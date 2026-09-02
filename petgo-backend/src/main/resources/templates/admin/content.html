@@ -131,7 +131,9 @@
                 <th th:text="#{admin.content.col.id}">ID</th>
                 <th th:text="#{admin.content.col.type}">类型</th>
                 <th th:text="#{admin.content.col.author}">作者</th>
-                <th th:text="#{admin.content.col.preview}">正文预览</th>
+                <!-- 2026-09-02 产品要求：正文预览列宽减半（原先表格把富余宽度都分给了这一列）。
+                     宽度钉死在表头上，td 同步收窄 + 摘要截短，展开看全文的 <details> 交互不变。 -->
+                <th th:text="#{admin.content.col.preview}" style="width:150px">正文预览</th>
                 <th th:text="#{admin.content.col.images}">图片</th>
                 <!-- bug 20260828：点赞数。产品撤掉了「内容互动积分」整页，
                      运营真正常用的就是这一个数，放回它本来该在的地方。 -->
@@ -192,14 +194,15 @@
             <td th:text="${c.id()}">1</td>
             <td th:text="#{'admin.contentType.' + ${c.type()}}">Moment</td>
             <td th:text="${c.authorId()}">-</td>
-            <!-- bug 20260803-447：长正文不再硬截断——短文直显，长文 <details> 折叠可展开看全文。 -->
-            <td class="muted cell-wide">
-                <details th:if="${c.textPreview() != null and #strings.length(c.textPreview()) > 60}">
-                    <summary style="cursor:pointer" th:text="${#strings.abbreviate(c.textPreview(), 60)}">…</summary>
-                    <div style="white-space:pre-wrap;word-break:break-word;max-width:420px"
+            <!-- bug 20260803-447：长正文不再硬截断——短文直显，长文 <details> 折叠可展开看全文。
+                 2026-09-02：列宽减半（150px，摘要相应截到 30 字），展开交互不变。 -->
+            <td class="muted" style="width:150px;max-width:150px;word-break:break-word">
+                <details th:if="${c.textPreview() != null and #strings.length(c.textPreview()) > 30}">
+                    <summary style="cursor:pointer" th:text="${#strings.abbreviate(c.textPreview(), 30)}">…</summary>
+                    <div style="white-space:pre-wrap;word-break:break-word"
                          th:text="${c.textPreview()}">…</div>
                 </details>
-                <span th:unless="${c.textPreview() != null and #strings.length(c.textPreview()) > 60}"
+                <span th:unless="${c.textPreview() != null and #strings.length(c.textPreview()) > 30}"
                       th:text="${c.textPreview()}">…</span>
             </td>
             <td>
@@ -257,6 +260,9 @@
                 </form>
             </td>
             <td>
+                <!-- 2026-09-02：内容详情（只读，含全文/大图/评论区）。 -->
+                <a class="btn btn-neutral btn-sm" th:href="@{'/admin/content/' + ${c.id()}}"
+                   th:text="#{admin.content.viewDetail}">查看详情</a>
                 <!-- 上线中 → 主动下架（必填原因）。HTMX 只替换本行。 -->
                 <form th:unless="${c.deleted()}" th:action="@{/admin/content/{id}/takedown(id=${c.id()})}"
                       method="post" class="inline-form"

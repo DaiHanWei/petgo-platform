@@ -5,6 +5,7 @@ import com.tailtopia.admin.seed.repository.SeedBatchRowRepository;
 import com.tailtopia.admin.seed.service.SeedBatchService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -49,11 +50,13 @@ public class AdminContentScheduleController {
 
     private final SeedBatchRowRepository rows;
     private final SeedBatchService stateMachine;
+    private final Messages msg;
 
     public AdminContentScheduleController(SeedBatchRowRepository rows,
-            SeedBatchService stateMachine) {
+            SeedBatchService stateMachine, Messages msg) {
         this.rows = rows;
         this.stateMachine = stateMachine;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/content-schedules")
@@ -81,18 +84,20 @@ public class AdminContentScheduleController {
         try {
             Instant at = requireFuture(scheduledAt);
             var row = rows.findById(rowId)
-                    .orElseThrow(() -> AppException.notFound("排期不存在"));
+                    .orElseThrow(() -> AppException.notFound("排期不存在")
+                            .code("admin.err.schedule.notFound"));
             if (row.getStatus() == SeedBatchRowStatus.FAILED) {
                 // 失败行要先回草稿才能重新排期（13-1 的状态机：FAILED → DRAFT → VALIDATED → SCHEDULED）。
                 // 🛡 这里不替运营走完那一串 —— 失败多半有原因（账号被移出、审核拦下），
                 //    直接改个时间再排一次只会到点再失败一次。
-                throw AppException.validation("这一行已发布失败，请先回工作台修好再重新提交");
+                throw AppException.validation("这一行已发布失败，请先回工作台修好再重新提交")
+                        .code("admin.err.schedule.failedRowFixFirst");
             }
             row.setScheduledAt(at);
             rows.save(row);
-            flash.addFlashAttribute("notice", "已更新计划发布时间");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.schedule.timeUpdated"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return redirect(authorId);
     }
@@ -104,9 +109,9 @@ public class AdminContentScheduleController {
             @RequestParam(required = false) Long authorId, RedirectAttributes flash) {
         try {
             stateMachine.cancelSchedule(rowId, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已取消排期，该行回到草稿");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.schedule.cancelled"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return redirect(authorId);
     }
@@ -123,16 +128,19 @@ public class AdminContentScheduleController {
      */
     private static Instant requireFuture(String raw) {
         if (raw == null || raw.isBlank()) {
-            throw AppException.validation("请填写计划发布时间");
+            throw AppException.validation("请填写计划发布时间")
+                    .code("admin.err.schedule.timeRequired");
         }
         Instant at;
         try {
             at = LocalDateTime.parse(raw.trim().replace(' ', 'T')).atZone(WIB).toInstant();
         } catch (Exception e) {
-            throw AppException.validation("时间格式应为 2026-09-01T08:30");
+            throw AppException.validation("时间格式应为 2026-09-01T08:30")
+                    .code("admin.err.schedule.timeFormat");
         }
         if (!at.isAfter(Instant.now())) {
-            throw AppException.validation("计划发布时间不能早于当前时刻（印尼时间 WIB）");
+            throw AppException.validation("计划发布时间不能早于当前时刻（印尼时间 WIB）")
+                    .code("admin.err.schedule.notFuture");
         }
         return at;
     }

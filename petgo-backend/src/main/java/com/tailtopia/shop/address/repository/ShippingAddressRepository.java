@@ -20,4 +20,7 @@ public interface ShippingAddressRepository extends JpaRepository<ShippingAddress
     long countByUserId(long userId);
 
     Optional<ShippingAddress> findByUserIdAndIsDefaultTrue(long userId);
+
+    /** 账号注销级联（Story 7.3）：地址簿是纯个人 PII，整簿物理删除。幂等（删空即无行可删）。 */
+    void deleteByUserId(long userId);
 }

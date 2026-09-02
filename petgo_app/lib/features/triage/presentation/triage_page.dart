@@ -117,8 +117,34 @@ class _TriagePageState extends ConsumerState<TriagePage> {
     });
     final l10n = AppLocalizations.of(context);
     final loggedIn = ref.watch(authControllerProvider).isLoggedIn;
-    return Scaffold(
+    // 🔴 DEP-1 后本页不再是 Tab 根，而是 shell 外裸路由：问诊流程各收尾点 `go('/triage')`
+    //    清栈落地在这里（canPop=false，无底部导航）。必须自带出路，否则 Android 系统返回
+    //    直接退出 App、iOS 无可见退路：① 顶栏返回 = 可 pop（健康页 push 入口）则 pop，
+    //    栈空则 go('/home')；② PopScope 拦系统返回走同一逻辑。
+    //    maybeOf：widget 测试用纯 MaterialApp pump 本页（无 GoRouter），不能在 build 里硬取。
+    final canPop = GoRouter.maybeOf(context)?.canPop() ?? false;
+    return PopScope(
+      canPop: canPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        context.go('/home'); // 栈空：导回带底部导航的首页，不退出 App
+      },
+      child: Scaffold(
       backgroundColor: AppColors.cream,
+      // 样式对齐 triage_upload_page 顶栏（页面底色 + 居中 18/w700 墨色标题）。
+      // 标题复用 triageHeroTitle（Kesehatan/Health），不新增 arb key。
+      appBar: AppBar(
+        backgroundColor: AppColors.cream,
+        centerTitle: true,
+        leading: IconButton(
+          key: const ValueKey('triageBack'),
+          icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+          onPressed: () => canPop ? context.pop() : context.go('/home'),
+        ),
+        title: Text(l10n.triageHeroTitle,
+            style: const TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+      ),
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -223,6 +249,7 @@ class _TriagePageState extends ConsumerState<TriagePage> {
           ],
           ),
         ),
+      ),
       ),
     );
   }

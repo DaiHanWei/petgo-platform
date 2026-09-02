@@ -86,7 +86,7 @@ class OrderCenterIntegrationTest extends ApiIntegrationTest {
         setCreatedAt("ai_consult_orders", "order_token", ai.getOrderToken(), base.minus(20, ChronoUnit.SECONDS));
         setCreatedAt("payment_intents", "public_token", top.getPublicToken(), base.minus(10, ChronoUnit.SECONDS));
 
-        OrderPage page = orderCenter.listOrders(userId, null, null, 20);
+        OrderPage page = orderCenter.listOrders(userId, null, null, 20, true);
 
         assertThat(page.items()).hasSize(3);
         // 倒序：topup(-10s) > ai(-20s) > vet(-30s)
@@ -128,7 +128,7 @@ class OrderCenterIntegrationTest extends ApiIntegrationTest {
         List<String> seen = new ArrayList<>();
         String cursor = null;
         for (int guard = 0; guard < 10; guard++) {
-            OrderPage page = orderCenter.listOrders(userId, null, cursor, 2);
+            OrderPage page = orderCenter.listOrders(userId, null, cursor, 2, true);
             page.items().forEach(v -> seen.add(v.orderToken()));
             if (!page.hasMore()) {
                 break;
@@ -151,7 +151,7 @@ class OrderCenterIntegrationTest extends ApiIntegrationTest {
         seedVet(userId, 20000);
         seedVet(userId, 30000);
 
-        OrderPage p1 = orderCenter.listOrders(userId, null, null, 2);
+        OrderPage p1 = orderCenter.listOrders(userId, null, null, 2, true);
         assertThat(p1.hasMore()).isTrue();
         String cursor = p1.nextCursor();
         // 🔒 不外泄顺序主键：订单对外一律用不可枚举 token（架构护栏）
@@ -159,7 +159,7 @@ class OrderCenterIntegrationTest extends ApiIntegrationTest {
         // 也不是「一眼能看懂的时间戳」——它是 base64url 的复合键
         assertThat(cursor).doesNotContain(":");
         // 但必须仍是个能用的游标（不是把功能删了换绿）
-        assertThat(orderCenter.listOrders(userId, null, cursor, 2).items()).hasSize(1);
+        assertThat(orderCenter.listOrders(userId, null, cursor, 2, true).items()).hasSize(1);
     }
 
     @Test
@@ -169,7 +169,7 @@ class OrderCenterIntegrationTest extends ApiIntegrationTest {
         seedAi(userId, 5000);
         seedTopup(userId, 25000);
 
-        OrderPage vetOnly = orderCenter.listOrders(userId, "VET_CONSULT", null, 20);
+        OrderPage vetOnly = orderCenter.listOrders(userId, "VET_CONSULT", null, 20, false);
         assertThat(vetOnly.items()).hasSize(1);
         assertThat(vetOnly.items().get(0).orderType()).isEqualTo("VET_CONSULT");
     }
@@ -180,7 +180,7 @@ class OrderCenterIntegrationTest extends ApiIntegrationTest {
         ConsultOrder vet = seedVet(userId, 50000);
         jdbc.update("UPDATE consult_orders SET status = 'REFUNDING' WHERE id = ?", vet.getId());
 
-        OrderPage page = orderCenter.listOrders(userId, "VET_CONSULT", null, 20);
+        OrderPage page = orderCenter.listOrders(userId, "VET_CONSULT", null, 20, false);
         assertThat(page.items().get(0).statusCode()).isEqualTo("REFUNDING");
         assertThat(page.items().get(0).statusColor()).isEqualTo("INFO"); // 退款中蓝非红
     }
@@ -192,7 +192,7 @@ class OrderCenterIntegrationTest extends ApiIntegrationTest {
         // 待接单请求（A-5：取消即删、不进订单中心）
         requests.save(ConsultRequest.queue(userId, 1L, "req-" + n(), Instant.now().plusSeconds(60)));
 
-        OrderPage page = orderCenter.listOrders(userId, null, null, 20);
+        OrderPage page = orderCenter.listOrders(userId, null, null, 20, true);
         assertThat(page.items()).hasSize(1); // 仅 1 已付订单，待接单请求不入
     }
 
@@ -206,12 +206,12 @@ class OrderCenterIntegrationTest extends ApiIntegrationTest {
                     base.minus(10L * (i + 1), ChronoUnit.SECONDS));
         }
 
-        OrderPage p1 = orderCenter.listOrders(userId, null, null, 2);
+        OrderPage p1 = orderCenter.listOrders(userId, null, null, 2, true);
         assertThat(p1.items()).hasSize(2);
         assertThat(p1.hasMore()).isTrue();
         assertThat(p1.nextCursor()).isNotNull();
 
-        OrderPage p2 = orderCenter.listOrders(userId, null, p1.nextCursor(), 2);
+        OrderPage p2 = orderCenter.listOrders(userId, null, p1.nextCursor(), 2, true);
         assertThat(p2.items()).hasSize(1);
         assertThat(p2.hasMore()).isFalse();
         // 无重叠：p2 的 token 不在 p1
@@ -224,6 +224,6 @@ class OrderCenterIntegrationTest extends ApiIntegrationTest {
         long owner = newUser().getId();
         long other = newUser().getId();
         seedVet(owner, 50000);
-        assertThat(orderCenter.listOrders(other, null, null, 20).items()).isEmpty();
+        assertThat(orderCenter.listOrders(other, null, null, 20, true).items()).isEmpty();
     }
 }

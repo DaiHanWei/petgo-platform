@@ -55,10 +55,17 @@ public class ShopOrderPaidHandler {
             log.warn("电商到账事件无匹配订单，忽略 intent={}", event.publicToken());
             return;
         }
-        // 🔴 顺序：先扣 Coin 段再扣库存 —— 两者同事务，失败一起回滚，顺序不影响正确性；
-        //    但 Coin 段失败（余额被别处花掉）时不该已经把库存扣了，日志上也更好读。
+        // 🔴 顺序：**先状态迁移、确认订单确实还在待支付，再扣 Coin 段** ——
+        //    fulfillPaid 对非待支付（已被取消/懒过期）静默跳过，若先扣币，
+        //    会留下「币已扣、单是 CANCELLED」的无补偿态。两者仍同事务：
+        //    Coin 段失败（余额被别处花掉）整体回滚，扣币与出库要么全有要么全无；
+        //    与取消事务的真并发由 shop_orders.version 乐观锁裁决（后提交者整体回滚）。
+        if (!payments.fulfillPaid(order)) {
+            log.warn("电商到账事件订单已非待支付（已取消/已处理），跳过扣币 order={} intent={}",
+                    order.getPublicToken(), event.publicToken());
+            return;
+        }
         checkout.settlePawCoinSegment(order);
-        payments.fulfillPaid(order);
         log.info("电商订单支付到账 order={} intent={}", order.getPublicToken(), event.publicToken());
     }
 }

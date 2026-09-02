@@ -41,6 +41,19 @@ public class AdminConfigController {
     static final String SHARE_REWARD_EDIT_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('"
             + AdminPermissions.CONFIG_SHARE_REWARD_EDIT + "')";
 
+    /**
+     * 页面准入（Story 18.3 · AC5 修订）：持任意 config.* 读权限即可进入本页。
+     *
+     * <p>🔴 只持 {@code config.share_reward_*} 的应急操作员必须能打开本页 ——
+     * 总开关的意义是「发现被刷要能立刻关掉」，页面门槛若卡 {@code config.view}，
+     * 杀开关经 UI 根本走不到。🛡 只放宽<b>准入</b>：页内定价 / PawCoin / 档位各块仍按
+     * {@code config.view} / {@code config.edit} 门控，分享奖励块按 share_reward 两码门控
+     * （见 {@code templates/admin/config.html}），各 POST 端点的写权限一律未放宽。
+     */
+    static final String PAGE_AUTH = VIEW_AUTH
+            + " or hasAuthority('" + AdminPermissions.CONFIG_SHARE_REWARD_VIEW + "')"
+            + " or hasAuthority('" + AdminPermissions.CONFIG_SHARE_REWARD_EDIT + "')";
+
     private final PlatformConfigService read;
     private final com.tailtopia.share.repository.ShareRewardQuotaStatsRepository shareStats;
     private final AdminConfigService write;
@@ -58,7 +71,7 @@ public class AdminConfigController {
     }
 
     @GetMapping("/admin/config")
-    @PreAuthorize(VIEW_AUTH)
+    @PreAuthorize(PAGE_AUTH)
     public String view(Model model) {
         model.addAttribute("active", "config");
         model.addAttribute("pricing", read.pricing());
@@ -91,9 +104,9 @@ public class AdminConfigController {
             write.updateShareReward(new com.tailtopia.admin.config.dto.ShareRewardForm(
                     shareRewardEnabled, shareRewardMonthlyCap, idCardShareReward,
                     idCardShareDailyCap), admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "分享奖励配置已更新（操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.config.shareRewardSaved"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/config";
     }

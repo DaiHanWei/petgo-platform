@@ -46,27 +46,13 @@
                 <td colspan="7" class="muted" th:text="#{admin.utags.empty}">还没有任何用户标签。</td>
             </tr>
             <tr th:each="t : ${tags}">
-                <!-- 🔴 **按真实底色、真实大小画出来**（2026-08-28）：图标是一枚纯白剪影，
-                     脱开圆底单看那张 PNG 什么都看不出来 —— 运营正是因此判断不了
-                     「我传的图到底对不对」。左边这枚是用户看到的实际大小（14px），
-                     右边放大到 28px 便于检查细节。 -->
+                <!-- 2026-09-02 产品定：上传的图**就是用户看到的整枚标签**（无圆底、无底色），
+                     这里按 2 倍大小（28px 高）裸图预览，等比不裁。 -->
                 <td style="white-space:nowrap">
-                    <span th:style="'display:inline-flex;align-items:center;justify-content:center;'
-                                  + 'width:14px;height:14px;border-radius:50%;vertical-align:middle;'
-                                  + 'background:' + ${t.badgeHex()}">
-                        <img th:if="${#strings.startsWith(t.icon, 'http')}" th:src="${t.icon}"
-                             alt="" width="8" height="8"/>
-                        <span th:unless="${#strings.startsWith(t.icon, 'http')}"
-                              th:text="${t.icon}" style="font-size:8px;line-height:1"></span>
-                    </span>
-                    <span th:style="'display:inline-flex;align-items:center;justify-content:center;'
-                                  + 'width:28px;height:28px;border-radius:50%;margin-left:6px;'
-                                  + 'vertical-align:middle;background:' + ${t.badgeHex()}">
-                        <img th:if="${#strings.startsWith(t.icon, 'http')}" th:src="${t.icon}"
-                             alt="" width="16" height="16"/>
-                        <span th:unless="${#strings.startsWith(t.icon, 'http')}"
-                              th:text="${t.icon}" style="font-size:16px;line-height:1"></span>
-                    </span>
+                    <img th:if="${#strings.startsWith(t.icon, 'http')}" th:src="${t.icon}"
+                         alt="" style="height:28px;width:auto;max-width:96px;vertical-align:middle"/>
+                    <span th:unless="${#strings.startsWith(t.icon, 'http')}"
+                          th:text="${t.icon}" style="font-size:16px;line-height:1"></span>
                 </td>
                 <td th:text="${t.code}">code</td>
                 <td th:text="${t.name}">名称</td>
@@ -88,11 +74,7 @@
                         <span th:if="${t.icon != null and !#strings.startsWith(t.icon, 'http')}"
                               th:text="${t.icon}" title="存量字符图标，重新上传即替换"></span>
                         <input type="file" name="iconFile" accept="image/png,image/webp"/>
-                        <select name="badgeColor">
-                            <option th:each="c : ${badgeColors}" th:value="${c}"
-                                    th:selected="${c == t.badgeColor}"
-                                    th:text="#{'admin.utags.color.' + ${c}}">金</option>
-                        </select>
+                        <!-- 2026-09-02：底色下拉已随「整图即标签」取消。 -->
                         <input type="text" name="description" th:value="${t.description}" required/>
                         <button type="submit" class="btn btn-sm" th:text="#{admin.utags.edit}">编辑</button>
                     </form>
@@ -113,13 +95,8 @@
         <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.tag_manage')">
             <h2 th:text="#{admin.utags.newTag}">新建标签</h2>
             <form method="post" enctype="multipart/form-data" th:action="@{/admin/user-tags}">
-                <!-- 🔴 两个字段的用途完全不同，而界面上原先只有两个光秃秃的标题
-                     （bug 20260828，与内容标签同一处困惑）。 -->
-                <label><span th:text="#{admin.utags.code}">标签码</span>
-                    <input type="text" name="code" class="field-full" required/></label>
-                <p class="muted" data-notice="utag-code-hint" th:text="#{admin.utags.codeHint}">
-                    用户看不到。建后不可修改。
-                </p>
+                <!-- 2026-09-02：标签码改为系统自动生成（ut-<id>），表单不再出现 ——
+                     与内容标签同一改法。列表里的「标签码」列照常显示生成结果。 -->
                 <label><span th:text="#{admin.utags.name}">名称</span>
                     <input type="text" name="name" class="field-full" required/></label>
                 <p class="muted" data-notice="utag-name-hint" th:text="#{admin.utags.nameHint}">
@@ -133,14 +110,7 @@
                 <p class="muted" data-notice="tag-icon-spec" th:text="${iconSpec}">
                     PNG 或 WebP，必须透明底；正方形，最短边 ≥ 72 像素、最长边 ≤ 1024 像素；文件 ≤ 512 KB。
                 </p>
-                <!-- 🔴 徽章底色（UI 稿 `.utag-icon` 按标签分色：官方号金、最佳新人紫）。
-                     固定几档、不给自由填 hex —— 图标是纯白剪影，浅色底会让它"消失"，
-                     而那和"图没加载出来"长得一模一样（本月已踩过一次）。 -->
-                <label><span th:text="#{admin.utags.badgeColor}">徽章底色</span>
-                    <select name="badgeColor">
-                        <option th:each="c : ${badgeColors}" th:value="${c}"
-                                th:text="#{'admin.utags.color.' + ${c}}">金</option>
-                    </select></label>
+                <!-- 2026-09-02：徽章底色取消 —— 上传的图就是整枚标签，圆/方/颜色由设计稿决定。 -->
                 <label><span th:text="#{admin.utags.description}">说明文案</span>
                     <input type="text" name="description" class="field-full" maxlength="140" required/></label>
                 <button type="submit" class="btn btn-primary" th:text="#{admin.utags.save}">保存</button>
@@ -280,22 +250,26 @@
             </table>
         </div>
 
-        <!-- 用户候选（HTMX 局部）。🔴 已注销账号不会出现在这里 —— 查询层就滤掉了。 -->
-        <div th:fragment="candidates" th:remove="tag">
-            <p class="muted" th:if="${#lists.isEmpty(candidates)}"
-               th:text="#{admin.utags.pickEmpty}">没有匹配的用户。</p>
-            <label th:each="c : ${candidates}" class="pick-row">
-                <input type="checkbox" name="pickedUserIds" th:value="${c.id}"/>
-                <span th:text="${c.id}">1</span>
-                <span th:text="${c.name}">昵称</span>
-                <!-- ⚠️ 状态只标注、不隐藏：运营有时确实要给封号账号挂标签，
-                     但不标注就等于让他在不知情的情况下分配。 -->
-                <span class="muted" th:if="${c.deactivated}"
-                      th:text="#{admin.utags.pickDeactivated}">已停用</span>
-                <span class="muted" th:if="${c.virtualAccount}"
-                      th:text="#{admin.utags.pickVirtual}">虚拟账号</span>
-            </label>
-        </div>
+    </div>
+
+    <!-- 用户候选（HTMX 局部）。🔴 已注销账号不会出现在这里 —— 查询层就滤掉了。
+         🔴 2026-09-02（实机截图）：从 content 片段**内部**挪到这里（外层 th:replace 之内、
+         content 之外）—— 原先定义在 content 里，整页渲染时片段本体会在页面底部
+         **再游离渲染一遍**（一整排带勾选框的用户名浮在页面最底下）。 -->
+    <div th:fragment="candidates" th:remove="tag">
+        <p class="muted" th:if="${#lists.isEmpty(candidates)}"
+           th:text="#{admin.utags.pickEmpty}">没有匹配的用户。</p>
+        <label th:each="c : ${candidates}" class="pick-row">
+            <input type="checkbox" name="pickedUserIds" th:value="${c.id}"/>
+            <span th:text="${c.id}">1</span>
+            <span th:text="${c.name}">昵称</span>
+            <!-- ⚠️ 状态只标注、不隐藏：运营有时确实要给封号账号挂标签，
+                 但不标注就等于让他在不知情的情况下分配。 -->
+            <span class="muted" th:if="${c.deactivated}"
+                  th:text="#{admin.utags.pickDeactivated}">已停用</span>
+            <span class="muted" th:if="${c.virtualAccount}"
+                  th:text="#{admin.utags.pickVirtual}">虚拟账号</span>
+        </label>
     </div>
 </div>
 </body>

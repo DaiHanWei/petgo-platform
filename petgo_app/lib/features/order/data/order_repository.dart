@@ -18,6 +18,10 @@ class OrderRepository {
   /// 🔴 **原样回传，不要解析、不要自己拼**。2026-08-18 它已经从「纯 epochMillis」
   /// 变成了 base64url 的复合键 —— 只按时间做游标会在同刻订单处整组丢单
   /// （`action_items: ORDER-CENTER-CURSOR-TIE`）。以后还可能再变。
+  ///
+  /// 🔴 `includeEcommerce=true` 是电商行的**显式加入闸门**（Story 3.9 补丁）：
+  /// 服务端默认聚合不返回电商订单 —— 线上 v1.1.4 老 App 不认识 ShopOrderStatus，
+  /// 会把这些状态全兜进「已完成」并渲染英文枚举串。本版 App 能渲染电商卡片，故恒传 true。
   Future<OrderPage> fetchOrders({OrderType? type, String? cursor, int limit = 20}) async {
     final resp = await dio.get<Map<String, dynamic>>(
       ApiPaths.orders,
@@ -25,6 +29,7 @@ class OrderRepository {
         'type': ?type?.toApi(),
         'cursor': ?cursor,
         'limit': limit,
+        'includeEcommerce': true,
       },
     );
     return OrderPage.fromJson(resp.data!);

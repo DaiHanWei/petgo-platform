@@ -113,18 +113,32 @@ class FeedRankRoutingIntegrationTest extends ApiIntegrationTest {
     }
 
     /**
-     * 🔴 <b>反方向也必须被拒</b>：时间倒序游标喂给 ALL Tab。
+     * 🔴 <b>反方向不是拒绝，而是兼容分流</b>：时间倒序游标喂给 ALL Tab。
      *
-     * <p>这条比上一条更要紧：没有种子前缀时它<b>不会报错</b> —— 时间倒序游标
-     * {@code "<micros>:<id>"} 会被解成 seed=那串毫秒数、consumed=id，
-     * 用户拿到一个不存在种子的任意偏移页。不崩、不记错、没人查得出来。
+     * <p>线上 v1.1.4 老客户端的 ALL Tab 走的就是时序流 —— 发版切换瞬间，正在翻页的
+     * 存量用户下一页带的是 chrono 游标；422 会让客户端拿着<b>同一个</b> nextCursor
+     * 重试 → 死循环。所以解得成 chrono 就让这个会话<b>继续走时序流</b>
+     * （rankMode=chrono，nextCursor 也回 chrono 格式，会话自洽）。
+     * 也不会被 rank 解码器<b>静默错解</b>成 (seed, consumed) —— {@code SEED_PREFIX}
+     * 把两种格式的编码空间隔开了（见 {@code FeedRankCursor}）。
      */
     @Test
-    void chronoCursorIsRejectedByTheAllTab() throws Exception {
+    void chronoCursorOnTheAllTabContinuesTheChronoSession() throws Exception {
         seedTwoPages();
         String chronoCursor = feed("?category=DAILY").get("nextCursor").asText();
 
-        mvc.perform(get("/api/v1/content-posts").param("cursor", chronoCursor))
+        JsonNode page = feed("?cursor=" + chronoCursor);
+        assertThat(page.get("rankMode").asText()).isEqualTo("chrono");
+        if (page.get("hasMore").asBoolean()) {
+            // 会话自洽：继续下发的还是 chrono 格式游标，老客户端整个会话不换轨
+            assertThat(FeedCursor.decode(page.get("nextCursor").asText()).id()).isPositive();
+        }
+    }
+
+    /** 🛡 兼容分流不放水任意串：两种格式都解不开的游标仍然 422。 */
+    @Test
+    void garbageCursorIsStillRejectedByTheAllTab() throws Exception {
+        mvc.perform(get("/api/v1/content-posts").param("cursor", "bm90LWEtY3Vyc29y"))
                 .andExpect(status().isUnprocessableEntity());
     }
 

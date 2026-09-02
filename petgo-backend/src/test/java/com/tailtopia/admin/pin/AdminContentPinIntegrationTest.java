@@ -316,6 +316,35 @@ class AdminContentPinIntegrationTest extends ApiIntegrationTest {
         assertThat(pins.findAll()).hasSize(1);
     }
 
+    /**
+     * 2026-09-02：卡片图支持本地上传（与 URL 二选一，都给时以上传为准）。
+     * 无 OSS 凭证环境上传走打桩（直接回 URL），足以验证「文件 → 生成 URL → 落库」这条链。
+     */
+    @Test
+    void promoCardImageCanBeUploadedFromLocalFile() throws Exception {
+        java.awt.image.BufferedImage img =
+                new java.awt.image.BufferedImage(400, 400, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(img, "png", out);
+        var file = new org.springframework.mock.web.MockMultipartFile(
+                "promoImageFile", "promo.png", "image/png", out.toByteArray());
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/admin/content-pins").file(file)
+                        .with(authentication(superAdminAuth())).with(csrf())
+                        .param("slot", ContentPin.SLOT_HOME_FEED).param("objectType", "PROMO")
+                        .param("promoTitle", "本地上传的卡片")
+                        .param("startsAt", wib(17, 10)).param("endsAt", wib(17, 12)))
+                .andExpect(status().is3xxRedirection());
+
+        ContentPin saved = pins.findAll().stream()
+                .filter(p -> "本地上传的卡片".equals(p.getPromoTitle()))
+                .findFirst().orElseThrow();
+        assertThat(saved.getPromoImageUrl())
+                .as("上传后应落生成的对象 URL（pin-promo 目录）")
+                .contains("pin-promo");
+    }
+
     // ——————————————————— 🛡 AC9 双权限码 ———————————————————
 
     /** 只持查看权限 → 能看列表，但改不了。 */

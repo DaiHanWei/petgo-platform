@@ -152,16 +152,32 @@ class AdminUserPhoneIntegrationTest extends ApiIntegrationTest {
     @Test
     void exportRequiresItsOwnPermission() throws Exception {
         // 只有查看权限 → 导不出
-        mvc.perform(get("/admin/users/phone-recall.csv")
+        mvc.perform(get("/admin/users/phone-recall.xlsx").param("phone", "empty")
                         .with(authentication(auth(AdminAccountType.STAFF, "user.view", "user.phone_view"))))
                 .andExpect(status().isForbidden());
         // 有导出权限 → 可以
-        mvc.perform(get("/admin/users/phone-recall.csv")
+        mvc.perform(get("/admin/users/phone-recall.xlsx").param("phone", "empty")
                         .with(authentication(auth(AdminAccountType.STAFF, "user.view", "user.phone_export"))))
                 .andExpect(status().isOk());
     }
 
-    /** 🛡 名单含已封号账号，但每行标注状态 —— 不自动剔除，由运营判断。 */
+    /**
+     * 🔴 bug 20260901-469 的根因回归：phone 缺失/非法 → 拒绝，绝不回落成「未填写名单」。
+     *
+     * <p>原实现 {@code defaultValue="empty"} 让丢参的导出**静默给出相反的那份名单**，
+     * 两份名单长得一模一样，运营看不出拿错了。
+     */
+    @Test
+    void exportRejectsMissingOrUnknownPhoneFilter() throws Exception {
+        mvc.perform(get("/admin/users/phone-recall.xlsx")
+                        .with(authentication(auth(AdminAccountType.SUPER_ADMIN))))
+                .andExpect(status().is4xxClientError());
+        mvc.perform(get("/admin/users/phone-recall.xlsx").param("phone", "whatever")
+                        .with(authentication(auth(AdminAccountType.SUPER_ADMIN))))
+                .andExpect(status().is4xxClientError());
+    }
+
+    /** 🛡 名单含已封号账号，但每行标注状态 —— 不自动剔除，由运营判断。产物为 .xlsx（469）。 */
     @Test
     void exportKeepsBannedAccountsButFlagsTheirStatus() throws Exception {
         User active = userWithPhone();
@@ -169,28 +185,46 @@ class AdminUserPhoneIntegrationTest extends ApiIntegrationTest {
         banned.deactivate();
         userRepo.save(banned);
 
-        String csv = mvc.perform(get("/admin/users/phone-recall.csv").param("phone", "filled")
+        byte[] xlsx = mvc.perform(get("/admin/users/phone-recall.xlsx").param("phone", "filled")
                         .with(authentication(auth(AdminAccountType.SUPER_ADMIN))))
                 .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
+                .andReturn().getResponse().getContentAsByteArray();
 
-        assertThat(csv).as("首行是表头").startsWith("user_id,display_name,phone,account_status");
-        assertThat(csv).as("🛡 已封号账号不得被自动剔除").contains(String.valueOf(banned.getId()));
-        assertThat(csv).as("必须标注状态，否则运营会在不知情下给封号用户发召回")
+        String sheetText = sheetAsText(xlsx);
+        assertThat(sheetText).as("首行是表头")
+                .contains("user_id").contains("display_name").contains("phone").contains("account_status");
+        assertThat(sheetText).as("🛡 已封号账号不得被自动剔除").contains(String.valueOf(banned.getId()));
+        assertThat(sheetText).as("必须标注状态，否则运营会在不知情下给封号用户发召回")
                 .contains("DEACTIVATED");
-        assertThat(csv).contains(String.valueOf(active.getId())).contains("ACTIVE");
+        assertThat(sheetText).contains(String.valueOf(active.getId())).contains("ACTIVE");
     }
 
-    /** 昵称里的逗号不能把整份名单的列错开。 */
+    /** 昵称里的逗号在 xlsx 里天然独占单元格，不会把列错开（原 CSV 转义测试的替代）。 */
     @Test
-    void csvEscapesCommasInNames() throws Exception {
+    void nicknameWithCommaStaysIntactInItsCell() throws Exception {
         User u = userWithPhone();
         u.setNickname("张三, 李四");
         userRepo.save(u);
-        String csv = mvc.perform(get("/admin/users/phone-recall.csv").param("phone", "filled")
+        byte[] xlsx = mvc.perform(get("/admin/users/phone-recall.xlsx").param("phone", "filled")
                         .with(authentication(auth(AdminAccountType.SUPER_ADMIN))))
-                .andReturn().getResponse().getContentAsString();
-        assertThat(csv).contains("\"张三, 李四\"");
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(sheetAsText(xlsx)).contains("张三, 李四");
+    }
+
+    /** 把 xlsx 全部单元格铺平成文本，供包含断言用（手机号列是文本单元格，前导 0 不丢）。 */
+    private static String sheetAsText(byte[] xlsx) throws Exception {
+        try (var wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                new java.io.ByteArrayInputStream(xlsx))) {
+            StringBuilder sb = new StringBuilder();
+            var fmt = new org.apache.poi.ss.usermodel.DataFormatter();
+            for (org.apache.poi.ss.usermodel.Row row : wb.getSheetAt(0)) {
+                for (org.apache.poi.ss.usermodel.Cell cell : row) {
+                    sb.append(fmt.formatCellValue(cell)).append('\t');
+                }
+                sb.append('\n');
+            }
+            return sb.toString();
+        }
     }
 
     // ——————————————————— 🔴 AC2 禁止别名字段（静态断言） ———————————————————

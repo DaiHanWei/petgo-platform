@@ -228,6 +228,8 @@ label.field .field-full { display: block; margin-top: 4px; }
 /* 状态切换要有过渡：0ms 的颜色跳变读起来像页面闪了一下，而不是「我按到了」。
    120ms 落在 80–150ms 的触觉反馈窗口内。只写具体属性，不用 transition: all。 */
 .btn { transition: background-color .12s ease, color .12s ease, border-color .12s ease; }
+/* 置灰态（bug 20260901-475）：不可用的按钮**留在原地**并说明条件，消失会被读成「功能没了」。 */
+.btn[disabled] { opacity: .5; cursor: not-allowed; }
 .btn-primary { background: var(--brand); color: #fff; }
 .btn-primary:hover { background: var(--brand-strong); }
 .btn-danger { background: var(--danger); color: #fff; }

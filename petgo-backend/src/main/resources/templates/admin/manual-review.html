@@ -60,7 +60,8 @@
                 </select>
             </label>
             <label><span th:text="#{admin.review.filter.q}">被举报账号</span>
-                <input type="text" name="q" th:value="${q}" placeholder="账号 id 或昵称"/>
+                <input type="text" name="q" th:value="${q}"
+                       th:placeholder="#{admin.review.filter.qPlaceholder}" placeholder="账号 id 或昵称"/>
             </label>
             <button type="submit" class="btn btn-primary" th:text="#{admin.tickets.filter.submit}">筛选</button>
         </form>
@@ -69,8 +70,9 @@
             <thead>
             <tr>
                 <th th:text="#{admin.review.col.ticketType}">类型</th>
-                <th th:text="#{admin.review.col.subject}">对象</th>
-                <th th:text="#{admin.review.col.preview}">摘要</th>
+                <!-- 2026-09-02 产品要求：摘要列缩三成，腾出来的宽度给对象列与操作列。 -->
+                <th th:text="#{admin.review.col.subject}" style="width:20%">对象</th>
+                <th th:text="#{admin.review.col.preview}" style="width:24%">摘要</th>
                 <th th:text="#{admin.review.col.score}">优先级分</th>
                 <th th:text="#{admin.review.col.earliest}">最早时间</th>
                 <th th:text="#{admin.review.col.status}">状态</th>
@@ -99,9 +101,30 @@
                     <span th:if="${row.subType() != null}" class="badge badge-neutral"
                           th:text="${row.subType()}">SUB</span>
                 </td>
-                <td class="muted" th:text="${row.preview()}">摘要</td>
+                <td class="muted">
+                    <!-- bug 20260902-480：头像审核的摘要是头像 URL —— 直接把图渲染出来，
+                         复核员一眼看到要审的图，而不是一串网址文字。 -->
+                    <img th:if="${(row.subType() == 'USER_AVATAR' or row.subType() == 'PET_AVATAR')
+                                  and row.preview() != null and #strings.startsWith(row.preview(), 'http')}"
+                         th:src="${row.preview()}" alt="" loading="lazy" data-lightbox
+                         style="width:56px;height:56px;object-fit:cover;border-radius:6px;cursor:zoom-in"/>
+                    <span th:unless="${(row.subType() == 'USER_AVATAR' or row.subType() == 'PET_AVATAR')
+                                       and row.preview() != null and #strings.startsWith(row.preview(), 'http')}"
+                          th:text="${row.preview()}">摘要</span>
+                    <!-- 2026-09-02（bug 480）：内容类工单直达内容详情页（新标签页，不打断复核流）。
+                         🔴 链接一律用 contentRefId（帖 id）——送审工单的 sourceId 是队列号，
+                         与帖 id 是两套编号，拿它连详情页会打开一条毫不相干的内容；
+                         评论送审的 contentRefId 是评论所在的帖（看上下文）。
+                         ⚠️ sec:authorize 须与 AdminContentManageController.DETAIL_AUTH 逐字一致。 -->
+                    <a th:if="${row.contentRefId() != null}"
+                       sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')"
+                       target="_blank" th:href="@{'/admin/content/' + ${row.contentRefId()}}"
+                       th:text="#{admin.review.viewContent}">查看内容</a>
+                </td>
                 <td><strong th:text="${row.score()}">0</strong></td>
-                <td th:text="${row.earliestAt()}">时间</td>
+                <!-- bug 20260902-481：原来直接打印原始 Instant（ISO UTC），复核员没法读；
+                     与「被举报用户」页同一口径，一律 WIB。 -->
+                <td th:text="${@adminTime.wib(row.earliestAt())}">时间</td>
                 <td>
                     <span th:text="#{'admin.tickets.status.' + ${row.status()}}">状态</span>
                     <span class="badge badge-danger" th:if="${row.overdue()}"

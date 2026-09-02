@@ -20,9 +20,24 @@ public interface SeedBatchAssetRepository extends JpaRepository<SeedBatchAsset, 
      */
     List<SeedBatchAsset> findByBatchIdAndOrphanedAtIsNull(long batchId);
 
-    Optional<SeedBatchAsset> findByBatchIdAndFileName(long batchId, String fileName);
+    /**
+     * 同批同名查重 —— 🔴 只看**在用**的（bug 20260901-474）：素材可单删（标记废弃）后，
+     * 「删掉再传同名文件」是替换的正当路径，把废弃行算进查重会让替换永远被拒。
+     * DB 侧的部分唯一索引（{@code WHERE orphaned_at IS NULL}）与此同一口径。
+     */
+    Optional<SeedBatchAsset> findByBatchIdAndFileNameAndOrphanedAtIsNull(long batchId, String fileName);
 
     /** 废弃素材台账（供后续回收决策用；F21 反转后一条 SQL 即可动手）。 */
     @Query("select coalesce(sum(a.sizeBytes), 0) from SeedBatchAsset a where a.orphanedAt is not null")
     long totalOrphanedBytes();
+
+    /**
+     * 素材级内容查重（bug 20260901-467）：同内容哈希的**在用**素材，跨批次全表查。
+     *
+     * <p>存量行哈希为 null，天然不会命中（调用方也不得拿 null 来查）。
+     */
+    List<SeedBatchAsset> findByContentSha256AndOrphanedAtIsNullOrderByIdAsc(String contentSha256);
+
+    /** 一批素材的哈希批量取（指纹解析用，见 {@code SeedBatchAssetService#fingerprintKeys}）。 */
+    List<SeedBatchAsset> findByUrlIn(java.util.Collection<String> urls);
 }

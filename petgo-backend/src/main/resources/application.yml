@@ -234,6 +234,21 @@ spring:
   jackson:
     default-property-inclusion: non_null
     time-zone: UTC
+  # 后台静态资源内容指纹（bug 20260901-471 的防复发修复）。
+  # 🔴 背景：admin.js 此前裸路径引用、无版本指纹 —— 8-28 那次「全后台 JS 静默失效」修复后，
+  #    浏览器缓存里存过坏文件的人**不会自愈**（强刷之前一直坏），提报人 9-01 撞上的就是它。
+  # content 策略把文件名改写成 admin-<内容md5>.js：内容一变 URL 就变，旧缓存天然失效。
+  # ⚠️ 范围只限 /admin/**（后台 js/css/htmx）；/brand 等对外静态不动，避免波及分享落地页。
+  # ⚠️ 模板里的 @{...} 要被改写成带指纹的 URL，还需注册 ResourceUrlEncodingFilter
+  #   （Boot 4 不再自动注册，见 StaticResourceVersionConfig）。
+  web:
+    resources:
+      chain:
+        enabled: true
+        strategy:
+          content:
+            enabled: true
+            paths: /admin/**
   # 管理后台双语 i18n（Story 1.6）：messageSource 由 AdminLocaleConfig 显式定义（basename classpath:i18n/messages，
   # UTF-8，缺键回退 code）。不用 spring.messages.* 自动配置——其条件要求基底 messages.properties，本项目仅 zh_CN/en 变体。
 

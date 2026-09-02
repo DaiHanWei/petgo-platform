@@ -241,6 +241,8 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         assertThat(mine.get(0).reporterCount()).isEqualTo(3);
         assertThat(mine.get(0).score()).isEqualTo(3);
         assertThat(mine.get(0).preview()).contains("被举报的正文");
+        // bug 20260902-480：「查看内容」链接用的帖 id。
+        assertThat(mine.get(0).contentRefId()).isEqualTo(post.getId());
     }
 
     // ===== AC6 · 账号标识字段没有举报人，分数按 priority 映射 =====
@@ -269,6 +271,9 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         assertThat(highRow.score()).isEqualTo(10);
         assertThat(normalRow.score()).isEqualTo(2);
         assertThat(normalRow.score()).isNotZero(); // 沉底守卫
+        // 标识字段工单没有「查看内容」这回事（bug 480）：链接引用恒为空，模板据此不出链接。
+        assertThat(highRow.contentRefId()).isNull();
+        assertThat(normalRow.contentRefId()).isNull();
         // 没有举报人这回事，三个计数都是 0。
         assertThat(highRow.reporterCount()).isZero();
         assertThat(highRow.reportCount()).isZero();
@@ -467,6 +472,8 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         assertThat(row.score()).isEqualTo(12);
         assertThat(row.preview()).contains("等放行的正文");
         assertThat(row.subType()).isEqualTo("P0 · CONTENT_POST");
+        // bug 20260902-480：送审工单的 sourceId 是队列号，「查看内容」必须用帖 id。
+        assertThat(row.contentRefId()).isEqualTo(post.getId());
         assertThat(row.reporterCount()).isZero();
         assertThat(row.reportCount()).isZero();
         assertThat(row.frequentCount()).isZero();
@@ -507,6 +514,8 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         assertThat(row.preview()).doesNotContain("无关的别人的帖子");
         assertThat(row.subType()).isEqualTo("P1 · COMMENT");
         assertThat(row.score()).isEqualTo(6);
+        // bug 20260902-480：评论送审的「查看内容」跳到**评论所在的帖**（看上下文）。
+        assertThat(row.contentRefId()).isEqualTo(decoy.getId());
     }
 
     /** 终态映射：{@code TIMED_OUT}（挂到超时被系统放掉）→ **无需处置**，不是「已处理」。 */

@@ -214,6 +214,25 @@ public class ContentService {
     }
 
     /**
+     * 后台内容详情投影（2026-09-02 内容详情页）：**全文**（列表行是截断预览）+ 状态 + 可见性，
+     * 含已删/审核挂起 —— 复核场景恰恰要看这些。content 模块对外只读 DTO，admin 不拿实体。
+     */
+    public record AdminPostDetail(long id, ContentType type, Long authorId, Long petId,
+            String text, List<String> imageUrls, boolean deleted, PostStatus status,
+            com.tailtopia.content.domain.ContentVisibility visibility, Instant createdAt,
+            String speciesOverride) {
+    }
+
+    /** 后台内容详情（2026-09-02）；不存在返回 empty。 */
+    @Transactional(readOnly = true)
+    public Optional<AdminPostDetail> adminDetail(long postId) {
+        return posts.findById(postId).map(p -> new AdminPostDetail(p.getId(), p.getType(),
+                p.getAuthorId(), p.getPetId(), p.getText(), p.getImageUrls(),
+                p.getDeletedAt() != null, p.getStatus(), p.getVisibility(), p.getCreatedAt(),
+                p.getSpeciesOverride()));
+    }
+
+    /**
      * 后台按一批 id 取内容行（2026-08-28「按点赞时间」口径用）。
      *
      * <p>⚠️ **不保证顺序** —— 调用方按自己的次序还原（这里的次序是"窗口内赞数降序"，
@@ -351,18 +370,21 @@ public class ContentService {
         if (existing.isPresent()) {
             return posts.findById(existing.get())
                     .map(ContentPostResponse::from)
-                    .orElseThrow(() -> AppException.notFound("内容不存在"));
+                    .orElseThrow(() -> AppException.notFound("内容不存在")
+                            .code("admin.err.seed.postNotFound"));
         }
 
         String text = blankToNull(req.text());
         List<String> imageUrls = req.imageUrls();
+        // 文案码仅供后台链路（种子/批量发布走到这里时按后台语言回显）；App 链路行为不变。
         if (imageUrls != null && imageUrls.size() > 9) {
-            throw AppException.validation("最多 9 张图片");
+            throw AppException.validation("最多 9 张图片").code("admin.err.seed.tooManyImages", 9);
         }
 
         // AC6（R2）：最低内容门槛——文字与图片皆空不可发布（服务端权威，前端置灰仅辅助）。
         if (text == null && (imageUrls == null || imageUrls.isEmpty())) {
-            throw AppException.validation("请填写文字或上传图片");
+            throw AppException.validation("请填写文字或上传图片")
+                    .code("admin.err.seed.textOrImageRequired");
         }
 
         Long petId = req.petId();
@@ -370,10 +392,12 @@ public class ContentService {
         if (req.type() == ContentType.GROWTH_MOMENT) {
             // 成长日历必须绑定属于当前用户的宠物档案。
             if (petId == null) {
-                throw AppException.validation("成长日历快乐时刻需绑定宠物档案");
+                throw AppException.validation("成长日历快乐时刻需绑定宠物档案")
+                        .code("admin.err.seed.growthNeedsPet");
             }
             if (!profileService.ownsPet(authorId, petId)) {
-                throw AppException.validation("无法绑定该宠物档案");
+                throw AppException.validation("无法绑定该宠物档案")
+                        .code("admin.err.seed.petNotOwned");
             }
             // AC5（R2 · F9）：事件日期仅 GROWTH_MOMENT 有值；缺省取今天；不可未来。
             // 「今天」按印尼业务时区 WIB（Asia/Jakarta, UTC+7）判定，勿用 UTC——否则 WIB 00:00~07:00
@@ -381,7 +405,8 @@ public class ContentService {
             LocalDate todayWib = LocalDate.now(java.time.ZoneId.of("Asia/Jakarta"));
             eventDate = req.eventDate() != null ? req.eventDate() : todayWib;
             if (eventDate.isAfter(todayWib)) {
-                throw AppException.validation("事件日期不能晚于今天");
+                throw AppException.validation("事件日期不能晚于今天")
+                        .code("admin.err.seed.eventDateFuture");
             }
         } else {
             // 普通类型不绑宠物、不写事件日期，忽略客户端误传的 petId/eventDate。
@@ -393,8 +418,10 @@ public class ContentService {
         ModerationOutcome outcome = moderation.evaluate(text, imageUrls);
         switch (outcome.verdict()) {
             // ① L1 硬拦截：无论人工审核开关开关，一律即时 throw、不落库、不进挂起态（D-CM2）。
-            case TEXT_BLOCKED -> throw AppException.contentTextBlocked("内容包含不当词汇，请修改后重试");
-            case IMAGE_BLOCKED -> throw AppException.contentImageBlocked("图片包含违规内容，请替换后重试");
+            case TEXT_BLOCKED -> throw AppException.contentTextBlocked("内容包含不当词汇，请修改后重试")
+                    .code("admin.err.seed.textBlocked");
+            case IMAGE_BLOCKED -> throw AppException.contentImageBlocked("图片包含违规内容，请替换后重试")
+                    .code("admin.err.seed.imageBlocked");
             default -> { /* PASS / RISKY / DEGRADED 走下方分级路由 */ }
         }
 

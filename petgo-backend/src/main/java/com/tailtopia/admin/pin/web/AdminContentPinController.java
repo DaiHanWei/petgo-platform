@@ -5,6 +5,7 @@ import com.tailtopia.admin.pin.service.AdminContentPinService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.content.domain.ContentPin;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -42,8 +43,21 @@ public class AdminContentPinController {
 
     private final AdminContentPinService service;
 
-    public AdminContentPinController(AdminContentPinService service) {
+    /**
+     * 推广卡片图本地上传（2026-09-02）。复用种子图片那条上传线：格式白名单（JPG/PNG/WebP、
+     * 拒 HEIC）、≤10MB、量宽高出 0.75–1.34 的裁切预判 —— 卡片在 Feed 里就是一张普通内容卡，
+     * 约束天然一致。
+     */
+    private final com.tailtopia.admin.seed.service.AdminSeedImageService images;
+
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public AdminContentPinController(AdminContentPinService service, Messages msg,
+            com.tailtopia.admin.seed.service.AdminSeedImageService images) {
         this.service = service;
+        this.msg = msg;
+        this.images = images;
     }
 
     @GetMapping("/admin/content-pins")
@@ -77,6 +91,8 @@ public class AdminContentPinController {
             @RequestParam String objectType,
             @RequestParam(required = false) Long contentId,
             @RequestParam(required = false) String promoImageUrl,
+            @RequestParam(value = "promoImageFile", required = false)
+            org.springframework.web.multipart.MultipartFile promoImageFile,
             @RequestParam(required = false) String promoTitle,
             @RequestParam(required = false) String promoLinkUrl,
             @RequestParam String startsAt,
@@ -86,19 +102,32 @@ public class AdminContentPinController {
             Instant from = toInstant(startsAt);
             Instant to = toInstant(endsAt);
             if ("PROMO".equals(objectType)) {
+                String imageUrl = blankToNull(promoImageUrl);
+                String cropWarning = null;
+                // 2026-09-02：本地上传（与 URL 二选一，都给时以上传为准）。
+                if (promoImageFile != null && !promoImageFile.isEmpty()) {
+                    var uploaded = images.upload(promoImageFile, "pin-promo");
+                    imageUrl = uploaded.url();
+                    cropWarning = uploaded.warning();
+                }
                 service.createPromoPin(admin.getAdminAccountId(), slot,
-                        blankToNull(promoImageUrl), blankToNull(promoTitle),
+                        imageUrl, blankToNull(promoTitle),
                         blankToNull(promoLinkUrl), from, to);
+                // 🛡 比例超出 0.75–1.34 → 保存成功但明说会被裁多少（只提醒，不拦）。
+                if (cropWarning != null) {
+                    flash.addFlashAttribute("error", cropWarning);
+                }
             } else {
                 if (contentId == null) {
-                    throw AppException.validation("请选择要顶置的内容");
+                    throw AppException.validation("请选择要顶置的内容")
+                            .code("admin.err.pins.contentRequired");
                 }
                 service.createContentPin(admin.getAdminAccountId(), slot, contentId, from, to);
             }
-            flash.addFlashAttribute("notice", "已保存顶置排期");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.pins.saved"));
         } catch (AppException e) {
             // 重叠 / 缺必填 / 时间窗非法都收在这里回显一句人话，不抛 500。
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/content-pins?slot=" + slot;
     }
@@ -110,9 +139,9 @@ public class AdminContentPinController {
             RedirectAttributes flash) {
         try {
             service.reschedule(admin.getAdminAccountId(), id, toInstant(startsAt), toInstant(endsAt));
-            flash.addFlashAttribute("notice", "已更新排期时间");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.pins.rescheduled"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/content-pins";
     }
@@ -124,9 +153,9 @@ public class AdminContentPinController {
         try {
             boolean changed = service.terminate(admin.getAdminAccountId(), id, Instant.now());
             flash.addFlashAttribute(changed ? "notice" : "error",
-                    changed ? "已提前结束该顶置" : "该排期已结束，无需再操作");
+                    msg.get(changed ? "admin.flash.pins.terminated" : "admin.flash.pins.alreadyEnded"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/content-pins";
     }
@@ -141,7 +170,7 @@ public class AdminContentPinController {
         try {
             return LocalDateTime.parse(localDateTime).atZone(WIB).toInstant();
         } catch (RuntimeException e) {
-            throw AppException.validation("时间格式不正确");
+            throw AppException.validation("时间格式不正确").code("admin.err.pins.badTimeFormat");
         }
     }
 

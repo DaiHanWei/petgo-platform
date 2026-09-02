@@ -162,17 +162,28 @@ public class AdminUserService {
         return accountQuery.listUsers(pageable).map(this::toRow);
     }
 
-    /** 按用户 id 或注册邮箱搜索普通用户（USER）。命中 0 或 1 条。 */
+    /** 昵称模糊命中上限：与列表页一页 50 条同量级，防「搜一个字」拖全表进内存。 */
+    private static final int NAME_SEARCH_LIMIT = 50;
+
+    /**
+     * 按用户 id / 注册邮箱 / 昵称搜索普通用户（USER）。id 精确命中、完整邮箱精确命中排最前；
+     * 昵称与邮箱都支持模糊匹配（2026-09-02 运营诉求：手里常常只有截图上的昵称或邮箱的一段），
+     * 近注册在前、至多 {@value #NAME_SEARCH_LIMIT} 条。两路按 id 去重。
+     */
     @Transactional(readOnly = true)
     public List<AdminUserRow> search(String query) {
         if (query == null || query.isBlank()) {
             return List.of();
         }
         String q = query.trim();
-        Optional<User> hit = q.chars().allMatch(Character::isDigit)
+        Optional<User> exact = q.chars().allMatch(Character::isDigit)
                 ? safeById(q)
                 : accountQuery.findUserByEmail(q);
-        return hit.map(u -> List.of(toRow(u))).orElseGet(List::of);
+        java.util.LinkedHashMap<Long, User> merged = new java.util.LinkedHashMap<>();
+        exact.ifPresent(u -> merged.put(u.getId(), u));
+        accountQuery.searchUsersByDisplayedName(q, NAME_SEARCH_LIMIT)
+                .forEach(u -> merged.putIfAbsent(u.getId(), u));
+        return merged.values().stream().map(this::toRow).toList();
     }
 
     /**
@@ -202,33 +213,45 @@ public class AdminUserService {
     //    结果导出直接 500（`cannot execute INSERT in a read-only transaction`）：
     //    读的部分没问题，是那条审计插入被只读事务挡了。
     @Transactional
-    public String exportRecallList(long actorAccountId, boolean filled) {
+    public byte[] exportRecallList(long actorAccountId, boolean filled) {
         List<User> rows = users.findAllByRoleAndPhoneFilled(
                 com.tailtopia.auth.domain.Role.USER, filled);
-        StringBuilder csv = new StringBuilder("user_id,display_name,phone,account_status\n");
-        for (User u : rows) {
-            boolean deleted = u.getDeletedAt() != null;
-            String name = deleted ? u.getDeletedDisplayName() : currentName(u);
-            // 账号状态：正常 / 已停用 / 已注销 —— 由运营自行判断是否纳入触达。
-            String status = deleted ? "DELETED" : (deactivated(u) ? "DEACTIVATED" : "ACTIVE");
-            csv.append(u.getId()).append(',')
-                    .append(csvCell(name)).append(',')
-                    .append(csvCell(u.getPhone())).append(',')
-                    .append(status).append('\n');
+        // bug 20260901-469 附带诉求：导出改真 .xlsx（原 CSV 在运营的 Excel 里挤成一列）。
+        // ⚠️ 手机号一律**文本单元格**：印尼号码以 0 开头，数字单元格会把前导 0 吃掉，
+        //    导出的名单就是一份拨不通的号码表。
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb =
+                new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("recall");
+            org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
+            String[] headers = {"user_id", "display_name", "phone", "account_status"};
+            for (int i = 0; i < headers.length; i++) {
+                header.createCell(i).setCellValue(headers[i]);
+            }
+            int rowIdx = 1;
+            for (User u : rows) {
+                boolean deleted = u.getDeletedAt() != null;
+                String name = deleted ? u.getDeletedDisplayName() : currentName(u);
+                // 账号状态：正常 / 已停用 / 已注销 —— 由运营自行判断是否纳入触达。
+                String status = deleted ? "DELETED" : (deactivated(u) ? "DEACTIVATED" : "ACTIVE");
+                org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
+                row.createCell(0).setCellValue(u.getId());
+                row.createCell(1).setCellValue(name == null ? "" : name);
+                row.createCell(2).setCellValue(u.getPhone() == null ? "" : u.getPhone());
+                row.createCell(3).setCellValue(status);
+            }
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+            wb.write(out);
+            // ⚠️ 审计摘要里**只写条数与筛选条件，绝不写号码本身**。
+            auditService.record(actorAccountId, "USER_PHONE_RECALL_EXPORT", "USER", null,
+                    "导出召回名单：filter=" + (filled ? "已填写" : "未填写") + " rows=" + rows.size());
+            return out.toByteArray();
+        } catch (java.io.IOException e) {
+            throw com.tailtopia.shared.error.AppException.serviceUnavailable("Excel 导出生成失败")
+                    .code("admin.err.users.exportFailed");
         }
-        // ⚠️ 审计摘要里**只写条数与筛选条件，绝不写号码本身**。
-        auditService.record(actorAccountId, "USER_PHONE_RECALL_EXPORT", "USER", null,
-                "导出召回名单：filter=" + (filled ? "已填写" : "未填写") + " rows=" + rows.size());
-        return csv.toString();
-    }
-
-    private static String csvCell(String raw) {
-        if (raw == null) {
-            return "";
-        }
-        // 逗号/引号/换行都要转义，否则一个昵称里的逗号就能把整份名单的列错开。
-        String escaped = raw.replace("\"", "\"\"");
-        return '"' + escaped + '"';
     }
 
     /** 用户详情聚合（五块只读）。 */

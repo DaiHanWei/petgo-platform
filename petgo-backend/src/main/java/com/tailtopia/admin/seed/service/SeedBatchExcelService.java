@@ -130,7 +130,8 @@ public class SeedBatchExcelService {
             wb.write(out);
             return out.toByteArray();
         } catch (Exception e) {
-            throw AppException.serviceUnavailable("Excel 模板生成失败");
+            throw AppException.serviceUnavailable("Excel 模板生成失败")
+                    .code("admin.err.seedBatch.templateBuildFailed");
         }
     }
 
@@ -164,7 +165,8 @@ public class SeedBatchExcelService {
      */
     public List<RawRow> parse(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw AppException.validation("请选择要导入的 Excel 文件");
+            throw AppException.validation("请选择要导入的 Excel 文件")
+                    .code("admin.err.seedBatch.fileRequired");
         }
         List<RawRow> out = new ArrayList<>();
         try (InputStream in = file.getInputStream(); Workbook wb = WorkbookFactory.create(in)) {
@@ -193,10 +195,12 @@ public class SeedBatchExcelService {
         } catch (AppException e) {
             throw e;
         } catch (Exception e) {
-            throw AppException.validation("Excel 解析失败，请用最新模板重试");
+            throw AppException.validation("Excel 解析失败，请用最新模板重试")
+                    .code("admin.err.seedBatch.parseFailed");
         }
         if (out.isEmpty()) {
-            throw AppException.validation("Excel 里没有有效的数据行");
+            throw AppException.validation("Excel 里没有有效的数据行")
+                    .code("admin.err.seedBatch.noDataRows");
         }
         return out;
     }
@@ -268,7 +272,9 @@ public class SeedBatchExcelService {
             }
         }
         throw AppException.validation("内容类型「" + raw + "」不可用于批量发布（只支持 "
-                + BATCH_TYPES.stream().map(Enum::name).toList() + "）");
+                + BATCH_TYPES.stream().map(Enum::name).toList() + "）")
+                .code("admin.err.seedBatch.typeNotAllowed", raw,
+                        BATCH_TYPES.stream().map(Enum::name).toList().toString());
     }
 
     /** {@code yyyy-MM-dd HH:mm}（WIB 墙上时间）→ UTC。解析不了就当没填。 */

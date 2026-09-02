@@ -168,7 +168,7 @@ public class AdminWebController {
             @PathVariable long postId,
             org.springframework.web.servlet.mvc.support.RedirectAttributes flash) {
         int n = adminModerationService.dismissAllForPost(postId, admin);
-        flash.addFlashAttribute("notice", "已驳回该帖全部举报（" + n + " 条）");
+        flash.addFlashAttribute("notice", msg.get("admin.flash.review.dismissedAll", n));
         // 内容举报现在的所在页是「人工复核」（2026-08-19 拆分）。
         return "redirect:/admin/manual-review";
     }

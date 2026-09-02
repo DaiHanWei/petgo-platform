@@ -41,7 +41,7 @@
                     <!-- ===== 发布账号（V1.1.6 Story 12.2 · AC1）=====
                          此前这一页**根本没有账号选择控件**：作者写死为"登录后台账号所关联的
                          官方作者身份"。防呆走 12-1 的共用片段，四条行为一份实现。 -->
-                    <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'seedAuthorUserId', 'authorUserId', @{/admin/seed-post/pets}, '#seedPetSelect')}"></div>
+                    <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'seedAuthorUserId', 'authorUserId', @{/admin/seed-post/pets}, '#seedPetSelect', null)}"></div>
                     <p class="err" th:if="${#fields.hasErrors('authorUserId')}" th:errors="*{authorUserId}">账号错误</p>
 
                     <!-- ===== 关联物种（V1.1.6 Story 14.1 · AC4）=====
@@ -120,7 +120,7 @@
                      默认不预选 / 仅选中真实账号时弹二次确认。三处发布入口共用同一份实现。 -->
                 <form method="post" th:action="@{/admin/seed-batch}"
                       th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
-                    <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'batchVirtualUserId', 'virtualUserId', null, null)}"></div>
+                    <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'batchVirtualUserId', 'virtualUserId', null, null, null)}"></div>
                     <label class="field" for="batchLines" th:text="#{admin.seed.batch.lines}">批量内容（每行一条）</label>
                     <textarea id="batchLines" name="lines" rows="12" required
                               th:placeholder="#{admin.seed.batch.linesPlaceholder}"
@@ -130,7 +130,7 @@
                 <hr class="section-line"/>
                 <form method="post" th:action="@{/admin/seed-batch/import}" enctype="multipart/form-data"
                       th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
-                    <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'importVirtualUserId', 'virtualUserId', null, null)}"></div>
+                    <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'importVirtualUserId', 'virtualUserId', null, null, null)}"></div>
                     <label class="field" for="seedImportFile" th:text="#{admin.seed.batch.excel}">Excel 导入</label>
                     <input id="seedImportFile" name="file" type="file" class="field-full" required
                            accept=".xlsx,.xls,.csv,.tsv,.txt"/>

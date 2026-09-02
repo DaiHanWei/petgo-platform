@@ -145,4 +145,21 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
             ORDER BY o.deliveredAt ASC
             """)
     List<ShopOrder> findAutoCompleteDue(@Param("threshold") Instant threshold, Pageable pageable);
+
+    /**
+     * 账号注销级联（Story 7.3，照 consult_orders 口径）：<b>订单行保留</b>（交易/财务记录），
+     * 只剥收货地址快照里的三项 PII（姓名/电话/详细地址，AD-13 标 🔒 的那三列）。
+     * 省/市/区与邮编是运营统计粒度，非个人标识，保留。
+     *
+     * <p>⚠️ 快照列实体上标了 {@code updatable = false}，走 JPQL 批量 UPDATE 绕开
+     * （批量语句不受该标记约束）；列 NOT NULL，置空串而非 NULL。幂等：重跑再置一遍空串无副作用。
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("""
+            UPDATE ShopOrder o
+            SET o.shipReceiverName = '', o.shipReceiverPhone = '', o.shipAddressLine = '',
+                o.updatedAt = CURRENT_TIMESTAMP
+            WHERE o.userId = :userId
+            """)
+    int anonymizeShipSnapshotByUserId(@Param("userId") long userId);
 }

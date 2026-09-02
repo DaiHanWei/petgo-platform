@@ -97,18 +97,23 @@ public class ContentTagQueryService {
     @Transactional
     public ContentTagAssignment assign(long postId, long tagId, Instant startsAt, Instant endsAt) {
         ContentPost post = posts.findById(postId)
-                .orElseThrow(() -> AppException.validation("内容不存在"));
+                .orElseThrow(() -> AppException.validation("内容不存在")
+                        .code("admin.err.contentTag.postNotFound"));
         // 🛡 已下线的标签不可再分配（Story 11.2）。已分配的不受影响 —— 下线是"不再发新的"。
         ContentTag tag = tags.findById(tagId)
-                .orElseThrow(() -> AppException.validation("标签不存在"));
+                .orElseThrow(() -> AppException.validation("标签不存在")
+                        .code("admin.err.contentTag.notFound"));
         if (tag.isRetired()) {
-            throw AppException.validation("该标签已下线，不能再分配");
+            throw AppException.validation("该标签已下线，不能再分配")
+                    .code("admin.err.contentTag.tagRetired");
         }
         if (!isPubliclyVisible(post)) {
-            throw AppException.validation("只有公开内容可以打标（未同步的私密 Diary 不可打标）");
+            throw AppException.validation("只有公开内容可以打标（未同步的私密 Diary 不可打标）")
+                    .code("admin.err.contentTag.publicOnly");
         }
         if (startsAt == null || (endsAt != null && !endsAt.isAfter(startsAt))) {
-            throw AppException.validation("结束时间必须晚于开始时间");
+            throw AppException.validation("结束时间必须晚于开始时间")
+                    .code("admin.err.contentTag.endNotAfterStart");
         }
         // 🔴 Story 11.6：一条内容**同时**最多一个装饰标签（2026-08-25 产品定）。
         //
@@ -123,7 +128,8 @@ public class ContentTagQueryService {
                     .map(ContentTag::getName).orElse("#" + first.getTagId());
             // 🛡 报错要**点明是哪一个**：只说"已有标签"运营得自己去列表里找。
             throw AppException.validation("这条内容在该时段已有装饰标签「" + name
-                    + "」，一条内容同时只能挂一个。请先移除它，或把新标签的时间排在它之后。");
+                    + "」，一条内容同时只能挂一个。请先移除它，或把新标签的时间排在它之后。")
+                    .code("admin.err.contentTag.overlap", name);
         }
         return assignments.save(ContentTagAssignment.of(postId, tagId, startsAt, endsAt));
     }

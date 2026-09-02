@@ -135,17 +135,22 @@ public class RefundExecutionService {
 
         // ---------- ④ 回程运费返还（平台承担时） ----------
         // 独立于 refundAmount：它不是订单里的钱，不参与 AD-2 的两段拆分（分母是订单总额）。
+        long shipbackReimbursed = 0L;
         if (q.shipbackReimbursement() > 0
                 && r.getCashDestination() == CashDestination.TO_PAWCOIN) {
             wallet.credit(r.getUserId(), q.shipbackReimbursement(), PawCoinTxnType.REFUND,
                     "SHOP_RETURN_SHIPFEE", r.getId(), idem + ":shipback");
+            shipbackReimbursed = q.shipbackReimbursement();
         }
+        // 🔴 TO_BANK：本版回程运费【没有】银行报销通道（财务线下打款单只含现金段本金），
+        //    故 shipback_reimbursed 只记实际到账的那笔（TO_PAWCOIN 路径），不得预标 —— 预标
+        //    等于账上写了一笔从未支付的报销。TODO：运费并入银行打款流程后，在财务回填处补记。
 
         // ---------- ⑤ 记账 ----------
         r.recordRefundPlan(q.refundTotal(), q.coinRefund(), q.cashRefund(),
                 q.compensationPremium());
         r.recordIncentivePremium(q.incentivePremium());
-        r.recordShipbackReimbursement(q.shipbackReimbursement());
+        r.recordShipbackReimbursement(shipbackReimbursed);
         r.markRefunded();
         returns.save(r);
 
@@ -166,8 +171,9 @@ public class RefundExecutionService {
         log.info("退款执行完成 return={} coin={} cash={} premium={} orderRefunded={}",
                 r.getPublicToken(), q.coinRefund(), q.cashRefund(), q.compensationPremium(),
                 orderFullyRefunded);
+        // ⚠️ Outcome 里的 shipbackReimbursed 是【实际到账】的报销额（TO_BANK 时为 0），与库中记账同源。
         return new Outcome(q.coinRefund(), q.cashRefund(), q.compensationPremium(),
-                q.incentivePremium(), q.shipbackReimbursement(), orderFullyRefunded);
+                q.incentivePremium(), shipbackReimbursed, orderFullyRefunded);
     }
 
     /** S-8 ③：退款执行失败 → 可重试；超 3 次转人工。 */

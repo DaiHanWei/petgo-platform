@@ -55,6 +55,13 @@ public class SeedBatchAsset {
     @Column(name = "size_bytes", nullable = false)
     private long sizeBytes;
 
+    /**
+     * 文件内容 SHA-256（hex，bug 20260901-467）。素材级查重的判据 ——
+     * 同内容改名/跨批重传都靠它识别。⚠️ 存量行为 null（不回填，不参与查重）。
+     */
+    @Column(name = "content_sha256", length = 64)
+    private String contentSha256;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -120,6 +127,14 @@ public class SeedBatchAsset {
 
     public long getSizeBytes() {
         return sizeBytes;
+    }
+
+    public String getContentSha256() {
+        return contentSha256;
+    }
+
+    public void setContentSha256(String v) {
+        this.contentSha256 = v;
     }
 
     public Instant getCreatedAt() {

@@ -49,6 +49,8 @@ public class AdminSeedBatchWorkspaceController {
 
     /** 批次列表页底部那段排期用（bug 20260826：上传与看情况同一页）。 */
     private final com.tailtopia.admin.seed.repository.SeedBatchRowRepository scheduleRows;
+    /** 确认发布的结果提示按当前语言输出（bug 20260901-473，后台三语）。 */
+    private final com.tailtopia.shared.i18n.Messages i18n;
 
     public AdminSeedBatchWorkspaceController(SeedBatchService batches,
             SeedBatchAssetService assets,
@@ -56,7 +58,8 @@ public class AdminSeedBatchWorkspaceController {
             com.tailtopia.admin.seed.service.SeedBatchExcelService excel,
             com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities,
             com.tailtopia.admin.seed.service.SeedBatchPublishService publishing,
-            com.tailtopia.admin.seed.repository.SeedBatchRowRepository scheduleRows) {
+            com.tailtopia.admin.seed.repository.SeedBatchRowRepository scheduleRows,
+            com.tailtopia.shared.i18n.Messages i18n) {
         this.batches = batches;
         this.assets = assets;
         this.entry = entry;
@@ -64,6 +67,7 @@ public class AdminSeedBatchWorkspaceController {
         this.identities = identities;
         this.publishing = publishing;
         this.scheduleRows = scheduleRows;
+        this.i18n = i18n;
     }
 
     /** 批次列表 —— 🛡 按各行状态**聚合**展示（13-1 AC2），批次自己没有状态。 */
@@ -88,7 +92,8 @@ public class AdminSeedBatchWorkspaceController {
             @RequestParam(defaultValue = "ONLINE_PASTE") SeedBatch.Source source,
             RedirectAttributes flash) {
         SeedBatch b = batches.openBatch(source, admin.getAdminAccountId());
-        flash.addFlashAttribute("notice", "已新建批次 #" + b.getId());
+        flash.addFlashAttribute("notice",
+                i18n.get("admin.flash.seedBatch.batchOpened", String.valueOf(b.getId())));
         return "redirect:/admin/seed-batches/" + b.getId();
     }
 
@@ -98,8 +103,24 @@ public class AdminSeedBatchWorkspaceController {
     public String workspace(@PathVariable long batchId, Model model) {
         model.addAttribute("active", "seed");
         model.addAttribute("batchId", batchId);
-        model.addAttribute("rows", batches.rowsOf(batchId));
+        var batchRows = batches.rowsOf(batchId);
+        model.addAttribute("rows", batchRows);
         model.addAttribute("batch", entry.findBatch(batchId).orElse(null));
+        // bug 20260901-468：行内「图片」输入框的回显值。行存的是 URL、输入框填的是文件名，
+        // 这里反查一次拼回逗号串 —— 不回显的话，再点一次保存会把已绑定的图片当成"清空"抹掉。
+        java.util.Map<String, String> urlToName = new java.util.HashMap<>();
+        for (var a : assets.wall(batchId)) {
+            urlToName.put(a.getUrl(), a.getFileName());
+        }
+        java.util.Map<Long, String> rowAssetNames = new java.util.HashMap<>();
+        for (var r : batchRows) {
+            if (r.getImageUrls() == null || r.getImageUrls().isEmpty()) {
+                continue;
+            }
+            rowAssetNames.put(r.getId(), r.getImageUrls().stream()
+                    .map(u -> urlToName.getOrDefault(u, u)).collect(java.util.stream.Collectors.joining(",")));
+        }
+        model.addAttribute("rowAssetNames", rowAssetNames);
         // 🔴 批次级设置的三个下拉数据源。**全页只有这一处** —— 此前在线录入与
         //    Excel 导入各带一个一模一样的账号下拉，同一页面出现两次。
         model.addAttribute("publishIdentities", identities.selectableIdentities());
@@ -109,6 +130,23 @@ public class AdminSeedBatchWorkspaceController {
                 com.tailtopia.admin.seed.service.SeedBatchExcelService.SPECIES_OPTIONS);
         addWall(model, batchId);
         return "admin/seed-batch-workspace";
+    }
+
+    /**
+     * 单张素材删除（bug 20260901-474）：标记废弃，OSS 对象不物理删（F21）。
+     * 被待发布行引用时拒绝并指出行号（校验在服务层，权威）。
+     */
+    @PostMapping("/admin/seed-batches/{batchId}/assets/{assetId}/delete")
+    @PreAuthorize(AUTH)
+    public String removeAsset(@PathVariable long batchId, @PathVariable long assetId,
+            RedirectAttributes flash) {
+        try {
+            assets.remove(batchId, assetId);
+            flash.addFlashAttribute("notice", i18n.get("admin.batch.asset.removed"));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", i18n.resolve(e));
+        }
+        return "redirect:/admin/seed-batches/" + batchId;
     }
 
     /** 页头那一处批次级设置（AC1）。 */
@@ -122,9 +160,9 @@ public class AdminSeedBatchWorkspaceController {
         try {
             entry.saveDefaults(batchId, defaultAuthorUserId, defaultContentType,
                     wallClockToUtc(defaultScheduledAt));
-            flash.addFlashAttribute("notice", "已保存批次设置");
+            flash.addFlashAttribute("notice", i18n.get("admin.flash.seedBatch.settingsSaved"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", i18n.resolve(e));
         }
         return "redirect:/admin/seed-batches/" + batchId;
     }
@@ -141,9 +179,9 @@ public class AdminSeedBatchWorkspaceController {
             RedirectAttributes flash) {
         try {
             int n = entry.pasteLines(batchId, lines);
-            flash.addFlashAttribute("notice", "已生成 " + n + " 个待编辑行");
+            flash.addFlashAttribute("notice", i18n.get("admin.flash.seedBatch.rowsPasted", n));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", i18n.resolve(e));
         }
         return "redirect:/admin/seed-batches/" + batchId;
     }
@@ -169,9 +207,10 @@ public class AdminSeedBatchWorkspaceController {
         try {
             entry.editRow(rowId, body, splitNames(assetFileNames), authorUserId, contentType,
                     species, wallClockToUtc(scheduledAt));
-            flash.addFlashAttribute("notice", "已保存第 " + rowId + " 行");
+            flash.addFlashAttribute("notice",
+                    i18n.get("admin.flash.seedBatch.rowSaved", String.valueOf(rowId)));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", i18n.resolve(e));
         }
         return "redirect:/admin/seed-batches/" + batchId;
     }
@@ -205,9 +244,9 @@ public class AdminSeedBatchWorkspaceController {
         try {
             var raws = excel.parse(file);
             int n = entry.appendRows(batchId, raws).size();
-            flash.addFlashAttribute("notice", "已导入 " + n + " 行");
+            flash.addFlashAttribute("notice", i18n.get("admin.flash.seedBatch.imported", n));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", i18n.resolve(e));
         }
         return "redirect:/admin/seed-batches/" + batchId;
     }
@@ -227,13 +266,15 @@ public class AdminSeedBatchWorkspaceController {
             at = java.time.LocalDateTime.parse(raw.trim().replace(' ', 'T'))
                     .atZone(WIB).toInstant();
         } catch (Exception e) {
-            throw AppException.validation("时间格式应为 2026-09-01T08:30");
+            throw AppException.validation("时间格式应为 2026-09-01T08:30")
+                    .code("admin.err.seedBatch.timeFormat");
         }
         // 🔴 V1.1.6 Story 13.5 · AC1：**不可早于当前时刻**。
         //    排一个已经过去的时间，下一轮扫描就会立刻发出去 —— 而运营的本意多半是
         //    "排到某个更晚的时候"，手滑填成过去的日期就成了立即发布，且不可撤回。
         if (!at.isAfter(java.time.Instant.now())) {
-            throw AppException.validation("计划发布时间不能早于当前时刻（印尼时间 WIB）");
+            throw AppException.validation("计划发布时间不能早于当前时刻（印尼时间 WIB）")
+                    .code("admin.err.seedBatch.scheduleNotFuture");
         }
         return at;
     }
@@ -322,24 +363,31 @@ public class AdminSeedBatchWorkspaceController {
             RedirectAttributes flash) {
         try {
             var out = publishing.confirm(batchId, admin.getAdminAccountId(), includeDuplicates);
-            StringBuilder msg = new StringBuilder("已发布 " + out.published() + " 条");
+            // bug 20260901-473：改经 i18n 组装（后台三语，硬编码中文会原样怼给印尼运营），
+            // 且**每个桶都必须出声** —— 少说一个桶，运营就会觉得有一行凭空消失了。
+            StringBuilder msg = new StringBuilder(i18n.get("admin.batch.confirm.published",
+                    out.published()));
             if (out.scheduled() > 0) {
-                msg.append("，转入排期 ").append(out.scheduled()).append(" 条");
+                msg.append(i18n.get("admin.batch.confirm.scheduled", out.scheduled()));
+            }
+            if (out.alreadyDone() > 0) {
+                // 此前已发布/已排期的行（比如预览刷两遍再点确认）—— 不说这一句，
+                // 汇总看起来就像「表格里的 Pass 行凭空消失」（473 的现场正是如此）。
+                msg.append(i18n.get("admin.batch.confirm.alreadyDone", out.alreadyDone()));
             }
             if (out.skippedByError() > 0) {
                 // 🛡 措辞写明"留在草稿里可改后重提"—— 只说"跳过 N 条"运营不知道那几条去哪了。
-                msg.append("；").append(out.skippedByError()).append(" 条校验未过，留在草稿里可修改后再提交");
+                msg.append(i18n.get("admin.batch.confirm.skippedError", out.skippedByError()));
             }
             if (out.skippedByDuplicate() > 0) {
-                msg.append("；").append(out.skippedByDuplicate())
-                        .append(" 条与该账号已发内容重复，未发（如仍要发请勾选「重复的也发」）");
+                msg.append(i18n.get("admin.batch.confirm.skippedDuplicate", out.skippedByDuplicate()));
             }
             if (out.failed() > 0) {
-                msg.append("；").append(out.failed()).append(" 条发布失败，原因见该行");
+                msg.append(i18n.get("admin.batch.confirm.failed", out.failed()));
             }
             flash.addFlashAttribute("notice", msg.toString());
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", i18n.resolve(e));
         }
         return "redirect:/admin/seed-batches/" + batchId + "/preview";
     }
@@ -348,5 +396,8 @@ public class AdminSeedBatchWorkspaceController {
         model.addAttribute("assets", assets.wall(batchId));
         model.addAttribute("usage", assets.usage(batchId));
         model.addAttribute("wallBatchId", batchId);
+        // bug 20260901-467：内容重复标记（标记提示但放行）。上传后墙经此路径整体刷新，
+        // 所以标记在拖完图的下一刻就可见。
+        model.addAttribute("assetDupNotes", assets.duplicateNotes(batchId));
     }
 }

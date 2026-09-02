@@ -49,10 +49,21 @@
                 <td th:text="${c.row.authorUserId} == 0 ? '—' : ${c.row.authorUserId}">—</td>
                 <td th:text="${c.row.contentType}">DAILY</td>
                 <td th:text="${c.row.species} ?: '—'">—</td>
-                <td th:text="${c.row.scheduledAt} ?: '—'">—</td>
+                <!-- bug 20260901-473：改 WIB 展示 —— 原来直接打印 Instant 是 UTC 原始串，
+                     与后台"一律雅加达时间"的约定相悖，运营会按自己的表读错 7 小时。 -->
+                <td th:text="${c.row.scheduledAt != null ? @adminTime.wib(c.row.scheduledAt) : '—'}">—</td>
                 <td>
+                    <!-- bug 20260901-473：已发布/已排期的行必须亮明状态 —— 否则它们仍显示 Pass，
+                         而确认发布会跳过它们，运营就会看到「表格 1 条 Pass、汇总 0 条发布」。 -->
+                    <span class="badge badge-ok" th:if="${c.row.status.name() == 'PUBLISHED'}"
+                          th:text="#{admin.batch.preview.alreadyPublished}">已发布（本次确认将跳过）</span>
+                    <span class="badge" th:if="${c.row.status.name() == 'SCHEDULED'}"
+                          th:text="#{admin.batch.preview.alreadyScheduled}">已排期（本次确认将跳过）</span>
                     <!-- 每条错误都要能对上运营那份表格：素材报文件名、类型报合法取值、账号报原因。 -->
-                    <span th:if="${c.passes() and !c.duplicate()}" th:text="#{admin.batch.preview.pass}">通过</span>
+                    <span th:if="${c.passes() and !c.duplicate()
+                                   and c.row.status.name() != 'PUBLISHED'
+                                   and c.row.status.name() != 'SCHEDULED'}"
+                          th:text="#{admin.batch.preview.pass}">通过</span>
                     <!-- 🔴 去重命中是**提示**不是错误（AC4）：原先是静默跳过，
                          界面只显示一个跳过条数，运营根本不知道哪一条被吞了。 -->
                     <span class="err" th:if="${c.warns()}"

@@ -149,7 +149,7 @@ public class AdminModerationService {
     public int dismissAllForPost(long postId, AdminUserDetails admin) {
         List<ContentReport> pending = reportService.findPendingForPost(postId);
         if (pending.isEmpty()) {
-            throw AppException.notFound("该帖没有待处理的举报");
+            throw AppException.notFound("该帖没有待处理的举报").code("admin.err.review.noPendingReports");
         }
         long handler = handlerId(admin);
         for (ContentReport r : pending) {
@@ -171,7 +171,8 @@ public class AdminModerationService {
     @Transactional
     public void takedownByPost(long postId, AdminUserDetails admin) {
         ContentReport first = reportService.findPendingForPost(postId).stream().findFirst()
-                .orElseThrow(() -> AppException.notFound("该帖没有待处理的举报"));
+                .orElseThrow(() -> AppException.notFound("该帖没有待处理的举报")
+                        .code("admin.err.review.noPendingReports"));
         takedown(first.getId(), admin);
     }
 

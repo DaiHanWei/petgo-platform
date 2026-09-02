@@ -72,6 +72,18 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
     Analytics.capture('toko_tab_viewed');
   }
 
+  /// FR-110 品类跳转二次注入：/shop 是 indexedStack 分支根，State 被保活 ——
+  /// 第二次 `go('/shop?category=Y')` 只重建 widget、initState 不重跑，须在此消费新品类。
+  /// `_selected` 变更后 build 里 `shopProductsProvider(_selected)` 随 watch 自动换源，无需额外加载。
+  /// 已知边界：同一 category 二连跳（新旧值相同）不触发 —— 页面本就停在该品类，可接受。
+  @override
+  void didUpdateWidget(covariant TokoPageV2 oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialCategory != oldWidget.initialCategory && widget.initialCategory != null) {
+      setState(() => _selected = ShopCategory.fromApi(widget.initialCategory));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);

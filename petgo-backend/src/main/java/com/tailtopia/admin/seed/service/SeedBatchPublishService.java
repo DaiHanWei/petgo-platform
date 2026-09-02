@@ -47,13 +47,15 @@ public class SeedBatchPublishService {
     private final com.tailtopia.auth.repository.UserRepository users;
     private final com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities;
     private final AdminAuditService audit;
+    /** 指纹图片键解析（bug 20260901-467）：URL → 素材内容哈希，三条发布路径同一判据。 */
+    private final SeedBatchAssetService assetService;
 
     public SeedBatchPublishService(SeedBatchRepository batches, SeedBatchRowRepository rows,
             SeedBatchValidator validator, SeedBatchService stateMachine,
             ContentService contentService, SeedContentHashRepository hashes,
             com.tailtopia.auth.repository.UserRepository users,
             com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities,
-            AdminAuditService audit) {
+            AdminAuditService audit, SeedBatchAssetService assetService) {
         this.batches = batches;
         this.rows = rows;
         this.validator = validator;
@@ -63,6 +65,7 @@ public class SeedBatchPublishService {
         this.users = users;
         this.identities = identities;
         this.audit = audit;
+        this.assetService = assetService;
     }
 
     /** 预览：逐行校验结果（AC1）。 */
@@ -74,7 +77,10 @@ public class SeedBatchPublishService {
 
     /** 确认发布的结果。 */
     public record PublishOutcome(int published, int scheduled, int skippedByError,
-            int skippedByDuplicate, int failed) {
+            int skippedByDuplicate, int failed,
+            /** bug 20260901-473：此前已发布/已排期而本次跳过的行数 —— 原先不计数不提示，
+             *  运营把预览刷两遍再点确认时，汇总看起来像「通过的那行凭空消失」。 */
+            int alreadyDone) {
     }
 
     /**
@@ -95,12 +101,16 @@ public class SeedBatchPublishService {
         int skippedByError = 0;
         int skippedByDuplicate = 0;
         int failed = 0;
+        int alreadyDone = 0;
 
         for (RowValidation check : checks) {
             SeedBatchRow row = check.row();
             // 已经发过 / 已经排期的行不重复处理 —— 运营可能把预览页刷两遍再点确认。
             if (row.getStatus() == SeedBatchRowStatus.PUBLISHED
                     || row.getStatus() == SeedBatchRowStatus.SCHEDULED) {
+                // bug 20260901-473：这个桶必须计数并出现在结果提示里 —— 静默跳过会让
+                // 「表格里明明有一条 Pass、汇总却说 0 条发布」，运营读成计数坏了。
+                alreadyDone++;
                 continue;
             }
             if (!check.passes()) {
@@ -136,8 +146,10 @@ public class SeedBatchPublishService {
         audit.record(adminAccountId, "SEED_BATCH_CONFIRM", "seed_batch", String.valueOf(batchId),
                 "published=" + published + " scheduled=" + scheduled
                         + " skippedByError=" + skippedByError
-                        + " skippedByDuplicate=" + skippedByDuplicate + " failed=" + failed);
-        return new PublishOutcome(published, scheduled, skippedByError, skippedByDuplicate, failed);
+                        + " skippedByDuplicate=" + skippedByDuplicate + " failed=" + failed
+                        + " alreadyDone=" + alreadyDone);
+        return new PublishOutcome(published, scheduled, skippedByError, skippedByDuplicate, failed,
+                alreadyDone);
     }
 
     /**
@@ -165,13 +177,17 @@ public class SeedBatchPublishService {
         //    在这里再查一次只能查出"没有权限"，把所有排期都毙掉。
         com.tailtopia.auth.domain.User author = users.findById(row.getAuthorUserId())
                 .orElseThrow(() -> AppException.validation(
-                        "发布账号 id=" + row.getAuthorUserId() + " 已不存在"));
+                        "发布账号 id=" + row.getAuthorUserId() + " 已不存在")
+                        .code("admin.err.seedBatch.authorMissing",
+                                String.valueOf(row.getAuthorUserId())));
         if (!identities.isInPool(author)) {
             throw AppException.validation(
-                    "发布账号「" + author.getNickname() + "」已不在运营发布身份池内");
+                    "发布账号「" + author.getNickname() + "」已不在运营发布身份池内")
+                    .code("admin.err.seedBatch.authorNotInPool", author.getNickname());
         }
         if (!author.isEnabled()) {
-            throw AppException.validation("发布账号「" + author.getNickname() + "」已停用");
+            throw AppException.validation("发布账号「" + author.getNickname() + "」已停用")
+                    .code("admin.err.seedBatch.authorDisabled", author.getNickname());
         }
         ContentPostResponse saved = contentService.publish(row.getAuthorUserId(),
                 new ContentPostCreateRequest(row.getContentType(), row.getPetId(), row.getBody(),
@@ -184,7 +200,7 @@ public class SeedBatchPublishService {
         }
         // 指纹：🔴 带**作者维度**（同一文案不同账号各自独立），并记下按发布键的后台账号。
         String hash = SeedContentFingerprint.of(row.getContentType(), row.getBody(),
-                row.getImageUrls());
+                assetService.fingerprintKeys(row.getImageUrls()));
         if (!hashes.existsByContentHashAndAuthorId(hash, row.getAuthorUserId())) {
             hashes.save(SeedContentHash.of(hash, saved.id(), row.getAuthorUserId(), adminAccountId));
         }
@@ -211,6 +227,7 @@ public class SeedBatchPublishService {
 
     private SeedBatch requireBatch(long batchId) {
         return batches.findById(batchId)
-                .orElseThrow(() -> AppException.notFound("批次不存在"));
+                .orElseThrow(() -> AppException.notFound("批次不存在")
+                        .code("admin.err.seedBatch.batchNotFound"));
     }
 }

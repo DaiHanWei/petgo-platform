@@ -55,15 +55,27 @@ public class ShopOrderPaymentService {
     private final PaymentIntentService paymentIntents;
     private final PaymentGateway gateway;
 
+    /**
+     * ⚠️ 自引用代理（照 {@code AccountDisposalService} 范式）。
+     *
+     * <p><b>无事务方法（{@link #pay} / {@link #cancelOverdue}）调本类事务方法必须经它</b>，
+     * 不能 {@code this.xxx(...)} —— 后者绕过 Spring 代理，{@code @Transactional} 直接不生效：
+     * 纯 PawCoin 的「扣币 + 出库 + 状态迁移同一事务」会退化成三步各自提交的假原子，
+     * 超时扫描的「逐笔独立事务」同样名存实亡。
+     */
+    private final org.springframework.beans.factory.ObjectProvider<ShopOrderPaymentService> selfProvider;
+
     public ShopOrderPaymentService(ShopOrderRepository orders, ShopOrderLineRepository orderLines,
             InventoryService inventory, CheckoutService checkout,
-            PaymentIntentService paymentIntents, PaymentGateway gateway) {
+            PaymentIntentService paymentIntents, PaymentGateway gateway,
+            org.springframework.beans.factory.ObjectProvider<ShopOrderPaymentService> selfProvider) {
         this.orders = orders;
         this.orderLines = orderLines;
         this.inventory = inventory;
         this.checkout = checkout;
         this.paymentIntents = paymentIntents;
         this.gateway = gateway;
+        this.selfProvider = selfProvider;
     }
 
     // ---------- 读 ----------
@@ -97,19 +109,22 @@ public class ShopOrderPaymentService {
      * @return 付款载荷；纯 PawCoin 单当场结清，返回的 {@code payload} 为 null
      */
     public PayResult pay(long userId, String orderToken, String idempotencyKey) {
-        ShopOrder order = requireOwn(userId, orderToken);
+        // 🔴 本方法刻意无事务（网关往返不入库事务），故事务方法一律经 self 代理调 ——
+        //    this.xxx() 自调用会绕过代理让 @Transactional 失效。
+        ShopOrderPaymentService self = selfProvider.getObject();
+        ShopOrder order = self.requireOwn(userId, orderToken);
         requirePayable(order);
 
         long cash = order.getCashAmount() == null ? order.getTotalAmount() : order.getCashAmount();
         if (cash <= 0) {
             // 纯 PawCoin：站内即时扣 + 当场结清（无网关往返，无意图）
-            settlePureCoin(userId, orderToken);
-            ShopOrder settled = requireOwn(userId, orderToken);
+            self.settlePureCoin(userId, orderToken);
+            ShopOrder settled = self.requireOwn(userId, orderToken);
             return new PayResult(settled.getStatus().name(), null, null, null);
         }
 
         // 有现金段：QRIS（纯现金）或 MIXED（两段都有）
-        PaymentIntent intent = ensureIntent(userId, order, idempotencyKey);
+        PaymentIntent intent = self.ensureIntent(userId, order, idempotencyKey);
         String payload = payloadOf(intent);
         if (intent.getGatewayRef() == null) {
             // 🔴 网关只收【现金段】：Coin 段是站内余额，不经网关。
@@ -169,27 +184,37 @@ public class ShopOrderPaymentService {
         ShopOrder order = orders.findByPublicTokenAndUserId(orderToken, userId)
                 .orElseThrow(() -> AppException.notFound("订单不存在"));
         requirePayable(order);
-        checkout.settlePawCoinSegment(order);
-        fulfillPaid(order);
+        // 🔴 先状态迁移再扣币（与 ShopOrderPaidHandler#onPaid 同序）：fulfillPaid 对非待支付
+        //    静默跳过，若先扣币，竞态下会留下「币已扣、单已取消」的无补偿态。
+        //    同一事务内，扣币失败（余额被别处花掉）整体回滚，出库与扣币仍是原子的。
+        if (fulfillPaid(order)) {
+            checkout.settlePawCoinSegment(order);
+        }
     }
 
     /**
-     * 支付成功后的收尾：<b>锁定库存 → 扣减出库 + 状态迁移</b>。
+     * 支付成功后的收尾：<b>状态迁移 + 库存扣减出库</b>。
      *
-     * <p>🔴 <b>非待支付状态直接返回</b>，这就是「重复回调不重复扣库存」的守卫：
-     * 回调与轮询同时到达时，两者在同一行上争 {@code @Version} 乐观锁，
-     * 后到的那个看到的已经是 {@code PENDING_SHIPMENT} —— 于是一件库存也不会被扣第二次。
+     * <p>🔴 双重守卫：<b>非待支付状态直接返回 {@code false}</b>（重复回调 / 轮询二次到达、
+     * 或订单已被取消时的内存守卫）；而「回调 vs 取消/懒过期」两个事务<b>同时</b>读到
+     * {@code PENDING_PAYMENT} 的真并发，由 {@code shop_orders.version}（{@code @Version} 乐观锁）
+     * 裁决 —— 后提交者在同一行上撞版本号整体回滚，于是 {@code inventory.commit} 与
+     * {@code inventory.release} 不会双双落库，一件库存也不会被扣第二次。
+     *
+     * @return 本次是否真的把订单从待支付推进为待发货；调用方据此决定<b>是否扣 PawCoin 段</b>
+     *     —— 非 {@code PENDING_PAYMENT} 时绝不扣币
      */
     @Transactional
-    public void fulfillPaid(ShopOrder order) {
+    public boolean fulfillPaid(ShopOrder order) {
         if (order.getStatus() != ShopOrderStatus.PENDING_PAYMENT) {
-            return;     // 已处理过（重复回调 / 轮询二次到达）
+            return false;   // 已处理过（重复回调 / 轮询二次到达）或已被取消
         }
         for (ShopOrderLine line : orderLines.findByOrderIdOrderByIdAsc(order.getId())) {
             inventory.commit(line.getSkuId(), line.getQty());
         }
         order.transitionTo(ShopOrderStatus.PENDING_SHIPMENT);
         orders.save(order);
+        return true;
     }
 
     // ---------- 取消 / 超时 ----------
@@ -227,11 +252,14 @@ public class ShopOrderPaymentService {
      * @return 实际取消的笔数
      */
     public int cancelOverdue(int limit) {
+        // 🔴 经 self 代理逐笔调用：this.cancelOneOverdue() 自调用会绕过代理，
+        //    @Transactional 不生效 → 「逐笔独立事务、单笔失败不阻断」就没了。
+        ShopOrderPaymentService self = selfProvider.getObject();
         int cancelled = 0;
         for (ShopOrder order : orders.findOverduePendingPayment(Instant.now(),
                 org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit)))) {
             try {
-                cancelOneOverdue(order.getId());
+                self.cancelOneOverdue(order.getId());
                 cancelled++;
             } catch (RuntimeException e) {
                 log.warn("超时订单取消失败 orderId={} cause={}", order.getId(),

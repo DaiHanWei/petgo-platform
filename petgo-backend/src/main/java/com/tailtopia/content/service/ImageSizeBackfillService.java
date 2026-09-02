@@ -7,6 +7,7 @@ import java.awt.Dimension;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URLConnection;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -17,7 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 图片尺寸的<b>服务端兜底测量</b>（V1.1.6 Story 3.1 · AD-5 Rule 3）。
@@ -67,15 +67,21 @@ public class ImageSizeBackfillService {
      * 客户端拿到的是原图尺寸，比我们隔着网络读回来的更可信。
      */
     /**
-     * ⚠️ 事务注解必须与 {@code @Async} 一起挂在<b>这个公开方法</b>上。
+     * ⚠️ 本方法<b>刻意不开事务</b>（只挂 {@code @Async}）。
      *
-     * <p>两个原因：① 挂在私有 / 受保护方法上不生效 —— 同类内部调用绕过代理；
-     * ② <b>更要紧的</b>：脱离事务读出实体、改完再存回去是一次<b>整行覆盖</b>，
-     * 而这张表有并发写入（审核通过会改状态）—— 那样会把别人的改动冲掉。
-     * 在同一个事务里读写，实体是受管的，不会出现这种「拿旧值盖新值」。
+     * <p>此前是 {@code @Async @Transactional} 同挂：同一事务里先装载实体、再做最多
+     * 9×(3s+3s) 的 OSS 网络读、最后靠脏检查<b>整行</b> UPDATE 收尾 —— 期间审核 / 下架若并发
+     * 改了 {@code status} / {@code report_hidden_at} / {@code deleted_at}，收尾会拿装载时的
+     * <b>旧值把它们静默盖掉</b>（本表无 {@code @DynamicUpdate} 无 {@code @Version}；
+     * Lark 定时发帖修过同款竞态）。
+     *
+     * <p>现在：① OSS 网络读全部在<b>事务外</b>做（{@code findById} 用仓储自带的短只读事务，
+     * 返回后实体即脱管，慢网络不占连接不占事务）；② 落库走
+     * {@code ContentPostRepository#updateImageSizes} 的<b>定向单列</b> UPDATE，
+     * 只动 {@code image_sizes}（+ {@code updated_at}），别的列碰都不碰 ——
+     * 并发提交的审核 / 下架结果不再可能被这里撤销。
      */
     @Async
-    @Transactional
     public void backfill(long postId) {
         try {
             doBackfill(postId);
@@ -86,6 +92,8 @@ public class ImageSizeBackfillService {
     }
 
     private void doBackfill(long postId) {
+        // 无事务装载：只为拿 imageUrls / 客户端已报的尺寸，读完实体即脱管（detached），
+        // 下面的逐张网络测量不占任何事务。
         ContentPost post = posts.findById(postId).orElse(null);
         if (post == null || post.getImageUrls() == null || post.getImageUrls().isEmpty()) {
             return;
@@ -105,8 +113,8 @@ public class ImageSizeBackfillService {
             changed |= measured != null;
         }
         if (changed) {
-            post.setImageSizes(out);
-            posts.save(post);
+            // 🛡 定向单列落库（绝不 save 整行）：并发的审核 / 下架写入不受影响。
+            posts.updateImageSizes(postId, out, Instant.now());
         }
     }
 

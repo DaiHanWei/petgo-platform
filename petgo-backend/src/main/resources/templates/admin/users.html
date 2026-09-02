@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- 用户搜索（Story 3.1，只读）。按 ID/注册邮箱查普通用户；HTMX 片段刷新。门控 user.view。 -->
+<!-- 用户搜索（Story 3.1，只读）。按 ID/注册邮箱精确、昵称模糊查普通用户；HTMX 片段刷新。门控 user.view。 -->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.users.title}">用户搜索 · TailTopia 运营</title>
@@ -36,10 +36,26 @@
                 </select>
             </label>
             <!-- 🔴 导出是独立权限：把 PII 批量带出系统，风险高一档 -->
+            <!-- bug 20260901-469：按钮只在明确选了 已填写/未填写 时出现，phone 原样透传 ——
+                 原先「没选就当未填写」的回落，配上翻页丢参，导出的正好是相反的那份名单。 -->
+            <!-- ⚠️ 搜索态（q 非空）列表显示的是搜索结果、不按手机号筛 —— 此时也不给导出，
+                 否则又是「屏幕一份、文件一份」。 -->
+            <!-- bug 20260901-475：不可用时**置灰而不是消失** —— 整个按钮不见会被读成「功能没了」。 -->
             <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
+               th:if="${!searched and (phone == 'filled' or phone == 'empty')}"
                class="btn btn-sm"
-               th:href="@{/admin/users/phone-recall.csv(phone=${phone == null or phone == '' ? 'empty' : phone})}"
+               th:href="@{/admin/users/phone-recall.xlsx(phone=${phone})}"
                th:text="#{admin.users.exportRecall}">导出召回名单</a>
+            <button sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
+                    th:unless="${!searched and (phone == 'filled' or phone == 'empty')}"
+                    type="button" class="btn btn-sm" disabled
+                    th:title="#{admin.users.exportNeedsFilter}"
+                    th:text="#{admin.users.exportRecall}">导出召回名单</button>
+            <span sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
+                  th:unless="${!searched and (phone == 'filled' or phone == 'empty')}"
+                  class="muted" th:text="#{admin.users.exportNeedsFilter}">
+                选择「已填写 / 未填写」后可导出召回名单
+            </span>
             <span class="muted" th:text="#{admin.users.exportNote}"
                   sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')">
                 名单含已封号账号并标注状态，由运营自行判断。
@@ -90,10 +106,14 @@
 
         <!-- bug 20260701-164：浏览态分页（搜索态无分页）。整页导航刷新，页码文案随之更新。 -->
         <div class="pager" th:if="${page != null and page.totalElements > 0}">
-            <a th:if="${page.hasPrevious()}" th:href="@{/admin/users(page=${page.number - 1})}"
+            <!-- bug 20260901-469：翻页必须带上 phone 筛选 —— 不带的话点下一页筛选静默丢失、
+                 列表变回全量，同时导出链接也跟着失去筛选（正是提报里两份名单对不上的来源）。 -->
+            <a th:if="${page.hasPrevious()}"
+               th:href="@{/admin/users(page=${page.number - 1}, phone=${phone})}"
                th:text="#{admin.audit.prev}">← 上一页</a>
             <span th:text="#{admin.audit.page(${page.number + 1}, ${page.totalPages}, ${page.totalElements})}">分页</span>
-            <a th:if="${page.hasNext()}" th:href="@{/admin/users(page=${page.number + 1})}"
+            <a th:if="${page.hasNext()}"
+               th:href="@{/admin/users(page=${page.number + 1}, phone=${phone})}"
                th:text="#{admin.audit.next}">下一页 →</a>
         </div>
     </div>

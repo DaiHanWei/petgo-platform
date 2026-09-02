@@ -8,8 +8,11 @@
 上传成功但公网 403：后台素材墙裂图，发布后 App 端同样加载不出来。
 代码侧已改走 putPublicObjectWithAcl（新对象自带标记）；本脚本只负责**存量**对象补一次。
 
-受影响前缀（同一条上传链路的 5 个业务目录，均在 <MEDIA_OSS_KEY_PREFIX>public/ 之下）：
-seed-post / seed-batch / shop-banner / shop-product / virtual-avatar。
+受影响前缀（均在 <MEDIA_OSS_KEY_PREFIX>public/ 之下）：
+seed-post / seed-batch / shop-banner / shop-product / virtual-avatar（bug 472 首批），
+tag-icon / vet-avatar / og（2026-09-02 补漏：472 只改了素材链路，这三处仍走旧上传 ——
+后台标签胶囊裂图的根因。代码侧已把 public-read 焊进 putPublicObject 本体）。
+🔴 直接用 --prefix <MEDIA_OSS_KEY_PREFIX>public/ 全量补一次最省事（脚本幂等，前缀宽了无妨）。
 
 用法
 ----

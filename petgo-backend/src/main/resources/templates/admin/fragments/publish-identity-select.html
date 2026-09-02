@@ -11,7 +11,11 @@
         <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'batchAuthorId')}"></div>
 -->
 <body>
-<div th:fragment="select(identities, fieldId, fieldName, hxGet, hxTarget)" th:remove="tag">
+<!-- bug 20260901-468：新增第 6 个参数 selected（可空）——「已存过的选择」回显。
+     🛡 「默认不预选」的防呆只针对**首次选择**；已保存的批次设置回显的是运营自己存过的值，
+     不回显反而制造两个新问题：看不见存了什么、且下次保存被迫重选。
+     单条/导入等首次选择场景传 null，行为与从前逐字一致。 -->
+<div th:fragment="select(identities, fieldId, fieldName, hxGet, hxTarget, selected)" th:remove="tag">
     <label th:for="${fieldId}">
         <span th:text="#{admin.publishIdentity.field}">发布账号</span>
         <!-- ⚠️ `name` 由调用方给：批量发布那两处的入参叫 virtualUserId（历史名，不改动它
@@ -21,12 +25,13 @@
                 th:attr="hx-get=${hxGet}, hx-target=${hxTarget}, hx-trigger=${hxGet} != null ? 'change' : null">
             <!-- 🛡 默认不预选任何账号：占位项 disabled+selected，强制显式选择。
                  预选第一项 = 手滑直接提交时用的是"上次那个号"，这正是要防的。 -->
-            <option value="" disabled selected
+            <option value="" disabled th:selected="${selected == null}"
                     th:text="#{admin.publishIdentity.placeholder}">请选择发布账号</option>
             <optgroup th:label="#{admin.publishIdentity.group.virtual}"
                       th:if="${identities.?[!real].size() > 0}">
                 <option th:each="o : ${identities.?[!real]}" th:value="${o.userId}"
                         th:disabled="${o.disabled}" data-real="false"
+                        th:selected="${selected != null and selected == o.userId}"
                         th:attr="data-species=${o.accountSpecies}"
                         th:text="${o.nickname} + ' (id=' + ${o.userId} + (${o.disabled} ? ' · ' + #{admin.common.disabled} : '') + ')'">名</option>
             </optgroup>
@@ -35,6 +40,7 @@
                       th:if="${identities.?[real].size() > 0}">
                 <option th:each="o : ${identities.?[real]}" th:value="${o.userId}"
                         th:disabled="${o.disabled}" data-real="true"
+                        th:selected="${selected != null and selected == o.userId}"
                         th:attr="data-species=${o.accountSpecies}"
                         th:text="'⚠️ ' + ${o.nickname} + ' (id=' + ${o.userId} + (${o.disabled} ? ' · ' + #{admin.common.disabled} : '') + ')'">名</option>
             </optgroup>

@@ -52,8 +52,9 @@
                      脱开胶囊单看那张 PNG 什么都看不出来 —— 运营因此判断不了
                      「我配的这枚最后长什么样」，也是「这枚胶囊只有一半是我的」那个误解的来源。
                      左边一枚是用户看到的实际大小，右边放大到 2 倍便于检查细节。 -->
+                <!-- 2026-09-02 产品要求：只留 2 倍放大的那一枚（细节看得清），
+                     不再同时摆一枚用户实际大小的 —— 腾出来的宽度给右侧编辑区。 -->
                 <td style="white-space:nowrap">
-                    <span th:replace="~{admin/content-tags :: chip(${t}, 1)}"></span>
                     <span th:replace="~{admin/content-tags :: chip(${t}, 2)}"></span>
                 </td>
                 <td th:text="${t.name}">名称</td>
@@ -102,15 +103,9 @@
         <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.tag_manage')">
             <h2 th:text="#{admin.tags.newTag}">新建标签</h2>
             <form method="post" enctype="multipart/form-data" th:action="@{/admin/content-tags}">
-                <!-- 🔴 两个字段的用途完全不同，而界面上原先只有两个光秃秃的标题
-                     （bug 20260828：运营问「标签码和名称分别是干嘛的」）。
-                     码 = 对外稳定标识，建后不可改，只进埋点与操作日志，用户永远看不到；
-                     名 = 用户在胶囊上看到的那几个字，随时可改。 -->
-                <label><span th:text="#{admin.tags.code}">标签码</span>
-                    <input type="text" name="code" class="field-full" required/></label>
-                <p class="muted" data-notice="tag-code-hint" th:text="#{admin.tags.codeHint}">
-                    用户看不到。建后不可修改。
-                </p>
+                <!-- 2026-09-02：标签码改为系统自动生成（ct-<id>），表单不再出现 ——
+                     原先由运营手填，多个运营会填出同一个码；码只进埋点与操作日志，
+                     用户看不到，没有理由让人来起名。列表里的「标签码」列照常显示生成结果。 -->
                 <label><span th:text="#{admin.tags.name}">名称</span>
                     <input type="text" name="name" class="field-full" required/></label>
                 <p class="muted" data-notice="tag-name-hint" th:text="#{admin.tags.nameHint}">
@@ -247,17 +242,21 @@
             </table>
         </div>
 
-        <!-- 内容候选（HTMX 局部）。复用顶置那条「只返回可公开展示内容」的分页查询。 -->
-        <div th:fragment="candidates" th:remove="tag">
-            <p class="muted" th:if="${#lists.isEmpty(candidates)}" th:text="#{admin.tags.pickEmpty}">没有可打标的公开内容。</p>
-            <label th:each="c : ${candidates}" class="pick-row">
-                <input type="radio" name="postId" th:value="${c.id}"/>
-                <span th:text="${c.id}">1</span>
-                <span th:text="#{'admin.contentType.' + ${c.type}}">Moment</span>
-                <span th:text="${c.summary}">摘要</span>
-                <span class="muted" th:text="${#temporals.format(c.createdAt, 'yyyy-MM-dd', 'Asia/Jakarta')}">日期</span>
-            </label>
-        </div>
+    </div>
+
+    <!-- 内容候选（HTMX 局部）。复用顶置那条「只返回可公开展示内容」的分页查询。
+         🔴 2026-09-02：从 content 片段**内部**挪到这里（外层 th:replace 之内、content 之外）——
+         原先定义在 content 里，整页渲染时片段本体会在页面底部**再游离渲染一遍**
+         （用户标签页同一个 bug 被实机截图抓到）。摆法同下方 chip 片段。 -->
+    <div th:fragment="candidates" th:remove="tag">
+        <p class="muted" th:if="${#lists.isEmpty(candidates)}" th:text="#{admin.tags.pickEmpty}">没有可打标的公开内容。</p>
+        <label th:each="c : ${candidates}" class="pick-row">
+            <input type="radio" name="postId" th:value="${c.id}"/>
+            <span th:text="${c.id}">1</span>
+            <span th:text="#{'admin.contentType.' + ${c.type}}">Moment</span>
+            <span th:text="${c.summary}">摘要</span>
+            <span class="muted" th:text="${#temporals.format(c.createdAt, 'yyyy-MM-dd', 'Asia/Jakarta')}">日期</span>
+        </label>
     </div>
 
     <!-- 整枚胶囊预览片段（2026-08-28）。数值逐项照 UI 稿 `.deco-badge`：

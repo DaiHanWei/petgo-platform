@@ -38,15 +38,19 @@ public class AdminSeedBatchService {
     private final SeedContentHashRepository hashes;
     private final AdminPublishIdentityService identities;
     private final AdminAuditService audit;
+    /** 指纹图片键解析（bug 20260901-467）：URL → 素材内容哈希，三条发布路径同一判据。 */
+    private final com.tailtopia.admin.seed.service.SeedBatchAssetService assetService;
 
     public AdminSeedBatchService(UserRepository users, ContentService contentService,
             SeedContentHashRepository hashes, AdminPublishIdentityService identities,
-            AdminAuditService audit) {
+            AdminAuditService audit,
+            com.tailtopia.admin.seed.service.SeedBatchAssetService assetService) {
         this.users = users;
         this.contentService = contentService;
         this.hashes = hashes;
         this.identities = identities;
         this.audit = audit;
+        this.assetService = assetService;
     }
 
     /** 批量结果。 */
@@ -97,9 +101,11 @@ public class AdminSeedBatchService {
     public BatchResult publishBatch(long virtualUserId, String rawLines, long adminId,
             boolean callerMayPublishAsRealIdentity) {
         User author = users.findById(virtualUserId)
-                .orElseThrow(() -> AppException.notFound("发布账号不存在"));
+                .orElseThrow(() -> AppException.notFound("发布账号不存在")
+                        .code("admin.err.seedBatch.publisherNotFound"));
         if (!identities.isInPool(author)) {
-            throw AppException.validation("该账号不在运营发布身份池内，不能作为发布者");
+            throw AppException.validation("该账号不在运营发布身份池内，不能作为发布者")
+                    .code("admin.err.seedBatch.notInPool");
         }
         // 🔴 AC5 ②：**以运营真实账号身份发布**需要独立权限码 seed.publish_as_real。
         //
@@ -108,11 +114,13 @@ public class AdminSeedBatchService {
         // 而"忘记检查"是静默的 —— 加个参数就让漏掉变成**编译错误**。
         // 从 SecurityContext 里偷偷读，新入口作者不会知道有这回事。
         if (!callerMayPublishAsRealIdentity && identities.isRealPublishIdentity(author.getId())) {
-            throw AppException.validation("以运营真实账号发布内容需要单独授权（seed.publish_as_real）");
+            throw AppException.validation("以运营真实账号发布内容需要单独授权（seed.publish_as_real）")
+                    .code("admin.err.publishIdentity.realNeedsGrant", "seed.publish_as_real");
         }
         if (!author.isEnabled()) {
             // 虚拟账号"停用"与真实账号"被封"在这里是同一件事：都不该继续替它发内容。
-            throw AppException.validation("该发布账号已停用");
+            throw AppException.validation("该发布账号已停用")
+                    .code("admin.err.seedBatch.publisherDisabled");
         }
         if (rawLines == null || rawLines.isBlank()) {
             throw AppException.validation("批量内容为空").code("admin.err.seedBatch.empty");
@@ -137,7 +145,7 @@ public class AdminSeedBatchService {
                 continue;
             }
             String hash = com.tailtopia.admin.seed.service.SeedContentFingerprint.of(
-                    ContentType.DAILY, text, images);
+                    ContentType.DAILY, text, assetService.fingerprintKeys(images));
             // 🔴 V1.1.6 Story 13.4：判据加了**作者维度** —— 同一文案不同账号各自独立。
             //    原先按 hash 单列判，"同一文案换个账号再发一遍"（内容运营的常规操作）
             //    会被静默吞掉。

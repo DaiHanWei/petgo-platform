@@ -74,7 +74,11 @@ public class AdminSeedImageService {
 
         String key = mediaProps.getOss().normalizedKeyPrefix()
                 + "public/" + folder + "/" + UUID.randomUUID() + "." + extOf(contentType);
-        String url = oss.putPublicObject(key, bytes, contentType);
+        // 🔴 必须带对象级 public-read（bug 20260901-472）：桶级并非公开读（BPA 关闭 + 桶 ACL 私有），
+        //    不带标记的对象上传成功但公网直读 403 —— 素材墙裂图、发布后 App 端同样加载不出。
+        //    本方法服务 5 条上传线（种子单条/批量素材/商品图/商品 banner/虚拟头像），一并修正。
+        //    存量对象由 scripts/ops/backfill-oss-public-acl.py 补一次 ACL。
+        String url = oss.putPublicObjectWithAcl(key, bytes, contentType);
 
         return new UploadedImage(url, size == null ? 0 : size.w(), size == null ? 0 : size.h(),
                 advice.warns() ? warningText(advice) : null, key, bytes.length);

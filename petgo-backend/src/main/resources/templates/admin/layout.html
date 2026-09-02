@@ -145,12 +145,14 @@
                    th:text="#{admin.nav.refunds}">退款管理</a>
             </div>
         </details>
-        <details class="nav-section" th:with="navOpen=${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts' or active == 'algo-params'}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('order.view') or hasAuthority('settlement.view') or hasAuthority('payment.view') or hasAuthority('risk.view') or hasAuthority('config.algo_param_view') or hasAuthority('virtual_account.view') or hasAuthority('virtual_account.manage') or hasAuthority('seed.publish_as_real')"
+        <details class="nav-section" th:with="navOpen=${active == 'config' or active == 'consult-orders' or active == 'ai-orders' or active == 'settlements' or active == 'payments' or active == 'red-overage' or active == 'virtual-accounts' or active == 'algo-params'}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('config.share_reward_view') or hasAuthority('config.share_reward_edit') or hasAuthority('order.view') or hasAuthority('settlement.view') or hasAuthority('payment.view') or hasAuthority('risk.view') or hasAuthority('config.algo_param_view') or hasAuthority('virtual_account.view') or hasAuthority('virtual_account.manage') or hasAuthority('seed.publish_as_real')"
                  th:attr="open=${navOpen} ? 'open' : null">
             <summary th:classappend="${navOpen} ? 'active'"
                      th:text="#{admin.nav.group.ops}">运营</summary>
             <div class="nav-sub">
-                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')"
+                <!-- ⚠️ 与 AdminConfigController.PAGE_AUTH 同口径（Story 18.3 · AC5 修订）：
+                     只持 config.share_reward_* 的应急操作员也要能从侧栏走到本页去关总开关。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view') or hasAuthority('config.share_reward_view') or hasAuthority('config.share_reward_edit')"
                    th:href="@{/admin/config}" th:classappend="${active == 'config'} ? 'active'"
                    th:text="#{admin.nav.config}">运营配置</a>
                 <!-- 🔴 算法参数独立成页、独立权限：不给运营（2026-08-26 产品决定）。

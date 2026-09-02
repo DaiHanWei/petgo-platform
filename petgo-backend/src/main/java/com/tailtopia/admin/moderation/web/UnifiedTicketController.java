@@ -11,6 +11,7 @@ import com.tailtopia.moderation.repository.AccountDisposalRepository;
 import com.tailtopia.moderation.repository.AccountReportEntryRepository;
 import com.tailtopia.moderation.service.AccountDisposalService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -66,12 +67,16 @@ public class UnifiedTicketController {
     private final com.tailtopia.moderation.service.ReportService contentReportService;
     private final com.tailtopia.admin.service.AdminModerationService moderationService;
 
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
     public UnifiedTicketController(UnifiedTicketQueryService query,
             AccountReportEntryRepository reportEntries, AccountDisposalRepository disposals,
             AccountQueryService accountQueryService, AccountDisposalService disposalService,
             com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead,
             com.tailtopia.moderation.service.ReportService contentReportService,
-            com.tailtopia.admin.service.AdminModerationService moderationService) {
+            com.tailtopia.admin.service.AdminModerationService moderationService,
+            Messages msg) {
         this.query = query;
         this.reportEntries = reportEntries;
         this.disposals = disposals;
@@ -80,6 +85,7 @@ public class UnifiedTicketController {
         this.throttleRead = throttleRead;
         this.contentReportService = contentReportService;
         this.moderationService = moderationService;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/tickets")
@@ -210,7 +216,7 @@ public class UnifiedTicketController {
             @RequestParam("targetUserId") long targetUserId,
             @RequestParam(value = "reportId", required = false) Long reportId,
             RedirectAttributes flash) {
-        return withFlashOnError(flash, "已警告该账号",
+        return withFlashOnError(flash, msg.get("admin.flash.ticket.warned"),
                 () -> disposalService.warn(targetUserId, reportId, admin.getAdminAccountId()));
     }
 
@@ -221,7 +227,7 @@ public class UnifiedTicketController {
             @RequestParam("targetUserId") long targetUserId,
             @RequestParam(value = "reportId", required = false) Long reportId,
             RedirectAttributes flash) {
-        return withFlashOnError(flash, "已停用该账号",
+        return withFlashOnError(flash, msg.get("admin.flash.ticket.suspended"),
                 () -> disposalService.suspend(targetUserId, reportId, admin.getAdminAccountId()));
     }
 
@@ -230,7 +236,7 @@ public class UnifiedTicketController {
     @PreAuthorize(DISPOSE_AUTH)
     public String dismiss(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam("reportId") long reportId, RedirectAttributes flash) {
-        return withFlashOnError(flash, "已标记为无需处置",
+        return withFlashOnError(flash, msg.get("admin.flash.ticket.dismissed"),
                 () -> disposalService.dismiss(reportId, admin.getAdminAccountId()));
     }
 
@@ -241,13 +247,13 @@ public class UnifiedTicketController {
      * <p>⚠️ 失败写 {@code error}（红色横幅）而非 {@code notice}（绿色成功横幅）——评审三轮 #9：
      * 把「工单不匹配」塞进 notice 会让运营把失败读成封号成功。
      */
-    private static String withFlashOnError(RedirectAttributes flash, String successNotice,
+    private String withFlashOnError(RedirectAttributes flash, String successNotice,
             Runnable action) {
         try {
             action.run();
             flash.addFlashAttribute("notice", successNotice);
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/tickets";
     }
@@ -275,7 +281,7 @@ public class UnifiedTicketController {
         try {
             parsed = parseBatch(ticketIds);
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
             return "redirect:/admin/tickets";
         }
 
@@ -290,7 +296,7 @@ public class UnifiedTicketController {
         return switch (parsed.type()) {
             case ACCOUNT_REPORT -> batchAccountReports(admin, action, parsed.ids(), flash);
             case CONTENT_REPORT, ACCOUNT_IDENTITY, CONTENT_SUBMISSION -> {
-                flash.addFlashAttribute("error", "该类工单请在「人工复核」页处理");
+                flash.addFlashAttribute("error", msg.get("admin.flash.ticket.useManualReviewPage"));
                 yield "redirect:/admin/tickets";
             }
         };
@@ -299,19 +305,20 @@ public class UnifiedTicketController {
     private String batchAccountReports(AdminUserDetails admin, String action, List<Long> reportIds,
             RedirectAttributes flash) {
         if (!hasAnyAuthority("content.dispose_account")) {
-            flash.addFlashAttribute("error", "你没有处置用户举报工单的权限");
+            flash.addFlashAttribute("error",
+                    msg.get("admin.flash.ticket.noAccountDisposePermission"));
             return "redirect:/admin/tickets";
         }
         AccountDisposalService.BatchAction batchAction = parseEnum(
                 AccountDisposalService.BatchAction.class, action);
         if (batchAction == null) {
-            flash.addFlashAttribute("error", "用户举报工单支持：批量警告 / 批量封号 / 批量无需处置");
+            flash.addFlashAttribute("error", msg.get("admin.flash.ticket.accountBatchActions"));
             return "redirect:/admin/tickets";
         }
         // 封号那一档额外要 user.deactivate —— 与单条口径一致，别让批量成为绕过它的后门。
         // 封号按钮在模板已按 user.deactivate 隐藏，走到这里只可能是篡改，红色提示即可（不 500）。
         if (batchAction == AccountDisposalService.BatchAction.SUSPEND && !canSuspend()) {
-            flash.addFlashAttribute("error", "你没有停用账号的权限");
+            flash.addFlashAttribute("error", msg.get("admin.flash.ticket.noSuspendPermission"));
             return "redirect:/admin/tickets";
         }
 
@@ -321,11 +328,11 @@ public class UnifiedTicketController {
         } catch (AppException e) {
             // 超 50 条上限等整批校验失败：给 flash 提示回列表，不能让运营吃一个整页错误
             //（前端置灰只是体验，勾选框在浏览器里可以随便改）。
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
             return "redirect:/admin/tickets";
         }
         flash.addFlashAttribute("notice",
-                "批量完成：成功 " + result.ok() + " 条，失败 " + result.failedCount() + " 条");
+                msg.get("admin.flash.seed.batchDone", result.ok(), result.failedCount()));
         // ⚠️ 失败明细必须真的渲染出来（AC5）：只报数量的话运营不知道是哪几条、为什么，也就无从重试。
         flash.addFlashAttribute("batchFailures", result.failed());
         return "redirect:/admin/tickets";
@@ -336,22 +343,22 @@ public class UnifiedTicketController {
             RedirectAttributes flash) {
         boolean takedown = "TAKEDOWN".equals(action);
         if (!takedown && !"DISMISS".equals(action)) {
-            flash.addFlashAttribute("error", "内容举报工单支持：批量下架 / 批量无需处置（驳回）");
+            flash.addFlashAttribute("error", msg.get("admin.flash.ticket.contentBatchActions"));
             return "redirect:/admin/tickets";
         }
         if (!hasAnyAuthority("content.takedown")) {
-            flash.addFlashAttribute("error", "你没有处置内容举报工单的权限");
+            flash.addFlashAttribute("error", msg.get("admin.flash.ticket.noContentDisposePermission"));
             return "redirect:/admin/tickets";
         }
         if (postIds.size() > AccountDisposalService.MAX_BATCH_SIZE) {
-            flash.addFlashAttribute("error",
-                    "单次最多处理 " + AccountDisposalService.MAX_BATCH_SIZE + " 条工单");
+            flash.addFlashAttribute("error", msg.get("admin.flash.ticket.batchTooLarge",
+                    AccountDisposalService.MAX_BATCH_SIZE));
             return "redirect:/admin/tickets";
         }
         com.tailtopia.admin.service.AdminModerationService.BatchResult result =
                 moderationService.batchByPost(postIds, takedown, admin);
         flash.addFlashAttribute("notice",
-                "批量完成：成功 " + result.ok() + " 条，失败 " + result.failedCount() + " 条");
+                msg.get("admin.flash.seed.batchDone", result.ok(), result.failedCount()));
         flash.addFlashAttribute("batchFailures", result.failed());
         return "redirect:/admin/tickets";
     }
@@ -369,28 +376,29 @@ public class UnifiedTicketController {
      */
     private static ParsedBatch parseBatch(List<String> tokens) {
         if (tokens == null || tokens.isEmpty()) {
-            throw AppException.validation("请先勾选要处理的工单");
+            throw AppException.validation("请先勾选要处理的工单").code("admin.err.ticket.noneSelected");
         }
         TicketType batchType = null;
         List<Long> ids = new java.util.ArrayList<>(tokens.size());
         for (String token : tokens) {
             int sep = token.indexOf(':');
             if (sep <= 0) {
-                throw AppException.validation("工单标识格式不正确");
+                throw AppException.validation("工单标识格式不正确").code("admin.err.ticket.badToken");
             }
             TicketType type = parseEnum(TicketType.class, token.substring(0, sep));
             if (type == null) {
-                throw AppException.validation("工单标识格式不正确");
+                throw AppException.validation("工单标识格式不正确").code("admin.err.ticket.badToken");
             }
             if (batchType == null) {
                 batchType = type;
             } else if (batchType != type) {
-                throw AppException.validation("不同类型的工单不能一起批量处理");
+                throw AppException.validation("不同类型的工单不能一起批量处理")
+                        .code("admin.err.ticket.mixedTypes");
             }
             try {
                 ids.add(Long.parseLong(token.substring(sep + 1)));
             } catch (NumberFormatException e) {
-                throw AppException.validation("工单标识格式不正确");
+                throw AppException.validation("工单标识格式不正确").code("admin.err.ticket.badToken");
             }
         }
         return new ParsedBatch(batchType, ids);

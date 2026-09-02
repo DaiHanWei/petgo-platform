@@ -106,7 +106,7 @@ public class AdminVirtualAccountController {
             flash.addFlashAttribute("error", msg.resolve(e));
         } catch (Exception e) {
             // 对象存储未配置 / 凭证异常 —— 优雅回显，不抛 500。
-            flash.addFlashAttribute("error", "头像上传失败，请重试");
+            flash.addFlashAttribute("error", msg.get("admin.flash.vet.avatarUploadFailed"));
         }
         return "redirect:/admin/virtual-accounts";
     }
@@ -124,9 +124,9 @@ public class AdminVirtualAccountController {
         try {
             service.setAccountSpecies(id, accountSpecies, admin.getAdminAccountId());
             flash.addFlashAttribute("notice",
-                    "已更新账号物种定位（该号全部历史内容的物种归属已随之生效）");
+                    msg.get("admin.flash.virtualAccount.speciesUpdated"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/virtual-accounts";
     }

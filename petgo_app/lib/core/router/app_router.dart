@@ -717,7 +717,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    降为顶层路由。**必须保留** —— consult_conversation / vet_waiting / vet_timed_pay
       //    等处有十余个 `context.go('/triage')` 作为问诊流程的返回落点，缺了就是 404。
       //    界面入口移到健康记录页（health_list_page.dart）。仍在 _controlledLocations 内，
-      //    登录门控不变。
+      //    登录门控不变。`go` 清栈落地后的出路由 TriagePage 自带（顶栏返回 + PopScope，
+      //    栈空导向 /home）—— 不在此处包壳，避免 push 入口双顶栏。
       GoRoute(path: '/triage', builder: (c, s) => const TriagePage()),
       GoRoute(path: '/triage/upload', builder: (c, s) => const TriageUploadPage()),
       // AI 分诊历史结果快照（bug 20260702-238/228）：按 triageId 只读回看，extra 带历史症状摘要。

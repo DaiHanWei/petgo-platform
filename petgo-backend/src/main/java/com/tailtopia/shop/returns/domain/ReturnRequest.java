@@ -37,6 +37,16 @@ public class ReturnRequest {
     /** 🔴 退款执行失败重试上限（S-8 ③）：超过即转人工，不无限重试。 */
     public static final int MAX_REFUND_ATTEMPTS = 3;
 
+    /**
+     * 🔴 用户自报回程运费的硬上限（IDR，防套现）。
+     *
+     * <p>QUALITY_ISSUE（平台承担运费）时退款执行按<b>申报额</b>全额折 PawCoin 且不允许
+     * CS 手工调整 —— 若无上限，填个天价运费就是直接印币。印尼国内退货件走 JNE/J&T 等
+     * 经济线，跨岛大件也在十几万盾以内，取 200,000 IDR 封顶足以覆盖真实运单；
+     * 真超限的极端件转人工核实，不给自动路径开口子。
+     */
+    public static final long MAX_SHIPBACK_FEE = 200_000L;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -258,6 +268,11 @@ public class ReturnRequest {
         }
         if (fee != null && fee < 0) {
             throw AppException.validation("运费不能为负");
+        }
+        // 🔴 防套现（见 MAX_SHIPBACK_FEE）：平台承担运费时按申报额返还，必须封顶。
+        if (fee != null && fee > MAX_SHIPBACK_FEE) {
+            throw AppException.validation(
+                    "寄回运费超出上限 Rp%,d，请核对运单金额；确属超限件请联系客服".formatted(MAX_SHIPBACK_FEE));
         }
         this.shipbackCarrier = carrier;
         this.shipbackTrackingNo = trackingNo.trim();

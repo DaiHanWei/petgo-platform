@@ -126,6 +126,7 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
     if (mounted) {
       _navigating = true;
       showAppToast(context, AppLocalizations.of(context).vetPayExpired);
+      // 落点保留 /triage（问诊 hub）：支付窗过期回发起入口便于重新发起（出路见 TriagePage）。
       context.go('/triage');
     }
   }
@@ -243,6 +244,7 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
     if (!mounted) return;
     _poll?.cancel();
     _display?.cancel();
+    // 落点保留 /triage（问诊 hub）：主动取消支付回发起入口（出路见 TriagePage）。
     context.go('/triage');
   }
 
