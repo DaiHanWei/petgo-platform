@@ -76,18 +76,23 @@ public class ReturnQueryService {
             int returnable = l.getQty() - l.getRefundedQty();
             ReturnPolicy policy = l.getReturnPolicy();
             boolean selectable = returnable > 0;
+            // 🔴 下发**原因码**而不是文案（D-9）：此前这里是中文串，而 App 没有中文包、
+            //    这句也不经 i18n ⇒ 印尼用户在退货申请页**必现**中文。
+            //    ⚠️ 搬进后端 messages.properties 解决不了：api 链的默认 locale 是 zh_CN
+            //       （见 AdminLocaleConfig 的注释「api 链返 JSON，文案固定，不经此」）。
+            //       展示文案属于端上。
             String blocked = null;
             if (returnable <= 0) {
-                blocked = "该商品已全部退回";
+                blocked = "ALL_RETURNED";
             } else if (policy == null || policy == ReturnPolicy.NON_RETURNABLE) {
                 // 🔴 未知枚举降级到最保守档：宁可少承诺
                 selectable = false;
-                blocked = "该商品不支持退货";
+                blocked = "NON_RETURNABLE";
             } else if (policy == ReturnPolicy.NO_RETURN_AFTER_OPEN) {
                 // 🔴 「开封不退」三处明示的第 3 处：保留可见 + 置灰 + 直接标注原因，
                 //    比提交后再驳回体验好得多。质量问题另有口径，前端切换原因时可再放开。
                 selectable = false;
-                blocked = "开封后不支持退货（若是破损/临期/错发，请选「质量问题」）";
+                blocked = "NO_RETURN_AFTER_OPEN";
             }
             lines.add(new ReturnableLineView(l.getId(), l.getProductName(), l.getSpecName(),
                     l.getUnitPrice(), l.getQty(), l.getRefundedQty(), Math.max(0, returnable),

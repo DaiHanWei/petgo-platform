@@ -46,7 +46,7 @@ void main() {
     int id = 1,
     int qty = 2,
     bool selectable = true,
-    String? blockedReason,
+    String? blockedCode,
     String policy = 'RETURNABLE',
   }) =>
       ReturnableLine(
@@ -59,7 +59,7 @@ void main() {
         returnableQty: qty,
         returnPolicy: policy,
         selectable: selectable,
-        blockedReason: blockedReason,
+        blockedCode: blockedCode,
       );
 
   ReturnEligibility eligibility({List<ReturnableLine>? lines, bool eligible = true}) =>
@@ -68,6 +68,56 @@ void main() {
         eligible: eligible,
         lines: lines ?? [line()],
       );
+
+  /// 🔴 D-9（2026-09-02 stag，P1）：后端把**中文**直接透传给印尼用户。
+  ///
+  /// 退货申请页不可退行的说明原本是服务端下发的中文串
+  /// 「开封后不支持退货（若是破损/临期/错发，请选「质量问题」）」——
+  /// App **没有中文包**，这句也不经 i18n，是字面量原样透传，**必现**。
+  ///
+  /// ⚠️ 修法不是「把它搬进后端 messages.properties」：`AdminLocaleConfig` 的注释写明
+  /// 「api 链返 JSON，**文案固定，不经此**」，默认 locale 是 zh_CN ——
+  /// 搬过去照样解析成中文。**展示文案属于端上**：后端只说「为什么不可退」（码），
+  /// 文案由 App 按码取。
+  group('🔴 D-9：不可退说明按码取本地化文案', () {
+    testWidgets('🔴 开封不退 → 出印尼语，且不含任何中文', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(requestHost(eligibility(lines: [
+        // ⚠️ 可退性由页面按 returnPolicy 重算，selectable 字段不参与（见下方那组的说明）
+        line(policy: 'NON_RETURNABLE', blockedCode: 'NO_RETURN_AFTER_OPEN'),
+      ])));
+      await tester.pumpAndSettle();
+
+      final t = tester.widget<Text>(find.byKey(const ValueKey('returnBlocked_1')));
+      expect(t.data, l10n.returnBlockedAfterOpen);
+      expect(find.textContaining('开封'), findsNothing,
+          reason: '印尼用户看到中文 —— D-9 的原形');
+    });
+
+    testWidgets('已全部退回 → 对应文案', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(requestHost(eligibility(lines: [
+        line(policy: 'NON_RETURNABLE', blockedCode: 'ALL_RETURNED'),
+      ])));
+      await tester.pumpAndSettle();
+
+      final t = tester.widget<Text>(find.byKey(const ValueKey('returnBlocked_1')));
+      expect(t.data, l10n.returnBlockedAllReturned);
+    });
+
+    testWidgets('🔴 未知码 → 兜底到最保守那句，不留空白', (tester) async {
+      // 后端将来加新码时，老版本 App 也得说得出「为什么不能选」——
+      // 显示空白等于让用户以为页面坏了。
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(requestHost(eligibility(lines: [
+        line(policy: 'NON_RETURNABLE', blockedCode: 'SOMETHING_NEW_FROM_SERVER'),
+      ])));
+      await tester.pumpAndSettle();
+
+      final t = tester.widget<Text>(find.byKey(const ValueKey('returnBlocked_1')));
+      expect(t.data, l10n.returnBlockedNonReturnable);
+    });
+  });
 
   /// 🔴 D-10（2026-09-02 stag，P0）：凭证照片曾是**桩实现**。
   ///
@@ -171,14 +221,17 @@ void main() {
       await tester.pumpWidget(requestHost(eligibility(lines: [
         // ⚠️ 可退性由 `selectableFor()` 按 **returnPolicy** 算，
         //    `selectable` 字段本身不参与 —— 用 NON_RETURNABLE 才真的挡住。
-        line(id: 7, policy: 'NON_RETURNABLE', blockedReason: 'Sudah dibuka'),
+        line(id: 7, policy: 'NON_RETURNABLE', blockedCode: 'NO_RETURN_AFTER_OPEN'),
       ])));
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('returnLine_7')), findsOneWidget,
           reason: '直接隐藏会让用户以为自己记错了买过什么');
       expect(find.byKey(const ValueKey('returnBlocked_7')), findsOneWidget);
-      expect(find.text('Sudah dibuka'), findsOneWidget);
+      // D-9：文案不再由服务端下发，改由端上按 blockedCode 取
+      final blocked = tester.widget<Text>(find.byKey(const ValueKey('returnBlocked_7')));
+      expect(blocked.data, isNotEmpty);
+      expect(blocked.data, isNot(contains('开封')));
     });
   });
 
@@ -440,7 +493,7 @@ void main() {
     testWidgets('退货申请 · 411dp', (tester) async {
       await tester.pumpWidget(requestHost(eligibility(lines: [
         line(id: 1),
-        line(id: 2, selectable: false, blockedReason: 'Sudah dibuka'),
+        line(id: 2, selectable: false, blockedCode: 'NO_RETURN_AFTER_OPEN'),
       ])));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);

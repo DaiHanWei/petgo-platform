@@ -102,7 +102,7 @@ class ReturnableLine {
     required this.returnableQty,
     required this.returnPolicy,
     required this.selectable,
-    this.blockedReason,
+    this.blockedCode,
   });
 
   final int orderLineId;
@@ -118,7 +118,13 @@ class ReturnableLine {
   final bool selectable;
 
   /// 🔴 不可勾选的原因由**服务端**给，前端直接展示 —— 前端自己拼会和服务端判定漂移。
-  final String? blockedReason;
+  /// 不可退的**原因码**（不是文案）：`ALL_RETURNED` / `NON_RETURNABLE` /
+  /// `NO_RETURN_AFTER_OPEN`；可退时为 null。
+  ///
+  /// 🔴 D-9：此前后端下发的是中文串，而本 App **没有中文包**、那句也不经 i18n
+  /// ⇒ 印尼用户在退货申请页必现中文。文案改由端上按码取。
+  /// ⚠️ 未知码要有兜底 —— 后端将来加新码时，老版本 App 不该显示一片空白。
+  final String? blockedCode;
 
   /// 🔴 「开封不退」的行在**质量问题**下仍可勾选：破损/临期/错发与是否开封无关。
   /// 把它一并挡掉等于让收到破损品的用户无路可走。
@@ -142,7 +148,7 @@ class ReturnableLine {
         // 🔴 未知/缺失的退货规则降级到最保守档：宁可少承诺
         returnPolicy: j['returnPolicy']?.toString() ?? 'NON_RETURNABLE',
         selectable: j['selectable'] == true,
-        blockedReason: j['blockedReason']?.toString(),
+        blockedCode: j['blockedCode']?.toString(),
       );
 }
 

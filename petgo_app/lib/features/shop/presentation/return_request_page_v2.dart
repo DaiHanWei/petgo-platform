@@ -9,7 +9,7 @@
 /// 2. **每个原因选项直接标出回程运费由谁承担** —— 不等提交后才告知。
 /// 3. **去程运费提示行随勾选实时切换**（UX-DR2）：全退 → 会退回；部分退 → 不退回。
 ///    这是堵住「免运门槛凑单 → 退掉凑单商品」套利的**唯一告知点**。
-/// 4. **可退判定以服务端为准**：用服务端下发的 `selectable` / `blockedReason` 渲染。
+/// 4. **可退判定以服务端为准**：用服务端下发的 `selectable` / `blockedCode` 渲染（文案在端上）。
 ///
 /// ## ⚠️ 与代码库既有约定的两处冲突（按设计稿实现，在此标注）
 ///
@@ -196,9 +196,9 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
                           color: selectable ? ShopColors.accent : ShopColors.text4)),
                   // 🔴 不可退的原因由**服务端**给，前端直接展示 ——
                   //    前端自己拼会和服务端判定漂移。
-                  if (!selectable && line.blockedReason != null) ...[
+                  if (!selectable && line.blockedCode != null) ...[
                     const SizedBox(height: 3),
-                    Text(line.blockedReason!,
+                    Text(_blockedText(l10n, line.blockedCode!),
                         key: ValueKey('returnBlocked_${line.orderLineId}'),
                         style: ShopText.meta.copyWith(color: ShopColors.warnTitle)),
                   ],
@@ -349,6 +349,16 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
           ],
         ),
       );
+
+  /// 不可退原因码 → 本地化文案（D-9）。
+  ///
+  /// 🔴 兜底到最保守的那句：后端将来新增原因码时，老版本 App 拿到未知码
+  /// 也得说得出「为什么不能选」—— 显示空白等于让用户以为是页面坏了。
+  String _blockedText(AppLocalizations l10n, String code) => switch (code) {
+        'ALL_RETURNED' => l10n.returnBlockedAllReturned,
+        'NO_RETURN_AFTER_OPEN' => l10n.returnBlockedAfterOpen,
+        _ => l10n.returnBlockedNonReturnable,
+      };
 
   /// 选一张凭证并上传（D-10）。
   ///
