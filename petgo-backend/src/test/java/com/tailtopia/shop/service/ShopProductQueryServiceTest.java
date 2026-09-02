@@ -194,4 +194,51 @@ class ShopProductQueryServiceTest {
         assertThat(ShopProductSummaryView.class.getRecordComponents())
                 .noneMatch(c -> c.getName().equals("id"));
     }
+
+    // ---------- 关键词搜索（2026-08-31）----------
+
+    @Test
+    @DisplayName("空关键词与不传逐字等价——搜索框清空必须原样回到列表")
+    void blankQueryFallsBackToPlainList() {
+        when(products.findByActiveTrueOrderBySortWeightDescIdDesc())
+                .thenReturn(List.of(product(1, "t1", ProductCategory.MAKANAN)));
+        when(skus.findByProductIdInOrderByIdAsc(ArgumentMatchers.anyList())).thenReturn(List.of());
+
+        for (String blank : new String[] {null, "", "   "}) {
+            assertThat(service.list(null, blank)).hasSize(1);
+        }
+        // 一次都不该走搜索分支
+        Mockito.verify(products, Mockito.never()).searchActive(ArgumentMatchers.anyString());
+    }
+
+    @Test
+    @DisplayName("有关键词时走搜索分支，且与品类是与关系")
+    void queryDelegatesToSearchAndCombinesWithCategory() {
+        when(products.searchActive("%royal%")).thenReturn(List.of());
+        when(products.searchActiveByCategory("%royal%", ProductCategory.MAKANAN))
+                .thenReturn(List.of());
+
+        assertThat(service.list(null, "Royal")).isEmpty();
+        assertThat(service.list(ProductCategory.MAKANAN, "  ROYAL  ")).isEmpty();
+
+        Mockito.verify(products).searchActive("%royal%");
+        Mockito.verify(products).searchActiveByCategory("%royal%", ProductCategory.MAKANAN);
+        // 走了搜索就绝不该再打普通列表
+        Mockito.verify(products, Mockito.never()).findByActiveTrueOrderBySortWeightDescIdDesc();
+    }
+
+    /**
+     * 🔴 不转义的话，用户敲一个 {@code %} 就等于「匹配全部」——结果里凭空多出商品，
+     * 而从输入框上完全看不出为什么。
+     */
+    @Test
+    @DisplayName("LIKE 通配符被转义：% _ \\ 都当字面量搜")
+    void likeWildcardsAreEscaped() {
+        assertThat(ShopProductQueryService.likePattern("100%")).isEqualTo("%100\\%%");
+        assertThat(ShopProductQueryService.likePattern("a_b")).isEqualTo("%a\\_b%");
+        // 反斜杠先转，不能把后面刚加的转义符再转一遍
+        assertThat(ShopProductQueryService.likePattern("a\\b")).isEqualTo("%a\\\\b%");
+        assertThat(ShopProductQueryService.likePattern("  ")).isNull();
+        assertThat(ShopProductQueryService.likePattern(null)).isNull();
+    }
 }

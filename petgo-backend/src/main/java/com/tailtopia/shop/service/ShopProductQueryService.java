@@ -50,9 +50,32 @@ public class ShopProductQueryService {
      */
     @Transactional(readOnly = true)
     public List<ShopProductSummaryView> list(ProductCategory category) {
-        List<ShopProduct> rows = category == null
-                ? products.findByActiveTrueOrderBySortWeightDescIdDesc()
-                : products.findByActiveTrueAndCategoryOrderBySortWeightDescIdDesc(category);
+        return list(category, null);
+    }
+
+    /**
+     * 商品列表 + 关键词搜索（2026-08-31）。
+     *
+     * <p>{@code query} 命中 <b>name 或 brand</b>，忽略大小写；为空/全空白时行为与
+     * {@link #list(ProductCategory)} <b>逐字相同</b>——搜索框清空必须原样回到列表，
+     * 而不是变成「搜了个空串」的另一条分支。
+     *
+     * <p>🔴 与 {@code category} <b>是与关系，不是互斥</b>：选了 Makanan 再搜「royal」
+     * 只在 Makanan 里搜。做成互斥（一搜就清掉品类）会让用户以为筛选没生效。
+     */
+    @Transactional(readOnly = true)
+    public List<ShopProductSummaryView> list(ProductCategory category, String query) {
+        String pattern = likePattern(query);
+        List<ShopProduct> rows;
+        if (pattern == null) {
+            rows = category == null
+                    ? products.findByActiveTrueOrderBySortWeightDescIdDesc()
+                    : products.findByActiveTrueAndCategoryOrderBySortWeightDescIdDesc(category);
+        } else {
+            rows = category == null
+                    ? products.searchActive(pattern)
+                    : products.searchActiveByCategory(pattern, category);
+        }
         if (rows.isEmpty()) {
             return List.of();
         }
@@ -130,5 +153,28 @@ public class ShopProductQueryService {
                         ShopSku::getProductId,
                         ShopSku::getPrice,
                         Math::min));
+    }
+
+    /**
+     * 把用户输入变成一条可安全用于 {@code like} 的 pattern；空输入返回 {@code null}（= 不搜）。
+     *
+     * <p>🔴 <b>必须转义 {@code \ % _}</b>：不转的话用户敲一个 {@code %} 就是「匹配全部」，
+     * 敲 {@code _} 就成了通配单字——搜索结果会莫名其妙地多出东西，而且没人能从
+     * 输入框里看出为什么。转义字符与仓储 {@code escape '\'} 声明的必须是同一个。
+     *
+     * <p>⚠️ 顺序要紧：反斜杠<b>必须先转</b>，否则会把后面刚加上去的转义符再转一遍。
+     *
+     * <p>大小写用 {@link java.util.Locale#ROOT} 归一——印尼语无特殊大小写映射，
+     * 但用默认 locale 会让结果随服务器区域设置漂移（土耳其语 I/ı 是经典坑）。
+     */
+    static String likePattern(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String escaped = raw.trim().toLowerCase(java.util.Locale.ROOT)
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        return "%" + escaped + "%";
     }
 }

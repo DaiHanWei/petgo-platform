@@ -26,6 +26,8 @@
 ///   全仓没有 key→URL 的拼装（v1 版式压根没画图，所以一直没暴露）。此处一律走占位斜纹。
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -60,6 +62,19 @@ class TokoPageV2 extends ConsumerStatefulWidget {
 class _TokoPageV2State extends ConsumerState<TokoPageV2> {
   ShopCategory? _selected;
 
+  /// 已**生效**的关键词（已防抖）。输入框里正在敲的那一份在 [_searchController] 里，
+  /// 两者故意分开：每敲一个字母就换一次 provider 族键 = 每个字母一次网络请求。
+  String? _keyword;
+
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
+
+  /// 防抖窗口。300ms 是「打完一个词的停顿」与「感觉不到延迟」之间的常用折中；
+  /// 再短会把连续输入拆成多次请求，再长会让用户以为搜索框没反应。
+  static const Duration _debounceWindow = Duration(milliseconds: 300);
+
+  ShopProductsQuery get _query => (category: _selected, keyword: _keyword);
+
   @override
   void initState() {
     super.initState();
@@ -68,9 +83,40 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
   }
 
   @override
+  void dispose() {
+    // 🔴 两个都要收：Timer 不取消会在页面销毁后回调进 setState（"setState after dispose"），
+    //    controller 不 dispose 会泄漏监听。
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String raw) {
+    _debounce?.cancel();
+    _debounce = Timer(_debounceWindow, () {
+      if (!mounted) return;
+      final next = raw.trim().isEmpty ? null : raw.trim();
+      if (next == _keyword) return; // 敲了又删回原样：不必重建族键
+      setState(() => _keyword = next);
+    });
+    // 清空是**立即**生效的，不等防抖 —— 用户点 × 是想马上看回全部列表，
+    // 让它等 300ms 会显得没点上。
+    if (raw.isEmpty && _keyword != null) {
+      _debounce?.cancel();
+      setState(() => _keyword = null);
+    }
+  }
+
+  void _clearSearch() {
+    _debounce?.cancel();
+    _searchController.clear();
+    if (_keyword != null) setState(() => _keyword = null);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final products = ref.watch(shopProductsProvider(_selected));
+    final products = ref.watch(shopProductsProvider(_query));
     final loggedIn = ref.watch(authControllerProvider).isLoggedIn;
     // banner 拉取失败一律当作"没有"（repository 里已吞掉异常）：
     // 它是锦上添花的展示位，不该让整页进错误态。加载中同样按"没有"处理 ——
@@ -98,10 +144,21 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
           _CartCapsule(bar: bar),
           const SizedBox(width: kShopScreenEdge),
         ],
+        // 搜索行（2026-08-31）。🔴 挂在顶栏的 bottom 槽而不是做成 pinned sliver：
+        //    有 banner 时 Scaffold 开了 extendBodyBehindAppBar，滚动区从 y=0 起算，
+        //    pinned sliver 会吸在 0 上、正好躲进浮着的顶栏底下被盖住。
+        //    bottom 槽由 AppBar 自己占位，天然不存在这类重叠，且「滚动不走」是无条件成立的。
+        bottom: _SearchBar(
+          controller: _searchController,
+          hint: l10n.tokoSearchHint,
+          clearLabel: l10n.tokoSearchClear,
+          onChanged: _onSearchChanged,
+          onClear: _clearSearch,
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          ref.invalidate(shopProductsProvider(_selected));
+          ref.invalidate(shopProductsProvider(_query));
           ref.invalidate(repurchaseCardsProvider);
           ref.invalidate(recommendationsProvider);
         },
@@ -128,11 +185,23 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
                 child: ShopRetryState(
                   message: l10n.tokoLoadFailed,
                   retryLabel: l10n.commonRetry,
-                  onRetry: () => ref.invalidate(shopProductsProvider(_selected)),
+                  onRetry: () => ref.invalidate(shopProductsProvider(_query)),
                 ),
               ),
               data: (items) => items.isEmpty
-                  ? SliverToBoxAdapter(child: _CenteredBox(child: Text(l10n.tokoEmpty, style: ShopText.body)))
+                  // 🔴 「搜不到」与「目录是空的」必须分开说：都用 tokoEmpty
+                  //    会让用户以为整个店没货，而不是自己的关键词没命中。
+                  ? SliverToBoxAdapter(
+                      child: _CenteredBox(
+                        child: Text(
+                          _keyword == null
+                              ? l10n.tokoEmpty
+                              : l10n.tokoSearchEmpty(_keyword!),
+                          style: ShopText.body,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
                   : _masonry(items),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: kShopGutter)),
@@ -291,6 +360,88 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
 /// banner 图的内容完全由运营决定，浅色图上白色的标题与按钮会直接看不见。
 /// 顶部压一层从半透明黑到全透明的渐变，让文字始终有足够对比度。
 /// ⚠️ 渐变高度覆盖到 AppBar 底部即可，再往下会把图的主视觉也压灰。
+/// Toko 顶栏之下的商品搜索行（2026-08-31）。
+///
+/// 🔴 **白色药丸底，不用透明底**：有 banner 时这一行浮在图上，透明底会让输入文字
+/// 落在任意画面上——图一换就可能读不出来。药丸自带底色，与图无关。
+///
+/// 🔴 输入框不持有"已生效关键词"：那份状态在页面 State 里，本组件只负责收输入
+/// 并把原始串抛出去。防抖与去重都在页面做——放在这里会让两处各有一份定时器。
+class _SearchBar extends StatelessWidget implements PreferredSizeWidget {
+  const _SearchBar({
+    required this.controller,
+    required this.hint,
+    required this.clearLabel,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final String clearLabel;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
+
+  /// 药丸 40 + 上下各 8。计入 [ShopAppBar.preferredSize]，改这里顶栏会自己变高。
+  static const double _pillHeight = 40;
+  static const double _vPad = 8;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(_pillHeight + _vPad * 2);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(kShopScreenEdge, _vPad, kShopScreenEdge, _vPad),
+        child: SizedBox(
+          height: _pillHeight,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: ShopColors.surface,
+              borderRadius: BorderRadius.circular(_pillHeight / 2),
+            ),
+            child: Row(
+              children: [
+                const SizedBox(width: 12),
+                const Icon(Icons.search, size: 18, color: ShopColors.text4),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    onChanged: onChanged,
+                    textInputAction: TextInputAction.search,
+                    style: ShopText.body,
+                    // 🔴 collapsed + 自绘 Row：默认 InputDecoration 会带上
+                    //    自己的 48 高约束与下划线，塞进 40 的药丸里必然溢出。
+                    decoration: InputDecoration.collapsed(
+                      hintText: hint,
+                      hintStyle: ShopText.body.copyWith(color: ShopColors.text4),
+                    ),
+                  ),
+                ),
+                // 有内容才出现清除按钮 —— 常驻一个 × 会让空输入框看起来像有内容。
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: controller,
+                  builder: (context, value, _) => value.text.isEmpty
+                      ? const SizedBox(width: 12)
+                      : Semantics(
+                          button: true,
+                          label: clearLabel,
+                          child: ShopPressable(
+                            onTap: onClear,
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10),
+                              child: Icon(Icons.close, size: 16, color: ShopColors.text4),
+                            ),
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
 class _BannerHeader extends StatelessWidget {
   const _BannerHeader({required this.banner});
 

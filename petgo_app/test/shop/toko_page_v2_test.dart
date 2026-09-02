@@ -25,12 +25,16 @@ void main() {
     Size size = const Size(411, 891), // Pixel 9：溢出正是在这个宽度上出现的
     double textScale = 1,
     ShopBanner? banner,
+    List<ShopProductsQuery>? seen, // 搜索用例用它观察页面到底按什么族键取数
   }) {
     return ProviderScope(
       overrides: [
         // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
         shopBannerProvider.overrideWith((ref) async => banner),
-        shopProductsProvider.overrideWith((ref, category) async => products),
+        shopProductsProvider.overrideWith((ref, query) async {
+          seen?.add(query);
+          return products;
+        }),
       ],
       child: MaterialApp(
         localizationsDelegates: const [
@@ -202,12 +206,102 @@ void main() {
       expect(find.text('Rp 0'), findsNothing);
     });
 
-    testWidgets('🔴 不提供全站搜索框（FR-93，与 v1 同一条战略边界）', (tester) async {
+    /// 🔴 2026-08-31 **决策反转**：FR-93 原文「不提供全站搜索框」，理由是
+    /// 商品受 SKU 上限约束（C-7）、四分类 + 精选流已够覆盖，且搜索框会把心智
+    /// 推向通用货架。产品于本日推翻该条，PRD / epics / decision-log /
+    /// architecture-delta 已同步改写。
+    ///
+    /// 这条用例从「断言不存在」翻成「断言存在」，**是故意留在原位**的 ——
+    /// 删掉它只会让下一个人以为搜索框是谁误加的，然后又把它拆了。
+    testWidgets('🔴 提供搜索框（2026-08-31 起，FR-93 原「不做搜索」已推翻）', (tester) async {
       await tester.pumpWidget(host([p('a', price: 185000)]));
       await tester.pumpAndSettle();
 
-      expect(find.byType(TextField), findsNothing);
-      expect(find.byIcon(Icons.search), findsNothing);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.byIcon(Icons.search), findsOneWidget);
+    });
+
+    testWidgets('🔒 搜索框对游客同样可用（浏览路径零登录墙）', (tester) async {
+      await tester.pumpWidget(host([p('a', price: 185000)]));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'royal');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      // 不弹登录、不拦截
+      expect(find.byType(Dialog), findsNothing);
+      expect(find.byType(BottomSheet), findsNothing);
+    });
+  });
+
+  group('搜索（2026-08-31）', () {
+    testWidgets('🔴 输入防抖：连续敲不会每个字母都取一次数', (tester) async {
+      final seen = <ShopProductsQuery>[];
+      await tester.pumpWidget(host([p('a', price: 185000)], seen: seen));
+      await tester.pumpAndSettle();
+      seen.clear(); // 丢掉首屏那次
+
+      await tester.enterText(find.byType(TextField), 'r');
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.enterText(find.byType(TextField), 'ro');
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.enterText(find.byType(TextField), 'royal');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      // 三次输入只落一次取数，且落的是最后那一版
+      expect(seen, hasLength(1));
+      expect(seen.single.keyword, 'royal');
+    });
+
+    testWidgets('🔴 关键词与品类是与关系，不是互斥', (tester) async {
+      final seen = <ShopProductsQuery>[];
+      await tester.pumpWidget(host([p('a', price: 185000)], seen: seen));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Makanan'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'royal');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(seen.last.category, ShopCategory.makanan,
+          reason: '搜索不该把已选品类清掉——那会让用户以为筛选没生效');
+      expect(seen.last.keyword, 'royal');
+    });
+
+    testWidgets('🔴 清空搜索框 → 族键回到 keyword=null（与从未搜过等价）', (tester) async {
+      final seen = <ShopProductsQuery>[];
+      await tester.pumpWidget(host([p('a', price: 185000)], seen: seen));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'royal');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(seen.last.keyword, 'royal');
+
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+
+      expect(seen.last.keyword, isNull);
+    });
+
+    /// 🔴 「搜不到」与「目录是空的」必须是两句话：共用一句会让用户以为整个店没货。
+    testWidgets('🔴 搜索无结果的空态带关键词，且不等于目录空态', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(host(const []));
+      await tester.pumpAndSettle();
+
+      // 没搜索时 = 目录空态
+      expect(find.text(l10n.tokoEmpty), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'royal');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.tokoEmpty), findsNothing);
+      expect(find.text(l10n.tokoSearchEmpty('royal')), findsOneWidget);
     });
   });
 

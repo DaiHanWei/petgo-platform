@@ -36,13 +36,19 @@ public class ShopProductController {
     }
 
     /**
-     * 商品列表（FR-93 区域③④）。
+     * 商品列表（FR-93 区域③④）+ 关键词搜索（2026-08-31）。
+     *
+     * <p>🔴 搜索**挂在列表接口上而不是另开 /search**：两者返回同一个 DTO、同一套排序，
+     * 且 {@code q} 与 {@code category} 需要组合生效。拆成两个端点会立刻带来
+     * 「搜索里要不要也支持品类」这种必须两边同步维护的重复。
      *
      * @param category 可选品类筛选；非法值 → 422（{@code AppException.validation}），不静默忽略
+     * @param q        可选关键词，命中 name 或 brand（忽略大小写）；空白等同于不传
      */
     @GetMapping
-    public List<ShopProductSummaryView> list(@RequestParam(required = false) String category) {
-        return query.list(parseCategory(category));
+    public List<ShopProductSummaryView> list(@RequestParam(required = false) String category,
+            @RequestParam(required = false) String q) {
+        return query.list(parseCategory(category), q);
     }
 
     /** 商品详情 + 其 SKU 列表（FR-94 / FR-94A）。未上架或不存在 → 404。 */
