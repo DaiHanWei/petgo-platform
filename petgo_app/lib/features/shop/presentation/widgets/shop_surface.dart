@@ -130,9 +130,16 @@ class ShopAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.leading,
     this.bottom,
     this.tone = ShopAppBarTone.dark,
+    this.titleWidget,
   });
 
   final String title;
+
+  /// 标题槽换成任意控件（搜索页把整条标题让给输入框）。
+  ///
+  /// ⚠️ 给了它就**完全接管**标题位，[title] 不再渲染 —— 但仍需传（可传空串），
+  /// 它还兼作无障碍与调试时的页面名。
+  final Widget? titleWidget;
   final bool large;
   final List<Widget> actions;
 
@@ -168,30 +175,75 @@ class ShopAppBar extends StatelessWidget implements PreferredSizeWidget {
     final hasLeading =
         leading != null || (!large && (Navigator.of(context).canPop()));
     // 🔴 底色 / 前景 / 状态栏图标必须同源于 tone，见 [tone] 的说明。
-    final (bg, fg, overlay) = switch (tone) {
-      ShopAppBarTone.dark => (ShopColors.ink, ShopColors.surface, SystemUiOverlayStyle.light),
-      ShopAppBarTone.light => (ShopColors.surface, ShopColors.ink, SystemUiOverlayStyle.dark),
-      // 透明：浮在 banner 图之上。前景仍取白色 —— 可读性由页面在图上压的那层
-      // 渐变保证（见 toko_page_v2 的 _BannerHeader），不是靠这里换颜色。
-      ShopAppBarTone.transparent =>
-        (Colors.transparent, ShopColors.surface, SystemUiOverlayStyle.light),
-    };
+    final c = colorsOf(tone);
     return AppBar(
-      backgroundColor: bg,
-      foregroundColor: fg,
+      backgroundColor: c.background,
+      foregroundColor: c.foreground,
       elevation: 0,
       scrolledUnderElevation: 0, // 🔴 设计稿明令产品 UI 内不使用阴影；M3 滚动阴影须显式关掉
-      systemOverlayStyle: overlay,
+      systemOverlayStyle: c.overlay,
       toolbarHeight: _barHeight,
       titleSpacing: hasLeading ? 0 : kShopScreenEdge,
       automaticallyImplyLeading: !large,
       leading: leading,
-      title: Text(title, style: large ? ShopText.pageTitle : ShopText.navTitle),
+      // 🔴 标题色必须 `copyWith` 覆盖掉（D-1）：`ShopText.pageTitle` / `navTitle`
+      //    **自带 `color: ShopColors.surface`（白）**，而 TextStyle 里写死的 color
+      //    压得过 `AppBar.foregroundColor`。tone 切到 light（白底）时，
+      //    不覆盖就是白底白字 —— 元素在控件树里、用户一个字看不见。
+      title: titleWidget ??
+          Text(title,
+              style: (large ? ShopText.pageTitle : ShopText.navTitle)
+                  .copyWith(color: c.foreground)),
       actions: actions,
       bottom: bottom,
     );
   }
+
+  /// 🔴 顶栏配色的**唯一出处**。放在 actions 里的胶囊（PawCoin 余额、购物车）
+  /// 必须从这里取色，**不能各自写死白色**。
+  ///
+  /// D-1（2026-09-02 stag 电商测试，P1）就是这么来的：tone 切到 [ShopAppBarTone.light]
+  /// （白底，Toko 无 banner 时的**设计内空态**）之后，标题与两个胶囊仍是白字 + 白色半透明底
+  /// ⇒ 整条顶栏在截图里恒为 RGB(255,255,255)。控件树里三个元素都在、无障碍也读得到，
+  /// 用户却什么都看不见 —— 连**购物车入口**都只能靠盲点角标位置。
+  ///
+  /// ⚠️ 白色顶栏本身不是故障（后台 banner 页写明了「这是设计内的空态」）。
+  /// 缺陷在于**前景色没跟着空态适配**。所以修的是「前景跟着 tone 走」，不是把底色改回深色。
+  static ShopAppBarColors colorsOf(ShopAppBarTone tone) => switch (tone) {
+        ShopAppBarTone.dark => (
+            background: ShopColors.ink,
+            foreground: ShopColors.surface,
+            capsule: ShopColors.onInk12,
+            overlay: SystemUiOverlayStyle.light,
+          ),
+        // 白底 → 前景取**主体色**（品牌紫），在白底上可见（2026-09-02 产品拍板）。
+        // 胶囊底同步换成浅紫 —— onInk12 是「白 12%」，压在白底上等于没有。
+        ShopAppBarTone.light => (
+            background: ShopColors.surface,
+            foreground: ShopColors.purple,
+            capsule: ShopColors.purpleTagBg,
+            overlay: SystemUiOverlayStyle.dark,
+          ),
+        // 透明：浮在 banner 图之上。前景仍取白色 —— 可读性由页面在图上压的那层
+        // 渐变保证（见 toko_page_v2 的 _BannerHeader），不是靠这里换颜色。
+        ShopAppBarTone.transparent => (
+            background: Colors.transparent,
+            foreground: ShopColors.surface,
+            capsule: ShopColors.onInk12,
+            overlay: SystemUiOverlayStyle.light,
+          ),
+      };
 }
+
+/// 一组顶栏配色。见 [ShopAppBar.colorsOf]。
+///
+/// 🔴 四个值**成组使用**，拆开取任意一个都可能拼出「白底白字」这类当场失效的组合。
+typedef ShopAppBarColors = ({
+  Color background,
+  Color foreground,
+  Color capsule,
+  SystemUiOverlayStyle overlay,
+});
 
 /// [ShopAppBar] 的栏体高度（不含状态栏）。见 ShopAppBar._barHeight 的说明。
 const double kShopAppBarHeight = 48;

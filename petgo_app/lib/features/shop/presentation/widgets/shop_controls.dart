@@ -350,10 +350,19 @@ class ShopChip extends StatelessWidget {
     required this.label,
     required this.selected,
     this.onTap,
+    this.selectedColor = ShopColors.ink,
   });
 
   final String label;
   final bool selected;
+
+  /// 选中态的实心底色。默认墨色。
+  ///
+  /// 🔴 Toko 的**分类行**传品牌紫（R-4 ②）：分类是页面级导航，
+  /// 选中态要和 D-1 定的顶栏主体色是同一个色，用户才读得出「这一整条是同一组控件」。
+  /// ⚠️ 不能直接把默认值改成紫：本组件同时用于**商品详情页的规格选择**（FR-94A），
+  /// 那里的选中态属于表单语义、沿用墨色，两者不是一回事。
+  final Color selectedColor;
 
   /// `null` = 纯展示（超服务范围页列已开通城市时就是纯展示，不可点）。
   final VoidCallback? onTap;
@@ -363,7 +372,7 @@ class ShopChip extends StatelessWidget {
     final chip = Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
       decoration: BoxDecoration(
-        color: selected ? ShopColors.ink : ShopColors.bg,
+        color: selected ? selectedColor : ShopColors.bg,
         borderRadius: BorderRadius.circular(ShopShape.radiusChip),
       ),
       child: Text(label,

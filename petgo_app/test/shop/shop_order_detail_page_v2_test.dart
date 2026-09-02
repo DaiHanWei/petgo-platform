@@ -202,14 +202,48 @@ void main() {
           reason: '204.000 已含 50.000 币，再跟一行「+ 50.000 PawCoin」就是重复计币');
     });
 
-    testWidgets('待支付 → 金额行仍是总额（此时标题是 Total bayar，语义正确）', (tester) async {
+    // 🔴 这条原先断言的是**反过来的**：「待支付 → 金额行仍是总额（此时标题是
+    //    Total bayar，语义正确）」。那个理由只在印尼语下成立 —— 同一个 ARB key
+    //    (`checkoutPayable`) 的英文是 **Total due**（现在还欠多少），而币段下单时已冻结。
+    //    2026-09-02 stag 用英文 locale 实测（D-4，P0）：同屏「Total due Rp 305.000」
+    //    配按钮「Pay now Rp 304.001」，那 999 的差额页面上无处可解释，
+    //    且该页明细区连 PawCoin 那一行都没有。已支付态本就按现金段显示 ⇒ 同页两态口径打架。
+    testWidgets('🔴 D-4：待支付 → 金额行也给**现金段**，与支付按钮同数', (tester) async {
       await tester.pumpWidget(host(order(
         expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
       )));
       await tester.pumpAndSettle();
 
       final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
+      expect(total.data, contains('154.000'));
+      expect(total.data, isNot(contains('204.000')),
+          reason: '204.000 含 50.000 币段；按钮写 154.000，合计写 204.000 就是同屏自相矛盾');
+
+      final btn = tester.widget<ShopButton>(find.byKey(const ValueKey('shopOrderPayV2')));
+      expect(btn.label, contains('154.000'), reason: '合计与按钮必须是同一个数');
+    });
+
+    testWidgets('🔴 D-4：待支付也必须列出 PawCoin 分段 —— 否则差额无从解释', (tester) async {
+      await tester.pumpWidget(host(order(
+        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+      )));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('shopOrderPaidCoinSplitV2')), findsOneWidget,
+          reason: '合计从 204.000 变成 154.000，页面必须说清那 50.000 去哪了');
+    });
+
+    testWidgets('待支付 · 纯现金单 → 金额行仍是总额（无币段可拆）', (tester) async {
+      await tester.pumpWidget(host(order(
+        coinAmount: 0,
+        cashAmount: 204000,
+        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+      )));
+      await tester.pumpAndSettle();
+
+      final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
       expect(total.data, contains('204.000'));
+      expect(find.byKey(const ValueKey('shopOrderPaidCoinSplitV2')), findsNothing);
     });
 
     testWidgets('🔴 支付按钮上的金额是**现在真要付的现金**，不是订单总额', (tester) async {
@@ -224,6 +258,48 @@ void main() {
       expect(btn.label, isNot(contains('204.000')));
     });
 
+    /// 🔴 D-4 **最极端形态**（2026-09-02 复测，指定为回归验收用例）：
+    /// PawCoin 余额够覆盖全单 ⇒ 现金段为 0。实测同一屏：
+    /// 明细区「Total due Rp 70.000」，正下方按钮「**Pay now Rp 0**」——
+    /// 按钮自己写着付 0，上方却称应付 70.000。差的不再是 999 而是**全额**，
+    /// 用户会以为还要再付 70.000 而放弃下单。
+    testWidgets('🔴 D-4 极端形态：全额抵扣 → Total due 为 0，与 Pay now 同数',
+        (tester) async {
+      await tester.pumpWidget(host(order(
+        coinAmount: 204000, // 币段覆盖全单
+        cashAmount: 0,
+        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+      )));
+      await tester.pumpAndSettle();
+
+      final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
+      expect(total.data, contains('0'));
+      expect(total.data, isNot(contains('204.000')),
+          reason: '一分现金都不欠，却写着应付 204.000 —— 用户会以为还要再付一次全款');
+
+      final btn = tester.widget<ShopButton>(find.byKey(const ValueKey('shopOrderPayV2')));
+      expect(btn.label, contains('Rp 0'), reason: '按钮与合计必须是同一个数');
+
+      // 那 204.000 去哪了必须有交代，否则合计从总额掉到 0 无从解释
+      expect(find.byKey(const ValueKey('shopOrderPaidCoinSplitV2')), findsOneWidget);
+    });
+
+    testWidgets('🔴 已支付的纯币单仍显总额 —— 「Dibayar Rp 0」读起来像没付钱',
+        (tester) async {
+      // 两态判据不同是刻意的：待支付问「还欠多少」，已支付说「付了多少」。
+      await tester.pumpWidget(host(order(
+        status: ShopOrderStatus.shipped,
+        coinAmount: 204000,
+        cashAmount: 0,
+        packages: [pkg(shippedAt: DateTime.now().subtract(const Duration(days: 1)))],
+      )));
+      await tester.pumpAndSettle();
+
+      final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
+      expect(total.data, contains('204.000'));
+      expect(total.data, isNot(contains('Rp 0')));
+    });
+
     testWidgets('纯币单（cashAmount 为 null）→ 不显示「Dibayar Rp 0」', (tester) async {
       await tester.pumpWidget(host(order(
         status: ShopOrderStatus.shipped,
@@ -235,6 +311,97 @@ void main() {
 
       final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
       expect(total.data, isNot(contains('Rp 0')));
+    });
+  });
+
+  /// 🔴 D-6（2026-09-02 stag 电商测试，P2）：顶部状态标签停在「On the way」。
+  ///
+  /// 复现：后台把包裹标记送达 → 订单转 DELIVERED → App 订单详情页。
+  /// 顶部那行大字紫色标签仍写「On the way」，而同页下方 Delivery history 的当前态、
+  /// 订单列表卡、后台订单状态**全是 Delivered**。
+  /// 它是 shipped/delivered 订单的**第一个区块** —— 用户第一眼读到的就是错的那个。
+  group('🔴 D-6：履约区标题必须跟着订单状态走', () {
+    testWidgets('已发货 → On the way', (tester) async {
+      await tester.pumpWidget(host(order(
+        status: ShopOrderStatus.shipped,
+        packages: [pkg(shippedAt: DateTime.now().subtract(const Duration(days: 1)))],
+      )));
+      await tester.pumpAndSettle();
+
+      final title =
+          tester.widget<Text>(find.byKey(const ValueKey('shopOrderFulfillmentTitleV2')));
+      expect(title.data, 'Sedang dikirim');
+    });
+
+    testWidgets('已送达 → 改「Terkirim / Delivered」，与下方时间线同一个词', (tester) async {
+      await tester.pumpWidget(host(order(
+        status: ShopOrderStatus.delivered,
+        packages: [pkg(
+          shippedAt: DateTime.now().subtract(const Duration(days: 2)),
+          deliveredAt: DateTime.now().subtract(const Duration(hours: 3)),
+        )],
+      )));
+      await tester.pumpAndSettle();
+
+      final title =
+          tester.widget<Text>(find.byKey(const ValueKey('shopOrderFulfillmentTitleV2')));
+      expect(title.data, 'Terkirim',
+          reason: '后台已 DELIVERED、时间线当前态也是 Terkirim，顶部标签不能还停在运输中');
+      expect(title.data, isNot('Sedang dikirim'), reason: 'D-6 的原形');
+    });
+  });
+
+  /// 🔴 D-19（2026-09-02 stag，P2）：订单取消后 Payment 区显示「Paid」。
+  ///
+  /// 实测**资金是对的**：取消后 PawCoin 余额完整恢复（冻结的 70.000 已解冻退回，
+  /// App 顶栏也同步成 120rb）。错的只是这一行文案 —— 而用户看到「Paid」会以为被扣了款。
+  /// 根因是个**二元判断** `pending ? Held : Paid`，取消态落到了 else。
+  group('🔴 D-19：取消态不能说「已支付」', () {
+    testWidgets('🔴 取消后 PawCoin 行说「已退回余额」，不是「Paid」', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(host(order(status: ShopOrderStatus.cancelled)));
+      await tester.pumpAndSettle();
+
+      final t = tester.widget<Text>(find.byKey(const ValueKey('shopOrderCoinStatusV2')));
+      expect(t.data, l10n.shopOrderCoinReturned);
+      expect(t.data, isNot(l10n.shopOrderPaidLabel),
+          reason: '钱从来没被拿走，说「已支付」用户会以为被扣了');
+    });
+
+    testWidgets('待支付仍说「已冻结、取消会退回」（这一支本来就是对的）', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(host(order(
+        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+      )));
+      await tester.pumpAndSettle();
+
+      final t = tester.widget<Text>(find.byKey(const ValueKey('shopOrderCoinStatusV2')));
+      expect(t.data, l10n.shopOrderCoinHeld);
+    });
+
+    testWidgets('已发货仍说「Paid」', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(host(order(
+        status: ShopOrderStatus.shipped,
+        packages: [pkg(shippedAt: DateTime.now().subtract(const Duration(days: 1)))],
+      )));
+      await tester.pumpAndSettle();
+
+      final t = tester.widget<Text>(find.byKey(const ValueKey('shopOrderCoinStatusV2')));
+      expect(t.data, l10n.shopOrderPaidLabel);
+    });
+
+    testWidgets('🔴 取消后合计行不再写「应付」—— 这单不存在应付', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(host(order(status: ShopOrderStatus.cancelled)));
+      await tester.pumpAndSettle();
+
+      final label = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalLabelV2')));
+      expect(label.data, l10n.shopOrderCancelledTotalLabel);
+      expect(label.data, isNot(l10n.checkoutPayable));
+
+      // 也不该拆成「现金段 + 币段」—— 那读起来像一笔真发生过的付款
+      expect(find.byKey(const ValueKey('shopOrderPaidCoinSplitV2')), findsNothing);
     });
   });
 

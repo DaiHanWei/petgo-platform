@@ -13,4 +13,7 @@ public interface ShopCartItemRepository extends JpaRepository<ShopCartItem, Long
     Optional<ShopCartItem> findByCartIdAndSkuId(long cartId, long skuId);
 
     void deleteByCartIdAndSkuIdIn(long cartId, List<Long> skuIds);
+
+    /** 账号注销级联（Story 7.3）：整车清空后车行本身也随之删除。 */
+    void deleteByCartId(long cartId);
 }

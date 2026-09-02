@@ -9,7 +9,7 @@
 /// 2. **每个原因选项直接标出回程运费由谁承担** —— 不等提交后才告知。
 /// 3. **去程运费提示行随勾选实时切换**（UX-DR2）：全退 → 会退回；部分退 → 不退回。
 ///    这是堵住「免运门槛凑单 → 退掉凑单商品」套利的**唯一告知点**。
-/// 4. **可退判定以服务端为准**：用服务端下发的 `selectable` / `blockedReason` 渲染。
+/// 4. **可退判定以服务端为准**：用服务端下发的 `selectable` / `blockedCode` 渲染（文案在端上）。
 ///
 /// ## ⚠️ 与代码库既有约定的两处冲突（按设计稿实现，在此标注）
 ///
@@ -23,15 +23,20 @@
 /// **不新增枚举值**（那要改后端 + Flyway）。
 library;
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/analytics/analytics.dart';
+import '../../../core/media/media_scope.dart';
 import '../../../core/theme/shop_tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/dashed_rect.dart';
+import '../../media/domain/media_upload_use_case.dart';
 import '../data/shop_return_repository.dart';
 import '../domain/shop_product.dart';
 import '../domain/shop_return.dart';
@@ -71,7 +76,20 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
   ReturnReasonOption? _reason;
 
   final Map<int, int> _selected = {};
-  final List<String> _evidence = [];
+
+  /// 已上传的凭证照片。
+  ///
+  /// 🔴 **D-10（2026-09-02 stag，P0）之前这里是一串假 key**：点「+」只往列表里
+  /// 追加字面量 `return-evidence-1/2/…`，**不调相册、不拍照、不上传**，
+  /// 计数照跳、缩略图是占位斜纹，随后这些假串被原样提交入库。
+  /// 后端也不校验 key 是否指向真实对象 ⇒ 运营在退货审核页无图可看，
+  /// 而本页文案还写着「拍到封口和保质期标签 —— 这是质检要看的」。
+  /// 整条凭证链路端到端不可用，「开封判例」这类依赖凭证的功能一并失去输入。
+  final List<_Evidence> _evidence = [];
+
+  /// 正在上传（选图→压缩→直传的整段）。期间「+」置灰并转圈 ——
+  /// 不给态就会重演 D-8 那种「点了没反应」。
+  bool _uploadingPhoto = false;
   bool _busy = false;
 
   /// 设计稿：min 2 / max 5（见文件头冲突说明）。
@@ -178,9 +196,9 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
                           color: selectable ? ShopColors.accent : ShopColors.text4)),
                   // 🔴 不可退的原因由**服务端**给，前端直接展示 ——
                   //    前端自己拼会和服务端判定漂移。
-                  if (!selectable && line.blockedReason != null) ...[
+                  if (!selectable && line.blockedCode != null) ...[
                     const SizedBox(height: 3),
-                    Text(line.blockedReason!,
+                    Text(_blockedText(l10n, line.blockedCode!),
                         key: ValueKey('returnBlocked_${line.orderLineId}'),
                         style: ShopText.meta.copyWith(color: ShopColors.warnTitle)),
                   ],
@@ -263,7 +281,14 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
                     height: 72,
                     child: Stack(
                       children: [
-                        const ShopImage(url: null, size: 72, radius: ShopShape.radiusField),
+                        // 🔴 用**刚选的那份字节**渲染，不去取远端：凭证进的是**私有桶**
+                        //    （与 IM 图、病例图同一口径），远端要签名 URL 才看得到，
+                        //    而用户此刻只是想确认「我传的是这张」。
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(ShopShape.radiusField),
+                          child: Image.memory(_evidence[i].bytes,
+                              width: 72, height: 72, fit: BoxFit.cover),
+                        ),
                         Positioned(
                           right: 2,
                           top: 2,
@@ -289,8 +314,8 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
                 if (_evidence.length < kMaxPhotos)
                   ShopPressable(
                     key: const ValueKey('returnEvidenceAddV2'),
-                    onTap: () => setState(() =>
-                        _evidence.add('return-evidence-${_evidence.length + 1}')),
+                    // 上传中不接第二次点击：并发上传会让计数与实际入库的 key 对不上。
+                    onTap: _uploadingPhoto ? null : () => _addEvidence(l10n),
                     child: CustomPaint(
                       painter: DashedRRectPainter(
                           color: ShopColors.border, radius: ShopShape.radiusField),
@@ -300,7 +325,15 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.add, size: 15, color: ShopColors.purple),
+                            if (_uploadingPhoto)
+                              const SizedBox(
+                                key: ValueKey('returnEvidenceUploadingV2'),
+                                width: 15,
+                                height: 15,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            else
+                              const Icon(Icons.add, size: 15, color: ShopColors.purple),
                             const SizedBox(height: 2),
                             Text('${_evidence.length}/$kMaxPhotos',
                                 style: ShopText.badge.copyWith(color: ShopColors.text3)),
@@ -314,6 +347,71 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
             const SizedBox(height: 7),
             Text(l10n.returnPhotoHint, style: ShopText.meta),
           ],
+        ),
+      );
+
+  /// 不可退原因码 → 本地化文案（D-9）。
+  ///
+  /// 🔴 兜底到最保守的那句：后端将来新增原因码时，老版本 App 拿到未知码
+  /// 也得说得出「为什么不能选」—— 显示空白等于让用户以为是页面坏了。
+  String _blockedText(AppLocalizations l10n, String code) => switch (code) {
+        'ALL_RETURNED' => l10n.returnBlockedAllReturned,
+        'NO_RETURN_AFTER_OPEN' => l10n.returnBlockedAfterOpen,
+        _ => l10n.returnBlockedNonReturnable,
+      };
+
+  /// 选一张凭证并上传（D-10）。
+  ///
+  /// 复用全仓统一的「选图 → 权限 → 压缩剥 EXIF → 直传」用例
+  /// （[MediaUploadUseCase]，工单附件页同一套路），不另起一条上传链路。
+  ///
+  /// 🔴 进**私有桶**：凭证是用户拍的实物照，可能带家里、面单、地址等信息，
+  /// 与 IM 图 / 病例图同一口径。⚠️ 这意味着后台要渲染它得走签名 URL，
+  /// 不能像商品图那样直接拼公开 URL（见 D-13）。
+  Future<void> _addEvidence(AppLocalizations l10n) async {
+    if (_evidence.length >= kMaxPhotos || _uploadingPhoto) return;
+    final source = await _pickSourceSheet(l10n);
+    if (source == null || !mounted) return;
+    setState(() => _uploadingPhoto = true);
+    try {
+      final useCase = ref.read(mediaUploadUseCaseProvider);
+      // 分两步而不是 pickAndUploadOne：要留住处理后的字节做缩略图，
+      // 私有桶的对象拿不到可直接 <img> 的地址。
+      final bytes = await useCase.pickAndProcess(source: source, context: context);
+      if (bytes == null || !mounted) return; // 用户取消 / 权限被拒（用例内已引导）
+      final res = await useCase.uploadBytes(scope: MediaScope.private, bytes: bytes);
+      if (!mounted) return;
+      setState(() => _evidence.add(_Evidence(bytes, res.objectKey)));
+    } catch (_) {
+      // 🔴 必须出声。D-8 的教训：上传失败没有任何反馈时，用户会以为是自己没点对，
+      //    而这里更糟 —— 计数不涨，他会反复点。
+      if (mounted) showAppToast(context, l10n.returnPhotoUploadFailed);
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
+  Future<MediaSource?> _pickSourceSheet(AppLocalizations l10n) =>
+      showModalBottomSheet<MediaSource>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                key: const ValueKey('returnEvidenceCameraV2'),
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: Text(l10n.triagePhotoFromCamera),
+                onTap: () => Navigator.pop(ctx, MediaSource.camera),
+              ),
+              ListTile(
+                key: const ValueKey('returnEvidenceGalleryV2'),
+                leading: const Icon(Icons.photo_library_outlined),
+                title: Text(l10n.triagePhotoFromGallery),
+                onTap: () => Navigator.pop(ctx, MediaSource.gallery),
+              ),
+            ],
+          ),
         ),
       );
 
@@ -409,7 +507,10 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
       return;
     }
     // 🔴 设计稿：照片 min 2。质量问题那一档恰恰是平台承担运费 + 发补偿溢价的，
-    //    没有凭证既无法质检也无法复盘。服务端也会再判一次。
+    //    没有凭证既无法质检也无法复盘。
+    // ⚠️ 「服务端也会再判一次」**2026-09-02 起才真正成立**（产品拍板：前端 2 张、后端 2 张）。
+    //    此前服务端只在 QUALITY_ISSUE 时要求「非空」—— 1 张也过、换个调用方 0 张也过，
+    //    等于只有这里在挡。现在两端同为 2 张（服务端 ReturnRequestService.MIN_EVIDENCE）。
     if (_evidence.length < kMinPhotos) {
       showAppToast(context, l10n.returnPhotoTooFew);
       return;
@@ -425,7 +526,7 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
             // 4 个原因映射回 2 个 API 值后，把具体原因写进备注供质检看
             // （见文件头冲突②：不新增枚举值）。
             reasonNote: _reasonLabel(l10n, _reason!),
-            evidenceKeys: List.of(_evidence),
+            evidenceKeys: [for (final e in _evidence) e.objectKey],
           );
       if (!mounted) return;
       ref.invalidate(returnEligibilityProvider(widget.orderToken));
@@ -439,4 +540,14 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
       if (mounted) setState(() => _busy = false);
     }
   }
+}
+
+/// 一张已上传的凭证：本地字节（画缩略图）+ 服务端 objectKey（提交用）。
+///
+/// ⚠️ 两者都要留：字节不能当 key 提交，key 也换不出可直接渲染的地址（私有桶）。
+class _Evidence {
+  const _Evidence(this.bytes, this.objectKey);
+
+  final Uint8List bytes;
+  final String objectKey;
 }

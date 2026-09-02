@@ -44,18 +44,18 @@
             <tr><th th:text="#{admin.shop.order.col.cashAmount}">QRIS 段</th>
                 <td th:text="${order.cashAmount}">245000</td></tr>
             <tr><th th:text="#{admin.shop.order.col.createdAt}">下单</th>
-                <td th:text="${order.createdAt}">-</td></tr>
+                <td th:text="${@adminTime.wib(order.createdAt)}">-</td></tr>
             <tr><th th:text="#{admin.shop.order.col.shippedAt}">发货</th>
-                <td th:text="${order.shippedAt}">-</td></tr>
+                <td th:text="${@adminTime.wib(order.shippedAt)}">-</td></tr>
             <tr><th th:text="#{admin.shop.order.col.deliveredAt}">签收</th>
                 <td>
-                    <span th:text="${order.deliveredAt}">-</span>
+                    <span th:text="${@adminTime.wib(order.deliveredAt)}">-</span>
                     <span th:if="${order.deliverySource != null}"
                           th:text="' / ' + ${order.deliverySource}">ADMIN_MARK</span>
                 </td></tr>
             <tr><th th:text="#{admin.shop.order.col.completedAt}">完成</th>
                 <td>
-                    <span th:text="${order.completedAt}">-</span>
+                    <span th:text="${@adminTime.wib(order.completedAt)}">-</span>
                     <span th:if="${order.completionSource != null}"
                           th:text="' / ' + ${order.completionSource}">USER_CONFIRM</span>
                 </td></tr>
@@ -124,7 +124,7 @@
                 <td th:text="${p.trackingNo}">JP123</td>
                 <td th:text="${p.carrierCost}">18000</td>
                 <td th:text="${p.status}">SHIPPED</td>
-                <td th:text="${p.deliveredAt}">-</td>
+                <td th:text="${@adminTime.wib(p.deliveredAt)}">-</td>
                 <td>
                     <form th:if="${canFulfill and markable and !p.delivered}" method="post"
                           th:action="@{/admin/shop/orders/{t}/packages/{id}/delivered(t=${order.publicToken},id=${p.id})}">

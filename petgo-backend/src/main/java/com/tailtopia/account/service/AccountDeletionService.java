@@ -8,14 +8,17 @@ import com.tailtopia.admin.moderation.service.ManualReviewService;
 import com.tailtopia.auth.service.AuthAccountDeletionService;
 import com.tailtopia.consult.service.ConsultAnonymizationService;
 import com.tailtopia.content.service.ContentService;
+import com.tailtopia.content.service.ContentShareService;
 import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.notify.service.NotificationDeletionService;
 import com.tailtopia.pay.service.PawCoinAccountDeletionService;
 import com.tailtopia.profile.service.ProfileDeletionService;
+import com.tailtopia.share.service.ShareRewardDeletionService;
 import com.tailtopia.shared.im.ImAccountMapper;
 import com.tailtopia.shared.im.TencentImClient;
 import com.tailtopia.shared.media.MediaDeletionService;
 import com.tailtopia.shared.media.PersonalMedia;
+import com.tailtopia.shop.service.ShopAccountDeletionService;
 import com.tailtopia.triage.service.TriageDeletionService;
 import java.util.List;
 import org.slf4j.Logger;
@@ -55,6 +58,10 @@ public class AccountDeletionService {
     private final ContentService contentService;
     private final ManualReviewService reviewService;
     private final ViolationCountService violationCountService;
+    // 1.1.6 电商/分享注销联动：shop 地址/购物车删除 + 订单/退货剥 PII + 分享行与奖励留痕清理。
+    private final ShopAccountDeletionService shopDeletion;
+    private final ContentShareService contentShareService;
+    private final ShareRewardDeletionService shareRewardDeletion;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -63,7 +70,9 @@ public class AccountDeletionService {
             PawCoinAccountDeletionService pawCoinDeletion, AuthAccountDeletionService authDeletion,
             MediaDeletionService mediaDeletion, TencentImClient imClient,
             ApplicationEventPublisher events, ContentService contentService,
-            ManualReviewService reviewService, ViolationCountService violationCountService) {
+            ManualReviewService reviewService, ViolationCountService violationCountService,
+            ShopAccountDeletionService shopDeletion, ContentShareService contentShareService,
+            ShareRewardDeletionService shareRewardDeletion) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -77,6 +86,9 @@ public class AccountDeletionService {
         this.contentService = contentService;
         this.reviewService = reviewService;
         this.violationCountService = violationCountService;
+        this.shopDeletion = shopDeletion;
+        this.contentShareService = contentShareService;
+        this.shareRewardDeletion = shareRewardDeletion;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -121,6 +133,16 @@ public class AccountDeletionService {
         contentService.deactivateAuthorContent(userId);
         reviewService.removePendingForAuthor(userId);
         violationCountService.deleteByAccount(userId);
+
+        // 1.1.6 电商/分享注销联动（D1/D2 口径，同样须在 user 行匿名化【前】——此时 user_id 仍可识别）：
+        //  ① shipping_addresses / shop_carts 纯个人数据物理删除；shop_orders 照 consult_orders 例
+        //     保留交易记录、剥收货快照 PII；return_requests 流程保留、加密收款账号置空；
+        //  ② content_shares 随作者内容一并删除（F14：分享链接注销即失效，token 不该比内容活得久）；
+        //  ③ id_card_share_rewards / share_reward_quotas 随 PawCoin 钱包口径物理删除（先删奖励留痕，再作废钱包）。
+        // 各自事务、幂等可重跑。
+        shopDeletion.deleteByUserId(userId);
+        contentShareService.deleteByAuthorForAccountDeletion(userId);
+        shareRewardDeletion.deleteByUserId(userId);
 
         // PawCoin 余额作废（Story 1.6，FR-50D）：写 FORFEITURE 终结分录归零 + 物理删钱包/流水；在删 user 行前。
         pawCoinDeletion.voidBalanceAndPurge(userId);

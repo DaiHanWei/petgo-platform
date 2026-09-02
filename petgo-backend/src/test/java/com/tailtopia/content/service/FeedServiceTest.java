@@ -324,8 +324,50 @@ class FeedServiceTest {
         org.mockito.Mockito.verify(recommendations)
                 .page(isNull(), isNull(), isNull(), eq(FeedService.PAGE_SIZE), eq(77L));
 
-        service.loadFeed("ALL", "some-cursor", null, null);
+        // ⚠️ 后续页游标必须是真 rank 格式：ALL Tab 入口有双格式兼容预检，
+        //    非 rank 格式的串到不了 recommendations（chrono 会分流走时序、垃圾串 422）。
+        String rankCursor = new com.tailtopia.content.rank.FeedRankCursor("s-test-seed", 20).encode();
+        service.loadFeed("ALL", rankCursor, null, null);
         org.mockito.Mockito.verify(recommendations)
-                .page(isNull(), isNull(), eq("some-cursor"), eq(FeedService.PAGE_SIZE), isNull());
+                .page(isNull(), isNull(), eq(rankCursor), eq(FeedService.PAGE_SIZE), isNull());
+    }
+
+    /**
+     * 🔴 发版过渡兼容：老客户端（≤v1.1.4）的 chrono 游标喂给 ALL Tab → 不 422，
+     * 整个会话继续走时序流（否则发版瞬间正在翻页的存量用户拿同一个 nextCursor 重试死循环）。
+     */
+    @Test
+    void legacyChronoCursorOnAllTabContinuesTheChronoSession() {
+        String chronoCursor = new FeedCursor(Instant.now(), 50L).encode();
+        when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                .thenReturn(List.of());
+
+        FeedPageResponse page = service.loadFeed("ALL", chronoCursor, null, null);
+
+        assertThat(page.rankMode()).isEqualTo(FeedPageResponse.RANK_MODE_CHRONO);
+        org.mockito.Mockito.verifyNoInteractions(recommendations); // 没进推荐链路，直接时序
+    }
+
+    /**
+     * 🛡 级别 4 降级带着 rank 游标时不得在降级路径里再 422（Redis 抖动时页 ≥2 全挂）——
+     * 回 chrono 首页：丢的是阅读进度，保住的是可用性。
+     */
+    @Test
+    void level4WithRankCursorFallsBackToChronoFirstPage() {
+        String rankCursor = new com.tailtopia.content.rank.FeedRankCursor("s-test-seed", 20).encode();
+        when(recommendations.page(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), any()))
+                .thenThrow(new IllegalStateException("redis blew up"));
+        when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any()))
+                .thenReturn(List.of());
+
+        FeedPageResponse page = service.loadFeed("ALL", rankCursor, null, null);
+
+        assertThat(page.rankMode()).isEqualTo(FeedPageResponse.RANK_MODE_CHRONO);
+        // 降级查询按「无游标首页」发出（第 5 个参数 hasCursor=false）—— rank 游标没被硬塞给 chrono。
+        org.mockito.Mockito.verify(posts).findFeed(isNull(), eq(false),
+                eq(false), isNull(), eq(false), isNull(), isNull(), eq(false), isNull(),
+                any(Pageable.class));
     }
 }

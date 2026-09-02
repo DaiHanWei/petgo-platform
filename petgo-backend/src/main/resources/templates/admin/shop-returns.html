@@ -70,7 +70,7 @@
                 <td th:text="${r.returnShipBearer}">PLATFORM</td>
                 <td th:text="${r.outboundFeeRefundable}">false</td>
                 <td th:text="${r.status}">PENDING_REVIEW</td>
-                <td th:text="${r.createdAt}">-</td>
+                <td th:text="${@adminTime.wib(r.createdAt)}">-</td>
                 <td>
                     <a th:href="@{/admin/shop/returns/{t}(t=${r.publicToken})}"
                        th:text="#{admin.common.detail}">详情</a>

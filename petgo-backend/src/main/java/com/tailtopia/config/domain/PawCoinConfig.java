@@ -172,6 +172,11 @@ public class PawCoinConfig {
     /**
      * 退款转 PawCoin 溢价（bonus）= 基础退款额 × premiumRate% + premiumFixed。
      * 仅「未交付 + 转币」分支给（反套利 C-1，由 RefundService 门控）；两参数均后台可配。
+     *
+     * <p>⚠️ <b>这段描述只对 {@code pay/refund/RefundService} 成立</b>（D-16 查证，2026-09-02）。
+     * 电商退货那条链路（{@code shop/returns/RefundExecutionService}）**另有一套私有公式**：
+     * 不加 {@code premiumFixed}，也没有「未交付」这道门 —— 详见那个类里 {@code premium(..)}
+     * 方法上的说明。两处并存这件事是已知的、待产品/风控拍板，不要当成漏改就地"统一"掉。
      */
     public long refundPawcoinPremium(long baseAmount) {
         return baseAmount * premiumRate / 100 + premiumFixed;

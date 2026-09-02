@@ -46,6 +46,21 @@ public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Lo
 
     List<ReturnRequest> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);
 
+    /**
+     * 账号注销级联（Story 7.3）：<b>退货流程记录保留</b>（与订单同为交易留痕），
+     * 只把 🔒 加密收款账号/户名置空 —— 银行账户 PII 在注销后没有任何保留理由
+     * （打款要么已完成要么随账号一起作废）。幂等：重跑再置一遍 NULL 无副作用。
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("""
+            UPDATE ReturnRequest r
+            SET r.payoutAccount = NULL, r.payoutAccountHolder = NULL,
+                r.updatedAt = CURRENT_TIMESTAMP
+            WHERE r.userId = :userId
+              AND (r.payoutAccount IS NOT NULL OR r.payoutAccountHolder IS NOT NULL)
+            """)
+    int clearPayoutPiiByUserId(@Param("userId") long userId);
+
     /** 超 7 日未寄回的申请（S-7：到期关闭）。 */
     @Query("""
             SELECT r FROM ReturnRequest r

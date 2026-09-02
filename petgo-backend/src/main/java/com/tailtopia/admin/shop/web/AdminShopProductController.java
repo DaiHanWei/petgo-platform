@@ -337,7 +337,8 @@ public class AdminShopProductController {
         f.setBrand(p.getBrand());
         f.setCategory(p.getCategory());
         f.setMainImageKey(p.getMainImageKey());
-        f.setGalleryKeysRaw(p.getGalleryKeys() == null ? "" : String.join("\n", p.getGalleryKeys()));
+        // getGalleryKeys() 保证非 null（见其 javadoc / D-20），此处不再判空。
+        f.setGalleryKeysRaw(String.join("\n", p.getGalleryKeys()));
         f.setSpecies(p.getSpecies());
         f.setBodySize(p.getBodySize());
         f.setAgeStage(p.getAgeStage());

@@ -240,6 +240,130 @@ void main() {
     });
   });
 
+  /// 🔴 R-3（2026-09-02 产品拍板）：删除必须可撤销。
+  ///
+  /// 风险不在「删除」本身，在**按钮位复用**：[ShopStepper] 在 `value <= min` 时
+  /// 把同一个位置的「−」换成垃圾桶。用户连点减号往下收数量，**最后一下必然落在
+  /// 已经变成垃圾桶的同一坐标上** —— 这不是手滑，是控件设计决定的必然结果。
+  ///
+  /// ⚠️ 产品明确否掉了二次确认弹窗：那会拖慢每一次正常的收数量操作，
+  /// 而误删的代价用 undo 完全覆盖得住。
+  ///
+  /// ⚠️ 数量固定是 1：经步进器删除时必然已收到底（这正是误删路径本身）。
+  /// 代码里仍按 `line.qty` 传而不是写死 1 —— 将来若多出别的删除入口，这里不必再改。
+  group('🔴 R-3：删除后可撤销', () {
+    Future<_FakeCartController> pumpOneLine(WidgetTester tester,
+        {bool addFails = false}) async {
+      final ctrl = _FakeCartController(CartView(
+        lines: [line('sku-a', qty: 1)],
+        invalidLines: const [],
+        itemCount: 1,
+        subtotal: 185000,
+      ))..addFailsOnStock = addFails;
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(() => _TestAuthController(
+                const AuthState(status: AuthStatus.authenticated, role: 'USER'),
+              )),
+          cartProvider.overrideWith(() => ctrl),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('id'),
+          home: const MediaQuery(
+            data: MediaQueryData(size: Size(411, 891)),
+            child: CartPageV2(),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      return ctrl;
+    }
+
+    testWidgets('🔴 删除后弹出撤销条', (tester) async {
+      final ctrl = await pumpOneLine(tester);
+      await tester.tap(find.byKey(const ValueKey('stepperDec')));
+      await tester.pumpAndSettle();
+
+      expect(ctrl.removed, ['sku-a']);
+      expect(find.byKey(const ValueKey('appToastAction')), findsOneWidget,
+          reason: '删完什么都不说，误删的用户只能重新去找那件商品');
+      expect(find.text('Urungkan'), findsOneWidget);
+      // 提示条里带商品名 —— 连着删两件时，用户得看得出撤销的是哪一件
+      expect(find.textContaining('dihapus'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 6)); // 放掉 toast 的自动消失 Timer
+    });
+
+    testWidgets('🔴 点撤销 → 按删除时的数量加回来', (tester) async {
+      final ctrl = await pumpOneLine(tester);
+      await tester.tap(find.byKey(const ValueKey('stepperDec')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Urungkan'));
+      await tester.pumpAndSettle();
+
+      expect(ctrl.added, hasLength(1));
+      expect(ctrl.added.single.sku, 'sku-a');
+      expect(ctrl.added.single.qty, 1);
+      // 点完动作 toast 立刻收起 —— 动作已经执行，再挂 5 秒只是挡视线
+      expect(find.byKey(const ValueKey('appToastAction')), findsNothing);
+    });
+
+    testWidgets('撤销带自述的归因值，而不是留 null', (tester) async {
+      final ctrl = await pumpOneLine(tester);
+      await tester.tap(find.byKey(const ValueKey('stepperDec')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Urungkan'));
+      await tester.pumpAndSettle();
+
+      // 后端购物车接口**刻意不下发**归因（CartView.CartLine 的注释写明了理由），
+      // 端上无从还原原值。null 与「归因上线前的老数据」长得一样、事后分不清；
+      // CART_UNDO 至少可解释、可筛掉。
+      expect(ctrl.added.single.entrySource, 'CART_UNDO');
+    });
+
+    testWidgets('🔴 撤销条可点 —— 纯提示的 toast 是穿透的，带动作这条不能穿透',
+        (tester) async {
+      final ctrl = await pumpOneLine(tester);
+      await tester.tap(find.byKey(const ValueKey('stepperDec')));
+      await tester.pumpAndSettle();
+
+      // app_toast 默认包着 IgnorePointer（让点击穿透到底下的页面）。
+      // 带动作时那层必须去掉，否则「撤销」按钮点不动 —— 而它是这条提示的全部意义。
+      expect(find.ancestor(
+        of: find.byKey(const ValueKey('appToastAction')),
+        matching: find.byType(IgnorePointer),
+      ), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('appToastAction')));
+      await tester.pumpAndSettle();
+      expect(ctrl.added, hasLength(1));
+    });
+
+    testWidgets('🔴 撤销失败（货被买走）必须出声，不能静默', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await pumpOneLine(tester, addFails: true);
+      await tester.tap(find.byKey(const ValueKey('stepperDec')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Urungkan'));
+      await tester.pumpAndSettle();
+
+      // 静默失败会让用户以为撤销成功了，直到结算才发现少了一件。
+      expect(find.text(l10n.cartStockError), findsOneWidget);
+
+      // toast 挂在 root Overlay 上、带一个 2.6s 的自动消失 Timer；
+      // 不 pump 过去，测试结束时会因为「Timer is still pending」而红。
+      await tester.pump(const Duration(seconds: 3));
+    });
+  });
+
   group('🔴 有效行必须删得掉（2026-08-21 默认变体翻到 v2 后一度删不掉）', () {
     // v1 的 `cart_page.dart` 一直是「qty=1 时 − 变垃圾桶」，v2 改版时漏了，
     // 于是默认版式翻过来之后，加错东西的用户只能整单买下或放弃结算。
@@ -280,6 +404,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('stepperDec')));
       await tester.pumpAndSettle();
       expect(ctrl.removed, ['sku-a']);
+
+      // 删除现在会弹 5 秒的撤销 toast（R-3），它带一个自动消失 Timer；
+      // 不 pump 过去，测试结束时会因为「Timer is still pending」而红。
+      await tester.pump(const Duration(seconds: 6));
     });
   });
 }
@@ -297,11 +425,24 @@ class _FakeCartController extends CartController {
   /// 被 `remove()` 掉的 skuToken，供用例断言。
   final removed = <String>[];
 
+  /// 被 `add()` 加回来的行（撤销用例断言数量与归因有没有带对）。
+  final added = <({String sku, int qty, String? entrySource})>[];
+
+  /// 置真则 `add()` 抛库存错误 —— 模拟「删掉到撤销之间货被别人买走」。
+  bool addFailsOnStock = false;
+
   @override
   Future<CartView> build() async => _cart;
 
   @override
   Future<void> remove(String skuToken) async => removed.add(skuToken);
+
+  @override
+  Future<void> add(String skuToken,
+      {int qty = 1, String? entrySource, String? triggerType}) async {
+    if (addFailsOnStock) throw CartMutationError.stock;
+    added.add((sku: skuToken, qty: qty, entrySource: entrySource));
+  }
 }
 
 class _TestAuthController extends AuthController {

@@ -31,8 +31,13 @@ class CheckoutRepository {
   /// 👉 归因链闭合归 Story 9.2 / Epic 6，届时从加购处一路带下来。
   ///
   /// 抛 [CheckoutFailure]：库存/下架挡住时带逐行明细。
+  ///
+  /// [idempotencyKey] 经 `Idempotency-Key` 头去重（照充值 createTopup 范式）：
+  /// 同 key 重放后端取回既有订单，不重复建单、不重复锁库存。
   Future<ShopOrderRef> placeOrder(String addressToken,
-      {String? entrySource, String? triggerType}) async {
+      {required String idempotencyKey,
+      String? entrySource,
+      String? triggerType}) async {
     try {
       final resp = await dio.post<Map<String, dynamic>>(
         ApiPaths.meShopOrders,
@@ -41,6 +46,7 @@ class CheckoutRepository {
           'entrySource': ?entrySource,
           'triggerType': ?triggerType,
         },
+        options: Options(headers: <String, dynamic>{'Idempotency-Key': idempotencyKey}),
       );
       return ShopOrderRef.fromJson(resp.data!);
     } on DioException catch (e) {

@@ -238,6 +238,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
       }
       return;
     }
+    // 落点保留 /triage（问诊 hub，含历史列表）：用户反馈明确要求聊完回记录页而非 /home；
+    // DEP-1 后它是裸路由，出路由 TriagePage 自带顶栏返回 + PopScope 兜底到 /home。
     context.go('/triage');
   }
 

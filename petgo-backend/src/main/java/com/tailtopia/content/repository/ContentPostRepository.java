@@ -2,6 +2,7 @@ package com.tailtopia.content.repository;
 
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.domain.ImageSize;
 import com.tailtopia.content.domain.PostStatus;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -12,6 +13,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface ContentPostRepository extends JpaRepository<ContentPost, Long>, ContentPostAdminSearch {
 
@@ -396,4 +398,21 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
                                 com.tailtopia.content.domain.PostStatus.UNDER_REVIEW)
             """)
     int deactivateByAuthor(@Param("authorId") long authorId, @Param("now") Instant now);
+
+    /**
+     * 图片尺寸兜底测量的<b>定向落库</b>（V1.1.6 Story 3.1 · 并发覆盖修复）：只写
+     * {@code image_sizes}（+ {@code updated_at}），<b>绝不整行回写</b> ——
+     * 回填装载实体后要经历最多 9×(3s+3s) 的 OSS 网络读，期间审核 / 下架可能已并发改了
+     * {@code status} / {@code report_hidden_at} / {@code deleted_at}，
+     * 整行脏检查 save 会拿装载时的旧值把它们静默盖掉（本表无 {@code @DynamicUpdate} 无 {@code @Version}）。
+     *
+     * <p>⚠️ {@code @Transactional} 挂在这里：调用方（{@code @Async} 的回填服务）<b>刻意不开事务</b>
+     * （网络读不得占事务 / 连接），而 {@code @Modifying} 的 executeUpdate 必须有事务 ——
+     * 就在这一条语句上开最短的一个。
+     */
+    @Transactional
+    @Modifying
+    @Query("UPDATE ContentPost p SET p.imageSizes = :sizes, p.updatedAt = :now WHERE p.id = :id")
+    int updateImageSizes(@Param("id") long id, @Param("sizes") List<ImageSize> sizes,
+            @Param("now") Instant now);
 }

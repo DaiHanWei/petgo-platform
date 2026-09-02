@@ -192,7 +192,18 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
           Row(
             children: [
               Expanded(
-                child: Text(l10n.shopOrderShippedNow,
+                // 🔴 标题必须**跟着订单状态**走（D-6，2026-09-02 stag 电商测试）。
+                //    此前这里写死 `shopOrderShippedNow`（On the way）：后台把包裹标记送达、
+                //    订单转 DELIVERED 之后，本行仍写「On the way」，而同页下方
+                //    Delivery history 的当前态、订单列表卡、后台状态**全都是 Delivered**。
+                //    这是 shipped/delivered 订单的**第一个区块**，用户第一眼读到的就是错的。
+                //    ⚠️ 送达态复用时间线那条 `shopOrderPackageDelivered` ——
+                //       同一页对同一件事必须用同一个词，另起一个 key 迟早两边走散。
+                child: Text(
+                    order.status == ShopOrderStatus.delivered
+                        ? l10n.shopOrderPackageDelivered
+                        : l10n.shopOrderShippedNow,
+                    key: const ValueKey('shopOrderFulfillmentTitleV2'),
                     style: ShopText.sectionTitle
                         .copyWith(fontSize: 13, color: ShopColors.purple)),
               ),
@@ -334,6 +345,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
     final coin = order.coinAmount ?? 0;
     final cash = order.cashAmount ?? 0;
     final pending = order.status.isPendingPayment;
+    final cancelled = order.status == ShopOrderStatus.cancelled;
     if (coin == 0 && cash == 0) return const SizedBox.shrink();
 
     return ShopSection(
@@ -356,7 +368,17 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
                             style: ShopText.cardTitle.copyWith(fontSize: 11.5)),
                         // 🔴 待支付时必须说明「已冻结、取消会退回」 ——
                         //    不说的话用户以为币已经花掉了。
-                        Text(pending ? l10n.shopOrderCoinHeld : l10n.shopOrderPaidLabel,
+                        //
+                        // 🔴 D-19（2026-09-02 stag）：此前这里是**二元判断**
+                        //    `pending ? Held : Paid`，于是**取消态落到了 Paid** ——
+                        //    而实测资金是对的（冻结的币已完整解冻退回、顶栏余额也同步了），
+                        //    只是这一行写着「Paid」，用户会以为钱被扣了。
+                        //    取消 = 钱从来没被拿走，得单说一句「已退回余额」。
+                        Text(
+                            cancelled
+                                ? l10n.shopOrderCoinReturned
+                                : (pending ? l10n.shopOrderCoinHeld : l10n.shopOrderPaidLabel),
+                            key: const ValueKey('shopOrderCoinStatusV2'),
                             style: ShopText.meta),
                       ],
                     ),
@@ -405,11 +427,32 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
 
   Widget _itemsBlock(AppLocalizations l10n, ShopOrderDetail order) {
     final pending = order.status.isPendingPayment;
-    // 已支付且**两段都非零** → 金额行改「Dibayar 现金 + N PawCoin」两段式（设计稿 02 §3）。
+    // **两段都非零** → 金额行改「现金段 + N PawCoin」两段式（设计稿 02 §3）。
     // 🔴 纯币单（现金段 0）不走这一支：那会显示成「Dibayar Rp 0 + Rp 204.000 PawCoin」，
     //    而且「+ 币」这行本身就是把总额换个说法再写一遍。纯币单保留「Total bayar 总额」。
-    final paidSplit =
-        !pending && (order.coinAmount ?? 0) > 0 && _cashSegment(order) > 0;
+    //
+    // 🔴 **待支付同样要拆**（D-4，2026-09-02 stag 电商测试，P0）。此前这里带着 `!pending`，
+    //    于是待支付态既不减币段、也根本不列币段：同屏「Total due Rp 305.000」配着按钮
+    //    「Pay now Rp 304.001」—— 那 999 的差额，页面上没有任何一处解释得了。
+    //    ⚠️ 原先有条测试写着「待支付金额行仍是总额，此时标题是 Total bayar，语义正确」。
+    //    那个理由**只在印尼语下成立**：同一个 key 的英文是 **Total due**（现在还欠多少），
+    //    而币段在下单时已冻结、用户此刻真要付的只有现金段。语言一换，同一个数就成了错的。
+    //    已支付态本来就按现金段显示 —— 两态口径统一之后，这一页不再自相矛盾。
+    //
+    // 🔴 **全额抵扣是 D-4 最极端的那一形态**（2026-09-02 复测）：PawCoin 覆盖全单时
+    //    现金段为 0，旧判据 `cash > 0` 直接把这种单排除在外 ⇒ 又退回显示总额。
+    //    实测同一屏：明细区「Total due Rp 70.000」，正下方按钮「**Pay now Rp 0**」——
+    //    按钮自己写着付 0，上方却称应付 70.000。差的不再是 999 而是**全额**，
+    //    用户会以为还要再付 70.000 而放弃下单。
+    //    ⚠️ 所以待支付态的判据只看**有没有币段**：全额抵扣时「Total due Rp 0」
+    //       正是对的（现在一分现金都不欠），与那个按钮同数。
+    //    ⚠️ 已支付态仍要求 `cash > 0`：纯币单显示「Dibayar Rp 0」读起来像没付钱，
+    //       那一支保留原样显示总额。两态判据不同是刻意的，不是漏写。
+    final coin = order.coinAmount ?? 0;
+    // 🔴 取消态不参与两段式：订单已取消，**不存在"还欠多少"**，
+    //    把它拆成「现金段 + 币段」读起来像一笔真发生过的付款（D-19 附带项）。
+    final cancelled = order.status == ShopOrderStatus.cancelled;
+    final coinSplit = !cancelled && coin > 0 && (pending || _cashSegment(order) > 0);
     return ShopSection(
       child: Column(
         children: [
@@ -457,22 +500,34 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
           Row(
             children: [
               Expanded(
-                child: Text(paidSplit ? l10n.shopOrderPaidLabel : l10n.checkoutPayable,
+                // 待支付 →「Total due」（现在还欠多少）；已支付 →「Dibayar / Paid」；
+                // 🔴 已取消 →「订单金额」：这单不存在"应付"，写 Total due 是无意义的
+                //    （D-19 附带项：取消后该行仍显示 Total due Rp 70.000）。
+                child: Text(
+                    cancelled
+                        ? l10n.shopOrderCancelledTotalLabel
+                        : (pending || !coinSplit
+                            ? l10n.checkoutPayable
+                            : l10n.shopOrderPaidLabel),
+                    key: const ValueKey('shopOrderTotalLabelV2'),
                     style: ShopText.cardTitle.copyWith(fontSize: 12)),
               ),
               // 🔴 拆两段显示时这里给的是**现金段**，不是订单总额。
               //    总额已经含了 PawCoin 段，再跟一行「+ 50.000 PawCoin」就是把币算了两遍
               //    （2026-08-19 上机：同屏 QRIS 块写 33.000、这里写 83.000，自相矛盾）。
               //    设计稿 02 §3 的原文是 `Dibayar Rp 154.000 + 50.000 PawCoin` —— 现金 + 币。
-              Text(formatIdr(paidSplit ? _cashSegment(order) : order.totalAmount),
+              Text(formatIdr(coinSplit ? _cashSegment(order) : order.totalAmount),
                   key: const ValueKey('shopOrderTotalV2'),
                   style: ShopText.priceGrid.copyWith(
                       color: pending ? ShopColors.accent : ShopColors.ink)),
             ],
           ),
-          // 🔴 已支付订单必须保留 PawCoin 分段 —— 退款拆分的用户侧依据。
+          // 🔴 混合支付必须列出 PawCoin 分段 —— 已支付时是退款拆分的用户侧依据，
+          //    待支付时是「合计为什么比商品总额少 999」的**唯一**解释（D-4）。
           //    条件与上面的金额行同源：只有真混合支付才有「两段」可言。
-          if (paidSplit) ...[
+          //    ⚠️ ValueKey 仍叫 `…PaidCoinSplitV2`（测试与既有引用的稳定钩子），
+          //       但它现在**两态都渲染**，名字里的 Paid 已不再表示只在已支付时出现。
+          if (coinSplit) ...[
             const SizedBox(height: 4),
             Align(
               alignment: Alignment.centerRight,

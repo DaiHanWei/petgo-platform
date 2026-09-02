@@ -40,6 +40,26 @@ public enum ReturnType {
         return returnShipBearer;
     }
 
+    /**
+     * 「未交付」—— 货<b>没有真正到过用户手上</b>：拒收（货没离开承运商）、发货前取消（无实物往返）。
+     *
+     * <h2>🔴 这是 C-1 反套利那道门</h2>
+     * {@code premium_rate} / {@code premium_fixed} 这对配置是<b>只给这一支</b>的转币激励 ——
+     * 迁移 {@code V20260817_2330} 的头注释（「①激励溢价…『未交付+转币』分支的反套利激励」）
+     * 与 {@link com.tailtopia.config.domain.PawCoinConfig#refundPawcoinPremium} 的 javadoc
+     * 两处都写明了。
+     *
+     * <p>已交付的退货若也给转币激励，等于<b>付钱请人「买 → 收货 → 退 → 转币」</b>：
+     * 质量问题那一档尤其糟 —— 平台还要承担回程运费并另给补偿溢价。
+     *
+     * <p>⚠️ 与 {@link #skipsShipback()} <b>当前取值相同，但语义不同，不要合并</b>：
+     * 那个说的是「流程上跳过寄回与质检」（结果），这个说的是「货没到过用户手上」（原因）。
+     * 将来若出现「要寄回但仍算未交付」或反之，两者会分道扬镳，而门控必须跟着**原因**走。
+     */
+    public boolean isUndelivered() {
+        return skipsShipback;
+    }
+
     /** 是否平台责任 → 决定是否给平台责任补偿溢价（C-9，读独立配置项）。 */
     public boolean isPlatformFault() {
         return platformFault;

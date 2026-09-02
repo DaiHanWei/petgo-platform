@@ -213,6 +213,34 @@ document.addEventListener('submit', function (e) {
     }
 }, true);
 
+// ===== 上传错误的落点：**保证有声**（2026-09-02 stag 电商测试 D-8 第 3 条）=====
+// 两个上传控件各写各的容器：单条发布 / 商品 / banner 写 [data-seed-thumbs]，
+// 批次素材写 [data-batch-errors]。此前两边都**认死一个容器**，且失败方式还不一样：
+//   - reject() 首行 `if (!box) { return; }` —— 容器不在就**静默吞掉**全部错误；
+//   - showError() 直接 .appendChild —— 容器不在就**抛异常**，而它是在 fetch 的
+//     .then/.catch 里被调的，抛出去只变成一条 unhandled rejection。
+// 两种写法表现不同，后果一模一样：**界面上一个字都没有**，运营只会以为是自己没点对。
+// D-8 就是这么从"少两行 meta"拖成"完全不可用且查不出原因"的。
+//
+// 🔴 所以落点改成**逐级回退**，最后一级必定 console.error ——
+//    宁可只有 F12 里看得到，也绝不能一声不吭。
+function adminUploadError(root, text, selectors) {
+    var box = null;
+    for (var i = 0; i < selectors.length && !box; i++) {
+        box = root && root.querySelector(selectors[i]);
+    }
+    if (!box) {
+        // 页面漏放容器 / 改版删掉了 —— 到这一步说明前端结构和 JS 已经走散，
+        // 但**用户的那次上传确实失败了**，这条必须留下痕迹。
+        console.error('[admin upload] ' + text);
+        return;
+    }
+    var p = document.createElement('p');
+    p.className = 'err';
+    p.textContent = text;
+    box.appendChild(p);
+}
+
 // ===== 单条发布的图片上传控件（V1.1.6 Story 12.2 · AC2/AC3）=====
 // 此前后台只能填图片 URL：运营为了发一条内容得先去别处传图、拿链接、再粘回来。
 //
@@ -247,6 +275,22 @@ document.addEventListener('submit', function (e) {
             var keys = thumbs.map(function (t) {
                 return t.getAttribute('data-key') || '';
             }).filter(function (k) { return k; });
+            // 🔴 平铺模式（D-15，2026-09-02）：**一个字段收全部 key**，不分主图/图集。
+            //    质检照片没有"封面"这回事 —— 它们是一组等价的验货照，
+            //    服务端也只有一个 photoKeys 字段（逗号分隔，见 AdminReturnController.splitKeys）。
+            //    给了 data-field-keys 就走这一支，主图/图集那套完全不参与。
+            var flatEl = fieldOf(root.getAttribute('data-field-keys'));
+            if (flatEl) {
+                flatEl.value = keys.join(',');
+                // 🔴 平铺模式**不打「封面」角标**：这一组图里没有"第一张更重要"这回事
+                //    （质检照片是一组等价的验货照）。留着角标会让运营以为顺序有含义、
+                //    去纠结该把哪张拖到最前面。
+                thumbs.forEach(function (t) {
+                    var badge = t.querySelector('[data-seed-cover]');
+                    if (badge) { badge.hidden = true; }
+                });
+                return;
+            }
             var mainEl = fieldOf(root.getAttribute('data-field-main'));
             var galEl = fieldOf(root.getAttribute('data-field-gallery'));
             if (mainEl) { mainEl.value = keys.length ? keys[0] : ''; }
@@ -342,21 +386,58 @@ document.addEventListener('submit', function (e) {
         fetch(root.getAttribute('data-upload-url'), {
             method: 'POST', body: body, headers: headers, credentials: 'same-origin'
         }).then(function (r) {
-            return r.json().then(function (j) { return { ok: r.ok, body: j }; });
+            // 🔴 会话过期要**单独认出来**：后台会话 8h 过期，过期后这个 POST 会被重定向到
+            //    /admin/login，而 fetch 默认跟随重定向 ⇒ 拿到的是 **200 + 登录页 HTML**。
+            //    不认它就会报成"上传失败，请重试" —— 而重试一万次也不会成功，
+            //    真正要做的是重新登录。判据用 r.redirected + 落点，不猜响应体。
+            if (r.redirected && r.url && r.url.indexOf('/admin/login') >= 0) {
+                return { ok: false, status: r.status, body: null, expired: true };
+            }
+            // 🔴 不能直接 r.json()：失败响应**未必是 JSON**。
+            //    403（缺 CSRF 头）回的是 Security 的错误页，5xx 回的是 RFC 9457 信封。
+            //    早先在这里直接解析，非 JSON 一律抛进下面的 catch，而 catch 只清了状态字
+            //    —— 界面上一个字都不显示，表现为"选了图没反应"，排障时毫无线索。
+            return r.text().then(function (t) {
+                var parsed = null;
+                try { parsed = t ? JSON.parse(t) : null; } catch (e) { parsed = null; }
+                return { ok: r.ok, status: r.status, body: parsed };
+            });
         }).then(function (res) {
             if (status) { status.textContent = ''; }
+            if (res.expired) {
+                showError(root, file, root.getAttribute('data-msg-expired') || 'session expired');
+                return;
+            }
             if (!res.ok) {
-                // 被拒的那张单独报错，不影响其余（HEIC / 超 10MB 都是**预期内**的输入）。
-                var p = document.createElement('p');
-                p.className = 'err';
-                p.textContent = (file.name || '') + '：' + (res.body.error || 'upload failed');
-                root.querySelector('[data-seed-thumbs]').appendChild(p);
+                // 被拒的那张单独报错，不影响其余（HEIC / 超限都是**预期内**的输入）。
+                // error 是本链路自定义的字段；detail 是 RFC 9457 的；两者都没有才回落通用文案，
+                // 并**带上状态码** —— 否则 403 与 500 在界面上长得一模一样，没法分诊。
+                var text = (res.body && (res.body.error || res.body.detail))
+                        || failedText(root) + '（HTTP ' + res.status + '）';
+                showError(root, file, text);
+                return;
+            }
+            if (!res.body || !res.body.url) {
+                // 200 却拿不到可用信封 —— 宁可报错，也不能让 addThumb 拿 null 崩在 then 里
+                // （那会掉进 catch，错因被抹平成一句通用文案）。
+                showError(root, file, failedText(root));
                 return;
             }
             addThumb(root, res.body);
         }).catch(function () {
+            // 网络层就没走通（断网 / 被扩展拦掉）。同样必须出声。
             if (status) { status.textContent = ''; }
+            showError(root, file, failedText(root));
         });
+    }
+
+    function failedText(root) {
+        return root.getAttribute('data-msg-failed') || 'upload failed';
+    }
+
+    function showError(root, file, text) {
+        adminUploadError(root, (file.name || '') + '：' + text,
+                ['[data-seed-thumbs]', '[data-batch-errors]']);
     }
 
     function eachRoot(fn) {
@@ -448,12 +529,8 @@ document.addEventListener('submit', function (e) {
     }
 
     function reject(root, name, msg) {
-        var box = root.querySelector('[data-batch-errors]');
-        if (!box) { return; }
-        var p = document.createElement('p');
-        p.className = 'err';
-        p.textContent = name + '：' + msg;
-        box.appendChild(p);
+        adminUploadError(root, name + '：' + msg,
+                ['[data-batch-errors]', '[data-seed-thumbs]']);
     }
 
     /** 墙上已有的文件名 —— 分次追加时最容易撞的就是这个（"先拖猫的、再拖狗的"）。 */
@@ -502,7 +579,10 @@ document.addEventListener('submit', function (e) {
         var root = e.target.closest('[data-batch-uploader]');
         var files = [].slice.call(e.target.files);
         e.target.value = '';
-        root.querySelector('[data-batch-errors]').innerHTML = '';
+        // ⚠️ 容器缺失时不能让这一行抛出 —— 它在 change 处理器最前面，
+        //    一抛后面**整段选文件的逻辑都不会执行**，表现又是"选了图没反应"。
+        var errBox = root.querySelector('[data-batch-errors]');
+        if (errBox) { errBox.innerHTML = ''; }
 
         var s = state(root);
         var names = existingNames();

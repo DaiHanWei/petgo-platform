@@ -232,7 +232,7 @@ class Epic8ChainIntegrationTest extends ApiIntegrationTest {
         // 部分退货：只退第一行
         List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(order.getId());
         ReturnRequest r = returnRequests.submit(uid, order.getPublicToken(),
-                ReturnType.NON_QUALITY_ISSUE, Map.of(lines.get(0).getId(), 1), "note", null);
+                ReturnType.NON_QUALITY_ISSUE, Map.of(lines.get(0).getId(), 1), "note", evidence(uid));
         r.chooseCashDestination(CashDestination.TO_BANK,
                 com.tailtopia.pay.refund.domain.PayoutChannel.BCA, "12345", "Budi");
         returns.save(r);
@@ -307,5 +307,18 @@ class Epic8ChainIntegrationTest extends ApiIntegrationTest {
                 WHERE table_name = 'pawcoin_wallets' AND column_name = 'batch_type'""",
                 Long.class);
         assertThat(cols).isEqualTo(1L);
+    }
+
+    /**
+     * 合法的凭证 key（2026-09-02，D-10 + 凭证张数口径）。
+     *
+     * <p>服务端现在校验两件事：**归属**（key 必须形如 {@code <keyPrefix>private/<userId>/…}，
+     * 见 {@code MediaObjectKeys}）与**张数**（货在用户手上的退货要 ≥ 2 张，
+     * 见 {@code ReturnRequestService.MIN_EVIDENCE}）。夹具从前那种 {@code "ev1"} 或 {@code null}
+     * 两条都过不了。
+     * ⚠️ 测试环境 {@code MEDIA_OSS_KEY_PREFIX} 为空，故前缀就是 {@code private/}。
+     */
+    private static java.util.List<String> evidence(long userId) {
+        return java.util.List.of("private/" + userId + "/ev1.jpg", "private/" + userId + "/ev2.jpg");
     }
 }

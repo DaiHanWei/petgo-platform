@@ -14,7 +14,19 @@ import '../domain/shipping_address.dart';
 /// 服务端会自动把剩余中最近使用的一条升为默认（Story 2.1），
 /// 但用户看不见这件事就会以为默认地址丢了，下单时才发现寄到了别处。
 class AddressBookPage extends ConsumerWidget {
-  const AddressBookPage({super.key});
+  const AddressBookPage({super.key, this.selecting = false});
+
+  /// 选择器模式（D-18，2026-09-02 stag）。
+  ///
+  /// 🔴 从**结算页**进来时，这一页要回答的是「这单寄哪」，不是「管理我的地址」。
+  /// 此前两者是同一个页面同一套交互：点卡片**毫无反应**，页面给的是
+  /// 「设为默认 / 编辑 / 删除」——**管理操作，不是选择操作**。
+  /// 于是多地址用户想把这单寄公司，唯一办法是把公司地址**设为默认**；
+  /// 下单后想寄回家，还得再切一次。默认地址被当成"当前选择"用，语义错位。
+  ///
+  /// 选择器模式下：点卡片即选中并 pop 回 token，**只作用于当前订单，不改默认地址**。
+  /// ⚠️ 「设为默认」仍然保留 —— 用户可能正想顺手改，只是它不再是换地址的**唯一**途径。
+  final bool selecting;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -35,6 +47,7 @@ class AddressBookPage extends ConsumerWidget {
                 separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
                 itemBuilder: (context, i) => _AddressCard(
                   address: items[i],
+                  selecting: selecting,
                   onChanged: () => ref.invalidate(addressListProvider),
                 ),
               ),
@@ -53,14 +66,35 @@ class AddressBookPage extends ConsumerWidget {
 }
 
 class _AddressCard extends ConsumerWidget {
-  const _AddressCard({required this.address, required this.onChanged});
+  const _AddressCard(
+      {required this.address, required this.onChanged, this.selecting = false});
 
   final ShippingAddress address;
   final VoidCallback onChanged;
 
+  /// 见 [AddressBookPage.selecting]。
+  final bool selecting;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final card = _card(context, ref, l10n);
+    if (!selecting) return card;
+    // 🔴 整卡可点：用户在选择器里想点的是**这张卡**，不是卡里的某个按钮。
+    //    pop 回 token，由结算页决定怎么用（只作用于本单）。
+    return Semantics(
+      button: true,
+      label: l10n.addressUseThis,
+      child: InkWell(
+        key: ValueKey('addressSelect_${address.token}'),
+        borderRadius: BorderRadius.circular(AppSpacing.md),
+        onTap: () => Navigator.of(context).pop(address.token),
+        child: card,
+      ),
+    );
+  }
+
+  Widget _card(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(

@@ -16,6 +16,7 @@ import '../../features/auth/presentation/login_page.dart';
 import '../../features/shop/address/presentation/address_book_page.dart';
 import '../../features/order/presentation/order_list_page_v2.dart';
 import '../../features/shop/address/presentation/address_form_page_v2.dart';
+import '../../features/shop/presentation/shop_search_page.dart';
 import '../../features/shop/presentation/cart_page_v2.dart';
 import '../../features/shop/presentation/checkout_page_v2.dart';
 import '../../features/shop/presentation/product_detail_page_v2.dart';
@@ -548,6 +549,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    redirect 会把游客直接甩回 /home，等于告诉他「这里没有购物车」——
       //    而真相是「登录后就有」，这一句差别就是 FR-0B 软性引导存在的理由。
       //    页面本身不发任何 /me 请求，游客态零数据暴露。
+      // 商品搜索页（2026-09-02 产品定形）。入口是 Toko 吸顶筛选行最左那个放大镜 ——
+      // 搜索在顶栏只占一个图标，整行剩下的宽度全给分类（见 _FilterBar 的说明）。
+      // 🔒 游客可用：只读商品目录，不发任何 /me 请求。
+      GoRoute(
+        path: '/shop/search',
+        builder: (c, s) => const ShopSearchPage(),
+      ),
       GoRoute(
         path: '/shop/cart',
         builder: (c, s) => const CartPageV2(),
@@ -587,7 +595,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    AC 写死「实现前不得自行发挥」。后端与数据层已就绪，补稿后只差这一页。
       // 地址簿（Story 2.4）。🔒 挂在 /me 前缀下 —— 它已在 _controlledLocations 里，
       // 游客访问自动重定向。地址是 PII，与 Toko 的游客开放策略正好相反。
-      GoRoute(path: '/me/addresses', builder: (c, s) => const AddressBookPage()),
+      // `?select=1` = 选择器模式（D-18）：从结算页进来时点卡片即选中并返回 token，
+      // 只作用于当前订单、不改默认地址。不带参数时仍是原来的地址管理页。
+      GoRoute(
+        path: '/me/addresses',
+        builder: (c, s) => AddressBookPage(
+          selecting: s.uri.queryParameters['select'] == '1',
+        ),
+      ),
       GoRoute(
         path: '/me/addresses/new',
         builder: (c, s) => const AddressFormPageV2(),
@@ -702,7 +717,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    降为顶层路由。**必须保留** —— consult_conversation / vet_waiting / vet_timed_pay
       //    等处有十余个 `context.go('/triage')` 作为问诊流程的返回落点，缺了就是 404。
       //    界面入口移到健康记录页（health_list_page.dart）。仍在 _controlledLocations 内，
-      //    登录门控不变。
+      //    登录门控不变。`go` 清栈落地后的出路由 TriagePage 自带（顶栏返回 + PopScope，
+      //    栈空导向 /home）—— 不在此处包壳，避免 push 入口双顶栏。
       GoRoute(path: '/triage', builder: (c, s) => const TriagePage()),
       GoRoute(path: '/triage/upload', builder: (c, s) => const TriageUploadPage()),
       // AI 分诊历史结果快照（bug 20260702-238/228）：按 triageId 只读回看，extra 带历史症状摘要。

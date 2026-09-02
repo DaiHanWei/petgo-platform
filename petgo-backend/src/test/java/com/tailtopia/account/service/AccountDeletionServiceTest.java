@@ -48,11 +48,16 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.content.service.ContentService contentService;
     @Mock com.tailtopia.admin.moderation.service.ManualReviewService reviewService;
     @Mock com.tailtopia.moderation.violation.service.ViolationCountService violationCountService;
+    @Mock com.tailtopia.shop.service.ShopAccountDeletionService shopDeletion;
+    @Mock com.tailtopia.content.service.ContentShareService contentShareService;
+    @Mock com.tailtopia.share.service.ShareRewardDeletionService shareRewardDeletion;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
                 consultAnonymization, notificationDeletion, pawCoinDeletion, authDeletion,
-                mediaDeletion, imClient, events, contentService, reviewService, violationCountService);
+                mediaDeletion, imClient, events,
+                contentService, reviewService, violationCountService,
+                shopDeletion, contentShareService, shareRewardDeletion);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -80,6 +85,10 @@ class AccountDeletionServiceTest {
         verify(notificationDeletion).deleteByUserId(7L);
         // PawCoin 余额作废纳入级联（Story 1.6），且在删 user 行前。
         verify(pawCoinDeletion).voidBalanceAndPurge(7L);
+        // 1.1.6 电商/分享注销联动：shop 清理 + 内容分享行删除 + 分享奖励留痕删除。
+        verify(shopDeletion).deleteByUserId(7L);
+        verify(contentShareService).deleteByAuthorForAccountDeletion(7L);
+        verify(shareRewardDeletion).deleteByUserId(7L);
         verify(authDeletion).deleteByUserId(7L);
         // OSS 私密图（h1+t1+t2+c1）+ 公开头像 + IM 媒体
         verify(mediaDeletion).deletePrivateKeys(anyList());

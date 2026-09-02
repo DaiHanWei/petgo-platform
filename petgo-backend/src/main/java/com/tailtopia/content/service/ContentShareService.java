@@ -122,6 +122,18 @@ public class ContentShareService {
                 .map(this::project);
     }
 
+    /**
+     * 账号注销级联（Story 7.3 / F14「分享链接立即失效」口径）：删除该作者全部内容的分享行。
+     *
+     * <p>{@link #findSharedPost} 的 {@code isActive} 过滤已让链接在注销后即刻失效，
+     * 这里再删行是让 token 本身也不复存在（分享链接不该比内容活得久，与
+     * {@code deleteByContentPostIdIn} 的既有口径一致）。幂等可重跑。
+     */
+    @Transactional
+    public void deleteByAuthorForAccountDeletion(long authorId) {
+        shares.deleteByAuthorId(authorId);
+    }
+
     private SharedPostResponse project(ContentPost post) {
         // 作者投影走 AccountQueryService（content 不直 join users，Story 3.2 的既有约定）。
         // 注销匿名化也在那一层，本处不重复实现。

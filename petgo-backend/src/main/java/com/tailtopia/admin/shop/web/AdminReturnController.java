@@ -53,14 +53,37 @@ public class AdminReturnController {
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
 
+    /** 凭证图是**私有桶**对象（D-10），后台要看必须签短 TTL URL —— 见 detail()。 */
+    private final com.tailtopia.shared.media.SignedUrlService signedUrls;
+
+    /** 质检照片直传（D-15）。⚠️ 落**公开桶**，与用户凭证的私有桶不是一回事，见 uploadInspectionImage()。 */
+    private final com.tailtopia.admin.seed.service.AdminSeedImageService images;
+
     public AdminReturnController(AdminReturnService adminReturns, ReturnRequestService requests,
             ShopOrderRepository orders, ShopOrderLineRepository orderLines,
-            Messages msg) {
+            Messages msg, com.tailtopia.shared.media.SignedUrlService signedUrls,
+            com.tailtopia.admin.seed.service.AdminSeedImageService images) {
         this.adminReturns = adminReturns;
         this.requests = requests;
         this.orders = orders;
         this.orderLines = orderLines;
         this.msg = msg;
+        this.signedUrls = signedUrls;
+        this.images = images;
+    }
+
+    /**
+     * 库里存的是**逗号拼接的一串** key（见 {@code ReturnRequest.joinKeys}），签名前先拆开。
+     *
+     * <p>⚠️ 空串要拆成空列表而不是 {@code [""]} —— 后者会签出一个指向桶根的 URL，
+     * 页面上表现为一张永远加载不出来的破图。
+     */
+    private static java.util.List<String> splitKeys(String joined) {
+        if (joined == null || joined.isBlank()) {
+            return java.util.List.of();
+        }
+        return java.util.Arrays.stream(joined.split("[,\n]"))
+                .map(String::trim).filter(k -> !k.isEmpty()).toList();
     }
 
     // ---------- 5.3 审核队列 ----------
@@ -103,6 +126,15 @@ public class AdminReturnController {
         model.addAttribute("lines", lines);
         model.addAttribute("lineNames", lineNames);
         model.addAttribute("disposals", RejectDisposal.values());
+        // 🔴 D-13（2026-09-02 stag）：此前模板直接 `th:text="${r.evidenceKeys}"`，
+        //    页面上渲染出的是 `return-evidence-1,return-evidence-2` 这样一串 key，
+        //    **零个 <img>** —— 质检要看封口和保质期标签，而审核界面从来就没有看图的能力。
+        //    ⚠️ 凭证进的是**私有桶**（D-10），不能像商品图那样拼公开 URL：
+        //       必须签短 TTL URL，与工单附件、兽医资质、异常工单三处同一套路。
+        model.addAttribute("evidenceUrls",
+                signedUrls.signAll(splitKeys(r.getEvidenceKeys())));
+        model.addAttribute("inspectionPhotoUrls",
+                signedUrls.signAll(splitKeys(r.getInspectionPhotoKeys())));
         // 🔴 退款单详情【明确列出溢价金额与触发依据】，便于事后审计与客诉复盘（5.5 AC）
         try {
             model.addAttribute("quote", adminReturns.quote(token));
@@ -156,6 +188,42 @@ public class AdminReturnController {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/shop/returns/" + token;
+    }
+
+    /**
+     * 质检照片直传（D-15 第 4 条，2026-09-02 产品拍板：<b>落公开桶</b>）。
+     *
+     * <p>此前质检照片是个**手填 objectKey 的文本框** —— 运营得先去别处传图、抄下 key、再粘回来，
+     * 与 D-13 同源（那边是「有 key 但看不到图」，这边是「要人工造 key」）。
+     *
+     * <h2>⚠️ 公开桶 vs 私有桶：同一页上两种图，别混</h2>
+     * <ul>
+     *   <li><b>用户凭证</b>（{@code evidenceKeys}）走**私有桶** —— 那是用户拍的实物照，
+     *       可能带家里、面单、地址；后台看它要签短 TTL URL（见 {@code detail()}）。</li>
+     *   <li><b>质检照片</b>（本端点）走**公开桶** —— 平台自己拍的验货照，
+     *       2026-09-02 产品拍板。</li>
+     * </ul>
+     * 两者在同一页并存，取图方式不同，改任一处前先确认改的是哪一种。
+     *
+     * <p>回包形状与商品图 / 内容侧**逐字一致**（一次一张、错误 400 + {@code {"error":...}}）——
+     * 前端那个上传控件是共用的，形状不一致它就得分叉。
+     */
+    @PostMapping("/admin/shop/returns/images")
+    @PreAuthorize(APPROVE_AUTH)
+    @org.springframework.web.bind.annotation.ResponseBody
+    public org.springframework.http.ResponseEntity<?> uploadInspectionImage(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        try {
+            return org.springframework.http.ResponseEntity.ok(
+                    images.upload(file, "shop-return-inspection"));
+        } catch (AppException e) {
+            return org.springframework.http.ResponseEntity.badRequest()
+                    .body(java.util.Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            // 对象存储未配置 / 凭证异常：回人话，不把 500 甩到运营脸上。
+            return org.springframework.http.ResponseEntity.badRequest()
+                    .body(java.util.Map.of("error", msg.get("admin.shop.form.uploadFailed")));
+        }
     }
 
     @PostMapping("/admin/shop/returns/{token}/inspect-pass")

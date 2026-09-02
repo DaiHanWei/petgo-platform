@@ -107,13 +107,26 @@ public class AliyunOssClient {
     }
 
     /**
-     * 服务端上传字节到公开桶①（Story 2.6 OG 预渲染图）。L2 真实网络。返回对外 CDN URL。
+     * 服务端上传字节到公开桶①。L2 真实网络。返回对外 CDN URL。
      *
-     * <p>🔴 <b>对象一律带 {@code x-oss-object-acl: public-read}</b>（2026-09-02，bug 472 的补漏）：
-     * 桶级并非公开读（BPA 关闭 + 桶 ACL 私有），不带对象级标记的上传**会成功**，但公网 403 ——
-     * 症状是"传上去了、页面裂图"。472 只改了素材那条链路（另立 {@link #putPublicObjectWithAcl}），
-     * 标签图标 / 兽医头像 / OG 图三处仍走本方法，于是后台标签胶囊全部裂图（2026-09-02 实机截图）。
-     * 把 ACL 焊进本体后，这一类事故对**未来所有调用方**都不可能再发生。
+     * <p>🔴 <b>一律带对象级 {@code x-oss-object-acl: public-read}</b>。公开桶的
+     * <b>桶级并非公开读</b>（BPA 关闭 + 桶 ACL 私有），对象不带这个标记就是
+     * 「上传成功、公网直读 403」—— 而上传链路本身一声不响。
+     *
+     * <h2>同一个根因，两条路各撞了一次（2026-09-02）</h2>
+     * <ul>
+     *   <li><b>bug 472 的补漏</b>：472 只改了素材那条链路（另立 {@code putPublicObjectWithAcl}），
+     *       标签图标 / 兽医头像 / OG 图三处仍走本方法 ⇒ 后台<b>标签胶囊全部裂图</b>（实机截图）。</li>
+     *   <li><b>stag 电商测试 D-2</b>：93 个商品里 10 张图公网 403、App 内空占位。
+     *       现象是<b>同一前缀下有的 200、有的 403</b> —— 因为预签名直传
+     *       （{@link #presignedPutUrl}）把 ACL 签进了头，服务端上传却没带。</li>
+     * </ul>
+     *
+     * <p>🔴 <b>合并成一个原语</b>而不是逐个改调用点：当时四条服务端上传线里
+     * <b>三条</b>走的是不带 ACL 的这条，只有 Lark 转存是对的。
+     * 公开桶里<b>不存在</b>「上传后不该被公开读」的对象 —— 它就是为公开分发存在的。
+     * 留着一个「看起来能用、但产出的对象必然 403」的重载，下一个新增上传线还会挑中它，
+     * 而且同样不会有任何报错。ACL 焊进本体后，这类事故对<b>未来所有调用方</b>都不可能再发生。
      */
     public String putPublicObject(String objectKey, byte[] bytes, String contentType) {
         // 🔴 无凭证时走打桩：直接返回 URL，不打网络（Story 11.5）。
@@ -131,24 +144,38 @@ public class AliyunOssClient {
         }
         OSS client = buildClient();
         try {
-            com.aliyun.oss.model.ObjectMetadata meta = new com.aliyun.oss.model.ObjectMetadata();
-            meta.setContentType(contentType);
-            meta.setContentLength(bytes.length);
-            meta.setHeader("x-oss-object-acl", "public-read");
             client.putObject(props.getOss().getPublicBucket(), stripLeadingSlash(objectKey),
-                    new ByteArrayInputStream(bytes), meta);
+                    new ByteArrayInputStream(bytes), publicObjectMetadata(contentType, bytes.length));
             return publicUrl(objectKey);
         } finally {
             client.shutdown();
         }
     }
 
+    /** 对象级公开读的头名。公开桶里每个对象都必须带它，见 {@link #putPublicObject}。 */
+    static final String PUBLIC_READ_HEADER = "x-oss-object-acl";
+
+    static final String PUBLIC_READ_VALUE = "public-read";
+
     /**
-     * 同 {@link #putPublicObject}（2026-09-02 起该方法已自带对象 ACL public-read，
-     * 本方法退化为别名，保留只为不动 472 那一批调用方）。新代码直接用 putPublicObject。
-     *
+     * 公开桶对象的元数据。抽出来是为了让「ACL 到底有没有带」可被 L0 直接断言 ——
+     * 这个标记漏掉时<b>上传照样成功</b>，只有公网取图才 403，没有任何一处会报错。
+     */
+    static com.aliyun.oss.model.ObjectMetadata publicObjectMetadata(String contentType, long length) {
+        com.aliyun.oss.model.ObjectMetadata meta = new com.aliyun.oss.model.ObjectMetadata();
+        meta.setContentType(contentType);
+        meta.setContentLength(length);
+        meta.setHeader(PUBLIC_READ_HEADER, PUBLIC_READ_VALUE);
+        return meta;
+    }
+
+    /**
+     * @deprecated 与 {@link #putPublicObject} 已无差别 —— 后者现在一律带 ACL。
+     *     保留只为不打断既有调用方（Lark 转存、以及 bug 472 那一批）与它们的用例；
+     *     新代码直接用 {@link #putPublicObject}。
      * @return 对外 CDN URL
      */
+    @Deprecated
     public String putPublicObjectWithAcl(String objectKey, byte[] bytes, String contentType) {
         return putPublicObject(objectKey, bytes, contentType);
     }

@@ -97,7 +97,7 @@
                 </td>
                 <td th:text="${r.kecamatan}">Kebayoran Baru</td>
                 <td th:text="${r.packageCount}">1</td>
-                <td th:text="${r.createdAt}">2026-08-18</td>
+                <td th:text="${@adminTime.wib(r.createdAt)}">2026-08-18</td>
                 <td>
                     <a th:href="@{/admin/shop/orders/{t}(t=${r.orderToken})}"
                        th:text="#{admin.common.detail}">详情</a>

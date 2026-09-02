@@ -22,6 +22,7 @@ import com.tailtopia.shop.order.dto.UnavailableLine;
 import com.tailtopia.shop.order.repository.ShopOrderLineRepository;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.shop.order.repository.ShopPawcoinRulesRepository;
+import com.tailtopia.shared.ratelimit.IdempotencyService;
 import com.tailtopia.shop.repository.ShopSkuRepository;
 import com.tailtopia.shop.service.InventoryService;
 import com.tailtopia.shop.service.ShopTokenGenerator;
@@ -30,6 +31,7 @@ import com.tailtopia.shop.shipping.service.ShippingQuoteService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,13 +62,14 @@ public class CheckoutService {
     private final ShopPawcoinRulesRepository rules;
     private final PawCoinWalletService wallet;
     private final ShopTokenGenerator tokens;
+    private final IdempotencyService idempotency;
 
     public CheckoutService(CartService carts, ShippingAddressService addresses,
             ShippingQuoteService quotes, InventoryService inventory, ShopSkuRepository skus,
             ShopProductRepository products,
             ShopOrderRepository orders, ShopOrderLineRepository orderLines,
             ShopPawcoinRulesRepository rules, PawCoinWalletService wallet,
-            ShopTokenGenerator tokens) {
+            ShopTokenGenerator tokens, IdempotencyService idempotency) {
         this.carts = carts;
         this.addresses = addresses;
         this.quotes = quotes;
@@ -78,6 +81,7 @@ public class CheckoutService {
         this.rules = rules;
         this.wallet = wallet;
         this.tokens = tokens;
+        this.idempotency = idempotency;
     }
 
     /**
@@ -147,15 +151,32 @@ public class CheckoutService {
         return requireRules().getMaxCoinPerOrder();
     }
 
+    /** 无幂等键的便捷重载（既有内部调用方 / 集成测试用）。对外下单入口走带 key 的主方法。 */
+    @Transactional
+    public ShopOrder placeOrder(long userId, String addressToken, String entrySource,
+            String triggerType) {
+        return placeOrder(userId, addressToken, entrySource, triggerType, null);
+    }
+
     /**
      * 下单。
+     *
+     * <p>🔴 {@code Idempotency-Key} 去重（照 {@code ContentService.publish} 范式，复用
+     * {@link IdempotencyService}）：同 key 重放取回既有订单，<b>不重复建单、不重复锁库存</b> ——
+     * 并发双击 / 网络重试不再产生两笔完整重复订单。key 为空则跳过（与 pay 端点同款，头可选）。
      *
      * @throws CheckoutUnavailableException 有行不可购买 —— 携带逐行明细，前端据此让用户移除后重试
      * @throws AppException 购物车为空 / 地址超范围 / 地址不存在
      */
     @Transactional
     public ShopOrder placeOrder(long userId, String addressToken, String entrySource,
-            String triggerType) {
+            String triggerType, String idempotencyKey) {
+        // 幂等重放：同 key 已落一单则取回，不重复创建。
+        Optional<Long> existing = idempotency.findResourceId(idempotencyKey);
+        if (existing.isPresent()) {
+            return orders.findById(existing.get())
+                    .orElseThrow(() -> AppException.notFound("订单不存在"));
+        }
         CartView cart = carts.view(userId);
         // 🔴 「空车」只在【有效行与失效行都为空】时成立。
         //    若整车都是失效行，用户明明加过东西，报「购物车为空」是答非所问 ——
@@ -206,6 +227,9 @@ public class CheckoutService {
         for (CartView.CartLine line : cart.lines()) {
             carts.remove(userId, line.skuToken());
         }
+
+        // ⑦ 记录幂等映射：重放取回本单（key 为空时 store 为 no-op）
+        idempotency.store(idempotencyKey, order.getId());
         return order;
     }
 

@@ -160,10 +160,24 @@ class RefundExecutionIntegrationTest extends ApiIntegrationTest {
     }
 
     /** 提交 → 批准 → 寄回 → 质检通过（把申请推到可执行退款的状态）。 */
+    /**
+     * 合法的凭证 key（2026-09-02，D-10）。
+     *
+     * <p>服务端现在校验两件事：**归属**（key 必须形如
+     * {@code <keyPrefix>private/<userId>/…}，见 {@code MediaObjectKeys}）
+     * 与**张数**（货在用户手上的退货要 ≥ 2 张，见 {@code ReturnRequestService.MIN_EVIDENCE}）。
+     * 从前夹具里那种 {@code "ev1"} 两条都过不了。
+     * ⚠️ 测试环境 {@code MEDIA_OSS_KEY_PREFIX} 为空，故前缀就是 {@code private/}。
+     */
+    private static java.util.List<String> evidence(long userId) {
+        return java.util.List.of("private/" + userId + "/ev1.jpg", "private/" + userId + "/ev2.jpg");
+    }
+
     private ReturnRequest readyForRefund(Ctx c, ReturnType type, Map<Long, Integer> selection,
             CashDestination dest) {
         ReturnRequest r = returnRequests.submit(c.userId(), c.order().getPublicToken(), type,
-                selection, "note", type == ReturnType.QUALITY_ISSUE ? List.of("ev1") : null);
+                selection, "note",
+                type.isUndelivered() ? null : evidence(c.userId()));
         // TO_BANK 需要渠道与账号（渠道费由后端按 PayoutChannel 权威计算，前端不得传费）
         r.chooseCashDestination(dest,
                 dest == CashDestination.TO_BANK
@@ -272,9 +286,21 @@ class RefundExecutionIntegrationTest extends ApiIntegrationTest {
         assertThat(out.incentivePremium()).as("现金段退银行 → 不给激励溢价").isZero();
     }
 
+    /**
+     * 🔴 <b>本条 2026-09-02 反转过（D-16）</b>：原先断言「现金段转 PawCoin 就给激励溢价」，
+     * 用的正是<b>已交付</b>的退货（{@code mixedDeliveredOrder} + {@code NON_QUALITY_ISSUE}）——
+     * 那恰恰是套利口子本身：买 → 收货 → 退 → 转币白拿溢价。
+     *
+     * <p>{@code premium_rate} / {@code premium_fixed} 这对配置是<b>「未交付+转币」分支专用</b>的
+     * 反套利激励（迁移 V20260817_2330 头注释 + PawCoinConfig 的 javadoc 两处写明），
+     * 代码此前漏了这道门。现在补上：已交付的退货一律不给。
+     *
+     * <p>⚠️ 门本身的完整真值表在 L0 的 {@code RefundIncentiveGateTest}（含未交付那一支）——
+     * 这里只钉住「有 DB 的真实链路上，已交付确实拿不到」。
+     */
     @Test
-    @DisplayName("🔴 D-8：现金段转 PawCoin → 给【激励】溢价，读的是另一个配置项")
-    void incentivePremiumOnlyWhenCashGoesToPawcoin() {
+    @DisplayName("🔴 D-16：已交付的退货转 PawCoin → **不给**激励溢价（C-1 反套利门）")
+    void noIncentivePremiumForDeliveredReturns() {
         jdbc.update("UPDATE pawcoin_config SET premium_rate = 5, compensation_premium_rate = 20, "
                 + "compensation_premium_cap = 0");
         Ctx c = mixedDeliveredOrder(60_000L, 0L, 100_000L);
@@ -284,7 +310,9 @@ class RefundExecutionIntegrationTest extends ApiIntegrationTest {
 
         var out = refunds.execute(r.getPublicToken());
 
-        assertThat(out.incentivePremium()).isEqualTo(out.cashRefunded() * 5 / 100);
+        assertThat(out.incentivePremium())
+                .as("货到过用户手上；再给转币激励就是付钱请人「买 → 退 → 转币」")
+                .isZero();
         assertThat(out.compensationPremium())
                 .as("非质量问题不是平台责任 → 不给补偿溢价").isZero();
     }
@@ -344,7 +372,7 @@ class RefundExecutionIntegrationTest extends ApiIntegrationTest {
         Ctx c = mixedDeliveredOrder(60_000L, 0L, 100_000L);
         var lines = linesOf(c.order());
         ReturnRequest r = returnRequests.submit(c.userId(), c.order().getPublicToken(),
-                ReturnType.NON_QUALITY_ISSUE, Map.of(lines.get(0).getId(), 1), "买错了", null);
+                ReturnType.NON_QUALITY_ISSUE, Map.of(lines.get(0).getId(), 1), "买错了", evidence(c.userId()));
 
         assertThatThrownBy(() -> refunds.execute(r.getPublicToken()))
                 .isInstanceOf(AppException.class).hasMessageContaining("不可执行退款");

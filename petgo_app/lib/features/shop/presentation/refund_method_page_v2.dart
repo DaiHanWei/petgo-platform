@@ -33,11 +33,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/shop_tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../data/shop_order_repository.dart';
 import '../data/shop_return_repository.dart';
 import '../domain/shop_product.dart';
 import '../domain/shop_return.dart';
@@ -149,9 +151,9 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
           _orderBlock(l10n, p),
           _splitBlock(l10n, p),
           // 🔴 不可提现说明 —— 这是本页的核心信息，与结算页防套现提示同一条契约。
-          if (p.coinRefund > 0) _notCashBlock(l10n),
+          if (p.coinRefund > 0) _notCashBlock(l10n, p),
           // 现金段去向（见文件头冲突说明：本栈不支持原路退回，必须让用户选）。
-          if (p.cashRefund > 0) _cashDestinationBlock(l10n),
+          if (p.cashRefund > 0) _cashDestinationBlock(l10n, p),
           _processBlock(l10n, p),
           const SizedBox(height: kShopGutter),
         ],
@@ -267,7 +269,12 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
             Row(
               children: [
                 Expanded(
-                  child: Text(l10n.refundMethodGrandTotal,
+                  // 🔴 「(incl. goodwill)」只在真有补偿时才写（D-11）：
+                  //    补偿为 0 时那半句说的是一笔不存在的钱。
+                  child: Text(
+                      p.compensationPremium > 0
+                          ? l10n.refundMethodGrandTotal
+                          : l10n.refundMethodGrandTotalPlain,
                       style: ShopText.cardTitle.copyWith(fontSize: 11.5)),
                 ),
                 Text(formatIdr(p.grandTotal),
@@ -292,11 +299,18 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
   ///
   /// 🔴 这段堵的是「充值 → 买货 → 退货退真钱」的变相提现路径。
   /// 文案含「包括发货前取消」—— 那是最容易被试探的口子。
-  Widget _notCashBlock(AppLocalizations l10n) => ShopSection(
+  Widget _notCashBlock(AppLocalizations l10n, ReturnProgress p) => ShopSection(
         child: ShopWarnBlock(
           key: const ValueKey('refundNotCashBlockV2'),
           title: l10n.refundNotCashTitle,
-          body: '${l10n.refundNotCashBody} ${l10n.refundMethodPawcoinWhy}',
+          // 🔴 「这单算我们的，我们额外补余额」**只在真有补偿时才说**（D-11）。
+          //    此前它是无条件拼接的：实测「Changed my mind（买家自身原因）」的退货
+          //    补偿为 0，页面照样承诺补余额 —— 用户会去客服问补偿在哪。
+          //    ⚠️ 「on us（算我们的）」还隐含**卖家责任**，而补偿溢价本就只在平台责任
+          //       （质量问题/拒收）时才给 ⇒ 按补偿额判，责任口径也自然对上了。
+          body: p.compensationPremium > 0
+              ? '${l10n.refundNotCashBody} ${l10n.refundMethodPawcoinWhy}'
+              : l10n.refundNotCashBody,
         ),
       );
 
@@ -306,7 +320,7 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
   ///
   /// ⚠️ 设计稿里**没有这一块**（它假设原路退回）。见文件头：本支付栈不支持原路退，
   /// 不给控件这笔钱退不出去。做成两个 [ShopRadioTile]，与退货原因同一套控件语言。
-  Widget _cashDestinationBlock(AppLocalizations l10n) => ShopSection(
+  Widget _cashDestinationBlock(AppLocalizations l10n, ReturnProgress p) => ShopSection(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -322,7 +336,11 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
             const SizedBox(height: 7),
             ShopRadioTile(
               key: const ValueKey('refundToPawcoinV2'),
-              label: '${l10n.refundMethodToPawcoin} · ${l10n.refundMethodToPawcoinSub}',
+              // 🔴 「with a bonus」按**预览值**判（D-11）。staging 实测 premiumRate=0、
+              //    激励溢价恒为 0，这句却照常承诺 —— 而用户正是**因为这句话**才选转币，
+              //    且该选择不可逆（PawCoin 不能提现）。
+              label: '${l10n.refundMethodToPawcoin} · '
+                  '${p.incentivePremiumIfPawcoin > 0 ? l10n.refundMethodToPawcoinSub : l10n.refundMethodToPawcoinSubPlain}',
               selected: _destination == CashDestination.toPawcoin,
               onTap: () => setState(() => _destination = CashDestination.toPawcoin),
             ),
@@ -535,7 +553,17 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
       }
       if (!mounted) return;
       ref.invalidate(returnProgressProvider(widget.returnToken));
+      // 🔴 D-12（2026-09-02 stag）：**提交完必须离开这一页**。
+      //    此前只弹了个 toast 就停在原处、按钮照旧可点 —— 而服务端其实已经成功了
+      //    （日志有记录、后台退货列表出现该单、订单详情底部已变成 Return in progress）。
+      //    用户在提交那一刻看不到任何"事情办成了"的信号，会以为失败而反复点。
+      //    ⚠️ toast 本身不够：它 2.6 秒就没了，而**页面没变**这件事一直摆在眼前。
+      //
+      //    落点选订单详情：退货状态在那里是可见的，与工单提交完落到工单详情同一套路。
+      //    ⚠️ 顺带失效订单详情，否则落过去看到的还是提交前那份缓存。
+      ref.invalidate(shopOrderDetailProvider(p.orderToken));
       showAppToast(context, l10n.refundMethodSaved);
+      context.pushReplacement('/shop/orders/${p.orderToken}');
     } catch (_) {
       if (mounted) showAppToast(context, l10n.refundMethodFailed);
     } finally {

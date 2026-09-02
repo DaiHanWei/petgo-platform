@@ -20,10 +20,25 @@ class ShopRepository {
   final Dio dio;
 
   /// 拉商品列表。[category] 为空 = 全部精选（区域④）。
-  Future<List<ShopProductSummary>> fetchProducts({ShopCategory? category}) async {
+  ///
+  /// [keyword] 为关键词搜索（2026-08-31），命中商品名或品牌，忽略大小写。
+  /// 🔴 **搜索在后端做**：本接口一次性返回整个上架目录，目录一大，前端过滤会连首屏
+  /// 一起拖垮。后端加 `q` 之后这里只是把参数透传下去。
+  ///
+  /// 🔴 [keyword] 与 [category] 是**与关系**：选了品类再搜，只在该品类内搜。
+  Future<List<ShopProductSummary>> fetchProducts({
+    ShopCategory? category,
+    String? keyword,
+  }) async {
+    // 空白关键词不发 q —— 让「清空搜索框」回到与从未搜过**逐字相同**的请求，
+    // 顺带让 dio 的请求签名一致，provider 的缓存也就能命中同一条。
+    final q = keyword?.trim();
     final resp = await dio.get<List<dynamic>>(
       ApiPaths.shopProducts,
-      queryParameters: {'category': ?category?.api},
+      queryParameters: {
+        'category': ?category?.api,
+        'q': ?(q == null || q.isEmpty ? null : q),
+      },
     );
     final rows = resp.data ?? const [];
     return rows
@@ -61,13 +76,24 @@ class ShopRepository {
 final shopRepositoryProvider =
     Provider<ShopRepository>((ref) => ShopRepository(dio: ref.read(dioProvider)));
 
-/// 商品列表，按品类分族（null = 全部精选，即区域④）。
+/// 商品列表的族键：品类 + 关键词（2026-08-31 加入搜索）。
+///
+/// 🔴 用 **record** 而不是自定义类：record 天生结构相等，family 的缓存/去重直接就对了；
+/// 换成普通类就得手写 `==`/`hashCode`，漏一个就会每次重建都当成新族键、无限重拉。
+typedef ShopProductsQuery = ({ShopCategory? category, String? keyword});
+
+/// 商品列表，按「品类 + 关键词」分族（都为空 = 全部精选，即区域④）。
 ///
 /// 选中态由页面自己的 State 持有 —— 一个纯 UI 筛选没必要提升成全局 provider，
 /// 也就顺带避开了 Riverpod 3 已移除 `StateProvider` 的问题。
+///
+/// ⚠️ 仍是 `autoDispose`：搜索会按输入产生多个族键（已在页面侧做了防抖），
+/// 不自动回收的话这些一次性的键会一直挂着。
 final shopProductsProvider = FutureProvider.autoDispose
-    .family<List<ShopProductSummary>, ShopCategory?>((ref, category) async {
-  return ref.read(shopRepositoryProvider).fetchProducts(category: category);
+    .family<List<ShopProductSummary>, ShopProductsQuery>((ref, q) async {
+  return ref
+      .read(shopRepositoryProvider)
+      .fetchProducts(category: q.category, keyword: q.keyword);
 });
 
 /// Toko 顶部 banner。null = 没有可展示的 banner（页面据此显示白色顶栏）。

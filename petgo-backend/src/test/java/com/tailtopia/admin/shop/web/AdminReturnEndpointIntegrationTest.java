@@ -154,11 +154,24 @@ class AdminReturnEndpointIntegrationTest extends ApiIntegrationTest {
     private record Ctx(long userId, String skuToken, ShopOrder order) {
     }
 
+    /**
+     * 合法的凭证 key（2026-09-02，D-10）。
+     *
+     * <p>服务端现在校验两件事：**归属**（key 必须形如
+     * {@code <keyPrefix>private/<userId>/…}，见 {@code MediaObjectKeys}）
+     * 与**张数**（货在用户手上的退货要 ≥ 2 张，见 {@code ReturnRequestService.MIN_EVIDENCE}）。
+     * 从前夹具里那种 {@code "ev1"} 两条都过不了。
+     * ⚠️ 测试环境 {@code MEDIA_OSS_KEY_PREFIX} 为空，故前缀就是 {@code private/}。
+     */
+    private static java.util.List<String> evidence(long userId) {
+        return java.util.List.of("private/" + userId + "/ev1.jpg", "private/" + userId + "/ev2.jpg");
+    }
+
     private ReturnRequest submitReturn(Ctx c, ReturnType type) {
         long lineId = orderLines.findByOrderIdOrderByIdAsc(c.order().getId()).get(0).getId();
         return returnRequests.submit(c.userId(), c.order().getPublicToken(), type,
                 Map.of(lineId, 1), "note",
-                type == ReturnType.QUALITY_ISSUE ? java.util.List.of("ev1") : null);
+                type.isUndelivered() ? null : evidence(c.userId()));
     }
 
     private Authentication staffWith(String... permissionCodes) {
