@@ -213,6 +213,34 @@ document.addEventListener('submit', function (e) {
     }
 }, true);
 
+// ===== 上传错误的落点：**保证有声**（2026-09-02 stag 电商测试 D-8 第 3 条）=====
+// 两个上传控件各写各的容器：单条发布 / 商品 / banner 写 [data-seed-thumbs]，
+// 批次素材写 [data-batch-errors]。此前两边都**认死一个容器**，且失败方式还不一样：
+//   - reject() 首行 `if (!box) { return; }` —— 容器不在就**静默吞掉**全部错误；
+//   - showError() 直接 .appendChild —— 容器不在就**抛异常**，而它是在 fetch 的
+//     .then/.catch 里被调的，抛出去只变成一条 unhandled rejection。
+// 两种写法表现不同，后果一模一样：**界面上一个字都没有**，运营只会以为是自己没点对。
+// D-8 就是这么从"少两行 meta"拖成"完全不可用且查不出原因"的。
+//
+// 🔴 所以落点改成**逐级回退**，最后一级必定 console.error ——
+//    宁可只有 F12 里看得到，也绝不能一声不吭。
+function adminUploadError(root, text, selectors) {
+    var box = null;
+    for (var i = 0; i < selectors.length && !box; i++) {
+        box = root && root.querySelector(selectors[i]);
+    }
+    if (!box) {
+        // 页面漏放容器 / 改版删掉了 —— 到这一步说明前端结构和 JS 已经走散，
+        // 但**用户的那次上传确实失败了**，这条必须留下痕迹。
+        console.error('[admin upload] ' + text);
+        return;
+    }
+    var p = document.createElement('p');
+    p.className = 'err';
+    p.textContent = text;
+    box.appendChild(p);
+}
+
 // ===== 单条发布的图片上传控件（V1.1.6 Story 12.2 · AC2/AC3）=====
 // 此前后台只能填图片 URL：运营为了发一条内容得先去别处传图、拿链接、再粘回来。
 //
@@ -392,10 +420,8 @@ document.addEventListener('submit', function (e) {
     }
 
     function showError(root, file, text) {
-        var p = document.createElement('p');
-        p.className = 'err';
-        p.textContent = (file.name || '') + '：' + text;
-        root.querySelector('[data-seed-thumbs]').appendChild(p);
+        adminUploadError(root, (file.name || '') + '：' + text,
+                ['[data-seed-thumbs]', '[data-batch-errors]']);
     }
 
     function eachRoot(fn) {
@@ -487,12 +513,8 @@ document.addEventListener('submit', function (e) {
     }
 
     function reject(root, name, msg) {
-        var box = root.querySelector('[data-batch-errors]');
-        if (!box) { return; }
-        var p = document.createElement('p');
-        p.className = 'err';
-        p.textContent = name + '：' + msg;
-        box.appendChild(p);
+        adminUploadError(root, name + '：' + msg,
+                ['[data-batch-errors]', '[data-seed-thumbs]']);
     }
 
     /** 墙上已有的文件名 —— 分次追加时最容易撞的就是这个（"先拖猫的、再拖狗的"）。 */
@@ -541,7 +563,10 @@ document.addEventListener('submit', function (e) {
         var root = e.target.closest('[data-batch-uploader]');
         var files = [].slice.call(e.target.files);
         e.target.value = '';
-        root.querySelector('[data-batch-errors]').innerHTML = '';
+        // ⚠️ 容器缺失时不能让这一行抛出 —— 它在 change 处理器最前面，
+        //    一抛后面**整段选文件的逻辑都不会执行**，表现又是"选了图没反应"。
+        var errBox = root.querySelector('[data-batch-errors]');
+        if (errBox) { errBox.innerHTML = ''; }
 
         var s = state(root);
         var names = existingNames();

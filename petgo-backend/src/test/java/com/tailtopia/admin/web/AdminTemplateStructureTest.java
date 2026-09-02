@@ -334,6 +334,87 @@ class AdminTemplateStructureTest {
                 .doesNotContain("th:unless=\"${#lists.isEmpty(tags)}\"");
     }
 
+    /**
+     * 🔴 **走 fetch 上传的页面，自己的 &lt;head&gt; 里必须有那两个 CSRF meta**
+     * （2026-09-02 stag 电商测试 D-8）。
+     *
+     * <h2>这条守的是一个真实事故</h2>
+     * {@code shop-banners.html} 与 {@code shop-product-form.html} 漏了这两行 meta。
+     * {@code /admin/**} 那条过滤链**保留 CSRF**（见 {@code SecurityConfig}），
+     * 表单提交有 Thymeleaf 自动带的隐藏域，**fetch 没有** ——
+     * {@code admin.js} 从这两个 meta 里取，取不到就不带头，Spring Security 直接 403。
+     * 于是**后台传不了任何 banner、也传不了商品主图**，而运营看到的只是「选了图没反应」。
+     *
+     * <p>⚠️ <b>当时全套测试都是绿的</b>：页面照常 200、片段结构合法、i18n 齐全、
+     * 上传接口自己的测试也过（那些测试都 {@code .with(csrf())}，正好把这个洞盖住了）。
+     * 唯一能发现它的方式是真的用浏览器传一张图。
+     *
+     * <p>⚠️ <b>不能靠「挪进 layout.html 统一注入」来根治</b>：业务页用
+     * {@code th:replace="~{admin/layout :: page(~{::content})}"} 只换掉 body 里那个 div，
+     * <b>layout 的 &lt;head&gt; 根本不会被渲染</b>，各页保留自己的 head
+     * （layout 注释亦言明「各业务页在自身 head 引入」）。所以只能逐页写，
+     * 也正因为只能逐页写，才需要这条测试兜着 —— 下一个加上传的页面同样会漏。
+     */
+    @Test
+    void everyFetchUploadPageDeclaresCsrfMeta() throws IOException {
+        List<String> withUploader = new ArrayList<>();
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            String html = Files.readString(f, StandardCharsets.UTF_8);
+            if (!html.contains("data-upload-url")) {
+                continue;
+            }
+            withUploader.add(fileName(f));
+            // 两个都要：admin.js 里是 `if (token && header)`，缺任一条就整体不带头。
+            if (!html.contains("name=\"_csrf\"") || !html.contains("name=\"_csrf_header\"")) {
+                offenders.add(fileName(f));
+            }
+        }
+        assertThat(withUploader).as("本条的前提是确实有页面走 fetch 上传").isNotEmpty();
+        assertThat(offenders)
+                .as("🔴 这些页面走 fetch 上传却没在自己的 <head> 里放 CSRF meta ⇒ "
+                        + "请求不带 CSRF 头 → 403 → 运营看到的是「选了图没反应」。"
+                        + "补上 seed-post.html 里那两行 <meta name=\"_csrf\"…>（不能靠 layout 统一注入，"
+                        + "layout 的 head 不参与业务页渲染）")
+                .isEmpty();
+    }
+
+    /**
+     * 🔴 **上传失败必须有落点**（2026-09-02 stag 电商测试 D-8 第 3 条）。
+     *
+     * <p>D-8 之所以从「少两行 meta」拖成「完全不可用且查不出原因」，是因为错误在前端被吞了：
+     * 批次那条 {@code reject()} 首行是 {@code if (!box) { return; }} —— 容器不在就静默 return；
+     * 单条那条 {@code showError()} 直接 {@code .appendChild} —— 容器不在就抛异常，
+     * 而它在 fetch 的 then/catch 里，抛出去只是一条 unhandled rejection。两种写法，同一个后果：
+     * <b>界面上一个字都没有</b>。
+     *
+     * <p>现已统一走 {@code adminUploadError()} 逐级回退，最后一级必定 {@code console.error}。
+     * 本条钉住「不许再退回静默」—— 这类代码删一行就恢复原状，且删完所有测试照样绿。
+     */
+    @Test
+    void uploadErrorsAreNeverSwallowedSilently() throws IOException {
+        // ⚠️ 只看**代码行**：本文件的注释里逐字引用了那句被废弃的写法（讲清楚当初错在哪），
+        //    连注释一起扫会把说明文字本身判成违规 —— 与 blockTagsAreBalanced 先剥注释同理。
+        String js = Files.readString(
+                        Path.of("src", "main", "resources", "static", "admin", "admin.js"),
+                        StandardCharsets.UTF_8)
+                .lines()
+                .filter(l -> !l.strip().startsWith("//"))
+                .collect(java.util.stream.Collectors.joining("\n"));
+
+        assertThat(js)
+                .as("🔴 上传错误的统一落点 adminUploadError() 不在了 —— "
+                        + "两个上传控件会各自退回「认死一个容器」的老写法")
+                .contains("function adminUploadError(");
+        assertThat(js)
+                .as("🔴 兜底那条 console.error 没了 ⇒ 容器缺失时又变成一声不吭。"
+                        + "宁可只有 F12 里看得到，也不能静默")
+                .contains("console.error('[admin upload] '");
+        assertThat(js)
+                .as("🔴 又有人把「容器不在就 return」写回来了 —— 这正是 D-8 里吞掉全部错误的那一行")
+                .doesNotContain("if (!box) { return; }");
+    }
+
     /** 该锚点元素内部起了一个片段 ⇒ 它是片段的外壳，不参与整页渲染，合法。 */
     private boolean wrapsAFragment(List<String> lines, int line, Matcher anchor, List<Span> fragments) {
         String tag = anchor.group(1) != null ? "form"
