@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!-- 内容详情（2026-09-02，只读）：与 App 详情同一批元素（作者/类型/正文全文/大图/装饰标签/
+     点赞数/评论区）+ 后台状态（已下架/审核挂起/可见性/浏览统计）。处置动作留在内容管理/评论管理。
+     门控与控制器 DETAIL_AUTH 一致（content.view / proactive_takedown / takedown / manual_review）。 -->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.contentdetail.title}">内容详情 · TailTopia 运营</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <p><a th:href="@{/admin/content}" th:text="#{admin.contentdetail.back}">← 返回内容管理</a></p>
+        <!-- 「标题」= 内容类型名（2026-09-02 产品确认：App 内容没有独立标题字段）。 -->
+        <h1><span th:text="#{'admin.contentType.' + ${d.post().type()}}">Daily</span>
+            · #<span th:text="${d.post().id()}">1</span></h1>
+
+        <!-- 状态行：已发布/已下架/审核挂起 + 可见性。已下架/挂起/私密内容照常可看，这里标明就好。 -->
+        <p>
+            <span class="badge" th:if="${d.post().deleted()}" th:classappend="'badge-danger'"
+                  th:text="#{admin.contentdetail.status.deleted}">已下架/已删除</span>
+            <span class="badge" th:if="${!d.post().deleted() and d.post().status() != null and d.post().status().name() == 'UNDER_REVIEW'}"
+                  th:classappend="'badge-warn'"
+                  th:text="#{admin.contentdetail.status.underReview}">审核挂起</span>
+            <span class="badge badge-ok"
+                  th:if="${!d.post().deleted() and (d.post().status() == null or d.post().status().name() != 'UNDER_REVIEW')}"
+                  th:text="#{admin.contentdetail.status.online}">已发布</span>
+            <span class="badge badge-neutral"
+                  th:text="${d.post().visibility() != null and d.post().visibility().name() == 'PRIVATE'}
+                           ? #{admin.contentdetail.visibility.private} : #{admin.contentdetail.visibility.public}">公开</span>
+            <!-- 装饰标签（当前生效中的）：后台看到的名字 = 用户在胶囊上看到的字。 -->
+            <span class="badge badge-neutral" th:each="t : ${d.tags()}" th:text="${t.name()}">标签</span>
+        </p>
+
+        <!-- 元信息卡：作者可点去用户详情（后台既有页），计数与列表页同口径。 -->
+        <div class="card">
+            <table>
+                <tr>
+                    <th th:text="#{admin.contentdetail.author}">作者</th>
+                    <td>
+                        <a th:if="${d.author() != null and !d.author().deleted()}"
+                           th:href="@{'/admin/users/' + ${d.post().authorId()}}"
+                           th:text="${d.author().nickname()} + ' (#' + ${d.post().authorId()} + ')'">昵称</a>
+                        <span th:if="${d.author() != null and d.author().deleted()}" class="muted"
+                              th:text="#{admin.contentdetail.deletedUser} + ' (#' + ${d.post().authorId()} + ')'">已注销</span>
+                        <span th:if="${d.author() == null}" class="muted">—</span>
+                    </td>
+                    <th th:text="#{admin.contentdetail.createdAt}">发布时间</th>
+                    <td th:text="${@adminTime.wib(d.post().createdAt())}">-</td>
+                </tr>
+                <tr>
+                    <th th:text="#{admin.content.col.likes}">点赞数</th>
+                    <td th:text="${d.likeCount()}">0</td>
+                    <th th:text="#{admin.content.col.comments}">评论数</th>
+                    <td th:text="${d.commentCount()}">0</td>
+                </tr>
+                <tr>
+                    <th th:title="#{admin.content.col.viewsHint}" th:text="#{admin.content.col.views}">浏览次数</th>
+                    <td th:text="${d.viewStat() != null ? d.viewStat().views() : 0}">0</td>
+                    <th th:title="#{admin.content.col.viewsHint}" th:text="#{admin.content.col.viewers}">浏览人数</th>
+                    <td th:text="${d.viewStat() != null ? d.viewStat().viewers() : 0}">0</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- 正文全文（列表页是截断预览，这里不截断）+ 大图。 -->
+        <div class="card">
+            <div th:if="${d.post().text() != null}"
+                 style="white-space:pre-wrap;word-break:break-word;max-width:720px"
+                 th:text="${d.post().text()}">正文</div>
+            <p class="muted" th:if="${d.post().text() == null}"
+               th:text="#{admin.contentdetail.noText}">（无文字）</p>
+            <div th:if="${d.post().imageUrls() != null and !#lists.isEmpty(d.post().imageUrls())}"
+                 style="margin-top:12px">
+                <!-- 与内容管理列表同一套 lightbox：点开看原图。 -->
+                <img th:each="img : ${d.post().imageUrls()}" th:src="${img}" alt="" loading="lazy"
+                     data-lightbox
+                     style="width:180px;height:180px;object-fit:cover;border-radius:8px;margin:4px;cursor:zoom-in"/>
+            </div>
+        </div>
+
+        <!-- 评论区：一级 20 条/页、楼中楼收起显示前 3 条；已删/已下架评论照列并标注状态
+             （后台全量视角，不替运营隐藏）。 -->
+        <div class="card">
+            <h3><span th:text="#{admin.contentdetail.comments}">评论</span>
+                (<span th:text="${d.commentTotalTopLevel()}">0</span>)</h3>
+            <p class="muted" th:if="${#lists.isEmpty(d.comments())}"
+               th:text="#{admin.contentdetail.comments.empty}">暂无评论</p>
+
+            <div th:each="cm : ${d.comments()}" style="padding:10px 0;border-bottom:1px solid var(--line, #eee)">
+                <p style="margin:0 0 4px">
+                    <a th:if="${!cm.authorDeleted() and cm.authorName() != null}"
+                       th:href="@{'/admin/users/' + ${cm.authorId()}}"
+                       th:text="${cm.authorName()}">评论人</a>
+                    <span th:if="${cm.authorDeleted() or cm.authorName() == null}" class="muted"
+                          th:text="#{admin.contentdetail.deletedUser}">已注销</span>
+                    <span class="muted" th:text="${@adminTime.wib(cm.createdAt())}">时间</span>
+                    <span class="badge badge-danger" th:if="${cm.status() != 'VISIBLE'}"
+                          th:text="#{'admin.contentdetail.cstatus.' + ${cm.status()}}">状态</span>
+                </p>
+                <div style="white-space:pre-wrap;word-break:break-word" th:text="${cm.body()}">评论内容</div>
+
+                <!-- 楼中楼：默认前 3 条；「展开全部」带 expand=该评论 id 重渲染本页并锚回原位。 -->
+                <div th:each="r : ${cm.replies()}"
+                     style="margin:8px 0 0 28px;padding-left:10px;border-left:2px solid var(--line, #eee)">
+                    <p style="margin:0 0 2px">
+                        <a th:if="${!r.authorDeleted() and r.authorName() != null}"
+                           th:href="@{'/admin/users/' + ${r.authorId()}}"
+                           th:text="${r.authorName()}">回复人</a>
+                        <span th:if="${r.authorDeleted() or r.authorName() == null}" class="muted"
+                              th:text="#{admin.contentdetail.deletedUser}">已注销</span>
+                        <span class="muted" th:text="${@adminTime.wib(r.createdAt())}">时间</span>
+                        <span class="badge badge-danger" th:if="${r.status() != 'VISIBLE'}"
+                              th:text="#{'admin.contentdetail.cstatus.' + ${r.status()}}">状态</span>
+                    </p>
+                    <div style="white-space:pre-wrap;word-break:break-word" th:text="${r.body()}">回复内容</div>
+                </div>
+                <p th:if="${cm.replyTotal() > cm.replies().size()}" style="margin:6px 0 0 28px">
+                    <a th:href="@{'/admin/content/' + ${d.post().id()}(commentPage=${d.commentPage()},expand=${cm.id()}) + '#comment-' + ${cm.id()}}"
+                       th:id="'comment-' + ${cm.id()}"
+                       th:text="#{admin.contentdetail.replies.expand(${cm.replyTotal()})}">展开全部 N 条回复</a>
+                </p>
+                <span th:if="${cm.replyTotal() <= cm.replies().size() and cm.replyTotal() > 0}"
+                      th:id="'comment-' + ${cm.id()}"></span>
+            </div>
+
+            <!-- 一级评论分页（20 条/页）。 -->
+            <div class="pager" th:if="${d.commentTotalPages() > 1}">
+                <a th:if="${d.commentPage() > 0}"
+                   th:href="@{'/admin/content/' + ${d.post().id()}(commentPage=${d.commentPage() - 1})}"
+                   th:text="#{admin.audit.prev}">← 上一页</a>
+                <span th:text="#{admin.audit.page(${d.commentPage() + 1}, ${d.commentTotalPages()}, ${d.commentTotalTopLevel()})}">分页</span>
+                <a th:if="${d.commentPage() + 1 < d.commentTotalPages()}"
+                   th:href="@{'/admin/content/' + ${d.post().id()}(commentPage=${d.commentPage() + 1})}"
+                   th:text="#{admin.audit.next}">下一页 →</a>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

@@ -34,8 +34,19 @@ public class AdminContentManageController {
     /** ⚠️ 须与模板里导出按钮的 sec:authorize 逐字一致，否则按钮在、点了 403。 */
     private static final String EXPORT_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('content.list_export')";
+    /**
+     * 内容详情页（2026-09-02，只读）。在 VIEW_AUTH 之上多放行两个**复核**权限 ——
+     * 人工复核页有「查看内容」入口，复核员可能只有复核权而没有 content.view，
+     * 点开是只读详情，不该 403。⚠️ 须与 manual-review.html 里该链接的 sec:authorize 逐字一致。
+     */
+    private static final String DETAIL_AUTH =
+            "hasRole('SUPER_ADMIN') or hasAuthority('content.view')"
+                    + " or hasAuthority('content.proactive_takedown')"
+                    + " or hasAuthority('content.takedown')"
+                    + " or hasAuthority('content.manual_review')";
 
     private final AdminContentManageService contentManage;
+    private final com.tailtopia.admin.moderation.service.AdminContentDetailService contentDetail;
     private final com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead;
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
@@ -43,10 +54,29 @@ public class AdminContentManageController {
 
     public AdminContentManageController(AdminContentManageService contentManage,
             Messages msg,
-            com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead) {
+            com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead,
+            com.tailtopia.admin.moderation.service.AdminContentDetailService contentDetail) {
         this.contentManage = contentManage;
         this.msg = msg;
         this.throttleRead = throttleRead;
+        this.contentDetail = contentDetail;
+    }
+
+    /**
+     * 内容详情页（2026-09-02，只读）：与 App 详情同一批元素 + 后台状态。
+     * 入口：内容管理列表「查看详情」、人工复核内容类工单「查看内容」。
+     * 已下架/审核挂起/私密内容照常可开（复核场景恰恰要看这些），页面顶部标注状态。
+     */
+    @GetMapping("/admin/content/{postId}")
+    @PreAuthorize(DETAIL_AUTH)
+    public String contentDetail(@PathVariable long postId,
+            @RequestParam(value = "commentPage", required = false, defaultValue = "0")
+            int commentPage,
+            @RequestParam(value = "expand", required = false) Long expand, Model model) {
+        model.addAttribute("active", "content");
+        model.addAttribute("d", contentDetail.detail(postId, commentPage, expand));
+        model.addAttribute("expand", expand);
+        return "admin/content-detail";
     }
 
     @GetMapping("/admin/content")

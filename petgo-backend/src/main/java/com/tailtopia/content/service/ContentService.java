@@ -214,6 +214,25 @@ public class ContentService {
     }
 
     /**
+     * 后台内容详情投影（2026-09-02 内容详情页）：**全文**（列表行是截断预览）+ 状态 + 可见性，
+     * 含已删/审核挂起 —— 复核场景恰恰要看这些。content 模块对外只读 DTO，admin 不拿实体。
+     */
+    public record AdminPostDetail(long id, ContentType type, Long authorId, Long petId,
+            String text, List<String> imageUrls, boolean deleted, PostStatus status,
+            com.tailtopia.content.domain.ContentVisibility visibility, Instant createdAt,
+            String speciesOverride) {
+    }
+
+    /** 后台内容详情（2026-09-02）；不存在返回 empty。 */
+    @Transactional(readOnly = true)
+    public Optional<AdminPostDetail> adminDetail(long postId) {
+        return posts.findById(postId).map(p -> new AdminPostDetail(p.getId(), p.getType(),
+                p.getAuthorId(), p.getPetId(), p.getText(), p.getImageUrls(),
+                p.getDeletedAt() != null, p.getStatus(), p.getVisibility(), p.getCreatedAt(),
+                p.getSpeciesOverride()));
+    }
+
+    /**
      * 后台按一批 id 取内容行（2026-08-28「按点赞时间」口径用）。
      *
      * <p>⚠️ **不保证顺序** —— 调用方按自己的次序还原（这里的次序是"窗口内赞数降序"，

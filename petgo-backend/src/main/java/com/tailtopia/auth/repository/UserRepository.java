@@ -87,23 +87,25 @@ public interface UserRepository extends JpaRepository<User, Long> {
             Role role, com.tailtopia.auth.domain.AccountType accountType, String nickname);
 
     /**
-     * 后台用户搜索：按**展示昵称**模糊匹配（2026-09-02 运营诉求：手里常常只有前台截图上的昵称）。
+     * 后台用户搜索：按**展示昵称或注册邮箱**模糊匹配（2026-09-02 运营诉求：手里常常
+     * 只有前台截图上的昵称，或只记得邮箱的一段）。
      *
-     * <p>匹配口径与列表展示一致（{@code AdminUserService#currentName}）：改过名走
+     * <p>昵称口径与列表展示一致（{@code AdminUserService#currentName}）：改过名走
      * {@code nickname}，没改过走注册时的 {@code displayName} —— 两列都 like 会出现
      * 「搜到的词不在页面任何一行上」的怪异命中。
      *
-     * <p>已注销账号不参与昵称匹配：昵称已随注销匿名化，快照列（{@code deletedDisplayName}）
-     * 仅供按 id / 邮箱定位后**展示**，拿来搜等于把匿名化又打开一条缝。
+     * <p>已注销账号不参与模糊匹配：昵称/邮箱已随注销匿名化，快照列仅供按 id /
+     * 邮箱精确定位后**展示**，拿来搜等于把匿名化又打开一条缝。
      */
     @Query("""
             select u from User u
             where u.role = :role and u.deletedAt is null
-              and lower(coalesce(u.nickname, u.displayName)) like :pattern
+              and (lower(coalesce(u.nickname, u.displayName)) like :pattern
+                   or lower(coalesce(u.email, '')) like :pattern)
             order by u.id desc
             """)
-    List<User> searchByDisplayedName(@Param("role") Role role, @Param("pattern") String pattern,
-            Pageable pageable);
+    List<User> searchByDisplayedNameOrEmail(@Param("role") Role role,
+            @Param("pattern") String pattern, Pageable pageable);
 
     /**
      * 生命周期推送日扫候选（留存手册抓手 1）。只取<b>能被推、且推了有意义</b>的账号：

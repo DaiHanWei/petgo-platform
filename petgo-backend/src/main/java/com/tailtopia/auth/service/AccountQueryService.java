@@ -148,13 +148,13 @@ public class AccountQueryService {
     }
 
     /**
-     * 后台搜索（2026-09-02）：按展示昵称模糊匹配普通用户（role=USER，未注销），
-     * 近注册在前，至多 {@code limit} 条。口径见 {@code UserRepository#searchByDisplayedName}。
+     * 后台搜索（2026-09-02）：按展示昵称或注册邮箱模糊匹配普通用户（role=USER，未注销），
+     * 近注册在前，至多 {@code limit} 条。口径见 {@code UserRepository#searchByDisplayedNameOrEmail}。
      */
     @Transactional(readOnly = true)
     public List<User> searchUsersByDisplayedName(String keyword, int limit) {
         String pattern = "%" + keyword.trim().toLowerCase() + "%";
-        return users.searchByDisplayedName(Role.USER, pattern,
+        return users.searchByDisplayedNameOrEmail(Role.USER, pattern,
                 org.springframework.data.domain.PageRequest.of(0, limit));
     }
 

@@ -166,9 +166,9 @@ public class AdminUserService {
     private static final int NAME_SEARCH_LIMIT = 50;
 
     /**
-     * 按用户 id / 注册邮箱 / 昵称搜索普通用户（USER）。id 与邮箱仍是精确命中、排最前；
-     * 昵称是模糊匹配（2026-09-02 运营诉求：手里常常只有前台截图上的昵称），近注册在前、
-     * 至多 {@value #NAME_SEARCH_LIMIT} 条。两路按 id 去重（昵称恰好是纯数字/邮箱形状时会撞）。
+     * 按用户 id / 注册邮箱 / 昵称搜索普通用户（USER）。id 精确命中、完整邮箱精确命中排最前；
+     * 昵称与邮箱都支持模糊匹配（2026-09-02 运营诉求：手里常常只有截图上的昵称或邮箱的一段），
+     * 近注册在前、至多 {@value #NAME_SEARCH_LIMIT} 条。两路按 id 去重。
      */
     @Transactional(readOnly = true)
     public List<AdminUserRow> search(String query) {

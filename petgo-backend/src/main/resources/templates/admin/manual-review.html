@@ -100,7 +100,16 @@
                     <span th:if="${row.subType() != null}" class="badge badge-neutral"
                           th:text="${row.subType()}">SUB</span>
                 </td>
-                <td class="muted" th:text="${row.preview()}">摘要</td>
+                <td class="muted">
+                    <span th:text="${row.preview()}">摘要</span>
+                    <!-- 2026-09-02：内容类工单直达内容详情页（新标签页，不打断复核流）。
+                         sourceId 对 CONTENT_REPORT / CONTENT_SUBMISSION 都是帖 id（与本页处置端点同源）。
+                         ⚠️ sec:authorize 须与 AdminContentManageController.DETAIL_AUTH 逐字一致。 -->
+                    <a th:if="${row.type().name() == 'CONTENT_REPORT' or row.type().name() == 'CONTENT_SUBMISSION'}"
+                       sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')"
+                       target="_blank" th:href="@{'/admin/content/' + ${row.sourceId()}}"
+                       th:text="#{admin.review.viewContent}">查看内容</a>
+                </td>
                 <td><strong th:text="${row.score()}">0</strong></td>
                 <td th:text="${row.earliestAt()}">时间</td>
                 <td>

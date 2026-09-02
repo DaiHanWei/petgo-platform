@@ -257,6 +257,9 @@
                 </form>
             </td>
             <td>
+                <!-- 2026-09-02：内容详情（只读，含全文/大图/评论区）。 -->
+                <a class="btn btn-neutral btn-sm" th:href="@{'/admin/content/' + ${c.id()}}"
+                   th:text="#{admin.content.viewDetail}">查看详情</a>
                 <!-- 上线中 → 主动下架（必填原因）。HTMX 只替换本行。 -->
                 <form th:unless="${c.deleted()}" th:action="@{/admin/content/{id}/takedown(id=${c.id()})}"
                       method="post" class="inline-form"

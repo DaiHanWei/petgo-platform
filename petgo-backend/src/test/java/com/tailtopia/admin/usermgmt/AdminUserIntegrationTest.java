@@ -39,6 +39,16 @@ class AdminUserIntegrationTest extends ApiIntegrationTest {
         assertThat(detail.sessions()).isNotNull();
     }
 
+    /** 2026-09-02：注册邮箱也能模糊搜 —— 记得邮箱的一段就能找到人。 */
+    @Test
+    void searchByEmailFuzzyMatches() {
+        User u = newUser(); // 邮箱形如 it{n}@petgo.test，{n} 全局唯一
+        String fragment = u.getEmail().substring(0, u.getEmail().indexOf('@'));
+
+        List<AdminUserRow> rows = adminUserService.search(fragment.toUpperCase());
+        assertThat(rows).extracting(AdminUserRow::id).contains(u.getId());
+    }
+
     /** 2026-09-02：昵称也能搜 —— 子串、大小写不敏感。 */
     @Test
     void searchByNicknameFuzzyMatches() {
