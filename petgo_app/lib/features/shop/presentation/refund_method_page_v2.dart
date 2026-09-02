@@ -149,9 +149,9 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
           _orderBlock(l10n, p),
           _splitBlock(l10n, p),
           // 🔴 不可提现说明 —— 这是本页的核心信息，与结算页防套现提示同一条契约。
-          if (p.coinRefund > 0) _notCashBlock(l10n),
+          if (p.coinRefund > 0) _notCashBlock(l10n, p),
           // 现金段去向（见文件头冲突说明：本栈不支持原路退回，必须让用户选）。
-          if (p.cashRefund > 0) _cashDestinationBlock(l10n),
+          if (p.cashRefund > 0) _cashDestinationBlock(l10n, p),
           _processBlock(l10n, p),
           const SizedBox(height: kShopGutter),
         ],
@@ -267,7 +267,12 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
             Row(
               children: [
                 Expanded(
-                  child: Text(l10n.refundMethodGrandTotal,
+                  // 🔴 「(incl. goodwill)」只在真有补偿时才写（D-11）：
+                  //    补偿为 0 时那半句说的是一笔不存在的钱。
+                  child: Text(
+                      p.compensationPremium > 0
+                          ? l10n.refundMethodGrandTotal
+                          : l10n.refundMethodGrandTotalPlain,
                       style: ShopText.cardTitle.copyWith(fontSize: 11.5)),
                 ),
                 Text(formatIdr(p.grandTotal),
@@ -292,11 +297,18 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
   ///
   /// 🔴 这段堵的是「充值 → 买货 → 退货退真钱」的变相提现路径。
   /// 文案含「包括发货前取消」—— 那是最容易被试探的口子。
-  Widget _notCashBlock(AppLocalizations l10n) => ShopSection(
+  Widget _notCashBlock(AppLocalizations l10n, ReturnProgress p) => ShopSection(
         child: ShopWarnBlock(
           key: const ValueKey('refundNotCashBlockV2'),
           title: l10n.refundNotCashTitle,
-          body: '${l10n.refundNotCashBody} ${l10n.refundMethodPawcoinWhy}',
+          // 🔴 「这单算我们的，我们额外补余额」**只在真有补偿时才说**（D-11）。
+          //    此前它是无条件拼接的：实测「Changed my mind（买家自身原因）」的退货
+          //    补偿为 0，页面照样承诺补余额 —— 用户会去客服问补偿在哪。
+          //    ⚠️ 「on us（算我们的）」还隐含**卖家责任**，而补偿溢价本就只在平台责任
+          //       （质量问题/拒收）时才给 ⇒ 按补偿额判，责任口径也自然对上了。
+          body: p.compensationPremium > 0
+              ? '${l10n.refundNotCashBody} ${l10n.refundMethodPawcoinWhy}'
+              : l10n.refundNotCashBody,
         ),
       );
 
@@ -306,7 +318,7 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
   ///
   /// ⚠️ 设计稿里**没有这一块**（它假设原路退回）。见文件头：本支付栈不支持原路退，
   /// 不给控件这笔钱退不出去。做成两个 [ShopRadioTile]，与退货原因同一套控件语言。
-  Widget _cashDestinationBlock(AppLocalizations l10n) => ShopSection(
+  Widget _cashDestinationBlock(AppLocalizations l10n, ReturnProgress p) => ShopSection(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -322,7 +334,11 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
             const SizedBox(height: 7),
             ShopRadioTile(
               key: const ValueKey('refundToPawcoinV2'),
-              label: '${l10n.refundMethodToPawcoin} · ${l10n.refundMethodToPawcoinSub}',
+              // 🔴 「with a bonus」按**预览值**判（D-11）。staging 实测 premiumRate=0、
+              //    激励溢价恒为 0，这句却照常承诺 —— 而用户正是**因为这句话**才选转币，
+              //    且该选择不可逆（PawCoin 不能提现）。
+              label: '${l10n.refundMethodToPawcoin} · '
+                  '${p.incentivePremiumIfPawcoin > 0 ? l10n.refundMethodToPawcoinSub : l10n.refundMethodToPawcoinSubPlain}',
               selected: _destination == CashDestination.toPawcoin,
               onTap: () => setState(() => _destination = CashDestination.toPawcoin),
             ),

@@ -41,6 +41,15 @@ public record ReturnProgressView(
         long cashRefund,
         long compensationPremium,
         long incentivePremium,
+        /**
+         * 「若选择转 PawCoin，激励溢价会是多少」——与当前选择无关的**预览值**（D-11）。
+         *
+         * <p>🔴 端上靠它决定退款方式页那句「Lands instantly, with a bonus」说不说。
+         * 用 {@code incentivePremium} 判不行：那个要**已经选了** TO_PAWCOIN 才非零，
+         * 而这句话正是在用户做选择**之前**看到的。
+         * ⚠️ 展示用，不入账。
+         */
+        long incentivePremiumIfPawcoin,
         long shipbackReimbursement,
         long grandTotal,
         Instant createdAt,
@@ -75,6 +84,7 @@ public record ReturnProgressView(
                 quote == null ? 0 : quote.cashRefund(),
                 quote == null ? 0 : quote.compensationPremium(),
                 quote == null ? 0 : quote.incentivePremium(),
+                quote == null ? 0 : quote.incentiveIfPawcoin(),
                 quote == null ? 0 : quote.shipbackReimbursement(),
                 quote == null ? 0 : quote.grandTotal(),
                 r.getCreatedAt(), ls);

@@ -218,6 +218,7 @@ class ReturnProgress {
     required this.cashRefund,
     required this.compensationPremium,
     required this.incentivePremium,
+    this.incentivePremiumIfPawcoin = 0,
     required this.shipbackReimbursement,
     required this.grandTotal,
     required this.lines,
@@ -258,6 +259,14 @@ class ReturnProgress {
   /// 原型里的 `+5%` / `Rp 1.500` 是示例值不是规格（D-8 的比例与上限仍待财务定）。
   final int compensationPremium;
   final int incentivePremium;
+
+  /// 「若选择转 PawCoin，激励溢价会是多少」——与当前选择无关的**预览值**（D-11）。
+  ///
+  /// 🔴 退款方式页那句「Lands instantly, with a bonus」靠它决定说不说。
+  /// ⚠️ 不能用 [incentivePremium] 判：那个要**已经选了**转币才非零，
+  /// 而这句承诺正是在用户做选择**之前**看到的 —— 拿它判就恒为 0、永远藏掉。
+  final int incentivePremiumIfPawcoin;
+
   final int shipbackReimbursement;
   final int grandTotal;
 
@@ -293,6 +302,7 @@ class ReturnProgress {
         cashRefund: _int(j['cashRefund']) ?? 0,
         compensationPremium: _int(j['compensationPremium']) ?? 0,
         incentivePremium: _int(j['incentivePremium']) ?? 0,
+        incentivePremiumIfPawcoin: _int(j['incentivePremiumIfPawcoin']) ?? 0,
         shipbackReimbursement: _int(j['shipbackReimbursement']) ?? 0,
         grandTotal: _int(j['grandTotal']) ?? 0,
         createdAt: _time(j['createdAt']),

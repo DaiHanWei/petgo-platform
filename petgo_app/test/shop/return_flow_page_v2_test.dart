@@ -6,6 +6,8 @@ import 'package:tailtopia/features/shop/data/shop_return_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_return.dart';
 import 'package:tailtopia/features/shop/presentation/refund_method_page_v2.dart';
 import 'package:tailtopia/features/shop/presentation/return_request_page_v2.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/shop_controls.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/shop_decor.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 退货申请 + 退款方式 · **设计稿版式**（V1.4.0 第 2 批）。
@@ -212,6 +214,10 @@ void main() {
     //    右半边在测试里总是生效、在真机上永远不生效 —— 单测全绿、上机显示 `PLATFORM`。
     //    夹具不还原真实下发值，护栏守的就是另一个世界。
     String? shipBearer = 'PLATFORM',
+    int compensationPremium = 0,
+    int incentivePremium = 0,
+    // D-11：「若选转币会拿到多少」的预览值。默认 0 = staging 实测的 premiumRate=0。
+    int incentivePremiumIfPawcoin = 0,
   }) =>
       ReturnProgress(
         returnToken: 'ret1',
@@ -223,8 +229,9 @@ void main() {
         outboundFeeRefundable: true,
         coinRefund: coinRefund,
         cashRefund: cashRefund,
-        compensationPremium: 0,
-        incentivePremium: 0,
+        compensationPremium: compensationPremium,
+        incentivePremium: incentivePremium,
+        incentivePremiumIfPawcoin: incentivePremiumIfPawcoin,
         shipbackReimbursement: 0,
         grandTotal: coinRefund + cashRefund,
         lines: const [
@@ -236,6 +243,73 @@ void main() {
           ),
         ],
       );
+
+  /// 🔴 D-11（2026-09-02 stag，P1）：三句承诺都是**无条件硬编码**的。
+  ///
+  /// 实测「Changed my mind（买家自身原因）」的退货：补偿溢价 0、激励溢价 0、
+  /// 合计 = 商品原价，页面却照样写着
+  /// 「Because this one is on us, we are adding extra balance.」、
+  /// 「Convert to PawCoin · Lands instantly, **with a bonus**」、
+  /// 「Total refunded **(incl. goodwill)**」。
+  ///
+  /// 🔴 转币这句尤其要紧：用户**因为这句话才选的转币**，而该选择**不可逆**
+  /// （PawCoin 不能提现）。
+  /// ⚠️ 「on us（算我们的）」还隐含卖家责任，买家自身原因的退货显示它本身就是错的口径。
+  group('🔴 D-11：没有的补偿不许承诺', () {
+    testWidgets('🔴 补偿为 0 → 不说「算我们的，额外补余额」', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(refundHost(progress(compensationPremium: 0)));
+      await tester.pumpAndSettle();
+
+      final block = tester.widget<ShopWarnBlock>(
+          find.byKey(const ValueKey('refundNotCashBlockV2')));
+      expect(block.body, l10n.refundNotCashBody,
+          reason: '补偿是 0 却承诺补余额 —— 用户会去客服问补偿在哪');
+      expect(block.body, isNot(contains('ekstra')));
+    });
+
+    testWidgets('补偿 > 0 → 那句话回来（平台责任才说「算我们的」）', (tester) async {
+      await tester.pumpWidget(refundHost(progress(compensationPremium: 5000)));
+      await tester.pumpAndSettle();
+
+      final block = tester.widget<ShopWarnBlock>(
+          find.byKey(const ValueKey('refundNotCashBlockV2')));
+      expect(block.body, contains('ekstra'));
+    });
+
+    testWidgets('🔴 激励溢价为 0 → 转币选项不写「dapat bonus」', (tester) async {
+      await tester.pumpWidget(refundHost(progress(incentivePremiumIfPawcoin: 0)));
+      await tester.pumpAndSettle();
+
+      final tile = tester.widget<ShopRadioTile>(
+          find.byKey(const ValueKey('refundToPawcoinV2')));
+      expect(tile.label, isNot(contains('bonus')),
+          reason: '用户因为这句话才选转币，而转币不可逆');
+      expect(tile.label, contains('Masuk seketika'));
+    });
+
+    testWidgets('🔴 判据是「若选转币会拿到多少」，不是当前已算出的激励额', (tester) async {
+      // incentivePremium 要**已经选了**转币才非零，而这句承诺是在选择**之前**看到的。
+      // 拿它判就恒为 0、永远藏掉 —— 所以后端另给了 incentivePremiumIfPawcoin。
+      await tester.pumpWidget(refundHost(
+          progress(incentivePremium: 0, incentivePremiumIfPawcoin: 3000)));
+      await tester.pumpAndSettle();
+
+      final tile = tester.widget<ShopRadioTile>(
+          find.byKey(const ValueKey('refundToPawcoinV2')));
+      expect(tile.label, contains('bonus'));
+    });
+
+    testWidgets('🔴 补偿为 0 → 合计不写「(termasuk tambahan)」', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(refundHost(progress(compensationPremium: 0)));
+      await tester.pumpAndSettle();
+
+      expect(find.text(l10n.refundMethodGrandTotalPlain), findsOneWidget);
+      expect(find.text(l10n.refundMethodGrandTotal), findsNothing,
+          reason: '补偿是 0 时，「含补偿」说的是一笔不存在的钱');
+    });
+  });
 
   group('🔴 后端枚举不得漏到用户眼前', () {
     testWidgets('运费归属步骤给文案，不给 `PLATFORM`', (tester) async {

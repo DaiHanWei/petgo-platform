@@ -226,6 +226,13 @@ public class RefundExecutionService {
         if (r.getCashDestination() == CashDestination.TO_PAWCOIN && config != null) {
             incentive = premium(split.thisCash(), config.getPremiumRate(), 0L);
         }
+        // 🔴 **「选了转币会拿到多少」的预览**（D-11，2026-09-02 stag）。
+        //    上面那个 incentive 要**已经选了** TO_PAWCOIN 才非零，而用户是在退款方式页
+        //    **做选择之前**看到「Lands instantly, with a bonus」这句承诺的 ——
+        //    端上拿 incentive 去判就恒为 0，等于永远藏掉；不判又变成无条件承诺（就是 D-11）。
+        //    所以额外给一个与当前选择无关的预览值，端上据此决定那句话说不说。
+        long incentiveIfPawcoin =
+                config == null ? 0L : premium(split.thisCash(), config.getPremiumRate(), 0L);
 
         // 回程运费：平台承担时按用户上传的实际运单金额返还（S-7）
         long shipbackReimbursement =
@@ -233,7 +240,7 @@ public class RefundExecutionService {
                         ? r.getShipbackFee() : 0L;
 
         return new Quote(refundTotal, split.thisCoin(), split.thisCash(), compensation, incentive,
-                shipbackReimbursement, goods, outbound);
+                incentiveIfPawcoin, shipbackReimbursement, goods, outbound);
     }
 
     /** 溢价 = 基数 × 比例%，按 cap 封顶（cap = 0 表示不封顶）。整数运算，禁浮点。 */
@@ -252,7 +259,14 @@ public class RefundExecutionService {
      * 便于事后审计与客诉复盘。
      */
     public record Quote(long refundTotal, long coinRefund, long cashRefund,
-            long compensationPremium, long incentivePremium, long shipbackReimbursement,
+            long compensationPremium, long incentivePremium,
+            /**
+             * 「若选择转 PawCoin，激励溢价会是多少」——**与当前选择无关**的预览值（D-11）。
+             * ⚠️ 与 {@code incentivePremium} 的区别：那个要已经选了 TO_PAWCOIN 才非零，
+             * 是**结算口径**；这个是**给用户做选择前看的**。不要拿它入账。
+             */
+            long incentiveIfPawcoin,
+            long shipbackReimbursement,
             long goodsAmount, long outboundFeeRefund) {
 
         /** 用户视角的「总退回（含补偿）」。 */
