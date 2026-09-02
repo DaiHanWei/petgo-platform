@@ -76,6 +76,12 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
     // 它是锦上添花的展示位，不该让整页进错误态。加载中同样按"没有"处理 ——
     // 先给白色顶栏、图到了再换，比先留一块空白再弹出 banner 稳。
     final banner = ref.watch(shopBannerProvider).asData?.value;
+    // 有 banner → 透明浮在图上；没有 → 白色顶栏（产品要求与其他板块区分）。
+    final tone = banner != null ? ShopAppBarTone.transparent : ShopAppBarTone.light;
+    // 🔴 顶栏里的标题与两个胶囊**一律从 tone 取色**（D-1）。此前它们各自写死
+    //    `ShopColors.surface`（白）+ `onInk12`（白 12% 底），于是无 banner 的白底顶栏上
+    //    整条恒为 RGB(255,255,255)：标题、金币余额、购物车入口全部不可见。
+    final bar = ShopAppBar.colorsOf(tone);
 
     return Scaffold(
       backgroundColor: ShopColors.bg,
@@ -85,12 +91,11 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
       appBar: ShopAppBar(
         title: l10n.tokoTitle,
         large: true,
-        // 有 banner → 透明浮在图上；没有 → 白色顶栏（产品要求与其他板块区分）。
-        tone: banner != null ? ShopAppBarTone.transparent : ShopAppBarTone.light,
+        tone: tone,
         actions: [
-          _pawcoinCapsule(l10n, loggedIn),
+          _pawcoinCapsule(l10n, loggedIn, bar),
           const SizedBox(width: 8),
-          const _CartCapsule(),
+          _CartCapsule(bar: bar),
           const SizedBox(width: kShopScreenEdge),
         ],
       ),
@@ -140,13 +145,14 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
   /// 顶栏右侧：已登录显示 PawCoin 余额胶囊，游客显示 `Masuk` 胶囊。
   ///
   /// 🔴 **游客不显示余额 0**（设计稿明写）。余额 0 会让人以为账户里本该有钱。
-  Widget _pawcoinCapsule(AppLocalizations l10n, bool loggedIn) {
+  Widget _pawcoinCapsule(AppLocalizations l10n, bool loggedIn, ShopAppBarColors bar) {
     if (!loggedIn) {
       return _Capsule(
         key: const ValueKey('tokoLoginCapsule'),
+        background: bar.capsule,
         onTap: () => context.push('/login'),
         child: Text(l10n.loginTitle,
-            style: ShopText.badge.copyWith(fontSize: 11, color: ShopColors.surface)),
+            style: ShopText.badge.copyWith(fontSize: 11, color: bar.foreground)),
       );
     }
     // ⚠️ 复用余额页的 provider —— 它同时会拉一页流水，对顶栏而言偏重。
@@ -155,6 +161,7 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
         data: (s) => s.balance, orElse: () => null);
     return _Capsule(
       key: const ValueKey('tokoPawcoinCapsule'),
+      background: bar.capsule,
       onTap: () => context.push('/me/pawcoin'),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -164,7 +171,7 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
           Text(
             // 余额未加载完时先只画胶囊壳，不画 0（同上：0 是错的信息，不是缺失的信息）。
             balance == null ? '—' : _compactIdr(balance),
-            style: ShopText.badge.copyWith(fontSize: 11, color: ShopColors.surface),
+            style: ShopText.badge.copyWith(fontSize: 11, color: bar.foreground),
           ),
         ],
       ),
@@ -339,9 +346,14 @@ class _BannerHeader extends StatelessWidget {
 
 /// 顶栏胶囊（半透明白底，圆角 7）。
 class _Capsule extends StatelessWidget {
-  const _Capsule({super.key, required this.child, this.onTap});
+  const _Capsule({super.key, required this.child, required this.background, this.onTap});
 
   final Widget child;
+
+  /// 🔴 由顶栏 tone 决定（[ShopAppBar.colorsOf]），不可写死：
+  /// 原先固定 `onInk12`（白 12%），在白底顶栏上等于没有底 —— D-1 的一半。
+  final Color background;
+
   final VoidCallback? onTap;
 
   @override
@@ -352,7 +364,7 @@ class _Capsule extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
           decoration: BoxDecoration(
-            color: ShopColors.onInk12,
+            color: background,
             borderRadius: BorderRadius.circular(ShopShape.radiusField),
           ),
           child: child,
@@ -365,7 +377,10 @@ class _Capsule extends StatelessWidget {
 /// 🔴 角标是**商品件数**不是种类数（FR-96）—— 与 v1 的 `CartIconButton` 同一口径、
 /// 同一个 provider，只是外观按设计稿重画。
 class _CartCapsule extends ConsumerWidget {
-  const _CartCapsule();
+  const _CartCapsule({required this.bar});
+
+  /// 🔴 见 [_Capsule.background]：图标与底色都得跟着顶栏 tone 走，否则白底上整个不可见。
+  final ShopAppBarColors bar;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -388,11 +403,11 @@ class _CartCapsule extends ConsumerWidget {
               height: 30,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: ShopColors.onInk12,
+                color: bar.capsule,
                 borderRadius: BorderRadius.circular(ShopShape.radiusButton),
               ),
-              child: const Icon(Icons.shopping_cart_outlined,
-                  size: 16, color: ShopColors.surface),
+              child: Icon(Icons.shopping_cart_outlined,
+                  size: 16, color: bar.foreground),
             ),
             if (count > 0)
               Positioned(
