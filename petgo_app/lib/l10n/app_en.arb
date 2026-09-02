@@ -2587,6 +2587,8 @@
   "tokoSearchNoResultHint": "Try a different word, or browse by category.",
   "@tokoSearchNoResultHint": {"description": "Search page: second line under tokoSearchEmpty. Gives the user a next move instead of a dead end."},
   "tokoCategoryAll": "All",
+  "tokoViewImageFull": "View full image",
+  "@tokoViewImageFull": {"description": "Product detail: semantics label for tapping the image area to open the full-screen zoomable viewer. The inline area crops (BoxFit.cover), so this is the only way to see the whole picture."},
   "@tokoCategoryAll": {"description": "Toko page: the explicit \"no category filter\" chip, first in the pinned row and selected by default. Before it existed, clearing a filter meant tapping the selected chip again — a hidden interaction nobody discovers."},
   "tokoPriceUnavailable": "Price soon",
   "@tokoPriceUnavailable": {"description": "Toko page: price placeholder when a product has no SKU yet (never show Rp 0)"},

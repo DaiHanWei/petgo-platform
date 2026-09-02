@@ -70,9 +70,11 @@ void main() {
     ShopCategory? category = ShopCategory.makanan,
     ReturnPolicy policy = ReturnPolicy.noReturnAfterOpen,
     List<String> gallery = const [],
+    String? mainImage,
   }) =>
       ShopProductDetail(
         token: 'tok1',
+        mainImageUrl: mainImage,
         name: 'Royal Canin Adult Dog',
         brand: 'Royal Canin',
         category: category,
@@ -81,6 +83,76 @@ void main() {
         galleryUrls: gallery,
         detailHtml: '<p>Makanan kering.</p>',
       );
+
+  /// 🔴 R-1（2026-09-02 产品提出）：商品主图要能点开看全貌。
+  ///
+  /// 详情页图区固定高 266、`ShopImage(fillWidth: true)`，而 `ShopImage.fit` 默认
+  /// **BoxFit.cover（裁切）** —— 商品图素材是 1:1，塞进 266 高的横向框里上下必然被切掉。
+  /// 而图区上**原本没有任何点击入口**（本页 6 处 onTap 全不在图区），也没有 InteractiveViewer
+  /// ⇒ 用户没有任何办法看到整张商品图。
+  ///
+  /// ⚠️ **没有改 `ShopImage` 的默认 fit** —— 它的源码注释写明十余处调用方（购物车行、
+  /// 订单行、退款选择）都依赖 cover 把图铺满各自的方框，改默认值会一次性波及全部。
+  /// 修法是**新增全屏查看器**，列表与图区照旧裁切。
+  group('🔴 R-1：主图点击放大', () {
+    testWidgets('有图 → 图区可点，点开出全屏查看器且用 contain 展示全貌', (tester) async {
+      await tester.pumpWidget(host(detail(
+        skus: [sku('s1')],
+        mainImage: 'https://cdn.test/main.jpg',
+      )));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('tokoGalleryZoomV2')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('tokoGalleryZoomV2')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(InteractiveViewer), findsOneWidget,
+          reason: '不支持双指缩放的话，全屏也只是把同一张图放大一点');
+      final img = tester.widget<Image>(find.descendant(
+          of: find.byType(InteractiveViewer), matching: find.byType(Image)));
+      expect(img.fit, BoxFit.contain, reason: '这个查看器存在的唯一理由就是看全貌');
+    });
+
+    testWidgets('🔴 查看器拿的是原图 URL，不是图区那张 266px 缩略图', (tester) async {
+      await tester.pumpWidget(host(detail(
+        skus: [sku('s1')],
+        mainImage: 'https://cdn.test/main.jpg',
+      )));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('tokoGalleryZoomV2')));
+      await tester.pumpAndSettle();
+
+      final img = tester.widget<Image>(find.descendant(
+          of: find.byType(InteractiveViewer), matching: find.byType(Image)));
+      expect((img.image as NetworkImage).url, 'https://cdn.test/main.jpg',
+          reason: '把缩略图送进查看器，双指放大只会看到一团糊 —— 等于白做');
+    });
+
+    testWidgets('无图 → 不给点击入口（占位斜纹点开一个黑屏更糟）', (tester) async {
+      await tester.pumpWidget(host(detail(skus: [sku('s1')])));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('tokoGalleryZoomV2')), findsNothing);
+    });
+
+    testWidgets('🔴 多图 → 整组都进查看器，且从被点的那张打开', (tester) async {
+      await tester.pumpWidget(host(detail(
+        skus: [sku('s1')],
+        mainImage: 'https://cdn.test/a.jpg',
+        gallery: const ['https://cdn.test/b.jpg', 'https://cdn.test/c.jpg'],
+      )));
+      await tester.pumpAndSettle();
+
+      // 点的是当前这张（第 1 张）⇒ 查看器停在 1/3，而不是无脑从头开始。
+      await tester.tap(find.byKey(const ValueKey('tokoGalleryZoomV2')).hitTestable());
+      await tester.pumpAndSettle();
+
+      final indicator = tester.widget<Text>(
+          find.byKey(const ValueKey('imageViewerPageIndicator')));
+      expect(indicator.data, '1/3', reason: '主图 + 2 张附图 = 3 张整组带进去');
+      expect(find.byType(InteractiveViewer), findsWidgets);
+    });
+  });
 
   group('🔴 FR-94A：多规格不得默认选中', () {
     testWidgets('两个规格时无选中态，主按钮禁用并提示先选规格', (tester) async {

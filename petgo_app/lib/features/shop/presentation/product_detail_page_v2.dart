@@ -38,6 +38,7 @@ import '../../../core/analytics/analytics.dart';
 import '../../../core/router/route_intent.dart';
 import '../../../core/theme/shop_tokens.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/case_image_viewer.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../auth/domain/login_guide_controller.dart';
@@ -205,12 +206,39 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
             child: PageView.builder(
               itemCount: pages.length,
               onPageChanged: (i) => setState(() => _galleryIndex = i),
-              itemBuilder: (c, i) => ShopImage(
-                url: pages[i],
-                size: 266,
-                fillWidth: true,
-                radius: 0,
-              ),
+              itemBuilder: (c, i) {
+                final img = ShopImage(
+                  url: pages[i],
+                  size: 266,
+                  fillWidth: true,
+                  radius: 0,
+                );
+                final url = pages[i];
+                // 没有图就没什么可放大的 —— 占位斜纹点开一个黑屏更糟。
+                if (url == null || url.isEmpty) return img;
+                return Semantics(
+                  button: true,
+                  label: l10n.tokoViewImageFull,
+                  child: GestureDetector(
+                    key: const ValueKey('tokoGalleryZoomV2'),
+                    // ⚠️ onTap 与 PageView 的横滑不冲突：手势竞技场里点击与拖拽本就分得开。
+                    onTap: () {
+                      // 🔴 传**原图 URL**，不是这里显示的那张。图区走的是 266px 的
+                      //    OSS 缩略图（见 ShopImage.thumbWidth）—— 把缩略图送进查看器，
+                      //    双指放大只会看到一团糊，而看清楚正是打开它的唯一理由。
+                      final srcs = [
+                        for (final u in pages)
+                          if (u != null && u.isNotEmpty) u,
+                      ];
+                      // ⚠️ 下标在**过滤后**的表里查，不要直接用 i：
+                      //    只要 pages 里混进一个空串，i 就会指到隔壁那张图上。
+                      showImageGalleryFullScreen(context,
+                          srcs: srcs, initialIndex: srcs.indexOf(url));
+                    },
+                    child: img,
+                  ),
+                );
+              },
             ),
           ),
           Positioned(
