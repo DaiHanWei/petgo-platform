@@ -70,22 +70,29 @@ public class AdminContentTagService {
         return tags.findByRetiredAtIsNullOrderByIdDesc();
     }
 
+    /**
+     * 新建标签。标签码<b>系统自动生成</b>（{@code ct-<自增id>}，2026-09-02）：
+     * 原先由运营手填，多个运营会填出同一个码互相顶掉；码只进埋点与操作日志、
+     * 用户看不到，没有任何理由让人来起名。
+     */
     @Transactional
-    public void createTag(long adminId, String code, String name, String icon, String description,
+    public void createTag(long adminId, String name, String icon, String description,
             String badgeStyle) {
-        if (code == null || code.isBlank() || name == null || name.isBlank()
+        if (name == null || name.isBlank()
                 || icon == null || icon.isBlank() || description == null || description.isBlank()) {
-            throw AppException.validation("标签码、名称、图标与说明文案均为必填")
+            throw AppException.validation("名称、图标与说明文案均为必填")
                     .code("admin.err.contentTag.fieldsRequired");
         }
-        tags.findByCode(code).ifPresent(t -> {
-            throw AppException.validation("标签码已存在：" + code)
-                    .code("admin.err.contentTag.codeExists", code);
-        });
         // ⚠️ 宽松解析、不抛：底色从下拉里选，值不对只可能是有人手改了请求 ——
         //    为此让整次建标签失败不划算，回落 UI 稿原始的橙→红即可。
         ContentTagBadgeStyle style = ContentTagBadgeStyle.parse(badgeStyle);
-        ContentTag saved = tags.save(ContentTag.of(code, name, icon, description, style));
+        // 两步建号：先以**唯一占位码** INSERT 拿到自增 id，再在同一事务里回填 ct-<id>。
+        // 占位码带 UUID 是为并发兜底（code 列有唯一约束，两个运营同时点「新建」也不撞）；
+        // 事务失败整体回滚，占位码不会留在库里。
+        ContentTag saved = tags.save(ContentTag.of(
+                "ct-pending-" + java.util.UUID.randomUUID(), name, icon, description, style));
+        String code = "ct-" + saved.getId();
+        saved.assignGeneratedCode(code);
         audit.record(adminId, "CONTENT_TAG_CREATE", "content_tag", String.valueOf(saved.getId()),
                 "code=" + code + " name=" + name + " style=" + style);
     }
