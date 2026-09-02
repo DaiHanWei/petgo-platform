@@ -87,18 +87,32 @@ Future<void> main() async {
   // - `start()` 必须同时晚于 ATT 结果与 init（未 init 时 start 是 no-op），故末尾按序 await 两者。
   WidgetsBinding.instance.addPostFrameCallback((_) async {
     final Future<void> afInit = AppsFlyerClient.instance.init();
+
+    // 通知权限只弹一次的会话内闸（跨会话由 PushPermissionBootstrap 的 prefs 标记兜底）。
+    var notificationAsked = false;
+    Future<void> askNotificationOnce() async {
+      if (notificationAsked) return;
+      notificationAsked = true;
+      await PushPermissionBootstrap.requestOnFirstLaunch();
+    }
+
+    // 前台补弹（2026-08-09 拒信，iPad 兼容模式）：冷启动请求被系统吞掉后，本会话内
+    // 每次回前台都会重试直到落定；落定那一刻把被推迟的通知权限接回来。
+    // 系统保证 ATT 弹窗只真正出现一次（仅 notDetermined 有 UI），不会骚扰已作答用户。
+    AttGate.installForegroundRetry(onSettled: askNotificationOnce);
+
     final attSettled = await AttGate.requestIfNeeded();
     // 首启即申请通知权限（2026-08-07 产品决策，取代 F7 双时机——见 PushPermissionBootstrap
     // 文档：双时机对存量用户是死路）。拒绝后不再自动弹，改由设置页开关兜底。
     //
-    // 🔴 必须在 ATT **落定之后**且**仅在弹窗已收场时**（PR#34 finding #14）：
-    // `requestIfNeeded()` 返回 false = 用户 15s 未作答、ATT 弹窗还开着——此时再弹通知权限
-    // 会盖住它 ⇒ 用户对跟踪没得选 ⇒ 重蹈 2026-08-06 Guideline 2.1 拒信。
-    // 宁可把通知权限推迟到下一次冷启动（首启标记未消费，下次照常询问）。
+    // 🔴 必须在 ATT **落定之后**（PR#34 finding #14 + 2026-08-09 iPad 拒信）：
+    // `requestIfNeeded()` 返回 false = 仍 notDetermined（弹窗开着没作答，或请求被吞）——
+    // 此时弹通知权限会盖住/挤掉 ATT ⇒ Guideline 2.1。未落定就交给前台补弹链路，
+    // 本会话内落定即弹，实在等不到则下一次冷启动（首启标记未消费，照常询问）。
     if (attSettled) {
-      await PushPermissionBootstrap.requestOnFirstLaunch();
+      await askNotificationOnce();
     } else {
-      debugPrint('[ATT] undetermined after wait — defer notification prompt to next launch');
+      debugPrint('[ATT] undetermined — notification prompt deferred to settle/next launch');
     }
 
     // 权限状态快照（Story 8.1 / 埋点 E-21）：本次启动的通知权限流程**落定之后**报一次。

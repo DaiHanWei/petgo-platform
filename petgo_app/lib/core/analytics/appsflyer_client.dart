@@ -20,12 +20,6 @@ class AppsFlyerClient {
 
   static final AppsFlyerClient instance = AppsFlyerClient._();
 
-  /// stag 分支专属总开关（2026-08-03 用户指令）：stag 环境不向 AppsFlyer 上报任何数据。
-  /// 默认关闭 = init 跳过，其余方法因 `_initialized=false` 全部 no-op（含 iOS ATT 弹窗）；
-  /// 如需临时验证归因可 `--dart-define=APPSFLYER_ENABLED=true` 打开。
-  /// ⚠️ 本改动只留在 stag 分支，勿合回 v1.1-dev / main。
-  static const bool _appsflyerEnabled = bool.fromEnvironment('APPSFLYER_ENABLED');
-
   /// 账号级 Dev Key（iOS/Android 共用同一个）。dart-define `APPSFLYER_DEV_KEY` 覆盖。
   static const String _devKey = String.fromEnvironment(
     'APPSFLYER_DEV_KEY',
@@ -47,10 +41,6 @@ class AppsFlyerClient {
 
   /// `runApp` 前调用一次（`main()`）。只 init 不上报（manualStart），失败不抛。
   Future<void> init() async {
-    if (!_appsflyerEnabled) {
-      debugPrint('[AppsFlyer] disabled (stag), skip init');
-      return;
-    }
     if (_initialized) return;
     try {
       final sdk = AppsflyerSdk(AppsFlyerOptions(

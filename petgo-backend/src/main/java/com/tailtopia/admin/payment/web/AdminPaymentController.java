@@ -2,25 +2,16 @@ package com.tailtopia.admin.payment.web;
 
 import com.tailtopia.admin.payment.dto.AdminPaymentRow;
 import com.tailtopia.admin.payment.service.AdminPaymentQueryService;
-import com.tailtopia.admin.paysim.service.AdminPaySimulatorService;
-import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.domain.PaymentStatus;
-import com.tailtopia.shared.error.AppException;
-import com.tailtopia.shared.i18n.Messages;
 import java.time.LocalDate;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
  * 后台支付记录通用查询（Story 9.6，AB-8E）。Thymeleaf admin slice，{@code /admin/payments}。
@@ -40,23 +31,10 @@ public class AdminPaymentController {
     private final AdminPaymentQueryService service;
     private final com.tailtopia.admin.payment.service.AdminPaymentExportService exportService;
 
-    // ⚠️ stag 专用：仅 stag 分支注入，绝不合并回 v1.1-dev / main。
-    private final AdminPaySimulatorService simulator;
-    private final boolean simulatorEnabled;
-
-    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
-    private final Messages msg;
-
     public AdminPaymentController(AdminPaymentQueryService service,
-            com.tailtopia.admin.payment.service.AdminPaymentExportService exportService,
-            AdminPaySimulatorService simulator,
-            @Value("${petgo.pay.simulator-enabled:false}") boolean simulatorEnabled,
-            Messages msg) {
+            com.tailtopia.admin.payment.service.AdminPaymentExportService exportService) {
         this.service = service;
         this.exportService = exportService;
-        this.simulator = simulator;
-        this.simulatorEnabled = simulatorEnabled;
-        this.msg = msg;
     }
 
     @GetMapping("/admin/payments")
@@ -71,7 +49,6 @@ public class AdminPaymentController {
                          @RequestParam(defaultValue = "0") int page, Model model) {
         model.addAttribute("active", "payments");
         model.addAttribute("userId", userId);
-        model.addAttribute("simulatorEnabled", simulatorEnabled);
         model.addAttribute("purpose", purpose);
         model.addAttribute("status", status);
         model.addAttribute("from", from);
@@ -96,30 +73,6 @@ public class AdminPaymentController {
         // 🔴 汇总覆盖**整个筛选结果**，不是当前这一页（见 summarize 的说明）。
         model.addAttribute("summary", service.summarize(filter));
         return "admin/payments";
-    }
-
-    /**
-     * ⚠️ stag 专用：手动模拟支付回调，把订单推向 成功/失败/过时。<b>绝不合并回主线</b>。
-     * 运行时靠 {@code petgo.pay.simulator-enabled} flag 门控（prod 不开则拒绝）。
-     */
-    @PostMapping("/admin/payments/{publicToken}/simulate")
-    @PreAuthorize(VIEW_AUTH)
-    public String simulate(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable String publicToken, @RequestParam AdminPaySimulatorService.Target target,
-            RedirectAttributes flash) {
-        if (!simulatorEnabled) {
-            flash.addFlashAttribute("error", msg.get("admin.err.payment.simulatorDisabled"));
-            return "redirect:/admin/payments";
-        }
-        try {
-            flash.addFlashAttribute("notice", simulator.simulate(publicToken, target, admin.getAdminAccountId()));
-        } catch (AppException e) {
-            flash.addFlashAttribute("error", msg.resolve(e));
-        } catch (RuntimeException e) {
-            // ⚠️ stag 专用链路，模拟器抛的非业务异常保持原文回显（不入 i18n 键集）。
-            flash.addFlashAttribute("error", e.getMessage());
-        }
-        return "redirect:/admin/payments";
     }
 
     /**
