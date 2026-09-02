@@ -78,6 +78,17 @@ public class UserTag {
         return t;
     }
 
+    /**
+     * 建号（2026-09-02：标签码改为系统自动生成，运营不再手填）。
+     *
+     * <p>⚠️ <b>只允许在创建事务内调用一次</b>：先以占位码 INSERT 拿到自增 id，
+     * 再回填 {@code ut-<id>}。「建后不可修改」的对外约定不变 —— 后台没有任何
+     * 编辑入口触达本方法。
+     */
+    public void assignGeneratedCode(String code) {
+        this.code = code;
+    }
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();

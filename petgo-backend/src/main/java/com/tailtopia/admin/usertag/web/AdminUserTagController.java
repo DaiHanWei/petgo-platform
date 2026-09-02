@@ -88,7 +88,7 @@ public class AdminUserTagController {
     @PostMapping("/admin/user-tags")
     @PreAuthorize(MANAGE)
     public String createTag(@AuthenticationPrincipal AdminUserDetails admin,
-            @RequestParam String code, @RequestParam String name,
+            @RequestParam String name,
             @RequestParam(value = "iconFile", required = false) MultipartFile iconFile,
             @RequestParam String description,
             @RequestParam(value = "badgeColor", required = false) String badgeColor,
@@ -100,7 +100,8 @@ public class AdminUserTagController {
             if (iconUrl == null) {
                 throw AppException.validation(icons.iconRequiredMessage());
             }
-            service.createTag(admin.getAdminAccountId(), code, name, iconUrl, description,
+            // 2026-09-02：标签码不再由运营填写，服务层自动生成（ut-<id>），杜绝撞码。
+            service.createTag(admin.getAdminAccountId(), name, iconUrl, description,
                     badgeColor);
             flash.addFlashAttribute("notice", msg.get("admin.flash.userTag.created"));
         } catch (AppException e) {

@@ -74,21 +74,27 @@ public class AdminUserTagService {
         return tags.findByRetiredAtIsNullOrderByIdDesc();
     }
 
+    /**
+     * 新建标签。标签码<b>系统自动生成</b>（{@code ut-<自增id>}，2026-09-02）：
+     * 原先由运营手填，多个运营会填出同一个码互相顶掉；码只进埋点与操作日志、
+     * 用户看不到，没有任何理由让人来起名。（与内容标签同一改法。）
+     */
     @Transactional
-    public void createTag(long adminId, String code, String name, String icon, String description,
+    public void createTag(long adminId, String name, String icon, String description,
             String badgeColor) {
-        if (isBlank(code) || isBlank(name) || isBlank(icon) || isBlank(description)) {
-            throw AppException.validation("标签码、名称、图标与说明文案均为必填")
+        if (isBlank(name) || isBlank(icon) || isBlank(description)) {
+            throw AppException.validation("名称、图标与说明文案均为必填")
                     .code("admin.err.userTag.fieldsRequired");
         }
-        tags.findByCode(code).ifPresent(t -> {
-            throw AppException.validation("标签码已存在：" + code)
-                    .code("admin.err.userTag.codeExists", code);
-        });
         // ⚠️ 宽松解析、不抛：底色是从下拉里选的，值不对只可能是有人手改了请求 ——
         //    为此让整次建标签失败不划算，回落 UI 稿的默认金色即可。
         UserTagBadgeColor color = UserTagBadgeColor.parse(badgeColor);
-        UserTag saved = tags.save(UserTag.of(code, name, icon, description, color));
+        // 两步建号：唯一占位码 INSERT 拿自增 id → 同事务回填 ut-<id>（并发/回滚安全，
+        // 详见 ContentTag.assignGeneratedCode 与内容标签侧同款注释）。
+        UserTag saved = tags.save(UserTag.of(
+                "ut-pending-" + java.util.UUID.randomUUID(), name, icon, description, color));
+        String code = "ut-" + saved.getId();
+        saved.assignGeneratedCode(code);
         audit.record(adminId, "USER_TAG_CREATE", "user_tag", String.valueOf(saved.getId()),
                 "code=" + code + " name=" + name + " color=" + color);
     }

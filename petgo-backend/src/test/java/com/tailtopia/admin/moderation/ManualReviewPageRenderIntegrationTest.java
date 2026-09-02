@@ -42,9 +42,13 @@ class ManualReviewPageRenderIntegrationTest extends ApiIntegrationTest {
                 new java.util.ArrayList<>(principal.getAuthorities()));
     }
 
-    private String renderPage() throws Exception {
-        // 只看 PENDING、页开大些：共享库里工单多，新造的行要能进第一屏。
+    /**
+     * 按「被举报账号」筛选后渲染 —— 🔴 必须筛：共享库工单逐轮累积，同分工单按最早时间排，
+     * 上一轮跑测试造的行会把本轮新行挤出第一屏（2026-09-02 复跑真的红过一次）。
+     */
+    private String renderPage(long targetUserId) throws Exception {
         return mvc.perform(get("/admin/manual-review").param("status", "PENDING")
+                        .param("q", String.valueOf(targetUserId))
                         .with(authentication(superAdminAuth())))
                 .andReturn().getResponse().getContentAsString();
     }
@@ -60,7 +64,7 @@ class ManualReviewPageRenderIntegrationTest extends ApiIntegrationTest {
                 + "status, priority, created_at, updated_at) "
                 + "VALUES (?, 'CONTENT_POST', now(), 'PENDING', 'P0', now(), now())", post.getId());
 
-        String html = renderPage();
+        String html = renderPage(author.getId());
         assertThat(html).contains("/admin/content/" + post.getId());
     }
 
@@ -74,7 +78,7 @@ class ManualReviewPageRenderIntegrationTest extends ApiIntegrationTest {
                 + "priority) VALUES ('USER_AVATAR', ?, ?, 'MANUAL_PENDING', 'HIGH')",
                 target.getId(), url);
 
-        String html = renderPage();
+        String html = renderPage(target.getId());
         assertThat(html).contains("src=\"" + url + "\"");
         // 头像工单没有「查看内容」链接（contentRefId 为空）。
         assertThat(html).doesNotContain("/admin/content/" + url);
@@ -94,7 +98,7 @@ class ManualReviewPageRenderIntegrationTest extends ApiIntegrationTest {
                 + "VALUES (?, 'CONTENT_POST', '2026-01-15 03:00:00+00', 'PENDING', 'P0', "
                 + "now(), now())", post.getId());
 
-        String html = renderPage();
+        String html = renderPage(author.getId());
         assertThat(html).contains("2026-01-15 10:00:00 WIB");
         assertThat(html).doesNotContain("2026-01-15T03:00");
     }
