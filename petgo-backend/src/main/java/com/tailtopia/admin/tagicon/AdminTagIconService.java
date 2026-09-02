@@ -38,17 +38,18 @@ public class AdminTagIconService {
     private static final org.slf4j.Logger log =
             org.slf4j.LoggerFactory.getLogger(AdminTagIconService.class);
 
-    /** 最小边长：渲染约 9~11 逻辑像素，3 倍屏需 33px，给到 72 留余量。 */
-    public static final int MIN_SIDE = 72;
-
-    /** 最大边长：再大只是浪费流量，图标不需要。 */
-    public static final int MAX_SIDE = 1024;
+    /**
+     * 最小边长（2026-09-02 放宽：72 → 42）。用户标签整图按 14 逻辑像素显示，
+     * 3 倍屏需要 42 物理像素 —— 这是"不糊"的下限，不是设计要求。
+     *
+     * <p>🔴 2026-09-02 产品定：**不再限制最大边长、不再要求正方形** ——
+     * 运营没办法精确把图卡在某个尺寸上，而端上本来就是等比缩放，
+     * 大图/长图都能正确显示。唯一保留的硬约束是格式（透明能力）与文件大小。
+     */
+    public static final int MIN_SIDE = 42;
 
     /** 单文件上限 512KB。🛡 <b>刻意不沿用</b>种子图片的 10MB —— 那是给内容照片定的。 */
     public static final long MAX_BYTES = 512L * 1024;
-
-    /** 长宽比容差 ±5% —— 设计导出偶尔差一两像素，不该为此拒绝。 */
-    public static final double RATIO_TOLERANCE = 0.05;
 
     /** 🛡 白名单，且<b>不含 JPEG</b>（透明底，见类注释）。 */
     private static final Set<String> ALLOWED = Set.of("image/png", "image/webp");
@@ -113,22 +114,16 @@ public class AdminTagIconService {
         }
     }
 
-    /** 尺寸与比例校验。🛡 报错一律带**实际数值**，否则运营不知道要改成多少。 */
+    /**
+     * 尺寸校验（2026-09-02 起只剩最小边长）。🛡 报错带**实际数值**，否则运营不知道要改成多少。
+     * 上限与正方形要求已取消 —— 端上等比缩放，图什么形状都能正确显示。
+     */
     private void requireSize(ImageSize size) {
         int w = size.w();
         int h = size.h();
         if (w < MIN_SIDE || h < MIN_SIDE) {
             throw AppException.validation(msg("admin.tagicon.tooSmall",
                     new Object[] {w, h, MIN_SIDE}));
-        }
-        if (w > MAX_SIDE || h > MAX_SIDE) {
-            throw AppException.validation(msg("admin.tagicon.tooBig",
-                    new Object[] {w, h, MAX_SIDE}));
-        }
-        double ratio = (double) w / h;
-        if (Math.abs(ratio - 1.0) > RATIO_TOLERANCE) {
-            throw AppException.validation(msg("admin.tagicon.notSquare",
-                    new Object[] {w, h, String.format(Locale.ROOT, "%.2f", ratio)}));
         }
     }
 
@@ -174,8 +169,9 @@ public class AdminTagIconService {
      * @param context {@code contentTag} 或 {@code userTag}
      */
     public String specText(String context) {
+        // {0}=最小边长 {1}=文件上限 KB（2026-09-02 起没有边长上限与正方形要求）。
         return msg("admin.tagicon.spec." + context,
-                new Object[] {MIN_SIDE, MAX_SIDE, MAX_BYTES / 1024});
+                new Object[] {MIN_SIDE, MAX_BYTES / 1024});
     }
 
     private String msg(String key, Object[] args) {

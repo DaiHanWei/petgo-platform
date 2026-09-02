@@ -78,39 +78,38 @@ public class AdminUserTagService {
      * 新建标签。标签码<b>系统自动生成</b>（{@code ut-<自增id>}，2026-09-02）：
      * 原先由运营手填，多个运营会填出同一个码互相顶掉；码只进埋点与操作日志、
      * 用户看不到，没有任何理由让人来起名。（与内容标签同一改法。）
+     *
+     * <p>🔴 2026-09-02 产品定：<b>上传的图就是用户看到的整枚标签</b>（14×14 整图显示，
+     * 端上不再画圆底）——「徽章底色」概念随之取消，不再入参。列上残留的 badge_color
+     * 值仅供旧版本 App 兜底渲染，新链路不读不写。
      */
     @Transactional
-    public void createTag(long adminId, String name, String icon, String description,
-            String badgeColor) {
+    public void createTag(long adminId, String name, String icon, String description) {
         if (isBlank(name) || isBlank(icon) || isBlank(description)) {
             throw AppException.validation("名称、图标与说明文案均为必填")
                     .code("admin.err.userTag.fieldsRequired");
         }
-        // ⚠️ 宽松解析、不抛：底色是从下拉里选的，值不对只可能是有人手改了请求 ——
-        //    为此让整次建标签失败不划算，回落 UI 稿的默认金色即可。
-        UserTagBadgeColor color = UserTagBadgeColor.parse(badgeColor);
         // 两步建号：唯一占位码 INSERT 拿自增 id → 同事务回填 ut-<id>（并发/回滚安全，
         // 详见 ContentTag.assignGeneratedCode 与内容标签侧同款注释）。
         UserTag saved = tags.save(UserTag.of(
-                "ut-pending-" + java.util.UUID.randomUUID(), name, icon, description, color));
+                "ut-pending-" + java.util.UUID.randomUUID(), name, icon, description));
         String code = "ut-" + saved.getId();
         saved.assignGeneratedCode(code);
         audit.record(adminId, "USER_TAG_CREATE", "user_tag", String.valueOf(saved.getId()),
-                "code=" + code + " name=" + name + " color=" + color);
+                "code=" + code + " name=" + name);
     }
 
     @Transactional
-    public void editTag(long adminId, long id, String name, String icon, String description,
-            String badgeColor) {
+    public void editTag(long adminId, long id, String name, String icon, String description) {
         UserTag tag = tags.findById(id).orElseThrow(() -> AppException.notFound("标签不存在")
                 .code("admin.err.userTag.notFound"));
         // Story 11.5：icon 为 null 表示"这次没传新文件" ⇒ **保留原图标**，不是清空。
         // 🛡 写成 tag.edit(name, icon, ...) 会把不改图标的那次编辑变成"把图标删了"，
         //    而那在界面上看不出来 —— 运营改个错别字，App 上的图标就没了。
-        UserTagBadgeColor color = UserTagBadgeColor.parse(badgeColor);
-        tag.edit(name, icon == null ? tag.getIcon() : icon, description, color);
+        // 底色概念已取消（2026-09-02）：三参 edit 保持原 badge_color 不动（旧 App 兜底用）。
+        tag.edit(name, icon == null ? tag.getIcon() : icon, description);
         audit.record(adminId, "USER_TAG_EDIT", "user_tag", String.valueOf(id),
-                "name=" + name + " color=" + color);
+                "name=" + name);
     }
 
     /** 下线 / 重新上线。🛡 下线只影响能否再分配，已分配的照旧生效到各自 ends_at。 */

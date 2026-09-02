@@ -592,54 +592,42 @@ class AdminUserTagIntegrationTest extends ApiIntegrationTest {
      * <p>⚠️ 断言下发的是**色值**而不是枚举名：客户端不认识调色板，
      * 这样将来加一档颜色不需要发版。改成下发枚举名会安静地让老客户端画不出颜色。
      */
+    /**
+     * 2026-09-02「整图即标签」后底色概念取消，但 DTO 里的 {@code badgeColor}
+     * **仍要下发一个色值** —— 旧版本 App 还在用它画圆底（渲染降级但不能崩）。
+     */
     @Test
-    void badgeColourIsPerTagAndGoesOutAsAHexValue() {
+    void badgeColourStillGoesOutAsAHexForOldAppCompatibility() {
         long admin = 8281L + SEQ.incrementAndGet();
         String name = "最佳新人V" + SEQ.incrementAndGet();
-        adminService.createTag(admin, name, "https://cdn/x.png", "说明", "VIOLET");
+        adminService.createTag(admin, name, "https://cdn/x.png", "说明");
 
         UserTag t = latestByName(name);
-        assertThat(t.getBadgeColor()).isEqualTo(UserTagBadgeColor.VIOLET);
+        assertThat(t.getBadgeColor()).isEqualTo(UserTagBadgeColor.GOLD); // 列上默认值
 
         User u = newUser();
         tagService.assign(u.getId(), t.getId(), Instant.now().minusSeconds(60), null);
         UserTagView view = tagService.findVisibleTags(List.of(u.getId()), Instant.now())
                 .get(u.getId()).get(0);
         assertThat(view.badgeColor())
-                .as("🔴 下发的不是色值 ⇒ 客户端得认识调色板，加一档颜色就要发版")
-                .isEqualTo("#845EC9");
+                .as("旧版本 App 靠这个色值画圆底，字段不能停发")
+                .isNotBlank();
     }
 
-    /**
-     * 🛡 没选颜色 / 值不认识 → 金色（UI 稿的默认值），**不报错**。
-     *
-     * <p>底色是从下拉里选的，值不对只可能是有人手改了请求 ——
-     * 为此让整次建标签失败不划算。
-     */
+    /** 🛡 编辑时**不选新图标**不会把图标弄丢（保留图标规则；底色概念已取消）。 */
     @Test
-    void unknownBadgeColourFallsBackToGoldInsteadOfFailing() {
-        long admin = 8282L + SEQ.incrementAndGet();
-        String name = "官方F" + SEQ.incrementAndGet();
-        adminService.createTag(admin, name, "https://cdn/y.png", "说明", "NOT_A_COLOUR");
-
-        assertThat(latestByName(name).getBadgeColor())
-                .isEqualTo(UserTagBadgeColor.GOLD);
-    }
-
-    /** 🛡 编辑时能改色，且**不选新图标**不会把图标弄丢（与既有的保留图标规则叠加）。 */
-    @Test
-    void editingTheColourKeepsTheExistingIcon() {
+    void editingKeepsTheExistingIcon() {
         long admin = 8283L + SEQ.incrementAndGet();
         String name = "官方K" + SEQ.incrementAndGet();
-        adminService.createTag(admin, name, "https://cdn/keep.png", "说明", "GOLD");
+        adminService.createTag(admin, name, "https://cdn/keep.png", "说明");
         UserTag t = latestByName(name);
 
-        adminService.editTag(admin, t.getId(), "官方", null, "说明", "CORAL");
+        adminService.editTag(admin, t.getId(), "官方", null, "说明改了");
 
         UserTag after = tags.findById(t.getId()).orElseThrow();
-        assertThat(after.getBadgeColor()).isEqualTo(UserTagBadgeColor.CORAL);
+        assertThat(after.getDescription()).isEqualTo("说明改了");
         assertThat(after.getIcon())
-                .as("🔴 改个颜色把图标弄丢了 —— 界面上看不出来，直到用户端图标消失")
+                .as("🔴 改个文案把图标弄丢了 —— 界面上看不出来，直到用户端图标消失")
                 .isEqualTo("https://cdn/keep.png");
     }
 }
