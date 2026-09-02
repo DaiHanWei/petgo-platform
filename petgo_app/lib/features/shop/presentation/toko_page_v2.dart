@@ -26,8 +26,6 @@
 ///   全仓没有 key→URL 的拼装（v1 版式压根没画图，所以一直没暴露）。此处一律走占位斜纹。
 library;
 
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -35,7 +33,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/shop_tokens.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/widgets/app_image.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../data/cart_repository.dart';
@@ -48,6 +45,7 @@ import 'widgets/shop_buttons.dart';
 import 'widgets/shop_controls.dart';
 import 'widgets/shop_decor.dart';
 import 'widgets/shop_pressable.dart';
+import 'widgets/shop_product_masonry.dart';
 import 'widgets/shop_surface.dart';
 
 class TokoPageV2 extends ConsumerStatefulWidget {
@@ -62,55 +60,16 @@ class TokoPageV2 extends ConsumerStatefulWidget {
 class _TokoPageV2State extends ConsumerState<TokoPageV2> {
   ShopCategory? _selected;
 
-  /// 已**生效**的关键词（已防抖）。输入框里正在敲的那一份在 [_searchController] 里，
-  /// 两者故意分开：每敲一个字母就换一次 provider 族键 = 每个字母一次网络请求。
-  String? _keyword;
-
-  final TextEditingController _searchController = TextEditingController();
-  Timer? _debounce;
-
-  /// 防抖窗口。300ms 是「打完一个词的停顿」与「感觉不到延迟」之间的常用折中；
-  /// 再短会把连续输入拆成多次请求，再长会让用户以为搜索框没反应。
-  static const Duration _debounceWindow = Duration(milliseconds: 300);
-
-  ShopProductsQuery get _query => (category: _selected, keyword: _keyword);
+  /// 🔴 本页**不再持有关键词**（2026-09-02 产品定形）：吸顶行只剩一个放大镜，
+  /// 输入、防抖、结果全在 [ShopSearchPage]。这里恒以 `keyword: null` 取数 ——
+  /// 分类是列表的筛选，搜索是另一条路径，两者不再挤同一个页面状态。
+  ShopProductsQuery get _query => (category: _selected, keyword: null);
 
   @override
   void initState() {
     super.initState();
     _selected = ShopCategory.fromApi(widget.initialCategory);
     Analytics.capture('toko_tab_viewed');
-  }
-
-  @override
-  void dispose() {
-    // 🔴 两个都要收：Timer 不取消会在页面销毁后回调进 setState（"setState after dispose"），
-    //    controller 不 dispose 会泄漏监听。
-    _debounce?.cancel();
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  void _onSearchChanged(String raw) {
-    _debounce?.cancel();
-    _debounce = Timer(_debounceWindow, () {
-      if (!mounted) return;
-      final next = raw.trim().isEmpty ? null : raw.trim();
-      if (next == _keyword) return; // 敲了又删回原样：不必重建族键
-      setState(() => _keyword = next);
-    });
-    // 清空是**立即**生效的，不等防抖 —— 用户点 × 是想马上看回全部列表，
-    // 让它等 300ms 会显得没点上。
-    if (raw.isEmpty && _keyword != null) {
-      _debounce?.cancel();
-      setState(() => _keyword = null);
-    }
-  }
-
-  void _clearSearch() {
-    _debounce?.cancel();
-    _searchController.clear();
-    if (_keyword != null) setState(() => _keyword = null);
   }
 
   @override
@@ -144,16 +103,23 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
           _CartCapsule(bar: bar),
           const SizedBox(width: kShopScreenEdge),
         ],
-        // 搜索行（2026-08-31）。🔴 挂在顶栏的 bottom 槽而不是做成 pinned sliver：
-        //    有 banner 时 Scaffold 开了 extendBodyBehindAppBar，滚动区从 y=0 起算，
-        //    pinned sliver 会吸在 0 上、正好躲进浮着的顶栏底下被盖住。
-        //    bottom 槽由 AppBar 自己占位，天然不存在这类重叠，且「滚动不走」是无条件成立的。
-        bottom: _SearchBar(
-          controller: _searchController,
-          hint: l10n.tokoSearchHint,
-          clearLabel: l10n.tokoSearchClear,
-          onChanged: _onSearchChanged,
-          onClear: _clearSearch,
+        // 筛选行（2026-09-02 产品定形）：**放大镜 + 分类依次排开**，共用一行。
+        //
+        // 🔴 挂在顶栏的 bottom 槽而不是做成 pinned sliver：有 banner 时 Scaffold 开了
+        //    extendBodyBehindAppBar，滚动区从 y=0 起算，pinned sliver 会吸在 0 上、
+        //    正好躲进浮着的顶栏底下被盖住。bottom 槽由 AppBar 自己占位，
+        //    天然不存在这类重叠，且「滚动不走」是无条件成立的。
+        //
+        // 🔴 分类**必须吸顶**（R-4）：原先它夹在屏幕 45% 处、跟内容一起滚，
+        //    往下翻两屏就完全离开视野，换品类得一路滚回顶部。它是页面级导航，
+        //    不是流中的一个区块。
+        bottom: _FilterBar(
+          selected: _selected,
+          allLabel: l10n.tokoCategoryAll,
+          searchLabel: l10n.tokoSearchOpen,
+          labelOf: (c) => _categoryLabel(l10n, c),
+          onSelect: (c) => setState(() => _selected = c),
+          onSearch: () => context.push('/shop/search'),
         ),
       ),
       body: RefreshIndicator(
@@ -178,7 +144,6 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
             //    恒走降级态（MODE DASAR）—— 见那个文件的说明。这里保留本页自有的
             //    横滑实现是为了首页的转化形态（4 个横滑位），两者数据源同一套。
             const SliverToBoxAdapter(child: _ProfilePicksRail()),
-            SliverToBoxAdapter(child: _categoryChips(l10n)),
             products.when(
               loading: () => const SliverToBoxAdapter(child: _CenteredBox(child: CircularProgressIndicator())),
               error: (_, _) => SliverToBoxAdapter(
@@ -189,20 +154,21 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
                 ),
               ),
               data: (items) => items.isEmpty
-                  // 🔴 「搜不到」与「目录是空的」必须分开说：都用 tokoEmpty
-                  //    会让用户以为整个店没货，而不是自己的关键词没命中。
+                  // 本页只会是「这个品类下没有商品」。「关键词搜不到」是搜索页的空态，
+                  // 两句话必须分开 —— 混用会让用户以为整个店没货。
                   ? SliverToBoxAdapter(
                       child: _CenteredBox(
-                        child: Text(
-                          _keyword == null
-                              ? l10n.tokoEmpty
-                              : l10n.tokoSearchEmpty(_keyword!),
-                          style: ShopText.body,
-                          textAlign: TextAlign.center,
-                        ),
+                        child: Text(l10n.tokoEmpty,
+                            style: ShopText.body, textAlign: TextAlign.center),
                       ),
                     )
-                  : _masonry(items),
+                  : SliverToBoxAdapter(
+                      child: ShopProductMasonry(
+                        items: items,
+                        entrySource:
+                            _selected == null ? 'TOKO_ALL_FEATURED' : 'TOKO_CATEGORY',
+                      ),
+                    ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: kShopGutter)),
           ],
@@ -257,94 +223,101 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
   ///
   /// ⚠️ 左右内边距给在 [SingleChildScrollView.padding] 而不是 [ShopSection] 上：
   /// 给在外层会让 chips 在 16dp 处被裁掉、滑不到屏幕边缘，看着像「滑不动了」。
-  Widget _categoryChips(AppLocalizations l10n) => ShopSection(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: kShopScreenEdge),
-          // 内容不足一屏时不要回弹，否则短列表也能被拖动，像是还有内容没显示。
-          physics: const ClampingScrollPhysics(),
-          child: Row(
-            children: [
-              for (final (i, c) in ShopCategory.values.indexed) ...[
-                if (i > 0) const SizedBox(width: 6),
-                ShopChip(
-                  label: _categoryLabel(l10n, c),
-                  selected: _selected == c,
-                  onTap: () => setState(() => _selected = _selected == c ? null : c),
-                ),
-              ],
-            ],
-          ),
-        ),
-      );
-
   String _categoryLabel(AppLocalizations l10n, ShopCategory c) => switch (c) {
         ShopCategory.makanan => l10n.tokoCategoryMakanan,
         ShopCategory.obatVitamin => l10n.tokoCategoryObatVitamin,
         ShopCategory.camilan => l10n.tokoCategoryCamilan,
         ShopCategory.perawatan => l10n.tokoCategoryPerawatan,
       };
+}
 
-  /// 全部商品：**两列瀑布流**（2026-08-27 产品改版）。
-  ///
-  /// 🔴 为什么从等高网格改成瀑布流：商品图比例并不统一（1:1 的素材规格没被严格遵守）。
-  /// 定高框下只有两种坏结果 —— `cover` 裁掉竖图的上下两端，`contain` 留出大片左右空白，
-  /// 两者都让「用户看到的」与「运营上架的」不是同一张图。宽度撑满 + 高度按比例，
-  /// 才能既不裁切也不留白。**代价是卡片参差、价格行不再横向对齐**，产品已确认接受。
-  ///
-  /// **按高度贪心分列**（2026-08-27 后端补上尺寸后启用）：每张卡放进当前较矮的那列，
-  /// 两列底部因此大致齐平。此前拿不到图片比例，只能奇偶交替、底部参差。
-  ///
-  /// ⚠️ 高度用**相对值**估算（以列宽为 1），不换算像素 —— 分列只需要比较谁更矮，
-  /// 绝对值没有意义，而列宽要等 layout 才知道。
-  /// 🔴 尺寸未知的商品按 1:1 计入：估错的代价只是两列略不齐，不影响正确性。
-  ///
-  /// 🔴 用 [SliverToBoxAdapter] + 两个 [Column]，**失去了 Sliver 的视口懒构建** ——
-  /// 全部商品一次性构建、图片同时开始加载。当前 92 个商品尚可承受，
-  /// 商品量再上去必须改为分页加载，否则首屏会同时发出上百个图片请求。
-  Widget _masonry(List<ShopProductSummary> items) {
-    final left = <Widget>[];
-    final right = <Widget>[];
-    // 以列宽为 1 的相对高度累计值。
-    var leftH = 0.0;
-    var rightH = 0.0;
-    for (var i = 0; i < items.length; i++) {
-      final p = items[i];
-      final card = _GridCard(
-        product: p,
-        entrySource: _selected == null ? 'TOKO_ALL_FEATURED' : 'TOKO_CATEGORY',
-      );
-      // 图片相对高度 = 1 / (w/h)；未知比例按 1:1。再加上名称+价格那块的固定占位。
-      final cardH = 1 / (p.mainImageAspect ?? 1.0) + kMasonryTextBlockRatio;
-      if (leftH <= rightH) {
-        left.add(card);
-        leftH += cardH;
-      } else {
-        right.add(card);
-        rightH += cardH;
-      }
-    }
-    return SliverToBoxAdapter(
-      child: Row(
-        // 🔴 必须是 start：默认的 stretch 会把两列拉成等高，瀑布流当场退化回网格。
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: _masonryColumn(left)),
-          const SizedBox(width: kShopGutter),
-          Expanded(child: _masonryColumn(right)),
-        ],
-      ),
-    );
-  }
+/// 吸顶筛选行：**放大镜 + 分类**（2026-09-02 产品定形，R-4 + C-18 的落位合并）。
+///
+/// ## 为什么搜索只留一个图标
+/// C-18 要给搜索一个常驻位，R-4 要把分类挪进同一个吸顶槽 —— 两者争这一个位置。
+/// 叠成两行会让顶栏增高约 170px、吃掉首屏；挤一行则输入框窄到打不了字、分类也剩不下几个。
+/// 产品的解法是**把搜索收成一个放大镜**：它只花一个图标的宽度，剩下的全给分类，
+/// 完整的搜索形态（键盘、输入、结果）搬进 [ShopSearchPage]。
+///
+/// ## 显式的「全部」
+/// 🔴 没有它时，取消筛选只能「再点一次已选中的标签」—— 隐藏交互，用户不会主动试。
+/// 「全部」默认选中、放最左，直观且可发现。
+class _FilterBar extends StatelessWidget implements PreferredSizeWidget {
+  const _FilterBar({
+    required this.selected,
+    required this.allLabel,
+    required this.searchLabel,
+    required this.labelOf,
+    required this.onSelect,
+    required this.onSearch,
+  });
 
-  Widget _masonryColumn(List<Widget> cards) => Column(
-        children: [
-          for (var i = 0; i < cards.length; i++) ...[
-            if (i > 0) const SizedBox(height: kShopGutter),
-            cards[i],
+  /// `null` = 全部（对应最左那个「全部」标签选中）。
+  final ShopCategory? selected;
+  final String allLabel;
+  final String searchLabel;
+  final String Function(ShopCategory) labelOf;
+  final ValueChanged<ShopCategory?> onSelect;
+  final VoidCallback onSearch;
+
+  /// 行高 = 标签 28 + 上下各 8。计入 [ShopAppBar.preferredSize]，改这里顶栏会自己变高。
+  static const double _rowHeight = 28;
+  static const double _vPad = 8;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(_rowHeight + _vPad * 2);
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: _rowHeight + _vPad * 2,
+        child: Row(
+          children: [
+            const SizedBox(width: kShopScreenEdge),
+            Semantics(
+              button: true,
+              label: searchLabel,
+              child: ShopPressable(
+                key: const ValueKey('tokoSearchEntryV2'),
+                onTap: onSearch,
+                // 命中区撑到 44：图标本身只有 20，按设计稿画出来会小到点不准。
+                minSize: kShopMinTapTarget,
+                child: const Icon(Icons.search, size: 20, color: ShopColors.purple),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              // 🔴 横滑，不换行：品类数一旦增加（运营加类目）换行会继续往下涨，
+              //    把首屏可见商品越挤越少。横滑把这行的高度**钉死为一行**，与品类数解耦。
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(right: kShopScreenEdge),
+                // 内容不足一屏时不要回弹，否则短列表也能被拖动，像是还有内容没显示。
+                physics: const ClampingScrollPhysics(),
+                child: Row(
+                  children: [
+                    _chip(allLabel, selected == null, () => onSelect(null)),
+                    for (final c in ShopCategory.values) ...[
+                      const SizedBox(width: 6),
+                      // 🔴 再点一次已选中的标签**不再取消** —— 取消现在有「全部」这个显式出口。
+                      //    保留「点一下取消」会让用户在两种心智之间猜。
+                      _chip(labelOf(c), selected == c, () => onSelect(c)),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           ],
-        ],
+        ),
+      );
+
+  /// 🔴 选中态 = **品牌紫实心底 + 白字**（R-4 ②）。此前选中与未选中几乎不可辨，
+  /// 而这一行现在是页面级导航，选中态读不出来等于不知道自己在看哪个品类。
+  /// 紫色与 D-1 定的顶栏主体色同源 —— 整条顶栏读起来才是同一组控件。
+  Widget _chip(String label, bool isSelected, VoidCallback onTap) => ShopChip(
+        label: label,
+        selected: isSelected,
+        selectedColor: ShopColors.purple,
+        onTap: onTap,
       );
 }
 
@@ -360,88 +333,6 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
 /// banner 图的内容完全由运营决定，浅色图上白色的标题与按钮会直接看不见。
 /// 顶部压一层从半透明黑到全透明的渐变，让文字始终有足够对比度。
 /// ⚠️ 渐变高度覆盖到 AppBar 底部即可，再往下会把图的主视觉也压灰。
-/// Toko 顶栏之下的商品搜索行（2026-08-31）。
-///
-/// 🔴 **白色药丸底，不用透明底**：有 banner 时这一行浮在图上，透明底会让输入文字
-/// 落在任意画面上——图一换就可能读不出来。药丸自带底色，与图无关。
-///
-/// 🔴 输入框不持有"已生效关键词"：那份状态在页面 State 里，本组件只负责收输入
-/// 并把原始串抛出去。防抖与去重都在页面做——放在这里会让两处各有一份定时器。
-class _SearchBar extends StatelessWidget implements PreferredSizeWidget {
-  const _SearchBar({
-    required this.controller,
-    required this.hint,
-    required this.clearLabel,
-    required this.onChanged,
-    required this.onClear,
-  });
-
-  final TextEditingController controller;
-  final String hint;
-  final String clearLabel;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onClear;
-
-  /// 药丸 40 + 上下各 8。计入 [ShopAppBar.preferredSize]，改这里顶栏会自己变高。
-  static const double _pillHeight = 40;
-  static const double _vPad = 8;
-
-  @override
-  Size get preferredSize => const Size.fromHeight(_pillHeight + _vPad * 2);
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(kShopScreenEdge, _vPad, kShopScreenEdge, _vPad),
-        child: SizedBox(
-          height: _pillHeight,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: ShopColors.surface,
-              borderRadius: BorderRadius.circular(_pillHeight / 2),
-            ),
-            child: Row(
-              children: [
-                const SizedBox(width: 12),
-                const Icon(Icons.search, size: 18, color: ShopColors.text4),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    onChanged: onChanged,
-                    textInputAction: TextInputAction.search,
-                    style: ShopText.body,
-                    // 🔴 collapsed + 自绘 Row：默认 InputDecoration 会带上
-                    //    自己的 48 高约束与下划线，塞进 40 的药丸里必然溢出。
-                    decoration: InputDecoration.collapsed(
-                      hintText: hint,
-                      hintStyle: ShopText.body.copyWith(color: ShopColors.text4),
-                    ),
-                  ),
-                ),
-                // 有内容才出现清除按钮 —— 常驻一个 × 会让空输入框看起来像有内容。
-                ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: controller,
-                  builder: (context, value, _) => value.text.isEmpty
-                      ? const SizedBox(width: 12)
-                      : Semantics(
-                          button: true,
-                          label: clearLabel,
-                          child: ShopPressable(
-                            onTap: onClear,
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 10),
-                              child: Icon(Icons.close, size: 16, color: ShopColors.text4),
-                            ),
-                          ),
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-}
-
 class _BannerHeader extends StatelessWidget {
   const _BannerHeader({required this.banner});
 
@@ -866,77 +757,6 @@ class _RailCardState extends State<_RailCard> {
   }
 }
 
-/// 全部商品网格卡。
-class _GridCard extends StatefulWidget {
-  const _GridCard({required this.product, required this.entrySource});
-
-  final ShopProductSummary product;
-  final String entrySource;
-
-  @override
-  State<_GridCard> createState() => _GridCardState();
-}
-
-class _GridCardState extends State<_GridCard> {
-  @override
-  void initState() {
-    super.initState();
-    // ⚠️ <b>这不是真正的「曝光」</b>（2026-08-27 审查记录，未修）：瀑布流用
-    //    [SliverToBoxAdapter] 一次性构建全部卡片，因此首屏会同时报出 92 条
-    //    `toko_product_shown`，而用户实际只看得到 4 个。要变成真曝光需要
-    //    `VisibilityDetector`（当前不是依赖）或把网格改成惰性 sliver ——
-    //    后者本来就是这里 TODO 的分页改造。在那之前，**不要拿这个事件算曝光转化率**，
-    //    它现在的含义是「进过列表的商品数」。
-    Analytics.capture('toko_product_shown', {
-      'product_token': widget.product.token,
-      'zone': 'all_featured',
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final p = widget.product;
-    return InkWell(
-      onTap: () => context.push('/shop/products/${p.token}?from=${widget.entrySource}'),
-      child: ColoredBox(
-        color: ShopColors.surface,
-        child: Padding(
-          padding: const EdgeInsets.all(9),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 🔴 2026-08-27 瀑布流：宽度撑满、高度随图片比例走，
-              //    既不裁切（cover 的毛病）也不留白（contain 的毛病）。
-              _AutoHeightImage(url: p.mainImageUrl, aspect: p.mainImageAspect),
-              const SizedBox(height: 6),
-              // 🔴 **不能再用 Expanded**：瀑布流下卡片高度由内容决定，Column 处于
-              //    无界高度约束中，Expanded 会直接抛「RenderFlex has unbounded height」。
-              //    原来用它是为了让价格行在等高网格里天然对齐 —— 瀑布流本就不要求对齐，
-              //    这个诉求随定高一起消失了。溢出也不再可能：高度跟着内容长。
-              Align(
-                alignment: Alignment.topLeft,
-                child: Text(p.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: ShopText.productNameCard),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                // 🔴 无 SKU 时显占位而非 `Rp 0` —— 那是错的价格，不是缺失的价格。
-                p.minPrice == null ? l10n.tokoPriceUnavailable : formatIdr(p.minPrice!),
-                style: ShopText.priceGrid.copyWith(
-                    color: p.minPrice == null ? ShopColors.text4 : ShopColors.accent),
-              ),
-              // ★ 评分 · 已售数：接口无此字段 → 整行不显示。
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _CenteredBox extends StatelessWidget {
   const _CenteredBox({required this.child});
 
@@ -962,103 +782,8 @@ String _compactIdr(int amount) {
   return '$amount';
 }
 
-/// 设计稿：网格商品图高 104。
-const double kGridImageHeight = 104;
-
 /// 设计稿：横滑商品图 120×120。
 const double kRailImageSize = 120;
-
-/// 网格卡的固定高度。
-///
-/// 🔴 <b>文字部分乘 textScaler</b>：app 允许系统字号放大到 1.3 倍（NFR-13），
-/// 不跟着放大会在大字号下把商品名裁掉一行。
-///
-/// ⚠️ 这里的数值**不需要精确**：卡片内部用 [Expanded] 吸收余量，多了名称框变高、
-/// 少了变矮，都不会溢出。它只决定「一排卡片有多高」这个观感，不承担正确性。
-/// 高度随图片比例走的商品图（瀑布流专用）。
-///
-/// 🔴 与 [ShopImage] 的分工：那个**必须**给定高（`size`），服务于等高网格与各处方框；
-/// 这个的高度由图片比例决定 —— 这正是瀑布流成立的前提。
-///
-/// ## 两条路径，取决于 [aspect] 有没有
-///
-/// - **已知比例**（后端下发了宽高）：[AspectRatio] 预置高度 ⇒ 图片解码前后**布局不变**，
-///   没有任何跳动。这是 2026-08-27 补上尺寸列后的默认路径。
-/// - **未知比例**（存量商品，尺寸恒为 null）：退回「宽度撑满、高度等解码」——
-///   加载中用 1:1 方块占位而不是零高度，把跳动收敛成「1:1 → 实际比例」这一次；
-///   零高度会让整列卡片在图片陆续到达时反复向下弹跳。
-///
-/// ⚠️ 已知比例时用 [BoxFit.cover]：容器比例就是图片比例，正常情况一个像素都不会裁掉；
-/// 只有比例被 [kShopImageRatioMin]/[kShopImageRatioMax] 收敛过的极端长图才会裁 ——
-/// 那正是收敛想要的效果（宁可裁，不让一张长图把后面的商品全挤出首屏）。
-class _AutoHeightImage extends StatelessWidget {
-  const _AutoHeightImage({required this.url, this.aspect});
-
-  final String? url;
-
-  /// 图片宽高比（w / h），已在 domain 层收敛过。null = 未知。
-  final double? aspect;
-
-  @override
-  Widget build(BuildContext context) {
-    // 占位要撑满列宽再取高，故用 LayoutBuilder 拿实际宽度。
-    final placeholder = LayoutBuilder(
-      builder: (ctx, c) => ShopImage(
-        url: null,
-        size: c.maxWidth.isFinite ? c.maxWidth : kGridImageHeight,
-        fillWidth: true,
-        radius: ShopShape.radiusChip,
-      ),
-    );
-    final u = url;
-    final a = aspect;
-    if (u == null || u.isEmpty) {
-      // 无图：比例已知时仍按该比例占位，免得后续补图时整列重排。
-      return a == null ? placeholder : AspectRatio(aspectRatio: a, child: placeholder);
-    }
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    // 列表图走 OSS 缩略图省流量；非 OSS 域原样返回（见 AppImage.ossResized）。
-    final src = AppImage.ossResized(u, width: (kMasonryThumbWidth * dpr).round());
-    final radius = BorderRadius.circular(ShopShape.radiusChip);
-
-    if (a != null) {
-      return ClipRRect(
-        borderRadius: radius,
-        child: AspectRatio(
-          aspectRatio: a,
-          child: Image.network(
-            src,
-            fit: BoxFit.cover,
-            // 高度已由 AspectRatio 定死，占位不会改变布局 ⇒ 无跳动。
-            frameBuilder: (ctx, child, frame, wasSync) =>
-                frame == null && !wasSync ? placeholder : child,
-            errorBuilder: (_, _, _) => placeholder,
-          ),
-        ),
-      );
-    }
-
-    return ClipRRect(
-      borderRadius: radius,
-      child: Image.network(
-        src,
-        width: double.infinity,
-        fit: BoxFit.fitWidth,
-        // frame == null ⇒ 首帧尚未解码，先占方块。wasSync 为真表示同步命中缓存，直接给图。
-        frameBuilder: (ctx, child, frame, wasSync) =>
-            frame == null && !wasSync ? placeholder : child,
-        errorBuilder: (_, _, _) => placeholder,
-      ),
-    );
-  }
-}
-
-/// 卡片里名称+价格那块相对于列宽的高度占比，仅用于分列时估算总高。
-/// ⚠️ 不需要精确：估错只会让两列略不齐，不影响任何正确性。
-const double kMasonryTextBlockRatio = 0.35;
-
-/// 瀑布流列宽下的缩略图取图宽度（逻辑像素）。两列 + 3px 灰缝，单列约占屏宽一半。
-const double kMasonryThumbWidth = 200;
 
 /// 横滑卡的固定高度（含来源标签那一行；游客态无标签时留白，卡片仍等高）。
 double _railCardExtent(BuildContext context) {

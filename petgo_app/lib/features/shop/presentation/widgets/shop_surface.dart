@@ -130,9 +130,16 @@ class ShopAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.leading,
     this.bottom,
     this.tone = ShopAppBarTone.dark,
+    this.titleWidget,
   });
 
   final String title;
+
+  /// 标题槽换成任意控件（搜索页把整条标题让给输入框）。
+  ///
+  /// ⚠️ 给了它就**完全接管**标题位，[title] 不再渲染 —— 但仍需传（可传空串），
+  /// 它还兼作无障碍与调试时的页面名。
+  final Widget? titleWidget;
   final bool large;
   final List<Widget> actions;
 
@@ -183,9 +190,10 @@ class ShopAppBar extends StatelessWidget implements PreferredSizeWidget {
       //    **自带 `color: ShopColors.surface`（白）**，而 TextStyle 里写死的 color
       //    压得过 `AppBar.foregroundColor`。tone 切到 light（白底）时，
       //    不覆盖就是白底白字 —— 元素在控件树里、用户一个字看不见。
-      title: Text(title,
-          style: (large ? ShopText.pageTitle : ShopText.navTitle)
-              .copyWith(color: c.foreground)),
+      title: titleWidget ??
+          Text(title,
+              style: (large ? ShopText.pageTitle : ShopText.navTitle)
+                  .copyWith(color: c.foreground)),
       actions: actions,
       bottom: bottom,
     );

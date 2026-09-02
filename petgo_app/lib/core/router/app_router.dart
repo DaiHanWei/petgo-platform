@@ -16,6 +16,7 @@ import '../../features/auth/presentation/login_page.dart';
 import '../../features/shop/address/presentation/address_book_page.dart';
 import '../../features/order/presentation/order_list_page_v2.dart';
 import '../../features/shop/address/presentation/address_form_page_v2.dart';
+import '../../features/shop/presentation/shop_search_page.dart';
 import '../../features/shop/presentation/cart_page_v2.dart';
 import '../../features/shop/presentation/checkout_page_v2.dart';
 import '../../features/shop/presentation/product_detail_page_v2.dart';
@@ -548,6 +549,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    redirect 会把游客直接甩回 /home，等于告诉他「这里没有购物车」——
       //    而真相是「登录后就有」，这一句差别就是 FR-0B 软性引导存在的理由。
       //    页面本身不发任何 /me 请求，游客态零数据暴露。
+      // 商品搜索页（2026-09-02 产品定形）。入口是 Toko 吸顶筛选行最左那个放大镜 ——
+      // 搜索在顶栏只占一个图标，整行剩下的宽度全给分类（见 _FilterBar 的说明）。
+      // 🔒 游客可用：只读商品目录，不发任何 /me 请求。
+      GoRoute(
+        path: '/shop/search',
+        builder: (c, s) => const ShopSearchPage(),
+      ),
       GoRoute(
         path: '/shop/cart',
         builder: (c, s) => const CartPageV2(),

@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/theme/shop_tokens.dart';
 import 'package:tailtopia/features/shop/data/shop_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_banner.dart';
 import 'package:tailtopia/features/shop/domain/shop_product.dart';
 import 'package:tailtopia/features/shop/presentation/toko_page_v2.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/shop_controls.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/shop_pressable.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_surface.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -213,95 +216,139 @@ void main() {
     ///
     /// 这条用例从「断言不存在」翻成「断言存在」，**是故意留在原位**的 ——
     /// 删掉它只会让下一个人以为搜索框是谁误加的，然后又把它拆了。
-    testWidgets('🔴 提供搜索框（2026-08-31 起，FR-93 原「不做搜索」已推翻）', (tester) async {
+    /// 🔴 FR-93 原写着「不提供全站搜索框」，C-18 推翻了它。
+    /// 2026-09-02 又把入口形态从「顶栏内嵌输入框」改成「放大镜 → 独立搜索页」——
+    /// **推翻的是落位，不是搜索本身**。所以这条守的仍是「搜索入口必须存在」。
+    testWidgets('🔴 提供搜索入口（放大镜）', (tester) async {
       await tester.pumpWidget(host([p('a', price: 185000)]));
       await tester.pumpAndSettle();
 
-      expect(find.byType(TextField), findsOneWidget);
       expect(find.byIcon(Icons.search), findsOneWidget);
+      expect(find.byKey(const ValueKey('tokoSearchEntryV2')), findsOneWidget);
     });
 
-    testWidgets('🔒 搜索框对游客同样可用（浏览路径零登录墙）', (tester) async {
+    testWidgets('🔒 搜索入口对游客同样可用（浏览路径零登录墙）', (tester) async {
       await tester.pumpWidget(host([p('a', price: 185000)]));
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.byType(TextField), 'royal');
-      await tester.pump(const Duration(milliseconds: 400));
-      await tester.pumpAndSettle();
-
-      // 不弹登录、不拦截
+      // 入口本身不带任何登录门 —— 游客看得见、点得动。
+      final entry = tester.widget<ShopPressable>(
+          find.byKey(const ValueKey('tokoSearchEntryV2')));
+      expect(entry.onTap, isNotNull);
       expect(find.byType(Dialog), findsNothing);
       expect(find.byType(BottomSheet), findsNothing);
     });
   });
 
-  group('搜索（2026-08-31）', () {
-    testWidgets('🔴 输入防抖：连续敲不会每个字母都取一次数', (tester) async {
-      final seen = <ShopProductsQuery>[];
-      await tester.pumpWidget(host([p('a', price: 185000)], seen: seen));
-      await tester.pumpAndSettle();
-      seen.clear(); // 丢掉首屏那次
-
-      await tester.enterText(find.byType(TextField), 'r');
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.enterText(find.byType(TextField), 'ro');
-      await tester.pump(const Duration(milliseconds: 100));
-      await tester.enterText(find.byType(TextField), 'royal');
-      await tester.pump(const Duration(milliseconds: 400));
+  /// 🔴 R-4 + C-18 的落位合并（2026-09-02 产品定形）。
+  ///
+  /// 两条需求争同一个吸顶槽：C-18 要给搜索一个常驻位，R-4 要把分类从流里挪上来
+  /// （原先它夹在屏幕 45% 处、跟内容一起滚，往下翻两屏就完全离开视野）。
+  /// 定下来的形态是**一行**：放大镜 + 分类依次排开，点放大镜进独立搜索页。
+  ///
+  /// ⚠️ 这推翻了 bcb5176e 的做法（顶栏内嵌完整输入框、就地过滤）。
+  /// 那组用例连同行为一起搬到了 shop_search_page_test.dart。
+  group('🔴 吸顶筛选行：放大镜 + 分类共用一行', () {
+    testWidgets('Toko 顶栏不再有输入框，只留放大镜', (tester) async {
+      await tester.pumpWidget(host([p('a', price: 185000)]));
       await tester.pumpAndSettle();
 
-      // 三次输入只落一次取数，且落的是最后那一版
-      expect(seen, hasLength(1));
-      expect(seen.single.keyword, 'royal');
+      expect(find.byType(TextField), findsNothing,
+          reason: '输入框整条占掉吸顶槽，分类就没地方放了 —— 这正是要收成图标的原因');
+      expect(find.byKey(const ValueKey('tokoSearchEntryV2')), findsOneWidget);
     });
 
-    testWidgets('🔴 关键词与品类是与关系，不是互斥', (tester) async {
+    testWidgets('🔴 点放大镜 → 进 /shop/search', (tester) async {
+      String? pushed;
+      final router = GoRouter(routes: [
+        GoRoute(path: '/', builder: (c, s) => const TokoPageV2()),
+        GoRoute(
+          path: '/shop/search',
+          builder: (c, s) {
+            pushed = '/shop/search';
+            return const Scaffold(body: Text('search page'));
+          },
+        ),
+      ]);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          shopBannerProvider.overrideWith((ref) async => null),
+          shopProductsProvider.overrideWith((ref, query) async => [p('a', price: 185000)]),
+        ],
+        child: MaterialApp.router(
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('id'),
+          routerConfig: router,
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('tokoSearchEntryV2')));
+      await tester.pumpAndSettle();
+
+      expect(pushed, '/shop/search');
+      expect(find.text('search page'), findsOneWidget);
+    });
+
+    testWidgets('🔴 分类吸顶：滚到底也还在（原先它跟着内容滚走）', (tester) async {
+      await tester.pumpWidget(host([
+        for (var i = 0; i < 30; i++) p('p$i', price: 185000, name: 'Produk $i'),
+      ]));
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -3000));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Makanan'), findsOneWidget,
+          reason: '换品类得一路滚回顶部 —— R-4 的问题本质不是「不够醒目」，是「会滚走」');
+      expect(find.byKey(const ValueKey('tokoSearchEntryV2')), findsOneWidget);
+    });
+
+    testWidgets('🔴 显式「全部」标签，默认选中', (tester) async {
       final seen = <ShopProductsQuery>[];
       await tester.pumpWidget(host([p('a', price: 185000)], seen: seen));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Semua'), findsOneWidget,
+          reason: '没有它时取消筛选只能「再点一次已选中的标签」—— 隐藏交互，用户不会主动试');
+      expect(seen.single.category, isNull, reason: '默认即全部');
+
+      // 选一个品类再点「全部」→ 回到无筛选
+      await tester.tap(find.text('Makanan'));
+      await tester.pumpAndSettle();
+      expect(seen.last.category, ShopCategory.makanan);
+
+      await tester.tap(find.text('Semua'));
+      await tester.pumpAndSettle();
+      expect(seen.last.category, isNull);
+    });
+
+    testWidgets('🔴 选中态是品牌紫实心，与顶栏主体色同源（R-4 ②）', (tester) async {
+      await tester.pumpWidget(host([p('a', price: 185000)]));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Makanan'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'royal');
-      await tester.pump(const Duration(milliseconds: 400));
-      await tester.pumpAndSettle();
 
-      expect(seen.last.category, ShopCategory.makanan,
-          reason: '搜索不该把已选品类清掉——那会让用户以为筛选没生效');
-      expect(seen.last.keyword, 'royal');
+      final chips = tester.widgetList<ShopChip>(find.byType(ShopChip));
+      final picked = chips.firstWhere((c) => c.label == 'Makanan');
+      expect(picked.selected, isTrue);
+      expect(picked.selectedColor, ShopColors.purple,
+          reason: '选中态读不出来，等于不知道自己在看哪个品类');
     });
 
-    testWidgets('🔴 清空搜索框 → 族键回到 keyword=null（与从未搜过等价）', (tester) async {
+    testWidgets('本页取数恒不带关键词（搜索是另一条路径）', (tester) async {
       final seen = <ShopProductsQuery>[];
       await tester.pumpWidget(host([p('a', price: 185000)], seen: seen));
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.byType(TextField), 'royal');
-      await tester.pump(const Duration(milliseconds: 400));
-      await tester.pumpAndSettle();
-      expect(seen.last.keyword, 'royal');
-
-      await tester.tap(find.byIcon(Icons.close));
-      await tester.pumpAndSettle();
-
-      expect(seen.last.keyword, isNull);
-    });
-
-    /// 🔴 「搜不到」与「目录是空的」必须是两句话：共用一句会让用户以为整个店没货。
-    testWidgets('🔴 搜索无结果的空态带关键词，且不等于目录空态', (tester) async {
-      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
-      await tester.pumpWidget(host(const []));
-      await tester.pumpAndSettle();
-
-      // 没搜索时 = 目录空态
-      expect(find.text(l10n.tokoEmpty), findsOneWidget);
-
-      await tester.enterText(find.byType(TextField), 'royal');
-      await tester.pump(const Duration(milliseconds: 400));
-      await tester.pumpAndSettle();
-
-      expect(find.text(l10n.tokoEmpty), findsNothing);
-      expect(find.text(l10n.tokoSearchEmpty('royal')), findsOneWidget);
+      expect(seen.every((q) => q.keyword == null), isTrue);
     });
   });
 
@@ -318,7 +365,8 @@ void main() {
       await tester.pumpWidget(host([p('a', price: 185000)]));
       await tester.pumpAndSettle();
 
-      for (final c in ['Makanan', 'Obat & Vitamin', 'Camilan', 'Perawatan']) {
+      // 「全部」是 2026-09-02 加的第 5 个（R-4 ③），排最左。
+      for (final c in ['Semua', 'Makanan', 'Obat & Vitamin', 'Camilan', 'Perawatan']) {
         expect(find.text(c), findsOneWidget);
       }
     });
@@ -334,7 +382,7 @@ void main() {
 
       // 四个 chip 必须共处一行：纵向位置全部相同。
       final tops = <double>{
-        for (final c in ['Makanan', 'Obat & Vitamin', 'Camilan', 'Perawatan'])
+        for (final c in ['Semua', 'Makanan', 'Obat & Vitamin', 'Camilan', 'Perawatan'])
           tester.getTopLeft(find.text(c)).dy,
       };
       expect(tops.length, 1, reason: '出现第二个 y 值 = 折行了');
