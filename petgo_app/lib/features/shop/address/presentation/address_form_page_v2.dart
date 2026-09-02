@@ -68,10 +68,16 @@ class _AddressFormPageV2State extends ConsumerState<AddressFormPageV2> {
     'region': GlobalKey(),
     'kodePos': GlobalKey(),
     'line': GlobalKey(),
+    'label': GlobalKey(),
   };
 
   /// 校验顺序 == 视觉顺序。滚到「第一个」错误依赖这个顺序，别重排。
-  static const _fieldOrder = ['receiver', 'phone', 'region', 'kodePos', 'line'];
+  /// 🔴 `label` 是 2026-09-02 补进来的（D-17）：它**是必填**（服务端会拒），
+  /// 但此前既不在这个序列里、界面上也没有任何必填标记 ⇒ 端上不校验、直接提交、
+  /// 服务端拒绝 ⇒ 落到 `_submitError`，而那块提示画在表单**顶部**，
+  /// 用户是在页面**底部**点的保存 —— 于是「页面纹丝不动」。
+  /// ⚠️ 顺序即滚动定位顺序，label 排在最后（它在表单里也确实最靠下）。
+  static const _fieldOrder = ['receiver', 'phone', 'region', 'kodePos', 'line', 'label'];
 
   @override
   void dispose() {
@@ -238,7 +244,18 @@ class _AddressFormPageV2State extends ConsumerState<AddressFormPageV2> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.addressSectionLabel, style: ShopText.sectionTitle.copyWith(fontSize: 12)),
+              // 🔴 D-17：必填却**没有任何必填标记**，用户不知道这里非选不可。
+              //    key 供校验失败时滚动定位（见 _fieldOrder 的说明）。
+              Row(
+                key: _fieldKeys['label'],
+                children: [
+                  Text(l10n.addressSectionLabel,
+                      style: ShopText.sectionTitle.copyWith(fontSize: 12)),
+                  Text(' *',
+                      style: ShopText.sectionTitle
+                          .copyWith(fontSize: 12, color: ShopColors.errorText)),
+                ],
+              ),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 6,
@@ -249,10 +266,17 @@ class _AddressFormPageV2State extends ConsumerState<AddressFormPageV2> {
                       key: ValueKey('addressLabel_$tag'),
                       label: tag,
                       selected: _label == tag,
+                      // 再点一次取消选中 —— 但取消后就是空，保存时会被拦下并标红。
                       onTap: () => setState(() => _label = _label == tag ? null : tag),
                     ),
                 ],
               ),
+              if (_errors['label'] != null) ...[
+                const SizedBox(height: 6),
+                Text(_errors['label']!,
+                    key: const ValueKey('addressLabelError'),
+                    style: ShopText.meta.copyWith(color: ShopColors.errorText)),
+              ],
               const ShopDivider(margin: EdgeInsets.symmetric(vertical: 12)),
               _defaultSwitchRow(l10n),
             ],
@@ -457,6 +481,9 @@ class _AddressFormPageV2State extends ConsumerState<AddressFormPageV2> {
 
   /// 单字段校验（失焦时调用）。
   String? _errorFor(AppLocalizations l10n, String id) => switch (id) {
+        // 必填。⚠️ **不默认选中 Rumah**：那会替用户做一次他没做过的选择，
+        //    而这个标签会显示在他日后的地址列表里。宁可要求他点一下。
+        'label' => _label == null ? l10n.addressRequired : null,
         'receiver' => switch (_receiver.text.trim().length) {
             0 => l10n.addressRequired,
             < 2 || > 50 => l10n.addressNameTooShort,
@@ -535,9 +562,20 @@ class _AddressFormPageV2State extends ConsumerState<AddressFormPageV2> {
     } catch (_) {
       // 🔒 错误提示**不回显用户输入**（含 PII）。
       setState(() => _submitError = l10n.addressSaveFailed);
+      // 🔴 D-17：光设上文案不够 —— 这块提示画在表单**顶部**，而用户是在**底部**
+      //    点的保存，不滚过去就是「页面纹丝不动」。本轮测试第三次撞见同一形态
+      //    （D-8 上传 403 静默、D-12 退货提交无提示），是全局性的反馈缺失。
+      if (mounted) _scrollToSubmitError();
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// 滚到提交失败提示（它在表单顶部）。
+  void _scrollToSubmitError() {
+    if (!_scroll.hasClients) return;
+    _scroll.animateTo(0,
+        duration: const Duration(milliseconds: 240), curve: Curves.easeOut);
   }
 
   /// 滚到指定字段。

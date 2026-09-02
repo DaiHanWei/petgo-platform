@@ -2087,6 +2087,8 @@
   "shopOrderCountdownTitle": "Selesaikan pembayaran dalam",
   "shopOrderCountdownHint": "Lewat waktu ini pesanan dibatalkan otomatis",
   "shopOrderCoinHeld": "Sudah ditahan · dikembalikan jika batal",
+  "shopOrderCoinReturned": "Dikembalikan ke saldo",
+  "shopOrderCancelledTotalLabel": "Total pesanan",
   "shopOrderQrisWaiting": "QRIS · menunggu",
   "shopOrderTimelineTitle": "Riwayat pengiriman",
   "shopOrderManualTrackingNotice": "Status diperbarui manual oleh tim kami · bukan pelacakan otomatis kurir",

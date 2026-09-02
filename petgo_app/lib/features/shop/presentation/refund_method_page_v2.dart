@@ -33,11 +33,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/shop_tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../data/shop_order_repository.dart';
 import '../data/shop_return_repository.dart';
 import '../domain/shop_product.dart';
 import '../domain/shop_return.dart';
@@ -551,7 +553,17 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
       }
       if (!mounted) return;
       ref.invalidate(returnProgressProvider(widget.returnToken));
+      // 🔴 D-12（2026-09-02 stag）：**提交完必须离开这一页**。
+      //    此前只弹了个 toast 就停在原处、按钮照旧可点 —— 而服务端其实已经成功了
+      //    （日志有记录、后台退货列表出现该单、订单详情底部已变成 Return in progress）。
+      //    用户在提交那一刻看不到任何"事情办成了"的信号，会以为失败而反复点。
+      //    ⚠️ toast 本身不够：它 2.6 秒就没了，而**页面没变**这件事一直摆在眼前。
+      //
+      //    落点选订单详情：退货状态在那里是可见的，与工单提交完落到工单详情同一套路。
+      //    ⚠️ 顺带失效订单详情，否则落过去看到的还是提交前那份缓存。
+      ref.invalidate(shopOrderDetailProvider(p.orderToken));
       showAppToast(context, l10n.refundMethodSaved);
+      context.pushReplacement('/shop/orders/${p.orderToken}');
     } catch (_) {
       if (mounted) showAppToast(context, l10n.refundMethodFailed);
     } finally {

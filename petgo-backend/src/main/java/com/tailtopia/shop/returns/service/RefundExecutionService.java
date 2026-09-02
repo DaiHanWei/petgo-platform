@@ -243,7 +243,33 @@ public class RefundExecutionService {
                 incentiveIfPawcoin, shipbackReimbursement, goods, outbound);
     }
 
-    /** 溢价 = 基数 × 比例%，按 cap 封顶（cap = 0 表示不封顶）。整数运算，禁浮点。 */
+    /**
+     * 溢价 = 基数 × 比例%，按 cap 封顶（cap = 0 表示不封顶）。整数运算，禁浮点。
+     *
+     * <h2>⚠️ 这是**第二套**溢价公式，与领域对象声明的那套不一致（D-16 查证，2026-09-02）</h2>
+     * {@link com.tailtopia.config.domain.PawCoinConfig#refundPawcoinPremium} 写的是
+     * <pre>溢价 = 基数 × premiumRate% + <b>premiumFixed</b></pre>
+     * 而本方法**不加 premiumFixed**。于是同一个后台配置项在两条退款链路上行为不同：
+     * <ul>
+     *   <li>{@code pay/refund/RefundService}（问诊/充值退款）：走领域方法，<b>吃 premiumFixed</b>；</li>
+     *   <li>本类（电商退货转币激励）：走这里，<b>不吃 premiumFixed</b>。</li>
+     * </ul>
+     *
+     * <p>📌 报告 D-16 记的是「premiumFixed 全仓没人读、是个空开关」——**不准确**：
+     * RefundService 一直在读。真正的问题是<b>两套公式并存</b>，
+     * 运营在后台改「退款转币固定溢价」时，只有问诊/充值那条链路会变。
+     *
+     * <p>🔴 <b>另有一处代码与注释不符，一并记在这里</b>：
+     * {@code PawCoinConfig#refundPawcoinPremium} 的注释写「仅『未交付 + 转币』分支给
+     * （反套利 C-1，由 RefundService 门控）」——那句话对 RefundService 成立，
+     * 但**本类对任何 TO_PAWCOIN 退货都给激励**，没有「未交付」这道门。
+     * 即：电商退货这条链路是**第二个、且未被 C-1 门控的**溢价出口。
+     * 当前 staging {@code premiumRate = 0} 把这两件事都掩盖着，一旦调非 0 就会同时暴露
+     * （买 → 收货 → 退 → 转币赚溢价）。
+     *
+     * <p>⚠️ <b>本次不改行为</b>：统一公式与补 C-1 门控都直接改钱，属产品/风控决策，
+     * 不由实现侧顺手定。
+     */
     private static long premium(long base, int ratePercent, long cap) {
         if (base <= 0 || ratePercent <= 0) {
             return 0L;

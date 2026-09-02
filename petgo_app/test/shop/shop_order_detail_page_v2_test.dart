@@ -351,6 +351,60 @@ void main() {
     });
   });
 
+  /// 🔴 D-19（2026-09-02 stag，P2）：订单取消后 Payment 区显示「Paid」。
+  ///
+  /// 实测**资金是对的**：取消后 PawCoin 余额完整恢复（冻结的 70.000 已解冻退回，
+  /// App 顶栏也同步成 120rb）。错的只是这一行文案 —— 而用户看到「Paid」会以为被扣了款。
+  /// 根因是个**二元判断** `pending ? Held : Paid`，取消态落到了 else。
+  group('🔴 D-19：取消态不能说「已支付」', () {
+    testWidgets('🔴 取消后 PawCoin 行说「已退回余额」，不是「Paid」', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(host(order(status: ShopOrderStatus.cancelled)));
+      await tester.pumpAndSettle();
+
+      final t = tester.widget<Text>(find.byKey(const ValueKey('shopOrderCoinStatusV2')));
+      expect(t.data, l10n.shopOrderCoinReturned);
+      expect(t.data, isNot(l10n.shopOrderPaidLabel),
+          reason: '钱从来没被拿走，说「已支付」用户会以为被扣了');
+    });
+
+    testWidgets('待支付仍说「已冻结、取消会退回」（这一支本来就是对的）', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(host(order(
+        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+      )));
+      await tester.pumpAndSettle();
+
+      final t = tester.widget<Text>(find.byKey(const ValueKey('shopOrderCoinStatusV2')));
+      expect(t.data, l10n.shopOrderCoinHeld);
+    });
+
+    testWidgets('已发货仍说「Paid」', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(host(order(
+        status: ShopOrderStatus.shipped,
+        packages: [pkg(shippedAt: DateTime.now().subtract(const Duration(days: 1)))],
+      )));
+      await tester.pumpAndSettle();
+
+      final t = tester.widget<Text>(find.byKey(const ValueKey('shopOrderCoinStatusV2')));
+      expect(t.data, l10n.shopOrderPaidLabel);
+    });
+
+    testWidgets('🔴 取消后合计行不再写「应付」—— 这单不存在应付', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(host(order(status: ShopOrderStatus.cancelled)));
+      await tester.pumpAndSettle();
+
+      final label = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalLabelV2')));
+      expect(label.data, l10n.shopOrderCancelledTotalLabel);
+      expect(label.data, isNot(l10n.checkoutPayable));
+
+      // 也不该拆成「现金段 + 币段」—— 那读起来像一笔真发生过的付款
+      expect(find.byKey(const ValueKey('shopOrderPaidCoinSplitV2')), findsNothing);
+    });
+  });
+
   group('🔴 物流：非自动追踪的免责行不可省', () {
     testWidgets('已发货且有时间线 → 免责行必须在', (tester) async {
       await tester.pumpWidget(host(order(

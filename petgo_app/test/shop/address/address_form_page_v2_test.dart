@@ -69,6 +69,73 @@ void main() {
     }
   }
 
+  /// 🔴 D-17（2026-09-02 stag，P2）：Label 是必填，却**既无必填标记、校验失败也零反馈**。
+  ///
+  /// 复现：除 Label 外全部填妥（且已提示 `We deliver to this area`），点 Save ——
+  /// **页面纹丝不动**：无 toast、无字段标红、不滚动。选任一 Label 后再点立即成功。
+  ///
+  /// 根因两层：① `label` 不在端上的校验序列里，于是直接提交、由服务端拒；
+  /// ② 服务端错误落到 `_submitError`，而那块提示画在表单**顶部**，
+  ///    用户是在**底部**点的保存 —— 提示在看不见的地方。
+  ///
+  /// ⚠️ 报告点名这是本轮**第三次**撞见「校验失败零反馈」（前两次：D-8 上传 403 静默、
+  /// D-12 退货提交无提示），是全局性的反馈缺失，不是这一页的疏忽。
+  group('🔴 D-17：Label 必填要标出来，拦下来要说话', () {
+    testWidgets('🔴 标签区有必填标记', (tester) async {
+      await tester.pumpWidget(host());
+      await tester.pumpAndSettle();
+      // ⚠️ 表单是 ListView（懒构建），标签区在最下面 —— 不滚过去它压根不在树里。
+      await _scrollTo(tester, const ValueKey('addressLabel_Rumah'));
+
+      expect(find.text(' *'), findsWidgets,
+          reason: '必填却没有任何标记，用户不知道这里非选不可');
+    });
+
+    testWidgets('🔴 未选 Label 点保存 → 就地标红，而不是静默', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(host());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('addressSaveV2')));
+      await tester.pumpAndSettle();
+      await _scrollTo(tester, const ValueKey('addressLabel_Rumah'));
+
+      final err = tester.widget<Text>(find.byKey(const ValueKey('addressLabelError')));
+      expect(err.data, l10n.addressRequired,
+          reason: '「页面纹丝不动」正是 D-17 的形态');
+    });
+
+    testWidgets('选了 Label → 该项不再报错', (tester) async {
+      await tester.pumpWidget(host());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('addressSaveV2')));
+      await tester.pumpAndSettle();
+      await _scrollTo(tester, const ValueKey('addressLabel_Rumah'));
+      expect(find.byKey(const ValueKey('addressLabelError')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('addressLabel_Rumah')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('addressSaveV2')));
+      await tester.pumpAndSettle();
+      await _scrollTo(tester, const ValueKey('addressLabel_Rumah'));
+
+      expect(find.byKey(const ValueKey('addressLabelError')), findsNothing);
+    });
+
+    testWidgets('🔴 不默认替用户选 Rumah', (tester) async {
+      // 报告给了「默认选中 Rumah」这个选项，但那是替用户做了一次他没做过的选择，
+      // 而这个标签会显示在他日后的地址列表里。宁可要求他点一下。
+      await tester.pumpWidget(host());
+      await tester.pumpAndSettle();
+      await _scrollTo(tester, const ValueKey('addressLabel_Rumah'));
+
+      final chip = tester.widget<ShopChip>(
+          find.byKey(const ValueKey('addressLabel_Rumah')));
+      expect(chip.selected, isFalse);
+    });
+  });
+
   group('🔴 行政区三级级联，不做自由输入', () {
     testWidgets('三级都是选择器，没有可输入的行政区文本框', (tester) async {
       await tester.pumpWidget(host());

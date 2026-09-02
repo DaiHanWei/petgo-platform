@@ -345,6 +345,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
     final coin = order.coinAmount ?? 0;
     final cash = order.cashAmount ?? 0;
     final pending = order.status.isPendingPayment;
+    final cancelled = order.status == ShopOrderStatus.cancelled;
     if (coin == 0 && cash == 0) return const SizedBox.shrink();
 
     return ShopSection(
@@ -367,7 +368,17 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
                             style: ShopText.cardTitle.copyWith(fontSize: 11.5)),
                         // 🔴 待支付时必须说明「已冻结、取消会退回」 ——
                         //    不说的话用户以为币已经花掉了。
-                        Text(pending ? l10n.shopOrderCoinHeld : l10n.shopOrderPaidLabel,
+                        //
+                        // 🔴 D-19（2026-09-02 stag）：此前这里是**二元判断**
+                        //    `pending ? Held : Paid`，于是**取消态落到了 Paid** ——
+                        //    而实测资金是对的（冻结的币已完整解冻退回、顶栏余额也同步了），
+                        //    只是这一行写着「Paid」，用户会以为钱被扣了。
+                        //    取消 = 钱从来没被拿走，得单说一句「已退回余额」。
+                        Text(
+                            cancelled
+                                ? l10n.shopOrderCoinReturned
+                                : (pending ? l10n.shopOrderCoinHeld : l10n.shopOrderPaidLabel),
+                            key: const ValueKey('shopOrderCoinStatusV2'),
                             style: ShopText.meta),
                       ],
                     ),
@@ -438,7 +449,10 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
     //    ⚠️ 已支付态仍要求 `cash > 0`：纯币单显示「Dibayar Rp 0」读起来像没付钱，
     //       那一支保留原样显示总额。两态判据不同是刻意的，不是漏写。
     final coin = order.coinAmount ?? 0;
-    final coinSplit = coin > 0 && (pending || _cashSegment(order) > 0);
+    // 🔴 取消态不参与两段式：订单已取消，**不存在"还欠多少"**，
+    //    把它拆成「现金段 + 币段」读起来像一笔真发生过的付款（D-19 附带项）。
+    final cancelled = order.status == ShopOrderStatus.cancelled;
+    final coinSplit = !cancelled && coin > 0 && (pending || _cashSegment(order) > 0);
     return ShopSection(
       child: Column(
         children: [
@@ -486,11 +500,16 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
           Row(
             children: [
               Expanded(
-                // 待支付 →「Total due」（现在还欠多少）；已支付 →「Dibayar / Paid」。
+                // 待支付 →「Total due」（现在还欠多少）；已支付 →「Dibayar / Paid」；
+                // 🔴 已取消 →「订单金额」：这单不存在"应付"，写 Total due 是无意义的
+                //    （D-19 附带项：取消后该行仍显示 Total due Rp 70.000）。
                 child: Text(
-                    pending || !coinSplit
-                        ? l10n.checkoutPayable
-                        : l10n.shopOrderPaidLabel,
+                    cancelled
+                        ? l10n.shopOrderCancelledTotalLabel
+                        : (pending || !coinSplit
+                            ? l10n.checkoutPayable
+                            : l10n.shopOrderPaidLabel),
+                    key: const ValueKey('shopOrderTotalLabelV2'),
                     style: ShopText.cardTitle.copyWith(fontSize: 12)),
               ),
               // 🔴 拆两段显示时这里给的是**现金段**，不是订单总额。
