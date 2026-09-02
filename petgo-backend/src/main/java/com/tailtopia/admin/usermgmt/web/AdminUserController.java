@@ -74,7 +74,7 @@ public class AdminUserController {
             model.addAttribute("results", pageResult.getContent());
             model.addAttribute("page", pageResult);
         } else if (searched) {
-            // 精确搜索：按 ID / 注册邮箱命中 0 或 1 条，不分页。
+            // 搜索：ID / 注册邮箱精确 + 昵称模糊（服务层封顶 50 条），不分页。
             model.addAttribute("results", adminUserService.search(q));
             model.addAttribute("page", null);
         } else {

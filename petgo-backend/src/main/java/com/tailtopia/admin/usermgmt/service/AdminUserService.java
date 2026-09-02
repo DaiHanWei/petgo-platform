@@ -162,17 +162,28 @@ public class AdminUserService {
         return accountQuery.listUsers(pageable).map(this::toRow);
     }
 
-    /** 按用户 id 或注册邮箱搜索普通用户（USER）。命中 0 或 1 条。 */
+    /** 昵称模糊命中上限：与列表页一页 50 条同量级，防「搜一个字」拖全表进内存。 */
+    private static final int NAME_SEARCH_LIMIT = 50;
+
+    /**
+     * 按用户 id / 注册邮箱 / 昵称搜索普通用户（USER）。id 与邮箱仍是精确命中、排最前；
+     * 昵称是模糊匹配（2026-09-02 运营诉求：手里常常只有前台截图上的昵称），近注册在前、
+     * 至多 {@value #NAME_SEARCH_LIMIT} 条。两路按 id 去重（昵称恰好是纯数字/邮箱形状时会撞）。
+     */
     @Transactional(readOnly = true)
     public List<AdminUserRow> search(String query) {
         if (query == null || query.isBlank()) {
             return List.of();
         }
         String q = query.trim();
-        Optional<User> hit = q.chars().allMatch(Character::isDigit)
+        Optional<User> exact = q.chars().allMatch(Character::isDigit)
                 ? safeById(q)
                 : accountQuery.findUserByEmail(q);
-        return hit.map(u -> List.of(toRow(u))).orElseGet(List::of);
+        java.util.LinkedHashMap<Long, User> merged = new java.util.LinkedHashMap<>();
+        exact.ifPresent(u -> merged.put(u.getId(), u));
+        accountQuery.searchUsersByDisplayedName(q, NAME_SEARCH_LIMIT)
+                .forEach(u -> merged.putIfAbsent(u.getId(), u));
+        return merged.values().stream().map(this::toRow).toList();
     }
 
     /**
