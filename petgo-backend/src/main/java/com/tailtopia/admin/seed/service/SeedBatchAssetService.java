@@ -242,13 +242,15 @@ public class SeedBatchAssetService {
     private static String safeName(MultipartFile file) {
         String raw = file.getOriginalFilename();
         if (raw == null || raw.isBlank()) {
-            throw AppException.validation("上传的文件没有文件名");
+            throw AppException.validation("上传的文件没有文件名")
+                    .code("admin.err.seedBatch.fileNameMissing");
         }
         String base = raw.replace('\\', '/');
         int slash = base.lastIndexOf('/');
         String name = slash >= 0 ? base.substring(slash + 1) : base;
         if (name.isBlank()) {
-            throw AppException.validation("上传的文件没有文件名");
+            throw AppException.validation("上传的文件没有文件名")
+                    .code("admin.err.seedBatch.fileNameMissing");
         }
         return name.length() > 255 ? name.substring(name.length() - 255) : name;
     }

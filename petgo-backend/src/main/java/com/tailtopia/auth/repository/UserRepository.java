@@ -79,12 +79,33 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /**
      * 按昵称模糊搜索某类账号（V1.1.6 Story 12.1 · AC3 纳入身份池用）。
      *
-     * <p>⚠️ 与后台既有的用户搜索（{@code AdminUserService#search}，按 id 或**注册邮箱**精确命中）
-     * <b>刻意分开</b>：纳入身份池时运营手里只有"那个 IP 号叫什么"，没有邮箱；
-     * 而把模糊昵称匹配加进那个搜索，会改变它"命中 0 或 1 条"的既有语义。
+     * <p>⚠️ 与后台用户搜索（{@code AdminUserService#search}，走下方
+     * {@link #searchByDisplayedName}）<b>刻意分开</b>：这里要按 {@code accountType}
+     * 锁定虚拟号池，且只匹配 {@code nickname} 一列（虚拟号必填昵称）。
      */
     java.util.List<User> findTop20ByRoleAndAccountTypeAndNicknameContainingIgnoreCaseOrderByIdDesc(
             Role role, com.tailtopia.auth.domain.AccountType accountType, String nickname);
+
+    /**
+     * 后台用户搜索：按**展示昵称或注册邮箱**模糊匹配（2026-09-02 运营诉求：手里常常
+     * 只有前台截图上的昵称，或只记得邮箱的一段）。
+     *
+     * <p>昵称口径与列表展示一致（{@code AdminUserService#currentName}）：改过名走
+     * {@code nickname}，没改过走注册时的 {@code displayName} —— 两列都 like 会出现
+     * 「搜到的词不在页面任何一行上」的怪异命中。
+     *
+     * <p>已注销账号不参与模糊匹配：昵称/邮箱已随注销匿名化，快照列仅供按 id /
+     * 邮箱精确定位后**展示**，拿来搜等于把匿名化又打开一条缝。
+     */
+    @Query("""
+            select u from User u
+            where u.role = :role and u.deletedAt is null
+              and (lower(coalesce(u.nickname, u.displayName)) like :pattern
+                   or lower(coalesce(u.email, '')) like :pattern)
+            order by u.id desc
+            """)
+    List<User> searchByDisplayedNameOrEmail(@Param("role") Role role,
+            @Param("pattern") String pattern, Pageable pageable);
 
     /**
      * 生命周期推送日扫候选（留存手册抓手 1）。只取<b>能被推、且推了有意义</b>的账号：

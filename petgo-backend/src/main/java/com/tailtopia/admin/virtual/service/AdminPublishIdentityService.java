@@ -177,18 +177,23 @@ public class AdminPublishIdentityService {
     public void grant(long userId, String authorizationNote, long adminId) {
         String note = authorizationNote == null ? "" : authorizationNote.trim();
         if (note.isEmpty() || note.length() > NOTE_MAX) {
-            throw AppException.validation("授权说明必填且不超过 " + NOTE_MAX + " 字");
+            throw AppException.validation("授权说明必填且不超过 " + NOTE_MAX + " 字")
+                    .code("admin.err.publishIdentity.noteInvalid", NOTE_MAX);
         }
         User u = users.findById(userId)
-                .orElseThrow(() -> AppException.notFound("账号不存在"));
+                .orElseThrow(() -> AppException.notFound("账号不存在")
+                        .code("admin.err.virtualAccount.accountNotFound"));
         if (u.getRole() != Role.USER || u.getAccountType() != AccountType.REAL) {
-            throw AppException.validation("仅真实用户账号可纳入运营发布身份池");
+            throw AppException.validation("仅真实用户账号可纳入运营发布身份池")
+                    .code("admin.err.publishIdentity.realUserOnly");
         }
         if (u.getDeletedAt() != null) {
-            throw AppException.validation("该账号已注销，不可纳入");
+            throw AppException.validation("该账号已注销，不可纳入")
+                    .code("admin.err.publishIdentity.deletedAccount");
         }
         if (grants.existsByUserIdAndStatus(userId, Status.ACTIVE)) {
-            throw AppException.validation("该账号已在身份池内");
+            throw AppException.validation("该账号已在身份池内")
+                    .code("admin.err.publishIdentity.alreadyInPool");
         }
         grants.save(SeedRealAccountGrant.grant(userId, note, adminId));
         audit.record(adminId, "PUBLISH_IDENTITY_GRANT", "user", String.valueOf(userId),
@@ -204,7 +209,8 @@ public class AdminPublishIdentityService {
     @Transactional
     public void remove(long userId, long adminId) {
         SeedRealAccountGrant g = grants.findByUserIdAndStatus(userId, Status.ACTIVE)
-                .orElseThrow(() -> AppException.validation("该账号不在身份池内"));
+                .orElseThrow(() -> AppException.validation("该账号不在身份池内")
+                        .code("admin.err.publishIdentity.notInPool"));
         g.remove(adminId);
         grants.save(g);
         audit.record(adminId, "PUBLISH_IDENTITY_REMOVE", "user", String.valueOf(userId),

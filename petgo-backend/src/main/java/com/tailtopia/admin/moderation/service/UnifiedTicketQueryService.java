@@ -119,7 +119,9 @@ public class UnifiedTicketQueryService {
                        LEFT(COALESCE(cp.text, ''), 60)            AS preview,
                        -- 代表性举报单 id：下架端点按 reportId 收口（它会顺带关掉该帖全部 PENDING 单），
                        -- 取任意一条 PENDING 即可；全部已处理时为 NULL（也不再需要动作按钮）。
-                       MIN(cr.id) FILTER (WHERE cr.status = 'PENDING') AS action_ref
+                       MIN(cr.id) FILTER (WHERE cr.status = 'PENDING') AS action_ref,
+                       -- 内容详情页链接用的**帖 id**（bug 20260902-480）。
+                       cr.post_id                                 AS content_ref
                   FROM content_reports cr
                   JOIN content_posts cp ON cp.id = cr.post_id
                  GROUP BY cr.post_id, cp.author_id, cp.text
@@ -140,6 +142,7 @@ public class UnifiedTicketQueryService {
                        (COALESCE(agg.reporter_count, 0) + COALESCE(agg.frequent_count, 0))::bigint,
                        COALESCE(agg.earliest_at, ar.first_reported_at),
                        NULL::text,
+                       NULL::bigint,
                        NULL::bigint
                   FROM account_reports ar
                   LEFT JOIN account_agg agg ON agg.report_id = ar.id
@@ -167,6 +170,7 @@ public class UnifiedTicketQueryService {
                        (CASE nmr.priority WHEN 'HIGH' THEN %d ELSE %d END)::bigint,
                        nmr.submitted_at,
                        nmr.submitted_value,
+                       NULL::bigint,
                        NULL::bigint
                   FROM name_moderation_records nmr
                   LEFT JOIN pet_profiles pp
@@ -195,6 +199,7 @@ public class UnifiedTicketQueryService {
                        (CASE avr.priority WHEN 'HIGH' THEN %d ELSE %d END)::bigint,
                        avr.created_at,
                        avr.avatar_url,
+                       NULL::bigint,
                        NULL::bigint
                   FROM avatar_reviews avr
                   LEFT JOIN pet_profiles pp2
@@ -225,7 +230,11 @@ public class UnifiedTicketQueryService {
                        (CASE mrq.priority WHEN 'P0' THEN %d WHEN 'P1' THEN %d ELSE %d END)::bigint,
                        mrq.submitted_at,
                        LEFT(COALESCE(cp2.text, cmt.body, ''), 60),
-                       mrq.id
+                       mrq.id,
+                       -- 🔴 内容详情页链接用的**帖 id**（bug 20260902-480）：送审工单的 source_id
+                       -- 是队列号 mrq.id，与帖 id 是两套编号 —— 拿它当帖 id 连详情页会打开一条
+                       -- 毫不相干的内容。帖送审取帖本身，评论送审取**评论所在的帖**（看上下文）。
+                       COALESCE(cp2.id, cmt.post_id)              AS content_ref
                   FROM manual_review_queue mrq
                   LEFT JOIN content_posts cp2
                          ON mrq.content_type = 'CONTENT_POST' AND cp2.id = mrq.content_id
@@ -335,7 +344,7 @@ public class UnifiedTicketQueryService {
                                 usr.nickname AS target_nickname,
                                 (usr.deleted_at IS NOT NULL) AS target_deleted,
                                 u.status_bucket, u.reporter_count, u.report_count, u.frequent_count,
-                                u.score, u.earliest_at, u.preview, u.action_ref,
+                                u.score, u.earliest_at, u.preview, u.action_ref, u.content_ref,
                                 COALESCE(d.c, 0) AS disposal_count
                         """ + joins + where
                         // 排序三级：① 未处理优先 ② 分倒序 ③ 同分最早优先。
@@ -358,6 +367,8 @@ public class UnifiedTicketQueryService {
         Long targetUserId = rs.wasNull() ? null : rawTargetId;
         long rawActionRef = rs.getLong("action_ref");
         Long actionRef = rs.wasNull() ? null : rawActionRef;
+        long rawContentRef = rs.getLong("content_ref");
+        Long contentRef = rs.wasNull() ? null : rawContentRef;
         return new UnifiedTicketRow(
                 TicketType.valueOf(rs.getString("ticket_type")),
                 rs.getLong("source_id"),
@@ -373,6 +384,7 @@ public class UnifiedTicketQueryService {
                 toInstant(rs, "earliest_at"),
                 rs.getString("preview"),
                 actionRef,
+                contentRef,
                 rs.getLong("disposal_count"));
     };
 

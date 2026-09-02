@@ -256,4 +256,15 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 
     /** 后台内容管理近评论列表（Story 9.9，含已删软删项）。 */
     java.util.List<Comment> findTop200ByOrderByIdDesc();
+
+    /**
+     * 后台内容详情（2026-09-02）：某帖一级评论分页，**含已删与全部审核状态**（运营全量视角），
+     * 时间正序（与 App 一致）。排序由 Pageable 携带（createdAt asc, id asc）。
+     */
+    org.springframework.data.domain.Page<Comment> findByPostIdAndParentIdIsNull(
+            long postId, Pageable pageable);
+
+    /** 后台内容详情：一批一级评论的全部二级回复（含已删），时间正序；service 端裁「收起前 3 条」。 */
+    java.util.List<Comment> findByParentIdInOrderByCreatedAtAscIdAsc(
+            java.util.Collection<Long> parentIds);
 }

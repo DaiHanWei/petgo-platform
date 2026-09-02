@@ -50,10 +50,12 @@ public class ContentPinService {
     private void validateObject(ContentPin pin) {
         if (pin.getObjectType() == PinObjectType.PROMO) {
             if (isBlank(pin.getPromoImageUrl()) || isBlank(pin.getPromoTitle())) {
-                throw AppException.validation("推广卡片的图片与标题为必填");
+                throw AppException.validation("推广卡片的图片与标题为必填")
+                        .code("admin.err.pins.promoFieldsRequired");
             }
         } else if (pin.getContentId() == null) {
-            throw AppException.validation("请选择要顶置的内容");
+            throw AppException.validation("请选择要顶置的内容")
+                    .code("admin.err.pins.contentRequired");
         }
     }
 
@@ -63,14 +65,16 @@ public class ContentPinService {
 
     private void validateWindow(Instant startsAt, Instant endsAt) {
         if (startsAt == null || endsAt == null || !endsAt.isAfter(startsAt)) {
-            throw AppException.validation("结束时间必须晚于开始时间");
+            throw AppException.validation("结束时间必须晚于开始时间")
+                    .code("admin.err.pins.endNotAfterStart");
         }
     }
 
     private void requireNoOverlap(String slot, Instant startsAt, Instant endsAt, Long excludeId) {
         List<ContentPin> conflicts = pins.findOverlapping(slot, startsAt, endsAt, excludeId);
         if (!conflicts.isEmpty()) {
-            throw AppException.validation("该坑位在此时间段已有顶置排期，请调整时间窗");
+            throw AppException.validation("该坑位在此时间段已有顶置排期，请调整时间窗")
+                    .code("admin.err.pins.overlap");
         }
     }
 
@@ -83,7 +87,8 @@ public class ContentPinService {
     @Transactional
     public ContentPin update(long id, Instant startsAt, Instant endsAt, ContentPin patch) {
         ContentPin pin = pins.findById(id)
-                .orElseThrow(() -> AppException.notFound("顶置排期不存在"));
+                .orElseThrow(() -> AppException.notFound("顶置排期不存在")
+                        .code("admin.err.pins.notFound"));
         validateWindow(startsAt, endsAt);
         requireNoOverlap(pin.getSlot(), startsAt, endsAt, id);
         pin.reschedule(startsAt, endsAt);
@@ -106,7 +111,8 @@ public class ContentPinService {
     @Transactional
     public boolean terminateNow(long id, Instant at) {
         ContentPin pin = pins.findById(id)
-                .orElseThrow(() -> AppException.notFound("顶置排期不存在"));
+                .orElseThrow(() -> AppException.notFound("顶置排期不存在")
+                        .code("admin.err.pins.notFound"));
         // 领域对象自带幂等守卫，并保证 terminatedAt <= endsAt（满足 DB 约束）。
         return pin.terminateAt(at);
     }

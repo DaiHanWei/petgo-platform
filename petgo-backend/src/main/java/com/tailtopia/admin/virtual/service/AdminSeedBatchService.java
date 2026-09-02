@@ -101,9 +101,11 @@ public class AdminSeedBatchService {
     public BatchResult publishBatch(long virtualUserId, String rawLines, long adminId,
             boolean callerMayPublishAsRealIdentity) {
         User author = users.findById(virtualUserId)
-                .orElseThrow(() -> AppException.notFound("发布账号不存在"));
+                .orElseThrow(() -> AppException.notFound("发布账号不存在")
+                        .code("admin.err.seedBatch.publisherNotFound"));
         if (!identities.isInPool(author)) {
-            throw AppException.validation("该账号不在运营发布身份池内，不能作为发布者");
+            throw AppException.validation("该账号不在运营发布身份池内，不能作为发布者")
+                    .code("admin.err.seedBatch.notInPool");
         }
         // 🔴 AC5 ②：**以运营真实账号身份发布**需要独立权限码 seed.publish_as_real。
         //
@@ -112,11 +114,13 @@ public class AdminSeedBatchService {
         // 而"忘记检查"是静默的 —— 加个参数就让漏掉变成**编译错误**。
         // 从 SecurityContext 里偷偷读，新入口作者不会知道有这回事。
         if (!callerMayPublishAsRealIdentity && identities.isRealPublishIdentity(author.getId())) {
-            throw AppException.validation("以运营真实账号发布内容需要单独授权（seed.publish_as_real）");
+            throw AppException.validation("以运营真实账号发布内容需要单独授权（seed.publish_as_real）")
+                    .code("admin.err.publishIdentity.realNeedsGrant", "seed.publish_as_real");
         }
         if (!author.isEnabled()) {
             // 虚拟账号"停用"与真实账号"被封"在这里是同一件事：都不该继续替它发内容。
-            throw AppException.validation("该发布账号已停用");
+            throw AppException.validation("该发布账号已停用")
+                    .code("admin.err.seedBatch.publisherDisabled");
         }
         if (rawLines == null || rawLines.isBlank()) {
             throw AppException.validation("批量内容为空").code("admin.err.seedBatch.empty");

@@ -8,6 +8,7 @@ import com.tailtopia.config.domain.ConfigChangeLog;
 import com.tailtopia.config.repository.ConfigChangeLogRepository;
 import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -59,11 +60,15 @@ public class AdminAlgoParamController {
     private final AdminConfigService write;
     private final ConfigChangeLogRepository changeLogs;
 
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
     public AdminAlgoParamController(PlatformConfigService read, AdminConfigService write,
-            ConfigChangeLogRepository changeLogs) {
+            ConfigChangeLogRepository changeLogs, Messages msg) {
         this.read = read;
         this.write = write;
         this.changeLogs = changeLogs;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/algo-params")
@@ -96,10 +101,10 @@ public class AdminAlgoParamController {
                     exposureDecay, shuffleStrength, throttleFactor, seenWindowDays, windowSize, attrFunQuota,
                     attrEduQuota, attrLifeQuota, speciesMainQuota, speciesOtherQuota,
                     speciesGeneralQuota), admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "算法参数已更新（逐字段留痕，见下方变更记录）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.algo.paramsSaved"));
         } catch (AppException e) {
             // 校验失败走 flash 回本页，不吃整页 500（沿用运营配置页既有口径）。
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/algo-params";
     }

@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- 用户搜索（Story 3.1，只读）。按 ID/注册邮箱查普通用户；HTMX 片段刷新。门控 user.view。 -->
+<!-- 用户搜索（Story 3.1，只读）。按 ID/注册邮箱精确、昵称模糊查普通用户；HTMX 片段刷新。门控 user.view。 -->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.users.title}">用户搜索 · TailTopia 运营</title>

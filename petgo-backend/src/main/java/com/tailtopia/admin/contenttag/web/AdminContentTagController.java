@@ -4,6 +4,7 @@ import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.contenttag.service.AdminContentTagService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -48,9 +49,13 @@ public class AdminContentTagController {
      */
     private final AdminTagIconService icons;
 
-    public AdminContentTagController(AdminContentTagService service, AdminTagIconService icons) {
+    private final Messages msg;
+
+    public AdminContentTagController(AdminContentTagService service, AdminTagIconService icons,
+            Messages msg) {
         this.service = service;
         this.icons = icons;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/content-tags")
@@ -102,9 +107,9 @@ public class AdminContentTagController {
             }
             service.createTag(admin.getAdminAccountId(), code, name, iconUrl, description,
                     badgeStyle);
-            flash.addFlashAttribute("notice", "已新建装饰标签");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.contentTag.created"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/content-tags";
     }
@@ -121,9 +126,9 @@ public class AdminContentTagController {
             // 🛡 没传新文件 → 传 null，服务层保留原图标（不是清空）。
             service.editTag(admin.getAdminAccountId(), id, name,
                     icons.uploadOrKeep(iconFile), description, badgeStyle);
-            flash.addFlashAttribute("notice", "已更新标签");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.contentTag.updated"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/content-tags";
     }
@@ -136,10 +141,10 @@ public class AdminContentTagController {
             service.setRetired(admin.getAdminAccountId(), id, retired);
             // ⚠️ 文案要说清"已分配的不受影响" —— 否则运营会以为下线等于全部收回。
             flash.addFlashAttribute("notice", retired
-                    ? "已下线该标签：不能再分配，已分配的照旧生效到各自结束时间"
-                    : "已重新上线该标签");
+                    ? msg.get("admin.flash.contentTag.retired")
+                    : msg.get("admin.flash.contentTag.restored"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/content-tags";
     }
@@ -155,9 +160,9 @@ public class AdminContentTagController {
             // 结束时间留空 = 永久分配。
             Instant to = (endsAt == null || endsAt.isBlank()) ? null : toInstant(endsAt);
             service.assign(admin.getAdminAccountId(), postId, tagId, toInstant(startsAt), to);
-            flash.addFlashAttribute("notice", "已打标");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.contentTag.assigned"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/content-tags";
     }
@@ -168,7 +173,8 @@ public class AdminContentTagController {
             RedirectAttributes flash) {
         boolean removed = service.unassign(admin.getAdminAccountId(), id);
         flash.addFlashAttribute(removed ? "notice" : "error",
-                removed ? "已取消打标" : "该分配记录不存在");
+                removed ? msg.get("admin.flash.contentTag.unassigned")
+                        : msg.get("admin.flash.contentTag.assignmentNotFound"));
         return "redirect:/admin/content-tags";
     }
 
@@ -181,7 +187,7 @@ public class AdminContentTagController {
         try {
             return LocalDateTime.parse(localDateTime).atZone(WIB).toInstant();
         } catch (RuntimeException e) {
-            throw AppException.validation("时间格式不正确");
+            throw AppException.validation("时间格式不正确").code("admin.err.contentTag.badDateTime");
         }
     }
 }

@@ -93,13 +93,28 @@ class UnifiedTicketAccessControlTest {
         }
 
         @Bean
+        com.tailtopia.shared.i18n.Messages messages() {
+            // 用真语言包而非 mock：本类多条用例断言 error flash 的中文片段（「不同类型」等），
+            // mock 返回 null 会让断言 NPE。默认语言锁 zh_CN，与线上无 locale cookie 时的回退一致。
+            org.springframework.context.i18n.LocaleContextHolder
+                    .setDefaultLocale(java.util.Locale.SIMPLIFIED_CHINESE);
+            var ms = new org.springframework.context.support.ResourceBundleMessageSource();
+            ms.setBasename("i18n/messages");
+            ms.setDefaultEncoding("UTF-8");
+            ms.setUseCodeAsDefaultMessage(true);
+            return new com.tailtopia.shared.i18n.Messages(ms);
+        }
+
+        @Bean
         UnifiedTicketController controller(UnifiedTicketQueryService q,
                 AccountReportEntryRepository e, AccountDisposalRepository d, AccountQueryService a,
                 AccountDisposalService ds,
                 com.tailtopia.admin.throttle.service.AdminThrottleReadService t,
                 com.tailtopia.moderation.service.ReportService cr,
-                com.tailtopia.admin.service.AdminModerationService am) {
-            return new UnifiedTicketController(q, e, d, a, ds, t, cr, am);
+                com.tailtopia.admin.service.AdminModerationService am,
+                com.tailtopia.shared.i18n.Messages msg) {
+            // 2026-09-02 后台文案国际化：控制器新增 Messages 注入。
+            return new UnifiedTicketController(q, e, d, a, ds, t, cr, am, msg);
         }
     }
 

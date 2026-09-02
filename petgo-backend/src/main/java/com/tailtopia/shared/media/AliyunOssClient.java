@@ -106,7 +106,15 @@ public class AliyunOssClient {
         return publicUrl + sep + "x-oss-process=" + EXIF_STRIP_PROCESS;
     }
 
-    /** 服务端上传字节到公开桶①（Story 2.6 OG 预渲染图）。L2 真实网络。返回对外 CDN URL。 */
+    /**
+     * 服务端上传字节到公开桶①（Story 2.6 OG 预渲染图）。L2 真实网络。返回对外 CDN URL。
+     *
+     * <p>🔴 <b>对象一律带 {@code x-oss-object-acl: public-read}</b>（2026-09-02，bug 472 的补漏）：
+     * 桶级并非公开读（BPA 关闭 + 桶 ACL 私有），不带对象级标记的上传**会成功**，但公网 403 ——
+     * 症状是"传上去了、页面裂图"。472 只改了素材那条链路（另立 {@link #putPublicObjectWithAcl}），
+     * 标签图标 / 兽医头像 / OG 图三处仍走本方法，于是后台标签胶囊全部裂图（2026-09-02 实机截图）。
+     * 把 ACL 焊进本体后，这一类事故对**未来所有调用方**都不可能再发生。
+     */
     public String putPublicObject(String objectKey, byte[] bytes, String contentType) {
         // 🔴 无凭证时走打桩：直接返回 URL，不打网络（Story 11.5）。
         //
@@ -126,6 +134,7 @@ public class AliyunOssClient {
             com.aliyun.oss.model.ObjectMetadata meta = new com.aliyun.oss.model.ObjectMetadata();
             meta.setContentType(contentType);
             meta.setContentLength(bytes.length);
+            meta.setHeader("x-oss-object-acl", "public-read");
             client.putObject(props.getOss().getPublicBucket(), stripLeadingSlash(objectKey),
                     new ByteArrayInputStream(bytes), meta);
             return publicUrl(objectKey);
@@ -135,33 +144,13 @@ public class AliyunOssClient {
     }
 
     /**
-     * 服务端上传字节到公开桶①并<b>显式带对象 ACL public-read</b>（Lark 定时发帖图片转存用）。
-     *
-     * <p>与 {@link #putPublicObject} 的差异：桶级并非公开读（BPA 关闭 + 桶 ACL 私有），
-     * 对象必须逐个带 {@code x-oss-object-acl: public-read} 才能公网直读——预签名直传路径
-     * （{@link #presignedPutUrl}）一直如此，本方法把同一约定补到服务端上传。L2 真实网络。
+     * 同 {@link #putPublicObject}（2026-09-02 起该方法已自带对象 ACL public-read，
+     * 本方法退化为别名，保留只为不动 472 那一批调用方）。新代码直接用 putPublicObject。
      *
      * @return 对外 CDN URL
      */
     public String putPublicObjectWithAcl(String objectKey, byte[] bytes, String contentType) {
-        // 🔴 与 putPublicObject 同一条打桩规则（bug 20260901-472）：无凭证直接回 URL 不打网络。
-        //    没有这条，后台图片上传在本地/测试环境（无 OSS 凭证）会直接抛错。
-        if (!hasCredentials()) {
-            log.warn("OSS 未配凭证，putPublicObjectWithAcl 走打桩（仅本地/测试）key={}", objectKey);
-            return publicUrl(objectKey);
-        }
-        OSS client = buildClient();
-        try {
-            com.aliyun.oss.model.ObjectMetadata meta = new com.aliyun.oss.model.ObjectMetadata();
-            meta.setContentType(contentType);
-            meta.setContentLength(bytes.length);
-            meta.setHeader("x-oss-object-acl", "public-read");
-            client.putObject(props.getOss().getPublicBucket(), stripLeadingSlash(objectKey),
-                    new ByteArrayInputStream(bytes), meta);
-            return publicUrl(objectKey);
-        } finally {
-            client.shutdown();
-        }
+        return putPublicObject(objectKey, bytes, contentType);
     }
 
     /**

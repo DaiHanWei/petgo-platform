@@ -4,6 +4,7 @@ import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.usertag.service.AdminUserTagService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -48,9 +49,13 @@ public class AdminUserTagController {
      */
     private final AdminTagIconService icons;
 
-    public AdminUserTagController(AdminUserTagService service, AdminTagIconService icons) {
+    private final Messages msg;
+
+    public AdminUserTagController(AdminUserTagService service, AdminTagIconService icons,
+            Messages msg) {
         this.service = service;
         this.icons = icons;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/user-tags")
@@ -97,9 +102,9 @@ public class AdminUserTagController {
             }
             service.createTag(admin.getAdminAccountId(), code, name, iconUrl, description,
                     badgeColor);
-            flash.addFlashAttribute("notice", "已新建用户标签");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.userTag.created"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/user-tags";
     }
@@ -116,9 +121,9 @@ public class AdminUserTagController {
             // 🛡 没传新文件 → 传 null，服务层保留原图标（不是清空）。
             service.editTag(admin.getAdminAccountId(), id, name,
                     icons.uploadOrKeep(iconFile), description, badgeColor);
-            flash.addFlashAttribute("notice", "已更新标签");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.userTag.updated"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/user-tags";
     }
@@ -130,10 +135,10 @@ public class AdminUserTagController {
         try {
             service.setRetired(admin.getAdminAccountId(), id, retired);
             flash.addFlashAttribute("notice", retired
-                    ? "已下线该标签：不能再分配，已分配的照旧生效到各自结束时间"
-                    : "已重新上线该标签");
+                    ? msg.get("admin.flash.userTag.retired")
+                    : msg.get("admin.flash.userTag.restored"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/user-tags";
     }
@@ -186,13 +191,14 @@ public class AdminUserTagController {
             List<Long> failed = service.assignBulk(admin.getAdminAccountId(), ids, tagId,
                     toInstant(startsAt), to);
             if (failed.isEmpty()) {
-                flash.addFlashAttribute("notice", "已为 " + ids.size() + " 个用户分配标签");
+                flash.addFlashAttribute("notice",
+                        msg.get("admin.flash.userTag.assignedBulk", ids.size()));
             } else {
                 flash.addFlashAttribute("error",
-                        "部分失败（" + failed.size() + " 个）：" + failed);
+                        msg.get("admin.flash.userTag.assignPartialFailed", failed.size(), failed));
             }
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/user-tags";
     }
@@ -203,7 +209,8 @@ public class AdminUserTagController {
             RedirectAttributes flash) {
         boolean removed = service.unassign(admin.getAdminAccountId(), id);
         flash.addFlashAttribute(removed ? "notice" : "error",
-                removed ? "已取消分配" : "该分配记录不存在");
+                removed ? msg.get("admin.flash.userTag.unassigned")
+                        : msg.get("admin.flash.userTag.assignmentNotFound"));
         return "redirect:/admin/user-tags";
     }
 
@@ -222,7 +229,8 @@ public class AdminUserTagController {
                     .map(Long::parseLong)
                     .toList();
         } catch (NumberFormatException e) {
-            throw AppException.validation("用户 ID 只能是数字，用逗号或空格分隔");
+            throw AppException.validation("用户 ID 只能是数字，用逗号或空格分隔")
+                    .code("admin.err.userTag.idsNotNumeric");
         }
     }
 
@@ -231,7 +239,7 @@ public class AdminUserTagController {
         try {
             return LocalDateTime.parse(localDateTime).atZone(WIB).toInstant();
         } catch (RuntimeException e) {
-            throw AppException.validation("时间格式不正确");
+            throw AppException.validation("时间格式不正确").code("admin.err.userTag.badDateTime");
         }
     }
 }

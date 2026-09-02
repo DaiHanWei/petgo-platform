@@ -169,7 +169,8 @@ public class AdminContentManageService {
     public int setSpeciesOverride(List<Long> postIds, String species, long actorAccountId) {
         String value = (species == null || species.isBlank()) ? null : species.trim();
         if (value != null && !ContentSpecies.isValid(value)) {
-            throw AppException.validation("物种取值须是 " + ContentSpecies.ALL);
+            throw AppException.validation("物种取值须是 " + ContentSpecies.ALL)
+                    .code("admin.err.content.speciesInvalid", ContentSpecies.ALL);
         }
         int changed = 0;
         for (Long postId : postIds) {

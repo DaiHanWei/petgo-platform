@@ -94,7 +94,7 @@
         <div class="s-card">
         <table>
             <tr th:each="e : ${s.repurchaseRates()}">
-                <th th:text="${e.key} + ' 日'">30 日</th>
+                <th th:text="#{admin.shop.repurchase.dayLabel(${e.key})}">30 日</th>
                 <td th:text="${#numbers.formatPercent(e.value, 1, 2)}">0%</td>
             </tr>
         </table>

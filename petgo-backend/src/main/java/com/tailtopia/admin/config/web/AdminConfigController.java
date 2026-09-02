@@ -91,9 +91,9 @@ public class AdminConfigController {
             write.updateShareReward(new com.tailtopia.admin.config.dto.ShareRewardForm(
                     shareRewardEnabled, shareRewardMonthlyCap, idCardShareReward,
                     idCardShareDailyCap), admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "分享奖励配置已更新（操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.config.shareRewardSaved"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/config";
     }

@@ -6,6 +6,7 @@ import com.tailtopia.moderation.throttle.domain.ThrottleDuration;
 import com.tailtopia.moderation.throttle.domain.ThrottleScope;
 import com.tailtopia.moderation.throttle.service.RankThrottleService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
@@ -44,8 +45,12 @@ public class AdminThrottleController {
 
     private final RankThrottleService service;
 
-    public AdminThrottleController(RankThrottleService service) {
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public AdminThrottleController(RankThrottleService service, Messages msg) {
         this.service = service;
+        this.msg = msg;
     }
 
     /**
@@ -71,7 +76,7 @@ public class AdminThrottleController {
                 : (scope == ThrottleScope.POST ? postTargetId : accountTargetId);
         if (resolved == null) {
             // 内容举报里被举报账号已注销时 accountTargetId 会是空 —— 给人话而不是 500。
-            flash.addFlashAttribute("error", "这条工单上找不到限流对象（账号可能已注销）");
+            flash.addFlashAttribute("error", msg.get("admin.err.throttle.targetMissing"));
             return redirect(back);
         }
         Instant now = Instant.now();
@@ -83,10 +88,9 @@ public class AdminThrottleController {
                 service.throttleAccount(resolved, duration, now, adminId, reportId, reason);
             }
             // 🔴 成功文案里也要带上「不是下架」——运营常常只看横幅，不回头看确认弹窗。
-            flash.addFlashAttribute("notice",
-                    "已限流曝光（只降低 Feed 分发权重，内容仍可通过直链和作者主页访问，不是下架）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.throttle.applied"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return redirect(back);
     }
@@ -117,8 +121,8 @@ public class AdminThrottleController {
             log.info("限流批量解除：成功 {} 条，已非生效态 {} 条", lifted, stale);
         }
         flash.addFlashAttribute("notice", stale == 0
-                ? "已解除 " + lifted + " 条限流"
-                : "已解除 " + lifted + " 条限流（另有 " + stale + " 条已到期或已被解除，无需处理）");
+                ? msg.get("admin.flash.throttle.lifted", lifted)
+                : msg.get("admin.flash.throttle.liftedWithStale", lifted, stale));
         return redirect(back);
     }
 

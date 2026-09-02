@@ -92,7 +92,8 @@ public class AdminSeedBatchWorkspaceController {
             @RequestParam(defaultValue = "ONLINE_PASTE") SeedBatch.Source source,
             RedirectAttributes flash) {
         SeedBatch b = batches.openBatch(source, admin.getAdminAccountId());
-        flash.addFlashAttribute("notice", "已新建批次 #" + b.getId());
+        flash.addFlashAttribute("notice",
+                i18n.get("admin.flash.seedBatch.batchOpened", String.valueOf(b.getId())));
         return "redirect:/admin/seed-batches/" + b.getId();
     }
 
@@ -143,7 +144,7 @@ public class AdminSeedBatchWorkspaceController {
             assets.remove(batchId, assetId);
             flash.addFlashAttribute("notice", i18n.get("admin.batch.asset.removed"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", i18n.resolve(e));
         }
         return "redirect:/admin/seed-batches/" + batchId;
     }
@@ -159,9 +160,9 @@ public class AdminSeedBatchWorkspaceController {
         try {
             entry.saveDefaults(batchId, defaultAuthorUserId, defaultContentType,
                     wallClockToUtc(defaultScheduledAt));
-            flash.addFlashAttribute("notice", "已保存批次设置");
+            flash.addFlashAttribute("notice", i18n.get("admin.flash.seedBatch.settingsSaved"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", i18n.resolve(e));
         }
         return "redirect:/admin/seed-batches/" + batchId;
     }
@@ -178,9 +179,9 @@ public class AdminSeedBatchWorkspaceController {
             RedirectAttributes flash) {
         try {
             int n = entry.pasteLines(batchId, lines);
-            flash.addFlashAttribute("notice", "已生成 " + n + " 个待编辑行");
+            flash.addFlashAttribute("notice", i18n.get("admin.flash.seedBatch.rowsPasted", n));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", i18n.resolve(e));
         }
         return "redirect:/admin/seed-batches/" + batchId;
     }
@@ -206,9 +207,10 @@ public class AdminSeedBatchWorkspaceController {
         try {
             entry.editRow(rowId, body, splitNames(assetFileNames), authorUserId, contentType,
                     species, wallClockToUtc(scheduledAt));
-            flash.addFlashAttribute("notice", "已保存第 " + rowId + " 行");
+            flash.addFlashAttribute("notice",
+                    i18n.get("admin.flash.seedBatch.rowSaved", String.valueOf(rowId)));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", i18n.resolve(e));
         }
         return "redirect:/admin/seed-batches/" + batchId;
     }
@@ -242,9 +244,9 @@ public class AdminSeedBatchWorkspaceController {
         try {
             var raws = excel.parse(file);
             int n = entry.appendRows(batchId, raws).size();
-            flash.addFlashAttribute("notice", "已导入 " + n + " 行");
+            flash.addFlashAttribute("notice", i18n.get("admin.flash.seedBatch.imported", n));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", i18n.resolve(e));
         }
         return "redirect:/admin/seed-batches/" + batchId;
     }
@@ -264,13 +266,15 @@ public class AdminSeedBatchWorkspaceController {
             at = java.time.LocalDateTime.parse(raw.trim().replace(' ', 'T'))
                     .atZone(WIB).toInstant();
         } catch (Exception e) {
-            throw AppException.validation("时间格式应为 2026-09-01T08:30");
+            throw AppException.validation("时间格式应为 2026-09-01T08:30")
+                    .code("admin.err.seedBatch.timeFormat");
         }
         // 🔴 V1.1.6 Story 13.5 · AC1：**不可早于当前时刻**。
         //    排一个已经过去的时间，下一轮扫描就会立刻发出去 —— 而运营的本意多半是
         //    "排到某个更晚的时候"，手滑填成过去的日期就成了立即发布，且不可撤回。
         if (!at.isAfter(java.time.Instant.now())) {
-            throw AppException.validation("计划发布时间不能早于当前时刻（印尼时间 WIB）");
+            throw AppException.validation("计划发布时间不能早于当前时刻（印尼时间 WIB）")
+                    .code("admin.err.seedBatch.scheduleNotFuture");
         }
         return at;
     }
@@ -383,7 +387,7 @@ public class AdminSeedBatchWorkspaceController {
             }
             flash.addFlashAttribute("notice", msg.toString());
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", i18n.resolve(e));
         }
         return "redirect:/admin/seed-batches/" + batchId + "/preview";
     }

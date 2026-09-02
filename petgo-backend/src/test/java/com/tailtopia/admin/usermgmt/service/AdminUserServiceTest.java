@@ -94,6 +94,33 @@ class AdminUserServiceTest {
         assertThat(page.getContent().get(0).email()).isEqualTo("ming@x.com");
     }
 
+    /** 2026-09-02：昵称模糊搜索 —— 非邮箱非数字的词也能经昵称匹配命中。 */
+    @Test
+    void searchByNicknameFuzzyHits() {
+        User u = user();
+        when(accountQuery.findUserByEmail("明明")).thenReturn(Optional.empty());
+        when(accountQuery.searchUsersByDisplayedName("明明", 50)).thenReturn(List.of(u));
+        var rows = service.search("明明");
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).id()).isEqualTo(42L);
+    }
+
+    /** 2026-09-02：精确命中排最前，与昵称模糊命中按 id 去重（昵称长得像邮箱时会两路都中）。 */
+    @Test
+    void searchMergesExactAndFuzzyHitsDedupedById() {
+        User exact = user(); // id=42
+        User other = mock(User.class);
+        when(other.getId()).thenReturn(7L);
+        when(other.getNickname()).thenReturn("ming@x.com 本人");
+        when(other.getEmail()).thenReturn("other@x.com");
+        when(other.getCreatedAt()).thenReturn(Instant.parse("2026-01-02T00:00:00Z"));
+        when(accountQuery.findUserByEmail("ming@x.com")).thenReturn(Optional.of(exact));
+        when(accountQuery.searchUsersByDisplayedName("ming@x.com", 50))
+                .thenReturn(List.of(other, exact)); // 模糊结果里也含精确那条
+        var rows = service.search("ming@x.com");
+        assertThat(rows).extracting(r -> r.id()).containsExactly(42L, 7L);
+    }
+
     @Test
     void searchMissReturnsEmpty() {
         when(accountQuery.findUserByEmail("none@x.com")).thenReturn(Optional.empty());

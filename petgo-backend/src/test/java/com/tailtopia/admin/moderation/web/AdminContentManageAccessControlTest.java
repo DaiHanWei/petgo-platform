@@ -47,9 +47,16 @@ class AdminContentManageAccessControlTest {
         }
 
         @Bean
+        com.tailtopia.admin.moderation.service.AdminContentDetailService contentDetail() {
+            return mock(com.tailtopia.admin.moderation.service.AdminContentDetailService.class);
+        }
+
+        @Bean
         AdminContentManageController controller(AdminContentManageService s,
-                com.tailtopia.admin.throttle.service.AdminThrottleReadService t) {
-            return new AdminContentManageController(s, TestMessages.real(), t);
+                com.tailtopia.admin.throttle.service.AdminThrottleReadService t,
+                com.tailtopia.admin.moderation.service.AdminContentDetailService d) {
+            // 2026-09-02 内容详情页：控制器新增 AdminContentDetailService 注入。
+            return new AdminContentManageController(s, TestMessages.real(), t, d);
         }
     }
 
