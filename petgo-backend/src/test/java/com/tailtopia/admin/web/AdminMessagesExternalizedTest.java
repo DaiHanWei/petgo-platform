@@ -126,8 +126,13 @@ class AdminMessagesExternalizedTest {
     @Test
     void noOrphanDynamicMessageCodes() throws IOException {
         StringBuilder all = new StringBuilder();
-        for (Path p : adminSources()) {
-            all.append(Files.readString(p, StandardCharsets.UTF_8));
+        // ⚠️ 引用扫描范围是**整个主源码树**，不是只有 admin 包 —— 后台可达的共享服务
+        // （content/auth/moderation 等包，2026-09-02 批量挂码）也持有 admin.err.* 文案码。
+        Path mainRoot = Path.of("src", "main", "java", "com", "tailtopia");
+        try (Stream<Path> s = Files.walk(mainRoot)) {
+            for (Path p : s.filter(x -> x.getFileName().toString().endsWith(".java")).toList()) {
+                all.append(Files.readString(p, StandardCharsets.UTF_8));
+            }
         }
         Properties zh = new Properties();
         try (InputStream in = getClass().getResourceAsStream("/i18n/messages_zh_CN.properties")) {

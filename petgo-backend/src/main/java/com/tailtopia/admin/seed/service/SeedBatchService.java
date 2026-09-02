@@ -103,7 +103,8 @@ public class SeedBatchService {
         SeedBatchRow r = require(rowId);
         if (r.getStatus() != SeedBatchRowStatus.DRAFT) {
             // 已经过了校验阶段的行不该再被写校验错误 —— 那说明调用方拿的是过期状态。
-            throw AppException.validation("只有草稿行可以记录校验错误");
+            throw AppException.validation("只有草稿行可以记录校验错误")
+                    .code("admin.err.seedBatch.validationErrorOnlyDraft");
         }
         r.setErrorMessage(error);
         rows.save(r);
@@ -121,7 +122,8 @@ public class SeedBatchService {
     @Transactional
     public void schedule(long rowId, Instant at, long adminAccountId) {
         if (at == null) {
-            throw AppException.validation("请指定计划发布时间");
+            throw AppException.validation("请指定计划发布时间")
+                    .code("admin.err.seedBatch.scheduleTimeRequired");
         }
         SeedBatchRow r = require(rowId);
         r.setScheduledAt(at);
@@ -213,7 +215,8 @@ public class SeedBatchService {
 
     private SeedBatchRow require(long rowId) {
         return rows.findById(rowId)
-                .orElseThrow(() -> AppException.notFound("批量内容行不存在"));
+                .orElseThrow(() -> AppException.notFound("批量内容行不存在")
+                        .code("admin.err.seedBatch.rowNotFound"));
     }
 
     /**

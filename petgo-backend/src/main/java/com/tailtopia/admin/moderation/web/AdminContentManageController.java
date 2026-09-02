@@ -182,11 +182,11 @@ public class AdminContentManageController {
         try {
             int changed = contentManage.setSpeciesOverride(postIds, species,
                     admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已更新 " + changed + " 条内容的物种归属"
-                    + (changed < postIds.size()
-                            ? "（其余为真实用户内容，物种由其宠物档案决定，不可手工干预）" : ""));
+            flash.addFlashAttribute("notice", msg.get(changed < postIds.size()
+                    ? "admin.flash.content.speciesUpdatedPartial"
+                    : "admin.flash.content.speciesUpdated", changed));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/content";
     }

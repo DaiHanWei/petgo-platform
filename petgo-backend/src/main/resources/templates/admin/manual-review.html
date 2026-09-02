@@ -60,7 +60,8 @@
                 </select>
             </label>
             <label><span th:text="#{admin.review.filter.q}">被举报账号</span>
-                <input type="text" name="q" th:value="${q}" placeholder="账号 id 或昵称"/>
+                <input type="text" name="q" th:value="${q}"
+                       th:placeholder="#{admin.review.filter.qPlaceholder}" placeholder="账号 id 或昵称"/>
             </label>
             <button type="submit" class="btn btn-primary" th:text="#{admin.tickets.filter.submit}">筛选</button>
         </form>

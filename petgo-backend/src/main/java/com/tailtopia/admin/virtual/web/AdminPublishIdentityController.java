@@ -3,6 +3,7 @@ package com.tailtopia.admin.virtual.web;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.virtual.service.AdminPublishIdentityService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -39,8 +40,12 @@ public class AdminPublishIdentityController {
 
     private final AdminPublishIdentityService identities;
 
-    public AdminPublishIdentityController(AdminPublishIdentityService identities) {
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public AdminPublishIdentityController(AdminPublishIdentityService identities, Messages msg) {
         this.identities = identities;
+        this.msg = msg;
     }
 
     /** 纳入候选搜索 + 纳入表单都在列表页上，这里只处理提交。 */
@@ -51,9 +56,10 @@ public class AdminPublishIdentityController {
             RedirectAttributes flash) {
         try {
             identities.grant(userId, authorizationNote, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已纳入运营发布身份池（userId=" + userId + "）");
+            flash.addFlashAttribute("notice",
+                    msg.get("admin.flash.publishIdentity.granted", userId));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/virtual-accounts";
     }
@@ -83,10 +89,9 @@ public class AdminPublishIdentityController {
             identities.remove(userId, admin.getAdminAccountId());
             // 🛡 措辞刻意写明"未封号"：运营最常误解的就是这一点。
             flash.addFlashAttribute("notice",
-                    "已移出运营发布身份池（userId=" + userId + "）。该账号未被封禁，"
-                            + "在 App 内的一切行为不受影响；历史内容也未改动。");
+                    msg.get("admin.flash.publishIdentity.removed", userId));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/virtual-accounts";
     }

@@ -75,10 +75,12 @@ public class AdminContentTagService {
             String badgeStyle) {
         if (code == null || code.isBlank() || name == null || name.isBlank()
                 || icon == null || icon.isBlank() || description == null || description.isBlank()) {
-            throw AppException.validation("标签码、名称、图标与说明文案均为必填");
+            throw AppException.validation("标签码、名称、图标与说明文案均为必填")
+                    .code("admin.err.contentTag.fieldsRequired");
         }
         tags.findByCode(code).ifPresent(t -> {
-            throw AppException.validation("标签码已存在：" + code);
+            throw AppException.validation("标签码已存在：" + code)
+                    .code("admin.err.contentTag.codeExists", code);
         });
         // ⚠️ 宽松解析、不抛：底色从下拉里选，值不对只可能是有人手改了请求 ——
         //    为此让整次建标签失败不划算，回落 UI 稿原始的橙→红即可。
@@ -92,7 +94,8 @@ public class AdminContentTagService {
     public void editTag(long adminId, long id, String name, String icon, String description,
             String badgeStyle) {
         ContentTag tag = tags.findById(id)
-                .orElseThrow(() -> AppException.notFound("标签不存在"));
+                .orElseThrow(() -> AppException.notFound("标签不存在")
+                        .code("admin.err.contentTag.notFound"));
         // Story 11.5：icon 为 null 表示"这次没传新文件" ⇒ **保留原图标**，不是清空。
         // 🛡 直接传 icon 会把"只改错别字"的那次编辑变成"把图标删了"，
         //    而那在后台界面上看不出来，只有 App 上图标消失才会被发现。
@@ -111,7 +114,8 @@ public class AdminContentTagService {
     @Transactional
     public void setRetired(long adminId, long id, boolean retired) {
         ContentTag tag = tags.findById(id)
-                .orElseThrow(() -> AppException.notFound("标签不存在"));
+                .orElseThrow(() -> AppException.notFound("标签不存在")
+                        .code("admin.err.contentTag.notFound"));
         if (retired) {
             tag.retire(Instant.now());
         } else {

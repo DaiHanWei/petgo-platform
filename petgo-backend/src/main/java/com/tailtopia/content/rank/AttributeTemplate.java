@@ -144,19 +144,32 @@ public final class AttributeTemplate {
      * @return 不可用的原因；{@code null} = 可用
      */
     public static String rejectUnusableQuotas(int fun, int edu, int life, int window) {
+        Rejection r = rejectUnusableQuotasDetailed(fun, edu, life, window);
+        return r == null ? null : r.message();
+    }
+
+    /** 校验失败详情：中文原文 + 后台本地化文案码（供 AdminConfigService 挂到 AppException）。 */
+    public record Rejection(String message, String code, Object... args) {
+    }
+
+    /** {@link #rejectUnusableQuotas} 的带码版本——规则同一处，只是多带文案码，勿另写一遍规则。 */
+    public static Rejection rejectUnusableQuotasDetailed(int fun, int edu, int life, int window) {
         if (window < 2) {
-            return "窗口大小须 ≥ 2";
+            return new Rejection("窗口大小须 ≥ 2", "admin.err.config.attrWindowTooSmall");
         }
         if (fun < 0 || edu < 0 || life < 0) {
-            return "配比不可为负";
+            return new Rejection("配比不可为负", "admin.err.config.attrQuotaNegative");
         }
         if (fun + edu + life != window) {
-            return "属性配比之和（" + (fun + edu + life) + "）须等于窗口大小（" + window + "）";
+            return new Rejection("属性配比之和（" + (fun + edu + life) + "）须等于窗口大小（" + window + "）",
+                    "admin.err.config.attrQuotaSumMismatch", fun + edu + life, window);
         }
         int cap = (window + 1) / 2;
         int max = Math.max(fun, Math.max(edu, life));
         if (max > cap) {
-            return "单一属性配额（" + max + "）不得超过窗口的一半（" + cap + "）—— 否则必然出现同属性相邻";
+            return new Rejection(
+                    "单一属性配额（" + max + "）不得超过窗口的一半（" + cap + "）—— 否则必然出现同属性相邻",
+                    "admin.err.config.attrQuotaTooConcentrated", max, cap);
         }
         return null;
     }

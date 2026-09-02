@@ -72,7 +72,8 @@ public class AdminVirtualAccountService {
         }
         if (accountSpecies != null && !accountSpecies.isBlank()
                 && !ContentSpecies.isValid(accountSpecies)) {
-            throw AppException.validation("账号物种定位取值须是 " + ContentSpecies.ALL);
+            throw AppException.validation("账号物种定位取值须是 " + ContentSpecies.ALL)
+                    .code("admin.err.virtualAccount.speciesInvalid", ContentSpecies.ALL);
         }
         User u = users.save(User.newVirtual("virtual:" + UUID.randomUUID(), nn,
                 blankToNull(avatarUrl), adminId));
@@ -111,13 +112,16 @@ public class AdminVirtualAccountService {
     @Transactional
     public void setAccountSpecies(long userId, String species, long adminId) {
         if (!ContentSpecies.isValid(species)) {
-            throw AppException.validation("账号物种定位取值须是 " + ContentSpecies.ALL);
+            throw AppException.validation("账号物种定位取值须是 " + ContentSpecies.ALL)
+                    .code("admin.err.virtualAccount.speciesInvalid", ContentSpecies.ALL);
         }
         User u = users.findById(userId)
-                .orElseThrow(() -> AppException.notFound("账号不存在"));
+                .orElseThrow(() -> AppException.notFound("账号不存在")
+                        .code("admin.err.virtualAccount.accountNotFound"));
         if (u.getAccountType() != AccountType.VIRTUAL) {
             // 🔴 真实账号刻意没有这个字段：它们有真实宠物档案，让算法读档案比贴标签准确。
-            throw AppException.validation("仅虚拟账号有「账号物种定位」");
+            throw AppException.validation("仅虚拟账号有「账号物种定位」")
+                    .code("admin.err.virtualAccount.speciesVirtualOnly");
         }
         u.setAccountSpecies(species);
         users.save(u);

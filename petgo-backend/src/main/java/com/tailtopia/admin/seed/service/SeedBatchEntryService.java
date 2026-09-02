@@ -76,7 +76,8 @@ public class SeedBatchEntryService {
     @Transactional
     public void saveDefaults(long batchId, Long authorUserId, ContentType type, Instant scheduledAt) {
         if (type == ContentType.GROWTH_MOMENT) {
-            throw AppException.validation("批量发布不支持「成长日历」类型，请用单条发布");
+            throw AppException.validation("批量发布不支持「成长日历」类型，请用单条发布")
+                    .code("admin.err.seedBatch.growthMomentUseSingle");
         }
         SeedBatch b = requireBatch(batchId);
         b.applyDefaults(authorUserId, type, scheduledAt);
@@ -100,7 +101,8 @@ public class SeedBatchEntryService {
     @Transactional
     public int pasteLines(long batchId, String raw) {
         if (raw == null || raw.isBlank()) {
-            throw AppException.validation("粘贴内容为空");
+            throw AppException.validation("粘贴内容为空")
+                    .code("admin.err.seedBatch.pasteEmpty");
         }
         List<RawRow> parsed = new ArrayList<>();
         for (String line : raw.split("\\R")) {
@@ -110,7 +112,8 @@ public class SeedBatchEntryService {
             }
         }
         if (parsed.isEmpty()) {
-            throw AppException.validation("粘贴内容里没有有效的行");
+            throw AppException.validation("粘贴内容里没有有效的行")
+                    .code("admin.err.seedBatch.pasteNoLines");
         }
         return appendRows(batchId, parsed).size();
     }
@@ -183,12 +186,14 @@ public class SeedBatchEntryService {
     public void editRow(long rowId, String body, List<String> assetFileNames, Long authorUserId,
             ContentType contentType, String species, Instant scheduledAt) {
         SeedBatchRow row = rows.findById(rowId)
-                .orElseThrow(() -> AppException.notFound("内容行不存在"));
+                .orElseThrow(() -> AppException.notFound("内容行不存在")
+                        .code("admin.err.seedBatch.contentRowNotFound"));
         SeedBatch batch = requireBatch(row.getBatchId());
         Long resolvedAuthor = SeedRowDefaults.authorUserId(authorUserId, batch).orElse(null);
         ContentType resolvedType = SeedRowDefaults.contentType(contentType, batch).orElse(null);
         if (resolvedType == ContentType.GROWTH_MOMENT) {
-            throw AppException.validation("批量发布不支持「成长日历」类型");
+            throw AppException.validation("批量发布不支持「成长日历」类型")
+                    .code("admin.err.seedBatch.growthMomentNotAllowed");
         }
         Map<String, SeedBatchAsset> byName = assetsByName(row.getBatchId());
         List<String> urls = new ArrayList<>();
@@ -231,7 +236,8 @@ public class SeedBatchEntryService {
 
     private SeedBatch requireBatch(long batchId) {
         return batches.findById(batchId)
-                .orElseThrow(() -> AppException.notFound("批次不存在"));
+                .orElseThrow(() -> AppException.notFound("批次不存在")
+                        .code("admin.err.seedBatch.batchNotFound"));
     }
 
     private static String blankToNull(String s) {

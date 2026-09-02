@@ -78,10 +78,12 @@ public class AdminUserTagService {
     public void createTag(long adminId, String code, String name, String icon, String description,
             String badgeColor) {
         if (isBlank(code) || isBlank(name) || isBlank(icon) || isBlank(description)) {
-            throw AppException.validation("标签码、名称、图标与说明文案均为必填");
+            throw AppException.validation("标签码、名称、图标与说明文案均为必填")
+                    .code("admin.err.userTag.fieldsRequired");
         }
         tags.findByCode(code).ifPresent(t -> {
-            throw AppException.validation("标签码已存在：" + code);
+            throw AppException.validation("标签码已存在：" + code)
+                    .code("admin.err.userTag.codeExists", code);
         });
         // ⚠️ 宽松解析、不抛：底色是从下拉里选的，值不对只可能是有人手改了请求 ——
         //    为此让整次建标签失败不划算，回落 UI 稿的默认金色即可。
@@ -94,7 +96,8 @@ public class AdminUserTagService {
     @Transactional
     public void editTag(long adminId, long id, String name, String icon, String description,
             String badgeColor) {
-        UserTag tag = tags.findById(id).orElseThrow(() -> AppException.notFound("标签不存在"));
+        UserTag tag = tags.findById(id).orElseThrow(() -> AppException.notFound("标签不存在")
+                .code("admin.err.userTag.notFound"));
         // Story 11.5：icon 为 null 表示"这次没传新文件" ⇒ **保留原图标**，不是清空。
         // 🛡 写成 tag.edit(name, icon, ...) 会把不改图标的那次编辑变成"把图标删了"，
         //    而那在界面上看不出来 —— 运营改个错别字，App 上的图标就没了。
@@ -107,7 +110,8 @@ public class AdminUserTagService {
     /** 下线 / 重新上线。🛡 下线只影响能否再分配，已分配的照旧生效到各自 ends_at。 */
     @Transactional
     public void setRetired(long adminId, long id, boolean retired) {
-        UserTag tag = tags.findById(id).orElseThrow(() -> AppException.notFound("标签不存在"));
+        UserTag tag = tags.findById(id).orElseThrow(() -> AppException.notFound("标签不存在")
+                .code("admin.err.userTag.notFound"));
         if (retired) {
             tag.retire(Instant.now());
         } else {
@@ -171,7 +175,8 @@ public class AdminUserTagService {
     public List<Long> assignBulk(long adminId, List<Long> userIds, long tagId,
             Instant startsAt, Instant endsAt) {
         if (userIds == null || userIds.isEmpty()) {
-            throw AppException.validation("请选择至少一个用户");
+            throw AppException.validation("请选择至少一个用户")
+                    .code("admin.err.userTag.atLeastOneUser");
         }
         // 去重但保持顺序：同一用户在表单里被勾两次不该分配两条。
         Set<Long> unique = new LinkedHashSet<>(userIds);

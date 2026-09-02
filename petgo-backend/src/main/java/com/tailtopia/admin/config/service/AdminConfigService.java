@@ -55,9 +55,11 @@ public class AdminConfigService {
     @Transactional
     public void updatePricing(PricingForm form, long adminId) {
         require(form.vetConsultPrice() >= 0 && form.aiUnlockPrice() >= 0 && form.idHdDownloadPrice() >= 0,
-                "价格不可为负");
-        require(form.vetShareRate() >= 0 && form.vetShareRate() <= 100, "兽医分成须在 0–100");
-        require(form.monthlyFreeQuota() >= 0 && form.monthlyFreeQuota() <= 35, "月免费额度须在 0–35");
+                "价格不可为负", "admin.err.config.priceNegative");
+        require(form.vetShareRate() >= 0 && form.vetShareRate() <= 100, "兽医分成须在 0–100",
+                "admin.err.config.vetShareRateRange");
+        require(form.monthlyFreeQuota() >= 0 && form.monthlyFreeQuota() <= 35, "月免费额度须在 0–35",
+                "admin.err.config.freeQuotaRange");
 
         PricingConfig c = pricingRepo.findById(PricingConfig.SINGLETON_ID)
                 .orElseThrow(() -> new IllegalStateException("pricing_config 缺失"));
@@ -82,8 +84,9 @@ public class AdminConfigService {
     // ── PawCoin ───────────────────────────────────────────────────────────────
     @Transactional
     public void updatePawCoin(PawCoinForm form, long adminId) {
-        require(form.premiumRate() >= 0 && form.premiumRate() <= 50, "溢价百分比须在 0–50");
-        require(form.premiumFixed() >= 0, "固定溢价须 ≥ 0");
+        require(form.premiumRate() >= 0 && form.premiumRate() <= 50, "溢价百分比须在 0–50",
+                "admin.err.config.premiumRateRange");
+        require(form.premiumFixed() >= 0, "固定溢价须 ≥ 0", "admin.err.config.premiumFixedNegative");
 
         PawCoinConfig c = pawcoinRepo.findById(PawCoinConfig.SINGLETON_ID)
                 .orElseThrow(() -> new IllegalStateException("pawcoin_config 缺失"));
@@ -114,9 +117,12 @@ public class AdminConfigService {
      */
     @Transactional
     public void updateShareReward(ShareRewardForm form, long adminId) {
-        require(form.shareRewardMonthlyCap() >= 0, "分享奖励月度上限须 ≥ 0（0 = 不发）");
-        require(form.idCardShareReward() >= 0, "身份证分享每次发放枚数须 ≥ 0（0 = 不发）");
-        require(form.idCardShareDailyCap() >= 0, "身份证分享每日次数上限须 ≥ 0（0 = 不发）");
+        require(form.shareRewardMonthlyCap() >= 0, "分享奖励月度上限须 ≥ 0（0 = 不发）",
+                "admin.err.config.shareRewardCapNegative");
+        require(form.idCardShareReward() >= 0, "身份证分享每次发放枚数须 ≥ 0（0 = 不发）",
+                "admin.err.config.idCardShareRewardNegative");
+        require(form.idCardShareDailyCap() >= 0, "身份证分享每日次数上限须 ≥ 0（0 = 不发）",
+                "admin.err.config.idCardShareDailyCapNegative");
 
         PawCoinConfig c = pawcoinRepo.findById(PawCoinConfig.SINGLETON_ID)
                 .orElseThrow(() -> new IllegalStateException("pawcoin_config 缺失"));
@@ -157,34 +163,46 @@ public class AdminConfigService {
      */
     @Transactional
     public void updateFeedRank(FeedRankForm form, long adminId) {
-        require(form.freshnessWeight() >= 0 && form.interactionWeight() >= 0, "权重不可为负");
+        require(form.freshnessWeight() >= 0 && form.interactionWeight() >= 0, "权重不可为负",
+                "admin.err.config.weightNegative");
         require(form.freshnessWeight() + form.interactionWeight() > 0,
-                "新鲜度与互动度权重不可同时为 0（那会让所有内容同分）");
-        require(form.commentWeight() >= 0, "评论权重不可为负");
+                "新鲜度与互动度权重不可同时为 0（那会让所有内容同分）",
+                "admin.err.config.weightsAllZero");
+        require(form.commentWeight() >= 0, "评论权重不可为负",
+                "admin.err.config.commentWeightNegative");
         require(form.exposureDecay() >= 0 && form.exposureDecay() <= 1,
-                "曝光衰减须在 0–1（大于 1 就是「看过的排更前面」，与这一维的意图相反）");
+                "曝光衰减须在 0–1（大于 1 就是「看过的排更前面」，与这一维的意图相反）",
+                "admin.err.config.exposureDecayRange");
         // 两端都可取：0 = 关闭抖动（回到纯分数排序），1 = 最强抖动 —— 与建表 CHECK 同一口径。
         require(form.shuffleStrength() >= 0 && form.shuffleStrength() <= 1,
-                "刷新抖动幅度须在 0–1（0=关闭抖动，越大下拉刷新换得越狠）");
-        require(form.seenWindowDays() >= 1, "曝光窗口须 ≥ 1 天");
+                "刷新抖动幅度须在 0–1（0=关闭抖动，越大下拉刷新换得越狠）",
+                "admin.err.config.shuffleStrengthRange");
+        require(form.seenWindowDays() >= 1, "曝光窗口须 ≥ 1 天",
+                "admin.err.config.seenWindowDaysMin");
         // 🛡 Story 17.1 · AC2：两头都不能取到 —— 与建表 CHECK 同一口径。
         // ≥ 1 不是降权（等于没处置）；= 0 让分数恒为 0 ⇒ 永远排不进推荐序 ⇒ 事实上等于下架，
         // 而那条 AC 明令「限流是降权不是下架」。这里给的是人话理由，
         // 靠 CHECK 兜底会以 500 的形式露出来，运营看不懂。
         require(form.throttleFactor() > 0 && form.throttleFactor() < 1,
                 "限流系数须在 0–1 之间且两端都不取："
-                        + "取 1 等于没处置，取 0 会让被限流的内容永远排不进首页（那是下架，不是降权）");
+                        + "取 1 等于没处置，取 0 会让被限流的内容永远排不进首页（那是下架，不是降权）",
+                "admin.err.config.throttleFactorRange");
 
-        String attrProblem = AttributeTemplate.rejectUnusableQuotas(form.attrFunQuota(),
-                form.attrEduQuota(), form.attrLifeQuota(), form.windowSize());
-        require(attrProblem == null, attrProblem == null ? "" : attrProblem);
+        AttributeTemplate.Rejection attrProblem = AttributeTemplate.rejectUnusableQuotasDetailed(
+                form.attrFunQuota(), form.attrEduQuota(), form.attrLifeQuota(), form.windowSize());
+        if (attrProblem != null) {
+            throw AppException.validation(attrProblem.message())
+                    .code(attrProblem.code(), attrProblem.args());
+        }
 
         int speciesSum = form.speciesMainQuota() + form.speciesOtherQuota()
                 + form.speciesGeneralQuota();
         require(form.speciesMainQuota() >= 0 && form.speciesOtherQuota() >= 0
-                && form.speciesGeneralQuota() >= 0, "物种配比不可为负");
+                && form.speciesGeneralQuota() >= 0, "物种配比不可为负",
+                "admin.err.config.speciesQuotaNegative");
         require(speciesSum == form.windowSize(),
-                "物种配比之和（" + speciesSum + "）须等于窗口大小（" + form.windowSize() + "）");
+                "物种配比之和（" + speciesSum + "）须等于窗口大小（" + form.windowSize() + "）",
+                "admin.err.config.speciesQuotaSumMismatch", speciesSum, form.windowSize());
 
         FeedRankConfig c = feedRankRepo.findById(FeedRankConfig.SINGLETON_ID)
                 .orElseThrow(() -> new IllegalStateException("feed_rank_config 缺失"));
@@ -260,9 +278,10 @@ public class AdminConfigService {
                 logs.size() + " field(s) changed");
     }
 
-    private static void require(boolean cond, String msg) {
+    /** 校验失败即抛（中文原文 + 后台本地化文案码；动态值经 args 进 {0}/{1} 占位）。 */
+    private static void require(boolean cond, String msg, String code, Object... args) {
         if (!cond) {
-            throw AppException.validation(msg);
+            throw AppException.validation(msg).code(code, args);
         }
     }
 }

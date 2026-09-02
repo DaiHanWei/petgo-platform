@@ -64,18 +64,23 @@ public class UserTagQueryService {
         // ⚠️ 校验放在**这一层**而不是后台控制器：后台批量分配、后台单个分配、
         // 将来任何自动发标签的路径都经过这里。放上层等于给每条新路径留一个绕过口。
         User user = users.findById(userId).orElseThrow(
-                () -> com.tailtopia.shared.error.AppException.validation("用户不存在：" + userId));
+                () -> com.tailtopia.shared.error.AppException.validation("用户不存在：" + userId)
+                        .code("admin.err.userTag.userNotFound", userId));
         if (user.getDeletedAt() != null) {
             throw com.tailtopia.shared.error.AppException.validation(
-                    "用户 " + userId + " 已注销，不能分配标签");
+                    "用户 " + userId + " 已注销，不能分配标签")
+                    .code("admin.err.userTag.userDeleted", userId);
         }
         UserTag tag = tags.findById(tagId)
-                .orElseThrow(() -> com.tailtopia.shared.error.AppException.validation("标签不存在"));
+                .orElseThrow(() -> com.tailtopia.shared.error.AppException.validation("标签不存在")
+                        .code("admin.err.userTag.notFound"));
         if (tag.isRetired()) {
-            throw com.tailtopia.shared.error.AppException.validation("该标签已下线，不能再分配");
+            throw com.tailtopia.shared.error.AppException.validation("该标签已下线，不能再分配")
+                    .code("admin.err.userTag.tagRetired");
         }
         if (startsAt == null || (endsAt != null && !endsAt.isAfter(startsAt))) {
-            throw com.tailtopia.shared.error.AppException.validation("结束时间必须晚于开始时间");
+            throw com.tailtopia.shared.error.AppException.validation("结束时间必须晚于开始时间")
+                    .code("admin.err.userTag.endNotAfterStart");
         }
         return assignments.save(UserTagAssignment.of(userId, tagId, startsAt, endsAt));
     }

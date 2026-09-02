@@ -79,15 +79,18 @@ public class AdminContentService {
         // 🔴 V1.1.6 Story 12.2：作者来自表单，所以这里必须自己把两道门补上 ——
         //    与批量发布（AdminSeedBatchService）**同一口径**，是 Story 12.1 AC5 ② 说的"三处"之二。
         com.tailtopia.auth.domain.User author = users.findById(authorUserId)
-                .orElseThrow(() -> AppException.validation("发布账号不存在"));
+                .orElseThrow(() -> AppException.validation("发布账号不存在")
+                        .code("admin.err.seed.authorNotFound"));
         if (!identities.isInPool(author)) {
-            throw AppException.validation("该账号不在运营发布身份池内，不能作为发布者");
+            throw AppException.validation("该账号不在运营发布身份池内，不能作为发布者")
+                    .code("admin.err.seed.authorNotInPool");
         }
         if (!author.isEnabled()) {
-            throw AppException.validation("该发布账号已停用");
+            throw AppException.validation("该发布账号已停用").code("admin.err.seed.authorDisabled");
         }
         if (!callerMayPublishAsRealIdentity && identities.isRealPublishIdentity(authorUserId)) {
-            throw AppException.validation("以运营真实账号发布内容需要单独授权（seed.publish_as_real）");
+            throw AppException.validation("以运营真实账号发布内容需要单独授权（seed.publish_as_real）")
+                    .code("admin.err.seed.realIdentityNeedsGrant", "seed.publish_as_real");
         }
         ContentPostCreateRequest req = new ContentPostCreateRequest(type, petId, text, imageUrls,
                 null, null, imageSizes);
@@ -95,7 +98,9 @@ public class AdminContentService {
         if (species != null && !species.isBlank()
                 && !com.tailtopia.content.species.ContentSpecies.isValid(species)) {
             throw AppException.validation("关联物种取值须是 "
-                    + com.tailtopia.content.species.ContentSpecies.ALL);
+                    + com.tailtopia.content.species.ContentSpecies.ALL)
+                    .code("admin.err.seed.speciesInvalid",
+                            com.tailtopia.content.species.ContentSpecies.ALL);
         }
         ContentPostResponse saved = contentService.publish(authorUserId, req, UUID.randomUUID().toString());
         if (species != null && !species.isBlank()) {

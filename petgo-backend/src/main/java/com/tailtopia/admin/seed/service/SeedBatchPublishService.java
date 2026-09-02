@@ -177,13 +177,17 @@ public class SeedBatchPublishService {
         //    在这里再查一次只能查出"没有权限"，把所有排期都毙掉。
         com.tailtopia.auth.domain.User author = users.findById(row.getAuthorUserId())
                 .orElseThrow(() -> AppException.validation(
-                        "发布账号 id=" + row.getAuthorUserId() + " 已不存在"));
+                        "发布账号 id=" + row.getAuthorUserId() + " 已不存在")
+                        .code("admin.err.seedBatch.authorMissing",
+                                String.valueOf(row.getAuthorUserId())));
         if (!identities.isInPool(author)) {
             throw AppException.validation(
-                    "发布账号「" + author.getNickname() + "」已不在运营发布身份池内");
+                    "发布账号「" + author.getNickname() + "」已不在运营发布身份池内")
+                    .code("admin.err.seedBatch.authorNotInPool", author.getNickname());
         }
         if (!author.isEnabled()) {
-            throw AppException.validation("发布账号「" + author.getNickname() + "」已停用");
+            throw AppException.validation("发布账号「" + author.getNickname() + "」已停用")
+                    .code("admin.err.seedBatch.authorDisabled", author.getNickname());
         }
         ContentPostResponse saved = contentService.publish(row.getAuthorUserId(),
                 new ContentPostCreateRequest(row.getContentType(), row.getPetId(), row.getBody(),
@@ -223,6 +227,7 @@ public class SeedBatchPublishService {
 
     private SeedBatch requireBatch(long batchId) {
         return batches.findById(batchId)
-                .orElseThrow(() -> AppException.notFound("批次不存在"));
+                .orElseThrow(() -> AppException.notFound("批次不存在")
+                        .code("admin.err.seedBatch.batchNotFound"));
     }
 }
