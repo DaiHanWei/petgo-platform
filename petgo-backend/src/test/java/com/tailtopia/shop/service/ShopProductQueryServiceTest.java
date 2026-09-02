@@ -153,6 +153,62 @@ class ShopProductQueryServiceTest {
         assertThat(view.skus().get(1).returnPolicy()).isEqualTo(ReturnPolicy.RETURNABLE);
     }
 
+    // ---------- 图集（R-2 回归；此前 detail 这一段零覆盖） ----------
+
+    @Test
+    @DisplayName("🔴 图集：keys 逐个派生成 CDN URL，顺序与入库一致")
+    void detailDerivesGalleryUrlsInOrder() {
+        // App 的 _gallery() 是 [mainImageUrl, ...galleryUrls] 直接喂 PageView ——
+        // 顺序在这里乱掉，用户左右滑看到的就跟运营在后台排的不是一回事。
+        ShopProduct p = product(1L, "tokA", ProductCategory.MAKANAN);
+        ReflectionTestUtils.setField(p, "galleryKeys",
+                List.of("shop/p/1/g2.jpg", "shop/p/1/g1.jpg"));
+        when(products.findByPublicTokenAndActiveTrue("tokA")).thenReturn(Optional.of(p));
+        when(skus.findByProductIdOrderByIdAsc(1L))
+                .thenReturn(List.of(sku(11L, 1L, 285_000L, null)));
+
+        ShopProductDetailView view = service.detail("tokA");
+
+        assertThat(view.galleryKeys())
+                .containsExactly("shop/p/1/g2.jpg", "shop/p/1/g1.jpg");
+        assertThat(view.galleryUrls()).containsExactly(
+                "https://cdn.test/shop/p/1/g2.jpg", "https://cdn.test/shop/p/1/g1.jpg");
+        // 与主图同一套派生规则 —— 两处分别拼前缀迟早会分叉
+        assertThat(view.mainImageUrl()).isEqualTo("https://cdn.test/shop/p/1/main.jpg");
+    }
+
+    @Test
+    @DisplayName("🔴 存量行 galleryKeys 为 null → 空列表，不是 null 也不抛")
+    void detailHandlesNullGallery() {
+        // 多图是后加的字段，存量商品那一列是 NULL。下发 null 会让 App 端
+        // `[mainImageUrl, ...galleryUrls]` 直接炸在展开上；这里必须收敛成空列表。
+        ShopProduct p = product(1L, "tokA", ProductCategory.MAKANAN);
+        assertThat((Object) ReflectionTestUtils.getField(p, "galleryKeys")).isNull();
+        when(products.findByPublicTokenAndActiveTrue("tokA")).thenReturn(Optional.of(p));
+        when(skus.findByProductIdOrderByIdAsc(1L))
+                .thenReturn(List.of(sku(11L, 1L, 285_000L, null)));
+
+        ShopProductDetailView view = service.detail("tokA");
+
+        assertThat(view.galleryUrls()).isNotNull().isEmpty();
+    }
+
+    @Test
+    @DisplayName("单图商品：图集为空 ⇒ App 天然不可滑、不显示页码")
+    void detailSingleImageHasEmptyGallery() {
+        // R-2 的现象「看不到滑动效果」正是这一支：模型与端上都就绪，缺的只是数据。
+        ShopProduct p = product(1L, "tokA", ProductCategory.MAKANAN);
+        ReflectionTestUtils.setField(p, "galleryKeys", List.of());
+        when(products.findByPublicTokenAndActiveTrue("tokA")).thenReturn(Optional.of(p));
+        when(skus.findByProductIdOrderByIdAsc(1L))
+                .thenReturn(List.of(sku(11L, 1L, 285_000L, null)));
+
+        ShopProductDetailView view = service.detail("tokA");
+
+        assertThat(view.galleryUrls()).isEmpty();
+        assertThat(view.mainImageUrl()).isNotNull();
+    }
+
     @Test
     @DisplayName("详情：未知 token → 404（notFound），不是 403 —— 防枚举探测")
     void detailUnknownTokenIsNotFound() {
