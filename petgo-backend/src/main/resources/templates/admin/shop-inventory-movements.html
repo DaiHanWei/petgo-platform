@@ -40,7 +40,7 @@
             </thead>
             <tbody>
             <tr th:each="m : ${movements}">
-                <td th:text="${m.createdAt}">2026-08-17</td>
+                <td th:text="${@adminTime.wib(m.createdAt)}">2026-08-17</td>
                 <td th:text="${m.movementType}">PURCHASE_INBOUND</td>
                 <td th:text="${m.qtyDelta}">+10</td>
                 <td th:text="${m.actualBefore}">0</td>

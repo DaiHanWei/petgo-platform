@@ -272,6 +272,43 @@ void main() {
     });
   });
 
+  /// 🔴 D-6（2026-09-02 stag 电商测试，P2）：顶部状态标签停在「On the way」。
+  ///
+  /// 复现：后台把包裹标记送达 → 订单转 DELIVERED → App 订单详情页。
+  /// 顶部那行大字紫色标签仍写「On the way」，而同页下方 Delivery history 的当前态、
+  /// 订单列表卡、后台订单状态**全是 Delivered**。
+  /// 它是 shipped/delivered 订单的**第一个区块** —— 用户第一眼读到的就是错的那个。
+  group('🔴 D-6：履约区标题必须跟着订单状态走', () {
+    testWidgets('已发货 → On the way', (tester) async {
+      await tester.pumpWidget(host(order(
+        status: ShopOrderStatus.shipped,
+        packages: [pkg(shippedAt: DateTime.now().subtract(const Duration(days: 1)))],
+      )));
+      await tester.pumpAndSettle();
+
+      final title =
+          tester.widget<Text>(find.byKey(const ValueKey('shopOrderFulfillmentTitleV2')));
+      expect(title.data, 'Sedang dikirim');
+    });
+
+    testWidgets('已送达 → 改「Terkirim / Delivered」，与下方时间线同一个词', (tester) async {
+      await tester.pumpWidget(host(order(
+        status: ShopOrderStatus.delivered,
+        packages: [pkg(
+          shippedAt: DateTime.now().subtract(const Duration(days: 2)),
+          deliveredAt: DateTime.now().subtract(const Duration(hours: 3)),
+        )],
+      )));
+      await tester.pumpAndSettle();
+
+      final title =
+          tester.widget<Text>(find.byKey(const ValueKey('shopOrderFulfillmentTitleV2')));
+      expect(title.data, 'Terkirim',
+          reason: '后台已 DELIVERED、时间线当前态也是 Terkirim，顶部标签不能还停在运输中');
+      expect(title.data, isNot('Sedang dikirim'), reason: 'D-6 的原形');
+    });
+  });
+
   group('🔴 物流：非自动追踪的免责行不可省', () {
     testWidgets('已发货且有时间线 → 免责行必须在', (tester) async {
       await tester.pumpWidget(host(order(

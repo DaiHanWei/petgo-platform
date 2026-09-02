@@ -158,7 +158,7 @@
                     <td th:text="${r.nickname}">名</td>
                     <td th:text="${r.avatarUrl} ?: '—'">—</td>
                     <td th:text="${r.authorizationNote}">说明</td>
-                    <td th:text="${r.grantedAt}">时间</td>
+                    <td th:text="${@adminTime.wib(r.grantedAt)}">时间</td>
                     <td th:text="${r.grantedBy}">人</td>
                     <td th:text="${r.deactivated} ? #{admin.common.disabled} : #{admin.common.enabled}">正常</td>
                     <!-- 🛡 只统计经后台代发的；持有人在 App 内自主发布的不计入。

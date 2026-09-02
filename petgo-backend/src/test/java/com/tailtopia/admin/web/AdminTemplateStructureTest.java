@@ -415,6 +415,44 @@ class AdminTemplateStructureTest {
                 .doesNotContain("if (!box) { return; }");
     }
 
+    /**
+     * 🔴 后台模板**不得直出时间戳**（D-7，2026-09-02 stag 电商测试）。
+     *
+     * <h2>这条守的是一个真实事故</h2>
+     * 订单履约列表与订单详情把 {@code Instant} 直接丢给模板，渲染成
+     * {@code 2026-09-02T03:03:24.172768Z} —— 裸 UTC、还带微秒。
+     * 运营在 WIB（UTC+7）上班，看到 03:03 会读成凌晨三点，实际是上午 10:03，<b>差 7 小时</b>。
+     * 履约排期、时效纠纷判定全靠这个时间。
+     *
+     * <p>⚠️ <b>公共出口一直都在</b>：{@code AdminTime}（bean 名 {@code adminTime}）
+     * 早已是后台惯例，当时已有 36 处模板在用 {@code ${@adminTime.wib(...)}}。
+     * 出事的是**没跟上的那 11 处** —— 分布在 7 个页面，报告只撞见了其中订单那几个。
+     * 「有一个正确写法」挡不住漏用，只有让漏用变红才行。
+     *
+     * <p>⚠️ 判据取字段名后缀 {@code ...At}（createdAt / shippedAt / deliveredAt / grantedAt…）：
+     * 这是本仓库时间字段的统一命名，比枚举一份字段清单可靠 —— 清单本身就是下一次漏改的地方。
+     */
+    @Test
+    void templatesNeverPrintRawTimestamps() throws IOException {
+        // th:text="${x.someAt}" —— 直出，没经 @adminTime.wib(...)
+        Pattern raw = Pattern.compile(
+                "th:text=\"\\$\\{[A-Za-z_][A-Za-z0-9_]*\\.[a-z][A-Za-z0-9_]*At}\"");
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            String html = Files.readString(f, StandardCharsets.UTF_8)
+                    .replaceAll("(?s)<!--.*?-->", "");
+            Matcher m = raw.matcher(html);
+            while (m.find()) {
+                offenders.add(fileName(f) + " → " + m.group());
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 时间戳直出模板 = 裸 UTC ISO（`2026-09-02T03:03:24.172768Z`）。"
+                        + "运营在 WIB 工作，会**差 7 小时**读错，而页面照常渲染、测试照常绿。"
+                        + "改用 ${@adminTime.wib(…)}（后台已有 36 处这么写）")
+                .isEmpty();
+    }
+
     /** 该锚点元素内部起了一个片段 ⇒ 它是片段的外壳，不参与整页渲染，合法。 */
     private boolean wrapsAFragment(List<String> lines, int line, Matcher anchor, List<Span> fragments) {
         String tag = anchor.group(1) != null ? "form"

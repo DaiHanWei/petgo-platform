@@ -192,7 +192,18 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
           Row(
             children: [
               Expanded(
-                child: Text(l10n.shopOrderShippedNow,
+                // 🔴 标题必须**跟着订单状态**走（D-6，2026-09-02 stag 电商测试）。
+                //    此前这里写死 `shopOrderShippedNow`（On the way）：后台把包裹标记送达、
+                //    订单转 DELIVERED 之后，本行仍写「On the way」，而同页下方
+                //    Delivery history 的当前态、订单列表卡、后台状态**全都是 Delivered**。
+                //    这是 shipped/delivered 订单的**第一个区块**，用户第一眼读到的就是错的。
+                //    ⚠️ 送达态复用时间线那条 `shopOrderPackageDelivered` ——
+                //       同一页对同一件事必须用同一个词，另起一个 key 迟早两边走散。
+                child: Text(
+                    order.status == ShopOrderStatus.delivered
+                        ? l10n.shopOrderPackageDelivered
+                        : l10n.shopOrderShippedNow,
+                    key: const ValueKey('shopOrderFulfillmentTitleV2'),
                     style: ShopText.sectionTitle
                         .copyWith(fontSize: 13, color: ShopColors.purple)),
               ),

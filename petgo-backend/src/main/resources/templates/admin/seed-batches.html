@@ -33,7 +33,7 @@
             <tr th:each="b : ${batches}">
                 <td th:text="${b.batchId}">0</td>
                 <td th:text="${b.source}">EXCEL</td>
-                <td th:text="${b.createdAt}">时间</td>
+                <td th:text="${@adminTime.wib(b.createdAt)}">时间</td>
                 <!-- 「本批 50 条：47 已发布 / 5 排期中 / 3 待修正」——
                      🛡 只列出现过的状态，0 的不留位置。 -->
                 <td>

@@ -42,7 +42,7 @@
                 <td th:text="${p.situation}">外包装已拆但内袋未开</td>
                 <td th:text="${p.judgedOpened} ? #{admin.shop.precedents.opened} : #{admin.shop.precedents.notOpened}">不算开封</td>
                 <td th:text="${p.rationale}">内袋密封完好，不影响二次销售</td>
-                <td th:text="${p.createdAt}">-</td>
+                <td th:text="${@adminTime.wib(p.createdAt)}">-</td>
             </tr>
             <tr th:if="${#lists.isEmpty(rows)}">
                 <td colspan="4" th:text="#{admin.shop.precedents.empty}">暂无判例。</td>
