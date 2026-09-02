@@ -154,7 +154,7 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
         List<ShopOrderLine> lines = linesOf(c.order());
 
         ReturnRequest r = returnRequests.submit(c.userId(), c.order().getPublicToken(),
-                ReturnType.NON_QUALITY_ISSUE, Map.of(lines.get(0).getId(), 1), "买错了", null);
+                ReturnType.NON_QUALITY_ISSUE, Map.of(lines.get(0).getId(), 1), "买错了", evidence(c.userId()));
 
         assertThat(r.getStatus()).isEqualTo(ReturnStatus.PENDING_REVIEW);
         assertThat(r.isFullReturn()).isFalse();
@@ -172,7 +172,7 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
 
         ReturnRequest r = returnRequests.submit(c.userId(), c.order().getPublicToken(),
                 ReturnType.NON_QUALITY_ISSUE,
-                Map.of(lines.get(0).getId(), 1, lines.get(1).getId(), 1), "都不要了", null);
+                Map.of(lines.get(0).getId(), 1, lines.get(1).getId(), 1), "都不要了", evidence(c.userId()));
 
         assertThat(r.isFullReturn()).isTrue();
         assertThat(r.isOutboundFeeRefundable()).isTrue();
@@ -186,7 +186,7 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
         List<ShopOrderLine> lines = linesOf(c.order());
 
         returnRequests.submit(c.userId(), c.order().getPublicToken(),
-                ReturnType.NON_QUALITY_ISSUE, Map.of(lines.get(0).getId(), 1), "买错了", null);
+                ReturnType.NON_QUALITY_ISSUE, Map.of(lines.get(0).getId(), 1), "买错了", evidence(c.userId()));
 
         assertThat(reload(c.order().getPublicToken()).getStatus())
                 .as("🔴 照后台 PRD 字面「与订单状态联动」实现的话，这里会变成 REFUNDING/REFUNDED")
@@ -235,7 +235,7 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
                 try {
                     start.await();
                     returnRequests.submit(c.userId(), token, ReturnType.NON_QUALITY_ISSUE,
-                            Map.of(lineId, 1), "买错了", null);
+                            Map.of(lineId, 1), "买错了", evidence(c.userId()));
                     succeeded.incrementAndGet();
                 } catch (Exception ignored) {
                     // 预期：除第一个之外全部被库级索引挡下
@@ -261,10 +261,10 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
         long lineId = linesOf(c.order()).get(0).getId();
         String token = c.order().getPublicToken();
         returnRequests.submit(c.userId(), token, ReturnType.NON_QUALITY_ISSUE,
-                Map.of(lineId, 1), "买错了", null);
+                Map.of(lineId, 1), "买错了", evidence(c.userId()));
 
         assertThatThrownBy(() -> returnRequests.submit(c.userId(), token,
-                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "又想退", null))
+                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "又想退", evidence(c.userId())))
                 .isInstanceOf(AppException.class).hasMessageContaining("进行中的退货申请");
     }
 
@@ -275,14 +275,14 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
         long lineId = linesOf(c.order()).get(0).getId();
         String token = c.order().getPublicToken();
         ReturnRequest first = returnRequests.submit(c.userId(), token,
-                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "买错了", null);
+                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "买错了", evidence(c.userId()));
 
         first.reject(ACTOR, "凭证不足");
         returns.save(first);
 
         // 🔴 若 REJECTED 也算「进行中」，用户被驳回一次就永远不能再申请了
         ReturnRequest second = returnRequests.submit(c.userId(), token,
-                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "补了凭证", null);
+                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "补了凭证", evidence(c.userId()));
         assertThat(second.getStatus()).isEqualTo(ReturnStatus.PENDING_REVIEW);
     }
 
@@ -297,7 +297,7 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
         long lineId = orderLines.findByOrderIdOrderByIdAsc(c2.order().getId()).get(0).getId();
 
         ReturnRequest r = returnRequests.submit(c2.userId(), c2.order().getPublicToken(),
-                ReturnType.REFUSED_ON_DELIVERY, Map.of(lineId, 1), "拒收", null);
+                ReturnType.REFUSED_ON_DELIVERY, Map.of(lineId, 1), "拒收", evidence(c2.userId()));
 
         assertThat(reload(c2.order().getPublicToken()).getStatus())
                 .isEqualTo(ShopOrderStatus.REFUNDING);
@@ -311,7 +311,7 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
         Ctx c = shippedOrder();
         long lineId = orderLines.findByOrderIdOrderByIdAsc(c.order().getId()).get(0).getId();
         ReturnRequest r = returnRequests.submit(c.userId(), c.order().getPublicToken(),
-                ReturnType.REFUSED_ON_DELIVERY, Map.of(lineId, 1), "拒收", null);
+                ReturnType.REFUSED_ON_DELIVERY, Map.of(lineId, 1), "拒收", evidence(c.userId()));
         assertThat(r.getOrderStatusBefore()).isEqualTo(ShopOrderStatus.SHIPPED);
 
         r.reject(ACTOR, "无正当理由");
@@ -329,7 +329,7 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
         Ctx c = shippedOrder();
         long lineId = orderLines.findByOrderIdOrderByIdAsc(c.order().getId()).get(0).getId();
         ReturnRequest r = returnRequests.submit(c.userId(), c.order().getPublicToken(),
-                ReturnType.REFUSED_ON_DELIVERY, Map.of(lineId, 1), "拒收", null);
+                ReturnType.REFUSED_ON_DELIVERY, Map.of(lineId, 1), "拒收", evidence(c.userId()));
 
         returnRequests.withdraw(c.userId(), r.getPublicToken());
 
@@ -345,7 +345,7 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
         Ctx c = deliveredOrder(500_000L, List.of(seedSku(10, 100_000L, "RETURNABLE")));
         long lineId = linesOf(c.order()).get(0).getId();
         ReturnRequest r = returnRequests.submit(c.userId(), c.order().getPublicToken(),
-                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "买错了", null);
+                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "买错了", evidence(c.userId()));
         r.approve(ACTOR);
         returns.save(r);
         assertThat(r.getStatus()).isEqualTo(ReturnStatus.AWAIT_SHIPBACK);
@@ -368,7 +368,7 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
         long lineId = linesOf(c.order()).get(0).getId();
 
         assertThatThrownBy(() -> returnRequests.submit(c.userId(), c.order().getPublicToken(),
-                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "买错了", null))
+                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "买错了", evidence(c.userId())))
                 .isInstanceOf(AppException.class).hasMessageContaining("不支持退货");
     }
 
@@ -380,23 +380,39 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
         String token = c.order().getPublicToken();
 
         assertThatThrownBy(() -> returnRequests.submit(c.userId(), token,
-                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "不想要了", null))
+                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "不想要了", evidence(c.userId())))
                 .isInstanceOf(AppException.class).hasMessageContaining("开封后不支持退货");
 
         ReturnRequest r = returnRequests.submit(c.userId(), token, ReturnType.QUALITY_ISSUE,
-                Map.of(lineId, 1), "收到就是破的", List.of("evidence-1"));
+                Map.of(lineId, 1), "收到就是破的", evidence(c.userId()));
         assertThat(r.getStatus()).isEqualTo(ReturnStatus.PENDING_REVIEW);
     }
 
+    /**
+     * 🔴 <b>下限由「非空」收紧为 2 张</b>（2026-09-02 产品拍板：前端 2 张、后端 2 张）。
+     *
+     * <p>此前服务端只在 QUALITY_ISSUE 时要求「非空」—— <b>1 张也过</b>，
+     * 而 App 对所有原因都要求 2 张。两端口径不一致时**挡在前端的那一档等于没挡**：
+     * 换个调用方就能提交 1 张，后台审核时看不全。
+     * 所以这条现在同时钉 0 张与 1 张，且**不再只针对质量问题**。
+     */
     @Test
-    @DisplayName("质量问题必须上传凭证（它是平台承担运费 + 发溢价的那一类）")
-    void qualityIssueRequiresEvidence() {
+    @DisplayName("货在用户手上的退货：凭证少于 2 张一律拒（0 张与 1 张都要拦）")
+    void deliveredReturnsRequireTwoEvidencePhotos() {
         Ctx c = deliveredOrder(500_000L, List.of(seedSku(10, 100_000L, "RETURNABLE")));
         long lineId = linesOf(c.order()).get(0).getId();
 
-        assertThatThrownBy(() -> returnRequests.submit(c.userId(), c.order().getPublicToken(),
-                ReturnType.QUALITY_ISSUE, Map.of(lineId, 1), "破了", null))
-                .isInstanceOf(AppException.class).hasMessageContaining("凭证图");
+        for (ReturnType t : List.of(ReturnType.QUALITY_ISSUE, ReturnType.NON_QUALITY_ISSUE)) {
+            assertThatThrownBy(() -> returnRequests.submit(c.userId(), c.order().getPublicToken(),
+                    t, Map.of(lineId, 1), "破了", null))
+                    .as("%s 传 0 张", t)
+                    .isInstanceOf(AppException.class).hasMessageContaining("凭证图");
+            assertThatThrownBy(() -> returnRequests.submit(c.userId(), c.order().getPublicToken(),
+                    t, Map.of(lineId, 1), "破了",
+                    List.of("private/" + c.userId() + "/only-one.jpg")))
+                    .as("%s 传 1 张", t)
+                    .isInstanceOf(AppException.class).hasMessageContaining("凭证图");
+        }
     }
 
     @Test
@@ -416,7 +432,9 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
         // 边界内一张不少：正好 5 张要能过（否则把上限调成 0 也能让上面那条绿）。
         ReturnRequest r = returnRequests.submit(c.userId(), c.order().getPublicToken(),
                 ReturnType.QUALITY_ISSUE, Map.of(lineId, 1), "破了",
-                List.of("e1", "e2", "e3", "e4", "e5"));
+                List.of("private/" + c.userId() + "/e1.jpg", "private/" + c.userId() + "/e2.jpg",
+                        "private/" + c.userId() + "/e3.jpg", "private/" + c.userId() + "/e4.jpg",
+                        "private/" + c.userId() + "/e5.jpg"));
         assertThat(r.getStatus()).isEqualTo(ReturnStatus.PENDING_REVIEW);
     }
 
@@ -431,7 +449,7 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
                 c.order().getPublicToken());
 
         assertThatThrownBy(() -> returnRequests.submit(c.userId(), c.order().getPublicToken(),
-                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "买错了", null))
+                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "买错了", evidence(c.userId())))
                 .isInstanceOf(AppException.class).hasMessageContaining("不可申请");
     }
 
@@ -443,7 +461,7 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
         long stranger = seedUser();
 
         assertThatThrownBy(() -> returnRequests.submit(stranger, c.order().getPublicToken(),
-                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "买错了", null))
+                ReturnType.NON_QUALITY_ISSUE, Map.of(lineId, 1), "买错了", evidence(stranger)))
                 .isInstanceOf(AppException.class).hasMessageContaining("订单不存在");
     }
 
@@ -464,5 +482,17 @@ class ReturnRequestIntegrationTest extends ApiIntegrationTest {
         payments.pay(uid, o.getPublicToken(), null);
         fulfillment.ship(o.getPublicToken(), Carrier.JNE, "JP" + SEQ.incrementAndGet(), 0L);
         return new Ctx(uid, orders.findByPublicToken(o.getPublicToken()).orElseThrow());
+    }
+    /**
+     * 合法的凭证 key（2026-09-02，D-10）。
+     *
+     * <p>服务端现在校验两件事：**归属**（key 必须形如
+     * {@code <keyPrefix>private/<userId>/…}，见 {@code MediaObjectKeys}）
+     * 与**张数**（货在用户手上的退货要 ≥ 2 张，见 {@code ReturnRequestService.MIN_EVIDENCE}）。
+     * 从前夹具里那种 {@code "ev1"} 两条都过不了。
+     * ⚠️ 测试环境 {@code MEDIA_OSS_KEY_PREFIX} 为空，故前缀就是 {@code private/}。
+     */
+    private static java.util.List<String> evidence(long userId) {
+        return java.util.List.of("private/" + userId + "/ev1.jpg", "private/" + userId + "/ev2.jpg");
     }
 }

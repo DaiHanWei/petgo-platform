@@ -51,6 +51,18 @@ public class ReturnRequestService {
      */
     public static final int MAX_EVIDENCE = 5;
 
+    /**
+     * 凭证图下限（2026-09-02 产品拍板：前端 2 张、后端 2 张）。
+     *
+     * <p>此前**只有前端在挡**：App 对所有原因都要求 min 2，而服务端只在 QUALITY_ISSUE 时
+     * 要求「非空」（1 张也过）。前后端口径不一致时，**挡在前端的那一档等于没挡**
+     * ——换个调用方就能提交 0 张，而后台审核时无图可看（这正是 MAX_EVIDENCE
+     * 那条注释当年说的同一件事）。
+     *
+     * <p>⚠️ <b>只对「货在用户手上」的退货生效</b>，见 {@link #requireEvidenceCount}。
+     */
+    public static final int MIN_EVIDENCE = 2;
+
     private final ReturnRequestRepository returns;
     private final ReturnLineRepository returnLines;
     private final ShopOrderRepository orders;
@@ -86,9 +98,7 @@ public class ReturnRequestService {
         if (selections == null || selections.isEmpty()) {
             throw AppException.validation("请至少勾选一件要退的商品");
         }
-        if (evidenceKeys != null && evidenceKeys.size() > MAX_EVIDENCE) {
-            throw AppException.validation("凭证图最多 " + MAX_EVIDENCE + " 张");
-        }
+        requireEvidenceCount(type, evidenceKeys);
         // 🔴 凭证 key 必须是**这个用户自己直传**产生的（D-10，2026-09-02 stag）。
         //    此前这里来者不拒：App 端那时压根没调相册、只塞了字面量
         //    `return-evidence-1/2/…`，服务端照单全收、原样入库 ——
@@ -97,11 +107,6 @@ public class ReturnRequestService {
         com.tailtopia.shared.media.MediaObjectKeys.requireAllOwned(
                 mediaProps, com.tailtopia.shared.media.MediaScope.PRIVATE, userId,
                 evidenceKeys, "凭证图");
-        // 🔴 质量问题必填凭证：没有凭证的「质量问题」既无法质检也无法复盘，
-        //    而它恰恰是平台承担运费 + 发补偿溢价的那一类。
-        if (type == ReturnType.QUALITY_ISSUE && (evidenceKeys == null || evidenceKeys.isEmpty())) {
-            throw AppException.validation("质量问题需要上传凭证图");
-        }
 
         List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(order.getId());
         Map<Long, ShopOrderLine> byId = new LinkedHashMap<>();
@@ -260,6 +265,40 @@ public class ReturnRequestService {
      * <p>四类退货各有各的入口状态 —— 混成一个「已付款就能退」会让「发货前取消」
      * 在货已经在路上时还能被选中。
      */
+    /**
+     * 凭证图张数校验（2026-09-02 产品拍板：<b>前端 2 张、后端 2 张</b>）。
+     *
+     * <p>此前只有前端在挡：App 对所有原因都要求 min 2，而服务端只在 {@code QUALITY_ISSUE} 时
+     * 要求「非空」——1 张也过、换个调用方 0 张也过。两端口径不一致时
+     * <b>挡在前端的那一档等于没挡</b>，而后台审核时无图可看。
+     *
+     * <h2>⚠️ 只对「货在用户手上」的退货要求</h2>
+     * 四种类型走的是同一个端点，只靠订单状态区分（见 {@link #requireReturnable}）：
+     * <ul>
+     *   <li>{@code QUALITY_ISSUE} / {@code NON_QUALITY_ISSUE} —— 已签收，
+     *       用户拿得到实物 ⇒ <b>要求 {@value #MIN_EVIDENCE} 张</b>；</li>
+     *   <li>{@code REFUSED_ON_DELIVERY}（拒收，货没离开承运商）、
+     *       {@code CANCEL_BEFORE_SHIPMENT}（发货前取消，无实物往返）——
+     *       用户<b>根本没见过货</b>，要求拍照等于让这两条路走不通。</li>
+     * </ul>
+     * 判据复用 {@link ReturnType#isUndelivered()}（C-1 那道门用的同一个语义）。
+     *
+     * <p>📌 App 目前只会产出前两种（4 个 UI 原因映射回 2 个 API 值），
+     * 所以对 App 能走到的**每一条路径**，这里都是实打实的 2 张。
+     */
+    static void requireEvidenceCount(ReturnType type, List<String> evidenceKeys) {
+        int n = evidenceKeys == null ? 0 : evidenceKeys.size();
+        if (n > MAX_EVIDENCE) {
+            throw AppException.validation("凭证图最多 " + MAX_EVIDENCE + " 张");
+        }
+        if (type != null && type.isUndelivered()) {
+            return; // 没见过货，拍不出凭证
+        }
+        if (n < MIN_EVIDENCE) {
+            throw AppException.validation("请上传至少 " + MIN_EVIDENCE + " 张凭证图");
+        }
+    }
+
     private void requireReturnable(ShopOrder order, ReturnType type) {
         ShopOrderStatus s = order.getStatus();
         boolean ok = switch (type) {

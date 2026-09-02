@@ -507,7 +507,10 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
       return;
     }
     // 🔴 设计稿：照片 min 2。质量问题那一档恰恰是平台承担运费 + 发补偿溢价的，
-    //    没有凭证既无法质检也无法复盘。服务端也会再判一次。
+    //    没有凭证既无法质检也无法复盘。
+    // ⚠️ 「服务端也会再判一次」**2026-09-02 起才真正成立**（产品拍板：前端 2 张、后端 2 张）。
+    //    此前服务端只在 QUALITY_ISSUE 时要求「非空」—— 1 张也过、换个调用方 0 张也过，
+    //    等于只有这里在挡。现在两端同为 2 张（服务端 ReturnRequestService.MIN_EVIDENCE）。
     if (_evidence.length < kMinPhotos) {
       showAppToast(context, l10n.returnPhotoTooFew);
       return;

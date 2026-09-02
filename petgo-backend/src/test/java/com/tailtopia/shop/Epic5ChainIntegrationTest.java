@@ -171,10 +171,24 @@ class Epic5ChainIntegrationTest extends ApiIntegrationTest {
         return orders.findByPublicToken(token).orElseThrow();
     }
 
+    /**
+     * 合法的凭证 key（2026-09-02，D-10）。
+     *
+     * <p>服务端现在校验两件事：**归属**（key 必须形如
+     * {@code <keyPrefix>private/<userId>/…}，见 {@code MediaObjectKeys}）
+     * 与**张数**（货在用户手上的退货要 ≥ 2 张，见 {@code ReturnRequestService.MIN_EVIDENCE}）。
+     * 从前夹具里那种 {@code "ev1"} 两条都过不了。
+     * ⚠️ 测试环境 {@code MEDIA_OSS_KEY_PREFIX} 为空，故前缀就是 {@code private/}。
+     */
+    private static java.util.List<String> evidence(long userId) {
+        return java.util.List.of("private/" + userId + "/ev1.jpg", "private/" + userId + "/ev2.jpg");
+    }
+
     /** 提交 → 批准 → 寄回 → 质检通过 → 退款执行，返回本次退回的 PawCoin。 */
     private long runReturnCycle(Ctx c, Map<Long, Integer> selection, ReturnType type) {
         ReturnRequest r = returnRequests.submit(c.userId(), c.order().getPublicToken(), type,
-                selection, "note", type == ReturnType.QUALITY_ISSUE ? List.of("ev1") : null);
+                selection, "note",
+                type.isUndelivered() ? null : evidence(c.userId()));
         r.chooseCashDestination(CashDestination.TO_BANK,
                 com.tailtopia.pay.refund.domain.PayoutChannel.BCA, "1234567890", "Budi");
         returns.save(r);
@@ -254,12 +268,12 @@ class Epic5ChainIntegrationTest extends ApiIntegrationTest {
         Ctx c = mixedThreeLineDeliveredOrder();
         List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(c.order().getId());
         returnRequests.submit(c.userId(), c.order().getPublicToken(),
-                ReturnType.NON_QUALITY_ISSUE, Map.of(lines.get(0).getId(), 1), "note", null);
+                ReturnType.NON_QUALITY_ISSUE, Map.of(lines.get(0).getId(), 1), "note", evidence(c.userId()));
 
         org.assertj.core.api.Assertions
                 .assertThatThrownBy(() -> returnRequests.submit(c.userId(),
                         c.order().getPublicToken(), ReturnType.NON_QUALITY_ISSUE,
-                        Map.of(lines.get(1).getId(), 1), "note", null))
+                        Map.of(lines.get(1).getId(), 1), "note", evidence(c.userId())))
                 .isInstanceOf(com.tailtopia.shared.error.AppException.class)
                 .hasMessageContaining("进行中的退货申请");
     }
@@ -274,7 +288,7 @@ class Epic5ChainIntegrationTest extends ApiIntegrationTest {
 
         ReturnRequest r = returnRequests.submit(c.userId(), c.order().getPublicToken(),
                 ReturnType.QUALITY_ISSUE, Map.of(lines.get(0).getId(), 1), "破损",
-                List.of("ev1"));
+                evidence(c.userId()));
         // 🔴 运费归属由类型自动得出，审核接口里根本没有这个参数
         assertThat(r.getReturnShipBearer())
                 .isEqualTo(com.tailtopia.shop.returns.domain.ShippingFeeBearer.PLATFORM);
