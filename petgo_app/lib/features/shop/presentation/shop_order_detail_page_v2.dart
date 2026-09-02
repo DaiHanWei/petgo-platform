@@ -427,7 +427,18 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
     //    那个理由**只在印尼语下成立**：同一个 key 的英文是 **Total due**（现在还欠多少），
     //    而币段在下单时已冻结、用户此刻真要付的只有现金段。语言一换，同一个数就成了错的。
     //    已支付态本来就按现金段显示 —— 两态口径统一之后，这一页不再自相矛盾。
-    final coinSplit = (order.coinAmount ?? 0) > 0 && _cashSegment(order) > 0;
+    //
+    // 🔴 **全额抵扣是 D-4 最极端的那一形态**（2026-09-02 复测）：PawCoin 覆盖全单时
+    //    现金段为 0，旧判据 `cash > 0` 直接把这种单排除在外 ⇒ 又退回显示总额。
+    //    实测同一屏：明细区「Total due Rp 70.000」，正下方按钮「**Pay now Rp 0**」——
+    //    按钮自己写着付 0，上方却称应付 70.000。差的不再是 999 而是**全额**，
+    //    用户会以为还要再付 70.000 而放弃下单。
+    //    ⚠️ 所以待支付态的判据只看**有没有币段**：全额抵扣时「Total due Rp 0」
+    //       正是对的（现在一分现金都不欠），与那个按钮同数。
+    //    ⚠️ 已支付态仍要求 `cash > 0`：纯币单显示「Dibayar Rp 0」读起来像没付钱，
+    //       那一支保留原样显示总额。两态判据不同是刻意的，不是漏写。
+    final coin = order.coinAmount ?? 0;
+    final coinSplit = coin > 0 && (pending || _cashSegment(order) > 0);
     return ShopSection(
       child: Column(
         children: [

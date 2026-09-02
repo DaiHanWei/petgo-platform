@@ -258,6 +258,48 @@ void main() {
       expect(btn.label, isNot(contains('204.000')));
     });
 
+    /// 🔴 D-4 **最极端形态**（2026-09-02 复测，指定为回归验收用例）：
+    /// PawCoin 余额够覆盖全单 ⇒ 现金段为 0。实测同一屏：
+    /// 明细区「Total due Rp 70.000」，正下方按钮「**Pay now Rp 0**」——
+    /// 按钮自己写着付 0，上方却称应付 70.000。差的不再是 999 而是**全额**，
+    /// 用户会以为还要再付 70.000 而放弃下单。
+    testWidgets('🔴 D-4 极端形态：全额抵扣 → Total due 为 0，与 Pay now 同数',
+        (tester) async {
+      await tester.pumpWidget(host(order(
+        coinAmount: 204000, // 币段覆盖全单
+        cashAmount: 0,
+        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+      )));
+      await tester.pumpAndSettle();
+
+      final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
+      expect(total.data, contains('0'));
+      expect(total.data, isNot(contains('204.000')),
+          reason: '一分现金都不欠，却写着应付 204.000 —— 用户会以为还要再付一次全款');
+
+      final btn = tester.widget<ShopButton>(find.byKey(const ValueKey('shopOrderPayV2')));
+      expect(btn.label, contains('Rp 0'), reason: '按钮与合计必须是同一个数');
+
+      // 那 204.000 去哪了必须有交代，否则合计从总额掉到 0 无从解释
+      expect(find.byKey(const ValueKey('shopOrderPaidCoinSplitV2')), findsOneWidget);
+    });
+
+    testWidgets('🔴 已支付的纯币单仍显总额 —— 「Dibayar Rp 0」读起来像没付钱',
+        (tester) async {
+      // 两态判据不同是刻意的：待支付问「还欠多少」，已支付说「付了多少」。
+      await tester.pumpWidget(host(order(
+        status: ShopOrderStatus.shipped,
+        coinAmount: 204000,
+        cashAmount: 0,
+        packages: [pkg(shippedAt: DateTime.now().subtract(const Duration(days: 1)))],
+      )));
+      await tester.pumpAndSettle();
+
+      final total = tester.widget<Text>(find.byKey(const ValueKey('shopOrderTotalV2')));
+      expect(total.data, contains('204.000'));
+      expect(total.data, isNot(contains('Rp 0')));
+    });
+
     testWidgets('纯币单（cashAmount 为 null）→ 不显示「Dibayar Rp 0」', (tester) async {
       await tester.pumpWidget(host(order(
         status: ShopOrderStatus.shipped,
