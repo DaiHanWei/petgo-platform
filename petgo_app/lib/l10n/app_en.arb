@@ -2635,6 +2635,8 @@
   "addressDelete": "Delete",
   "@addressDelete": {"description": "Address book: delete action"},
   "addressSetDefault": "Set as default",
+  "addressUseThis": "Use this address",
+  "@addressUseThis": {"description": "Address book in selector mode (opened from checkout): semantics label for tapping a card. Picking here applies to this order only and does not change the default address (D-18)."},
   "@addressSetDefault": {"description": "Address book: set-default action"},
   "addressDefaultBadge": "Default",
   "@addressDefaultBadge": {"description": "Address book: badge on the default address"},

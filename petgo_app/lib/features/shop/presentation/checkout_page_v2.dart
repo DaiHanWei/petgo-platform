@@ -82,6 +82,25 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
   }
 
   /// 🔴 默认地址优先，其次第一个。没有地址时返回 null → 走引导态并禁用提交。
+  /// 换收货地址（D-18）。
+  ///
+  /// 🔴 进的是**选择器模式**的地址页：点卡片即选中并返回，**只作用于这一单**。
+  /// 此前这里是 `context.push('/me/addresses')` —— 那是地址**管理**页，
+  /// 点卡片毫无反应，页面给的是「设为默认 / 编辑 / 删除」。
+  /// 于是多地址用户想把这单寄公司，唯一办法是把公司地址**设为默认**，
+  /// 下单后想寄回家还得再切一次 —— 默认地址被当成"当前选择"用，语义错位。
+  ///
+  /// ⚠️ [_selectedAddressToken] 这个状态与 [_effectiveAddressToken] 的覆盖逻辑
+  /// **本来就写好了**，缺的只是没有任何地方给它赋值。
+  Future<void> _pickAddress() async {
+    final picked = await context.push<String>('/me/addresses?select=1');
+    if (picked == null || !mounted) return;
+    setState(() => _selectedAddressToken = picked);
+    // 地址一换，运费与 PawCoin 抵扣都要重算 —— 族键换了 provider 会自己重取，
+    // 这里只需确保列表是新的（用户可能在选择器里顺手编辑过）。
+    ref.invalidate(addressListProvider);
+  }
+
   String? _effectiveAddressToken(List<ShippingAddress> list) {
     if (_selectedAddressToken != null && list.any((a) => a.token == _selectedAddressToken)) {
       return _selectedAddressToken;
@@ -188,7 +207,7 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
                 const SizedBox(width: 10),
                 InkWell(
                   key: const ValueKey('checkoutChangeAddressV2'),
-                  onTap: () => context.push('/me/addresses'),
+                  onTap: () => _pickAddress(),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
                     child: Text('${l10n.checkoutChangeAddress} ›',

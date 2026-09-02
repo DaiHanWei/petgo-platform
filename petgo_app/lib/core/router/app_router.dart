@@ -595,7 +595,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    AC 写死「实现前不得自行发挥」。后端与数据层已就绪，补稿后只差这一页。
       // 地址簿（Story 2.4）。🔒 挂在 /me 前缀下 —— 它已在 _controlledLocations 里，
       // 游客访问自动重定向。地址是 PII，与 Toko 的游客开放策略正好相反。
-      GoRoute(path: '/me/addresses', builder: (c, s) => const AddressBookPage()),
+      // `?select=1` = 选择器模式（D-18）：从结算页进来时点卡片即选中并返回 token，
+      // 只作用于当前订单、不改默认地址。不带参数时仍是原来的地址管理页。
+      GoRoute(
+        path: '/me/addresses',
+        builder: (c, s) => AddressBookPage(
+          selecting: s.uri.queryParameters['select'] == '1',
+        ),
+      ),
       GoRoute(
         path: '/me/addresses/new',
         builder: (c, s) => const AddressFormPageV2(),

@@ -1846,6 +1846,7 @@
   "addressEdit": "Ubah",
   "addressDelete": "Hapus",
   "addressSetDefault": "Jadikan utama",
+  "addressUseThis": "Pakai alamat ini",
   "addressDefaultBadge": "Utama",
   "addressEmpty": "Belum ada alamat.",
   "addressLoadFailed": "Gagal memuat alamat.",
