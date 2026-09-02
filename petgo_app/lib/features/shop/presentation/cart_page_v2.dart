@@ -286,12 +286,75 @@ class _ValidLineState extends ConsumerState<_ValidLine> {
   }
 
   /// 删除整行。走的是失效行 `Hapus` 用的同一个 `remove()`，不是新增能力。
+  ///
+  /// 🔴 **删完必须给 undo**（R-3，2026-09-02 产品拍板）。
+  /// 风险不在「删除」本身，在**按钮位复用**：[ShopStepper] 在 `value <= min` 时
+  /// 把同一个位置的「−」换成垃圾桶。用户连点减号往下收数量，**最后一下必然落在
+  /// 已经变成垃圾桶的同一坐标上** —— 这不是手滑，是控件设计决定的必然结果。
+  ///
+  /// ⚠️ **不用二次确认弹窗**：那会拖慢正常的收数量操作（每次减到 1 都弹一次），
+  /// 而误删的代价用 undo 完全覆盖得住。产品明确否掉了确认框这条路。
   Future<void> _remove(AppLocalizations l10n, CartLine line) async {
     setState(() => _busy = true);
+    // 🔴 删之前把这一行记下来：删完服务端就没有它了，undo 只能靠这份快照重建。
+    final skuToken = line.skuToken;
+    final qty = line.qty;
+    final name = line.productName ?? line.specName;
     try {
-      await ref.read(cartProvider.notifier).remove(line.skuToken);
+      await ref.read(cartProvider.notifier).remove(skuToken);
+      if (mounted) _offerUndo(l10n, skuToken: skuToken, qty: qty, name: name);
     } on CartMutationError {
       if (mounted) showAppToast(context, l10n.cartGenericError);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 删除后的撤销条。
+  ///
+  /// ⚠️ 用 [SnackBar] 而不是本仓的 [showAppToast]：toast 没有可点的动作位，
+  /// 而这条提示的**全部意义**就是那个「撤销」按钮。
+  ///
+  /// 停留 5 秒（产品定的 4–5 秒区间上限）：短于此，误删的人还没反应过来就没了；
+  /// 长于此，它会盖住底部合计条影响正常结算。
+  void _offerUndo(AppLocalizations l10n,
+      {required String skuToken, required int qty, required String name}) {
+    ScaffoldMessenger.of(context)
+      // 连删两行时只留最后那条 —— 叠着的旧提示条点下去撤销的不是用户以为的那一行。
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        key: const ValueKey('cartUndoBarV2'),
+        content: Text(l10n.cartRemovedUndo(name)),
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: l10n.cartUndo,
+          onPressed: () => _undoRemove(l10n, skuToken: skuToken, qty: qty),
+        ),
+      ));
+  }
+
+  /// 撤销删除：按原数量把这一行加回去。
+  ///
+  /// ⚠️ **归因会变成 `CART_UNDO` 而不是原来的入口**（Story 3.10 的 entrySource）：
+  /// 后端购物车接口**刻意不下发**归因给客户端（`CartView.CartLine` 的注释写明了理由），
+  /// 所以端上拿不到原值、也无从还原。两种选择里取了「写一个自述的值」而不是留 null ——
+  /// null 与「归因字段上线前的老数据」长得一模一样，事后没人分得清；
+  /// `CART_UNDO` 至少是可解释、可筛掉的。⚠️ 这一条要不要计入转化口径，由数据侧定。
+  ///
+  /// 🔴 撤销可能**失败**：删除到撤销之间库存被别人买走，`add` 会抛库存错误。
+  /// 那时必须出声 —— 静默失败会让用户以为撤销成功了，直到结算时才发现少了一件。
+  Future<void> _undoRemove(AppLocalizations l10n,
+      {required String skuToken, required int qty}) async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(cartProvider.notifier)
+          .add(skuToken, qty: qty, entrySource: 'CART_UNDO');
+    } on CartMutationError catch (e) {
+      if (mounted) {
+        showAppToast(context,
+            e == CartMutationError.stock ? l10n.cartStockError : l10n.cartGenericError);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

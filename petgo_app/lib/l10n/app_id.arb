@@ -1884,6 +1884,8 @@
   "cartDecrease": "Kurangi jumlah",
   "cartIncrease": "Tambah jumlah",
   "cartRemoveLine": "Hapus produk",
+  "cartRemovedUndo": "\u201C{name}\u201D dihapus",
+  "cartUndo": "Urungkan",
   "cartMaxStock": "Sisa stok {count}",
   "cartAdded": "Ditambahkan ke keranjang",
   "cartStockError": "Stok tidak cukup. Kurangi jumlahnya.",
