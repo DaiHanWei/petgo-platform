@@ -4,7 +4,6 @@ import 'package:tailtopia/features/auth/domain/user_tag.dart';
 import 'package:tailtopia/features/content/domain/comment.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
 import 'package:tailtopia/shared/widgets/anchored_tooltip.dart';
-import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/shared/widgets/tag_icon.dart';
 import 'package:tailtopia/shared/widgets/user_tag_row.dart';
 
@@ -185,58 +184,29 @@ void main() {
     });
   });
 
-  /// 🔴 **图标必须有金色圆底**（UI 稿 `.utag-icon`：14×14 / 圆 / 金色底 / 白色字形）。
-  ///
-  /// 此前实现成"裸图标、无衬底"（bug 20260828）。后果不是少了个装饰：
-  /// 稿子里图标是**白色**的，运营照稿做一枚白色图标传上来，在白色 Feed 背景上
-  /// 完全看不见；而 `TagIcon` 加载失败时同样收缩为零 —— 两种情况长得一模一样，
-  /// 「图标没显示」这件事在实机上因此无法自证，实机排查绕了一大圈。
-  group('bug 20260828 · 图标衬底', () {
-    testWidgets('每个标签图标都套在金色圆底上', (tester) async {
+  /// 🔴 **整图即标签**（2026-09-02 产品定）：上传的图直接按 14×14 满幅显示，
+  /// 不再画圆底、不再读底色 —— 圆的方的、什么颜色，全由运营的设计稿决定。
+  /// （历史：裸图标 → 金色圆底 + 8/14 内圈（bug 20260828）→ 整图。
+  ///   圆底那版的动机是"白色剪影在白底上看不见"，如今图自带底，动机不复存在。）
+  group('2026-09-02 · 整图即标签', () {
+    testWidgets('不再画圆形衬底', (tester) async {
       await _pumpRow(tester, name: 'Alice', tags: [_tag('a'), _tag('b')]);
-
-      final circles = tester.widgetList<Container>(find.byType(Container))
-          .where((c) => c.decoration is BoxDecoration
-              && (c.decoration! as BoxDecoration).shape == BoxShape.circle)
-          .toList();
-      expect(circles, hasLength(2),
-          reason: '🔴 图标没有圆形衬底 —— 白色图标在白底上会完全看不见');
-      for (final c in circles) {
-        expect((c.decoration! as BoxDecoration).color, AppColors.gold,
-            reason: '🔴 衬底不是稿子里的金色');
-      }
+      expect(_circleColors(tester), isEmpty,
+          reason: '🔴 又画圆底了 —— 会盖住运营设计稿里自带的形状与底色');
     });
 
-    testWidgets('圆底 14、内圈 8 —— 与 UI 稿同比例，图标不顶到边缘', (tester) async {
+    testWidgets('图标满幅 14（不再是 8/14 内圈）', (tester) async {
       await _pumpRow(tester, name: 'Alice', tags: [_tag('a')]);
-
-      final circle = tester.widgetList<Container>(find.byType(Container))
-          .firstWhere((c) => c.decoration is BoxDecoration
-              && (c.decoration! as BoxDecoration).shape == BoxShape.circle);
-      expect(circle.constraints?.maxWidth ?? 0, closeTo(14, 0.01));
-      // 内圈按 8/14 收 —— 直接铺满会让图标压在圆的描边上。
-      expect(tester.widget<TagIcon>(find.byType(TagIcon)).size, closeTo(8, 0.01));
+      expect(tester.widget<TagIcon>(find.byType(TagIcon)).size, closeTo(14, 0.01));
     });
-  });
 
-  /// 🔴 **底色按标签走**（2026-08-28，UI 稿 `.utag-icon`：官方号金、最佳新人紫）。
-  ///
-  /// 此前圆底是写死的金色，运营配不出第二种 —— 而稿子里颜色正是区分标签类别的手段。
-  group('bug 20260828 · 徽章底色按标签配', () {
-    testWidgets('后端给了色值就用它', (tester) async {
+    testWidgets('后端下发的旧底色被忽略（仅供老版本 App 兜底）', (tester) async {
       const violet = Color(0xFF845EC9);
       await _pumpRow(tester, name: 'Alice', tags: [
         UserTag(code: 'star', name: '最佳新人', icon: '★', description: 'x',
             badgeColor: violet),
       ]);
-
-      expect(_circleColors(tester), [violet],
-          reason: '🔴 底色仍写死 —— 运营配的颜色没生效');
-    });
-
-    testWidgets('没给色值回落金色（稿子的默认值）', (tester) async {
-      await _pumpRow(tester, name: 'Alice', tags: [_tag('a')]);
-      expect(_circleColors(tester), [AppColors.gold]);
+      expect(_circleColors(tester), isEmpty);
     });
 
     /// 🛡 **色值解析不出来不许炸**：它是展示层的锦上添花，

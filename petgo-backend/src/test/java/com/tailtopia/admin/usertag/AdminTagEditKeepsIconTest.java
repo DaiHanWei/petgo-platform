@@ -63,7 +63,7 @@ class AdminTagEditKeepsIconTest {
     @Test
     void nullIconKeepsTheExistingOne() {
         UserTag tag = seed();
-        svc(tag).editTag(7L, 1L, "新名字", null, "新说明", "GOLD");
+        svc(tag).editTag(7L, 1L, "新名字", null, "新说明");
 
         assertThat(tag.getIcon()).as("🛡 不该被清空").isEqualTo("https://cdn/old.png");
         assertThat(tag.getName()).isEqualTo("新名字");
@@ -73,7 +73,7 @@ class AdminTagEditKeepsIconTest {
     @Test
     void newIconReplacesTheOldOne() {
         UserTag tag = seed();
-        svc(tag).editTag(7L, 1L, "新名字", "https://cdn/new.png", "新说明", "GOLD");
+        svc(tag).editTag(7L, 1L, "新名字", "https://cdn/new.png", "新说明");
 
         assertThat(tag.getIcon()).isEqualTo("https://cdn/new.png");
     }

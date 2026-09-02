@@ -80,8 +80,7 @@ public class AdminUserTagController {
         model.addAttribute("iconSpec", icons.specText("userTag"));
         // bug 20260828：用户选择器的首屏候选（htmx 之后再按关键词换）。
         model.addAttribute("candidates", service.pickableUsers(null, 0));
-        // 2026-08-28：徽章底色调色板（固定几档，见 UserTagBadgeColor 的说明）。
-        model.addAttribute("badgeColors", com.tailtopia.auth.domain.UserTagBadgeColor.values());
+        // 2026-09-02：徽章底色概念取消 —— 上传的图就是整枚标签，颜色由图自己决定。
         return "admin/user-tags";
     }
 
@@ -91,18 +90,16 @@ public class AdminUserTagController {
             @RequestParam String name,
             @RequestParam(value = "iconFile", required = false) MultipartFile iconFile,
             @RequestParam String description,
-            @RequestParam(value = "badgeColor", required = false) String badgeColor,
             RedirectAttributes flash) {
         try {
-            // Story 11.5：图标改为上传。🔴 新建时**必须**有图标 —— 没有图标的标签在
-            // Feed 卡上只剩文字，与设计稿不符（规格里图标是胶囊的固定组成部分）。
+            // Story 11.5：图标改为上传。🔴 新建时**必须**有图标 —— 2026-09-02 起
+            // 上传的图**就是用户看到的整枚标签**（14×14 整图显示，无衬底）。
             String iconUrl = icons.uploadOrKeep(iconFile);
             if (iconUrl == null) {
                 throw AppException.validation(icons.iconRequiredMessage());
             }
             // 2026-09-02：标签码不再由运营填写，服务层自动生成（ut-<id>），杜绝撞码。
-            service.createTag(admin.getAdminAccountId(), name, iconUrl, description,
-                    badgeColor);
+            service.createTag(admin.getAdminAccountId(), name, iconUrl, description);
             flash.addFlashAttribute("notice", msg.get("admin.flash.userTag.created"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
@@ -116,12 +113,11 @@ public class AdminUserTagController {
             @RequestParam String name,
             @RequestParam(value = "iconFile", required = false) MultipartFile iconFile,
             @RequestParam String description,
-            @RequestParam(value = "badgeColor", required = false) String badgeColor,
             RedirectAttributes flash) {
         try {
             // 🛡 没传新文件 → 传 null，服务层保留原图标（不是清空）。
             service.editTag(admin.getAdminAccountId(), id, name,
-                    icons.uploadOrKeep(iconFile), description, badgeColor);
+                    icons.uploadOrKeep(iconFile), description);
             flash.addFlashAttribute("notice", msg.get("admin.flash.userTag.updated"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));

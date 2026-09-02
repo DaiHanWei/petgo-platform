@@ -128,40 +128,27 @@ class AdminTagIconServiceTest {
                 .startsWith("https://cdn.example/petgo/public/tag-icon/");
     }
 
-    // ── AC2 尺寸与比例 ──────────────────────────────────────────────
+    // ── 尺寸（2026-09-02 放宽：只剩最小边长，上限与正方形要求取消）──────────
 
-    /** 🔴 差 1 像素也拒 —— 边界必须是硬的，否则「≥72」这条规格没有意义。 */
+    /** 🔴 差 1 像素也拒 —— 边界必须是硬的，否则「≥42」这条规格没有意义。 */
     @Test
     void oneShortSidePixelBelowMinimumIsRejected() {
-        assertThatThrownBy(() -> service.uploadOrKeep(file("a.png", "image/png", png(71, 72))))
+        assertThatThrownBy(() -> service.uploadOrKeep(file("a.png", "image/png", png(41, 42))))
                 .hasMessageContaining("tooSmall")
-                .hasMessageContaining("71")   // 报错要带实际尺寸
-                .hasMessageContaining("72");  // 和要求的最小值
-        assertThat(service.uploadOrKeep(file("a.png", "image/png", png(72, 72)))).isNotNull();
+                .hasMessageContaining("41")   // 报错要带实际尺寸
+                .hasMessageContaining("42");  // 和要求的最小值
+        assertThat(service.uploadOrKeep(file("a.png", "image/png", png(42, 42)))).isNotNull();
     }
 
+    /**
+     * 2026-09-02 产品定：大图、长图、任意比例一律放行 —— 运营没办法精确卡尺寸，
+     * 端上等比缩放什么形状都能正确显示。这三张图在旧规则下全都会被拒。
+     */
     @Test
-    void oversizedIconIsRejectedWithActualNumbers() {
-        assertThatThrownBy(() -> service.uploadOrKeep(file("a.png", "image/png", png(1200, 1200))))
-                .hasMessageContaining("tooBig")
-                .hasMessageContaining("1200")
-                .hasMessageContaining("1024");
-    }
-
-    /** 非方图 → 拒，且报错带**实际比例**（不然运营不知道差多少）。 */
-    @Test
-    void nonSquareIsRejectedWithActualRatio() {
-        assertThatThrownBy(() -> service.uploadOrKeep(file("a.png", "image/png", png(72, 90))))
-                .hasMessageContaining("notSquare")
-                .hasMessageContaining("0.80");
-    }
-
-    /** ±5% 容差内的近方图放过 —— 设计导出偶尔差一两像素，不该为此拒绝。 */
-    @Test
-    void nearSquareWithinToleranceIsAccepted() {
-        assertThat(service.uploadOrKeep(file("a.png", "image/png", png(100, 103)))).isNotNull();
-        assertThatThrownBy(() -> service.uploadOrKeep(file("a.png", "image/png", png(100, 110))))
-                .hasMessageContaining("notSquare");
+    void anyAspectRatioAndLargeSizesAreAccepted() {
+        assertThat(service.uploadOrKeep(file("a.png", "image/png", png(1200, 1200)))).isNotNull();
+        assertThat(service.uploadOrKeep(file("a.png", "image/png", png(72, 90)))).isNotNull();
+        assertThat(service.uploadOrKeep(file("a.png", "image/png", png(300, 100)))).isNotNull();
     }
 
     // ── AC2 文件大小 ────────────────────────────────────────────────
@@ -196,13 +183,13 @@ class AdminTagIconServiceTest {
 
     // ── 界面文案 ────────────────────────────────────────────────────
 
-    /** AC3：尺寸规范文案要带三个数（最小边 / 最大边 / 大小上限），**两页各一份**。 */
+    /** AC3：尺寸规范文案要带两个数（最小边 / 大小上限），**两页各一份**（2026-09-02 起无上限边长）。 */
     @Test
-    void specTextCarriesAllThreeNumbers() {
+    void specTextCarriesBothNumbers() {
         for (String ctx : new String[] {"contentTag", "userTag"}) {
             assertThat(service.specText(ctx))
                     .as(ctx + " 的规格文案")
-                    .contains("72").contains("1024").contains("512");
+                    .contains("42").contains("512");
         }
     }
 

@@ -46,19 +46,13 @@
                 <td colspan="7" class="muted" th:text="#{admin.utags.empty}">还没有任何用户标签。</td>
             </tr>
             <tr th:each="t : ${tags}">
-                <!-- 🔴 **按真实底色画出来**（2026-08-28）：图标是一枚纯白剪影，
-                     脱开圆底单看那张 PNG 什么都看不出来。
-                     2026-09-02 产品要求：只留 2 倍放大的这一枚（细节看得清），
-                     不再同时摆一枚 14px 实际大小的。 -->
+                <!-- 2026-09-02 产品定：上传的图**就是用户看到的整枚标签**（无圆底、无底色），
+                     这里按 2 倍大小（28px 高）裸图预览，等比不裁。 -->
                 <td style="white-space:nowrap">
-                    <span th:style="'display:inline-flex;align-items:center;justify-content:center;'
-                                  + 'width:28px;height:28px;border-radius:50%;'
-                                  + 'vertical-align:middle;background:' + ${t.badgeHex()}">
-                        <img th:if="${#strings.startsWith(t.icon, 'http')}" th:src="${t.icon}"
-                             alt="" width="16" height="16"/>
-                        <span th:unless="${#strings.startsWith(t.icon, 'http')}"
-                              th:text="${t.icon}" style="font-size:16px;line-height:1"></span>
-                    </span>
+                    <img th:if="${#strings.startsWith(t.icon, 'http')}" th:src="${t.icon}"
+                         alt="" style="height:28px;width:auto;max-width:96px;vertical-align:middle"/>
+                    <span th:unless="${#strings.startsWith(t.icon, 'http')}"
+                          th:text="${t.icon}" style="font-size:16px;line-height:1"></span>
                 </td>
                 <td th:text="${t.code}">code</td>
                 <td th:text="${t.name}">名称</td>
@@ -80,11 +74,7 @@
                         <span th:if="${t.icon != null and !#strings.startsWith(t.icon, 'http')}"
                               th:text="${t.icon}" title="存量字符图标，重新上传即替换"></span>
                         <input type="file" name="iconFile" accept="image/png,image/webp"/>
-                        <select name="badgeColor">
-                            <option th:each="c : ${badgeColors}" th:value="${c}"
-                                    th:selected="${c == t.badgeColor}"
-                                    th:text="#{'admin.utags.color.' + ${c}}">金</option>
-                        </select>
+                        <!-- 2026-09-02：底色下拉已随「整图即标签」取消。 -->
                         <input type="text" name="description" th:value="${t.description}" required/>
                         <button type="submit" class="btn btn-sm" th:text="#{admin.utags.edit}">编辑</button>
                     </form>
@@ -120,14 +110,7 @@
                 <p class="muted" data-notice="tag-icon-spec" th:text="${iconSpec}">
                     PNG 或 WebP，必须透明底；正方形，最短边 ≥ 72 像素、最长边 ≤ 1024 像素；文件 ≤ 512 KB。
                 </p>
-                <!-- 🔴 徽章底色（UI 稿 `.utag-icon` 按标签分色：官方号金、最佳新人紫）。
-                     固定几档、不给自由填 hex —— 图标是纯白剪影，浅色底会让它"消失"，
-                     而那和"图没加载出来"长得一模一样（本月已踩过一次）。 -->
-                <label><span th:text="#{admin.utags.badgeColor}">徽章底色</span>
-                    <select name="badgeColor">
-                        <option th:each="c : ${badgeColors}" th:value="${c}"
-                                th:text="#{'admin.utags.color.' + ${c}}">金</option>
-                    </select></label>
+                <!-- 2026-09-02：徽章底色取消 —— 上传的图就是整枚标签，圆/方/颜色由设计稿决定。 -->
                 <label><span th:text="#{admin.utags.description}">说明文案</span>
                     <input type="text" name="description" class="field-full" maxlength="140" required/></label>
                 <button type="submit" class="btn btn-primary" th:text="#{admin.utags.save}">保存</button>

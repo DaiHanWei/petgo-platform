@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../core/analytics/analytics.dart';
-import '../../core/theme/colors.dart';
 import '../../features/auth/domain/user_tag.dart';
 import 'anchored_tooltip.dart';
 import 'tag_icon.dart';
@@ -121,25 +120,17 @@ class _TagIcon extends StatelessWidget {
         });
         showAnchoredTooltip(context, title: tag.name, message: tag.description);
       },
-      child: Container(
-        // 🔴 **金色圆底**（UI 稿 `.utag-icon`：14×14 / border-radius 50% / 金色底 / 白色字形）。
-        //
-        // 此前实现成"裸图标、无衬底"（bug 20260828）—— 后果不是"少了个装饰"：
-        // 稿子里图标是**白色**的，运营照稿做一枚白色图标传上来，在白色 Feed 背景上
-        // 就是**完全看不见**。而 [TagIcon] 加载失败时也是收缩为零，两种情况长得一模一样，
-        // 于是"图标没显示"这件事在实机上完全无法自证。
-        //
-        // ⚠️ 内容装饰标签**不套这个圆底**：它的图标叠在橙红渐变胶囊里（见 ContentTagChip），
-        //    那里衬底由胶囊本身提供。两处刻意不共用同一个外壳。
+      // 🔴 2026-09-02 产品定：**上传的图就是整枚标签** —— 不再画圆底、不再读底色，
+      // 图按 14×14 满幅显示（等比 contain）。圆的方的、什么颜色，全由运营的设计稿决定；
+      // 后台的上传规则守住「透明底 + 最短边 ≥42px」这条底线。
+      //
+      // ⚠️ 定宽定高不能丢 —— 上面"放得下几个"的计算依赖每个槽位是固定 size。
+      // （历史：曾经历"裸图标 → 金色圆底 + 8/14 内圈 → 整图"三个阶段；
+      //   圆底那版的动机是白色剪影在白底上看不见，如今图自带底，动机不复存在。）
+      child: SizedBox(
         width: size,
         height: size,
-        // 底色由运营按标签配（UI 稿里官方号金、最佳新人紫）；没配/解析失败回落金色。
-        decoration: BoxDecoration(
-            color: tag.badgeColor ?? AppColors.gold, shape: BoxShape.circle),
-        alignment: Alignment.center,
-        // 定宽定高 —— 上面"放得下几个"的计算依赖它。
-        // 内圈按 UI 稿 8/14 的比例留出圆边，图标不会顶到圆的边缘。
-        child: TagIcon(icon: tag.icon, size: size * (8 / 14)),
+        child: TagIcon(icon: tag.icon, size: size),
       ),
     );
   }
