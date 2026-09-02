@@ -9,6 +9,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 
 /**
@@ -119,6 +120,15 @@ public class ShopOrder {
     @Enumerated(EnumType.STRING)
     @Column(name = "completion_source", length = 24)
     private CompletionSource completionSource;
+
+    /**
+     * 🔴 乐观锁（照 {@code PaymentIntent} 同款）：支付回调与取消/懒过期两个事务同时读到
+     * {@code PENDING_PAYMENT} 时，后提交者在同一行上撞版本号整体回滚 ——
+     * 这是「{@code inventory.commit} 与 {@code inventory.release} 不会双双落库」的库级裁决。
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

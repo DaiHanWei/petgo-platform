@@ -187,10 +187,10 @@ class Epic3ChainIntegrationTest extends ApiIntegrationTest {
                 .isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
 
         // ⑥ 订单中心：混排可见 + Belanja 能筛到
-        OrderPage all = orderCenter.listOrders(uid, null, null, 20);
+        OrderPage all = orderCenter.listOrders(uid, null, null, 20, true);
         assertThat(all.items()).extracting(OrderSummaryView::orderToken)
                 .contains(order.getPublicToken());
-        OrderPage belanja = orderCenter.listOrders(uid, "ECOMMERCE", null, 20);
+        OrderPage belanja = orderCenter.listOrders(uid, "ECOMMERCE", null, 20, false);
         assertThat(belanja.items()).hasSize(1);
         assertThat(belanja.items().getFirst().itemCount()).isEqualTo(2);
         assertThat(belanja.items().getFirst().statusCode()).isEqualTo("PENDING_SHIPMENT");

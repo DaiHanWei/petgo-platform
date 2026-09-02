@@ -90,9 +90,15 @@ public class OrderCenterService {
      *   <li>同刻组的取舍由 {@link #idBound} 按「源的先后位」编进同一条 SQL。</li>
      * </ol>
      * 少任何一件都会在边界处漏单或重复。
+     *
+     * @param includeEcommerce 默认聚合（{@code type} 为空）是否混入电商行 ——
+     *        <b>显式加入闸门</b>：线上 v1.1.4 老 App 的状态分组把 {@code ShopOrderStatus}
+     *        全兜进「已完成」、渲染英文枚举串，故电商行必须由新客户端显式要
+     *        （该参为 true，或直接 {@code type=ECOMMERCE}）；老 App 不传 → 聚合契约不变。
      */
     @Transactional(readOnly = true)
-    public OrderPage listOrders(long userId, String type, String cursor, int limit) {
+    public OrderPage listOrders(long userId, String type, String cursor, int limit,
+            boolean includeEcommerce) {
         OrderType filter = parseType(type);
         OrderCenterCursor at = parseCursor(cursor);
         // 首页上界用 now+60s 而不是 now：库里的 created_at 是 Postgres 的 now()，
@@ -130,7 +136,9 @@ public class OrderCenterService {
         }
         // 🔴 Story 3.9：第 4 个分支【追加在 if 链末尾】，既有三个分支与四个映射器一行未改（AD-11 / 契约 O-1）。
         //    电商订单与虚拟商品订单在同一列表按时间倒序混排 —— 用户心智里「我的订单」就是一个地方（FR-101）。
-        if (filter == null || filter == OrderType.ECOMMERCE) {
+        //    默认聚合过闸门 includeEcommerce（老 App 不传不给，见方法 javadoc）；
+        //    type=ECOMMERCE 是本版新 App 才有的筛选值，不受闸门约束。
+        if ((filter == null && includeEcommerce) || filter == OrderType.ECOMMERCE) {
             long bound = idBound(at, RANK_SHOP);
             for (ShopOrder o : shopOrders.findOrderCenterPageBefore(userId, before, bound, page)) {
                 merged.add(new Row(mapShop(o), RANK_SHOP, o.getId()));

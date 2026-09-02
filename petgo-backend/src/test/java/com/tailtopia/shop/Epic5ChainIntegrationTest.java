@@ -278,8 +278,9 @@ class Epic5ChainIntegrationTest extends ApiIntegrationTest {
         // 🔴 运费归属由类型自动得出，审核接口里根本没有这个参数
         assertThat(r.getReturnShipBearer())
                 .isEqualTo(com.tailtopia.shop.returns.domain.ShippingFeeBearer.PLATFORM);
-        r.chooseCashDestination(CashDestination.TO_BANK,
-                com.tailtopia.pay.refund.domain.PayoutChannel.BCA, "1234567890", "Budi");
+        // 🔴 走 TO_PAWCOIN：运费报销只在该路径真实到账；TO_BANK 没有银行报销通道，记账恒 0
+        //    （不得预标一笔从未支付的报销 —— 见 RefundExecutionService ④）。
+        r.chooseCashDestination(CashDestination.TO_PAWCOIN, null, null, null);
         returns.save(r);
         adminReturns.approve(r.getPublicToken(), ADMIN);
         adminReturns.registerShipback(r.getPublicToken(), "JNE", "SB" + SEQ.incrementAndGet(),

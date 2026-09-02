@@ -63,16 +63,20 @@ public class MeCheckoutController {
      * 笼统的「库存不足，请重试」会让用户在一车 8 件商品里逐个试错。
      * 映射由 {@link CheckoutUnavailableException} 自己声明（它实现 {@code ProblemExtensions}），
      * 本控制器<b>不重复拼错误信封</b> —— 自拼会漏掉 traceId，而排障最先看的就是它。
+     *
+     * <p>🔴 {@code Idempotency-Key} 头去重（与同控制器 pay 端点同款：可选，缺失时不拒 ——
+     * 幂等层对空 key 直接跳过）：同 key 重放取回既有订单，<b>不重复建单、不重复锁库存</b>。
      */
     @PostMapping("/shop-orders")
     @ResponseStatus(HttpStatus.CREATED)
     public ShopOrderView placeOrder(@AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @RequestBody(required = false) PlaceOrderRequest req) {
         if (req == null || req.addressToken() == null || req.addressToken().isBlank()) {
             throw AppException.validation("请选择收货地址");
         }
         return ShopOrderView.of(checkout.placeOrder(currentUserId(jwt), req.addressToken(),
-                req.entrySource(), req.triggerType()));
+                req.entrySource(), req.triggerType(), idempotencyKey));
     }
 
     // ===== Story 3.8：待支付订单详情与支付 =====

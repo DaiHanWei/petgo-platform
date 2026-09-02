@@ -14,6 +14,10 @@
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
         <p class="hint" th:text="#{admin.config.hint}">改动仅影响后续新成交；历史订单按成交快照不变。每次修改记入变更日志与审计哈希链。</p>
 
+        <!-- 🛡 页面准入已放宽到任意 config.* 读权限（Story 18.3 · AC5 修订，见 AdminConfigController.PAGE_AUTH）：
+             只持 config.share_reward_* 的人也能进来关总开关。所以定价 / PawCoin / 档位这些
+             **非分享奖励块**必须补上 config.view 门 —— 否则放宽准入就顺带把兽医定价与分成放出去了。 -->
+        <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')">
         <!-- 定价（AB-8A/8F）——仅 config.edit 可改；否则只读 -->
         <h2 th:text="#{admin.config.pricing}">定价配置</h2>
         <form class="card" method="post" th:action="@{/admin/config/pricing}"
@@ -53,11 +57,13 @@
 
             <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.config.btn.savePawcoin}">保存 PawCoin 配置</button>
         </form>
+        </th:block>
 
         <!-- ══ V1.1.6 Story 18.3 · AB-3M：分享奖励 ══
              🛡 独立 form + 独立权限码（AC5）：关总开关不该顺带要「改兽医定价与分成」的权限。
-             🛡 落库仍是同一张 pawcoin_config 单行、同一个 PAWCOIN diff 审计组（AC1/AC6）。 -->
-        <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.share_reward_view')"
+             🛡 落库仍是同一张 pawcoin_config 单行、同一个 PAWCOIN diff 审计组（AC1/AC6）。
+             ⚠️ edit 码也放进门里：应急操作员可能只握 share_reward_edit，进得了页也要看得到这一块。 -->
+        <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.share_reward_view') or hasAuthority('config.share_reward_edit')"
              th:with="ov=${shareRewardOverview}">
             <h2 th:text="#{admin.config.shareReward}">分享奖励</h2>
 
@@ -108,7 +114,8 @@
             </form>
         </div>
 
-        <!-- 充值档位（AB-6B）——保底 ≥1 启用 -->
+        <!-- 充值档位（AB-6B）——保底 ≥1 启用。同上：非分享奖励块，补 config.view 门。 -->
+        <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')">
         <h2 th:text="#{admin.config.tiers}">充值档位</h2>
         <p class="hint" th:text="#{admin.config.hint.tiers}">至少保留 1 个启用档位；停用不影响历史订单。</p>
         <table>
@@ -130,6 +137,7 @@
             </tr>
             </tbody>
         </table>
+        </th:block>
 
     </div>
 </div>

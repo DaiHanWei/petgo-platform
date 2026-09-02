@@ -17,6 +17,7 @@ import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.CommentRepository.PostCommentCount;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentLikeRepository.PostLikeCount;
+import com.tailtopia.content.rank.FeedRankCursor;
 import com.tailtopia.content.rank.FeedRecommendationService;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.shared.error.AppException;
@@ -198,8 +199,25 @@ public class FeedService {
      * 🛡 回落走的是 {@link #chronoFeed}，也就是<b>同一套候选池过滤</b> ——
      * AC4 明写「任何级别下候选池的全部过滤都不得被绕过」，回落时把过滤丢掉就是拉黑白拉。
      * ⚠️ 级别 4 <b>要告警</b>（级别 1、2 是预期行为不告警，见 §6.2）。
+     *
+     * <h2>🔴 发版过渡兼容：老客户端手上捏着旧 chrono 游标</h2>
+     * 线上 v1.1.4 的 ALL Tab 走的是时序流 —— 发版切换瞬间，正在翻页的存量用户下一页
+     * 带上来的是旧 {@link FeedCursor} 格式游标。直接按 rank 格式解会 422，
+     * 而客户端拿着同一个 nextCursor 重试 → <b>死循环</b>。
+     * 两种格式<b>可靠可分</b>（{@link FeedRankCursor#SEED_PREFIX} 的存在理由就是隔开编码空间）：
+     * rank 是 {@code base64url("s<seed>:<consumed>")}，chrono 是 {@code base64url("<epochMicros>:<id>")}
+     * ——首段一个强制 "s" 前缀、一个纯数字，互相解不开。
+     * 解得成 chrono 就让这次会话<b>继续走时序流</b>（nextCursor 也回 chrono 格式，整个会话自洽）；
+     * 两种格式都解不开才是真正的非法游标 → 422。
      */
     private FeedPageResponse recommendedFeed(String cursor, Long viewerId, String anonSessionId) {
+        if (cursor != null && !cursor.isBlank() && rankCursorOrNull(cursor) == null) {
+            if (chronoCursorOrNull(cursor) == null) {
+                throw AppException.validation("游标无效"); // 两种格式都解不开才 422
+            }
+            // 老客户端（≤v1.1.4）的时序流会话：整个会话继续 chrono，游标自洽。
+            return chronoFeed(FeedCategory.ALL, cursor, viewerId);
+        }
         try {
             Long yieldId = pinnedContentIdToYield(cursor);
             FeedRecommendationService.RankedPage ranked =
@@ -207,11 +225,33 @@ public class FeedService {
             return assemble(ranked.posts(), viewerId, ranked.nextCursor(), ranked.hasMore(),
                     FeedPageResponse.RANK_MODE_RECOMMEND);
         } catch (AppException e) {
-            throw e; // 游标非法等入参问题照常 422，不能被当成"算不出来"吞掉
+            throw e; // 其余入参问题照常 422，不能被当成"算不出来"吞掉（游标格式已在上面兜过）
         } catch (RuntimeException e) {
             log.warn("{} cls={} msg={}", RANK_FALLBACK_MARKER, e.getClass().getSimpleName(),
                     e.getMessage());
-            return chronoFeed(FeedCategory.ALL, cursor, viewerId);
+            // 🛡 级别 4 的承诺是「用户无感」：走到这里 cursor 要么为 null、要么是 rank 格式
+            //   （chrono 格式已在方法开头分流），而 chronoFeed 读不懂 rank 游标 ——
+            //   原样透传会让降级路径自己 422（Redis 抖动时页 ≥2 全挂）。
+            //   降级为返回 chrono 首页：丢的是阅读进度，保住的是可用性。
+            return chronoFeed(FeedCategory.ALL, null, viewerId);
+        }
+    }
+
+    /** 试按推荐序格式解游标；解不开返回 {@code null}（供 ALL Tab 双格式兼容分流判定，不抛）。 */
+    private static FeedRankCursor rankCursorOrNull(String cursor) {
+        try {
+            return FeedRankCursor.decode(cursor);
+        } catch (AppException e) {
+            return null;
+        }
+    }
+
+    /** 试按时间倒序格式解游标；解不开返回 {@code null}（同上）。 */
+    private static FeedCursor chronoCursorOrNull(String cursor) {
+        try {
+            return FeedCursor.decode(cursor);
+        } catch (AppException e) {
+            return null;
         }
     }
 

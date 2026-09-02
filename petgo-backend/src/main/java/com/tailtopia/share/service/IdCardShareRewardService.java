@@ -13,9 +13,12 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -51,11 +54,21 @@ public class IdCardShareRewardService {
     /** WIB。日上限按**当地日**切；UTC 切日会让「今天」在 WIB 早上 7 点才换。 */
     private static final ZoneId WIB = ZoneId.of("Asia/Jakarta");
 
+    /**
+     * 钱包幂等键在 Redis 里的前缀，与 {@code IdempotencyService.PREFIX} 逐字一致。
+     *
+     * <p>⚠️ 那边是 private 常量，这里刻意<b>不改共享层去暴露它</b>（Story 1.2 的
+     * pre-commit 写 Redis 模式由 topup/refund/debit 共用，本 story 不动它），
+     * 代价是两处字符串要人肉保持一致 —— 改那边前缀时记得同步这里。
+     */
+    private static final String IDEM_PREFIX = "idem:";
+
     private final IdCardShareRewardRepository rewards;
     private final PetProfileRepository profiles;
     private final IdCardRepository cards;
     private final PlatformConfigService platformConfig;
     private final ShareRewardService shareReward;
+    private final StringRedisTemplate redis;
 
     /**
      * ⚠️ 用显式 {@link TransactionTemplate} 而不是在 {@code attempt} 上标
@@ -72,12 +85,13 @@ public class IdCardShareRewardService {
     public IdCardShareRewardService(IdCardShareRewardRepository rewards,
             PetProfileRepository profiles, IdCardRepository cards,
             PlatformConfigService platformConfig, ShareRewardService shareReward,
-            PlatformTransactionManager txManager) {
+            PlatformTransactionManager txManager, StringRedisTemplate redis) {
         this.rewards = rewards;
         this.profiles = profiles;
         this.cards = cards;
         this.platformConfig = platformConfig;
         this.shareReward = shareReward;
+        this.redis = redis;
         this.tx = new TransactionTemplate(txManager);
         this.tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -227,8 +241,34 @@ public class IdCardShareRewardService {
 
         // ⑦ 第三层：月度全局上限 + 总开关（18.1）。
         //    幂等键用档案 id —— 与去重键同源，重放时 PawCoin 侧也不会重复入账。
-        if (!shareReward.tryReward(userId, coins, "ID_CARD_SHARE", profileId,
-                "id-card-share:" + profileId, at)) {
+        String idemKey = "id-card-share:" + profileId;
+
+        // 🛡 陈旧幂等键清理（review fix）：下面的 credit 会在**本事务提交前**就把幂等键
+        //    写进 Redis（Story 1.2 既有共享模式，topup/refund/debit 共用，🔴 不动那一层）。
+        //    若本 REQUIRES_NEW 事务在 credit 之后提交失败，DB 全部回滚、Redis 键却留 24h ——
+        //    重试时 credit 被这枚陈旧键短路成 no-op，而留痕行与额度照常提交：
+        //    档案被标成已拿过、币一枚没到账，正是「没发成就不该留痕」要防的局面。
+        //    所以登记同步器：本事务只要**不是成功提交**，就把这枚键删掉。
+        //    ⚠️ 误删 / STATUS_UNKNOWN 下删掉一枚其实有效的键都是安全的：钱包幂等有 DB 兜底
+        //    （uq_ledger_entries_idem 唯一索引 + isReplay 查总账），Redis 只是快路径，
+        //    删掉最多让下一次重放多查一次库，不会重复入账。
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_COMMITTED) {
+                    return;
+                }
+                try {
+                    redis.delete(IDEM_PREFIX + idemKey);
+                } catch (RuntimeException e) {
+                    // Redis 不可用时放弃清理（此时 credit 里的写入多半也没成）。只记 warn，不外抛。
+                    log.warn("分享奖励回滚后清理幂等键失败 key={} cls={} msg={}",
+                            idemKey, e.getClass().getSimpleName(), e.getMessage());
+                }
+            }
+        });
+
+        if (!shareReward.tryReward(userId, coins, "ID_CARD_SHARE", profileId, idemKey, at)) {
             // 🛡 没发成就不该留痕：抛出去让上面那行 insert 一起回滚。
             //    否则档案会被标成"已拿过"，而用户其实一枚都没拿到——再也拿不到了。
             throw new NotGranted();

@@ -131,7 +131,7 @@ class OrderCenterEcommerceIntegrationTest extends ApiIntegrationTest {
         setCreatedAt("shop_orders", "public_token", shop.getPublicToken(),
                 base.minus(10, ChronoUnit.SECONDS));
 
-        OrderPage page = orderCenter.listOrders(uid, null, null, 20);
+        OrderPage page = orderCenter.listOrders(uid, null, null, 20, true);
 
         assertThat(page.items()).extracting(OrderSummaryView::orderType)
                 .containsExactly("ECOMMERCE", "PAWCOIN_TOPUP", "VET_CONSULT");
@@ -145,7 +145,7 @@ class OrderCenterEcommerceIntegrationTest extends ApiIntegrationTest {
         seedTopup(uid, 25_000);
         placeShopOrder(uid, Map.of(seedSku(10, 100_000L, "Produk A"), 1));
 
-        OrderPage page = orderCenter.listOrders(uid, "ECOMMERCE", null, 20);
+        OrderPage page = orderCenter.listOrders(uid, "ECOMMERCE", null, 20, false);
 
         assertThat(page.items()).hasSize(1);
         assertThat(page.items().getFirst().orderType()).isEqualTo("ECOMMERCE");
@@ -160,7 +160,7 @@ class OrderCenterEcommerceIntegrationTest extends ApiIntegrationTest {
                 seedSku(10, 100_000L, "Royal Canin"), 2,
                 seedSku(10, 50_000L, "Drontal Plus"), 1));
 
-        OrderSummaryView card = orderCenter.listOrders(uid, "ECOMMERCE", null, 20).items()
+        OrderSummaryView card = orderCenter.listOrders(uid, "ECOMMERCE", null, 20, false).items()
                 .getFirst();
 
         assertThat(card.itemCount()).isEqualTo(3);
@@ -181,14 +181,14 @@ class OrderCenterEcommerceIntegrationTest extends ApiIntegrationTest {
         long uid = newUser().getId();
         ShopOrder shop = placeShopOrder(uid, Map.of(seedSku(10, 100_000L, "A"), 1));
 
-        OrderSummaryView pending = orderCenter.listOrders(uid, "ECOMMERCE", null, 20).items()
+        OrderSummaryView pending = orderCenter.listOrders(uid, "ECOMMERCE", null, 20, false).items()
                 .getFirst();
         assertThat(pending.statusCode()).isEqualTo("PENDING_PAYMENT");
         assertThat(pending.statusColor()).isEqualTo("WARN");
 
         jdbc.update("UPDATE shop_orders SET status = 'CANCELLED' WHERE public_token = ?",
                 shop.getPublicToken());
-        OrderSummaryView cancelled = orderCenter.listOrders(uid, "ECOMMERCE", null, 20).items()
+        OrderSummaryView cancelled = orderCenter.listOrders(uid, "ECOMMERCE", null, 20, false).items()
                 .getFirst();
         assertThat(cancelled.statusColor()).isNotEqualTo("ERROR");
     }
@@ -199,7 +199,7 @@ class OrderCenterEcommerceIntegrationTest extends ApiIntegrationTest {
         long uid = newUser().getId();
         placeShopOrder(uid, Map.of(seedSku(10, 100_000L, "A"), 1));
 
-        assertThat(orderCenter.listOrders(uid, "ECOMMERCE", null, 20).items().getFirst()
+        assertThat(orderCenter.listOrders(uid, "ECOMMERCE", null, 20, false).items().getFirst()
                 .displayNo()).startsWith("TOKO-");
     }
 
@@ -212,7 +212,7 @@ class OrderCenterEcommerceIntegrationTest extends ApiIntegrationTest {
         seedVet(uid, 50_000);
         seedTopup(uid, 25_000);
 
-        assertThat(orderCenter.listOrders(uid, null, null, 20).items()).allSatisfy(v -> {
+        assertThat(orderCenter.listOrders(uid, null, null, 20, true).items()).allSatisfy(v -> {
             assertThat(v.thumbnailUrl()).isNull();
             assertThat(v.itemTitle()).isNull();
             assertThat(v.itemCount()).isNull();
@@ -226,7 +226,7 @@ class OrderCenterEcommerceIntegrationTest extends ApiIntegrationTest {
         seedVet(uid, 50_000);
         placeShopOrder(uid, Map.of(seedSku(10, 100_000L, "A"), 1));
 
-        assertThat(orderCenter.listOrders(uid, "ID_HD", null, 20).items()).isEmpty();
+        assertThat(orderCenter.listOrders(uid, "ID_HD", null, 20, false).items()).isEmpty();
     }
 
     // ---------- 详情 ----------

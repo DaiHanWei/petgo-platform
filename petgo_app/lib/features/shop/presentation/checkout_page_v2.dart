@@ -569,7 +569,8 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
     Analytics.capture('toko_checkout_submit_tapped');
     setState(() => _submitting = true);
     try {
-      final order = await ref.read(checkoutRepositoryProvider).placeOrder(p.addressToken);
+      final order = await ref.read(checkoutRepositoryProvider).placeOrder(p.addressToken,
+          idempotencyKey: 'shop-order-${DateTime.now().microsecondsSinceEpoch}');
       await ref.read(cartProvider.notifier).refresh();
       if (!mounted) return;
       // 🔒 items 里只有受控标识与数量：sku_id 是不可枚举 token，无价格、无名称、无 PII。

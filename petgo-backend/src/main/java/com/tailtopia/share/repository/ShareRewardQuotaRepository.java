@@ -41,4 +41,7 @@ public interface ShareRewardQuotaRepository extends JpaRepository<ShareRewardQuo
             + "and q.grantedCoins + :coins <= :cap")
     int tryGrant(@Param("userId") long userId, @Param("period") String period,
             @Param("coins") long coins, @Param("cap") long cap);
+
+    /** 账号注销级联（Story 7.3）：月度额度是纯个人计数行，随奖励留痕一并物理删除。幂等。 */
+    void deleteByUserId(long userId);
 }
