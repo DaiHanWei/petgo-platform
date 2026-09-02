@@ -275,6 +275,22 @@ function adminUploadError(root, text, selectors) {
             var keys = thumbs.map(function (t) {
                 return t.getAttribute('data-key') || '';
             }).filter(function (k) { return k; });
+            // 🔴 平铺模式（D-15，2026-09-02）：**一个字段收全部 key**，不分主图/图集。
+            //    质检照片没有"封面"这回事 —— 它们是一组等价的验货照，
+            //    服务端也只有一个 photoKeys 字段（逗号分隔，见 AdminReturnController.splitKeys）。
+            //    给了 data-field-keys 就走这一支，主图/图集那套完全不参与。
+            var flatEl = fieldOf(root.getAttribute('data-field-keys'));
+            if (flatEl) {
+                flatEl.value = keys.join(',');
+                // 🔴 平铺模式**不打「封面」角标**：这一组图里没有"第一张更重要"这回事
+                //    （质检照片是一组等价的验货照）。留着角标会让运营以为顺序有含义、
+                //    去纠结该把哪张拖到最前面。
+                thumbs.forEach(function (t) {
+                    var badge = t.querySelector('[data-seed-cover]');
+                    if (badge) { badge.hidden = true; }
+                });
+                return;
+            }
             var mainEl = fieldOf(root.getAttribute('data-field-main'));
             var galEl = fieldOf(root.getAttribute('data-field-gallery'));
             if (mainEl) { mainEl.value = keys.length ? keys[0] : ''; }

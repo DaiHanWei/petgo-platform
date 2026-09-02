@@ -6,6 +6,12 @@
     <title th:text="#{admin.shop.return.detail.title}">退货详情 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+    <!-- 🔴 上传走 fetch，而 /admin/** 那条过滤链**保留 CSRF** —— 少了这两个 meta
+         就是 403，且会被误读成"权限不够"（D-8 的原形）。
+         ⚠️ 不能挪到 layout.html：业务页用 th:replace 只换 body 里那个 div，
+            各页保留自己的 <head>。有 L0 护栏盯着这条。 -->
+    <meta name="_csrf" th:content="${_csrf?.token}"/>
+    <meta name="_csrf_header" th:content="${_csrf?.headerName}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
@@ -165,13 +171,32 @@
                         </div>
                     </div>
                     <div class="s-form-row">
-                        <label class="s-label" for="pass-photos" th:text="#{admin.shop.returns.inspect.photosLabel}">质检照片 objectKey</label>
+                        <label class="s-label" for="pass-photos" th:text="#{admin.shop.returns.inspect.photosLabel}">质检照片</label>
                         <div class="s-ctl">
-                            <input id="pass-photos" class="field-full" type="text" name="photoKeys" maxlength="1000"/>
-                            <!-- ⚠️ 仍是手填 key（D-15 第 4 条未做）：换成上传控件要先决定质检照片
-                                 落公开桶还是私有桶 —— 后台现有的直传端点只写公开桶，
-                                 而用户凭证走的是私有桶（D-10）。两者混在一页里必须先定口径。 -->
-                            <p class="hint" th:text="#{admin.shop.returns.inspect.photosManualHint}">暂需手填 objectKey。</p>
+                            <!-- 🔴 D-15 第 4 条：原先是**手填 objectKey 的文本框** ——
+                                 运营得先去别处传图、抄下 key、再粘回来。
+                                 复用内容侧那个上传控件（多选 / Ctrl+V 粘贴 / 拖拽排序），
+                                 走**平铺模式**：质检照片没有"封面"，一组等价的验货照
+                                 全部写进同一个 photoKeys 字段（逗号分隔）。
+                                 ⚠️ 落**公开桶**（2026-09-02 产品拍板）——
+                                    与用户凭证的私有桶不是一回事，同一页上两种图，别混。 -->
+                            <div data-seed-uploader
+                                 data-mode="objectkey"
+                                 data-field-keys="pass-photos"
+                                 th:attr="data-upload-url=@{/admin/shop/returns/images},
+                                          data-msg-cover=#{admin.seed.images.cover},
+                                          data-msg-limit=#{admin.shop.form.images.limit},
+                                          data-msg-remove=#{admin.seed.images.remove},
+                                          data-msg-uploading=#{admin.seed.images.uploading},
+                                          data-msg-failed=#{admin.seed.upload.failed},
+                                          data-msg-expired=#{admin.seed.upload.sessionExpired}">
+                                <input type="file" data-seed-file
+                                       accept="image/jpeg,image/png,image/webp" multiple/>
+                                <p class="hint" th:text="#{admin.shop.returns.inspect.photosHint}">可多选、可 Ctrl+V 粘贴。</p>
+                                <p class="hint" data-seed-status></p>
+                                <div class="seed-thumbs" data-seed-thumbs></div>
+                            </div>
+                            <input type="hidden" id="pass-photos" name="photoKeys"/>
                         </div>
                     </div>
                     <button class="btn btn-primary" type="submit" th:text="#{admin.shop.returns.btn.inspectPass}">质检通过并入库</button>
@@ -191,10 +216,32 @@
                         </div>
                     </div>
                     <div class="s-form-row">
-                        <label class="s-label" for="fail-photos" th:text="#{admin.shop.returns.inspect.photosLabel}">质检照片 objectKey</label>
+                        <label class="s-label" for="fail-photos" th:text="#{admin.shop.returns.inspect.photosLabel}">质检照片</label>
                         <div class="s-ctl">
-                            <input id="fail-photos" class="field-full" type="text" name="photoKeys" maxlength="1000"/>
-                            <p class="hint" th:text="#{admin.shop.returns.inspect.photosManualHint}">暂需手填 objectKey。</p>
+                            <!-- 🔴 D-15 第 4 条：原先是**手填 objectKey 的文本框** ——
+                                 运营得先去别处传图、抄下 key、再粘回来。
+                                 复用内容侧那个上传控件（多选 / Ctrl+V 粘贴 / 拖拽排序），
+                                 走**平铺模式**：质检照片没有"封面"，一组等价的验货照
+                                 全部写进同一个 photoKeys 字段（逗号分隔）。
+                                 ⚠️ 落**公开桶**（2026-09-02 产品拍板）——
+                                    与用户凭证的私有桶不是一回事，同一页上两种图，别混。 -->
+                            <div data-seed-uploader
+                                 data-mode="objectkey"
+                                 data-field-keys="fail-photos"
+                                 th:attr="data-upload-url=@{/admin/shop/returns/images},
+                                          data-msg-cover=#{admin.seed.images.cover},
+                                          data-msg-limit=#{admin.shop.form.images.limit},
+                                          data-msg-remove=#{admin.seed.images.remove},
+                                          data-msg-uploading=#{admin.seed.images.uploading},
+                                          data-msg-failed=#{admin.seed.upload.failed},
+                                          data-msg-expired=#{admin.seed.upload.sessionExpired}">
+                                <input type="file" data-seed-file
+                                       accept="image/jpeg,image/png,image/webp" multiple/>
+                                <p class="hint" th:text="#{admin.shop.returns.inspect.photosHint}">可多选、可 Ctrl+V 粘贴。</p>
+                                <p class="hint" data-seed-status></p>
+                                <div class="seed-thumbs" data-seed-thumbs></div>
+                            </div>
+                            <input type="hidden" id="fail-photos" name="photoKeys"/>
                         </div>
                     </div>
                     <div class="s-form-row">
