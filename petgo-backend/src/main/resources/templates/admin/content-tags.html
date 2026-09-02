@@ -102,15 +102,9 @@
         <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.tag_manage')">
             <h2 th:text="#{admin.tags.newTag}">新建标签</h2>
             <form method="post" enctype="multipart/form-data" th:action="@{/admin/content-tags}">
-                <!-- 🔴 两个字段的用途完全不同，而界面上原先只有两个光秃秃的标题
-                     （bug 20260828：运营问「标签码和名称分别是干嘛的」）。
-                     码 = 对外稳定标识，建后不可改，只进埋点与操作日志，用户永远看不到；
-                     名 = 用户在胶囊上看到的那几个字，随时可改。 -->
-                <label><span th:text="#{admin.tags.code}">标签码</span>
-                    <input type="text" name="code" class="field-full" required/></label>
-                <p class="muted" data-notice="tag-code-hint" th:text="#{admin.tags.codeHint}">
-                    用户看不到。建后不可修改。
-                </p>
+                <!-- 2026-09-02：标签码改为系统自动生成（ct-<id>），表单不再出现 ——
+                     原先由运营手填，多个运营会填出同一个码；码只进埋点与操作日志，
+                     用户看不到，没有理由让人来起名。列表里的「标签码」列照常显示生成结果。 -->
                 <label><span th:text="#{admin.tags.name}">名称</span>
                     <input type="text" name="name" class="field-full" required/></label>
                 <p class="muted" data-notice="tag-name-hint" th:text="#{admin.tags.nameHint}">
