@@ -312,25 +312,28 @@ class _ValidLineState extends ConsumerState<_ValidLine> {
 
   /// 删除后的撤销条。
   ///
-  /// ⚠️ 用 [SnackBar] 而不是本仓的 [showAppToast]：toast 没有可点的动作位，
-  /// 而这条提示的**全部意义**就是那个「撤销」按钮。
+  /// 走本仓统一的 [showAppToast]（`app_toast.dart` 的类注释：「全 App 短提示统一入口，
+  /// 替代 SnackBar」）。该组件 2026-09-02 加了动作位 —— 此前它被 [IgnorePointer]
+  /// 包着、刻意不可交互，而这条提示的**全部意义**就是那个可点的「撤销」。
+  ///
+  /// ⚠️ 选它而不是 SnackBar 的实际差别：toast 挂在 **root Overlay** 上，
+  /// **不参与布局** —— 而本页底部有合计条 + 结算按钮，SnackBar 会从下方顶进来压着它。
   ///
   /// 停留 5 秒（产品定的 4–5 秒区间上限）：短于此，误删的人还没反应过来就没了；
-  /// 长于此，它会盖住底部合计条影响正常结算。
+  /// 长于此，它在屏幕上待得比这次操作本身还久。
+  ///
+  /// ⚠️ 连删两行只留最后一条是 **toast 单实例**天然带来的（新的自动替换旧的），
+  /// 不需要像 SnackBar 那样自己先 hide —— 叠着的旧提示条点下去，
+  /// 撤销的不是用户以为的那一行。
   void _offerUndo(AppLocalizations l10n,
       {required String skuToken, required int qty, required String name}) {
-    ScaffoldMessenger.of(context)
-      // 连删两行时只留最后那条 —— 叠着的旧提示条点下去撤销的不是用户以为的那一行。
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        key: const ValueKey('cartUndoBarV2'),
-        content: Text(l10n.cartRemovedUndo(name)),
-        duration: const Duration(seconds: 5),
-        action: SnackBarAction(
-          label: l10n.cartUndo,
-          onPressed: () => _undoRemove(l10n, skuToken: skuToken, qty: qty),
-        ),
-      ));
+    showAppToast(
+      context,
+      l10n.cartRemovedUndo(name),
+      duration: const Duration(seconds: 5),
+      actionLabel: l10n.cartUndo,
+      onAction: () => _undoRemove(l10n, skuToken: skuToken, qty: qty),
+    );
   }
 
   /// 撤销删除：按原数量把这一行加回去。

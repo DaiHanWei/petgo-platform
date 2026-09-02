@@ -292,9 +292,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(ctrl.removed, ['sku-a']);
-      expect(find.byKey(const ValueKey('cartUndoBarV2')), findsOneWidget,
+      expect(find.byKey(const ValueKey('appToastAction')), findsOneWidget,
           reason: '删完什么都不说，误删的用户只能重新去找那件商品');
       expect(find.text('Urungkan'), findsOneWidget);
+      // 提示条里带商品名 —— 连着删两件时，用户得看得出撤销的是哪一件
+      expect(find.textContaining('dihapus'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 6)); // 放掉 toast 的自动消失 Timer
     });
 
     testWidgets('🔴 点撤销 → 按删除时的数量加回来', (tester) async {
@@ -308,6 +312,8 @@ void main() {
       expect(ctrl.added, hasLength(1));
       expect(ctrl.added.single.sku, 'sku-a');
       expect(ctrl.added.single.qty, 1);
+      // 点完动作 toast 立刻收起 —— 动作已经执行，再挂 5 秒只是挡视线
+      expect(find.byKey(const ValueKey('appToastAction')), findsNothing);
     });
 
     testWidgets('撤销带自述的归因值，而不是留 null', (tester) async {
@@ -321,6 +327,24 @@ void main() {
       // 端上无从还原原值。null 与「归因上线前的老数据」长得一样、事后分不清；
       // CART_UNDO 至少可解释、可筛掉。
       expect(ctrl.added.single.entrySource, 'CART_UNDO');
+    });
+
+    testWidgets('🔴 撤销条可点 —— 纯提示的 toast 是穿透的，带动作这条不能穿透',
+        (tester) async {
+      final ctrl = await pumpOneLine(tester);
+      await tester.tap(find.byKey(const ValueKey('stepperDec')));
+      await tester.pumpAndSettle();
+
+      // app_toast 默认包着 IgnorePointer（让点击穿透到底下的页面）。
+      // 带动作时那层必须去掉，否则「撤销」按钮点不动 —— 而它是这条提示的全部意义。
+      expect(find.ancestor(
+        of: find.byKey(const ValueKey('appToastAction')),
+        matching: find.byType(IgnorePointer),
+      ), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('appToastAction')));
+      await tester.pumpAndSettle();
+      expect(ctrl.added, hasLength(1));
     });
 
     testWidgets('🔴 撤销失败（货被买走）必须出声，不能静默', (tester) async {
@@ -380,6 +404,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('stepperDec')));
       await tester.pumpAndSettle();
       expect(ctrl.removed, ['sku-a']);
+
+      // 删除现在会弹 5 秒的撤销 toast（R-3），它带一个自动消失 Timer；
+      // 不 pump 过去，测试结束时会因为「Timer is still pending」而红。
+      await tester.pump(const Duration(seconds: 6));
     });
   });
 }
