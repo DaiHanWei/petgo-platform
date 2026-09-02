@@ -13,7 +13,7 @@
 -- 修复方式：不改 V20260819_0156 本身（无法确认它是否已应用到某环境，已应用的迁移
 -- 改 checksum 就是启动即拒），按安全默认另起本条新迁移、以终序重建一次全集。
 --
--- ⚠️ 取值全集以 NotificationType.java 枚举为唯一权威（当前 26 个值，逐个照抄源码，
+-- ⚠️ 取值全集以 NotificationType.java 枚举为唯一权威（当前 30 个值，逐个照抄源码，
 --    不凭记忆、不照抄上一份清单）。下次再有人改这个约束：
 --    1) 先打开 NotificationType.java 对全集；2) 再查一遍并行分支加了什么；
 --    3) DROP + ADD 重列全集，永远不要只在旧清单上打补丁。
@@ -30,4 +30,8 @@ ALTER TABLE notifications ADD CONSTRAINT ck_notifications_type CHECK (type IN (
     -- 正是 V20260819_0156 重建时漏掉的四个在用类型。
     'SHOP_ORDER_SHIPPED', 'SHOP_ORDER_EXCEPTION', 'SHOP_RETURN_UPDATED', 'REPURCHASE_FOOD_LOW',
     -- V1.1.6 Story 6.1（FR-76）：S/M 级里程碑达成 —— 写通知中心、不发系统推送。
-    'MILESTONE_SM_NODE'));
+    'MILESTONE_SM_NODE',
+    -- 留存手册抓手 1（V20260821_1646）：生命周期四节点，单一类型 + target_ref variant 分流。
+    -- 🔴 第五次漏值就差点发生在这里：本条写在 0902、跑在 0821 之后，重列全集时漏抄
+    --    这四个 = 把生命周期推送悄悄踢掉；petgo_stag 若已有该类行，重建即 23514 启动崩。
+    'LIFECYCLE_D1', 'LIFECYCLE_D3', 'LIFECYCLE_D7', 'LIFECYCLE_WINBACK'));
