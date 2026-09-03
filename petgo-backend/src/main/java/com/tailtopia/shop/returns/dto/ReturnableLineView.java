@@ -37,5 +37,13 @@ public record ReturnableLineView(
          * <p>取值：{@code ALL_RETURNED} / {@code NON_RETURNABLE} / {@code NO_RETURN_AFTER_OPEN}；
          * 可退时为 null。⚠️ 端上必须对未知码留兜底（新增码时老版本 App 不至于显示空白）。
          */
-        String blockedCode) {
+        String blockedCode,
+        /**
+         * 商品主图 CDN 全 URL（2026-09-03 追加）。无图为 null，端上走占位图。
+         *
+         * <p>🔴 退货申请页要用户勾「退哪几件」，而此前本视图<b>一张图都没有</b> ——
+         * 只有商品名 + 规格名，一单里两件同名不同规格的东西靠文字分辨很容易勾错。
+         * ⚠️ 读时派生（见 {@code ShopLineImageResolver}），非下单快照。
+         */
+        String mainImageUrl) {
 }

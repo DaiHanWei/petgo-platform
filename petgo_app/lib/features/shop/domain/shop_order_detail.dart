@@ -97,6 +97,7 @@ class ShopOrderLine {
     required this.unitPrice,
     required this.qty,
     required this.lineTotal,
+    this.mainImageUrl,
   });
 
   final String productName;
@@ -105,12 +106,19 @@ class ShopOrderLine {
   final int qty;
   final int lineTotal;
 
+  /// 商品主图 CDN 全 URL（2026-09-03 后端追加）。**可空** —— 无图 / CDN 未配置时为 null，
+  /// [ShopImage] 收到 null 会画占位斜纹。
+  /// ⚠️ 服务端是**读时派生**（现取商品当前主图），不是下单快照：运营换了主图，
+  /// 历史订单的缩略图会跟着变。它的用途是「认出是哪件」，不是留证。
+  final String? mainImageUrl;
+
   factory ShopOrderLine.fromJson(Map<String, dynamic> j) => ShopOrderLine(
         productName: j['productName']?.toString() ?? '',
         specName: j['specName']?.toString() ?? '',
         unitPrice: _int(j['unitPrice']) ?? 0,
         qty: _int(j['qty']) ?? 0,
         lineTotal: _int(j['lineTotal']) ?? 0,
+        mainImageUrl: _blankToNull(j['mainImageUrl']?.toString()),
       );
 }
 
@@ -257,6 +265,10 @@ class ShopPayResult {
 }
 
 int? _int(Object? v) => v is num ? v.toInt() : null;
+
+/// 空串按「没有」处理：后端派生不出 URL 时给的是 null，但历史/边界数据可能是空串，
+/// 两者对 UI 是同一件事 —— 走占位图，而不是拿空串去请求自己的域名。
+String? _blankToNull(String? s) => (s == null || s.isEmpty) ? null : s;
 
 DateTime? _time(Object? v) {
   if (v is! String || v.isEmpty) return null;

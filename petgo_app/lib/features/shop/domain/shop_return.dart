@@ -103,6 +103,7 @@ class ReturnableLine {
     required this.returnPolicy,
     required this.selectable,
     this.blockedCode,
+    this.mainImageUrl,
   });
 
   final int orderLineId;
@@ -125,6 +126,11 @@ class ReturnableLine {
   /// ⇒ 印尼用户在退货申请页必现中文。文案改由端上按码取。
   /// ⚠️ 未知码要有兜底 —— 后端将来加新码时，老版本 App 不该显示一片空白。
   final String? blockedCode;
+
+  /// 商品主图 CDN 全 URL（2026-09-03 后端追加）。可空 —— [ShopImage] 收到 null 画占位斜纹。
+  /// ⚠️ 服务端读时派生、非下单快照：运营换了主图，历史单的缩略图会跟着变。
+  /// 用途是「认出是哪件」，不是留证（留证走质检照片那条私有桶链路）。
+  final String? mainImageUrl;
 
   /// 🔴 「开封不退」的行在**质量问题**下仍可勾选：破损/临期/错发与是否开封无关。
   /// 把它一并挡掉等于让收到破损品的用户无路可走。
@@ -149,6 +155,7 @@ class ReturnableLine {
         returnPolicy: j['returnPolicy']?.toString() ?? 'NON_RETURNABLE',
         selectable: j['selectable'] == true,
         blockedCode: j['blockedCode']?.toString(),
+        mainImageUrl: _blankToNull(j['mainImageUrl']?.toString()),
       );
 }
 
@@ -327,6 +334,7 @@ class ReturnProgressLine {
     required this.specName,
     required this.qty,
     required this.lineRefundAmount,
+    this.mainImageUrl,
   });
 
   final String productName;
@@ -334,15 +342,23 @@ class ReturnProgressLine {
   final int qty;
   final int lineRefundAmount;
 
+  /// 商品主图 CDN 全 URL（2026-09-03 后端追加）。可空 —— 无图走占位斜纹。
+  final String? mainImageUrl;
+
   factory ReturnProgressLine.fromJson(Map<String, dynamic> j) => ReturnProgressLine(
         productName: j['productName']?.toString() ?? '',
         specName: j['specName']?.toString() ?? '',
         qty: _int(j['qty']) ?? 0,
         lineRefundAmount: _int(j['lineRefundAmount']) ?? 0,
+        mainImageUrl: _blankToNull(j['mainImageUrl']?.toString()),
       );
 }
 
 int? _int(Object? v) => v is num ? v.toInt() : null;
+
+/// 空串按「没有」处理：后端无图时给 null，但边界数据可能是空串，
+/// 两者对 UI 是同一件事 —— 走占位图，而不是拿空串去请求自己的域名。
+String? _blankToNull(String? s) => (s == null || s.isEmpty) ? null : s;
 
 DateTime? _time(Object? v) {
   if (v is! String || v.isEmpty) return null;

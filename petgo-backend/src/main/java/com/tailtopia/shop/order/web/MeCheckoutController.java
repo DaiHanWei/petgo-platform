@@ -37,12 +37,27 @@ public class MeCheckoutController {
     private final CheckoutService checkout;
     private final ShopOrderPaymentService payments;
     private final com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment;
+    private final com.tailtopia.shop.service.ShopLineImageResolver lineImages;
 
     public MeCheckoutController(CheckoutService checkout, ShopOrderPaymentService payments,
-            com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment) {
+            com.tailtopia.shop.order.service.ShopOrderFulfillmentService fulfillment,
+            com.tailtopia.shop.service.ShopLineImageResolver lineImages) {
         this.checkout = checkout;
         this.payments = payments;
         this.fulfillment = fulfillment;
+        this.lineImages = lineImages;
+    }
+
+    /**
+     * 订单详情的三个出口共用：装配前先批量取一次主图（2026-09-03）。
+     *
+     * <p>🔴 三处各写一遍必然漏掉其中一处 —— 「下单后全链路无图」本就是这么攒出来的。
+     */
+    private ShopOrderDetailView detailOf(com.tailtopia.shop.order.domain.ShopOrder order) {
+        var lines = payments.linesOf(order);
+        return ShopOrderDetailView.of(order, lines, fulfillment.shipmentsOf(order.getId()),
+                lineImages.mainImageUrlBySkuId(lines.stream()
+                        .map(com.tailtopia.shop.order.domain.ShopOrderLine::getSkuId).toList()));
     }
 
     /**
@@ -89,8 +104,7 @@ public class MeCheckoutController {
     public ShopOrderDetailView detail(@AuthenticationPrincipal Jwt jwt,
             @PathVariable String token) {
         var order = payments.requireOwn(currentUserId(jwt), token);
-        return ShopOrderDetailView.of(order, payments.linesOf(order),
-                fulfillment.shipmentsOf(order.getId()));
+        return detailOf(order);
     }
 
     /**
@@ -113,8 +127,7 @@ public class MeCheckoutController {
         long userId = currentUserId(jwt);
         payments.cancel(userId, token);
         var order = payments.requireOwn(userId, token);
-        return ShopOrderDetailView.of(order, payments.linesOf(order),
-                fulfillment.shipmentsOf(order.getId()));
+        return detailOf(order);
     }
 
     // ===== Story 4.1：履约段（SPEC-2 出口②） =====
@@ -133,8 +146,7 @@ public class MeCheckoutController {
             @PathVariable String token) {
         long userId = currentUserId(jwt);
         var order = fulfillment.confirmReceipt(userId, token);
-        return ShopOrderDetailView.of(order, payments.linesOf(order),
-                fulfillment.shipmentsOf(order.getId()));
+        return detailOf(order);
     }
 
     /**

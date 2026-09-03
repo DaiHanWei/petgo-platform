@@ -11,6 +11,7 @@ import 'package:tailtopia/features/shop/domain/shop_return.dart';
 import 'package:tailtopia/features/shop/presentation/shop_order_detail_page_v2.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_buttons.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_countdown.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/shop_decor.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// 电商订单详情 · **设计稿版式**（V1.4.0 第 2 批）。
@@ -80,6 +81,7 @@ void main() {
             unitPrice: 189000,
             qty: 1,
             lineTotal: 189000,
+            mainImageUrl: 'https://cdn.test/shop/main.jpg',
           ),
         ],
         receiverName: 'Budi',
@@ -97,6 +99,21 @@ void main() {
         shippedAt: shippedAt,
         deliveredAt: deliveredAt,
       );
+
+  /// 🔴 下单前有图、下单后无图（2026-09-03 stag 回归 P2）：本页的商品缩略图写死
+  /// `ShopImage(url: null)`，于是**永远**是占位斜纹。订单详情是用户回头找「我买的是哪件」
+  /// 的地方，只有商品名 + 规格名时，同名不同规格的两件根本分不出来。
+  group('🔴 订单行必须显示商品图', () {
+    testWidgets('缩略图拿到 URL，不是写死的 null', (tester) async {
+      await tester.pumpWidget(host(order()));
+      await tester.pumpAndSettle();
+
+      final withUrl = tester.widgetList<ShopImage>(find.byType(ShopImage))
+          .where((i) => i.url != null);
+      expect(withUrl, isNotEmpty, reason: '缩略图恒为占位斜纹 —— 用户认不出买的是哪件');
+      expect(withUrl.first.url, 'https://cdn.test/shop/main.jpg');
+    });
+  });
 
   group('🔴 倒计时：服务端下发到期时刻，前端只渲染', () {
     testWidgets('待支付且未过期 → 渲染倒计时组件', (tester) async {

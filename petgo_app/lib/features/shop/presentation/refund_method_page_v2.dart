@@ -165,7 +165,11 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const ShopImage(url: null, size: 44, radius: ShopShape.radiusField),
+            // 整单一张缩略图 —— 本块讲的是「这一单」，取第一条退货行的图认单即可。
+            ShopImage(
+                url: p.lines.isEmpty ? null : p.lines.first.mainImageUrl,
+                size: 44,
+                radius: ShopShape.radiusField),
             const SizedBox(width: 10),
             Expanded(
               child: Column(

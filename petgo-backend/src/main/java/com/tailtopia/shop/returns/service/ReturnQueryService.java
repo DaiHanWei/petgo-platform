@@ -14,10 +14,12 @@ import com.tailtopia.shop.returns.dto.ReturnableLineView;
 import com.tailtopia.shop.returns.repository.ReturnLineRepository;
 import com.tailtopia.shop.returns.repository.ReturnRequestRepository;
 import com.tailtopia.shop.shipping.domain.ShippingSettings;
+import com.tailtopia.shop.service.ShopLineImageResolver;
 import com.tailtopia.shop.shipping.repository.ShippingSettingsRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,16 +39,19 @@ public class ReturnQueryService {
     private final ReturnLineRepository returnLines;
     private final ShippingSettingsRepository settings;
     private final RefundExecutionService refunds;
+    private final ShopLineImageResolver lineImages;
 
     public ReturnQueryService(ShopOrderRepository orders, ShopOrderLineRepository orderLines,
             ReturnRequestRepository returns, ReturnLineRepository returnLines,
-            ShippingSettingsRepository settings, RefundExecutionService refunds) {
+            ShippingSettingsRepository settings, RefundExecutionService refunds,
+            ShopLineImageResolver lineImages) {
         this.orders = orders;
         this.orderLines = orderLines;
         this.returns = returns;
         this.returnLines = returnLines;
         this.settings = settings;
         this.refunds = refunds;
+        this.lineImages = lineImages;
     }
 
     /** 退货申请页数据。🔴 不可退的行<b>保留可见但置灰</b>，不过滤掉（5.7 AC）。 */
@@ -71,8 +76,13 @@ public class ReturnQueryService {
             reason = "已超过签收后 7 天的退货期限";
         }
 
+        List<ShopOrderLine> orderLineRows = orderLines.findByOrderIdOrderByIdAsc(order.getId());
+        // 🔴 一次批量取图，别在循环里逐行查（订单动辄十几行）。
+        Map<Long, String> imageBySku = lineImages.mainImageUrlBySkuId(
+                orderLineRows.stream().map(ShopOrderLine::getSkuId).toList());
+
         List<ReturnableLineView> lines = new ArrayList<>();
-        for (ShopOrderLine l : orderLines.findByOrderIdOrderByIdAsc(order.getId())) {
+        for (ShopOrderLine l : orderLineRows) {
             int returnable = l.getQty() - l.getRefundedQty();
             ReturnPolicy policy = l.getReturnPolicy();
             boolean selectable = returnable > 0;
@@ -97,7 +107,7 @@ public class ReturnQueryService {
             lines.add(new ReturnableLineView(l.getId(), l.getProductName(), l.getSpecName(),
                     l.getUnitPrice(), l.getQty(), l.getRefundedQty(), Math.max(0, returnable),
                     policy == null ? ReturnPolicy.NON_RETURNABLE.name() : policy.name(),
-                    selectable, blocked));
+                    selectable, blocked, imageBySku.get(l.getSkuId())));
         }
 
         ShippingSettings s = settings.findAll().stream().findFirst().orElse(null);
@@ -120,9 +130,17 @@ public class ReturnQueryService {
         ShopOrder order = orders.findById(r.getShopOrderId()).orElseThrow();
         var rls = returnLines.findByReturnRequestIdOrderByIdAsc(r.getId());
         List<String> labels = new ArrayList<>();
+        List<Long> skuIds = new ArrayList<>();
         for (var rl : rls) {
-            labels.add(orderLines.findById(rl.getOrderLineId())
-                    .map(ol -> ol.getProductName() + " · " + ol.getSpecName()).orElse(""));
+            var ol = orderLines.findById(rl.getOrderLineId()).orElse(null);
+            labels.add(ol == null ? "" : ol.getProductName() + " · " + ol.getSpecName());
+            skuIds.add(ol == null ? null : ol.getSkuId());
+        }
+        Map<Long, String> imageBySku = lineImages.mainImageUrlBySkuId(skuIds);
+        // 与 rls 同下标对齐（见 ReturnProgressView.of 的参数说明）。
+        List<String> imageUrls = new ArrayList<>();
+        for (Long skuId : skuIds) {
+            imageUrls.add(skuId == null ? null : imageBySku.get(skuId));
         }
         // 试算失败（如状态已终结）不该让整页 500 —— 金额区块留空即可
         RefundExecutionService.Quote quote;
@@ -131,7 +149,7 @@ public class ReturnQueryService {
         } catch (RuntimeException e) {
             quote = null;
         }
-        return ReturnProgressView.of(r, order.getPublicToken(), rls, labels, quote);
+        return ReturnProgressView.of(r, order.getPublicToken(), rls, labels, imageUrls, quote);
     }
 
     @Transactional(readOnly = true)

@@ -5,6 +5,7 @@ import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.domain.ShopOrderLine;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 电商订单详情（Story 3.8 待支付态 · Story 4.1 履约态）。
@@ -69,17 +70,30 @@ public record ShopOrderDetailView(
             String kotaKabupaten, String kecamatan, String addressLine, String kodePos) {
     }
 
-    /** 订单行。{@code returnPolicy} 是下单时定格的承诺（FR-104，退货时按它执行）。 */
+    /**
+     * 订单行。{@code returnPolicy} 是下单时定格的承诺（FR-104，退货时按它执行）。
+     *
+     * <p>{@code mainImageUrl}：商品主图 CDN 全 URL，2026-09-03 追加。无图为 null，端上走占位图。
+     * ⚠️ 它是**读时派生**的（见 {@code ShopLineImageResolver}），不是下单快照 ——
+     * 运营事后换主图，这里会跟着变。用途是「认出是哪件」，不是留证。
+     */
     public record Line(String productName, String specName, long unitPrice, int qty,
-            long lineTotal, String returnPolicy) {
-    }
-
-    public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines) {
-        return of(o, lines, List.of());
+            long lineTotal, String returnPolicy, String mainImageUrl) {
     }
 
     public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines,
-            List<Shipment> shipments) {
+            Map<Long, String> imageUrlBySkuId) {
+        return of(o, lines, List.of(), imageUrlBySkuId);
+    }
+
+    /**
+     * @param imageUrlBySkuId skuId → 主图 URL，由 {@code ShopLineImageResolver} 批量取。
+     *     🔴 <b>刻意做成必传</b>：给个「不带图」的重载，下一个人照着写就又是一页占位图 ——
+     *     下单后全链路无图（2026-09-03 stag 回归 P2）正是这么来的。没有图就传 {@code Map.of()}，
+     *     那是一个显式的选择。
+     */
+    public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines,
+            List<Shipment> shipments, Map<Long, String> imageUrlBySkuId) {
         var ship = o.shipTo();
         return new ShopOrderDetailView(
                 o.getPublicToken(),
@@ -100,7 +114,8 @@ public record ShopOrderDetailView(
                 lines.stream()
                         .map(l -> new Line(l.getProductName(), l.getSpecName(), l.getUnitPrice(),
                                 l.getQty(), l.getLineTotal(),
-                                l.getReturnPolicy() == null ? null : l.getReturnPolicy().name()))
+                                l.getReturnPolicy() == null ? null : l.getReturnPolicy().name(),
+                                imageUrlBySkuId.get(l.getSkuId())))
                         .toList(),
                 o.getShippedAt(),
                 o.getDeliveredAt(),

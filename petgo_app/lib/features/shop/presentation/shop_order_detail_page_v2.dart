@@ -460,7 +460,8 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const ShopImage(url: null, size: 50, radius: ShopShape.radiusField),
+                ShopImage(
+                    url: line.mainImageUrl, size: 50, radius: ShopShape.radiusField),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
