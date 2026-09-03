@@ -374,6 +374,16 @@ function adminUploadError(root, text, selectors) {
             window.alert(root.getAttribute('data-msg-limit') || 'max 9 images');
             return;
         }
+        // 🔴 超限的图**根本不发出去**（2026-09-03 stag 回归 P1）。
+        //    Tomcat 是在 multipart 解析阶段拒的：那一刻请求体还没发完，连接随即被重置，
+        //    fetch 既不 resolve 也不 reject —— 界面永远停在「正在上传…」，运营只会一直等。
+        //    ⚠️ 这是体验护栏不是安全边界：判定点仍在服务端（见 AdminUploadLimitAdvice）。
+        //    没有 data-max-bytes 的老模板自动跳过本检查，行为与改动前一致。
+        var maxBytes = parseInt(root.getAttribute('data-max-bytes') || '0', 10);
+        if (maxBytes > 0 && file.size > maxBytes) {
+            showError(root, file, root.getAttribute('data-msg-too-large') || failedText(root));
+            return;
+        }
         var status = root.querySelector('[data-seed-status]');
         if (status) { status.textContent = root.getAttribute('data-msg-uploading') || '...'; }
         var body = new FormData();

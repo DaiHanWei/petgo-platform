@@ -126,7 +126,9 @@
                                           data-msg-remove=#{admin.seed.images.remove},
                                           data-msg-uploading=#{admin.seed.images.uploading},
                                           data-msg-failed=#{admin.seed.upload.failed},
-                                          data-msg-expired=#{admin.seed.upload.sessionExpired}">
+                                          data-msg-expired=#{admin.seed.upload.sessionExpired},
+                                          data-max-bytes=${uploadMaxBytes},
+                                          data-msg-too-large=#{admin.seed.upload.tooLarge(${uploadMaxMb})}">
                                 <input type="file" data-seed-file
                                        accept="image/jpeg,image/png,image/webp" multiple/>
                                 <p class="hint" th:text="#{admin.shop.form.images.hint}">可多选、可 Ctrl+V 粘贴；拖拽排序，第一张即主图。</p>

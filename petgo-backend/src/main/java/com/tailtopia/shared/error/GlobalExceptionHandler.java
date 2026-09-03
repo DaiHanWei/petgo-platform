@@ -104,10 +104,51 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ProblemDetail> handleUploadTooLarge(MaxUploadSizeExceededException ex,
             HttpServletRequest req) {
+        return uploadTooLarge(req);
+    }
+
+    private ResponseEntity<ProblemDetail> uploadTooLarge(HttpServletRequest req) {
         ProblemDetail pd = base(HttpStatus.PAYLOAD_TOO_LARGE, ErrorTypes.VALIDATION,
                 "Payload Too Large",
                 messages.get("admin.seed.upload.tooLarge", maxFileSize.toMegabytes()), req);
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(pd);
+    }
+
+    /**
+     * 这次失败到底是不是「上传超限」——<b>按异常链判，不按类型判</b>。
+     *
+     * <p>🔴 2026-09-03 stag 回归实测：10.2MB 图 POST 到 {@code /admin/shop/banners/images}
+     * 回的是 <b>500</b>「服务暂时不可用」，而不是上面那个 413。日志里是本类
+     * {@code handleUnexpected} 打的「Unhandled exception」+
+     * {@code org.apache.tomcat.util.http.fileupload.impl.FileSizeLimitExceededException}。
+     *
+     * <p>成因：把 Tomcat 的原始异常包成 Spring 的 {@link MaxUploadSizeExceededException} 的，
+     * 只有 {@code StandardServletMultipartResolver.resolveMultipart}（DispatcherServlet 内部）。
+     * 而 {@code /admin/**} 这条链<b>带 CSRF 过滤器</b>，它会提前读请求参数、就地触发 multipart 解析
+     * —— 那一刻 DispatcherServlet 还没接手，抛出来的是 Tomcat 自己的
+     * {@code FileSizeLimitExceededException}，它继承 {@code IOException}，
+     * <b>与 Spring 的 multipart 异常体系毫无血缘</b>，于是上面那个 {@code @ExceptionHandler} 接不到，
+     * 一路掉进 catch-all。运营看到的是一句与体积毫无关系的「服务暂时不可用」，只会反复重传同一张图。
+     *
+     * <p>⚠️ 为什么按<b>类名</b>判而不是 import Tomcat 的类：那是容器内部实现
+     * （{@code org.apache.tomcat.util.http.fileupload.impl.*}），换 Jetty/Undertow 或 Tomcat
+     * 挪包就编不过或静默失效。类名后缀 + 异常链遍历对三种容器都成立，且不给本模块添依赖。
+     */
+    private static boolean isUploadTooLarge(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof org.springframework.web.multipart.MultipartException) {
+                return true;
+            }
+            String name = t.getClass().getSimpleName();
+            // Tomcat: FileSizeLimitExceededException（单文件超限）/ SizeLimitExceededException（整请求超限）
+            if (name.endsWith("SizeLimitExceededException")) {
+                return true;
+            }
+            if (t.getCause() == t) {
+                break; // 自环，防死循环
+            }
+        }
+        return false;
     }
 
     /**
@@ -122,6 +163,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public Object handleUnexpected(Exception ex, HttpServletRequest req) {
+        // 🔴 先认「上传超限」：它可能以 Tomcat 的原始异常形态到这里，与 5xx 不是一回事。
+        //    见 isUploadTooLarge 的说明 —— 漏了这一步，运营拿到的是 500 通用文案。
+        if (isUploadTooLarge(ex)) {
+            return uploadTooLarge(req);
+        }
         // 5xx：服务端记录完整堆栈，对外仅给通用文案 + traceId，绝不外泄内部细节
         String traceId = currentTraceId();
         log.error("Unhandled exception [traceId={}]", traceId, ex);
