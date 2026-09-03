@@ -526,6 +526,74 @@ void main() {
     });
   });
 
+  /// 🔴 标题压在 banner 亮部只有 **2.45:1**（2026-09-03 stag 回归实测，低于 3:1 下限）。
+  ///
+  /// 成因不是「遮罩没了」——几何与不透明度都没变（92dp 高、满强度），
+  /// 而是**两段线性渐变把最深的一段给了状态栏**：.55 从 y=0 线性降到 y=92，
+  /// 落到标题那一带（43.5–68.5）只剩 14–29% 黑。状态栏那条只有系统图标，
+  /// 真正要保护的顶栏文字反而落在已经淡下去的一段。
+  ///
+  /// 改成三段：顶栏范围内维持深色，出了顶栏再快速淡出。
+  /// ⚠️ 本用例不测像素（测试环境没有真实 banner 图），测的是**渐变在标题那一带
+  /// 到底有多黑** —— 那正是上面那次失效的地方，也是唯一能在无图环境里守住的东西。
+  group('🔴 banner 遮罩必须罩住标题所在的那一带', () {
+    /// 线性渐变在 [t]（0=顶，1=底）处的 alpha。
+    double alphaAt(LinearGradient g, double t) {
+      final stops = g.stops ?? [for (var i = 0; i < g.colors.length; i++) i / (g.colors.length - 1)];
+      for (var i = 0; i < stops.length - 1; i++) {
+        if (t <= stops[i + 1]) {
+          final span = stops[i + 1] - stops[i];
+          final k = span == 0 ? 0.0 : (t - stops[i]) / span;
+          return (g.colors[i].a + (g.colors[i + 1].a - g.colors[i].a) * k);
+        }
+      }
+      return g.colors.last.a;
+    }
+
+    testWidgets('🔴 标题纵向中点处的遮罩不低于 .60', (tester) async {
+      await tester.pumpWidget(host(
+        [p('a', price: 185000)],
+        banner: const ShopBanner(
+            imageUrl: 'https://example.test/b.jpg', imageW: 1200, imageH: 896),
+      ));
+      await tester.pumpAndSettle();
+
+      final box = find.byWidgetPredicate((w) =>
+          w is DecoratedBox &&
+          w.decoration is BoxDecoration &&
+          (w.decoration as BoxDecoration).gradient is LinearGradient);
+      expect(box, findsOneWidget);
+
+      final deco = tester.widget<DecoratedBox>(box).decoration as BoxDecoration;
+      final size = tester.getSize(box);
+      final top = tester.getTopLeft(box).dy;
+      final titleMid = tester.getCenter(find.text('Toko')).dy;
+      final t = (titleMid - top) / size.height;
+
+      expect(t, inInclusiveRange(0.0, 1.0), reason: '标题必须落在遮罩范围内');
+      expect(alphaAt(deco.gradient! as LinearGradient, t), greaterThanOrEqualTo(0.60),
+          reason: '白字要在**任意运营图**上过 3:1，标题那一带的黑就不能低于 .60 —— '
+              '两段线性渐变在这里只剩 .14–.29，实测 2.45:1');
+    });
+
+    testWidgets('遮罩底端仍要淡到全透明 —— 不许在图上留一条硬边', (tester) async {
+      await tester.pumpWidget(host(
+        [p('a', price: 185000)],
+        banner: const ShopBanner(
+            imageUrl: 'https://example.test/b.jpg', imageW: 1200, imageH: 896),
+      ));
+      await tester.pumpAndSettle();
+
+      final deco = tester
+          .widget<DecoratedBox>(find.byWidgetPredicate((w) =>
+              w is DecoratedBox &&
+              w.decoration is BoxDecoration &&
+              (w.decoration as BoxDecoration).gradient is LinearGradient))
+          .decoration as BoxDecoration;
+      expect((deco.gradient! as LinearGradient).colors.last.a, 0);
+    });
+  });
+
   group('设计骨架', () {
     testWidgets('页面底色 = 灰缝色（区块靠露出底色分隔）', (tester) async {
       await tester.pumpWidget(host([p('a', price: 185000)]));
