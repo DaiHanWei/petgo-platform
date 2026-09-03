@@ -514,12 +514,21 @@ class _BannerAppBar extends StatelessWidget {
               child: IgnorePointer(
                 child: Opacity(
                   opacity: _scrimOpacity(constraints.maxHeight, minExtent, maxExtent),
-                  child: const DecoratedBox(
+                  child: DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [ShopColors.bannerScrimTop, ShopColors.bannerScrimBottom],
+                        colors: const [
+                          ShopColors.bannerScrimTop,
+                          ShopColors.bannerScrimMid,
+                          ShopColors.bannerScrimBottom,
+                        ],
+                        // 🔴 中间停靠点钉在**顶栏下沿**：顶栏范围内保持深色，
+                        //    出了顶栏再淡出。线性两段渐变会把最深的一段给状态栏
+                        //    （那里只有系统图标），标题反而落在淡下去的一段 ——
+                        //    实测白色标题只有 2.45:1（2026-09-03 stag 回归）。
+                        stops: [0, (minExtent / gradientHeight).clamp(0.0, 1.0), 1],
                       ),
                     ),
                   ),
