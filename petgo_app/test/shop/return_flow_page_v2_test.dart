@@ -60,6 +60,7 @@ void main() {
         returnPolicy: policy,
         selectable: selectable,
         blockedCode: blockedCode,
+        mainImageUrl: 'https://cdn.test/shop/main.jpg',
       );
 
   ReturnEligibility eligibility({List<ReturnableLine>? lines, bool eligible = true}) =>
@@ -293,6 +294,7 @@ void main() {
             specName: '3 kg',
             qty: 1,
             lineRefundAmount: 204000,
+            mainImageUrl: 'https://cdn.test/shop/main.jpg',
           ),
         ],
       );
@@ -398,6 +400,55 @@ void main() {
       await _scrollTo(tester, const ValueKey('refundProcessBlockV2'));
       expect(find.text(l10n.refundStep2), findsOneWidget,
           reason: '两段都在时那句是对的，别为了修单段把它一起删了');
+    });
+  });
+
+  /// 🔴 下单**前**的三个视图（商品列表 / 购物车 / 结算）都带 mainImageUrl，
+  /// 下单**后**的三个（订单详情 / 可退行 / 退货进度）此前一张图都没有 ——
+  /// 三处页面早就画着 `ShopImage(url: null)`，缩略图**永远**是占位斜纹
+  /// （2026-09-03 stag 回归 P2）。退货要用户勾「退哪几件」，一单里两件同名不同规格
+  /// 的东西只靠文字分辨，很容易勾错。
+  group('🔴 退货相关页必须显示商品图', () {
+    testWidgets('退货申请页：可退行的缩略图拿到 URL，不是写死的 null', (tester) async {
+      await tester.pumpWidget(requestHost(eligibility()));
+      await tester.pumpAndSettle();
+
+      final img = tester.widgetList<ShopImage>(find.byType(ShopImage))
+          .where((i) => i.url != null);
+      expect(img, isNotEmpty,
+          reason: '缩略图恒为占位斜纹 —— 用户只能靠商品名分辨要退哪件');
+      expect(img.first.url, 'https://cdn.test/shop/main.jpg');
+    });
+
+    testWidgets('退款方式页：整单缩略图取第一条退货行的图', (tester) async {
+      await tester.pumpWidget(refundHost(progress()));
+      await tester.pumpAndSettle();
+
+      final img = tester.widgetList<ShopImage>(find.byType(ShopImage))
+          .where((i) => i.url != null);
+      expect(img, isNotEmpty);
+      expect(img.first.url, 'https://cdn.test/shop/main.jpg');
+    });
+
+    testWidgets('无图（后端给 null）时仍画占位斜纹，不崩也不留空洞', (tester) async {
+      await tester.pumpWidget(requestHost(eligibility(lines: [
+        ReturnableLine(
+          orderLineId: 9,
+          productName: 'Tanpa gambar',
+          specName: '1 pcs',
+          unitPrice: 10000,
+          qty: 1,
+          refundedQty: 0,
+          returnableQty: 1,
+          returnPolicy: 'RETURNABLE',
+          selectable: true,
+        ),
+      ])));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(ShopImage), findsWidgets,
+          reason: '没有图不等于不画图位 —— 布局不该塌掉');
     });
   });
 

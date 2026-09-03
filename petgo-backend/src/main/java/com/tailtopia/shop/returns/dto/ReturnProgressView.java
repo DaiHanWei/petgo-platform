@@ -55,11 +55,22 @@ public record ReturnProgressView(
         Instant createdAt,
         List<Line> lines) {
 
-    public record Line(String productName, String specName, int qty, long lineRefundAmount) {
+    /**
+     * {@code mainImageUrl}：商品主图 CDN 全 URL（2026-09-03 追加），无图为 null。
+     * ⚠️ 读时派生（见 {@code ShopLineImageResolver}），非下单快照。
+     */
+    public record Line(String productName, String specName, int qty, long lineRefundAmount,
+            String mainImageUrl) {
     }
 
+    /**
+     * @param lineLabels    与 {@code returnLines} <b>按下标一一对应</b>的「商品名 · 规格名」
+     * @param lineImageUrls 同上，按下标对应的主图 URL；缺位按 null 处理
+     *     ⚠️ 两个并行列表是既有形态（labels 本就如此），新增时沿用而不另起一套 ——
+     *     但**长度不足一律按缺失降级**，绝不越界：调用方少给一条不该让整页 500。
+     */
     public static ReturnProgressView of(ReturnRequest r, String orderToken,
-            List<ReturnLine> returnLines, List<String> lineLabels,
+            List<ReturnLine> returnLines, List<String> lineLabels, List<String> lineImageUrls,
             com.tailtopia.shop.returns.service.RefundExecutionService.Quote quote) {
         List<Line> ls = new java.util.ArrayList<>();
         for (int i = 0; i < returnLines.size(); i++) {
@@ -68,7 +79,8 @@ public record ReturnProgressView(
             int sep = label.indexOf(" · ");
             ls.add(new Line(sep < 0 ? label : label.substring(0, sep),
                     sep < 0 ? "" : label.substring(sep + 3), rl.getQty(),
-                    rl.getLineRefundAmount()));
+                    rl.getLineRefundAmount(),
+                    i < lineImageUrls.size() ? lineImageUrls.get(i) : null));
         }
         return new ReturnProgressView(
                 r.getPublicToken(), orderToken, r.getStatus().name(), r.getReturnType().name(),

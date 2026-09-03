@@ -180,7 +180,7 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
               }),
             ),
             const SizedBox(width: 2),
-            const ShopImage(url: null, size: 46, radius: ShopShape.radiusChip),
+            ShopImage(url: line.mainImageUrl, size: 46, radius: ShopShape.radiusChip),
             const SizedBox(width: 9),
             Expanded(
               child: Column(
