@@ -420,7 +420,7 @@ void main() {
 class _FakeCartController extends CartController {
   _FakeCartController(this._cart);
 
-  final CartView _cart;
+  CartView _cart;
 
   /// 被 `remove()` 掉的 skuToken，供用例断言。
   final removed = <String>[];
@@ -434,8 +434,25 @@ class _FakeCartController extends CartController {
   @override
   Future<CartView> build() async => _cart;
 
+  /// 🔴 **必须真的把行从状态里去掉**（2026-09-03 修）。
+  ///
+  /// 原实现只记一笔 `removed.add(...)`、状态一动不动 —— 于是 `_ValidLine` 在测试里
+  /// 永远挂在树上，而线上它删完就被卸载。差别正是 R-3「撤销点了没反应」能一路绿着
+  /// 上线的原因：撤销回调当初挂在这一行的 State 上，真机里 State 已 defunct、
+  /// `setState` 当场抛异常，测试里却活得好好的。
+  /// ⚠️ 假实现可以简陋，但**不能比真实现更宽容** —— 那是在给缺陷发通行证。
   @override
-  Future<void> remove(String skuToken) async => removed.add(skuToken);
+  Future<void> remove(String skuToken) async {
+    removed.add(skuToken);
+    final rest = _cart.lines.where((l) => l.skuToken != skuToken).toList();
+    _cart = CartView(
+      lines: rest,
+      invalidLines: _cart.invalidLines,
+      itemCount: rest.fold(0, (n, l) => n + l.qty),
+      subtotal: rest.fold(0, (n, l) => n + l.price * l.qty),
+    );
+    state = AsyncData(_cart);
+  }
 
   @override
   Future<void> add(String skuToken,
