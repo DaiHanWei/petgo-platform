@@ -454,7 +454,12 @@ class _RefundMethodPageV2State extends ConsumerState<RefundMethodPageV2> {
             Text(l10n.refundProcessTitle, style: ShopText.sectionTitle.copyWith(fontSize: 12)),
             const SizedBox(height: 10),
             _step(1, l10n.refundStep1, current: true),
-            _step(2, l10n.refundStep2, current: false),
+            // 🔴 第 2 步的「2 个去向」是**焊在文案里**的数字（两份 arb 都是），
+            //    而单一去向的退款（纯 PawCoin 或纯现金）上方只渲染 1 张卡、
+            //    Total refunded 也只有那一笔 —— 下方却承诺 2 个（2026-09-03 stag 回归）。
+            //    判据用 [ReturnProgress.isMixed]，与本页 _splitBlock 标题同一个信号，
+            //    不要在这里另算一遍「有几段」。
+            _step(2, p.isMixed ? l10n.refundStep2 : l10n.refundStep2Single, current: false),
             _step(
               3,
               // 🔴 运费归属**永远走 l10n**。原写法是 `p.returnShipBearer ?? (按类型推)` ——

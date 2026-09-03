@@ -3133,6 +3133,7 @@
   "refundProcessTitle": "Once we receive the item",
   "refundStep1": "Condition & seal inspection · max. 2 working days",
   "refundStep2": "Funds are sent to the 2 destinations above",
+  "refundStep2Single": "Funds are sent to the destination above",
   "refundAgreeShipBack": "Agree & ship it back",
   "refundCoinInstant": "To PawCoin balance · instant",
   "refundCashEta": "3–7 working days",

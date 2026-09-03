@@ -2120,6 +2120,7 @@
   "refundProcessTitle": "Setelah barang kami terima",
   "refundStep1": "Pemeriksaan kondisi & segel · maks. 2 hari kerja",
   "refundStep2": "Dana diproses ke 2 tujuan di atas",
+  "refundStep2Single": "Dana diproses ke tujuan di atas",
   "refundAgreeShipBack": "Setuju & Kirim Balik",
   "refundCoinInstant": "Ke saldo PawCoin · langsung",
   "refundCashEta": "3–7 hari kerja",
