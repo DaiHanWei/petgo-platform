@@ -159,20 +159,27 @@ class _FilterTabs extends StatelessWidget implements PreferredSizeWidget {
                 child: Container(
                   alignment: Alignment.center,
                   padding: const EdgeInsets.only(bottom: 8),
+                  // 🔴 下划线**不能**再用 [ShopColors.accent]：它与顶栏 2026-09-03
+                  //    换上的底色是同一个 #845EC9 —— 紫压紫，选中指示直接消失。
+                  //    白色在紫底上 4.70:1，是这条顶栏上唯一读得出的指示色。
                   decoration: BoxDecoration(
                     border: Border(
                       bottom: BorderSide(
-                        color: f == current ? ShopColors.accent : Colors.transparent,
+                        color: f == current ? ShopColors.surface : Colors.transparent,
                         width: 2,
                       ),
                     ),
                   ),
                   child: Text(
                     _label(l10n, f),
+                    // 🔴 未选中态**不能**再用 onInk60（白 60%）：顶栏 2026-09-03 由墨底
+                    //    换成品牌紫后，白 60% 压在 #845EC9 上只剩 2.77:1 —— 11.5px 的
+                    //    小字要 4.5。纯白是 4.70:1，是这条紫底上唯一达标的白。
+                    //    选中态改由**字重 + 玫红下划线**表达，不再靠颜色深浅。
                     style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: f == current ? FontWeight.w700 : FontWeight.w400,
-                      color: f == current ? ShopColors.surface : ShopColors.onInk60,
+                      color: ShopColors.surface,
                     ),
                   ),
                 ),
