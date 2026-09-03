@@ -150,8 +150,9 @@ class Epic4ChainIntegrationTest extends ApiIntegrationTest {
         // ② 用户在 App 详情里看到承运商 / 单号 / 官网地址（FR-103：只跳转，不渲染轨迹）
         ShopOrder order = payments.requireOwn(c.userId(), token);
         List<Shipment> pkgs = fulfillment.shipmentsOf(order.getId());
+        // 本组用例断言的是包裹，与缩略图无关 ⇒ 显式传空图表（见 ShopOrderDetailView.of 的说明）。
         ShopOrderDetailView view =
-                ShopOrderDetailView.of(order, payments.linesOf(order), pkgs);
+                ShopOrderDetailView.of(order, payments.linesOf(order), pkgs, java.util.Map.of());
         assertThat(view.packages()).hasSize(1);
         assertThat(view.packages().get(0).carrierName()).isEqualTo("JNE");
         assertThat(view.packages().get(0).trackingNo()).isEqualTo(tracking);
@@ -265,7 +266,7 @@ class Epic4ChainIntegrationTest extends ApiIntegrationTest {
         // App 详情逐条列出两个包裹，各自带官网地址
         ShopOrder order = payments.requireOwn(c.userId(), token);
         ShopOrderDetailView view = ShopOrderDetailView.of(order, payments.linesOf(order),
-                fulfillment.shipmentsOf(order.getId()));
+                fulfillment.shipmentsOf(order.getId()), java.util.Map.of());
         assertThat(view.packages()).hasSize(2);
         assertThat(view.packages()).allSatisfy(
                 p -> assertThat(p.trackingUrl()).startsWith("https://"));

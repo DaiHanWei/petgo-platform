@@ -159,7 +159,9 @@ class Epic9AttributionIntegrationTest extends ApiIntegrationTest {
 
         ShopOrderDetailView view = ShopOrderDetailView.of(
                 orders.findById(o.getId()).orElseThrow(),
-                orderLines.findByOrderIdOrderByIdAsc(o.getId()));
+                orderLines.findByOrderIdOrderByIdAsc(o.getId()),
+                // 本组断言的是归因来源，与缩略图无关 ⇒ 显式传空图表。
+                java.util.Map.of());
         assertThat(view.attributionSource()).isEqualTo(src);
     }
 
@@ -173,7 +175,9 @@ class Epic9AttributionIntegrationTest extends ApiIntegrationTest {
 
         ShopOrderDetailView view = ShopOrderDetailView.of(
                 orders.findById(o.getId()).orElseThrow(),
-                orderLines.findByOrderIdOrderByIdAsc(o.getId()));
+                orderLines.findByOrderIdOrderByIdAsc(o.getId()),
+                // 本组断言的是归因来源，与缩略图无关 ⇒ 显式传空图表。
+                java.util.Map.of());
         assertThat(view.attributionSource()).isEqualTo("mixed");
     }
 
@@ -186,7 +190,9 @@ class Epic9AttributionIntegrationTest extends ApiIntegrationTest {
 
         ShopOrderDetailView view = ShopOrderDetailView.of(
                 orders.findById(o.getId()).orElseThrow(),
-                orderLines.findByOrderIdOrderByIdAsc(o.getId()));
+                orderLines.findByOrderIdOrderByIdAsc(o.getId()),
+                // 本组断言的是归因来源，与缩略图无关 ⇒ 显式传空图表。
+                java.util.Map.of());
         assertThat(view.attributionSource()).isEqualTo("unknown");
 
         var snapshot = dashboard.snapshot(LocalDate.now().minusDays(1), LocalDate.now());
