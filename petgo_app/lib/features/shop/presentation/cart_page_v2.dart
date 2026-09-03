@@ -100,6 +100,70 @@ class _CartPageV2State extends ConsumerState<CartPageV2> {
     );
   }
 
+  /// 删除后的撤销条。**必须挂在页面 State 上，不能挂在行上。**
+  ///
+  /// 🔴 2026-09-03 stag 回归 R-3「撤销点了没反应」的根因就在这里：原实现把
+  /// `_offerUndo` / `_undoRemove` 放在 `_ValidLineState`（每一行自己的 State）上。
+  /// 删除一成功，这一行就从 `cart.lines` 里没了 → State 变 defunct → 5 秒后用户点
+  /// 「撤销」，第一句 `setState(() => _busy = true)` 当场抛
+  /// `setState() called after dispose()`，**加回购物车的请求根本没发出去**。
+  /// 现象极具迷惑性：点击本身是通的（回调确实触发了），服务端却只看得到 DELETE，
+  /// 界面也毫无反应 —— release 包里这个异常连日志都不留。
+  /// ⚠️ 任何「动作要比触发它的控件活得久」的回调，都必须挂在活得更久的那一层。
+  ///
+  /// 走本仓统一的 [showAppToast]（`app_toast.dart` 的类注释：「全 App 短提示统一入口，
+  /// 替代 SnackBar」）。该组件 2026-09-02 加了动作位 —— 此前它被 [IgnorePointer]
+  /// 包着、刻意不可交互，而这条提示的**全部意义**就是那个可点的「撤销」。
+  ///
+  /// ⚠️ 选它而不是 SnackBar 的实际差别：toast 挂在 **root Overlay** 上，
+  /// **不参与布局** —— 而本页底部有合计条 + 结算按钮，SnackBar 会从下方顶进来压着它。
+  ///
+  /// 停留 5 秒（产品定的 4–5 秒区间上限）：短于此，误删的人还没反应过来就没了；
+  /// 长于此，它在屏幕上待得比这次操作本身还久。
+  ///
+  /// ⚠️ 连删两行只留最后一条是 **toast 单实例**天然带来的（新的自动替换旧的），
+  /// 不需要像 SnackBar 那样自己先 hide —— 叠着的旧提示条点下去，
+  /// 撤销的不是用户以为的那一行。
+  void _offerUndo(
+      {required String skuToken, required int qty, required String name}) {
+    final l10n = AppLocalizations.of(context);
+    showAppToast(
+      context,
+      l10n.cartRemovedUndo(name),
+      duration: const Duration(seconds: 5),
+      actionLabel: l10n.cartUndo,
+      onAction: () => _undoRemove(l10n, skuToken: skuToken, qty: qty),
+    );
+  }
+
+  /// 撤销删除：按原数量把这一行加回去。
+  ///
+  /// ⚠️ **归因会变成 `CART_UNDO` 而不是原来的入口**（Story 3.10 的 entrySource）：
+  /// 后端购物车接口**刻意不下发**归因给客户端（`CartView.CartLine` 的注释写明了理由），
+  /// 所以端上拿不到原值、也无从还原。两种选择里取了「写一个自述的值」而不是留 null ——
+  /// null 与「归因字段上线前的老数据」长得一模一样，事后没人分得清；
+  /// `CART_UNDO` 至少是可解释、可筛掉的。⚠️ 这一条要不要计入转化口径，由数据侧定。
+  ///
+  /// 🔴 撤销可能**失败**：删除到撤销之间库存被别人买走，`add` 会抛库存错误。
+  /// 那时必须出声 —— 静默失败会让用户以为撤销成功了，直到结算时才发现少了一件。
+  /// 🔴 **不设 busy 态**：撤销执行时那一行已经不在树上，没有可禁用的按钮；
+  /// 而 toast 在调 onAction 前就自我收起了（app_toast 里那句 `_dismiss()`），
+  /// 连点两次也不可能。原实现在这里 `setState(() => _busy = true)`，
+  /// 正是 2026-09-03 那条「撤销点了没反应」的根因 —— 见 [_offerUndo]。
+  Future<void> _undoRemove(AppLocalizations l10n,
+      {required String skuToken, required int qty}) async {
+    try {
+      await ref
+          .read(cartProvider.notifier)
+          .add(skuToken, qty: qty, entrySource: 'CART_UNDO');
+    } on CartMutationError catch (e) {
+      if (mounted) {
+        showAppToast(context,
+            e == CartMutationError.stock ? l10n.cartStockError : l10n.cartGenericError);
+      }
+    }
+  }
+
   /// 导航栏标题带计数。🔴 计数**含失效商品** —— 用户加过的东西都该被算进「车里有几样」，
   /// 否则他会以为自己漏加了。
   String _title(AppLocalizations l10n, AsyncValue<CartView> async) => async.maybeWhen(
@@ -115,7 +179,7 @@ class _CartPageV2State extends ConsumerState<CartPageV2> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        for (final line in cart.lines) _ValidLine(line: line),
+        for (final line in cart.lines) _ValidLine(line: line, onRemoved: _offerUndo),
         // 🔴 失效行**沉到独立分组**，不混在可购商品里，也不静默消失 ——
         //    悄悄删掉会让用户以为自己记错了。
         if (cart.invalidLines.isNotEmpty) ...[
@@ -201,9 +265,16 @@ class _CartPageV2State extends ConsumerState<CartPageV2> {
 
 /// 可购商品行。
 class _ValidLine extends ConsumerStatefulWidget {
-  const _ValidLine({required this.line});
+  const _ValidLine({required this.line, required this.onRemoved});
 
   final CartLine line;
+
+  /// 删成功后回调**页面**去弹撤销条。
+  ///
+  /// 🔴 撤销不能由本行自己管：删掉的那一瞬间这一行就从列表里没了、State 变 defunct，
+  /// 而撤销条要在它死后再活 5 秒。详见 [_CartPageV2State._offerUndo]。
+  final void Function({required String skuToken, required int qty, required String name})
+      onRemoved;
 
   @override
   ConsumerState<_ValidLine> createState() => _ValidLineState();
@@ -300,64 +371,16 @@ class _ValidLineState extends ConsumerState<_ValidLine> {
     final skuToken = line.skuToken;
     final qty = line.qty;
     final name = line.productName ?? line.specName;
+    // 🔴 回调必须在 await **之前**捕获：remove 一成功，列表就少了这一行、
+    //    本 State 立刻 defunct，那之后再读 `widget.onRemoved` 是在碰一个已死对象。
+    final offerUndo = widget.onRemoved;
     try {
       await ref.read(cartProvider.notifier).remove(skuToken);
-      if (mounted) _offerUndo(l10n, skuToken: skuToken, qty: qty, name: name);
+      // ⚠️ 这里**不判 mounted**：删成功后本行本就该消失，判了等于撤销条永远不弹。
+      //    回调指向的是页面（还活着），不是本行。
+      offerUndo(skuToken: skuToken, qty: qty, name: name);
     } on CartMutationError {
       if (mounted) showAppToast(context, l10n.cartGenericError);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  /// 删除后的撤销条。
-  ///
-  /// 走本仓统一的 [showAppToast]（`app_toast.dart` 的类注释：「全 App 短提示统一入口，
-  /// 替代 SnackBar」）。该组件 2026-09-02 加了动作位 —— 此前它被 [IgnorePointer]
-  /// 包着、刻意不可交互，而这条提示的**全部意义**就是那个可点的「撤销」。
-  ///
-  /// ⚠️ 选它而不是 SnackBar 的实际差别：toast 挂在 **root Overlay** 上，
-  /// **不参与布局** —— 而本页底部有合计条 + 结算按钮，SnackBar 会从下方顶进来压着它。
-  ///
-  /// 停留 5 秒（产品定的 4–5 秒区间上限）：短于此，误删的人还没反应过来就没了；
-  /// 长于此，它在屏幕上待得比这次操作本身还久。
-  ///
-  /// ⚠️ 连删两行只留最后一条是 **toast 单实例**天然带来的（新的自动替换旧的），
-  /// 不需要像 SnackBar 那样自己先 hide —— 叠着的旧提示条点下去，
-  /// 撤销的不是用户以为的那一行。
-  void _offerUndo(AppLocalizations l10n,
-      {required String skuToken, required int qty, required String name}) {
-    showAppToast(
-      context,
-      l10n.cartRemovedUndo(name),
-      duration: const Duration(seconds: 5),
-      actionLabel: l10n.cartUndo,
-      onAction: () => _undoRemove(l10n, skuToken: skuToken, qty: qty),
-    );
-  }
-
-  /// 撤销删除：按原数量把这一行加回去。
-  ///
-  /// ⚠️ **归因会变成 `CART_UNDO` 而不是原来的入口**（Story 3.10 的 entrySource）：
-  /// 后端购物车接口**刻意不下发**归因给客户端（`CartView.CartLine` 的注释写明了理由），
-  /// 所以端上拿不到原值、也无从还原。两种选择里取了「写一个自述的值」而不是留 null ——
-  /// null 与「归因字段上线前的老数据」长得一模一样，事后没人分得清；
-  /// `CART_UNDO` 至少是可解释、可筛掉的。⚠️ 这一条要不要计入转化口径，由数据侧定。
-  ///
-  /// 🔴 撤销可能**失败**：删除到撤销之间库存被别人买走，`add` 会抛库存错误。
-  /// 那时必须出声 —— 静默失败会让用户以为撤销成功了，直到结算时才发现少了一件。
-  Future<void> _undoRemove(AppLocalizations l10n,
-      {required String skuToken, required int qty}) async {
-    setState(() => _busy = true);
-    try {
-      await ref
-          .read(cartProvider.notifier)
-          .add(skuToken, qty: qty, entrySource: 'CART_UNDO');
-    } on CartMutationError catch (e) {
-      if (mounted) {
-        showAppToast(context,
-            e == CartMutationError.stock ? l10n.cartStockError : l10n.cartGenericError);
-      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

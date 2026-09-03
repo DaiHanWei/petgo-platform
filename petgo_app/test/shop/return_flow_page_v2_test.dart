@@ -364,6 +364,43 @@ void main() {
     });
   });
 
+  /// 🔴 D-11 的第二处漏网（2026-09-03 stag 回归）：第 3 步已经按服务端归属条件渲染了，
+  /// 第 2 步却仍是无参数无条件的 `l10n.refundStep2` —— 而两份 arb 都把数量「2」
+  /// 焊死在字符串里（"…the 2 destinations above"）。
+  /// 单一去向的退款上方只有 1 张目的地卡、Total refunded 也只有那一笔，下方却承诺 2 个。
+  group('🔴 D-11：只有一个去向时不许承诺两个', () {
+    testWidgets('纯现金退款（无 PawCoin 段）→ 第 2 步不说「2 个去向」', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(refundHost(progress(coinRefund: 0, cashRefund: 204000)));
+      await tester.pumpAndSettle();
+
+      await _scrollTo(tester, const ValueKey('refundProcessBlockV2'));
+      expect(find.text(l10n.refundStep2), findsNothing,
+          reason: '上方只渲染 1 张目的地卡，下方却承诺 2 个 —— 这是钱的事');
+      expect(find.text(l10n.refundStep2Single), findsOneWidget);
+    });
+
+    testWidgets('纯 PawCoin 退款（无现金段）→ 同样只说一个去向', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(refundHost(progress(coinRefund: 204000, cashRefund: 0)));
+      await tester.pumpAndSettle();
+
+      await _scrollTo(tester, const ValueKey('refundProcessBlockV2'));
+      expect(find.text(l10n.refundStep2), findsNothing);
+      expect(find.text(l10n.refundStep2Single), findsOneWidget);
+    });
+
+    testWidgets('真的分两段 → 「2 个去向」那句回来', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      await tester.pumpWidget(refundHost(progress(coinRefund: 50000, cashRefund: 154000)));
+      await tester.pumpAndSettle();
+
+      await _scrollTo(tester, const ValueKey('refundProcessBlockV2'));
+      expect(find.text(l10n.refundStep2), findsOneWidget,
+          reason: '两段都在时那句是对的，别为了修单段把它一起删了');
+    });
+  });
+
   group('🔴 后端枚举不得漏到用户眼前', () {
     testWidgets('运费归属步骤给文案，不给 `PLATFORM`', (tester) async {
       await tester.pumpWidget(refundHost(progress()));

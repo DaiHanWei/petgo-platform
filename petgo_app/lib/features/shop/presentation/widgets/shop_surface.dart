@@ -210,8 +210,14 @@ class ShopAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// ⚠️ 白色顶栏本身不是故障（后台 banner 页写明了「这是设计内的空态」）。
   /// 缺陷在于**前景色没跟着空态适配**。所以修的是「前景跟着 tone 走」，不是把底色改回深色。
   static ShopAppBarColors colorsOf(ShopAppBarTone tone) => switch (tone) {
+        // 🔴 2026-09-03 产品拍板：底色由 [ShopColors.ink]（#2E2742，深到接近黑）
+        //    换成品牌紫 [ShopColors.purple]（#845EC9）—— 电商各页顶栏与按钮、选中态
+        //    读作同一套主题色。白字在紫上是 4.75:1（墨底是 14.14:1），仍过 AA，
+        //    ⚠️ 但余量只剩 0.25 —— **压在这条顶栏上的任何前景色都要重算**，
+        //    照搬为墨底调的半透明白（onInk45/60/85）会当场掉到 3:1 以下。
+        //    订单列表的状态 Tab 行就是这么修的（见 order_list_page_v2 的 _FilterTabs）。
         ShopAppBarTone.dark => (
-            background: ShopColors.ink,
+            background: ShopColors.purple,
             foreground: ShopColors.surface,
             capsule: ShopColors.onInk12,
             overlay: SystemUiOverlayStyle.light,
@@ -252,14 +258,23 @@ const double kShopAppBarHeight = 48;
 ///
 /// 每个值代表一整组「底色 + 前景色 + 状态栏图标亮暗」的搭配，不可拆开使用。
 enum ShopAppBarTone {
-  /// 深紫底 + 白字（电商各页默认）。
+  /// 品牌紫底 + 白字（电商各页默认）。
+  ///
+  /// ⚠️ 名字保留 `dark` 而不改成 `purple`：它表达的是「深底浅字」这一**组**关系
+  /// （与 [light] 相对），底色具体是墨还是紫是 [ShopAppBar.colorsOf] 的事。
+  /// 2026-09-03 之前它是 #2E2742 墨底。
   dark,
 
   /// 白底 + 深字。Toko 在**没有 banner** 时用它 ——
   /// 产品要求此时顶部与其他板块的深色顶栏区分开。
   light,
 
-  /// 完全透明，浮在 banner 图之上。图要顶到屏幕最上沿、不留纯色条时用。
+  /// 完全透明，浮在图之上。
+  ///
+  /// ⚠️ 2026-09-03 起**无人使用**：Toko 原来靠它把顶栏浮在 banner 上，现在 banner
+  /// 会跟着滚动收起（图滚走后顶栏底下就是商品流），透明会让商品从标题底下穿过去，
+  /// 已改用 [dark]。留着这一档是给「顶栏恒定浮在一张不会滚走的图上」那种版式用的 ——
+  /// 用它之前先确认这个前提成立，否则等着看穿帮。
   transparent,
 }
 

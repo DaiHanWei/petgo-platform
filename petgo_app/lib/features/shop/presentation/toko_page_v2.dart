@@ -93,47 +93,64 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
     // 它是锦上添花的展示位，不该让整页进错误态。加载中同样按"没有"处理 ——
     // 先给白色顶栏、图到了再换，比先留一块空白再弹出 banner 稳。
     final banner = ref.watch(shopBannerProvider).asData?.value;
-    // 有 banner → 透明浮在图上；没有 → 白色顶栏（产品要求与其他板块区分）。
-    final tone = banner != null ? ShopAppBarTone.transparent : ShopAppBarTone.light;
+    // 有 banner → 墨底顶栏（图铺在它之上，图滚走后露出来的就是这层墨色）；
+    // 没有 → 白色顶栏（产品要求与其他板块区分）。
+    //
+    // 🔴 不再用 transparent：透明只在「顶栏恒定浮在整幅 banner 图上」时成立。
+    //    banner 现在会跟着滚动收起（见 [_BannerAppBar]），收起后顶栏下面是商品流 ——
+    //    透明的话商品会直接从标题、金币余额、购物车底下穿过去。
+    final tone = banner != null ? ShopAppBarTone.dark : ShopAppBarTone.light;
     // 🔴 顶栏里的标题与两个胶囊**一律从 tone 取色**（D-1）。此前它们各自写死
     //    `ShopColors.surface`（白）+ `onInk12`（白 12% 底），于是无 banner 的白底顶栏上
     //    整条恒为 RGB(255,255,255)：标题、金币余额、购物车入口全部不可见。
     final bar = ShopAppBar.colorsOf(tone);
+    // 🔴 胶囊底色不能只跟 tone 走（2026-09-03 产品反馈）：tone 说的是「顶栏是墨底」，
+    //    而有 banner 时顶栏的底其实是**一张运营图**，`bar.capsule`（白 12%）压在图上
+    //    等于没有底 —— 实测白字只有 1.78:1、购物车图标 2.27:1，AA 要 4.5 / 3.0。
+    //    见 [ShopColors.imageCapsuleScrim]。无 banner 时仍用 tone 给的浅紫底。
+    final capsuleFill = banner != null ? ShopColors.imageCapsuleScrim : bar.capsule;
+
+    // 筛选行（2026-09-02 产品定形）：**放大镜 + 分类依次排开**，共用一行。
+    //
+    // 🔴 分类**必须吸顶**（R-4）：原先它夹在屏幕 45% 处、跟内容一起滚，
+    //    往下翻两屏就完全离开视野，换品类得一路滚回顶部。它是页面级导航，
+    //    不是流中的一个区块。落位分两支（见下），两支都保证「滚不走」。
+    final filterBar = _FilterBar(
+      selected: _selected,
+      allLabel: l10n.tokoCategoryAll,
+      searchLabel: l10n.tokoSearchOpen,
+      labelOf: (c) => _categoryLabel(l10n, c),
+      onSelect: (c) => setState(() => _selected = c),
+      onSearch: () => context.push('/shop/search'),
+    );
+    // 两支顶栏共用同一组右侧胶囊（颜色已由 tone 决定）。
+    final barActions = <Widget>[
+      _pawcoinCapsule(l10n, loggedIn, bar, capsuleFill),
+      const SizedBox(width: 8),
+      _CartCapsule(bar: bar, fill: capsuleFill),
+      const SizedBox(width: kShopScreenEdge),
+    ];
 
     return Scaffold(
       backgroundColor: ShopColors.bg,
-      // 🔴 有 banner 时让 body 穿到 AppBar 之下 —— 这是"图顶到屏幕最上沿、
-      //    上方不留纯色条"的前提。没有它，AppBar 会先占掉状态栏+48px 的高度。
-      extendBodyBehindAppBar: banner != null,
-      appBar: ShopAppBar(
-        title: l10n.tokoTitle,
-        large: true,
-        tone: tone,
-        actions: [
-          _pawcoinCapsule(l10n, loggedIn, bar),
-          const SizedBox(width: 8),
-          _CartCapsule(bar: bar),
-          const SizedBox(width: kShopScreenEdge),
-        ],
-        // 筛选行（2026-09-02 产品定形）：**放大镜 + 分类依次排开**，共用一行。
-        //
-        // 🔴 挂在顶栏的 bottom 槽而不是做成 pinned sliver：有 banner 时 Scaffold 开了
-        //    extendBodyBehindAppBar，滚动区从 y=0 起算，pinned sliver 会吸在 0 上、
-        //    正好躲进浮着的顶栏底下被盖住。bottom 槽由 AppBar 自己占位，
-        //    天然不存在这类重叠，且「滚动不走」是无条件成立的。
-        //
-        // 🔴 分类**必须吸顶**（R-4）：原先它夹在屏幕 45% 处、跟内容一起滚，
-        //    往下翻两屏就完全离开视野，换品类得一路滚回顶部。它是页面级导航，
-        //    不是流中的一个区块。
-        bottom: _FilterBar(
-          selected: _selected,
-          allLabel: l10n.tokoCategoryAll,
-          searchLabel: l10n.tokoSearchOpen,
-          labelOf: (c) => _categoryLabel(l10n, c),
-          onSelect: (c) => setState(() => _selected = c),
-          onSearch: () => context.push('/shop/search'),
-        ),
-      ),
+      // 🔴 有 banner 时顶栏**整条搬进滚动区**（[_BannerAppBar]），Scaffold 不挂 appBar。
+      //    要同时满足三件事：图顶到屏幕最上沿、顶栏浮在图上、筛选行落在图**下方**且
+      //    跟着滚到顶再吸住 —— 只有「顶栏本身也是 sliver」才凑得齐：排在它后面的
+      //    pinned sliver 会自动吸在它的下沿。
+      //    换成老写法（extendBodyBehindAppBar + 固定 appBar）时，pinned sliver 吸的是
+      //    y=0，正好躲进浮着的顶栏底下被盖住 —— 这就是筛选行当初只能挂 bottom 槽、
+      //    从而**浮在 banner 之上**的原因。
+      appBar: banner != null
+          ? null
+          : ShopAppBar(
+              title: l10n.tokoTitle,
+              large: true,
+              tone: tone,
+              actions: barActions,
+              // 无 banner：顶栏是实心白条、body 从它下沿起算，筛选行挂 bottom 槽
+              // 即天然吸顶，不必再走 sliver 那条路。
+              bottom: filterBar,
+            ),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(shopProductsProvider(_query));
@@ -145,9 +162,24 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
           //    RefreshIndicator 于是形同虚设。Always… 让下拉刷新在任何长度下都可用。
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            // 顶部 banner（2026-08-27）。🔴 必须是第一个 sliver，且自己吃掉状态栏高度 ——
-            // 见 [_BannerHeader]。没有 banner 时整块不渲染（不留占位）。
-            if (banner != null) SliverToBoxAdapter(child: _BannerHeader(banner: banner)),
+            // 顶部 banner（2026-08-27）+ 浮在图上的顶栏，两者是同一个 sliver。
+            // 🔴 必须排第一（它自己吃掉状态栏高度，见 [_BannerAppBar]）。
+            // 没有 banner 时整块不渲染（不留占位），顶栏由上面的 Scaffold.appBar 承担。
+            if (banner != null) ...[
+              _BannerAppBar(
+                title: l10n.tokoTitle,
+                banner: banner,
+                colors: bar,
+                actions: barActions,
+              ),
+              // 🔴 筛选行吸的是**顶栏下沿**，不是屏幕顶：pinned sliver 排在
+              //    [_BannerAppBar] 之后，初始就落在 banner 图下方、跟着内容往上走，
+              //    碰到收起后的顶栏才停住。这正是产品要的那条曲线。
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _StickyFilterBar(child: filterBar),
+              ),
+            ],
             // 🔴 顺序固定，不可调换（设计稿「结构自上而下」）。
             //    促销条位于此处 —— 无免运活动数据源，整条不渲染。
             const SliverToBoxAdapter(child: _RestockRow()),
@@ -192,14 +224,16 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
   /// 顶栏右侧：已登录显示 PawCoin 余额胶囊，游客显示 `Masuk` 胶囊。
   ///
   /// 🔴 **游客不显示余额 0**（设计稿明写）。余额 0 会让人以为账户里本该有钱。
-  Widget _pawcoinCapsule(AppLocalizations l10n, bool loggedIn, ShopAppBarColors bar) {
+  Widget _pawcoinCapsule(
+      AppLocalizations l10n, bool loggedIn, ShopAppBarColors bar, Color fill) {
     if (!loggedIn) {
       return _Capsule(
         key: const ValueKey('tokoLoginCapsule'),
-        background: bar.capsule,
+        background: fill,
+        foreground: bar.foreground,
         onTap: () => context.push('/login'),
         child: Text(l10n.loginTitle,
-            style: ShopText.badge.copyWith(fontSize: 11, color: bar.foreground)),
+            style: ShopText.badge.copyWith(fontSize: _kCapsuleText, color: bar.foreground)),
       );
     }
     // ⚠️ 复用余额页的 provider —— 它同时会拉一页流水，对顶栏而言偏重。
@@ -208,17 +242,18 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
         data: (s) => s.balance, orElse: () => null);
     return _Capsule(
       key: const ValueKey('tokoPawcoinCapsule'),
-      background: bar.capsule,
+      background: fill,
+      foreground: bar.foreground,
       onTap: () => context.push('/me/pawcoin'),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const ShopCoinMark(size: 14),
+          const ShopCoinMark(size: 17),
           const SizedBox(width: 5),
           Text(
             // 余额未加载完时先只画胶囊壳，不画 0（同上：0 是错的信息，不是缺失的信息）。
             balance == null ? '—' : _compactIdr(balance),
-            style: ShopText.badge.copyWith(fontSize: 11, color: bar.foreground),
+            style: ShopText.badge.copyWith(fontSize: _kCapsuleText, color: bar.foreground),
           ),
         ],
       ),
@@ -333,92 +368,218 @@ class _FilterBar extends StatelessWidget implements PreferredSizeWidget {
       );
 }
 
-/// Toko 顶部 banner（2026-08-27）。
+/// 吸在顶栏下沿的筛选行容器（2026-09-03）。
+///
+/// 只负责两件事：给 [_FilterBar] 一个**不透明**底 + 底部 3px 灰缝。
+///
+/// 🔴 不透明是硬要求：吸顶后商品流会从它底下穿过去，透明底等于把商品名和价格
+/// 糊在分类标签上 —— 这正是「浮在 banner 上 + 吸顶」那版看着别扭的另一半原因。
+/// 白底 + 灰缝是本套设计的区块语言（见 [ShopSection]），与无 banner 时的白色顶栏同形。
+class _StickyFilterBar extends SliverPersistentHeaderDelegate {
+  const _StickyFilterBar({required this.child});
+
+  final PreferredSizeWidget child;
+
+  /// 不随滚动伸缩：min == max，于是它一路等高，碰到顶栏就停。
+  double get _height => child.preferredSize.height + kShopGutter;
+
+  @override
+  double get minExtent => _height;
+
+  @override
+  double get maxExtent => _height;
+
+  /// 🔴 这里必须**自己把高度撑到 [_height]**：sliver 报出去的 layoutExtent 是 _height，
+  /// 而 [DecoratedBox] 的 border 不占布局尺寸 —— 直接给 child 包一层边框，盒子仍只有
+  /// 44 高，framework 当场断言「layoutExtent 超出 paintExtent」。所以用「灰底 + 顶部
+  /// 对齐的白块」拼出这 3px 缝，而不是画一条边框。
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) => SizedBox(
+        height: _height,
+        child: ColoredBox(
+          color: ShopColors.bg,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ColoredBox(color: ShopColors.surface, child: child),
+          ),
+        ),
+      );
+
+  /// 选中的品类变了就得重建 —— child 每次都是新实例，直接比引用即可。
+  @override
+  bool shouldRebuild(covariant _StickyFilterBar oldDelegate) =>
+      oldDelegate.child != child;
+}
+
+/// Toko 顶部 banner + 浮在图上的顶栏（2026-08-27 立，2026-09-03 改成 sliver）。
+///
+/// ## 为什么是 SliverAppBar 而不是「固定顶栏 + 一张图」
+/// 2026-09-03 产品反馈：搜索与分类浮在 banner 之上、且恒定吸顶，滚起来很怪。
+/// 定下来的形态是 —— **有 banner 时筛选行落在图下方，跟着滚，到顶再吸住**。
+/// 要让筛选行吸在顶栏下沿（而不是被浮着的顶栏盖住），顶栏必须和它同在一个滚动区里：
+/// 排在 pinned sliver 前面的 pinned sliver 天然就是后者的「天花板」。
 ///
 /// ## 为什么自己吃掉状态栏高度
-/// 页面用 `extendBodyBehindAppBar: true` 把内容穿到了 AppBar 之下，于是本组件的
-/// 顶边就是**屏幕最上沿**。图必须从这里开始画，上方才不会留出一条纯色 ——
-/// 这正是产品要的"banner 到顶显示"。代价是图的**最上面一条会被状态栏文字压住**，
-/// 所以高度要额外加上 `padding.top`，把被压的那部分让出来。
+/// `expandedHeight` 不含状态栏，SliverAppBar 会自己补上 `padding.top`
+/// （maxExtent = topPadding + expandedHeight），于是图从**屏幕最上沿**开始画，
+/// 上方不留纯色条 —— 这正是产品要的"banner 到顶显示"。
+/// 代价是图的最上面一条会被状态栏文字压住，由下面的渐变兜底。
 ///
 /// ## 🔴 渐变不是装饰，是可读性的唯一保障
 /// banner 图的内容完全由运营决定，浅色图上白色的标题与按钮会直接看不见。
 /// 顶部压一层从半透明黑到全透明的渐变，让文字始终有足够对比度。
-/// ⚠️ 渐变高度覆盖到 AppBar 底部即可，再往下会把图的主视觉也压灰。
-class _BannerHeader extends StatelessWidget {
-  const _BannerHeader({required this.banner});
+/// ⚠️ 渐变**不跟着图滚**（图用 [CollapseMode.pin] 往上走，渐变钉在顶栏位置），
+/// 否则滚到一半时顶栏底下换成了图的中段，白字又没了保护。
+/// 收起过程中它按与图**同一条曲线**淡出（见 `_scrimOpacity`）：图没了就轮到墨底顶栏
+/// 自己保证对比度，此时再压一层黑会让整条顶栏看着脏。
+class _BannerAppBar extends StatelessWidget {
+  const _BannerAppBar({
+    required this.title,
+    required this.banner,
+    required this.colors,
+    required this.actions,
+  });
 
+  final String title;
   final ShopBanner banner;
+
+  /// 顶栏配色，由页面按 tone 取（[ShopAppBar.colorsOf]）—— 本组件不自己配色。
+  final ShopAppBarColors colors;
+  final List<Widget> actions;
 
   /// 渐变覆盖到状态栏 + 顶栏之下再多一点，保证顶栏文字整行都在保护范围内。
   static const double _gradientExtra = 12;
+
+  /// 渐变的不透明度，**与 [FlexibleSpaceBar] 给背景图的那条曲线完全一致**：
+  /// 图在收起的最后 [kToolbarHeight] 像素内线性淡出（可收起量不足时按可收起量摊）。
+  /// 两者同步淡出，才不会出现「图已经没了、黑纱还在」的脏顶栏。
+  static double _scrimOpacity(double current, double min, double max) {
+    final collapsible = max - min;
+    if (collapsible <= 0) return 1;
+    final fade = collapsible < kToolbarHeight ? collapsible : kToolbarHeight;
+    return ((current - min) / fade).clamp(0.0, 1.0);
+  }
 
   @override
   Widget build(BuildContext context) {
     final topInset = MediaQuery.paddingOf(context).top;
     final width = MediaQuery.sizeOf(context).width;
-    // 图按自身比例铺满屏宽；再加上状态栏高度，让图真正顶到屏幕最上沿。
+    // 图按自身比例铺满屏宽；状态栏高度由 SliverAppBar 自己补（见类注释）。
     final imageHeight = width / banner.aspect;
     final gradientHeight = topInset + kShopAppBarHeight + _gradientExtra;
+    // 与 SliverAppBar 内部算法保持一致，供 _scrimOpacity 用。
+    final minExtent = topInset + kShopAppBarHeight;
+    final maxExtent = topInset + imageHeight > minExtent ? topInset + imageHeight : minExtent;
 
-    return SizedBox(
-      height: topInset + imageHeight,
-      width: double.infinity,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.network(
-            banner.imageUrl,
-            fit: BoxFit.cover,
-            // 🔴 高度已由外层 SizedBox 定死（比例来自服务端下发的宽高），
-            //    所以图到达前后布局不变，不会把下方内容顶开。
-            errorBuilder: (_, _, _) => const ColoredBox(color: ShopColors.ink),
-          ),
-          // 顶部渐变遮罩：保证标题与右上角按钮在任何图上都可读。
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: gradientHeight,
-            child: const IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [ShopColors.bannerScrimTop, ShopColors.bannerScrimBottom],
+    return SliverAppBar(
+      // 🔴 pinned：标题、金币余额、购物车是页面级入口，图滚走了它们也得在。
+      pinned: true,
+      expandedHeight: imageHeight,
+      toolbarHeight: kShopAppBarHeight,
+      backgroundColor: colors.background,
+      foregroundColor: colors.foreground,
+      systemOverlayStyle: colors.overlay,
+      elevation: 0,
+      scrolledUnderElevation: 0, // 🔴 设计稿明令产品 UI 内不使用阴影
+      // Tab 级页面无返回箭头（与 ShopAppBar 的 large 形态一致）。
+      automaticallyImplyLeading: false,
+      titleSpacing: kShopScreenEdge,
+      // 🔴 标题色必须 copyWith 覆盖：ShopText.pageTitle 自带白色，写死的 color
+      //    压得过 AppBar.foregroundColor（D-1 的成因）。
+      title: Text(title, style: ShopText.pageTitle.copyWith(color: colors.foreground)),
+      actions: actions,
+      flexibleSpace: LayoutBuilder(
+        // maxHeight 即顶栏当前高度（收起过程中从 maxExtent 递减到 minExtent）。
+        builder: (context, constraints) => Stack(
+          fit: StackFit.expand,
+          children: [
+            FlexibleSpaceBar(
+              // 🔴 pin：图随滚动**往上走**，就像它本来就是流里的一块。
+              //    默认的 parallax 会让图以 1/4 速度慢慢挪，banner 看着像在打滑。
+              collapseMode: CollapseMode.pin,
+              background: Image.network(
+                banner.imageUrl,
+                fit: BoxFit.cover,
+                // 🔴 高度已由 expandedHeight 定死（比例来自服务端下发的宽高），
+                //    所以图到达前后布局不变，不会把下方内容顶开。
+                errorBuilder: (_, _, _) => const ColoredBox(color: ShopColors.ink),
+              ),
+            ),
+            // 顶部渐变遮罩：保证标题与右上角按钮在任何图上都可读。
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: gradientHeight,
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: _scrimOpacity(constraints.maxHeight, minExtent, maxExtent),
+                  child: const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [ShopColors.bannerScrimTop, ShopColors.bannerScrimBottom],
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-/// 顶栏胶囊（半透明白底，圆角 7）。
+/// 顶栏胶囊的视觉高度（2026-09-03 由 ~26 提到 32）。
+///
+/// 🔴 购物车方块也用这个值：两者并排，高度不一致时右上角会看着歪。
+/// 32 是在 48 高的顶栏里能给到的实用上限（上下各留 8）。
+const double _kCapsuleHeight = 32;
+
+/// 胶囊内文字号（2026-09-03 由 11 提到 13）。11px 在 1080p 手机上约 2mm 高，
+/// 余额和 `Masuk` 都是要**读数**的信息，不是角标。
+const double _kCapsuleText = 13;
+
+/// 顶栏胶囊（圆角 7）。
 class _Capsule extends StatelessWidget {
-  const _Capsule({super.key, required this.child, required this.background, this.onTap});
+  const _Capsule({
+    super.key,
+    required this.child,
+    required this.background,
+    required this.foreground,
+    this.onTap,
+  });
 
   final Widget child;
 
   /// 🔴 由顶栏 tone 决定（[ShopAppBar.colorsOf]），不可写死：
   /// 原先固定 `onInk12`（白 12%），在白底顶栏上等于没有底 —— D-1 的一半。
+  /// ⚠️ 压在 banner 图上时由页面换成 [ShopColors.imageCapsuleScrim]，不是 tone 给的那个。
   final Color background;
+
+  /// 只用来描边（前景色 22%）。
+  ///
+  /// 🔴 描边不是装饰：底色深到能保证白字可读之后，胶囊在**收起后的墨底顶栏**上
+  /// 几乎与顶栏同色（ink 88% 压在 ink 上还是 ink），没有这条边就看不出这是个可点的框。
+  final Color foreground;
 
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => ShopPressable(
         onTap: onTap,
-        // 胶囊视觉高约 26，命中区撑到 44（顶栏 toolbarHeight 是 48，放得下）。
+        // 胶囊视觉高 32，命中区撑到 44（顶栏 toolbarHeight 是 48，放得下）。
         minSize: kShopMinTapTarget,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+          height: _kCapsuleHeight,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 11),
           decoration: BoxDecoration(
             color: background,
+            border: Border.all(color: foreground.withValues(alpha: .22)),
             borderRadius: BorderRadius.circular(ShopShape.radiusField),
           ),
           child: child,
@@ -431,10 +592,13 @@ class _Capsule extends StatelessWidget {
 /// 🔴 角标是**商品件数**不是种类数（FR-96）—— 与 v1 的 `CartIconButton` 同一口径、
 /// 同一个 provider，只是外观按设计稿重画。
 class _CartCapsule extends ConsumerWidget {
-  const _CartCapsule({required this.bar});
+  const _CartCapsule({required this.bar, required this.fill});
 
   /// 🔴 见 [_Capsule.background]：图标与底色都得跟着顶栏 tone 走，否则白底上整个不可见。
   final ShopAppBarColors bar;
+
+  /// 底色。与 [_Capsule.background] 同一个值 —— 两个胶囊并排，底色不同会看着像两套控件。
+  final Color fill;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -453,22 +617,34 @@ class _CartCapsule extends ConsumerWidget {
           clipBehavior: Clip.none,
           children: [
             Container(
-              width: 30,
-              height: 30,
+              width: _kCapsuleHeight,
+              height: _kCapsuleHeight,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: bar.capsule,
+                color: fill,
+                border: Border.all(color: bar.foreground.withValues(alpha: .22)),
                 borderRadius: BorderRadius.circular(ShopShape.radiusButton),
               ),
+              // 图标 16 → 19：30 的方块里 16 的线框图标偏空，放大后与余额胶囊的字号同量级。
               child: Icon(Icons.shopping_cart_outlined,
-                  size: 16, color: bar.foreground),
+                  size: 19, color: bar.foreground),
             ),
             if (count > 0)
               Positioned(
                 right: -5,
                 top: -5,
-                child: ShopCountBadge(
-                    key: const ValueKey('cartBadgeV2'), count: count),
+                // 🔴 白环不是装饰：角标底色是 [ShopColors.accent]，而顶栏 2026-09-03
+                //    换上的底色是同一个 #845EC9 —— 角标有一多半悬在顶栏上，不套环
+                //    就只剩一个飘着的白数字，读不出这是购物车上的件数。
+                child: Container(
+                  padding: const EdgeInsets.all(1.5),
+                  decoration: const BoxDecoration(
+                    color: ShopColors.surface,
+                    borderRadius: BorderRadius.all(Radius.circular(999)),
+                  ),
+                  child: ShopCountBadge(
+                      key: const ValueKey('cartBadgeV2'), count: count),
+                ),
               ),
           ],
         ),

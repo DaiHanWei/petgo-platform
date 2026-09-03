@@ -107,7 +107,11 @@
             <div class="s-card-body">
                 <form method="post" th:action="@{/admin/shop/banners}" th:object="${form}">
                     <div class="s-form-row">
-                        <div class="s-label s-req" th:text="#{admin.shop.form.images.label}">Banner 图</div>
+                        <!-- 🔴 键必须是 banners 自己的：借用 admin.shop.form.images.* 会渲染成
+                             「商品图片（第一张为主图，其余进图集，共 ≤9 张…）」—— banner 是单图无图集，
+                             那句话每个字都是错的（2026-09-03 stag 回归 P2）。 -->
+                        <div class="s-label s-req"
+                             th:text="#{admin.shop.banners.form.image.label}">Banner 图</div>
                         <div class="s-ctl">
                             <!-- 复用商品图那套直传控件（objectKey 模式）：一张图，
                                  第一张即主图 ⇒ 这里就是唯一那张。 -->
@@ -122,10 +126,14 @@
                                           data-msg-remove=#{admin.seed.images.remove},
                                           data-msg-uploading=#{admin.seed.images.uploading},
                                           data-msg-failed=#{admin.seed.upload.failed},
-                                          data-msg-expired=#{admin.seed.upload.sessionExpired}">
+                                          data-msg-expired=#{admin.seed.upload.sessionExpired},
+                                          data-max-bytes=${uploadMaxBytes},
+                                          data-msg-too-large=#{admin.seed.upload.tooLarge(${uploadMaxMb})}">
                                 <input type="file" data-seed-file
                                        accept="image/jpeg,image/png,image/webp"/>
-                                <p class="hint" th:text="#{admin.shop.form.images.hint}">可直接 Ctrl+V 粘贴。</p>
+                                <!-- 同上：商品那句 hint 讲的是「多选 + 拖拽排序」，banner 只有一张。 -->
+                                <p class="hint"
+                                   th:text="#{admin.shop.banners.form.image.hint}">可直接 Ctrl+V 粘贴。</p>
                                 <p class="hint" data-seed-status></p>
                                 <div class="seed-thumbs" data-seed-thumbs></div>
                             </div>
