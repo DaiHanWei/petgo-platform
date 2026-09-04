@@ -168,6 +168,13 @@ public class RepurchaseScanService {
         if (existing.isPresent()) {
             return false;   // 已有进行中的同 SKU 触发 → 不重复建、不重推
         }
+        // 🔴 一笔来源订单只产生一次触发：用户点过「不再提醒」(DISMISSED) 或已复购 (SUPERSEDED) 后，
+        //    次日日扫同一订单仍满足条件，不拦会每天重建 ACTIVE 并重推 —— 正是换来关推送权限的那种打扰。
+        boolean alreadyHandled = triggers.findByUserIdAndSkuIdIn(order.getUserId(), List.of(sku.getId()))
+                .stream().anyMatch(x -> java.util.Objects.equals(x.getSourceOrderId(), order.getId()));
+        if (alreadyHandled) {
+            return false;
+        }
         RepurchaseTrigger t = RepurchaseTrigger.foodLow(order.getUserId(), pet.getId(),
                 sku.getId(), order.getId(), depletion);
         try {
@@ -311,7 +318,7 @@ public class RepurchaseScanService {
         // 有效数量：与日扫同一口径（扣掉已退的行），否则退了货还按原量算剩余。
         int qty = 0;
         for (ShopOrderLine line : orderLines.findByOrderIdOrderByIdAsc(orderId)) {
-            if (line.getSkuId() == sku.getId()) {
+            if (java.util.Objects.equals(line.getSkuId(), sku.getId())) {
                 qty += line.getQty() - line.getRefundedQty();
             }
         }

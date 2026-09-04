@@ -11,4 +11,7 @@ public interface LifecyclePushMarkRepository extends JpaRepository<LifecyclePush
 
     /** 每日体检取数：某时刻之后已投递的条数（用于「今天还能发多少」与运营日报）。 */
     long countByPushedAtAfter(Instant since);
+
+    /** 该用户某类推送最近一次（召回按滚动 30 天去重，不按日历月）。 */
+    java.util.Optional<LifecyclePushMark> findFirstByUserIdAndPushKindOrderByPushedAtDesc(Long userId, String pushKind);
 }
