@@ -58,6 +58,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatus()).body(pd);
     }
 
+    /**
+     * 乐观锁撞车（{@code shop_orders.version} 等）：两个事务同时改同一行，输家整体回滚。
+     * 这是「被别人抢先了」，不是服务端故障 —— 给 409 让客户端/网关重试，而不是 500。
+     */
+    @ExceptionHandler(org.springframework.dao.OptimisticLockingFailureException.class)
+    public ResponseEntity<ProblemDetail> handleOptimisticLock(
+            org.springframework.dao.OptimisticLockingFailureException ex, HttpServletRequest req) {
+        return handleApp(AppException.conflict("操作与另一笔更新冲突，请重试"), req);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ProblemDetail> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest req) {
         ProblemDetail pd = base(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.VALIDATION, "Validation Failed",
