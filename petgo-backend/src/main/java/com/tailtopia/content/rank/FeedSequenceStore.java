@@ -86,6 +86,10 @@ public class FeedSequenceStore {
         if (raw == null || raw.isEmpty()) {
             return List.of();
         }
+        // 翻页途中续期（yml 注释承诺的行为）：否则 key 自创建起 30 分钟即消失，慢速阅读的用户
+        // 下一页会用同 seed 重算，而 seen 衰减已生效 → 已看过的被压到后段再次出现。
+        FeedRankRedisGuard.guard("sequenceTouch",
+                () -> redis.expire(key, props.sequenceTtl()), null);
         return raw.stream().map(Long::valueOf).toList();
     }
 
