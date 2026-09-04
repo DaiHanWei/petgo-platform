@@ -123,6 +123,16 @@ public class AdminConfigService {
                 "admin.err.config.idCardShareRewardNegative");
         require(form.idCardShareDailyCap() >= 0, "身份证分享每日次数上限须 ≥ 0（0 = 不发）",
                 "admin.err.config.idCardShareDailyCapNegative");
+        // 🔴 上界：误填天文数字会让 granted + coins 在 PG 里 bigint 溢出（发放静默失效），或一次真发出巨量币。
+        require(form.idCardShareReward() <= 10_000, "身份证分享每次发放枚数须 ≤ 10000",
+                "admin.err.config.idCardShareRewardTooLarge");
+        require(form.shareRewardMonthlyCap() <= 10_000_000, "分享奖励月度上限须 ≤ 10000000",
+                "admin.err.config.shareRewardCapTooLarge");
+        // 🔴 月度上限要装得下至少一次发放，否则卡面宣传「首次分享得 N」但永远发不出（AC6）。
+        require(form.idCardShareReward() == 0 || form.shareRewardMonthlyCap() == 0
+                || form.shareRewardMonthlyCap() >= form.idCardShareReward(),
+                "分享奖励月度上限须 ≥ 身份证分享每次发放枚数",
+                "admin.err.config.shareRewardCapBelowReward");
 
         PawCoinConfig c = pawcoinRepo.findById(PawCoinConfig.SINGLETON_ID)
                 .orElseThrow(() -> new IllegalStateException("pawcoin_config 缺失"));
