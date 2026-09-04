@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,13 +55,16 @@ public class SeedSchedulePublishScanner {
     private final SeedBatchRowRepository rows;
     private final com.tailtopia.admin.seed.repository.SeedBatchRepository batches;
     private final SeedBatchPublishService publishing;
+    private final ObjectProvider<SeedSchedulePublishScanner> selfProvider;
 
     public SeedSchedulePublishScanner(SeedBatchRowRepository rows,
             com.tailtopia.admin.seed.repository.SeedBatchRepository batches,
-            SeedBatchPublishService publishing) {
+            SeedBatchPublishService publishing,
+            ObjectProvider<SeedSchedulePublishScanner> selfProvider) {
         this.rows = rows;
         this.batches = batches;
         this.publishing = publishing;
+        this.selfProvider = selfProvider;
     }
 
     /**
@@ -85,7 +89,9 @@ public class SeedSchedulePublishScanner {
         int published = 0;
         int failed = 0;
         for (SeedBatchRow row : due.stream().limit(MAX_PER_SCAN).toList()) {
-            if (publishOne(row.getId())) {
+            // 🔴 经 self 代理：this.publishOne() 自调用会绕过代理，@Transactional 形同虚设 ——
+            //    publish / 写指纹 / markPublished 变成各自提交，中途失败 = 帖子已上线但行仍 SCHEDULED（下轮重发）。
+            if (selfProvider.getObject().publishOne(row.getId())) {
                 published++;
             } else {
                 failed++;
@@ -101,7 +107,7 @@ public class SeedSchedulePublishScanner {
      * <p>🛡 单独一个事务：一条失败不影响其余（见 {@link #publishDueRows} 的注释）。
      */
     @Transactional
-    boolean publishOne(long rowId) {
+    public boolean publishOne(long rowId) {
         SeedBatchRow row = rows.findById(rowId).orElse(null);
         // 并发守卫：另一轮扫描（或运营手动确认）可能已经把它发了 / 取消了。
         if (row == null || row.getStatus() != SeedBatchRowStatus.SCHEDULED) {
