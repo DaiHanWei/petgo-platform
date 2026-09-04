@@ -179,7 +179,8 @@ class _CartPageV2State extends ConsumerState<CartPageV2> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        for (final line in cart.lines) _ValidLine(line: line, onRemoved: _offerUndo),
+        for (final line in cart.lines)
+          _ValidLine(key: ValueKey(line.skuToken), line: line, onRemoved: _offerUndo),
         // 🔴 失效行**沉到独立分组**，不混在可购商品里，也不静默消失 ——
         //    悄悄删掉会让用户以为自己记错了。
         if (cart.invalidLines.isNotEmpty) ...[
@@ -265,7 +266,7 @@ class _CartPageV2State extends ConsumerState<CartPageV2> {
 
 /// 可购商品行。
 class _ValidLine extends ConsumerStatefulWidget {
-  const _ValidLine({required this.line, required this.onRemoved});
+  const _ValidLine({super.key, required this.line, required this.onRemoved});
 
   final CartLine line;
 

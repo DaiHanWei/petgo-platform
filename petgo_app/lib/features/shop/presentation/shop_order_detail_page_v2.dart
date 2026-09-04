@@ -750,7 +750,10 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
         pollPaid: () async {
           final fresh =
               await ref.refresh(shopOrderDetailProvider(widget.orderToken).future);
-          return !fresh.status.isPendingPayment;
+          if (fresh.status == ShopOrderStatus.cancelled) {
+            throw const QrPaymentAborted();
+          }
+          return fresh.status.isPaidOrLater;
         },
       );
       if (!mounted) return;

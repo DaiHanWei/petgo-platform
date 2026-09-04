@@ -35,6 +35,16 @@ enum ShopOrderStatus {
   /// 只有待支付才允许支付/取消。
   bool get isPendingPayment => this == ShopOrderStatus.pendingPayment;
 
+  /// 已完成付款并进入履约链（含其后的终态）。🔴 二维码轮询只认这些 —— 「不再待支付」
+  /// 还包括 CANCELLED（付款窗到期 / 另一台设备取消），把它当成功会弹「支付成功」并污染埋点。
+  bool get isPaidOrLater =>
+      this == ShopOrderStatus.pendingShipment ||
+      this == ShopOrderStatus.shipped ||
+      this == ShopOrderStatus.delivered ||
+      this == ShopOrderStatus.completed ||
+      this == ShopOrderStatus.refunding ||
+      this == ShopOrderStatus.refunded;
+
   /// 🔴 **已发货态即可确认收货**（Story 4.5，SPEC-2 出口②）——不必等系统标记送达。
   /// 用户比谁都先知道货到没到；只留「已送达后才能确认」这一条路，等于把订单能否
   /// 脱离「已发货」完全押在运营记不记得点那个按钮上。

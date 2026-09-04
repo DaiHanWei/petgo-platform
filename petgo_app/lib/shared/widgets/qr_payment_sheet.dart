@@ -9,6 +9,12 @@ import '../../l10n/app_localizations.dart';
 /// 通用 QRIS 二维码支付面板（AI 解锁 / 身份证HD 等现金一次性购买复用）。
 ///
 /// 展示后端下发的 EMVCo 二维码串（本地生成，照 recharge/vet_timed_pay 范式）+ 每 3s 轮询到账。
+/// [pollPaid] 抛出本异常 = 付款已不可能完成（订单被取消 / 付款窗到期）：
+/// 弹层关闭并 resolve `false`，与用户主动取消同路，**不**当作到账。
+class QrPaymentAborted implements Exception {
+  const QrPaymentAborted();
+}
+
 /// [pollPaid] 返回 true 即到账 → 关闭并 resolve `true`；用户取消 → resolve `false`（纯关闭，
 /// 不调后端——这些场景 pending 可复用重复支付、不清理，下次再发起复用同 intent）。
 Future<bool> showQrPaymentSheet(
@@ -57,8 +63,11 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
     super.dispose();
   }
 
+  bool _inFlight = false;
+
   Future<void> _tick() async {
-    if (_closing) return;
+    if (_closing || _inFlight) return; // 慢网时不让多次轮询并发堆叠
+    _inFlight = true;
     try {
       final bool paid = await widget.pollPaid();
       if (!mounted || _closing) return;
@@ -67,8 +76,15 @@ class _QrPaymentSheetState extends State<_QrPaymentSheet> {
         _poll?.cancel();
         Navigator.of(context).pop(true);
       }
+    } on QrPaymentAborted {
+      if (!mounted || _closing) return;
+      _closing = true;
+      _poll?.cancel();
+      Navigator.of(context).pop(false);
     } catch (_) {
       // 忽略单次轮询失败，下个 tick 再试。
+    } finally {
+      _inFlight = false;
     }
   }
 
