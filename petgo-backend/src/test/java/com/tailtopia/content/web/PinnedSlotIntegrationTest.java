@@ -196,7 +196,8 @@ class PinnedSlotIntegrationTest extends ApiIntegrationTest {
         User author = newUser();
         ContentPost newest = savePost(author.getId(), "NEWEST-" + SEQ.incrementAndGet());
 
-        assertThat(feed(null)).contains("\"id\":" + newest.getId() + ",");
+        assertThat(feedEventuallyContains(newest.getId()))
+                .as("推荐序下首页不保证含目标帖：翻页仍应能找到").isTrue();
     }
 
     /**
@@ -270,7 +271,8 @@ class PinnedSlotIntegrationTest extends ApiIntegrationTest {
                 "https://cdn.example.com/b.jpg", "Judul", null,
                 now.minusSeconds(60), now.plusSeconds(3600)));
 
-        assertThat(feed(null)).contains("\"id\":" + newest.getId() + ",");
+        assertThat(feedEventuallyContains(newest.getId()))
+                .as("推荐序下首页不保证含目标帖：翻页仍应能找到").isTrue();
     }
 
     private static String extractCursor(String body) {

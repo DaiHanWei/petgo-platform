@@ -1,6 +1,7 @@
 package com.tailtopia.content.web;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -101,10 +102,9 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
         String marker = "feedmark-" + SEQ.incrementAndGet();
         savePost(author.getId(), ContentType.DAILY, null, marker);
 
-        // 倒序最新在前，首批 20 条内能取到刚发的。
-        mvc.perform(get("/api/v1/content-posts"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[?(@.body=='" + marker + "')]").exists());
+        // ALL Tab 是推荐序，首页不保证含刚发的帖：最多翻 10 页找。
+        assertThat(walkFeed(null, 10).stream().anyMatch(n -> marker.equals(n.path("body").asText(null))))
+                .as("游客翻推荐流应能看到刚发布的公开帖").isTrue();
     }
 
     @Test
