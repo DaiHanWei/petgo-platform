@@ -13,6 +13,7 @@ import com.tailtopia.shop.returns.domain.RejectDisposal;
 import com.tailtopia.shop.returns.domain.ReturnLine;
 import com.tailtopia.shop.returns.domain.ReturnRequest;
 import com.tailtopia.shop.returns.domain.ReturnStatus;
+import com.tailtopia.shop.returns.domain.ReturnType;
 import com.tailtopia.shop.returns.repository.OpenedPrecedentRepository;
 import com.tailtopia.shop.returns.repository.ReturnRequestRepository;
 import com.tailtopia.shop.returns.service.RefundExecutionService;
@@ -205,7 +206,20 @@ public class AdminReturnService {
 
     @Transactional
     public RefundExecutionService.Outcome executeRefund(String returnToken, long adminId) {
+        ReturnRequest before = require(returnToken);
+        boolean firstExecution = before.getStatus() == ReturnStatus.REFUNDING;
         var out = refunds.execute(returnToken);
+        // 🔴 发货前取消：货从未出库，但付款时已 commit 扣了实际库存 —— 退款执行的同时按原订单号
+        //    以退货入库批次回补，否则 actual 长期偏低（幻影缺货）。只在首次执行时回补（重复点击不重复入库）。
+        //    ⚠️ 拒收（REFUSED_ON_DELIVERY）不在这里回补：货在承运商手里，何时入库是运营决定。
+        if (firstExecution && before.getReturnType() == ReturnType.CANCEL_BEFORE_SHIPMENT) {
+            ShopOrder order = orders.findById(before.getShopOrderId()).orElseThrow();
+            for (ReturnLine rl : requests.linesOf(before.getId())) {
+                var line = orderLines.findById(rl.getOrderLineId()).orElseThrow();
+                movements.receiveReturn(line.getSkuId(), rl.getQty(), order.getPublicToken(),
+                        LocalDate.now(), adminId);
+            }
+        }
         audit.record(adminId, AuditActions.SHOP_RETURN_REFUNDED, "SHOP_RETURN", returnToken,
                 "退款执行：PawCoin 段=%d 现金段=%d 补偿溢价=%d 激励溢价=%d 回程运费返还=%d"
                         .formatted(out.coinRefunded(), out.cashRefunded(),

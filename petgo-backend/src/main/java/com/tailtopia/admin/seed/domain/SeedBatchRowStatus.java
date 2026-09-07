@@ -50,8 +50,10 @@ public enum SeedBatchRowStatus {
     FAILED;
 
     private static final Map<SeedBatchRowStatus, Set<SeedBatchRowStatus>> ALLOWED = Map.of(
-            DRAFT, EnumSet.of(VALIDATED),
-            VALIDATED, EnumSet.of(SCHEDULED, PUBLISHED, DRAFT),
+            // 🔴 DRAFT/VALIDATED → FAILED：立即发布那一行的事务回滚后行回到 DRAFT（或停在 VALIDATED），
+            //    必须能记下失败原因，否则 safelyFail 静默吞掉、行卡死且下次确认 VALIDATED→VALIDATED 非法。
+            DRAFT, EnumSet.of(VALIDATED, FAILED),
+            VALIDATED, EnumSet.of(SCHEDULED, PUBLISHED, DRAFT, FAILED),
             SCHEDULED, EnumSet.of(PUBLISHED, FAILED, DRAFT),
             PUBLISHED, EnumSet.noneOf(SeedBatchRowStatus.class),
             FAILED, EnumSet.of(DRAFT));

@@ -240,8 +240,10 @@ public class ProfileApiController {
     @PostMapping("/me/id-cards/{cardId}/share-rewards")
     public com.tailtopia.share.dto.IdCardShareRewardResponse rewardIdCardShare(
             @AuthenticationPrincipal Jwt jwt, @PathVariable long cardId) {
+        long ownerId = currentUserId(jwt);
+        rateLimiter.check("rl:profile:idshare:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
         return com.tailtopia.share.dto.IdCardShareRewardResponse.of(
-                idCardShareRewards.rewardAfterShare(currentUserId(jwt), cardId,
+                idCardShareRewards.rewardAfterShare(ownerId, cardId,
                         java.time.Instant.now()));
     }
 

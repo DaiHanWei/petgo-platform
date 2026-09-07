@@ -32,6 +32,8 @@
 /// - **配送时效**：`checkoutShippingReguler` 是固定文案（C-14 已把配送方式退化为单档）。
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -602,7 +604,10 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
     try {
       final order = await ref.read(checkoutRepositoryProvider).placeOrder(p.addressToken,
           idempotencyKey: 'shop-order-${DateTime.now().microsecondsSinceEpoch}');
-      await ref.read(cartProvider.notifier).refresh();
+      // 🔴 单已落库，之后任何失败都不能把页面退回「可再次提交」：此前这里 await 购物车
+      //    刷新，一次网络抖动就落进 finally 把按钮放开，再点 = 新幂等键 = 同车重复下第二单。
+      //    购物车刷新改为不等待、失败吞掉（下次进购物车会重拉）。
+      unawaited(ref.read(cartProvider.notifier).refresh().catchError((_) {}));
       if (!mounted) return;
       // 🔒 items 里只有受控标识与数量：sku_id 是不可枚举 token，无价格、无名称、无 PII。
       //    客户端这一份与服务端的行级归因**互为校验**，偏差过大即说明端上埋点有丢失。

@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -124,7 +125,8 @@ public class ContentPinService {
     }
 
     /** 某坑位当前生效中的排期；无则空。 */
-    @Transactional(readOnly = true)
+    // REQUIRES_NEW：同 FeedRecommendationService.page —— FeedService 对它 catch 降级，不能污染外层事务。
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
     public Optional<ContentPin> activePin(String slot, Instant now) {
         return pins.findActiveOne(slot, now);
     }

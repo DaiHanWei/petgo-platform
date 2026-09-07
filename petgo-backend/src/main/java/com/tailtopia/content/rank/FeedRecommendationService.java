@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -122,7 +123,10 @@ public class FeedRecommendationService {
      * @param pageSize      每页条数
      * @param yieldId       首屏要让位的顶置内容 id；null = 不让位
      */
-    @Transactional(readOnly = true)
+    // 🔴 REQUIRES_NEW：本方法在 FeedService.loadFeed 的只读事务里被 try/catch 包着做降级。
+    //    若加入外层事务，任何 RuntimeException 穿过本代理都会把外层标成 rollback-only，
+    //    降级查询跑完外层提交仍抛 UnexpectedRollbackException → 500，「用户无感」落空。
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
     public RankedPage page(Long viewerId, String anonSessionId, String cursor, int pageSize,
             Long yieldId) {
         Instant now = Instant.now();
@@ -207,9 +211,11 @@ public class FeedRecommendationService {
     private List<Long> slice(FeedRankCacheKey key, String seed, int offset, int limit,
             Long viewerId, Instant now) {
         List<Long> cached = sequenceStore.read(key, seed, offset, limit);
-        if (!cached.isEmpty()) {
+        if (cached.size() >= limit) {
             return cached;
         }
+        // 🔴 命中但尾巴不足 limit 时也要续算：顶置让位 / 已删条目会让 consumed 偏离页长的整数倍，
+        //    命中的短尾若直接返回会被上游判成「序列到底」，推荐流永远翻不过初始 100 条。
         List<Long> full = extend(key, seed, offset + limit, viewerId, now);
         if (offset >= full.size()) {
             return List.of();

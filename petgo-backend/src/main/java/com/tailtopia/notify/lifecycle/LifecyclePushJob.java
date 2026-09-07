@@ -2,6 +2,7 @@ package com.tailtopia.notify.lifecycle;
 
 import com.tailtopia.auth.dto.UserLifecycleSnapshot;
 import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.notify.repository.LifecyclePushMarkRepository;
 import com.tailtopia.profile.dto.PetProfileSnapshot;
 import com.tailtopia.profile.service.PetProfileQueryService;
 import java.time.LocalDate;
@@ -35,15 +36,18 @@ public class LifecyclePushJob {
     private final LifecyclePushPlanner planner;
     private final LifecyclePushDispatcher dispatcher;
     private final LifecyclePushProperties props;
+    private final LifecyclePushMarkRepository marks;
 
     public LifecyclePushJob(AccountQueryService accounts, PetProfileQueryService petProfiles,
             LifecyclePushPlanner planner, LifecyclePushDispatcher dispatcher,
-            LifecyclePushProperties props) {
+            LifecyclePushProperties props,
+            LifecyclePushMarkRepository marks) {
         this.accounts = accounts;
         this.petProfiles = petProfiles;
         this.planner = planner;
         this.dispatcher = dispatcher;
         this.props = props;
+        this.marks = marks;
     }
 
     /** 每日 19:00 WIB（12:00 UTC）扫描；cron 与开关可经配置覆盖。 */
@@ -60,8 +64,14 @@ public class LifecyclePushJob {
                 planner.plan(today, users, petNames, props.getWinbackAfterDays());
 
         int cap = Math.max(0, props.getDailyCap());
+        // 🔴 先剔除已推过的计划项再套上限：planner 不知道去重表（D1 两天窗口、召回每天都重新计划），
+        //    不剔除的话前一天已推的条目会占满今天的 cap，第 201 人起「明天补」永远补不到。
+        List<LifecyclePlannedPush> due = planned.stream()
+                .filter(push -> !marks.existsByUserIdAndPushKindAndNodeKey(
+                        push.userId(), push.type().name(), push.nodeKey()))
+                .toList();
         int sent = 0;
-        for (LifecyclePlannedPush push : planned) {
+        for (LifecyclePlannedPush push : due) {
             if (sent >= cap) {
                 break; // planned 已按 D1→D3→D7→召回 排序，截断先砍掉最不紧迫的召回。
             }
@@ -70,8 +80,8 @@ public class LifecyclePushJob {
         }
         // 手册每日 SOP「看召回漏斗」的第一行数据。planned > sent 说明当天被上限压住了，
         // 剩下的明天补 —— 不记 userId / 宠物名（日志禁 PII）。
-        log.info("lifecycle push daily scan: users={} planned={} dispatched={} cap={} deferred={}",
-                users.size(), planned.size(), sent, cap, Math.max(0, planned.size() - sent));
+        log.info("lifecycle push daily scan: users={} planned={} due={} dispatched={} cap={} deferred={}",
+                users.size(), planned.size(), due.size(), sent, cap, Math.max(0, due.size() - sent));
     }
 
     /**

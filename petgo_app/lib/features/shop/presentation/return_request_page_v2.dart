@@ -533,7 +533,8 @@ class _ReturnRequestPageV2State extends ConsumerState<ReturnRequestPageV2> {
       showAppToast(context, l10n.returnRequestSubmitted);
       // 🔴 下一步**不是提交完成**：退款去向由支付构成决定且不可选，
       //    必须先让用户看到拆分结果再确认。
-      context.push('/shop/returns/${progress.returnToken}/refund-method');
+      // 🔴 pushReplacement：申请已提交，本页不能再留在栈里（返回键回到表单可再次提交 = 第二张退货单）。
+      context.pushReplacement('/shop/returns/${progress.returnToken}/refund-method');
     } catch (_) {
       if (mounted) showAppToast(context, l10n.returnRequestFailed);
     } finally {

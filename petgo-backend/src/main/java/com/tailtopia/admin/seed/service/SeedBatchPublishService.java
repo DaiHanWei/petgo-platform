@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,13 +50,15 @@ public class SeedBatchPublishService {
     private final AdminAuditService audit;
     /** 指纹图片键解析（bug 20260901-467）：URL → 素材内容哈希，三条发布路径同一判据。 */
     private final SeedBatchAssetService assetService;
+    private final ObjectProvider<SeedBatchPublishService> selfProvider;
 
     public SeedBatchPublishService(SeedBatchRepository batches, SeedBatchRowRepository rows,
             SeedBatchValidator validator, SeedBatchService stateMachine,
             ContentService contentService, SeedContentHashRepository hashes,
             com.tailtopia.auth.repository.UserRepository users,
             com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities,
-            AdminAuditService audit, SeedBatchAssetService assetService) {
+            AdminAuditService audit, SeedBatchAssetService assetService,
+            ObjectProvider<SeedBatchPublishService> selfProvider) {
         this.batches = batches;
         this.rows = rows;
         this.validator = validator;
@@ -66,6 +69,7 @@ public class SeedBatchPublishService {
         this.identities = identities;
         this.audit = audit;
         this.assetService = assetService;
+        this.selfProvider = selfProvider;
     }
 
     /** 预览：逐行校验结果（AC1）。 */
@@ -92,6 +96,18 @@ public class SeedBatchPublishService {
      */
     @Transactional
     public PublishOutcome confirm(long batchId, long adminAccountId, boolean includeDuplicates) {
+        return confirm(batchId, adminAccountId, includeDuplicates, true);
+    }
+
+    /**
+     * @param callerMayPublishAsReal 操作人是否持有 {@code seed.publish_as_real}。
+     *        🔴 以真实账号为作者的行在无权限时跳过 —— 否则只有 virtual_account.manage 的人
+     *        能借批量工作台以真实用户身份发帖（旧单条路径一直查，这里此前漏了）。
+     */
+    @Transactional
+    public PublishOutcome confirm(long batchId, long adminAccountId, boolean includeDuplicates,
+            boolean callerMayPublishAsReal) {
+        SeedBatchPublishService self = selfProvider.getObject();
         SeedBatch batch = requireBatch(batchId);
         List<SeedBatchRow> all = rows.findByBatchIdOrderByRowNoAsc(batchId);
         List<RowValidation> checks = validator.validate(batch, all);
@@ -122,17 +138,23 @@ public class SeedBatchPublishService {
                 skippedByDuplicate++;
                 continue;
             }
+            if (!callerMayPublishAsReal && identities.isRealPublishIdentity(row.getAuthorUserId())) {
+                try {
+                    stateMachine.markValidationFailed(row.getId(), "无权以真实账号身份发布");
+                } catch (RuntimeException ignored) {
+                    log.warn("记录无权发布原因失败 rowId={}", row.getId());
+                }
+                skippedByError++;
+                continue;
+            }
             try {
-                stateMachine.markValidated(row.getId());
-                // ⚠️ 计划时间已经过了 ⇒ **立即发**，而不是排一个已经过期的期。
-                //    运营昨天排的、今天才点确认，属常见情形；排进去也只是让扫描器
-                //    在下一轮把它发出来，中间多一次状态跳转、还多一条"逾期"的观感。
-                if (row.getScheduledAt() != null && row.getScheduledAt().isAfter(Instant.now())) {
-                    stateMachine.schedule(row.getId(), row.getScheduledAt(), adminAccountId);
-                    scheduled++;
-                } else {
-                    publishRowNow(row, adminAccountId);
+                // 🔴 逐行独立事务（REQUIRES_NEW，经 self 代理）：此前整批一个事务，任一行
+                //    publish 抛错都会把共享事务标成 rollback-only，catch 后继续发、最后 commit
+                //    抛 UnexpectedRollbackException → 已"成功"的行全部回滚、运营看到 500。
+                if (self.publishOrScheduleRow(row.getId(), adminAccountId)) {
                     published++;
+                } else {
+                    scheduled++;
                 }
             } catch (RuntimeException e) {
                 // 🛡 单行失败不拖垮整批：记原因、转 FAILED，其余行照发。
@@ -223,6 +245,27 @@ public class SeedBatchPublishService {
             // 连失败都记不下就只留日志 —— 绝不让它把整批拖垮。
             log.warn("记录发布失败原因时又失败了 rowId={}", rowId);
         }
+    }
+
+    /**
+     * 单行「校验通过 → 排期或立即发布」，独立事务。
+     *
+     * @return true = 本次立即发布了；false = 进入排期
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public boolean publishOrScheduleRow(long rowId, long adminAccountId) {
+        SeedBatchRow row = rows.findById(rowId)
+                .orElseThrow(() -> AppException.notFound("行不存在"));
+        stateMachine.markValidated(rowId);
+        // ⚠️ 计划时间已经过了 ⇒ **立即发**，而不是排一个已经过期的期。
+        //    运营昨天排的、今天才点确认，属常见情形；排进去也只是让扫描器
+        //    在下一轮把它发出来，中间多一次状态跳转、还多一条"逾期"的观感。
+        if (row.getScheduledAt() != null && row.getScheduledAt().isAfter(Instant.now())) {
+            stateMachine.schedule(rowId, row.getScheduledAt(), adminAccountId);
+            return false;
+        }
+        publishRowNow(row, adminAccountId);
+        return true;
     }
 
     private SeedBatch requireBatch(long batchId) {

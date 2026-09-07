@@ -230,6 +230,9 @@ public class ReturnRequest {
      * <p>拒收 / 发货前取消<b>跳过寄回与质检</b>，直接进入退款执行。
      */
     public void approve(long adminId) {
+        if (status != ReturnStatus.PENDING_REVIEW) {
+            throw AppException.conflict("当前状态不可批准：" + status);
+        }
         this.reviewedBy = adminId;
         this.reviewedAt = Instant.now();
         if (returnType.skipsShipback()) {
@@ -244,6 +247,10 @@ public class ReturnRequest {
     public void reject(long adminId, String reason) {
         if (reason == null || reason.isBlank()) {
             throw AppException.validation("驳回必须填写理由（会回告用户）");
+        }
+        // 🔴 质检中不走普通驳回：货已寄回，必须经 S-10 处置（RejectDisposal）记录去向。
+        if (status != ReturnStatus.PENDING_REVIEW && status != ReturnStatus.REFUND_FAILED) {
+            throw AppException.conflict("当前状态不可驳回：" + status);
         }
         this.reviewedBy = adminId;
         this.reviewedAt = Instant.now();
@@ -335,6 +342,10 @@ public class ReturnRequest {
             String accountHolder) {
         if (destination == null) {
             throw AppException.validation("请选择现金段的退回方式");
+        }
+        // 🔴 退款一旦执行（或申请已终结）去向不可再改：REFUNDED 后改成 TO_BANK 会让财务照单再打一次现金段。
+        if (refundedAt != null || status.isTerminal()) {
+            throw AppException.conflict("退款已执行或申请已结束，退回方式不可更改");
         }
         this.cashDestination = destination;
         if (destination == CashDestination.TO_BANK) {

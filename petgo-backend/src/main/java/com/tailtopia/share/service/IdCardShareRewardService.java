@@ -166,7 +166,10 @@ public class IdCardShareRewardService {
             var cfg = platformConfig.pawcoin();
             if (!cfg.isShareRewardEnabled()
                     || cfg.getIdCardShareReward() <= 0
-                    || cfg.getIdCardShareDailyCap() <= 0) {
+                    || cfg.getIdCardShareDailyCap() <= 0
+                    // 🔴 月度上限为 0 或装不下一次发放 → tryGrant 永假：这是配置态而非「额度耗尽」，
+                    //    此时继续宣传就是永久性的假承诺（AC6）。
+                    || cfg.getShareRewardMonthlyCap() < cfg.getIdCardShareReward()) {
                 return 0; // 没配好 —— 一个字都不要提
             }
             Optional<PetProfile> profile = profiles.findByOwnerId(userId);

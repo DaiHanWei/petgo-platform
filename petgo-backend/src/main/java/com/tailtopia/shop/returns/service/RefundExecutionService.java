@@ -106,6 +106,10 @@ public class RefundExecutionService {
         }
         ShopOrder order = orders.findById(r.getShopOrderId()).orElseThrow();
         Quote q = computeQuote(r, order);
+        // 🔴 有现金段却还没选去向 → 不能执行：执行后会置 REFUNDED，现金段既没转币也没进打款队列。
+        if (q.cashRefund() > 0 && r.getCashDestination() == null) {
+            throw AppException.conflict("用户尚未选择现金段退回方式，暂不能执行退款");
+        }
 
         // ---------- ① PawCoin 段：只能退回 PawCoin ----------
         String idem = "shop-refund:" + r.getPublicToken();
@@ -167,6 +171,11 @@ public class RefundExecutionService {
             }
         }
         boolean orderFullyRefunded = requests.settleOrderIfFullyRefunded(order.getId());
+        // 🔴 拒收 / 发货前取消只退了部分行：订单在 submit 时被推进了 REFUNDING，
+        //    这里必须回到申请前状态，否则剩余行永远发不出、送不达（REFUNDING 无其它出边）。
+        if (!orderFullyRefunded && r.getReturnType().skipsShipback()) {
+            requests.restoreOrderStatus(r);
+        }
 
         log.info("退款执行完成 return={} coin={} cash={} premium={} orderRefunded={}",
                 r.getPublicToken(), q.coinRefund(), q.cashRefund(), q.compensationPremium(),

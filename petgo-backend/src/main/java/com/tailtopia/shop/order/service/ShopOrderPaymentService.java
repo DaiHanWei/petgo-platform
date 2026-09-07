@@ -154,9 +154,9 @@ public class ShopOrderPaymentService {
         long cash = order.getCashAmount() == null ? order.getTotalAmount() : order.getCashAmount();
         // 🔴 幂等键绑定订单 token：重复点「去支付」取回同一个意图、同一个二维码，
         //    不会每点一次就向网关多下一单。
-        String key = idempotencyKey == null || idempotencyKey.isBlank()
-                ? "shop-order-pay:" + order.getPublicToken()
-                : idempotencyKey;
+        //    🔴 客户端 key 一律【不采信】：订单 token 已唯一标识「这个用户的这一单」，
+        //    采信任意字符串会让 B 用 A 的 key 取回 A 的意图并挂到 B 单上（回调按 token 回找订单命中两行）。
+        String key = "shop-order-pay:" + order.getPublicToken();
         Duration ttl = remainingWindow(order);
 
         var response = coin > 0

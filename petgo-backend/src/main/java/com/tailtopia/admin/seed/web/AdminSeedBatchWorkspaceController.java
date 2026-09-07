@@ -362,7 +362,8 @@ public class AdminSeedBatchWorkspaceController {
             @RequestParam(defaultValue = "false") boolean includeDuplicates,
             RedirectAttributes flash) {
         try {
-            var out = publishing.confirm(batchId, admin.getAdminAccountId(), includeDuplicates);
+            var out = publishing.confirm(batchId, admin.getAdminAccountId(), includeDuplicates,
+                    com.tailtopia.admin.virtual.web.AdminSeedBatchController.mayPublishAsReal(admin));
             // bug 20260901-473：改经 i18n 组装（后台三语，硬编码中文会原样怼给印尼运营），
             // 且**每个桶都必须出声** —— 少说一个桶，运营就会觉得有一行凭空消失了。
             StringBuilder msg = new StringBuilder(i18n.get("admin.batch.confirm.published",

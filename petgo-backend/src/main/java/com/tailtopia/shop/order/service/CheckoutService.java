@@ -172,9 +172,13 @@ public class CheckoutService {
     public ShopOrder placeOrder(long userId, String addressToken, String entrySource,
             String triggerType, String idempotencyKey) {
         // 幂等重放：同 key 已落一单则取回，不重复创建。
-        Optional<Long> existing = idempotency.findResourceId(idempotencyKey);
+        // 🔴 键按用户隔离：客户端 key 是任意字符串，不隔离则 B 重放 A 用过的 key 会拿到 A 的订单。
+        String scopedKey = idempotencyKey == null || idempotencyKey.isBlank()
+                ? null : "shop-checkout:" + userId + ":" + idempotencyKey;
+        Optional<Long> existing = idempotency.findResourceId(scopedKey);
         if (existing.isPresent()) {
             return orders.findById(existing.get())
+                    .filter(o -> o.getUserId() != null && o.getUserId() == userId)
                     .orElseThrow(() -> AppException.notFound("订单不存在"));
         }
         CartView cart = carts.view(userId);
@@ -229,7 +233,7 @@ public class CheckoutService {
         }
 
         // ⑦ 记录幂等映射：重放取回本单（key 为空时 store 为 no-op）
-        idempotency.store(idempotencyKey, order.getId());
+        idempotency.store(scopedKey, order.getId());
         return order;
     }
 

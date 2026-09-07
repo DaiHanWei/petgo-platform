@@ -47,6 +47,15 @@ public class LifecyclePushDispatcher {
                     push.userId(), push.type().name(), push.nodeKey())) {
                 return; // 已推过，跳过。
             }
+            // 🔴 召回「每月至多一次」按滚动 30 天判定：nodeKey 是日历月，9/30 与 10/1 会各推一条。
+            if (push.type() == com.tailtopia.notify.domain.NotificationType.LIFECYCLE_WINBACK
+                    && marks.findFirstByUserIdAndPushKindOrderByPushedAtDesc(
+                            push.userId(), push.type().name())
+                    .map(m -> m.getPushedAt() != null && m.getPushedAt()
+                            .isAfter(java.time.Instant.now().minus(java.time.Duration.ofDays(30))))
+                    .orElse(false)) {
+                return;
+            }
             // 先落去重标记（唯一约束兜底并发）；再投递。
             marks.save(LifecyclePushMark.of(push.userId(), push.type().name(), push.nodeKey(),
                     push.variant().name()));

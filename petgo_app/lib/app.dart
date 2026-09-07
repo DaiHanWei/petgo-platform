@@ -18,6 +18,7 @@ import 'package:tailtopia/features/me/presentation/phone_edit_sheet.dart';
 import 'package:tailtopia/features/me/domain/phone_soft_prompt.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/notify/data/notification_repository.dart';
+import 'package:tailtopia/features/order/presentation/order_list_controller.dart';
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/features/profile/data/health_record_repository.dart';
 import 'package:tailtopia/features/profile/data/id_card_repository.dart';
@@ -285,5 +286,6 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(idCardDetailProvider); // 身份证：卡详情（按 cardId family 整族失效）
   ref.invalidate(newbieTasksProvider); // 新手任务进度（同型隐患：换账号防串任务状态）
   ref.invalidate(pawCoinProvider); // PawCoin 余额（同型隐患：换账号防显示上个账号余额）
+  ref.invalidate(orderListProvider); // 订单中心（keep-alive 且不 watch 登录态：换账号会看到上个账号的订单）
   ref.read(consultRefreshProvider.notifier).bump(); // 问诊页 _active/_history 重拉
 }
