@@ -285,8 +285,8 @@ class AdminContentPinIntegrationTest extends ApiIntegrationTest {
 
         ContentPin saved = pins.findAll().get(0);
         assertThat(saved.getStartsAt()).isEqualTo(wibInstant(6, 10));
-        // WIB 10:00 = UTC 03:00
-        assertThat(saved.getStartsAt()).isEqualTo(Instant.parse("2026-09-06T03:00:00Z"));
+        // WIB 10:00 = UTC 03:00（日期已改为相对今天，只校验小时）
+        assertThat(saved.getStartsAt().atZone(java.time.ZoneOffset.UTC).getHour()).isEqualTo(3);
     }
 
     /** 🛡 界面必须在时间输入旁明示「WIB」—— 否则运营按本地时区填，排期整体偏移。 */
