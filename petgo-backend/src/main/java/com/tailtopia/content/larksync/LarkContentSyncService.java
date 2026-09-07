@@ -73,7 +73,15 @@ public class LarkContentSyncService {
     /** 图片编号前缀白名单：不得含 {@code -}（{@code -} 后是序号），拼进 OSS objectKey 与公网 URL。 */
     private static final Pattern IMAGE_PREFIX_PATTERN = Pattern.compile("[A-Za-z0-9_]{1,32}");
     /** 云盘文件名：{前缀}-{整数}.jpg；组 1=前缀，组 2=序号。 */
-    private static final Pattern IMAGE_FILE_PATTERN = Pattern.compile("([A-Za-z0-9_]{1,32})-(\\d{1,6})\\.jpg");
+    /**
+     * 云盘图片文件名：{@code {前缀}-{序号}.{jpg|jpeg|png}}，或单图省略序号 {@code {前缀}.{ext}}（视为第 0 张，排最前）。
+     * 扩展名不区分大小写。
+     *
+     * <p>🔴 2026-09-07 放宽：原先只认小写 {@code -序号.jpg}。运营实际上传的 262 个文件里 235 个不合规——
+     * 0828 那批 112 张没带 {@code -序号}、W 系列 123 张是 png——145 行全报「缺图」，只有 27 条发出去。
+     */
+    private static final Pattern IMAGE_FILE_PATTERN =
+            Pattern.compile("([A-Za-z0-9_]{1,32})(?:\\s*-\\s*(\\d{1,6}))?\\s*\\.(?i:jpe?g|png)"); // 横杠两侧容忍空格（W2K104 - 1.png）
     /** 「发布账号(邮箱)」格式（users.email varchar(320)）。 */
     private static final Pattern EMAIL_PATTERN = Pattern.compile("[^@\\s]{1,64}@[^@\\s]{1,255}");
     /** 文案上限：content_posts.text varchar(1000)。 */
@@ -216,7 +224,8 @@ public class LarkContentSyncService {
             byte[] bytes = client.downloadFile(folder.get(fileName)); // 传输失败/非图片 → LarkApiException（轮级）
             String key = mediaProps.getOss().normalizedKeyPrefix()
                     + "public/lark-content/" + row.contentCode() + "/" + fileName;
-            imageUrls.add(oss.putPublicObjectWithAcl(key, bytes, "image/jpeg"));
+            // content-type 按字节魔数判定，不按扩展名、更不写死 image/jpeg（png 顶着 jpeg 头发出去会被部分客户端拒绝解码）
+            imageUrls.add(oss.putPublicObjectWithAcl(key, bytes, contentTypeOf(bytes)));
         }
 
         ContentPostCreateRequest req = new ContentPostCreateRequest(
@@ -251,11 +260,13 @@ public class LarkContentSyncService {
             for (String fileName : folder.keySet()) {
                 Matcher m = IMAGE_FILE_PATTERN.matcher(fileName);
                 if (m.matches() && m.group(1).equals(prefix)) {
-                    ordered.put(Integer.parseInt(m.group(2)), fileName);
+                    int seq = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
+                    ordered.putIfAbsent(seq, fileName); // 同序号多扩展名（a-1.jpg 与 a-1.png）取先列到的一张
                 }
             }
             if (ordered.isEmpty()) {
-                throw new IllegalStateException("缺图：云盘找不到 " + prefix + "-<序号>.jpg");
+                throw new IllegalStateException(
+                        "缺图：云盘找不到 " + prefix + ".jpg/png 或 " + prefix + "-<序号>.jpg/png");
             }
             out.addAll(ordered.values());
         }
@@ -263,6 +274,21 @@ public class LarkContentSyncService {
             throw new IllegalStateException("图片超过 " + MAX_IMAGES + " 张（云盘匹配到 " + out.size() + " 张）");
         }
         return out;
+    }
+
+    /** 按魔数给 OSS 对象 content-type；识别不出时回落 image/jpeg（downloadFile 已保证是图片字节）。 */
+    static String contentTypeOf(byte[] b) {
+        if (b.length >= 4 && (b[0] & 0xFF) == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G') {
+            return "image/png";
+        }
+        if (b.length >= 3 && b[0] == 'G' && b[1] == 'I' && b[2] == 'F') {
+            return "image/gif";
+        }
+        if (b.length >= 12 && b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F'
+                && b[8] == 'W' && b[9] == 'E' && b[10] == 'B' && b[11] == 'P') {
+            return "image/webp";
+        }
+        return "image/jpeg";
     }
 
     /** 「内容分类」→ 类型。空=DAILY；非法值返回 null（validateRow 已先拦，这里兜底）。 */
