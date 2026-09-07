@@ -6,7 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:go_router/go_router.dart';
+
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
+import '../../../shared/boundary/triage_category_jump.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/app_toast.dart';
@@ -131,6 +135,16 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
       appBar: AppBar(
         title: Text(l10n.healthListTitle),
         actions: [
+          // 🔴 DEP-1 闭合（2026-08-21）：Health 让出底栏 Tab 位给 Toko 后，
+          //    「发起问诊」失去全部界面入口——本页此前只**展示**问诊存档（_HealthCat CONSULT），
+          //    并无发起动作。故在此补入口，使「问诊已并入健康记录」成为事实而非说法。
+          //    `/triage` 已由 shell 分支降为顶层路由，用 push 保留返回栈（回得到本页）。
+          IconButton(
+            key: const ValueKey('healthStartConsult'),
+            icon: const Icon(Icons.medical_services_outlined, color: AppColors.ink),
+            tooltip: l10n.healthStartConsult,
+            onPressed: () => context.push('/triage'),
+          ),
           IconButton(
             key: const ValueKey('healthAddTop'),
             icon: const Icon(Icons.add, color: AppColors.ink),
@@ -352,6 +366,55 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
   );
 
   Widget _tile(BuildContext context, WidgetRef ref, AppLocalizations l10n, HealthListItem item) {
+    final card = _recordCard(context, ref, l10n, item);
+    // 🔴 FR-110（Story 9.1）：问诊与商品之间**唯一**被允许的关联 ——
+    //    按结构化健康记录类型跳【品类】，且由系统生成。
+    //    刻意不做「推荐商品」：兽医不参与、界面上没有任何能选到具体 SKU 的入口。
+    //    映射表在 shared/boundary，两头都是受控枚举串，路径上没有能携带 SKU 的形参。
+    final jumpCategory =
+        item.isConsult ? null : TriageCategoryJump.categoryFor(item.type);
+    if (jumpCategory == null) return card;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [card, _categoryJumpRow(context, l10n, item.type, jumpCategory)],
+    );
+  }
+
+  /// 系统生成的品类跳转行。**整行只带一个品类 code**，带不了别的。
+  Widget _categoryJumpRow(
+      BuildContext context, AppLocalizations l10n, String recordType, String category) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        key: ValueKey('healthCategoryJump_$recordType'),
+        onPressed: () {
+          // 边界侵蚀监控（Story 9.3）：问诊→商品的跳转占比要能被看见。
+          // 🔒 只带 record_type 这一个受控词表值，无 SKU、无宠物信息。
+          // ⚠️ 事件名与 AC 字面量 `triage_to_category_jump` 不同：那个名字过不了
+          //    埋点命名守卫（动作不在词尾、非过去式）。按既有先例（V1.4.0 Story 6.x
+          //    的 `_dismissed`→`_dismiss_tapped`）改名迁就规则，而不是放宽规则。
+          //    看板口径映射记在 Epic 9 交付说明里。
+          Analytics.capture('triage_category_jump_tapped', {'record_type': recordType});
+          // ⚠️ 必须 `go` 不能 `push`：DEP-1 闭合后 `/shop` 是 shell 分支根，
+          //    push 会二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏
+          //    （见 deep_link_routes.dart shellTabRoots 注释里的 20260729 事故）。
+          context.go('/shop?category=$category');
+        },
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.mint,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        icon: const Icon(Icons.storefront_outlined, size: 16),
+        label: Text(l10n.healthShopCategoryJump,
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+      ),
+    );
+  }
+
+  Widget _recordCard(
+      BuildContext context, WidgetRef ref, AppLocalizations l10n, HealthListItem item) {
     final focused =
         widget.focusRecordId != null && !item.isConsult && item.id == widget.focusRecordId;
     final dateStr = item.eventDate == null

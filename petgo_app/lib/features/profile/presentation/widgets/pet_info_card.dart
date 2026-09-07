@@ -4,7 +4,7 @@ import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_image.dart';
 import '../../domain/pet_age.dart';
-import '../../domain/pet_profile.dart';
+import '../../domain/pet_header_info.dart';
 
 /// 宠物护照卡（Story 2.4 · paspor.html 1:1 还原）。
 ///
@@ -19,7 +19,7 @@ class PetInfoCard extends StatelessWidget {
     this.milestoneCount,
   });
 
-  final PetProfile profile;
+  final PetHeaderInfo profile;
 
   /// 统计三列（archiveStatsProvider 未就绪时传 null，显占位「·」）。
   final int? happyCount;

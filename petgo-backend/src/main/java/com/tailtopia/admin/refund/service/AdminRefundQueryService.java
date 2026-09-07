@@ -38,7 +38,7 @@ public class AdminRefundQueryService {
     @Transactional(readOnly = true)
     public AdminRefundView find(String refundToken) {
         RefundRequest r = refunds.findByRefundToken(refundToken)
-                .orElseThrow(() -> AppException.notFound("退款请求不存在"));
+                .orElseThrow(() -> AppException.notFound("退款请求不存在").code("admin.err.refund.notFound"));
         return toView(r);
     }
 

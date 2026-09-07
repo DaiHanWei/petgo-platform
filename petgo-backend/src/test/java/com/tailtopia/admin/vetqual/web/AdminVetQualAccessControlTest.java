@@ -25,6 +25,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
+import com.tailtopia.support.TestMessages;
 
 /** L0：资质端点 {@code @PreAuthorize(vet.qualify)}（Story 2.7 AC5）——vet.qualify/超管放行，否则 403。 */
 class AdminVetQualAccessControlTest {
@@ -55,7 +56,7 @@ class AdminVetQualAccessControlTest {
         @Bean
         AdminVetQualificationController controller(VetQualificationService q, AdminVetService v,
                 SignedUrlService s) {
-            return new AdminVetQualificationController(q, v, s);
+            return new AdminVetQualificationController(q, v, s, TestMessages.real());
         }
     }
 

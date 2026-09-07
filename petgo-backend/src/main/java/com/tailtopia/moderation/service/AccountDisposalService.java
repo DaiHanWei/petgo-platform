@@ -118,7 +118,8 @@ public class AccountDisposalService {
         List<Long> ids = reportIds == null ? List.of() : reportIds;
         if (ids.size() > MAX_BATCH_SIZE) {
             // ⚠️ 服务端硬校验：勾选框在浏览器里可以被随便改，上限不能只靠前端。
-            throw AppException.validation("单次最多处理 " + MAX_BATCH_SIZE + " 条工单");
+            throw AppException.validation("单次最多处理 " + MAX_BATCH_SIZE + " 条工单")
+                    .code("admin.err.ticket.batchTooLarge", MAX_BATCH_SIZE);
         }
         AccountDisposalService self = selfProvider.getObject();
         int ok = 0;
@@ -144,7 +145,8 @@ public class AccountDisposalService {
     @Transactional
     public void disposeTicket(long reportId, BatchAction action, long actorAccountId) {
         AccountReport report = reports.findById(reportId)
-                .orElseThrow(() -> AppException.notFound("工单不存在"));
+                .orElseThrow(() -> AppException.notFound("工单不存在")
+                        .code("admin.err.ticket.notFound"));
         switch (action) {
             case WARN -> warn(report.getTargetUserId(), reportId, actorAccountId);
             case SUSPEND -> suspend(report.getTargetUserId(), reportId, actorAccountId);
@@ -227,7 +229,8 @@ public class AccountDisposalService {
     @Transactional
     public void dismiss(long reportId, long actorAccountId) {
         AccountReport report = reports.findByIdForUpdate(reportId) // 行级写锁串行化（#5）
-                .orElseThrow(() -> AppException.notFound("工单不存在"));
+                .orElseThrow(() -> AppException.notFound("工单不存在")
+                        .code("admin.err.ticket.notFound"));
         requirePending(report); // 过期页面/并发重放守卫（评审三轮 #3）
         Instant boundary = report.getHandledAt(); // 上次处置时刻，回告只覆盖此后的新举报人（#7）
         report.handleBy(actorAccountId, AccountReportStatus.DISMISSED);
@@ -284,15 +287,17 @@ public class AccountDisposalService {
      */
     private void requireDisposalTarget(long targetUserId, Long reportId) {
         if (accountQuery.findUserById(targetUserId).isEmpty()) {
-            throw AppException.notFound("用户不存在");
+            throw AppException.notFound("用户不存在").code("admin.err.ticket.userNotFound");
         }
         if (reportId != null) {
             // 取行级写锁（评审三轮 #5/#3）：锁在任何处置副作用之前，与举报提交及并发处置串行化，
             // 锁一直持有到本事务结束。
             AccountReport report = reports.findByIdForUpdate(reportId)
-                    .orElseThrow(() -> AppException.notFound("工单不存在"));
+                    .orElseThrow(() -> AppException.notFound("工单不存在")
+                        .code("admin.err.ticket.notFound"));
             if (report.getTargetUserId() != targetUserId) {
-                throw AppException.validation("工单与被处置账号不匹配，请刷新列表后重试");
+                throw AppException.validation("工单与被处置账号不匹配，请刷新列表后重试")
+                        .code("admin.err.ticket.targetMismatch");
             }
             requirePending(report);
         }
@@ -306,7 +311,8 @@ public class AccountDisposalService {
      */
     private static void requirePending(AccountReport report) {
         if (report.getStatus() != AccountReportStatus.PENDING) {
-            throw AppException.validation("该工单已被处理，请刷新列表后重试");
+            throw AppException.validation("该工单已被处理，请刷新列表后重试")
+                    .code("admin.err.ticket.alreadyHandled");
         }
     }
 

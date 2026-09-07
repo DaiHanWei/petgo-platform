@@ -29,13 +29,19 @@ import 'bottom_tab_bar.dart';
 ///
 /// `Diary` 在此白名单里指的**只是 Diary 主页**：其子页（建档 / 编辑 / 当天详情 / 里程碑列表）
 /// 由深链门控继续拦截，游客点进去仍会被 redirect。
-/// **Health / [+] / Me 对游客维持受控**，不得顺手加进来。
-const Set<AppTab> kUngatedTabs = {AppTab.home, AppTab.profile};
+/// **[+] / Me 对游客维持受控**，不得顺手加进来。
+///
+/// 🔴 `Toko` 在白名单里是**刻意的**，且与路由层同源：`/shop` 不在 `_controlledLocations`
+/// （app_router.dart），理由是商品浏览处于转化漏斗最上层，用登录墙拦截会直接杀掉转化，
+/// 登录引导推迟到加购（Epic 3）。**两处必须同步** —— 只放行路由那一处，游客点 Toko 标签
+/// 仍会被弹登录框（本注释开头记载的 Diary 事故就是这么来的）。
+/// 放行范围仅限 Toko 主页与商品详情；加购 / 结算 / 订单 / 地址等仍受控。
+const Set<AppTab> kUngatedTabs = {AppTab.home, AppTab.profile, AppTab.shop};
 
 /// App 主框架外壳（Story 1.2 外观 + Story 1.5 受控 Tab 门控）。
 ///
 /// 5 位底部 Tab Bar + 中间凸起「＋」；内容区切换 [AppMotion.tabFade]=120ms 淡入。
-/// 门控（Story 1.5）：仅 Social 游客可访问；Diary/[+]/Health/我的 未登录点击 → 经
+/// 门控（Story 1.5 + DEP-1 闭合）：Social / Diary / Toko 游客可访问；[+]/我的 未登录点击 → 经
 /// **单一门控入口** [requireLogin] 弹强弹窗（注入 pendingAction），不切换目的地。
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.navigationShell});
@@ -128,11 +134,14 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     }
     // 受控 Tab：单一门控入口；未登录弹强弹窗 + 注入 pendingAction（登录后回到该 Tab）。
     // 目的地取自枚举内嵌的 location，不再依赖并行数组。
-    // 埋点放在 onAllowed 里 —— 被门控拦下时页面没打开，不该记一条浏览。
-    requireLogin(
+    // **浏览**埋点放在 onAllowed 里 —— 被门控拦下时页面没打开，不该记一条浏览。
+    final bool allowed = requireLogin(
       ref,
       context,
       pendingAction: RouteIntent(location: tab.location),
+      // 埋点缺口修复（2026-08-31）：此前不传 ⇒ 这里触发的注册在 signup_succeeded 里
+      // 全落 `other` 一档，漏斗上看不出用户是从哪个入口被弹的窗。
+      entrySource: 'tab_${tab.analyticsName}',
       onAllowed: () {
         if (!reTap) {
           _reportTabEntered(from, tab);
@@ -140,13 +149,20 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
         _goBranch(index);
       },
     );
+    // **点击意图**埋点与浏览相反，必须在门控**之外**记：被拦下时「用户想进这里」这件事
+    // 正是漏斗缺的那一环（此前强弹窗路径从触发到注册中间零事件）。
+    if (!allowed) {
+      Analytics.capture('login_guide_entry_blocked', {'entry': 'tab_${tab.analyticsName}'});
+    }
   }
 
   void _onAddPressed() {
     // 「＋」=发布入口，受控。未登录弹强弹窗；已登录打开 Publish Compose（Story 2.3）。
-    requireLogin(
+    final bool allowed = requireLogin(
       ref,
       context,
+      // 埋点缺口修复（2026-08-31）：同 _onTabSelected —— 不传就落 signup_succeeded 的 `other` 档。
+      entrySource: 'publish_add',
       // 登录后回跳落 Social（内容流）。
       //
       // ⚠️ 2026-08-04 code-review 决策 D3 改于此：原先写死 `/profile`（Diary），注释还引着
@@ -170,6 +186,10 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
         PublishComposePage.open(context, preset: addButtonPreset(tab, canGrowth: canGrowth));
       },
     );
+    // 点击意图埋点（2026-08-31）：与 _onTabSelected 同一条规则，被拦下也要记。
+    if (!allowed) {
+      Analytics.capture('login_guide_entry_blocked', {'entry': 'publish_add'});
+    }
   }
 
   @override
@@ -180,6 +200,8 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
       // 键盘弹出时不收缩外壳：底栏 + 中间「＋」发布按钮固定在屏幕底部不被顶起（用户反馈）。
       // 各 Tab 根页本身无内联输入框，文字编辑均走 modal bottom sheet（自带 viewInsets 让位），故安全。
       resizeToAvoidBottomInset: false,
+      // 2026-08-21 DEP-1 闭合：Toko 已占正式 Tab 位，原先那个「仅 debug 的橙色悬浮入口」
+      // （_TokoDevEntry）存在理由消失，随本次改动一并移除，内容区回到裸 navigationShell。
       body: FadeTransition(opacity: _fade, child: widget.navigationShell),
       floatingActionButton: AddTabButton(activeIndex: index, onPressed: _onAddPressed),
       // 与 centerDocked 同位，但忽略 SnackBar 高度：底部出现「sign-in」等错误弹框时
@@ -189,6 +211,7 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     );
   }
 }
+
 
 /// 居中贴底栏顶边的 FAB 定位，复刻 [FloatingActionButtonLocation.centerDocked]，
 /// **但不把 SnackBar 高度计入**——底部错误弹框出现时「＋」发布按钮固定不动（用户反馈：按钮被顶起）。

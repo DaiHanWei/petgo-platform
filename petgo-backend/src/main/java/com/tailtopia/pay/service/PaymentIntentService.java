@@ -88,8 +88,9 @@ public class PaymentIntentService {
             // 仅【PAID】(已付幂等) 或【PENDING 且未过窗】(复用同一 QR) 才返回既有意图；
             // 其余（已 EXPIRED / PENDING 已过窗 / 失败）→ 落到下方新建，出新码（bug：超付款窗后重开应出新码非旧码）。
             // 末尾 idempotency.store 覆盖映射到新意图（Redis SET 覆盖，非 NX）。
-            boolean reusable = ex.getStatus() == PaymentStatus.PAID
-                    || (ex.getStatus() == PaymentStatus.PENDING && !ex.isExpiredAt(Instant.now()));
+            boolean reusable = ex.getUserId() != null && ex.getUserId() == userId
+                    && (ex.getStatus() == PaymentStatus.PAID
+                    || (ex.getStatus() == PaymentStatus.PENDING && !ex.isExpiredAt(Instant.now())));
             if (reusable) {
                 return PaymentIntentResponse.of(ex);
             }
@@ -105,6 +106,63 @@ public class PaymentIntentService {
         PaymentIntent saved = intents.save(intent);
         idempotency.store(idempotencyKey, saved.getId());
         return PaymentIntentResponse.of(saved);
+    }
+
+    /**
+     * 幂等建<b>混合支付</b>意图（Story 3.8，电商订单专用）。
+     *
+     * <p>🔴 {@code amount} 是订单总额，{@code coinAmount + cashAmount} 必须等于它 ——
+     * 库级 {@code ck_payment_intents_mixed_shape} 强制这条不变式（3.3 建立）。
+     * {@code coinRatio} 由此就地算出，<b>只作展示与审计冗余，绝不参与计算</b>（AD-2）。
+     */
+    @Transactional
+    public PaymentIntentResponse createMixedIntent(long userId, PaymentPurpose purpose,
+            long amount, long coinAmount, long cashAmount, String currency,
+            String idempotencyKey, Duration ttl) {
+        rateLimiter.check("rl:pay:create:" + userId, 20, Duration.ofMinutes(1));
+
+        Optional<Long> existing = idempotency.findResourceId(idempotencyKey);
+        if (existing.isPresent()) {
+            PaymentIntent ex = intents.findById(existing.get())
+                    .orElseThrow(() -> AppException.notFound("支付意图不存在"));
+            boolean reusable = ex.getUserId() != null && ex.getUserId() == userId
+                    && (ex.getStatus() == PaymentStatus.PAID
+                    || (ex.getStatus() == PaymentStatus.PENDING && !ex.isExpiredAt(Instant.now())));
+            if (reusable) {
+                return PaymentIntentResponse.of(ex);
+            }
+            if (ex.getStatus() == PaymentStatus.PENDING) {
+                ex.markExpired(null);
+                intents.saveAndFlush(ex);
+            }
+        }
+
+        java.math.BigDecimal ratio = amount <= 0
+                ? java.math.BigDecimal.ZERO
+                : java.math.BigDecimal.valueOf(coinAmount)
+                        .divide(java.math.BigDecimal.valueOf(amount), 6,
+                                java.math.RoundingMode.HALF_UP);
+        Instant expiresAt = ttl == null ? null : Instant.now().plus(ttl);
+        PaymentIntent saved = intents.save(PaymentIntent.createMixed(userId, purpose, amount,
+                coinAmount, cashAmount, ratio, currency, tokenGenerator.generate(), expiresAt));
+        idempotency.store(idempotencyKey, saved.getId());
+        return PaymentIntentResponse.of(saved);
+    }
+
+    /**
+     * 按 token 作废一个待支付意图（Story 3.8：订单取消 / 支付超时）。
+     *
+     * <p>已终态则 no-op —— 取消一个已经付掉的意图不该把它改回失败。
+     */
+    @Transactional
+    public void failByToken(String publicToken, String reason) {
+        intents.findByPublicToken(publicToken).ifPresent(intent -> {
+            if (intent.getStatus().isTerminal()) {
+                return;
+            }
+            intent.markFailed(java.util.Map.of("reason", reason == null ? "CANCELLED" : reason));
+            intents.saveAndFlush(intent);
+        });
     }
 
     /**

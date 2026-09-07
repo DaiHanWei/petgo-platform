@@ -95,10 +95,10 @@ public class VetQualificationService {
     @Transactional
     public void renew(long vetId, QualificationForm form, long actorAccountId) {
         if (form.getSipdhExpiry() == null) {
-            throw AppException.validation("续期须填写新的 SIPDH 有效期");
+            throw AppException.validation("续期须填写新的 SIPDH 有效期").code("admin.err.vetQual.renewExpiryRequired");
         }
         if (form.getSipdhPhotoKey() == null || form.getSipdhPhotoKey().isBlank()) {
-            throw AppException.validation("续期须上传新的 SIPDH 证件图");
+            throw AppException.validation("续期须上传新的 SIPDH 证件图").code("admin.err.vetQual.renewPhotoRequired");
         }
         VetQualification q = requireRow(vetId);
         q.setSipdhExpiry(form.getSipdhExpiry());
@@ -157,14 +157,14 @@ public class VetQualificationService {
 
     private VetQualification requireRow(long vetId) {
         return repo.findByVetAccountId(vetId)
-                .orElseThrow(() -> AppException.notFound("该兽医无资质记录"));
+                .orElseThrow(() -> AppException.notFound("该兽医无资质记录").code("admin.err.vetQual.notFound"));
     }
 
     private void requireFullInput(QualificationForm f) {
         if (blank(f.getKtpNo()) || blank(f.getKtpPhotoKey()) || blank(f.getSipdhNo())
                 || blank(f.getSipdhIssuer()) || f.getSipdhExpiry() == null
                 || blank(f.getSipdhPhotoKey()) || blank(f.getDegreePhotoKey())) {
-            throw AppException.validation("请完整填写 KTP/SIPDH 编号·机构·有效期及证件图");
+            throw AppException.validation("请完整填写 KTP/SIPDH 编号·机构·有效期及证件图").code("admin.err.vetQual.fieldsIncomplete");
         }
     }
 

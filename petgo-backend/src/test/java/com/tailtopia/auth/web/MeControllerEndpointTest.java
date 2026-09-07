@@ -135,4 +135,22 @@ class MeControllerEndpointTest extends ApiIntegrationTest {
         Assertions.assertEquals(bNickname, reloadedB.getNickname(), "B 的昵称不应被 A 的请求改动");
         Assertions.assertEquals(PetStatus.ENTHUSIAST, reloadedB.getPetStatus(), "B 的状态不应被 A 的请求改动");
     }
+
+    /**
+     * V1.1.6 Story 7.2（AC6）：`/me` 必须下发**注册时间** ——
+     * FR-70 手机号软引导的时机是「用户第 3 天打开 App」，客户端**只能**靠它算。
+     *
+     * <p>🔴 不得改用「首次启动时本地记一个日期」绕开：那样**存量用户**（注册已久）会被当成
+     * 新人再等两天，重装 App 更是重新计时。注册时间只有服务端知道。
+     *
+     * <p>⚠️ `users.created_at` 列早就有，本条只是把它下发，**不涉及迁移**。
+     */
+    @Test
+    void meReturnsCreatedAtForPhonePromptTiming() throws Exception {
+        User u = newUser();
+
+        mvc.perform(get("/api/v1/me").header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.createdAt").exists());
+    }
 }

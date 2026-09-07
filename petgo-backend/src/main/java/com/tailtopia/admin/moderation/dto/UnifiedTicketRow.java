@@ -28,6 +28,10 @@ import java.time.Instant;
  * @param actionRef         内容举报专用：该帖任意一条 <b>PENDING</b> 举报单 id，下架端点
  *                          {@code /admin/reports/{id}/takedown} 按它收口（会顺带关掉该帖全部
  *                          PENDING 单）。其余类别与「无待处理单」时为 null
+ * @param contentRefId      「查看内容」链接指向的<b>帖 id</b>（bug 20260902-480）。内容举报 = 被举报的帖；
+ *                          内容送审 = 送审的帖，<b>评论送审 = 评论所在的帖</b>（看上下文）。
+ *                          ⚠️ 送审工单的 {@code sourceId} 是队列号，与帖 id 是两套编号，绝不能混用。
+ *                          其余类别与内容已物理删除时为 null（此时不出链接）
  * @param disposalCount     该账号历史被处置次数（含每一次警告）。Story 3.2 写入前恒为 0
  */
 public record UnifiedTicketRow(
@@ -45,6 +49,7 @@ public record UnifiedTicketRow(
         Instant earliestAt,
         String preview,
         Long actionRef,
+        Long contentRefId,
         long disposalCount) {
 
     /** 送审挂起超 24h 未处置 → 模板高亮（原「内容送审队列」页 AC7；并入混排后随行迁移，阈值不变）。 */

@@ -98,7 +98,7 @@ public class AdminModerationService {
     @Transactional
     public void takedown(long reportId, AdminUserDetails admin) {
         ContentReport r = reportService.find(reportId)
-                .orElseThrow(() -> AppException.notFound("举报工单不存在"));
+                .orElseThrow(() -> AppException.notFound("举报工单不存在").code("admin.err.report.notFound"));
         long handler = handlerId(admin);
         // story 9 幂等（AC-8）：仅当帖当前【未删】时本次下架才是真实迁移 → 计一次；已删再下架为 no-op 不重复计数。
         var summary = contentService.findSummary(r.getPostId());
@@ -130,7 +130,7 @@ public class AdminModerationService {
     @Transactional
     public void dismiss(long reportId, AdminUserDetails admin) {
         ContentReport r = reportService.find(reportId)
-                .orElseThrow(() -> AppException.notFound("举报工单不存在"));
+                .orElseThrow(() -> AppException.notFound("举报工单不存在").code("admin.err.report.notFound"));
         reportService.mark(reportId, handlerId(admin), ReportStatus.DISMISSED);
         contentService.releaseReportHold(r.getPostId()); // P0 误报恢复；非 P0 held no-op；不发事件/不通知
         auditService.record(admin.getAdminAccountId(), AuditActions.REPORT_DISMISSED, "CONTENT_REPORT",
@@ -149,7 +149,7 @@ public class AdminModerationService {
     public int dismissAllForPost(long postId, AdminUserDetails admin) {
         List<ContentReport> pending = reportService.findPendingForPost(postId);
         if (pending.isEmpty()) {
-            throw AppException.notFound("该帖没有待处理的举报");
+            throw AppException.notFound("该帖没有待处理的举报").code("admin.err.review.noPendingReports");
         }
         long handler = handlerId(admin);
         for (ContentReport r : pending) {
@@ -171,7 +171,8 @@ public class AdminModerationService {
     @Transactional
     public void takedownByPost(long postId, AdminUserDetails admin) {
         ContentReport first = reportService.findPendingForPost(postId).stream().findFirst()
-                .orElseThrow(() -> AppException.notFound("该帖没有待处理的举报"));
+                .orElseThrow(() -> AppException.notFound("该帖没有待处理的举报")
+                        .code("admin.err.review.noPendingReports"));
         takedown(first.getId(), admin);
     }
 

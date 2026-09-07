@@ -8,5 +8,12 @@ public enum PaymentPurpose {
     VET_CONSULT,
     PAWCOIN_TOPUP,
     AI_UNLOCK,
-    ID_HD
+    ID_HD,
+    /**
+     * 精选自营电商订单（V1.4.0 Story 3.8）。🔴 <b>只在枚举末尾追加</b>（并行契约 E-1）——
+     * 中间插值会让另两条工作线的 ordinal 序静默错位。DB 侧 CHECK 见 V113。
+     *
+     * <p>这是唯一可能取 {@code MIXED} 渠道的用途：虚拟商品三处均显式拒绝混合支付（AD-3）。
+     */
+    SHOP_ORDER
 }

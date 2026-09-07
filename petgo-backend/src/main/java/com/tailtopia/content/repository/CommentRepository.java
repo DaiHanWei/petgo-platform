@@ -2,6 +2,7 @@ package com.tailtopia.content.repository;
 
 import com.tailtopia.content.domain.Comment;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -108,6 +109,36 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
             @Param("hasViewer") boolean hasViewer,
             @Param("viewerId") Long viewerId,
             @Param("postAuthorId") long postAuthorId);
+
+    /**
+     * 一页帖子各自的评论数（V1.1.6 Story 3.1 · AD-7 Rule 2）。
+     *
+     * <p>🔴 <b>口径与 {@link #countVisibleForViewer} 逐字一致</b>，包括「viewer 自己那条
+     * 尚未对外可见的评论也算进去」。
+     *
+     * <p>为什么必须一致：首页和详情页显示的是<b>同一个东西</b>。若这里图省事只数
+     * 对外可见的，用户会看到首页写着 3 条、点进详情变成 4 条 ——
+     * <b>同一个数字两处不一样，用户只会以为出 bug 了。</b>
+     *
+     * <p>🛡 Feed 必须用这个批量版；把 {@code countVisibleForViewer} 搬进循环
+     * 就是每页 20 次查询（AD-7 明令禁止）。无评论的帖不在结果中，调用方默认 0。
+     */
+    @Query("""
+            SELECT c.postId AS postId, COUNT(c) AS commentCount FROM Comment c
+            WHERE c.postId IN :postIds AND c.deletedAt IS NULL
+              AND (c.moderationStatus = com.tailtopia.content.domain.CommentModerationStatus.VISIBLE
+                   OR (:viewerId IS NOT NULL AND c.authorId = :viewerId))
+            GROUP BY c.postId
+            """)
+    List<PostCommentCount> countVisibleForViewerIn(@Param("postIds") Collection<Long> postIds,
+            @Param("viewerId") Long viewerId);
+
+    /** 批量评论数投影（postId → 条数）。无评论的帖不在结果中，调用方默认 0。 */
+    interface PostCommentCount {
+        Long getPostId();
+
+        long getCommentCount();
+    }
 
     /**
      * 一级评论（{@code parent_id IS NULL}）时间正序游标分页（cursor 为 null = 首批），viewer 可见性过滤。
@@ -225,4 +256,15 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 
     /** 后台内容管理近评论列表（Story 9.9，含已删软删项）。 */
     java.util.List<Comment> findTop200ByOrderByIdDesc();
+
+    /**
+     * 后台内容详情（2026-09-02）：某帖一级评论分页，**含已删与全部审核状态**（运营全量视角），
+     * 时间正序（与 App 一致）。排序由 Pageable 携带（createdAt asc, id asc）。
+     */
+    org.springframework.data.domain.Page<Comment> findByPostIdAndParentIdIsNull(
+            long postId, Pageable pageable);
+
+    /** 后台内容详情：一批一级评论的全部二级回复（含已删），时间正序；service 端裁「收起前 3 条」。 */
+    java.util.List<Comment> findByParentIdInOrderByCreatedAtAscIdAsc(
+            java.util.Collection<Long> parentIds);
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/feed_repository.dart';
 import '../domain/feed_item.dart';
 import '../domain/home_refresh_provider.dart';
+import '../domain/pinned_slot.dart';
 
 /// 当前选中的分类 Tab（Story 3.2，AC3）。切换即重置游标重拉（feedProvider watch 此值）。
 final NotifierProvider<FeedCategoryNotifier, FeedCategory> feedCategoryProvider =
@@ -25,10 +26,17 @@ class FeedState {
     this.loadingMore = false,
     this.loadMoreFailed = false,
     this.pagesLoaded = 1,
+    this.rankMode = RankMode.unknown,
   });
 
   final List<FeedItem> items;
   final FeedCategory category;
+
+  /// 本次刷新（含已翻的各页）实际用的排序路径（V1.1.6 Story 16.5，服务端下发）。
+  ///
+  /// ⚠️ 翻页时按 [RankMode.merge] 合并：首屏推荐序、第二页恰好降级的情况确实存在，
+  /// 那种会话记成 [RankMode.mixed] —— 挑一边冒充会污染 FR-95 的效果归因。
+  final String rankMode;
   final String? nextCursor;
   final bool hasMore;
   final bool loadingMore;
@@ -49,6 +57,7 @@ class FeedState {
     bool? loadingMore,
     bool? loadMoreFailed,
     int? pagesLoaded,
+    String? rankMode,
   }) =>
       FeedState(
         items: items ?? this.items,
@@ -58,6 +67,7 @@ class FeedState {
         loadingMore: loadingMore ?? this.loadingMore,
         loadMoreFailed: loadMoreFailed ?? this.loadMoreFailed,
         pagesLoaded: pagesLoaded ?? this.pagesLoaded,
+        rankMode: rankMode ?? this.rankMode,
       );
 }
 
@@ -77,6 +87,7 @@ class FeedController extends AsyncNotifier<FeedState> {
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,
       pagesLoaded: 1,
+      rankMode: page.rankMode,
     );
   }
 
@@ -102,6 +113,7 @@ class FeedController extends AsyncNotifier<FeedState> {
           loadingMore: false,
           loadMoreFailed: false,
           pagesLoaded: current.pagesLoaded + 1,
+          rankMode: RankMode.merge(current.rankMode, page.rankMode),
         ));
       } catch (_) {
         // AC5：加载更多失败 → 保留已加载内容（不整屏报错、不清空），底部失败提示 + 重试入口。
@@ -142,3 +154,17 @@ class FeedController extends AsyncNotifier<FeedState> {
 
 final AsyncNotifierProvider<FeedController, FeedState> feedProvider =
     AsyncNotifierProvider<FeedController, FeedState>(FeedController.new);
+
+
+/// 顶置坑位（V1.1.6 Story 4.2 · FR-68）。
+///
+/// 🛡 **取数失败一律当作"没有顶置"** —— AC 明写"顶置取数失败不得连带整个首页失败"。
+/// 一个运营位不该把主功能带崩，所以这里吞掉异常返回 null，而不是把错误抛给首页的状态机。
+final FutureProvider<PinnedSlot?> pinnedSlotProvider =
+    FutureProvider<PinnedSlot?>((ref) async {
+  try {
+    return await ref.read(feedRepositoryProvider).getPinnedSlot();
+  } catch (_) {
+    return null;
+  }
+});

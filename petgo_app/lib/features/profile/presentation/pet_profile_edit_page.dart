@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:date_picker_plus/date_picker_plus.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -36,10 +37,16 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
   final _nameController = TextEditingController();
   final _breedController = TextEditingController();
   final _introController = TextEditingController();
+
+  /// 🔒 体重（kg），Story 6.1。**PII 邻近的健康数据 —— 禁止写入日志或埋点属性**（NFR-5）。
+  /// 可留空：建档与编辑都不设必填，设必填会挡住既有转化。
+  final _weightController = TextEditingController();
   DateTime? _birthday;
   String? _avatarUrl;
   String? _petType; // F6：创建后不可改，编辑页置灰只读展示，不随 PATCH 提交
-  // KELAMIN（性别）：MALE/FEMALE。⚠️ 仅前端占位——后端 PetProfile 暂无 sex 字段，不随 PATCH 提交、不持久化。
+  // KELAMIN（性别）：MALE/FEMALE，null = 未填。V1.1.6 Story 1.1 起**真正落库**
+  // （此前是纯前端占位：能选能显示，但不提交不持久化）。
+  // ⚠️ 无「清空」路径：PATCH 语义是「传 null = 不改动」，故选了就改不回未填 —— 已知且接受。
   String? _sex;
   bool _uploading = false;
   bool _submitting = false;
@@ -51,6 +58,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
     _nameController.dispose();
     _breedController.dispose();
     _introController.dispose();
+    _weightController.dispose();
     super.dispose();
   }
 
@@ -60,10 +68,17 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
     _nameController.text = p.name;
     _breedController.text = p.breed ?? '';
     _introController.text = p.intro ?? '';
+    // null（没填过）与 0 是两回事 —— 空串表示没填，不要预填成 "0"
+    _weightController.text = p.weightKg == null ? '' : _trimZero(p.weightKg!);
     _birthday = p.birthday;
     _avatarUrl = p.avatarUrl;
     _petType = p.petType;
+    _sex = p.sex; // 漏这行 = 存住了但重进页面又变回「请选择」
   }
+
+  /// 15.0 → "15"；15.5 → "15.5"。别让用户每次进来都看到一个多余的小数点。
+  static String _trimZero(double v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
   bool get _canSubmit => _nameController.text.trim().isNotEmpty && !_submitting && !_uploading;
 
@@ -97,7 +112,10 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             avatarUrl: _avatarUrl,
             breed: _emptyToNull(_breedController.text),
             birthday: _birthday,
+            sex: _sex,
             intro: _emptyToNull(_introController.text),
+            // 🔒 体重：留空 = 不改动（部分更新语义），不会把已填的值清掉
+            weightKg: double.tryParse(_weightController.text.trim()),
           );
       ref.invalidate(petProfileProvider);
       if (mounted) context.go('/profile');
@@ -374,6 +392,21 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
             ),
           ),
           const SizedBox(height: 16),
+          // Story 6.1：体重。🔴 这是 FR-107 精准推荐与 FR-109 粮量预估的唯一输入 ——
+          //    但它【可跳过】：设必填会挡住既有编辑转化。
+          _sectionLabel(l10n.petProfileWeightLabel),
+          const SizedBox(height: 6),
+          TextField(
+            key: const ValueKey('petProfileEditWeightField'),
+            controller: _weightController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: _inputDeco(),
+          ),
+          const SizedBox(height: 4),
+          Text(l10n.petProfileWeightHint,
+              key: const ValueKey('petProfileEditWeightHint'),
+              style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+          const SizedBox(height: 16),
           _sectionLabel(l10n.petProfileBioLabel),
           const SizedBox(height: 6),
           TextField(
@@ -444,7 +477,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
         ),
       );
 
-  /// KELAMIN 选择字段（原型 pet-edit：边框 + 下拉箭头）。⚠️ 占位：选了不持久化。
+  /// KELAMIN 选择字段（原型 pet-edit：边框 + 下拉箭头）。未填时显示占位文案。
   Widget _sexField(AppLocalizations l10n) {
     final label = switch (_sex) {
       'MALE' => l10n.petProfileSexMale,
@@ -504,12 +537,14 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
 
   Future<void> _pickBirthday() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    // bug 20260623-047：统一 date_picker_plus 干净日历风格（点某天即选中并关闭）。
+    final picked = await showDatePickerDialog(
       context: context,
-      initialDate: _birthday ?? now,
-      firstDate: DateTime(now.year - 40),
-      lastDate: now,
+      minDate: DateTime(now.year - 40),
+      maxDate: now,
+      selectedDate: _birthday,
+      displayedDate: _birthday ?? now,
     );
-    if (picked != null) setState(() => _birthday = picked);
+    if (picked != null && mounted) setState(() => _birthday = picked);
   }
 }

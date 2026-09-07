@@ -18,6 +18,7 @@ import '../../l10n/app_localizations.dart';
 import 'app_image.dart';
 import 'app_toast.dart';
 import 'confirm_sheet.dart';
+import 'user_tag_row.dart';
 
 /// 他人迷你主页预览卡（Story 3.8，FR-26）。点他人头像/昵称从底部弹卡。
 ///
@@ -138,7 +139,13 @@ class _MiniProfileCard extends StatelessWidget {
                         : null,
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  Text(profile.nickname ?? '', style: AppTypography.title),
+                  // V1.1.6 Story 5.1：迷你主页预览卡挂运营标签（四处展示位之一）。
+                  UserTagRow(
+                    position: 'mini_profile',
+                    name: profile.nickname ?? '',
+                    nameStyle: AppTypography.title,
+                    tags: profile.isDeactivated ? const [] : profile.tags,
+                  ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(l10n.miniProfilePostCount(profile.postCount), style: AppTypography.caption),
                   const SizedBox(height: AppSpacing.md),

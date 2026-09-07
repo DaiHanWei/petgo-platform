@@ -58,16 +58,19 @@ public class ProfileApiController {
     private final CardRerenderService cardRerenderService;
     private final IdCardService idCardService;
     private final IdCardHdService idCardHdService;
+    private final com.tailtopia.share.service.IdCardShareRewardService idCardShareRewards;
     private final RedisRateLimiter rateLimiter;
 
     public ProfileApiController(ProfileService profileService, TimelineService timelineService,
             CardRerenderService cardRerenderService, IdCardService idCardService,
-            IdCardHdService idCardHdService, RedisRateLimiter rateLimiter) {
+            IdCardHdService idCardHdService, RedisRateLimiter rateLimiter,
+            com.tailtopia.share.service.IdCardShareRewardService idCardShareRewards) {
         this.profileService = profileService;
         this.timelineService = timelineService;
         this.cardRerenderService = cardRerenderService;
         this.idCardService = idCardService;
         this.idCardHdService = idCardHdService;
+        this.idCardShareRewards = idCardShareRewards;
         this.rateLimiter = rateLimiter;
     }
 
@@ -221,6 +224,46 @@ public class ProfileApiController {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:profile:idcard:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
         return idCardService.createCard(ownerId, req);
+    }
+
+    /**
+     * 身份证卡面分享成功上报 → 试发分享奖励（V1.1.6 Story 18.2）。
+     *
+     * <p>⚠️ App 只在系统分享面板回调 {@code ShareResultStatus.success} 之后调本接口（AC5）——
+     * 用户取消面板就不调，所以「取消不发币」是在**客户端**成立的，服务端无从判断。
+     *
+     * <p>🛡 返回 {@code coins}：真的发了多少枚，{@code 0} = 没发。
+     * 刻意不返回原因（AC3）：不区分就让客户端没法把「你额度用完了」讲给用户听。
+     *
+     * <p>🛡 发放失败不影响分享本身（AC7）——服务层把异常消化掉，这里永远是 200。
+     */
+    @PostMapping("/me/id-cards/{cardId}/share-rewards")
+    public com.tailtopia.share.dto.IdCardShareRewardResponse rewardIdCardShare(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable long cardId) {
+        long ownerId = currentUserId(jwt);
+        rateLimiter.check("rl:profile:idshare:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
+        return com.tailtopia.share.dto.IdCardShareRewardResponse.of(
+                idCardShareRewards.rewardAfterShare(ownerId, cardId,
+                        java.time.Instant.now()));
+    }
+
+    /**
+     * 分享奖励的**展示口径**（产品 2026-08-27）。
+     *
+     * <p>返回 {@code coins}：可以对外承诺的枚数，{@code 0} = 卡面页一个字都不要提奖励。
+     * 与 HD 定价那条同一范式（实时读后台配置，不在客户端硬编码）——
+     * 分享奖励三个数**默认全是 0**，运营没配好就不该出现"分享可得 PawCoin"的文案，
+     * 否则就是 Story 18.2 AC6 反复要避免的「承诺了奖励却不发」。
+     *
+     * <p>🛡 只回一个数，**不回原因**：AC3 不许把「额度用完了」讲给用户听
+     * （会诱导攒着别分享 / 月初集中刷满）。判据见
+     * {@link com.tailtopia.share.service.IdCardShareRewardService#advertisableCoins(long)}。
+     */
+    @GetMapping("/me/id-cards/share-reward")
+    public com.tailtopia.share.dto.IdCardShareRewardResponse shareRewardPreview(
+            @AuthenticationPrincipal Jwt jwt) {
+        return com.tailtopia.share.dto.IdCardShareRewardResponse.of(
+                idCardShareRewards.advertisableCoins(currentUserId(jwt)));
     }
 
     /** 购买某卡 HD（按卡解锁）。 */

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
-import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/push_permission_providers.dart';
 
@@ -22,30 +21,48 @@ class PushEnableGuide extends StatelessWidget {
     return Container(
       key: const ValueKey('pushEnableGuide'),
       margin: const EdgeInsets.all(AppSpacing.md),
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      // 🔴 与通知中心那条**同一观感**（2026-08-26 按设计稿重做）：淡紫柔填充 + 实心紫胶囊按钮。
+      //    两处共用同一套文案键，样式再分叉就会出现「同一句话两种长相」。
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.mintTint,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
-          const Icon(Icons.notifications_active_outlined, color: AppColors.accentConsult),
-          const SizedBox(width: AppSpacing.md),
+          const Text('🔔', style: TextStyle(fontSize: 22)),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(l10n.pushEnableGuideTitle, style: AppTypography.title),
-                const SizedBox(height: 2),
-                Text(l10n.pushEnableGuideBody, style: AppTypography.caption),
+                Text(l10n.pushEnableGuideTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                const SizedBox(height: 3),
+                Text(l10n.pushEnableGuideBody,
+                    maxLines: 2,
+                    style: const TextStyle(
+                        fontSize: 12, height: 1.3, color: AppColors.textSecondary)),
               ],
             ),
           ),
-          TextButton(
+          const SizedBox(width: 10),
+          FilledButton(
             key: const ValueKey('pushOpenSettings'),
             onPressed: () => (onOpenSettings ?? openPushSettings)(),
-            child: Text(l10n.mediaOpenSettings),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.mint,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+            ),
+            child: Text(l10n.pushEnableGuideCta,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
           ),
         ],
       ),

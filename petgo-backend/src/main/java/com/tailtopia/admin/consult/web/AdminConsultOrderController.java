@@ -4,6 +4,7 @@ import com.tailtopia.admin.consult.service.AdminConsultOrderService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.consult.domain.ConsultOrderVerifyStatus;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -31,8 +32,13 @@ public class AdminConsultOrderController {
 
     private final AdminConsultOrderService service;
 
-    public AdminConsultOrderController(AdminConsultOrderService service) {
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public AdminConsultOrderController(AdminConsultOrderService service,
+            Messages msg) {
         this.service = service;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/consult-orders")
@@ -60,11 +66,11 @@ public class AdminConsultOrderController {
             ConsultOrderVerifyStatus vs = (status == null || status.isBlank())
                     ? null : ConsultOrderVerifyStatus.valueOf(status);
             service.markVerify(orderToken, vs, note, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已更新待核查标记（纯注记，不改订单状态；操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.consultOrder.verifyMarked"));
         } catch (IllegalArgumentException e) {
-            flash.addFlashAttribute("error", "非法的核查状态");
+            flash.addFlashAttribute("error", msg.get("admin.flash.consultOrder.badVerifyStatus"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/consult-orders/" + orderToken;
     }

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="id" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+    <!-- 分享页对外但不进搜索引擎索引（与名片 /p、里程碑 /m 同范式，强制 noindex） -->
+    <meta name="robots" content="noindex,nofollow"/>
+    <title th:text="${ogTitle}">TailTopia</title>
+
+    <!-- Open Graph：仅标题/描述，**无图** —— 沿用名片与里程碑两页的既有边界，
+         不把宠物图交给第三方抓取与缓存。 -->
+    <meta property="og:type" content="article"/>
+    <meta property="og:title" th:content="${ogTitle}"/>
+    <meta property="og:description" th:content="${body}"/>
+    <meta name="twitter:card" content="summary"/>
+    <meta name="twitter:title" th:content="${ogTitle}"/>
+    <meta name="twitter:description" th:content="${body}"/>
+
+    <style>
+        :root { --ink: #2E2A45; --ink2: #544864; --muted: #9690A6; --violet: #845EC9; --tint: #F8F2FF; }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; min-height: 100%; }
+        body {
+            font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+            background: var(--tint); color: var(--ink);
+            min-height: 100vh; min-height: 100dvh;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .wrap { width: 100%; max-width: 480px; padding: 20px 16px 108px; }
+        .brand { height: 22px; margin-bottom: 14px; }
+        .card { background: #fff; border-radius: 18px; overflow: hidden;
+                box-shadow: 0 8px 24px rgba(46,42,69,.10); }
+        .pad { padding: 16px; }
+        .author { display: flex; align-items: center; gap: 10px; }
+        .avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover;
+                  background: var(--violet); color: #fff; display: flex; align-items: center;
+                  justify-content: center; font-weight: 700; flex: none; }
+        .name { font-size: 14px; font-weight: 700; }
+        .date { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+        .chip { margin-left: auto; font-size: 11px; font-weight: 700; padding: 4px 9px;
+                border-radius: 8px; background: var(--tint); flex: none; }
+        .body { font-size: 15px; line-height: 1.6; margin-top: 12px; white-space: pre-wrap;
+                word-break: break-word; }
+        .shot { width: 100%; display: block; }
+        .shots img + img { margin-top: 2px; }
+        .cta {
+            position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px;
+            width: calc(100% - 32px); max-width: 448px;
+            display: block; text-align: center; text-decoration: none;
+            background: var(--violet); color: #fff; font-size: 15px; font-weight: 700;
+            padding: 15px 18px; border-radius: 14px;
+            box-shadow: 0 8px 22px rgba(132,94,201,.34);
+        }
+        .note { font-size: 11.5px; color: var(--muted); text-align: center; margin-top: 14px; }
+    </style>
+</head>
+<body>
+<!-- 🛡 本页只有这一条内容。**不放**任何通往该宠物档案 / 作者主页 / 其它内容的链接
+     —— 单条分享就是单条（AD-15 Rule 5）。唯一的出口是底部「下载 App」。 -->
+<div class="wrap">
+    <img class="brand" src="/brand/wordmark_brand.svg" alt="TailTopia"/>
+
+    <div class="card">
+        <div class="shots" th:if="${hasImages}">
+            <img class="shot" th:each="img : ${images}" th:src="${img}" alt=""/>
+        </div>
+        <div class="pad">
+            <div class="author">
+                <img class="avatar" th:if="${hasAvatar}" th:src="${authorAvatarUrl}" alt=""/>
+                <div class="avatar" th:unless="${hasAvatar}">🐾</div>
+                <div>
+                    <div class="name" th:text="${authorName}">—</div>
+                    <div class="date" th:text="${dateLabel}">—</div>
+                </div>
+                <div class="chip" th:text="${typeLabel}" th:style="'color:' + ${typeColor}">—</div>
+            </div>
+            <div class="body" th:if="${hasBody}" th:text="${body}">—</div>
+        </div>
+    </div>
+
+    <div class="note">Dibagikan dari TailTopia 🐾</div>
+</div>
+
+<a class="cta" id="downloadCta" th:href="${downloadUrl}"
+   th:attr="data-ios=${iosUrl},data-android=${androidUrl}"
+   th:text="${downloadCta}">Download</a>
+
+<script>
+    // 平台分流：iOS → App Store、Android → Play、桌面 → 保持默认下载页。与名片/里程碑两页同做法。
+    (function () {
+        var el = document.getElementById('downloadCta');
+        if (!el) { return; }
+        var ua = navigator.userAgent || '';
+        if (/iPhone|iPad|iPod/i.test(ua) && el.dataset.ios) { el.href = el.dataset.ios; }
+        else if (/Android/i.test(ua) && el.dataset.android) { el.href = el.dataset.android; }
+    })();
+</script>
+</body>
+</html>

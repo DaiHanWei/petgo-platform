@@ -3,6 +3,7 @@ package com.tailtopia.admin.risk.web;
 import com.tailtopia.admin.risk.service.RedOverageMonitorService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -25,8 +26,13 @@ public class AdminRedOverageController {
 
     private final RedOverageMonitorService service;
 
-    public AdminRedOverageController(RedOverageMonitorService service) {
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public AdminRedOverageController(RedOverageMonitorService service,
+            Messages msg) {
         this.service = service;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/red-overage")
@@ -44,9 +50,9 @@ public class AdminRedOverageController {
             RedirectAttributes flash) {
         try {
             service.mark(userId, status, note, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已更新复核标记（纯注记，无自动处置；操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.redOverage.marked"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/red-overage";
     }

@@ -20,6 +20,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.ui.ConcurrentModel;
+import com.tailtopia.support.TestMessages;
 
 /** L0：失败请求队列页 {@code @PreAuthorize(vet.view)}（Story 2.9 AC5）。 */
 class FailedRequestAccessControlTest {
@@ -40,7 +41,7 @@ class FailedRequestAccessControlTest {
 
         @Bean
         FailedRequestAdminController controller(FailedConsultRequestService s) {
-            return new FailedRequestAdminController(s);
+            return new FailedRequestAdminController(s, TestMessages.real());
         }
     }
 

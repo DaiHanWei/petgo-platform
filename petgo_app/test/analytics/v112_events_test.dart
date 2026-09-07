@@ -219,6 +219,59 @@ void main() {
         'signup_', 'milestone_',
         // 问诊双线漏斗（2026-08-06：PostHog 区分 AI/VET）——事件必带 consult_type 属性。
         'consult_', 'ai_',
+        // 精选自营电商（2026-08-17，V1.4.0 Story 1.6）：Toko 是新模块，按既有扩展路径注册前缀
+        // 而不是放宽规则。商品曝光事件必带 zone 属性（区分区域②档案推荐 / 区域④全部精选）。
+        'toko_',
+        // FR-110 边界侵蚀监控（2026-08-18，V1.4.0 Story 9.1/9.3）：问诊→商品的跳转
+        // 是唯一被允许的关联，其占比必须能被单独看见 —— 混进 toko_ 就看不出来了。
+        'triage_',
+        // 推送疲劳终点信号（2026-08-18，V1.4.0 Story 9.3）：撤销授权发生在 notify 模块的
+        // 检测点上，混进 me_ 会让「在设置页撤销」与「冷启动才发现」看着像两回事。
+        'notify_',
+        // 手机号采集（V1.1.6 FR-70 / Story 7.2）。模块是「手机号这件事」——
+        // 它横跨软引导浮层与设置页常驻入口两处界面，不属于任何单页；
+        // `phone_*` 一眼可读，符合本规则的用意。⚠️ 新模块入表，非为遗留事件放宽。
+        'phone_',
+        // 推送权限（V1.1.6 FR-85 / Story 8.1）。模块是「推送权限」而非某个页面 ——
+        // 它跨冷启动与四个触发点，本来就不属于任何单页；`push_permission_*` 一眼可读，
+        // 符合本规则的**用意**（产品看得出是哪个功能）。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则（那种情况请加 legacyEvents）。
+        'push_',
+        // 单条内容分享（V1.1.6 FR-73 / Story 9.3）。模块是「一条内容（post）」——
+        // 分享入口在详情页，但事件描述的对象是这条内容本身，`post_*` 一眼可读。
+        // ⚠️ 表里原本没有 `post_`，而 `post_like_tapped` 早已在用（见 legacyEvents）——
+        // 这次是把它作为**正式模块**入表，不是为遗留事件放宽规则。
+        // 🔴 名字由产品 2026-08-18 按命名规范定为 `post_share_card_sent`；
+        //    story 明令**不许**改名（改名等于推翻已闭合的 OA-7），所以扩表、不改名。
+        'post_',
+        // 用户运营标签（V1.1.6 FR-74 / Story 10.1 的 E-15）。模块是「用户身上的标签」——
+        // 它出现在四处**互不相干**的界面（首页卡、详情页、评论列表、迷你名片），
+        // 挂到任何单页前缀下都会误导（`social_badge_*` 会让人以为只有首页有）。
+        // 名字由产品定为 `user_badge_tooltip_opened`，扩表、不改名。
+        'user_',
+        // 内容装饰标签（V1.1.6 FR-75 / Story 10.1 的 E-16）。同上，跨首页/详情/Diary 三处。
+        // ⚠️ 表里原本没有 `content_`，而 `content_publish_submitted` 早已在用
+        // （见 legacyEvents）—— 这次是把它作为**正式模块**入表，不是为遗留事件放宽规则。
+        'content_',
+        // 宠物名片对外分享（V1.1.6 FR-92 / Story 10.1 的 E-23）。
+        // 🔴 与 App 内的 `diary_*` 刻意分开：`pet_card_*` 这一组四个事件里有三个是
+        //    **服务端从 H5 页上报**的（E-24~E-26），和 App 内的 Diary 页不是一回事。
+        //    共用前缀会让人把两组数混着看。
+        'pet_card_',
+        // 宠物身份证卡面分享奖励（FR-96 / Story 18.2）。
+        // 🔴 与 `pet_card_` 刻意分开：那一组是**宠物主页对外 H5 名片**（FR-92），
+        //    这一组是**身份证卡面图片**（FR-49A 那条链、带水印、有 HD 付费点）。
+        //    两者的对象、落地形态、付费边界完全不同，共用前缀会让人把两组分享数混着看
+        //    ——而"分享了多少次"正是这两个功能各自的核心指标。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
+        'id_card_',
+        // 登录引导（2026-08-31 埋点缺口修复）。模块是「登录引导」这套门控机制 ——
+        // 强弹窗被 13 个受控入口共用（底栏 Me/「＋」、点赞、评论、举报、Health 两卡、401 兜底…），
+        // 挂到任何单页前缀下都会误导。此前这条链路零埋点，漏斗上表现为
+        // 「上一个事件直接跳 af_complete_registration」。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。软浮层的 `social_soft_login_sheet_*`
+        // 是历史命名（当时软浮层只在 Social 出现），不迁就它、也不改它的名。
+        'login_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -226,6 +279,44 @@ void main() {
         '_succeeded', '_completed', '_landed_on_tab', '_achieved',
         // 问诊漏斗节点（2026-08-06）：下单提交 / 流程开始。
         '_submitted', '_started',
+        // 用户对提示的响应（V1.1.6 Story 8.2）：`_responded` 与 `_tapped` 的区别在于
+        // **它是对一个「被问」的回答**，取值有多档（granted / denied / settings_opened /
+        // dismissed），而不是单一动作。分母是提示曝光数（`_shown`），配对使用。
+        // 🔴 8-1 刻意**没有**提前把它加进来 —— 白名单里放尚未用到的条目，
+        //    就失去了「改动时被迫想一次」的作用。本 story 用到了才加。
+        '_responded',
+        // 状态上报（V1.1.6 Story 8.1）：`_reported` = 端上主动上报一次当前状态，
+        // 与「用户做了什么」的 _tapped/_selected 区分开 —— 这类事件没有用户动作，
+        // 分母是启动数而不是曝光数，混在一起会让判读口径错位。
+        // 🔴 产品 2026-08-18 定名时正是把旧名 `..._state_snapshot` 改成了它
+        //    （snapshot 是名词，不满足「动作在词尾且须是动词」），OA-7 已闭合。
+        '_reported',
+        // 分享已递给系统（V1.1.6 Story 9.3）：`_sent` = 出图完成、内容已交给系统分享面板。
+        // 🔴 刻意**不用** `_completed` —— 产品 2026-08-18 定名时的理由是
+        //    「completed 不如 sent 明确」：我们只知道递出去了，不知道对方到底发没发出。
+        //    `_completed` 会让人误读成"分享成功送达"。
+        '_sent',
+        // 出图完成（V1.1.6 Story 10.1 的 E-12 `post_share_card_generated`）：
+        // `_generated` = **系统产出了一个东西**，与用户动作（_tapped）分得开。
+        // 🔴 刻意不并进 `_completed`：这条事件的价值全在 `duration_ms`（生成基建性能），
+        //    它衡量的是机器而不是人，混进"用户完成了某步"那一档会让口径含混。
+        '_generated',
+        // 提示层被打开（V1.1.6 Story 10.1 的 E-15/E-16 tooltip）：
+        // `_opened` = **用户的动作让某个东西打开了**，与 `_viewed`（被动曝光、用户没做什么）
+        // 是两回事。tooltip 必须点一下才出来，记成 `_viewed` 会让它和真正的曝光事件
+        // 在同一维度上被拿来比。
+        // ⚠️ 也正因为这条界线，E-17 通知中心用的是 `_viewed`（打开页面即曝光，不是点某个东西）。
+        '_opened',
+        // 奖励发放结果（FR-96 / Story 18.2）：`_rewarded` = 系统就这次分享**做出了发放判定**，
+        // 属性 `rewarded`(bool) 说明发没发。
+        // 🔴 刻意不用 `_succeeded`：那会让"没发"看起来像失败，而"没发"是**预期的常态**
+        //    （按档案去重，一个档案一辈子只发一次），把它记成失败会让告警天天响。
+        '_rewarded',
+        // 门控拦下（2026-08-31 埋点缺口修复）：`_blocked` = **系统拦下了用户的动作**。
+        // 🔴 刻意不用 `_tapped`：这条事件只在游客被拦时上报（已登录的点击不报），
+        //    叫 tapped 会被当成"该入口的全部点击数"拿去做分母，而它只是被拦的那部分。
+        //    分母请用曝光类事件或 bottom_nav_tab_switched。
+        '_blocked',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;
@@ -273,6 +364,12 @@ void main() {
         'restore_timeout', 'corrected_from',
         // 问诊双线漏斗（2026-08-06）：consult_type ∈ {AI, VET} 是区分两线的唯一维度。
         'consult_type', 'price_idr',
+        // FR-110 边界侵蚀监控（V1.4.0 Story 9.1）：record_type ∈ HealthRecordType 受控词表。
+        // 🔒 刻意只带这一个 —— 宠物体重/年龄段那些维度服务端自己 join 得到，不必上报。
+        'record_type',
+        // 推送疲劳终点信号（V1.4.0 Story 9.3）：from_screen ∈ {app_launch, settings_page}，
+        // 受控字面量，不是 UI 文案。
+        'from_screen',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');
@@ -410,6 +507,60 @@ void main() {
       expect(ev.props!['type'], ContentType.daily.wire);
       expect(ev.props!['is_default'], isFalse, reason: '已建档用户默认是 Diary，选 Moment 不是默认值');
       expect(ev.props!['has_pet_profile'], isTrue);
+    });
+
+    /// 图片来源选择（2026-08-20 用户要求）：发布页点「Add」后弹的 sheet 里，
+    /// 用户选了相机还是相册。
+    ///
+    /// **为什么值得埋**：这两条路的成本完全不同 —— 相册是"我已经有照片了"，
+    /// 相机是"我现在为发帖专门拍一张"。后者说明发布意愿更强、但也更容易在拍摄这一步流失。
+    /// 一个事件 + `source` 属性（不是两个事件），与同页 `publish_page_content_type_selected`
+    /// 的形状一致，看板里可直接对比占比。
+    testWidgets('选相机 / 选相册上报 publish_page_image_source_selected（source）', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_composeApp());
+      await tester.pumpAndSettle();
+
+      // 相册
+      events.clear();
+      await tester.tap(find.byKey(const ValueKey('publishAddImage')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('publishPickGallery')));
+      await tester.pumpAndSettle();
+      expect(_one('publish_page_image_source_selected').props!['source'], 'gallery');
+
+      // 相机
+      events.clear();
+      await tester.tap(find.byKey(const ValueKey('publishAddImage')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('publishPickCamera')));
+      await tester.pumpAndSettle();
+      expect(_one('publish_page_image_source_selected').props!['source'], 'camera');
+    });
+
+    /// 🛡 关掉 sheet 而不选 —— **不该**产生这个事件。
+    /// 否则「选了哪个来源」的分母会混进"打开又关掉"的人，占比失真。
+    testWidgets('关掉 sheet 不选来源 → 不报事件', (tester) async {
+      tester.view.physicalSize = const Size(1200, 3200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_composeApp());
+      await tester.pumpAndSettle();
+      events.clear();
+
+      await tester.tap(find.byKey(const ValueKey('publishAddImage')));
+      await tester.pumpAndSettle();
+      // 点 sheet 外的遮罩关掉
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+
+      expect(events.where((e) => e.event == 'publish_page_image_source_selected'), isEmpty);
     });
 
     testWidgets('关同步开关上报 publish_page_sync_to_moment_toggled(enabled=false)——本版本最关键的假设验证', (tester) async {

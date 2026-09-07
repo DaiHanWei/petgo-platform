@@ -170,15 +170,34 @@
                          HTML 禁止 form 嵌套，行内直接写 <form> 会被浏览器解析器按渲染顺序丢掉
                          第一个（其余「侥幸存活」）——首行警告按钮就此绑到批量 form 上提交 → 400。
                          ⚠️ 只在待处理时给动作：已处理/无需处置的工单再点一次没有意义。
-                         ⚠️ 「限流曝光」不实现、不留 UI 位（随 FR-95 移至 1.1.8）。 -->
+                         ✅ 「限流曝光」已于 Story 17.2 落地（此前随 FR-95 延后到本版）。 -->
     <!-- ⚠️ 全部动作按钮按权限渲染（修复清单二轮 #10）：端点 gate 在 dispose/takedown 上，
                          无权人群看见「点了必 403」的活按钮=日常撞墙。 -->
+                    <!-- Story 17.2 · AC3：限流中的账号在工单上直接看到状态与到期时间（WIB）+ 就地解除。 -->
+                    <span th:if="${r.targetUserId != null and accountThrottles?.get(r.targetUserId) != null}"
+                          th:with="th=${accountThrottles.get(r.targetUserId)}"
+                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_view')">
+                        <span class="badge badge-warn" th:text="#{admin.throttle.badge.account}">账号限流中</span>
+                        <span class="muted"
+                              th:text="${th.permanent()} ? #{admin.throttle.permanent} : ${@adminTime.wib(th.expiresAt())}">永久</span>
+                        <button type="submit" class="btn btn-neutral btn-sm"
+                                th:form="'throttle-lift-form-' + ${r.targetUserId}"
+                                sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_manage')"
+                                th:text="#{admin.throttle.lift}">解除</button>
+                    </span>
                     <span th:if="${r.type.name() == 'ACCOUNT_REPORT' and r.status.name() == 'PENDING'
                                    and r.targetUserId != null}"
                           sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')">
                         <button type="submit" class="btn btn-sm btn-neutral"
                                 th:form="'warn-form-' + ${r.sourceId}"
                                 th:text="#{admin.tickets.action.warn}">警告</button>
+                        <!-- Story 17.2 · AC1：三档处置的中间那一档。
+                             🛡 权限走独立的 content.throttle_manage（不搭 dispose_account 的车）：
+                                限流可逆、用户不可感知，抬到与封号同级会让这一档又没人敢用。 -->
+                        <button type="button" class="btn btn-sm btn-warn"
+                                th:attr="data-open-dialog='throttle-dialog-' + ${r.sourceId}"
+                                sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_manage')"
+                                th:text="#{admin.tickets.action.throttle}">限流曝光</button>
                         <button type="submit" class="btn btn-sm btn-danger"
                                 th:form="'suspend-form-' + ${r.sourceId}"
                                 sec:authorize="hasRole('SUPER_ADMIN') or (hasAuthority('content.dispose_account') and hasAuthority('user.deactivate'))"
@@ -198,6 +217,10 @@
                         <button type="submit" class="btn btn-sm btn-danger"
                                 th:form="'takedown-form-' + ${r.sourceId}"
                                 th:text="#{admin.tickets.action.takedown}">下架</button>
+                        <button type="button" class="btn btn-sm btn-warn"
+                                th:attr="data-open-dialog='throttle-dialog-c-' + ${r.sourceId}"
+                                sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_manage')"
+                                th:text="#{admin.tickets.action.throttle}">限流曝光</button>
                         <!-- 驳回=一次抹掉整帖全部举报，批量级动作，gate 对齐批量的 takedown
                              （挂查看权上会让只读审核员绕过处置权限，修复清单二轮 #6）。 -->
                         <button type="submit" class="btn btn-sm btn-neutral"
@@ -234,9 +257,99 @@
                       method="post">
                     <input type="hidden" name="reportId" th:value="${r.sourceId}"/>
                 </form>
+                <!-- Story 17.2 · AC1/AC2：限流弹窗。粒度与期限在**确认之前**显式选，
+                     且 AC2 的「不是下架」明示就摆在按钮上方 —— 不明示运营会把它当下架用，
+                     然后向举报人回复「已处理」，而内容其实还在。 -->
+                <dialog th:id="'throttle-dialog-' + ${r.sourceId}">
+                    <form th:action="@{/admin/throttles}" method="post">
+                        <h3 th:text="#{admin.throttle.dialog.title}">限流曝光</h3>
+                        <p class="hint" data-notice="throttle-not-takedown"
+                           th:utext="#{admin.throttle.notTakedown}">
+                            只降低 Feed 分发权重，内容仍可通过直链和作者主页访问，不是下架。</p>
+                        <p class="hint" data-notice="throttle-all-tab-only"
+                           th:text="#{admin.throttle.allTabOnly}">
+                            限流只作用于首页推荐（ALL）。分类 Tab 走纯时间倒序、不打分。</p>
+                        <input type="hidden" name="scope" value="ACCOUNT"/>
+                        <input type="hidden" name="targetId" th:value="${r.targetUserId}"/>
+                        <input type="hidden" name="reportId" th:value="${r.sourceId}"/>
+                        <input type="hidden" name="back" value="tickets"/>
+                        <p>
+                            <label><span th:text="#{admin.throttle.scope}">粒度</span>
+                                <b th:text="#{admin.throttle.scope.accountFixed}">账号级（该账号全部已发布内容）</b></label>
+                        </p>
+                        <p>
+                            <label><span th:text="#{admin.throttle.duration}">期限</span>
+                                <select name="duration" required>
+                                    <option value="" th:text="#{admin.throttle.duration.pick}">选期限</option>
+                                    <option value="DAYS_7" th:text="#{admin.throttle.duration.d7}">7 天</option>
+                                    <option value="DAYS_30" th:text="#{admin.throttle.duration.d30}">30 天</option>
+                                    <option value="PERMANENT" th:text="#{admin.throttle.duration.perm}">永久</option>
+                                </select></label>
+                        </p>
+                        <p>
+                            <button type="submit" class="btn btn-warn btn-sm"
+                                    th:text="#{admin.throttle.confirm}">确认限流</button>
+                            <button type="button" class="btn btn-neutral btn-sm" data-close-dialog
+                                    th:text="#{admin.throttle.cancel}">取消</button>
+                        </p>
+                    </form>
+                </dialog>
+            </th:block>
+            <!-- 限流中账号的就地解除表单（与状态徽标配套，AC3）。 -->
+            <th:block th:if="${r.targetUserId != null and accountThrottles?.get(r.targetUserId) != null}">
+                <form th:id="'throttle-lift-form-' + ${r.targetUserId}"
+                      th:action="@{/admin/throttles/lift}" method="post">
+                    <input type="hidden" name="throttleIds"
+                           th:value="${accountThrottles.get(r.targetUserId).throttleId()}"/>
+                    <input type="hidden" name="back" value="tickets"/>
+                </form>
             </th:block>
             <th:block th:if="${r.type.name() == 'CONTENT_REPORT' and r.status.name() == 'PENDING'
                                and r.actionRef != null}">
+                <!-- 内容举报的限流弹窗：这里粒度**真的有两种可选** ——
+                     降这一条，还是降这个作者的全部内容。所以 scope 是个 select 而不是写死。 -->
+                <dialog th:id="'throttle-dialog-c-' + ${r.sourceId}">
+                    <form th:action="@{/admin/throttles}" method="post">
+                        <h3 th:text="#{admin.throttle.dialog.title}">限流曝光</h3>
+                        <p class="hint" data-notice="throttle-not-takedown"
+                           th:utext="#{admin.throttle.notTakedown}">
+                            只降低 Feed 分发权重，内容仍可通过直链和作者主页访问，不是下架。</p>
+                        <p class="hint" data-notice="throttle-all-tab-only"
+                           th:text="#{admin.throttle.allTabOnly}">
+                            限流只作用于首页推荐（ALL）。分类 Tab 走纯时间倒序、不打分。</p>
+                        <input type="hidden" name="reportId" th:value="${r.sourceId}"/>
+                        <input type="hidden" name="back" value="tickets"/>
+                        <p>
+                            <label><span th:text="#{admin.throttle.scope}">粒度</span>
+                                <select name="scope" required>
+                                    <option value="" th:text="#{admin.throttle.scope.pick}">选粒度</option>
+                                    <option value="POST" th:text="#{admin.throttle.scope.post}">仅这一条内容</option>
+                                    <option value="ACCOUNT" th:text="#{admin.throttle.scope.account}">该账号全部内容</option>
+                                </select></label>
+                        </p>
+                        <p>
+                            <label><span th:text="#{admin.throttle.duration}">期限</span>
+                                <select name="duration" required>
+                                    <option value="" th:text="#{admin.throttle.duration.pick}">选期限</option>
+                                    <option value="DAYS_7" th:text="#{admin.throttle.duration.d7}">7 天</option>
+                                    <option value="DAYS_30" th:text="#{admin.throttle.duration.d30}">30 天</option>
+                                    <option value="PERMANENT" th:text="#{admin.throttle.duration.perm}">永久</option>
+                                </select></label>
+                        </p>
+                        <!-- ⚠️ POST 用帖 id（sourceId），ACCOUNT 用作者 id ——
+                             两个 targetId 都渲出来，由选中的 scope 决定哪个被提交（同名后者覆盖不可靠，
+                             所以用 disabled 互斥：未选中的那个不参与提交）。
+                             这里改用两个不同的隐藏名 + 服务端按 scope 取，避免依赖浏览器行为。 -->
+                        <input type="hidden" name="postTargetId" th:value="${r.sourceId}"/>
+                        <input type="hidden" name="accountTargetId" th:value="${r.targetUserId}"/>
+                        <p>
+                            <button type="submit" class="btn btn-warn btn-sm"
+                                    th:text="#{admin.throttle.confirm}">确认限流</button>
+                            <button type="button" class="btn btn-neutral btn-sm" data-close-dialog
+                                    th:text="#{admin.throttle.cancel}">取消</button>
+                        </p>
+                    </form>
+                </dialog>
                 <form th:id="'takedown-form-' + ${r.sourceId}"
                       th:action="@{/admin/reports/{id}/takedown(id=${r.actionRef})}"
                       method="post" th:attr="data-confirm=#{admin.tickets.confirm.takedown}"></form>

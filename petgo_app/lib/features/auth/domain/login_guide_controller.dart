@@ -36,6 +36,26 @@ class LoginGuideController {
   /// 所以单个字段足够，不需要按弹层实例分别记。
   String _entrySource = 'other';
 
+  /// 本次进程里"是从名片分享链接进来的"这一事实（埋点 E-27 的 `pet_card` 取值）。
+  ///
+  /// 🔴 **为什么需要一个额外的静态字段，而不是把 `entrySource` 一路传下来**：
+  /// 深链落点是**访客只读页**（`/pet/:token`），那一页**根本没有注册入口** ——
+  /// 用户是先看完别人的档案、再从别处（底栏、点赞、发布…）撞上登录引导才注册的。
+  /// 所以从名片来的归因跨了好几个页面，没有一条参数能贯通它。
+  ///
+  /// 只在 `_entrySource` 仍是兜底值 `other` 时才生效 ——
+  /// 也就是说，**任何明确的来源都优先于它**（例如从游客 Diary 的 CTA 注册，仍记 `diary_cta`）。
+  ///
+  /// ⚠️ 进程内布尔、不落盘：换次冷启动就作废。这是刻意的 ——
+  /// 三天前点过一次名片链接，不该被算成那次分享带来的注册。
+  static bool _cameFromPetCard = false;
+
+  /// 访客只读页在被打开时调用一次（Story 10.1）。
+  static void markPetCardEntry() => _cameFromPetCard = true;
+
+  @visibleForTesting
+  static void resetPetCardEntry() => _cameFromPetCard = false;
+
   bool _softShownThisSession = false;
   bool _hardDialogShowing = false;
   RouteIntent? _pending;
@@ -45,9 +65,18 @@ class LoginGuideController {
   bool get hardDialogShowing => _hardDialogShowing;
 
   /// 软浮层（每 session 最多一次；第 2 次起 no-op）。
+  ///
+  /// [allowRepeat] 跳过 session 去重（默认 false，既有调用点行为一字不变）。
+  ///
+  /// 🔴 为什么需要它（V1.4.0 Story 3.6）：session 去重守的是**被动弹出**的引导——
+  /// 用户没做什么、系统主动劝他登录，一次就够，弹第二次是骚扰。但**用户自己点了加购**
+  /// 是明确意图，此时 no-op 会让按钮看起来坏了（点了没反应），而这恰是转化漏斗上
+  /// 最贵的一次点击。两类触发的语义不同，不该共用一个去重开关。
   Future<void> showSoftSheet(BuildContext context,
-      {RouteIntent? pendingAction, String entrySource = 'social_soft_login'}) async {
-    if (_softShownThisSession) return;
+      {RouteIntent? pendingAction,
+      String entrySource = 'social_soft_login',
+      bool allowRepeat = false}) async {
+    if (_softShownThisSession && !allowRepeat) return;
     _softShownThisSession = true;
     _pending = pendingAction;
     _entrySource = entrySource;
@@ -87,6 +116,10 @@ class LoginGuideController {
     _hardDialogShowing = true;
     _pending = pendingAction;
     _entrySource = entrySource;
+    // 埋点缺口修复（2026-08-31）：强弹窗此前曝光/点击零埋点，13 个走它的受控入口在漏斗里
+    // 表现为「上一个事件直接跳 af_complete_registration」。曝光埋在并发去重**之后**
+    // （与软浮层把曝光埋在 session 去重之后同一道理：no-op 的那次不该记曝光）。
+    Analytics.capture('login_guide_hard_dialog_shown', {'entry_source': entrySource});
     try {
       await showDialog<void>(
         context: context,
@@ -94,10 +127,18 @@ class LoginGuideController {
         // 原型深遮罩（rgba(14,16,25,.72)）：强门控视觉强度高于软浮层。
         barrierColor: AppColors.splashInk.withValues(alpha: 0.72),
         builder: (dlgCtx) => LoginHardDialog(
-          onLogin: () => _attemptLogin(context, dlgCtx, _login),
+          onLogin: () {
+            Analytics.capture('login_guide_hard_dialog_login_tapped',
+                {'method': 'google', 'entry_source': entrySource});
+            return _attemptLogin(context, dlgCtx, _login);
+          },
           onAppleLogin: _loginApple == null
               ? null
-              : () => _attemptLogin(context, dlgCtx, _loginApple),
+              : () {
+                  Analytics.capture('login_guide_hard_dialog_login_tapped',
+                      {'method': 'apple', 'entry_source': entrySource});
+                  return _attemptLogin(context, dlgCtx, _loginApple);
+                },
           onClose: () {
             _pending = null;
             Navigator.of(dlgCtx).pop();
@@ -142,7 +183,12 @@ class LoginGuideController {
     // T-7 signup_succeeded（Story 6.1）：**注册真正成功**才报（取消/失败都已在上面 return）。
     // 现有埋点只有「点了登录按钮」，缺的就是这一环；`entry_source` 是转化路径构成的唯一来源。
     if (resp.isNewUser) {
-      Analytics.capture('signup_succeeded', {'entry_source': _entrySource});
+      // E-27（Story 10.1）：`pet_card` 只在没有更明确来源时兜上 —— 见 [_cameFromPetCard]。
+      final source = _entrySource == 'other' && _cameFromPetCard
+          ? 'pet_card'
+          : _entrySource;
+      // 埋点封装带 $set_once（signup_date / first_entry_source），留存分群要用。
+      Analytics.captureSignupSucceeded(source);
     }
     if (!rootContext.mounted) return LoginGuideOutcome.success;
     _handleSuccess(rootContext, resp);

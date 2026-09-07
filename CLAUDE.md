@@ -3,6 +3,24 @@
 > 本文件随仓库 commit，**云端 session（claude.ai/code）clone 后会自动加载**。本地 / 云端 dev agent 都以此为准。
 > 与用户沟通用**中文**。
 
+## 🚧 staging 部署纪律（stag 分支专属小节，勿合回其它分支）
+
+生产与 staging 同在一台服务器（62.146.239.156），**本会话只允许操作 staging 资源**，`.claude/hooks/stag-guard.py` 会强制拦截生产命令。边界如下：
+
+| | staging（✅ 只能碰这些） | 生产（⛔ 一律禁止） |
+|---|---|---|
+| 容器 | `petgo-server-stag` | `petgo-server`、`petgo-postgres`/`redis` 的停删重启 |
+| 端口 | `127.0.0.1:8085` / `https://api-stag.tailtopia.id` | `8084` / `https://api.tailtopia.id` |
+| 数据库 | `petgo_stag` | `petgo` |
+| Redis | 逻辑库 `-n 3` | DB2；FLUSH 类命令全禁 |
+| env | `~/.env.petgo-stag` | `~/.env.petgo` |
+| 部署脚本 | `scripts/deploy-backend-stag.sh` | `scripts/deploy-backend.sh` **绝对禁止** |
+
+- 部署验证流程：stag 分支 → `./scripts/deploy-backend-stag.sh` → `curl -s https://api-stag.tailtopia.id/actuator/health` 应为 UP。
+- 分支纪律：**只在 stag 分支工作**；禁止 push main、禁止 force push、禁止 `ALLOW_BRANCH=1`。
+- **APK 版本边界**：stag 出包**必须走 `scripts/build-stag-apk.sh`**（`debug` 参数=开发自测包；默认=release 内测包）——脚本自动在构建时注入 `-stag` 版本后缀（versionName=`1.1.2-stag`），埋点平台按 App Version 区分 stag 测试数据与生产数据。`pubspec.yaml` 的 version **保持纯净**（与其它分支一致、不带 `-stag`，合并零冲突）；**禁止**直接 `flutter build` 出 stag 包（丢后缀会污染生产埋点口径），也禁止把 `-stag` 写回 pubspec。
+- 被 stag-guard 拦截时：不要想办法绕过（换写法/转义/写脚本间接执行都不行），改用 staging 等价物；确有需要联系 Dai。
+
 ## 这是什么项目
 
 **双产物 monorepo**，两套工程并列在仓库根下：
@@ -33,7 +51,13 @@
    - **L1 集成**：需 Docker daemon + postgres + redis 真跑（`mvn spring-boot:run` + `/actuator/health=UP`）
    - **L2 端到端**：需真实第三方凭证 / 真机 / 模拟器视觉
 4. **严格按 Epic 1→7、story 编号升序**。
-5. **Flyway 新迁移一律时间戳版本号**：`V<yyyyMMdd_HHmm>__<snake_case>.sql`（如 `V20260821_1435__init_shop_orders.sql`，取创建时刻），**禁止再用序列号**（决策 E6，反转 E2 的序号分配）。存量序号迁移（≤V108 等）保持原号**冻结**——已合入 main 的迁移文件不改不删，改表另起新迁移。CI `flyway-guard` 强制这四条：树内同号 / 动冻结文件 / 新文件非时间戳格式 / 与 main 撞号 → PR 不绿（本地自查：`bash scripts/ci/check-flyway-versions.sh origin/main`）。`out-of-order=true` 已全环境常开，时间戳跨分支合并乱序是预期行为。
+5. **Flyway 新迁移一律时间戳版本号**：`V<yyyyMMdd_HHmm>__<snake_case>.sql`（如 `V20260821_1435__init_shop_orders.sql`，取创建时刻），**禁止再用序列号**（决策 E7，取代 E6/E2；时间戳制为常设规则，不再有过渡条款）。
+   - **存量序号迁移 V1–V108 一律保留原号，不改名、不返工**（名单见 `scripts/ci/flyway-legacy-versions.txt`）。它们多数已应用到 prod / `petgo_stag`，改名会让 Flyway 找不到已应用记录、启动即拒。**一切以数据库现状为准。**
+   - **能不能改一个迁移文件，判据是「它有没有被任何环境应用过」，不是「它在不在 main 上」**：已应用的绝不能改（checksum 对不上，启动即失败），从未应用过的可以直接改。
+   - **改 CHECK 约束必须重列全集**：`ck_notifications_type` 这类被多条工作线共用的约束，一律 `DROP + ADD` 全量重建，且值必须取自**当前树里最后一条重建它的迁移**，不是某个记忆中的旧列表。此处已出过三次事故（V72、V20260818_0358 各丢一批值），每次都是照着过期列表抄。
+   - CI `flyway-guard` 强制：树内同号 / 动 main 上已有文件 / 新增非时间戳且不在 legacy 名单 / 与 main 撞号 → PR 不绿（本地自查：`bash scripts/ci/check-flyway-versions.sh origin/main`）。
+   - `out-of-order=true` 已全环境常开，时间戳跨分支合并乱序是预期行为。
+6. **构建产物必须 `clean`**：`mvn package` 不删 `target/classes` 的旧文件，迁移改名后新旧两份会一起进 jar，Flyway 报 `Found more than one migration with version X` 启动即崩（2026-08-21 实际踩过）。**打包一律 `mvn -B clean package`。**
 
 ## ☁️ 云端（headless）能做什么、不能做什么
 

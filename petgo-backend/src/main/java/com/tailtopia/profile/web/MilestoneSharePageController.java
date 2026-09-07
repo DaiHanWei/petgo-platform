@@ -30,6 +30,7 @@ public class MilestoneSharePageController {
     private final MilestoneShareService shareService;
     private final ProfileService profileService;
     private final AccountQueryService accountQueryService;
+    private final com.tailtopia.profile.service.CardPageAnalytics analytics;
     private final String downloadUrl;
     private final String iosUrl;
     private final String androidUrl;
@@ -39,26 +40,33 @@ public class MilestoneSharePageController {
             @Value("${petgo.card.app-download-url:https://petgo.example/download}") String downloadUrl,
             @Value("${petgo.card.ios-url:https://apps.apple.com/app/petgo}") String iosUrl,
             @Value("${petgo.card.android-url:https://play.google.com/store/apps/details?id=com.tailtopia.app}")
-                    String androidUrl) {
+                    String androidUrl,
+            com.tailtopia.profile.service.CardPageAnalytics analytics) {
         this.shareService = shareService;
         this.profileService = profileService;
         this.accountQueryService = accountQueryService;
+        this.analytics = analytics;
         this.downloadUrl = downloadUrl;
         this.iosUrl = iosUrl;
         this.androidUrl = androidUrl;
     }
 
     @GetMapping("/m/{shareToken}")
-    public String share(@PathVariable String shareToken, Model model, HttpServletResponse response) {
+    public String share(@PathVariable String shareToken, Model model,
+            jakarta.servlet.http.HttpServletRequest request, HttpServletResponse response) {
+        // V1.1.6 Story 1.4：与名片页共用同一个匿名访客标识（同一 cookie，漏斗才串得起来）。
+        String visitorId = com.tailtopia.shared.analytics.AnonymousVisitorId
+                .resolveOrIssue(request, response);
+
         Optional<MilestoneShare> opt = shareService.findByToken(shareToken);
         if (opt.isEmpty()) {
-            return gone(model, response);
+            return gone(model, response, visitorId, request);
         }
         MilestoneShare share = opt.get();
-        // 账号注销 / 档案已删 → 与不存在同一失效页（防枚举）。
+        // 账号注销 / 封号 / 档案已删 → 与不存在同一失效页（防枚举）。
         Optional<PetProfile> profile = profileService.findById(share.getPetProfileId());
         if (profile.isEmpty() || !accountQueryService.isActive(profile.get().getOwnerId())) {
-            return gone(model, response);
+            return gone(model, response, visitorId, request);
         }
 
         boolean isId = "id".equals(share.getLocale());
@@ -84,6 +92,9 @@ public class MilestoneSharePageController {
         model.addAttribute("downloadUrl", downloadUrl);
         model.addAttribute("iosUrl", iosUrl);
         model.addAttribute("androidUrl", androidUrl);
+        // E-24：里程碑分享页被打开。这条链路没有「零数据」形态（有分享记录就必有内容），故恒为 full。
+        analytics.linkOpened(visitorId,
+                com.tailtopia.profile.service.CardPageAnalytics.STATE_FULL, request);
         return "milestone_share";
     }
 
@@ -143,10 +154,14 @@ public class MilestoneSharePageController {
         return share.getPetName() + " · " + date;
     }
 
-    private String gone(Model model, HttpServletResponse response) {
+    private String gone(Model model, HttpServletResponse response, String visitorId,
+            jakarta.servlet.http.HttpServletRequest request) {
         response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-        // 复用名片失效页（card_gone）：统一「不存在 / 删除 / 注销」三态响应，CTA 落下载。
+        // 复用名片失效页（card_gone）：统一「不存在 / 删除 / 注销 / 封号」四态响应，CTA 落下载。
         model.addAttribute("downloadUrl", downloadUrl);
+        // 失效也要上报（Story 1.4）：这条链路的失效率同样要看。
+        analytics.linkOpened(visitorId,
+                com.tailtopia.profile.service.CardPageAnalytics.STATE_GONE, request);
         return "card_gone";
     }
 }

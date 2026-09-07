@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!--
+  移出运营真实账号 / 禁用虚拟账号的确认页（V1.1.6 Story 12.1 · AC4）。
+
+  🔴 为什么是服务端渲染的一整页，而不是浏览器 confirm()：这一页要显示
+     「该账号当前有 N 条待发布排期」—— N 只有服务端算得出来，而这个提示就是本条 AC 的全部意义。
+     不提示的话，那 N 条会在未来若干天里陆续、分散地失败，运营要等到失败才发现，
+     而届时内容的时间窗（如配合某活动）多半已经错过。
+
+  🛡 三条不许改成"顺手更贴心"的行为：
+     ① 不阻止操作 —— 运营可能正是要停掉这个号
+     ② 排期不自动取消、不自动转草稿 —— 保持"到点标记失败并注明原因"
+        （自动取消是替运营做决定；失败记录带原因比静默转草稿更可追溯）
+     ③ 移出 ≠ 封号
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.publishIdentity.confirm.title}">确认操作 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="${mode == 'REMOVE_REAL'} ? #{admin.publishIdentity.confirm.removeTitle} : #{admin.publishIdentity.confirm.disableTitle}">确认</h1>
+
+        <p th:text="${mode == 'REMOVE_REAL'}
+                    ? #{admin.publishIdentity.confirm.removeBody(${targetUserId})}
+                    : #{admin.publishIdentity.confirm.disableBody(${targetUserId})}">说明</p>
+
+        <div class="banner err" th:if="${pendingSchedules > 0}">
+            <span th:text="#{admin.publishIdentity.confirm.pending(${pendingSchedules})}">
+                该账号当前有 N 条待发布排期，操作后这些内容到点将发布失败。</span>
+            <a th:if="${scheduleListUrl}" th:href="@{${scheduleListUrl}}"
+               th:text="#{admin.publishIdentity.confirm.viewSchedules}">查看这些排期</a>
+        </div>
+        <p class="hint" th:if="${pendingSchedules == 0}"
+           th:text="#{admin.publishIdentity.confirm.noPending}">该账号当前没有待发布排期。</p>
+
+        <p class="hint" th:if="${mode == 'REMOVE_REAL'}"
+           th:text="#{admin.publishIdentity.confirm.notBan}">
+            移出 ≠ 封号：只收回「后台可代其发布」这一项。</p>
+
+        <form method="post" th:action="@{${actionPath}}">
+            <!-- 禁用走既有的启停端点，需要带上目标状态。 -->
+            <input type="hidden" name="enabled" value="false" th:if="${mode == 'DISABLE_VIRTUAL'}"/>
+            <button type="submit" class="btn btn-danger btn-sm"
+                    th:text="${mode == 'REMOVE_REAL'} ? #{admin.publishIdentity.btn.remove} : #{admin.common.disable}">确认</button>
+            <a class="btn btn-neutral btn-sm" th:href="@{/admin/virtual-accounts}"
+               th:text="#{admin.publishIdentity.btn.cancel}">取消</a>
+        </form>
+    </div>
+</div>
+</body>
+</html>

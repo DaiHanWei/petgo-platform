@@ -39,6 +39,8 @@ class _ReplyDeletedRepo implements DetailRepository {
   @override
   Future<ContentDetail> getDetail(int id) => throw UnimplementedError();
   @override
+  Future<String> getShareUrl(int postId) => throw UnimplementedError();
+  @override
   Future<CommentPage> getComments(int postId, {String? cursor}) async =>
       const CommentPage(items: [], nextCursor: null, hasMore: false);
   @override

@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/timeline_repository.dart';
+import '../domain/archive_scope.dart';
 import '../domain/timeline_item.dart';
 import 'widgets/timeline_tiles.dart';
 
@@ -13,9 +15,16 @@ import 'widgets/timeline_tiles.dart';
 ///
 /// **不设「+」、不设删除入口**（AC6）。快乐时刻条目点击进 FR-28 内容详情；健康事件不可点。
 class DayDetailPage extends ConsumerWidget {
-  const DayDetailPage({super.key, required this.date});
+  const DayDetailPage({super.key, required this.date, this.token});
 
   final DateTime date;
+
+  /// 分享 token（V1.1.6 Story 2.3）。非 null = 访客态：走访客接口，且条目按
+  /// 服务端下发的「可否点开」分流。作者态恒为 null。
+  final String? token;
+
+  ArchiveScope get _scope =>
+      token == null ? const ArchiveScope.me() : ArchiveScope.visitor(token!);
 
   String get _title =>
       '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
@@ -24,13 +33,13 @@ class DayDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final dayKey = DateTime(date.year, date.month, date.day);
-    final async = ref.watch(dayDetailProvider(dayKey));
+    final async = ref.watch(dayDetailProviderFor(_scope, dayKey));
     return Scaffold(
       backgroundColor: AppColors.cream,
       appBar: AppBar(title: Text(_title), backgroundColor: AppColors.cream),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => _DayError(onRetry: () => ref.invalidate(dayDetailProvider(dayKey))),
+        error: (e, _) => _DayError(onRetry: () => ref.invalidate(dayDetailProviderFor(_scope, dayKey))),
         data: (detail) {
           if (detail.items.isEmpty) {
             return Center(
@@ -39,23 +48,39 @@ class DayDetailPage extends ConsumerWidget {
           }
           return ListView(
             padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.section),
-            children: [for (final item in detail.items) _tile(context, item)],
+            children: [for (final item in detail.items) _tile(context, item, l10n)],
           );
         },
       ),
     );
   }
 
-  Widget _tile(BuildContext context, TimelineItem item) {
+  Widget _tile(BuildContext context, TimelineItem item, AppLocalizations l10n) {
     if (item.kind == TimelineKind.healthEvent) {
       return HealthEventTile(item: item); // 健康事件当天不可点
     }
     // 快乐时刻 → FR-28 内容详情。
     return GestureDetector(
       key: ValueKey('dayItem_${item.postId}'),
-      onTap: item.postId == null ? null : () => context.push('/content/${item.postId}'),
+      onTap: _tapFor(context, item, l10n),
       child: HappyMomentTile(item: item),
     );
+  }
+
+  /// 点击语义。
+  ///
+  /// 作者态：有 postId 就能进详情（沿用原行为）。
+  /// 🛡 访客态：只有服务端标了「可点开」的才进详情；私密条目**不跳转**、给一句解释性提示
+  /// （AD-3 Rule 2 —— 私密内容始终不越出分享链接的边界）。`openable` 为 null 同样不可点。
+  VoidCallback? _tapFor(BuildContext context, TimelineItem item, AppLocalizations l10n) {
+    if (item.postId == null) return null;
+    if (token == null) {
+      return () => context.push('/content/${item.postId}');
+    }
+    if (item.openable == true) {
+      return () => context.push('/content/${item.postId}');
+    }
+    return () => showAppToast(context, l10n.visitorPrivateItemNotice);
   }
 }
 

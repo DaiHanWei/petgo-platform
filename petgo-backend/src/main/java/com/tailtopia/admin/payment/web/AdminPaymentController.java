@@ -2,7 +2,11 @@ package com.tailtopia.admin.payment.web;
 
 import com.tailtopia.admin.payment.dto.AdminPaymentRow;
 import com.tailtopia.admin.payment.service.AdminPaymentQueryService;
+import com.tailtopia.pay.domain.PaymentPurpose;
+import com.tailtopia.pay.domain.PaymentStatus;
+import java.time.LocalDate;
 import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -11,39 +15,108 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * 后台支付记录通用查询（Story 9.6，AB-8E）。Thymeleaf admin slice，{@code /admin/payments}。
- * 门控 {@code payment.view}（SUPER_ADMIN 隐式全权）。按 userId 跨类型只读查。
+ * 门控 {@code payment.view}（SUPER_ADMIN 隐式全权）。按用途 / 状态 / 时间段 / userId 组合只读查。
  */
 @Controller
 public class AdminPaymentController {
 
     private static final String VIEW_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('payment.view')";
+    /** ⚠️ 须与模板里导出按钮的 sec:authorize 逐字一致，否则按钮在、点了 403。 */
+    private static final String EXPORT_AUTH =
+            "hasRole('SUPER_ADMIN') or hasAuthority('payment.list_export')";
 
     /** 默认视图每页条数。 */
     private static final int PAGE_SIZE = 20;
 
     private final AdminPaymentQueryService service;
+    private final com.tailtopia.admin.payment.service.AdminPaymentExportService exportService;
 
-    public AdminPaymentController(AdminPaymentQueryService service) {
+    public AdminPaymentController(AdminPaymentQueryService service,
+            com.tailtopia.admin.payment.service.AdminPaymentExportService exportService) {
         this.service = service;
+        this.exportService = exportService;
     }
 
     @GetMapping("/admin/payments")
     @PreAuthorize(VIEW_AUTH)
     public String search(@RequestParam(required = false) Long userId,
+                         @RequestParam(required = false) String purpose,
+                         @RequestParam(required = false) String status,
+                         @RequestParam(required = false)
+                         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+                         @RequestParam(required = false)
+                         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
                          @RequestParam(defaultValue = "0") int page, Model model) {
         model.addAttribute("active", "payments");
         model.addAttribute("userId", userId);
-        if (userId == null) {
-            Page<AdminPaymentRow> result = service.recent(Math.max(page, 0), PAGE_SIZE);
-            model.addAttribute("payments", result.getContent());
-            model.addAttribute("page", result.getNumber());
-            model.addAttribute("totalPages", result.getTotalPages());
-            model.addAttribute("totalElements", result.getTotalElements());
-            model.addAttribute("hasPrev", result.hasPrevious());
-            model.addAttribute("hasNext", result.hasNext());
-        } else {
-            model.addAttribute("payments", service.byUser(userId));
-        }
+        model.addAttribute("purpose", purpose);
+        model.addAttribute("status", status);
+        model.addAttribute("from", from);
+        model.addAttribute("to", to);
+        model.addAttribute("purposeOptions", PaymentPurpose.values());
+        model.addAttribute("statusOptions", PaymentStatus.values());
+
+        // ⚠️ 用途/状态**宽松解析**：值不认识就当"不限"，不报错。
+        //    这两个值只能从下拉里来，出现非法值只可能是有人手改了 URL ——
+        //    为此给运营一个报错页不划算，何况"不限"是最无害的退化。
+        var filter = new AdminPaymentQueryService.Filter(
+                userId, parseEnum(PaymentPurpose.class, purpose),
+                parseEnum(PaymentStatus.class, status), from, to);
+
+        Page<AdminPaymentRow> result = service.search(filter, Math.max(page, 0), PAGE_SIZE);
+        model.addAttribute("payments", result.getContent());
+        model.addAttribute("page", result.getNumber());
+        model.addAttribute("totalPages", result.getTotalPages());
+        model.addAttribute("totalElements", result.getTotalElements());
+        model.addAttribute("hasPrev", result.hasPrevious());
+        model.addAttribute("hasNext", result.hasNext());
+        // 🔴 汇总覆盖**整个筛选结果**，不是当前这一页（见 summarize 的说明）。
+        model.addAttribute("summary", service.summarize(filter));
         return "admin/payments";
+    }
+
+    /**
+     * 按当前筛选条件导出 Excel（2026-08-31）。
+     *
+     * <p>🔴 独立权限 {@code payment.list_export}、记审计 —— 与内容列表导出同口径：
+     * 查看是一次看一屏，导出是把支付数据批量带出系统。
+     *
+     * <p>⚠️ 参数与列表页**逐个对齐**：按钮把当前筛选条件原样带过来，
+     * 导出的就是屏幕上正在看的那一份。
+     */
+    @GetMapping("/admin/payments/export.xlsx")
+    @PreAuthorize(EXPORT_AUTH)
+    public org.springframework.http.ResponseEntity<byte[]> exportXlsx(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal
+            com.tailtopia.admin.service.AdminUserDetails admin,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String purpose,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        var filter = new AdminPaymentQueryService.Filter(
+                userId, parseEnum(PaymentPurpose.class, purpose),
+                parseEnum(PaymentStatus.class, status), from, to);
+        byte[] body = exportService.exportXlsx(admin.getAdminAccountId(), filter);
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"payment-records.xlsx\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(body);
+    }
+
+    /** 宽松解析：空 / 不认识 → null（= 不限），绝不抛。 */
+    private static <E extends Enum<E>> E parseEnum(Class<E> type, String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Enum.valueOf(type, raw.trim());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 }

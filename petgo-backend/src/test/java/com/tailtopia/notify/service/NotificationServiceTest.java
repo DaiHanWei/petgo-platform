@@ -72,4 +72,34 @@ class NotificationServiceTest {
         String t2 = svc.send(7L, NotificationType.CONTENT_LIKED, "a", "b", "X", "r").getDeepLinkToken();
         assertThat(t1).isNotEqualTo(t2);
     }
+
+    /**
+     * 🛡 只写不推（V1.1.6 Story 6.1 · FR-76）：**写通知行 + 角标 +1，但不投递推送**。
+     *
+     * <p>这条守的是 AC2 —— 它之所以"白送"，前提是这条路径**与 send 共用同一段落库 + 角标逻辑**。
+     * 谁要是另写一套"只落库"的实现，角标就不会涨：通知进了中心而铃铛不动，
+     * 用户仍需主动去翻，FR-76 的核心诉求直接失效。
+     */
+    @Test
+    void sendWithoutPushStillWritesRowAndBumpsBadgeButNeverPushes() {
+        when(repo.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(redis.opsForValue()).thenReturn(valueOps);
+
+        // ⚠️ 不走 service()：那个辅助方法会 stub 推送文案本地化与收件人语言，
+        // 而本路径**根本不发推送**、用不到它们 —— 严格 stub 模式下会报 UnnecessaryStubbing。
+        // 这本身就是"没发推送"的一个旁证。
+        NotificationService svc =
+                new NotificationService(repo, redis, pusher, messageSource, accountQuery);
+        Notification n = svc.sendWithoutPush(7L, NotificationType.MILESTONE_SM_NODE,
+                "留痕标题", "留痕正文", NotificationType.MILESTONE_NODE.name(), "C-S14");
+
+        // ① 通知行照写
+        verify(repo).save(any(Notification.class));
+        assertThat(n.getType()).isEqualTo(NotificationType.MILESTONE_SM_NODE);
+        assertThat(n.getTargetRef()).isEqualTo("C-S14");
+        // ② 🛡 未读角标照涨
+        verify(valueOps).increment(NotificationService.UNREAD_KEY_PREFIX + 7L);
+        // ③ 但**一条推送都不发**
+        org.mockito.Mockito.verifyNoInteractions(pusher);
+    }
 }

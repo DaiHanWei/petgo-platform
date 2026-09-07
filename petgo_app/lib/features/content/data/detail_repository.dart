@@ -4,7 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/comment.dart';
+import '../../profile/domain/card_link.dart';
 import '../domain/content_detail.dart';
+import 'anon_feed_session.dart';
 
 /// 内容详情 + 评论只读数据层（Story 3.3）。
 ///
@@ -30,6 +32,13 @@ abstract class DetailRepository {
 
   /// 举报内容（Story 3.7，单选类型 wire；需登录；无自动下架）。
   Future<void> submitReport(int postId, String reasonType);
+
+  /// 取该条内容的**对外分享链接**（V1.1.6 Story 9.3）。
+  ///
+  /// 返回完整 URL。后端只回不可枚举 token，域名由客户端按 H5 子域拼
+  /// （与名片 / 里程碑同约定，见 `postShareUrl`）。
+  /// 幂等：同一条内容重复分享复用同一 token。
+  Future<String> getShareUrl(int postId);
 }
 
 class DioDetailRepository implements DetailRepository {
@@ -40,7 +49,12 @@ class DioDetailRepository implements DetailRepository {
   @override
   Future<ContentDetail> getDetail(int id) async {
     try {
-      final resp = await dio.get<Map<String, dynamic>>(ApiPaths.contentPostDetail(id));
+      final resp = await dio.get<Map<String, dynamic>>(
+        ApiPaths.contentPostDetail(id),
+        // 2026-08-31：详情打开计入浏览统计，游客靠这个头去重「浏览人数」。
+        // 🛡 与首页取数同一约定：只挂在这一个请求上，不做成全局请求头。
+        options: Options(headers: {'X-Anon-Session': AnonFeedSession.id}),
+      );
       return ContentDetail.fromJson(resp.data!);
     } on DioException catch (e) {
       throw ContentLoadError(_classify(e));
@@ -99,6 +113,12 @@ class DioDetailRepository implements DetailRepository {
       '${ApiPaths.contentPostDetail(postId)}/reports',
       data: {'reasonType': reasonType},
     );
+  }
+
+  @override
+  Future<String> getShareUrl(int postId) async {
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.contentPostShareLink(postId));
+    return postShareUrl(resp.data!['shareToken'] as String);
   }
 
   ContentLoadErrorKind _classify(DioException e) {

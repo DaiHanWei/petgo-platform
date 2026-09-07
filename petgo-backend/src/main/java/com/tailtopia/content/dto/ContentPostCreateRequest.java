@@ -2,6 +2,7 @@ package com.tailtopia.content.dto;
 
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.ContentVisibility;
+import com.tailtopia.content.domain.ImageSize;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
@@ -29,18 +30,33 @@ public record ContentPostCreateRequest(
          * <p>⚠️ 只在**创建时**接受：发布后不可更改（FR-83 AC7 —— 让内容不再被他人看到的
          * 唯一途径是删除该条内容）。因此没有、也不要加任何「转为私密」的更新端点。
          */
-        ContentVisibility visibility) {
+        ContentVisibility visibility,
+        /**
+         * 图片原始宽高（V1.1.6 Story 3.1 · AD-5），与 {@link #imageUrls()} <b>同序等长</b>。
+         *
+         * <p>客户端在判容差区间时尺寸已在手，顺手上报即可，省掉服务端一次网络往返。
+         *
+         * <p>🛡 <b>长度对不上就整组作废</b>（见 {@code ContentService} 里的校验）——
+         * 错位的后果是图文不符，比没有尺寸严重得多。省略 / 为 null 时全部走服务端兜底测量。
+         */
+        @Size(max = 9, message = "最多 9 张图片") List<ImageSize> imageSizes) {
 
     /** 兼容无事件日期的发布（日常/科普 / 后台补发）：eventDate 省为 null，可见范围默认公开。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls) {
-        this(type, petId, text, imageUrls, null, null);
+        this(type, petId, text, imageUrls, null, null, null);
     }
 
     /** 兼容不带可见范围的调用（老客户端 / 既有测试）：默认公开。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls, LocalDate eventDate) {
-        this(type, petId, text, imageUrls, eventDate, null);
+        this(type, petId, text, imageUrls, eventDate, null, null);
+    }
+
+    /** 兼容不带图片尺寸的调用（老客户端 / 既有测试 / 后台种子发布）：一律走服务端兜底测量。 */
+    public ContentPostCreateRequest(ContentType type, Long petId, String text,
+            List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility) {
+        this(type, petId, text, imageUrls, eventDate, visibility, null);
     }
 
     /** 省略即公开（NFR-6：私密只由用户主动关开关产生）。 */

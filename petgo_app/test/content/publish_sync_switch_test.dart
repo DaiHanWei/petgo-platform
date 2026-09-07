@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/content/domain/feed_image_layout.dart';
 import 'package:tailtopia/features/content/data/content_repository.dart';
 import 'package:tailtopia/features/content/domain/content_type.dart';
 import 'package:tailtopia/features/content/domain/publish_controller.dart';
@@ -21,6 +22,7 @@ class _RecordingRepo implements ContentRepository {
     int? petId,
     String? text,
     List<String> imageUrls = const [],
+    List<ImageSize?> imageSizes = const [],
     DateTime? eventDate,
     required String idempotencyKey,
     bool syncToMoment = true,

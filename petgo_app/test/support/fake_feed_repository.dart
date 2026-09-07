@@ -1,3 +1,4 @@
+import 'package:tailtopia/features/content/domain/pinned_slot.dart';
 import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
 
@@ -17,4 +18,9 @@ class FakeFeedRepository implements FeedRepository {
     int limit = 20,
   }) async =>
       FeedPage(items: items, nextCursor: null, hasMore: false);
+
+  /// V1.1.6 Story 4.2：本 fake 不涉及顶置 —— 恒无顶置（与"坑位为空"同义）。
+  @override
+  Future<PinnedSlot?> getPinnedSlot() async => null;
+
 }

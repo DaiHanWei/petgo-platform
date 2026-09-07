@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/content/domain/pinned_slot.dart';
 import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
@@ -43,6 +44,11 @@ class _FakeFeedRepo implements FeedRepository {
     int limit = 20,
   }) async =>
       FeedPage(items: items, nextCursor: null, hasMore: false);
+
+  /// V1.1.6 Story 4.2：本 fake 不涉及顶置 —— 恒无顶置（与"坑位为空"同义）。
+  @override
+  Future<PinnedSlot?> getPinnedSlot() async => null;
+
 }
 
 /// 脚本化 fake：由注入函数决定每次 getFeed 的结果（含抛错），用于 AC5 失败态。
@@ -57,6 +63,11 @@ class _ScriptedFeedRepo implements FeedRepository {
     int limit = 20,
   }) =>
       handler(category, cursor);
+
+  /// V1.1.6 Story 4.2：本 fake 不涉及顶置 —— 恒无顶置（与"坑位为空"同义）。
+  @override
+  Future<PinnedSlot?> getPinnedSlot() async => null;
+
 }
 
 Future<void> _pumpHome(WidgetTester tester, List<FeedItem> items) async {
@@ -78,14 +89,17 @@ Future<void> _pumpHome(WidgetTester tester, List<FeedItem> items) async {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('MasonryCard 纯文字卡渲染昵称与正文（无点赞评论数）', (tester) async {
-    await tester.pumpWidget(MaterialApp(
+  // ⚠️ 用例名与断言在 V1.1.6 Story 3.2 后已订正：卡片**现在有**点赞与评论数
+  // （FR-93 推翻了 FR-17「不在卡片展示」）。操作行本身的行为由
+  // feed_action_row_test.dart 专门覆盖，这里只保留"文字内容渲染"这一层。
+  testWidgets('MasonryCard 纯文字卡渲染昵称与正文', (tester) async {
+    await tester.pumpWidget(ProviderScope(child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: MasonryCard(item: _item(body: 'doggo day'), deletedUserLabel: 'Deleted user'),
       ),
-    ));
+    )));
     await tester.pump();
     expect(find.text('doggo day'), findsOneWidget);
     expect(find.text('Alice'), findsOneWidget);
@@ -201,6 +215,35 @@ void main() {
     s = container.read(feedProvider).value!;
     expect(s.loadMoreFailed, isFalse);
     expect(s.items.map((e) => e.id), [1, 2]); // 续拉追加
+  });
+
+  /// bug 20260826 · 信息流卡片必须**真的接上**分享入口。
+  ///
+  /// ⚠️ 分享图标本身与点击流程在 share_entry_and_landing_test 里覆盖了，但那边是直接
+  /// 挂 `MasonryCard` 并手动传 `onShare` —— **信息流有没有传这个回调，那些用例一条也管不到**。
+  /// 少了这一条，「图标组件好好的、信息流上就是没有」这种接线漏掉不会有任何测试变红。
+  testWidgets('信息流卡片接上了分享入口（不是只有组件支持）', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: FeedMasonryView(
+            items: [_item(id: 7, body: 'halo')],
+            hasMore: false,
+            loadingMore: false,
+            loadMoreFailed: false,
+            loadMoreErrorLabel: 'x',
+            deletedUserLabel: 'x',
+            onLoadMore: () async {},
+            onRefresh: () async {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('feedCardShare_7')), findsOneWidget,
+        reason: '信息流没给卡片传 onShare ⇒ 图标不渲染，而组件层的用例照样全绿');
   });
 
   testWidgets('AC5: FeedMasonryView loadMoreFailed → 底部重试按钮可点', (tester) async {

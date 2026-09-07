@@ -65,8 +65,21 @@ class ReportTriageIntegrationTest extends ApiIntegrationTest {
         return reports.findByPostIdAndStatus(postId, ReportStatus.PENDING).get(0).getId();
     }
 
-    private boolean feedContains(long viewerId, String petStatus, long postId) {
-        FeedPageResponse page = feedService.loadFeed(petStatus, "ALL", null, viewerId);
+    /**
+     * 🔴 <b>刻意用分类 Tab（时间倒序），不用 ALL</b>。
+     *
+     * <p>V1.1.6 Story 16.3 起 ALL Tab 走推荐序，而本方法断言的是「刚发的帖<b>出现在第一页</b>」——
+     * 那个前提只对时间倒序成立：推荐序里一条 0 赞新帖要和池子里上千条内容按分数竞争，
+     * 落到第 20 名之后完全正常。硬留 ALL 会得到一条<b>时不时红</b>的测试，
+     * 而它红的时候跟举报过滤没有任何关系。
+     *
+     * <p>推荐序路径上的过滤覆盖另有 {@code FeedRankQueryIntegrationTest} —— 那边断言的是
+     * 「该内容不在候选池里」（<b>缺席</b>类断言在排序面前是稳的，<b>在席</b>类断言不是）。
+     *
+     * <p>（{@code petStatus} 形参已删除，Story 16.3 · AC3。）
+     */
+    private boolean feedContains(long viewerId, long postId) {
+        FeedPageResponse page = feedService.loadFeed("DAILY", null, viewerId, null);
         return page.items().stream().anyMatch(i -> i.id() != null && i.id() == postId);
     }
 
@@ -78,12 +91,12 @@ class ReportTriageIntegrationTest extends ApiIntegrationTest {
         User viewerB = newUser();
         ContentPost p = newPost(author.getId());
 
-        assertThat(feedContains(reporterA.getId(), "HAS_PET", p.getId())).isTrue(); // 举报前 A 可见
+        assertThat(feedContains(reporterA.getId(), p.getId())).isTrue(); // 举报前 A 可见
 
         reportService.submit(p.getId(), reporterA.getId(), ReportReason.INAPPROPRIATE);
 
-        assertThat(feedContains(reporterA.getId(), "HAS_PET", p.getId())).isFalse(); // A 举报后不再见
-        assertThat(feedContains(viewerB.getId(), "HAS_PET", p.getId())).isTrue();    // B 未举报仍见
+        assertThat(feedContains(reporterA.getId(), p.getId())).isFalse(); // A 举报后不再见
+        assertThat(feedContains(viewerB.getId(), p.getId())).isTrue();    // B 未举报仍见
         // P2（单次非 ILLEGAL）：不改可见性——帖仍 PUBLISHED、未预处置。
         ContentPost after = posts.findById(p.getId()).orElseThrow();
         assertThat(after.getStatus()).isEqualTo(PostStatus.PUBLISHED);
@@ -135,7 +148,7 @@ class ReportTriageIntegrationTest extends ApiIntegrationTest {
         assertThat(held.getReviewReason()).isEqualTo("REPORT_P0");
         assertThat(held.getDeletedAt()).isNull(); // 内容不删
         // 他人不可见（Feed 仅 PUBLISHED），作者本人仍可见（findMyPosts 放行 UNDER_REVIEW）。
-        assertThat(feedContains(newUser().getId(), "HAS_PET", p.getId())).isFalse();
+        assertThat(feedContains(newUser().getId(), p.getId())).isFalse();
         long pid = p.getId();
         assertThat(feedService.myPosts(author.getId(), null).items().stream()
                 .anyMatch(i -> i.id() != null && i.id() == pid)).isTrue();
@@ -200,8 +213,8 @@ class ReportTriageIntegrationTest extends ApiIntegrationTest {
         // 作者无任何通知（既非下架、亦非「发布前审核通过」；D-CM6）。
         assertThat(authorNotifications(author.getId())).isEmpty();
         // 原举报者仍对其隐藏（举报记录未撤，R5）：他人可见、A 不可见。
-        assertThat(feedContains(reporterA.getId(), "HAS_PET", p.getId())).isFalse();
-        assertThat(feedContains(newUser().getId(), "HAS_PET", p.getId())).isTrue();
+        assertThat(feedContains(reporterA.getId(), p.getId())).isFalse();
+        assertThat(feedContains(newUser().getId(), p.getId())).isTrue();
     }
 
     private List<Notification> authorNotifications(long authorId) {

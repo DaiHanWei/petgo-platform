@@ -31,6 +31,29 @@ public class AdminAuditService {
         this.chainLock = chainLock;
     }
 
+    /** {@code admin_audit_logs.summary} 的列宽（V34）。 */
+    static final int SUMMARY_MAX_LENGTH = 500;
+
+    /** 超长摘要的截断标记，让读日志的人知道后面还有内容被切掉了。 */
+    private static final String TRUNCATION_MARK = "…[截断]";
+
+    /**
+     * 把摘要收进列宽。
+     *
+     * <p>为什么在这里兜底而不是让每个调用方自己保证：审计与业务动作<b>同事务</b>，
+     * 摘要超长会让 INSERT 抛 DataIntegrityViolation，进而<b>回滚掉那个业务动作本身</b>——
+     * 「因为日志写不下，所以账号没建成」是完全不对等的失败。摘要是给人看的辅助信息，
+     * 截断它远好过让操作失败。
+     *
+     * <p>截断发生在算 rowHash <b>之前</b>，所以哈希链覆盖的始终是真正落库的那份文本，链的可验证性不受影响。
+     */
+    static String clampSummary(String summary) {
+        if (summary == null || summary.length() <= SUMMARY_MAX_LENGTH) {
+            return summary;
+        }
+        return summary.substring(0, SUMMARY_MAX_LENGTH - TRUNCATION_MARK.length()) + TRUNCATION_MARK;
+    }
+
     /**
      * 记录一条审计（哈希链 append-only）。
      *
@@ -38,12 +61,14 @@ public class AdminAuditService {
      * @param actionType     动作类型（{@link AuditActions}，UPPER_SNAKE 过去式）
      * @param targetType     目标资源类型（可空）
      * @param targetId       目标外露标识：不可枚举 token 或业务 id 字符串（可空）
-     * @param summary        人类可读摘要；<b>严禁含密码/令牌/签名 URL/健康数据</b>
+     * @param summary        人类可读摘要；<b>严禁含密码/令牌/签名 URL/健康数据</b>。
+     *                       超过 {@value #SUMMARY_MAX_LENGTH} 字符会被截断（见 {@link #clampSummary}）
      * @return 落库的审计行（含 id 与链哈希）
      */
     @Transactional
     public AdminAuditLog record(Long actorAccountId, String actionType, String targetType,
             String targetId, String summary) {
+        summary = clampSummary(summary);
         // AG-2：串行化整段临界区，避免并发取到同一链尾导致分叉。
         chainLock.acquire();
 

@@ -22,6 +22,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
+import com.tailtopia.support.TestMessages;
 
 /**
  * L0：退款三段职责分离门控（A-1）——客服 need 判定 {@code refund.submit}（Story 4.4）/ 主管审批
@@ -48,7 +49,7 @@ class AdminRefundAccessControlTest {
 
         @Bean
         AdminRefundController controller(RefundService s, AdminRefundQueryService q) {
-            return new AdminRefundController(s, q);
+            return new AdminRefundController(s, q, TestMessages.real());
         }
     }
 

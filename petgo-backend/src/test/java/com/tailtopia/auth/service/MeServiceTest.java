@@ -50,7 +50,7 @@ class MeServiceTest {
         when(users.findById(1L)).thenReturn(Optional.of(u));
         when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest("Buddy", null, null, null));
+        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest("Buddy", null, null, null, null));
 
         assertThat(resp.nickname()).isEqualTo("Buddy");
         assertThat(u.getNickname()).isEqualTo("Buddy");
@@ -63,7 +63,7 @@ class MeServiceTest {
         when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UserProfileResponse resp = meService.updateMe(
-                1L, new UpdateMeRequest(null, null, "https://oss/public/avatars/abc.jpg", null));
+                1L, new UpdateMeRequest(null, null, "https://oss/public/avatars/abc.jpg", null, null));
 
         assertThat(resp.avatarUrl()).isEqualTo("https://oss/public/avatars/abc.jpg");
         assertThat(u.getAvatarUrl()).isEqualTo("https://oss/public/avatars/abc.jpg");
@@ -76,7 +76,7 @@ class MeServiceTest {
         when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UserProfileResponse resp = meService.updateMe(
-                1L, new UpdateMeRequest(null, null, null, "  Cinta anjing 🐶  "));
+                1L, new UpdateMeRequest(null, null, null, "  Cinta anjing 🐶  ", null));
 
         assertThat(resp.signature()).isEqualTo("Cinta anjing 🐶"); // trim
         assertThat(u.getSignature()).isEqualTo("Cinta anjing 🐶");
@@ -89,7 +89,7 @@ class MeServiceTest {
         when(users.findById(1L)).thenReturn(Optional.of(u));
         when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest(null, null, null, "  "));
+        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest(null, null, null, "  ", null));
 
         assertThat(resp.signature()).isNull();
         assertThat(u.getSignature()).isNull();
@@ -98,7 +98,7 @@ class MeServiceTest {
     @Test
     void blankNicknameRejected() {
         when(users.findById(1L)).thenReturn(Optional.of(freshUser()));
-        assertThatThrownBy(() -> meService.updateMe(1L, new UpdateMeRequest("   ", null, null, null)))
+        assertThatThrownBy(() -> meService.updateMe(1L, new UpdateMeRequest("   ", null, null, null, null)))
                 .isInstanceOf(AppException.class);
     }
 
@@ -109,7 +109,7 @@ class MeServiceTest {
         when(users.findById(1L)).thenReturn(Optional.of(u));
         when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest(null, "HAS_PET", null, null));
+        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest(null, "HAS_PET", null, null, null));
 
         assertThat(u.getPetStatus()).isEqualTo(PetStatus.HAS_PET);
         assertThat(u.isOnboardingCompleted()).isTrue();
@@ -119,7 +119,7 @@ class MeServiceTest {
     @Test
     void invalidPetStatusRejected() {
         when(users.findById(1L)).thenReturn(Optional.of(freshUser()));
-        assertThatThrownBy(() -> meService.updateMe(1L, new UpdateMeRequest(null, "Z", null, null)))
+        assertThatThrownBy(() -> meService.updateMe(1L, new UpdateMeRequest(null, "Z", null, null, null)))
                 .isInstanceOf(AppException.class);
     }
 
@@ -132,7 +132,7 @@ class MeServiceTest {
         when(users.findById(1L)).thenReturn(Optional.of(u));
         when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest(null, "PLANNING", null, null));
+        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest(null, "PLANNING", null, null, null));
 
         assertThat(u.getPetStatus()).isEqualTo(PetStatus.PLANNING);
         assertThat(u.isOnboardingCompleted()).isTrue(); // onboarding 不回退

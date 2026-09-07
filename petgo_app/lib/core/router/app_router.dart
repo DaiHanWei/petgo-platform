@@ -9,13 +9,26 @@ import 'deep_link_routes.dart';
 import '../theme/app_theme.dart';
 
 import '../../features/auth/domain/auth_state.dart';
+import '../../features/auth/domain/login_guide_controller.dart';
 import '../../features/auth/domain/user_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
+import '../../features/shop/address/presentation/address_book_page.dart';
+import '../../features/order/presentation/order_list_page_v2.dart';
+import '../../features/shop/address/presentation/address_form_page_v2.dart';
+import '../../features/shop/presentation/shop_search_page.dart';
+import '../../features/shop/presentation/cart_page_v2.dart';
+import '../../features/shop/presentation/checkout_page_v2.dart';
+import '../../features/shop/presentation/product_detail_page_v2.dart';
+import '../../features/shop/presentation/refund_method_page_v2.dart';
+import '../../features/shop/presentation/return_request_page_v2.dart';
+import '../../features/shop/presentation/shop_order_detail_page_v2.dart';
+import '../../features/shop/presentation/toko_page_v2.dart';
 import '../../features/auth/presentation/nickname_page.dart';
 import '../../features/auth/presentation/pet_status_page.dart';
 import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/content_detail_page.dart';
+import '../../features/content/presentation/shared_post_page.dart';
 import '../../features/content/presentation/home_page.dart';
 import '../../features/content/presentation/publish_landing_page.dart';
 import '../../features/content/presentation/publish_result_page.dart';
@@ -30,7 +43,6 @@ import '../../features/support/presentation/ticket_detail_page.dart';
 import '../../features/support/presentation/csat_page.dart';
 import '../../features/pawcoin/presentation/pawcoin_page.dart';
 import '../../features/pawcoin/presentation/recharge_page.dart';
-import '../../features/order/presentation/order_list_page.dart';
 import '../../features/order/presentation/order_detail_page.dart';
 import '../../features/refund/domain/refund_request.dart';
 import '../../features/refund/presentation/refund_list_page.dart';
@@ -45,7 +57,6 @@ import '../../features/profile/presentation/id_card_detail_page.dart';
 import '../../features/profile/presentation/id_card_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
-import '../../features/notify/data/push_permission_providers.dart';
 import '../../features/onboarding/presentation/splash_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/day_detail_page.dart';
@@ -142,9 +153,12 @@ const Set<String> _controlledExactExceptions = {'/profile'};
 const String _devRoute = String.fromEnvironment('DEV_ROUTE');
 
 /// Tab 分支根页（与 [AppTab] 一一对应；穷尽 switch，新增 Tab 时编译期报错，不会静默漏配）。
-Widget _tabRootPage(AppTab tab) => switch (tab) {
+/// Tab 根页。**接收 [GoRouterState]** 而非只接 tab —— Toko 要读 `?category=`
+/// （FR-110 品类跳转注入），无 state 就取不到。其余 Tab 忽略它。
+Widget _tabRootPage(AppTab tab, GoRouterState state) => switch (tab) {
   AppTab.profile => const GrowthArchivePage(),
-  AppTab.triage => const TriagePage(),
+  // ⚠️ 2026-08-28 v1 版式整体删除，双 UI 并存机制随之移除；此处直接构造 v2 页面。
+  AppTab.shop => TokoPageV2(initialCategory: state.uri.queryParameters['category']),
   AppTab.home => const HomePage(),
   AppTab.me => const MePage(),
 };
@@ -191,16 +205,42 @@ bool redirectWouldRewrite(AuthState auth, String location) {
   return !auth.isLoggedIn && controlled;
 }
 
+/// 热启动落深链（app 已活、被深链唤起）。
+///
+/// 🔴 **V1.1.6 Story 2.4 起必须走这里，不能再直接 `go`。**
+/// 在此之前名片深链落的是 `/profile`（一个 Tab 根），`go` 掉整个栈也无所谓 ——
+/// 用户落在带底部导航的主界面里，哪儿都去得了。
+/// 现在落的是 `/pet/{token}`，一个**在 Tab 外**的顶层路由：`go` 之后既没有底部导航、
+/// 也没有返回栈，**按返回键会直接退出 App**（2026-08-18 L2 实测踩到）。
+/// 对一个「从 WhatsApp 点链接进来」的人来说，那就是一条死路 ——
+/// 而这条链路的全部意义正是把人**引进** App。
+void goDeepLinkFromLiveApp(WidgetRef ref, String location) {
+  final ctx = rootNavigatorKey.currentContext;
+  if (ctx == null || !ctx.mounted) {
+    ref.read(routerProvider).go(location); // 极端兜底：拿不到 context 时至少别丢深链
+    return;
+  }
+  _goDeepLinkWith(ctx, () => ref.read(authControllerProvider), location);
+}
+
 /// 冷启动落深链：需要底座的先 `go` 到落地矩阵目标，再把深链 `push` 上去（这样才可返回）。
 ///
 /// 底座取**落地矩阵目标**而不是写死 `/home`：游客/已建档用户落 Diary、其余落 Social，
 /// 返回后看到的是他本该看到的那一屏，与不点推送直接冷启动完全一致。
-void _goDeepLink(BuildContext ctx, Ref ref, String location) {
+void _goDeepLink(BuildContext ctx, Ref ref, String location) =>
+    _goDeepLinkWith(ctx, () => ref.read(authControllerProvider), location);
+
+/// 冷启动与热启动共用的实现。
+///
+/// 两处的 ref 类型不同（`Ref` / `WidgetRef`），而这里只需要「当前登录态」这一样东西，
+/// 故把它做成一个取值函数传进来 —— 既避免复制一份逻辑，也保留「用时才读」：
+/// 下面那次读发生在**下一帧**，不能提前取快照。
+void _goDeepLinkWith(BuildContext ctx, AuthState Function() authNow, String location) {
   if (!deepLinkNeedsBaseRoute(location)) {
     ctx.go(location);
     return;
   }
-  ctx.go(appUserStateOf(ref.read(authControllerProvider)).landingLocation);
+  ctx.go(appUserStateOf(authNow()).landingLocation);
   // ⚠️ **必须等下一帧再 push，不能和 go 同帧发出**（2026-08-07 实测）：go_router 的 `go`
   // 走的是 RouteInformationParser 的**异步**解析，调用返回时 `currentConfiguration` 还是旧值。
   // 同帧接着 push，等于把目标叠在**旧栈**（/splash）上，随后 go 的解析落地又把整个栈替换掉 ——
@@ -210,7 +250,7 @@ void _goDeepLink(BuildContext ctx, Ref ref, String location) {
     if (c == null || !c.mounted) return;
     // PR#34 finding #8（孪生位）：游客/角色不符时受控深链会被 redirect 改写到 shell 根，
     // push 它 = GlobalKey 撞车白屏。底座已是该状态的正确落地页，直接放弃叠加。
-    if (redirectWouldRewrite(ref.read(authControllerProvider), location)) return;
+    if (redirectWouldRewrite(authNow(), location)) return;
     c.push(location);
   });
 }
@@ -482,6 +522,95 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(path: '/login', builder: (c, s) => const LoginPage()),
+
+      // ===== Toko（V1.4.0 Story 1.6，FR-93 / FR-93A）=====
+      // 🔒 游客可直接进入：靠【不在 _controlledLocations 白名单里】达成，零安全规则改动。
+      //    这与 V1.1.2 FR-78「未登录点击非落地 Tab 触发登录引导」有意不同——商品浏览是
+      //    转化漏斗最上层，用登录墙拦截会直接杀掉转化。登录引导推迟到加购（Epic 3）。
+      // 🔴 Tab 位序归 DEP-1 未拍板、图标归 DEP-2 未交付 → 本版本【只挂路由，不动 AppTab 枚举】
+      //    （bottom_tab_bar.dart 属并行契约 C 类）。Tab 接入待 DEP-1 闭合后单独处理。
+      // `?category=` 只被 FR-110 的品类跳转注入（Story 9.1）：健康记录类型 → 品类，
+      // 系统生成、无 SKU。非法值由 ShopCategory.fromApi 落回 null（= 全部精选）。
+      // 🔴 双 UI 并存（2026-08-19）：v1 = 逐 story 实现的首发版式，v2 = 电商设计稿版式。
+      //    **路由结构一行不改** —— URL、深链、导航栈、受控路由名单全不变，
+      //    （2026-08-28 起只有一套版式，此约束自然成立。）
+      // 商品详情（Story 1.7）。同样对游客开放——不在 _controlledLocations 里。
+      GoRoute(
+        path: '/shop/products/:token',
+        // `?from=` 带入归因来源（Story 3.10）：商品从哪个入口进的，只有跳转那一刻知道。
+        builder: (c, s) {
+          final token = s.pathParameters['token']!;
+          final from = s.uri.queryParameters['from'];
+          return ProductDetailPageV2(token: token, entrySource: from);
+        },
+      ),
+      // 购物车（Story 3.6）。🔒 **有意不放进 _controlledLocations**：门控在页面内部
+      //    （游客渲染「登录后查看」空态 + 软性引导），而不是 redirect 弹走。
+      //    redirect 会把游客直接甩回 /home，等于告诉他「这里没有购物车」——
+      //    而真相是「登录后就有」，这一句差别就是 FR-0B 软性引导存在的理由。
+      //    页面本身不发任何 /me 请求，游客态零数据暴露。
+      // 商品搜索页（2026-09-02 产品定形）。入口是 Toko 吸顶筛选行最左那个放大镜 ——
+      // 搜索在顶栏只占一个图标，整行剩下的宽度全给分类（见 _FilterBar 的说明）。
+      // 🔒 游客可用：只读商品目录，不发任何 /me 请求。
+      GoRoute(
+        path: '/shop/search',
+        builder: (c, s) => const ShopSearchPage(),
+      ),
+      GoRoute(
+        path: '/shop/cart',
+        builder: (c, s) => const CartPageV2(),
+      ),
+      // 结算页（Story 3.7）。🔒 与购物车同理：门控在页内（本页只在已登录态可达 ——
+      //    入口是购物车页的 Checkout 按钮，而游客的购物车页根本不渲染那个按钮）。
+      GoRoute(
+        path: '/shop/checkout',
+        builder: (c, s) => const CheckoutPageV2(),
+      ),
+      // 电商订单详情（Story 3.8）。token 寻址（不可枚举）；越权与不存在同为后端 404。
+      GoRoute(
+        path: '/shop/orders/:token',
+        builder: (c, s) {
+          final token = s.pathParameters['token']!;
+          return ShopOrderDetailPageV2(orderToken: token);
+        },
+      ),
+      // 退货申请页（Story 5.7）。入口在订单详情；已有进行中申请时页面自己渲染置灰态
+      // （UX-DR3）而不是 redirect —— 用户需要知道「已在处理中」，而不是被弹走。
+      GoRoute(
+        path: '/shop/orders/:token/return',
+        builder: (c, s) {
+          final token = s.pathParameters['token']!;
+          return ReturnRequestPageV2(orderToken: token);
+        },
+      ),
+      // 退款方式选择页（Story 5.8）。token 寻址（退货申请的不可枚举 token）。
+      GoRoute(
+        path: '/shop/returns/:token/refund-method',
+        builder: (c, s) {
+          final token = s.pathParameters['token']!;
+          return RefundMethodPageV2(returnToken: token);
+        },
+      ),
+      // ⏳ 退货进度页（Story 5.9）路由暂不挂载：UX-DR5 视觉稿未交付，
+      //    AC 写死「实现前不得自行发挥」。后端与数据层已就绪，补稿后只差这一页。
+      // 地址簿（Story 2.4）。🔒 挂在 /me 前缀下 —— 它已在 _controlledLocations 里，
+      // 游客访问自动重定向。地址是 PII，与 Toko 的游客开放策略正好相反。
+      // `?select=1` = 选择器模式（D-18）：从结算页进来时点卡片即选中并返回 token，
+      // 只作用于当前订单、不改默认地址。不带参数时仍是原来的地址管理页。
+      GoRoute(
+        path: '/me/addresses',
+        builder: (c, s) => AddressBookPage(
+          selecting: s.uri.queryParameters['select'] == '1',
+        ),
+      ),
+      GoRoute(
+        path: '/me/addresses/new',
+        builder: (c, s) => const AddressFormPageV2(),
+      ),
+      GoRoute(
+        path: '/me/addresses/:token',
+        builder: (c, s) => AddressFormPageV2(token: s.pathParameters['token']),
+      ),
       // 兽医账密登录 + 工作台壳（Story 5.1）。与用户侧 5-Tab 隔离：shell 外顶层路由。
       GoRoute(path: '/vet/login', builder: (c, s) => _vetScoped(const VetLoginPage())),
       GoRoute(path: '/vet/workbench', builder: (c, s) => _vetScoped(const VetWorkbenchShell())),
@@ -520,11 +649,22 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             petName: created.name,
             avatarUrl: created.avatarUrl,
             onStartExplore: () async {
-              // FR-22D 建档时机（庆祝页后、进首页前）：触发推送权限闸门（Story 6.4）。
-              // neverConsulted 传 true 安全——已问诊者其 `alreadyAsked` 守卫已使闸门跳过（取最早、仅一次）。
-              final gate = await ref.read(pushPermissionGateProvider.future);
-              await gate.maybeRequestAfterProfileCreated(neverConsulted: true);
-              if (c.mounted) c.go('/home');
+              // 🔴 **建档这个时机不再弹推送权限**（产品 2026-08-27）。
+              //
+              // 实机路径是：建档成功 → 庆祝页 → 点主 CTA「记录第一个瞬间」→ 弹出一个
+              // 「为你的毛孩子打开通知吧？」的底部弹层。用户刚填完一整张档案表单、
+              // 正要去发第一条内容，中间横插一次权限索取 —— 那一刻他的意图非常明确，
+              // 打断它换来的授权率不值得。
+              //
+              // ⚠️ 连带后果：**触发点 2 自此没有调用方**（FR-85 的四个时机剩三个：
+              //    首次问诊完成 / 打开通知中心 / 兽医切上线）。
+              //    `PushTriggerPoint.profileCreated` 枚举值与它的 prefs 键**刻意保留不删** ——
+              //    键一删，将来若恢复这个时机，老用户的"已问过"标记就丢了，会被重新打扰一遍。
+              //
+              // 🔴 主 CTA 改为**直接拉起内容发布**（产品同批）。原先它 go 到 /home ——
+              //    而按钮上写的是「记录第一个瞬间 📸」，点完却落在首页信息流，
+              //    文案承诺的事一件没发生。/publish 着陆页首帧即开发布弹层，正是这句文案的落点。
+              if (c.mounted) c.go('/publish');
             },
           );
         },
@@ -573,6 +713,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 表单 —— 两者都与真实游客路径不符，极易被误判成缺陷。现在验游客态请走真路径：
       // 退出登录 → 冷启动即落 Diary 游客引导态（底栏在、点 CTA 弹登录窗）。
       // AI 分诊上传页（Story 4.3）。受控路由（/triage/ 前缀，游客被门控）；shell 外 push 隐藏 Tab Bar。
+      // 🔴 DEP-1 闭合（2026-08-21）：Health 让出 Tab 位给 Toko 后，`/triage` 由 shell 分支
+      //    降为顶层路由。**必须保留** —— consult_conversation / vet_waiting / vet_timed_pay
+      //    等处有十余个 `context.go('/triage')` 作为问诊流程的返回落点，缺了就是 404。
+      //    界面入口移到健康记录页（health_list_page.dart）。仍在 _controlledLocations 内，
+      //    登录门控不变。`go` 清栈落地后的出路由 TriagePage 自带（顶栏返回 + PopScope，
+      //    栈空导向 /home）—— 不在此处包壳，避免 push 入口双顶栏。
+      GoRoute(path: '/triage', builder: (c, s) => const TriagePage()),
       GoRoute(path: '/triage/upload', builder: (c, s) => const TriageUploadPage()),
       // AI 分诊历史结果快照（bug 20260702-238/228）：按 triageId 只读回看，extra 带历史症状摘要。
       GoRoute(
@@ -678,7 +825,10 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // PawCoin 充值页（Story 1.5）。余额页「Isi Saldo」入口；同样 /me 门控 + shell 外隐 Tab。
       GoRoute(path: '/me/pawcoin/recharge', builder: (c, s) => const RechargePage()),
       // 订单中心列表（Story 5.2）。受控（/me 前缀，需登录）；shell 外顶层隐 Tab。
-      GoRoute(path: '/me/orders', builder: (c, s) => const OrderListPage()),
+      GoRoute(
+        path: '/me/orders',
+        builder: (c, s) => const OrderListPageV2(),
+      ),
       // 订单详情（Story 5.3）：各态 + 退款进度 + 宠物已删失效占位。受控（/me 前缀）。
       GoRoute(
         path: '/me/orders/:token',
@@ -716,7 +866,65 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 内容详情（Story 3.3）。shell 外顶层 push（隐藏 Tab Bar）；返回保持 Feed 滚动位置。游客只读可进。
       GoRoute(
         path: '/content/:id',
-        builder: (c, s) => ContentDetailPage(postId: int.parse(s.pathParameters['id']!)),
+        // `?focus=comments` → 进来直接滚到评论区（V1.1.6 Story 3.2 · AC4）。
+        // ⚠️ 这个参数名**早就存在**：通知深链在生成"评论锚点"跳转时一直在产出它
+        // （deep_link_routes.dart，测试也断言了这个串），只是详情页从没消费过。
+        // 首页评论按钮沿用同一个名字 —— 两侧同名是硬要求，且接通后通知那条链路也跟着好了。
+        //
+        // ⚠️ 别与 `/profile/health?focus=<记录编号>` 混淆：同名不同义，路由不同不冲突。
+        builder: (c, s) => ContentDetailPage(
+          postId: int.parse(s.pathParameters['id']!),
+          focusComments: s.uri.queryParameters['focus'] == 'comments',
+        ),
+      ),
+      // ===== V1.1.6 Story 2.3：App 内访客只读视图（AD-2 Rule 6）=====
+      //
+      // 🛡 **带 token 的独立路由，刻意不复用 `/profile`**：后者对未登录会落游客示例页，
+      // 与「点开分享链接就要看到被分享的那只宠物」直接冲突。
+      //
+      // 🛡 **必须对未登录开放**（同一个链接在浏览器里无需登录即可看完整 Diary，
+      // App 内若要求登录只会把用户推回浏览器）。`/pet` 不在 `_controlledLocations` 任何前缀下，
+      // 因此天然不受门控 —— ⚠️ **不要把它挪到 `/profile/...` 之下**，那会让它自动受控。
+      //
+      // 页面本体复用 `GrowthArchivePage`（AD-4：复用作者态结构做减法，不另建页面），
+      // 由 `visitorToken` 触发第五个状态分支。
+      // 单条内容分享落点（V1.1.6 Story 9.3 · AD-15 Rule 5）。
+      //
+      // 🔴 **与上面的 `/pet/:token` 是两个不同的落地页，刻意不合并**：那边是整本档案的
+      // 只读视图，这里**只有被分享的那一条**。合成一个落点等于把「我只想分享一条」
+      // 变成「我把整本都给你了」—— 这是隐私边界。
+      //
+      // ⚠️ **刻意不进 `_controlledLocations`**：未登录访客必须能直接看（AC3），
+      // 加进受控前缀会把人 redirect 到 /home，等于把他推回浏览器。
+      GoRoute(
+        path: '/shared-post/:token',
+        builder: (c, s) => SharedPostPage(shareToken: s.pathParameters['token']!),
+      ),
+      GoRoute(
+        path: '/pet/:token',
+        builder: (c, s) {
+          // E-27（Story 10.1）：从名片分享链接深链进来的**已装用户**，
+          // 若之后在本次进程里注册，把这笔注册归因给 `pet_card`。
+          // ⚠️ 这一页自己没有注册入口，所以归因必须跨页留痕 —— 见 markPetCardEntry 的注释。
+          LoginGuideController.markPetCardEntry();
+          return GrowthArchivePage(visitorToken: s.pathParameters['token']);
+        },
+        routes: [
+          GoRoute(
+            path: 'day',
+            builder: (c, s) {
+              final raw = s.uri.queryParameters['date'];
+              final date = raw == null ? null : DateTime.tryParse(raw);
+              if (date == null) {
+                return const SizedBox.shrink();
+              }
+              return DayDetailPage(
+                date: date,
+                token: s.pathParameters['token'],
+              );
+            },
+          ),
+        ],
       ),
       // 发布深链着陆（Story 6.1 · FR-40）：PET_BIRTHDAY 深链 → 打开统一发布 sheet，可预选成长日历。受控（需登录）。
       GoRoute(
@@ -769,7 +977,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         branches: <StatefulShellBranch>[
           for (final AppTab tab in AppTab.values)
             StatefulShellBranch(
-              routes: [GoRoute(path: tab.location, builder: (c, s) => _tabRootPage(tab))],
+              routes: [GoRoute(path: tab.location, builder: (c, s) => _tabRootPage(tab, s))],
             ),
         ],
       ),

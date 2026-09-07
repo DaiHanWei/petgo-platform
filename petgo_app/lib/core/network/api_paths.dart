@@ -167,6 +167,11 @@ class ApiPaths {
   /// HD 下载当前定价（417 同类：展示价改后端实时下发，与扣费同源 pricing_config）。
   static const String meIdCardHdPricing = '$base/pet-profiles/me/id-cards/pricing';
 
+  /// 分享奖励的**展示口径**（产品 2026-08-27）：可以对外承诺的枚数，0 = 一个字都不要提。
+  /// 与上面那条同一范式 —— 奖励三个数默认全是 0，没配好就不该出现「分享可得 PawCoin」的文案。
+  static const String meIdCardShareReward =
+      '$base/pet-profiles/me/id-cards/share-reward';
+
   /// 单卡快照详情（Story 6.7）。非本人 404。
   static String meIdCard(int cardId) => '$base/pet-profiles/me/id-cards/$cardId';
 
@@ -183,6 +188,20 @@ class ApiPaths {
   static const String petProfileCalendar = '$base/pet-profiles/me/calendar';
   static const String petProfileDay = '$base/pet-profiles/me/day';
   static const String petProfileArchiveStats = '$base/pet-profiles/me/archive-stats';
+
+  // ===== V1.1.6 Story 2.2/2.3：App 内访客只读视图 =====
+  // 🛡 挂在 /public/ 下是刻意的：SecurityConfig 里 `GET /api/v1/public/**` 已 permitAll，
+  // 访客（含未登录）才进得来。上面那批 /me 路径身份取自 JWT，访客没有身份，
+  // 且架构 AD-1 Rule 3 禁止给它们加访问者参数来复用。
+  static String sharedPetProfile(String token) => '$base/public/shared-pets/$token/profile';
+
+  static String sharedPetStats(String token) => '$base/public/shared-pets/$token/stats';
+
+  static String sharedPetTimeline(String token) => '$base/public/shared-pets/$token/timeline';
+
+  static String sharedPetCalendar(String token) => '$base/public/shared-pets/$token/calendar';
+
+  static String sharedPetDay(String token) => '$base/public/shared-pets/$token/day';
 
   /// 里程碑列表/进度（Story 8.1/8.2 · FR-42）。
   static const String petProfileMilestones = '$base/pet-profiles/me/milestones';
@@ -203,6 +222,9 @@ class ApiPaths {
   /// 内容发布 + Feed 列表（Story 2.3 / 3.2）。
   static const String contentPosts = '$base/content-posts';
 
+  /// 顶置坑位（V1.1.6 Story 4.2）。**独立取数**，与首页分页互不影响。
+  static const String contentPinnedSlot = '$base/content-posts/pinned';
+
   /// 内容详情（Story 3.3）。
   static String contentPostDetail(int id) => '$base/content-posts/$id';
 
@@ -214,6 +236,13 @@ class ApiPaths {
 
   /// 内容点赞开关（Story 3.4）。POST 点赞 / DELETE 取消。
   static String contentPostLike(int id) => '$base/content-posts/$id/like';
+
+  /// 单条内容分享链接（V1.1.6 Story 9.3）。作者本人 POST，回不可枚举 shareToken。
+  static String contentPostShareLink(int id) => '$base/content-posts/$id/share-link';
+
+  /// 单条分享内容的**公开**只读投影（Story 9.3）。未登录可读 —— 否则会把人推回浏览器。
+  /// 按 token 寻址，返回的投影里没有任何 id。
+  static String publicSharedPost(String shareToken) => '$base/public/shared-posts/$shareToken';
 
   /// 他人迷你主页投影（Story 3.8）。
   static String userMiniProfile(int userId) => '$base/users/$userId/mini-profile';
@@ -239,4 +268,59 @@ class ApiPaths {
 
   /// 本月免费额度（Story 2.1/2.4）→ {period, limit, used, remaining}。
   static const String freeQuota = '$base/me/free-quota';
+
+  // ===== 精选自营电商（V1.4.0 Story 1.6）=====
+  /// 商品列表（Story 1.1 只读接口，**已对游客放行**）。可选 query：`category`。
+  static const String shopProducts = '$base/shop/products';
+
+  /// Toko 顶部 banner（2026-08-27）。🔴 无 banner 时后端回 **204 No Content**，
+  /// 不是 200+null 也不是 404 —— 见 ShopBannerController 的说明。
+  static const String shopBanner = '$base/shop/banner';
+  /// 行政区划三级树（Story 2.4，游客可读）。
+  static const String shopRegions = '$base/shop/regions';
+  /// 🔒 地址簿（Story 2.1/2.4）。用 `/me` 不用 `/users/me`（决策 C1）。
+  static const String shippingAddresses = '$base/me/shipping-addresses';
+
+  /// 🔒 购物车（Story 3.1 后端 · 3.6 前端）。`/me` 前缀本就受保护 ——
+  /// **游客无购物车**是有意的能力缺席（FR-96），不是待放开的限制。
+  static const String meCart = '$base/me/cart';
+  /// 加购（`?skuToken=&qty=`，同 SKU 累加）。
+  static const String meCartItems = '$meCart/items';
+  /// 改数量（`?qty=`，qty≤0 即删除）/ 删除单行。
+  static String meCartItem(String skuToken) => '$meCart/items/$skuToken';
+  /// 一键清空全部失效行（已下架 / 已售罄）。
+  static const String meCartInvalidItems = '$meCart/invalid-items';
+
+  /// 🔒 结算试算（Story 3.7）。`?addressToken=`；超服务范围回 `serviceable=false` 而非报错。
+  static const String meCheckout = '$base/me/checkout';
+
+  /// 🔒 电商下单（Story 3.7）。409 带 `unavailableLines` 逐行明细（FR-95，不整单打回）。
+  /// Story 3.8 追加：`/{token}` 详情 · `/{token}/pay` 发起支付 · `/{token}/cancel` 取消。
+  static const String meShopOrders = '$base/me/shop-orders';
+
+  /// 退货申请页数据（Story 5.7）。🔴 不可退的行照样下发（带置灰原因），不由前端过滤。
+  static String meReturnEligibility(String orderToken) =>
+      '$meShopOrders/$orderToken/return-eligibility';
+
+  /// 🔒 退货申请（Story 5.7/5.8/5.9）。
+  /// `/{token}` 进度 · `/{token}/cash-destination` 选现金段去向 ·
+  /// `/{token}/shipback` 上传寄回运单 · `/{token}/withdraw` 撤销。
+  ///
+  /// 🔴 **没有 coin-destination**：PawCoin 段没有第二个去向（FR-100A 规则 1，能力缺席）。
+  static const String meShopReturns = '$base/me/shop-returns';
+
+  /// 🔒 Toko 首页区域②「为我的宠物精选」（Story 6.5，FR-107）。
+  /// 在 `/me` 下是刻意的：FR-93 状态矩阵里游客不展示该区。
+  static const String meShopRecommendations = '$base/me/shop/recommendations';
+
+  /// 🔒 Toko 首页区域①「补货提醒」（Story 6.4，FR-109）。`/{id}/dismiss` 关卡。
+  static const String meShopRepurchaseCards = '$base/me/shop/repurchase-cards';
+
+  /// 商品详情页的评价区（Story 7.3）。🔒 对游客开放 —— 评价是买前决策信息，
+  /// 拿它当登录墙会直接杀掉转化（FR-93A）。接口不下发任何评价者身份。
+  static String shopProductReviews(String productToken) =>
+      '$base/shop/products/$productToken/reviews';
+
+  /// 🔒 提交 / 重提评价（Story 7.1；供 Story 7.2 评价页调用，该页待 UX-DR4 补稿）。
+  static const String meShopReviews = '$base/me/shop-reviews';
 }

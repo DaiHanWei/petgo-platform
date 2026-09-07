@@ -8,6 +8,7 @@ import '../../domain/health_record_icons.dart';
 import '../../domain/milestone_celebration_copy.dart';
 import '../../domain/milestone_titles.dart';
 import '../../domain/timeline_item.dart';
+import '../../../../shared/widgets/content_tag_chip.dart';
 
 /// Diary 时间线**五类条目的唯一渲染组件**（V1.1.2 Story 2.2 · FR-80/82 · NFR-7 · AD-13 Rule 4）。
 ///
@@ -150,6 +151,18 @@ class TimelineItemTile extends StatelessWidget {
                         color: isFirst ? AppColors.mint : AppColors.ink)),
                 const SizedBox(height: 3),
                 Text(sub, style: const TextStyle(fontSize: 10.5, color: AppColors.muted)),
+                // V1.1.6 Story 5.2：装饰标签（三处展示位之一 —— 宠物日记页内）。
+                // 这里的卡是横向小卡、没有大图可叠，所以走正文下方那种小胶囊形态。
+                if (item.decorationTags.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: [
+                      for (final t in item.decorationTags) ContentTagChip.inline(tag: t, position: 'diary'),
+                    ],
+                  ),
+                ],
                 if (badge != null) ...[const SizedBox(height: 7), badge],
               ],
             ),

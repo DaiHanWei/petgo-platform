@@ -23,6 +23,9 @@ public record CommentResponse(
         String authorNickname,
         String authorAvatarUrl,
         boolean authorDeleted,
+        // 运营标签（V1.1.6 Story 5.1 · FR-74）。⚠️ 评论区是最容易退化成逐条查的地方，
+        // 但取数在作者投影里整批完成，这里只是把结果原样带出来。
+        java.util.List<com.tailtopia.auth.dto.UserTagView> authorTags,
         String body,
         Instant createdAt,
         Integer replyCount,
@@ -32,16 +35,16 @@ public record CommentResponse(
     /** 二级回复（无嵌套）。 */
     public static CommentResponse reply(Comment c, AuthorView author) {
         return new CommentResponse(c.getId(), c.getAuthorId(), author.nickname(),
-                author.avatarUrl(), author.deleted(), c.getBody(), c.getCreatedAt(), null, null,
-                statusName(c));
+                author.avatarUrl(), author.deleted(), author.tags().isEmpty() ? null : author.tags(),
+                c.getBody(), c.getCreatedAt(), null, null, statusName(c));
     }
 
     /** 一级评论（带 replyCount + 前 3 条二级）。 */
     public static CommentResponse topLevel(Comment c, AuthorView author, int replyCount,
             List<CommentResponse> firstReplies) {
         return new CommentResponse(c.getId(), c.getAuthorId(), author.nickname(),
-                author.avatarUrl(), author.deleted(), c.getBody(), c.getCreatedAt(),
-                replyCount, firstReplies, statusName(c));
+                author.avatarUrl(), author.deleted(), author.tags().isEmpty() ? null : author.tags(),
+                c.getBody(), c.getCreatedAt(), replyCount, firstReplies, statusName(c));
     }
 
     private static String statusName(Comment c) {

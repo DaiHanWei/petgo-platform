@@ -13,7 +13,15 @@ class DeepLinkRoutes {
   /// Shell 四 Tab 的分支根路由。**分支根只能 `go`（切分支），绝不能 `push`**：
   /// push 会在同一匹配链里二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏，
   /// 且此后该分支 `goBranch` 持续抛异常、Tab 永久点不进去（bug 20260729-纪念日通知白屏）。
-  static const Set<String> shellTabRoots = {'/home', '/profile', '/triage', '/me'};
+  ///
+  /// ⚠️ 2026-08-21 DEP-1 闭合：`/triage` 换成 `/shop`（Health 让位给 Toko）。
+  /// 换位当时 `health_list_page.dart` 的 FR-110 品类跳转还在用 push 而非 go ——
+  /// 那在换位前无害（`/shop` 当时是顶层路由），换位后正是上面这条 bug 的复现路径，
+  /// 已同批改掉。**今后新增任何通向 `/shop` 的跳转，一律用 `go`。**
+  ///
+  /// 该约束由 `test/shop/toko_page_test.dart` 的源码护栏机械守门（全量扫 lib/）。
+  /// ⚠️ 护栏按原始文本匹配、不剔注释，所以此处刻意**不写出**那个被禁的字面量。
+  static const Set<String> shellTabRoots = {'/home', '/profile', '/shop', '/me'};
 
   /// [location] 是否为 shell Tab 分支根（须用 `go` 导航）。
   static bool isShellTabRoot(String location) => shellTabRoots.contains(location);
@@ -26,6 +34,14 @@ class DeepLinkRoutes {
 
   /// 里程碑列表页（壳）（L级里程碑节点深链落点，FR-42；本体属里程碑 mini-epic）。
   static const String milestoneList = '/profile/milestones';
+
+  /// 宠物建档页（生命周期召回深链落点，留存作战手册抓手 1）。
+  /// 手册里 ROI 最高的一刀：557 人只打开过 1 天、1.1.0 还残留 506 人装了却没建档，
+  /// 获客成本已经沉没，只差把他们直接送到这一页。
+  static const String createPetProfile = '/profile/create';
+
+  /// Feed（D3 内容钩子落点）。**分支根，必须 `go` 不能 `push`**，见 [shellTabRoots]。
+  static const String feedHome = '/home';
 
   /// 通知 payload → go_router location。
   ///
@@ -72,8 +88,32 @@ class DeepLinkRoutes {
             ? '/me'
             : '/profile/edit';
     }
+    // 生命周期推送（留存作战手册抓手 1）：D1/D3/D7/召回四类共用一套分流 ——
+    // 落点由 targetRef 携带的 variant 决定，而不是给每个落点再开一个 type
+    // （沿用 NAME_RESET/AVATAR_RESET 范式；也避免 ck_notifications_type 被撑爆）。
+    // ⚠️ 走 targetRef 而非通知自身的随机 deepLinkToken —— [notify 跳转改用 targetRef] 的教训。
+    if (type == 'LIFECYCLE_D1' ||
+        type == 'LIFECYCLE_D3' ||
+        type == 'LIFECYCLE_D7' ||
+        type == 'LIFECYCLE_WINBACK') {
+      return switch (targetRef) {
+        'RECORD' => publishGrowthCalendar,
+        'FEED' => feedHome,
+        'REVIEW' => growthArchive,
+        // CREATE_PROFILE 与任何未知/缺失 variant 一律落建档页：
+        // 会收到这四类推送的人，绝大多数缺的就是这一步。
+        _ => createPetProfile,
+      };
+    }
     // 退款被驳回：refund 详情页以 extra 对象寻址、无 token 路由 → 落退款列表（安全落点）。
     if (type == 'REFUND_REJECTED') return '/me/refunds';
+    // 账号警告/停用（bug 20260901-477）：后端 targetRef 恒空，必须在下面「无 targetRef →
+    // 落通知中心」的短路**之前**分流（与 REFUND_REJECTED 同位）——落回通知中心时人本来
+    // 就在通知中心，表现即「点了没反应」（与 bug 20260729-391 的死点击同型）。
+    // 落点 = 提工单页（Report a Problem）：收到处置通知的人下一步就是申诉/联系客服。
+    if (type == 'ACCOUNT_WARNED' || type == 'ACCOUNT_SUSPENDED') {
+      return '/me/support-tickets/new';
+    }
     // id 寻址类：缺 targetRef 落兜底（避免拼出非法路由）。
     if (targetRef == null || targetRef.isEmpty) return notificationsCenter;
     switch (type) {
@@ -84,15 +124,15 @@ class DeepLinkRoutes {
         return '/content/$targetRef';
       case 'CONTENT_COMMENTED':
         return commentAnchor ? '/content/$targetRef?focus=comments' : '/content/$targetRef';
+      case 'CONTENT_REMOVED':
+        // 内容下架（内容审核 cm-3 评论 / cm-6 举报下架 / 既有帖子下架）：targetRef=postId → 作者本人可见的内容详情。
+        // 帖子/评论都用 postId，App 无法区分 → 统一落帖子详情（评论仍在该帖内可见）。
+        return '/content/$targetRef';
       // 客服结案 / CSAT 邀评：targetRef=ticketToken（bug 20260729-391，此前未映射=死点击）。
       case 'TICKET_RESOLVED':
         return '/me/support-tickets/$targetRef';
       case 'CSAT_SURVEY':
         return '/me/support-tickets/$targetRef/csat';
-      case 'CONTENT_REMOVED':
-        // 内容下架（内容审核 cm-3 评论 / cm-6 举报下架 / 既有帖子下架）：targetRef=postId → 作者本人可见的内容详情。
-        // 帖子/评论都用 postId，App 无法区分 → 统一落帖子详情（评论仍在该帖内可见）。
-        return '/content/$targetRef';
       default:
         // CONTENT_REVIEW_REJECTED / CONTENT_REVIEW_TIMED_OUT / REPORT_REVIEWED：
         // targetRef=null 已在上方短路兜底（无深链，点击不跳）；此处为其它未知类兜底。

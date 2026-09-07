@@ -7,6 +7,7 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/content/data/content_repository.dart';
 import 'package:tailtopia/features/content/domain/content_type.dart';
+import 'package:tailtopia/features/content/domain/feed_image_layout.dart';
 import 'package:tailtopia/features/content/domain/publish_controller.dart';
 import 'package:tailtopia/features/content/presentation/publish_compose_page.dart';
 import 'package:tailtopia/features/content/presentation/publish_landing_page.dart';
@@ -27,6 +28,7 @@ class _ThrowRepo implements ContentRepository {
     int? petId,
     String? text,
     List<String> imageUrls = const [],
+    List<ImageSize?> imageSizes = const [],
     DateTime? eventDate,
     required String idempotencyKey,
     bool syncToMoment = true,
@@ -52,6 +54,7 @@ class _OkRepo implements ContentRepository {
     int? petId,
     String? text,
     List<String> imageUrls = const [],
+    List<ImageSize?> imageSizes = const [],
     DateTime? eventDate,
     required String idempotencyKey,
     bool syncToMoment = true,
@@ -71,6 +74,9 @@ class _FakeProfileRepo implements ProfileRepository {
     String? avatarUrl,
     String? breed,
     String? intro,
+    double? weightKg,
+    String? neuterStatus,
+    String? sex,
     String? idempotencyKey,
   }) async =>
       PetProfile(id: 1, name: name, cardToken: 'T', petType: petType, birthday: birthday);
@@ -84,7 +90,10 @@ class _FakeProfileRepo implements ProfileRepository {
     String? avatarUrl,
     String? breed,
     DateTime? birthday,
+    String? sex,
     String? intro,
+    double? weightKg,
+    String? neuterStatus,
   }) async =>
       PetProfile(id: 1, name: name ?? 'x', cardToken: 'T');
 }
@@ -384,7 +393,7 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('petProfileBirthdayTile')));
     await tester.tap(find.byKey(const ValueKey('petProfileBirthdayTile')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('OK'));
+    await tester.tap(find.descendant(of: find.byType(Dialog), matching: find.text('1')).first);
     await tester.pumpAndSettle();
 
     // 提交建档 → graySelectPublish 分支：回发布着陆页 + 重开发布页预选成长日历。

@@ -32,6 +32,9 @@ public final class PaymentDisplayNo {
             case AI_UNLOCK -> "PAYAI";
             case ID_HD -> "PAYHD";
             case PAWCOIN_TOPUP -> "PAYTOPUP";
+            // 电商订单（V1.4.0 Story 3.8）。🔴 与订单号 `TOKO-…` 刻意不同名 ——
+            // 支付号只出现在支付页与后台支付列表，同名会让客服拿支付号去订单列表误查。
+            case SHOP_ORDER -> "PAYSHOP";
         };
         return prefix + "-" + p.getCreatedAt().atZone(WIB).format(YMD)
                 + "-" + String.format("%06d", p.getId());

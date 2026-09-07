@@ -127,14 +127,17 @@ void main() {
     expect(find.byType(SingleChildScrollView), findsWidgets); // 可滚动容器
   });
 
-  testWidgets('AC2: 游客点受控 Tab（问诊）→ 弹强弹窗 + 不切换目的地', (tester) async {
+  // ⚠️ 2026-08-21 DEP-1 闭合：第 2 位由 Health(受控) 换成 Toko(对游客开放)，
+  //    本组的「受控 Tab」样本随之从 Health 改为 Me —— 换的是样本，不是断言强度。
+  //    Toko 开放那一侧由 test/shared/diary_gating_and_landing_test.dart 正向守门。
+  testWidgets('AC2: 游客点受控 Tab（我的）→ 弹强弹窗 + 不切换目的地', (tester) async {
     await tester.pumpWidget(ProviderScope(
       overrides: [feedRepositoryProvider.overrideWithValue(FakeFeedRepository())],
       child: const TailTopiaApp(),
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(_tabButton('Health')); // 问诊 Tab（inactive 标签，bug 20260706-248：Consult→Health）
+    await tester.tap(_tabButton('Me')); // 「我的」对游客恒受控
     await tester.pumpAndSettle();
 
     expect(find.byType(LoginHardDialog), findsOneWidget);
@@ -159,15 +162,15 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    await tester.tap(_tabButton('Health')); // bug 20260706-248：Consult→Health
-    // 问诊 hub AI 卡在线脉冲为常驻动画，pumpAndSettle 不收敛——固定帧推进。
-    // 200ms 覆盖底部 Tab 按压释放的 120ms 动画 timer，避免 tearDown 报 pending timer。
+    await tester.tap(_tabButton('Me'));
+    // 固定帧推进而非 pumpAndSettle：200ms 覆盖底部 Tab 按压释放的 120ms 动画 timer，
+    // 避免 tearDown 报 pending timer。
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
     expect(find.byType(LoginHardDialog), findsNothing);
-    // 切到问诊 hub（bug 20260706-248：顶部 title Consult→Health；tab 亦为 Health，故 findsWidgets）。
-    expect(find.text('Health'), findsWidgets);
+    // 切到「我的」（底栏标签与页内标题同为 Me，故 findsWidgets）。
+    expect(find.text('Me'), findsWidgets);
 
     // 卸载 widget 树：问诊 hub 常驻脉冲动画等在测试结束仍活跃会触发 !timersPending；
     // 卸载令 AnimationController/Ticker/timer 随 dispose 取消，收敛后再结束。

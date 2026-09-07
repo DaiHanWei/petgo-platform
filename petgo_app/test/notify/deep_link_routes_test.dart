@@ -36,20 +36,6 @@ void main() {
     expect(DeepLinkRoutes.pushPayloadToLocation('MILESTONE_NODE', null), '/profile/milestones');
   });
 
-  test('bug 20260729-391：工单结案/CSAT/退款驳回 → 各自落点（此前无映射=死点击）', () {
-    // TICKET_RESOLVED / CSAT_SURVEY：targetRef=ticketToken
-    expect(DeepLinkRoutes.pushPayloadToLocation('TICKET_RESOLVED', 'tk1'),
-        '/me/support-tickets/tk1');
-    expect(DeepLinkRoutes.pushPayloadToLocation('CSAT_SURVEY', 'tk1'),
-        '/me/support-tickets/tk1/csat');
-    // 缺 targetRef → 兜底（不拼非法路由）
-    expect(DeepLinkRoutes.pushPayloadToLocation('TICKET_RESOLVED', null),
-        DeepLinkRoutes.notificationsCenter);
-    // REFUND_REJECTED：详情页以 extra 寻址无 token 路由 → 固定落退款列表
-    expect(DeepLinkRoutes.pushPayloadToLocation('REFUND_REJECTED', 'rf1'), '/me/refunds');
-    expect(DeepLinkRoutes.pushPayloadToLocation('REFUND_REJECTED', null), '/me/refunds');
-  });
-
   test('NAME_RESET（内容审核 cm-4）→ targetRef 区分昵称 vs 宠物名', () {
     // 昵称重置：targetRef="NICKNAME" → 我的页（昵称编辑底抽屉入口）
     expect(DeepLinkRoutes.pushPayloadToLocation('NAME_RESET', 'NICKNAME'), '/me');
@@ -82,6 +68,64 @@ void main() {
         DeepLinkRoutes.notificationsCenter);
     expect(DeepLinkRoutes.pushPayloadToLocation('REPORT_REVIEWED', null),
         DeepLinkRoutes.notificationsCenter);
+  });
+
+  test('bug 20260729-391：工单结案/CSAT/退款驳回 → 各自落点（此前无映射=死点击）', () {
+    // TICKET_RESOLVED / CSAT_SURVEY：targetRef=ticketToken
+    expect(DeepLinkRoutes.pushPayloadToLocation('TICKET_RESOLVED', 'tk1'),
+        '/me/support-tickets/tk1');
+    expect(DeepLinkRoutes.pushPayloadToLocation('CSAT_SURVEY', 'tk1'),
+        '/me/support-tickets/tk1/csat');
+    // 缺 targetRef → 兜底（不拼非法路由）
+    expect(DeepLinkRoutes.pushPayloadToLocation('TICKET_RESOLVED', null),
+        DeepLinkRoutes.notificationsCenter);
+    // REFUND_REJECTED：详情页以 extra 寻址无 token 路由 → 固定落退款列表
+    expect(DeepLinkRoutes.pushPayloadToLocation('REFUND_REJECTED', 'rf1'), '/me/refunds');
+    expect(DeepLinkRoutes.pushPayloadToLocation('REFUND_REJECTED', null), '/me/refunds');
+    // 账号警告/停用（bug 20260901-477）：targetRef 恒空也必须落提工单页 ——
+    // 落回通知中心 = 点了没反应的死点击（20260729-391 同型回归钉）。
+    expect(DeepLinkRoutes.pushPayloadToLocation('ACCOUNT_WARNED', null),
+        '/me/support-tickets/new');
+    expect(DeepLinkRoutes.pushPayloadToLocation('ACCOUNT_SUSPENDED', null),
+        '/me/support-tickets/new');
+  });
+
+  group('生命周期推送（留存运营作战手册 · 抓手 1）', () {
+    const nodes = ['LIFECYCLE_D1', 'LIFECYCLE_D3', 'LIFECYCLE_D7', 'LIFECYCLE_WINBACK'];
+
+    test('四个节点共用一套 variant 分流（targetRef 携带 variant，不是资源 id）', () {
+      for (final type in nodes) {
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'CREATE_PROFILE'), '/profile/create',
+            reason: '$type + CREATE_PROFILE 应直达建档页');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'RECORD'),
+            '/publish?preset=growth-calendar',
+            reason: '$type + RECORD 应直达「+发布」预选成长日历');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'FEED'), '/home',
+            reason: '$type + FEED 应落 Feed');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'REVIEW'), '/profile',
+            reason: '$type + REVIEW 应落成长档案 Tab');
+      }
+    });
+
+    test('未知 / 缺失 variant 一律落建档页，而不是通知中心', () {
+      // 会收到这四类推送的人，绝大多数缺的就是建档这一步；
+      // 落回通知中心等于把召回链路断在最后一米。
+      for (final type in nodes) {
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, null), '/profile/create');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, ''), '/profile/create');
+        expect(DeepLinkRoutes.pushPayloadToLocation(type, 'WHATEVER'), '/profile/create');
+      }
+    });
+
+    test('FEED / REVIEW 落点是 shell 分支根 —— 调用方必须 go 而非 push', () {
+      // 分支根被 push 会在同一匹配链里二次构建 StatefulShellRoute → GlobalKey 撞车 → release 白屏
+      // （bug 20260729-纪念日通知白屏）。这里钉住「它们确实是分支根」，让调用方的 go/push 判断有依据。
+      expect(DeepLinkRoutes.isShellTabRoot(DeepLinkRoutes.feedHome), isTrue);
+      expect(DeepLinkRoutes.isShellTabRoot(DeepLinkRoutes.growthArchive), isTrue);
+      // 建档页与发布页不是分支根，push 是安全的。
+      expect(DeepLinkRoutes.isShellTabRoot(DeepLinkRoutes.createPetProfile), isFalse);
+      expect(DeepLinkRoutes.isShellTabRoot(DeepLinkRoutes.publishGrowthCalendar), isFalse);
+    });
   });
 
   test('未知 type / 空 token → 通知中心兜底（不崩溃）', () {

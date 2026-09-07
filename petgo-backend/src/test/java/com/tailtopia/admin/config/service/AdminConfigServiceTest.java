@@ -39,6 +39,7 @@ class AdminConfigServiceTest {
     private PawCoinTopupTierRepository tierRepo;
     private ConfigChangeLogRepository changeLogs;
     private AdminAuditService audit;
+    private com.tailtopia.config.repository.FeedRankConfigRepository feedRankRepo;
     private AdminConfigService svc;
 
     @BeforeEach
@@ -48,7 +49,10 @@ class AdminConfigServiceTest {
         tierRepo = Mockito.mock(PawCoinTopupTierRepository.class);
         changeLogs = Mockito.mock(ConfigChangeLogRepository.class);
         audit = Mockito.mock(AdminAuditService.class);
-        svc = new AdminConfigService(pricingRepo, pawcoinRepo, tierRepo, changeLogs, audit);
+        // V1.1.6 Story 16.4：推荐算法参数（本类既有用例不碰它，另有专门用例）
+        feedRankRepo = Mockito.mock(com.tailtopia.config.repository.FeedRankConfigRepository.class);
+        svc = new AdminConfigService(pricingRepo, pawcoinRepo, tierRepo, changeLogs, audit,
+                feedRankRepo);
     }
 
     private PricingConfig seedPricing() {

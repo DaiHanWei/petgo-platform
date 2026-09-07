@@ -3,160 +3,449 @@
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <!-- 防爬：名片对外但不进搜索引擎索引（Story 2.6 强制 noindex） -->
+    <!--/* 防爬：名片对外但不进搜索引擎索引（Story 2.6 强制 noindex）。
+         ⚠️ V1.1.6 Story 1.2 整页重写时必须保留 —— 丢了名片就会被搜索引擎收录。 */-->
     <meta name="robots" content="noindex,nofollow"/>
     <title th:text="${ogTitle}">TailTopia</title>
 
-    <!-- Open Graph（WhatsApp/Line/Instagram 链接预览）；标题印尼语「Kisah tumbuh kembang [宠物名]」 -->
+    <!--/* Open Graph（WhatsApp/Line/Instagram 链接预览）；标题印尼语「Kisah tumbuh kembang [宠物名]」
+         ⚠️ V1.1.6 Story 1.2 整页重写时必须保留整组 —— 丢了分享出去就没有预览图。 */-->
     <meta property="og:type" content="profile"/>
     <meta property="og:title" th:content="${ogTitle}"/>
     <meta property="og:description" th:content="${intro} ?: ${breed}"/>
     <meta property="og:image" th:content="${ogImageUrl}"/>
-    <!-- secure_url + 尺寸/类型提示：WhatsApp 等严格抓取器缺尺寸会静默丢图（修 20260702-208）。
-         仅预渲染大图有确定 1200×630；回退头像尺寸未知，不输出尺寸以免误导。 -->
+    <!--/* secure_url + 尺寸/类型提示：WhatsApp 等严格抓取器缺尺寸会静默丢图（修 20260702-208）。
+         仅预渲染大图有确定 1200×630；回退头像尺寸未知，不输出尺寸以免误导。 */-->
     <meta property="og:image:secure_url" th:content="${ogImageUrl}"/>
     <meta property="og:image:width" content="1200" th:if="${ogImageWide}"/>
     <meta property="og:image:height" content="630" th:if="${ogImageWide}"/>
     <meta property="og:image:type" content="image/png" th:if="${ogImageWide}"/>
     <meta property="og:url" th:content="${pageUrl}"/>
-    <!-- Twitter Card -->
+    <!--/* Twitter Card */-->
     <meta name="twitter:card" content="summary_large_image"/>
     <meta name="twitter:title" th:content="${ogTitle}"/>
     <meta name="twitter:description" th:content="${intro} ?: ${breed}"/>
     <meta name="twitter:image" th:content="${ogImageUrl}"/>
 
+    <!--/* 字体：照抄视觉稿 ui-h5-card-v1.1.6.html 的 <head>（AC6），**不得自行拼装 URL**。
+         保留 display=swap（字体未就位时先用回退字体渲染，不出现文字空白期）；
+         两个 preconnect 省掉一次 DNS + TLS 往返。
+         ⚠️ 产品已确认接受这个依赖（PRD §2.9 §①）及其两项后果：首屏多一次跨域请求（印尼移动网络下会拖慢，
+         属已知代价不是缺陷）；Caveat 加载失败时手写小字变衬线体、剪贴簿意图基本丢失。 */-->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..900&family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+
     <style>
-        body { font-family: -apple-system, system-ui, sans-serif; background: #F2FBF8; color: #2B2B2B; margin: 0; }
-        .wrap { max-width: 640px; margin: 0 auto; padding: 24px; }
-        .brand { margin-bottom: 16px; }
-        .brand img { height: 26px; display: block; }
-        .hero { text-align: center; }
-        .avatar { width: 130px; height: 130px; border-radius: 50%; object-fit: cover; }
-        .name { font-size: 28px; font-weight: 800; margin: 12px 0 4px; }
-        .breed, .intro { color: #7A8B86; }
-        .companion { margin-top: 8px; font-weight: 700; color: #2BB58A; }
-        .badges { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 18px 0;
-            cursor: pointer; text-decoration: none; }
-        .badge { width: 44px; height: 44px; border-radius: 50%; background: #D9F2EA;
-            display: flex; align-items: center; justify-content: center; font-size: 20px; }
-        .badge.locked { background: #ECECEC; filter: grayscale(1); }
-        .stats { display: flex; justify-content: center; gap: 16px; margin: 18px 0;
-            font-weight: 700; color: #2B2B2B; }
-        .stats .num { color: #2BB58A; }
-        .milestone-news { background: #FFF7E6; border-radius: 12px; padding: 12px 14px; margin: 14px 0;
-            font-weight: 600; color: #8A6A12; }
-        .moments img { width: 100%; border-radius: 14px; margin: 8px 0; display: block; }
-        .empty-moments { text-align: center; color: #9B928A; padding: 28px 0; }
-        .cta { display: block; text-align: center; padding: 14px; border-radius: 12px;
-            text-decoration: none; margin-top: 12px; font-weight: 700; }
-        .cta.primary { background: #2BB58A; color: #fff; }
-        .cta.secondary { background: #D9F2EA; color: #1E8A68; }
+        
+        :root {
+            --v:#845EC9; --v2:#9E83DA; --v3:#6C48AE; --v4:#4B2E8F; --vt:#F8F2FF;
+            --gold:#F6A609; --goldt:#FEF3DE; --coral:#F0425A; --coralt:#FDE7EB;
+            --green:#1F9E6A; --greent:#E7F8F0;
+            --ink:#2E2A45; --ink2:#544864; --muted:#9690A6;
+            --paper:#FFFCF4;
+            --font:'Poppins',system-ui,sans-serif;
+            --display:'Archivo','Poppins',system-ui,sans-serif;
+            --mono:'JetBrains Mono',ui-monospace,monospace;
+            --hand:'Caveat',cursive;
+        }
+        * { box-sizing:border-box; }
+        html, body { margin:0; padding:0; }
+        body { background:var(--paper); color:var(--ink); font-family:var(--font);
+            line-height:1.5; -webkit-font-smoothing:antialiased; }
+
+        
+        .paper { position:relative; max-width:440px; margin:0 auto; padding:12px 16px 96px; }
+
+        .top { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+        .top .mark { height:22px; display:block; opacity:.9; }
+        .tape { font-family:var(--hand); font-size:17px; line-height:1.1; color:#5A3B96;
+            background:var(--goldt); padding:3px 10px 4px; transform:rotate(1.4deg);
+            box-shadow:0 1px 2px rgba(46,42,69,.08); }
+
+        
+        .cluster { position:relative; height:284px; margin:0 -4px; }
+        .pl { position:absolute; background:#fff; padding:8px 8px 0; border-radius:4px;
+            box-shadow:0 1px 2px rgba(46,42,69,.09), 0 5px 14px rgba(46,42,69,.1), 0 14px 28px rgba(46,42,69,.08); }
+        .pl .ph { border-radius:1px; display:block; object-fit:cover;
+            outline:1px solid rgba(0,0,0,.1); outline-offset:-1px; }
+        .pl .cp { font-family:var(--hand); line-height:1.1; color:var(--ink);
+            text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .pl.a { left:52px; top:10px; width:178px; transform:rotate(-3.2deg); z-index:3; }
+        .pl.a .ph { width:162px; height:162px; }
+        .pl.a .cp { font-size:18px; padding:7px 2px 11px; }
+        .pl.b { right:2px; top:34px; width:112px; transform:rotate(8deg); z-index:2; }
+        .pl.b .ph { width:96px; height:96px; }
+        .pl.b .cp { font-size:14px; padding:5px 2px 8px; }
+        .pl.c { left:6px; bottom:0; width:104px; transform:rotate(-9.5deg); z-index:4; }
+        .pl.c .ph { width:88px; height:88px; }
+        .pl.c .cp { font-size:13.5px; padding:5px 2px 8px; }
+        
+        .slotpl { position:absolute; border:1.6px dashed #D6CDE6; border-radius:4px;
+            background:rgba(255,255,255,.42); }
+        .cornertape { position:absolute; left:36px; top:2px; width:56px; height:20px; z-index:5;
+            background:rgba(246,166,9,.42); transform:rotate(-8deg); }
+        .sticker { position:absolute; font-family:var(--mono); font-size:8.5px; font-weight:700;
+            letter-spacing:.07em; color:#fff; padding:3px 7px; border-radius:2px; z-index:6; }
+        .dood { position:absolute; z-index:7; pointer-events:none; }
+        .hw { position:absolute; font-family:var(--hand); z-index:7; color:var(--v3); line-height:1; }
+
+        
+        .idrow { position:relative; margin-top:4px; display:flex; align-items:flex-end; gap:10px; }
+        .nmwrap { position:relative; }
+        .nm { font-family:var(--display); font-variation-settings:'wdth' 104,'wght' 800;
+            font-size:33px; line-height:1.05; color:var(--ink); }
+        .nmline { position:absolute; left:-4px; right:-6px; bottom:-7px; height:9px; }
+        
+        .mt { font-size:11px; color:var(--muted); margin-top:9px; }
+        
+        .intro { font-family:var(--hand); font-size:19.5px; line-height:1.45; color:var(--ink); margin-top:12px; }
+        .intro span { background:linear-gradient(180deg,transparent 14%,rgba(246,166,9,.34) 14%,
+            rgba(246,166,9,.34) 88%,transparent 88%); }
+
+        
+        .stub { position:relative; margin-top:22px; background:#fff; border-radius:3px;
+            padding:16px 14px 14px; box-shadow:0 1px 2px rgba(46,42,69,.09), 0 5px 14px rgba(46,42,69,.1);
+            transform:rotate(-.5deg); }
+        .stubnote { position:absolute; left:13px; top:-13px; font-family:var(--hand); font-size:17px;
+            line-height:1; color:var(--muted); }
+        .stubtape { position:absolute; right:16px; top:-8px; width:52px; height:19px; z-index:2;
+            background:rgba(132,94,201,.3); transform:rotate(4deg); }
+        .stubrow { display:flex; align-items:stretch; }
+        .stubrow > div { flex:1; text-align:center; }
+        .stubrow .n { font-family:var(--display); font-variation-settings:'wght' 850; font-size:27px;
+            line-height:1; }
+        .stubrow .l { font-size:8.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+            color:var(--muted); margin-top:5px; }
+        .stubrow .vr { flex:0 0 1px; align-self:stretch; background:repeating-linear-gradient(
+            to bottom, #E5E0EF 0 4px, transparent 4px 8px); }
+
+        
+        .lab { display:flex; align-items:center; gap:8px; margin:22px 0 10px; }
+        .lab .tg { font-size:10.5px; font-weight:800; letter-spacing:.1em; text-transform:uppercase;
+            color:#5A3B96; background:var(--vt); padding:4px 9px; transform:rotate(-1.2deg); }
+        .lab .ct { font-family:var(--mono); font-size:9.5px; color:var(--muted); margin-left:auto; }
+
+        
+        .stickers { display:flex; gap:7px; flex-wrap:nowrap; overflow-x:auto; padding:3px 0 4px;
+            scrollbar-width:none; }
+        .stickers::-webkit-scrollbar { display:none; }
+        .chip { display:inline-flex; align-items:center; gap:6px; min-height:40px; flex-shrink:0;
+            white-space:nowrap; background:var(--goldt); border-radius:13px; padding:0 12px;
+            font-size:11.5px; font-weight:700; color:#8A5A00;
+            box-shadow:0 1px 2px rgba(46,42,69,.08); }
+        .chip:nth-child(1) { transform:rotate(-1.6deg); }
+        .chip:nth-child(2) { transform:rotate(1.4deg); }
+        .slot { width:40px; height:40px; border-radius:13px; border:1.5px dashed #D3CADF;
+            background:rgba(255,255,255,.5); display:inline-flex; align-items:center;
+            justify-content:center; flex-shrink:0; }
+        .slot.more { font-family:var(--mono); font-size:10px; font-weight:700; color:#A9A2BC;
+            width:auto; padding:0 10px; }
+
+        
+        .news { position:relative; background:#fff; border-radius:3px; padding:12px 13px 12px 15px;
+            box-shadow:0 1px 2px rgba(46,42,69,.09), 0 5px 14px rgba(46,42,69,.1);
+            border-left:4px solid var(--green); font-size:12px; line-height:1.45; color:var(--ink);
+            transform:rotate(-.7deg); }
+        .news .w { display:block; font-family:var(--mono); font-size:8.5px; color:var(--muted);
+            margin-top:5px; letter-spacing:.06em; }
+        .clip { position:absolute; right:9px; top:-9px; z-index:2; }
+
+        
+        .collage { position:relative; height:236px; margin:0 -2px; }
+        .cpl { position:absolute; background:#fff; padding:6px 6px 0; border-radius:4px;
+            box-shadow:0 1px 2px rgba(46,42,69,.09), 0 4px 11px rgba(46,42,69,.1), 0 12px 24px rgba(46,42,69,.08); }
+        .cpl .ph { border-radius:1px; display:block; object-fit:cover;
+            outline:1px solid rgba(0,0,0,.1); outline-offset:-1px; }
+        .cpl .t { font-family:var(--hand); text-align:center; color:var(--ink2); white-space:nowrap;
+            overflow:hidden; text-overflow:ellipsis; }
+        .cpl.p1 { left:0; top:0; width:132px; transform:rotate(-2.6deg); z-index:3; }
+        .cpl.p1 .ph { width:120px; height:120px; }
+        .cpl.p1 .t { font-size:14px; padding:4px 2px 7px; }
+        .cpl.p2 { right:6px; top:16px; width:118px; transform:rotate(5.4deg); z-index:2; }
+        .cpl.p2 .ph { width:106px; height:106px; }
+        .cpl.p2 .t { font-size:13px; padding:4px 2px 6px; }
+        .cpl.p3 { left:78px; bottom:0; width:120px; transform:rotate(-6.5deg); z-index:4; }
+        .cpl.p3 .ph { width:108px; height:108px; }
+        .cpl.p3 .t { font-size:13px; padding:4px 2px 6px; }
+        .cpl.p4 { right:0; bottom:8px; width:96px; transform:rotate(3.2deg); z-index:1; }
+        .cpl.p4 .ph { width:84px; height:84px; }
+        .cpl.p4 .t { font-size:12.5px; padding:4px 2px 6px; }
+
+        .empty { border:1.5px dashed #D8CFE6; border-radius:14px; padding:26px 18px; text-align:center;
+            font-size:12px; line-height:1.5; color:var(--muted); background:rgba(255,255,255,.5); }
+        .emptyline { font-family:var(--hand); font-size:16px; color:var(--muted); text-align:center;
+            margin-top:10px; }
+
+        .foot { text-align:center; margin-top:20px; }
+        .foot .mark { margin:0 auto; height:20px; opacity:.5; display:block; }
+
+        
+        .ctabar { position:fixed; left:0; right:0; bottom:0; z-index:20;
+            padding:26px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+            background:linear-gradient(to top, var(--paper) 46%, rgba(255,252,244,.92) 68%, rgba(255,252,244,0)); }
+        .ctainner { max-width:440px; margin:0 auto; text-align:center; }
+        
+        .btn { display:flex; align-items:center; justify-content:center; gap:8px; margin:0 auto;
+            border:none; border-radius:999px; height:50px; padding:0 30px; font-size:14.5px;
+            font-weight:700; font-family:var(--font); cursor:pointer; white-space:nowrap;
+            text-decoration:none; background:var(--vt); color:var(--v3);
+            box-shadow:0 1px 2px rgba(108,72,174,.08), 0 4px 12px rgba(108,72,174,.12),
+                0 12px 24px rgba(108,72,174,.08);
+            transition:scale 180ms cubic-bezier(.2,0,0,1); }
+        .btn:active { scale:.96; }
+        .ctahint { font-size:10px; color:var(--muted); margin-top:8px; letter-spacing:.02em; }
+
+        @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
     </style>
 </head>
-<body>
-<div class="wrap">
-    <!-- 左上角品牌标（bug 20260701-182）：与 App 同一 Tailtopia wordmark。 -->
-    <div class="brand"><img src="/brand/logo.svg" alt="TailTopia"/></div>
-    <!-- ① Hero：头像 + 名字 + 陪伴天数 -->
-    <section class="hero">
-        <img class="avatar" th:if="${avatarUrl}" th:src="${avatarUrl}" alt="avatar"/>
-        <div class="name" th:text="${name}">Pet</div>
-        <div class="breed" th:if="${breed}" th:text="${breed}">Breed</div>
-        <div class="intro" th:if="${intro}" th:text="${intro}">Intro</div>
-        <div class="companion" th:if="${ownerNickname}"
-             th:text="'Bersama ' + ${ownerNickname} + ' selama ' + ${companionDays} + ' hari'">
-            Bersama ... selama X hari</div>
-        <div class="companion" th:unless="${ownerNickname}"
-             th:text="'Sudah ' + ${companionDays} + ' hari bersama'">Sudah X hari bersama</div>
-    </section>
+<body th:attr="data-track-url=${trackUrl},data-page-state=${hasMoments} ? 'full' : 'empty'">
+<div class="paper">
+    <!--/* 顶：品牌标 + 胶带小片「Paspor [名]」 */-->
+    <div class="top">
+        <img class="mark" src="/brand/logo.svg" alt="TailTopia"/>
+        <span class="tape" th:text="'Paspor ' + ${name}">Paspor</span>
+    </div>
 
-    <!-- ② 里程碑徽章条（零态降级：里程碑为 0 时隐藏，AC5）。
-         可点 → 导 App 下载（修 20260702-205：原纯装饰不可点）。徽章按真实 tier 清晰展示需后续
-         把徽章数据 plumb 到本页，属产品/数据决策，暂维持占位样式。 -->
-    <a class="badges" id="ctaBadges" th:if="${hasMilestones}" th:href="${downloadUrl}"
-       th:attr="data-ios=${iosUrl},data-android=${androidUrl},data-deeplink=${deepLink}">
-        <div class="badge">🏅</div>
-        <div class="badge locked">🔒</div>
-        <div class="badge locked">🔒</div>
-    </a>
-
-    <!-- ③ 故事数字（里程碑完成项零态降级） -->
-    <section class="stats">
-        <span><span class="num" th:text="${happyCount}">0</span> Momen Bahagia</span>
-        <span><span class="num" th:text="${consultCount}">0</span> Konsultasi</span>
-        <span th:if="${hasMilestones}"><span class="num" th:text="${milestoneCompleted}">0</span> Tonggak</span>
-    </section>
-
-    <!-- ④ 最近里程碑动态（零态降级） -->
-    <section class="milestone-news" th:if="${hasMilestones}">
-        <span th:text="${name} + ' baru saja menyelesaikan sebuah tonggak 🎉'">milestone news</span>
-    </section>
-
-    <!-- ⑤ 快乐时刻照片流（按 event_date 倒序，最近 5 条；空态占位） -->
-    <section class="moments" th:if="${hasMoments}">
-        <div th:each="moment : ${moments}">
-            <img th:each="img : ${moment.imageUrls}" th:src="${img}" alt="moment"/>
-            <p th:if="${moment.text}" th:text="${moment.text}">caption</p>
+    <!--/* ① 照片簇（交叠）+ 涂鸦层。有图用真图，缺图留虚线空相位（E2「刚开本子」） */-->
+    <div class="cluster">
+        <!--/* 主张：优先第一条快乐时刻的首图，否则头像 */-->
+        <div class="pl a">
+            <img class="ph" th:if="${avatarUrl}" th:src="${avatarUrl}" alt=""/>
+            <div class="ph" th:unless="${avatarUrl}"
+                 style="background:linear-gradient(150deg,#B69BE8,#7B58C4)"></div>
+            <div class="cp">&nbsp;</div>
         </div>
-    </section>
-    <section class="empty-moments" th:unless="${hasMoments}">
-        Unduh App untuk lihat lebih banyak konten
-    </section>
+        <!--/* 右后 / 左下前：有第 2、3 张快乐时刻图就贴，否则空相位 */-->
+        <div class="pl b" th:if="${#lists.size(clusterPhotos) > 0}">
+            <img class="ph" th:src="${clusterPhotos[0].imageUrls[0]}" alt=""/>
+            <div class="cp" th:text="${clusterPhotos[0].text}">&nbsp;</div>
+        </div>
+        <div class="slotpl" th:unless="${#lists.size(clusterPhotos) > 0}"
+             style="right:8px;top:34px;width:104px;height:118px;transform:rotate(7deg)"></div>
 
-    <!-- ⑥ 双 CTA（平台分流：iOS App Store / Android Google Play；已装 App 尝试深链直开档案） -->
-    <a class="cta primary" id="ctaPrimary" th:href="${downloadUrl}"
-       th:attr="data-ios=${iosUrl},data-android=${androidUrl},data-deeplink=${deepLink}">
-        Buat arsip untuk hewanku</a>
-    <a class="cta secondary" id="ctaSecondary" th:href="${downloadUrl}"
-       th:attr="data-ios=${iosUrl},data-android=${androidUrl},data-deeplink=${deepLink}"
-       th:text="'Lihat cerita lengkap ' + ${name}">Lihat cerita lengkap</a>
+        <div class="pl c" th:if="${#lists.size(clusterPhotos) > 1}">
+            <img class="ph" th:src="${clusterPhotos[1].imageUrls[0]}" alt=""/>
+            <div class="cp" th:text="${clusterPhotos[1].text}">&nbsp;</div>
+        </div>
+        <div class="slotpl" th:unless="${#lists.size(clusterPhotos) > 1}"
+             style="left:8px;bottom:2px;width:96px;height:110px;transform:rotate(-9deg)"></div>
 
-    <script th:inline="none">
-      // 平台分流 + 三级回退（真机生效，L2 验收）：
-      //   Android：① 深链开 App（成长档案）→ ② market:// 开 Play Store App → ③ Play 网页。
-      //   iOS：① 深链开 App → ② App Store。
-      //   桌面：直接落下载页。
-      // 每级用 setTimeout 守护；若上一级成功（App/商店打开→页面 hidden），pagehide 清除后续跳转。
-      (function () {
-        var ua = navigator.userAgent || '';
-        var isIOS = /iPad|iPhone|iPod/.test(ua);
-        var isAndroid = /Android/.test(ua);
-        // web Play 链接 → market:// 应用直达链接（同包名）。
-        function toMarket(webUrl) {
-          return webUrl.replace('https://play.google.com/store/apps/details', 'market://details');
-        }
-        function go(url) { window.location.href = url; }
-        // 注册一个「页面隐藏即取消」的定时器：返回 cancel 句柄。
-        function guard(fn, ms) {
-          var t = setTimeout(fn, ms);
-          window.addEventListener('pagehide', function () { clearTimeout(t); }, { once: true });
-          return t;
-        }
-        ['ctaPrimary', 'ctaSecondary', 'ctaBadges'].forEach(function (id) {
-          var el = document.getElementById(id);
-          if (!el) return;
-          el.addEventListener('click', function (e) {
-            e.preventDefault();
-            var deep = el.dataset.deeplink;
-            var androidWeb = el.dataset.android;
-            var ios = el.dataset.ios;
-            if (isAndroid) {
-              // ① 深链；900ms 内没走（未装/未注册）→ ② Play App；再 700ms 没走 → ③ Play 网页。
-              guard(function () {
-                guard(function () { go(androidWeb); }, 700);
-                go(toMarket(androidWeb));
-              }, 900);
-              go(deep);
-            } else if (isIOS) {
-              guard(function () { go(ios); }, 900);
-              go(deep);
-            } else {
-              go(el.href); // 桌面：下载页
-            }
-          });
-        });
-      })();
-    </script>
+        <div class="cornertape"></div>
+        <!--/* 手写涂鸦层：有内容用「si bos」，零数据用「baru mulai!」（刚起步，不是坏了） */-->
+        <span class="hw" style="left:2px;top:28px;font-size:17px;transform:rotate(-7deg)"
+              th:text="${hasMoments} ? 'si bos' : 'baru mulai!'">si bos</span>
+        <svg class="dood" style="left:2px;top:52px;width:52px;height:44px" viewBox="0 0 52 44"
+             fill="none" stroke="#845EC9" stroke-width="1.9" stroke-linecap="round">
+            <path d="M3 8c9 1 18 6 24 15"/><path d="M27 23l-6-3M27 23l-1-6.6"/>
+        </svg>
+        <svg class="dood" style="right:6px;top:16px;width:20px;height:20px" viewBox="0 0 22 22"
+             fill="none" stroke="#F6A609" stroke-width="2" stroke-linecap="round">
+            <path d="M11 2.5v6M11 13.5v6M2.5 11h6M13.5 11h6"/>
+        </svg>
+        <span class="sticker" style="background:#845EC9;left:126px;bottom:4px;transform:rotate(-6deg)"
+              th:if="${companionDays > 0}"
+              th:text="${companionDays} + ' HARI'">365 HARI</span>
+    </div>
+
+    <!--/* ② ID 行：名字 + 手绘下划线 + 爱心 */-->
+    <div class="idrow">
+        <div class="nmwrap">
+            <div class="nm" th:text="${name}">Pet</div>
+            <svg class="nmline" viewBox="0 0 120 9" fill="none" stroke="#F6A609" stroke-width="3"
+                 stroke-linecap="round" preserveAspectRatio="none">
+                <path d="M2 6c22-3.4 46-4.2 74-2.2 16 1.2 30 .6 42-1.4"/>
+            </svg>
+        </div>
+        <svg style="width:19px;height:19px;margin-bottom:3px" viewBox="0 0 24 24" fill="#F0425A">
+            <path d="M12 21c-4.9-3.3-8.4-6.5-8.4-10.4A4.7 4.7 0 0 1 12 8.6a4.7 4.7 0 0 1 8.4 2c0 3.9-3.5 7.1-8.4 10.4z"/>
+        </svg>
+    </div>
+    <!--/* 元信息行：品种 · 性别 · 年龄 · bersama 主人。服务端已逐段判空拼好；全缺则整行不渲染 */-->
+    <div class="mt" th:if="${metaLine}" th:text="${metaLine}">Kucing · Betina · 2 tahun</div>
+    <!--/* 自述（荧光笔标记）。无 intro → 该行不占空间 */-->
+    <div class="intro" th:if="${intro}"><span th:text="${intro}">Intro</span></div>
+
+    <!--/* ③ 故事数字（票根）。⚠️ 零里程碑时「Tonggak」整列隐藏 —— 剩 2 列，不是补 0 */-->
+    <div class="stub">
+        <span class="stubnote">sejauh ini&hellip;</span>
+        <div class="stubtape"></div>
+        <div class="stubrow">
+            <div>
+                <div class="n" style="color:var(--v)" th:text="${happyCount}">0</div>
+                <div class="l">Momen</div>
+            </div>
+            <div class="vr"></div>
+            <div>
+                <div class="n" style="color:var(--green)" th:text="${consultCount}">0</div>
+                <div class="l">Konsultasi</div>
+            </div>
+            <div class="vr" th:if="${hasMilestones}"></div>
+            <div th:if="${hasMilestones}">
+                <div class="n" style="color:var(--gold)" th:text="${milestoneCompleted}">0</div>
+                <div class="l">Tonggak</div>
+            </div>
+        </div>
+    </div>
+
+    <!--/* ④ 里程碑收藏：完成数 / 总数（按物种，猫 31 / 狗 31 / 通用 16）+ 具名 chip + 空槽 + 「+N」 */-->
+    <div class="lab">
+        <span class="tg">Koleksi tonggak</span>
+        <span class="ct" th:text="${milestoneCompleted} + ' / ' + ${milestoneTotal}">0 / 31</span>
+    </div>
+    <div class="stickers">
+        <!--/* 具名徽章：最近完成的若干个。标题取印尼语常量（AC3：页面不得出现中文） */-->
+        <span class="chip" th:each="b : ${badges}" th:text="'🏅 ' + ${b}">🏅 Foto pertama</span>
+        <!--/* 固定两个虚线空槽（视觉占位，E2 零态时只剩它们） */-->
+        <span class="slot">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#BDB2D0"
+                 stroke-width="2" stroke-linecap="round">
+                <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>
+            </svg>
+        </span>
+        <span class="slot">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#BDB2D0"
+                 stroke-width="2" stroke-linecap="round">
+                <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>
+            </svg>
+        </span>
+        <span class="slot more" th:if="${milestoneMore > 0}" th:text="'+' + ${milestoneMore}">+23</span>
+    </div>
+
+    <!--/* ⑤ 最新动态（零里程碑 → 整段不渲染）。相对时间来自最近完成的那条 */-->
+    <th:block th:if="${hasMilestones}">
+        <div class="lab"><span class="tg">Kabar terbaru</span></div>
+        <div class="news">
+            <svg class="clip" width="19" height="26" viewBox="0 0 19 26" fill="none" stroke="#9690A6"
+                 stroke-width="1.8" stroke-linecap="round">
+                <path d="M6 22V7a3.5 3.5 0 0 1 7 0v13a2 2 0 0 1-4 0V9"/>
+            </svg>
+            <b th:text="${name}">Pet</b><span> baru saja menyelesaikan sebuah tonggak baru</span>
+            <span class="w" th:if="${latestMilestoneAgo}" th:text="${latestMilestoneAgo}">3 HARI LALU</span>
+        </div>
+    </th:block>
+
+    <!--/* ⑥ 快乐时刻（交叠拼贴，最多 4 张）。零态 → 虚线占位 + 手写小字 */-->
+    <div class="lab">
+        <span class="tg">Momen bahagia</span>
+        <span class="ct" th:if="${!#lists.isEmpty(collagePhotos)}"
+              th:text="${#lists.size(collagePhotos)} + ' terbaru'">4 terbaru</span>
+    </div>
+    <div class="collage" th:if="${!#lists.isEmpty(collagePhotos)}">
+        <div th:each="m, it : ${collagePhotos}" class="cpl"
+             th:classappend="${'p' + (it.index + 1)}">
+            <img class="ph" th:src="${m.imageUrls[0]}" alt=""/>
+            <div class="t" th:text="${m.text}">&nbsp;</div>
+        </div>
+    </div>
+    <th:block th:if="${#lists.isEmpty(collagePhotos)}">
+        <div class="empty">Unduh App untuk lihat<br/>lebih banyak konten</div>
+        <div class="emptyline">halaman pertama&hellip;</div>
+    </th:block>
+
+    <div class="foot"><img class="mark" src="/brand/logo.svg" alt="TailTopia"/></div>
 </div>
+
+<!--/* ⑦ 单个吸底 CTA（V1.1.6 Story 1.2：原双 CTA 行为完全相同，已合并）。
+     滚动全程可见；顶部渐变遮罩；安全区兜底。 */-->
+<div class="ctabar">
+    <div class="ctainner">
+        <a class="btn" id="ctaPrimary" th:href="${downloadUrl}"
+           th:attr="data-ios=${iosUrl},data-android=${androidUrl},data-deeplink=${deepLink}"
+           th:text="'Lihat cerita ' + ${name}">Lihat cerita</a>
+        <div class="ctahint">Gratis di App Store &amp; Google Play</div>
+    </div>
+</div>
+
+<script th:inline="none">
+  // Platform routing + three-step fallback (real-device only, L2):
+  //   Android: (1) deep link -> (2) market:// -> (3) Play web page
+  //   iOS:     (1) deep link -> (2) App Store
+  //   Desktop: straight to the download page
+  // Each step is guarded by a timer; if the previous step succeeded the page goes
+  // hidden and `pagehide` cancels whatever was scheduled next.
+  //
+  // V1.1.6 Story 1.4 - analytics (E-25 / E-26):
+  //   E-25 `cta_tapped`  fires the INSTANT the button is pressed -> reliable count.
+  //   E-26 `cta_outcome` is INFERRED from the same timing signals -> best effort, will be lost sometimes.
+  //   These two MUST stay separate events. Merging them would let the unreliable one
+  //   contaminate the only number we can actually trust (how many people tapped).
+  //   Reporting goes to our own endpoint; no third-party script is loaded here.
+  (function () {
+    var ua = navigator.userAgent || '';
+    var isIOS = /iPad|iPhone|iPod/.test(ua);
+    var isAndroid = /Android/.test(ua);
+    var TRACK_URL = document.body.getAttribute('data-track-url');
+    var PAGE_STATE = document.body.getAttribute('data-page-state');
+    var platform = isIOS ? 'ios' : (isAndroid ? 'android' : 'desktop');
+
+    // Best effort by design: no retry, never blocks navigation, failures are swallowed.
+    function report(event, extra) {
+      if (!TRACK_URL) return;
+      var props = { page_state: PAGE_STATE, ua_platform: platform };
+      if (extra) { for (var k in extra) { props[k] = extra[k]; } }
+      var payload = JSON.stringify({ event: event, props: props });
+      try {
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(TRACK_URL, new Blob([payload], { type: 'application/json' }));
+        } else {
+          fetch(TRACK_URL, { method: 'POST', body: payload, keepalive: true,
+                             headers: { 'Content-Type': 'application/json' } });
+        }
+      } catch (e) { /* analytics must never break the page */ }
+    }
+
+    function toMarket(webUrl) {
+      return webUrl.replace('https://play.google.com/store/apps/details', 'market://details');
+    }
+    function go(url) { window.location.href = url; }
+    function guard(fn, ms) {
+      var t = setTimeout(fn, ms);
+      window.addEventListener('pagehide', function () { clearTimeout(t); }, { once: true });
+      return t;
+    }
+
+    ['ctaPrimary'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('click', function (e) {
+        e.preventDefault();
+        // E-25 first, before anything can navigate away.
+        report('pet_card_cta_tapped');
+
+        var deep = el.dataset.deeplink;
+        var androidWeb = el.dataset.android;
+        var ios = el.dataset.ios;
+
+        if (isAndroid || isIOS) {
+          // If the page goes hidden before the deep-link guard fires, the app took over.
+          // That same signal is what the fallback chain already relies on - reuse it,
+          // do NOT invent a second timing scheme or the two will disagree.
+          var settled = false;
+          window.addEventListener('pagehide', function () {
+            if (!settled) { settled = true; report('pet_card_cta_outcome', { outcome: 'app_opened' }); }
+          }, { once: true });
+
+          if (isAndroid) {
+            guard(function () {
+              if (!settled) { settled = true; report('pet_card_cta_outcome', { outcome: 'store_redirect' }); }
+              guard(function () { go(androidWeb); }, 700);
+              go(toMarket(androidWeb));
+            }, 900);
+          } else {
+            guard(function () {
+              if (!settled) { settled = true; report('pet_card_cta_outcome', { outcome: 'store_redirect' }); }
+              go(ios);
+            }, 900);
+          }
+          go(deep);
+        } else {
+          report('pet_card_cta_outcome', { outcome: 'desktop_fallback' });
+          go(el.href);
+        }
+      });
+    });
+  })();
+</script>
 </body>
 </html>

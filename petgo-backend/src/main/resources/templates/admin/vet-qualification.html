@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!--
   兽医资质审核（Story 2.7，AB-2H）。直录/续期/通过/驳回；证件图私密桶现签短 TTL URL 展示。
   门控 @PreAuthorize(vet.qualify)。证件 key/签名 URL 绝不落日志。

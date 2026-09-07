@@ -9,7 +9,8 @@ import '../../l10n/app_localizations.dart';
 /// 底部 Tab 的 4 个可导航位（中间「＋」是独立凸起按钮，不占导航分支）。
 ///
 /// **枚举顺序 == 视觉顺序 == 路由分支顺序**（Story 1.1 · AD-3）：
-/// Diary(profile) → Health(triage) → [+] → Social(home) → Me。
+/// Diary(profile) → Toko(shop) → [+] → Social(home) → Me。
+/// （2026-08-21 DEP-1 闭合：Health 位让给 Toko；问诊入口移入健康记录页，`/triage` 保留为可达路由。）
 /// 枚举值名沿用历史语义（`home` = 原首页 Feed，现称 Social；`profile` = 成长档案 Diary），
 /// 本 Story 只重排顺序不改名——改名会牵动 l10n key 与大量调用点，不在范围内。
 ///
@@ -17,7 +18,7 @@ import '../../l10n/app_localizations.dart';
 /// 并行数组会与枚举顺序脱节（AD-3 点名的漂移风险之一），内嵌后结构上不可能对不上。
 enum AppTab {
   profile('/profile', 'diary'),
-  triage('/triage', 'health'),
+  shop('/shop', 'toko'),
   home('/home', 'social'),
   me('/me', 'me');
 
@@ -107,9 +108,9 @@ class BottomTabBar extends StatelessWidget {
           height: _kBarHeight,
           child: Row(
             children: [
-              // 顺序与 AppTab.values 严格一致（AD-3）：Diary / Health / [+] / Socialy / Me
+              // 顺序与 AppTab.values 严格一致（AD-3）：Diary / Toko / [+] / Social / Me
               _item(AppTab.profile, l10n.tabProfile),
-              _item(AppTab.triage, l10n.tabTriage),
+              _item(AppTab.shop, l10n.tabShop),
               const Expanded(child: SizedBox()), // 「＋」凸起按钮的缺口占位
               _item(AppTab.home, l10n.tabHome),
               _item(AppTab.me, l10n.tabMe),
@@ -218,9 +219,12 @@ const _kIconBook = _TabIcon(
   '<path d="M2 4h7a3 3 0 013 3v13a2 2 0 00-2-2H2V4z"/><path d="M22 4h-7a3 3 0 00-3 3v13a2 2 0 012-2h8V4z"/>',
   '<path d="M2 4h7a3 3 0 013 3v13a2 2 0 00-2-2H2V4z"/><path d="M22 4h-7a3 3 0 00-3 3v13a2 2 0 012-2h8V4z"/>',
 );
-const _kIconSteth = _TabIcon(
-  '<circle cx="17" cy="17" r="3"/><path d="M14 17H9a6 6 0 01-6-6V6"/><path d="M7 3v5a3 3 0 006 0V3"/>',
-  '<circle cx="17" cy="17" r="3.5"/><path d="M8 3a2 2 0 00-2 2v4a6 6 0 0012 0V5a2 2 0 10-4 0v4a2 2 0 01-4 0V5a2 2 0 00-2-2z"/>',
+/// Toko（DEP-1 闭合后接入）。**占位图标**：简笔购物袋，风格向现有四个靠
+/// （viewBox 24×24、描边 1.6、圆角端点）。DEP-2 精修图标到位后**只替换这两段 path**，
+/// 结构与调用点均不动。
+const _kIconBag = _TabIcon(
+  '<path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 016 0v2"/>',
+  '<path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 016 0v2" fill="none" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/>',
 );
 const _kIconPerson = _TabIcon(
   '<circle cx="12" cy="7" r="4"/><path d="M4 21a8 8 0 0116 0"/>',
@@ -230,15 +234,18 @@ const _kIconPerson = _TabIcon(
 /// Tab → glyph 图标表（顺序无关，按 Tab 取；渲染顺序由 [BottomTabBar.build] 的 Row 决定）。
 const Map<AppTab, _TabIcon> _kTabIcons = <AppTab, _TabIcon>{
   AppTab.profile: _kIconBook,
-  AppTab.triage: _kIconSteth,
+  AppTab.shop: _kIconBag,
   AppTab.home: _kIconCompass,
   AppTab.me: _kIconPerson,
 };
 
 /// 激活态**仍用描边**的 Tab（T3 稿：听诊器实心会糊成一团）。其余激活态为紫色实心。
-const Set<AppTab> _kActiveOutlineTabs = <AppTab>{AppTab.triage};
+///
+/// 原本只有 Health(听诊器) 在此名单里；DEP-1 闭合后该 Tab 换成 Toko(购物袋)，
+/// 袋形实心不糊，故名单清空。**保留这套机制**——精修图标若出现同类问题可直接登记。
+const Set<AppTab> _kActiveOutlineTabs = <AppTab>{};
 
-/// 激活态 glyph SVG（紫；Health 为描边 1.8，其余实心）。
+/// 激活态 glyph SVG（紫；[_kActiveOutlineTabs] 内为描边 1.8，其余实心）。
 @visibleForTesting
 String tabActiveGlyphSvg(AppTab tab) => _kActiveOutlineTabs.contains(tab)
     ? _kTabIcons[tab]!.outlineSvg(_kViolet, 1, strokeWidth: 1.8)
@@ -325,8 +332,8 @@ const String _kCharmCollar = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0
 const Map<AppTab, _TabCharm> _kTabCharms = <AppTab, _TabCharm>{
   // 书 + 猫耳：顶部居中，压在书的上沿（top:5 相对 44 高亮底）。
   AppTab.profile: _TabCharm(svg: _kCharmCatEars, size: 23, top: 5, centerTop: true),
-  // 听诊器 + 爪印：右上角外沿 (-3,-3)。
-  AppTab.triage: _TabCharm(svg: _kCharmPaw, size: 16, top: -3, right: -3),
+  // 购物袋 + 爪印：右上角外沿 (-3,-3)（沿用原 Health 位的规格，DEP-2 精修后再定）。
+  AppTab.shop: _TabCharm(svg: _kCharmPaw, size: 16, top: -3, right: -3),
   // 罗盘 + 尾巴：**右下角** (-4,-1)。
   AppTab.home: _TabCharm(svg: _kCharmTail, size: 18, right: -4, bottom: -1),
   // 人像 + 项圈：居中整体覆盖。

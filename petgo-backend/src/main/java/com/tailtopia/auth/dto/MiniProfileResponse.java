@@ -17,6 +17,7 @@ package com.tailtopia.auth.dto;
  *                     全局 Jackson {@code NON_NULL} 会把 null 字段整个键省略掉，游客拿到的
  *                     key 集合因此<b>一字未变</b>（Story 1.1 AC6 的硬要求，L1 测试有三条断言守着）。
  *                     写成 primitive {@code boolean} 就永远出现在 JSON 里，当场破坏游客契约。
+ * @param tags         运营标签（V1.1.6 Story 5.1 · FR-74）。最多 3 个；注销时为空表
  */
 public record MiniProfileResponse(
         String nickname,
@@ -24,17 +25,18 @@ public record MiniProfileResponse(
         String signature,
         long postCount,
         boolean isDeactivated,
-        Boolean reported) {
+        Boolean reported,
+        java.util.List<UserTagView> tags) {
 
     /** 已注销：不暴露任何身份信息，也不下发「已举报」（对方都注销了，这个标记没有意义）。 */
     public static MiniProfileResponse deactivated() {
-        return new MiniProfileResponse(null, null, null, 0, true, null);
+        return new MiniProfileResponse(null, null, null, 0, true, null, java.util.List.of());
     }
 
     /** @param reported 登录者传 true/false；<b>游客传 null</b>（键会被 NON_NULL 省略）。 */
     public static MiniProfileResponse of(AuthorView author, String signature, long postCount,
             Boolean reported) {
         return new MiniProfileResponse(author.nickname(), author.avatarUrl(), signature, postCount,
-                false, reported);
+                false, reported, author.tags().isEmpty() ? null : author.tags());
     }
 }

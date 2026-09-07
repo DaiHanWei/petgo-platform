@@ -45,7 +45,7 @@ class _VetInboxPageState extends ConsumerState<VetInboxPage> with WidgetsBinding
   Timer? _display; // 1s 心跳刷新倒计时显示
   String _displayName = '';
   String? _avatarUrl; // 运营后台上传的头像；null → 首字母占位
-  int? _doneCount; // 完成数（history 列表长度）；null=加载中/失败 → 占位「—」
+  int? _doneCount; // 完成数（history 列表长度，全量非仅今日）；null=加载中/失败 → 占位
   Set<String>? _prevAwaitingTokens; // 上一轮待支付 token 集（侦测「某接单已结束」跃迁，FR-53B）；null=未建基线
   int _knownActiveCount = 0; // 已知进行中会话数（判成交：待支付消失 + 会话数增加 = 已支付）
   final Set<String> _skipped = <String>{}; // 「Lewati」本地跳过的 token（会话内隐藏，请求对他人仍可见）

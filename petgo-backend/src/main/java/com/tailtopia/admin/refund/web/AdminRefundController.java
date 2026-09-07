@@ -4,6 +4,7 @@ import com.tailtopia.admin.refund.service.AdminRefundQueryService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.pay.refund.service.RefundService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -32,9 +33,14 @@ public class AdminRefundController {
     private final RefundService refundService;
     private final AdminRefundQueryService query;
 
-    public AdminRefundController(RefundService refundService, AdminRefundQueryService query) {
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public AdminRefundController(RefundService refundService, AdminRefundQueryService query,
+            Messages msg) {
         this.refundService = refundService;
         this.query = query;
+        this.msg = msg;
     }
 
     // ===== 列表 / 详情（Story 4.6）=====
@@ -63,9 +69,9 @@ public class AdminRefundController {
             @PathVariable String refundToken, RedirectAttributes flash) {
         try {
             refundService.approveNeed(refundToken, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已批准退款需求（订单进入退款流程，用户可选退款方式；操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.refund.needApproved"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/refunds/" + refundToken;
     }
@@ -76,9 +82,9 @@ public class AdminRefundController {
             @PathVariable String refundToken, RedirectAttributes flash) {
         try {
             refundService.rejectNeed(refundToken, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已驳回退款需求（订单回落已完成，已通知用户；操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.refund.needRejected"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/refunds/" + refundToken;
     }
@@ -91,9 +97,9 @@ public class AdminRefundController {
             @PathVariable String refundToken, @RequestParam("note") String note, RedirectAttributes flash) {
         try {
             refundService.approveRefund(refundToken, admin.getAdminAccountId(), note);
-            flash.addFlashAttribute("notice", "已审批通过（待财务打款；操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.refund.approved"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/refunds/" + refundToken;
     }
@@ -104,9 +110,9 @@ public class AdminRefundController {
             @PathVariable String refundToken, @RequestParam("reason") String reason, RedirectAttributes flash) {
         try {
             refundService.rejectRefund(refundToken, admin.getAdminAccountId(), reason);
-            flash.addFlashAttribute("notice", "已驳回退款申请（订单回落已完成，已通知用户；操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.refund.rejected"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/refunds/" + refundToken;
     }
@@ -119,9 +125,9 @@ public class AdminRefundController {
             @PathVariable String refundToken, RedirectAttributes flash) {
         try {
             refundService.payoutRefund(refundToken, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已完成打款（订单已退款，账目已记；操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.refund.paidOut"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/refunds/" + refundToken;
     }

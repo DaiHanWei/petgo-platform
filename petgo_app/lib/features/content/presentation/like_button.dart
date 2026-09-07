@@ -8,20 +8,42 @@ import '../../../core/theme/typography.dart';
 import '../../../features/auth/domain/auth_guard.dart';
 import '../data/like_repository.dart';
 
-/// 详情互动栏点赞按钮（Story 3.4，FR-23）。区域色心形 + 计数；乐观更新（失败回滚）。
+/// 点赞按钮（Story 3.4 FR-23；V1.1.6 Story 3.2 起首页也用）。心形 + 计数；乐观更新（失败回滚）。
 ///
 /// 未登录点击触发 FR-0C（强登录弹窗）；登录态 toggle 调点赞/取消端点并以后端真值校正。
+///
+/// ⚠️ 本组件是 V1.1.6 Story 3.2 要求**直接复用、不得重写**的那个 —— 状态机
+/// （乐观更新 / 后端真值校正 / 失败回滚 / 未登录门控）是既有资产。改它之前先想清楚。
 class LikeButton extends ConsumerStatefulWidget {
   const LikeButton({
     super.key,
     required this.postId,
     required this.initialLiked,
     required this.initialCount,
+    required this.source,
+    this.feedTab,
+    this.rankMode,
   });
 
   final int postId;
   final bool initialLiked;
   final int initialCount;
+
+  /// 埋点来源：`feed`（首页）/ `detail`（详情页）。
+  ///
+  /// 🛡 **两个挂载点都必须传**（V1.1.6 Story 3.2 · AC6）——
+  /// 只改一侧的话，「开放首页点赞到底是净增长还是把详情页的点赞前移了」这个对比
+  /// 就**彻底失效**，而这正是本版本要回答的问题。故设为必填参数：漏传编译不过。
+  final String source;
+
+  /// 埋点 `feed_tab`（V1.1.6 Story 16.5）。只有从 Feed 卡片来时才有值。
+  final String? feedTab;
+
+  /// 埋点 `rank_mode`（V1.1.6 Story 16.5，服务端下发）。同上。
+  ///
+  /// 🛡 两个都做成可选：详情页的点赞没有"哪个 Tab、哪条排序路径"这回事，
+  /// 硬填一个值会在看板上造出不存在的 Feed 会话。
+  final String? rankMode;
 
   @override
   ConsumerState<LikeButton> createState() => _LikeButtonState();
@@ -32,13 +54,49 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
   late int _count = widget.initialCount;
   bool _inFlight = false;
 
+  /// 🔴 跟随外部数据更新（V1.1.6 Story 3.2）。
+  ///
+  /// 本组件原来只在创建时读一次初始值 —— 详情页只有一个实例、进来即销毁，没问题。
+  /// 但**进了首页列表**之后，下拉刷新会带回新的点赞态，而 Flutter 会**复用同一个
+  /// State 对象**（同类型同位置）：不同步的话，用户刷新后看到的还是旧的点赞态与计数。
+  ///
+  /// ⚠️ 只在「换了另一条内容」或「请求不在飞行中」时才跟随 ——
+  /// 否则会把用户刚点出来的乐观更新给盖回去。
+  @override
+  void didUpdateWidget(covariant LikeButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final switchedPost = oldWidget.postId != widget.postId;
+    if (switchedPost) {
+      _liked = widget.initialLiked;
+      _count = widget.initialCount;
+      _inFlight = false;
+      return;
+    }
+    if (!_inFlight &&
+        (oldWidget.initialLiked != widget.initialLiked ||
+            oldWidget.initialCount != widget.initialCount)) {
+      _liked = widget.initialLiked;
+      _count = widget.initialCount;
+    }
+  }
+
   Future<void> _toggle() async {
     if (_inFlight) return;
     // 门控：未登录 → FR-0C，不发请求。
     final allowed = requireLogin(ref, context, onAllowed: () {});
     if (!allowed) return;
 
-    Analytics.capture('post_like_tapped', {'liked': !_liked});
+    // 🛡 只加 source 属性，**事件名不动** —— 改名会切断已有的点赞历史序列
+    // （埋点清单 E-22 与命名护栏测试都盯着这一点）。
+    Analytics.capture('post_like_tapped', {
+      'liked': !_liked,
+      'source': widget.source,
+      // V1.1.6 Story 16.5：首页点赞是 FR-95 效果归因的主要信号 ——
+      // 🔴 两个属性都要有。只有 feed_tab 不够：降级链级别 4 会让 ALL Tab 也走时间倒序，
+      // 那时 feed_tab=all 但 rank_mode=chrono，把它算进推荐序的效果里就是错的。
+      if (widget.feedTab != null) 'feed_tab': widget.feedTab!,
+      if (widget.rankMode != null) 'rank_mode': widget.rankMode!,
+    });
     final prevLiked = _liked;
     final prevCount = _count;
     // 乐观更新：先翻转 UI。
@@ -70,8 +128,10 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
 
   @override
   Widget build(BuildContext context) {
+    // 🔴 key 必须带内容编号：本组件原先写死成详情页专用的名字，
+    // 进了首页列表后一屏多张卡会**重复 key**（Flutter 里重复 key 会报错或错配状态）。
     return InkWell(
-      key: const ValueKey('detailLikeButton'),
+      key: ValueKey('likeButton_${widget.postId}'),
       onTap: _toggle,
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -83,7 +143,14 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
             color: _liked ? AppColors.likeHeart : AppColors.textSecondary,
           ),
           const SizedBox(width: AppSpacing.xs),
-          Text('$_count', style: AppTypography.caption),
+          // 数字与心形**同步变色**（FR-93）：改前数字恒为次要色，已赞时只有图标变红，
+          // 看上去像"没点上"。
+          Text(
+            '$_count',
+            style: AppTypography.caption.copyWith(
+              color: _liked ? AppColors.likeHeart : AppColors.textSecondary,
+            ),
+          ),
         ],
       ),
     );

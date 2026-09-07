@@ -82,16 +82,24 @@ class TimelineCursorMergeTest {
                             .toList();
                 });
 
-        // 假健康源：只认 createdAt 上界（与真实实现一致）。
-        when(health.recentHealthEvents(anyLong(), Mockito.any(), anyInt())).thenAnswer(inv -> {
-            Instant before = inv.getArgument(1);
-            int limit = inv.getArgument(2);
-            return healthEvents.stream()
-                    .filter(h -> h.createdAt().isBefore(before))
-                    .sorted(Comparator.comparing(HealthEventView::createdAt).reversed())
-                    .limit(limit)
-                    .toList();
-        });
+        // 假健康源：按**就诊日期的复合锚点**取（与真实实现一致，V1.1.6 修正后）。
+        // ⚠️ 改之前这里按 createdAt 单键上界过滤 —— 与排序用的就诊日期不是同一把尺子。
+        when(health.recentHealthEvents(anyLong(), Mockito.any(), Mockito.any(), anyInt()))
+                .thenAnswer(inv -> {
+                    java.time.LocalDate anchorDate = inv.getArgument(1);
+                    Instant anchorKey = inv.getArgument(2);
+                    int limit = inv.getArgument(3);
+                    return healthEvents.stream()
+                            .filter(h -> h.eventDate().isBefore(anchorDate)
+                                    || (h.eventDate().equals(anchorDate)
+                                            && h.createdAt().isBefore(anchorKey)))
+                            .sorted(Comparator
+                                    .comparing(HealthEventView::eventDate)
+                                    .thenComparing(HealthEventView::createdAt)
+                                    .reversed())
+                            .limit(limit)
+                            .toList();
+                });
 
                 // Story 3.2 新增的两个源（本类不造它们的数据 → 返回空列表，等价于「只有内容 + 问诊存档」）。
         milestoneCompletions =
@@ -101,7 +109,9 @@ class TimelineCursorMergeTest {
                 .thenReturn(List.of());
         when(idCards.findByUserIdOrderByCreatedAtDesc(anyLong())).thenReturn(List.of());
         service = new TimelineService(profileService, contentService, healthProvider, milestoneService,
-                healthRecords, milestoneCompletions, idCards);
+                healthRecords, milestoneCompletions, idCards,
+                // V1.1.6 Story 5.2：装饰标签统一贴标点；本类不验它，给 mock（默认无标签）。
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
     }
 
     // ===== 锚点编解码（AC1） =====
@@ -292,7 +302,9 @@ class TimelineCursorMergeTest {
     /** 存量兜底：event_date 为 NULL 的历史行（V26 加列未回填）不得从时间线上消失。 */
     @Test
     void legacyNullEventDateRowsStillAppear() {
-        moments.add(new GrowthMomentView(1L, Instant.parse("2026-06-02T10:00:00Z"), null, List.of("u1"), "legacy"));
+        moments.add(new GrowthMomentView(1L, Instant.parse("2026-06-02T10:00:00Z"), null, List.of("u1"), "legacy",
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED));
         moments.add(momentEv(2, "2026-06-03T10:00:00Z", "2026-06-03"));
 
         List<TimelineItemResponse> all = drainAllPages(1);
@@ -344,11 +356,16 @@ class TimelineCursorMergeTest {
 
     private static GrowthMomentView momentEv(long id, String createdIso, String eventIso) {
         return new GrowthMomentView(id, Instant.parse(createdIso), LocalDate.parse(eventIso),
-                List.of("u" + id), "m" + id);
+                List.of("u" + id), "m" + id,
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED);
     }
 
+    /** 就诊日期取归档时刻的当天（本类的用例不涉及"补录旧问诊"这一场景）。 */
     private static HealthEventView healthAt(String iso) {
-        return new HealthEventView(Instant.parse(iso), "GREEN", "摘要", "AI_TRIAGE", "t-" + iso);
+        Instant at = Instant.parse(iso);
+        return new HealthEventView(at, at.atZone(java.time.ZoneOffset.UTC).toLocalDate(),
+                "GREEN", "摘要", "AI_TRIAGE", "t-" + iso);
     }
 
     private static PetProfile pet() {

@@ -30,6 +30,11 @@ class _FakeMeRepository implements MeRepository {
   @override
   Future<UserProfile> updateProfile({String? nickname, String? signature}) async =>
       UserProfile(nickname: nickname, signature: signature);
+
+  /// V1.1.6 Story 7.1：本 fake 不涉及手机号。
+  @override
+  Future<UserProfile> updatePhone(String phone) async => const UserProfile();
+
 }
 
 /// 记录写端点调用，用于断言「返回键不建账号」（AC4）。
@@ -60,6 +65,11 @@ class _RecordingMeRepository implements MeRepository {
     writeCalls.add('profile');
     return UserProfile(nickname: nickname, signature: signature);
   }
+
+  /// V1.1.6 Story 7.1：本 fake 不涉及手机号。
+  @override
+  Future<UserProfile> updatePhone(String phone) async => const UserProfile();
+
 }
 
 /// 引导返回键测试用路由（昵称 ↔ 状态 ↔ 未登录首页占位）。

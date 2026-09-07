@@ -16,6 +16,14 @@ abstract class ProfileRepository {
     String? avatarUrl,
     String? breed,
     String? intro,
+    /// 🔒 体重（kg），Story 6.1。**选填 —— 建档流程可跳过**：
+    /// 设为必填会挡住既有建档转化，而建档转化在漏斗上比推荐精度重要得多。
+    double? weightKg,
+    String? neuterStatus,
+
+    /// 性别（bug 20260827）。**选填** —— 与体重同一理由：建档转化比字段完整度重要。
+    /// 此前只有编辑接口能填，于是身份证卡上「性别」永远是空。
+    String? sex,
     String? idempotencyKey,
   });
 
@@ -23,12 +31,19 @@ abstract class ProfileRepository {
   Future<PetProfile?> getMyProfile();
 
   /// 编辑档案（Story 2.8，部分更新 PATCH）。cardToken 不变。
+  ///
+  /// ⚠️ 全字段「传 null = 不改动」，**没有清空语义**（V1.1.6 Story 1.1 沿用该口径新增 [sex]）。
+  /// Story 6.1 追加 [weightKg] / [neuterStatus]。
+  /// 🔒 体重是 PII 邻近的健康数据 —— **禁止写入日志与埋点属性**（NFR-5）。
   Future<PetProfile> update({
     String? name,
     String? avatarUrl,
     String? breed,
     DateTime? birthday,
+    String? sex,
     String? intro,
+    double? weightKg,
+    String? neuterStatus,
   });
 
   /// 删除当前用户档案（bug 20260702-237 / 决策 F18）。后端级联删派生数据 + 名片失效 + 清理个人图，
@@ -49,6 +64,9 @@ class DioProfileRepository implements ProfileRepository {
     String? avatarUrl,
     String? breed,
     String? intro,
+    double? weightKg,
+    String? neuterStatus,
+    String? sex,
     String? idempotencyKey,
   }) async {
     final data = <String, dynamic>{
@@ -59,6 +77,10 @@ class DioProfileRepository implements ProfileRepository {
     if (avatarUrl != null) data['avatarUrl'] = avatarUrl;
     if (breed != null) data['breed'] = breed;
     if (intro != null) data['intro'] = intro;
+    // Story 6.1：体重【可跳过】—— 建档流程不设必填，设必填会挡住建档转化
+    if (weightKg != null) data['weightKg'] = weightKg;
+    if (neuterStatus != null) data['neuterStatus'] = neuterStatus;
+    if (sex != null) data['sex'] = sex;
     final resp = await dio.post<Map<String, dynamic>>(
       ApiPaths.petProfiles,
       data: data,
@@ -75,14 +97,20 @@ class DioProfileRepository implements ProfileRepository {
     String? avatarUrl,
     String? breed,
     DateTime? birthday,
+    String? sex,
     String? intro,
+    double? weightKg,
+    String? neuterStatus,
   }) async {
     final data = <String, dynamic>{};
     if (name != null) data['name'] = name;
     if (avatarUrl != null) data['avatarUrl'] = avatarUrl;
     if (breed != null) data['breed'] = breed;
     if (birthday != null) data['birthday'] = _isoDate(birthday);
+    if (sex != null) data['sex'] = sex;
     if (intro != null) data['intro'] = intro;
+    if (weightKg != null) data['weightKg'] = weightKg;
+    if (neuterStatus != null) data['neuterStatus'] = neuterStatus;
     final resp = await dio.patch<Map<String, dynamic>>(ApiPaths.petProfileMe, data: data);
     return PetProfile.fromJson(resp.data!);
   }

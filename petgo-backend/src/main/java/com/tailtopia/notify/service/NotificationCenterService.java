@@ -5,6 +5,7 @@ import com.tailtopia.notify.dto.NotificationItem;
 import com.tailtopia.notify.dto.NotificationPage;
 import com.tailtopia.notify.repository.NotificationRepository;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.paging.KeysetCursor;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.PageRequest;
@@ -38,19 +39,21 @@ public class NotificationCenterService {
     /**
      * 倒序游标分页。
      *
-     * <p>游标格式 {@code "<epochMicros>_<id>"}（首页 null）。对客户端是<b>不透明串</b>：
-     * App 只把 {@code nextCursor} 原样回传，不解析（已核对 Flutter 侧 `NotificationPage`）。
+     * <p>游标是 {@link KeysetCursor}（base64url 的 {@code (createdAt, id)}，首页 null）。
+     * 对客户端是<b>不透明串</b>：App 只把 {@code nextCursor} 原样回传，不解析
+     * （已核对 Flutter 侧 `NotificationPage`）。
      */
     @Transactional(readOnly = true)
     public NotificationPage list(long userId, String cursor, int limit) {
-        Cursor c = parseCursor(cursor);
+        KeysetCursor c = parseCursor(cursor);
         List<Notification> rows = repo.findPageBefore(
-                userId, c.ts(), c.id(), PageRequest.of(0, limit + 1));
+                userId, c.createdAt(), c.id(), PageRequest.of(0, limit + 1));
         boolean hasMore = rows.size() > limit;
         List<Notification> pageRows = hasMore ? rows.subList(0, limit) : rows;
         List<NotificationItem> items = pageRows.stream().map(NotificationItem::from).toList();
-        String nextCursor = hasMore && !pageRows.isEmpty()
-                ? encodeCursor(pageRows.get(pageRows.size() - 1))
+        Notification last = pageRows.isEmpty() ? null : pageRows.get(pageRows.size() - 1);
+        String nextCursor = hasMore && last != null
+                ? new KeysetCursor(last.getCreatedAt(), last.getId()).encode()
                 : null;
         // 打开通知中心（首页）时以 DB 真实未读数校准 Redis 角标，自愈计数漂移
         // （如计数器残留致角标>0 但列表空，或行被清而计数未减）。仅校准计数，不改已读态。
@@ -120,53 +123,27 @@ public class NotificationCenterService {
     // ---------- 游标 ----------
 
     /**
-     * 复合游标：{@code (createdAt, id)}。
+     * 解析游标。
      *
-     * <p>🔴 <b>只有 {@code createdAt} 是不够的</b>：同一微秒内可以有多条通知（批量触达就是），
-     * 而分页必须有<b>全序唯一</b>的锚点，否则边界处的记录要么被跳过、要么重复。
+     * <p>🔴 坏游标退化成首页而不是报错：游标是客户端传回来的，
+     * 让整个通知中心 4xx/5xx 等于把用户锁在门外。
      */
-    private record Cursor(Instant ts, long id) {
-    }
-
-    /** 首页哨兵：取「现在之前」全部（留余量含刚写入）。 */
-    private static Cursor firstPage() {
-        return new Cursor(Instant.now().plusSeconds(60), Long.MAX_VALUE);
-    }
-
-    /**
-     * 编码为 {@code "<epochMicros>_<id>"}。
-     *
-     * <p>⚠️ <b>按微秒取，不是毫秒</b>：Postgres {@code timestamptz} 的精度就是微秒，
-     * 截到毫秒会让下一页的 {@code createdAt = :beforeTs} 恒不成立，
-     * 复合游标就退化回原来那个「整批跳过」的 bug。
-     */
-    private static String encodeCursor(Notification last) {
-        Instant at = last.getCreatedAt();
-        long micros = at.getEpochSecond() * 1_000_000L + at.getNano() / 1_000L;
-        return micros + "_" + last.getId();
-    }
-
-    private static Cursor parseCursor(String cursor) {
+    private static KeysetCursor parseCursor(String cursor) {
         if (cursor == null || cursor.isBlank()) {
-            return firstPage();
+            return KeysetCursor.firstPage();
         }
-        int sep = cursor.indexOf('_');
+        KeysetCursor parsed = KeysetCursor.decodeOrNull(cursor);
+        if (parsed != null) {
+            return parsed;
+        }
+        // 过渡兼容：老客户端手上还捏着旧格式（纯 epochMillis）的游标。
+        // 用 Long.MIN_VALUE 让「同刻」分支恒不命中 → 行为与老实现逐字一致（仍会漏，
+        // 但不会因为换了格式而报错或错位）。老客户端翻完这一轮就没有旧游标了。
         try {
-            if (sep < 0) {
-                // 过渡兼容：老客户端手上还捏着旧格式（纯 epochMillis）的游标。
-                // 用 Long.MIN_VALUE 让「同刻」分支恒不命中 → 行为与老实现逐字一致（仍会漏，
-                // 但不会因为换了格式而报错或错位）。老客户端翻完这一轮就没有旧游标了。
-                return new Cursor(Instant.ofEpochMilli(Long.parseLong(cursor)), Long.MIN_VALUE);
-            }
-            long micros = Long.parseLong(cursor.substring(0, sep));
-            long id = Long.parseLong(cursor.substring(sep + 1));
-            return new Cursor(
-                    Instant.ofEpochSecond(Math.floorDiv(micros, 1_000_000L),
-                            Math.floorMod(micros, 1_000_000L) * 1_000L),
-                    id);
-        } catch (NumberFormatException | ArithmeticException e) {
-            // 🔴 游标是客户端传来的，坏值不能 500 —— 退化成首页，用户至少看得到最新的
-            return firstPage();
+            return new KeysetCursor(Instant.ofEpochMilli(Long.parseLong(cursor.trim())),
+                    Long.MIN_VALUE);
+        } catch (NumberFormatException e) {
+            return KeysetCursor.firstPage();
         }
     }
 }

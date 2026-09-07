@@ -39,6 +39,8 @@ class _CommentsRepo implements DetailRepository {
   @override
   Future<ContentDetail> getDetail(int id) => throw UnimplementedError();
   @override
+  Future<String> getShareUrl(int postId) => throw UnimplementedError();
+  @override
   Future<void> deleteComment(int commentId) async {}
   @override
   Future<void> deleteContent(int postId) async {}

@@ -80,7 +80,7 @@ public class ConsultAnomalyService {
     @Transactional
     public void addNote(long anomalyId, String note, long actorAccountId) {
         if (note == null || note.isBlank()) {
-            throw AppException.validation("备注内容不能为空");
+            throw AppException.validation("备注内容不能为空").code("admin.err.anomaly.noteRequired");
         }
         ConsultAnomaly a = require(anomalyId);
         a.setInternalNote(note.trim());
@@ -100,6 +100,6 @@ public class ConsultAnomalyService {
     }
 
     private ConsultAnomaly require(long anomalyId) {
-        return anomalies.findById(anomalyId).orElseThrow(() -> AppException.notFound("异常工单不存在"));
+        return anomalies.findById(anomalyId).orElseThrow(() -> AppException.notFound("异常工单不存在").code("admin.err.anomaly.notFound"));
     }
 }

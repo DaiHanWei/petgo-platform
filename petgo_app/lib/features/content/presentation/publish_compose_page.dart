@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:date_picker_plus/date_picker_plus.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -29,7 +30,10 @@ import '../../../shared/utils/media_permission.dart';
 import '../../me/data/my_posts_repository.dart';
 import '../data/content_repository.dart';
 import '../domain/content_type.dart';
+import '../domain/feed_image_layout.dart';
+import '../domain/image_crop.dart';
 import '../domain/publish_controller.dart';
+import 'publish_crop_page.dart';
 import 'feed_controller.dart';
 import 'publish_result_page.dart';
 
@@ -184,10 +188,22 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       // 处理结束即撤占位：成功则下方 item 入列接管显示，失败/取消则恢复添加格。
       if (mounted) setState(() => _addingImage = false);
     }
+    if (bytes == null) return;
+    // 只有超出容差区间的图才会被裁剪框打断；区间内的图用户完全感知不到这一步存在。
+    final cropped = await applyBatchCrop([bytes], ask: _askCrop);
+    if (cropped == null || cropped.isEmpty) return; // 用户在裁剪页退出 → 取消本次上传
     // 即选即传：item 入列即以 pending/uploading 态渲染（自带 loading 盖层）；上传期间发布按钮置灰。
-    if (bytes != null && controller.addImage(bytes)) {
+    if (controller.addImage(cropped.first)) {
       await controller.uploadAll();
     }
+  }
+
+  /// 打开裁剪页问用户怎么裁。[locked] 非空表示本批次档位已定，界面上不再让换档。
+  Future<CropChoice?> _askCrop(Uint8List bytes, ImageSize size, CropPreset? locked) {
+    if (!mounted) return Future<CropChoice?>.value();
+    return Navigator.of(context).push<CropChoice>(MaterialPageRoute<CropChoice>(
+      builder: (_) => PublishCropPage(bytes: bytes, size: size, lockedPreset: locked),
+    ));
   }
 
   Future<void> _addGalleryImages(PublishController controller) async {
@@ -203,7 +219,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       if (mounted) setState(() => _addingImage = false);
     }
     if (images.isEmpty) return;
-    for (final bytes in images) {
+    // 🛡 批次锁定只作用于「需要裁剪的图之间」——区间内的图原样入列，不被跟着改比例。
+    final cropped = await applyBatchCrop(images, ask: _askCrop);
+    if (cropped == null) return; // 用户在裁剪页退出 → 整批取消
+    for (final bytes in cropped) {
       controller.addImage(bytes);
     }
     await controller.uploadAll();
@@ -229,6 +248,17 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     final petId = controller.type == ContentType.growthMoment
         ? _linkedPet?.id
         : null;
+    // 分享飞轮（留存手册抓手 2）：成功页要**当场**给可分享的成长册链接，
+    // 所以这里 best-effort 把档案取上来拿 cardToken（成长日历路径上面已取过，直接命中缓存）。
+    // 失败/无档案不阻断发布——代价只是成功页少一个分享按钮。
+    if (_linkedPet == null && _hasPetProfile) {
+      try {
+        await _ensurePetLoaded();
+      } catch (_) {
+        // 静默：分享按钮是加分项，不能让它挡住发布。
+      }
+      if (!mounted) return;
+    }
     final args = _buildArgs(controller, l10n);
     // 进入「审核中」覆盖层（P-39b）。
     setState(() {
@@ -354,6 +384,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       photoCount: controller.items.length,
       // 私密保存（Diary 关掉同步开关）→ 成功页走私密文案/CTA（PR#34 finding #11）。
       isPrivate: !controller.isSharing,
+      // 抓手 2：有档案才有成长册可分享；为空时成功页不渲染分享 CTA。
+      cardToken: _linkedPet?.cardToken,
+      petName: _linkedPet?.name,
     );
   }
 
@@ -808,6 +841,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
+              key: const ValueKey('publishPickCamera'),
               leading: const Icon(
                 Icons.photo_camera_outlined,
                 color: AppColors.mint,
@@ -816,6 +850,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
               onTap: () => Navigator.of(ctx).pop(MediaSource.camera),
             ),
             ListTile(
+              key: const ValueKey('publishPickGallery'),
               leading: const Icon(
                 Icons.photo_library_outlined,
                 color: AppColors.mint,
@@ -827,6 +862,21 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         ),
       ),
     );
+    // 图片来源选择（2026-08-20 用户要求）：相机与相册是两条成本完全不同的路 ——
+    // 相册是「我已经有照片了」，相机是「我现在为发帖专门拍一张」。后者发布意愿更强，
+    // 但也更容易在拍摄那一步流失。一个事件 + source 属性（不是两个事件），
+    // 与同页 publish_page_content_type_selected 形状一致，看板可直接对比占比。
+    //
+    // ⚠️ 报在这里（sheet 已返回选择、真正去拍/去选**之前**）：它记的是「用户选了哪条路」。
+    //    挪到取图成功之后会变成「成功率」事件，分母口径就不是这个了 ——
+    //    而"选了相机却没拍成"恰恰是想观察的流失。
+    // ⚠️ source == null（点遮罩关掉 sheet）**不报**：否则分母会混进"打开又关掉"的人。
+    if (source != null) {
+      await Analytics.capture(
+        'publish_page_image_source_selected',
+        {'source': source.name},
+      );
+    }
     if (source == MediaSource.gallery) {
       await _addGalleryImages(controller);
     } else if (source != null) {
@@ -886,12 +936,13 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   Future<void> _pickEventDate(PublishController controller) async {
     final today = DateTime.now();
-    final initial = controller.eventDate ?? today;
-    final picked = await showDatePicker(
+    // bug 20260623-047：统一 date_picker_plus 干净日历风格（点某天即选中并关闭）。
+    final picked = await showDatePickerDialog(
       context: context,
-      initialDate: initial,
-      firstDate: DateTime(today.year - 30),
-      lastDate: DateTime(today.year, today.month, today.day), // 禁选未来（F9）
+      minDate: DateTime(today.year - 30),
+      maxDate: DateTime(today.year, today.month, today.day), // 禁选未来（F9）
+      selectedDate: controller.eventDate,
+      displayedDate: controller.eventDate ?? today,
     );
     if (picked != null) controller.setEventDate(picked);
   }

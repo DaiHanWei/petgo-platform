@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!-- 兽医咨询订单只读管理（Story 9.3，AB-8B）。只读 + 待核查标记 + 导出；无退款入口（退款走工单）。 -->
 <head>
     <meta charset="UTF-8"/>

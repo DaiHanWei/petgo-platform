@@ -3,6 +3,7 @@ package com.tailtopia.admin.failedrequest.web;
 import com.tailtopia.admin.failedrequest.service.FailedConsultRequestService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -24,8 +25,13 @@ public class FailedRequestAdminController {
 
     private final FailedConsultRequestService service;
 
-    public FailedRequestAdminController(FailedConsultRequestService service) {
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
+    public FailedRequestAdminController(FailedConsultRequestService service,
+            Messages msg) {
         this.service = service;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/failed-requests")
@@ -42,7 +48,7 @@ public class FailedRequestAdminController {
     public String followUp(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
             RedirectAttributes flash) {
         service.followUp(id, admin.getAdminAccountId());
-        flash.addFlashAttribute("notice", "已标记跟进");
+        flash.addFlashAttribute("notice", msg.get("admin.flash.failed.followedUp"));
         return "redirect:/admin/failed-requests";
     }
 
@@ -52,9 +58,9 @@ public class FailedRequestAdminController {
             RedirectAttributes flash) {
         try {
             service.archive(id, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已归档");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.failed.archived"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/failed-requests";
     }
@@ -64,7 +70,7 @@ public class FailedRequestAdminController {
     public String note(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
             @RequestParam("note") String note, RedirectAttributes flash) {
         service.note(id, note, admin.getAdminAccountId());
-        flash.addFlashAttribute("notice", "已更新备注");
+        flash.addFlashAttribute("notice", msg.get("admin.flash.failed.noteSaved"));
         return "redirect:/admin/failed-requests";
     }
 }

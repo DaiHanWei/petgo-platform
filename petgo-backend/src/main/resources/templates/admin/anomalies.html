@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!-- 问诊异常工单队列（Story 5.1，AB-4A）。仅会话元数据（NFR5：绝不含 IM 正文/AI 上下文/媒体）。
      状态筛选（OPEN/RESOLVED）HTMX 片段；工单不可删；双入口（模块4 + 兽医分组）指向本页。门控 consult.view_anomalies。 -->
 <head>

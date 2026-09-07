@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!-- 运营配置（Story 9.2）：定价 / PawCoin / 充值档位。改值只影响后续（历史落快照）；变更留审计。 -->
 <head>
     <meta charset="UTF-8"/>
@@ -14,6 +14,10 @@
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
         <p class="hint" th:text="#{admin.config.hint}">改动仅影响后续新成交；历史订单按成交快照不变。每次修改记入变更日志与审计哈希链。</p>
 
+        <!-- 🛡 页面准入已放宽到任意 config.* 读权限（Story 18.3 · AC5 修订，见 AdminConfigController.PAGE_AUTH）：
+             只持 config.share_reward_* 的人也能进来关总开关。所以定价 / PawCoin / 档位这些
+             **非分享奖励块**必须补上 config.view 门 —— 否则放宽准入就顺带把兽医定价与分成放出去了。 -->
+        <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')">
         <!-- 定价（AB-8A/8F）——仅 config.edit 可改；否则只读 -->
         <h2 th:text="#{admin.config.pricing}">定价配置</h2>
         <form class="card" method="post" th:action="@{/admin/config/pricing}"
@@ -50,10 +54,68 @@
                 <input type="number" name="premiumFixed" min="0" th:value="${pawcoin.premiumFixed}"/></label>
             <label><span th:text="#{admin.config.topupPaused}">暂停充值</span>
                 <input type="checkbox" name="topupPaused" value="true" th:checked="${pawcoin.topupPaused}"/></label>
+
             <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.config.btn.savePawcoin}">保存 PawCoin 配置</button>
         </form>
+        </th:block>
 
-        <!-- 充值档位（AB-6B）——保底 ≥1 启用 -->
+        <!-- ══ V1.1.6 Story 18.3 · AB-3M：分享奖励 ══
+             🛡 独立 form + 独立权限码（AC5）：关总开关不该顺带要「改兽医定价与分成」的权限。
+             🛡 落库仍是同一张 pawcoin_config 单行、同一个 PAWCOIN diff 审计组（AC1/AC6）。
+             ⚠️ edit 码也放进门里：应急操作员可能只握 share_reward_edit，进得了页也要看得到这一块。 -->
+        <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.share_reward_view') or hasAuthority('config.share_reward_edit')"
+             th:with="ov=${shareRewardOverview}">
+            <h2 th:text="#{admin.config.shareReward}">分享奖励</h2>
+
+            <!-- 🔴 AC2：白嫖倍数必须与配置**同屏**。两个数分开看都合理，
+                 放一起才看得出风险 —— 「月上限 30 / HD 解锁 60 = 两个月白嫖一次」。 -->
+            <p class="hint" data-notice="share-reward-freeride">
+                <span th:text="#{admin.config.shareReward.hdPrice}">当前 HD 解锁价</span>:
+                <b th:text="${ov.hdPrice()}">5000</b> ·
+                <span th:text="#{admin.config.shareReward.monthlyCap}">月度上限</span>:
+                <b th:text="${ov.monthlyCap()}">2000</b> &rArr;
+                <b th:if="${ov.monthsPerHdUnlock() != null}"
+                   th:text="|#{admin.config.shareReward.monthsPrefix} ${ov.monthsPerHdUnlock()} #{admin.config.shareReward.monthsSuffix}|">攒满 2.5 个月额度可换一次 HD 解锁</b>
+                <b th:if="${ov.monthsPerHdUnlock() == null}"
+                   th:text="#{admin.config.shareReward.noGrant}">月度上限为 0 ⇒ 不发币</b>
+            </p>
+
+            <!-- ⚠️ AC3：不给当月消耗，运营改这个数就是拍脑袋。WIB 字样显式标出。 -->
+            <p class="hint" data-notice="share-reward-usage">
+                <b th:text="${ov.period()}">2026-08</b>
+                <span th:text="#{admin.config.shareReward.wib}">（WIB 自然月）</span> ·
+                <span th:text="#{admin.config.shareReward.granted}">已发放</span>
+                <b th:text="${ov.grantedThisMonth()}">0</b> ·
+                <span th:text="#{admin.config.shareReward.atCap}">达上限账号数</span>
+                <b th:text="${ov.accountsAtCap()}">0</b>
+            </p>
+
+            <!-- ⚠️ class="card" 不是装饰：本块四个标签都很长（「身份证分享每日次数上限（0 = 不发）」），
+                 不加它标签是 inline 的，会在一行里排不下而**从中间断开**——
+                 实机截图上「身份证」被挤到上一行行尾、「分享每日次数上限」掉到下一行。
+                 .card 让 label 变 block，与上面「定价配置」同一形状。 -->
+            <form class="card" method="post" th:action="@{/admin/config/share-reward}"
+                  sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.share_reward_edit')">
+                <!-- 🔴 总开关：发现被刷要能立刻全线关掉，优先于任何渠道层配置。 -->
+                <label><span th:text="#{admin.config.shareRewardEnabled}">分享奖励总开关</span>
+                    <input type="checkbox" name="shareRewardEnabled" value="true"
+                           th:checked="${pawcoin.shareRewardEnabled}"/></label>
+                <label><span th:text="#{admin.config.shareRewardMonthlyCap}">月度免费获取上限</span>
+                    <input type="number" name="shareRewardMonthlyCap" min="0" step="1"
+                           th:value="${pawcoin.shareRewardMonthlyCap}"/></label>
+                <label><span th:text="#{admin.config.idCardShareReward}">身份证分享每次发放</span>
+                    <input type="number" name="idCardShareReward" min="0" step="1"
+                           th:value="${pawcoin.idCardShareReward}"/></label>
+                <label><span th:text="#{admin.config.idCardShareDailyCap}">身份证分享每日次数上限</span>
+                    <input type="number" name="idCardShareDailyCap" min="0" step="1"
+                           th:value="${pawcoin.idCardShareDailyCap}"/></label>
+                <button type="submit" class="btn btn-primary btn-sm"
+                        th:text="#{admin.config.btn.saveShareReward}">保存分享奖励配置</button>
+            </form>
+        </div>
+
+        <!-- 充值档位（AB-6B）——保底 ≥1 启用。同上：非分享奖励块，补 config.view 门。 -->
+        <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')">
         <h2 th:text="#{admin.config.tiers}">充值档位</h2>
         <p class="hint" th:text="#{admin.config.hint.tiers}">至少保留 1 个启用档位；停用不影响历史订单。</p>
         <table>
@@ -75,6 +137,8 @@
             </tr>
             </tbody>
         </table>
+        </th:block>
+
     </div>
 </div>
 </body>

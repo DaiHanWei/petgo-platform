@@ -5,6 +5,7 @@ import com.tailtopia.admin.support.service.AdminSupportTicketQueryService;
 import com.tailtopia.admin.support.service.AdminTicketRefundService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.support.service.SupportTicketService;
+import com.tailtopia.shared.i18n.Messages;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -40,11 +41,16 @@ public class AdminSupportTicketController {
     private final SupportTicketService ticketService;
     private final AdminTicketRefundService ticketRefund;
 
+    /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
+    private final Messages msg;
+
     public AdminSupportTicketController(AdminSupportTicketQueryService query,
-            SupportTicketService ticketService, AdminTicketRefundService ticketRefund) {
+            SupportTicketService ticketService, AdminTicketRefundService ticketRefund,
+            Messages msg) {
         this.query = query;
         this.ticketService = ticketService;
         this.ticketRefund = ticketRefund;
+        this.msg = msg;
     }
 
     @GetMapping("/admin/support-tickets")
@@ -87,9 +93,9 @@ public class AdminSupportTicketController {
             @PathVariable String ticketToken, RedirectAttributes flash) {
         try {
             ticketService.resolveTicket(ticketToken, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已结案（已通知用户并邀请 CSAT 评价；操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.ticket.resolved"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/support-tickets/" + ticketToken;
     }
@@ -104,9 +110,9 @@ public class AdminSupportTicketController {
             RedirectAttributes flash) {
         try {
             ticketRefund.linkOrder(ticketToken, orderToken, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已关联订单（操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.ticket.orderLinked"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/support-tickets/" + ticketToken;
     }
@@ -118,9 +124,9 @@ public class AdminSupportTicketController {
             @PathVariable String ticketToken, RedirectAttributes flash) {
         try {
             ticketRefund.approveRefundNeed(ticketToken, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已批准退款需求（订单进入退款流程，用户可在 App 选择退款方式；操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.ticket.refundApproved"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/support-tickets/" + ticketToken;
     }
@@ -132,9 +138,9 @@ public class AdminSupportTicketController {
             @PathVariable String ticketToken, RedirectAttributes flash) {
         try {
             ticketRefund.rejectRefundNeed(ticketToken, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", "已驳回退款需求（已通知用户；操作留审计）");
+            flash.addFlashAttribute("notice", msg.get("admin.flash.ticket.refundRejected"));
         } catch (AppException e) {
-            flash.addFlashAttribute("error", e.getMessage());
+            flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/support-tickets/" + ticketToken;
     }

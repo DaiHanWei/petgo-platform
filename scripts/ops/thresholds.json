@@ -1,0 +1,70 @@
+{
+  "_README": [
+    "每日体检的判断阈值。留存作战手册第五章第 1 步明写：『先人工按 SOP 跑 2 周，把每个判断阈值跑准』——",
+    "所以这些数不是真理，是**待校准的假设**。每条都写成 {value, source, confidence} 三元组，",
+    "跑够两周后回来改 value，并把 confidence 从 guess 升上去。改这个文件，别改脚本。",
+    "confidence: handbook=手册明写 | diagnosis=诊断报告实测 | guess=拍脑袋，最该被两周真实数据推翻的那些"
+  ],
+
+  "north_star": {
+    "d1_retention_target": {
+      "value": 0.20,
+      "source": "手册『附：唯一北极星』——D1 ≥ 20% 是恢复放量的准入线",
+      "confidence": "handbook"
+    }
+  },
+
+  "daily": {
+    "d1_retention_alarm_below": {
+      "value": 0.10,
+      "source": "手册每日 SOP：『D1 < 10% → 检查推送是否正常发出』",
+      "confidence": "handbook"
+    },
+    "d1_cohort_min_size": {
+      "value": 50,
+      "source": "2026-08-13~08-26 十四天实测校准（原值 15 是拍脑袋的，太松）：cohort<50 的 6 天 D1 落在 2.0%~15.2%、标准差 5.0；cohort>=50 的 8 天落在 8.2%~13.5%、标准差 1.7。50 是噪音塌下来的分界点。代价是约四成的天不出判定——那些天本来就支撑不了判定",
+      "confidence": "diagnosis"
+    },
+    "dau_drop_alarm_ratio": {
+      "value": 0.7,
+      "source": "当日 DAU < 近 7 日中位数 × 该比例 → 报警",
+      "confidence": "guess"
+    },
+    "feed_new_posts_min": {
+      "value": 5,
+      "source": "手册抓手 3：『每天固定发 N 条种子内容，保证 Feed 不为空——空房间是留存杀手』。N 未定，暂取 5",
+      "confidence": "guess"
+    },
+    "consult_unanswered_alarm": {
+      "value": 1,
+      "source": "手册抓手 4：『无人接单 → 补兽医/限流』。供给不足比功能 bug 更伤信任，所以阈值就是 1 单",
+      "confidence": "handbook"
+    }
+  },
+
+  "weekly": {
+    "share_rate_of_publishers_min": {
+      "value": 0.30,
+      "source": "手册抓手 2：现状 106 人发布 / 15 人分享 = 14%。目标先翻倍到 30%",
+      "confidence": "guess"
+    },
+    "publish_rate_of_profiled_min": {
+      "value": 0.40,
+      "source": "诊断报告 §2.3：建档→发首条只有 26.7%，四分之三的人从没产出内容。目标 40%",
+      "confidence": "diagnosis"
+    }
+  },
+
+  "data_hygiene": {
+    "excluded_app_versions": {
+      "value": ["1.1.0"],
+      "source": "诊断报告 §0：v1.1.0 是断链包，473 人 D1 2.3%、占总量 38%，把所有数字拉平。『任何不分版本看的数字都是错的』",
+      "confidence": "diagnosis"
+    },
+    "exclude_stag_builds": {
+      "value": true,
+      "source": "stag 包 versionName 带 -stag 后缀（scripts/build-stag-apk.sh 注入）就是为了把内测数据和生产口径分开",
+      "confidence": "handbook"
+    }
+  }
+}

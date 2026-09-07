@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!-- 异常工单详情（Story 5.1）。仅会话元数据 + 内部备注 + 处理图现签 URL（NFR5：不读第三方正文）。
      备注/标记已处理门控 consult.handle；工单不可删。 -->
 <head>

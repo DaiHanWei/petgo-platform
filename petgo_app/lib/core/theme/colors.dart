@@ -52,6 +52,13 @@ class AppColors {
   static const Color menstruationRed = Color(0xFFB03060);
   static const Color healthEventText = Color(0xFFC4263C); // 健康事件深红文字（原型 hentry #C4263C）
   static const Color goldTint = Color(0xFFFEF3DE); // 黄浅底（badge tips）
+
+  /// 装饰标签胶囊的渐变终点（UI 稿 `.deco-badge`：135° 从 [gold] 到此色）。
+  ///
+  /// ⚠️ 与 [coral]（0xFFF0425A）**不是同一个红**，只差一点但不要混用：
+  /// coral 是「危险 / 点赞 / 疫苗」那套语义色，这个只是装饰标签的渐变终点。
+  /// 投影色用的才是 coral（规格写的是 rgba(240,66,90,.22)）。
+  static const Color decoBadgeEnd = Color(0xFFF0596E);
   static const Color momenBadgeBg = Color(0xFFE7F8F0); // Momen 绿浅底（原型 b-happy）
   static const Color momenBadgeText = Color(0xFF0E7A4D); // Momen 绿文字
   static const Color tipsBadgeText = Color(0xFF8A5A00); // Tips 黄文字（原型 b-tips）

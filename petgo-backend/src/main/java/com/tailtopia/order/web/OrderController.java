@@ -28,13 +28,21 @@ public class OrderController {
         this.orderCenter = orderCenter;
     }
 
+    /**
+     * 🔴 {@code includeEcommerce} 是电商行的<b>显式加入闸门</b>（Story 3.9 补丁）：
+     * 线上 v1.1.4 老 App 不认识 {@code ShopOrderStatus} —— 状态全兜进「已完成」组、
+     * 文案渲染英文枚举串、CANCELLED 还打绿色成功徽章。所以默认聚合（不传该参）<b>不含</b>电商行，
+     * 只有本版起的新 App 显式传 {@code includeEcommerce=true}（或 {@code type=ECOMMERCE}，
+     * 老 App 没有这个枚举）才返回。
+     */
     @GetMapping("/api/v1/orders")
     public OrderPage orders(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String cursor,
-            @RequestParam(required = false) Integer limit) {
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false, defaultValue = "false") boolean includeEcommerce) {
         int size = limit == null ? DEFAULT_LIMIT : Math.min(Math.max(limit, 1), MAX_LIMIT);
-        return orderCenter.listOrders(currentUserId(jwt), type, cursor, size);
+        return orderCenter.listOrders(currentUserId(jwt), type, cursor, size, includeEcommerce);
     }
 
     /** 订单详情（Story 5.3，按 token 跨 3 源；仅 owner；宠物已删→占位 200 非 500）。 */

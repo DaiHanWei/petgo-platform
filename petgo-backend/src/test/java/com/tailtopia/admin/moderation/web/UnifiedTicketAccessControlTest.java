@@ -50,6 +50,10 @@ class UnifiedTicketAccessControlTest {
         UnifiedTicketQueryService query() {
             var q = mock(UnifiedTicketQueryService.class);
             when(q.search(any(), any(), any(), any())).thenReturn(Page.empty());
+            // ⚠️ 控制器实际调的是**五参**重载（scope, type, status, q, pageable）。
+            // 之前只打了四参那个，五参返回 null —— 而旧代码从不解引用 result，
+            // 所以这个漏桩一直没露出来，直到 17.2 要读 result.getContent() 装配限流状态。
+            when(q.search(any(), any(), any(), any(), any())).thenReturn(Page.empty());
             return q;
         }
 
@@ -84,11 +88,33 @@ class UnifiedTicketAccessControlTest {
         }
 
         @Bean
+        com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead() {
+            return mock(com.tailtopia.admin.throttle.service.AdminThrottleReadService.class);
+        }
+
+        @Bean
+        com.tailtopia.shared.i18n.Messages messages() {
+            // 用真语言包而非 mock：本类多条用例断言 error flash 的中文片段（「不同类型」等），
+            // mock 返回 null 会让断言 NPE。默认语言锁 zh_CN，与线上无 locale cookie 时的回退一致。
+            org.springframework.context.i18n.LocaleContextHolder
+                    .setDefaultLocale(java.util.Locale.SIMPLIFIED_CHINESE);
+            var ms = new org.springframework.context.support.ResourceBundleMessageSource();
+            ms.setBasename("i18n/messages");
+            ms.setDefaultEncoding("UTF-8");
+            ms.setUseCodeAsDefaultMessage(true);
+            return new com.tailtopia.shared.i18n.Messages(ms);
+        }
+
+        @Bean
         UnifiedTicketController controller(UnifiedTicketQueryService q,
                 AccountReportEntryRepository e, AccountDisposalRepository d, AccountQueryService a,
-                AccountDisposalService ds, com.tailtopia.moderation.service.ReportService cr,
-                com.tailtopia.admin.service.AdminModerationService am) {
-            return new UnifiedTicketController(q, e, d, a, ds, cr, am);
+                AccountDisposalService ds,
+                com.tailtopia.admin.throttle.service.AdminThrottleReadService t,
+                com.tailtopia.moderation.service.ReportService cr,
+                com.tailtopia.admin.service.AdminModerationService am,
+                com.tailtopia.shared.i18n.Messages msg) {
+            // 2026-09-02 后台文案国际化：控制器新增 Messages 注入。
+            return new UnifiedTicketController(q, e, d, a, ds, t, cr, am, msg);
         }
     }
 

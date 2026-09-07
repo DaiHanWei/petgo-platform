@@ -42,7 +42,7 @@ public class AdminConsultOrderService {
     @Transactional(readOnly = true)
     public AdminConsultOrderDetail detail(String orderToken) {
         ConsultOrder o = orders.findByOrderToken(orderToken)
-                .orElseThrow(() -> AppException.notFound("订单不存在"));
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
         List<AdminConsultOrderStageRow> stages = stageEvents
                 .findByConsultOrderIdOrderByOccurredAtAsc(o.getId()).stream()
                 .map(e -> new AdminConsultOrderStageRow(
@@ -60,7 +60,7 @@ public class AdminConsultOrderService {
     @Transactional
     public void markVerify(String orderToken, ConsultOrderVerifyStatus status, String note, long adminId) {
         ConsultOrder o = orders.findByOrderToken(orderToken)
-                .orElseThrow(() -> AppException.notFound("订单不存在"));
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
         o.applyVerify(status, note, adminId);
         orders.save(o);
         audit.record(adminId, "CONSULT_ORDER_VERIFY", "consult_order", orderToken,

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<!--
+  「绑定宠物」下拉（V1.1.6 Story 12.2 · AC4）。由 HTMX 在切换发布账号时整块换掉。
+
+  此前这里是让运营手填**数字 ID** 的 number 输入框，而服务端校验的是"该宠物是否属于
+  所选作者" —— 填错就报错，且运营无从判断原因。
+
+  ⚠️ V1 是「单账号单宠物」（唯一约束），所以这里实际只有 0 或 1 项。
+     仍做成下拉：14-1 的「关联物种」要挂在它之后，将来放开多宠物也不用重做。
+-->
+<body>
+<div th:fragment="options" id="seedPetSelect" th:remove="tag">
+    <select id="petId" name="petId" class="field-full">
+        <option value="" th:text="#{admin.seed.pet.none}">不绑定宠物</option>
+        <option th:each="p : ${petOptions}" th:value="${p.id}"
+                th:text="${p.name} + ' · ' + ${p.petType} + ' (id=' + ${p.id} + ')'">宠物</option>
+    </select>
+    <!-- 🔴 空态要说清楚原因：虚拟账号没有宠物档案，而成长日历必须绑档案 ——
+         不写这句，运营只会看到一个空下拉，然后回去手填 ID（那正是本 story 要去掉的东西）。 -->
+    <p class="hint" th:if="${petOptions.isEmpty()}" th:text="#{admin.seed.pet.empty}">
+        该账号名下没有宠物档案。成长日历（Diary）必须绑定宠物，请改用有档案的运营真实账号。
+    </p>
+</div>
+</body>
+</html>

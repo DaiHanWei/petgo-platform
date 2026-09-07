@@ -195,6 +195,8 @@ class _VetWaitingPageState extends ConsumerState<VetWaitingPage> with WidgetsBin
     await _cancelSilently();
     if (!mounted) return;
     _navigating = true;
+    // 落点保留 /triage（问诊 hub）：取消等待回发起入口便于重试/换 AI 分诊；
+    // DEP-1 后 TriagePage 自带顶栏返回 + PopScope 兜底到 /home。
     context.go('/triage');
   }
 
@@ -222,6 +224,7 @@ class _VetWaitingPageState extends ConsumerState<VetWaitingPage> with WidgetsBin
         if (didPop || _navigating) return;
         if (_noVet) {
           _navigating = true;
+          // 落点保留 /triage（问诊 hub）：无兽医可接时系统返回同「Kembali」按钮语义（出路见 TriagePage）。
           context.go('/triage');
         } else {
           _confirmCancel();
@@ -312,6 +315,7 @@ class _VetWaitingPageState extends ConsumerState<VetWaitingPage> with WidgetsBin
               width: double.infinity,
               child: FilledButton(
                 key: const ValueKey('vetWaitingBackHome'),
+                // 落点保留 /triage（问诊 hub）：「Kembali」回发起入口可换 AI 分诊/重试（出路见 TriagePage）。
                 onPressed: _navigating ? null : () { _navigating = true; context.go('/triage'); },
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.mint, foregroundColor: Colors.white,

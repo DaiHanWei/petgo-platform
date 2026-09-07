@@ -4,10 +4,12 @@ import com.tailtopia.content.dto.CommentPageResponse;
 import com.tailtopia.content.dto.ContentDetailResponse;
 import com.tailtopia.content.service.CommentQueryService;
 import com.tailtopia.content.service.ContentDetailService;
+import com.tailtopia.content.service.ContentViewStatsService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -26,16 +28,27 @@ public class ContentDetailController {
 
     private final ContentDetailService detailService;
     private final CommentQueryService commentQueryService;
+    private final ContentViewStatsService viewStats;
 
     public ContentDetailController(ContentDetailService detailService,
-            CommentQueryService commentQueryService) {
+            CommentQueryService commentQueryService, ContentViewStatsService viewStats) {
         this.detailService = detailService;
         this.commentQueryService = commentQueryService;
+        this.viewStats = viewStats;
     }
 
     @GetMapping("/api/v1/content-posts/{id}")
-    public ContentDetailResponse detail(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
-        return detailService.getDetail(id, viewerId(jwt));
+    public ContentDetailResponse detail(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
+            @RequestHeader(value = ContentFeedController.ANON_SESSION_HEADER, required = false)
+            String anonSession) {
+        Long viewerId = viewerId(jwt);
+        ContentDetailResponse resp = detailService.getDetail(id, viewerId);
+        // 浏览统计（2026-08-31）：详情成功返回才算「一次浏览」（404/不可见路径在上一行已抛）。
+        // 作者本人不计 —— isAuthor 详情本来就要算，不为统计再查一遍。异步落库，不拖慢本请求。
+        if (!resp.isAuthor()) {
+            viewStats.recordView(id, viewerId, anonSession);
+        }
+        return resp;
     }
 
     @GetMapping("/api/v1/content-posts/{id}/comments")

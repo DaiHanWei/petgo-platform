@@ -22,6 +22,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
+import com.tailtopia.support.TestMessages;
 
 /**
  * L0：内容管理门控（Story 4.2 AC7）——浏览/下架 {@code content.proactive_takedown}、
@@ -41,8 +42,21 @@ class AdminContentManageAccessControlTest {
         }
 
         @Bean
-        AdminContentManageController controller(AdminContentManageService s) {
-            return new AdminContentManageController(s);
+        com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead() {
+            return mock(com.tailtopia.admin.throttle.service.AdminThrottleReadService.class);
+        }
+
+        @Bean
+        com.tailtopia.admin.moderation.service.AdminContentDetailService contentDetail() {
+            return mock(com.tailtopia.admin.moderation.service.AdminContentDetailService.class);
+        }
+
+        @Bean
+        AdminContentManageController controller(AdminContentManageService s,
+                com.tailtopia.admin.throttle.service.AdminThrottleReadService t,
+                com.tailtopia.admin.moderation.service.AdminContentDetailService d) {
+            // 2026-09-02 内容详情页：控制器新增 AdminContentDetailService 注入。
+            return new AdminContentManageController(s, TestMessages.real(), t, d);
         }
     }
 
@@ -75,7 +89,10 @@ class AdminContentManageAccessControlTest {
     }
 
     private void browse() {
-        controller.content(null, null, null, null, null, null, null, 0, null, new ConcurrentModel());
+        // type, authorId, from, to, status, q, sort, page, species, speciesSource,
+        // dateBasis, hxRequest, model
+        controller.content(null, null, null, null, null, null, null, 0, null, null,
+                "published", null, new ConcurrentModel());
     }
 
     private void takedown() {

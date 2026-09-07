@@ -196,6 +196,8 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
     }
     if (!mounted) return;
     _navigating = true;
+    // 落点保留 /triage（问诊 hub）：取消匹配应回发起入口便于重试；DEP-1 后 TriagePage
+    // 自带顶栏返回 + PopScope 兜底到 /home，不再是导航死胡同。
     context.go('/triage');
   }
 

@@ -76,8 +76,12 @@ public class SecurityConfig {
                 .addFilterBefore(new AdminSessionGuardFilter(adminAccounts),
                         AuthorizationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        // 静态资源放行（登录页未登录即需加载 CSS/JS，否则登录页裸奔无样式）
-                        .requestMatchers("/admin/admin.css", "/admin/admin.js",
+                        // 静态资源放行（登录页未登录即需加载 CSS/JS，否则登录页裸奔无样式）。
+                        // ⚠️ 用 *.css / *.js 模式而不是精确文件名：静态资源已开内容指纹
+                        //   （bug 20260901-471，admin.js → admin-<md5>.js），精确名匹配不到
+                        //    指纹化后的 URL，表现是登录页 CSS/JS 全 403、页面裸奔。
+                        //    模式只覆盖 /admin/ 一级目录下的样式与脚本，不放行任何页面路由。
+                        .requestMatchers("/admin/*.css", "/admin/*.js",
                                 "/admin/vendor/**").permitAll()
                         // 登录页 + Lark OAuth 登录/回调放行（未登录可访问以建会话）
                         .requestMatchers("/admin/login", "/admin/oauth/**").permitAll()
@@ -143,12 +147,14 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 登录/刷新放行（换取自签 JWT 的入口）
                         .requestMatchers("/api/v1/auth/**").permitAll()
-                        // 运维/文档/公开 H5（名片 /p、里程碑庆祝分享 /m）放行
+                        // 运维/文档/公开 H5（名片 /p、里程碑庆祝分享 /m、单条内容分享 /c）放行。
+                        // ⚠️ 三个前缀是**三种不同的分享类型**，各自落地页不同（Story 9.3 · AD-15 Rule 5）——
+                        // 不可合并成一个通配。
                         .requestMatchers("/actuator/**", "/v3/api-docs/**", "/swagger-ui/**",
-                                "/swagger-ui.html", "/p/**", "/m/**").permitAll()
+                                "/swagger-ui.html", "/p/**", "/m/**", "/c/**").permitAll()
                         // 品牌静态资源（H5 名片/分享页左上角 wordmark，bug 20260701-182）公开放行。
                         .requestMatchers(HttpMethod.GET, "/brand/**").permitAll()
-                        // 法律政策 H5（隐私政策 / 服务条款 / 账号删除 / 儿童安全标准 / 支持页）+ 下载引导落地页公开放行
+                        // 法律政策 H5（隐私 / 条款 / Mitra 条款 / 账号删除 / 儿童安全 / 支持）+ 下载引导落地页公开放行（商店上架 + App WebView 引用）
                         .requestMatchers(HttpMethod.GET, "/privacy", "/terms", "/mitra-terms",
                                 "/account-deletion", "/child-safety", "/support", "/get").permitAll()
                         // dev 诊断端点（仅 dev profile 存在）+ 错误转发
@@ -171,6 +177,19 @@ public class SecurityConfig {
                                 "/api/v1/comments/**").permitAll()
                         // 他人迷你主页只读对游客可见（Story 3.8，FR-26 无登录要求）
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/mini-profile").permitAll()
+                        // Toko 商品只读对游客可见（V1.4.0 Story 1.1，FR-93A）：GET 商品列表/详情放行。
+                        // 与 FR-78「未登录点击非落地 Tab 触发登录引导」有意不同——商品浏览是转化漏斗
+                        // 最上层，登录墙会直接杀掉转化；登录引导推迟到「加入购物车」（Story 3.6）。
+                        // 写入端点属 Story 1.3 后台，走 /admin/**，不在此放行。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop/products",
+                                "/api/v1/shop/products/**").permitAll()
+                        // Toko 顶部 banner（2026-08-27）：与商品列表同理 ——
+                        // banner 在转化漏斗最上层，用登录墙拦它没有任何意义。
+                        // 只读；配置走 /admin/shop/banners，不在此放行。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop/banner").permitAll()
+                        // 行政区划树（Story 2.4）：区划与是否可配送都不敏感，
+                        // 且用户在注册前就该能看到「你们送不送我这儿」。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/shop/regions").permitAll()
                         // 兽医工作台端点（Story 5.1+）：仅 role=VET 可达；user/guest → 403（双向门控）
                         .requestMatchers("/api/v1/vet/**").hasRole("VET")
                         // 用户侧问诊端点（Story 5.2+ / 计费流 3-2~3-4）：仅 role=USER 可达（vet/guest → 403）

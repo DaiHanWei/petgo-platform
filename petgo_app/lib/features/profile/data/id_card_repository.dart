@@ -36,6 +36,19 @@ abstract class IdCardRepository {
   /// HD 下载当前定价（IDR，后台可配 → 实时下发，417 同类修复）。
   /// 拉取失败/载荷异常**直接抛出**——UI 显示重试并禁用付款，不做本地兜底价。
   Future<int> hdPrice();
+
+  /// 分享成功上报 → 试发分享奖励（Story 18.2）。返回真的发了多少枚，0 = 没发。
+  ///
+  /// ⚠️ 只该在系统分享面板回调 `ShareResultStatus.success` 之后调（AC5）。
+  /// 🛡 服务端刻意不返回「为什么没发」——不区分就没法把「你额度用完了」讲给用户听（AC3）。
+  /// 🛡 失败不抛给分享链路：调用方把它当"没发"处理（AC7，不重试、不建补偿队列）。
+  Future<int> reportShareForReward(int cardId);
+
+  /// 分享奖励的**展示口径**（产品 2026-08-27）：可以对外承诺的枚数，0 = 卡面页不提奖励。
+  ///
+  /// 🔴 由服务端算，客户端不判：判据涉及总开关、每次发放数、日上限、以及"这只宠物领过没"，
+  /// 在客户端复刻一份必然漂移，而漂移的后果是**承诺了却不发**（Story 18.2 AC6 反复要避免的）。
+  Future<int> advertisableShareReward();
 }
 
 class DioIdCardRepository implements IdCardRepository {
@@ -86,6 +99,16 @@ class DioIdCardRepository implements IdCardRepository {
   }
 
   @override
+  @override
+  Future<int> reportShareForReward(int cardId) async {
+    final res = await dio.post<Map<String, dynamic>>(
+      '${ApiPaths.meIdCards}/$cardId/share-rewards',
+    );
+    final coins = res.data?['coins'];
+    return coins is num ? coins.toInt() : 0;
+  }
+
+  @override
   Future<IdCard> getCard(int cardId) async {
     final res = await dio.get<Map<String, dynamic>>(ApiPaths.meIdCard(cardId));
     return IdCard.fromJson(res.data ?? const {});
@@ -98,6 +121,13 @@ class DioIdCardRepository implements IdCardRepository {
       data: {'channel': channel.wire},
     );
     return HdPurchaseResult.fromJson(res.data ?? const {});
+  }
+
+  @override
+  Future<int> advertisableShareReward() async {
+    final res = await dio.get<Map<String, dynamic>>(ApiPaths.meIdCardShareReward);
+    final coins = res.data?['coins'];
+    return coins is num ? coins.toInt() : 0;
   }
 
   @override
@@ -123,6 +153,16 @@ final FutureProvider<IdCardData?> idCardProvider = FutureProvider<IdCardData?>(
 /// 失败为 AsyncError，付费抽屉显示重试并禁用付款按钮。
 final idCardHdPriceProvider = FutureProvider.autoDispose<int>(
     (ref) => ref.read(idCardRepositoryProvider).hdPrice());
+
+/// 卡面页「分享可得多少币」的展示口径（0 = 不展示）。
+/// 🛡 取不到就按 0 处理 —— 这只是一句文案，读失败绝不能让卡面页出错或空承诺。
+final idCardShareRewardProvider = FutureProvider.autoDispose<int>((ref) async {
+  try {
+    return await ref.read(idCardRepositoryProvider).advertisableShareReward();
+  } catch (_) {
+    return 0;
+  }
+});
 
 /// 历史卡列表（Story 6.7，createdAt 倒序）。KTP 页进入即渲染此列表。
 final FutureProvider<List<IdCard>> idCardListProvider = FutureProvider<List<IdCard>>(

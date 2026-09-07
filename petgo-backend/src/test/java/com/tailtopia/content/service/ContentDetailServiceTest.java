@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.mockito.Mockito;
 import org.junit.jupiter.api.Test;
 
 /** L0：详情读取 + 多态（404 不存在/软删；注销作者 200 匿名化）+ isAuthor（AC1/AC4）。 */
@@ -45,7 +46,8 @@ class ContentDetailServiceTest {
         reportService = mock(ReportService.class); // 默认 hasReported → false（未举报）
         // Story 1.1：默认 isHidden → false（未隐藏该作者）
         hideRelations = mock(UserHideRelationReader.class);
-        service = new ContentDetailService(posts, comments, likes, accounts, reportService, hideRelations);
+        service = new ContentDetailService(posts, comments, likes, accounts, reportService, hideRelations,
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyLong())).thenReturn(5L);
@@ -75,7 +77,7 @@ class ContentDetailServiceTest {
     void returnsDetailWithCommentCountAndImagesInOrder() {
         when(posts.findById(1L)).thenReturn(Optional.of(post(1L, 7L, null)));
         when(accounts.findAuthorViews(anyList()))
-                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", "https://cdn/av.jpg", false)));
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", "https://cdn/av.jpg", false, java.util.List.of())));
 
         ContentDetailResponse d = service.getDetail(1L, 7L);
         assertThat(d.imageUrls()).containsExactly("https://cdn/a.jpg", "https://cdn/b.jpg");
@@ -90,7 +92,7 @@ class ContentDetailServiceTest {
     void guestIsNotAuthor() {
         when(posts.findById(1L)).thenReturn(Optional.of(post(1L, 7L, null)));
         when(accounts.findAuthorViews(anyList()))
-                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false)));
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
         assertThat(service.getDetail(1L, null).isAuthor()).isFalse();
     }
 
@@ -132,7 +134,7 @@ class ContentDetailServiceTest {
     void guestDetailUnaffectedByHideRelations() {
         when(posts.findById(4L)).thenReturn(Optional.of(post(4L, 7L, null)));
         when(accounts.findAuthorViews(org.mockito.ArgumentMatchers.anyList()))
-                .thenReturn(java.util.Map.of(7L, new com.tailtopia.auth.dto.AuthorView(7L, "A", null, false)));
+                .thenReturn(java.util.Map.of(7L, new com.tailtopia.auth.dto.AuthorView(7L, "A", null, false, java.util.List.of())));
 
         service.getDetail(4L, null);
 
@@ -151,7 +153,7 @@ class ContentDetailServiceTest {
         // 内容审核 D-CM2：审核中作者无感知——本人可正常点入自己的挂起帖详情。
         when(posts.findById(5L)).thenReturn(Optional.of(underReview(5L, 7L)));
         when(accounts.findAuthorViews(anyList()))
-                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false)));
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
         ContentDetailResponse d = service.getDetail(5L, 7L);
         assertThat(d.isAuthor()).isTrue();
     }

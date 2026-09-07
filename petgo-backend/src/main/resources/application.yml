@@ -14,6 +14,16 @@ petgo:
     apple:
       # Apple Sign-In client id（aud 校验，通常 = iOS bundle id）。env 注入；留空时跳过 aud 严格校验（仅 dev/L0）。
       client-id: ${APPLE_CLIENT_ID:}
+  # 生命周期推送（留存运营作战手册 · 抓手 1）：D1 / D3 / D7 / 7 天未回召回，打 D1 留存 9.6% → 20%。
+  # 🔴 enabled 默认 false：迁移把存量用户 last_active_at 回填成 updated_at 后，一大批老用户会立刻
+  #    满足「7 天未回」。随部署自动生效 = 第一次日扫给几百人同时推召回。手册要的是「按 SOP 放量、
+  #    看漏斗、换文案」，所以上线后由运营在 env 里显式打开，并用 daily-cap 按天放量。
+  lifecycle-push:
+    enabled: ${LIFECYCLE_PUSH_ENABLED:false}
+    daily-cap: ${LIFECYCLE_PUSH_DAILY_CAP:200}
+    winback-after-days: ${LIFECYCLE_PUSH_WINBACK_AFTER_DAYS:7}
+    # 12:00 UTC = 19:00 WIB，晚间黄金时段。别照抄 Story 6.7 的 01:00 UTC（=08:00 WIB 通勤路上）。
+    cron: ${LIFECYCLE_PUSH_CRON:0 0 12 * * *}
   # AI 智能分诊（Story 4.1）：Gemini Developer API（gemini-2.5-flash，签名 URL 直拉私密图）。
   # mode=stub（默认）走打桩客户端，无凭证即可启动并验状态机；mode=live 才打真实 Gemini（L2，需 key）。
   ai:
@@ -80,6 +90,20 @@ petgo:
     android-store-url: ${APP_ANDROID_STORE_URL:}
   # 对外 H5（名片 /p、里程碑庆祝分享 /m）下载 CTA（CardPageController + MilestoneSharePageController 共用）。
   # V1 仅 Android 上架：iOS / 桌面统一兜底到 Play 商店；待 iOS 上架再单独配 CARD_IOS_URL。env 可覆盖。
+  # 首页推荐序**基建**参数（V1.1.6 Story 16.1，16.4 收窄）。
+  # ✅ 打分类参数（权重/评论权重/P95/曝光衰减/曝光窗口/两项配比/窗口大小）已迁到配置表
+  #    feed_rank_config，改后无需发版（后台「推荐算法」区块）。
+  # 🛡 留在这里的只有"改了要发版也无所谓"的基建量 —— 它们不是运营会去调的东西
+  #    （调错了表现是缓存失效或查询变慢，不是排序效果变差）。
+  feed:
+    rank:
+      # 序列快照 TTL（分钟）。翻页途中会续期，避免翻到一半快照过期导致下一页重复。
+      sequence-ttl-minutes: ${FEED_RANK_SEQUENCE_TTL_MINUTES:30}
+      # 一次生成的序列长度。游标超出后用同一种子续算下一段。
+      sequence-length: ${FEED_RANK_SEQUENCE_LENGTH:100}
+      # 候选池上界（最近 N 条公开内容）。🔴 必须有上界：这个查询每次下拉刷新都要跑一次，
+      # 且推导物种/批量取赞评/取装饰标签都按这一批规模走。取"最近 N 条"也让它走既有索引。
+      candidate-pool-size: ${FEED_RANK_CANDIDATE_POOL_SIZE:1000}
   card:
     android-url: ${CARD_ANDROID_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
     ios-url: ${CARD_IOS_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
@@ -99,6 +123,12 @@ petgo:
     timeout-seconds: ${LARK_CONTENT_TIMEOUT_SECONDS:30}
     # 读表行数上限（数据区 A2:F{limit+1}）。已发布行会一直留在表内占坑，触顶时任务会 warn 提醒调大。
     row-limit: ${LARK_CONTENT_ROW_LIMIT:500}
+
+  # 精选自营电商（V1.4.0）
+  shop:
+    # 低库存提示阈值（FR-95）：可售 ≤ 此值时详情页展示「Sisa {n}」。
+    # {n} 取真实剩余数——制造合理紧迫感但不虚构数字。
+    low-stock-threshold: ${SHOP_LOW_STOCK_THRESHOLD:5}
 
 # 退款收款账户 PII 加密（Story 4.3，A-1/FR-NFR-4）。AES-256-GCM 密钥（base64 的 32 字节）。
 # 凭证 env 注入红线，绝不入库；缺失时加/解密抛异常（不静默存明文）。dev/test 用 application-dev.yml 的占位密钥。
@@ -163,6 +193,16 @@ spring:
     scheduling:
       pool:
         size: ${TASK_SCHEDULING_POOL_SIZE:4}
+  # 🔴 后台图片上传（banner / 商品图 / 种子内容）的**真正**上限在这里。
+  # Boot 默认 max-file-size=1MB，而 AdminSeedImageService.MAX_BYTES 写的是 10MB ——
+  # 不配这段，Tomcat 在**进 controller 之前**就拒掉 >1MB 的请求，那段 10MB 校验
+  # 与 admin.seed.upload.tooLarge 文案**永远走不到**（banner 是整屏宽主视觉，必超 1MB）。
+  # ⚠️ 改 MAX_BYTES 必须同步改这里：这里只负责放行，判定点唯一地留在服务层。
+  servlet:
+    multipart:
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE:10MB}
+      # 整请求上限：本控件一张图一个请求，留一倍余量兜住表单其余字段。
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:20MB}
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:petgo}
     username: ${DB_USER:petgo}
@@ -194,6 +234,21 @@ spring:
   jackson:
     default-property-inclusion: non_null
     time-zone: UTC
+  # 后台静态资源内容指纹（bug 20260901-471 的防复发修复）。
+  # 🔴 背景：admin.js 此前裸路径引用、无版本指纹 —— 8-28 那次「全后台 JS 静默失效」修复后，
+  #    浏览器缓存里存过坏文件的人**不会自愈**（强刷之前一直坏），提报人 9-01 撞上的就是它。
+  # content 策略把文件名改写成 admin-<内容md5>.js：内容一变 URL 就变，旧缓存天然失效。
+  # ⚠️ 范围只限 /admin/**（后台 js/css/htmx）；/brand 等对外静态不动，避免波及分享落地页。
+  # ⚠️ 模板里的 @{...} 要被改写成带指纹的 URL，还需注册 ResourceUrlEncodingFilter
+  #   （Boot 4 不再自动注册，见 StaticResourceVersionConfig）。
+  web:
+    resources:
+      chain:
+        enabled: true
+        strategy:
+          content:
+            enabled: true
+            paths: /admin/**
   # 管理后台双语 i18n（Story 1.6）：messageSource 由 AdminLocaleConfig 显式定义（basename classpath:i18n/messages，
   # UTF-8，缺键回退 code）。不用 spring.messages.* 自动配置——其条件要求基底 messages.properties，本项目仅 zh_CN/en 变体。
 

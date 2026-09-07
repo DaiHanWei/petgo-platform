@@ -70,8 +70,8 @@ class TimelineItemResponseContractTest {
                         LocalDate.of(2026, 5, 20), List.of("https://x/1.jpg"), "文字"),
                 TimelineItemResponse.happyMomentWithMilestone(1L, Instant.parse("2026-05-20T09:00:00Z"),
                         LocalDate.of(2026, 5, 20), List.of("https://x/1.jpg"), "文字", "D-S13", "S"),
-                TimelineItemResponse.healthEvent(Instant.parse("2026-05-20T09:00:00Z"), "GREEN",
-                        "摘要", "AI_TRIAGE", "triage:1"),
+                TimelineItemResponse.healthEvent(Instant.parse("2026-05-20T09:00:00Z"),
+                        LocalDate.of(2026, 5, 20), "GREEN", "摘要", "AI_TRIAGE", "triage:1"),
                 TimelineItemResponse.healthRecord(7L, Instant.parse("2026-05-20T09:00:00Z"),
                         LocalDate.of(2026, 5, 20), "VACCINE", "第一针"),
                 TimelineItemResponse.milestoneBanner(Instant.parse("2026-05-20T09:00:00Z"), "C-L2", "L"),
@@ -108,7 +108,8 @@ class TimelineItemResponseContractTest {
     void healthEventKeepsV1SourceFieldsForDeepLink() {
         // bug 20260702-231 / 20260706-259 的两个字段不得因新增分类而丢失。
         Map<String, Object> w = wire(TimelineItemResponse.healthEvent(
-                Instant.parse("2026-05-20T09:00:00Z"), "GREEN", "摘要", "VET_CONSULT", "consult:9"));
+                Instant.parse("2026-05-20T09:00:00Z"), LocalDate.of(2026, 5, 20),
+                "GREEN", "摘要", "VET_CONSULT", "consult:9"));
         assertThat(w).containsEntry("sourceType", "VET_CONSULT");
         assertThat(w).containsEntry("sourceRef", "consult:9");
         assertThat(w).containsEntry("healthRecordType", "CONSULT");

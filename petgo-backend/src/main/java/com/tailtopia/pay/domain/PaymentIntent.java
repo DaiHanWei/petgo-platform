@@ -76,6 +76,24 @@ public class PaymentIntent {
     @Column(name = "expires_at")
     private Instant expiresAt;
 
+    /**
+     * 混合支付三列（Story 3.3 建列 · Story 3.8 首次写入）。
+     *
+     * <p>🔴 <b>非 MIXED 三列必须全 NULL；MIXED 三列必须非空且 coin + cash = amount</b> ——
+     * 由 {@code ck_payment_intents_mixed_shape} 在库级强制。不变式放在 DB 而不是只放应用层，
+     * 理由是「拆分金额对不上就是账对不平，而账不平只在退款时才暴露 —— 那时已经动过真钱了」。
+     *
+     * <p>🔴 {@code coinRatio} <b>只作展示与审计冗余，绝不参与计算</b>（AD-2）。
+     */
+    @Column(name = "coin_amount", updatable = false)
+    private Long coinAmount;
+
+    @Column(name = "cash_amount", updatable = false)
+    private Long cashAmount;
+
+    @Column(name = "coin_ratio", updatable = false)
+    private java.math.BigDecimal coinRatio;
+
     @Version
     @Column(name = "version", nullable = false)
     private long version;
@@ -114,6 +132,43 @@ public class PaymentIntent {
         p.status = PaymentStatus.PENDING;
         p.expiresAt = expiresAt;
         return p;
+    }
+
+    /**
+     * 建混合支付意图（Story 3.8，电商订单专用）。
+     *
+     * <p>🔴 {@code amount} 是<b>订单总额</b>，不是现金段：库级不变式要求 coin + cash = amount。
+     * 网关那边只收 {@code cashAmount}（Coin 段站内扣），两者的差异必须靠这个不变式记下来 ——
+     * 否则退款时无从知道当初有多少是币、多少是真钱（AD-2 整数累计法的分母）。
+     */
+    public static PaymentIntent createMixed(long userId, PaymentPurpose purpose, long amount,
+            long coinAmount, long cashAmount, java.math.BigDecimal coinRatio, String currency,
+            String publicToken, Instant expiresAt) {
+        if (coinAmount < 0 || cashAmount < 0) {
+            throw AppException.validation("拆分金额不能为负");
+        }
+        if (coinAmount + cashAmount != amount) {
+            // 与 ck_payment_intents_mixed_shape 同一条不变式：应用层先挡一次，给得出更清楚的错
+            throw AppException.validation("拆分金额与总额不符");
+        }
+        PaymentIntent p = create(userId, purpose, PayChannel.MIXED, amount, currency, publicToken,
+                expiresAt);
+        p.coinAmount = coinAmount;
+        p.cashAmount = cashAmount;
+        p.coinRatio = coinRatio;
+        return p;
+    }
+
+    public Long getCoinAmount() {
+        return coinAmount;
+    }
+
+    public Long getCashAmount() {
+        return cashAmount;
+    }
+
+    public java.math.BigDecimal getCoinRatio() {
+        return coinRatio;
     }
 
     /** 是否已过窗（仅对有 expiresAt 的意图有意义；null → 永不过期，恒 false）。 */

@@ -113,6 +113,10 @@ public class ConsultPayService {
         return switch (channel) {
             case PAWCOIN -> payByPawCoin(req, price);
             case QRIS -> createCashPay(req, price, PayChannel.QRIS);
+            // 🔴 虚拟商品【恒单渠道】（AD-3 纵深防御）：MIXED 只用于电商实物订单。
+            //    这里显式拒绝而不是让 switch 落到 default —— 前者在编译期就逼着
+            //    每个新渠道的引入者来面对这个分支，后者会静默把新渠道当成某个旧分支处理。
+            case MIXED -> throw AppException.validation("该商品不支持混合支付");
         };
     }
 

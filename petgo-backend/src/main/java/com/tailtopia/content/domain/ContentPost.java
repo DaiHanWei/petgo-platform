@@ -48,6 +48,24 @@ public class ContentPost {
     @Column(name = "image_urls")
     private List<String> imageUrls;
 
+    /**
+     * 图片原始宽高（V1.1.6 Story 3.1 · AD-5）。与 {@link #imageUrls} <b>同序等长</b>，
+     * 测不出来的位置为 {@code null} 占位。
+     *
+     * <h2>🛡 等长同序是硬约束</h2>
+     * 错位的后果是<b>图文不符</b>（第 1 张图套用第 2 张的比例），比"没有尺寸"严重得多 ——
+     * 后者有客户端占位兜底，前者是显示错误。所以长度对不上时<b>整组作废</b>，不做部分采信。
+     *
+     * <h2>⚠️ 只存原始宽高</h2>
+     * <b>不得</b>存已收敛的比例或已算好的高度：那些依赖可视区尺寸，只能客户端算；
+     * 服务端先算一遍、客户端再算一遍 = <b>双重裁切</b>（AD-6 Rule 6）。
+     *
+     * <p>存量内容<b>永远为 null</b>（零回填是 AD-5 Rule 1 的硬要求）。
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "image_sizes")
+    private List<ImageSize> imageSizes;
+
     @Column(name = "danger_level", length = 8)
     private String dangerLevel;
 
@@ -98,6 +116,27 @@ public class ContentPost {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    /**
+     * 行级物种覆写（V1.1.6 Story 14.1 · AC5/AC7）。
+     *
+     * <p>🔴 <b>这是存量种子内容唯一的物种修正入口</b>：账号定位是全量粗粒度开关，
+     * 改它会把整个号的历史内容一起套上同一个物种；而个别错标只能靠这一列改。
+     *
+     * <p>🛡 稀疏列、<b>真实用户内容恒为空</b>（它们走作者宠物档案 join 推导）。
+     * 推导优先级见 {@code ContentSpeciesResolver}。
+     */
+    @Column(name = "species_override", length = 20)
+    private String speciesOverride;
+
+    public String getSpeciesOverride() {
+        return speciesOverride;
+    }
+
+    /** 运营设置 / 清除行级覆写（传 null 即清除，回落到账号定位或档案推导）。 */
+    public void setSpeciesOverride(String speciesOverride) {
+        this.speciesOverride = speciesOverride;
+    }
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -232,6 +271,20 @@ public class ContentPost {
 
     public String getText() {
         return text;
+    }
+
+    public List<ImageSize> getImageSizes() {
+        return imageSizes;
+    }
+
+    /**
+     * 写入图片尺寸（V1.1.6 Story 3.1）。
+     *
+     * <p>🛡 调用方必须保证与 {@link #getImageUrls()} <b>同序等长</b> —— 校验在发布服务里做，
+     * 这里只负责存。
+     */
+    public void setImageSizes(List<ImageSize> imageSizes) {
+        this.imageSizes = imageSizes;
     }
 
     public List<String> getImageUrls() {

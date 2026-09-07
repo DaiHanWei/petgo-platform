@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TailTopia V1.4.0 · 订单详情·已发货</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared.css">
+<link rel="stylesheet" href="../../../../1.项目总述/UI&UX/imports/tokens.css">
+</head>
+<body>
+
+<div class="phone">
+  <div class="pill"></div>
+  <div class="statusbar"><span class="t">9:41</span><span class="icons">●●●●</span></div>
+  <div class="pages"><div class="page" style="display:flex;flex-direction:column;">
+
+    <div style="flex:1;overflow-y:auto;">
+      <div class="appbar">
+        <button class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+        <div class="appbar-title">Detail Pesanan</div>
+      </div>
+
+      <div style="margin:0 20px 14px;background:linear-gradient(135deg,#F4EEFF,#EFF7F4);border-radius:18px;padding:16px 18px;border:1.5px solid var(--violet-200);">
+        <div style="display:flex;align-items:center;gap:9px;">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="var(--violet-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 16V6a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h1"/><path d="M14 8h4l3 3v5a1 1 0 0 1-1 1h-1"/><circle cx="7.5" cy="17.5" r="2"/><circle cx="17.5" cy="17.5" r="2"/></svg>
+          <div><div style="font-size:13.5px;font-weight:700;color:var(--color-text-heading);">Sedang dikirim</div>
+          <div style="font-size:11.5px;color:var(--color-text-secondary);">Estimasi tiba 2–4 hari kerja</div></div>
+        </div>
+      </div>
+
+      <div class="section-label">Info Pengiriman</div>
+      <div class="card"><div class="card-pad">
+        <div class="sumrow" style="padding:4px 0;"><span>Kurir</span><span style="color:var(--color-text-heading);font-weight:600;">JNE (Reguler)</span></div>
+        <div class="sumrow" style="padding:4px 0;align-items:center;">
+          <span>No. resi</span>
+          <span style="display:flex;align-items:center;gap:7px;">
+            <b style="color:var(--color-text-heading);font-size:12.5px;">JP8842119037</b>
+            <span style="font-size:10.5px;font-weight:700;color:var(--violet-500);border:1.2px solid var(--violet-300);border-radius:6px;padding:2px 7px;">Salin</span>
+          </span>
+        </div>
+        <button class="btn btn-secondary" style="margin-top:11px;">
+          Lacak di situs kurir
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/></svg>
+        </button>
+      </div></div>
+
+      <div class="section-label">Barang</div>
+      <div class="card"><div class="card-pad" style="padding-top:4px;padding-bottom:4px;">
+        <div class="orow" style="border-bottom:1px solid #F0F0F0;">
+          <div class="t">🍖</div><div class="i"><b>Royal Canin Medium Adult</b><div class="sp">3 kg × 1</div><div class="pz">Rp 285.000</div></div>
+        </div>
+        <div class="orow">
+          <div class="t">💊</div><div class="i"><b>Drontal Plus Obat Cacing</b><div class="sp">1 tablet × 1</div><div class="pz">Rp 85.000</div></div>
+        </div>
+      </div></div>
+
+      <div class="section-label">Alamat</div>
+      <div class="card"><div class="card-pad">
+        <div style="font-size:13px;font-weight:600;color:var(--color-text-heading);">Shawn Liu · +62 812-3456-7890</div>
+        <div style="font-size:12px;color:var(--color-text-secondary);line-height:1.6;margin-top:4px;">Jl. Kemang Raya No. 12, Blok B Lt. 3<br>Mampang Prapatan, Jakarta Selatan, DKI Jakarta 12730</div>
+      </div></div>
+
+      <div class="card"><div class="card-pad">
+        <div class="sumrow" style="padding:3px 0;"><span>No. Pesanan</span><span style="color:var(--color-text-heading);font-weight:600;">TT2026081000004217</span></div>
+        <div class="sumrow" style="padding:3px 0;"><span>Dibayar</span><span style="color:var(--color-text-heading);">QRIS · Rp 370.000</span></div>
+      </div></div>
+
+      <div class="notice n-info">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
+        <div>Pesanan otomatis selesai <b>7 hari</b> setelah diterima. Kamu tetap bisa ajukan retur dalam 7 hari sejak barang diterima.</div>
+      </div>
+      <div style="height:8px;"></div>
+    </div>
+
+    <div class="bottombar">
+      <button class="btn btn-ghost" style="width:auto;padding:13px 18px;">Bantuan</button>
+      <button class="btn btn-primary" style="flex:1;">Terima barang</button>
+    </div>
+
+  </div></div>
+  <div class="homebar" style="background:var(--color-bg-surface);"><div></div></div>
+</div>
+
+<div class="spec">
+  <div class="sbox">
+    <div class="title">订单详情 · 已发货</div>
+    <div class="sub">轻量物流实现</div>
+    <span class="frtag">FR-103</span><span class="frtag">FR-102</span>
+  </div>
+
+  <div class="sbox">
+    <h3>物流是刻意的轻量实现（FR-103）</h3>
+    <div class="warn"><b>首版不接承运商 API、不在 App 内渲染物流轨迹。</b><br><br>
+      只做：后台录入承运商 + 单号 → App 展示单号、承运商名、<b>复制按钮</b>、跳转承运商官网查询的链接。</div>
+    <ul>
+      <li><b>分期理由</b>：首发仅 Jabodetabek，三家承运商（JNE/SiCepat/Anteraja）API 对接工期显著；C-14 后配送方式收为 Reguler 一档（标准快递 2–4 日），跳承运商官网查询已够用，App 内自建轨迹渲染的体验增量有限</li>
+      <li>轨迹渲染建议在<b>跨城单量起来后</b>单独排期（见 Roadmap 改动建议第 4 条，归入 2.1.0 能力扩展）</li>
+      <li>「复制单号」是本页最高频操作，必须做成一眼可见的独立按钮，不要藏在长按里</li>
+    </ul>
+  </div>
+
+  <div class="sbox">
+    <h3>「已送达」状态怎么来（AB-11B）</h3>
+    <div class="warn">因为不接 API，<b>「已送达」需后台手动标记或依赖用户确认收货</b>。<br><br>
+      后台待办需列出「已发货超过 N 日未确认收货」的订单供运营跟进——否则这批订单会永远卡在「已发货」，直到 7 日自动确认兜底。</div>
+  </div>
+
+  <div class="sbox">
+    <h3>两个 7 日不冲突（FR-102）</h3>
+    <ul>
+      <li><b>自动确认收货</b>：已送达后 7 日 → 已完成</li>
+      <li><b>退货窗口</b>：<b>自签收起算</b> 7 日内可申请</li>
+    </ul>
+    <div class="warn">两者叠加是有意的：即使订单已自动转「已完成」，签收 7 日内仍可申请退货。故 <b>「已完成」在签收 7 日后才是绝对终态</b>（见 FR-102 状态机）。<br><br>
+      本页底部提示条须把这层关系讲清楚，否则用户会以为「确认收货 = 放弃售后」而拖着不确认。</div>
+  </div>
+
+  <div class="sbox">
+    <h3>推送</h3>
+    <ul>
+      <li>发货时推送一次，复用 <b>FR-38 深链接规则</b>直跳本页</li>
+    </ul>
+  </div>
+</div>
+
+</body></html>

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tailtopia.admin.account.domain.AdminAccountStatus;
 import com.tailtopia.admin.account.domain.AdminAccountType;
+import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.account.service.AdminAccountService;
 import com.tailtopia.admin.audit.domain.AdminAuditLog;
@@ -48,7 +49,7 @@ class AdminAccountManagementIntegrationTest extends ApiIntegrationTest {
         String email = "staff-" + seq + "@tailtopia.test";
         long actor = 100000L + seq;
 
-        long id = accountService.createAccount(email, "新人" + seq, AdminAccountType.STAFF,
+        long id = accountService.createAccount(email, "新人" + seq, AdminRole.CUSTOM,
                 List.of("vet.view", "admin.view_logs"), actor);
         assertThat(id).isPositive();
 
@@ -69,7 +70,7 @@ class AdminAccountManagementIntegrationTest extends ApiIntegrationTest {
         long seq = SEQ.incrementAndGet();
         String email = "staff-deac-" + seq + "@tailtopia.test";
         long actor = 200000L + seq;
-        long id = accountService.createAccount(email, "停用测试", AdminAccountType.STAFF,
+        long id = accountService.createAccount(email, "停用测试", AdminRole.CUSTOM,
                 List.of("vet.view"), actor);
 
         accountService.deactivate(id, actor);
@@ -91,7 +92,7 @@ class AdminAccountManagementIntegrationTest extends ApiIntegrationTest {
         long seq = SEQ.incrementAndGet();
         String email = "staff-perm-" + seq + "@tailtopia.test";
         long actor = 300000L + seq;
-        long id = accountService.createAccount(email, "权限测试", AdminAccountType.STAFF,
+        long id = accountService.createAccount(email, "权限测试", AdminRole.CUSTOM,
                 List.of("vet.view"), actor);
 
         accountService.updatePermissions(id, List.of("content.takedown", "rating.view"), actor);

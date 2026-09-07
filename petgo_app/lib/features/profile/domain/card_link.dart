@@ -23,3 +23,28 @@ String milestoneShareUrl(String shareToken, {String baseUrl = kH5BaseUrl}) {
   final trimmed = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
   return '$trimmed/m/$shareToken';
 }
+
+/// 由不可枚举 shareToken 拼出**单条内容**对外分享 URL（后端 `GET /c/{shareToken}` 直出 H5）。
+///
+/// 🔴 **与 [petCardShareUrl] 是两种不同的链接类型，落地页也不同**（Story 9.3 · AD-15 Rule 5）：
+/// - `/p/{cardToken}` → 整本档案的只读视图
+/// - `/c/{shareToken}` → **只有被分享的那一条**
+///
+/// 复用同一落点等于把「我只想分享一条」变成「我把整本都给你了」—— 这是隐私边界，不是路由洁癖。
+/// 与前两者同 H5 子域；非用户明确指令不得改默认值。
+String postShareUrl(String shareToken, {String baseUrl = kH5BaseUrl}) {
+  final trimmed = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+  return '$trimmed/c/$shareToken';
+}
+
+/// 同一条链接的**二维码专用**变体：尾部带 `?src=qr`（Story 10.1 · 埋点 E-14）。
+///
+/// 🔴 **不加这个标记，`open_method` 这个属性就是做不出来的** ——
+/// 二维码里印的和图上文字里给的是同一个 URL，服务端收到请求时无从分辨。
+/// 而 `open_method` 是**下载二维码唯一的验收依据**（清单 §3 原话）：
+/// 它占了卡片页脚近一半版面，`qr` 长期极低就该撤掉 —— 没有这个数就只能靠感觉吵。
+///
+/// ⚠️ 只加在**印进码里**的那一份，分享出去的文字链接不带 ——
+/// 两份都带就又分不出来了。
+String postShareQrUrl(String shareToken, {String baseUrl = kH5BaseUrl}) =>
+    '${postShareUrl(shareToken, baseUrl: baseUrl)}?src=qr';

@@ -24,6 +24,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
+import com.tailtopia.support.TestMessages;
 
 /**
  * L0：客服工单后台门控（Story 4.7）——列表/详情/结案均需 {@code support.handle}；{@code SUPER_ADMIN} 隐式全权。
@@ -59,7 +60,7 @@ class AdminSupportAccessControlTest {
         @Bean
         AdminSupportTicketController controller(AdminSupportTicketQueryService q, SupportTicketService s,
                 AdminTicketRefundService r) {
-            return new AdminSupportTicketController(q, s, r);
+            return new AdminSupportTicketController(q, s, r, TestMessages.real());
         }
     }
 

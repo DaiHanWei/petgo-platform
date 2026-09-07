@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <!-- 问诊会话元数据查询（Story 5.2，AB-4B）。纯只读：按用户/兽医/日期查会话元数据 + 评分。
      NFR5：仅元数据，绝不含 IM 正文/AI 分诊/用户媒体。门控 consult.view_sessions。 -->
 <head>

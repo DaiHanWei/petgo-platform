@@ -84,7 +84,7 @@ class _DiaryGuestPageState extends ConsumerState<DiaryGuestPage> {
                 const SizedBox(height: 14),
                 // 页头与真实态同一组件；入口均引到建档引导（不得引向受控子页）。
                 DiaryHeader(
-                  profile: profile,
+                  profile: profile.header,
                   happyCount: DiaryDemoData.happyCount,
                   consultCount: DiaryDemoData.consultCount,
                   milestoneCompleted: DiaryDemoData.milestoneCompleted,

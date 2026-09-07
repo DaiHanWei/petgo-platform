@@ -39,6 +39,40 @@ void main() {
     }
   });
 
+  /// 🔴 D-3（2026-09-02 stag 电商测试）：**英文基线里混着印尼语**。
+  ///
+  /// 设备 locale=zh-Hans-CN 时 App 回退英文（app.dart），于是商品详情页显示
+  /// "Stok habis" / "Detail Produk"、购物车标题 "Keranjang"、订单 Tab
+  /// `All / Konsultasi / PawCoin / Belanja` —— 四个里两个是印尼语。
+  /// 全量比对后确认 **38 个键的英文值实为印尼语**，电商域（toko+cart+checkout+order）占 36 个：
+  /// 不是零星漏译，是英文基线整体没做完。
+  ///
+  /// ⚠️ J2 只查「key 有没有对齐」，两边 key 齐全但**值没翻译**它一个字都看不出来 ——
+  /// 这正是 38 个键一路绿着上线的原因。本条补上「值有没有真的翻译」。
+  ///
+  /// <h2>判据</h2>
+  /// en 与 id 值完全相同 ⇒ 可疑。但**同形本来就有合理的**：品牌名（PawCoin/QRIS/GoPay）、
+  /// 英文借词（Online/Checkout/Refund，印尼语里直接用）、人名、纯格式串。
+  /// 所以放行规则是**按词**：值里每个字母词都在 [_sameInBothLocales] 里才放行 ——
+  /// 新增一个值为 "PawCoin" 的 key 自动通过，而 "Stok habis" 这种整句印尼语必然变红。
+  ///
+  /// ⚠️ 往 [_sameInBothLocales] 里加词等于**判定「这个词中英印尼同形」**，是一次决定，
+  /// 不是让测试变绿的开关。真要翻译的词加进去，D-3 就会原样再来一次。
+  test('🔴 D-3：英文基线不得混入印尼语（en 值与 id 相同者必须是同形词）', () {
+    final offenders = <String>[];
+    for (final k in _messageKeys(en)) {
+      final v = en[k];
+      if (v is! String || v != id[k]) continue;
+      final foreign = _alphaWords(v).where((w) => !_sameInBothLocales.contains(w.toLowerCase()));
+      if (foreign.isNotEmpty) {
+        offenders.add('$k = "$v"  ← 未翻译的词: ${foreign.join(", ")}');
+      }
+    }
+    expect(offenders, isEmpty,
+        reason: '🔴 这些 key 的英文值与印尼语完全相同，且不是同形词 —— 多半压根没翻译。\n'
+            '英文 locale 下用户会看到中英印尼语混排（D-3）。\n${offenders.join("\n")}');
+  });
+
   test('J3：红色预警简短无歧义（triageRed* ≤ 120 字符；就医指引可含必要动作语句）', () {
     for (final arb in [en, id]) {
       _messageKeys(arb).where((k) => k.startsWith('triageRed')).forEach((k) {
@@ -72,3 +106,29 @@ int _emojiCount(String s) {
   }
   return count;
 }
+
+/// 值里的字母词（丢掉占位符 `{count}`、数字、标点、CJK）。
+List<String> _alphaWords(String v) => v
+    .replaceAll(RegExp(r'\{[^}]*\}'), ' ')
+    .split(RegExp(r"[^A-Za-z']+"))
+    .where((w) => w.isNotEmpty)
+    .toList();
+
+/// 英文与印尼语**本来就同形**的词：品牌名 / 专名 / 印尼语直接借用的英文词 / 演示用人名。
+///
+/// ⚠️ 见上面那条测试的说明：往这里加词是一次判定，不是绿灯开关。
+const _sameInBothLocales = {
+  // 品牌与产品专名
+  'tailtopia', 'pawcoin', 'qris', 'gopay', 'ovo', 'ktp', 'hd',
+  // 印尼语直接借用的英文词
+  'checkout', 'online', 'offline', 'normal', 'rating', 'refund', 'bonus',
+  'edit', 'bug', 'email', 'whatsapp', 'label', 'diary', 'milestone', 'health',
+  'major', 'small', 'legend', 'no', 'm', 's', 'l',
+  // 语言名（各自的自称，刻意不翻译）
+  'english', 'bahasa', 'indonesia',
+  // 印尼行政区划专名 —— 2026-09-02 产品拍板：保留原词，
+  // 直译成 Province/City/District 会与表单实际层级对不上。
+  'provinsi', 'kota', 'kabupaten', 'kecamatan',
+  // 演示数据里的人名 / 宠物名
+  'aurel', 'mochi',
+};

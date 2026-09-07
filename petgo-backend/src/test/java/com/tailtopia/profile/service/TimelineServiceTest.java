@@ -57,16 +57,22 @@ class TimelineServiceTest {
                 .thenReturn(List.of());
         when(idCards.findByUserIdOrderByCreatedAtDesc(anyLong())).thenReturn(List.of());
         service = new TimelineService(profileService, contentService, healthProvider, milestoneService,
-                healthRecords, milestoneCompletions, idCards);
+                healthRecords, milestoneCompletions, idCards,
+                // V1.1.6 Story 5.2：装饰标签统一贴标点；本类不验它，给 mock（默认无标签）。
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
     }
 
     private GrowthMomentView moment(long id, String iso) {
-        return new GrowthMomentView(id, Instant.parse(iso), null, List.of("u" + id), "moment" + id);
+        return new GrowthMomentView(id, Instant.parse(iso), null, List.of("u" + id), "moment" + id,
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED);
     }
 
     private GrowthMomentView momentEv(long id, String createdIso, String eventIso, String img) {
         return new GrowthMomentView(id, Instant.parse(createdIso), LocalDate.parse(eventIso),
-                List.of(img), "moment" + id);
+                List.of(img), "moment" + id,
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED);
     }
 
     private static PetProfile pet(PetType type) {
@@ -91,6 +97,84 @@ class TimelineServiceTest {
             throw new IllegalStateException(e);
         }
         return p;
+    }
+
+    /**
+     * bug 20260828：**上一只宠物的身份证不许出现在这只宠物的时间线上**。
+     *
+     * <p>实机症状是一处**逻辑上不可能的日期**：档案标 8/27 建立、名片却标 8/07 生成 ——
+     * 名片是建档之后才有的东西，不可能早二十天。产品在两个不同账号上都看到了。
+     *
+     * <p>根因：{@code id_cards} 只挂在 <b>user</b> 上、<b>没有宠物外键</b>，
+     * 而这一源取的是「这个用户最早的一张卡」。用户删档重建后，旧卡就被算成新宠物的
+     * 「名片已生成」。删档时 {@code profileDeletedAt} 已经打好标（V108），
+     * 只是这一源从来没看过它。
+     *
+     * <p>🔴 与 {@link #timelineFiltersGrowthByCurrentPetId()} 是<b>同一类漏</b>的第二处：
+     * 那次修的是成长帖，五个数据源里只改了一个。这里补上第五个。
+     */
+    @Test
+    void timelineIgnoresIdCardsLeftBehindByADeletedProfile() {
+        when(healthProvider.getIfAvailable()).thenReturn(null);
+        when(contentService.findGrowthMomentsBeforeAnchor(anyLong(), anyLong(), Mockito.any(),
+                Mockito.any(), Mockito.any(), anyInt())).thenReturn(List.of());
+
+        // 旧卡：属于已删除的上一只宠物（8/07），已打删除标。
+        com.tailtopia.profile.domain.IdCard old =
+                Mockito.mock(com.tailtopia.profile.domain.IdCard.class);
+        when(old.getCreatedAt()).thenReturn(Instant.parse("2026-08-07T03:00:00Z"));
+        when(old.getProfileDeletedAt()).thenReturn(Instant.parse("2026-08-27T01:00:00Z"));
+        when(old.getCardNo()).thenReturn("TT020826010001");
+        // 当前卡：属于现在这只宠物（8/27），未打标。
+        com.tailtopia.profile.domain.IdCard current =
+                Mockito.mock(com.tailtopia.profile.domain.IdCard.class);
+        when(current.getCreatedAt()).thenReturn(Instant.parse("2026-08-27T04:00:00Z"));
+        when(current.getProfileDeletedAt()).thenReturn(null);
+        when(current.getCardNo()).thenReturn("TT521826020001");
+
+        // 仓储按 createdAt 倒序返回（新 → 旧）。
+        when(idCards.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(current, old));
+
+        List<TimelineItemResponse> items = service.getTimeline(1L, null, 20).items().stream()
+                .filter(i -> i.itemType() == com.tailtopia.profile.dto.TimelineItemType.ID_CARD_ISSUED)
+                .toList();
+
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).date()).isEqualTo(Instant.parse("2026-08-27T04:00:00Z"));
+        assertThat(items.get(0).idCardSerial()).isEqualTo("TT521826020001");
+    }
+
+    /**
+     * 🛡 反向：**没删过档的用户不受影响**——最早的那张卡仍然是「名片已生成」那一条。
+     *
+     * <p>没有这一条，把过滤写成「只取最新一张」也能让上面那条绿，
+     * 而那会让老用户的时间线上，名片日期随着每次刷新名片一路往后跳。
+     */
+    @Test
+    void timelineStillShowsTheFirstIdCardWhenNoProfileWasEverDeleted() {
+        when(healthProvider.getIfAvailable()).thenReturn(null);
+        when(contentService.findGrowthMomentsBeforeAnchor(anyLong(), anyLong(), Mockito.any(),
+                Mockito.any(), Mockito.any(), anyInt())).thenReturn(List.of());
+
+        com.tailtopia.profile.domain.IdCard first =
+                Mockito.mock(com.tailtopia.profile.domain.IdCard.class);
+        when(first.getCreatedAt()).thenReturn(Instant.parse("2026-08-07T03:00:00Z"));
+        when(first.getProfileDeletedAt()).thenReturn(null);
+        when(first.getCardNo()).thenReturn("TT020826010001");
+        com.tailtopia.profile.domain.IdCard refreshed =
+                Mockito.mock(com.tailtopia.profile.domain.IdCard.class);
+        when(refreshed.getCreatedAt()).thenReturn(Instant.parse("2026-08-27T04:00:00Z"));
+        when(refreshed.getProfileDeletedAt()).thenReturn(null);
+        when(refreshed.getCardNo()).thenReturn("TT020826010002");
+
+        when(idCards.findByUserIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(refreshed, first));
+
+        List<TimelineItemResponse> items = service.getTimeline(1L, null, 20).items().stream()
+                .filter(i -> i.itemType() == com.tailtopia.profile.dto.TimelineItemType.ID_CARD_ISSUED)
+                .toList();
+
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).date()).isEqualTo(Instant.parse("2026-08-07T03:00:00Z"));
     }
 
     /** bug 20260721-271：成长时间线按当前宠物 petId 过滤（删档后旧帖 pet_id=NULL 不串入新宠物档案）。 */
@@ -131,8 +215,9 @@ class TimelineServiceTest {
         when(healthProvider.getIfAvailable()).thenReturn(health);
         when(contentService.findGrowthMomentsBeforeAnchor(eq(1L), anyLong(), Mockito.any(), Mockito.any(), Mockito.any(), anyInt()))
                 .thenReturn(List.of(moment(1, "2026-06-01T10:00:00Z")));
-        when(health.recentHealthEvents(anyLong(), Mockito.any(), anyInt()))
-                .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-03T10:00:00Z"), "YELLOW", "咳嗽", "AI_TRIAGE", "triage-1")));
+        when(health.recentHealthEvents(anyLong(), Mockito.any(), Mockito.any(), anyInt()))
+                .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-03T10:00:00Z"),
+                        LocalDate.parse("2026-06-03"), "YELLOW", "咳嗽", "AI_TRIAGE", "triage-1")));
 
         TimelinePageResponse resp = service.getTimeline(1L, null, 20);
 
@@ -199,8 +284,10 @@ class TimelineServiceTest {
                 momentEv(12, "2026-06-10T09:00:00Z", "2026-06-10", "img10")));
         // 健康事件 6/2（叠加角标）+ 6/20（独立 🏥 日）。
         when(health.healthEventsInRange(eq(1L), Mockito.any(), Mockito.any())).thenReturn(List.of(
-                new HealthEventView(Instant.parse("2026-06-02T12:00:00Z"), "GREEN", "x", "AI_TRIAGE", "triage-x"),
-                new HealthEventView(Instant.parse("2026-06-20T12:00:00Z"), "YELLOW", "y", "AI_TRIAGE", "triage-y")));
+                new HealthEventView(Instant.parse("2026-06-02T12:00:00Z"),
+                        LocalDate.parse("2026-06-02"), "GREEN", "x", "AI_TRIAGE", "triage-x"),
+                new HealthEventView(Instant.parse("2026-06-20T12:00:00Z"),
+                        LocalDate.parse("2026-06-20"), "YELLOW", "y", "AI_TRIAGE", "triage-y")));
 
         CalendarMonthResponse resp = service.getCalendarMonth(1L, 2026, 6);
 
@@ -225,8 +312,9 @@ class TimelineServiceTest {
         when(healthProvider.getIfAvailable()).thenReturn(health);
         when(contentService.findGrowthMomentsOnDate(eq(1L), anyLong(), eq(LocalDate.parse("2026-06-02"))))
                 .thenReturn(List.of(momentEv(10, "2026-06-02T08:00:00Z", "2026-06-02", "a")));
-        when(health.healthEventsOnDay(eq(1L), Mockito.any(), Mockito.any()))
-                .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-02T07:00:00Z"), "GREEN", "z", "AI_TRIAGE", "triage-z")));
+        when(health.healthEventsOnDay(eq(1L), Mockito.any()))
+                .thenReturn(List.of(new HealthEventView(Instant.parse("2026-06-02T07:00:00Z"),
+                        LocalDate.parse("2026-06-02"), "GREEN", "z", "AI_TRIAGE", "triage-z")));
 
         DayDetailResponse resp = service.getDayDetail(1L, LocalDate.parse("2026-06-02"));
 

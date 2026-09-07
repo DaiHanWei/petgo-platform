@@ -105,8 +105,9 @@ void main() {
       expect(ears.contains('#845EC9'), isTrue, reason: '紫色外耳');
     });
 
-    testWidgets('Health 爪印：右上角外沿 16×16 + 白描边（叠在图标上不糊）', (tester) async {
-      await pump(tester, currentIndex: AppTab.triage.index);
+    testWidgets('Toko 爪印：右上角外沿 16×16 + 白描边（叠在图标上不糊）', (tester) async {
+      // DEP-1 闭合（2026-08-21）：第 2 位由 Health 换为 Toko，爪印规格原样沿用。
+      await pump(tester, currentIndex: AppTab.shop.index);
 
       final charmRect = tester.getRect(find.byKey(const ValueKey('activeTabCharm')));
       final slotRect = tester.getRect(find.byKey(const ValueKey('activeTabHighlight')));
@@ -114,7 +115,7 @@ void main() {
       expect((charmRect.top - (slotRect.top - 3)).abs() < 1.5, isTrue);
       expect((charmRect.right - (slotRect.right + 3)).abs() < 1.5, isTrue);
 
-      expect(tabCharmSvg(AppTab.triage).contains('#FFFFFF'), isTrue,
+      expect(tabCharmSvg(AppTab.shop).contains('#FFFFFF'), isTrue,
           reason: '白描边垫底（近似稿子的白发光）');
     });
 
@@ -147,12 +148,11 @@ void main() {
       expect(collar.contains('#845EC9'), isFalse, reason: '不该是紫色（那是早期实现的偏差）');
     });
 
-    testWidgets('Health 激活 glyph 仍为描边（听诊器实心会糊）；其余三个为实心', (tester) async {
-      final steth = tabActiveGlyphSvg(AppTab.triage);
-      expect(steth.contains('fill="none"'), isTrue);
-      expect(steth.contains('stroke-width="1.8"'), isTrue, reason: 'T3 激活描边 1.8');
-
-      for (final tab in [AppTab.profile, AppTab.home, AppTab.me]) {
+    testWidgets('四个 Tab 激活 glyph 均为紫色实心（描边特例名单已空）', (tester) async {
+      // 原断言：Health(听诊器) 实心会糊，故激活态仍走描边。DEP-1 闭合后该位换成 Toko(购物袋)，
+      // 袋形实心不糊 → _kActiveOutlineTabs 清空。**机制保留**：精修图标若再出现同类问题，
+      // 往那个集合里登记即可，本断言随之改回。
+      for (final tab in [AppTab.profile, AppTab.shop, AppTab.home, AppTab.me]) {
         expect(tabActiveGlyphSvg(tab).contains('fill="$_violetHex"'), isTrue,
             reason: '$tab 激活态应为紫色实心');
       }

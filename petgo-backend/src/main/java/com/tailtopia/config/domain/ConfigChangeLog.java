@@ -17,7 +17,9 @@ public class ConfigChangeLog {
 
     /** 配置类别。 */
     public enum ConfigType {
-        PRICING, PAWCOIN, TOPUP_TIER
+        PRICING, PAWCOIN, TOPUP_TIER,
+        /** 首页推荐算法打分参数（V1.1.6 Story 16.4）。 */
+        FEED_RANK
     }
 
     @Id

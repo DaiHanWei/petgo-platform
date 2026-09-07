@@ -88,14 +88,14 @@ public class LarkOAuthClient {
     @SuppressWarnings("unchecked")
     private String extractUserAccessToken(Map<String, Object> resp) {
         if (resp == null) {
-            throw AppException.validation("Lark 登录失败");
+            throw AppException.validation("Lark 登录失败").code("admin.err.lark.loginFailed");
         }
         Map<String, Object> data = resp.get("data") instanceof Map
                 ? (Map<String, Object>) resp.get("data") : resp;
         Object token = data.get("access_token");
         if (token == null) {
             log.warn("Lark user_access_token 获取失败 code={}", resp.get("code"));
-            throw AppException.validation("Lark 鉴权失败");
+            throw AppException.validation("Lark 鉴权失败").code("admin.err.lark.authFailed");
         }
         return token.toString();
     }
@@ -110,7 +110,7 @@ public class LarkOAuthClient {
         Object token = resp == null ? null : resp.get("app_access_token");
         if (token == null) {
             log.warn("Lark app_access_token 获取失败 code={}", resp == null ? null : resp.get("code"));
-            throw AppException.validation("Lark 鉴权失败");
+            throw AppException.validation("Lark 鉴权失败").code("admin.err.lark.authFailed");
         }
         return token.toString();
     }
@@ -119,7 +119,7 @@ public class LarkOAuthClient {
     @SuppressWarnings("unchecked")
     LarkIdentity mapIdentity(Map<String, Object> resp) {
         if (resp == null) {
-            throw AppException.validation("Lark 登录失败");
+            throw AppException.validation("Lark 登录失败").code("admin.err.lark.loginFailed");
         }
         Map<String, Object> data = resp.get("data") instanceof Map
                 ? (Map<String, Object>) resp.get("data") : resp;

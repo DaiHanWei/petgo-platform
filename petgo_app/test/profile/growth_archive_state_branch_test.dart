@@ -111,13 +111,51 @@ void main() {
       );
     });
 
-    test('穷尽性：枚举恰好四态（新增态会让分发 switch 编译期报错）', () {
+    test('穷尽性：枚举恰好五态（新增态会让分发 switch 编译期报错）', () {
+      // V1.1.6 Story 2.3 加了 visitor（AD-4：访客态作为 AD-15 单一判定入口的新增分支）。
       expect(DiaryUserState.values, <DiaryUserState>[
         DiaryUserState.guest,
         DiaryUserState.nonOwner,
         DiaryUserState.ownerWithoutProfile,
         DiaryUserState.ownerWithProfile,
+        DiaryUserState.visitor,
       ]);
+    });
+
+    test('🛡 访客判据独占：有 token 时，登录态与自己的档案一概不影响判定', () {
+      // AD-2 Rule 2：已登录非作者与未登录访客看到**同一套**只读视图。
+      // 这条把「同一套」钉死 —— 四种身份组合，只要带 token，一律 visitor。
+      for (final loggedIn in [true, false]) {
+        for (final hasProfile in [true, false]) {
+          expect(
+            resolveDiaryUserState(
+              isLoggedIn: loggedIn,
+              petStatus: hasProfile ? 'HAS_PET' : 'PLANNING',
+              hasPetProfile: hasProfile,
+              visitorToken: 'TOK',
+            ),
+            DiaryUserState.visitor,
+            reason: '带 token 时判定必须恒为 visitor'
+                '（isLoggedIn=$loggedIn hasPetProfile=$hasProfile）',
+          );
+        }
+      }
+    });
+
+    test('无 token 时判定完全不受影响（访客分支不得污染既有四态）', () {
+      // 空串也算没有 —— 路由参数缺失时拿到的是空串而不是 null，
+      // 漏判会让作者莫名其妙落进只读态。
+      for (final token in [null, '']) {
+        expect(
+          resolveDiaryUserState(
+            isLoggedIn: true,
+            petStatus: 'HAS_PET',
+            hasPetProfile: true,
+            visitorToken: token,
+          ),
+          DiaryUserState.ownerWithProfile,
+        );
+      }
     });
   });
 
@@ -175,9 +213,9 @@ void main() {
     // 三条断言全部到期，改由 test/shared/diary_gating_and_landing_test.dart 双向守门
     // （拦截方向：/profile/* 子页仍受控；放行方向：/profile 与示例详情对游客可达）。
     // 这里只保留一条最小连接断言，确认本页的游客分支确实对游客可达。
-    test('Diary 主页已在免门控 Tab 白名单里，Health / Me 仍受控', () {
+    test('Diary 主页已在免门控 Tab 白名单里，Me 仍受控', () {
       expect(kUngatedTabs.contains(AppTab.profile), isTrue);
-      expect(kUngatedTabs.contains(AppTab.triage), isFalse);
+      // DEP-1 闭合后原 Health 位换成 Toko 并一并放行；受控侧的最小守门收敛到 Me。
       expect(kUngatedTabs.contains(AppTab.me), isFalse);
     });
   });

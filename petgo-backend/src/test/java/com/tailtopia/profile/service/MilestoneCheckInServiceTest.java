@@ -62,7 +62,9 @@ class MilestoneCheckInServiceTest {
 
     private GrowthMomentView moment(long id) {
         return new GrowthMomentView(id, Instant.now(), LocalDate.of(2026, 5, 1),
-                List.of("img" + id), "text" + id);
+                List.of("img" + id), "text" + id,
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                com.tailtopia.content.domain.PostStatus.PUBLISHED);
     }
 
     @Test

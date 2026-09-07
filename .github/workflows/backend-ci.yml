@@ -58,6 +58,14 @@ jobs:
           java-version: "21"
           cache: maven
 
+      # 🔴🔴 FR-110 / FR-100A 规则 6 边界守护（V1.4.0 Story 9.1，安全攸关）。
+      #    单列一步而不是靠 package 顺带跑：这条约束的对手是【持续存在的转化压力】——
+      #    上线后一定有人提「兽医能推荐商品转化率会高很多」。红掉的流水线要有名字，
+      #    审 PR 的人才看得见自己踩的是哪条线，而不是在一屏测试里找那一行。
+      #    decision-log N-3：此约束优先于任何转化率优化。
+      - name: 🔴 Guard — 问诊与商品的边界（FR-110 + PawCoin 封闭币规则 6）
+        run: ./mvnw -B test -Dtest=ConsultShopBoundaryTest -DfailIfNoTests=true
+
       # 使用项目级 .mvn/settings.xml（直连 Maven Central，见 maven.config）。含测试 → 出 jar。
       - name: Build & test (mvn package)
         run: ./mvnw -B package

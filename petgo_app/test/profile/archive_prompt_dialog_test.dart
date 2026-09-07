@@ -53,6 +53,11 @@ class _FakeMeRepo implements MeRepository {
   @override
   Future<UserProfile> updateProfile({String? nickname, String? signature}) async =>
       UserProfile(nickname: nickname, signature: signature);
+
+  /// V1.1.6 Story 7.1：本 fake 不涉及手机号。
+  @override
+  Future<UserProfile> updatePhone(String phone) async => const UserProfile();
+
 }
 
 class _TestAuthController extends AuthController {
@@ -74,6 +79,9 @@ class _FakeProfileRepo implements ProfileRepository {
     String? avatarUrl,
     String? breed,
     String? intro,
+    double? weightKg,
+    String? neuterStatus,
+    String? sex,
     String? idempotencyKey,
   }) async =>
       PetProfile(id: 99, name: name, cardToken: 'T', petType: petType, birthday: birthday);
@@ -85,7 +93,10 @@ class _FakeProfileRepo implements ProfileRepository {
     String? avatarUrl,
     String? breed,
     DateTime? birthday,
+    String? sex,
     String? intro,
+    double? weightKg,
+    String? neuterStatus,
   }) async =>
       PetProfile(id: 99, name: name ?? 'x', cardToken: 'T');
 }
@@ -270,6 +281,11 @@ void main() {
         GoRoute(path: '/profile/created', builder: (c, s) => const Scaffold(body: Text('celebrate'))),
       ],
     );
+    // ⚠️ 视口要够高：建档表单是 ListView（懒构建），默认 800×600 下提交按钮落在屏外
+    //    ⇒ 根本没被构建，ensureVisible 直接 No element。
+    //    2026-08-27 加了性别字段后表单又长了一截，这条因此红过一次。
+    await tester.binding.setSurfaceSize(const Size(440, 2200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
       child: MaterialApp.router(
@@ -290,7 +306,7 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('petProfileBirthdayTile')));
     await tester.tap(find.byKey(const ValueKey('petProfileBirthdayTile')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('OK'));
+    await tester.tap(find.descendant(of: find.byType(Dialog), matching: find.text('1')).first);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const ValueKey('petProfileSubmit')));
     await tester.tap(find.byKey(const ValueKey('petProfileSubmit')));

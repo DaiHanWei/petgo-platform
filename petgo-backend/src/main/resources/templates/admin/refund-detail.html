@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!-- 退款详情（Story 4.6）。各段操作按钮按权限显隐（A-1 职责分离）：
      客服 refund.submit（need 判定）/ 主管 refund.approve（审批通过/驳回）/ 财务 refund.payout（Iris 打款）。
      PII 脱敏：账号仅末 4 位，户名不回显。 -->

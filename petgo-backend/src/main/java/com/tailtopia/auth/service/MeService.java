@@ -1,5 +1,6 @@
 package com.tailtopia.auth.service;
 
+import com.tailtopia.auth.domain.IndonesianPhone;
 import com.tailtopia.auth.domain.PetStatus;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.dto.UpdateMeRequest;
@@ -79,6 +80,26 @@ public class MeService {
                     user.setSystemDefaultName(false);
                 }
                 events.publishEvent(new NameSubmittedEvent(NameTargetType.NICKNAME, userId, nn));
+            }
+        }
+
+        // 手机号（V1.1.6 Story 7.1 · FR-70）。
+        //
+        // 🔴 三分支，缺一不可：
+        //   - 没传（null）      → 不动它（部分更新语义）
+        //   - 传了空/全空白     → **清空**（撤回权：写回 null，后台重新落入「未填写」分组）
+        //   - 传了内容         → 归一后入库；格式不对直接 422
+        if (req.phone() != null) {
+            String raw = req.phone().trim();
+            if (raw.isEmpty()) {
+                user.setPhone(null); // 撤回，**不做二次确认**（AC 明确要求）
+            } else {
+                String normalized = IndonesianPhone.normalizeOrNull(raw);
+                if (normalized == null) {
+                    // ⚠️ 提示里**绝不回显用户输入的号码** —— 错误信息会进日志与告警。
+                    throw AppException.validation("手机号格式不正确");
+                }
+                user.setPhone(normalized);
             }
         }
 

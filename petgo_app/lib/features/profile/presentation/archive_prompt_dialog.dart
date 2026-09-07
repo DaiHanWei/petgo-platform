@@ -75,9 +75,9 @@ Future<bool> showArchivePrompt(
         await _record(ref, args, pet.id, ArchiveDecision.archived);
         return true;
       }
-      // 存入档案确认改用底部抽屉（原 AlertDialog 居中弹窗），与病例/诊断结果等底部弹层交互统一。
+      // 存入档案确认用底部抽屉（stag：与病例/诊断结果等底部弹层交互统一）。
       final decision = await showArchiveSaveSheet(context, petName: pet.name);
-      if (decision == null) return false; // 关闭未选 → 不记录，下次仍可弹
+      if (decision == null) return false; // 关闭未选 → 不记录，下次仍可弹（bug 20260721-338 返回 bool）
       guard.markHandled(args.sourceRef);
       await _record(ref, args, pet.id, decision);
       return decision == ArchiveDecision.archived;
