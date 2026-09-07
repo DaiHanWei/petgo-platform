@@ -255,7 +255,8 @@ public class SeedBatchPublishService {
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public boolean publishOrScheduleRow(long rowId, long adminAccountId) {
         SeedBatchRow row = rows.findById(rowId)
-                .orElseThrow(() -> AppException.notFound("行不存在"));
+                .orElseThrow(() -> AppException.notFound("行不存在")
+                        .code("admin.err.seedBatch.contentRowNotFound"));
         stateMachine.markValidated(rowId);
         // ⚠️ 计划时间已经过了 ⇒ **立即发**，而不是排一个已经过期的期。
         //    运营昨天排的、今天才点确认，属常见情形；排进去也只是让扫描器
