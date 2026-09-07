@@ -81,7 +81,7 @@ class PinnedSlotIntegrationTest extends ApiIntegrationTest {
             if (json.contains("\"id\":" + postId + ",")) {
                 return true;
             }
-            var tree = new com.fasterxml.jackson.databind.ObjectMapper().readTree(json);
+            var tree = new tools.jackson.databind.ObjectMapper().readTree(json);
             if (!tree.path("hasMore").asBoolean(false) || tree.path("nextCursor").isNull()) {
                 return false;
             }

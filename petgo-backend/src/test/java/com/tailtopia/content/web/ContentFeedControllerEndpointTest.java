@@ -39,9 +39,9 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
     private PetProfileRepository petProfiles;
 
     /** 沿 nextCursor 翻 ALL Tab，最多 {@code maxPages} 页，返回全部 items（推荐序下首页不保证含目标帖）。 */
-    private java.util.List<com.fasterxml.jackson.databind.JsonNode> walkFeed(String bearer, int maxPages)
+    private java.util.List<tools.jackson.databind.JsonNode> walkFeed(String bearer, int maxPages)
             throws Exception {
-        java.util.List<com.fasterxml.jackson.databind.JsonNode> out = new java.util.ArrayList<>();
+        java.util.List<tools.jackson.databind.JsonNode> out = new java.util.ArrayList<>();
         String cursor = null;
         for (int page = 0; page < maxPages; page++) {
             var req = get("/api/v1/content-posts");
