@@ -90,12 +90,17 @@ class AdminContentPinIntegrationTest extends ApiIntegrationTest {
     }
 
     /** 表单提交用的 WIB 墙上时间字符串（`yyyy-MM-ddTHH:mm`）。 */
+    // 🔴 相对日期（今天起 30+day 天）：此前写死 2026-09，9 月一过「提前结束」用例因终止时刻晚于结束时刻而 no-op。
+    private static java.time.LocalDate wibDate(int day) {
+        return java.time.LocalDate.now(WIB).plusDays(30L + day);
+    }
+
     private static String wib(int day, int hour) {
-        return String.format("2026-09-%02dT%02d:00", day, hour);
+        return String.format("%sT%02d:00", wibDate(day), hour);
     }
 
     private static Instant wibInstant(int day, int hour) {
-        return ZonedDateTime.of(2026, 9, day, hour, 0, 0, 0, WIB).toInstant();
+        return wibDate(day).atTime(hour, 0).atZone(WIB).toInstant();
     }
 
     // ——————————————————— 🛡 AC3 同坑位重叠 ———————————————————

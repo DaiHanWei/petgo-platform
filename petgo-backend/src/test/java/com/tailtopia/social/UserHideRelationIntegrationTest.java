@@ -187,7 +187,7 @@ class UserHideRelationIntegrationTest extends ApiIntegrationTest {
 
         hideService.block(a.getId(), b.getId());
 
-        String feed = mvc.perform(get("/api/v1/content-posts")
+        String feed = mvc.perform(get("/api/v1/content-posts").param("category", "DAILY")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(a.getId())))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
@@ -196,7 +196,7 @@ class UserHideRelationIntegrationTest extends ApiIntegrationTest {
         assertThat(ids).doesNotContain(p1, p2);
 
         // 游客（无 token）不受影响
-        String guestFeed = mvc.perform(get("/api/v1/content-posts"))
+        String guestFeed = mvc.perform(get("/api/v1/content-posts").param("category", "DAILY"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         var guestIds = new java.util.HashSet<Long>();
@@ -213,7 +213,7 @@ class UserHideRelationIntegrationTest extends ApiIntegrationTest {
 
         hideService.hideByReport(a.getId(), b.getId());
 
-        String feed = mvc.perform(get("/api/v1/content-posts")
+        String feed = mvc.perform(get("/api/v1/content-posts").param("category", "DAILY")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(a.getId())))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
@@ -355,6 +355,6 @@ class UserHideRelationIntegrationTest extends ApiIntegrationTest {
                 .hasSize(5);
 
         // 游客 Feed 不做拉黑过滤（无登录身份可用）
-        mvc.perform(get("/api/v1/content-posts")).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/content-posts").param("category", "DAILY")).andExpect(status().isOk());
     }
 }

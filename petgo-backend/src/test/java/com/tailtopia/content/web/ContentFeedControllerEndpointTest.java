@@ -204,7 +204,8 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
         savePost(authorId, ContentType.DAILY, null, marker);
         softDelete(author);
 
-        MvcResult res = mvc.perform(get("/api/v1/content-posts"))
+        // 走 DAILY Tab（时间序）：ALL Tab 是推荐序，同库其它用例的帖会把本帖挤出首页。
+        MvcResult res = mvc.perform(get("/api/v1/content-posts").param("category", "DAILY"))
                 .andExpect(status().isOk())
                 .andReturn();
         var items = json.readTree(res.getResponse().getContentAsString()).get("items");
