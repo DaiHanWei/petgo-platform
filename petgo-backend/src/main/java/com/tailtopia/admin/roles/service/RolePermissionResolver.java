@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@code accountType == SUPER_ADMIN} 或 {@code role == null} → 空集（隐式全权，表达式 {@code hasRole} 命中）。</li>
  *   <li>{@code OPS_MANAGER} → 读枚举 {@link AdminRole#permissionCodes()}（保留不迁移，D-13）。</li>
  *   <li>{@code CUSTOM} → 读 {@code admin_account_permissions} 勾选行（现状不动）。</li>
- *   <li>其余（四个已迁移岗位，{@code role_id != null}）→ 读 {@code admin_role_permissions WHERE role_id}。
+ *   <li>其余（四个已迁移岗位 + Story 1.5 的 {@code ROLE_TEMPLATE}，{@code role_id != null}）→ 读 {@code admin_role_permissions WHERE role_id}。
  *       {@code role_id} 为 NULL 的异常数据 → 空集 + warn（不记邮箱），不抛、不静默给权限。</li>
  * </ol>
  */
@@ -96,8 +96,8 @@ public class RolePermissionResolver {
     /** 已迁移岗位对应的 {@code admin_roles.id}（SYSTEM 行，code = 枚举名）；非表驱动角色返回 empty。 */
     @Transactional(readOnly = true)
     public Optional<Long> roleIdFor(AdminRole role) {
-        if (role == null || !role.isTableBacked()) {
-            return Optional.empty();
+        if (role == null || !role.isTableBacked() || role.isCustomRoleRef()) {
+            return Optional.empty(); // ROLE_TEMPLATE 的 role_id 由赋值入口显式给（1-6），不按 code 查
         }
         return roles.findByCode(role.name()).map(r -> r.getId());
     }

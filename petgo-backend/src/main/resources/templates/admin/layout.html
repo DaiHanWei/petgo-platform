@@ -183,7 +183,7 @@
                    th:text="#{admin.nav.virtualAccounts}">运营发布身份</a>
             </div>
         </details>
-        <details class="nav-section" th:with="navOpen=${active == 'audit-logs' or active == 'accounts'}"
+        <details class="nav-section" th:with="navOpen=${active == 'audit-logs' or active == 'accounts' or active == 'roles'}"
                  sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.view_logs') or hasAuthority('admin.view_accounts') or hasAuthority('admin.create_account')"
                  th:attr="open=${navOpen} ? 'open' : null">
             <summary th:classappend="${navOpen} ? 'active'"
@@ -195,6 +195,10 @@
                 <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.view_accounts') or hasAuthority('admin.create_account')"
                    th:href="@{/admin/accounts}" th:classappend="${active == 'accounts'} ? 'active'"
                    th:text="#{admin.nav.accounts}">后台账号</a>
+                <!-- V1.3.0 Story 1.5 角色配置（仅超管；Epic 2 重排时随 AdminPageCatalog 迁移） -->
+                <a sec:authorize="hasRole('SUPER_ADMIN')"
+                   th:href="@{/admin/roles}" th:classappend="${active == 'roles'} ? 'active'"
+                   th:text="#{admin.nav.roles}">角色配置</a>
             </div>
         </details>
         <!-- 精选自营电商 模块 10–13（V1.4.0）。⚠️ 共享文件：只追加到导航末尾，不动既有块顺序。 -->

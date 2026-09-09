@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  角色权限矩阵（V1.3.0 Story 1.5，UI 稿 7-9 编辑 / 7-10 新建；整页，不进抽屉）。
+  行 = 页面（AdminPageCatalog，按 8 个导航组），列 = 查看 / 编辑 / 其他操作；每格一个复选框对应一个权限码。
+  沿用码（不规整项，PRD FR-21A-7）只展示「沿用 …」文字 + 注脚，不出复选框（一个码只在一个页面有复选框）。
+  保存前 data-confirm 复述「新增 N / 移除 M，影响 K 个账号，重新登录后生效」（admin.js 计算 diff 后替换 {0}{1}{2}）。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="${role == null} ? #{admin.roles.new.title} : #{admin.roles.edit.title}">编辑角色权限 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin.js}"></script>
+    <style>
+        .matrix th, .matrix td { vertical-align: top; }
+        .matrix th { white-space: nowrap; }
+        .matrix .group-row td { background: #F0F1F5; font-weight: 600; }
+        .matrix label { display: block; white-space: nowrap; font-size: 12px; }
+        .matrix .shared { color: #888; font-size: 12px; }
+        .matrix .route { color: #888; font-size: 11px; }
+    </style>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="${role == null} ? #{admin.roles.new.title} : #{admin.roles.edit.title}">编辑角色权限</h1>
+        <p class="muted" th:if="${role != null and role.system}"
+           th:text="#{admin.roles.edit.systemHint(${#messages.msg(role.nameKey)}, ${accountCount})}">系统预置角色名称不可改；使用中账号 N 个</p>
+        <p class="muted" th:if="${role != null and !role.system}"
+           th:text="#{admin.roles.edit.customHint(${accountCount})}">使用中账号 N 个</p>
+        <p class="muted" th:if="${role == null}" th:text="#{admin.roles.new.hint}">名称必填、至少勾选 1 项权限才可创建。</p>
+
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <form method="post" data-role-matrix
+              th:action="${role == null} ? @{/admin/roles} : (${role.system} ? @{/admin/roles/{id}/permissions(id=${role.id})} : @{/admin/roles/{id}(id=${role.id})})"
+              th:data-confirm="${role == null} ? null : #{admin.roles.save.confirm}"
+              th:data-confirm-args="${accountCount}"
+              th:data-initial="${#strings.listJoin(matrix.checked, ',')}">
+            <div class="card card-wide" th:if="${role == null or !role.system}">
+                <label class="field" th:text="#{admin.roles.field.name}">角色名称</label>
+                <input type="text" name="name" class="field-full" maxlength="60" required
+                       th:value="${role == null} ? '' : ${role.name}"/>
+                <p class="hint" th:text="#{admin.roles.field.name.hint}">单语，≤60 字符，不可与既有角色重名</p>
+            </div>
+
+            <table class="matrix">
+                <thead>
+                <tr>
+                    <th th:text="#{admin.roles.matrix.page}">页面</th>
+                    <th th:text="#{admin.roles.matrix.view}">查看</th>
+                    <th th:text="#{admin.roles.matrix.edit}">编辑</th>
+                    <th th:text="#{admin.roles.matrix.other}">其他操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                <th:block th:each="g : ${matrix.groups}">
+                    <tr class="group-row"><td colspan="4" th:text="#{${g.group.titleKey}}">分组</td></tr>
+                    <tr th:each="p : ${g.pages}">
+                        <td>
+                            <span th:text="#{${p.titleKey()}}">页面名</span>
+                            <span class="route" th:if="${p.route != null}" th:text="${p.route}">/admin/x</span>
+                            <span class="muted" th:if="${p.superAdminOnly}" th:text="#{admin.roles.matrix.superOnly}">（仅超管）</span>
+                            <div class="shared" th:if="${!#lists.isEmpty(p.sharedCodes)}">
+                                <span th:text="#{admin.roles.matrix.shared}">沿用：</span>
+                                <span th:each="c : ${p.sharedCodes}" th:text="#{'perm.' + ${c}} + ' '" th:title="${c}">码</span>
+                                <sup>*</sup>
+                            </div>
+                        </td>
+                        <td>
+                            <label th:each="c : ${p.viewCodes}">
+                                <input type="checkbox" name="permissionCodes" th:value="${c}" th:checked="${matrix.isChecked(c)}"/>
+                                <span th:text="#{'perm.' + ${c}}" th:title="${c}">码</span>
+                            </label>
+                        </td>
+                        <td>
+                            <label th:each="c : ${p.editCodes}">
+                                <input type="checkbox" name="permissionCodes" th:value="${c}" th:checked="${matrix.isChecked(c)}"/>
+                                <span th:text="#{'perm.' + ${c}}" th:title="${c}">码</span>
+                            </label>
+                        </td>
+                        <td>
+                            <label th:each="c : ${p.otherCodes}">
+                                <input type="checkbox" name="permissionCodes" th:value="${c}" th:checked="${matrix.isChecked(c)}"/>
+                                <span th:text="#{'perm.' + ${c}}" th:title="${c}">码</span>
+                            </label>
+                        </td>
+                    </tr>
+                </th:block>
+                </tbody>
+            </table>
+
+            <p class="hint" th:text="#{admin.roles.matrix.footnote}">* 现状代码不规整项：评论管理无独立查看码（沿用内容查看）；退款管理 / Toko 退货审核 / 开封判例共用退款权限；复购引擎效果为运营配置查看或订单查看；Toko 异常订单与订单履约同码；服务范围与运费用运营配置权限；未成功请求沿用兽医查看。</p>
+
+            <div class="perm-panel-actions">
+                <button type="submit" class="btn btn-primary" data-role-submit
+                        th:text="${role == null} ? #{admin.roles.new.submit} : #{admin.roles.edit.submit}">保存</button>
+                <a class="btn btn-neutral" th:href="@{/admin/roles}" th:text="#{admin.roles.cancel}">取消</a>
+            </div>
+        </form>
+    </div>
+</div>
+</body>
+</html>

@@ -105,7 +105,7 @@ public class AdminAccountService {
         if (displayName == null || displayName.isBlank()) {
             throw AppException.validation("显示名不能为空").code("admin.err.account.displayNameRequired");
         }
-        if (role == null) {
+        if (role == null || role == AdminRole.ROLE_TEMPLATE) {
             throw AppException.validation("必须选择岗位角色").code("admin.err.account.roleRequired");
         }
         // V1.3.0 Story 1.3（D-21）：只对 ACTIVE 账号查重，已停用账号的邮箱视为已释放（部分唯一索引兜底）。
@@ -157,7 +157,8 @@ public class AdminAccountService {
     public void changeRole(long accountId, AdminRole newRole, long actorAccountId) {
         AdminAccount a = accounts.findById(accountId)
                 .orElseThrow(() -> AppException.notFound("后台账号不存在").code("admin.err.account.notFound"));
-        if (newRole == null) {
+        if (newRole == null || newRole == AdminRole.ROLE_TEMPLATE) {
+            // ROLE_TEMPLATE 必须连同 role_id 一起赋值（Story 1.6 的自定义角色入口），不走本方法。
             throw AppException.validation("必须选择岗位角色").code("admin.err.account.roleRequired");
         }
         // V1.3.0 Story 1.2 self 护栏：放在幂等判断之前——「给自己选当前角色再保存」也应被拒。

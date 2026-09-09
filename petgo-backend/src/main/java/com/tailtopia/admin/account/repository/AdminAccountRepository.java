@@ -6,6 +6,9 @@ import com.tailtopia.admin.account.domain.AdminAccountType;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /**
  * 后台账号仓库（Story 1.1）。后台认证唯一数据源，与 {@code UserRepository} 隔离。
@@ -30,6 +33,14 @@ public interface AdminAccountRepository extends JpaRepository<AdminAccount, Long
 
     /** 引用某岗位角色表行的账号（Story 1.5：角色改权限后批量 bump 安全版本号）。 */
     List<AdminAccount> findByRoleId(Long roleId);
+
+    /**
+     * 角色改权限后批量 bump 该角色下全部账号的安全版本号（Story 1.5，AD-1）：一条 UPDATE 比逐个 save 稳且快。
+     * {@code clearAutomatically} 防同事务内后续读到旧版本号。调用方须在 @Transactional 内。
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update AdminAccount a set a.securityVersion = a.securityVersion + 1 where a.roleId = :roleId")
+    int bumpSecurityVersionByRoleId(@Param("roleId") long roleId);
 
     /** 引用某岗位角色表行的账号数（Story 1.5：删角色前校验）。 */
     long countByRoleId(Long roleId);

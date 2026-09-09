@@ -146,7 +146,14 @@ public enum AdminRole {
      * 自定义：不套用任何岗位模板，权限逐码勾选、落 {@code admin_account_permissions} 表
      * （Story 1.5 的原有形态）。存量 STAFF 账号迁移到此角色，行为与迁移前完全一致。
      */
-    CUSTOM(List.of());
+    CUSTOM(List.of()),
+
+    /**
+     * 引用运营自建的自定义角色（V1.3.0 Story 1.5）：账号 {@code role = ROLE_TEMPLATE, role_id = admin_roles.id}，
+     * 权限来自 {@code admin_role_permissions}（{@code RolePermissionResolver}）。1-6 起账号页可选；
+     * {@link #selectable()} 暂不含它（下拉改从表读是 1-6 的事）。
+     */
+    ROLE_TEMPLATE(List.of());
 
     private final List<String> permissionCodes;
 
@@ -169,7 +176,13 @@ public enum AdminRole {
 
     /** 权限是否以 {@code admin_roles} 表为准（Story 1.4 迁移的四个岗位；SUPER_ADMIN / OPS_MANAGER / CUSTOM 否）。 */
     public boolean isTableBacked() {
-        return this == OPERATIONS || this == FULFILLMENT || this == SUPPORT || this == FINANCE;
+        return this == OPERATIONS || this == FULFILLMENT || this == SUPPORT || this == FINANCE
+                || this == ROLE_TEMPLATE;
+    }
+
+    /** 是否引用自定义角色行（Story 1.5）：role_id 指向 CUSTOM 类型的 admin_roles 行，code 不等于枚举名。 */
+    public boolean isCustomRoleRef() {
+        return this == ROLE_TEMPLATE;
     }
 
     /** 岗位角色是否对应 {@code account_type=SUPER_ADMIN}（认证层 {@code ROLE_SUPER_ADMIN} 的来源）。 */
@@ -192,9 +205,9 @@ public enum AdminRole {
         return "role." + name() + ".desc";
     }
 
-    /** 可在账号页选择的角色（全部；顺序即下拉顺序，超管在首、自定义在末）。 */
+    /** 可在账号页选择的角色（顺序即下拉顺序，超管在首、自定义在末）；ROLE_TEMPLATE 由 1-6 的角色表下拉承载，不在此列。 */
     public static List<AdminRole> selectable() {
-        return List.of(values());
+        return java.util.Arrays.stream(values()).filter(r -> r != ROLE_TEMPLATE).toList();
     }
 
     /**

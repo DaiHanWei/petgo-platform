@@ -24,6 +24,12 @@ public final class AuditActions {
     public static final String ACCOUNT_RENAMED = "ACCOUNT_RENAMED";
     /** 换绑后台账号 Lark 邮箱（V1.3.0 Story 1.3）。detail 记 旧邮箱 → 新邮箱；同事务 bump 安全版本号 + 超管告警。 */
     public static final String ACCOUNT_EMAIL_REBOUND = "ACCOUNT_EMAIL_REBOUND";
+    /** 新建自定义角色（V1.3.0 Story 1.5）。 */
+    public static final String ROLE_CREATED = "ROLE_CREATED";
+    /** 角色改名 / 改权限（V1.3.0 Story 1.5）。summary 记 code + 增删码列表（≤500 截断）。 */
+    public static final String ROLE_UPDATED = "ROLE_UPDATED";
+    /** 删除自定义角色（V1.3.0 Story 1.5）。 */
+    public static final String ROLE_DELETED = "ROLE_DELETED";
     /** 授予模块权限。 */
     public static final String PERMISSION_GRANTED = "PERMISSION_GRANTED";
     /** 撤销模块权限（Story 1.5）。 */

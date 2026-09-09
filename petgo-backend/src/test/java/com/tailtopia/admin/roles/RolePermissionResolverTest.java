@@ -101,4 +101,14 @@ class RolePermissionResolverTest {
         assertThat(resolver.roleIdFor(AdminRole.SUPPORT)).isEmpty();
         assertThat(resolver.codesOf(AdminRole.SUPPORT)).isEmpty();
     }
+
+    /** Story 1.5：ROLE_TEMPLATE + role_id → 读表；roleIdFor 不按 code 查（empty）。 */
+    @Test
+    void roleTemplateReadsRoleRowsById() {
+        when(rolePerms.findByRoleId(77L)).thenReturn(List.of(new AdminRolePermission(77L, AdminPermissions.VET_VIEW)));
+        assertThat(resolver.resolve(account(AdminRole.ROLE_TEMPLATE, 77L))).containsExactly(AdminPermissions.VET_VIEW);
+        assertThat(resolver.resolve(account(AdminRole.ROLE_TEMPLATE, null))).isEmpty();
+        assertThat(resolver.roleIdFor(AdminRole.ROLE_TEMPLATE)).isEmpty();
+        assertThat(resolver.codesOf(AdminRole.ROLE_TEMPLATE)).isEmpty();
+    }
 }

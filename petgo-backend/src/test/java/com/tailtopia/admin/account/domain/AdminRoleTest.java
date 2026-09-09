@@ -191,7 +191,14 @@ class AdminRoleTest {
 
     /** 下拉里必须列全角色，否则会出现「库里有这个角色但页面选不到」的死角。 */
     @Test
-    void selectableCoversEveryRole() {
-        assertThat(AdminRole.selectable()).containsExactly(AdminRole.values());
+    void selectableCoversEveryRoleExceptRoleTemplate() {
+        // Story 1.5：ROLE_TEMPLATE 由角色表下拉承载（1-6），枚举下拉不含它。
+        assertThat(AdminRole.selectable())
+                .containsExactlyElementsOf(java.util.Arrays.stream(AdminRole.values())
+                        .filter(r -> r != AdminRole.ROLE_TEMPLATE).toList());
+        assertThat(AdminRole.ROLE_TEMPLATE.isTemplated()).isTrue();
+        assertThat(AdminRole.ROLE_TEMPLATE.isTableBacked()).isTrue();
+        assertThat(AdminRole.ROLE_TEMPLATE.isCustomRoleRef()).isTrue();
+        assertThat(AdminRole.ROLE_TEMPLATE.accountType()).isEqualTo(AdminAccountType.STAFF);
     }
 }

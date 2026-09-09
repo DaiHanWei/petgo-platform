@@ -1,24 +1,58 @@
 // TailTopia 运营后台轻量交互（Story 1.6）。本地静态托管，无第三方依赖。
 // 危险操作二次确认：表单带 data-confirm="提示文案" 时，提交前弹 confirm，取消则阻止提交。
 // 用 data-* + 监听（而非 th:onsubmit 内联字符串）以兼容 i18n 文案并规避 Thymeleaf 事件属性限制。
-// V1.3.0 Story 1.3：文案可含 {0} {1} 占位——{0} 取表单 data-confirm-args（如当前行旧邮箱），
-// {1} 取表单内 input[name=newEmail]（或 data-confirm-input 指定的字段）的当前值，替换后再 confirm。
+// V1.3.0 Story 1.3 / 1.5：文案可含 {0} {1} {2}… 占位。
+//   · data-confirm-args="a|b|c" 按 | 拆分依次填 {0} {1} {2}；
+//   · {1} 未由 args 提供时，取表单内 input[name=newEmail]（或 data-confirm-input 指定字段）的当前值（1.3 换绑）；
+//   · 表单带 data-role-matrix（1.5 角色矩阵）：先按 data-initial（逗号分隔的初始勾选）与当前勾选算出
+//     新增 / 移除条数，填 {0} {1}，{2} = data-confirm-args（受影响账号数）。
 // 通用能力，Story 2.2 拆 admin-core.js 时原样搬迁。
+function tailtopiaConfirmArgs(form) {
+    var raw = form.getAttribute('data-confirm-args');
+    var args = raw === null ? [] : raw.split('|');
+    if (form.hasAttribute('data-role-matrix')) {
+        var initial = (form.getAttribute('data-initial') || '').split(',').filter(Boolean);
+        var current = Array.prototype.map.call(
+            form.querySelectorAll('input[name="permissionCodes"]:checked'), function (i) { return i.value; });
+        var added = current.filter(function (c) { return initial.indexOf(c) === -1; }).length;
+        var removed = initial.filter(function (c) { return current.indexOf(c) === -1; }).length;
+        args = [String(added), String(removed), raw === null ? '' : raw];
+    }
+    if (args.length < 2) {
+        var inputName = form.getAttribute('data-confirm-input') || 'newEmail';
+        var input = form.querySelector('[name="' + inputName + '"]');
+        args[1] = input ? (input.value || '').trim() : '';
+    }
+    return args;
+}
 document.addEventListener('submit', function (e) {
     var form = e.target;
     var msg = form.getAttribute && form.getAttribute('data-confirm');
     if (!msg) { return; }
-    if (msg.indexOf('{0}') !== -1 || msg.indexOf('{1}') !== -1) {
-        var arg0 = form.getAttribute('data-confirm-args') || '';
-        var inputName = form.getAttribute('data-confirm-input') || 'newEmail';
-        var input = form.querySelector('[name="' + inputName + '"]');
-        var arg1 = input ? (input.value || '').trim() : '';
-        msg = msg.split('{0}').join(arg0).split('{1}').join(arg1);
+    if (msg.indexOf('{') !== -1) {
+        var args = tailtopiaConfirmArgs(form);
+        for (var i = 0; i < Math.max(args.length, 3); i++) {
+            msg = msg.split('{' + i + '}').join(args[i] === undefined ? '' : args[i]);
+        }
     }
     if (!window.confirm(msg)) {
         e.preventDefault();
     }
 }, true);
+
+// V1.3.0 Story 1.5：角色矩阵「至少勾 1 项」——0 勾选时禁用保存钮（服务层另有校验，双保险）。
+document.addEventListener('change', function (e) {
+    var form = e.target && e.target.closest && e.target.closest('form[data-role-matrix]');
+    if (!form) { return; }
+    var btn = form.querySelector('[data-role-submit]');
+    if (btn) { btn.disabled = form.querySelectorAll('input[name="permissionCodes"]:checked').length === 0; }
+});
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.querySelector('form[data-role-matrix]');
+    if (!form) { return; }
+    var btn = form.querySelector('[data-role-submit]');
+    if (btn) { btn.disabled = form.querySelectorAll('input[name="permissionCodes"]:checked').length === 0; }
+});
 
 // 原生 <dialog> 弹窗开关（兽医开户等）。data-* 委托，无内联 JS：
 //   [data-open-dialog="<id>"] 点击 → 打开该弹窗；[data-close-dialog] → 关闭所在弹窗；
