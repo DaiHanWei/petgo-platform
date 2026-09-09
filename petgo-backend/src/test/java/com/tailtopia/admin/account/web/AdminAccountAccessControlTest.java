@@ -90,7 +90,9 @@ class AdminAccountAccessControlTest {
     }
 
     private void deactivate() {
-        controller.deactivate(principal(), 5L, new RedirectAttributesModelMap());
+        controller.deactivate(principal(), 5L, com.tailtopia.admin.shared.web.HxRequest.NONE,
+                new RedirectAttributesModelMap(), new org.springframework.mock.web.MockHttpServletResponse(),
+                new ConcurrentModel());
     }
 
     private void rebind() {

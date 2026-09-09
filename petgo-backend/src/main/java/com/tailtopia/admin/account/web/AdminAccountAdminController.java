@@ -6,6 +6,9 @@ import com.tailtopia.admin.roles.dto.RoleOption;
 import com.tailtopia.admin.roles.dto.RoleSelection;
 import com.tailtopia.admin.roles.service.AdminRoleService;
 import com.tailtopia.admin.roles.service.RolePermissionResolver;
+import com.tailtopia.admin.shared.web.AdminFragmentResponses;
+import com.tailtopia.admin.shared.web.HxRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
@@ -162,10 +165,21 @@ public class AdminAccountAdminController {
         return "redirect:/admin/accounts";
     }
 
+    /**
+     * 停用（V1.3.0 Story 2.3a 范式接入）：htmx 分支<b>不 try/catch</b>——AppException / 403 由
+     * {@code AdminBusinessExceptionAdvice} 出 422 / 403 fragment；成功返回 toast fragment + {@code HX-Trigger} 刷新角标。
+     * 整页分支维持 PRG + flash。真正套模板 B 在 Story 6.5。
+     */
     @PostMapping("/admin/accounts/{id}/deactivate")
     @PreAuthorize(DEACTIVATE_AUTH)
     public String deactivate(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
-            RedirectAttributes flash) {
+            HxRequest hx, RedirectAttributes flash, HttpServletResponse response, Model model) {
+        if (hx.isHtmx()) {
+            accountService.deactivate(id, admin.getAdminAccountId());
+            AdminFragmentResponses.triggerBadgeRefresh(response);
+            model.addAttribute("message", msg.get("admin.flash.account.deactivated", id));
+            return "admin/fragments/tpl-shared :: toast";
+        }
         try {
             accountService.deactivate(id, admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.account.deactivated", id));

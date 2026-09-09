@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  五套模板共用的横切 fragment（V1.3.0 Story 2.3a，AD-9；2.3b 继续在此加抽屉壳等）。
+  · inline-error(message)：htmx 请求下 AppException / 表单校验 → 422（AdminBusinessExceptionAdvice），HX-Retarget 到
+    HX-Target 或 #admin-inline-error，HX-Reswap innerHTML。
+  · forbidden(message)：htmx 请求下 @PreAuthorize 拒绝 → 403，文案「需要「{permission}」权限」（D-37 固定显示权限名）。
+  · toast(message)：复用 layout 的 .toast 样式（admin-core.js 3s 淡出），供写操作成功后的 fragment / oob 追加。
+-->
+<body>
+<p th:fragment="inline-error(message)" class="err inline-error" role="alert" th:text="${message}">出错了</p>
+
+<p th:fragment="forbidden(message)" class="err muted forbidden" role="alert" th:text="${message}">需要「xxx」权限</p>
+
+<div th:fragment="toast(message)" class="toast" role="status" th:text="${message}">已完成</div>
+</body>
+</html>
