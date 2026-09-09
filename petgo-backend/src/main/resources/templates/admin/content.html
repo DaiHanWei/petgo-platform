@@ -6,8 +6,7 @@
     <meta charset="UTF-8"/>
     <title th:text="#{admin.content.title}">内容管理 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
-    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
-    <script th:src="@{/admin/admin.js}"></script>
+    <script th:src="@{/admin/admin-core.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">

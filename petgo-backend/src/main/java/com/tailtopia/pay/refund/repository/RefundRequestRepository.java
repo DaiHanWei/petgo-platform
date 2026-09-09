@@ -22,4 +22,7 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
 
     /** 后台退款管理列表（Story 4.6，全量倒序）。 */
     List<RefundRequest> findAllByOrderByCreatedAtDesc();
+
+    /** 待办中心角标（V1.3.0 Story 2.2）：待审批 + 已审批待打款。 */
+    long countByApprovalStatusIn(java.util.Collection<com.tailtopia.pay.refund.domain.ApprovalStatus> statuses);
 }

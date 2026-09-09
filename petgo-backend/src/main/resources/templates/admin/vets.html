@@ -9,8 +9,7 @@
     <meta charset="UTF-8"/>
     <title th:text="#{admin.vets.title}">兽医账号 · TailTopia 运营</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
-    <script defer th:src="@{/admin/admin.js}"></script>
-    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">

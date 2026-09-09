@@ -7,8 +7,7 @@
     <title th:text="#{admin.review.title}">人工审核队列 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <!-- admin.js：原生 <dialog> 的 data-open/close-dialog 委托（拒绝弹框依赖），此前本页漏引致拒绝按钮无反应。 -->
-    <script defer th:src="@{/admin/admin.js}"></script>
-    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">

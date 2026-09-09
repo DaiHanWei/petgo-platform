@@ -48,7 +48,7 @@ development_status:
   # ---- Epic 2: 新后台框架与待办中心 ----
   epic-2: in-progress
   2-1-生成-后台写操作清单-验收底账: review   # 生成《后台写操作清单》验收底账（D-27）
-  2-2-g0-全局壳-新导航-顶栏账号菜单-stag-角标-登录页: ready-for-dev   # G0 全局壳——新导航、顶栏账号菜单、STAG 角标、登录页
+  2-2-g0-全局壳-新导航-顶栏账号菜单-stag-角标-登录页: review   # G0 全局壳——新导航、顶栏账号菜单、STAG 角标、登录页
   2-3a-htmx-响应约定与-admin-shared-横切件: ready-for-dev   # htmx 响应约定与 admin/shared 横切件（AD-9）
   2-3b-五套模板壳-抽屉与工作台-js: ready-for-dev   # 五套模板壳、抽屉与工作台 JS（AD-11）
   2-4-a1-统一复核工作台: ready-for-dev   # A1 统一复核工作台

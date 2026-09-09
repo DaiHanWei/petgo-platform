@@ -9,7 +9,6 @@
     <title th:text="#{admin.audit.title}">操作审计 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <!-- HTMX：本地静态托管（不走 CDN）；未加载时表单退化为整页 GET 提交（仍可用）。 -->
-    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">

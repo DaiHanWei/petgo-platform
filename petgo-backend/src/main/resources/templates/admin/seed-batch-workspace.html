@@ -12,8 +12,7 @@
     <!-- 上传走 fetch，而 /admin/** 那条过滤链保留 CSRF —— 少了这两个 meta 就是 403。 -->
     <meta name="_csrf" th:content="${_csrf?.token}"/>
     <meta name="_csrf_header" th:content="${_csrf?.headerName}"/>
-    <script defer th:src="@{/admin/admin.js}"></script>
-    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">

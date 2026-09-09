@@ -14,9 +14,8 @@
     <title th:text="#{admin.tickets.title}">被举报用户 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <!-- ⚠️ 新页要自己引 htmx（不是全局自动引入的）——曾有页面漏引导致按钮点了没反应。 -->
-    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
     <!-- data-confirm：危险操作提交前弹原生 confirm（admin.js 既有能力）。 -->
-    <script th:src="@{/admin/admin.js}" defer></script>
+    <script th:src="@{/admin/admin-core.js}" defer></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">

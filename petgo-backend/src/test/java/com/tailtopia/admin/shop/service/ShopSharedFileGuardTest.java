@@ -109,15 +109,19 @@ class ShopSharedFileGuardTest {
     @Test
     @DisplayName("🔴 admin 导航追加在末尾，且既有分组一个没少")
     void navAppendedWithoutDisturbingExisting() throws IOException {
+        // V1.3.0 Story 2.2：导航不再硬编码在 layout.html，而由 AdminPageCatalog 驱动（fragments/nav.html）。
+        // 电商组仍完整存在于目录里，12 个现状入口一个不少；layout 只引 nav fragment。
         String layout = Files.readString(
                 Path.of("src/main/resources/templates/admin/layout.html"));
-        for (String g : List.of("admin.nav.group.content", "admin.nav.group.security")) {
-            assertThat(layout).as("既有导航分组 %s 不得丢失", g).contains(g);
-        }
-        assertThat(layout).contains("admin.nav.group.shop");
-        // 电商分组必须在既有 security 分组之后（即追加到末尾，未插队）
-        assertThat(layout.indexOf("admin.nav.group.shop"))
-                .as("电商导航应追加在末尾，不得插到既有分组之前")
-                .isGreaterThan(layout.indexOf("admin.nav.group.security"));
+        assertThat(layout).contains("admin/fragments/nav :: nav");
+        assertThat(layout).as("导航已抽 fragment，layout 不该再手写电商分组").doesNotContain("admin.nav.group.shop");
+        List<String> shopRoutes = com.tailtopia.admin.shared.AdminPageCatalog.navPages().stream()
+                .filter(p -> com.tailtopia.admin.shared.AdminPageCatalog.G_SHOP.equals(p.group()))
+                .map(com.tailtopia.admin.shared.AdminPageCatalog.Page::route).toList();
+        assertThat(shopRoutes).containsExactly(
+                "/admin/shop/products", "/admin/shop/inventory", "/admin/shop/orders", "/admin/shop/order-exceptions",
+                "/admin/shop/returns", "/admin/shop/return-precedents", "/admin/shop/repurchase-dashboard",
+                "/admin/shop/margin", "/admin/shop/banners", "/admin/shop/inventory-turnover",
+                "/admin/shop/reconciliation", "/admin/shop/shipping");
     }
 }

@@ -12,8 +12,7 @@
     <meta name="_csrf_header" th:content="${_csrf?.headerName}"/>
     <!-- admin.js：data-confirm / 条件式二次确认 / 图片上传控件（Story 12.2）。
          htmx：切换发布账号时换掉宠物下拉（AC4）。 -->
-    <script defer th:src="@{/admin/admin.js}"></script>
-    <script th:src="@{/admin/vendor/htmx.min.js}"></script>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">

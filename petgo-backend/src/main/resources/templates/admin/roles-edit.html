@@ -11,7 +11,7 @@
     <meta charset="UTF-8"/>
     <title th:text="${role == null} ? #{admin.roles.new.title} : #{admin.roles.edit.title}">编辑角色权限 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
-    <script defer th:src="@{/admin/admin.js}"></script>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">

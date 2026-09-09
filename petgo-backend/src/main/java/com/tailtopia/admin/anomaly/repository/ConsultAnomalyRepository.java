@@ -16,6 +16,9 @@ public interface ConsultAnomalyRepository extends JpaRepository<ConsultAnomaly, 
     /** 按状态筛选（待处理 OPEN / 已归档 RESOLVED），创建时间倒序。 */
     List<ConsultAnomaly> findByStatusOrderByCreatedAtDesc(AnomalyStatus status);
 
+    /** 待办中心角标（V1.3.0 Story 2.2）：OPEN 工单数。 */
+    long countByStatus(AnomalyStatus status);
+
     /** 全部工单（含归档），创建时间倒序。 */
     List<ConsultAnomaly> findAllByOrderByCreatedAtDesc();
 }

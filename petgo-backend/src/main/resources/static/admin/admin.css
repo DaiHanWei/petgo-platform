@@ -488,3 +488,31 @@ dialog.lightbox img { display: block; max-width: 92vw; max-height: 92vh; object-
 .matrix .route { color: var(--muted); font-size: 11px; }
 .perm-panel .matrix { max-width: 760px; }
 .role-tag.role-ROLE_TEMPLATE { border-style: dashed; }
+
+/* ===== V1.3.0 Story 2.2：G0 全局壳（顶栏账号菜单 / STAG 角标 / 待办角标 / 登录页） ===== */
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.stag-badge { background: #FFF3C4; color: #7A5A00; border: 1px solid #F2D77B; border-radius: var(--radius-sm);
+  padding: 3px 10px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .02em; }
+.account-menu { position: relative; }
+.account-menu summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  font-size: var(--fs-sm); color: var(--ink); padding: 4px 8px; border-radius: var(--radius-sm); }
+.account-menu summary::-webkit-details-marker { display: none; }
+.account-menu summary:hover { background: rgba(31, 35, 48, .05); }
+.account-menu .avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--brand); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: var(--fs-xs); }
+.account-menu .caret { color: var(--muted); font-size: 10px; }
+.account-menu-panel { position: absolute; right: 0; top: calc(100% + 6px); min-width: 240px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgba(0, 0, 0, .08);
+  padding: 12px 14px; z-index: 30; font-size: var(--fs-sm); }
+.account-menu-panel .name { font-weight: 700; margin-bottom: 2px; }
+.account-menu-panel form { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+nav .nav-badge { float: right; background: var(--danger); color: #fff; min-width: 18px; text-align: center;
+  padding: 0 6px; line-height: 18px; font-size: 11px; }
+nav .nav-badge.is-empty { display: none; }
+nav a.legacy { opacity: .85; }
+.login-v130 { max-width: 380px; }
+.login-v130 .login-brand { text-align: center; font-size: 34px; margin: 4px 0 6px; }
+.login-v130 h1 { text-align: center; }
+.login-v130 .login-sub { text-align: center; margin: -8px 0 16px; }
+.login-v130 .lark { display: block; text-align: center; text-decoration: none; margin: 10px 0 16px; }
+.login-v130 .emergency summary { cursor: pointer; color: var(--muted); font-size: var(--fs-sm); text-align: center; }

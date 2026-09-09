@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  侧栏导航 fragment（V1.3.0 Story 2.2，AD-9 / UI 稿 0-1～0-2）。
+  🛡 组与项由 AdminPageCatalog 驱动（GlobalModelAdvice 算好 navGroups 传入）：权限表达式只存在于目录一处，
+     本模板**不得**手写 sec:authorize。可见性 = 页面入口门任一码命中 / 超管；组 = 组内项的并集；整组无项则整个
+     <details> 不渲染（不是置灰）。目录里的 navCodes 必须与各 Controller 的 @PreAuthorize 逐字同集——
+     L1 AdminPagesRenderSmokeTest.everySidebarLinkMatchesItsPageGate 双向比对。
+  · 当前页所在组自动 open、当前项 .active；商城组沿用「active 以 shop 开头」判定（AdminNavModel.NavGroup.contains）。
+  · 待办中心组：组头角标 hx-get /admin/nav/badges（load + admin:badge-refresh），各项角标由该 fragment oob 一并替换。
+-->
+<body>
+<nav th:fragment="nav(active, navGroups)">
+    <div class="brand" th:text="#{admin.brand}">🐾 TailTopia 运营</div>
+    <th:block th:each="g : ${navGroups}">
+        <!-- 📊 概览：单链接，不套 details -->
+        <th:block th:if="${g.group.key == 'overview'}">
+            <a th:each="p : ${g.pages}" th:href="@{${p.route}}"
+               th:classappend="${active == p.activeKey} ? 'active'"
+               th:text="#{${g.group.titleKey}}">📊 概览</a>
+        </th:block>
+        <details th:unless="${g.group.key == 'overview'}" class="nav-section"
+                 th:with="navOpen=${g.contains(active)}"
+                 th:attr="open=${navOpen} ? 'open' : null">
+            <summary th:classappend="${navOpen} ? 'active'">
+                <span th:text="#{${g.group.titleKey}}">分组</span>
+                <span th:if="${g.isInbox()}" class="badge nav-badge is-empty" id="nav-badge-total"
+                      th:attr="hx-get=@{/admin/nav/badges}"
+                      hx-trigger="load, admin:badge-refresh from:body" hx-swap="outerHTML"></span>
+            </summary>
+            <div class="nav-sub">
+                <a th:each="p : ${g.pages}" th:href="@{${p.route}}"
+                   th:classappend="(${active == p.activeKey} ? 'active ' : '') + (${p.legacy} ? 'legacy' : '')">
+                    <span th:text="#{${p.navKey}}">页面</span>
+                    <span th:if="${g.isInbox()}" class="badge nav-badge is-empty" th:id="'nav-badge-' + ${p.key}"></span>
+                </a>
+            </div>
+        </details>
+    </th:block>
+</nav>
+</body>
+</html>

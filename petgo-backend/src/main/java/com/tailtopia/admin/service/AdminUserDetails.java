@@ -36,6 +36,9 @@ public class AdminUserDetails implements UserDetails {
      * 都经 {@code AdminUserDetailsService.loadByEmail} 构造 principal，此处是唯一汇合点。
      */
     private final int securityVersion;
+    /** 顶栏账号菜单用（V1.3.0 Story 2.2）：登录时快照的显示名与岗位角色码（D-2：改后重登才更新，顶栏不查库）。 */
+    private final String displayName;
+    private final String roleCode;
 
     /** 兼容旧调用（无细粒度权限，permission 空集）：Story 1.5 前的构造形态。 */
     public AdminUserDetails(long adminAccountId, Long operatorUserId, String email,
@@ -53,6 +56,16 @@ public class AdminUserDetails implements UserDetails {
     public AdminUserDetails(long adminAccountId, Long operatorUserId, String email,
             String passwordHash, AdminAccountType accountType, Set<String> permissionCodes,
             int securityVersion) {
+        this(adminAccountId, operatorUserId, email, passwordHash, accountType, permissionCodes, securityVersion,
+                null, null);
+    }
+
+    /** V1.3.0 Story 2.2：再携带显示名与岗位角色码（顶栏账号菜单）。 */
+    public AdminUserDetails(long adminAccountId, Long operatorUserId, String email,
+            String passwordHash, AdminAccountType accountType, Set<String> permissionCodes,
+            int securityVersion, String displayName, String roleCode) {
+        this.displayName = displayName;
+        this.roleCode = roleCode;
         this.adminAccountId = adminAccountId;
         this.operatorUserId = operatorUserId;
         this.email = email;
@@ -69,6 +82,16 @@ public class AdminUserDetails implements UserDetails {
     /** 登录时刻的账号安全版本号快照（AD-1）。 */
     public int getSecurityVersion() {
         return securityVersion;
+    }
+
+    /** 登录时刻的显示名快照（Story 2.2 顶栏）；旧构造器为 null。 */
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    /** 登录时刻的岗位角色码（{@code AdminRole.name()}）；旧构造器为 null。 */
+    public String getRoleCode() {
+        return roleCode;
     }
 
     public AdminAccountType getAccountType() {

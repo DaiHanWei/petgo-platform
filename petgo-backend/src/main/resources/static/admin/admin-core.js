@@ -1,3 +1,34 @@
+// ===== htmx 全局钩子（V1.3.0 Story 2.2 · AD-9）=====
+// 本文件由 admin.js 整体改名而来（能力一行不丢；拆 admin-workbench.js / admin-drawer.js / admin-charts.js 是 2.3b / 3.4 的事）。
+// htmx 1.9.12（D-31 不升级）由 layout.html 的 page 片段末尾统一引入，先于本 defer 脚本初始化。
+// ① 422（校验错）/ 403（禁用态 fragment）允许 swap：1.9 默认 4xx 不 swap，放行是 2.3a 校验错误 / 禁用态 fragment 能渲染的唯一前提；
+//    其余 4xx/5xx 不动（仍不 swap）。
+// ② 统一注入 CSRF 头：取 <meta name="_csrf"> / <meta name="_csrf_header">（fetch 上传页自带），
+//    否则取 layout page 片段里的 <span data-csrf>。
+// ③ admin:badge-refresh：2.3a 的 HX-Trigger 响应头会带出该事件，侧栏待办角标监听它重新 hx-get；
+//    这里提供一个显式入口 window.tailtopiaBadgeRefresh() 供无 htmx 上下文的脚本调用。
+document.addEventListener('DOMContentLoaded', function () {
+    document.body.addEventListener('htmx:beforeSwap', function (e) {
+        var s = e.detail && e.detail.xhr && e.detail.xhr.status;
+        if (s === 422 || s === 403) { e.detail.shouldSwap = true; e.detail.isError = false; }
+    });
+    document.body.addEventListener('htmx:configRequest', function (e) {
+        var t = document.querySelector('meta[name="_csrf"]');
+        var h = document.querySelector('meta[name="_csrf_header"]');
+        var token = t && t.getAttribute('content');
+        var header = h && h.getAttribute('content');
+        if (!token || !header) {
+            var span = document.querySelector('[data-csrf]');
+            token = span && span.getAttribute('data-csrf-token');
+            header = span && span.getAttribute('data-csrf-header');
+        }
+        if (token && header) { e.detail.headers[header] = token; }
+    });
+});
+window.tailtopiaBadgeRefresh = function () {
+    if (typeof htmx !== 'undefined') { htmx.trigger(document.body, 'admin:badge-refresh'); }
+};
+
 // TailTopia 运营后台轻量交互（Story 1.6）。本地静态托管，无第三方依赖。
 // 危险操作二次确认：表单带 data-confirm="提示文案" 时，提交前弹 confirm，取消则阻止提交。
 // 用 data-* + 监听（而非 th:onsubmit 内联字符串）以兼容 i18n 文案并规避 Thymeleaf 事件属性限制。

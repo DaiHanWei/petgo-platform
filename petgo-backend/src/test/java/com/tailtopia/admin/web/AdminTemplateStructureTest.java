@@ -396,7 +396,7 @@ class AdminTemplateStructureTest {
         // ⚠️ 只看**代码行**：本文件的注释里逐字引用了那句被废弃的写法（讲清楚当初错在哪），
         //    连注释一起扫会把说明文字本身判成违规 —— 与 blockTagsAreBalanced 先剥注释同理。
         String js = Files.readString(
-                        Path.of("src", "main", "resources", "static", "admin", "admin.js"),
+                        Path.of("src", "main", "resources", "static", "admin", "admin-core.js"),
                         StandardCharsets.UTF_8)
                 .lines()
                 .filter(l -> !l.strip().startsWith("//"))

@@ -21,6 +21,9 @@ public interface FeedbackTicketRepository extends JpaRepository<FeedbackTicket, 
     /** 后台工单管理列表（Story 4.7，全量倒序）。 */
     List<FeedbackTicket> findAllByOrderByCreatedAtDesc();
 
+    /** 待办中心角标（V1.3.0 Story 2.2）：OPEN + IN_PROGRESS 工单数。 */
+    long countByStatusIn(java.util.Collection<TicketStatus> statuses);
+
     /** 7 天自动关闭 scanner（Story 4.7）：RESOLVED 且 CSAT 死线已过（用户未评）。 */
     List<FeedbackTicket> findByStatusAndCsatDeadlineBefore(TicketStatus status, Instant before);
 }

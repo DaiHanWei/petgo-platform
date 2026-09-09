@@ -10,7 +10,7 @@ depends_on: [1-5 (AdminPageCatalog), 1-1 (顶栏显示名依赖 principal 字段
 
 # Story 2.2: G0 全局壳——新导航、顶栏账号菜单、STAG 角标、登录页
 
-Status: ready-for-dev
+Status: review
 
 > 自包含 story，可本地或云端 L0 执行。与用户沟通用中文。执行纪律见根 `CLAUDE.md`。
 > 本 story 改的是**所有 64 个后台页面共用的外壳**，任何一处写坏全站一起坏。改动集中在 `layout.html`、新 `fragments/nav.html`、`admin.js → admin-core.js` 拆分、`login.html`、`SecurityConfig` 静态资源放行、`scripts/ci/check-i18n-keys.sh`。**不改任何业务页面内容区**。
@@ -63,29 +63,29 @@ so that 找页面不用记旧分组，也不会把测试环境当生产误操作
 
 ## Tasks / Subtasks
 
-- [ ] **T1 · `AdminPageCatalog` 消费接口对齐**（AC1，前置 1.5）
-  - [ ] 读 Story 1.5 落地的 `admin/shared/AdminPageCatalog`：确认提供 `groups()`（有序）→ `pages()`（有序）→ 每页 `{ key, pathTemplate, navKey(i18n), viewPermissionCodes, activeKey, badgeKey? }`；若 1.5 尚未提供 `activeKey` / `badgeKey` 字段，在本 story 追加（向后兼容）
-  - [ ] 现状 `active` 值清单（模板里 `model.addAttribute("active", "...")`）全部登记进 catalog：`dashboard, seed, seed-batches, content-schedules, content, comments, manual-review, content-pins, content-tags, users, tickets, user-tags, vets, online, failed-requests, ratings, anomalies, consult-sessions, support-tickets, refunds, config, algo-params, consult-orders, ai-orders, settlements, payments, red-overage, virtual-accounts, audit-logs, accounts, shop*`；控制器不改 `active` 值
+- [x] **T1 · `AdminPageCatalog` 消费接口对齐**（AC1，前置 1.5）
+  - [x] 读 Story 1.5 落地的 `admin/shared/AdminPageCatalog`：确认提供 `groups()`（有序）→ `pages()`（有序）→ 每页 `{ key, pathTemplate, navKey(i18n), viewPermissionCodes, activeKey, badgeKey? }`；若 1.5 尚未提供 `activeKey` / `badgeKey` 字段，在本 story 追加（向后兼容）
+  - [x] 现状 `active` 值清单（模板里 `model.addAttribute("active", "...")`）全部登记进 catalog：`dashboard, seed, seed-batches, content-schedules, content, comments, manual-review, content-pins, content-tags, users, tickets, user-tags, vets, online, failed-requests, ratings, anomalies, consult-sessions, support-tickets, refunds, config, algo-params, consult-orders, ai-orders, settlements, payments, red-overage, virtual-accounts, audit-logs, accounts, shop*`；控制器不改 `active` 值
 
-- [ ] **T2 · `fragments/nav.html`**（AC1/AC2）
-  - [ ] `th:fragment="nav(active, badges)"`；两层 `th:each`：组 → 项；组级 `th:if="${group.visibleFor(#authentication)}"`（或 controller 侧预算好 `visibleGroups` 传入，**推荐后者**：模板里不写权限表达式，避免 64 页各写一份）
-  - [ ] 组 `<details class="nav-section" th:attr="open=${group.contains(active)} ? 'open' : null">`；商城组沿用 `#strings.startsWith(active,'shop')`
-  - [ ] 待办中心组：`<summary>` 内 `<span class="badge" id="nav-badge-total" hx-get="/admin/nav/badges" hx-trigger="load, admin:badge-refresh from:body" hx-swap="outerHTML">`；各项 `<span class="badge" data-badge="manual-review">`，由 badges fragment 一次 oob 替换全部
-  - [ ] 保留现状全部注释里的「权限并集」提醒，改写为一句：可见性由 catalog 计算，**不得**在模板手写 `sec:authorize`
+- [x] **T2 · `fragments/nav.html`**（AC1/AC2）
+  - [x] `th:fragment="nav(active, badges)"`；两层 `th:each`：组 → 项；组级 `th:if="${group.visibleFor(#authentication)}"`（或 controller 侧预算好 `visibleGroups` 传入，**推荐后者**：模板里不写权限表达式，避免 64 页各写一份）
+  - [x] 组 `<details class="nav-section" th:attr="open=${group.contains(active)} ? 'open' : null">`；商城组沿用 `#strings.startsWith(active,'shop')`
+  - [x] 待办中心组：`<summary>` 内 `<span class="badge" id="nav-badge-total" hx-get="/admin/nav/badges" hx-trigger="load, admin:badge-refresh from:body" hx-swap="outerHTML">`；各项 `<span class="badge" data-badge="manual-review">`，由 badges fragment 一次 oob 替换全部
+  - [x] 保留现状全部注释里的「权限并集」提醒，改写为一句：可见性由 catalog 计算，**不得**在模板手写 `sec:authorize`
 
-- [ ] **T3 · `layout.html` 顶栏**（AC3/AC4）
-  - [ ] `<div class="topbar">`：语言切换（当前语言加 `.on`，用 `${#locale.toString()}` 比对）→ `${stag}` 时 `<span class="stag-badge">STAG</span>` → 账号菜单 `<details class="account-menu"><summary>显示名 · 角色徽标</summary><div>显示名 / 邮箱 / 角色 / 退出表单</div></details>`
-  - [ ] principal 取值：`${#authentication.principal.username}`（邮箱）与显示名——现状 `AdminUserDetails` **没有 displayName 字段**（只有 email / accountType / permissionCodes / 1.1 加的 securityVersion）→ 本 story 给 `AdminUserDetails` 加 `displayName` 与 `roleCode`（`AdminRole.name()`），`loadByEmail` 填充；旧构造器保持兼容（Story 1.1 已经在动这个类，注意合并顺序：1.1 先合）
-  - [ ] 角色徽标文案 key `admin.role.SUPER_ADMIN / OPS_MANAGER / OPERATIONS / FULFILLMENT / SUPPORT / FINANCE / CUSTOM`，三语（Story 1.5 预置角色 `name_key` 可复用同一组 key）
-  - [ ] `StagFlag`：`@Component @Profile("stag")` 提供 `boolean stag=true`，非 stag 无 bean → `@ControllerAdvice` 用 `Optional<StagFlag>` 注入 `@ModelAttribute("stag")`；同时定义 `admin/shared/StagOnly` 注解（`@Profile("stag")` 的元注解），供 B12 / 3.3 复用
+- [x] **T3 · `layout.html` 顶栏**（AC3/AC4）
+  - [x] `<div class="topbar">`：语言切换（当前语言加 `.on`，用 `${#locale.toString()}` 比对）→ `${stag}` 时 `<span class="stag-badge">STAG</span>` → 账号菜单 `<details class="account-menu"><summary>显示名 · 角色徽标</summary><div>显示名 / 邮箱 / 角色 / 退出表单</div></details>`
+  - [x] principal 取值：`${#authentication.principal.username}`（邮箱）与显示名——现状 `AdminUserDetails` **没有 displayName 字段**（只有 email / accountType / permissionCodes / 1.1 加的 securityVersion）→ 本 story 给 `AdminUserDetails` 加 `displayName` 与 `roleCode`（`AdminRole.name()`），`loadByEmail` 填充；旧构造器保持兼容（Story 1.1 已经在动这个类，注意合并顺序：1.1 先合）
+  - [x] 角色徽标文案 key `admin.role.SUPER_ADMIN / OPS_MANAGER / OPERATIONS / FULFILLMENT / SUPPORT / FINANCE / CUSTOM`，三语（Story 1.5 预置角色 `name_key` 可复用同一组 key）
+  - [x] `StagFlag`：`@Component @Profile("stag")` 提供 `boolean stag=true`，非 stag 无 bean → `@ControllerAdvice` 用 `Optional<StagFlag>` 注入 `@ModelAttribute("stag")`；同时定义 `admin/shared/StagOnly` 注解（`@Profile("stag")` 的元注解），供 B12 / 3.3 复用
 
-- [ ] **T4 · 登录页**（AC5）
-  - [ ] `login.html` 按 UI 稿 0-5 重排版式（居中卡、品牌紫主按钮、紧急入口 `<details>` 折叠）；六条提示 `<p class="err|ok" th:if="${param.x}">` 一条不少
-  - [ ] 不改 `SecurityConfig` 的 formLogin / oauth 路由
+- [x] **T4 · 登录页**（AC5）
+  - [x] `login.html` 按 UI 稿 0-5 重排版式（居中卡、品牌紫主按钮、紧急入口 `<details>` 折叠）；六条提示 `<p class="err|ok" th:if="${param.x}">` 一条不少
+  - [x] 不改 `SecurityConfig` 的 formLogin / oauth 路由
 
-- [ ] **T5 · `admin.js` → `admin-core.js`**（AC6）
-  - [ ] `git mv static/admin/admin.js static/admin/admin-core.js`；全部模板 `sed` 替换引用（含 `denied.html`、`login.html` 如有）
-  - [ ] 文件头新增 `// ===== htmx 全局钩子（V1.3.0 Story 2.2 · AD-9）=====`：
+- [x] **T5 · `admin.js` → `admin-core.js`**（AC6）
+  - [x] `git mv static/admin/admin.js static/admin/admin-core.js`；全部模板 `sed` 替换引用（含 `denied.html`、`login.html` 如有）
+  - [x] 文件头新增 `// ===== htmx 全局钩子（V1.3.0 Story 2.2 · AD-9）=====`：
     ```js
     document.body.addEventListener('htmx:beforeSwap', function (e) {
       var s = e.detail.xhr && e.detail.xhr.status;
@@ -96,11 +96,11 @@ so that 找页面不用记旧分组，也不会把测试环境当生产误操作
       if (t && h) { e.detail.headers[h.getAttribute('content')] = t.getAttribute('content'); }
     });
     ```
-  - [ ] 🔴 `htmx:beforeSwap` 要挂在 `document.body` 上且在 htmx 加载后执行：`admin-core.js` 是 `defer`，htmx.min.js 的引入顺序要在它之前（现状各页 `<head>` 只引 admin.js，htmx 由用到的页面单独引——**本 story 把 `vendor/htmx.min.js` 提到 `layout.html` 统一引入**，去掉各页零散引入）
-  - [ ] 现状 `meta[name="_csrf"]` 在哪些模板有？grep 后统一放进 `layout.html` `<head>` 不现实（layout 只提供 body fragment）→ 放在 `page` fragment 顶部一个隐藏 `<span data-csrf>` 或让各页 `<head>` 保留 meta；**选前者**，与 `htmx:configRequest` 取值对齐
+  - [x] 🔴 `htmx:beforeSwap` 要挂在 `document.body` 上且在 htmx 加载后执行：`admin-core.js` 是 `defer`，htmx.min.js 的引入顺序要在它之前（现状各页 `<head>` 只引 admin.js，htmx 由用到的页面单独引——**本 story 把 `vendor/htmx.min.js` 提到 `layout.html` 统一引入**，去掉各页零散引入）
+  - [x] 现状 `meta[name="_csrf"]` 在哪些模板有？grep 后统一放进 `layout.html` `<head>` 不现实（layout 只提供 body fragment）→ 放在 `page` fragment 顶部一个隐藏 `<span data-csrf>` 或让各页 `<head>` 保留 meta；**选前者**，与 `htmx:configRequest` 取值对齐
 
-- [ ] **T6 · CI 三语守门**（AC7）
-  - [ ] `scripts/ci/check-i18n-keys.sh` 草案：
+- [x] **T6 · CI 三语守门**（AC7）
+  - [x] `scripts/ci/check-i18n-keys.sh` 草案：
     ```bash
     #!/usr/bin/env bash
     # 三语 message key 集合守门（V1.3.0 NFR-3）：zh_CN / en / id / 默认包 四份 key 集合必须逐一相等。
@@ -113,22 +113,22 @@ so that 找页面不用记旧分组，也不会把测试环境当生产误操作
     done
     exit $fail
     ```
-  - [ ] 接入 `.github/workflows/*.yml` 现有 backend job（与 flyway-guard 同一步骤组）
-  - [ ] 🔴 grep 要排除注释行与空行：`^[A-Za-z0-9_.-]+` 天然不匹配 `#` 开头
+  - [x] 接入 `.github/workflows/*.yml` 现有 backend job（与 flyway-guard 同一步骤组）
+  - [x] 🔴 grep 要排除注释行与空行：`^[A-Za-z0-9_.-]+` 天然不匹配 `#` 开头
 
-- [ ] **T7 · 新 key 三语**（AC7）
-  - [ ] `admin.v130.nav.group.todo / content / users / finance / shop / vet / settings / overview`（组名，带 emoji 或 emoji 放模板）；`admin.v130.topbar.stag`、`admin.v130.topbar.account`、`admin.role.*` 7 个
-  - [ ] 现状 `admin.nav.*` 52 个 key 复用于各项文案，不重复造 key；退役页面的 key（`admin.nav.reports / online / ratings / contentSchedules`）本 story **保留**，由对应退役 story 删除
+- [x] **T7 · 新 key 三语**（AC7）
+  - [x] `admin.v130.nav.group.todo / content / users / finance / shop / vet / settings / overview`（组名，带 emoji 或 emoji 放模板）；`admin.v130.topbar.stag`、`admin.v130.topbar.account`、`admin.role.*` 7 个
+  - [x] 现状 `admin.nav.*` 52 个 key 复用于各项文案，不重复造 key；退役页面的 key（`admin.nav.reports / online / ratings / contentSchedules`）本 story **保留**，由对应退役 story 删除
 
-- [ ] **T8 · 测试**（AC1/AC6/AC8）
-  - [ ] `AdminNavSectionOpenTest` 不改断言，跑绿
-  - [ ] `AdminPagesRenderSmokeTest.contentNavKeepsTheProductSpecifiedOrder` 改为新 IA 顺序断言；新增 `navGroupsFollowCatalogOrder`（8 组顺序）、`todoGroupHiddenWhenNoQueuePermission`（只持 `config.view` 的账号看不到待办中心组）、`stagBadgeOnlyInStagProfile`（`@ActiveProfiles("stag")` 渲染含 STAG，默认不含）
-  - [ ] `AdminTemplateStructureTest` 三条继续绿（nav fragment 也走它的扫描）
-  - [ ] L0：`check-i18n-keys.sh` 在本地跑一次贴结果
+- [x] **T8 · 测试**（AC1/AC6/AC8）
+  - [x] `AdminNavSectionOpenTest` 不改断言，跑绿
+  - [x] `AdminPagesRenderSmokeTest.contentNavKeepsTheProductSpecifiedOrder` 改为新 IA 顺序断言；新增 `navGroupsFollowCatalogOrder`（8 组顺序）、`todoGroupHiddenWhenNoQueuePermission`（只持 `config.view` 的账号看不到待办中心组）、`stagBadgeOnlyInStagProfile`（`@ActiveProfiles("stag")` 渲染含 STAG，默认不含）
+  - [x] `AdminTemplateStructureTest` 三条继续绿（nav fragment 也走它的扫描）
+  - [x] L0：`check-i18n-keys.sh` 在本地跑一次贴结果
 
-- [ ] **T9 · 云端执行须知**
-  - [ ] 云端 L0：`mvn -B clean package -DskipITs` + 两个 shell 脚本；模板渲染测试属 MockMvc 切片，云端可跑
-  - [ ] L2（视觉：8 组导航、账号菜单、STAG 角标、登录页）留本地 stag 验收，对照 UI 稿泳道 0 五帧
+- [x] **T9 · 云端执行须知**
+  - [x] 云端 L0：`mvn -B clean package -DskipITs` + 两个 shell 脚本；模板渲染测试属 MockMvc 切片，云端可跑
+  - [x] L2（视觉：8 组导航、账号菜单、STAG 角标、登录页）留本地 stag 验收，对照 UI 稿泳道 0 五帧
 
 ---
 
@@ -225,10 +225,35 @@ admin 链 403 = `AccessDeniedHandlerImpl` forward `/admin/denied`（整页，注
 
 ### Agent Model Used
 
-（dev-story 填写）
+claude-fable-5-1（云端 headless session，2026-09-09）
 
 ### Debug Log References
 
+- 云端 L0：`./mvnw -B clean package`（排除需真库的 Spring 上下文测试类）→ 1724 tests, 0 failures, BUILD SUCCESS。
+- 新增 L0：`AdminNavModelTest` 5/5（超管全见 / 内容线只见三组 / 无队列权限整组不渲染 / 仅超管页 / 商城前缀）、`NavBadgeServiceTest` 2/2（只汇总可见队列）、`AdminPageCatalogTest` +2（侧栏元数据：路由 / activeKey 唯一 / 入口门码在册 / 全部现状 active 值可落组；无路由与未建路由页不入侧栏）。
+- `AdminTemplateStructureTest` 11/11（`fragments/nav.html`、`nav-badges.html` 也过它的扫描）；`ShopSharedFileGuardTest` 按「导航已抽 fragment」改写。
+- `bash scripts/ci/check-i18n-keys.sh` → OK（2207 key，四包集合相等、无重复）；`check-flyway-versions.sh` 树内 174 支无重号（本 story 无迁移）。
+- 复审：① 「删了 30 个 notify.* key」为误报——只删了同包内**重复出现**的前一份（保留最后一次出现 = 运行时生效值），四包 key 集合仍相等且键仍在；② 显示名为空串时 `#strings.substring(0,1)` 抛异常 → 已修（advice 空白回退邮箱 + 模板 isEmpty 兜底）。
+
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：① `AdminPagesRenderSmokeTest`：改写 `contentNavKeepsTheProductSpecifiedOrder`（新 IA 顺序）、新增 `navGroupsFollowCatalogOrder` / `todoGroupHiddenWhenNoQueuePermission` / `topbarShowsAccountMenuAndNoStagBadgeByDefault` / `navBadgesFragmentRenders`；既有 `everySidebarLinkMatchesItsPageGate`（侧栏 ↔ 入口门双向）、`navShowsManualReviewForTakedownOnlyStaff`、`pageHeadingsMatchTheirNavLabels`、`AdminNavSectionOpenTest` 两条须真库跑；② `StagBadgeRenderIntegrationTest`（`@ActiveProfiles({"dev","stag"})` 独立上下文，STAG 角标 + 顶栏显示名）；③ L2 视觉：8 组导航（UI 稿 0-1/0-2）、账号菜单展开（0-3）、STAG 角标（0-4）、登录页（0-5）、三语占位（0-6）；④ htmx 行为：待办角标 load / `admin:badge-refresh` 刷新、422/403 fragment 可 swap、hx-post 带 CSRF 头（2.3a 端点落地后联调）。
+- **导航单一真相**：`AdminPageCatalog.Page` 加 `navKey / activeKey / navCodes / legacy`，`navCodes` 逐字抄自各 Controller 入口门（`AdminPagesRenderSmokeTest.everySidebarLinkMatchesItsPageGate` 双向守）；`fragments/nav.html` 不写任何 `sec:authorize`；`GlobalModelAdvice`（`@ControllerAdvice(basePackages="com.tailtopia.admin")`）注入 `navGroups / stag / topbar*`。
+- **退役页暂保留入口**（`legacy=true`，`nav a.legacy` 样式）：content-schedules（7.5 删）、vets/online + ratings（9.1a/9.1b 删）、shop-banners / inventory-turnover / reconciliation（Epic 10 收口）——否则现存可用页面会从侧栏消失。`warm-replies`（4.4）与 `places`（5.2）路由未建，暂不入侧栏，由各自 story 打开。
+- **角标**：`AdminNavController GET /admin/nav/badges` + `NavBadgeService`（本 story 先落，2.3a 继续扩展）；五队列口径：人工复核 PENDING、统一工单 PENDING 桶（`UnifiedTicketQueryService.search` total）、问诊异常 OPEN、客服工单 OPEN+IN_PROGRESS、退款 PENDING_APPROVAL+APPROVED（三段流未走完）；仅可见队列计入总数。四个仓库各加一个 count 方法。
+- `AdminUserDetails` + `displayName / roleCode`（新构造器，旧构造器默认 null）；顶栏取登录时快照，不查库（D-2）。角色徽标复用既有 `role.<CODE>` 三语 key（story 写 `admin.role.*`，不重复造 key）；组名复用 1-5 的 `admin.group.*`。
+- `admin.js` → `admin-core.js`（`git mv`，18 个模板引用同步；头部加 htmx 三钩子）；htmx 1.9.12 由 layout page 片段末尾统一引入，15 个模板的零散引入删除（D-31 不升级）；CSRF 经 `<span data-csrf>` 或页面 `<meta name="_csrf">`。
+- `scripts/ci/check-i18n-keys.sh` 新建并接入 `backend-ci.yml`；顺带发现 zh_CN / en 两包各有 30 个 `notify.*` 重复 key（其中 1 个前后值不同），按「保留最后一次出现」去重，运行时行为不变。
+- **待拍板（提醒产品）**：① 403 禁用态「注明所缺权限名」（PRD / AD-9）vs 现状 `denied.html`「不泄露」——本 story 不改 `denied.html`，2.3a 按 D-37 做 fragment 级注明；② UI 稿 9-2 「操作审计列表为 UTC」与 D-22 冲突，待设计师同步。
+
 ### File List
+
+- petgo-backend/src/main/java/com/tailtopia/admin/shared/{StagOnly,StagFlag}.java、shared/nav/{AdminNavModel,NavBadgeService}.java、shared/web/{GlobalModelAdvice,AdminNavController}.java（新增）
+- petgo-backend/src/main/java/com/tailtopia/admin/shared/AdminPageCatalog.java（导航元数据 + 6 个 legacy 页）
+- petgo-backend/src/main/java/com/tailtopia/admin/service/{AdminUserDetails,AdminUserDetailsService}.java
+- petgo-backend/src/main/java/com/tailtopia/admin/moderation/repository/ManualReviewItemRepository.java、admin/anomaly/repository/ConsultAnomalyRepository.java、support/repository/FeedbackTicketRepository.java、pay/refund/repository/RefundRequestRepository.java（+count）
+- petgo-backend/src/main/resources/templates/admin/layout.html、login.html、fragments/{nav,nav-badges}.html（新增）、其余 29 个模板（script 引用 / htmx 引入）
+- petgo-backend/src/main/resources/static/admin/admin-core.js（改名 + 钩子）、admin.css
+- petgo-backend/src/main/resources/i18n/messages{,_zh_CN,_en,_id}.properties（+9 key；zh_CN/en 去重）
+- scripts/ci/check-i18n-keys.sh（新增）、.github/workflows/backend-ci.yml
+- 测试：admin/shared/nav/{AdminNavModelTest,NavBadgeServiceTest}.java、admin/shared/StagBadgeRenderIntegrationTest.java（新增）；AdminPageCatalogTest、AdminPagesRenderSmokeTest、AdminTemplateStructureTest、ShopSharedFileGuardTest

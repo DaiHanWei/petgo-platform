@@ -24,6 +24,9 @@ public interface ManualReviewItemRepository extends JpaRepository<ManualReviewIt
     /** 某状态且提交早于阈值的项（超时扫描：PENDING + submittedAt < cutoff）。 */
     List<ManualReviewItem> findByStatusAndSubmittedAtBefore(ReviewStatus status, Instant cutoff);
 
+    /** 待办中心角标（V1.3.0 Story 2.2）：PENDING 队列长度。 */
+    long countByStatus(ReviewStatus status);
+
     /**
      * 注销联动（story 9，§5.5.2）：把注销用户内容对应的 PENDING 队列条目置 TIMED_OUT 终态（移出队列，不再发布）。
      * 队列表无作者列，按 content_id 子查询映射到作者：CONTENT_POST → content_posts.author_id、
