@@ -115,8 +115,10 @@ class UnifiedTicketAccessControlTest {
                 com.tailtopia.shared.i18n.Messages msg) {
             // 2026-09-02 后台文案国际化：控制器新增 Messages 注入。
             // V1.3.0 Story 2.5：控制器只留处置 / 批量 / 工作台装配四个依赖。
-            return new UnifiedTicketController(ds, am,
-                    org.mockito.Mockito.mock(com.tailtopia.admin.moderation.service.TicketsWorkbenchService.class), msg);
+            var wb = org.mockito.Mockito.mock(com.tailtopia.admin.moderation.service.TicketsWorkbenchService.class);
+            org.mockito.Mockito.when(wb.counts(org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Map.of());
+            return new UnifiedTicketController(ds, am, wb,
+                    msg);
         }
     }
 

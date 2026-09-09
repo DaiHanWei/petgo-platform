@@ -22,16 +22,8 @@
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
         <div th:replace="~{admin/fragments/tpl-a-workbench :: workbench(~{::an-tabs}, ~{}, ~{::an-queue}, ~{::an-detail}, ~{::an-actions})}">
-            <div th:fragment="an-tabs" class="tabs" id="anomaly-tabs">
-                <a class="tab" th:classappend="${state == 'open'} ? 'tab--on'" th:href="@{/admin/anomalies(state='open')}">
-                    <span th:text="#{admin.v130.anomalies.tab.open}">待处理</span>
-                    <span class="tab-count" id="anomaly-tab-count-open" th:text="${counts.get('open')}">0</span>
-                </a>
-                <a class="tab" th:classappend="${state == 'resolved'} ? 'tab--on'" th:href="@{/admin/anomalies(state='resolved')}">
-                    <span th:text="#{admin.v130.anomalies.tab.resolved}">已处理</span>
-                    <span class="tab-count" id="anomaly-tab-count-resolved" th:text="${counts.get('resolved')}">0</span>
-                </a>
-            </div>
+            <!-- 页签行：公共片段（Story 2.9 T2） -->
+            <div th:fragment="an-tabs" th:replace="~{admin/fragments/tpl-a-state-tabs :: tabs(${stateTabs})}"></div>
             <div th:fragment="an-queue" th:replace="~{admin/fragments/anomaly-queue :: list}"></div>
             <div th:fragment="an-detail" th:replace="~{admin/fragments/tpl-a-workbench :: detail-empty}"></div>
             <div th:fragment="an-actions"><span class="muted" th:text="#{admin.v130.review.actions.hint}">操作区随所选单据渲染</span></div>

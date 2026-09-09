@@ -12,15 +12,14 @@
 
 <th:block th:fragment="rows">
     <li th:if="${queue.isEmpty() and filters.page == 0}" class="q-empty">
-        <div class="empty empty--queue"><span class="empty-emoji">🎉</span>
-            <p th:text="${filters.handled} ? #{admin.v130.review.empty.handled} : #{admin.v130.empty.queue}">队列已清空</p>
-            <p class="muted" th:unless="${filters.handled}">
-                <th:block th:each="t : ${tabs}" th:if="${t != filters.tab and counts.get(t) > 0}">
-                    <a th:href="@{/admin/manual-review(tab=${t.param()})}"
-                       th:text="#{admin.v130.review.empty.elsewhere(#{${t.titleKey()}}, ${counts.get(t)})}">其他队列还有 N 条</a>
-                </th:block>
-            </p>
-        </div>
+        <!-- 公共空态（Story 2.9 T2）：其他队列去向来自 otherQueues（与角标同源）；本页内其他页签的去向另列 -->
+        <div th:replace="~{admin/fragments/tpl-a-empty :: queueEmpty('manual-review', ${filters.handled} ? #{admin.v130.review.empty.handled} : null)}"></div>
+        <p class="muted" th:unless="${filters.handled}">
+            <th:block th:each="t : ${tabs}" th:if="${t != filters.tab and counts.get(t) > 0}">
+                <a th:href="@{/admin/manual-review(tab=${t.param()})}"
+                   th:text="#{admin.v130.review.empty.elsewhere(#{${t.titleKey()}}, ${counts.get(t)})}">其他页签还有 N 条</a>
+            </th:block>
+        </p>
     </li>
     <th:block th:each="r : ${queue.content}"><li th:replace="~{admin/fragments/review-queue :: row(${r}, false)}"></li></th:block>
     <!-- 滚动到底加载下一页（每页 20） -->

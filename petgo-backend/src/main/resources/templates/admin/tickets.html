@@ -59,19 +59,8 @@
         </form>
 
             <div th:replace="~{admin/fragments/tpl-a-workbench :: workbench(~{::tk-tabs}, ~{::tk-filters}, ~{::tk-queue}, ~{::tk-detail}, ~{::tk-actions})}">
-                <!-- 页签行：待处置 / 已处置 + 计数（切页签 = 整页 GET，保留筛选） -->
-                <div th:fragment="tk-tabs" class="tabs" id="tickets-tabs">
-                    <a class="tab" th:classappend="${!filters.handled} ? 'tab--on'"
-                       th:href="@{/admin/tickets(state='pending',reason=${filters.reason},q=${filters.q})}">
-                        <span th:text="#{admin.v130.tickets.tab.pending}">待处置</span>
-                        <span class="tab-count" id="tickets-tab-count-pending" th:text="${counts.get('pending')}">0</span>
-                    </a>
-                    <a class="tab" th:classappend="${filters.handled} ? 'tab--on'"
-                       th:href="@{/admin/tickets(state='handled',reason=${filters.reason},q=${filters.q})}">
-                        <span th:text="#{admin.v130.tickets.tab.handled}">已处置</span>
-                        <span class="tab-count" id="tickets-tab-count-handled" th:text="${counts.get('handled')}">0</span>
-                    </a>
-                </div>
+                <!-- 页签行：公共片段（Story 2.9 T2），待处置 / 已处置 + 同源计数 -->
+                <div th:fragment="tk-tabs" th:replace="~{admin/fragments/tpl-a-state-tabs :: tabs(${stateTabs})}"></div>
                 <!-- 筛选行：举报类型（下拉自动提交）+ 关键词（账号 id / 昵称，显式查询钮）；整页 GET，保留两态。 -->
                 <form th:fragment="tk-filters" class="filter-bar tk-filters" th:action="@{/admin/tickets}" method="get" data-autosubmit>
                     <input type="hidden" name="state" th:value="${filters.state()}"/>

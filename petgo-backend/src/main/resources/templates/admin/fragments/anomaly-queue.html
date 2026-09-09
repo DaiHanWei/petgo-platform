@@ -11,9 +11,7 @@
 
 <th:block th:fragment="rows">
     <li th:if="${queue.isEmpty() and page == 0}" class="q-empty">
-        <div class="empty empty--queue"><span class="empty-emoji">🎉</span>
-            <p th:text="${state == 'resolved'} ? #{admin.v130.anomalies.empty.resolved} : #{admin.v130.empty.queue}">队列已清空</p>
-        </div>
+        <div th:replace="~{admin/fragments/tpl-a-empty :: queueEmpty('anomalies', ${state == 'resolved'} ? #{admin.v130.anomalies.empty.resolved} : null)}"></div>
     </li>
     <th:block th:each="a : ${queue.content}"><li th:replace="~{admin/fragments/anomaly-queue :: row(${a}, false)}"></li></th:block>
     <li th:if="${queue.hasNext()}" class="q-more" hx-swap="outerHTML" hx-trigger="revealed"

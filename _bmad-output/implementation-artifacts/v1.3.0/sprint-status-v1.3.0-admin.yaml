@@ -56,7 +56,7 @@ development_status:
   2-6-a4-问诊异常工单: review   # A4 问诊异常工单
   2-7-a5-客服工单: review   # A5 客服工单
   2-8-a6-退款管理三段流: review   # A6 退款管理三段流
-  2-9-待办中心组联调与两态收口: ready-for-dev   # 待办中心组联调与两态收口
+  2-9-待办中心组联调与两态收口: review   # 待办中心组联调与两态收口
   epic-2-retrospective: optional
   # ---- Epic 3: 内容运营数据看板 ----
   epic-3: in-progress

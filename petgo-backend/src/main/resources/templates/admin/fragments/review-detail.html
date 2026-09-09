@@ -99,8 +99,11 @@
                         <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.review.priority.change}">改优先级</button>
                     </form>
                 </div>
-                <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.takedown') or hasAuthority('content.manual_review'))"
-                   th:text="#{admin.v130.err.forbidden(#{perm.content.manual_review})}">需要权限</p>
+                <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.takedown') or hasAuthority('content.manual_review'))">
+                    <button type="button" class="btn btn-primary" disabled th:title="#{admin.v130.err.forbidden(#{perm.content.manual_review})}" th:text="#{admin.review.approve}">通过（放行发布）</button>
+                    <button type="button" class="btn btn-danger" disabled th:title="#{admin.v130.err.forbidden(#{perm.content.manual_review})}" th:text="#{admin.review.reject}">拒绝（丢弃）</button>
+                    <span th:text="#{admin.v130.err.forbidden(#{perm.content.manual_review})}">需要权限</span>
+                </p>
             </th:block>
             <!-- 内容举报：下架（confirm）/ 无需处置 / 整帖一键驳回（confirm 复述条数） -->
             <th:block th:if="${d.tab.name() == 'REPORT'}">
@@ -118,8 +121,11 @@
                         <button type="submit" class="btn btn-neutral" th:text="#{admin.tickets.action.dismissContent}">整帖一键驳回</button>
                     </form>
                 </div>
-                <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.takedown'))"
-                   th:text="#{admin.v130.err.forbidden(#{perm.content.takedown})}">需要权限</p>
+                <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.takedown'))">
+                    <button type="button" class="btn btn-danger" disabled th:title="#{admin.v130.err.forbidden(#{perm.content.takedown})}" th:text="#{admin.review.act.takedown}">下架</button>
+                    <button type="button" class="btn btn-neutral" disabled th:title="#{admin.v130.err.forbidden(#{perm.content.takedown})}" th:text="#{admin.review.act.dismiss}">无需处置</button>
+                    <span th:text="#{admin.v130.err.forbidden(#{perm.content.takedown})}">需要权限</span>
+                </p>
             </th:block>
             <!-- 名称 / 头像：通过 / 违规（违规 confirm） -->
             <th:block th:if="${d.tab.name() == 'NAME' or d.tab.name() == 'AVATAR'}">
@@ -142,8 +148,12 @@
                                 th:text="${d.tab.name() == 'NAME'} ? #{admin.review.act.violationName} : #{admin.review.act.violationAvatar}">违规</button>
                     </form>
                 </div>
-                <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.takedown'))"
-                   th:text="#{admin.v130.err.forbidden(#{perm.content.takedown})}">需要权限</p>
+                <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.takedown'))">
+                    <button type="button" class="btn btn-neutral" disabled th:title="#{admin.v130.err.forbidden(#{perm.content.takedown})}" th:text="#{admin.review.act.pass}">通过</button>
+                    <button type="button" class="btn btn-danger" disabled th:title="#{admin.v130.err.forbidden(#{perm.content.takedown})}"
+                            th:text="${d.tab.name() == 'NAME'} ? #{admin.review.act.violationName} : #{admin.review.act.violationAvatar}">违规</button>
+                    <span th:text="#{admin.v130.err.forbidden(#{perm.content.takedown})}">需要权限</span>
+                </p>
             </th:block>
         </th:block>
         <p class="muted" th:if="${d.pending() and d.targetDeleted}" th:text="#{admin.v130.review.targetDeleted}">对象已注销，单据作废（只读）</p>

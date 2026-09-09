@@ -8,11 +8,10 @@
 <div th:fragment="done" class="rv-done" data-done th:data-next-id="${done.nextId}">
     <!-- toast oob 到 layout 的 #admin-toast-host（留在右栏会被下一条 detail 立刻冲掉，复审 #6） -->
     <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${message} ?: #{${messageKey}}">已处理</div>
-    <div class="empty empty--queue" th:if="${#strings.isEmpty(done.nextId)}">
-        <span class="empty-emoji">🎉</span>
-        <p th:text="#{admin.v130.empty.queue}">队列已清空</p>
-        <p class="muted" th:if="${done.otherPending > 0}" th:text="#{admin.v130.review.empty.other(${done.otherPending})}">其他队列还有 N 条</p>
-    </div>
+    <th:block th:if="${#strings.isEmpty(done.nextId)}">
+        <div th:replace="~{admin/fragments/tpl-a-empty :: queueEmpty('manual-review', null)}"></div>
+        <p class="muted" th:if="${done.otherPending > 0}" th:text="#{admin.v130.review.empty.other(${done.otherPending})}">其他页签还有 N 条</p>
+    </th:block>
     <!-- 被处理行：终态 → oob 删除；内容举报按帖聚合、该帖仍有其他待处理单 → oob 重渲染该行（actionRef 已换成下一条 PENDING 单，复审 #4） -->
     <li th:if="${done.keepRow == null}" th:id="${done.rowId()}" hx-swap-oob="delete"></li>
     <th:block th:if="${done.keepRow != null}"><li th:replace="~{admin/fragments/review-queue :: row(${done.keepRow}, true)}"></li></th:block>

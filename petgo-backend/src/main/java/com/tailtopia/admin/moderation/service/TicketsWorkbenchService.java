@@ -124,6 +124,13 @@ public class TicketsWorkbenchService {
         return out;
     }
 
+    /** 待处置数（无筛选）= {@code counts(DEFAULT).get("pending")}，供侧栏角标同源取数且不多跑「已处理」计数（Story 2.9 AC1）。 */
+    @Transactional(readOnly = true)
+    public long pendingCount() {
+        return tickets.search(SCOPE, TicketType.ACCOUNT_REPORT, TicketStatusBucket.PENDING, TicketFilters.DEFAULT.q(),
+                extraFor(TicketFilters.DEFAULT), PageRequest.of(0, 1)).getTotalElements();
+    }
+
     /** 当前筛选下待处置第一条（处置提交后 = 下一条）；无则空串。 */
     @Transactional(readOnly = true)
     public String nextId(TicketFilters f) {

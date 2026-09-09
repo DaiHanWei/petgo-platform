@@ -2,6 +2,7 @@ package com.tailtopia.admin.support.web;
 
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.shared.web.AdminFragmentResponses;
+import com.tailtopia.admin.shared.web.StateTab;
 import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.admin.support.service.AdminSupportTicketQueryService;
 import com.tailtopia.admin.support.service.AdminSupportTicketQueryService.State;
@@ -47,6 +48,7 @@ public class AdminSupportTicketController {
     private final AdminSupportTicketQueryService query;
     private final SupportTicketService ticketService;
     private final AdminTicketRefundService ticketRefund;
+    /** V1.3.0 Story 2.9：空态「其他队列还有 N 条」去向（与角标同源）。 */
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
@@ -164,9 +166,10 @@ public class AdminSupportTicketController {
     @PreAuthorize(REFUND_SUBMIT_AUTH)
     public String approveRefundNeed(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable String ticketToken, HxRequest hx, Model model, Authentication auth,
-            RedirectAttributes flash) {
+            HttpServletResponse response, RedirectAttributes flash) {
         if (hx.isHtmx()) {
             ticketRefund.approveRefundNeed(ticketToken, admin.getAdminAccountId());
+            AdminFragmentResponses.triggerBadgeRefresh(response); // 建单 / need→APPROVED 会改退款队列计数（Story 2.9 AC1）
             return stay(ticketToken, msg.get("admin.flash.ticket.refundApproved"), model, auth);
         }
         try {
@@ -188,9 +191,10 @@ public class AdminSupportTicketController {
     public String rejectRefundNeed(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable String ticketToken,
             @RequestParam(value = "reason", required = false) String reason,
-            HxRequest hx, Model model, Authentication auth, RedirectAttributes flash) {
+            HxRequest hx, Model model, Authentication auth, HttpServletResponse response, RedirectAttributes flash) {
         if (hx.isHtmx()) {
             ticketRefund.rejectRefundNeed(ticketToken, admin.getAdminAccountId(), requireReason(reason));
+            AdminFragmentResponses.triggerBadgeRefresh(response);
             return stay(ticketToken, msg.get("admin.flash.ticket.refundRejected"), model, auth);
         }
         try {
@@ -213,7 +217,11 @@ public class AdminSupportTicketController {
         model.addAttribute("state", state.param());
         model.addAttribute("page", Math.max(page, 0));
         model.addAttribute("queue", query.page(state, PageRequest.of(Math.max(page, 0), PAGE_SIZE)));
-        model.addAttribute("counts", query.counts());
+        java.util.Map<String, Long> counts = query.counts();
+        model.addAttribute("counts", counts);
+        model.addAttribute("stateTabs", java.util.Arrays.stream(State.values()).map(st -> new StateTab(
+                StateTab.href("/admin/support-tickets", "state", st.param()), "admin.v130.support.tab." + st.param(),
+                "support-tab-count-" + st.param(), counts == null ? 0L : counts.getOrDefault(st.param(), 0L), st == state)).toList());
     }
 
     private void populateDetail(String ticketToken, Model model, Authentication auth) {

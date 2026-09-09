@@ -16,6 +16,7 @@ import com.tailtopia.admin.moderation.dto.ReviewFilters;
 import com.tailtopia.admin.moderation.dto.ReviewTab;
 import com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService;
 import com.tailtopia.admin.shared.web.AdminFragmentResponses;
+import com.tailtopia.admin.shared.web.StateTab;
 import com.tailtopia.admin.shared.web.HxRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.data.domain.PageRequest;
@@ -78,6 +79,7 @@ public class ManualReviewAdminController {
     private final UnifiedTicketQueryService ticketQuery;
     /** V1.3.0 Story 2.4：模板 A 工作台的只读装配（页签计数 / 两态队列 / 三卡 / 下一条）。 */
     private final ManualReviewWorkbenchService workbench;
+    /** V1.3.0 Story 2.9：空态「其他队列还有 N 条」去向（与角标同源）。 */
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
@@ -148,7 +150,12 @@ public class ManualReviewAdminController {
     private void populateQueue(ReviewFilters filters, Model model) {
         model.addAttribute("filters", filters);
         model.addAttribute("tabs", ReviewTab.values());
-        model.addAttribute("counts", workbench.counts(filters));
+        java.util.Map<ReviewTab, Long> counts = workbench.counts(filters);
+        model.addAttribute("counts", counts);
+        // 公共页签行（Story 2.9 T2）：四页签 + 同源计数
+        model.addAttribute("stateTabs", java.util.Arrays.stream(ReviewTab.values()).map(t -> new StateTab(
+                StateTab.href("/admin/manual-review", "tab", t.param(), "state", filters.state(), "q", filters.q()),
+                t.titleKey(), "review-tab-count-" + t.param(), counts.getOrDefault(t, 0L), t == filters.tab())).toList());
         model.addAttribute("queue", workbench.queue(filters));
         model.addAttribute("categories", com.tailtopia.moderation.domain.ReportReason.values());
     }

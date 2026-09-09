@@ -57,7 +57,10 @@ class ManualReviewAccessControlTest {
         @Bean
         ManualReviewAdminController controller(ManualReviewService r, AdminSettingsService s,
                 com.tailtopia.admin.moderation.service.UnifiedTicketQueryService q) {
-            return new ManualReviewAdminController(r, s, q, mock(com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService.class), TestMessages.real());
+            var wb = mock(com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService.class);
+            org.mockito.Mockito.when(wb.counts(org.mockito.ArgumentMatchers.any())).thenReturn(java.util.Map.of());
+            return new ManualReviewAdminController(r, s, q, wb,
+                    TestMessages.real());
         }
     }
 

@@ -61,6 +61,7 @@ public class UnifiedTicketController {
     private final com.tailtopia.admin.service.AdminModerationService moderationService;
     /** V1.3.0 Story 2.5：工作台只读装配（两态计数 / 队列 / 四区 / 下一条）。 */
     private final TicketsWorkbenchService workbench;
+    /** V1.3.0 Story 2.9：空态「其他队列还有 N 条」去向（与角标同源）。 */
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
@@ -120,7 +121,15 @@ public class UnifiedTicketController {
 
     private void populateQueue(TicketFilters filters, Model model) {
         model.addAttribute("filters", filters);
-        model.addAttribute("counts", workbench.counts(filters));
+        java.util.Map<String, Long> counts = workbench.counts(filters);
+        model.addAttribute("counts", counts);
+        model.addAttribute("stateTabs", List.of(
+                new com.tailtopia.admin.shared.web.StateTab(com.tailtopia.admin.shared.web.StateTab.href("/admin/tickets",
+                        "state", "pending", "reason", filters.reason(), "q", filters.q()),
+                        "admin.v130.tickets.tab.pending", "tickets-tab-count-pending", counts.getOrDefault("pending", 0L), !filters.handled()),
+                new com.tailtopia.admin.shared.web.StateTab(com.tailtopia.admin.shared.web.StateTab.href("/admin/tickets",
+                        "state", "handled", "reason", filters.reason(), "q", filters.q()),
+                        "admin.v130.tickets.tab.handled", "tickets-tab-count-handled", counts.getOrDefault("handled", 0L), filters.handled())));
         model.addAttribute("queue", workbench.queue(filters));
         model.addAttribute("reasons", com.tailtopia.moderation.domain.AccountReportReason.values());
     }

@@ -21,20 +21,8 @@
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
         <div th:replace="~{admin/fragments/tpl-a-workbench :: workbench(~{::sp-tabs}, ~{::sp-filters}, ~{::sp-queue}, ~{::sp-detail}, ~{::sp-actions})}">
-            <div th:fragment="sp-tabs" class="tabs" id="support-tabs">
-                <a class="tab" th:classappend="${state == 'pending'} ? 'tab--on'" th:href="@{/admin/support-tickets(state='pending')}">
-                    <span th:text="#{admin.v130.support.tab.pending}">待处理</span>
-                    <span class="tab-count" id="support-tab-count-pending" th:text="${counts.get('pending')}">0</span>
-                </a>
-                <a class="tab" th:classappend="${state == 'contact'} ? 'tab--on'" th:href="@{/admin/support-tickets(state='contact')}">
-                    <span th:text="#{admin.v130.support.tab.contact}">待联系</span>
-                    <span class="tab-count" id="support-tab-count-contact" th:text="${counts.get('contact')}">0</span>
-                </a>
-                <a class="tab" th:classappend="${state == 'closed'} ? 'tab--on'" th:href="@{/admin/support-tickets(state='closed')}">
-                    <span th:text="#{admin.v130.support.tab.closed}">已结案</span>
-                    <span class="tab-count" id="support-tab-count-closed" th:text="${counts.get('closed')}">0</span>
-                </a>
-            </div>
+            <!-- 页签行：公共片段（Story 2.9 T2） -->
+            <div th:fragment="sp-tabs" th:replace="~{admin/fragments/tpl-a-state-tabs :: tabs(${stateTabs})}"></div>
             <!-- 深链 ?open=<ticketToken>（D-23，A6 来源工单回链）：admin-workbench.js 加载时选中该行 / 直接拉 detail -->
             <div th:fragment="sp-filters" class="filter-bar" th:attr="data-open=${open},data-open-url=${open != null} ? @{/admin/support-tickets/{t}/detail(t=${open})} : null"></div>
             <div th:fragment="sp-queue" th:replace="~{admin/fragments/support-queue :: list}"></div>

@@ -101,6 +101,13 @@ public class AdminRefundQueryService {
         return out;
     }
 
+    /** 待处理数 = 判定 + 审批 + 打款三段之和（与 {@link #counts()} 同一组查询，不含已完结），供侧栏角标（Story 2.9 AC1）。 */
+    @Transactional(readOnly = true)
+    public long pendingCount() {
+        return refunds.countByNeedDecision(NeedDecision.PENDING) + refunds.countApprovalStage()
+                + refunds.countByApprovalStatusIn(PAYOUT_STATUSES);
+    }
+
     /** 某段的第一条（处置后 = 下一条）token；无则空串。 */
     @Transactional(readOnly = true)
     public String nextToken(Stage stage) {

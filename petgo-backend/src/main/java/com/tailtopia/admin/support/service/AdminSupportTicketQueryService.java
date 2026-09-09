@@ -116,6 +116,12 @@ public class AdminSupportTicketQueryService {
         return out;
     }
 
+    /** 待处理数 = {@code counts().get("pending")} 同一查询，供侧栏角标（Story 2.9 AC1）。 */
+    @Transactional(readOnly = true)
+    public long pendingCount() {
+        return tickets.countByStatusIn(OPEN_STATUSES);
+    }
+
     /** 结案后「下一条」= 当前页签最新一条 token（待联系页签只在需联系未联系单里取；已结案页签无下一条）；无则空串。 */
     @Transactional(readOnly = true)
     public String nextPendingToken(State state) {

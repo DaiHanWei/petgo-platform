@@ -2,7 +2,7 @@
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!--
   A6 退款管理三段流（V1.3.0 Story 2.8，模板 A · tpl-a-workbench；原 Story 4.6 列表 + 详情两页合一）。
-  四页签：待客服判定 / 待主管审批 / 待财务打款 / 已完结·已驳回（计数，先进先出）；右栏四区由 fragments/refund-panel.html 渲染
+  四页签：待客服判定 / 待主管审批 / 待财务打款 / 已完结·已驳回（公共页签片段 tpl-a-state-tabs，计数与侧栏角标同源 · Story 2.9，先进先出）；右栏四区由 fragments/refund-panel.html 渲染
   （金额卡 / 来源卡 / 三段流程条 / 当前段操作区，仅渲染登录者权限对应段）。五个写端点路径 / 权限零变更（D-36：reject 加必填 reason、
   payout 加出款凭证 proof）。🔴 职责分离护栏（A-1）在 RefundService，界面只是镜子。?open=<token> 页内深链自动开该条。无键盘 ↑/↓（D-14）。
 -->
@@ -21,13 +21,7 @@
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
         <div th:replace="~{admin/fragments/tpl-a-workbench :: workbench(~{::rf-tabs}, ~{::rf-filters}, ~{::rf-queue}, ~{::rf-detail}, ~{::rf-actions})}">
-            <div th:fragment="rf-tabs" class="tabs" id="refund-tabs">
-                <a class="tab" th:each="s : ${ {'submit','approve','payout','closed'} }" th:classappend="${stage == s} ? 'tab--on'"
-                   th:href="@{/admin/refunds(stage=${s})}">
-                    <span th:text="#{'admin.v130.refunds.stage.' + ${s}}">段</span>
-                    <span class="tab-count" th:id="'refund-tab-count-' + ${s}" th:text="${counts.get(s)}">0</span>
-                </a>
-            </div>
+            <div th:fragment="rf-tabs" th:replace="~{admin/fragments/tpl-a-state-tabs :: tabs(${stateTabs})}"></div>
             <!-- 深链：?open=<token> → admin-workbench.js 在 DOMContentLoaded 时选中该行 / 直接拉 detail -->
             <div th:fragment="rf-filters" class="filter-bar" th:attr="data-open=${open},data-open-url=${open != null} ? @{/admin/refunds/{t}/detail(t=${open})} : null"></div>
             <div th:fragment="rf-queue" th:replace="~{admin/fragments/refund-queue :: list}"></div>

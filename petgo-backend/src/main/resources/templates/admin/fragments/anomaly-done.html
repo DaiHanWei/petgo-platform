@@ -7,10 +7,8 @@
 <body>
 <div th:fragment="done" class="an-done" data-done th:data-next-id="${nextId}">
     <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${message}">已处理</div>
-    <div class="empty empty--queue" th:if="${#strings.isEmpty(nextId)}">
-        <span class="empty-emoji">🎉</span>
-        <p th:text="#{admin.v130.empty.queue}">队列已清空</p>
-    </div>
+    <!-- th:replace 优先级高于 th:if，条件必须放在外层 th:block 上 -->
+    <th:block th:if="${#strings.isEmpty(nextId)}"><div th:replace="~{admin/fragments/tpl-a-empty :: queueEmpty('anomalies', null)}"></div></th:block>
     <li th:id="'anomaly-row-' + ${removedId}" hx-swap-oob="delete"></li>
     <span id="anomaly-tab-count-open" class="tab-count" hx-swap-oob="true" th:text="${counts.get('open')}">0</span>
     <span id="anomaly-tab-count-resolved" class="tab-count" hx-swap-oob="true" th:text="${counts.get('resolved')}">0</span>

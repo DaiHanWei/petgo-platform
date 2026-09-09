@@ -93,8 +93,12 @@
                 <th:block th:if="${!d.targetDeleted()}">
                     <button type="button" class="chip" data-chip="warn" th:text="#{admin.tickets.action.warn}"
                             sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')">警告</button>
+                    <button type="button" class="chip" disabled th:title="#{admin.v130.err.forbidden(#{perm.content.dispose_account})}" th:text="#{admin.tickets.action.warn}"
+                            sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account'))">警告</button>
                     <button type="button" class="chip" data-chip="throttle" th:text="#{admin.tickets.action.throttle}"
                             sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_manage')">限流曝光</button>
+                    <button type="button" class="chip" disabled th:title="#{admin.v130.err.forbidden(#{perm.content.throttle_manage})}" th:text="#{admin.tickets.action.throttle}"
+                            sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_manage'))">限流曝光</button>
                     <button type="button" class="chip chip-danger" data-chip="suspend" th:text="#{admin.tickets.action.suspend}"
                             sec:authorize="hasRole('SUPER_ADMIN') or (hasAuthority('content.dispose_account') and hasAuthority('user.deactivate'))">封号</button>
                     <!-- 缺 user.deactivate：chip 禁用 + 悬浮所缺权限中文标签（不隐藏） -->
@@ -104,8 +108,11 @@
                 </th:block>
                 <button type="button" class="chip" data-chip="dismiss" th:text="#{admin.tickets.action.dismiss}"
                         sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')">无需处置</button>
+                <button type="button" class="chip" disabled th:title="#{admin.v130.err.forbidden(#{perm.content.dispose_account})}" th:text="#{admin.tickets.action.dismiss}"
+                        sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account'))">无需处置</button>
             </div>
-            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account') or hasAuthority('content.throttle_manage'))"
+            <!-- 无处置权提示：表达式必须与 DISPOSE_AUTH 逐字一致（Story 2.9 AC4，AdminPageCatalogAuthorityTest） -->
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account'))"
                th:text="#{admin.v130.err.forbidden(#{perm.content.dispose_account})}">需要权限</p>
 
             <!-- 第二段：参数区（选中 chip 后展开；参数不全按钮禁用） -->

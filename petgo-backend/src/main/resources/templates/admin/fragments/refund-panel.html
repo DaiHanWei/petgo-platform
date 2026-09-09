@@ -98,7 +98,11 @@
                     <button type="submit" class="btn btn-neutral" disabled data-requires-target th:text="#{admin.refundDetail.btn.rejectNeed}">驳回退款需求</button>
                 </form>
             </div>
-            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('refund.submit'))" th:text="#{admin.v130.err.forbidden(#{perm.refund.submit})}">需要权限</p>
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('refund.submit'))">
+                <button type="button" class="btn btn-primary" disabled th:title="#{admin.v130.err.forbidden(#{perm.refund.submit})}" th:text="#{admin.refundDetail.btn.approveNeed}">批准退款需求</button>
+                <button type="button" class="btn btn-neutral" disabled th:title="#{admin.v130.err.forbidden(#{perm.refund.submit})}" th:text="#{admin.refundDetail.btn.rejectNeed}">驳回退款需求</button>
+                <span th:text="#{admin.v130.err.forbidden(#{perm.refund.submit})}">需要权限</span>
+            </p>
         </th:block>
 
         <!-- 主管审批段（用户尚未填收款时无按钮） -->
@@ -116,7 +120,11 @@
                                 th:attr="data-confirm=#{admin.v130.refunds.confirm.approvalReject}" th:text="#{admin.refundDetail.btn.reject}">驳回申请</button>
                     </form>
                 </div>
-                <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('refund.approve'))" th:text="#{admin.v130.err.forbidden(#{perm.refund.approve})}">需要权限</p>
+                <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('refund.approve'))">
+                    <button type="button" class="btn btn-primary" disabled th:title="#{admin.v130.err.forbidden(#{perm.refund.approve})}" th:text="#{admin.refundDetail.btn.approve}">审批通过</button>
+                    <button type="button" class="btn btn-danger" disabled th:title="#{admin.v130.err.forbidden(#{perm.refund.approve})}" th:text="#{admin.refundDetail.btn.reject}">驳回申请</button>
+                    <span th:text="#{admin.v130.err.forbidden(#{perm.refund.approve})}">需要权限</span>
+                </p>
             </th:block>
         </th:block>
 
@@ -132,7 +140,10 @@
                             th:text="#{admin.refundDetail.btn.payout}">确认 Iris 打款</button>
                 </form>
             </div>
-            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('refund.payout'))" th:text="#{admin.v130.err.forbidden(#{perm.refund.payout})}">需要权限</p>
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('refund.payout'))">
+                <button type="button" class="btn btn-primary" disabled th:title="#{admin.v130.err.forbidden(#{perm.refund.payout})}" th:text="#{admin.refundDetail.btn.payout}">确认 Iris 打款</button>
+                <span th:text="#{admin.v130.err.forbidden(#{perm.refund.payout})}">需要权限</span>
+            </p>
         </th:block>
     </section>
 </div>

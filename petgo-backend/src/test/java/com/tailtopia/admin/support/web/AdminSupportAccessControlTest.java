@@ -116,11 +116,13 @@ class AdminSupportAccessControlTest {
     }
 
     private void refundApprove() {
-        controller.approveRefundNeed(admin(), "tok", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), null, new RedirectAttributesModelMap());
+        controller.approveRefundNeed(admin(), "tok", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), null,
+                new org.springframework.mock.web.MockHttpServletResponse(), new RedirectAttributesModelMap());
     }
 
     private void refundReject() {
-        controller.rejectRefundNeed(admin(), "tok", "原因", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), null, new RedirectAttributesModelMap());
+        controller.rejectRefundNeed(admin(), "tok", "原因", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), null,
+                new org.springframework.mock.web.MockHttpServletResponse(), new RedirectAttributesModelMap());
     }
 
     @Test

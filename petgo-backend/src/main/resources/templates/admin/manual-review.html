@@ -43,14 +43,8 @@
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
         <div th:replace="~{admin/fragments/tpl-a-workbench :: workbench(~{::rv-tabs}, ~{::rv-filters}, ~{::rv-queue}, ~{::rv-detail}, ~{::rv-actions})}">
-            <!-- 页签行：四页签 + 紫计数（切页签 = 整页 GET，保留筛选） -->
-            <div th:fragment="rv-tabs" class="tabs" id="review-tabs">
-                <a th:each="t : ${tabs}" class="tab" th:classappend="${t == filters.tab} ? 'tab--on'"
-                   th:href="@{/admin/manual-review(tab=${t.param()},state=${filters.state()},q=${filters.q})}">
-                    <span th:text="#{${t.titleKey()}}">页签</span>
-                    <span class="tab-count" th:id="'review-tab-count-' + ${t.param()}" th:text="${counts.get(t)}">0</span>
-                </a>
-            </div>
+            <!-- 页签行：公共片段（Story 2.9 T2），四页签 + 与角标同源的紫计数（切页签 = 整页 GET，保留筛选） -->
+            <div th:fragment="rv-tabs" th:replace="~{admin/fragments/tpl-a-state-tabs :: tabs(${stateTabs})}"></div>
             <!-- 筛选行：两态 + 类别 / 优先级 / 子类型（下拉自动提交）+ 关键词（显式查询钮） -->
             <form th:fragment="rv-filters" class="filter-bar review-filters" th:action="@{/admin/manual-review}" method="get" data-autosubmit>
                 <input type="hidden" name="tab" th:value="${filters.tab.param()}"/>

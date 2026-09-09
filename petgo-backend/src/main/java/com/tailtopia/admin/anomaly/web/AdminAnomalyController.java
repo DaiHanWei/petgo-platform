@@ -6,6 +6,7 @@ import com.tailtopia.admin.anomaly.dto.AnomalyNoteLine;
 import com.tailtopia.admin.anomaly.service.ConsultAnomalyService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.shared.web.AdminFragmentResponses;
+import com.tailtopia.admin.shared.web.StateTab;
 import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.media.SignedUrlService;
@@ -53,6 +54,7 @@ public class AdminAnomalyController {
     /** V1.3.0 Story 2.6 AC1：左栏行「用户昵称 × 兽医名」整页一次取（只读，不入实体）。 */
     private final AccountQueryService accountQuery;
     private final VetAccountRepository vets;
+    /** V1.3.0 Story 2.9：空态「其他队列还有 N 条」去向（与角标同源）。 */
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
@@ -148,7 +150,13 @@ public class AdminAnomalyController {
         model.addAttribute("state", state.name().toLowerCase());
         model.addAttribute("page", Math.max(page, 0));
         model.addAttribute("queue", queue);
-        model.addAttribute("counts", counts());
+        Map<String, Long> counts = counts();
+        model.addAttribute("counts", counts);
+        model.addAttribute("stateTabs", List.of(
+                new StateTab(StateTab.href("/admin/anomalies", "state", "open"), "admin.v130.anomalies.tab.open",
+                        "anomaly-tab-count-open", counts.getOrDefault("open", 0L), state == AnomalyStatus.OPEN),
+                new StateTab(StateTab.href("/admin/anomalies", "state", "resolved"), "admin.v130.anomalies.tab.resolved",
+                        "anomaly-tab-count-resolved", counts.getOrDefault("resolved", 0L), state == AnomalyStatus.RESOLVED)));
         // 用户昵称 / 兽医名整页一次取（≤20 行；注销用户 / 查不到的行回退 #id）
         List<ConsultAnomaly> rows = queue == null ? List.of() : queue.getContent();
         Map<Long, String> userNames = new HashMap<>();

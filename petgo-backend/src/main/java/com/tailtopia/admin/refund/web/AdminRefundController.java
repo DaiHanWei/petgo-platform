@@ -7,6 +7,7 @@ import com.tailtopia.admin.refund.service.AdminRefundQueryService.Stage;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.shared.web.AdminFragmentResponses;
 import com.tailtopia.admin.shared.web.HxRequest;
+import com.tailtopia.admin.shared.web.StateTab;
 import com.tailtopia.pay.refund.service.RefundService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
@@ -240,7 +241,11 @@ public class AdminRefundController {
         model.addAttribute("stage", stage.param());
         model.addAttribute("page", Math.max(page, 0));
         model.addAttribute("queue", query.page(stage, PageRequest.of(Math.max(page, 0), PAGE_SIZE)));
-        model.addAttribute("counts", query.counts());
+        java.util.Map<String, Long> counts = query.counts();
+        model.addAttribute("counts", counts);
+        model.addAttribute("stateTabs", java.util.Arrays.stream(Stage.values()).map(st -> new StateTab(
+                StateTab.href("/admin/refunds", "stage", st.param()), "admin.v130.refunds.stage." + st.param(),
+                "refund-tab-count-" + st.param(), counts == null ? 0L : counts.getOrDefault(st.param(), 0L), st == stage)).toList());
     }
 
     private static String requireText(String raw, String message, String code) {

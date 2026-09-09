@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  模板 A 公共页签行（V1.3.0 Story 2.9 T2）。tabs = List<StateTab>（href / labelKey / countId / count / on）。
+  紫计数元素 id 由各页给定（处置 fragment 以同 id hx-swap-oob 替换）；切页签 = 整页 GET（保留筛选）。
+-->
+<body>
+<div th:fragment="tabs(tabs)" class="tabs" role="tablist">
+    <a th:each="t : ${tabs}" class="tab" th:classappend="${t.on} ? 'tab--on'" th:href="@{${t.href}}"
+       th:attr="aria-selected=${t.on} ? 'true' : 'false'">
+        <span th:text="#{${t.labelKey}}">页签</span>
+        <span class="tab-count" th:id="${t.countId}" th:text="${t.count}">0</span>
+    </a>
+</div>
+</body>
+</html>

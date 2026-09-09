@@ -58,7 +58,8 @@ class AdminAnomalyAccessControlTest {
         @Bean
         AdminAnomalyController controller(ConsultAnomalyService a, SignedUrlService s) {
             return new AdminAnomalyController(a, s, mock(com.tailtopia.auth.service.AccountQueryService.class),
-                    mock(com.tailtopia.vet.repository.VetAccountRepository.class), TestMessages.real());
+                    mock(com.tailtopia.vet.repository.VetAccountRepository.class),
+                    TestMessages.real());
         }
     }
 

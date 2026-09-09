@@ -12,9 +12,7 @@
 
 <th:block th:fragment="rows">
     <li th:if="${queue.isEmpty() and filters.page == 0}" class="q-empty">
-        <div class="empty empty--queue"><span class="empty-emoji">🎉</span>
-            <p th:text="${filters.handled} ? #{admin.v130.tickets.empty.handled} : #{admin.v130.empty.queue}">队列已清空</p>
-        </div>
+        <div th:replace="~{admin/fragments/tpl-a-empty :: queueEmpty('tickets', ${filters.handled} ? #{admin.v130.tickets.empty.handled} : null)}"></div>
     </li>
     <li th:each="r : ${queue.content}" class="q-row" th:id="'ticket-row-' + ${r.row.sourceId()}"
         th:data-id="${r.row.sourceId()}"
