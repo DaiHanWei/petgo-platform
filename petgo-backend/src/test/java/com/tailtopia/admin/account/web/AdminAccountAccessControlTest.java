@@ -86,6 +86,10 @@ class AdminAccountAccessControlTest {
         controller.deactivate(principal(), 5L, new RedirectAttributesModelMap());
     }
 
+    private void rebind() {
+        controller.rebindEmail(principal(), 5L, "new@x", new RedirectAttributesModelMap());
+    }
+
     private void rename() {
         controller.rename(principal(), 5L, "新名", new RedirectAttributesModelMap());
     }
@@ -134,5 +138,26 @@ class AdminAccountAccessControlTest {
         assertThatCode(this::rename).doesNotThrowAnyException();
         authenticateWith("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
         assertThatCode(this::rename).doesNotThrowAnyException();
+    }
+
+    // ---- V1.3.0 Story 1.3：换绑邮箱仅超管 ----
+
+    @Test
+    void rebindNeedsSuperAdmin() {
+        authenticateWith("ROLE_ADMIN", "admin.create_account", "admin.deactivate");
+        assertThatThrownBy(this::rebind).isInstanceOf(AccessDeniedException.class);
+        authenticateWith("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+        assertThatCode(this::rebind).doesNotThrowAnyException();
+    }
+
+    @Test
+    void rebindConcurrentUniqueViolationBecomesFlashErrorNot500() {
+        authenticateWith("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+        AdminAccountService svc = ctx.getBean(AdminAccountService.class);
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("uq"))
+                .when(svc).rebindEmail(5L, "dup@x", 1L);
+        var flash = new RedirectAttributesModelMap();
+        assertThatCode(() -> controller.rebindEmail(principal(), 5L, "dup@x", flash)).doesNotThrowAnyException();
+        org.assertj.core.api.Assertions.assertThat(flash.getFlashAttributes()).containsKey("error");
     }
 }

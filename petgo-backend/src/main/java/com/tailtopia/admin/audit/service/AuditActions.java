@@ -22,6 +22,8 @@ public final class AuditActions {
     public static final String ACCOUNT_REACTIVATED = "ACCOUNT_REACTIVATED";
     /** 改后台账号显示名（V1.3.0 Story 1.2）。detail 记 旧名 → 新名（邮箱）；不 bump 安全版本号。 */
     public static final String ACCOUNT_RENAMED = "ACCOUNT_RENAMED";
+    /** 换绑后台账号 Lark 邮箱（V1.3.0 Story 1.3）。detail 记 旧邮箱 → 新邮箱；同事务 bump 安全版本号 + 超管告警。 */
+    public static final String ACCOUNT_EMAIL_REBOUND = "ACCOUNT_EMAIL_REBOUND";
     /** 授予模块权限。 */
     public static final String PERMISSION_GRANTED = "PERMISSION_GRANTED";
     /** 撤销模块权限（Story 1.5）。 */

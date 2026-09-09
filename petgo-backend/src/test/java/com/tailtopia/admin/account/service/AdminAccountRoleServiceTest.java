@@ -19,6 +19,7 @@ import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.dto.AdminAccountView;
 import com.tailtopia.admin.account.repository.AdminAccountPermissionRepository;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
+import com.tailtopia.admin.audit.service.AdminAlertService;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.shared.error.AppException;
@@ -35,6 +36,7 @@ class AdminAccountRoleServiceTest {
     private AdminAccountRepository accounts;
     private AdminAccountPermissionRepository permissions;
     private AdminAuditService auditService;
+    private AdminAlertService alertService;
     private AdminAccountService service;
 
     @BeforeEach
@@ -42,8 +44,9 @@ class AdminAccountRoleServiceTest {
         accounts = mock(AdminAccountRepository.class);
         permissions = mock(AdminAccountPermissionRepository.class);
         auditService = mock(AdminAuditService.class);
-        service = new AdminAccountService(accounts, permissions, auditService);
-        when(accounts.findByLarkEmail(any())).thenReturn(Optional.empty());
+        alertService = mock(AdminAlertService.class);
+        service = new AdminAccountService(accounts, permissions, auditService, alertService, "boot@x");
+        when(accounts.findByLarkEmailIgnoreCaseAndStatus(any(), any())).thenReturn(Optional.empty());
         when(accounts.save(any(AdminAccount.class))).thenAnswer(inv -> {
             AdminAccount a = inv.getArgument(0);
             if (a.getId() == null) {

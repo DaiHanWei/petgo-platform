@@ -1,10 +1,21 @@
 // TailTopia 运营后台轻量交互（Story 1.6）。本地静态托管，无第三方依赖。
 // 危险操作二次确认：表单带 data-confirm="提示文案" 时，提交前弹 confirm，取消则阻止提交。
 // 用 data-* + 监听（而非 th:onsubmit 内联字符串）以兼容 i18n 文案并规避 Thymeleaf 事件属性限制。
+// V1.3.0 Story 1.3：文案可含 {0} {1} 占位——{0} 取表单 data-confirm-args（如当前行旧邮箱），
+// {1} 取表单内 input[name=newEmail]（或 data-confirm-input 指定的字段）的当前值，替换后再 confirm。
+// 通用能力，Story 2.2 拆 admin-core.js 时原样搬迁。
 document.addEventListener('submit', function (e) {
     var form = e.target;
     var msg = form.getAttribute && form.getAttribute('data-confirm');
-    if (msg && !window.confirm(msg)) {
+    if (!msg) { return; }
+    if (msg.indexOf('{0}') !== -1 || msg.indexOf('{1}') !== -1) {
+        var arg0 = form.getAttribute('data-confirm-args') || '';
+        var inputName = form.getAttribute('data-confirm-input') || 'newEmail';
+        var input = form.querySelector('[name="' + inputName + '"]');
+        var arg1 = input ? (input.value || '').trim() : '';
+        msg = msg.split('{0}').join(arg0).split('{1}').join(arg1);
+    }
+    if (!window.confirm(msg)) {
         e.preventDefault();
     }
 }, true);

@@ -161,4 +161,47 @@ class AdminAccountManagementIntegrationTest extends ApiIntegrationTest {
         assertThat(audits).isNotEmpty();
         assertThat(audits.get(0).getSummary()).contains("旧名").contains("新名" + seq);
     }
+
+    // ---- V1.3.0 Story 1.3：换绑邮箱真库闭环 + 部分唯一索引 ----
+
+    @Test
+    void rebindEmailMovesIdentityKeepsPermissionsBumpsVersionAndAudits() {
+        long seq = SEQ.incrementAndGet();
+        String oldEmail = "staff-rebind-old-" + seq + "@tailtopia.test";
+        String newEmail = "staff-rebind-new-" + seq + "@tailtopia.test";
+        long actor = 600000L + seq;
+        long id = accountService.createAccount(oldEmail, "换绑测试", AdminRole.CUSTOM,
+                List.of("vet.view", "admin.view_logs"), actor);
+        List<String> before = authorities(userDetailsService.loadByEmail(oldEmail, false));
+
+        accountService.rebindEmail(id, newEmail, actor);
+
+        assertThatThrownBy(() -> userDetailsService.loadByEmail(oldEmail, false))
+                .isInstanceOf(UsernameNotFoundException.class);
+        AdminUserDetails ud = userDetailsService.loadByEmail(newEmail, false);
+        assertThat(ud.getAdminAccountId()).isEqualTo(id);
+        assertThat(authorities(ud)).containsExactlyInAnyOrderElementsOf(before);
+        assertThat(adminAccounts.findById(id).orElseThrow().getSecurityVersion()).isEqualTo(1);
+        List<AdminAuditLog> audits = auditService.search(null, null, actor,
+                AuditActions.ACCOUNT_EMAIL_REBOUND, PageRequest.of(0, 10)).getContent();
+        assertThat(audits).isNotEmpty();
+        assertThat(audits.get(0).getSummary()).contains(oldEmail).contains(newEmail);
+    }
+
+    @Test
+    void disabledEmailCanBeReusedButActiveDuplicateRejected() {
+        long seq = SEQ.incrementAndGet();
+        String email = "staff-reuse-" + seq + "@tailtopia.test";
+        long actor = 700000L + seq;
+        long a = accountService.createAccount(email, "A", AdminRole.CUSTOM, List.of(), actor);
+        accountService.deactivate(a, actor);
+        // D-21 + 部分唯一索引：停用后邮箱释放，B 可建。
+        long b = accountService.createAccount(email, "B", AdminRole.CUSTOM, List.of(), actor);
+        assertThat(b).isNotEqualTo(a);
+        // 再建 C（ACTIVE 重复）被服务层拒。
+        assertThatThrownBy(() -> accountService.createAccount(email, "C", AdminRole.CUSTOM, List.of(), actor))
+                .isInstanceOf(com.tailtopia.shared.error.AppException.class);
+        // 登录白名单只命中 ACTIVE 的 B。
+        assertThat(userDetailsService.loadByEmail(email, false).getAdminAccountId()).isEqualTo(b);
+    }
 }

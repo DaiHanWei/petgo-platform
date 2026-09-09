@@ -61,7 +61,11 @@ public class AdminBootstrap implements ApplicationRunner {
         String hash = passwordEncoder.encode(bootstrapPassword);
 
         // 1) admin_accounts 超管（认证源真相）
-        adminAccounts.findByLarkEmail(bootstrapEmail).ifPresentOrElse(existing -> {
+        // V1.3.0 Story 1.3：邮箱仅 ACTIVE 唯一（D-21）。优先取 ACTIVE 行；没有 ACTIVE 时取最新的已停用行复活
+        // （沿用既有「重启即复活 bootstrap 超管」语义，且此时无 ACTIVE 同邮箱行、不会撞部分唯一索引）；都没有才建号。
+        adminAccounts.findByLarkEmailIgnoreCaseAndStatus(bootstrapEmail, AdminAccountStatus.ACTIVE)
+                .or(() -> adminAccounts.findByLarkEmailIgnoreCaseOrderByIdDesc(bootstrapEmail).stream().findFirst())
+                .ifPresentOrElse(existing -> {
             existing.setPasswordHash(hash);
             existing.setStatus(AdminAccountStatus.ACTIVE);
             adminAccounts.save(existing);

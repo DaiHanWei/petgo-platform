@@ -122,6 +122,31 @@
                                 </div>
                             </details>
                         </form>
+                        <!-- 换绑 Lark 邮箱（V1.3.0 Story 1.3）：仅超管；bootstrap 超管行禁用。
+                             data-confirm 文案含 {0}/{1} 占位，admin.js 用 data-confirm-args（旧邮箱）与 input[name=newEmail] 替换后再 confirm。 -->
+                        <form class="inline account-rebind-form" th:if="${a.status.name() == 'ACTIVE'}"
+                              th:with="isBootstrap=${#lists.contains(bootstrapEmails, a.larkEmail)}"
+                              th:action="@{/admin/accounts/{id}/rebind-email(id=${a.id})}" method="post"
+                              th:data-confirm="#{admin.accounts.rebind.confirm}"
+                              th:data-confirm-args="${a.larkEmail}"
+                              sec:authorize="hasRole('SUPER_ADMIN')">
+                            <details class="perm-details rebind-details">
+                                <summary class="btn btn-neutral btn-sm" th:text="#{admin.accounts.rebind}"
+                                         th:classappend="${isBootstrap} ? 'is-disabled' : ''"
+                                         th:title="${isBootstrap} ? #{admin.accounts.rebind.bootstrapGuard} : null">换绑邮箱</summary>
+                                <div class="perm-panel rebind-panel">
+                                    <label class="field" th:text="#{admin.accounts.rebind.newEmail}">新 Lark 邮箱</label>
+                                    <input type="email" name="newEmail" maxlength="255" required class="field-full"
+                                           th:disabled="${isBootstrap}"
+                                           th:title="${isBootstrap} ? #{admin.accounts.rebind.bootstrapGuard} : null"/>
+                                    <div class="perm-panel-actions">
+                                        <button type="submit" class="btn btn-danger btn-sm" th:disabled="${isBootstrap}"
+                                                th:title="${isBootstrap} ? #{admin.accounts.rebind.bootstrapGuard} : null"
+                                                th:text="#{admin.accounts.rebind}">换绑邮箱</button>
+                                    </div>
+                                </div>
+                            </details>
+                        </form>
                         <!-- 改岗位角色：一次定型该账号能进哪些模块。与建号同门控（改角色 = 重新授权）。 -->
                         <!-- self 护栏（Story 1.2 AC4）：自己那一行禁用 + title 说明；安全边界在服务层。 -->
                         <form class="inline account-role-form"

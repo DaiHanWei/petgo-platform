@@ -56,8 +56,8 @@ public class AdminUserDetailsService implements UserDetailsService {
      */
     @Transactional(readOnly = true)
     public AdminUserDetails loadByEmail(String email, boolean requirePassword) throws UsernameNotFoundException {
-        AdminAccount a = adminAccounts.findByLarkEmail(email)
-                .filter(acc -> acc.getStatus() == AdminAccountStatus.ACTIVE)
+        // V1.3.0 Story 1.3：邮箱仅 ACTIVE 唯一（D-21），白名单查询直接按 ACTIVE 口径（语义不变，零多行风险）。
+        AdminAccount a = adminAccounts.findByLarkEmailIgnoreCaseAndStatus(email, AdminAccountStatus.ACTIVE)
                 .filter(acc -> !requirePassword || acc.getPasswordHash() != null)
                 .orElseThrow(() -> new UsernameNotFoundException("后台账号不存在或不可登录"));
         // 官方内容作者 shim：同邮箱的 users(role=ADMIN) 行 id（AC5，保住种子发帖 author_id 的 FK 语义）。

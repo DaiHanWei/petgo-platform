@@ -127,6 +127,11 @@ public class AdminAccount {
         this.status = status;
     }
 
+    /** 换绑 Lark 邮箱（V1.3.0 Story 1.3）。校验 / 唯一性 / bump 版本号在 {@code AdminAccountService.rebindEmail}。 */
+    public void setLarkEmail(String larkEmail) {
+        this.larkEmail = larkEmail;
+    }
+
     /** 改显示名（V1.3.0 Story 1.2）。校验（非空 / ≤100）在 {@code AdminAccountService.rename}。 */
     public void setDisplayName(String displayName) {
         this.displayName = displayName;

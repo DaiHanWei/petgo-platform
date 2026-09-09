@@ -17,6 +17,7 @@ import com.tailtopia.admin.account.domain.AdminAccountType;
 import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.repository.AdminAccountPermissionRepository;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
+import com.tailtopia.admin.audit.service.AdminAlertService;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.shared.error.AppException;
@@ -32,6 +33,7 @@ class AdminAccountServiceTest {
     private AdminAccountRepository accounts;
     private AdminAccountPermissionRepository permissions;
     private AdminAuditService auditService;
+    private AdminAlertService alertService;
     private AdminAccountService service;
 
     @BeforeEach
@@ -39,8 +41,9 @@ class AdminAccountServiceTest {
         accounts = mock(AdminAccountRepository.class);
         permissions = mock(AdminAccountPermissionRepository.class);
         auditService = mock(AdminAuditService.class);
-        service = new AdminAccountService(accounts, permissions, auditService);
-        when(accounts.findByLarkEmail(any())).thenReturn(Optional.empty());
+        alertService = mock(AdminAlertService.class);
+        service = new AdminAccountService(accounts, permissions, auditService, alertService, "boot@x");
+        when(accounts.findByLarkEmailIgnoreCaseAndStatus(any(), any())).thenReturn(Optional.empty());
         when(accounts.save(any(AdminAccount.class))).thenAnswer(inv -> {
             AdminAccount a = inv.getArgument(0);
             if (a.getId() == null) {
@@ -71,7 +74,7 @@ class AdminAccountServiceTest {
 
     @Test
     void createRejectsDuplicateEmail() {
-        when(accounts.findByLarkEmail("dup@x")).thenReturn(Optional.of(staff(9L, AdminAccountStatus.ACTIVE)));
+        when(accounts.findByLarkEmailIgnoreCaseAndStatus("dup@x", AdminAccountStatus.ACTIVE)).thenReturn(Optional.of(staff(9L, AdminAccountStatus.ACTIVE)));
         assertThatThrownBy(() -> service.createAccount("dup@x", "X", AdminRole.CUSTOM, List.of(), 1L))
                 .isInstanceOf(AppException.class);
         verify(accounts, never()).save(any());
@@ -293,5 +296,94 @@ class AdminAccountServiceTest {
         assertThatThrownBy(() -> service.changeRole(8L, AdminRole.CUSTOM, 8L)).isInstanceOf(AppException.class);
         assertThat(a.getRole()).isEqualTo(AdminRole.CUSTOM);
         verify(accounts, never()).save(any());
+    }
+
+    // ---- V1.3.0 Story 1.3：换绑 Lark 邮箱 ----
+
+    @Test
+    void rebindEmailUpdatesBumpsAuditsAndAlerts() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE); // s@x
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        when(accounts.existsByLarkEmailIgnoreCaseAndStatusAndIdNot("new@x", AdminAccountStatus.ACTIVE, 8L))
+                .thenReturn(false);
+
+        service.rebindEmail(8L, "  new@x ", 1L);
+
+        assertThat(a.getLarkEmail()).isEqualTo("new@x");
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+        verify(accounts).save(a);
+        verify(auditService).record(eq(1L), eq(AuditActions.ACCOUNT_EMAIL_REBOUND), eq("ADMIN_ACCOUNT"),
+                eq("8"), org.mockito.ArgumentMatchers.contains("s@x → new@x"));
+        verify(alertService).alertSuperAdmins(AuditActions.ACCOUNT_EMAIL_REBOUND, 1L);
+    }
+
+    @Test
+    void rebindRejectsBootstrapEmail() {
+        AdminAccount a = AdminAccount.create("Boot@X", "B", AdminRole.SUPER_ADMIN, null);
+        ReflectionTestUtils.setField(a, "id", 1L);
+        when(accounts.findById(1L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.rebindEmail(1L, "other@x", 2L)).isInstanceOf(AppException.class);
+        assertThat(a.getLarkEmail()).isEqualTo("Boot@X");
+        assertThat(service.isBootstrapEmail(" BOOT@x ")).isTrue();
+        assertThat(service.isBootstrapEmail("s@x")).isFalse();
+    }
+
+    @Test
+    void rebindRejectsDisabledTarget() {
+        AdminAccount a = staff(8L, AdminAccountStatus.DISABLED);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.rebindEmail(8L, "new@x", 1L)).isInstanceOf(AppException.class);
+        verify(accounts, never()).save(any());
+    }
+
+    @Test
+    void rebindRejectsInvalidFormatAndBlank() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.rebindEmail(8L, "   ", 1L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.rebindEmail(8L, "not-an-email", 1L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.rebindEmail(8L, "a b@x.io", 1L)).isInstanceOf(AppException.class);
+        assertThat(a.getLarkEmail()).isEqualTo("s@x");
+        assertThat(a.getSecurityVersion()).isZero();
+    }
+
+    @Test
+    void rebindRejectsActiveDuplicate() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        when(accounts.existsByLarkEmailIgnoreCaseAndStatusAndIdNot("taken@x", AdminAccountStatus.ACTIVE, 8L))
+                .thenReturn(true);
+        assertThatThrownBy(() -> service.rebindEmail(8L, "taken@x", 1L)).isInstanceOf(AppException.class);
+        assertThat(a.getSecurityVersion()).isZero();
+        verify(auditService, never()).record(anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rebindAllowsDisabledDuplicate() {
+        // D-21：已停用账号的邮箱视为已释放（仓库查重只看 ACTIVE，DISABLED 同邮箱返回 false）。
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        when(accounts.existsByLarkEmailIgnoreCaseAndStatusAndIdNot("released@x", AdminAccountStatus.ACTIVE, 8L))
+                .thenReturn(false);
+        service.rebindEmail(8L, "released@x", 1L);
+        assertThat(a.getLarkEmail()).isEqualTo("released@x");
+    }
+
+    @Test
+    void rebindSameEmailIsNoOp() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.rebindEmail(8L, "S@X", 1L);
+        assertThat(a.getSecurityVersion()).isZero();
+        verify(accounts, never()).save(any());
+        verify(auditService, never()).record(anyLong(), any(), any(), any(), any());
+        verify(alertService, never()).alertSuperAdmins(any(), any());
+    }
+
+    @Test
+    void createAllowsReuseOfDisabledEmail() {
+        // D-21：建号查重只对 ACTIVE 比对（mock 默认 findByLarkEmailIgnoreCaseAndStatus → empty）。
+        long id = service.createAccount("released@x", "新人", AdminRole.CUSTOM, List.of(), 1L);
+        assertThat(id).isEqualTo(42L);
     }
 }

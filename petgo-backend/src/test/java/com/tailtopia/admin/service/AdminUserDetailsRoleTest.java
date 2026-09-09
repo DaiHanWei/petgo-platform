@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.tailtopia.admin.account.domain.AdminAccount;
+import com.tailtopia.admin.account.domain.AdminAccountStatus;
 import com.tailtopia.admin.account.domain.AdminAccountPermission;
 import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.account.domain.AdminRole;
@@ -48,7 +49,7 @@ class AdminUserDetailsRoleTest {
     private AdminUserDetails load(AdminRole role) {
         AdminAccount a = AdminAccount.create("x@y", "X", role, 1L);
         ReflectionTestUtils.setField(a, "id", 7L);
-        when(accounts.findByLarkEmail("x@y")).thenReturn(Optional.of(a));
+        when(accounts.findByLarkEmailIgnoreCaseAndStatus("x@y", AdminAccountStatus.ACTIVE)).thenReturn(Optional.of(a));
         return service.loadByEmail("x@y", false);
     }
 

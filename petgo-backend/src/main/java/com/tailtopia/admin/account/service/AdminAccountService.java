@@ -9,14 +9,18 @@ import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.dto.AdminAccountView;
 import com.tailtopia.admin.account.repository.AdminAccountPermissionRepository;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
+import com.tailtopia.admin.audit.service.AdminAlertService;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
+import java.util.Locale;
+import java.util.regex.Pattern;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,15 +38,25 @@ public class AdminAccountService {
     /** 超管上限（AC4）。 */
     static final int SUPER_ADMIN_CAP = 5;
 
+    /** 邮箱格式（与建号表单 {@code @Email} 同口径的宽松校验：本地部分@域名，无空白、恰一个 @；不强制顶级域）。 */
+    static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+$");
+
     private final AdminAccountRepository accounts;
     private final AdminAccountPermissionRepository permissions;
     private final AdminAuditService auditService;
+    private final AdminAlertService alertService;
+    /** bootstrap 超管邮箱（与 {@code AdminBootstrap} 同一 env）；空表示未配置、护栏不生效。 */
+    private final String bootstrapEmail;
 
     public AdminAccountService(AdminAccountRepository accounts,
-            AdminAccountPermissionRepository permissions, AdminAuditService auditService) {
+            AdminAccountPermissionRepository permissions, AdminAuditService auditService,
+            AdminAlertService alertService,
+            @Value("${ADMIN_BOOTSTRAP_EMAIL:}") String bootstrapEmail) {
         this.accounts = accounts;
         this.permissions = permissions;
         this.auditService = auditService;
+        this.alertService = alertService;
+        this.bootstrapEmail = bootstrapEmail == null ? "" : bootstrapEmail.trim();
     }
 
     /**
@@ -98,7 +112,8 @@ public class AdminAccountService {
         if (role == null) {
             throw AppException.validation("必须选择岗位角色").code("admin.err.account.roleRequired");
         }
-        if (accounts.findByLarkEmail(email).isPresent()) {
+        // V1.3.0 Story 1.3（D-21）：只对 ACTIVE 账号查重，已停用账号的邮箱视为已释放（部分唯一索引兜底）。
+        if (accounts.findByLarkEmailIgnoreCaseAndStatus(email, AdminAccountStatus.ACTIVE).isPresent()) {
             throw AppException.conflict("该 Lark 邮箱已存在后台账号：" + email)
                     .code("admin.err.account.emailExists", email);
         }
@@ -288,6 +303,51 @@ public class AdminAccountService {
         accounts.save(a);
         auditService.record(actorAccountId, AuditActions.ACCOUNT_RENAMED, "ADMIN_ACCOUNT",
                 String.valueOf(accountId), "显示名 " + old + " → " + name + "（" + a.getLarkEmail() + "）");
+    }
+
+    /**
+     * 换绑 Lark 邮箱（V1.3.0 Story 1.3，AB-16A ②，D-21）= 身份移交。改邮箱、bump 安全版本号、写审计
+     * 三件事同一事务：任一失败整体回滚，不会出现「邮箱换了但旧人还在线」或「换了没留痕」。
+     * 顺序：findById → 须 ACTIVE → bootstrap 邮箱拒绝 → trim + 格式 → 同值 no-op → ACTIVE 唯一性（排除自身）
+     * → 写 larkEmail → bump → 审计 → 超管告警（只记事件 + actorId，不记邮箱）。
+     */
+    @Transactional
+    public void rebindEmail(long accountId, String newEmail, long actorAccountId) {
+        AdminAccount a = accounts.findById(accountId)
+                .orElseThrow(() -> AppException.notFound("后台账号不存在").code("admin.err.account.notFound"));
+        if (a.getStatus() != AdminAccountStatus.ACTIVE) {
+            throw AppException.validation("账号已停用，请先重新激活再换绑邮箱").code("admin.err.account.rebindDisabled");
+        }
+        if (isBootstrapEmail(a.getLarkEmail())) {
+            throw AppException.validation("bootstrap 超管的邮箱不能换绑").code("admin.err.account.bootstrapRebind");
+        }
+        String email = newEmail == null ? "" : newEmail.trim();
+        if (email.isEmpty()) {
+            throw AppException.validation("Lark 邮箱不能为空").code("admin.err.account.emailRequired");
+        }
+        if (!EMAIL.matcher(email).matches()) {
+            throw AppException.validation("邮箱格式不正确").code("admin.err.account.emailInvalid");
+        }
+        String old = a.getLarkEmail();
+        if (email.equalsIgnoreCase(old)) {
+            return; // 幂等
+        }
+        if (accounts.existsByLarkEmailIgnoreCaseAndStatusAndIdNot(email, AdminAccountStatus.ACTIVE, accountId)) {
+            throw AppException.conflict("该 Lark 邮箱已存在后台账号：" + email)
+                    .code("admin.err.account.emailExists", email);
+        }
+        a.setLarkEmail(email);
+        a.bumpSecurityVersion(); // AD-1：旧持有人下一次请求被踢到 /admin/login?relogin
+        accounts.save(a);
+        auditService.record(actorAccountId, AuditActions.ACCOUNT_EMAIL_REBOUND, "ADMIN_ACCOUNT",
+                String.valueOf(accountId), "Lark 邮箱 " + old + " → " + email);
+        alertService.alertSuperAdmins(AuditActions.ACCOUNT_EMAIL_REBOUND, actorAccountId);
+    }
+
+    /** 是否 bootstrap 超管邮箱（忽略大小写、trim；env 未配置时恒 false）。供页面禁用态与服务层护栏共用。 */
+    public boolean isBootstrapEmail(String email) {
+        return !bootstrapEmail.isEmpty() && email != null
+                && bootstrapEmail.toLowerCase(Locale.ROOT).equals(email.trim().toLowerCase(Locale.ROOT));
     }
 
     /** 重新激活账号（AC5）。 */

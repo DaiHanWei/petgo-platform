@@ -9,6 +9,7 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -34,6 +35,8 @@ public class AdminAccountAdminController {
     private static final String VIEW_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('admin.view_accounts') or hasAuthority('admin.create_account')";
     private static final String DEACTIVATE_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('admin.deactivate')";
+    /** 换绑邮箱 = 身份移交，仅超管（V1.3.0 Story 1.3）。 */
+    private static final String REBIND_AUTH = "hasRole('SUPER_ADMIN')";
 
     private final AdminAccountService accountService;
 
@@ -73,6 +76,9 @@ public class AdminAccountAdminController {
             flash.addFlashAttribute("notice", msg.get("admin.flash.account.created", id, form.getLarkEmail()));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
+        } catch (DataIntegrityViolationException e) {
+            // 并发建号 / 换绑撞部分唯一索引（服务层查重是 read-then-write，索引是兜底）：按邮箱重复提示，不 500。
+            flash.addFlashAttribute("error", msg.get("admin.err.account.emailExists", form.getLarkEmail()));
         }
         return "redirect:/admin/accounts";
     }
@@ -125,6 +131,25 @@ public class AdminAccountAdminController {
         return "redirect:/admin/accounts";
     }
 
+    /** 换绑 Lark 邮箱（V1.3.0 Story 1.3）。仅超管；成功后旧邮箱会话由 AdminSessionGuardFilter 踢重登。 */
+    @PostMapping("/admin/accounts/{id}/rebind-email")
+    @PreAuthorize(REBIND_AUTH)
+    public String rebindEmail(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
+            @RequestParam("newEmail") String newEmail, RedirectAttributes flash) {
+        try {
+            accountService.rebindEmail(id, newEmail, admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", msg.get("admin.flash.account.emailRebound", id,
+                    newEmail == null ? "" : newEmail.trim()));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        } catch (DataIntegrityViolationException e) {
+            // 并发换绑撞 uq_admin_accounts_lark_email_active（提交时才抛，服务层 exists 查重拦不住）：按邮箱重复提示。
+            flash.addFlashAttribute("error", msg.get("admin.err.account.emailExists",
+                    newEmail == null ? "" : newEmail.trim()));
+        }
+        return "redirect:/admin/accounts";
+    }
+
     @PostMapping("/admin/accounts/{id}/deactivate")
     @PreAuthorize(DEACTIVATE_AUTH)
     public String deactivate(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
@@ -153,7 +178,11 @@ public class AdminAccountAdminController {
 
     private void populate(Model model) {
         model.addAttribute("active", "accounts");
-        model.addAttribute("accounts", accountService.list());
+        var accounts = accountService.list();
+        model.addAttribute("accounts", accounts);
+        // V1.3.0 Story 1.3：bootstrap 超管行「换绑邮箱」禁用态（判定逻辑与服务层护栏同源）。
+        model.addAttribute("bootstrapEmails", accounts.stream()
+                .map(v -> v.larkEmail()).filter(accountService::isBootstrapEmail).toList());
         model.addAttribute("allPermissions", AdminPermissions.ALL);
         model.addAttribute("permissionGroups", AdminPermissions.GROUPS);
         model.addAttribute("roles", AdminRole.selectable());

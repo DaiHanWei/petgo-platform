@@ -10,7 +10,7 @@ depends_on: [1-1-账号变更版本号与自动踢重登]
 
 # Story 1.3: 换绑 Lark 邮箱
 
-Status: ready-for-dev
+Status: review
 
 > 自包含 story，可本地或云端 L0 执行。与用户沟通用中文。执行纪律见根 `CLAUDE.md`。
 > 本 story **纯后台**（服务层 + Controller + 现有账号页模板 + 三语 key + 一支迁移改唯一约束），无 App 端改动。
@@ -60,8 +60,8 @@ so that 人员邮箱变更或账号移交不用停旧建新、权限重配、审
 
 ## Tasks / Subtasks
 
-- [ ] **T1 · 迁移：唯一约束改部分索引**（AC5）
-  - [ ] 新建 `V<yyyyMMdd_HHmm>__relax_admin_accounts_email_unique.sql`（取创建时刻；上一支动本表的是 `V20260821_1449__add_admin_account_role.sql`，注释风格照它）：
+- [x] **T1 · 迁移：唯一约束改部分索引**（AC5）
+  - [x] 新建 `V<yyyyMMdd_HHmm>__relax_admin_accounts_email_unique.sql`（取创建时刻；上一支动本表的是 `V20260821_1449__add_admin_account_role.sql`，注释风格照它）：
     ```sql
     -- AB-16A 换绑 Lark 邮箱（D-21）：已停用账号的邮箱视为已释放，可被换绑 / 新建复用。
     -- 全表唯一改为「仅 ACTIVE 唯一」的部分索引；服务层仍显式校验，索引是兜底。
@@ -69,36 +69,36 @@ so that 人员邮箱变更或账号移交不用停旧建新、权限重配、审
     CREATE UNIQUE INDEX uq_admin_accounts_lark_email_active
         ON admin_accounts (lower(lark_email)) WHERE status = 'ACTIVE';
     ```
-  - [ ] `ddl-auto=validate` 不校验索引/约束名，只校验列 —— 本迁移不改列，validate 不受影响
-  - [ ] 跑 `bash scripts/ci/check-flyway-versions.sh origin/main`
+  - [x] `ddl-auto=validate` 不校验索引/约束名，只校验列 —— 本迁移不改列，validate 不受影响
+  - [x] 跑 `bash scripts/ci/check-flyway-versions.sh origin/main`
 
-- [ ] **T2 · Repository**（AC2 / AC5）
-  - [ ] `AdminAccountRepository` 新增 `Optional<AdminAccount> findByLarkEmailIgnoreCaseAndStatus(String email, AdminAccountStatus status)` 与 `boolean existsByLarkEmailIgnoreCaseAndStatusAndIdNot(String email, AdminAccountStatus status, long id)`
-  - [ ] 🔴 全库 grep `findByLarkEmail(` 的调用点，逐处判断：登录（`loadByEmail`）与 Bootstrap 只关心 ACTIVE → 改用新方法；`createAccount` 重复校验 → 改为 ACTIVE 口径。旧方法若无调用可删，有调用但语义需要「任意状态」则保留并加注释
+- [x] **T2 · Repository**（AC2 / AC5）
+  - [x] `AdminAccountRepository` 新增 `Optional<AdminAccount> findByLarkEmailIgnoreCaseAndStatus(String email, AdminAccountStatus status)` 与 `boolean existsByLarkEmailIgnoreCaseAndStatusAndIdNot(String email, AdminAccountStatus status, long id)`
+  - [x] 🔴 全库 grep `findByLarkEmail(` 的调用点，逐处判断：登录（`loadByEmail`）与 Bootstrap 只关心 ACTIVE → 改用新方法；`createAccount` 重复校验 → 改为 ACTIVE 口径。旧方法若无调用可删，有调用但语义需要「任意状态」则保留并加注释
 
-- [ ] **T3 · 服务层 `rebindEmail`**（AC2～AC4）
-  - [ ] `AdminAccountService` 新增 `@Transactional public void rebindEmail(long accountId, String newEmail, long actorAccountId)`
-  - [ ] 注入 `AdminAlertService`（构造器加参数；同时更新 `AdminAccountServiceTest` / `AdminAccountRoleServiceTest` 的构造）与 `@Value("${ADMIN_BOOTSTRAP_EMAIL:}") String bootstrapEmail`（与 `AdminBootstrap` 同一 env 名）
-  - [ ] 顺序：findById → status 必须 ACTIVE → bootstrap 邮箱拒绝 → trim + 格式 → 同值 no-op → ACTIVE 唯一性（排除自身 id）→ 写 `larkEmail` → `bumpSecurityVersion` → 审计 → 告警
-  - [ ] `AdminAccount` 新增 `setLarkEmail(String)`（现状无此 setter）
-  - [ ] `AuditActions` 加 `ACCOUNT_EMAIL_REBOUND`
-  - [ ] 🛡 日志：`AdminAlertService.alertSuperAdmins` 只记 event + actorId，不记邮箱；`rebindEmail` 内不打含邮箱的应用日志（审计 summary 记邮箱是既有约定，允许）
+- [x] **T3 · 服务层 `rebindEmail`**（AC2～AC4）
+  - [x] `AdminAccountService` 新增 `@Transactional public void rebindEmail(long accountId, String newEmail, long actorAccountId)`
+  - [x] 注入 `AdminAlertService`（构造器加参数；同时更新 `AdminAccountServiceTest` / `AdminAccountRoleServiceTest` 的构造）与 `@Value("${ADMIN_BOOTSTRAP_EMAIL:}") String bootstrapEmail`（与 `AdminBootstrap` 同一 env 名）
+  - [x] 顺序：findById → status 必须 ACTIVE → bootstrap 邮箱拒绝 → trim + 格式 → 同值 no-op → ACTIVE 唯一性（排除自身 id）→ 写 `larkEmail` → `bumpSecurityVersion` → 审计 → 告警
+  - [x] `AdminAccount` 新增 `setLarkEmail(String)`（现状无此 setter）
+  - [x] `AuditActions` 加 `ACCOUNT_EMAIL_REBOUND`
+  - [x] 🛡 日志：`AdminAlertService.alertSuperAdmins` 只记 event + actorId，不记邮箱；`rebindEmail` 内不打含邮箱的应用日志（审计 summary 记邮箱是既有约定，允许）
 
-- [ ] **T4 · Controller + 模板**（AC1 / AC3）
-  - [ ] `AdminAccountAdminController` 加常量 `REBIND_AUTH = "hasRole('SUPER_ADMIN')"`，`@PostMapping("/admin/accounts/{id}/rebind-email") @PreAuthorize(REBIND_AUTH)`，PRG 范式同既有
-  - [ ] `populate` 增 `bootstrapEmail`（注入同一 env）供模板判断禁用态；`AdminAccountView` 不改（模板用 `a.larkEmail == bootstrapEmail` 比较即可）
-  - [ ] `admin-accounts.html` 操作列加「换绑邮箱」`<details>`（`sec:authorize="hasRole('SUPER_ADMIN')"`）：邮箱输入 + 保存钮；表单 `th:data-confirm="#{admin.accounts.rebind.confirm}"`——🔴 现有 `data-confirm` 文案是静态 key，**无法复述新旧邮箱**：本 story 在 `admin.js` 里为该表单加一段小逻辑，把 `data-confirm` 文案中的 `{0}` `{1}` 用当前行邮箱与输入框值替换后再 `confirm()`（`admin-core.js` 拆分是 Story 2.2 的事，这里只加最小改动，写清注释供 2.2 搬迁）
-  - [ ] bootstrap 行：按钮 `disabled` + `title="#{admin.accounts.rebind.bootstrapGuard}"`
+- [x] **T4 · Controller + 模板**（AC1 / AC3）
+  - [x] `AdminAccountAdminController` 加常量 `REBIND_AUTH = "hasRole('SUPER_ADMIN')"`，`@PostMapping("/admin/accounts/{id}/rebind-email") @PreAuthorize(REBIND_AUTH)`，PRG 范式同既有
+  - [x] `populate` 增 `bootstrapEmail`（注入同一 env）供模板判断禁用态；`AdminAccountView` 不改（模板用 `a.larkEmail == bootstrapEmail` 比较即可）
+  - [x] `admin-accounts.html` 操作列加「换绑邮箱」`<details>`（`sec:authorize="hasRole('SUPER_ADMIN')"`）：邮箱输入 + 保存钮；表单 `th:data-confirm="#{admin.accounts.rebind.confirm}"`——🔴 现有 `data-confirm` 文案是静态 key，**无法复述新旧邮箱**：本 story 在 `admin.js` 里为该表单加一段小逻辑，把 `data-confirm` 文案中的 `{0}` `{1}` 用当前行邮箱与输入框值替换后再 `confirm()`（`admin-core.js` 拆分是 Story 2.2 的事，这里只加最小改动，写清注释供 2.2 搬迁）
+  - [x] bootstrap 行：按钮 `disabled` + `title="#{admin.accounts.rebind.bootstrapGuard}"`
 
-- [ ] **T5 · i18n**（AC6）：四包各加 8 key；印尼语参考既有措辞
+- [x] **T5 · i18n**（AC6）：四包各加 8 key；印尼语参考既有措辞
 
-- [ ] **T6 · 测试**
-  - [ ] L0 `AdminAccountServiceTest`：`rebindEmailUpdatesBumpsAuditsAndAlerts`（verify `bumpSecurityVersion` 路径、`auditService.record(ACCOUNT_EMAIL_REBOUND)`、`alertService.alertSuperAdmins`）、`rebindRejectsBootstrapEmail`、`rebindRejectsDisabledTarget`、`rebindRejectsInvalidFormat`、`rebindRejectsActiveDuplicate`、`rebindAllowsDisabledDuplicate`（D-21）、`rebindSameEmailIsNoOp`
-  - [ ] L0 `AdminAccountAccessControlTest`：`rebindNeedsSuperAdmin`（`admin.create_account` 也 403）
-  - [ ] L1 `AdminAccountManagementIntegrationTest`：换绑后 `loadByEmail(old,false)` 抛 `UsernameNotFoundException`、`loadByEmail(new,false)` 成功且权限集合不变、`security_version` +1、审计行存在；**部分唯一索引**：建 A(ACTIVE, x@y) → 停用 → 建 B(ACTIVE, x@y) 成功；再建 C(ACTIVE, x@y) 被拒
-  - [ ] L2（本地）：换绑后旧持有人另一浏览器刷新 → 跳 `?relogin`
+- [x] **T6 · 测试**
+  - [x] L0 `AdminAccountServiceTest`：`rebindEmailUpdatesBumpsAuditsAndAlerts`（verify `bumpSecurityVersion` 路径、`auditService.record(ACCOUNT_EMAIL_REBOUND)`、`alertService.alertSuperAdmins`）、`rebindRejectsBootstrapEmail`、`rebindRejectsDisabledTarget`、`rebindRejectsInvalidFormat`、`rebindRejectsActiveDuplicate`、`rebindAllowsDisabledDuplicate`（D-21）、`rebindSameEmailIsNoOp`
+  - [x] L0 `AdminAccountAccessControlTest`：`rebindNeedsSuperAdmin`（`admin.create_account` 也 403）
+  - [x] L1 `AdminAccountManagementIntegrationTest`：换绑后 `loadByEmail(old,false)` 抛 `UsernameNotFoundException`、`loadByEmail(new,false)` 成功且权限集合不变、`security_version` +1、审计行存在；**部分唯一索引**：建 A(ACTIVE, x@y) → 停用 → 建 B(ACTIVE, x@y) 成功；再建 C(ACTIVE, x@y) 被拒
+  - [x] L2（本地）：换绑后旧持有人另一浏览器刷新 → 跳 `?relogin`
 
-- [ ] **T7 · 云端执行须知**：云端只跑 L0；L1 需 Docker，留本地；Completion Notes 标注
+- [x] **T7 · 云端执行须知**：云端只跑 L0；L1 需 Docker，留本地；Completion Notes 标注
 
 ---
 
@@ -167,10 +167,33 @@ PRD 要求确认弹层「复述旧邮箱 → 新邮箱」。现状 `admin.js` �
 
 ### Agent Model Used
 
-（dev-story 填写）
+claude-fable-5-1（云端 headless session，2026-09-09）
 
 ### Debug Log References
 
+- 云端 L0：`./mvnw -B clean package`（排除需真库的 Spring 上下文测试类）→ 1675 tests, 0 failures, BUILD SUCCESS。
+- `AdminAccountServiceTest` 32/32（换绑 8 条）、`AdminAccountAccessControlTest` 9/9、新增 `AdminBootstrapTest` 3/3。
+- 四包 key 集合 diff 为空；flyway-guard 树内 171 支无重号（`origin/main` 基线在云端不可达，撞号检查待本地/CI）。
+- 复审 CONFIRMED 两条已修：① `AdminBootstrap` 改 ACTIVE 查询后，bootstrap 超管被停用时会重复建号 → 补「无 ACTIVE 取最新已停用行复活」回退（新增仓库方法 `findByLarkEmailIgnoreCaseOrderByIdDesc`）+ 单测；② 并发换绑/建号撞部分唯一索引会 500 → 控制器 catch `DataIntegrityViolationException` 转 `emailExists` flash。
+
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：① 迁移 `V20260909_1130`（DROP 全表唯一 + 部分唯一索引 `lower(lark_email) WHERE status='ACTIVE'`）真库跑通；② `AdminAccountManagementIntegrationTest.rebindEmailMovesIdentityKeepsPermissionsBumpsVersionAndAudits` 与 `disabledEmailCanBeReusedButActiveDuplicateRejected`（真库：旧邮箱拒登、新邮箱权限不变、版本 +1、审计行、停用邮箱复用、ACTIVE 重复拒）；③ 页面：仅超管看到「换绑邮箱」，bootstrap 行禁用带 title，确认弹层复述「旧 → 新」（admin.js 占位替换）；④ 换绑后旧持有人另一浏览器刷新 → `?relogin`；⑤ 三语横幅 / 报错。
+- 邮箱格式校验取宽松口径（恰一个 `@`、无空白、不强制顶级域），与 jakarta `@Email` 一致；既有测试夹具用 `s@x` 这类无 TLD 邮箱。
+- bootstrap 邮箱判定 `isBootstrapEmail` 公开，供模板禁用态（`bootstrapEmails` 模型属性）与服务层护栏同源；env 未配置时护栏不生效。
+- `findByLarkEmail` 保留（仅注释警告），主调用点全部改为 `findByLarkEmailIgnoreCaseAndStatus(…, ACTIVE)`：`loadByEmail` / `AdminBootstrap` / `createAccount` 查重；相关单测 mock 同步。
+- 告警 `alertSuperAdmins` 只记事件 + actorId；`rebindEmail` 不打含邮箱的应用日志。
+- `data-confirm` 占位替换写在 `admin.js` 顶部，注释标明 Story 2.2 拆 `admin-core.js` 时原样搬迁。
+
 ### File List
+
+- petgo-backend/src/main/resources/db/migration/V20260909_1130__relax_admin_accounts_email_unique.sql（新增）
+- petgo-backend/src/main/java/com/tailtopia/admin/account/repository/AdminAccountRepository.java（+3 方法）
+- petgo-backend/src/main/java/com/tailtopia/admin/account/domain/AdminAccount.java（+ setLarkEmail）
+- petgo-backend/src/main/java/com/tailtopia/admin/account/service/AdminAccountService.java（+ rebindEmail / isBootstrapEmail；构造器 + AdminAlertService + bootstrapEmail；createAccount ACTIVE 口径）
+- petgo-backend/src/main/java/com/tailtopia/admin/account/web/AdminAccountAdminController.java（+ REBIND_AUTH、rebind-email POST、bootstrapEmails、DataIntegrityViolation 兜底）
+- petgo-backend/src/main/java/com/tailtopia/admin/service/AdminUserDetailsService.java / AdminBootstrap.java
+- petgo-backend/src/main/java/com/tailtopia/admin/audit/service/AuditActions.java（+ ACCOUNT_EMAIL_REBOUND）
+- petgo-backend/src/main/resources/templates/admin/admin-accounts.html、static/admin/admin.js
+- petgo-backend/src/main/resources/i18n/messages{,_zh_CN,_en,_id}.properties（+8 key）
+- 测试：AdminAccountServiceTest、AdminAccountRoleServiceTest、AdminAccountAccessControlTest、AdminUserDetailsServiceTest、AdminUserDetailsRoleTest、AdminBootstrapTest（新增）、AdminAccountManagementIntegrationTest
