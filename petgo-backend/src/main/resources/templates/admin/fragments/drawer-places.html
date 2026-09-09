@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  B6 场所详情抽屉（V1.3.0 Story 5.2 AC5，只读；模板 B 抽屉体 res=places，480px）。d = PlaceDrawerView。
+  五区：① 基本信息（2×2 弹性网格 UX-DR11；MERGED 显示「已并入 → 保留场所名」可点跳其抽屉 ?open=）② 照片墙（签名 URL 现签，不落库）
+  ③ 评论列表（分页 20，comments fragment 局部翻页）④ 打卡计数 ⑤ 操作条占位（按钮禁用，处置动作见 Story 5.3）。
+-->
+<body>
+<div th:fragment="drawer" class="pl-drawer" th:attr="data-place-id=${d.id}">
+    <!-- ① 基本信息 -->
+    <section class="card card-full pl-card">
+        <h2>
+            <span th:text="${d.name}">名称</span>
+            <span class="badge" th:classappend="${d.status.name() == 'ACTIVE'} ? 'badge-ok' : (${d.status.name() == 'DELISTED'} ? 'badge-warn' : 'badge-muted')"
+                  th:text="#{'admin.v130.places.status.' + ${d.status.name()}}">状态</span>
+        </h2>
+        <p class="muted" th:if="${d.status.name() == 'MERGED'}">
+            <span th:text="#{admin.v130.places.drawer.mergedInto}">已并入 →</span>
+            <!-- 直接换抽屉体（保留场所可能不在当前页，?open= 深链找不到行会静默失效，复审 #4） -->
+            <a href="#" th:attr="hx-get=@{/admin/places/{id}/drawer(id=${d.mergedIntoId})}" hx-target="#places-drawer .drawer-body" hx-swap="innerHTML"
+               th:text="${d.mergedIntoName}">保留场所</a>
+        </p>
+        <div class="sum pl-info">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.type}">类型</div><div class="sum-value rv-small" th:text="${d.typeName}">类型</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.city}">城市</div><div class="sum-value rv-small" th:text="${d.city}">城市</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.marker}">标记人</div>
+                <div class="sum-value rv-small"><span th:text="${d.markerName}" th:classappend="${d.markerDeleted} ? 'muted'">标记人</span>
+                    <span class="badge" th:if="${d.markerDeleted}" th:text="#{admin.review.subject.deactivated}">已注销</span></div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.createdAt}">创建时间</div><div class="sum-value rv-small" th:text="${@adminTime.wib(d.createdAt)}">-</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.drawer.lat}">纬度</div><div class="sum-value rv-small" th:text="${d.lat}">0</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.drawer.lng}">经度</div><div class="sum-value rv-small" th:text="${d.lng}">0</div></div>
+        </div>
+        <p><span class="muted" th:text="#{admin.v130.places.col.address}">文字地址</span> <span th:text="${d.addressText}">地址</span></p>
+        <p th:if="${!#lists.isEmpty(d.tags)}"><span class="tag" th:each="t : ${d.tags}" th:text="${t}">标签</span></p>
+        <p th:if="${!#strings.isEmpty(d.description)}" class="pl-desc" th:text="${d.description}">描述</p>
+        <p class="muted rv-small" th:text="'#' + ${d.id} + ' · ' + ${d.publicToken}">#id · token</p>
+    </section>
+
+    <!-- ② 照片墙 -->
+    <section class="card card-full pl-card">
+        <h2><span th:text="#{admin.v130.places.drawer.photos}">照片</span> <span class="muted" th:text="${d.photoCount}">0</span></h2>
+        <p class="muted" th:if="${#lists.isEmpty(d.photos)}" th:text="#{admin.v130.places.drawer.photos.empty}">暂无照片</p>
+        <div class="pl-photo-grid" th:if="${!#lists.isEmpty(d.photos)}">
+            <figure th:each="ph : ${d.photos}" class="pl-photo" th:attr="data-photo-id=${ph.id}">
+                <img th:if="${ph.url != null}" th:src="${ph.url}" alt="" data-lightbox loading="lazy"/>
+                <div class="pl-photo-missing" th:if="${ph.url == null}" th:text="#{admin.v130.places.drawer.photos.unavailable}">图片暂不可用</div>
+                <figcaption class="muted rv-small" th:text="${ph.uploaderName}">上传者</figcaption>
+            </figure>
+        </div>
+    </section>
+
+    <!-- ③ 评论（分页 20） -->
+    <section class="card card-full pl-card" th:replace="~{admin/fragments/drawer-places :: comments}"></section>
+
+    <!-- ④ 打卡计数 -->
+    <section class="card card-full pl-card">
+        <div class="sum pl-info">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.checkins}">打卡</div><div class="sum-value" th:text="${d.checkinCount}">0</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.attitude}">推荐 · 不推荐</div>
+                <div class="sum-value"><span th:text="${d.recommendCount}">0</span> · <span th:text="${d.notRecommendCount}">0</span></div></div>
+        </div>
+    </section>
+
+    <!-- ⑤ 操作条占位：处置动作（编辑 / 下架 / 恢复 / 删照片 / 删评论 / 合并）由 Story 5.3 接入，本 story 渲染禁用态 -->
+    <section class="pl-actions" data-place-actions>
+        <button type="button" class="btn btn-neutral btn-sm" disabled th:text="#{admin.v130.places.action.edit}">编辑</button>
+        <button type="button" class="btn btn-neutral btn-sm" disabled th:text="${d.status.name() == 'DELISTED'} ? #{admin.v130.places.action.restore} : #{admin.v130.places.action.delist}">下架</button>
+        <button type="button" class="btn btn-neutral btn-sm" disabled th:text="#{admin.v130.places.action.merge}">合并</button>
+        <span class="muted rv-small" th:text="#{admin.v130.places.action.pending}">处置动作见 Story 5.3</span>
+    </section>
+</div>
+
+<!-- 评论列表片段：翻页只换本节（hx-get …/drawer?part=comments&commentPage=n） -->
+<section th:fragment="comments" class="card card-full pl-card pl-comments" id="places-drawer-comments">
+    <h2><span th:text="#{admin.v130.places.drawer.comments}">评论</span> <span class="muted" th:text="${d.comments.total}">0</span></h2>
+    <p class="muted" th:if="${#lists.isEmpty(d.comments.items)}" th:text="#{admin.v130.places.drawer.comments.empty}">暂无评论</p>
+    <ul class="pl-comment-list" th:if="${!#lists.isEmpty(d.comments.items)}">
+        <li th:each="c : ${d.comments.items}" th:attr="data-comment-id=${c.id}">
+            <span class="badge" th:classappend="${c.attitude.name() == 'RECOMMEND'} ? 'badge-ok' : 'badge-warn'"
+                  th:text="${c.attitude.name() == 'RECOMMEND'} ? '👍' : '👎'" th:title="#{'admin.v130.places.attitude.' + ${c.attitude.name()}}">👍</span>
+            <span th:text="${c.authorName}" th:classappend="${c.authorDeleted} ? 'muted'">作者</span>
+            <span class="muted rv-small" th:text="${@adminTime.wib(c.createdAt)}">时间</span>
+            <p class="pl-comment-body" th:text="${c.body}">正文</p>
+        </li>
+    </ul>
+    <div class="pager" th:if="${d.comments.hasNext or d.comments.page > 0}">
+        <a th:if="${d.comments.page > 0}" href="#" th:attr="hx-get=@{/admin/places/{id}/drawer(id=${d.id},part='comments',commentPage=${d.comments.page - 1})}"
+           hx-target="#places-drawer-comments" hx-swap="outerHTML" th:text="#{admin.v130.places.pager.prev}">上一页</a>
+        <a th:if="${d.comments.hasNext}" href="#" th:attr="hx-get=@{/admin/places/{id}/drawer(id=${d.id},part='comments',commentPage=${d.comments.page + 1})}"
+           hx-target="#places-drawer-comments" hx-swap="outerHTML" th:text="#{admin.v130.places.pager.next}">下一页</a>
+    </div>
+</section>
+</body>
+</html>

@@ -63,7 +63,7 @@ class AdminPermissionWiringTest {
      * comment.virtual_post 已由 Story 4.1 接线并移出名单。
      */
     // comment.virtual_post 已由 V1.3.0 Story 4.1（分布页签 VIEW_AUTH / 「去评论」）接线，从预留名单移除。
-    private static final Set<String> PENDING_WIRING = Set.of(AdminPermissions.PLACE_MANAGE);
+    private static final Set<String> PENDING_WIRING = Set.of(); // place.manage 已在 Story 5.2 接线（AdminPlaceController）
 
     /**
      * V1.3.0 页面退役后暂留矩阵的码（Story 2.4 AC7：{@code GET /admin/reports} 删除，{@code content.view_reports}

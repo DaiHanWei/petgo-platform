@@ -97,16 +97,15 @@ class AdminPageCatalogTest {
                 "roles", "seed", "seed-batches", "settlements", "shopBanners", "shopInventory", "shopMargin", "shopOrders",
                 "shopProducts", "shopReconciliation", "shopRepurchase", "shopReturns", "shopShipping", "shopTurnover",
                 "shopOrderExceptions", "shopPrecedents", "support-tickets", "tickets", "user-tags", "users", "vets",
-                "virtual-accounts", "warm-replies")) {
+                "virtual-accounts", "warm-replies", "places")) {
             assertThat(actives).as("active=" + active + " 没有对应侧栏项").contains(active);
         }
     }
 
     @Test
     void pagesWithoutRouteOrPendingStoriesStayOutOfNav() {
-        // 页面内区块 / 抽屉页签无路由；places（5.2）路由尚未建，暂不入侧栏（warm-replies 已在 4.4 落地入栏）。
-        for (String key : List.of("throttles", "user-phone", "vet-qualification", "ratings", "shop-cost", "share-reward",
-                "places")) {
+        // 页面内区块 / 抽屉页签无路由，不入侧栏（warm-replies 4.4、places 5.2 已落地入栏）。
+        for (String key : List.of("throttles", "user-phone", "vet-qualification", "ratings", "shop-cost", "share-reward")) {
             AdminPageCatalog.Page p = AdminPageCatalog.PAGES.stream().filter(x -> x.key().equals(key)).findFirst().orElseThrow();
             assertThat(p.inNav()).as(key + " 不该在侧栏").isFalse();
         }

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  B6 场所管理（V1.3.0 Story 5.2，模板 B · tpl-b-list，UI 稿 2-20 / 2-22；列按逐页规格 B6 的 11 列 + D-39 城市列）。
+  只读：筛选栏（关键词 + 查询钮；类型 / 状态 / 城市 即选即查）→ 摘要条四格（随筛选联动，待处理举报数跳 A1 场所举报页签）
+  → 表格（创建时间倒序、每页 20）→ 分页；行点击开 480px 抽屉（fragments/drawer-places.html，?open=<id> 深链）。
+  处置动作在 5.3（抽屉操作条渲染禁用占位）、「＋新建场所」在 5.4。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.v130.places.title}">场所管理 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag" th:with="res='places'">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.v130.places.title}">场所管理</h1>
+            <!-- 「＋新建场所」由 Story 5.4 接入 -->
+        </div>
+        <p class="muted" th:text="#{admin.v130.places.note}">宠物友好场所的信息、照片、评论与打卡；处置动作见抽屉操作条。</p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::pl-filters}, ~{::pl-summary}, ~{::pl-table}, ~{::pl-drawer})}">
+            <form th:fragment="pl-filters" class="filter-bar" data-autosubmit th:attr="hx-get=@{/admin/places}"
+                  hx-target="#places-rows" hx-swap="innerHTML" hx-push-url="true">
+                <label class="field">
+                    <span th:text="#{admin.v130.places.filter.q}">名称 / 地址</span>
+                    <input type="text" name="q" class="inp" th:value="${filter.q}" th:placeholder="#{admin.v130.places.filter.q.placeholder}"/>
+                </label>
+                <label class="field">
+                    <span th:text="#{admin.v130.places.filter.type}">类型</span>
+                    <select name="type" class="sel">
+                        <option value="" th:selected="${filter.type == null}" th:text="#{admin.v130.places.filter.all}">全部</option>
+                        <option th:each="t : ${typeOptions}" th:value="${t}" th:selected="${filter.type == t}" th:text="#{'admin.v130.places.type.' + ${t}}">类型</option>
+                        <!-- 当前筛选值不在已知类型里（App 端新增的码）：原样保留，可继续筛 -->
+                        <option th:if="${filter.type != null and !typeOptions.contains(filter.type)}" th:value="${filter.type}" selected th:text="${filter.type ?: ''}">未知类型</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span th:text="#{admin.v130.places.filter.status}">状态</span>
+                    <select name="status" class="sel">
+                        <option value="" th:selected="${filter.status == null}" th:text="#{admin.v130.places.filter.all}">全部</option>
+                        <option value="ACTIVE" th:selected="${filter.statusParam() == 'ACTIVE'}" th:text="#{admin.v130.places.status.ACTIVE}">上架</option>
+                        <option value="DELISTED" th:selected="${filter.statusParam() == 'DELISTED'}" th:text="#{admin.v130.places.status.DELISTED}">已下架</option>
+                        <option value="MERGED" th:selected="${filter.statusParam() == 'MERGED'}" th:text="#{admin.v130.places.status.MERGED}">已合并</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span th:text="#{admin.v130.places.filter.city}">城市</span>
+                    <select name="city" class="sel">
+                        <option value="" th:selected="${filter.city == null}" th:text="#{admin.v130.places.filter.city.all}">全部城市</option>
+                        <option th:each="c : ${cities}" th:value="${c}" th:selected="${filter.city == c}" th:text="${c}">Jakarta</option>
+                    </select>
+                </label>
+                <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.v130.places.filter.query}">查询</button>
+            </form>
+
+            <div th:fragment="pl-summary" th:replace="~{admin/fragments/places-list :: summary(false)}"></div>
+
+            <div th:fragment="pl-table" id="places-rows">
+                <div th:replace="~{admin/fragments/places-list :: rows(false)}"></div>
+            </div>
+
+            <div th:fragment="pl-drawer" class="drawer-title" th:text="#{admin.v130.places.drawer.title}">场所详情</div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

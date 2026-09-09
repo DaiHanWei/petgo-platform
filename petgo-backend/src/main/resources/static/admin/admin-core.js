@@ -10,7 +10,8 @@
 document.addEventListener('DOMContentLoaded', function () {
     document.body.addEventListener('htmx:beforeSwap', function (e) {
         var s = e.detail && e.detail.xhr && e.detail.xhr.status;
-        if (s === 422 || s === 403) { e.detail.shouldSwap = true; e.detail.isError = false; }
+        // 404 也放行：AdminBusinessExceptionAdvice 对 404 同样回行内 err fragment（Story 5.2 抽屉「不存在 / 已删」）
+        if (s === 422 || s === 403 || s === 404) { e.detail.shouldSwap = true; e.detail.isError = false; }
     });
     document.body.addEventListener('htmx:configRequest', function (e) {
         var t = document.querySelector('meta[name="_csrf"]');

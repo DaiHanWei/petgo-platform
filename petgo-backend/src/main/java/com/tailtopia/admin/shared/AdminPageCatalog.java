@@ -166,8 +166,9 @@ public final class AdminPageCatalog {
             mixed("seed-post", G_CONTENT, "/admin/seed-post",
                     List.of(), List.of(), List.of(SEED_PUBLISH_AS_REAL),
                     List.of(VIRTUAL_ACCOUNT_VIEW, VIRTUAL_ACCOUNT_MANAGE)).nav("admin.nav.seed", "seed", VIRTUAL_ACCOUNT_MANAGE),
+            // Story 5.2：内容组第 7 项「场所管理」；查看即 place.manage（D-9 / D-17 不预授予预置角色）
             page("places", G_CONTENT, "/admin/places",
-                    List.of(PLACE_MANAGE), List.of(), List.of()),
+                    List.of(PLACE_MANAGE), List.of(), List.of()).nav("admin.nav.places", "places", PLACE_MANAGE),
             // ⛔ 本版退役（7.5 并入批量内容页签）：侧栏暂保留，改期/取消 POST 重定向落点见 7.5。
             legacy("content-schedules", G_CONTENT, "/admin/content-schedules", "admin.nav.contentSchedules",
                     "content-schedules", VIRTUAL_ACCOUNT_MANAGE),

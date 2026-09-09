@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  B6 场所列表片段（V1.3.0 Story 5.2）。
+  rows(oob) — 表格 + 分页（htmx 换 #places-rows 的 innerHTML）+ oob=true 时附摘要条 oob（#places-summary 随筛选联动）
+  summary — 摘要条四格：上架场所数 · 今日新增（WIB）· 待处理举报数（跳 A1 场所举报页签）· 累计打卡数
+  模型：filter / rows / total / hasNext / summary。
+-->
+<body>
+<div th:fragment="summary(oob)" class="sum" id="places-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.places.summary.active}">上架场所</div>
+        <div class="sum-value" th:text="${summary.activeCount}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.places.summary.todayNew}">今日新增</div>
+        <div class="sum-value" th:text="${summary.todayNew}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.places.summary.pendingReports}">待处理举报</div>
+        <div class="sum-value">
+            <!-- 跳 A1 场所举报页签（5.4 落地；合入前落无筛选的 A1 页，不报错） -->
+            <a th:href="@{/admin/manual-review(type='PLACE_REPORT')}" th:text="${summary.pendingReports}" th:title="#{admin.v130.places.summary.pendingReports.go}">0</a>
+        </div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.places.summary.checkins}">累计打卡</div>
+        <div class="sum-value" th:text="${summary.checkins}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <!-- htmx 筛选 / 翻页时摘要条随 oob 一并换；整页首屏（oob=false）不重复渲染（复审 #2） -->
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/places-list :: summary(true)}"></div></th:block>
+    <table th:if="${!rows.isEmpty()}" class="places-table">
+        <thead>
+        <tr>
+            <th th:text="#{admin.v130.places.col.name}">名称</th>
+            <th th:text="#{admin.v130.places.col.type}">类型</th>
+            <th th:text="#{admin.v130.places.col.tags}">标签</th>
+            <th th:text="#{admin.v130.places.col.city}">城市</th>
+            <th th:text="#{admin.v130.places.col.address}">文字地址</th>
+            <th th:text="#{admin.v130.places.col.marker}">标记人</th>
+            <th th:text="#{admin.v130.places.col.photos}">照片</th>
+            <th th:text="#{admin.v130.places.col.comments}">评论</th>
+            <th th:text="#{admin.v130.places.col.checkins}">打卡</th>
+            <th th:text="#{admin.v130.places.col.attitude}">推荐 · 不推荐</th>
+            <th th:text="#{admin.v130.places.col.status}">状态</th>
+            <th th:text="#{admin.v130.places.col.createdAt}">创建时间</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="r : ${rows}" th:data-id="${r.id}" th:data-drawer-url="@{/admin/places/{id}/drawer(id=${r.id})}" tabindex="0"
+            th:classappend="${r.status.name() != 'ACTIVE'} ? 'row-muted'">
+            <td class="nowrap" th:text="${r.name}" th:title="${r.name}">名称</td>
+            <td class="nowrap" th:text="${r.typeName}">类型</td>
+            <td>
+                <span class="tag" th:each="t : ${r.visibleTags()}" th:text="${t}">标签</span>
+                <span class="muted" th:if="${r.hiddenTagCount() > 0}" th:text="'+' + ${r.hiddenTagCount()}">+N</span>
+            </td>
+            <td class="nowrap" th:text="${r.city}">城市</td>
+            <td class="nowrap places-address" th:text="${r.addressText}" th:title="${r.addressText}">地址</td>
+            <td class="nowrap">
+                <span th:text="${r.markerName}" th:classappend="${r.markerDeleted} ? 'muted'">标记人</span>
+                <span class="badge" th:if="${r.markerDeleted}" th:text="#{admin.review.subject.deactivated}">已注销</span>
+            </td>
+            <td th:text="${r.photoCount}">0</td>
+            <td th:text="${r.commentCount}">0</td>
+            <td th:text="${r.checkinCount}">0</td>
+            <td class="nowrap"><span th:text="${r.recommendCount}">0</span> · <span th:text="${r.notRecommendCount}">0</span></td>
+            <td class="nowrap">
+                <span class="dot" th:classappend="${r.status.name() == 'ACTIVE'} ? 'dot--ok' : (${r.status.name() == 'DELISTED'} ? 'dot--wait' : 'dot--done')"></span>
+                <span class="badge" th:classappend="${r.status.name() == 'ACTIVE'} ? 'badge-ok' : (${r.status.name() == 'DELISTED'} ? 'badge-warn' : 'badge-muted')"
+                      th:text="#{'admin.v130.places.status.' + ${r.status.name()}}">状态</span>
+            </td>
+            <td class="nowrap" th:text="${@adminTime.wib(r.createdAt)}">时间</td>
+        </tr>
+        </tbody>
+    </table>
+    <div class="empty" th:if="${rows.isEmpty()}">
+        <span class="empty-emoji" th:text="${filter.q == null and filter.type == null and filter.status == null and filter.city == null} ? '📍' : '🔍'">🔍</span>
+        <p th:text="${filter.q == null and filter.type == null and filter.status == null and filter.city == null} ? #{admin.v130.places.empty} : #{admin.v130.places.empty.search}">暂无场所</p>
+    </div>
+    <div class="pager" th:if="${!rows.isEmpty()}">
+        <a th:if="${filter.page > 0}" href="#" th:attr="hx-get=@{/admin/places(q=${filter.q},type=${filter.type},status=${filter.statusParam()},city=${filter.city},page=${filter.page - 1})}"
+           hx-target="#places-rows" hx-swap="innerHTML" hx-push-url="true" th:text="#{admin.v130.places.pager.prev}">上一页</a>
+        <span th:text="#{admin.v130.places.pager.total(${total})}">共 N 个场所</span>
+        <a th:if="${hasNext}" href="#" th:attr="hx-get=@{/admin/places(q=${filter.q},type=${filter.type},status=${filter.statusParam()},city=${filter.city},page=${filter.page + 1})}"
+           hx-target="#places-rows" hx-swap="innerHTML" hx-push-url="true" th:text="#{admin.v130.places.pager.next}">下一页</a>
+    </div>
+</th:block>
+</body>
+</html>
