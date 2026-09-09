@@ -12,14 +12,6 @@
     <title th:text="${role == null} ? #{admin.roles.new.title} : #{admin.roles.edit.title}">编辑角色权限 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin.js}"></script>
-    <style>
-        .matrix th, .matrix td { vertical-align: top; }
-        .matrix th { white-space: nowrap; }
-        .matrix .group-row td { background: #F0F1F5; font-weight: 600; }
-        .matrix label { display: block; white-space: nowrap; font-size: 12px; }
-        .matrix .shared { color: #888; font-size: 12px; }
-        .matrix .route { color: #888; font-size: 11px; }
-    </style>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
@@ -45,51 +37,8 @@
                 <p class="hint" th:text="#{admin.roles.field.name.hint}">单语，≤60 字符，不可与既有角色重名</p>
             </div>
 
-            <table class="matrix">
-                <thead>
-                <tr>
-                    <th th:text="#{admin.roles.matrix.page}">页面</th>
-                    <th th:text="#{admin.roles.matrix.view}">查看</th>
-                    <th th:text="#{admin.roles.matrix.edit}">编辑</th>
-                    <th th:text="#{admin.roles.matrix.other}">其他操作</th>
-                </tr>
-                </thead>
-                <tbody>
-                <th:block th:each="g : ${matrix.groups}">
-                    <tr class="group-row"><td colspan="4" th:text="#{${g.group.titleKey}}">分组</td></tr>
-                    <tr th:each="p : ${g.pages}">
-                        <td>
-                            <span th:text="#{${p.titleKey()}}">页面名</span>
-                            <span class="route" th:if="${p.route != null}" th:text="${p.route}">/admin/x</span>
-                            <span class="muted" th:if="${p.superAdminOnly}" th:text="#{admin.roles.matrix.superOnly}">（仅超管）</span>
-                            <div class="shared" th:if="${!#lists.isEmpty(p.sharedCodes)}">
-                                <span th:text="#{admin.roles.matrix.shared}">沿用：</span>
-                                <span th:each="c : ${p.sharedCodes}" th:text="#{'perm.' + ${c}} + ' '" th:title="${c}">码</span>
-                                <sup>*</sup>
-                            </div>
-                        </td>
-                        <td>
-                            <label th:each="c : ${p.viewCodes}">
-                                <input type="checkbox" name="permissionCodes" th:value="${c}" th:checked="${matrix.isChecked(c)}"/>
-                                <span th:text="#{'perm.' + ${c}}" th:title="${c}">码</span>
-                            </label>
-                        </td>
-                        <td>
-                            <label th:each="c : ${p.editCodes}">
-                                <input type="checkbox" name="permissionCodes" th:value="${c}" th:checked="${matrix.isChecked(c)}"/>
-                                <span th:text="#{'perm.' + ${c}}" th:title="${c}">码</span>
-                            </label>
-                        </td>
-                        <td>
-                            <label th:each="c : ${p.otherCodes}">
-                                <input type="checkbox" name="permissionCodes" th:value="${c}" th:checked="${matrix.isChecked(c)}"/>
-                                <span th:text="#{'perm.' + ${c}}" th:title="${c}">码</span>
-                            </label>
-                        </td>
-                    </tr>
-                </th:block>
-                </tbody>
-            </table>
+            <!-- 矩阵 fragment（Story 1.6 抽出，账号页共用） -->
+            <div th:replace="~{admin/fragments/perm-matrix :: matrix(${matrix.groups}, ${matrix.checked}, false, false)}"></div>
 
             <p class="hint" th:text="#{admin.roles.matrix.footnote}">* 现状代码不规整项：评论管理无独立查看码（沿用内容查看）；退款管理 / Toko 退货审核 / 开封判例共用退款权限；复购引擎效果为运营配置查看或订单查看；Toko 异常订单与订单履约同码；服务范围与运费用运营配置权限；未成功请求沿用兽医查看。</p>
 

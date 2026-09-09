@@ -293,7 +293,11 @@ public final class AdminPermissions {
     /** 暖贴——以虚拟身份「去评论」（V1.3.0 Story 1.4 预留，Epic 4 建端点）。不预授予任何预置角色。 */
     public static final String COMMENT_VIRTUAL_POST = "comment.virtual_post";
 
-    /** 按查看/编辑分组，供账号页勾选区展示。 */
+    /**
+     * 按查看/编辑分组。V1.3.0 Story 1.6 起账号页勾选区改用 {@code AdminPageCatalog} 8 组矩阵，本常量已无页面引用；
+     * 保留仅作 {@link #ALL} 的派生来源（全集定义处），勿删。
+     */
+    @Deprecated
     public static final List<PermissionGroup> GROUPS = List.of(
             new PermissionGroup("perm.group.view", List.of(
                     CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW, CONTENT_PIN_VIEW, CONTENT_TAG_VIEW,

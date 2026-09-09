@@ -221,7 +221,8 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('.role-perm-preview').forEach(function (d) {
             d.hidden = d.getAttribute('data-role') !== role;
         });
-        var custom = role === 'CUSTOM';
+        // V1.3.0 Story 1.6：选项值编码 enum:<NAME> / tpl:<id>，「自定义勾选」= enum:CUSTOM。
+        var custom = role === 'enum:CUSTOM' || role === 'CUSTOM';
         if (permGroups) permGroups.hidden = !custom;
         if (permNote) permNote.hidden = !custom;
     }

@@ -9,6 +9,11 @@ import com.tailtopia.admin.roles.domain.AdminRolePermission;
 import com.tailtopia.admin.roles.dto.AdminRoleView;
 import com.tailtopia.admin.roles.dto.PermissionMatrixView;
 import com.tailtopia.admin.roles.dto.RoleChange;
+import com.tailtopia.admin.roles.dto.RoleOption;
+import com.tailtopia.admin.roles.dto.RoleSelection;
+import com.tailtopia.admin.account.domain.AdminRole;
+import com.tailtopia.admin.roles.domain.RoleType;
+import java.util.function.Function;
 import com.tailtopia.admin.roles.repository.AdminRolePermissionRepository;
 import com.tailtopia.admin.roles.repository.AdminRoleRepository;
 import com.tailtopia.admin.shared.AdminPageCatalog;
@@ -47,6 +52,72 @@ public class AdminRoleService {
         this.rolePermissions = rolePermissions;
         this.accounts = accounts;
         this.auditService = auditService;
+    }
+
+    /**
+     * 账号页角色下拉（Story 1.6 AC1）：超管、运营主管（枚举）→ 预置四岗（{@code enum:<CODE>}，存量账号默认选中不用查表）
+     * → 自定义若干（{@code tpl:<id>}）→ 自定义勾选（CUSTOM）。
+     *
+     * @param label i18n 取文案（通常 {@code msg::get}）
+     */
+    @Transactional(readOnly = true)
+    public List<RoleOption> options(Function<String, String> label) {
+        List<RoleOption> out = new ArrayList<>();
+        for (AdminRole r : List.of(AdminRole.SUPER_ADMIN, AdminRole.OPS_MANAGER)) {
+            out.add(new RoleOption("enum:" + r.name(), label.apply(r.titleCode()), r.descriptionCode(),
+                    false, false, null, r));
+        }
+        List<AdminRoleEntity> rows = roles.findAllByOrderByRoleTypeAscIdAsc();
+        for (AdminRoleEntity row : rows) {
+            if (row.getRoleType() == RoleType.SYSTEM) {
+                AdminRole r = AdminRole.valueOf(row.getCode());
+                out.add(new RoleOption("enum:" + r.name(), label.apply(row.getNameKey()), r.descriptionCode(),
+                        true, false, row.getId(), r));
+            }
+        }
+        for (AdminRoleEntity row : rows) {
+            if (row.getRoleType() == RoleType.CUSTOM) {
+                out.add(new RoleOption("tpl:" + row.getId(), row.getName(), null,
+                        true, true, row.getId(), AdminRole.ROLE_TEMPLATE));
+            }
+        }
+        out.add(new RoleOption("enum:CUSTOM", label.apply(AdminRole.CUSTOM.titleCode()),
+                AdminRole.CUSTOM.descriptionCode(), false, false, null, AdminRole.CUSTOM));
+        return out;
+    }
+
+    /**
+     * 把下拉选项值解析成 {@link RoleSelection}（Story 1.6 AC2）：{@code enum:<NAME>}（ROLE_TEMPLATE 不可直选）
+     * 预置四岗补上表 id；{@code tpl:<id>} 按表行类型：SYSTEM → 对应枚举 + id，CUSTOM → ROLE_TEMPLATE + id。
+     */
+    @Transactional(readOnly = true)
+    public RoleSelection resolveSelection(String value) {
+        String v = value == null ? "" : value.trim();
+        try {
+            if (v.startsWith("enum:")) {
+                AdminRole r = AdminRole.valueOf(v.substring(5));
+                if (r == AdminRole.ROLE_TEMPLATE) {
+                    throw AppException.validation("必须选择岗位角色").code("admin.err.account.roleRequired");
+                }
+                Long roleId = null;
+                if (r.isTableBacked()) {
+                    roleId = roles.findByCode(r.name()).map(AdminRoleEntity::getId)
+                            .orElseThrow(() -> AppException.notFound("角色不存在").code("admin.err.role.notFound"));
+                }
+                return RoleSelection.ofEnum(r, roleId);
+            }
+            if (v.startsWith("tpl:")) {
+                AdminRoleEntity row = get(Long.parseLong(v.substring(4)));
+                if (row.getRoleType() == RoleType.SYSTEM) {
+                    return RoleSelection.ofEnum(AdminRole.valueOf(row.getCode()), row.getId());
+                }
+                return new RoleSelection(AdminRole.ROLE_TEMPLATE, row.getId(),
+                        row.getName() + "(" + row.getCode() + ")");
+            }
+        } catch (IllegalArgumentException e) {
+            // 非法枚举名 / 非数字 id → 下面统一按「未选角色」报
+        }
+        throw AppException.validation("必须选择岗位角色").code("admin.err.account.roleRequired");
     }
 
     /** 角色列表（预置在前）：权限数 + 使用中账号数。 */

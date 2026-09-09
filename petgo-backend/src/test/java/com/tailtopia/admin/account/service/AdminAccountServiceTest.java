@@ -62,7 +62,7 @@ class AdminAccountServiceTest {
                     e.getValue().stream().map(c -> new AdminRolePermission(id, c)).toList());
         }
         service = new AdminAccountService(accounts, permissions, auditService, alertService,
-                new RolePermissionResolver(permissions, roles, rolePermissions), "boot@x");
+                new RolePermissionResolver(permissions, roles, rolePermissions), roles, "boot@x");
         when(accounts.findByLarkEmailIgnoreCaseAndStatus(any(), any())).thenReturn(Optional.empty());
         when(accounts.save(any(AdminAccount.class))).thenAnswer(inv -> {
             AdminAccount a = inv.getArgument(0);

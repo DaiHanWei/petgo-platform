@@ -126,4 +126,48 @@ class AdminRoleIntegrationTest extends ApiIntegrationTest {
         mvc.perform(req).andExpect(status().is3xxRedirection()).andExpect(redirectedUrl("/admin/roles"));
         assertThat(Set.of(superId, staffId)).hasSize(2);
     }
+
+    // ---- Story 1.6：账号页接入角色表 ----
+
+    @Test
+    void accountPageRendersAllPermissionCheckboxesAndCustomRoleLoginGetsRoleCodes() throws Exception {
+        long seq = SEQ.incrementAndGet();
+        long actor = 930000L + seq;
+        accountService.createAccount("super-" + seq + "@tailtopia.test", "超管", AdminRole.SUPER_ADMIN, List.of(), actor);
+        long roleId = roleService.create("自定义角色" + seq, List.of(AdminPermissions.VET_VIEW, AdminPermissions.RATING_VIEW), actor);
+        String email = "tpl-login-" + seq + "@tailtopia.test";
+        long acc = accountService.createAccount(email, "T", roleService.resolveSelection("tpl:" + roleId), List.of(), actor);
+        try {
+            AdminAccount a = adminAccounts.findById(acc).orElseThrow();
+            assertThat(a.getRole()).isEqualTo(AdminRole.ROLE_TEMPLATE);
+            assertThat(a.getRoleId()).isEqualTo(roleId);
+            assertThat(authorities(userDetailsService.loadByEmail(email, false)))
+                    .containsExactlyInAnyOrder("ROLE_ADMIN", AdminPermissions.VET_VIEW, AdminPermissions.RATING_VIEW);
+
+            // 改角色 → 预置四岗补表 id；版本号 +1
+            accountService.changeRole(acc, roleService.resolveSelection("enum:SUPPORT"), actor);
+            a = adminAccounts.findById(acc).orElseThrow();
+            assertThat(a.getRole()).isEqualTo(AdminRole.SUPPORT);
+            assertThat(a.getRoleId()).isEqualTo(roles.findByCode("SUPPORT").orElseThrow().getId());
+            assertThat(a.getSecurityVersion()).isEqualTo(1);
+
+            // 账号页渲染：勾选框 value 集合 == AdminPermissions.ALL（创建表单矩阵）
+            AdminUserDetails superAdmin = userDetailsService.loadByEmail(
+                    "super-" + seq + "@tailtopia.test", false) ;
+            String html = mvc.perform(get("/admin/accounts").with(user(superAdmin)))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("name=\"permissionCodes\"[^>]*value=\"([a-z_.]+)\"|value=\"([a-z_.]+)\"[^>]*name=\"permissionCodes\"")
+                    .matcher(html);
+            Set<String> values = new java.util.HashSet<>();
+            while (m.find()) {
+                values.add(m.group(1) != null ? m.group(1) : m.group(2));
+            }
+            assertThat(values).containsAll(AdminPermissions.ALL);
+            assertThat(html).contains("tpl:" + roleId).contains("enum:CUSTOM");
+        } finally {
+            accountService.changeRole(acc, AdminRole.CUSTOM, actor);
+            roleService.delete(roleId, actor);
+        }
+    }
 }

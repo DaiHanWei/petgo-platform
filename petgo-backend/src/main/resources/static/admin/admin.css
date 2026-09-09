@@ -478,3 +478,13 @@ dialog.lightbox img { display: block; max-width: 92vw; max-height: 92vh; object-
 .seed-thumb .err { font-size: 11px; margin: 4px 0 0; line-height: 1.35; }
 .seed-url-fallback { margin: 10px 0; }
 .seed-url-fallback > summary { cursor: pointer; font-size: 13px; }
+
+/* ===== V1.3.0 Story 1.5/1.6：权限矩阵（角色配置页 + 账号页共用 fragments/perm-matrix.html） ===== */
+.matrix th, .matrix td { vertical-align: top; }
+.matrix th { white-space: nowrap; }
+.matrix .group-row td { background: #F0F1F5; font-weight: 600; }
+.matrix label { display: block; white-space: nowrap; font-size: var(--fs-xs); margin: 0; }
+.matrix .shared { color: var(--muted); font-size: var(--fs-xs); }
+.matrix .route { color: var(--muted); font-size: 11px; }
+.perm-panel .matrix { max-width: 760px; }
+.role-tag.role-ROLE_TEMPLATE { border-style: dashed; }

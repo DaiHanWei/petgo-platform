@@ -17,7 +17,10 @@ import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.roles.domain.AdminRoleEntity;
 import com.tailtopia.admin.roles.domain.AdminRolePermission;
 import com.tailtopia.admin.roles.domain.RoleType;
+import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.roles.dto.RoleChange;
+import com.tailtopia.admin.roles.dto.RoleOption;
+import com.tailtopia.admin.roles.dto.RoleSelection;
 import com.tailtopia.admin.roles.repository.AdminRolePermissionRepository;
 import com.tailtopia.admin.roles.repository.AdminRoleRepository;
 import com.tailtopia.shared.error.AppException;
@@ -190,5 +193,46 @@ class AdminRoleServiceTest {
         system(4L, "FINANCE");
         assertThatThrownBy(() -> service.updateCustom(4L, "FINANCE", List.of(AdminPermissions.CONFIG_VIEW), 1L))
                 .isInstanceOf(AppException.class);
+    }
+
+    // ---------- Story 1.6：下拉选项与选项值解析 ----------
+
+    @Test
+    void optionsOrderedSuperManagerPresetCustomThenCustomPick() {
+        AdminRoleEntity ops = system(1L, "OPERATIONS");
+        AdminRoleEntity fin = system(4L, "FINANCE");
+        AdminRoleEntity mine = custom(9L, "兽医管理员");
+        when(roles.findAllByOrderByRoleTypeAscIdAsc()).thenReturn(List.of(fin, ops, mine));
+
+        List<RoleOption> o = service.options(code -> "L:" + code);
+
+        assertThat(o).extracting(RoleOption::value).containsExactly(
+                "enum:SUPER_ADMIN", "enum:OPS_MANAGER", "enum:FINANCE", "enum:OPERATIONS", "tpl:9", "enum:CUSTOM");
+        assertThat(o.get(2).label()).isEqualTo("L:role.FINANCE");
+        assertThat(o.get(4).label()).isEqualTo("兽医管理员");
+        assertThat(o.get(4).custom()).isTrue();
+        assertThat(o.get(5).pickPermissions()).isTrue();
+    }
+
+    @Test
+    void resolveSelectionCoversEnumPresetAndCustom() {
+        AdminRoleEntity fin = system(4L, "FINANCE");
+        when(roles.findByCode("FINANCE")).thenReturn(Optional.of(fin));
+        custom(9L, "兽医管理员");
+
+        assertThat(service.resolveSelection("enum:SUPER_ADMIN")).isEqualTo(RoleSelection.ofEnum(AdminRole.SUPER_ADMIN, null));
+        assertThat(service.resolveSelection("enum:FINANCE")).isEqualTo(RoleSelection.ofEnum(AdminRole.FINANCE, 4L));
+        assertThat(service.resolveSelection("tpl:4")).isEqualTo(RoleSelection.ofEnum(AdminRole.FINANCE, 4L));
+        RoleSelection c = service.resolveSelection("tpl:9");
+        assertThat(c.role()).isEqualTo(AdminRole.ROLE_TEMPLATE);
+        assertThat(c.roleId()).isEqualTo(9L);
+        assertThat(c.label()).contains("兽医管理员");
+        assertThat(c.value()).isEqualTo("tpl:9");
+
+        assertThatThrownBy(() -> service.resolveSelection("enum:ROLE_TEMPLATE")).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.resolveSelection("enum:NOPE")).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.resolveSelection("tpl:x")).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.resolveSelection("")).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.resolveSelection(null)).isInstanceOf(AppException.class);
     }
 }

@@ -12,7 +12,13 @@ import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.audit.service.AdminAlertService;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.admin.roles.domain.AdminRoleEntity;
+import com.tailtopia.admin.roles.dto.RoleSelection;
+import com.tailtopia.admin.roles.repository.AdminRoleRepository;
 import com.tailtopia.admin.roles.service.RolePermissionResolver;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
 import java.util.Locale;
@@ -48,18 +54,22 @@ public class AdminAccountService {
     private final AdminAlertService alertService;
     /** 权限来源唯一出口（V1.3.0 Story 1.4）：列表回显 / carry / 审计摘要都经它，与登录装载同口径。 */
     private final RolePermissionResolver resolver;
+    /** 自定义角色名回显（Story 1.6 列表「岗位角色」列）。 */
+    private final AdminRoleRepository roleRows;
     /** bootstrap 超管邮箱（与 {@code AdminBootstrap} 同一 env）；空表示未配置、护栏不生效。 */
     private final String bootstrapEmail;
 
     public AdminAccountService(AdminAccountRepository accounts,
             AdminAccountPermissionRepository permissions, AdminAuditService auditService,
             AdminAlertService alertService, RolePermissionResolver resolver,
+            AdminRoleRepository roleRows,
             @Value("${ADMIN_BOOTSTRAP_EMAIL:}") String bootstrapEmail) {
         this.accounts = accounts;
         this.permissions = permissions;
         this.auditService = auditService;
         this.alertService = alertService;
         this.resolver = resolver;
+        this.roleRows = roleRows;
         this.bootstrapEmail = bootstrapEmail == null ? "" : bootstrapEmail.trim();
     }
 
@@ -73,9 +83,17 @@ public class AdminAccountService {
     @Transactional(readOnly = true)
     public List<AdminAccountView> list() {
         List<AdminAccountView> views = new ArrayList<>();
-        for (AdminAccount a : accounts.findAll()) {
+        List<AdminAccount> all = accounts.findAll();
+        // Story 1.6：自定义角色名一次批量取（避免 N+1）。
+        Set<Long> customIds = all.stream().filter(a -> a.getRole() == AdminRole.ROLE_TEMPLATE)
+                .map(AdminAccount::getRoleId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, String> names = customIds.isEmpty() ? Map.of()
+                : roleRows.findAllById(customIds).stream()
+                        .collect(Collectors.toMap(AdminRoleEntity::getId, AdminRoleEntity::getName));
+        for (AdminAccount a : all) {
             views.add(new AdminAccountView(a.getId(), a.getLarkEmail(), a.getDisplayName(),
-                    a.getAccountType(), a.getRole(), a.getStatus(), effectivePermissions(a)));
+                    a.getAccountType(), a.getRole(), a.getStatus(), effectivePermissions(a),
+                    a.getRoleId(), a.getRoleId() == null ? null : names.get(a.getRoleId())));
         }
         views.sort((x, y) -> Long.compare(x.id(), y.id()));
         return views;
@@ -98,6 +116,16 @@ public class AdminAccountService {
     @Transactional
     public long createAccount(String larkEmail, String displayName, AdminRole role,
             List<String> permissionCodes, long actorAccountId) {
+        return createAccount(larkEmail, displayName,
+                role == null ? null : RoleSelection.ofEnum(role, resolver.roleIdFor(role).orElse(null)),
+                permissionCodes, actorAccountId);
+    }
+
+    /** Story 1.6：按 {@link RoleSelection}（role + role_id 成对）建号；自定义角色 role=ROLE_TEMPLATE。 */
+    @Transactional
+    public long createAccount(String larkEmail, String displayName, RoleSelection sel,
+            List<String> permissionCodes, long actorAccountId) {
+        AdminRole role = sel == null ? null : sel.role();
         String email = larkEmail == null ? "" : larkEmail.trim();
         if (email.isEmpty()) {
             throw AppException.validation("Lark 邮箱不能为空").code("admin.err.account.emailRequired");
@@ -105,7 +133,7 @@ public class AdminAccountService {
         if (displayName == null || displayName.isBlank()) {
             throw AppException.validation("显示名不能为空").code("admin.err.account.displayNameRequired");
         }
-        if (role == null || role == AdminRole.ROLE_TEMPLATE) {
+        if (role == null || (role == AdminRole.ROLE_TEMPLATE && sel.roleId() == null)) {
             throw AppException.validation("必须选择岗位角色").code("admin.err.account.roleRequired");
         }
         // V1.3.0 Story 1.3（D-21）：只对 ACTIVE 账号查重，已停用账号的邮箱视为已释放（部分唯一索引兜底）。
@@ -122,8 +150,8 @@ public class AdminAccountService {
                 : sanitizePermissions(AdminAccountType.STAFF, permissionCodes);
 
         AdminAccount fresh = AdminAccount.create(email, displayName.trim(), role, actorAccountId);
-        // Story 1.4：四个已迁移岗位落 role_id（权限按表解析）；SUPER_ADMIN / OPS_MANAGER / CUSTOM 保持 NULL。
-        fresh.setRoleId(resolver.roleIdFor(role).orElse(null));
+        // Story 1.4/1.6：表驱动岗位与自定义角色落 role_id（权限按表解析）；SUPER_ADMIN / OPS_MANAGER / CUSTOM 为 NULL。
+        fresh.assignRole(role, sel.roleId());
         AdminAccount saved = accounts.save(fresh);
         if (!codes.isEmpty()) {
             permissions.saveAll(codes.stream()
@@ -133,11 +161,11 @@ public class AdminAccountService {
         // 模板角色只记角色名 + 权限条数：整份码表能由 AdminRole 反查，且随 git 留痕；
         // 摘要列只有 varchar(500)，运营主管那 40 多个码直接撑爆它，而审计写失败会回滚整个建号事务。
         String permSummary = role.isTemplated()
-                ? resolver.codesOf(role).size() + " 项（按角色）"
+                ? templateCodes(role, sel.roleId()).size() + " 项（按角色）"
                 : String.valueOf(new TreeSet<>(codes));
         auditService.record(actorAccountId, AuditActions.ACCOUNT_CREATED, "ADMIN_ACCOUNT",
                 String.valueOf(saved.getId()),
-                "创建后台账号 " + email + "（角色 " + role + "）权限=" + permSummary);
+                "创建后台账号 " + email + "（角色 " + sel.label() + "）权限=" + permSummary);
         return saved.getId();
     }
 
@@ -155,10 +183,18 @@ public class AdminAccountService {
      */
     @Transactional
     public void changeRole(long accountId, AdminRole newRole, long actorAccountId) {
+        changeRole(accountId,
+                newRole == null ? null : RoleSelection.ofEnum(newRole, resolver.roleIdFor(newRole).orElse(null)),
+                actorAccountId);
+    }
+
+    /** Story 1.6：按 {@link RoleSelection} 改角色（role + role_id 成对）；幂等 = 同 role 且同 roleId。 */
+    @Transactional
+    public void changeRole(long accountId, RoleSelection sel, long actorAccountId) {
         AdminAccount a = accounts.findById(accountId)
                 .orElseThrow(() -> AppException.notFound("后台账号不存在").code("admin.err.account.notFound"));
-        if (newRole == null || newRole == AdminRole.ROLE_TEMPLATE) {
-            // ROLE_TEMPLATE 必须连同 role_id 一起赋值（Story 1.6 的自定义角色入口），不走本方法。
+        AdminRole newRole = sel == null ? null : sel.role();
+        if (newRole == null || (newRole == AdminRole.ROLE_TEMPLATE && sel.roleId() == null)) {
             throw AppException.validation("必须选择岗位角色").code("admin.err.account.roleRequired");
         }
         // V1.3.0 Story 1.2 self 护栏：放在幂等判断之前——「给自己选当前角色再保存」也应被拒。
@@ -166,8 +202,8 @@ public class AdminAccountService {
             throw AppException.validation("不能修改自己的岗位角色").code("admin.err.account.selfRoleChange");
         }
         AdminRole oldRole = a.getRole();
-        if (oldRole == newRole) {
-            return; // 幂等
+        if (oldRole == newRole && Objects.equals(a.getRoleId(), sel.roleId())) {
+            return; // 幂等（同 role 且同 role_id）
         }
         if (newRole.isSuperAdmin()) {
             assertSuperAdminCap();
@@ -179,8 +215,8 @@ public class AdminAccountService {
         }
 
         List<String> carried = effectivePermissions(a);
-        a.setRole(newRole);
-        a.setRoleId(resolver.roleIdFor(newRole).orElse(null)); // Story 1.4：表驱动岗位设 role_id，其余清空
+        String oldLabel = oldRole == AdminRole.ROLE_TEMPLATE ? "ROLE_TEMPLATE#" + a.getRoleId() : String.valueOf(oldRole);
+        a.assignRole(newRole, sel.roleId()); // Story 1.4/1.6：role 与 role_id 成对写，其余清空
         a.bumpSecurityVersion(); // AD-1：角色真变 → 会话下次请求被踢重登
         accounts.save(a);
 
@@ -192,7 +228,7 @@ public class AdminAccountService {
 
         auditService.record(actorAccountId, AuditActions.ACCOUNT_ROLE_CHANGED, "ADMIN_ACCOUNT",
                 String.valueOf(accountId),
-                "岗位角色 " + oldRole + " → " + newRole + "（" + a.getLarkEmail() + "）");
+                "岗位角色 " + oldLabel + " → " + sel.label() + "（" + a.getLarkEmail() + "）");
     }
 
     /** 调整 STAFF 模块权限（AC7）：diff 增删 + 分别审计。SUPER_ADMIN 不可改权限（隐式全权）。 */
@@ -240,6 +276,14 @@ public class AdminAccountService {
             auditService.record(actorAccountId, AuditActions.PERMISSION_REVOKED, "ADMIN_ACCOUNT",
                     String.valueOf(accountId), "撤销权限 " + removed + " 自 " + a.getLarkEmail());
         }
+    }
+
+    /** 模板角色的权限码：自定义角色按 role_id 读表，其余经 resolver（枚举 / 预置表行）。 */
+    private java.util.Collection<String> templateCodes(AdminRole role, Long roleId) {
+        if (role == AdminRole.ROLE_TEMPLATE) {
+            return roleId == null ? List.of() : resolver.codesOfRoleId(roleId);
+        }
+        return resolver.codesOf(role);
     }
 
     /** 停用账号（AC5，A1 即时撤权靠会话守卫）。 */

@@ -46,7 +46,14 @@ class AdminAccountAccessControlTest {
 
         @Bean
         AdminAccountAdminController adminAccountAdminController(AdminAccountService s) {
-            return new AdminAccountAdminController(s, TestMessages.real());
+            // Story 1.6：角色下拉 / 矩阵来自 AdminRoleService（mock 空列表）。
+            com.tailtopia.admin.roles.service.AdminRoleService roleService =
+                    mock(com.tailtopia.admin.roles.service.AdminRoleService.class);
+            when(roleService.options(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+            when(roleService.matrix(org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(new com.tailtopia.admin.roles.dto.PermissionMatrixView(List.of(), java.util.Set.of()));
+            return new AdminAccountAdminController(s, roleService,
+                    mock(com.tailtopia.admin.roles.service.RolePermissionResolver.class), TestMessages.real());
         }
     }
 

@@ -1,9 +1,11 @@
 package com.tailtopia.admin.account.web;
 
-import com.tailtopia.admin.account.domain.AdminPermissions;
-import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.dto.CreateAdminAccountForm;
 import com.tailtopia.admin.account.service.AdminAccountService;
+import com.tailtopia.admin.roles.dto.RoleOption;
+import com.tailtopia.admin.roles.dto.RoleSelection;
+import com.tailtopia.admin.roles.service.AdminRoleService;
+import com.tailtopia.admin.roles.service.RolePermissionResolver;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
@@ -39,13 +41,18 @@ public class AdminAccountAdminController {
     private static final String REBIND_AUTH = "hasRole('SUPER_ADMIN')";
 
     private final AdminAccountService accountService;
+    /** 角色下拉 / 选项解析 / 权限矩阵（V1.3.0 Story 1.6 接入角色表）。 */
+    private final AdminRoleService roleService;
+    private final RolePermissionResolver resolver;
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
 
-    public AdminAccountAdminController(AdminAccountService accountService,
-            Messages msg) {
+    public AdminAccountAdminController(AdminAccountService accountService, AdminRoleService roleService,
+            RolePermissionResolver resolver, Messages msg) {
         this.accountService = accountService;
+        this.roleService = roleService;
+        this.resolver = resolver;
         this.msg = msg;
     }
 
@@ -71,8 +78,9 @@ public class AdminAccountAdminController {
             return "admin/admin-accounts";
         }
         try {
+            RoleSelection sel = roleService.resolveSelection(form.getRoleValue());
             long id = accountService.createAccount(form.getLarkEmail(), form.getDisplayName(),
-                    form.getRole(), form.getPermissionCodes(), admin.getAdminAccountId());
+                    sel, form.getPermissionCodes(), admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.account.created", id, form.getLarkEmail()));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
@@ -105,11 +113,15 @@ public class AdminAccountAdminController {
     @PostMapping("/admin/accounts/{id}/role")
     @PreAuthorize(CREATE_AUTH)
     public String changeRole(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable long id, @RequestParam("role") AdminRole role,
+            @PathVariable long id, @RequestParam("role") String roleValue,
             RedirectAttributes flash) {
         try {
-            accountService.changeRole(id, role, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", msg.get("admin.flash.account.roleChanged", id, msg.get(role.titleCode())));
+            // Story 1.6：选项值 enum:<NAME> / tpl:<id> → role + role_id 成对（预置四岗补表 id，自定义 → ROLE_TEMPLATE）。
+            RoleSelection sel = roleService.resolveSelection(roleValue);
+            accountService.changeRole(id, sel, admin.getAdminAccountId());
+            String label = sel.role() == com.tailtopia.admin.account.domain.AdminRole.ROLE_TEMPLATE
+                    ? sel.label() : msg.get(sel.role().titleCode());
+            flash.addFlashAttribute("notice", msg.get("admin.flash.account.roleChanged", id, label));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
         }
@@ -183,12 +195,17 @@ public class AdminAccountAdminController {
         // V1.3.0 Story 1.3：bootstrap 超管行「换绑邮箱」禁用态（判定逻辑与服务层护栏同源）。
         model.addAttribute("bootstrapEmails", accounts.stream()
                 .map(v -> v.larkEmail()).filter(accountService::isBootstrapEmail).toList());
-        model.addAttribute("allPermissions", AdminPermissions.ALL);
-        model.addAttribute("permissionGroups", AdminPermissions.GROUPS);
-        model.addAttribute("roles", AdminRole.selectable());
-        // 角色 → 权限码，供页面在选角色时即时预览「这个岗位能看到什么」（仅体验；真正的授权在服务端按角色解析）。
-        model.addAttribute("rolePermissions", java.util.Arrays.stream(AdminRole.values())
-                .collect(java.util.stream.Collectors.toMap(Enum::name, AdminRole::permissionCodes,
-                        (a, b) -> a, java.util.LinkedHashMap::new)));
+        // Story 1.6：角色下拉 = 枚举（超管 / 运营主管）+ admin_roles 全部行 + CUSTOM；权限面板按 AdminPageCatalog 8 组。
+        List<RoleOption> roleOptions = roleService.options(code -> msg.get(code));
+        model.addAttribute("roleOptions", roleOptions);
+        model.addAttribute("matrixGroups", roleService.matrix(null).groups());
+        // 选项值 → 权限码，供页面在选角色时即时预览「这个岗位能看到什么」（仅体验；真正的授权在服务端按角色解析）。
+        java.util.Map<String, java.util.Collection<String>> rolePermissions = new java.util.LinkedHashMap<>();
+        for (RoleOption o : roleOptions) {
+            rolePermissions.put(o.value(), o.custom()
+                    ? resolver.codesOfRoleId(o.roleId())
+                    : resolver.codesOf(o.enumRole()));
+        }
+        model.addAttribute("rolePermissions", rolePermissions);
     }
 }

@@ -18,10 +18,36 @@ public record AdminAccountView(
         AdminAccountType accountType,
         AdminRole role,
         AdminAccountStatus status,
-        List<String> permissionCodes) {
+        List<String> permissionCodes,
+        Long roleId,
+        String roleName) {
+
+    /** Story 1.6 前的构造形态（无表角色信息）。 */
+    public AdminAccountView(Long id, String larkEmail, String displayName, AdminAccountType accountType,
+            AdminRole role, AdminAccountStatus status, List<String> permissionCodes) {
+        this(id, larkEmail, displayName, accountType, role, status, permissionCodes, null, null);
+    }
 
     /** 权限是否由岗位角色模板决定（UI 据此把勾选框置为只读）。 */
     public boolean templated() {
         return role != null && role.isTemplated();
+    }
+
+    /** 是否引用运营自建的自定义角色（Story 1.6：列表加「自定义」徽标）。 */
+    public boolean roleCustom() {
+        return role == AdminRole.ROLE_TEMPLATE;
+    }
+
+    /** 角色名 i18n key（枚举 / 预置角色）；自定义角色用 {@link #roleName()}。 */
+    public String roleNameKey() {
+        return role == null ? null : role.titleCode();
+    }
+
+    /** 与角色下拉选项值同编码（Story 1.6 AC1）：自定义 {@code tpl:<id>}，其余 {@code enum:<NAME>}。 */
+    public String selectedValue() {
+        if (role == null) {
+            return null;
+        }
+        return role == AdminRole.ROLE_TEMPLATE ? "tpl:" + roleId : "enum:" + role.name();
     }
 }

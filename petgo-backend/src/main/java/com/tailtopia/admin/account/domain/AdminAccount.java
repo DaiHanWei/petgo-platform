@@ -154,6 +154,15 @@ public class AdminAccount {
     }
 
     /**
+     * 成对写 {@code role} 与 {@code role_id}（V1.3.0 Story 1.6；对照表见 Story 1.4）。任何一处只写一个字段
+     * 都会让 {@code RolePermissionResolver} 走进「异常数据 → 空集」分支（改了角色后登录什么权限都没有）。
+     */
+    public void assignRole(AdminRole role, Long roleId) {
+        setRole(role);
+        this.roleId = roleId;
+    }
+
+    /**
      * 安全版本号 +1（AD-1）。仅在「确实发生了变更」的分支调用；幂等 no-op 不加。
      * 服务层（{@code admin.account.service}，与本实体不同包）统一经 {@code AdminAccountService.bumpSecurityVersion} 调用。
      */
