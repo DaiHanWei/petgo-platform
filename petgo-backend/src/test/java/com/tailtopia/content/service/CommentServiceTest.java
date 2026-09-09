@@ -251,6 +251,47 @@ class CommentServiceTest {
     }
 
     @Test
+    void approveReplyCarriesTopLevelParentAuthorAndIdEvenForVirtualSecondLevel() {
+        // V1.3.0 Story 4.3 AC4（D-35）：回复挂在一级 10（作者 3）下——即便运营想回的是虚拟二级 20（作者 4），createReply 已归并到 10，
+        // 转可见时事件的 parentAuthorId / parentCommentId 都是一级的（3 / 10），暖贴入队据此识别不出「虚拟二级被回复」→ 不入队
+        when(comments.findById(20L)).thenReturn(Optional.of(existingComment(20L, 10L, 4L, 1L)));
+        when(comments.findById(10L)).thenReturn(Optional.of(existingComment(10L, null, 3L, 1L)));
+        postBy(1L, 7L);
+        service.createReply(20L, 9L, "reply");
+        ArgumentCaptor<Comment> cap = ArgumentCaptor.forClass(Comment.class);
+        verify(comments).save(cap.capture());
+        Comment reply = cap.getValue();
+        assertThat(reply.getParentId()).isEqualTo(10L);
+        when(comments.findById(500L)).thenReturn(Optional.of(reply));
+        service.approveComment(500L);
+        ArgumentCaptor<ContentCommentedEvent> ev = ArgumentCaptor.forClass(ContentCommentedEvent.class);
+        verify(events).publishEvent(ev.capture());
+        assertThat(ev.getValue().parentAuthorId()).isEqualTo(3L);
+        assertThat(ev.getValue().parentCommentId()).isEqualTo(10L);
+        assertThat(ev.getValue().commenterId()).isEqualTo(9L);
+    }
+
+    @Test
+    void deleteVisibleReplyPublishesRemovedEventButUnderReviewDoesNot() {
+        // V1.3.0 Story 4.3 AC3（D-19）：删前可见 → CommentRemovedEvent(parentId, authorId)；审核中的从未入队 → 不发
+        when(comments.findById(30L)).thenReturn(Optional.of(existingComment(30L, 10L, 9L, 1L)));
+        postBy(1L, 7L);
+        service.delete(30L, 9L);
+        ArgumentCaptor<Object> ev = ArgumentCaptor.forClass(Object.class);
+        verify(events).publishEvent(ev.capture());
+        com.tailtopia.content.event.CommentRemovedEvent removed = (com.tailtopia.content.event.CommentRemovedEvent) ev.getValue();
+        assertThat(removed.commentId()).isEqualTo(30L);
+        assertThat(removed.parentId()).isEqualTo(10L);
+        assertThat(removed.authorId()).isEqualTo(9L);
+        assertThat(removed.reason()).isEqualTo(com.tailtopia.content.event.CommentRemovedReason.AUTHOR_DELETE);
+
+        org.mockito.Mockito.reset(events);
+        when(comments.findById(31L)).thenReturn(Optional.of(underReview(31L, 10L, 9L, 1L)));
+        service.delete(31L, 9L);
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
     void rejectCommentTurnsRejectedNoEvent() {
         Comment c = underReview(71L, null, 9L, 1L);
         when(comments.findById(71L)).thenReturn(Optional.of(c));

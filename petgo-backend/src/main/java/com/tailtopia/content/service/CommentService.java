@@ -8,6 +8,8 @@ import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.PostStatus;
 import com.tailtopia.content.dto.CommentResponse;
 import com.tailtopia.content.event.CommentSubmittedEvent;
+import com.tailtopia.content.event.CommentRemovedEvent;
+import com.tailtopia.content.event.CommentRemovedReason;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
@@ -119,13 +121,26 @@ public class CommentService {
             throw AppException.forbidden("无权删除该评论");
         }
 
+        boolean wasVisible = c.getModerationStatus() == CommentModerationStatus.VISIBLE;
         c.softDelete();
         comments.save(c);
+        Instant now = Instant.now();
+        // V1.3.0 Story 4.3：「可见评论不再可见」事件（本条 + 级联的每条二级各一次），暖贴跟进队列据此出队（D-19）。
+        // 只对删前 VISIBLE 的发：审核中 / 已拒从未入队，TAKEN_DOWN 已在下架时发过——否则会多减一次（复审 #1）
+        if (wasVisible) {
+            events.publishEvent(new CommentRemovedEvent(c.getId(), c.getPostId(), c.getAuthorId(), c.getParentId(),
+                    CommentRemovedReason.AUTHOR_DELETE, now));
+        }
         if (c.isTopLevel()) {
             // 级联软删全部二级（事务内）。
             for (Comment reply : comments.findByParentIdAndDeletedAtIsNull(c.getId())) {
+                boolean replyVisible = reply.getModerationStatus() == CommentModerationStatus.VISIBLE;
                 reply.softDelete();
                 comments.save(reply);
+                if (replyVisible) {
+                    events.publishEvent(new CommentRemovedEvent(reply.getId(), reply.getPostId(), reply.getAuthorId(),
+                            reply.getParentId(), CommentRemovedReason.AUTHOR_DELETE, now));
+                }
             }
         }
     }
@@ -180,6 +195,9 @@ public class CommentService {
             throw AppException.validation("仅可下架正常展示的评论");
         }
         comments.save(c);
+        // V1.3.0 Story 4.3：运营下架同样让暖贴跟进队列出队；restoreComment 不重新入队（恢复不是「新回复」）
+        events.publishEvent(new CommentRemovedEvent(c.getId(), c.getPostId(), c.getAuthorId(), c.getParentId(),
+                CommentRemovedReason.ADMIN_TAKEDOWN, Instant.now()));
         return Optional.of(summaryOf(c));
     }
 
@@ -220,7 +238,8 @@ public class CommentService {
         Long parentAuthorId = c.isTopLevel() ? null
                 : comments.findById(c.getParentId()).map(Comment::getAuthorId).orElse(null);
         events.publishEvent(new ContentCommentedEvent(
-                c.getPostId(), c.getId(), c.getAuthorId(), contentAuthorId, parentAuthorId, Instant.now()));
+                c.getPostId(), c.getId(), c.getAuthorId(), contentAuthorId, parentAuthorId, Instant.now(),
+                c.isTopLevel() ? null : c.getParentId()));
     }
 
     private ContentPost requireVisible(long postId) {

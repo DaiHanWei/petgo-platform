@@ -21,5 +21,7 @@ public record ContentCommentedEvent(
         long commenterId,
         long contentAuthorId,
         Long parentAuthorId,
-        Instant createdAt) {
+        Instant createdAt,
+        /** V1.3.0 Story 4.3：二级回复所挂的一级评论 id（一级评论为 null）；暖贴跟进入队按它定位被回复的虚拟一级评论。 */
+        Long parentCommentId) {
 }
