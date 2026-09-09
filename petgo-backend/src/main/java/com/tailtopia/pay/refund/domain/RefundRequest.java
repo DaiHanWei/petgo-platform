@@ -132,6 +132,13 @@ public class RefundRequest {
         this.submitterAdminId = submitterAdminId;
     }
 
+    /** ①客服驳回退款需求并记原因（V1.3.0 Story 2.7，D-36）：原因落 {@code reject_reason}（需求驳回单不会再进主管审批，列不冲突）。 */
+    public void markNeedRejected(long submitterAdminId, String reason) {
+        markNeedDecision(NeedDecision.REJECTED, submitterAdminId);
+        this.rejectReason = reason;
+        this.rejectedAt = Instant.now();
+    }
+
     /** 用户选退款方式 + 填收款（4-5 用户行为）：算净额 + 存密文，进 PENDING_APPROVAL。 */
     public void fillPayout(PayoutChannel channel, String payoutAccount, String accountHolderName,
             long channelFee, long netAmount) {

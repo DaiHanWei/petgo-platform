@@ -129,15 +129,32 @@ public class RefundService {
      */
     @Transactional
     public void rejectNeed(String refundToken, long submitterAdminId) {
+        rejectNeed(refundToken, submitterAdminId, null);
+    }
+
+    /**
+     * 驳回退款需求并记原因（V1.3.0 Story 2.7，D-36）：{@code reason} 存入退款单 {@code reject_reason} 并写进审计摘要
+     * （≤200 字，运营内部依据）；<b>用户通知文案不变、不透出原因</b>。{@code reason} 为空走旧口径（审计记「-」）。
+     */
+    @Transactional
+    public void rejectNeed(String refundToken, long submitterAdminId, String reason) {
         RefundRequest r = requirePending(refundToken);
-        r.markNeedDecision(NeedDecision.REJECTED, submitterAdminId);
+        String cleaned = reason == null || reason.isBlank() ? null : reason.strip().replaceAll("\\s+", " ");
+        if (cleaned != null && cleaned.length() > 200) {
+            cleaned = cleaned.substring(0, 200);
+        }
+        if (cleaned == null) {
+            r.markNeedDecision(NeedDecision.REJECTED, submitterAdminId);
+        } else {
+            r.markNeedRejected(submitterAdminId, cleaned);
+        }
         orders.markRefundRejected(r.getOrderId()); // CAS 幂等：0=订单已非 COMPLETED，跳过
-        // 驳回通知（AB-5B：仅驳回发，批准不发）。护栏：文案不含金额/账号；targetRef 为稳定 refundToken（非随机）。
+        // 驳回通知（AB-5B：仅驳回发，批准不发）。护栏：文案不含金额/账号/原因；targetRef 为稳定 refundToken（非随机）。
         notifications.send(r.getUserId(), NotificationType.REFUND_REJECTED,
                 "退款申请未通过", "你的退款申请未通过审核，如有疑问可在工单中联系客服。",
                 NotificationType.REFUND_REJECTED.name(), refundToken);
         audit.record(submitterAdminId, AuditActions.REFUND_NEED_REJECTED, "refund_request", refundToken,
-                "退款需求驳回（订单回落 COMPLETED+refund_rejected，已通知用户）");
+                "退款需求驳回（订单回落 COMPLETED+refund_rejected，已通知用户）理由：" + (cleaned == null ? "-" : cleaned));
     }
 
     /**

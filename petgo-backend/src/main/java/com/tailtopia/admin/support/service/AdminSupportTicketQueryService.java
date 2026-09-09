@@ -8,6 +8,7 @@ import com.tailtopia.pay.refund.repository.RefundRequestRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.media.SignedUrlService;
 import com.tailtopia.support.domain.FeedbackTicket;
+import com.tailtopia.support.domain.TicketStatus;
 import com.tailtopia.support.domain.TicketAttachment;
 import com.tailtopia.support.domain.TicketLabel;
 import com.tailtopia.support.repository.FeedbackTicketRepository;
@@ -60,7 +61,79 @@ public class AdminSupportTicketQueryService {
                 t.getContactType().name(), null,
                 t.isNeedContactCustomer(), t.isContactedCustomer(), t.getStatus().name(),
                 List.of(), 0, List.of(), null, null, null,
-                t.getCsatScore(), null, t.getCreatedAt(), t.getResolvedAt()));
+                t.getCsatScore(), null, t.getCreatedAt(), t.getResolvedAt(), null, null, null, null));
+    }
+
+    /** A5 工作台三态（V1.3.0 Story 2.7 AC1）：待处理 / 待联系（需联系且未联系）/ 已结案。 */
+    public enum State {
+        PENDING, CONTACT, CLOSED;
+
+        public static State of(String raw) {
+            if (raw == null || raw.isBlank()) {
+                return PENDING;
+            }
+            try {
+                return valueOf(raw.trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                return PENDING;
+            }
+        }
+
+        public String param() {
+            return name().toLowerCase();
+        }
+    }
+
+    private static final java.util.Set<TicketStatus> OPEN_STATUSES =
+            java.util.EnumSet.of(TicketStatus.OPEN, TicketStatus.IN_PROGRESS);
+    private static final java.util.Set<TicketStatus> CLOSED_STATUSES =
+            java.util.EnumSet.of(TicketStatus.RESOLVED, TicketStatus.CLOSED);
+
+    /** 工作台左栏一页（轻量视图，时间倒序）。 */
+    @Transactional(readOnly = true)
+    public Page<AdminTicketView> page(State state, Pageable pageable) {
+        Page<FeedbackTicket> page = switch (state) {
+            case CONTACT -> tickets.findByStatusInAndNeedContactCustomerTrueAndContactedCustomerFalseOrderByCreatedAtDesc(
+                    OPEN_STATUSES, pageable);
+            case CLOSED -> tickets.findByStatusInOrderByCreatedAtDesc(CLOSED_STATUSES, pageable);
+            default -> tickets.findByStatusInOrderByCreatedAtDesc(OPEN_STATUSES, pageable);
+        };
+        return page.map(t -> new AdminTicketView(
+                t.getTicketToken(), t.getSubject(), null,
+                t.getContactType().name(), null,
+                t.isNeedContactCustomer(), t.isContactedCustomer(), t.getStatus().name(),
+                List.of(), 0, List.of(), null, null, null,
+                t.getCsatScore(), null, t.getCreatedAt(), t.getResolvedAt(), null, null, null, null));
+    }
+
+    /** 三态计数。 */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Long> counts() {
+        java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+        out.put("pending", tickets.countByStatusIn(OPEN_STATUSES));
+        out.put("contact", tickets.countByStatusInAndNeedContactCustomerTrueAndContactedCustomerFalse(OPEN_STATUSES));
+        out.put("closed", tickets.countByStatusIn(CLOSED_STATUSES));
+        return out;
+    }
+
+    /** 结案后「下一条」= 当前页签最新一条 token（待联系页签只在需联系未联系单里取；已结案页签无下一条）；无则空串。 */
+    @Transactional(readOnly = true)
+    public String nextPendingToken(State state) {
+        return switch (state == null ? State.PENDING : state) {
+            case CONTACT -> tickets.findFirstByStatusInAndNeedContactCustomerTrueAndContactedCustomerFalseOrderByCreatedAtDesc(OPEN_STATUSES)
+                    .map(FeedbackTicket::getTicketToken).orElse("");
+            case CLOSED -> "";
+            default -> tickets.findFirstByStatusInOrderByCreatedAtDesc(OPEN_STATUSES)
+                    .map(FeedbackTicket::getTicketToken).orElse("");
+        };
+    }
+
+    /** 一张工单当前所属页签（`?open=` 深链落页签用）。 */
+    public State stateOf(AdminTicketView t) {
+        if (!t.open()) {
+            return State.CLOSED;
+        }
+        return t.needContact() && !t.contacted() ? State.CONTACT : State.PENDING;
     }
 
     /**
@@ -88,13 +161,23 @@ public class AdminSupportTicketQueryService {
         String relatedOrderToken = null;
         String refundToken = null;
         String refundNeedDecision = null;
+        Long orderAmount = null;
+        String orderStatus = null;
+        java.time.Instant orderPaidAt = null;
+        String refundRejectReason = null;
         if (t.getRelatedOrderId() != null) {
-            relatedOrderToken = orders.findById(t.getRelatedOrderId())
-                    .map(ConsultOrder::getOrderToken).orElse(null);
+            ConsultOrder order = orders.findById(t.getRelatedOrderId()).orElse(null);
+            if (order != null) {
+                relatedOrderToken = order.getOrderToken();
+                orderAmount = order.getAmount();
+                orderStatus = order.getStatus() == null ? null : order.getStatus().name();
+                orderPaidAt = order.getPaidAt();
+            }
             RefundRequest refund = refunds.findByOrderId(t.getRelatedOrderId()).orElse(null);
             if (refund != null) {
                 refundToken = refund.getRefundToken();
                 refundNeedDecision = refund.getNeedDecision().name();
+                refundRejectReason = refund.getRejectReason();
             }
         }
         String contactValue = includeContactPii ? t.getContactValue() : maskContact(t.getContactValue());
@@ -105,7 +188,7 @@ public class AdminSupportTicketQueryService {
                 labelNames, atts.size(), attachmentUrls,
                 relatedOrderToken, refundToken, refundNeedDecision,
                 t.getCsatScore(), t.getCsatComment(),
-                t.getCreatedAt(), t.getResolvedAt());
+                t.getCreatedAt(), t.getResolvedAt(), orderAmount, orderStatus, orderPaidAt, refundRejectReason);
     }
 
     /** 联系方式脱敏：首 2 + 末 2 可见（长度不足 5 全遮）。EMAIL/WHATSAPP 通用，够客服核对不够外泄。 */

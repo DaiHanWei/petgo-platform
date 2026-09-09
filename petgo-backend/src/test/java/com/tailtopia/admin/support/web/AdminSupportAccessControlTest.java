@@ -44,6 +44,10 @@ class AdminSupportAccessControlTest {
             // 分页化后 controller 会对返回值取 getContent()——mock 默认 null 会 NPE，返回空页。
             org.mockito.Mockito.when(q.list(org.mockito.ArgumentMatchers.any()))
                     .thenReturn(org.springframework.data.domain.Page.empty());
+            // V1.3.0 Story 2.7：工作台改走 page(state, pageable) + counts()。
+            org.mockito.Mockito.when(q.page(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(org.springframework.data.domain.Page.empty());
+            org.mockito.Mockito.when(q.counts()).thenReturn(java.util.Map.of());
             return q;
         }
 
@@ -93,29 +97,37 @@ class AdminSupportAccessControlTest {
     }
 
     private void list() {
-        controller.list(new ConcurrentModel(), 0);
+        controller.list(new ConcurrentModel(), null, 0, null, com.tailtopia.admin.shared.web.HxRequest.NONE, null);
+    }
+
+    /** V1.3.0 Story 2.7：两个只读 fragment 与整页同门（VIEW_AUTH）。 */
+    private void queueAndDetail() {
+        controller.queueFragment(null, 0, new ConcurrentModel());
+        controller.detail("tok", new ConcurrentModel(), null);
     }
 
     private void resolve() {
-        controller.resolve(admin(), "tok", new RedirectAttributesModelMap());
+        controller.resolve(admin(), "tok", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(),
+                new org.springframework.mock.web.MockHttpServletResponse(), new RedirectAttributesModelMap());
     }
 
     private void linkOrder() {
-        controller.linkOrder(admin(), "tok", "ord", new RedirectAttributesModelMap());
+        controller.linkOrder(admin(), "tok", "ord", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), null, new RedirectAttributesModelMap());
     }
 
     private void refundApprove() {
-        controller.approveRefundNeed(admin(), "tok", new RedirectAttributesModelMap());
+        controller.approveRefundNeed(admin(), "tok", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), null, new RedirectAttributesModelMap());
     }
 
     private void refundReject() {
-        controller.rejectRefundNeed(admin(), "tok", new RedirectAttributesModelMap());
+        controller.rejectRefundNeed(admin(), "tok", "原因", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), null, new RedirectAttributesModelMap());
     }
 
     @Test
     void deniedWithoutSupportHandle() {
         auth("ROLE_ADMIN", "refund.submit"); // 无关权限
         assertThatThrownBy(this::list).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(this::queueAndDetail).isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(this::resolve).isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(this::linkOrder).isInstanceOf(AccessDeniedException.class);
     }

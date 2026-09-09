@@ -21,7 +21,7 @@
             <tr><th th:text="#{admin.common.order}">订单</th><td th:text="${refund.orderToken}">ord</td></tr>
             <tr><th th:text="#{admin.refundDetail.sourceTicket}">来源工单</th>
                 <td><a th:if="${refund.sourceTicketToken != null}"
-                       th:href="@{/admin/support-tickets/{t}(t=${refund.sourceTicketToken})}"
+                       th:href="@{/admin/support-tickets(open=${refund.sourceTicketToken})}"
                        th:text="${refund.sourceTicketToken}">tok</a>
                     <span th:if="${refund.sourceTicketToken == null}">—</span></td></tr>
             <tr><th th:text="#{admin.refundDetail.payChannel}">支付渠道</th><td th:text="${refund.payChannel}">QRIS</td></tr>

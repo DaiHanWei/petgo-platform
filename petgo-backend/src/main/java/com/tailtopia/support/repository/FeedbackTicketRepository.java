@@ -24,6 +24,25 @@ public interface FeedbackTicketRepository extends JpaRepository<FeedbackTicket, 
     /** 待办中心角标（V1.3.0 Story 2.2）：OPEN + IN_PROGRESS 工单数。 */
     long countByStatusIn(java.util.Collection<TicketStatus> statuses);
 
+    // ===== V1.3.0 Story 2.7：A5 工作台三态（待处理 / 待联系 / 已结案），时间倒序分页 =====
+
+    org.springframework.data.domain.Page<FeedbackTicket> findByStatusInOrderByCreatedAtDesc(
+            java.util.Collection<TicketStatus> statuses, org.springframework.data.domain.Pageable pageable);
+
+    /** 待联系 = 未结案 且 需联系 且 未联系。 */
+    org.springframework.data.domain.Page<FeedbackTicket>
+            findByStatusInAndNeedContactCustomerTrueAndContactedCustomerFalseOrderByCreatedAtDesc(
+            java.util.Collection<TicketStatus> statuses, org.springframework.data.domain.Pageable pageable);
+
+    long countByStatusInAndNeedContactCustomerTrueAndContactedCustomerFalse(java.util.Collection<TicketStatus> statuses);
+
+    /** 处置后「下一条」：最新一条未结案工单。 */
+    Optional<FeedbackTicket> findFirstByStatusInOrderByCreatedAtDesc(java.util.Collection<TicketStatus> statuses);
+
+    /** 待联系页签的「下一条」。 */
+    Optional<FeedbackTicket> findFirstByStatusInAndNeedContactCustomerTrueAndContactedCustomerFalseOrderByCreatedAtDesc(
+            java.util.Collection<TicketStatus> statuses);
+
     /** 7 天自动关闭 scanner（Story 4.7）：RESOLVED 且 CSAT 死线已过（用户未评）。 */
     List<FeedbackTicket> findByStatusAndCsatDeadlineBefore(TicketStatus status, Instant before);
 }

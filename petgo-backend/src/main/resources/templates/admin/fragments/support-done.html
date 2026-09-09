@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  A5 结案成功 fragment（V1.3.0 Story 2.7 AC5，AD-9）：根元素 data-next-id（admin-workbench.js 自动下一条 / 空则右栏空态）；
+  oob：被结案行删除（support-row-<token>）、三态计数替换、toast 到 #admin-toast-host。HX-Trigger 由 Controller 写。
+-->
+<body>
+<div th:fragment="done" class="sp-done" data-done th:data-next-id="${nextId}">
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${message}">已结案</div>
+    <div class="empty empty--queue" th:if="${#strings.isEmpty(nextId)}">
+        <span class="empty-emoji">🎉</span>
+        <p th:text="#{admin.v130.empty.queue}">队列已清空</p>
+    </div>
+    <li th:id="'support-row-' + ${removedToken}" hx-swap-oob="delete"></li>
+    <span id="support-tab-count-pending" class="tab-count" hx-swap-oob="true" th:text="${counts.get('pending')}">0</span>
+    <span id="support-tab-count-contact" class="tab-count" hx-swap-oob="true" th:text="${counts.get('contact')}">0</span>
+    <span id="support-tab-count-closed" class="tab-count" hx-swap-oob="true" th:text="${counts.get('closed')}">0</span>
+</div>
+</body>
+</html>

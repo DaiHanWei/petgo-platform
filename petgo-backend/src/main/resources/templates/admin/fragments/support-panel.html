@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  A5 右栏五区（V1.3.0 Story 2.7 AC2/AC4/AC5）：① 正文 + 附件（点开大图）② 联系卡 ③ 关联订单（已关联 → 订单摘要卡 + 「改绑订单」；
+  未关联 → 订单号搜索框 + 「关联」）④ 退款需求判定（批准 confirm 复述订单 / 驳回原因必填 D-36；未关联订单禁用，防呆 F7-4）⑤ 结案。
+  结案后只读 + CSAT 回填展示。有 support.view 无 support.handle → 关联 / 结案禁用；无 refund.submit → 判定两钮禁用；均注明所缺权限。
+  关联 / 判定 htmx 成功回本 fragment（停留本条，toast oob）；结案回 support-done。联系方式原文仅 handle/SUPER_ADMIN（PII 最小可见面）。
+-->
+<body>
+<div th:fragment="detail" class="sp-detail" th:attr="data-ticket-token=${ticket.ticketToken}">
+    <div class="toast" role="status" th:if="${toast}" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">toast</div>
+
+    <!-- ① 正文 + 附件 -->
+    <section class="card card-full sp-card sp-body">
+        <h2 th:text="${ticket.subject}">标题</h2>
+        <p class="muted">
+            <span th:text="${ticket.ticketToken}">tok</span> ·
+            <span class="badge badge-neutral" th:text="${ticket.status}">OPEN</span> ·
+            <span th:text="${@adminTime.wib(ticket.createdAt)}">时间</span>
+            <span th:if="${!#lists.isEmpty(ticket.labels)}" th:text="'· ' + ${#strings.listJoin(ticket.labels, ', ')}">标签</span>
+        </p>
+        <p class="rv-text" th:text="${ticket.body}">正文</p>
+        <div class="rv-images" th:if="${!#lists.isEmpty(ticket.attachmentUrls)}">
+            <img th:each="url : ${ticket.attachmentUrls}" th:src="${url}" data-lightbox alt="" loading="lazy" class="rv-img"/>
+        </div>
+        <p class="muted" th:if="${#lists.isEmpty(ticket.attachmentUrls)}" th:text="#{admin.ticket.attachments} + '：' + ${ticket.attachmentCount}">附件：0</p>
+    </section>
+
+    <!-- ② 联系卡 -->
+    <section class="card card-full sp-card sp-contact">
+        <h2 th:text="#{admin.v130.support.card.contact}">联系</h2>
+        <div class="sum">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.ticket.contact}">联系方式</div>
+                <div class="sum-value rv-small"><span th:text="${ticket.contactType}">EMAIL</span> · <span th:text="${ticket.contactValue}">x</span></div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.ticket.needContact}">需联系</div>
+                <div class="sum-value rv-small" th:text="${ticket.needContact} ? #{admin.common.yes} : #{admin.common.no}">是</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.ticket.contacted}">已联系</div>
+                <div class="sum-value rv-small" th:text="${ticket.contacted} ? #{admin.common.yes} : #{admin.common.no}">否</div></div>
+            <div class="sum-item" th:if="${ticket.csatScore != null}"><div class="sum-label">CSAT</div>
+                <div class="sum-value rv-small"><span th:text="'★ ' + ${ticket.csatScore}">★ 5</span> <span class="muted" th:text="${ticket.csatComment} ?: ''"></span></div></div>
+        </div>
+    </section>
+
+    <!-- ③ 关联订单 -->
+    <section class="card card-full sp-card sp-order">
+        <h2 th:text="#{admin.ticket.relatedOrder}">关联订单</h2>
+        <div th:if="${ticket.relatedOrderToken != null}" class="sum">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.support.order.token}">订单号</div>
+                <div class="sum-value rv-small"><a target="_blank" th:href="@{/admin/consult-orders(open=${ticket.relatedOrderToken})}" th:text="${ticket.relatedOrderToken}">ord</a></div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.support.order.amount}">金额</div>
+                <div class="sum-value" th:text="${ticket.orderAmount != null} ? ${#numbers.formatInteger(ticket.orderAmount, 0, 'COMMA')} : '—'">0</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.common.status}">状态</div>
+                <div class="sum-value rv-small" th:text="${ticket.orderStatus ?: '—'}">COMPLETED</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.support.order.paidAt}">支付时间</div>
+                <div class="sum-value rv-small" th:text="${ticket.orderPaidAt != null} ? ${@adminTime.wib(ticket.orderPaidAt)} : '—'">-</div></div>
+        </div>
+        <p class="muted" th:if="${ticket.relatedOrderToken == null}" th:text="#{admin.v130.support.order.none}">未关联订单</p>
+        <th:block th:if="${ticket.open()}">
+            <form th:attr="hx-post=@{/admin/support-tickets/{t}/link-order(t=${ticket.ticketToken})}" hx-target=".wb-detail-body" hx-swap="innerHTML"
+                  class="inline sp-link-form" data-requires-form data-inline-error
+                  sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')">
+                <input type="text" name="orderToken" class="inp" required data-requires-text th:placeholder="#{admin.ticket.ph.orderToken}"/>
+                <button type="submit" class="btn btn-neutral btn-sm" disabled data-requires-target
+                        th:text="${ticket.relatedOrderToken == null} ? #{admin.ticket.btn.linkOrder} : #{admin.ticket.btn.relinkOrder}">关联订单</button>
+            </form>
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('support.handle'))">
+                <button type="button" class="btn btn-neutral btn-sm" disabled th:title="#{admin.v130.err.forbidden(#{perm.support.handle})}"
+                        th:text="${ticket.relatedOrderToken == null} ? #{admin.ticket.btn.linkOrder} : #{admin.ticket.btn.relinkOrder}">关联订单</button>
+                <span th:text="#{admin.v130.err.forbidden(#{perm.support.handle})}">需要权限</span>
+            </p>
+        </th:block>
+    </section>
+
+    <!-- ④ 退款需求判定 -->
+    <section class="card card-full sp-card sp-refund">
+        <h2 th:text="#{admin.ticket.section.refundDecision}">退款需求判定</h2>
+        <p th:if="${ticket.refundToken != null}">
+            <span th:text="#{admin.ticket.refund}">退款单</span>
+            <a target="_blank" th:href="@{/admin/refunds(open=${ticket.refundToken})}" th:text="${ticket.refundToken}">tok</a>
+            · <span class="badge" th:classappend="${ticket.refundNeedDecision == 'APPROVED'} ? 'badge-ok' : (${ticket.refundNeedDecision == 'REJECTED'} ? 'badge-danger' : 'badge-neutral')"
+                    th:text="${ticket.refundNeedDecision}">PENDING</span>
+            <span class="muted" th:if="${ticket.refundRejectReason != null}" th:text="'· ' + ${ticket.refundRejectReason}">原因</span>
+        </p>
+        <th:block th:if="${ticket.open() and (ticket.refundNeedDecision == null or ticket.refundNeedDecision == 'PENDING')}">
+            <p class="muted" th:if="${ticket.relatedOrderToken == null}" th:text="#{admin.v130.support.refundDisabledHint}">先关联订单，才有金额依据</p>
+            <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.submit')">
+                <form th:attr="hx-post=@{/admin/support-tickets/{t}/refund-approve(t=${ticket.ticketToken})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-inline-error>
+                    <button type="submit" class="btn btn-primary btn-sm" data-confirm-button th:disabled="${!ticket.refundDecidable()}"
+                            th:attr="data-confirm=#{admin.ticket.confirm.refundApprove(${ticket.relatedOrderToken ?: '—'})}"
+                            th:text="#{admin.ticket.btn.refundApprove}">批准退款需求</button>
+                </form>
+                <form th:attr="hx-post=@{/admin/support-tickets/{t}/refund-reject(t=${ticket.ticketToken})}" hx-target=".wb-detail-body" hx-swap="innerHTML"
+                      class="inline sp-reject-form" data-requires-form data-inline-error>
+                    <input type="text" name="reason" class="inp" maxlength="200" required data-requires-text
+                           th:disabled="${!ticket.refundDecidable()}" th:placeholder="#{admin.v130.support.rejectReason}"/>
+                    <button type="submit" class="btn btn-neutral btn-sm" disabled data-requires-target data-confirm-button
+                            th:attr="data-confirm=#{admin.ticket.confirm.refundReject}"
+                            th:text="#{admin.ticket.btn.refundReject}">驳回退款需求</button>
+                </form>
+            </div>
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('refund.submit'))">
+                <button type="button" class="btn btn-primary btn-sm" disabled th:title="#{admin.v130.err.forbidden(#{perm.refund.submit})}" th:text="#{admin.ticket.btn.refundApprove}">批准</button>
+                <button type="button" class="btn btn-neutral btn-sm" disabled th:title="#{admin.v130.err.forbidden(#{perm.refund.submit})}" th:text="#{admin.ticket.btn.refundReject}">驳回</button>
+                <span th:text="#{admin.v130.err.forbidden(#{perm.refund.submit})}">需要权限</span>
+            </p>
+        </th:block>
+    </section>
+
+    <!-- ⑤ 结案 -->
+    <section class="wb-actions sp-actions">
+        <th:block th:if="${ticket.open()}">
+            <form th:attr="hx-post=@{/admin/support-tickets/{t}/resolve(t=${ticket.ticketToken})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline"
+                  sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')">
+                <button type="submit" class="btn btn-primary" data-confirm-button th:attr="data-confirm=#{admin.v130.support.confirm.resolve}"
+                        th:text="#{admin.ticket.btn.resolve}">已联系 + 已解决（结案）</button>
+            </form>
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('support.handle'))">
+                <button type="button" class="btn btn-primary" disabled th:title="#{admin.v130.err.forbidden(#{perm.support.handle})}" th:text="#{admin.ticket.btn.resolve}">结案</button>
+                <span th:text="#{admin.v130.err.forbidden(#{perm.support.handle})}">需要权限</span>
+            </p>
+        </th:block>
+        <p class="muted" th:unless="${ticket.open()}">
+            <span th:text="#{admin.v130.support.readonly}">已结案，只读回看</span>
+            <span th:if="${ticket.resolvedAt != null}" th:text="'· ' + ${@adminTime.wib(ticket.resolvedAt)}">时间</span>
+        </p>
+    </section>
+</div>
+</body>
+</html>

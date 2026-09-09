@@ -670,3 +670,8 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .an-timeline li .muted { margin-right: 6px; }
 .an-note-form { display: flex; gap: 8px; align-items: center; }
 .an-note-form .inp { flex: 1; }
+
+/* ===== V1.3.0 Story 2.7 · A5 客服工单工作台 ===== */
+.sp-link-form, .sp-reject-form { display: inline-flex; gap: 8px; align-items: center; margin-top: 8px; }
+.sp-link-form .inp, .sp-reject-form .inp { min-width: 240px; }
+

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  A5 左栏队列（V1.3.0 Story 2.7 AC1）。list = 整个 <ul>；rows = 行 + 翻页哨兵。
+  行两行式：① 工单标题 + 状态点；② 需联系标记 + CSAT（有则星值）+ 建单时间（WIB）。
+-->
+<body>
+<ul th:fragment="list" class="q-list" id="support-queue" th:attr="data-state=${state}">
+    <th:block th:replace="~{admin/fragments/support-queue :: rows}"></th:block>
+</ul>
+
+<th:block th:fragment="rows">
+    <li th:if="${queue.isEmpty() and page == 0}" class="q-empty">
+        <div class="empty empty--queue"><span class="empty-emoji">🎉</span>
+            <p th:text="${state == 'closed'} ? #{admin.v130.support.empty.closed} : #{admin.v130.empty.queue}">队列已清空</p>
+        </div>
+    </li>
+    <th:block th:each="t : ${queue.content}"><li th:replace="~{admin/fragments/support-queue :: row(${t}, false)}"></li></th:block>
+    <li th:if="${queue.hasNext()}" class="q-more" hx-swap="outerHTML" hx-trigger="revealed"
+        th:attr="hx-get=@{/admin/support-tickets/queue(state=${state},page=${page + 1})}">
+        <span class="muted" th:text="#{admin.v130.review.more}">加载更多…</span>
+    </li>
+</th:block>
+
+<ul th:remove="tag">
+    <li th:fragment="row(t, oob)" class="q-row" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:id="'support-row-' + ${t.ticketToken}" th:data-id="${t.ticketToken}"
+        th:data-detail-url="@{/admin/support-tickets/{tok}/detail(tok=${t.ticketToken})}"
+        th:attr="hx-get=@{/admin/support-tickets/{tok}/detail(tok=${t.ticketToken})}"
+        hx-target=".wb-detail-body" hx-swap="innerHTML" tabindex="0">
+        <span class="q-title">
+            <span class="dot" th:classappend="${t.open()} ? (${t.needContact and !t.contacted} ? 'dot--hot' : 'dot--todo') : 'dot--done'"></span>
+            <span th:text="${t.subject}">标题</span>
+        </span>
+        <span class="q-meta">
+            <span class="badge badge-warn" th:if="${t.needContact and !t.contacted}" th:text="#{admin.v130.support.needContact}">需联系</span>
+            <span class="badge badge-neutral" th:text="${t.status}">OPEN</span>
+            <span th:if="${t.csatScore != null}" th:text="'★ ' + ${t.csatScore}">★ 5</span>
+            <span th:text="${@adminTime.wib(t.createdAt)}">时间</span>
+        </span>
+    </li>
+</ul>
+</body>
+</html>
