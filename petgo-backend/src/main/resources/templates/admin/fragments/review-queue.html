@@ -42,14 +42,24 @@
             <span class="dot" th:classappend="'dot--' + ${r.dot()}"></span>
             <img th:if="${r.isAvatar()}" th:src="${r.row.preview()}" alt="" loading="lazy" class="q-thumb"/>
             <span th:if="${r.tab.name() == 'AVATAR'}" th:text="${r.row.targetNickname() ?: #messages.msg('admin.review.subject.deactivated')}">昵称</span>
-            <span th:unless="${r.tab.name() == 'AVATAR'}" th:text="${r.row.preview() ?: (r.row.targetNickname() ?: '')}">摘要</span>
+            <!--/* 场所举报（5.4）：preview = 场所名（MERGED 场所带 [MERGED] 后缀 → 「已并入」徽标；解析级注释，不进 HTML） */-->
+            <th:block th:if="${r.tab.name() == 'PLACE'}" th:with="merged=${r.row.preview() != null and #strings.endsWith(r.row.preview(), '[MERGED]')}">
+                <span th:text="${merged} ? ${#strings.substringBefore(r.row.preview(), ' [MERGED]')} : ${r.row.preview()}">场所名</span>
+                <span class="badge badge-muted" th:if="${merged}" th:text="#{admin.v130.places.status.MERGED}">已并入</span>
+            </th:block>
+            <span th:unless="${r.tab.name() == 'AVATAR' or r.tab.name() == 'PLACE'}" th:text="${r.row.preview() ?: (r.row.targetNickname() ?: '')}">摘要</span>
             <!-- bug 480：内容类工单直达内容详情（用帖 id）；权限与 AdminContentManageController.DETAIL_AUTH 一致 -->
-            <a th:if="${r.row.contentRefId() != null}" class="q-link" target="_blank"
+            <a th:if="${r.row.contentRefId() != null and r.tab.name() != 'PLACE'}" class="q-link" target="_blank"
                sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')"
                th:href="@{'/admin/content/' + ${r.row.contentRefId()}}" th:text="#{admin.review.viewContent}" data-no-drawer>查看内容</a>
+            <!--/* 场所举报：content_ref = place_id，直达 B6 场所管理（复审 #1：不能链到同号帖子）；门控 = AdminPlaceController.VIEW_AUTH */-->
+            <a th:if="${r.tab.name() == 'PLACE'}" class="q-link" target="_blank"
+               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('place.manage')"
+               th:href="@{/admin/places(open=${r.row.contentRefId()})}" th:text="#{admin.v130.review.place.open}" data-no-drawer>去场所管理 ↗</a>
         </span>
         <span class="q-meta">
             <span class="badge badge-neutral" th:if="${r.row.subType() != null}" th:text="${r.row.subType()}">SUB</span>
+            <span th:if="${r.tab.name() == 'PLACE'}" th:text="#{admin.v130.review.place.reporters(${r.row.reporterCount()}, ${r.row.reportCount()})}">N 人 / M 次</span>
             <span th:text="'⚑ ' + ${r.row.score()}">⚑ 0</span>
             <span th:text="${@adminTime.wib(r.row.earliestAt())}">时间</span>
             <span class="badge badge-danger" th:if="${r.row.overdue()}" th:text="#{admin.review.overdue}">超 24h</span>

@@ -33,6 +33,50 @@
                    th:text="#{admin.review.viewContent}">查看内容</a>
             </div>
         </th:block>
+        <!-- 场所举报（Story 5.4）：场所快照（名称 / 类型 / 城市 / 地址 / 坐标 / 标记人 / 状态 / 照片缩略 / 最近 5 条评论） -->
+        <th:block th:if="${d.tab.name() == 'PLACE'}">
+            <p class="err" th:if="${d.contentDeleted}" th:text="#{admin.v130.review.place.deleted}">场所已删除</p>
+            <div th:if="${d.place != null}" class="rv-place">
+                <p><strong th:text="${d.place.name}">场所名</strong>
+                    <span class="badge" th:classappend="${d.place.status.name() == 'ACTIVE'} ? 'badge-ok' : (${d.place.status.name() == 'DELISTED'} ? 'badge-warn' : 'badge-muted')"
+                          th:text="#{'admin.v130.places.status.' + ${d.place.status.name()}}">状态</span>
+                    <a class="q-link" target="_blank" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('place.manage')"
+                       th:href="@{/admin/places(open=${d.place.id})}" th:text="#{admin.v130.review.place.open}" data-no-drawer>去场所管理 ↗</a></p>
+                <div class="sum pl-info">
+                    <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.type}">类型</div><div class="sum-value rv-small" th:text="${d.place.typeName}">类型</div></div>
+                    <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.city}">城市</div><div class="sum-value rv-small" th:text="${d.place.city}">城市</div></div>
+                    <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.marker}">标记人</div><div class="sum-value rv-small" th:text="${d.place.markerName}">标记人</div></div>
+                    <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.drawer.lat} + ' / ' + #{admin.v130.places.drawer.lng}">纬度 / 经度</div><div class="sum-value rv-small" th:text="${d.place.lat} + ' / ' + ${d.place.lng}">0 / 0</div></div>
+                </div>
+                <p><span class="muted" th:text="#{admin.v130.places.col.address}">文字地址</span> <span th:text="${d.place.addressText}">地址</span></p>
+                <!--/* AC4「删照片 / 删评论」：复用 5.3 端点 + from=review → 停留本条重渲染右栏（举报仍 PENDING）；MERGED 只读；门控 = AdminPlaceController.VIEW_AUTH */-->
+                <div class="rv-images" th:if="${!#lists.isEmpty(d.place.photos)}" th:with="canEdit=${d.pending() and d.place.status.name() != 'MERGED'}">
+                    <figure th:each="ph : ${d.place.photos}" class="pl-photo" th:attr="data-photo-id=${ph.id}">
+                        <img th:if="${ph.url != null}" th:src="${ph.url}" alt="" loading="lazy" data-lightbox class="rv-img"/>
+                        <div class="pl-photo-missing" th:if="${ph.url == null}" th:text="#{admin.v130.places.drawer.photos.unavailable}">图片暂不可用</div>
+                        <figcaption th:if="${canEdit}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('place.manage')">
+                            <form class="inline" th:attr="hx-post=@{/admin/places/{id}/photos/{pid}/remove(id=${d.place.id},pid=${ph.id})}" hx-target=".wb-detail-body" hx-swap="innerHTML">
+                                <input type="hidden" name="from" value="review"/>
+                                <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.v130.places.action.removePhoto}">删除</button>
+                            </form>
+                        </figcaption>
+                    </figure>
+                </div>
+                <ul class="rv-entries" th:if="${!#lists.isEmpty(d.place.comments.items)}" th:with="canEdit=${d.pending() and d.place.status.name() != 'MERGED'}">
+                    <li th:each="c, st : ${d.place.comments.items}" th:if="${st.index < 5}" th:attr="data-comment-id=${c.id}">
+                        <span th:text="${c.attitude.name() == 'RECOMMEND'} ? '👍' : '👎'">👍</span>
+                        <span th:text="${c.authorName}">作者</span>
+                        <span th:text="${c.body}">正文</span>
+                        <span class="muted" th:text="${@adminTime.wib(c.createdAt)}">-</span>
+                        <form class="inline" th:if="${canEdit}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('place.manage')"
+                              th:attr="hx-post=@{/admin/places/{id}/comments/{cid}/remove(id=${d.place.id},cid=${c.id})}" hx-target=".wb-detail-body" hx-swap="innerHTML">
+                            <input type="hidden" name="from" value="review"/>
+                            <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.v130.places.action.removeComment}">删除</button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </th:block>
         <!-- 名称：新旧对照 -->
         <div th:if="${d.tab.name() == 'NAME'}" class="rv-compare">
             <div><span class="muted" th:text="#{admin.v130.review.name.submitted}">待审名称</span><strong class="rv-big" th:text="${d.submittedValue}">待审名</strong></div>
@@ -54,11 +98,11 @@
         <div class="sum">
             <div class="sum-item"><div class="sum-label" th:text="#{admin.tickets.col.score}">优先级分</div><div class="sum-value" th:text="${d.priority ?: ''}">P1</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.tickets.col.disposals}">历史处置</div><div class="sum-value" th:text="${d.disposalCount}">0</div></div>
-            <div class="sum-item" th:if="${d.tab.name() == 'REPORT'}"><div class="sum-label" th:text="#{admin.tickets.col.reports}">举报数</div><div class="sum-value" th:text="${#lists.size(d.entries)}">0</div></div>
+            <div class="sum-item" th:if="${d.tab.name() == 'REPORT' or d.tab.name() == 'PLACE'}"><div class="sum-label" th:text="#{admin.tickets.col.reports}">举报数</div><div class="sum-value" th:text="${#lists.size(d.entries)}">0</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.review.col.earliest}">最早时间</div><div class="sum-value rv-small" th:text="${@adminTime.wib(d.earliestAt)}">时间</div></div>
         </div>
         <p class="muted" th:if="${d.tab.name() == 'SUBMISSION'}" th:text="#{admin.v130.review.machineReason}">机审判定：拿不准，送人工复核</p>
-        <ul th:if="${d.tab.name() == 'REPORT' and !#lists.isEmpty(d.entries)}" class="rv-entries">
+        <ul th:if="${(d.tab.name() == 'REPORT' or d.tab.name() == 'PLACE') and !#lists.isEmpty(d.entries)}" class="rv-entries">
             <li th:each="e : ${d.entries}">
                 <span th:text="${e.reporterNickname ?: #messages.msg('admin.review.subject.deactivated')}">举报人</span>
                 <span class="muted" th:if="${e.reporterId != null}" th:text="'#' + ${e.reporterId}">#0</span>
@@ -71,7 +115,8 @@
     <!-- ③ 操作区 -->
     <section class="wb-actions rv-actions" th:with="url='/admin/manual-review'">
         <p class="muted" th:unless="${d.pending()}" th:text="#{admin.v130.review.readonly}">已处理，只读回看</p>
-        <th:block th:if="${d.pending() and !d.targetDeleted}">
+        <!-- 场所举报的对象是场所条目，标记人注销不作废单据（targetDeleted 只对账号 / 内容类生效） -->
+        <th:block th:if="${d.pending() and (!d.targetDeleted or d.tab.name() == 'PLACE')}">
             <!-- 内容送审：通过 / 拒绝（原因常驻，未选禁用）/ 调优先级 -->
             <th:block th:if="${d.tab.name() == 'SUBMISSION'}">
                 <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')" class="rv-action-group">
@@ -127,6 +172,29 @@
                     <span th:text="#{admin.v130.err.forbidden(#{perm.content.takedown})}">需要权限</span>
                 </p>
             </th:block>
+            <!-- 场所举报（Story 5.4，D-40）：下架场所（confirm 复述场所名；全部 PENDING → ACTIONED）/ 驳回举报（confirm 复述条数；全部 → DISMISSED）；
+                 权限 place.manage（与 B6 同码，不用 content.takedown）；已 MERGED / DELISTED 或场所已删 → 「下架」禁用，「驳回」仍可用 -->
+            <th:block th:if="${d.tab.name() == 'PLACE'}">
+                <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('place.manage')" class="rv-action-group">
+                    <form th:attr="hx-post=@{/admin/places/{id}/delist(id=${d.sourceId})},data-confirm=#{admin.v130.places.confirm.delist},data-confirm-args=${d.place != null ? d.place.name : ''}"
+                          hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline">
+                        <input type="hidden" name="from" value="review"/>
+                        <button type="submit" class="btn btn-danger" th:disabled="${d.contentDeleted or d.place == null or d.place.status.name() != 'ACTIVE'}"
+                                th:title="${d.contentDeleted or d.place == null} ? #{admin.v130.review.place.deleted} : (${d.place.status.name() != 'ACTIVE'} ? #{'admin.v130.places.status.' + ${d.place.status.name()}} : null)"
+                                th:text="#{admin.v130.review.place.act.delist}">下架场所</button>
+                    </form>
+                    <form th:attr="hx-post=@{/admin/places/{id}/reports/dismiss-all(id=${d.sourceId})},data-confirm=#{admin.v130.review.place.confirm.dismissAll},data-confirm-args=${d.pendingEntries}"
+                          hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline">
+                        <input type="hidden" name="from" value="review"/>
+                        <button type="submit" class="btn btn-neutral" th:text="#{admin.v130.review.place.act.dismissAll}">驳回举报</button>
+                    </form>
+                </div>
+                <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('place.manage'))">
+                    <button type="button" class="btn btn-danger" disabled th:title="#{admin.v130.err.forbidden(#{perm.place.manage})}" th:text="#{admin.v130.review.place.act.delist}">下架场所</button>
+                    <button type="button" class="btn btn-neutral" disabled th:title="#{admin.v130.err.forbidden(#{perm.place.manage})}" th:text="#{admin.v130.review.place.act.dismissAll}">驳回举报</button>
+                    <span th:text="#{admin.v130.err.forbidden(#{perm.place.manage})}">需要权限</span>
+                </p>
+            </th:block>
             <!-- 名称 / 头像：通过 / 违规（违规 confirm） -->
             <th:block th:if="${d.tab.name() == 'NAME' or d.tab.name() == 'AVATAR'}">
                 <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')" class="rv-action-group">
@@ -156,7 +224,7 @@
                 </p>
             </th:block>
         </th:block>
-        <p class="muted" th:if="${d.pending() and d.targetDeleted}" th:text="#{admin.v130.review.targetDeleted}">对象已注销，单据作废（只读）</p>
+        <p class="muted" th:if="${d.pending() and d.targetDeleted and d.tab.name() != 'PLACE'}" th:text="#{admin.v130.review.targetDeleted}">对象已注销，单据作废（只读）</p>
     </section>
 </div>
 </body>

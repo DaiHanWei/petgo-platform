@@ -82,6 +82,24 @@ document.addEventListener('submit', function (e) {
     }
 }, true);
 document.addEventListener('DOMContentLoaded', function () {
+    // 多文件一次提交的表单（V1.3.0 Story 5.4 新建场所照片）：张数 / 单张 / 合计字节先在浏览器端拦（复审 #8）。
+    //   超 max-request-size 的请求 Tomcat 在 multipart 解析阶段直接重置连接，htmx 收不到任何响应、行内 err 空白——所以超限的根本不发。
+    //   ⚠️ 体验护栏不是安全边界：判定点仍在服务端。没有 data-max-files 的老 input 不受影响。
+    document.addEventListener('change', function (e) {
+        var input = e.target;
+        if (!input || input.type !== 'file' || !input.hasAttribute('data-max-files')) { return; }
+        var files = input.files || [];
+        var maxFiles = parseInt(input.getAttribute('data-max-files') || '0', 10);
+        var maxBytes = parseInt(input.getAttribute('data-max-bytes') || '0', 10);
+        var maxTotal = parseInt(input.getAttribute('data-max-total-bytes') || '0', 10);
+        var total = 0, bad = false;
+        for (var i = 0; i < files.length; i++) { total += files[i].size; if (maxBytes > 0 && files[i].size > maxBytes) { bad = true; } }
+        if ((maxFiles > 0 && files.length > maxFiles) || (maxTotal > 0 && total > maxTotal) || bad) {
+            window.alert(input.getAttribute('data-msg-limit') || 'too many / too large');
+            input.value = '';
+        }
+    });
+
     document.body.addEventListener('htmx:confirm', function (e) {
         var elt = e.detail && e.detail.elt;
         var form = elt && elt.closest ? elt.closest('form[data-confirm]') : null;

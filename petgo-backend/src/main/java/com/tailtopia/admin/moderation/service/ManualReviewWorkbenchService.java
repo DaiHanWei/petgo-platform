@@ -13,6 +13,11 @@ import com.tailtopia.admin.moderation.dto.TicketStatusBucket;
 import com.tailtopia.admin.moderation.dto.UnifiedTicketRow;
 import com.tailtopia.admin.moderation.repository.ManualReviewItemRepository;
 import com.tailtopia.admin.moderation.web.UnifiedTicketController.ReportEntryView;
+import com.tailtopia.admin.places.domain.PlaceReport;
+import com.tailtopia.admin.places.domain.PlaceReportStatus;
+import com.tailtopia.admin.places.dto.PlaceDrawerView;
+import com.tailtopia.admin.places.repository.PlaceReportRepository;
+import com.tailtopia.admin.places.service.AdminPlaceQueryService;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.repository.UserRepository;
 import com.tailtopia.avatarmoderation.domain.AvatarReview;
@@ -54,7 +59,8 @@ public class ManualReviewWorkbenchService {
     static final Set<com.tailtopia.admin.moderation.dto.TicketType> SCOPE = java.util.EnumSet.of(
             com.tailtopia.admin.moderation.dto.TicketType.CONTENT_REPORT,
             com.tailtopia.admin.moderation.dto.TicketType.ACCOUNT_IDENTITY,
-            com.tailtopia.admin.moderation.dto.TicketType.CONTENT_SUBMISSION);
+            com.tailtopia.admin.moderation.dto.TicketType.CONTENT_SUBMISSION,
+            com.tailtopia.admin.moderation.dto.TicketType.PLACE_REPORT); // V1.3.0 Story 5.4
 
     private final UnifiedTicketQueryService tickets;
     private final ManualReviewItemRepository items;
@@ -67,11 +73,17 @@ public class ManualReviewWorkbenchService {
     private final UserRepository users;
     private final PetProfileRepository pets;
     private final AdminAccountRepository adminAccounts;
+    /** V1.3.0 Story 5.4：场所举报页签的快照（复用 B6 抽屉视图）与举报明细。 */
+    private final PlaceReportRepository placeReports;
+    private final AdminPlaceQueryService placeQuery;
 
     public ManualReviewWorkbenchService(UnifiedTicketQueryService tickets, ManualReviewItemRepository items,
             NameModerationRecordRepository names, AvatarReviewRepository avatars, ReportService reports,
             ContentReportRepository contentReports, ContentService content, CommentRepository comments,
-            UserRepository users, PetProfileRepository pets, AdminAccountRepository adminAccounts) {
+            UserRepository users, PetProfileRepository pets, AdminAccountRepository adminAccounts,
+            PlaceReportRepository placeReports, AdminPlaceQueryService placeQuery) {
+        this.placeReports = placeReports;
+        this.placeQuery = placeQuery;
         this.tickets = tickets;
         this.items = items;
         this.names = names;
@@ -161,6 +173,7 @@ public class ManualReviewWorkbenchService {
         String currentAvatar = null;
         String machineReason = null;
         long pendingEntries = 0;
+        PlaceDrawerView place = null;
         switch (tab) {
             case SUBMISSION -> {
                 ManualReviewItem item = items.findById(sourceId).orElse(null);
@@ -200,6 +213,20 @@ public class ManualReviewWorkbenchService {
                     }
                 }
             }
+            case PLACE -> {
+                // 场所快照（照片现签 / 评论首页）；场所已软删 → 404 → 占位「内容已删除」，只允许驳回
+                try {
+                    place = placeQuery.drawer(sourceId, 0);
+                } catch (AppException e) {
+                    place = null;
+                }
+                contentDeleted = place == null;
+                List<PlaceReport> list = placeReports.findByPlaceIdOrderByCreatedAtAsc(sourceId);
+                pendingEntries = list.stream().filter(r -> r.getStatus() == PlaceReportStatus.PENDING).count();
+                Map<Long, String> nick = nicknamesOf(list.stream().map(PlaceReport::getReporterUserId).toList());
+                entries = list.stream().map(r -> new ReportEntryView(r.getReporterUserId(), nick.get(r.getReporterUserId()),
+                        r.getReasonType() == null ? null : r.getReasonType().name(), r.getCreatedAt(), null)).toList();
+            }
             case AVATAR -> {
                 AvatarReview rev = avatars.findById(sourceId).orElse(null);
                 if (rev != null) {
@@ -216,7 +243,7 @@ public class ManualReviewWorkbenchService {
         return new ReviewDetailView(tab, sourceId, row.subType(), row.status(), row.targetUserId(), row.targetNickname(),
                 row.targetDeleted(), row.disposalCount(), row.earliestAt(), priority, row.overdue(), post, commentBody,
                 row.contentRefId(), contentDeleted, entries, pendingEntries, row.actionRef(), submittedValue, currentValue,
-                submittedAvatar, currentAvatar, machineReason);
+                submittedAvatar, currentAvatar, machineReason, place);
     }
 
     private static UnifiedTicketQueryService.Extra extraFor(ReviewFilters f) {
@@ -280,6 +307,17 @@ public class ManualReviewWorkbenchService {
                 if (rev != null) {
                     result = rev.getVerdict() == null ? rev.getStatus().name() : rev.getVerdict().name();
                     at = rev.getUpdatedAt();
+                }
+            }
+            case PLACE -> {
+                // 按场所聚合：取最近一条已处置的举报作结果 / 操作人 / 时间（下架 → ACTIONED，驳回 → DISMISSED）
+                PlaceReport pr = placeReports.findByPlaceIdOrderByCreatedAtAsc(r.sourceId()).stream()
+                        .filter(x -> x.getHandledAt() != null)
+                        .max(java.util.Comparator.comparing(PlaceReport::getHandledAt)).orElse(null);
+                if (pr != null) {
+                    result = pr.getStatus().name();
+                    by = pr.getHandledBy();
+                    at = pr.getHandledAt();
                 }
             }
             default -> { }

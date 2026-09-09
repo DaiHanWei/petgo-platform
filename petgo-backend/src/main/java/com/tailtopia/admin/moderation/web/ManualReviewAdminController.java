@@ -70,7 +70,8 @@ public class ManualReviewAdminController {
      * **对它一个都用不上**，运营点了只会吃一条「请到名称/头像审核页处理」的红字。
      */
     private static final java.util.Set<TicketType> SCOPE = java.util.EnumSet.of(
-            TicketType.CONTENT_REPORT, TicketType.ACCOUNT_IDENTITY, TicketType.CONTENT_SUBMISSION);
+            TicketType.CONTENT_REPORT, TicketType.ACCOUNT_IDENTITY, TicketType.CONTENT_SUBMISSION,
+            TicketType.PLACE_REPORT); // V1.3.0 Story 5.4：场所举报页签
 
     private static final int PAGE_SIZE = 20;
 

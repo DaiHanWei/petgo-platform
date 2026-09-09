@@ -19,6 +19,9 @@ public final class AuditActions {
     public static final String PLACE_PHOTO_REMOVED = "PLACE_PHOTO_REMOVED";
     public static final String PLACE_COMMENT_REMOVED = "PLACE_COMMENT_REMOVED";
     public static final String PLACE_MERGED = "PLACE_MERGED";
+    /** V1.3.0 Story 5.4：运营预置录入场所（summary 记场所名，不记坐标）/ 场所举报整批驳回。 */
+    public static final String PLACE_CREATED = "PLACE_CREATED";
+    public static final String PLACE_REPORTS_DISMISSED = "PLACE_REPORTS_DISMISSED";
 
     /** 紧急账密（formLogin）登录成功（Story 1.3，AC7）。 */
     public static final String EMERGENCY_LOGIN_SUCCEEDED = "EMERGENCY_LOGIN_SUCCEEDED";

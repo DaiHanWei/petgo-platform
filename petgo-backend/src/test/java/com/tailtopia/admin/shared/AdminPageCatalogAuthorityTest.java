@@ -32,7 +32,8 @@ class AdminPageCatalogAuthorityTest {
                 com.tailtopia.admin.web.AdminWebController.class,
                 com.tailtopia.namemoderation.web.NameModerationAdminController.class,
                 com.tailtopia.admin.moderation.web.NameAvatarReviewAdminController.class,
-                com.tailtopia.admin.moderation.web.AdminContentManageController.class));
+                com.tailtopia.admin.moderation.web.AdminContentManageController.class,
+                com.tailtopia.admin.places.web.AdminPlaceController.class)); // 5.4 场所举报页签按钮用 place.manage
         PAGES.put("tickets", List.of(com.tailtopia.admin.moderation.web.UnifiedTicketController.class,
                 com.tailtopia.admin.throttle.web.AdminThrottleController.class,
                 com.tailtopia.admin.moderation.web.AdminContentManageController.class));

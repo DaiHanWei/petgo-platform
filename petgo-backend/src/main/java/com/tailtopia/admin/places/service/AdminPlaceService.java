@@ -6,21 +6,29 @@ import com.tailtopia.admin.places.domain.Place;
 import com.tailtopia.admin.places.domain.PlaceAttitude;
 import com.tailtopia.admin.places.domain.PlaceComment;
 import com.tailtopia.admin.places.domain.PlacePhoto;
+import com.tailtopia.admin.places.domain.PlaceReportStatus;
 import com.tailtopia.admin.places.domain.PlaceStatus;
 import com.tailtopia.admin.places.dto.PlaceEditForm;
 import com.tailtopia.admin.places.repository.PlaceCommentRepository;
 import com.tailtopia.admin.places.repository.PlacePhotoRepository;
+import com.tailtopia.admin.places.repository.PlaceReportRepository;
 import com.tailtopia.admin.places.repository.PlaceRepository;
+import com.tailtopia.admin.seed.dto.UploadedImage;
+import com.tailtopia.admin.seed.service.AdminSeedImageService;
+import com.tailtopia.admin.virtual.dto.PublishIdentityOption;
+import com.tailtopia.admin.virtual.service.AdminPublishIdentityService;
 import com.tailtopia.shared.error.AppException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 场所处置——编辑 / 下架 / 恢复 / 删照片 / 删评论（V1.3.0 Story 5.3 AC1～AC3；合并在 {@link PlaceMergeService}）。
+ * 场所处置——编辑 / 下架 / 恢复 / 删照片 / 删评论（V1.3.0 Story 5.3 AC1～AC3；合并在 {@link PlaceMergeService}）+ 新建与举报处置（Story 5.4）。
  * 写操作三件套：{@code @PreAuthorize}（Controller）+ 同事务 {@code AdminAuditService.record} + 三语 key。
  * 审计 detail 不记评论正文、坐标值、地址全文（架构模式规则）。幂等：已 DELISTED 再下架 / 已 ACTIVE 再恢复 → no-op、不写审计。
  */
@@ -45,15 +53,90 @@ public class AdminPlaceService {
     private final PlaceCoordinateValidator coordinates;
     private final AdminAuditService audit;
     private final JdbcTemplate jdbc;
+    /** Story 5.4：新建（标记人 ∈ 发布身份池、照片上传）与举报处置。 */
+    private final PlaceReportRepository reports;
+    private final PlaceTokenGenerator tokens;
+    private final AdminPublishIdentityService identities;
+    private final AdminSeedImageService images;
+
+    public static final int MAX_PHOTOS = 9;
 
     public AdminPlaceService(PlaceRepository places, PlacePhotoRepository photos, PlaceCommentRepository comments,
-            PlaceCoordinateValidator coordinates, AdminAuditService audit, JdbcTemplate jdbc) {
+            PlaceCoordinateValidator coordinates, AdminAuditService audit, JdbcTemplate jdbc, PlaceReportRepository reports,
+            PlaceTokenGenerator tokens, AdminPublishIdentityService identities, AdminSeedImageService images) {
         this.places = places;
         this.photos = photos;
         this.comments = comments;
         this.coordinates = coordinates;
         this.audit = audit;
         this.jdbc = jdbc;
+        this.reports = reports;
+        this.tokens = tokens;
+        this.identities = identities;
+        this.images = images;
+    }
+
+    /** 新建结果：{@code placeId} + 雅加达包围盒外警告（200 + 黄条，不拦）。 */
+    public record CreateResult(long placeId, boolean outsideJakarta) {
+    }
+
+    /**
+     * 运营预置录入（Story 5.4 AC2）：字段校验（{@link PlaceEditForm}）→ 坐标（5.3 校验器）→ 标记人须 ∈ 发布身份池
+     * （{@code selectableIdentities()}：启用中的虚拟账号 + 授权真实账号，否则 422 {@code admin.err.places.markerNotInPool}）→ token → 保存
+     * → 逐张上传照片（12-2 链路 {@code images.upload(file, "places/<id>")}，只存 objectKey，{@code uploader_user_id} = 标记人）→
+     * {@code photo_count} = 张数 → 审计 {@code PLACE_CREATED}（summary 记场所名，不记坐标）。不做批量导入。
+     */
+    @Transactional
+    public CreateResult create(PlaceEditForm form, Long markerUserId, List<MultipartFile> photoFiles, long actorAdminAccountId) {
+        coordinates.validate(form.lat(), form.lng());
+        if (markerUserId == null || identities.selectableIdentities().stream()
+                .noneMatch(o -> o.userId() == markerUserId && !o.disabled())) {
+            throw AppException.validation("标记人须从运营发布身份池中选择").code("admin.err.places.markerNotInPool");
+        }
+        List<MultipartFile> files = photoFiles == null ? List.of() : photoFiles.stream().filter(f -> f != null && !f.isEmpty()).toList();
+        if (files.size() > MAX_PHOTOS) {
+            throw AppException.validation("照片最多 9 张").code("admin.err.places.tooManyPhotos");
+        }
+        files.forEach(images::validate); // 复审 #6：先把全部文件的类型 / 大小 / HEIC 校验跑完，再落库、再逐张上传，避免第 N 张被拒时前几张成 OSS 孤儿
+        Place p = places.save(Place.create(tokens.generate(), form.name(), form.placeType(), form.tags(), form.description(), form.city(),
+                form.addressText(), form.lat(), form.lng(), markerUserId));
+        int uploaded = 0;
+        for (MultipartFile f : files) {
+            UploadedImage up = images.upload(f, "places/" + p.getId());
+            photos.save(PlacePhoto.create(p.getId(), up.objectKey(), markerUserId));
+            uploaded++;
+        }
+        p.recount(uploaded, 0, 0, 0, 0);
+        audit.record(actorAdminAccountId, AuditActions.PLACE_CREATED, "PLACE", String.valueOf(p.getId()),
+                "name=" + p.getName() + ", photos=" + uploaded + ", markerUserId=" + markerUserId);
+        return new CreateResult(p.getId(), coordinates.isOutsideJakarta(form.lat(), form.lng()));
+    }
+
+    /** 标记人下拉数据源（Story 5.4）：发布身份池，启用中的在前；默认选中「TailTopia Official」或池内第一项由模板决定。 */
+    @Transactional(readOnly = true)
+    public List<PublishIdentityOption> markerOptions() {
+        return identities.selectableIdentities().stream().filter(o -> !o.disabled()).toList();
+    }
+
+    /**
+     * 驳回该场所全部 PENDING 举报（Story 5.4 AC4）：→ DISMISSED，记 handled_by / handled_at；审计 {@code PLACE_REPORTS_DISMISSED}。
+     * 返回驳回条数（0 = 没有待处理举报，不写审计）。场所已软删也允许驳回（举报对象已不存在，队列要能清）。
+     */
+    @Transactional
+    public int dismissReports(long placeId, long actorAdminAccountId) {
+        int n = settleReports(placeId, PlaceReportStatus.DISMISSED, actorAdminAccountId);
+        if (n > 0) {
+            audit.record(actorAdminAccountId, AuditActions.PLACE_REPORTS_DISMISSED, "PLACE", String.valueOf(placeId), "dismissed=" + n);
+        }
+        return n;
+    }
+
+    /**
+     * 该场所全部 PENDING 举报置为 {@code decision}，返回受影响条数。单条 {@code UPDATE … WHERE status='PENDING'}（复审 #7）：
+     * 原子且天然幂等——两位管理员同时驳回只有一笔改到行、只记一笔审计；与「下架」（锁场所行）并发也不会把已 ACTIONED 的行改成 DISMISSED。
+     */
+    private int settleReports(long placeId, PlaceReportStatus decision, long actorAdminAccountId) {
+        return reports.settlePending(placeId, decision, actorAdminAccountId, Instant.now());
     }
 
     /** 编辑结果：{@code outsideJakarta} = 坐标落在雅加达都会区包围盒外（200 + 黄条，不拦）。 */
@@ -112,7 +195,10 @@ public class AdminPlaceService {
         if (!p.delist()) {
             return false;
         }
-        audit.record(actorAdminAccountId, AuditActions.PLACE_DELISTED, "PLACE", String.valueOf(p.getId()), "name=" + p.getName());
+        // Story 5.4 AC4：下架顺带把该场所全部 PENDING 举报置 ACTIONED（同事务）
+        int actioned = settleReports(p.getId(), PlaceReportStatus.ACTIONED, actorAdminAccountId);
+        audit.record(actorAdminAccountId, AuditActions.PLACE_DELISTED, "PLACE", String.valueOf(p.getId()),
+                "name=" + p.getName() + (actioned > 0 ? ", reportsActioned=" + actioned : ""));
         return true;
     }
 

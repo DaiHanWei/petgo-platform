@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 待办中心角标计数（V1.3.0 Story 2.2 AC2 → Story 2.9 AC1 收口）。
  * <b>计数三处同源</b>：侧栏组角标 / 组内各项 / 页内页签计数都来自各页 Service 的同一「待处理」口径
  * （A1 四页签之和、A2 待处置、A4 OPEN、A5 待处理、A6 判定 + 审批 + 打款三段之和、A9 暖贴待跟进），不再各查一套。
- * 只汇总<b>登录者可见</b>的队列（UI 稿 0-2）；场所举报（5.4）后续接入同一聚合。
+ * 只汇总<b>登录者可见</b>的队列（UI 稿 0-2）；场所举报（Story 5.4）作为 A1 第五页签 {@code PLACE} 走同一聚合（{@code counts} 按 ReviewTab 求和），不另查。
  */
 @Service
 public class NavBadgeService {
@@ -102,7 +102,7 @@ public class NavBadgeService {
 
     private LongSupplier supplierFor(String queue) {
         return switch (queue) {
-            // A1：四页签待处理之和（送审 + 内容举报 + 名称 + 头像）
+            // A1：五页签待处理之和（送审 + 内容举报 + 场所举报（5.4）+ 名称 + 头像）
             case "manual-review" -> () -> manualReview.counts(ReviewFilters.DEFAULT).values().stream()
                     .mapToLong(Long::longValue).sum();
             case "tickets" -> tickets::pendingCount;

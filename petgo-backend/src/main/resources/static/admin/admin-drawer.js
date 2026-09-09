@@ -7,7 +7,7 @@
 //   · 抽屉内操作成功**不自动关**（UI 稿 10-6）；
 //   · ?open=<id> 页内深链（D-23：不是旧详情页 URL 的跳转规则）：DOMContentLoaded 找 tr[data-id=…] 自动 open；
 //     打开 / 关闭同步 history.replaceState 的 open 参数（sync）。
-// 委托：tr[data-drawer-url] 点击（排除 a / button / input / label / select 内的点击）。
+// 委托：tr[data-drawer-url] 点击（排除 a / button / input / label / select 内的点击）；[data-drawer-open] 按钮式入口（5.4 新建）。
 (function () {
     window.Admin = window.Admin || {};
     var state = { res: null, rowEl: null, hideTimer: null };
@@ -64,6 +64,9 @@
         if (!t || !t.closest) { return; }
         if (t.closest('[data-drawer-close]')) { close(); return; }
         if (t.closest('[data-drawer-mask]')) { close(); return; }
+        // 非行触发的抽屉入口（Story 5.4「＋ 新建场所」）：<button data-drawer-open="<url>" data-drawer-res="places">
+        var opener = t.closest('[data-drawer-open]');
+        if (opener) { open(opener.dataset.drawerOpen, { res: opener.dataset.drawerRes }); return; }
         if (t.closest('a, button, input, label, select, textarea, [data-no-drawer]')) { return; }
         var tr = t.closest('tr[data-drawer-url]');
         if (tr) { open(tr.dataset.drawerUrl, { rowEl: tr }); }
@@ -76,6 +79,12 @@
     });
     document.addEventListener('DOMContentLoaded', function () {
         document.body.addEventListener('admin:drawer-close', function () { close(); });
+        var auto = document.querySelector('[data-drawer-open][data-drawer-autoopen]'); // ?create=1 深链（非 htmx 访问新建表单 URL 的落点）
+        if (auto) {
+            open(auto.dataset.drawerOpen, { res: auto.dataset.drawerRes });
+            try { var u = new URL(window.location.href); u.searchParams.delete('create'); history.replaceState(history.state, '', u.toString()); } catch (e) { /* 忽略 */ }
+            return; // 打开后立即清掉 ?create=，关抽屉后 F5 不再自动重开（复审 #11）
+        }
         try {
             var id = new URLSearchParams(window.location.search).get('open');
             if (!id) { return; }

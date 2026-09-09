@@ -55,11 +55,7 @@ public class AdminSeedImageService {
      * @param folder 对象存储下的子目录（如 {@code seed-post} / {@code virtual-avatar}）
      */
     public UploadedImage upload(MultipartFile file, String folder) {
-        String contentType = normalizedType(file);
-        if (file.getSize() > MAX_BYTES) {
-            throw AppException.validation(msg("admin.seed.upload.tooLarge",
-                    new Object[] {MAX_BYTES / 1024 / 1024}));
-        }
+        String contentType = validate(file);
         byte[] bytes;
         try {
             bytes = file.getBytes();
@@ -82,6 +78,19 @@ public class AdminSeedImageService {
 
         return new UploadedImage(url, size == null ? 0 : size.w(), size == null ? 0 : size.h(),
                 advice.warns() ? warningText(advice) : null, key, bytes.length);
+    }
+
+    /**
+     * 纯校验（不碰网络）：格式白名单 / HEIC / 空文件 / 大小。多张上传的调用方（V1.3.0 Story 5.4 新建场所）应先对全部文件跑一遍再逐张
+     * {@link #upload}，否则第 N 张被拒时前面几张已成 OSS 孤儿对象（复审 #6）。返回规范化 content-type。
+     */
+    public String validate(MultipartFile file) {
+        String contentType = normalizedType(file);
+        if (file.getSize() > MAX_BYTES) {
+            throw AppException.validation(msg("admin.seed.upload.tooLarge",
+                    new Object[] {MAX_BYTES / 1024 / 1024}));
+        }
+        return contentType;
     }
 
     /**

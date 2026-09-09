@@ -70,7 +70,7 @@ public class UnifiedTicketQueryService {
     static final int FREQUENT_REPORTER_THRESHOLD = 5;
 
     /**
-     * 六表联合的 CTE（① 内容举报 ② 用户举报 ③ 名称 ④ 头像 ⑤ 内容送审）。
+     * 七表联合的 CTE（① 内容举报 ② 用户举报 ③ 名称 ④ 头像 ⑤ 内容送审 ⑥ 场所举报）。
      *
      * <p>⚠️ 账号标识字段两表<b>只收 MANUAL_PENDING 与两个终态</b>：
      * {@code SCORING / QUEUED / AUTO_PASSED / SUPERSEDED / FAILED_TO_QUEUE} 一律不进运营队列
@@ -240,6 +240,31 @@ public class UnifiedTicketQueryService {
                          ON mrq.content_type = 'CONTENT_POST' AND cp2.id = mrq.content_id
                   LEFT JOIN comments cmt
                          ON mrq.content_type = 'COMMENT' AND cmt.id = mrq.content_id
+
+                UNION ALL
+
+                -- ⑥ 场所举报（V1.3.0 Story 5.4，D-5）：**按场所聚合**（与①同理：运营处置的是场所条目，不是某一条举报）。
+                --    place_reports 唯一键 (place_id, reporter_user_id) ⇒ 次数恒等于人数、高频恒为 0，分数 = 举报人数。
+                --    status_bucket：任一 PENDING → PENDING；有 ACTIONED → RESOLVED；否则 NO_ACTION（全部驳回）。
+                --    preview = 场所名（MERGED 场所追加 [MERGED] 标记，页面渲染为「已并入」徽标）；action_ref = 任一 PENDING 举报 id；content_ref = place_id。
+                SELECT 'PLACE_REPORT'::text,
+                       pr.place_id,
+                       string_agg(DISTINCT pr.reason_type, ' / '),
+                       pl.marked_by_user_id,
+                       CASE WHEN bool_or(pr.status = 'PENDING')  THEN 'PENDING'
+                            WHEN bool_or(pr.status = 'ACTIONED') THEN 'RESOLVED'
+                            ELSE 'NO_ACTION' END,
+                       COUNT(DISTINCT pr.reporter_user_id)::bigint,
+                       COUNT(*)::bigint,
+                       0::bigint,
+                       COUNT(DISTINCT pr.reporter_user_id)::bigint,
+                       MIN(pr.created_at),
+                       pl.name || CASE WHEN pl.status = 'MERGED' THEN ' [MERGED]' ELSE '' END,
+                       MIN(pr.id) FILTER (WHERE pr.status = 'PENDING'),
+                       pr.place_id
+                  FROM place_reports pr
+                  JOIN places pl ON pl.id = pr.place_id
+                 GROUP BY pr.place_id, pl.marked_by_user_id, pl.name, pl.status
             )
             """.formatted(FREQUENT_REPORTER_THRESHOLD,
             IDENTITY_SCORE_HIGH, IDENTITY_SCORE_NORMAL,

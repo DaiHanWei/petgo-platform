@@ -3,7 +3,7 @@ package com.tailtopia.admin.moderation.dto;
 import java.util.Set;
 
 /**
- * 统一复核工作台页签（V1.3.0 Story 2.4 AC1）。四个页签 = 内容送审 / 内容举报 / 名称审核 / 头像审核；
+ * 统一复核工作台页签（V1.3.0 Story 2.4 AC1；5.4 加场所举报）。五个页签 = 内容送审 / 内容举报 / 场所举报 / 名称审核 / 头像审核；
  * 后两者都落在 {@link TicketType#ACCOUNT_IDENTITY} 上，靠 {@code sub_type} 切分。
  * 页签结构可扩展：新 {@link TicketType}（如 Story 5.4 的场所举报）加一行即出现新页签（AC8）。
  */
@@ -11,6 +11,8 @@ public enum ReviewTab {
 
     SUBMISSION("submission", TicketType.CONTENT_SUBMISSION, Set.of()),
     REPORT("report", TicketType.CONTENT_REPORT, Set.of()),
+    /** 场所举报（V1.3.0 Story 5.4）：按场所聚合，处置权限 place.manage（D-40：无权限看得到页签、按钮禁用）。 */
+    PLACE("place", TicketType.PLACE_REPORT, Set.of()),
     NAME("name", TicketType.ACCOUNT_IDENTITY, Set.of("NICKNAME", "PET_NAME")),
     AVATAR("avatar", TicketType.ACCOUNT_IDENTITY, Set.of("USER_AVATAR", "PET_AVATAR"));
 
@@ -69,6 +71,7 @@ public enum ReviewTab {
             return switch (t) {
                 case CONTENT_SUBMISSION -> SUBMISSION;
                 case CONTENT_REPORT -> REPORT;
+                case PLACE_REPORT -> PLACE;
                 case ACCOUNT_IDENTITY -> NAME;
                 default -> null;
             };
@@ -81,6 +84,9 @@ public enum ReviewTab {
     public static ReviewTab of(UnifiedTicketRow row) {
         if (row.type() == TicketType.ACCOUNT_IDENTITY) {
             return AVATAR.subTypes.contains(row.subType()) ? AVATAR : NAME;
+        }
+        if (row.type() == TicketType.PLACE_REPORT) {
+            return PLACE;
         }
         return row.type() == TicketType.CONTENT_REPORT ? REPORT : SUBMISSION;
     }

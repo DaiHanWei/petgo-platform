@@ -4,7 +4,7 @@
   B6 场所管理（V1.3.0 Story 5.2，模板 B · tpl-b-list，UI 稿 2-20 / 2-22；列按逐页规格 B6 的 11 列 + D-39 城市列）。
   只读：筛选栏（关键词 + 查询钮；类型 / 状态 / 城市 即选即查）→ 摘要条四格（随筛选联动，待处理举报数跳 A1 场所举报页签）
   → 表格（创建时间倒序、每页 20）→ 分页；行点击开 480px 抽屉（fragments/drawer-places.html，?open=<id> 深链）。
-  处置动作在 5.3（抽屉操作条渲染禁用占位）、「＋新建场所」在 5.4。
+  处置动作见 5.3（抽屉操作条）；「＋ 新建场所」（5.4）复用同一抽屉装 fragments/drawer-places-create.html 表单。
 -->
 <head>
     <meta charset="UTF-8"/>
@@ -18,11 +18,15 @@
     <div th:fragment="content" th:remove="tag" th:with="res='places'">
         <div class="wb-title-row">
             <h1 th:text="#{admin.v130.places.title}">场所管理</h1>
-            <!-- 「＋新建场所」由 Story 5.4 接入 -->
+            <!-- Story 5.4：「＋ 新建场所」→ 同一抽屉装新建表单（admin-drawer.js 的 [data-drawer-open]；?create=1 深链自动开） -->
+            <button type="button" class="btn btn-primary btn-sm" th:attr="data-drawer-open=@{/admin/places/new/drawer},data-drawer-autoopen=${openCreate} ? 'true' : null"
+                    data-drawer-res="places" th:text="#{admin.v130.places.create.button}">＋ 新建场所</button>
         </div>
         <p class="muted" th:text="#{admin.v130.places.note}">宠物友好场所的信息、照片、评论与打卡；处置动作见抽屉操作条。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <!-- 新建成功但坐标在雅加达都会区外（D-33 不拦）：PRG 回列表带 warn=outsideJakarta -->
+        <div class="banner warn" th:if="${warn}" th:text="${warn}">坐标不在雅加达都会区，请确认</div>
 
         <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::pl-filters}, ~{::pl-summary}, ~{::pl-table}, ~{::pl-drawer})}">
             <form th:fragment="pl-filters" class="filter-bar" data-autosubmit th:attr="hx-get=@{/admin/places}"

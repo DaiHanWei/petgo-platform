@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  B6 新建场所抽屉表单（V1.3.0 Story 5.4 AC1 / AC2；UI 稿 2-21 · D-33 手填坐标 · D-32 不引地图库 · D-39 城市必填）。
+  form = 抽屉体：multipart（照片 0～9 张）hx-post /admin/places；失败 422 行内 err（AdminBusinessExceptionAdvice 按 HX-Target 回填
+  #places-create-error）；成功 HX-Redirect 到 /admin/places?open=<id>（PRG，新行自动开抽屉；都会区外再带 warn=outsideJakarta）。
+  位置区 = 纬度 / 经度两个数字输入（占位「从 Google Maps 右键坐标复制」），**无地图组件、无外部瓦片请求**。
+  created = HX-Redirect 时的占位响应体（htmx 收到 HX-Redirect 不做 swap）。
+-->
+<body>
+<div th:fragment="form" class="pl-drawer pl-create" data-place-create>
+    <form class="pl-edit-form" th:attr="hx-post=@{/admin/places}" hx-encoding="multipart/form-data"
+          hx-target="#places-create-error" hx-swap="innerHTML">
+        <h3 th:text="#{admin.v130.places.create.title}">新建场所</h3>
+        <p class="hint" th:text="#{admin.v130.places.create.hint}">运营预置录入：坐标从 Google Maps 复制手填，不做地图与批量导入。</p>
+        <div id="places-create-error" class="lst-inline-error" aria-live="polite"></div>
+        <label class="field field-full"><span th:text="#{admin.v130.places.edit.name}">名称</span>
+            <input type="text" name="name" class="inp" maxlength="80" required autofocus/></label>
+        <label class="field"><span th:text="#{admin.v130.places.edit.type}">类型</span>
+            <select name="placeType" class="sel" required>
+                <option th:each="t : ${typeOptions}" th:value="${t}" th:text="#{'admin.v130.places.type.' + ${t}}">类型</option>
+            </select></label>
+        <label class="field"><span th:text="#{admin.v130.places.edit.city}">城市</span>
+            <input type="text" name="city" class="inp" maxlength="60" required list="places-create-cities" value="Jakarta"/>
+            <datalist id="places-create-cities">
+                <option th:each="c : ${cities}" th:value="${c}"></option>
+            </datalist></label>
+        <label class="field field-full"><span th:text="#{admin.v130.places.edit.tags}">标签</span>
+            <input type="text" name="tags" class="inp" th:placeholder="#{admin.v130.places.create.tags.placeholder}"/></label>
+        <label class="field field-full"><span th:text="#{admin.v130.places.edit.address}">文字地址</span>
+            <input type="text" name="addressText" class="inp" maxlength="255" required/></label>
+        <!-- 位置（D-33）：两个数字输入，不渲染地图 -->
+        <label class="field"><span th:text="#{admin.v130.places.edit.lat}">纬度</span>
+            <input type="number" name="lat" class="inp" step="0.000001" min="-90" max="90" required
+                   th:placeholder="#{admin.v130.places.create.coord.placeholder}"/></label>
+        <label class="field"><span th:text="#{admin.v130.places.edit.lng}">经度</span>
+            <input type="number" name="lng" class="inp" step="0.000001" min="-180" max="180" required
+                   th:placeholder="#{admin.v130.places.create.coord.placeholder}"/></label>
+        <p class="hint field-full" th:text="#{admin.v130.places.create.coord.hint}">在 Google Maps 上右键地点 → 点击坐标即可复制「纬度, 经度」。</p>
+        <label class="field field-full"><span th:text="#{admin.v130.places.edit.description}">描述</span>
+            <textarea name="description" class="inp" rows="3"></textarea></label>
+        <label class="field field-full"><span th:text="#{admin.v130.places.create.photos}">照片（0～9 张，可空）</span>
+            <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple data-max-files="9"
+                   th:attr="data-max-bytes=${uploadMaxBytes},data-max-total-bytes=${uploadMaxRequestBytes},data-msg-limit=#{admin.v130.places.create.photos.limit(9, ${uploadMaxMb}, ${uploadMaxRequestBytes / 1048576})}"/>
+            <span class="hint" th:text="#{admin.v130.places.create.photos.limit(9, ${uploadMaxMb}, ${uploadMaxRequestBytes / 1048576})}">最多 9 张</span></label>
+        <label class="field field-full"><span th:text="#{admin.v130.places.col.marker}">标记人</span>
+            <select name="markerUserId" class="sel" required>
+                <option th:each="m : ${markers}" th:value="${m.userId}" th:selected="${m.nickname == 'TailTopia Official'}"
+                        th:text="${m.nickname} + (${m.real} ? '' : ' · ' + #{admin.v130.places.create.marker.virtual})">TailTopia Official</option>
+            </select>
+            <span class="hint" th:if="${#lists.isEmpty(markers)}" th:text="#{admin.v130.places.create.marker.empty}">发布身份池为空</span></label>
+        <button type="submit" class="btn btn-primary btn-sm" th:disabled="${#lists.isEmpty(markers)}" th:text="#{admin.v130.places.create.submit}">创建场所</button>
+    </form>
+</div>
+
+<!-- 成功：HX-Redirect 已带出，此响应体不会被 swap -->
+<div th:fragment="created" class="muted" th:text="#{admin.v130.places.create.done}">已创建</div>
+</body>
+</html>
