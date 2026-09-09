@@ -19,7 +19,7 @@ class AdminNavModelTest {
         int pages = groups.stream().mapToInt(g -> g.pages().size()).sum();
         assertThat(pages).isEqualTo(AdminPageCatalog.navPages().size());
         assertThat(groups.get(1).pages()).extracting(AdminPageCatalog.Page::key)
-                .containsExactly("manual-review", "tickets", "anomalies", "support-tickets", "refunds");
+                .containsExactly("manual-review", "tickets", "anomalies", "support-tickets", "refunds", "warm-replies"); // 4.4 第 6 项
     }
 
     @Test

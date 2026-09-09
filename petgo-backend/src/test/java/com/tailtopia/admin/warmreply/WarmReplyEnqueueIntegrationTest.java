@@ -125,8 +125,9 @@ class WarmReplyEnqueueIntegrationTest extends ApiIntegrationTest {
         WarmReplyFollowup f = pending(warm.getId()).orElseThrow();
 
         // 运营标记已读 → HANDLED；之后回复被下架不影响历史项
-        assertThat(queue.markRead(f.getId(), 1L)).isTrue();
-        assertThat(queue.markRead(f.getId(), 1L)).isFalse();
+        queue.markRead(f.getId(), 1L);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> queue.markRead(f.getId(), 1L))
+                .isInstanceOf(com.tailtopia.shared.error.AppException.class);
         commentService.takedownComment(reply);
         settle();
         WarmReplyFollowup handled = followups.findById(f.getId()).orElseThrow();

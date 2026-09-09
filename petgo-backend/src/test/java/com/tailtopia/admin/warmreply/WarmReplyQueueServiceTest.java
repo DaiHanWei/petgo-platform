@@ -1,6 +1,7 @@
 package com.tailtopia.admin.warmreply;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -10,13 +11,26 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.warmreply.domain.FollowupStatus;
+import com.tailtopia.admin.warmreply.domain.HandledAction;
+import com.tailtopia.admin.warmreply.domain.WarmReplyFollowup;
 import com.tailtopia.admin.warmreply.repository.WarmReplyFollowupRepository;
 import com.tailtopia.admin.warmreply.service.WarmReplyEnqueueListener;
 import com.tailtopia.admin.warmreply.service.WarmReplyQueueService;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.content.domain.Comment;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.dto.CommentResponse;
 import com.tailtopia.content.event.CommentRemovedEvent;
+import com.tailtopia.content.repository.CommentRepository;
+import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.content.service.CommentService;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.ratelimit.IdempotencyService;
 import com.tailtopia.content.event.CommentRemovedReason;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import java.time.Instant;
@@ -34,7 +48,13 @@ class WarmReplyQueueServiceTest {
     private final WarmReplyFollowupRepository followups = mock(WarmReplyFollowupRepository.class);
     private final UserRepository users = mock(UserRepository.class);
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
-    private final WarmReplyQueueService service = new WarmReplyQueueService(followups, users, jdbc);
+    private final CommentRepository comments = mock(CommentRepository.class);
+    private final ContentPostRepository posts = mock(ContentPostRepository.class);
+    private final CommentService commentService = mock(CommentService.class);
+    private final IdempotencyService idempotency = mock(IdempotencyService.class);
+    private final AdminAuditService audit = mock(AdminAuditService.class);
+    private final WarmReplyQueueService service = new WarmReplyQueueService(followups, users, jdbc, comments, posts, commentService,
+            idempotency, audit);
     private final WarmReplyEnqueueListener listener = new WarmReplyEnqueueListener(service);
 
     private static final long POST = 10L;
@@ -126,5 +146,115 @@ class WarmReplyQueueServiceTest {
     void pendingCountDelegatesToRepository() {
         when(followups.countByStatus(FollowupStatus.PENDING)).thenReturn(4L);
         assertThat(service.pendingCount()).isEqualTo(4L);
+    }
+
+    // ===== Story 4.4：回复 / 标记已读 =====
+
+    /** 跟进行只由 upsert SQL 创建（无公开构造器）：测试用反射造一条 PENDING 项。 */
+    static WarmReplyFollowup pendingFollowup(long id) {
+        try {
+            var ctor = WarmReplyFollowup.class.getDeclaredConstructor();
+            ctor.setAccessible(true);
+            WarmReplyFollowup f = ctor.newInstance();
+            for (var e : java.util.Map.of("id", (Object) id, "virtualCommentId", VIRTUAL_COMMENT, "postId", POST,
+                    "virtualUserId", VIRTUAL_USER, "lastReplyId", REPLY, "lastReplyAt", Instant.now()).entrySet()) {
+                var fld = WarmReplyFollowup.class.getDeclaredField(e.getKey());
+                fld.setAccessible(true);
+                fld.set(f, e.getValue());
+            }
+            return f;
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void stubContentAlive() {
+        when(posts.findById(POST)).thenReturn(Optional.of(ContentPost.publish(5L, ContentType.DAILY, null, "帖", java.util.List.of())));
+        when(comments.findById(VIRTUAL_COMMENT)).thenReturn(Optional.of(Comment.create(POST, null, VIRTUAL_USER, "暖评")));
+    }
+
+    @Test
+    void replyGoesThroughCreateReplyWithLockedIdentityThenHandledAndAudited() {
+        WarmReplyFollowup f = pendingFollowup(7L);
+        when(followups.findForUpdateById(7L)).thenReturn(Optional.of(f));
+        when(idempotency.findResourceId("wr:7:k1")).thenReturn(Optional.empty());
+        stubContentAlive();
+        String longBody = "谢谢你！".repeat(20); // 80 字
+        when(commentService.createReply(VIRTUAL_COMMENT, VIRTUAL_USER, longBody)).thenReturn(
+                new CommentResponse(900L, VIRTUAL_USER, "马甲", null, false, null, longBody, Instant.now(), 0, java.util.List.of(), "UNDER_REVIEW"));
+
+        WarmReplyQueueService.ReplyResult r = service.reply(7L, "  " + longBody + "  ", "k1", 42L);
+
+        assertThat(r.commentId()).isEqualTo(900L);
+        assertThat(r.replayed()).isFalse();
+        // 身份锁定：parentId = 虚拟一级评论、authorId = 虚拟账号——都从跟进行取，不接收参数
+        verify(commentService).createReply(VIRTUAL_COMMENT, VIRTUAL_USER, longBody);
+        verify(comments, never()).save(any());
+        assertThat(f.getStatus()).isEqualTo(FollowupStatus.HANDLED);
+        assertThat(f.getHandledAction()).isEqualTo(HandledAction.REPLIED);
+        assertThat(f.getHandledCommentId()).isEqualTo(900L);
+        assertThat(f.getHandledBy()).isEqualTo(42L);
+        org.mockito.ArgumentCaptor<String> summary = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(audit).record(eq(42L), eq(AuditActions.COMMENT_VIRTUAL_POST), eq("COMMENT"), eq("900"), summary.capture());
+        assertThat(summary.getValue()).contains("followupId=7").doesNotContain(longBody).contains(longBody.substring(0, 50) + "…");
+        verify(idempotency).store("wr:7:k1", 900L); // 幂等键按项加作用域
+    }
+
+    @Test
+    void replyValidationOrderAndReplay() {
+        when(idempotency.findResourceId("wr:7:dup")).thenReturn(Optional.of(900L));
+        assertThat(service.reply(7L, "x", "dup", 42L)).isEqualTo(new WarmReplyQueueService.ReplyResult(900L, true));
+        verify(commentService, never()).createReply(anyLong(), anyLong(), anyString());
+
+        when(idempotency.findResourceId(any())).thenReturn(Optional.empty());
+        when(followups.findForUpdateById(8L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.reply(8L, "x", null, 42L)).isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.warmReply.notFound"));
+
+        WarmReplyFollowup handled = pendingFollowup(9L);
+        handled.markHandled(1L, HandledAction.READ, null);
+        when(followups.findForUpdateById(9L)).thenReturn(Optional.of(handled));
+        assertThatThrownBy(() -> service.reply(9L, "x", null, 42L)).isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.warmReply.notPending"));
+
+        WarmReplyFollowup f = pendingFollowup(7L);
+        when(followups.findForUpdateById(7L)).thenReturn(Optional.of(f));
+        assertThatThrownBy(() -> service.reply(7L, "   ", null, 42L)).isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.warmReply.bodyInvalid"));
+        assertThatThrownBy(() -> service.reply(7L, "x".repeat(201), null, 42L)).isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.warmReply.bodyInvalid"));
+
+        // 帖子已删 → 只能标记已读
+        when(posts.findById(POST)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.reply(7L, "x", null, 42L)).isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.warmReply.contentDeleted"));
+        assertThat(f.getStatus()).isEqualTo(FollowupStatus.PENDING);
+        verify(commentService, never()).createReply(anyLong(), anyLong(), anyString());
+        verify(audit, never()).record(any(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void replyBlockedByL1KeepsPendingAndCarriesLocalizedCode() {
+        WarmReplyFollowup f = pendingFollowup(7L);
+        when(followups.findForUpdateById(7L)).thenReturn(Optional.of(f));
+        when(idempotency.findResourceId(any())).thenReturn(Optional.empty());
+        stubContentAlive();
+        when(commentService.createReply(anyLong(), anyLong(), anyString())).thenThrow(AppException.commentBlocked("内容包含不当词汇"));
+        assertThatThrownBy(() -> service.reply(7L, "judi", "k", 42L)).isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.v130.comments.virtual.err.blocked"));
+        assertThat(f.getStatus()).isEqualTo(FollowupStatus.PENDING);
+        verify(audit, never()).record(any(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void markReadAuditsAndRejectsSecondTime() {
+        WarmReplyFollowup f = pendingFollowup(7L);
+        when(followups.findForUpdateById(7L)).thenReturn(Optional.of(f));
+        service.markRead(7L, 42L);
+        assertThat(f.getStatus()).isEqualTo(FollowupStatus.HANDLED);
+        assertThat(f.getHandledAction()).isEqualTo(HandledAction.READ);
+        verify(audit).record(eq(42L), eq(AuditActions.WARM_REPLY_READ), eq("WARM_REPLY_FOLLOWUP"), eq("7"), anyString());
+        assertThatThrownBy(() -> service.markRead(7L, 42L)).isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.warmReply.notPending"));
     }
 }

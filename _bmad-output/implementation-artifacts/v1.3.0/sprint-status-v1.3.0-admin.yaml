@@ -71,7 +71,7 @@ development_status:
   4-1-帖子评论分布页签: review   # 帖子评论分布页签
   4-2-去评论-抽屉与虚拟身份发布: review   # 「去评论」抽屉与虚拟身份发布（走完整审核）
   4-3-暖贴回复跟进队列: review   # 暖贴回复跟进队列（入队 / 出队）
-  4-4-a9-暖贴回复跟进工作台: ready-for-dev   # A9 暖贴回复跟进工作台
+  4-4-a9-暖贴回复跟进工作台: review   # A9 暖贴回复跟进工作台
   epic-4-retrospective: optional
   # ---- Epic 5: 场所内容管理 ----
   epic-5: in-progress

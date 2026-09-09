@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  A9 暖贴回复跟进（V1.3.0 Story 4.4，模板 A · tpl-a-workbench，UI 稿 1-12）。
+  两态页签 待跟进 / 已跟进（近 30 天）；左栏 last_reply_at 倒序每页 20 滚动；右栏帖子卡 → 线程（入队后新到的真实回复高亮）
+  → 常驻回复区：身份锁定为被回复的虚拟账号（无下拉，服务端也不接收 virtualUserId）+ 文本框（≤200，空内容禁用）+ 标记已读。
+  写端点 htmx 回 warm-reply-done（data-next-id 自动下一条 + oob 删行 / 计数 + HX-Trigger 角标刷新）。🔴 无键盘 ↑/↓（D-14）。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.v130.warmReplies.title}">暖贴回复跟进 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-workbench.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <div class="wb-title-row"><h1 th:text="#{admin.v130.warmReplies.title}">暖贴回复跟进</h1></div>
+        <p class="muted" th:text="#{admin.v130.warmReplies.note}">真实用户回复了运营暖评：以同一虚拟身份继续回复，或标记已读。</p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <div th:replace="~{admin/fragments/tpl-a-workbench :: workbench(~{::wr-tabs}, ~{}, ~{::wr-queue}, ~{::wr-detail}, ~{::wr-actions})}">
+            <div th:fragment="wr-tabs" th:replace="~{admin/fragments/tpl-a-state-tabs :: tabs(${stateTabs})}"></div>
+            <div th:fragment="wr-queue" th:replace="~{admin/fragments/warm-reply-queue :: list}"></div>
+            <div th:fragment="wr-detail" th:replace="~{admin/fragments/tpl-a-workbench :: detail-empty}"></div>
+            <div th:fragment="wr-actions"><span class="muted" th:text="#{admin.v130.review.actions.hint}">操作区随所选单据渲染</span></div>
+        </div>
+
+        <script>
+        // 回复区：内容为空 → 「发布回复」禁用；剩余字数（事件委托，右栏 fragment 会被整块替换）
+        (function () {
+            function sync(form) {
+                var body = form.querySelector('[data-wr-body]');
+                var btn = form.querySelector('[data-wr-submit]');
+                var rem = form.querySelector('[data-wr-remaining]');
+                if (body && rem) {
+                    if (!rem.getAttribute('data-tpl')) { rem.setAttribute('data-tpl', rem.textContent.replace(/\d+/, '{0}')); }
+                    rem.textContent = rem.getAttribute('data-tpl').replace('{0}', String(Math.max(0, 200 - body.value.length)));
+                }
+                if (btn && body) { btn.disabled = !body.value.trim(); }
+            }
+            function syncAll() { document.querySelectorAll('form[data-wr-form]').forEach(sync); }
+            document.addEventListener('input', function (e) {
+                var form = e.target && e.target.closest ? e.target.closest('form[data-wr-form]') : null;
+                if (form) { sync(form); }
+            });
+            document.body.addEventListener('htmx:afterSwap', syncAll);
+            document.body.addEventListener('htmx:oobAfterSwap', syncAll);
+            document.addEventListener('DOMContentLoaded', syncAll);
+        })();
+        </script>
+    </div>
+</div>
+</body>
+</html>

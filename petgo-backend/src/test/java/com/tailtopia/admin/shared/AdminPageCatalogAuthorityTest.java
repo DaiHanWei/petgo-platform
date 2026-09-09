@@ -40,6 +40,9 @@ class AdminPageCatalogAuthorityTest {
                 com.tailtopia.admin.anomaly.web.AdminConsultSessionController.class));
         PAGES.put("support-tickets", List.of(com.tailtopia.admin.support.web.AdminSupportTicketController.class));
         PAGES.put("refunds", List.of(com.tailtopia.admin.refund.web.AdminRefundController.class));
+        // 暖贴跟进右栏「查看帖子 ↗」链到内容详情页，表达式须与 AdminContentManageController.DETAIL_AUTH 逐字一致
+        PAGES.put("warm-replies", List.of(com.tailtopia.admin.warmreply.web.AdminWarmReplyController.class,
+                com.tailtopia.admin.moderation.web.AdminContentManageController.class));
         // Story 3.5：看板付费卡门控（模板 sec:authorize 须与 AdminPaymentController.VIEW_AUTH / PAYMENT_CARD_AUTH 逐字一致）
         PAGES.put("dashboard", List.of(com.tailtopia.admin.dashboard.web.AdminDashboardController.class,
                 com.tailtopia.admin.payment.web.AdminPaymentController.class));
@@ -51,6 +54,7 @@ class AdminPageCatalogAuthorityTest {
             "anomalies", List.of("anomalies.html", "fragments/anomaly-queue.html", "fragments/anomaly-panel.html", "fragments/anomaly-done.html"),
             "support-tickets", List.of("support-tickets.html", "fragments/support-queue.html", "fragments/support-panel.html", "fragments/support-done.html"),
             "refunds", List.of("refunds.html", "fragments/refund-queue.html", "fragments/refund-panel.html", "fragments/refund-done.html"),
+            "warm-replies", List.of("warm-replies.html", "fragments/warm-reply-queue.html", "fragments/warm-reply-detail.html", "fragments/warm-reply-done.html"),
             "dashboard", List.of("dashboard.html", "fragments/dashboard-charts.html"));
 
     private static final Pattern SEC = Pattern.compile("sec:authorize=\"([^\"]+)\"");
@@ -101,8 +105,8 @@ class AdminPageCatalogAuthorityTest {
         // 反向：目录里「待办中心」组的每一页都必须登记到本测试（4.4 暖贴跟进进组时会在这里红，防漏检）
         Set<String> inbox = AdminPageCatalog.PAGES.stream().filter(p -> AdminPageCatalog.G_INBOX.equals(p.group()))
                 .map(AdminPageCatalog.Page::key).collect(java.util.stream.Collectors.toSet());
-        // 目录里已预登记、页面尚未落地的项（Story 4.4 暖贴跟进）；落地时从这里移到 PAGES / TEMPLATES
-        Set<String> notBuiltYet = Set.of("warm-replies");
+        // 目录里已预登记、页面尚未落地的项；落地时从这里移到 PAGES / TEMPLATES（4.4 暖贴跟进已落地）
+        Set<String> notBuiltYet = Set.of();
         inbox.removeAll(notBuiltYet);
         // 非待办中心的页面（看板，Story 3.5）也可登记进来复用逐字守卫，故用 containsAll 而非 exactly
         assertThat(PAGES.keySet()).as("待办中心组页面须全部登记到 PAGES / TEMPLATES").containsAll(inbox);

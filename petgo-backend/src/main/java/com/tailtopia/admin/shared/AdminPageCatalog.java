@@ -146,8 +146,9 @@ public final class AdminPageCatalog {
                     List.of(SUPPORT_VIEW), List.of(SUPPORT_HANDLE), List.of(REFUND_SUBMIT)).nav("admin.nav.supportTickets", "support-tickets", SUPPORT_VIEW, SUPPORT_HANDLE),
             page("refunds", G_INBOX, "/admin/refunds",
                     List.of(REFUND_VIEW), List.of(), List.of(REFUND_APPROVE, REFUND_PAYOUT)).nav("admin.nav.refunds", "refunds", REFUND_VIEW, REFUND_SUBMIT, REFUND_APPROVE, REFUND_PAYOUT),
+            // Story 4.4：待办中心第 6 项；查看权即 comment.virtual_post（不另设只读码）
             page("warm-replies", G_INBOX, "/admin/warm-replies",
-                    List.of(COMMENT_VIRTUAL_POST), List.of(), List.of()),
+                    List.of(COMMENT_VIRTUAL_POST), List.of(), List.of()).nav("admin.nav.warmReplies", "warm-replies", COMMENT_VIRTUAL_POST),
             // ✍️ 内容
             page("content", G_CONTENT, "/admin/content",
                     List.of(CONTENT_VIEW), List.of(),

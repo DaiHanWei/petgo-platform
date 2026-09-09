@@ -711,3 +711,16 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .summary-row .summary-list li b { font-size: var(--fs-md, 15px); color: var(--ink); }
 .retention-note { margin-top: 10px; }
 @media (max-width: 1024px) { .chart-grid { grid-template-columns: 1fr; } .chart-body { height: 220px; } }
+
+/* ===== A9 暖贴回复跟进（V1.3.0 Story 4.4）===== */
+.wr-card { margin-bottom: 10px; }
+.wr-thread-list { list-style: none; padding: 0; margin: 0; font-size: var(--fs-sm); }
+.wr-comment { display: grid; grid-template-columns: 1fr; gap: 2px; padding: 8px 10px; border-bottom: 1px dashed var(--line); border-left: 3px solid transparent; }
+.wr-comment--reply { margin-left: 18px; }
+.wr-comment.wr-fresh { background: var(--brand-tint); border-left-color: var(--brand); }
+.wr-author { font-weight: 600; }
+.wr-body { white-space: pre-wrap; word-break: break-word; }
+.wr-identity { margin: 0 0 6px; font-weight: 600; }
+.wr-form textarea { width: 100%; box-sizing: border-box; }
+.wr-buttons { display: flex; gap: 8px; align-items: center; margin: 6px 0 10px; }
+.wr-deleted { padding: 8px 10px; border: 1px dashed var(--line); border-radius: var(--radius-sm); }

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  A9 右栏（V1.3.0 Story 4.4 AC3 / AC4 / AC6）。d = WarmReplyViews.Detail。
+  ① 帖子卡（#postId + 正文摘要 + 作者昵称 + 可见评论数 + 「查看帖子 ↗」开内容详情）
+  ② 评论线程（该虚拟一级评论 + 其下全部可见 / 审核中二级，时间正序；入队后新收到的真实回复高亮 wr-fresh；审核中标徽）
+  ③ 常驻回复区（仅 PENDING）：「以 @<虚拟昵称> 继续回复（身份锁定为被回复账号）」只读标签 —— 无下拉、服务端不接收 virtualUserId ——
+     + 文本框（≤200，空内容禁用）+ 「发布回复」+ 「标记已读（不回复）」；帖子或暖评已删 → 「内容已删除」占位，只允许标记已读。
+  已跟进：处置徽标 + 操作人 + 时间，线程仍可看，操作区不渲染。本页查看权即 comment.virtual_post，无需禁用态。
+-->
+<body>
+<div th:fragment="detail" class="wr-detail" th:attr="data-followup-id=${d.id}">
+    <!-- ① 帖子卡 -->
+    <section class="card card-full wr-card">
+        <h2 th:text="#{admin.v130.warmReplies.detail.post}">帖子</h2>
+        <th:block th:if="${d.contentDeleted}">
+            <p class="muted wr-deleted" th:text="#{admin.v130.warmReplies.deleted}">内容已删除</p>
+            <p class="muted" th:text="'#' + ${d.postId}">#1</p>
+        </th:block>
+        <th:block th:unless="${d.contentDeleted}">
+            <p th:text="${#strings.isEmpty(d.postSummary)} ? '#' + ${d.postId} : ${d.postSummary}">正文摘要</p>
+            <p class="muted">
+                <span th:text="'#' + ${d.postId}">#1</span> ·
+                <span th:text="#{admin.v130.warmReplies.detail.post.author}">作者</span>
+                <span th:text="${d.postAuthorName}">作者</span> ·
+                <span th:text="#{admin.v130.comments.virtual.preview.visibleCount(${d.visibleCount})}">可见评论 N 条</span>
+                <a class="btn btn-neutral btn-sm" target="_blank" th:href="@{/admin/content/{id}(id=${d.postId})}"
+                   sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')"
+                   th:text="#{admin.v130.warmReplies.detail.viewPost}">查看帖子 ↗</a>
+            </p>
+        </th:block>
+    </section>
+
+    <!-- ② 评论线程 -->
+    <section class="card card-full wr-card wr-thread">
+        <h2 th:text="#{admin.v130.warmReplies.detail.thread}">评论线程</h2>
+        <p class="muted" th:if="${d.virtualComment == null}" th:text="#{admin.v130.warmReplies.deleted}">内容已删除</p>
+        <ul class="wr-thread-list" th:if="${d.virtualComment != null}">
+            <li class="wr-comment wr-comment--top">
+                <span class="wr-author"><span th:text="${d.virtualComment.authorName}">虚拟账号</span>
+                    <span class="badge badge-info" th:text="#{admin.v130.comments.virtual.badge.virtual}">虚拟</span></span>
+                <span class="wr-body" th:text="${d.virtualComment.body}">暖评</span>
+                <span class="muted rv-small" th:text="${@adminTime.wib(d.virtualComment.createdAt)}">时间</span>
+            </li>
+            <li th:each="c : ${d.replies}" class="wr-comment wr-comment--reply" th:classappend="${c.fresh} ? 'wr-fresh'" th:id="'wr-comment-' + ${c.id}">
+                <span class="wr-author"><span th:text="${c.authorName}">昵称</span>
+                    <span class="badge badge-info" th:if="${c.virtual}" th:text="#{admin.v130.comments.virtual.badge.virtual}">虚拟</span>
+                    <span class="badge badge-warn" th:if="${c.underReview}" th:text="#{admin.v130.warmReplies.badge.underReview}">审核中</span>
+                    <span class="badge badge-ok" th:if="${c.fresh}" th:text="#{admin.v130.warmReplies.detail.newReply}">新回复</span></span>
+                <span class="wr-body" th:text="${c.body}">回复</span>
+                <span class="muted rv-small" th:text="${@adminTime.wib(c.createdAt)}">时间</span>
+            </li>
+        </ul>
+    </section>
+
+    <!-- ③ 操作区 -->
+    <section class="wb-actions wr-actions">
+        <th:block th:if="${d.pending()}">
+            <p class="wr-identity">
+                <span th:text="#{admin.v130.warmReplies.detail.replyAs('@' + ${d.virtualNickname})}">以 @xx 继续回复</span>
+                <span class="muted" th:text="#{admin.v130.warmReplies.detail.locked}">（身份锁定为被回复账号）</span>
+            </p>
+            <form th:unless="${d.contentDeleted}" th:attr="hx-post=@{/admin/warm-replies/{id}/reply(id=${d.id})}" hx-target=".wb-detail-body" hx-swap="innerHTML"
+                  class="wr-form" data-wr-form>
+                <input type="hidden" name="idempotencyKey" th:value="${d.idempotencyKey}"/>
+                <textarea name="body" class="inp field-full" rows="3" maxlength="200" required data-wr-body
+                          th:placeholder="#{admin.v130.warmReplies.detail.body.placeholder}"></textarea>
+                <span class="muted" data-wr-remaining th:text="#{admin.v130.comments.virtual.body.remaining(200)}">还可输入 200 字</span>
+                <div class="wr-buttons">
+                    <button type="submit" class="btn btn-primary" disabled data-wr-submit th:text="#{admin.v130.warmReplies.action.reply}">发布回复</button>
+                </div>
+            </form>
+            <p class="muted wr-deleted" th:if="${d.contentDeleted}" th:text="#{admin.v130.warmReplies.deleted.readOnly}">帖子或暖评已删除，只能标记已读</p>
+            <form th:attr="hx-post=@{/admin/warm-replies/{id}/read(id=${d.id})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline">
+                <button type="submit" class="btn btn-neutral" th:text="#{admin.v130.warmReplies.action.read}">标记已读（不回复）</button>
+            </form>
+        </th:block>
+        <p class="muted" th:unless="${d.pending()}">
+            <span class="badge" th:classappend="${d.handledAction != null and d.handledAction.name() == 'REPLIED'} ? 'badge-ok' : 'badge-info'"
+                  th:text="${d.handledAction != null and d.handledAction.name() == 'REPLIED'} ? #{admin.v130.warmReplies.badge.replied} : #{admin.v130.warmReplies.badge.read}">已回复</span>
+            <span th:text="${d.handledByName} ?: ''">操作人</span>
+            <span th:text="${@adminTime.wib(d.handledAt)}">时间</span>
+            · <span th:text="#{admin.v130.warmReplies.readonly}">已跟进，只读回看</span>
+        </p>
+    </section>
+</div>
+</body>
+</html>

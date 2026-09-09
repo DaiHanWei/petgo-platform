@@ -15,6 +15,7 @@ import com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService;
 import com.tailtopia.admin.moderation.service.TicketsWorkbenchService;
 import com.tailtopia.admin.refund.service.AdminRefundQueryService;
 import com.tailtopia.admin.support.service.AdminSupportTicketQueryService;
+import com.tailtopia.admin.warmreply.service.WarmReplyQueueService;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,7 +36,8 @@ class NavBadgeServiceTest {
     private final ConsultAnomalyService anomalies = mock(ConsultAnomalyService.class);
     private final AdminSupportTicketQueryService support = mock(AdminSupportTicketQueryService.class);
     private final AdminRefundQueryService refunds = mock(AdminRefundQueryService.class);
-    private final NavBadgeService service = new NavBadgeService(manual, tickets, anomalies, support, refunds);
+    private final WarmReplyQueueService warmReplies = mock(WarmReplyQueueService.class);
+    private final NavBadgeService service = new NavBadgeService(manual, tickets, anomalies, support, refunds, warmReplies);
 
     @AfterEach
     void clear() {
@@ -49,6 +51,7 @@ class NavBadgeServiceTest {
         when(anomalies.count(AnomalyStatus.OPEN)).thenReturn(1L);
         when(support.pendingCount()).thenReturn(4L);
         when(refunds.pendingCount()).thenReturn(2L);
+        when(warmReplies.pendingCount()).thenReturn(6L);
     }
 
     @Test
@@ -56,7 +59,8 @@ class NavBadgeServiceTest {
         stubAll();
         Map<String, Long> c = service.counts(Set.of("ROLE_SUPER_ADMIN"));
         assertThat(c).containsEntry("manual-review", 12L).containsEntry("tickets", 3L).containsEntry("anomalies", 1L)
-                .containsEntry("support-tickets", 4L).containsEntry("refunds", 2L).containsEntry("total", 22L);
+                .containsEntry("support-tickets", 4L).containsEntry("refunds", 2L).containsEntry("warm-replies", 6L)
+                .containsEntry("total", 28L);
     }
 
     @Test
@@ -78,7 +82,7 @@ class NavBadgeServiceTest {
         SecurityContextHolder.getContext().setAuthentication(t);
         List<NavBadgeService.QueueLink> links = service.otherQueues("tickets");
         assertThat(links).extracting(NavBadgeService.QueueLink::key)
-                .containsExactly("manual-review", "support-tickets", "refunds");
+                .containsExactly("manual-review", "support-tickets", "refunds", "warm-replies");
         assertThat(links.get(0).route()).isEqualTo("/admin/manual-review");
         assertThat(links.get(0).navKey()).isEqualTo("admin.nav.review");
         assertThat(links.get(0).count()).isEqualTo(12L);

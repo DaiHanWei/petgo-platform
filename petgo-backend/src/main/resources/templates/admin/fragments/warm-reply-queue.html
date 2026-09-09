@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  A9 左栏队列（V1.3.0 Story 4.4 AC2）。list = 整个 <ul>；rows = 行 + 翻页哨兵；row(r, oob) = 单行。
+  行两行式：① 虚拟账号昵称 +「收到回复」+ 状态点（🔵 待跟进）；② 帖 #postId · <真实用户昵称> 回复了暖评 + 时间（last_reply_at）；
+  多条回复合并 → 「+N 条新回复」。已跟进页签：处置徽标（已回复 / 已读）+ 操作人 + 时间。
+-->
+<body>
+<ul th:fragment="list" class="q-list" id="warm-replies-queue" th:attr="data-tab=${tab}">
+    <th:block th:replace="~{admin/fragments/warm-reply-queue :: rows}"></th:block>
+</ul>
+
+<th:block th:fragment="rows">
+    <li th:if="${queue.isEmpty() and page == 0}" class="q-empty">
+        <div th:replace="~{admin/fragments/tpl-a-empty :: queueEmpty('warm-replies', ${tab == 'handled'} ? #{admin.v130.warmReplies.empty.handled} : null)}"></div>
+    </li>
+    <th:block th:each="r : ${queue.content}"><li th:replace="~{admin/fragments/warm-reply-queue :: row(${r}, false)}"></li></th:block>
+    <li th:if="${queue.hasNext()}" class="q-more" hx-swap="outerHTML" hx-trigger="revealed"
+        th:attr="hx-get=@{/admin/warm-replies/queue(tab=${tab},page=${page + 1})}">
+        <span class="muted" th:text="#{admin.v130.review.more}">加载更多…</span>
+    </li>
+</th:block>
+
+<ul th:remove="tag">
+    <li th:fragment="row(r, oob)" class="q-row" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:id="'warm-replies-row-' + ${r.id}" th:data-id="${r.id}"
+        th:data-detail-url="@{/admin/warm-replies/{id}/detail(id=${r.id})}"
+        th:attr="hx-get=@{/admin/warm-replies/{id}/detail(id=${r.id})}"
+        hx-target=".wb-detail-body" hx-swap="innerHTML" tabindex="0">
+        <span class="q-title">
+            <span class="dot" th:classappend="${r.pending()} ? 'dot--todo' : 'dot--done'"></span>
+            <span th:text="${r.virtualNickname}">虚拟账号</span>
+            <span class="muted" th:if="${r.pending()}" th:text="#{admin.v130.warmReplies.row.received}">收到回复</span>
+            <span class="badge" th:unless="${r.pending()}"
+                  th:classappend="${r.handledAction != null and r.handledAction.name() == 'REPLIED'} ? 'badge-ok' : 'badge-info'"
+                  th:text="${r.handledAction != null and r.handledAction.name() == 'REPLIED'} ? #{admin.v130.warmReplies.badge.replied} : #{admin.v130.warmReplies.badge.read}">已回复</span>
+            <span class="badge badge-warn" th:if="${r.pending() and r.pendingReplyCount > 1}"
+                  th:text="#{admin.v130.warmReplies.row.more(${r.pendingReplyCount - 1})}">+N 条新回复</span>
+        </span>
+        <span class="q-meta">
+            <span th:text="#{admin.v130.warmReplies.row.repliedBy('#' + ${r.postId}, ${r.replierNickname})}">帖 #1 · 某人 回复了暖评</span>
+            <span th:if="${r.pending()}" th:text="${@adminTime.wib(r.lastReplyAt)}">时间</span>
+            <span th:unless="${r.pending()}" th:text="(${r.handledByName} ?: '') + ' · ' + ${@adminTime.wib(r.handledAt)}">操作人 · 时间</span>
+        </span>
+    </li>
+</ul>
+</body>
+</html>

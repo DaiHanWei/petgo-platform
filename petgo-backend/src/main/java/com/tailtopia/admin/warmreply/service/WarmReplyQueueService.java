@@ -1,5 +1,7 @@
 package com.tailtopia.admin.warmreply.service;
 
+import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.warmreply.domain.FollowupStatus;
 import com.tailtopia.admin.warmreply.domain.HandledAction;
 import com.tailtopia.admin.warmreply.domain.WarmReplyFollowup;
@@ -7,7 +9,16 @@ import com.tailtopia.admin.warmreply.repository.WarmReplyFollowupRepository;
 import com.tailtopia.auth.domain.AccountType;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.repository.UserRepository;
+import com.tailtopia.content.domain.Comment;
+import com.tailtopia.content.domain.PostStatus;
+import com.tailtopia.content.dto.CommentResponse;
 import com.tailtopia.content.event.ContentCommentedEvent;
+import com.tailtopia.content.repository.CommentRepository;
+import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.content.service.CommentService;
+import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.error.ErrorTypes;
+import com.tailtopia.shared.ratelimit.IdempotencyService;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -30,6 +41,8 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code pending_reply_count - 1}，归零删行；虚拟一级评论本身被删：PENDING 项整条删除；HANDLED 不受影响。</li>
  * <li>两者都由 AFTER_COMMIT 监听器调入，本类方法 {@code REQUIRES_NEW}（监听阶段无环境事务，不开新事务写入会静默丢——07 月通知事故的修法）。</li>
  * <li>D-35：虚拟账号发的<b>二级</b>被回复不入队（两级结构下该回复的 parentAuthorId 是一级作者），X-2 启用后再扩展。</li>
+ * <li>Story 4.4（A9 工作台）：{@link #reply} 以被回复的虚拟账号身份发二级评论（{@code CommentService.createReply}，与 App 同链路 D-4，
+ * 身份从跟进行取、不接收参数）→ 项置 HANDLED/REPLIED + 审计 {@code COMMENT_VIRTUAL_POST}；{@link #markRead} → HANDLED/READ + 审计 {@code WARM_REPLY_READ}。</li>
  * <li>日志只记 id，不记评论正文。</li>
  * </ul>
  */
@@ -49,14 +62,31 @@ public class WarmReplyQueueService {
                           updated_at = now()
             """;
 
+    /** 回复正文上限（与 App 端评论一致）。 */
+    public static final int BODY_MAX = 200;
+    /** 审计摘要只记正文前 50 字（同 4-2 规则）。 */
+    static final int AUDIT_PREVIEW = 50;
+
     private final WarmReplyFollowupRepository followups;
     private final UserRepository users;
     private final JdbcTemplate jdbc;
+    private final CommentRepository comments;
+    private final ContentPostRepository posts;
+    private final CommentService commentService;
+    private final IdempotencyService idempotency;
+    private final AdminAuditService audit;
 
-    public WarmReplyQueueService(WarmReplyFollowupRepository followups, UserRepository users, JdbcTemplate jdbc) {
+    public WarmReplyQueueService(WarmReplyFollowupRepository followups, UserRepository users, JdbcTemplate jdbc,
+            CommentRepository comments, ContentPostRepository posts, CommentService commentService,
+            IdempotencyService idempotency, AdminAuditService audit) {
         this.followups = followups;
         this.users = users;
         this.jdbc = jdbc;
+        this.comments = comments;
+        this.posts = posts;
+        this.commentService = commentService;
+        this.idempotency = idempotency;
+        this.audit = audit;
     }
 
     /**
@@ -138,16 +168,95 @@ public class WarmReplyQueueService {
                 Instant.now().minus(HANDLED_RETENTION), PageRequest.of(Math.max(page, 0), size));
     }
 
-    /** 只读不回（4-4 用）：PENDING → HANDLED/READ；已处理幂等返回 false。 */
-    @Transactional
-    public boolean markRead(long followupId, long adminAccountId) {
-        return followups.findById(followupId).map(f -> f.markHandled(adminAccountId, HandledAction.READ, null)).orElse(false);
+    /** 已跟进（近 30 天）计数：页签计数与列表同口径。 */
+    @Transactional(readOnly = true)
+    public long handledCount() {
+        return followups.countByStatusAndHandledAtAfter(FollowupStatus.HANDLED, Instant.now().minus(HANDLED_RETENTION));
     }
 
-    /** 已回复（4-4 用）：PENDING → HANDLED/REPLIED，带运营以虚拟身份发出的回复 id。 */
+    /** 处置后自动选中的下一条（待跟进队列顶部；没有则 null）。 */
+    @Transactional(readOnly = true)
+    public Long nextPendingId() {
+        return followups.findFirstByStatusOrderByLastReplyAtDescIdDesc(FollowupStatus.PENDING).map(WarmReplyFollowup::getId).orElse(null);
+    }
+
+    /**
+     * 标记已读（不回复）（Story 4.4 AC5）：PENDING → HANDLED/READ + 审计 {@code WARM_REPLY_READ}；不存在 404，已处理 → 422
+     * （{@code admin.err.warmReply.notPending}）。无二次确认。
+     */
     @Transactional
-    public boolean markReplied(long followupId, long adminAccountId, long handledCommentId) {
-        return followups.findById(followupId).map(f -> f.markHandled(adminAccountId, HandledAction.REPLIED, handledCommentId))
-                .orElse(false);
+    public void markRead(long followupId, long adminAccountId) {
+        WarmReplyFollowup f = requirePending(followupId);
+        f.markHandled(adminAccountId, HandledAction.READ, null);
+        audit.record(adminAccountId, AuditActions.WARM_REPLY_READ, "WARM_REPLY_FOLLOWUP", String.valueOf(f.getId()),
+                "virtualCommentId=" + f.getVirtualCommentId() + ", postId=" + f.getPostId() + ", pendingReplies=" + f.getPendingReplyCount());
+        log.info("warm-reply followup read followupId={} by admin={}", f.getId(), adminAccountId);
+    }
+
+    /** 以虚拟身份回复的结果：评论 id；{@code replayed} = 幂等重放（同 key 已发过）。 */
+    public record ReplyResult(long commentId, boolean replayed) {
+    }
+
+    /**
+     * 以被回复的虚拟账号身份回复（Story 4.4 AC4，D-4）：身份锁定为 {@code followup.virtual_user_id}，父评论 = {@code virtual_comment_id}
+     * （二级回复，App 端 {@code POST /api/v1/comments/{parentId}/replies} 同一方法 {@code createReply}：L1 黑名单 / UNDER_REVIEW / 审核事件全部继承）。
+     * 顺序：幂等短路（key 按项加作用域）→ 项须 PENDING（行锁；404 / 422）→ 正文 1～200 → 帖子与虚拟评论未删（422
+     * {@code admin.err.warmReply.contentDeleted}，此时只允许「标记已读」）→ 帖子 PUBLISHED（422 {@code admin.err.virtualComment.postHidden}）→ 发布 → 项置 HANDLED/REPLIED → 审计 {@code COMMENT_VIRTUAL_POST}（正文只记前 50 字）→ 幂等记录（提交后写）。
+     */
+    @Transactional
+    public ReplyResult reply(long followupId, String body, String idempotencyKey, long adminAccountId) {
+        // 幂等键加作用域：全局 idem: 命名空间里别处的 key 不能拿来短路本项（复审 #7）
+        String scopedKey = idempotencyKey == null || idempotencyKey.isBlank() ? null : "wr:" + followupId + ":" + idempotencyKey;
+        Optional<Long> replay = idempotency.findResourceId(scopedKey);
+        if (replay.isPresent()) {
+            return new ReplyResult(replay.get(), true);
+        }
+        WarmReplyFollowup f = requirePending(followupId);
+        String text = body == null ? "" : body.strip();
+        if (text.isEmpty() || text.length() > BODY_MAX) {
+            throw AppException.validation("回复内容需为 1～200 字").code("admin.err.warmReply.bodyInvalid");
+        }
+        if (isContentDeleted(f)) {
+            throw AppException.validation("帖子或暖评已删除，只能标记已读").code("admin.err.warmReply.contentDeleted");
+        }
+        if (!posts.findById(f.getPostId()).map(p -> p.getStatus() == PostStatus.PUBLISHED).orElse(false)) {
+            // 帖子未删但不可见（下架 / 挂审）：createReply 会 404 中文原文，这里先按后台码 422（复审 #5）
+            throw AppException.validation("帖子不可见，不能评论").code("admin.err.virtualComment.postHidden");
+        }
+        CommentResponse created;
+        try {
+            created = commentService.createReply(f.getVirtualCommentId(), f.getVirtualUserId(), text);
+        } catch (AppException e) {
+            if (ErrorTypes.COMMENT_BLOCKED.equals(e.getType())) {
+                throw e.code("admin.v130.comments.virtual.err.blocked"); // L1 命中：后台三语按码渲染
+            }
+            throw e;
+        }
+        long commentId = created.id();
+        f.markHandled(adminAccountId, HandledAction.REPLIED, commentId);
+        audit.record(adminAccountId, AuditActions.COMMENT_VIRTUAL_POST, "COMMENT", String.valueOf(commentId),
+                "followupId=" + f.getId() + ", postId=" + f.getPostId() + ", virtualUserId=" + f.getVirtualUserId()
+                        + ", parentCommentId=" + f.getVirtualCommentId() + ", body=" + VirtualCommentService.summarize(text, AUDIT_PREVIEW));
+        idempotency.store(scopedKey, commentId);
+        log.info("warm-reply replied followupId={} commentId={} by admin={}", f.getId(), commentId, adminAccountId);
+        return new ReplyResult(commentId, false);
+    }
+
+    /** 帖子或那条虚拟一级评论已软删（AC6 边界）：右栏「内容已删除」占位，只允许标记已读。 */
+    @Transactional(readOnly = true)
+    public boolean isContentDeleted(WarmReplyFollowup f) {
+        boolean postGone = posts.findById(f.getPostId()).map(p -> p.getDeletedAt() != null).orElse(true);
+        boolean commentGone = comments.findById(f.getVirtualCommentId()).map(Comment::isDeleted).orElse(true);
+        return postGone || commentGone;
+    }
+
+    /** 行锁取 PENDING 项（复审 #6：两名运营同时回复同一项只能成功一个；后到的在锁释放后看到 HANDLED → 422）。 */
+    private WarmReplyFollowup requirePending(long followupId) {
+        WarmReplyFollowup f = followups.findForUpdateById(followupId)
+                .orElseThrow(() -> AppException.notFound("跟进项不存在").code("admin.err.warmReply.notFound"));
+        if (f.getStatus() != FollowupStatus.PENDING) {
+            throw AppException.validation("该项已跟进，不能再操作").code("admin.err.warmReply.notPending");
+        }
+        return f;
     }
 }
