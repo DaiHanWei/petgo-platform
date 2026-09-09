@@ -4,7 +4,7 @@ status: draft
 created: 2026-08-10
 updated: 2026-08-15
 validated: 2026-08-14
-validation_report: "_bmad-output/planning-artifacts/prds/prd-petgo-platform-2026-08-14/validation-report.md"
+validation_report: "_bmad-output/planning-artifacts/v1.4.0/validation-2026-08-14/validation-report.md"
 decided_2026_08_15: "C-10 扩展 PaymentIntent（原 D-9/OQ-35/L-8）· C-11 FR-108 挪 1.2.0（原 D-10/OQ-36/L-10）· C-12 行级部分退货 + 去程运费（原 OQ-38，落为 FR-104A）· C-13 砍换货（原 OQ-39）· SPEC-15 提前量 7 天。连带消解：D-5/OQ-29 · A-16 疫苗类分母污染"
 carried_findings: "⏳ 待拍板 OQ-37 / OQ-40 / OQ-41（安全攸关）/ OQ-42 · 后台 OQ-30~32 无 D 编号 · SPEC-1~SPEC-25（§9B 待补规格）· DEP-1~DEP-9（其中 DEP-6 已升为版本核心单点依赖）· L-9/L-11/L-12（§8A 未闭合项）"
 blocking_backend_dev: "无 —— C-10 拍板后已解除。开工前须先落 §8B 的两项并行护栏（Flyway 独占号段 · 共享枚举追加约定），且须三人共同确认"
@@ -678,7 +678,7 @@ PawCoin 原本只用于虚拟商品（AI 问诊解锁 FR-43A、兽医咨询 FR-4
 
 ## 5. 埋点
 
-事件写入 `3.数据埋点/埋点文件/埋点清单v140.md`，并**同步工程侧 `petgo-platform/docs/analytics-posthog-tracking.md`（该文件明确要求两边内容一致）**。平台 PostHog。
+事件写入 `3.数据埋点/埋点文件/埋点清单v140.md`，并**同步工程侧 `petgo-platform/docs/reference/analytics-posthog-tracking.md`（该文件明确要求两边内容一致）**。平台 PostHog。
 
 | 事件 | 关键属性 | 用途 |
 |---|---|---|
@@ -905,4 +905,4 @@ PawCoin 原本只用于虚拟商品（AI 问诊解锁 FR-43A、兽医咨询 FR-4
 
 *配套（**落库后文件名**，与源工作区不同源）：`PRD-v1.4.0-后台.md`（运营后台）｜`Roadmap-电商改动建议.md`（Roadmap 定点改写）｜`decision-log.md`（决策日志）｜`页面/`（UI 规格预览）｜`README.md`（落库说明）*
 
-*评审：`../prds/prd-petgo-platform-2026-08-14/validation-report.md`（2026-08-14，rubric + adversarial + 跨文档一致性三名评审员，128 条 findings）*
+*评审：`./validation-2026-08-14/validation-report.md`（2026-08-14，rubric + adversarial + 跨文档一致性三名评审员，128 条 findings）*

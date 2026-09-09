@@ -10,7 +10,7 @@
 #   SKIP_BUILD=1                     跳过本地 mvn build，直接用现有 target/*.jar
 #   SKIP_TESTS=0                     本地 build 时跑测试（默认 1=skip，与 logistic 一致）
 #
-# 前置（一次性，详见 docs/deployment-guide-backend.md §2）:
+# 前置（一次性，详见 docs/runbooks/deployment-guide-backend.md §2）:
 #   1. 本地装好 mvn（或用仓库自带 ./mvnw）/ Java 21
 #   2. SSH 公钥已注册到服务器
 #   3. 服务器已建好 jbp-net 网络、petgo-postgres 容器、共享 redis 容器、~/.env.petgo

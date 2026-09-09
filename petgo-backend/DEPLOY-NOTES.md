@@ -1,7 +1,7 @@
 # 后端待部署变更记录（DEPLOY NOTES）
 
 > 记录每次会改变**生产行为**的后端变更，以及部署时需要的额外动作（新 env / 新 Flyway / profile 等）。
-> 部署流程本身见 `docs/deployment-guide-backend.md`（`./scripts/deploy-backend.sh`）。新条目放最上面。
+> 部署流程本身见 `docs/runbooks/deployment-guide-backend.md`（`./scripts/deploy-backend.sh`）。新条目放最上面。
 
 ---
 

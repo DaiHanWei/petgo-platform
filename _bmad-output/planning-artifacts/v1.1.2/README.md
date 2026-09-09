@@ -61,7 +61,7 @@
 4. **日历格子数据结构新增结构化健康记录维度**（FR-84）——`CalendarDayCell` 需补「是否有 / 类型 / 条数」，后端 `petProfileCalendar` 接口补字段。PRD 已核实「当天是否有 Diary 内容」维度**已存在但未被使用**，可直接复用。
 5. **Diary 主页解除登录门控时不得连带放行子页面**（FR-78 / 假设 A-7）——现有受控清单按**路径前缀匹配**，解除 Diary 主页会连带解除建档 / 编辑档案 / 当天详情 / 里程碑列表。需改为精确匹配或显式子页白名单。
 6. **Tab 索引重排的连带风险**（FR-78）——PRD 明确只约束视觉顺序，是否重排底层索引由工程按成本决定；若重排，需同步核对所有以索引寻址的调用点（登录后回跳目标、推送深链、埋点 Tab 标识）。
-7. **埋点是 P0 工程项，不可后置**（§3.1）——底部 Tab 切换目前完全无埋点（走 shell 分支切换、不经路由观察器），不修则本次改版效果无法度量。拆 story 时应**独立成条**，不要散进各功能 story。仓库已有 `implementation-artifacts/spec-posthog-analytics-integration.md`，T-1~T-12 应挂在该链路上。
+7. **埋点是 P0 工程项，不可后置**（§3.1）——底部 Tab 切换目前完全无埋点（走 shell 分支切换、不经路由观察器），不修则本次改版效果无法度量。拆 story 时应**独立成条**，不要散进各功能 story。仓库已有 `implementation-artifacts/specs/spec-posthog-analytics-integration.md`，T-1~T-12 应挂在该链路上。
 
 ## 5. 数据库迁移编号
 
@@ -69,13 +69,13 @@
 
 ## 6. 版本上下文
 
-- V1.0.0：46 story 全部完成（`implementation-artifacts/sprint-status.yaml`）
-- V1.1.0：9 Epic 全部完成，Epic 9 收官（`implementation-artifacts/sprint-status-v1.1.yaml`）
+- V1.0.0：46 story 全部完成（`implementation-artifacts/v1.0.0/sprint-status.yaml`）
+- V1.1.0：9 Epic 全部完成，Epic 9 收官（`implementation-artifacts/v1.1.0/sprint-status-v1.1.yaml`）
 - **V1.1.2：本目录，规划中**。零运营后台依赖，App 端 + 服务端即可独立交付
 - V1.1.4：内容运营/增长能力（FR-68/70/71/73/74/75/76/85 + 名片 H5 改版），依赖运营后台，排在本版本之后。**本版本不依赖 V1.1.4 的任何 FR**（依赖方向自检见 PRD §6.2）
 
 ## 7. 下游产物命名（沿用 V1.1.0 的 delta 模式，并存不覆盖）
 
-- `planning-artifacts/architecture-v1.1.2-delta.md`
-- `planning-artifacts/epics-v1.1.2.md`
-- `implementation-artifacts/sprint-status-v1.1.2.yaml`
+- `planning-artifacts/v1.1.2/architecture-v1.1.2-delta.md`
+- `planning-artifacts/v1.1.2/epics-v1.1.2.md`
+- `implementation-artifacts/v1.1.2/sprint-status-v1.1.2.yaml`

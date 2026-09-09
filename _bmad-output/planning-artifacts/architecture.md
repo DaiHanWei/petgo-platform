@@ -4,12 +4,12 @@ lastStep: 8
 status: 'complete'
 completedAt: '2026-06-01'
 inputDocuments:
-  - _bmad-output/planning-artifacts/PRD.md
-  - _bmad-output/planning-artifacts/TECH_FRAMEWORK.md
-  - _bmad-output/planning-artifacts/UX_DESIGN.md
-  - _bmad-output/planning-artifacts/UX_EXPERIENCE.md
-  - _bmad-output/planning-artifacts/implementation-readiness-report-2026-06-01.md
-  - _bmad-output/planning-artifacts/index.md
+  - _bmad-output/planning-artifacts/v1.0.0/PRD.md
+  - _bmad-output/planning-artifacts/v1.0.0/TECH_FRAMEWORK.md
+  - _bmad-output/planning-artifacts/v1.0.0/UX_DESIGN.md
+  - _bmad-output/planning-artifacts/v1.0.0/UX_EXPERIENCE.md
+  - _bmad-output/planning-artifacts/v1.0.0/implementation-readiness-report-2026-06-01.md
+  - _bmad-output/planning-artifacts/v1.0.0/index.md
 workflowType: 'architecture'
 project_name: 'TailTopia'
 user_name: 'Dai'

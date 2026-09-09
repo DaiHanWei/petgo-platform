@@ -6,8 +6,8 @@ completedAt: '2026-06-29'
 inputDocuments:
   - _bmad-output/planning-artifacts/admin-backend/PRD.md
   - _bmad-output/planning-artifacts/architecture.md
-  - _bmad-output/planning-artifacts/PRD.md
-  - _bmad-output/planning-artifacts/TECH_FRAMEWORK.md
+  - _bmad-output/planning-artifacts/v1.0.0/PRD.md
+  - _bmad-output/planning-artifacts/v1.0.0/TECH_FRAMEWORK.md
   - _bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md
 workflowType: 'architecture'
 project_name: 'TailTopia 管理后台 V1.0.0'

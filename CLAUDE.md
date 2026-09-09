@@ -37,10 +37,15 @@
 
 ## 规划产物在哪（单一事实源）
 
-- **PRD / 架构 / UX**：`_bmad-output/planning-artifacts/`（`PRD.md`、`architecture.md`、`UX_DESIGN.md`、`epics.md`）
-- **46 份 story**：`_bmad-output/implementation-artifacts/<epic>-<n>-<中文名>.md`，状态 `ready-for-dev`
+**先读 `_bmad-output/README.md`**，它列出所有版本及每个版本的五件套。产物**按版本目录**存放，规划层与实现层同名：
+
+- **规划层** `_bmad-output/planning-artifacts/<ver>/`：PRD、架构 delta、epics、就绪度评审，各目录有 README 说明状态
+- **实现层** `_bmad-output/implementation-artifacts/<ver>/`：story（`<epic>-<n>-<中文名>.md`）+ `sprint-status-<ver>.yaml`（执行顺序，`story_location` 指向同目录）
+- **跨版本基线**：`_bmad-output/planning-artifacts/architecture.md`（各版本只写 delta）
 - **跨 story 契约/数据生命周期决策**：`_bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md` —— **遇冲突以此为准**
-- **执行顺序与 Flyway 约定**：`_bmad-output/implementation-artifacts/sprint-status.yaml`
+- **独立 spec**：`_bmad-output/implementation-artifacts/specs/`；运维/参考文档在 `docs/runbooks/`、`docs/reference/`
+
+被要求「执行某版本的 PRD / story」时：进对应 `<ver>/` 目录 → 读 README → 按 sprint-status 顺序取 story。**不同版本 story 编号会重复**（v1.0.0 与 v1.1.0 都有 `1-1-*`），引用必须带版本目录。
 
 ## 实现一个 story 的纪律
 
@@ -50,7 +55,7 @@
    - **L0 静态**：`flutter analyze` / `flutter test` / `mvn -B compile|package`（无需 DB、无需凭证）
    - **L1 集成**：需 Docker daemon + postgres + redis 真跑（`mvn spring-boot:run` + `/actuator/health=UP`）
    - **L2 端到端**：需真实第三方凭证 / 真机 / 模拟器视觉
-4. **严格按 Epic 1→7、story 编号升序**。
+4. **严格按当前版本 `sprint-status-<ver>.yaml` 的 Epic / story 顺序推进**，不跳序。
 5. **Flyway 新迁移一律时间戳版本号**：`V<yyyyMMdd_HHmm>__<snake_case>.sql`（如 `V20260821_1435__init_shop_orders.sql`，取创建时刻），**禁止再用序列号**（决策 E7，取代 E6/E2；时间戳制为常设规则，不再有过渡条款）。
    - **存量序号迁移 V1–V108 一律保留原号，不改名、不返工**（名单见 `scripts/ci/flyway-legacy-versions.txt`）。它们多数已应用到 prod / `petgo_stag`，改名会让 Flyway 找不到已应用记录、启动即拒。**一切以数据库现状为准。**
    - **能不能改一个迁移文件，判据是「它有没有被任何环境应用过」，不是「它在不在 main 上」**：已应用的绝不能改（checksum 对不上，启动即失败），从未应用过的可以直接改。

@@ -23,7 +23,7 @@ V1 以两个核心功能构建最小完整体验，**全功能免费，不涉及
 
 **明确移至 V2：** 宠物聚会活动（Gabung Gath）、支付体系、内容社区视频发布、搜索、用户公开主页、多宠物管理。
 
-详见 [`PRD.md`](./_bmad-output/planning-artifacts/PRD.md)（39 个功能需求 FR，唯一权威范围定义）。
+详见 [`PRD.md`](./_bmad-output/planning-artifacts/v1.0.0/PRD.md)（39 个功能需求 FR，唯一权威范围定义）。
 
 ---
 
@@ -49,7 +49,7 @@ Cloudflare(边缘 TLS/WAF/路由)  →  德国源站(后端 + PostgreSQL)
 
 **媒体三层存储**（隐私边界严格隔离）：① 阿里 OSS 公开桶（Feed / 档案 / 名片）· ② 阿里 OSS 私密桶（AI 分诊图，医疗敏感，仅签名 URL）· ③ 腾讯 IM 托管（兽医聊天图 / 视频）。
 
-详见 [`TECH_FRAMEWORK.md`](./_bmad-output/planning-artifacts/TECH_FRAMEWORK.md)。
+详见 [`TECH_FRAMEWORK.md`](./_bmad-output/planning-artifacts/v1.0.0/TECH_FRAMEWORK.md)。
 
 ### 后端模块边界
 
@@ -61,16 +61,15 @@ Cloudflare(边缘 TLS/WAF/路由)  →  德国源站(后端 + PostgreSQL)
 
 ```
 petgo-platform/
-├── _bmad-output/planning-artifacts/   # 规划产物（唯一事实源）
-│   ├── index.md                       #   产物索引 + PRD 参考目录 + FR→模块映射
-│   ├── PRD.md                         #   产品需求文档（核心，39 个 FR）
-│   ├── UX_DESIGN.md                   #   UX 视觉规范（Design System）
-│   ├── UX_EXPERIENCE.md               #   UX 行为规范（信息架构 / 流程 / 无障碍）
-│   ├── TECH_FRAMEWORK.md              #   技术框架与多云拓扑对齐稿
-│   ├── TailTopia_V1_mockups.html          #   21 屏全屏效果图（S01–S21）
-│   └── implementation-readiness-report-2026-06-01.md  # 就绪度评审
+├── _bmad-output/                      # 规划与实现产物（唯一事实源），入口 _bmad-output/README.md
+│   ├── planning-artifacts/            #   规划层：按版本目录 v1.0.0 … v1.4.0 + admin-backend + bug-system
+│   │   ├── architecture.md            #     跨版本基线架构（各版本只写 delta）
+│   │   └── v1.0.0/                    #     PRD / UX / TECH_FRAMEWORK / epics / 就绪度评审
+│   ├── implementation-artifacts/      #   实现层：同名版本目录，story + sprint-status；specs/ 独立规格
+│   └── _archive/                      #   一次性截图与原型页，只读
 ├── _bmad/                             # BMAD 工作流配置
-├── docs/                              # 工程文档（架构 / API 契约，待产出）
+├── docs/                              # 工程文档：runbooks/ 运维、reference/ 参考、ops/ 运营、design/
+├── petgo_app/  petgo-backend/         # 双产物
 └── README.md
 ```
 
@@ -80,11 +79,11 @@ petgo-platform/
 
 | 文件 | 类型 | 说明 |
 |------|------|------|
-| [`index.md`](./_bmad-output/planning-artifacts/index.md) | 🗂️ 索引 | 产物目录、PRD 章节速查、FR → 技术模块映射 |
-| [`PRD.md`](./_bmad-output/planning-artifacts/PRD.md) | 📋 PRD | 产品需求（核心，唯一权威范围） |
-| [`UX_DESIGN.md`](./_bmad-output/planning-artifacts/UX_DESIGN.md) | 🎨 UX 视觉 | 色彩 / 字体 / 间距 / 组件 / Do's & Don'ts |
-| [`UX_EXPERIENCE.md`](./_bmad-output/planning-artifacts/UX_EXPERIENCE.md) | 🧭 UX 行为 | 导航 / 状态 / 关键流程 / 无障碍 |
-| [`TECH_FRAMEWORK.md`](./_bmad-output/planning-artifacts/TECH_FRAMEWORK.md) | 🏗️ 技术框架 | 技术选型与多云拓扑 |
+| [`index.md`](./_bmad-output/planning-artifacts/v1.0.0/index.md) | 🗂️ 索引 | 产物目录、PRD 章节速查、FR → 技术模块映射 |
+| [`PRD.md`](./_bmad-output/planning-artifacts/v1.0.0/PRD.md) | 📋 PRD | 产品需求（核心，唯一权威范围） |
+| [`UX_DESIGN.md`](./_bmad-output/planning-artifacts/v1.0.0/UX_DESIGN.md) | 🎨 UX 视觉 | 色彩 / 字体 / 间距 / 组件 / Do's & Don'ts |
+| [`UX_EXPERIENCE.md`](./_bmad-output/planning-artifacts/v1.0.0/UX_EXPERIENCE.md) | 🧭 UX 行为 | 导航 / 状态 / 关键流程 / 无障碍 |
+| [`TECH_FRAMEWORK.md`](./_bmad-output/planning-artifacts/v1.0.0/TECH_FRAMEWORK.md) | 🏗️ 技术框架 | 技术选型与多云拓扑 |
 | [`TailTopia_V1_mockups.html`](./_bmad-output/planning-artifacts/TailTopia_V1_mockups.html) | 🖼️ 效果图 | 21 屏全屏效果图 |
 
 ---
@@ -106,7 +105,7 @@ cd petgo_app && flutter pub get && flutter gen-l10n && flutter run
 ```
 
 Agent 工作约定（命名 / 分层 / 护栏 / 云端 L0 边界）见根 [`CLAUDE.md`](./CLAUDE.md)；
-云端过夜开发循环见 [`docs/cloud-dev-workflow.md`](./docs/cloud-dev-workflow.md)。
+云端过夜开发循环见 [`docs/runbooks/cloud-dev-workflow.md`](./docs/runbooks/cloud-dev-workflow.md)。
 
 ---
 
@@ -115,6 +114,6 @@ Agent 工作约定（命名 / 分层 / 护栏 / 云端 L0 边界）见根 [`CLAU
 规划阶段已完成（PRD / 架构 / UX / 46 Story）。开发已启动：
 
 - ✅ **Story 1.1** 双产物脚手架与本地可运行骨架（后端起栈 + Flyway + ProblemDetail + OpenAPI 3.1 + i18n 空壳 + CI）
-- ⏭️ 按 Epic 1→7、Story 编号升序推进（见 `_bmad-output/implementation-artifacts/sprint-status.yaml`）
+- ⏭️ 按 Epic 1→7、Story 编号升序推进（见 `_bmad-output/implementation-artifacts/v1.0.0/sprint-status.yaml`）
 
 > ⚠️ 状态：规划产物为 `draft`。开发前请以 `_bmad-output/planning-artifacts/` 内最新版本为准。

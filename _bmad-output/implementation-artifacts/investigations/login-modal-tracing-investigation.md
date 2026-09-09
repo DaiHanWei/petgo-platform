@@ -44,13 +44,13 @@
 
 ### Finding 2: Story 1.4 把需求依据直接指向 FR-0B / FR-0C
 
-**Evidence:** `_bmad-output/implementation-artifacts/1-4-登录引导浮层与登录后回跳.md:13-25`
+**Evidence:** `_bmad-output/implementation-artifacts/v1.0.0/1-4-登录引导浮层与登录后回跳.md:13-25`
 
 **Detail:** Story 标题即「登录引导浮层」。正文：「实现两个自包含组件——软性登录推荐浮层（**FR-0B**，底部半屏…每 session 最多一次）与强登录引导弹窗（**FR-0C**，含『登录后继续使用该功能』）」。明确「无后端改动」「登录态由 Story 1.3 提供」。
 
 ### Finding 3: FR-0B / FR-0C 是 PRD 的原始产品设计（弹窗写死在需求里）
 
-**Evidence:** `_bmad-output/planning-artifacts/PRD.md:124-139`（§4.0 用户登录与引导）
+**Evidence:** `_bmad-output/planning-artifacts/v1.0.0/PRD.md:124-139`（§4.0 用户登录与引导）
 
 **Detail:**
 - FR-0A（PRD:116）：未登录用户可直接浏览首页，**无强制登录拦截**。
