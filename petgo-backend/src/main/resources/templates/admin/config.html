@@ -31,17 +31,42 @@
             <label class="field"><span th:text="#{admin.config.aiUnlockPrice}">AI 详情解锁价（IDR）</span>
                 <input class="field-full" type="number" name="aiUnlockPrice" min="0" th:value="${pricing.aiUnlockPrice}"/>
             </label>
-            <label class="field"><span th:text="#{admin.config.idHdDownloadPrice}">身份证高清图下载价（IDR）</span>
-                <input class="field-full" type="number" name="idHdDownloadPrice" min="0" th:value="${pricing.idHdDownloadPrice}"/>
-            </label>
+            <!--/* KTP 卡高清价自 V1.3.0 Story 6.1 起移到下方独立卡「KTP 模块高清图解锁定价」 */-->
             <label class="field"><span th:text="#{admin.config.monthlyFreeQuota}">每月AI问诊免费额度（0–35）</span>
                 <input class="field-full" type="number" name="monthlyFreeQuota" min="0" max="35" th:value="${pricing.monthlyFreeQuota}"/>
             </label>
             <button type="submit" class="btn btn-primary btn-sm mt-sm" th:text="#{admin.config.btn.savePricing}">保存定价</button>
         </form>
         <p class="hint" sec:authorize="!hasRole('SUPER_ADMIN') and !hasAuthority('config.edit')"
-           th:text="#{admin.config.pricingReadonly(${pricing.vetConsultPrice}, ${pricing.vetShareRate}, ${pricing.aiUnlockPrice}, ${pricing.idHdDownloadPrice}, ${pricing.monthlyFreeQuota})}">
+           th:text="#{admin.config.pricingReadonly(${pricing.vetConsultPrice}, ${pricing.vetShareRate}, ${pricing.aiUnlockPrice}, ${pricing.monthlyFreeQuota})}">
             当前定价（只读，需 config.edit 权限修改）
+        </p>
+
+        <!--/* ══ V1.3.0 Story 6.1 · AB-18A：KTP 模块高清图解锁定价三行（AD-7 / D-3 加样式 = 加列；D-7 三价一律 ≥1）══
+             每行：样式名（只读）| 价格 input[min=1,step=1] | 参考价（仅护照两行：KTP 当前价）。三价独立保存、不联动；
+             改价只影响新发起的解锁。与定价卡同码门控（config.edit 改 / config.view 看）。
+             data-confirm 用静态文案（admin-core.js 的 data-confirm 不拼新旧值；新旧值复述随 Story 6.3 模板 D）。解析级注释，不进 HTML。 */-->
+        <h2 th:text="#{admin.config.ktp.title}">KTP 模块高清图解锁定价</h2>
+        <p class="hint" th:text="#{admin.config.ktp.hint}">三价独立保存；改价只影响新发起的解锁，已解锁记录不受影响。</p>
+        <form class="card ktp-pricing" method="post" th:action="@{/admin/config/ktp-pricing}"
+              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')"
+              th:attr="data-confirm=#{admin.config.ktp.confirm}">
+            <label class="field"><span th:text="#{admin.config.ktp.rowKtpHd}">KTP 卡高清下载（IDR）</span>
+                <input class="field-full" type="number" name="idHdDownloadPrice" min="1" step="1" required th:value="${pricing.idHdDownloadPrice}"/>
+            </label>
+            <label class="field"><span th:text="#{admin.config.ktp.rowPassportPage}">护照 · 护照内页解锁（IDR）</span>
+                <input class="field-full" type="number" name="passportPagePrice" min="1" step="1" required th:value="${pricing.passportPageUnlockPrice}"/>
+                <span class="hint" data-ref-hint th:text="#{admin.config.ktp.refHint(${#numbers.formatInteger(pricing.idHdDownloadPrice, 0, 'COMMA')})}">参考：KTP 当前价 Rp 5,000</span>
+            </label>
+            <label class="field"><span th:text="#{admin.config.ktp.rowPassportBoarding}">护照 · 登机牌解锁（IDR）</span>
+                <input class="field-full" type="number" name="passportBoardingPrice" min="1" step="1" required th:value="${pricing.passportBoardingUnlockPrice}"/>
+                <span class="hint" data-ref-hint th:text="#{admin.config.ktp.refHint(${#numbers.formatInteger(pricing.idHdDownloadPrice, 0, 'COMMA')})}">参考：KTP 当前价 Rp 5,000</span>
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm mt-sm" th:text="#{admin.config.ktp.btn.save}">保存解锁定价</button>
+        </form>
+        <p class="hint" data-ktp-readonly sec:authorize="!hasRole('SUPER_ADMIN') and !hasAuthority('config.edit')"
+           th:text="#{admin.config.ktp.readonly(${pricing.idHdDownloadPrice}, ${pricing.passportPageUnlockPrice}, ${pricing.passportBoardingUnlockPrice})}">
+            当前 KTP 卡高清 / 护照内页 / 登机牌解锁价（只读，需 config.edit 权限修改）
         </p>
 
         <!-- PawCoin（AB-6A/6C）-->

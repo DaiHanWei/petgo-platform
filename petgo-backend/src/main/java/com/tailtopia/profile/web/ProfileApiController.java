@@ -205,10 +205,11 @@ public class ProfileApiController {
     /**
      * HD 下载当前定价（与扣费同源实时读 pricing_config，Story 9.2 后台可配）。
      * 前端付费抽屉展示用——此前展示价硬编码 5000，后台改价后与实际扣费脱钩（417 同类）。
+     * V1.3.0 Story 6.1（契约 X-4）：同一响应追加护照·护照内页 / 护照·登机牌两个解锁价（camelCase），旧字段 {@code price} 不变。
      */
     @GetMapping("/me/id-cards/pricing")
     public com.tailtopia.profile.dto.IdCardHdPricingResponse hdPricing() {
-        return new com.tailtopia.profile.dto.IdCardHdPricingResponse(idCardHdService.currentHdPrice());
+        return idCardHdService.currentPricing();
     }
 
     /** 单卡详情（归属校验，非本人 404 防枚举）。 */

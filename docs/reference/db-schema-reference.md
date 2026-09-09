@@ -752,10 +752,12 @@
 | 2 | `vet_consult_price` | bigint | ● |  | 兽医单次问诊价格，IDR 最小单位（默认 50000 = Rp50.000） |
 | 3 | `vet_share_rate` | integer | ● |  | 兽医分成百分比（0-100 的整数，默认 60 表示 60%）；兽医到手 = 问诊价 × 该比例 ÷ 100 |
 | 4 | `ai_unlock_price` | bigint | ● |  | AI 分诊详情付费解锁价格，IDR 最小单位（默认 10000 = Rp10.000） |
-| 5 | `id_hd_download_price` | bigint | ● |  | 宠物身份证高清图下载价格，IDR 最小单位（默认 5000 = Rp5.000） |
+| 5 | `id_hd_download_price` | bigint | ● |  | KTP 卡（宠物身份证）高清图下载价格，IDR 最小单位（默认 5000 = Rp5.000）；V1.3.0 起 `CHECK (>= 1)`（D-7 不做 0 元限免） |
 | 6 | `monthly_free_quota` | integer | ● |  | 每位用户每月免费解锁 AI 分诊详情的次数（0-35，默认 1） |
 | 7 | `created_at` | timestamp with time zone | ● |  | 创建时间（UTC） |
 | 8 | `updated_at` | timestamp with time zone | ● |  | 最后修改时间（UTC） |
+| 9 | `passport_page_unlock_price` | bigint | ● |  | **V1.3.0 后台 6.1**（`V20260909_1843__add_pricing_config_passport_prices.sql`）：FR-120 护照·护照内页样式一次性解锁价，IDR，`CHECK (>= 1)`；初始值 = 迁移时的 `id_hd_download_price` |
+| 10 | `passport_boarding_unlock_price` | bigint | ● |  | 同上：护照·登机牌样式一次性解锁价，IDR，`CHECK (>= 1)`。三价由后台「KTP 模块高清图解锁定价」卡独立维护（D-3：加样式 = 加列 + 迁移 + 小发版），App 端经 `GET /api/v1/pet-profiles/me/id-cards/pricing` 读取（契约 X-4） |
 
 
 ---

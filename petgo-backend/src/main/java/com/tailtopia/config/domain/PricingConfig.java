@@ -35,6 +35,14 @@ public class PricingConfig {
     @Column(name = "monthly_free_quota", nullable = false)
     private int monthlyFreeQuota;
 
+    /** FR-120 护照·护照内页样式一次性解锁价（IDR，≥1；V1.3.0 Story 6.1，D-3 加样式 = 加列）。 */
+    @Column(name = "passport_page_unlock_price", nullable = false)
+    private long passportPageUnlockPrice;
+
+    /** FR-120 护照·登机牌样式一次性解锁价（IDR，≥1）。 */
+    @Column(name = "passport_boarding_unlock_price", nullable = false)
+    private long passportBoardingUnlockPrice;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -96,5 +104,21 @@ public class PricingConfig {
 
     public void setMonthlyFreeQuota(int v) {
         this.monthlyFreeQuota = v;
+    }
+
+    public long getPassportPageUnlockPrice() {
+        return passportPageUnlockPrice;
+    }
+
+    public void setPassportPageUnlockPrice(long v) {
+        this.passportPageUnlockPrice = v;
+    }
+
+    public long getPassportBoardingUnlockPrice() {
+        return passportBoardingUnlockPrice;
+    }
+
+    public void setPassportBoardingUnlockPrice(long v) {
+        this.passportBoardingUnlockPrice = v;
     }
 }

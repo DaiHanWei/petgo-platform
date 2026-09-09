@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.config.dto.KtpPricingForm;
 import com.tailtopia.admin.config.dto.PawCoinForm;
 import com.tailtopia.admin.config.dto.PricingForm;
 import com.tailtopia.config.domain.ConfigChangeLog;
@@ -62,6 +63,8 @@ class AdminConfigServiceTest {
         set(c, "vetShareRate", 60);
         set(c, "aiUnlockPrice", 10000L);
         set(c, "idHdDownloadPrice", 5000L);
+        set(c, "passportPageUnlockPrice", 5000L);
+        set(c, "passportBoardingUnlockPrice", 5000L);
         set(c, "monthlyFreeQuota", 1);
         when(pricingRepo.findById(1L)).thenReturn(Optional.of(c));
         return c;
@@ -70,7 +73,7 @@ class AdminConfigServiceTest {
     @Test
     void rejectsShareRateOver100() {
         seedPricing();
-        assertThatThrownBy(() -> svc.updatePricing(new PricingForm(50000, 101, 10000, 5000, 1), 7L))
+        assertThatThrownBy(() -> svc.updatePricing(new PricingForm(50000, 101, 10000, 1), 7L))
                 .isInstanceOf(AppException.class);
         verify(changeLogs, never()).saveAll(anyList());
     }
@@ -78,14 +81,14 @@ class AdminConfigServiceTest {
     @Test
     void rejectsFreeQuotaOver35() {
         seedPricing();
-        assertThatThrownBy(() -> svc.updatePricing(new PricingForm(50000, 60, 10000, 5000, 36), 7L))
+        assertThatThrownBy(() -> svc.updatePricing(new PricingForm(50000, 60, 10000, 36), 7L))
                 .isInstanceOf(AppException.class);
     }
 
     @Test
     void rejectsNegativePrice() {
         seedPricing();
-        assertThatThrownBy(() -> svc.updatePricing(new PricingForm(-1, 60, 10000, 5000, 1), 7L))
+        assertThatThrownBy(() -> svc.updatePricing(new PricingForm(-1, 60, 10000, 1), 7L))
                 .isInstanceOf(AppException.class);
     }
 
@@ -93,7 +96,7 @@ class AdminConfigServiceTest {
     void logsOnlyChangedFieldsAndAuditsOnce() {
         seedPricing();
         // 仅改单价 + 分成两字段。
-        svc.updatePricing(new PricingForm(60000, 55, 10000, 5000, 1), 7L);
+        svc.updatePricing(new PricingForm(60000, 55, 10000, 1), 7L);
 
         ArgumentCaptor<List<ConfigChangeLog>> cap = ArgumentCaptor.forClass(List.class);
         verify(changeLogs).saveAll(cap.capture());
@@ -103,10 +106,56 @@ class AdminConfigServiceTest {
         verify(audit, times(1)).record(eq(7L), anyString(), anyString(), anyString(), anyString());
     }
 
+    // ── V1.3.0 Story 6.1：KTP 模块高清图解锁定价三行（D-7 三价一律 ≥1）──────────
+    @Test
+    void ktpPricingRejectsZeroOrNegativeOnAnyOfTheThree() {
+        seedPricing();
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(0, 5000, 5000), 7L))
+                .isInstanceOf(AppException.class).hasMessageContaining("≥1");
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, -1, 5000), 7L))
+                .isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 0), 7L))
+                .isInstanceOf(AppException.class);
+        verify(changeLogs, never()).saveAll(anyList());
+        verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void ktpPricingLogsOnlyChangedColumnsIndependentlyAndAuditsOnce() {
+        PricingConfig c = seedPricing();
+        svc.updateKtpPricing(new KtpPricingForm(5000, 8000, 5000), 7L); // 只改护照内页
+
+        ArgumentCaptor<List<ConfigChangeLog>> cap = ArgumentCaptor.forClass(List.class);
+        verify(changeLogs).saveAll(cap.capture());
+        assertThat(cap.getValue()).extracting(ConfigChangeLog::getField).containsExactly("passport_page_unlock_price");
+        assertThat(c.getPassportPageUnlockPrice()).isEqualTo(8000);
+        assertThat(c.getIdHdDownloadPrice()).isEqualTo(5000); // 不联动
+        assertThat(c.getPassportBoardingUnlockPrice()).isEqualTo(5000);
+        verify(audit, times(1)).record(eq(7L), eq("CONFIG_UPDATE_PRICING"), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void ktpPricingNoChangeWritesNothing() {
+        seedPricing();
+        svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000), 7L);
+        verify(changeLogs, never()).saveAll(anyList());
+        verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void pricingCardNoLongerTouchesTheHdPrice() {
+        PricingConfig c = seedPricing();
+        svc.updatePricing(new PricingForm(60000, 60, 10000, 1), 7L);
+        assertThat(c.getIdHdDownloadPrice()).isEqualTo(5000);
+        ArgumentCaptor<List<ConfigChangeLog>> cap = ArgumentCaptor.forClass(List.class);
+        verify(changeLogs).saveAll(cap.capture());
+        assertThat(cap.getValue()).extracting(ConfigChangeLog::getField).doesNotContain("id_hd_download_price");
+    }
+
     @Test
     void noChangeWritesNothing() {
         seedPricing();
-        svc.updatePricing(new PricingForm(50000, 60, 10000, 5000, 1), 7L); // 全同
+        svc.updatePricing(new PricingForm(50000, 60, 10000, 1), 7L); // 全同
         verify(changeLogs, never()).saveAll(anyList());
         verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
     }

@@ -89,6 +89,9 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(html).as("定价配置整块不见了").contains("/admin/config/pricing");
+        // V1.3.0 Story 6.1：KTP 模块高清图解锁定价独立卡；HD 行已从定价卡移出
+        assertThat(html).as("KTP 解锁定价卡不见了").contains("/admin/config/ktp-pricing").contains("name=\"passportBoardingPrice\"")
+                .doesNotContain("name=\"idHdDownloadPrice\" min=\"0\"");
         assertThat(html).as("PawCoin 整块不见了").contains("/admin/config/pawcoin");
         assertThat(html).as("分享奖励整块不见了（Story 18.3）")
                 .contains("/admin/config/share-reward");

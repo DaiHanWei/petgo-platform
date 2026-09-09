@@ -2,6 +2,7 @@ package com.tailtopia.admin.config.web;
 
 import com.tailtopia.admin.config.dto.FeedRankForm;
 import com.tailtopia.admin.account.domain.AdminPermissions;
+import com.tailtopia.admin.config.dto.KtpPricingForm;
 import com.tailtopia.admin.config.dto.PawCoinForm;
 import com.tailtopia.admin.config.dto.PricingForm;
 import com.tailtopia.admin.config.service.AdminConfigService;
@@ -126,17 +127,38 @@ public class AdminConfigController {
                 period);
     }
 
+    /** 定价卡四项（V1.3.0 Story 6.1 起不再接收 {@code idHdDownloadPrice}——KTP 卡高清价归 {@link #updateKtpPricing}）。 */
     @PostMapping("/admin/config/pricing")
     @PreAuthorize(EDIT_AUTH)
     public String updatePricing(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam long vetConsultPrice, @RequestParam int vetShareRate,
-            @RequestParam long aiUnlockPrice, @RequestParam long idHdDownloadPrice,
+            @RequestParam long aiUnlockPrice,
             @RequestParam int monthlyFreeQuota, RedirectAttributes flash) {
         try {
             write.updatePricing(new PricingForm(vetConsultPrice, vetShareRate, aiUnlockPrice,
-                    idHdDownloadPrice, monthlyFreeQuota), admin.getAdminAccountId());
+                    monthlyFreeQuota), admin.getAdminAccountId());
             // bug 20260721-346：定价保存成功提示改用 toast（短暂自动消失），区别于常驻 notice 横幅。
             flash.addFlashAttribute("toast", msg.get("admin.flash.config.pricingSaved"));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/config";
+    }
+
+    /**
+     * 「KTP 模块高清图解锁定价」三行（V1.3.0 Story 6.1 · AB-18A）：KTP 卡高清下载 / 护照·护照内页 / 护照·登机牌。
+     * 与定价卡同码（{@code config.edit} 改、{@code config.view} 看，不新增权限）；PRG + toast；校验失败 flash error 回显
+     * （htmx 422 fragment 随 Story 6.3 套模板 D 一起接）。
+     */
+    @PostMapping("/admin/config/ktp-pricing")
+    @PreAuthorize(EDIT_AUTH)
+    public String updateKtpPricing(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam long idHdDownloadPrice, @RequestParam long passportPagePrice,
+            @RequestParam long passportBoardingPrice, RedirectAttributes flash) {
+        try {
+            write.updateKtpPricing(new KtpPricingForm(idHdDownloadPrice, passportPagePrice, passportBoardingPrice),
+                    admin.getAdminAccountId());
+            flash.addFlashAttribute("toast", msg.get("admin.flash.config.ktpPricingSaved"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
         }

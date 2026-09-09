@@ -2,6 +2,7 @@ package com.tailtopia.admin.config.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.config.dto.FeedRankForm;
+import com.tailtopia.admin.config.dto.KtpPricingForm;
 import com.tailtopia.admin.config.dto.PawCoinForm;
 import com.tailtopia.admin.config.dto.PricingForm;
 import com.tailtopia.config.domain.ConfigChangeLog;
@@ -52,9 +53,10 @@ public class AdminConfigService {
     }
 
     // ── 定价 ──────────────────────────────────────────────────────────────────
+    /** 定价卡四项（V1.3.0 Story 6.1 起不再含 KTP 卡高清价——那一项归 {@link #updateKtpPricing}）。 */
     @Transactional
     public void updatePricing(PricingForm form, long adminId) {
-        require(form.vetConsultPrice() >= 0 && form.aiUnlockPrice() >= 0 && form.idHdDownloadPrice() >= 0,
+        require(form.vetConsultPrice() >= 0 && form.aiUnlockPrice() >= 0,
                 "价格不可为负", "admin.err.config.priceNegative");
         require(form.vetShareRate() >= 0 && form.vetShareRate() <= 100, "兽医分成须在 0–100",
                 "admin.err.config.vetShareRateRange");
@@ -67,7 +69,6 @@ public class AdminConfigService {
         diff(logs, ConfigType.PRICING, "vet_consult_price", c.getVetConsultPrice(), form.vetConsultPrice(), adminId);
         diff(logs, ConfigType.PRICING, "vet_share_rate", c.getVetShareRate(), form.vetShareRate(), adminId);
         diff(logs, ConfigType.PRICING, "ai_unlock_price", c.getAiUnlockPrice(), form.aiUnlockPrice(), adminId);
-        diff(logs, ConfigType.PRICING, "id_hd_download_price", c.getIdHdDownloadPrice(), form.idHdDownloadPrice(), adminId);
         diff(logs, ConfigType.PRICING, "monthly_free_quota", c.getMonthlyFreeQuota(), form.monthlyFreeQuota(), adminId);
         if (logs.isEmpty()) {
             return; // 无变更 → 不写、不审计。
@@ -75,8 +76,38 @@ public class AdminConfigService {
         c.setVetConsultPrice(form.vetConsultPrice());
         c.setVetShareRate(form.vetShareRate());
         c.setAiUnlockPrice(form.aiUnlockPrice());
-        c.setIdHdDownloadPrice(form.idHdDownloadPrice());
         c.setMonthlyFreeQuota(form.monthlyFreeQuota());
+        pricingRepo.save(c);
+        commit(logs, adminId, "PRICING", "pricing_config");
+    }
+
+    // ── KTP 模块高清图解锁定价三行（V1.3.0 Story 6.1 · AB-18A / AD-7）───────────
+    /**
+     * KTP 卡高清 / 护照·护照内页 / 护照·登机牌 三个一次性解锁价。
+     *
+     * <p>🔴 D-7：三价一律 ≥1（不做 0 元限免——账本 CHECK amount &gt; 0、收款渠道不接 0 元单），与迁移加的 DB CHECK 同口径，
+     * 这里先拦成人话 422 而不是让 CHECK 以 500 露出来。三价独立保存、不联动；只对真变化的字段写 {@code config_change_logs}
+     * （PRICING 类型，字段名 = 列名）+ 一条审计 {@code CONFIG_UPDATE_PRICING}；无变化不写不审计（本类既有口径）。
+     * 改价即时生效、只影响新发起的解锁（{@code IdCardHdService} 扣费逻辑不动）。
+     */
+    @Transactional
+    public void updateKtpPricing(KtpPricingForm form, long adminId) {
+        require(form.idHdDownloadPrice() >= 1 && form.passportPagePrice() >= 1 && form.passportBoardingPrice() >= 1,
+                "价格须为 ≥1 的整数（IDR），不做 0 元限免", "admin.err.config.ktpPriceMin");
+
+        PricingConfig c = pricingRepo.findById(PricingConfig.SINGLETON_ID)
+                .orElseThrow(() -> new IllegalStateException("pricing_config 缺失"));
+        List<ConfigChangeLog> logs = new ArrayList<>();
+        diff(logs, ConfigType.PRICING, "id_hd_download_price", c.getIdHdDownloadPrice(), form.idHdDownloadPrice(), adminId);
+        diff(logs, ConfigType.PRICING, "passport_page_unlock_price", c.getPassportPageUnlockPrice(), form.passportPagePrice(), adminId);
+        diff(logs, ConfigType.PRICING, "passport_boarding_unlock_price", c.getPassportBoardingUnlockPrice(),
+                form.passportBoardingPrice(), adminId);
+        if (logs.isEmpty()) {
+            return; // 无变更 → 不写、不审计。
+        }
+        c.setIdHdDownloadPrice(form.idHdDownloadPrice());
+        c.setPassportPageUnlockPrice(form.passportPagePrice());
+        c.setPassportBoardingUnlockPrice(form.passportBoardingPrice());
         pricingRepo.save(c);
         commit(logs, adminId, "PRICING", "pricing_config");
     }

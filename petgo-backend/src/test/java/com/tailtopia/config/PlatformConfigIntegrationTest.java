@@ -47,13 +47,12 @@ class PlatformConfigIntegrationTest extends ApiIntegrationTest {
         // 捕获原值（单行 pricing_config 是共享态，测试后还原避免污染 seedDefaults 断言）。
         var orig = read.pricing();
         var origForm = new PricingForm(orig.getVetConsultPrice(), orig.getVetShareRate(),
-                orig.getAiUnlockPrice(), orig.getIdHdDownloadPrice(), orig.getMonthlyFreeQuota());
+                orig.getAiUnlockPrice(), orig.getMonthlyFreeQuota());
         long before = changeLogs.count();
         int newRate = orig.getVetShareRate() == 55 ? 50 : 55; // 确保与当前不同
         try {
             write.updatePricing(new PricingForm(60000, newRate,
-                    orig.getAiUnlockPrice(), orig.getIdHdDownloadPrice(),
-                    orig.getMonthlyFreeQuota()), 1L);
+                    orig.getAiUnlockPrice(), orig.getMonthlyFreeQuota()), 1L);
 
             assertThat(read.pricing().getVetConsultPrice()).isEqualTo(60000);
             assertThat(read.pricing().getVetShareRate()).isEqualTo(newRate);
