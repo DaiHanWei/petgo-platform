@@ -1,0 +1,131 @@
+# generated: 2026-09-09
+# last_updated: 2026-09-09
+# project: petgo-platform (V1.3.0 后台增量 · 主题 admin · 分支 feat/1.3.0-ops-ui-refactor → dev_1.3.0)
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.3.0
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0.md (12 Epic / 59 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-delta.md (AD-1~AD-12)
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-admin.md (AB-15A~AB-22A)
+# readiness: implementation-readiness-report-2026-09-09-v1.3.0.md → READY WITH MINOR REVISIONS（已回写）
+# NOTE: 本文件是 V1.3.0 后台线 sprint 跟踪，与 v1.0.0/v1.1.x/v1.4.0 各自的 sprint-status 并存，不覆盖。
+#
+# 执行顺序（架构 §Decision Impact + AD-12）：
+#   Epic 1（AD-1 版本号最先）→ Epic 2（G0 壳，2.1 底账脚本先跑）→ Epic 3 | 4 | 5 | 6 可并行
+#   → Epic 7 → 8 → 9 → ⛔ 等 v1.4.0 电商线合入 dev_1.3.0 → Epic 10 → Epic 11 收尾
+#   Story 2.3b 依赖 2.3a；4.x 依赖 3.1；5.4 依赖 2.4；6.5 依赖 1.5/1.6。
+#
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:   backlog → in-progress → done
+# Story Status:  backlog → ready-for-dev → in-progress → review → done
+# Retrospective: optional ↔ done
+#   - backlog: story 只存在于 epics 文件
+#   - ready-for-dev: story 文件已在 story_location 生成（create-story）
+#   - in-progress / review / done: 由 dev-story / code-review 推进
+# WORKFLOW NOTES:
+#   - 首个 story 被 create-story 后 epic 自动转 in-progress；全部 done 后手动置 done
+#   - Flyway 一律时间戳版本号（E7），本线 8 支迁移见架构 §数据模型增量
+#   - 每条 story 完成后跑 scripts/ci/check-i18n-keys.sh 与 mvn -B clean package
+
+generated: "2026-09-09"
+last_updated: "2026-09-09"
+project: petgo-platform
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.3.0"
+
+development_status:
+  # ---- Epic 1: 账号与角色管理增强（安全底座） ----
+  epic-1: backlog
+  1-1-账号变更版本号与自动踢重登: backlog   # 账号变更版本号与自动踢重登（AD-1）
+  1-2-修改显示名与-self-护栏: backlog   # 修改显示名与 self 护栏
+  1-3-换绑-lark-邮箱: backlog   # 换绑 Lark 邮箱
+  1-4-角色-权限表与预置角色迁移: backlog   # 角色-权限表与预置角色迁移（AD-4 方案 A）
+  1-5-角色配置页: backlog   # 角色配置页（AB-21A）
+  1-6-后台账号页接入角色表: backlog   # 后台账号页接入角色表
+  epic-1-retrospective: optional
+  # ---- Epic 2: 新后台框架与待办中心 ----
+  epic-2: backlog
+  2-1-生成-后台写操作清单-验收底账: backlog   # 生成《后台写操作清单》验收底账（D-27）
+  2-2-g0-全局壳-新导航-顶栏账号菜单-stag-角标-登录页: backlog   # G0 全局壳——新导航、顶栏账号菜单、STAG 角标、登录页
+  2-3a-htmx-响应约定与-admin-shared-横切件: backlog   # htmx 响应约定与 admin/shared 横切件（AD-9）
+  2-3b-五套模板壳-抽屉与工作台-js: backlog   # 五套模板壳、抽屉与工作台 JS（AD-11）
+  2-4-a1-统一复核工作台: backlog   # A1 统一复核工作台
+  2-5-a2-被举报用户: backlog   # A2 被举报用户
+  2-6-a4-问诊异常工单: backlog   # A4 问诊异常工单
+  2-7-a5-客服工单: backlog   # A5 客服工单
+  2-8-a6-退款管理三段流: backlog   # A6 退款管理三段流
+  2-9-待办中心组联调与两态收口: backlog   # 待办中心组联调与两态收口
+  epic-2-retrospective: optional
+  # ---- Epic 3: 内容运营数据看板 ----
+  epic-3: backlog
+  3-1-虚拟-种子账号判定单一出口: backlog   # 虚拟 / 种子账号判定单一出口（AD-8）
+  3-2-预聚合长表与-18-项指标查询: backlog   # 预聚合长表与 18 项指标查询（AD-2）
+  3-3-自愈跑批与历史回填: backlog   # 自愈跑批与历史回填（AD-3）
+  3-4-看板页五卡图表与范围切换: backlog   # 看板页五卡图表与范围切换（AB-15A 前端）
+  3-5-看板权限与验收对照: backlog   # 看板权限与验收对照
+  epic-3-retrospective: optional
+  # ---- Epic 4: 暖贴（虚拟账号评论与回复跟进） ----
+  epic-4: backlog
+  4-1-帖子评论分布页签: backlog   # 帖子评论分布页签
+  4-2-去评论-抽屉与虚拟身份发布: backlog   # 「去评论」抽屉与虚拟身份发布（走完整审核）
+  4-3-暖贴回复跟进队列: backlog   # 暖贴回复跟进队列（入队 / 出队）
+  4-4-a9-暖贴回复跟进工作台: backlog   # A9 暖贴回复跟进工作台
+  epic-4-retrospective: optional
+  # ---- Epic 5: 场所内容管理 ----
+  epic-5: backlog
+  5-1-场所数据模型: backlog   # 场所数据模型（AD-5）
+  5-2-场所列表与详情抽屉: backlog   # 场所列表与详情抽屉（B6）
+  5-3-场所处置-编辑-下架-恢复-删照片-评论-合并: backlog   # 场所处置——编辑、下架 / 恢复、删照片 / 评论、合并
+  5-4-新建场所与-a1-场所举报页签: backlog   # 新建场所（冷启动预置，手填坐标）与 A1 场所举报页签
+  epic-5-retrospective: optional
+  # ---- Epic 6: 运营配置增强（定价、档位、算法参数） ----
+  epic-6: backlog
+  6-1-ktp-模块高清图解锁定价三行: backlog   # KTP 模块高清图解锁定价三行（AB-18A）
+  6-2-pawcoin-档位-只显启用中-查看已停用-新建档位: backlog   # PawCoin 档位——只显启用中、查看已停用、新建档位（AB-22A）
+  6-3-d2-运营配置页整体套模板-d: backlog   # D2 运营配置页整体套模板 D
+  6-4-d3-算法参数页整改与变更记录抽屉: backlog   # D3 算法参数页整改与变更记录抽屉
+  6-5-b23-操作审计-b24-后台账号-d6-角色配置套模板: backlog   # B23 操作审计（WIB）、B24 后台账号 / D6 角色配置套模板
+  epic-6-retrospective: optional
+  # ---- Epic 7: 内容组页面重构 ----
+  epic-7: backlog
+  7-1-b1-内容管理-详情抽屉: backlog   # B1 内容管理 + 详情抽屉
+  7-2-b2-评论巡查页签套模板-b: backlog   # B2 评论巡查页签套模板 B
+  7-3-b3-顶置管理: backlog   # B3 顶置管理
+  7-4-b4-内容标签: backlog   # B4 内容标签（抽屉多页签，打标入口收拢）
+  7-5-b5-排期发布并入批量内容页签: backlog   # B5 排期发布并入批量内容页签
+  7-6-e1-种子内容发布与-e2-批量工作台套模板-e: backlog   # E1 种子内容发布（单发）与 E2 批量工作台套模板 E
+  epic-7-retrospective: optional
+  # ---- Epic 8: 用户组与订单资金组页面重构 ----
+  epic-8: backlog
+  8-1-b7-用户列表-五页签详情抽屉: backlog   # B7 用户列表 + 五页签详情抽屉
+  8-2-b8-用户标签: backlog   # B8 用户标签（与内容标签同构）
+  8-3-b9-运营发布身份: backlog   # B9 运营发布身份（双区块）
+  8-4-b10-兽医订单-b11-ai-订单: backlog   # B10 兽医订单 + B11 AI 订单（抽屉吸收详情页）
+  8-5-b12-支付记录-b13-兽医月结-b14-红色超额: backlog   # B12 支付记录 + B13 兽医月结 + B14 红色超额
+  epic-8-retrospective: optional
+  # ---- Epic 9: 兽医与问诊组页面重构 ----
+  epic-9: backlog
+  9-1a-b20-兽医账号-列表-资料-账号页签-开户: backlog   # B20 兽医账号——列表、资料 / 账号页签、开户
+  9-1b-b20-兽医账号-资质页签与评分并入: backlog   # B20 兽医账号——资质页签与评分并入
+  9-2-b21-未成功请求-b22-历史会话查询: backlog   # B21 未成功请求 + B22 历史会话查询
+  epic-9-retrospective: optional
+  # ---- Epic 10: 商城组页面重构（最后一批） ----
+  # ⛔ 前置：v1.4.0 电商线合入 dev_1.3.0 后再启动（AD-12）；启动前重跑 scripts/ci/list-admin-write-ops.sh 刷新商城组底账
+  epic-10: backlog
+  10-1-a7-toko-退货审核-a8-toko-异常订单: backlog   # A7 Toko 退货审核 + A8 Toko 异常订单（模板 A，导航在商城组）
+  10-2-b15-toko-订单履约-c1-toko-对账: backlog   # B15 Toko 订单履约 + C1 Toko 对账
+  10-3-b16-商品管理-b17-banner-抽屉化: backlog   # B16 商品管理（列表模板 B + 表单页模板 D）+ B17 Banner 抽屉化
+  10-4-b18-库存管理-流水页-b19-开封判例: backlog   # B18 库存管理 + 流水页 + B19 开封判例
+  10-6-d1-服务范围与运费配置: backlog   # D1 服务范围与运费配置（模板 D）
+  10-5-c2-复购引擎效果-c3-销售与毛利-c4-库存周转: backlog   # C2 复购引擎效果 + C3 销售与毛利 + C4 库存周转（模板 C 只读）
+  epic-10-retrospective: optional
+  # ---- Epic 11: 全量核对与收尾 ----
+  epic-11: backlog
+  11-1-写操作清单-diff-与端点零丢失核对: backlog   # 写操作清单 diff 与端点零丢失核对
+  11-2-三语与-id-占位全站验收: backlog   # 三语与 ID 占位全站验收
+  11-3-退役路由与模板清理确认: backlog   # 退役路由与模板清理确认
+  11-4-权限矩阵与导航一致性收口: backlog   # 权限矩阵与导航一致性收口
+  11-5-stag-全量验收与-ui-稿比对: backlog   # stag 全量验收与 UI 稿比对
+  epic-11-retrospective: optional
