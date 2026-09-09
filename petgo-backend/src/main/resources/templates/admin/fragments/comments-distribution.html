@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  评论管理 · 页签二「帖子评论分布」（V1.3.0 Story 4.1，AB-20A ①；模板 B 壳 tpl-b-list）。
+  body = 筛选栏（下拉即选即查 data-autosubmit；自定义 N 走「查询」钮）→ 摘要条四格（一条聚合 SQL，随筛选联动）
+  → 表格（评论数升序、同数按发布时间倒序；0 红标、1～3 黄标）→ 分页 → 空态。
+  「去评论」按钮：Story 4.2 接入抽屉端点 /admin/comments/distribution/{postId}/drawer，本 story 只落按钮（data-post-id）；
+  无 comment.virtual_post 时禁用并注明所缺权限。帖子摘要点击 → B1 内容抽屉 ?open=（Story 7.1）。
+  模型：filter / rows / total / hasNext / summary / speciesOptions。
+-->
+<body>
+<div th:fragment="body" id="comments-distribution" th:with="res='post'">
+    <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::cd-filters}, ~{::cd-summary}, ~{::cd-table}, ~{::cd-drawer})}">
+        <form th:fragment="cd-filters" class="filter-bar" data-autosubmit th:attr="hx-get=@{/admin/comments/distribution}"
+              hx-target="#comments-tab-body" hx-swap="innerHTML" hx-push-url="true" data-distribution-filter>
+            <label class="field">
+                <span th:text="#{admin.v130.comments.distribution.filter.count}">评论数</span>
+                <select name="count" class="sel">
+                    <option value="all" th:selected="${filter.count == 'all'}" th:text="#{admin.v130.comments.distribution.filter.count.all}">全部</option>
+                    <option value="zero" th:selected="${filter.count == 'zero'}" th:text="#{admin.v130.comments.distribution.filter.count.zero}">= 0</option>
+                    <option value="le3" th:selected="${filter.count == 'le3'}" th:text="#{admin.v130.comments.distribution.filter.count.le3}">≤ 3</option>
+                    <option value="custom" th:selected="${filter.count == 'custom'}" th:text="#{admin.v130.comments.distribution.filter.count.custom}">≤ N</option>
+                </select>
+            </label>
+            <label class="field">
+                <span th:text="#{admin.v130.comments.distribution.filter.n}">N</span>
+                <input type="number" name="n" class="inp" min="1" step="1" th:value="${filter.n}" style="width:80px"/>
+            </label>
+            <label class="field">
+                <span th:text="#{admin.v130.comments.distribution.filter.range}">发布时间（WIB）</span>
+                <input type="date" name="from" class="inp" th:value="${filter.from}"/>
+                <span>–</span>
+                <input type="date" name="to" class="inp" th:value="${filter.to}"/>
+            </label>
+            <label class="field">
+                <span th:text="#{admin.v130.comments.distribution.filter.species}">物种</span>
+                <select name="species" class="sel">
+                    <option value="" th:selected="${filter.species == null}" th:text="#{admin.v130.comments.distribution.filter.species.all}">全部</option>
+                    <option th:each="s : ${speciesOptions}" th:value="${s}" th:selected="${filter.species == s}" th:text="#{'admin.v130.comments.distribution.species.' + ${s}}">CAT</option>
+                </select>
+            </label>
+            <label class="field">
+                <span th:text="#{admin.v130.comments.distribution.filter.status}">帖子状态</span>
+                <select name="status" class="sel">
+                    <option value="all" th:selected="${filter.status == 'all'}" th:text="#{admin.v130.comments.distribution.filter.status.all}">全部</option>
+                    <option value="visible" th:selected="${filter.status == 'visible'}" th:text="#{admin.v130.comments.distribution.filter.status.visible}">可见</option>
+                    <option value="takendown" th:selected="${filter.status == 'takendown'}" th:text="#{admin.v130.comments.distribution.filter.status.takendown}">已下架</option>
+                </select>
+            </label>
+            <label class="field">
+                <span th:text="#{admin.v130.comments.distribution.filter.excludeVirtual}">排除虚拟账号内容</span>
+                <!-- 开关用下拉（即选即查）：checkbox 未勾选时不发参数，无法与「缺省 = 开」区分 -->
+                <select name="excludeVirtual" class="sel">
+                    <option value="true" th:selected="${filter.excludeVirtual}" th:text="#{admin.v130.comments.distribution.filter.excludeVirtual.on}">开（只看真实账号 + 真实身份池的帖）</option>
+                    <option value="false" th:selected="${!filter.excludeVirtual}" th:text="#{admin.v130.comments.distribution.filter.excludeVirtual.off}">关（含虚拟账号的帖）</option>
+                </select>
+            </label>
+            <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.v130.comments.distribution.filter.query}">查询</button>
+        </form>
+
+        <div th:fragment="cd-summary" class="sum cd-summary">
+            <div class="sum-item">
+                <div class="sum-label" th:text="#{admin.v130.comments.distribution.summary.posts}">帖子数</div>
+                <div class="sum-value" th:text="${summary.posts}">0</div>
+            </div>
+            <div class="sum-item">
+                <div class="sum-label" th:text="#{admin.v130.comments.distribution.summary.avg}">篇均评论数（含虚拟 / 剔除虚拟）</div>
+                <div class="sum-value">
+                    <span th:text="${summary.avgAllRounded()} ?: '—'">0.00</span>
+                    <span class="muted">/</span>
+                    <span th:text="${summary.avgRealRounded()} ?: '—'">0.00</span>
+                </div>
+                <div class="muted" th:text="#{admin.v130.comments.distribution.summary.avgHint}">左：含虚拟评论；右：剔除虚拟账号评论</div>
+            </div>
+            <div class="sum-item">
+                <div class="sum-label" th:text="#{admin.v130.comments.distribution.summary.zero}">0 评论帖</div>
+                <div class="sum-value">
+                    <span th:text="${summary.zeroPosts}">0</span>
+                    <span class="muted" th:if="${summary.zeroPercent() != null}" th:text="'(' + ${summary.zeroPercent()} + '%)'">(0%)</span>
+                </div>
+            </div>
+            <div class="sum-item">
+                <div class="sum-label" th:text="#{admin.v130.comments.distribution.summary.virtualShare}">虚拟评论占比</div>
+                <div class="sum-value" th:text="${summary.virtualPercent() != null} ? ${summary.virtualPercent()} + '%' : '—'">0%</div>
+            </div>
+        </div>
+
+        <div th:fragment="cd-table">
+            <table th:if="${!rows.isEmpty()}" class="cd-table">
+                <thead>
+                <tr>
+                    <th th:text="#{admin.v130.comments.distribution.col.post}">帖子</th>
+                    <th th:text="#{admin.v130.comments.distribution.col.author}">作者</th>
+                    <th th:text="#{admin.v130.comments.distribution.col.time}">发布时间</th>
+                    <th th:text="#{admin.v130.comments.distribution.col.comments}">评论数</th>
+                    <th th:text="#{admin.v130.comments.distribution.col.virtual}">其中虚拟</th>
+                    <th th:text="#{admin.common.actions}">操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="r : ${rows}" th:data-id="${r.postId}">
+                    <td>
+                        <a th:href="@{/admin/content(open=${r.postId})}" th:text="${#strings.isEmpty(r.summary)} ? '#' + ${r.postId} : ${r.summary}">帖子摘要</a>
+                    </td>
+                    <td>
+                        <span th:text="${r.authorName}">作者</span>
+                        <span class="badge badge-info" th:if="${r.authorVirtual}" th:text="#{admin.v130.comments.distribution.virtualTag}">虚拟</span>
+                    </td>
+                    <td th:text="${@adminTime.wib(r.createdAt)}">时间</td>
+                    <td>
+                        <span class="badge" th:classappend="${r.commentCount == 0} ? 'badge-danger' : (${r.commentCount <= 3} ? 'badge-warn' : 'badge-info')"
+                              th:text="${r.commentCount}">0</span>
+                    </td>
+                    <td th:text="${r.virtualCount}">0</td>
+                    <td>
+                        <button type="button" class="btn btn-primary btn-sm" th:attr="data-post-id=${r.postId},data-drawer-url=@{/admin/comments/distribution/{id}/drawer(id=${r.postId})}"
+                                sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('comment.virtual_post')"
+                                th:text="#{admin.v130.comments.distribution.action.comment}">去评论</button>
+                        <button type="button" class="btn btn-primary btn-sm" disabled th:attr="data-post-id=${r.postId}"
+                                th:title="#{admin.v130.err.forbidden(#{perm.comment.virtual_post})}"
+                                sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('comment.virtual_post'))"
+                                th:text="#{admin.v130.comments.distribution.action.comment}">去评论</button>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+            <div class="empty" th:if="${rows.isEmpty()}">
+                <span class="empty-emoji">🔍</span>
+                <p th:text="#{admin.v130.comments.distribution.empty}">没有符合条件的帖子</p>
+            </div>
+            <div class="pager" th:if="${!rows.isEmpty()}">
+                <a th:if="${filter.page > 0}" href="#" th:attr="hx-get=@{/admin/comments/distribution(count=${filter.count},n=${filter.n},from=${filter.from},to=${filter.to},species=${filter.species},status=${filter.status},excludeVirtual=${filter.excludeVirtual},page=${filter.page - 1})}"
+                   hx-target="#comments-tab-body" hx-swap="innerHTML" hx-push-url="true" th:text="#{admin.v130.comments.distribution.pager.prev}">上一页</a>
+                <span th:text="#{admin.v130.comments.distribution.pager.total(${total})}">共 N 条</span>
+                <a th:if="${hasNext}" href="#" th:attr="hx-get=@{/admin/comments/distribution(count=${filter.count},n=${filter.n},from=${filter.from},to=${filter.to},species=${filter.species},status=${filter.status},excludeVirtual=${filter.excludeVirtual},page=${filter.page + 1})}"
+                   hx-target="#comments-tab-body" hx-swap="innerHTML" hx-push-url="true" th:text="#{admin.v130.comments.distribution.pager.next}">下一页</a>
+            </div>
+            <p class="hint" th:text="#{admin.v130.comments.distribution.hint.species}">物种按帖子覆写 / 作者账号定位判断，不含宠物档案推导；GENERAL 与未定位的帖对任何物种都命中。</p>
+        </div>
+
+        <div th:fragment="cd-drawer" class="drawer-title" th:text="#{admin.v130.comments.distribution.action.comment}">去评论</div>
+    </div>
+</div>
+</body>
+</html>

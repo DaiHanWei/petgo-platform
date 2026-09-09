@@ -60,10 +60,10 @@ class AdminPermissionWiringTest {
     /**
      * 待接线的预留码（V1.3.0 Story 1.4 AC5 先登记、端点在后续 story 才建）。<b>显式、有限、自清理</b>：
      * 只允许这两个码；一旦某码在源码里出现了 hasAuthority 落点，本测试会红并要求把它从这里删掉，
-     * 名单不会静默变成永久后门。place.manage → Epic 5（Story 5.3）；comment.virtual_post → Epic 4（Story 4.2）。
+     * comment.virtual_post 已由 Story 4.1 接线并移出名单。
      */
-    private static final Set<String> PENDING_WIRING = Set.of(
-            AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST);
+    // comment.virtual_post 已由 V1.3.0 Story 4.1（分布页签 VIEW_AUTH / 「去评论」）接线，从预留名单移除。
+    private static final Set<String> PENDING_WIRING = Set.of(AdminPermissions.PLACE_MANAGE);
 
     /**
      * V1.3.0 页面退役后暂留矩阵的码（Story 2.4 AC7：{@code GET /admin/reports} 删除，{@code content.view_reports}

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  评论管理 · 页签一「评论巡查」（Story 9.9 列表原样搬入片段，V1.3.0 Story 4.1 AC1：功能、下架 / 恢复端点与权限不变）。
+  模型：comments = service.recent()（近 200 条）。
+-->
+<body>
+<div th:fragment="body" id="comments-inspect">
+    <p class="hint" th:text="#{admin.comments.hint}">近 200 条评论。下架走审核线语义（必填原因；作者仍可见 + 收到通知 + 计违规）；误下架可恢复。操作留审计。</p>
+    <table>
+        <thead>
+        <tr><th>ID</th><th th:text="#{admin.comments.col.post}">帖子</th><th th:text="#{admin.comments.col.author}">作者</th><th th:text="#{admin.comments.col.body}">内容</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.common.time}">时间</th><th th:text="#{admin.common.actions}">操作</th></tr>
+        </thead>
+        <tbody>
+        <tr th:each="c : ${comments}">
+            <td th:text="${c.id}">0</td>
+            <td th:text="${c.postId}">0</td>
+            <td th:text="${c.authorId}">0</td>
+            <td th:text="${c.body}">评论内容</td>
+            <td th:text="${c.deleted} ? #{admin.comments.deleted} : ${c.moderationStatus}">VISIBLE</td>
+            <td th:text="${@adminTime.wib(c.createdAt)}">t</td>
+            <td>
+                <!-- 下架（审核线 FR-55A）：仅 VISIBLE 可下架，必填原因（进审计不进作者通知）。 -->
+                <form th:if="${!c.deleted and c.moderationStatus == 'VISIBLE'}" method="post"
+                      th:action="@{/admin/comments/{id}/takedown(id=${c.id})}" style="display:inline"
+                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')">
+                    <input type="text" name="reason" required th:placeholder="#{admin.content.reason}" placeholder="下架原因（必填）" style="width:140px"/>
+                    <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.content.takedown}">下架</button>
+                </form>
+                <!-- 恢复：TAKEN_DOWN / REJECTED → VISIBLE（不通知，D-CM6）。 -->
+                <form th:if="${!c.deleted and (c.moderationStatus == 'TAKEN_DOWN' or c.moderationStatus == 'REJECTED')}"
+                      method="post"
+                      th:action="@{/admin/comments/{id}/restore(id=${c.id})}" style="display:inline"
+                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.restore')">
+                    <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.content.restore}">恢复</button>
+                </form>
+            </td>
+        </tr>
+        <tr th:if="${comments.isEmpty()}"><td colspan="7" th:text="#{admin.comments.empty}">暂无评论</td></tr>
+        </tbody>
+    </table>
+</div>
+</body>
+</html>

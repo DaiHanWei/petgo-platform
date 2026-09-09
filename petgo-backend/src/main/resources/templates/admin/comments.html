@@ -1,10 +1,16 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- 评论内容管理（Story 9.9）。评论纳入全量内容管理主动下架/恢复。 -->
+<!--
+  评论内容管理（Story 9.9）→ V1.3.0 Story 4.1 升级为两页签：「评论巡查」（原列表，功能 / 端点 / 权限不变，fragments/comments-inspect）
+  ｜「帖子评论分布」（AB-20A ①，fragments/comments-distribution，htmx 局部切换 #comments-tab-body，不整页刷新）。
+  模型：tab = inspect | distribution；页签一需 comments，页签二需 filter / rows / summary …（由 AdminCommentDistributionController 提供）。
+-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.comments.title}">评论管理 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
@@ -12,39 +18,58 @@
         <h1 th:text="#{admin.comments.title}">评论管理</h1>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
-        <p class="hint" th:text="#{admin.comments.hint}">近 200 条评论。下架走审核线语义（必填原因；作者仍可见 + 收到通知 + 计违规）；误下架可恢复。操作留审计。</p>
-        <table>
-            <thead>
-            <tr><th>ID</th><th th:text="#{admin.comments.col.post}">帖子</th><th th:text="#{admin.comments.col.author}">作者</th><th th:text="#{admin.comments.col.body}">内容</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.common.time}">时间</th><th th:text="#{admin.common.actions}">操作</th></tr>
-            </thead>
-            <tbody>
-            <tr th:each="c : ${comments}">
-                <td th:text="${c.id}">0</td>
-                <td th:text="${c.postId}">0</td>
-                <td th:text="${c.authorId}">0</td>
-                <td th:text="${c.body}">评论内容</td>
-                <td th:text="${c.deleted} ? #{admin.comments.deleted} : ${c.moderationStatus}">VISIBLE</td>
-                <td th:text="${@adminTime.wib(c.createdAt)}">t</td>
-                <td>
-                    <!-- 下架（审核线 FR-55A）：仅 VISIBLE 可下架，必填原因（进审计不进作者通知）。 -->
-                    <form th:if="${!c.deleted and c.moderationStatus == 'VISIBLE'}" method="post"
-                          th:action="@{/admin/comments/{id}/takedown(id=${c.id})}" style="display:inline"
-                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')">
-                        <input type="text" name="reason" required th:placeholder="#{admin.content.reason}" placeholder="下架原因（必填）" style="width:140px"/>
-                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.content.takedown}">下架</button>
-                    </form>
-                    <!-- 恢复：TAKEN_DOWN / REJECTED → VISIBLE（不通知，D-CM6）。 -->
-                    <form th:if="${!c.deleted and (c.moderationStatus == 'TAKEN_DOWN' or c.moderationStatus == 'REJECTED')}"
-                          method="post"
-                          th:action="@{/admin/comments/{id}/restore(id=${c.id})}" style="display:inline"
-                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.restore')">
-                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.content.restore}">恢复</button>
-                    </form>
-                </td>
-            </tr>
-            <tr th:if="${comments.isEmpty()}"><td colspan="7" th:text="#{admin.comments.empty}">暂无评论</td></tr>
-            </tbody>
-        </table>
+
+        <!-- 常驻页签条（AC1）：页签一整页链接（权限 content.proactive_takedown）；页签二 htmx 局部切换 -->
+        <div class="tabs comments-tabs" role="tablist">
+            <a class="tab" th:classappend="${tab == 'inspect'} ? 'tab--on'" th:href="@{/admin/comments}"
+               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
+               th:text="#{admin.v130.comments.distribution.tab.inspect}">评论巡查</a>
+            <a class="tab" th:classappend="${tab == 'distribution'} ? 'tab--on'" th:href="@{/admin/comments/distribution}"
+               th:attr="hx-get=@{/admin/comments/distribution}" hx-target="#comments-tab-body" hx-swap="innerHTML" hx-push-url="true"
+               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('comment.virtual_post') or hasAuthority('content.view')"
+               th:text="#{admin.v130.comments.distribution.tab}">帖子评论分布</a>
+        </div>
+
+        <div id="comments-tab-body">
+            <th:block th:if="${tab == 'distribution'}"><div th:replace="~{admin/fragments/comments-distribution :: body}"></div></th:block>
+            <th:block th:unless="${tab == 'distribution'}"><div th:replace="~{admin/fragments/comments-inspect :: body}"></div></th:block>
+        </div>
+
+        <script>
+        // Story 4.1：页签切换后同步页签高亮；「去评论」按钮（Story 4.2 接入抽屉端点）→ 打开模板 B 抽屉（res=post）。
+        (function () {
+            // 422/403 行内 err 不清空页签体：分布页签内的请求把 HX-Target 改到 #admin-inline-error（advice 按它 HX-Retarget），
+            // 成功响应仍按元素自己的 hx-target 换 #comments-tab-body（HX-Target 头只影响错误落点）。
+            document.body.addEventListener('htmx:configRequest', function (e) {
+                var el = e.detail && e.detail.elt;
+                if (el && el.closest && el.closest('#comments-distribution')) { e.detail.headers['HX-Target'] = 'admin-inline-error'; }
+            });
+            // 选「≤ N」但 N 还没填：拦下 data-autosubmit 的即选即查，聚焦 N，等「查询」钮
+            document.addEventListener('submit', function (e) {
+                var f = e.target;
+                if (!f || !f.matches || !f.matches('form[data-distribution-filter]')) { return; }
+                var count = f.querySelector('select[name=count]');
+                var n = f.querySelector('input[name=n]');
+                if (count && n && count.value === 'custom' && !n.value.trim()) { e.preventDefault(); n.focus(); }
+            }, true);
+            document.body.addEventListener('htmx:afterSwap', function (e) {
+                var t = e.detail && e.detail.target;
+                if (!t || t.id !== 'comments-tab-body') { return; }
+                var on = !!t.querySelector('#comments-distribution');
+                document.querySelectorAll('.comments-tabs .tab').forEach(function (a) {
+                    var isDist = a.hasAttribute('hx-get');
+                    a.classList.toggle('tab--on', isDist === on);
+                });
+            });
+            document.addEventListener('click', function (e) {
+                var b = e.target && e.target.closest ? e.target.closest('button[data-post-id][data-drawer-url]') : null;
+                if (!b || b.disabled) { return; }
+                if (window.Admin && Admin.drawer && typeof Admin.drawer.open === 'function') {
+                    Admin.drawer.open(b.getAttribute('data-drawer-url'), { res: 'post', rowEl: b.closest('tr') });
+                }
+            });
+        })();
+        </script>
     </div>
 </div>
 </body>

@@ -29,6 +29,8 @@ public class AdminCommentModerationController {
     @PreAuthorize(TAKEDOWN_AUTH)
     public String list(Model model) {
         model.addAttribute("active", "comments");
+        // V1.3.0 Story 4.1：页签一「评论巡查」；页签二「帖子评论分布」由 AdminCommentDistributionController 承接
+        model.addAttribute("tab", "inspect");
         model.addAttribute("comments", service.recent());
         return "admin/comments";
     }
