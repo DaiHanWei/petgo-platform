@@ -10,6 +10,7 @@
 ## 云端全量执行指令（2026-09-09 拍板：一口气跑完、不设检查点、本地统一验收）
 
 > 复制下面整段作为云端 session 的首条提示词。前提：session 已 clone 并 checkout `feat/1.3.0-ops-ui-refactor`。
+> 等价且可复用的起法：`scripts/cloud-run-story-loop.sh v1.3.0 admin feat/1.3.0-ops-ui-refactor --skip-epics "10"`（主题专属规则在同目录 `cloud-rules-admin.md`）；其它主题换参数即可，多条线并行各起一个会话。
 
 ```
 V1.3.0 后台线，分支 feat/1.3.0-ops-ui-refactor。先读 _bmad-output/project-context.md 与 _bmad-output/planning-artifacts/v1.3.0/README.md。
