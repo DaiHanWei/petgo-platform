@@ -1,15 +1,27 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!--
   看板五卡图表区（V1.3.0 Story 3.4 AC2 / AC4 / AC5 / AC6）。charts = ChartData（rangeDays / labels / cards）。
   每卡：标题 + 卡内 tab（真实用户 / 含种子 · 现金到账 / 含 PawCoin，纯前端切 series）+ 指标名（含口径 hover）
   + <canvas> + 内嵌 JSON（<script type="application/json" data-chart="<cardId>">，labels 为范围内每一天，未物化日为 null）
   + 空态 / 失败重试块 + 卡底「N 日缺数据」与口径差异提示。图由 static/admin/admin-charts.js 在 htmx:afterSwap 重建。
   GET /admin/charts?range=7|30（HX-Request）只回本片段；整页 /admin 首屏内嵌同一片段。
+  付费卡只对 payment.view / SUPER_ADMIN 渲染（Story 3.5，D-17：改可见性不改口径，payNote 口径提示随卡常驻）。
 -->
 <body>
 <div th:fragment="charts" class="chart-grid" th:attr="data-range=${charts.rangeDays}">
-    <section th:each="card : ${charts.cards}" class="chart-card" th:id="'card-' + ${card.id}"
+    <!-- 付费卡（Story 3.5 / D-17）：服务端无权时已不下发；模板层再按 AdminPaymentController.VIEW_AUTH 同一表达式挡一道（双保险，
+         表达式须与 Controller 常量逐字一致，AdminPageCatalogAuthorityTest 守卫）。外层 block 先于子元素求值，无权时不渲染子树。 -->
+    <th:block th:each="card : ${charts.cards}">
+    <th:block th:if="${card.id == 'payment'}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('payment.view')">
+        <th:block th:insert="~{admin/fragments/dashboard-charts :: chart-card(${card})}"></th:block>
+    </th:block>
+    <th:block th:if="${card.id != 'payment'}" th:insert="~{admin/fragments/dashboard-charts :: chart-card(${card})}"></th:block>
+    </th:block>
+</div>
+
+<div th:remove="tag">
+    <section th:fragment="chart-card(card)" class="chart-card" th:id="'card-' + ${card.id}"
              th:attr="data-card=${card.id},data-kind=${card.id},data-empty=${card.empty}">
         <header class="chart-head">
             <h2 th:text="#{'admin.v130.dashboard.card.' + ${card.id}}">卡名</h2>

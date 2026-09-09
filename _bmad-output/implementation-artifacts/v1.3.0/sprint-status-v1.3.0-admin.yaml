@@ -64,7 +64,7 @@ development_status:
   3-2-预聚合长表与-18-项指标查询: review   # 预聚合长表与 18 项指标查询（AD-2）
   3-3-自愈跑批与历史回填: review   # 自愈跑批与历史回填（AD-3）
   3-4-看板页五卡图表与范围切换: review   # 看板页五卡图表与范围切换（AB-15A 前端）
-  3-5-看板权限与验收对照: ready-for-dev   # 看板权限与验收对照
+  3-5-看板权限与验收对照: review   # 看板权限与验收对照
   epic-3-retrospective: optional
   # ---- Epic 4: 暖贴（虚拟账号评论与回复跟进） ----
   epic-4: in-progress

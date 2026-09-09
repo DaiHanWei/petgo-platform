@@ -20,7 +20,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 @Controller
 public class AdminPaymentController {
 
-    private static final String VIEW_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('payment.view')";
+    /** 支付记录查看权；看板付费卡（Story 3.5，D-17）同码复用，不另设 permission_code。 */
+    public static final String VIEW_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('payment.view')";
     /** ⚠️ 须与模板里导出按钮的 sec:authorize 逐字一致，否则按钮在、点了 403。 */
     private static final String EXPORT_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('payment.list_export')";

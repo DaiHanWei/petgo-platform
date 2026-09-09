@@ -90,8 +90,12 @@ public class DashboardQueryService {
         }
     }
 
+    /**
+     * 取图表数据。{@code includePayment=false}（登录者无 {@code payment.view} 且非 SUPER_ADMIN，Story 3.5 / D-17）时<b>不查、不下发</b>付费卡：
+     * JSON 内嵌在页面源码里，只在模板层藏卡片数据仍会泄露，服务端必须先把付费四项从结果里拿掉。其余四卡不受影响。
+     */
     @Transactional(readOnly = true)
-    public ChartData chartData(int rangeDays) {
+    public ChartData chartData(int rangeDays, boolean includePayment) {
         int range = rangeOrThrow(rangeDays);
         LocalDate end = LocalDate.now(ScheduleWindow.WIB).minusDays(1);
         LocalDate start = end.minusDays(range - 1L);
@@ -108,6 +112,9 @@ public class DashboardQueryService {
         }
         List<ChartCard> cards = new ArrayList<>(CARDS.size());
         for (CardSpec spec : CARDS) {
+            if (spec.payTabs() && !includePayment) {
+                continue; // D-17：无财务查看权 → 付费卡整卡不下发（数据一行都不进响应）
+            }
             cards.add(card(spec, days, labels, byKeyScope));
         }
         return new ChartData(range, start, end, List.copyOf(labels), List.copyOf(cards));

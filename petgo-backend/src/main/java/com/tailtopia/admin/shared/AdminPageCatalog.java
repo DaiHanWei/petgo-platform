@@ -132,8 +132,8 @@ public final class AdminPageCatalog {
 
     /** 页面目录（UI 稿 7-9 行序）。 */
     public static final List<Page> PAGES = List.of(
-            // 📊 概览
-            new Page("dashboard", G_OVERVIEW, "/admin", List.of(), List.of(), List.of(), List.of(), false).nav("admin.nav.dashboard", "dashboard"),
+            // 📊 概览：查看 = 全员（无码，与原首页一致）；付费卡沿用支付记录页的 payment.view（Story 3.5 / D-17，不另设码）
+            new Page("dashboard", G_OVERVIEW, "/admin", List.of(), List.of(), List.of(), List.of(PAYMENT_VIEW), false).nav("admin.nav.dashboard", "dashboard"),
             // 📥 待办中心
             //   content.view_reports：旧举报队列（/admin/reports 已退役）码，暂挂统一复核「其他操作」（D-46）。
             page("manual-review", G_INBOX, "/admin/manual-review",

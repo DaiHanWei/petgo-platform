@@ -51,7 +51,7 @@ class DashboardQueryServiceTest {
         rows.addAll(fullDay(yesterday.minusDays(3), 0));      // 4 天前：全部 = 0（合法的 0）
         when(repo.findByReportDateBetweenOrderByReportDate(any(), any())).thenReturn(rows);
 
-        ChartData data = service.chartData(7);
+        ChartData data = service.chartData(7, true);
 
         assertThat(data.rangeDays()).isEqualTo(7);
         assertThat(data.end()).isEqualTo(yesterday);
@@ -77,7 +77,7 @@ class DashboardQueryServiceTest {
     @Test
     void dualScopeCardsCarryBothScopesAndPaymentCardHasBothPairs() {
         when(repo.findByReportDateBetweenOrderByReportDate(any(), any())).thenReturn(fullDay(yesterday, 10));
-        ChartData data = service.chartData(30);
+        ChartData data = service.chartData(30, true);
         assertThat(data.labels()).hasSize(30);
 
         ChartCard content = data.card("content");
@@ -106,7 +106,7 @@ class DashboardQueryServiceTest {
     @Test
     void wholeCardEmptyWhenNothingMaterialized() {
         when(repo.findByReportDateBetweenOrderByReportDate(any(), any())).thenReturn(List.of());
-        ChartData data = service.chartData(7);
+        ChartData data = service.chartData(7, true);
         assertThat(data.cards()).allSatisfy(c -> {
             assertThat(c.empty()).isTrue();
             assertThat(c.missingDays()).isEqualTo(7);
@@ -114,8 +114,18 @@ class DashboardQueryServiceTest {
     }
 
     @Test
+    void paymentCardIsNotProducedWithoutPaymentView() {
+        // Story 3.5 / D-17：无 payment.view → 付费卡整卡不在结果里（JSON 内嵌页面，服务端就得拿掉），其余四卡照常
+        when(repo.findByReportDateBetweenOrderByReportDate(any(), any())).thenReturn(fullDay(yesterday, 100));
+        ChartData data = service.chartData(7, false);
+        assertThat(data.cards()).extracting(ChartCard::id).containsExactly("users", "pets", "content", "engagement");
+        assertThat(data.cards()).noneSatisfy(c -> assertThat(c.json()).contains("paying_users"));
+        assertThat(service.chartData(7, true).cards()).extracting(ChartCard::id).contains("payment");
+    }
+
+    @Test
     void rangeValidation() {
-        assertThatThrownBy(() -> service.chartData(99)).isInstanceOf(AppException.class)
+        assertThatThrownBy(() -> service.chartData(99, true)).isInstanceOf(AppException.class)
                 .satisfies(e -> assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.dashboard.badRange"));
         assertThatThrownBy(() -> DashboardQueryService.rangeOrThrow((Integer) null)).isInstanceOf(AppException.class);
         assertThat(DashboardQueryService.rangeOrDefault((Integer) null)).isEqualTo(7);

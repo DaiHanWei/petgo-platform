@@ -40,6 +40,9 @@ class AdminPageCatalogAuthorityTest {
                 com.tailtopia.admin.anomaly.web.AdminConsultSessionController.class));
         PAGES.put("support-tickets", List.of(com.tailtopia.admin.support.web.AdminSupportTicketController.class));
         PAGES.put("refunds", List.of(com.tailtopia.admin.refund.web.AdminRefundController.class));
+        // Story 3.5：看板付费卡门控（模板 sec:authorize 须与 AdminPaymentController.VIEW_AUTH / PAYMENT_CARD_AUTH 逐字一致）
+        PAGES.put("dashboard", List.of(com.tailtopia.admin.dashboard.web.AdminDashboardController.class,
+                com.tailtopia.admin.payment.web.AdminPaymentController.class));
     }
 
     private static final Map<String, List<String>> TEMPLATES = Map.of(
@@ -47,7 +50,8 @@ class AdminPageCatalogAuthorityTest {
             "tickets", List.of("tickets.html", "fragments/tickets-queue.html", "fragments/tickets-detail.html", "fragments/tickets-done.html"),
             "anomalies", List.of("anomalies.html", "fragments/anomaly-queue.html", "fragments/anomaly-panel.html", "fragments/anomaly-done.html"),
             "support-tickets", List.of("support-tickets.html", "fragments/support-queue.html", "fragments/support-panel.html", "fragments/support-done.html"),
-            "refunds", List.of("refunds.html", "fragments/refund-queue.html", "fragments/refund-panel.html", "fragments/refund-done.html"));
+            "refunds", List.of("refunds.html", "fragments/refund-queue.html", "fragments/refund-panel.html", "fragments/refund-done.html"),
+            "dashboard", List.of("dashboard.html", "fragments/dashboard-charts.html"));
 
     private static final Pattern SEC = Pattern.compile("sec:authorize=\"([^\"]+)\"");
 
@@ -100,11 +104,15 @@ class AdminPageCatalogAuthorityTest {
         // 目录里已预登记、页面尚未落地的项（Story 4.4 暖贴跟进）；落地时从这里移到 PAGES / TEMPLATES
         Set<String> notBuiltYet = Set.of("warm-replies");
         inbox.removeAll(notBuiltYet);
-        assertThat(PAGES.keySet()).as("待办中心组页面须全部登记到 PAGES / TEMPLATES").containsExactlyInAnyOrderElementsOf(inbox);
-        assertThat(TEMPLATES.keySet()).containsExactlyInAnyOrderElementsOf(inbox);
+        // 非待办中心的页面（看板，Story 3.5）也可登记进来复用逐字守卫，故用 containsAll 而非 exactly
+        assertThat(PAGES.keySet()).as("待办中心组页面须全部登记到 PAGES / TEMPLATES").containsAll(inbox);
+        assertThat(TEMPLATES.keySet()).containsAll(inbox);
+        assertThat(TEMPLATES.keySet()).containsExactlyInAnyOrderElementsOf(PAGES.keySet());
         for (String key : PAGES.keySet()) {
-            assertThat(AdminPageCatalog.PAGES.stream().filter(p -> p.key().equals(key)).findFirst())
-                    .as(key).isPresent().get().extracting(AdminPageCatalog.Page::group).isEqualTo(AdminPageCatalog.G_INBOX);
+            var page = AdminPageCatalog.PAGES.stream().filter(p -> p.key().equals(key)).findFirst();
+            assertThat(page).as(key).isPresent();
+            // 待办中心页归 G_INBOX；看板（Story 3.5，复用逐字守卫）归概览组
+            assertThat(page.get().group()).as(key).isEqualTo(inbox.contains(key) ? AdminPageCatalog.G_INBOX : AdminPageCatalog.G_OVERVIEW);
         }
     }
 }

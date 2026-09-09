@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 /**
  * L1（真库 + 真 Thymeleaf）：看板页与图表 fragment 四条（V1.3.0 Story 3.4 AC7）：
  * 整页 200 含 {@code data-chart}；{@code HX-Request} 只回 fragment；{@code range=99} → 422 行内 err；无登录 302。
+ * Story 3.5：付费卡只对 {@code payment.view} / SUPER_ADMIN 下发（有 / 无各一条）。
  */
 class DashboardChartsMvcTest extends ApiIntegrationTest {
 
@@ -75,6 +76,33 @@ class DashboardChartsMvcTest extends ApiIntegrationTest {
         String err = mvc.perform(get("/admin/charts").param("range", "99").param("lang", "zh_CN").with(user(staff())).header("HX-Request", "true"))
                 .andExpect(status().isUnprocessableEntity()).andReturn().getResponse().getContentAsString();
         assertThat(err).contains("inline-error").contains("时间范围只支持近 7 天或近 30 天");
+    }
+
+    private AdminUserDetails staffWith(String... codes) {
+        long seq = SEQ.incrementAndGet();
+        String email = "dash-perm-" + seq + "@tailtopia.test";
+        accountService.createAccount(email, "看板权限员工", AdminRole.CUSTOM, List.of(codes), 960000L + seq);
+        return userDetailsService.loadByEmail(email, false);
+    }
+
+    /** Story 3.5 AC1 / AC5：有 payment.view → 五卡齐全；无 → 四卡，且源码里没有付费四项的任何数据键。 */
+    @Test
+    void paymentCardOnlyForPaymentViewOrSuperAdmin() throws Exception {
+        String with = mvc.perform(get("/admin/charts").param("range", "7").with(user(staffWith("payment.view"))).header("HX-Request", "true"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(with).contains("data-chart=\"payment\"").contains("paying_users_cash").contains("id=\"card-payment\"");
+
+        AdminUserDetails noPay = staffWith("content.view");
+        String without = mvc.perform(get("/admin/charts").param("range", "7").with(user(noPay)).header("HX-Request", "true"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(without).contains("data-chart=\"users\"").contains("data-chart=\"pets\"").contains("data-chart=\"content\"")
+                .contains("data-chart=\"engagement\"")
+                .doesNotContain("card-payment").doesNotContain("paying_users").doesNotContain("payments_cash").doesNotContain("payments_incl_pawcoin");
+        // 整页同样不下发（首屏内嵌同一片段）
+        String page = mvc.perform(get("/admin").with(user(noPay))).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(page).contains("data-chart=\"engagement\"").doesNotContain("paying_users");
+        // 看板本身对无任何码的账号可进（AC2）
+        mvc.perform(get("/admin").with(user(staffWith()))).andExpect(status().isOk());
     }
 
     @Test
