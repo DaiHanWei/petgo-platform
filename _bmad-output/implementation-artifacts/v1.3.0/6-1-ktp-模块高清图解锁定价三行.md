@@ -151,3 +151,7 @@ App 端 FR-120 按 `hd-pricing` 响应的两个新字段取价；字段名固定
 ### Completion Notes List
 
 ### File List
+
+## 拍板回写（2026-09-09）
+
+- **D-45**：已核实 stag KTP 高清价 = 5,000、prod = 100，均 ≥1；三列 `CHECK (>= 1)` 可直接上线，迁移前无需改值。

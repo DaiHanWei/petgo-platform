@@ -189,3 +189,7 @@ UI 稿 9-7 第 12 条与逐页规格「规则 12」：CSV 正确转义、XLSX �
 ### Completion Notes List
 
 ### File List
+
+## 拍板回写（2026-09-09）
+
+- **D-37**：403 禁用态 fragment **固定显示所缺权限名**（三语 key 取 `AdminPageCatalog` 的权限显示名），删除原「不泄露」开关；整页 `/admin/denied` 文案维持现状。

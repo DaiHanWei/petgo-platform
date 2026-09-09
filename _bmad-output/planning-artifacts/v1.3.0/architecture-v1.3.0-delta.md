@@ -169,7 +169,7 @@ brownfield，无 init 命令。Chart.js 静态资源落位与五套 fragment 骨
 **AD-9 htmx 局部更新约定（模板 A/B）**
 - 请求头含 `HX-Request` → Controller 返回 fragment（`templates/admin/fragments/**`），否则整页；同一 Controller 方法两条路径共用 Model，用 `HxRequest` 参数解析器判别。
 - 处置成功：200 + 主 fragment（右栏）+ `hx-swap-oob` 带出左栏该行与页签计数；响应头 `HX-Trigger: {"admin:badge-refresh":{}}` 让侧导航角标自刷（角标 fragment 由 `GET /admin/nav/badges` 提供）。
-- 校验/业务失败：**422 + 操作区 fragment**（行内 err）；权限不足 403 + 禁用态 fragment 注明所缺权限名；不可逆动作仍用 `data-confirm`。htmx 1.9 默认不渲染 4xx，由 `admin-core.js` 监听 `htmx:beforeSwap` 对 422/403 放行 swap（不用 `response-targets` 扩展）。
+- 校验/业务失败：**422 + 操作区 fragment**（行内 err）；权限不足 403 + 禁用态 fragment **注明所缺权限名**（D-37 定案）；不可逆动作仍用 `data-confirm`。htmx 1.9 默认不渲染 4xx，由 `admin-core.js` 监听 `htmx:beforeSwap` 对 422/403 放行 swap（不用 `response-targets` 扩展）。
 - 模板 D/E 与所有整页表单维持现状 PRG，不混用。
 - CSRF：htmx 请求由 `admin-core.js` 统一注入 `X-CSRF-TOKEN`（现状机制沿用）。
 - 抽屉：**页面已有详情 GET（如 `orders/{token}`、`users/{userId}`）的，复用原 mapping 的 `HX-Request` 分支返回抽屉 fragment，不新增 `…/drawer` 端点**（AB-19A 零端点变更）；只有本版新建页面（places / roles / warm-replies）才用 `GET …/{id}/drawer`。列表页 `?open=<id>` 由 `admin-drawer.js` 自动请求抽屉（页内深链，非旧路由兜底）。Story 11.4 一致性核对按此规则判定。
@@ -516,3 +516,10 @@ petgo-backend/
 - 算法参数页实际 14 个输入（三个配比组各 3 项），非 PRD/UI 稿的「11 项」。
 - `NameModerationAdminController` 在 `admin` 包外却挂 `/admin/**`，写操作清单脚本须按路由前缀扫描而非按包。
 - 抽屉端点、AD-8 双出口、迁移 9/10、CommentRemovedEvent、X-4 端点、AdminTime 复用已在正文修订。
+
+## 拍板回写（2026-09-09，D-36～D-46）
+
+- AB-19A 零端点变更的**正式例外**：`warn`(+reason，早定) · `refund-reject`(+reason) · `refunds/{token}/reject`(+reason) · `payout`(+出款凭证 objectKey，退款单加列 → 迁移 #11) · B12 三个 stag-only 模拟回调端点（D-41，`@StagOnly`）。
+- 互动指标「有效评论」= `moderation_status='VISIBLE' AND deleted_at IS NULL`（D-38）。
+- `places.city`（D-39）；契约 X-3 补 city 字段。
+- 迁移总数 11 支（+ `add_refund_requests_payout_proof_key`）。

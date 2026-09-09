@@ -105,3 +105,7 @@ Story 7.6 种子发布页删旧批量入口时，`POST /admin/seed-batch` / `/se
 ### Completion Notes List
 
 ### File List
+
+## 拍板回写（2026-09-09）
+
+- **D-36 / D-41 白名单追加**：允许的写端点变更 = `warn`(+reason) · `refund-reject`(+reason) · `refunds/{token}/reject`(+reason) · `payout`(+proof) · B12 三个 stag-only 模拟回调端点（仅 stag profile 注册，生产 diff 中不出现）。
