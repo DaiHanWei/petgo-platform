@@ -48,8 +48,10 @@ public class AdminAccountAdminController {
 
     @GetMapping("/admin/accounts")
     @PreAuthorize(VIEW_AUTH)
-    public String accounts(Model model) {
+    public String accounts(@AuthenticationPrincipal AdminUserDetails admin, Model model) {
         populate(model);
+        // V1.3.0 Story 1.2：自己那一行的「停用 / 改角色」渲染禁用态（体验；安全边界在服务层 self 护栏）。
+        model.addAttribute("selfId", admin == null ? null : admin.getAdminAccountId());
         if (!model.containsAttribute("createAdminAccountForm")) {
             model.addAttribute("createAdminAccountForm", new CreateAdminAccountForm());
         }
@@ -102,6 +104,21 @@ public class AdminAccountAdminController {
         try {
             accountService.changeRole(id, role, admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.account.roleChanged", id, msg.get(role.titleCode())));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/accounts";
+    }
+
+    /** 改显示名（V1.3.0 Story 1.2）。与建号 / 改权限 / 改角色同门槛。 */
+    @PostMapping("/admin/accounts/{id}/rename")
+    @PreAuthorize(CREATE_AUTH)
+    public String rename(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
+            @RequestParam("displayName") String displayName, RedirectAttributes flash) {
+        try {
+            accountService.rename(id, displayName, admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", msg.get("admin.flash.account.renamed", id,
+                    displayName == null ? "" : displayName.trim()));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
         }

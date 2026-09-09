@@ -223,4 +223,75 @@ class AdminAccountServiceTest {
         when(accounts.findById(404L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.bumpSecurityVersion(404L)).isInstanceOf(AppException.class);
     }
+
+    // ---- V1.3.0 Story 1.2：改名 + self 护栏 ----
+
+    @Test
+    void renamePersistsTrimmedNameAndAudits() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.rename(8L, "  新名字  ", 1L);
+        assertThat(a.getDisplayName()).isEqualTo("新名字");
+        verify(accounts).save(a);
+        verify(auditService).record(eq(1L), eq(AuditActions.ACCOUNT_RENAMED), eq("ADMIN_ACCOUNT"),
+                eq("8"), org.mockito.ArgumentMatchers.contains("S → 新名字"));
+    }
+
+    @Test
+    void renameRejectsBlank() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.rename(8L, "   ", 1L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.rename(8L, null, 1L)).isInstanceOf(AppException.class);
+        assertThat(a.getDisplayName()).isEqualTo("S");
+        verify(accounts, never()).save(any());
+    }
+
+    @Test
+    void renameRejectsOver100() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.rename(8L, "x".repeat(101), 1L))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("100");
+        service.rename(8L, "x".repeat(100), 1L); // 边界 100 允许
+        assertThat(a.getDisplayName()).hasSize(100);
+    }
+
+    @Test
+    void renameSameValueIsNoOp() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.rename(8L, " S ", 1L);
+        verify(accounts, never()).save(any());
+        verify(auditService, never()).record(anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    void renameDoesNotBumpSecurityVersion() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.rename(8L, "改了", 1L);
+        assertThat(a.getSecurityVersion()).isZero();
+    }
+
+    @Test
+    void cannotDeactivateSelf() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.deactivate(8L, 8L)).isInstanceOf(AppException.class);
+        assertThat(a.getStatus()).isEqualTo(AdminAccountStatus.ACTIVE);
+        verify(accounts, never()).save(any());
+        verify(auditService, never()).record(anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    void cannotChangeOwnRoleEvenToSameRole() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE); // CUSTOM
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.changeRole(8L, AdminRole.OPERATIONS, 8L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.changeRole(8L, AdminRole.CUSTOM, 8L)).isInstanceOf(AppException.class);
+        assertThat(a.getRole()).isEqualTo(AdminRole.CUSTOM);
+        verify(accounts, never()).save(any());
+    }
 }

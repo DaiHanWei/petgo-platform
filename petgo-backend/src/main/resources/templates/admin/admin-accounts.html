@@ -103,17 +103,38 @@
                     </span>
                 </td>
                 <td class="account-actions-cell">
-                    <div class="account-actions">
+                    <div class="account-actions" th:with="isSelf=${selfId != null and a.id == selfId}">
+                        <!-- 改显示名（V1.3.0 Story 1.2）：行内展开，与「改权限」同结构；对自己可用。 -->
+                        <form class="inline account-rename-form"
+                              th:action="@{/admin/accounts/{id}/rename(id=${a.id})}" method="post"
+                              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')">
+                            <details class="perm-details rename-details">
+                                <summary class="btn btn-neutral btn-sm" th:text="#{admin.accounts.rename}">改名</summary>
+                                <div class="perm-panel rename-panel">
+                                    <input type="text" name="displayName" th:value="${a.displayName}"
+                                           maxlength="100" required class="field-full"/>
+                                    <div class="perm-panel-actions">
+                                        <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.accounts.rename.save}">保存显示名</button>
+                                        <button type="button" class="btn btn-neutral btn-sm"
+                                                onclick="this.closest('details').removeAttribute('open')"
+                                                th:text="#{admin.accounts.rename.cancel}">取消</button>
+                                    </div>
+                                </div>
+                            </details>
+                        </form>
                         <!-- 改岗位角色：一次定型该账号能进哪些模块。与建号同门控（改角色 = 重新授权）。 -->
+                        <!-- self 护栏（Story 1.2 AC4）：自己那一行禁用 + title 说明；安全边界在服务层。 -->
                         <form class="inline account-role-form"
                               th:action="@{/admin/accounts/{id}/role(id=${a.id})}" method="post"
                               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')">
-                            <select name="role" class="role-select">
+                            <select name="role" class="role-select" th:disabled="${isSelf}"
+                                    th:title="${isSelf} ? #{admin.accounts.selfGuard} : null">
                                 <option th:each="r : ${roles}" th:value="${r}"
                                         th:selected="${r == a.role}"
                                         th:text="${#messages.msg(r.titleCode())}">运营专员</option>
                             </select>
-                            <button type="submit" class="btn btn-neutral btn-sm"
+                            <button type="submit" class="btn btn-neutral btn-sm" th:disabled="${isSelf}"
+                                    th:title="${isSelf} ? #{admin.accounts.selfGuard} : null"
                                     th:text="#{admin.accounts.saveRole}">改角色</button>
                         </form>
                         <!-- 改权限：仅「自定义」角色。模板角色的权限由角色定义决定，逐码改会造出第二份真相。 -->
@@ -148,7 +169,9 @@
                             <form class="inline" th:if="${a.status.name() == 'ACTIVE'}"
                                   th:action="@{/admin/accounts/{id}/deactivate(id=${a.id})}" method="post"
                                   th:data-confirm="#{admin.accounts.deactivate.confirm}">
-                                <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.accounts.deactivate}">停用</button>
+                                <button type="submit" class="btn btn-danger btn-sm" th:disabled="${isSelf}"
+                                        th:title="${isSelf} ? #{admin.accounts.selfGuard} : null"
+                                        th:text="#{admin.accounts.deactivate}">停用</button>
                             </form>
                             <form class="inline" th:if="${a.status.name() == 'DISABLED'}"
                                   th:action="@{/admin/accounts/{id}/reactivate(id=${a.id})}" method="post">

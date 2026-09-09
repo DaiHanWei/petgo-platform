@@ -141,4 +141,24 @@ class AdminAccountManagementIntegrationTest extends ApiIntegrationTest {
         assertThat(adminAccounts.findById(id).orElseThrow().getSecurityVersion()).isEqualTo(4);
         assertThat(userDetailsService.loadByEmail(email, false).getSecurityVersion()).isEqualTo(4);
     }
+
+    // ---- V1.3.0 Story 1.2：改名真库闭环 ----
+
+    @Test
+    void renameShowsInListAuditsAndKeepsSecurityVersion() {
+        long seq = SEQ.incrementAndGet();
+        String email = "staff-rename-" + seq + "@tailtopia.test";
+        long actor = 500000L + seq;
+        long id = accountService.createAccount(email, "旧名", AdminRole.CUSTOM, List.of("vet.view"), actor);
+
+        accountService.rename(id, "新名" + seq, actor);
+
+        assertThat(accountService.list().stream().filter(v -> v.id() == id).findFirst().orElseThrow()
+                .displayName()).isEqualTo("新名" + seq);
+        assertThat(adminAccounts.findById(id).orElseThrow().getSecurityVersion()).isZero();
+        List<AdminAuditLog> audits = auditService.search(null, null, actor,
+                AuditActions.ACCOUNT_RENAMED, PageRequest.of(0, 10)).getContent();
+        assertThat(audits).isNotEmpty();
+        assertThat(audits.get(0).getSummary()).contains("旧名").contains("新名" + seq);
+    }
 }

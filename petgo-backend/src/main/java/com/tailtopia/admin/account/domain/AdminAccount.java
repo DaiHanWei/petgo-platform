@@ -127,6 +127,11 @@ public class AdminAccount {
         this.status = status;
     }
 
+    /** 改显示名（V1.3.0 Story 1.2）。校验（非空 / ≤100）在 {@code AdminAccountService.rename}。 */
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
     /**
      * 改岗位角色（同步推导 {@code accountType}，二者永不脱钩）。
      * 超管名额上限与「不降级最后一个超管」的护栏在 {@code AdminAccountService} 侧校验。

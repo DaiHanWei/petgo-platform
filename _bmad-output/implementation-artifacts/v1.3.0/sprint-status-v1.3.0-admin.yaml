@@ -39,7 +39,7 @@ development_status:
   # ---- Epic 1: 账号与角色管理增强（安全底座） ----
   epic-1: in-progress
   1-1-账号变更版本号与自动踢重登: review   # 账号变更版本号与自动踢重登（AD-1）
-  1-2-修改显示名与-self-护栏: ready-for-dev   # 修改显示名与 self 护栏
+  1-2-修改显示名与-self-护栏: review   # 修改显示名与 self 护栏
   1-3-换绑-lark-邮箱: ready-for-dev   # 换绑 Lark 邮箱
   1-4-角色-权限表与预置角色迁移: ready-for-dev   # 角色-权限表与预置角色迁移（AD-4 方案 A）
   1-5-角色配置页: ready-for-dev   # 角色配置页（AB-21A）

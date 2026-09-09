@@ -79,11 +79,15 @@ class AdminAccountAccessControlTest {
     }
 
     private void viewList() {
-        controller.accounts(new ConcurrentModel());
+        controller.accounts(principal(), new ConcurrentModel());
     }
 
     private void deactivate() {
         controller.deactivate(principal(), 5L, new RedirectAttributesModelMap());
+    }
+
+    private void rename() {
+        controller.rename(principal(), 5L, "新名", new RedirectAttributesModelMap());
     }
 
     @Test
@@ -114,5 +118,21 @@ class AdminAccountAccessControlTest {
     void deactivateAuthorityAllowed() {
         authenticateWith("ROLE_ADMIN", "admin.deactivate");
         assertThatCode(this::deactivate).doesNotThrowAnyException();
+    }
+
+    // ---- V1.3.0 Story 1.2：改名与建号同门槛（CREATE_AUTH） ----
+
+    @Test
+    void renameNeedsCreateAccountAuthority() {
+        authenticateWith("ROLE_ADMIN", "admin.deactivate"); // 有停用权但无建号权
+        assertThatThrownBy(this::rename).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void renameAllowedForCreateAccountAuthorityAndSuperAdmin() {
+        authenticateWith("ROLE_ADMIN", "admin.create_account");
+        assertThatCode(this::rename).doesNotThrowAnyException();
+        authenticateWith("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+        assertThatCode(this::rename).doesNotThrowAnyException();
     }
 }

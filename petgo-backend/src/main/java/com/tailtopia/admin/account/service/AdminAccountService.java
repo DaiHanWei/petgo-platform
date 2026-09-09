@@ -147,6 +147,10 @@ public class AdminAccountService {
         if (newRole == null) {
             throw AppException.validation("必须选择岗位角色").code("admin.err.account.roleRequired");
         }
+        // V1.3.0 Story 1.2 self 护栏：放在幂等判断之前——「给自己选当前角色再保存」也应被拒。
+        if (accountId == actorAccountId) {
+            throw AppException.validation("不能修改自己的岗位角色").code("admin.err.account.selfRoleChange");
+        }
         AdminRole oldRole = a.getRole();
         if (oldRole == newRole) {
             return; // 幂等
@@ -228,6 +232,10 @@ public class AdminAccountService {
     public void deactivate(long accountId, long actorAccountId) {
         AdminAccount a = accounts.findById(accountId)
                 .orElseThrow(() -> AppException.notFound("后台账号不存在").code("admin.err.account.notFound"));
+        // V1.3.0 Story 1.2 self 护栏（服务层是安全边界；模板禁用态只是体验）。
+        if (accountId == actorAccountId) {
+            throw AppException.validation("不能停用自己的账号").code("admin.err.account.selfDeactivate");
+        }
         if (a.getStatus() == AdminAccountStatus.DISABLED) {
             return; // 幂等
         }
@@ -255,6 +263,31 @@ public class AdminAccountService {
                 .orElseThrow(() -> AppException.notFound("后台账号不存在").code("admin.err.account.notFound"));
         a.bumpSecurityVersion();
         accounts.save(a);
+    }
+
+    /**
+     * 改显示名（V1.3.0 Story 1.2，AB-16A ①）。trim 后非空且 ≤100（与列 {@code display_name VARCHAR(100)} 一致）；
+     * 与旧值相同幂等 no-op（不审计）。<b>不</b> bump 安全版本号（D-2：显示名不参与鉴权，顶栏名下次登录自然更新）。
+     */
+    @Transactional
+    public void rename(long accountId, String displayName, long actorAccountId) {
+        AdminAccount a = accounts.findById(accountId)
+                .orElseThrow(() -> AppException.notFound("后台账号不存在").code("admin.err.account.notFound"));
+        String name = displayName == null ? "" : displayName.trim();
+        if (name.isEmpty()) {
+            throw AppException.validation("显示名不能为空").code("admin.err.account.displayNameRequired");
+        }
+        if (name.length() > 100) {
+            throw AppException.validation("显示名不能超过 100 个字符").code("admin.err.account.displayNameTooLong");
+        }
+        String old = a.getDisplayName();
+        if (name.equals(old)) {
+            return; // 幂等
+        }
+        a.setDisplayName(name);
+        accounts.save(a);
+        auditService.record(actorAccountId, AuditActions.ACCOUNT_RENAMED, "ADMIN_ACCOUNT",
+                String.valueOf(accountId), "显示名 " + old + " → " + name + "（" + a.getLarkEmail() + "）");
     }
 
     /** 重新激活账号（AC5）。 */
