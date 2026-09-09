@@ -12,6 +12,13 @@ public final class AuditActions {
     public static final String COMMENT_VIRTUAL_POST = "COMMENT_VIRTUAL_POST";
     /** V1.3.0 Story 4.4：暖贴跟进项「标记已读（不回复）」（target WARM_REPLY_FOLLOWUP/&lt;id&gt;）。 */
     public static final String WARM_REPLY_READ = "WARM_REPLY_READ";
+    /** V1.3.0 Story 5.3：场所处置（target PLACE/&lt;id&gt;；summary 不记坐标值 / 地址全文 / 评论正文）。 */
+    public static final String PLACE_EDITED = "PLACE_EDITED";
+    public static final String PLACE_DELISTED = "PLACE_DELISTED";
+    public static final String PLACE_RESTORED = "PLACE_RESTORED";
+    public static final String PLACE_PHOTO_REMOVED = "PLACE_PHOTO_REMOVED";
+    public static final String PLACE_COMMENT_REMOVED = "PLACE_COMMENT_REMOVED";
+    public static final String PLACE_MERGED = "PLACE_MERGED";
 
     /** 紧急账密（formLogin）登录成功（Story 1.3，AC7）。 */
     public static final String EMERGENCY_LOGIN_SUCCEEDED = "EMERGENCY_LOGIN_SUCCEEDED";

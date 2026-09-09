@@ -3,10 +3,12 @@
 <!--
   B6 场所详情抽屉（V1.3.0 Story 5.2 AC5，只读；模板 B 抽屉体 res=places，480px）。d = PlaceDrawerView。
   五区：① 基本信息（2×2 弹性网格 UX-DR11；MERGED 显示「已并入 → 保留场所名」可点跳其抽屉 ?open=）② 照片墙（签名 URL 现签，不落库）
-  ③ 评论列表（分页 20，comments fragment 局部翻页）④ 打卡计数 ⑤ 操作条占位（按钮禁用，处置动作见 Story 5.3）。
+  ③ 评论列表（分页 20，comments fragment 局部翻页；每条「删除」）④ 打卡计数 ⑤ 操作条（Story 5.3：编辑行内表单 / 下架·恢复 / 合并弹层；
+  照片墙每张「删除」）；afterAction = 处置成功响应（抽屉 + oob 列表行 + toast）；mergeCandidates = 合并候选。
 -->
 <body>
 <div th:fragment="drawer" class="pl-drawer" th:attr="data-place-id=${d.id}">
+    <div class="banner warn" th:if="${warn}" th:text="${warn}">坐标不在雅加达都会区，请确认</div>
     <!-- ① 基本信息 -->
     <section class="card card-full pl-card">
         <h2>
@@ -44,7 +46,11 @@
             <figure th:each="ph : ${d.photos}" class="pl-photo" th:attr="data-photo-id=${ph.id}">
                 <img th:if="${ph.url != null}" th:src="${ph.url}" alt="" data-lightbox loading="lazy"/>
                 <div class="pl-photo-missing" th:if="${ph.url == null}" th:text="#{admin.v130.places.drawer.photos.unavailable}">图片暂不可用</div>
-                <figcaption class="muted rv-small" th:text="${ph.uploaderName}">上传者</figcaption>
+                <figcaption class="muted rv-small"><span th:text="${ph.uploaderName}">上传者</span>
+                    <form class="inline" th:if="${d.status.name() != 'MERGED'}" th:attr="hx-post=@{/admin/places/{id}/photos/{pid}/remove(id=${d.id},pid=${ph.id})}"
+                          hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+                        <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.v130.places.action.removePhoto}">删除</button>
+                    </form></figcaption>
             </figure>
         </div>
     </section>
@@ -61,14 +67,79 @@
         </div>
     </section>
 
-    <!-- ⑤ 操作条占位：处置动作（编辑 / 下架 / 恢复 / 删照片 / 删评论 / 合并）由 Story 5.3 接入，本 story 渲染禁用态 -->
-    <section class="pl-actions" data-place-actions>
-        <button type="button" class="btn btn-neutral btn-sm" disabled th:text="#{admin.v130.places.action.edit}">编辑</button>
-        <button type="button" class="btn btn-neutral btn-sm" disabled th:text="${d.status.name() == 'DELISTED'} ? #{admin.v130.places.action.restore} : #{admin.v130.places.action.delist}">下架</button>
-        <button type="button" class="btn btn-neutral btn-sm" disabled th:text="#{admin.v130.places.action.merge}">合并</button>
-        <span class="muted rv-small" th:text="#{admin.v130.places.action.pending}">处置动作见 Story 5.3</span>
+    <!-- ⑤ 操作条（Story 5.3）：编辑（行内表单展开）/ 下架·恢复（data-confirm 复述场所名）/ 合并（弹层：搜索 + 候选 + 确认）；MERGED 只读 -->
+    <section class="pl-actions" data-place-actions th:if="${d.status.name() != 'MERGED'}">
+        <details class="pl-inline" data-place-edit>
+            <summary class="btn btn-neutral btn-sm" th:text="#{admin.v130.places.action.edit}">编辑</summary>
+            <form class="pl-edit-form" th:attr="hx-post=@{/admin/places/{id}/edit(id=${d.id})}" hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+                <h3 th:text="#{admin.v130.places.edit.title}">编辑场所</h3>
+                <label class="field field-full"><span th:text="#{admin.v130.places.edit.name}">名称</span>
+                    <input type="text" name="name" class="inp" maxlength="80" required th:value="${d.name}"/></label>
+                <label class="field"><span th:text="#{admin.v130.places.edit.type}">类型</span>
+                    <select name="placeType" class="sel">
+                        <option th:each="t : ${T(com.tailtopia.admin.places.domain.PlaceType).KNOWN}" th:value="${t}" th:selected="${d.placeType == t}" th:text="#{'admin.v130.places.type.' + ${t}}">类型</option>
+                        <option th:if="${!T(com.tailtopia.admin.places.domain.PlaceType).isKnown(d.placeType)}" th:value="${d.placeType}" selected th:text="#{admin.v130.places.edit.type.other}">其他</option>
+                    </select></label>
+                <label class="field"><span th:text="#{admin.v130.places.edit.city}">城市</span>
+                    <input type="text" name="city" class="inp" maxlength="60" required th:value="${d.city}"/></label>
+                <label class="field field-full"><span th:text="#{admin.v130.places.edit.tags}">标签</span>
+                    <input type="text" name="tags" class="inp" th:value="${#strings.listJoin(d.tags, ', ')}"/></label>
+                <label class="field field-full"><span th:text="#{admin.v130.places.edit.address}">文字地址</span>
+                    <input type="text" name="addressText" class="inp" maxlength="255" required th:value="${d.addressText}"/></label>
+                <label class="field"><span th:text="#{admin.v130.places.edit.lat}">纬度</span>
+                    <input type="text" name="lat" class="inp" inputmode="decimal" required th:value="${d.lat}"/></label>
+                <label class="field"><span th:text="#{admin.v130.places.edit.lng}">经度</span>
+                    <input type="text" name="lng" class="inp" inputmode="decimal" required th:value="${d.lng}"/></label>
+                <label class="field field-full"><span th:text="#{admin.v130.places.edit.description}">描述</span>
+                    <textarea name="description" class="inp" rows="3" th:text="${d.description}"></textarea></label>
+                <p class="hint"><span th:text="#{admin.v130.places.col.marker}">标记人</span> <span th:text="${d.markerName}">标记人</span> · <span th:text="#{admin.v130.places.edit.markerLocked}">标记人不可修改</span></p>
+                <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.v130.places.edit.save}">保存</button>
+            </form>
+        </details>
+        <form class="inline" th:if="${d.status.name() == 'ACTIVE'}" th:attr="hx-post=@{/admin/places/{id}/delist(id=${d.id})},data-confirm=#{admin.v130.places.confirm.delist},data-confirm-args=${d.name}"
+              hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+            <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.v130.places.action.delist}">下架</button>
+        </form>
+        <form class="inline" th:if="${d.status.name() == 'DELISTED'}" th:attr="hx-post=@{/admin/places/{id}/restore(id=${d.id})}"
+              hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+            <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.v130.places.action.restore}">恢复</button>
+        </form>
+        <details class="pl-inline" data-place-merge>
+            <summary class="btn btn-danger btn-sm" th:text="#{admin.v130.places.action.merge}">合并</summary>
+            <div class="pl-merge">
+                <h3 th:text="#{admin.v130.places.merge.title}">合并到保留场所</h3>
+                <p class="hint" th:text="#{admin.v130.places.merge.hint}">只列上架中的其他场所…</p>
+                <input type="search" name="q" class="inp field-full" th:placeholder="#{admin.v130.places.merge.search}"
+                       th:attr="hx-get=@{/admin/places/{id}/merge-candidates(id=${d.id})}" hx-trigger="input changed delay:300ms, search" hx-target="#places-merge-candidates" hx-swap="innerHTML"/>
+                <div id="places-merge-candidates"></div>
+            </div>
+        </details>
     </section>
+    <p class="muted" th:if="${d.status.name() == 'MERGED'}" th:text="#{admin.v130.places.merged.readonly}">已并入其他场所，只读</p>
 </div>
+
+<!-- 合并候选（弹层内搜索结果）：每个候选一个表单，data-confirm 复述「保留 A、并入 B，不可撤销」 -->
+<div th:fragment="mergeCandidates" class="pl-merge-list">
+    <p class="muted" th:if="${#lists.isEmpty(candidates)}" th:text="#{admin.v130.places.merge.empty}">没有匹配的上架场所</p>
+    <ul th:if="${!#lists.isEmpty(candidates)}">
+        <li th:each="c : ${candidates}">
+            <form class="inline" th:attr="hx-post=@{/admin/places/{id}/merge(id=${mergedId})},data-confirm=#{admin.v130.places.confirm.merge},data-confirm-args=${c.name} + '|' + ${mergedName}"
+                  hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+                <input type="hidden" name="keepId" th:value="${c.id}"/>
+                <span th:text="${c.name}">名称</span> <span class="muted rv-small" th:text="${c.city} + ' · ' + ${c.addressText}">地址</span>
+                <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.v130.places.merge.keep}">保留此场所</button>
+            </form>
+        </li>
+    </ul>
+</div>
+
+<!-- 处置成功响应：抽屉重渲染 + oob 列表该行 + toast（黄条 warn 由 drawer 内渲染） -->
+<th:block th:fragment="afterAction">
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+    <!-- htmx 1.9.12 默认用 DOMParser（body 上下文）解析响应：裸 <tr> 会被丢掉、单元格内容泄进抽屉（复审 #1）→ 包进隐藏 table，oob 后只剩空壳 -->
+    <table hidden th:if="${row != null}"><tbody><tr th:replace="~{admin/fragments/places-list :: row(${row}, true)}"></tr></tbody></table>
+    <div th:replace="~{admin/fragments/drawer-places :: drawer}"></div>
+</th:block>
 
 <!-- 评论列表片段：翻页只换本节（hx-get …/drawer?part=comments&commentPage=n） -->
 <section th:fragment="comments" class="card card-full pl-card pl-comments" id="places-drawer-comments">
@@ -80,6 +151,10 @@
                   th:text="${c.attitude.name() == 'RECOMMEND'} ? '👍' : '👎'" th:title="#{'admin.v130.places.attitude.' + ${c.attitude.name()}}">👍</span>
             <span th:text="${c.authorName}" th:classappend="${c.authorDeleted} ? 'muted'">作者</span>
             <span class="muted rv-small" th:text="${@adminTime.wib(c.createdAt)}">时间</span>
+            <form class="inline" th:if="${d.status.name() != 'MERGED'}" th:attr="hx-post=@{/admin/places/{id}/comments/{cid}/remove(id=${d.id},cid=${c.id})}"
+                  hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+                <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.v130.places.action.removeComment}">删除</button>
+            </form>
             <p class="pl-comment-body" th:text="${c.body}">正文</p>
         </li>
     </ul>

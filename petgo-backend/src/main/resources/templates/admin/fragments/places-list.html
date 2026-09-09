@@ -50,7 +50,25 @@
         </tr>
         </thead>
         <tbody>
-        <tr th:each="r : ${rows}" th:data-id="${r.id}" th:data-drawer-url="@{/admin/places/{id}/drawer(id=${r.id})}" tabindex="0"
+        <th:block th:each="r : ${rows}"><tr th:replace="~{admin/fragments/places-list :: row(${r}, false)}"></tr></th:block>
+        </tbody>
+    </table>
+    <div class="empty" th:if="${rows.isEmpty()}">
+        <span class="empty-emoji" th:text="${filter.q == null and filter.type == null and filter.status == null and filter.city == null} ? '📍' : '🔍'">🔍</span>
+        <p th:text="${filter.q == null and filter.type == null and filter.status == null and filter.city == null} ? #{admin.v130.places.empty} : #{admin.v130.places.empty.search}">暂无场所</p>
+    </div>
+    <div class="pager" th:if="${!rows.isEmpty()}" th:attr="data-page=${filter.page}">
+        <a th:if="${filter.page > 0}" href="#" th:attr="hx-get=@{/admin/places(q=${filter.q},type=${filter.type},status=${filter.statusParam()},city=${filter.city},page=${filter.page - 1})}"
+           hx-target="#places-rows" hx-swap="innerHTML" hx-push-url="true" th:text="#{admin.v130.places.pager.prev}">上一页</a>
+        <span th:text="#{admin.v130.places.pager.total(${total})}">共 N 个场所</span>
+        <a th:if="${hasNext}" href="#" th:attr="hx-get=@{/admin/places(q=${filter.q},type=${filter.type},status=${filter.statusParam()},city=${filter.city},page=${filter.page + 1})}"
+           hx-target="#places-rows" hx-swap="innerHTML" hx-push-url="true" th:text="#{admin.v130.places.pager.next}">下一页</a>
+    </div>
+</th:block>
+
+<!-- 单行（rows 循环体；处置成功后以 oob=true 原位替换，Story 5.3） -->
+<table th:remove="tag"><tbody th:remove="tag">
+        <tr th:fragment="row(r, oob)" th:id="'places-row-' + ${r.id}" th:hx-swap-oob="${oob} ? 'true' : null" th:data-id="${r.id}" th:data-drawer-url="@{/admin/places/{id}/drawer(id=${r.id})}" tabindex="0"
             th:classappend="${r.status.name() != 'ACTIVE'} ? 'row-muted'">
             <td class="nowrap" th:text="${r.name}" th:title="${r.name}">名称</td>
             <td class="nowrap" th:text="${r.typeName}">类型</td>
@@ -75,19 +93,6 @@
             </td>
             <td class="nowrap" th:text="${@adminTime.wib(r.createdAt)}">时间</td>
         </tr>
-        </tbody>
-    </table>
-    <div class="empty" th:if="${rows.isEmpty()}">
-        <span class="empty-emoji" th:text="${filter.q == null and filter.type == null and filter.status == null and filter.city == null} ? '📍' : '🔍'">🔍</span>
-        <p th:text="${filter.q == null and filter.type == null and filter.status == null and filter.city == null} ? #{admin.v130.places.empty} : #{admin.v130.places.empty.search}">暂无场所</p>
-    </div>
-    <div class="pager" th:if="${!rows.isEmpty()}">
-        <a th:if="${filter.page > 0}" href="#" th:attr="hx-get=@{/admin/places(q=${filter.q},type=${filter.type},status=${filter.statusParam()},city=${filter.city},page=${filter.page - 1})}"
-           hx-target="#places-rows" hx-swap="innerHTML" hx-push-url="true" th:text="#{admin.v130.places.pager.prev}">上一页</a>
-        <span th:text="#{admin.v130.places.pager.total(${total})}">共 N 个场所</span>
-        <a th:if="${hasNext}" href="#" th:attr="hx-get=@{/admin/places(q=${filter.q},type=${filter.type},status=${filter.statusParam()},city=${filter.city},page=${filter.page + 1})}"
-           hx-target="#places-rows" hx-swap="innerHTML" hx-push-url="true" th:text="#{admin.v130.places.pager.next}">下一页</a>
-    </div>
-</th:block>
+</tbody></table>
 </body>
 </html>

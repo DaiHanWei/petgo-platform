@@ -743,3 +743,11 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pl-comment-list li { padding: 8px 0; border-bottom: 1px dashed var(--line); }
 .pl-comment-body { margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; }
 .pl-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 0; }
+.banner.warn { background: var(--warn-bg); color: var(--warn); }
+.pl-inline > summary { list-style: none; display: inline-flex; }
+.pl-inline > summary::-webkit-details-marker { display: none; }
+.pl-edit-form, .pl-merge { margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); flex-basis: 100%; }
+.pl-edit-form .field { margin-bottom: 8px; }
+.pl-merge-list ul { list-style: none; padding: 0; margin: 8px 0 0; }
+.pl-merge-list li { padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.pl-photo figcaption form { margin-left: 6px; }

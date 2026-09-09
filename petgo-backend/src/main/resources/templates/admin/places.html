@@ -27,6 +27,10 @@
         <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::pl-filters}, ~{::pl-summary}, ~{::pl-table}, ~{::pl-drawer})}">
             <form th:fragment="pl-filters" class="filter-bar" data-autosubmit th:attr="hx-get=@{/admin/places}"
                   hx-target="#places-rows" hx-swap="innerHTML" hx-push-url="true">
+                <!-- Story 5.3：处置成功后 HX-Trigger admin:places-refresh → 按当前筛选 + 当前页重拉表格与摘要条（独立元素：不压 history、不丢 ?open=） -->
+                <span hidden data-places-refresh th:attr="hx-get=@{/admin/places}" hx-include="closest form" hx-trigger="admin:places-refresh from:body"
+                      hx-target="#places-rows" hx-swap="innerHTML"
+                      hx-vals="js:{page: (document.querySelector('#places-rows .pager') || {}).getAttribute ? (document.querySelector('#places-rows .pager').getAttribute('data-page') || 0) : 0}"></span>
                 <label class="field">
                     <span th:text="#{admin.v130.places.filter.q}">名称 / 地址</span>
                     <input type="text" name="q" class="inp" th:value="${filter.q}" th:placeholder="#{admin.v130.places.filter.q.placeholder}"/>

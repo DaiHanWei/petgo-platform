@@ -57,20 +57,42 @@ function tailtopiaConfirmArgs(form) {
     }
     return args;
 }
-document.addEventListener('submit', function (e) {
-    var form = e.target;
+function tailtopiaConfirmMessage(form) {
     var msg = form.getAttribute && form.getAttribute('data-confirm');
-    if (!msg) { return; }
+    if (!msg) { return null; }
     if (msg.indexOf('{') !== -1) {
         var args = tailtopiaConfirmArgs(form);
         for (var i = 0; i < Math.max(args.length, 3); i++) {
             msg = msg.split('{' + i + '}').join(args[i] === undefined ? '' : args[i]);
         }
     }
-    if (!window.confirm(msg)) {
+    return msg;
+}
+function tailtopiaIsHxForm(form) {
+    return !!(form.getAttribute && (form.hasAttribute('hx-post') || form.hasAttribute('hx-get') || form.hasAttribute('hx-put') || form.hasAttribute('hx-delete')));
+}
+// 原生表单：submit 事件 preventDefault 即拦截。
+// ⚠️ htmx 表单（hx-post 等）不看 defaultPrevented，submit 里 preventDefault 拦不住请求（V1.3.0 Story 5.3 复审 #2）——
+//   它们改走下面的 htmx:confirm（htmx 在发请求前派发；preventDefault 后只有 issueRequest(true) 才真正发），这里跳过以免弹两次。
+document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form.getAttribute || !form.getAttribute('data-confirm') || tailtopiaIsHxForm(form)) { return; }
+    if (!window.confirm(tailtopiaConfirmMessage(form))) {
         e.preventDefault();
     }
 }, true);
+document.addEventListener('DOMContentLoaded', function () {
+    document.body.addEventListener('htmx:confirm', function (e) {
+        var elt = e.detail && e.detail.elt;
+        var form = elt && elt.closest ? elt.closest('form[data-confirm]') : null;
+        if (!form || !tailtopiaIsHxForm(form)) { return; }
+        // 违规钮（data-confirm-button，admin-workbench.js）自己在 click 阶段确认过，这里不重复
+        if (e.detail.triggeringEvent && e.detail.triggeringEvent.submitter
+                && e.detail.triggeringEvent.submitter.hasAttribute && e.detail.triggeringEvent.submitter.hasAttribute('data-confirm-button')) { return; }
+        e.preventDefault();
+        if (window.confirm(tailtopiaConfirmMessage(form))) { e.detail.issueRequest(true); }
+    });
+});
 
 // V1.3.0 Story 1.5：角色矩阵「至少勾 1 项」——0 勾选时禁用保存钮（服务层另有校验，双保险）。
 document.addEventListener('change', function (e) {

@@ -124,6 +124,17 @@ public class AdminPlaceQueryService {
         return new ListResult(List.copyOf(rows), total, (long) (f.page() + 1) * PlaceFilter.PAGE_SIZE < total);
     }
 
+    /** 单行（处置成功后 oob 原位替换列表行，Story 5.3）；不存在 / 已删 → 404。 */
+    @Transactional(readOnly = true)
+    public PlaceRow row(long id) {
+        Place pl = requirePlace(id);
+        AuthorView m = authorViews(Set.of(pl.getMarkedByUserId())).get(pl.getMarkedByUserId());
+        return new PlaceRow(pl.getId(), pl.getPublicToken(), pl.getName(), pl.getPlaceType(), typeName(pl.getPlaceType()), pl.getTags(),
+                pl.getCity(), pl.getAddressText(), name(m, pl.getMarkedByUserId()), m != null && m.deleted(),
+                pl.getPhotoCount(), pl.getCommentCount(), pl.getCheckinCount(), pl.getRecommendCount(), pl.getNotRecommendCount(),
+                pl.getStatus(), pl.getMergedIntoId(), pl.getCreatedAt());
+    }
+
     @Transactional(readOnly = true)
     public PlaceSummary summary(PlaceFilter f) {
         MapSqlParameterSource p = params(f).addValue("today", LocalDate.now(ScheduleWindow.WIB));

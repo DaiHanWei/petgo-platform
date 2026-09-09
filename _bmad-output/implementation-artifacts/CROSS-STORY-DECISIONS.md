@@ -73,7 +73,7 @@
 | `consult_ratings` | 5.6 | |
 | `health_events` | 2.5 | |
 | `notifications` | 6.1 | 6.7 增 type 枚举 PET_BIRTHDAY/COMPANION_ANNIVERSARY/MILESTONE_NODE（F2/F5）|
-| `places` / `place_photos` / `place_comments` / `place_checkins` / `place_reports` | **V1.3.0 后台 5.1**（`V20260909_1749__init_places.sql`） | 五表 → **本分支（后台）定 schema，App 分支（FR-112）读写数据**（架构 delta 契约 X-1 / X-3）。语义：`status != 'ACTIVE'` 或 `deleted_at IS NOT NULL` 对用户端「不存在」；`MERGED` 行的 `merged_into_id` 供 App 直链跳到保留场所；5.3 合并发 `PlaceMergedEvent(keepId, mergedId)`，护照章归并由 App 分支监听实现。`place_type` / `tags` 值域由 App 端定，表不加 CHECK。D-39 加 `city`。详见 `docs/reference/db-schema-reference.md` §8 |
+| `places` / `place_photos` / `place_comments` / `place_checkins` / `place_reports` | **V1.3.0 后台 5.1**（`V20260909_1749__init_places.sql`） | 五表 → **本分支（后台）定 schema，App 分支（FR-112）读写数据**（架构 delta 契约 X-1 / X-3）。语义：`status != 'ACTIVE'` 或 `deleted_at IS NOT NULL` 对用户端「不存在」；`MERGED` 行的 `merged_into_id` 供 App 直链跳到保留场所；5.3 合并发 `PlaceMergedEvent(long keepPlaceId, long mergedPlaceId, Instant mergedAt, long actorAdminAccountId)`（`com.tailtopia.admin.places.event`，合并事务内发布；子表照片 / 评论 / 打卡已改指保留场所，举报不迁移），护照章归并由 App 分支用 `@TransactionalEventListener(AFTER_COMMIT)` + `REQUIRES_NEW` 监听实现（同一用户 A、B 都盖过 → 并一枚、次数相加）。`place_type` / `tags` 值域由 App 端定，表不加 CHECK。D-39 加 `city`。详见 `docs/reference/db-schema-reference.md` §8 |
 | `pet_profiles.pet_type`（加列）| 2.2 | F6：加列非建表，创建后不可改 |
 | `pet_milestones` / `milestone_completions` | 里程碑 mini-epic（F2）| 归 profile 域；排期 1.0.x/1.1.0 待定，**非 Epic 6**。本轮 FR-42 断档补齐（in-page picker 打卡 / L 级达成推送 / 已过生日补录）已并入 PRD FR-42 规格，随 mini-epic 实现，**本轮不落代码** |
 | `notifications` 去重标记（生日/纪念日/节点已推）| 6.7（F5）| 落 notifications 附加列或独立小表，dev 落实 |
