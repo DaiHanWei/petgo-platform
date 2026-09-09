@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  充值档位「已停用」折叠表（V1.3.0 Story 6.2 AC2，D-25：停用不能变单向）。GET /admin/config/tiers/disabled 返 :: table（htmx 原地换 #tiers-disabled）；
+  每行「启用」钮走既有 POST /admin/config/tiers/{id}/enabled（enabled=true）—— htmx 请求成功回 :: refresh（清空行内 err + 主表 oob + 本表 oob + toast），
+  启用中已达 4 / 停最后一个 → 422 行内 err（AdminBusinessExceptionAdvice 按 HX-Target 回填 #tiers-inline-error）。灰底样式 .row-muted。
+-->
+<body>
+<div th:fragment="table" id="tiers-disabled" class="tiers-disabled" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <h3 th:text="#{admin.config.tier.disabledTitle}">已停用档位</h3>
+    <p class="muted" th:if="${#lists.isEmpty(disabledTiers)}" th:text="#{admin.config.tier.disabledEmpty}">没有已停用的档位</p>
+    <table th:if="${!#lists.isEmpty(disabledTiers)}" class="row-muted">
+        <thead>
+        <tr><th th:text="#{admin.config.col.tier}">档位</th><th th:text="#{admin.config.col.amount}">金额（IDR）</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.common.actions}">操作</th></tr>
+        </thead>
+        <tbody>
+        <tr th:each="t : ${disabledTiers}" th:attr="data-tier-id=${t.id}">
+            <td th:text="${t.tierKey}">25k</td>
+            <td th:text="${#numbers.formatInteger(t.amountIdr, 0, 'COMMA')}">25,000</td>
+            <td th:text="#{admin.common.disabled}">停用</td>
+            <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
+                <form th:attr="hx-post=@{/admin/config/tiers/{id}/enabled(id=${t.id})}" hx-target="#tiers-inline-error" hx-swap="innerHTML" class="inline">
+                    <input type="hidden" name="enabled" value="true"/>
+                    <input type="hidden" name="expanded" value="1"/>
+                    <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.common.enable}">启用</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+<!--/* 启停成功（htmx）：主目标 #tiers-inline-error 清空（无非 oob 内容）+ 主表 oob（outerHTML 按 id）+ 「查看已停用（N）」链接 oob
+     + 已停用表 oob（只在折叠区已展开时替换：表单带 expanded=1，未展开保持按需加载语义）+ toast（复审 #5 / #7） */-->
+<th:block th:fragment="refresh">
+    <table th:replace="~{admin/config :: tiers-enabled}"></table>
+    <p th:replace="~{admin/config :: tiers-disabled-link}"></p>
+    <div th:if="${expanded}" th:replace="~{admin/fragments/config-tiers-disabled :: table}"></div>
+    <div th:unless="${expanded}" id="tiers-disabled" hx-swap-oob="true"></div>
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+</th:block>
+</body>
+</html>

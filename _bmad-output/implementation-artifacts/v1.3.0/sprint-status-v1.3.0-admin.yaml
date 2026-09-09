@@ -83,7 +83,7 @@ development_status:
   # ---- Epic 6: 运营配置增强（定价、档位、算法参数） ----
   epic-6: in-progress
   6-1-ktp-模块高清图解锁定价三行: review   # KTP 模块高清图解锁定价三行（AB-18A）
-  6-2-pawcoin-档位-只显启用中-查看已停用-新建档位: ready-for-dev   # PawCoin 档位——只显启用中、查看已停用、新建档位（AB-22A）
+  6-2-pawcoin-档位-只显启用中-查看已停用-新建档位: review   # PawCoin 档位——只显启用中、查看已停用、新建档位（AB-22A）
   6-3-d2-运营配置页整体套模板-d: ready-for-dev   # D2 运营配置页整体套模板 D
   6-4-d3-算法参数页整改与变更记录抽屉: ready-for-dev   # D3 算法参数页整改与变更记录抽屉
   6-5-b23-操作审计-b24-后台账号-d6-角色配置套模板: ready-for-dev   # B23 操作审计（WIB）、B24 后台账号 / D6 角色配置套模板

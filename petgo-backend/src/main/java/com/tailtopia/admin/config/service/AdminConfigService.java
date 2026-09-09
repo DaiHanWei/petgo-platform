@@ -1,6 +1,7 @@
 package com.tailtopia.admin.config.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.config.dto.FeedRankForm;
 import com.tailtopia.admin.config.dto.KtpPricingForm;
 import com.tailtopia.admin.config.dto.PawCoinForm;
@@ -21,6 +22,8 @@ import com.tailtopia.admin.config.dto.ShareRewardForm;
 import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
 import java.util.List;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +43,15 @@ public class AdminConfigService {
     private final ConfigChangeLogRepository changeLogs;
     private final AdminAuditService audit;
     private final FeedRankConfigRepository feedRankRepo;
+
+    /** 启用档位上限（AB-22A：活动调档最多 4 档；表上无约束，服务层数 + advisory 锁串行）。 */
+    public static final int MAX_ENABLED_TIERS = 4;
+    /** 单档金额上限（IDR）：`tier_key VARCHAR(16)` 与 QRIS 单笔上限都装不下天文数字（复审 #6）；与 `shareRewardCapTooLarge` 同风格。 */
+    public static final long MAX_TIER_AMOUNT = 100_000_000L;
+
+    /** 事务级 advisory 锁（V1.3.0 Story 6.2）：新建 / 启用同一把锁串行化，随事务提交 / 回滚自动释放；L0 单测不注入（为 null 时跳过）。 */
+    @PersistenceContext
+    private EntityManager em;
 
     public AdminConfigService(PricingConfigRepository pricingRepo, PawCoinConfigRepository pawcoinRepo,
             PawCoinTopupTierRepository tierRepo, ConfigChangeLogRepository changeLogs,
@@ -284,9 +296,10 @@ public class AdminConfigService {
         commit(logs, adminId, "FEED_RANK", "feed_rank_config");
     }
 
-    // ── 充值档位启停（保底 ≥1）─────────────────────────────────────────────────
+    // ── 充值档位启停（保底 ≥1；V1.3.0 Story 6.2 加启用上限 ≤4）────────────────────
     @Transactional
     public void setTierEnabled(long tierId, boolean enabled, long adminId) {
+        lockTiers(); // 先锁再读（复审 #4）：两个运营同时停用不会把启用数减到 0，同时启用同一档位不会重复记日志；与 createTier 同一把锁
         PawCoinTopupTier tier = tierRepo.findById(tierId)
                 .orElseThrow(() -> AppException.notFound("充值档位不存在").code("admin.err.config.tierNotFound"));
         if (tier.isEnabled() == enabled) {
@@ -295,12 +308,57 @@ public class AdminConfigService {
         if (!enabled && tierRepo.countByEnabledTrue() <= 1) {
             throw AppException.validation("至少保留 1 个启用的充值档位").code("admin.err.config.keepOneTier");
         }
+        if (enabled) {
+            require(tierRepo.countByEnabledTrue() < MAX_ENABLED_TIERS, "已有 4 个启用档位，请先停用一个",
+                    "admin.err.config.tierCapReached");
+        }
         tier.setEnabled(enabled);
         tierRepo.save(tier);
         List<ConfigChangeLog> logs = new ArrayList<>();
         logs.add(ConfigChangeLog.of(ConfigType.TOPUP_TIER, "tier." + tier.getTierKey() + ".enabled",
                 String.valueOf(!enabled), String.valueOf(enabled), adminId));
         commit(logs, adminId, "TOPUP_TIER", "tier:" + tier.getTierKey());
+    }
+
+    // ── 新建充值档位（V1.3.0 Story 6.2 · AB-22A / D-24）────────────────────────
+    /**
+     * 新建档位：金额 ≥1 → advisory 锁串行 → 金额不与任何既有档位（含已停用）重复 → 启用中 &lt; 4 → {@code tier_key = "t" + amount}、
+     * 新建即启用 → 全部档位按金额升序重排 {@code sort_order} 1..n → 变更日志一条（TOPUP_TIER，{@code tier.t<金额>.created}，old 空 new 金额）
+     * + 审计 {@link AuditActions#TIER_CREATED}。不提供删除（AC4）。
+     */
+    @Transactional
+    public PawCoinTopupTier createTier(long amountIdr, long adminId) {
+        require(amountIdr >= 1, "档位金额须为 ≥1 的整数（IDR）", "admin.err.config.tierAmountMin");
+        require(amountIdr <= MAX_TIER_AMOUNT, "档位金额须 ≤ 100000000 IDR", "admin.err.config.tierAmountMax");
+        lockTiers();
+        require(!tierRepo.existsByAmountIdr(amountIdr), "已存在相同金额的档位", "admin.err.config.tierAmountExists");
+        require(tierRepo.countByEnabledTrue() < MAX_ENABLED_TIERS, "已有 4 个启用档位，请先停用一个",
+                "admin.err.config.tierCapReached");
+        PawCoinTopupTier t = tierRepo.save(PawCoinTopupTier.create("t" + amountIdr, amountIdr));
+        resortAll();
+        List<ConfigChangeLog> logs = List.of(ConfigChangeLog.of(ConfigType.TOPUP_TIER,
+                "tier." + t.getTierKey() + ".created", "", String.valueOf(amountIdr), adminId));
+        changeLogs.saveAll(logs);
+        audit.record(adminId, AuditActions.TIER_CREATED, "config", "tier:" + t.getTierKey(), "新建充值档位 " + amountIdr + " IDR");
+        return t;
+    }
+
+    /** 全部档位（含停用）按金额升序重排 {@code sort_order} 1..n；须在事务内。 */
+    void resortAll() {
+        List<PawCoinTopupTier> all = tierRepo.findAllByOrderByAmountIdrAsc();
+        for (int i = 0; i < all.size(); i++) {
+            if (all.get(i).getSortOrder() != i + 1) {
+                all.get(i).setSortOrder(i + 1);
+            }
+        }
+        tierRepo.saveAll(all);
+    }
+
+    /** {@code pg_advisory_xact_lock(hashtext('pawcoin_topup_tiers'))}：随事务自动释放，不需要 unlock。 */
+    private void lockTiers() {
+        if (em != null) {
+            em.createNativeQuery("SELECT pg_advisory_xact_lock(hashtext('pawcoin_topup_tiers'))").getSingleResult();
+        }
     }
 
     // ── 内部 ──────────────────────────────────────────────────────────────────

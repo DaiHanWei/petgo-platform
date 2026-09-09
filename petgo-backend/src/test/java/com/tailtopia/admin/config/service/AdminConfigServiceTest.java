@@ -202,6 +202,77 @@ class AdminConfigServiceTest {
         verify(audit).record(eq(7L), anyString(), anyString(), anyString(), anyString());
     }
 
+    // ── V1.3.0 Story 6.2：新建档位 / 启用上限 ≤4（advisory 锁在 L1 验，单测 em 为 null 跳过）──
+    private PawCoinTopupTier tier(long id, String key, long amount, boolean enabled, int sort) {
+        PawCoinTopupTier t = instantiate(PawCoinTopupTier.class);
+        set(t, "id", id);
+        set(t, "tierKey", key);
+        set(t, "amountIdr", amount);
+        set(t, "enabled", enabled);
+        set(t, "sortOrder", sort);
+        return t;
+    }
+
+    @Test
+    void createTierKeysByAmountResortsAllLogsAndAudits() {
+        PawCoinTopupTier a = tier(1L, "10k", 10_000, true, 1);
+        PawCoinTopupTier b = tier(2L, "50k", 50_000, false, 2);
+        when(tierRepo.existsByAmountIdr(25_000L)).thenReturn(false);
+        when(tierRepo.countByEnabledTrue()).thenReturn(1L);
+        when(tierRepo.save(any(PawCoinTopupTier.class))).thenAnswer(inv -> {
+            PawCoinTopupTier t = inv.getArgument(0);
+            set(t, "id", 3L);
+            return t;
+        });
+        when(tierRepo.findAllByOrderByAmountIdrAsc()).thenAnswer(inv -> {
+            PawCoinTopupTier n = tier(3L, "t25000", 25_000, true, 0);
+            return List.of(a, n, b);
+        });
+
+        PawCoinTopupTier created = svc.createTier(25_000L, 7L);
+
+        assertThat(created.getTierKey()).isEqualTo("t25000");
+        assertThat(created.isEnabled()).isTrue();
+        assertThat(created.getAmountIdr()).isEqualTo(25_000L);
+        assertThat(a.getSortOrder()).isEqualTo(1);
+        assertThat(b.getSortOrder()).isEqualTo(3); // 全部档位（含停用）按金额升序重排 1..n
+        ArgumentCaptor<List<ConfigChangeLog>> cap = ArgumentCaptor.forClass(List.class);
+        verify(changeLogs).saveAll(cap.capture());
+        assertThat(cap.getValue()).hasSize(1);
+        assertThat(cap.getValue().get(0).getField()).isEqualTo("tier.t25000.created");
+        assertThat(cap.getValue().get(0).getNewValue()).isEqualTo("25000");
+        verify(audit).record(eq(7L), eq(com.tailtopia.admin.audit.service.AuditActions.TIER_CREATED), anyString(), eq("tier:t25000"), anyString());
+    }
+
+    @Test
+    void createTierRejectsDuplicateAmountCapAndNonPositive() {
+        assertThatThrownBy(() -> svc.createTier(0L, 7L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> svc.createTier(AdminConfigService.MAX_TIER_AMOUNT + 1, 7L)).isInstanceOf(AppException.class)
+                .hasMessageContaining("100000000");
+        when(tierRepo.existsByAmountIdr(10_000L)).thenReturn(true);
+        assertThatThrownBy(() -> svc.createTier(10_000L, 7L)).isInstanceOf(AppException.class).hasMessageContaining("相同金额");
+        when(tierRepo.existsByAmountIdr(75_000L)).thenReturn(false);
+        when(tierRepo.countByEnabledTrue()).thenReturn(4L);
+        assertThatThrownBy(() -> svc.createTier(75_000L, 7L)).isInstanceOf(AppException.class).hasMessageContaining("4 个启用档位");
+        verify(tierRepo, never()).save(any());
+        verify(changeLogs, never()).saveAll(anyList());
+    }
+
+    @Test
+    void enablingFifthTierRejectedButDisablingStillWorks() {
+        PawCoinTopupTier off = tier(9L, "t75000", 75_000, false, 5);
+        when(tierRepo.findById(9L)).thenReturn(Optional.of(off));
+        when(tierRepo.countByEnabledTrue()).thenReturn(4L);
+        assertThatThrownBy(() -> svc.setTierEnabled(9L, true, 7L)).isInstanceOf(AppException.class).hasMessageContaining("4 个启用档位");
+        assertThat(off.isEnabled()).isFalse();
+        verify(tierRepo, never()).save(any());
+
+        when(tierRepo.countByEnabledTrue()).thenReturn(3L);
+        svc.setTierEnabled(9L, true, 7L);
+        assertThat(off.isEnabled()).isTrue();
+        verify(tierRepo).save(off);
+    }
+
     private static <T> T instantiate(Class<T> cls) {
         try {
             var ctor = cls.getDeclaredConstructor();

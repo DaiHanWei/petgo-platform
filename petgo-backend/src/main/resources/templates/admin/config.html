@@ -5,6 +5,8 @@
     <meta charset="UTF-8"/>
     <title th:text="#{admin.config.title}">运营配置 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <!-- V1.3.0 Story 6.2：档位卡「查看已停用」/ 启停走 htmx（CSRF 头、toast 计时、data-confirm 由 admin-core.js 统一处理） -->
+    <script defer th:src="@{/admin/admin-core.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
@@ -139,29 +141,50 @@
             </form>
         </div>
 
-        <!-- 充值档位（AB-6B）——保底 ≥1 启用。同上：非分享奖励块，补 config.view 门。 -->
+        <!--/* 充值档位（AB-6B → V1.3.0 Story 6.2 AB-22A / D-24 / D-25）：主表只列启用中（≤4）；「查看已停用（N）」htmx 原地展开灰底第二表；
+             右上「＋ 新建档位」<details> 内联表单（抽屉版随 6.3 模板 D）。保底 ≥1 启用护栏不变。同上：非分享奖励块，补 config.view 门。 */-->
         <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')">
-        <h2 th:text="#{admin.config.tiers}">充值档位</h2>
+        <div class="wb-title-row">
+            <h2 th:text="#{admin.config.tiers}">充值档位</h2>
+            <details class="pl-inline" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
+                <summary class="btn btn-primary btn-sm" th:text="#{admin.config.tier.newButton}">＋ 新建档位</summary>
+                <form class="card" method="post" th:action="@{/admin/config/tiers}">
+                    <h3 th:text="#{admin.config.tier.newTitle}">新建充值档位</h3>
+                    <p class="hint" th:text="#{admin.config.tier.newHint}">档位标识自动生成为 t&lt;金额&gt;；新建即启用；最多 4 个启用档位。</p>
+                    <label class="field"><span th:text="#{admin.config.tier.amount}">金额（IDR）</span>
+                        <input class="field-full" type="number" name="amountIdr" min="1" max="100000000" step="1" required/></label>
+                    <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.config.tier.btn.create}">创建档位</button>
+                </form>
+            </details>
+        </div>
         <p class="hint" th:text="#{admin.config.hint.tiers}">至少保留 1 个启用档位；停用不影响历史订单。</p>
-        <table>
+        <p id="tiers-inline-error" class="lst-inline-error" aria-live="polite"></p>
+        <table th:fragment="tiers-enabled" id="tiers-enabled" th:attr="hx-swap-oob=${oob} ? 'true' : null">
             <thead>
             <tr><th th:text="#{admin.config.col.tier}">档位</th><th th:text="#{admin.config.col.amount}">金额（IDR）</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.common.actions}">操作</th></tr>
             </thead>
             <tbody>
-            <tr th:each="t : ${tiers}">
+            <tr th:each="t : ${tiers}" th:attr="data-tier-id=${t.id}">
                 <td th:text="${t.tierKey}">10k</td>
-                <td th:text="${t.amountIdr}">10000</td>
-                <td th:text="${t.enabled} ? #{admin.common.enabled} : #{admin.common.disabled}">启用</td>
+                <td th:text="${#numbers.formatInteger(t.amountIdr, 0, 'COMMA')}">10,000</td>
+                <td th:text="#{admin.common.enabled}">启用</td>
                 <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
-                    <form method="post" th:action="@{/admin/config/tiers/{id}/enabled(id=${t.id})}" style="display:inline">
-                        <input type="hidden" name="enabled" th:value="${!t.enabled}"/>
-                        <button type="submit" class="btn btn-neutral btn-sm"
-                                th:text="${t.enabled} ? #{admin.common.disable} : #{admin.common.enable}">切换</button>
+                    <form th:attr="hx-post=@{/admin/config/tiers/{id}/enabled(id=${t.id})}" hx-target="#tiers-inline-error" hx-swap="innerHTML" class="inline"
+                          hx-vals="js:{expanded: document.querySelector('#tiers-disabled table, #tiers-disabled h3') ? 1 : 0}">
+                        <input type="hidden" name="enabled" value="false"/>
+                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.common.disable}">停用</button>
                     </form>
                 </td>
             </tr>
             </tbody>
         </table>
+        <p class="hint" th:text="#{admin.config.tier.note}">仅展示当前启用的档位，最多 4 档。</p>
+        <!--/* 链接与折叠区一起是 fragment（tiers-disabled-link）：启停后随两表一并 oob，N 不过期；折叠区展开态由 refresh 按 expanded 决定（复审 #5） */-->
+        <p th:fragment="tiers-disabled-link" id="tiers-disabled-link" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+            <a th:if="${disabledCount > 0}" href="#" th:attr="hx-get=@{/admin/config/tiers/disabled}" hx-target="#tiers-disabled" hx-swap="outerHTML"
+               th:text="#{admin.config.tier.showDisabled(${disabledCount})}">查看已停用（N）</a>
+        </p>
+        <div id="tiers-disabled"></div>
         </th:block>
 
     </div>

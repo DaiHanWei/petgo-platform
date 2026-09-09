@@ -15,4 +15,13 @@ public interface PawCoinTopupTierRepository extends JpaRepository<PawCoinTopupTi
     Optional<PawCoinTopupTier> findByTierKey(String tierKey);
 
     long countByEnabledTrue();
+
+    // ── V1.3.0 Story 6.2：只显启用中 / 查看已停用 / 新建档位 ──
+    List<PawCoinTopupTier> findByEnabledFalseOrderBySortOrderAsc();
+
+    boolean existsByAmountIdr(long amountIdr);
+
+    long countByEnabledFalse();
+
+    List<PawCoinTopupTier> findAllByOrderByAmountIdrAsc();
 }

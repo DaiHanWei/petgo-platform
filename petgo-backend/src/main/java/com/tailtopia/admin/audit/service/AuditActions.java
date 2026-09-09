@@ -22,6 +22,8 @@ public final class AuditActions {
     /** V1.3.0 Story 5.4：运营预置录入场所（summary 记场所名，不记坐标）/ 场所举报整批驳回。 */
     public static final String PLACE_CREATED = "PLACE_CREATED";
     public static final String PLACE_REPORTS_DISMISSED = "PLACE_REPORTS_DISMISSED";
+    /** V1.3.0 Story 6.2：新建 PawCoin 充值档位（target config/tier:&lt;key&gt;；启停仍走 CONFIG_UPDATE_TOPUP_TIER）。 */
+    public static final String TIER_CREATED = "TIER_CREATED";
 
     /** 紧急账密（formLogin）登录成功（Story 1.3，AC7）。 */
     public static final String EMERGENCY_LOGIN_SUCCEEDED = "EMERGENCY_LOGIN_SUCCEEDED";

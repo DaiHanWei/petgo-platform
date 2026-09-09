@@ -7,6 +7,7 @@ import com.tailtopia.admin.config.dto.PawCoinForm;
 import com.tailtopia.admin.config.dto.PricingForm;
 import com.tailtopia.admin.config.service.AdminConfigService;
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
@@ -77,7 +78,9 @@ public class AdminConfigController {
         model.addAttribute("active", "config");
         model.addAttribute("pricing", read.pricing());
         model.addAttribute("pawcoin", read.pawcoin());
-        model.addAttribute("tiers", read.allTiers());
+        // V1.3.0 Story 6.2（AB-22A / D-25）：主表只列启用中；已停用折叠区按需 htmx 载入（N=0 不渲染链接）
+        model.addAttribute("tiers", read.enabledTiers());
+        model.addAttribute("disabledCount", read.disabledTierCount());
         // V1.1.6 Story 16.4：推荐算法参数（挂既有配置页，🛡 不新建后台模块）
         // Story 18.3 · AC2/AC3：白嫖倍数与当月消耗必须**同屏**——
         // 「月度上限 30」和「HD 解锁 60」分开看都合理，放一起才看得出「两个月白嫖一次」。
@@ -181,10 +184,23 @@ public class AdminConfigController {
         return "redirect:/admin/config";
     }
 
+    /**
+     * 档位启停。V1.3.0 Story 6.2：htmx 请求（已停用折叠表 / 主表内的按钮）成功回两表 fragment（主表 + 已停用表 oob + toast），
+     * 失败（达上限 / 保底 ≥1）由 {@code AdminBusinessExceptionAdvice} 出 422 行内 err；非 htmx 维持 PRG。
+     */
     @PostMapping("/admin/config/tiers/{id}/enabled")
     @PreAuthorize(EDIT_AUTH)
     public String setTierEnabled(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable long id, @RequestParam boolean enabled, RedirectAttributes flash) {
+            @PathVariable long id, @RequestParam boolean enabled, @RequestParam(value = "expanded", defaultValue = "0") String expanded,
+            HxRequest hx, Model model, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            write.setTierEnabled(id, enabled, admin.getAdminAccountId());
+            populateTiers(model);
+            model.addAttribute("oob", true); // 两表以 hx-swap-oob 按 id 原位替换，主目标只清空行内 err
+            model.addAttribute("expanded", "1".equals(expanded)); // 折叠区已展开才替换已停用表，保持「按需展开」语义
+            model.addAttribute("toast", msg.get("admin.flash.config.tiersSaved"));
+            return "admin/fragments/config-tiers-disabled :: refresh";
+        }
         try {
             write.setTierEnabled(id, enabled, admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.config.tiersSaved"));
@@ -192,5 +208,35 @@ public class AdminConfigController {
             flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/config";
+    }
+
+    /** 「查看已停用（N）」折叠表 fragment（V1.3.0 Story 6.2 AC2；查看即 {@code config.view}）。 */
+    @GetMapping("/admin/config/tiers/disabled")
+    @PreAuthorize(VIEW_AUTH)
+    public String disabledTiers(HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            return "redirect:/admin/config";
+        }
+        populateTiers(model);
+        return "admin/fragments/config-tiers-disabled :: table";
+    }
+
+    /** 新建档位（V1.3.0 Story 6.2 AC3）：金额 IDR 正整数 → PRG + toast；重复 / 达上限 / ≤0 → flash error 回显。 */
+    @PostMapping("/admin/config/tiers")
+    @PreAuthorize(EDIT_AUTH)
+    public String createTier(@AuthenticationPrincipal AdminUserDetails admin, @RequestParam long amountIdr, RedirectAttributes flash) {
+        try {
+            write.createTier(amountIdr, admin.getAdminAccountId());
+            flash.addFlashAttribute("toast", msg.get("admin.flash.config.tierCreated"));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/config";
+    }
+
+    private void populateTiers(Model model) {
+        model.addAttribute("tiers", read.enabledTiers());
+        model.addAttribute("disabledTiers", read.disabledTiers());
+        model.addAttribute("disabledCount", read.disabledTierCount());
     }
 }

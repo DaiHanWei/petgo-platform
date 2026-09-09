@@ -42,6 +42,21 @@ public class PawCoinTopupTier {
     protected PawCoinTopupTier() {
     }
 
+    /**
+     * 新建档位（V1.3.0 Story 6.2，AB-22A / D-24）：{@code tierKey = "t" + amountIdr}（就绪度评审修正：与存量 {@code 10k} 类人工串天然不撞、
+     * 也不会出现 {@code 25k} vs {@code 25500} 歧义），新建即启用；{@code sortOrder} 先置 0，由 {@code AdminConfigService.resortAll} 按金额升序重排。
+     */
+    public static PawCoinTopupTier create(String tierKey, long amountIdr) {
+        PawCoinTopupTier t = new PawCoinTopupTier();
+        t.tierKey = tierKey;
+        t.amountIdr = amountIdr;
+        t.enabled = true;
+        t.sortOrder = 0;
+        t.createdAt = Instant.now();
+        t.updatedAt = t.createdAt;
+        return t;
+    }
+
     @PreUpdate
     void onUpdate() {
         this.updatedAt = Instant.now();
@@ -69,5 +84,9 @@ public class PawCoinTopupTier {
 
     public int getSortOrder() {
         return sortOrder;
+    }
+
+    public void setSortOrder(int sortOrder) {
+        this.sortOrder = sortOrder;
     }
 }
