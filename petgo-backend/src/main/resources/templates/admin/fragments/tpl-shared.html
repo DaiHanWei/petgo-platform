@@ -13,5 +13,18 @@
 <p th:fragment="forbidden(message)" class="err muted forbidden" role="alert" th:text="${message}">需要「xxx」权限</p>
 
 <div th:fragment="toast(message)" class="toast" role="status" th:text="${message}">已完成</div>
+
+<!--/* 独立抽屉壳（V1.3.0 Story 6.4）：给非模板 B 页（模板 D 的「变更记录」等）用，与 tpl-b-list 里的抽屉同构——
+     <aside id="<res>-drawer" class="drawer" data-res> + 遮罩；admin-drawer.js 的 [data-drawer-open] / ✕ / 遮罩 / Esc 照常工作。 */-->
+<th:block th:fragment="drawer(res, titleSlot)">
+    <aside th:id="${res} + '-drawer'" class="drawer" hidden th:attr="data-res=${res}" role="dialog" aria-modal="true" tabindex="-1">
+        <header class="drawer-head">
+            <div class="drawer-title" th:replace="${titleSlot} ?: ~{}"></div>
+            <button type="button" class="drawer-close" data-drawer-close th:title="#{admin.v130.drawer.close}" aria-label="close">✕</button>
+        </header>
+        <div class="drawer-body"></div>
+    </aside>
+    <div class="drawer-mask" hidden data-drawer-mask></div>
+</th:block>
 </body>
 </html>

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  D3 算法参数 · 变更记录抽屉（V1.3.0 Story 6.4 AC3）。GET /admin/algo-params/changes/drawer?field=&from=&to=&page= 返 :: drawer
+  （admin-drawer.js 装进 #algo-drawer .drawer-body）。筛选行（参数下拉 14 项 + 起止日期 WIB + 查询钮）hx-get 自刷本体；表：时间（WIB）/ 参数 / 改前 / 改后 / 操作人；
+  每页 20，默认最近 20 条。数据 = config_change_logs（FEED_RANK）分页 + 筛选（ConfigChangeLogRepository Specification）。时间格式化只走 @adminTime（WIB 单一出口）。
+-->
+<body>
+<div th:fragment="drawer" class="algo-changes" id="algo-changes">
+    <p class="hint" th:text="#{admin.algo.changelogWhy}">改动时间是唯一能与埋点指标漂移对上的锚点。</p>
+    <form class="filter-bar" data-autosubmit th:attr="hx-get=@{/admin/algo-params/changes/drawer}" hx-target="#algo-changes" hx-swap="outerHTML">
+        <label class="field"><span th:text="#{admin.v130.algo.filter.field}">参数</span>
+            <select name="field" class="sel">
+                <option value="" th:selected="${field == null}" th:text="#{admin.v130.algo.filter.all}">全部参数</option>
+                <option th:each="f : ${fields}" th:value="${f.column}" th:selected="${field == f.column}" th:text="#{${f.labelKey}}">参数</option>
+            </select></label>
+        <label class="field"><span th:text="#{admin.v130.algo.filter.from}">起（WIB）</span>
+            <input type="date" name="from" class="inp" th:value="${from}"/></label>
+        <label class="field"><span th:text="#{admin.v130.algo.filter.to}">止（WIB）</span>
+            <input type="date" name="to" class="inp" th:value="${to}"/></label>
+        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.v130.algo.filter.query}">查询</button>
+    </form>
+    <table data-section="algo-changelog">
+        <thead>
+        <tr>
+            <th th:text="#{admin.algo.col.at}">时间（WIB）</th>
+            <th th:text="#{admin.algo.col.field}">参数</th>
+            <th th:text="#{admin.algo.col.from}">改前</th>
+            <th th:text="#{admin.algo.col.to}">改后</th>
+            <th th:text="#{admin.algo.col.by}">操作人</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="c : ${changes.content}" th:attr="data-change-id=${c.id}">
+            <td class="nowrap" th:text="${@adminTime.wib(c.changedAt)}">-</td>
+            <td th:text="${fieldLabels.containsKey(c.field)} ? #{${fieldLabels.get(c.field)}} : ${c.field}">-</td>
+            <td class="muted" th:text="${c.oldValue}">-</td>
+            <td><b th:text="${c.newValue}">-</b></td>
+            <td th:text="${actorNames.getOrDefault(c.changedBy, '#' + c.changedBy)}">-</td>
+        </tr>
+        <tr th:if="${changes.isEmpty()}">
+            <td colspan="5" class="empty" th:text="#{admin.algo.changelog.empty}">还没有改动过。</td>
+        </tr>
+        </tbody>
+    </table>
+    <div class="pager" th:if="${changes.totalPages > 1}" th:attr="data-page=${changes.number}">
+        <a th:if="${changes.hasPrevious()}" href="#" th:attr="hx-get=@{/admin/algo-params/changes/drawer(field=${field},from=${from},to=${to},page=${changes.number - 1})}"
+           hx-target="#algo-changes" hx-swap="outerHTML" th:text="#{admin.v130.places.pager.prev}">上一页</a>
+        <span th:text="${changes.number + 1} + ' / ' + ${changes.totalPages}">1 / 3</span>
+        <a th:if="${changes.hasNext()}" href="#" th:attr="hx-get=@{/admin/algo-params/changes/drawer(field=${field},from=${from},to=${to},page=${changes.number + 1})}"
+           hx-target="#algo-changes" hx-swap="outerHTML" th:text="#{admin.v130.places.pager.next}">下一页</a>
+    </div>
+</div>
+</body>
+</html>

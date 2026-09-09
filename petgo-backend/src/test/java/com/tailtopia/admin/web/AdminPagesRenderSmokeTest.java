@@ -119,8 +119,9 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
         assertThat(html).as("算法参数表单不见了").contains("/admin/algo-params");
         assertThat(html).as("🔴 限流系数输入框不见了（Story 17.1 挂在这个表单里）")
                 .contains("throttleFactor");
-        assertThat(html).as("🔴 变更记录表不见了 —— 没有 A/B 时它是唯一的锚点")
-                .contains("data-section=\"algo-changelog\"");
+        // V1.3.0 Story 6.4（D-10）：页尾常驻变更表改为页头「变更记录」按钮开抽屉（fragments/drawer-algo-changes），锚点换成入口
+        assertThat(html).as("🔴 变更记录入口不见了 —— 没有 A/B 时它是唯一的锚点")
+                .contains("data-drawer-open=\"/admin/algo-params/changes/drawer\"").doesNotContain("data-section=\"algo-changelog\"");
         assertThat(html).as("「不对运营开放」的说明不见了")
                 .contains("data-notice=\"algo-not-for-ops\"");
         assertThat(html).as("「无 A/B 实验基建」的提醒不见了")
