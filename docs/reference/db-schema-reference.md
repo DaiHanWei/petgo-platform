@@ -2,9 +2,9 @@
 
 > 面向运营 / 产品的取数参考：全部业务表的字段、类型、主外键与中文含义。配合只读账号 `ops_readonly` 查库使用。
 
-> **数据来源**：staging 库 `petgo_stag`（含 v1.1 全部 56 张表）。正式库 `petgo` 当前只有其中 28 张表，v1.1 未发版的表尚不存在，发版后两库一致。
+> **数据来源**：staging 库 `petgo_stag`（含 v1.1 全部 56 张表）。正式库 `petgo` 当前只有其中 28 张表，v1.1 未发版的表尚不存在，发版后两库一致。V1.3.0 后台新增表（§8 场所五表等）随该版本迁移上库，量级另计。
 
-> **规模**：55 张业务表 / 546 个字段（已排除 Flyway 自有表 `flyway_schema_history`）。
+> **规模**：v1.1 基线 55 张业务表 / 546 个字段（已排除 Flyway 自有表 `flyway_schema_history`）；V1.3.0 后台 §8 追加 5 张场所表（本文档尚未收录的其它 V1.3.0 新表：`ops_daily_metrics`、`warm_reply_followups`，见各 story 迁移）。
 
 > **标记**：**PK**=主键 · **FK→**=外键指向 · 「空」列 ● 表示非空 (NOT NULL) · 【PII】=个人身份/健康敏感数据 · 【加密存储】=密文列。
 
@@ -32,6 +32,9 @@
 
 **7. 兽医·通知·分诊·其它**（6 表）  
 　[`vet_accounts`](#vet-accounts) · [`vet_qualifications`](#vet-qualifications) · [`notifications`](#notifications) · [`scheduled_push_marks`](#scheduled-push-marks) · [`triage_tasks`](#triage-tasks) · [`schema_meta`](#schema-meta)
+
+**8. 场所（V1.3.0 后台 Story 5.1，AB-17A / FR-112）**（5 表）  
+　[`places`](#places) · [`place_photos`](#place-photos) · [`place_comments`](#place-comments) · [`place_checkins`](#place-checkins) · [`place_reports`](#place-reports)
 
 
 ---
@@ -1257,3 +1260,121 @@
 |--:|------|------|:--:|:--:|------|
 | 1 | `key` | character varying(64) | ● | PK | 元数据键名（主键），当前仅有 baseline 一条 |
 | 2 | `value` | character varying(255) | ● |  | 元数据取值，baseline 对应的值为基线版本号 1.1 |
+
+
+---
+
+# 8. 场所（V1.3.0 后台 Story 5.1）
+
+> **跨分支契约（架构 delta X-1 / X-3）**：五表 schema 由**后台分支**定义（迁移 `V20260909_1749__init_places.sql`），**App 分支（FR-112）只读写数据**，谁先上线都不用改表。给 App 分支的三条语义：
+> ① `status != 'ACTIVE'` **或** `deleted_at IS NOT NULL` 的场所对用户端「**不存在**」——直链一律落「场所不存在」统一文案，不区分下架 / 删除 / 合并；
+> ② `status = 'MERGED'` 行的 `merged_into_id` 供 App 把直链**跳到保留场所**（保留方自身不会是 MERGED，服务层保证）；
+> ③ 后台合并（Story 5.3）时发布 `PlaceMergedEvent(keepId, mergedId)`，**护照章（`place_checkins`）归并由 App 分支监听实现**，后台不改打卡行。
+> 另：`place_type` / `tags` 值域由 App 端定义，表不加 CHECK（后台 Java 枚举软校验）；五个计数列是缓存，以明细表为准。
+
+<a id="places"></a>
+## `places`
+
+**场所主表：宠物友好场所（咖啡店 / 宠物公园 / 宠物酒店 / 宠物友好餐饮…），App 用户标记或运营预置录入。对外用 public_token 不用 id；下架 = status DELISTED；合并 = status MERGED + merged_into_id；软删 deleted_at**
+
+（新表，staging 暂无量级。）
+
+| # | 字段 | 类型 | 空 | 键 | 说明 |
+|--:|------|------|:--:|:--:|------|
+| 1 | `id` | bigint | ● | PK | 主键，内部 id（不对外暴露） |
+| 2 | `public_token` | character varying(32) | ● |  | 对外标识（Base62 22 位，不可枚举）。全表唯一 |
+| 3 | `name` | character varying(80) | ● |  | 场所名 |
+| 4 | `place_type` | character varying(32) | ● |  | 场所类型（UPPER_SNAKE），值域由 App 端 FR-112 定义（如 CAFE / PET_PARK / PET_HOTEL / PET_FRIENDLY_RESTAURANT），暂不加 CHECK |
+| 5 | `tags` | jsonb | ● |  | 宠物友好标签码列表（JSON 字符串数组），默认 `[]`，值域由 App 端定义 |
+| 6 | `description` | text |  |  | 简介 |
+| 7 | `city` | character varying(60) | ● |  | 城市名（D-39），运营录入时填 / 选；App 端标记时由 App 分支传入 |
+| 8 | `address_text` | character varying(255) | ● |  | 文字地址（供用户复制导航） |
+| 9 | `lat` | numeric(9,6) | ● |  | 纬度，-90～90 |
+| 10 | `lng` | numeric(9,6) | ● |  | 经度，-180～180 |
+| 11 | `marked_by_user_id` | bigint | ● | FK→`users` | 标记人：App 用户或运营发布身份池账号（users 表里的虚拟号 / 授权真实号），**不是后台账号**；不可改 |
+| 12 | `status` | character varying(16) | ● |  | ACTIVE=上架 / DELISTED=下架（对用户端「不存在」，可恢复）/ MERGED=已并入 merged_into_id |
+| 13 | `merged_into_id` | bigint |  | FK→`places` | 合并指向：仅 status=MERGED 时非空（CHECK `ck_places_merged_ref` 强制成对）；App 直链据此跳到保留场所 |
+| 14 | `photo_count` | integer | ● |  | 缓存：place_photos 未删行数（服务层同事务维护） |
+| 15 | `comment_count` | integer | ● |  | 缓存：place_comments 未删行数 |
+| 16 | `checkin_count` | integer | ● |  | 缓存：place_checkins 行数 |
+| 17 | `recommend_count` | integer | ● |  | 缓存：place_comments 未删且 attitude=RECOMMEND 的行数 |
+| 18 | `not_recommend_count` | integer | ● |  | 缓存：place_comments 未删且 attitude=NOT_RECOMMEND 的行数 |
+| 19 | `created_at` | timestamp with time zone | ● |  | 创建时间（UTC） |
+| 20 | `updated_at` | timestamp with time zone | ● |  | 最后更新时间（UTC） |
+| 21 | `deleted_at` | timestamp with time zone |  |  | 软删时间；非空即对用户端「不存在」，任何列表查询默认 `deleted_at IS NULL` |
+
+**索引**：🔑唯一 `public_token` · `(status, created_at DESC) WHERE deleted_at IS NULL` · `lower(name)` · `marked_by_user_id` · `(city, status) WHERE deleted_at IS NULL`
+
+<a id="place-photos"></a>
+## `place_photos`
+
+**场所照片：只存 OSS objectKey（非 URL），签名 URL 现签不落库；运营可删（软删）**
+
+（新表，staging 暂无量级。）
+
+| # | 字段 | 类型 | 空 | 键 | 说明 |
+|--:|------|------|:--:|:--:|------|
+| 1 | `id` | bigint | ● | PK | 主键 |
+| 2 | `place_id` | bigint | ● | FK→`places` | 所属场所（级联删除） |
+| 3 | `object_key` | character varying(255) | ● |  | OSS objectKey，非 URL |
+| 4 | `uploader_user_id` | bigint | ● | FK→`users` | 上传人 |
+| 5 | `created_at` | timestamp with time zone | ● |  | 上传时间（UTC） |
+| 6 | `deleted_at` | timestamp with time zone |  |  | 软删时间（运营删照片） |
+
+**索引**：`(place_id, created_at) WHERE deleted_at IS NULL`
+
+<a id="place-comments"></a>
+## `place_comments`
+
+**场所评论：正文 ≤500 字 + 二元态度（推荐 / 不推荐）；运营可删（软删）**
+
+（新表，staging 暂无量级。）
+
+| # | 字段 | 类型 | 空 | 键 | 说明 |
+|--:|------|------|:--:|:--:|------|
+| 1 | `id` | bigint | ● | PK | 主键 |
+| 2 | `place_id` | bigint | ● | FK→`places` | 所属场所（级联删除） |
+| 3 | `author_user_id` | bigint | ● | FK→`users` | 评论人 |
+| 4 | `body` | character varying(500) | ● |  | 正文 |
+| 5 | `attitude` | character varying(16) | ● |  | RECOMMEND=推荐 / NOT_RECOMMEND=不推荐 |
+| 6 | `created_at` | timestamp with time zone | ● |  | 发表时间（UTC） |
+| 7 | `deleted_at` | timestamp with time zone |  |  | 软删时间 |
+
+**索引**：`(place_id, created_at DESC) WHERE deleted_at IS NULL`
+
+<a id="place-checkins"></a>
+## `place_checkins`
+
+**场所打卡（护照章）：用户在场所打卡一次一行；合并场所时的归并由 App 分支监听 PlaceMergedEvent 实现，后台不改本表**
+
+（新表，staging 暂无量级。）
+
+| # | 字段 | 类型 | 空 | 键 | 说明 |
+|--:|------|------|:--:|:--:|------|
+| 1 | `id` | bigint | ● | PK | 主键 |
+| 2 | `place_id` | bigint | ● | FK→`places` | 场所（级联删除） |
+| 3 | `user_id` | bigint | ● | FK→`users` | 打卡用户 |
+| 4 | `checked_at` | timestamp with time zone | ● |  | 打卡时间（UTC） |
+
+**索引**：`(place_id, checked_at DESC)` · `(user_id, place_id)`
+
+<a id="place-reports"></a>
+## `place_reports`
+
+**场所举报（决策 D-5 独立建表：现有 content_reports / account_reports 无通用 target_type）。同人对同场所只一条（重复举报幂等）；处置流在后台 Story 5.4 接进统一复核队列**
+
+（新表，staging 暂无量级。）
+
+| # | 字段 | 类型 | 空 | 键 | 说明 |
+|--:|------|------|:--:|:--:|------|
+| 1 | `id` | bigint | ● | PK | 主键 |
+| 2 | `place_id` | bigint | ● | FK→`places` | 被举报场所（级联删除） |
+| 3 | `reporter_user_id` | bigint | ● | FK→`users` | 举报人（只在运营后台展示，不下发给任何用户） |
+| 4 | `reason_type` | character varying(24) | ● |  | 沿用内容举报五值 ILLEGAL / MISINFO / INAPPROPRIATE / HARASSMENT / OTHER + 场所特有 DUPLICATE=重复场所（辅助合并）/ CLOSED=已关店 |
+| 5 | `status` | character varying(16) | ● |  | PENDING=待处理 / DISMISSED=驳回 / ACTIONED=已处置（下架 / 合并等） |
+| 6 | `handled_by` | bigint |  |  | 处理人：admin_accounts.id（后台账号与 App 用户隔离，不加 FK） |
+| 7 | `handled_at` | timestamp with time zone |  |  | 处置时间（UTC） |
+| 8 | `created_at` | timestamp with time zone | ● |  | 举报时间（UTC） |
+| 9 | `updated_at` | timestamp with time zone | ● |  | 最后更新时间（UTC） |
+
+**索引**：🔑唯一 `(place_id, reporter_user_id)` · `(status, created_at)`
