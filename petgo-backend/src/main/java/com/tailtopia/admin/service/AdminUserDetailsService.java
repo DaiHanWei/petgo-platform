@@ -65,8 +65,9 @@ public class AdminUserDetailsService implements UserDetailsService {
                 .map(u -> u.getId())
                 .orElse(null);
         Set<String> permissionCodes = resolvePermissions(a);
+        // AD-1：登录时刻的安全版本号随 principal 进会话，供 AdminSessionGuardFilter 每请求比对。
         return new AdminUserDetails(a.getId(), operatorUserId, a.getLarkEmail(),
-                a.getPasswordHash(), a.getAccountType(), permissionCodes);
+                a.getPasswordHash(), a.getAccountType(), permissionCodes, a.getSecurityVersion());
     }
 
     /**

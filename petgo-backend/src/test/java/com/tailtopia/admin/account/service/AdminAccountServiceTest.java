@@ -164,4 +164,63 @@ class AdminAccountServiceTest {
         assertThat(a.getStatus()).isEqualTo(AdminAccountStatus.ACTIVE);
         verify(auditService).record(eq(1L), eq(AuditActions.ACCOUNT_REACTIVATED), any(), eq("8"), any());
     }
+
+    // ---- V1.3.0 Story 1.1（AD-1）：安全版本号 bump ----
+
+    @Test
+    void deactivateBumpsSecurityVersionOnlyWhenChanged() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.deactivate(8L, 1L);
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+        service.deactivate(8L, 1L); // 幂等 no-op 不加
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void reactivateDoesNotBumpSecurityVersion() {
+        AdminAccount a = staff(8L, AdminAccountStatus.DISABLED);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.reactivate(8L, 1L);
+        assertThat(a.getSecurityVersion()).isZero();
+    }
+
+    @Test
+    void changeRoleBumpsSecurityVersionOnlyWhenChanged() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.changeRole(8L, AdminRole.OPERATIONS, 1L);
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+        service.changeRole(8L, AdminRole.OPERATIONS, 1L); // 同角色幂等
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void updatePermissionsBumpsSecurityVersionOnlyWhenDiffNonEmpty() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        when(permissions.findByAccountId(8L)).thenReturn(List.of(
+                new AdminAccountPermission(8L, "vet.view")));
+        service.updatePermissions(8L, List.of("vet.view"), 1L); // 无 diff
+        assertThat(a.getSecurityVersion()).isZero();
+        service.updatePermissions(8L, List.of("vet.view", "content.takedown"), 1L);
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void bumpSecurityVersionIsPublicAndNoAudit() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.bumpSecurityVersion(8L);
+        service.bumpSecurityVersion(8L);
+        assertThat(a.getSecurityVersion()).isEqualTo(2);
+        verify(accounts, org.mockito.Mockito.times(2)).save(a);
+        verify(auditService, never()).record(anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    void bumpSecurityVersionUnknownAccountRejected() {
+        when(accounts.findById(404L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.bumpSecurityVersion(404L)).isInstanceOf(AppException.class);
+    }
 }

@@ -101,4 +101,44 @@ class AdminAccountManagementIntegrationTest extends ApiIntegrationTest {
         assertThat(authorities(ud)).contains("content.takedown", "rating.view")
                 .doesNotContain("vet.view");
     }
+
+    // ---- V1.3.0 Story 1.1（AD-1）：安全版本号真库闭环 ----
+
+    @Test
+    void securityVersionBumpsOnRealChangesOnlyAndSnapshotsIntoPrincipal() {
+        long seq = SEQ.incrementAndGet();
+        String email = "staff-secver-" + seq + "@tailtopia.test";
+        long actor = 400000L + seq;
+        long id = accountService.createAccount(email, "版本号测试", AdminRole.CUSTOM,
+                List.of("vet.view"), actor);
+        assertThat(adminAccounts.findById(id).orElseThrow().getSecurityVersion()).isZero();
+
+        // updatePermissions 真变 +1；无 diff 不加。
+        accountService.updatePermissions(id, List.of("content.takedown"), actor);
+        assertThat(adminAccounts.findById(id).orElseThrow().getSecurityVersion()).isEqualTo(1);
+        accountService.updatePermissions(id, List.of("content.takedown"), actor);
+        assertThat(adminAccounts.findById(id).orElseThrow().getSecurityVersion()).isEqualTo(1);
+
+        // changeRole 真变 +1；同角色幂等不加。
+        accountService.changeRole(id, AdminRole.OPERATIONS, actor);
+        assertThat(adminAccounts.findById(id).orElseThrow().getSecurityVersion()).isEqualTo(2);
+        accountService.changeRole(id, AdminRole.OPERATIONS, actor);
+        assertThat(adminAccounts.findById(id).orElseThrow().getSecurityVersion()).isEqualTo(2);
+
+        // AC3：登录时 principal 快照 = DB 值。
+        assertThat(userDetailsService.loadByEmail(email, false).getSecurityVersion()).isEqualTo(2);
+
+        // deactivate 真变 +1；重复停用不加；reactivate 不加。
+        accountService.deactivate(id, actor);
+        assertThat(adminAccounts.findById(id).orElseThrow().getSecurityVersion()).isEqualTo(3);
+        accountService.deactivate(id, actor);
+        assertThat(adminAccounts.findById(id).orElseThrow().getSecurityVersion()).isEqualTo(3);
+        accountService.reactivate(id, actor);
+        assertThat(adminAccounts.findById(id).orElseThrow().getSecurityVersion()).isEqualTo(3);
+
+        // 公开出口 bumpSecurityVersion（供 1.3 / 1.5 调用）。
+        accountService.bumpSecurityVersion(id);
+        assertThat(adminAccounts.findById(id).orElseThrow().getSecurityVersion()).isEqualTo(4);
+        assertThat(userDetailsService.loadByEmail(email, false).getSecurityVersion()).isEqualTo(4);
+    }
 }

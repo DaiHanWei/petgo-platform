@@ -30,6 +30,12 @@ public class AdminUserDetails implements UserDetails {
     private final AdminAccountType accountType;
     /** STAFF 的模块权限码（Story 1.5，装载为 authority）；SUPER_ADMIN 隐式全权、此处为空集。 */
     private final Set<String> permissionCodes;
+    /**
+     * 登录时刻的账号安全版本号快照（V1.3.0 Story 1.1，AD-1）。随 principal 存进 HttpSession，
+     * {@code AdminSessionGuardFilter} 每请求与库值比对，不等即踢重登。两条登录路径（账密 / Lark）
+     * 都经 {@code AdminUserDetailsService.loadByEmail} 构造 principal，此处是唯一汇合点。
+     */
+    private final int securityVersion;
 
     /** 兼容旧调用（无细粒度权限，permission 空集）：Story 1.5 前的构造形态。 */
     public AdminUserDetails(long adminAccountId, Long operatorUserId, String email,
@@ -40,16 +46,29 @@ public class AdminUserDetails implements UserDetails {
     /** Story 1.5：携带 STAFF 模块权限码（注入为 {@code hasAuthority('<code>')} 可命中的 authority）。 */
     public AdminUserDetails(long adminAccountId, Long operatorUserId, String email,
             String passwordHash, AdminAccountType accountType, Set<String> permissionCodes) {
+        this(adminAccountId, operatorUserId, email, passwordHash, accountType, permissionCodes, 0);
+    }
+
+    /** V1.3.0 Story 1.1：额外携带登录时刻的 {@code securityVersion}（旧构造器默认 0）。 */
+    public AdminUserDetails(long adminAccountId, Long operatorUserId, String email,
+            String passwordHash, AdminAccountType accountType, Set<String> permissionCodes,
+            int securityVersion) {
         this.adminAccountId = adminAccountId;
         this.operatorUserId = operatorUserId;
         this.email = email;
         this.passwordHash = passwordHash;
         this.accountType = accountType;
         this.permissionCodes = permissionCodes == null ? Set.of() : Set.copyOf(permissionCodes);
+        this.securityVersion = securityVersion;
     }
 
     public long getAdminAccountId() {
         return adminAccountId;
+    }
+
+    /** 登录时刻的账号安全版本号快照（AD-1）。 */
+    public int getSecurityVersion() {
+        return securityVersion;
     }
 
     public AdminAccountType getAccountType() {

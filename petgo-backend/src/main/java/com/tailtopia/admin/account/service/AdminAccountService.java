@@ -162,6 +162,7 @@ public class AdminAccountService {
 
         List<String> carried = effectivePermissions(a);
         a.setRole(newRole);
+        a.bumpSecurityVersion(); // AD-1：角色真变 → 会话下次请求被踢重登
         accounts.save(a);
 
         permissions.deleteByAccountId(accountId);
@@ -210,6 +211,8 @@ public class AdminAccountService {
             permissions.saveAll(desired.stream()
                     .map(c -> new AdminAccountPermission(accountId, c)).toList());
         }
+        a.bumpSecurityVersion(); // AD-1：权限真变（added/removed 非空）→ 踢重登
+        accounts.save(a);
         if (!added.isEmpty()) {
             auditService.record(actorAccountId, AuditActions.PERMISSION_GRANTED, "ADMIN_ACCOUNT",
                     String.valueOf(accountId), "授予权限 " + added + " 给 " + a.getLarkEmail());
@@ -235,9 +238,23 @@ public class AdminAccountService {
             throw AppException.validation("不能停用最后一个在职超级管理员").code("admin.err.account.lastSuperAdminDisable");
         }
         a.setStatus(AdminAccountStatus.DISABLED);
+        a.bumpSecurityVersion(); // AD-1：停用真变 → 版本 +1（会话守卫仍先判 ACTIVE、走 ?expired）
         accounts.save(a);
         auditService.record(actorAccountId, AuditActions.ACCOUNT_DEACTIVATED, "ADMIN_ACCOUNT",
                 String.valueOf(accountId), "停用后台账号 " + a.getLarkEmail());
+    }
+
+    /**
+     * 账号安全版本号 +1（V1.3.0 Story 1.1，AD-1）——公开、独立事务，供后续横切调用：
+     * 1.3 换绑邮箱、1.5 角色模板改权限后对该角色下全部账号批量 bump。
+     * 版本号是内部机制，不写审计；{@code reactivate} 不调（对方本来就登不进）。
+     */
+    @Transactional
+    public void bumpSecurityVersion(long accountId) {
+        AdminAccount a = accounts.findById(accountId)
+                .orElseThrow(() -> AppException.notFound("后台账号不存在").code("admin.err.account.notFound"));
+        a.bumpSecurityVersion();
+        accounts.save(a);
     }
 
     /** 重新激活账号（AC5）。 */

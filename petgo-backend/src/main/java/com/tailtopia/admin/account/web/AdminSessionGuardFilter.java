@@ -43,18 +43,30 @@ public class AdminSessionGuardFilter extends OncePerRequestFilter {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.isAuthenticated()
                 && auth.getPrincipal() instanceof AdminUserDetails admin) {
+            // 同一次查库：先判 ACTIVE（既有 ?expired 语义不变），再比对安全版本号（AD-1，零新增查询）。
             Optional<AdminAccount> current = adminAccounts.findById(admin.getAdminAccountId());
             boolean active = current.map(a -> a.getStatus() == AdminAccountStatus.ACTIVE).orElse(false);
             if (!active) {
-                HttpSession session = request.getSession(false);
-                if (session != null) {
-                    session.invalidate();
-                }
-                SecurityContextHolder.clearContext();
-                response.sendRedirect(request.getContextPath() + "/admin/login?expired");
+                kick(request, response, "expired");
+                return;
+            }
+            // 停用/改角色/改权限/换绑邮箱等已让库里版本号 +1，而会话仍持登录时刻快照 → 踢重登（D-2：不重算权限）。
+            if (current.get().getSecurityVersion() != admin.getSecurityVersion()) {
+                kick(request, response, "relogin");
                 return;
             }
         }
         chain.doFilter(request, response);
+    }
+
+    /** 失效会话 + 清 SecurityContext + 302 登录页（{@code ?expired} / {@code ?relogin}）。 */
+    private void kick(HttpServletRequest request, HttpServletResponse response, String reason)
+            throws IOException {
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
+        SecurityContextHolder.clearContext();
+        response.sendRedirect(request.getContextPath() + "/admin/login?" + reason);
     }
 }

@@ -58,6 +58,14 @@ public class AdminAccount {
     @Column(name = "created_by")
     private Long createdBy;
 
+    /**
+     * 账号安全版本号（V1.3.0 Story 1.1，AD-1）。停用 / 改岗位角色 / 改账号级权限 / 换绑邮箱 /
+     * 所属角色模板改权限时 +1；登录时快照进 {@code AdminUserDetails}，会话守卫每请求比对，不等即踢重登。
+     * 列类型 INT ↔ {@code int}（{@code ddl-auto=validate}；勿用 SMALLINT）。
+     */
+    @Column(name = "security_version", nullable = false)
+    private int securityVersion;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -126,6 +134,18 @@ public class AdminAccount {
     public void setRole(AdminRole role) {
         this.role = role;
         this.accountType = role.accountType();
+    }
+
+    /**
+     * 安全版本号 +1（AD-1）。仅在「确实发生了变更」的分支调用；幂等 no-op 不加。
+     * 服务层（{@code admin.account.service}，与本实体不同包）统一经 {@code AdminAccountService.bumpSecurityVersion} 调用。
+     */
+    public void bumpSecurityVersion() {
+        this.securityVersion++;
+    }
+
+    public int getSecurityVersion() {
+        return securityVersion;
     }
 
     public Long getId() {
