@@ -683,3 +683,31 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rf-flow li.is-done { opacity: .85; }
 .rf-net-hint { background: #fff7e0; border: 1px solid #f0d58c; border-radius: var(--radius-sm); padding: 8px 10px; margin-top: 8px; }
 .rf-payout-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* ===== V1.3.0 Story 3.4 · 内容运营数据看板（模板 C + Chart.js 五卡）===== */
+.dashboard-charts { position: relative; }
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; margin-bottom: 16px; }
+.chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; min-width: 0; }
+.chart-card.is-failed .chart-body canvas { visibility: hidden; }
+.chart-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.chart-head h2 { margin: 0; font-size: var(--fs-md, 15px); }
+.chart-tabs .chip, [data-range-switch] .chip { cursor: pointer; }
+.chart-tabs .chip.chip--on, [data-range-switch] .chip.chip--on { background: var(--brand); color: #fff; border-color: var(--brand); }
+.chart-metrics { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: var(--fs-xs); }
+.chart-metrics .hint-icon { cursor: help; margin-left: 2px; color: var(--brand); }
+.chart-body { position: relative; height: 260px; margin-top: 8px; }
+.chart-body canvas { width: 100% !important; height: 100% !important; }
+.chart-skeleton { display: none; position: absolute; inset: 0; border-radius: var(--radius-sm); background: linear-gradient(90deg, var(--line) 25%, var(--surface-2, #f3f4f6) 37%, var(--line) 63%); background-size: 400% 100%; animation: chart-shimmer 1.2s ease infinite; }
+#dashboard-charts.htmx-request .chart-skeleton { display: block; }
+#dashboard-charts.htmx-request .chart-body canvas { visibility: hidden; }
+@keyframes chart-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+.chart-failed[hidden] { display: none; } /* 作者样式的 display:flex 会盖过 UA 的 [hidden]（同 .perm-groups[hidden] 的坑） */
+.chart-empty, .chart-failed { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--muted); background: var(--surface); }
+.chart-empty .empty-emoji { font-size: 26px; }
+.chart-foot { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: var(--fs-xs); }
+.chart-foot .chart-missing { color: var(--warn); font-weight: 700; }
+.summary-row .summary-list { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.summary-row .summary-list li { display: flex; flex-direction: column; font-size: var(--fs-xs); color: var(--muted); }
+.summary-row .summary-list li b { font-size: var(--fs-md, 15px); color: var(--ink); }
+.retention-note { margin-top: 10px; }
+@media (max-width: 1024px) { .chart-grid { grid-template-columns: 1fr; } .chart-body { height: 220px; } }

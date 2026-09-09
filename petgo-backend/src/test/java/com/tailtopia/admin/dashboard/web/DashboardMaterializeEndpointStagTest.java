@@ -7,10 +7,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.tailtopia.admin.account.domain.AdminAccountType;
+import com.tailtopia.admin.account.domain.AdminRole;
+import com.tailtopia.admin.account.service.AdminAccountService;
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.service.AdminUserDetailsService;
 import com.tailtopia.support.ApiIntegrationTest;
-import java.util.Set;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -31,14 +33,26 @@ class DashboardMaterializeEndpointStagTest extends ApiIntegrationTest {
     @Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbc;
 
-    private static AdminUserDetails superAdmin() {
-        return new AdminUserDetails(1L, null, "stag@tailtopia.test", null, AdminAccountType.SUPER_ADMIN, Set.of(), 0,
-                "Stag 超管", "SUPER_ADMIN");
+    @Autowired
+    private AdminAccountService accountService;
+
+    @Autowired
+    private AdminUserDetailsService userDetailsService;
+
+    /** 真建账号再取 principal（admin 链每请求复核账号状态 / security_version，手造 id 会被踢回登录页）。 */
+    private AdminUserDetails account(AdminRole role, String tag) {
+        long seq = SEQ.incrementAndGet();
+        String email = "mat-" + tag + "-" + seq + "@tailtopia.test";
+        accountService.createAccount(email, "跑批 " + tag, role, List.of(), 960000L + seq);
+        return userDetailsService.loadByEmail(email, false);
     }
 
-    private static AdminUserDetails staff() {
-        return new AdminUserDetails(2L, null, "staff@tailtopia.test", null, AdminAccountType.STAFF, Set.of(), 0,
-                "Staff", "ADMIN");
+    private AdminUserDetails superAdmin() {
+        return account(AdminRole.SUPER_ADMIN, "super");
+    }
+
+    private AdminUserDetails staff() {
+        return account(AdminRole.CUSTOM, "staff");
     }
 
     @Test

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  看板五卡图表区（V1.3.0 Story 3.4 AC2 / AC4 / AC5 / AC6）。charts = ChartData（rangeDays / labels / cards）。
+  每卡：标题 + 卡内 tab（真实用户 / 含种子 · 现金到账 / 含 PawCoin，纯前端切 series）+ 指标名（含口径 hover）
+  + <canvas> + 内嵌 JSON（<script type="application/json" data-chart="<cardId>">，labels 为范围内每一天，未物化日为 null）
+  + 空态 / 失败重试块 + 卡底「N 日缺数据」与口径差异提示。图由 static/admin/admin-charts.js 在 htmx:afterSwap 重建。
+  GET /admin/charts?range=7|30（HX-Request）只回本片段；整页 /admin 首屏内嵌同一片段。
+-->
+<body>
+<div th:fragment="charts" class="chart-grid" th:attr="data-range=${charts.rangeDays}">
+    <section th:each="card : ${charts.cards}" class="chart-card" th:id="'card-' + ${card.id}"
+             th:attr="data-card=${card.id},data-kind=${card.id},data-empty=${card.empty}">
+        <header class="chart-head">
+            <h2 th:text="#{'admin.v130.dashboard.card.' + ${card.id}}">卡名</h2>
+            <div class="chips chart-tabs" th:if="${card.scopeTabs}" data-scope-tabs role="tablist">
+                <button type="button" class="chip chip--on" data-scope-tab="REAL" th:text="#{admin.v130.dashboard.scope.real}">真实用户</button>
+                <button type="button" class="chip" data-scope-tab="ALL" th:text="#{admin.v130.dashboard.scope.all}">含种子</button>
+            </div>
+            <div class="chips chart-tabs" th:if="${card.payTabs}" data-pay-tabs role="tablist">
+                <button type="button" class="chip chip--on" data-pay-tab="cash" th:text="#{admin.v130.dashboard.pay.cash}">现金到账</button>
+                <button type="button" class="chip" data-pay-tab="pawcoin" th:text="#{admin.v130.dashboard.pay.pawcoin}">含 PawCoin 消费</button>
+            </div>
+        </header>
+        <ul class="chart-metrics">
+            <li th:each="k : ${card.metricKeys}">
+                <span th:attr="data-metric-name=${k}" th:text="#{'admin.v130.dashboard.metric.' + ${k} + '.name'}">指标名</span>
+                <span class="hint-icon" tabindex="0" th:title="#{'admin.v130.dashboard.metric.' + ${k} + '.hint'}"
+                      th:attr="aria-label=#{'admin.v130.dashboard.metric.' + ${k} + '.hint'}">ⓘ</span>
+            </li>
+        </ul>
+        <div class="chart-body">
+            <div class="chart-skeleton" aria-hidden="true"></div>
+            <canvas role="img" th:attr="aria-label=#{'admin.v130.dashboard.card.' + ${card.id}}"></canvas>
+            <div class="chart-empty" th:if="${card.empty}">
+                <span class="empty-emoji">📭</span>
+                <p th:text="#{admin.v130.dashboard.empty}">本范围内没有已物化的数据</p>
+            </div>
+            <div class="chart-failed" hidden>
+                <p th:text="#{admin.v130.dashboard.failed}">图表加载失败</p>
+                <button type="button" class="btn btn-neutral btn-sm" data-chart-retry th:text="#{admin.v130.dashboard.retry}">重试</button>
+            </div>
+        </div>
+        <script type="application/json" th:attr="data-chart=${card.id}" th:utext="${card.json}">{}</script>
+        <footer class="chart-foot muted">
+            <span class="chart-missing" th:if="${card.missingDays > 0}" th:text="#{admin.v130.dashboard.missing(${card.missingDays})}">N 日缺数据</span>
+            <span th:if="${card.scopeTabs}" th:text="#{admin.v130.dashboard.scopeNote}">口径差异</span>
+            <span th:if="${card.payTabs}" th:text="#{admin.v130.dashboard.payNote}">口径差异</span>
+        </footer>
+    </section>
+</div>
+</body>
+</html>

@@ -46,8 +46,7 @@ class AdminWebControllerTest {
         when(virtualAccountService.list()).thenReturn(List.of());
         identities = mock(com.tailtopia.admin.virtual.service.AdminPublishIdentityService.class);
         when(identities.selectableIdentities()).thenReturn(List.of());
-        controller = new AdminWebController(adminContentService, adminModerationService, adminVetService,
-                mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class), virtualAccountService,
+        controller = new AdminWebController(adminContentService, adminModerationService, adminVetService, virtualAccountService,
                 TestMessages.real(),
                 identities, mock(com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService.class));
     }
@@ -66,12 +65,9 @@ class AdminWebControllerTest {
     }
 
     @Test
-    void loginAndDashboardAndSeedFormViews() {
+    void loginAndSeedFormViews() {
         assertThat(controller.login()).isEqualTo("admin/login");
-
-        Model m1 = new ConcurrentModel();
-        assertThat(controller.dashboard(m1)).isEqualTo("admin/dashboard");
-        assertThat(m1.getAttribute("active")).isEqualTo("dashboard");
+        // 看板（/admin）自 V1.3.0 Story 3.4 起由 AdminDashboardController 承接
 
         Model m2 = new ConcurrentModel();
         assertThat(controller.seedPostForm(m2)).isEqualTo("admin/seed-post");

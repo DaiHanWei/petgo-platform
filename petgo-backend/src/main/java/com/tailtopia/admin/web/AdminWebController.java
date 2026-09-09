@@ -44,7 +44,6 @@ public class AdminWebController {
     private final AdminContentService adminContentService;
     private final AdminModerationService adminModerationService;
     private final AdminVetService adminVetService;
-    private final com.tailtopia.admin.dashboard.service.AdminDashboardService dashboardService;
     private final AdminVirtualAccountService virtualAccountService;
     private final AdminPublishIdentityService publishIdentityService;
     /** V1.3.0 Story 2.4：内容举报页签处置 fragment 装配（工作台）。 */
@@ -56,7 +55,6 @@ public class AdminWebController {
     public AdminWebController(AdminContentService adminContentService,
             AdminModerationService adminModerationService,
             AdminVetService adminVetService,
-            com.tailtopia.admin.dashboard.service.AdminDashboardService dashboardService,
             AdminVirtualAccountService virtualAccountService,
             Messages msg,
             AdminPublishIdentityService publishIdentityService,
@@ -65,7 +63,6 @@ public class AdminWebController {
         this.adminContentService = adminContentService;
         this.adminModerationService = adminModerationService;
         this.adminVetService = adminVetService;
-        this.dashboardService = dashboardService;
         this.virtualAccountService = virtualAccountService;
         this.msg = msg;
         this.publishIdentityService = publishIdentityService;
@@ -87,13 +84,7 @@ public class AdminWebController {
         return "admin/denied";
     }
 
-    /** 运营概览看板（Story 9.10，AB-1.1-01）：四模块指标聚合（原种子发布引导页升级为概览）。 */
-    @GetMapping({"/admin", "/admin/dashboard"})
-    public String dashboard(Model model) {
-        model.addAttribute("active", "dashboard");
-        model.addAttribute("metrics", dashboardService.overview());
-        return "admin/dashboard";
-    }
+    // 运营概览 / 数据看板（GET /admin、/admin/dashboard）自 V1.3.0 Story 3.4 起由 admin/dashboard/web/AdminDashboardController 承接。
 
     @GetMapping("/admin/seed-post")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')")
