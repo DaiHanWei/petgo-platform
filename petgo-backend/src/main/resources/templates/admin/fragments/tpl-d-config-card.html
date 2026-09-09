@@ -7,19 +7,19 @@
   调用方须在外层 th:with="action=@{...}" 提供表单 action（壳不写 @{}，便于纯模板引擎渲染单测）。
 -->
 <body>
-<form class="cfg-card card" th:fragment="configCard(title, form, saveLabel)" method="post" data-config-card
+<form class="cfg-card card" th:fragment="configCard(titleSlot, formSlot, saveLabelSlot)" method="post" data-config-card
       th:attr="action=${action}">
     <div class="cfg-head">
-        <h2 class="cfg-title" th:replace="${title} ?: ~{}"></h2>
+        <h2 class="cfg-title" th:replace="${titleSlot} ?: ~{}"></h2>
         <span class="tag tag-dirty" hidden data-dirty-flag th:text="#{admin.v130.tpl.dirty}">已修改</span>
     </div>
     <div class="cfg-body">
-        <div th:replace="${form} ?: ~{}"></div>
+        <div th:replace="${formSlot} ?: ~{}"></div>
     </div>
     <div class="cfg-foot">
         <p class="inline-error-slot" aria-live="polite"></p>
         <button type="submit" class="btn btn-primary" disabled data-save
-                th:text="${saveLabel} ?: #{admin.v130.tpl.save}">保存</button>
+                th:text="${saveLabelSlot} ?: #{admin.v130.tpl.save}">保存</button>
     </div>
 </form>
 </body>

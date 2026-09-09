@@ -57,7 +57,7 @@ class ManualReviewAccessControlTest {
         @Bean
         ManualReviewAdminController controller(ManualReviewService r, AdminSettingsService s,
                 com.tailtopia.admin.moderation.service.UnifiedTicketQueryService q) {
-            return new ManualReviewAdminController(r, s, q, TestMessages.real());
+            return new ManualReviewAdminController(r, s, q, mock(com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService.class), TestMessages.real());
         }
     }
 
@@ -91,7 +91,8 @@ class ManualReviewAccessControlTest {
 
     private void queue() {
         // 2026-08-19：queue() 增加了复核列表的筛选参数（type/status/q/page）。
-        controller.queue(null, null, null, 0, null, new ConcurrentModel());
+        controller.queue(null, null, null, null, null, null, null, null, 0,
+                com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel());
     }
 
     private void toggle() {
@@ -99,11 +100,13 @@ class ManualReviewAccessControlTest {
     }
 
     private void approve() {
-        controller.approve(admin(), 5L, new RedirectAttributesModelMap());
+        controller.approve(admin(), 5L, com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(),
+                new org.springframework.mock.web.MockHttpServletResponse(), new RedirectAttributesModelMap());
     }
 
     private void changePriority() {
-        controller.changePriority(admin(), 5L, "P0", new RedirectAttributesModelMap());
+        controller.changePriority(admin(), 5L, "P0", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(),
+                new org.springframework.mock.web.MockHttpServletResponse(), new RedirectAttributesModelMap());
     }
 
     /**

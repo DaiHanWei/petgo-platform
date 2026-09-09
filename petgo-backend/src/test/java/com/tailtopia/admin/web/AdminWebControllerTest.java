@@ -49,7 +49,7 @@ class AdminWebControllerTest {
         controller = new AdminWebController(adminContentService, adminModerationService, adminVetService,
                 mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class), virtualAccountService,
                 TestMessages.real(),
-                identities);
+                identities, mock(com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService.class));
     }
 
     private AdminUserDetails admin() {

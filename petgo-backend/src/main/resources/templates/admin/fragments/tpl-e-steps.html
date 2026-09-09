@@ -8,14 +8,14 @@
     footer — 底部吸底条（上一步 / 下一步 / 提交）
 -->
 <body>
-<div class="stp" th:fragment="steps(steps, body, footer)" data-steps>
-    <ol class="step-bar" th:replace="${steps} ?: ~{}"></ol>
+<div class="stp" th:fragment="steps(stepsSlot, bodySlot, footerSlot)" data-steps>
+    <ol class="step-bar" th:replace="${stepsSlot} ?: ~{}"></ol>
     <div class="stp-body">
-        <div th:replace="${body} ?: ~{}"></div>
+        <div th:replace="${bodySlot} ?: ~{}"></div>
     </div>
     <p id="admin-inline-error" class="stp-inline-error" aria-live="polite"></p>
     <footer class="sticky-footer">
-        <div th:replace="${footer} ?: ~{}"></div>
+        <div th:replace="${footerSlot} ?: ~{}"></div>
     </footer>
 </div>
 </body>

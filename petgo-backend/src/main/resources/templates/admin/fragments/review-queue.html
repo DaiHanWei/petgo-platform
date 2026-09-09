@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  工作台左栏队列（V1.3.0 Story 2.4 AC2）。list = 整个 <ul>（切页签 / 两态时替换）；rows = 行 + 翻页哨兵（滚动到底 htmx 追加）。
+  行 56px 两行式：① 对象标识 + 状态色点；② 类别标签 + 优先级分 + 最早时间（WIB）。overdue 整行红 + 挂起标签。
+  已处理态：结果徽标 + 操作人 + 时间 + 理由（只读回看）。
+-->
+<body>
+<ul th:fragment="list" class="q-list" id="review-queue" th:attr="data-tab=${filters.tab.param()}">
+    <th:block th:replace="~{admin/fragments/review-queue :: rows}"></th:block>
+</ul>
+
+<th:block th:fragment="rows">
+    <li th:if="${queue.isEmpty() and filters.page == 0}" class="q-empty">
+        <div class="empty empty--queue"><span class="empty-emoji">🎉</span>
+            <p th:text="${filters.handled} ? #{admin.v130.review.empty.handled} : #{admin.v130.empty.queue}">队列已清空</p>
+            <p class="muted" th:unless="${filters.handled}">
+                <th:block th:each="t : ${tabs}" th:if="${t != filters.tab and counts.get(t) > 0}">
+                    <a th:href="@{/admin/manual-review(tab=${t.param()})}"
+                       th:text="#{admin.v130.review.empty.elsewhere(#{${t.titleKey()}}, ${counts.get(t)})}">其他队列还有 N 条</a>
+                </th:block>
+            </p>
+        </div>
+    </li>
+    <th:block th:each="r : ${queue.content}"><li th:replace="~{admin/fragments/review-queue :: row(${r}, false)}"></li></th:block>
+    <!-- 滚动到底加载下一页（每页 20） -->
+    <li th:if="${queue.hasNext()}" class="q-more" hx-swap="outerHTML" hx-trigger="revealed"
+        th:attr="hx-get=@{/admin/manual-review/queue(tab=${filters.tab.param()},state=${filters.state()},subType=${filters.subType},priority=${filters.priority},category=${filters.category},q=${filters.q},page=${filters.page + 1})}">
+        <span class="muted" th:text="#{admin.v130.review.more}">加载更多…</span>
+    </li>
+</th:block>
+
+<!-- 单行（供列表循环与处置后 oob 重渲染共用；oob=true 时带 hx-swap-oob） -->
+<ul th:remove="tag">
+    <li th:fragment="row(r, oob)" class="q-row" th:classappend="${r.row.overdue()} ? 'row-overdue'"
+        th:hx-swap-oob="${oob} ? 'true' : null"
+        th:id="'review-row-' + ${r.tab.param()} + '-' + ${r.row.sourceId()}"
+        th:data-id="${r.row.sourceId()}"
+        th:data-detail-url="@{/admin/manual-review/{id}/detail(id=${r.row.sourceId()},tab=${r.tab.param()})}"
+        th:attr="hx-get=@{/admin/manual-review/{id}/detail(id=${r.row.sourceId()},tab=${r.tab.param()})}"
+        hx-target=".wb-detail-body" hx-swap="innerHTML" tabindex="0">
+        <span class="q-title">
+            <span class="dot" th:classappend="'dot--' + ${r.dot()}"></span>
+            <img th:if="${r.isAvatar()}" th:src="${r.row.preview()}" alt="" loading="lazy" class="q-thumb"/>
+            <span th:if="${r.tab.name() == 'AVATAR'}" th:text="${r.row.targetNickname() ?: #messages.msg('admin.review.subject.deactivated')}">昵称</span>
+            <span th:unless="${r.tab.name() == 'AVATAR'}" th:text="${r.row.preview() ?: (r.row.targetNickname() ?: '')}">摘要</span>
+            <!-- bug 480：内容类工单直达内容详情（用帖 id）；权限与 AdminContentManageController.DETAIL_AUTH 一致 -->
+            <a th:if="${r.row.contentRefId() != null}" class="q-link" target="_blank"
+               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')"
+               th:href="@{'/admin/content/' + ${r.row.contentRefId()}}" th:text="#{admin.review.viewContent}" data-no-drawer>查看内容</a>
+        </span>
+        <span class="q-meta">
+            <span class="badge badge-neutral" th:if="${r.row.subType() != null}" th:text="${r.row.subType()}">SUB</span>
+            <span th:text="'⚑ ' + ${r.row.score()}">⚑ 0</span>
+            <span th:text="${@adminTime.wib(r.row.earliestAt())}">时间</span>
+            <span class="badge badge-danger" th:if="${r.row.overdue()}" th:text="#{admin.review.overdue}">超 24h</span>
+            <th:block th:if="${r.result != null}">
+                <span class="badge" th:classappend="${r.result == 'APPROVED' or r.result == 'PASS'} ? 'badge-ok' : 'badge-danger'" th:text="${r.result}">结果</span>
+                <span class="muted" th:if="${r.handledBy != null}" th:text="${r.handledBy}">操作人</span>
+                <span class="muted" th:if="${r.handledAt != null}" th:text="${@adminTime.wib(r.handledAt)}">时间</span>
+                <span class="muted" th:if="${r.reason != null}" th:text="${r.reason}">理由</span>
+            </th:block>
+        </span>
+    </li>
+</ul>
+</body>
+</html>

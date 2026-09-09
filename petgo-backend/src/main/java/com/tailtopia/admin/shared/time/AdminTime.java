@@ -36,4 +36,25 @@ public class AdminTime {
     public ZoneId zone() {
         return ZONE;
     }
+
+    // ---- 以下三个方法自原 admin/web/AdminTime（@Component("adminTime"）合并而来（Story 2.4：两个同名 bean 会让上下文启动失败）；
+    //      33 个既有模板仍用 ${@adminTime.wib(...)} / nowWibForInput / wibForInput，语义与格式逐字不变。 ----
+
+    private static final DateTimeFormatter WIB_LEGACY = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZONE);
+    private static final DateTimeFormatter INPUT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
+
+    /** Instant → "yyyy-MM-dd HH:mm:ss WIB"；null → "—"（bug 20260720-314 既有口径）。 */
+    public String wib(Instant t) {
+        return t == null ? "—" : WIB_LEGACY.format(t) + " WIB";
+    }
+
+    /** 「此刻的 WIB 时间」（datetime-local 参照，bug 20260828）。 */
+    public String nowWibForInput() {
+        return java.time.LocalDateTime.now(ZONE).format(INPUT);
+    }
+
+    /** 已存时刻 → datetime-local 回显值（WIB）；null → 空串（bug 20260901-468）。 */
+    public String wibForInput(Instant t) {
+        return t == null ? "" : java.time.LocalDateTime.ofInstant(t, ZONE).format(INPUT);
+    }
 }

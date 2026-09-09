@@ -1,302 +1,96 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- 人工审核队列（Story 4.3，预建未激活）。超管或 content.manual_review 可见/可达；激活开关仅超管；PENDING 队列处置（通过/拒绝）。
-     24h 未处理高亮（AC7）。V1.0.0 默认开关关 = 现网行为，队列恒空。 -->
+<!--
+  A1 统一复核工作台（V1.3.0 Story 2.4，模板 A · tpl-a-workbench）。
+  四页签：内容送审 / 内容举报 / 名称审核 / 头像审核（ReviewTab），各带待处理计数；左栏两态（待处理 / 已处理）；
+  右栏三卡（快照 / 上下文 / 操作）由 fragments/review-detail.html 按页签渲染；处置走各自既有写端点（路径 / 参数 / 权限零变更），
+  htmx 分支返回 fragments/review-done.html（data-next-id → admin-workbench.js 自动下一条）。
+  🔴 无键盘 ↑/↓（D-14）。人工复核总开关移到右上齿轮弹层（仅超管）。
+-->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.review.title}">人工审核队列 · TailTopia 运营后台</title>
+    <title th:text="#{admin.review.title}">人工复核 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
-    <!-- admin.js：原生 <dialog> 的 data-open/close-dialog 委托（拒绝弹框依赖），此前本页漏引致拒绝按钮无反应。 -->
     <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-workbench.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.review.title}">人工复核</h1>
-        <p class="muted" th:text="#{admin.review.intro}">本页汇总需要人工判断的待办：内容送审（等放行）、内容举报、昵称/宠物名审核、用户/宠物头像审核。用户举报（账号级警告/封号）在「被举报用户」页。</p>
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.review.title}">人工复核</h1>
+            <!-- 齿轮：人工复核总开关（AC6，仅超管；POST /admin/settings/manual-review 不变） -->
+            <details class="account-menu review-gear" sec:authorize="hasRole('SUPER_ADMIN')">
+                <summary th:title="#{admin.v130.review.gear.title}">⚙️</summary>
+                <div class="account-menu-panel">
+                    <div class="name" th:text="#{admin.v130.review.gear.title}">人工复核总开关</div>
+                    <p class="muted" th:text="#{admin.v130.review.gear.scope}">影响范围：开启后，机审拿不准的新发布内容进入本队列等待放行；关闭则机审判完直接发布。</p>
+                    <p>
+                        <span class="badge" th:classappend="${manualReviewEnabled} ? 'badge-ok' : 'badge-neutral'"
+                              th:text="${manualReviewEnabled} ? #{admin.review.switch.on} : #{admin.review.switch.off}">未激活</span>
+                    </p>
+                    <form th:action="@{/admin/settings/manual-review}" method="post">
+                        <input type="hidden" name="enabled" th:value="${!manualReviewEnabled}"/>
+                        <button type="submit" class="btn btn-sm"
+                                th:classappend="${manualReviewEnabled} ? 'btn-neutral' : 'btn-primary'"
+                                th:text="${manualReviewEnabled} ? #{admin.review.switch.disable} : #{admin.review.switch.enable}">开启</button>
+                    </form>
+                </div>
+            </details>
+        </div>
+        <p class="muted" th:text="#{admin.review.intro}">本页汇总需要人工判断的待办。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
-        <!-- 激活开关（仅超管）-->
-        <div class="filter-bar" sec:authorize="hasRole('SUPER_ADMIN')">
-            <span th:text="#{admin.review.switch.label}">人工审核：</span>
-            <span class="badge" th:classappend="${manualReviewEnabled} ? 'badge-ok' : 'badge-neutral'"
-                  th:text="${manualReviewEnabled} ? #{admin.review.switch.on} : #{admin.review.switch.off}">未激活</span>
-            <form th:action="@{/admin/settings/manual-review}" method="post" class="inline-form">
-                <input type="hidden" name="enabled" th:value="${!manualReviewEnabled}"/>
-                <button type="submit" class="btn btn-sm"
-                        th:classappend="${manualReviewEnabled} ? 'btn-neutral' : 'btn-primary'"
-                        th:text="${manualReviewEnabled} ? #{admin.review.switch.disable} : #{admin.review.switch.enable}">开启</button>
+        <div th:replace="~{admin/fragments/tpl-a-workbench :: workbench(~{::rv-tabs}, ~{::rv-filters}, ~{::rv-queue}, ~{::rv-detail}, ~{::rv-actions})}">
+            <!-- 页签行：四页签 + 紫计数（切页签 = 整页 GET，保留筛选） -->
+            <div th:fragment="rv-tabs" class="tabs" id="review-tabs">
+                <a th:each="t : ${tabs}" class="tab" th:classappend="${t == filters.tab} ? 'tab--on'"
+                   th:href="@{/admin/manual-review(tab=${t.param()},state=${filters.state()},q=${filters.q})}">
+                    <span th:text="#{${t.titleKey()}}">页签</span>
+                    <span class="tab-count" th:id="'review-tab-count-' + ${t.param()}" th:text="${counts.get(t)}">0</span>
+                </a>
+            </div>
+            <!-- 筛选行：两态 + 类别 / 优先级 / 子类型（下拉自动提交）+ 关键词（显式查询钮） -->
+            <form th:fragment="rv-filters" class="filter-bar review-filters" th:action="@{/admin/manual-review}" method="get" data-autosubmit>
+                <input type="hidden" name="tab" th:value="${filters.tab.param()}"/>
+                <label><span th:text="#{admin.v130.review.state}">状态</span>
+                    <select name="state" class="sel">
+                        <option value="pending" th:selected="${!filters.handled}" th:text="#{admin.v130.review.state.pending}">待处理</option>
+                        <option value="handled" th:selected="${filters.handled}" th:text="#{admin.v130.review.state.handled}">已处理</option>
+                    </select>
+                </label>
+                <label th:if="${filters.tab.name() == 'REPORT'}"><span th:text="#{admin.v130.review.filter.category}">违规类别</span>
+                    <select name="category" class="sel">
+                        <option value="" th:text="#{admin.tickets.filter.all}">全部</option>
+                        <option th:each="c : ${categories}" th:value="${c}" th:selected="${c.name() == filters.category}" th:text="${c}">CAT</option>
+                    </select>
+                </label>
+                <label th:if="${filters.tab.name() == 'SUBMISSION'}"><span th:text="#{admin.v130.review.filter.priority}">优先级</span>
+                    <select name="priority" class="sel">
+                        <option value="" th:text="#{admin.tickets.filter.all}">全部</option>
+                        <option th:each="p : ${ {'P0','P1','P2'} }" th:value="${p}" th:selected="${p == filters.priority}" th:text="${p}">P0</option>
+                    </select>
+                </label>
+                <label th:if="${filters.tab.hasSubTypeFilter()}"><span th:text="#{admin.v130.review.filter.subType}">对象</span>
+                    <select name="subType" class="sel">
+                        <option value="" th:text="#{admin.tickets.filter.all}">全部</option>
+                        <option value="user" th:selected="${filters.subType == 'user'}" th:text="#{admin.v130.review.subType.user}">用户</option>
+                        <option value="pet" th:selected="${filters.subType == 'pet'}" th:text="#{admin.v130.review.subType.pet}">宠物</option>
+                    </select>
+                </label>
+                <label><span th:text="#{admin.review.filter.q}">账号</span>
+                    <input type="text" name="q" class="inp" th:value="${filters.q}" th:placeholder="#{admin.review.filter.qPlaceholder}"/>
+                </label>
+                <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.tickets.filter.submit}">查询</button>
             </form>
+            <!-- 左栏队列 -->
+            <div th:fragment="rv-queue" th:replace="~{admin/fragments/review-queue :: list}"></div>
+            <!-- 右栏初始空态 -->
+            <div th:fragment="rv-detail" th:replace="~{admin/fragments/tpl-a-workbench :: detail-empty}"></div>
+            <div th:fragment="rv-actions"><span class="muted" th:text="#{admin.v130.review.actions.hint}">操作区随所选单据渲染</span></div>
         </div>
-
-        <!-- ===== 复核列表（2026-08-19 从工单队列页移入）=====
-             内容送审（2026-08-19 第二步并入）+ 内容举报 + 账号标识字段（名称/头像）混排，按类型筛选。
-             ⚠️ 每行的处置动作**按类型各自渲染** —— 各类的动作语义与授权域都不同：
-                内容送审 → 通过（放行发布）/ 拒绝（丢弃，从未公开）/ 改优先级
-                内容举报 → 下架（已公开过）/ 无需处置（content.takedown）
-                名称审核 → 通过 / 违规（重置昵称）
-                头像审核 → 通过 / 违规（重置为默认头像）
-             统一成两个按钮会让「违规」对内容是下架、对头像是重置默认图、对送审是丢弃，
-             后果各不相同却长得一样。 -->
-        <h2 th:text="#{admin.review.section.tickets}">待复核</h2>
-
-        <form class="filter-bar" th:action="@{/admin/manual-review}" method="get" data-autosubmit>
-            <label><span th:text="#{admin.review.filter.type}">类型</span>
-                <select name="type">
-                    <option value="" th:text="#{admin.tickets.filter.all}">全部</option>
-                    <option th:each="t : ${types}" th:value="${t}"
-                            th:text="#{'admin.tickets.type.' + ${t}}"
-                            th:selected="${t.name() == type}">TYPE</option>
-                </select>
-            </label>
-            <label><span th:text="#{admin.tickets.filter.status}">状态</span>
-                <select name="status">
-                    <option value="" th:text="#{admin.tickets.filter.all}">全部</option>
-                    <option th:each="s : ${statuses}" th:value="${s}"
-                            th:text="#{'admin.tickets.status.' + ${s}}"
-                            th:selected="${s.name() == status}">STATUS</option>
-                </select>
-            </label>
-            <label><span th:text="#{admin.review.filter.q}">被举报账号</span>
-                <input type="text" name="q" th:value="${q}"
-                       th:placeholder="#{admin.review.filter.qPlaceholder}" placeholder="账号 id 或昵称"/>
-            </label>
-            <button type="submit" class="btn btn-primary" th:text="#{admin.tickets.filter.submit}">筛选</button>
-        </form>
-
-        <table>
-            <thead>
-            <tr>
-                <th th:text="#{admin.review.col.ticketType}">类型</th>
-                <!-- 2026-09-02 产品要求：摘要列缩三成，腾出来的宽度给对象列与操作列。 -->
-                <th th:text="#{admin.review.col.subject}" style="width:20%">对象</th>
-                <th th:text="#{admin.review.col.preview}" style="width:24%">摘要</th>
-                <th th:text="#{admin.review.col.score}">优先级分</th>
-                <th th:text="#{admin.review.col.earliest}">最早时间</th>
-                <th th:text="#{admin.review.col.status}">状态</th>
-                <th th:text="#{admin.review.col.action}">操作</th>
-            </tr>
-            </thead>
-            <!-- th:fragment="rows"：controller 的 HX-Request 分支只回这段 tbody（原挂在已删除的送审表上）。 -->
-            <tbody th:fragment="rows">
-            <tr th:if="${result == null or result.isEmpty()}">
-                <td colspan="7" class="muted" th:text="#{admin.review.empty}">暂无待复核项</td>
-            </tr>
-            <!-- 一条工单渲染**两个 tr**（数据行 + 展开面板承载行），所以循环挂在 th:block 上：
-                 HTML 不允许 tr 嵌套，th:each 若挂在数据行上，第二个 tr 就落在循环外、
-                 拿不到 row（渲染期直接抛 SpringEL 求值异常）。tickets.html 同样处理。 -->
-            <th:block th:each="row : ${result != null ? result.content : null}">
-            <tr th:classappend="${row.overdue()} ? 'row-overdue'">
-                <td th:text="#{'admin.tickets.type.' + ${row.type()}}">类型</td>
-                <td>
-                    <!-- 宠物类对象：SQL 已把宠物解析到宠主；解析不到＝宠物档案已删除，
-                         如实说明，别只给一个光秃秃的破折号让运营以为是 bug。 -->
-                    <span th:if="${row.targetNickname() != null}" th:text="${row.targetNickname()}">昵称</span>
-                    <span th:if="${row.targetNickname() == null and row.targetDeleted()}" class="muted"
-                          th:text="#{admin.review.subject.deactivated}">账号已注销</span>
-                    <span th:if="${row.targetNickname() == null and !row.targetDeleted()}" class="muted"
-                          th:text="#{admin.review.subject.gone}">宠物档案已删除</span>
-                    <span th:if="${row.subType() != null}" class="badge badge-neutral"
-                          th:text="${row.subType()}">SUB</span>
-                </td>
-                <td class="muted">
-                    <!-- bug 20260902-480：头像审核的摘要是头像 URL —— 直接把图渲染出来，
-                         复核员一眼看到要审的图，而不是一串网址文字。 -->
-                    <img th:if="${(row.subType() == 'USER_AVATAR' or row.subType() == 'PET_AVATAR')
-                                  and row.preview() != null and #strings.startsWith(row.preview(), 'http')}"
-                         th:src="${row.preview()}" alt="" loading="lazy" data-lightbox
-                         style="width:56px;height:56px;object-fit:cover;border-radius:6px;cursor:zoom-in"/>
-                    <span th:unless="${(row.subType() == 'USER_AVATAR' or row.subType() == 'PET_AVATAR')
-                                       and row.preview() != null and #strings.startsWith(row.preview(), 'http')}"
-                          th:text="${row.preview()}">摘要</span>
-                    <!-- 2026-09-02（bug 480）：内容类工单直达内容详情页（新标签页，不打断复核流）。
-                         🔴 链接一律用 contentRefId（帖 id）——送审工单的 sourceId 是队列号，
-                         与帖 id 是两套编号，拿它连详情页会打开一条毫不相干的内容；
-                         评论送审的 contentRefId 是评论所在的帖（看上下文）。
-                         ⚠️ sec:authorize 须与 AdminContentManageController.DETAIL_AUTH 逐字一致。 -->
-                    <a th:if="${row.contentRefId() != null}"
-                       sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')"
-                       target="_blank" th:href="@{'/admin/content/' + ${row.contentRefId()}}"
-                       th:text="#{admin.review.viewContent}">查看内容</a>
-                </td>
-                <td><strong th:text="${row.score()}">0</strong></td>
-                <!-- bug 20260902-481：原来直接打印原始 Instant（ISO UTC），复核员没法读；
-                     与「被举报用户」页同一口径，一律 WIB。 -->
-                <td th:text="${@adminTime.wib(row.earliestAt())}">时间</td>
-                <td>
-                    <span th:text="#{'admin.tickets.status.' + ${row.status()}}">状态</span>
-                    <span class="badge badge-danger" th:if="${row.overdue()}"
-                          th:text="#{admin.review.overdue}">超 24h</span>
-                </td>
-                <td>
-                    <!-- 内容举报：下架 / 驳回。
-                         ⚠️ 驳回必须走**按帖**端点 /admin/reports/post/{postId}/dismiss-all：
-                            本类工单是**按帖聚合**的（12 个人举报同一条帖 = 一条工单），
-                            而 /admin/reports/{reportId}/dismiss 只收档**一条**举报单 ——
-                            该帖还有别人的 PENDING 单，行仍是「待处理」、下次打开又在。
-                            运营会以为「点了没反应」。（下架端点相反：它会顺带关掉该帖全部 PENDING 单。）
-                         ⚠️ 下架带 data-confirm：帖子会被隐藏、该帖全部待处理举报一并关闭，
-                            是不可顺手撤回的动作。2026-08-19 拆分时把这个二次确认丢了。
-                         sourceId 是 post_id（不是某条举报单 id），actionRef 是代表性 PENDING 单 id。 -->
-                    <div th:if="${row.type().name() == 'CONTENT_REPORT'
-                                 and row.status().name() == 'PENDING' and row.actionRef() != null}"
-                         sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
-                        <!-- 展开：看「谁举报的 + 什么理由」。2026-08-20 补 —— 内容举报拆到本页后
-                             这一页没有展开面板，于是它的举报人与逐条理由在任何界面都看不到
-                             （/admin/tickets/detail 的 CONTENT_REPORT 分支成了死代码）。 -->
-                        <a class="btn btn-sm btn-neutral"
-                           th:hx-get="@{/admin/tickets/detail(type=${row.type()},sourceId=${row.sourceId()},userId=${row.targetUserId()})}"
-                           th:hx-target="'#detail-' + ${row.type()} + '-' + ${row.sourceId()}"
-                           hx-swap="innerHTML"
-                           th:text="#{admin.tickets.expand}">展开</a>
-                        <form th:action="@{/admin/reports/{id}/takedown(id=${row.actionRef()})}"
-                              method="post" class="inline-form"
-                              th:attr="data-confirm=#{admin.tickets.confirm.takedown}">
-                            <button type="submit" class="btn btn-sm btn-danger"
-                                    th:text="#{admin.review.act.takedown}">下架</button>
-                        </form>
-                        <form th:action="@{/admin/reports/post/{id}/dismiss-all(id=${row.sourceId()})}"
-                              method="post" class="inline-form">
-                            <button type="submit" class="btn btn-sm btn-neutral"
-                                    th:text="#{admin.tickets.action.dismissContent}">驳回</button>
-                        </form>
-                    </div>
-                    <!-- 名称审核：判过保留 / 违规（重置名称）。
-                         ⚠️ 必须走 HTMX：/admin/name-moderation/{id}/decide 是 @ResponseBody **纯文本**端点
-                            （设计上供就地回显）。用普通表单 POST 会把浏览器导航到一个只有一行字的
-                            白页，运营丢掉整个列表上下文 —— 2026-08-19 拆分时换成了普通表单，
-                            正是这个毛病。
-                         ⚠️「判定依据 + 备注」不能省：违规处置要折叠进审计（story 8 §5.2）。
-                            拆分时一并丢了，这两类的违规记录在审计里就没了原因。 -->
-                    <div th:if="${row.type().name() == 'ACCOUNT_IDENTITY'
-                                 and (row.subType() == 'NICKNAME' or row.subType() == 'PET_NAME')
-                                 and row.status().name() == 'PENDING'}"
-                         sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
-                        <form th:hx-post="@{/admin/name-moderation/{id}/decide(id=${row.sourceId()})}"
-                              th:hx-target="'#name-result-' + ${row.sourceId()}" hx-swap="innerHTML"
-                              class="inline-form">
-                            <!-- HTMX 表单不走 th:action → 手动带 CSRF token（/admin 会话 CSRF 链）。 -->
-                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
-                            <select name="category" aria-label="category">
-                                <option value="ILLEGAL" th:text="#{admin.review.cat.illegal}">违法</option>
-                                <option value="HATE" th:text="#{admin.review.cat.hate}">仇恨</option>
-                                <option value="PORN" th:text="#{admin.review.cat.porn}">色情</option>
-                                <option value="POLITICAL" th:text="#{admin.review.cat.political}">政治敏感</option>
-                                <option value="AD" th:text="#{admin.review.cat.ad}">广告引流</option>
-                                <option value="HARASSMENT" th:text="#{admin.review.cat.harassment}">骚扰</option>
-                                <option value="OTHER" selected th:text="#{admin.review.cat.other}">其他</option>
-                            </select>
-                            <input type="text" name="note" class="input-sm"
-                                   th:placeholder="#{admin.review.reject.note}"/>
-                            <button type="submit" name="decision" value="PASS" class="btn btn-neutral btn-sm"
-                                    th:text="#{admin.review.act.pass}">通过</button>
-                            <button type="submit" name="decision" value="VIOLATION" class="btn btn-danger btn-sm"
-                                    th:text="#{admin.review.act.violationName}">违规（重置名称）</button>
-                        </form>
-                        <span class="muted" th:id="'name-result-' + ${row.sourceId()}"></span>
-                    </div>
-                    <!-- 内容送审：通过（放行发布）/ 拒绝（丢弃 + 记判定依据）/ 改优先级。
-                         ⚠️「拒绝」在这里是**丢弃一条还没公开过的内容**，与内容举报的「下架」不同源：
-                         那条已经公开过、有人看过、要通知举报人；这条从未面世。端点因此各自独立。 -->
-                    <div th:if="${row.type().name() == 'CONTENT_SUBMISSION' and row.status().name() == 'PENDING'}"
-                         sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')">
-                        <div class="row-actions">
-                            <form th:action="@{/admin/manual-review/{id}/approve(id=${row.sourceId()})}"
-                                  method="post" class="inline-form">
-                                <button type="submit" class="btn btn-sm btn-primary"
-                                        th:text="#{admin.review.approve}">通过</button>
-                            </form>
-                            <!-- 拒绝弹框由 admin.js 的 data-open/close-dialog 委托，无内联 JS。 -->
-                            <button type="button" class="btn btn-sm btn-danger"
-                                    th:attr="data-open-dialog=|reject-dlg-${row.sourceId()}|"
-                                    th:text="#{admin.review.reject}">拒绝</button>
-                        </div>
-                        <!-- 改优先级（story 8 §5.1，写一条审计）。不预选当前值：现值已在「对象」列的徽标上（如 P1 · COMMENT）。 -->
-                        <form th:action="@{/admin/manual-review/{id}/priority(id=${row.sourceId()})}" method="post"
-                              class="inline-form">
-                            <select name="priority" aria-label="priority">
-                                <option value="P0">P0</option>
-                                <option value="P1">P1</option>
-                                <option value="P2">P2</option>
-                            </select>
-                            <button type="submit" class="btn btn-neutral btn-sm"
-                                    th:text="#{admin.review.priority.change}">改</button>
-                        </form>
-                        <dialog th:id="|reject-dlg-${row.sourceId()}|" class="modal">
-                            <div class="modal-head">
-                                <h3 th:text="#{admin.review.reject.title}">拒绝并记录原因</h3>
-                                <button type="button" class="modal-close" data-close-dialog aria-label="Close">&times;</button>
-                            </div>
-                            <form th:action="@{/admin/manual-review/{id}/reject(id=${row.sourceId()})}" method="post">
-                                <div class="modal-body">
-                                    <label class="field" th:text="#{admin.review.reject.category}">原因</label>
-                                    <select name="category" class="field-full" aria-label="category">
-                                        <option value="ILLEGAL" th:text="#{admin.review.cat.illegal}">违法</option>
-                                        <option value="HATE" th:text="#{admin.review.cat.hate}">仇恨</option>
-                                        <option value="PORN" th:text="#{admin.review.cat.porn}">色情</option>
-                                        <option value="POLITICAL" th:text="#{admin.review.cat.political}">政治敏感</option>
-                                        <option value="AD" th:text="#{admin.review.cat.ad}">广告引流</option>
-                                        <option value="HARASSMENT" th:text="#{admin.review.cat.harassment}">骚扰</option>
-                                        <option value="OTHER" selected th:text="#{admin.review.cat.other}">其他</option>
-                                    </select>
-                                    <label class="field" th:text="#{admin.review.reject.note}">备注（选填）</label>
-                                    <textarea name="note" rows="2" class="field-full"></textarea>
-                                </div>
-                                <div class="modal-foot">
-                                    <button type="button" class="btn btn-neutral" data-close-dialog
-                                            th:text="#{admin.review.cancel}">取消</button>
-                                    <button type="submit" class="btn btn-danger"
-                                            th:text="#{admin.review.reject.confirm}">确认拒绝</button>
-                                </div>
-                            </form>
-                        </dialog>
-                    </div>
-                    <!-- 头像审核：判过保留 / 违规（重置为默认头像）。
-                         ⚠️ 必须走 HTMX：/admin/avatar-review/{id}/decide 是 @ResponseBody **纯文本**端点
-                            （设计上供就地回显）。用普通表单 POST 会把浏览器导航到一个只有一行字的
-                            白页，运营丢掉整个列表上下文 —— 2026-08-19 拆分时换成了普通表单，
-                            正是这个毛病。
-                         ⚠️「判定依据 + 备注」不能省：违规处置要折叠进审计（story 8 §5.2）。
-                            拆分时一并丢了，这两类的违规记录在审计里就没了原因。 -->
-                    <div th:if="${row.type().name() == 'ACCOUNT_IDENTITY'
-                                 and (row.subType() == 'USER_AVATAR' or row.subType() == 'PET_AVATAR')
-                                 and row.status().name() == 'PENDING'}"
-                         sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')">
-                        <form th:hx-post="@{/admin/avatar-review/{id}/decide(id=${row.sourceId()})}"
-                              th:hx-target="'#avatar-result-' + ${row.sourceId()}" hx-swap="innerHTML"
-                              class="inline-form">
-                            <!-- HTMX 表单不走 th:action → 手动带 CSRF token（/admin 会话 CSRF 链）。 -->
-                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
-                            <select name="category" aria-label="category">
-                                <option value="ILLEGAL" th:text="#{admin.review.cat.illegal}">违法</option>
-                                <option value="HATE" th:text="#{admin.review.cat.hate}">仇恨</option>
-                                <option value="PORN" th:text="#{admin.review.cat.porn}">色情</option>
-                                <option value="POLITICAL" th:text="#{admin.review.cat.political}">政治敏感</option>
-                                <option value="AD" th:text="#{admin.review.cat.ad}">广告引流</option>
-                                <option value="HARASSMENT" th:text="#{admin.review.cat.harassment}">骚扰</option>
-                                <option value="OTHER" selected th:text="#{admin.review.cat.other}">其他</option>
-                            </select>
-                            <input type="text" name="note" class="input-sm"
-                                   th:placeholder="#{admin.review.reject.note}"/>
-                            <button type="submit" name="decision" value="PASS" class="btn btn-neutral btn-sm"
-                                    th:text="#{admin.review.act.pass}">通过</button>
-                            <button type="submit" name="decision" value="VIOLATION" class="btn btn-danger btn-sm"
-                                    th:text="#{admin.review.act.violationAvatar}">违规（重置头像）</button>
-                        </form>
-                        <span class="muted" th:id="'avatar-result-' + ${row.sourceId()}"></span>
-                    </div>
-                </td>
-            </tr>
-            <!-- 展开面板的承载行（HTMX 把 detailFragment 塞进这里）。列数与表头一致＝7。
-                 只有内容举报有展开入口，其余三类没有举报人这回事。 -->
-            <tr th:if="${row.type().name() == 'CONTENT_REPORT'}">
-                <td colspan="7" th:id="'detail-' + ${row.type()} + '-' + ${row.sourceId()}"></td>
-            </tr>
-            </th:block>
-            </tbody>
-        </table>
-
+        <!-- 刻意不放 data-detail-empty-template：队列清空时右栏保留 review-done 的「队列已清空 + 其他队列还有 N 条」（AC8）。 -->
     </div>
 </div>
 </body>

@@ -2,7 +2,8 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <!--
   模板 A · 统一复核工作台壳（V1.3.0 Story 2.3b，AD-11；首个消费者 Story 2.4 A1）。
-  槽位契约 workbench(tabs, filters, queue, detail, actions)：
+  槽位契约 workbench(tabsSlot, filtersSlot, queueSlot, detailSlot, actionsSlot)（形参带 Slot 后缀：Thymeleaf fragment 形参是局部变量、
+  会遮蔽页面 model 里同名的 tabs / filters / queue 属性——Story 2.4 复审实际踩过，整页渲染 500）：
     tabs    — 页签行（.tabs > .tab[.tab--on] + 紫计数 .tab-count）
     filters — 筛选行（form[data-autosubmit]）
     queue   — 左栏队列 <ul class="q-list">，每行 <li class="q-row" data-id data-detail-url hx-get hx-target=".wb-detail-body">
@@ -13,23 +14,23 @@
   调用方 th:replace="~{admin/fragments/tpl-a-workbench :: workbench(~{::tabs}, ~{::filters}, ~{::queue}, ~{::detail}, ~{::actions})}"
 -->
 <body>
-<div class="wb" th:fragment="workbench(tabs, filters, queue, detail, actions)" data-workbench>
+<div class="wb" th:fragment="workbench(tabsSlot, filtersSlot, queueSlot, detailSlot, actionsSlot)" data-workbench>
     <div class="wb-head">
-        <div class="wb-tabs" th:replace="${tabs} ?: ~{}"></div>
-        <div class="wb-filters" th:replace="${filters} ?: ~{}"></div>
+        <div class="wb-tabs" th:replace="${tabsSlot} ?: ~{}"></div>
+        <div class="wb-filters" th:replace="${filtersSlot} ?: ~{}"></div>
     </div>
     <div class="wb-body">
         <section class="wb-queue" data-pane="queue">
             <div class="wb-queue-body">
-                <div th:replace="${queue} ?: ~{admin/fragments/tpl-a-workbench :: queue-empty}"></div>
+                <div th:replace="${queueSlot} ?: ~{admin/fragments/tpl-a-workbench :: queue-empty}"></div>
             </div>
         </section>
         <section class="wb-detail" data-pane="detail">
             <div class="wb-detail-body" id="wb-detail-body">
-                <div th:replace="${detail} ?: ~{admin/fragments/tpl-a-workbench :: detail-empty}"></div>
+                <div th:replace="${detailSlot} ?: ~{admin/fragments/tpl-a-workbench :: detail-empty}"></div>
             </div>
             <div class="wb-actions" id="wb-actions">
-                <div th:replace="${actions} ?: ~{}"></div>
+                <div th:replace="${actionsSlot} ?: ~{}"></div>
             </div>
         </section>
     </div>

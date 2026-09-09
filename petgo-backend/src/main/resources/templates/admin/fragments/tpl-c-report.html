@@ -9,14 +9,14 @@
   根元素 data-readonly：只读标识（不渲染任何写操作）。
 -->
 <body>
-<div class="rpt" th:fragment="report(range, cards, detail)" data-readonly>
+<div class="rpt" th:fragment="report(rangeSlot, cardsSlot, detailSlot)" data-readonly>
     <div class="rpt-head">
-        <div class="rpt-range" th:replace="${range} ?: ~{}"></div>
+        <div class="rpt-range" th:replace="${rangeSlot} ?: ~{}"></div>
         <span class="tag rpt-readonly" th:text="#{admin.v130.tpl.readonly}">只读</span>
     </div>
-    <div class="cards" th:replace="${cards} ?: ~{}"></div>
+    <div class="cards" th:replace="${cardsSlot} ?: ~{}"></div>
     <div class="rpt-detail">
-        <div th:replace="${detail} ?: ~{}"></div>
+        <div th:replace="${detailSlot} ?: ~{}"></div>
     </div>
 </div>
 </body>

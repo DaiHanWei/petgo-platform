@@ -285,8 +285,32 @@ public class UnifiedTicketQueryService {
     @Transactional(readOnly = true)
     public Page<UnifiedTicketRow> search(java.util.Set<TicketType> scope, TicketType type,
             TicketStatusBucket status, String search, Pageable pageable) {
+        return search(scope, type, status, search, Extra.NONE, pageable);
+    }
+
+    /**
+     * 追加过滤（V1.3.0 Story 2.4 工作台页签 / 筛选；不改 CTE 语义，只在外层 WHERE 加条件）。
+     *
+     * @param subTypesIn  {@code u.sub_type IN (...)}（名称 / 头像页签按 NICKNAME/PET_NAME、USER_AVATAR/PET_AVATAR 切分）
+     * @param subTypeLike {@code u.sub_type ILIKE %x%}（内容举报按违规类别、内容送审按优先级前缀）
+     * @param handledOnly {@code true} = 只要终态（已处理 / 无需处置，「已处理」两态视图）；{@code false} = 不加条件
+     */
+    public record Extra(java.util.Set<String> subTypesIn, String subTypeLike, boolean handledOnly, Long sourceId) {
+        public static final Extra NONE = new Extra(null, null, false, null);
+
+        public Extra(java.util.Set<String> subTypesIn, String subTypeLike, boolean handledOnly) {
+            this(subTypesIn, subTypeLike, handledOnly, null);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<UnifiedTicketRow> search(java.util.Set<TicketType> scope, TicketType type,
+            TicketStatusBucket status, String search, Extra extra, Pageable pageable) {
         if (scope == null || scope.isEmpty()) {
             throw new IllegalArgumentException("工单作用域不能为空");
+        }
+        if (extra == null) {
+            extra = Extra.NONE;
         }
         List<Object> args = new ArrayList<>();
         StringBuilder where = new StringBuilder(" WHERE 1 = 1");
@@ -304,6 +328,23 @@ public class UnifiedTicketQueryService {
         if (status != null) {
             where.append(" AND u.status_bucket = ?");
             args.add(status.name());
+        }
+        if (extra.handledOnly()) {
+            where.append(" AND u.status_bucket <> 'PENDING'");
+        }
+        if (extra.sourceId() != null) {
+            where.append(" AND u.source_id = ?");
+            args.add(extra.sourceId());
+        }
+        if (extra.subTypesIn() != null && !extra.subTypesIn().isEmpty()) {
+            where.append(" AND u.sub_type IN (")
+                    .append(String.join(",", java.util.Collections.nCopies(extra.subTypesIn().size(), "?")))
+                    .append(')');
+            args.addAll(extra.subTypesIn());
+        }
+        if (extra.subTypeLike() != null && !extra.subTypeLike().isBlank()) {
+            where.append(" AND u.sub_type ILIKE ? ESCAPE '\\'");
+            args.add("%" + escapeLike(extra.subTypeLike().trim()) + "%");
         }
         String keyword = search == null ? null : search.trim();
         if (keyword != null && !keyword.isEmpty()) {

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  处置成功 fragment（V1.3.0 Story 2.4 AC5，AD-9）：主片段根元素带 data-next-id（admin-workbench.js 自动请求下一条 / 空则右栏空态），
+  oob：被处理行删除（review-row-<tab>-<id>）、各页签计数替换、toast。响应头 HX-Trigger: admin:badge-refresh 由 Controller 写。
+-->
+<body>
+<div th:fragment="done" class="rv-done" th:data-next-id="${done.nextId}">
+    <!-- toast oob 到 layout 的 #admin-toast-host（留在右栏会被下一条 detail 立刻冲掉，复审 #6） -->
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${message} ?: #{${messageKey}}">已处理</div>
+    <div class="empty empty--queue" th:if="${#strings.isEmpty(done.nextId)}">
+        <span class="empty-emoji">🎉</span>
+        <p th:text="#{admin.v130.empty.queue}">队列已清空</p>
+        <p class="muted" th:if="${done.otherPending > 0}" th:text="#{admin.v130.review.empty.other(${done.otherPending})}">其他队列还有 N 条</p>
+    </div>
+    <!-- 被处理行：终态 → oob 删除；内容举报按帖聚合、该帖仍有其他待处理单 → oob 重渲染该行（actionRef 已换成下一条 PENDING 单，复审 #4） -->
+    <li th:if="${done.keepRow == null}" th:id="${done.rowId()}" hx-swap-oob="delete"></li>
+    <th:block th:if="${done.keepRow != null}"><li th:replace="~{admin/fragments/review-queue :: row(${done.keepRow}, true)}"></li></th:block>
+    <span th:each="e : ${done.counts}" th:id="'review-tab-count-' + ${e.key.param()}" class="tab-count" hx-swap-oob="true" th:text="${e.value}">0</span>
+</div>
+</body>
+</html>

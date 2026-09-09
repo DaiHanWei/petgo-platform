@@ -613,3 +613,25 @@ dialog { z-index: 60; }
 .btn { min-width: 88px; white-space: nowrap; }
 .btn-sm { min-width: 0; }
 th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ===== A1 统一复核工作台（Story 2.4） ===== */
+.wb-title-row { display: flex; align-items: center; justify-content: space-between; }
+.review-gear summary { font-size: 18px; }
+.review-filters { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end; }
+.q-row.row-overdue .q-title, .q-row.row-overdue .q-meta { color: var(--danger); }
+.q-thumb { width: 28px; height: 28px; object-fit: cover; border-radius: 4px; vertical-align: middle; margin-right: 6px; }
+.q-link { margin-left: 6px; font-size: var(--fs-xs); }
+.q-meta .badge { padding: 0 6px; }
+.rv-card { margin-bottom: 12px; }
+.rv-text { white-space: pre-wrap; }
+.rv-images { display: flex; flex-wrap: wrap; gap: 8px; }
+.rv-img { width: 120px; height: 120px; object-fit: cover; border-radius: var(--radius-sm); cursor: zoom-in; }
+.rv-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.rv-big { display: block; font-size: 22px; }
+.rv-avatar { width: 96px; height: 96px; object-fit: cover; border-radius: 50%; }
+.rv-avatar--big { width: 160px; height: 160px; }
+.rv-comment { border-left: 3px solid var(--brand-line); padding: 6px 10px; margin: 8px 0; background: var(--brand-tint); }
+.rv-entries { list-style: none; padding: 0; margin: 0; font-size: var(--fs-sm); }
+.rv-entries li { padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.rv-action-group { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.rv-small { font-size: var(--fs-sm); }

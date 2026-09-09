@@ -65,6 +65,13 @@ class AdminPermissionWiringTest {
     private static final Set<String> PENDING_WIRING = Set.of(
             AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST);
 
+    /**
+     * V1.3.0 页面退役后暂留矩阵的码（Story 2.4 AC7：{@code GET /admin/reports} 删除，{@code content.view_reports}
+     * 「仍在矩阵」；入口 {@code QUEUE_AUTH} 按 story 不变）。去留由 Story 11.4「权限矩阵与导航一致性收口」拍板，
+     * 届时要么接线要么摘除并从这里删掉。
+     */
+    private static final Set<String> RETIRED_KEPT = Set.of(AdminPermissions.CONTENT_VIEW_REPORTS);
+
     @Test
     void everyReferencedAuthorityIsRegisteredAndEveryCodeIsWired() throws IOException {
         Path main = Path.of("src", "main");
@@ -120,7 +127,7 @@ class AdminPermissionWiringTest {
                 .allSatisfy(code -> assertThat(AdminPermissions.ALL).contains(code));
 
         // ②：在册的码都有落点（防「勾了也没用」的死码回潮）——PENDING_WIRING 里的预留码暂免。
-        assertThat(AdminPermissions.ALL.stream().filter(c -> !PENDING_WIRING.contains(c)).toList())
+        assertThat(AdminPermissions.ALL.stream().filter(c -> !PENDING_WIRING.contains(c) && !RETIRED_KEPT.contains(c)).toList())
                 .as("AdminPermissions.ALL 存在无任何 hasAuthority 落点的死码（要么接线要么摘除）")
                 .allSatisfy(code -> assertThat(referenced).contains(code));
         // 自清理：预留码一旦接线，必须从 PENDING_WIRING 移除（否则名单会退化成永久豁免）。

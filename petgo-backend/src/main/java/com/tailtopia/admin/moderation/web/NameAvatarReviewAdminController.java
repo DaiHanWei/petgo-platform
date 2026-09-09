@@ -38,9 +38,12 @@ public class NameAvatarReviewAdminController {
     private static final String AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')";
 
     private final AvatarModerationService avatarService;
+    /** V1.3.0 Story 2.4：工作台 htmx 分支的处置 fragment 装配。 */
+    private final com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService workbench;
 
-    public NameAvatarReviewAdminController(AvatarModerationService avatarService) {
+    public NameAvatarReviewAdminController(AvatarModerationService avatarService, com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService workbench) {
         this.avatarService = avatarService;
+        this.workbench = workbench;
     }
 
     /**
@@ -50,15 +53,25 @@ public class NameAvatarReviewAdminController {
      */
     @PostMapping("/admin/avatar-review/{reviewId}/decide")
     @PreAuthorize(AUTH)
-    @ResponseBody
-    public ResponseEntity<String> decideAvatar(@AuthenticationPrincipal AdminUserDetails admin,
+    public Object decideAvatar(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable long reviewId,
             @RequestParam("decision") String decision,
             @RequestParam(value = "category", required = false) String category,
-            @RequestParam(value = "note", required = false) String note) {
+            @RequestParam(value = "note", required = false) String note,
+            com.tailtopia.admin.shared.web.HxRequest hx, org.springframework.ui.Model model,
+            jakarta.servlet.http.HttpServletResponse response) {
         AvatarDecision parsed = parseAvatarDecision(decision);
         avatarService.decide(reviewId, parsed, admin.getAdminAccountId(),
                 new ModerationDecision(category, note));
+        if (hx.isHtmx()) {
+            // V1.3.0 Story 2.4 AC5：工作台 → 处置 fragment；非 htmx 维持纯文本回显。
+            model.addAttribute("done", workbench.afterDispose(hx.currentUrl(),
+                    com.tailtopia.admin.moderation.dto.ReviewTab.AVATAR, reviewId));
+            model.addAttribute("messageKey", parsed == AvatarDecision.VIOLATION
+                    ? "admin.flash.review.avatarViolation" : "admin.flash.review.avatarPass");
+            com.tailtopia.admin.shared.web.AdminFragmentResponses.triggerBadgeRefresh(response);
+            return "admin/fragments/review-done :: done";
+        }
         return ResponseEntity.ok(parsed == AvatarDecision.VIOLATION
                 ? "已判违规：头像已重置为平台默认头像并通知用户"
                 : "已判通过：头像保留");

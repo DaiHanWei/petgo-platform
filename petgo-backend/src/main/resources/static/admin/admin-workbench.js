@@ -57,9 +57,20 @@
             var root = e.detail.target && e.detail.target.firstElementChild;
             if (root && root.hasAttribute('data-next-id')) { selectNext(root); }
         });
+        // 操作区的 POST：HX-Target 头改指壳底部的 #admin-inline-error（复审 #2）。htmx 默认把 hx-target 的 id
+        // （wb-detail-body）放进 HX-Target，AdminBusinessExceptionAdvice 会据此 HX-Retarget → 422/403 把右栏三卡整体
+        // 清空。改成行内错误宿主后：失败只落一行 err、不跳条；成功仍按 hx-target 正常 swap（该头只被服务端错误分支读）。
+        document.body.addEventListener('htmx:configRequest', function (e) {
+            var elt = e.detail && e.detail.elt;
+            if (elt && elt.closest && elt.closest('.wb-actions') && wbOf(elt)) {
+                e.detail.headers['HX-Target'] = 'admin-inline-error';
+            }
+        });
         document.body.addEventListener('htmx:beforeRequest', function (e) {
             var btn = e.detail && e.detail.elt && e.detail.elt.closest ? e.detail.elt.closest('button') : null;
             if (btn && wbOf(btn)) { btn.classList.add('is-loading'); btn.disabled = true; }
+            var host = document.getElementById('admin-inline-error');
+            if (host && btn && wbOf(btn)) { host.textContent = ''; }
         });
         document.body.addEventListener('htmx:afterRequest', function (e) {
             var btn = e.detail && e.detail.elt && e.detail.elt.closest ? e.detail.elt.closest('button') : null;
@@ -79,4 +90,27 @@
             });
         }
     });
+})();
+
+// ===== 工作台操作区（Story 2.4）：拒绝原因未选 → 拒绝钮禁用（常驻，不做二级面板）；违规钮级 data-confirm =====
+(function () {
+    function syncRequires(form) {
+        var sel = form.querySelector('select[name="category"]');
+        var btn = form.querySelector('[data-requires-target]');
+        if (sel && btn) { btn.disabled = !sel.value; }
+    }
+    document.addEventListener('change', function (e) {
+        var form = e.target && e.target.closest ? e.target.closest('form[data-requires]') : null;
+        if (form) { syncRequires(form); }
+    });
+    document.body.addEventListener('htmx:afterSwap', function () {
+        document.querySelectorAll('form[data-requires]').forEach(syncRequires);
+    });
+    // 违规钮（同一表单里有「通过」）：只在点违规时确认。capture 阶段先于 htmx 的 submit 处理。
+    document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('button[data-confirm-button]') : null;
+        if (btn && btn.getAttribute('data-confirm') && !window.confirm(btn.getAttribute('data-confirm'))) {
+            e.preventDefault(); e.stopPropagation();
+        }
+    }, true);
 })();

@@ -54,6 +54,8 @@
         </div>
         <!-- 全站 toast（仅有 ${toast} flash 时出现，admin.js 定时自动消失，bug 346）。 -->
         <div class="toast" role="status" th:if="${toast}" th:text="${toast}">toast</div>
+        <!-- htmx 处置 fragment 的 toast 宿主（hx-swap-oob="beforeend:#admin-toast-host"，admin-core.js 计时消失）。 -->
+        <div id="admin-toast-host"></div>
         <div th:replace="${content}">页面内容占位</div>
     </main>
     <!-- CSRF（供 admin-core.js 的 htmx:configRequest 统一注入；fetch 上传页仍各自保留 <meta name="_csrf">） -->

@@ -12,6 +12,12 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.tailtopia.admin.moderation.dto.TicketStatusBucket;
 import com.tailtopia.admin.moderation.dto.TicketType;
 import com.tailtopia.admin.moderation.service.UnifiedTicketQueryService;
+import com.tailtopia.admin.moderation.dto.ReviewFilters;
+import com.tailtopia.admin.moderation.dto.ReviewTab;
+import com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService;
+import com.tailtopia.admin.shared.web.AdminFragmentResponses;
+import com.tailtopia.admin.shared.web.HxRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -70,69 +76,81 @@ public class ManualReviewAdminController {
     private final ManualReviewService reviewService;
     private final AdminSettingsService settingsService;
     private final UnifiedTicketQueryService ticketQuery;
+    /** V1.3.0 Story 2.4：模板 A 工作台的只读装配（页签计数 / 两态队列 / 三卡 / 下一条）。 */
+    private final ManualReviewWorkbenchService workbench;
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
 
     public ManualReviewAdminController(ManualReviewService reviewService,
             AdminSettingsService settingsService, UnifiedTicketQueryService ticketQuery,
-            Messages msg) {
+            ManualReviewWorkbenchService workbench, Messages msg) {
         this.reviewService = reviewService;
         this.settingsService = settingsService;
         this.ticketQuery = ticketQuery;
+        this.workbench = workbench;
         this.msg = msg;
     }
 
+    /**
+     * 工作台整页（V1.3.0 Story 2.4，模板 A）。参数：{@code tab}（submission/report/name/avatar，默认送审）、
+     * {@code state}（pending/handled）、{@code subType}（user/pet）、{@code priority}、{@code category}、{@code q}、{@code page}。
+     * 旧链接 {@code ?type=CONTENT_REPORT} / {@code ?status=} 继续被接受（映射到页签 / 两态）。
+     * htmx 请求（滚动加载下一页）只回左栏行片段。
+     */
     @GetMapping("/admin/manual-review")
     @PreAuthorize(QUEUE_AUTH)
     public String queue(
+            @RequestParam(value = "tab", required = false) String tab,
             @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "state", required = false) String state,
             @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "subType", required = false) String subType,
+            @RequestParam(value = "priority", required = false) String priority,
+            @RequestParam(value = "category", required = false) String category,
             @RequestParam(value = "q", required = false) String q,
             @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestHeader(value = "HX-Request", required = false) String hxRequest,
-            Model model) {
+            HxRequest hx, Model model) {
         model.addAttribute("active", "manual-review");
-        // ⚠️ 这个开关管的是**内容发布要不要走人工审核这道关**（默认关＝机器判完直接发布），
-        // 不是页面开关。下面的复核列表与它无关、始终显示。按钮本身仅超管可见（模板 sec:authorize）。
+        // ⚠️ 这个开关管的是**内容发布要不要走人工审核这道关**（默认关＝机器判完直接发布），不是页面开关（齿轮弹层，仅超管）。
         model.addAttribute("manualReviewEnabled", settingsService.isManualReviewEnabled());
-
-        // 复核列表（2026-08-19 从工单队列页移入）：内容举报 + 账号标识字段混排，按类型筛选。
-        TicketType typeFilter = parseTicketType(type);
-        TicketStatusBucket statusFilter = parseStatusBucket(status);
-        model.addAttribute("result", ticketQuery.search(SCOPE, typeFilter, statusFilter, q,
-                PageRequest.of(Math.max(page, 0), PAGE_SIZE)));
-        model.addAttribute("types", SCOPE.toArray(new TicketType[0]));
-        model.addAttribute("statuses", TicketStatusBucket.values());
-        model.addAttribute("type", typeFilter == null ? null : typeFilter.name());
-        model.addAttribute("status", statusFilter == null ? null : statusFilter.name());
-        model.addAttribute("q", q);
-
-        return hxRequest != null ? "admin/manual-review :: rows" : "admin/manual-review";
+        ReviewFilters filters = ReviewFilters.of(tab, type, state, status, subType, priority, category, q, page);
+        populateQueue(filters, model);
+        return hx.isHtmx() ? "admin/fragments/review-queue :: rows" : "admin/manual-review";
     }
 
-    /** 非法/超出作用域的类别一律当「不筛选」，绝不让改 URL 把整页打成 500。 */
-    private static TicketType parseTicketType(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            TicketType t = TicketType.valueOf(raw.trim());
-            return SCOPE.contains(t) ? t : null;
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
+    /** 左栏队列 fragment（切页签 / 切两态 / 筛选 / 滚动翻页）。 */
+    @GetMapping("/admin/manual-review/queue")
+    @PreAuthorize(QUEUE_AUTH)
+    public String queueFragment(
+            @RequestParam(value = "tab", required = false) String tab,
+            @RequestParam(value = "state", required = false) String state,
+            @RequestParam(value = "subType", required = false) String subType,
+            @RequestParam(value = "priority", required = false) String priority,
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            Model model) {
+        populateQueue(ReviewFilters.of(tab, null, state, null, subType, priority, category, q, page), model);
+        return page > 0 ? "admin/fragments/review-queue :: rows" : "admin/fragments/review-queue :: list";
     }
 
-    private static TicketStatusBucket parseStatusBucket(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return TicketStatusBucket.valueOf(raw.trim());
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
+    /** 右栏三卡 fragment。 */
+    @GetMapping("/admin/manual-review/{itemId}/detail")
+    @PreAuthorize(QUEUE_AUTH)
+    public String detail(@PathVariable long itemId, @RequestParam(value = "tab", required = false) String tab,
+            Model model) {
+        model.addAttribute("d", workbench.detail(ReviewTab.fromParam(tab), itemId));
+        model.addAttribute("categories", com.tailtopia.moderation.domain.ReportReason.values());
+        return "admin/fragments/review-detail :: detail";
+    }
+
+    private void populateQueue(ReviewFilters filters, Model model) {
+        model.addAttribute("filters", filters);
+        model.addAttribute("tabs", ReviewTab.values());
+        model.addAttribute("counts", workbench.counts(filters));
+        model.addAttribute("queue", workbench.queue(filters));
+        model.addAttribute("categories", com.tailtopia.moderation.domain.ReportReason.values());
     }
 
     @PostMapping("/admin/settings/manual-review")
@@ -147,7 +165,12 @@ public class ManualReviewAdminController {
     @PostMapping("/admin/manual-review/{itemId}/approve")
     @PreAuthorize(DECIDE_AUTH)
     public String approve(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long itemId,
-            RedirectAttributes flash) {
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            // Story 2.4 AC5：htmx 分支不 try/catch（422/403 由 AdminBusinessExceptionAdvice 出 fragment）
+            reviewService.approve(itemId, admin.getAdminAccountId());
+            return done(hx, ReviewTab.SUBMISSION, itemId, msg.get("admin.flash.review.approved"), model, response);
+        }
         try {
             reviewService.approve(itemId, admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.review.approved"));
@@ -162,7 +185,11 @@ public class ManualReviewAdminController {
     public String reject(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long itemId,
             @RequestParam(value = "category", required = false) String category,
             @RequestParam(value = "note", required = false) String note,
-            RedirectAttributes flash) {
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            reviewService.reject(itemId, admin.getAdminAccountId(), new ModerationDecision(category, note));
+            return done(hx, ReviewTab.SUBMISSION, itemId, msg.get("admin.flash.review.rejected"), model, response);
+        }
         try {
             // story 8 §5.2：判定依据 + 备注折叠进 append-only 审计（service 内落，无内容原文）。
             reviewService.reject(itemId, admin.getAdminAccountId(), new ModerationDecision(category, note));
@@ -177,7 +204,17 @@ public class ManualReviewAdminController {
     @PostMapping("/admin/manual-review/{itemId}/priority")
     @PreAuthorize(DECIDE_AUTH)
     public String changePriority(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long itemId,
-            @RequestParam("priority") String priority, RedirectAttributes flash) {
+            @RequestParam("priority") String priority, HxRequest hx, Model model, HttpServletResponse response,
+            RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            // 改优先级停留本条：返回刷新后的右栏三卡 + toast，不推进下一条（AC4）。
+            reviewService.changePriority(itemId, parsePriority(priority), admin.getAdminAccountId());
+            model.addAttribute("d", workbench.detail(ReviewTab.SUBMISSION, itemId));
+            model.addAttribute("categories", com.tailtopia.moderation.domain.ReportReason.values());
+            model.addAttribute("toast", msg.get("admin.flash.review.priorityChanged", priority.trim().toUpperCase()));
+            AdminFragmentResponses.triggerBadgeRefresh(response);
+            return "admin/fragments/review-detail :: detail";
+        }
         try {
             reviewService.changePriority(itemId, parsePriority(priority), admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.review.priorityChanged", priority.trim().toUpperCase()));
@@ -185,6 +222,15 @@ public class ManualReviewAdminController {
             flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/manual-review";
+    }
+
+    /** 处置成功 fragment：data-next-id + 行 oob 删除 + 页签计数 oob + toast + HX-Trigger 刷角标（AC5）。 */
+    private String done(HxRequest hx, ReviewTab tab, long sourceId, String message, Model model,
+            HttpServletResponse response) {
+        model.addAttribute("done", workbench.afterDispose(hx.currentUrl(), tab, sourceId));
+        model.addAttribute("message", message);
+        AdminFragmentResponses.triggerBadgeRefresh(response);
+        return "admin/fragments/review-done :: done";
     }
 
     private static ReviewPriority parsePriority(String raw) {

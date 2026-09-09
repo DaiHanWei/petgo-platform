@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  工作台右栏三卡（V1.3.0 Story 2.4 AC3/AC4/AC8）：① 对象快照 ② 上下文 ③ 操作区（选择参数类操作常驻，未选全按钮禁用）。
+  处置端点 / 参数 / 权限与现状逐字一致；htmx 提交带 HX-Request，成功回 review-done（data-next-id）。
+  已删除 / 已注销 → 只读作废态；有入口权限无处置权限 → 按钮禁用 + 所缺权限名。
+-->
+<body>
+<div th:fragment="detail" class="rv-detail" th:attr="data-tab=${d.tab.param()},data-source-id=${d.sourceId}">
+    <div class="toast" role="status" th:if="${toast}" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">toast</div>
+
+    <!-- ① 对象快照卡 -->
+    <section class="card card-full rv-card rv-snapshot">
+        <h2 th:text="#{admin.v130.review.card.snapshot}">对象快照</h2>
+        <div class="rv-author muted">
+            <span th:text="${d.targetNickname ?: #messages.msg('admin.review.subject.deactivated')}" th:classappend="${d.targetDeleted} ? 'muted'">昵称</span>
+            <span th:if="${d.targetUserId != null}" th:text="'#' + ${d.targetUserId}">#0</span>
+            <span class="badge badge-danger" th:if="${d.targetDeleted}" th:text="#{admin.review.subject.deactivated}">账号已注销</span>
+            <span class="badge badge-neutral" th:if="${d.subType != null}" th:text="${d.subType}">SUB</span>
+            <span class="badge badge-danger" th:if="${d.overdue}" th:text="#{admin.review.overdue}">超 24h</span>
+        </div>
+        <!-- 送审 / 举报：帖全文 + 图片 -->
+        <th:block th:if="${d.tab.name() == 'SUBMISSION' or d.tab.name() == 'REPORT'}">
+            <p class="err" th:if="${d.contentDeleted}" th:text="#{admin.v130.review.contentDeleted}">内容已删除</p>
+            <blockquote class="rv-comment" th:if="${d.commentBody != null}" th:text="${d.commentBody}">评论正文</blockquote>
+            <div th:if="${d.post != null}">
+                <p class="rv-text" th:text="${d.post.text}">帖子全文</p>
+                <div class="rv-images">
+                    <img th:each="u : ${d.post.imageUrls}" th:src="${u}" alt="" loading="lazy" data-lightbox class="rv-img"/>
+                </div>
+                <a th:if="${d.contentRefId != null}" target="_blank" th:href="@{'/admin/content/' + ${d.contentRefId}}"
+                   sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')"
+                   th:text="#{admin.review.viewContent}">查看内容</a>
+            </div>
+        </th:block>
+        <!-- 名称：新旧对照 -->
+        <div th:if="${d.tab.name() == 'NAME'}" class="rv-compare">
+            <div><span class="muted" th:text="#{admin.v130.review.name.submitted}">待审名称</span><strong class="rv-big" th:text="${d.submittedValue}">待审名</strong></div>
+            <div><span class="muted" th:text="#{admin.v130.review.name.current}">当前生效</span><span th:text="${d.currentValue ?: '—'}">旧名</span></div>
+        </div>
+        <!-- 头像：待审大图 + 当前对照 -->
+        <div th:if="${d.tab.name() == 'AVATAR'}" class="rv-compare">
+            <div><span class="muted" th:text="#{admin.v130.review.avatar.submitted}">待审头像</span><br/>
+                <img th:if="${d.submittedAvatarUrl != null}" th:src="${d.submittedAvatarUrl}" alt="" data-lightbox class="rv-avatar rv-avatar--big"/></div>
+            <div><span class="muted" th:text="#{admin.v130.review.avatar.current}">当前生效</span><br/>
+                <img th:if="${d.currentAvatarUrl != null}" th:src="${d.currentAvatarUrl}" alt="" data-lightbox class="rv-avatar"/>
+                <span th:if="${d.currentAvatarUrl == null}">—</span></div>
+        </div>
+    </section>
+
+    <!-- ② 上下文卡 -->
+    <section class="card card-full rv-card rv-context">
+        <h2 th:text="#{admin.v130.review.card.context}">上下文</h2>
+        <div class="sum">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.tickets.col.score}">优先级分</div><div class="sum-value" th:text="${d.priority ?: ''}">P1</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.tickets.col.disposals}">历史处置</div><div class="sum-value" th:text="${d.disposalCount}">0</div></div>
+            <div class="sum-item" th:if="${d.tab.name() == 'REPORT'}"><div class="sum-label" th:text="#{admin.tickets.col.reports}">举报数</div><div class="sum-value" th:text="${#lists.size(d.entries)}">0</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.review.col.earliest}">最早时间</div><div class="sum-value rv-small" th:text="${@adminTime.wib(d.earliestAt)}">时间</div></div>
+        </div>
+        <p class="muted" th:if="${d.tab.name() == 'SUBMISSION'}" th:text="#{admin.v130.review.machineReason}">机审判定：拿不准，送人工复核</p>
+        <ul th:if="${d.tab.name() == 'REPORT' and !#lists.isEmpty(d.entries)}" class="rv-entries">
+            <li th:each="e : ${d.entries}">
+                <span th:text="${e.reporterNickname ?: #messages.msg('admin.review.subject.deactivated')}">举报人</span>
+                <span class="muted" th:if="${e.reporterId != null}" th:text="'#' + ${e.reporterId}">#0</span>
+                <code th:text="${e.reason}">REASON</code>
+                <span class="muted" th:text="${@adminTime.wib(e.createdAt)}">-</span>
+            </li>
+        </ul>
+    </section>
+
+    <!-- ③ 操作区 -->
+    <section class="wb-actions rv-actions" th:with="url='/admin/manual-review'">
+        <p class="muted" th:unless="${d.pending()}" th:text="#{admin.v130.review.readonly}">已处理，只读回看</p>
+        <th:block th:if="${d.pending() and !d.targetDeleted}">
+            <!-- 内容送审：通过 / 拒绝（原因常驻，未选禁用）/ 调优先级 -->
+            <th:block th:if="${d.tab.name() == 'SUBMISSION'}">
+                <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')" class="rv-action-group">
+                    <form th:attr="hx-post=@{/admin/manual-review/{id}/approve(id=${d.sourceId})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline">
+                        <button type="submit" class="btn btn-primary" th:text="#{admin.review.approve}">通过（放行发布）</button>
+                    </form>
+                    <form th:attr="hx-post=@{/admin/manual-review/{id}/reject(id=${d.sourceId})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline rv-reject" data-requires="category">
+                        <select name="category" class="sel" required aria-label="category">
+                            <option value="" th:text="#{admin.review.reject.category}">选择原因</option>
+                            <option value="ILLEGAL" th:text="#{admin.review.cat.illegal}">违法</option>
+                            <option value="HATE" th:text="#{admin.review.cat.hate}">仇恨</option>
+                            <option value="PORN" th:text="#{admin.review.cat.porn}">色情</option>
+                            <option value="POLITICAL" th:text="#{admin.review.cat.political}">政治敏感</option>
+                            <option value="AD" th:text="#{admin.review.cat.ad}">广告引流</option>
+                            <option value="HARASSMENT" th:text="#{admin.review.cat.harassment}">骚扰</option>
+                            <option value="OTHER" th:text="#{admin.review.cat.other}">其他</option>
+                        </select>
+                        <input type="text" name="note" class="inp" th:placeholder="#{admin.review.reject.note}"/>
+                        <button type="submit" class="btn btn-danger" disabled data-requires-target th:text="#{admin.review.reject}">拒绝（丢弃）</button>
+                    </form>
+                    <form th:attr="hx-post=@{/admin/manual-review/{id}/priority(id=${d.sourceId})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline">
+                        <select name="priority" class="sel" aria-label="priority">
+                            <option th:each="p : ${ {'P0','P1','P2'} }" th:value="${p}" th:selected="${p == d.priority}" th:text="${p}">P0</option>
+                        </select>
+                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.review.priority.change}">改优先级</button>
+                    </form>
+                </div>
+                <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.takedown') or hasAuthority('content.manual_review'))"
+                   th:text="#{admin.v130.err.forbidden(#{perm.content.manual_review})}">需要权限</p>
+            </th:block>
+            <!-- 内容举报：下架（confirm）/ 无需处置 / 整帖一键驳回（confirm 复述条数） -->
+            <th:block th:if="${d.tab.name() == 'REPORT'}">
+                <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')" class="rv-action-group">
+                    <form th:if="${d.actionRef != null}" th:attr="hx-post=@{/admin/reports/{id}/takedown(id=${d.actionRef})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline"
+                          th:data-confirm="#{admin.tickets.confirm.takedown}">
+                        <button type="submit" class="btn btn-danger" th:disabled="${d.contentDeleted}"
+                                th:title="${d.contentDeleted} ? #{admin.v130.review.contentDeleted} : null" th:text="#{admin.review.act.takedown}">下架</button>
+                    </form>
+                    <form th:if="${d.actionRef != null}" th:attr="hx-post=@{/admin/reports/{id}/dismiss(id=${d.actionRef})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline">
+                        <button type="submit" class="btn btn-neutral" th:text="#{admin.review.act.dismiss}">无需处置</button>
+                    </form>
+                    <form th:attr="hx-post=@{/admin/reports/post/{id}/dismiss-all(id=${d.sourceId})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline"
+                          th:data-confirm="#{admin.v130.review.confirm.dismissAll}" th:data-confirm-args="${d.pendingEntries}">
+                        <button type="submit" class="btn btn-neutral" th:text="#{admin.tickets.action.dismissContent}">整帖一键驳回</button>
+                    </form>
+                </div>
+                <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.takedown'))"
+                   th:text="#{admin.v130.err.forbidden(#{perm.content.takedown})}">需要权限</p>
+            </th:block>
+            <!-- 名称 / 头像：通过 / 违规（违规 confirm） -->
+            <th:block th:if="${d.tab.name() == 'NAME' or d.tab.name() == 'AVATAR'}">
+                <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')" class="rv-action-group">
+                    <form th:attr="hx-post=${d.tab.name() == 'NAME'} ? @{/admin/name-moderation/{id}/decide(id=${d.sourceId})} : @{/admin/avatar-review/{id}/decide(id=${d.sourceId})}"
+                          hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline rv-decide">
+                        <select name="category" class="sel" aria-label="category">
+                            <option value="ILLEGAL" th:text="#{admin.review.cat.illegal}">违法</option>
+                            <option value="HATE" th:text="#{admin.review.cat.hate}">仇恨</option>
+                            <option value="PORN" th:text="#{admin.review.cat.porn}">色情</option>
+                            <option value="POLITICAL" th:text="#{admin.review.cat.political}">政治敏感</option>
+                            <option value="AD" th:text="#{admin.review.cat.ad}">广告引流</option>
+                            <option value="HARASSMENT" th:text="#{admin.review.cat.harassment}">骚扰</option>
+                            <option value="OTHER" selected th:text="#{admin.review.cat.other}">其他</option>
+                        </select>
+                        <input type="text" name="note" class="inp" th:placeholder="#{admin.review.reject.note}"/>
+                        <button type="submit" name="decision" value="PASS" class="btn btn-neutral" th:text="#{admin.review.act.pass}">通过</button>
+                        <button type="submit" name="decision" value="VIOLATION" class="btn btn-danger" data-confirm-button
+                                th:attr="data-confirm=${d.tab.name() == 'NAME'} ? #{admin.v130.review.confirm.violationName} : #{admin.v130.review.confirm.violationAvatar}"
+                                th:text="${d.tab.name() == 'NAME'} ? #{admin.review.act.violationName} : #{admin.review.act.violationAvatar}">违规</button>
+                    </form>
+                </div>
+                <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.takedown'))"
+                   th:text="#{admin.v130.err.forbidden(#{perm.content.takedown})}">需要权限</p>
+            </th:block>
+        </th:block>
+        <p class="muted" th:if="${d.pending() and d.targetDeleted}" th:text="#{admin.v130.review.targetDeleted}">对象已注销，单据作废（只读）</p>
+    </section>
+</div>
+</body>
+</html>

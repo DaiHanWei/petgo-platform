@@ -67,7 +67,7 @@ class NameAvatarReviewAccessControlTest {
 
         @Bean
         NameAvatarReviewAdminController controller(AvatarModerationService a) {
-            return new NameAvatarReviewAdminController(a);
+            return new NameAvatarReviewAdminController(a, mock(com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService.class));
         }
     }
 
@@ -100,7 +100,8 @@ class NameAvatarReviewAccessControlTest {
     }
 
     private void decideAvatar() {
-        controller.decideAvatar(admin(), 5L, "PASS", "OTHER", null);
+        controller.decideAvatar(admin(), 5L, "PASS", "OTHER", null, com.tailtopia.admin.shared.web.HxRequest.NONE,
+                new org.springframework.ui.ConcurrentModel(), new org.springframework.mock.web.MockHttpServletResponse());
     }
 
     @Test

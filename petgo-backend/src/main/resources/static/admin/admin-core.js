@@ -150,11 +150,27 @@ document.addEventListener('DOMContentLoaded', function () {
         if (typeof d.showModal === 'function') d.showModal();
     });
     // Toast 自动消失（bug 346）：3s 淡出、3.4s 移除。
-    document.querySelectorAll('.toast').forEach(function (t) {
-        setTimeout(function () { t.classList.add('hide'); }, 3000);
-        setTimeout(function () { t.remove(); }, 3400);
+    document.querySelectorAll('.toast').forEach(armToast);
+    // V1.3.0 Story 2.4 复审 #6：htmx swap / oob 进来的 toast 同样计时（处置 fragment 把 toast oob 到 #admin-toast-host）。
+    document.body.addEventListener('htmx:afterSwap', function (e) {
+        var t = e.detail && e.detail.target;
+        if (!t || !t.querySelectorAll) { return; }
+        t.querySelectorAll('.toast').forEach(armToast);
+    });
+    document.body.addEventListener('htmx:oobAfterSwap', function (e) {
+        var t = e.detail && e.detail.target;
+        if (!t || !t.querySelectorAll) { return; }
+        t.querySelectorAll('.toast').forEach(armToast);
+        if (t.classList && t.classList.contains('toast')) { armToast(t); }
     });
 });
+
+function armToast(t) {
+    if (!t || t.getAttribute('data-toast-armed')) { return; }
+    t.setAttribute('data-toast-armed', '1');
+    setTimeout(function () { t.classList.add('hide'); }, 3000);
+    setTimeout(function () { t.remove(); }, 3400);
+}
 
 // ===== 工单批量勾选（V1.1.4 Story 3.3）=====
 // ⚠️ 本文件是**全后台共享**的，所以这一段全部用 [data-batch-scope] 限定作用域，

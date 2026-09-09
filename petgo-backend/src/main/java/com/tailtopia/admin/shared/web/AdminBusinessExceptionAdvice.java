@@ -38,7 +38,8 @@ import org.springframework.web.servlet.ModelAndView;
  * <p>htmx 请求下各页 Controller 的分支<b>不再 try/catch</b>，直接让 AppException 冒出来；整页 PRG 分支照旧。
  * 浏览器端 422/403 能 swap 依赖 Story 2.2 在 admin-core.js 加的 {@code htmx:beforeSwap} 放行。
  */
-@ControllerAdvice(basePackages = "com.tailtopia.admin")
+// namemoderation.web：名称审核的处置端点被统一复核工作台以 htmx 调用（Story 2.4），须同样出 422/403 fragment。
+@ControllerAdvice(basePackages = {"com.tailtopia.admin", "com.tailtopia.namemoderation.web"})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class AdminBusinessExceptionAdvice {
 

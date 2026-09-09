@@ -58,7 +58,7 @@ class AdminVetsAccessControlTest {
                     mock(com.tailtopia.admin.dashboard.service.AdminDashboardService.class),
                     mock(com.tailtopia.admin.virtual.service.AdminVirtualAccountService.class),
                     TestMessages.real(),
-                    mock(com.tailtopia.admin.virtual.service.AdminPublishIdentityService.class));
+                    mock(com.tailtopia.admin.virtual.service.AdminPublishIdentityService.class), mock(com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService.class));
         }
     }
 
