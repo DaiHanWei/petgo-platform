@@ -252,7 +252,7 @@ So that 账号移交或收权不会留下几个小时的空窗。
 **Then** 新增 `security_version INT NOT NULL DEFAULT 0`，存量全为 0 `[L1]`
 
 **Given** 账号 A 已登录（会话内记录登录时的 `security_version`）
-**When** 任一写操作使 A 的版本号 +1（停用、改角色、改账号级权限；换绑邮箱与角色模板改权限由后续 story 接入同一方法 `bumpSecurityVersion`）
+**When** 任一写操作使 A 的版本号 +1（本 story 接入停用、改角色、改账号级权限，并暴露 `bumpSecurityVersion(accountId)` 供换绑（1.3）与角色模板改权限（1.5）调用）
 **Then** A 的下一次任何 `/admin/**` 请求被 `AdminSessionGuardFilter` 拦截：会话失效、跳 `/admin/login?relogin` `[L1]`
 **And** 登录页显示三语提示「账号信息已变更，请重新登录」（key `admin.v130.login.relogin`） `[L1]`
 **And** 版本号比对复用过滤器现有的每请求查库，不新增查询 `[L0]`
@@ -429,22 +429,36 @@ So that 找页面不用记旧分组，也不会把测试环境当生产误操作
 **And** `admin.js` 拆为 `admin-core.js`（现状能力 + `htmx:beforeSwap` 对 422/403 放行 + CSRF 注入），全部现有页面回归 `[L1]`
 **And** 新增 `scripts/ci/check-i18n-keys.sh`，三包 key 集合不等即失败，接入 CI `[L0]`
 
-### Story 2.3：五套模板壳、抽屉与 htmx 响应约定（AD-9 / AD-11）
+### Story 2.3a：htmx 响应约定与 admin/shared 横切件（AD-9）
 
 As a 后续每个页面的实现者，
-I want 一套现成的 A/B/C/D/E 模板 fragment、抽屉 JS 和统一的 fragment 响应 / 错误呈现机制，
-So that 49 页只填内容不重写壳，交互口径一致。
+I want 一套统一的 fragment 响应、错误呈现、WIB 格式化与导出工具，
+So that 49 页的交互口径与导出格式一致。
+
+**Acceptance Criteria:**
+
+**Given** `admin/shared/web/`
+**When** 落 `HxRequest` 参数解析器与 `AdminBusinessExceptionAdvice`
+**Then** `HX-Request` 下 422 返操作区 fragment（行内 err）、403 返禁用态 fragment 注明所缺权限名；非 htmx 请求维持现状 PRG 与错误页 `[L1]`
+**And** `admin-core.js` 增 `htmx:beforeSwap` 对 422/403 放行 swap；`HX-Trigger: admin:badge-refresh` 触发 `GET /admin/nav/badges`（`AdminNavController`，单条聚合查询）替换角标片段 `[L1]`
+**And** `admin/shared/time/AdminTime`（WIB `yyyy-MM-dd HH:mm`）与 `admin/shared/export/AdminExportWriter`（POI xlsx / RFC 4180 csv / 表头随 locale / 前导 `=` 防注入）+ 单测 `[L0]`
+**And** `admin/shared/AdminPageCatalog`（Story 1.5 引入）迁至此包，作为导航、权限矩阵、写操作清单的唯一页面目录 `[L0]`
+**And** MockMvc 范式测试：任取一个既有 Controller 加 `HX-Request` 头验证四条（整页 200 / fragment / 422 / 403）`[L1]`
+
+### Story 2.3b：五套模板壳、抽屉与工作台 JS（AD-11）
+
+As a 后续每个页面的实现者，
+I want 现成的 A/B/C/D/E 五套模板 fragment、抽屉与工作台 JS、CSS 底座，
+So that 页面只填内容不重写壳。
 
 **Acceptance Criteria:**
 
 **Given** `templates/admin/fragments/`
-**When** 落 `tpl-a-workbench` / `tpl-b-list` / `tpl-c-report` / `tpl-d-config-card` / `tpl-e-steps` 五个壳
+**When** 落 `tpl-a-workbench` / `tpl-b-list` / `tpl-c-report` / `tpl-d-config-card` / `tpl-e-steps`
 **Then** 槽位固定（A：tabs/filters/queue/detail/actions；B：filters/summary/table/drawer；C：range/cards/detail；D：cards[]；E：steps/body/footer），Thymeleaf 渲染单测各一 `[L0]`
-**And** `admin/shared/web/`：`HxRequest` 参数解析器、`AdminBusinessExceptionAdvice`（`HX-Request` 下 422 返操作区 fragment，403 返禁用态 fragment 注明所缺权限名；非 htmx 请求维持现状）`[L1]`
-**And** `admin/shared/time/AdminTime`（WIB `yyyy-MM-dd HH:mm`）与 `admin/shared/export/AdminExportWriter`（POI xlsx / RFC 4180 csv / 表头随 locale / 前导 `=` 防注入）+ 单测 `[L0]`
 **And** `admin-drawer.js`（`GET …/{id}/drawer` 开合、ESC 关闭、`?open=<id>` 自动开）与 `admin-workbench.js`（读 `data-next-id` 自动选中下一条、<1024 两屏切换、无键盘 ↑/↓）`[L2]`
 **And** `admin.css` 补五壳样式与 UX-DR11 组件底座修正（`.sel/.inp` display、`.sel` 箭头、`.sum` 抽屉内 2×2）、UX-DR12 三语占位规则 `[L2]`
-**And** `HX-Trigger: admin:badge-refresh` → 前端请求 `GET /admin/nav/badges`（`AdminNavController`）替换角标片段 `[L1]`
+**And** 依赖 2.3a 的 fragment 响应约定；本 story 不改任何业务页 `[L0]`
 
 ### Story 2.4：A1 统一复核工作台
 
@@ -463,6 +477,7 @@ So that 早巡不用在四个页面间来回点。
 **And** `reports.html` 与 `GET /admin/reports` 页面路由退役，`reports/**` 处置端点保留供页签调用 `[L1]`
 **And** 边界：被审对象已删占位仍可处置举报；账号已注销单据只读 `[L1]`
 **And** 页签结构可扩展，场所举报页签由 Story 5.4 追加 `[L0]`
+**And** 依赖 2.3a / 2.3b 的约定与壳 `[L0]`
 
 ### Story 2.5：A2 被举报用户
 
@@ -618,7 +633,7 @@ So that 数据既不泄露也可信。
 
 **Acceptance Criteria:**
 
-**Given** 登录账号无支付记录页同码权限
+**Given** 登录账号无 `payment.view`（支付记录页同码）
 **When** 打开首页
 **Then** 付费卡不渲染，其余四卡正常；有权限则渲染（D-17）`[L1]`
 **And** 看板所有后台账号可进（与现首页一致，不新增 permission_code）`[L1]`
@@ -673,7 +688,7 @@ So that 运营不会漏掉「已读不回」。
 **Given** 迁移 `V<ts>__init_warm_reply_followups.sql`
 **When** 执行
 **Then** 表含 `virtual_comment_id, post_id, virtual_user_id, pending_reply_count, last_reply_id, last_reply_at, status PENDING|HANDLED, handled_by, handled_at, handled_action REPLIED|READ`，部分唯一索引 `(virtual_comment_id) WHERE status='PENDING'` `[L1]`
-**And** `WarmReplyEnqueueListener` 监听 `ContentCommentedEvent`（AFTER_COMMIT + REQUIRES_NEW）：`parentAuthorId` 为合成账号且 `commenterId` 非合成 → 新建或累加 PENDING 项 `[L1]`
+**And** `WarmReplyEnqueueListener` 监听 `ContentCommentedEvent`（AFTER_COMMIT + REQUIRES_NEW）：`parentAuthorId` 为合成账号且 `commenterId` 非合成 → 新建或累加 PENDING 项；该事件仅在回复转 VISIBLE 时发布（机审通过或人工 approve），审核中的回复不入队 `[L1]`
 **And** 监听评论删除 / 下架事件：对应项 `pending_reply_count` 减一，归零删除（D-19）`[L1]`
 **And** 二级虚拟评论被回复不入队（结构限制，D-35）`[L0]`
 
@@ -755,7 +770,7 @@ So that 冷启动有数据、违规场所有出口。
 
 ## Epic 6：运营配置增强（定价、档位、算法参数）
 
-改护照两款样式解锁价、新建充值档位、折叠区重新启用档位；算法参数页整改；配置与安全组页面套模板 B/D，审计页改 WIB。
+改护照两款样式解锁价、新建充值档位、折叠区重新启用档位；算法参数页整改；配置与安全组页面套模板 B/D，审计页改 WIB。（D1 运费配置属商城组，见 Story 10.6）
 
 ### Story 6.1：KTP 模块高清图解锁定价三行（AB-18A）
 
@@ -815,18 +830,15 @@ So that 页面清爽、历史可查。
 **And** 「变更记录」按钮 → 抽屉（`GET /admin/algo-params/changes/drawer`），按参数 / 时间段筛选，数据来自既有变更日志表，不再常驻页尾（D-10）`[L1]`
 **And** 权限现状不动（不对普通运营开放）`[L1]`
 
-### Story 6.5：D1 运费配置、B23 操作审计（WIB）、B24 / D6 套模板
+### Story 6.5：B23 操作审计（WIB）、B24 后台账号 / D6 角色配置套模板
 
 As a 运营与超管，
-I want 配置与安全组其余页面（运费配置、操作审计、后台账号、角色配置）视觉与交互统一，审计页时间也按印尼时间显示，
+I want 配置与安全组其余页面（操作审计、后台账号、角色配置）视觉与交互统一，审计页时间也按印尼时间显示，
 So that 这一组从头到尾一个样。
 
 **Acceptance Criteria:**
 
-**Given** `/admin/shop/shipping` 套模板 D
-**When** 打开
-**Then** 三卡（可配送区域行内编辑 + 新增行 + 启停开关 / 免运门槛 / 退货收件地址）各自保存钮；`shop.*` 权限沿用 `[L2]`
-**And** `/admin/audit-logs` 套模板 B 只读：时间列 **WIB**（D-22，`AdminTime`），存储与哈希链复算仍用 UTC；页头哈希链校验状态徽标；筛选 + 显式查询钮 `[L1]`
+**Given** `/admin/audit-logs` 套模板 B 只读：时间列 **WIB**（D-22，`AdminTime`），存储与哈希链复算仍用 UTC；页头哈希链校验状态徽标；筛选 + 显式查询钮 `[L1]`
 **And** `/admin/accounts`（Epic 1 功能）套模板 B：行内操作归入抽屉，权限面板按 `AdminPageCatalog` 8 组重排（Story 1.6 已实现分组，本处套壳）`[L2]`
 **And** `/admin/roles` 套模板 B 列表 + 整页权限矩阵（矩阵不进窄抽屉，UI 稿 7-8～7-10）`[L2]`
 
@@ -958,17 +970,27 @@ So that 与其他列表页一致。
 
 兽医账号页吸收编辑、资质、在线状态、评分为抽屉页签；未成功请求、历史会话查询套模板 B；两组合一组置后。
 
-### Story 9.1：B20 兽医账号——列表 + 四页签抽屉 + 开户流程
+### Story 9.1a：B20 兽医账号——列表、资料 / 账号页签、开户
 
 **Acceptance Criteria:**
 
 **Given** `/admin/vets` 套模板 B
 **When** 打开
 **Then** 摘要条兽医总数 · 在线数 · 资质待审 · 已封禁；列 ID / 昵称 / 账号 / 状态 / 资质态 / 在线 / 评分 / **最后在线** / 创建日期 `[L1]`
-**And** 抽屉四页签：资料（昵称 / 邮箱 / 手机 / 头像上传，`vet.edit`）｜ 资质（KTP / SIPDH / STRV 编号·机构·有效期·证图 + 学位证 / PDHI / 专长；直录 / 续期；通过 / 驳回必填理由，`vet.qualify`）｜ 评分（原 `ratings` 页明细并入，`rating.view`）｜ 账号（重置密码 ≥8 位 data-confirm、封禁 / 解封 data-confirm）`[L2]`
+**And** 抽屉页签：资料（昵称 / 邮箱 / 手机 / 头像上传，`vet.edit`）｜ 账号（重置密码 ≥8 位 data-confirm、封禁 / 解封 data-confirm）；资质与评分页签占位由 9.1b 填充 `[L2]`
 **And** 开户：右上按钮 → 抽屉表单（昵称 / 邮箱 / 手机 / 初始密码「仅本次可见」提示保留），`vet.create`；流程逐步交互按 UI 稿 6-3 `[L2]`
-**And** `vet-edit.html` / `vet-qualification.html` / `vets-online.html` / `ratings.html` 四模板与对应 GET 路由退役；在线态数据并入列表列与资料页签（D-11）；导航去掉在线状态、评分两项 `[L1]`
-**And** 写端点（`/admin/vets`、`{id}`、`{id}/avatar`、`{id}/password`、`{id}/status`、`{id}/qualification*`）一个不少 `[L1]`
+**And** 在线态并入列表列与资料页签（D-11）；`vet-edit.html` 与 `vets-online.html` 及对应 GET 路由退役；导航去掉「在线状态」 `[L1]`
+**And** 写端点 `/admin/vets`、`{id}`、`{id}/avatar`、`{id}/password`、`{id}/status` 不变 `[L1]`
+
+### Story 9.1b：B20 兽医账号——资质页签与评分并入
+
+**Acceptance Criteria:**
+
+**Given** 9.1a 的抽屉
+**When** 填充资质页签
+**Then** KTP / SIPDH / STRV 编号·机构·有效期·证图 + 学位证 / PDHI / 专长；直录 / 续期表单；审核通过 / 驳回必填理由（`vet.qualify`）；写端点 `{id}/qualification*` 不变 `[L1/L2]`
+**And** 评分页签：原 `ratings` 页明细并入（`rating.view`）`[L2]`
+**And** `vet-qualification.html` / `ratings.html` 与对应 GET 路由退役；导航去掉「兽医评分」 `[L1]`
 
 ### Story 9.2：B21 未成功请求 + B22 历史会话查询
 
@@ -1020,6 +1042,14 @@ Toko 17 页套模板 A/B/C/D。AD-12：本 Epic 全部 story 排在 v1.4.0 电�
 **When** 打开
 **Then** 摘要条售罄 SKU · 低库存 · 锁定合计；抽屉 SKU 流水摘要 + 四操作页签（采购入库 / 退货入库 / 报损原因必填 data-confirm / 盘点调整 data-confirm 复述差异）`shop.inventory_edit`；`/inventory-movements` 独立只读页套模板 B `[L1/L2]`
 **And** `/admin/shop/return-precedents` 独立页：业务定位提示常驻；表情形 / 判定 / 理由 / 时间 + 检索；沉淀判例表单；A7 「查判例」落本页检索 `[L2]`
+
+### Story 10.6：D1 服务范围与运费配置（模板 D）
+
+**Acceptance Criteria:**
+
+**Given** `/admin/shop/shipping` 套模板 D
+**When** 打开
+**Then** 三卡（可配送区域行内编辑 + 新增行 + 启停开关 / 免运门槛 / 退货收件地址）各自保存钮（未修改禁用 → 高危确认）；`shop.*` 权限沿用；端点不变 `[L2]`
 
 ### Story 10.5：C2 复购引擎效果 + C3 销售与毛利 + C4 库存周转（模板 C 只读）
 
@@ -1086,5 +1116,5 @@ So that 128 个写操作一个不丢有机器证据。
 - **架构一致**：无 starter（brownfield）；8 支迁移分别落在首个需要它的 story（1.1 / 1.4 ×2 / 3.2 / 4.2 / 4.3 / 5.1 / 6.1），无「一次建全表」。
 - **依赖流向**：Epic 1 → 2 硬前置；3～6 只依赖 1、2；7～9 依赖 2 的模板壳；10 额外依赖 v1.4.0 合入（AD-12）；11 最后。Epic 内 story 均只依赖前序。跨 Epic 的向前引用只有 Story 1.5 的 `AdminPageCatalog` 被 2.2 / 1.6 / 11.4 复用，方向正确。
 - **文件重叠**：后台账号页在 Epic 1（功能）与 Epic 6（套模板）各碰一次，属有意分离（避免 Epic 1 依赖 Epic 2 壳），已在 Epic 1 说明。
-- **规模**：11 Epic / 56 Story；单 story 均可由单个实现会话完成；每条 AC 标 L0 / L1 / L2。
+- **规模**：11 Epic / 59 Story（就绪度评审后拆 2.3 → 2.3a/b、9.1 → 9.1a/b，新增 10.6）；单 story 均可由单个实现会话完成；每条 AC 标 L0 / L1 / L2。
 - **待外部**：Epic 10 启动时点取决于电商线合入日期；契约 X-1～X-4 的 App 侧由 App 分支排期。

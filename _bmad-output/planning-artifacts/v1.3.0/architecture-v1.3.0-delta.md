@@ -319,7 +319,9 @@ petgo-backend/
 │   │   ├── shared/                            # （新，admin 内横切）
 │   │   │   ├── web/{HxRequest 参数解析器, AdminFragmentResponses, AdminBusinessExceptionAdvice(422/403 fragment)}.java
 │   │   │   ├── export/AdminExportWriter.java  # AD-10
-│   │   │   └── time/AdminTime.java            # WIB 格式化单一出口
+│   │   │   ├── time/AdminTime.java            # WIB 格式化单一出口
+│   │   │   ├── AdminPageCatalog.java          # 页面目录：导航 8 组 / 权限矩阵 35 维度 / 写操作清单 共用（Story 1.5 引入）
+│   │   │   └── StagOnly.java                  # stag 专用件门控注解（STAG 角标 / 模拟回调 / 手动跑批）
 │   │   └── web/AdminNavController.java        # GET /admin/nav/badges（角标聚合）
 │   ├── auth/domain/User.java                  # + isSyntheticAccount()（AD-8）
 │   ├── content/
@@ -474,7 +476,7 @@ petgo-backend/
 **Overall Status**：READY FOR IMPLEMENTATION
 **Confidence Level**：high（后台侧）；跨分支契约 X-1～X-4 的 App 侧落地不在本分支控制范围，medium。
 **Key Strengths**：横切件先于功能定死，49 页重构有统一底座；看板回填与补偿合一，无手工运维动作；全部决策可追溯到 D 编号。
-**Areas for Future Enhancement**：admin 直查业务 Repository 的 70 处历史债；二级回复目标字段启用（X-2）；stag 专用件的 profile 门控统一为 `@StagOnly`。
+**Areas for Future Enhancement**：admin 直查业务 Repository 的 70 处历史债；二级回复目标字段启用（X-2）。（`@StagOnly` 已提前到本版 `admin/shared`，就绪度评审 2026-09-09）
 
 ### Implementation Handoff
 
