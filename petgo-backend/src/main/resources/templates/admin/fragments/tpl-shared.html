@@ -8,7 +8,7 @@
   · toast(message)：复用 layout 的 .toast 样式（admin-core.js 3s 淡出），供写操作成功后的 fragment / oob 追加。
 -->
 <body>
-<p th:fragment="inline-error(message)" class="err inline-error" role="alert" th:text="${message}">出错了</p>
+<p th:fragment="inline-error(message)" class="err inline-error" role="alert" th:attr="data-code=${code}" th:text="${message}">出错了</p>
 
 <p th:fragment="forbidden(message)" class="err muted forbidden" role="alert" th:text="${message}">需要「xxx」权限</p>
 

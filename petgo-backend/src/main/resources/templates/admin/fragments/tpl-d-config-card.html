@@ -1,14 +1,16 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <!--
-  模板 D · 配置卡壳（V1.3.0 Story 2.3b，AD-11；首个消费者 Story 6.1 KTP 定价 / 6.3 D2）。
+  模板 D · 配置卡壳（V1.3.0 Story 2.3b，AD-11；消费者 Story 6.3 D2 运营配置页四卡 / D3 / D1 / 商品表单）。
   槽位契约 configCard(title, form, saveLabel)：每卡一个 <form data-config-card>，自带保存钮（未修改禁用 → 修改激活 +「已修改」标，
-  admin-core.js 按 FormData 序列化比对）；高危确认由调用方在 form 上加 data-confirm。
-  调用方须在外层 th:with="action=@{...}" 提供表单 action（壳不写 @{}，便于纯模板引擎渲染单测）。
+  admin-core.js 按 FormData 序列化比对）；高危确认由调用方在 form 上加 data-confirm（静态文案）或 data-confirm-diff（复述每个改动字段旧值 → 新值，Story 6.3）。
+  调用方须在外层 th:with 提供：action=@{...}（必填，壳不写 @{}，便于纯模板引擎渲染单测）；可选 cardId（form id，也是行内 err 槽 <id>-err 的前缀）、
+  hxPost（htmx 提交：成功回卡 fragment，失败 422 行内 err 到 #<cardId>-err）、confirmDiff（true = 提交前复述改动）、errorFields（422 错误码 → 字段名 JSON，红边）、
+  readonly（true = 保存钮固定禁用并显示 readonlyNote）。
 -->
 <body>
 <form class="cfg-card card" th:fragment="configCard(titleSlot, formSlot, saveLabelSlot)" method="post" data-config-card
-      th:attr="action=${action}">
+      th:attr="action=${action},id=${cardId},hx-post=${hxPost},hx-target=${hxPost != null and cardId != null} ? ('#' + ${cardId} + '-err') : null,hx-swap=${hxPost != null} ? 'innerHTML' : null,data-confirm-diff=${confirmDiff} ? 'true' : null,data-error-fields=${errorFields},data-readonly=${readonly} ? 'true' : null,data-confirm-diff-title=${confirmDiff} ? #{admin.v130.config.confirm.title} : null,data-confirm-diff-line=${confirmDiff} ? #{admin.v130.config.confirm.diff} : null,data-confirm-diff-on=${confirmDiff} ? #{admin.v130.config.confirm.on} : null,data-confirm-diff-off=${confirmDiff} ? #{admin.v130.config.confirm.off} : null">
     <div class="cfg-head">
         <h2 class="cfg-title" th:replace="${titleSlot} ?: ~{}"></h2>
         <span class="tag tag-dirty" hidden data-dirty-flag th:text="#{admin.v130.tpl.dirty}">已修改</span>
@@ -17,7 +19,8 @@
         <div th:replace="${formSlot} ?: ~{}"></div>
     </div>
     <div class="cfg-foot">
-        <p class="inline-error-slot" aria-live="polite"></p>
+        <p class="inline-error-slot" aria-live="polite" th:attr="id=${cardId != null} ? (${cardId} + '-err') : null"></p>
+        <span class="hint cfg-readonly" th:if="${readonly}" th:text="${readonlyNote} ?: #{admin.v130.tpl.readonly}">只读</span>
         <button type="submit" class="btn btn-primary" disabled data-save
                 th:text="${saveLabelSlot} ?: #{admin.v130.tpl.save}">保存</button>
     </div>

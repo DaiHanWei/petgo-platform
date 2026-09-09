@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  D2 运营配置 · 卡四「分享奖励」（V1.1.6 Story 18.3 AB-3M → V1.3.0 Story 6.3 套模板 D）。端点 / 参数逐字不变：POST /admin/config/share-reward
+  （shareRewardEnabled / shareRewardMonthlyCap / idCardShareReward / idCardShareDailyCap）。
+  🛡 权限与别的卡不同：独立码 config.share_reward_view / config.share_reward_edit（AdminConfigController.SHARE_REWARD_*_AUTH），只读态按 edit 码判。
+  🔴 白嫖倍数与当月消耗必须与配置同屏（AC2 / AC3）——概览两行放卡内表单上方。模型：pawcoin、shareRewardOverview（ov）、errorFields。
+-->
+<body>
+<th:block th:fragment="card"
+          th:with="action=@{/admin/config/share-reward},hxPost=@{/admin/config/share-reward},cardId='cfg-share-reward',confirmDiff=true,
+                   errorFields=${errorFields?.get('shareReward')},ov=${shareRewardOverview},
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.share_reward_edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.share_reward_edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.config.share_reward_edit})}">
+    <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::sr-title}, ~{::sr-form}, #{admin.config.btn.saveShareReward})}">
+        <h2 class="cfg-title" th:fragment="sr-title" th:text="#{admin.config.shareReward}">分享奖励</h2>
+        <div th:fragment="sr-form">
+            <p class="hint" data-notice="share-reward-freeride">
+                <span th:text="#{admin.config.shareReward.hdPrice}">当前 HD 解锁价</span>:
+                <b th:text="${ov.hdPrice()}">5000</b> ·
+                <span th:text="#{admin.config.shareReward.monthlyCap}">月度上限</span>:
+                <b th:text="${ov.monthlyCap()}">2000</b> &rArr;
+                <b th:if="${ov.monthsPerHdUnlock() != null}"
+                   th:text="|#{admin.config.shareReward.monthsPrefix} ${ov.monthsPerHdUnlock()} #{admin.config.shareReward.monthsSuffix}|">攒满 2.5 个月额度可换一次 HD 解锁</b>
+                <b th:if="${ov.monthsPerHdUnlock() == null}" th:text="#{admin.config.shareReward.noGrant}">月度上限为 0 ⇒ 不发币</b>
+            </p>
+            <p class="hint" data-notice="share-reward-usage">
+                <b th:text="${ov.period()}">2026-08</b>
+                <span th:text="#{admin.config.shareReward.wib}">（WIB 自然月）</span> ·
+                <span th:text="#{admin.config.shareReward.granted}">已发放</span>
+                <b th:text="${ov.grantedThisMonth()}">0</b> ·
+                <span th:text="#{admin.config.shareReward.atCap}">达上限账号数</span>
+                <b th:text="${ov.accountsAtCap()}">0</b>
+            </p>
+            <label class="field field-check"><span th:text="#{admin.config.shareRewardEnabled}">分享奖励总开关</span>
+                <input type="checkbox" name="shareRewardEnabled" value="true" th:checked="${pawcoin.shareRewardEnabled}" th:disabled="${!canEdit}"/></label>
+            <label class="field"><span th:text="#{admin.config.shareRewardMonthlyCap}">月度免费获取上限</span>
+                <input class="inp field-full" type="number" name="shareRewardMonthlyCap" min="0" step="1" th:value="${pawcoin.shareRewardMonthlyCap}" th:disabled="${!canEdit}"/></label>
+            <label class="field"><span th:text="#{admin.config.idCardShareReward}">身份证分享每次发放</span>
+                <input class="inp field-full" type="number" name="idCardShareReward" min="0" step="1" th:value="${pawcoin.idCardShareReward}" th:disabled="${!canEdit}"/></label>
+            <label class="field"><span th:text="#{admin.config.idCardShareDailyCap}">身份证分享每日次数上限</span>
+                <input class="inp field-full" type="number" name="idCardShareDailyCap" min="0" step="1" th:value="${pawcoin.idCardShareDailyCap}" th:disabled="${!canEdit}"/></label>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="saved">
+    <th:block th:replace="~{admin/fragments/config-card-share-reward :: card}"></th:block>
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+</th:block>
+</body>
+</html>

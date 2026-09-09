@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  D2 运营配置 · 卡二「KTP 模块高清图解锁定价」（V1.3.0 Story 6.1 三行 → 6.3 套模板 D）。端点 / 参数逐字不变：POST /admin/config/ktp-pricing
+  （idHdDownloadPrice / passportPagePrice / passportBoardingPrice，一律 ≥1，D-7）。确认弹层复述每个改动字段旧值 → 新值（data-confirm-diff，取代 6.1 的静态 data-confirm）。
+-->
+<body>
+<th:block th:fragment="card"
+          th:with="action=@{/admin/config/ktp-pricing},hxPost=@{/admin/config/ktp-pricing},cardId='cfg-ktp',confirmDiff=true,
+                   errorFields=${errorFields?.get('ktp')},
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.config.edit})}">
+    <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::ktp-title}, ~{::ktp-form}, #{admin.config.ktp.btn.save})}">
+        <h2 class="cfg-title" th:fragment="ktp-title" th:text="#{admin.config.ktp.title}">KTP 模块高清图解锁定价</h2>
+        <div th:fragment="ktp-form">
+            <p class="hint" th:text="#{admin.config.ktp.hint}">三价独立保存；改价只影响新发起的解锁，已解锁记录不受影响。</p>
+            <label class="field"><span th:text="#{admin.config.ktp.rowKtpHd}">KTP 卡高清下载（IDR）</span>
+                <input class="inp field-full" type="number" name="idHdDownloadPrice" min="1" step="1" required th:value="${pricing.idHdDownloadPrice}" th:disabled="${!canEdit}"/>
+            </label>
+            <label class="field"><span th:text="#{admin.config.ktp.rowPassportPage}">护照 · 护照内页解锁（IDR）</span>
+                <input class="inp field-full" type="number" name="passportPagePrice" min="1" step="1" required th:value="${pricing.passportPageUnlockPrice}" th:disabled="${!canEdit}"/>
+                <span class="hint" data-ref-hint th:text="#{admin.config.ktp.refHint(${#numbers.formatInteger(pricing.idHdDownloadPrice, 0, 'COMMA')})}">参考：KTP 当前价 Rp 5,000</span>
+            </label>
+            <label class="field"><span th:text="#{admin.config.ktp.rowPassportBoarding}">护照 · 登机牌解锁（IDR）</span>
+                <input class="inp field-full" type="number" name="passportBoardingPrice" min="1" step="1" required th:value="${pricing.passportBoardingUnlockPrice}" th:disabled="${!canEdit}"/>
+                <span class="hint" data-ref-hint th:text="#{admin.config.ktp.refHint(${#numbers.formatInteger(pricing.idHdDownloadPrice, 0, 'COMMA')})}">参考：KTP 当前价 Rp 5,000</span>
+            </label>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="saved">
+    <th:block th:replace="~{admin/fragments/config-card-ktp :: card}"></th:block>
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+</th:block>
+</body>
+</html>

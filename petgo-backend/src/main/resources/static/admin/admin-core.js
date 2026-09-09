@@ -68,6 +68,26 @@ function tailtopiaConfirmMessage(form) {
     }
     return msg;
 }
+// V1.3.0 Story 6.3：配置卡高危确认复述每个改动字段「标签：旧值 → 新值」（form[data-confirm-diff]；初值由配置卡 init 记在 data-initial-value）。
+function tailtopiaConfirmDiffMessage(form) {
+    if (!form.getAttribute || !form.hasAttribute('data-confirm-diff')) { return null; }
+    var line = form.getAttribute('data-confirm-diff-line') || '{0}: {1} → {2}';
+    var on = form.getAttribute('data-confirm-diff-on') || 'on', off = form.getAttribute('data-confirm-diff-off') || 'off';
+    var lines = [];
+    form.querySelectorAll('input[name], select[name], textarea[name]').forEach(function (el) {
+        if (el.type === 'hidden' || el.disabled) { return; }
+        var isCheck = el.type === 'checkbox' || el.type === 'radio';
+        var cur = isCheck ? (el.checked ? '1' : '0') : el.value;
+        var was = el.dataset.initialValue === undefined ? cur : el.dataset.initialValue;
+        if (cur === was) { return; }
+        var labelEl = el.closest('label'); var span = labelEl && labelEl.querySelector('span');
+        var label = span ? span.textContent.trim() : el.name;
+        var fmt = function (v) { return isCheck ? (v === '1' ? on : off) : (v === '' ? '—' : v); };
+        lines.push(line.split('{0}').join(label).split('{1}').join(fmt(was)).split('{2}').join(fmt(cur)));
+    });
+    if (!lines.length) { return form.getAttribute('data-confirm-diff-title') || null; } // 无逐字段差异也不静默放行（复审 #3）
+    return (form.getAttribute('data-confirm-diff-title') || '') + '\n\n' + lines.join('\n');
+}
 function tailtopiaIsHxForm(form) {
     return !!(form.getAttribute && (form.hasAttribute('hx-post') || form.hasAttribute('hx-get') || form.hasAttribute('hx-put') || form.hasAttribute('hx-delete')));
 }
@@ -76,8 +96,9 @@ function tailtopiaIsHxForm(form) {
 //   它们改走下面的 htmx:confirm（htmx 在发请求前派发；preventDefault 后只有 issueRequest(true) 才真正发），这里跳过以免弹两次。
 document.addEventListener('submit', function (e) {
     var form = e.target;
-    if (!form.getAttribute || !form.getAttribute('data-confirm') || tailtopiaIsHxForm(form)) { return; }
-    if (!window.confirm(tailtopiaConfirmMessage(form))) {
+    if (!form.getAttribute || tailtopiaIsHxForm(form)) { return; }
+    var msg = form.getAttribute('data-confirm') ? tailtopiaConfirmMessage(form) : tailtopiaConfirmDiffMessage(form);
+    if (msg && !window.confirm(msg)) {
         e.preventDefault();
     }
 }, true);
@@ -102,13 +123,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.body.addEventListener('htmx:confirm', function (e) {
         var elt = e.detail && e.detail.elt;
-        var form = elt && elt.closest ? elt.closest('form[data-confirm]') : null;
+        var form = elt && elt.closest ? elt.closest('form[data-confirm], form[data-confirm-diff]') : null;
         if (!form || !tailtopiaIsHxForm(form)) { return; }
         // 违规钮（data-confirm-button，admin-workbench.js）自己在 click 阶段确认过，这里不重复
         if (e.detail.triggeringEvent && e.detail.triggeringEvent.submitter
                 && e.detail.triggeringEvent.submitter.hasAttribute && e.detail.triggeringEvent.submitter.hasAttribute('data-confirm-button')) { return; }
+        var msg = form.getAttribute('data-confirm') ? tailtopiaConfirmMessage(form) : tailtopiaConfirmDiffMessage(form);
+        if (!msg) { return; } // 配置卡无改动（理论上保存钮已禁用）：不弹、照常发
         e.preventDefault();
-        if (window.confirm(tailtopiaConfirmMessage(form))) { e.detail.issueRequest(true); }
+        if (window.confirm(msg)) { e.detail.issueRequest(true); }
     });
 });
 
@@ -808,14 +831,55 @@ document.addEventListener('change', function (e) {
         var dirty = serialize(form) !== form.dataset.initial;
         form.classList.toggle('is-dirty', dirty);
         var save = form.querySelector('[data-save]');
-        if (save) { save.disabled = !dirty; }
+        // 422 之后（data-invalid）保存钮禁用到再次修改（Story 6.3 AC3），dirty 基线不动：改回原值仍算干净、离开页面照提示
+        if (save) { save.disabled = !dirty || form.dataset.invalid === '1'; }
         var flag = form.querySelector('[data-dirty-flag]');
         if (flag) { flag.hidden = !dirty; }
     }
+    function init(form) {
+        form.dataset.initial = serialize(form);
+        // V1.3.0 Story 6.3：记每个输入的初值，供高危确认复述「旧值 → 新值」（data-confirm-diff）
+        form.querySelectorAll('input[name], select[name], textarea[name]').forEach(function (el) {
+            el.dataset.initialValue = el.type === 'checkbox' || el.type === 'radio' ? (el.checked ? '1' : '0') : el.value;
+        });
+        refresh(form);
+    }
     document.addEventListener('DOMContentLoaded', function () {
-        document.querySelectorAll('form[data-config-card]').forEach(function (form) {
-            form.dataset.initial = serialize(form);
-            refresh(form);
+        document.querySelectorAll('form[data-config-card]').forEach(init);
+        // htmx 原位替换回来的卡（Story 6.3 保存成功 → outerHTML 换整张卡）重新记初值：「已修改」标自然消退
+        document.body.addEventListener('htmx:load', function (e) {
+            var el = e.detail && e.detail.elt;
+            if (!el || !el.querySelectorAll) { return; }
+            if (el.matches && el.matches('form[data-config-card]')) { init(el); }
+            el.querySelectorAll('form[data-config-card]').forEach(init);
+        });
+        // 422 行内 err 落到卡的 err 槽后：按 data-error-fields 给对应输入红边，保存钮禁用到再次修改（Story 6.3 AC3）
+        document.body.addEventListener('htmx:afterSwap', function (e) {
+            var t = e.detail && e.detail.target;
+            if (!t || !t.classList || !t.classList.contains('inline-error-slot')) { return; }
+            var form = t.closest('form[data-config-card]');
+            var err = t.querySelector('.inline-error[data-code]');
+            if (!form) { return; }
+            form.querySelectorAll('.is-invalid').forEach(function (el) { el.classList.remove('is-invalid'); });
+            if (err) {
+                var map = {};
+                try { map = JSON.parse(form.getAttribute('data-error-fields') || '{}'); } catch (ex) { map = {}; }
+                (map[err.getAttribute('data-code')] || '').split(',').forEach(function (name) {
+                    var el = name && form.querySelector('[name="' + name + '"]');
+                    if (el) { el.classList.add('is-invalid'); }
+                });
+                form.dataset.invalid = '1'; // 复审 #3：不动 dirty / diff 基线，只用独立标志禁用保存钮
+                refresh(form);
+            }
+        });
+    });
+    // 输入变化即清红边与「无效」标志（错误文案保留到下次提交）
+    ['input', 'change'].forEach(function (evt) {
+        document.addEventListener(evt, function (e) {
+            var el = e.target;
+            if (el && el.classList && el.classList.contains('is-invalid')) { el.classList.remove('is-invalid'); }
+            var form = el && el.closest ? el.closest('form[data-config-card]') : null;
+            if (form && form.dataset.invalid === '1') { delete form.dataset.invalid; refresh(form); }
         });
     });
     ['input', 'change'].forEach(function (evt) {
@@ -824,12 +888,14 @@ document.addEventListener('change', function (e) {
             if (form) { refresh(form); }
         });
     });
+    // 原生表单提交后视为已保存（整页 PRG 会重渲染）；htmx 表单不在这里动基线——成功路径由 outerHTML + htmx:load 重新 init，
+    // 失败 / 确认弹层取消时卡必须仍是「已修改」（复审 #2）。被 preventDefault（确认取消）的提交同样跳过。
     document.addEventListener('submit', function (e) {
         var form = e.target;
-        if (form && form.hasAttribute && form.hasAttribute('data-config-card')) {
-            form.dataset.initial = serialize(form);
-            refresh(form); // 提交即视为已保存：禁用保存钮、隐藏「已修改」标
-        }
+        if (!form || !form.hasAttribute || !form.hasAttribute('data-config-card')) { return; }
+        if (e.defaultPrevented || tailtopiaIsHxForm(form)) { return; }
+        form.dataset.initial = serialize(form);
+        refresh(form);
     });
     window.addEventListener('beforeunload', function (e) {
         if (document.querySelector('form[data-config-card].is-dirty')) { e.preventDefault(); e.returnValue = ''; }

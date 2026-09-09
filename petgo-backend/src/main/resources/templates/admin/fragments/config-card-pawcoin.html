@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  D2 运营配置 · 卡三「PawCoin」（V1.3.0 Story 6.3，模板 D）：溢价两项 + 暂停充值 = 配置卡表单（POST /admin/config/pawcoin，参数逐字不变）；
+  充值档位两表 + 「＋ 新建档位」（Story 6.2）作为同一卡的附属区块（tiers），各自独立表单——放在配置卡 <form> 之外，避免嵌套 form。
+  card = 配置卡 fragment（整页 + htmx 成功返回）；saved = card + toast oob；tiers = 档位区块（整页用；启停刷新走 config-tiers-disabled :: refresh）。
+-->
+<body>
+<th:block th:fragment="card"
+          th:with="action=@{/admin/config/pawcoin},hxPost=@{/admin/config/pawcoin},cardId='cfg-pawcoin',confirmDiff=true,
+                   errorFields=${errorFields?.get('pawcoin')},
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.config.edit})}">
+    <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::pawcoin-title}, ~{::pawcoin-form}, #{admin.config.btn.savePawcoin})}">
+        <h2 class="cfg-title" th:fragment="pawcoin-title">PawCoin</h2>
+        <div th:fragment="pawcoin-form">
+            <label class="field"><span th:text="#{admin.config.premiumRate}">退款转币溢价（%，0–50）</span>
+                <input class="inp field-full" type="number" name="premiumRate" min="0" max="50" step="1" th:value="${pawcoin.premiumRate}" th:disabled="${!canEdit}"/></label>
+            <label class="field"><span th:text="#{admin.config.premiumFixed}">退款转币固定溢价（koin，≥0）</span>
+                <input class="inp field-full" type="number" name="premiumFixed" min="0" step="1" th:value="${pawcoin.premiumFixed}" th:disabled="${!canEdit}"/></label>
+            <label class="field field-check"><span th:text="#{admin.config.topupPaused}">暂停充值</span>
+                <input type="checkbox" name="topupPaused" value="true" th:checked="${pawcoin.topupPaused}" th:disabled="${!canEdit}"/></label>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="saved">
+    <th:block th:replace="~{admin/fragments/config-card-pawcoin :: card}"></th:block>
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+</th:block>
+
+<!--/* 充值档位区块（AB-6B → Story 6.2 AB-22A / D-24 / D-25）：主表只列启用中（≤4）；「查看已停用（N）」htmx 折叠表；「＋ 新建档位」内联表单。
+     保底 ≥1 启用护栏不变。tiers-enabled / tiers-disabled-link 两个 fragment 供 config-tiers-disabled :: refresh 按 id oob。 */-->
+<div th:fragment="tiers" class="card cfg-card cfg-tiers" id="cfg-tiers">
+    <div class="cfg-head">
+        <h2 class="cfg-title" th:text="#{admin.config.tiers}">充值档位</h2>
+        <details class="pl-inline" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
+            <summary class="btn btn-primary btn-sm" th:text="#{admin.config.tier.newButton}">＋ 新建档位</summary>
+            <form class="cfg-inline-form" method="post" th:action="@{/admin/config/tiers}">
+                <h3 th:text="#{admin.config.tier.newTitle}">新建充值档位</h3>
+                <p class="hint" th:text="#{admin.config.tier.newHint}">档位标识自动生成为 t&lt;金额&gt;；新建即启用；最多 4 个启用档位。</p>
+                <label class="field"><span th:text="#{admin.config.tier.amount}">金额（IDR）</span>
+                    <input class="inp field-full" type="number" name="amountIdr" min="1" max="100000000" step="1" required/></label>
+                <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.config.tier.btn.create}">创建档位</button>
+            </form>
+        </details>
+    </div>
+    <p class="hint" th:text="#{admin.config.hint.tiers}">至少保留 1 个启用档位；停用不影响历史订单。</p>
+    <p id="tiers-inline-error" class="lst-inline-error" aria-live="polite"></p>
+    <table th:fragment="tiers-enabled" id="tiers-enabled" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+        <thead>
+        <tr><th th:text="#{admin.config.col.tier}">档位</th><th th:text="#{admin.config.col.amount}">金额（IDR）</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.common.actions}">操作</th></tr>
+        </thead>
+        <tbody>
+        <tr th:each="t : ${tiers}" th:attr="data-tier-id=${t.id}">
+            <td th:text="${t.tierKey}">10k</td>
+            <td th:text="${#numbers.formatInteger(t.amountIdr, 0, 'COMMA')}">10,000</td>
+            <td th:text="#{admin.common.enabled}">启用</td>
+            <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
+                <form th:attr="hx-post=@{/admin/config/tiers/{id}/enabled(id=${t.id})}" hx-target="#tiers-inline-error" hx-swap="innerHTML" class="inline"
+                      hx-vals="js:{expanded: document.querySelector('#tiers-disabled table, #tiers-disabled h3') ? 1 : 0}">
+                    <input type="hidden" name="enabled" value="false"/>
+                    <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.common.disable}">停用</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <p class="hint" th:text="#{admin.config.tier.note}">仅展示当前启用的档位，最多 4 档。</p>
+    <p th:fragment="tiers-disabled-link" id="tiers-disabled-link" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+        <a th:if="${disabledCount > 0}" href="#" th:attr="hx-get=@{/admin/config/tiers/disabled}" hx-target="#tiers-disabled" hx-swap="outerHTML"
+           th:text="#{admin.config.tier.showDisabled(${disabledCount})}">查看已停用（N）</a>
+    </p>
+    <div id="tiers-disabled"></div>
+</div>
+</body>
+</html>

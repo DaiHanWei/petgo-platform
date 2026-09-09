@@ -20,9 +20,14 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import com.tailtopia.admin.shared.web.AdminFragmentResponses;
+import jakarta.servlet.http.HttpServletResponse;
+import java.util.Map;
 
 /**
  * 后台运营配置（Story 9.2，AB-8A/8F/6A/6B）。Thymeleaf admin slice，{@code /admin/config/**}，redirect+flash。
+ * V1.3.0 Story 6.3（模板 D）：四个 POST 端点加 htmx 分支——成功回该卡 fragment（HX-Retarget / HX-Reswap 原位替换）+ toast，
+ * 失败由 {@code AdminBusinessExceptionAdvice} 出 422 行内 err；非 htmx 维持 PRG。<b>端点路径 / 参数名 / 权限一个不动</b>（AB-19A）。
  * 门控：查看 {@code config.view} / 修改 {@code config.edit}（SUPER_ADMIN 隐式全权）。校验/变更日志/审计在
  * {@link AdminConfigService}。改值只影响后续（历史落快照）。
  */
@@ -56,6 +61,39 @@ public class AdminConfigController {
             + " or hasAuthority('" + AdminPermissions.CONFIG_SHARE_REWARD_VIEW + "')"
             + " or hasAuthority('" + AdminPermissions.CONFIG_SHARE_REWARD_EDIT + "')";
 
+    /**
+     * 422 错误码 → 卡内字段名（V1.3.0 Story 6.3 AC3）：htmx 提交失败时 {@code AdminBusinessExceptionAdvice} 出行内 err（带 data-code），
+     * admin-core.js 按本表给对应输入框红边。键 = 卡 id（模板 data-error-fields），值 = {code: "field[,field]"} 的 JSON 串。
+     */
+    static final Map<String, String> ERROR_FIELDS = Map.of(
+            "pricing", json(Map.of(
+                    "admin.err.config.priceNegative", "vetConsultPrice,aiUnlockPrice",
+                    "admin.err.config.vetShareRateRange", "vetShareRate",
+                    "admin.err.config.freeQuotaRange", "monthlyFreeQuota")),
+            "ktp", json(Map.of(
+                    "admin.err.config.ktpPriceMin", "idHdDownloadPrice,passportPagePrice,passportBoardingPrice")),
+            "pawcoin", json(Map.of(
+                    "admin.err.config.premiumRateRange", "premiumRate",
+                    "admin.err.config.premiumFixedNegative", "premiumFixed")),
+            "shareReward", json(Map.of(
+                    "admin.err.config.shareRewardCapNegative", "shareRewardMonthlyCap",
+                    "admin.err.config.shareRewardCapTooLarge", "shareRewardMonthlyCap",
+                    "admin.err.config.shareRewardCapBelowReward", "shareRewardMonthlyCap,idCardShareReward",
+                    "admin.err.config.idCardShareRewardNegative", "idCardShareReward",
+                    "admin.err.config.idCardShareRewardTooLarge", "idCardShareReward",
+                    "admin.err.config.idCardShareDailyCapNegative", "idCardShareDailyCap")));
+
+    private static String json(Map<String, String> m) {
+        StringBuilder sb = new StringBuilder("{");
+        m.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(e -> {
+            if (sb.length() > 1) {
+                sb.append(',');
+            }
+            sb.append('"').append(e.getKey()).append("\":\"").append(e.getValue()).append('"');
+        });
+        return sb.append('}').toString();
+    }
+
     private final PlatformConfigService read;
     private final com.tailtopia.share.repository.ShareRewardQuotaStatsRepository shareStats;
     private final AdminConfigService write;
@@ -76,16 +114,35 @@ public class AdminConfigController {
     @PreAuthorize(PAGE_AUTH)
     public String view(Model model) {
         model.addAttribute("active", "config");
-        model.addAttribute("pricing", read.pricing());
-        model.addAttribute("pawcoin", read.pawcoin());
+        populateCards(model);
         // V1.3.0 Story 6.2（AB-22A / D-25）：主表只列启用中；已停用折叠区按需 htmx 载入（N=0 不渲染链接）
         model.addAttribute("tiers", read.enabledTiers());
         model.addAttribute("disabledCount", read.disabledTierCount());
-        // V1.1.6 Story 16.4：推荐算法参数（挂既有配置页，🛡 不新建后台模块）
-        // Story 18.3 · AC2/AC3：白嫖倍数与当月消耗必须**同屏**——
-        // 「月度上限 30」和「HD 解锁 60」分开看都合理，放一起才看得出「两个月白嫖一次」。
-        model.addAttribute("shareRewardOverview", shareRewardOverview());
         return "admin/config";
+    }
+
+    /**
+     * 四张配置卡共用模型（V1.3.0 Story 6.3 模板 D）：pricing / pawcoin 单行 + 分享奖励概览 + 422 错误码→字段映射。
+     * Story 18.3 · AC2/AC3：白嫖倍数与当月消耗必须**同屏**——「月度上限 30」和「HD 解锁 60」分开看都合理，放一起才看得出「两个月白嫖一次」。
+     */
+    private void populateCards(Model model) {
+        model.addAttribute("pricing", read.pricing());
+        model.addAttribute("pawcoin", read.pawcoin());
+        model.addAttribute("shareRewardOverview", shareRewardOverview());
+        model.addAttribute("errorFields", ERROR_FIELDS);
+    }
+
+    /**
+     * htmx 提交成功统一返回（Story 6.3 AC3）：重渲染该卡（{@code HX-Retarget #<cardId>} + {@code HX-Reswap outerHTML} 原位替换，
+     * 「已修改」标随之消退）+ toast oob。失败路径不经这里——AppException 冒给 {@code AdminBusinessExceptionAdvice} 出 422 行内 err
+     * （HX-Target = 卡的 err 槽）。
+     */
+    private String savedCard(String cardId, String fragment, String toastKey, Model model, HttpServletResponse response) {
+        populateCards(model);
+        model.addAttribute("toast", msg.get(toastKey));
+        response.setHeader(AdminFragmentResponses.HEADER_RETARGET, "#" + cardId);
+        response.setHeader(AdminFragmentResponses.HEADER_RESWAP, "outerHTML");
+        return "admin/fragments/" + fragment + " :: saved";
     }
 
     /**
@@ -103,7 +160,12 @@ public class AdminConfigController {
             @RequestParam(defaultValue = "0") long shareRewardMonthlyCap,
             @RequestParam(defaultValue = "0") long idCardShareReward,
             @RequestParam(defaultValue = "0") int idCardShareDailyCap,
-            RedirectAttributes flash) {
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            write.updateShareReward(new com.tailtopia.admin.config.dto.ShareRewardForm(
+                    shareRewardEnabled, shareRewardMonthlyCap, idCardShareReward, idCardShareDailyCap), admin.getAdminAccountId());
+            return savedCard("cfg-share-reward", "config-card-share-reward", "admin.flash.config.shareRewardSaved", model, response);
+        }
         try {
             write.updateShareReward(new com.tailtopia.admin.config.dto.ShareRewardForm(
                     shareRewardEnabled, shareRewardMonthlyCap, idCardShareReward,
@@ -136,7 +198,11 @@ public class AdminConfigController {
     public String updatePricing(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam long vetConsultPrice, @RequestParam int vetShareRate,
             @RequestParam long aiUnlockPrice,
-            @RequestParam int monthlyFreeQuota, RedirectAttributes flash) {
+            @RequestParam int monthlyFreeQuota, HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            write.updatePricing(new PricingForm(vetConsultPrice, vetShareRate, aiUnlockPrice, monthlyFreeQuota), admin.getAdminAccountId());
+            return savedCard("cfg-pricing", "config-card-pricing", "admin.flash.config.pricingSaved", model, response);
+        }
         try {
             write.updatePricing(new PricingForm(vetConsultPrice, vetShareRate, aiUnlockPrice,
                     monthlyFreeQuota), admin.getAdminAccountId());
@@ -157,7 +223,11 @@ public class AdminConfigController {
     @PreAuthorize(EDIT_AUTH)
     public String updateKtpPricing(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam long idHdDownloadPrice, @RequestParam long passportPagePrice,
-            @RequestParam long passportBoardingPrice, RedirectAttributes flash) {
+            @RequestParam long passportBoardingPrice, HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            write.updateKtpPricing(new KtpPricingForm(idHdDownloadPrice, passportPagePrice, passportBoardingPrice), admin.getAdminAccountId());
+            return savedCard("cfg-ktp", "config-card-ktp", "admin.flash.config.ktpPricingSaved", model, response);
+        }
         try {
             write.updateKtpPricing(new KtpPricingForm(idHdDownloadPrice, passportPagePrice, passportBoardingPrice),
                     admin.getAdminAccountId());
@@ -173,7 +243,12 @@ public class AdminConfigController {
     public String updatePawCoin(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam int premiumRate,
             @RequestParam(defaultValue = "0") long premiumFixed,
-            @RequestParam(defaultValue = "false") boolean topupPaused, RedirectAttributes flash) {
+            @RequestParam(defaultValue = "false") boolean topupPaused, HxRequest hx, Model model, HttpServletResponse response,
+            RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            write.updatePawCoin(new PawCoinForm(premiumRate, premiumFixed, topupPaused), admin.getAdminAccountId());
+            return savedCard("cfg-pawcoin", "config-card-pawcoin", "admin.flash.config.pawcoinSaved", model, response);
+        }
         try {
             write.updatePawCoin(new PawCoinForm(premiumRate, premiumFixed, topupPaused),
                     admin.getAdminAccountId());

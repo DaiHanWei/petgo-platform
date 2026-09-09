@@ -33,8 +33,8 @@
 <!--/* 启停成功（htmx）：主目标 #tiers-inline-error 清空（无非 oob 内容）+ 主表 oob（outerHTML 按 id）+ 「查看已停用（N）」链接 oob
      + 已停用表 oob（只在折叠区已展开时替换：表单带 expanded=1，未展开保持按需加载语义）+ toast（复审 #5 / #7） */-->
 <th:block th:fragment="refresh">
-    <table th:replace="~{admin/config :: tiers-enabled}"></table>
-    <p th:replace="~{admin/config :: tiers-disabled-link}"></p>
+    <table th:replace="~{admin/fragments/config-card-pawcoin :: tiers-enabled}"></table>
+    <p th:replace="~{admin/fragments/config-card-pawcoin :: tiers-disabled-link}"></p>
     <div th:if="${expanded}" th:replace="~{admin/fragments/config-tiers-disabled :: table}"></div>
     <div th:unless="${expanded}" id="tiers-disabled" hx-swap-oob="true"></div>
     <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>

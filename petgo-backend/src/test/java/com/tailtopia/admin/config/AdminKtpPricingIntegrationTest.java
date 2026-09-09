@@ -187,13 +187,15 @@ class AdminKtpPricingIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isForbidden());
         String page = mvc.perform(get("/admin/config").param("lang", "zh_CN").with(authentication(staffWith(AdminPermissions.CONFIG_VIEW))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(page).contains("data-ktp-readonly").doesNotContain("/admin/config/ktp-pricing").doesNotContain("name=\"passportPagePrice\"")
-                .contains("/ " + c.getPassportPageUnlockPrice() + " /"); // 只读：无表单，只读提示带三价
+        // 只读（Story 6.3 模板 D）：卡仍渲染但输入禁用、保存钮固定禁用、注明所缺权限
+        assertThat(page).contains("id=\"cfg-ktp\"").containsPattern("id=\"cfg-ktp\"[^>]*data-readonly=\"true\"")
+                .containsPattern("name=\"passportPagePrice\"[^>]*disabled").contains("编辑配置");
         String editPage = mvc.perform(get("/admin/config").param("lang", "zh_CN")
                         .with(authentication(staffWith(AdminPermissions.CONFIG_VIEW, AdminPermissions.CONFIG_EDIT))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(editPage).contains("/admin/config/ktp-pricing").contains("name=\"passportPagePrice\"").contains("name=\"passportBoardingPrice\"")
-                .contains("data-ref-hint").doesNotContain("name=\"idHdDownloadPrice\" min=\"0\"");
+        assertThat(editPage).contains("hx-post=\"/admin/config/ktp-pricing\"").contains("name=\"passportPagePrice\"").contains("name=\"passportBoardingPrice\"")
+                .contains("data-ref-hint").doesNotContain("name=\"idHdDownloadPrice\" min=\"0\"")
+                .doesNotContainPattern("id=\"cfg-ktp\"[^>]*data-readonly");
         // 定价卡：旧客户端多带 idHdDownloadPrice 参数也不再改 HD 价
         mvc.perform(post("/admin/config/pricing").with(authentication(superAdmin())).with(csrf())
                         .param("vetConsultPrice", String.valueOf(c.getVetConsultPrice())).param("vetShareRate", String.valueOf(c.getVetShareRate()))

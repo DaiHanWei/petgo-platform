@@ -1,11 +1,17 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- 运营配置（Story 9.2）：定价 / PawCoin / 充值档位。改值只影响后续（历史落快照）；变更留审计。 -->
+<!--/*
+  D2 运营配置（Story 9.2 → V1.3.0 Story 6.3 整体套模板 D，AB-19A「不动任何功能」）：四张配置卡各自成表单、自带保存钮
+  （未修改禁用 → 修改激活 +「已修改」标 → 高危确认复述改动字段旧值 → 新值 → 提交）；组头不标红「高危」（D-8）。
+  卡顺序按 UI 稿 7-1：问诊定价 · KTP 模块高清图解锁定价 · PawCoin（含充值档位两表 + 新建）· 分享奖励。
+  卡内容各在 fragments/config-card-*.html（也是 htmx 成功 / 422 的返回目标）；端点 / 参数 / @PreAuthorize 逐字不变（Story 2.1 底账）。
+  改值只影响后续（历史落快照）；变更留审计。
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.config.title}">运营配置 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
-    <!-- V1.3.0 Story 6.2：档位卡「查看已停用」/ 启停走 htmx（CSRF 头、toast 计时、data-confirm 由 admin-core.js 统一处理） -->
+    <!--/* 配置卡 dirty / diff 确认 / htmx（CSRF 头、toast 计时、422 放行）由 admin-core.js 统一处理 */-->
     <script defer th:src="@{/admin/admin-core.js}"></script>
 </head>
 <body>
@@ -16,177 +22,21 @@
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
         <p class="hint" th:text="#{admin.config.hint}">改动仅影响后续新成交；历史订单按成交快照不变。每次修改记入变更日志与审计哈希链。</p>
 
-        <!-- 🛡 页面准入已放宽到任意 config.* 读权限（Story 18.3 · AC5 修订，见 AdminConfigController.PAGE_AUTH）：
-             只持 config.share_reward_* 的人也能进来关总开关。所以定价 / PawCoin / 档位这些
-             **非分享奖励块**必须补上 config.view 门 —— 否则放宽准入就顺带把兽医定价与分成放出去了。 -->
+        <!--/* 🛡 页面准入已放宽到任意 config.* 读权限（Story 18.3 · AC5 修订，见 AdminConfigController.PAGE_AUTH）：
+             只持 config.share_reward_* 的人也能进来关总开关。所以定价 / KTP / PawCoin / 档位这些**非分享奖励卡**必须补上 config.view 门。 */-->
         <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')">
-        <!-- 定价（AB-8A/8F）——仅 config.edit 可改；否则只读 -->
-        <h2 th:text="#{admin.config.pricing}">定价配置</h2>
-        <form class="card" method="post" th:action="@{/admin/config/pricing}"
-              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
-            <label class="field"><span th:text="#{admin.config.vetConsultPrice}">兽医单次咨询价（IDR）</span>
-                <input class="field-full" type="number" name="vetConsultPrice" min="0" th:value="${pricing.vetConsultPrice}"/>
-            </label>
-            <label class="field"><span th:text="#{admin.config.vetShareRate}">兽医分成（%，0–100）</span>
-                <input class="field-full" type="number" name="vetShareRate" min="0" max="100" th:value="${pricing.vetShareRate}"/>
-            </label>
-            <label class="field"><span th:text="#{admin.config.aiUnlockPrice}">AI 详情解锁价（IDR）</span>
-                <input class="field-full" type="number" name="aiUnlockPrice" min="0" th:value="${pricing.aiUnlockPrice}"/>
-            </label>
-            <!--/* KTP 卡高清价自 V1.3.0 Story 6.1 起移到下方独立卡「KTP 模块高清图解锁定价」 */-->
-            <label class="field"><span th:text="#{admin.config.monthlyFreeQuota}">每月AI问诊免费额度（0–35）</span>
-                <input class="field-full" type="number" name="monthlyFreeQuota" min="0" max="35" th:value="${pricing.monthlyFreeQuota}"/>
-            </label>
-            <button type="submit" class="btn btn-primary btn-sm mt-sm" th:text="#{admin.config.btn.savePricing}">保存定价</button>
-        </form>
-        <p class="hint" sec:authorize="!hasRole('SUPER_ADMIN') and !hasAuthority('config.edit')"
-           th:text="#{admin.config.pricingReadonly(${pricing.vetConsultPrice}, ${pricing.vetShareRate}, ${pricing.aiUnlockPrice}, ${pricing.monthlyFreeQuota})}">
-            当前定价（只读，需 config.edit 权限修改）
-        </p>
-
-        <!--/* ══ V1.3.0 Story 6.1 · AB-18A：KTP 模块高清图解锁定价三行（AD-7 / D-3 加样式 = 加列；D-7 三价一律 ≥1）══
-             每行：样式名（只读）| 价格 input[min=1,step=1] | 参考价（仅护照两行：KTP 当前价）。三价独立保存、不联动；
-             改价只影响新发起的解锁。与定价卡同码门控（config.edit 改 / config.view 看）。
-             data-confirm 用静态文案（admin-core.js 的 data-confirm 不拼新旧值；新旧值复述随 Story 6.3 模板 D）。解析级注释，不进 HTML。 */-->
-        <h2 th:text="#{admin.config.ktp.title}">KTP 模块高清图解锁定价</h2>
-        <p class="hint" th:text="#{admin.config.ktp.hint}">三价独立保存；改价只影响新发起的解锁，已解锁记录不受影响。</p>
-        <form class="card ktp-pricing" method="post" th:action="@{/admin/config/ktp-pricing}"
-              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')"
-              th:attr="data-confirm=#{admin.config.ktp.confirm}">
-            <label class="field"><span th:text="#{admin.config.ktp.rowKtpHd}">KTP 卡高清下载（IDR）</span>
-                <input class="field-full" type="number" name="idHdDownloadPrice" min="1" step="1" required th:value="${pricing.idHdDownloadPrice}"/>
-            </label>
-            <label class="field"><span th:text="#{admin.config.ktp.rowPassportPage}">护照 · 护照内页解锁（IDR）</span>
-                <input class="field-full" type="number" name="passportPagePrice" min="1" step="1" required th:value="${pricing.passportPageUnlockPrice}"/>
-                <span class="hint" data-ref-hint th:text="#{admin.config.ktp.refHint(${#numbers.formatInteger(pricing.idHdDownloadPrice, 0, 'COMMA')})}">参考：KTP 当前价 Rp 5,000</span>
-            </label>
-            <label class="field"><span th:text="#{admin.config.ktp.rowPassportBoarding}">护照 · 登机牌解锁（IDR）</span>
-                <input class="field-full" type="number" name="passportBoardingPrice" min="1" step="1" required th:value="${pricing.passportBoardingUnlockPrice}"/>
-                <span class="hint" data-ref-hint th:text="#{admin.config.ktp.refHint(${#numbers.formatInteger(pricing.idHdDownloadPrice, 0, 'COMMA')})}">参考：KTP 当前价 Rp 5,000</span>
-            </label>
-            <button type="submit" class="btn btn-primary btn-sm mt-sm" th:text="#{admin.config.ktp.btn.save}">保存解锁定价</button>
-        </form>
-        <p class="hint" data-ktp-readonly sec:authorize="!hasRole('SUPER_ADMIN') and !hasAuthority('config.edit')"
-           th:text="#{admin.config.ktp.readonly(${pricing.idHdDownloadPrice}, ${pricing.passportPageUnlockPrice}, ${pricing.passportBoardingUnlockPrice})}">
-            当前 KTP 卡高清 / 护照内页 / 登机牌解锁价（只读，需 config.edit 权限修改）
-        </p>
-
-        <!-- PawCoin（AB-6A/6C）-->
-        <h2>PawCoin</h2>
-        <form method="post" th:action="@{/admin/config/pawcoin}"
-              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
-            <label><span th:text="#{admin.config.premiumRate}">退款转币溢价（%，0–50）</span>
-                <input type="number" name="premiumRate" min="0" max="50" th:value="${pawcoin.premiumRate}"/></label>
-            <label><span th:text="#{admin.config.premiumFixed}">退款转币固定溢价（koin，≥0）</span>
-                <input type="number" name="premiumFixed" min="0" th:value="${pawcoin.premiumFixed}"/></label>
-            <label><span th:text="#{admin.config.topupPaused}">暂停充值</span>
-                <input type="checkbox" name="topupPaused" value="true" th:checked="${pawcoin.topupPaused}"/></label>
-
-            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.config.btn.savePawcoin}">保存 PawCoin 配置</button>
-        </form>
+            <div th:replace="~{admin/fragments/config-card-pricing :: card}"></div>
+            <div th:replace="~{admin/fragments/config-card-ktp :: card}"></div>
+            <div class="cfg-group" data-card-group="pawcoin">
+                <div th:replace="~{admin/fragments/config-card-pawcoin :: card}"></div>
+                <div th:replace="~{admin/fragments/config-card-pawcoin :: tiers}"></div>
+            </div>
         </th:block>
 
-        <!-- ══ V1.1.6 Story 18.3 · AB-3M：分享奖励 ══
-             🛡 独立 form + 独立权限码（AC5）：关总开关不该顺带要「改兽医定价与分成」的权限。
-             🛡 落库仍是同一张 pawcoin_config 单行、同一个 PAWCOIN diff 审计组（AC1/AC6）。
-             ⚠️ edit 码也放进门里：应急操作员可能只握 share_reward_edit，进得了页也要看得到这一块。 -->
-        <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.share_reward_view') or hasAuthority('config.share_reward_edit')"
-             th:with="ov=${shareRewardOverview}">
-            <h2 th:text="#{admin.config.shareReward}">分享奖励</h2>
-
-            <!-- 🔴 AC2：白嫖倍数必须与配置**同屏**。两个数分开看都合理，
-                 放一起才看得出风险 —— 「月上限 30 / HD 解锁 60 = 两个月白嫖一次」。 -->
-            <p class="hint" data-notice="share-reward-freeride">
-                <span th:text="#{admin.config.shareReward.hdPrice}">当前 HD 解锁价</span>:
-                <b th:text="${ov.hdPrice()}">5000</b> ·
-                <span th:text="#{admin.config.shareReward.monthlyCap}">月度上限</span>:
-                <b th:text="${ov.monthlyCap()}">2000</b> &rArr;
-                <b th:if="${ov.monthsPerHdUnlock() != null}"
-                   th:text="|#{admin.config.shareReward.monthsPrefix} ${ov.monthsPerHdUnlock()} #{admin.config.shareReward.monthsSuffix}|">攒满 2.5 个月额度可换一次 HD 解锁</b>
-                <b th:if="${ov.monthsPerHdUnlock() == null}"
-                   th:text="#{admin.config.shareReward.noGrant}">月度上限为 0 ⇒ 不发币</b>
-            </p>
-
-            <!-- ⚠️ AC3：不给当月消耗，运营改这个数就是拍脑袋。WIB 字样显式标出。 -->
-            <p class="hint" data-notice="share-reward-usage">
-                <b th:text="${ov.period()}">2026-08</b>
-                <span th:text="#{admin.config.shareReward.wib}">（WIB 自然月）</span> ·
-                <span th:text="#{admin.config.shareReward.granted}">已发放</span>
-                <b th:text="${ov.grantedThisMonth()}">0</b> ·
-                <span th:text="#{admin.config.shareReward.atCap}">达上限账号数</span>
-                <b th:text="${ov.accountsAtCap()}">0</b>
-            </p>
-
-            <!-- ⚠️ class="card" 不是装饰：本块四个标签都很长（「身份证分享每日次数上限（0 = 不发）」），
-                 不加它标签是 inline 的，会在一行里排不下而**从中间断开**——
-                 实机截图上「身份证」被挤到上一行行尾、「分享每日次数上限」掉到下一行。
-                 .card 让 label 变 block，与上面「定价配置」同一形状。 -->
-            <form class="card" method="post" th:action="@{/admin/config/share-reward}"
-                  sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.share_reward_edit')">
-                <!-- 🔴 总开关：发现被刷要能立刻全线关掉，优先于任何渠道层配置。 -->
-                <label><span th:text="#{admin.config.shareRewardEnabled}">分享奖励总开关</span>
-                    <input type="checkbox" name="shareRewardEnabled" value="true"
-                           th:checked="${pawcoin.shareRewardEnabled}"/></label>
-                <label><span th:text="#{admin.config.shareRewardMonthlyCap}">月度免费获取上限</span>
-                    <input type="number" name="shareRewardMonthlyCap" min="0" step="1"
-                           th:value="${pawcoin.shareRewardMonthlyCap}"/></label>
-                <label><span th:text="#{admin.config.idCardShareReward}">身份证分享每次发放</span>
-                    <input type="number" name="idCardShareReward" min="0" step="1"
-                           th:value="${pawcoin.idCardShareReward}"/></label>
-                <label><span th:text="#{admin.config.idCardShareDailyCap}">身份证分享每日次数上限</span>
-                    <input type="number" name="idCardShareDailyCap" min="0" step="1"
-                           th:value="${pawcoin.idCardShareDailyCap}"/></label>
-                <button type="submit" class="btn btn-primary btn-sm"
-                        th:text="#{admin.config.btn.saveShareReward}">保存分享奖励配置</button>
-            </form>
-        </div>
-
-        <!--/* 充值档位（AB-6B → V1.3.0 Story 6.2 AB-22A / D-24 / D-25）：主表只列启用中（≤4）；「查看已停用（N）」htmx 原地展开灰底第二表；
-             右上「＋ 新建档位」<details> 内联表单（抽屉版随 6.3 模板 D）。保底 ≥1 启用护栏不变。同上：非分享奖励块，补 config.view 门。 */-->
-        <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.view')">
-        <div class="wb-title-row">
-            <h2 th:text="#{admin.config.tiers}">充值档位</h2>
-            <details class="pl-inline" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
-                <summary class="btn btn-primary btn-sm" th:text="#{admin.config.tier.newButton}">＋ 新建档位</summary>
-                <form class="card" method="post" th:action="@{/admin/config/tiers}">
-                    <h3 th:text="#{admin.config.tier.newTitle}">新建充值档位</h3>
-                    <p class="hint" th:text="#{admin.config.tier.newHint}">档位标识自动生成为 t&lt;金额&gt;；新建即启用；最多 4 个启用档位。</p>
-                    <label class="field"><span th:text="#{admin.config.tier.amount}">金额（IDR）</span>
-                        <input class="field-full" type="number" name="amountIdr" min="1" max="100000000" step="1" required/></label>
-                    <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.config.tier.btn.create}">创建档位</button>
-                </form>
-            </details>
-        </div>
-        <p class="hint" th:text="#{admin.config.hint.tiers}">至少保留 1 个启用档位；停用不影响历史订单。</p>
-        <p id="tiers-inline-error" class="lst-inline-error" aria-live="polite"></p>
-        <table th:fragment="tiers-enabled" id="tiers-enabled" th:attr="hx-swap-oob=${oob} ? 'true' : null">
-            <thead>
-            <tr><th th:text="#{admin.config.col.tier}">档位</th><th th:text="#{admin.config.col.amount}">金额（IDR）</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.common.actions}">操作</th></tr>
-            </thead>
-            <tbody>
-            <tr th:each="t : ${tiers}" th:attr="data-tier-id=${t.id}">
-                <td th:text="${t.tierKey}">10k</td>
-                <td th:text="${#numbers.formatInteger(t.amountIdr, 0, 'COMMA')}">10,000</td>
-                <td th:text="#{admin.common.enabled}">启用</td>
-                <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
-                    <form th:attr="hx-post=@{/admin/config/tiers/{id}/enabled(id=${t.id})}" hx-target="#tiers-inline-error" hx-swap="innerHTML" class="inline"
-                          hx-vals="js:{expanded: document.querySelector('#tiers-disabled table, #tiers-disabled h3') ? 1 : 0}">
-                        <input type="hidden" name="enabled" value="false"/>
-                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.common.disable}">停用</button>
-                    </form>
-                </td>
-            </tr>
-            </tbody>
-        </table>
-        <p class="hint" th:text="#{admin.config.tier.note}">仅展示当前启用的档位，最多 4 档。</p>
-        <!--/* 链接与折叠区一起是 fragment（tiers-disabled-link）：启停后随两表一并 oob，N 不过期；折叠区展开态由 refresh 按 expanded 决定（复审 #5） */-->
-        <p th:fragment="tiers-disabled-link" id="tiers-disabled-link" th:attr="hx-swap-oob=${oob} ? 'true' : null">
-            <a th:if="${disabledCount > 0}" href="#" th:attr="hx-get=@{/admin/config/tiers/disabled}" hx-target="#tiers-disabled" hx-swap="outerHTML"
-               th:text="#{admin.config.tier.showDisabled(${disabledCount})}">查看已停用（N）</a>
-        </p>
-        <div id="tiers-disabled"></div>
+        <!--/* 分享奖励（V1.1.6 Story 18.3 · AB-3M）：独立权限码；edit 码也放进门里——应急操作员可能只握 share_reward_edit */-->
+        <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.share_reward_view') or hasAuthority('config.share_reward_edit')">
+            <div th:replace="~{admin/fragments/config-card-share-reward :: card}"></div>
         </th:block>
-
     </div>
 </div>
 </body>

@@ -157,8 +157,8 @@ class AdminMessagesParityTest {
     /**
      * 🛡 AC2：文案值里出现的**权限码必须逐字保留**，不许被翻译。
      *
-     * <p>当前有一处真实占用：{@code admin.config.pricingReadonly} 的文案里写着
-     * 「需 {@code config.edit} 权限修改」——那是**故意**告诉运营该找谁要权限的。
+     * <p>曾有一处真实占用：{@code admin.config.pricingReadonly} 的文案里写着「需 {@code config.edit} 权限修改」——那是**故意**
+     * 告诉运营该找谁要权限的（V1.3.0 Story 6.3 起该注释改为 {@code admin.v130.config.readonly} 按 {@code perm.*} 显示名传参，文案值里不再有裸码）。
      * 权限码一旦落地就**冻结**，译过的码对不上任何真实权限，运营拿着它去申请会被驳回。
      *
      * <p>比对基准取自 {@link com.tailtopia.admin.account.domain.AdminPermissions} 的常量，
@@ -190,8 +190,9 @@ class AdminMessagesParityTest {
                 expected.put(k, found);
             }
         }
-        // 断言基数：真有这么一处，否则下面的循环是空跑。
-        assertThat(expected).as("zh 侧文案里嵌了权限码的键").isNotEmpty();
+        // V1.3.0 Story 6.3 之前 admin.config.pricingReadonly 真嵌着 config.edit；6.3 起只读注释改按 {0} 传权限显示名（perm.* key），
+        // 新不变量：文案值里**不再允许**裸权限码（显示名三语各译，码不需要也不该出现在文案里）。下面的四包逐字比对保留作历史参考。
+        assertThat(expected).as("文案值不得再嵌裸权限码——所缺权限一律走 perm.* 显示名传参（D-37）").isEmpty();
 
         Map<String, String> all = new LinkedHashMap<>(LOCALES);
         all.put("baseline", BASELINE);
