@@ -1,27 +1,23 @@
 package com.tailtopia.admin.moderation.web;
 
-import com.tailtopia.admin.moderation.dto.TicketStatusBucket;
+import com.tailtopia.admin.moderation.dto.TicketFilters;
 import com.tailtopia.admin.moderation.dto.TicketType;
-import com.tailtopia.admin.moderation.dto.UnifiedTicketRow;
-import com.tailtopia.admin.moderation.service.UnifiedTicketQueryService;
+import com.tailtopia.admin.moderation.service.TicketsWorkbenchService;
+import com.tailtopia.admin.shared.web.AdminFragmentResponses;
+import com.tailtopia.admin.shared.web.HxRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import com.tailtopia.admin.service.AdminUserDetails;
-import com.tailtopia.auth.service.AccountQueryService;
-import com.tailtopia.moderation.domain.AccountReportEntry;
-import com.tailtopia.moderation.repository.AccountDisposalRepository;
-import com.tailtopia.moderation.repository.AccountReportEntryRepository;
 import com.tailtopia.moderation.service.AccountDisposalService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
 import java.util.List;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -32,8 +28,13 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  * 不是两者并存：三类工单混在一个队列里、按同一把尺子排序，运营才不用在几个入口之间来回切、
  * 也不用对着一堆互不可比的标记猜先处理哪个。
  *
- * <p>详情走单独的 HTMX 片段（点「展开」才拉）：签名、每一次举报的类型与补充说明、历史处置记录
- * 都只在展开那一行时查一次，<b>不在列表里逐行查</b>（那就是既有举报队列的 N+1）。
+ * <p>详情走单独的 HTMX 片段（选中才拉）：签名、每一次举报的类型与补充说明、历史处置记录
+ * 都只在选中那一条时查一次，<b>不在列表里逐行查</b>（那就是既有举报队列的 N+1）。
+ *
+ * <p>V1.3.0 Story 2.5：重构为模板 A 双栏工作台（{@code tpl-a-workbench}）——两态页签 / 左栏队列 / 右栏四区 /
+ * 两段式处置区。<b>写端点路径 / 参数 / 权限零变更</b>（唯一例外：{@code warn} 新增必填 {@code reason}，只进审计）；
+ * htmx 请求按 {@link HxRequest} 分叉返回 fragment，非 htmx 维持 PRG。旧 {@code GET /admin/tickets/detail} 退役，
+ * 并入 {@code GET /admin/tickets/{id}/detail}。
  */
 @Controller
 public class UnifiedTicketController {
@@ -56,151 +57,72 @@ public class UnifiedTicketController {
     static final String SUSPEND_AUTH = "hasRole('SUPER_ADMIN') or "
             + "(hasAuthority('content.dispose_account') and hasAuthority('user.deactivate'))";
 
-    private static final int PAGE_SIZE = 20;
-
-    private final UnifiedTicketQueryService query;
-    private final AccountReportEntryRepository reportEntries;
-    private final AccountDisposalRepository disposals;
-    private final AccountQueryService accountQueryService;
     private final AccountDisposalService disposalService;
-    private final com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead;
-    private final com.tailtopia.moderation.service.ReportService contentReportService;
     private final com.tailtopia.admin.service.AdminModerationService moderationService;
+    /** V1.3.0 Story 2.5：工作台只读装配（两态计数 / 队列 / 四区 / 下一条）。 */
+    private final TicketsWorkbenchService workbench;
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
 
-    public UnifiedTicketController(UnifiedTicketQueryService query,
-            AccountReportEntryRepository reportEntries, AccountDisposalRepository disposals,
-            AccountQueryService accountQueryService, AccountDisposalService disposalService,
-            com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead,
-            com.tailtopia.moderation.service.ReportService contentReportService,
+    public UnifiedTicketController(AccountDisposalService disposalService,
             com.tailtopia.admin.service.AdminModerationService moderationService,
-            Messages msg) {
-        this.query = query;
-        this.reportEntries = reportEntries;
-        this.disposals = disposals;
-        this.accountQueryService = accountQueryService;
+            TicketsWorkbenchService workbench, Messages msg) {
         this.disposalService = disposalService;
-        this.throttleRead = throttleRead;
-        this.contentReportService = contentReportService;
         this.moderationService = moderationService;
+        this.workbench = workbench;
         this.msg = msg;
     }
 
+    /**
+     * 工作台整页（V1.3.0 Story 2.5，模板 A）。参数：{@code state}（pending/handled，默认待处置）、{@code reason}（举报类型）、
+     * {@code q}（账号 id / 昵称）、{@code page}。旧链接 {@code ?status=RESOLVED} 映射到已处置态；{@code type} 参数已无意义（本页恒为用户举报）。
+     * htmx 请求（滚动翻页）只回左栏行片段。
+     */
     @GetMapping("/admin/tickets")
     @PreAuthorize(VIEW_AUTH)
     public String tickets(
-            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "state", required = false) String state,
             @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "reason", required = false) String reason,
             @RequestParam(value = "q", required = false) String q,
             @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestHeader(value = "HX-Request", required = false) String hxRequest,
-            Model model) {
-
-        TicketStatusBucket statusFilter = parseEnum(TicketStatusBucket.class, status);
-        // 🔴 2026-08-19 拆分：本页**只管用户举报**，标题改为「被举报用户」。
-        // 内容举报与账号标识字段已移入「人工复核」页 —— 它们的处置动作和授权域都不在本页，
-        // 之前挤在一起的结果是：账号标识字段那一类在本页根本无法处置（点批量只吃一条红字提示）。
-        Page<UnifiedTicketRow> result = query.search(SCOPE, null, statusFilter, q,
-                PageRequest.of(Math.max(page, 0), PAGE_SIZE));
-
+            HxRequest hx, Model model) {
         model.addAttribute("active", "tickets");
-        model.addAttribute("result", result);
-        // Story 17.2 · AC3：限流中的账号在工单上直接看到状态与到期时间。
-        // 🔴 整页一次取（逐行查是 N+1）。
-        model.addAttribute("accountThrottles", throttleRead.forAccounts(
-                result.getContent().stream().map(UnifiedTicketRow::targetUserId)
-                        .filter(java.util.Objects::nonNull).distinct().toList(),
-                java.time.Instant.now()));
-        model.addAttribute("statuses", TicketStatusBucket.values());
-        // 回显筛选条件（分页链接要带着它们走）。类别下拉已移除（本页恒为用户举报一类）。
-        model.addAttribute("type", null);
-        model.addAttribute("status", statusFilter == null ? null : statusFilter.name());
-        model.addAttribute("q", q);
+        populateQueue(TicketFilters.of(state, status, reason, q, page), model);
+        return hx.isHtmx() ? "admin/fragments/tickets-queue :: rows" : "admin/tickets";
+    }
 
-        return hxRequest != null ? "admin/tickets :: resultsFragment" : "admin/tickets";
+    /** 左栏队列 fragment（切两态 / 筛选 / 滚动翻页）。 */
+    @GetMapping("/admin/tickets/queue")
+    @PreAuthorize(VIEW_AUTH)
+    public String queueFragment(
+            @RequestParam(value = "state", required = false) String state,
+            @RequestParam(value = "reason", required = false) String reason,
+            @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            Model model) {
+        populateQueue(TicketFilters.of(state, null, reason, q, page), model);
+        return page > 0 ? "admin/fragments/tickets-queue :: rows" : "admin/fragments/tickets-queue :: list";
     }
 
     /**
-     * 一条工单的展开详情（HTMX 片段）。
-     *
-     * <p>⚠️ 这里读的三样东西都<b>只在展开时查一次</b>：
-     * <ul>
-     *   <li><b>个性签名</b>：举报「仿冒他人」「持续骚扰」时，签名往往<b>就是证据本身</b>
-     *       （冒充某人的自我介绍、指名道姓的攻击），运营不该还要再跳一步去别处看。
-     *       取<b>当前值</b>（经既有账号查询服务），不快照、不落工单表。</li>
-     *   <li><b>历史处置记录</b>：含<b>每一次警告</b>——只数封号会漏掉「已经被警告过三次」这种关键背景。</li>
-     *   <li><b>每一次举报的类型与「其他」补充说明</b>，按时间倒序（第一次报骚扰、第二次报仿冒，
-     *       本身就是问题在升级的证据）。</li>
-     * </ul>
+     * 右栏四区 fragment（AC3 / AC9）：账号卡（头像 / 昵称 / 注册时间 / 签名 / 历史处置，含<b>每一次警告</b>）、举报明细逐条
+     * （高频举报人打标）、近期内容抽样、操作区。取代旧 {@code GET /admin/tickets/detail}（已退役）。
+     * ⚠️ 举报人身份只在运营后台展示——绝不下发给被举报人、也绝不进日志。
      */
-    /**
-     * 展开面板。**两个页面共用**：被举报用户（用户举报）与人工复核（内容举报）。
-     *
-     * <p>🔴 权限比列表页的 {@code VIEW_AUTH} 宽一档：加上 {@code content.manual_review} 与
-     * {@code content.takedown}。因为内容举报 2026-08-19 拆到了人工复核页，而那页的入口认的是
-     * 后两个码 —— 若这里仍只认 {@code content.view_tickets}，只持 takedown 的审核员
-     * <b>页面打得开、点「展开」却吃 403</b>：面板一片空白、没有任何提示，
-     * 只能当成「这个功能坏了」。
-     */
-    @GetMapping("/admin/tickets/detail")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.view_tickets') "
-            + "or hasAuthority('content.manual_review') or hasAuthority('content.takedown')")
-    public String detail(@RequestParam("type") String type,
-            @RequestParam("sourceId") long sourceId,
-            @RequestParam(value = "userId", required = false) Long userId,
-            Model model) {
-        TicketType ticketType = parseEnum(TicketType.class, type);
-        model.addAttribute("type", ticketType == null ? null : ticketType.name());
-        model.addAttribute("sourceId", sourceId);
+    @GetMapping("/admin/tickets/{id:\\d+}/detail")
+    @PreAuthorize(VIEW_AUTH)
+    public String detail(@PathVariable("id") long reportId, Model model) {
+        model.addAttribute("d", workbench.detail(reportId));
+        return "admin/fragments/tickets-detail :: detail";
+    }
 
-        // 修复清单 #3：内容举报的「每一次举报」也要能看（原因 + 时间）——旧 /admin/reports 页
-        // 下线后这里是唯一可见处。两类映射成同一形状（reason/createdAt/detail）复用同一段模板。
-        // 每一行都带上**举报人**（2026-08-20）：处置一条举报时，「谁在报」和「报的什么理由」
-        // 一样是判断依据 —— 三个不同的人各报一次与一个人反复报三次，处置结论可能完全相反，
-        // 而优先级分只把这件事压成一个数字。原先这里只给原因 + 时间，运营看不出是谁。
-        // ⚠️ 昵称**批量解析一次**（findAuthorViews 收一组 id）。逐条查昵称就是 N+1，
-        //    而这个面板是逐行展开、每次都会打一遍。
-        List<ReportEntryView> entries;
-        if (ticketType == TicketType.ACCOUNT_REPORT) {
-            var rows = reportEntries.findByReportIdOrderByCreatedAtDesc(sourceId);
-            var names = nicknamesOf(rows.stream().map(e -> e.getReporterId()).toList());
-            entries = rows.stream()
-                    .map(e -> new ReportEntryView(e.getReporterId(), names.get(e.getReporterId()),
-                            e.getReason().name(), e.getCreatedAt(), e.getDetail()))
-                    .toList();
-        } else if (ticketType == TicketType.CONTENT_REPORT) {
-            var rows = contentReportService.findAllForPost(sourceId);
-            var names = nicknamesOf(rows.stream().map(r -> r.getReporterId()).toList());
-            entries = rows.stream()
-                    .map(r -> new ReportEntryView(r.getReporterId(), names.get(r.getReporterId()),
-                            r.getReasonType().name(), r.getCreatedAt(), null))
-                    .toList();
-        } else {
-            entries = List.of();
-        }
-        model.addAttribute("entries", entries);
-        // 多于 1 条时页面只显示「原因 × 次数」，逐条明细折叠起来（2026-08-20 产品口径）：
-        // 十几个人举报同一个对象时，逐条列出来的那一屏没人会一行行读，真正要看的是「都在报什么」。
-        // 次数倒序、同次数按原因名稳定排序 —— 别让同一份数据两次打开顺序不同。
-        model.addAttribute("reasonCounts", entries.stream()
-                .collect(java.util.stream.Collectors.groupingBy(ReportEntryView::reason,
-                        java.util.TreeMap::new, java.util.stream.Collectors.counting()))
-                .entrySet().stream()
-                .map(e -> new ReasonCount(e.getKey(), e.getValue()))
-                .sorted(java.util.Comparator.comparingLong(ReasonCount::count).reversed()
-                        .thenComparing(ReasonCount::reason))
-                .toList());
-
-        if (userId != null) {
-            model.addAttribute("signature", accountQueryService.activeSignatureOf(userId).orElse(null));
-            model.addAttribute("disposals", disposals.findByTargetUserIdOrderByCreatedAtDesc(userId));
-        } else {
-            model.addAttribute("signature", null);
-            model.addAttribute("disposals", List.of());
-        }
-        return "admin/tickets :: detailFragment";
+    private void populateQueue(TicketFilters filters, Model model) {
+        model.addAttribute("filters", filters);
+        model.addAttribute("counts", workbench.counts(filters));
+        model.addAttribute("queue", workbench.queue(filters));
+        model.addAttribute("reasons", com.tailtopia.moderation.domain.AccountReportReason.values());
     }
 
     // ===== Story 3.2：账号级处置 =====
@@ -209,15 +131,26 @@ public class UnifiedTicketController {
     // ⚠️ 「限流曝光」这一档**不实现、也不留任何 UI 位** —— 它依赖推荐算法打分链路，随 FR-95 移到 1.1.8。
     //    留一个点了没反应的按钮比没有按钮更糟。
 
-    /** 警告：发一条通知 + 记一行处置，**不影响用户使用**。 */
+    /**
+     * 警告：发一条通知 + 记一行处置，**不影响用户使用**。
+     *
+     * <p>V1.3.0 Story 2.5 AC6：新增必填 {@code reason}（PRD §5 ③ ①），<b>只进审计</b>，通知文案一字不改。
+     * {@code required=false} + 服务端判空 → 422（缺参给 400 会绕过行内 err 范式）。
+     */
     @PostMapping("/admin/tickets/warn")
     @PreAuthorize(DISPOSE_AUTH)
     public String warn(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam("targetUserId") long targetUserId,
             @RequestParam(value = "reportId", required = false) Long reportId,
-            RedirectAttributes flash) {
+            @RequestParam(value = "reason", required = false) String reason,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            // htmx 分支不 try/catch：422 / 403 由 AdminBusinessExceptionAdvice 出 fragment（AC8）。
+            disposalService.warn(targetUserId, reportId, admin.getAdminAccountId(), requireReason(reason));
+            return done(hx, reportId, msg.get("admin.flash.ticket.warned"), model, response);
+        }
         return withFlashOnError(flash, msg.get("admin.flash.ticket.warned"),
-                () -> disposalService.warn(targetUserId, reportId, admin.getAdminAccountId()));
+                () -> disposalService.warn(targetUserId, reportId, admin.getAdminAccountId(), requireReason(reason)));
     }
 
     /** 封号：停用账号（可逆）+ 撤销 refresh 句柄 + 发通知 + 记一行处置。 */
@@ -226,7 +159,11 @@ public class UnifiedTicketController {
     public String suspend(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam("targetUserId") long targetUserId,
             @RequestParam(value = "reportId", required = false) Long reportId,
-            RedirectAttributes flash) {
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            disposalService.suspend(targetUserId, reportId, admin.getAdminAccountId());
+            return done(hx, reportId, msg.get("admin.flash.ticket.suspended"), model, response);
+        }
         return withFlashOnError(flash, msg.get("admin.flash.ticket.suspended"),
                 () -> disposalService.suspend(targetUserId, reportId, admin.getAdminAccountId()));
     }
@@ -235,9 +172,29 @@ public class UnifiedTicketController {
     @PostMapping("/admin/tickets/dismiss")
     @PreAuthorize(DISPOSE_AUTH)
     public String dismiss(@AuthenticationPrincipal AdminUserDetails admin,
-            @RequestParam("reportId") long reportId, RedirectAttributes flash) {
+            @RequestParam("reportId") long reportId,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            disposalService.dismiss(reportId, admin.getAdminAccountId());
+            return done(hx, reportId, msg.get("admin.flash.ticket.dismissed"), model, response);
+        }
         return withFlashOnError(flash, msg.get("admin.flash.ticket.dismissed"),
                 () -> disposalService.dismiss(reportId, admin.getAdminAccountId()));
+    }
+
+    /** 处置成功 fragment（AC8）：data-next-id + 行 oob 删除 + 两态计数 oob + toast + HX-Trigger 刷角标。 */
+    private String done(HxRequest hx, Long reportId, String message, Model model, HttpServletResponse response) {
+        model.addAttribute("done", workbench.afterDispose(hx.currentUrl(), reportId == null ? 0L : reportId));
+        model.addAttribute("message", message);
+        AdminFragmentResponses.triggerBadgeRefresh(response);
+        return "admin/fragments/tickets-done :: done";
+    }
+
+    private static String requireReason(String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw AppException.validation("警告必须填写理由").code("admin.err.tickets.warnReasonRequired");
+        }
+        return reason.trim();
     }
 
     /**
@@ -313,6 +270,11 @@ public class UnifiedTicketController {
                 AccountDisposalService.BatchAction.class, action);
         if (batchAction == null) {
             flash.addFlashAttribute("error", msg.get("admin.flash.ticket.accountBatchActions"));
+            return "redirect:/admin/tickets";
+        }
+        // V1.3.0 Story 2.5 AC6：警告必须写理由，批量条已不渲染批量警告；伪造表单提交一律红字拒绝（服务层重载保留兼容）。
+        if (batchAction == AccountDisposalService.BatchAction.WARN) {
+            flash.addFlashAttribute("error", msg.get("admin.v130.tickets.batch.warnRetired"));
             return "redirect:/admin/tickets";
         }
         // 封号那一档额外要 user.deactivate —— 与单条口径一致，别让批量成为绕过它的后门。
@@ -430,20 +392,6 @@ public class UnifiedTicketController {
     }
 
     /**
-     * 展开详情「每一次举报」的统一行形状：账号举报直接用实体（reason/createdAt/detail 同名），
-     * 内容举报映射到本 record —— 两类共用模板同一段循环。
-     */
-    /**
-     * 「原因 × 次数」的一行（多于 1 条举报时的聚合摘要）。
-     *
-     * @param reason 举报原因枚举名
-     * @param count  该原因被报了多少**次**（不是多少人）—— 人数/次数/高频人数三个数在**行上**
-     *               已经分列给出，这里只回答「都在报什么」
-     */
-    public record ReasonCount(String reason, long count) {
-    }
-
-    /**
      * 展开面板里「每一次举报」的一行。两类举报映射成同一形状复用同一段模板。
      *
      * @param reporterId       举报人账号 id。⚠️ 只在运营后台展示 —— <b>绝不下发给被举报人、
@@ -454,25 +402,6 @@ public class UnifiedTicketController {
      */
     public record ReportEntryView(Long reporterId, String reporterNickname, String reason,
             java.time.Instant createdAt, String detail) {
-    }
-
-    /**
-     * 一批账号 id → 昵称。注销或查不到的**不放进 map**（模板据此显示「账号已注销」）。
-     *
-     * <p>一次查完，不在循环里逐条查 —— 展开面板每次都会打这一遍。
-     */
-    private java.util.Map<Long, String> nicknamesOf(List<Long> ids) {
-        var distinct = ids.stream().filter(java.util.Objects::nonNull).distinct().toList();
-        if (distinct.isEmpty()) {
-            return java.util.Map.of();
-        }
-        java.util.Map<Long, String> out = new java.util.HashMap<>();
-        accountQueryService.findAuthorViews(distinct).forEach((id, view) -> {
-            if (view != null && !view.deleted() && view.nickname() != null) {
-                out.put(id, view.nickname());
-            }
-        });
-        return out;
     }
 
     /** 空白 / 非法值一律当「不筛选」，不给运营一个 400。 */

@@ -5,7 +5,7 @@
   oob：被处理行删除（review-row-<tab>-<id>）、各页签计数替换、toast。响应头 HX-Trigger: admin:badge-refresh 由 Controller 写。
 -->
 <body>
-<div th:fragment="done" class="rv-done" th:data-next-id="${done.nextId}">
+<div th:fragment="done" class="rv-done" data-done th:data-next-id="${done.nextId}">
     <!-- toast oob 到 layout 的 #admin-toast-host（留在右栏会被下一条 detail 立刻冲掉，复审 #6） -->
     <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${message} ?: #{${messageKey}}">已处理</div>
     <div class="empty empty--queue" th:if="${#strings.isEmpty(done.nextId)}">

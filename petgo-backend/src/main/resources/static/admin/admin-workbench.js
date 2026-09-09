@@ -55,14 +55,15 @@
             var wb = wbOf(e.detail && e.detail.target);
             if (!wb) { return; }
             var root = e.detail.target && e.detail.target.firstElementChild;
-            if (root && root.hasAttribute('data-next-id')) { selectNext(root); }
+            // data-next-id 为空串时 Thymeleaf 会整个去掉该属性 → 处置 fragment 另带 data-done 标记，保证清空态也走 selectNext
+            if (root && (root.hasAttribute('data-next-id') || root.hasAttribute('data-done'))) { selectNext(root); }
         });
         // 操作区的 POST：HX-Target 头改指壳底部的 #admin-inline-error（复审 #2）。htmx 默认把 hx-target 的 id
         // （wb-detail-body）放进 HX-Target，AdminBusinessExceptionAdvice 会据此 HX-Retarget → 422/403 把右栏三卡整体
         // 清空。改成行内错误宿主后：失败只落一行 err、不跳条；成功仍按 hx-target 正常 swap（该头只被服务端错误分支读）。
         document.body.addEventListener('htmx:configRequest', function (e) {
             var elt = e.detail && e.detail.elt;
-            if (elt && elt.closest && elt.closest('.wb-actions') && wbOf(elt)) {
+            if (elt && elt.closest && elt.closest('.wb-actions, [data-inline-error]') && wbOf(elt)) {
                 e.detail.headers['HX-Target'] = 'admin-inline-error';
             }
         });

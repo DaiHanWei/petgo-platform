@@ -165,15 +165,27 @@ public class AccountDisposalService {
      */
     @Transactional
     public void warn(long targetUserId, Long reportId, long actorAccountId) {
+        warn(targetUserId, reportId, actorAccountId, null);
+    }
+
+    /**
+     * 警告一次并记理由（V1.3.0 Story 2.5 AC6，PRD §5 ③ ①）。{@code reason} 是运营内部追溯用，
+     * <b>只进审计 summary</b>（截断 ≤ {@value #REASON_MAX_LENGTH} 字），<b>绝不拼进用户通知</b>——
+     * 通知文案与 {@link #warn(long, Long, long)} 一字不差（不透出理由 / 举报人 / 次数）。
+     * 三步顺序不变：先落记录 → 收档 + 审计 → 最后通知。理由为空（批量 / 旧调用方）时审计记「-」。
+     */
+    @Transactional
+    public void warn(long targetUserId, Long reportId, long actorAccountId, String reason) {
         requireDisposalTarget(targetUserId, reportId);
         // ① 先落记录 —— 顺序不能反（见类注释）。
         disposals.save(AccountDisposal.create(targetUserId, AccountDisposalType.WARNING,
                 actorAccountId, reportId));
         // ② 收档 + 审计。
         resolveTicket(reportId, actorAccountId);
-        // ⚠️ summary 里严禁 PII / 内容原文 / 令牌。
+        // ⚠️ summary 里严禁 PII / 内容原文 / 令牌；理由是运营自己写的处置依据，不是用户内容。
         auditService.record(actorAccountId, AuditActions.ACCOUNT_WARNED, "USER",
-                String.valueOf(targetUserId), "账号警告（工单 " + (reportId == null ? "-" : reportId) + "）");
+                String.valueOf(targetUserId), "账号警告（工单 " + (reportId == null ? "-" : reportId) + "）理由："
+                        + clampReason(reason));
         // ③ 通知必须排最后：send 是 REQUIRES_NEW（立即独立提交并推送、回滚不撤回），
         //    放在收档/审计之前的话，后两步一旦失败回滚，用户已经收到了一条「假处置」通知。
         notificationService.send(targetUserId, NotificationType.ACCOUNT_WARNED,
@@ -314,6 +326,17 @@ public class AccountDisposalService {
             throw AppException.validation("该工单已被处理，请刷新列表后重试")
                     .code("admin.err.ticket.alreadyHandled");
         }
+    }
+
+    /** 审计里警告理由的最大长度（Story 2.5）：超长截断，不让一段长文撑爆审计摘要。 */
+    static final int REASON_MAX_LENGTH = 200;
+
+    private static String clampReason(String reason) {
+        if (reason == null || reason.isBlank()) {
+            return "-";
+        }
+        String r = reason.strip().replaceAll("\\s+", " ");
+        return r.length() <= REASON_MAX_LENGTH ? r : r.substring(0, REASON_MAX_LENGTH) + "…";
     }
 
     /** 某账号历史被处置次数（含<b>每一次警告</b>——只数封号会漏掉「已经警告过三次」这种关键背景）。 */

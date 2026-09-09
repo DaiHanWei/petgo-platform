@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  A2 被举报用户 · 左栏队列（V1.3.0 Story 2.5 AC2）。list = 整个 <ul>；rows = 行 + 翻页哨兵（滚动到底 htmx 追加）。
+  行两行式：① 勾选框（批量模式，仅待处置）+ 被举报账号昵称 + 状态点；② 类型标签 + 人 / 次 + 优先级分 + 最早举报（WIB）。
+  已处置态：结果徽标 + 操作人 + 时间（只读回看）。勾选框点击不触发行选中（hx-trigger 事件过滤）。
+-->
+<body>
+<ul th:fragment="list" class="q-list" id="tickets-queue" th:attr="data-state=${filters.state()}">
+    <th:block th:replace="~{admin/fragments/tickets-queue :: rows}"></th:block>
+</ul>
+
+<th:block th:fragment="rows">
+    <li th:if="${queue.isEmpty() and filters.page == 0}" class="q-empty">
+        <div class="empty empty--queue"><span class="empty-emoji">🎉</span>
+            <p th:text="${filters.handled} ? #{admin.v130.tickets.empty.handled} : #{admin.v130.empty.queue}">队列已清空</p>
+        </div>
+    </li>
+    <li th:each="r : ${queue.content}" class="q-row" th:id="'ticket-row-' + ${r.row.sourceId()}"
+        th:data-id="${r.row.sourceId()}"
+        th:data-detail-url="@{/admin/tickets/{id}/detail(id=${r.row.sourceId()})}"
+        th:attr="hx-get=@{/admin/tickets/{id}/detail(id=${r.row.sourceId()})}"
+        hx-trigger="click[!target.closest('.q-check')]"
+        hx-target=".wb-detail-body" hx-swap="innerHTML" tabindex="0">
+        <span class="q-title">
+            <!-- 批量勾选：value = 类型:id 复合串（批量端点契约不变）；data-label 供批量封号弹窗逐条列出 -->
+            <label class="q-check" th:if="${r.pending()}"
+                   sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')">
+                <input type="checkbox" name="ticketIds" form="ticket-batch-form" data-batch-item th:value="${r.batchToken()}"
+                       th:attr="data-type=${r.row.type()},data-label=${(r.row.targetNickname() != null ? r.row.targetNickname() : '#' + r.row.targetUserId()) + ' · ' + r.row.reportCount() + ' 次'}"/>
+            </label>
+            <span class="dot" th:classappend="'dot--' + ${r.dot()}"></span>
+            <span th:text="${r.row.targetNickname() ?: #messages.msg('admin.review.subject.deactivated')}" th:classappend="${r.row.targetDeleted()} ? 'muted'">昵称</span>
+            <span class="muted" th:if="${r.row.targetUserId() != null}" th:text="'#' + ${r.row.targetUserId()}">#id</span>
+            <span class="badge badge-warn" th:if="${r.throttled}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_view')"
+                  th:text="#{admin.throttle.badge.account}">账号限流中</span>
+        </span>
+        <span class="q-meta">
+            <span class="badge badge-neutral" th:text="#{admin.tickets.type.ACCOUNT_REPORT}">用户举报</span>
+            <span th:text="${r.row.reporterCount()} + ' ' + #{admin.v130.tickets.unit.people} + ' / ' + ${r.row.reportCount()} + ' ' + #{admin.v130.tickets.unit.times}">3 人 / 7 次</span>
+            <span th:if="${r.row.frequentCount() > 0}" class="badge badge-danger" th:text="#{admin.v130.tickets.frequent} + ' ' + ${r.row.frequentCount()}">高频 1</span>
+            <span th:text="'⚑ ' + ${r.row.score()}">⚑ 0</span>
+            <span th:text="${@adminTime.wib(r.row.earliestAt())}">时间</span>
+            <th:block th:if="${r.result != null}">
+                <span class="badge" th:classappend="${r.result == 'SUSPEND'} ? 'badge-danger' : (${r.result == 'WARNING'} ? 'badge-warn' : 'badge-ok')"
+                      th:text="#{'admin.v130.tickets.result.' + ${r.result}}">结果</span>
+                <span class="muted" th:if="${r.handledBy != null}" th:text="${r.handledBy}">操作人</span>
+                <span class="muted" th:if="${r.handledAt != null}" th:text="${@adminTime.wib(r.handledAt)}">时间</span>
+            </th:block>
+        </span>
+    </li>
+    <li th:if="${queue.hasNext()}" class="q-more" hx-swap="outerHTML" hx-trigger="revealed"
+        th:attr="hx-get=@{/admin/tickets/queue(state=${filters.state()},reason=${filters.reason},q=${filters.q},page=${filters.page + 1})}">
+        <span class="muted" th:text="#{admin.v130.review.more}">加载更多…</span>
+    </li>
+</th:block>
+</body>
+</html>

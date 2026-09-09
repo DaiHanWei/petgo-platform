@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  A2 处置成功 fragment（V1.3.0 Story 2.5 AC8，AD-9）：
+    done    — 主片段根元素带 data-next-id（admin-workbench.js 自动请求下一条 / 空则右栏空态）；oob：被处理行删除、两态计数替换；toast。
+    refresh — 限流 / 解除限流「停留本条」：toast + data-refresh-detail（tickets.html 页内 JS 据此重拉当前右栏）。
+  响应头 HX-Trigger: admin:badge-refresh 由 Controller 写。
+-->
+<body>
+<div th:fragment="done" class="tk-done" data-done th:data-next-id="${done.nextId}">
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${message}">已处理</div>
+    <div class="empty empty--queue" th:if="${#strings.isEmpty(done.nextId)}">
+        <span class="empty-emoji">🎉</span>
+        <p th:text="#{admin.v130.empty.queue}">队列已清空</p>
+    </div>
+    <li th:id="${done.rowId()}" hx-swap-oob="delete"></li>
+    <span id="tickets-tab-count-pending" class="tab-count" hx-swap-oob="true" th:text="${done.pendingCount}">0</span>
+    <span id="tickets-tab-count-handled" class="tab-count" hx-swap-oob="true" th:text="${done.handledCount}">0</span>
+</div>
+
+<div th:fragment="refresh" class="tk-refresh" data-refresh-detail>
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${message}">已完成</div>
+</div>
+</body>
+</html>

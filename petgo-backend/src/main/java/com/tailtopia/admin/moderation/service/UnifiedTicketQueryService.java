@@ -294,9 +294,15 @@ public class UnifiedTicketQueryService {
      * @param subTypesIn  {@code u.sub_type IN (...)}（名称 / 头像页签按 NICKNAME/PET_NAME、USER_AVATAR/PET_AVATAR 切分）
      * @param subTypeLike {@code u.sub_type ILIKE %x%}（内容举报按违规类别、内容送审按优先级前缀）
      * @param handledOnly {@code true} = 只要终态（已处理 / 无需处置，「已处理」两态视图）；{@code false} = 不加条件
+     * @param accountReason 用户举报按举报类型筛（Story 2.5 AC1）：{@code EXISTS account_report_entries.reason = ?}；非法值忽略
      */
-    public record Extra(java.util.Set<String> subTypesIn, String subTypeLike, boolean handledOnly, Long sourceId) {
-        public static final Extra NONE = new Extra(null, null, false, null);
+    public record Extra(java.util.Set<String> subTypesIn, String subTypeLike, boolean handledOnly, Long sourceId,
+            String accountReason) {
+        public static final Extra NONE = new Extra(null, null, false, null, null);
+
+        public Extra(java.util.Set<String> subTypesIn, String subTypeLike, boolean handledOnly, Long sourceId) {
+            this(subTypesIn, subTypeLike, handledOnly, sourceId, null);
+        }
 
         public Extra(java.util.Set<String> subTypesIn, String subTypeLike, boolean handledOnly) {
             this(subTypesIn, subTypeLike, handledOnly, null);
@@ -345,6 +351,17 @@ public class UnifiedTicketQueryService {
         if (extra.subTypeLike() != null && !extra.subTypeLike().isBlank()) {
             where.append(" AND u.sub_type ILIKE ? ESCAPE '\\'");
             args.add("%" + escapeLike(extra.subTypeLike().trim()) + "%");
+        }
+        if (extra.accountReason() != null && !extra.accountReason().isBlank()) {
+            try {
+                String reason = com.tailtopia.moderation.domain.AccountReportReason
+                        .valueOf(extra.accountReason().trim().toUpperCase()).name();
+                where.append(" AND u.ticket_type = 'ACCOUNT_REPORT' AND EXISTS (SELECT 1 FROM account_report_entries e"
+                        + " WHERE e.report_id = u.source_id AND e.reason = ?)");
+                args.add(reason);
+            } catch (IllegalArgumentException ignore) {
+                // 非法举报类型当「不筛选」，不给运营一个 500
+            }
         }
         String keyword = search == null ? null : search.trim();
         if (keyword != null && !keyword.isEmpty()) {

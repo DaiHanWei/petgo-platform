@@ -17,6 +17,10 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import com.tailtopia.admin.shared.web.AdminFragmentResponses;
+import com.tailtopia.admin.shared.web.HxRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.ui.Model;
 
 /**
  * 限流处置动作（V1.1.6 Story 17.2）。内容列表与工单页的限流按钮都打到这里。
@@ -31,6 +35,11 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  * <h2>⚠️ 这里不改限流的生效逻辑</h2>
  * 生效判定、到期、系数全在 17.1 的 {@link RankThrottleService} 里（AC7）。
  * 本类只做「谁能点、点了传什么参数、结果怎么回显」。
+ *
+ * <h2>V1.3.0 Story 2.5：htmx 分叉</h2>
+ * 带 {@code HX-Request} 时返回 toast fragment（根元素 {@code data-refresh-detail}，A2 页内 JS 据此重拉当前右栏，
+ * 「停留本条」）；{@code back} 在 htmx 路径忽略。参数全集与 {@code MANAGE} 门控不变；业务错交给
+ * {@code AdminBusinessExceptionAdvice} 出 422 行内 err。
  */
 @Controller
 public class AdminThrottleController {
@@ -71,16 +80,27 @@ public class AdminThrottleController {
             @RequestParam(value = "reportId", required = false) Long reportId,
             @RequestParam(value = "reason", required = false) String reason,
             @RequestParam(value = "back", required = false) String back,
-            RedirectAttributes flash) {
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         Long resolved = targetId != null ? targetId
                 : (scope == ThrottleScope.POST ? postTargetId : accountTargetId);
         if (resolved == null) {
+            if (hx.isHtmx()) {
+                throw AppException.validation("被限流对象缺失").code("admin.err.throttle.targetMissing");
+            }
             // 内容举报里被举报账号已注销时 accountTargetId 会是空 —— 给人话而不是 500。
             flash.addFlashAttribute("error", msg.get("admin.err.throttle.targetMissing"));
             return redirect(back);
         }
         Instant now = Instant.now();
         long adminId = admin.getAdminAccountId();
+        if (hx.isHtmx()) {
+            if (scope == ThrottleScope.POST) {
+                service.throttlePost(resolved, duration, now, adminId, reportId, reason);
+            } else {
+                service.throttleAccount(resolved, duration, now, adminId, reportId, reason);
+            }
+            return refreshed(msg.get("admin.flash.throttle.applied"), model, response);
+        }
         try {
             if (scope == ThrottleScope.POST) {
                 service.throttlePost(resolved, duration, now, adminId, reportId, reason);
@@ -106,7 +126,7 @@ public class AdminThrottleController {
     public String lift(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam("throttleIds") List<Long> throttleIds,
             @RequestParam(value = "back", required = false) String back,
-            RedirectAttributes flash) {
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         Instant now = Instant.now();
         long adminId = admin.getAdminAccountId();
         int lifted = 0;
@@ -120,10 +140,21 @@ public class AdminThrottleController {
             // 已到期或已被别人解除 —— 不是错误，但要说清，否则运营会以为按钮没生效。
             log.info("限流批量解除：成功 {} 条，已非生效态 {} 条", lifted, stale);
         }
-        flash.addFlashAttribute("notice", stale == 0
+        String notice = stale == 0
                 ? msg.get("admin.flash.throttle.lifted", lifted)
-                : msg.get("admin.flash.throttle.liftedWithStale", lifted, stale));
+                : msg.get("admin.flash.throttle.liftedWithStale", lifted, stale);
+        if (hx.isHtmx()) {
+            return refreshed(notice, model, response);
+        }
+        flash.addFlashAttribute("notice", notice);
         return redirect(back);
+    }
+
+    /** htmx 成功：toast + data-refresh-detail（停留本条，页内 JS 重拉右栏）+ HX-Trigger 刷角标。 */
+    private static String refreshed(String message, Model model, HttpServletResponse response) {
+        model.addAttribute("message", message);
+        AdminFragmentResponses.triggerBadgeRefresh(response);
+        return "admin/fragments/tickets-done :: refresh";
     }
 
     /**

@@ -114,7 +114,9 @@ class UnifiedTicketAccessControlTest {
                 com.tailtopia.admin.service.AdminModerationService am,
                 com.tailtopia.shared.i18n.Messages msg) {
             // 2026-09-02 后台文案国际化：控制器新增 Messages 注入。
-            return new UnifiedTicketController(q, e, d, a, ds, t, cr, am, msg);
+            // V1.3.0 Story 2.5：控制器只留处置 / 批量 / 工作台装配四个依赖。
+            return new UnifiedTicketController(ds, am,
+                    org.mockito.Mockito.mock(com.tailtopia.admin.moderation.service.TicketsWorkbenchService.class), msg);
         }
     }
 
@@ -145,21 +147,21 @@ class UnifiedTicketAccessControlTest {
     @Test
     void superAdminCanView() {
         authenticate(AdminAccountType.SUPER_ADMIN);
-        assertThatCode(() -> controller.tickets(null, null, null, 0, null, new ConcurrentModel()))
+        assertThatCode(() -> controller.tickets(null, null, null, null, 0, com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel()))
                 .doesNotThrowAnyException();
     }
 
     @Test
     void staffWithPermissionCanView() {
         authenticate(AdminAccountType.STAFF, "content.view_tickets");
-        assertThatCode(() -> controller.tickets(null, null, null, 0, null, new ConcurrentModel()))
+        assertThatCode(() -> controller.tickets(null, null, null, null, 0, com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel()))
                 .doesNotThrowAnyException();
     }
 
     @Test
     void staffWithoutPermissionIsDenied() {
         authenticate(AdminAccountType.STAFF, "content.view");
-        assertThatThrownBy(() -> controller.tickets(null, null, null, 0, null, new ConcurrentModel()))
+        assertThatThrownBy(() -> controller.tickets(null, null, null, null, 0, com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel()))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -167,7 +169,7 @@ class UnifiedTicketAccessControlTest {
     @Test
     void legacyReportPermissionDoesNotGrantTheUnifiedView() {
         authenticate(AdminAccountType.STAFF, "content.view_reports");
-        assertThatThrownBy(() -> controller.tickets(null, null, null, 0, null, new ConcurrentModel()))
+        assertThatThrownBy(() -> controller.tickets(null, null, null, null, 0, com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel()))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -175,7 +177,7 @@ class UnifiedTicketAccessControlTest {
     void detailIsGuardedToo() {
         authenticate(AdminAccountType.STAFF, "content.view");
         assertThatThrownBy(
-                () -> controller.detail("ACCOUNT_REPORT", 1L, 2L, new ConcurrentModel()))
+                () -> controller.detail(1L, new ConcurrentModel()))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -184,7 +186,8 @@ class UnifiedTicketAccessControlTest {
     @Test
     void warnRequiresDisposePermission() {
         authenticate(AdminAccountType.STAFF, "content.view_tickets");
-        assertThatThrownBy(() -> controller.warn(null, 7L, 1L,
+        assertThatThrownBy(() -> controller.warn(null, 7L, 1L, "理由", com.tailtopia.admin.shared.web.HxRequest.NONE,
+                new ConcurrentModel(), new org.springframework.mock.web.MockHttpServletResponse(),
                 new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap()))
                 .isInstanceOf(AccessDeniedException.class);
     }
@@ -197,13 +200,15 @@ class UnifiedTicketAccessControlTest {
     @Test
     void suspendNeedsBothDisposeAndDeactivate() {
         authenticate(AdminAccountType.STAFF, "content.dispose_account");
-        assertThatThrownBy(() -> controller.suspend(null, 7L, 1L,
+        assertThatThrownBy(() -> controller.suspend(null, 7L, 1L, com.tailtopia.admin.shared.web.HxRequest.NONE,
+                new ConcurrentModel(), new org.springframework.mock.web.MockHttpServletResponse(),
                 new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap()))
                 .isInstanceOf(AccessDeniedException.class);
 
         SecurityContextHolder.clearContext();
         authenticate(AdminAccountType.STAFF, "content.dispose_account", "user.deactivate");
-        assertThatCode(() -> controller.suspend(principalOf(), 7L, 1L,
+        assertThatCode(() -> controller.suspend(principalOf(), 7L, 1L, com.tailtopia.admin.shared.web.HxRequest.NONE,
+                new ConcurrentModel(), new org.springframework.mock.web.MockHttpServletResponse(),
                 new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap()))
                 .doesNotThrowAnyException();
     }

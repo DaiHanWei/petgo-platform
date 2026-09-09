@@ -52,7 +52,7 @@ development_status:
   2-3a-htmx-响应约定与-admin-shared-横切件: review   # htmx 响应约定与 admin/shared 横切件（AD-9）
   2-3b-五套模板壳-抽屉与工作台-js: review   # 五套模板壳、抽屉与工作台 JS（AD-11）
   2-4-a1-统一复核工作台: review   # A1 统一复核工作台
-  2-5-a2-被举报用户: ready-for-dev   # A2 被举报用户
+  2-5-a2-被举报用户: review   # A2 被举报用户
   2-6-a4-问诊异常工单: ready-for-dev   # A4 问诊异常工单
   2-7-a5-客服工单: ready-for-dev   # A5 客服工单
   2-8-a6-退款管理三段流: ready-for-dev   # A6 退款管理三段流

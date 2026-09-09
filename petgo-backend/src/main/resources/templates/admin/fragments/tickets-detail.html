@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  A2 右栏四区（V1.3.0 Story 2.5 AC3/AC4/AC8）：① 账号卡 ② 举报明细（高频举报人打标）③ 近期内容抽样 ④ 操作区两段式
+  （先选处置方式 chip，选中后该方式的参数区内联展开，参数不全按钮禁用；参数常驻卡内不进弹层）。
+  端点 / 参数 / 权限与现状逐字一致（warn 多一个必填 reason）。htmx 成功回 tickets-done（data-next-id）；限流类回 refresh（停留本条）。
+  缺 user.deactivate → 封号 chip 禁用 + 所缺权限中文标签；被举报账号已注销 → 只可驳回。
+  ⚠️ 举报人身份只在运营后台展示——绝不下发给被举报人、也绝不进日志。
+-->
+<body>
+<div th:fragment="detail" class="tk-detail" th:attr="data-report-id=${d.reportId}">
+
+    <!-- ① 账号卡 -->
+    <section class="card card-full tk-card tk-account">
+        <h2 th:text="#{admin.v130.tickets.card.account}">账号</h2>
+        <div class="tk-account-head">
+            <img th:if="${d.avatarUrl != null}" th:src="${d.avatarUrl}" alt="" class="tk-avatar" data-lightbox loading="lazy"/>
+            <div>
+                <div>
+                    <strong th:text="${d.nickname() ?: #messages.msg('admin.review.subject.deactivated')}" th:classappend="${d.targetDeleted()} ? 'muted'">昵称</strong>
+                    <span class="muted" th:if="${d.targetUserId() != null}" th:text="'#' + ${d.targetUserId()}">#0</span>
+                    <span class="badge badge-danger" th:if="${d.targetDeleted()}" th:text="#{admin.review.subject.deactivated}">账号已注销</span>
+                    <span class="badge badge-warn" th:if="${d.throttle != null}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_view')"
+                          th:text="#{admin.throttle.badge.account}">账号限流中</span>
+                </div>
+                <div class="muted">
+                    <span th:text="#{admin.v130.tickets.registeredAt}">注册时间</span>
+                    <span th:text="${d.registeredAt != null} ? ${@adminTime.wib(d.registeredAt)} : '—'">-</span>
+                </div>
+                <div class="muted"><span th:text="#{admin.tickets.detail.signature}">个性签名</span>：
+                    <span th:text="${d.signature != null and !#strings.isEmpty(d.signature)} ? ${d.signature} : #{admin.tickets.detail.signature.empty}">签名</span></div>
+            </div>
+        </div>
+        <div class="sum">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.tickets.col.reporters}">举报人数</div><div class="sum-value" th:text="${d.row.reporterCount()}">0</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.tickets.col.reports}">举报次数</div><div class="sum-value" th:text="${d.row.reportCount()}">0</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.tickets.col.score}">优先级分</div><div class="sum-value" th:text="${d.row.score()}">0</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.tickets.col.disposals}">历史处置</div><div class="sum-value" th:text="${d.disposalCount}">0</div></div>
+        </div>
+        <!-- 历史处置列表（含每一次警告）：点开展开 -->
+        <details th:if="${!#lists.isEmpty(d.disposals)}" class="tk-history">
+            <summary class="muted" th:text="#{admin.v130.tickets.history}">处置历史</summary>
+            <ul>
+                <li th:each="h : ${d.disposals}">
+                    <span class="badge" th:classappend="${h.type == 'SUSPEND'} ? 'badge-danger' : 'badge-warn'" th:text="#{'admin.v130.tickets.result.' + ${h.type}}">类型</span>
+                    <span class="muted" th:if="${h.operator != null}" th:text="${h.operator}">操作人</span>
+                    <span class="muted" th:text="${@adminTime.wib(h.at)}">时间</span>
+                    <span class="muted" th:if="${h.reportId != null}" th:text="'#' + ${h.reportId}">#工单</span>
+                </li>
+            </ul>
+        </details>
+    </section>
+
+    <!-- ② 举报明细：逐条（举报人 · 类型 · 时间 · 摘要），高频举报人打标（≥5 次） -->
+    <section class="card card-full tk-card tk-reports">
+        <h2 th:text="#{admin.v130.tickets.card.reports}">举报明细</h2>
+        <p class="muted" th:if="${#lists.isEmpty(d.entries)}" th:text="#{admin.tickets.detail.none}">无</p>
+        <ul class="rv-entries" th:if="${!#lists.isEmpty(d.entries)}">
+            <li th:each="e : ${d.entries}">
+                <span th:text="${e.reporterNickname ?: #messages.msg('admin.review.subject.deactivated')}">举报人</span>
+                <span class="muted" th:if="${e.reporterId != null}" th:text="'#' + ${e.reporterId}">#0</span>
+                <span class="badge badge-danger" th:if="${d.isFrequent(e.reporterId)}" th:text="#{admin.v130.tickets.frequent}">高频</span>
+                <code th:text="${e.reason}">REASON</code>
+                <span class="muted" th:text="${@adminTime.wib(e.createdAt)}">-</span>
+                <span th:if="${e.detail != null}"><b th:text="#{admin.tickets.detail.note}">补充</b>：<span th:text="${e.detail}">…</span></span>
+            </li>
+        </ul>
+    </section>
+
+    <!-- ③ 近期内容抽样：快照流，点开大图 -->
+    <section class="card card-full tk-card tk-samples">
+        <h2 th:text="#{admin.v130.tickets.card.samples}">近期内容</h2>
+        <p class="muted" th:if="${#lists.isEmpty(d.samples)}" th:text="#{admin.v130.tickets.samples.empty}">暂无内容</p>
+        <div class="tk-sample-grid" th:if="${!#lists.isEmpty(d.samples)}">
+            <div class="tk-sample" th:each="s : ${d.samples}" th:classappend="${s.deleted} ? 'is-deleted'">
+                <img th:if="${!#lists.isEmpty(s.imageUrls)}" th:src="${s.imageUrls[0]}" alt="" data-lightbox loading="lazy"/>
+                <p class="tk-sample-text" th:text="${s.textPreview}">…</p>
+                <span class="muted" th:text="${@adminTime.wib(s.createdAt)}">时间</span>
+                <a target="_blank" th:href="@{'/admin/content/' + ${s.id}}"
+                   sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')"
+                   th:text="#{admin.review.viewContent}">查看内容</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ④ 操作区两段式 -->
+    <section class="wb-actions tk-actions" th:with="nick=${d.nickname() ?: '#' + d.targetUserId()}">
+        <p class="muted" th:unless="${d.pending()}" th:text="#{admin.v130.tickets.readonly}">已处置，只读回看</p>
+        <th:block th:if="${d.pending()}">
+            <p class="muted" th:if="${d.targetDeleted()}" th:text="#{admin.v130.tickets.deletedOnlyDismiss}">账号已注销，只可驳回</p>
+            <!-- 第一段：处置方式 chips -->
+            <div class="chips tk-chips" role="tablist">
+                <th:block th:if="${!d.targetDeleted()}">
+                    <button type="button" class="chip" data-chip="warn" th:text="#{admin.tickets.action.warn}"
+                            sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')">警告</button>
+                    <button type="button" class="chip" data-chip="throttle" th:text="#{admin.tickets.action.throttle}"
+                            sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_manage')">限流曝光</button>
+                    <button type="button" class="chip chip-danger" data-chip="suspend" th:text="#{admin.tickets.action.suspend}"
+                            sec:authorize="hasRole('SUPER_ADMIN') or (hasAuthority('content.dispose_account') and hasAuthority('user.deactivate'))">封号</button>
+                    <!-- 缺 user.deactivate：chip 禁用 + 悬浮所缺权限中文标签（不隐藏） -->
+                    <button type="button" class="chip chip-danger" disabled th:title="#{admin.v130.err.forbidden(#{perm.user.deactivate})}"
+                            th:text="#{admin.tickets.action.suspend}"
+                            sec:authorize="!(hasRole('SUPER_ADMIN') or (hasAuthority('content.dispose_account') and hasAuthority('user.deactivate')))">封号</button>
+                </th:block>
+                <button type="button" class="chip" data-chip="dismiss" th:text="#{admin.tickets.action.dismiss}"
+                        sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')">无需处置</button>
+            </div>
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account') or hasAuthority('content.throttle_manage'))"
+               th:text="#{admin.v130.err.forbidden(#{perm.content.dispose_account})}">需要权限</p>
+
+            <!-- 第二段：参数区（选中 chip 后展开；参数不全按钮禁用） -->
+            <th:block th:if="${!d.targetDeleted() and d.targetUserId() != null}">
+                <form data-panel="warn" hidden class="tk-panel" th:attr="hx-post=@{/admin/tickets/warn}" hx-target=".wb-detail-body" hx-swap="innerHTML"
+                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')">
+                    <input type="hidden" name="targetUserId" th:value="${d.targetUserId()}"/>
+                    <input type="hidden" name="reportId" th:value="${d.reportId}"/>
+                    <label class="field" th:text="#{admin.v130.tickets.warn.reason}">警告理由（必填，只入审计）</label>
+                    <textarea name="reason" class="inp field-full" rows="2" required maxlength="200" data-requires-text
+                              th:placeholder="#{admin.v130.tickets.warn.reasonPlaceholder}"></textarea>
+                    <button type="submit" class="btn btn-primary" disabled data-requires-target th:text="#{admin.tickets.action.warn}">警告</button>
+                </form>
+                <form data-panel="throttle" hidden class="tk-panel" th:attr="hx-post=@{/admin/throttles}" hx-target=".wb-detail-body" hx-swap="beforeend"
+                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_manage')">
+                    <input type="hidden" name="scope" value="ACCOUNT"/>
+                    <input type="hidden" name="targetId" th:value="${d.targetUserId()}"/>
+                    <input type="hidden" name="reportId" th:value="${d.reportId}"/>
+                    <input type="hidden" name="back" value="tickets"/>
+                    <p class="hint" th:utext="#{admin.throttle.notTakedown}">不是下架</p>
+                    <div class="chips">
+                        <span class="muted" th:text="#{admin.throttle.scope}">粒度</span>
+                        <span class="chip chip--on chip--static" th:text="#{admin.throttle.scope.accountFixed}">账号级</span>
+                    </div>
+                    <div class="chips" data-requires-radio="duration">
+                        <span class="muted" th:text="#{admin.throttle.duration}">期限</span>
+                        <label class="chip"><input type="radio" name="duration" value="DAYS_7"/><span th:text="#{admin.throttle.duration.d7}">7 天</span></label>
+                        <label class="chip"><input type="radio" name="duration" value="DAYS_30"/><span th:text="#{admin.throttle.duration.d30}">30 天</span></label>
+                        <label class="chip"><input type="radio" name="duration" value="PERMANENT"/><span th:text="#{admin.throttle.duration.perm}">永久</span></label>
+                    </div>
+                    <button type="submit" class="btn btn-warn" disabled data-requires-target th:text="#{admin.throttle.confirm}">确认限流</button>
+                </form>
+                <form data-panel="suspend" hidden class="tk-panel" th:attr="hx-post=@{/admin/tickets/suspend}" hx-target=".wb-detail-body" hx-swap="innerHTML"
+                      sec:authorize="hasRole('SUPER_ADMIN') or (hasAuthority('content.dispose_account') and hasAuthority('user.deactivate'))">
+                    <input type="hidden" name="targetUserId" th:value="${d.targetUserId()}"/>
+                    <input type="hidden" name="reportId" th:value="${d.reportId}"/>
+                    <p class="hint" th:text="#{admin.tickets.confirm.suspend}">他将无法登录，并会收到通知。</p>
+                    <button type="submit" class="btn btn-danger" data-confirm-button
+                            th:attr="data-confirm=#{admin.v130.tickets.confirm.suspend(${nick})}"
+                            th:text="#{admin.tickets.action.suspend}">封号</button>
+                </form>
+            </th:block>
+            <form data-panel="dismiss" hidden class="tk-panel" th:attr="hx-post=@{/admin/tickets/dismiss}" hx-target=".wb-detail-body" hx-swap="innerHTML"
+                  sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')">
+                <input type="hidden" name="reportId" th:value="${d.reportId}"/>
+                <p class="hint" th:text="#{admin.v130.tickets.dismiss.hint}">对被举报账号什么都不做，工单收档。</p>
+                <button type="submit" class="btn btn-neutral" th:text="#{admin.tickets.action.dismiss}">无需处置</button>
+            </form>
+        </th:block>
+        <!-- 限流中：就地解除（停留本条） -->
+        <form th:if="${d.throttle != null}" class="tk-panel tk-lift" th:attr="hx-post=@{/admin/throttles/lift}" hx-target=".wb-detail-body" hx-swap="beforeend"
+              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_manage')">
+            <input type="hidden" name="throttleIds" th:value="${d.throttle.throttleId()}"/>
+            <input type="hidden" name="back" value="tickets"/>
+            <span class="muted" th:text="${d.throttle.permanent()} ? #{admin.throttle.permanent} : ${@adminTime.wib(d.throttle.expiresAt())}">到期</span>
+            <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.throttle.lift}">解除限流</button>
+        </form>
+    </section>
+</div>
+</body>
+</html>
