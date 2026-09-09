@@ -50,7 +50,18 @@
     window.Admin.workbench = { selectNext: selectNext, select: select };
 
     document.addEventListener('DOMContentLoaded', function () {
-        document.querySelectorAll('[data-workbench]').forEach(function (wb) { setPane(wb, 'queue'); });
+        document.querySelectorAll('[data-workbench]').forEach(function (wb) {
+            setPane(wb, 'queue');
+            // ?open=<id> 页内深链（D-23）：页面在任一槽位放 [data-open][data-open-url]；行在队列里则选中它，否则直接拉 detail
+            var deep = wb.querySelector('[data-open]');
+            var openId = deep && deep.getAttribute('data-open');
+            if (openId && window.htmx) {
+                var row = wb.querySelector('.q-row[data-id="' + CSS.escape(openId) + '"]');
+                if (row) { select(row); }
+                var url = (row && row.getAttribute('data-detail-url')) || deep.getAttribute('data-open-url');
+                if (url) { window.htmx.ajax('GET', url, { target: '.wb-detail-body', swap: 'innerHTML' }); }
+            }
+        });
         document.body.addEventListener('htmx:afterSwap', function (e) {
             var wb = wbOf(e.detail && e.detail.target);
             if (!wb) { return; }

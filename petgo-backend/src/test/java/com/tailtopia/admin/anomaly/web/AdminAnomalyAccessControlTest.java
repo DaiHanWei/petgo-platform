@@ -57,7 +57,8 @@ class AdminAnomalyAccessControlTest {
 
         @Bean
         AdminAnomalyController controller(ConsultAnomalyService a, SignedUrlService s) {
-            return new AdminAnomalyController(a, s, TestMessages.real());
+            return new AdminAnomalyController(a, s, mock(com.tailtopia.auth.service.AccountQueryService.class),
+                    mock(com.tailtopia.vet.repository.VetAccountRepository.class), TestMessages.real());
         }
     }
 
@@ -90,15 +91,17 @@ class AdminAnomalyAccessControlTest {
     }
 
     private void list() {
-        controller.list(null, null, new ConcurrentModel());
+        controller.list(null, null, 0, com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel());
     }
 
     private void note() {
-        controller.note(admin(), 1L, "备注", new RedirectAttributesModelMap());
+        controller.note(admin(), 1L, "备注", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(),
+                new RedirectAttributesModelMap());
     }
 
     private void resolve() {
-        controller.resolve(admin(), 1L, null, new RedirectAttributesModelMap());
+        controller.resolve(admin(), 1L, null, com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(),
+                new org.springframework.mock.web.MockHttpServletResponse(), new RedirectAttributesModelMap());
     }
 
     @Test

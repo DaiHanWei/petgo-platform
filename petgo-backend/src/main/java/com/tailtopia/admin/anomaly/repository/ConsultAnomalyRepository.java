@@ -21,4 +21,22 @@ public interface ConsultAnomalyRepository extends JpaRepository<ConsultAnomaly, 
 
     /** 全部工单（含归档），创建时间倒序。 */
     List<ConsultAnomaly> findAllByOrderByCreatedAtDesc();
+
+    /** 工作台分页（V1.3.0 Story 2.6）：按状态、创建时间倒序，每页 20 滚动加载。 */
+    org.springframework.data.domain.Page<ConsultAnomaly> findByStatusOrderByCreatedAtDesc(AnomalyStatus status,
+            org.springframework.data.domain.Pageable pageable);
+
+    /** 处置后「下一条」：最新一条 OPEN（队列时间倒序的第一条）。 */
+    Optional<ConsultAnomaly> findFirstByStatusOrderByCreatedAtDesc(AnomalyStatus status);
+
+    /**
+     * 数据库端追加一行备注（V1.3.0 Story 2.6 复审 #1）：两名运营同时加备注不会互相覆盖（读-拼-写会丢更新）。
+     * 返回 0 = 工单不存在。
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query(value = "UPDATE consult_anomalies SET internal_note = CASE"
+            + " WHEN internal_note IS NULL OR internal_note = '' THEN :line ELSE internal_note || E'\\n' || :line END,"
+            + " updated_at = now() WHERE id = :id", nativeQuery = true)
+    int appendNoteLine(@org.springframework.data.repository.query.Param("id") long id,
+            @org.springframework.data.repository.query.Param("line") String line);
 }

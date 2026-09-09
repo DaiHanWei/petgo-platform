@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  A4 左栏队列（V1.3.0 Story 2.6 AC1）。list = 整个 <ul>；rows = 行 + 翻页哨兵。
+  行两行式：① 工单号 + 异常类型标签 + 状态点；② 用户 × 兽医 + 生成时间（WIB）。
+-->
+<body>
+<ul th:fragment="list" class="q-list" id="anomaly-queue" th:attr="data-state=${state}">
+    <th:block th:replace="~{admin/fragments/anomaly-queue :: rows}"></th:block>
+</ul>
+
+<th:block th:fragment="rows">
+    <li th:if="${queue.isEmpty() and page == 0}" class="q-empty">
+        <div class="empty empty--queue"><span class="empty-emoji">🎉</span>
+            <p th:text="${state == 'resolved'} ? #{admin.v130.anomalies.empty.resolved} : #{admin.v130.empty.queue}">队列已清空</p>
+        </div>
+    </li>
+    <th:block th:each="a : ${queue.content}"><li th:replace="~{admin/fragments/anomaly-queue :: row(${a}, false)}"></li></th:block>
+    <li th:if="${queue.hasNext()}" class="q-more" hx-swap="outerHTML" hx-trigger="revealed"
+        th:attr="hx-get=@{/admin/anomalies/queue(state=${state},page=${page + 1})}">
+        <span class="muted" th:text="#{admin.v130.review.more}">加载更多…</span>
+    </li>
+</th:block>
+
+<ul th:remove="tag">
+    <li th:fragment="row(a, oob)" class="q-row" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:id="'anomaly-row-' + ${a.id}" th:data-id="${a.id}"
+        th:data-detail-url="@{/admin/anomalies/{id}/detail(id=${a.id})}"
+        th:attr="hx-get=@{/admin/anomalies/{id}/detail(id=${a.id})}"
+        hx-target=".wb-detail-body" hx-swap="innerHTML" tabindex="0">
+        <span class="q-title">
+            <span class="dot" th:classappend="${a.status.name() == 'OPEN'} ? 'dot--todo' : 'dot--done'"></span>
+            <span th:text="'#' + ${a.id}">#1</span>
+            <span class="badge badge-danger" th:text="${a.anomalyType}">VET_BANNED</span>
+            <span class="badge" th:classappend="${a.status.name() == 'OPEN'} ? 'badge-danger' : 'badge-ok'"
+                  th:text="${a.status.name() == 'OPEN'} ? #{admin.anomalies.status.open} : #{admin.anomalies.status.resolved}">待处理</span>
+        </span>
+        <span class="q-meta">
+            <!-- 用户昵称 × 兽医名（AC1）；注销 / 查不到回退 #id（userNames / vetNames 由 populateQueue 整页一次取；oob 重渲染时缺省为 #id） -->
+            <span th:text="${a.userId == null} ? #{admin.anomalies.anonymized} : (${userNames != null and userNames.get(a.userId) != null} ? ${userNames.get(a.userId)} : '#' + ${a.userId})">用户</span>
+            <span th:text="'× ' + (${vetNames != null and vetNames.get(a.vetId) != null} ? ${vetNames.get(a.vetId)} : '#' + ${a.vetId})">× 兽医</span>
+            <span th:text="${@adminTime.wib(a.createdAt)}">时间</span>
+        </span>
+    </li>
+</ul>
+</body>
+</html>

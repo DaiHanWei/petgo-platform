@@ -663,3 +663,10 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wb--collapsed .tk-card:not(.tk-account) { display: none; }
 .wb--collapsed .tk-actions { display: none; }
 .tk-filters { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+
+/* ===== V1.3.0 Story 2.6 · A4 问诊异常工单工作台 ===== */
+.an-timeline { list-style: none; padding: 0; margin: 0 0 10px; font-size: var(--fs-sm); }
+.an-timeline li { padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.an-timeline li .muted { margin-right: 6px; }
+.an-note-form { display: flex; gap: 8px; align-items: center; }
+.an-note-form .inp { flex: 1; }
