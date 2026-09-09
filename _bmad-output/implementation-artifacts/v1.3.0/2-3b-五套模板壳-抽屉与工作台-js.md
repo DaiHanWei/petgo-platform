@@ -168,11 +168,11 @@ UI 稿 10-6：「抽屉内操作成功不自动关抽屉（运营常连续处理
 
 ### References
 
-- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-delta.md#AD-11 / §Structure Patterns（五壳槽位）/ §Process Patterns（data-next-id / hx-indicator）]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-admin-delta.md#AD-11 / §Structure Patterns（五壳槽位）/ §Process Patterns（data-next-id / hx-indicator）]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/后台重构逐页规格.md#模板 A 通用规格 / 模板 B 通用规格 / 模板 E 通用规格 / 组件底座修正记录（2026-09-04）]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/ui-v1.3.0-admin.html 泳道 9（9-1～9-7）、泳道 10（10-1～10-8）]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/决策日志.md D-14 / D-23 / D-31]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0.md#Story 2.3b / UX-DR4～UX-DR12]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/决策日志-admin.md D-14 / D-23 / D-31]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-admin.md#Story 2.3b / UX-DR4～UX-DR12]
 - [Source: petgo-backend/src/main/resources/static/admin/admin.css（:root 令牌、.toast、.nav-*）]
 - [Source: petgo-backend/src/main/resources/static/admin/admin.js（现状能力，见 2-2 清单）]
 - [Source: petgo-backend/src/test/java/com/tailtopia/admin/web/AdminTemplateStructureTest.java]

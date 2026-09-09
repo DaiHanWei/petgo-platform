@@ -209,12 +209,12 @@ admin 链 403 = `AccessDeniedHandlerImpl` forward `/admin/denied`（整页，注
 
 ### References
 
-- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-delta.md#AD-9 / AD-11 / §Implementation Patterns 模板与前端]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-admin-delta.md#AD-9 / AD-11 / §Implementation Patterns 模板与前端]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/后台重构逐页规格.md#G0 · 全局框架]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/ui-v1.3.0-admin.html 泳道 0（0-1～0-5）、泳道 9（9-6 导航件、9-7 防呆 10）、泳道 10（10-7）]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-admin.md#5. AB-19A ① 新导航结构]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/决策日志.md D-2 / D-8 / D-31]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0.md#Story 2.2]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/决策日志-admin.md D-2 / D-8 / D-31]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-admin.md#Story 2.2]
 - [Source: petgo-backend/src/main/resources/templates/admin/layout.html]
 - [Source: petgo-backend/src/main/resources/static/admin/admin.js]
 - [Source: petgo-backend/src/main/java/com/tailtopia/shared/web/StaticResourceVersionConfig.java]

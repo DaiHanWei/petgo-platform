@@ -144,9 +144,9 @@ D-2 拍板「权限重新登录后生效」，顶栏显示名与角色徽标同�
 ### References
 
 - [Source: _bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-admin.md#2. AB-16A ①③④]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-delta.md#AD-1 / Authentication & Security]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/决策日志.md D-2]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0.md#Story 1.2]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-admin-delta.md#AD-1 / Authentication & Security]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/决策日志-admin.md D-2]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-admin.md#Story 1.2]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/ui-v1.3.0-admin.html 帧 7-7]
 - [Source: petgo-backend/src/main/java/com/tailtopia/admin/account/service/AdminAccountService.java]
 - [Source: petgo-backend/src/main/java/com/tailtopia/admin/account/web/AdminAccountAdminController.java]

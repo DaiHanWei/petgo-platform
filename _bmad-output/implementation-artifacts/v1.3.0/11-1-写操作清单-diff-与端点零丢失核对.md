@@ -91,7 +91,7 @@ Story 7.6 种子发布页删旧批量入口时，`POST /admin/seed-batch` / `/se
 
 ### References
 
-- [Source: epics-v1.3.0.md#Story 11.1 / Story 2.1 / Story 7.6] · [Source: architecture-v1.3.0-delta.md#Enforcement / AD-12] · [Source: 决策日志.md D-8 D-23 D-27] · [Source: implementation-readiness-report-2026-09-09-v1.3.0.md#UX 对齐 #1]
+- [Source: epics-v1.3.0-admin.md#Story 11.1 / Story 2.1 / Story 7.6] · [Source: architecture-v1.3.0-admin-delta.md#Enforcement / AD-12] · [Source: 决策日志-admin.md D-8 D-23 D-27] · [Source: implementation-readiness-report-2026-09-09-v1.3.0-admin.md#UX 对齐 #1]
 - [Source: scripts/ci/check-flyway-versions.sh（CI 接法范式）]
 
 ## Dev Agent Record

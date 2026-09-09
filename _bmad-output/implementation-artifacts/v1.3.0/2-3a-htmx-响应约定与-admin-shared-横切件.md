@@ -166,10 +166,10 @@ UI 稿 9-7 第 12 条与逐页规格「规则 12」：CSV 正确转义、XLSX �
 
 ### References
 
-- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-delta.md#AD-9 / AD-10 / §Format Patterns / §Process Patterns / §Validation Issues Addressed（beforeSwap）]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-admin-delta.md#AD-9 / AD-10 / §Format Patterns / §Process Patterns / §Validation Issues Addressed（beforeSwap）]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/后台重构逐页规格.md#模板 A 通用规格（处置动线、规则 12）/ 模板 B 通用规格]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/ui-v1.3.0-admin.html 泳道 9（9-1 缺权限禁用态、9-5 反馈件、9-7 防呆 7/12）、泳道 10（10-3 提交流转）]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0.md#Story 2.3a]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-admin.md#Story 2.3a]
 - [Source: petgo-backend/src/main/java/com/tailtopia/shared/error/GlobalExceptionHandler.java（handleApp / handleAccessDenied）]
 - [Source: petgo-backend/src/main/java/com/tailtopia/shared/error/AppException.java]
 - [Source: petgo-backend/src/main/java/com/tailtopia/shared/i18n/Messages.java]

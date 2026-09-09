@@ -128,9 +128,9 @@ A6（Story 2-8）是虚拟商品退款三段流；A7 是实物退货五步流。
 ### References
 - [Source: _bmad-output/planning-artifacts/v1.3.0/后台重构逐页规格.md#A7 / #A8 / 模板 A 通用规格]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/ui-v1.3.0-admin.html 泳道 5 帧 5-10、5-11]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-delta.md#AD-9 #AD-11 #AD-12]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-admin-delta.md#AD-9 #AD-11 #AD-12]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-admin.md#5 ① 商城组行 2026-09-08 修订]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0.md#Story 10.1]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-admin.md#Story 10.1]
 - [Source: petgo-backend/src/main/java/com/tailtopia/admin/shop/web/AdminReturnController.java]
 
 ## Dev Agent Record

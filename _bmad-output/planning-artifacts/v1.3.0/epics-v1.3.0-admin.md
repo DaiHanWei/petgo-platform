@@ -8,11 +8,11 @@ date: '2026-09-09'
 baseline: '_bmad-output/planning-artifacts/v1.0.0/epics.md'   # 冻结基线；本文件只写 V1.3.0 后台增量
 inputDocuments:
   - _bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-admin.md
-  - _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-delta.md
+  - _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-admin-delta.md
   - _bmad-output/planning-artifacts/v1.3.0/后台重构逐页规格.md
   - _bmad-output/planning-artifacts/v1.3.0/ui-v1.3.0-admin.html
-  - _bmad-output/planning-artifacts/v1.3.0/决策日志.md
-  - _bmad-output/planning-artifacts/v1.3.0/validation-2026-09-09/review-adversarial-general.md
+  - _bmad-output/planning-artifacts/v1.3.0/决策日志-admin.md
+  - _bmad-output/planning-artifacts/v1.3.0/validation-admin-2026-09-09/review-adversarial-general.md
 scope: 'V1.3.0 后台增量：AB-15A~AB-22A；brownfield；仅后台，App 端另一分支'
 ---
 
@@ -20,7 +20,7 @@ scope: 'V1.3.0 后台增量：AB-15A~AB-22A；brownfield；仅后台，App 端�
 
 ## Overview
 
-本文件是 V1.3.0 **后台**增量 epic/story 分解，承接 `PRD-v1.3.0-admin.md`（AB-15A～AB-22A）、`architecture-v1.3.0-delta.md`（AD-1～AD-12）、`后台重构逐页规格.md` + `ui-v1.3.0-admin.html`（49 页 / 8 泳道 / 五套模板）与 `决策日志.md`（D-1～D-35）。未提及处继承 V1.0 基线与各版 delta。App 端（FR-112 场所、FR-120 护照样式）由另一分支实现，本文件只写后台侧，跨分支契约见架构 delta X-1～X-4。
+本文件是 V1.3.0 **后台**增量 epic/story 分解，承接 `PRD-v1.3.0-admin.md`（AB-15A～AB-22A）、`architecture-v1.3.0-admin-delta.md`（AD-1～AD-12）、`后台重构逐页规格.md` + `ui-v1.3.0-admin.html`（49 页 / 8 泳道 / 五套模板）与 `决策日志-admin.md`（D-1～D-35）。未提及处继承 V1.0 基线与各版 delta。App 端（FR-112 场所、FR-120 护照样式）由另一分支实现，本文件只写后台侧，跨分支契约见架构 delta X-1～X-4。
 
 ## Requirements Inventory
 

@@ -20,8 +20,8 @@ inputDocuments:
   - _bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-admin.md
   - _bmad-output/planning-artifacts/v1.3.0/后台重构逐页规格.md
   - _bmad-output/planning-artifacts/v1.3.0/ui-v1.3.0-admin.html
-  - _bmad-output/planning-artifacts/v1.3.0/决策日志.md
-  - _bmad-output/planning-artifacts/v1.3.0/validation-2026-09-09/review-adversarial-general.md
+  - _bmad-output/planning-artifacts/v1.3.0/决策日志-admin.md
+  - _bmad-output/planning-artifacts/v1.3.0/validation-admin-2026-09-09/review-adversarial-general.md
   - _bmad-output/planning-artifacts/v1.3.0/内容运营所需数据-20260831.sql
   - _bmad-output/planning-artifacts/v1.3.0/README.md
   - docs/reference/db-schema-reference.md

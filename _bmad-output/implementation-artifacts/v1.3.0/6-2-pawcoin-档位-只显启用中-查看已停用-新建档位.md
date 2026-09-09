@@ -132,7 +132,7 @@ so that 活动调档不用找工程。
 
 ### References
 
-- [Source: PRD-v1.3.0-admin.md#8. AB-22A、#5 ③ 第 10 条]、[决策日志 D-24 / D-25]、[architecture-v1.3.0-delta.md#AD-7]、[epics-v1.3.0.md#Story 6.2]、[UI 稿 7-1 / 7-2 / 7-3]
+- [Source: PRD-v1.3.0-admin.md#8. AB-22A、#5 ③ 第 10 条]、[决策日志 D-24 / D-25]、[architecture-v1.3.0-admin-delta.md#AD-7]、[epics-v1.3.0-admin.md#Story 6.2]、[UI 稿 7-1 / 7-2 / 7-3]
 - [Source: petgo-backend …/admin/config/service/AdminConfigService.java#setTierEnabled]、[…/pay/service/DbTopupTierProvider.java]、[…/db/migration/V78__init_platform_config.sql]
 
 ## Dev Agent Record

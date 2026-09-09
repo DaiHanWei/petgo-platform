@@ -107,7 +107,7 @@ AD-12：商城组 17 帧的比对要等电商线合入 `dev_1.3.0`；若合入�
 
 ### References
 
-- [Source: epics-v1.3.0.md#Story 11.5] · [Source: ui-v1.3.0-admin.html 全部泳道] · [Source: 后台重构逐页规格.md 全文] · [Source: architecture-v1.3.0-delta.md#Development Workflow Integration / AD-2 AD-3 AD-12] · [Source: 决策日志.md D-1 D-2 D-4 D-8 D-14 D-15 D-17 D-29]
+- [Source: epics-v1.3.0-admin.md#Story 11.5] · [Source: ui-v1.3.0-admin.html 全部泳道] · [Source: 后台重构逐页规格.md 全文] · [Source: architecture-v1.3.0-admin-delta.md#Development Workflow Integration / AD-2 AD-3 AD-12] · [Source: 决策日志-admin.md D-1 D-2 D-4 D-8 D-14 D-15 D-17 D-29]
 - [Source: CLAUDE.md#staging 部署纪律] · [Source: scripts/deploy-backend-stag.sh] · [Source: _bmad-output/implementation-artifacts/v1.1.6/L2-视觉验收报告-Epic2.md（报告范式）]
 
 ## Dev Agent Record

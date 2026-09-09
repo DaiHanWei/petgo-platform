@@ -155,10 +155,10 @@ PRD 要求确认弹层「复述旧邮箱 → 新邮箱」。现状 `admin.js` �
 ### References
 
 - [Source: _bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-admin.md#2. AB-16A ②]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-delta.md#AD-1 / Authentication & Security（换绑）]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/决策日志.md D-1 / D-21]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0.md#Story 1.3]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/validation-2026-09-09/review-adversarial-general.md #1 #27]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-admin-delta.md#AD-1 / Authentication & Security（换绑）]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/决策日志-admin.md D-1 / D-21]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-admin.md#Story 1.3]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/validation-admin-2026-09-09/review-adversarial-general.md #1 #27]
 - [Source: petgo-backend/src/main/resources/db/migration/V32__init_admin_accounts.sql]
 - [Source: petgo-backend/src/main/java/com/tailtopia/admin/service/AdminBootstrap.java]
 - [Source: petgo-backend/src/main/java/com/tailtopia/admin/audit/service/AdminAlertService.java]

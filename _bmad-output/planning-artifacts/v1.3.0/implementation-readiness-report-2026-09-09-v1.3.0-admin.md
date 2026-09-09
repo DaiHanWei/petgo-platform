@@ -4,11 +4,11 @@ status: complete
 date: '2026-09-09'
 inputDocuments:
   - _bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-admin.md
-  - _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-delta.md
+  - _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-admin-delta.md
   - _bmad-output/planning-artifacts/v1.3.0/后台重构逐页规格.md
   - _bmad-output/planning-artifacts/v1.3.0/ui-v1.3.0-admin.html
-  - _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0.md
-  - _bmad-output/planning-artifacts/v1.3.0/决策日志.md
+  - _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-admin.md
+  - _bmad-output/planning-artifacts/v1.3.0/决策日志-admin.md
 ---
 
 # Implementation Readiness Assessment Report
@@ -22,17 +22,17 @@ inputDocuments:
 | 类型 | 文件 | 状态 |
 |---|---|---|
 | PRD | `PRD-v1.3.0-admin.md`（定稿 09-01，09-09 评审回写 D-1～D-35） | ✅ 单一版本 |
-| Architecture | `architecture-v1.3.0-delta.md`（AD-1～AD-12，status complete） | ✅ 单一版本 |
-| Epics | `epics-v1.3.0.md`（11 Epic / 56 Story，status complete） | ✅ 单一版本 |
+| Architecture | `architecture-v1.3.0-admin-delta.md`（AD-1～AD-12，status complete） | ✅ 单一版本 |
+| Epics | `epics-v1.3.0-admin.md`（11 Epic / 56 Story，status complete） | ✅ 单一版本 |
 | UX | `后台重构逐页规格.md` + `ui-v1.3.0-admin.html`（49 帧 / 8 泳道） | ✅ 两份互补，无重复 |
-| 决策 | `决策日志.md` D-1～D-35 | ✅ 视为事实 |
+| 决策 | `决策日志-admin.md` D-1～D-35 | ✅ 视为事实 |
 
 无分片版本、无重复；App 端 PRD 不在范围（另一分支）。
 
 ## PRD Analysis
 
 ### Functional Requirements
-PRD 以 AB 编号组织，epics 阶段已展开为 **59 条 FR**（`FR-<AB>-<序>`，见 `epics-v1.3.0.md` §Requirements Inventory）。逐 AB 复核 PRD 正文，无遗漏分项：
+PRD 以 AB 编号组织，epics 阶段已展开为 **59 条 FR**（`FR-<AB>-<序>`，见 `epics-v1.3.0-admin.md` §Requirements Inventory）。逐 AB 复核 PRD 正文，无遗漏分项：
 - AB-15A 12 条（含口径表、双口径、回填、权限、改名）
 - AB-16A 5 条（改名 / 换绑 / 踢重登 / self 护栏 / 不变原则）
 - AB-17A 7 条（列表 / 抽屉 / 处置 / 新建手填 / 举报页签 / 权限 / 不做地图）
@@ -50,7 +50,7 @@ PRD 经 09-09 对抗评审 28 条回写后内部一致；剩余「待确认」�
 ## Epic Coverage Validation
 
 ### Coverage Statistics
-- PRD FR 总数：59 · epics 覆盖：59 · **覆盖率 100%**（脚本校验，`epics-v1.3.0.md` 拆分校验记录）
+- PRD FR 总数：59 · epics 覆盖：59 · **覆盖率 100%**（脚本校验，`epics-v1.3.0-admin.md` 拆分校验记录）
 - UX-DR 15 条全部有承接 story
 - epics 中无 PRD 外的 FR
 
@@ -124,7 +124,7 @@ Found：逐页规格（G0 + 五套模板通用规格 + 逐页节）与 UI 结构
 1. epics 回写（本次直接执行）：拆 2.3 → 2.3a/2.3b；拆 9.1 → 9.1a/9.1b；6.5 去掉 D1，新增 10.6 D1 运费配置；3.5 写实 `payment.view`；4.3 注明 VISIBLE 时机；1.1 措辞。
 2. 架构 delta 回写：结构树加 `admin/shared/AdminPageCatalog`、`@StagOnly`；§Deferred 去掉 `@StagOnly`。
 3. PRD D-8 措辞：「49 页」→「UI 稿 49 帧，路由页面以写操作清单同批产出的 GET 路由列表为准」。
-4. 运行 sprint-planning 生成 `sprint-status-v1.3.0.yaml`，story 顺序按 Epic 1 → 2 → (3 | 4 | 5 | 6) → 7 → 8 → 9 → [电商线合入] → 10 → 11。
+4. 运行 sprint-planning 生成 `sprint-status-v1.3.0-admin.yaml`，story 顺序按 Epic 1 → 2 → (3 | 4 | 5 | 6) → 7 → 8 → 9 → [电商线合入] → 10 → 11。
 5. create-story 阶段对 Epic 7～10 每条 story 展开对应逐页规格节全文。
 
 ### Final Note

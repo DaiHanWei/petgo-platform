@@ -4,10 +4,10 @@
 # project_key: NOKEY
 # tracking_system: file-system
 # story_location: {project-root}/_bmad-output/implementation-artifacts/v1.3.0
-# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0.md (12 Epic / 59 Story)
-# architecture: {project-root}/_bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-delta.md (AD-1~AD-12)
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-admin.md (12 Epic / 59 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-admin-delta.md (AD-1~AD-12)
 # prd: {project-root}/_bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-admin.md (AB-15A~AB-22A)
-# readiness: implementation-readiness-report-2026-09-09-v1.3.0.md → READY WITH MINOR REVISIONS（已回写）
+# readiness: implementation-readiness-report-2026-09-09-v1.3.0-admin.md → READY WITH MINOR REVISIONS（已回写）
 # NOTE: 本文件是 V1.3.0 后台线 sprint 跟踪，与 v1.0.0/v1.1.x/v1.4.0 各自的 sprint-status 并存，不覆盖。
 #
 # 执行顺序（架构 §Decision Impact + AD-12）：

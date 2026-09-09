@@ -112,10 +112,10 @@ so that 履约不再跳独立详情页，对账异常一眼可见。
 ### References
 - [Source: _bmad-output/planning-artifacts/v1.3.0/后台重构逐页规格.md#B15 / #C1 / 模板 B 通用规格 / 模板 C]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/ui-v1.3.0-admin.html 泳道 5 帧 5-8、5-9、5-16]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-delta.md#AD-9 #AD-11 #AD-12]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-admin-delta.md#AD-9 #AD-11 #AD-12]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-admin.md#5 ① 商城组行 / #5 ② 模板表]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/决策日志.md D-8 / D-23]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0.md#Story 10.2]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/决策日志-admin.md D-8 / D-23]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-admin.md#Story 10.2]
 - [Source: petgo-backend/src/main/java/com/tailtopia/admin/shop/web/AdminShopOrderController.java]
 
 ## Dev Agent Record

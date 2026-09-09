@@ -139,7 +139,7 @@ App 端 FR-120 按 `hd-pricing` 响应的两个新字段取价；字段名固定
 
 ### References
 
-- [Source: PRD-v1.3.0-admin.md#4. AB-18A]、[决策日志 D-3 / D-7]、[architecture-v1.3.0-delta.md#AD-7 / X-4]、[epics-v1.3.0.md#Story 6.1]、[逐页规格 D2]、[UI 稿 7-1 KTP 卡]
+- [Source: PRD-v1.3.0-admin.md#4. AB-18A]、[决策日志 D-3 / D-7]、[architecture-v1.3.0-admin-delta.md#AD-7 / X-4]、[epics-v1.3.0-admin.md#Story 6.1]、[逐页规格 D2]、[UI 稿 7-1 KTP 卡]
 - [Source: petgo-backend …/admin/config/service/AdminConfigService.java]、[…/config/domain/PricingConfig.java]、[…/db/migration/V78__init_platform_config.sql]
 
 ## Dev Agent Record

@@ -113,10 +113,10 @@ App 端只展示「已上架 + 权重最高」那一条。列表若只显示启�
 ### References
 - [Source: _bmad-output/planning-artifacts/v1.3.0/后台重构逐页规格.md#B16 / #B17 / 模板 B / 模板 D]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/ui-v1.3.0-admin.html 泳道 5 帧 5-1～5-5]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-delta.md#AD-9 #AD-11 #AD-12]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-admin-delta.md#AD-9 #AD-11 #AD-12]
 - [Source: _bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-admin.md#5 ① 商城组行 / #5 ② 模板表]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/决策日志.md D-8 / D-23]
-- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0.md#Story 10.3]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/决策日志-admin.md D-8 / D-23]
+- [Source: _bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-admin.md#Story 10.3]
 - [Source: petgo-backend/src/main/java/com/tailtopia/admin/shop/web/AdminShopProductController.java / AdminShopBannerController.java]
 
 ## Dev Agent Record
