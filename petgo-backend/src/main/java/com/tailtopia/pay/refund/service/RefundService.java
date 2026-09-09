@@ -347,6 +347,15 @@ public class RefundService {
      */
     @Transactional
     public void payoutRefund(String refundToken, long payerAdminId) {
+        payoutRefund(refundToken, payerAdminId, null);
+    }
+
+    /**
+     * 财务打款 + 出款凭证 objectKey（V1.3.0 Story 2.8 D-36）：凭证 key 存退款单 {@code payout_proof_key} 并进审计 detail
+     * （只记 objectKey，不记 URL）。职责分离 / 金额校验 / 三闸幂等与 {@link #payoutRefund(String, long)} 完全相同。
+     */
+    @Transactional
+    public void payoutRefund(String refundToken, long payerAdminId, String payoutProofKey) {
         RefundRequest r = require(refundToken);
         if (r.getApprovalStatus() == ApprovalStatus.DONE) {
             return; // 已打款，幂等短路
@@ -370,7 +379,7 @@ public class RefundService {
             // 未即时完成（异步/失败）→ 抛出令事务回滚（保持 APPROVED，可重试）。OPEN-5：V1 sandbox 按同步处理。
             throw AppException.serviceUnavailable("退款出款未即时完成，请稍后重试");
         }
-        r.completePayout(payerAdminId, res.disbursementRef());
+        r.completePayout(payerAdminId, res.disbursementRef(), payoutProofKey);
         orders.markRefunded(order.getId()); // CAS REFUNDING→REFUNDED（返 0=已退，跳过）
         // REFUND_OUT 双分录（真钱退款流出）：DEBIT REFUND_OUT net / CREDIT CASH_IN net。借贷平 + 幂等键。
         ledger.post(UUID.randomUUID().toString(), List.of(
@@ -378,7 +387,8 @@ public class RefundService {
                 LedgerLine.credit(LedgerAccount.CASH_IN, r.getNetAmount(), null, "refund_request", r.getId())),
                 "refund-out-" + refundToken);
         audit.record(payerAdminId, AuditActions.REFUND_PAYOUT_RECORDED, "refund_request", refundToken,
-                "退款打款完成（Iris ref=" + res.disbursementRef() + "）");
+                "退款打款完成（Iris ref=" + res.disbursementRef() + "）"
+                        + (payoutProofKey == null || payoutProofKey.isBlank() ? "" : " 凭证=" + payoutProofKey));
     }
 
     private void requirePendingApproval(RefundRequest r) {

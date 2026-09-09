@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  A6 处置成功 fragment（V1.3.0 Story 2.8 AC6，AD-9）：根元素 data-next-id（同段下一条；空则右栏空态）+ data-done；
+  oob：被处理行删除（refund-row-<token>）、四页签计数替换、toast 到 #admin-toast-host。HX-Trigger 由 Controller 写。
+-->
+<body>
+<div th:fragment="done" class="rf-done" data-done th:data-next-id="${nextId}">
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${message}">已处理</div>
+    <div class="empty empty--queue" th:if="${#strings.isEmpty(nextId)}">
+        <span class="empty-emoji">🎉</span>
+        <p th:text="#{admin.v130.empty.queue}">队列已清空</p>
+    </div>
+    <li th:id="'refund-row-' + ${removedToken}" hx-swap-oob="delete"></li>
+    <span th:each="s : ${ {'submit','approve','payout','closed'} }" th:id="'refund-tab-count-' + ${s}" class="tab-count" hx-swap-oob="true" th:text="${counts.get(s)}">0</span>
+</div>
+</body>
+</html>

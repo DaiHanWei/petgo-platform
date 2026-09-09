@@ -93,6 +93,10 @@ public class RefundRequest {
     @Column(name = "payment_proof", length = 128)
     private String paymentProof;
 
+    /** 出款凭证对象 key（私密桶；V1.3.0 Story 2.8 D-36）。可空；展示时现签 URL，不落 URL。 */
+    @Column(name = "payout_proof_key", length = 255)
+    private String payoutProofKey;
+
     @Column(name = "approved_at")
     private Instant approvedAt;
 
@@ -193,9 +197,17 @@ public class RefundRequest {
 
     /** ②财务打款完成（Story 4.6，payer 角色 + Iris 凭证 + 时间戳）。{@code →DONE}。 */
     public void completePayout(long payerAdminId, String paymentProof) {
+        completePayout(payerAdminId, paymentProof, null);
+    }
+
+    /** ②财务打款完成 + 出款凭证 objectKey（V1.3.0 Story 2.8 D-36）。 */
+    public void completePayout(long payerAdminId, String paymentProof, String payoutProofKey) {
         this.approvalStatus = ApprovalStatus.DONE;
         this.payerAdminId = payerAdminId;
         this.paymentProof = paymentProof;
+        if (payoutProofKey != null && !payoutProofKey.isBlank()) {
+            this.payoutProofKey = payoutProofKey;
+        }
         this.paidAt = Instant.now();
     }
 
@@ -285,6 +297,10 @@ public class RefundRequest {
 
     public String getPaymentProof() {
         return paymentProof;
+    }
+
+    public String getPayoutProofKey() {
+        return payoutProofKey;
     }
 
     public Instant getApprovedAt() {

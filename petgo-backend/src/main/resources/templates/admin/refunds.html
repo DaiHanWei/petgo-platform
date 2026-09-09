@@ -1,46 +1,63 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- 退款管理列表（Story 4.6）。三段职责分离：客服判定 / 主管审批 / 财务打款。PII 脱敏（账号末 4 位）。 -->
+<!--
+  A6 退款管理三段流（V1.3.0 Story 2.8，模板 A · tpl-a-workbench；原 Story 4.6 列表 + 详情两页合一）。
+  四页签：待客服判定 / 待主管审批 / 待财务打款 / 已完结·已驳回（计数，先进先出）；右栏四区由 fragments/refund-panel.html 渲染
+  （金额卡 / 来源卡 / 三段流程条 / 当前段操作区，仅渲染登录者权限对应段）。五个写端点路径 / 权限零变更（D-36：reject 加必填 reason、
+  payout 加出款凭证 proof）。🔴 职责分离护栏（A-1）在 RefundService，界面只是镜子。?open=<token> 页内深链自动开该条。无键盘 ↑/↓（D-14）。
+-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.refunds.title}">退款管理 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-workbench.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.refunds.title}">退款管理</h1>
+        <div class="wb-title-row"><h1 th:text="#{admin.refunds.title}">退款管理</h1></div>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
-        <table>
-            <thead>
-            <tr>
-                <th th:text="#{admin.refunds.col.refund}">退款单</th>
-                <th th:text="#{admin.common.order}">订单</th>
-                <th th:text="#{admin.common.channel}">渠道</th>
-                <th th:text="#{admin.refunds.col.needDecision}">客服判定</th>
-                <th th:text="#{admin.refunds.col.approval}">审批态</th>
-                <th th:text="#{admin.common.amount}">金额</th>
-                <th th:text="#{admin.refunds.col.net}">净额</th>
-                <th th:text="#{admin.common.actions}">操作</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="r : ${items}">
-                <td th:text="${r.refundToken}">tok</td>
-                <td th:text="${r.orderToken}">ord</td>
-                <td th:text="${r.payChannel}">QRIS</td>
-                <td th:text="${r.needDecision}">PENDING</td>
-                <td th:text="${r.approvalStatus} ?: '—'">—</td>
-                <td th:text="${r.orderAmount}">0</td>
-                <td th:text="${r.netAmount}">0</td>
-                <td><a class="btn btn-neutral btn-sm" th:href="@{/admin/refunds/{t}(t=${r.refundToken})}" th:text="#{admin.common.detail}">详情</a></td>
-            </tr>
-            <tr th:if="${items.isEmpty()}">
-                <td colspan="8" th:text="#{admin.refunds.empty}">暂无退款工单</td>
-            </tr>
-            </tbody>
-        </table>
+
+        <div th:replace="~{admin/fragments/tpl-a-workbench :: workbench(~{::rf-tabs}, ~{::rf-filters}, ~{::rf-queue}, ~{::rf-detail}, ~{::rf-actions})}">
+            <div th:fragment="rf-tabs" class="tabs" id="refund-tabs">
+                <a class="tab" th:each="s : ${ {'submit','approve','payout','closed'} }" th:classappend="${stage == s} ? 'tab--on'"
+                   th:href="@{/admin/refunds(stage=${s})}">
+                    <span th:text="#{'admin.v130.refunds.stage.' + ${s}}">段</span>
+                    <span class="tab-count" th:id="'refund-tab-count-' + ${s}" th:text="${counts.get(s)}">0</span>
+                </a>
+            </div>
+            <!-- 深链：?open=<token> → admin-workbench.js 在 DOMContentLoaded 时选中该行 / 直接拉 detail -->
+            <div th:fragment="rf-filters" class="filter-bar" th:attr="data-open=${open},data-open-url=${open != null} ? @{/admin/refunds/{t}/detail(t=${open})} : null"></div>
+            <div th:fragment="rf-queue" th:replace="~{admin/fragments/refund-queue :: list}"></div>
+            <div th:fragment="rf-detail" th:replace="~{admin/fragments/tpl-a-workbench :: detail-empty}"></div>
+            <div th:fragment="rf-actions"><span class="muted" th:text="#{admin.v130.review.actions.hint}">操作区随所选单据渲染</span></div>
+        </div>
+
+        <script>
+        // 页内 JS（Story 2.8）：必填输入未填 → 对应按钮禁用（驳回原因 / 审批备注 / 出款凭证）。无 ↑/↓（D-14）。
+        (function () {
+            function sync(form) {
+                var btn = form.querySelector('[data-requires-target]');
+                if (!btn) { return; }
+                var ok = true;
+                form.querySelectorAll('[data-requires-text]').forEach(function (i) { ok = ok && !!i.value.trim(); });
+                form.querySelectorAll('[data-requires-file]').forEach(function (i) { ok = ok && !!(i.files && i.files.length); });
+                btn.disabled = !ok;
+            }
+            ['input', 'change'].forEach(function (ev) {
+                document.addEventListener(ev, function (e) {
+                    var f = e.target && e.target.closest ? e.target.closest('form[data-requires-form]') : null;
+                    if (f) { sync(f); }
+                });
+            });
+            document.body.addEventListener('htmx:afterSwap', function (e) {
+                var t = e.detail && e.detail.target;
+                if (t && t.querySelectorAll) { t.querySelectorAll('form[data-requires-form]').forEach(sync); }
+            });
+        })();
+        </script>
     </div>
 </div>
 </body>

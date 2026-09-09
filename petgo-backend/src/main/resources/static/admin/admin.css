@@ -675,3 +675,11 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sp-link-form, .sp-reject-form { display: inline-flex; gap: 8px; align-items: center; margin-top: 8px; }
 .sp-link-form .inp, .sp-reject-form .inp { min-width: 240px; }
 
+/* ===== V1.3.0 Story 2.8 · A6 退款三段流工作台 ===== */
+.rf-flow { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.rf-flow li { padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); font-size: var(--fs-sm); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.rf-flow li strong { width: 100%; }
+.rf-flow li.is-current { border-color: var(--primary); box-shadow: inset 3px 0 0 var(--primary); }
+.rf-flow li.is-done { opacity: .85; }
+.rf-net-hint { background: #fff7e0; border: 1px solid #f0d58c; border-radius: var(--radius-sm); padding: 8px 10px; margin-top: 8px; }
+.rf-payout-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  A6 右栏四区（V1.3.0 Story 2.8 AC2/AC4/AC5）：① 金额卡（订单金额 / 净额 / 出款渠道 / 收款账号脱敏；净额≠订单金额 → 黄底差额提示）
+  ② 来源卡（订单 → 订单抽屉 ?open=；来源客服工单 → A5 ?open=）③ 三段流程条（判定 → 审批 → 打款，当前段高亮，已完成段显示操作人 + 时间 + 备注，
+  驳回终止显示驳回段与理由）④ 当前段操作区：**仅渲染登录者权限对应段**（refund.submit / approve / payout；SUPER_ADMIN 三段可见），
+  其余段只读。🔴 职责分离在 RefundService.guardDutySeparation（SUPER_ADMIN 不豁免），此处按钮显隐只是体验；违规 403 fragment 显示服务层文案。
+  收款账号为字段级加密，展示层只出脱敏串；凭证按 objectKey 现签短 TTL URL，不落库不进日志。
+-->
+<body>
+<div th:fragment="detail" class="rf-detail" th:attr="data-refund-token=${refund.refundToken}">
+
+    <!-- ① 金额卡 -->
+    <section class="card card-full rf-card rf-amount">
+        <h2 th:text="#{admin.v130.refunds.card.amount}">金额</h2>
+        <div class="sum">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.refundDetail.orderAmount}">订单金额</div>
+                <div class="sum-value" th:text="${#numbers.formatInteger(refund.orderAmount, 0, 'COMMA')}">0</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.refundDetail.netAmount}">净额</div>
+                <div class="sum-value" th:text="${refund.payoutFilled()} ? ${#numbers.formatInteger(refund.netAmount, 0, 'COMMA')} : '—'">0</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.refundDetail.payoutChannel}">出款渠道</div>
+                <div class="sum-value rv-small" th:text="${refund.payoutChannel ?: '—'}">—</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.refundDetail.payoutAccount}">收款账号（脱敏）</div>
+                <div class="sum-value rv-small" th:text="${refund.payoutAccountMasked ?: '—'}">—</div></div>
+        </div>
+        <p class="hint rf-net-hint" th:if="${refund.netDiffers()}"
+           th:text="#{admin.v130.refunds.netDiffHint(${#numbers.formatInteger(refund.channelFee, 0, 'COMMA')}, ${refund.payoutChannel})}">净额差额来源</p>
+    </section>
+
+    <!-- ② 来源卡 -->
+    <section class="card card-full rf-card rf-source">
+        <h2 th:text="#{admin.v130.refunds.card.source}">来源</h2>
+        <div class="sum">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.common.order}">订单</div>
+                <div class="sum-value rv-small">
+                    <a th:if="${refund.orderToken != null}" target="_blank" th:href="@{/admin/consult-orders(open=${refund.orderToken})}" th:text="${refund.orderToken}">ord</a>
+                    <span th:if="${refund.orderToken == null}">—</span>
+                    <span class="badge badge-neutral" th:if="${refund.payChannel != null}" th:text="${refund.payChannel}">QRIS</span>
+                </div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.refundDetail.sourceTicket}">来源工单</div>
+                <div class="sum-value rv-small">
+                    <a th:if="${refund.sourceTicketToken != null}" target="_blank" th:href="@{/admin/support-tickets(open=${refund.sourceTicketToken})}" th:text="${refund.sourceTicketToken}">tok</a>
+                    <span th:if="${refund.sourceTicketToken == null}">—</span>
+                </div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.refunds.createdAt}">发起时间</div>
+                <div class="sum-value rv-small" th:text="${@adminTime.wib(refund.createdAt)}">-</div></div>
+        </div>
+    </section>
+
+    <!-- ③ 三段流程条 -->
+    <section class="card card-full rf-card rf-stages">
+        <h2 th:text="#{admin.v130.refunds.card.stages}">流程</h2>
+        <ol class="rf-flow">
+            <li th:classappend="${refund.stage == 'submit'} ? 'is-current' : (${refund.needDecision != 'PENDING'} ? 'is-done' : '')"
+                th:with="rej=${refund.needDecision == 'REJECTED'}">
+                <strong th:text="#{admin.refundDetail.section.cs}">客服判定</strong>
+                <span class="badge" th:if="${refund.needDecision != 'PENDING'}" th:classappend="${rej} ? 'badge-danger' : 'badge-ok'"
+                      th:text="#{'admin.v130.refunds.decision.' + ${refund.needDecision}}">已批准</span>
+                <span class="muted" th:if="${refund.submitterName != null}" th:text="${refund.submitterName}">客服</span>
+                <span class="muted" th:if="${rej and refund.rejectedAt != null}" th:text="${@adminTime.wib(refund.rejectedAt)}">时间</span>
+                <span class="muted" th:if="${rej and refund.rejectReason != null}" th:text="'· ' + ${refund.rejectReason}">原因</span>
+            </li>
+            <li th:classappend="${refund.stage == 'approve'} ? 'is-current' : (${refund.approvalStatus == 'APPROVED' or refund.approvalStatus == 'PROCESSING' or refund.approvalStatus == 'DONE' or refund.approvalStatus == 'REJECTED'} ? 'is-done' : '')"
+                th:with="rej=${refund.approvalStatus == 'REJECTED'}">
+                <strong th:text="#{admin.refundDetail.section.approval}">主管审批</strong>
+                <span class="badge" th:if="${refund.approvalStatus != null and refund.approvalStatus != 'PENDING_APPROVAL'}"
+                      th:classappend="${rej} ? 'badge-danger' : 'badge-ok'" th:text="${rej} ? 'REJECTED' : 'APPROVED'">APPROVED</span>
+                <span class="muted" th:if="${refund.stage == 'approve' and refund.approvalStatus == null}" th:text="#{admin.v130.refunds.waitingPayout}">等待用户填收款方式</span>
+                <span class="muted" th:if="${refund.approverName != null}" th:text="${refund.approverName}">主管</span>
+                <span class="muted" th:if="${refund.approvedAt != null}" th:text="${@adminTime.wib(refund.approvedAt)}">时间</span>
+                <span class="muted" th:if="${rej and refund.rejectedAt != null}" th:text="${@adminTime.wib(refund.rejectedAt)}">时间</span>
+                <span class="muted" th:if="${refund.approvalNote != null}" th:text="'· ' + ${refund.approvalNote}">备注</span>
+                <span class="muted" th:if="${rej and refund.rejectReason != null}" th:text="'· ' + ${refund.rejectReason}">理由</span>
+            </li>
+            <li th:classappend="${refund.stage == 'payout'} ? 'is-current' : (${refund.approvalStatus == 'DONE'} ? 'is-done' : '')">
+                <strong th:text="#{admin.refundDetail.section.payout}">财务打款</strong>
+                <span class="badge badge-ok" th:if="${refund.approvalStatus == 'DONE'}" th:text="#{admin.v130.refunds.terminal}">已打款（终态）</span>
+                <span class="muted" th:if="${refund.payerName != null}" th:text="${refund.payerName}">财务</span>
+                <span class="muted" th:if="${refund.paidAt != null}" th:text="${@adminTime.wib(refund.paidAt)}">时间</span>
+                <span class="muted" th:if="${refund.paymentProof != null}" th:text="'· Iris ' + ${refund.paymentProof}">ref</span>
+                <a th:if="${proofUrl != null}" th:href="${proofUrl}" target="_blank" th:text="#{admin.v130.refunds.proof.view}">查看出款凭证</a>
+            </li>
+        </ol>
+    </section>
+
+    <!-- ④ 当前段操作区：只渲染权限匹配段 -->
+    <section class="wb-actions rf-actions">
+        <p class="muted" th:if="${refund.terminal()}" th:text="${refund.rejected()} ? #{admin.v130.refunds.readonly.rejected} : #{admin.v130.refunds.terminal}">终态</p>
+
+        <!-- 客服判定段 -->
+        <th:block th:if="${refund.stage == 'submit'}">
+            <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.submit')" class="rv-action-group">
+                <form th:attr="hx-post=@{/admin/refunds/{t}/approve(t=${refund.refundToken})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline">
+                    <button type="submit" class="btn btn-primary" th:text="#{admin.refundDetail.btn.approveNeed}">批准退款需求</button>
+                </form>
+                <form th:attr="hx-post=@{/admin/refunds/{t}/reject(t=${refund.refundToken})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-requires-form>
+                    <input type="text" name="reason" class="inp" maxlength="200" required data-requires-text th:placeholder="#{admin.v130.refunds.rejectReason}"/>
+                    <button type="submit" class="btn btn-neutral" disabled data-requires-target th:text="#{admin.refundDetail.btn.rejectNeed}">驳回退款需求</button>
+                </form>
+            </div>
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('refund.submit'))" th:text="#{admin.v130.err.forbidden(#{perm.refund.submit})}">需要权限</p>
+        </th:block>
+
+        <!-- 主管审批段（用户尚未填收款时无按钮） -->
+        <th:block th:if="${refund.stage == 'approve'}">
+            <p class="muted" th:if="${refund.approvalStatus == null}" th:text="#{admin.v130.refunds.waitingPayout}">等待用户填收款方式</p>
+            <th:block th:if="${refund.approvalStatus == 'PENDING_APPROVAL'}">
+                <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.approve')" class="rv-action-group">
+                    <form th:attr="hx-post=@{/admin/refunds/{t}/approval(t=${refund.refundToken})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-requires-form>
+                        <input type="text" name="note" class="inp" required data-requires-text th:placeholder="#{admin.refundDetail.ph.note}"/>
+                        <button type="submit" class="btn btn-primary" disabled data-requires-target th:text="#{admin.refundDetail.btn.approve}">审批通过</button>
+                    </form>
+                    <form th:attr="hx-post=@{/admin/refunds/{t}/approval-reject(t=${refund.refundToken})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-requires-form>
+                        <input type="text" name="reason" class="inp" required data-requires-text th:placeholder="#{admin.refundDetail.ph.reason}"/>
+                        <button type="submit" class="btn btn-danger" disabled data-requires-target data-confirm-button
+                                th:attr="data-confirm=#{admin.v130.refunds.confirm.approvalReject}" th:text="#{admin.refundDetail.btn.reject}">驳回申请</button>
+                    </form>
+                </div>
+                <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('refund.approve'))" th:text="#{admin.v130.err.forbidden(#{perm.refund.approve})}">需要权限</p>
+            </th:block>
+        </th:block>
+
+        <!-- 财务打款段：附出款凭证（D-36），confirm 复述金额 + 渠道 -->
+        <th:block th:if="${refund.stage == 'payout'}">
+            <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.payout')" class="rv-action-group">
+                <form th:attr="hx-post=@{/admin/refunds/{t}/payout(t=${refund.refundToken})}" hx-target=".wb-detail-body" hx-swap="innerHTML"
+                      hx-encoding="multipart/form-data" class="inline rf-payout-form" data-requires-form>
+                    <label class="field" th:text="#{admin.v130.refunds.proof.label}">出款凭证（必附）</label>
+                    <input type="file" name="proof" accept="image/jpeg,image/png,application/pdf" required data-requires-file/>
+                    <button type="submit" class="btn btn-primary" disabled data-requires-target data-confirm-button
+                            th:attr="data-confirm=#{admin.v130.refunds.confirm.payout(${#numbers.formatInteger(refund.netAmount, 0, 'COMMA')}, ${refund.payoutChannel ?: '—'})}"
+                            th:text="#{admin.refundDetail.btn.payout}">确认 Iris 打款</button>
+                </form>
+            </div>
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('refund.payout'))" th:text="#{admin.v130.err.forbidden(#{perm.refund.payout})}">需要权限</p>
+        </th:block>
+    </section>
+</div>
+</body>
+</html>
