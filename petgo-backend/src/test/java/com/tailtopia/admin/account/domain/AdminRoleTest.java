@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import com.tailtopia.admin.roles.AdminRoleSeedSnapshot;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
@@ -20,17 +21,46 @@ class AdminRoleTest {
 
     @Test
     void everyReferencedCodeIsARegisteredPermission() {
+        // 枚举里现只剩 OPS_MANAGER 持码（Story 1.4）。
         assertThat(AdminRole.allReferencedCodes())
                 .as("角色引用了不在 AdminPermissions.ALL 的权限码（改码名后此处会静默失效）")
                 .allSatisfy(code -> assertThat(AdminPermissions.isValid(code)).isTrue());
+        // 表 seed 的码（V20260909_1141，快照同源）也必须 ⊆ ALL。
+        AdminRoleSeedSnapshot.MIGRATED.values().stream().flatMap(List::stream)
+                .forEach(code -> assertThat(AdminPermissions.isValid(code)).as("seed 码 " + code).isTrue());
+    }
+
+    /** Story 1.4：四个已迁移岗位的枚举码表清空（权限以表为准），isTableBacked 与之对齐；isTemplated 语义不变。 */
+    @Test
+    void migratedRolesCarryNoEnumCodesAndAreTableBacked() {
+        for (AdminRole role : AdminRoleSeedSnapshot.MIGRATED.keySet()) {
+            assertThat(role.permissionCodes()).as(role + " 的枚举码表应已清空").isEmpty();
+            assertThat(role.isTableBacked()).isTrue();
+            assertThat(role.isTemplated()).isTrue();
+        }
+        assertThat(AdminRole.OPS_MANAGER.isTableBacked()).isFalse();
+        assertThat(AdminRole.OPS_MANAGER.permissionCodes()).hasSize(41);
+        assertThat(AdminRole.SUPER_ADMIN.isTableBacked()).isFalse();
+        assertThat(AdminRole.CUSTOM.isTableBacked()).isFalse();
+    }
+
+    /** Story 1.4 AC5：新权限码进 ALL / edit 组，但不预授予任何预置角色。 */
+    @Test
+    void newCodesRegisteredButNotGrantedToAnyPresetRole() {
+        assertThat(AdminPermissions.isValid(AdminPermissions.PLACE_MANAGE)).isTrue();
+        assertThat(AdminPermissions.isValid(AdminPermissions.COMMENT_VIRTUAL_POST)).isTrue();
+        for (AdminRole role : AdminRole.values()) {
+            assertThat(AdminRoleSeedSnapshot.effective(role))
+                    .doesNotContain(AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST);
+        }
     }
 
     @Test
     void noRoleRepeatsACode() {
         for (AdminRole role : AdminRole.values()) {
-            assertThat(new HashSet<>(role.permissionCodes()))
+            assertThat(new HashSet<>(AdminRoleSeedSnapshot.effective(role)))
                     .as(role + " 的权限码列表有重复")
-                    .hasSameSizeAs(role.permissionCodes());
+                    .hasSameSizeAs(AdminRoleSeedSnapshot.effective(role));
         }
     }
 
@@ -66,9 +96,9 @@ class AdminRoleTest {
                 AdminPermissions.SHOP_FINANCE_VIEW);
         for (AdminRole role : AdminRole.values()) {
             if (role == AdminRole.FINANCE) {
-                assertThat(role.permissionCodes()).containsAll(sensitive);
+                assertThat(AdminRoleSeedSnapshot.effective(role)).containsAll(sensitive);
             } else {
-                assertThat(role.permissionCodes())
+                assertThat(AdminRoleSeedSnapshot.effective(role))
                         .as(role + " 不该默认持有进货价 / 经营数据权限（NFR-11）")
                         .doesNotContainAnyElementsOf(sensitive);
             }
@@ -82,12 +112,12 @@ class AdminRoleTest {
     @Test
     void onlySupportCanSearchOrdersByPhone() {
         for (AdminRole role : AdminRole.values()) {
-            boolean has = role.permissionCodes().contains(AdminPermissions.SHOP_ORDER_PHONE_SEARCH);
+            boolean has = AdminRoleSeedSnapshot.effective(role).contains(AdminPermissions.SHOP_ORDER_PHONE_SEARCH);
             assertThat(has)
                     .as(role + " 的电话反查订单权限归属不符合预期（应仅客服持有）")
                     .isEqualTo(role == AdminRole.SUPPORT);
         }
-        assertThat(AdminRole.FULFILLMENT.permissionCodes())
+        assertThat(AdminRoleSeedSnapshot.effective(AdminRole.FULFILLMENT))
                 .as("发货专员不该能按收件人电话捞人")
                 .doesNotContain(AdminPermissions.SHOP_ORDER_PHONE_SEARCH);
     }
@@ -103,14 +133,14 @@ class AdminRoleTest {
                     AdminPermissions.REFUND_SUBMIT,
                     AdminPermissions.REFUND_APPROVE,
                     AdminPermissions.REFUND_PAYOUT).stream()
-                    .filter(role.permissionCodes()::contains).toList();
+                    .filter(AdminRoleSeedSnapshot.effective(role)::contains).toList();
             assertThat(held)
                     .as(role + " 同时持有退款流程的多级权限，职责分离被打破：" + held)
                     .hasSizeLessThanOrEqualTo(1);
         }
-        assertThat(AdminRole.SUPPORT.permissionCodes()).contains(AdminPermissions.REFUND_SUBMIT);
-        assertThat(AdminRole.OPS_MANAGER.permissionCodes()).contains(AdminPermissions.REFUND_APPROVE);
-        assertThat(AdminRole.FINANCE.permissionCodes()).contains(AdminPermissions.REFUND_PAYOUT);
+        assertThat(AdminRoleSeedSnapshot.effective(AdminRole.SUPPORT)).contains(AdminPermissions.REFUND_SUBMIT);
+        assertThat(AdminRoleSeedSnapshot.effective(AdminRole.OPS_MANAGER)).contains(AdminPermissions.REFUND_APPROVE);
+        assertThat(AdminRoleSeedSnapshot.effective(AdminRole.FINANCE)).contains(AdminPermissions.REFUND_PAYOUT);
     }
 
     /**
@@ -124,7 +154,7 @@ class AdminRoleTest {
                 AdminPermissions.ADMIN_CREATE_ACCOUNT,
                 AdminPermissions.ADMIN_DEACTIVATE);
         for (AdminRole role : AdminRole.values()) {
-            assertThat(role.permissionCodes())
+            assertThat(AdminRoleSeedSnapshot.effective(role))
                     .as(role + " 不该默认持有注销删除 / 后台账号增删权")
                     .doesNotContainAnyElementsOf(reserved);
         }
@@ -133,10 +163,10 @@ class AdminRoleTest {
     /** 发货专员刻意收窄在电商模块：不该出现任何非 shop 前缀的权限。 */
     @Test
     void fulfilmentIsScopedToShopModulesOnly() {
-        assertThat(AdminRole.FULFILLMENT.permissionCodes())
+        assertThat(AdminRoleSeedSnapshot.effective(AdminRole.FULFILLMENT))
                 .as("发货专员越出电商模块")
                 .allSatisfy(code -> assertThat(code).startsWith("shop."));
-        assertThat(AdminRole.FULFILLMENT.permissionCodes()).contains(
+        assertThat(AdminRoleSeedSnapshot.effective(AdminRole.FULFILLMENT)).contains(
                 AdminPermissions.SHOP_ORDER_VIEW, AdminPermissions.SHOP_ORDER_FULFILL);
     }
 

@@ -81,6 +81,9 @@ import java.util.Set;
  * </ul>
  */
 public enum AdminRole {
+    // V1.3.0 Story 1.4（AD-4 方案 A）起：OPERATIONS / FULFILLMENT / SUPPORT / FINANCE 四个岗位的权限码
+    // 已迁入 admin_roles + admin_role_permissions 表（seed 见 V20260909_1141），此处列表清空；
+    // 权限一律经 RolePermissionResolver 解析。SUPER_ADMIN（隐式全权）与 OPS_MANAGER（D-13）继续硬编码。
 
     /**
      * 超级管理员：隐式全权（经 {@code hasRole('SUPER_ADMIN')} 命中，不注入权限码全集——
@@ -116,15 +119,7 @@ public enum AdminRole {
      * 运营专员：内容审核、商品与活动维护、社区与用户只读。
      * 不含任何审批/打款/停用类动作，也不含库存变更。
      */
-    OPERATIONS(List.of(
-            CONTENT_VIEW_REPORTS, CONTENT_VIEW, CONTENT_TAKEDOWN, CONTENT_RESTORE,
-            CONTENT_PROACTIVE_TAKEDOWN, CONTENT_MANUAL_REVIEW,
-            USER_VIEW,
-            VET_VIEW, VET_QUALIFY_VIEW, RATING_VIEW,
-            CONSULT_VIEW_ANOMALIES, CONSULT_VIEW_SESSIONS,
-            CONFIG_VIEW, ORDER_VIEW,
-            VIRTUAL_ACCOUNT_VIEW, VIRTUAL_ACCOUNT_MANAGE,
-            SHOP_PRODUCT_VIEW, SHOP_INVENTORY_VIEW, SHOP_ORDER_VIEW)),
+    OPERATIONS(List.of()), // Story 1.4：权限以 admin_roles / admin_role_permissions 表为准，枚举不再持码
 
     /**
      * 发货专员：电商履约闭环——看单、发货、标记送达、异常处置、库存进出。
@@ -133,37 +128,19 @@ public enum AdminRole {
      * 无 {@code shop.cost_view}（故商品页不下发进货价字段）。⚠️ 同样因无 {@code shop.cost_edit}，
      * 采购入库需运营主管或财务配合。
      */
-    FULFILLMENT(List.of(
-            SHOP_PRODUCT_VIEW,
-            SHOP_INVENTORY_VIEW, SHOP_INVENTORY_EDIT,
-            SHOP_ORDER_VIEW, SHOP_ORDER_FULFILL)),
+    FULFILLMENT(List.of()), // Story 1.4：权限以 admin_roles / admin_role_permissions 表为准，枚举不再持码
 
     /**
      * 客服：工单处理、退款需求提交（三级分离的第一级）、问诊异常跟进、按电话找单。
      * 只读用户与内容，不能停用用户、不能审批或打款。
      */
-    SUPPORT(List.of(
-            USER_VIEW,
-            CONTENT_VIEW, CONTENT_VIEW_REPORTS,
-            VET_VIEW, RATING_VIEW,
-            CONSULT_VIEW_ANOMALIES, CONSULT_HANDLE, CONSULT_VIEW_SESSIONS,
-            SUPPORT_VIEW, SUPPORT_HANDLE,
-            REFUND_VIEW, REFUND_SUBMIT,
-            ORDER_VIEW,
-            SHOP_ORDER_VIEW, SHOP_ORDER_PHONE_SEARCH)),
+    SUPPORT(List.of()), // Story 1.4：权限以 admin_roles / admin_role_permissions 表为准，枚举不再持码
 
     /**
      * 财务：兽医月结、支付记录、退款打款（三级分离的第三级）、进货价与经营数据。
      * 商业敏感权限（{@code shop.cost_*} / {@code shop.finance_view}）的<b>唯一</b>默认持有角色。
      */
-    FINANCE(List.of(
-            CONFIG_VIEW,
-            ORDER_VIEW, ORDER_EXPORT,
-            SETTLEMENT_VIEW, SETTLEMENT_PAYOUT,
-            PAYMENT_VIEW, RISK_VIEW,
-            REFUND_VIEW, REFUND_PAYOUT,
-            SHOP_ORDER_VIEW, SHOP_INVENTORY_VIEW, SHOP_PRODUCT_VIEW,
-            SHOP_COST_VIEW, SHOP_COST_EDIT, SHOP_FINANCE_VIEW)),
+    FINANCE(List.of()), // Story 1.4：权限以 admin_roles / admin_role_permissions 表为准，枚举不再持码
 
     /**
      * 自定义：不套用任何岗位模板，权限逐码勾选、落 {@code admin_account_permissions} 表
@@ -188,6 +165,11 @@ public enum AdminRole {
     /** 权限是否由角色模板决定（{@code false} 则读 {@code admin_account_permissions} 勾选行）。 */
     public boolean isTemplated() {
         return this != CUSTOM;
+    }
+
+    /** 权限是否以 {@code admin_roles} 表为准（Story 1.4 迁移的四个岗位；SUPER_ADMIN / OPS_MANAGER / CUSTOM 否）。 */
+    public boolean isTableBacked() {
+        return this == OPERATIONS || this == FULFILLMENT || this == SUPPORT || this == FINANCE;
     }
 
     /** 岗位角色是否对应 {@code account_type=SUPER_ADMIN}（认证层 {@code ROLE_SUPER_ADMIN} 的来源）。 */

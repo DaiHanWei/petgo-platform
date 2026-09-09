@@ -15,6 +15,11 @@ import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.repository.AdminAccountPermissionRepository;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
+import com.tailtopia.admin.roles.AdminRoleSeedSnapshot;
+import com.tailtopia.admin.roles.domain.AdminRolePermission;
+import com.tailtopia.admin.roles.repository.AdminRolePermissionRepository;
+import com.tailtopia.admin.roles.repository.AdminRoleRepository;
+import com.tailtopia.admin.roles.service.RolePermissionResolver;
 import com.tailtopia.auth.repository.UserRepository;
 import java.util.List;
 import java.util.Optional;
@@ -34,6 +39,8 @@ class AdminUserDetailsRoleTest {
     private AdminAccountRepository accounts;
     private UserRepository users;
     private AdminAccountPermissionRepository permissions;
+    private AdminRoleRepository roles;
+    private AdminRolePermissionRepository rolePermissions;
     private AdminUserDetailsService service;
 
     @BeforeEach
@@ -41,7 +48,16 @@ class AdminUserDetailsRoleTest {
         accounts = mock(AdminAccountRepository.class);
         users = mock(UserRepository.class);
         permissions = mock(AdminAccountPermissionRepository.class);
-        service = new AdminUserDetailsService(accounts, users, permissions);
+        roles = mock(AdminRoleRepository.class);
+        rolePermissions = mock(AdminRolePermissionRepository.class);
+        // Story 1.4：四个已迁移岗位的权限来自 admin_role_permissions（mock 数据源 = 迁移前快照）。
+        for (var e : AdminRoleSeedSnapshot.MIGRATED.entrySet()) {
+            long id = AdminRoleSeedSnapshot.mockRoleId(e.getKey());
+            when(rolePermissions.findByRoleId(id)).thenReturn(
+                    e.getValue().stream().map(c -> new AdminRolePermission(id, c)).toList());
+        }
+        service = new AdminUserDetailsService(accounts, users,
+                new RolePermissionResolver(permissions, roles, rolePermissions));
         when(users.findByEmailAndRole(any(), any())).thenReturn(Optional.empty());
         when(permissions.findByAccountId(anyLong())).thenReturn(List.of());
     }
@@ -49,6 +65,9 @@ class AdminUserDetailsRoleTest {
     private AdminUserDetails load(AdminRole role) {
         AdminAccount a = AdminAccount.create("x@y", "X", role, 1L);
         ReflectionTestUtils.setField(a, "id", 7L);
+        if (role.isTableBacked()) {
+            a.setRoleId(AdminRoleSeedSnapshot.mockRoleId(role));
+        }
         when(accounts.findByLarkEmailIgnoreCaseAndStatus("x@y", AdminAccountStatus.ACTIVE)).thenReturn(Optional.of(a));
         return service.loadByEmail("x@y", false);
     }
@@ -62,7 +81,7 @@ class AdminUserDetailsRoleTest {
         AdminUserDetails d = load(AdminRole.FULFILLMENT);
 
         assertThat(authorities(d))
-                .containsAll(AdminRole.FULFILLMENT.permissionCodes())
+                .containsAll(AdminRoleSeedSnapshot.FULFILLMENT)
                 .contains("ROLE_ADMIN")
                 .doesNotContain("ROLE_SUPER_ADMIN");
         // 模板角色不查表：角色定义改了，存量账号下次登录就跟上，不会漂移。
@@ -105,5 +124,25 @@ class AdminUserDetailsRoleTest {
                 AdminPermissions.REFUND_SUBMIT);
         assertThat(auth).doesNotContain(AdminPermissions.REFUND_APPROVE,
                 AdminPermissions.REFUND_PAYOUT);
+    }
+
+    /** Story 1.4 AC3：已迁移岗位却 role_id 为 NULL 的异常数据 → 空集（不抛、不静默给权限）。 */
+    @Test
+    void migratedRoleWithNullRoleIdGetsNoPermissions() {
+        AdminAccount a = AdminAccount.create("x@y", "X", AdminRole.FINANCE, 1L);
+        ReflectionTestUtils.setField(a, "id", 7L);
+        when(accounts.findByLarkEmailIgnoreCaseAndStatus("x@y", AdminAccountStatus.ACTIVE)).thenReturn(Optional.of(a));
+        AdminUserDetails d = service.loadByEmail("x@y", false);
+        assertThat(authorities(d)).containsExactly("ROLE_ADMIN");
+        verify(rolePermissions, never()).findByRoleId(any());
+    }
+
+    /** Story 1.4：OPS_MANAGER 保留读枚举（D-13），不查角色表。 */
+    @Test
+    void opsManagerStillReadsEnum() {
+        AdminUserDetails d = load(AdminRole.OPS_MANAGER);
+        assertThat(authorities(d)).containsAll(AdminRole.OPS_MANAGER.permissionCodes());
+        verify(rolePermissions, never()).findByRoleId(any());
+        verify(permissions, never()).findByAccountId(anyLong());
     }
 }

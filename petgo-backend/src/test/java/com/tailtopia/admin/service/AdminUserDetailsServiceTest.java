@@ -41,7 +41,10 @@ class AdminUserDetailsServiceTest {
         users = mock(UserRepository.class);
         permissions = mock(AdminAccountPermissionRepository.class);
         when(permissions.findByAccountId(anyLong())).thenReturn(List.of());
-        service = new AdminUserDetailsService(adminAccounts, users, permissions);
+        service = new AdminUserDetailsService(adminAccounts, users,
+                new com.tailtopia.admin.roles.service.RolePermissionResolver(permissions,
+                        mock(com.tailtopia.admin.roles.repository.AdminRoleRepository.class),
+                        mock(com.tailtopia.admin.roles.repository.AdminRolePermissionRepository.class)));
     }
 
     /**

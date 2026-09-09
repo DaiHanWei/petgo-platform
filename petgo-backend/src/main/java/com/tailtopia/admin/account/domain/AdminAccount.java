@@ -46,6 +46,13 @@ public class AdminAccount {
     @Column(name = "role", nullable = false, length = 32)
     private AdminRole role = AdminRole.CUSTOM;
 
+    /**
+     * 岗位角色表引用（V1.3.0 Story 1.4）：四个已迁移岗位 → {@code admin_roles} 对应行；
+     * SUPER_ADMIN / OPS_MANAGER / CUSTOM 为 NULL。由服务层显式设置，{@link #setRole} 不自动改它。
+     */
+    @Column(name = "role_id")
+    private Long roleId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private AdminAccountStatus status = AdminAccountStatus.ACTIVE;
@@ -176,6 +183,14 @@ public class AdminAccount {
 
     public AdminRole getRole() {
         return role;
+    }
+
+    public Long getRoleId() {
+        return roleId;
+    }
+
+    public void setRoleId(Long roleId) {
+        this.roleId = roleId;
     }
 
     public AdminAccountStatus getStatus() {

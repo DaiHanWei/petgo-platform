@@ -20,6 +20,12 @@ import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.audit.service.AdminAlertService;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.admin.roles.AdminRoleSeedSnapshot;
+import com.tailtopia.admin.roles.domain.AdminRoleEntity;
+import com.tailtopia.admin.roles.domain.AdminRolePermission;
+import com.tailtopia.admin.roles.repository.AdminRolePermissionRepository;
+import com.tailtopia.admin.roles.repository.AdminRoleRepository;
+import com.tailtopia.admin.roles.service.RolePermissionResolver;
 import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import java.util.Optional;
@@ -34,6 +40,8 @@ class AdminAccountServiceTest {
     private AdminAccountPermissionRepository permissions;
     private AdminAuditService auditService;
     private AdminAlertService alertService;
+    private AdminRoleRepository roles;
+    private AdminRolePermissionRepository rolePermissions;
     private AdminAccountService service;
 
     @BeforeEach
@@ -42,7 +50,19 @@ class AdminAccountServiceTest {
         permissions = mock(AdminAccountPermissionRepository.class);
         auditService = mock(AdminAuditService.class);
         alertService = mock(AdminAlertService.class);
-        service = new AdminAccountService(accounts, permissions, auditService, alertService, "boot@x");
+        roles = mock(AdminRoleRepository.class);
+        rolePermissions = mock(AdminRolePermissionRepository.class);
+        // Story 1.4：四个已迁移岗位的角色表行与权限码（mock 数据源 = 迁移前快照）。
+        for (var e : AdminRoleSeedSnapshot.MIGRATED.entrySet()) {
+            long id = AdminRoleSeedSnapshot.mockRoleId(e.getKey());
+            AdminRoleEntity row = AdminRoleEntity.newCustom(e.getKey().name(), e.getKey().name(), null);
+            ReflectionTestUtils.setField(row, "id", id);
+            when(roles.findByCode(e.getKey().name())).thenReturn(Optional.of(row));
+            when(rolePermissions.findByRoleId(id)).thenReturn(
+                    e.getValue().stream().map(c -> new AdminRolePermission(id, c)).toList());
+        }
+        service = new AdminAccountService(accounts, permissions, auditService, alertService,
+                new RolePermissionResolver(permissions, roles, rolePermissions), "boot@x");
         when(accounts.findByLarkEmailIgnoreCaseAndStatus(any(), any())).thenReturn(Optional.empty());
         when(accounts.save(any(AdminAccount.class))).thenAnswer(inv -> {
             AdminAccount a = inv.getArgument(0);

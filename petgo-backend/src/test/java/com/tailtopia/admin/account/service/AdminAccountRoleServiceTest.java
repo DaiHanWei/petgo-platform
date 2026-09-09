@@ -22,6 +22,12 @@ import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.audit.service.AdminAlertService;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.admin.roles.AdminRoleSeedSnapshot;
+import com.tailtopia.admin.roles.domain.AdminRoleEntity;
+import com.tailtopia.admin.roles.domain.AdminRolePermission;
+import com.tailtopia.admin.roles.repository.AdminRolePermissionRepository;
+import com.tailtopia.admin.roles.repository.AdminRoleRepository;
+import com.tailtopia.admin.roles.service.RolePermissionResolver;
 import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import java.util.Optional;
@@ -37,6 +43,8 @@ class AdminAccountRoleServiceTest {
     private AdminAccountPermissionRepository permissions;
     private AdminAuditService auditService;
     private AdminAlertService alertService;
+    private AdminRoleRepository roles;
+    private AdminRolePermissionRepository rolePermissions;
     private AdminAccountService service;
 
     @BeforeEach
@@ -45,7 +53,19 @@ class AdminAccountRoleServiceTest {
         permissions = mock(AdminAccountPermissionRepository.class);
         auditService = mock(AdminAuditService.class);
         alertService = mock(AdminAlertService.class);
-        service = new AdminAccountService(accounts, permissions, auditService, alertService, "boot@x");
+        roles = mock(AdminRoleRepository.class);
+        rolePermissions = mock(AdminRolePermissionRepository.class);
+        // Story 1.4：四个已迁移岗位的角色表行与权限码（mock 数据源 = 迁移前快照）。
+        for (var e : AdminRoleSeedSnapshot.MIGRATED.entrySet()) {
+            long id = AdminRoleSeedSnapshot.mockRoleId(e.getKey());
+            AdminRoleEntity row = AdminRoleEntity.newCustom(e.getKey().name(), e.getKey().name(), null);
+            ReflectionTestUtils.setField(row, "id", id);
+            when(roles.findByCode(e.getKey().name())).thenReturn(Optional.of(row));
+            when(rolePermissions.findByRoleId(id)).thenReturn(
+                    e.getValue().stream().map(c -> new AdminRolePermission(id, c)).toList());
+        }
+        service = new AdminAccountService(accounts, permissions, auditService, alertService,
+                new RolePermissionResolver(permissions, roles, rolePermissions), "boot@x");
         when(accounts.findByLarkEmailIgnoreCaseAndStatus(any(), any())).thenReturn(Optional.empty());
         when(accounts.save(any(AdminAccount.class))).thenAnswer(inv -> {
             AdminAccount a = inv.getArgument(0);
@@ -60,6 +80,9 @@ class AdminAccountRoleServiceTest {
     private AdminAccount account(long id, AdminRole role) {
         AdminAccount a = AdminAccount.create("x@y", "X", role, 1L);
         ReflectionTestUtils.setField(a, "id", id);
+        if (role.isTableBacked()) {
+            a.setRoleId(AdminRoleSeedSnapshot.mockRoleId(role)); // Story 1.4：表驱动岗位带 role_id
+        }
         when(accounts.findById(id)).thenReturn(Optional.of(a));
         return a;
     }
@@ -150,7 +173,7 @@ class AdminAccountRoleServiceTest {
         ArgumentCaptor<List<AdminAccountPermission>> rows = ArgumentCaptor.forClass(List.class);
         verify(permissions).saveAll(rows.capture());
         assertThat(rows.getValue()).extracting(AdminAccountPermission::getPermissionCode)
-                .containsExactlyInAnyOrderElementsOf(AdminRole.FULFILLMENT.permissionCodes());
+                .containsExactlyInAnyOrderElementsOf(AdminRoleSeedSnapshot.FULFILLMENT);
     }
 
     @Test
@@ -206,6 +229,7 @@ class AdminAccountRoleServiceTest {
     void listShowsEffectivePermissionsForTemplatedRoles() {
         AdminAccount ops = AdminAccount.create("a@x", "A", AdminRole.OPERATIONS, 1L);
         ReflectionTestUtils.setField(ops, "id", 1L);
+        ops.setRoleId(AdminRoleSeedSnapshot.mockRoleId(AdminRole.OPERATIONS));
         AdminAccount custom = AdminAccount.create("b@x", "B", AdminRole.CUSTOM, 1L);
         ReflectionTestUtils.setField(custom, "id", 2L);
         when(accounts.findAll()).thenReturn(List.of(ops, custom));
@@ -217,8 +241,39 @@ class AdminAccountRoleServiceTest {
         assertThat(views.get(0).role()).isEqualTo(AdminRole.OPERATIONS);
         assertThat(views.get(0).templated()).isTrue();
         assertThat(views.get(0).permissionCodes())
-                .containsExactlyInAnyOrderElementsOf(AdminRole.OPERATIONS.permissionCodes());
+                .containsExactlyInAnyOrderElementsOf(AdminRoleSeedSnapshot.OPERATIONS);
         assertThat(views.get(1).templated()).isFalse();
         assertThat(views.get(1).permissionCodes()).containsExactly(AdminPermissions.USER_VIEW);
+    }
+
+    // ---------- Story 1.4：role_id 随角色设 / 清 ----------
+
+    @Test
+    void changeRoleSetsRoleIdForMigratedRolesAndClearsOtherwise() {
+        AdminAccount a = account(7L, AdminRole.CUSTOM);
+        assertThat(a.getRoleId()).isNull();
+
+        service.changeRole(7L, AdminRole.FINANCE, 1L);
+        assertThat(a.getRoleId()).isEqualTo(AdminRoleSeedSnapshot.mockRoleId(AdminRole.FINANCE));
+
+        service.changeRole(7L, AdminRole.OPS_MANAGER, 1L);
+        assertThat(a.getRoleId()).isNull();
+
+        service.changeRole(7L, AdminRole.SUPPORT, 1L);
+        assertThat(a.getRoleId()).isEqualTo(AdminRoleSeedSnapshot.mockRoleId(AdminRole.SUPPORT));
+
+        service.changeRole(7L, AdminRole.CUSTOM, 1L);
+        assertThat(a.getRoleId()).isNull();
+    }
+
+    @Test
+    void createSetsRoleIdOnlyForMigratedRoles() {
+        service.createAccount("ops@x", "运营", AdminRole.OPERATIONS, List.of(), 1L);
+        service.createAccount("mgr@x", "主管", AdminRole.OPS_MANAGER, List.of(), 1L);
+        ArgumentCaptor<AdminAccount> saved = ArgumentCaptor.forClass(AdminAccount.class);
+        verify(accounts, org.mockito.Mockito.times(2)).save(saved.capture());
+        assertThat(saved.getAllValues().get(0).getRoleId())
+                .isEqualTo(AdminRoleSeedSnapshot.mockRoleId(AdminRole.OPERATIONS));
+        assertThat(saved.getAllValues().get(1).getRoleId()).isNull();
     }
 }

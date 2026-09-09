@@ -12,6 +12,7 @@ import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.audit.service.AdminAlertService;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.admin.roles.service.RolePermissionResolver;
 import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
 import java.util.Locale;
@@ -45,17 +46,20 @@ public class AdminAccountService {
     private final AdminAccountPermissionRepository permissions;
     private final AdminAuditService auditService;
     private final AdminAlertService alertService;
+    /** 权限来源唯一出口（V1.3.0 Story 1.4）：列表回显 / carry / 审计摘要都经它，与登录装载同口径。 */
+    private final RolePermissionResolver resolver;
     /** bootstrap 超管邮箱（与 {@code AdminBootstrap} 同一 env）；空表示未配置、护栏不生效。 */
     private final String bootstrapEmail;
 
     public AdminAccountService(AdminAccountRepository accounts,
             AdminAccountPermissionRepository permissions, AdminAuditService auditService,
-            AdminAlertService alertService,
+            AdminAlertService alertService, RolePermissionResolver resolver,
             @Value("${ADMIN_BOOTSTRAP_EMAIL:}") String bootstrapEmail) {
         this.accounts = accounts;
         this.permissions = permissions;
         this.auditService = auditService;
         this.alertService = alertService;
+        this.resolver = resolver;
         this.bootstrapEmail = bootstrapEmail == null ? "" : bootstrapEmail.trim();
     }
 
@@ -77,17 +81,9 @@ public class AdminAccountService {
         return views;
     }
 
-    /** 该账号实际生效的权限码（排序稳定，供 UI 回显）。 */
+    /** 该账号实际生效的权限码（排序稳定，供 UI 回显）——与登录装载同源（{@link RolePermissionResolver}）。 */
     private List<String> effectivePermissions(AdminAccount a) {
-        AdminRole role = a.getRole();
-        if (a.getAccountType() == AdminAccountType.SUPER_ADMIN || role == null) {
-            return List.of();
-        }
-        if (role.isTemplated()) {
-            return role.permissionCodes().stream().sorted().toList();
-        }
-        return permissions.findByAccountId(a.getId()).stream()
-                .map(AdminAccountPermission::getPermissionCode).sorted().toList();
+        return resolver.resolve(a).stream().sorted().toList();
     }
 
     /**
@@ -125,8 +121,10 @@ public class AdminAccountService {
                 ? Set.of()
                 : sanitizePermissions(AdminAccountType.STAFF, permissionCodes);
 
-        AdminAccount saved = accounts.save(
-                AdminAccount.create(email, displayName.trim(), role, actorAccountId));
+        AdminAccount fresh = AdminAccount.create(email, displayName.trim(), role, actorAccountId);
+        // Story 1.4：四个已迁移岗位落 role_id（权限按表解析）；SUPER_ADMIN / OPS_MANAGER / CUSTOM 保持 NULL。
+        fresh.setRoleId(resolver.roleIdFor(role).orElse(null));
+        AdminAccount saved = accounts.save(fresh);
         if (!codes.isEmpty()) {
             permissions.saveAll(codes.stream()
                     .map(c -> new AdminAccountPermission(saved.getId(), c)).toList());
@@ -135,7 +133,7 @@ public class AdminAccountService {
         // 模板角色只记角色名 + 权限条数：整份码表能由 AdminRole 反查，且随 git 留痕；
         // 摘要列只有 varchar(500)，运营主管那 40 多个码直接撑爆它，而审计写失败会回滚整个建号事务。
         String permSummary = role.isTemplated()
-                ? role.permissionCodes().size() + " 项（按角色）"
+                ? resolver.codesOf(role).size() + " 项（按角色）"
                 : String.valueOf(new TreeSet<>(codes));
         auditService.record(actorAccountId, AuditActions.ACCOUNT_CREATED, "ADMIN_ACCOUNT",
                 String.valueOf(saved.getId()),
@@ -181,6 +179,7 @@ public class AdminAccountService {
 
         List<String> carried = effectivePermissions(a);
         a.setRole(newRole);
+        a.setRoleId(resolver.roleIdFor(newRole).orElse(null)); // Story 1.4：表驱动岗位设 role_id，其余清空
         a.bumpSecurityVersion(); // AD-1：角色真变 → 会话下次请求被踢重登
         accounts.save(a);
 

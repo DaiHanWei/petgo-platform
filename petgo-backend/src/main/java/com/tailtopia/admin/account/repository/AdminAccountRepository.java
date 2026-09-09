@@ -28,6 +28,12 @@ public interface AdminAccountRepository extends JpaRepository<AdminAccount, Long
     /** 换绑查重（V1.3.0 Story 1.3）：排除自身 id 后，是否存在同邮箱（忽略大小写）的指定状态账号。 */
     boolean existsByLarkEmailIgnoreCaseAndStatusAndIdNot(String larkEmail, AdminAccountStatus status, long id);
 
+    /** 引用某岗位角色表行的账号（Story 1.5：角色改权限后批量 bump 安全版本号）。 */
+    List<AdminAccount> findByRoleId(Long roleId);
+
+    /** 引用某岗位角色表行的账号数（Story 1.5：删角色前校验）。 */
+    long countByRoleId(Long roleId);
+
     /** 超管数量（bootstrap 用）。 */
     long countByAccountType(AdminAccountType accountType);
 

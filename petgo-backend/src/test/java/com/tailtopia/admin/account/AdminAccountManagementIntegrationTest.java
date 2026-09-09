@@ -204,4 +204,34 @@ class AdminAccountManagementIntegrationTest extends ApiIntegrationTest {
         // 登录白名单只命中 ACTIVE 的 B。
         assertThat(userDetailsService.loadByEmail(email, false).getAdminAccountId()).isEqualTo(b);
     }
+
+    // ---- V1.3.0 Story 1.4：四岗位登录权限迁移前后逐位相等 + role_id 设/清 ----
+
+    @Test
+    void migratedRolesLoadSnapshotAuthoritiesAndRoleIdFollowsRole() {
+        long seq = SEQ.incrementAndGet();
+        long actor = 800000L + seq;
+        for (var e : com.tailtopia.admin.roles.AdminRoleSeedSnapshot.MIGRATED.entrySet()) {
+            String email = "staff-" + e.getKey().name().toLowerCase() + "-" + seq + "@tailtopia.test";
+            long id = accountService.createAccount(email, "岗位" + seq, e.getKey(), List.of(), actor);
+            assertThat(adminAccounts.findById(id).orElseThrow().getRoleId()).isNotNull();
+            List<String> auth = authorities(userDetailsService.loadByEmail(email, false));
+            assertThat(auth).as(e.getKey() + " 登录权限 ≠ 迁移前快照")
+                    .containsExactlyInAnyOrderElementsOf(
+                            java.util.stream.Stream.concat(java.util.stream.Stream.of("ROLE_ADMIN"),
+                                    e.getValue().stream()).toList());
+        }
+        // OPS_MANAGER 仍读枚举、role_id NULL；切到 CUSTOM 清 role_id 并 carry。
+        String mgr = "staff-mgr-" + seq + "@tailtopia.test";
+        long mgrId = accountService.createAccount(mgr, "主管" + seq, AdminRole.OPS_MANAGER, List.of(), actor);
+        assertThat(adminAccounts.findById(mgrId).orElseThrow().getRoleId()).isNull();
+        assertThat(authorities(userDetailsService.loadByEmail(mgr, false)))
+                .containsAll(AdminRole.OPS_MANAGER.permissionCodes());
+        accountService.changeRole(mgrId, AdminRole.FINANCE, actor);
+        assertThat(adminAccounts.findById(mgrId).orElseThrow().getRoleId()).isNotNull();
+        accountService.changeRole(mgrId, AdminRole.CUSTOM, actor);
+        assertThat(adminAccounts.findById(mgrId).orElseThrow().getRoleId()).isNull();
+        assertThat(authorities(userDetailsService.loadByEmail(mgr, false)))
+                .containsAll(com.tailtopia.admin.roles.AdminRoleSeedSnapshot.FINANCE);
+    }
 }
