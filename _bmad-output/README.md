@@ -10,7 +10,7 @@
 | `implementation-artifacts/` | 实现层：story、sprint-status、评审记录、spec —— **按版本一个子目录**，与规划层同名 |
 | `_archive/` | 一次性验收截图、V1.0 保真工程、H5 原型页 —— 只读，不再维护 |
 
-两层都用同一套版本目录名：`v1.0.0` `v1.1.0` `v1.1.2` `v1.1.4` `v1.1.6` `v1.4.0`，另有两个专题线 `admin-backend`（运营后台，2026-06）和 `bug-system`（Bug 同步工具，仅规划层）。
+两层都用同一套版本目录名：`v1.0.0` `v1.1.0` `v1.1.2` `v1.1.4` `v1.1.6` `v1.3.0` `v1.4.0`，另有两个专题线 `admin-backend`（运营后台，2026-06）和 `bug-system`（Bug 同步工具，仅规划层）。
 
 ## 一个版本的五件套
 
@@ -33,5 +33,6 @@
 | v1.1.2 | Diary 时间线重构 / Tab 重排 / 内容可见范围 / Splash | `planning-artifacts/v1.1.2/` | 已上线 |
 | v1.1.4 | 拉黑 / 举报 / 工单队列 | `planning-artifacts/v1.1.4/` | 已上线 |
 | v1.1.6 | 内容运营与增长：访客态 / 顶置 / 标签 / 批量发布 / 推荐序 / 分享 | `planning-artifacts/v1.1.6/` | 2026-09-07 合 main |
+| v1.3.0 | 多 PRD 组合（首个：运营后台 UI 重构），集成分支 `dev_1.3.0` | `planning-artifacts/v1.3.0/` | 开工中，PRD 陆续传入 |
 | v1.4.0 | 精选自营电商（Toko） | `planning-artifacts/v1.4.0/` | 开发中（并行线） |
 | admin-backend | 运营后台重构（Lark 登录 / 审计 / 兽医·用户·内容管理） | `planning-artifacts/admin-backend/` | 已上线 |
