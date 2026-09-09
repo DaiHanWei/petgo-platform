@@ -325,6 +325,26 @@ public class User {
         return role;
     }
 
+    /**
+     * 「运营马甲 / 种子号」判定的<b>唯一 Java 出口</b>（V1.3.0 Story 3.1，AD-8）：看板 / 暖评身份池 / 暖贴入队三处都只调这里。
+     * 主判定按列：{@code account_type = VIRTUAL}（V82 起虚拟号 / 种子号统一回填）或 {@code role = ADMIN}
+     * （{@code AdminBootstrap} 维护的官方内容作者 shim，后台发帖的 {@code author_id} 即它；按 AD-8 视为非真实用户）。
+     * Apple 登录用户（{@code googleSub} 为 null）是真实用户 → false（D-6）。SQL 侧同口径见
+     * {@code admin/dashboard/metrics/SyntheticAccountSql}，两侧一致性由 parity 测试保证。
+     */
+    public boolean isSyntheticAccount() {
+        return accountType == AccountType.VIRTUAL || role == Role.ADMIN;
+    }
+
+    /**
+     * 前缀兜底判定：{@code googleSub} 以 {@code admin:} / {@code virtual:} / {@code seed-tailtopia-} 开头。
+     * <b>仅供 parity 测试与迁移期校验；业务代码不得调用</b>（判定以 {@link #isSyntheticAccount()} 为准）。null 安全。
+     */
+    public static boolean looksSyntheticBySub(String googleSub) {
+        return googleSub != null && (googleSub.startsWith("admin:") || googleSub.startsWith("virtual:")
+                || googleSub.startsWith("seed-tailtopia-"));
+    }
+
     public String getPasswordHash() {
         return passwordHash;
     }
