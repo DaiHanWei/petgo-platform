@@ -1,6 +1,7 @@
 package com.tailtopia.content.repository;
 
 import com.tailtopia.content.domain.Comment;
+import com.tailtopia.content.domain.CommentModerationStatus;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -263,6 +264,28 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
      */
     org.springframework.data.domain.Page<Comment> findByPostIdAndParentIdIsNull(
             long postId, Pageable pageable);
+
+    // ===== V1.3.0 Story 4.2 暖评抽屉只读查询（平台口径，不套 R1/R2）=====
+
+    /** 一批作者在 [from, to) 内发出的评论数（含审核中，排软删）：「今日已评 N 条」，区间由调用方按 WIB 自然日算。 */
+    @org.springframework.data.jpa.repository.Query("select c.authorId, count(c) from Comment c where c.authorId in :authorIds"
+            + " and c.deletedAt is null and c.createdAt >= :from and c.createdAt < :to group by c.authorId")
+    java.util.List<Object[]> countByAuthorsBetween(@Param("authorIds") java.util.Collection<Long> authorIds,
+            @Param("from") Instant from, @Param("to") Instant to);
+
+    /** 某帖自 since 起评过的作者 id（含审核中，排软删）：10 分钟内连发软提示。 */
+    @org.springframework.data.jpa.repository.Query("select distinct c.authorId from Comment c where c.postId = :postId"
+            + " and c.deletedAt is null and c.createdAt >= :since")
+    java.util.List<Long> findRecentAuthorIdsOnPost(@Param("postId") long postId, @Param("since") Instant since);
+
+    /** 某帖上虚拟账号发的评论数（可见 + 审核中，排软删）：≥3 条黄条提示。 */
+    @org.springframework.data.jpa.repository.Query("select count(c) from Comment c join User u on u.id = c.authorId"
+            + " where c.postId = :postId and u.accountType = :virtual and c.deletedAt is null and c.moderationStatus in :statuses")
+    long countByPostAndAuthorType(@Param("postId") long postId, @Param("virtual") com.tailtopia.auth.domain.AccountType virtual,
+            @Param("statuses") java.util.Collection<CommentModerationStatus> statuses);
+
+    /** 某帖可见评论数（一级 + 二级，排软删）：抽屉预览。 */
+    long countByPostIdAndDeletedAtIsNullAndModerationStatus(long postId, CommentModerationStatus status);
 
     /** 后台内容详情：一批一级评论的全部二级回复（含已删），时间正序；service 端裁「收起前 3 条」。 */
     java.util.List<Comment> findByParentIdInOrderByCreatedAtAscIdAsc(

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  「去评论」抽屉（V1.3.0 Story 4.2，UI 稿 2-9 / 2-10；模板 B 抽屉体，res=post）。模型：d = VirtualCommentDrawer；filter（4-1 当前筛选，
+  供「下一帖」回传）；toast（提交成功文案，oob 到 #admin-toast-host）。
+  drawer   — 整个抽屉体：帖子预览 → 已有评论列表（#vc-existing）→ 常驻评论区（#vc-composer）→ 「下一帖」
+  existing — 已有评论列表（提交成功后 oob 刷新：刚提交那条置顶标「审核中」）
+  composer — 评论区（身份下拉 + 文本框 + 发布；提交成功后整块替换：文本框清空、身份保持、幂等键刷新）
+  422（L1 命中 / 身份无效 / 正文无效）由 AdminBusinessExceptionAdvice 按 HX-Target（#vc-error）回行内 err，表单不消失。
+-->
+<body>
+<div th:fragment="drawer" class="vc-drawer" th:attr="data-post-id=${d.postId},data-next-post-id=${d.nextPostId}">
+    <!-- ① 帖子预览 -->
+    <section class="vc-preview card card-full">
+        <div class="vc-preview-row">
+            <img th:if="${d.thumbnailUrl != null}" th:src="${d.thumbnailUrl}" alt="" class="vc-thumb"/>
+            <div class="vc-preview-text">
+                <p th:text="${#strings.isEmpty(d.postSummary)} ? '#' + ${d.postId} : ${d.postSummary}">正文摘要</p>
+                <p class="muted">
+                    <span th:text="#{admin.v130.comments.virtual.preview.author}">作者</span>
+                    <span th:text="${d.authorName}">作者</span>
+                    <span class="badge badge-info" th:if="${d.authorVirtual}" th:text="#{admin.v130.comments.virtual.badge.virtual}">虚拟</span>
+                    ·
+                    <span th:text="#{admin.v130.comments.virtual.preview.species}">物种</span>
+                    <span th:text="${d.species != null} ? #{'admin.v130.comments.distribution.species.' + ${d.species}} : '—'">—</span>
+                    ·
+                    <span th:text="#{admin.v130.comments.virtual.preview.visibleCount(${d.visibleCount})}">可见评论 N 条</span>
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ② 已有评论 -->
+    <div th:replace="~{admin/fragments/drawer-comment-virtual :: existing}"></div>
+
+    <!-- ③ 常驻评论区 -->
+    <div th:replace="~{admin/fragments/drawer-comment-virtual :: composer}"></div>
+
+    <!-- ④ 下一帖（按 4-1 当前筛选结果集顺序；服务端算） -->
+    <div class="vc-next">
+        <button type="button" class="btn btn-neutral btn-sm" th:if="${d.nextPostId != null}"
+                th:attr="hx-get=@{/admin/comments/distribution/{id}/drawer(id=${d.nextPostId},count=${filter != null ? filter.count : null},n=${filter != null ? filter.n : null},from=${filter != null ? filter.from : null},to=${filter != null ? filter.to : null},species=${filter != null ? filter.species : null},status=${filter != null ? filter.status : null},excludeVirtual=${filter != null ? filter.excludeVirtual : null},page=${filter != null ? filter.page : null})}"
+                hx-target="#post-drawer .drawer-body" hx-swap="innerHTML" th:text="#{admin.v130.comments.virtual.next}">下一帖</button>
+        <span class="muted" th:if="${d.nextPostId == null}" th:text="#{admin.v130.comments.virtual.next.none}">本页已是最后一帖</span>
+    </div>
+</div>
+
+<!-- POST 成功的响应：评论区（替换 #vc-composer）+ oob 的已有评论列表（刚提交那条置顶标「审核中」） -->
+<th:block th:fragment="composer-with-existing">
+    <div th:replace="~{admin/fragments/drawer-comment-virtual :: composer}"></div>
+    <div th:replace="~{admin/fragments/drawer-comment-virtual :: existing}"></div>
+</th:block>
+
+<section th:fragment="existing" id="vc-existing" class="vc-existing" th:hx-swap-oob="${oob} ? 'true' : null">
+    <h3 th:text="#{admin.v130.comments.virtual.existing(${#lists.size(d.comments)})}">已有评论（N）</h3>
+    <p class="muted" th:if="${#lists.isEmpty(d.comments)}" th:text="#{admin.v130.comments.virtual.existing.empty}">还没有评论，这是一条冷帖</p>
+    <ul class="vc-list" th:if="${!#lists.isEmpty(d.comments)}">
+        <li th:each="c : ${d.comments}" th:classappend="(${c.parentId != null} ? 'vc-reply ' : '') + (${c.justSubmitted} ? 'vc-just' : '')" th:data-id="${c.id}">
+            <span class="vc-author" th:text="${c.authorName}">作者</span>
+            <span class="badge badge-info" th:if="${c.authorVirtual}" th:text="#{admin.v130.comments.virtual.badge.virtual}">虚拟</span>
+            <span class="badge badge-warn" th:if="${c.underReview}" th:text="#{admin.v130.comments.virtual.badge.underReview}">审核中</span>
+            <span class="muted" th:text="${@adminTime.wib(c.createdAt)}">时间</span>
+            <p class="vc-body" th:text="${c.body}">正文</p>
+        </li>
+    </ul>
+</section>
+
+<section th:fragment="composer" id="vc-composer" class="vc-composer">
+    <div class="toast" role="status" th:if="${toast}" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">toast</div>
+    <div class="banner err vc-many" th:if="${d.manyVirtual()}" th:text="#{admin.v130.comments.virtual.manyVirtualWarn(${d.virtualCount})}">本帖虚拟评论已 N 条</div>
+    <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('comment.virtual_post')">
+        <form th:attr="hx-post=@{/admin/comments/virtual},data-recent-ids=${#strings.listJoin(d.recentIdentityIds, ',')}"
+              hx-target="#vc-error" hx-swap="innerHTML" class="vc-form" data-vc-form>
+            <input type="hidden" name="postId" th:value="${d.postId}"/>
+            <input type="hidden" name="idempotencyKey" th:value="${d.idempotencyKey}"/>
+            <th:block th:if="${filter != null}">
+                <input type="hidden" name="count" th:value="${filter.count}"/>
+                <input type="hidden" name="n" th:value="${filter.n}"/>
+                <input type="hidden" name="from" th:value="${filter.from}"/>
+                <input type="hidden" name="to" th:value="${filter.to}"/>
+                <input type="hidden" name="species" th:value="${filter.species}"/>
+                <input type="hidden" name="status" th:value="${filter.status}"/>
+                <input type="hidden" name="excludeVirtual" th:value="${filter.excludeVirtual}"/>
+                <input type="hidden" name="page" th:value="${filter.page}"/>
+            </th:block>
+            <label class="field field-full">
+                <span th:text="#{admin.v130.comments.virtual.identity}">评论身份</span>
+                <input type="search" class="inp" data-vc-search th:placeholder="#{admin.v130.comments.virtual.identity.search}"/>
+                <!-- 默认不预选（沿用 publish-identity-select 的防呆）；其他物种收起，勾「展开全部」再显示 -->
+                <select name="virtualUserId" class="sel field-full" required data-vc-identity th:attr="data-selected=${selectedIdentity}">
+                    <option value="" disabled th:selected="${selectedIdentity == null}" th:text="#{admin.v130.comments.virtual.identity.placeholder}">请选择评论身份</option>
+                    <optgroup th:label="#{admin.v130.comments.virtual.identity.matchGroup}">
+                        <option th:each="o : ${d.matching}" th:value="${o.id}" th:selected="${selectedIdentity != null and selectedIdentity == o.id}"
+                                th:attr="data-species=${o.accountSpecies}"
+                                th:text="${o.nickname} + ' · ' + #{'admin.v130.comments.distribution.species.' + ${o.accountSpecies}} + ' · ' + #{admin.v130.comments.virtual.identity.todayCount(${o.todayCount})}">昵称 · 猫 · 今日已评 0</option>
+                    </optgroup>
+                    <optgroup th:label="#{admin.v130.comments.virtual.identity.otherGroup}" data-vc-others hidden th:if="${!#lists.isEmpty(d.others)}">
+                        <option th:each="o : ${d.others}" th:value="${o.id}" th:selected="${selectedIdentity != null and selectedIdentity == o.id}"
+                                th:attr="data-species=${o.accountSpecies}"
+                                th:text="${o.nickname} + ' · ' + #{'admin.v130.comments.distribution.species.' + ${o.accountSpecies}} + ' · ' + #{admin.v130.comments.virtual.identity.todayCount(${o.todayCount})}">昵称 · 狗 · 今日已评 0</option>
+                    </optgroup>
+                </select>
+                <label class="muted" th:if="${!#lists.isEmpty(d.others)}"><input type="checkbox" data-vc-show-all/> <span th:text="#{admin.v130.comments.virtual.identity.showAll}">展开全部物种</span></label>
+            </label>
+            <label class="field field-full">
+                <span th:text="#{admin.v130.comments.virtual.body}">评论内容</span>
+                <textarea name="body" class="inp field-full" rows="3" maxlength="200" required data-vc-body th:placeholder="#{admin.v130.comments.virtual.body.placeholder}"></textarea>
+                <span class="muted" data-vc-remaining th:text="#{admin.v130.comments.virtual.body.remaining(200)}">还可输入 200 字</span>
+            </label>
+            <p class="hint vc-recent-warn" data-vc-recent-warn hidden th:text="#{admin.v130.comments.virtual.recentWarn}">该账号刚评过这帖，确认再发？</p>
+            <div id="vc-error" class="vc-error" aria-live="polite"></div>
+            <button type="submit" class="btn btn-primary" disabled data-vc-submit th:text="#{admin.v130.comments.virtual.submit}">发布</button>
+        </form>
+    </div>
+    <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('comment.virtual_post'))">
+        <button type="button" class="btn btn-primary" disabled th:title="#{admin.v130.err.forbidden(#{perm.comment.virtual_post})}" th:text="#{admin.v130.comments.virtual.submit}">发布</button>
+        <span th:text="#{admin.v130.err.forbidden(#{perm.comment.virtual_post})}">需要权限</span>
+    </p>
+</section>
+</body>
+</html>

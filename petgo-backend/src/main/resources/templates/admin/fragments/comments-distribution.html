@@ -113,7 +113,7 @@
                     </td>
                     <td th:text="${r.virtualCount}">0</td>
                     <td>
-                        <button type="button" class="btn btn-primary btn-sm" th:attr="data-post-id=${r.postId},data-drawer-url=@{/admin/comments/distribution/{id}/drawer(id=${r.postId})}"
+                        <button type="button" class="btn btn-primary btn-sm" th:attr="data-post-id=${r.postId},data-drawer-url=@{/admin/comments/distribution/{id}/drawer(id=${r.postId},count=${filter.count},n=${filter.n},from=${filter.from},to=${filter.to},species=${filter.species},status=${filter.status},excludeVirtual=${filter.excludeVirtual},page=${filter.page})}"
                                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('comment.virtual_post')"
                                 th:text="#{admin.v130.comments.distribution.action.comment}">去评论</button>
                         <button type="button" class="btn btn-primary btn-sm" disabled th:attr="data-post-id=${r.postId}"

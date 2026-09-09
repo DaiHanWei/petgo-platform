@@ -8,6 +8,9 @@ package com.tailtopia.admin.audit.service;
  */
 public final class AuditActions {
 
+    /** V1.3.0 Story 4.2：运营以虚拟身份发暖评（target COMMENT/&lt;commentId&gt;；summary 只记正文前 50 字）。 */
+    public static final String COMMENT_VIRTUAL_POST = "COMMENT_VIRTUAL_POST";
+
     /** 紧急账密（formLogin）登录成功（Story 1.3，AC7）。 */
     public static final String EMERGENCY_LOGIN_SUCCEEDED = "EMERGENCY_LOGIN_SUCCEEDED";
 

@@ -48,6 +48,13 @@ public class Comment {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    /**
+     * V1.3.0 预留（D-35 / X-2）：二级回复所回复的目标评论 id。本版只映射列、不写值（暖评只发一级评论；
+     * {@code createReply} 仍按两级归并写 {@code parent_id}），App 分支合入「回复某条评论」后启用。
+     */
+    @Column(name = "reply_to_comment_id")
+    private Long replyToCommentId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -173,6 +180,11 @@ public class Comment {
 
     public int getContentVersion() {
         return contentVersion;
+    }
+
+    /** 预留字段（D-35 / X-2），本版恒为 null。 */
+    public Long getReplyToCommentId() {
+        return replyToCommentId;
     }
 
     public Instant getDeletedAt() {

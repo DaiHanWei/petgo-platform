@@ -42,7 +42,8 @@
             // 成功响应仍按元素自己的 hx-target 换 #comments-tab-body（HX-Target 头只影响错误落点）。
             document.body.addEventListener('htmx:configRequest', function (e) {
                 var el = e.detail && e.detail.elt;
-                if (el && el.closest && el.closest('#comments-distribution')) { e.detail.headers['HX-Target'] = 'admin-inline-error'; }
+                // 抽屉（模板 B 的 #post-drawer 在 #comments-distribution 里）内的请求按元素自己的 hx-target 落错误（4.2 评论区 #vc-error），不改头
+                if (el && el.closest && el.closest('#comments-distribution') && !el.closest('.drawer')) { e.detail.headers['HX-Target'] = 'admin-inline-error'; }
             });
             // 选「≤ N」但 N 还没填：拦下 data-autosubmit 的即选即查，聚焦 N，等「查询」钮
             document.addEventListener('submit', function (e) {
@@ -60,6 +61,57 @@
                     var isDist = a.hasAttribute('hx-get');
                     a.classList.toggle('tab--on', isDist === on);
                 });
+            });
+            // ===== Story 4.2 抽屉评论区：身份未选或内容为空 → 发布禁用；剩余字数；搜昵称；展开其他物种；10 分钟内已评软提示（首次拦一次）
+            function vcSync(form) {
+                var sel = form.querySelector('[data-vc-identity]');
+                var body = form.querySelector('[data-vc-body]');
+                var btn = form.querySelector('[data-vc-submit]');
+                var rem = form.querySelector('[data-vc-remaining]');
+                if (body && rem) {
+                    var left = Math.max(0, 200 - body.value.length);
+                    // 模板只从服务端渲染的初始文案建一次（数字换成 {0}），之后每次都用模板替换（复审：第二次起曾显示字面 {0}）
+                    if (!rem.getAttribute('data-tpl')) { rem.setAttribute('data-tpl', rem.textContent.replace(/\d+/, '{0}')); }
+                    rem.textContent = rem.getAttribute('data-tpl').replace('{0}', String(left));
+                }
+                if (btn) { btn.disabled = !(sel && sel.value && body && body.value.trim()); }
+            }
+            function vcFilter(form) {
+                var q = (form.querySelector('[data-vc-search]') || {}).value || '';
+                var showAll = !!(form.querySelector('[data-vc-show-all]') || {}).checked;
+                var others = form.querySelector('[data-vc-others]');
+                if (others) { others.hidden = !showAll; }
+                form.querySelectorAll('[data-vc-identity] option[value]:not([value=""])').forEach(function (o) {
+                    o.hidden = q && o.textContent.toLowerCase().indexOf(q.toLowerCase()) < 0;
+                });
+            }
+            ['input', 'change'].forEach(function (ev) {
+                document.addEventListener(ev, function (e) {
+                    var form = e.target && e.target.closest ? e.target.closest('form[data-vc-form]') : null;
+                    if (!form) { return; }
+                    if (e.target.hasAttribute('data-vc-search') || e.target.hasAttribute('data-vc-show-all')) { vcFilter(form); }
+                    if (e.target.hasAttribute('data-vc-identity')) { form.removeAttribute('data-vc-acked'); var w = form.querySelector('[data-vc-recent-warn]'); if (w) { w.hidden = true; } }
+                    vcSync(form);
+                });
+            });
+            // outerHTML 换掉 #vc-composer 后 detail.target 仍是旧节点（htmx 1.9.12），一律在文档里找当前挂着的评论区表单初始化
+            function vcInitAll() {
+                document.querySelectorAll('form[data-vc-form]').forEach(function (f) { vcFilter(f); vcSync(f); });
+            }
+            document.body.addEventListener('htmx:afterSwap', vcInitAll);
+            document.body.addEventListener('htmx:oobAfterSwap', vcInitAll);
+            // D-20 软提示：该身份 10 分钟内评过本帖 → 首次点「发布」只提示，再点即发（不弹层、不拦截）
+            document.body.addEventListener('htmx:confirm', function (e) {
+                var form = e.detail && e.detail.elt && e.detail.elt.closest ? e.detail.elt.closest('form[data-vc-form]') : null;
+                if (!form) { return; }
+                var sel = form.querySelector('[data-vc-identity]');
+                var recent = (form.getAttribute('data-recent-ids') || '').split(',').filter(Boolean);
+                if (sel && recent.indexOf(sel.value) >= 0 && !form.hasAttribute('data-vc-acked')) {
+                    e.preventDefault();
+                    form.setAttribute('data-vc-acked', '1');
+                    var w = form.querySelector('[data-vc-recent-warn]');
+                    if (w) { w.hidden = false; }
+                }
             });
             document.addEventListener('click', function (e) {
                 var b = e.target && e.target.closest ? e.target.closest('button[data-post-id][data-drawer-url]') : null;
