@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  模板 C · 只读报表壳（V1.3.0 Story 2.3b，AD-11；首个消费者 Story 3.4 看板 / Epic 10 C2～C4）。
+  槽位契约 report(range, cards, detail)：
+    range  — 范围切换器（日 / 周 / 月 / 自定义，form[data-autosubmit]）
+    cards  — 指标卡网格（.cards > .card-kpi）
+    detail — 图表 / 明细表区
+  根元素 data-readonly：只读标识（不渲染任何写操作）。
+-->
+<body>
+<div class="rpt" th:fragment="report(range, cards, detail)" data-readonly>
+    <div class="rpt-head">
+        <div class="rpt-range" th:replace="${range} ?: ~{}"></div>
+        <span class="tag rpt-readonly" th:text="#{admin.v130.tpl.readonly}">只读</span>
+    </div>
+    <div class="cards" th:replace="${cards} ?: ~{}"></div>
+    <div class="rpt-detail">
+        <div th:replace="${detail} ?: ~{}"></div>
+    </div>
+</div>
+</body>
+</html>

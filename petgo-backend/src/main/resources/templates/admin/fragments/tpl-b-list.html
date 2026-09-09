@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  模板 B · 列表 + 抽屉壳（V1.3.0 Story 2.3b，AD-11；首个消费者 Epic 5.2 B6 / 7.1 B1）。
+  槽位契约 list(filters, summary, table, drawer)：
+    filters — 筛选栏 form[data-autosubmit]
+    summary — 摘要条 .sum 3~5 格（抽屉内自动 2×2）
+    table   — 表格（行 48px；<tr data-id data-drawer-url> 点击开抽屉，admin-drawer.js）
+    drawer  — 抽屉头部标题槽（可空）；抽屉体由 hx-get 填充 .drawer-body
+  抽屉容器 id 由调用方以 th:with="res='xxx'" 传入（默认 res='item'）→ <aside id="xxx-drawer" class="drawer" hidden>。
+  关闭三途径（✕ / 点遮罩 / Esc）后焦点回触发行；抽屉内操作成功**不自动关**（UI 稿 10-6），对象消失类动作由服务端
+  HX-Trigger: admin:drawer-close。
+  调用方 th:replace="~{admin/fragments/tpl-b-list :: list(~{::filters}, ~{::summary}, ~{::table}, ~{::drawer})}"
+-->
+<body>
+<div class="lst" th:fragment="list(filters, summary, table, drawer)" th:with="res=${res} ?: 'item'" data-list>
+    <div class="lst-filters" th:replace="${filters} ?: ~{}"></div>
+    <div class="sum" th:replace="${summary} ?: ~{}"></div>
+    <div class="lst-table">
+        <div th:replace="${table} ?: ~{admin/fragments/tpl-a-workbench :: search-empty}"></div>
+    </div>
+    <p id="admin-inline-error" class="lst-inline-error" aria-live="polite"></p>
+    <aside th:id="${res} + '-drawer'" class="drawer" hidden th:attr="data-res=${res}" role="dialog" aria-modal="true" tabindex="-1">
+        <header class="drawer-head">
+            <div class="drawer-title" th:replace="${drawer} ?: ~{}"></div>
+            <button type="button" class="drawer-close" data-drawer-close th:title="#{admin.v130.drawer.close}" aria-label="close">✕</button>
+        </header>
+        <div class="drawer-body"></div>
+    </aside>
+    <div class="drawer-mask" hidden data-drawer-mask></div>
+</div>
+</body>
+</html>

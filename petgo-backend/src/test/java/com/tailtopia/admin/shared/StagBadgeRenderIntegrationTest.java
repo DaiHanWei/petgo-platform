@@ -29,4 +29,22 @@ class StagBadgeRenderIntegrationTest extends ApiIntegrationTest {
         assertThat(html).contains("stag-badge").contains("STAG");
         assertThat(html).contains("Stag 超管");
     }
+
+    /** Story 2.3b AC7：stag profile 下 kitchen-sink 五壳 + 抽屉 fragment + 处置 fragment（data-next-id）可渲染。 */
+    @Test
+    void kitchenSinkRendersInStagProfile() throws Exception {
+        AdminUserDetails admin = new AdminUserDetails(1L, null, "stag@tailtopia.test", null,
+                AdminAccountType.SUPER_ADMIN, Set.of(), 0, "Stag 超管", "SUPER_ADMIN");
+        String html = mvc.perform(get("/admin/_kitchen-sink").with(user(admin))).andReturn().getResponse().getContentAsString();
+        assertThat(html).contains("data-workbench").contains("id=\"ks-drawer\"").contains("data-readonly")
+                .contains("data-config-card").contains("sticky-footer").contains("admin-drawer").contains("admin-workbench");
+        String drawer = mvc.perform(get("/admin/_kitchen-sink/1/drawer").with(user(admin))).andReturn().getResponse().getContentAsString();
+        assertThat(drawer).contains("ks-detail").contains("hx-post=\"/admin/_kitchen-sink/1/done\"");
+        String done = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/admin/_kitchen-sink/1/done")
+                        .with(user(admin)).with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf())
+                        .header("HX-Request", "true"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().exists("HX-Trigger"))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(done).contains("data-next-id=\"2\"");
+    }
 }

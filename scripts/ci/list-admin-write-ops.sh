@@ -49,7 +49,7 @@ group_of() {
     /admin/shop/*) echo "商城" ;;
     /admin/vets*|/admin/failed-requests*|/admin/ratings*|/admin/consult-sessions*) echo "兽医与问诊" ;;
     /admin/config*|/admin/algo-params*|/admin/audit-logs*|/admin/accounts*|/admin/roles*) echo "配置与安全" ;;
-    /admin/login*|/admin/oauth*|/admin/logout*|/admin/denied*|/admin/lang*) echo "登录与壳" ;;
+    /admin/login*|/admin/oauth*|/admin/logout*|/admin/denied*|/admin/lang*|/admin/nav/*) echo "登录与壳" ;;
     *) echo "⚠️ 未归组" ;;
   esac
 }
@@ -166,14 +166,16 @@ while IFS= read -r f; do
 done < <(find "$SRC" -name '*.java' | sort)
 
 # ---- 表 1：写端点 ----
+# /admin/_* 为 stag-only 演示路由（Story 2.3b kitchen-sink，@StagOnly 生产不注册），不进底账；grep 自检同样排除该 Controller。
+awk -F'\t' '$2 !~ /^\/admin\/_/' "$tmp" > "$tmp.f" && mv "$tmp.f" "$tmp"
 write_rows=$(awk -F'\t' '$1 != "GET"' "$tmp" | sort -t$'\t' -k2,2 -k1,1 -k3,3)
 write_count=$(printf '%s\n' "$write_rows" | grep -c . || true)
-expected=$(grep -rhoE '@(Post|Put|Delete)Mapping\(' "$SRC" | wc -l | tr -d ' ')
+expected=$(grep -rhoE '@(Post|Put|Delete)Mapping\(' "$SRC" --exclude='AdminKitchenSinkController.java' | wc -l | tr -d ' ')
 
 # ---- 表 2：GET 页面路由 ----
 get_rows=$(awk -F'\t' '$1 == "GET"' "$tmp" | sort -t$'\t' -k2,2 -k3,3)
 get_count=$(printf '%s\n' "$get_rows" | grep -c . || true)
-get_expected=$(grep -rhoE '@GetMapping\(' "$SRC" | wc -l | tr -d ' ')
+get_expected=$(grep -rhoE '@GetMapping\(' "$SRC" --exclude='AdminKitchenSinkController.java' | wc -l | tr -d ' ')
 # 页面路由 = 去掉带路径参数 / export / .csv|.xlsx / drawer / /detail 的 GET
 page_count=$(printf '%s\n' "$get_rows" | awk -F'\t' '$2 !~ /\{|export|\.csv|\.xlsx|drawer|\/detail|\/fragment|\/preview|\/search|\/lookup|\/suggest|\/json|\/api\//' | grep -c . || true)
 

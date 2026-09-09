@@ -739,3 +739,42 @@ document.addEventListener('change', function (e) {
     // data-species 为空（运营真实账号）⇒ 留空。
     species.value = (opt && opt.getAttribute('data-species')) || '';
 });
+
+// ===== 模板 D 配置卡：未修改禁用保存钮 / 已修改标 / 离开拦一次（V1.3.0 Story 2.3b）=====
+// form[data-config-card]：DOMContentLoaded 记初始 FormData 序列化；input/change 时比对 → 有差异启用 [data-save] 并显示
+// [data-dirty-flag]；提交后视为已保存。存在 dirty 卡时 beforeunload 提示一次（UI 稿 9-7 第 6 条）。
+(function () {
+    function serialize(form) {
+        try { return new URLSearchParams(new FormData(form)).toString(); } catch (e) { return ''; }
+    }
+    function refresh(form) {
+        var dirty = serialize(form) !== form.dataset.initial;
+        form.classList.toggle('is-dirty', dirty);
+        var save = form.querySelector('[data-save]');
+        if (save) { save.disabled = !dirty; }
+        var flag = form.querySelector('[data-dirty-flag]');
+        if (flag) { flag.hidden = !dirty; }
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('form[data-config-card]').forEach(function (form) {
+            form.dataset.initial = serialize(form);
+            refresh(form);
+        });
+    });
+    ['input', 'change'].forEach(function (evt) {
+        document.addEventListener(evt, function (e) {
+            var form = e.target && e.target.closest ? e.target.closest('form[data-config-card]') : null;
+            if (form) { refresh(form); }
+        });
+    });
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (form && form.hasAttribute && form.hasAttribute('data-config-card')) {
+            form.dataset.initial = serialize(form);
+            refresh(form); // 提交即视为已保存：禁用保存钮、隐藏「已修改」标
+        }
+    });
+    window.addEventListener('beforeunload', function (e) {
+        if (document.querySelector('form[data-config-card].is-dirty')) { e.preventDefault(); e.returnValue = ''; }
+    });
+})();

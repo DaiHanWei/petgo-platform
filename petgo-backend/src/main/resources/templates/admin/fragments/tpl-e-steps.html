@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  模板 E · 分步壳（V1.3.0 Story 2.3b，AD-11；首个消费者 Story 7.6 E1 单发 / E2 批量工作台）。
+  槽位契约 steps(steps, body, footer)：
+    steps  — 顶部步骤条 <ol class="step-bar"> 的 <li class="step[.step--on|.step--done]">
+    body   — 当前步骤内容
+    footer — 底部吸底条（上一步 / 下一步 / 提交）
+-->
+<body>
+<div class="stp" th:fragment="steps(steps, body, footer)" data-steps>
+    <ol class="step-bar" th:replace="${steps} ?: ~{}"></ol>
+    <div class="stp-body">
+        <div th:replace="${body} ?: ~{}"></div>
+    </div>
+    <p id="admin-inline-error" class="stp-inline-error" aria-live="polite"></p>
+    <footer class="sticky-footer">
+        <div th:replace="${footer} ?: ~{}"></div>
+    </footer>
+</div>
+</body>
+</html>

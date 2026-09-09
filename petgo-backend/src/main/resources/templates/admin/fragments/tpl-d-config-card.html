@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  模板 D · 配置卡壳（V1.3.0 Story 2.3b，AD-11；首个消费者 Story 6.1 KTP 定价 / 6.3 D2）。
+  槽位契约 configCard(title, form, saveLabel)：每卡一个 <form data-config-card>，自带保存钮（未修改禁用 → 修改激活 +「已修改」标，
+  admin-core.js 按 FormData 序列化比对）；高危确认由调用方在 form 上加 data-confirm。
+  调用方须在外层 th:with="action=@{...}" 提供表单 action（壳不写 @{}，便于纯模板引擎渲染单测）。
+-->
+<body>
+<form class="cfg-card card" th:fragment="configCard(title, form, saveLabel)" method="post" data-config-card
+      th:attr="action=${action}">
+    <div class="cfg-head">
+        <h2 class="cfg-title" th:replace="${title} ?: ~{}"></h2>
+        <span class="tag tag-dirty" hidden data-dirty-flag th:text="#{admin.v130.tpl.dirty}">已修改</span>
+    </div>
+    <div class="cfg-body">
+        <div th:replace="${form} ?: ~{}"></div>
+    </div>
+    <div class="cfg-foot">
+        <p class="inline-error-slot" aria-live="polite"></p>
+        <button type="submit" class="btn btn-primary" disabled data-save
+                th:text="${saveLabel} ?: #{admin.v130.tpl.save}">保存</button>
+    </div>
+</form>
+</body>
+</html>

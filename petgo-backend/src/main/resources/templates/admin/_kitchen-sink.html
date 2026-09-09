@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  kitchen-sink（V1.3.0 Story 2.3b AC7，stag only）：五套模板壳假数据实例 + 抽屉 + 工作台自动下一条。
+  对照 UI 稿泳道 9（9-1～9-6）与泳道 10（10-1～10-8）做 L2 验收；后续页面套壳时以此为范式。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.v130.kitchen.title}">模板壳演示</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
+    <script defer th:src="@{/admin/admin-workbench.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <h1 th:text="#{admin.v130.kitchen.title}">模板壳演示（STAG）</h1>
+        <p class="muted">A 工作台 → B 列表+抽屉 → C 报表 → D 配置卡 → E 分步。全部假数据，无落库。</p>
+
+        <!-- ===== 模板 A ===== -->
+        <h2>A · 工作台</h2>
+        <div th:replace="~{admin/fragments/tpl-a-workbench :: workbench(~{::a-tabs}, ~{::a-filters}, ~{::a-queue}, ~{::a-detail}, ~{::a-actions})}">
+            <div th:fragment="a-tabs" class="tabs">
+                <a class="tab tab--on" href="#">待处理 <span class="tab-count">3</span></a>
+                <a class="tab" href="#">已处理 <span class="tab-count">1</span></a>
+            </div>
+            <form th:fragment="a-filters" class="inline" data-autosubmit>
+                <select name="type" class="sel"><option>全部类型</option><option>帖子举报</option></select>
+            </form>
+            <ul th:fragment="a-queue" class="q-list">
+                <li class="q-row" th:each="i : ${items}" th:data-id="${i.id}"
+                    th:data-detail-url="@{/admin/_kitchen-sink/{id}/drawer(id=${i.id})}"
+                    th:attr="hx-get=@{/admin/_kitchen-sink/{id}/drawer(id=${i.id})}" hx-target=".wb-detail-body" hx-swap="innerHTML">
+                    <span class="q-title"><span class="dot" th:classappend="'dot--' + ${i.dot}"></span><span th:text="${i.title}">标题</span></span>
+                    <span class="q-meta" th:text="${i.meta}">meta</span>
+                </li>
+            </ul>
+            <div th:fragment="a-detail" th:replace="~{admin/fragments/tpl-a-workbench :: detail-empty}"></div>
+            <div th:fragment="a-actions">
+                <span class="muted">处置按钮随详情 fragment 渲染（见 detail）</span>
+            </div>
+        </div>
+        <template data-detail-empty-template><div th:replace="~{admin/fragments/tpl-a-workbench :: detail-empty}"></div></template>
+
+        <!-- ===== 模板 B ===== -->
+        <h2>B · 列表 + 抽屉</h2>
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::b-filters}, ~{::b-summary}, ~{::b-table}, ~{::b-drawer})}">
+            <form th:fragment="b-filters" class="inline" data-autosubmit>
+                <input class="inp" name="q" placeholder="搜索"/>
+                <select name="status" class="sel"><option>全部状态</option></select>
+            </form>
+            <div th:fragment="b-summary" class="sum">
+                <div class="sum-item"><div class="sum-label">总数</div><div class="sum-value">4</div></div>
+                <div class="sum-item"><div class="sum-label">待处理</div><div class="sum-value">3</div></div>
+                <div class="sum-item"><div class="sum-label">今日新增</div><div class="sum-value">1</div></div>
+            </div>
+            <table th:fragment="b-table">
+                <thead><tr><th>ID</th><th>标题</th><th>状态</th></tr></thead>
+                <tbody>
+                <tr th:each="i : ${items}" th:data-id="${i.id}" th:data-drawer-url="@{/admin/_kitchen-sink/{id}/drawer(id=${i.id})}" tabindex="0">
+                    <td th:text="${i.id}">1</td><td th:text="${i.title}">t</td>
+                    <td><span class="dot" th:classappend="'dot--' + ${i.dot}"></span><span th:text="${i.dot}">todo</span></td>
+                </tr>
+                </tbody>
+            </table>
+            <span th:fragment="b-drawer">详情</span>
+        </div>
+
+        <!-- ===== 模板 C ===== -->
+        <h2>C · 只读报表</h2>
+        <div th:replace="~{admin/fragments/tpl-c-report :: report(~{::c-range}, ~{::c-cards}, ~{::c-detail})}">
+            <form th:fragment="c-range" class="inline" data-autosubmit>
+                <select name="range" class="sel"><option>近 7 天</option><option>近 30 天</option></select>
+            </form>
+            <div th:fragment="c-cards" class="cards">
+                <div class="card-kpi"><div class="kpi-value">1,284</div><div class="kpi-label">DAU</div></div>
+                <div class="card-kpi"><div class="kpi-value">312</div><div class="kpi-label">发帖数</div></div>
+                <div class="card-kpi"><div class="kpi-value">58%</div><div class="kpi-label">互动率</div></div>
+            </div>
+            <div th:fragment="c-detail"><p class="muted">图表区（Story 3.4 admin-charts.js）</p></div>
+        </div>
+
+        <!-- ===== 模板 D ===== -->
+        <h2>D · 配置卡</h2>
+        <div th:with="action=@{/admin/_kitchen-sink}">
+            <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::d-title}, ~{::d-form}, null)}">
+                <span th:fragment="d-title">问诊定价</span>
+                <div th:fragment="d-form">
+                    <label class="field">AI 问诊单价（IDR）<input class="inp field-full" name="aiPrice" value="18000"/></label>
+                    <label class="field">兽医咨询单价（IDR）<input class="inp field-full" name="vetPrice" value="30000"/></label>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 模板 E ===== -->
+        <h2>E · 分步</h2>
+        <div th:replace="~{admin/fragments/tpl-e-steps :: steps(~{::e-steps}, ~{::e-body}, ~{::e-footer})}">
+            <ol th:fragment="e-steps" class="step-bar">
+                <li class="step step--done">1 选素材</li>
+                <li class="step step--on">2 填正文</li>
+                <li class="step">3 预览发布</li>
+            </ol>
+            <div th:fragment="e-body"><textarea class="inp field-full" rows="3" placeholder="正文"></textarea></div>
+            <div th:fragment="e-footer">
+                <button type="button" class="btn btn-neutral" th:text="#{admin.v130.tpl.prev}">上一步</button>
+                <button type="button" class="btn btn-primary" th:text="#{admin.v130.tpl.next}">下一步</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 详情 / 抽屉体 fragment（工作台右栏与模板 B 抽屉共用） -->
+<div th:fragment="detail" class="ks-detail">
+    <h3 th:text="${item.title}">标题</h3>
+    <p class="muted" th:text="${item.meta}">meta</p>
+    <div class="sum">
+        <div class="sum-item"><div class="sum-label">举报数</div><div class="sum-value">3</div></div>
+        <div class="sum-item"><div class="sum-label">机审分</div><div class="sum-value">0.62</div></div>
+    </div>
+    <div class="wb-actions">
+        <button type="button" class="btn btn-primary" th:attr="hx-post=@{/admin/_kitchen-sink/{id}/done(id=${item.id})}"
+                hx-target=".wb-detail-body" hx-swap="innerHTML">标记已处理 → 自动下一条</button>
+        <button type="button" class="btn btn-neutral" disabled title="需要「content.takedown」权限">下架（禁用态示例）</button>
+    </div>
+</div>
+
+<!-- 处置成功 fragment：根元素带 data-next-id（admin-workbench.js 自动选中下一条） -->
+<div th:fragment="done" class="ks-done" th:data-next-id="${nextId}">
+    <p class="ok">✅ <span th:text="${item.title}">x</span> 已处理</p>
+    <p class="muted" th:if="${#strings.isEmpty(nextId)}" th:text="#{admin.v130.empty.queue}">队列已清空</p>
+</div>
+</body>
+</html>
