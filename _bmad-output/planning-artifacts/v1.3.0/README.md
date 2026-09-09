@@ -18,7 +18,7 @@
 
 | 主题 | 功能分支 | PRD 文件 | Epic 号段 | 状态 |
 |---|---|---|---|---|
-| 后台（admin）：AB-15A 看板 / 16A 账号 / 17A 场所 / 18A KTP 定价 / 19A IA 与页面形态重整（37 页）/ 20A 暖贴 / 21A 角色配置 | `feat/1.3.0-ops-ui-refactor` | `PRD-v1.3.0-admin.md`（定稿 2026-09-01，修订至 09-08）+ `后台重构逐页规格.md`（AB-19A 逐页）+ `ui-v1.3.0-admin.html`（G0 + 五模板结构稿） | Epic 1–? | PRD 已按 2026-09-09 对抗评审回写（D-1~D-29，全部闭合）；**下一步：架构 delta（CA）** |
+| 后台（admin）：AB-15A 看板 / 16A 账号 / 17A 场所 / 18A KTP 定价 / 19A IA 与页面形态重整（37 页）/ 20A 暖贴 / 21A 角色配置 | `feat/1.3.0-ops-ui-refactor` | `PRD-v1.3.0-admin.md`（定稿 2026-09-01，修订至 09-08）+ `后台重构逐页规格.md`（AB-19A 逐页）+ `ui-v1.3.0-admin.html`（G0 + 五模板结构稿） | Epic 1–? | PRD 已回写（D-1~D-35）；**架构 delta 已完成**（`architecture-v1.3.0-delta.md`，AD-1~AD-12，READY）；**下一步：epics（CE）** |
 
 Epic 号段在拆 epics 前先登记，story 文件名 `<epic>-<n>-<中文名>.md` 由此派生，不同主题不会重复。
 
