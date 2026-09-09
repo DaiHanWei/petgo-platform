@@ -1118,3 +1118,4 @@ So that 128 个写操作一个不丢有机器证据。
 - **文件重叠**：后台账号页在 Epic 1（功能）与 Epic 6（套模板）各碰一次，属有意分离（避免 Epic 1 依赖 Epic 2 壳），已在 Epic 1 说明。
 - **规模**：11 Epic / 59 Story（就绪度评审后拆 2.3 → 2.3a/b、9.1 → 9.1a/b，新增 10.6）；单 story 均可由单个实现会话完成；每条 AC 标 L0 / L1 / L2。
 - **待外部**：Epic 10 启动时点取决于电商线合入日期；契约 X-1～X-4 的 App 侧由 App 分支排期。
+- **story 阶段修正（2026-09-09）**：退役数量按代码为 17 条 GET 路由 / 16 个模板（见 Story 11.3）；迁移 8 → 10 支（1.3 邮箱部分唯一索引、1.5 ROLE_TEMPLATE）；AD-8 拆为看板用 `isSyntheticAccount()` 与暖评用 `isVirtualPoolAccount()`；已有详情 GET 的页面复用原 mapping 返抽屉，不新增 `/drawer` 端点。

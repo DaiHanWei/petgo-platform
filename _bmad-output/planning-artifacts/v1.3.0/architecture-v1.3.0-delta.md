@@ -150,8 +150,11 @@ brownfield，无 init 命令。Chart.js 静态资源落位与五套 fragment 骨
 **AD-7 定价与档位（D-3/D-7/D-24/D-25）**
 `pricing_config` 加 `passport_page_unlock_price`、`passport_boarding_unlock_price`（BIGINT NOT NULL，迁移默认值 = 当前 `id_hd_download_price`），CHECK `>= 1`；三行价格独立、不联动。档位新建走既有 `pawcoin_topup_tiers`：`tier_key = "t" + amount_idr`（`t25000`，与既有 UNIQUE 天然兼容），`sort_order` 按金额升序重排，「启用中 ≤4」在服务层校验并用 `pg_advisory_xact_lock` 防并发；列表查询默认 `enabled=true`，「查看已停用」为同页第二段查询。
 
-**AD-8 虚拟/种子账号判定单一出口**
-`User.isSyntheticAccount()`：`role=ADMIN` 或 `googleSub` 以 `virtual:` / `seed-tailtopia-` 开头（null 安全，Apple 用户 → false）。Java 端三处（看板 REAL 口径的用户/互动者过滤、暖评身份池、暖贴入队）只调它；SQL 侧同一判断封装为常量片段 `SyntheticAccountSql.EXCLUDE_WHERE`，与 Java 方法并列维护，单测断言两者对同一批样本结果一致。
+**AD-8 虚拟/种子账号判定：两个出口（2026-09-09 story 阶段修订）**
+代码核实：`users.account_type`（REAL|VIRTUAL）已由 V82 上线并回填了 `seed-tailtopia-*` 存量，是比前缀更可靠的判定源。
+- `User.isSyntheticAccount()`（**看板 REAL 口径用**）：`account_type='VIRTUAL'` 或 `role='ADMIN'`；`googleSub` 前缀判定只作 parity 兜底。SQL 侧常量片段 `SyntheticAccountSql.EXCLUDE_WHERE` 与之等价，单测断言一致。
+- `User.isVirtualPoolAccount()`（**暖评身份池、暖贴入队、「排除虚拟账号内容」开关用**）：仅 `account_type='VIRTUAL'`；旧运营号（role=ADMIN）与真实身份池账号**不**属于虚拟账号池。
+两者不得混用；每处调用注明用的是哪一个。
 
 ### Authentication & Security
 
@@ -169,7 +172,7 @@ brownfield，无 init 命令。Chart.js 静态资源落位与五套 fragment 骨
 - 校验/业务失败：**422 + 操作区 fragment**（行内 err）；权限不足 403 + 禁用态 fragment 注明所缺权限名；不可逆动作仍用 `data-confirm`。htmx 1.9 默认不渲染 4xx，由 `admin-core.js` 监听 `htmx:beforeSwap` 对 422/403 放行 swap（不用 `response-targets` 扩展）。
 - 模板 D/E 与所有整页表单维持现状 PRG，不混用。
 - CSRF：htmx 请求由 `admin-core.js` 统一注入 `X-CSRF-TOKEN`（现状机制沿用）。
-- 抽屉：`GET /admin/<list>/{id}/drawer` 返回抽屉 fragment；列表页 `?open=<id>` 查询参数在页面加载后由 `admin-drawer.js` 自动请求该抽屉（页内深链，非旧路由兜底）。
+- 抽屉：**页面已有详情 GET（如 `orders/{token}`、`users/{userId}`）的，复用原 mapping 的 `HX-Request` 分支返回抽屉 fragment，不新增 `…/drawer` 端点**（AB-19A 零端点变更）；只有本版新建页面（places / roles / warm-replies）才用 `GET …/{id}/drawer`。列表页 `?open=<id>` 由 `admin-drawer.js` 自动请求抽屉（页内深链，非旧路由兜底）。Story 11.4 一致性核对按此规则判定。
 
 **AD-10 导出（规则 12）**
 新增 `AdminExportWriter`：xlsx 走既有 POI（`AdminPaymentExportService` 范式），CSV 走 RFC 4180 转义（引号、逗号、换行、前导 `=` 防公式注入），表头取当前会话 locale 的 message key，时间列 WIB 字样。各页导出只允许调它，禁止自拼字符串。
@@ -185,7 +188,7 @@ brownfield，无 init 命令。Chart.js 静态资源落位与五套 fragment 骨
 ### Infrastructure & Deployment
 
 - 无新中间件、无新容器、无新 env；Chart.js 静态文件随 jar。
-- 新增 1 个 `@Scheduled`（AD-3）+ 2 个事件监听（AD-6）+ 1 个 `PlaceMergedEvent` 发布点；与既有 4 个 admin 扫描器同容器。事件监听沿用 `@TransactionalEventListener(AFTER_COMMIT)` + `REQUIRES_NEW`（既有通知事故的修法）。
+- 新增 1 个 `@Scheduled`（AD-3）+ 2 个事件监听（AD-6）+ `PlaceMergedEvent` / `CommentRemovedEvent` 两个发布点；`@StagOnly` 为项目首个 stag 门控注解（现状只有 `@Profile("dev")`，stag profile 名以 `deploy-backend-stag.sh` 为准）；与既有 4 个 admin 扫描器同容器。事件监听沿用 `@TransactionalEventListener(AFTER_COMMIT)` + `REQUIRES_NEW`（既有通知事故的修法）。
 - Flyway 时间戳迁移预计 8 支：`admin_accounts.security_version`、`ops_daily_metrics`、`admin_roles` + `admin_role_permissions` + 数据迁移、`places` 五表、`warm_reply_followups`、`comments.reply_to_comment_id`、`pricing_config` 两列。
 
 **AD-12 商城组排序约束**
@@ -198,7 +201,7 @@ AB-19A 对商城组 17 页的重构 story 排在 v1.4.0 电商线合入 `dev_1.3
 | X-1 | 场所合并的护照章归并 | 合并时发布 `PlaceMergedEvent(keepId, mergedId)`，被合并场所 `merged_into_id` 可查 | 监听事件归并护照章（并一枚、次数相加）；直链跳转到保留场所 |
 | X-2 | 二级回复目标 | `comments.reply_to_comment_id` 可空列 + 回复接口可选字段，本版不使用 | 传目标评论 id；通知改发给被回复者；后台再开二级暖评识别 |
 | X-3 | 场所读接口 | `places*` 五表与 `status` 语义由本 delta 定 | App 端 FR-112 读写接口以此表为准 |
-| X-4 | 护照样式定价 | `pricing_config` 两新列 + 现有 `/consult/pricing` 同类下发方式 | FR-120 解锁按新列取价 |
+| X-4 | 护照样式定价 | `pricing_config` 两新列 + 既有 `GET /api/v1/pet-profiles/me/id-card/hd-pricing`（`IdCardHdPricingResponse`）增两字段下发 | FR-120 解锁按新字段取价 |
 
 ### Decision Impact Analysis
 
@@ -319,12 +322,14 @@ petgo-backend/
 │   │   ├── shared/                            # （新，admin 内横切）
 │   │   │   ├── web/{HxRequest 参数解析器, AdminFragmentResponses, AdminBusinessExceptionAdvice(422/403 fragment)}.java
 │   │   │   ├── export/AdminExportWriter.java  # AD-10
-│   │   │   ├── time/AdminTime.java            # WIB 格式化单一出口
+│   │   │   ├── time/AdminTime.java            # WIB 格式化单一出口 —— ⚠️ 现状已有 admin/web/AdminTime.java（@Component("adminTime")，模板 @adminTime.wib），2.3a 搬迁复用而非新建
 │   │   │   ├── AdminPageCatalog.java          # 页面目录：导航 8 组 / 权限矩阵 35 维度 / 写操作清单 共用（Story 1.5 引入）
 │   │   │   └── StagOnly.java                  # stag 专用件门控注解（STAG 角标 / 模拟回调 / 手动跑批）
 │   │   └── web/AdminNavController.java        # GET /admin/nav/badges（角标聚合）
 │   ├── auth/domain/User.java                  # + isSyntheticAccount()（AD-8）
 │   ├── content/
+│   │   ├── event/CommentRemovedEvent.java     # 新：评论删除/下架事件（暖贴出队 D-19 依赖；现状只有帖子级 ContentRemovedEvent）
+│   │   ├── event/ContentCommentedEvent.java   # + parentCommentId 可空字段（暖贴入队定位虚拟一级评论）
 │   │   ├── domain/Comment.java                # + replyToCommentId（预留，D-35）
 │   │   ├── dto/CommentCreateRequest.java      # + Optional replyToCommentId
 │   │   └── service/CommentService.java        # + 以虚拟身份发布的显式入口（走同一审核链）
@@ -423,7 +428,7 @@ petgo-backend/
 - **Important（本节已修正）**：htmx 4xx 渲染方式（AD-9）；`tier_key` 规则（AD-7）；数据模型增量清单（下节补）；场所举报数据流（AD-5）；新权限码默认授予范围（安全节）。
 - **Nice-to-have**：`MetricQueryParityTest` 依赖 stag 库脱敏快照，首次跑需人工准备；AB-19A 商城组 17 页依赖 v1.4.0 合入时点，epics 阶段与电商线确认。
 
-### 数据模型增量（Flyway 时间戳迁移，8 支）
+### 数据模型增量（Flyway 时间戳迁移，10 支；2026-09-09 story 阶段 +2）
 
 | # | 迁移 | 内容 |
 |---|---|---|
@@ -434,7 +439,9 @@ petgo-backend/
 | 5 | `init_places` | `places` / `place_photos` / `place_comments` / `place_checkins` / `place_reports` 五表 + 索引 |
 | 6 | `init_warm_reply_followups` | AD-6 表 + 部分唯一索引 `WHERE status='PENDING'` |
 | 7 | `add_comments_reply_to_comment_id` | 可空列 + 索引（D-35 预留） |
-| 8 | `add_pricing_config_passport_prices` | 两列 NOT NULL，默认值 = 当前 `id_hd_download_price`，CHECK `>= 1` |
+| 8 | `add_pricing_config_passport_prices` | 两列 NOT NULL，默认值 = 当前 `id_hd_download_price`，CHECK `>= 1`（迁移前核实 stag/prod 现值均 ≥1） |
+| 9 | `admin_accounts_email_unique_active_only` | 删 V32 全表 `UNIQUE(lark_email)`，改为部分唯一索引 `WHERE status='ACTIVE'`（D-21 的前提）；所有 `findByLarkEmail` 调用点改为按状态限定 |
+| 10 | `admin_accounts_role_check_add_role_template` | `role` CHECK DROP+ADD 全集，新增 `ROLE_TEMPLATE` 值供自定义角色账号使用（`role_id` 指向 admin_roles） |
 
 顺序仅表依赖：3 → 4；其余独立。`out-of-order` 常开，与并行分支合并不重排号。文件名取创建时刻 `V<yyyyMMdd_HHmm>__<上表名>.sql`。
 
@@ -501,3 +508,11 @@ petgo-backend/
 ## 开放问题
 
 - 无阻塞项。跨分支契约 X-1～X-4 的 App 侧落地时点由 App 分支排期；商城组 17 页重构的启动时点取决于 v1.4.0 合入 `dev_1.3.0` 的日期（AD-12）。
+
+## Story 阶段回写记录（2026-09-09，59 story 生成后）
+
+- 退役清单按代码精确化：**17 条 GET 页面路由 / 16 个模板**（兽医线 5 个模板：vet-edit、vet-online、vet-qualification、vet-ratings、ratings），取代文中「8 个独立详情页」的粗算；精确清单见 Story 11.3。
+- 审计页 B23 现状已是 WIB 展示（`@adminTime.wib`），D-22 实际只剩占位文字修正。
+- 算法参数页实际 14 个输入（三个配比组各 3 项），非 PRD/UI 稿的「11 项」。
+- `NameModerationAdminController` 在 `admin` 包外却挂 `/admin/**`，写操作清单脚本须按路由前缀扫描而非按包。
+- 抽屉端点、AD-8 双出口、迁移 9/10、CommentRemovedEvent、X-4 端点、AdminTime 复用已在正文修订。
