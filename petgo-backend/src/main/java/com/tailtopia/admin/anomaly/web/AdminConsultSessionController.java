@@ -44,10 +44,17 @@ public class AdminConsultSessionController {
         model.addAttribute("to", to);
         boolean searched = userId != null || vetId != null || from != null || to != null;
         model.addAttribute("searched", searched);
+        // 🔴 一个条件都没填时**不查库**（V1.3.0 Story 9.2 起）：
+        //    原先空条件会走 `cb.and(new Predicate[0])` —— 那是恒真式，等于把整张
+        //    consult_sessions 摊平返回。这一页是按用户/兽医/时间取证的，不是会话总账；
+        //    「打开即全量」既是无谓的全表扫描，也让一次误点就把全站会话元数据摆在屏幕上。
+        //    空态文案（admin.v130.sessions.searchFirst）说的就是这个行为。
         // 日期按 UTC 日界换算：from 取当日 00:00、to 取次日 00:00（不含）。
-        model.addAttribute("items", queryService.search(userId, vetId,
-                from == null ? null : from.atStartOfDay(ZoneOffset.UTC).toInstant(),
-                to == null ? null : to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()));
+        model.addAttribute("items", searched
+                ? queryService.search(userId, vetId,
+                        from == null ? null : from.atStartOfDay(ZoneOffset.UTC).toInstant(),
+                        to == null ? null : to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant())
+                : java.util.List.of());
         model.addAttribute("open", open);
         return hxRequest != null
                 ? "admin/fragments/consult-sessions-list :: rows(true)" : "admin/consult-sessions";

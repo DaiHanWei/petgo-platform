@@ -41,6 +41,9 @@
         state.openId = opts.openId || null;
         var body = d.querySelector('.drawer-body');
         if (typeof htmx !== 'undefined' && url) {
+            // 抽屉体带 id（tpl-b-list / tpl-shared）→ htmx 会发 HX-Target →
+            // 拉取失败（?open=<不存在的 id>）时 AdminBusinessExceptionAdvice 把错误回填到**这里**，
+            // 而不是表格下面那个被遮罩盖住的 #admin-inline-error（9.2 复审 M2）。
             htmx.ajax('GET', url, { target: body, swap: 'innerHTML' });
         }
         d.hidden = false;

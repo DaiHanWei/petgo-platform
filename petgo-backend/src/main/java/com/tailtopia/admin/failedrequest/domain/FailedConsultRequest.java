@@ -32,7 +32,7 @@ public class FailedConsultRequest {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    /** 内部关联的会话 id（不外露；仅排查用）。 */
+    /** 内部关联的会话 id（**仅后台可见**：V1.3.0 Story 9.2 起抽屉用它拼 B22 深链；不进任何对客响应）。 */
     @Column(name = "session_id")
     private Long sessionId;
 

@@ -14,7 +14,11 @@ import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.failedrequest.domain.CancelReason;
 import com.tailtopia.admin.failedrequest.domain.FailedConsultRequest;
 import com.tailtopia.admin.failedrequest.repository.FailedConsultRequestRepository;
+import com.tailtopia.admin.failedrequest.service.FailedConsultRequestService;
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.consult.domain.ConsultSession;
+import com.tailtopia.consult.domain.ConsultSource;
+import com.tailtopia.consult.repository.ConsultSessionRepository;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -40,6 +44,10 @@ class FailedRequestDrawerIntegrationTest extends ApiIntegrationTest {
     private FailedConsultRequestRepository repo;
     @Autowired
     private AdminAccountRepository adminAccounts;
+    @Autowired
+    private FailedConsultRequestService service;
+    @Autowired
+    private ConsultSessionRepository consultSessions;
 
     private Authentication auth(AdminAccountType type, String... permissions) {
         long n = SEQ.incrementAndGet();
@@ -71,6 +79,12 @@ class FailedRequestDrawerIntegrationTest extends ApiIntegrationTest {
                 reason, 0));
     }
 
+    /** 造一条真实会话：抽屉是只读视图，WAITING 态就够把「摊开那一行」验完。 */
+    private ConsultSession seedSession() {
+        long n = SEQ.incrementAndGet();
+        return consultSessions.save(ConsultSession.startWaiting(80000L + n, ConsultSource.DIRECT));
+    }
+
     private String body(MvcResult r) throws Exception {
         return r.getResponse().getContentAsString();
     }
@@ -100,7 +114,13 @@ class FailedRequestDrawerIntegrationTest extends ApiIntegrationTest {
     /** 🔴 摘要随页签联动：在「已归档」页签上给活动区的数，读起来是骗人的。 */
     @Test
     void theSummaryFollowsTheTabNotTheActiveQueueAlways() throws Exception {
-        seed(CancelReason.SYSTEM_FAILURE);
+        FailedConsultRequest r = seed(CancelReason.SYSTEM_FAILURE);
+        // ⚠️ 不能钉「归档页签的数是 0」：ApiIntegrationTest 不回滚，同包别的测试会往库里留
+        //    永久归档的记录（类名字母序在前时先跑）。钉的是**同一时刻的库现状**与页面数一致。
+        int archivedTotal = service.archived().size();
+        int activeTotal = service.active().size();
+        assertThat(activeTotal).as("刚 seed 的这条必在活动区").isPositive();
+
         String archived = body(mvc.perform(get("/admin/failed-requests").param("tab", "archived")
                         .param("lang", "zh_CN").header("HX-Request", "true")
                         .with(authentication(superAdmin())))
@@ -108,8 +128,19 @@ class FailedRequestDrawerIntegrationTest extends ApiIntegrationTest {
 
         assertThat(archived).as("局部刷新不该回整页").doesNotContain("<html");
         assertThat(archived).containsPattern("<div[^>]*id=\"failed-summary\"[^>]*hx-swap-oob=\"true\"");
-        // 刚 seed 的那条在「活动」区，所以「已归档」页签的三个数都应是 0。
-        assertThat(archived).containsPattern("data-sum=\"total\"[^>]*>\\s*0\\s*<");
+        assertThat(archived).as("已归档页签给的是归档区的数，不是活动区的")
+                .containsPattern("data-sum=\"total\"[^>]*>\\s*" + archivedTotal + "\\s*<");
+        // 🔴 真正的反证：刚 seed 的那条在活动区，它不该出现在「已归档」页签里。
+        assertThat(archived).doesNotContain(
+                "data-drawer-url=\"/admin/failed-requests/" + r.getId() + "/drawer\"");
+
+        String active = body(mvc.perform(get("/admin/failed-requests")
+                        .param("lang", "zh_CN").header("HX-Request", "true")
+                        .with(authentication(superAdmin())))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(active).containsPattern("data-sum=\"total\"[^>]*>\\s*" + activeTotal + "\\s*<");
+        assertThat(active).contains(
+                "data-drawer-url=\"/admin/failed-requests/" + r.getId() + "/drawer\"");
     }
 
     @Test
@@ -191,6 +222,7 @@ class FailedRequestDrawerIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void theSessionPageUsesTemplateBAndNeverListsEverythingByDefault() throws Exception {
+        ConsultSession s = seedSession();
         String html = body(mvc.perform(get("/admin/consult-sessions").param("lang", "zh_CN")
                         .with(authentication(auth(AdminAccountType.STAFF,
                                 AdminPermissions.CONSULT_VIEW_SESSIONS))))
@@ -205,6 +237,19 @@ class FailedRequestDrawerIntegrationTest extends ApiIntegrationTest {
         assertThat(html).contains("data-notice=\"sessions-search-first\"");
         // 🔴 NFR5 说明常驻。
         assertThat(html).contains("data-notice=\"sessions-nfr5\"");
+        // 🔴 方法名那句话得是真的：一个条件都没填时**一行都不列**（不是「查了但恰好为空」）。
+        //    库里明明有这条会话，默认页上不该出现它。
+        assertThat(html).as("空条件不该把整张 consult_sessions 摊出来")
+                .doesNotContain("id=\"session-row-" + s.getId() + "\"");
+
+        // 填了条件才查得到 —— 反证上面那条不是因为查询坏了。
+        String found = body(mvc.perform(get("/admin/consult-sessions")
+                        .param("userId", String.valueOf(s.getUserId())).param("lang", "zh_CN")
+                        .with(authentication(auth(AdminAccountType.STAFF,
+                                AdminPermissions.CONSULT_VIEW_SESSIONS))))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(found).contains("id=\"session-row-" + s.getId() + "\"")
+                .doesNotContain("data-notice=\"sessions-search-first\"");
     }
 
     /**
@@ -215,12 +260,60 @@ class FailedRequestDrawerIntegrationTest extends ApiIntegrationTest {
      */
     @Test
     void theSessionDrawerCarriesMetadataOnlyAndSaysWhy() throws Exception {
-        // 会话由既有链路产生；这里只验「抽屉对不存在的会话回 404」与页面上的红线说明，
-        // 真实会话的抽屉内容由本地 L1（ConsultSessionQueryIntegrationTest）覆盖。
+        ConsultSession s = seedSession();
+        String html = body(mvc.perform(get("/admin/consult-sessions/" + s.getId() + "/drawer")
+                        .param("lang", "zh_CN").header("HX-Request", "true")
+                        .with(authentication(auth(AdminAccountType.STAFF,
+                                AdminPermissions.CONSULT_VIEW_SESSIONS))))
+                .andExpect(status().isOk()).andReturn());
+
+        assertThat(html).doesNotContain("<html");
+        assertThat(html).contains("id=\"session-drawer-panel\"")
+                .contains("data-section=\"session-meta\"").contains("data-section=\"session-rating\"");
+        // 摊开的就是列表那一行：会话 id / 用户 / 状态。
+        assertThat(html).contains(">" + s.getId() + "<").contains(">" + s.getUserId() + "<")
+                .contains(s.getStatus().name());
+        // 🔴 NFR5：抽屉里没有聊天记录**是刻意的**，说明必须在。
+        assertThat(html).contains("data-notice=\"session-nfr5\"");
+        // 🔴 反过来钉住：将来有人「为了让抽屉更丰富」去加内容读取，这里会红。
+        assertThat(html).doesNotContain("imConversationId").doesNotContain("im_conversation_id")
+                .doesNotContain("aiSymptomText").doesNotContain("ai_symptom_text")
+                .doesNotContain("aiImageRefs").doesNotContain("vetDiagnosis");
+        // 🔴 全只读：一个 <form>、一个写端点都没有。
+        assertThat(html).doesNotContain("<form").doesNotContain("hx-post");
+
+        // 不存在的会话 → 404（?open=<不存在的 id> 深链会走到这里）。
         mvc.perform(get("/admin/consult-sessions/999999999/drawer").header("HX-Request", "true")
                         .with(authentication(auth(AdminAccountType.STAFF,
                                 AdminPermissions.CONSULT_VIEW_SESSIONS))))
                 .andExpect(status().isNotFound());
+    }
+
+    /**
+     * 🔴 深链取不到时错误要落在**抽屉体里**（9.2 复审 M2）。
+     *
+     * <p>抽屉体带 id → htmx 发 HX-Target → AdminBusinessExceptionAdvice 按它回填；
+     * 没有 id 时错误被退回表格下面的 {@code #admin-inline-error}，而那时它正被遮罩盖着 ——
+     * 运营看到的是一扇空白的 480px 抽屉。
+     */
+    @Test
+    void aDeepLinkToAMissingSessionPutsTheErrorInsideTheDrawerNotUnderTheMask() throws Exception {
+        String page = body(mvc.perform(get("/admin/consult-sessions").param("open", "999999999")
+                        .param("lang", "zh_CN")
+                        .with(authentication(auth(AdminAccountType.STAFF,
+                                AdminPermissions.CONSULT_VIEW_SESSIONS))))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(page).contains("id=\"session-drawer-body\"")
+                .contains("data-drawer-deeplink=\"/admin/consult-sessions/999999999/drawer\"");
+
+        var err = mvc.perform(get("/admin/consult-sessions/999999999/drawer")
+                        .param("lang", "zh_CN").header("HX-Request", "true")
+                        .header("HX-Target", "session-drawer-body")
+                        .with(authentication(auth(AdminAccountType.STAFF,
+                                AdminPermissions.CONSULT_VIEW_SESSIONS))))
+                .andExpect(status().isNotFound()).andReturn();
+        assertThat(err.getResponse().getHeader("HX-Retarget")).isEqualTo("#session-drawer-body");
+        assertThat(body(err)).contains("inline-error");
     }
 
     /** 🛡 会话页与抽屉同一道门 {@code consult.view_sessions}。 */
@@ -231,12 +324,30 @@ class FailedRequestDrawerIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    /** AC3：两页维持独立 —— 侧栏两项都在，没有被合并。 */
+    /**
+     * AC3：两页维持独立（2026-09-04 拍板不合并）。
+     *
+     * <p>「侧栏两项都在」不够 —— 合并之后侧栏也可能留着两个链接。真正的征兆是
+     * **一页里出现另一页的控件**：两套筛选条、两张表、两个抽屉。
+     */
     @Test
-    void thetwoPagesStayIndependent() throws Exception {
-        String html = body(mvc.perform(get("/admin/failed-requests").param("lang", "zh_CN")
+    void theTwoPagesStayIndependentInsteadOfBeingMerged() throws Exception {
+        String failed = body(mvc.perform(get("/admin/failed-requests").param("lang", "zh_CN")
                         .with(authentication(superAdmin())))
                 .andExpect(status().isOk()).andReturn());
-        assertThat(html).contains("/admin/failed-requests").contains("/admin/consult-sessions");
+        String sessions = body(mvc.perform(get("/admin/consult-sessions").param("lang", "zh_CN")
+                        .with(authentication(superAdmin())))
+                .andExpect(status().isOk()).andReturn());
+
+        // 侧栏两项都在（没被合并成一项）。
+        assertThat(failed).contains("/admin/failed-requests").contains("/admin/consult-sessions");
+        // 各自只有自己的筛选条 / 表 / 抽屉。
+        assertThat(failed).contains("id=\"failed-rows\"").contains("id=\"failed-drawer\"")
+                .doesNotContain("id=\"session-filters-form\"").doesNotContain("id=\"session-rows\"")
+                .doesNotContain("id=\"session-drawer\"");
+        assertThat(sessions).contains("id=\"session-filters-form\"").contains("id=\"session-rows\"")
+                .contains("id=\"session-drawer\"")
+                .doesNotContain("id=\"failed-rows\"").doesNotContain("id=\"failed-summary\"")
+                .doesNotContain("id=\"failed-drawer\"");
     }
 }

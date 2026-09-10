@@ -79,6 +79,10 @@ public class FailedRequestAdminController {
      *
      * <p>⚠️ **不做单行 oob**：归档会把这一行从「活动」移走 —— 原位换行会留下一张骗人的表
      * （行还在活动页签里，只是状态变了）。
+     *
+     * <p>⚠️ 无 JS 的整页 PRG 分支一律回默认（活动）页签，不带回 {@code tab}：本 story 的硬约束是
+     * 三个写端点的**路径 / 参数 / 权限逐字不动**，为回跳带一个 {@code tab} 参数就破了这条。
+     * htmx 分支（常态）由页内 {@code #failed-refresh} 按当前页签整表重拉，不受影响。
      */
     private String afterAction(long id, String toast, Model model,
             jakarta.servlet.http.HttpServletResponse response) {

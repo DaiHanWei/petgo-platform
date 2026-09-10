@@ -22,7 +22,8 @@
             <div class="drawer-title" th:replace="${titleSlot} ?: ~{}"></div>
             <button type="button" class="drawer-close" data-drawer-close th:title="#{admin.v130.drawer.close}" aria-label="close">✕</button>
         </header>
-        <div class="drawer-body"></div>
+        <!--/* 带 id：htmx 只在目标有 id 时才发 HX-Target，错误槽才回得进抽屉（同 tpl-b-list，9.2 复审 M2）。 */-->
+        <div th:id="${res} + '-drawer-body'" class="drawer-body"></div>
     </aside>
     <div class="drawer-mask" hidden data-drawer-mask></div>
 </th:block>

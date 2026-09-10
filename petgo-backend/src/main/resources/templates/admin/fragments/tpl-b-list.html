@@ -28,7 +28,11 @@
                 <div class="drawer-title" th:replace="${drawerSlot} ?: ~{}"></div>
                 <button type="button" class="drawer-close" data-drawer-close th:title="#{admin.v130.drawer.close}" aria-label="close">✕</button>
             </header>
-            <div class="drawer-body"></div>
+            <!--/* 🔴 抽屉体必须**带 id**（V1.3.0 Story 9.2 复审 M2）：htmx 只在目标元素有 id 时才发
+                   HX-Target 头，而 AdminBusinessExceptionAdvice 正是按这个头回填错误槽。没有 id 时
+                   抽屉体拉取失败（?open=<不存在的 id> 深链最常见）会被退回到表格下面的
+                   #admin-inline-error —— 那时它正被遮罩盖着，运营看到的是一扇空白的 480px 抽屉。 */-->
+            <div th:id="${res} + '-drawer-body'" class="drawer-body"></div>
         </aside>
         <div class="drawer-mask" hidden data-drawer-mask></div>
     </th:block>
