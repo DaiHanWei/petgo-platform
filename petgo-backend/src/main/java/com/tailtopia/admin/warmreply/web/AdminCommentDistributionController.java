@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 /**
  * 评论管理 · 页签二「帖子评论分布」（V1.3.0 Story 4.1，AB-20A ①）。
  * <ul>
- * <li>{@code GET /admin/comments/distribution}：{@code HX-Request} → 只回 {@code fragments/comments-distribution :: body}
+ * <li>{@code GET /admin/comments/distribution}：{@code HX-Request} → 只回 {@code fragments/comments-distribution :: panel}
  * （筛选栏 + 摘要条 + 表格 + 分页，htmx 替换 {@code #comments-tab-body}）；非 htmx → 整页 {@code admin/comments} 并 {@code tab=distribution}。</li>
  * <li>权限：SUPER_ADMIN / {@code comment.virtual_post}（可评）/ {@code content.view}（只看，「去评论」禁用并注明所缺权限）。</li>
  * <li>自定义 N 非正整数 → 422 行内 err（{@code admin.err.comments.distribution.badCount}）。</li>
@@ -67,7 +67,7 @@ public class AdminCommentDistributionController {
             // htmx：非法 N → AppException → AdminBusinessExceptionAdvice 422 行内 err（页面把 HX-Target 改到 #admin-inline-error，不清空页签体）
             filter = DistributionFilter.of(count, nn, from, to, species, status, excludeVirtual, page);
             populate(filter, model);
-            return "admin/fragments/comments-distribution :: body";
+            return "admin/fragments/comments-distribution :: panel";
         }
         // 整页（手输 URL / 刷新历史）：非法 N 降级为「全部」并挂 error 提示，不能吐 ProblemDetail JSON
         try {

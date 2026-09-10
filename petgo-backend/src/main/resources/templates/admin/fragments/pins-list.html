@@ -9,7 +9,7 @@
   🔴 时间一律标「WIB」：不写运营就按自己电脑的时区读，整批排期看着都对不上。
 */-->
 <body>
-<div th:fragment="summary(oob)" class="sum" id="pins-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+<div th:fragment="sumbar(oob)" class="sum" id="pins-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
     <div class="sum-item">
         <div class="sum-label" th:text="#{admin.pins.phase.active}">生效中</div>
         <div class="sum-value" th:text="${summary.active}">0</div>
@@ -25,7 +25,7 @@
 </div>
 
 <th:block th:fragment="rows(oob)">
-    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/pins-list :: summary(true)}"></div></th:block>
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/pins-list :: sumbar(true)}"></div></th:block>
     <table th:if="${!#lists.isEmpty(rows)}" class="pins-table">
         <thead>
         <tr>

@@ -32,7 +32,7 @@
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
         <div th:replace="~{admin/fragments/tpl-b-list :: list(~{}, ~{::ac-summary}, ~{::ac-table}, ~{::ac-drawer})}">
-            <div th:fragment="ac-summary" th:replace="~{admin/admin-accounts :: summary(false)}"></div>
+            <div th:fragment="ac-summary" th:replace="~{admin/admin-accounts :: sumbar(false)}"></div>
 
             <div th:fragment="ac-table" id="accounts-rows">
                 <table>
@@ -69,7 +69,7 @@
     </div>
 
     <!--/* 摘要条（oob=true：抽屉内停用 / 重新激活后随处置响应一并换，否则「启用中 / 已停用」会停在旧值） */-->
-    <div th:fragment="summary(oob)" class="sum" id="accounts-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div th:fragment="sumbar(oob)" class="sum" id="accounts-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
         <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.accounts.summary.total}">账号总数</div><div class="sum-value" th:text="${summary.total}">0</div></div>
         <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.accounts.summary.active}">启用中</div><div class="sum-value" th:text="${summary.active}">0</div></div>
         <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.accounts.summary.disabled}">已停用</div><div class="sum-value" th:text="${summary.disabled}">0</div></div>

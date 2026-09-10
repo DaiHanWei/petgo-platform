@@ -23,8 +23,8 @@
         <div th:replace="~{admin/fragments/comments-tabs :: tabs}"></div>
 
         <div id="comments-tab-body" role="tabpanel">
-            <th:block th:if="${tab == 'distribution'}"><div th:replace="~{admin/fragments/comments-distribution :: body}"></div></th:block>
-            <th:block th:unless="${tab == 'distribution'}"><div th:replace="~{admin/fragments/comments-inspect :: body}"></div></th:block>
+            <th:block th:if="${tab == 'distribution'}"><div th:replace="~{admin/fragments/comments-distribution :: panel}"></div></th:block>
+            <th:block th:unless="${tab == 'distribution'}"><div th:replace="~{admin/fragments/comments-inspect :: panel}"></div></th:block>
         </div>
 
         <script>

@@ -169,9 +169,9 @@ public final class AdminPageCatalog {
             // Story 5.2：内容组第 7 项「场所管理」；查看即 place.manage（D-9 / D-17 不预授予预置角色）
             page("places", G_CONTENT, "/admin/places",
                     List.of(PLACE_MANAGE), List.of(), List.of()).nav("admin.nav.places", "places", PLACE_MANAGE),
-            // ⛔ 本版退役（7.5 并入批量内容页签）：侧栏暂保留，改期/取消 POST 重定向落点见 7.5。
-            legacy("content-schedules", G_CONTENT, "/admin/content-schedules", "admin.nav.contentSchedules",
-                    "content-schedules", VIRTUAL_ACCOUNT_MANAGE),
+            // ⛔ 已退役（V1.3.0 Story 7.5）：排期并入批量内容页第二页签（/admin/seed-batches?tab=schedules），
+            //    独立页 GET 与模板已删、侧栏项一并撤掉。两个处置 POST 仍在原路径上（端点零变更）。
+            //    ⚠️ 目录里**不再留条目** —— 留一个没有页面的条目就是侧栏上的死链。
             // 👥 用户
             page("users", G_USERS, "/admin/users",
                     List.of(USER_VIEW), List.of(), List.of(USER_DEACTIVATE, USER_DELETE, USER_GRANT_PAWCOIN)).nav("admin.nav.users", "users", USER_VIEW),

@@ -1,28 +1,83 @@
 <!DOCTYPE html>
 <html lang="zh" xmlns:th="http://www.thymeleaf.org"
       xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!--
-  批次列表（V1.1.6 Story 13.1 AC2 的聚合展示 + 13.2 的入口）。
-  🛡 这里显示的是**各行状态的统计**，不是"批次状态"—— 批次没有状态。
--->
+<!--/*
+  批量内容（V1.1.6 Story 13.1 AC2 的聚合展示 + 13.2 的入口 → V1.3.0 Story 7.5 页签化）。
+  🛡 批次表显示的是**各行状态的统计**，不是「批次状态」—— 批次没有状态。
+
+  🔴 两个页签：批次 ｜ 排期发布。
+     排期原先是整段嵌在批次表**下面**（bug 20260826 产品要求「上传与看情况同一页」），
+     于是一屏两张表堆在一起，运营先得分清哪张是哪张；独立的「排期管理」页则同时还在，
+     同一份数据两个入口。7.5 把独立页退役、排期收进第二页签：一次只看一件事，入口只有一个。
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.batch.listTitle}">批次列表 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.batch.listTitle}">批次列表</h1>
+        <h1 th:text="#{admin.batch.listTitle}">批量内容</h1>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
+        <!--/* 页签条：整页链接（无 JS 可用）+ htmx 局部切换 #batches-tab。
+               ⚠️ 一个标签上只能有一个 th:attr（重复属性会让模板解析失败）：aria-selected 与 hx-get 合并写。 */-->
+        <div class="tabs batches-tabs" role="tablist">
+            <a class="tab" role="tab" th:classappend="${tab != 'schedules'} ? 'tab--on'"
+               th:href="@{/admin/seed-batches}"
+               th:attr="aria-selected=${tab != 'schedules'},hx-get=@{/admin/seed-batches}"
+               hx-target="#batches-tab" hx-swap="innerHTML" hx-push-url="true"
+               th:text="#{admin.v130.schedules.tab.batches}">批次</a>
+            <a class="tab" role="tab" th:classappend="${tab == 'schedules'} ? 'tab--on'"
+               th:href="@{/admin/seed-batches(tab='schedules')}"
+               th:attr="aria-selected=${tab == 'schedules'},hx-get=@{/admin/seed-batches(tab='schedules')}"
+               hx-target="#batches-tab" hx-swap="innerHTML" hx-push-url="true"
+               th:text="#{admin.v130.schedules.tab.schedules}">排期发布</a>
+        </div>
+
+        <!--/* 🔴 th:if 与 th:replace **不能写在同一个标签上**：th:replace 的优先级（100）高于
+               th:if（300），条件根本不会被求值 —— 两个页签会同时渲染出来。故各自套一层 th:block。
+               （同一族的坑还有 th:each / sec:authorize 与 th:replace 同标签，L0 有守卫盯着。） */-->
+        <div id="batches-tab">
+            <th:block th:if="${tab == 'schedules'}">
+                <div th:replace="~{admin/fragments/schedules-tab :: tab}"></div>
+            </th:block>
+            <th:block th:unless="${tab == 'schedules'}">
+                <div th:replace="~{admin/seed-batches :: batchesTab}"></div>
+            </th:block>
+        </div>
+
+        <!--/* 页签高亮与 aria-selected 是服务端按 ${tab} 算死的，而切页签是 htmx 局部 swap、不整页刷新 ——
+               不在这里同步，就会出现「内容换了、高亮没换」，读屏用户拿到的 selected 还与视觉相反
+               （Story 7.2 复审 C2 的同一件事；本页两个方向都会错，因为两个页签都是 htmx）。 */-->
+        <script>
+            document.body.addEventListener('htmx:afterSwap', function (e) {
+                var t = e.detail && e.detail.target;
+                if (!t || t.id !== 'batches-tab') { return; }
+                var onSchedules = !!t.querySelector('#schedules-rows');
+                document.querySelectorAll('.batches-tabs .tab').forEach(function (a) {
+                    var isSchedules = (a.getAttribute('hx-get') || '').indexOf('tab=schedules') >= 0;
+                    a.classList.toggle('tab--on', isSchedules === onSchedules);
+                    a.setAttribute('aria-selected', String(isSchedules === onSchedules));
+                });
+            });
+        </script>
+    </div>
+
+    <!--/* 批次页签体（htmx 切回来时单独回这一段）。
+           ⚠️ 必须放在 content 片段**之外、外层 th:replace 之内**：定义在 content 里的话，
+              整页渲染时片段本体会在页面底部再游离渲染一遍（内容标签页同一个 bug 被实机截图抓到）。 */-->
+    <div th:fragment="batchesTab" th:remove="tag">
         <form method="post" th:action="@{/admin/seed-batches}">
             <button type="submit" class="btn btn-primary btn-sm"
                     th:text="#{admin.batch.new}">新建批次</button>
         </form>
 
-        <table>
+        <table class="table">
             <thead>
             <tr><th>#</th><th th:text="#{admin.batch.source}">来源</th>
                 <th th:text="#{admin.common.createdAt}">创建时间</th>
@@ -34,8 +89,8 @@
                 <td th:text="${b.batchId}">0</td>
                 <td th:text="${b.source}">EXCEL</td>
                 <td th:text="${@adminTime.wib(b.createdAt)}">时间</td>
-                <!-- 「本批 50 条：47 已发布 / 5 排期中 / 3 待修正」——
-                     🛡 只列出现过的状态，0 的不留位置。 -->
+                <!--/* 「本批 50 条：47 已发布 / 5 排期中 / 3 待修正」——
+                       🛡 只列出现过的状态，0 的不留位置。 */-->
                 <td>
                     <span th:text="${b.total} + ' '">0</span>
                     <span th:each="e : ${b.counts}"
@@ -49,13 +104,6 @@
                     th:text="#{admin.batch.empty}">暂无批次</td></tr>
             </tbody>
         </table>
-
-        <!-- 排期（bug 20260826 产品要求）：**上传与看情况放同一页** ——
-             原先「批量内容」管上传、「排期管理」管查看，分在侧栏两个入口，
-             运营发完一批要换页才知道它们什么时候发、发没发。
-             🛡 整段复用排期页的片段，不另写一份：两处漂移会让运营看到两张对不上的排期表。 -->
-        <h2 th:text="#{admin.schedule.title}">排期管理</h2>
-        <div th:replace="~{admin/content-schedules :: scheduleSection}">排期</div>
     </div>
 </div>
 </body>

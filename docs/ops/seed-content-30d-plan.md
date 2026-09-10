@@ -16,7 +16,7 @@
 |---|---|
 | `/admin/seed-batches` | **批次工作台（推荐）**——建批次 → 导入/粘贴 → 预览校验 → 确认发布 |
 | `/admin/seed-batches/{id}/template` | 下载 Excel 模板（6 列） |
-| `/admin/content-schedules` | 定时发布队列：改时间、取消 |
+| `/admin/seed-batches?tab=schedules` | 定时发布队列：改时间、取消（V1.3.0 起并入批量内容页第二页签，原 `/admin/content-schedules` 已退役） |
 | `/admin/seed-post` | 单条发布（要挑具体宠物、要传图时用） |
 | `/admin/seed-batch?tab=batch` | 旧的「贴多行就发」——**没有预览**，去重命中会静默跳过，只适合临时补几条 |
 

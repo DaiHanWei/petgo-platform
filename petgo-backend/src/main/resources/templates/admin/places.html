@@ -67,7 +67,7 @@
                 <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.v130.places.filter.query}">查询</button>
             </form>
 
-            <div th:fragment="pl-summary" th:replace="~{admin/fragments/places-list :: summary(false)}"></div>
+            <div th:fragment="pl-summary" th:replace="~{admin/fragments/places-list :: sumbar(false)}"></div>
 
             <div th:fragment="pl-table" id="places-rows">
                 <div th:replace="~{admin/fragments/places-list :: rows(false)}"></div>

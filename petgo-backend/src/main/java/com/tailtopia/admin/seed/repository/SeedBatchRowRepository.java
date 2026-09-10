@@ -7,7 +7,8 @@ import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /** 批量内容行仓储（V1.1.6 Story 13.1）。 */
-public interface SeedBatchRowRepository extends JpaRepository<SeedBatchRow, Long> {
+public interface SeedBatchRowRepository extends JpaRepository<SeedBatchRow, Long>,
+        org.springframework.data.jpa.repository.JpaSpecificationExecutor<SeedBatchRow> {
 
     /** 一个批次的全部行，按原始行号 —— 运营看的是自己那份表格的顺序。 */
     List<SeedBatchRow> findByBatchIdOrderByRowNoAsc(long batchId);

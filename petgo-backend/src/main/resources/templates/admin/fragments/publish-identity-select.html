@@ -8,14 +8,14 @@
 
   用法（外层 <form> 必须带 data-real-identity-confirm，否则二次确认不会生效）：
     <form method="post" ... th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
-        <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'batchAuthorId')}"></div>
+        <div th:replace="~{admin/fragments/publish-identity-select :: identity-select(${publishIdentities}, 'batchAuthorId')}"></div>
 -->
 <body>
 <!-- bug 20260901-468：新增第 6 个参数 selected（可空）——「已存过的选择」回显。
      🛡 「默认不预选」的防呆只针对**首次选择**；已保存的批次设置回显的是运营自己存过的值，
      不回显反而制造两个新问题：看不见存了什么、且下次保存被迫重选。
      单条/导入等首次选择场景传 null，行为与从前逐字一致。 -->
-<div th:fragment="select(identities, fieldId, fieldName, hxGet, hxTarget, selected)" th:remove="tag">
+<div th:fragment="identity-select(identities, fieldId, fieldName, hxGet, hxTarget, selected)" th:remove="tag">
     <label th:for="${fieldId}">
         <span th:text="#{admin.publishIdentity.field}">发布账号</span>
         <!-- ⚠️ `name` 由调用方给：批量发布那两处的入参叫 virtualUserId（历史名，不改动它

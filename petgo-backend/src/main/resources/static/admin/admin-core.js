@@ -191,6 +191,16 @@ document.addEventListener('change', function (e) {
     }
 });
 
+// 行内编辑态的「取消」（V1.3.0 Story 7.5 排期页签）：收起最近的 <details>。
+//   ⚠️ 事件委托在 document —— htmx 换过表格之后照常生效，不需要重新绑定。
+//   无 JS / 被 CSP 拦时退化成「点标题栏自己收起」，不会卡住任何操作。
+document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest && e.target.closest('[data-details-close]');
+    if (!btn) { return; }
+    var d = btn.closest('details');
+    if (d) { d.open = false; }
+});
+
 // 图片灯箱（内容管理等）：点带 data-lightbox 的缩略图 → 原生 <dialog> 全屏看大图（非下载）。
 // 惰性建一个通用 dialog，全后台复用；点任意处关闭。HTMX 换行后仍生效（事件委托在 document）。
 document.addEventListener('click', function (e) {

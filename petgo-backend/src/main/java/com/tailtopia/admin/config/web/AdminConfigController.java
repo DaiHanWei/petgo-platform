@@ -293,7 +293,7 @@ public class AdminConfigController {
             return "redirect:/admin/config";
         }
         populateTiers(model);
-        return "admin/fragments/config-tiers-disabled :: table";
+        return "admin/fragments/config-tiers-disabled :: disabled-table";
     }
 
     /** 新建档位（V1.3.0 Story 6.2 AC3）：金额 IDR 正整数 → PRG + toast；重复 / 达上限 / ≤0 → flash error 回显。 */

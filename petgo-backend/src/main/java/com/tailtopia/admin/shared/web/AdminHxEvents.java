@@ -32,6 +32,17 @@ public final class AdminHxEvents {
     public static final String TAG_LIST_REFRESH = "admin:tag-list-refresh";
 
     /**
+     * B5 排期发布：排期表按当前筛选 + 当前页重拉（Story 7.5）。
+     *
+     * <p>⚠️ 改时间 / 取消都**不做单行 oob**：表按计划时间升序，改完时间那一行的位置会变；
+     * 取消后那一行回到 DRAFT、根本不该留在这张表里。两种情况原位换行都会给出一张骗人的表。
+     */
+    public static final String SCHEDULE_LIST_REFRESH = "admin:schedule-list-refresh";
+
+    /** B5 排期发布：抽屉按自身 URL 重拉（Story 7.5；与列表分开的理由同 {@link #CONTENT_DRAWER_REFRESH}）。 */
+    public static final String SCHEDULE_DRAWER_REFRESH = "admin:schedule-drawer-refresh";
+
+    /**
      * 让前端打开某个抽屉，载荷 {@code {"url": "<抽屉 URL>", "id": <对象 id>}}
      * （V1.3.0 Story 7.4 新增 · AC4：新建标签成功后
      * 直接停在新标签抽屉的「分配记录」页签 —— 建完标签紧接着就是给它加内容）。

@@ -228,7 +228,7 @@ public class AdminPlaceController {
         model.addAttribute("markers", placeService.markerOptions());
         model.addAttribute("cities", query.cities());
         model.addAttribute("typeOptions", com.tailtopia.admin.places.domain.PlaceType.KNOWN);
-        return "admin/fragments/drawer-places-create :: form";
+        return "admin/fragments/drawer-places-create :: create-form";
     }
 
     /**

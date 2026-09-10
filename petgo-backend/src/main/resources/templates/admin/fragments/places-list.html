@@ -7,7 +7,7 @@
   模型：filter / rows / total / hasNext / summary。
 -->
 <body>
-<div th:fragment="summary(oob)" class="sum" id="places-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+<div th:fragment="sumbar(oob)" class="sum" id="places-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
     <div class="sum-item">
         <div class="sum-label" th:text="#{admin.v130.places.summary.active}">上架场所</div>
         <div class="sum-value" th:text="${summary.activeCount}">0</div>
@@ -31,7 +31,7 @@
 
 <th:block th:fragment="rows(oob)">
     <!-- htmx 筛选 / 翻页时摘要条随 oob 一并换；整页首屏（oob=false）不重复渲染（复审 #2） -->
-    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/places-list :: summary(true)}"></div></th:block>
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/places-list :: sumbar(true)}"></div></th:block>
     <table th:if="${!rows.isEmpty()}" class="places-table">
         <thead>
         <tr>

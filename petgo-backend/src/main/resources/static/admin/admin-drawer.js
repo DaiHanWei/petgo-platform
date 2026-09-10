@@ -76,7 +76,10 @@
         // 非行触发的抽屉入口（Story 5.4「＋ 新建场所」）：<button data-drawer-open="<url>" data-drawer-res="places">
         var opener = t.closest('[data-drawer-open]');
         if (opener) { open(opener.dataset.drawerOpen, { res: opener.dataset.drawerRes }); return; }
-        if (t.closest('a, button, input, label, select, textarea, [data-no-drawer]')) { return; }
+        // 🔴 summary / details 也要排除（V1.3.0 Story 7.5 复审 C3）：行内编辑态（B5 改时间）与
+        //    长正文折叠（B1）都用 <details>，点它们本意是就地展开 —— 顺手再把 480px 抽屉连遮罩弹出来，
+        //    正是 UI 稿明令排除的「弹层」，而且遮罩会盖住刚展开的那个输入框。
+        if (t.closest('a, button, input, label, select, textarea, summary, details, [data-no-drawer]')) { return; }
         var tr = t.closest('tr[data-drawer-url]');
         if (tr) { open(tr.dataset.drawerUrl, { rowEl: tr }); }
     });

@@ -362,13 +362,18 @@ class SeedScheduleIntegrationTest extends ApiIntegrationTest {
         makeDue(willFail.getId());
         scanner.publishDueRows();
 
-        String html = mvc.perform(get("/admin/content-schedules")
+        // V1.3.0 Story 7.5：独立排期页退役，排期在批量内容页第二页签上。
+        String html = mvc.perform(get("/admin/seed-batches").param("tab", "schedules")
+                        .param("lang", "zh_CN")
                         .with(authentication(superAdmin())))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(html).contains(pending);
-        assertThat(html).as("🛡 失败行要留在列表里供运营处理").contains("FAILED");
+        // ⚠️ 不能断「发布失败」四个字：状态筛选下拉与摘要条第三格都无条件带着这几个字，
+        //    一条失败行都不显示时它照样绿（本条第一版就是这么假绿的）。断这一行本身在不在。
+        assertThat(html).as("🛡 失败行要留在列表里供运营处理")
+                .contains("id=\"schedule-row-" + willFail.getId() + "\"");
     }
 
     /** 按发布账号过滤 —— 12-1 的移出提示会带 authorId 跳进来。 */
@@ -381,7 +386,8 @@ class SeedScheduleIntegrationTest extends ApiIntegrationTest {
         scheduledRow(newBatch(), a, aBody, Instant.now().plus(1, ChronoUnit.DAYS));
         scheduledRow(newBatch(), b, bBody, Instant.now().plus(1, ChronoUnit.DAYS));
 
-        String html = mvc.perform(get("/admin/content-schedules").param("authorId", String.valueOf(a))
+        String html = mvc.perform(get("/admin/seed-batches").param("tab", "schedules")
+                        .param("authorId", String.valueOf(a)).param("lang", "zh_CN")
                         .with(authentication(superAdmin())))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
@@ -437,7 +443,8 @@ class SeedScheduleIntegrationTest extends ApiIntegrationTest {
     /** 🛡 界面须在时间旁明示「WIB」（四处口径一致：11-1/11-2/11-3 + 这里）。 */
     @Test
     void theSchedulePageStatesTheTimezone() throws Exception {
-        String html = mvc.perform(get("/admin/content-schedules")
+        String html = mvc.perform(get("/admin/seed-batches").param("tab", "schedules")
+                        .param("lang", "zh_CN")
                         .with(authentication(superAdmin())))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();

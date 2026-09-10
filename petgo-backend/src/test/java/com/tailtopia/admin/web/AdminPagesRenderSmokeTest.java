@@ -273,8 +273,7 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 "/admin/virtual-accounts",
                 // V1.1.6 Story 13.2：批次列表（工作台需要一个真实 batchId，另在其专属测试里渲染）。
                 "/admin/seed-batches",
-                // V1.1.6 Story 13.5：排期管理（12-1 的移出提示会跳到这里）。
-                "/admin/content-schedules",
+                // V1.1.6 Story 13.5 的排期页已于 V1.3.0 Story 7.5 退役（并入 /admin/seed-batches 第二页签）。
                 // V1.1.6 Story 15.1：内容互动积分榜。
             // 2026-08-26：算法参数独立成页，须一并纳入逐页双语扫描
             "/admin/algo-params");

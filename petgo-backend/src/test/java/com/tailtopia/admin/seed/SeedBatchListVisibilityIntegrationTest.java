@@ -59,19 +59,28 @@ class SeedBatchListVisibilityIntegrationTest extends ApiIntegrationTest {
     /// 原先「批量内容」管上传、「排期管理」管查看，分在侧栏两个入口 ——
     /// 运营发完一批要换页才知道它们什么时候发、发没发。
     ///
-    /// ⚠️ 断言的是**排期段真的渲染在这一页上**，不是「侧栏少了一个入口」：
+    /// ⚠️ 断言的是**排期内容真的在这一页上**，不是「侧栏少了一个入口」：
     /// 只删导航而没把内容搬过来，等于把功能藏了起来，而那种改动看截图是看不出来的。
+    ///
+    /// ⚠️ V1.3.0 Story 7.5：排期从「批次表下面那一段」改成**第二个页签**，独立排期页整页退役。
+    /// 所以这里断两件事：① 本页有通往排期页签的入口；② 打开那个页签真的渲染出排期内容
+    /// （WIB 明示 + 按发布账号筛选）。少断第二条的话，「入口在但页签是空的」照样绿。
     @org.junit.jupiter.api.Test
     void batchListPageAlsoShowsTheScheduleSection() throws Exception {
         String html = mvc.perform(get("/admin/seed-batches").param("lang", "zh_CN")
                         .with(authentication(superAdmin())))
                 .andReturn().getResponse().getContentAsString();
-        assertThat(html)
-                .as("🔴 排期段没渲染在批次列表页上 —— 运营仍要换页才知道发布情况")
-                // 排期段的两个特征：按发布账号筛选的表单（action 指向排期页）+ WIB 明示。
-                .contains("/admin/content-schedules")
-                .contains("WIB");
+        assertThat(html).as("🔴 本页没有通往排期的入口 —— 运营仍要换页才知道发布情况")
+                .contains("tab=schedules").contains("排期发布");
         assertThat(html).as("这仍应是批次列表页本身").contains("批次列表");
+        assertThat(html).as("独立排期页已退役，页面上不该再出现它的地址")
+                .doesNotContain("/admin/content-schedules\"");
+
+        String schedules = mvc.perform(get("/admin/seed-batches").param("tab", "schedules")
+                        .param("lang", "zh_CN").with(authentication(superAdmin())))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(schedules).as("🔴 排期页签必须真的有内容：WIB 明示 + 按发布账号筛选")
+                .contains("WIB").contains("name=\"authorId\"");
     }
 
     private boolean listed(long batchId) {

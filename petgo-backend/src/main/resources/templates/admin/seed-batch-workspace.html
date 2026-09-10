@@ -42,7 +42,7 @@
         <form method="post" th:action="@{/admin/seed-batches/{id}/settings(id=${batchId})}"
               th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
             <!-- bug 20260901-468：回显已存的默认发布账号（存过才回显，首次仍不预选）。 -->
-            <div th:replace="~{admin/fragments/publish-identity-select :: select(${publishIdentities}, 'batchDefaultAuthor', 'defaultAuthorUserId', null, null, ${batch?.defaultAuthorUserId})}"></div>
+            <div th:replace="~{admin/fragments/publish-identity-select :: identity-select(${publishIdentities}, 'batchDefaultAuthor', 'defaultAuthorUserId', null, null, ${batch?.defaultAuthorUserId})}"></div>
             <label class="field" for="batchDefaultType" th:text="#{admin.batch.defaultType}">默认内容类型</label>
             <!-- 🔴 不含 GROWTH_MOMENT（A-10）：成长日历需逐行绑宠物与事件日期、属"真实记录"
                  性质，不适合批量灌入。服务端另有一遍硬校验（下拉里没有 ≠ 请求里发不上来）。 -->

@@ -8,7 +8,7 @@
   🔴「已下架」（可见性态 TAKEN_DOWN）与「已删除」（用户自删 / 级联软删）是两回事，别合并成一个状态。
 */-->
 <body>
-<div th:fragment="body" id="comments-inspect" th:with="res='comment'">
+<div th:fragment="panel" id="comments-inspect" th:with="res='comment'">
     <p class="hint" th:text="#{admin.comments.hint}">下架走审核线语义（必填原因；作者仍可见 + 收到通知 + 计违规）；误下架可恢复。操作留审计。</p>
 
     <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::cm-filters}, ~{::cm-summary}, ~{::cm-table}, ~{::cm-drawer})}">
@@ -38,7 +38,7 @@
             <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.content.search}">查询</button>
         </form>
 
-        <div th:fragment="cm-summary" th:replace="~{admin/fragments/comments-inspect :: summary(false)}"></div>
+        <div th:fragment="cm-summary" th:replace="~{admin/fragments/comments-inspect :: sumbar(false)}"></div>
 
         <div th:fragment="cm-table" id="comments-rows">
             <div th:replace="~{admin/fragments/comments-inspect :: rows(false)}"></div>
@@ -52,7 +52,7 @@
           th:attr="data-drawer-deeplink=@{/admin/comments/{id}/drawer(id=${open})}"></span>
 </div>
 
-<div th:fragment="summary(oob)" class="sum" id="comments-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+<div th:fragment="sumbar(oob)" class="sum" id="comments-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
     <div class="sum-item">
         <div class="sum-label" th:text="#{admin.v130.comments.summary.total}">总评论数</div>
         <div class="sum-value" th:text="${summary.total}">0</div>
@@ -69,7 +69,7 @@
 
 <th:block th:fragment="rows(oob)">
     <!--/* htmx 筛选 / 翻页时摘要条随 oob 一并换；整页首屏（oob=false）不重复渲染 */-->
-    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/comments-inspect :: summary(true)}"></div></th:block>
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/comments-inspect :: sumbar(true)}"></div></th:block>
     <table th:if="${!#lists.isEmpty(comments)}" class="comments-table">
         <thead>
         <tr>

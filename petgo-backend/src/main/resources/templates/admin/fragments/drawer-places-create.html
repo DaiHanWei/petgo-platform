@@ -8,7 +8,7 @@
   created = HX-Redirect 时的占位响应体（htmx 收到 HX-Redirect 不做 swap）。
 -->
 <body>
-<div th:fragment="form" class="pl-drawer pl-create" data-place-create>
+<div th:fragment="create-form" class="pl-drawer pl-create" data-place-create>
     <form class="pl-edit-form" th:attr="hx-post=@{/admin/places}" hx-encoding="multipart/form-data"
           hx-target="#places-create-error" hx-swap="innerHTML">
         <h3 th:text="#{admin.v130.places.create.title}">新建场所</h3>

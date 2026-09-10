@@ -9,7 +9,7 @@
      同屏两个叫「名称」的输入框指的却是两件事，运营在两张表之间迷路 —— 全部收进抽屉。
 */-->
 <body>
-<div th:fragment="summary(oob)" class="sum" id="tags-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+<div th:fragment="sumbar(oob)" class="sum" id="tags-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
     <div class="sum-item">
         <!--/* 文案是「在线标签数」而不是 AC1 字面的「生效标签数」：状态列写的就是「在线 / 已下线」，
                同一件事在同屏用两个词，运营会以为「生效」还另有一层含义（偏离已记入 Completion Notes）。 */-->
@@ -23,7 +23,7 @@
 </div>
 
 <th:block th:fragment="rows(oob)">
-    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/tags-list :: summary(true)}"></div></th:block>
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/tags-list :: sumbar(true)}"></div></th:block>
     <table th:if="${!#lists.isEmpty(tags)}" class="tags-table">
         <thead>
         <tr>

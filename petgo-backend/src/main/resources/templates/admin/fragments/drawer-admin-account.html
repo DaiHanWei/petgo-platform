@@ -110,7 +110,7 @@
     </div>
     <table hidden><tbody><tr th:replace="~{admin/admin-accounts :: row(${a}, true)}"></tr></tbody></table>
     <!--/* 停用 / 重新激活会改「启用中 · 已停用 · 超管数」——摘要条不一起换就会停在旧值直到整页刷新 */-->
-    <div th:replace="~{admin/admin-accounts :: summary(true)}"></div>
+    <div th:replace="~{admin/admin-accounts :: sumbar(true)}"></div>
     <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
 </th:block>
 

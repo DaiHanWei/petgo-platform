@@ -598,6 +598,93 @@ class AdminTemplateStructureTest {
     }
 
     /**
+     * 🔴 {@code th:if}/{@code th:unless} 同样不能与 {@code th:replace}/{@code th:insert} 同标签
+     * （V1.3.0 Story 7.5 补齐这一族的第三条）。
+     *
+     * <p>{@code th:if} 的优先级是 300，低于 {@code th:replace}(100) —— 元素照样被替换，
+     * <b>条件一次都不会被求值</b>。已实测：{@code <div th:if="${false}" th:replace="~{::frag}">} 照样插入。
+     *
+     * <p>这不是理论问题，本条落地时当场抓到两处存量缺陷：
+     * <ul>
+     *   <li>{@code dashboard-charts.html}：付费卡被无条件再渲染一遍 ⇒ 有 payment.view 的人看到两张一样的卡；</li>
+     *   <li>{@code config-tiers-disabled.html}：「已停用」表每次都 oob 换出来，紧接着又被一个空 div 换掉 ⇒
+     *       折叠区展开着时启停一个档位，那张表当场被清空。</li>
+     * </ul>
+     * 两处都是**静默**的：页面照样渲染、其它测试照样绿。正确写法：外层 {@code <th:block th:if=…>} 包住。
+     */
+    @Test
+    void noTagCarriesBothConditionAndReplace() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            List<String> lines = Files.readAllLines(f, StandardCharsets.UTF_8);
+            for (int i = 0; i < lines.size(); i++) {
+                String tag = wholeOpenTagAt(lines, i);
+                if (tag == null || !(tag.contains("th:if=") || tag.contains("th:unless="))) {
+                    continue;
+                }
+                if (tag.contains("th:replace") || tag.contains("th:insert")) {
+                    offenders.add(fileName(f) + ":" + (i + 1) + "  " + lines.get(i).trim());
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 th:if / th:unless 与 th:replace/th:insert 同标签：优先级低于 replace ⇒ 条件被静默忽略，"
+                        + "片段无条件渲染。改成外层 <th:block th:if=…> 包住。")
+                .isEmpty();
+    }
+
+    /**
+     * 🔴 <b>片段名不能与同文件里另一个同名 HTML 标签撞车</b>（V1.3.0 Story 7.5 复审 C1 展开）。
+     *
+     * <p>{@code ~{tpl :: name}} 的选择器**不只匹配 {@code th:fragment="name"}，也按标签名匹配** ——
+     * 同一文件里另有一个 {@code <name>} 元素时，两个节点都会被选中并一起输出。已实测：
+     * <ul>
+     *   <li>{@code th:fragment="summary"} + 行内编辑态的 {@code <summary>} ⇒ 摘要条后面凭空多出一个「改时间」；</li>
+     *   <li>{@code th:fragment="body"} ⇒ 选中的干脆是整个 {@code <body>}：文件里定义在片段**之外**的
+     *       其它片段（如 {@code row(c, oob)}）也会被当场求值，{@code c} 未绑定 ⇒ <b>EL1007E，整页 500</b>。</li>
+     * </ul>
+     *
+     * <p>⚠️ 判据是「同文件里存在一个**不是片段自己**的同名标签」：
+     * {@code <nav th:fragment="nav(...)">} 这种片段就长在同名标签上、文件里也只此一个，没有歧义。
+     *
+     * <p>本条**刻意比最小必要条件严**：嵌套在片段**内部**的同名标签实测不会被重复输出
+     * （外层已经包含它，Thymeleaf 只发出最外层那个节点），但「这个同名标签到底在片段里面还是外面」
+     * 得靠人逐个判断 —— 而判断错的代价是一处静默的重复渲染，甚至整页 500。
+     * 换个不与标签同名的片段名成本只有一次改名，所以这里不给这种豁免。
+     */
+    @Test
+    void noFragmentIsNamedAfterAnHtmlTagThatAlsoAppearsInTheSameFile() throws IOException {
+        // 后台模板里真正出现过、又容易被拿来当片段名的标签。
+        Set<String> tags = Set.of("summary", "table", "form", "header", "footer", "section", "details",
+                "main", "nav", "aside", "body", "head", "title", "label", "option", "select",
+                "legend", "fieldset", "dialog", "figure", "output", "progress", "template");
+        Pattern fragment = Pattern.compile("th:fragment=\"\\s*([A-Za-z0-9_-]+)");
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            String html = Files.readString(f, StandardCharsets.UTF_8);
+            Matcher m = fragment.matcher(html);
+            while (m.find()) {
+                String name = m.group(1).toLowerCase(java.util.Locale.ROOT);
+                if (!tags.contains(name)) {
+                    continue;
+                }
+                long uses = Pattern.compile("<" + name + "[\\s>/]").matcher(html).results().count();
+                // 片段就长在同名标签上时，它自己那一次不算。
+                boolean selfTagged = html.substring(0, m.start()).lastIndexOf('<' + name) >= 0
+                        && html.substring(0, m.start()).lastIndexOf('<') == html.substring(0, m.start()).lastIndexOf('<' + name);
+                if (uses > (selfTagged ? 1 : 0)) {
+                    offenders.add(fileName(f) + "  片段名 '" + name + "' 与文件里的 <" + name + "> 撞车（出现 "
+                            + uses + " 次）");
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 片段名与同文件里的 HTML 标签同名：选择器会把那个标签一并选中，"
+                        + "轻则多渲染一段、重则把整个 <body> 连同别的片段一起求值而 500。换个不与标签同名的片段名。")
+                .isEmpty();
+    }
+
+    /**
      * 从第 {@code i} 行起的<b>开标签全文</b>（属性常跨行写，取到 {@code >} 为止；本行不是开标签则返回 null）。
      * 注释行不算 —— 注释里写反例是常事，连注释一起扫会误报。
      */

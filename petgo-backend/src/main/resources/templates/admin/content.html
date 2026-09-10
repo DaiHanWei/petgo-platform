@@ -87,7 +87,7 @@
                    th:text="#{admin.content.exportCsv}">导出 CSV</a>
             </form>
 
-            <div th:fragment="ct-summary" th:replace="~{admin/fragments/content-list :: summary(false)}"></div>
+            <div th:fragment="ct-summary" th:replace="~{admin/fragments/content-list :: sumbar(false)}"></div>
 
             <div th:fragment="ct-table" id="content-rows">
                 <div th:replace="~{admin/fragments/content-list :: rows(false)}"></div>

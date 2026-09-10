@@ -836,3 +836,19 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tag-drawer .sticky-footer { bottom: 0; }
 /* 展开「＋添加内容」时才留出原生日期弹层的空间（收起时那两个输入框虽在 DOM 里却看不见） */
 .tag-assign-details[open] { padding-bottom: 340px; }
+
+/* ===== B5 排期发布页签（V1.3.0 Story 7.5，模板 B + 480px 抽屉）===== */
+.batches-tabs { margin: 0 0 12px; }
+.schedules-table td { vertical-align: middle; }
+.schedules-table td:first-child { max-width: 280px; word-break: break-word; }
+/* 失败原因**在服务端就截断**（#strings.abbreviate），完整原文在 title 里悬浮看全。
+   ⚠️ 这里不用 max-width + ellipsis 那一套：表格不是 table-layout:fixed 时 max-width 对单元格几乎无效，
+      写了会以为已经限住宽度，实际没有（V1.3.0 Story 7.5 复审 P7）。 */
+.sched-error { color: var(--danger); }
+/* 行内编辑态：<details> 展开即当场编辑，不弹层（UI 稿 2-23 注记 2026-09-02） */
+.sched-edit > summary { cursor: pointer; color: var(--brand-strong); font-weight: 600; padding: 4px 0; }
+.sched-edit-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 0; }
+.sched-card { margin-bottom: 10px; }
+.sched-card h3 { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.sched-images { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.sched-drawer .sticky-footer { bottom: 0; }

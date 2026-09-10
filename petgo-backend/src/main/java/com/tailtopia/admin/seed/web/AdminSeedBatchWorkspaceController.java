@@ -47,8 +47,8 @@ public class AdminSeedBatchWorkspaceController {
     private final com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities;
     private final com.tailtopia.admin.seed.service.SeedBatchPublishService publishing;
 
-    /** 批次列表页底部那段排期用（bug 20260826：上传与看情况同一页）。 */
-    private final com.tailtopia.admin.seed.repository.SeedBatchRowRepository scheduleRows;
+    /** 排期页签的读取（V1.3.0 Story 7.5：独立排期页退役后由本页承接）。 */
+    private final com.tailtopia.admin.seed.service.AdminSchedulePageService schedulePage;
     /** 确认发布的结果提示按当前语言输出（bug 20260901-473，后台三语）。 */
     private final com.tailtopia.shared.i18n.Messages i18n;
 
@@ -58,7 +58,7 @@ public class AdminSeedBatchWorkspaceController {
             com.tailtopia.admin.seed.service.SeedBatchExcelService excel,
             com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities,
             com.tailtopia.admin.seed.service.SeedBatchPublishService publishing,
-            com.tailtopia.admin.seed.repository.SeedBatchRowRepository scheduleRows,
+            com.tailtopia.admin.seed.service.AdminSchedulePageService schedulePage,
             com.tailtopia.shared.i18n.Messages i18n) {
         this.batches = batches;
         this.assets = assets;
@@ -66,24 +66,86 @@ public class AdminSeedBatchWorkspaceController {
         this.excel = excel;
         this.identities = identities;
         this.publishing = publishing;
-        this.scheduleRows = scheduleRows;
+        this.schedulePage = schedulePage;
         this.i18n = i18n;
     }
 
-    /** 批次列表 —— 🛡 按各行状态**聚合**展示（13-1 AC2），批次自己没有状态。 */
+    /**
+     * 批量内容页（V1.3.0 Story 7.5 起**两个页签**）：批次 ｜ 排期发布。
+     *
+     * <p>🛡 批次表按各行状态**聚合**展示（13-1 AC2），批次自己没有状态。
+     *
+     * <p>排期页签承接原独立页 {@code /admin/content-schedules}（已退役）：
+     * bug 20260826 产品要求「上传与看情况同一页」，此前是把排期区块整段嵌在批次表下面同屏堆叠 ——
+     * 一页两张表，运营要先分清哪张是哪张。改成页签后一次只看一件事，
+     * 而按发布账号筛选（12.1 的「移出发布身份前」提示带 {@code authorId} 跳进来）**保留在页签里**。
+     */
     @GetMapping("/admin/seed-batches")
     @PreAuthorize(AUTH)
-    public String list(Model model) {
+    public String list(@RequestParam(value = "tab", required = false) String tab,
+            @RequestParam(value = "authorId", required = false) Long authorId,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "date", required = false) String date,
+            @RequestParam(value = "page", required = false, defaultValue = "0") int page,
+            @RequestParam(value = "open", required = false) Long open,
+            com.tailtopia.admin.shared.web.HxRequest hx, Model model) {
         model.addAttribute("active", "seed");
         model.addAttribute("batches", batches.recentBatches());
-        // 排期段与「排期管理」页共用同一个模板片段，故模型键也必须一致（rows / authorId）。
-        // bug 20260826：产品要求上传与看情况同一页 —— 运营发完一批不该再换页才知道何时发。
-        // ⚠️ 这里刻意**不带 authorId 过滤**：本页的排期是「这批发出去之后的整体情况」，
-        //    按账号筛的诉求在排期页那边（片段里的筛选表单仍指向那个页面）。
-        model.addAttribute("authorId", null);
-        model.addAttribute("rows", scheduleRows.findByStatusInOrderByScheduledAtAsc(
-                com.tailtopia.admin.seed.web.AdminContentScheduleController.LISTED));
+        boolean schedulesTab = "schedules".equals(tab);
+        model.addAttribute("tab", schedulesTab ? "schedules" : "batches");
+        model.addAttribute("open", open);
+        populateSchedules(authorId, status, date, page, model);
+        if (hx.isHtmx()) {
+            // 页签切换：只换页签体（#batches-tab）。
+            return schedulesTab ? "admin/fragments/schedules-tab :: tab"
+                    : "admin/seed-batches :: batchesTab";
+        }
         return "admin/seed-batches";
+    }
+
+    /**
+     * 排期页签的表格（htmx 局部）：筛选、翻页、处置后的整表重拉都打这里。
+     *
+     * <p>非 htmx 直达 → 回整页的排期页签（不是 404 也不是一段裸片段）。
+     */
+    @GetMapping("/admin/seed-batches/schedules")
+    @PreAuthorize(AUTH)
+    public String schedules(@RequestParam(value = "authorId", required = false) Long authorId,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "date", required = false) String date,
+            @RequestParam(value = "page", required = false, defaultValue = "0") int page,
+            com.tailtopia.admin.shared.web.HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            return "redirect:/admin/seed-batches?tab=schedules"
+                    + (authorId == null ? "" : "&authorId=" + authorId);
+        }
+        model.addAttribute("active", "seed");
+        model.addAttribute("tab", "schedules");
+        populateSchedules(authorId, status, date, page, model);
+        return "admin/fragments/schedules-tab :: rows(true)";
+    }
+
+    private void populateSchedules(Long authorId, String status, String date, int page, Model model) {
+        model.addAttribute("authorId", authorId);
+        model.addAttribute("status", status);
+        model.addAttribute("date", date);
+        model.addAttribute("statusOptions",
+                com.tailtopia.admin.seed.service.AdminSchedulePageService.filterableStatuses());
+        // ⚠️ 日期非法（有人手改 URL）当作没筛，不为此让整页 500。
+        java.time.LocalDate day = null;
+        if (date != null && !date.isBlank()) {
+            try {
+                day = java.time.LocalDate.parse(date.trim());
+            } catch (java.time.format.DateTimeParseException ignored) {
+                day = null;
+            }
+        }
+        var found = schedulePage.search(authorId, status, day, page);
+        model.addAttribute("rows", found.rows());
+        model.addAttribute("hasNext", found.hasNext());
+        model.addAttribute("page", found.page());
+        model.addAttribute("summary", schedulePage.summary(authorId));
+        model.addAttribute("authors", schedulePage.authorViews(found.rows()));
     }
 
     @PostMapping("/admin/seed-batches")

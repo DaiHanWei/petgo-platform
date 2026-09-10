@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  B5 排期详情抽屉（V1.3.0 Story 7.5 · AC5，480px 抽屉体 res=schedule，UI 稿 2-24）。
+  内容预览（正文 + 图缩略 + 发布账号 + 类型 + 物种）+ 排期信息 + 操作条。
+  ⚠️ 两个 POST 的路径与参数逐字不变（scheduledAt / authorId）—— 本 story 只是把入口搬进抽屉。
+  ⚠️ hx-target 指**带 id 的** #schedule-drawer-err：htmx 只在目标带 id 时才发 HX-Target 头，
+     而 AdminBusinessExceptionAdvice 按这个头 HX-Retarget。
+  🔴 已发布是终态（内容已经对外可见）→ 抽屉只读；失败行不给「改时间」——
+     服务层要求先回工作台修好再重排，给一个必报错的按钮只会让人白点一次。
+*/-->
+<body>
+<!--/* ⚠️ 本页**只有一个权限码**（virtual_account.manage，看与写同码），而这个端点就挂在它下面 ——
+       所以这里不再判 canManage：能打开抽屉的人必然能写，写一个恒真的分支只会让下一个人以为
+       本页有「只读身份」这回事。B1~B4 那种「禁用注明」是给双权限码的页面用的。 */-->
+<div th:fragment="drawer" id="schedule-drawer-panel" class="sched-drawer" th:attr="data-row-id=${r.id}"
+     th:with="failed=${r.status.name() == 'FAILED'},published=${r.status.name() == 'PUBLISHED'}">
+
+    <!--/* 改时间成功后抽屉按自身 URL 重拉（列表与抽屉分两个事件：见 AdminHxEvents 的说明） */-->
+    <span hidden th:attr="hx-get=@{/admin/content-schedules/{id}/drawer(id=${r.id})}"
+          hx-trigger="admin:schedule-drawer-refresh from:body"
+          hx-target="#schedule-drawer-panel" hx-swap="outerHTML"></span>
+
+    <!--/* ① 内容预览 */-->
+    <section class="card card-full sched-card" data-section="sched-preview">
+        <h2>
+            <span class="muted">#<span th:text="${r.id}">1</span></span>
+            <span class="badge" th:classappend="${failed} ? 'badge-danger' : (${published} ? 'badge-muted' : 'badge-neutral')"
+                  th:text="#{'admin.v130.schedules.status.' + ${r.status.name()}}">待发布</span>
+        </h2>
+        <div class="sched-images" th:if="${!#lists.isEmpty(r.imageUrls)}">
+            <img th:each="u : ${r.imageUrls}" th:src="${u}" alt="" loading="lazy" data-lightbox class="rv-img"/>
+        </div>
+        <p class="pl-desc" th:text="${r.body} ?: #{admin.v130.schedules.noBody}">正文</p>
+        <p class="muted rv-small">
+            <span th:text="#{admin.v130.schedules.col.author}">发布账号</span>:
+            <span th:if="${author != null and !author.deleted()}" th:text="${author.nickname()}">昵称</span>
+            <span th:if="${author == null or author.deleted()}" th:text="#{admin.contentdetail.deletedUser}">已注销</span>
+            <span class="muted">#<span th:text="${r.authorUserId}">0</span></span>
+        </p>
+        <p class="muted rv-small">
+            <span th:text="#{admin.batch.row.type}">类型</span>:
+            <span th:text="#{'admin.contentType.' + ${r.contentType.name()}}">Moment</span>
+            <span th:if="${r.species != null}">· <span th:text="${r.species}">DOG</span></span>
+        </p>
+    </section>
+
+    <!--/* ② 排期信息 */-->
+    <section class="card card-full sched-card" data-section="sched-window">
+        <h3 th:text="#{admin.schedule.col.at}">计划时间（WIB）</h3>
+        <p>
+            <span th:if="${r.scheduledAt != null}"
+                  th:text="${#temporals.format(r.scheduledAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">时间</span>
+            <span th:if="${r.scheduledAt == null}">—</span>
+            <span class="muted">WIB</span>
+        </p>
+        <!--/* 🛡 失败原因**完整展示**（表里只放得下截断的一段）：账号被移出、审核拦下、宠物档案删了，
+               处置方式完全不同，看不到全文就无从下手 */-->
+        <p class="err" th:if="${r.errorMessage != null}" th:text="${r.errorMessage}">失败原因</p>
+        <p class="hint" th:if="${failed}" th:text="#{admin.v130.schedules.failedFixFirst}">
+            失败行请回工作台修好再重新提交。</p>
+        <p class="hint">
+            <a data-no-drawer th:href="@{/admin/seed-batches/{id}(id=${r.batchId})}"
+               th:text="#{admin.v130.schedules.openBatch}">去这一批的工作台 ↗</a>
+        </p>
+    </section>
+
+    <div id="schedule-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+
+    <!--/* ③ 操作条 */-->
+    <section class="pl-actions sticky-footer" data-sched-actions th:unless="${published}">
+        <form class="sched-edit-form" th:unless="${failed}"
+              th:attr="hx-post=@{/admin/content-schedules/{id}/time(id=${r.id})}"
+              hx-target="#schedule-drawer-err" hx-swap="innerHTML">
+            <input type="datetime-local" name="scheduledAt" class="inp" required
+                   th:value="${r.scheduledAt != null} ? ${#temporals.format(r.scheduledAt, 'yyyy-MM-dd''T''HH:mm', 'Asia/Jakarta')} : null"/>
+            <span class="muted">WIB</span>
+            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.schedule.reschedule}">改时间</button>
+        </form>
+        <form class="inline"
+              th:attr="hx-post=@{/admin/content-schedules/{id}/cancel(id=${r.id})},
+                       data-confirm=#{admin.schedule.cancelConfirm}"
+              hx-target="#schedule-drawer-err" hx-swap="innerHTML">
+            <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.schedule.cancel}">取消排期</button>
+        </form>
+    </section>
+    <p class="hint" th:if="${published}" th:text="#{admin.v130.schedules.publishedReadonly}">已发布，只读。</p>
+</div>
+</body>
+</html>

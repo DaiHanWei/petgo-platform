@@ -50,7 +50,7 @@
                   th:attr="hx-get=@{/admin/content-tags}" hx-trigger="admin:tag-list-refresh from:body"
                   hx-target="#tags-rows" hx-swap="innerHTML"></span>
 
-            <div th:fragment="tag-summary" th:replace="~{admin/fragments/tags-list :: summary(false)}"></div>
+            <div th:fragment="tag-summary" th:replace="~{admin/fragments/tags-list :: sumbar(false)}"></div>
 
             <div th:fragment="tag-table" id="tags-rows">
                 <div th:replace="~{admin/fragments/tags-list :: rows(false)}"></div>

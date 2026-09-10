@@ -9,7 +9,7 @@
   模型：filter / rows / total / hasNext / summary / speciesOptions。
 -->
 <body>
-<div th:fragment="body" id="comments-distribution" th:with="res='post'">
+<div th:fragment="panel" id="comments-distribution" th:with="res='post'">
     <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::cd-filters}, ~{::cd-summary}, ~{::cd-table}, ~{::cd-drawer})}">
         <form th:fragment="cd-filters" class="filter-bar" data-autosubmit th:attr="hx-get=@{/admin/comments/distribution}"
               hx-target="#comments-tab-body" hx-swap="innerHTML" hx-push-url="true" data-distribution-filter>

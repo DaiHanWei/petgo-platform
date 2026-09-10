@@ -16,7 +16,12 @@
     <th:block th:if="${card.id == 'payment'}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('payment.view')">
         <th:block th:insert="~{admin/fragments/dashboard-charts :: chart-card(${card})}"></th:block>
     </th:block>
-    <th:block th:if="${card.id != 'payment'}" th:insert="~{admin/fragments/dashboard-charts :: chart-card(${card})}"></th:block>
+    <!--/* 🔴 th:if 与 th:insert **不能同标签**：th:insert 优先级（100）高于 th:if（300），
+           条件根本不会被求值 —— 付费卡会被下面这行**再渲染一遍**（有 payment.view 的人看到两张一样的卡）。
+           故套一层 th:block（V1.3.0 Story 7.5 新增的 L0 守卫抓到的存量缺陷）。 */-->
+    <th:block th:if="${card.id != 'payment'}">
+        <th:block th:insert="~{admin/fragments/dashboard-charts :: chart-card(${card})}"></th:block>
+    </th:block>
     </th:block>
 </div>
 

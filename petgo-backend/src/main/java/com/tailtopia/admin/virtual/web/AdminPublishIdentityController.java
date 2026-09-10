@@ -34,9 +34,13 @@ public class AdminPublishIdentityController {
      *
      * <p>📌 <b>这个页面由 Story 13.5（定时发布与排期管理）交付</b>，本 story 落地时还不存在。
      * 链接**只在待发布排期数 &gt; 0 时才渲染**，而在 13.4/13.5 开始产生排期之前那个数为 0，
-     * 所以今天线上不会出现死链。13.5 若改了路径，改这一个常量即可。
+     * 所以今天线上不会出现死链。改了路径改这一个常量即可。
+     *
+     * <p>⚠️ V1.3.0 Story 7.5：独立排期页退役，排期并入批量内容页第二页签 —— 常量随之改成
+     * 带页签参数的地址（后面还要拼 {@code &authorId=}，所以这里用的是 {@code ?} 开头的查询串，
+     * 下面拼接时**必须是 {@code &}**）。按发布账号筛选在新页签里原样保留，这条链接照常能用。
      */
-    static final String SCHEDULE_LIST_PATH = "/admin/content-schedules";
+    static final String SCHEDULE_LIST_PATH = "/admin/seed-batches?tab=schedules";
 
     private final AdminPublishIdentityService identities;
 
@@ -121,7 +125,7 @@ public class AdminPublishIdentityController {
         model.addAttribute("pendingSchedules", pending);
         // 🛡 只在真有排期时给链接：那一页由 13.5 交付，13.5 之前 pending 恒 0 ⇒ 不会渲染死链。
         model.addAttribute("scheduleListUrl",
-                pending > 0 ? SCHEDULE_LIST_PATH + "?authorId=" + userId : null);
+                pending > 0 ? SCHEDULE_LIST_PATH + "&authorId=" + userId : null);
         return "admin/publish-identity-confirm";
     }
 }
