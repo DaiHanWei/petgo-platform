@@ -94,11 +94,14 @@ public class MilestoneCheckInService {
             // 并发兜底（唯一约束）：已被另一请求完成。
             throw AppException.conflict("该里程碑已完成");
         }
+        // 刚打卡完成的这一条**必然未庆祝**（庆祝页还没弹）—— celebratedAt 恒为 null，
+        // 客户端据此把它计入本次要庆祝的集合（V1.3.0 Story 1.5）。
         return new MilestoneItemResponse(
                 milestone.getCode(), titleOf(milestone.getCode()),
                 milestone.getLevel().name(), milestone.getTriggerType().name(),
                 true, completions.findByPetMilestoneId(milestone.getId())
-                        .map(c -> c.getCompletedAt()).orElse(null));
+                        .map(c -> c.getCompletedAt()).orElse(null),
+                null);
     }
 
     private Set<Long> linkedContentIds(long petProfileId) {

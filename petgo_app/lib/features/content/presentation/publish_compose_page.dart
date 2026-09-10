@@ -22,6 +22,7 @@ import '../../profile/domain/milestone.dart';
 import '../../profile/domain/milestone_share.dart';
 import '../../profile/domain/milestone_titles.dart';
 import '../../profile/domain/pet_profile.dart';
+import '../../profile/data/milestone_celebration_reporter.dart';
 import '../../profile/presentation/widgets/milestone_celebration.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/dashed_rect.dart';
@@ -325,6 +326,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           context,
           done,
           petName: petName,
+          path: MilestoneCelebrationPath.instant,
           collection: collection,
           onShare: () => shareMilestoneWithLink(
             ref,
@@ -336,11 +338,18 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           ),
           // onSeeAll 省略：庆祝关闭后统一在下方先关 sheet 再跳列表（否则 sheet 挡住跳转）。
         );
+        // 回报本次庆祝（best-effort，不 await）——「去发布」也是一次真实庆祝，不报的话
+        // 这条会在下面跳到的列表页被当成"未庆祝"再弹一遍。
+        reportMilestoneCelebrated(ref, [done.code]);
         if (!mounted) return;
         // 里程碑路径：庆祝即成功反馈 → 关闭发布 sheet → 跳回里程碑列表（不叠加通用「发布成功」页）。
         Navigator.of(context).pop();
+        // 🔴 把「刚庆祝过」的 code 随导航带过去（AD-A2.3c）。上面那次回报是**异步**的，
+        //    列表页极可能在它落库前就读到 celebratedAt == null → 两秒内连弹两次同一条。
+        //    抑制必须落在客户端、**不依赖回报是否已落库**；也不得把回报改成同步来绕开
+        //    （那会让发布流程卡在一个可失败的写上）。
         // push 而非 go：保留发布前页作前驱，里程碑页 canPop→iOS 边缘侧滑可返回（修 20260701-190）。
-        router?.push(DeepLinkRoutes.milestoneList);
+        router?.push(DeepLinkRoutes.milestoneList, extra: <String>{done.code});
         return;
       }
       Navigator.of(context).pop(); // 关闭发布 sheet

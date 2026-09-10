@@ -363,6 +363,8 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             milestoneCompleted: stats?.milestoneCompleted,
             milestoneTotal: stats?.milestoneTotal,
             healthRecordCount: stats?.healthRecordCount,
+            // 未庆祝角标（V1.3.0 Story 1.5）：搭 stats 这一次请求，不为它多发一次。
+            milestoneUncelebrated: stats?.milestoneUncelebrated ?? 0,
             titleAction: _shareButton(),
             onEditProfile: widget.onEditProfile,
             onOpenIdCard: () => context.push('/profile/id-card'),

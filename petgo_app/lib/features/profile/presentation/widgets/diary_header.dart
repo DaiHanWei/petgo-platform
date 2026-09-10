@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/widgets/count_badge.dart';
 import '../../domain/pet_header_info.dart';
 import 'pet_info_card.dart';
 
@@ -33,6 +34,7 @@ class DiaryHeader extends StatelessWidget {
     this.consultCount,
     this.milestoneCompleted,
     this.milestoneTotal,
+    this.milestoneUncelebrated = 0,
     this.healthRecordCount,
     this.titleAction,
     this.onEditProfile,
@@ -61,6 +63,12 @@ class DiaryHeader extends StatelessWidget {
   /// 里程碑进度；任一为 null → 不渲染进度条（沿用现状：统计未就绪时该条不出现）。
   final int? milestoneCompleted;
   final int? milestoneTotal;
+
+  /// 「已完成且未庆祝」条目数（V1.3.0 Story 1.5 · AD-A2.2）：>0 时在里程碑进度卡右上角出红点。
+  ///
+  /// ⚠️ 档案 Tab **只显示角标、永不弹全屏庆祝**（AD-A2.1）—— 补弹只挂里程碑列表页。
+  /// 两处都弹的话，用户从这里点进列表页会被连弹两次。
+  final int milestoneUncelebrated;
 
   /// 结构化健康记录条数。为 0 时健康入口副文案改「还没有记录」（A4 近空态）；
   /// **null = 未知**（统计未就绪 / 游客示例态）→ 沿用固定副文案，不冒充空态。
@@ -246,7 +254,31 @@ class DiaryHeader extends StatelessWidget {
       );
 
   /// 里程碑进度卡（msbar）：「🏆 Pencapaian {name}」+ "X / N" 紫色 + 进度槽。
+  ///
+  /// V1.3.0 Story 1.5：有未庆祝条目时右上角挂一枚红色角标（复用通知铃铛那颗 [CountBadge]，
+  /// 不另画）。**卡片本身的布局与视觉一字不改** —— 角标由外层 Stack 叠上去，不挤占内容。
   Widget _milestoneBar(AppLocalizations l10n, int completed, int total) {
+    final bar = _milestoneBarCard(l10n, completed, total);
+    if (milestoneUncelebrated <= 0) {
+      return bar;
+    }
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        bar,
+        Positioned(
+          right: -4,
+          top: -4,
+          child: CountBadge(
+            key: const ValueKey('milestoneUncelebratedBadge'),
+            count: milestoneUncelebrated,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _milestoneBarCard(AppLocalizations l10n, int completed, int total) {
     final ratio = total == 0 ? 0.0 : completed / total;
     return GestureDetector(
       key: const ValueKey('archiveMilestoneBar'),

@@ -215,6 +215,11 @@ class ApiPaths {
   static String petProfileMilestoneCheckIn(String code) =>
       '$base/pet-profiles/me/milestones/$code/check-in';
 
+  /// 庆祝回报（V1.3.0 Story 1.5 · FR-111）：POST `{codes: [...]}`，服务端按列表幂等置位
+  /// `celebrated_at`。best-effort —— 失败静默，代价只是下次进列表页再补弹一次。
+  static const String petProfileMilestoneCelebrations =
+      '$base/pet-profiles/me/milestones/celebrations';
+
   /// P-35 里程碑庆祝对外分享：创建 / 刷新分享，返回不可枚举 shareToken（H5 `GET /m/{token}`）。
   static String petProfileMilestoneShares(String code) =>
       '$base/pet-profiles/me/milestones/$code/shares';

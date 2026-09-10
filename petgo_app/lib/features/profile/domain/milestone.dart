@@ -42,6 +42,7 @@ class MilestoneItem {
     required this.trigger,
     required this.completed,
     this.completedAt,
+    this.celebratedAt,
   });
 
   final String code;
@@ -51,12 +52,24 @@ class MilestoneItem {
   final bool completed;
   final DateTime? completedAt;
 
+  /// 庆祝页展示过的时刻（V1.3.0 Story 1.5 · FR-111）。线上字段缺失即为 null。
+  final DateTime? celebratedAt;
+
+  /// 「已完成但从未庆祝过」—— **补庆祝的全链路唯一判据**（AD-A1.3）。
+  ///
+  /// ⚠️ 不得在客户端另立本地标记来代替它：本地标记换台设备就失效，而且与服务端的
+  /// `celebrated_at` 迟早对不上（回报失败、多端同时看，都会让两者分叉）。
+  bool get isUncelebrated => completed && celebratedAt == null;
+
   factory MilestoneItem.fromJson(Map<String, dynamic> json) => MilestoneItem(
         code: json['code'] as String,
         title: json['title'] as String,
         level: MilestoneLevel.fromWire(json['level'] as String),
         trigger: MilestoneTrigger.fromWire(json['triggerType'] as String),
         completed: (json['completed'] ?? false) as bool,
+        celebratedAt: json['celebratedAt'] == null
+            ? null
+            : DateTime.parse(json['celebratedAt'] as String),
         completedAt: json['completedAt'] == null
             ? null
             : DateTime.parse(json['completedAt'] as String),

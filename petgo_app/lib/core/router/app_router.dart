@@ -969,7 +969,15 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       // 里程碑列表页（壳）（Story 6.1 · FR-42）：MILESTONE_NODE 深链承接；本体属里程碑 mini-epic。受控（/profile/ 前缀）。
-      GoRoute(path: '/profile/milestones', builder: (c, s) => const MilestoneListPage()),
+      // extra 可选携带「刚庆祝过的 code 集合」（V1.3.0 Story 1.5 · AD-A2.3c）：
+      // 「去发布」路径弹完庆祝就跳这里，而庆祝回报是异步的 —— 不带这份集合的话，
+      // 列表页会在回报落库前读到 celebratedAt == null，两秒内连弹两次同一条。
+      GoRoute(
+        path: '/profile/milestones',
+        builder: (c, s) => MilestoneListPage(
+          justCelebrated: s.extra is Set<String> ? s.extra! as Set<String> : const {},
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => AppShell(navigationShell: navigationShell),
         // 分支顺序 **按 AppTab.values 循环生成**（Story 1.1 · AD-3 AC2/AC3⑤）：

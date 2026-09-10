@@ -99,10 +99,16 @@ public class MilestoneService {
 
         Set<Long> completedMilestoneIds = new java.util.HashSet<>();
         Map<Long, java.time.Instant> completedAtById = new java.util.HashMap<>();
+        // V1.3.0 Story 1.5：庆祝时刻随列表下发，客户端据「completed && celebratedAt == null」
+        // 判定要不要补弹（AD-A1.3 唯一判据）。同一次查询里顺出，不多发一次请求。
+        Map<Long, java.time.Instant> celebratedAtById = new java.util.HashMap<>();
         for (MilestoneCompletion c : completions.findByPetMilestoneIdIn(
                 roster.stream().map(PetMilestone::getId).toList())) {
             completedMilestoneIds.add(c.getPetMilestoneId());
             completedAtById.put(c.getPetMilestoneId(), c.getCompletedAt());
+            if (c.getCelebratedAt() != null) {
+                celebratedAtById.put(c.getPetMilestoneId(), c.getCelebratedAt());
+            }
         }
 
         // 按级别分组（保持 sortOrder 顺序），再按 L/M/S 展示序拼装。
@@ -124,7 +130,8 @@ public class MilestoneService {
             }
             byLevel.get(m.getLevel()).add(new MilestoneItemResponse(
                     m.getCode(), title, m.getLevel().name(), m.getTriggerType().name(),
-                    completed, completed ? completedAtById.get(m.getId()) : null));
+                    completed, completed ? completedAtById.get(m.getId()) : null,
+                    completed ? celebratedAtById.get(m.getId()) : null));
         }
 
         List<MilestoneGroupResponse> groups = new ArrayList<>();

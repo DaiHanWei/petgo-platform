@@ -9,10 +9,13 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
+import '../data/milestone_celebration_reporter.dart';
 import '../data/milestone_repository.dart';
 import '../data/newbie_task_repository.dart';
+import '../data/timeline_repository.dart';
 import '../domain/milestone.dart';
 import '../domain/health_milestones.dart';
+import '../domain/milestone_catchup.dart';
 import '../domain/milestone_checkin_prompt_copy.dart';
 import '../domain/milestone_share.dart';
 import '../domain/milestone_titles.dart';
@@ -26,7 +29,14 @@ import 'widgets/milestone_celebration.dart';
 /// 承接 `MILESTONE_NODE` 推送深链（`/profile/milestones`）。三级庆祝动效在 8.5；
 /// 「已打卡」picker + 打卡 API、「去发布」预选成长日历的完成回填在 8.4。
 class MilestoneListPage extends ConsumerStatefulWidget {
-  const MilestoneListPage({super.key});
+  const MilestoneListPage({super.key, this.justCelebrated = const {}});
+
+  /// 本次导航内**刚庆祝过**的 code（V1.3.0 Story 1.5 · AD-A2.3c）。
+  ///
+  /// 🔴 「去发布」路径的时序是「发布成功 → 回填打卡 → 弹庆祝 → 关 sheet → 跳本页」，
+  /// 而庆祝回报是**异步**的 —— 本页极可能在回报落库前就读到 `celebratedAt == null`，
+  /// 于是两秒内连弹两次同一条。这份集合在补弹判定前先被扣除，**不依赖回报是否已落库**。
+  final Set<String> justCelebrated;
 
   @override
   ConsumerState<MilestoneListPage> createState() => _MilestoneListPageState();
@@ -34,6 +44,9 @@ class MilestoneListPage extends ConsumerStatefulWidget {
 
 class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
   bool _devShown = false;
+
+  /// 补弹只做一次：`build` 会因 provider 刷新反复跑，没有这道闸就会重复弹。
+  bool _catchupDone = false;
 
   /// 筛选（0711）：false=「Belum Semua Selesai」显示未全完成级别；true=「Semua Sudah Selesai」显示已全完成级别。
 
@@ -59,8 +72,68 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
           _ => MilestoneLevel.m,
         };
         showMilestoneCelebration(context, _devItem(level),
-            petName: data.petName, collection: [for (final g in data.groups) ...g.items]);
+            petName: data.petName,
+            path: MilestoneCelebrationPath.revisit, // debug 钩子，按"回看"计
+            collection: [for (final g in data.groups) ...g.items]);
       }
+    });
+  }
+
+  /// 补庆祝（V1.3.0 Story 1.5 · AC2/AC3 · AD-A2）：进本页时若有「已完成且未庆祝」的条目，
+  /// **自动弹一次**，取级别最高的一条，其余由 KOLEKSI 圆点带过。
+  ///
+  /// 三条不要改坏：
+  /// - **不按级别过滤，S 级也补**（AD-A2.4）：入口是用户主动点进来的，没有打扰问题；
+  /// - 回报**只报本次展示覆盖的那批 code**（AD-A2.3b），不是「所有未庆祝的」——
+  ///   否则会吞掉读取到回报之间新解锁的条目，让它永不补弹；
+  /// - 回报 **best-effort**：不 await 到阻塞 UI、失败静默（AD-A3.1）。
+  ///
+  /// 既有的即时庆祝路径与 500/800/1200ms 三次短轮询**全部保留** —— 补庆祝是兜底，不是替代。
+  void _maybeCatchUp(MilestoneList data) {
+    if (_catchupDone) return;
+    final catchup = resolveCatchup(
+      [for (final g in data.groups) ...g.items],
+      justCelebrated: widget.justCelebrated,
+    );
+    if (catchup.isEmpty) return;
+    _catchupDone = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final item = catchup.toCelebrate!;
+      final l10n = AppLocalizations.of(context);
+      final locale = Localizations.localeOf(context);
+      final collection = [for (final g in data.groups) ...g.items];
+      final shareText = l10n.milestoneShareText(localizedMilestoneTitle(item.code, locale));
+      // 先回报再展示还是先展示再回报？——**先展示**（AD-A3.1：展示成功后才回报）。
+      // 回报失败的代价只是下次再补弹一次，而「没弹却已置位」会让用户永远看不到这次庆祝。
+      await showMilestoneCelebration(
+        context,
+        item,
+        petName: data.petName,
+        path: MilestoneCelebrationPath.catchup,
+        collection: collection,
+        onShare: () => shareMilestoneWithLink(ref,
+            item: item,
+            locale: locale,
+            petName: data.petName,
+            shareText: shareText,
+            collection: collection),
+      );
+      _reportCelebrated(catchup.codesToReport);
+    });
+  }
+
+  /// 庆祝回报（AD-A3.1）：**best-effort** —— 异步发、失败静默、不重试到用户可感知。
+  ///
+  /// ⚠️ 刻意不 `await`、不弹错、不重试。失败的代价只是下次进本页再补弹一次，可接受；
+  /// **不得**为了「保证落库」把它改成同步 —— 那会让庆祝页（乃至发布流程）卡在一个可失败的写上。
+  /// 回报成功后刷新列表，让本页与档案 Tab 的角标口径立刻一致。
+  void _reportCelebrated(List<String> codes) {
+    reportMilestoneCelebrated(ref, codes, onDone: () {
+      if (!mounted) return;
+      // 回报落库后刷新，让本页与档案 Tab 的角标口径立刻一致。
+      ref.invalidate(milestoneListProvider);
+      ref.invalidate(archiveStatsProvider);
     });
   }
 
@@ -79,6 +152,7 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
     final l10n = AppLocalizations.of(context);
     final async = ref.watch(milestoneListProvider);
     async.whenData(_maybeDevShow);
+    async.whenData(_maybeCatchUp);
     return Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(
@@ -537,6 +611,9 @@ void _showCelebration(BuildContext context, WidgetRef ref, MilestoneItem item) {
     context,
     item,
     petName: petName,
+    // AC5 重温：正常展示庆祝，但**不改写 celebrated_at、不产生回报**（AD-A3.3）——
+    // 这里刻意没有 _reportCelebrated 调用。埋点仍上报（埋点与回报是两件事）。
+    path: MilestoneCelebrationPath.revisit,
     collection: collection,
     onShare: () => shareMilestoneWithLink(ref,
         item: item, locale: locale, petName: petName, shareText: shareText, collection: collection),
@@ -876,6 +953,7 @@ class _CandidateTile extends ConsumerWidget {
         context,
         completed,
         petName: petName,
+        path: MilestoneCelebrationPath.instant,
         collection: collection,
         onShare: () => shareMilestoneWithLink(ref,
             item: completed,
@@ -885,6 +963,8 @@ class _CandidateTile extends ConsumerWidget {
             collection: collection),
         onSeeAll: router == null ? null : () => router.go(DeepLinkRoutes.milestoneList),
       );
+      // 即时庆祝也要回报，否则这一条会在下次进列表页时被当成"未庆祝"再弹一遍（AD-A3.1）。
+      reportMilestoneCelebrated(ref, [completed.code]);
     } catch (_) {
       showAppToastOnOverlay(overlay, l10n.milestoneCheckinFailed);
     }

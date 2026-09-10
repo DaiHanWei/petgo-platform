@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../core/analytics/analytics.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/milestone.dart';
@@ -29,14 +30,42 @@ Future<void> _celebrationVibrate() async {
   }
 }
 
+/// 一次庆祝展示是由什么路径触发的（V1.3.0 Story 1.5 · AC6 · AD-A26.5）。
+///
+/// 埋点 `milestone_celebration_shown` 的 `path` 属性**值域就是这三个**，不多不少 ——
+/// 看板据此区分「当场庆祝的」「事后补的」「用户自己回头看的」。
+enum MilestoneCelebrationPath {
+  /// 打卡 / 存健康记录后当场弹（含 500/800/1200ms 三次短轮询拉到的）。
+  instant,
+
+  /// 进里程碑列表页时补弹（本 story 新增的兜底路径）。
+  catchup,
+
+  /// 用户点已完成徽章回头重温。**不改写 `celebrated_at`、不产生回报**（AD-A3.3），
+  /// 但仍上报埋点 —— 埋点与回报是两件事。
+  revisit;
+
+  String get wire => name;
+}
+
 Future<void> showMilestoneCelebration(
   BuildContext context,
   MilestoneItem item, {
   required String petName,
+  required MilestoneCelebrationPath path,
   FutureOr<void> Function()? onShare,
   VoidCallback? onSeeAll,
   List<MilestoneItem> collection = const [],
 }) {
+  // AC6：展示即上报，携带 code / level / path。
+  // ⚠️ 必须写成 `Analytics.capture(` 这个自限定形式 —— 埋点清单测试按该字面量对账。
+  // 两台设备同时补弹会各报一次（**接受双计**，AD-A26.5）；回报本身仍是幂等的。
+  // 属性里只有 code / level / path，**没有任何 PII**（NFR-5）。
+  Analytics.capture('milestone_celebration_shown', {
+    'code': item.code,
+    'level': item.level.name.toUpperCase(),
+    'path': path.wire,
+  });
   return showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,

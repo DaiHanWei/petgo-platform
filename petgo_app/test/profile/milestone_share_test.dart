@@ -30,6 +30,14 @@ class _FakeRepo implements MilestoneRepository {
     return token!;
   }
 
+  /// V1.3.0 Story 1.5 新增的回报通道；本类不验它，记下调用即可。
+  List<String>? lastReportedCelebrations;
+
+  @override
+  Future<void> reportCelebrations(List<String> codes) async {
+    lastReportedCelebrations = codes;
+  }
+
   @override
   Future<MilestoneList> getMilestones() => throw UnimplementedError();
   @override
