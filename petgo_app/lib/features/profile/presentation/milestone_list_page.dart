@@ -460,7 +460,7 @@ class _Badge extends ConsumerWidget {
     final completed = item.completed;
     return GestureDetector(
       key: ValueKey('milestoneBadge_${item.code}'),
-      // 已完成 → 重温 P-35 解锁庆祝；未完成健康类（疫苗 M3/驱虫 M4）→ 直跳健康记录页并预选类型
+      // 已完成 → 重温 P-35 解锁庆祝；未完成健康类 → 按 kHealthMilestoneDestinations 跳去处
       // （bug 20260729-406：下线旧三选项打卡浮层，里程碑数据源受健康记录约束）；
       // 其余未完成 → P-33b 详情底抽屉。
       onTap: () {
@@ -468,10 +468,17 @@ class _Badge extends ConsumerWidget {
           _showCelebration(context, ref, item);
           return;
         }
-        final healthPreset = healthPresetTypeFor(item.code);
-        if (healthPreset != null) {
-          GoRouter.of(context).push('/profile/health?add=$healthPreset');
-          return;
+        // 未完成健康类：一律有去处（AD-A6.5）。有记录类型可填的进健康记录页并预选，
+        // 没有的（第一次看兽医 M5 / G-M1）进真人兽医问诊入口 —— 不是 AI 分诊。
+        switch (healthDestinationFor(item.code)) {
+          case MilestoneDestination.healthRecord:
+            GoRouter.of(context).push('/profile/health?add=${healthPresetTypeFor(item.code)}');
+            return;
+          case MilestoneDestination.vetConsult:
+            GoRouter.of(context).push('/consult');
+            return;
+          case null:
+            break; // 非健康类 → 维持 P-33b 徽章详情底抽屉
         }
         _showBadgeSheet(context, ref, item);
       },
@@ -912,11 +919,58 @@ class _MilestoneError extends StatelessWidget {
   }
 }
 
-/// 健康类里程碑 → 健康记录预选类型（bug 20260729-406，纯函数 L0 可测）：
-/// 疫苗 `*-M3`→VACCINE、驱虫 `*-M4`→DEWORM（镜像后端 MilestoneAutoCompleteListener 映射）；
-/// 其余返回 null（维持 P-33b 徽章弹层）。
-String? healthPresetTypeFor(String code) {
-  if (code.endsWith('-M3')) return 'VACCINE';
-  if (code.endsWith('-M4')) return 'DEWORM';
-  return null;
+/// 未完成健康类灰徽章的**点击去向**（V1.3.0 Story 1.3 · AD-A6，纯函数 L0 可测）。
+///
+/// 🔴 **收口判据：任何一枚未完成的健康类灰徽章，点下去都必须有明确去处**（AD-A6.5）。
+/// 改造前 `M5`（第一次看兽医）与 `M9`（绝育）落到 null → 只弹一段只读说明、**没有任何去处**，
+/// 用户看完不知道该干什么。现在按完整 code 逐条列举，[kAutoOnlyHealthMilestoneCodes] 里
+/// 每一条都在本表里有值 —— 由测试钉住（AC5）。
+///
+/// 两类去向：
+/// - [MilestoneDestination.healthRecord]：有对应的健康记录类型可预选（疫苗 / 驱虫 / 绝育）；
+/// - [MilestoneDestination.vetConsult]：没有记录类型可填，只能真去看一次兽医
+///   （`*-M5` 与通用宠物的 `G-M1`，两者语义与触发源相同，去向必须一致 —— AD-A6.3）。
+///
+/// ⚠️ 去的是**真人兽医问诊入口**（`/consult`），**不是 AI 分诊**：AI 问诊不解锁这两条
+/// （同 FR-86 OQ-17 口径），把用户领到 AI 分诊等于带他去一个点不亮它的地方（AD-A6.6）。
+///
+/// ⚠️ 本表与 [kAutoOnlyHealthMilestoneCodes]（门控集合，决定出不出打卡按钮）**是两个用途**：
+/// 门控集合与后端逐字等长，本表覆盖同一批 code 但**去向可以不同**。不要合并。
+const Map<String, MilestoneDestination> kHealthMilestoneDestinations = {
+  // 猫狗：疫苗 / 驱虫 / 绝育都有对应的健康记录类型可预选。
+  'C-M3': MilestoneDestination.healthRecord, 'D-M3': MilestoneDestination.healthRecord,
+  'C-M4': MilestoneDestination.healthRecord, 'D-M4': MilestoneDestination.healthRecord,
+  'C-M9': MilestoneDestination.healthRecord, 'D-M9': MilestoneDestination.healthRecord,
+  // 「第一次看兽医」没有健康记录类型可填 → 去真人问诊入口。
+  'C-M5': MilestoneDestination.vetConsult, 'D-M5': MilestoneDestination.vetConsult,
+  // 通用宠物：G-M1 同上；G-M2「第一次健康检查 / 疫苗」只由 VACCINE 记录点亮（决策 A-1）。
+  'G-M1': MilestoneDestination.vetConsult,
+  'G-M2': MilestoneDestination.healthRecord,
+};
+
+/// 走健康记录页时预选的 `health_records.type`；[MilestoneDestination.vetConsult] 不需要。
+const Map<String, String> kHealthMilestonePresetTypes = {
+  'C-M3': 'VACCINE', 'D-M3': 'VACCINE', 'G-M2': 'VACCINE',
+  'C-M4': 'DEWORM', 'D-M4': 'DEWORM',
+  'C-M9': 'NEUTER', 'D-M9': 'NEUTER',
+};
+
+/// 未完成健康类灰徽章的去向；非健康类返回 null（维持 P-33b 徽章弹层）。
+MilestoneDestination? healthDestinationFor(String code) =>
+    kHealthMilestoneDestinations[code];
+
+/// 健康类里程碑 → 健康记录预选类型（bug 20260729-406）。
+///
+/// ⚠️ V1.3.0 Story 1.3 起**按完整 code 查表，不再用 `endsWith` 判后缀**：通用清单的
+/// `G-M3` 是「陪伴满 30 天」、`G-M4` 是「记录满 10 条」，跟健康毫无关系，按后缀判会把它们
+/// 一点就跳到健康记录页去录疫苗 / 驱虫 —— 用户完全摸不着头脑。
+String? healthPresetTypeFor(String code) => kHealthMilestonePresetTypes[code];
+
+/// 未完成健康类灰徽章点下去到哪（AD-A6）。
+enum MilestoneDestination {
+  /// 健康记录页，带 [kHealthMilestonePresetTypes] 里的预选类型。
+  healthRecord,
+
+  /// 真人兽医问诊入口（**不是** AI 分诊）。
+  vetConsult,
 }
