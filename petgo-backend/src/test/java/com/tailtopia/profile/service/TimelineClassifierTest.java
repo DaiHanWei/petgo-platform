@@ -192,9 +192,16 @@ class TimelineClassifierTest {
         assertThat(of(auto, TimelineItemType.MILESTONE_BANNER)).isNull();
     }
 
+    /**
+     * V1.3.0 Story 1.1 · AC6：健康类判定改按**完整 code**，猫狗不变、通用宠物纠偏。
+     *
+     * <p>🔴 原实现按后缀判，于是 {@code G-M3}「陪伴满 30 天」和 {@code G-M4}「记录满 10 条」
+     * 只因为撞上了猫狗的疫苗/驱虫号位，就被当成健康类 —— 通用宠物只要当天录了任一健康记录，
+     * 这两条 banner 就被静默吞掉。**这两条断言是本次修复的收口，别改回按后缀。**
+     */
     @Test
-    void ac4_healthMilestoneSuffixes_coverAllSeriesPrefixes() {
-        for (String prefix : List.of("C", "D", "G")) {
+    void ac4_healthMilestoneCodes_catAndDogUnchanged() {
+        for (String prefix : List.of("C", "D")) {
             assertThat(TimelineClassifier.isHealthMilestone(prefix + "-M3")).isTrue();
             assertThat(TimelineClassifier.isHealthMilestone(prefix + "-M4")).isTrue();
             assertThat(TimelineClassifier.isHealthMilestone(prefix + "-M5")).isTrue();
@@ -205,6 +212,18 @@ class TimelineClassifierTest {
             assertThat(TimelineClassifier.isHealthMilestone(prefix + "-S1")).isFalse();
         }
         assertThat(TimelineClassifier.isHealthMilestone(null)).isFalse();
+    }
+
+    @Test
+    void ac6_genericPetHealthClassification_isFixed() {
+        // 通用清单里这两条与健康毫无关系，不得再因后缀撞号被判为健康类。
+        assertThat(TimelineClassifier.isHealthMilestone("G-M3")).isFalse(); // 陪伴满 30 天
+        assertThat(TimelineClassifier.isHealthMilestone("G-M4")).isFalse(); // 记录满 10 条
+        // G-S4「第一次保存兽医问诊结论」三张清单位置一致，确为健康类，保持不变（AD-A4.5）。
+        assertThat(TimelineClassifier.isHealthMilestone("G-S4")).isTrue();
+        // 通用清单压根没有这两个 code，判 false 而不是靠后缀猜。
+        assertThat(TimelineClassifier.isHealthMilestone("G-M5")).isFalse();
+        assertThat(TimelineClassifier.isHealthMilestone("G-M9")).isFalse();
     }
 
     // ===== AC7 类④ 不加里程碑标记（OQ-14 本版本不做） =====

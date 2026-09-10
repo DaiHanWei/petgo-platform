@@ -1,5 +1,7 @@
 package com.tailtopia.profile.service;
 
+import com.tailtopia.profile.domain.MilestoneAutoCompleteMap;
+import com.tailtopia.profile.domain.MilestoneAutoEvent;
 import com.tailtopia.profile.domain.MilestoneCatalog;
 import com.tailtopia.profile.domain.MilestoneCompletion;
 import com.tailtopia.profile.domain.MilestoneCompletionSource;
@@ -26,8 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
  * 里程碑完成写入服务（Story 8.3，FR-42）。**幂等、不可撤销**：以 {@code milestone_completions}
  * 唯一约束（pet_milestone_id）为单一事实源——同一里程碑至多一条完成行，重复/并发安全。
  *
- * <p>清单按 pet_type 前缀解析（CAT→C / DOG→D / OTHER→G）：调用方传**语义后缀**（如 {@code "S1"}、
- * {@code "M10"}），本服务据档案类型拼出 code（{@code C-S1}）。该宠物清单无此节点（如 OTHER 无 S6）→ no-op。
+ * <p><b>寻址一律用完整 code</b>（V1.3.0 Story 1.1 · AD-A4）：自动完成的调用方传
+ * {@link MilestoneAutoEvent}，由 {@link MilestoneAutoCompleteMap} 按物种查出完整 code；打卡路径本就
+ * 持有完整 code，直接传入。**不再有「物种前缀 + 语义后缀」的拼接** —— 那套寻址默认三张清单同号位
+ * 含义相同，而通用清单只有 16 项、猫狗各 31 项，一次造出五处线上错误。该宠物清单无此节点 → no-op。
  *
  * <p>健康组合依赖（C-L4/D-L4 = M3+M4+M5）：每次完成后若该 code 是某 combo 前置，且前置全完成 →
  * 自动解锁 combo 节点（SYSTEM_AUTO）。供 8.3 事件订阅与 8.4 用户打卡共用。
@@ -56,32 +60,54 @@ public class MilestoneCompletionService {
         this.events = events;
     }
 
-    /** 按档案 owner + 语义后缀幂等完成（系统自动类无关联内容）。返回是否**新**完成。 */
+    /**
+     * 按档案 owner + **自动事件**幂等完成（系统自动类无关联内容）。返回是否**新**完成。
+     * 事件 → code 由 {@link MilestoneAutoCompleteMap} 按物种显式列举，该物种无对应节点 → no-op。
+     */
     @Transactional
-    public boolean completeForOwner(long ownerId, String suffix, MilestoneCompletionSource source) {
-        return completeForOwner(ownerId, suffix, source, null);
+    public boolean completeForOwner(long ownerId, MilestoneAutoEvent event,
+            MilestoneCompletionSource source) {
+        Optional<PetProfile> profile = profiles.findByOwnerId(ownerId);
+        if (profile.isEmpty()) {
+            return false;
+        }
+        PetProfile p = profile.get();
+        return complete(p.getId(), p.getPetType(), event, source, null);
     }
 
-    /** 按档案 owner + 语义后缀幂等完成，可带关联成长日历内容（用户打卡 8.4）。返回是否**新**完成。 */
+    /** 按档案 owner + **完整 code** 幂等完成，可带关联成长日历内容（用户打卡 8.4）。返回是否**新**完成。 */
     @Transactional
-    public boolean completeForOwner(long ownerId, String suffix, MilestoneCompletionSource source,
+    public boolean completeCodeForOwner(long ownerId, String code, MilestoneCompletionSource source,
             Long linkedContentId) {
         Optional<PetProfile> profile = profiles.findByOwnerId(ownerId);
         if (profile.isEmpty()) {
             return false;
         }
         PetProfile p = profile.get();
-        return complete(p.getId(), p.getPetType(), suffix, source, linkedContentId);
+        return complete(p.getId(), p.getPetType(), code, source, linkedContentId);
     }
 
-    /** 直接按 petProfileId + petType + 语义后缀完成（内部 / combo 复用）。 */
+    /** 直接按 petProfileId + petType + **自动事件**完成（定时扫描 / 内部复用）。 */
     @Transactional
-    public boolean complete(long petProfileId, PetType petType, String suffix,
+    public boolean complete(long petProfileId, PetType petType, MilestoneAutoEvent event,
             MilestoneCompletionSource source, Long linkedContentId) {
-        String code = prefixOf(petType) + "-" + suffix;
+        String code = MilestoneAutoCompleteMap.codeOf(petType, event);
+        if (code == null) {
+            return false; // 该物种清单无对应节点（显式声明，非遗漏）。
+        }
+        return complete(petProfileId, petType, code, source, linkedContentId);
+    }
+
+    /** 直接按 petProfileId + petType + **完整 code** 完成（内部 / combo 复用）。 */
+    @Transactional
+    public boolean complete(long petProfileId, PetType petType, String code,
+            MilestoneCompletionSource source, Long linkedContentId) {
         Optional<PetMilestone> row = milestones.findByPetProfileIdAndCode(petProfileId, code);
         if (row.isEmpty()) {
-            return false; // 该清单无此节点（如 OTHER 无 S6 洗澡）。
+            // roster 里没有这一行。正常情况下走不到：自动路径的 code 出自映射表、已被
+            // MilestoneAutoCompleteMapTest 逐条比对过该物种的清单；打卡路径在上游已查过 roster。
+            // 真走到这里说明 roster 与编译期目录走散了 —— 仍按 no-op 处理，不抛。
+            return false;
         }
         PetMilestone m = row.get();
         if (completions.existsByPetMilestoneId(m.getId())) {
@@ -101,7 +127,7 @@ public class MilestoneCompletionService {
                 def != null ? def.titleZh() : code, source));
         maybeUnlockHealthCombo(petProfileId, petType, code);
         // Lulus Pemula 聚合（7.3）：S1–S5 任一新完成后，若 6 新手任务全达成则解锁。
-        if (MilestoneCatalog.NEWBIE_PREREQ_SUFFIXES.contains(suffix)) {
+        if (MilestoneCatalog.isNewbiePrereq(code)) {
             checkAndUnlockLulusPemula(petProfileId, petType);
         }
         return true;
@@ -123,9 +149,9 @@ public class MilestoneCompletionService {
      * 未全达成 → no-op。第 6 任务（健康记录）非里程碑节点，故内联存在性判定（不入 combo map）。
      */
     private void checkAndUnlockLulusPemula(long petProfileId, PetType petType) {
-        boolean allMilestonePrereqs = MilestoneCatalog.NEWBIE_PREREQ_SUFFIXES.stream()
-                .allMatch(suffix -> milestones
-                        .findByPetProfileIdAndCode(petProfileId, prefixOf(petType) + "-" + suffix)
+        boolean allMilestonePrereqs = MilestoneCatalog.newbiePrereqCodes(petType).stream()
+                .allMatch(code -> milestones
+                        .findByPetProfileIdAndCode(petProfileId, code)
                         .map(pm -> completions.existsByPetMilestoneId(pm.getId()))
                         .orElse(false));
         if (!allMilestonePrereqs) {
@@ -134,24 +160,30 @@ public class MilestoneCompletionService {
         if (!healthRecords.existsByPetProfileId(petProfileId)) {
             return;
         }
-        complete(petProfileId, petType, suffixOf(MilestoneCatalog.lulusPemulaCode(petType)),
+        complete(petProfileId, petType, MilestoneCatalog.lulusPemulaCode(petType),
                 MilestoneCompletionSource.SYSTEM_AUTO, null);
     }
 
     /**
-     * 计数类自动完成（成长日历记录数阈值）：首张照片 S2（≥1）、满 10 条 M10、满 30 条 L5。
+     * 计数类自动完成（成长日历记录数阈值）：首张照片（≥1）、满 10 条、满 30 条。
      * 由发布成长日历事件触发，传入该宠物当前成长日历总数。
+     *
+     * <p>⚠️ 满 10 条对通用宠物是 <b>G-M4</b>（不是 M10 —— 通用清单没有 M10，旧寻址指空，
+     * 这条合法路径从上线至今是死的）；满 30 条通用清单无节点。映射见 {@link MilestoneAutoCompleteMap}。
      */
     @Transactional
     public void onGrowthMomentCount(long ownerId, long growthMomentCount) {
         if (growthMomentCount >= 1) {
-            completeForOwner(ownerId, "S2", MilestoneCompletionSource.SYSTEM_AUTO);
+            completeForOwner(ownerId, MilestoneAutoEvent.GROWTH_MOMENT_FIRST,
+                    MilestoneCompletionSource.SYSTEM_AUTO);
         }
         if (growthMomentCount >= 10) {
-            completeForOwner(ownerId, "M10", MilestoneCompletionSource.SYSTEM_AUTO);
+            completeForOwner(ownerId, MilestoneAutoEvent.GROWTH_MOMENT_10,
+                    MilestoneCompletionSource.SYSTEM_AUTO);
         }
         if (growthMomentCount >= 30) {
-            completeForOwner(ownerId, "L5", MilestoneCompletionSource.SYSTEM_AUTO);
+            completeForOwner(ownerId, MilestoneAutoEvent.GROWTH_MOMENT_30,
+                    MilestoneCompletionSource.SYSTEM_AUTO);
         }
     }
 
@@ -170,16 +202,19 @@ public class MilestoneCompletionService {
         java.time.LocalDate birthday = p.getBirthday();
         if (birthday != null && birthday.getMonthValue() == today.getMonthValue()
                 && birthday.getDayOfMonth() == today.getDayOfMonth()) {
-            completeForOwner(ownerId, "L1", MilestoneCompletionSource.PUBLISH);
+            completeForOwner(ownerId, MilestoneAutoEvent.FIRST_BIRTHDAY,
+                    MilestoneCompletionSource.PUBLISH);
         }
         if (p.getCreatedAt() != null) {
             long days = java.time.temporal.ChronoUnit.DAYS.between(
                     p.getCreatedAt().atZone(java.time.ZoneOffset.UTC).toLocalDate(), today);
             if (days >= 100) {
-                completeForOwner(ownerId, "L2", MilestoneCompletionSource.PUBLISH);
+                completeForOwner(ownerId, MilestoneAutoEvent.COMPANION_100_DAYS,
+                        MilestoneCompletionSource.PUBLISH);
             }
             if (days >= 365) {
-                completeForOwner(ownerId, "L3", MilestoneCompletionSource.PUBLISH);
+                completeForOwner(ownerId, MilestoneAutoEvent.COMPANION_365_DAYS,
+                        MilestoneCompletionSource.PUBLISH);
             }
         }
     }
@@ -197,7 +232,7 @@ public class MilestoneCompletionService {
                     .map(pm -> completions.existsByPetMilestoneId(pm.getId()))
                     .orElse(false));
             if (allDone) {
-                complete(petProfileId, petType, suffixOf(comboCode),
+                complete(petProfileId, petType, comboCode,
                         MilestoneCompletionSource.SYSTEM_AUTO, null);
             }
         }
@@ -208,18 +243,7 @@ public class MilestoneCompletionService {
         return profiles.findById(petProfileId).map(PetProfile::getOwnerId).orElse(0L);
     }
 
-    /** pet_type → 清单 code 前缀（CAT→C / DOG→D / OTHER→G）。 */
-    private static String prefixOf(PetType type) {
-        return switch (type) {
-            case CAT -> "C";
-            case DOG -> "D";
-            case OTHER -> "G";
-        };
-    }
-
-    /** code（C-S1）→ 语义后缀（S1）。 */
-    private static String suffixOf(String code) {
-        int dash = code.indexOf('-');
-        return dash >= 0 ? code.substring(dash + 1) : code;
-    }
+    // ⚠️ 这里曾有 prefixOf(PetType) / suffixOf(String) 两个辅助方法，AD-A4 已把它们连根拔掉：
+    // 「物种前缀 + 语义后缀」拼 code 正是五处线上错位的根因。需要 code 就查
+    // MilestoneAutoCompleteMap（自动事件）或由调用方直接传完整 code，**不要把它们加回来**。
 }

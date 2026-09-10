@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import com.tailtopia.consult.event.ConsultClosedEvent;
 import com.tailtopia.profile.domain.HealthMilestones;
 import com.tailtopia.profile.domain.HealthRecordType;
+import com.tailtopia.profile.domain.MilestoneAutoEvent;
 import com.tailtopia.profile.domain.MilestoneCompletionSource;
 import com.tailtopia.profile.event.HealthRecordCreatedEvent;
 import java.lang.reflect.Method;
@@ -45,7 +46,8 @@ class HealthMilestoneAutoPathTest {
     void neuterRecordCompletesM9() {
         listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.NEUTER));
 
-        verify(completion).completeForOwner(7L, "M9", MilestoneCompletionSource.SYSTEM_AUTO);
+        verify(completion).completeForOwner(7L, MilestoneAutoEvent.HEALTH_RECORD_NEUTER,
+                MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     @Test
@@ -53,8 +55,10 @@ class HealthMilestoneAutoPathTest {
         listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.VACCINE));
         listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.DEWORM));
 
-        verify(completion).completeForOwner(7L, "M3", MilestoneCompletionSource.SYSTEM_AUTO);
-        verify(completion).completeForOwner(7L, "M4", MilestoneCompletionSource.SYSTEM_AUTO);
+        verify(completion).completeForOwner(7L, MilestoneAutoEvent.HEALTH_RECORD_VACCINE,
+                MilestoneCompletionSource.SYSTEM_AUTO);
+        verify(completion).completeForOwner(7L, MilestoneAutoEvent.HEALTH_RECORD_DEWORM,
+                MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     @Test
@@ -64,10 +68,14 @@ class HealthMilestoneAutoPathTest {
         listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.CUSTOM));
 
         // PRD 明确：这两类无对应里程碑节点 —— 只应触发「Lulus Pemula」聚合尝试，不完成任何里程碑。
-        verify(completion, never()).completeForOwner(anyLong(), eq("M3"), Mockito.any());
-        verify(completion, never()).completeForOwner(anyLong(), eq("M4"), Mockito.any());
-        verify(completion, never()).completeForOwner(anyLong(), eq("M9"), Mockito.any());
-        verify(completion, never()).completeForOwner(anyLong(), eq("M5"), Mockito.any());
+        verify(completion, never()).completeForOwner(
+                anyLong(), eq(MilestoneAutoEvent.HEALTH_RECORD_VACCINE), Mockito.any());
+        verify(completion, never()).completeForOwner(
+                anyLong(), eq(MilestoneAutoEvent.HEALTH_RECORD_DEWORM), Mockito.any());
+        verify(completion, never()).completeForOwner(
+                anyLong(), eq(MilestoneAutoEvent.HEALTH_RECORD_NEUTER), Mockito.any());
+        verify(completion, never()).completeForOwner(
+                anyLong(), eq(MilestoneAutoEvent.CONSULT_CLOSED), Mockito.any());
     }
 
     // ===== AC2 M5：真人兽医咨询结束 =====
@@ -77,7 +85,8 @@ class HealthMilestoneAutoPathTest {
         listener.onConsultClosed(new ConsultClosedEvent(1L, 7L, 42L, 9L, "im-1", List.of(), true,
                 LocalDate.of(2026, 8, 4), "摘要", "GREEN", "建议"));
 
-        verify(completion).completeForOwner(7L, "M5", MilestoneCompletionSource.SYSTEM_AUTO);
+        verify(completion).completeForOwner(7L, MilestoneAutoEvent.CONSULT_CLOSED,
+                MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     @Test

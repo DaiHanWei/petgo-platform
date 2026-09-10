@@ -41,15 +41,28 @@ class MilestoneAnalyticsTest {
     class PathMapping {
 
         @Test
-        @DisplayName("健康类：M5 → consult；M3/M4/M9 → health_record")
+        @DisplayName("健康类：问诊点亮的 → consult；疫苗/驱虫/绝育 → health_record")
         void healthMilestonesMapToTheirTrigger() {
             assertThat(MilestoneAnalyticsPath.of("C-M5", MilestoneCompletionSource.SYSTEM_AUTO))
                     .isEqualTo("consult");
-            for (String code : List.of("C-M3", "D-M4", "G-M9")) {
+            for (String code : List.of("C-M3", "D-M4", "D-M9")) {
                 assertThat(MilestoneAnalyticsPath.of(code, MilestoneCompletionSource.SYSTEM_AUTO))
                         .as("%s 由健康记录触发", code)
                         .isEqualTo("health_record");
             }
+        }
+
+        /**
+         * V1.3.0 Story 1.1 · AC6：「第一次看兽医」在通用清单是 <b>G-M1</b>，不是 M5。
+         *
+         * <p>按后缀判时 G-M1 命中不了 consult，等 Story 1.2 把它纳入健康类集合，就会落进
+         * else 被标成 {@code health_record} —— 而它根本不是健康记录点亮的。这条断言把口径提前钉死。
+         */
+        @Test
+        @DisplayName("通用宠物：G-M1 走 consult，不得被误标为 health_record")
+        void genericPetVetVisitMapsToConsult() {
+            assertThat(MilestoneAnalyticsPath.of("G-M1", MilestoneCompletionSource.SYSTEM_AUTO))
+                    .isEqualTo("consult");
         }
 
         @Test

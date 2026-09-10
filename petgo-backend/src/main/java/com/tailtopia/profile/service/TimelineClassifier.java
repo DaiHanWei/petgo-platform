@@ -36,7 +36,7 @@ import java.util.Set;
  * <p><b>抑制范围只限健康类里程碑</b>（本 Story 的实现判断，记录在案）：PRD 原文是「**由这些记录触发完成的**
  * 里程碑不再单独生成时间线条目」。若把「当天有健康记录」无差别地用于所有里程碑，那么某天正好录了疫苗，
  * 当天的「100 天纪念」banner 会被一起吃掉 —— 明显不是意图。因此仅对**健康类**里程碑
- * （见 {@link #HEALTH_MILESTONE_SUFFIXES}）做「当天有健康条目即让胶囊承载」的抑制。
+ * （见 {@link #HEALTH_MILESTONE_CODES}）做「当天有健康条目即让胶囊承载」的抑制。
  */
 public final class TimelineClassifier {
 
@@ -44,12 +44,28 @@ public final class TimelineClassifier {
     }
 
     /**
-     * 健康类里程碑的 code 后缀（含猫 C / 狗 D / 通用 G 三系）：
-     * M3 疫苗 · M4 驱虫 · M5 第一次看兽医 · M9 绝育 · S4 第一次保存兽医问诊结论。
+     * 健康类里程碑的**完整 code**（V1.3.0 Story 1.1 · AD-A4.5 改：原为后缀集合）。
      *
-     * <p>只有这五类会被「当天已有健康条目」抑制（由类④ 胶囊承载）；其余里程碑照常出 banner。
+     * <p>只有这些会被「当天已有健康条目」抑制（由类④ 胶囊承载）；其余里程碑照常出 banner。
+     *
+     * <p>🔴 <b>为什么必须按完整 code 而不是后缀</b>：后缀 {@code M3}/{@code M4} 在猫狗清单上是
+     * 疫苗 / 驱虫（确为健康类），在**通用清单**上却是 <b>G-M3「陪伴满 30 天」</b>与
+     * <b>G-M4「记录满 10 条」</b>——跟健康毫无关系。按后缀判，通用宠物在录了健康记录的当天，
+     * 「陪伴满 30 天」和「记录满 10 条」的 banner 会被静默吞掉。
+     *
+     * <p>{@code S4}「第一次保存兽医问诊结论」三张清单位置一致，通用宠物 {@code G-S4} 确为健康类，
+     * <b>保留</b>（AD-A4.5 明示）。
+     *
+     * <p>⚠️ 本集合是 AD-A4.6 的第 ③ 份，与后端「哪些是健康类」（{@code HealthMilestones}，第 ①
+     * 份、唯一事实源）**用途不同**：① 管「禁止打卡」，本集合管「时间线展示抑制」，所以本集合多含
+     * {@code S4}。两者刻意分开，不要合并，但增减健康节点时要一起过一遍。
      */
-    static final Set<String> HEALTH_MILESTONE_SUFFIXES = Set.of("M3", "M4", "M5", "M9", "S4");
+    static final Set<String> HEALTH_MILESTONE_CODES = Set.of(
+            "C-M3", "C-M4", "C-M5", "C-M9", "C-S4",
+            "D-M3", "D-M4", "D-M5", "D-M9", "D-S4",
+            // 通用清单目前只有 G-S4 属健康类：G-M1「第一次看兽医」/ G-M2「第一次健康检查」当前仍是
+            // 打卡类，改自动达成属 Story 1.2，届时随第 ① 份集合一并纳入这里。
+            "G-S4");
 
     /**
      * 分类并归并成一份条目列表（未排序，排序由调用方按全局序统一处理）。
@@ -126,14 +142,9 @@ public final class TimelineClassifier {
         return out;
     }
 
-    /** code 形如 {@code C-M3} / {@code D-S4} / {@code G-M9}：取「-」后的后缀判定是否健康类。 */
+    /** 是否健康类里程碑：按**完整 code** 查表，不做任何前缀/后缀拆解（AD-A4）。 */
     static boolean isHealthMilestone(String code) {
-        if (code == null) {
-            return false;
-        }
-        int dash = code.lastIndexOf('-');
-        String suffix = dash >= 0 ? code.substring(dash + 1) : code;
-        return HEALTH_MILESTONE_SUFFIXES.contains(suffix);
+        return code != null && HEALTH_MILESTONE_CODES.contains(code);
     }
 
     /**

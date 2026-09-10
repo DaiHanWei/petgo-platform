@@ -91,7 +91,8 @@ class MilestoneCheckInServiceTest {
         when(completions.existsByPetMilestoneId(5L)).thenReturn(false);
         when(contentService.isOwnGrowthMoment(7L, 99L)).thenReturn(true);
         when(completions.existsByLinkedContentId(99L)).thenReturn(false);
-        when(completionService.completeForOwner(7L, "S6", MilestoneCompletionSource.USER_CHECKIN, 99L))
+        when(completionService.completeCodeForOwner(
+                7L, "C-S6", MilestoneCompletionSource.USER_CHECKIN, 99L))
                 .thenReturn(true);
         when(completions.findByPetMilestoneId(5L)).thenReturn(
                 Optional.of(MilestoneCompletion.of(5L, MilestoneCompletionSource.USER_CHECKIN, 99L)));
