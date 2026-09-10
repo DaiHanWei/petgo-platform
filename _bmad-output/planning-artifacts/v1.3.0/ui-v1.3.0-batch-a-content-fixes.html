@@ -1,0 +1,1024 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>TailTopia V1.3.0 批次A — 内容体验修复包 · 第二步结构稿</title>
+<style>
+
+:root{
+  --page-bg:#FAF9FC; --page-bg-2:#F1EEF7; --page-ink:#211F2E; --page-ink-2:#57536B;
+  --page-muted:#8E89A3; --page-rule:#E4E0EE; --page-accent:#7D45F6; --page-accent-soft:#EFE6FF;
+  --lane-p:#845EC9; --lane-m:#D1477A; --lane-d:#3D8BD1; --lane-c:#1F9E6A; --lane-l:#C77B1F; --lane-u:#3D8BD1;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --page-bg:#15131C; --page-bg-2:#1D1A26; --page-ink:#EDEBF5; --page-ink-2:#B3AEC6; --page-muted:#837E99; --page-rule:#2C2838; --page-accent:#A98BFA; --page-accent-soft:#2C2444; }
+}
+:root[data-theme="dark"]{ --page-bg:#15131C; --page-bg-2:#1D1A26; --page-ink:#EDEBF5; --page-ink-2:#B3AEC6; --page-muted:#837E99; --page-rule:#2C2838; --page-accent:#A98BFA; --page-accent-soft:#2C2444; }
+:root[data-theme="light"]{ --page-bg:#FAF9FC; --page-bg-2:#F1EEF7; --page-ink:#211F2E; --page-ink-2:#57536B; --page-muted:#8E89A3; --page-rule:#E4E0EE; --page-accent:#7D45F6; --page-accent-soft:#EFE6FF; }
+
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; background:var(--page-bg); }
+body{ color:var(--page-ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; line-height:1.5; -webkit-font-smoothing:antialiased; }
+h1,h2,h3{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; font-weight:600; text-wrap:balance; margin:0; }
+.wrap{ max-width:1440px; margin:0 auto; padding:0 28px 140px; }
+
+.doc-header{ padding:56px 0 28px; border-bottom:1px solid var(--page-rule); margin-bottom:28px; }
+.eyebrow{ display:inline-flex; align-items:center; gap:8px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--page-accent); font-weight:600; margin:0 0 12px; }
+.eyebrow::before{ content:""; width:16px; height:1.5px; background:var(--page-accent); display:inline-block; }
+.doc-header h1{ font-size:25px; margin:0; }
+.doc-sub{ max-width:82ch; color:var(--page-ink-2); font-size:14.5px; margin:14px 0 0; }
+.stage-tag{ display:inline-block; font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:6px; background:var(--page-accent-soft); color:var(--page-accent); margin-right:8px; }
+
+.checklist{ margin:22px 0 0; border:1px solid var(--page-rule); border-radius:12px; overflow:hidden; }
+.checklist table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+.checklist th{ text-align:left; background:var(--page-bg-2); padding:9px 12px; font-weight:650; border-bottom:1px solid var(--page-rule); }
+.checklist td{ padding:8px 12px; border-bottom:1px solid var(--page-rule); vertical-align:top; color:var(--page-ink-2); }
+.checklist tr:last-child td{ border-bottom:none; }
+.checklist td b{ color:var(--page-ink); }
+.checklist .lane-p{ color:var(--lane-p); font-weight:700; } .checklist .lane-m{ color:var(--lane-m); font-weight:700; }
+.checklist .lane-d{ color:var(--lane-d); font-weight:700; } .checklist .lane-c{ color:var(--lane-c); font-weight:700; }
+.checklist .lane-l{ color:var(--lane-l); font-weight:700; } .checklist .lane-u{ color:var(--lane-u); font-weight:700; }
+
+.jumpnav{ position:sticky; top:0; z-index:30; display:flex; gap:4px; flex-wrap:wrap; padding:10px 0; margin:20px 0 4px; background:color-mix(in srgb, var(--page-bg) 90%, transparent); backdrop-filter:blur(6px); border-bottom:1px solid var(--page-rule); }
+.jumpnav a{ font-size:12px; font-weight:600; color:var(--page-ink-2); text-decoration:none; padding:6px 10px; border-radius:7px; }
+.jumpnav a:hover{ background:var(--page-accent-soft); color:var(--page-accent); }
+
+.lane{ margin:44px 0 8px; }
+.lane-title{ display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+.lane-dot{ width:9px; height:9px; border-radius:50%; }
+.lane-title h2{ font-size:19px; margin:0; }
+.lane-fr{ font-size:11.5px; font-weight:700; color:#fff; background:var(--page-muted); padding:2px 9px; border-radius:999px; }
+.lane-desc{ color:var(--page-ink-2); font-size:13px; margin:4px 0 20px; max-width:82ch; }
+
+/* 流程条 */
+.flow{display:flex; flex-wrap:wrap; align-items:center; gap:7px; font-size:12.5px;
+  color:var(--page-ink-2); line-height:1.9; margin:0 0 22px; padding:12px 16px;
+  background:#fff; border:1px solid var(--page-rule); border-radius:10px;}
+.flow s{text-decoration:none; font-weight:600; color:var(--page-accent);
+  background:var(--page-accent-soft); border-radius:6px; padding:2px 8px;}
+.flow i{font-style:normal; color:var(--page-muted);}
+.flow em{font-style:normal; color:var(--page-ink); font-weight:600;}
+.flow .nl{flex-basis:100%; height:0;}
+@media (prefers-color-scheme: dark){ .flow{ background:var(--page-bg-2); } }
+:root[data-theme="dark"] .flow{ background:var(--page-bg-2); }
+
+/* 一行 3 屏 */
+.frames{display:grid; grid-template-columns:repeat(3, 384px); gap:40px 34px;
+  justify-content:start; padding:8px 4px 26px;}
+.frame-card{ display:flex; flex-direction:column; align-items:center; gap:10px; width:384px; }
+.frame-tag{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; font-size:12.5px; font-weight:600; color:var(--page-accent); border:1px solid var(--page-accent); border-radius:999px; padding:3px 12px; text-align:center; }
+.frame-cap{ font-size:12px; color:var(--page-ink-2); text-align:left; align-self:stretch; }
+.frame-cap b{ color:var(--page-ink); }
+.variant-flag{ display:inline-block; font-size:10.5px; font-weight:700; color:#8A5A00; background:#FEF3DE; padding:1px 7px; border-radius:5px; margin-right:5px; }
+@media (prefers-color-scheme: dark){ .variant-flag{ background:#3a2a10; color:#e8b862; } }
+
+.phone-shell-empty{ width:384px; height:812px; border-radius:42px; border:2px dashed var(--page-rule); background:var(--page-bg-2); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.phone-empty-label{ text-align:center; padding:0 30px; }
+.phone-empty-id{ font-size:22px; font-weight:700; color:var(--page-accent); font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; }
+.phone-empty-name{ font-size:13.5px; color:var(--page-ink-2); margin-top:8px; line-height:1.5; }
+
+/* ============================================================
+   真实页面容器（第二步起使用）——取值来自 petgo-platform stag 分支
+   core/theme/colors.dart 真实 token（AppColors.mint 命名沿用但实际是紫 #845EC9）
+   ============================================================ */
+:root{
+  --tt-mint:#845EC9; --tt-mint600:#6C48AE; --tt-minttint:#F8F2FF;
+  --tt-cream:#FFFFFF; --tt-cream2:#F8F2FF; --tt-ink:#2E2A45; --tt-ink2:#544864;
+  --tt-muted:#9690A6; --tt-line:#E6E6E6; --tt-line2:#F0F0F0;
+  --tt-coral:#F0425A; --tt-coral-soft:#FDE7EB; --tt-gold:#F6A609; --tt-green:#1F9E6A; --tt-danger:#E5604D;
+  --tt-dashed:#C2B0EC;
+}
+.phone-shell{ width:384px; height:812px; border-radius:42px; background:var(--tt-cream); flex-shrink:0;
+  font-family:'Poppins',sans-serif; color:var(--tt-ink); overflow:hidden; position:relative; z-index:0; box-shadow:0 18px 40px -14px rgba(30,20,60,.28), 0 0 0 1px rgba(30,20,60,.06); }
+.phone-shell.on-cream2{ background:var(--tt-cream2); }
+.phone-shell.on-black{ background:#000; }
+.tt-status{ height:30px; display:flex; align-items:center; justify-content:space-between; padding:0 20px;
+  font-size:11px; font-weight:600; color:var(--tt-ink); flex-shrink:0; }
+.tt-status.on-dark{ color:#fff; }
+.tt-appbar{ height:44px; display:flex; align-items:center; padding:0 14px; gap:10px; flex-shrink:0; background:var(--tt-cream); }
+.tt-appbar .t{ font-size:16px; font-weight:700; color:var(--tt-ink); flex:1; }
+.tt-appbar .ic{ width:22px; height:22px; display:flex; align-items:center; justify-content:center; color:var(--tt-ink); font-size:18px; }
+.tt-scroll{ position:absolute; top:74px; left:0; right:0; bottom:0; overflow:hidden; padding:14px 16px; }
+.tt-scroll.no-appbar{ top:30px; }
+.tt-scroll.no-status{ top:0; }
+.tt-card{ background:var(--tt-cream); border-radius:14px; box-shadow:0 2px 8px rgba(43,42,39,.05); }
+.tt-shadow-sm{ box-shadow:0 2px 8px rgba(22,34,51,.07); }
+.tt-ibtn{ width:38px; height:38px; border-radius:11px; background:var(--tt-cream); display:flex; align-items:center; justify-content:center;
+  box-shadow:0 2px 8px rgba(22,34,51,.07); font-size:16px; color:var(--tt-ink2); flex-shrink:0; }
+.tt-fixed-bottom{ position:absolute; left:0; right:0; bottom:0; background:var(--tt-cream); border-top:1px solid var(--tt-line); padding:10px 16px; }
+.tt-btn-primary{ height:46px; border-radius:12px; background:var(--tt-mint); color:#fff; display:flex; align-items:center; justify-content:center;
+  font-size:14.5px; font-weight:700; }
+.origin-note{ font-size:11px; color:var(--page-muted); background:var(--page-bg-2); border:1px dashed var(--page-rule);
+  border-radius:8px; padding:6px 9px; margin-top:6px; line-height:1.5; }
+.origin-note b{ color:var(--page-ink-2); }
+.new-note{ font-size:11px; color:#6C48AE; background:var(--page-accent-soft); border:1px dashed var(--page-accent);
+  border-radius:8px; padding:6px 9px; margin-top:6px; line-height:1.5; }
+
+/* 规格图（对照图）容器：允许框内出现说明性标注，与 phone-shell 严格区分 */
+.spec-shell{ width:384px; min-height:812px; border-radius:16px; border:1.5px dashed var(--page-rule);
+  background:var(--page-bg-2); flex-shrink:0; padding:20px; }
+.spec-shell h4{ font-size:12.5px; font-weight:700; color:var(--page-ink); margin:0 0 4px; }
+.spec-row{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px dashed var(--page-rule); }
+.spec-row:last-child{ border-bottom:none; }
+.spec-tag{ font-size:10px; font-weight:700; padding:2px 7px; border-radius:5px; }
+.spec-tag.now{ background:#FEE9EA; color:#B23A45; }
+.spec-tag.new{ background:var(--page-accent-soft); color:var(--page-accent); }
+
+
+.icn{ display:inline-flex; }
+svg{ display:block; }
+.img-ph{ position:relative; display:flex; align-items:center; justify-content:center; color:var(--tt-muted); }
+.img-ph svg{ opacity:.32; }
+.tt-num{ font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<svg style="display:none" aria-hidden="true">
+<symbol id="ic-edit" viewBox="0 0 24 24"><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-chevron-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></symbol>
+<symbol id="ic-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+<symbol id="ic-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-6-7-2Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+<symbol id="ic-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.6" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M7.3 12.4l2.9 2.9L17 8.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-sparkle" viewBox="0 0 24 24"><path d="M12 2 14 9.2 21 12 14 14.8 12 22 10 14.8 3 12 10 9.2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-trophy" viewBox="0 0 24 24"><path d="M8 4h8v4.2a4 4 0 0 1-8 0Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" fill="none"/><path d="M8 5.2H5.3a1 1 0 0 0-1 1.1c.2 2 1.7 3.4 3.5 3.9M16 5.2h2.7a1 1 0 0 1 1 1.1c-.2 2-1.7 3.4-3.5 3.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M12 12.2v2.6M9.3 19.5h5.4M9.7 17h4.6l.5 2.5h-5.6Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-lock" viewBox="0 0 24 24"><rect x="5.3" y="10.6" width="13.4" height="9" rx="2" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="M8.2 10.6V8.2a3.8 3.8 0 0 1 7.6 0v2.4" stroke="currentColor" stroke-width="1.7" fill="none"/></symbol>
+<symbol id="ic-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.3-9.4-8.7C1.2 8 2.4 5 5.6 4.3c2.3-.5 4.2.8 6.4 3 2.2-2.2 4.1-3.5 6.4-3 3.2.7 4.4 3.7 3 7C19 15.7 12 20 12 20Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-heart-fill" viewBox="0 0 24 24"><path d="M12 20s-7-4.3-9.4-8.7C1.2 8 2.4 5 5.6 4.3c2.3-.5 4.2.8 6.4 3 2.2-2.2 4.1-3.5 6.4-3 3.2.7 4.4 3.7 3 7C19 15.7 12 20 12 20Z" fill="currentColor"/></symbol>
+<symbol id="ic-comment" viewBox="0 0 24 24"><path d="M4.5 5.5h15v10.5h-9.2L6 20v-4H4.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-share" viewBox="0 0 24 24"><path d="M12 2.7v11.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M7.7 6.7 12 2.5 16.3 6.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M4 10.3v8.4c0 1.2 1 2.2 2.2 2.2h11.6c1.2 0 2.2-1 2.2-2.2v-8.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-flag" viewBox="0 0 24 24"><path d="M6.5 3v18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M6.5 4h10l-2.3 3.3L16.5 10.6h-10Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-trash" viewBox="0 0 24 24"><path d="M5 7h14M9.3 7V5.3a1 1 0 0 1 1-1h3.4a1 1 0 0 1 1 1V7m-8 0 .9 11.5a1 1 0 0 0 1 .9h5.6a1 1 0 0 0 1-.9L15.7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="10.5" height="10.5" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M5.5 15V6.5a2 2 0 0 1 2-2H16" stroke="currentColor" stroke-width="1.6" fill="none"/></symbol>
+<symbol id="ic-reply" viewBox="0 0 24 24"><path d="M10.3 8.3 4.5 13l5.8 4.7M4.5 13h8.7a5 5 0 0 1 5 5v1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="M6.3 17.7 17.7 6.3" stroke="currentColor" stroke-width="1.7"/></symbol>
+<symbol id="ic-image" viewBox="0 0 24 24"><rect x="3.7" y="4.7" width="16.6" height="14.6" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="8.7" cy="9.5" r="1.5" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M4.3 15.8l4.6-4.6 3.3 3.3 2.8-2.8 3.7 3.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-image-broken" viewBox="0 0 24 24"><rect x="3.7" y="4.7" width="16.6" height="14.6" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M6.5 15.8 9.2 12l2 2 2.7-3.6 2.6 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M4 4l16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="ic-id-card" viewBox="0 0 24 24"><rect x="2" y="3.5" width="20" height="17" rx="2.2" stroke="currentColor" stroke-width="1.7" fill="none"/><circle cx="8.2" cy="9.8" r="2" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M5 15.2c.6-1.5 1.9-2.1 3.2-2.1s2.6.6 3.2 2.1M14.5 8.2h5.5M14.5 11.3h5.5M14.5 14.4h3.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></symbol>
+<symbol id="ic-book" viewBox="0 0 24 24"><path d="M3 3.8A2.2 2.2 0 0 1 5.2 2.3H11v19.4H5.2a2.2 2.2 0 0 0-2.2 1.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/><path d="M21 3.8A2.2 2.2 0 0 0 18.8 2.3H13v19.4h5.8a2.2 2.2 0 0 1 2.2 1.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-calendar-heart" viewBox="0 0 24 24"><rect x="2.5" y="3.8" width="19" height="17.5" rx="2.2" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="M2.5 9.3h19M7.8 1.5v4.2M16.2 1.5v4.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12 18.3s-3.2-1.8-3.2-4c0-1 .8-1.9 1.9-1.9.6 0 1.1.4 1.3.9.2-.5.7-.9 1.3-.9 1.1 0 1.9.9 1.9 1.9 0 2.2-3.2 4-3.2 4Z" fill="currentColor"/></symbol>
+<symbol id="ic-personality" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4.5" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M3.5 21.5c0-4.1 3.7-6.5 8.5-6.5s8.5 2.4 8.5 6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></symbol>
+<symbol id="ic-refresh" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 0 1 13-5M19.5 12a7.5 7.5 0 0 1-13 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none"/><path d="M17.3 3.7v4h-4M6.7 20.3v-4h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></symbol>
+<symbol id="ic-signal" viewBox="0 0 20 12"><rect x="0" y="7" width="3.2" height="5" rx="0.6" fill="currentColor"/><rect x="5.4" y="5" width="3.2" height="7" rx="0.6" fill="currentColor"/><rect x="10.8" y="3" width="3.2" height="9" rx="0.6" fill="currentColor"/><rect x="16.2" y="0.3" width="3.2" height="11.7" rx="0.6" fill="currentColor"/></symbol>
+<symbol id="ic-wifi" viewBox="0 0 20 14"><path d="M1.2 5.3a13 13 0 0 1 17.6 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none"/><path d="M4.3 8.6a8.6 8.6 0 0 1 11.4 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none"/><path d="M7.5 11.8a4 4 0 0 1 5 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none"/><circle cx="10" cy="13.2" r="1.1" fill="currentColor"/></symbol>
+<symbol id="scene-cat-sofa" viewBox="0 0 300 300">
+  <rect width="300" height="300" fill="#2b2438"/>
+  <rect x="10" y="150" width="280" height="140" rx="26" fill="#c9a876"/>
+  <rect x="10" y="120" width="280" height="55" rx="22" fill="#d9bd94"/>
+  <ellipse cx="152" cy="168" rx="60" ry="48" fill="#e8963c"/>
+  <circle cx="152" cy="105" r="40" fill="#f0a84e"/>
+  <path d="M118 78 L126 44 L146 76 Z" fill="#f0a84e"/>
+  <path d="M186 78 L178 44 L158 76 Z" fill="#f0a84e"/>
+  <path d="M122 72 L128 52 L140 70 Z" fill="#d9822e"/>
+  <path d="M182 72 L176 52 L164 70 Z" fill="#d9822e"/>
+  <circle cx="139" cy="106" r="4.5" fill="#2b2438"/>
+  <circle cx="165" cy="106" r="4.5" fill="#2b2438"/>
+  <ellipse cx="152" cy="118" rx="5" ry="3.5" fill="#d9822e"/>
+  <path d="M146 121 Q152 127 158 121" stroke="#7a4a1e" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+</symbol>
+<symbol id="ic-paw" viewBox="0 0 24 24"><ellipse cx="12" cy="16.5" rx="6.2" ry="5" fill="currentColor"/><circle cx="5.5" cy="9" r="2.3" fill="currentColor"/><circle cx="10" cy="5.5" r="2.3" fill="currentColor"/><circle cx="14.5" cy="5.5" r="2.3" fill="currentColor"/><circle cx="18.5" cy="9" r="2.3" fill="currentColor"/></symbol>
+<symbol id="deco-star" viewBox="0 0 24 24"><path d="M12 2 14.5 9.5 22 12 14.5 14.5 12 22 9.5 14.5 2 12 9.5 9.5Z" fill="currentColor"/></symbol>
+<symbol id="ic-battery" viewBox="0 0 26 13"><rect x="0.75" y="0.75" width="21.5" height="11.5" rx="2.6" stroke="currentColor" stroke-width="1.2" fill="none"/><rect x="2.3" y="2.3" width="18.4" height="8.4" rx="1.3" fill="currentColor"/><rect x="23.1" y="4" width="1.9" height="5" rx="0.9" fill="currentColor"/></symbol>
+</svg>
+<div class="wrap">
+
+  <div class="doc-header">
+    <div class="eyebrow">TailTopia · V1.3.0 · 批次 A</div>
+    <h1>内容体验修复包 —— 已定稿（不拆页，整合稿即最终交付）</h1>
+    <p class="doc-sub">
+      <span class="stage-tag">定稿 · 2026-09-10</span>
+      范围对应 <code>v1-3-0prd-A.md</code>：FR-65（年龄换算分享卡 + 「Know more about your pet」入口改造）、
+      FR-111（里程碑逻辑变更，不含视觉重绘）、FR-113（内容详情页）、FR-114（评论体验）、FR-115（图片灯箱全屏化）、FR-116（发布图片排序）。
+      代码取值：<code>petgo-platform</code> <b>stag</b> 分支。
+    </p>
+    <p class="doc-sub" style="margin-top:14px;">
+      <b>本轮核对方法：</b>全部 28 屏逐张用 <code>ui-mockup-shots</code> 出图肉眼核验（不是只读 HTML 源码猜）；对照 <code>v1-3-0prd-A.md</code> 全文复查「不占位/不展示」条款；P3 的禁用态额外核实了真实代码里同类场景的现成写法。
+    </p>
+    <p class="doc-sub" style="margin-top:10px;">
+      <b>发现并已修复（<span style="color:#B23A45;">⚠️ 标注见各屏 frame-cap</span>）：</b>
+      ① <b>P3 架构画错</b>——原稿把「禁用态」画成独立整页（无返回按钮、退不出去），核实代码里 <code>milestone_list_page.dart</code>/<code>pet_card_page.dart</code> 的同类场景后，改为 P2 聚合页上「Usia Manusia」卡原地置灰，不新开页面；
+      ② <b>P7 两处真实渲染 bug</b>——教学蒙层的「聚光挖孔」用了 3000px box-shadow 叠加在另一层半透明遮罩上，双重叠加导致遮罩比设计意图更暗、聚光区域实际并未变亮；改用四块矩形遮罩后又发现第二个 bug：<code>display:flex</code> 容器内的文字与按钮被同容器内 <code>position:absolute</code> 的兄弟元素挡住不可见（已用隔离测试文件复现确认），改为纯绝对定位布局后两个问题一并解决；
+      ③ <b>D2 / D3 漏画内容类型徽章</b>——两屏 frame-cap 都写着"其余同 D1"，但作者行的「Momen」徽章被漏画，已按 D1 补上；
+④ <b>L2 有个说不清楚的渐变条</b>——移除后才发现它其实在掩盖一个真实布局 bug（背景插画 translateX 位移后右边缘露出黑底），已改成正确的超出裁切方式从根上修掉，而不是简单删掉装饰。
+      <b>另外删除了 D4</b>——它是「重绘后（定稿）」的规格对比图，但对比的旧版互动栏样式早已被 D1 后续的小红书式合并底栏取代，图本身已经没有独立存在的价值；唯一还有效的一条结论（图标 18→19px、间距 16→22px 扩大点击热区）已经并入 D1 的 frame-cap，不会丢信息。
+    </p>
+    <p class="doc-sub" style="margin-top:10px;">
+      <b>本轮没有新的文档/代码矛盾需要你拍板</b>——以上都是纯渲染/一致性问题，已直接修正；P5/P6 分享卡视觉占位、背景插画模板库范围等产品决策已在上一轮拍过板，未变。
+    </p>
+    <p class="doc-sub" style="margin-top:10px;">
+      <b>2026-09-10 用户已授权「定稿，但是不用拆页」</b>——本整合稿即为最终交付形态，不执行第五步拆分成单页 HTML。D4（互动栏热区规格图，已过时）已删除，唯一还有效的尺寸结论并入 D1 的 frame-cap；整合稿由 28 屏收整为 27 屏。
+    </p>
+  </div>
+
+  <nav class="jumpnav">
+    <a href="#lane-p">FR-65 年龄卡/入口</a>
+    <a href="#lane-m">FR-111 里程碑逻辑</a>
+    <a href="#lane-d">FR-113 详情页</a>
+    <a href="#lane-c">FR-114 评论</a>
+    <a href="#lane-l">FR-115 灯箱</a>
+    <a href="#lane-u">FR-116 发布排序</a>
+  </nav>
+
+  <div class="checklist">
+    <table>
+      <tr><th>屏号</th><th>页面/状态</th><th>类型</th><th>所属 FR</th></tr>
+      <tr><td class="lane-p">P1</td><td>成长档案头部（新入口条替换原 KTP 条）</td><td>现有页局部改动</td><td>FR-65</td></tr>
+      <tr><td class="lane-p">P2</td><td>「Know more about your pet」聚合页（本批次 2 卡）</td><td>新页面</td><td>FR-65</td></tr>
+      <tr><td class="lane-p">P3</td><td>年龄换算卡 · 非猫狗「暂不支持」态</td><td>禁用态</td><td>FR-65</td></tr>
+      <tr><td class="lane-p">P4</td><td>年龄换算卡 · 体型选择（仅狗，四选一）</td><td>新页面</td><td>FR-65</td></tr>
+      <tr><td class="lane-p">P5</td><td>年龄换算卡 · 卡片预览（猫版）</td><td>新页面</td><td>FR-65</td></tr>
+      <tr><td class="lane-p">P6</td><td>年龄换算卡 · 卡片预览（狗版，含体型档）</td><td>变体</td><td>FR-65</td></tr>
+      <tr><td class="lane-p">P7</td><td>迁移引导蒙层（仅第一版：KTP 位置）</td><td>一次性叠加态</td><td>FR-65</td></tr>
+      <tr><td class="lane-m">M1</td><td>成长档案 Tab · 里程碑入口（默认无角标）</td><td>现有页局部改动</td><td>FR-111</td></tr>
+      <tr><td class="lane-m">M2</td><td>成长档案 Tab · 里程碑入口（未庆祝角标态）</td><td>变体</td><td>FR-111</td></tr>
+      <tr><td class="lane-m">M3</td><td>通用宠物里程碑列表页（G-M1/G-M2 灰态）</td><td>现有页局部改动</td><td>FR-111</td></tr>
+      <tr><td class="lane-d">D1</td><td>内容详情页 · 默认单图态（新顺序/新图片比例）</td><td>现有页改版</td><td>FR-113</td></tr>
+      <tr><td class="lane-d">D2</td><td>内容详情页 · 多图横滑态</td><td>变体</td><td>FR-113</td></tr>
+      <tr><td class="lane-d">D3</td><td>内容详情页 · 发布超 7 天（绝对日期）</td><td>变体</td><td>FR-113</td></tr>
+      <tr><td class="lane-d">D5</td><td>内容详情页 · 纯文字态（无图，Cerita/Tips 类型常见）</td><td>变体</td><td>FR-113</td></tr>
+      <tr><td class="lane-c">C1</td><td>评论区 · 默认态（热度排序/点赞/作者标签）</td><td>现有页改版</td><td>FR-114</td></tr>
+      <tr><td class="lane-c">C2</td><td>评论区 · 回复态（「回复@昵称」胶囊）</td><td>变体</td><td>FR-114</td></tr>
+      <tr><td class="lane-c">C3</td><td>长按菜单 · 自己的评论</td><td>叠加层</td><td>FR-114</td></tr>
+      <tr><td class="lane-c">C4</td><td>长按菜单 · 他人的评论</td><td>变体</td><td>FR-114</td></tr>
+      <tr><td class="lane-c">C5</td><td>评论区 · 空态</td><td>空态</td><td>FR-114</td></tr>
+      <tr><td class="lane-l">L1</td><td>灯箱 · 全屏默认单图态</td><td>新页面</td><td>FR-115</td></tr>
+      <tr><td class="lane-l">L2</td><td>灯箱 · 多图横滑态（页码）</td><td>变体</td><td>FR-115</td></tr>
+      <tr><td class="lane-l">L3</td><td>灯箱 · 放大平移态</td><td>变体</td><td>FR-115</td></tr>
+      <tr><td class="lane-l">L4</td><td>灯箱 · 下滑关闭进行中态</td><td>过渡态</td><td>FR-115</td></tr>
+      <tr><td class="lane-l">L5</td><td>灯箱 · 加载中（模糊过渡）</td><td>加载态</td><td>FR-115</td></tr>
+      <tr><td class="lane-l">L6</td><td>灯箱 · 加载失败（重试）</td><td>异常态</td><td>FR-115</td></tr>
+      <tr><td class="lane-u">U1</td><td>发布页 · 九宫格默认态（封面角标）</td><td>现有页改版</td><td>FR-116</td></tr>
+      <tr><td class="lane-u">U2</td><td>发布页 · 长按拖拽进行中态</td><td>过渡态</td><td>FR-116</td></tr>
+    </table>
+  </div>
+
+  <!-- ============ 泳道 P：FR-65 ============ -->
+  <div class="lane" id="lane-p">
+    <div class="lane-title"><span class="lane-dot" style="background:var(--lane-p)"></span><h2>宠物年龄换算分享卡 + 综合入口</h2><span class="lane-fr">FR-65</span></div>
+    <p class="lane-desc">成长档案头部 KTP 入口条改造为「Know more about your pet」综合入口。本批次聚合页只含 KTP / 年龄卡两项；护照（FR-120）与 Tailsonality（FR-117）不占位、不展示，随批次 B2 上线时再新增。</p>
+    <div class="flow">
+      <em>主路径：</em><i>成长档案页</i> <s>P1</s> <i>头部入口条 → 点击 →</i> <s>P2</s> <i>聚合页 → 点「年龄换算卡」</i>
+      <span class="nl"></span>
+      <em>分支：</em><i>当前宠物非猫狗 →</i> <s>P3</s> 暂不支持 <i>／ 当前宠物是狗 →</i> <s>P4</s> 体型选择 <i>→</i> <s>P6</s> 卡片预览-狗版 <i>／ 当前宠物是猫 → 直接</i> <s>P5</s> 卡片预览-猫版
+      <span class="nl"></span>
+      <em>叠加态：</em><s>P7</s> 迁移引导蒙层——首次进入成长档案页时叠加显示在 <s>P1</s> 之上（不是独立跳转，看过即不再弹）
+    </div>
+    <div class="frames">
+
+      <!-- P1 —— 现有页局部改动：diary_header.dart 的 DiaryHeader 组件，entry-grid 右格改造 -->
+      <div class="frame-card"><span class="frame-tag">P1</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-scroll" style="padding:14px 16px 0;">
+            <div style="display:flex;align-items:center;margin-bottom:14px;">
+              <div style="flex:1;font-size:19px;font-weight:700;color:var(--tt-ink);">Paspor Milo</div>
+              <div class="tt-ibtn"><svg viewBox="0 0 24 24" style="width:17px;height:17px;"><use href="#ic-edit"></use></svg></div>
+            </div>
+            <div class="tt-card" style="padding:18px;margin-bottom:11px;border-radius:20px;box-shadow:0 6px 20px rgba(43,42,39,.08);">
+              <div style="display:flex;gap:14px;align-items:center;">
+                <div style="width:62px;height:62px;border-radius:99px;background:linear-gradient(135deg,var(--tt-mint500),var(--tt-mint));display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;">🐱</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:19px;font-weight:700;color:var(--tt-ink);">Milo</div>
+                  <div style="font-size:12px;color:var(--tt-ink2);margin-top:2px;">Kucing · 2 th 3 bln</div>
+                  <div style="font-size:11px;color:var(--tt-muted);font-style:italic;margin-top:3px;">"Suka tidur di kotak"</div>
+                </div>
+              </div>
+              <div style="display:flex;background:var(--tt-cream2);border-radius:12px;margin-top:14px;">
+                <div style="flex:1;text-align:center;padding:10px 8px;"><div style="font-size:17px;font-weight:700;color:var(--tt-mint);font-variant-numeric:tabular-nums;">12</div><div style="font-size:10px;color:var(--tt-ink2);margin-top:1px;">Diary</div></div>
+                <div style="width:1px;background:var(--tt-line);margin:10px 0;"></div>
+                <div style="flex:1;text-align:center;padding:10px 8px;"><div style="font-size:17px;font-weight:700;color:var(--tt-mint);font-variant-numeric:tabular-nums;">3</div><div style="font-size:10px;color:var(--tt-ink2);margin-top:1px;">Konsultasi</div></div>
+                <div style="width:1px;background:var(--tt-line);margin:10px 0;"></div>
+                <div style="flex:1;text-align:center;padding:10px 8px;"><div style="font-size:17px;font-weight:700;color:var(--tt-mint);font-variant-numeric:tabular-nums;">6</div><div style="font-size:10px;color:var(--tt-ink2);margin-top:1px;">Milestone</div></div>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;margin:11px 0;">
+              <div class="tt-card" style="flex:1;padding:12px;display:flex;align-items:center;gap:10px;">
+                <div style="width:38px;height:38px;border-radius:11px;background:var(--tt-minttint);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg viewBox="0 0 24 24" style="width:21px;height:21px;color:var(--tt-mint);"><use href="#ic-check-circle"></use></svg></div>
+                <div style="min-width:0;">
+                  <div style="font-size:13px;font-weight:600;color:var(--tt-ink);">Catatan Kesehatan</div>
+                  <div style="font-size:10.5px;color:var(--tt-muted);margin-top:2px;">Ketuk untuk lihat</div>
+                </div>
+              </div>
+              <div class="tt-card" style="flex:1;padding:12px;border:1.5px solid var(--tt-mint);display:flex;align-items:center;gap:10px;">
+                <div style="width:38px;height:38px;border-radius:11px;background:var(--tt-minttint);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg viewBox="0 0 24 24" style="width:21px;height:21px;color:var(--tt-mint);"><use href="#ic-sparkle"></use></svg></div>
+                <div style="min-width:0;">
+                  <div style="font-size:13px;font-weight:600;color:var(--tt-ink);">Kenali Hewanmu</div>
+                  <div style="font-size:10.5px;color:var(--tt-muted);margin-top:2px;">Ketuk untuk lihat</div>
+                </div>
+              </div>
+            </div>
+            <div class="tt-card" style="padding:11px 15px;margin-top:11px;border-radius:12px;">
+              <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="font-weight:600;">🏆 Pencapaian Milo</span><span style="font-weight:700;color:var(--tt-mint);font-variant-numeric:tabular-nums;">6 / 47</span></div>
+              <div style="height:5px;border-radius:99px;background:var(--tt-cream2);margin-top:7px;overflow:hidden;"><div style="width:13%;height:100%;background:var(--tt-mint);"></div></div>
+            </div>
+          </div>
+        </div>
+        <p class="frame-cap"><b>现有页局部改动</b>（<code>diary_header.dart</code>）—— 页头其余模块（标题行/信息卡/里程碑条）原样保留，只改 entry-grid 右格 <code>diaryIdCardButton</code>：图标从 <code>Icons.badge_outlined</code>、标题从「Kartu Identitas」改为「Know more about your pet」——PRD 原文（中/EN/ID 三语文案待定）；稿内暂用印尼语占位翻译「Kenali Hewanmu」（已按你的要求缩短，去掉「Peliharaan」），最终文案待产品定稿。<span style="color:#B23A45;font-weight:700;">⚠️ 视觉改版（你已拍板）：</span>entry-grid 两张卡从 <code>_entryCard</code> 现状的纵向布局（图标在上、标题在下）改为横向并排（左图标+右文字），偏离现有代码实现，属于本轮主动改版，非照抄代码；P2 聚合页两卡同步应用同一横向样式</p>
+      </div>
+
+      <!-- P2 —— 新页面：聚合页 2 卡（本批次范围收窄，护照/Tailsonality 不占位），复用 entry-card 视觉语言 -->
+      <div class="frame-card"><span class="frame-tag">P2</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-appbar"><span class="ic"><svg viewBox="0 0 24 24" style="width:18px;height:18px;"><use href="#ic-chevron-left"></use></svg></span><span class="t">Kenali Hewanmu</span></div>
+          <div class="tt-scroll">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div class="tt-card" style="padding:12px;display:flex;align-items:center;gap:10px;">
+                <div style="width:38px;height:38px;border-radius:11px;background:var(--tt-minttint);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg viewBox="0 0 24 24" style="width:21px;height:21px;color:var(--tt-mint);"><use href="#ic-id-card"></use></svg></div>
+                <div style="min-width:0;">
+                  <div style="font-size:13px;font-weight:600;">Kartu Identitas</div>
+                  <div style="font-size:10.5px;color:var(--tt-muted);margin-top:2px;">Ketuk untuk lihat</div>
+                </div>
+              </div>
+              <div class="tt-card" style="padding:12px;border:1.5px solid var(--tt-mint);display:flex;align-items:center;gap:10px;">
+                <div style="width:38px;height:38px;border-radius:11px;background:var(--tt-minttint);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg viewBox="0 0 24 24" style="width:21px;height:21px;color:var(--tt-mint);"><use href="#ic-calendar-heart"></use></svg></div>
+                <div style="min-width:0;">
+                  <div style="font-size:13px;font-weight:600;">Usia Manusia</div>
+                  <div style="font-size:10.5px;color:var(--tt-muted);margin-top:2px;">Buat kartu</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="frame-cap"><b>新页面</b> —— 2 卡 2 列网格（PRD 已改：护照/Tailsonality 本批次不占位、不展示，随批次 B2 上线时新增，见 <code>v1-3-0prd-A.md</code> §3.1）；卡片视觉复用 <code>diary_header.dart</code> 的 entry-card 白底r14+阴影样式，<span style="color:#B23A45;font-weight:700;">已按你的拍板改横向布局</span>（左图标+右文字，与 P1 同步）；KTP 卡沿用 <code>id_card_page.dart</code> 现有列表逻辑整体平移（深链 <code>/profile/id-card</code> 需重定向到新路径，不能断链）；年龄卡为本 FR 新增；页面标题同步缩短为「Kenali Hewanmu」</p>
+      </div>
+
+      <!-- P3 —— 禁用态（非猫狗宠物，卡片原地置灰） -->
+      <div class="frame-card"><span class="frame-tag">P3</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-appbar"><span class="ic"><svg viewBox="0 0 24 24" style="width:18px;height:18px;"><use href="#ic-chevron-left"></use></svg></span><span class="t">Kenali Hewanmu</span></div>
+          <div class="tt-scroll">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div class="tt-card" style="padding:12px;display:flex;align-items:center;gap:10px;">
+                <div style="width:38px;height:38px;border-radius:11px;background:var(--tt-minttint);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg viewBox="0 0 24 24" style="width:21px;height:21px;color:var(--tt-mint);"><use href="#ic-id-card"></use></svg></div>
+                <div style="min-width:0;">
+                  <div style="font-size:13px;font-weight:600;">Kartu Identitas</div>
+                  <div style="font-size:10.5px;color:var(--tt-muted);margin-top:2px;">Ketuk untuk lihat</div>
+                </div>
+              </div>
+              <div class="tt-card" style="padding:12px;display:flex;align-items:center;gap:10px;opacity:.45;">
+                <div style="width:38px;height:38px;border-radius:11px;background:var(--tt-line2);display:flex;align-items:center;justify-content:center;flex-shrink:0;"><svg viewBox="0 0 24 24" style="width:21px;height:21px;color:var(--tt-muted);"><use href="#ic-calendar-heart"></use></svg></div>
+                <div style="min-width:0;">
+                  <div style="font-size:13px;font-weight:600;">Usia Manusia</div>
+                  <div style="font-size:10.5px;color:var(--tt-muted);margin-top:2px;">Belum didukung untuk jenis ini</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="frame-cap"><b>P2 的禁用态</b>（非猫狗宠物）—— <span style="color:#B23A45;font-weight:700;">⚠️ 第四步核对修正：</span>此前误画成独立「不支持」整页（无返回按钮、无法退出），核实代码里同类「功能对当前项不适用」场景（<code>milestone_list_page.dart</code> 已链接候选项、<code>pet_card_page.dart</code> 未解锁成就）后确认统一做法是**原地置灰 + 静态提示文案，点击不跳转**（<code>Opacity</code> + <code>onTap: null</code>），不会新开一个页面或弹层；已改为 P2 同一张聚合页上「Usia Manusia」卡直接置灰，PRD 明确「无公认换算标准、通用系数只是娱乐数字，不上」；提示文案待产品定稿（此处为直译占位）</p>
+      </div>
+
+      <!-- P4 —— 体型选择（仅狗） -->
+      <div class="frame-card"><span class="frame-tag">P4</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-appbar"><span class="ic"><svg viewBox="0 0 24 24" style="width:18px;height:18px;"><use href="#ic-chevron-left"></use></svg></span><span class="t">Pilih Ukuran Tubuh</span></div>
+          <div class="tt-scroll">
+            <div style="font-size:12px;color:var(--tt-ink2);margin-bottom:12px;line-height:1.6;">Untuk menghitung usia manusia yang lebih akurat, pilih ukuran tubuh dewasa Rocky:</div>
+            <div class="tt-card" style="padding:14px;margin-bottom:9px;display:flex;justify-content:space-between;align-items:center;">
+              <div><div style="font-size:13.5px;font-weight:600;">Kecil</div><div style="font-size:11px;color:var(--tt-muted);">&lt; 9 kg</div></div>
+              <div style="width:20px;height:20px;border-radius:99px;border:2px solid var(--tt-line);"></div>
+            </div>
+            <div class="tt-card" style="padding:14px;margin-bottom:9px;display:flex;justify-content:space-between;align-items:center;border:1.5px solid var(--tt-mint);">
+              <div><div style="font-size:13.5px;font-weight:600;">Sedang</div><div style="font-size:11px;color:var(--tt-muted);">9–23 kg</div></div>
+              <div style="width:20px;height:20px;border-radius:99px;border:6px solid var(--tt-mint);"></div>
+            </div>
+            <div class="tt-card" style="padding:14px;margin-bottom:9px;display:flex;justify-content:space-between;align-items:center;">
+              <div><div style="font-size:13.5px;font-weight:600;">Besar</div><div style="font-size:11px;color:var(--tt-muted);">23–41 kg</div></div>
+              <div style="width:20px;height:20px;border-radius:99px;border:2px solid var(--tt-line);"></div>
+            </div>
+            <div class="tt-card" style="padding:14px;display:flex;justify-content:space-between;align-items:center;">
+              <div><div style="font-size:13.5px;font-weight:600;">Sangat Besar</div><div style="font-size:11px;color:var(--tt-muted);">&gt; 41 kg</div></div>
+              <div style="width:20px;height:20px;border-radius:99px;border:2px solid var(--tt-line);"></div>
+            </div>
+          </div>
+          <div class="tt-fixed-bottom"><div class="tt-btn-primary">Lanjutkan</div></div>
+        </div>
+        <p class="frame-cap"><b>新页面</b> —— 四选一单选列表；档位名 + 体重区间来自 PRD §3.1 调研结论（不落档案字段、不持久化）</p>
+      </div>
+
+      <!-- P5 —— 卡片预览（猫版），复用 ShareCardPreviewPage 结构 -->
+      <div class="frame-card"><span class="frame-tag">P5</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream2);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-appbar"><span class="ic"><svg viewBox="0 0 24 24" style="width:18px;height:18px;"><use href="#ic-chevron-left"></use></svg></span><span class="t">Pratinjau Kartu</span></div>
+          <div class="tt-scroll" style="display:flex;flex-direction:column;bottom:66px;">
+            <div style="flex:1;background:var(--tt-cream2);border:1.5px dashed var(--tt-line);border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+              <svg viewBox="0 0 24 24" style="width:36px;height:36px;color:var(--tt-ink2);opacity:.5;"><use href="#ic-image"></use></svg>
+              <div style="font-size:12px;font-weight:600;color:var(--tt-ink2);">Kartu Usia · Milo</div>
+            </div>
+          </div>
+          <div class="tt-fixed-bottom"><div class="tt-btn-primary">Bagikan</div></div>
+        </div>
+        <p class="frame-cap"><b>新页面</b> —— 复用 <code>share_card_preview_page.dart</code> 结构：AppBar + 画布区（9:16，1080×1920；另支持 1:1，本图仅示意 9:16）+ 底部吸底分享按钮。<b>⚠️ 视觉占位：</b>卡内视觉设计以设计师最终设计稿为准，本图仅标示页面结构与画布尺寸规格，不代表最终视觉</p>
+      </div>
+
+      <!-- P6 —— 卡片预览（狗版，变体） -->
+      <div class="frame-card"><span class="frame-tag">P6</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream2);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-appbar"><span class="ic"><svg viewBox="0 0 24 24" style="width:18px;height:18px;"><use href="#ic-chevron-left"></use></svg></span><span class="t">Pratinjau Kartu</span></div>
+          <div class="tt-scroll" style="display:flex;flex-direction:column;bottom:66px;">
+            <div style="flex:1;background:var(--tt-cream2);border:1.5px dashed var(--tt-line);border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+              <svg viewBox="0 0 24 24" style="width:36px;height:36px;color:var(--tt-ink2);opacity:.5;"><use href="#ic-image"></use></svg>
+              <div style="font-size:12px;font-weight:600;color:var(--tt-ink2);">Kartu Usia · Rocky</div>
+            </div>
+          </div>
+          <div class="tt-fixed-bottom"><div class="tt-btn-primary">Bagikan</div></div>
+        </div>
+        <p class="frame-cap"><span class="variant-flag">变体</span><b>P5 的变体</b> —— 狗卡额外字段：体型档（「Anjing · 9–23 kg」并入底部信息行）。<b>⚠️ 视觉占位：</b>卡内视觉设计以设计师最终设计稿为准，本图仅标示页面结构与画布尺寸规格，不代表最终视觉</p>
+      </div>
+
+      <!-- P7 —— 迁移引导蒙层，叠加在 P1 之上 -->
+      <div class="frame-card"><span class="frame-tag">P7</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-scroll" style="padding:14px 16px 0;filter:blur(1px);opacity:.5;">
+            <div style="display:flex;align-items:center;margin-bottom:14px;"><div style="flex:1;font-size:19px;font-weight:700;">Paspor Milo</div></div>
+            <div class="tt-card" style="height:70px;margin-bottom:11px;"></div>
+            <div style="display:flex;gap:10px;"><div class="tt-card" style="flex:1;height:90px;"></div><div class="tt-card" style="flex:1;height:90px;border:1.5px solid var(--tt-mint);"></div></div>
+          </div>
+          <div style="position:absolute;inset:0;">
+            <div style="position:absolute;top:0;left:0;right:0;height:238px;background:rgba(20,16,25,.72);"></div>
+            <div style="position:absolute;top:326px;left:0;right:0;bottom:0;background:rgba(20,16,25,.72);"></div>
+            <div style="position:absolute;top:238px;height:88px;left:0;width:218px;background:rgba(20,16,25,.72);"></div>
+            <div style="position:absolute;top:238px;height:88px;right:0;width:16px;background:rgba(20,16,25,.72);"></div>
+            <div style="position:absolute;top:238px;right:16px;width:150px;height:88px;border:2.5px solid var(--tt-mint);border-radius:14px;"></div>
+            <div style="position:absolute;left:24px;right:24px;bottom:172px;color:#fff;text-align:center;">
+              <div style="font-size:15px;font-weight:700;">Kartu Identitas pindah ke sini!</div>
+              <div style="font-size:12px;color:#D8D0EE;margin-top:8px;line-height:1.6;">KTP kini ada di dalam "Kenali Hewanmu" — ketuk untuk membukanya.</div>
+            </div>
+            <div style="position:absolute;left:50%;bottom:90px;transform:translateX(-50%);padding:11px 28px;background:#fff;border-radius:99px;font-size:13px;font-weight:700;color:var(--tt-ink);white-space:nowrap;">Mengerti</div>
+          </div>
+        </div>
+        <p class="frame-cap"><b>一次性叠加态</b>（全新交互，App 内暂无现成 coachmark 组件可复用）—— 高亮框指向 P1 新入口条位置；首进成长档案页触发，看过按账号记一次不再弹；<b>本批次只做「① KTP 位置」这一版</b>，第二次触发（性格测试入口）随批次 B2 上线</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ 泳道 M：FR-111 ============ -->
+  <div class="lane" id="lane-m">
+    <div class="lane-title"><span class="lane-dot" style="background:var(--lane-m)"></span><h2>里程碑逻辑变更</h2><span class="lane-fr">FR-111（仅逻辑）</span></div>
+    <p class="lane-desc">本批次只做漏庆祝收口与 G-M1/G-M2 改自动达成两条逻辑变更，不涉及庆祝页/徽章视觉重绘（视觉在批次 B2）。真正的视觉新增只有里程碑入口的未庆祝角标。</p>
+    <div class="flow">
+      <em>主路径：</em><i>成长档案 Tab →</i> <s>M1</s> 里程碑入口默认态 <i>／ 存在未庆祝条目时替换为</i> <s>M2</s> 角标态 <i>→ 点击进列表页 → 若 M2 态则自动补弹现有庆祝页（视觉不变，不重画）</i>
+      <span class="nl"></span>
+      <em>变体：</em><s>M3</s> 通用宠物里程碑列表页——G-M1/G-M2 徽章改为与猫狗 M3/M4/M5/M9 一致的健康类灰态（点击直跳健康记录页，不弹抽屉）
+    </div>
+    <div class="frames">
+
+      <!-- M1 —— 里程碑进度条默认态（diary_header.dart _milestoneBar，原样） -->
+      <div class="frame-card"><span class="frame-tag">M1</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-scroll no-appbar" style="padding-top:14px;">
+            <div class="tt-card" style="padding:12px 15px;">
+              <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="font-weight:600;">🏆 Pencapaian Milo</span><span style="font-weight:700;color:var(--tt-mint);font-variant-numeric:tabular-nums;">6 / 47</span></div>
+              <div style="height:5px;border-radius:99px;background:var(--tt-cream2);margin-top:7px;overflow:hidden;"><div style="width:13%;height:100%;background:var(--tt-mint);"></div></div>
+            </div>
+          </div>
+        </div>
+        <p class="frame-cap"><b>现有页局部改动</b>（<code>archiveMilestoneBar</code>，<code>diary_header.dart</code>）—— 无「已完成未庆祝」条目时的默认样式，与现网完全一致，不改动；本屏只放大展示里程碑条这一模块，页面其余部分同 P1</p>
+      </div>
+
+      <!-- M2 —— 角标态，复用 notification_bell.dart 的红点角标视觉 -->
+      <div class="frame-card"><span class="frame-tag">M2</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-scroll no-appbar" style="padding-top:14px;">
+            <div class="tt-card" style="padding:12px 15px;position:relative;">
+              <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="font-weight:600;">🏆 Pencapaian Milo</span><span style="font-weight:700;color:var(--tt-mint);font-variant-numeric:tabular-nums;">6 / 47</span></div>
+              <div style="height:5px;border-radius:99px;background:var(--tt-cream2);margin-top:7px;overflow:hidden;"><div style="width:13%;height:100%;background:var(--tt-mint);"></div></div>
+              <div style="position:absolute;top:-6px;right:-6px;min-width:16px;padding:1px 5px;border-radius:8px;background:var(--tt-danger);color:#fff;font-size:10px;font-weight:700;text-align:center;">+2</div>
+            </div>
+          </div>
+        </div>
+        <p class="frame-cap"><span class="variant-flag">变体</span><b>M1 的变体</b> —— 角标样式直接复用 <code>notification_bell.dart</code> 现成的 <code>notificationBadge</code>（AppColors.danger 红底、min-width 16、圆角 8、白字 10px）；存在「已完成未庆祝」条目时显示，点进列表页触发补弹后消除；本屏只放大展示里程碑条这一模块，页面其余部分同 M1</p>
+      </div>
+
+      <!-- M3 —— 通用宠物列表页，G-M1/G-M2 改为灰态（复用现有 _Badge 未完成样式） -->
+      <div class="frame-card"><span class="frame-tag">M3</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-appbar"><span class="ic"><svg viewBox="0 0 24 24" style="width:18px;height:18px;"><use href="#ic-chevron-left"></use></svg></span><span class="t">Milestone Milo</span></div>
+          <div class="tt-scroll">
+            <div class="tt-card" style="padding:16px;border-radius:16px;">
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div style="width:52px;height:52px;border-radius:99px;background:var(--tt-minttint);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--tt-mint);"><svg viewBox="0 0 24 24" style="width:24px;height:24px;"><use href="#ic-paw"></use></svg></div>
+                <div style="flex:1;font-size:17px;font-weight:700;color:var(--tt-ink);">Milo</div>
+                <div style="text-align:right;">
+                  <div style="font-size:19px;font-weight:700;color:var(--tt-mint);font-variant-numeric:tabular-nums;">6 / 47</div>
+                  <div style="font-size:11px;color:var(--tt-muted);">milestone</div>
+                </div>
+              </div>
+              <div style="height:6px;border-radius:99px;background:var(--tt-cream2);margin-top:12px;overflow:hidden;"><div style="width:13%;height:100%;background:var(--tt-mint);"></div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;margin-top:16px;background:var(--tt-minttint);border:1px solid var(--tt-dashed);border-radius:14px;">
+              <div style="font-size:20px;">🎓</div>
+              <div style="font-size:13px;font-weight:600;color:var(--tt-ink);">Lulus Pemula terbuka!</div>
+            </div>
+
+            <div style="font-size:13px;font-weight:700;color:var(--tt-gold);margin:20px 0 10px;">Level L — LEGENDA</div>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;">
+              <div style="width:64px;text-align:center;">
+                <div style="width:64px;height:64px;border-radius:99px;background:var(--tt-line2);display:flex;align-items:center;justify-content:center;color:var(--tt-muted);"><svg viewBox="0 0 24 24" style="width:24px;height:24px;"><use href="#ic-lock"></use></svg></div>
+                <div style="font-size:11px;color:var(--tt-muted);margin-top:6px;">Ulang Tahun</div>
+              </div>
+              <div style="width:64px;text-align:center;">
+                <div style="width:64px;height:64px;border-radius:99px;background:var(--tt-line2);display:flex;align-items:center;justify-content:center;color:var(--tt-muted);"><svg viewBox="0 0 24 24" style="width:24px;height:24px;"><use href="#ic-lock"></use></svg></div>
+                <div style="font-size:11px;color:var(--tt-muted);margin-top:6px;">100 Hari</div>
+              </div>
+              <div style="width:64px;text-align:center;">
+                <div style="width:64px;height:64px;border-radius:99px;background:var(--tt-line2);display:flex;align-items:center;justify-content:center;color:var(--tt-muted);"><svg viewBox="0 0 24 24" style="width:24px;height:24px;"><use href="#ic-lock"></use></svg></div>
+                <div style="font-size:11px;color:var(--tt-muted);margin-top:6px;">365 Hari</div>
+              </div>
+            </div>
+
+            <div style="font-size:13px;font-weight:700;color:var(--tt-mint);margin:20px 0 10px;">Level M — MAJOR</div>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;">
+              <div style="width:64px;text-align:center;">
+                <div style="width:64px;height:64px;border-radius:99px;background:var(--tt-mint);box-shadow:0 3px 10px rgba(132,94,201,.35);display:flex;align-items:center;justify-content:center;color:#fff;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;"><use href="#ic-trophy"></use></svg></div>
+                <div style="font-size:11px;font-weight:700;margin-top:6px;">Foto Pertama</div>
+              </div>
+              <div style="width:64px;text-align:center;">
+                <div style="width:64px;height:64px;border-radius:99px;background:var(--tt-line2);display:flex;align-items:center;justify-content:center;color:var(--tt-muted);"><svg viewBox="0 0 24 24" style="width:24px;height:24px;"><use href="#ic-lock"></use></svg></div>
+                <div style="font-size:11px;color:var(--tt-muted);margin-top:6px;">Postingan Pertama</div>
+              </div>
+              <div style="width:64px;text-align:center;">
+                <div style="width:64px;height:64px;border-radius:99px;background:var(--tt-line2);display:flex;align-items:center;justify-content:center;color:var(--tt-muted);"><svg viewBox="0 0 24 24" style="width:24px;height:24px;"><use href="#ic-lock"></use></svg></div>
+                <div style="font-size:11px;color:var(--tt-muted);margin-top:6px;">10 Catatan</div>
+              </div>
+            </div>
+
+            <div style="font-size:13px;font-weight:700;color:var(--tt-green);margin:20px 0 10px;">Level S — SMALL</div>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;">
+              <div style="width:64px;text-align:center;">
+                <div style="width:64px;height:64px;border-radius:99px;background:var(--tt-green);box-shadow:0 3px 10px rgba(31,158,106,.35);display:flex;align-items:center;justify-content:center;color:#fff;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;"><use href="#ic-trophy"></use></svg></div>
+                <div style="font-size:11px;font-weight:700;margin-top:6px;">Profil Dibuat</div>
+              </div>
+              <div style="width:64px;text-align:center;">
+                <div style="width:64px;height:64px;border-radius:99px;background:var(--tt-line2);display:flex;align-items:center;justify-content:center;color:var(--tt-muted);"><svg viewBox="0 0 24 24" style="width:24px;height:24px;"><use href="#ic-lock"></use></svg></div>
+                <div style="font-size:11px;color:var(--tt-muted);margin-top:6px;">Periksa Pertama</div>
+              </div>
+              <div style="width:64px;text-align:center;">
+                <div style="width:64px;height:64px;border-radius:99px;background:var(--tt-line2);display:flex;align-items:center;justify-content:center;color:var(--tt-muted);"><svg viewBox="0 0 24 24" style="width:24px;height:24px;"><use href="#ic-lock"></use></svg></div>
+                <div style="font-size:11px;color:var(--tt-muted);margin-top:6px;">Cek Kesehatan</div>
+              </div>
+              <div style="width:64px;text-align:center;">
+                <div style="width:64px;height:64px;border-radius:99px;background:var(--tt-line2);display:flex;align-items:center;justify-content:center;color:var(--tt-muted);"><svg viewBox="0 0 24 24" style="width:24px;height:24px;"><use href="#ic-lock"></use></svg></div>
+                <div style="font-size:11px;color:var(--tt-muted);margin-top:6px;">Suka Pertama</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="frame-cap"><b>现有页局部改动</b>（<code>milestone_list_page.dart</code>）—— 补全页面其余原有模块：顶部 <code>_Header</code>（头像+名字+总进度条）、<code>_NewbieCard</code>（新手任务卡，此处简化展示「全部完成」态）、L/M/S 三级完整分组（第二次交稿只画了 S 组一个分组，遗漏了页面大半内容）；标题栏订正为 <code>milestoneListTitleNamed</code> 真实文案「Milestone {name}」（此前误用「Tonggak」，那是无宠物名时的兜底文案）；分组标题订正为真实 l10n「Level S — SMALL」（此前误写「S · SMALL」）。<b>改动点</b>：G-M1「Periksa Pertama」/ G-M2「Cek Kesehatan」从可打卡（点击弹底抽屉「已打卡/去发布」）改为与猫狗 M3/M4/M5/M9 一致的健康类灰态，点击直跳健康记录页并预选类型；健康类判定需从「code 后缀集合」改为「显式列举」，<code>healthPresetTypeFor</code> 函数已存在只是本次要把 G-M1/G-M2 纳入；徽章组件本身（<code>_Badge</code>）视觉一字不改</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ 泳道 D：FR-113 ============ -->
+  <div class="lane" id="lane-d">
+    <div class="lane-title"><span class="lane-dot" style="background:var(--lane-d)"></span><h2>内容详情页优化</h2><span class="lane-fr">FR-113</span></div>
+    <p class="lane-desc">元素顺序改为作者行→图片→文字→互动栏→评论区；图片规则与 Feed 一致（原始比例，不再裁 1:1）；互动栏视觉重绘 + 扩大热区。</p>
+    <div class="flow">
+      <em>主路径：</em><i>由 Feed / 通知等入口进入 →</i> <s>D1</s> 默认单图态
+      <span class="nl"></span>
+      <em>变体：</em><s>D2</s> 多图横滑态（替代 D1）<i>／</i> <s>D3</s> 发布超 7 天绝对日期（替代 D1 的时间显示）
+      <span class="nl"></span>
+      <em>变体：</em><s>D5</s> 纯文字态（无图，替代 D1）—— <code>detail.imageUrls.isEmpty</code> 时不渲染图片轮播，装饰标签挪到正文下方单独一行
+    </div>
+    <div class="frames">
+
+      <!-- D1 —— 默认单图态：新顺序 作者行→图片→文字→互动栏→评论区 -->
+      <div class="frame-card"><span class="frame-tag">D1</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-appbar"><span style="flex:1;"></span><span class="ic"><svg viewBox="0 0 24 24" style="width:18px;height:18px;"><use href="#ic-more"></use></svg></span></div>
+          <div class="tt-scroll" style="bottom:66px;">
+            <div style="display:flex;align-items:center;gap:9px;">
+              <div style="width:36px;height:36px;border-radius:99px;background:var(--tt-mint);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;">A</div>
+              <div style="flex:1;">
+                <div style="font-size:15px;font-weight:700;">Ayu Lestari</div>
+                <div style="font-size:13px;color:var(--tt-muted);margin-top:1px;">3 jam lalu</div>
+              </div>
+              <div style="padding:3px 9px;border-radius:7px;background:#E7F8F0;font-size:10.5px;font-weight:700;color:#0E7A4D;">Momen</div>
+            </div>
+            <div style="margin-top:12px;border-radius:14px;overflow:hidden;position:relative;">
+              <div class="img-ph" style="width:100%;aspect-ratio:0.82;background:#E3DEEA;"><svg viewBox="0 0 24 24" style="width:40px;height:40px;"><use href="#ic-image"></use></svg></div>
+            </div>
+            <div style="font-size:15px;color:var(--tt-ink);line-height:1.45;margin-top:11px;">Hari ini Milo akhirnya berani lompat ke sofa sendiri 🎉 udah latihan seminggu penuh...</div>
+            <div style="height:1px;background:var(--tt-line);margin:14px 0 12px;"></div>
+            <div style="font-size:13px;font-weight:700;letter-spacing:.5px;color:var(--tt-ink2);">KOMENTAR (24)</div>
+          </div>
+          <div class="tt-fixed-bottom" style="display:flex;align-items:center;gap:12px;">
+            <div style="flex:1;min-width:0;border-radius:99px;background:var(--tt-cream2);display:flex;align-items:center;padding:10px 14px;font-size:14px;color:var(--tt-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Tulis komentar...</div>
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;font-size:13px;font-weight:600;color:var(--tt-coral);font-variant-numeric:tabular-nums;"><svg viewBox="0 0 24 24" style="width:23px;height:23px;"><use href="#ic-heart-fill"></use></svg>128</div>
+            <div style="flex-shrink:0;color:var(--tt-ink2);"><svg viewBox="0 0 24 24" style="width:23px;height:23px;"><use href="#ic-share"></use></svg></div>
+          </div>
+        </div>
+        <p class="frame-cap"><b>现有页改版</b>（<code>content_detail_page.dart</code>）—— 原有模块（作者行/正文/评论区/底部固定输入框 <code>CommentComposer</code>）全部保留，只调整顺序为 作者行→图片→文字→评论区；具体改动：①时间行从作者名右侧移到名字下方 ②图片改原始比例通栏出血（复用 <code>clampFeedRatio</code> 同一套 0.75~1.34 闭区间护栏，与 Feed 完全一致），不再强制裁 1:1+两侧留边 ③正文从图片上方移到图片下方。<span style="color:#B23A45;font-weight:700;">⚠️ 视觉/交互改版（你已拍板参考小红书）：</span>原来内嵌在正文下方的互动栏（❤128 💬24 ↗）整块挪走，与评论输入框合并成同一条固定底栏（对应改动 <code>_interactionBar</code> 从 <code>SingleChildScrollView</code> 内迁到 <code>CommentComposer</code> 同级）——点赞/分享始终悬浮可点，不需要滚到图片下方；评论数不再单独展示（已由标题「KOMENTAR (24)」承担），底部只保留点赞+分享；发送按钮改为聚焦输入框/开始打字后才出现（未输入时右侧是点赞/分享，此稿展示的是默认未输入态），这是比"挪位置"更深的交互状态变化，需要你确认是否接受。点赞/分享图标沿用「放大图标（18→19px）+ 拉开间距（16→22px）」的尺寸结论——点击热区参照 Nielsen Norman / Material Design 通用触控指南（最小 44×44）隐性扩展到位，不改变可见视觉大小</p>
+      </div>
+
+      <!-- D2 —— 多图横滑变体 -->
+      <div class="frame-card"><span class="frame-tag">D2</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-appbar"><span style="flex:1;"></span><span class="ic"><svg viewBox="0 0 24 24" style="width:18px;height:18px;"><use href="#ic-more"></use></svg></span></div>
+          <div class="tt-scroll" style="bottom:66px;">
+            <div style="display:flex;align-items:center;gap:9px;">
+              <div style="width:36px;height:36px;border-radius:99px;background:var(--tt-mint);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;">A</div>
+              <div style="flex:1;"><div style="font-size:15px;font-weight:700;">Ayu Lestari</div><div style="font-size:13px;color:var(--tt-muted);margin-top:1px;">3 jam lalu</div></div>
+              <div style="padding:3px 9px;border-radius:7px;background:#E7F8F0;font-size:10.5px;font-weight:700;color:#0E7A4D;">Momen</div>
+            </div>
+            <div style="margin-top:12px;border-radius:14px;overflow:hidden;position:relative;">
+              <div class="img-ph" style="width:100%;aspect-ratio:1.4;background:#DEE3EA;"><svg viewBox="0 0 24 24" style="width:36px;height:36px;"><use href="#ic-image"></use></svg></div>
+              <div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.54);color:#fff;font-size:11px;padding:2px 8px;border-radius:6px;font-variant-numeric:tabular-nums;">2/5</div>
+              <div style="position:absolute;left:8px;bottom:8px;background:#F6A609;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;">Rajin!</div>
+            </div>
+            <div style="font-size:15px;color:var(--tt-ink);line-height:1.45;margin-top:11px;">Latihan sosialisasi minggu ini, biar makin pede ketemu kucing tetangga 🐈</div>
+            <div style="height:1px;background:var(--tt-line);margin:14px 0 12px;"></div>
+            <div style="font-size:13px;font-weight:700;letter-spacing:.5px;color:var(--tt-ink2);">KOMENTAR (9)</div>
+          </div>
+          <div class="tt-fixed-bottom" style="display:flex;align-items:center;gap:12px;">
+            <div style="flex:1;min-width:0;border-radius:99px;background:var(--tt-cream2);display:flex;align-items:center;padding:10px 14px;font-size:14px;color:var(--tt-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Tulis komentar...</div>
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;font-size:13px;font-weight:600;color:var(--tt-coral);font-variant-numeric:tabular-nums;"><svg viewBox="0 0 24 24" style="width:23px;height:23px;"><use href="#ic-heart-fill"></use></svg>56</div>
+            <div style="flex-shrink:0;color:var(--tt-ink2);"><svg viewBox="0 0 24 24" style="width:23px;height:23px;"><use href="#ic-share"></use></svg></div>
+          </div>
+        </div>
+        <p class="frame-cap"><span class="variant-flag">变体</span><b>D1 的变体</b> —— 横图示例，多图横滑+页码角标（右上）+装饰标签（左下）位置规则维持现状（<code>_ImageCarousel</code> 原有逻辑，仅比例规则变化），两角互不遮挡；装饰标签文字「Rajin!」为示例——<code>ContentTag.name</code> 是运营后台动态配置内容，不是客户端固定文案，实际语言/措辞由运营决定。底部固定栏与 D1 同步（点赞+分享，见小红书式改版说明）。<span style="color:#B23A45;font-weight:700;">⚠️ 第四步核对修正：</span>此前漏画了作者行的内容类型徽章「Momen」，已按 D1 补上</p>
+      </div>
+
+      <!-- D3 —— 发布超7天，绝对日期变体 -->
+      <div class="frame-card"><span class="frame-tag">D3</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-appbar"><span style="flex:1;"></span><span class="ic"><svg viewBox="0 0 24 24" style="width:18px;height:18px;"><use href="#ic-more"></use></svg></span></div>
+          <div class="tt-scroll" style="bottom:66px;">
+            <div style="display:flex;align-items:center;gap:9px;">
+              <div style="width:36px;height:36px;border-radius:99px;background:var(--tt-mint);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;">A</div>
+              <div style="flex:1;"><div style="font-size:15px;font-weight:700;">Ayu Lestari</div><div style="font-size:13px;color:var(--tt-muted);margin-top:1px;">15 Jun 2025</div></div>
+              <div style="padding:3px 9px;border-radius:7px;background:#E7F8F0;font-size:10.5px;font-weight:700;color:#0E7A4D;">Momen</div>
+            </div>
+            <div style="margin-top:12px;border-radius:14px;overflow:hidden;position:relative;">
+              <div class="img-ph" style="width:100%;aspect-ratio:0.82;background:#E3DEEA;"><svg viewBox="0 0 24 24" style="width:40px;height:40px;"><use href="#ic-image"></use></svg></div>
+            </div>
+            <div style="font-size:15px;color:var(--tt-ink);line-height:1.45;margin-top:11px;">Hari ini Milo akhirnya berani lompat ke sofa sendiri 🎉 udah latihan seminggu penuh...</div>
+            <div style="height:1px;background:var(--tt-line);margin:14px 0 12px;"></div>
+            <div style="font-size:13px;font-weight:700;letter-spacing:.5px;color:var(--tt-ink2);">KOMENTAR (24)</div>
+          </div>
+          <div class="tt-fixed-bottom" style="display:flex;align-items:center;gap:12px;">
+            <div style="flex:1;min-width:0;border-radius:99px;background:var(--tt-cream2);display:flex;align-items:center;padding:10px 14px;font-size:14px;color:var(--tt-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Tulis komentar...</div>
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;font-size:13px;font-weight:600;color:var(--tt-coral);font-variant-numeric:tabular-nums;"><svg viewBox="0 0 24 24" style="width:23px;height:23px;"><use href="#ic-heart-fill"></use></svg>128</div>
+            <div style="flex-shrink:0;color:var(--tt-ink2);"><svg viewBox="0 0 24 24" style="width:23px;height:23px;"><use href="#ic-share"></use></svg></div>
+          </div>
+        </div>
+        <p class="frame-cap"><span class="variant-flag">变体</span><b>D1 的变体</b> —— 仅时间显示不同，其余同 D1；发布超 7 天由相对时间「N 天前」改绝对日期，格式复用现成 <code>formatDayMonthYear</code>（date_format.dart，输出如「15 Jun 2025」），无需新写格式化逻辑；底部固定栏与 D1 同步。<span style="color:#B23A45;font-weight:700;">⚠️ 第四步核对修正：</span>此前漏画了作者行的内容类型徽章「Momen」（与本条声称"其余同 D1"矛盾），已按 D1 补上</p>
+      </div>
+
+      <!-- D5 —— 纯文字态（无图），此前清单遗漏的分支状态 -->
+      <div class="frame-card"><span class="frame-tag">D5</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-appbar"><span style="flex:1;"></span><span class="ic"><svg viewBox="0 0 24 24" style="width:18px;height:18px;"><use href="#ic-more"></use></svg></span></div>
+          <div class="tt-scroll" style="bottom:66px;">
+            <div style="display:flex;align-items:center;gap:9px;">
+              <div style="width:36px;height:36px;border-radius:99px;background:var(--tt-gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;">D</div>
+              <div style="flex:1;">
+                <div style="font-size:15px;font-weight:700;">Dr. Sinta</div>
+                <div style="font-size:13px;color:var(--tt-muted);margin-top:1px;">1 hari lalu</div>
+              </div>
+              <div style="padding:3px 9px;border-radius:7px;background:var(--tt-minttint);font-size:10.5px;font-weight:700;color:var(--tt-mint);">Edukasi &amp; Tips</div>
+            </div>
+            <div style="font-size:15px;color:var(--tt-ink);line-height:1.5;margin-top:12px;">5 tanda dehidrasi pada kucing yang sering diabaikan pemilik: gusi kering, kulit lambat kembali saat dicubit, lesu, nafsu makan turun, dan urine pekat. Kalau muncul 2 atau lebih, segera bawa ke dokter hewan.</div>
+            <div style="margin-top:10px;"><span style="padding:3px 9px;border-radius:7px;background:#FEF3DE;font-size:10.5px;font-weight:700;color:#8A5A00;">Rajin!</span></div>
+            <div style="height:1px;background:var(--tt-line);margin:14px 0 12px;"></div>
+            <div style="font-size:13px;font-weight:700;letter-spacing:.5px;color:var(--tt-ink2);">KOMENTAR (6)</div>
+          </div>
+          <div class="tt-fixed-bottom" style="display:flex;align-items:center;gap:12px;">
+            <div style="flex:1;min-width:0;border-radius:99px;background:var(--tt-cream2);display:flex;align-items:center;padding:10px 14px;font-size:14px;color:var(--tt-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Tulis komentar...</div>
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;font-size:13px;font-weight:600;color:var(--tt-coral);font-variant-numeric:tabular-nums;"><svg viewBox="0 0 24 24" style="width:23px;height:23px;"><use href="#ic-heart-fill"></use></svg>31</div>
+            <div style="flex-shrink:0;color:var(--tt-ink2);"><svg viewBox="0 0 24 24" style="width:23px;height:23px;"><use href="#ic-share"></use></svg></div>
+          </div>
+        </div>
+        <p class="frame-cap"><span class="variant-flag">变体</span><b>D1 的变体，第二步清单遗漏的分支状态</b> —— <code>content_detail_page.dart</code> 明确有「无图」分支：<code>detail.imageUrls.isEmpty</code> 时不渲染 <code>_ImageCarousel</code>，装饰标签改成正文下方单独一行小胶囊（<code>else if (detail.decorationTags.isNotEmpty)</code>），而不是叠在图片角落——这条真实存在的分支此前完全没排进清单，本次补上；纯文字帖在 Cerita/Edukasia &amp; Tips 类型里最常见，故示例用科普类内容</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ 泳道 C：FR-114 ============ -->
+  <div class="lane" id="lane-c">
+    <div class="lane-title"><span class="lane-dot" style="background:var(--lane-c)"></span><h2>评论体验优化</h2><span class="lane-fr">FR-114</span></div>
+    <p class="lane-desc">回复态显式化、评论点赞、一级评论默认序改热度、作者标签、长按菜单、空态引导语。不改两级结构、不动审核链路。</p>
+    <div class="flow">
+      <em>主路径：</em><s>C1</s> 评论区默认态 <i>→ 点某条评论「回复」→</i> <s>C2</s> 回复态 <i>→ 发布成功 → 展开该父评论回复区、自动回到</i> <s>C1</s>
+      <span class="nl"></span>
+      <em>叠加层：</em><i>长按任意评论 →</i> <s>C3</s> 自己的评论菜单（复制/回复/删除）<i>／</i> <s>C4</s> 他人的评论菜单（复制/回复/举报），替代默认态叠加显示
+      <span class="nl"></span>
+      <em>空态：</em><s>C5</s> 无评论时的替代态（替代 C1）
+    </div>
+    <div class="frames">
+
+      <!-- C1 —— 评论区默认态 -->
+      <div class="frame-card"><span class="frame-tag">C1</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-scroll no-appbar" style="padding-top:14px;bottom:66px;">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.5px;color:var(--tt-ink2);margin-bottom:10px;">KOMENTAR (24)</div>
+            <div style="display:flex;gap:9px;padding:9px 0;border-bottom:1px solid var(--tt-line2);">
+              <div style="width:30px;height:30px;border-radius:99px;background:var(--tt-gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">B</div>
+              <div style="flex:1;">
+                <div style="display:flex;align-items:center;gap:6px;"><span style="font-size:13px;font-weight:700;">Budi S.</span><span style="padding:1px 6px;border-radius:5px;background:var(--tt-minttint);color:var(--tt-mint);font-size:9.5px;font-weight:700;">Penulis</span><span style="font-size:11px;color:var(--tt-muted);margin-left:auto;">2 jam lalu</span></div>
+                <div style="font-size:15px;margin-top:3px;">Wah lucu banget udah berani lompat sendiri!</div>
+                <div style="display:flex;align-items:center;gap:14px;margin-top:5px;">
+                  <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--tt-coral);font-variant-numeric:tabular-nums;"><svg viewBox="0 0 24 24" style="width:12px;height:12px;"><use href="#ic-heart"></use></svg> 12</span>
+                  <span style="font-size:11px;color:var(--tt-muted);">Balas</span>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;gap:9px;padding:9px 0;">
+              <div style="width:30px;height:30px;border-radius:99px;background:var(--tt-mint);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">R</div>
+              <div style="flex:1;">
+                <div style="display:flex;align-items:center;gap:6px;"><span style="font-size:13px;font-weight:700;">Rani K.</span><span style="font-size:11px;color:var(--tt-muted);margin-left:auto;">5 jam lalu</span></div>
+                <div style="font-size:15px;margin-top:3px;">Latihan seminggu itu sabar banget parentingnya 👏</div>
+                <div style="display:flex;align-items:center;gap:14px;margin-top:5px;">
+                  <span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--tt-muted);font-variant-numeric:tabular-nums;"><svg viewBox="0 0 24 24" style="width:12px;height:12px;"><use href="#ic-heart"></use></svg> 3</span>
+                  <span style="font-size:11px;color:var(--tt-muted);">Balas</span>
+                </div>
+                <div style="margin-top:8px;padding-left:14px;border-left:2px solid var(--tt-line2);">
+                  <div style="display:flex;gap:8px;">
+                    <div style="width:24px;height:24px;border-radius:99px;background:var(--tt-gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;">B</div>
+                    <div style="font-size:13px;"><b>Budi S.</b> <span style="padding:1px 5px;border-radius:4px;background:var(--tt-minttint);color:var(--tt-mint);font-size:9px;">Penulis</span><br><span style="font-size:15px;color:var(--tt-ink);">Iya dong, demi anak 😄</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tt-fixed-bottom" style="display:flex;align-items:center;gap:12px;">
+            <div style="flex:1;min-width:0;border-radius:99px;background:var(--tt-cream2);display:flex;align-items:center;padding:10px 14px;font-size:14px;color:var(--tt-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Tulis komentar...</div>
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;font-size:13px;font-weight:600;color:var(--tt-coral);font-variant-numeric:tabular-nums;"><svg viewBox="0 0 24 24" style="width:23px;height:23px;"><use href="#ic-heart-fill"></use></svg>128</div>
+            <div style="flex-shrink:0;color:var(--tt-ink2);"><svg viewBox="0 0 24 24" style="width:23px;height:23px;"><use href="#ic-share"></use></svg></div>
+          </div>
+        </div>
+        <p class="frame-cap"><b>现有页改版</b>（<code>comment_section.dart</code> <code>_CommentTile</code>）—— 新增：❤ 点赞图标+计数、「Penulis」作者标签（帖主发言时）；默认序改热度（赞数降序，同赞按时间正序）；原有头像/正文/回复入口/删除入口保留。底部栏与 D1 同步改版：未输入态右侧是点赞+分享（不再是发送按钮），聚焦输入后才切到发送态（见 C2）</p>
+      </div>
+
+      <!-- C2 —— 回复态 -->
+      <div class="frame-card"><span class="frame-tag">C2</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-scroll no-appbar" style="padding-top:14px;bottom:92px;">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.5px;color:var(--tt-ink2);margin-bottom:10px;">KOMENTAR (24)</div>
+            <div style="display:flex;gap:9px;padding:9px 0;background:var(--page-accent-soft);border-radius:10px;padding-left:8px;">
+              <div style="width:30px;height:30px;border-radius:99px;background:var(--tt-gold);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">B</div>
+              <div style="flex:1;"><div style="font-size:13px;font-weight:700;">Budi S.</div><div style="font-size:15px;margin-top:3px;">Wah lucu banget udah berani lompat sendiri!</div></div>
+            </div>
+          </div>
+          <div class="tt-fixed-bottom">
+            <div style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:99px;background:var(--tt-minttint);width:fit-content;margin-bottom:8px;">
+              <span style="font-size:11.5px;color:var(--tt-mint);font-weight:600;">Balas @Budi S.</span>
+              <span style="color:var(--tt-mint);display:inline-flex;"><svg viewBox="0 0 24 24" style="width:13px;height:13px;"><use href="#ic-close"></use></svg></span>
+            </div>
+            <div style="display:flex;align-items:center;gap:9px;">
+              <div style="flex:1;border-radius:99px;background:var(--tt-cream2);display:flex;align-items:center;padding:12px 16px;font-size:15px;color:var(--tt-muted);">Balas @Budi S....</div>
+              <div style="width:42px;height:42px;flex-shrink:0;border-radius:99px;background:var(--tt-mint);display:flex;align-items:center;justify-content:center;color:#fff;"><svg viewBox="0 0 24 24" style="width:19px;height:19px;"><use href="#ic-send"></use></svg></div>
+            </div>
+          </div>
+        </div>
+        <p class="frame-cap"><span class="variant-flag">变体</span><b>C1 的变体</b> —— <span style="color:#B23A45;font-weight:700;">⚠️ 核实发现：这不是全新功能</span>——<code>comment_composer.dart</code> 已有 <code>replyTarget</code> 显示「@昵称」+ ✕ 按钮，只是现状是<b>纯文本行</b>、占位文案<b>不随回复态切换</b>（仍是通用「Tulis komentar」）。本次要做的是：① 改成图中「胶囊」样式 ② 占位文案同步改「Balas @昵称...」③ 补上「点×或清空文字都退出回复态」④ 回复成功后自动展开父评论并滚动定位（现状均无）</p>
+      </div>
+
+      <!-- C3 —— 长按菜单：自己的评论 -->
+      <div class="frame-card"><span class="frame-tag">C3</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-scroll no-appbar" style="padding-top:14px;filter:blur(1px);opacity:.5;">
+            <div style="font-size:13px;font-weight:700;color:var(--tt-ink2);margin-bottom:10px;">KOMENTAR (24)</div>
+            <div style="display:flex;gap:9px;"><div style="width:30px;height:30px;border-radius:99px;background:var(--tt-mint);"></div><div style="flex:1;height:40px;"></div></div>
+          </div>
+          <div style="position:absolute;inset:0;background:rgba(20,16,25,.42);display:flex;align-items:center;justify-content:center;">
+            <div style="width:230px;background:var(--tt-cream);border-radius:16px;overflow:hidden;">
+              <div style="padding:13px 16px;font-size:13px;border-bottom:1px solid var(--tt-line2);display:flex;align-items:center;gap:10px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;color:var(--tt-ink2);"><use href="#ic-copy"></use></svg> Salin teks</div>
+              <div style="padding:13px 16px;font-size:13px;border-bottom:1px solid var(--tt-line2);display:flex;align-items:center;gap:10px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;color:var(--tt-ink2);"><use href="#ic-reply"></use></svg> Balas</div>
+              <div style="padding:13px 16px;font-size:13px;color:var(--tt-danger);display:flex;align-items:center;gap:10px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-trash"></use></svg> Hapus</div>
+            </div>
+          </div>
+        </div>
+        <p class="frame-cap"><b>叠加层</b>（全新交互，App 内暂无同款长按菜单可直接复用，样式参照既有底部动作面板 <code>_showMoreSheet</code> 的列表行样式）—— 复制 / 回复 / 删除三项，删除沿用既有 <code>_confirmDelete</code> 权限判定（<code>_canDelete</code>）</p>
+      </div>
+
+      <!-- C4 —— 长按菜单：他人评论 -->
+      <div class="frame-card"><span class="frame-tag">C4</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-scroll no-appbar" style="padding-top:14px;filter:blur(1px);opacity:.5;">
+            <div style="font-size:13px;font-weight:700;color:var(--tt-ink2);margin-bottom:10px;">KOMENTAR (24)</div>
+            <div style="display:flex;gap:9px;"><div style="width:30px;height:30px;border-radius:99px;background:var(--tt-gold);"></div><div style="flex:1;height:40px;"></div></div>
+          </div>
+          <div style="position:absolute;inset:0;background:rgba(20,16,25,.42);display:flex;align-items:center;justify-content:center;">
+            <div style="width:230px;background:var(--tt-cream);border-radius:16px;overflow:hidden;">
+              <div style="padding:13px 16px;font-size:13px;border-bottom:1px solid var(--tt-line2);display:flex;align-items:center;gap:10px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;color:var(--tt-ink2);"><use href="#ic-copy"></use></svg> Salin teks</div>
+              <div style="padding:13px 16px;font-size:13px;border-bottom:1px solid var(--tt-line2);display:flex;align-items:center;gap:10px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;color:var(--tt-ink2);"><use href="#ic-reply"></use></svg> Balas</div>
+              <div style="padding:13px 16px;font-size:13px;color:var(--tt-danger);display:flex;align-items:center;gap:10px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-flag"></use></svg> Laporkan</div>
+            </div>
+          </div>
+        </div>
+        <p class="frame-cap"><span class="variant-flag">变体</span><b>C3 的变体</b> —— 无删除项，改为举报（沿用既有 <code>openReport</code> 举报流程）</p>
+      </div>
+
+      <!-- C5 —— 空态 -->
+      <div class="frame-card"><span class="frame-tag">C5</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-scroll no-appbar" style="bottom:66px;display:flex;align-items:center;justify-content:center;">
+            <div style="text-align:center;">
+              <div style="display:flex;justify-content:center;color:var(--tt-muted);"><svg viewBox="0 0 24 24" style="width:36px;height:36px;"><use href="#ic-comment"></use></svg></div>
+              <div style="font-size:13px;color:var(--tt-muted);margin-top:10px;">Belum ada komentar, yuk mulai obrolannya</div>
+            </div>
+          </div>
+          <div class="tt-fixed-bottom" style="display:flex;align-items:center;gap:12px;">
+            <div style="flex:1;min-width:0;border-radius:99px;background:var(--tt-cream2);display:flex;align-items:center;padding:10px 14px;font-size:14px;color:var(--tt-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Tulis komentar...</div>
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;font-size:13px;font-weight:600;color:var(--tt-ink2);font-variant-numeric:tabular-nums;"><svg viewBox="0 0 24 24" style="width:23px;height:23px;"><use href="#ic-heart"></use></svg>0</div>
+            <div style="flex-shrink:0;color:var(--tt-ink2);"><svg viewBox="0 0 24 24" style="width:23px;height:23px;"><use href="#ic-share"></use></svg></div>
+          </div>
+        </div>
+        <p class="frame-cap"><b>空态</b>（现状 <code>detailNoComments</code> 只有一行纯文字居中，无插画）—— 本次补一枚 emoji/插画占位，文案「还没有评论，来说点什么吧」中/EN/ID 三语；此前遗漏了底部固定输入框，已补上（与 C1/D1 一致）</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ 泳道 L：FR-115 ============ -->
+  <div class="lane" id="lane-l">
+    <div class="lane-title"><span class="lane-dot" style="background:var(--lane-l)"></span><h2>图片查看体验优化（灯箱全屏化）</h2><span class="lane-fr">FR-115</span></div>
+    <p class="lane-desc">灯箱改为全屏沉浸态，只保留悬浮关闭×与页码。配套下滑关闭、双击缩放、放大态防误翻页、加载态。（本批次做通用组件，FR-112 场所照片复用属于批次 B1，直接接入即可）</p>
+    <div class="flow">
+      <em>主路径：</em><i>详情页点图 →</i> <s>L1</s> 默认全屏单图 <i>→ 横滑 →</i> <s>L2</s> 多图态 <i>→ 双击/捏合 →</i> <s>L3</s> 放大平移态 <i>→ 下滑 →</i> <s>L4</s> 关闭进行中 <i>→ 松手关闭回详情页</i>
+      <span class="nl"></span>
+      <em>变体：</em><s>L5</s> 加载中-模糊过渡（替代 L1 初始瞬间）<i>／</i> <s>L6</s> 加载失败-重试（替代 L1）
+    </div>
+    <div class="frames">
+
+      <!-- L1 —— 全屏默认单图 -->
+      <div class="frame-card"><span class="frame-tag">L1</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:#000;z-index:-1;"></div>
+          <svg viewBox="0 0 300 300" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;"><use href="#scene-cat-sofa"></use></svg>
+          <div style="position:absolute;top:44px;left:16px;width:34px;height:34px;border-radius:99px;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;"><svg viewBox="0 0 24 24" style="width:17px;height:17px;"><use href="#ic-close"></use></svg></div>
+        </div>
+        <p class="frame-cap"><b>新交互态</b>（现状 <code>_Lightbox</code>，content_detail_page.dart：黑底 Scaffold + 黑色 AppBar 居中页码，<b>保留系统状态栏与返回箭头</b>）—— 改为完全隐藏 AppBar、内容延伸进状态栏区域，只留悬浮关闭×（左上角）；图片铺满屏宽（现状 <code>InteractiveViewer</code>+<code>BoxFit.contain</code> 保留复用）</p>
+      </div>
+
+      <!-- L2 —— 多图横滑 -->
+      <div class="frame-card"><span class="frame-tag">L2</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:#000;z-index:-1;"></div>
+          <svg viewBox="0 0 300 300" preserveAspectRatio="xMidYMid slice" style="position:absolute;top:-22%;left:-22%;width:144%;height:144%;transform:translateX(-14%);"><use href="#scene-cat-sofa"></use></svg>
+          <div style="position:absolute;top:44px;left:16px;width:34px;height:34px;border-radius:99px;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;"><svg viewBox="0 0 24 24" style="width:17px;height:17px;"><use href="#ic-close"></use></svg></div>
+          <div style="position:absolute;top:48px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.4);color:#fff;font-size:12px;padding:4px 14px;border-radius:99px;font-variant-numeric:tabular-nums;">3/9</div>
+        </div>
+        <p class="frame-cap"><span class="variant-flag">变体</span><b>L1 的变体</b> —— 页码改悬浮居中胶囊「3/9」（对标小红书），替代现状黑色 AppBar 里的居中标题；横滑沿用现状 <code>PageView.builder</code>。<span style="color:#B23A45;font-weight:700;">⚠️ 第四步核对修正：</span>此前右边缘有一条未说明的橙黑渐变条，看图确认是视觉残留（无任何交互/说明依据），已删除</p>
+      </div>
+
+      <!-- L3 —— 放大平移态 -->
+      <div class="frame-card"><span class="frame-tag">L3</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:#000;z-index:-1;overflow:hidden;">
+            <svg viewBox="0 0 300 300" preserveAspectRatio="xMidYMid slice" style="position:absolute;width:250%;height:250%;left:-95%;top:-70%;"><use href="#scene-cat-sofa"></use></svg>
+          </div>
+          <div style="position:absolute;top:44px;left:16px;width:34px;height:34px;border-radius:99px;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;opacity:.5;"><svg viewBox="0 0 24 24" style="width:17px;height:17px;"><use href="#ic-close"></use></svg></div>
+        </div>
+        <p class="frame-cap"><span class="variant-flag">变体</span><b>L1 的变体</b> —— 双击/捏合放大到 2.5 倍，图片超出屏幕可平移；沿用现状 <code>InteractiveViewer</code>（现状已支持 minScale/maxScale，双击缩放为新增手势）；放大态下横滑改为图内平移，到边缘才切下一张</p>
+      </div>
+
+      <!-- L4 —— 下滑关闭进行中 -->
+      <div class="frame-card"><span class="frame-tag">L4</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:#1a1524;z-index:-1;opacity:.55;"></div>
+          <div style="position:absolute;top:70px;left:14px;right:14px;bottom:220px;border-radius:14px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.5);">
+            <svg viewBox="0 0 300 300" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;"><use href="#scene-cat-sofa"></use></svg>
+          </div>
+          <div style="position:absolute;top:44px;left:16px;width:34px;height:34px;border-radius:99px;background:rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;opacity:.4;"><svg viewBox="0 0 24 24" style="width:17px;height:17px;"><use href="#ic-close"></use></svg></div>
+        </div>
+        <p class="frame-cap"><b>全新过渡态</b>（App 内暂无同款「跟手下拖+背景渐透明」手势可复用，需新实现）—— 单指下拖图片跟手、背景透明度随拖拽距离降低；过阈值松手关闭，未过回弹；已放大状态下滑为图内平移，不触发关闭</p>
+      </div>
+
+      <!-- L5 —— 加载中 -->
+      <div class="frame-card"><span class="frame-tag">L5</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:#000;z-index:-1;"></div>
+          <svg viewBox="0 0 300 300" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%;filter:blur(7px);opacity:.7;"><use href="#scene-cat-sofa"></use></svg>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;"><div style="width:28px;height:28px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:99px;"></div></div>
+          <div style="position:absolute;top:44px;left:16px;width:34px;height:34px;border-radius:99px;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;"><svg viewBox="0 0 24 24" style="width:17px;height:17px;"><use href="#ic-close"></use></svg></div>
+        </div>
+        <p class="frame-cap"><span class="variant-flag">变体</span><b>L1 的变体</b> —— 先显示已有缩略图模糊过渡到清晰（现状 <code>_ImageCarousel</code> 缩略图走 <code>thumbWidth:1080</code>，可作为过渡起点，原图加载完成后淡入）</p>
+      </div>
+
+      <!-- L6 —— 加载失败 -->
+      <div class="frame-card"><span class="frame-tag">L6</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:#000;z-index:-1;"></div>
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;">
+            <div style="display:flex;justify-content:center;opacity:.7;"><svg viewBox="0 0 24 24" style="width:34px;height:34px;"><use href="#ic-image-broken"></use></svg></div>
+            <div style="font-size:12px;color:#B8B0CC;margin-top:10px;">Gagal memuat gambar</div>
+            <div style="margin-top:14px;padding:7px 20px;border:1px solid rgba(255,255,255,.4);border-radius:99px;font-size:12px;display:flex;align-items:center;gap:6px;"><svg viewBox="0 0 24 24" style="width:13px;height:13px;"><use href="#ic-refresh"></use></svg> Coba lagi</div>
+          </div>
+          <div style="position:absolute;top:44px;left:16px;width:34px;height:34px;border-radius:99px;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;"><svg viewBox="0 0 24 24" style="width:17px;height:17px;"><use href="#ic-close"></use></svg></div>
+        </div>
+        <p class="frame-cap"><span class="variant-flag">变体</span><b>L1 的变体</b> —— 现状 <code>_ImageCarousel</code> 缩略图失败态只是灰色容器（<code>errorBuilder</code> 返回纯色块），灯箱内新增带「重试」按钮的失败态</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ 泳道 U：FR-116 ============ -->
+  <div class="lane" id="lane-u">
+    <div class="lane-title"><span class="lane-dot" style="background:var(--lane-u)"></span><h2>内容发布图片排序</h2><span class="lane-fr">FR-116</span></div>
+    <p class="lane-desc">发布页九宫格内长按拖拽调整图片顺序，首图常驻「封面」角标。仅发布前可调，已发布内容不在本 FR 范围。</p>
+    <div class="flow">
+      <em>主路径：</em><i>发布页选图后 →</i> <s>U1</s> 九宫格默认态（封面角标）<i>→ 长按一张图 →</i> <s>U2</s> 拖拽进行中态 <i>→ 松手完成排序 → 回到</i> <s>U1</s>（新顺序）
+    </div>
+    <div class="frames">
+
+      <!-- U1 —— 九宫格默认态 -->
+      <div class="frame-card"><span class="frame-tag">U1</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-appbar"><span class="ic"><svg viewBox="0 0 24 24" style="width:18px;height:18px;"><use href="#ic-chevron-left"></use></svg></span><span class="t">Buat Postingan</span></div>
+          <div class="tt-scroll">
+            <div style="font-size:11px;font-weight:600;color:var(--tt-ink2);margin-bottom:8px;">FOTO</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;">
+              <div style="aspect-ratio:1;border-radius:9px;background:#E3DEEA;position:relative;" class="img-ph">
+                <div style="position:absolute;top:4px;left:4px;padding:1px 6px;border-radius:5px;background:rgba(0,0,0,.5);color:#fff;font-size:9px;font-weight:700;">Sampul</div>
+                <div style="position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:99px;background:rgba(0,0,0,.4);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:10px;height:10px;"><use href="#ic-close"></use></svg></div>
+              </div>
+              <div style="aspect-ratio:1;border-radius:9px;background:#DEE3EA;position:relative;" class="img-ph">
+                <div style="position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:99px;background:rgba(0,0,0,.4);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:10px;height:10px;"><use href="#ic-close"></use></svg></div>
+              </div>
+              <div style="aspect-ratio:1;border-radius:9px;background:#E7E0DA;position:relative;" class="img-ph">
+                <div style="position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:99px;background:rgba(0,0,0,.4);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:10px;height:10px;"><use href="#ic-close"></use></svg></div>
+              </div>
+              <div style="aspect-ratio:1;border-radius:9px;border:2px dashed var(--tt-dashed);background:var(--tt-cream2);display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--tt-mint);">
+                <div><svg viewBox="0 0 24 24" style="width:20px;height:20px;"><use href="#ic-plus"></use></svg></div><div style="font-size:10px;font-weight:500;">Tambah</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="frame-cap"><b>现有页局部改动</b>（<code>publish_compose_page.dart</code> <code>_imageRow</code>）—— 现状「按选择顺序排列、无排序手段」，新增可拖拽调整 + 首图左上角常驻「Sampul」（封面）小角标（明示第一张即 Feed 封面/详情页首图/分享卡主图，印尼语文案为新增，无现成 l10n key）；网格本身（3 列、虚线添加格、右上角 ✕ 删除）沿用现状不变</p>
+      </div>
+
+      <!-- U2 —— 拖拽进行中 -->
+      <div class="frame-card"><span class="frame-tag">U2</span>
+        <div class="phone-shell">
+          <div style="position:absolute;inset:0;background:var(--tt-cream);z-index:-1;"></div>
+          <div class="tt-status"><span>9:41</span><span style="display:flex;align-items:center;gap:5px;"><svg viewBox="0 0 24 24" style="width:16px;height:16px;"><use href="#ic-signal"></use></svg><svg viewBox="0 0 24 24" style="width:14px;height:14px;"><use href="#ic-wifi"></use></svg><svg viewBox="0 0 24 24" style="width:21px;height:21px;"><use href="#ic-battery"></use></svg></span></div>
+          <div class="tt-appbar"><span class="ic"><svg viewBox="0 0 24 24" style="width:18px;height:18px;"><use href="#ic-chevron-left"></use></svg></span><span class="t">Buat Postingan</span></div>
+          <div class="tt-scroll">
+            <div style="font-size:11px;font-weight:600;color:var(--tt-ink2);margin-bottom:8px;">FOTO</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;position:relative;">
+              <div style="aspect-ratio:1;border-radius:9px;background:var(--tt-line2);"></div>
+              <div style="aspect-ratio:1;border-radius:9px;background:#DEE3EA;transform:scale(1.08) rotate(-2deg);box-shadow:0 10px 24px rgba(30,20,60,.35);z-index:2;position:relative;" class="img-ph">
+                <div style="position:absolute;top:4px;left:4px;padding:1px 6px;border-radius:5px;background:rgba(0,0,0,.5);color:#fff;font-size:9px;font-weight:700;">Sampul</div>
+              </div>
+              <div style="aspect-ratio:1;border-radius:9px;background:#E7E0DA;"></div>
+              <div style="aspect-ratio:1;border-radius:9px;border:2px dashed var(--tt-dashed);background:var(--tt-cream2);"></div>
+            </div>
+          </div>
+        </div>
+        <p class="frame-cap"><span class="variant-flag">变体</span><b>U1 的变体</b> —— 抬起态放大+阴影+其余格让位；松手后第 1 格的「Sampul」角标跟随新首图。全新交互，App 内暂无同款拖拽重排网格可复用（<code>pubspec.yaml</code> 未引入任何 reorder 类第三方包），需新实现</p>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

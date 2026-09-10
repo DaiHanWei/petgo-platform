@@ -1,0 +1,105 @@
+# generated: 2026-09-10
+# last_updated: 2026-09-10
+# project: TailTopia V1.3.0 批次 A —— 内容体验修复包
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.3.0
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-batch-a.md (5 Epic / 19 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-delta.md (AD-A1~AD-A28，权威)
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-batch-a-content-fixes.md
+# ui: {project-root}/_bmad-output/planning-artifacts/v1.3.0/ui-v1.3.0-batch-a-content-fixes.html (27 屏 / 6 泳道)
+# decisions: {project-root}/_bmad-output/planning-artifacts/v1.3.0/决策日志.md (A-1~A-9，冲突时以此为准)
+# copy: {project-root}/_bmad-output/planning-artifacts/v1.3.0/文案需求清单.md (EN/ID 已定稿)
+#
+# ⚠️ 批次隔离：V1.3.0 由多批次组成，各批次**独立 Epic 号段、独立 sprint 文件**。
+#    本文件只跟踪**批次 A**；批次 B / C 另起 sprint-status-v1.3.0-batch-b.yaml 等，互不覆盖。
+#    分支：feat/1.3.0-batch-a-content-fixes → 合回 dev_1.3.0。
+#
+# ⚠️ App 只发 EN / ID 两套语言，**无中文包**。PRD 里的「中/EN/ID 三语」是笔误（delta §7 R-7 待回写）。
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+# Retrospective: optional <-> done
+#
+# WORKFLOW NOTES:
+# ===============
+# - 每 story 三段推进：后端 -> 前端 -> 联调（CLAUDE.md 纪律）
+# - 每条 AC 已标 L0(静态) / L1(集成) / L2(端到端) 层级
+# - 云端 headless 只跑到 L0 绿灯；L1/L2 留本地，在 Completion Notes 标注
+# - Flyway 一律时间戳版本号；打包一律 mvn -B clean package
+# - 提 PR 前自查：bash scripts/ci/check-flyway-versions.sh origin/main
+#
+# ⚠️ 本批次 L2 占比显著高于既往版本 —— 手势、拖拽、底栏两态、小屏护栏、出图扫码
+#    均无法由 L0 覆盖。**排期必须给真机验收留出实打实的时间，不能按 L0 绿灯就算完。**
+#
+# ===== Epic 依赖链（全后向，无环） =====
+# 零依赖、可立刻开工：E1 · E2 · E4 · E5
+# E2 -> E3   # 建议序，非硬依赖：详情页结构重排完再把灯箱搬出去，只搬一次
+# E3 -> 批次 B1 的 FR-112   # 跨批次：场所照片直接接入 E3 交付的通用查看器
+#
+# ===== 本批次数据模型增量（6 支时间戳迁移，分散在 4 个 story）=====
+# 1-2  存量 pet_milestones.trigger_type 改判
+# 1-4  milestone_completions.celebrated_at + 同支内存量回填
+# 2-4  comment_likes 新表 + 两侧索引
+# 5-3  PawCoin 年龄卡渠道两列  /  年龄卡分享奖励账本表
+# 5-4  用户一次性引导标记键值表
+#
+# ===== 三条安全攸关（写代码时勿埋违反点）=====
+# 5-1 AC5  游客门控只升不降，新路由不得进例外集合
+# 5-3 AC3  分享奖励日界按 WIB，不按 UTC（资金口径）
+# 2-4 AC8 / 5-4 AC7  新增的每张带用户外键的表都要进注销级联
+
+development_status:
+  # ===== Epic 1: 里程碑体验修复 · FR-111 全部 =====
+  # 消除三个现存缺陷：健康记录错点亮、通用宠物健康类仍可打卡、错过的庆祝补不回来。
+  # 庆祝页与徽章视觉维持现状（重绘属批次 B2）。
+  # OQ-6 已闭合（决策 A-9：脏行仅 3 条，不清理）→ 本 Epic 无条件分支、无迁移顺序约束。
+  epic-1: backlog
+  1-1-自动完成寻址改按物种显式列举: ready-for-dev   # 修一整类线上错误：OTHER 清单五处错位（2 处错点亮 + 3 处静默失效）。建议首条，止血
+  1-2-通用宠物健康类改自动达成: ready-for-dev       # 🔴 别忘存量 trigger_type 迁移——铺清单入口有短路，只改目录对存量用户完全失效
+  1-3-灰徽章一律有去处: ready-for-dev               # 纯前端。M9→绝育页、M5/G-M1→兽医问诊页；收口判据=没有死胡同
+  1-4-庆祝状态记账与存量回填: ready-for-dev         # 🔴 回填与建列必须同一支迁移；置位按客户端回传列表，禁 mark-all
+  1-5-未庆祝角标与补庆祝: ready-for-dev             # 依赖 1-4。🔴「去发布」路径必须抑制连弹
+  epic-1-retrospective: optional
+
+  # ===== Epic 2: 详情页阅读与评论体验 · FR-113 + FR-114 =====
+  # 合并理由：同一屏同一文件；底栏合并会重排评论输入框所在层级，拆开做必然返工。
+  # 🔴 2-2/2-3 结构重排必须先于 2-5/2-6。
+  epic-2: backlog
+  2-1-详情接口下发图片尺寸: ready-for-dev           # 订正「FR-113 零接口变更」——详情响应至今没有尺寸字段
+  2-2-详情页图片按原比例通栏: ready-for-dev         # 依赖 2-1。🔴 必须调 Feed 同一个出口函数；护栏口径按详情页实测重取
+  2-3-互动栏与输入框合并为固定底栏: ready-for-dev   # 🔴 结构重排，必须先于 2-5/2-6。评论数 N 口径与 Feed 同源
+  2-4-评论点赞与热度排序: ready-for-dev             # 本批次后端最难。三条「不要做」：不加计数列 / 不改 FeedCursor / 不做服务端快照
+  2-5-评论区可读性与操作: ready-for-dev             # 依赖 2-3 + 2-4。🔴 自己刚发的评论必须置顶可见
+  2-6-回复态显式化: ready-for-dev                   # 依赖 2-3。不是全新功能，是四项增量
+  epic-2-retrospective: optional
+
+  # ===== Epic 3: 大图查看器全屏化 · FR-115 =====
+  # 零后端。交付物是通用共享组件，同时是批次 B1 的前置。
+  # 建议排在 Epic 2 之后（少搬一次代码），非硬依赖。
+  epic-3: backlog
+  3-1-灯箱上提为共享组件并全屏化: ready-for-dev
+  3-2-灯箱四个手势: ready-for-dev                   # 🔴 本批次最重的一条。不引包，全自实现；手势优先级顺序不可调换
+  3-3-灯箱过渡动画与加载态: ready-for-dev           # 🔴 Hero tag 必须用调用方前缀，不得从 URL 推导（B1 会同图同屏，直接抛异常）
+  epic-3-retrospective: optional
+
+  # ===== Epic 4: 发布图片排序 · FR-116 =====
+  # 零后端、零依赖，可随时插队。
+  epic-4: backlog
+  4-1-发布页拖拽重排与封面角标: ready-for-dev       # 不引包，自实现。🔴 上传开始即锁定重排，不允许「上传中还能拖」
+  epic-4-retrospective: optional
+
+  # ===== Epic 5: 宠物年龄卡与综合入口 · FR-65 全部 =====
+  # 三条安全攸关全在本 Epic：游客门控 / WIB 资金口径 / 注销级联。
+  epic-5: backlog
+  5-1-综合入口聚合页与ktp平移: ready-for-dev        # 🔴 新路由不得进门控例外集合；迁移旧路径禁止前缀字符串替换
+  5-2-年龄换算与卡片生成: ready-for-dev             # 依赖 5-1。纯客户端。🔴 二维码三条硬要求是可扫底线，不为视觉让步
+  5-3-年龄卡分享奖励链路: ready-for-dev             # 🔴 三层结构（原以为两层，漏了账本表）；日界按 WIB，按 UTC 会让 06-07 点领双份
+  5-4-迁移引导蒙层与引导标记表: ready-for-dev       # 双侧。按账号存（与 v1.1.6 按设备不同，理由见 story）；聚光挖孔禁用 box-shadow 叠加
+  epic-5-retrospective: optional
+
+# ===== 唯一剩余外部依赖 =====
+# 年龄卡卡面设计稿 + 背景插画素材（设计侧）。不挡开工——5-2 可用纯色背景跑通全链路，
+# 素材到位后替换即可。催稿时提醒：底部品牌带不能压小，二维码有可扫底线，压过头代码会当场断言失败。

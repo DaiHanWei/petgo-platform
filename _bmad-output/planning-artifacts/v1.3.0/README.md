@@ -19,6 +19,7 @@
 | 主题 | 功能分支 | PRD 文件 | Epic 号段 | 状态 |
 |---|---|---|---|---|
 | 运营后台 UI 重构 | `feat/1.3.0-ops-ui-refactor` | `PRD-v1.3.0-ops-ui-refactor.md` | Epic 1–? | 待传 PRD |
+| 批次 A · 内容体验修复包 | `feat/1.3.0-batch-a-content-fixes` | `PRD-v1.3.0-batch-a-content-fixes.md` | 独立 epics 文件，不与其它主题共号 | PRD + UI 稿已入库 |
 
 Epic 号段在拆 epics 前先登记，story 文件名 `<epic>-<n>-<中文名>.md` 由此派生，不同主题不会重复。
 
