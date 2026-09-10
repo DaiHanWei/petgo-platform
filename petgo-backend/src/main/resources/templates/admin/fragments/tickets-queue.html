@@ -25,7 +25,7 @@
             <label class="q-check" th:if="${r.pending()}"
                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')">
                 <input type="checkbox" name="ticketIds" form="ticket-batch-form" data-batch-item th:value="${r.batchToken()}"
-                       th:attr="data-type=${r.row.type()},data-label=${(r.row.targetNickname() != null ? r.row.targetNickname() : '#' + r.row.targetUserId()) + ' · ' + r.row.reportCount() + ' 次'}"/>
+                       th:attr="data-type=${r.row.type()},data-label=${(r.row.targetNickname() != null ? r.row.targetNickname() : '#' + r.row.targetUserId()) + ' · ' + r.row.reportCount() + ' ' + #{admin.v130.tickets.unit.times}}"/>
             </label>
             <span class="dot" th:classappend="'dot--' + ${r.dot()}"></span>
             <span th:text="${r.row.targetNickname() ?: #messages.msg('admin.review.subject.deactivated')}" th:classappend="${r.row.targetDeleted()} ? 'muted'">昵称</span>

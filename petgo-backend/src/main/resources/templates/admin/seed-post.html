@@ -68,7 +68,7 @@
                          "Diary" = GROWTH_MOMENT。单条发布是 GROWTH_MOMENT 的**唯一入口**，
                          这里搞反枚举等于把成长日历入口做没了。 -->
                     <select id="type" th:field="*{type}" class="field-full">
-                        <option th:each="t : ${types}" th:value="${t}" th:text="${t}">类型</option>
+                        <option th:each="t : ${types}" th:value="${t}" th:text="#{'admin.contentType.' + ${t}}">类型</option>
                     </select>
                     <p class="err" th:if="${#fields.hasErrors('type')}" th:errors="*{type}">类型错误</p>
 

@@ -1,0 +1,40 @@
+name: i18n-guard
+
+# 三语守门（V1.3.0 Story 2.2 AC7 + Story 11.2 AC1/AC2，NFR-3）：
+#   ① check-i18n-keys.sh          —— zh_CN / en / id / 默认包 四份 key 集合必须逐一相等，包内无重复；
+#   ② check-admin-hardcoded-text.sh —— 后台模板与脚本里不许有写死的单语文案（注释与占位默认文本除外）。
+#
+# 🔴 单列一条流水线而不是塞进 backend-ci：这两条约束的对手是【赶工时顺手写死一句中文】。
+#    红掉的检查要有名字，审 PR 的人才看得见自己踩的是哪条线，而不是在一屏 mvn 日志里找那一行。
+#    另外它们不需要 JDK / Postgres / Redis，秒级出结果，不该被 backend-ci 的十几分钟拖着。
+# ⚠️ paths 两份是抄的不是引的：GitHub Actions 不支持 YAML 锚点，改一处必须同步另一处。
+on:
+  push:
+    branches: [main, dev_1.3.0]
+    paths:
+      - "petgo-backend/src/main/resources/i18n/**"
+      - "petgo-backend/src/main/resources/templates/admin/**"
+      - "petgo-backend/src/main/resources/static/admin/**"
+      - "scripts/ci/check-i18n-keys.sh"
+      - "scripts/ci/check-admin-hardcoded-text.sh"
+      - ".github/workflows/i18n-guard.yml"
+  pull_request:
+    paths:
+      - "petgo-backend/src/main/resources/i18n/**"
+      - "petgo-backend/src/main/resources/templates/admin/**"
+      - "petgo-backend/src/main/resources/static/admin/**"
+      - "scripts/ci/check-i18n-keys.sh"
+      - "scripts/ci/check-admin-hardcoded-text.sh"
+      - ".github/workflows/i18n-guard.yml"
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 三语 key 集合相等（zh_CN / en / id / 默认包）
+        run: bash scripts/ci/check-i18n-keys.sh
+
+      - name: 后台无裸文案（模板 + admin-*.js）
+        run: bash scripts/ci/check-admin-hardcoded-text.sh

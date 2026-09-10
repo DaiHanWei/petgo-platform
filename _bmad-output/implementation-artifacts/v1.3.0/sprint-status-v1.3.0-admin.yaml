@@ -124,7 +124,7 @@ development_status:
   # ---- Epic 11: 全量核对与收尾 ----
   epic-11: in-progress
   11-1-写操作清单-diff-与端点零丢失核对: review   # 写操作清单 diff 与端点零丢失核对
-  11-2-三语与-id-占位全站验收: ready-for-dev   # 三语与 ID 占位全站验收
+  11-2-三语与-id-占位全站验收: review   # 三语与 ID 占位全站验收
   11-3-退役路由与模板清理确认: ready-for-dev   # 退役路由与模板清理确认
   11-4-权限矩阵与导航一致性收口: ready-for-dev   # 权限矩阵与导航一致性收口
   11-5-stag-全量验收与-ui-稿比对: ready-for-dev   # stag 全量验收与 UI 稿比对

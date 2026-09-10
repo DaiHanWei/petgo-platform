@@ -1,0 +1,55 @@
+# 裸文案守门的例外与已知欠账（V1.3.0 Story 11.2 · AC2）
+#
+# 格式：`<相对路径>|<类别>   # 依据`（也支持 `<相对路径>:<行号>`，但**不推荐** ——
+#       行号一改就失效，会让无关改动把 CI 弄红，于是所有人学会的第一件事就是随手改行号，
+#       那时它已经不是护栏了）。
+#
+# 类别取自守门的报错标签：`正文` / `属性 <名>` / `枚举未走 key` /
+#                         `JS 中文字面量` / `JS 硬编码文案（应来自 data-* / #{}）`。
+#
+# 两类条目，读的时候要分清：
+#   🟢 **长期例外** —— 判定规则的固有假阳性，不是欠账，不需要修。
+#   🟠 **已知欠账** —— 真的没走 key，登记在案、归属明确，由对应 story 修（本 story 只验收不改业务，AC3 口径）。
+#      逐条清单与影响见 `_bmad-output/implementation-artifacts/v1.3.0/i18n-枚举未走key-20260910.md`。
+
+# ============================ 🟢 长期例外 ============================
+# 选项内容是**数据**不是枚举：城市名、P0/P1/P2 这类通用代号，没有翻译一说。
+petgo-backend/src/main/resources/templates/admin/places.html|枚举未走 key   # ${cities} 是城市名（数据），不翻译
+petgo-backend/src/main/resources/templates/admin/fragments/review-detail.html|枚举未走 key   # {'P0','P1','P2'} 优先级代号，通用不翻译
+petgo-backend/src/main/resources/templates/admin/manual-review.html:66   # 同上，{'P0','P1','P2'}
+
+# admin-core.js 的六处英文兜底：`getAttribute('data-msg-*') || '<english>'`。
+# 🟠 它们**确实是欠账**（模板漏给 data-msg-* 时会显示英文），但改法在模板侧不在脚本侧 ——
+#    见下方欠账清单里的「上传组件缺 data-msg-*」一条。这里先豁免，避免守门从落地起就是红的。
+petgo-backend/src/main/resources/static/admin/admin-core.js|JS 硬编码文案（应来自 data-* / #{}）   # 🟠 六处 data-msg-* 的英文兜底，见欠账清单
+
+# ============================ 🟠 已知欠账（枚举未走 key）============================
+# 下拉框直接渲染枚举常量名，切 ID 后显示 ACTIVE / ILLEGAL / GENERAL。
+# 这些页面各归其 Epic，按 AC3 的口径「回对应页面 story 修」，本 story 只登记。
+
+# --- 泳道 1 待办中心（Epic 2）---
+petgo-backend/src/main/resources/templates/admin/manual-review.html|枚举未走 key   # ${categories} 复核类别，需新建 key
+
+# --- 泳道 2 内容（Epic 7）---
+petgo-backend/src/main/resources/templates/admin/content.html|枚举未走 key   # ${speciesOptions} / ${speciesSources}，需新建 key
+petgo-backend/src/main/resources/templates/admin/fragments/drawer-content.html|枚举未走 key   # ${speciesOptions}
+petgo-backend/src/main/resources/templates/admin/content-pins.html|枚举未走 key   # ${slots} 置顶槽位
+petgo-backend/src/main/resources/templates/admin/seed-post.html|枚举未走 key   # ${speciesOptions}（同页的 ${types} 已修）
+petgo-backend/src/main/resources/templates/admin/seed-batch-workspace.html|枚举未走 key   # ${speciesOptions}
+
+# --- 泳道 3 用户（Epic 8）---
+petgo-backend/src/main/resources/templates/admin/virtual-accounts.html|枚举未走 key   # ${speciesOptions}
+petgo-backend/src/main/resources/templates/admin/fragments/drawer-virtual-account.html|枚举未走 key   # ${speciesOptions}
+
+# --- 泳道 6 兽医与问诊（Epic 9）---
+petgo-backend/src/main/resources/templates/admin/vets.html|枚举未走 key   # ${vetStatuses} VetStatus，需新建 key
+
+# --- 泳道 7 配置与安全（Epic 6）---
+petgo-backend/src/main/resources/templates/admin/audit-logs.html|枚举未走 key   # ${actionTypes} 审计动作类型，需新建 key
+
+# --- 泳道 5 商城（Epic 10，⏳ 本轮未执行；届时随页面重构一并修）---
+petgo-backend/src/main/resources/templates/admin/shop-margin.html|枚举未走 key   # ⏳ Epic 10
+petgo-backend/src/main/resources/templates/admin/shop-orders.html|枚举未走 key   # ⏳ Epic 10
+petgo-backend/src/main/resources/templates/admin/shop-products.html|枚举未走 key   # ⏳ Epic 10
+petgo-backend/src/main/resources/templates/admin/shop-product-form.html|枚举未走 key   # ⏳ Epic 10（6 处）
+petgo-backend/src/main/resources/templates/admin/shop-returns.html|枚举未走 key   # ⏳ Epic 10

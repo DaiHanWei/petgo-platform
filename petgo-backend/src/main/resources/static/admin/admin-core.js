@@ -828,7 +828,10 @@ function adminUploadError(root, text, selectors) {
             return r.json().then(function (j) { return { ok: r.ok, body: j }; });
         }).then(function (res) {
             if (!res.ok) {
-                reject(root, file.name, res.body.error || 'upload failed');
+                // 🔴 兜底文案走 failedText(root)（data-msg-failed），不要在这里再写一句英文：
+                //    服务端不回 error 时，写死的那句是**唯一**会显示给运营的文字，
+                //    而它永远是英文 —— 印尼同事看到的就是一句看不懂的话（11.2 复审 C6）。
+                reject(root, file.name, res.body.error || failedText(root));
             } else {
                 // 用服务端回的权威用量校准本地计数（别自己累加 —— 会和真相慢慢分叉）。
                 root.setAttribute('data-used-count', res.body.usedCount);
