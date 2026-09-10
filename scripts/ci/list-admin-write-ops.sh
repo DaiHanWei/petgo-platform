@@ -60,7 +60,11 @@ retired_note() {
     /admin/content/\{postId\}) echo "⛔ 本版退役（7.1，详情抽屉化）" ;;
     /admin/users/\{userId\}) echo "⛔ 本版退役（8.1，五页签抽屉）" ;;
     /admin/consult-orders/\{orderToken\}|/admin/ai-orders/\{orderToken\}) echo "⛔ 本版退役（8.4，抽屉吸收详情页）" ;;
-    /admin/vets/\{id\}|/admin/vets/\{id\}/edit) echo "⛔ 本版退役（9.1a，资料/账号页签）" ;;
+    # ⚠️ 只有 GET /admin/vets/{id}/edit 退役；**POST /admin/vets/{id} 仍在服役**
+    #    （AC6 要求它逐字不变）。两个一起匹配的话，清单里那条写端点会带着「已退役」备注，
+    #    Story 11.1 做 diff 时读到的是一个自相矛盾的口径。
+    /admin/vets/\{id\}/edit) echo "⛔ 本版退役（9.1a，资料并入抽屉资料页签）" ;;
+    /admin/vets/online) echo "⛔ 本版退役（9.1a，在线态并入列表与抽屉）" ;;
     /admin/vets/\{id\}/qualification) echo "⛔ 本版退役（9.1b，资质页签）" ;;
     /admin/vets/online) echo "⛔ 本版退役（9.1a，并入兽医列表）" ;;
     /admin/ratings) echo "⛔ 本版退役（9.1b，评分并入兽医列表筛选栏）" ;;

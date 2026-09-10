@@ -44,6 +44,15 @@ public final class AdminHxEvents {
     public static final String VIRTUAL_ACCOUNT_LIST_REFRESH = "admin:virtual-account-list-refresh";
 
     /**
+     * B20 兽医账号：列表按当前筛选 + 当前页重拉（Story 9.1a）。
+     *
+     * <p>🔴 为什么不做单行 oob + 摘要条 oob：抽屉里那几个 POST 身上**没有筛选参数**，
+     * 在服务端重算只能按全库算，而屏幕上的表格是筛选后的 —— 两个数摆在一起就是错的。
+     * 由页面上的刷新槽带着当前筛选表单去重拉，是唯一能保证「表格与摘要条同一口径」的做法。
+     */
+    public static final String VET_LIST_REFRESH = "admin:vet-list-refresh";
+
+    /**
      * B12 支付记录：列表按当前筛选 + 当前页重拉（Story 8.5，仅 stag 的模拟回调会发）。
      *
      * <p>⚠️ 这里**必须整表重拉、不做单行 oob**：模拟回调改的是状态，而摘要条的

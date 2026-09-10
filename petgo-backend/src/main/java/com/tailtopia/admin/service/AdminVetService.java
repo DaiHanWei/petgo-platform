@@ -76,11 +76,14 @@ public class AdminVetService {
     public List<VetAdminView> list(VetListFilter rawFilter) {
         VetListFilter f = (rawFilter == null ? VetListFilter.none() : rawFilter).normalized();
         String qLower = f.q() == null ? null : f.q().toLowerCase(Locale.ROOT);
-        // 🔴「最后在线」一次取全集（V1.3.0 Story 9.1a）：这一列跟着每一行渲染，
-        //    逐行 ZSCORE 会把一次列表渲染变成 N 次 Redis 往返。
+        // 🔴 在线态与「最后在线」都**一次取全集**（V1.3.0 Story 9.1a）：这两列跟着每一行渲染，
+        //    逐行查会把一次列表渲染变成 2N 次 Redis 往返（statusOf = ZSCORE + SISMEMBER）。
+        //    在线集合的 key 集合本身就是「谁在线」，所以 ONLINE/OFFLINE 零成本推出来，
+        //    只有 BUSY 需要再取一次忙碌集合。
         java.util.Map<Long, java.time.Instant> lastSeen = presence.lastSeenAll();
+        java.util.Set<Long> busy = presence.busyAll();
         return vetAccounts.listAll().stream()
-                .map(v -> assemble(v, lastSeen))
+                .map(v -> assemble(v, lastSeen, busy))
                 .filter(v -> f.accountStatus() == null || f.accountStatus().equals(v.status()))
                 .filter(v -> f.qualStatus() == null || f.qualStatus().equals(v.qualStatus()))
                 .filter(v -> matchesOnline(f.online(), v.presence()))
@@ -90,9 +93,14 @@ public class AdminVetService {
                 .toList();
     }
 
-    private VetAdminView assemble(VetAccount v, java.util.Map<Long, java.time.Instant> lastSeen) {
+    private VetAdminView assemble(VetAccount v, java.util.Map<Long, java.time.Instant> lastSeen,
+            java.util.Set<Long> busy) {
         String qual = vetQualifications.getStatus(v.getId()).name();
-        String pres = presence.statusOf(v.getId()).name();
+        // ⚠️ 口径必须与 VetPresenceService.statusOf 逐字一致：在集合里 = 在线，
+        //    再看忙碌集合分 BUSY / ONLINE；不在 = OFFLINE。写歪一点，列表与抽屉就会各说各话。
+        String pres = (lastSeen.containsKey(v.getId())
+                ? (busy.contains(v.getId()) ? VetPresenceStatus.BUSY : VetPresenceStatus.ONLINE)
+                : VetPresenceStatus.OFFLINE).name();
         VetRatingsView ratings = ratingQuery.forVet(v.getId());
         Double avg = ratings.count() == 0 ? null : ratings.average();
         return VetAdminView.of(v, qual, pres, avg, lastSeen.get(v.getId()));

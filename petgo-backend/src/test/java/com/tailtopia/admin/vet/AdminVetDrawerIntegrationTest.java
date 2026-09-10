@@ -95,6 +95,8 @@ class AdminVetDrawerIntegrationTest extends ApiIntegrationTest {
                 .contains("name=\"online\"").contains("name=\"q\"");
         assertThat(html).as("最后在线并入列表（原 vet-online 整页的数据）").contains("最后在线");
         assertThat(html).as("开户仍是模态框，不是抽屉").contains("id=\"createVetDialog\"");
+        assertThat(html).as("＋开户在筛选栏里（AC1）")
+                .containsPattern("id=\"vet-filters-form\"[\\s\\S]*data-open-dialog=\"createVetDialog\"[\\s\\S]*</form>");
     }
 
     @Test
@@ -170,36 +172,58 @@ class AdminVetDrawerIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    /**
+     * 封禁成功：抽屉体 oob + toast，列表由 {@code admin:vet-list-refresh} **带着当前筛选**重拉。
+     *
+     * <p>🔴 不在服务端算行与摘要条：这几个 POST 身上没有筛选参数，只能按全库算，
+     * 而屏幕上的表格是筛选后的 —— 摘要条会跳成全库的数，运营读成统计坏了。
+     */
     @Test
-    void banningViaHtmxSwapsTheRowAndTheSummary() throws Exception {
+    void banningViaHtmxRefreshesTheListWithTheCurrentFilters() throws Exception {
         VetAccount v = seedVet();
-        String html = body(mvc.perform(post("/admin/vets/" + v.getId() + "/status")
+        var result = mvc.perform(post("/admin/vets/" + v.getId() + "/status")
                         .param("banned", "true").param("lang", "zh_CN")
                         .header("HX-Request", "true")
                         .with(authentication(superAdmin())).with(csrf()))
-                .andExpect(status().isOk()).andReturn());
+                .andExpect(status().isOk()).andReturn();
+        String html = body(result);
 
         assertThat(html).contains("hx-swap-oob=\"innerHTML:#vet-drawer .drawer-body\"");
-        // 🔴 行与摘要条都必须是 oob 换出去的：只断言 id 出现过，把 true 写成 false 也照样绿，
-        //    而实机是列表与四个数一动不动、界面零反馈。
-        assertThat(html).containsPattern("<tr[^>]*id=\"vet-row-" + v.getId()
-                + "\"[^>]*hx-swap-oob=\"true\"");
-        assertThat(html).containsPattern("<div[^>]*id=\"vets-summary\"[^>]*hx-swap-oob=\"true\"");
-        // 🔴 oob 行外壳必须是真的 <table hidden>（响应不以 `<tr` 开头时 htmx 走通用解析）。
-        assertThat(html.indexOf("<table hidden")).isGreaterThanOrEqualTo(0)
-                .isLessThan(html.indexOf("id=\"vet-row-" + v.getId() + "\""));
+        assertThat(result.getResponse().getHeader("HX-Trigger"))
+                .as("列表靠事件按当前筛选重拉").contains("admin:vet-list-refresh");
+        // 🔴 反过来钉住：这里**不该**再自己算行与摘要条（那是全库口径）。
+        assertThat(html).doesNotContain("id=\"vets-summary\"")
+                .doesNotContain("id=\"vet-row-" + v.getId() + "\"");
         assertThat(vets.findById(v.getId()).orElseThrow().getStatus().name()).isEqualTo("BANNED");
     }
 
-    /** 资料校验失败：422 并且**连着表单一起回显**（只回一句错误的话，运营刚填的会被换掉）。 */
+    /** 🔴 刷新槽必须 {@code hx-include} 筛选表单本体，而不是把筛选值烤进 URL（烤进去的会过期）。 */
     @Test
-    void anInvalidProfileComesBackWithTheFormNotJustAnError() throws Exception {
+    void theRefreshSlotPullsWithTheLiveFilterForm() throws Exception {
+        String html = body(mvc.perform(get("/admin/vets").param("lang", "zh_CN")
+                        .with(authentication(superAdmin())))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(html).containsPattern(
+                "<span[^>]*id=\"vets-refresh\"[^>]*hx-include=\"#vet-filters-form\"");
+        assertThat(html).contains("hx-trigger=\"admin:vet-list-refresh from:body\"")
+                .contains("id=\"vet-filters-form\"");
+    }
+
+    /**
+     * 资料校验失败：**422**（不是 200）并且连着表单一起回显。
+     *
+     * <p>🔴 状态码不能是 200：全站约定是「4xx 出 fragment」（admin-core.js 专门放行
+     * 422/403/404）。回 200 的话，任何按状态码判成败的监控与自动化都会把校验失败记成成功。
+     * <p>🔴 回显必须带表单：只回一句错误的话，运营刚填的内容会被换掉，得从头再填一遍。
+     */
+    @Test
+    void anInvalidProfileIs422AndComesBackWithTheFormNotJustAnError() throws Exception {
         VetAccount v = seedVet();
         String html = body(mvc.perform(post("/admin/vets/" + v.getId())
                         .param("displayName", "").param("username", "not-an-email")
                         .param("lang", "zh_CN").header("HX-Request", "true")
                         .with(authentication(superAdmin())).with(csrf()))
-                .andExpect(status().isOk()).andReturn());
+                .andExpect(status().isUnprocessableEntity()).andReturn());
 
         assertThat(html).contains("id=\"vet-profile-form\"").contains("name=\"displayName\"")
                 .contains("name=\"username\"");
@@ -222,6 +246,15 @@ class AdminVetDrawerIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isOk()).andReturn());
 
         assertThat(html).contains("data-notice=\"vet-issued-password\"").contains(issued);
+        // 🔴 只断言「块在页面上」是假绿：明文渲染在「账号」页签里，而抽屉是整体重渲染的 ——
+        //    页签状态若回到默认的「资料」，这一块就落进一个 hidden 的 section：
+        //    DOM 里有、屏幕上看不见，而这是唯一的获取窗口。所以要钉住那个 section **可见**。
+        assertThat(html).as("账号页签必须是当前页签")
+                .containsPattern("data-vtab=\"account\"[^>]*class=\"tab tab--on\"|class=\"tab tab--on\"[^>]*data-vtab=\"account\"");
+        assertThat(html).as("账号 panel 不能是 hidden 的")
+                .doesNotContainPattern("<section[^>]*data-vtab-panel=\"account\"[^>]*hidden");
+        assertThat(html).as("🔴 关闭文案要强调「已记录」，中性的「关闭」会被顺手点掉")
+                .contains("data-dismiss-secret");
 
         String again = body(mvc.perform(get("/admin/vets/" + v.getId() + "/drawer")
                         .param("lang", "zh_CN").header("HX-Request", "true")
@@ -248,11 +281,40 @@ class AdminVetDrawerIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
-    /** 非 htmx 直达抽屉 → 回列表并自动开该抽屉（与 B1～B14 同一机制）。 */
+    /**
+     * 非 htmx 直达抽屉 → 回列表并**自动开该抽屉**（与 B1～B14 同一机制）。
+     *
+     * <p>⚠️ 必须验 Location 里的 {@code ?open=}：只断言 3xx 的话，把落点改成
+     * {@code /admin/vets}（深链彻底失效）这条测试照样绿，而方法名声称验的就是它。
+     */
     @Test
     void aDirectHitOnTheDrawerRedirectsToTheListWithOpen() throws Exception {
         VetAccount v = seedVet();
         mvc.perform(get("/admin/vets/" + v.getId() + "/drawer").with(authentication(superAdmin())))
-                .andExpect(status().is3xxRedirection());
+                .andExpect(status().is3xxRedirection())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .redirectedUrl("/admin/vets?open=" + v.getId()));
+    }
+
+    /** 🔴 头像上传的三条失败路径在抽屉里都要落进行内错误槽（422），不能像整页那样吞成 flash。 */
+    @Test
+    void avatarUploadFailuresAre422InTheDrawer() throws Exception {
+        VetAccount v = seedVet();
+        var notImage = new org.springframework.mock.web.MockMultipartFile(
+                "avatar", "a.txt", "text/plain", "hi".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/admin/vets/" + v.getId() + "/avatar").file(notImage)
+                        .header("HX-Request", "true")
+                        .with(authentication(superAdmin())).with(csrf()))
+                .andExpect(status().isUnprocessableEntity());
+
+        byte[] big = new byte[5 * 1024 * 1024 + 1];
+        var tooLarge = new org.springframework.mock.web.MockMultipartFile(
+                "avatar", "a.png", "image/png", big);
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/admin/vets/" + v.getId() + "/avatar").file(tooLarge)
+                        .header("HX-Request", "true")
+                        .with(authentication(superAdmin())).with(csrf()))
+                .andExpect(status().isUnprocessableEntity());
     }
 }

@@ -123,6 +123,28 @@ public class VetPresenceService {
         return out;
     }
 
+    /**
+     * 全部忙碌中兽医的 id（V1.3.0 Story 9.1a：与 {@link #lastSeenAll()} 配套，供列表一次取数）。
+     *
+     * <p>🔴 一次 {@code SMEMBERS}，不是逐行 {@code SISMEMBER}：与在线集合合起来，
+     * 一张列表的在线态从「每行 2 次 Redis 往返」降到**两次**。
+     */
+    public java.util.Set<Long> busyAll() {
+        var members = redis.opsForSet().members(BUSY_SET);
+        if (members == null || members.isEmpty()) {
+            return java.util.Set.of();
+        }
+        java.util.Set<Long> out = new java.util.HashSet<>(members.size());
+        for (String m : members) {
+            try {
+                out.add(Long.parseLong(m));
+            } catch (NumberFormatException e) {
+                // 历史脏数据：跳过而不是让整张列表崩掉（与 lastSeenAll 同一处理）。
+            }
+        }
+        return out;
+    }
+
     /** 当前在线态：BUSY 优先（占用中），否则 ONLINE/OFFLINE。 */
     public VetPresenceStatus statusOf(long vetId) {
         if (!isOnline(vetId)) {

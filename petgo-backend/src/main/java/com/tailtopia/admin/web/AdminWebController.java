@@ -194,6 +194,9 @@ public class AdminWebController {
 
     // ===== Story 5.1：兽医账号 CRUD（复用本 shell）=====
 
+    /** 兽医列表每页条数（V1.3.0 Story 9.1a · AC1）。 */
+    private static final int VET_PAGE_SIZE = 20;
+
     @GetMapping("/admin/vets")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.view')")
     public String vets(@RequestParam(value = "accountStatus", required = false) String accountStatus,
@@ -201,13 +204,25 @@ public class AdminWebController {
             @RequestParam(value = "online", required = false) String online,
             @RequestParam(value = "q", required = false) String q,
             @RequestParam(value = "open", required = false) Long open,
+            @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestHeader(value = "HX-Request", required = false) String hxRequest,
             Model model) {
         model.addAttribute("active", "vets");
         // ⚠️ 取一次列表喂给摘要条与表格两处：各查各的话跨秒时两个数能对不上。
         var vetRows = adminVetService.list(new VetListFilter(accountStatus, qualStatus, online, q));
-        model.addAttribute("vets", vetRows);
+        // 🔴 摘要条统计的是**整个筛选集**，不是当前这一页：一个只统计本页的「在线数」
+        //    会随翻页变化，而运营会把它当成总数抄进周报。
         model.addAttribute("summary", adminVetService.summary(vetRows));
+        int total = vetRows.size();
+        int totalPages = Math.max(1, (total + VET_PAGE_SIZE - 1) / VET_PAGE_SIZE);
+        int safePage = Math.min(Math.max(page, 0), totalPages - 1);
+        int from = safePage * VET_PAGE_SIZE;
+        model.addAttribute("vets", vetRows.subList(from, Math.min(from + VET_PAGE_SIZE, total)));
+        model.addAttribute("page", safePage);
+        model.addAttribute("totalPages", totalPages);
+        model.addAttribute("totalElements", (long) total);
+        model.addAttribute("hasPrev", safePage > 0);
+        model.addAttribute("hasNext", safePage < totalPages - 1);
         model.addAttribute("open", open);
         // 回显筛选 + 下拉候选。
         model.addAttribute("accountStatus", accountStatus);
@@ -259,8 +274,14 @@ public class AdminWebController {
     private void populateVetList(Model model) {
         model.addAttribute("active", "vets");
         var rows = adminVetService.list(VetListFilter.none());
-        model.addAttribute("vets", rows);
         model.addAttribute("summary", adminVetService.summary(rows));
+        int totalPages = Math.max(1, (rows.size() + VET_PAGE_SIZE - 1) / VET_PAGE_SIZE);
+        model.addAttribute("vets", rows.subList(0, Math.min(VET_PAGE_SIZE, rows.size())));
+        model.addAttribute("page", 0);
+        model.addAttribute("totalPages", totalPages);
+        model.addAttribute("totalElements", (long) rows.size());
+        model.addAttribute("hasPrev", false);
+        model.addAttribute("hasNext", totalPages > 1);
         model.addAttribute("vetStatuses", VetStatus.values());
         model.addAttribute("qualStatuses", QualificationStatus.values());
         model.addAttribute("expiryStats", adminVetService.qualificationExpiryStats());
@@ -290,27 +311,37 @@ public class AdminWebController {
     private void populateVetDrawer(long id, Model model) {
         model.addAttribute("active", "vets");
         model.addAttribute("vetId", id);
-        model.addAttribute("vet", adminVetService.view(id));
+        // ⚠️ view(id) 只查一次：头像 URL 就在这份视图里，再查一遍是白白多一次 DB 往返。
+        var v = adminVetService.view(id);
+        model.addAttribute("vet", v);
         if (!model.containsAttribute("editVetForm")) {
             model.addAttribute("editVetForm", adminVetService.editForm(id));
         }
-        model.addAttribute("currentAvatarUrl", adminVetService.view(id).avatarUrl());
+        model.addAttribute("currentAvatarUrl", v.avatarUrl());
         // 在线态与最后在线：原 vet-online 整页的数据，AC5 要求并进资料页签。
         model.addAttribute("presence", adminVetService.presenceOf(id));
     }
 
     /**
-     * 抽屉内处置成功统一响应：抽屉重渲染 + 列表那一行 oob + 摘要条 oob + toast。
+     * 抽屉内处置成功统一响应：抽屉重渲染 + toast + 列表**按当前筛选**整表重拉。
      *
-     * <p>⚠️ 不整表重拉：改资料 / 改头像 / 封禁都不会让行换位置（表按 id 序）。
-     * 🔴 但封禁会改摘要条的「已封禁 / 在线」两格，所以行之外**还要**换摘要条。
+     * <p>🔴 列表不在这里重算：这几个 POST 身上没有筛选参数，用 {@code VetListFilter.none()}
+     * 算出来的是**全库**的四个数，而屏幕上的表格是筛选后的 —— 运营会读成统计坏了
+     * （筛「ACTIVE」时摘要条会跳成全库的总数与已封禁数）。改为发
+     * {@code admin:vet-list-refresh}，由页面上的刷新槽带着**当前筛选表单**去重拉，
+     * 顺便省掉「为了拿一行数据把全量兽医重新装配一遍」的放大版 N+1。
+     *
+     * @param activeTab 重渲染后要停在哪个页签。🔴 不能一律回默认的「资料」：
+     *                  重置密码的明文渲染在**账号**页签里，回默认页签等于把唯一的获取窗口盖住 ——
+     *                  运营只看到一条 toast，明文在 DOM 里却是 hidden 的。
      */
-    private String vetAfterAction(long id, String toast, Model model) {
+    private String vetAfterAction(long id, String toast, String activeTab, Model model,
+            jakarta.servlet.http.HttpServletResponse response) {
         populateVetDrawer(id, model);
-        var rows = adminVetService.list(VetListFilter.none());
-        model.addAttribute("summary", adminVetService.summary(rows));
-        model.addAttribute("row", rows.stream().filter(v -> v.id() == id).findFirst().orElseThrow());
+        model.addAttribute("activeTab", activeTab);
         model.addAttribute("toast", toast);
+        com.tailtopia.admin.shared.web.AdminFragmentResponses.trigger(response,
+                com.tailtopia.admin.shared.web.AdminHxEvents.VET_LIST_REFRESH);
         return "admin/fragments/drawer-vets :: afterAction";
     }
 
@@ -320,7 +351,7 @@ public class AdminWebController {
     public String uploadVetAvatar(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
             @RequestParam("avatar") org.springframework.web.multipart.MultipartFile avatar,
             @RequestHeader(value = "HX-Request", required = false) String hxRequest,
-            Model model, RedirectAttributes flash) {
+            Model model, jakarta.servlet.http.HttpServletResponse response, RedirectAttributes flash) {
         boolean hx = hxRequest != null;
         String ct = avatar.getContentType();
         // ⚠️ 三条失败路径在抽屉里都得**落在行内错误槽**（抛 422 交给 AdminBusinessExceptionAdvice），
@@ -351,7 +382,7 @@ public class AdminWebController {
             return "redirect:/admin/vets?open=" + id;
         }
         if (hx) {
-            return vetAfterAction(id, msg.get("admin.flash.vet.avatarUpdated"), model);
+            return vetAfterAction(id, msg.get("admin.flash.vet.avatarUpdated"), "profile", model, response);
         }
         flash.addFlashAttribute("notice", msg.get("admin.flash.vet.avatarUpdated"));
         return "redirect:/admin/vets?open=" + id;
@@ -362,12 +393,16 @@ public class AdminWebController {
     public String updateVet(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
             @Valid @ModelAttribute("editVetForm") EditVetForm form, BindingResult binding,
             @RequestHeader(value = "HX-Request", required = false) String hxRequest,
-            Model model, RedirectAttributes flash) {
+            Model model, jakarta.servlet.http.HttpServletResponse response, RedirectAttributes flash) {
         boolean hx = hxRequest != null;
         if (binding.hasErrors()) {
             // 🔴 校验错误必须**连着表单一起回显**（回的是资料页签本身，不是抽屉全体）：
             //    只回一句错误的话，运营刚填的内容会被换掉，得从头再填一遍。
             if (hx) {
+                // 🔴 422 而不是 200：全站的约定是「4xx 出 fragment」（admin-core.js 专门放行
+                //    422/403/404）。回 200 的话，任何按状态码判成败的监控与后续自动化
+                //    都会把「校验失败」记成成功 —— 界面上看不出，账上全是绿的。
+                response.setStatus(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY.value());
                 populateVetDrawer(id, model);
                 return "admin/fragments/drawer-vets :: profile-form";
             }
@@ -382,6 +417,7 @@ public class AdminWebController {
                     form.getContactPhone(), admin.getAdminAccountId());
         } catch (AppException e) {
             if (hx) {
+                response.setStatus(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY.value());
                 binding.reject("update.failed", msg.resolve(e));
                 populateVetDrawer(id, model);
                 return "admin/fragments/drawer-vets :: profile-form";
@@ -390,7 +426,7 @@ public class AdminWebController {
             return "redirect:/admin/vets?open=" + id;
         }
         if (hx) {
-            return vetAfterAction(id, msg.get("admin.flash.vet.profileSaved"), model);
+            return vetAfterAction(id, msg.get("admin.flash.vet.profileSaved"), "profile", model, response);
         }
         flash.addFlashAttribute("notice", msg.get("admin.flash.vet.profileSaved"));
         return "redirect:/admin/vets?open=" + id;
@@ -401,14 +437,15 @@ public class AdminWebController {
     public String resetVetPassword(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable long id, @RequestParam("newPassword") String newPassword,
             @RequestHeader(value = "HX-Request", required = false) String hxRequest,
-            Model model, RedirectAttributes flash) {
+            Model model, jakarta.servlet.http.HttpServletResponse response, RedirectAttributes flash) {
         if (hxRequest != null) {
             // 弱密码等在服务层抛 422，这里不重复判 —— 让它落进抽屉的行内错误槽。
             adminVetService.resetPassword(id, newPassword, admin.getAdminAccountId());
             // 🔴 明文**只此一屏**：放一次性 model 属性随本次响应渲染，
             //    不进 session / flash / 审计 / 日志（既有约束，UI 稿 6-4）。
             model.addAttribute("issuedPassword", newPassword);
-            return vetAfterAction(id, msg.get("admin.flash.vet.passwordReset"), model);
+            // 🔴 停在「账号」页签：明文就渲染在那里，回默认页签等于把唯一的获取窗口盖住。
+            return vetAfterAction(id, msg.get("admin.flash.vet.passwordReset"), "account", model, response);
         }
         try {
             adminVetService.resetPassword(id, newPassword, admin.getAdminAccountId());
@@ -424,11 +461,11 @@ public class AdminWebController {
     public String setVetStatus(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable long id, @RequestParam("banned") boolean banned,
             @RequestHeader(value = "HX-Request", required = false) String hxRequest,
-            Model model, RedirectAttributes flash) {
+            Model model, jakarta.servlet.http.HttpServletResponse response, RedirectAttributes flash) {
         adminVetService.setBanned(id, banned, admin.getAdminAccountId());
         String toastKey = banned ? "admin.flash.vet.banned" : "admin.flash.vet.unbanned";
         if (hxRequest != null) {
-            return vetAfterAction(id, msg.get(toastKey), model);
+            return vetAfterAction(id, msg.get(toastKey), "account", model, response);
         }
         flash.addFlashAttribute("notice", msg.get(toastKey));
         return "redirect:/admin/vets?open=" + id;

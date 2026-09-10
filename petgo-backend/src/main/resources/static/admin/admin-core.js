@@ -274,6 +274,49 @@ function armToast(t) {
     setTimeout(function () { t.remove(); }, 3400);
 }
 
+// ===== 一次性密钥：复制 + 「我已记录」（V1.3.0 Story 9.1a）=====
+// 🔴 全局委托而不是各页内联：兽医开户的初始密码在**整页**上（PRG 重渲染），
+//    重置密码的明文在**抽屉**里（htmx swap 进来）—— 两处形态不同，
+//    写在抽屉片段里的脚本够不着整页那一份，那个复制钮会是个死钮。
+// ⚠️ navigator.clipboard 在非 https 或旧浏览器上不存在：退回 execCommand，
+//    再不行就 select 让人自己按 Ctrl+C —— 绝不能静默什么都不做（这是唯一的获取窗口）。
+document.addEventListener('click', function (e) {
+    var copyBtn = e.target.closest('[data-copy-target]');
+    if (copyBtn) {
+        var el = document.querySelector(copyBtn.getAttribute('data-copy-target'));
+        if (!el) { return; }
+        var text = el.textContent.trim();
+        var done = function () {
+            var old = copyBtn.getAttribute('data-copied-label') || copyBtn.textContent;
+            copyBtn.setAttribute('data-copied', '1');
+            copyBtn.textContent = old;
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, function () { selectText(el); });
+        } else {
+            selectText(el);
+            try { document.execCommand('copy'); done(); } catch (err) { /* 让人手动复制 */ }
+        }
+        return;
+    }
+    // 「我已记录」：只移除这一块，不动抽屉其余部分。
+    var dismiss = e.target.closest('[data-dismiss-secret]');
+    if (dismiss) {
+        var host = dismiss.closest('[data-notice="vet-issued-password"], [data-notice="vet-created"]');
+        if (host) { host.remove(); }
+    }
+});
+
+function selectText(el) {
+    try {
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+    } catch (err) { /* 选不中就算了，文本仍在屏幕上 */ }
+}
+
 // ===== 工单批量勾选（V1.1.4 Story 3.3）=====
 // ⚠️ 本文件是**全后台共享**的，所以这一段全部用 [data-batch-scope] 限定作用域，
 //    事件委托在 document 上但先判断是否落在该作用域内——别让它影响到其他页面的表格。

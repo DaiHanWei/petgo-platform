@@ -54,6 +54,18 @@
         <span class="empty-emoji">🩺</span>
         <p th:text="#{admin.vets.empty}">暂无兽医账号</p>
     </div>
+
+    <!--/* 分页（AC1 每页 20）。
+           ⚠️ 翻页链接必须带上全部筛选条件，否则点「下一页」会**悄悄回到无筛选的全量**，
+              而页码还在往前走 —— 运营看到一堆对不上的数据，却看不出筛选没了。
+           ⚠️ 摘要条统计的是**整个筛选集**、不随翻页变（口径见控制器注释）。 */-->
+    <div class="pager" th:if="${totalPages != null and totalPages > 1}">
+        <a th:if="${hasPrev}" class="btn btn-sm" data-no-drawer th:text="#{admin.audit.prev}"
+           th:href="@{/admin/vets(page=${page - 1},accountStatus=${accountStatus},qualStatus=${qualStatus},online=${online},q=${q})}">上一页</a>
+        <span th:text="#{admin.audit.page(${page + 1}, ${totalPages}, ${totalElements})}">分页</span>
+        <a th:if="${hasNext}" class="btn btn-sm" data-no-drawer th:text="#{admin.audit.next}"
+           th:href="@{/admin/vets(page=${page + 1},accountStatus=${accountStatus},qualStatus=${qualStatus},online=${online},q=${q})}">下一页</a>
+    </div>
 </th:block>
 
 <!--/* 单行。编辑 / 重置密码 / 封禁三列已删（都移进抽屉），点行开抽屉。 */-->

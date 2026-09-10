@@ -107,7 +107,7 @@ development_status:
   epic-8-retrospective: optional
   # ---- Epic 9: 兽医与问诊组页面重构 ----
   epic-9: in-progress
-  9-1a-b20-兽医账号-列表-资料-账号页签-开户: ready-for-dev   # B20 兽医账号——列表、资料 / 账号页签、开户
+  9-1a-b20-兽医账号-列表-资料-账号页签-开户: review   # B20 兽医账号——列表、资料 / 账号页签、开户
   9-1b-b20-兽医账号-资质页签与评分并入: ready-for-dev   # B20 兽医账号——资质页签与评分并入
   9-2-b21-未成功请求-b22-历史会话查询: ready-for-dev   # B21 未成功请求 + B22 历史会话查询
   epic-9-retrospective: optional

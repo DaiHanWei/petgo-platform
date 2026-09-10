@@ -22,13 +22,7 @@
     <!--/* ⚠️ res 设在这一层，不能写在下面那个带 th:replace 的 div 上（优先级 100 vs 600，
            同标签时 th:with 被静默丢弃 —— 见 AdminTemplateStructureTest 的守门）。 */-->
     <div th:fragment="content" th:remove="tag" th:with="res='vet'">
-        <div class="wb-title-row">
-            <h1 th:text="#{admin.vets.title}">兽医账号</h1>
-            <!--/* 开户入口与 POST /admin/vets 的 @PreAuthorize 同款门控：无 vet.create 的 STAFF 不见此按钮。 */-->
-            <button type="button" class="btn btn-primary btn-sm" data-open-dialog="createVetDialog" data-no-drawer
-                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('vet.create')"
-                    th:text="#{admin.vets.create}">＋开户</button>
-        </div>
+        <h1 th:text="#{admin.vets.title}">兽医账号</h1>
 
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
@@ -47,6 +41,8 @@
                         data-copy-target="#vet-created-password"
                         th:text="#{admin.v130.vets.password.copy}">复制</button>
                 <p class="hint" th:text="#{admin.v130.vets.password.recorded}">关闭后无法再次查看（后端不保存明文）。</p>
+                <button type="button" class="btn btn-neutral btn-sm" data-dismiss-secret data-no-drawer
+                        th:text="#{admin.v130.vets.password.close}">我已记录</button>
             </th:block>
         </div>
 
@@ -61,16 +57,16 @@
                     <!--/* 全局/业务错误（如邮箱已被占用，来自 AppException → binding.reject） */-->
                     <p class="err" th:each="e : ${#fields.globalErrors()}" th:text="${e}">错误</p>
                     <label class="field" th:text="#{admin.vets.displayName}">兽医昵称</label>
-                    <input type="text" th:field="*{displayName}" class="field-full"/>
+                    <input type="text" th:field="*{displayName}" class="field-full" maxlength="64" required/>
                     <p class="err" th:if="${#fields.hasErrors('displayName')}" th:errors="*{displayName}">昵称错误</p>
                     <label class="field" th:text="#{admin.vets.loginEmail}">登录邮箱</label>
-                    <input type="email" th:field="*{username}" class="field-full"/>
+                    <input type="email" th:field="*{username}" class="field-full" maxlength="64" required/>
                     <p class="err" th:if="${#fields.hasErrors('username')}" th:errors="*{username}">邮箱错误</p>
                     <label class="field" th:text="#{admin.vets.contactPhone}">联系手机号</label>
                     <input type="text" th:field="*{contactPhone}" class="field-full"/>
                     <p class="err" th:if="${#fields.hasErrors('contactPhone')}" th:errors="*{contactPhone}">手机号错误</p>
                     <label class="field" th:text="#{admin.vets.password}">初始密码（≥8 位，仅本次可见）</label>
-                    <input type="password" th:field="*{password}" class="field-full"/>
+                    <input type="password" th:field="*{password}" class="field-full" minlength="8" required/>
                     <p class="err" th:if="${#fields.hasErrors('password')}" th:errors="*{password}">密码错误</p>
                 </div>
                 <div class="modal-foot">
@@ -84,7 +80,7 @@
         <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::vet-filters}, ~{::vet-summary}, ~{::vet-table}, ~{::vet-drawer})}">
             <!--/* 筛选栏：三个下拉 data-autosubmit（只作用于 <select>）+ 关键词配显式「查询」钮。
                    ⚠️ 参数名 accountStatus / qualStatus / online / q 逐字未动 —— 改名会让运营存的书签失效。 */-->
-            <form th:fragment="vet-filters" th:action="@{/admin/vets}" method="get"
+            <form th:fragment="vet-filters" id="vet-filters-form" th:action="@{/admin/vets}" method="get"
                   hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="innerHTML" data-autosubmit>
                 <label class="field"><span th:text="#{admin.vets.filter.account}">账号状态</span>
                     <select name="accountStatus" class="sel">
@@ -116,6 +112,11 @@
                 <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.payments.btn.search}">查询</button>
                 <a th:href="@{/admin/vets}" class="btn btn-sm" data-no-drawer
                    th:text="#{admin.payments.btn.reset}">清空筛选</a>
+                <!--/* ＋开户在筛选栏最右（AC1 / UI 稿 6-1）。
+                       与 POST /admin/vets 的 @PreAuthorize 同款门控：无 vet.create 的 STAFF 不见此按钮。 */-->
+                <button type="button" class="btn btn-primary btn-sm" data-open-dialog="createVetDialog" data-no-drawer
+                        sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('vet.create')"
+                        th:text="#{admin.vets.create}">＋开户</button>
             </form>
 
             <div th:fragment="vet-summary" th:replace="~{admin/fragments/vets-list :: sumbar(false)}"></div>
@@ -126,6 +127,15 @@
 
             <div th:fragment="vet-drawer" class="drawer-title" th:text="#{admin.v130.vets.drawer.title}">兽医详情</div>
         </div>
+
+        <!--/* 抽屉里处置成功后整表重拉。
+               🔴 hx-include 指向筛选表单本体（不是把值烤进 URL）：筛选走 htmx 局部 swap，
+                  烤进去的串在换过筛选之后就是旧的，刷新会把表悄悄跳回上一次的筛选集
+                  （8.3 复审踩过这个坑）。hx-include 读的是**请求那一刻**的表单值。 */-->
+        <span hidden id="vets-refresh"
+              hx-get="/admin/vets" hx-include="#vet-filters-form"
+              hx-trigger="admin:vet-list-refresh from:body"
+              hx-target="#vet-rows" hx-swap="innerHTML"></span>
 
         <!--/* ?open=<id> 深链兜底：admin-drawer.js 先按当前页找行，找不到就用这里给的 URL。 */-->
         <span hidden th:if="${open != null}" data-drawer-res="vet"

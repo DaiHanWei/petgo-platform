@@ -66,9 +66,14 @@ class AdminVetServiceListTest {
         when(vetQual.getStatus(1L)).thenReturn(QualificationStatus.CERTIFIED);
         when(vetQual.getStatus(2L)).thenReturn(QualificationStatus.PENDING_COMPLETION);
         when(vetQual.getStatus(3L)).thenReturn(QualificationStatus.EXPIRED);
-        when(presence.statusOf(1L)).thenReturn(VetPresenceStatus.ONLINE);
-        when(presence.statusOf(2L)).thenReturn(VetPresenceStatus.OFFLINE);
-        when(presence.statusOf(3L)).thenReturn(VetPresenceStatus.BUSY);
+        // V1.3.0 Story 9.1a：列表的在线态改为**一次取全集**再在内存里推
+        //    （在线集合的成员 = 在线；再看忙碌集合分 BUSY / ONLINE），
+        //    不再逐行 statusOf —— 一张列表原来要 2N 次 Redis 往返。
+        //    anna=ONLINE、bob=OFFLINE（不在集合里）、carol=BUSY。
+        when(presence.lastSeenAll()).thenReturn(java.util.Map.of(
+                1L, java.time.Instant.parse("2026-06-29T03:25:00Z"),
+                3L, java.time.Instant.parse("2026-06-29T03:26:00Z")));
+        when(presence.busyAll()).thenReturn(java.util.Set.of(3L));
     }
 
     @Test
@@ -124,6 +129,11 @@ class AdminVetServiceListTest {
     @Test
     void onlineSnapshotReadsStatusAndNeverWritesPresence() {
         scenario();
+        // onlineSnapshot 走的是**逐行** statusOf（另一个口径的只读快照，本 story 未动）——
+        // 列表那条路已改成批量取集合，所以这里要单独把 statusOf 桩上。
+        when(presence.statusOf(1L)).thenReturn(VetPresenceStatus.ONLINE);
+        when(presence.statusOf(2L)).thenReturn(VetPresenceStatus.OFFLINE);
+        when(presence.statusOf(3L)).thenReturn(VetPresenceStatus.BUSY);
         java.time.Instant t = java.time.Instant.parse("2026-06-29T03:00:00Z");
         var snap = service.onlineSnapshot(t);
 
@@ -140,7 +150,12 @@ class AdminVetServiceListTest {
     @Test
     void onlineSnapshotIncludesLastSeenLabel() {
         // Bug 20260701-168：每行补最后在线时间（WIB）；离线/无 lastSeen → 「—」。
-        scenario();
+        // onlineSnapshot 仍走逐行 statusOf / lastSeenAt（它是另一个口径的只读快照，本 story 未动）。
+        VetAccount a = vet(1L, "anna@x", "Anna", VetStatus.ACTIVE);
+        VetAccount b = vet(2L, "bob@x", "Bob", VetStatus.BANNED);
+        when(vetAccounts.listAll()).thenReturn(List.of(a, b));
+        when(presence.statusOf(1L)).thenReturn(VetPresenceStatus.ONLINE);
+        when(presence.statusOf(2L)).thenReturn(VetPresenceStatus.OFFLINE);
         when(presence.lastSeenAt(1L))
                 .thenReturn(java.util.Optional.of(java.time.Instant.parse("2026-06-29T03:25:00Z")));
         when(presence.lastSeenAt(2L)).thenReturn(java.util.Optional.empty());

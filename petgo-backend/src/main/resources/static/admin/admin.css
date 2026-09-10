@@ -732,6 +732,9 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
    但它从来没有被定义过 —— 落地效果是「一个没有底色的徽标」，与旁边有底色的 ok / danger 摆在一起
    会被读成「这一格没加载出来」。补上定义（V1.3.0 Story 8.5 顺手），语义 = 中性待办，不是异常。 */
 .badge-neutral { background: var(--surface-2, #F1F2F5); color: var(--ink-2); }
+/* 抽屉里的头像块（V1.3.0 Story 9.1a）：当前头像与上传表单同一行，窄屏换行不挤。 */
+.ud-avatar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.ud-avatar form { display: flex; align-items: center; gap: 6px; }
 .row-muted td { color: var(--muted); }
 .nowrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
 .places-table .places-address { max-width: 260px; }

@@ -10,8 +10,12 @@
   🔴 密码明文**只此一屏**：随本次响应渲染，不进 session / flash / 审计 / 日志。
 */-->
 <body>
+<!--/* 🔴 tab：处置成功后抽屉是整体重渲染的，页签状态**必须由服务端带回来** ——
+       写死「资料」在 on 态的话，重置密码的明文（渲染在「账号」页签里）会落进一个
+       hidden 的 section：DOM 里有、屏幕上看不见，而那是唯一的获取窗口。 */-->
 <div th:fragment="drawer" id="vet-drawer-panel" class="tag-drawer" th:attr="data-vet-id=${vet.id()}"
-     th:with="canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''vet.edit'') or hasAuthority(''vet.create'')')},
+     th:with="tab=${activeTab} ?: 'profile',
+              canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''vet.edit'') or hasAuthority(''vet.create'')')},
               canResetPwd=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''vet.reset_password'')')},
               canBan=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''vet.ban'')')}">
 
@@ -26,18 +30,22 @@
 
     <!--/* 页签条。纯前端切 hidden，不再请求。 */-->
     <div class="tabs ud-tabs" role="tablist" data-vet-tabs>
-        <button type="button" class="tab tab--on" role="tab" data-vtab="profile"
+        <button type="button" class="tab" role="tab" data-vtab="profile"
+                th:classappend="${tab == 'profile'} ? 'tab--on'"
                 th:text="#{admin.v130.vets.tab.profile}">资料</button>
         <button type="button" class="tab" role="tab" data-vtab="qual"
+                th:classappend="${tab == 'qual'} ? 'tab--on'"
                 th:text="#{admin.v130.vets.tab.qual}">资质</button>
         <button type="button" class="tab" role="tab" data-vtab="rating"
+                th:classappend="${tab == 'rating'} ? 'tab--on'"
                 th:text="#{admin.v130.vets.tab.rating}">评分</button>
         <button type="button" class="tab" role="tab" data-vtab="account"
+                th:classappend="${tab == 'account'} ? 'tab--on'"
                 th:text="#{admin.v130.vets.tab.account}">账号</button>
     </div>
 
     <!--/* ① 资料页签：昵称 / 邮箱 / 手机 / 头像 + 在线态与最后在线。 */-->
-    <section class="card card-full tag-card" data-vtab-panel="profile">
+    <section class="card card-full tag-card" data-vtab-panel="profile" th:attr="hidden=${tab != 'profile'} ? true : null">
         <div th:replace="~{admin/fragments/drawer-vets :: profile-form}"></div>
 
         <!--/* 🔴 在线态是**兽医自己选的持久态**，没有 TTL 兜底（memory: vet-presence-explicit-only）：
@@ -58,17 +66,17 @@
 
     <!--/* ② / ③ 资质与评分：本 story 只放占位（9.1b 填充）。
            🔴 占位必须**说明什么时候会有**：一个空白页签会被读成「这个兽医没有资质记录」。 */-->
-    <section class="card card-full tag-card" data-vtab-panel="qual" hidden>
+    <section class="card card-full tag-card" data-vtab-panel="qual" th:attr="hidden=${tab != 'qual'} ? true : null">
         <p class="hint" data-notice="vet-qual-placeholder"
            th:text="#{admin.v130.vets.tab.placeholder}">此页签由后续 story 填充。</p>
     </section>
-    <section class="card card-full tag-card" data-vtab-panel="rating" hidden>
+    <section class="card card-full tag-card" data-vtab-panel="rating" th:attr="hidden=${tab != 'rating'} ? true : null">
         <p class="hint" data-notice="vet-rating-placeholder"
            th:text="#{admin.v130.vets.tab.placeholder}">此页签由后续 story 填充。</p>
     </section>
 
     <!--/* ④ 账号页签：重置密码 + 封禁 / 解封。 */-->
-    <section class="card card-full tag-card" data-vtab-panel="account" hidden>
+    <section class="card card-full tag-card" data-vtab-panel="account" th:attr="hidden=${tab != 'account'} ? true : null">
         <h3 th:text="#{admin.v130.vets.password.title}">重置密码</h3>
 
         <!--/* 🔴 明文只此一屏：这一段只在本次响应里存在，刷新即消失。
@@ -80,6 +88,10 @@
                     data-copy-target="#vet-issued-password"
                     th:text="#{admin.v130.vets.password.copy}">复制</button>
             <p class="hint" th:text="#{admin.v130.vets.password.recorded}">关闭后无法再次查看（后端不保存明文）。</p>
+            <!--/* 🔴 关闭钮的文案是「我已记录」而不是「关闭」：这一步不可逆（后端不存明文），
+                   一个中性的「关闭」会被顺手点掉。 */-->
+            <button type="button" class="btn btn-neutral btn-sm" data-dismiss-secret
+                    th:text="#{admin.v130.vets.password.close}">我已记录</button>
         </div>
 
         <form th:if="${canResetPwd}"
@@ -149,14 +161,8 @@
                     p.hidden = p.getAttribute('data-vtab-panel') !== name;
                 });
             });
-            // 「仅本次可见」的新密码：一次性复制钮（不依赖全局 JS，抽屉是 swap 进来的）。
-            var copyBtn = root.parentElement.querySelector('[data-copy-target]');
-            if (copyBtn && navigator.clipboard) {
-                copyBtn.addEventListener('click', function () {
-                    var el = document.querySelector(copyBtn.getAttribute('data-copy-target'));
-                    if (el) { navigator.clipboard.writeText(el.textContent.trim()); }
-                });
-            }
+            // ⚠️ 复制 / 「我已记录」两个钮走 admin-core.js 的全局委托（document 上的 click），
+            //    不在这里各写一份：开户成功的那份明文在**整页**上，抽屉的内联脚本够不着它。
         })();
     </script>
 </div>
@@ -209,24 +215,21 @@
               hx-target="#vet-drawer-err" hx-swap="innerHTML">
             <input type="file" name="avatar" accept="image/*" required/>
             <button type="submit" class="btn btn-neutral btn-sm"
-                    th:text="#{admin.v130.vets.avatar.upload}">上传头像</button>
+                    th:text="#{admin.vets.avatar.upload}">上传头像</button>
         </form>
     </div>
 </div>
 
-<!--/* 处置成功：抽屉体 oob + 列表那一行 oob + 摘要条 oob + toast。
-       ⚠️ 不整表重拉：改资料 / 换头像 / 封禁都不会让行换位置（表按 id 序）。
-       🔴 封禁会改摘要条的「已封禁 / 在线」两格，所以行 oob 之外**还要**换摘要条。
-       🔴 外壳必须是**真的** <table hidden>，不能 th:remove="tag"：响应不以 `<tr` 开头时
-          htmx 走通用解析，裸 <tr>/<td> 会被 HTML 解析器丢掉（8.2 踩过）。 */-->
+<!--/* 处置成功：抽屉体 oob + toast；列表由 HX-Trigger 的 admin:vet-list-refresh
+       **带着当前筛选表单**整表重拉（刷新槽在 vets.html）。
+       🔴 不在这里做单行 oob + 摘要条 oob：这几个 POST 身上没有筛选参数，服务端只能按全库算，
+          而屏幕上的表格是筛选后的 —— 筛「ACTIVE」时摘要条会跳成全库的总数与已封禁数，
+          运营会读成统计坏了。跨页深链时更明显：行 oob 因为找不到 #vet-row-<id> 被静默丢弃，
+          只有摘要条跳变。 */-->
 <th:block th:fragment="afterAction">
     <div id="vet-drawer-body-oob" hx-swap-oob="innerHTML:#vet-drawer .drawer-body">
         <div th:replace="~{admin/fragments/drawer-vets :: drawer}"></div>
     </div>
-    <table hidden><tbody>
-        <tr th:replace="~{admin/fragments/vets-list :: row(${row}, true)}"></tr>
-    </tbody></table>
-    <div th:replace="~{admin/fragments/vets-list :: sumbar(true)}"></div>
     <!--/* 🔴 toast 多包一层：htmx 的 `beforeend:` oob 搬的是**子节点**，直接写在 .toast 上
            落进宿主的只有裸文本（无样式、armToast 找不到元素 → 永不消失）。外层这个 div 会被丢掉。 */-->
     <div hx-swap-oob="beforeend:#admin-toast-host">
