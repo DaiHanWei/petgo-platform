@@ -1,0 +1,53 @@
+name: write-ops-guard
+
+# 后台写操作清单守门（V1.3.0 Story 11.1 · AC5，决策 D-27 / AB-19A「重构不丢一项」）：
+# 重跑生成器 → 与基线 v2 diff → 任何**不在白名单**里的端点新增 / 删除，或任何 @PreAuthorize 漂移 → 不绿。
+#
+# 生成器纯 bash + grep（全树扫约 20s，不需要 JDK / Docker），所以 paths 宁可宽也不要窄：
+# 🔴 **不能只监听 admin 包**（Story 11.1 复审 C1）：判据是「路由挂不挂在 /admin 下」，跟文件在哪个包无关。
+#    新建一个 com/tailtopia/<随便什么>/XxxAdminController 加个 POST /admin/... —— 只听 admin/** 的话，
+#    这个 PR 连 job 都不会起，守门形同虚设。所以整个 java 源码树都监听。
+# 🔴 **基线文件路径只写一处**（复审 CI-2）：日期戳文件名硬编码在 push.paths / pull_request.paths / env
+#    三处时，将来换基线只要漏改 paths 里的两份，触发条件就**静默失效** —— 不报错，只是不跑。
+#    这里 paths 只写目录，真值只在 env.BASELINE 一处。
+# ⚠️ paths 两份是抄的不是引的：GitHub Actions 不支持 YAML 锚点，改一处必须同步另一处。
+on:
+  push:
+    branches: [main, dev_1.3.0]
+    paths:
+      - "petgo-backend/src/main/java/**"
+      - "scripts/ci/list-admin-write-ops.sh"
+      - "scripts/ci/admin-write-ops-allowlist.txt"
+      - "_bmad-output/implementation-artifacts/v1.3.0/**"
+      - ".github/workflows/write-ops-guard.yml"
+  pull_request:
+    paths:
+      - "petgo-backend/src/main/java/**"
+      - "scripts/ci/list-admin-write-ops.sh"
+      - "scripts/ci/admin-write-ops-allowlist.txt"
+      - "_bmad-output/implementation-artifacts/v1.3.0/**"
+      - ".github/workflows/write-ops-guard.yml"
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 写操作清单 diff（与基线 v2）
+        env:
+          BASELINE: _bmad-output/implementation-artifacts/v1.3.0/后台写操作清单-20260909-基线v2.md
+        run: |
+          # ⚠️ 输出写到 runner 临时目录：CI 只负责判定，不往仓库里塞每次构建的清单文件
+          #    （入库的 after 清单由 Story 11.1 人工产出并附核对报告）。
+          bash scripts/ci/list-admin-write-ops.sh \
+            --out "$RUNNER_TEMP/admin-write-ops-ci.md" \
+            --baseline "$BASELINE"
+
+      - name: 失败时附上生成的清单
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-write-ops-ci
+          path: ${{ runner.temp }}/admin-write-ops-ci.md
+          if-no-files-found: ignore

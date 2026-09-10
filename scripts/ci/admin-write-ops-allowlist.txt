@@ -1,0 +1,108 @@
+# 后台写操作清单 diff 白名单（V1.3.0 Story 11.1 · AC2 / AC3）
+#
+# 格式：`<+|-> <METHOD> <PATH>   # 依据（story 号）`
+#   +  允许新增（本版 PRD 定义的新页面 / 新动作 / 抽屉与工作台片段）
+#   -  允许删除（Story 11.3 退役清单 + Story 7.6 明示的旧批量写入口）
+# 不在本表中的任何新增 / 删除 = 事故，CI 直接红（AB-19A：重构不丢一项）。
+# ⚠️ @PreAuthorize 漂移**不受白名单豁免**：无论端点在不在表里，权限表达式与基线不一致一律红。
+# ⚠️ 参数级变化（warn/reject +reason、payout +proof）清单本来就不列参数，不产生 diff，
+#    人工登记在《后台写操作清单-核对-<日期>.md》。
+
+# ===== 允许新增 · 写端点 =====
++ POST /admin/comments/virtual   # Story 4.2（AB-20A 虚拟身份发布评论，走完整审核）
++ POST /admin/config/ktp-pricing   # Story 6.1（AB-18A KTP 高清图解锁定价三行）
++ POST /admin/config/tiers   # Story 6.2（AB-22A PawCoin 档位）
++ POST /admin/dashboard/materialize   # Story 3.3（AD-3 自愈跑批，@StagOnly 生产不注册）
++ POST /admin/payments/{intentToken}/simulate-expired   # Story 8.5（D-41 支付模拟回调，@StagOnly 生产不注册）
++ POST /admin/payments/{intentToken}/simulate-failed   # Story 8.5（D-41 支付模拟回调，@StagOnly 生产不注册）
++ POST /admin/payments/{intentToken}/simulate-paid   # Story 8.5（D-41 支付模拟回调，@StagOnly 生产不注册）
++ POST /admin/places   # Story 5.2 / 5.3 / 5.4（AB-17A 场所管理，PRD 定义的新增页与处置动作）
++ POST /admin/places/{id:\d+}/comments/{commentId:\d+}/remove   # Story 5.2 / 5.3 / 5.4（AB-17A 场所管理，PRD 定义的新增页与处置动作）
++ POST /admin/places/{id:\d+}/delist   # Story 5.2 / 5.3 / 5.4（AB-17A 场所管理，PRD 定义的新增页与处置动作）
++ POST /admin/places/{id:\d+}/edit   # Story 5.2 / 5.3 / 5.4（AB-17A 场所管理，PRD 定义的新增页与处置动作）
++ POST /admin/places/{id:\d+}/merge   # Story 5.2 / 5.3 / 5.4（AB-17A 场所管理，PRD 定义的新增页与处置动作）
++ POST /admin/places/{id:\d+}/photos/{photoId:\d+}/remove   # Story 5.2 / 5.3 / 5.4（AB-17A 场所管理，PRD 定义的新增页与处置动作）
++ POST /admin/places/{id:\d+}/reports/dismiss-all   # Story 5.2 / 5.3 / 5.4（AB-17A 场所管理，PRD 定义的新增页与处置动作）
++ POST /admin/places/{id:\d+}/restore   # Story 5.2 / 5.3 / 5.4（AB-17A 场所管理，PRD 定义的新增页与处置动作）
++ POST /admin/warm-replies/{id:\d+}/read   # Story 4.4（AB-20A A9 暖贴回复跟进工作台）
++ POST /admin/warm-replies/{id:\d+}/reply   # Story 4.4（AB-20A A9 暖贴回复跟进工作台）
+
+# ===== 允许新增 · GET（抽屉片段 / 模板 A 工作台片段 / 本版新页面）=====
++ GET /admin/accounts/new/drawer   # Story 6.5（B24 后台账号抽屉 / 创建账号）
++ GET /admin/accounts/{id}/drawer   # Story 6.5（B24 后台账号抽屉 / 创建账号）
++ GET /admin/ai-orders/{orderToken}/drawer   # Story 8.4（B11 AI 订单抽屉吸收详情页）
++ GET /admin/algo-params/changes/drawer   # Story 6.4（D3 算法参数变更记录抽屉）
++ GET /admin/anomalies/queue   # Story 2.6（A4 问诊异常工单，模板 A 双栏片段）
++ GET /admin/anomalies/{id:\d+}/detail   # Story 2.6（A4 问诊异常工单，模板 A 双栏片段）
++ GET /admin/audit-logs/chain-status   # Story 6.5（B23 操作审计链完整性）
++ GET /admin/charts   # Story 3.4（AB-15A 看板五卡图表片段；⚠️ 无 @PreAuthorize，仅链级 ROLE_ADMIN —— 见核对报告「观察项」）
++ GET /admin/comments/distribution   # Story 4.2（AB-20A 评论分布页与抽屉）
++ GET /admin/comments/distribution/{postId}/drawer   # Story 4.2（AB-20A 评论分布页与抽屉）
++ GET /admin/comments/{id}/drawer   # Story 7.3（B4 评论管理抽屉）
++ GET /admin/config/tiers/disabled   # Story 6.2（AB-22A PawCoin 档位）
++ GET /admin/consult-orders/{orderToken}/drawer   # Story 8.4（B10 兽医订单抽屉吸收详情页）
++ GET /admin/consult-sessions/{sessionId}/drawer   # Story 9.2（B22 会话取证抽屉）
++ GET /admin/content-pins/new/drawer   # Story 7.2（B2 置顶管理抽屉）
++ GET /admin/content-pins/{id}/drawer   # Story 7.2（B2 置顶管理抽屉）
++ GET /admin/content-schedules/{rowId}/drawer   # Story 7.5（B5 排期发布并入批量内容页签）
++ GET /admin/content-tags/new/drawer   # Story 7.4（B3 内容标签抽屉）
++ GET /admin/content-tags/{id}/drawer   # Story 7.4（B3 内容标签抽屉）
++ GET /admin/content/{postId}/drawer   # Story 7.1（B1 内容详情抽屉化）
++ GET /admin/failed-requests/{id}/drawer   # Story 9.2（B21 未成功请求抽屉）
++ GET /admin/manual-review/queue   # Story 2.4（A1 统一复核工作台，模板 A 双栏片段）
++ GET /admin/manual-review/{itemId}/detail   # Story 2.4（A1 统一复核工作台，模板 A 双栏片段）
++ GET /admin/nav/badges   # Story 2.2（G0 全局壳导航角标；⚠️ 无 @PreAuthorize，仅链级 ROLE_ADMIN —— 见核对报告「观察项」）
++ GET /admin/payments/{intentToken}/drawer   # Story 8.5（B12 支付记录抽屉）
++ GET /admin/places   # Story 5.2 / 5.3 / 5.4（AB-17A 场所管理，PRD 定义的新增页与处置动作）
++ GET /admin/places/new/drawer   # Story 5.2 / 5.3 / 5.4（AB-17A 场所管理，PRD 定义的新增页与处置动作）
++ GET /admin/places/{id:\d+}/drawer   # Story 5.2 / 5.3 / 5.4（AB-17A 场所管理，PRD 定义的新增页与处置动作）
++ GET /admin/places/{id:\d+}/merge-candidates   # Story 5.2 / 5.3 / 5.4（AB-17A 场所管理，PRD 定义的新增页与处置动作）
++ GET /admin/publish-identities/{userId}/remove/confirm   # Story 8.3（B9 运营发布身份，确认弹层改 /confirm 片段）
++ GET /admin/red-overage/{userId}/drawer   # Story 8.5（B14 红色超额抽屉）
++ GET /admin/refunds/queue   # Story 2.8（A6 退款管理，模板 A 双栏片段）
++ GET /admin/refunds/{refundToken}/detail   # Story 2.8（A6 退款管理，模板 A 双栏片段）
++ GET /admin/seed-batches/schedules   # Story 7.6（E2 批量工作台，模板 E）
++ GET /admin/seed-batches/{batchId}/preview/{rowId}/drawer   # Story 7.6（E2 批量工作台，模板 E）
++ GET /admin/settlements/{id}/drawer   # Story 8.5（B13 兽医月结抽屉）
++ GET /admin/support-tickets/queue   # Story 2.7（A5 客服工单，模板 A 双栏片段）
++ GET /admin/support-tickets/{ticketToken}/detail   # Story 2.7（A5 客服工单，模板 A 双栏片段）
++ GET /admin/tickets/queue   # Story 2.5（A2 被举报用户，模板 A 双栏片段）
++ GET /admin/tickets/{id:\d+}/detail   # Story 2.5（A2 被举报用户，模板 A 双栏片段）
++ GET /admin/user-tags/new/drawer   # Story 8.2（B8 用户标签抽屉）
++ GET /admin/user-tags/{id}/drawer   # Story 8.2（B8 用户标签抽屉）
++ GET /admin/users/{userId}/drawer   # Story 8.1（B7 用户五页签抽屉）
++ GET /admin/vets/{id}/drawer   # Story 9.1a（B20 兽医账号抽屉）
++ GET /admin/virtual-accounts/new/drawer   # Story 8.3（B9 虚拟账号抽屉 + 确认弹层改 /confirm 片段）
++ GET /admin/virtual-accounts/{id}/drawer   # Story 8.3（B9 虚拟账号抽屉 + 确认弹层改 /confirm 片段）
++ GET /admin/virtual-accounts/{userId}/disable/confirm   # Story 8.3（B9 虚拟账号抽屉 + 确认弹层改 /confirm 片段）
++ GET /admin/warm-replies   # Story 4.4（AB-20A A9 暖贴回复跟进工作台）
++ GET /admin/warm-replies/queue   # Story 4.4（AB-20A A9 暖贴回复跟进工作台）
++ GET /admin/warm-replies/{id:\d+}/detail   # Story 4.4（AB-20A A9 暖贴回复跟进工作台）
+
+# ===== 允许删除 =====
+# ⚠️ 本段必须与 Story 11.3 AC1 的退役表**一一对应**（11.3 Dev Notes 的硬要求）。
+#    下列 4 条是「已授权、当前尚未删」的预授权项 —— 现在不命中，但漏了它们的话，
+#    Epic 10 / 后续 story 真按 11.3 去删时，guard 会把一次**有授权的删除**报成事故（PR 无端变红）。
+- GET /admin/shop/orders/{token}   # Story 10.2（订单履约抽屉，11.3 退役清单）—— ⏳ Epic 10 未执行，当前仍在服役
+- GET /admin/shop/returns/{token}   # Story 10.1（Toko 退货抽屉，11.3 退役清单）—— ⏳ Epic 10 未执行，当前仍在服役
+- GET /admin/vets/{id}/qualification   # Story 9.1b（11.3 列为退役，实际改为抽屉资质页签片段、路径保留）—— 🔄 当前仍在服役，勿删
+- GET /admin/vets/{id}/ratings   # Story 9.1b（11.3 列为退役，实际改为抽屉评分页签片段、路径保留）—— 🔄 当前仍在服役，勿删
+- GET /admin/ai-orders/{orderToken}   # Story 8.4（抽屉吸收详情页，11.3 退役清单）
+- GET /admin/anomalies/{id}   # Story 2.6（问诊异常抽屉，11.3 退役清单）
+- GET /admin/consult-orders/{orderToken}   # Story 8.4（抽屉吸收详情页，11.3 退役清单）
+- GET /admin/content-schedules   # Story 7.5（并入批量内容页签，11.3 退役清单）
+- GET /admin/content/{postId}   # Story 7.1（详情抽屉化，11.3 退役清单）
+- GET /admin/publish-identities/{userId}/remove   # Story 8.3（GET 确认页 → GET .../remove/confirm 片段，写端点 POST 未动）
+- GET /admin/ratings   # Story 9.1b（评分并入兽医列表筛选栏，11.3 退役清单）
+- GET /admin/refunds/{refundToken}   # Story 2.8（退款三段流，11.3 退役清单）
+- GET /admin/reports   # Story 2.4（统一复核工作台，11.3 退役清单）
+- GET /admin/seed-batch   # Story 7.6（旧批量入口，E2 模板 E 取代；Dev Notes 唯一允许删的写端点）
+- GET /admin/seed-batch/template   # Story 7.6（旧批量入口的模板下载，随入口一并退役）
+- GET /admin/support-tickets/{ticketToken}   # Story 2.7（客服工单抽屉，11.3 退役清单）
+- GET /admin/tickets/detail   # Story 2.5（被举报用户抽屉，11.3 退役清单）
+- GET /admin/users/{userId}   # Story 8.1（五页签抽屉，11.3 退役清单）
+- GET /admin/vets/online   # Story 9.1a（在线态并入列表与抽屉，11.3 退役清单）
+- GET /admin/vets/{id}/edit   # Story 9.1a（资料并入抽屉资料页签，11.3 退役清单）
+- GET /admin/virtual-accounts/{userId}/disable   # Story 8.3（GET 确认页 → GET .../disable/confirm 片段，写端点 POST 未动）
+- POST /admin/seed-batch   # Story 7.6（旧批量入口，E2 模板 E 取代；Dev Notes 唯一允许删的写端点）
+- POST /admin/seed-batch/import   # Story 7.6（旧批量入口，同上）
