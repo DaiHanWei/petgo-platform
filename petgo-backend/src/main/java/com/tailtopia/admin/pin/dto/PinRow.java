@@ -24,8 +24,20 @@ public record PinRow(
         SchedulePhase phase,
         boolean contentGone) {
 
-    /** 是否可编辑 / 可提前结束：仅「待生效」与「生效中」两态。 */
+    /**
+     * 已收手：到期，<b>或</b>被手动提前结束。
+     *
+     * <p>🔴 {@code phase} 不够用：{@code ScheduleWindow} 的第一判据是 {@code now < startsAt} → PENDING，
+     * 所以把一条**待生效**的排期「提前结束」之后，phase 仍然是 PENDING。
+     * 只看 phase 的话，界面上会是「待生效 + 按钮还在」，运营点了像没反应，再点一次才得到
+     * 「该排期已结束，无需再操作」。判据必须把 {@code terminatedAt} 一起算进来。
+     */
+    public boolean ended() {
+        return phase == SchedulePhase.ENDED || terminatedAt != null;
+    }
+
+    /** 是否可编辑 / 可提前结束：仅「待生效」与「生效中」两态（见 {@link #ended()}）。 */
     public boolean editable() {
-        return phase != SchedulePhase.ENDED;
+        return !ended();
     }
 }

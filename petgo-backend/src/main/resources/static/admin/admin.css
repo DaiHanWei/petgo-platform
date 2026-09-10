@@ -804,3 +804,16 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cm-post-card { display: flex; gap: 10px; align-items: flex-start; }
 .cm-takedown-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .cm-drawer .sticky-footer { bottom: 0; }
+
+/* ===== B3 顶置管理（V1.3.0 Story 7.3，模板 B + 480px 抽屉）===== */
+.pins-table td { vertical-align: middle; }
+.pin-card { margin-bottom: 10px; }
+.pin-card h3 { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.pin-preview { display: flex; gap: 10px; align-items: flex-start; }
+.pin-window-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pin-create fieldset { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; margin: 10px 0; }
+.pin-create legend { color: var(--muted); font-size: var(--fs-xs); padding: 0 4px; }
+.pin-drawer .sticky-footer { bottom: 0; }
+/* bug 20260828 的同一件事，但发生在抽屉里：原生日期弹层在 position:fixed 的抽屉里同样会被裁，
+   而给 main 加底部留白对固定定位的抽屉毫无作用（V1.3.0 Story 7.3 复审 P2）。 */
+.drawer-body:has(input[type="datetime-local"]) { padding-bottom: 340px; }

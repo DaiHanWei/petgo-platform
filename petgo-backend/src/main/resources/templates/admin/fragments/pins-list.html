@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  B3 顶置管理的摘要条 / 表格 / 单行（V1.3.0 Story 7.3，模板 B）。
+    summary(oob) — 三格：生效中 · 待生效 · 已结束（口径与状态列同源：都取 SchedulePhase）
+    rows(oob)    — 表格 + 空态 + 分页；oob=true 时摘要条随片段一并换
+    row(r, oob)  — 单行；oob 形参目前恒为 false（处置成功走整表重拉：新建的行本来就不在页面上，oob 插不进去），
+                   保留是为了与其它模板 B 列表同形
+  🔴 时间一律标「WIB」：不写运营就按自己电脑的时区读，整批排期看着都对不上。
+*/-->
+<body>
+<div th:fragment="summary(oob)" class="sum" id="pins-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.pins.phase.active}">生效中</div>
+        <div class="sum-value" th:text="${summary.active}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.pins.phase.pending}">待生效</div>
+        <div class="sum-value" th:text="${summary.pending}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.pins.phase.ended}">已结束</div>
+        <div class="sum-value" th:text="${summary.ended}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/pins-list :: summary(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(rows)}" class="pins-table">
+        <thead>
+        <tr>
+            <th th:text="#{admin.pins.objectType}">类型</th>
+            <th th:text="#{admin.pins.summary}">内容 / 标题</th>
+            <th class="nowrap" th:text="#{admin.pins.window}">生效时间（WIB）</th>
+            <th th:text="#{admin.pins.phase}">状态</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="r : ${rows}"><tr th:replace="~{admin/fragments/pins-list :: row(${r}, false)}"></tr></th:block>
+        </tbody>
+    </table>
+
+    <div class="empty" th:if="${#lists.isEmpty(rows)}">
+        <span class="empty-emoji">📌</span>
+        <p th:text="#{admin.pins.empty}">该坑位还没有任何顶置排期。</p>
+    </div>
+
+    <div class="pager" th:if="${!#lists.isEmpty(rows)}" th:attr="data-page=${page}">
+        <a th:if="${page > 0}" href="#" data-no-drawer hx-target="#pins-rows" hx-swap="innerHTML" hx-push-url="true"
+           th:attr="hx-get=@{/admin/content-pins(slot=${slot},status=${status},page=${page - 1})}"
+           th:text="#{admin.audit.prev}">← 上一页</a>
+        <span th:text="#{admin.v130.pins.pager.page(${page + 1})}">第 1 页</span>
+        <a th:if="${hasNext}" href="#" data-no-drawer hx-target="#pins-rows" hx-swap="innerHTML" hx-push-url="true"
+           th:attr="hx-get=@{/admin/content-pins(slot=${slot},status=${status},page=${page + 1})}"
+           th:text="#{admin.audit.next}">下一页 →</a>
+    </div>
+</th:block>
+
+<!--/* 单行（rows 循环体；抽屉里处置成功后以 oob=true 原位替换）。行内不再有任何处置表单 —— 全在抽屉操作条上 */-->
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(r, oob)" th:id="'pin-row-' + ${r.id}" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${r.id}" th:data-drawer-url="@{/admin/content-pins/{id}/drawer(id=${r.id})}" tabindex="0"
+        th:classappend="${r.ended()} ? 'row-muted'">
+        <td class="nowrap" th:text="${r.objectType == 'PROMO'} ? #{admin.pins.type.promo} : #{admin.pins.type.content}">类型</td>
+        <td>
+            <span th:text="${r.summary}">摘要</span>
+            <!--/* 🔴 内容失效未生效：判定与 App 的 Feed 坑位同源（ContentDisplayability）。
+                   不标出来的话，运营看到「生效中」而 App 上坑位是空的，只会以为是缓存或故障。 */-->
+            <span class="badge badge-warn" th:if="${r.contentGone and r.objectType != 'PROMO'}"
+                  th:text="#{admin.pins.contentGone}">内容失效未生效</span>
+        </td>
+        <td class="nowrap">
+            <span th:text="${#temporals.format(r.startsAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">开始</span>
+            –
+            <span th:text="${#temporals.format(r.endsAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">结束</span>
+            <!--/* 提前结束单独展示：ends_at 未被覆盖，排期意图与实际收手时刻都留着 */-->
+            <span class="muted" th:if="${r.terminatedAt != null}"
+                  th:text="'· ' + ${#temporals.format(r.terminatedAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">提前结束于</span>
+            <span class="muted">WIB</span>
+        </td>
+        <td class="nowrap">
+            <!--/* 🔴 用 ended() 而不是 phase：被手动提前结束的「待生效」排期 phase 仍是 PENDING，
+                   只看 phase 会在界面上写「待生效」而它其实已经收手了（见 PinRow.ended） */-->
+            <span class="dot" th:classappend="${r.ended()} ? 'dot--done' : (${r.phase.name() == 'ACTIVE'} ? 'dot--ok' : 'dot--wait')"></span>
+            <span class="badge"
+                  th:classappend="${r.ended()} ? 'badge-muted' : (${r.phase.name() == 'ACTIVE'} ? 'badge-ok' : 'badge-neutral')"
+                  th:text="${r.ended()} ? #{admin.pins.phase.ended}
+                           : (${r.phase.name() == 'ACTIVE'} ? #{admin.pins.phase.active} : #{admin.pins.phase.pending})">状态</span>
+        </td>
+    </tr>
+</tbody></table>
+</body>
+</html>

@@ -25,6 +25,9 @@ public final class AdminHxEvents {
     /** B2 评论巡查：列表按当前筛选 + 当前页重拉（Story 7.2；抽屉同样由处置响应体直接带回，不需要事件）。 */
     public static final String COMMENT_LIST_REFRESH = "admin:comment-list-refresh";
 
+    /** B3 顶置管理：列表按当前筛选 + 当前页重拉（Story 7.3；新建成功也发它 —— 新行得靠整表重拉才会出现）。 */
+    public static final String PIN_LIST_REFRESH = "admin:pin-list-refresh";
+
     private AdminHxEvents() {
     }
 }

@@ -289,13 +289,20 @@ class AdminContentPinIntegrationTest extends ApiIntegrationTest {
         assertThat(saved.getStartsAt().atZone(java.time.ZoneOffset.UTC).getHour()).isEqualTo(3);
     }
 
-    /** 🛡 界面必须在时间输入旁明示「WIB」—— 否则运营按本地时区填，排期整体偏移。 */
+    /**
+     * 🛡 时间输入旁必须明示「WIB」—— 否则运营按本地时区填，排期整体偏移。
+     *
+     * <p>V1.3.0 Story 7.3：输入框随新建表单搬进了抽屉，所以断言也跟着搬 ——
+     * 留在整页上只会撞到副标题里的「WIB（雅加达）」而恒绿，等于不再守任何东西。
+     */
     @Test
-    void pageLabelsTheTimezoneNextToTheTimeInputs() throws Exception {
-        String html = mvc.perform(get("/admin/content-pins").with(authentication(superAdminAuth())).param("lang", "zh_CN"))
+    void timeInputsAreLabelledWithWib() throws Exception {
+        String form = mvc.perform(get("/admin/content-pins/new/drawer")
+                        .with(authentication(superAdminAuth())).header("HX-Request", "true").param("lang", "zh_CN"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        assertThat(html).as("时间输入旁须有 WIB 字样").contains("WIB");
+        assertThat(form).as("新建表单里时间输入旁须有 WIB 字样")
+                .contains("datetime-local").contains("WIB");
     }
 
     // ——————————————————— AC2 推广卡片 ———————————————————
