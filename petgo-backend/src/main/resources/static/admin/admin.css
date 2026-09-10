@@ -776,3 +776,8 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cfg-grid-2 > .cfg-grid-right { grid-column: 2; margin: 4px 0; align-self: end; }
 .algo-changes .filter-bar { margin-bottom: 8px; }
 @media (max-width: 720px) { .cfg-grid-2 { grid-template-columns: 1fr; } }
+
+/* V1.3.0 Story 6.5：B23 只读页标识 / B24 抽屉动作卡 */
+.lst-readonly-badge { align-self: center; }
+.ac-drawer .card { margin-bottom: 10px; }
+.ac-drawer details.pl-inline > form { margin-top: 8px; }

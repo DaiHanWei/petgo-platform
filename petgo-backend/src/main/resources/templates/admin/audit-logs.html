@@ -1,52 +1,68 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
-<!--
-  操作审计日志查询页（Story 1.3；1.6 外化 i18n + 换肤 + 本地托管 htmx）。门控在控制器 @PreAuthorize。
-  筛选：日期范围 / 操作人账号 id / 操作类型；HTMX 局部刷新 #results（HX-Request 返 resultsFragment 片段）。
--->
+<!--/*
+  B23 操作审计（Story 1.3 → V1.3.0 Story 6.5 套模板 B，只读，无抽屉；AD-11 / D-22）。门控在控制器 @PreAuthorize（admin.view_logs）。
+  筛选栏：操作人 / 操作类型 / 时间段 + 显式「查询」钮（HTMX 局部刷新 #results；未加载 htmx 时退化为整页 GET）。
+  摘要条：记录数 + 哈希链校验状态（页面载入后 hx-get /admin/audit-logs/chain-status 异步取，AuditChainVerifier 复算最近一窗，不阻塞首屏）。
+  表：id / 时间 WIB（@adminTime.wib，存储与哈希链复算仍基于 UTC created_at，本页不碰 AdminAuditService）/ 操作人 / 类型 / 目标 / 摘要 / 行哈希 → 分页。
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.audit.title}">操作审计 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
-    <!-- HTMX：本地静态托管（不走 CDN）；未加载时表单退化为整页 GET 提交（仍可用）。 -->
+    <script defer th:src="@{/admin/admin-core.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
-    <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.audit.title}">操作审计</h1>
+    <div th:fragment="content" th:remove="tag" th:with="res='audit',noDrawer=true">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.audit.title}">操作审计</h1>
+            <span class="badge badge-muted lst-readonly-badge" data-readonly-page th:text="#{admin.v130.audit.readonly}">只读页</span>
+        </div>
         <p class="muted" th:text="#{admin.audit.subtitle}">所有后台写操作的不可篡改记录（哈希链 append-only，永久保留）。</p>
 
-        <!-- 筛选条：HTMX 提交局部刷新 #results -->
-        <form class="filter-bar" th:action="@{/admin/audit-logs}" method="get"
-              hx-get="/admin/audit-logs" hx-target="#results" hx-swap="innerHTML">
-            <label><span th:text="#{admin.audit.filter.from}">起始日期</span>
-                <input type="date" name="from" th:value="${from}"/></label>
-            <label><span th:text="#{admin.audit.filter.to}">结束日期</span>
-                <input type="date" name="to" th:value="${to}"/></label>
-            <label><span th:text="#{admin.audit.filter.actor}">操作人账号id</span>
-                <input type="number" name="actor" th:value="${actor}" min="1"/></label>
-            <label><span th:text="#{admin.audit.filter.action}">操作类型</span>
-                <select name="action">
-                    <option value="" th:text="#{admin.audit.filter.all}">全部</option>
-                    <option th:each="t : ${actionTypes}" th:value="${t}" th:text="${t}"
-                            th:selected="${t == action}">ACTION</option>
-                </select>
-            </label>
-            <button type="submit" class="btn btn-primary" th:text="#{admin.audit.filter.submit}">筛选</button>
-        </form>
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::au-filters}, ~{::au-summary}, ~{::au-table}, ~{})}">
+            <!-- 筛选条：显式「查询」钮（不自动提交）；HTMX 提交局部刷新 #results，参数名 from / to / actor / action 不变 -->
+            <form th:fragment="au-filters" class="filter-bar" th:action="@{/admin/audit-logs}" method="get"
+                  th:attr="hx-get=@{/admin/audit-logs}" hx-target="#results" hx-swap="innerHTML">
+                <label class="field"><span th:text="#{admin.audit.filter.actor}">操作人账号id</span>
+                    <input type="number" name="actor" class="inp" th:value="${actor}" min="1"/></label>
+                <label class="field"><span th:text="#{admin.audit.filter.action}">操作类型</span>
+                    <select name="action" class="sel">
+                        <option value="" th:text="#{admin.audit.filter.all}">全部</option>
+                        <option th:each="t : ${actionTypes}" th:value="${t}" th:text="${t}" th:selected="${t == action}">ACTION</option>
+                    </select></label>
+                <label class="field"><span th:text="#{admin.audit.filter.from}">起始日期</span>
+                    <input type="date" name="from" class="inp" th:value="${from}"/></label>
+                <label class="field"><span th:text="#{admin.audit.filter.to}">结束日期</span>
+                    <input type="date" name="to" class="inp" th:value="${to}"/></label>
+                <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.audit.filter.submit}">查询</button>
+            </form>
 
-        <!-- 结果区（HTMX 局部刷新目标）。整页与片段共用同一 resultsFragment。 -->
-        <div id="results" th:insert="~{:: resultsFragment}">结果占位</div>
+            <div th:fragment="au-summary" class="sum" id="audit-summary">
+                <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.audit.summary.total}">匹配记录</div>
+                    <div class="sum-value" id="audit-total" th:text="${result.totalElements}">0</div></div>
+                <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.audit.chain.label}">哈希链</div>
+                    <!--/* 异步校验：只复算最近一窗（AuditChainVerifier.verifyRecent），审计表永久保留、全表重算不该由开页触发 */-->
+                    <div class="sum-value" id="audit-chain" th:attr="hx-get=@{/admin/audit-logs/chain-status}" hx-trigger="load" hx-swap="innerHTML">
+                        <span class="muted" th:text="#{admin.v130.audit.chain.checking}">校验中…</span></div></div>
+            </div>
+
+            <div th:fragment="au-table" id="results">
+                <div th:replace="~{admin/audit-logs :: resultsFragment}"></div>
+            </div>
+        </div>
     </div>
 
-    <!-- ===== 结果片段（HX-Request 时控制器单独返回此片段）===== -->
+    <!-- ===== 结果片段（HX-Request 时控制器单独返回此片段）：表 + 分页 + 摘要「匹配记录」oob ===== -->
     <div th:fragment="resultsFragment" th:remove="tag">
+        <span id="audit-total" hx-swap-oob="true" class="sum-value" th:if="${partial}" th:text="${result.totalElements}">0</span>
         <p class="empty" th:if="${result.totalElements == 0}" th:text="#{admin.audit.empty}">无匹配的审计记录。</p>
         <table th:if="${result.totalElements > 0}">
             <thead>
             <tr>
                 <th th:text="#{admin.audit.col.id}">id</th>
-                <th th:text="#{admin.audit.col.time}">时间(UTC)</th>
+                <th class="nowrap" th:text="#{admin.audit.col.time}">时间(WIB)</th>
                 <th th:text="#{admin.audit.col.actor}">操作人账号</th>
                 <th th:text="#{admin.audit.col.action}">操作类型</th>
                 <th th:text="#{admin.audit.col.target}">目标</th>
@@ -55,9 +71,9 @@
             </tr>
             </thead>
             <tbody>
-            <tr th:each="r : ${result.content}">
+            <tr th:each="r : ${result.content}" th:attr="data-id=${r.id}">
                 <td th:text="${r.id}">1</td>
-                <td th:text="${@adminTime.wib(r.createdAt)}">-</td>
+                <td class="nowrap" th:text="${@adminTime.wib(r.createdAt)}">-</td>
                 <td th:text="${r.actorAccountId}">-</td>
                 <td><code th:text="${r.actionType}">ACTION</code></td>
                 <td>
@@ -70,7 +86,7 @@
             </tbody>
         </table>
 
-        <div class="pager" th:if="${result.totalElements > 0}">
+        <div class="pager" th:if="${result.totalElements > 0}" th:attr="data-page=${result.number}">
             <a th:if="${result.hasPrevious()}"
                th:hx-get="@{/admin/audit-logs(from=${from},to=${to},actor=${actor},action=${action},page=${result.number - 1})}"
                hx-target="#results" hx-swap="innerHTML"
@@ -84,6 +100,12 @@
                th:text="#{admin.audit.next}">下一页 →</a>
         </div>
     </div>
+
+    <!-- ===== 哈希链状态徽标（GET /admin/audit-logs/chain-status）===== -->
+    <th:block th:fragment="chainStatus">
+        <span th:if="${chain.intact}" class="badge badge-ok" data-chain="intact" th:text="#{admin.v130.audit.chain.intact(${chain.verifiedCount})}">链完整 ✓（N 行）</span>
+        <span th:unless="${chain.intact}" class="badge badge-danger" data-chain="broken" th:text="#{admin.v130.audit.chain.broken(${chain.firstBrokenId})}">断链告警：首个断裂行 #id</span>
+    </th:block>
 </div>
 </body>
 </html>

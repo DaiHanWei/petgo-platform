@@ -26,5 +26,17 @@
     </aside>
     <div class="drawer-mask" hidden data-drawer-mask></div>
 </th:block>
+
+<!--/* 带预渲染抽屉体的壳（V1.3.0 Story 6.5「创建账号」抽屉：表单随整页渲染，无 JS 也能提交；按钮 data-drawer-open="" 只显示不请求）。
+     同页多个抽屉共用一个遮罩即可（admin-drawer.js 只查第一个 [data-drawer-mask]），故本壳不再输出遮罩。 */-->
+<th:block th:fragment="drawerWithBody(res, titleSlot, bodySlot)">
+    <aside th:id="${res} + '-drawer'" class="drawer" hidden th:attr="data-res=${res}" role="dialog" aria-modal="true" tabindex="-1">
+        <header class="drawer-head">
+            <div class="drawer-title" th:replace="${titleSlot} ?: ~{}"></div>
+            <button type="button" class="drawer-close" data-drawer-close th:title="#{admin.v130.drawer.close}" aria-label="close">✕</button>
+        </header>
+        <div class="drawer-body"><div th:replace="${bodySlot} ?: ~{}"></div></div>
+    </aside>
+</th:block>
 </body>
 </html>

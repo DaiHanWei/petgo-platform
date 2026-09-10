@@ -46,7 +46,7 @@ class AuditLogAccessControlTest {
 
         @Bean
         AuditLogAdminController auditLogAdminController(AdminAuditService s) {
-            return new AuditLogAdminController(s);
+            return new AuditLogAdminController(s, org.mockito.Mockito.mock(com.tailtopia.admin.audit.service.AuditChainVerifier.class));
         }
     }
 

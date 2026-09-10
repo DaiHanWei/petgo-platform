@@ -3,6 +3,7 @@ package com.tailtopia.admin.account.dto;
 import com.tailtopia.admin.account.domain.AdminAccountStatus;
 import com.tailtopia.admin.account.domain.AdminAccountType;
 import com.tailtopia.admin.account.domain.AdminRole;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -20,12 +21,14 @@ public record AdminAccountView(
         AdminAccountStatus status,
         List<String> permissionCodes,
         Long roleId,
-        String roleName) {
+        String roleName,
+        /** 创建时间（V1.3.0 Story 6.5 B24 列表列 / 抽屉；展示层走 {@code @adminTime.wib}）。 */
+        Instant createdAt) {
 
     /** Story 1.6 前的构造形态（无表角色信息）。 */
     public AdminAccountView(Long id, String larkEmail, String displayName, AdminAccountType accountType,
             AdminRole role, AdminAccountStatus status, List<String> permissionCodes) {
-        this(id, larkEmail, displayName, accountType, role, status, permissionCodes, null, null);
+        this(id, larkEmail, displayName, accountType, role, status, permissionCodes, null, null, null);
     }
 
     /** 权限是否由岗位角色模板决定（UI 据此把勾选框置为只读）。 */

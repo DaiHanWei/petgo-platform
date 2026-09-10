@@ -43,6 +43,8 @@ public class AdminRoleController {
         model.addAttribute("roles", roles);
         model.addAttribute("systemCount", roles.stream().filter(AdminRoleView::system).count());
         model.addAttribute("customCount", roles.stream().filter(r -> !r.system()).count());
+        // V1.3.0 Story 6.5 摘要条：使用中账号 = 各角色 accountCount 之和
+        model.addAttribute("accountTotal", roles.stream().mapToLong(AdminRoleView::accountCount).sum());
         return "admin/roles";
     }
 

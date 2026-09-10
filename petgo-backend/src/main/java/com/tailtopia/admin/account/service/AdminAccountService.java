@@ -93,10 +93,41 @@ public class AdminAccountService {
         for (AdminAccount a : all) {
             views.add(new AdminAccountView(a.getId(), a.getLarkEmail(), a.getDisplayName(),
                     a.getAccountType(), a.getRole(), a.getStatus(), effectivePermissions(a),
-                    a.getRoleId(), a.getRoleId() == null ? null : names.get(a.getRoleId())));
+                    a.getRoleId(), a.getRoleId() == null ? null : names.get(a.getRoleId()), a.getCreatedAt()));
         }
         views.sort((x, y) -> Long.compare(x.id(), y.id()));
         return views;
+    }
+
+    /**
+     * 单个账号视图（V1.3.0 Story 6.5 抽屉 / oob 行）；不存在 → 404。
+     *
+     * <p>⚠️ <b>按 id 单条取</b>，不要写成 {@code list().stream().filter(...)} ——
+     * {@code list()} 会把全部账号连同逐账号的权限解析（{@link RolePermissionResolver}）跑一遍，
+     * 而抽屉每开一次、每处置一次都会走这里。
+     */
+    @Transactional(readOnly = true)
+    public AdminAccountView view(long id) {
+        AdminAccount a = accounts.findById(id)
+                .orElseThrow(() -> AppException.notFound("账号不存在").code("admin.err.account.notFound"));
+        String roleName = a.getRoleId() == null ? null
+                : roleRows.findById(a.getRoleId()).map(AdminRoleEntity::getName).orElse(null);
+        return new AdminAccountView(a.getId(), a.getLarkEmail(), a.getDisplayName(), a.getAccountType(),
+                a.getRole(), a.getStatus(), effectivePermissions(a), a.getRoleId(), roleName, a.getCreatedAt());
+    }
+
+    /** B24 摘要条（Story 6.5 AC2）：账号总数 · 启用中 · 已停用 · 超管数 / 5。 */
+    public record Summary(long total, long active, long disabled, long superAdmins) {
+    }
+
+    @Transactional(readOnly = true)
+    public Summary summary() {
+        long total = accounts.count();
+        long active = accounts.countByStatus(AdminAccountStatus.ACTIVE);
+        // 🔴 超管数取 **ACTIVE** 口径：上限判定（assertSuperAdminCap）数的就是在职超管，停用的不占名额（Story 1.5 AC4）。
+        //    用含 DISABLED 的总数会显示「4 / 5」却还能再建两个 —— 分母与系统判定不是同一件事。
+        return new Summary(total, active, total - active,
+                accounts.countByAccountTypeAndStatus(AdminAccountType.SUPER_ADMIN, AdminAccountStatus.ACTIVE));
     }
 
     /** 该账号实际生效的权限码（排序稳定，供 UI 回显）——与登录装载同源（{@link RolePermissionResolver}）。 */

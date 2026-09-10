@@ -318,27 +318,36 @@ function armToast(t) {
 //   3) 权限勾选区仅「自定义」角色显示 —— 其余角色的权限由角色定义决定，服务端会忽略勾选，
 //      留着它只会让人以为「我勾了就生效」。
 // 纯体验层：授权在服务端按角色解析，禁用 JS 也授不出多余权限（页面只是全部展开而已）。
+// V1.3.0 Story 6.5：建号表单进了抽屉，会被 htmx 整块换掉（422 回 createForm / GET new/drawer）——
+//   换回来的是**全新的 <select>**，只在 DOMContentLoaded 绑一次的话，新表单既没有 change 监听、
+//   也没跑过首次 sync()：所有角色说明与权限预览全部展开、勾选区不再随「自定义」显隐。
+//   故抽成可重入的 init，并在 htmx:load 上重跑（已绑过的用 data 标记跳过，不会叠监听）。
 document.addEventListener('DOMContentLoaded', function () {
-    var roleSelect = document.getElementById('create-role');
-    if (!roleSelect) return;
-    var permGroups = document.getElementById('create-perm-groups');
-    var permNote = permGroups && permGroups.previousElementSibling;
+    function initCreateRole() {
+        var roleSelect = document.getElementById('create-role');
+        if (!roleSelect || roleSelect.dataset.roleSyncBound === '1') return;
+        roleSelect.dataset.roleSyncBound = '1';
+        var permGroups = document.getElementById('create-perm-groups');
+        var permNote = permGroups && permGroups.previousElementSibling;
 
-    function sync() {
-        var role = roleSelect.value;
-        document.querySelectorAll('.role-desc').forEach(function (p) {
-            p.hidden = p.getAttribute('data-role') !== role;
-        });
-        document.querySelectorAll('.role-perm-preview').forEach(function (d) {
-            d.hidden = d.getAttribute('data-role') !== role;
-        });
-        // V1.3.0 Story 1.6：选项值编码 enum:<NAME> / tpl:<id>，「自定义勾选」= enum:CUSTOM。
-        var custom = role === 'enum:CUSTOM' || role === 'CUSTOM';
-        if (permGroups) permGroups.hidden = !custom;
-        if (permNote) permNote.hidden = !custom;
+        function sync() {
+            var role = roleSelect.value;
+            document.querySelectorAll('.role-desc').forEach(function (p) {
+                p.hidden = p.getAttribute('data-role') !== role;
+            });
+            document.querySelectorAll('.role-perm-preview').forEach(function (d) {
+                d.hidden = d.getAttribute('data-role') !== role;
+            });
+            // V1.3.0 Story 1.6：选项值编码 enum:<NAME> / tpl:<id>，「自定义勾选」= enum:CUSTOM。
+            var custom = role === 'enum:CUSTOM' || role === 'CUSTOM';
+            if (permGroups) permGroups.hidden = !custom;
+            if (permNote) permNote.hidden = !custom;
+        }
+        roleSelect.addEventListener('change', sync);
+        sync();
     }
-    roleSelect.addEventListener('change', sync);
-    sync();
+    initCreateRole();
+    document.body.addEventListener('htmx:load', initCreateRole);
 });
 // 🔴 上面这个 `});` 曾在 merge b391bea59（2026-08-26，hex/v1.1.6-rebased 合入 dev_1.1.6）中丢失。
 //    后果不是"角色显隐失效"这么局部 —— 少了它，下面每一个 addEventListener 都被吞进

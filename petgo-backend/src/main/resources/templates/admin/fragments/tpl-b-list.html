@@ -13,21 +13,25 @@
   调用方 th:replace="~{admin/fragments/tpl-b-list :: list(~{::filters}, ~{::summary}, ~{::table}, ~{::drawer})}"
 -->
 <body>
-<div class="lst" th:fragment="list(filtersSlot, summarySlot, tableSlot, drawerSlot)" th:with="res=${res} ?: 'item'" data-list>
+<div class="lst" th:fragment="list(filtersSlot, summarySlot, tableSlot, drawerSlot)" th:with="res=${res} ?: 'item',noDrawer=${noDrawer} ?: false" data-list>
     <div class="lst-filters" th:replace="${filtersSlot} ?: ~{}"></div>
     <div class="sum" th:replace="${summarySlot} ?: ~{}"></div>
     <div class="lst-table">
         <div th:replace="${tableSlot} ?: ~{admin/fragments/tpl-a-workbench :: search-empty}"></div>
     </div>
     <p id="admin-inline-error" class="lst-inline-error" aria-live="polite"></p>
-    <aside th:id="${res} + '-drawer'" class="drawer" hidden th:attr="data-res=${res}" role="dialog" aria-modal="true" tabindex="-1">
-        <header class="drawer-head">
-            <div class="drawer-title" th:replace="${drawerSlot} ?: ~{}"></div>
-            <button type="button" class="drawer-close" data-drawer-close th:title="#{admin.v130.drawer.close}" aria-label="close">✕</button>
-        </header>
-        <div class="drawer-body"></div>
-    </aside>
-    <div class="drawer-mask" hidden data-drawer-mask></div>
+    <!--/* 只读列表页（B23 审计 / D6 角色）不引 admin-drawer.js、行上也没有 data-drawer-url：
+           调用方 th:with="noDrawer=true" 即不输出抽屉壳与遮罩，免得页面上留一段永远打不开的死标记。 */-->
+    <th:block th:unless="${noDrawer}">
+        <aside th:id="${res} + '-drawer'" class="drawer" hidden th:attr="data-res=${res}" role="dialog" aria-modal="true" tabindex="-1">
+            <header class="drawer-head">
+                <div class="drawer-title" th:replace="${drawerSlot} ?: ~{}"></div>
+                <button type="button" class="drawer-close" data-drawer-close th:title="#{admin.v130.drawer.close}" aria-label="close">✕</button>
+            </header>
+            <div class="drawer-body"></div>
+        </aside>
+        <div class="drawer-mask" hidden data-drawer-mask></div>
+    </th:block>
 </div>
 </body>
 </html>

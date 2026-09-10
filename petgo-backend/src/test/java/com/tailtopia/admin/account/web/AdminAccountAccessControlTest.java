@@ -86,7 +86,7 @@ class AdminAccountAccessControlTest {
     }
 
     private void viewList() {
-        controller.accounts(principal(), new ConcurrentModel());
+        controller.accounts(principal(), null, new ConcurrentModel());
     }
 
     private void deactivate() {
@@ -96,11 +96,11 @@ class AdminAccountAccessControlTest {
     }
 
     private void rebind() {
-        controller.rebindEmail(principal(), 5L, "new@x", new RedirectAttributesModelMap());
+        controller.rebindEmail(principal(), 5L, "new@x", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), new RedirectAttributesModelMap());
     }
 
     private void rename() {
-        controller.rename(principal(), 5L, "新名", new RedirectAttributesModelMap());
+        controller.rename(principal(), 5L, "新名", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), new RedirectAttributesModelMap());
     }
 
     @Test
@@ -166,7 +166,7 @@ class AdminAccountAccessControlTest {
         org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("uq"))
                 .when(svc).rebindEmail(5L, "dup@x", 1L);
         var flash = new RedirectAttributesModelMap();
-        assertThatCode(() -> controller.rebindEmail(principal(), 5L, "dup@x", flash)).doesNotThrowAnyException();
+        assertThatCode(() -> controller.rebindEmail(principal(), 5L, "dup@x", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), flash)).doesNotThrowAnyException();
         org.assertj.core.api.Assertions.assertThat(flash.getFlashAttributes()).containsKey("error");
     }
 }

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  B24 后台账号抽屉（V1.3.0 Story 6.5 AC2）。a = AdminAccountView；模型：selfId / bootstrapEmails / roleOptions / rolePermissions / matrixGroups。
+  基本信息 + Epic 1 全部行内动作，端点与参数逐字不变（/admin/accounts/{id}/rename · /rebind-email（仅超管）· /role · /permissions（仅 CUSTOM）· /deactivate · /reactivate）。
+  全部 hx-post：成功回 :: afterAction（抽屉重渲染 + oob 列表行 + toast），失败 422 / 403 行内 err（AdminBusinessExceptionAdvice → #accounts-drawer-err）。
+  self 护栏：自己那一行「改角色 / 改权限 / 停用」禁用并注明（安全边界在服务层）；D-2：改名 / 改角色 / 改权限成功横幅「对方重新登录后生效」。
+  createForm = 创建账号表单（页内 account-new 抽屉预渲染 / GET /admin/accounts/new/drawer 同一片段；htmx 提交成功 HX-Redirect ?open=<id>）。
+*/-->
+<body>
+<div th:fragment="drawer" class="ac-drawer" th:attr="data-account-id=${a.id}" th:with="isSelf=${selfId != null and a.id == selfId},isBootstrap=${#lists.contains(bootstrapEmails, a.larkEmail)}">
+    <section class="card card-full">
+        <h2><span th:text="${a.displayName}">名</span>
+            <span class="badge" th:classappend="${a.accountType.name() == 'SUPER_ADMIN'} ? 'badge-warn' : 'badge-muted'"
+                  th:text="${a.accountType.name() == 'SUPER_ADMIN'} ? #{admin.v130.accounts.type.superAdmin} : #{admin.v130.accounts.type.staff}">超管</span>
+            <span th:if="${a.status.name() == 'ACTIVE'}" class="badge badge-ok" th:text="#{admin.v130.accounts.status.active}">启用</span>
+            <span th:if="${a.status.name() == 'DISABLED'}" class="badge badge-danger" th:text="#{admin.v130.accounts.status.disabled}">已停用</span>
+            <span th:if="${isSelf}" class="badge badge-muted" th:text="#{admin.v130.accounts.self}">这是你自己</span></h2>
+        <div class="sum pl-info">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.accounts.col.email}">Lark 邮箱</div><div class="sum-value rv-small" th:text="${a.larkEmail}">x@y</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.accounts.col.role}">岗位角色</div>
+                <div class="sum-value rv-small" th:text="${a.roleCustom()} ? ${a.roleName ?: a.role} : #{${a.roleNameKey()}}">运营专员</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.accounts.col.createdAt}">创建时间</div>
+                <div class="sum-value rv-small" th:text="${a.createdAt != null} ? ${@adminTime.wib(a.createdAt)} : '-'">-</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.accounts.col.id}">id</div><div class="sum-value rv-small" th:text="'#' + ${a.id}">#1</div></div>
+        </div>
+        <p class="cell-wide">
+            <span class="muted" th:text="#{admin.accounts.col.perms}">权限</span>
+            <span th:if="${a.accountType.name() == 'SUPER_ADMIN'}" class="muted" th:text="#{admin.accounts.implicitAll}">隐式全权</span>
+            <span th:unless="${a.accountType.name() == 'SUPER_ADMIN'}">
+                <span th:if="${a.templated()}" class="muted" th:text="#{admin.accounts.byRole}">（按岗位角色授权）</span>
+                <span th:if="${#lists.isEmpty(a.permissionCodes)}" class="muted" th:text="#{admin.accounts.none}">（无）</span>
+                <span th:each="c : ${a.permissionCodes}" class="tag" th:text="#{'perm.' + ${c}}" th:title="${c}">code</span>
+            </span>
+        </p>
+        <p class="hint" th:text="#{admin.v130.accounts.relogin}">改名 / 改角色 / 改权限对该账号重新登录后生效；停用即时踢出会话。</p>
+    </section>
+
+    <p id="accounts-drawer-err" class="lst-inline-error" aria-live="polite"></p>
+
+    <!-- 改显示名（Story 1.2）：对自己可用 -->
+    <details class="card card-full pl-inline" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')">
+        <summary class="btn btn-neutral btn-sm" th:text="#{admin.accounts.rename}">改名</summary>
+        <form class="account-rename-form" th:attr="hx-post=@{/admin/accounts/{id}/rename(id=${a.id})}" hx-target="#accounts-drawer-err" hx-swap="innerHTML">
+            <label class="field field-full"><span th:text="#{admin.accounts.displayName}">显示名</span>
+                <input type="text" name="displayName" th:value="${a.displayName}" maxlength="100" required class="inp field-full"/></label>
+            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.accounts.rename.save}">保存显示名</button>
+        </form>
+    </details>
+
+    <!-- 换绑 Lark 邮箱（Story 1.3）：仅超管；bootstrap 超管禁用；confirm 复述旧→新（{0}/{1}，admin-core.js 取 input[name=newEmail]） -->
+    <details class="card card-full pl-inline" th:if="${a.status.name() == 'ACTIVE'}" sec:authorize="hasRole('SUPER_ADMIN')">
+        <summary class="btn btn-neutral btn-sm" th:text="#{admin.accounts.rebind}" th:classappend="${isBootstrap} ? 'is-disabled' : ''"
+                 th:title="${isBootstrap} ? #{admin.accounts.rebind.bootstrapGuard} : null">换绑邮箱</summary>
+        <form class="account-rebind-form" th:attr="hx-post=@{/admin/accounts/{id}/rebind-email(id=${a.id})},data-confirm=#{admin.accounts.rebind.confirm},data-confirm-args=${a.larkEmail}"
+              hx-target="#accounts-drawer-err" hx-swap="innerHTML">
+            <label class="field field-full"><span th:text="#{admin.accounts.rebind.newEmail}">新 Lark 邮箱</span>
+                <input type="email" name="newEmail" maxlength="255" required class="inp field-full" th:disabled="${isBootstrap}"
+                       th:title="${isBootstrap} ? #{admin.accounts.rebind.bootstrapGuard} : null"/></label>
+            <button type="submit" class="btn btn-danger btn-sm" th:disabled="${isBootstrap}"
+                    th:title="${isBootstrap} ? #{admin.accounts.rebind.bootstrapGuard} : null" th:text="#{admin.accounts.rebind}">换绑邮箱</button>
+        </form>
+    </details>
+
+    <!-- 改岗位角色（Story 1.6，下拉自角色表）：self 禁用 -->
+    <form class="card card-full account-role-form" th:attr="hx-post=@{/admin/accounts/{id}/role(id=${a.id})}" hx-target="#accounts-drawer-err" hx-swap="innerHTML"
+          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')">
+        <label class="field field-full"><span th:text="#{admin.accounts.col.role}">岗位角色</span>
+            <select name="role" class="sel role-select" th:disabled="${isSelf}" th:title="${isSelf} ? #{admin.accounts.selfGuard} : null">
+                <option th:each="o : ${roleOptions}" th:value="${o.value}" th:selected="${o.value == a.selectedValue()}"
+                        th:text="${o.custom} ? ${o.label} + ' · ' + #{admin.accounts.role.customBadge} : ${o.label}">运营专员</option>
+            </select></label>
+        <span class="hint" th:if="${isSelf}" th:text="#{admin.accounts.selfGuard}">不能对自己执行此操作</span>
+        <button type="submit" class="btn btn-neutral btn-sm" th:disabled="${isSelf}" th:title="${isSelf} ? #{admin.accounts.selfGuard} : null"
+                th:text="#{admin.accounts.saveRole}">改角色</button>
+    </form>
+
+    <!-- 改权限（仅「自定义」角色；按 AdminPageCatalog 8 组）：self 禁用 -->
+    <details class="card card-full pl-inline" th:if="${a.accountType.name() != 'SUPER_ADMIN' and !a.templated()}"
+             sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')">
+        <summary class="btn btn-neutral btn-sm" th:text="#{admin.accounts.editPerms}">改权限</summary>
+        <form class="account-perm-form" th:attr="hx-post=@{/admin/accounts/{id}/permissions(id=${a.id})}" hx-target="#accounts-drawer-err" hx-swap="innerHTML">
+            <div class="perm-panel">
+                <div th:replace="~{admin/fragments/perm-matrix :: matrix(${matrixGroups}, ${a.permissionCodes}, false, true)}"></div>
+            </div>
+            <span class="hint" th:if="${isSelf}" th:text="#{admin.accounts.selfGuard}">不能对自己执行此操作</span>
+            <button type="submit" class="btn btn-primary btn-sm" th:disabled="${isSelf}" th:title="${isSelf} ? #{admin.accounts.selfGuard} : null"
+                    th:text="#{admin.accounts.savePerms}">保存权限</button>
+        </form>
+    </details>
+
+    <!-- 停用 / 重新激活：self 禁用 -->
+    <section class="pl-actions" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.deactivate')">
+        <form class="inline" th:if="${a.status.name() == 'ACTIVE'}" th:attr="hx-post=@{/admin/accounts/{id}/deactivate(id=${a.id})},data-confirm=#{admin.accounts.deactivate.confirm}"
+              hx-target="#accounts-drawer-err" hx-swap="innerHTML">
+            <button type="submit" class="btn btn-danger btn-sm" th:disabled="${isSelf}" th:title="${isSelf} ? #{admin.accounts.selfGuard} : null"
+                    th:text="#{admin.accounts.deactivate}">停用</button>
+        </form>
+        <form class="inline" th:if="${a.status.name() == 'DISABLED'}" th:attr="hx-post=@{/admin/accounts/{id}/reactivate(id=${a.id})}"
+              hx-target="#accounts-drawer-err" hx-swap="innerHTML">
+            <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.accounts.reactivate}">重新激活</button>
+        </form>
+    </section>
+</div>
+
+<!-- 处置成功：主目标（err 槽）清空 + 抽屉体 oob + 列表行 oob + toast oob -->
+<th:block th:fragment="afterAction">
+    <div id="accounts-drawer-body-oob" hx-swap-oob="innerHTML:#accounts-drawer .drawer-body">
+        <div th:replace="~{admin/fragments/drawer-admin-account :: drawer}"></div>
+    </div>
+    <table hidden><tbody><tr th:replace="~{admin/admin-accounts :: row(${a}, true)}"></tr></tbody></table>
+    <!--/* 停用 / 重新激活会改「启用中 · 已停用 · 超管数」——摘要条不一起换就会停在旧值直到整页刷新 */-->
+    <div th:replace="~{admin/admin-accounts :: summary(true)}"></div>
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+</th:block>
+
+<!--/* htmx 建号成功的占位响应体：HX-Redirect 已带出，htmx 直接跳转、本体不会被 swap（与 drawer-places-create :: created 同一范式） */-->
+<div th:fragment="created" class="muted" th:text="#{admin.v130.accounts.created.open}">账号已创建</div>
+
+<!-- 创建账号表单（字段与 createAdminAccountForm 不变；th:object 绑定校验错误回显）。htmx 提交成功 HX-Redirect /admin/accounts?open=<id>；校验错误 422 回本片段（带 errors） -->
+<div th:fragment="createForm" class="ac-create" id="account-create">
+    <form th:action="@{/admin/accounts}" th:object="${createAdminAccountForm}" method="post" th:attr="hx-post=@{/admin/accounts}" hx-target="#account-create" hx-swap="outerHTML">
+        <label class="field field-full"><span th:text="#{admin.accounts.email}">Lark 邮箱</span>
+            <input type="email" th:field="*{larkEmail}" class="inp field-full" placeholder="member@company.com"/></label>
+        <span class="err" th:if="${#fields.hasErrors('larkEmail')}" th:errors="*{larkEmail}">邮箱错误</span>
+        <label class="field field-full"><span th:text="#{admin.accounts.displayName}">显示名</span>
+            <input type="text" th:field="*{displayName}" class="inp field-full"/></label>
+        <span class="err" th:if="${#fields.hasErrors('displayName')}" th:errors="*{displayName}">名字错误</span>
+        <label class="field field-full"><span th:text="#{admin.accounts.role}">岗位角色</span>
+            <select th:field="*{roleValue}" id="create-role" class="sel field-full">
+                <option th:each="o : ${roleOptions}" th:value="${o.value}"
+                        th:text="${o.custom} ? ${o.label} + ' · ' + #{admin.accounts.role.customBadge} : ${o.label}">运营专员</option>
+            </select></label>
+        <p class="hint role-desc" th:each="o : ${roleOptions}" th:if="${o.descKey != null}" th:data-role="${o.value}" th:text="#{${o.descKey}}">角色职责说明</p>
+        <div class="role-perm-preview" th:each="o : ${roleOptions}" th:data-role="${o.value}" th:if="${o.showPreview()}">
+            <span class="tag" th:each="c : ${rolePermissions.get(o.value)}" th:text="#{'perm.' + ${c}}" th:title="${c}">code</span>
+        </div>
+        <p class="hint" th:text="#{admin.accounts.perms.note}">模块权限（仅「自定义」角色生效）：</p>
+        <div class="perm-groups" id="create-perm-groups">
+            <div th:replace="~{admin/fragments/perm-matrix :: matrix(${matrixGroups}, null, true, true)}"></div>
+        </div>
+        <p class="err" th:if="${createError}" th:text="${createError}">err</p>
+        <p><button type="submit" class="btn btn-primary" th:text="#{admin.accounts.submit.create}">创建账号</button></p>
+    </form>
+</div>
+</body>
+</html>

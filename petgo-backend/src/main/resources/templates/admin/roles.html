@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org"
       xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!--
-  角色配置列表（V1.3.0 Story 1.5，AB-21A，UI 稿 7-8）。仅超管（控制器 @PreAuthorize）。
-  预置角色：名称三语（role.<CODE>）、只有「编辑权限」；自定义角色：单语 name、「编辑」「删除」。
-  套模板 B 归 Story 6.5，本页只在现有样式上落功能。
--->
+<!--/*
+  D6 角色配置列表（V1.3.0 Story 1.5 → 6.5 套模板 B（列表）；矩阵整页 roles-edit.html 不进抽屉，UI 稿 7-8～7-10）。仅超管（控制器 @PreAuthorize）。
+  摘要条：预置角色 4 · 自定义 N · 使用中账号 M；列：角色名称 / 类型 / 权限数 / 使用中账号数 / 操作（编辑权限 → 整页矩阵；自定义可删）。
+  端点全部来自 1-5（/admin/roles*），本 story 不加。
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.roles.title}">角色配置 · TailTopia 运营后台</title>
@@ -14,61 +14,64 @@
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
-    <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.roles.title}">角色配置</h1>
+    <div th:fragment="content" th:remove="tag" th:with="res='roles',noDrawer=true">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.roles.title}">角色配置</h1>
+            <a class="btn btn-primary btn-sm" th:href="@{/admin/roles/new}" th:text="#{admin.roles.create}">＋ 新建角色</a>
+        </div>
         <p class="muted" th:text="#{admin.roles.subtitle}">四个预置岗位角色的权限可在此编辑；也可新建自定义角色。变更对该角色下账号重新登录后生效。</p>
 
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
-        <div class="toolbar roles-toolbar">
-            <span class="tag" th:text="#{admin.roles.summary.total(${#lists.size(roles)})}">角色总数 4</span>
-            <span class="tag" th:text="#{admin.roles.summary.system(${systemCount})}">系统预置 4</span>
-            <span class="tag" th:text="#{admin.roles.summary.custom(${customCount})}">自定义 0</span>
-            <a class="btn btn-primary btn-sm" th:href="@{/admin/roles/new}" th:text="#{admin.roles.create}">＋ 新建角色</a>
-        </div>
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{}, ~{::ro-summary}, ~{::ro-table}, ~{})}">
+            <div th:fragment="ro-summary" class="sum roles-toolbar" id="roles-summary">
+                <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.roles.summary.system}">预置角色</div><div class="sum-value" th:text="${systemCount}">4</div></div>
+                <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.roles.summary.custom}">自定义</div><div class="sum-value" th:text="${customCount}">0</div></div>
+                <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.roles.summary.accounts}">使用中账号</div><div class="sum-value" th:text="${accountTotal}">0</div></div>
+            </div>
 
-        <table>
-            <thead>
-            <tr>
-                <th th:text="#{admin.roles.col.name}">角色名称</th>
-                <th th:text="#{admin.roles.col.type}">类型</th>
-                <th th:text="#{admin.roles.col.permissions}">权限数</th>
-                <th th:text="#{admin.roles.col.accounts}">使用中账号数</th>
-                <th th:text="#{admin.roles.col.action}">操作</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="r : ${roles}">
-                <td>
-                    <span th:if="${r.system()}" th:text="#{${r.nameKey}}">运营专员</span>
-                    <span th:unless="${r.system()}" th:text="${r.name}">自定义角色</span>
-                    <span class="muted" th:text="${r.code}">OPERATIONS</span>
-                </td>
-                <td>
-                    <span class="tag" th:if="${r.system()}" th:text="#{admin.roles.type.system}">系统预置</span>
-                    <span class="tag" th:unless="${r.system()}" th:text="#{admin.roles.type.custom}">自定义</span>
-                </td>
-                <td th:text="${r.permissionCount}">19</td>
-                <td th:text="${r.accountCount}">3</td>
-                <td class="account-actions-cell">
-                    <div class="account-actions">
-                        <a class="btn btn-neutral btn-sm" th:href="@{/admin/roles/{id}/edit(id=${r.id})}"
-                           th:text="${r.system()} ? #{admin.roles.editPermissions} : #{admin.roles.edit}">编辑权限</a>
-                        <form class="inline" th:unless="${r.system()}"
-                              th:action="@{/admin/roles/{id}/delete(id=${r.id})}" method="post"
-                              th:data-confirm="#{admin.roles.delete.confirm}"
-                              th:data-confirm-args="${r.name}">
-                            <button type="submit" class="btn btn-danger btn-sm"
-                                    th:disabled="${r.accountCount > 0}"
-                                    th:title="${r.accountCount > 0} ? #{admin.err.role.inUse(${r.accountCount})} : null"
-                                    th:text="#{admin.roles.delete}">删除</button>
-                        </form>
-                    </div>
-                </td>
-            </tr>
-            </tbody>
-        </table>
+            <div th:fragment="ro-table" id="roles-rows">
+                <table>
+                    <thead>
+                    <tr>
+                        <th th:text="#{admin.roles.col.name}">角色名称</th>
+                        <th th:text="#{admin.roles.col.type}">类型</th>
+                        <th th:text="#{admin.roles.col.permissions}">权限数</th>
+                        <th th:text="#{admin.roles.col.accounts}">使用中账号数</th>
+                        <th th:text="#{admin.roles.col.action}">操作</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="r : ${roles}" th:attr="data-id=${r.id}">
+                        <td>
+                            <span th:if="${r.system()}" th:text="#{${r.nameKey}}">运营专员</span>
+                            <span th:unless="${r.system()}" th:text="${r.name}">自定义角色</span>
+                            <span class="muted rv-small" th:text="${r.code}">OPERATIONS</span>
+                        </td>
+                        <td>
+                            <span class="badge badge-muted" th:if="${r.system()}" th:text="#{admin.roles.type.system}">系统预置</span>
+                            <span class="badge badge-ok" th:unless="${r.system()}" th:text="#{admin.roles.type.custom}">自定义</span>
+                        </td>
+                        <td th:text="${r.permissionCount}">19</td>
+                        <td th:text="${r.accountCount}">3</td>
+                        <td class="account-actions-cell">
+                            <div class="account-actions">
+                                <!-- 编辑权限 → 整页矩阵（不进 480px 抽屉，UI 稿 7-9） -->
+                                <a class="btn btn-neutral btn-sm" th:href="@{/admin/roles/{id}/edit(id=${r.id})}"
+                                   th:text="${r.system()} ? #{admin.roles.editPermissions} : #{admin.roles.edit}">编辑权限</a>
+                                <form class="inline" th:unless="${r.system()}" th:action="@{/admin/roles/{id}/delete(id=${r.id})}" method="post"
+                                      th:data-confirm="#{admin.roles.delete.confirm}" th:data-confirm-args="${r.name}">
+                                    <button type="submit" class="btn btn-danger btn-sm" th:disabled="${r.accountCount > 0}"
+                                            th:title="${r.accountCount > 0} ? #{admin.err.role.inUse(${r.accountCount})} : null" th:text="#{admin.roles.delete}">删除</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 </body>

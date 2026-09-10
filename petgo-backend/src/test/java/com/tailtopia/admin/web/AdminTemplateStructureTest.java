@@ -526,6 +526,95 @@ class AdminTemplateStructureTest {
         return n;
     }
 
+    /**
+     * 🔴 同一个标签上<b>不能</b>既写 {@code th:each} 又写 {@code th:replace}/{@code th:insert}（bug 20260909，Story 6.5 复审）。
+     *
+     * <h2>这条守的是一个真实事故</h2>
+     * 账号页写成 {@code <tr th:each="a : ${accounts}" th:replace="~{… :: row(${a}, false)}">}。
+     * Thymeleaf 的属性优先级里 <b>replace(100) 先于 each(200)</b> ⇒ 循环<b>根本没跑</b>，
+     * {@code ${a}} 在上下文中不存在、以 {@code null} 进片段，一开页就是 500。
+     *
+     * <p>⚠️ 这类错<b>看起来完全正常</b>：语法合法、模板结构检查、i18n 扫描、编译全绿，
+     * 只有真渲染一次才炸 —— 而整页渲染测试是 L1（要真库），云端跑不到。
+     *
+     * <p>正确写法是外面套一层 {@code <th:block th:each=...>}（见 {@code fragments/places-list.html}）。
+     */
+    @Test
+    void noTagCarriesBothEachAndReplace() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            List<String> lines = Files.readAllLines(f, StandardCharsets.UTF_8);
+            for (int i = 0; i < lines.size(); i++) {
+                String tag = wholeOpenTagAt(lines, i);
+                if (tag == null || !tag.contains("th:each")) {
+                    continue;
+                }
+                if (tag.contains("th:replace") || tag.contains("th:insert")) {
+                    offenders.add(fileName(f) + ":" + (i + 1) + "  " + lines.get(i).trim());
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 th:each 与 th:replace/th:insert 同标签：replace 优先级更高 ⇒ 循环不执行、循环变量为 null，"
+                        + "开页即 500。改成外层 <th:block th:each=…> 包住。")
+                .isEmpty();
+    }
+
+    /**
+     * 🔴 {@code sec:authorize} 不能与 {@code th:replace}/{@code th:insert} 写在同一个标签上（同一批复审）。
+     *
+     * <p>{@code AuthorizeAttrProcessor} 的优先级是 300，同样低于 {@code th:replace}(100)：
+     * 元素照样被替换、片段照样渲染，<b>这道门形同虚设</b>。
+     * 账号页的「创建账号」抽屉就这么把整份建号表单与权限码全集渲染给了只读账号。
+     * 正确写法：把门挂在外层 {@code <th:block sec:authorize=…>}（见 {@code config.html}）。
+     */
+    @Test
+    void noTagCarriesBothAuthorizeAndReplace() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            List<String> lines = Files.readAllLines(f, StandardCharsets.UTF_8);
+            for (int i = 0; i < lines.size(); i++) {
+                String tag = wholeOpenTagAt(lines, i);
+                if (tag == null || !tag.contains("sec:authorize")) {
+                    continue;
+                }
+                if (tag.contains("th:replace") || tag.contains("th:insert")) {
+                    offenders.add(fileName(f) + ":" + (i + 1) + "  " + lines.get(i).trim());
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 sec:authorize 与 th:replace/th:insert 同标签：优先级低于 replace ⇒ 门被静默忽略，"
+                        + "无权限的人照样拿到片段内容。改成外层 <th:block sec:authorize=…> 包住。")
+                .isEmpty();
+    }
+
+    /**
+     * 从第 {@code i} 行起的<b>开标签全文</b>（属性常跨行写，取到 {@code >} 为止；本行不是开标签则返回 null）。
+     * 注释行不算 —— 注释里写反例是常事，连注释一起扫会误报。
+     */
+    private String wholeOpenTagAt(List<String> lines, int i) {
+        String line = lines.get(i);
+        int lt = line.indexOf('<');
+        if (lt < 0 || !OPEN_TAG.matcher(line.substring(lt)).lookingAt()) {
+            return null;
+        }
+        String trimmed = line.stripLeading();
+        if (trimmed.startsWith("<!--")) {
+            return null;
+        }
+        StringBuilder tag = new StringBuilder();
+        for (int j = i; j < lines.size() && j < i + 12; j++) {
+            String s = j == i ? line.substring(lt) : lines.get(j);
+            int gt = s.indexOf('>');
+            tag.append(gt >= 0 ? s.substring(0, gt) : s).append(' ');
+            if (gt >= 0) {
+                break;
+            }
+        }
+        return tag.toString();
+    }
+
     private List<Path> templates() throws IOException {
         try (Stream<Path> files = Files.walk(DIR)) {
             return files.filter(p -> p.toString().endsWith(".html")).sorted().toList();

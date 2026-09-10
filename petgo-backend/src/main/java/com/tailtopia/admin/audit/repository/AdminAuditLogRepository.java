@@ -24,4 +24,12 @@ public interface AdminAuditLogRepository
 
     /** 全量升序（运维/测试逐行复算校验链完整性用）。 */
     List<AdminAuditLog> findAllByOrderByIdAsc();
+
+    /**
+     * 最近 N 行（降序；调用方自行倒排回升序）。
+     *
+     * <p>V1.3.0 Story 6.5：审计页的哈希链徽标只复算最近一窗 —— 审计表 append-only 且永久保留，
+     * 每开一次页就把全表实体拉进内存逐行重算，行数一多就是自找的内存与延迟。
+     */
+    List<AdminAuditLog> findAllByOrderByIdDesc(org.springframework.data.domain.Pageable pageable);
 }

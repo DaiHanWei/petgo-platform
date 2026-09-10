@@ -48,6 +48,9 @@ public interface AdminAccountRepository extends JpaRepository<AdminAccount, Long
     /** 超管数量（bootstrap 用）。 */
     long countByAccountType(AdminAccountType accountType);
 
+    /** B24 摘要条（V1.3.0 Story 6.5）。 */
+    long countByStatus(AdminAccountStatus status);
+
     /** 按类型 + 状态计数（Story 1.5 AC4：超管上限口径 = ACTIVE 的 SUPER_ADMIN < 5；DISABLED 不占名额）。 */
     long countByAccountTypeAndStatus(AdminAccountType accountType, AdminAccountStatus status);
 

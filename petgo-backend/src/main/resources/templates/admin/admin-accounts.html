@@ -1,198 +1,100 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org"
       xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!--
-  后台账号管理（Story 1.5；1.6 外化 i18n + 换肤）。两级权限：SUPER_ADMIN 隐式全权；STAFF 按勾选 permission_code。
-  门控在控制器 @PreAuthorize；页面 sec:authorize 隐藏入口仅体验。redirect-PRG。
--->
+<!--/*
+  B24 后台账号（Story 1.5 → V1.3.0 Story 6.5 套模板 B + 抽屉，AD-11）。两级权限：SUPER_ADMIN 隐式全权；STAFF 按勾选 permission_code。
+  门控在控制器 @PreAuthorize；页面 sec:authorize 隐藏入口仅体验。
+  摘要条：账号总数 · 启用中 · 已停用 · 超管数/5 → 表（显示名 / Lark 邮箱 / 岗位角色 / 类型 / 状态 / 创建时间）→ 点行开抽屉
+  GET /admin/accounts/{id}/drawer（fragments/drawer-admin-account.html：改名 / 换绑 / 改角色 / 改权限 / 停用 / 激活，全部 hx-post 原端点）。
+  「创建账号」收进右上按钮 → 第二个抽屉（account-new，表单预渲染在页内：无 JS 时也能提交，字段与 createAdminAccountForm 不变）。
+  写端点全部来自 Epic 1，本 story 一个不加；新增只读 GET …/drawer、…/new/drawer。
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.accounts.title}">后台账号 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
-    <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.accounts.title}">后台账号</h1>
+    <div th:fragment="content" th:remove="tag" th:with="res='accounts'">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.accounts.title}">后台账号</h1>
+            <button type="button" class="btn btn-primary btn-sm" data-drawer-open="" data-drawer-res="account-new"
+                    th:attr="data-drawer-autoopen=${openCreate} ? 'true' : null"
+                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')"
+                    th:text="#{admin.accounts.create}">创建账号</button>
+        </div>
         <p class="muted" th:text="#{admin.accounts.subtitle}">两级权限：超级管理员隐式全权；普通账号按勾选模块权限授权。</p>
 
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
-        <!-- 创建账号 -->
-        <div class="card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')">
-            <h2 th:text="#{admin.accounts.create}">创建账号</h2>
-            <form th:action="@{/admin/accounts}" th:object="${createAdminAccountForm}" method="post">
-                <label class="field" th:text="#{admin.accounts.email}">Lark 邮箱</label>
-                <input type="email" th:field="*{larkEmail}" class="field-full" placeholder="member@company.com"/>
-                <span class="err" th:if="${#fields.hasErrors('larkEmail')}" th:errors="*{larkEmail}">邮箱错误</span>
-                <label class="field" th:text="#{admin.accounts.displayName}">显示名</label>
-                <input type="text" th:field="*{displayName}" class="field-full"/>
-                <span class="err" th:if="${#fields.hasErrors('displayName')}" th:errors="*{displayName}">名字错误</span>
-                <label class="field" th:text="#{admin.accounts.role}">岗位角色</label>
-                <!-- Story 1.6：下拉 = 超管 / 运营主管 / 预置四岗（enum:）/ 自定义（tpl:）/ 自定义勾选；值编码见 RoleOption -->
-                <select th:field="*{roleValue}" id="create-role" class="field-full">
-                    <option th:each="o : ${roleOptions}" th:value="${o.value}"
-                            th:text="${o.custom} ? ${o.label} + ' · ' + #{admin.accounts.role.customBadge} : ${o.label}">运营专员</option>
-                </select>
-                <p class="hint role-desc" th:each="o : ${roleOptions}" th:if="${o.descKey != null}"
-                   th:data-role="${o.value}" th:text="#{${o.descKey}}">角色职责说明</p>
-                <!--
-                  角色权限预览：每个角色一块，服务端直接渲染（不走 JSON + JS 拼串），
-                  于是权限名天然跟着 #{perm.*} 走三语，且禁用 JS 时页面退化为「把所有角色的权限都列出来」，
-                  仍然可读。admin.js 只负责按当前下拉值显隐其中一块。
-                -->
-                <div class="role-perm-preview" th:each="o : ${roleOptions}"
-                     th:data-role="${o.value}" th:if="${o.showPreview()}">
-                    <span class="tag" th:each="c : ${rolePermissions.get(o.value)}"
-                          th:text="#{'perm.' + ${c}}" th:title="${c}">code</span>
-                </div>
-                <!-- 权限勾选区：仅「自定义」角色需要手工勾。其余角色的权限由角色定义决定（服务端忽略此处勾选）。 -->
-                <p class="hint" th:text="#{admin.accounts.perms.note}">模块权限（仅「自定义」角色生效）：</p>
-                <!-- Story 1.6：按 AdminPageCatalog 8 组重排（fragment 与角色配置页共用；码集合仍是 ALL 全集） -->
-                <div class="perm-groups" id="create-perm-groups">
-                    <div th:replace="~{admin/fragments/perm-matrix :: matrix(${matrixGroups}, null, true, true)}"></div>
-                </div>
-                <p><button type="submit" class="btn btn-primary" th:text="#{admin.accounts.submit.create}">创建账号</button></p>
-            </form>
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{}, ~{::ac-summary}, ~{::ac-table}, ~{::ac-drawer})}">
+            <div th:fragment="ac-summary" th:replace="~{admin/admin-accounts :: summary(false)}"></div>
+
+            <div th:fragment="ac-table" id="accounts-rows">
+                <table>
+                    <thead>
+                    <tr>
+                        <th th:text="#{admin.accounts.col.name}">显示名</th>
+                        <th th:text="#{admin.accounts.col.email}">Lark 邮箱</th>
+                        <th th:text="#{admin.accounts.col.role}">岗位角色</th>
+                        <th th:text="#{admin.accounts.col.type}">类型</th>
+                        <th th:text="#{admin.accounts.col.status}">状态</th>
+                        <th th:text="#{admin.v130.accounts.col.createdAt}">创建时间</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <!--/* ⚠️ th:each 与 th:replace 不能同标签：replace 的优先级(100)高于 each(200)，each 根本不会跑，
+                           ${a} 以 null 进片段 → 整页 500。外面套一层 th:block（fragments/places-list.html:53 同一范式）。 */-->
+                    <th:block th:each="a : ${accounts}"><tr th:replace="~{admin/admin-accounts :: row(${a}, false)}"></tr></th:block>
+                    </tbody>
+                </table>
+            </div>
+
+            <div th:fragment="ac-drawer" class="drawer-title" th:text="#{admin.v130.accounts.drawer.title}">账号详情</div>
         </div>
 
-        <!-- 账号列表 -->
-        <table>
-            <thead>
-            <tr>
-                <th th:text="#{admin.accounts.col.id}">id</th>
-                <th th:text="#{admin.accounts.col.email}">邮箱</th>
-                <th th:text="#{admin.accounts.col.name}">显示名</th>
-                <th th:text="#{admin.accounts.col.role}">岗位角色</th>
-                <th th:text="#{admin.accounts.col.status}">状态</th>
-                <th th:text="#{admin.accounts.col.perms}">权限</th>
-                <th th:text="#{admin.accounts.col.action}">操作</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="a : ${accounts}">
-                <td th:text="${a.id}">1</td>
-                <td th:text="${a.larkEmail}">x@y</td>
-                <td th:text="${a.displayName}">名</td>
-                <td>
-                    <!-- Story 1.6：表角色显示三语名 / 自定义名 + 「自定义」徽标 -->
-                    <span class="tag role-tag" th:classappend="'role-' + ${a.role}"
-                          th:text="${a.roleCustom()} ? ${a.roleName ?: a.role} : #{${a.roleNameKey()}}"
-                          th:title="${a.selectedValue()}">运营专员</span>
-                    <span class="muted" th:if="${a.roleCustom()}" th:text="#{admin.accounts.role.customBadge}">自定义</span>
-                </td>
-                <td>
-                    <span th:if="${a.status.name() == 'ACTIVE'}" class="status-active">ACTIVE</span>
-                    <span th:if="${a.status.name() == 'DISABLED'}" class="status-disabled">DISABLED</span>
-                </td>
-                <td class="cell-wide">
-                    <span th:if="${a.accountType.name() == 'SUPER_ADMIN'}" class="muted" th:text="#{admin.accounts.implicitAll}">隐式全权</span>
-                    <span th:unless="${a.accountType.name() == 'SUPER_ADMIN'}">
-                        <span th:if="${a.templated()}" class="muted"
-                              th:text="#{admin.accounts.byRole}">（按岗位角色授权）</span>
-                        <span th:if="${#lists.isEmpty(a.permissionCodes)}" class="muted" th:text="#{admin.accounts.none}">（无）</span>
-                        <span th:each="c : ${a.permissionCodes}" class="tag" th:text="#{'perm.' + ${c}}" th:title="${c}">code</span>
-                    </span>
-                </td>
-                <td class="account-actions-cell">
-                    <div class="account-actions" th:with="isSelf=${selfId != null and a.id == selfId}">
-                        <!-- 改显示名（V1.3.0 Story 1.2）：行内展开，与「改权限」同结构；对自己可用。 -->
-                        <form class="inline account-rename-form"
-                              th:action="@{/admin/accounts/{id}/rename(id=${a.id})}" method="post"
-                              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')">
-                            <details class="perm-details rename-details">
-                                <summary class="btn btn-neutral btn-sm" th:text="#{admin.accounts.rename}">改名</summary>
-                                <div class="perm-panel rename-panel">
-                                    <input type="text" name="displayName" th:value="${a.displayName}"
-                                           maxlength="100" required class="field-full"/>
-                                    <div class="perm-panel-actions">
-                                        <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.accounts.rename.save}">保存显示名</button>
-                                        <button type="button" class="btn btn-neutral btn-sm"
-                                                onclick="this.closest('details').removeAttribute('open')"
-                                                th:text="#{admin.accounts.rename.cancel}">取消</button>
-                                    </div>
-                                </div>
-                            </details>
-                        </form>
-                        <!-- 换绑 Lark 邮箱（V1.3.0 Story 1.3）：仅超管；bootstrap 超管行禁用。
-                             data-confirm 文案含 {0}/{1} 占位，admin.js 用 data-confirm-args（旧邮箱）与 input[name=newEmail] 替换后再 confirm。 -->
-                        <form class="inline account-rebind-form" th:if="${a.status.name() == 'ACTIVE'}"
-                              th:with="isBootstrap=${#lists.contains(bootstrapEmails, a.larkEmail)}"
-                              th:action="@{/admin/accounts/{id}/rebind-email(id=${a.id})}" method="post"
-                              th:data-confirm="#{admin.accounts.rebind.confirm}"
-                              th:data-confirm-args="${a.larkEmail}"
-                              sec:authorize="hasRole('SUPER_ADMIN')">
-                            <details class="perm-details rebind-details">
-                                <summary class="btn btn-neutral btn-sm" th:text="#{admin.accounts.rebind}"
-                                         th:classappend="${isBootstrap} ? 'is-disabled' : ''"
-                                         th:title="${isBootstrap} ? #{admin.accounts.rebind.bootstrapGuard} : null">换绑邮箱</summary>
-                                <div class="perm-panel rebind-panel">
-                                    <label class="field" th:text="#{admin.accounts.rebind.newEmail}">新 Lark 邮箱</label>
-                                    <input type="email" name="newEmail" maxlength="255" required class="field-full"
-                                           th:disabled="${isBootstrap}"
-                                           th:title="${isBootstrap} ? #{admin.accounts.rebind.bootstrapGuard} : null"/>
-                                    <div class="perm-panel-actions">
-                                        <button type="submit" class="btn btn-danger btn-sm" th:disabled="${isBootstrap}"
-                                                th:title="${isBootstrap} ? #{admin.accounts.rebind.bootstrapGuard} : null"
-                                                th:text="#{admin.accounts.rebind}">换绑邮箱</button>
-                                    </div>
-                                </div>
-                            </details>
-                        </form>
-                        <!-- 改岗位角色：一次定型该账号能进哪些模块。与建号同门控（改角色 = 重新授权）。 -->
-                        <!-- self 护栏（Story 1.2 AC4）：自己那一行禁用 + title 说明；安全边界在服务层。 -->
-                        <form class="inline account-role-form"
-                              th:action="@{/admin/accounts/{id}/role(id=${a.id})}" method="post"
-                              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')">
-                            <select name="role" class="role-select" th:disabled="${isSelf}"
-                                    th:title="${isSelf} ? #{admin.accounts.selfGuard} : null">
-                                <option th:each="o : ${roleOptions}" th:value="${o.value}"
-                                        th:selected="${o.value == a.selectedValue()}"
-                                        th:text="${o.custom} ? ${o.label} + ' · ' + #{admin.accounts.role.customBadge} : ${o.label}">运营专员</option>
-                            </select>
-                            <button type="submit" class="btn btn-neutral btn-sm" th:disabled="${isSelf}"
-                                    th:title="${isSelf} ? #{admin.accounts.selfGuard} : null"
-                                    th:text="#{admin.accounts.saveRole}">改角色</button>
-                        </form>
-                        <!-- 改权限：仅「自定义」角色。模板角色的权限由角色定义决定，逐码改会造出第二份真相。 -->
-                        <form class="inline account-perm-form"
-                              th:if="${a.accountType.name() != 'SUPER_ADMIN' and !a.templated()}"
-                              th:action="@{/admin/accounts/{id}/permissions(id=${a.id})}" method="post"
-                              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')">
-                            <details class="perm-details">
-                                <summary class="btn btn-neutral btn-sm" th:text="#{admin.accounts.editPerms}">改权限</summary>
-                                <div class="perm-panel">
-                                    <!-- Story 1.6：8 组矩阵 fragment（name=permissionCodes + th:checked 回显） -->
-                                    <div th:replace="~{admin/fragments/perm-matrix :: matrix(${matrixGroups}, ${a.permissionCodes}, false, true)}"></div>
-                                    <div class="perm-panel-actions">
-                                        <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.accounts.savePerms}">保存权限</button>
-                                    </div>
-                                </div>
-                            </details>
-                        </form>
-                        <!-- 停用 / 激活 -->
-                        <span class="account-status-actions"
-                              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.deactivate')">
-                            <form class="inline" th:if="${a.status.name() == 'ACTIVE'}"
-                                  th:action="@{/admin/accounts/{id}/deactivate(id=${a.id})}" method="post"
-                                  th:data-confirm="#{admin.accounts.deactivate.confirm}">
-                                <button type="submit" class="btn btn-danger btn-sm" th:disabled="${isSelf}"
-                                        th:title="${isSelf} ? #{admin.accounts.selfGuard} : null"
-                                        th:text="#{admin.accounts.deactivate}">停用</button>
-                            </form>
-                            <form class="inline" th:if="${a.status.name() == 'DISABLED'}"
-                                  th:action="@{/admin/accounts/{id}/reactivate(id=${a.id})}" method="post">
-                                <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.accounts.reactivate}">重新激活</button>
-                            </form>
-                        </span>
-                    </div>
-                </td>
-            </tr>
-            </tbody>
-        </table>
+        <!--/* 创建账号抽屉（第二个抽屉容器；表单预渲染，字段与 createAdminAccountForm 不变；校验错误时整页回显在此）。
+               ⚠️ 门必须挂在**外层** th:block：sec:authorize 优先级(300)低于 th:replace(100)，写在同一标签上会被静默忽略，
+                  只读账号也会拿到整份建号表单与权限码全集（config.html:27 是正确写法）。 */-->
+        <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('admin.create_account')">
+            <div th:replace="~{admin/fragments/tpl-shared :: drawerWithBody('account-new', ~{::ac-new-title}, ~{::ac-new-body})}">
+                <span th:fragment="ac-new-title" th:text="#{admin.accounts.create}">创建账号</span>
+                <div th:fragment="ac-new-body" th:replace="~{admin/fragments/drawer-admin-account :: createForm}"></div>
+            </div>
+        </th:block>
     </div>
+
+    <!--/* 摘要条（oob=true：抽屉内停用 / 重新激活后随处置响应一并换，否则「启用中 / 已停用」会停在旧值） */-->
+    <div th:fragment="summary(oob)" class="sum" id="accounts-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.accounts.summary.total}">账号总数</div><div class="sum-value" th:text="${summary.total}">0</div></div>
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.accounts.summary.active}">启用中</div><div class="sum-value" th:text="${summary.active}">0</div></div>
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.accounts.summary.disabled}">已停用</div><div class="sum-value" th:text="${summary.disabled}">0</div></div>
+        <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.accounts.summary.superAdmins}">超管数</div>
+            <div class="sum-value"><span th:text="${summary.superAdmins}">1</span><span class="muted"> / 5</span></div></div>
+    </div>
+
+    <!-- 表格行（oob=true 时按 id 原位替换：抽屉内处置成功后带回） -->
+    <tr th:fragment="row(a, oob)" th:id="'account-row-' + ${a.id}" th:attr="data-id=${a.id},data-drawer-url=@{/admin/accounts/{id}/drawer(id=${a.id})},hx-swap-oob=${oob} ? 'true' : null"
+        th:classappend="${a.status.name() == 'DISABLED'} ? 'row-muted'" tabindex="0">
+        <td><span th:text="${a.displayName}">名</span> <span class="muted rv-small" th:text="'#' + ${a.id}">#1</span></td>
+        <td th:text="${a.larkEmail}">x@y</td>
+        <td>
+            <span class="tag role-tag" th:classappend="'role-' + ${a.role}"
+                  th:text="${a.roleCustom()} ? ${a.roleName ?: a.role} : #{${a.roleNameKey()}}" th:title="${a.selectedValue()}">运营专员</span>
+            <span class="muted" th:if="${a.roleCustom()}" th:text="#{admin.accounts.role.customBadge}">自定义</span>
+        </td>
+        <td><span class="badge" th:classappend="${a.accountType.name() == 'SUPER_ADMIN'} ? 'badge-warn' : 'badge-muted'"
+                  th:text="${a.accountType.name() == 'SUPER_ADMIN'} ? #{admin.v130.accounts.type.superAdmin} : #{admin.v130.accounts.type.staff}">超管</span></td>
+        <td>
+            <span th:if="${a.status.name() == 'ACTIVE'}" class="status-active" th:text="#{admin.v130.accounts.status.active}">启用</span>
+            <span th:if="${a.status.name() == 'DISABLED'}" class="status-disabled" th:text="#{admin.v130.accounts.status.disabled}">已停用</span>
+        </td>
+        <td class="nowrap" th:text="${a.createdAt != null} ? ${@adminTime.wib(a.createdAt)} : '-'">-</td>
+    </tr>
 </div>
 </body>
 </html>
