@@ -1,11 +1,14 @@
 package com.tailtopia.profile.web;
 
+import com.tailtopia.profile.dto.MilestoneCelebrationReportRequest;
+import com.tailtopia.profile.dto.MilestoneCelebrationReportResponse;
 import com.tailtopia.profile.dto.MilestoneCheckinCandidateResponse;
 import com.tailtopia.profile.dto.MilestoneCheckinRequest;
 import com.tailtopia.profile.dto.MilestoneItemResponse;
 import com.tailtopia.profile.dto.MilestoneListResponse;
 import com.tailtopia.profile.dto.MilestoneShareRequest;
 import com.tailtopia.profile.dto.MilestoneShareResponse;
+import com.tailtopia.profile.service.MilestoneCelebrationService;
 import com.tailtopia.profile.service.MilestoneCheckInService;
 import com.tailtopia.profile.service.MilestoneService;
 import com.tailtopia.profile.service.MilestoneShareService;
@@ -33,12 +36,15 @@ public class MilestoneController {
     private final MilestoneService milestoneService;
     private final MilestoneCheckInService checkInService;
     private final MilestoneShareService shareService;
+    private final MilestoneCelebrationService celebrationService;
 
     public MilestoneController(MilestoneService milestoneService,
-            MilestoneCheckInService checkInService, MilestoneShareService shareService) {
+            MilestoneCheckInService checkInService, MilestoneShareService shareService,
+            MilestoneCelebrationService celebrationService) {
         this.milestoneService = milestoneService;
         this.checkInService = checkInService;
         this.shareService = shareService;
+        this.celebrationService = celebrationService;
     }
 
     /** 当前用户里程碑列表（L/M/S 分区 + 完成状态 + 进度）。无档案 → 404。 */
@@ -74,6 +80,24 @@ public class MilestoneController {
     public MilestoneShareResponse createShare(@AuthenticationPrincipal Jwt jwt,
             @PathVariable String code, @Valid @RequestBody MilestoneShareRequest req) {
         return shareService.createOrRefresh(currentUserId(jwt), code, req);
+    }
+
+    /**
+     * 庆祝回报（V1.3.0 Story 1.4 · FR-111）：客户端在庆祝页**展示成功后**回报本次实际展示覆盖的
+     * code 列表，服务端按列表幂等置位 {@code celebrated_at}。无档案 → 404。
+     *
+     * <p>🔴 <b>code 列表由客户端点名，服务端不做 mark-all</b>（AD-A2.3b）：客户端从读取列表到回报
+     * 之间的几百毫秒里可能被点赞 / 被评论而新解锁一条，mark-all 会把它静默盖章为已庆祝、永不补弹。
+     *
+     * <p>回报是 best-effort（AD-A3.1）：客户端**异步发、失败静默、不重试到用户可感知**。
+     * 失败的代价只是下次进列表页再补弹一次。**不要把它改成同步阻塞庆祝页或发布流程。**
+     *
+     * <p>「重温庆祝」（点已完成徽章）**不调本端点**，也不改写 {@code celebrated_at}（AD-A3.3）。
+     */
+    @PostMapping("/celebrations")
+    public MilestoneCelebrationReportResponse reportCelebrations(@AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody MilestoneCelebrationReportRequest req) {
+        return celebrationService.reportCelebrated(currentUserId(jwt), req.codes());
     }
 
     private static long currentUserId(Jwt jwt) {

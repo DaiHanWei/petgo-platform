@@ -38,6 +38,16 @@ public class MilestoneCompletion {
     @Column(name = "completed_at", nullable = false, updatable = false)
     private Instant completedAt;
 
+    /**
+     * 庆祝页展示过的时刻（UTC，V1.3.0 Story 1.4 · AD-A1）。
+     *
+     * <p>{@code null} = 已完成但**从未展示过庆祝** —— 这是补庆祝的唯一判据（AD-A1.3），
+     * 前端不得另立任何本地标记。非空后**不再覆盖**（幂等，AD-A3.2）：重复回报、
+     * 以及「重温庆祝」（点已完成徽章）都不改写它。
+     */
+    @Column(name = "celebrated_at")
+    private Instant celebratedAt;
+
     protected MilestoneCompletion() {
     }
 
@@ -75,5 +85,14 @@ public class MilestoneCompletion {
 
     public Instant getCompletedAt() {
         return completedAt;
+    }
+
+    public Instant getCelebratedAt() {
+        return celebratedAt;
+    }
+
+    /** 是否「已完成但未庆祝过」—— 全链路唯一判据（AD-A1.3）。 */
+    public boolean isUncelebrated() {
+        return celebratedAt == null;
     }
 }

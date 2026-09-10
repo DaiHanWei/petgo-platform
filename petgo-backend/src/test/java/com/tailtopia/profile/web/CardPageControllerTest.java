@@ -85,8 +85,9 @@ class CardPageControllerTest {
         when(accountQueryService.isActive(7L)).thenReturn(true);
         when(accountQueryService.findAuthorViews(any()))
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Aurel", null, false, java.util.List.of())));
+        // 第 6 个字段是 V1.3.0 Story 1.4 的「未庆祝」角标数；访客页不展示它，给 0。
         when(timelineService.getStats(7L))
-                .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30, 0));
+                .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30, 0, 0));
     }
 
     @Test
