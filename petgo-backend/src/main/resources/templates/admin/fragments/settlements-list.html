@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  B13 兽医月结的摘要条 / 表格 / 单行（V1.3.0 Story 8.5，模板 B）。
+    sumbar(oob) — 三格：待打款单数 · 待打款金额合计 · 本月已打款
+    rows(oob)   — 表格 + 空态；oob=true 时摘要条随片段一并换
+    row(s, oob) — 单行；抽屉里打款 / 归档成功后原位替换
+  🔴 「本月已打款」判的是 **paidAt 落在本月（WIB）**，不是 period 等于本月 ——
+     8 月的月结在 9 月初打款，财务问「这个月付出去多少」时它算 9 月（见 SettlementSummary）。
+*/-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="settlements-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.settlements.summary.pendingCount}">待打款单数</div>
+        <div class="sum-value" data-sum="pendingCount" th:text="${summary.pendingCount}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.settlements.summary.pendingPayout}">待打款金额合计</div>
+        <div class="sum-value" data-sum="pendingPayout"
+             th:text="${#numbers.formatInteger(summary.pendingPayout, 1, 'COMMA')}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.settlements.summary.paidThisMonth}">本月已打款</div>
+        <div class="sum-value" data-sum="paidThisMonth"
+             th:text="${#numbers.formatInteger(summary.paidThisMonth, 1, 'COMMA')}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/settlements-list :: sumbar(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(settlements)}" class="tags-table">
+        <thead>
+        <tr>
+            <th th:text="#{admin.settlements.col.vet}">兽医</th>
+            <th class="nowrap" th:text="#{admin.settlements.col.period}">月份</th>
+            <th class="nowrap" th:text="#{admin.settlements.col.orders}">单数</th>
+            <th class="nowrap" th:text="#{admin.settlements.col.gross}">成交额</th>
+            <th class="nowrap" th:text="#{admin.settlements.col.payout}">到手</th>
+            <th th:text="#{admin.common.status}">状态</th>
+            <th th:text="#{admin.settlements.col.proof}">凭证</th>
+            <th class="nowrap" th:text="#{admin.settlements.col.paidAt}">打款时间</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="s : ${settlements}"><tr th:replace="~{admin/fragments/settlements-list :: row(${s}, false)}"></tr></th:block>
+        </tbody>
+    </table>
+
+    <div class="empty" th:if="${#lists.isEmpty(settlements)}">
+        <span class="empty-emoji">🧮</span>
+        <p th:text="#{admin.settlements.empty}">暂无月结</p>
+    </div>
+</th:block>
+
+<!--/* 单行。「操作」列已删（打款 / 归档移入抽屉）。 */-->
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(s, oob)" th:id="'settlement-row-' + ${s.id}" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${s.id}" th:data-drawer-url="@{/admin/settlements/{id}/drawer(id=${s.id})}"
+        tabindex="0">
+        <td class="nowrap muted" th:text="${s.vetId}">0</td>
+        <td class="nowrap" th:text="${s.period}">2026-06</td>
+        <td class="nowrap" th:text="${s.orderCount}">0</td>
+        <td class="nowrap" th:text="${#numbers.formatInteger(s.grossAmount, 1, 'COMMA')}">0</td>
+        <td class="nowrap" th:text="${#numbers.formatInteger(s.payoutAmount, 1, 'COMMA')}">0</td>
+        <!--/* 待打款是**待办**不是异常：用中性徽标；已归档才用灰。 */-->
+        <td class="nowrap">
+            <span class="badge"
+                  th:classappend="${s.status == 'PENDING_FINANCE'} ? 'badge-neutral'
+                                  : (${s.status == 'PAID'} ? 'badge-ok' : 'badge-muted')"
+                  th:text="${s.status == 'PENDING_FINANCE'} ? #{admin.v130.settlements.status.pendingFinance}
+                           : (${s.status == 'PAID'} ? #{admin.v130.settlements.status.paid} : #{admin.v130.settlements.status.archived})">待打款</span>
+        </td>
+        <!--/* 凭证是**文本参考号**（≤512），不是图（D-42）。列表里截断，全文在抽屉。 */-->
+        <td class="cell-wide" th:text="${s.paymentProof} ?: '—'">—</td>
+        <td class="nowrap" th:text="${@adminTime.wib(s.paidAt)}">—</td>
+    </tr>
+</tbody></table>
+</body>
+</html>

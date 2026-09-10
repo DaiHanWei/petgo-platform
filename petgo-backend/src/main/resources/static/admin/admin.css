@@ -728,6 +728,10 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* ===== B6 场所管理（V1.3.0 Story 5.2）===== */
 .dot--ok { background: var(--ok, #2E9E5B); }
 .badge-muted { background: var(--surface-2, #F1F2F5); color: var(--muted); }
+/* badge-neutral：十余个既有模板（manual-review / drawer-users / tickets-queue …）一直在用这个类名，
+   但它从来没有被定义过 —— 落地效果是「一个没有底色的徽标」，与旁边有底色的 ok / danger 摆在一起
+   会被读成「这一格没加载出来」。补上定义（V1.3.0 Story 8.5 顺手），语义 = 中性待办，不是异常。 */
+.badge-neutral { background: var(--surface-2, #F1F2F5); color: var(--ink-2); }
 .row-muted td { color: var(--muted); }
 .nowrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
 .places-table .places-address { max-width: 260px; }

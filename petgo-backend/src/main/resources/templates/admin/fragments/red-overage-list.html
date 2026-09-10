@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  B14 红色超额的摘要条 / 表格 / 单行（V1.3.0 Story 8.5，模板 B）。
+    sumbar(oob) — 一格：待核查用户数
+    rows(oob)   — 表格 + 空态；oob=true 时摘要条随片段一并换
+    row(r, oob) — 单行；抽屉里标记成功后原位替换
+  🔴 本页**纯观测**：这些数字不触发任何自动处置（不拦截 / 不限流 / 不封禁），
+     是否处置由人工判断 —— 页面上的那句提示不可删。
+*/-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="red-overage-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.redOverage.summary.toVerify}">待核查用户数</div>
+        <div class="sum-value" data-sum="toVerify" th:text="${summary.toVerify}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/red-overage-list :: sumbar(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(rows)}" class="tags-table">
+        <thead>
+        <tr>
+            <th th:text="#{admin.common.user}">用户</th>
+            <th class="nowrap" th:text="#{admin.redOverage.col.redCount}">RED 计数</th>
+            <th th:text="#{admin.redOverage.col.reviewStatus}">复核态</th>
+            <th th:text="#{admin.common.note}">备注</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="r : ${rows}"><tr th:replace="~{admin/fragments/red-overage-list :: row(${r}, false)}"></tr></th:block>
+        </tbody>
+    </table>
+
+    <div class="empty" th:if="${#lists.isEmpty(rows)}">
+        <span class="empty-emoji">🩺</span>
+        <p th:text="#{admin.redOverage.empty}">暂无 RED 分诊记录</p>
+    </div>
+</th:block>
+
+<!--/* 单行。「操作」列已删（标记移进抽屉）。 */-->
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(r, oob)" th:id="'red-overage-row-' + ${r.userId}" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${r.userId}" th:data-drawer-url="@{/admin/red-overage/{u}/drawer(u=${r.userId})}"
+        tabindex="0">
+        <td class="nowrap muted" th:text="${r.userId}">0</td>
+        <td class="nowrap" th:text="${r.redCount}">0</td>
+        <!--/* 🔴 复核态用中性 / 完成两色，**不用红**：红会被读成「这个用户有问题」，
+               而这一列表达的只是「后台看没看过」。RED 计数本身才是观测量。 */-->
+        <td class="nowrap">
+            <span th:if="${r.reviewStatus == ''}" class="muted">—</span>
+            <span th:unless="${r.reviewStatus == ''}" class="badge"
+                  th:classappend="${r.reviewStatus == 'TO_VERIFY'} ? 'badge-neutral' : 'badge-ok'"
+                  th:text="${r.reviewStatus == 'TO_VERIFY'}
+                           ? #{admin.redOverage.status.toVerify} : #{admin.redOverage.status.resolved}">待核查</span>
+        </td>
+        <td class="cell-wide" th:text="${r.note} ?: '—'">—</td>
+    </tr>
+</tbody></table>
+</body>
+</html>

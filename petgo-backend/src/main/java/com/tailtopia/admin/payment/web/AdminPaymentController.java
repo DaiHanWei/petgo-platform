@@ -2,6 +2,7 @@ package com.tailtopia.admin.payment.web;
 
 import com.tailtopia.admin.payment.dto.AdminPaymentRow;
 import com.tailtopia.admin.payment.service.AdminPaymentQueryService;
+import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.domain.PaymentStatus;
 import java.time.LocalDate;
@@ -11,6 +12,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
@@ -47,8 +49,11 @@ public class AdminPaymentController {
                          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                          @RequestParam(required = false)
                          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-                         @RequestParam(defaultValue = "0") int page, Model model) {
+                         @RequestParam(defaultValue = "0") int page,
+                         @RequestParam(required = false) String open,
+                         HxRequest hx, Model model) {
         model.addAttribute("active", "payments");
+        model.addAttribute("open", open);
         model.addAttribute("userId", userId);
         model.addAttribute("purpose", purpose);
         model.addAttribute("status", status);
@@ -73,7 +78,25 @@ public class AdminPaymentController {
         model.addAttribute("hasNext", result.hasNext());
         // 🔴 汇总覆盖**整个筛选结果**，不是当前这一页（见 summarize 的说明）。
         model.addAttribute("summary", service.summarize(filter));
-        return "admin/payments";
+        // htmx 局部：只回表格 + 摘要条 oob（模拟回调改了状态之后由页面上的刷新槽拉一次）。
+        return hx.isHtmx() ? "admin/fragments/payments-list :: rows(true)" : "admin/payments";
+    }
+
+    /**
+     * 支付意图抽屉（Story 8.5 · AC1）：全字段只读 + staging 专用的模拟回调三钮。
+     *
+     * <p>非 htmx 直达 → 回列表并自动开该抽屉（与 B1～B13 同一机制）。
+     * ⚠️ 按**对外 token** 定位，不用自增 id（架构 §Enforcement）。
+     */
+    @GetMapping("/admin/payments/{intentToken}/drawer")
+    @PreAuthorize(VIEW_AUTH)
+    public String drawer(@PathVariable String intentToken, HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            return "redirect:/admin/payments?open=" + intentToken;
+        }
+        model.addAttribute("active", "payments");
+        model.addAttribute("p", service.detail(intentToken));
+        return "admin/fragments/drawer-payment :: drawer";
     }
 
     /**

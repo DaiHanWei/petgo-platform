@@ -2,14 +2,10 @@ package com.tailtopia.admin.payment.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.payment.dto.AdminPaymentRow;
+import com.tailtopia.admin.shared.export.AdminExportWriter;
 import com.tailtopia.shared.error.AppException;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
+import com.tailtopia.shared.i18n.Messages;
 import java.util.List;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,16 +35,32 @@ public class AdminPaymentExportService {
     /** 导出一次最多带出多少行。到顶时在表尾与审计里都写明，绝不静默截断。 */
     static final int EXPORT_MAX_ROWS = 5000;
 
-    private static final String[] HEADERS = {
-            "user_id", "payment_no", "purpose", "channel", "amount", "currency", "status",
-            "created_at_wib"};
+    /**
+     * 表头 key（V1.3.0 Story 8.5：由写死英文标识符改为按界面语言解析）。
+     *
+     * <p>⚠️ 顺序 = 列顺序 = 下面 {@code row(...)} 的取值顺序，三处必须同步改。
+     */
+    private static final List<String> HEADER_KEYS = List.of(
+            "admin.v130.payments.export.userId",
+            "admin.v130.payments.export.paymentNo",
+            "admin.v130.payments.export.purpose",
+            "admin.v130.payments.export.channel",
+            "admin.v130.payments.export.amount",
+            "admin.v130.payments.export.currency",
+            "admin.v130.payments.export.status",
+            "admin.v130.payments.export.createdAt");
 
     private final AdminPaymentQueryService query;
     private final AdminAuditService audit;
 
-    public AdminPaymentExportService(AdminPaymentQueryService query, AdminAuditService audit) {
+    /** 表头与截断说明按当前界面语言输出（V1.3.0 Story 2.3a 规则 12）。 */
+    private final Messages msg;
+
+    public AdminPaymentExportService(AdminPaymentQueryService query, AdminAuditService audit,
+            Messages msg) {
         this.query = query;
         this.audit = audit;
+        this.msg = msg;
     }
 
     /**
@@ -64,43 +76,41 @@ public class AdminPaymentExportService {
         if (truncated) {
             rows = rows.subList(0, EXPORT_MAX_ROWS);
         }
-        try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-            Sheet sheet = wb.createSheet("payments");
-            Row header = sheet.createRow(0);
-            for (int i = 0; i < HEADERS.length; i++) {
-                header.createCell(i).setCellValue(HEADERS[i]);
-            }
-            int rowIdx = 1;
-            for (AdminPaymentRow p : rows) {
-                Row row = sheet.createRow(rowIdx++);
-                row.createCell(0).setCellValue(p.userId());
-                // 支付号优先可读号（与页面同源同串）；无可读号回退 publicToken —— 别留空，
-                // 空串会让这一行在表里无法回查。
-                row.createCell(1).setCellValue(p.displayNo() != null ? p.displayNo() : p.publicToken());
-                row.createCell(2).setCellValue(p.purpose());
-                row.createCell(3).setCellValue(p.channel());
-                Cell amount = row.createCell(4);
-                amount.setCellValue(p.amount()); // 数字单元格：运营可直接求和/透视
-                row.createCell(5).setCellValue(p.currency());
-                row.createCell(6).setCellValue(p.status());
-                row.createCell(7).setCellValue(p.createdAtLabel() == null ? "" : p.createdAtLabel());
-            }
-            if (truncated) {
-                sheet.createRow(rowIdx).createCell(0).setCellValue(
-                        "已达单次导出上限 " + EXPORT_MAX_ROWS + " 行，请收窄筛选条件后分批导出");
-            }
-            for (int i = 0; i < HEADERS.length; i++) {
-                sheet.autoSizeColumn(i);
-            }
-            wb.write(out);
-            audit.record(actorAccountId, "PAYMENT_LIST_EXPORT", "payment_intent", "-",
-                    "rows=" + rows.size() + " truncated=" + truncated
-                            + " userId=" + f.userId() + " purpose=" + f.purpose()
-                            + " status=" + f.status() + " from=" + f.from() + " to=" + f.to());
-            return out.toByteArray();
-        } catch (IOException e) {
+        List<String> headers = HEADER_KEYS.stream().map(msg::get).toList();
+        List<List<Object>> data = new java.util.ArrayList<>(rows.size() + 1);
+        for (AdminPaymentRow p : rows) {
+            data.add(java.util.Arrays.asList(
+                    p.userId(),
+                    // 支付号优先可读号（与页面同源同串）；无可读号回退 publicToken —— 别留空，
+                    // 空串会让这一行在表里无法回查。
+                    p.displayNo() != null ? p.displayNo() : p.publicToken(),
+                    p.purpose(),
+                    p.channel(),
+                    p.amount(), // Number → 数字单元格：运营可直接求和/透视
+                    p.currency(),
+                    p.status(),
+                    p.createdAtLabel() == null ? "" : p.createdAtLabel()));
+        }
+        if (truncated) {
+            // 🔴 截断说明留在**表尾第一列**（与旧实现同位置）：文件被单独转发时，
+            //    这是唯一能说明「这份表不全」的地方。
+            data.add(java.util.List.of(msg.get("admin.v130.payments.export.truncated", EXPORT_MAX_ROWS)));
+        }
+        // V1.3.0 Story 8.5：改经 AdminExportWriter（2.3a 起全站导出一个出口，表头随 locale）。
+        // ⚠️ 写入器把 IOException 包成 UncheckedIOException 往上抛，那会落进兜底 handler
+        //    变成一句没头没尾的 500。这里翻回本模块原有的 AppException，
+        //    运营看到的仍是「Excel 导出生成失败」而不是「系统错误」。
+        byte[] body;
+        try {
+            body = AdminExportWriter.xlsx("payments", headers, data);
+        } catch (java.io.UncheckedIOException e) {
             throw AppException.serviceUnavailable("Excel 导出生成失败")
                     .code("admin.err.payments.exportFailed");
         }
+        audit.record(actorAccountId, "PAYMENT_LIST_EXPORT", "payment_intent", "-",
+                "rows=" + rows.size() + " truncated=" + truncated
+                        + " userId=" + f.userId() + " purpose=" + f.purpose()
+                        + " status=" + f.status() + " from=" + f.from() + " to=" + f.to());
+        return body;
     }
 }

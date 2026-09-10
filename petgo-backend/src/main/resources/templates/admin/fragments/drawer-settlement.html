@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  B13 兽医月结抽屉（V1.3.0 Story 8.5 · AC3，480px 抽屉体 res=settlement，UI 稿 4-4）。
+  台账 + 订单构成 + 凭证 + 操作条。两个写端点 POST {id}/pay(proof) / {id}/archive 逐字不变。
+  🔴 凭证是**文本参考号**（≤512），不是图（D-42）：如实展示文本，不做上传控件。
+  ⚠️ hx-target 指**带 id 的** #settlement-drawer-err：htmx 只在目标带 id 时才发 HX-Target 头。
+*/-->
+<body>
+<div th:fragment="drawer" id="settlement-drawer-panel" class="tag-drawer" th:attr="data-settlement-id=${s.id}"
+     th:with="canPayout=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''settlement.payout'')')}">
+
+    <!--/* ① 台账。 */-->
+    <section class="card card-full tag-card" data-section="settlement-ledger">
+        <h3 th:text="#{admin.v130.settlements.drawer.ledger}">月结台账</h3>
+        <table class="ud-table">
+            <tr><th th:text="#{admin.settlements.col.vet}">兽医</th><td th:text="${s.vetId}">0</td></tr>
+            <tr><th th:text="#{admin.settlements.col.period}">月份</th><td class="nowrap" th:text="${s.period}">2026-06</td></tr>
+            <tr><th th:text="#{admin.settlements.col.orders}">单数</th><td th:text="${s.orderCount}">0</td></tr>
+            <tr><th th:text="#{admin.settlements.col.gross}">成交额</th>
+                <td th:text="${#numbers.formatInteger(s.grossAmount, 1, 'COMMA')}">0</td></tr>
+            <tr><th th:text="#{admin.settlements.col.payout}">到手</th>
+                <td th:text="${#numbers.formatInteger(s.payoutAmount, 1, 'COMMA')}">0</td></tr>
+            <tr><th th:text="#{admin.common.status}">状态</th><td><code th:text="${s.status}">PENDING_FINANCE</code></td></tr>
+            <tr><th th:text="#{admin.settlements.col.proof}">凭证</th>
+                <td>
+                    <span th:if="${s.hasProof()}" th:text="${s.paymentProof}">ref</span>
+                    <span th:unless="${s.hasProof()}" class="muted">—</span>
+                </td></tr>
+            <tr><th th:text="#{admin.settlements.col.paidAt}">打款时间</th>
+                <td class="nowrap" th:text="${@adminTime.wib(s.paidAt)}">—</td></tr>
+            <tr><th th:text="#{admin.v130.settlements.drawer.archivedAt}">归档时间</th>
+                <td class="nowrap" th:text="${@adminTime.wib(s.archivedAt)}">—</td></tr>
+            <tr><th th:text="#{admin.v130.settlements.drawer.generatedAt}">生成时间</th>
+                <td class="nowrap" th:text="${@adminTime.wib(s.generatedAt)}">—</td></tr>
+        </table>
+    </section>
+
+    <!--/* ② 订单构成（只读）。🔴 到手用的是**订单上的分成快照**，不是拿当前比例重算 ——
+           比例改过之后重算会得出与已打款金额不同的数（见 AdminSettlementDetail）。 */-->
+    <section class="card card-full tag-card" data-section="settlement-orders">
+        <h3 th:text="#{admin.v130.settlements.drawer.orders}">订单构成</h3>
+        <table th:if="${!#lists.isEmpty(s.orders)}" class="ud-table">
+            <thead><tr>
+                <th th:text="#{admin.common.order}">订单</th>
+                <th class="nowrap" th:text="#{admin.common.amount}">金额</th>
+                <th class="nowrap" th:text="#{admin.consultOrders.col.payout}">分成</th>
+                <th class="nowrap" th:text="#{admin.v130.settlements.drawer.sessionEnd}">会话结束</th>
+            </tr></thead>
+            <tbody>
+            <tr th:each="o : ${s.orders}">
+                <td class="nowrap" th:text="${o.displayNo}">no</td>
+                <td class="nowrap" th:text="${#numbers.formatInteger(o.amount, 1, 'COMMA')}">0</td>
+                <td class="nowrap" th:text="${o.payout == null} ? '—' : ${#numbers.formatInteger(o.payout, 1, 'COMMA')}">—</td>
+                <td class="nowrap" th:text="${@adminTime.wib(o.sessionEndedAt)}">—</td>
+            </tr>
+            </tbody>
+        </table>
+        <!--/* 🔴 空态必须解释「为什么可能是空的」：订单构成是**读时按 (兽医, 月份窗口) 重算**的，
+               而台账里的单数是生成月结那一刻存下来的。两者对不上时运营第一反应是「账错了」，
+               实际多半是订单事后被改过状态 —— 把这句写出来，比让人去问工程便宜得多。 */-->
+        <p class="hint" th:if="${#lists.isEmpty(s.orders)}"
+           th:text="#{admin.v130.settlements.drawer.ordersEmpty}">按当前数据重算不到订单明细</p>
+        <p class="hint" th:if="${!#lists.isEmpty(s.orders) and #lists.size(s.orders) != s.orderCount}"
+           data-notice="settlement-order-mismatch"
+           th:text="#{admin.v130.settlements.drawer.ordersMismatch(${#lists.size(s.orders)}, ${s.orderCount})}">
+            重算 N 单，台账 M 单</p>
+    </section>
+
+    <!--/* ③ 操作条。状态机 PENDING_FINANCE → PAID → ARCHIVED，每一步只渲染当前可做的那一个。 */-->
+    <section class="card card-full tag-card" data-section="settlement-actions">
+        <h3 th:text="#{admin.common.actions}">操作</h3>
+
+        <!--/* 待打款：确认打款 + 凭证。data-confirm 复述**兽医 + 到手金额** —— 这是不可逆的一步，
+               而抽屉里同时开着好几个月结时，"确定吗" 三个字挡不住点错行。 */-->
+        <form th:if="${s.pendingFinance() and canPayout}"
+              th:attr="hx-post=@{/admin/settlements/{id}/pay(id=${s.id})}"
+              hx-target="#settlement-drawer-err" hx-swap="innerHTML"
+              th:data-confirm="#{admin.v130.settlements.confirmPay(${s.vetId}, ${#numbers.formatInteger(s.payoutAmount, 1, 'COMMA')})}">
+            <label class="field field-full">
+                <span th:text="#{admin.settlements.col.proof}">凭证</span>
+                <input type="text" name="proof" class="inp field-full" maxlength="512"
+                       th:placeholder="#{admin.settlements.ph.proof}"/>
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.settlements.btn.pay}">确认打款</button>
+        </form>
+
+        <!--/* 已打款：归档。🔴 凭证为空时**前置禁用**（现状只有服务层拒绝 ——
+               让人点完再看报错，等于让他猜「缺什么」）。 */-->
+        <th:block th:if="${s.paid() and canPayout}">
+            <form th:if="${s.hasProof()}"
+                  th:attr="hx-post=@{/admin/settlements/{id}/archive(id=${s.id})}"
+                  hx-target="#settlement-drawer-err" hx-swap="innerHTML">
+                <button type="submit" class="btn btn-neutral btn-sm"
+                        th:text="#{admin.settlements.btn.archive}">归档</button>
+            </form>
+            <th:block th:unless="${s.hasProof()}">
+                <button type="button" class="btn btn-neutral btn-sm" disabled
+                        th:title="#{admin.v130.settlements.archiveNeedsProof}"
+                        th:text="#{admin.settlements.btn.archive}">归档</button>
+                <p class="hint" th:text="#{admin.v130.settlements.archiveNeedsProof}">凭证为空，不能归档</p>
+            </th:block>
+        </th:block>
+
+        <p class="hint" th:if="${s.archived()}" th:text="#{admin.v130.settlements.archivedReadOnly}">已归档，只读</p>
+
+        <!--/* 🔴 门控与端点的 @PreAuthorize(settlement.payout) 逐字一致：
+               只有查看权限的人看到的是禁用态 + 原因，而不是一个点了拿 403 的按钮。 */-->
+        <th:block th:unless="${canPayout}">
+            <button type="button" class="btn btn-primary btn-sm" disabled th:unless="${s.archived()}"
+                    th:title="#{admin.v130.err.forbidden(#{perm.settlement.payout})}"
+                    th:text="${s.pendingFinance()} ? #{admin.settlements.btn.pay} : #{admin.settlements.btn.archive}">确认打款</button>
+            <p class="hint" th:unless="${s.archived()}"
+               th:text="#{admin.v130.err.forbidden(#{perm.settlement.payout})}">需要「兽医结算打款」权限</p>
+        </th:block>
+
+        <div id="settlement-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+
+        <!--/* 🔴 这句不可删：本页**不发起真实转账**（财务线下 / Iris 打款后回填凭证）。
+               不写的话，「确认打款」四个字会被读成「点了钱就出去了」。 */-->
+        <p class="hint" th:text="#{admin.v130.settlements.noRealTransfer}">
+            ⚠️ 此处只登记账务状态与凭证，不发起真实转账。</p>
+    </section>
+</div>
+
+<!--/* 打款 / 归档成功：抽屉体 oob + 列表那一行 oob + 摘要条 oob + toast。
+       ⚠️ 不整表重拉：状态变化不会让行换位置（表按生成时间倒序）。
+       🔴 摘要条三格全都会变（待打款少一单、本月已打款多一笔），所以行 oob 之外还要换摘要条。
+       🔴 外壳必须是**真的** <table hidden>，不能 th:remove="tag"：响应不以 `<tr` 开头时
+          htmx 走通用解析，裸 <tr>/<td> 会被 HTML 解析器丢掉（8.2 踩过）。 */-->
+<th:block th:fragment="afterAction">
+    <div id="settlement-drawer-body-oob" hx-swap-oob="innerHTML:#settlement-drawer .drawer-body">
+        <div th:replace="~{admin/fragments/drawer-settlement :: drawer}"></div>
+    </div>
+    <table hidden><tbody>
+        <tr th:replace="~{admin/fragments/settlements-list :: row(${row}, true)}"></tr>
+    </tbody></table>
+    <div th:replace="~{admin/fragments/settlements-list :: sumbar(true)}"></div>
+    <!--/* 🔴 toast 多包一层：htmx 的 `beforeend:` oob 搬的是**子节点**，直接写在 .toast 上
+           落进宿主的只有裸文本（无样式、armToast 找不到元素 → 永不消失）。外层这个 div 会被丢掉。 */-->
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已完成</div>
+    </div>
+</th:block>
+</body>
+</html>

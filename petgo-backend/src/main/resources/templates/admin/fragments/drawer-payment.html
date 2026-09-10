@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  B12 支付记录抽屉（V1.3.0 Story 8.5 · AC1 / AC2，480px 抽屉体 res=payment，UI 稿 4-3）。
+  支付意图全字段只读 + **仅 staging** 的模拟回调三钮（D-41）。
+  🔴 不展示 gatewayMeta：那是网关回调的原始快照，是个「以后会被塞进新字段」的开放结构 ——
+     今天没有敏感项不代表明天没有。要查原始记录用 gatewayRef 去网关后台（那里才是权威）。
+*/-->
+<body>
+<div th:fragment="drawer" id="payment-drawer-panel" class="tag-drawer" th:attr="data-payment-token=${p.publicToken}">
+
+    <section class="card card-full tag-card" data-section="payment-fields">
+        <h3 th:text="#{admin.v130.payments.drawer.title}">支付意图</h3>
+        <table class="ud-table">
+            <tr><th th:text="#{admin.payments.col.paymentNo}">支付号</th>
+                <td class="nowrap" th:text="${p.displayNo != null ? p.displayNo : p.publicToken}">no</td></tr>
+            <tr><th th:text="#{admin.common.userId}">用户 ID</th><td th:text="${p.userId}">0</td></tr>
+            <tr><th th:text="#{admin.payments.col.purpose}">用途</th>
+                <td th:text="#{'admin.payments.purpose.' + ${p.purpose}}">兽医咨询</td></tr>
+            <tr><th th:text="#{admin.common.channel}">渠道</th><td th:text="${p.channel}">QRIS</td></tr>
+            <tr><th th:text="#{admin.common.amount}">金额</th>
+                <td th:text="${p.currency} + ' ' + ${#numbers.formatInteger(p.amount, 1, 'COMMA')}">IDR 0</td></tr>
+            <!--/* 🔴 混合支付两段分开列：只看总额会把「站内余额扣的那一段」当成现金收入 ——
+                   那笔钱在充值那一单就已经收过了，两处都算等于同一笔钱记两遍。 */-->
+            <tr th:if="${p.cashAmount != null or p.coinAmount != null}">
+                <th th:text="#{admin.v130.payments.drawer.split}">现金 / PawCoin</th>
+                <td th:text="${#numbers.formatInteger(p.cashAmount ?: 0, 1, 'COMMA')} + ' / '
+                             + ${#numbers.formatInteger(p.coinAmount ?: 0, 1, 'COMMA')}">0 / 0</td></tr>
+            <tr><th th:text="#{admin.common.status}">状态</th>
+                <td><span class="badge"
+                          th:classappend="${p.status == 'PAID'} ? 'badge-ok'
+                                          : (${p.status == 'PENDING'} ? 'badge-neutral' : 'badge-muted')"
+                          th:text="#{'admin.payments.status.' + ${p.status}}">已支付</span></td></tr>
+            <tr><th th:text="#{admin.v130.payments.drawer.gatewayRef}">网关订单号</th>
+                <td class="nowrap" th:text="${p.gatewayRef} ?: '—'">—</td></tr>
+            <tr><th th:text="#{admin.v130.payments.drawer.expiresAt}">付款窗至</th>
+                <td class="nowrap" th:text="${@adminTime.wib(p.expiresAt)}">—</td></tr>
+            <tr><th th:text="#{admin.common.createdAt}">创建时间</th>
+                <td class="nowrap" th:text="${@adminTime.wib(p.createdAt)}">—</td></tr>
+            <tr><th th:text="#{admin.v130.payments.drawer.updatedAt}">更新时间</th>
+                <td class="nowrap" th:text="${@adminTime.wib(p.updatedAt)}">—</td></tr>
+        </table>
+        <p class="hint" data-notice="payment-no-meta"
+           th:text="#{admin.v130.payments.drawer.noMeta}">网关回调原文不在此展示；对账请用网关订单号回查。</p>
+    </section>
+
+    <!--/* 🧪 模拟回调（D-41）。三重门：
+           ① ${stag} —— StagFlag 只在 stag profile 存在，生产 / dev 这一整块不渲染；
+           ② sec:authorize SUPER_ADMIN —— staging 上也有普通运营在用，而「把一笔支付刷成已付款」
+              不是日常运营动作。这句与 AdminPaymentSimulateController 的 @PreAuthorize 逐字一致；
+           ③ 终态不再渲染 —— 收口对已终态是静默返回（幂等设计），渲染出来的按钮会是「点了没反应」。
+           🔴 端点本身也是 @StagOnly（生产**根本没有这条路由**，不是 403）：一个靠权限挡住的
+              写端点仍然是生产上的可达路径，而它能凭空把一笔支付置成已付款。 */-->
+    <!--/* ⚠️ 两道门写在**两层标签**上：th:if 与 sec:authorize 优先级同为 300，
+           叠在同一个标签上时谁先跑没有明文保证 —— 安全门不押在这种事上。 */-->
+    <th:block th:if="${stag}">
+    <section class="card card-full tag-card" data-section="payment-simulate" data-stag-only
+             sec:authorize="hasRole('SUPER_ADMIN')">
+        <h3>
+            <span th:text="#{admin.v130.payments.simulate.title}">🧪 模拟回调</span>
+            <span class="badge badge-warn" th:text="#{admin.v130.payments.stagOnly}">仅测试环境</span>
+        </h3>
+        <p class="hint" th:text="#{admin.v130.payments.simulate.hint}">
+            走真实回调收口：幂等、到账事件、下游入账都会照常发生。仅 staging 可用。</p>
+
+        <th:block th:unless="${p.terminal()}">
+            <form th:attr="hx-post=@{/admin/payments/{t}/simulate-paid(t=${p.publicToken})}"
+                  hx-target="#payment-drawer-err" hx-swap="innerHTML" class="inline"
+                  th:data-confirm="#{admin.v130.payments.simulate.confirm(${p.displayNo != null ? p.displayNo : p.publicToken})}">
+                <button type="submit" class="btn btn-primary btn-sm"
+                        th:text="#{admin.v130.payments.simulate.paid}">模拟成功</button>
+            </form>
+            <form th:attr="hx-post=@{/admin/payments/{t}/simulate-failed(t=${p.publicToken})}"
+                  hx-target="#payment-drawer-err" hx-swap="innerHTML" class="inline"
+                  th:data-confirm="#{admin.v130.payments.simulate.confirm(${p.displayNo != null ? p.displayNo : p.publicToken})}">
+                <button type="submit" class="btn btn-neutral btn-sm"
+                        th:text="#{admin.v130.payments.simulate.failed}">模拟失败</button>
+            </form>
+            <form th:attr="hx-post=@{/admin/payments/{t}/simulate-expired(t=${p.publicToken})}"
+                  hx-target="#payment-drawer-err" hx-swap="innerHTML" class="inline"
+                  th:data-confirm="#{admin.v130.payments.simulate.confirm(${p.displayNo != null ? p.displayNo : p.publicToken})}">
+                <button type="submit" class="btn btn-neutral btn-sm"
+                        th:text="#{admin.v130.payments.simulate.expired}">模拟过时</button>
+            </form>
+        </th:block>
+        <!--/* 终态：按钮**留在原地但置灰**并说明原因 —— 整排消失会被读成「这个环境不能模拟」。 */-->
+        <th:block th:if="${p.terminal()}">
+            <button type="button" class="btn btn-sm" disabled
+                    th:title="#{admin.v130.payments.simulate.terminal}"
+                    th:text="#{admin.v130.payments.simulate.paid}">模拟成功</button>
+            <p class="hint" th:text="#{admin.v130.payments.simulate.terminal}">已是终态，不能再模拟回调。</p>
+        </th:block>
+    </section>
+    </th:block>
+
+    <div id="payment-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+</div>
+
+<!--/* 模拟成功：抽屉体 oob + toast；列表整表重拉由 HX-Trigger 的 admin:payment-list-refresh 带筛选去做
+       （状态列与摘要条都会变，而摘要依赖当前筛选条件，在这里凭空重算是错的）。 */-->
+<th:block th:fragment="afterAction">
+    <div id="payment-drawer-body-oob" hx-swap-oob="innerHTML:#payment-drawer .drawer-body">
+        <div th:replace="~{admin/fragments/drawer-payment :: drawer}"></div>
+    </div>
+    <!--/* 🔴 toast 多包一层：htmx 的 `beforeend:` oob 搬的是**子节点**，直接写在 .toast 上
+           落进宿主的只有裸文本（无样式、armToast 找不到元素 → 永不消失）。外层这个 div 会被丢掉。 */-->
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已模拟</div>
+    </div>
+</th:block>
+</body>
+</html>

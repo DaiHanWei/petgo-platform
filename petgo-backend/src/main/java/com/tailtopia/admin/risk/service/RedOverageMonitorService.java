@@ -3,6 +3,8 @@ package com.tailtopia.admin.risk.service;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.risk.domain.RedOverageReview;
 import com.tailtopia.admin.risk.dto.RedOverageRow;
+import com.tailtopia.admin.risk.dto.RedOverageSummary;
+import com.tailtopia.admin.risk.dto.RedTaskRow;
 import com.tailtopia.admin.risk.repository.RedOverageReviewRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.triage.repository.RedCountProjection;
@@ -43,6 +45,28 @@ public class RedOverageMonitorService {
             return new RedOverageRow(c.getUserId(), c.getRedCount(),
                     r == null ? "" : r.getStatus(), r == null ? null : r.getNote());
         }).toList();
+    }
+
+    /**
+     * 摘要条（Story 8.5 · AC4）：待核查用户数。入参就是列表那一份 rows，不另查一遍。
+     */
+    public RedOverageSummary summary(List<RedOverageRow> rows) {
+        return new RedOverageSummary(rows.stream()
+                .filter(r -> RedOverageReview.TO_VERIFY.equals(r.reviewStatus())).count());
+    }
+
+    /**
+     * 某用户的 RED 分诊历史（Story 8.5 · AC4 抽屉）。
+     *
+     * <p>🔴 **只取任务 id / 状态 / 时间**：症状文本、AI 解析结果、图片都是**健康数据**，
+     * 不进后台展示（架构 §Enforcement）。本页要回答的是「红了几次、什么时候红的」，
+     * 回答它不需要看症状，而摆出来就多一个泄漏面。
+     */
+    @Transactional(readOnly = true)
+    public List<RedTaskRow> history(long userId) {
+        return triage.findRedByUser(userId).stream()
+                .map(t -> new RedTaskRow(t.getId(), t.getStatus().name(), t.getCreatedAt()))
+                .toList();
     }
 
     /** 人工标记（纯注记 + 审计，绝不触发自动处置）。 */

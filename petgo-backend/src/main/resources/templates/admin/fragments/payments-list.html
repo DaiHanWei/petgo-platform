@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  B12 支付记录的摘要条 / 表格 / 分页（V1.3.0 Story 8.5，模板 B）。
+    sumbar(oob) — 三格：本期支付笔数 · 成功金额 · 失败/过时数
+    rows(oob)   — 表格 + 空态 + 分页；oob=true 时摘要条随片段一并换
+  🔴 「本期」= **当前筛选集**（汇总在 DB 里按整个筛选结果算，不是当前这一页）——
+     这句必须写在页面上，否则运营会把它读成「本月」，或以为是本页 20 条的合计。
+  🔴 「成功金额」= 现金收入：只计已支付、且经收款渠道**真正到账**的部分
+     （PawCoin 抵扣是站内余额扣减、混合支付只算现金段，见 AdminPaymentSummary）。
+*/-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="payments-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.payments.summary.orders}">本期支付笔数</div>
+        <div class="sum-value" data-sum="orders" th:text="${summary.orderCount()}">0</div>
+        <div class="hint" th:text="#{admin.v130.payments.summary.ordersNote(${summary.paidCount()})}">其中已支付 0 笔</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.payments.summary.cash}">成功金额</div>
+        <!--/* 多币种时**不做换算**：把不同币种加在一起是错的，而且错得看不出来。 */-->
+        <div class="sum-value" data-sum="cash" th:unless="${summary.currencyIsMixed()}"
+             th:text="${summary.currency()} + ' ' + ${#numbers.formatInteger(summary.cashIncome(), 1, 'COMMA')}">IDR 0</div>
+        <div class="sum-value" data-sum="cash" th:if="${summary.currencyIsMixed()}"
+             th:text="#{admin.payments.sum.mixedCurrency}">币种不一致，不做换算</div>
+        <div class="hint" th:unless="${summary.currencyIsMixed()}"
+             th:text="#{admin.payments.sum.coin(${summary.currency()}, ${#numbers.formatInteger(summary.coinSpent(), 1, 'COMMA')})}">另有 PawCoin 抵扣</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.payments.summary.unpaid}">未成交笔数</div>
+        <!--/* ⚠️ 逐页规格写的是「失败/过时数」，但摘要只有「全部条数」与「已支付条数」两个数
+               （汇总在 DB 里一次聚合，没有分状态计数），差值里还含**待支付** ——
+               把它标成「失败/过时」会把一批还在付款窗里的单子说成失败。这里如实叫「未成交」。 */-->
+        <div class="sum-value" data-sum="unpaid"
+             th:text="${summary.orderCount() - summary.paidCount()}">0</div>
+        <div class="hint" th:text="#{admin.v130.payments.summary.unpaidNote}">含待支付 / 失败 / 已过期</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/payments-list :: sumbar(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(payments)}" class="tags-table">
+        <thead>
+        <tr>
+            <th th:text="#{admin.common.user}">用户</th>
+            <th th:text="#{admin.payments.col.paymentNo}">支付号</th>
+            <th th:text="#{admin.payments.col.purpose}">用途</th>
+            <th th:text="#{admin.common.channel}">渠道</th>
+            <th class="nowrap" th:text="#{admin.common.amount}">金额</th>
+            <th class="nowrap" th:text="#{admin.payments.col.currency}">币种</th>
+            <th th:text="#{admin.common.status}">状态</th>
+            <th class="nowrap" th:text="#{admin.common.time}">时间</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="p : ${payments}" th:id="'payment-row-' + ${p.publicToken}"
+            th:data-id="${p.publicToken}"
+            th:data-drawer-url="@{/admin/payments/{t}/drawer(t=${p.publicToken})}" tabindex="0">
+            <td class="nowrap muted" th:text="${p.userId}">0</td>
+            <td class="nowrap" th:text="${p.displayNo != null ? p.displayNo : p.publicToken}"
+                th:title="${p.publicToken}">no</td>
+            <td class="nowrap" th:text="#{'admin.payments.purpose.' + ${p.purpose}}">VET_CONSULT</td>
+            <td class="nowrap" th:text="${p.channel}">QRIS</td>
+            <td class="nowrap" th:text="${#numbers.formatInteger(p.amount, 1, 'COMMA')}">0</td>
+            <td class="nowrap" th:text="${p.currency}">IDR</td>
+            <td class="nowrap">
+                <span class="badge"
+                      th:classappend="${p.status == 'PAID'} ? 'badge-ok'
+                                      : (${p.status == 'PENDING'} ? 'badge-neutral' : 'badge-muted')"
+                      th:text="#{'admin.payments.status.' + ${p.status}}">已支付</span>
+            </td>
+            <td class="nowrap" th:text="${p.createdAtLabel}">t</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <div class="empty" th:if="${#lists.isEmpty(payments)}">
+        <span class="empty-emoji">💳</span>
+        <p th:text="#{admin.payments.empty}">暂无符合筛选条件的支付记录</p>
+    </div>
+
+    <!--/* ⚠️ 翻页链接必须带上全部筛选条件，否则点「下一页」会**悄悄回到无筛选的全量**，
+           而页码还在往前走 —— 运营看到一堆对不上的数据，却看不出筛选没了。 */-->
+    <div class="pager" th:if="${totalPages > 0}">
+        <a th:if="${hasPrev}" class="btn btn-sm" data-no-drawer th:text="#{admin.audit.prev}"
+           th:href="@{/admin/payments(page=${page - 1},userId=${userId},purpose=${purpose},status=${status},from=${from},to=${to})}">上一页</a>
+        <span th:text="#{admin.audit.page(${page + 1}, ${totalPages}, ${totalElements})}">分页</span>
+        <a th:if="${hasNext}" class="btn btn-sm" data-no-drawer th:text="#{admin.audit.next}"
+           th:href="@{/admin/payments(page=${page + 1},userId=${userId},purpose=${purpose},status=${status},from=${from},to=${to})}">下一页</a>
+    </div>
+</th:block>
+</body>
+</html>

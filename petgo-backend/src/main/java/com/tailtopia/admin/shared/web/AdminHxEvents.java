@@ -44,6 +44,15 @@ public final class AdminHxEvents {
     public static final String VIRTUAL_ACCOUNT_LIST_REFRESH = "admin:virtual-account-list-refresh";
 
     /**
+     * B12 支付记录：列表按当前筛选 + 当前页重拉（Story 8.5，仅 stag 的模拟回调会发）。
+     *
+     * <p>⚠️ 这里**必须整表重拉、不做单行 oob**：模拟回调改的是状态，而摘要条的
+     * 「已支付笔数 / 现金收入」跟着变，那两个数只有带上当前筛选条件重算才是对的
+     * （汇总覆盖整个筛选结果，不是当前页）。
+     */
+    public static final String PAYMENT_LIST_REFRESH = "admin:payment-list-refresh";
+
+    /**
      * 关掉当前打开的确认弹层并清空它的宿主（Story 8.3）。
      *
      * <p>🔴 为什么要一个事件而不是让响应把宿主换空：确认表单的 {@code hx-target} 必须指向

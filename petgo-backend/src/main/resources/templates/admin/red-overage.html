@@ -1,43 +1,45 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- 红色超额只读监控（Story 9.6，AB-7A）。纯观测 + 人工标记，无自动拦截。 -->
+<!--/*
+  红色超额只读监控（Story 9.6 · AB-7A → V1.3.0 Story 8.5 套模板 B · tpl-b-list，UI 稿 4-5）。
+  纯观测 + 人工标记，**无自动拦截**。8.5 的改动是页面组织：行内标记表单移进抽屉、加摘要条、点行开抽屉；
+  唯一写端点 POST {userId}/review(status, note) 的路径与参数逐字未动。
+  🔴 顺带修掉一处「按钮在、点了 403」：整页那版的标记表单挂的是 risk.view，而端点要 risk.edit。
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.redOverage.title}">红色超额监控 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
-    <div th:fragment="content" th:remove="tag">
+    <!--/* ⚠️ res 设在这一层，不能写在下面那个带 th:replace 的 div 上（优先级 100 vs 600，
+           同标签时 th:with 被静默丢弃 —— 见 AdminTemplateStructureTest 的守门）。 */-->
+    <div th:fragment="content" th:remove="tag" th:with="res='red'">
         <h1 th:text="#{admin.redOverage.title}">红色超额监控</h1>
+        <p class="hint"><span th:text="#{admin.redOverage.hint.observe}">⚠️ 仅观测：按用户 RED 分诊计数降序，供人工排查。</span><b
+                th:text="#{admin.redOverage.hint.noAuto}">系统不做任何自动拦截/限流/封禁</b><span
+                th:text="#{admin.redOverage.hint.manual}">——是否处置由人工判断。可标记 待核查 / 已处理。</span></p>
+
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
-        <p class="hint"><span th:text="#{admin.redOverage.hint.observe}">⚠️ 仅观测：按用户 RED 分诊计数降序，供人工排查。</span><b th:text="#{admin.redOverage.hint.noAuto}">系统不做任何自动拦截/限流/封禁</b><span th:text="#{admin.redOverage.hint.manual}">——是否处置由人工判断。可标记 待核查 / 已处理。</span></p>
-        <table>
-            <thead>
-            <tr><th th:text="#{admin.common.user}">用户</th><th th:text="#{admin.redOverage.col.redCount}">RED 计数</th><th th:text="#{admin.redOverage.col.reviewStatus}">复核态</th><th th:text="#{admin.common.note}">备注</th><th th:text="#{admin.common.actions}">操作</th></tr>
-            </thead>
-            <tbody>
-            <tr th:each="r : ${rows}">
-                <td th:text="${r.userId}">0</td>
-                <td th:text="${r.redCount}">0</td>
-                <td th:text="${r.reviewStatus == ''} ? '—' : ${r.reviewStatus}">—</td>
-                <td th:text="${r.note} ?: '—'">—</td>
-                <td sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('risk.view')">
-                    <form method="post" th:action="@{/admin/red-overage/{u}/review(u=${r.userId})}"
-                          style="display:inline">
-                        <select name="status">
-                            <option value="TO_VERIFY" th:text="#{admin.redOverage.status.toVerify}">待核查</option>
-                            <option value="RESOLVED" th:text="#{admin.redOverage.status.resolved}">已处理</option>
-                        </select>
-                        <input type="text" name="note" th:placeholder="#{admin.common.note}" placeholder="备注" maxlength="255"/>
-                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.redOverage.btn.mark}">标记</button>
-                    </form>
-                </td>
-            </tr>
-            <tr th:if="${rows.isEmpty()}"><td colspan="5" th:text="#{admin.redOverage.empty}">暂无 RED 分诊记录</td></tr>
-            </tbody>
-        </table>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{}, ~{::red-summary}, ~{::red-table}, ~{::red-drawer})}">
+            <div th:fragment="red-summary" th:replace="~{admin/fragments/red-overage-list :: sumbar(false)}"></div>
+
+            <div th:fragment="red-table" id="red-overage-rows">
+                <div th:replace="~{admin/fragments/red-overage-list :: rows(false)}"></div>
+            </div>
+
+            <div th:fragment="red-drawer" class="drawer-title"
+                 th:text="#{admin.v130.redOverage.drawer.title}">用户红色评级</div>
+        </div>
+
+        <!--/* ?open=<userId> 深链兜底：admin-drawer.js 先按当前页找行，找不到就用这里给的 URL。 */-->
+        <span hidden th:if="${open != null}" data-drawer-res="red"
+              th:attr="data-drawer-deeplink=@{/admin/red-overage/{u}/drawer(u=${open})}"></span>
     </div>
 </div>
 </body>
