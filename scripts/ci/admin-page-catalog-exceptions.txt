@@ -16,7 +16,7 @@
 # ---- 页内片段（htmx 拉取，不是能独立打开的页面）----
 /admin/charts   # 看板五卡图表片段（3.4），随 /admin 渲染
 /admin/audit-logs/chain-status   # 审计链完整性片段（6.5），随 /admin/audit-logs 渲染
-/admin/comments/distribution   # 评论管理的「分布」页签（4.2），页面是 /admin/comments
+
 /admin/seed-batches/schedules   # 批量内容的「排期」页签（7.5），页面是 /admin/seed-batches
 /admin/config/tiers/disabled   # PawCoin 档位的「已停用」子视图（6.2），页面是 /admin/config
 
@@ -26,7 +26,21 @@
 /admin/user-tags/pick   # 用户标签的用户选择器
 /admin/seed-post/pets   # 种子发布的宠物选择器
 
+# ---- 🟠 真页面、故意不进目录（不是片段；每条都要单独说清为什么）----
+# ⚠️ 这一段与上面几段性质不同：它们**能独立打开、有自己的 @PreAuthorize**，
+#    放进例外只是因为「不进导航 / 码随父页」，不是因为它们不是页面。
+/admin/comments/distribution   # 🔴 评论管理页签二（4.1）。非 htmx 直达 return "admin/comments"，
+                               #    是**整页**不是片段；门 = SUPER_ADMIN|comment.virtual_post|content.view，
+                               #    比页签一 /admin/comments 的 content.proactive_takedown **松**。
+                               #    页签条各自 sec:authorize，不泄露巡查数据；但侧栏「评论管理」项的
+                               #    navCodes 只有 content.proactive_takedown ⇒ **只持 content.view /
+                               #    comment.virtual_post 的运营有权限却没有任何入口能走到这一页**
+                               #    （「能进却看不见」）。修法是设计问题（侧栏该指向哪个页签），
+                               #    已记入 Story 11.4 待拍板，不在 11.4 里私自改。
+
 # ---- 表单页（从列表页进入，本身不在导航里）----
 # ⚠️ Story 11.3 AC1 明确「/admin/shop/products/{id} 与 /new 表单页保留独立」（10.3）。
-/admin/roles/new   # 角色配置的新建表单，入口在 /admin/roles
-/admin/shop/products/new   # 商品新建表单，入口在 /admin/shop/products
+# ⚠️ 这两条也是**真整页**，不是片段：父页在目录里、码由父页归属（SUPER / shop.product_edit），
+#    所以不单独进目录。别和上面的 htmx 片段混成一类看（复审 C5）。
+/admin/roles/new   # 角色配置的新建表单（真页面），入口在 /admin/roles，码随父页
+/admin/shop/products/new   # 商品新建表单（真页面），入口在 /admin/shop/products，码随父页

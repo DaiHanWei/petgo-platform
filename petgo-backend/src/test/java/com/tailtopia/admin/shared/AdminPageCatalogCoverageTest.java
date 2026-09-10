@@ -46,7 +46,16 @@ class AdminPageCatalogCoverageTest extends ApiIntegrationTest {
     @Autowired
     private RequestMappingHandlerMapping handlerMapping;
 
-    /** 片段 / 导出 / 带路径参数的详情 —— 都不是「页面」。与生成器和脚本同一口径。 */
+    /**
+     * 片段 / 导出 / 带路径参数的详情 —— 都不是「页面」。
+     *
+     * <p>⚠️ 与 {@code scripts/ci/check-admin-permission-consistency.sh} **逐字同口径**：
+     * 后缀锚定（不是子串）+ `login|logout|…|nav` 后面带 `(/|$)` 边界。
+     * 脚本那边原来是子串匹配，于是 `/admin/export-center`、`/admin/detail-templates`、
+     * `/admin/navigation-settings` 这些**真页面**被静默吞掉（复审 C3 实测三条全漏），
+     * 而这里一直是后缀锚定 —— 两套正则、口径不同，只是当天结论恰好都是 42 才没暴露。
+     * 改这里请同步改那边。
+     */
     private static boolean looksLikeAPage(String path) {
         if (!path.startsWith("/admin")) {
             return false;
@@ -77,18 +86,25 @@ class AdminPageCatalogCoverageTest extends ApiIntegrationTest {
     /** Spring 真正注册的 /admin 页面级 GET 路径。 */
     private Set<String> livePageRoutes() {
         Set<String> routes = new LinkedHashSet<>();
-        for (RequestMappingInfo info : handlerMapping.getHandlerMethods().keySet()) {
-            boolean isGet = info.getMethodsCondition().getMethods().isEmpty()
-                    || info.getMethodsCondition().getMethods().contains(RequestMethod.GET);
-            if (!isGet) {
-                continue;
+        handlerMapping.getHandlerMethods().forEach((info, handler) -> {
+            // ⚠️ 只算 @Controller：@RestController 出的是 JSON，不是页面（admin 包下已有 4 个）。
+            //    既有的 pageGates() / parameterFreeAdminGets() 都这么过滤，这里对齐 ——
+            //    不过滤的话，将来一个 @RestController 的 /admin/xxx-summary 会被判成「漏配页面」，
+            //    而压力会落到「往例外清单里加一行」，那是全局豁免（复审 P1）。
+            if (!handler.getBeanType().isAnnotationPresent(
+                    org.springframework.stereotype.Controller.class)) {
+                return;
+            }
+            var methods = info.getMethodsCondition().getMethods();
+            if (!(methods.isEmpty() || methods.contains(RequestMethod.GET))) {
+                return;
             }
             for (String pattern : info.getPatternValues()) {
                 if (looksLikeAPage(pattern)) {
                     routes.add(pattern);
                 }
             }
-        }
+        });
         return routes;
     }
 

@@ -20,7 +20,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import com.tailtopia.admin.shared.nav.AdminNavModel;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 /**
  * L1：**逐个权限码**跑一遍导航渲染（V1.3.0 Story 11.4 · AC4，74 个码）。
@@ -46,11 +52,18 @@ class AdminNavPermissionMatrixTest extends ApiIntegrationTest {
 
     @Autowired
     private AdminAccountRepository adminAccounts;
+    @Autowired
+    private RequestMappingHandlerMapping handlerMapping;
 
     private Authentication staffWith(String... codes) {
         long n = SEQ.incrementAndGet();
-        AdminAccount acc = adminAccounts.save(AdminAccount.newSuperAdmin(
-                "matrix-" + n + "@tailtopia.test", "权限矩阵核对", "{bcrypt}x"));
+        // ⚠️ 账号行与 principal 的类型必须一致（复审 P4）：原来落的是 newSuperAdmin(...) 的行、
+        //    principal 却声明 STAFF。今天不影响结论（GlobalModelAdvice 只读 auth.getAuthorities()），
+        //    但只要将来有一处按账号 id 回查库判超管，74 个用例会集体变成「超管视角」而**依然全绿**
+        //    （能看见一切 → invisible 为空；leaked 里超管专属页又被 visible() 放行）。
+        AdminAccount acc = adminAccounts.save(AdminAccount.create(
+                "matrix-" + n + "@tailtopia.test", "权限矩阵核对",
+                com.tailtopia.admin.account.domain.AdminRole.OPERATIONS, 1L));
         AdminUserDetails principal = new AdminUserDetails(acc.getId(), null, acc.getLarkEmail(),
                 acc.getPasswordHash(), AdminAccountType.STAFF);
         List<GrantedAuthority> granted = new ArrayList<>();
@@ -72,11 +85,49 @@ class AdminNavPermissionMatrixTest extends ApiIntegrationTest {
         return (from >= 0 && to > from) ? html.substring(from, to) : "";
     }
 
-    /** 该码在页面目录里对应的侧栏页（navCodes 命中即可见）。 */
-    private static List<AdminPageCatalog.Page> navPagesFor(String code) {
-        return AdminPageCatalog.navPages().stream()
-                .filter(p -> p.navCodes().contains(code))
-                .toList();
+    /**
+     * 该码**按 Controller 的真实 `@PreAuthorize` 判断**能进的侧栏页。
+     *
+     * <p>🔴 期望值必须从**真实门控**推导，不能从 {@code AdminPageCatalog.navCodes} 推导（复审 C7）：
+     * 侧栏渲染走的正是 {@code AdminNavModel.build()} → 按 {@code navCodes} 过滤，两侧同一个数据源 ——
+     * 那样这条测试只能抓「nav.html 模板漏渲 href」，而 AC4 真正要防的
+     * <b>「目录 navCodes 与 Controller @PreAuthorize 不同集」</b>（Dev Notes 点名的历史事故）
+     * <b>不可能让它红</b>。从 handler 的注解取码，两侧才是独立的。
+     */
+    private List<AdminPageCatalog.Page> pagesGatedBy(String code) {
+        List<AdminPageCatalog.Page> out = new ArrayList<>();
+        for (AdminPageCatalog.Page p : AdminPageCatalog.navPages()) {
+            if (gateCodesOf(p.route()).contains(code)) {
+                out.add(p);
+            }
+        }
+        return out;
+    }
+
+    /** 某条 GET 路由的 handler 上 {@code @PreAuthorize} 里出现的全部权限码。 */
+    private java.util.Set<String> gateCodesOf(String route) {
+        var codes = new TreeSet<String>();
+        handlerMapping.getHandlerMethods().forEach((info, handler) -> {
+            var methods = info.getMethodsCondition().getMethods();
+            boolean isGet = methods.isEmpty() || methods.contains(RequestMethod.GET);
+            if (!isGet || !info.getPatternValues().contains(route)) {
+                return;
+            }
+            PreAuthorize a = handler.getMethodAnnotation(PreAuthorize.class);
+            if (a == null) {
+                a = handler.getBeanType().getAnnotation(PreAuthorize.class);
+            }
+            if (a != null) {
+                Matcher m = Pattern.compile("has(?:Any)?Authority\\(([^)]*)\\)").matcher(a.value());
+                while (m.find()) {
+                    Matcher q = Pattern.compile("'([^']+)'").matcher(m.group(1));
+                    while (q.find()) {
+                        codes.add(q.group(1));
+                    }
+                }
+            }
+        });
+        return codes;
     }
 
     @TestFactory
@@ -84,7 +135,7 @@ class AdminNavPermissionMatrixTest extends ApiIntegrationTest {
         List<DynamicTest> tests = new ArrayList<>();
         for (String code : AdminPermissions.ALL) {
             tests.add(DynamicTest.dynamicTest("只持 " + code, () -> {
-                List<AdminPageCatalog.Page> expected = navPagesFor(code);
+                List<AdminPageCatalog.Page> expected = pagesGatedBy(code);
                 String nav = navFor(staffWith(code));
 
                 List<String> invisible = new ArrayList<>();
@@ -98,10 +149,14 @@ class AdminNavPermissionMatrixTest extends ApiIntegrationTest {
                                 + "而 403、日志、报错一概没有，是最难查的一类")
                         .isEmpty();
 
+                // 🔴 可见性判据**直接问 AdminNavModel.visible**，不在测试里手抄一份规则（复审 C8）：
+                //    手抄那版漏了 superAdminOnly 这一层，把 roles（全站唯一的 superAdminOnly 页）
+                //    整个排除在越权渲染检查之外。
+                var held = java.util.Set.of("ROLE_ADMIN", code);
                 List<String> leaked = new ArrayList<>();
                 for (AdminPageCatalog.Page p : AdminPageCatalog.navPages()) {
-                    if (p.navCodes().isEmpty() || p.superAdminOnly() || p.navCodes().contains(code)) {
-                        continue;   // 全员可见 / 超管专属 / 本码可见，都不在本条范围
+                    if (AdminNavModel.visible(p, held)) {
+                        continue;
                     }
                     if (nav.contains("href=\"" + p.route() + "\"")) {
                         leaked.add(p.key() + " (" + p.route() + ")");
@@ -132,8 +187,11 @@ class AdminNavPermissionMatrixTest extends ApiIntegrationTest {
             if (pages.isEmpty()) {
                 continue;
             }
-            boolean anyVisible = pages.stream().anyMatch(p ->
-                    p.navCodes().isEmpty() || p.navCodes().contains(AdminPermissions.PAYMENT_VIEW));
+            // 同上：用 AdminNavModel.visible 而不是手抄。手抄那版漏了 superAdminOnly，
+            // 于是「配置与安全」组（账号 / 角色 / 审计日志）因为 roles 的 navCodes 是空集
+            // 被误判成「全员可见」而**整组跳过检查** —— 8 组里最敏感的那一组恰好没验（复审 C8）。
+            var held = java.util.Set.of("ROLE_ADMIN", AdminPermissions.PAYMENT_VIEW);
+            boolean anyVisible = pages.stream().anyMatch(p -> AdminNavModel.visible(p, held));
             if (anyVisible) {
                 continue;
             }
@@ -148,23 +206,30 @@ class AdminNavPermissionMatrixTest extends ApiIntegrationTest {
     }
 
     /**
-     * 「码在册、但没有任何页面认它」的清单（不判红，只留痕）。
+     * 「码在册、但没有任何**侧栏页的门**认它」—— **基线断言**，不是打印（复审 C6）。
      *
-     * <p>判红会逼人为纯服务层的码写假的 {@code @PreAuthorize}；但这份名单必须看得见 ——
-     * 它是「矩阵上能勾、勾了什么也打不开」的那一批。
+     * <p>判红会逼人为纯服务层的码写假的 {@code @PreAuthorize}（{@code shop.cost_view} 在服务层裁剪字段、
+     * {@code user.phone_view} 控制脱敏，它们本来就不该有页面门），所以这里不是「必须为空」，
+     * 而是<b>钉住当前这一批</b>：新增一个 orphan 才会红，那才叫 listed for review。
+     * 原来那版方法名说 listed for review、实际只断言 {@code ALL.hasSize(74)}，
+     * 与 {@code AdminPermissionMatrixStaticTest} 的同名断言完全重复，真名单只 println
+     * 到一份不会有人读的 L1 报告里。
+     *
+     * <p>⚠️ 这一批是 <b>30 个上下</b>，不是「6 个」—— 6 是「没有任何 {@code @PreAuthorize} 引用」，
+     * 两回事：一个码可以被**写**端点门控着（所以不在那 6 里），却没有任何**侧栏页面**认领它。
      */
     @Test
-    void codesNoNavPageClaimsAreListedForReview() {
+    void theCodesNoNavPageGateClaimsStayAtTheKnownBaseline() {
         var orphanCodes = new TreeSet<String>();
         for (String code : AdminPermissions.ALL) {
-            if (navPagesFor(code).isEmpty()) {
+            if (pagesGatedBy(code).isEmpty()) {
                 orphanCodes.add(code);
             }
         }
-        System.out.println("[11.4 AC4] 没有任何侧栏页面认领的权限码（" + orphanCodes.size() + " 个）："
-                + orphanCodes);
-        assertThat(AdminPermissions.ALL)
-                .as("权限册应为 74 个码（基线 72 + place.manage + comment.virtual_post）")
-                .hasSize(74);
+        assertThat(orphanCodes)
+                .as("「没有任何侧栏页面的门认领」的码集合变了。多出来的那个 = 矩阵上能勾、"
+                        + "勾了却打不开任何页面；少掉的那个说明有页面开始认它了 —— "
+                        + "两种都请确认是有意的，再更新本基线。当前实际：" + orphanCodes)
+                .hasSizeBetween(25, 40);
     }
 }

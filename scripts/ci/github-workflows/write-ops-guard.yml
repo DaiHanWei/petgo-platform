@@ -18,6 +18,10 @@ on:
       - "petgo-backend/src/main/java/**"
       - "scripts/ci/list-admin-write-ops.sh"
       - "scripts/ci/admin-write-ops-allowlist.txt"
+      # 🔴 第二步（权限一致性）依赖这两个文件，漏了它们的话，「只往例外清单里加一行」
+      #    ——正是最该被审的那个动作——的 PR **连 job 都不会起**（复审 C10）。
+      - "scripts/ci/check-admin-permission-consistency.sh"
+      - "scripts/ci/admin-page-catalog-exceptions.txt"
       - "_bmad-output/implementation-artifacts/v1.3.0/**"
       - ".github/workflows/write-ops-guard.yml"
   pull_request:
@@ -25,6 +29,10 @@ on:
       - "petgo-backend/src/main/java/**"
       - "scripts/ci/list-admin-write-ops.sh"
       - "scripts/ci/admin-write-ops-allowlist.txt"
+      # 🔴 第二步（权限一致性）依赖这两个文件，漏了它们的话，「只往例外清单里加一行」
+      #    ——正是最该被审的那个动作——的 PR **连 job 都不会起**（复审 C10）。
+      - "scripts/ci/check-admin-permission-consistency.sh"
+      - "scripts/ci/admin-page-catalog-exceptions.txt"
       - "_bmad-output/implementation-artifacts/v1.3.0/**"
       - ".github/workflows/write-ops-guard.yml"
 

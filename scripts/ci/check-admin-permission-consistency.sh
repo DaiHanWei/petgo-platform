@@ -7,8 +7,10 @@
 #   ② 目录 ↔ 路由双向：AdminPageCatalog 里每条 route 必须是活着的 GET 路由；
 #      每个**页面级** GET 路由必须在目录里有一条 —— 目录是导航与权限矩阵的唯一数据源，
 #      少一条 = 页面进不了菜单也进不了矩阵，多一条 = 菜单里一个点不开的死项。
-#   ③ 矩阵里不许出现已撤销的码（content.stats_view / content.stats_export，
-#      整页 2026-08-28 撤销；存量账号里的残留字符串不清，但矩阵不能再给出来）。
+#   ③ 已撤销的码（content.stats_view / content.stats_export，整页 2026-08-28 撤销）不许再出现在**门控**里。
+#      ⚠️ 「不许出现在矩阵里」这一半由 L0 的 AdminPermissionMatrixStaticTest 判
+#      （码在不在册要问 AdminPermissions，不能 grep 目录源码 —— 目录里权限码字面量数量为 0，
+#      全部走 `import static AdminPermissions.*` 的常量，grep 它是个**死分支**，复审 C9）。
 #
 # 用法：bash scripts/ci/check-admin-permission-consistency.sh
 # 纯 bash + awk/grep，云端可跑；路由清单复用 Story 11.1 的生成器（唯一事实源，不另写一套解析）。
@@ -41,15 +43,29 @@ grep -oE 'String [A-Z_0-9]+ *= *"[a-z_.]+"' "$PERMS" | sed 's/.*"\(.*\)"/\1/' | 
 perm_count=$(grep -c . "$tmp/perms.txt")
 
 # ---- 路由清单（复用 11.1 生成器）----
-bash scripts/ci/list-admin-write-ops.sh --out "$tmp/ledger.md" > "$tmp/ledger.log" 2>&1
+# 🔴 **必须判退出码，不能只判「文件非空」**（复审 C2）：
+#    生成器自己会喊「某文件解析出 0 行 < 映射注解 1 条 —— 有端点被静默丢掉」，
+#    但那句被 `> ledger.log` 吞了，而清单照样生成、照样非空。
+#    于是一个包级私有的处理器方法（生成器的 awk 只认 public/protected/private 开头的签名）
+#    就能同时废掉下面两条检查：拼错的码不报、没进目录的页面不报，脚本还是 OK exit 0（实测）。
+#    清单的完整性是本脚本**全部结论的前提**。
+if ! bash scripts/ci/list-admin-write-ops.sh --out "$tmp/ledger.md" > "$tmp/ledger.log" 2>&1; then
+  echo "::error::清单生成失败或自检不通过 —— 本脚本的结论建立在清单完整的前提上，先修它："
+  cat "$tmp/ledger.log"
+  exit 1
+fi
 if [[ ! -s "$tmp/ledger.md" ]]; then
-  echo "::error::清单生成失败："
+  echo "::error::清单为空"
   cat "$tmp/ledger.log"
   exit 1
 fi
 
 # ---- ① 门控码 ⊆ 权限册 ----
-grep -oE "hasAuthority\('[^']+'\)" "$tmp/ledger.md" | sed "s/hasAuthority('\(.*\)')/\1/" | sort -u > "$tmp/used.txt"
+# 🔴 `hasAnyAuthority('a','b')` 与 `hasAuthority('a') or hasAuthority('b')` 在 SpEL 里完全等价，
+#    随时会有人写；而 `hasAnyAuthority` 里**不含子串 `hasAuthority`**（hasAny**A**uthority），
+#    只匹配后者的话，前者里的码一个都提不出来 —— 拼错了也不报（复审 C1 实测）。
+grep -oE "has(Any)?Authority\([^)]*\)" "$tmp/ledger.md" \
+  | grep -oE "'[^']+'" | tr -d "'" | sort -u > "$tmp/used.txt"
 unknown=$(comm -23 "$tmp/used.txt" "$tmp/perms.txt")
 if [[ -n "$unknown" ]]; then
   echo "::error::下列 @PreAuthorize 码不在 AdminPermissions 里（拼错的码 = 该端点对所有人 403）："
@@ -63,10 +79,8 @@ for revoked in content.stats_view content.stats_export; do
     echo "::error::已撤销的权限码 $revoked 又出现在门控里（整页 2026-08-28 撤销）"
     fail=1
   fi
-  if grep -qF "\"$revoked\"" "$CATALOG"; then
-    echo "::error::已撤销的权限码 $revoked 又出现在 AdminPageCatalog 里"
-    fail=1
-  fi
+  # ⚠️ 不 grep 目录源码：那里权限码全是 `import static` 的常量，字面量数量为 0，grep 恒不命中。
+  #    「码是否还在册」由 L0 的 AdminPermissionMatrixStaticTest 用 AdminPermissions.isValid 判。
 done
 
 # ---- ② 目录 ↔ 路由 ----
@@ -74,8 +88,13 @@ done
 grep -oE '"/admin[a-zA-Z0-9/_{}.-]*"' "$CATALOG" | tr -d '"' | sort -u > "$tmp/catalog-routes.txt"
 # 清单里的 GET 路由，去掉片段 / 导出 / 带参数的详情 —— 与生成器的「页面路由」口径一致
 awk -F'|' 'NF >= 7 && $2 ~ /^ *GET *$/ { p=$3; gsub(/`/, "", p); gsub(/^ +| +$/, "", p); print p }' "$tmp/ledger.md" \
-  | grep -vE '\{|export|\.csv|\.xlsx|drawer|/detail|/queue|/fragment|/preview|/search|/lookup|/suggest|/json|/api/' \
-  | grep -vE '^/admin/(login|logout|denied|lang|oauth|nav)' \
+  `# 🔴 后缀锚定 + 路径边界（复审 C3）：原来是子串匹配，于是 /admin/export-center、` \
+  `# /admin/detail-templates、/admin/navigation-settings 这些**真页面**被静默吞掉（实测三条全漏），` \
+  `# 而 L1 的 AdminPageCatalogCoverageTest.looksLikeAPage 用的是后缀锚定 —— 两套正则、口径不同，` \
+  `# 只是今天结论恰好都是 42 才没暴露。两边现在逐字一致。` \
+  | grep -vE '\{' \
+  | grep -vE '(export|\.csv|\.xlsx|drawer|/detail|/queue|/fragment|/preview|/search|/lookup|/suggest|/json)$' \
+  | grep -vE '^/admin/(login|logout|denied|lang|oauth|nav)(/|$)' \
   | sort -u > "$tmp/page-routes.raw"
 # 例外清单：长得像页面路由、但其实是页签 / 片段 / 选择器 / 表单页的 GET。
 # 🔴 显式列表而不是脚本里一条 grep -v 正则：正则一改，真正漏配的页面会跟着被吞掉，且没人看得出来。
