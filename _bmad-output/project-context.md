@@ -18,9 +18,10 @@
 - **主题 `<theme>`**：同一版本可能多主题并行（admin / app …）。解析顺序：提示词里的主题名 → `planning-artifacts/<ver>/README.md` 主题登记表里「当前分支 → 主题」的映射 → 目录里若只有一套带主题后缀的文件则取它 → 否则停下问。
 - `sprint_status` → `_bmad-output/implementation-artifacts/<ver>/sprint-status-<ver>-<theme>.yaml`
 - `epics_file` → `…/planning-artifacts/<ver>/epics-<ver>-<theme>.md`；`architecture_file` → `…/architecture-<ver>-<theme>-delta.md`；`prd_file` → `…/PRD-<ver>-<theme>.md`；决策日志 `决策日志-<theme>.md`
+- **带主题后缀的文件不存在时**（早于命名约定入库的主题）：取 `planning-artifacts/<ver>/README.md`「产物文件」表里该主题登记的**实际文件名**，那张表是权威。仍找不到才停下问，**禁止猜、禁止回退根目录**。
 - 跨版本常设文件不重定向：`_bmad-output/planning-artifacts/architecture.md`（基线架构）、`_bmad-output/implementation-artifacts/CROSS-STORY-DECISIONS.md`
 
-同一版本可能有多个主题（如 v1.3.0 的后台 admin 与 App 端），主题分支 `feat/<ver>-<主题>`；同一版本目录内 story 编号由 `planning-artifacts/<ver>/README.md` 的主题登记表分号段，不会重复；**不同版本目录之间编号会重复**（v1.0.0 与 v1.1.0 都有 1-1），引用 story 必须带版本目录。
+同一版本可能有多个主题（如 v1.3.0 的后台 admin 与 App 端），主题分支 `feat/<ver>-<主题>`；同一版本目录内**不同主题的 Epic 号段可以重复**（各主题 epics 与 sprint-status 独立成域，story 文件名带中文名互不覆盖，技能按 sprint-status 里的完整 key 取 story，不按 `<epic>-<n>` 前缀通配）——因此**引用 story 必须带主题**；**不同版本目录之间编号会重复**（v1.0.0 与 v1.1.0 都有 1-1），引用 story 必须带版本目录。
 
 ## 云端（headless）执行提醒
 
