@@ -276,6 +276,43 @@ class AdminMessagesParityTest {
                 .isEmpty();
     }
 
+    /**
+     * 🔴 带 {@code {n}} 占位符的文案里，单引号必须写成 {@code ''}。
+     *
+     * <p>Spring 只在**传了参数**时才走 {@code MessageFormat}，而 MessageFormat 把单引号当
+     * <b>引用起始符</b>：{@code drawer's assignment tab; user {0} ...} 里那个撇号一出现，
+     * 后面直到下一个单引号（这里没有）全部变成字面量 —— 占位符不再替换，撇号本身还被吞掉。
+     * 界面上得到的是一句半截话加一个原样的 <code>{0}</code>。
+     *
+     * <p>⚠️ 这条**只能**在带占位符的键上判：不带参数的文案根本不过 MessageFormat，
+     * 那里的单引号是正常字符，一起判会把一大批正常文案判成违规。
+     *
+     * <p>（2026-09-10 实际踩到：`admin.v130.utags.legacyUserView` 与两条 Story 1.3 的账号文案。）
+     */
+    @Test
+    void messagesWithPlaceholdersEscapeTheirSingleQuotes() throws Exception {
+        Set<String> offenders = new TreeSet<>();
+        java.util.List<String> all = new java.util.ArrayList<>(LOCALES.values());
+        all.add(BASELINE);
+        for (String path : all) {
+            Properties p = load(path);
+            for (String key : p.stringPropertyNames()) {
+                String v = p.getProperty(key);
+                if (placeholders(v).isEmpty()) {
+                    continue;
+                }
+                // 把成对的 '' 去掉之后还剩单引号 = 未转义。
+                if (v.replace("''", "").indexOf('\'') >= 0) {
+                    offenders.add(path + " → " + key);
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 这些文案带占位符却有未转义的单引号 —— MessageFormat 会把它当引用起始符，"
+                        + "占位符不再替换、撇号被吞掉。写成 '' 即可")
+                .isEmpty();
+    }
+
     private Set<String> placeholders(String text) {
         Set<String> out = new TreeSet<>();
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\{(\\d+)}").matcher(text);

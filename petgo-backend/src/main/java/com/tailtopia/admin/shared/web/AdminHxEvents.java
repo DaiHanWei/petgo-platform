@@ -32,6 +32,15 @@ public final class AdminHxEvents {
     public static final String TAG_LIST_REFRESH = "admin:tag-list-refresh";
 
     /**
+     * B8 用户标签：列表整表重拉（Story 8.2）。
+     *
+     * <p>⚠️ 与 {@link #TAG_LIST_REFRESH} **刻意分开**，尽管两页永远不会同时打开：
+     * 事件名是写在模板 {@code hx-trigger} 里的字符串，同名意味着将来任何一页改了刷新语义，
+     * 另一页会跟着一起变而没人察觉。
+     */
+    public static final String USER_TAG_LIST_REFRESH = "admin:user-tag-list-refresh";
+
+    /**
      * B5 排期发布：排期表按当前筛选 + 当前页重拉（Story 7.5）。
      *
      * <p>⚠️ 改时间 / 取消都**不做单行 oob**：表按计划时间升序，改完时间那一行的位置会变；

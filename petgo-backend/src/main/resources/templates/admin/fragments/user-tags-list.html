@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  B8 用户标签的摘要条 / 表格 / 单行（V1.3.0 Story 8.2，模板 B）。
+    sumbar(oob) — 两格：生效标签数 · 生效中分配数
+    rows(oob)   — 表格 + 空态；oob=true 时摘要条随片段一并换
+    row(t, oob) — 单行；点行开抽屉（编辑 / 分配记录都在抽屉里）
+  🔴 主表只有**标签**一张表：原先页尾还并排着「新建标签」「批量分配」「分配记录」三块，
+     同屏两个叫「名称」的输入框指的却是两件事（新标签的名字 / 选哪个已有标签），
+     运营正是在那里读不懂 —— 全部收进抽屉（与 7.4 内容标签同一改法）。
+  ⚠️ 徽章预览是**裸图**：2026-09-02 起上传的图就是用户看到的整枚标签（14×14 整图、无衬底、无底色），
+     所以这里也不能加圆底 —— 加了就成了另一种误导（后台看到的 ≠ 用户看到的）。
+*/-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="utags-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <!--/* 文案用「在线标签数」而不是 AC1 字面的「生效标签数」：状态列写的就是「在线 / 已下线」，
+               同一件事在同屏用两个词，运营会以为「生效」还另有一层含义（与 7.4 同一处理）。 */-->
+        <div class="sum-label" th:text="#{admin.v130.utags.summary.tags}">在线标签数</div>
+        <div class="sum-value" data-sum="tags" th:text="${summary.activeTags}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.utags.summary.assignments}">生效中分配数</div>
+        <div class="sum-value" data-sum="assignments" th:text="${summary.activeAssignments}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/user-tags-list :: sumbar(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(tags)}" class="tags-table">
+        <thead>
+        <tr>
+            <th th:text="#{admin.utags.badge}">徽章</th>
+            <th th:text="#{admin.utags.code}">标签码</th>
+            <th th:text="#{admin.utags.name}">名称</th>
+            <th th:text="#{admin.utags.description}">说明文案</th>
+            <th class="nowrap" th:text="#{admin.utags.activeCount}">生效中分配数</th>
+            <th th:text="#{admin.utags.status}">状态</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="t : ${tags}"><tr th:replace="~{admin/fragments/user-tags-list :: row(${t}, false)}"></tr></th:block>
+        </tbody>
+    </table>
+
+    <div class="empty" th:if="${#lists.isEmpty(tags)}">
+        <span class="empty-emoji">🏷️</span>
+        <p th:text="#{admin.utags.empty}">还没有任何用户标签。</p>
+    </div>
+</th:block>
+
+<!--/* 单行。点行开抽屉（原先那一列行内编辑表单已删 —— 一行里塞三个输入框 + 两个提交钮，
+       在 1440px 下也要横滚，而且改错了没有任何撤回余地）。 */-->
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(t, oob)" th:id="'utag-row-' + ${t.id}" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${t.id}" th:data-drawer-url="@{/admin/user-tags/{id}/drawer(id=${t.id})}" tabindex="0"
+        th:classappend="${t.retired()} ? 'row-muted'">
+        <td class="nowrap">
+            <img th:if="${#strings.startsWith(t.icon, 'http')}" th:src="${t.icon}" alt=""
+                 style="height:28px;width:auto;max-width:96px;vertical-align:middle"/>
+            <!--/* 存量字符图标（上传改造前建的标签）：照原样显示，重新上传即替换。 */-->
+            <span th:unless="${#strings.startsWith(t.icon, 'http')}" th:text="${t.icon}"
+                  style="font-size:16px;line-height:1"></span>
+        </td>
+        <td class="nowrap muted" th:text="${t.code}">ut-1</td>
+        <td th:text="${t.name}">名称</td>
+        <td th:text="${t.description}">说明</td>
+        <td class="nowrap" th:text="${t.activeAssignments}">0</td>
+        <td class="nowrap">
+            <span class="dot" th:classappend="${t.retired()} ? 'dot--done' : 'dot--ok'"></span>
+            <span class="badge" th:classappend="${t.retired()} ? 'badge-muted' : 'badge-ok'"
+                  th:text="${t.retired()} ? #{admin.utags.retired} : #{admin.utags.online}">在线</span>
+        </td>
+    </tr>
+</tbody></table>
+</body>
+</html>

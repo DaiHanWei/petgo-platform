@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  B8 用户标签抽屉（V1.3.0 Story 8.2 AC2～AC5，480px 抽屉体 res=utag，UI 稿 3-7～3-11）。三种渲染：
+    drawer     — 页签一「编辑」/ 页签二「分配记录」（同一端点 ?tab=，两个页签共用同一份标签数据）
+    createForm — 新建态（名称 / 说明 / 图标必传；标签码自动生成，表单里不出现）
+    created    — 新建成功：只回一个 toast，抽屉由 HX-Trigger admin:drawer-open 打开**新标签**并停在分配记录
+  ⚠️ 5 个 POST 的路径与参数逐字不变（name / iconFile / description / retired /
+     pickedUserIds / userIds / tagId / startsAt / endsAt）—— 本 story 只是把表单从页尾搬进抽屉。
+  ⚠️ hx-target 一律指**带 id 的** #utag-drawer-err：htmx 只在目标带 id 时才发 HX-Target 头，
+     而 AdminBusinessExceptionAdvice 按这个头 HX-Retarget（7.1 复审 C1 的教训）。
+  🔴 「＋添加用户」是**唯一分配入口**：页尾那个独立的「批量分配」区块已删 ——
+     多选、顶掉最早、注销不可选三条既有能力原样在这里可用，端点一个都没少。
+  ⚠️ 徽章一律**裸图**（2026-09-02 起图就是整枚标签）：抽屉里也不能加圆底或底色控件，
+     否则后台看到的就不是用户看到的。
+*/-->
+<body>
+<div th:fragment="drawer" id="utag-drawer-panel" class="tag-drawer" th:attr="data-tag-id=${t.id},data-tab=${tab}"
+     th:with="canManage=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''user.tag_manage'')')}">
+
+    <!--/* ① 抽屉头：裸图徽章 + 标签码（只读）+ 状态 */-->
+    <section class="card card-full tag-card" data-section="utag-head">
+        <h2>
+            <img th:if="${#strings.startsWith(t.icon, 'http')}" th:src="${t.icon}" alt=""
+                 style="height:28px;width:auto;max-width:96px;vertical-align:middle"/>
+            <span th:unless="${#strings.startsWith(t.icon, 'http')}" th:text="${t.icon}"
+                  style="font-size:16px;line-height:1"></span>
+            <span th:text="${t.name}">名称</span>
+            <!--/* 标签码只读展示（PRD §5 ③ 第 9 条：ut-<id> 由服务层生成，任何表单都不再出现输入位）。 */-->
+            <span class="muted" th:text="${t.code}">ut-1</span>
+            <span class="badge" th:classappend="${t.retired()} ? 'badge-muted' : 'badge-ok'"
+                  th:text="${t.retired()} ? #{admin.utags.retired} : #{admin.utags.online}">在线</span>
+        </h2>
+    </section>
+
+    <!--/* ② 页签（htmx 局部切换整块面板；两个页签是同一个 GET，只差 ?tab=） */-->
+    <div class="tabs tag-tabs" role="tablist">
+        <a class="tab" role="tab" href="#" data-no-drawer th:classappend="${tab == 'edit'} ? 'tab--on'"
+           th:attr="aria-selected=${tab == 'edit'},hx-get=@{/admin/user-tags/{id}/drawer(id=${t.id},tab='edit')}"
+           hx-target="#utag-drawer-panel" hx-swap="outerHTML"
+           th:text="#{admin.v130.utags.tab.edit}">编辑</a>
+        <a class="tab" role="tab" href="#" data-no-drawer th:classappend="${tab == 'assignments'} ? 'tab--on'"
+           th:attr="aria-selected=${tab == 'assignments'},hx-get=@{/admin/user-tags/{id}/drawer(id=${t.id},tab='assignments')}"
+           hx-target="#utag-drawer-panel" hx-swap="outerHTML"
+           th:text="#{admin.v130.utags.tab.assignments(${assignmentTotal})}">分配记录</a>
+    </div>
+
+    <!--/* ================= 页签一 · 编辑 ================= */-->
+    <section class="card card-full tag-card" th:if="${tab == 'edit'}" data-section="utag-edit">
+        <form id="utagEditForm" th:if="${canManage}" data-utag-edit-form
+              th:attr="hx-post=@{/admin/user-tags/{id}/edit(id=${t.id})}"
+              hx-encoding="multipart/form-data" hx-target="#utag-drawer-err" hx-swap="innerHTML">
+            <!--/* 标签码只读：不是 disabled input，就直接不做成输入框 ——
+                   一个灰掉的输入框读起来仍像「暂时不能改」，而它是**永远**不该由人来填的。 */-->
+            <p class="hint">
+                <span th:text="#{admin.utags.code}">标签码</span>:
+                <code th:text="${t.code}">ut-1</code>
+                <span th:text="#{admin.v130.utags.codeAuto}">系统生成，不可修改。</span>
+            </p>
+
+            <label class="field field-full">
+                <span th:text="#{admin.utags.name}">名称</span>
+                <input type="text" name="name" class="inp field-full" th:value="${t.name}" required/>
+            </label>
+            <p class="hint" th:text="#{admin.utags.nameHint}">用户在标签上看到的字。</p>
+
+            <label class="field field-full">
+                <span th:text="#{admin.utags.description}">说明文案</span>
+                <input type="text" name="description" class="inp field-full" maxlength="140"
+                       th:value="${t.description}" required/>
+            </label>
+
+            <!--/* 🛡 编辑时**不设 required**：不选文件 = 保留原图标。
+                   直接传空会把「只改错别字」的那次编辑变成「把图标删了」，而后台界面上看不出来
+                   （AdminTagEditKeepsIconTest 钉的就是这条）。 */-->
+            <label class="field field-full">
+                <span th:text="#{admin.utags.icon}">图标</span>
+                <input type="file" name="iconFile" accept="image/png,image/webp"/>
+            </label>
+            <p class="hint" th:text="${iconSpec}">PNG 或 WebP……</p>
+            <p class="hint" th:text="#{admin.v130.utags.iconKeep}">不选文件即保留原图标。</p>
+
+            <div id="utag-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+            <!--/* AC2：未修改时保存禁用 —— 图标是 multipart，「没改也提交」会把整张图重传一遍。
+                   ⚠️ `disabled` 由下面那段脚本**加上**，不写死在 HTML 里：写死的话脚本一旦没跑
+                   （将来上 CSP、htmx 的 inlineScriptNonce 是空串，内联脚本会被拦），
+                   保存钮就永久禁用、编辑整个不可用，而界面上看不出原因。
+                   反过来失效时退化成「总能点」，最坏结果只是原样再保存一次。 */-->
+            <button type="submit" class="btn btn-primary" data-utag-save
+                    th:text="#{admin.utags.save}">保存</button>
+        </form>
+
+        <p class="hint" th:unless="${canManage}"
+           th:text="#{admin.v130.err.forbidden(#{perm.user.tag_manage})}">需要「编辑用户标签」权限</p>
+    </section>
+
+    <!--/* 操作条：下线 / 重新上线。data-confirm 复述生效分配数 —— 否则运营会以为下线等于全部收回 */-->
+    <section class="pl-actions sticky-footer" th:if="${tab == 'edit'}" data-utag-actions>
+        <form class="inline" th:if="${canManage}"
+              th:attr="hx-post=@{/admin/user-tags/{id}/retire(id=${t.id})},
+                       data-confirm=${t.retired()} ? null
+                           : #{admin.utags.retireConfirm} + ' ' + #{admin.v130.utags.retireConfirm.count(${t.activeAssignments})}"
+              hx-target="#utag-drawer-err" hx-swap="innerHTML">
+            <input type="hidden" name="retired" th:value="${!t.retired()}"/>
+            <button type="submit" class="btn btn-sm" th:classappend="${t.retired()} ? '' : 'btn-danger'"
+                    th:text="${t.retired()} ? #{admin.utags.restore} : #{admin.utags.retire}">下线</button>
+        </form>
+        <!--/* 只读权限：按钮渲染成禁用态并注明缺哪个权限（AC5）—— 整块空白会让人以为「这个标签没有操作」 */-->
+        <button type="button" class="btn btn-sm btn-danger" disabled th:unless="${canManage}"
+                th:title="#{admin.v130.err.forbidden(#{perm.user.tag_manage})}"
+                th:text="#{admin.utags.retire}">下线</button>
+    </section>
+
+    <!--/* ================= 页签二 · 分配记录 ================= */-->
+    <th:block th:if="${tab == 'assignments'}">
+        <section class="card card-full tag-card" data-section="utag-assignments">
+            <!--/* 🔴 展示上限说明（11.3 AC3，**不可删**）：不提示的话，运营分配了标签、
+                   以为用户身上就能看见，实际被顶掉了，他会以为是 bug，然后重复分配。 */-->
+            <!--/* ⚠️ 这里**不能**再用 id="userTagCapNotice"：整页上已经有一份同 id 的，
+                   抽屉一开 DOM 里就有两个。改成 data-notice —— 将来谁给它挂 oob 或 getElementById，
+                   命中的一定是页面上那份、不是抽屉里这份。 */-->
+            <div class="banner warn" data-notice="utag-cap"
+                 th:text="${#messages.msg('admin.utags.capNotice', maxVisible, maxVisible + 1)}">
+                用户端同时只展示 3 个标签……
+            </div>
+
+            <table th:if="${!#lists.isEmpty(assignments)}" class="tag-assign-table">
+                <thead>
+                <tr>
+                    <th th:text="#{admin.v130.utags.col.user}">用户</th>
+                    <th class="nowrap" th:text="#{admin.v130.utags.col.assignedAt}">分配时间</th>
+                    <!--/* ⚠️ 列头用**列名**，不是分配表单那条字段标签（`admin.utags.window` =
+                           「生效时间（WIB，结束可留空 = 永久）」）：在一张只读记录表里出现「结束可留空」
+                           这种填表指令读不通，而且它很长，六列在 480px 抽屉里必横滚。 */-->
+                    <th class="nowrap" th:text="#{admin.v130.utags.col.window}">起止时间（WIB）</th>
+                    <th th:text="#{admin.utags.status}">状态</th>
+                    <th th:text="#{admin.v130.utags.col.operator}">操作人</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="a : ${assignments}" th:id="'utag-assign-' + ${a.id}">
+                    <td>
+                        <span class="muted">#<span th:text="${a.userId}">1</span></span>
+                        <span th:text="${a.userName} ?: '—'">昵称</span>
+                    </td>
+                    <td class="nowrap"
+                        th:text="${a.createdAt != null}
+                                 ? ${#temporals.format(a.createdAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')} : '—'">分配时间</td>
+                    <td class="nowrap">
+                        <span th:text="${#temporals.format(a.startsAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">开始</span>
+                        –
+                        <span th:if="${a.permanent()}" th:text="#{admin.utags.permanent}">永久</span>
+                        <span th:unless="${a.permanent()}"
+                              th:text="${#temporals.format(a.endsAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">结束</span>
+                        <span class="muted">WIB</span>
+                    </td>
+                    <!--/* 🔴 两件事必须都说：① 时间窗三态（待生效 / 生效中 / 已到期）——
+                           本页支持先排期后生效，把排在下周的写成「已到期」会让人再分配一次；
+                           ② 会不会**真的展示**（生效中也可能被更晚的三个标签顶掉），
+                           不展示时给出**原因** —— 四种原因的处置动作完全不同（见 UserAssignmentRow）。 */-->
+                    <td class="nowrap">
+                        <span class="dot" th:classappend="${a.active} ? 'dot--ok' : (${a.pending} ? 'dot--wait' : 'dot--done')"></span>
+                        <span class="badge"
+                              th:classappend="${a.active} ? 'badge-ok' : (${a.pending} ? 'badge-neutral' : 'badge-muted')"
+                              th:text="${a.active} ? #{admin.v130.utags.status.active}
+                                       : (${a.pending} ? #{admin.v130.utags.status.pending} : #{admin.v130.utags.status.expired})">生效中</span>
+                        <span class="muted" th:if="${a.hiddenReason != null}"
+                              th:text="#{'admin.utags.why.' + ${a.hiddenReason}}">原因</span>
+                    </td>
+                    <td class="muted" th:text="${a.actorName} ?: '—'">操作人</td>
+                    <td>
+                        <form class="inline" th:if="${canManage}"
+                              th:attr="hx-post=@{/admin/user-tags/assignments/{id}/remove(id=${a.id})},
+                                       data-confirm=#{admin.utags.removeConfirm}"
+                              hx-target="#utag-drawer-err" hx-swap="innerHTML">
+                            <button type="submit" class="btn btn-sm btn-danger" th:text="#{admin.utags.remove}">取消分配</button>
+                        </form>
+                        <button type="button" class="btn btn-sm btn-danger" disabled th:unless="${canManage}"
+                                th:title="#{admin.v130.err.forbidden(#{perm.user.tag_manage})}"
+                                th:text="#{admin.utags.remove}">取消分配</button>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+
+            <p class="hint" th:if="${#lists.isEmpty(assignments)}"
+               th:text="#{admin.utags.assignmentsEmpty}">没有符合条件的分配记录。</p>
+
+            <!--/* 操作人整列可能是「—」：分配表没有这一列，靠审计里那条 USER_TAG_ASSIGN 反查，
+                   8.2 起逐条记；更早经批量分配落库的只有一条汇总审计，反查不到。
+                   不写这句的话，运营看到一列破折号的第一反应是功能坏了。 */-->
+            <p class="hint" th:if="${!#lists.isEmpty(assignments)}"
+               th:text="#{admin.v130.utags.actorHint}">「操作人」只对 8.2 之后经后台分配的记录可查。</p>
+
+            <!--/* 🔴 「取消分配」的 422 / 403 / 404 落点。**必须无条件渲染** —— 挂在下面那张分配表单里的话，
+                   标签一旦下线（表单不渲染）目标就没了，htmx 连请求都不会发，界面上什么都不发生。 */-->
+            <div id="utag-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+
+            <div class="pager" th:if="${!#lists.isEmpty(assignments)}" th:attr="data-page=${page}">
+                <a th:if="${page > 0}" href="#" data-no-drawer hx-target="#utag-drawer-panel" hx-swap="outerHTML"
+                   th:attr="hx-get=@{/admin/user-tags/{id}/drawer(id=${t.id},tab='assignments',page=${page - 1})}"
+                   th:text="#{admin.audit.prev}">← 上一页</a>
+                <span th:text="#{admin.v130.utags.pager.page(${page + 1})}">第 1 页</span>
+                <a th:if="${hasNext}" href="#" data-no-drawer hx-target="#utag-drawer-panel" hx-swap="outerHTML"
+                   th:attr="hx-get=@{/admin/user-tags/{id}/drawer(id=${t.id},tab='assignments',page=${page + 1})}"
+                   th:text="#{admin.audit.next}">下一页 →</a>
+            </div>
+        </section>
+
+        <!--/* ＋添加用户 = 唯一分配入口。标签定死为当前抽屉标签（tagId 隐藏传），运营只需选人与时间。 */-->
+        <section class="card card-full tag-card" th:if="${canManage}" data-section="utag-assign-form">
+            <!--/* 展开判据两条：还没有任何分配（第一件事就是加人）、或刚发生了部分失败（提示在里面，
+                   折叠着等于没提示）。⚠️ 用 th:attr 而不是 th:open —— 后者会渲染成 open="open"。 */-->
+            <details class="tag-assign-details"
+                     th:attr="open=${#lists.isEmpty(assignments) or partialError != null} ? 'open' : null">
+                <!--/* ⚠️ 片段名不能叫 summary：`~{tpl :: summary}` 也会命中 <summary> 标签本身
+                       （7.5 踩过的坑）。这里只是个普通 <summary>，不定义同名片段。 */-->
+                <summary th:text="#{admin.v130.utags.addUsers}">＋ 添加用户</summary>
+
+                <!--/* 🛡 已下线的标签不可再分配（服务层唯一真相 UserTagQueryService.assign）：
+                       这里不渲染表单，只说明原因 —— 渲染一个提交就报错的表单等于让人白填一遍。 */-->
+                <p class="hint" th:if="${t.retired()}" data-notice="assign-retired"
+                   th:text="#{admin.v130.utags.assignRetired}">该标签已下线，不能再分配。先「重新上线」再来。</p>
+
+                <form th:unless="${t.retired()}" th:attr="hx-post=@{/admin/user-tags/assign}"
+                      hx-target="#utag-assign-err" hx-swap="innerHTML" id="utagAssignForm">
+                    <input type="hidden" name="tagId" th:value="${t.id}"/>
+                    <fieldset>
+                        <legend th:text="#{admin.utags.pickUsers}">选择用户</legend>
+                        <p class="hint" th:text="#{admin.utags.pickHint}">
+                            只列未注销的用户。已停用（封号）的会列出但标注状态，由你决定要不要分配。
+                        </p>
+                        <input type="search" name="q" class="inp field-full" th:placeholder="#{admin.utags.pickSearch}"
+                               hx-get="/admin/user-tags/pick" hx-target="#userCandidates"
+                               hx-trigger="keyup changed delay:300ms, search"/>
+                        <!--/* 候选**按需拉**（hx-trigger=load）：整页渲染时不预取，抽屉展开才要。 */-->
+                        <div id="userCandidates" hx-get="/admin/user-tags/pick" hx-trigger="load">
+                            <p class="hint" th:text="#{admin.utags.pickEmpty}">没有匹配的用户。</p>
+                        </div>
+                    </fieldset>
+                    <label class="field field-full">
+                        <!--/* ⚠️ 手填框**保留**：运营手上有时就是一串从别处导出的 id。
+                               两条入口走同一套服务端校验，所以留着它不会重新打开那个口子。 */-->
+                        <span th:text="#{admin.utags.userIdsOptional}">或手动填用户 ID（选填）</span>
+                        <textarea name="userIds" class="inp field-full" rows="2"
+                                  placeholder="1001, 1002 1003"></textarea>
+                    </label>
+                    <label class="field field-full">
+                        <span th:text="#{admin.utags.window}">生效时间（WIB，结束可留空 = 永久）</span>
+                        <input type="datetime-local" name="startsAt" class="inp" required/>
+                        <input type="datetime-local" name="endsAt" class="inp"/>
+                        <!--/* 🔴 光写「WIB」不够（bug 20260828）：运营在 UTC+8，照自己的表填「现在」
+                               落到 WIB 就是一小时后，标签当场看起来「没生效」。把**此刻的 WIB** 直接摆出来。 */-->
+                        <span class="muted">WIB</span>
+                        <span class="muted" data-notice="wib-now"
+                              th:text="#{admin.wibNow(${@adminTime.nowWibForInput()})}">现在是 WIB …</span>
+                    </label>
+                    <!--/* ⚠️ 分配表单自己的 err 槽（与上面「取消分配」的分开）：这张表单很长
+                           （候选列表 + 手填框 + 时间），422 落在表格那边等于落在 480px 抽屉的视口之外。
+                           🔴 **部分失败的提示必须由这里渲染出来，不能靠主 swap 送进来**：
+                              htmx 是**先 oob、后主 swap**，而主 swap 的目标是发请求时就捕获的**节点引用**。
+                              afterAction 的 oob 把整个 .drawer-body 换掉之后，这个 div 已经脱离文档，
+                              再往它写内容等于写进一个游离节点 —— 界面上一个字都不会出现。
+                              （总失败那条路没这个问题：它抛 422，advice 按 HX-Target 头 retarget，
+                              发生在任何 oob 之前。） */-->
+                    <div id="utag-assign-err" class="lst-inline-error" aria-live="polite"
+                         th:text="${partialError}"></div>
+                    <button type="submit" class="btn btn-primary" th:text="#{admin.utags.assign}">分配</button>
+                </form>
+            </details>
+        </section>
+
+        <p class="hint" th:unless="${canManage}"
+           th:text="#{admin.v130.err.forbidden(#{perm.user.tag_manage})}">需要「编辑用户标签」权限</p>
+    </th:block>
+
+    <!--/* 「未修改保存禁用」：htmx 每次 swap 进来都会重新执行，不需要额外的 re-init 钩子 */-->
+    <script>
+        (function () {
+            var form = document.querySelector('[data-utag-edit-form]');
+            if (!form) { return; }
+            var save = form.querySelector('[data-utag-save]');
+            if (!save) { return; }
+            var initial = new FormData(form);
+            function dirty() {
+                var now = new FormData(form);
+                var keys = ['name', 'description'];
+                for (var i = 0; i < keys.length; i++) {
+                    if (String(now.get(keys[i])) !== String(initial.get(keys[i]))) { return true; }
+                }
+                var f = form.querySelector('input[type=file]');
+                return !!(f && f.files && f.files.length);
+            }
+            function sync() { save.disabled = !dirty(); }
+            form.addEventListener('input', sync);
+            form.addEventListener('change', sync);
+            sync();   // ← 初始禁用在这里加上（HTML 里刻意不写 disabled，见按钮上的说明）
+        })();
+    </script>
+</div>
+
+<!--/* 新建标签（AC4）：字段与 POST /admin/user-tags 的参数逐字不变；multipart（图标本地上传）。
+       🔴 标签码不出现在表单里 —— 2026-09-02 起服务层自动生成 ut-<id>，运营手填会互相撞码。 */-->
+<div th:fragment="createForm" class="tag-create" id="utag-create">
+    <!--/* ⚠️ 只挂 hx-post，不再写 th:action/method/enctype（与编辑 / 下线 / 分配三张表单一致）：
+           这张表单只存在于 htmx 载进来的抽屉里，JS 失效时它根本渲染不出来，那半套「原生降级」
+           唯一的效果是没有 CSRF 隐藏域、真走原生提交时得到一个 403。 */-->
+    <form th:attr="hx-post=@{/admin/user-tags}" hx-encoding="multipart/form-data"
+          hx-target="#utag-drawer-err" hx-swap="innerHTML" id="utagCreateForm">
+        <h3 th:text="#{admin.utags.newTag}">新建标签</h3>
+        <label class="field field-full">
+            <span th:text="#{admin.utags.name}">名称</span>
+            <input type="text" name="name" class="inp field-full" required/>
+        </label>
+        <p class="hint" data-notice="utag-name-hint" th:text="#{admin.utags.nameHint}">用户在标签上看到的字。</p>
+
+        <label class="field field-full">
+            <span th:text="#{admin.utags.description}">说明文案</span>
+            <input type="text" name="description" class="inp field-full" maxlength="140" required/>
+        </label>
+
+        <!--/* 🔴 新建时图标必传：2026-09-02 起上传的图就是用户看到的整枚标签，没有图就没有标签 */-->
+        <label class="field field-full">
+            <span th:text="#{admin.utags.icon}">图标</span>
+            <input type="file" name="iconFile" accept="image/png,image/webp" required/>
+        </label>
+        <!--/* 🔴 尺寸规范必须常驻在上传控件旁：不写的后果不是填错一次，而是每换一个人就问一遍 */-->
+        <p class="hint" data-notice="tag-icon-spec" th:text="${iconSpec}">
+            PNG 或 WebP，必须透明底；圆形 / 异形四角须透明；文件 ≤ 512 KB。
+        </p>
+
+        <!--/* ⚠️ err 槽放在提交钮**正上方**：422 落在表单顶部时早已滚出 480px 抽屉的视口 */-->
+        <div id="utag-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+        <button type="submit" class="btn btn-primary" th:text="#{admin.utags.save}">保存</button>
+    </form>
+</div>
+
+<!--/* 新建成功：抽屉体不在这里换 —— HX-Trigger admin:drawer-open 会带着新标签的抽屉 URL
+       让 admin-drawer.js 走正常的 open 流程（这样地址栏的 ?open= 与「当前对象」才对得上）。 */-->
+<th:block th:fragment="created">
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+</th:block>
+
+<!--/* 处置成功：抽屉体 oob + toast；列表由 HX-Trigger admin:user-tag-list-refresh 整表重拉
+       （「生效中分配数」与摘要条都要跟着变） */-->
+<th:block th:fragment="afterAction">
+    <div id="utag-drawer-body-oob" hx-swap-oob="innerHTML:#utag-drawer .drawer-body">
+        <div th:replace="~{admin/fragments/drawer-user-tag :: drawer}"></div>
+    </div>
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+</th:block>
+</body>
+</html>

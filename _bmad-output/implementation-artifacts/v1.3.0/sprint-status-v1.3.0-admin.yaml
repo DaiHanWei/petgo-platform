@@ -100,7 +100,7 @@ development_status:
   # ---- Epic 8: 用户组与订单资金组页面重构 ----
   epic-8: in-progress
   8-1-b7-用户列表-五页签详情抽屉: review   # B7 用户列表 + 五页签详情抽屉
-  8-2-b8-用户标签: ready-for-dev   # B8 用户标签（与内容标签同构）
+  8-2-b8-用户标签: review   # B8 用户标签（与内容标签同构）
   8-3-b9-运营发布身份: ready-for-dev   # B9 运营发布身份（双区块）
   8-4-b10-兽医订单-b11-ai-订单: ready-for-dev   # B10 兽医订单 + B11 AI 订单（抽屉吸收详情页）
   8-5-b12-支付记录-b13-兽医月结-b14-红色超额: ready-for-dev   # B12 支付记录 + B13 兽医月结 + B14 红色超额

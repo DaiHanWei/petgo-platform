@@ -57,16 +57,31 @@ public interface UserTagAssignmentRepository extends JpaRepository<UserTagAssign
     List<UserTagAssignment> findByUserIdOrderByStartsAtDesc(long userId);
 
     /**
-     * 某用户当前**生效中**的分配数（Story 11.3 的"第 4 个"提示用）。
+     * 后台抽屉页签二（V1.3.0 Story 8.2 · AC3）：某标签的分配记录，**含已到期**，分页。
      *
-     * <p>⚠️ 这问的是「有几个在生效」，**不是**「会展示哪几个」——
-     * 后者是 {@code UserTagQueryService.findVisibleTags} 的职责，不要在这里重造。
+     * <p>⚠️ 与 {@link #findActiveByTag} 的差别就是「不只看生效中的」——
+     * AC3 要的正是「生效中 / 待生效 / 已到期」并列：只列生效中的话，
+     * 运营看不出「上周那次分配到底到期了没」，只会看到它凭空消失。
+     */
+    org.springframework.data.domain.Page<UserTagAssignment> findByTagId(long tagId,
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * 一批用户各自当前**生效中**的分配数（V1.3.0 Story 8.2：选择器里就地预告「满 3 会顶掉最早的」）。
+     *
+     * <p>🔴 必须是批量：候选表一页 30 行，逐行问一次就是 30 条查询。
+     * 口径与 {@link #findActiveByTag} 逐字一致（半开区间，{@code endsAt} 空 = 永久）。
+     *
+     * @return 每行 {@code [userId, count]}；**没有任何生效分配的用户不会出现在结果里**
      */
     @Query("""
-            select count(a) from UserTagAssignment a
-             where a.userId = :userId
+            select a.userId, count(a) from UserTagAssignment a
+             where a.userId in :userIds
                and a.startsAt <= :now
                and (a.endsAt is null or :now < a.endsAt)
+             group by a.userId
             """)
-    long countActiveByUser(@Param("userId") long userId, @Param("now") Instant now);
+    List<Object[]> countActiveByUsers(@Param("userIds") Collection<Long> userIds,
+            @Param("now") Instant now);
+
 }

@@ -206,9 +206,14 @@ class AdminUserTagIntegrationTest extends ApiIntegrationTest {
         assertThat(html).as("须说明记录保留但不展示").contains("记录保留");
     }
 
-    /** 按用户看且该用户已达上限时，就地再提示一次。 */
+    /**
+     * 旧书签 {@code ?userId=}（V1.3.0 Story 8.2 · AC1）：「按用户看」这个维度随筛选区块一并退役。
+     *
+     * <p>🔴 **不静默忽略**：静默忽略的话运营看到的是一张「他要找的那个人不在里面」的全量标签表，
+     * 会以为数据没了。所以钉的是「说清楚它去哪了」。
+     */
     @Test
-    void perUserViewWarnsWhenTheCapIsAlreadyReached() throws Exception {
+    void theRetiredPerUserViewExplainsWhereItWent() throws Exception {
         User u = newUser();
         for (int i = 0; i < 3; i++) {
             UserTag t = tag("HIT");
@@ -218,7 +223,29 @@ class AdminUserTagIntegrationTest extends ApiIntegrationTest {
                         .param("userId", String.valueOf(u.getId())).param("lang", "zh_CN"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        assertThat(html).contains("已达");
+        assertThat(html).as("给出去向说明，且带上他查的那个用户 id")
+                .contains("data-notice=\"utags-legacy-user\"")
+                .contains(String.valueOf(u.getId()));
+    }
+
+    /**
+     * 旧书签 {@code ?tagId=}（V1.3.0 Story 8.2 · AC1）：原意就是「看这个标签的分配记录」，
+     * 等价于新的 {@code ?open=} + 分配记录页签，直接把抽屉深链渲染出来。
+     */
+    @Test
+    void theLegacyTagIdBookmarkOpensThatTagsAssignmentTab() throws Exception {
+        UserTag t = tag("LEGACY");
+        String html = mvc.perform(get("/admin/user-tags").with(authentication(superAdminAuth()))
+                        .param("tagId", String.valueOf(t.getId())).param("lang", "zh_CN"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        // 🔴 判据是 data-drawer-open + data-drawer-autoopen，不是 data-drawer-deeplink：
+        //    deeplink 那条兜底分支**只在 URL 带 ?open= 时才跑**，而旧书签上没有 ?open=，
+        //    写成 deeplink 的话页面上标记在、抽屉却一声不响不开。
+        assertThat(html).as("旧书签自动打开该标签抽屉并停在分配记录页签")
+                .contains("data-drawer-open=\"/admin/user-tags/" + t.getId()
+                        + "/drawer?tab=assignments\"")
+                .contains("data-drawer-autoopen=\"true\"");
     }
 
     // ——————————————————— 标签增改下线 ———————————————————
@@ -320,12 +347,23 @@ class AdminUserTagIntegrationTest extends ApiIntegrationTest {
         assertThat(saved.getStartsAt()).isEqualTo(Instant.parse("2026-11-15T03:00:00Z"));
     }
 
+    /**
+     * 🛡 时间输入框旁必须标 WIB，并把**此刻的 WIB** 摆出来（bug 20260828）。
+     *
+     * <p>⚠️ V1.3.0 Story 8.2 起分配表单在**抽屉的分配记录页签**里，不在整页上 ——
+     * 继续对整页断言 "WIB" 会因为页面上别处偶然出现这三个字母而假绿。
+     */
     @Test
-    void pageLabelsTheTimezone() throws Exception {
-        String html = mvc.perform(get("/admin/user-tags").with(authentication(superAdminAuth()))
-                        .param("lang", "zh_CN"))
+    void theAssignFormLabelsTheTimezone() throws Exception {
+        UserTag t = tag("TZ");
+        String html = mvc.perform(get("/admin/user-tags/" + t.getId() + "/drawer")
+                        .param("tab", "assignments").param("lang", "zh_CN")
+                        .header("HX-Request", "true").with(authentication(superAdminAuth())))
+                .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        assertThat(html).contains("WIB");
+        assertThat(html).as("输入框旁标 WIB").contains("WIB");
+        assertThat(html).as("并把此刻的 WIB 直接摆出来，不要求任何人心算时差")
+                .contains("data-notice=\"wib-now\"");
     }
 
     // ——————————————————— 🛡 双权限码 ———————————————————

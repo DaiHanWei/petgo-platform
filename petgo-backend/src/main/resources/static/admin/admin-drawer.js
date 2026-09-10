@@ -107,8 +107,15 @@
         var auto = document.querySelector('[data-drawer-open][data-drawer-autoopen]'); // ?create=1 深链（非 htmx 访问新建表单 URL 的落点）
         if (auto) {
             open(auto.dataset.drawerOpen, { res: auto.dataset.drawerRes });
-            try { var u = new URL(window.location.href); u.searchParams.delete('create'); history.replaceState(history.state, '', u.toString()); } catch (e) { /* 忽略 */ }
-            return; // 打开后立即清掉 ?create=，关抽屉后 F5 不再自动重开（复审 #11）
+            // 打开后立即清掉触发它的那个查询参数，否则关掉抽屉再 F5 / 回退它又自己弹出来（7.4 复审 #11）。
+            // 默认清 create（?create=1 新建深链）；调用方可用 data-drawer-autoclear 指定别的
+            // （8.2：用户标签的旧书签 ?tagId= 复用这条通道，要清的是 tagId）。
+            try {
+                var u = new URL(window.location.href);
+                u.searchParams.delete(auto.dataset.drawerAutoclear || 'create');
+                history.replaceState(history.state, '', u.toString());
+            } catch (e) { /* 忽略 */ }
+            return;
         }
         try {
             var id = new URLSearchParams(window.location.search).get('open');

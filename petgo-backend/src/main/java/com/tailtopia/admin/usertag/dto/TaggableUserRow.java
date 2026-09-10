@@ -14,6 +14,13 @@ package com.tailtopia.admin.usertag.dto;
  * @param name        展示名；昵称为空时回落 displayName，仍为空给「(未设昵称)」
  * @param deactivated 已停用（封号）
  * @param virtualAccount 虚拟/种子账号 —— 给它挂标签会显示在种子内容的作者位上
+ * @param activeTagCount 该用户**当前生效中**的标签数（V1.3.0 Story 8.2）。
+ *
+ *        <p>🔴 这是「满 3 会顶掉最早的那个」这条预告唯一的依据，而预告只有在**选人的那一刻**
+ *        才有用：分配完再说，运营已经不知道顶掉的是谁了。
+ *        ⚠️ 问的是「有几个在生效」，**不是**「会展示哪几个」—— 后者是
+ *        {@code UserTagQueryService.findVisibleTags} 的职责，不要在这里重造。
  */
-public record TaggableUserRow(long id, String name, boolean deactivated, boolean virtualAccount) {
+public record TaggableUserRow(long id, String name, boolean deactivated, boolean virtualAccount,
+        long activeTagCount) {
 }

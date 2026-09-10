@@ -55,9 +55,12 @@ class AdminTagEditKeepsIconTest {
     private AdminUserTagService svc(UserTag tag) {
         UserTagRepository tags = mock(UserTagRepository.class);
         when(tags.findById(1L)).thenReturn(Optional.of(tag));
+        // V1.3.0 Story 8.2：新增两个依赖（分配记录的「操作人」列靠审计反查），本类不测它们。
         return new AdminUserTagService(tags, mock(UserTagAssignmentRepository.class),
                 mock(com.tailtopia.auth.repository.UserRepository.class),
-                mock(UserTagQueryService.class), mock(AdminAuditService.class));
+                mock(UserTagQueryService.class), mock(AdminAuditService.class),
+                mock(com.tailtopia.admin.audit.repository.AdminAuditLogRepository.class),
+                mock(com.tailtopia.admin.account.repository.AdminAccountRepository.class));
     }
 
     @Test
