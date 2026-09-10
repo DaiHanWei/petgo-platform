@@ -33,7 +33,10 @@ class HealthMilestoneCheckInRefusedTest {
     @Test
     void checkInOnHealthMilestonesIsRejected_beforeTouchingDb() {
         MilestoneCheckInService svc = service();
-        for (String code : List.of("C-M3", "C-M4", "C-M5", "C-M9", "D-M3", "G-M9")) {
+        // ⚠️ "G-M9" 已从本清单移除：通用清单**根本没有 M9 这个节点**，拿它测护栏等于在测一个
+        //    不存在的 code（旧实现按后缀判才会"命中"）。通用宠物真正的健康类是 G-M1 / G-M2。
+        for (String code : List.of("C-M3", "C-M4", "C-M5", "C-M9", "D-M3", "D-M9",
+                "G-M1", "G-M2")) {
             assertThatThrownBy(() -> svc.checkIn(7L, code, 1L))
                     .as("%s 只能自动点亮，打卡必须被显式拒绝（NFR-11）", code)
                     .isInstanceOf(AppException.class)
@@ -51,10 +54,30 @@ class HealthMilestoneCheckInRefusedTest {
                 .hasMessageNotContaining("自动点亮");
     }
 
+    /**
+     * 🔴 反向断言（V1.3.0 Story 1.2）：通用清单的 G-M3「陪伴满 30 天」/ G-M4「记录满 10 条」
+     * 与健康无关，**必须仍能打卡** —— 按后缀判会把它们误伤成"只能自动点亮"，等于凭空
+     * 砍掉通用宠物两条节点的唯一手动路径。
+     */
+    @Test
+    void genericPetNonHealthMilestonesStillPassTheGuard() {
+        MilestoneCheckInService svc = service();
+        for (String code : List.of("G-M3", "G-M4")) {
+            assertThatThrownBy(() -> svc.checkIn(7L, code, 1L))
+                    .as("%s 不是健康类，不该被护栏拦下", code)
+                    .isInstanceOf(AppException.class)
+                    .hasMessageNotContaining("自动点亮");
+        }
+    }
+
     @Test
     void guardUsesTheSingleSharedDefinition() {
-        // 集合定义只有一处（Story 5.1 抽出）：护栏、埋点、分类都引用它。
-        assertThat(HealthMilestones.SUFFIXES).containsExactlyInAnyOrder("M3", "M4", "M5", "M9");
+        // 集合定义只有一处（Story 5.1 抽出，V1.3.0 Story 1.2 改按完整 code）：
+        // 护栏、埋点、时间线分类、前端门控都引用它。
+        assertThat(HealthMilestones.CODES).containsExactlyInAnyOrder(
+                "C-M3", "C-M4", "C-M5", "C-M9",
+                "D-M3", "D-M4", "D-M5", "D-M9",
+                "G-M1", "G-M2");
         // 护栏方法确实存在于 checkIn 路径上（改名/删除会让本断言红）。
         List<Method> checkIn = Arrays.stream(MilestoneCheckInService.class.getDeclaredMethods())
                 .filter(m -> m.getName().equals("checkIn")).toList();

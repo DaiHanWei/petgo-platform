@@ -55,14 +55,17 @@ class MilestoneAnalyticsTest {
         /**
          * V1.3.0 Story 1.1 · AC6：「第一次看兽医」在通用清单是 <b>G-M1</b>，不是 M5。
          *
-         * <p>按后缀判时 G-M1 命中不了 consult，等 Story 1.2 把它纳入健康类集合，就会落进
-         * else 被标成 {@code health_record} —— 而它根本不是健康记录点亮的。这条断言把口径提前钉死。
+         * <p>按后缀判时 G-M1 命中不了 consult，而 Story 1.2 已把它纳入健康类集合 —— 若不先认
+         * consult，它就会落进 else 被标成 {@code health_record}，而它根本不是健康记录点亮的。
          */
         @Test
         @DisplayName("通用宠物：G-M1 走 consult，不得被误标为 health_record")
         void genericPetVetVisitMapsToConsult() {
             assertThat(MilestoneAnalyticsPath.of("G-M1", MilestoneCompletionSource.SYSTEM_AUTO))
                     .isEqualTo("consult");
+            // G-M2 由 VACCINE 健康记录点亮 —— 它才是 health_record。
+            assertThat(MilestoneAnalyticsPath.of("G-M2", MilestoneCompletionSource.SYSTEM_AUTO))
+                    .isEqualTo("health_record");
         }
 
         @Test

@@ -209,8 +209,14 @@ public final class MilestoneCatalog {
                 q.s(SYSTEM_AUTO, "第一次被评论", "Komentar pertama"),              // G-S7
                 q.s(SYSTEM_AUTO, "第一次收到点赞", "Suka pertama"),            // G-S8
                 // M 级（4）
-                q.m(USER_CHECKIN, "第一次看兽医", "Ke dokter hewan pertama"),             // G-M1
-                q.m(USER_CHECKIN, "完成第一次健康检查 / 疫苗", "Cek kesehatan pertama"), // G-M2
+                // 🔴 V1.3.0 Story 1.2（AD-A5）：这两条由打卡类改为自动达成类。FR-86 当初按后缀
+                // M3/M4/M5/M9 取消健康类打卡，通用清单的这两个后缀（M1/M2）不命中 —— 于是同一件事
+                // 猫狗要真做才点亮、其他宠物点一下就行。属规则漏网，非有意的物种差异。
+                // G-M1 ← 真人兽医咨询结束；G-M2 ← VACCINE 类型健康记录（决策 A-1：只认疫苗，
+                // 不新增「体检」类型）。⚠️ 改这里**必须**同时有存量 pet_milestones.trigger_type 迁移，
+                // 否则只对新建档宠物生效（assignRoster 有 existsByPetProfileId 短路，永不回改）。
+                q.m(SYSTEM_AUTO, "第一次看兽医", "Ke dokter hewan pertama"),             // G-M1
+                q.m(SYSTEM_AUTO, "完成第一次健康检查 / 疫苗", "Cek kesehatan pertama"), // G-M2
                 q.m(SYSTEM_AUTO, "陪伴满 30 天", "30 hari bersama"),              // G-M3
                 q.m(SYSTEM_AUTO, "成长日历记录满 10 条", "10 catatan tumbuh kembang"),       // G-M4
                 // L 级（3）

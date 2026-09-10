@@ -68,9 +68,9 @@ public final class MilestoneAutoCompleteMap {
         put(t, MilestoneAutoEvent.HEALTH_RECORD_VACCINE, "C-M3", "D-M3", "G-M2");
         put(t, MilestoneAutoEvent.HEALTH_RECORD_DEWORM, "C-M4", "D-M4", null);
         put(t, MilestoneAutoEvent.HEALTH_RECORD_NEUTER, "C-M9", "D-M9", null);
-        // 真人问诊结束：猫狗 M5「第一次看兽医」。通用清单的对应节点是 G-M1，但它当前仍是打卡类，
-        // 接入属 Story 1.2（本 story 只改寻址、不改触发源），故此处维持「通用不点亮」的既有行为。
-        put(t, MilestoneAutoEvent.CONSULT_CLOSED, "C-M5", "D-M5", null);
+        // 真人问诊结束 →「第一次看兽医」：猫狗 M5，通用宠物 G-M1（Story 1.2 接入，AD-A5.2）。
+        // ⚠️ AI 分诊不发 ConsultClosedEvent（模块隔离），无需也不要再加一层 AI 判断分支。
+        put(t, MilestoneAutoEvent.CONSULT_CLOSED, "C-M5", "D-M5", "G-M1");
         // 陪伴满 30 天：通用清单在 G-M3（定时扫描原有的 OTHER 特判是对的，在此固化下来）。
         put(t, MilestoneAutoEvent.COMPANION_30_DAYS, "C-M8", "D-M8", "G-M3");
         // L 级日期门控三条，三张清单位置恰好对齐。

@@ -117,11 +117,19 @@ class MilestoneAutoCompleteMapTest {
             assertThat(code(PetType.OTHER, MilestoneAutoEvent.COMPANION_30_DAYS)).isEqualTo("G-M3");
         }
 
-        /** 通用清单无「记录满 30 条」；真人问诊的对应节点 G-M1 接入属 Story 1.2，此刻显式为空。 */
+        /** 通用清单无「记录满 30 条」（G-L5 不存在）。 */
         @Test
         void nodesAbsentFromGenericCatalog() {
             assertThat(code(PetType.OTHER, MilestoneAutoEvent.GROWTH_MOMENT_30)).isNull();
-            assertThat(code(PetType.OTHER, MilestoneAutoEvent.CONSULT_CLOSED)).isNull();
+        }
+
+        /**
+         * V1.3.0 Story 1.2（AD-A5.2）：真人问诊结束 → 通用宠物点亮 <b>G-M1</b>，不是 M5
+         * （通用清单没有 M5）。AI 分诊不发 {@code ConsultClosedEvent}，模块隔离天然满足。
+         */
+        @Test
+        void consultClosedLightsUpGenericVetVisitNode() {
+            assertThat(code(PetType.OTHER, MilestoneAutoEvent.CONSULT_CLOSED)).isEqualTo("G-M1");
         }
     }
 

@@ -1,5 +1,6 @@
 package com.tailtopia.profile.service;
 
+import com.tailtopia.profile.domain.HealthMilestones;
 import com.tailtopia.profile.dto.TimelineItemResponse;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -44,6 +45,14 @@ public final class TimelineClassifier {
     }
 
     /**
+     * 「第一次保存兽医问诊结论」三系 code —— 本集合相对 {@link HealthMilestones#CODES} 多出来的那部分。
+     *
+     * <p>它属健康类是**展示规则**（当天有健康条目就由胶囊承载），不是功能规则（S4 从来可以打卡），
+     * 所以进不了集合 ①。见下方 {@link #HEALTH_MILESTONE_CODES} 的说明。
+     */
+    private static final Set<String> ARCHIVE_MILESTONE_CODES = Set.of("C-S4", "D-S4", "G-S4");
+
+    /**
      * 健康类里程碑的**完整 code**（V1.3.0 Story 1.1 · AD-A4.5 改：原为后缀集合）。
      *
      * <p>只有这些会被「当天已有健康条目」抑制（由类④ 胶囊承载）；其余里程碑照常出 banner。
@@ -53,19 +62,19 @@ public final class TimelineClassifier {
      * <b>G-M4「记录满 10 条」</b>——跟健康毫无关系。按后缀判，通用宠物在录了健康记录的当天，
      * 「陪伴满 30 天」和「记录满 10 条」的 banner 会被静默吞掉。
      *
-     * <p>{@code S4}「第一次保存兽医问诊结论」三张清单位置一致，通用宠物 {@code G-S4} 确为健康类，
-     * <b>保留</b>（AD-A4.5 明示）。
-     *
-     * <p>⚠️ 本集合是 AD-A4.6 的第 ③ 份，与后端「哪些是健康类」（{@code HealthMilestones}，第 ①
-     * 份、唯一事实源）**用途不同**：① 管「禁止打卡」，本集合管「时间线展示抑制」，所以本集合多含
-     * {@code S4}。两者刻意分开，不要合并，但增减健康节点时要一起过一遍。
+     * <p><b>本集合 = 集合 ①（{@link HealthMilestones#CODES}）+ 三条 S4</b>（AD-A4.6：③ 与 ① 对齐、
+     * 额外含 S4）。刻意**派生**而不是手抄一份：两份手维护的名单正是本次一连串错误的来源。
+     * 派生也保住了两者的用途区分 —— ① 管「禁止打卡」，本集合管「时间线展示抑制」，
+     * 差集永远只有 S4 这一项，一眼看得出来。
      */
-    static final Set<String> HEALTH_MILESTONE_CODES = Set.of(
-            "C-M3", "C-M4", "C-M5", "C-M9", "C-S4",
-            "D-M3", "D-M4", "D-M5", "D-M9", "D-S4",
-            // 通用清单目前只有 G-S4 属健康类：G-M1「第一次看兽医」/ G-M2「第一次健康检查」当前仍是
-            // 打卡类，改自动达成属 Story 1.2，届时随第 ① 份集合一并纳入这里。
-            "G-S4");
+    static final Set<String> HEALTH_MILESTONE_CODES = union(
+            HealthMilestones.CODES, ARCHIVE_MILESTONE_CODES);
+
+    private static Set<String> union(Set<String> a, Set<String> b) {
+        Set<String> out = new HashSet<>(a);
+        out.addAll(b);
+        return Set.copyOf(out);
+    }
 
     /**
      * 分类并归并成一份条目列表（未排序，排序由调用方按全局序统一处理）。
