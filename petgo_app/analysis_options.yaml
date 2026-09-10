@@ -15,6 +15,13 @@ analyzer:
     - "lib/l10n/app_localizations*.dart"
     # vendor 的第三方插件源码不纳入 lint（tencent_cloud_chat_push 打补丁副本，见其 VENDORED.md）
     - "third_party/**"
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
 
 linter:
   rules:
