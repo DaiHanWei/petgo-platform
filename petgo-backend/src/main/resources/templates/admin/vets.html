@@ -107,28 +107,38 @@
                 <label class="field"><span th:text="#{admin.vets.filter.search}">搜索姓名/邮箱</span>
                     <input type="search" name="q" class="inp" th:value="${q}"/>
                 </label>
-                <!--/* 评分排序 + 评价时间段：原「评分查看」总览页的两样东西并进来（AC3 / D-46）。
+                <!--/* 评分排序 + 问诊时间段：原「评分查看」总览页的两样东西并进来（AC3 / D-46）。
+                       🛡 整块随 rating.view 显隐 —— 服务端也不装那份数据（不是这里藏起来）。
                        ⚠️ 排序**默认为空 = 保持原顺序**：默认按均分重排会让运营每次打开列表都发现
-                          行序变了，而他找人靠的是记住位置。 */-->
+                          行序变了，而他找人靠的是记住位置。
+                       ⚠️ 排序值用 snake_case（`avg_desc` …）：这是服务层一直以来的常量，
+                          也是退役那页发出去的链接里的拼法（运营存了书签）。 */-->
+                <th:block th:if="${canSeeRatings}">
                 <label class="field"><span th:text="#{admin.v130.vets.filter.sort}">排序</span>
                     <select name="sort" class="sel">
                         <option value="" th:text="#{admin.v130.vets.filter.sortDefault}">默认</option>
-                        <option value="avgDesc" th:selected="${sort == 'avgDesc'}"
+                        <option value="avg_desc" th:selected="${sort == 'avg_desc' or sort == 'avgDesc'}"
                                 th:text="#{admin.ratingOverview.sort.avgDesc}">均分高→低</option>
-                        <option value="avgAsc" th:selected="${sort == 'avgAsc'}"
+                        <option value="avg_asc" th:selected="${sort == 'avg_asc' or sort == 'avgAsc'}"
                                 th:text="#{admin.ratingOverview.sort.avgAsc}">均分低→高</option>
-                        <option value="volumeDesc" th:selected="${sort == 'volumeDesc'}"
+                        <option value="volume_desc" th:selected="${sort == 'volume_desc' or sort == 'volumeDesc'}"
                                 th:text="#{admin.ratingOverview.sort.volumeDesc}">问诊量多→少</option>
                     </select>
                 </label>
-                <!--/* 🔴 这两个日期按 **UTC** 日界算（从退役的总览页原样搬过来的口径），
-                       与本页其它时间的 WIB **不一样** —— 不标注的话，运营会拿它跟「最后在线」
-                       的 WIB 时间对，然后发现差 7 小时。 */-->
-                <label class="field"><span th:text="#{admin.v130.vets.filter.ratedRange}">评价时间段（UTC）</span>
+                <!--/* 🔴 两处口径必须写在标签上，否则这个筛选会被读成另一个意思：
+                       ① 按 **UTC** 日界算（从退役的总览页原样搬来），与本页其它时间的 WIB 差 7 小时；
+                       ② 筛的是**问诊发生的时间**（会话 created_at），不是「评价写下的时间」——
+                          9/1 的问诊 9/20 才补评，按「9/15–9/30」查是查不到它的；
+                       ③ 它**只影响评分那三个数**，不减少行。不说明的话，运营设完发现「一行都没少」，
+                          会以为筛选坏了。 */-->
+                <label class="field"><span th:text="#{admin.v130.vets.filter.ratedRange}">问诊时间段（UTC）</span>
                     <input type="date" name="from" class="inp" th:value="${from}"/>
                     <input type="date" name="to" class="inp" th:value="${to}"/>
                     <span class="muted">UTC</span>
                 </label>
+                <p class="hint" data-notice="vets-rating-range-scope"
+                   th:text="#{admin.v130.vets.filter.ratedRangeNote}">只影响评分列，不减少行。</p>
+                </th:block>
                 <!--/* 🔴 关键词走**显式「查询」钮**，不再 keyup 即搜：边打字边发请求会在
                        「王」这一个字上就把表刷成几十行，运营还没打完就已经看花了。 */-->
                 <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.payments.btn.search}">查询</button>

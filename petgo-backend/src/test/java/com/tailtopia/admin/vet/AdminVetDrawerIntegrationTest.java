@@ -114,7 +114,7 @@ class AdminVetDrawerIntegrationTest extends ApiIntegrationTest {
     // ——————————————————— AC2 / AC3 抽屉 ———————————————————
 
     @Test
-    void theDrawerHasFourTabsWithQualAndRatingAsPlaceholders() throws Exception {
+    void theDrawerHasFourTabsWithQualAndRatingLazyLoaded() throws Exception {
         VetAccount v = seedVet();
         String html = body(mvc.perform(get("/admin/vets/" + v.getId() + "/drawer")
                         .param("lang", "zh_CN").header("HX-Request", "true")
@@ -125,9 +125,10 @@ class AdminVetDrawerIntegrationTest extends ApiIntegrationTest {
         assertThat(html).contains("id=\"vet-drawer-panel\"").contains("id=\"vet-drawer-err\"")
                 .contains("data-vtab=\"profile\"").contains("data-vtab=\"qual\"")
                 .contains("data-vtab=\"rating\"").contains("data-vtab=\"account\"");
-        // 🔴 占位必须说明「什么时候会有」：空白页签会被读成「这个兽医没有资质记录」。
-        assertThat(html).contains("data-notice=\"vet-qual-placeholder\"")
-                .contains("data-notice=\"vet-rating-placeholder\"");
+        // V1.3.0 Story 9.1b：两个页签由占位换成**懒加载槽**（占位文案随之删除）。
+        // 🔴 槽位必须说明「正在做什么」：一块空白会被读成「这个兽医没有资质记录」。
+        assertThat(html).contains("data-notice=\"vet-qual-loading\"")
+                .contains("data-notice=\"vet-rating-loading\"");
         // 资料页签吸收了 vet-online 的两项。
         assertThat(html).contains("data-section=\"vet-presence\"")
                 .contains("data-notice=\"vet-presence-explicit\"");

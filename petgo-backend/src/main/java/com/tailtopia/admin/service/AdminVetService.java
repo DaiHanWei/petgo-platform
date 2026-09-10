@@ -93,6 +93,19 @@ public class AdminVetService {
     @Transactional(readOnly = true)
     public List<VetAdminView> list(VetListFilter rawFilter, String sort,
             java.time.Instant from, java.time.Instant to) {
+        return list(rawFilter, sort, from, to, true);
+    }
+
+    /**
+     * @param withRatings 是否装配评分三个数并允许按评分排序。
+     *        🛡 **false = 调用方没有 {@code rating.view}**：那一份数据在退役前是
+     *        {@code GET /admin/ratings}（`rating.view`）独占的，并进这一页之后如果只挡
+     *        `vet.view`，等于把整张评分总览白送给只有兽医查看权的人 ——
+     *        「安全规则层只升不降」。所以不是在模板里藏起来，而是**服务端根本不装**。
+     */
+    @Transactional(readOnly = true)
+    public List<VetAdminView> list(VetListFilter rawFilter, String sort,
+            java.time.Instant from, java.time.Instant to, boolean withRatings) {
         VetListFilter f = (rawFilter == null ? VetListFilter.none() : rawFilter).normalized();
         String qLower = f.q() == null ? null : f.q().toLowerCase(Locale.ROOT);
         // 🔴 在线态与「最后在线」都**一次取全集**（V1.3.0 Story 9.1a）：这两列跟着每一行渲染，
@@ -101,17 +114,23 @@ public class AdminVetService {
         //    只有 BUSY 需要再取一次忙碌集合。
         java.util.Map<Long, java.time.Instant> lastSeen = presence.lastSeenAll();
         java.util.Set<Long> busy = presence.busyAll();
-        // 🔴 评分三个数（均分 / 已评 / 总量）也**一次取全集**：原来每行一次 ratingQuery.forVet，
-        //    又一处 N+1。这一份还顺带带上「评价时间段」筛选与排序 ——
-        //    与退役的评分总览页**同一个服务方法**，所以两处的数不会分叉。
+        // 评分列。
+        // 🔴 **只在真的要用时才走总览**：`AdminRatingService.overview` 为每个兽医拉全部 CLOSED 会话、
+        //    再逐会话查评分（那个类自己的注释写着「低频总览页可接受」）。把它挂到每次列表渲染上，
+        //    查询量就从 O(兽医数) 变成 O(全部已结束会话数) —— 而这一页的三个下拉是 autosubmit，
+        //    每变一次就重拉一遍。所以：给了排序或时间窗（= 运营在做评分这件事）才走总览，
+        //    否则沿用原来「每行一次 forVet」的便宜路径，只出均分。
+        boolean ratingQueryMode = withRatings
+                && (sort != null && !sort.isBlank() || from != null || to != null);
         List<com.tailtopia.admin.rating.dto.VetRatingOverviewRow> ratingRows =
-                ratingService.overview(sort, from, to);
+                ratingQueryMode ? ratingService.overview(sort, from, to) : List.of();
         java.util.Map<Long, com.tailtopia.admin.rating.dto.VetRatingOverviewRow> ratingByVet =
                 ratingRows.stream().collect(java.util.stream.Collectors.toMap(
                         com.tailtopia.admin.rating.dto.VetRatingOverviewRow::vetId, r -> r,
                         (a, b) -> a, java.util.LinkedHashMap::new));
         var rows = vetAccounts.listAll().stream()
-                .map(v -> assemble(v, lastSeen, busy, ratingByVet.get(v.getId())))
+                .map(v -> assemble(v, lastSeen, busy, ratingByVet.get(v.getId()),
+                        withRatings, ratingQueryMode))
                 .filter(v -> f.accountStatus() == null || f.accountStatus().equals(v.status()))
                 .filter(v -> f.qualStatus() == null || f.qualStatus().equals(v.qualStatus()))
                 .filter(v -> matchesOnline(f.online(), v.presence()))
@@ -119,7 +138,7 @@ public class AdminVetService {
                         || (v.displayName() != null && v.displayName().toLowerCase(Locale.ROOT).contains(qLower))
                         || (v.username() != null && v.username().toLowerCase(Locale.ROOT).contains(qLower)))
                 .toList();
-        if (sort == null || sort.isBlank()) {
+        if (!ratingQueryMode || sort == null || sort.isBlank()) {
             return rows;
         }
         // 排序口径**直接沿用总览的那一份**（overview 返回的就是排好序的）：在这里另写一个
@@ -133,19 +152,31 @@ public class AdminVetService {
     }
 
     private VetAdminView assemble(VetAccount v, java.util.Map<Long, java.time.Instant> lastSeen,
-            java.util.Set<Long> busy, com.tailtopia.admin.rating.dto.VetRatingOverviewRow rating) {
+            java.util.Set<Long> busy, com.tailtopia.admin.rating.dto.VetRatingOverviewRow rating,
+            boolean withRatings, boolean ratingQueryMode) {
         String qual = vetQualifications.getStatus(v.getId()).name();
         // ⚠️ 口径必须与 VetPresenceService.statusOf 逐字一致：在集合里 = 在线，
         //    再看忙碌集合分 BUSY / ONLINE；不在 = OFFLINE。写歪一点，列表与抽屉就会各说各话。
         String pres = (lastSeen.containsKey(v.getId())
                 ? (busy.contains(v.getId()) ? VetPresenceStatus.BUSY : VetPresenceStatus.ONLINE)
                 : VetPresenceStatus.OFFLINE).name();
+        // 🛡 无 rating.view：均分与两个计数**都不装**（不是在模板里藏）。
+        if (!withRatings) {
+            return VetAdminView.of(v, qual, pres, null, lastSeen.get(v.getId()), 0, 0);
+        }
         // 🔴 「无评分」必须是 null 而不是 0.0：0.0 会被排成「最差的兽医」，
         //    而它的含义是「还没人评过」。总览的 average() 无评分时给 0.0，这里翻译回 null。
-        Double avg = (rating == null || rating.ratedCount() == 0) ? null : rating.average();
-        return VetAdminView.of(v, qual, pres, avg, lastSeen.get(v.getId()),
-                rating == null ? 0 : rating.ratedCount(),
-                rating == null ? 0 : rating.totalVolume());
+        if (ratingQueryMode) {
+            Double avg = (rating == null || rating.ratedCount() == 0) ? null : rating.average();
+            return VetAdminView.of(v, qual, pres, avg, lastSeen.get(v.getId()),
+                    rating == null ? 0 : rating.ratedCount(),
+                    rating == null ? 0 : rating.totalVolume());
+        }
+        // 便宜路径：只出均分（与 9.1b 之前一致）。两个计数留 0 —— 模板据此不显示 (已评/总量)，
+        // 它们只在运营真的在做评分查询时才有意义（也只有那时候才是准的）。
+        VetRatingsView ratings = ratingQuery.forVet(v.getId());
+        Double avg = ratings.count() == 0 ? null : ratings.average();
+        return VetAdminView.of(v, qual, pres, avg, lastSeen.get(v.getId()), 0, 0);
     }
 
     /**

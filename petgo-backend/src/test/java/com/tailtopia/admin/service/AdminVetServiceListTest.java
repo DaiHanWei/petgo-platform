@@ -82,14 +82,16 @@ class AdminVetServiceListTest {
         when(presence.busyAll()).thenReturn(java.util.Set.of(3L));
     }
 
+    /**
+     * 不给排序 / 时间窗时走**便宜路径**：每行一次 {@code forVet}，只出均分。
+     *
+     * <p>🔴 不能一律走评分总览：`overview` 为每个兽医拉全部 CLOSED 会话再逐会话查评分，
+     * 查询量是 O(全部已结束会话)，而这一页的三个下拉是 autosubmit、每变一次就重拉。
+     */
     @Test
     void noFilterReturnsAllAssembledWithColumns() {
         scenario();
-        // V1.3.0 Story 9.1b：均分 / 已评 / 总量改由评分总览**一次**给出（原来每行一次 forVet）——
-        // 与退役的评分总览页同一个服务方法，两处的数因此不会分叉。
-        when(ratingService.overview(any(), any(), any())).thenReturn(List.of(
-                new com.tailtopia.admin.rating.dto.VetRatingOverviewRow(1L, "Anna", 4.8, 5, 2, 7),
-                new com.tailtopia.admin.rating.dto.VetRatingOverviewRow(2L, "Bob", 0.0, 0, 3, 3)));
+        when(ratingQuery.forVet(1L)).thenReturn(new VetRatingsView(1L, 4.8, 5, List.of()));
 
         List<VetAdminView> all = service.list(VetListFilter.none());
 
@@ -98,13 +100,51 @@ class AdminVetServiceListTest {
         assertThat(anna.qualStatus()).isEqualTo("CERTIFIED");
         assertThat(anna.presence()).isEqualTo("ONLINE");
         assertThat(anna.ratingAvg()).isEqualTo(4.8);
+        // 未评兽医均分 null（0.0 会被排成「最差的兽医」，而它的含义是「还没人评过」）。
+        assertThat(all.stream().filter(v -> v.id() == 2L).findFirst().orElseThrow().ratingAvg()).isNull();
+        // 便宜路径不碰评分总览。
+        verify(ratingService, never()).overview(any(), any(), any());
+    }
+
+    /** 给了排序或时间窗 = 运营在做评分查询：这时才走总览，并带出已评 / 总量两个计数。 */
+    @Test
+    void aRatingQueryGoesThroughTheOverviewAndCarriesTheCounts() {
+        scenario();
+        when(ratingService.overview(any(), any(), any())).thenReturn(List.of(
+                new com.tailtopia.admin.rating.dto.VetRatingOverviewRow(1L, "Anna", 4.8, 5, 2, 7),
+                new com.tailtopia.admin.rating.dto.VetRatingOverviewRow(2L, "Bob", 0.0, 0, 3, 3)));
+
+        List<VetAdminView> all = service.list(VetListFilter.none(),
+                com.tailtopia.admin.rating.service.AdminRatingService.AVG_DESC, null, null);
+
+        VetAdminView anna = all.stream().filter(v -> v.id() == 1L).findFirst().orElseThrow();
+        assertThat(anna.ratingAvg()).isEqualTo(4.8);
         assertThat(anna.ratedCount()).isEqualTo(5);
         assertThat(anna.totalVolume()).isEqualTo(7);
-        // 🔴 未评兽医均分是 **null 而不是 0.0**：0.0 会被排成「最差的兽医」，
-        //    而它的含义是「还没人评过」。总览给 0.0，service 负责翻译回 null。
         VetAdminView bob = all.stream().filter(v -> v.id() == 2L).findFirst().orElseThrow();
-        assertThat(bob.ratingAvg()).isNull();
+        assertThat(bob.ratingAvg()).as("0 条评分 → null，不是 0.0").isNull();
         assertThat(bob.totalVolume()).isEqualTo(3);
+    }
+
+    /**
+     * 🛡 无 {@code rating.view}：均分与两个计数**一个都不装**，也不走总览。
+     *
+     * <p>评分那份数据在退役前是 {@code GET /admin/ratings} 独占的；并进这一页之后
+     * 如果只挡 `vet.view`，等于把整张总览白送出去 ——「安全规则层只升不降」。
+     */
+    @Test
+    void withoutRatingViewNoRatingDataIsAssembledAtAll() {
+        scenario();
+        List<VetAdminView> all = service.list(VetListFilter.none(),
+                com.tailtopia.admin.rating.service.AdminRatingService.AVG_DESC, null, null, false);
+
+        assertThat(all).allSatisfy(v -> {
+            assertThat(v.ratingAvg()).isNull();
+            assertThat(v.ratedCount()).isZero();
+            assertThat(v.totalVolume()).isZero();
+        });
+        verify(ratingService, never()).overview(any(), any(), any());
+        verify(ratingQuery, never()).forVet(anyLong());
     }
 
     /** 🔴 sort 为空时**不重排**：默认按均分重排会让运营每次打开列表都发现行序变了。 */
@@ -119,7 +159,8 @@ class AdminVetServiceListTest {
         assertThat(service.list(VetListFilter.none(), null, null, null))
                 .extracting(VetAdminView::id).containsExactly(1L, 2L, 3L);
         // 给了 sort 就按**总览返回的那一份顺序**排（不在这里另写比较器，否则两处会分叉）。
-        assertThat(service.list(VetListFilter.none(), "avgDesc", null, null))
+        assertThat(service.list(VetListFilter.none(),
+                        com.tailtopia.admin.rating.service.AdminRatingService.AVG_DESC, null, null))
                 .extracting(VetAdminView::id).containsExactly(3L, 1L, 2L);
     }
 

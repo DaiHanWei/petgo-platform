@@ -41,7 +41,7 @@
             <th th:text="#{admin.vets.col.qual}">资质</th>
             <th th:text="#{admin.vets.col.online}">在线</th>
             <th class="nowrap" th:text="#{admin.v130.vets.lastSeen}">最后在线</th>
-            <th class="nowrap" th:text="#{admin.vets.col.rating}">评分</th>
+            <th class="nowrap" th:if="${canSeeRatings}" th:text="#{admin.vets.col.rating}">评分</th>
             <th class="nowrap" th:text="#{admin.vets.col.created}">创建日期</th>
         </tr>
         </thead>
@@ -97,8 +97,11 @@
         </td>
         <td class="nowrap" th:text="${@adminTime.wib(v.lastSeenAt())}">—</td>
         <!--/* 均分旁边带上「已评 / 总问诊量」：列表支持按问诊量排序，
-               而一个看不见的数上的排序，运营没法判断结果对不对。 */-->
-        <td class="nowrap">
+               而一个看不见的数上的排序，运营没法判断结果对不对。
+               ⚠️ 两个计数只在**运营真的在做评分查询**（给了排序或时间窗）时才装 —— 也只有那时候
+                  它们才带着窗口口径；平时不查，省掉一次 O(全部已结束会话) 的聚合。
+               🛡 整列随 rating.view 显隐，且服务端不装值。 */-->
+        <td class="nowrap" th:if="${canSeeRatings}">
             <span th:if="${v.ratingAvg() != null}" th:text="${v.ratingAvg()} + ' ★'">4.8 ★</span>
             <span th:unless="${v.ratingAvg() != null}" class="muted">—</span>
             <span class="muted" th:if="${v.totalVolume() > 0}"

@@ -35,11 +35,17 @@
         <button type="button" class="tab" role="tab" data-vtab="profile"
                 th:classappend="${tab == 'profile'} ? 'tab--on'"
                 th:text="#{admin.v130.vets.tab.profile}">资料</button>
+        <!--/* 缺权限的页签**置灰**（AC2 的原话是「渲染为禁用并注明所缺权限」）：
+               可点但点开只有一句「你没权限」，等于让人白点一次。 */-->
         <button type="button" class="tab" role="tab" data-vtab="qual"
                 th:classappend="${tab == 'qual'} ? 'tab--on'"
+                th:disabled="${!canQualView}"
+                th:title="${canQualView} ? null : #{admin.v130.err.forbidden(#{perm.vet.qualify_view})}"
                 th:text="#{admin.v130.vets.tab.qual}">资质</button>
         <button type="button" class="tab" role="tab" data-vtab="rating"
                 th:classappend="${tab == 'rating'} ? 'tab--on'"
+                th:disabled="${!canRatingView}"
+                th:title="${canRatingView} ? null : #{admin.v130.err.forbidden(#{perm.rating.view})}"
                 th:text="#{admin.v130.vets.tab.rating}">评分</button>
         <button type="button" class="tab" role="tab" data-vtab="account"
                 th:classappend="${tab == 'account'} ? 'tab--on'"
@@ -71,10 +77,16 @@
               是白白扩大暴露面。`click from:[data-vtab='qual'] once` 只拉一次。
            🛡 无 vet.qualify_view / vet.qualify 时**不挂 hx-get**：页签渲染成禁用说明，
               而不是让它去撞一个 403（AC2 的原话是「不 403 整个抽屉」）。 */-->
-    <section class="card card-full tag-card" data-vtab-panel="qual"
+    <!--/* 🔴 target 必须**带 id**：htmx 只在目标带 id 时才发 HX-Target 头，而
+           AdminBusinessExceptionAdvice 按那个头 retarget —— 没有它，4xx 会飘到
+           `#admin-inline-error`（表格下方，抽屉打开时根本看不见）。本文件表头立的规矩。
+       🔴 **不加 `once`**：加了之后失败一次就再也不会重试（`triggeredOnce` 置位），
+           页签永远停在「正在加载资质…」而错误落在看不见的地方。每次点页签重拉还有个好处：
+           证件图的预签名 URL 是短 TTL 的，看久了再点一下就重签。 */-->
+    <section id="vet-qual-slot" class="card card-full tag-card" data-vtab-panel="qual"
              th:attr="hidden=${tab != 'qual'} ? true : null,
                       hx-get=${canQualView} ? @{/admin/vets/{id}/qualification(id=${vet.id()})} : null"
-             hx-trigger="click from:[data-vtab='qual'] once" hx-target="this" hx-swap="innerHTML">
+             hx-trigger="click from:[data-vtab='qual']" hx-target="this" hx-swap="innerHTML">
         <p class="hint" th:if="${canQualView}" data-notice="vet-qual-loading"
            th:text="#{admin.v130.vets.qual.loading}">正在加载资质…</p>
         <p class="hint" th:unless="${canQualView}" data-notice="vet-qual-forbidden"
@@ -82,10 +94,10 @@
     </section>
 
     <!--/* ③ 评分页签（AC2）。同样懒加载；无 rating.view 时页签禁用而不是整个抽屉 403。 */-->
-    <section class="card card-full tag-card" data-vtab-panel="rating"
+    <section id="vet-rating-slot" class="card card-full tag-card" data-vtab-panel="rating"
              th:attr="hidden=${tab != 'rating'} ? true : null,
                       hx-get=${canRatingView} ? @{/admin/vets/{id}/ratings(id=${vet.id()})} : null"
-             hx-trigger="click from:[data-vtab='rating'] once" hx-target="this" hx-swap="innerHTML">
+             hx-trigger="click from:[data-vtab='rating']" hx-target="this" hx-swap="innerHTML">
         <p class="hint" th:if="${canRatingView}" data-notice="vet-rating-loading"
            th:text="#{admin.v130.vets.rating.loading}">正在加载评分…</p>
         <p class="hint" th:unless="${canRatingView}" data-notice="vet-rating-forbidden"
@@ -350,12 +362,14 @@
             <div class="sum-label" th:text="#{admin.v130.vets.rating.unrated}">未评</div>
             <div class="sum-value" data-sum="unrated" th:text="${#lists.size(unrated)}">0</div>
         </div>
-        <div class="sum-item">
-            <div class="sum-label" th:text="#{admin.v130.vets.rating.volume}">总问诊量</div>
-            <div class="sum-value" data-sum="volume"
-                 th:text="${ratings.count()} + ${#lists.size(unrated)}">0</div>
-        </div>
     </div>
+    <!--/* 🔴 这里**没有「总问诊量」那一格**，尽管一眼看去「已评 + 未评」就是它。
+           两个数的口径与列表那一列不一样：抽屉的「已评」是该兽医**全部**评分行（不分会话状态、
+           不带时间窗），「未评」含 INTERRUPTED；而列表的总量只数 CLOSED、且受问诊时间段约束。
+           把两者相加摆出来，就会出现「列表写 12、抽屉写 15」这种没人解释得清的组合 ——
+           所以宁可不给这个数，也不给一个会跟旁边打架的数。 */-->
+    <p class="hint" data-notice="vet-rating-scope" th:text="#{admin.v130.vets.rating.scopeNote}">
+        本页统计为该兽医全时段数据；「未评」含被中断的会话。列表的评分列按问诊时间段统计，两者口径不同。</p>
 
     <table th:if="${!#lists.isEmpty(ratings.items())}" class="ud-table">
         <thead><tr>

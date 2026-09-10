@@ -197,6 +197,21 @@ public class AdminWebController {
     /** 兽医列表每页条数（V1.3.0 Story 9.1a · AC1）。 */
     private static final int VET_PAGE_SIZE = 20;
 
+    /** 当前登录者是否持某个权限码（SUPER_ADMIN 隐式全权，与 @PreAuthorize 的语义一致）。 */
+    private static boolean hasAuthority(String code) {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext()
+                .getAuthentication();
+        if (auth == null) {
+            return false;
+        }
+        for (var a : auth.getAuthorities()) {
+            if ("ROLE_SUPER_ADMIN".equals(a.getAuthority()) || code.equals(a.getAuthority())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @GetMapping("/admin/vets")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.view')")
     public String vets(@RequestParam(value = "accountStatus", required = false) String accountStatus,
@@ -224,10 +239,18 @@ public class AdminWebController {
         // 🔴 评价时间段的日界沿用退役的总览页那一份口径（**UTC**，from 当日 00:00、to 次日 00:00）——
         //    这一页别处的时间是 WIB，但这两个参数是从总览页原样搬过来的，改口径会让
         //    运营存的旧链接算出不同的数。差异写在筛选栏的提示里。
+        // 🛡 评分那一份数据在退役前是 GET /admin/ratings（rating.view）独占的。并进这一页之后
+        //    如果只挡 vet.view，等于把整张评分总览白送给只有兽医查看权的人 ——「只升不降」。
+        //    所以按码判一次，**没有就不装**（服务端不查、不返，不是模板里藏起来）。
+        boolean canSeeRatings = hasAuthority("rating.view");
+        model.addAttribute("canSeeRatings", canSeeRatings);
         var vetRows = adminVetService.list(new VetListFilter(accountStatus, qualStatus, online, q),
-                sort,
-                from == null ? null : from.atStartOfDay(java.time.ZoneOffset.UTC).toInstant(),
-                to == null ? null : to.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant());
+                canSeeRatings ? sort : null,
+                canSeeRatings && from != null
+                        ? from.atStartOfDay(java.time.ZoneOffset.UTC).toInstant() : null,
+                canSeeRatings && to != null
+                        ? to.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant() : null,
+                canSeeRatings);
         // 🔴 摘要条统计的是**整个筛选集**，不是当前这一页：一个只统计本页的「在线数」
         //    会随翻页变化，而运营会把它当成总数抄进周报。
         model.addAttribute("summary", adminVetService.summary(vetRows));

@@ -96,6 +96,11 @@ public class AdminVetQualificationController {
      */
     private String qualAfterAction(long id, String toast, Model model,
             jakarta.servlet.http.HttpServletResponse response) {
+        // 🔴 提交成功后把表单**换成空的**：`save` 的 @ModelAttribute 已经把刚提交的那份放进了同一个
+        //    Model，而 populateQual 只在「没有」时才塞新的 —— 不覆盖的话，屏幕上那张表单会
+        //    原封不动留着刚录的 KTP / SIPDH 编号与六个证件 key（整页时代 redirect 之后是空表单），
+        //    既与「证件号敏感」的姿态相悖，也留下一个再点一次就重录一遍的钮。
+        model.addAttribute("qualificationForm", new QualificationForm());
         populateQual(id, model);
         model.addAttribute("toast", toast);
         com.tailtopia.admin.shared.web.AdminFragmentResponses.trigger(response,
