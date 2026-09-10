@@ -61,10 +61,10 @@
            ⚠️ 摘要条统计的是**整个筛选集**、不随翻页变（口径见控制器注释）。 */-->
     <div class="pager" th:if="${totalPages != null and totalPages > 1}">
         <a th:if="${hasPrev}" class="btn btn-sm" data-no-drawer th:text="#{admin.audit.prev}"
-           th:href="@{/admin/vets(page=${page - 1},accountStatus=${accountStatus},qualStatus=${qualStatus},online=${online},q=${q})}">上一页</a>
+           th:href="@{/admin/vets(page=${page - 1},accountStatus=${accountStatus},qualStatus=${qualStatus},online=${online},q=${q},sort=${sort},from=${from},to=${to})}">上一页</a>
         <span th:text="#{admin.audit.page(${page + 1}, ${totalPages}, ${totalElements})}">分页</span>
         <a th:if="${hasNext}" class="btn btn-sm" data-no-drawer th:text="#{admin.audit.next}"
-           th:href="@{/admin/vets(page=${page + 1},accountStatus=${accountStatus},qualStatus=${qualStatus},online=${online},q=${q})}">下一页</a>
+           th:href="@{/admin/vets(page=${page + 1},accountStatus=${accountStatus},qualStatus=${qualStatus},online=${online},q=${q},sort=${sort},from=${from},to=${to})}">下一页</a>
     </div>
 </th:block>
 
@@ -96,9 +96,13 @@
                   th:text="#{'admin.vets.presence.' + ${v.presence()}}">在线</span>
         </td>
         <td class="nowrap" th:text="${@adminTime.wib(v.lastSeenAt())}">—</td>
+        <!--/* 均分旁边带上「已评 / 总问诊量」：列表支持按问诊量排序，
+               而一个看不见的数上的排序，运营没法判断结果对不对。 */-->
         <td class="nowrap">
             <span th:if="${v.ratingAvg() != null}" th:text="${v.ratingAvg()} + ' ★'">4.8 ★</span>
             <span th:unless="${v.ratingAvg() != null}" class="muted">—</span>
+            <span class="muted" th:if="${v.totalVolume() > 0}"
+                  th:text="' (' + ${v.ratedCount()} + '/' + ${v.totalVolume()} + ')'"> (0/0)</span>
         </td>
         <td class="nowrap" th:text="${@adminTime.wib(v.createdAt())}">2026-06-01</td>
     </tr>

@@ -81,7 +81,7 @@ class AdminVetRatingsAccessControlTest {
     }
 
     private void vetRatings() {
-        controller.vetRatings(5L, new ConcurrentModel());
+        controller.vetRatings(5L, null, new ConcurrentModel());
     }
 
     @Test

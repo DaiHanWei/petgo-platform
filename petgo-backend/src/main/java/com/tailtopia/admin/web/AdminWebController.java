@@ -205,19 +205,37 @@ public class AdminWebController {
             @RequestParam(value = "q", required = false) String q,
             @RequestParam(value = "open", required = false) Long open,
             @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "sort", required = false) String sort,
+            @RequestParam(value = "from", required = false)
+            @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            java.time.LocalDate from,
+            @RequestParam(value = "to", required = false)
+            @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
+            java.time.LocalDate to,
             @RequestHeader(value = "HX-Request", required = false) String hxRequest,
             Model model) {
         model.addAttribute("active", "vets");
+        model.addAttribute("sort", sort);
+        model.addAttribute("from", from);
+        model.addAttribute("to", to);
         // ⚠️ 取一次列表喂给摘要条与表格两处：各查各的话跨秒时两个数能对不上。
-        var vetRows = adminVetService.list(new VetListFilter(accountStatus, qualStatus, online, q));
+        // 🔴 评价时间段的日界沿用退役的总览页那一份口径（**UTC**，from 当日 00:00、to 次日 00:00）——
+        //    这一页别处的时间是 WIB，但这两个参数是从总览页原样搬过来的，改口径会让
+        //    运营存的旧链接算出不同的数。差异写在筛选栏的提示里。
+        var vetRows = adminVetService.list(new VetListFilter(accountStatus, qualStatus, online, q),
+                sort,
+                from == null ? null : from.atStartOfDay(java.time.ZoneOffset.UTC).toInstant(),
+                to == null ? null : to.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant());
         // 🔴 摘要条统计的是**整个筛选集**，不是当前这一页：一个只统计本页的「在线数」
         //    会随翻页变化，而运营会把它当成总数抄进周报。
         model.addAttribute("summary", adminVetService.summary(vetRows));
         int total = vetRows.size();
         int totalPages = Math.max(1, (total + VET_PAGE_SIZE - 1) / VET_PAGE_SIZE);
         int safePage = Math.min(Math.max(page, 0), totalPages - 1);
-        int from = safePage * VET_PAGE_SIZE;
-        model.addAttribute("vets", vetRows.subList(from, Math.min(from + VET_PAGE_SIZE, total)));
+        int offset = safePage * VET_PAGE_SIZE;
+        model.addAttribute("vets", vetRows.subList(offset, Math.min(offset + VET_PAGE_SIZE, total)));
         model.addAttribute("page", safePage);
         model.addAttribute("totalPages", totalPages);
         model.addAttribute("totalElements", (long) total);
@@ -476,16 +494,27 @@ public class AdminWebController {
     //    在线态与最后在线时间并入兽医列表的列与抽屉资料页签，不再单开一页。
     //    不做旧地址跳转（D-23）；服务层的 onlineSnapshot(...) 保留（别处仍可能用到）。
 
-    // ===== Story 5.6：兽医评分查看（仅运营可见）=====
+    // ===== Story 5.6：兽医评分查看（仅运营可见）→ V1.3.0 Story 9.1b 并入抽屉评分页签 =====
 
+    /**
+     * 评分页签（Story 9.1b · AC2）。整页 {@code vet-ratings.html} 已删除。
+     *
+     * <p>🔴 页签**懒加载**：均分明细 + 未评问诊两次聚合只在真的切过去时才做。
+     * 非 htmx 直达 → 回列表并开抽屉（这条路径没有同名 POST，但保持与资质页签一致的落点）。
+     */
     @GetMapping("/admin/vets/{id}/ratings")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('rating.view')")
-    public String vetRatings(@PathVariable long id, Model model) {
+    public String vetRatings(@PathVariable long id,
+            @RequestHeader(value = "HX-Request", required = false) String hxRequest, Model model) {
+        if (hxRequest == null) {
+            return "redirect:/admin/vets?open=" + id;
+        }
         model.addAttribute("active", "vets");
+        model.addAttribute("vetId", id);
         model.addAttribute("vet", adminVetService.view(id));
         model.addAttribute("ratings", adminVetService.ratings(id));
         model.addAttribute("unrated", adminVetService.unratedConsults(id)); // Story 6.2：未评问诊单列
-        return "admin/vet-ratings";
+        return "admin/fragments/drawer-vets :: rating-panel";
     }
 
     @PostMapping("/admin/seed-post")

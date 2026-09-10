@@ -3,7 +3,9 @@ package com.tailtopia.admin.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -15,6 +17,7 @@ import com.tailtopia.consult.service.ConsultRatingQueryService;
 import com.tailtopia.shared.im.TencentImClient;
 import com.tailtopia.vet.service.VetAccountService;
 import com.tailtopia.vet.service.VetPresenceService;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -27,6 +30,8 @@ class AdminVetServiceEditTest {
     private ConsultInterruptService interrupt;
     private VetPresenceService presence;
     private AdminVetService service;
+    /** V1.3.0 Story 9.1b：列表的均分 / 已评 / 总量改由评分总览一次给出（原来是每行一次 forVet）。 */
+    private com.tailtopia.admin.rating.service.AdminRatingService ratingService;
 
     @BeforeEach
     void setUp() {
@@ -34,12 +39,15 @@ class AdminVetServiceEditTest {
         audit = mock(AdminAuditService.class);
         interrupt = mock(ConsultInterruptService.class);
         presence = mock(VetPresenceService.class);
+        ratingService = mock(com.tailtopia.admin.rating.service.AdminRatingService.class);
+        when(ratingService.overview(any(), any(), any())).thenReturn(List.of());
         service = new AdminVetService(vetAccounts, mock(ConsultRatingQueryService.class),
                 presence, interrupt, mock(TencentImClient.class),
                 mock(VetQualificationService.class), audit,
                 mock(com.tailtopia.consult.service.ConsultQualityQueryService.class),
                 mock(com.tailtopia.shared.media.AliyunOssClient.class),
-                mock(com.tailtopia.shared.media.MediaProperties.class));
+                mock(com.tailtopia.shared.media.MediaProperties.class),
+                ratingService);
     }
 
     @Test

@@ -87,7 +87,7 @@ class AdminVetsAccessControlTest {
 
     private void invoke() {
         // V1.3.0 Story 9.1a：多两个参数（open 深链、HX-Request）；门控表达式未变。
-        controller.vets(null, null, null, null, null, 0, null, new ConcurrentModel());
+        controller.vets(null, null, null, null, null, 0, null, null, null, null, new ConcurrentModel());
     }
 
     @Test
