@@ -259,7 +259,7 @@ svg{ display:block; }
   <!-- ============ 泳道 P：FR-65 ============ -->
   <div class="lane" id="lane-p">
     <div class="lane-title"><span class="lane-dot" style="background:var(--lane-p)"></span><h2>宠物年龄换算分享卡 + 综合入口</h2><span class="lane-fr">FR-65</span></div>
-    <p class="lane-desc">成长档案头部 KTP 入口条改造为「Know more about your pet」综合入口。本批次聚合页只含 KTP / 年龄卡两项；护照（FR-120）与 Tailsonality（FR-117）不占位、不展示，随批次 B2 上线时再新增。</p>
+    <p class="lane-desc">成长档案头部 KTP 入口条改造为「Know more about your pet」综合入口。本批次聚合页只含 KTP / 年龄卡两项；护照（FR-120）与 Tailsonality（FR-117）不占位、不展示，随批次 C 上线时再新增。</p>
     <div class="flow">
       <em>主路径：</em><i>成长档案页</i> <s>P1</s> <i>头部入口条 → 点击 →</i> <s>P2</s> <i>聚合页 → 点「年龄换算卡」</i>
       <span class="nl"></span>
@@ -346,7 +346,7 @@ svg{ display:block; }
             </div>
           </div>
         </div>
-        <p class="frame-cap"><b>新页面</b> —— 2 卡 2 列网格（PRD 已改：护照/Tailsonality 本批次不占位、不展示，随批次 B2 上线时新增，见 <code>v1-3-0prd-A.md</code> §3.1）；卡片视觉复用 <code>diary_header.dart</code> 的 entry-card 白底r14+阴影样式，<span style="color:#B23A45;font-weight:700;">已按你的拍板改横向布局</span>（左图标+右文字，与 P1 同步）；KTP 卡沿用 <code>id_card_page.dart</code> 现有列表逻辑整体平移（深链 <code>/profile/id-card</code> 需重定向到新路径，不能断链）；年龄卡为本 FR 新增；页面标题同步缩短为「Kenali Hewanmu」</p>
+        <p class="frame-cap"><b>新页面</b> —— 2 卡 2 列网格（PRD 已改：护照/Tailsonality 本批次不占位、不展示，随批次 C 上线时新增，见 <code>v1-3-0prd-A.md</code> §3.1）；卡片视觉复用 <code>diary_header.dart</code> 的 entry-card 白底r14+阴影样式，<span style="color:#B23A45;font-weight:700;">已按你的拍板改横向布局</span>（左图标+右文字，与 P1 同步）；KTP 卡沿用 <code>id_card_page.dart</code> 现有列表逻辑整体平移（深链 <code>/profile/id-card</code> 需重定向到新路径，不能断链）；年龄卡为本 FR 新增；页面标题同步缩短为「Kenali Hewanmu」</p>
       </div>
 
       <!-- P3 —— 禁用态（非猫狗宠物，卡片原地置灰） -->
@@ -464,7 +464,7 @@ svg{ display:block; }
             <div style="position:absolute;left:50%;bottom:90px;transform:translateX(-50%);padding:11px 28px;background:#fff;border-radius:99px;font-size:13px;font-weight:700;color:var(--tt-ink);white-space:nowrap;">Mengerti</div>
           </div>
         </div>
-        <p class="frame-cap"><b>一次性叠加态</b>（全新交互，App 内暂无现成 coachmark 组件可复用）—— 高亮框指向 P1 新入口条位置；首进成长档案页触发，看过按账号记一次不再弹；<b>本批次只做「① KTP 位置」这一版</b>，第二次触发（性格测试入口）随批次 B2 上线</p>
+        <p class="frame-cap"><b>一次性叠加态</b>（全新交互，App 内暂无现成 coachmark 组件可复用）—— 高亮框指向 P1 新入口条位置；首进成长档案页触发，看过按账号记一次不再弹；<b>本批次只做「① KTP 位置」这一版</b>，第二次触发（性格测试入口）随批次 C 上线</p>
       </div>
 
     </div>
@@ -473,7 +473,7 @@ svg{ display:block; }
   <!-- ============ 泳道 M：FR-111 ============ -->
   <div class="lane" id="lane-m">
     <div class="lane-title"><span class="lane-dot" style="background:var(--lane-m)"></span><h2>里程碑逻辑变更</h2><span class="lane-fr">FR-111（仅逻辑）</span></div>
-    <p class="lane-desc">本批次只做漏庆祝收口与 G-M1/G-M2 改自动达成两条逻辑变更，不涉及庆祝页/徽章视觉重绘（视觉在批次 B2）。真正的视觉新增只有里程碑入口的未庆祝角标。</p>
+    <p class="lane-desc">本批次只做漏庆祝收口与 G-M1/G-M2 改自动达成两条逻辑变更，不涉及庆祝页/徽章视觉重绘（视觉在批次 C）。真正的视觉新增只有里程碑入口的未庆祝角标。</p>
     <div class="flow">
       <em>主路径：</em><i>成长档案 Tab →</i> <s>M1</s> 里程碑入口默认态 <i>／ 存在未庆祝条目时替换为</i> <s>M2</s> 角标态 <i>→ 点击进列表页 → 若 M2 态则自动补弹现有庆祝页（视觉不变，不重画）</i>
       <span class="nl"></span>
