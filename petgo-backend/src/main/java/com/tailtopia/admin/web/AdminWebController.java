@@ -11,7 +11,6 @@ import com.tailtopia.admin.service.AdminModerationService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.service.AdminVetService;
 import com.tailtopia.admin.virtual.service.AdminPublishIdentityService;
-import com.tailtopia.admin.virtual.web.AdminSeedBatchController;
 import com.tailtopia.admin.virtual.service.AdminVirtualAccountService;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.dto.ContentPostResponse;
@@ -403,7 +402,7 @@ public class AdminWebController {
             ContentPostResponse saved = adminContentService.publishSeed(
                     form.getAuthorUserId(), form.getType(), form.getPetId(), form.getText(),
                     form.imageUrls(), form.imageSizes(),
-                    AdminSeedBatchController.mayPublishAsReal(admin), form.getSpecies());
+                    com.tailtopia.admin.virtual.service.AdminPublishIdentityService.mayPublishAsReal(admin), form.getSpecies());
             // 发布成功：清空表单 + 成功提示（含 postId，便于运营核对）。
             model.addAttribute("seedPostForm", new SeedPostForm());
             model.addAttribute("publishedId", saved.id());

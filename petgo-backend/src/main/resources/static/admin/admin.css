@@ -852,3 +852,25 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sched-card h3 { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
 .sched-images { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 .sched-drawer .sticky-footer { bottom: 0; }
+
+/* ===== E1 单发 / E2 批量工作台（V1.3.0 Story 7.6，模板 E）===== */
+/* 吸底条里横排的按钮与表单 */
+.stp-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.stp-actions form.inline { display: flex; gap: 8px; align-items: center; }
+.batch-naming > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+/* 行卡片 = 行内编辑态：展开时紫底高亮，一眼看得出「我正在改这一行」 */
+.seed-row-card { padding: 0; }
+.seed-row-card .row-edit > summary { cursor: pointer; padding: 10px 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.seed-row-card .row-edit[open] { background: var(--brand-tint); border-left: 3px solid var(--brand); }
+.seed-row-card .row-edit[open] > summary { font-weight: 600; }
+.seed-row-card form { padding: 0 12px 12px; }
+.row-edit-actions { display: flex; gap: 8px; margin-top: 8px; }
+/* 校验没过的行整行标红：只把右侧那一列写红字，在 8 列宽的表里很容易漏看 */
+.preview-table tr.row-bad td { background: var(--danger-bg); }
+.preview-table tr[data-drawer-url] { cursor: pointer; }
+.bt-card { margin-bottom: 10px; }
+.bt-images { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+.bt-images figure { margin: 0; }
+.bt-images img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; }
+.bt-body { white-space: pre-wrap; word-break: break-word; }
+.bt-drawer .sticky-footer { bottom: 0; }

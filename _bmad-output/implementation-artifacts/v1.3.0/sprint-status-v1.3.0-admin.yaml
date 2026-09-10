@@ -95,7 +95,7 @@ development_status:
   7-3-b3-顶置管理: review   # B3 顶置管理
   7-4-b4-内容标签: review   # B4 内容标签（抽屉多页签，打标入口收拢）
   7-5-b5-排期发布并入批量内容页签: review   # B5 排期发布并入批量内容页签
-  7-6-e1-种子内容发布与-e2-批量工作台套模板-e: ready-for-dev   # E1 种子内容发布（单发）与 E2 批量工作台套模板 E
+  7-6-e1-种子内容发布与-e2-批量工作台套模板-e: review   # E1 种子内容发布（单发）与 E2 批量工作台套模板 E
   epic-7-retrospective: optional
   # ---- Epic 8: 用户组与订单资金组页面重构 ----
   epic-8: in-progress

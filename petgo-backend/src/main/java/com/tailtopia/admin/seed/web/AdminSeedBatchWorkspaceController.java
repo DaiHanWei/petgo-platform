@@ -26,10 +26,10 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  * <p>本 story 只交付 Step 1：开批次、拖素材、看缩略图墙与配额。
  * 内容录入（13-3）、校验预览（13-4）、定时发布（13-5）都会长在这同一个工作台上。
  *
- * <p>⚠️ <b>名字里的 Workspace 不是修饰</b>：{@code admin.virtual.web.AdminSeedBatchController}
- * 已经存在（Story 9.8 的"选虚拟账号 + 多行文本立即发"那条老路径），
- * 同名会直接撞 Spring 的 bean 名。两者也确实是两回事 ——
- * 那条是"贴进去就发"，本工作台是"存下来、逐行校验、按需排期"。
+ * <p>⚠️ <b>名字里的 Workspace 是历史留下的</b>：Story 9.8 那条"选虚拟账号 + 多行文本立即发"的
+ * 轻量批量控制器（{@code admin.virtual.web.AdminSeedBatchController}）曾与本类并存、同名会撞 bean 名。
+ * 它已于 V1.3.0 Story 7.6 删除（"贴进去就发"没有预览、提交即上线，能力被本工作台的
+ * "存下来、逐行校验、按需排期"完整覆盖），类名保留不动 —— 改名的收益抵不上一次全仓改引用的风险。
  */
 @Controller
 public class AdminSeedBatchWorkspaceController {
@@ -103,6 +103,18 @@ public class AdminSeedBatchWorkspaceController {
         return "admin/seed-batches";
     }
 
+    /** {@code ?step=} 宽松解析：非数字 / 越界一律夹回 {@code [0,2]}，不为它出 400 或空屏。 */
+    private static int parseStep(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return 0;
+        }
+        try {
+            return Math.min(Math.max(Integer.parseInt(raw.trim()), 0), 2);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
     /**
      * 排期页签的表格（htmx 局部）：筛选、翻页、处置后的整表重拉都打这里。
      *
@@ -160,11 +172,27 @@ public class AdminSeedBatchWorkspaceController {
     }
 
     /** 单个批次的工作台。 */
+    /**
+     * 批次工作台（V1.1.6 Story 13.2 → V1.3.0 Story 7.6 套模板 E 分四步）。
+     *
+     * <p>🔴 <b>只是把同一页切成四屏，交互骨架一条没动</b>（逐页规格 E2：现状骨架保留，只做视觉统一）：
+     * 端点、表单字段、状态机都原样；{@code step} 是**渲染参数**，服务端不为它存任何状态 ——
+     * 存了就得回答「运营在第 2 步关掉浏览器，回来该停在哪一步」这种没有正确答案的问题。
+     *
+     * @param step 0 批次设置 / 1 素材 / 2 录内容（3 预览确认是另一个页面 {@code /preview}）
+     * @param edit 要展开成编辑态的行 id（新增空行后带回来，直接落在那一行上）
+     */
     @GetMapping("/admin/seed-batches/{batchId}")
     @PreAuthorize(AUTH)
-    public String workspace(@PathVariable long batchId, Model model) {
+    public String workspace(@PathVariable long batchId,
+            @RequestParam(value = "step", required = false) String step,
+            @RequestParam(value = "edit", required = false) Long edit, Model model) {
         model.addAttribute("active", "seed");
         model.addAttribute("batchId", batchId);
+        // ⚠️ 手改 URL 的 step 一律夹回 [0,2]；非数字也当第 0 步 ——
+        //    声明成 int 的话 `?step=abc` 是一个 400 错误页，而它对运营毫无意义。
+        model.addAttribute("step", parseStep(step));
+        model.addAttribute("edit", edit);
         var batchRows = batches.rowsOf(batchId);
         model.addAttribute("rows", batchRows);
         model.addAttribute("batch", entry.findBatch(batchId).orElse(null));
@@ -208,7 +236,8 @@ public class AdminSeedBatchWorkspaceController {
         } catch (AppException e) {
             flash.addFlashAttribute("error", i18n.resolve(e));
         }
-        return "redirect:/admin/seed-batches/" + batchId;
+        // ⚠️ 回**素材那一步**：分步之后落回第 0 步等于把运营刚在做的事丢掉。
+        return "redirect:/admin/seed-batches/" + batchId + "?step=1";
     }
 
     /** 页头那一处批次级设置（AC1）。 */
@@ -226,7 +255,7 @@ public class AdminSeedBatchWorkspaceController {
         } catch (AppException e) {
             flash.addFlashAttribute("error", i18n.resolve(e));
         }
-        return "redirect:/admin/seed-batches/" + batchId;
+        return "redirect:/admin/seed-batches/" + batchId + "?step=0";
     }
 
     /**
@@ -245,14 +274,16 @@ public class AdminSeedBatchWorkspaceController {
         } catch (AppException e) {
             flash.addFlashAttribute("error", i18n.resolve(e));
         }
-        return "redirect:/admin/seed-batches/" + batchId;
+        return "redirect:/admin/seed-batches/" + batchId + "?step=2";
     }
 
     @PostMapping("/admin/seed-batches/{batchId}/rows")
     @PreAuthorize(AUTH)
     public String addRow(@PathVariable long batchId, RedirectAttributes flash) {
-        entry.addBlankRow(batchId);
-        return "redirect:/admin/seed-batches/" + batchId;
+        // 🔴 新增的空行**直接落在编辑态上**（AC3）：回到列表再让运营自己找那一行，
+        //    在几十行的批次里就是一次翻找 —— 而这一步的本意正是「马上开始写」。
+        var row = entry.addBlankRow(batchId);
+        return "redirect:/admin/seed-batches/" + batchId + "?step=2&edit=" + row.getId();
     }
 
     /** 逐行编辑（行卡片上的保存）。空值一律表示"继承默认"。 */
@@ -273,15 +304,18 @@ public class AdminSeedBatchWorkspaceController {
                     i18n.get("admin.flash.seedBatch.rowSaved", String.valueOf(rowId)));
         } catch (AppException e) {
             flash.addFlashAttribute("error", i18n.resolve(e));
+            // 🔴 保存失败要把**那一行**留在编辑态上：分步之后行卡片是收起的，
+            //    只在页顶留一条 banner 等于「报了错但看不出是哪一行」，几十行的批次里就是一次翻找。
+            return "redirect:/admin/seed-batches/" + batchId + "?step=2&edit=" + rowId;
         }
-        return "redirect:/admin/seed-batches/" + batchId;
+        return "redirect:/admin/seed-batches/" + batchId + "?step=2";
     }
 
     @PostMapping("/admin/seed-batches/{batchId}/rows/{rowId}/delete")
     @PreAuthorize(AUTH)
     public String deleteRow(@PathVariable long batchId, @PathVariable long rowId) {
         entry.deleteRow(rowId);
-        return "redirect:/admin/seed-batches/" + batchId;
+        return "redirect:/admin/seed-batches/" + batchId + "?step=2";
     }
 
     /** 带下拉数据校验的 Excel 模板（AC4）。 */
@@ -310,7 +344,7 @@ public class AdminSeedBatchWorkspaceController {
         } catch (AppException e) {
             flash.addFlashAttribute("error", i18n.resolve(e));
         }
-        return "redirect:/admin/seed-batches/" + batchId;
+        return "redirect:/admin/seed-batches/" + batchId + "?step=2";
     }
 
     /**
@@ -405,15 +439,70 @@ public class AdminSeedBatchWorkspaceController {
      */
     @GetMapping("/admin/seed-batches/{batchId}/preview")
     @PreAuthorize(AUTH)
-    public String preview(@PathVariable long batchId, Model model) {
+    public String preview(@PathVariable long batchId,
+            @RequestParam(value = "open", required = false) Long open, Model model) {
         model.addAttribute("active", "seed");
         model.addAttribute("batchId", batchId);
+        model.addAttribute("open", open);
         var checks = publishing.preview(batchId);
         model.addAttribute("checks", checks);
         model.addAttribute("passCount", checks.stream().filter(c -> c.passes()).count());
         model.addAttribute("failCount", checks.stream().filter(c -> !c.passes()).count());
         model.addAttribute("dupCount", checks.stream().filter(c -> c.warns()).count());
         return "admin/seed-batch-preview";
+    }
+
+    /**
+     * 成帖效果抽屉（V1.3.0 Story 7.6 · AC3）：这一行发出去之后在 App Feed 里长什么样。
+     *
+     * <p>🔴 预览表格里能看到的只有「校验过没过」，看不出**这条内容本身**对不对 ——
+     * 图配错了、正文被 Excel 截断、多图顺序反了，这些只有把卡片画出来才发现得了。
+     *
+     * <p>抽屉里可以直接翻到上一行 / 下一行：50 行的批次，关一次开一次要点 100 下。
+     */
+    @GetMapping("/admin/seed-batches/{batchId}/preview/{rowId}/drawer")
+    @PreAuthorize(AUTH)
+    public String previewRowDrawer(@PathVariable long batchId, @PathVariable long rowId,
+            com.tailtopia.admin.shared.web.HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            return "redirect:/admin/seed-batches/" + batchId + "/preview?open=" + rowId;
+        }
+        var checks = publishing.preview(batchId);
+        int idx = -1;
+        for (int i = 0; i < checks.size(); i++) {
+            if (checks.get(i).row().getId() != null && checks.get(i).row().getId() == rowId) {
+                idx = i;
+                break;
+            }
+        }
+        if (idx < 0) {
+            throw AppException.notFound("这一行不在本批次里").code("admin.err.seedBatch.rowNotInBatch");
+        }
+        var check = checks.get(idx);
+        model.addAttribute("batchId", batchId);
+        model.addAttribute("c", check);
+        model.addAttribute("prevRowId", idx > 0 ? checks.get(idx - 1).row().getId() : null);
+        model.addAttribute("nextRowId",
+                idx < checks.size() - 1 ? checks.get(idx + 1).row().getId() : null);
+        // 🔴 作者要显示**这一行实际会用谁发**，不是「行上填没填」：
+        //    行级留空（authorUserId = 0）时用的是批次默认，而那正是最常见的用法 ——
+        //    只印一句「继承批次默认」等于这一栏对大多数行都是废的，而这个抽屉的立论
+        //    正是「配错账号在这里一眼看得出来」（复审 P2）。
+        long rowAuthor = check.row().getAuthorUserId();
+        boolean inherited = rowAuthor <= 0;
+        Long effective = inherited
+                ? entry.findBatch(batchId).map(b -> b.getDefaultAuthorUserId()).orElse(null)
+                : rowAuthor;
+        var option = effective == null ? null
+                : identities.selectableIdentities().stream()
+                        .filter(o -> o.userId() == effective).findFirst().orElse(null);
+        model.addAttribute("author", option);
+        model.addAttribute("authorInherited", inherited);
+        // ⚠️ 解析不到要单独说：可能是行留空且批次也没设默认，也可能是那个真实账号已被移出身份池 ——
+        //    两种都不能印成「继承批次默认 #123」，那是自相矛盾的。
+        model.addAttribute("authorUnresolved", option == null);
+        model.addAttribute("effectiveAuthorId", effective);
+        return "admin/fragments/drawer-batch-row :: drawer";
     }
 
     /** 确认发布（AC2）。🛡 只发通过的行；失败行留草稿可改后重提。 */
@@ -425,7 +514,7 @@ public class AdminSeedBatchWorkspaceController {
             RedirectAttributes flash) {
         try {
             var out = publishing.confirm(batchId, admin.getAdminAccountId(), includeDuplicates,
-                    com.tailtopia.admin.virtual.web.AdminSeedBatchController.mayPublishAsReal(admin));
+                    com.tailtopia.admin.virtual.service.AdminPublishIdentityService.mayPublishAsReal(admin));
             // bug 20260901-473：改经 i18n 组装（后台三语，硬编码中文会原样怼给印尼运营），
             // 且**每个桶都必须出声** —— 少说一个桶，运营就会觉得有一行凭空消失了。
             StringBuilder msg = new StringBuilder(i18n.get("admin.batch.confirm.published",

@@ -64,6 +64,30 @@ class AdminPublishIdentityIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private AdminVirtualAccountService virtualAccounts;
 
+    @Autowired
+    private com.tailtopia.admin.seed.service.SeedBatchService batchService;
+
+    /**
+     * 单条发布（{@code POST /admin/seed-post}）——本组用例验证的是它与被删的轻量批量端点
+     * 共用的那份真实身份门控。⚠️ 表单页**成功与内联报错都回 200**，所以断言一律看「内容有没有落库」。
+     */
+    private void seedPost(Authentication as, long authorUserId, String text) throws Exception {
+        mvc.perform(post("/admin/seed-post").with(authentication(as)).with(csrf())
+                        .param("authorUserId", String.valueOf(authorUserId))
+                        .param("type", "DAILY")
+                        .param("text", text)
+                        .param("imageUrlsRaw", "")
+                        .param("imageSizesRaw", ""))
+                .andExpect(status().isOk());
+    }
+
+    /** ⚠️ Objects.equals：getAuthorId() 是装箱 Long，`==` 比引用、id 一大就恒 false。 */
+    private List<com.tailtopia.content.domain.ContentPost> postsOf(long authorId) {
+        return posts.findAll().stream()
+                .filter(p -> java.util.Objects.equals(p.getAuthorId(), authorId))
+                .toList();
+    }
+
     /**
      * 后台身份。
      *
@@ -142,17 +166,22 @@ class AdminPublishIdentityIntegrationTest extends ApiIntegrationTest {
 
     // ——————————————————— AC2 放开发布断言 ———————————————————
 
-    /** 池内真实账号可以作为批量发布的作者（此前被那句 accountType 硬断言挡着）。 */
+    /**
+     * 池内真实账号可以作为发布者（此前被那句 accountType 硬断言挡着）。
+     *
+     * <p>⚠️ V1.3.0 Story 7.6：原先这一组用例打的是轻量批量端点 {@code POST /admin/seed-batch}，
+     * 那个控制器随 7.6 删除（能力由 {@code /admin/seed-batches/**} 四步流承载）。
+     * 改打**单条发布** {@code POST /admin/seed-post} —— 它与被删的那条路径共用同一份
+     * {@code AdminPublishIdentityService.mayPublishAsReal} 门控，是这组断言真正要钉的东西。
+     * 断言随之从「去重哈希落没落」改成「内容落没落」（单条发布不写去重哈希）。
+     */
     @Test
     void realAccountInThePoolCanPublish() throws Exception {
         User u = grantedRealAccount();
 
-        mvc.perform(post("/admin/seed-batch").with(authentication(superAdmin())).with(csrf())
-                        .param("virtualUserId", String.valueOf(u.getId()))
-                        .param("lines", "以 IP 号发的一条-" + SEQ.incrementAndGet()))
-                .andExpect(status().is3xxRedirection());
+        seedPost(superAdmin(), u.getId(), "以 IP 号发的一条-" + SEQ.incrementAndGet());
 
-        assertThat(hashes.countByAuthorId(u.getId())).isEqualTo(1);
+        assertThat(postsOf(u.getId())).hasSize(1);
     }
 
     /** 🛡 不在池内的真实账号仍然不能发 —— 放开的是"池内"，不是"所有真实账号"。 */
@@ -160,12 +189,9 @@ class AdminPublishIdentityIntegrationTest extends ApiIntegrationTest {
     void realAccountOutsideThePoolStillCannotPublish() throws Exception {
         User outsider = newUser();
 
-        mvc.perform(post("/admin/seed-batch").with(authentication(superAdmin())).with(csrf())
-                        .param("virtualUserId", String.valueOf(outsider.getId()))
-                        .param("lines", "不该发出去的一条-" + SEQ.incrementAndGet()))
-                .andExpect(status().is3xxRedirection());
+        seedPost(superAdmin(), outsider.getId(), "不该发出去的-" + SEQ.incrementAndGet());
 
-        assertThat(hashes.countByAuthorId(outsider.getId())).isZero();
+        assertThat(postsOf(outsider.getId())).isEmpty();
     }
 
     /** 移出之后不能再作为新内容的发布者。 */
@@ -176,12 +202,9 @@ class AdminPublishIdentityIntegrationTest extends ApiIntegrationTest {
                         .with(authentication(superAdmin())).with(csrf()))
                 .andExpect(status().is3xxRedirection());
 
-        mvc.perform(post("/admin/seed-batch").with(authentication(superAdmin())).with(csrf())
-                        .param("virtualUserId", String.valueOf(u.getId()))
-                        .param("lines", "移出后不该发出去-" + SEQ.incrementAndGet()))
-                .andExpect(status().is3xxRedirection());
+        seedPost(superAdmin(), u.getId(), "移出后不该发出去-" + SEQ.incrementAndGet());
 
-        assertThat(hashes.countByAuthorId(u.getId())).isZero();
+        assertThat(postsOf(u.getId())).isEmpty();
     }
 
     // ——————————————————— 🛡 AC3 移出 ≠ 封号 ———————————————————
@@ -196,11 +219,11 @@ class AdminPublishIdentityIntegrationTest extends ApiIntegrationTest {
     void removalIsNotABanAndLeavesHistoryIntact() throws Exception {
         User u = grantedRealAccount();
         String marker = "移出前发的一条-" + SEQ.incrementAndGet();
-        mvc.perform(post("/admin/seed-batch").with(authentication(superAdmin())).with(csrf())
-                        .param("virtualUserId", String.valueOf(u.getId()))
-                        .param("lines", marker))
-                .andExpect(status().is3xxRedirection());
-        long publishedBefore = hashes.countByAuthorId(u.getId());
+        seedPost(superAdmin(), u.getId(), marker);
+        long publishedBefore = postsOf(u.getId()).size();
+        // ⚠️ 不先钉住「确实发出去了」的话，下面那句 hasSize(publishedBefore) 在「一条都没发成」时
+        //    也是 0 == 0 恒绿 —— 而「移出不删历史」这件事就一次都没被验到。
+        assertThat(publishedBefore).as("前置：这条得真发出去").isEqualTo(1);
 
         mvc.perform(post("/admin/publish-identities/" + u.getId() + "/remove")
                         .with(authentication(superAdmin())).with(csrf()))
@@ -210,7 +233,7 @@ class AdminPublishIdentityIntegrationTest extends ApiIntegrationTest {
         assertThat(reloaded.isEnabled()).as("移出不是封号").isTrue();
         assertThat(reloaded.getAccountType()).isEqualTo(AccountType.REAL);
         assertThat(reloaded.getDeletedAt()).isNull();
-        assertThat(hashes.countByAuthorId(u.getId())).isEqualTo(publishedBefore);
+        assertThat(postsOf(u.getId())).hasSize((int) publishedBefore);
     }
 
     /** 移出留痕、不删行 —— 否则"谁在什么时候把谁移出去的"就查不到了。 */
@@ -301,13 +324,10 @@ class AdminPublishIdentityIntegrationTest extends ApiIntegrationTest {
         Authentication onlyVirtual =
                 auth(AdminAccountType.STAFF, AdminPermissions.VIRTUAL_ACCOUNT_MANAGE);
 
-        mvc.perform(post("/admin/seed-batch").with(authentication(onlyVirtual)).with(csrf())
-                        .param("virtualUserId", String.valueOf(real.getId()))
-                        .param("lines", "越权发的一条-" + SEQ.incrementAndGet()))
-                .andExpect(status().is3xxRedirection());
+        seedPost(onlyVirtual, real.getId(), "越权发的一条-" + SEQ.incrementAndGet());
 
-        assertThat(hashes.countByAuthorId(real.getId()))
-                .as("只有 virtual_account.manage 不该能以真人身份发布").isZero();
+        assertThat(postsOf(real.getId()))
+                .as("只有 virtual_account.manage 不该能以真人身份发布").isEmpty();
     }
 
     /** 同一个人选虚拟账号仍然发得出去 —— 别把常用路径一起锁死。 */
@@ -317,12 +337,9 @@ class AdminPublishIdentityIntegrationTest extends ApiIntegrationTest {
         Authentication onlyVirtual =
                 auth(AdminAccountType.STAFF, AdminPermissions.VIRTUAL_ACCOUNT_MANAGE);
 
-        mvc.perform(post("/admin/seed-batch").with(authentication(onlyVirtual)).with(csrf())
-                        .param("virtualUserId", String.valueOf(virtualId))
-                        .param("lines", "虚拟号照常发-" + SEQ.incrementAndGet()))
-                .andExpect(status().is3xxRedirection());
+        seedPost(onlyVirtual, virtualId, "虚拟号照常发-" + SEQ.incrementAndGet());
 
-        assertThat(hashes.countByAuthorId(virtualId)).isEqualTo(1);
+        assertThat(postsOf(virtualId)).hasSize(1);
     }
 
     /** 🛡 没有 {@code seed.publish_as_real} 的人连纳入都不行。 */
@@ -395,9 +412,16 @@ class AdminPublishIdentityIntegrationTest extends ApiIntegrationTest {
         Authentication admin = superAdmin();
         long adminId = ((AdminUserDetails) admin.getPrincipal()).getAdminAccountId();
 
-        mvc.perform(post("/admin/seed-batch").with(authentication(admin)).with(csrf())
-                        .param("virtualUserId", String.valueOf(u.getId()))
-                        .param("lines", "要留操作人痕迹的一条-" + SEQ.incrementAndGet()))
+        // ⚠️ 去重哈希与「按发布键的后台账号」是**批量路径**的产物（单条发布不写），
+        //    所以这一条改走四步流的确认发布 —— 与被删的轻量批量端点同一份记录逻辑。
+        long batchId = batchService.openBatch(
+                com.tailtopia.admin.seed.domain.SeedBatch.Source.ONLINE_PASTE, adminId).getId();
+        var row = batchService.addDraft(batchId, 1, u.getId(),
+                com.tailtopia.content.domain.ContentType.DAILY, null,
+                "要留操作人痕迹的一条-" + SEQ.incrementAndGet(), null, null);
+        batchService.markValidated(row.getId());
+        mvc.perform(post("/admin/seed-batches/" + batchId + "/confirm")
+                        .with(authentication(admin)).with(csrf()))
                 .andExpect(status().is3xxRedirection());
 
         assertThat(hashes.findAll().stream()

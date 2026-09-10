@@ -17,20 +17,24 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <div class="card card-wide">
-            <h1 th:text="#{admin.seed.title}">发布种子内容</h1>
-            <div class="tabs" data-tabs>
-                <button class="tab active" type="button" data-tab-target="single" th:text="#{admin.seed.tab.single}">单独发布</button>
-                <button class="tab" type="button" data-tab-target="batch"
-                        sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')" th:text="#{admin.seed.tab.batch}">批量发布</button>
-            </div>
-            <p class="ok" th:if="${publishedId}">
-                <span th:text="#{admin.seed.published.prefix}">已发布，内容 ID：</span><span th:text="${publishedId}">0</span><span th:text="#{admin.seed.published.suffix}">（与用户内容混排，无特殊标记）。</span>
-            </p>
-            <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
-            <div class="banner err" th:if="${error}" th:text="${error}">err</div>
-            <section class="tab-panel" data-tab-panel="single">
-                <form th:action="@{/admin/seed-post}" th:object="${seedPostForm}" method="post"
+        <h1 th:text="#{admin.seed.title}">发布种子内容</h1>
+        <p class="ok" th:if="${publishedId}">
+            <span th:text="#{admin.seed.published.prefix}">已发布，内容 ID：</span><span th:text="${publishedId}">0</span><span th:text="#{admin.seed.published.suffix}">（与用户内容混排，无特殊标记）。</span>
+        </p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!--/* 模板 E 单步壳（V1.3.0 Story 7.6 · AC1）：本页只有一步，套壳是为了与批量工作台
+               视觉一致（同一套步骤条 + 吸底提交条）。页内原先的「逐行批量发布」「Excel 导入并发布」
+               两个区块已删 —— 那条轻量批量路径**没有预览、提交即上线**，50 行错 3 行就是 3 条线上真帖；
+               能力由 /admin/seed-batches 的四步流完整承载（建批次 → 素材 → 录内容 → 预览确认）。 */-->
+        <div th:replace="~{admin/fragments/tpl-e-steps :: steps(~{::seed-steps}, ~{::seed-body}, ~{::seed-footer})}">
+            <ol th:fragment="seed-steps" class="step-bar">
+                <li class="step step--on" th:text="#{admin.v130.seed.step.single}">单条发布</li>
+            </ol>
+
+            <div th:fragment="seed-body">
+                <form id="seedPostForm" th:action="@{/admin/seed-post}" th:object="${seedPostForm}" method="post"
                       data-seed-form
                       th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
                     <div th:if="${#fields.hasGlobalErrors()}">
@@ -110,54 +114,17 @@
                     <!-- HTMX：切换发布账号 → 换掉这一块（AC4）。 -->
                     <div th:replace="~{admin/fragments/seed-pet-select :: options}"></div>
 
-                    <button type="submit" class="btn btn-primary form-submit" th:text="#{admin.seed.submit}">发布</button>
                 </form>
-            </section>
-            <section class="tab-panel" data-tab-panel="batch" hidden
-                     sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')">
-                <p class="hint"><span th:text="#{admin.seed.batch.hint.intro}">以选定发布账号为作者逐条发日常（DAILY）种子。每行一条，格式</span>
-                    <code th:text="#{admin.seed.batch.hint.fmt1}">文本</code> <span th:text="#{admin.seed.batch.hint.or}">或</span> <code th:text="#{admin.seed.batch.hint.fmt2}">文本 ||| 图URL1, 图URL2</code><span th:text="#{admin.seed.batch.hint.tail}">（≤9 图）。相同内容跨批自动去重跳过。</span></p>
-                <!-- 发布账号选择器走共用片段（V1.1.6 Story 12.1 · AC6）：分组 / 真实账号带标记 /
-                     默认不预选 / 仅选中真实账号时弹二次确认。三处发布入口共用同一份实现。 -->
-                <form method="post" th:action="@{/admin/seed-batch}"
-                      th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
-                    <div th:replace="~{admin/fragments/publish-identity-select :: identity-select(${publishIdentities}, 'batchVirtualUserId', 'virtualUserId', null, null, null)}"></div>
-                    <label class="field" for="batchLines" th:text="#{admin.seed.batch.lines}">批量内容（每行一条）</label>
-                    <textarea id="batchLines" name="lines" rows="12" required
-                              th:placeholder="#{admin.seed.batch.linesPlaceholder}"
-                              placeholder="今天带喵星人晒太阳啦 ||| https://cdn/x.jpg&#10;第二条日常..."></textarea>
-                    <button type="submit" class="btn btn-primary form-submit" th:text="#{admin.seed.batch.submit}">批量发布</button>
-                </form>
-                <hr class="section-line"/>
-                <form method="post" th:action="@{/admin/seed-batch/import}" enctype="multipart/form-data"
-                      th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
-                    <div th:replace="~{admin/fragments/publish-identity-select :: identity-select(${publishIdentities}, 'importVirtualUserId', 'virtualUserId', null, null, null)}"></div>
-                    <label class="field" for="seedImportFile" th:text="#{admin.seed.batch.excel}">Excel 导入</label>
-                    <input id="seedImportFile" name="file" type="file" class="field-full" required
-                           accept=".xlsx,.xls,.csv,.tsv,.txt"/>
-                    <p class="hint" th:text="#{admin.seed.batch.excelHint}">Excel 第一张表：第 1 列正文，第 2 列图片 URL（多个 URL 用逗号分隔）。首行“文本 / 正文 / text / content”会自动跳过。</p>
-                    <p><a class="btn btn-neutral btn-sm" th:href="@{/admin/seed-batch/template}" th:text="#{admin.seed.batch.template}">下载 Excel 示例</a></p>
-                    <button type="submit" class="btn btn-primary" th:text="#{admin.seed.batch.import}">导入并发布</button>
-                </form>
-            </section>
+            </div>
+
+            <!--/* ⚠️ 提交钮在吸底条里、表单在上面 —— 用 form="seedPostForm" 关联。
+                   HTML5 的 form 属性提交的仍是那张表单，submit 事件照常从表单冒泡，
+                   admin-core.js 的「选了真实账号才二次确认」钩子不受影响。 */-->
+            <div th:fragment="seed-footer">
+                <button type="submit" form="seedPostForm" class="btn btn-primary form-submit"
+                        th:text="#{admin.seed.submit}">发布</button>
+            </div>
         </div>
-        <script>
-            (() => {
-                const root = document.querySelector('[data-tabs]');
-                if (!root) return;
-                const buttons = [...document.querySelectorAll('[data-tab-target]')];
-                const panels = [...document.querySelectorAll('[data-tab-panel]')];
-                const show = (name) => {
-                    buttons.forEach(b => b.classList.toggle('active', b.dataset.tabTarget === name));
-                    panels.forEach(p => p.hidden = p.dataset.tabPanel !== name);
-                    history.replaceState(null, '', `${location.pathname}?tab=${name}`);
-                };
-                buttons.forEach(b => b.addEventListener('click', () => show(b.dataset.tabTarget)));
-                const wantsBatch = new URLSearchParams(location.search).get('tab') === 'batch';
-                const initial = wantsBatch && panels.some(p => p.dataset.tabPanel === 'batch') ? 'batch' : 'single';
-                show(initial);
-            })();
-        </script>
     </div>
 </div>
 </body>

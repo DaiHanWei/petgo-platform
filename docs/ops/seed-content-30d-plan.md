@@ -18,7 +18,6 @@
 | `/admin/seed-batches/{id}/template` | 下载 Excel 模板（6 列） |
 | `/admin/seed-batches?tab=schedules` | 定时发布队列：改时间、取消（V1.3.0 起并入批量内容页第二页签，原 `/admin/content-schedules` 已退役） |
 | `/admin/seed-post` | 单条发布（要挑具体宠物、要传图时用） |
-| `/admin/seed-batch?tab=batch` | 旧的「贴多行就发」——**没有预览**，去重命中会静默跳过，只适合临时补几条 |
 
 **Excel 六列**：`正文` / `图片文件名` / `发布账号` / `内容类型` / `关联物种` / `计划发布时间`
 

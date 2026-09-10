@@ -382,8 +382,19 @@ document.addEventListener('submit', function (e) {
     if (!form || !form.getAttribute) { return; }
     var msg = form.getAttribute('data-real-identity-confirm');
     if (!msg) { return; }
-    var select = form.querySelector('select[name="virtualUserId"]');
-    var opt = select && select.selectedIndex >= 0 ? select.options[select.selectedIndex] : null;
+    // 🔴 按 option[data-real] 判，而不是认死某个 name（V1.3.0 Story 7.6 复审 P3）：
+    //    这个钩子原先只找 select[name="virtualUserId"]，而种子发布链路里的下拉分别叫
+    //    authorUserId（单发 / 行级）与 defaultAuthorUserId（批次默认）——
+    //    唯一还叫 virtualUserId 的那两张表单正是 7.6 删掉的旧轻量批量区块。
+    //    也就是说这条「选了运营真实账号才二次确认」的防呆在 E1/E2 上一直是**死的**。
+    //    共用片段渲染出的 option 一律带 data-real，按它判就不再依赖字段名。
+    var opt = null;
+    var selects = form.querySelectorAll('select');
+    for (var i = 0; i < selects.length && !opt; i++) {
+        var sel = selects[i];
+        var chosen = sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+        if (chosen && chosen.hasAttribute('data-real')) { opt = chosen; }
+    }
     if (opt && opt.getAttribute('data-real') === 'true' && !window.confirm(msg)) {
         e.preventDefault();
     }

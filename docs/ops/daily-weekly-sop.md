@@ -26,7 +26,7 @@ python3 scripts/ops/daily-health-check.py --out ~/tailtopia-health/$(date +%F).m
 |---|---|---|---|
 | 1 | **D1 留存**（北极星） | < 10% 报警 | **先查推送有没有发出去，别先改文案**——两者长得一模一样。看后端日志 `lifecycle push daily scan: users=.. planned=.. dispatched=..`：`planned=0` → 开关/取数问题；`dispatched < planned` → 撞每日上限，正常；两者都 > 0 而 D1 没动 → 才轮到换文案 |
 | 2 | **在线兽医数 vs 问诊请求** | 无人接单 ≥ 1 单 | 补兽医；补不上就**限流**，别让用户发起了再空等。⚠️ 在线兽医数在后端 Redis，体检脚本查不到，要去后台兽医管理页看 |
-| 3 | **Feed 当日新内容** | < 5 条 | 去 `/admin/seed-post?tab=batch` 补种子。⚠️ 脚本只数得到 App 内发布的埋点，**运营种子不经埋点**——补之前先去后台确认今天实际发了多少 |
+| 3 | **Feed 当日新内容** | < 5 条 | 去 `/admin/seed-batches` 新建批次补种子（四步：批次设置 → 素材 → 录内容 → 预览确认；单条零散补用 `/admin/seed-post`）。⚠️ 脚本只数得到 App 内发布的埋点，**运营种子不经埋点**——补之前先去后台确认今天实际发了多少 |
 | 4 | **召回 push 漏斗** | 点击率/建档率下滑 | 换文案（备选臂见 `retention-push-copy-matrix.md` §2）。⚠️ 这块在后端库，体检报告末尾直接给了 SQL |
 
 ### 第 5 步 · 记一行日志（30 秒，两周后校准阈值全靠它）
