@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  B22 历史会话查询的结果表（V1.3.0 Story 9.2，模板 B · 只读）。
+  🔴 本页**没有摘要条**：它是「按条件查一批」的取证页，不是一张有总量口径的台账 ——
+     摆一个「共 N 条」只会让人以为那是系统里的会话总数（其实是本次查询命中的条数）。
+     `rows(oob)` 的 oob 形参保留，是为了与其它页同形（也让刷新槽将来能用）。
+  🔴 NFR5：只有会话元数据 + 评分。这一份数据里没有 IM 正文 / AI 分诊 / 用户媒体。
+*/-->
+<body>
+<th:block th:fragment="rows(oob)">
+    <table th:if="${!#lists.isEmpty(items)}" class="tags-table">
+        <thead>
+        <tr>
+            <th class="nowrap" th:text="#{admin.sessions.col.session}">会话</th>
+            <th class="nowrap" th:text="#{admin.sessions.col.user}">用户</th>
+            <th class="nowrap" th:text="#{admin.sessions.col.vet}">兽医</th>
+            <th class="nowrap" th:text="#{admin.sessions.col.started}">开始</th>
+            <th class="nowrap" th:text="#{admin.sessions.col.ended}">结束</th>
+            <th th:text="#{admin.sessions.col.status}">状态</th>
+            <th th:text="#{admin.sessions.col.rating}">评分</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="s : ${items}" th:id="'session-row-' + ${s.sessionId()}"
+            th:data-id="${s.sessionId()}"
+            th:data-drawer-url="@{/admin/consult-sessions/{id}/drawer(id=${s.sessionId()})}"
+            tabindex="0">
+            <td class="nowrap" th:text="${s.sessionId()}">1</td>
+            <!--/* 注销后 userId 被匿名化置空（D2）—— 显示「已匿名」而不是空白，
+                   空白会被读成「数据丢了」。 */-->
+            <td class="nowrap muted"
+                th:text="${s.userId() != null} ? ${s.userId()} : #{admin.sessions.anonymized}">-</td>
+            <td class="nowrap muted" th:text="${s.vetId()}">-</td>
+            <td class="nowrap" th:text="${@adminTime.wib(s.startedAt())}">-</td>
+            <td class="nowrap" th:text="${@adminTime.wib(s.endedAt())}">-</td>
+            <td class="nowrap"><code th:text="${s.status()}">CLOSED</code></td>
+            <td class="nowrap">
+                <span th:if="${s.stars() != null}" th:text="${s.stars()} + ' ★'">5 ★</span>
+                <span th:unless="${s.stars() != null}" class="muted"
+                      th:text="#{admin.sessions.noRating}">未评分</span>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+
+    <!--/* 两种空态分开：还没查 vs 查了没有。合成一句的话，运营打开页面就会看到
+           「无匹配会话」，以为系统里一条都没有。 */-->
+    <div class="empty" th:if="${#lists.isEmpty(items)}">
+        <span class="empty-emoji">🔍</span>
+        <p th:if="${searched}" th:text="#{admin.sessions.empty}">无匹配会话。</p>
+        <p th:unless="${searched}" data-notice="sessions-search-first"
+           th:text="#{admin.v130.sessions.searchFirst}">先填查询条件再点「查询」。</p>
+    </div>
+</th:block>
+</body>
+</html>

@@ -1,66 +1,66 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
-<!-- 问诊会话元数据查询（Story 5.2，AB-4B）。纯只读：按用户/兽医/日期查会话元数据 + 评分。
-     NFR5：仅元数据，绝不含 IM 正文/AI 分诊/用户媒体。门控 consult.view_sessions。 -->
+<!--/*
+  问诊会话元数据查询（Story 5.2 · AB-4B → V1.3.0 Story 9.2 套模板 B · tpl-b-list，UI 稿 6-9）。
+  纯只读：按用户 / 兽医 / 日期查会话元数据 + 评分。门控 consult.view_sessions。
+  🔴 NFR5：仅元数据，绝不含 IM 正文 / AI 分诊 / 用户媒体 —— 抽屉是取证视图，不是聊天记录。
+  🔴 与「未成功请求」**维持两页独立**（2026-09-04 拍板）：不合并、不共享筛选条。
+  ⚠️ 查询条件走**显式「查询」钮**，不 autosubmit：这一页每次查询都是一次全表 Specification，
+     边填边查会在只填了一半的条件上打一遍库。
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.sessions.title}">问诊会话查询 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
-    <div th:fragment="content" th:remove="tag">
+    <!--/* ⚠️ res 设在这一层，不能写在下面那个带 th:replace 的 div 上（优先级 100 vs 600，
+           同标签时 th:with 被静默丢弃 —— 见 AdminTemplateStructureTest 的守门）。 */-->
+    <div th:fragment="content" th:remove="tag" th:with="res='session',noDrawer=false">
         <h1 th:text="#{admin.sessions.title}">问诊会话查询</h1>
-        <p class="muted" th:text="#{admin.sessions.note}">仅展示系统内会话元数据 + 评分；不触达第三方消息正文/AI/媒体。</p>
+        <!--/* 🔴 这句常驻：它解释了「为什么这里查不到聊天内容」。删掉之后，
+               每一个第一次用这页的人都会以为功能没做完。 */-->
+        <p class="hint" data-notice="sessions-nfr5" th:text="#{admin.sessions.note}">
+            仅展示系统内会话元数据 + 评分；不触达第三方消息正文/AI/媒体。</p>
 
-        <form class="filter-bar" th:action="@{/admin/consult-sessions}" method="get"
-              hx-get="/admin/consult-sessions" hx-target="#session-rows" hx-swap="outerHTML">
-            <label>
-                <input type="number" name="userId" th:value="${userId}" min="1"
-                       th:placeholder="#{admin.sessions.userId}" style="width:120px"/>
-            </label>
-            <label>
-                <input type="number" name="vetId" th:value="${vetId}" min="1"
-                       th:placeholder="#{admin.sessions.vetId}" style="width:120px"/>
-            </label>
-            <label><input type="date" name="from" th:value="${from}"/></label>
-            <label><input type="date" name="to" th:value="${to}"/></label>
-            <button type="submit" class="btn btn-primary" th:text="#{admin.sessions.search}">查询</button>
-        </form>
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::session-filters}, ~{}, ~{::session-table}, ~{::session-drawer})}">
+            <form th:fragment="session-filters" id="session-filters-form"
+                  th:action="@{/admin/consult-sessions}" method="get"
+                  hx-get="/admin/consult-sessions" hx-target="#session-rows" hx-swap="innerHTML">
+                <label class="field"><span th:text="#{admin.sessions.userId}">用户 ID</span>
+                    <input type="number" name="userId" class="inp" th:value="${userId}" min="1"/>
+                </label>
+                <label class="field"><span th:text="#{admin.sessions.vetId}">兽医 ID</span>
+                    <input type="number" name="vetId" class="inp" th:value="${vetId}" min="1"/>
+                </label>
+                <!--/* 日期按 **UTC** 日界（服务层如此，未改）：与本站其它页的 WIB 不一样，标注出来。 */-->
+                <label class="field"><span th:text="#{admin.v130.sessions.range}">会话时间段（UTC）</span>
+                    <input type="date" name="from" class="inp" th:value="${from}"/>
+                    <input type="date" name="to" class="inp" th:value="${to}"/>
+                    <span class="muted">UTC</span>
+                </label>
+                <button type="submit" class="btn btn-primary btn-sm"
+                        th:text="#{admin.sessions.search}">查询</button>
+                <a th:href="@{/admin/consult-sessions}" class="btn btn-sm" data-no-drawer
+                   th:text="#{admin.payments.btn.reset}">清空筛选</a>
+            </form>
 
-        <table>
-            <thead>
-            <tr>
-                <th th:text="#{admin.sessions.col.session}">会话</th>
-                <th th:text="#{admin.sessions.col.user}">用户</th>
-                <th th:text="#{admin.sessions.col.vet}">兽医</th>
-                <th th:text="#{admin.sessions.col.started}">开始</th>
-                <th th:text="#{admin.sessions.col.ended}">结束</th>
-                <th th:text="#{admin.sessions.col.status}">状态</th>
-                <th th:text="#{admin.sessions.col.rating}">评分</th>
-            </tr>
-            </thead>
-            <tbody id="session-rows" th:fragment="rows">
-            <tr th:each="s : ${items}">
-                <td th:text="${s.sessionId()}">1</td>
-                <td th:text="${s.userId() != null} ? ${s.userId()} : #{admin.sessions.anonymized}">-</td>
-                <td th:text="${s.vetId()}">-</td>
-                <td th:text="${@adminTime.wib(s.startedAt())}">-</td>
-                <td th:text="${@adminTime.wib(s.endedAt())}">-</td>
-                <td th:text="${s.status()}">CLOSED</td>
-                <td>
-                    <span th:if="${s.stars() != null}">
-                        <span th:text="${s.stars()} + '★'">5★</span>
-                        <span class="muted" th:if="${s.comment()}" th:text="${s.comment()}">…</span>
-                    </span>
-                    <span th:unless="${s.stars() != null}" class="muted" th:text="#{admin.sessions.noRating}">未评分</span>
-                </td>
-            </tr>
-            <tr th:if="${searched and #lists.isEmpty(items)}">
-                <td colspan="7" class="empty" th:text="#{admin.sessions.empty}">无匹配会话。</td>
-            </tr>
-            </tbody>
-        </table>
+            <div th:fragment="session-table" id="session-rows">
+                <div th:replace="~{admin/fragments/consult-sessions-list :: rows(false)}"></div>
+            </div>
+
+            <div th:fragment="session-drawer" class="drawer-title"
+                 th:text="#{admin.v130.sessions.drawer.title}">会话取证</div>
+        </div>
+
+        <!--/* ?open=<sessionId> 页内深链：A4 异常工单的「去取证」就落在这里（新开标签）。
+               admin-drawer.js 先按当前页找行，找不到就用这里给的 URL —— 后者才是常态：
+               深链进来时查询条件是空的，表里一行都没有。 */-->
+        <span hidden th:if="${open != null}" data-drawer-res="session"
+              th:attr="data-drawer-deeplink=@{/admin/consult-sessions/{id}/drawer(id=${open})}"></span>
     </div>
 </div>
 </body>

@@ -70,7 +70,7 @@ class FailedRequestAccessControlTest {
     }
 
     private void list() {
-        controller.list(new ConcurrentModel());
+        controller.list(null, null, com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel());
     }
 
     @Test

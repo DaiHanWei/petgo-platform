@@ -67,6 +67,28 @@ public class FailedConsultRequestService {
         return repo.findByArchivedAtIsNotNullOrderByArchivedAtDesc();
     }
 
+    /**
+     * 摘要条三格（V1.3.0 Story 9.2 · AC1）：活动数 · SYSTEM_FAILURE 数 · 已跟进数。
+     *
+     * <p>⚠️ 入参就是当前页签那一份 rows，不另查一遍 —— 摘要与表格必须同源，
+     * 各查各的话跨秒时两个数能对不上，而运营会当成统计错了。
+     * 「随页签联动」= 对当前页签的集合统计（活动页签统计活动的，已归档页签统计已归档的）。
+     */
+    public com.tailtopia.admin.failedrequest.dto.FailedRequestSummary summary(
+            List<FailedConsultRequest> rows) {
+        long systemFailure = rows.stream()
+                .filter(r -> CancelReason.SYSTEM_FAILURE.equals(r.getCancelReason())).count();
+        long followedUp = rows.stream().filter(FailedConsultRequest::isFollowedUp).count();
+        return new com.tailtopia.admin.failedrequest.dto.FailedRequestSummary(
+                rows.size(), systemFailure, followedUp);
+    }
+
+    /** 单条（抽屉用）。不存在 → 404。 */
+    @Transactional(readOnly = true)
+    public FailedConsultRequest one(long id) {
+        return require(id);
+    }
+
     @Transactional
     public void followUp(long id, long actorAccountId) {
         FailedConsultRequest r = require(id);

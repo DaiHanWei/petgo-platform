@@ -1,92 +1,65 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
-<!-- 问诊请求未成功队列（Story 2.9，AB-2G）。活动/归档分区；SYSTEM_FAILURE 红预警 + 强制跟进方可归档。门控 vet.view。 -->
+<!--/*
+  问诊请求未成功队列（Story 2.9 · AB-2G → V1.3.0 Story 9.2 套模板 B · tpl-b-list，UI 稿 6-8）。
+  9.2 的改动是页面组织：活动 / 已归档两张平铺表改成**页签 + 一张表**，行内三个动作移进抽屉，
+  加摘要条三格。三个写端点的路径 / 参数 / 权限逐字未动。
+  🔴 SYSTEM_FAILURE 强制跟进方可归档 —— 服务层那道判定一个字没动，抽屉里只是**提前告诉运营**。
+  门控 vet.view（接诊能力监控归兽医管理权限组）。
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.failed.title}">未成功请求 · TailTopia 运营</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
-    <div th:fragment="content" th:remove="tag">
+    <!--/* ⚠️ res 设在这一层，不能写在下面那个带 th:replace 的 div 上（优先级 100 vs 600，
+           同标签时 th:with 被静默丢弃 —— 见 AdminTemplateStructureTest 的守门）。 */-->
+    <div th:fragment="content" th:remove="tag" th:with="res='failed'">
         <h1 th:text="#{admin.failed.title}">问诊请求未成功队列</h1>
+        <p class="hint" th:text="#{admin.v130.failed.hint}">
+            掉单巡查：只有「系统故障」那部分是我们自己的问题，它必须先标记跟进才能归档。</p>
+
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
-        <h2 th:text="#{admin.failed.active}">活动</h2>
-        <table>
-            <thead>
-            <tr>
-                <th th:text="#{admin.failed.col.token}">请求</th>
-                <th th:text="#{admin.failed.col.user}">用户</th>
-                <th th:text="#{admin.failed.col.submitted}">提交</th>
-                <th th:text="#{admin.failed.col.cancelled}">取消</th>
-                <th th:text="#{admin.failed.col.reason}">原因</th>
-                <th th:text="#{admin.failed.col.online}">在线兽医</th>
-                <th th:text="#{admin.failed.col.followed}">跟进</th>
-                <th th:text="#{admin.failed.col.note}">备注</th>
-                <th th:text="#{admin.failed.col.action}">操作</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="r : ${activeItems}"
-                th:classappend="${r.systemFailure} ? 'row-alert'">
-                <td class="mono" th:text="${#strings.abbreviate(r.requestToken, 10)}">tok</td>
-                <td th:text="${r.userId}">1</td>
-                <td th:text="${@adminTime.wib(r.submittedAt)}">-</td>
-                <td th:text="${@adminTime.wib(r.cancelledAt)}">-</td>
-                <td>
-                    <span class="badge" th:classappend="${r.systemFailure} ? 'badge-danger' : 'badge-info'"
-                          th:text="#{'admin.failed.reason.' + ${r.cancelReason.name()}}">原因</span>
-                </td>
-                <td th:text="${r.onlineVetCount}">0</td>
-                <td th:text="${r.followedUp} ? #{admin.failed.yes} : #{admin.failed.no}">否</td>
-                <td>
-                    <form class="inline" th:action="@{/admin/failed-requests/{id}/note(id=${r.id})}" method="post">
-                        <input type="text" name="note" th:value="${r.note}"/>
-                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.failed.saveNote}">保存备注</button>
-                    </form>
-                </td>
-                <td>
-                    <form class="inline" th:unless="${r.followedUp}"
-                          th:action="@{/admin/failed-requests/{id}/follow-up(id=${r.id})}" method="post">
-                        <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.failed.followUp}">标记跟进</button>
-                    </form>
-                    <form class="inline" th:action="@{/admin/failed-requests/{id}/archive(id=${r.id})}" method="post">
-                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.failed.archive}">归档</button>
-                    </form>
-                </td>
-            </tr>
-            <tr th:if="${#lists.isEmpty(activeItems)}">
-                <td colspan="9" class="empty" th:text="#{admin.failed.empty}">暂无记录</td>
-            </tr>
-            </tbody>
-        </table>
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::failed-filters}, ~{::failed-summary}, ~{::failed-table}, ~{::failed-drawer})}">
+            <!--/* 页签用**查询参数**而不是前端切 hidden：两个区是两次查询，
+                   而且运营会把「已归档」那一页存成书签。 */-->
+            <div th:fragment="failed-filters" class="tabs" role="tablist">
+                <a class="tab" role="tab" data-no-drawer
+                   th:classappend="${tab != 'archived'} ? 'tab--on'"
+                   th:href="@{/admin/failed-requests}" th:text="#{admin.failed.active}">活动</a>
+                <a class="tab" role="tab" data-no-drawer
+                   th:classappend="${tab == 'archived'} ? 'tab--on'"
+                   th:href="@{/admin/failed-requests(tab='archived')}"
+                   th:text="#{admin.failed.archived}">已归档</a>
+            </div>
 
-        <h2 style="margin-top:24px" th:text="#{admin.failed.archived}">归档</h2>
-        <table>
-            <thead>
-            <tr>
-                <th th:text="#{admin.failed.col.token}">请求</th>
-                <th th:text="#{admin.failed.col.user}">用户</th>
-                <th th:text="#{admin.failed.col.reason}">原因</th>
-                <th th:text="#{admin.failed.col.online}">在线兽医</th>
-                <th th:text="#{admin.failed.col.note}">备注</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="r : ${archivedItems}">
-                <td class="mono" th:text="${#strings.abbreviate(r.requestToken, 10)}">tok</td>
-                <td th:text="${r.userId}">1</td>
-                <td th:text="#{'admin.failed.reason.' + ${r.cancelReason.name()}}">原因</td>
-                <td th:text="${r.onlineVetCount}">0</td>
-                <td th:text="${r.note}">-</td>
-            </tr>
-            <tr th:if="${#lists.isEmpty(archivedItems)}">
-                <td colspan="5" class="empty" th:text="#{admin.failed.empty}">暂无记录</td>
-            </tr>
-            </tbody>
-        </table>
+            <div th:fragment="failed-summary" th:replace="~{admin/fragments/failed-requests-list :: sumbar(false)}"></div>
+
+            <div th:fragment="failed-table" id="failed-rows">
+                <div th:replace="~{admin/fragments/failed-requests-list :: rows(false)}"></div>
+            </div>
+
+            <div th:fragment="failed-drawer" class="drawer-title"
+                 th:text="#{admin.v130.failed.drawer.title}">未成功请求</div>
+        </div>
+
+        <!--/* 抽屉里处置成功后按**当前页签**整表重拉。
+               ⚠️ 页签值烤进 URL 是对的：切页签走的是整页 GET（上面是 <a>），
+                  所以这一段每次都会重渲染，不存在「页签变了、槽位没变」的窗口。 */-->
+        <span hidden id="failed-refresh"
+              th:attr="hx-get=@{/admin/failed-requests(tab=${tab})}"
+              hx-trigger="admin:failed-request-list-refresh from:body"
+              hx-target="#failed-rows" hx-swap="innerHTML"></span>
+
+        <!--/* ?open=<id> 深链兜底：admin-drawer.js 先按当前页找行，找不到就用这里给的 URL。 */-->
+        <span hidden th:if="${open != null}" data-drawer-res="failed"
+              th:attr="data-drawer-deeplink=@{/admin/failed-requests/{id}/drawer(id=${open})}"></span>
     </div>
 </div>
 </body>

@@ -129,6 +129,16 @@ public class FailedConsultRequest {
         return userId;
     }
 
+    /**
+     * 关联会话 id（可空：请求在建会话之前就失败时没有）。
+     *
+     * <p>V1.3.0 Story 9.2 新增读取方：抽屉里的「去取证」要拿它拼 B22 的页内深链。
+     * 字段本来就在，只是一直没人读。
+     */
+    public Long getSessionId() {
+        return sessionId;
+    }
+
     public Instant getSubmittedAt() {
         return submittedAt;
     }

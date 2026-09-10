@@ -53,6 +53,14 @@ public final class AdminHxEvents {
     public static final String VET_LIST_REFRESH = "admin:vet-list-refresh";
 
     /**
+     * B21 未成功请求：列表按当前页签重拉（Story 9.2）。
+     *
+     * <p>⚠️ **不做单行 oob**：归档会把这一行从「活动」移走 —— 原位换行会留下一张骗人的表
+     * （行还在活动页签里，只是状态变了）；跟进 / 备注也会改摘要条那三个数。
+     */
+    public static final String FAILED_REQUEST_LIST_REFRESH = "admin:failed-request-list-refresh";
+
+    /**
      * B12 支付记录：列表按当前筛选 + 当前页重拉（Story 8.5，仅 stag 的模拟回调会发）。
      *
      * <p>⚠️ 这里**必须整表重拉、不做单行 oob**：模拟回调改的是状态，而摘要条的

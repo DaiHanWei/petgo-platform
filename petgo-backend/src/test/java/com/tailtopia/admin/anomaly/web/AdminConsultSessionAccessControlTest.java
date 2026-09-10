@@ -70,7 +70,7 @@ class AdminConsultSessionAccessControlTest {
     }
 
     private void search() {
-        controller.search(null, null, null, null, null, new ConcurrentModel());
+        controller.search(null, null, null, null, null, null, new ConcurrentModel());
     }
 
     @Test
