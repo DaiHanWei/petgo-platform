@@ -320,13 +320,27 @@ class AdminContentTagIntegrationTest extends ApiIntegrationTest {
         assertThat(html).as("须说明取消/到期时曝光会回落").contains("曝光");
     }
 
-    /** 🛡 WIB 字样必须在时间输入旁 —— 否则运营按本地时区填，整批生效时间偏移。 */
+    /**
+     * 🛡 WIB 字样必须在**时间输入旁** —— 否则运营按本地时区填，整批生效时间偏移。
+     *
+     * <p>⚠️ V1.3.0 Story 7.4 把打标表单搬进抽屉后，整页上已经没有任何时间输入框了：
+     * 还断整页含「WIB」的话，它只会撞到副标题里的那句话而**恒绿**（7.3 复审 ⑩ 同款空转）。
+     * 所以改断**抽屉里的打标表单**：`datetime-local` 旁有 WIB，且把此刻的 WIB 直接摆出来。
+     */
     @Test
-    void pageLabelsTheTimezone() throws Exception {
-        String html = mvc.perform(get("/admin/content-tags").with(authentication(superAdminAuth()))
-                        .param("lang", "zh_CN"))
+    void assignFormInTheDrawerLabelsTheTimezoneNextToTheTimeInputs() throws Exception {
+        ContentTag t = tag("WIB_LABEL");
+        String html = mvc.perform(get("/admin/content-tags/" + t.getId() + "/drawer")
+                        .param("tab", "assignments").param("lang", "zh_CN")
+                        .header("HX-Request", "true")
+                        .with(authentication(superAdminAuth())))
+                .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        assertThat(html).contains("WIB");
+        assertThat(html).contains("datetime-local");
+        int input = html.indexOf("datetime-local");
+        assertThat(html.substring(input)).as("WIB 必须紧挨着时间输入框").contains("WIB");
+        assertThat(html).as("把此刻的 WIB 摆出来，不要求任何人心算时差")
+                .contains("data-notice=\"wib-now\"");
     }
 
     // ——————————————————— 🛡 AC6 双权限码 ———————————————————

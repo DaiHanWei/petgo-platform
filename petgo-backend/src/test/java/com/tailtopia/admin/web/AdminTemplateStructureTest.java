@@ -308,30 +308,38 @@ class AdminTemplateStructureTest {
     }
 
     /**
-     * 🔴 **没有可用标签时，「给内容打标」不许渲染一个点不开的空下拉**（bug 20260828）。
+     * 🔴 **打不成的标，不许渲染一张打标表单**（bug 20260828 的延续）。
      *
-     * <p>实机：一个标签都还没建，页面照样把整张打标表单铺出来 —— 一个空的、点开什么都没有的
+     * <p>原始事故：一个标签都还没建，页面照样把整张打标表单铺出来 —— 一个空的、点开什么都没有的
      * 下拉，底下跟着几十条待选内容。界面上没有任何一句话说明「先去建标签」，
      * 于是它读起来像**坏了**，而不是像**还没准备好**。运营的原话就是「点不开，是空的」。
      *
-     * <p>⚠️ 用文本结构断言而不是渲染断言：要渲染出这一屏得先准备一个「零标签」的库，
-     * 而这一页的判据只有两条、都写在模板里，扫文本就够，且不依赖 Docker。
+     * <p>V1.3.0 Story 7.4 把打标收进**标签自己的抽屉**（标签在抽屉里定死，不再有选标签的下拉），
+     * 「零标签」那一屏结构上不复存在 —— 但同一个坑换了个位置还在：**已下线的标签不可再分配**
+     * （校验在 {@code ContentTagQueryService.assign}）。抽屉里照渲染表单的话，运营选完内容、
+     * 填完时间、点提交才收到一句报错，白填一遍。所以判据同样是两条：不渲染 + 说清为什么。
+     *
+     * <p>⚠️ 用文本结构断言而不是渲染断言：判据都写在模板里，扫文本就够，且不依赖 Docker。
      */
     @Test
-    void tagAssignFormIsHiddenWhenNoTagExistsYet() throws IOException {
-        String html = Files.readString(DIR.resolve("content-tags.html"));
+    void tagAssignFormIsHiddenWhenTheTagCannotBeAssigned() throws IOException {
+        String drawer = Files.readString(DIR.resolve("fragments").resolve("drawer-content-tag.html"));
 
-        assertThat(html)
-                .as("🔴 打标表单没有「无可用标签时不渲染」的条件 ⇒ 运营会看到一个点不开的空下拉")
-                .contains("th:unless=\"${#lists.isEmpty(assignable)}\"");
-        assertThat(html)
-                .as("🔴 少了「先去建标签」那句提示 ⇒ 表单藏起来之后，那一块变成一片空白，"
-                        + "比空下拉更让人不知道该干什么")
-                .contains("data-notice=\"assign-needs-tag\"");
-        assertThat(html)
-                .as("🔴 判据必须是 assignable（**在线**标签）而不是 tags —— "
-                        + "标签全部下线时同样打不了标，用 tags 判会漏掉那种情况")
-                .doesNotContain("th:unless=\"${#lists.isEmpty(tags)}\"");
+        assertThat(drawer)
+                .as("🔴 打标表单没有「标签已下线时不渲染」的条件 ⇒ 运营会白填一整张表单才收到报错")
+                .contains("th:unless=\"${t.retired()}\"");
+        assertThat(drawer)
+                .as("🔴 少了「该标签已下线」那句提示 ⇒ 表单藏起来之后，那一块变成一片空白，"
+                        + "比一张提交必报错的表单更让人不知道该干什么")
+                .contains("data-notice=\"assign-retired\"");
+
+        String page = Files.readString(DIR.resolve("content-tags.html"));
+        assertThat(page)
+                .as("🔴 页尾那个独立的「给内容打标」区块必须删干净（AC3）—— "
+                        + "留着就又有两个打标入口，而它那个「选择标签」下拉与新建表单的「名称」同屏，"
+                        + "正是运营读不懂的那一屏")
+                .doesNotContain("admin.tags.assignTitle")
+                .doesNotContain("admin.tags.assignPickTag");
     }
 
     /**

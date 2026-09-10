@@ -26,6 +26,14 @@ public interface AdminAuditLogRepository
     List<AdminAuditLog> findAllByOrderByIdAsc();
 
     /**
+     * 按动作 + 目标批量取（V1.3.0 Story 7.4：内容标签分配记录的「操作人」列）。
+     *
+     * <p>分配表本身没有操作人列，而审计是 append-only、永久保留的 —— 经后台打的标必然在这里有一条。
+     * ⚠️ 仍是**只读**：本接口不暴露任何 delete / 批量改写（见类注释）。
+     */
+    List<AdminAuditLog> findByActionTypeAndTargetIdIn(String actionType, java.util.Collection<String> targetIds);
+
+    /**
      * 最近 N 行（降序；调用方自行倒排回升序）。
      *
      * <p>V1.3.0 Story 6.5：审计页的哈希链徽标只复算最近一窗 —— 审计表 append-only 且永久保留，

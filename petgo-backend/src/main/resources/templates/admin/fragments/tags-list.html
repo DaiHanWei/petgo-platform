@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  B4 内容标签的摘要条 / 表格 / 单行（V1.3.0 Story 7.4，模板 B）。
+    summary(oob) — 两格：生效标签数 · 生效中分配数
+    rows(oob)    — 表格 + 空态；oob=true 时摘要条随片段一并换
+    row(t, oob)  — 单行；点行开抽屉（编辑 / 分配记录都在抽屉里）
+  🔴 主表只有**标签**一张表：原先页尾还并排着「新建标签」「给内容打标」「分配记录」三块，
+     同屏两个叫「名称」的输入框指的却是两件事，运营在两张表之间迷路 —— 全部收进抽屉。
+*/-->
+<body>
+<div th:fragment="summary(oob)" class="sum" id="tags-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <!--/* 文案是「在线标签数」而不是 AC1 字面的「生效标签数」：状态列写的就是「在线 / 已下线」，
+               同一件事在同屏用两个词，运营会以为「生效」还另有一层含义（偏离已记入 Completion Notes）。 */-->
+        <div class="sum-label" th:text="#{admin.v130.tags.summary.activeTags}">在线标签数</div>
+        <div class="sum-value" th:text="${summary.activeTags}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.tags.summary.activeAssignments}">生效中分配数</div>
+        <div class="sum-value" th:text="${summary.activeAssignments}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/tags-list :: summary(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(tags)}" class="tags-table">
+        <thead>
+        <tr>
+            <th th:text="#{admin.tags.badge}">胶囊</th>
+            <th th:text="#{admin.tags.code}">标签码</th>
+            <th th:text="#{admin.tags.name}">名称</th>
+            <th th:text="#{admin.tags.description}">说明文案</th>
+            <th class="nowrap" th:text="#{admin.tags.activeCount}">生效中分配数</th>
+            <th th:text="#{admin.tags.status}">状态</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="t : ${tags}"><tr th:replace="~{admin/fragments/tags-list :: row(${t}, false)}"></tr></th:block>
+        </tbody>
+    </table>
+
+    <div class="empty" th:if="${#lists.isEmpty(tags)}">
+        <span class="empty-emoji">🏷️</span>
+        <p th:text="#{admin.tags.empty}">还没有任何内容标签。</p>
+    </div>
+</th:block>
+
+<!--/* 单行。🔴 胶囊按真实样子画（2 倍放大便于看细节）：图标只有 9px、字是白色，
+       脱开胶囊单看那张 PNG 什么都看不出来，运营因此判断不了「我配的这枚最后长什么样」。 */-->
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(t, oob)" th:id="'tag-row-' + ${t.id}" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${t.id}" th:data-drawer-url="@{/admin/content-tags/{id}/drawer(id=${t.id})}" tabindex="0"
+        th:classappend="${t.retired()} ? 'row-muted'">
+        <td class="nowrap"><span th:replace="~{admin/content-tags :: chip(${t}, 2)}"></span></td>
+        <td class="nowrap muted" th:text="${t.code}">ct-1</td>
+        <td th:text="${t.name}">名称</td>
+        <td th:text="${t.description}">说明</td>
+        <td class="nowrap" th:text="${t.activeAssignments}">0</td>
+        <td class="nowrap">
+            <span class="dot" th:classappend="${t.retired()} ? 'dot--done' : 'dot--ok'"></span>
+            <span class="badge" th:classappend="${t.retired()} ? 'badge-muted' : 'badge-ok'"
+                  th:text="${t.retired()} ? #{admin.tags.retired} : #{admin.tags.online}">在线</span>
+        </td>
+    </tr>
+</tbody></table>
+</body>
+</html>

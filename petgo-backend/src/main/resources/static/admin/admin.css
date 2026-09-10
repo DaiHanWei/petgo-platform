@@ -816,4 +816,23 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pin-drawer .sticky-footer { bottom: 0; }
 /* bug 20260828 的同一件事，但发生在抽屉里：原生日期弹层在 position:fixed 的抽屉里同样会被裁，
    而给 main 加底部留白对固定定位的抽屉毫无作用（V1.3.0 Story 7.3 复审 P2）。 */
-.drawer-body:has(input[type="datetime-local"]) { padding-bottom: 340px; }
+/* ⚠️ 排除 B4：那页的时间输入在收起的 <details> 里也留在 DOM 中，:has 按存在判会让
+   分配记录页签底部恒空一大片（V1.3.0 Story 7.4 复审 P3）——B4 改由 details[open] 自己留白。 */
+.drawer-body:has(input[type="datetime-local"]):not(:has(.tag-assign-details)) { padding-bottom: 340px; }
+
+/* ===== B4 内容标签（V1.3.0 Story 7.4，模板 B + 480px 抽屉）===== */
+.tags-table td { vertical-align: middle; }
+.tags-table td:nth-child(4) { max-width: 280px; word-break: break-word; }
+.tag-card { margin-bottom: 10px; }
+.tag-card h2 { margin: 0 0 6px; font-size: var(--fs-sm); font-weight: 600; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.tag-tabs { margin: 0 0 10px; }
+/* 抽屉窄（480px），分配记录六列容易挤成一团：字号小一档 + 允许摘要换行 */
+.tag-assign-table { font-size: var(--fs-xs); }
+.tag-assign-table td { vertical-align: middle; }
+.tag-assign-table td:first-child { max-width: 200px; word-break: break-word; }
+.tag-assign-details > summary { cursor: pointer; color: var(--brand-strong); font-weight: 600; padding: 6px 0; }
+.tag-assign-details fieldset { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; margin: 10px 0; }
+.tag-assign-details legend { color: var(--muted); font-size: var(--fs-xs); padding: 0 4px; }
+.tag-drawer .sticky-footer { bottom: 0; }
+/* 展开「＋添加内容」时才留出原生日期弹层的空间（收起时那两个输入框虽在 DOM 里却看不见） */
+.tag-assign-details[open] { padding-bottom: 340px; }

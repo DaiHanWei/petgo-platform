@@ -93,7 +93,7 @@ development_status:
   7-1-b1-内容管理-详情抽屉: review   # B1 内容管理 + 详情抽屉
   7-2-b2-评论巡查页签套模板-b: review   # B2 评论巡查页签套模板 B
   7-3-b3-顶置管理: review   # B3 顶置管理
-  7-4-b4-内容标签: ready-for-dev   # B4 内容标签（抽屉多页签，打标入口收拢）
+  7-4-b4-内容标签: review   # B4 内容标签（抽屉多页签，打标入口收拢）
   7-5-b5-排期发布并入批量内容页签: ready-for-dev   # B5 排期发布并入批量内容页签
   7-6-e1-种子内容发布与-e2-批量工作台套模板-e: ready-for-dev   # E1 种子内容发布（单发）与 E2 批量工作台套模板 E
   epic-7-retrospective: optional

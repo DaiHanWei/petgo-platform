@@ -86,4 +86,28 @@ public interface ContentTagAssignmentRepository extends JpaRepository<ContentTag
 
     /** 后台「按内容」维度（Story 11.2）：某条内容的全部分配记录（含已失效的历史）。 */
     List<ContentTagAssignment> findByPostIdOrderByStartsAtDesc(long postId);
+
+    /**
+     * 某标签的全部分配（含已到期），**分页**（V1.3.0 Story 7.4 抽屉页签二）。
+     *
+     * <p>🔴 分页下推到 DB，不是取全量再在 Java 里切片：「本周最佳」这种长期在用的标签会累积几千条，
+     * 而这张表每开一次抽屉、每打一次标（处置后抽屉重渲染）都要读一遍。
+     */
+    org.springframework.data.domain.Page<ContentTagAssignment> findByTagId(long tagId,
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * 各标签当前**生效中**的分配条数（V1.3.0 Story 7.4：列表的「生效中分配数」列与摘要条）。
+     *
+     * <p>🔴 一条聚合，不是逐个标签查一次再 {@code .size()} —— 后者既是 N+1，又把成千上万条
+     * 分配实体拉进内存只为数个数，而列表每次局部刷新都会重来一遍。
+     * 口径与 {@link #findActiveByTag} 逐字一致（左闭右开，{@code endsAt} 为空 = 永久）。
+     */
+    @Query("""
+            select a.tagId, count(a) from ContentTagAssignment a
+             where a.startsAt <= :now
+               and (a.endsAt is null or :now < a.endsAt)
+             group by a.tagId
+            """)
+    List<Object[]> countActiveByTag(@Param("now") Instant now);
 }

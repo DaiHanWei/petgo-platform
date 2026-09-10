@@ -28,6 +28,19 @@ public final class AdminHxEvents {
     /** B3 顶置管理：列表按当前筛选 + 当前页重拉（Story 7.3；新建成功也发它 —— 新行得靠整表重拉才会出现）。 */
     public static final String PIN_LIST_REFRESH = "admin:pin-list-refresh";
 
+    /** B4 内容标签：列表整表重拉（Story 7.4；建标签 / 改标签 / 上下线 / 打标 / 取消打标都会改「生效中分配数」与摘要条）。 */
+    public static final String TAG_LIST_REFRESH = "admin:tag-list-refresh";
+
+    /**
+     * 让前端打开某个抽屉，载荷 {@code {"url": "<抽屉 URL>", "id": <对象 id>}}
+     * （V1.3.0 Story 7.4 新增 · AC4：新建标签成功后
+     * 直接停在新标签抽屉的「分配记录」页签 —— 建完标签紧接着就是给它加内容）。
+     *
+     * <p>⚠️ 与「把抽屉体换掉」不是一回事：换抽屉体不会更新 {@code admin-drawer.js} 里记的当前对象，
+     * 地址栏的 {@code ?open=} 也不会跟着走，刷新就回到新建态。所以走事件、让 JS 走正常的 open 流程。
+     */
+    public static final String DRAWER_OPEN = "admin:drawer-open";
+
     private AdminHxEvents() {
     }
 }

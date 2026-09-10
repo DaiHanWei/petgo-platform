@@ -74,6 +74,11 @@ public class ContentTagAssignment {
         return startsAt;
     }
 
+    /** 打标时刻（V1.3.0 Story 7.4 · AC3 分配记录列；与 {@link #getStartsAt()} 不是一回事：可先排期后生效）。 */
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
     public Instant getEndsAt() {
         return endsAt;
     }
