@@ -59,7 +59,9 @@ class AdminNavModelTest {
         assertThat(shop.contains("shopWhateverNewPage")).isTrue();
         assertThat(shop.contains("content")).isFalse();
         AdminNavModel.NavGroup vet = groups.stream().filter(g -> g.group().key().equals("vet")).findFirst().orElseThrow();
-        assertThat(vet.contains("online")).isTrue();
+        assertThat(vet.contains("vets")).isTrue();
+        // ⛔ 「在线状态」已退役（V1.3.0 Story 9.1a）：并进兽医列表与抽屉，侧栏不再有这一项。
+        assertThat(vet.contains("online")).isFalse();
         assertThat(vet.contains(null)).isFalse();
     }
 }

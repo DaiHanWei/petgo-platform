@@ -200,11 +200,15 @@ public class AdminWebController {
             @RequestParam(value = "qualStatus", required = false) String qualStatus,
             @RequestParam(value = "online", required = false) String online,
             @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "open", required = false) Long open,
             @RequestHeader(value = "HX-Request", required = false) String hxRequest,
             Model model) {
         model.addAttribute("active", "vets");
-        model.addAttribute("vets",
-                adminVetService.list(new VetListFilter(accountStatus, qualStatus, online, q)));
+        // ⚠️ 取一次列表喂给摘要条与表格两处：各查各的话跨秒时两个数能对不上。
+        var vetRows = adminVetService.list(new VetListFilter(accountStatus, qualStatus, online, q));
+        model.addAttribute("vets", vetRows);
+        model.addAttribute("summary", adminVetService.summary(vetRows));
+        model.addAttribute("open", open);
         // 回显筛选 + 下拉候选。
         model.addAttribute("accountStatus", accountStatus);
         model.addAttribute("qualStatus", qualStatus);
@@ -216,8 +220,8 @@ public class AdminWebController {
         if (!model.containsAttribute("createVetForm")) {
             model.addAttribute("createVetForm", new CreateVetForm());
         }
-        // HTMX 局部刷新返结果行片段；整页请求返完整视图。
-        return hxRequest != null ? "admin/vets :: rows" : "admin/vets";
+        // HTMX 局部刷新返表格 + 摘要条 oob；整页请求返完整视图。
+        return hxRequest != null ? "admin/fragments/vets-list :: rows(true)" : "admin/vets";
     }
 
     @PostMapping("/admin/vets")
@@ -234,8 +238,13 @@ public class AdminWebController {
         try {
             long id = adminVetService.create(form.getDisplayName(), form.getUsername(),
                     form.getPassword(), form.getContactPhone(), admin.getAdminAccountId());
+            // 🔴 初始密码**仅本次可见**（V1.3.0 Story 9.1a · AC4 / UI 稿 6-4）：
+            //    只放这一次渲染的 model，绝不进 flash / session / 审计 / 日志 ——
+            //    后端不存明文，这一屏是唯一的获取窗口。必须在下面重置表单之前取。
+            String issued = form.getPassword();
             model.addAttribute("createVetForm", new CreateVetForm());
             model.addAttribute("createdVetId", id);
+            model.addAttribute("createdVetPassword", issued);
             populateVetList(model); // 列表已变更，重查（含新账号 + 资质/在线/均分列）
             return "admin/vets";
         } catch (AppException e) {
@@ -249,24 +258,60 @@ public class AdminWebController {
     /** 兽医整页（非 HTMX）渲染所需 model：完整列表 + 下拉候选。 */
     private void populateVetList(Model model) {
         model.addAttribute("active", "vets");
-        model.addAttribute("vets", adminVetService.list(VetListFilter.none()));
+        var rows = adminVetService.list(VetListFilter.none());
+        model.addAttribute("vets", rows);
+        model.addAttribute("summary", adminVetService.summary(rows));
         model.addAttribute("vetStatuses", VetStatus.values());
         model.addAttribute("qualStatuses", QualificationStatus.values());
         model.addAttribute("expiryStats", adminVetService.qualificationExpiryStats());
     }
 
-    // ===== Story 2.4：编辑兽医资料（不中断会话）=====
+    // ===== Story 2.4：编辑兽医资料（不中断会话）→ V1.3.0 Story 9.1a 并入抽屉资料页签 =====
 
-    @GetMapping("/admin/vets/{id}/edit")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.edit') or hasAuthority('vet.create')")
-    public String editVetForm(@PathVariable long id, Model model) {
+    /**
+     * 兽医抽屉（Story 9.1a · AC2）：资料 / 资质 / 评分 / 账号四页签。
+     *
+     * <p>📌 <b>整页 {@code GET /admin/vets/{id}/edit} 已删除</b>（AC5 / D-23）：改资料不该跳走再回来。
+     * 不做旧地址跳转 —— 旧书签拿到 404 比拿到一个「看着像成功了」的重定向诚实。
+     * 非 htmx 直达 → 回列表并自动开该抽屉（与 B1～B14 同一机制）。
+     */
+    @GetMapping("/admin/vets/{id}/drawer")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.view')")
+    public String vetDrawer(@PathVariable long id,
+            @RequestHeader(value = "HX-Request", required = false) String hxRequest, Model model) {
+        if (hxRequest == null) {
+            return "redirect:/admin/vets?open=" + id;
+        }
+        populateVetDrawer(id, model);
+        return "admin/fragments/drawer-vets :: drawer";
+    }
+
+    /** 抽屉四页签共用的 model。 */
+    private void populateVetDrawer(long id, Model model) {
         model.addAttribute("active", "vets");
         model.addAttribute("vetId", id);
+        model.addAttribute("vet", adminVetService.view(id));
         if (!model.containsAttribute("editVetForm")) {
             model.addAttribute("editVetForm", adminVetService.editForm(id));
         }
         model.addAttribute("currentAvatarUrl", adminVetService.view(id).avatarUrl());
-        return "admin/vet-edit";
+        // 在线态与最后在线：原 vet-online 整页的数据，AC5 要求并进资料页签。
+        model.addAttribute("presence", adminVetService.presenceOf(id));
+    }
+
+    /**
+     * 抽屉内处置成功统一响应：抽屉重渲染 + 列表那一行 oob + 摘要条 oob + toast。
+     *
+     * <p>⚠️ 不整表重拉：改资料 / 改头像 / 封禁都不会让行换位置（表按 id 序）。
+     * 🔴 但封禁会改摘要条的「已封禁 / 在线」两格，所以行之外**还要**换摘要条。
+     */
+    private String vetAfterAction(long id, String toast, Model model) {
+        populateVetDrawer(id, model);
+        var rows = adminVetService.list(VetListFilter.none());
+        model.addAttribute("summary", adminVetService.summary(rows));
+        model.addAttribute("row", rows.stream().filter(v -> v.id() == id).findFirst().orElseThrow());
+        model.addAttribute("toast", toast);
+        return "admin/fragments/drawer-vets :: afterAction";
     }
 
     /** 上传/更换兽医头像（服务端落公开桶① → 回填 CDN URL）。仅图片、≤5MB。 */
@@ -274,87 +319,125 @@ public class AdminWebController {
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.edit') or hasAuthority('vet.create')")
     public String uploadVetAvatar(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
             @RequestParam("avatar") org.springframework.web.multipart.MultipartFile avatar,
-            RedirectAttributes flash) {
+            @RequestHeader(value = "HX-Request", required = false) String hxRequest,
+            Model model, RedirectAttributes flash) {
+        boolean hx = hxRequest != null;
         String ct = avatar.getContentType();
+        // ⚠️ 三条失败路径在抽屉里都得**落在行内错误槽**（抛 422 交给 AdminBusinessExceptionAdvice），
+        //    不能像整页 PRG 那样吞成一句 flash —— 抽屉里没有 flash 的落点，
+        //    吞掉的结果是「点了上传、什么都没发生」。
         if (avatar.isEmpty() || ct == null || !ct.startsWith("image/")) {
+            if (hx) {
+                throw AppException.validation("请选择图片文件").code("admin.flash.vet.avatarNotImage");
+            }
             flash.addFlashAttribute("error", msg.get("admin.flash.vet.avatarNotImage"));
-            return "redirect:/admin/vets/" + id + "/edit";
+            return "redirect:/admin/vets?open=" + id;
         }
         if (avatar.getSize() > 5L * 1024 * 1024) {
+            if (hx) {
+                throw AppException.validation("图片过大").code("admin.flash.vet.avatarTooLarge");
+            }
             flash.addFlashAttribute("error", msg.get("admin.flash.vet.avatarTooLarge"));
-            return "redirect:/admin/vets/" + id + "/edit";
+            return "redirect:/admin/vets?open=" + id;
         }
         try {
             adminVetService.updateAvatar(id, avatar.getBytes(), ct, admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", msg.get("admin.flash.vet.avatarUpdated"));
         } catch (Exception e) {
             // 读文件 IO / OSS 未配置或上传失败（含凭证异常）均优雅回显，不抛 500。
+            if (hx) {
+                throw AppException.validation("头像上传失败").code("admin.flash.vet.avatarUploadFailed");
+            }
             flash.addFlashAttribute("error", msg.get("admin.flash.vet.avatarUploadFailed"));
+            return "redirect:/admin/vets?open=" + id;
         }
-        return "redirect:/admin/vets/" + id + "/edit";
+        if (hx) {
+            return vetAfterAction(id, msg.get("admin.flash.vet.avatarUpdated"), model);
+        }
+        flash.addFlashAttribute("notice", msg.get("admin.flash.vet.avatarUpdated"));
+        return "redirect:/admin/vets?open=" + id;
     }
 
     @PostMapping("/admin/vets/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.edit') or hasAuthority('vet.create')")
     public String updateVet(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
             @Valid @ModelAttribute("editVetForm") EditVetForm form, BindingResult binding,
+            @RequestHeader(value = "HX-Request", required = false) String hxRequest,
             Model model, RedirectAttributes flash) {
+        boolean hx = hxRequest != null;
         if (binding.hasErrors()) {
-            model.addAttribute("active", "vets");
-            model.addAttribute("vetId", id);
-            return "admin/vet-edit";
+            // 🔴 校验错误必须**连着表单一起回显**（回的是资料页签本身，不是抽屉全体）：
+            //    只回一句错误的话，运营刚填的内容会被换掉，得从头再填一遍。
+            if (hx) {
+                populateVetDrawer(id, model);
+                return "admin/fragments/drawer-vets :: profile-form";
+            }
+            // 非 htmx 兜底（无 JS 的浏览器）：整页 vet-edit 已删，只能 PRG 回列表并开该抽屉。
+            // ⚠️ 这条路上字段级错误回显不了 —— 抽屉内容是 htmx 拉的，而这一跳没有 htmx。
+            //    可接受：它是降级路径，正常路径（有 JS）走上面那支，错误连着表单一起回显。
+            flash.addFlashAttribute("error", msg.get("admin.flash.vet.profileInvalid"));
+            return "redirect:/admin/vets?open=" + id;
         }
         try {
             adminVetService.updateProfile(id, form.getDisplayName(), form.getUsername(),
                     form.getContactPhone(), admin.getAdminAccountId());
-            flash.addFlashAttribute("notice", msg.get("admin.flash.vet.profileSaved"));
-            return "redirect:/admin/vets";
         } catch (AppException e) {
-            binding.reject("update.failed", e.getMessage());
-            model.addAttribute("active", "vets");
-            model.addAttribute("vetId", id);
-            return "admin/vet-edit";
+            if (hx) {
+                binding.reject("update.failed", msg.resolve(e));
+                populateVetDrawer(id, model);
+                return "admin/fragments/drawer-vets :: profile-form";
+            }
+            flash.addFlashAttribute("error", msg.resolve(e));
+            return "redirect:/admin/vets?open=" + id;
         }
+        if (hx) {
+            return vetAfterAction(id, msg.get("admin.flash.vet.profileSaved"), model);
+        }
+        flash.addFlashAttribute("notice", msg.get("admin.flash.vet.profileSaved"));
+        return "redirect:/admin/vets?open=" + id;
     }
 
     @PostMapping("/admin/vets/{id}/password")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.reset_password')")
     public String resetVetPassword(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable long id, @RequestParam("newPassword") String newPassword,
-            RedirectAttributes flash) {
+            @RequestHeader(value = "HX-Request", required = false) String hxRequest,
+            Model model, RedirectAttributes flash) {
+        if (hxRequest != null) {
+            // 弱密码等在服务层抛 422，这里不重复判 —— 让它落进抽屉的行内错误槽。
+            adminVetService.resetPassword(id, newPassword, admin.getAdminAccountId());
+            // 🔴 明文**只此一屏**：放一次性 model 属性随本次响应渲染，
+            //    不进 session / flash / 审计 / 日志（既有约束，UI 稿 6-4）。
+            model.addAttribute("issuedPassword", newPassword);
+            return vetAfterAction(id, msg.get("admin.flash.vet.passwordReset"), model);
+        }
         try {
             adminVetService.resetPassword(id, newPassword, admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.vet.passwordReset"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/vets";
+        return "redirect:/admin/vets?open=" + id;
     }
 
     @PostMapping("/admin/vets/{id}/status")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.ban')")
     public String setVetStatus(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable long id, @RequestParam("banned") boolean banned, RedirectAttributes flash) {
+            @PathVariable long id, @RequestParam("banned") boolean banned,
+            @RequestHeader(value = "HX-Request", required = false) String hxRequest,
+            Model model, RedirectAttributes flash) {
         adminVetService.setBanned(id, banned, admin.getAdminAccountId());
-        flash.addFlashAttribute("notice", msg.get(banned ? "admin.flash.vet.banned" : "admin.flash.vet.unbanned"));
-        return "redirect:/admin/vets";
+        String toastKey = banned ? "admin.flash.vet.banned" : "admin.flash.vet.unbanned";
+        if (hxRequest != null) {
+            return vetAfterAction(id, msg.get(toastKey), model);
+        }
+        flash.addFlashAttribute("notice", msg.get(toastKey));
+        return "redirect:/admin/vets?open=" + id;
     }
 
-    // ===== Story 2.6：兽医在线状态快照（只读，手动刷新）=====
-
-    @GetMapping("/admin/vets/online")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('vet.view')")
-    public String vetOnline(@RequestHeader(value = "HX-Request", required = false) String hxRequest,
-            Model model) {
-        java.time.Instant now = java.time.Instant.now();
-        model.addAttribute("active", "online");
-        model.addAttribute("snapshot", adminVetService.onlineSnapshot(now));
-        // 最后查询时间按运营时区（Asia/Jakarta = WIB）格式化展示，逻辑仍 UTC。
-        model.addAttribute("queriedAtLabel", java.time.format.DateTimeFormatter
-                .ofPattern("yyyy-MM-dd HH:mm:ss")
-                .withZone(java.time.ZoneId.of("Asia/Jakarta")).format(now) + " WIB");
-        return hxRequest != null ? "admin/vet-online :: results" : "admin/vet-online";
-    }
+    // ===== Story 2.6：兽医在线状态快照 =====
+    // ⛔ 整页 GET /admin/vets/online 已删除（V1.3.0 Story 9.1a · AC5 / D-11）：
+    //    在线态与最后在线时间并入兽医列表的列与抽屉资料页签，不再单开一页。
+    //    不做旧地址跳转（D-23）；服务层的 onlineSnapshot(...) 保留（别处仍可能用到）。
 
     // ===== Story 5.6：兽医评分查看（仅运营可见）=====
 

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  B20 兽医账号的摘要条 / 表格 / 单行（V1.3.0 Story 9.1a，模板 B）。
+    sumbar(oob) — 四格：总数 · 在线 · 资质待审 · 已封禁（随筛选联动 = 对筛选后的集合统计）
+    rows(oob)   — 表格 + 空态；oob=true 时摘要条随片段一并换
+    row(v, oob) — 单行；抽屉里改资料 / 封禁成功后原位替换
+  🔴 「最后在线」离线兽医**没有值**（下线即移出在线集合，不是记着上次什么时候在）——
+     显示「—」的含义是「当前不在线」，不是「数据缺失」。
+*/-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="vets-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.vets.summary.total}">兽医总数</div>
+        <div class="sum-value" data-sum="total" th:text="${summary.total}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.vets.summary.online}">在线</div>
+        <div class="sum-value" data-sum="online" th:text="${summary.online}">0</div>
+        <div class="hint" th:text="#{admin.v130.vets.summary.onlineNote}">含忙碌中</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.vets.summary.qualPending}">资质待审</div>
+        <div class="sum-value" data-sum="qualPending" th:text="${summary.qualPending}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.vets.summary.banned}">已封禁</div>
+        <div class="sum-value" data-sum="banned" th:text="${summary.banned}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/vets-list :: sumbar(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(vets)}" class="tags-table">
+        <thead>
+        <tr>
+            <th class="nowrap" th:text="#{admin.vets.col.id}">ID</th>
+            <th th:text="#{admin.vets.col.name}">昵称</th>
+            <th th:text="#{admin.vets.col.username}">账号</th>
+            <th th:text="#{admin.vets.col.status}">状态</th>
+            <th th:text="#{admin.vets.col.qual}">资质</th>
+            <th th:text="#{admin.vets.col.online}">在线</th>
+            <th class="nowrap" th:text="#{admin.v130.vets.lastSeen}">最后在线</th>
+            <th class="nowrap" th:text="#{admin.vets.col.rating}">评分</th>
+            <th class="nowrap" th:text="#{admin.vets.col.created}">创建日期</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="v : ${vets}"><tr th:replace="~{admin/fragments/vets-list :: row(${v}, false)}"></tr></th:block>
+        </tbody>
+    </table>
+
+    <div class="empty" th:if="${#lists.isEmpty(vets)}">
+        <span class="empty-emoji">🩺</span>
+        <p th:text="#{admin.vets.empty}">暂无兽医账号</p>
+    </div>
+</th:block>
+
+<!--/* 单行。编辑 / 重置密码 / 封禁三列已删（都移进抽屉），点行开抽屉。 */-->
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(v, oob)" th:id="'vet-row-' + ${v.id()}" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${v.id()}" th:data-drawer-url="@{/admin/vets/{id}/drawer(id=${v.id()})}"
+        tabindex="0">
+        <td class="nowrap muted" th:text="${v.id()}">1</td>
+        <td th:text="${v.displayName()}">王医生</td>
+        <td th:text="${v.username()}">vet001</td>
+        <td class="nowrap">
+            <span class="badge" th:classappend="${v.status() == 'ACTIVE'} ? 'badge-ok' : 'badge-danger'"
+                  th:text="${v.status() == 'ACTIVE'} ? #{admin.v130.vets.status.active} : #{admin.v130.vets.status.banned}">正常</span>
+        </td>
+        <!--/* 资质徽标不再是链接：点行开抽屉，抽屉里有资质页签（9.1b 填充）。
+               留着链接会与「点行开抽屉」抢同一次点击。 */-->
+        <td class="nowrap">
+            <span class="badge" th:if="${v.qualStatus() != null}"
+                  th:classappend="${v.qualStatus() == 'CERTIFIED'} ? 'badge-ok'
+                      : (${v.qualStatus() == 'EXPIRING_SOON'} ? 'badge-warn'
+                      : ((${v.qualStatus() == 'EXPIRED'} or ${v.qualStatus() == 'REJECTED'}) ? 'badge-danger' : 'badge-info'))"
+                  th:text="#{'admin.qual.' + ${v.qualStatus()}}">资质</span>
+        </td>
+        <td class="nowrap">
+            <span class="badge" th:if="${v.presence() != null}"
+                  th:classappend="${v.presence() == 'ONLINE'} ? 'badge-ok'
+                      : (${v.presence() == 'BUSY'} ? 'badge-warn' : 'badge-info')"
+                  th:text="#{'admin.vets.presence.' + ${v.presence()}}">在线</span>
+        </td>
+        <td class="nowrap" th:text="${@adminTime.wib(v.lastSeenAt())}">—</td>
+        <td class="nowrap">
+            <span th:if="${v.ratingAvg() != null}" th:text="${v.ratingAvg()} + ' ★'">4.8 ★</span>
+            <span th:unless="${v.ratingAvg() != null}" class="muted">—</span>
+        </td>
+        <td class="nowrap" th:text="${@adminTime.wib(v.createdAt())}">2026-06-01</td>
+    </tr>
+</tbody></table>
+</body>
+</html>

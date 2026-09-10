@@ -1,40 +1,56 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org"
       xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!--
-  兽医账号管理（Story 5.1 + 2.2 列表扩列/筛选/搜索；1.6 外化 + 换肤）。复用 admin shell。
+<!--/*
+  兽医账号管理（Story 5.1 + 2.2 → V1.3.0 Story 9.1a 套模板 B · tpl-b-list，UI 稿 6-1～6-4）。
+  9.1a 的改动是页面组织：行内「编辑 / 重置密码 / 封禁」三列移进抽屉、加摘要条四格、
+  在线态与最后在线并入（整页 vet-online / vet-edit 已删，D-11 / D-23）。
+  五个写端点的路径 / 参数 / @PreAuthorize 逐字未动。
+  🔴 开户仍是**模态框**不是抽屉（UI 稿 6-3 明写「照抄代码原实现」）：校验失败 / 成功都整页重渲染
+     并重开弹窗，这条 PRG 链子没动，只套新视觉。
   护栏：明文密码仅提交一次，绝不回显；列表绝不含 passwordHash。门控 @PreAuthorize(vet.view)。
--->
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.vets.title}">兽医账号 · TailTopia 运营</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
-    <div th:fragment="content">
-        <h1 th:text="#{admin.vets.title}">兽医账号</h1>
+    <!--/* ⚠️ res 设在这一层，不能写在下面那个带 th:replace 的 div 上（优先级 100 vs 600，
+           同标签时 th:with 被静默丢弃 —— 见 AdminTemplateStructureTest 的守门）。 */-->
+    <div th:fragment="content" th:remove="tag" th:with="res='vet'">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.vets.title}">兽医账号</h1>
+            <!--/* 开户入口与 POST /admin/vets 的 @PreAuthorize 同款门控：无 vet.create 的 STAFF 不见此按钮。 */-->
+            <button type="button" class="btn btn-primary btn-sm" data-open-dialog="createVetDialog" data-no-drawer
+                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('vet.create')"
+                    th:text="#{admin.vets.create}">＋开户</button>
+        </div>
 
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
         <div class="banner err" th:if="${expiryStats != null and (expiryStats.expiringSoon() > 0 or expiryStats.expired() > 0)}"
              th:text="#{admin.vets.expiryWarn(${expiryStats.expiringSoon()}, ${expiryStats.expired()})}">资质预警</div>
 
-        <!-- 开户成功提示（提交后整页重渲染，弹窗已关闭，横幅在此可见）。 -->
-        <p class="banner ok" th:if="${createdVetId != null}">
-            <span th:text="#{admin.vets.created.prefix}">已创建兽医账号（id=</span><span th:text="${createdVetId}">0</span><span th:text="#{admin.vets.created.suffix}">）。请将初始密码线下交付兽医。</span>
-        </p>
-
-        <!-- 开户入口：点击弹出弹窗（Story 5.1；创建表单改弹窗形式）。 -->
-        <div class="toolbar">
-            <!-- 开户入口与 POST /admin/vets 的 @PreAuthorize 同款门控：无 vet.create 的 STAFF 不见此按钮。 -->
-            <button type="button" class="btn btn-primary" data-open-dialog="createVetDialog"
-                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('vet.create')"
-                    th:text="#{admin.vets.create}">开户</button>
+        <!--/* 开户成功：初始密码**仅本次可见**（后端不存明文，UI 稿 6-4）。
+               🔴 常驻醒目提示 + 复制钮，不是 toast：toast 会自己消失，而这是唯一的获取窗口。 */-->
+        <div class="banner ok" th:if="${createdVetId != null}" data-notice="vet-created">
+            <p><span th:text="#{admin.vets.created.prefix}">已创建兽医账号（id=</span><span
+                    th:text="${createdVetId}">0</span><span th:text="#{admin.vets.created.suffix}">）。</span></p>
+            <th:block th:if="${createdVetPassword != null}">
+                <p th:text="#{admin.v130.vets.password.issued}">初始密码（仅本次可见，请立即记录并线下交付）：</p>
+                <code id="vet-created-password" th:text="${createdVetPassword}">xxxxxxxx</code>
+                <button type="button" class="btn btn-neutral btn-sm" data-no-drawer
+                        data-copy-target="#vet-created-password"
+                        th:text="#{admin.v130.vets.password.copy}">复制</button>
+                <p class="hint" th:text="#{admin.v130.vets.password.recorded}">关闭后无法再次查看（后端不保存明文）。</p>
+            </th:block>
         </div>
 
-        <!-- 兽医开户弹窗。校验失败时后端置 createVetModalOpen → data-autoopen 载入即重开、回显错误。 -->
+        <!--/* 兽医开户弹窗。校验失败时后端置 createVetModalOpen → data-autoopen 载入即重开、回显错误。 */-->
         <dialog id="createVetDialog" class="modal" th:attr="data-autoopen=${createVetModalOpen}">
             <div class="modal-head">
                 <h3 th:text="#{admin.vets.create}">开户</h3>
@@ -42,7 +58,7 @@
             </div>
             <form th:action="@{/admin/vets}" th:object="${createVetForm}" method="post">
                 <div class="modal-body">
-                    <!-- 全局/业务错误（如邮箱已被占用，来自 AppException → binding.reject） -->
+                    <!--/* 全局/业务错误（如邮箱已被占用，来自 AppException → binding.reject） */-->
                     <p class="err" th:each="e : ${#fields.globalErrors()}" th:text="${e}">错误</p>
                     <label class="field" th:text="#{admin.vets.displayName}">兽医昵称</label>
                     <input type="text" th:field="*{displayName}" class="field-full"/>
@@ -65,113 +81,55 @@
             </form>
         </dialog>
 
-        <!-- 筛选条（HTMX 局部刷新 #vet-rows）-->
-        <form class="filter-bar" th:action="@{/admin/vets}" method="get"
-              hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="outerHTML">
-            <label><span th:text="#{admin.vets.filter.account}">账号状态</span>
-                <select name="accountStatus" hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="outerHTML" hx-include="closest form">
-                    <option value="" th:text="#{admin.vets.filter.all}">全部</option>
-                    <option th:each="s : ${vetStatuses}" th:value="${s}" th:text="${s}"
-                            th:selected="${s.name() == accountStatus}">ACTIVE</option>
-                </select>
-            </label>
-            <label><span th:text="#{admin.vets.filter.qual}">资质状态</span>
-                <select name="qualStatus" hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="outerHTML" hx-include="closest form">
-                    <option value="" th:text="#{admin.vets.filter.all}">全部</option>
-                    <option th:each="s : ${qualStatuses}" th:value="${s}"
-                            th:text="#{'admin.qual.' + ${s.name()}}"
-                            th:selected="${s.name() == qualStatus}">CERTIFIED</option>
-                </select>
-            </label>
-            <label><span th:text="#{admin.vets.filter.online}">在线</span>
-                <select name="online" hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="outerHTML" hx-include="closest form">
-                    <option value="" th:text="#{admin.vets.filter.all}">全部</option>
-                    <option value="ONLINE" th:text="#{admin.vets.online.ONLINE}" th:selected="${online == 'ONLINE'}">在线</option>
-                    <option value="OFFLINE" th:text="#{admin.vets.online.OFFLINE}" th:selected="${online == 'OFFLINE'}">离线</option>
-                </select>
-            </label>
-            <label><span th:text="#{admin.vets.filter.search}">搜索姓名/邮箱</span>
-                <input type="search" name="q" th:value="${q}"
-                       hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="outerHTML"
-                       hx-trigger="keyup changed delay:300ms, search" hx-include="closest form"/>
-            </label>
-            <!-- 刷新：带当前筛选重拉列表（HTMX 局部刷新 #vet-rows）。放在搜索之后。 -->
-            <button type="button" class="btn btn-neutral"
-                    hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="outerHTML" hx-include="closest form"
-                    th:text="#{admin.vets.refresh}">刷新</button>
-        </form>
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::vet-filters}, ~{::vet-summary}, ~{::vet-table}, ~{::vet-drawer})}">
+            <!--/* 筛选栏：三个下拉 data-autosubmit（只作用于 <select>）+ 关键词配显式「查询」钮。
+                   ⚠️ 参数名 accountStatus / qualStatus / online / q 逐字未动 —— 改名会让运营存的书签失效。 */-->
+            <form th:fragment="vet-filters" th:action="@{/admin/vets}" method="get"
+                  hx-get="/admin/vets" hx-target="#vet-rows" hx-swap="innerHTML" data-autosubmit>
+                <label class="field"><span th:text="#{admin.vets.filter.account}">账号状态</span>
+                    <select name="accountStatus" class="sel">
+                        <option value="" th:text="#{admin.vets.filter.all}">全部</option>
+                        <option th:each="s : ${vetStatuses}" th:value="${s}" th:text="${s}"
+                                th:selected="${s.name() == accountStatus}">ACTIVE</option>
+                    </select>
+                </label>
+                <label class="field"><span th:text="#{admin.vets.filter.qual}">资质状态</span>
+                    <select name="qualStatus" class="sel">
+                        <option value="" th:text="#{admin.vets.filter.all}">全部</option>
+                        <option th:each="s : ${qualStatuses}" th:value="${s}"
+                                th:text="#{'admin.qual.' + ${s.name()}}"
+                                th:selected="${s.name() == qualStatus}">CERTIFIED</option>
+                    </select>
+                </label>
+                <label class="field"><span th:text="#{admin.vets.filter.online}">在线</span>
+                    <select name="online" class="sel">
+                        <option value="" th:text="#{admin.vets.filter.all}">全部</option>
+                        <option value="ONLINE" th:text="#{admin.vets.online.ONLINE}" th:selected="${online == 'ONLINE'}">在线</option>
+                        <option value="OFFLINE" th:text="#{admin.vets.online.OFFLINE}" th:selected="${online == 'OFFLINE'}">离线</option>
+                    </select>
+                </label>
+                <label class="field"><span th:text="#{admin.vets.filter.search}">搜索姓名/邮箱</span>
+                    <input type="search" name="q" class="inp" th:value="${q}"/>
+                </label>
+                <!--/* 🔴 关键词走**显式「查询」钮**，不再 keyup 即搜：边打字边发请求会在
+                       「王」这一个字上就把表刷成几十行，运营还没打完就已经看花了。 */-->
+                <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.payments.btn.search}">查询</button>
+                <a th:href="@{/admin/vets}" class="btn btn-sm" data-no-drawer
+                   th:text="#{admin.payments.btn.reset}">清空筛选</a>
+            </form>
 
-        <table>
-            <thead>
-            <tr>
-                <th th:text="#{admin.vets.col.id}">ID</th>
-                <th th:text="#{admin.vets.col.name}">昵称</th>
-                <th th:text="#{admin.vets.col.username}">账号</th>
-                <th th:text="#{admin.vets.col.status}">状态</th>
-                <th th:text="#{admin.vets.col.qual}">资质</th>
-                <th th:text="#{admin.vets.col.online}">在线</th>
-                <th th:text="#{admin.vets.col.rating}">评分</th>
-                <th th:text="#{admin.vets.col.created}">创建日期</th>
-                <th th:text="#{admin.vets.col.edit}">编辑</th>
-                <th th:text="#{admin.vets.col.resetPwd}">重置密码</th>
-                <th th:text="#{admin.vets.col.ban}">封禁</th>
-            </tr>
-            </thead>
-            <tbody id="vet-rows" th:fragment="rows">
-            <tr th:each="v : ${vets}">
-                <td th:text="${v.id()}">1</td>
-                <td th:text="${v.displayName()}">王医生</td>
-                <td th:text="${v.username()}">vet001</td>
-                <td>
-                    <span class="badge" th:classappend="${v.status() == 'ACTIVE'} ? 'badge-ok' : 'badge-danger'"
-                          th:text="${v.status()}">ACTIVE</span>
-                </td>
-                <td>
-                    <a th:href="@{'/admin/vets/' + ${v.id()} + '/qualification'}">
-                        <span class="badge" th:if="${v.qualStatus() != null}"
-                              th:classappend="${v.qualStatus() == 'CERTIFIED'} ? 'badge-ok'
-                                  : (${v.qualStatus() == 'EXPIRING_SOON'} ? 'badge-warn'
-                                  : ((${v.qualStatus() == 'EXPIRED'} or ${v.qualStatus() == 'REJECTED'}) ? 'badge-danger' : 'badge-info'))"
-                              th:text="#{'admin.qual.' + ${v.qualStatus()}}">资质</span>
-                    </a>
-                </td>
-                <td>
-                    <span class="badge" th:if="${v.presence() != null}"
-                          th:classappend="${v.presence() == 'ONLINE'} ? 'badge-ok'
-                              : (${v.presence() == 'BUSY'} ? 'badge-warn' : 'badge-info')"
-                          th:text="#{'admin.vets.presence.' + ${v.presence()}}">在线</span>
-                </td>
-                <td>
-                    <a th:href="@{'/admin/vets/' + ${v.id()} + '/ratings'}">
-                        <span th:if="${v.ratingAvg() != null}" th:text="${v.ratingAvg()} + ' ★'">4.8 ★</span>
-                        <span th:unless="${v.ratingAvg() != null}" class="muted">—</span>
-                    </a>
-                </td>
-                <td th:text="${@adminTime.wib(v.createdAt())}">2026-06-01</td>
-                <td>
-                    <a class="btn btn-neutral btn-sm" th:href="@{'/admin/vets/' + ${v.id()} + '/edit'}"
-                       th:text="#{admin.vets.edit}">编辑</a>
-                </td>
-                <td>
-                    <form class="inline" th:action="@{'/admin/vets/' + ${v.id()} + '/password'}" method="post">
-                        <input type="text" name="newPassword" th:placeholder="#{admin.vets.newPassword}"/>
-                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.vets.reset}">重置</button>
-                    </form>
-                </td>
-                <td>
-                    <form class="inline" th:action="@{'/admin/vets/' + ${v.id()} + '/status'}" method="post"
-                          th:data-confirm="#{admin.vets.ban.confirm}">
-                        <input type="hidden" name="banned" th:value="${v.status() == 'ACTIVE'}"/>
-                        <button type="submit" class="btn btn-danger btn-sm"
-                                th:text="${v.status() == 'ACTIVE'} ? #{admin.vets.ban} : #{admin.vets.unban}">封禁</button>
-                    </form>
-                </td>
-            </tr>
-            <tr th:if="${#lists.isEmpty(vets)}">
-                <td colspan="11" class="empty" th:text="#{admin.vets.empty}">暂无兽医账号</td>
-            </tr>
-            </tbody>
-        </table>
+            <div th:fragment="vet-summary" th:replace="~{admin/fragments/vets-list :: sumbar(false)}"></div>
+
+            <div th:fragment="vet-table" id="vet-rows">
+                <div th:replace="~{admin/fragments/vets-list :: rows(false)}"></div>
+            </div>
+
+            <div th:fragment="vet-drawer" class="drawer-title" th:text="#{admin.v130.vets.drawer.title}">兽医详情</div>
+        </div>
+
+        <!--/* ?open=<id> 深链兜底：admin-drawer.js 先按当前页找行，找不到就用这里给的 URL。 */-->
+        <span hidden th:if="${open != null}" data-drawer-res="vet"
+              th:attr="data-drawer-deeplink=@{/admin/vets/{id}/drawer(id=${open})}"></span>
     </div>
 </div>
 </body>

@@ -86,7 +86,8 @@ class AdminVetsAccessControlTest {
     }
 
     private void invoke() {
-        controller.vets(null, null, null, null, null, new ConcurrentModel());
+        // V1.3.0 Story 9.1a：多两个参数（open 深链、HX-Request）；门控表达式未变。
+        controller.vets(null, null, null, null, null, null, new ConcurrentModel());
     }
 
     @Test
@@ -143,12 +144,13 @@ class AdminVetsAccessControlTest {
         form.setDisplayName("Dr Y");
         form.setUsername("dry@x");
         controller.updateVet(principal(), 5L, form,
-                new BeanPropertyBindingResult(form, "editVetForm"),
+                new BeanPropertyBindingResult(form, "editVetForm"), null,
                 new ConcurrentModel(), new RedirectAttributesModelMap());
     }
 
     private void resetPassword() {
-        controller.resetVetPassword(principal(), 5L, "NewPass#1", new RedirectAttributesModelMap());
+        controller.resetVetPassword(principal(), 5L, "NewPass#1", null,
+                new ConcurrentModel(), new RedirectAttributesModelMap());
     }
 
     @Test
@@ -178,7 +180,8 @@ class AdminVetsAccessControlTest {
     // ===== Story 2.5：封禁/解封受 vet.ban 门控 =====
 
     private void setBanned() {
-        controller.setVetStatus(principal(), 5L, true, new RedirectAttributesModelMap());
+        controller.setVetStatus(principal(), 5L, true, null,
+                new ConcurrentModel(), new RedirectAttributesModelMap());
     }
 
     @Test

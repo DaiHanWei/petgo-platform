@@ -92,6 +92,37 @@ public class VetPresenceService {
         return score == null ? Optional.empty() : Optional.of(Instant.ofEpochMilli(score.longValue()));
     }
 
+    /**
+     * 全部在线兽医的 lastSeen（V1.3.0 Story 9.1a：兽医列表的「最后在线」列）。
+     *
+     * <p>🔴 **一次 ZRANGE 取全集**，不是逐行 ZSCORE：这一列要跟着列表的每一行渲染，
+     * 逐行查等于把一次列表渲染变成 N 次 Redis 往返。在线集合的量级 = 当前在线兽医数（几十），
+     * 整取一次比 N 次单查便宜得多。
+     *
+     * <p>不在返回的 Map 里 = 不在线（ZSET 里已被移除）→ 调用方显示「—」，与
+     * {@link #lastSeenAt} 的口径一致。
+     */
+    public java.util.Map<Long, Instant> lastSeenAll() {
+        var tuples = redis.opsForZSet().rangeWithScores(ONLINE_ZSET, 0, -1);
+        if (tuples == null || tuples.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.Map<Long, Instant> out = new java.util.HashMap<>(tuples.size());
+        for (var t : tuples) {
+            String member = t.getValue();
+            Double score = t.getScore();
+            if (member == null || score == null) {
+                continue;
+            }
+            try {
+                out.put(Long.parseLong(member), Instant.ofEpochMilli(score.longValue()));
+            } catch (NumberFormatException e) {
+                // 集合里混进了非法成员（历史脏数据）：跳过而不是让整张列表崩掉。
+            }
+        }
+        return out;
+    }
+
     /** 当前在线态：BUSY 优先（占用中），否则 ONLINE/OFFLINE。 */
     public VetPresenceStatus statusOf(long vetId) {
         if (!isOnline(vetId)) {

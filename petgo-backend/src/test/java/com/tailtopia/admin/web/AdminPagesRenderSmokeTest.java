@@ -266,7 +266,8 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
     static final java.util.List<String> SWEPT_PAGES = java.util.List.of("/admin/dashboard", "/admin/seed-post", "/admin/tickets", "/admin/content",
                 "/admin/content-pins", "/admin/content-tags", "/admin/user-tags",
                 "/admin/manual-review", "/admin/anomalies", "/admin/consult-sessions", "/admin/vets",
-                "/admin/vets/online", "/admin/failed-requests", "/admin/ratings", "/admin/users",
+                // ⛔ /admin/vets/online 已退役（V1.3.0 Story 9.1a：并入兽医列表与抽屉）。
+                "/admin/failed-requests", "/admin/ratings", "/admin/users",
                 "/admin/audit-logs", "/admin/accounts",
                 // V1.1.6 Story 12.1：「运营发布身份」页（虚拟账号 + 运营真实账号两区）。
                 // ⚠️ 这一页此前不在本表里 —— 加进来才会验它的 i18n 键在两种语言下都齐。

@@ -93,7 +93,8 @@ class AdminPageCatalogTest {
         // 现状全部 Controller 的 active 值都必须能落到某个侧栏项（否则该页打开时组不展开）。
         for (String active : List.of("accounts", "ai-orders", "algo-params", "anomalies", "audit-logs", "comments", "config",
                 "consult-orders", "consult-sessions", "content", "content-pins", "content-tags",
-                "dashboard", "failed-requests", "manual-review", "online", "payments", "ratings", "red-overage", "refunds",
+                // ⛔ "online" 已移除：V1.3.0 Story 9.1a 把在线状态并进兽医列表与抽屉，整页路由删除。
+                "dashboard", "failed-requests", "manual-review", "payments", "ratings", "red-overage", "refunds",
                 "roles", "seed", "seed-batches", "settlements", "shopBanners", "shopInventory", "shopMargin", "shopOrders",
                 "shopProducts", "shopReconciliation", "shopRepurchase", "shopReturns", "shopShipping", "shopTurnover",
                 "shopOrderExceptions", "shopPrecedents", "support-tickets", "tickets", "user-tags", "users", "vets",

@@ -228,8 +228,9 @@ public final class AdminPageCatalog {
             shared("failed-requests", G_VET, "/admin/failed-requests", List.of(VET_VIEW)).nav("admin.nav.failedRequests", "failed-requests", VET_VIEW),
             page("consult-sessions", G_VET, "/admin/consult-sessions",
                     List.of(CONSULT_VIEW_SESSIONS), List.of(), List.of()).nav("admin.nav.sessions", "consult-sessions", CONSULT_VIEW_SESSIONS),
-            // ⛔ 本版退役（9.1a 并入兽医列表 / 9.1b 评分并入筛选栏）：侧栏暂保留。
-            legacy("online", G_VET, "/admin/vets/online", "admin.nav.online", "online", VET_VIEW),
+            // ⛔ 本版退役（9.1b 评分并入筛选栏）：侧栏暂保留。
+            //    「在线状态」（原 /admin/vets/online）已于 V1.3.0 Story 9.1a **整条删除**：
+            //    在线态与最后在线并入兽医列表的列与抽屉资料页签，路由 404、不做跳转（D-11 / D-23）。
             legacy("ratings-page", G_VET, "/admin/ratings", "admin.nav.ratings", "ratings", RATING_VIEW),
             // ⚙️ 配置与安全
             page("config", G_CONFIG, "/admin/config",
