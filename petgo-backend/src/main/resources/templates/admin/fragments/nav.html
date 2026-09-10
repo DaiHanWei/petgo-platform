@@ -19,9 +19,12 @@
                th:classappend="${active == p.activeKey} ? 'active'"
                th:text="#{${g.group.titleKey}}">📊 概览</a>
         </th:block>
+        <!--/* data-nav-group：给「整组无权限则整组不渲染」那条 L1 断言一个稳定锚点
+               （V1.3.0 Story 11.4 AC4）。组标题是 #{admin.group.*} 文案，拿文案去断言会跟
+               同名的页面项撞车（比如「内容」既是组名也可能是项名），一撞就成了假绿。 */-->
         <details th:unless="${g.group.key == 'overview'}" class="nav-section"
                  th:with="navOpen=${g.contains(active)}"
-                 th:attr="open=${navOpen} ? 'open' : null">
+                 th:attr="open=${navOpen} ? 'open' : null,data-nav-group=${g.group.key}">
             <summary th:classappend="${navOpen} ? 'active'">
                 <span th:text="#{${g.group.titleKey}}">分组</span>
                 <span th:if="${g.isInbox()}" class="badge nav-badge is-empty" id="nav-badge-total"

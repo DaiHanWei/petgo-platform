@@ -1,0 +1,32 @@
+# AdminPageCatalog 覆盖检查的例外清单（V1.3.0 Story 11.4 · AC1）
+#
+# 这里列的是「长得像页面路由、但**不是页面**」的 GET —— 它们不该进页面目录，
+# 因为目录驱动的是**侧导航**与**权限矩阵的行**：把一个页签或一个选择器放进去，
+# 菜单里就会多出一项点开是半张页面的东西，矩阵里也会多出一行没有独立权限的空行。
+#
+# 🔴 这份清单是**显式的**，不是脚本里一条 `grep -v` 正则。理由：正则一改，
+#    真正漏配的页面会跟着被吞掉，而且没人看得出来吞了什么。写在这里，每加一条都要留个理由。
+#
+# 格式：`<路径>   # 理由`
+# 非注释行按整行精确匹配（不做前缀 / 通配）。
+
+# ---- 同一处理器的多路径别名 ----
+/admin/dashboard   # 与 /admin 是同一个 @GetMapping({"/admin","/admin/dashboard"})，目录里以 /admin 登记
+
+# ---- 页内片段（htmx 拉取，不是能独立打开的页面）----
+/admin/charts   # 看板五卡图表片段（3.4），随 /admin 渲染
+/admin/audit-logs/chain-status   # 审计链完整性片段（6.5），随 /admin/audit-logs 渲染
+/admin/comments/distribution   # 评论管理的「分布」页签（4.2），页面是 /admin/comments
+/admin/seed-batches/schedules   # 批量内容的「排期」页签（7.5），页面是 /admin/seed-batches
+/admin/config/tiers/disabled   # PawCoin 档位的「已停用」子视图（6.2），页面是 /admin/config
+
+# ---- 选择器（弹层里用的候选列表，没有导航入口）----
+/admin/content-pins/pick   # 置顶管理的内容选择器
+/admin/content-tags/pick   # 内容标签的内容选择器
+/admin/user-tags/pick   # 用户标签的用户选择器
+/admin/seed-post/pets   # 种子发布的宠物选择器
+
+# ---- 表单页（从列表页进入，本身不在导航里）----
+# ⚠️ Story 11.3 AC1 明确「/admin/shop/products/{id} 与 /new 表单页保留独立」（10.3）。
+/admin/roles/new   # 角色配置的新建表单，入口在 /admin/roles
+/admin/shop/products/new   # 商品新建表单，入口在 /admin/shop/products
