@@ -36,7 +36,9 @@ class AdminConsultOrderServiceTest {
         orders = Mockito.mock(ConsultOrderRepository.class);
         stageEvents = Mockito.mock(ConsultOrderStageEventRepository.class);
         audit = Mockito.mock(AdminAuditService.class);
-        svc = new AdminConsultOrderService(orders, stageEvents, audit);
+        // V1.3.0 Story 8.4：新增 Messages 入参（导出表头随 locale）。
+        svc = new AdminConsultOrderService(orders, stageEvents, audit,
+                com.tailtopia.support.TestMessages.real());
     }
 
     private long idSeq = 0;
@@ -73,11 +75,15 @@ class AdminConsultOrderServiceTest {
 
         String csv = svc.exportCsv();
 
-        assertThat(csv).startsWith("order_token,user_id,vet_id,amount,vet_payout,status,"
-                + "rebroadcast_count,verify_status,paid_at,created_at\n");
-        // 含逗号/引号字段被包裹 + 引号翻倍。
+        // V1.3.0 Story 8.4：表头改成**随 locale 的文案**（走 AdminExportWriter），
+        // 所以断言的是那几个 message 的值而不是写死的字面量。
+        assertThat(csv).startsWith(
+                com.tailtopia.support.TestMessages.real().get("admin.v130.consultOrders.export.orderToken") + ",");
+        // 含逗号/引号字段被包裹 + 引号翻倍（RFC 4180，由写入器统一处理）。
         assertThat(csv).contains("\"tok,quote\"\"x\"");
         assertThat(csv).contains(",50000,30000,COMPLETED,0,,");
+        // 🔴 行尾必须是 CRLF：写错的话 Excel 会把整份文件读成一行。
+        assertThat(csv).contains("\r\n");
     }
 
     @Test

@@ -22,6 +22,9 @@ class AdminAiOrderIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private AiConsultOrderRepository orders;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.tailtopia.shared.i18n.Messages msg;
+
     @Test
     void summaryCountsOnlyCompletedAndSplitsByChannel() {
         AiRevenueSummary before = service.summary();
@@ -47,8 +50,11 @@ class AdminAiOrderIntegrationTest extends ApiIntegrationTest {
         assertThat(service.list()).extracting("orderToken").contains(o.getOrderToken());
         assertThat(service.detail(o.getOrderToken()).status()).isEqualTo("COMPLETED");
 
+        // V1.3.0 Story 8.4：表头改成随 locale 的文案（走 AdminExportWriter），
+        // 所以断言的是那几个 message 的值 + RFC 4180 的 CRLF，不是写死的字面量。
         String csv = service.exportCsv();
-        assertThat(csv).startsWith("order_token,");
+        assertThat(csv).startsWith(msg.get("admin.v130.aiOrders.export.orderToken") + ",");
+        assertThat(csv).contains("\r\n");
         assertThat(csv).contains(o.getOrderToken());
     }
 }

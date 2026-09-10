@@ -3,6 +3,7 @@ package com.tailtopia.admin.aiorder.service;
 import com.tailtopia.admin.aiorder.dto.AdminAiOrderDetail;
 import com.tailtopia.admin.aiorder.dto.AdminAiOrderRow;
 import com.tailtopia.admin.aiorder.dto.AiRevenueSummary;
+import com.tailtopia.admin.shared.export.AdminExportWriter;
 import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.triage.domain.AiConsultOrder;
 import com.tailtopia.triage.domain.AiConsultOrderStatus;
@@ -22,9 +23,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminAiOrderService {
 
     private final AiConsultOrderRepository orders;
+    /** 导出表头随当前 locale（V1.3.0 Story 8.4 走 AdminExportWriter 之后）。 */
+    private final com.tailtopia.shared.i18n.Messages msg;
 
-    public AdminAiOrderService(AiConsultOrderRepository orders) {
+    public AdminAiOrderService(AiConsultOrderRepository orders,
+            com.tailtopia.shared.i18n.Messages msg) {
         this.orders = orders;
+        this.msg = msg;
     }
 
     @Transactional(readOnly = true)
@@ -55,21 +60,34 @@ public class AdminAiOrderService {
                 o.getStatus().name(), o.getPaidAt(), o.getCreatedAt());
     }
 
+    /**
+     * CSV 导出。⚠️ <b>永远导出全表</b>（本端点不接收筛选参数，页面按钮因此写「导出全部」）。
+     *
+     * <p>V1.3.0 Story 8.4：改经 {@link AdminExportWriter#csv}（AD-10 规则 12）——
+     * RFC 4180 转义 + 公式注入防护 + 表头随会话 locale。
+     */
     @Transactional(readOnly = true)
     public String exportCsv() {
-        StringBuilder sb = new StringBuilder(
-                "order_token,user_id,triage_task_id,amount,pay_channel,status,paid_at,created_at\n");
-        for (AdminAiOrderRow r : list()) {
-            sb.append(csv(r.orderToken())).append(',')
-                    .append(r.userId()).append(',')
-                    .append(r.triageTaskId()).append(',')
-                    .append(r.amount()).append(',')
-                    .append(csv(r.payChannel())).append(',')
-                    .append(csv(r.status())).append(',')
-                    .append(r.paidAt() == null ? "" : r.paidAt()).append(',')
-                    .append(r.createdAt() == null ? "" : r.createdAt()).append('\n');
-        }
-        return sb.toString();
+        List<String> headers = List.of(
+                msg.get("admin.v130.aiOrders.export.orderToken"),
+                msg.get("admin.v130.aiOrders.export.userId"),
+                msg.get("admin.v130.aiOrders.export.triageTaskId"),
+                msg.get("admin.v130.aiOrders.export.amount"),
+                msg.get("admin.v130.aiOrders.export.payChannel"),
+                msg.get("admin.v130.aiOrders.export.status"),
+                msg.get("admin.v130.aiOrders.export.paidAt"),
+                msg.get("admin.v130.aiOrders.export.createdAt"));
+        List<List<Object>> rows = list().stream().map(r -> List.<Object>of(
+                        r.orderToken(),
+                        r.userId(),
+                        r.triageTaskId(),
+                        r.amount(),
+                        r.payChannel(),
+                        r.status(),
+                        r.paidAt() == null ? "" : r.paidAt(),
+                        r.createdAt() == null ? "" : r.createdAt()))
+                .toList();
+        return AdminExportWriter.csv(headers, rows);
     }
 
     private static AdminAiOrderRow toRow(AiConsultOrder o) {
@@ -78,15 +96,5 @@ public class AdminAiOrderService {
                 o.getUserId(), o.getTriageTaskId(),
                 o.getAmount(), o.getPayChannel().name(), o.getStatus().name(),
                 o.getPaidAt(), o.getCreatedAt());
-    }
-
-    private static String csv(String v) {
-        if (v == null) {
-            return "";
-        }
-        if (v.contains(",") || v.contains("\"") || v.contains("\n")) {
-            return '"' + v.replace("\"", "\"\"") + '"';
-        }
-        return v;
     }
 }

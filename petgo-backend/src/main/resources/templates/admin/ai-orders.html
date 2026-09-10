@@ -1,53 +1,49 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- AI 问诊收入统计 + 订单查询（Story 9.4，AB-8C/8G）。只读。与兽医订单命名空间隔离。 -->
+<!--/*
+  AI 问诊收入统计 + 订单查询（Story 9.4 · AB-8C/8G → V1.3.0 Story 8.4 套模板 B，UI 稿 4-2）。
+  全只读，与兽医订单页命名空间隔离。收入汇总六格作为本页摘要条。
+  8.4 的改动是页面组织：详情整页并入抽屉后删除，「操作」列去掉，点行开抽屉。
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.aiOrders.title}">AI 问诊订单 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
-    <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.aiOrders.title}">AI 问诊收入 · 订单</h1>
+    <div th:fragment="content" th:remove="tag" th:with="res='ai-order'">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.aiOrders.title}">AI 问诊收入 · 订单</h1>
+            <!--/* 🔴 同 B10：这个端点不接收筛选参数，永远导出全表。 */-->
+            <a class="btn btn-neutral btn-sm" data-no-drawer
+               th:href="@{/admin/ai-orders/export}"
+               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.export')"
+               th:text="#{admin.v130.common.exportAll}">导出全部</a>
+        </div>
+
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
-        <h2 th:text="#{admin.aiOrders.summary}">收入汇总</h2>
-        <p class="hint" th:text="#{admin.aiOrders.hint.revenue}">收入口径 = 已完成（COMPLETED）订单金额之和；待支付/异常不计收入。</p>
-        <table>
-            <tr><th th:text="#{admin.aiOrders.totalRevenue}">总收入（IDR）</th><td th:text="${summary.totalRevenue}">0</td></tr>
-            <tr><th th:text="#{admin.aiOrders.revenueQris}">· QRIS 现金</th><td th:text="${summary.revenueQris}">0</td></tr>
-            <tr><th th:text="#{admin.aiOrders.revenuePawcoin}">· PawCoin</th><td th:text="${summary.revenuePawcoin}">0</td></tr>
-            <tr><th th:text="#{admin.aiOrders.completedCount}">已完成订单数</th><td th:text="${summary.completedCount}">0</td></tr>
-            <tr><th th:text="#{admin.aiOrders.pendingCount}">待支付</th><td th:text="${summary.pendingCount}">0</td></tr>
-            <tr><th th:text="#{admin.aiOrders.abnormalCount}">异常（对账）</th><td th:text="${summary.abnormalCount}">0</td></tr>
-        </table>
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::ai-filters}, ~{::ai-summary}, ~{::ai-table}, ~{::ai-drawer})}">
+            <!--/* 🔴 收入口径提示不可删：不写的话运营会拿「总收入」跟支付渠道流水直接对，永远对不上。 */-->
+            <p th:fragment="ai-filters" class="hint" data-notice="ai-revenue-scope"
+               th:text="#{admin.aiOrders.hint.revenue}">收入口径 = 已完成（COMPLETED）订单金额之和；待支付/异常不计收入。</p>
 
-        <h2 th:text="#{admin.common.order}">订单</h2>
-        <p>
-            <a class="btn btn-neutral btn-sm" th:href="@{/admin/ai-orders/export}"
-               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.export')" th:text="#{admin.common.exportCsv}">导出 CSV</a>
-        </p>
-        <table>
-            <thead>
-            <tr><th th:text="#{admin.common.order}">订单</th><th th:text="#{admin.common.user}">用户</th><th th:text="#{admin.aiOrders.col.triageTask}">分诊任务</th><th th:text="#{admin.common.amount}">金额</th><th th:text="#{admin.common.channel}">渠道</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.common.paidAt}">成交时间</th><th th:text="#{admin.common.actions}">操作</th></tr>
-            </thead>
-            <tbody>
-            <tr th:each="o : ${orders}">
-                <td th:text="${o.displayNo}">no</td>
-                <td th:text="${o.userId}">0</td>
-                <td th:text="${o.triageTaskId}">0</td>
-                <td th:text="${o.amount}">0</td>
-                <td th:text="${o.payChannel}">QRIS</td>
-                <td th:text="${o.status}">COMPLETED</td>
-                <td th:text="${@adminTime.wib(o.paidAt)}">—</td>
-                <td><a class="btn btn-neutral btn-sm"
-                       th:href="@{/admin/ai-orders/{t}(t=${o.orderToken})}" th:text="#{admin.common.detail}">详情</a></td>
-            </tr>
-            <tr th:if="${orders.isEmpty()}"><td colspan="8" th:text="#{admin.aiOrders.empty}">暂无 AI 问诊订单</td></tr>
-            </tbody>
-        </table>
+            <div th:fragment="ai-summary" th:replace="~{admin/fragments/ai-orders-list :: sumbar(false)}"></div>
+
+            <div th:fragment="ai-table" id="ai-orders-rows">
+                <div th:replace="~{admin/fragments/ai-orders-list :: rows(false)}"></div>
+            </div>
+
+            <div th:fragment="ai-drawer" class="drawer-title"
+                 th:text="#{admin.aiOrderDetail.title}">AI 订单详情</div>
+        </div>
+
+        <span hidden th:if="${open != null}" data-drawer-res="ai-order"
+              th:attr="data-drawer-deeplink=@{/admin/ai-orders/{t}/drawer(t=${open})}"></span>
     </div>
 </div>
 </body>

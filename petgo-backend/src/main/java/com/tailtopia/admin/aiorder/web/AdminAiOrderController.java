@@ -1,6 +1,7 @@
 package com.tailtopia.admin.aiorder.web;
 
 import com.tailtopia.admin.aiorder.service.AdminAiOrderService;
+import com.tailtopia.admin.shared.web.HxRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
@@ -29,19 +31,30 @@ public class AdminAiOrderController {
 
     @GetMapping("/admin/ai-orders")
     @PreAuthorize(VIEW_AUTH)
-    public String list(Model model) {
+    public String list(@RequestParam(value = "open", required = false) String open,
+            HxRequest hx, Model model) {
         model.addAttribute("active", "ai-orders");
         model.addAttribute("summary", service.summary());
         model.addAttribute("orders", service.list());
-        return "admin/ai-orders";
+        model.addAttribute("open", open);
+        return hx.isHtmx() ? "admin/fragments/ai-orders-list :: rows(true)" : "admin/ai-orders";
     }
 
-    @GetMapping("/admin/ai-orders/{orderToken}")
+    /**
+     * 订单抽屉（Story 8.4 · AC4）：**全只读**，一个操作按钮都没有
+     * （AI 是一次性解锁，无退款 / 分成入口）。
+     *
+     * <p>📌 整页 {@code GET /admin/ai-orders/{orderToken}} 已删除（AC5），不做旧地址跳转（D-23）。
+     */
+    @GetMapping("/admin/ai-orders/{orderToken}/drawer")
     @PreAuthorize(VIEW_AUTH)
-    public String detail(@PathVariable String orderToken, Model model) {
+    public String drawer(@PathVariable String orderToken, HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            return "redirect:/admin/ai-orders?open=" + orderToken;
+        }
         model.addAttribute("active", "ai-orders");
         model.addAttribute("order", service.detail(orderToken));
-        return "admin/ai-order-detail";
+        return "admin/fragments/drawer-ai-order :: drawer";
     }
 
     @GetMapping("/admin/ai-orders/export")
@@ -51,6 +64,8 @@ public class AdminAiOrderController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"ai-orders.csv\"")
                 .contentType(new MediaType("text", "csv", java.nio.charset.StandardCharsets.UTF_8))
-                .body(service.exportCsv());
+                // 🔴 BOM 不能省：表头随界面语言输出后首行是中文/印尼文，
+                //    Excel 打开无 BOM 的 UTF-8 CSV 会按本地代码页解，整行乱码。
+                .body('\uFEFF' + service.exportCsv());
     }
 }

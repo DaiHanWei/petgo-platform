@@ -1,48 +1,56 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- 兽医咨询订单只读管理（Story 9.3，AB-8B）。只读 + 待核查标记 + 导出；无退款入口（退款走工单）。 -->
+<!--/*
+  兽医咨询订单只读管理（Story 9.3 · AB-8B → V1.3.0 Story 8.4 套模板 B · tpl-b-list，UI 稿 4-1）。
+  只读 + 待核查标记 + 导出；🔴 **无退款入口**（退款走客服工单两段审批）。
+  8.4 的改动是页面组织：详情整页并入抽屉后删除，「操作」列去掉，点行开抽屉。
+  唯一写端点 POST {orderToken}/verify 的路径与参数逐字未动。
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.consultOrders.title}">兽医咨询订单 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
-    <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.consultOrders.title}">兽医咨询订单</h1>
+    <!--/* ⚠️ res 设在这一层，不能写在下面那个带 th:replace 的 div 上（优先级 100 vs 600，
+           同标签时 th:with 被静默丢弃 —— 见 AdminTemplateStructureTest 的守门）。 */-->
+    <div th:fragment="content" th:remove="tag" th:with="res='order'">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.consultOrders.title}">兽医咨询订单</h1>
+            <!--/* 🔴 文案是「导出全部」不是「导出」：这个端点**不接收任何筛选参数**，永远导出全表。
+                   写「导出」会被读成「导出我现在看到的这些」—— 支付记录页（8.5）的导出才是那个语义。 */-->
+            <a class="btn btn-neutral btn-sm" data-no-drawer
+               th:href="@{/admin/consult-orders/export}"
+               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.export')"
+               th:text="#{admin.v130.common.exportAll}">导出全部</a>
+        </div>
+        <p class="hint" th:text="#{admin.consultOrders.hint}">只读追踪订单全流程；退款不在此处理（走客服工单）。可标记待核查。</p>
+
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
-        <p class="hint" th:text="#{admin.consultOrders.hint}">只读追踪订单全流程；退款不在此处理（走客服工单）。可标记待核查。</p>
-        <p>
-            <a class="btn btn-neutral btn-sm" th:href="@{/admin/consult-orders/export}"
-               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('order.export')" th:text="#{admin.common.exportCsv}">导出 CSV</a>
-        </p>
-        <table>
-            <thead>
-            <tr>
-                <th th:text="#{admin.common.order}">订单</th><th th:text="#{admin.common.user}">用户</th><th th:text="#{admin.consultOrders.col.vet}">兽医</th><th th:text="#{admin.common.amount}">金额</th><th th:text="#{admin.consultOrders.col.payout}">分成</th>
-                <th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.consultOrders.col.rebroadcast}">重播</th><th th:text="#{admin.consultOrders.col.verify}">待核查</th><th th:text="#{admin.common.paidAt}">成交时间</th><th th:text="#{admin.common.actions}">操作</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="o : ${orders}">
-                <td th:text="${o.displayNo}">no</td>
-                <td th:text="${o.userId}">0</td>
-                <td th:text="${o.vetId}">0</td>
-                <td th:text="${#numbers.formatInteger(o.amount, 1, 'COMMA')}">0</td>
-                <td th:text="${o.vetPayout == null} ? '—' : ${#numbers.formatInteger(o.vetPayout, 1, 'COMMA')}">—</td>
-                <td th:text="${o.statusCode}">IN_PROGRESS</td>
-                <td th:text="${o.rebroadcastCount}">0</td>
-                <td th:text="${o.verifyStatus == ''} ? '—' : ${o.verifyStatus}">—</td>
-                <td th:text="${@adminTime.wib(o.paidAt)}">—</td>
-                <td><a class="btn btn-neutral btn-sm"
-                       th:href="@{/admin/consult-orders/{t}(t=${o.orderToken})}" th:text="#{admin.common.detail}">详情</a></td>
-            </tr>
-            <tr th:if="${orders.isEmpty()}">
-                <td colspan="10" th:text="#{admin.consultOrders.empty}">暂无兽医咨询订单</td>
-            </tr>
-            </tbody>
-        </table>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::order-filters}, ~{::order-summary}, ~{::order-table}, ~{::order-drawer})}">
+            <!--/* 本页现状没有筛选参数（摘要条的「本期」因此等于全量，这一点在提示里写明）。
+                   这里只放一句口径说明 —— 槽位留空的话摘要条会紧贴标题，读起来像标题的一部分。 */-->
+            <p th:fragment="order-filters" class="hint" data-notice="orders-scope"
+               th:text="#{admin.v130.consultOrders.summaryScope}">「本期」= 当前筛选集；本页暂无筛选，故为全量。</p>
+
+            <div th:fragment="order-summary" th:replace="~{admin/fragments/consult-orders-list :: sumbar(false)}"></div>
+
+            <div th:fragment="order-table" id="orders-rows">
+                <div th:replace="~{admin/fragments/consult-orders-list :: rows(false)}"></div>
+            </div>
+
+            <div th:fragment="order-drawer" class="drawer-title"
+                 th:text="#{admin.consultOrderDetail.title}">订单详情</div>
+        </div>
+
+        <!--/* ?open=<orderToken> 深链兜底：admin-drawer.js 先按当前页找行，找不到就用这里给的 URL。 */-->
+        <span hidden th:if="${open != null}" data-drawer-res="order"
+              th:attr="data-drawer-deeplink=@{/admin/consult-orders/{t}/drawer(t=${open})}"></span>
     </div>
 </div>
 </body>

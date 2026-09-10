@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  B10 兽医订单抽屉（V1.3.0 Story 8.4 · AC2，480px 抽屉体 res=order，UI 稿 4-1）。
+  整页 consult-order-detail.html 的三段原样平移：成交快照 / 阶段时间线 / 待核查标记。
+  ⚠️ 唯一写端点 POST {orderToken}/verify（status / note）逐字不变。
+  ⚠️ hx-target 指**带 id 的** #order-drawer-err：htmx 只在目标带 id 时才发 HX-Target 头。
+  🔴 **无退款入口**（退款只走客服工单两段审批）—— 那句提示不可删。
+*/-->
+<body>
+<div th:fragment="drawer" id="order-drawer-panel" class="tag-drawer" th:attr="data-order-token=${order.orderToken}"
+     th:with="canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''order.edit'')')}">
+
+    <!--/* ① 成交快照。🔴 单价快照旁必须注明「成交时点值」：不注明的话，
+           运营拿它跟当前配置价一比对不上，会当成计价错误来报。 */-->
+    <section class="card card-full tag-card" data-section="order-snapshot">
+        <h3 th:text="#{admin.consultOrderDetail.snapshot}">成交快照</h3>
+        <table class="ud-table">
+            <tr><th th:text="#{admin.common.orderNo}">订单号</th><td class="nowrap" th:text="${order.orderToken}">tok</td></tr>
+            <tr><th th:text="#{admin.common.userId}">用户 ID</th><td th:text="${order.userId}">0</td></tr>
+            <tr><th th:text="#{admin.consultOrderDetail.vetId}">兽医 ID</th><td th:text="${order.vetId}">0</td></tr>
+            <tr><th th:text="#{admin.consultOrderDetail.petProfileId}">宠物档案 ID</th><td th:text="${order.petProfileId}">0</td></tr>
+            <tr><th th:text="#{admin.common.status}">状态</th><td><code th:text="${order.statusCode}">IN_PROGRESS</code></td></tr>
+            <tr><th th:text="#{admin.common.amount}">金额</th><td th:text="${#numbers.formatInteger(order.amount, 1, 'COMMA')}">0</td></tr>
+            <tr><th th:text="#{admin.common.channel}">渠道</th><td th:text="${order.payChannel} ?: '—'">—</td></tr>
+            <tr><th th:text="#{admin.consultOrderDetail.vetPayout}">兽医到手</th>
+                <td th:text="${order.vetPayout == null} ? '—' : ${#numbers.formatInteger(order.vetPayout, 1, 'COMMA')}">—</td></tr>
+            <tr><th th:text="#{admin.consultOrderDetail.shareRate}">分成比例</th>
+                <td th:text="${order.vetShareRateSnapshot} ?: '—'">—</td></tr>
+            <tr><th th:text="#{admin.consultOrderDetail.unitPrice}">单价快照</th>
+                <td>
+                    <span th:text="${order.unitPriceSnapshot == null} ? '—' : ${#numbers.formatInteger(order.unitPriceSnapshot, 1, 'COMMA')}">—</span>
+                    <span class="hint" data-notice="unit-price-note"
+                          th:text="#{admin.v130.consultOrders.unitPriceNote}">成交时点值，与当前配置价不同属正常</span>
+                </td></tr>
+            <tr><th th:text="#{admin.consultOrderDetail.rebroadcast}">重播次数</th><td th:text="${order.rebroadcastCount}">0</td></tr>
+            <tr><th th:text="#{admin.common.paidAt}">成交时间</th><td class="nowrap" th:text="${@adminTime.wib(order.paidAt)}">—</td></tr>
+            <tr><th th:text="#{admin.consultOrderDetail.sessionStart}">会话起</th><td class="nowrap" th:text="${@adminTime.wib(order.sessionStartedAt)}">—</td></tr>
+            <tr><th th:text="#{admin.consultOrderDetail.sessionEnd}">会话止</th><td class="nowrap" th:text="${@adminTime.wib(order.sessionEndedAt)}">—</td></tr>
+        </table>
+    </section>
+
+    <!--/* ② 阶段时间线（只读）。空态文案保留 —— 一张没有解释的空表会被当成「数据丢了」。 */-->
+    <section class="card card-full tag-card" data-section="order-timeline">
+        <h3 th:text="#{admin.consultOrderDetail.timeline}">阶段时间线</h3>
+        <table th:if="${!order.stages.isEmpty()}" class="ud-table">
+            <thead><tr>
+                <th th:text="#{admin.consultOrderDetail.col.event}">节点</th>
+                <th class="nowrap" th:text="#{admin.common.time}">时间</th>
+                <th th:text="#{admin.common.note}">备注</th>
+            </tr></thead>
+            <tbody>
+            <tr th:each="s : ${order.stages}">
+                <td class="nowrap"><code th:text="${s.eventType}">PAID</code></td>
+                <td class="nowrap" th:text="${@adminTime.wib(s.occurredAt)}">t</td>
+                <td th:text="${s.note} ?: '—'">—</td>
+            </tr>
+            </tbody>
+        </table>
+        <p class="hint" th:if="${order.stages.isEmpty()}"
+           th:text="#{admin.consultOrderDetail.empty.stages}">暂无阶段事件</p>
+    </section>
+
+    <!--/* ③ 待核查标记：**纯人工注记**，不改订单业务状态、不触发退款/冻结。 */-->
+    <section class="card card-full tag-card" data-section="order-verify">
+        <h3 th:text="#{admin.consultOrderDetail.verify}">待核查标记</h3>
+        <p class="hint">
+            <span th:text="#{admin.consultOrderDetail.current}">当前：</span>
+            <span th:text="${order.verifyStatus == ''} ? #{admin.consultOrderDetail.unmarked} : ${order.verifyStatus}">未标记</span>
+            <span th:if="${order.verifyNote}"> · <span th:text="#{admin.consultOrderDetail.noteLabel}">备注：</span><span th:text="${order.verifyNote}">note</span></span>
+        </p>
+
+        <!--/* 🔴 门控用 order.edit，与端点的 @PreAuthorize(EDIT_AUTH) 逐字一致。
+               ⚠️ 整页那版写的是 order.view —— 那是典型的「按钮在、点了 403」：
+                  只有查看权限的人看得到这张表单，一提交拿到的是 403。 */-->
+        <form th:if="${canEdit}"
+              th:attr="hx-post=@{/admin/consult-orders/{t}/verify(t=${order.orderToken})}"
+              hx-target="#order-drawer-err" hx-swap="innerHTML">
+            <label class="field">
+                <span th:text="#{admin.consultOrderDetail.mark}">标记</span>
+                <select name="status" class="sel">
+                    <option value="" th:text="#{admin.consultOrderDetail.opt.clear}">清除标记</option>
+                    <option value="TO_VERIFY" th:selected="${order.verifyStatus == 'TO_VERIFY'}"
+                            th:text="#{admin.consultOrderDetail.opt.toVerify}">待核查</option>
+                    <option value="VERIFIED" th:selected="${order.verifyStatus == 'VERIFIED'}"
+                            th:text="#{admin.consultOrderDetail.opt.verified}">已核查</option>
+                </select>
+            </label>
+            <label class="field field-full">
+                <span th:text="#{admin.common.note}">备注</span>
+                <input type="text" name="note" class="inp field-full" maxlength="255"
+                       th:value="${order.verifyNote}"/>
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm"
+                    th:text="#{admin.consultOrderDetail.btn.save}">保存标记</button>
+        </form>
+        <p class="hint" th:unless="${canEdit}"
+           th:text="#{admin.v130.err.forbidden(#{perm.order.edit})}">需要「编辑订单」权限</p>
+        <button type="button" class="btn btn-primary btn-sm" disabled th:unless="${canEdit}"
+                th:title="#{admin.v130.err.forbidden(#{perm.order.edit})}"
+                th:text="#{admin.consultOrderDetail.btn.save}">保存标记</button>
+
+        <div id="order-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+
+        <!--/* 🔴 这句不可删：本页**没有**退款入口，而运营在订单页找退款是最自然的反应。
+               不写的话他会以为功能坏了，或者去找工程「帮忙改一下」。 */-->
+        <p class="hint" th:text="#{admin.consultOrderDetail.hint.noRefund}">
+            ⚠️ 退款不在此处理——如需退款请走客服工单两段审批。</p>
+    </section>
+</div>
+
+<!--/* 标记成功：抽屉体 oob + 列表那一行 oob + toast。
+       ⚠️ 不整表重拉：标记不会让行换位置（表按成交时间倒序），整表重拉只会把运营刚翻到的位置跳回去。
+       🔴 摘要条的「待核查数」会变，所以行 oob 之外**还要**换摘要条 —— 只换行的话那个数会留在旧值。 */-->
+<th:block th:fragment="afterAction">
+    <div id="order-drawer-body-oob" hx-swap-oob="innerHTML:#order-drawer .drawer-body">
+        <div th:replace="~{admin/fragments/drawer-consult-order :: drawer}"></div>
+    </div>
+    <!--/* 🔴 外壳必须是**真的** <table hidden>，不能 th:remove="tag"：响应不以 `<tr` 开头时
+           htmx 走通用解析，裸 <tr>/<td> 会被 HTML 解析器丢掉 —— 行不换、单元格文本还泄进抽屉的 err 槽。 */-->
+    <table hidden><tbody>
+        <tr th:replace="~{admin/fragments/consult-orders-list :: row(${row}, true)}"></tr>
+    </tbody></table>
+    <div th:replace="~{admin/fragments/consult-orders-list :: sumbar(true)}"></div>
+    <!--/* 🔴 toast 必须**多包一层**：htmx 的 oob 只有 outerHTML 语义才换整个元素，
+           `beforeend:` 走的是「把这个元素的**子节点**搬过去」（htmx 1.9.12 的 Ee：
+           非 inline swap 时 fragment 被换成元素本身，再由 Fe 搬 childNodes）——
+           直接把 hx-swap-oob 写在 .toast 上，落进宿主的只有一段**裸文本**：
+           没有 toast 样式，admin-core.js 的 armToast 也找不到元素，于是**永远不消失**，
+           连标几单就一直堆在页脚。外层这个 div 会被丢掉，正是我们要的。
+           ⚠️ 全后台还有二十来处是旧写法（drawer-content-tag / drawer-users / tickets-done …），
+              同一个毛病，属既存缺口，见本 story 的 Completion Notes。 */-->
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>
