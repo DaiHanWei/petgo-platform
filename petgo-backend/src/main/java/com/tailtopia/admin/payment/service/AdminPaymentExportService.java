@@ -94,7 +94,9 @@ public class AdminPaymentExportService {
         if (truncated) {
             // 🔴 截断说明留在**表尾第一列**（与旧实现同位置）：文件被单独转发时，
             //    这是唯一能说明「这份表不全」的地方。
-            data.add(java.util.List.of(msg.get("admin.v130.payments.export.truncated", EXPORT_MAX_ROWS)));
+            data.add(java.util.List.of(// ⚠️ 传 String：int 会被 MessageFormat 交给 NumberFormat，变成「5,000 行」，
+            //    而这份表里其它数字都没有千分位。
+            msg.get("admin.v130.payments.export.truncated", String.valueOf(EXPORT_MAX_ROWS))));
         }
         // V1.3.0 Story 8.5：改经 AdminExportWriter（2.3a 起全站导出一个出口，表头随 locale）。
         // ⚠️ 写入器把 IOException 包成 UncheckedIOException 往上抛，那会落进兜底 handler

@@ -86,7 +86,10 @@ public class AdminPaymentSimulateController {
             throw AppException.validation("该支付已是终态，不能再模拟回调")
                     .code("admin.err.payments.alreadyTerminal");
         }
-        // ⚠️ gatewayRef 带 `sim-` 前缀：事后在库里一眼能认出「这笔是测出来的」。
+        // ⚠️ 可分辨性靠的是 **rawMeta 的 simulated 标记 + 审计行**，不是 gatewayRef 的前缀：
+        //    收口只在 gateway_ref 为空时才回填（PaymentIntentService 的 attachGatewayRef 前有 null 判断），
+        //    而下过单、拿到过收款码的意图（也正是最值得模拟的那一批）早就被 attachCharge 写进了真实网关号。
+        //    前缀仍然传，是为了「从没下过单的裸意图」那一类；但别拿它当判据。
         //    rawMeta 只放这一个标记，不伪造网关字段 —— 伪造出来的字段会被当成真回调读。
         intents.applyCallback(new PaymentCallback(intentToken, "sim-" + intentToken, result,
                 Map.of("simulated", true)));

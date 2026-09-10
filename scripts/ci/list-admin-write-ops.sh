@@ -83,9 +83,15 @@ retired_note() {
 #   · 方法级 @RequestMapping 无方法限定 → 记为 GET 并备注 (@RequestMapping)。
 scan() {
   local file="$1"
-  local cls
+  local cls stagonly
   cls=$(basename "$file" .java)
-  awk -v CLS="$cls" '
+  # 🧪 类上带 @StagOnly（= @Profile("stag")）的 Controller：生产**不注册 bean、路由不存在**。
+  #    它们仍然进清单（Story 11.1 做 diff 时不能凭空少几行），但必须**单列标记**，
+  #    否则会被当成本版新增的生产写端点（V1.3.0 Story 8.5 / 决策 D-41 的模拟回调三钮就是这一类）。
+  #    判据是注解本身，不是路径前缀 —— 按前缀认只对 kitchen-sink 那一种命名有效。
+  stagonly=""
+  if grep -qE '^[ \t]*@StagOnly[ \t]*$' "$file"; then stagonly="🧪 stag-only（@StagOnly，生产不注册）"; fi
+  awk -v CLS="$cls" -v STAGONLY="$stagonly" '
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
     function balanced(s,   i, c, d) { d = 0; for (i = 1; i <= length(s); i++) { c = substr(s, i, 1); if (c == "(") d++; else if (c == ")") d-- } return d <= 0 }
     function resolve(expr, depth,   out, i, c, tok, isid) {
@@ -151,6 +157,7 @@ scan() {
         n = emit_paths(pend_map)
         auth = (pend_auth == "" ? "（无 @PreAuthorize，仅 /admin/** 链级 ROLE_ADMIN）" : pend_auth)
         gsub(/\|/, "\\|", auth)
+        if (STAGONLY != "") note = STAGONLY (note == "" ? "" : " " note)
         for (i = 1; i <= n; i++) printf "%s\t%s\t%s#%s\t%s\t%s\n", method, PATHS[i], CLS, m, auth, note
         pend_map = ""; pend_auth = ""
         delete PATHS
@@ -187,6 +194,7 @@ mkdir -p "$OUT_DIR"
   echo "- 生成命令: \`bash scripts/ci/list-admin-write-ops.sh\`（Story 2.1；Story 11.1 对重构后代码再跑一次做 diff）"
   echo "- 计数: 写端点 **$write_count**（grep 自检 $expected）· GET 映射 **$get_count**（grep $get_expected）· 页面路由（去参数 / 导出 / 抽屉 / 详情）≈ **$page_count**"
   echo "- 页面组按「路径前缀 → 泳道」表（脚本内置，UI 稿 8 泳道）；\`AdminPageCatalog\`（Story 1.5）落地后 Story 11.1 可改读它。"
+  echo "- 🧪 标记 = \`@StagOnly\` 端点：**生产不注册 bean、路由不存在**（不是 403）。做 diff 时按 stag-only 单列，不计入生产写端点。"
   echo
   echo "## 表 1 · 写端点（@Post/Put/DeleteMapping）"
   echo

@@ -83,4 +83,23 @@ class RedOverageMonitorServiceTest {
         verify(reviews).save(Mockito.any(RedOverageReview.class));
         verify(audit).record(eq(7L), eq("RED_OVERAGE_REVIEW"), anyString(), eq("100"), anyString());
     }
+
+    /**
+     * L0（V1.3.0 Story 8.5 · AC4）：摘要条「待核查用户数」的**数值**。
+     *
+     * <p>纯函数（入参就是列表那一份 rows），所以在这里钉死 —— 页面上只断言
+     * {@code data-sum="toVerify"} 这个标记存在的话，把判据从 TO_VERIFY 写成 RESOLVED
+     * 也照样绿。
+     */
+    @Test
+    void summaryCountsOnlyUsersMarkedToVerify() {
+        java.util.List<RedOverageRow> rows = java.util.List.of(
+                new RedOverageRow(1L, 9, "TO_VERIFY", "排查中"),
+                new RedOverageRow(2L, 5, "RESOLVED", "已处理"),
+                new RedOverageRow(3L, 3, "", null),
+                new RedOverageRow(4L, 2, "TO_VERIFY", null));
+
+        assertThat(svc.summary(rows).toVerify()).isEqualTo(2);
+        assertThat(svc.summary(java.util.List.of()).toVerify()).isZero();
+    }
 }

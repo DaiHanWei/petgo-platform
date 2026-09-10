@@ -14,7 +14,8 @@
     <section class="card card-full tag-card" data-section="settlement-ledger">
         <h3 th:text="#{admin.v130.settlements.drawer.ledger}">月结台账</h3>
         <table class="ud-table">
-            <tr><th th:text="#{admin.settlements.col.vet}">兽医</th><td th:text="${s.vetId}">0</td></tr>
+            <tr><th th:text="#{admin.settlements.col.vet}">兽医</th>
+                <td th:text="${s.vetName} + ' (#' + ${s.vetId} + ')'">名 (#0)</td></tr>
             <tr><th th:text="#{admin.settlements.col.period}">月份</th><td class="nowrap" th:text="${s.period}">2026-06</td></tr>
             <tr><th th:text="#{admin.settlements.col.orders}">单数</th><td th:text="${s.orderCount}">0</td></tr>
             <tr><th th:text="#{admin.settlements.col.gross}">成交额</th>
@@ -76,30 +77,33 @@
         <form th:if="${s.pendingFinance() and canPayout}"
               th:attr="hx-post=@{/admin/settlements/{id}/pay(id=${s.id})}"
               hx-target="#settlement-drawer-err" hx-swap="innerHTML"
-              th:data-confirm="#{admin.v130.settlements.confirmPay(${s.vetId}, ${#numbers.formatInteger(s.payoutAmount, 1, 'COMMA')})}">
+              th:data-confirm="#{admin.v130.settlements.confirmPay(${s.vetName}, ${#numbers.formatInteger(s.payoutAmount, 1, 'COMMA')})}">
+            <!--/* 🔴 required 不是装饰：凭证是**只在 PENDING_FINANCE 时才写得进去**的字段
+                   （VetSettlement.markPaid 带 requireStatus(PENDING_FINANCE)）。这一步留空，
+                   之后就再也没有任何入口能补填 —— 所以拦在这里，而不是事后提示。 */-->
             <label class="field field-full">
                 <span th:text="#{admin.settlements.col.proof}">凭证</span>
-                <input type="text" name="proof" class="inp field-full" maxlength="512"
+                <input type="text" name="proof" class="inp field-full" maxlength="512" required
                        th:placeholder="#{admin.settlements.ph.proof}"/>
             </label>
             <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.settlements.btn.pay}">确认打款</button>
         </form>
 
-        <!--/* 已打款：归档。🔴 凭证为空时**前置禁用**（现状只有服务层拒绝 ——
-               让人点完再看报错，等于让他猜「缺什么」）。 */-->
+        <!--/* 已打款：归档。
+               🔴 凭证为空时**不禁用**，只警告 —— 这与 AC3 的字面要求相反，理由见 Completion Notes：
+                  AC3 的前提「现状仅服务层拒绝」不成立（VetSettlement.archive 只判 PAID，从不看 proof），
+                  而 proof 只在 PENDING_FINANCE 时写得进去。真按 AC 禁用，一条「打款时忘了填凭证」的月结
+                  就会**永久卡在 PAID**：归档按钮灰着，提示叫人「先回填凭证」，而回填凭证的表单
+                  已经随状态消失了 —— 一个 UI 逃不出去的死角，只能改库。
+                  改为：入口处 required 拦住（上面），存量缺凭证的仍可归档，但把话说清楚。 */-->
         <th:block th:if="${s.paid() and canPayout}">
-            <form th:if="${s.hasProof()}"
-                  th:attr="hx-post=@{/admin/settlements/{id}/archive(id=${s.id})}"
+            <p class="hint" th:unless="${s.hasProof()}" data-notice="settlement-no-proof"
+               th:text="#{admin.v130.settlements.archiveNeedsProof}">未登记凭证</p>
+            <form th:attr="hx-post=@{/admin/settlements/{id}/archive(id=${s.id})}"
                   hx-target="#settlement-drawer-err" hx-swap="innerHTML">
                 <button type="submit" class="btn btn-neutral btn-sm"
                         th:text="#{admin.settlements.btn.archive}">归档</button>
             </form>
-            <th:block th:unless="${s.hasProof()}">
-                <button type="button" class="btn btn-neutral btn-sm" disabled
-                        th:title="#{admin.v130.settlements.archiveNeedsProof}"
-                        th:text="#{admin.settlements.btn.archive}">归档</button>
-                <p class="hint" th:text="#{admin.v130.settlements.archiveNeedsProof}">凭证为空，不能归档</p>
-            </th:block>
         </th:block>
 
         <p class="hint" th:if="${s.archived()}" th:text="#{admin.v130.settlements.archivedReadOnly}">已归档，只读</p>

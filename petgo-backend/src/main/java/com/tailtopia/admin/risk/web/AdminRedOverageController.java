@@ -83,6 +83,13 @@ public class AdminRedOverageController {
         model.addAttribute("history", service.history(userId));
     }
 
+    /** 该用户必须在 RED 聚合结果里；否则 404（与抽屉同一条判据）。 */
+    private void requireInList(long userId) {
+        if (service.list().stream().noneMatch(r -> r.userId() == userId)) {
+            throw AppException.notFound("无该用户的 RED 记录").code("admin.err.redOverage.notFound");
+        }
+    }
+
     /** 标记成功统一响应：抽屉重渲染 + 列表那一行 oob + 摘要条 oob + toast。 */
     private String afterAction(long userId, String toast, Model model) {
         List<RedOverageRow> rows = service.list();
@@ -102,6 +109,13 @@ public class AdminRedOverageController {
             @RequestParam String status, @RequestParam(required = false) String note,
             HxRequest hx, Model model, RedirectAttributes flash) {
         if (hx.isHtmx()) {
+            // 🔴 先确认这个用户真的在聚合结果里（= 有过 RED 分诊）。
+            //    service.mark 对任意 userId 都会写一条 review 行，而列表只列有 RED 记录的人：
+            //    对一个没有 RED 记录的 id 直接 POST（改地址栏 / 脚本），会**写库成功**、
+            //    随后 afterAction 找不到行抛 NoSuchElementException → 500，
+            //    留下一条永远不会出现在任何页面上的孤儿 review 行。抽屉只可能从列表里打开，
+            //    所以这里与 drawer 用同一条判据：不在列表里 = 404。
+            requireInList(userId);
             // 非法状态值在服务层抛 422，这里不重复判 —— 让它落进抽屉的行内错误槽。
             service.mark(userId, status, note, admin.getAdminAccountId());
             return afterAction(userId, msg.get("admin.flash.redOverage.marked"), model);

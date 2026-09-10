@@ -21,8 +21,16 @@ public record AdminPaymentDetail(
         Long coinAmount, Long cashAmount, Instant expiresAt,
         Instant createdAt, Instant updatedAt) {
 
-    /** 终态（PAID / FAILED / EXPIRED）——终态不可再被回调推进（服务层的幂等闸）。 */
+    /**
+     * 终态 —— 终态不可再被回调推进（服务层的幂等闸）。
+     *
+     * <p>🔴 判据写成「不是 PENDING」而不是逐个列举 PAID / FAILED / EXPIRED：后者与
+     * {@code PaymentStatus.isTerminal()}（{@code this != PENDING}）**是两套定义**，
+     * 枚举以后多一个值（REFUNDED / CANCELLED …）时会当场分叉 —— 领域侧认为是终态、
+     * 这里认为不是，于是抽屉照常渲染模拟三钮、前置检查放行，而收口在「已终态即静默返回」
+     * 处无声退出：运营看到 toast「已模拟回调」，状态一个字没变。
+     */
     public boolean terminal() {
-        return "PAID".equals(status) || "FAILED".equals(status) || "EXPIRED".equals(status);
+        return !"PENDING".equals(status);
     }
 }

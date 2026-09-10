@@ -12,6 +12,7 @@ import com.tailtopia.admin.account.domain.AdminAccountType;
 import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.domain.VetSettlement;
 import com.tailtopia.consult.repository.VetSettlementRepository;
 import com.tailtopia.pay.domain.PayChannel;
@@ -22,6 +23,8 @@ import com.tailtopia.support.ApiIntegrationTest;
 import com.tailtopia.triage.domain.DangerLevel;
 import com.tailtopia.triage.domain.TriageTask;
 import com.tailtopia.triage.repository.TriageTaskRepository;
+import com.tailtopia.vet.domain.VetAccount;
+import com.tailtopia.vet.repository.VetAccountRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +57,12 @@ class AdminMoneyPagesDrawerIntegrationTest extends ApiIntegrationTest {
     private TriageTaskRepository triage;
     @Autowired
     private AdminAccountRepository adminAccounts;
+    @Autowired
+    private VetAccountRepository vets;
+    @Autowired
+    private com.tailtopia.admin.risk.repository.RedOverageReviewRepository redReviews;
+    @Autowired
+    private com.tailtopia.consult.repository.ConsultOrderRepository consultOrders;
 
     private Authentication auth(AdminAccountType type, String... permissions) {
         long n = SEQ.incrementAndGet();
@@ -84,17 +93,47 @@ class AdminMoneyPagesDrawerIntegrationTest extends ApiIntegrationTest {
                 PayChannel.QRIS, 50000L, "IDR", "pay-d-" + n));
     }
 
+    /** 二次确认要复述兽医名，所以月结必须挂在一个真存在的兽医账号上。 */
+    private static final String VET_NAME = "月结测试兽医";
+
+    private VetAccount seedVet() {
+        long n = SEQ.incrementAndGet();
+        return vets.save(VetAccount.create("vet-money-" + n, "{bcrypt}x", VET_NAME));
+    }
+
     private VetSettlement seedSettlement() {
-        return settlements.save(VetSettlement.of(8300L + SEQ.incrementAndGet(), "2026-05", 2,
+        return settlements.save(VetSettlement.of(seedVet().getId(), "2026-05", 2,
                 100000L, 60000L, Instant.now()));
     }
 
+    /**
+     * 🔴 症状文本用**哨兵串**，不用「症状」这类真词：抽屉里那句边界提示本身就写着
+     * 「此处不展示症状描述与解析结果」—— 拿真词断言 doesNotContain 会与提示文案撞字，
+     * 断言只能删或改，等于这条守门永远失效。哨兵串不会出现在任何文案里。
+     */
+    private static final String SYMPTOM_SENTINEL = "SYMPTOM-SENTINEL-8x5";
+
     private long seedRedUser() {
         long userId = 900_000L + SEQ.incrementAndGet();
-        TriageTask t = TriageTask.submit(userId, null, "症状", List.of(), "idem-" + userId, "zh_CN");
+        TriageTask t = TriageTask.submit(userId, null, SYMPTOM_SENTINEL, List.of(),
+                "idem-" + userId, "zh_CN");
         t.markDone(DangerLevel.RED, Map.of(), Map.of());
         triage.save(t);
         return userId;
+    }
+
+    /** 窗口口径按 `sessionEndedAt` 归月，所以这里造的是**已完成**订单并显式指定会话结束时刻。 */
+    private ConsultOrder completedOrder(long vetId, Instant sessionEndedAt) {
+        long n = SEQ.incrementAndGet();
+        ConsultOrder o = ConsultOrder.inProgress("st-" + n, 100L + n, vetId, 3L, 50000L,
+                PayChannel.QRIS, null, 30000L, 60, 50000L, Instant.parse("2026-05-01T00:00:00Z"));
+        o.markCompleted(sessionEndedAt);
+        return consultOrders.save(o);
+    }
+
+    private String displayNoOf(ConsultOrder o) {
+        return com.tailtopia.order.dto.OrderDisplayNo.of(
+                com.tailtopia.order.dto.OrderDisplayNo.VET_CONSULT, o.getId(), o.getCreatedAt());
     }
 
     private String body(MvcResult r) throws Exception {
@@ -176,9 +215,26 @@ class AdminMoneyPagesDrawerIntegrationTest extends ApiIntegrationTest {
         assertThat(html).as("页首「每月 1 日生成上月月结」提示保留").contains("每月 1 日生成上月月结");
     }
 
+    /**
+     * 🔴「订单构成」是**读时按 (兽医, 月份窗口) 重算**出来的（月结表只存聚合值，没有明细表），
+     * 所以必须真的塞一批订单进去验：窗口内的要出现、窗口外的一条都不能漏进来。
+     *
+     * <p>只断言「`data-section="settlement-orders"` 这个标记在」的话，把 `>= :start` 改成
+     * `> :start`、把 `sessionEndedAt` 换成 `createdAt`、把 WIB 换成 UTC，全都照样绿 ——
+     * 而那正是这条口径唯一会出错的地方（它必须与生成月结时逐字一致）。
+     */
     @Test
     void settlementDrawerShowsOrderCompositionAndOnlyTheActionThatFits() throws Exception {
-        VetSettlement s = seedSettlement();
+        VetAccount vet = seedVet();
+        VetSettlement s = settlements.save(VetSettlement.of(vet.getId(), "2026-05", 2,
+                100000L, 60000L, Instant.now()));
+        // 窗口 = 2026-05 的 WIB [1 日 00:00, 6/1 00:00)。
+        ConsultOrder in1 = completedOrder(vet.getId(), Instant.parse("2026-04-30T17:00:00Z")); // = 5/1 00:00 WIB，含
+        ConsultOrder in2 = completedOrder(vet.getId(), Instant.parse("2026-05-20T03:00:00Z"));
+        ConsultOrder beforeWindow = completedOrder(vet.getId(), Instant.parse("2026-04-30T16:59:59Z"));
+        ConsultOrder afterWindow = completedOrder(vet.getId(), Instant.parse("2026-05-31T17:00:00Z")); // = 6/1 00:00 WIB，不含
+        ConsultOrder otherVet = completedOrder(seedVet().getId(), Instant.parse("2026-05-20T03:00:00Z"));
+
         String html = body(mvc.perform(get("/admin/settlements/" + s.getId() + "/drawer")
                         .param("lang", "zh_CN").header("HX-Request", "true")
                         .with(authentication(superAdmin())))
@@ -186,29 +242,57 @@ class AdminMoneyPagesDrawerIntegrationTest extends ApiIntegrationTest {
 
         assertThat(html).contains("id=\"settlement-drawer-panel\"")
                 .contains("data-section=\"settlement-orders\"");
+        assertThat(html).as("窗口内的两单都要列出来（含左端点 5/1 00:00 WIB）")
+                .contains(displayNoOf(in1)).contains(displayNoOf(in2));
+        assertThat(html).as("🔴 窗口外与别的兽医的单，一条都不能漏进来")
+                .doesNotContain(displayNoOf(beforeWindow))
+                .doesNotContain(displayNoOf(afterWindow))
+                .doesNotContain(displayNoOf(otherVet));
+        assertThat(html).as("兽医名而不是数字 id").contains(VET_NAME);
         // PENDING_FINANCE：只渲染「确认打款」，不渲染「归档」。
         assertThat(html).contains("/pay").doesNotContain("/archive");
-        // 🔴 不可撤销的一步：确认文案必须复述兽医 + 到手金额。
-        assertThat(html).contains("data-confirm");
+        // 🔴 不可撤销的一步：确认文案必须复述**兽医名 + 到手金额** ——
+        //    财务同时开着几笔月结时，一个他不认识的数字 id 挡不住点错行。
+        assertThat(html).containsPattern("data-confirm=\"[^\"]*" + VET_NAME + "[^\"]*60,000");
         assertThat(html).as("「此处不发起真实转账」不可删").contains("不发起真实转账");
     }
 
-    /** 🔴 归档要凭证：现状只有服务层拒绝，抽屉必须**前置禁用**并说明缺什么。 */
+    /**
+     * 🔴 凭证只在 {@code PENDING_FINANCE} 时写得进去（{@code VetSettlement.markPaid} 带
+     * {@code requireStatus}），所以拦在**打款那一步**：表单上 required。
+     *
+     * <p>而已经 PAID 且没有凭证的存量数据**仍然可归档**，只是把话说清楚 —— 真按
+     * 「凭证为空则禁用归档」做，这类月结会永久卡在 PAID：归档按钮灰着、提示叫人回填凭证，
+     * 而回填凭证的表单已经随状态消失，UI 里逃不出去。（Story AC3 的前提「现状仅服务层拒绝」
+     * 不成立：{@code VetSettlement.archive} 只判 PAID，从来不看 proof。）
+     */
     @Test
-    void archiveIsDisabledWhenProofIsMissing() throws Exception {
+    void proofIsRequiredAtPayoutAndAMissingProofNeverBlocksArchiving() throws Exception {
         VetSettlement s = seedSettlement();
-        // 直接置 PAID 但**不给凭证**（服务层的 markPaid 允许 proof 为空）。
+        String pending = body(mvc.perform(get("/admin/settlements/" + s.getId() + "/drawer")
+                        .param("lang", "zh_CN").header("HX-Request", "true")
+                        .with(authentication(superAdmin())))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(pending).as("凭证必填拦在打款这一步").containsPattern(
+                "<input[^>]*name=\"proof\"[^>]*required");
+
+        // 存量数据的形态：PAID 但没有凭证（服务层允许 proof 为空，本 story 未改写端点行为）。
         mvc.perform(post("/admin/settlements/" + s.getId() + "/pay")
                         .with(authentication(superAdmin())).with(csrf()))
                 .andExpect(status().is3xxRedirection());
 
-        String html = body(mvc.perform(get("/admin/settlements/" + s.getId() + "/drawer")
+        String paid = body(mvc.perform(get("/admin/settlements/" + s.getId() + "/drawer")
                         .param("lang", "zh_CN").header("HX-Request", "true")
                         .with(authentication(superAdmin())))
                 .andExpect(status().isOk()).andReturn());
-        assertThat(html).contains("disabled").contains("凭证为空，不能归档");
-        assertThat(html).as("禁用态下不该留下可提交的归档表单").doesNotContain("hx-post=\"/admin/settlements/"
-                + s.getId() + "/archive\"");
+        assertThat(paid).as("说明为什么这笔没有流水可对").contains("data-notice=\"settlement-no-proof\"");
+        assertThat(paid).as("🔴 归档必须仍然做得到，否则这笔月结永久卡在 PAID")
+                .contains("hx-post=\"/admin/settlements/" + s.getId() + "/archive\"");
+        mvc.perform(post("/admin/settlements/" + s.getId() + "/archive")
+                        .header("HX-Request", "true")
+                        .with(authentication(superAdmin())).with(csrf()))
+                .andExpect(status().isOk());
+        assertThat(settlements.findById(s.getId()).orElseThrow().getStatus()).isEqualTo("ARCHIVED");
     }
 
     /** 🛡 打款 / 归档要 {@code settlement.payout}；只有查看权限的人看到的是禁用态 + 原因，不是 403 按钮。 */
@@ -276,7 +360,7 @@ class AdminMoneyPagesDrawerIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isOk()).andReturn());
 
         assertThat(html).contains("id=\"red-drawer-panel\"").contains("data-section=\"red-history\"");
-        assertThat(html).as("症状文本绝不能出现在后台").doesNotContain("症状");
+        assertThat(html).as("症状文本绝不能出现在后台").doesNotContain(SYMPTOM_SENTINEL);
         assertThat(html).contains("data-notice=\"red-no-health-data\"");
     }
 
@@ -322,5 +406,20 @@ class AdminMoneyPagesDrawerIntegrationTest extends ApiIntegrationTest {
         mvc.perform(get("/admin/red-overage/999999999/drawer").header("HX-Request", "true")
                         .with(authentication(superAdmin())))
                 .andExpect(status().isNotFound());
+    }
+
+    /**
+     * 🔴 对没有 RED 记录的 id 直接 POST：必须**先拒绝再写库**。
+     *
+     * <p>{@code service.mark} 对任意 userId 都会写一条 review 行，而列表只列有 RED 记录的人 ——
+     * 先写后拒的话，库里会留下一条永远不会出现在任何页面上的孤儿行，运营还会看到 500。
+     */
+    @Test
+    void markingAUserWithoutAnyRedTaskIs404AndWritesNothing() throws Exception {
+        mvc.perform(post("/admin/red-overage/999999999/review").param("status", "TO_VERIFY")
+                        .header("HX-Request", "true")
+                        .with(authentication(superAdmin())).with(csrf()))
+                .andExpect(status().isNotFound());
+        assertThat(redReviews.findById(999999999L)).as("拒绝之前不该已经写进去").isEmpty();
     }
 }

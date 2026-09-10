@@ -28,11 +28,16 @@ public class AdminSettlementService {
     /** 抽屉里的「订单构成」按 (vetId, period 窗口) 读时重算 —— 月结表只存聚合值，没有明细表。 */
     private final com.tailtopia.consult.repository.ConsultOrderRepository orders;
 
+    /** 只为把抽屉与二次确认里的「兽医」从数字 id 换成名字（AC3）。 */
+    private final com.tailtopia.vet.repository.VetAccountRepository vets;
+
     public AdminSettlementService(VetSettlementRepository settlements, AdminAuditService audit,
-            com.tailtopia.consult.repository.ConsultOrderRepository orders) {
+            com.tailtopia.consult.repository.ConsultOrderRepository orders,
+            com.tailtopia.vet.repository.VetAccountRepository vets) {
         this.settlements = settlements;
         this.audit = audit;
         this.orders = orders;
+        this.vets = vets;
     }
 
     /**
@@ -78,7 +83,12 @@ public class AdminSettlementService {
                                         o.getId(), o.getCreatedAt()),
                                 o.getAmount(), o.getVetPayout(), o.getSessionEndedAt()))
                         .toList();
-        return new AdminSettlementDetail(s.getId(), s.getVetId(), s.getPeriod(), s.getOrderCount(),
+        // 兽医名查不到就回退成 #id —— 账号可能已被删，但月结（钱）必须还看得见。
+        String vetName = vets.findById(s.getVetId())
+                .map(com.tailtopia.vet.domain.VetAccount::getDisplayName)
+                .filter(n -> n != null && !n.isBlank())
+                .orElse("#" + s.getVetId());
+        return new AdminSettlementDetail(s.getId(), s.getVetId(), vetName, s.getPeriod(), s.getOrderCount(),
                 s.getGrossAmount(), s.getPayoutAmount(), s.getStatus(), s.getPaymentProof(),
                 s.getPaidAt(), s.getArchivedAt(), s.getGeneratedAt(), rows);
     }
