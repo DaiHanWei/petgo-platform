@@ -4,7 +4,7 @@
 
 ## 原理一句话
 
-`claude --remote "..."` 把任务跑在 Anthropic 托管的云 VM 上，clone 本仓库执行，关浏览器仍继续，手机 App 能盯进度。每次 `--remote` = 全新隔离 VM（天然 `/clear`）。
+`claude --cloud "..."`（旧版 CLI 叫 `--remote`，2.1.x 起改名） 把任务跑在 Anthropic 托管的云 VM 上，clone 本仓库执行，关浏览器仍继续，手机 App 能盯进度。每次 `--cloud` = 全新隔离 VM（天然 `/clear`）。
 
 ## 角色边界（本项目是双产物全栈，非纯前端原型）
 
@@ -59,28 +59,40 @@ git add -A && git commit -m "feat(scaffold): story 1.1 双产物脚手架" && gi
 1. **接 GitHub（二选一）**
    - 终端：在 Claude Code 里跑 `/web-setup`（同步本地 `gh` token + 建默认云环境），或
    - 网页：首次 onboarding 时授权 **Claude GitHub App**（要 Auto-fix 选这个）
-2. **配 setup script**：claude.ai/code → Environment → Setup script，**粘贴 `scripts/cloud-setup.sh` 的内容**。
+2. **建专用环境（只建一次，之后所有 session 复用）**：桌面端底部 Cloud → 「Add cloud environment…」（或网页 claude.ai/code 环境选择器 → Add environment）。字段：Name=`tailtopia-l0`；Network=Trusted；Setup script=**整段粘贴 `scripts/cloud-setup.sh`**；环境变量留空（云端只做 L0）。
+   - 环境是账号级配置，与分支无关：新主题 / 新版本只换 session 的分支与提示词，**不重建环境**。
 3. **网络**：选 **Trusted**（含 pub.dev / storage.googleapis.com）；若 JDK/Flutter 首跑下载被挡，切 **Full** 或加 Custom 域名。
-4. **首跑验证**：开一个测试 session，确认 setup 末尾 `flutter --version && java -version && mvn -version` 三个都过；过了就被缓存，后续不重装。
+4. **首跑验证**：用该环境开一个测试 session，提示词只写「跑 `flutter --version && java -version && cd petgo-backend && ./mvnw -v`」，三个都过；过了就被缓存，后续不重装。
    - 改了 setup script 会重建缓存——前 1-2 次按 `VERIFY` 标记迭代是正常的。
 
 > 套餐要求：Pro / Max / Team / Enterprise（云端为 research preview，无单独算力计费，走现有额度）。
 
 ## Stage E — 跑 story 循环（过夜批跑）
 
+**并行模型：一条 PRD 线 = 一个 `feat/<ver>-<主题>` 分支 = 一份 `sprint-status-<ver>-<主题>.yaml` = 一个云端会话。** 环境（`tailtopia-l0`）所有会话共用，不用为每条线重建；想并行几条线就起几个会话。
+
+**每条线起会话的固定三步**：
+1. 本地 `git push -u origin <分支>`（云端从 GitHub clone，不看本地工作区）。
+2. `scripts/cloud-run-story-loop.sh <ver> <主题> <分支> [--skip-epics "10"]`：校验分支已同步远端、按固定模板拼提示词（主题专属规则放 `implementation-artifacts/<ver>/cloud-rules-<主题>.md`，存在即拼入）、`claude --cloud` 起会话。先加 `--dry-run` 看提示词。
+   桌面端等价：Cloud → `tailtopia-l0` → 仓库 petgo-platform → 选分支 → 贴 `--dry-run` 打印的提示词。
+3. 结束后 `/tasks` 或 `claude --teleport <session-id>` 拉回本地做 L1/L2。
+
+并行注意：各线 Flyway 用时间戳号 + out-of-order 常开，跨线合入不撞号；但**同一分支只能有一个会话在跑**（两个会话推同一分支会互相覆盖 sprint-status）。
+
+
 **顺序铁律**（`sprint-status.yaml`）：严格 **Epic 1→7、story 编号升序**；Flyway 序号按执行顺序**单调分配**，**不能 46 个全并发**（迁移号会撞 → 决策 E2）。串行或小批：
 
 ```bash
-claude --remote "按 bmad-dev-story 流程执行 _bmad-output/implementation-artifacts/v1.0.0/1-3-google-登录与-jwt-签发.md。\
+claude --cloud "按 bmad-dev-story 流程执行 _bmad-output/implementation-artifacts/v1.0.0/1-3-google-登录与-jwt-签发.md。\
 云端 headless：只做到 L0（mvn -B package + flutter analyze + flutter test）绿灯；\
 L1/L2 在 Completion Notes 标注「待本地验收」。完成后提交到本 story 分支并开 PR。"
 ```
 
-每条 `--remote` = 独立云 session = 全新上下文（无需 `/clear`）。
+每条 `--cloud` = 独立云 session = 全新上下文（无需 `/clear`）。
 
 ### Stage E-batch — 按 Epic 批量执行（连续推进 + Epic 末检查点）
 
-一条云会话做完**一个 Epic 内的连续 story**，Epic 末停下等本地验收+合并，再放下一个 Epic。把下面模板里的 `<EPIC_N>` 与 story 范围替换后，`claude --remote "<模板>"` 发起：
+一条云会话做完**一个 Epic 内的连续 story**，Epic 末停下等本地验收+合并，再放下一个 Epic。把下面模板里的 `<EPIC_N>` 与 story 范围替换后，`claude --cloud "<模板>"` 发起：
 
 ```
 你是 TailTopia 的 dev agent（云端 headless）。任务：按 bmad-dev-story 流程，依次实现 <EPIC_N> 中所有 ready-for-dev 的 story（按 sprint-status.yaml 的 story 编号升序），一个做完再做下一个，直到该 Epic 全部完成。
