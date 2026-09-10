@@ -25,13 +25,13 @@ git commit -m "ci(v1.3.0): 安装 write-ops-guard 与 i18n-guard"
 git push
 ```
 
-移完请把对应 story（11.1 AC5 / 11.2 AC1-AC2）Completion Notes 里的「⏳ 待安装」勾掉。
+移完请把对应 story（11.1 AC5 / 11.2 AC1-AC2 / 11.4 AC3）Completion Notes 里的「⏳ 待安装」勾掉。
 
 ## 目录内容
 
 | 文件 | 来源 story | 作用 |
 |---|---|---|
-| `write-ops-guard.yml` | 11.1 AC5 | 重跑写操作清单生成器并与基线 v2 diff：非白名单的端点新增 / 删除、任何 `@PreAuthorize` 漂移 → 不绿 |
+| `write-ops-guard.yml` | 11.1 AC5 · 11.4 AC3 | 两步：① 重跑写操作清单生成器并与基线 v2 diff（非白名单的端点新增 / 删除、任何 `@PreAuthorize` 漂移 → 不绿）；② 权限矩阵与导航一致性（门控码 ⊆ `AdminPermissions`、目录 ↔ 路由双向、已撤销的码不再出现） |
 | `i18n-guard.yml` | 11.2 AC1 / AC2 | 四份语言包 key 集合相等 + 后台模板与脚本无写死单语文案 |
 
 两者都只需要 bash / python3，不需要 JDK / Docker，秒级到 20 秒级出结果。
@@ -41,6 +41,7 @@ git push
 bash scripts/ci/list-admin-write-ops.sh \
   --out /tmp/after.md \
   --baseline _bmad-output/implementation-artifacts/v1.3.0/后台写操作清单-20260909-基线v2.md
+bash scripts/ci/check-admin-permission-consistency.sh
 bash scripts/ci/check-i18n-keys.sh
 bash scripts/ci/check-admin-hardcoded-text.sh
 ```

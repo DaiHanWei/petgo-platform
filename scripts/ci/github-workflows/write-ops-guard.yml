@@ -44,6 +44,14 @@ jobs:
             --out "$RUNNER_TEMP/admin-write-ops-ci.md" \
             --baseline "$BASELINE"
 
+      # Story 11.4 AC3：门控码 ⊆ AdminPermissions、目录 ↔ 路由双向、已撤销的码不再出现。
+      # 🔴 单列一步而不是并进上一步：这两条约束的对手不一样 ——
+      #    上一步防「重构把端点弄丢了」，这一步防「加端点时把权限码拼错 / 忘了进页面目录」。
+      #    红掉的检查要有名字，审 PR 的人才看得见自己踩的是哪条线。
+      #    它复用同一个生成器，所以放在同一个 job 里跑，不额外 checkout。
+      - name: 权限矩阵与导航一致性
+        run: bash scripts/ci/check-admin-permission-consistency.sh
+
       - name: 失败时附上生成的清单
         if: failure()
         uses: actions/upload-artifact@v4
