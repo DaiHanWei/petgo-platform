@@ -171,6 +171,35 @@ public class GlobalExceptionHandler {
         throw ex;
     }
 
+    /**
+     * 路径存在但方法不对 → <b>405</b>（而不是落到 catch-all 误报 500 并打一条堆栈）。
+     *
+     * <p>🔴 这不是理论情况：一条路径上常常 GET 与 POST 并存，而**只退役 GET、保留 POST**
+     * 是重构里的常规动作（V1.3.0 Story 8.3：移出确认页从整页改成弹层片段，
+     * `GET /admin/publish-identities/{userId}/remove` 退役、同路径的 POST 必须留着）。
+     * 退役之后运营的旧书签仍然会 GET 它 —— 拿到 500 的话，
+     * ① 页面上是「服务器开小差」这种会让人来报障的文案；② 服务端每次都刷一条 ERROR 级堆栈。
+     * 两者都是噪音：这就是个方法不匹配。
+     *
+     * <p>⚠️ 带上 {@code Allow} 头（HTTP 语义要求），告诉调用方这条路径到底支持什么。
+     */
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public Object handleMethodNotSupported(
+            org.springframework.web.HttpRequestMethodNotSupportedException ex,
+            HttpServletRequest req) {
+        Object page = h5PageOrNull(req, HttpStatus.METHOD_NOT_ALLOWED, "card_gone");
+        if (page != null) {
+            return page;
+        }
+        ProblemDetail pd = base(HttpStatus.METHOD_NOT_ALLOWED, ErrorTypes.NOT_FOUND,
+                "Method Not Allowed", "该地址不支持这种请求方式", req);
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
+        if (ex.getSupportedHttpMethods() != null && !ex.getSupportedHttpMethods().isEmpty()) {
+            builder.allow(ex.getSupportedHttpMethods().toArray(new org.springframework.http.HttpMethod[0]));
+        }
+        return builder.body(pd);
+    }
+
     @ExceptionHandler(Exception.class)
     public Object handleUnexpected(Exception ex, HttpServletRequest req) {
         // 🔴 先认「上传超限」：它可能以 Tomcat 的原始异常形态到这里，与 5xx 不是一回事。

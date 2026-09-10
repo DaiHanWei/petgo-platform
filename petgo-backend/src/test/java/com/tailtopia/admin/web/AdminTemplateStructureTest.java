@@ -634,6 +634,43 @@ class AdminTemplateStructureTest {
     }
 
     /**
+     * 🔴 <b>{@code th:with} 不能与 {@code th:replace}/{@code th:insert} 同标签</b>
+     * （V1.3.0 Story 8.3 实测踩到）。
+     *
+     * <p>优先级：{@code th:insert}/{@code th:replace} = 100，{@code th:with} = 600 ——
+     * 数字小的先处理，所以同标签时 {@code th:with} **压根轮不到执行**，被声明的局部变量静默消失。
+     *
+     * <p>它比 {@code th:if} 那条更难发现：条件失效至少会多渲染一块看得见的东西，
+     * 而变量丢失只是让片段拿到默认值。实测后果 ——
+     * {@code <div th:with="res='virtual'" th:replace="~{… :: list(…)}">} 里的 {@code res} 没传进去，
+     * 模板 B 壳按默认值把抽屉容器渲染成 {@code id="item-drawer"}，
+     * 而抽屉 JS、oob 选择器（{@code #virtual-drawer .drawer-body}）与 {@code ?open=} 深链
+     * 全按 {@code virtual-drawer} 找 —— 表现是「点行什么都不发生」，页面上却看不出任何异常。
+     *
+     * <p>写法：把 {@code th:with} 挪到**外层**任意祖先标签上（各页惯例是放在 {@code content} 片段那一层）。
+     */
+    @Test
+    void noTagCarriesBothWithAndReplace() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            List<String> lines = Files.readAllLines(f, StandardCharsets.UTF_8);
+            for (int i = 0; i < lines.size(); i++) {
+                String tag = wholeOpenTagAt(lines, i);
+                if (tag == null || !tag.contains("th:with=")) {
+                    continue;
+                }
+                if (tag.contains("th:replace") || tag.contains("th:insert")) {
+                    offenders.add(fileName(f) + ":" + (i + 1) + "  " + lines.get(i).trim());
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 th:with 与 th:replace/th:insert 同标签：优先级低于 replace ⇒ 变量被静默丢弃，"
+                        + "片段拿到的是默认值。把 th:with 挪到外层祖先标签上。")
+                .isEmpty();
+    }
+
+    /**
      * 🔴 <b>片段名不能与同文件里另一个同名 HTML 标签撞车</b>（V1.3.0 Story 7.5 复审 C1 展开）。
      *
      * <p>{@code ~{tpl :: name}} 的选择器**不只匹配 {@code th:fragment="name"}，也按标签名匹配** ——

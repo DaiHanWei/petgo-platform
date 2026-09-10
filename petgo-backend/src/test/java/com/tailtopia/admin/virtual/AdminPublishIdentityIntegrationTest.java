@@ -279,10 +279,12 @@ class AdminPublishIdentityIntegrationTest extends ApiIntegrationTest {
      * 「有排期时数字对不对」由 {@code SeedBatchStateMachineIntegrationTest} 钉。
      */
     @Test
-    void removeConfirmPageShowsTheScheduleCountAndChangesNothing() throws Exception {
+    void removeConfirmShowsTheScheduleCountAndChangesNothing() throws Exception {
         User u = grantedRealAccount();
 
-        String html = mvc.perform(get("/admin/publish-identities/" + u.getId() + "/remove")
+        // V1.3.0 Story 8.3 · AC3：整页确认已退役，同一份内容改由**弹层片段**承载（口径未动）。
+        String html = mvc.perform(get("/admin/publish-identities/" + u.getId() + "/remove/confirm")
+                        .header("HX-Request", "true").param("lang", "zh_CN")
                         .with(authentication(superAdmin())))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
@@ -290,23 +292,51 @@ class AdminPublishIdentityIntegrationTest extends ApiIntegrationTest {
         // 🔴 断言的是**路径形状**而不是裸 id：id 是个小整数，"3" 之类会在 CSS 颜色里撞上，
         //    那种断言看着绿其实什么都没验（本轮早先踩过一次）。
         assertThat(html).contains("/admin/publish-identities/" + u.getId() + "/remove");
+        assertThat(html).as("是弹层片段，且自带 autoopen（htmx 换进来后由 admin-core.js 打开）")
+                .contains("id=\"confirm-modal\"").contains("data-autoopen=\"true\"");
+        assertThat(html).as("排期数那句必须在（这条 AC 的全部意义）")
+                .containsAnyOf("data-notice=\"confirm-pending\"", "data-notice=\"confirm-no-pending\"");
 
-        // 🛡 看一眼确认页不该改任何东西 —— 授权仍生效。
+        // 🛡 看一眼确认弹层不该改任何东西 —— 授权仍生效。
         assertThat(grants.existsByUserIdAndStatus(u.getId(), SeedRealAccountGrant.Status.ACTIVE))
-                .as("GET 确认页必须是只读的").isTrue();
+                .as("GET 确认必须是只读的").isTrue();
     }
 
-    /** ⚠️ 虚拟账号**禁用**走同一个确认页、同一个计数口径（两处各判一次，口径迟早分叉）。 */
+    /** 整页确认路由已退役（AC3）：非 htmx 直达回列表，不再渲染一整页。 */
     @Test
-    void disablingAVirtualAccountGoesThroughTheSameConfirmPage() throws Exception {
+    void theStandaloneConfirmPagesAreGone() throws Exception {
+        User u = grantedRealAccount();
         long virtualId = virtualAccount();
-
+        // ⚠️ 这条路径上**同名的 POST 还在**（移出端点，AC4 要求它逐字不变），所以 GET 得到的是
+        //    405 而不是 404 —— 路径匹配、方法不匹配。405 是本次一并补的（原来落到 catch-all → 500 + 堆栈）。
+        mvc.perform(get("/admin/publish-identities/" + u.getId() + "/remove")
+                        .with(authentication(superAdmin())))
+                .andExpect(status().isMethodNotAllowed());
         mvc.perform(get("/admin/virtual-accounts/" + virtualId + "/disable")
                         .with(authentication(superAdmin())))
-                .andExpect(status().isOk());
+                .andExpect(status().isNotFound());
+        // 新的 fragment 端点被非 htmx 直达时回列表（而不是把一段没有壳的 HTML 直接吐给浏览器）。
+        mvc.perform(get("/admin/publish-identities/" + u.getId() + "/remove/confirm")
+                        .with(authentication(superAdmin())))
+                .andExpect(status().is3xxRedirection());
+    }
 
+    /** ⚠️ 虚拟账号**禁用**走同一个确认片段、同一个计数口径（两处各判一次，口径迟早分叉）。 */
+    @Test
+    void disablingAVirtualAccountGoesThroughTheSameConfirm() throws Exception {
+        long virtualId = virtualAccount();
+
+        String html = mvc.perform(get("/admin/virtual-accounts/" + virtualId + "/disable/confirm")
+                        .header("HX-Request", "true").param("lang", "zh_CN")
+                        .with(authentication(superAdmin())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).as("禁用走既有启停端点，带上目标状态")
+                .contains("/admin/virtual-accounts/" + virtualId + "/enabled")
+                .contains("name=\"enabled\" value=\"false\"");
         assertThat(users.findById(virtualId).orElseThrow().isEnabled())
-                .as("确认页是只读的，不该顺手禁用").isTrue();
+                .as("确认是只读的，不该顺手禁用").isTrue();
     }
 
     // ——————————————————— 🛡 AC5 独立权限码 ———————————————————

@@ -51,6 +51,49 @@ public class AdminVirtualAccountService {
                 .toList();
     }
 
+    /**
+     * 摘要条三格（Story 8.3 · AC1）。入参就是列表那一份 `rows`，不另查一遍 ——
+     * 分开查的话跨秒时「启用中」可能比「总数」还大。
+     */
+    public com.tailtopia.admin.virtual.dto.VirtualAccountSummary summary(List<VirtualAccountRow> rows) {
+        return new com.tailtopia.admin.virtual.dto.VirtualAccountSummary(
+                rows.size(),
+                rows.stream().filter(VirtualAccountRow::enabled).count(),
+                rows.stream().mapToLong(VirtualAccountRow::publishedCount).sum());
+    }
+
+    /**
+     * 单个虚拟账号（抽屉用，Story 8.3 · AC1）。不存在 / 不是虚拟账号 → 404。
+     *
+     * <p>🛡 必须判 {@code accountType}：不判的话把一个真实用户的 id 敲进抽屉 URL 也能打开，
+     * 里面还带着「改物种定位」「停用」两个只该对虚拟号生效的写入口。
+     */
+    @Transactional(readOnly = true)
+    public VirtualAccountRow one(long id) {
+        return users.findById(id)
+                .filter(u -> u.getAccountType() == AccountType.VIRTUAL)
+                .map(AdminVirtualAccountService::toRow)
+                .orElseThrow(() -> AppException.notFound("虚拟账号不存在")
+                        .code("admin.err.virtualAccount.notFound"));
+    }
+
+    /**
+     * 关键词筛选（Story 8.3 · AC1）：账号 id 精确 或 昵称模糊（忽略大小写）。
+     *
+     * <p>⚠️ 与物种筛选一样在内存里做：虚拟账号是运营手工建的，数量级几十到几百。
+     */
+    @Transactional(readOnly = true)
+    public List<VirtualAccountRow> list(String speciesFilter, String keyword) {
+        String k = keyword == null ? "" : keyword.trim().toLowerCase();
+        if (k.isEmpty()) {
+            return list(speciesFilter);
+        }
+        return list(speciesFilter).stream()
+                .filter(r -> String.valueOf(r.id()).equals(k)
+                        || (r.nickname() != null && r.nickname().toLowerCase().contains(k)))
+                .toList();
+    }
+
     /** 建虚拟账号（无登录）。昵称必填 ≤20；头像选填。 */
     @Transactional
     public long create(String nickname, String avatarUrl, long adminId) {

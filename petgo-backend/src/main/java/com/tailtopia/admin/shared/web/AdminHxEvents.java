@@ -40,6 +40,18 @@ public final class AdminHxEvents {
      */
     public static final String USER_TAG_LIST_REFRESH = "admin:user-tag-list-refresh";
 
+    /** B9 运营发布身份 · 区块一：虚拟账号表整表重拉（Story 8.3；建号 / 改物种 / 启停都会改摘要条三格）。 */
+    public static final String VIRTUAL_ACCOUNT_LIST_REFRESH = "admin:virtual-account-list-refresh";
+
+    /**
+     * 关掉当前打开的确认弹层并清空它的宿主（Story 8.3）。
+     *
+     * <p>🔴 为什么要一个事件而不是让响应把宿主换空：确认表单的 {@code hx-target} 必须指向
+     * **弹层内部**那个错误槽 —— 否则 422 / 403 一回来就把整个弹层连同用户填的东西一起换掉，
+     * 运营看不到「为什么没成功」。成功路径因此没法顺带把弹层清掉，只能靠这个事件。
+     */
+    public static final String CONFIRM_CLOSE = "admin:confirm-close";
+
     /**
      * B5 排期发布：排期表按当前筛选 + 当前页重拉（Story 7.5）。
      *

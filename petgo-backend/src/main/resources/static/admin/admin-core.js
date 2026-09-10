@@ -225,9 +225,31 @@ document.addEventListener('click', function (e) {
     if (typeof dlg.showModal === 'function') dlg.showModal();
 });
 
+function openAutoDialogs(root) {
+    if (!root || !root.querySelectorAll) { return; }
+    root.querySelectorAll('dialog[data-autoopen="true"]').forEach(function (d) {
+        if (typeof d.showModal === 'function' && !d.open) { d.showModal(); }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('dialog[data-autoopen="true"]').forEach(function (d) {
-        if (typeof d.showModal === 'function') d.showModal();
+    openAutoDialogs(document);
+    // V1.3.0 Story 8.3：htmx **换进来**的确认弹层也要自动打开。
+    //   ⚠️ 原来只在 DOMContentLoaded 扫一次 —— 那是为「服务端校验失败、整页回显」写的；
+    //      确认弹层是点按钮时才 hx-get 拉进来的，不补这一条它会静静躺在宿主里不显示。
+    document.body.addEventListener('htmx:afterSwap', function (e) {
+        openAutoDialogs(e.detail && e.detail.target);
+    });
+    // 处置成功后由服务端发 admin:confirm-close 收掉弹层并清空宿主。
+    //   🔴 为什么不让响应把宿主换空：确认表单的 hx-target 必须指向**弹层内部**的错误槽，
+    //      否则 422 / 403 一回来就把整个弹层换掉，运营看到的是弹层凭空消失、
+    //      而不是「为什么没成功」。成功路径因此只能靠这个事件。
+    document.body.addEventListener('admin:confirm-close', function () {
+        document.querySelectorAll('dialog.modal[open]').forEach(function (d) {
+            if (typeof d.close === 'function') { d.close(); }
+        });
+        var host = document.getElementById('confirm-host');
+        if (host) { host.innerHTML = ''; }
     });
     // Toast 自动消失（bug 346）：3s 淡出、3.4s 移除。
     document.querySelectorAll('.toast').forEach(armToast);

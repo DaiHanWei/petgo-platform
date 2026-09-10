@@ -1,7 +1,11 @@
 package com.tailtopia.admin.virtual.web;
 
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.shared.web.AdminFragmentResponses;
+import com.tailtopia.admin.shared.web.AdminHxEvents;
+import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.admin.virtual.service.AdminPublishIdentityService;
+import jakarta.servlet.http.HttpServletResponse;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -57,7 +61,13 @@ public class AdminPublishIdentityController {
     @PreAuthorize(REAL_AUTH)
     public String grant(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam long userId, @RequestParam String authorizationNote,
-            RedirectAttributes flash) {
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            identities.grant(userId, authorizationNote, admin.getAdminAccountId());
+            populateAfterPoolChange(model, userId);
+            model.addAttribute("toast", msg.get("admin.flash.publishIdentity.granted", userId));
+            return "admin/fragments/publish-identities :: granted";
+        }
         try {
             identities.grant(userId, authorizationNote, admin.getAdminAccountId());
             flash.addFlashAttribute("notice",
@@ -77,9 +87,13 @@ public class AdminPublishIdentityController {
      * <b>陆续、分散地失败</b>，运营要等到失败才发现，而届时内容的时间窗多半已经错过。
      * 移出是个瞬间的、有明确操作人的动作，是成本最低的提示时机。
      */
-    @GetMapping("/admin/publish-identities/{userId}/remove")
+    @GetMapping("/admin/publish-identities/{userId}/remove/confirm")
     @PreAuthorize(REAL_AUTH)
-    public String removeConfirm(@PathVariable long userId, Model model) {
+    public String removeConfirm(@PathVariable long userId, HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            // 整页确认路由已退役（AC3）：非 htmx 直达就回列表，不做旧地址跳转以外的兜底（D-23）。
+            return "redirect:/admin/virtual-accounts";
+        }
         model.addAttribute("active", "virtual-accounts");
         return confirmModel(model, userId, "REMOVE_REAL",
                 "/admin/publish-identities/" + userId + "/remove");
@@ -88,7 +102,18 @@ public class AdminPublishIdentityController {
     @PostMapping("/admin/publish-identities/{userId}/remove")
     @PreAuthorize(REAL_AUTH)
     public String remove(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable long userId, RedirectAttributes flash) {
+            @PathVariable long userId,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            // 🛡 「被种子内容引用的身份不可移出」由服务层判定（引用数 > 0 拒绝）——
+            //    这里不重复判，让它抛 422 落进弹层里的行内错误槽。
+            identities.remove(userId, admin.getAdminAccountId());
+            AdminFragmentResponses.trigger(response, AdminHxEvents.CONFIRM_CLOSE);
+            populateAfterPoolChange(model, userId);
+            // 🛡 措辞刻意写明"未封号"：运营最常误解的就是这一点。
+            model.addAttribute("toast", msg.get("admin.flash.publishIdentity.removed", userId));
+            return "admin/fragments/publish-identities :: granted";
+        }
         try {
             identities.remove(userId, admin.getAdminAccountId());
             // 🛡 措辞刻意写明"未封号"：运营最常误解的就是这一点。
@@ -109,12 +134,33 @@ public class AdminPublishIdentityController {
      *
      * <p>🛡 <b>只有禁用要确认，启用不要</b>：启用是无害的。
      */
-    @GetMapping("/admin/virtual-accounts/{userId}/disable")
+    @GetMapping("/admin/virtual-accounts/{userId}/disable/confirm")
     @PreAuthorize(AdminVirtualAccountController.MANAGE_AUTH)
-    public String disableConfirm(@PathVariable long userId, Model model) {
+    public String disableConfirm(@PathVariable long userId, HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            // 整页确认路由已退役（AC3）。
+            return "redirect:/admin/virtual-accounts?open=" + userId;
+        }
         model.addAttribute("active", "virtual-accounts");
         return confirmModel(model, userId, "DISABLE_VIRTUAL",
                 "/admin/virtual-accounts/" + userId + "/enabled");
+    }
+
+    /**
+     * 纳入 / 移出成功后要换的两块：池表（整表 oob）+ **候选表里那一行**（定点 oob）。
+     *
+     * <p>🔴 候选行必须一起换：不换的话，刚纳入的那个人在上面的候选表里**仍然是可点的「纳入」按钮**，
+     * 运营再点一次拿到 422（AC2 要求「已在池内的候选显示『已在池内』禁用」）。
+     * 移出时反过来：那一行要重新变回可纳入。
+     *
+     * <p>⚠️ 不整表重拉候选：重拉得带上当时的搜索词 {@code q}，而 POST 请求里没有它。
+     * 这里按 **id 精确**查一次；那个人不在当前候选结果里（运营搜的是别人）就查不到，
+     * 不渲染 oob 行即可 —— 页面上本来也没有那一行。
+     */
+    private void populateAfterPoolChange(Model model, long userId) {
+        model.addAttribute("realAccounts", identities.listRealAccounts());
+        model.addAttribute("candidateRow", identities.searchCandidates(String.valueOf(userId))
+                .stream().findFirst().orElse(null));
     }
 
     private String confirmModel(Model model, long userId, String mode, String action) {
@@ -126,6 +172,7 @@ public class AdminPublishIdentityController {
         // 🛡 只在真有排期时给链接：那一页由 13.5 交付，13.5 之前 pending 恒 0 ⇒ 不会渲染死链。
         model.addAttribute("scheduleListUrl",
                 pending > 0 ? SCHEDULE_LIST_PATH + "&authorId=" + userId : null);
-        return "admin/publish-identity-confirm";
+        // V1.3.0 Story 8.3：整页确认退役，同一份内容改由弹层片段承载（口径一个字没动）。
+        return "admin/fragments/publish-identity-confirm :: modal";
     }
 }
