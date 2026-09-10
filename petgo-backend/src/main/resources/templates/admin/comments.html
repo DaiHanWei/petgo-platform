@@ -19,18 +19,10 @@
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
-        <!-- 常驻页签条（AC1）：页签一整页链接（权限 content.proactive_takedown）；页签二 htmx 局部切换 -->
-        <div class="tabs comments-tabs" role="tablist">
-            <a class="tab" th:classappend="${tab == 'inspect'} ? 'tab--on'" th:href="@{/admin/comments}"
-               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
-               th:text="#{admin.v130.comments.distribution.tab.inspect}">评论巡查</a>
-            <a class="tab" th:classappend="${tab == 'distribution'} ? 'tab--on'" th:href="@{/admin/comments/distribution}"
-               th:attr="hx-get=@{/admin/comments/distribution}" hx-target="#comments-tab-body" hx-swap="innerHTML" hx-push-url="true"
-               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('comment.virtual_post') or hasAuthority('content.view')"
-               th:text="#{admin.v130.comments.distribution.tab}">帖子评论分布</a>
-        </div>
+        <!--/* 常驻页签条（4.1 AC1）：V1.3.0 Story 7.2 抽成 fragments/comments-tabs —— 4.1 与 7.2 的合并冲突点只剩这一行 */-->
+        <div th:replace="~{admin/fragments/comments-tabs :: tabs}"></div>
 
-        <div id="comments-tab-body">
+        <div id="comments-tab-body" role="tabpanel">
             <th:block th:if="${tab == 'distribution'}"><div th:replace="~{admin/fragments/comments-distribution :: body}"></div></th:block>
             <th:block th:unless="${tab == 'distribution'}"><div th:replace="~{admin/fragments/comments-inspect :: body}"></div></th:block>
         </div>
@@ -60,6 +52,9 @@
                 document.querySelectorAll('.comments-tabs .tab').forEach(function (a) {
                     var isDist = a.hasAttribute('hx-get');
                     a.classList.toggle('tab--on', isDist === on);
+                    // ⚠️ aria-selected 是服务端按 ${tab} 算死的，而页签二是 htmx 局部切换、不整页刷新 ——
+                    //    不在这里一起同步，读屏用户拿到的就是与视觉相反的状态（Story 7.2 复审 C2）。
+                    a.setAttribute('aria-selected', String(isDist === on));
                 });
             });
             // ===== Story 4.2 抽屉评论区：身份未选或内容为空 → 发布禁用；剩余字数；搜昵称；展开其他物种；10 分钟内已评软提示（首次拦一次）

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  B2 评论详情抽屉（V1.3.0 Story 7.2 AC4 / AC5；480px 抽屉体 res=comment，UI 稿 2-7）。c = CommentInspectRow。
+  四区：① 评论全文 + 状态徽标 ② 所属帖子卡（首图 + 摘要 + 可跳 B1 抽屉）③ 作者卡（昵称 / id / 注销置灰）④ 操作条。
+  ⚠️ 两个表单的 hx-target 指**带 id 的** #comment-drawer-err：htmx 只在目标带 id 时才发 HX-Target 头，
+     而 AdminBusinessExceptionAdvice 按这个头 HX-Retarget —— 指 .drawer-body（无 id）会让 422 落到运营看不见的地方（7.1 复审 C1）。
+     成功响应因此把抽屉体、列表行、toast 全部走 oob，主目标（err 槽）顺带被清空。
+  🔴 用户自删（deleted）任何处置都不给，抽屉只显示删除态 —— 「已下架」与「已删除」不是一个状态。
+*/-->
+<body>
+<div th:fragment="drawer" class="cm-drawer" th:attr="data-comment-id=${c.id}"
+     th:with="canTakedown=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''content.proactive_takedown'')')},
+              canRestore=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''content.restore'')')}">
+    <!--/* ① 评论全文 */-->
+    <section class="card card-full cm-card">
+        <h2>
+            <span class="muted">#<span th:text="${c.id}">1</span></span>
+            <span class="badge badge-muted" th:if="${c.deleted}" th:text="#{admin.comments.deleted}">已删除</span>
+            <!--/* AUTHOR_DEACTIVATED 是作者注销后的级联隐藏，不是违规态 —— 标红会让运营当成处置对象 */-->
+            <span class="badge" th:unless="${c.deleted}"
+                  th:classappend="${c.moderationStatus == 'VISIBLE'} ? 'badge-ok' : (${c.moderationStatus == 'UNDER_REVIEW'} ? 'badge-warn' : (${c.moderationStatus == 'AUTHOR_DEACTIVATED'} ? 'badge-muted' : 'badge-danger'))"
+                  th:text="#{'admin.v130.comments.status.' + ${c.moderationStatus}}">可见</span>
+            <span class="muted rv-small" th:text="${@adminTime.wib(c.createdAt)}">时间</span>
+        </h2>
+        <div class="pl-desc" th:text="${c.body}">评论全文</div>
+    </section>
+
+    <!--/* ② 所属帖子卡：点进 B1 抽屉（?open=<postId>） */-->
+    <section class="card card-full cm-card" data-section="comment-post">
+        <h3 th:text="#{admin.v130.comments.col.post}">所属帖子</h3>
+        <div class="cm-post-card">
+            <img th:if="${c.postImage != null}" th:src="${c.postImage}" alt="" loading="lazy" data-lightbox class="rv-img"/>
+            <div>
+                <p class="pl-desc" th:text="${c.postPreview != null} ? ${c.postPreview} : #{admin.v130.comments.post.gone}">帖子正文摘要</p>
+                <a class="btn btn-neutral btn-sm" data-no-drawer target="_blank" rel="noopener"
+                   th:href="@{/admin/content(open=${c.postId})}" th:text="#{admin.v130.comments.post.open}">去内容管理 ↗</a>
+                <span class="muted rv-small" th:text="'#' + ${c.postId}">#1</span>
+            </div>
+        </div>
+    </section>
+
+    <!--/* ③ 作者卡 */-->
+    <section class="card card-full cm-card" data-section="comment-author">
+        <h3 th:text="#{admin.comments.col.author}">作者</h3>
+        <p>
+            <a th:if="${!c.authorDeleted and c.authorName != null}" data-no-drawer
+               th:href="@{'/admin/users/' + ${c.authorId}}" th:text="${c.authorName}">昵称</a>
+            <span th:if="${c.authorDeleted or c.authorName == null}" class="muted" th:text="#{admin.contentdetail.deletedUser}">已注销</span>
+            <span class="muted rv-small" th:text="'#' + ${c.authorId}">#1</span>
+        </p>
+    </section>
+
+    <!--/* ⚠️ err 槽放在操作条**正上方**：评论正文最长 1000 字，抽屉滚到底提交时，
+           顶部的报错早已滚出视口 —— 与 7.1 复审 C1 想防的是同一件事（运营看不见） */-->
+    <div id="comment-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+
+    <!--/* ④ 操作条：按钮显示条件与 9.9 行内表单逐字一致（仅 VISIBLE 可下架；TAKEN_DOWN / REJECTED 可恢复） */-->
+    <section class="pl-actions sticky-footer" data-comment-actions>
+        <form class="cm-takedown-form" th:if="${c.canTakedown() and canTakedown}"
+              th:attr="hx-post=@{/admin/comments/{id}/takedown(id=${c.id})},data-confirm=#{admin.v130.comments.confirm.takedown},data-confirm-args=${c.id}"
+              hx-target="#comment-drawer-err" hx-swap="innerHTML">
+            <input type="text" name="reason" class="inp" required th:placeholder="#{admin.content.reason}" style="width:180px"/>
+            <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.content.takedown}">下架</button>
+        </form>
+        <form class="inline" th:if="${c.canRestore() and canRestore}"
+              th:attr="hx-post=@{/admin/comments/{id}/restore(id=${c.id})}"
+              hx-target="#comment-drawer-err" hx-swap="innerHTML">
+            <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.content.restore}">恢复</button>
+        </form>
+        <p class="hint" th:if="${c.deleted}" th:text="#{admin.v130.comments.deletedNote}">
+            这条评论已被作者删除（或随帖级联删除），不提供下架 / 恢复。</p>
+        <p class="hint" th:if="${c.canRestore() and !canRestore}" th:text="#{admin.v130.err.forbidden(#{perm.content.restore})}">需要「恢复内容」权限</p>
+    </section>
+</div>
+
+<!--/* 处置成功：抽屉体 oob + 列表行 oob + toast（主目标 err 槽被清空 = 上次的报错自动消失） */-->
+<th:block th:fragment="afterAction">
+    <div id="comment-drawer-body-oob" hx-swap-oob="innerHTML:#comment-drawer .drawer-body">
+        <div th:replace="~{admin/fragments/drawer-comment :: drawer}"></div>
+    </div>
+    <!--/* htmx 用 DOMParser（body 上下文）解析响应：裸 <tr> 会被丢掉 → 包进隐藏 table，oob 后只剩空壳 */-->
+    <table hidden><tbody><tr th:replace="~{admin/fragments/comments-inspect :: row(${c}, true)}"></tr></tbody></table>
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已处理</div>
+</th:block>
+</body>
+</html>

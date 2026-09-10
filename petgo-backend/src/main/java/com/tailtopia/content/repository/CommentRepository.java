@@ -42,7 +42,8 @@ import org.springframework.data.repository.query.Param;
  * <p><b>跨模块引用说明</b>：子查询里写的是 {@code social} 的实体名 {@code UserHideRelation}，Java 侧不 import 其仓储 ——
  * 与 {@code findFeed} 在 JPQL 里引用 {@code moderation} 的 {@code ContentReport} 是同一既定破例（AD-5 优先于 AD-8 的字面）。
  */
-public interface CommentRepository extends JpaRepository<Comment, Long> {
+public interface CommentRepository extends JpaRepository<Comment, Long>,
+        org.springframework.data.jpa.repository.JpaSpecificationExecutor<Comment> {
 
     /** 某帖未删评论总数（含一级+二级）。<b>已弃用于 detail commentCount</b>，改用 viewer 维度计数。 */
     long countByPostIdAndDeletedAtIsNull(long postId);
@@ -254,9 +255,6 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
                                           com.tailtopia.content.domain.CommentModerationStatus.UNDER_REVIEW)
             """)
     int deactivateByAuthor(@Param("authorId") long authorId, @Param("now") Instant now);
-
-    /** 后台内容管理近评论列表（Story 9.9，含已删软删项）。 */
-    java.util.List<Comment> findTop200ByOrderByIdDesc();
 
     /**
      * 后台内容详情（2026-09-02）：某帖一级评论分页，**含已删与全部审核状态**（运营全量视角），

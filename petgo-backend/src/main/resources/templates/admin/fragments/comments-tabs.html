@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  B2 评论管理页顶页签条（V1.3.0 Story 7.2 AC1 从 comments.html 抽出，4.1 与 7.2 共用；两者的合并冲突点只剩这一行 include）。
+  页签一「评论巡查」= 整页链接（Story 7.2 拥有）；页签二「帖子评论分布」= htmx 局部切换 #comments-tab-body（Story 4.1 拥有）。
+  门控与各自控制器的 @PreAuthorize 逐字一致：页签一 content.proactive_takedown；页签二 comment.virtual_post / content.view。
+*/-->
+<body>
+<div th:fragment="tabs" class="tabs comments-tabs" role="tablist">
+    <a class="tab" role="tab" th:classappend="${tab == 'inspect'} ? 'tab--on'" th:attr="aria-selected=${tab == 'inspect'}"
+       th:href="@{/admin/comments}"
+       sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')"
+       th:text="#{admin.v130.comments.distribution.tab.inspect}">评论巡查</a>
+    <!--/* ⚠️ 一个标签上只能有一个 th:attr（重复属性会让模板解析失败）：aria-selected 与 hx-get 合并写 */-->
+    <a class="tab" role="tab" th:classappend="${tab == 'distribution'} ? 'tab--on'"
+       th:href="@{/admin/comments/distribution}"
+       th:attr="aria-selected=${tab == 'distribution'},hx-get=@{/admin/comments/distribution}"
+       hx-target="#comments-tab-body" hx-swap="innerHTML" hx-push-url="true"
+       sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('comment.virtual_post') or hasAuthority('content.view')"
+       th:text="#{admin.v130.comments.distribution.tab}">帖子评论分布</a>
+</div>
+</body>
+</html>

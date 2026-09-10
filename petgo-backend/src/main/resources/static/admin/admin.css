@@ -792,3 +792,15 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ct-comment:last-child { border-bottom: none; }
 .ct-comment-head { margin: 0 0 4px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .ct-reply { margin: 8px 0 0 20px; padding-left: 10px; border-left: 2px solid var(--line); }
+
+/* ===== B2 评论巡查（V1.3.0 Story 7.2，模板 B + 480px 抽屉）===== */
+.comments-table td { vertical-align: middle; }
+.comments-table .cm-body { max-width: 320px; word-break: break-word; }
+.cm-post-link { display: inline-flex; gap: 6px; align-items: center; color: var(--brand-strong); text-decoration: none; }
+.cm-post-link:hover { text-decoration: underline; }
+.cm-post-thumb { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; }
+.cm-card { margin-bottom: 10px; }
+.cm-card h3 { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.cm-post-card { display: flex; gap: 10px; align-items: flex-start; }
+.cm-takedown-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cm-drawer .sticky-footer { bottom: 0; }

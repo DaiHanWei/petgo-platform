@@ -1,44 +1,137 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!--
-  评论管理 · 页签一「评论巡查」（Story 9.9 列表原样搬入片段，V1.3.0 Story 4.1 AC1：功能、下架 / 恢复端点与权限不变）。
-  模型：comments = service.recent()（近 200 条）。
--->
+<!--/*
+  评论管理 · 页签一「评论巡查」（Story 9.9 列表 → V1.3.0 Story 7.2 套模板 B · tpl-b-list，UI 稿 2-6～2-7）。
+  筛选（状态 / 帖子 ID / 关键词 + 显式「查询」钮）→ 摘要条三格（随筛选联动）→ 表格（时间倒序、每页 20）→ 分页；
+  点行开 480px 抽屉 GET /admin/comments/{id}/drawer（?open=<id> 深链，含不在首页那一条）。
+  处置动作在抽屉操作条上，端点与参数仍是 /admin/comments/{id}/takedown|restore（本 story 只加 htmx 分支）。
+  🔴「已下架」（可见性态 TAKEN_DOWN）与「已删除」（用户自删 / 级联软删）是两回事，别合并成一个状态。
+*/-->
 <body>
-<div th:fragment="body" id="comments-inspect">
-    <p class="hint" th:text="#{admin.comments.hint}">近 200 条评论。下架走审核线语义（必填原因；作者仍可见 + 收到通知 + 计违规）；误下架可恢复。操作留审计。</p>
-    <table>
+<div th:fragment="body" id="comments-inspect" th:with="res='comment'">
+    <p class="hint" th:text="#{admin.comments.hint}">下架走审核线语义（必填原因；作者仍可见 + 收到通知 + 计违规）；误下架可恢复。操作留审计。</p>
+
+    <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::cm-filters}, ~{::cm-summary}, ~{::cm-table}, ~{::cm-drawer})}">
+        <!--/* 状态下拉即选即查；帖子 ID / 关键词走「查询」钮（文本框的 change 在失焦时才触发，打字中途会莫名刷新） */-->
+        <form th:fragment="cm-filters" class="filter-bar" data-autosubmit th:action="@{/admin/comments}" method="get"
+              th:attr="hx-get=@{/admin/comments}" hx-target="#comments-rows" hx-swap="innerHTML" hx-push-url="true">
+            <!--/* 抽屉内处置成功 → HX-Trigger admin:comment-list-refresh：按当前筛选 + 当前页重拉表格与摘要条 */-->
+            <span hidden data-comment-refresh th:attr="hx-get=@{/admin/comments}" hx-include="closest form"
+                  hx-trigger="admin:comment-list-refresh from:body" hx-target="#comments-rows" hx-swap="innerHTML"
+                  hx-vals="js:{page: (document.querySelector('#comments-rows .pager') || {}).getAttribute ? (document.querySelector('#comments-rows .pager').getAttribute('data-page') || 0) : 0}"></span>
+            <label class="field">
+                <span th:text="#{admin.common.status}">状态</span>
+                <select name="status" class="sel">
+                    <option value="" th:selected="${status == null or status.isEmpty()}" th:text="#{admin.v130.comments.filter.status.all}">全部状态</option>
+                    <option th:each="s : ${statusOptions}" th:value="${s}" th:selected="${status == s}"
+                            th:text="#{'admin.v130.comments.status.' + ${s}}">可见</option>
+                </select>
+            </label>
+            <label class="field">
+                <span th:text="#{admin.v130.comments.filter.postId}">帖子 ID</span>
+                <input type="number" name="postId" class="inp" min="1" th:value="${postId}" style="width:120px"/>
+            </label>
+            <label class="field">
+                <span th:text="#{admin.v130.comments.filter.q}">关键词</span>
+                <input type="search" name="q" class="inp" th:value="${q}" th:placeholder="#{admin.v130.comments.filter.q.placeholder}" style="width:200px"/>
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.content.search}">查询</button>
+        </form>
+
+        <div th:fragment="cm-summary" th:replace="~{admin/fragments/comments-inspect :: summary(false)}"></div>
+
+        <div th:fragment="cm-table" id="comments-rows">
+            <div th:replace="~{admin/fragments/comments-inspect :: rows(false)}"></div>
+        </div>
+
+        <div th:fragment="cm-drawer" class="drawer-title" th:text="#{admin.v130.comments.drawer.title}">评论详情</div>
+    </div>
+
+    <!--/* ?open=<id> 跨页深链兜底：admin-drawer.js 先按当前页找行，找不到就用这里给的 URL（与 B1 同一机制） */-->
+    <span hidden th:if="${open != null}" data-drawer-res="comment"
+          th:attr="data-drawer-deeplink=@{/admin/comments/{id}/drawer(id=${open})}"></span>
+</div>
+
+<div th:fragment="summary(oob)" class="sum" id="comments-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.comments.summary.total}">总评论数</div>
+        <div class="sum-value" th:text="${summary.total}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.comments.summary.today}">今日新增</div>
+        <div class="sum-value" th:text="${summary.todayNew}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.comments.summary.takenDown}">已下架</div>
+        <div class="sum-value" th:text="${summary.takenDown}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <!--/* htmx 筛选 / 翻页时摘要条随 oob 一并换；整页首屏（oob=false）不重复渲染 */-->
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/comments-inspect :: summary(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(comments)}" class="comments-table">
         <thead>
-        <tr><th>ID</th><th th:text="#{admin.comments.col.post}">帖子</th><th th:text="#{admin.comments.col.author}">作者</th><th th:text="#{admin.comments.col.body}">内容</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.common.time}">时间</th><th th:text="#{admin.common.actions}">操作</th></tr>
+        <tr>
+            <th th:text="#{admin.content.col.id}">ID</th>
+            <th th:text="#{admin.v130.comments.col.post}">所属帖子</th>
+            <th th:text="#{admin.comments.col.author}">作者</th>
+            <th th:text="#{admin.comments.col.body}">内容</th>
+            <th th:text="#{admin.common.status}">状态</th>
+            <th class="nowrap" th:text="#{admin.common.time}">时间</th>
+        </tr>
         </thead>
         <tbody>
-        <tr th:each="c : ${comments}">
-            <td th:text="${c.id}">0</td>
-            <td th:text="${c.postId}">0</td>
-            <td th:text="${c.authorId}">0</td>
-            <td th:text="${c.body}">评论内容</td>
-            <td th:text="${c.deleted} ? #{admin.comments.deleted} : ${c.moderationStatus}">VISIBLE</td>
-            <td th:text="${@adminTime.wib(c.createdAt)}">t</td>
-            <td>
-                <!-- 下架（审核线 FR-55A）：仅 VISIBLE 可下架，必填原因（进审计不进作者通知）。 -->
-                <form th:if="${!c.deleted and c.moderationStatus == 'VISIBLE'}" method="post"
-                      th:action="@{/admin/comments/{id}/takedown(id=${c.id})}" style="display:inline"
-                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.proactive_takedown')">
-                    <input type="text" name="reason" required th:placeholder="#{admin.content.reason}" placeholder="下架原因（必填）" style="width:140px"/>
-                    <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.content.takedown}">下架</button>
-                </form>
-                <!-- 恢复：TAKEN_DOWN / REJECTED → VISIBLE（不通知，D-CM6）。 -->
-                <form th:if="${!c.deleted and (c.moderationStatus == 'TAKEN_DOWN' or c.moderationStatus == 'REJECTED')}"
-                      method="post"
-                      th:action="@{/admin/comments/{id}/restore(id=${c.id})}" style="display:inline"
-                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.restore')">
-                    <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.content.restore}">恢复</button>
-                </form>
-            </td>
-        </tr>
-        <tr th:if="${comments.isEmpty()}"><td colspan="7" th:text="#{admin.comments.empty}">暂无评论</td></tr>
+        <th:block th:each="c : ${comments}"><tr th:replace="~{admin/fragments/comments-inspect :: row(${c}, false)}"></tr></th:block>
         </tbody>
     </table>
-</div>
+
+    <div class="empty" th:if="${#lists.isEmpty(comments)}">
+        <span class="empty-emoji">🔍</span>
+        <p th:text="#{admin.comments.empty}">暂无评论</p>
+    </div>
+
+    <div class="pager" th:if="${!#lists.isEmpty(comments)}" th:attr="data-page=${page}">
+        <a th:if="${page > 0}" href="#" data-no-drawer hx-target="#comments-rows" hx-swap="innerHTML" hx-push-url="true"
+           th:attr="hx-get=@{/admin/comments(status=${status},postId=${postId},q=${q},page=${page - 1})}"
+           th:text="#{admin.audit.prev}">← 上一页</a>
+        <span th:text="#{admin.v130.comments.pager.total(${total})}">共 N 条</span>
+        <a th:if="${hasNext}" href="#" data-no-drawer hx-target="#comments-rows" hx-swap="innerHTML" hx-push-url="true"
+           th:attr="hx-get=@{/admin/comments(status=${status},postId=${postId},q=${q},page=${page + 1})}"
+           th:text="#{admin.audit.next}">下一页 →</a>
+    </div>
+</th:block>
+
+<!--/* 单行（rows 循环体；抽屉里处置成功后以 oob=true 原位替换） */-->
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(c, oob)" th:id="'comment-row-' + ${c.id}" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${c.id}" th:data-drawer-url="@{/admin/comments/{id}/drawer(id=${c.id})}" tabindex="0"
+        th:classappend="${c.deleted or c.moderationStatus != 'VISIBLE'} ? 'row-muted'">
+        <td th:text="${c.id}">0</td>
+        <!--/* 所属帖子：首图缩略 + 正文摘要，点进 B1 抽屉（?open=<postId>，D-23 的页内深链） */-->
+        <td class="cm-post">
+            <a th:href="@{/admin/content(open=${c.postId})}" data-no-drawer target="_blank" rel="noopener" class="cm-post-link">
+                <img th:if="${c.postImage != null}" th:src="${c.postImage}" alt="" loading="lazy" class="cm-post-thumb"/>
+                <span th:text="${c.postPreview != null} ? ${#strings.abbreviate(c.postPreview, 24)} : ('#' + ${c.postId})">帖子摘要</span>
+            </a>
+        </td>
+        <td class="nowrap">
+            <span th:if="${!c.authorDeleted and c.authorName != null}" th:text="${c.authorName}">昵称</span>
+            <span th:if="${c.authorDeleted or c.authorName == null}" class="muted" th:text="#{admin.contentdetail.deletedUser}">已注销</span>
+            <span class="muted rv-small" th:text="'#' + ${c.authorId}">#1</span>
+        </td>
+        <td class="cm-body" th:title="${c.body}" th:text="${#strings.abbreviate(c.body, 60)}">评论内容</td>
+        <td class="nowrap">
+            <!--/* 🔴 删除态与可见性态正交：软删的评论显示「已删除」，不再显示它下架前的可见性态 */-->
+            <span class="dot" th:classappend="${c.deleted or c.moderationStatus == 'AUTHOR_DEACTIVATED'} ? 'dot--done' : (${c.moderationStatus == 'VISIBLE'} ? 'dot--ok' : (${c.moderationStatus == 'UNDER_REVIEW'} ? 'dot--wait' : 'dot--hot'))"></span>
+            <span class="badge badge-muted" th:if="${c.deleted}" th:text="#{admin.comments.deleted}">已删除</span>
+            <!--/* AUTHOR_DEACTIVATED 是作者注销的级联隐藏，不是违规态 —— 标红会让运营当成处置对象 */-->
+            <span class="badge" th:unless="${c.deleted}"
+                  th:classappend="${c.moderationStatus == 'VISIBLE'} ? 'badge-ok' : (${c.moderationStatus == 'UNDER_REVIEW'} ? 'badge-warn' : (${c.moderationStatus == 'AUTHOR_DEACTIVATED'} ? 'badge-muted' : 'badge-danger'))"
+                  th:text="#{'admin.v130.comments.status.' + ${c.moderationStatus}}">可见</span>
+        </td>
+        <td class="nowrap" th:text="${@adminTime.wib(c.createdAt)}">t</td>
+    </tr>
+</tbody></table>
 </body>
 </html>

@@ -57,10 +57,10 @@ public class AdminContentManageController {
      * story 要求**参数零变更** ⇒ 用它们既有的 {@code back=content} 分辨调用方，两个事件都发：
      * 它们的响应体只是 toast，抽屉与列表都得自己去重拉。
      */
-    public static final String LIST_REFRESH = "admin:content-list-refresh";
+    public static final String LIST_REFRESH = com.tailtopia.admin.shared.web.AdminHxEvents.CONTENT_LIST_REFRESH;
 
     /** 见 {@link #LIST_REFRESH}：只有限流两个端点会发（本页自己的处置响应里已经带回了抽屉）。 */
-    public static final String DRAWER_REFRESH = "admin:content-drawer-refresh";
+    public static final String DRAWER_REFRESH = com.tailtopia.admin.shared.web.AdminHxEvents.CONTENT_DRAWER_REFRESH;
 
     private final AdminContentManageService contentManage;
     private final com.tailtopia.admin.moderation.service.AdminContentDetailService contentDetail;
