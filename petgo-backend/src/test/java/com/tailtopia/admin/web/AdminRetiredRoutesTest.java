@@ -2,20 +2,25 @@ package com.tailtopia.admin.web;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.tailtopia.admin.account.domain.AdminAccount;
 import com.tailtopia.admin.account.domain.AdminAccountType;
-import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.TreeSet;
 import org.junit.jupiter.api.DynamicTest;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 /**
  * L1：本版退役的整页 GET **必须 404**（V1.3.0 Story 11.3 · AC2）。
@@ -43,9 +48,15 @@ import org.springframework.security.core.Authentication;
 class AdminRetiredRoutesTest extends ApiIntegrationTest {
 
     @Autowired
-    private AdminAccountRepository adminAccounts;
+    private RequestMappingHandlerMapping handlerMapping;
 
-    /** 退役路由 → 取代它的东西（失败信息里直接说清楚该去哪儿）。 */
+    /**
+     * 退役路由 → 取代它的东西（失败信息里直接说清楚该去哪儿）。
+     *
+     * <p>14 条 = 11.3 AC1 表里已删的 13 条 + `/admin/seed-batch`。
+     * 后者来自 Story 7.6（旧批量入口，E2 模板 E 取代），AC1 的表里没列，
+     * 但它确实是本版删掉的整页 GET，在 Story 11.1 的白名单里有授权（复审 P2）。
+     */
     private static final List<String[]> RETIRED = List.of(
             new String[] {"/admin/reports", "A1 统一复核工作台（2.4）"},
             new String[] {"/admin/tickets/detail", "被举报用户抽屉（2.5）"},
@@ -62,13 +73,62 @@ class AdminRetiredRoutesTest extends ApiIntegrationTest {
             new String[] {"/admin/vets/1/edit", "抽屉资料页签（9.1a）"},
             new String[] {"/admin/ratings", "兽医列表筛选栏 + 抽屉评分页签（9.1b）"});
 
+    /**
+     * 🔴 **同路径还有 POST 的退役 GET，HTTP 状态是 405 不是 404。**
+     *
+     * <p>`POST /admin/vets/{id}` 在**路径层面**盖住了 `/admin/vets/online`（`{id}` 是路径变量，
+     * Spring 匹配路径时不看它声明成 long），于是方法不匹配 → `HttpRequestMethodNotSupportedException`
+     * → 405 + `Allow: POST`。本仓库 `GlobalExceptionHandler` 的 javadoc 里就写着这一条
+     * 「只退役 GET、保留 POST 是重构里的常规动作」。
+     *
+     * <p>**405 同样证明「GET 映射不存在」**——它恰恰说明这条路径上只剩 POST。
+     * 但拿 404 去断言它会让这条测试一上真库就红，而红的原因跟「有没有删干净」毫无关系。
+     */
+    private static final java.util.Set<String> SHADOWED_BY_POST = java.util.Set.of("/admin/vets/online");
+
     private Authentication superAdmin() {
-        long n = SEQ.incrementAndGet();
-        AdminAccount acc = adminAccounts.save(AdminAccount.newSuperAdmin(
-                "retired-" + n + "@tailtopia.test", "退役路由核对", "{bcrypt}x"));
-        AdminUserDetails p = new AdminUserDetails(acc.getId(), null, acc.getLarkEmail(),
-                acc.getPasswordHash(), AdminAccountType.SUPER_ADMIN);
+        // ⚠️ 不落库：这 14 条断言的权限全部来自 TestingAuthenticationToken，一次库都不读；
+        //    而 ApiIntegrationTest 不回滚，每跑一次就往共享库 admin_accounts 白扔一行（复审 P6）。
+        AdminUserDetails p = new AdminUserDetails(
+                900_000_000L + SEQ.incrementAndGet(), null, "retired-routes@tailtopia.test",
+                "{bcrypt}x", AdminAccountType.SUPER_ADMIN);
         return new TestingAuthenticationToken(p, null, new ArrayList<>(p.getAuthorities()));
+    }
+
+    /**
+     * 🔴 **最直接的判据：这些路径上不该再有任何 GET 映射。**
+     *
+     * <p>比断言 HTTP 状态码强，因为它不受「同路径 POST 遮蔽」影响 ——
+     * 那种情况下状态码是 405，而 405 与「GET 还活着」是两回事。AC2 要的是「路由不存在」，
+     * 这一条直接问 Spring 要答案。
+     */
+    @Test
+    void noRetiredPathStillHasAGetMapping() {
+        var offenders = new TreeSet<String>();
+        for (RequestMappingInfo info : handlerMapping.getHandlerMethods().keySet()) {
+            var methods = info.getMethodsCondition().getMethods();
+            boolean isGet = methods.isEmpty() || methods.contains(RequestMethod.GET);
+            if (!isGet) {
+                continue;
+            }
+            for (String pattern : info.getPatternValues()) {
+                for (String[] row : RETIRED) {
+                    // 模板化路径（/admin/users/{userId}）与实例路径（/admin/users/1）都要对上
+                    if (pattern.equals(row[0]) || pattern.matches(templatize(row[0]))) {
+                        offenders.add(pattern);
+                    }
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("退役页的 GET 映射又回来了 —— 模板删了不等于路由删了，"
+                        + "返回一个片段视图名照样能让整页复活")
+                .isEmpty();
+    }
+
+    /** `/admin/users/1` → `/admin/users/\{[^/]+\}`，用来匹配注册时的模板化 pattern。 */
+    private static String templatize(String concrete) {
+        return concrete.replaceAll("/(?:\\d+|tok-[a-z]+)(?=/|$)", "/\\{[^/]+\\}");
     }
 
     @TestFactory
@@ -76,9 +136,18 @@ class AdminRetiredRoutesTest extends ApiIntegrationTest {
         Authentication auth = superAdmin();
         List<DynamicTest> tests = new ArrayList<>();
         for (String[] row : RETIRED) {
-            tests.add(DynamicTest.dynamicTest(row[0] + " → 404（取代者：" + row[1] + "）",
-                    () -> mvc.perform(get(row[0]).with(authentication(auth)))
-                            .andExpect(status().isNotFound())));
+            boolean shadowed = SHADOWED_BY_POST.contains(row[0]);
+            String want = shadowed ? "405 + Allow: POST（同路径仍有 POST）" : "404";
+            tests.add(DynamicTest.dynamicTest(row[0] + " → " + want + "（取代者：" + row[1] + "）",
+                    () -> {
+                        var r = mvc.perform(get(row[0]).with(authentication(auth)));
+                        if (shadowed) {
+                            r.andExpect(status().isMethodNotAllowed())
+                                    .andExpect(header().string("Allow", "POST"));
+                        } else {
+                            r.andExpect(status().isNotFound());
+                        }
+                    }));
         }
         return tests;
     }

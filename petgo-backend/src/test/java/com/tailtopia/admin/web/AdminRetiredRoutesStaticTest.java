@@ -57,12 +57,33 @@ class AdminRetiredRoutesStaticTest {
      */
     private static final Map<String, String> RETIRED_HREFS = new LinkedHashMap<>();
 
+    /**
+     * 退役的**带参**路由前缀（AC3 第二条逐字点名的那几种）。
+     *
+     * <p>🔴 只列无参路由是不够的：`th:href="@{'/admin/content/' + ${p.id}}"`、
+     * `@{/admin/users/{id}(id=${u.id})}`、`@{/admin/vets/{id}/edit(id=${v.id})}`
+     * 都是本仓库真实在用的写法，也正是 AC3 点名的三种 —— 死链回到模板里，
+     * 只匹配无参路由的断言一声不吭（复审 C2，三种形态实测全绿）。
+     *
+     * <p>⚠️ 后继字符必须限定，否则会误伤**仍在服役**的同前缀路由：
+     * `/admin/users/{id}/drawer`、`/admin/content/{postId}/drawer` 都还活着。
+     */
+    private static final Map<String, String> RETIRED_PARAM_HREFS = new LinkedHashMap<>();
+
     static {
         RETIRED_HREFS.put("/admin/vets/online", "9.1a：在线态并入兽医列表与抽屉");
         RETIRED_HREFS.put("/admin/ratings", "9.1b：评分并入兽医列表筛选栏与抽屉评分页签");
         RETIRED_HREFS.put("/admin/reports", "2.4：并入统一复核工作台");
         RETIRED_HREFS.put("/admin/content-schedules(", "7.5：并入批量内容的排期页签");
         RETIRED_HREFS.put("/admin/tickets/detail", "2.5：并入被举报用户抽屉");
+
+        RETIRED_PARAM_HREFS.put("/admin/content/", "7.1：内容详情抽屉化（?open=<id>）");
+        RETIRED_PARAM_HREFS.put("/admin/users/", "8.1：用户五页签抽屉（?open=<id>）");
+        RETIRED_PARAM_HREFS.put("/admin/consult-orders/", "8.4：兽医订单抽屉（?open=<token>）");
+        RETIRED_PARAM_HREFS.put("/admin/ai-orders/", "8.4：AI 订单抽屉（?open=<token>）");
+        RETIRED_PARAM_HREFS.put("/admin/anomalies/", "2.6：问诊异常抽屉（?open=<id>）");
+        RETIRED_PARAM_HREFS.put("/admin/refunds/", "2.8：退款三段流抽屉（?open=<token>）");
+        RETIRED_PARAM_HREFS.put("/admin/support-tickets/", "2.7：客服工单抽屉（?open=<token>）");
     }
 
     private static List<Path> templates() throws IOException {
@@ -81,6 +102,10 @@ class AdminRetiredRoutesStaticTest {
 
     @Test
     void everyRetiredPageTemplateIsActuallyGone() throws IOException {
+        // 🛡 防空转：这一条用 Files.exists 判「不存在」，工作目录不对时 14 个 exists 全 false，
+        //    于是静默通过（另外几条会因 Files.walk 抛异常而暴露）。先钉一个必然存在的锚（复审 P1）。
+        assertThat(Files.exists(TPL.resolve("vets.html")))
+                .as("连 vets.html 都找不到 —— 工作目录不对，这条断言此刻毫无意义").isTrue();
         List<String> stillThere = new ArrayList<>();
         for (String name : RETIRED_TEMPLATES) {
             if (Files.exists(TPL.resolve(name + ".html"))) {
@@ -138,6 +163,11 @@ class AdminRetiredRoutesStaticTest {
                     hits.add(p.getFileName() + " → " + e.getKey() + "（" + e.getValue() + "）");
                 }
             }
+            for (Map.Entry<String, String> e : RETIRED_PARAM_HREFS.entrySet()) {
+                if (linksToParamRoute(html, e.getKey())) {
+                    hits.add(p.getFileName() + " → " + e.getKey() + "<id>（" + e.getValue() + "）");
+                }
+            }
         }
         assertThat(hits).as("退役整页不能再有入口链接；跨页跳转改 ?open=<id> 页内深链（D-23）").isEmpty();
     }
@@ -155,13 +185,72 @@ class AdminRetiredRoutesStaticTest {
      */
     private static boolean linksTo(String text, String route) {
         String r = Pattern.quote(route.endsWith("(") ? route.substring(0, route.length() - 1) : route);
+        // 🔴 `th:attr="hx-get=@{...}"` 是本仓库**用得最多**的 htmx 跳转写法
+        //    （th:attr="hx-post=" 99 处 / "hx-get=" 73 处 / "data-drawer-deeplink=" 17 处），
+        //    而它的属性名后面跟的是 `@{` 不是引号 —— 第一版正则要求「属性名后紧跟引号」，
+        //    恰好把用得最多的那一种漏了（复审 C3）。
         Pattern attr = Pattern.compile(
-                "(?:th:)?(?:href|hx-get|hx-post|data-drawer-url|action)\\s*=\\s*[\"']\\s*(?:@\\{)?" + r
+                "(?:th:attr\\s*=\\s*\"[a-z-]+=|(?:th:)?(?:href|hx-get|hx-post|data-drawer-url"
+                        + "|data-drawer-deeplink|action)\\s*=\\s*[\"']\\s*)(?:@\\{)?" + r
                         // ⚠️ `}` 必须在后继字符集里：`th:href="@{/admin/ratings}"` 是最常见的写法，
                         //    漏了它这条断言对**绝大多数真实残留**都不响（实测两种写法全漏）。
                         + "(?:[)}\"'(?]|\\s|$)");
         Pattern redirect = Pattern.compile("redirect:" + r + "(?:[\"'?]|$)");
         return attr.matcher(text).find() || redirect.matcher(text).find();
+    }
+
+    /**
+     * 带参退役路由：前缀命中且后继不是「仍在服役」的子路径。
+     *
+     * <p>覆盖三种写法：`@{'/admin/content/' + ${x}}`、`@{/admin/users/{id}(...)}`、
+     * `href="/admin/content/3"`。
+     */
+    private static boolean linksToParamRoute(String text, String prefix) {
+        // 🔴 判据是「参数之后 URL 就结束了」，而不是一份「仍在服役的子路径」白名单。
+        //    白名单那种写法必须穷举 /ban、/deactivate、/note、/drawer… 几十个在役子路由，
+        //    漏一个就是一次假阳性（第一版实测误报 6 处：drawer-users、drawer-content 等
+        //    引用的全是 /admin/users/{id}/xxx 这类活着的处置端点）。
+        //    退役的是**裸详情页**，所以只有「前缀 + id + URL 结束」才算残留。
+        Pattern p = Pattern.compile(
+                "(?:th:attr\\s*=\\s*\"[a-z-]+=|(?:th:)?(?:href|hx-get|hx-post|data-drawer-url"
+                        + "|data-drawer-deeplink|action)\\s*=\\s*[\"']\\s*)(?:@\\{)?'?"
+                        + Pattern.quote(prefix)
+                        // id 的三种形态：{id} / ' + ${x} 拼串 / 字面数字；随后必须是 URL 结束
+                        + "(?:\\{[^}/]*\\}|'\\s*\\+\\s*\\$\\{[^}]*\\}|\\d+)\\s*(?:[(){}\"'?]|$)");
+        return p.matcher(text).find();
+    }
+
+    /**
+     * 🔴 **路由复活**：Controller 里不该再出现指向退役路由的 {@code @GetMapping}。
+     *
+     * <p>前面三条都管不了这件事 —— 模板文件删了、视图名不是退役模板名（返回一个片段就行），
+     * 一条 {@code @GetMapping("/admin/reports")} 加回来，四条静态断言**全绿**（复审 C4 实测）。
+     * 而唯一能管的 AC2 是 L1，云端跑不了。所以补这一条纯文本扫描，代价近乎为零。
+     */
+    @Test
+    void noControllerReintroducesAGetMappingForARetiredRoute() throws IOException {
+        List<String> hits = new ArrayList<>();
+        List<String> routes = new ArrayList<>(RETIRED_HREFS.keySet());
+        routes.replaceAll(x -> x.endsWith("(") ? x.substring(0, x.length() - 1) : x);
+        try (Stream<Path> s = Files.walk(SRC)) {
+            for (Path p : s.filter(Files::isRegularFile)
+                    .filter(f -> f.toString().endsWith(".java")).sorted().toList()) {
+                String src = Files.readString(p, StandardCharsets.UTF_8)
+                        .replaceAll("(?s)/\\*.*?\\*/", "").replaceAll("(?m)//.*$", "");
+                for (String route : routes) {
+                    // 注解可能写成全限定名（@org.springframework...GetMapping），也可能带 value = / 数组，
+                    // 所以只要求「Get/RequestMapping 的括号里出现这个路径字面量」。
+                    if (Pattern.compile("@(?:[\\w.]*\\.)?(?:Get|Request)Mapping\\s*\\([^)]*\""
+                            + Pattern.quote(route) + "\"").matcher(src).find()) {
+                        hits.add(p.getFileName() + " → @GetMapping(\"" + route + "\")");
+                    }
+                }
+            }
+        }
+        assertThat(hits)
+                .as("退役路由的 GET 映射又回来了 —— 模板删了不等于路由删了，"
+                        + "返回一个片段视图名照样能让整页复活")
+                .isEmpty();
     }
 
     /**

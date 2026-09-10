@@ -5,6 +5,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.tailtopia.admin.account.domain.AdminAccount;
@@ -268,16 +269,25 @@ class AdminVetDrawerIntegrationTest extends ApiIntegrationTest {
     // ——————————————————— AC5 退役 ———————————————————
 
     /**
-     * 🔴 两个整页路由**真的没了**，且拿到的是 404 而不是 500。
+     * 🔴 两个整页路由**真的没了**；不做旧地址跳转（D-23）——
+     * 旧书签拿到 404 / 405 比拿到一个「看着像成功了」的重定向诚实。
      *
-     * <p>{@code /admin/vets/{id}/edit} 这条路径上没有同名的 POST，所以是干净的 404；
-     * 不做旧地址跳转（D-23）—— 旧书签拿到 404 比拿到一个「看着像成功了」的重定向诚实。
+     * <p>⚠️ 两条的状态码**不一样**，原因是路径遮蔽，与「有没有删干净」无关：
+     * <ul>
+     *   <li>{@code /admin/vets/{id}/edit} —— 这条路径上没有同名 POST，干净的 <b>404</b>；</li>
+     *   <li>{@code /admin/vets/online} —— 被 {@code POST /admin/vets/{id}} 在**路径层面**盖住
+     *       （{@code {id}} 是路径变量，Spring 匹配路径时不看它声明成 long），方法不匹配 →
+     *       <b>405 + Allow: POST</b>。405 同样证明 GET 映射不存在，它恰恰说明这条路径上只剩 POST。</li>
+     * </ul>
+     * 本注释原来写的是「这条路径上没有同名的 POST，所以是干净的 404」——
+     * 作者意识到了遮蔽这回事，却把结论用反了，两条都断言成 404（V1.3.0 Story 11.3 复审 C1 修正）。
      */
     @Test
     void theTwoRetiredPagesAreGone() throws Exception {
         VetAccount v = seedVet();
         mvc.perform(get("/admin/vets/online").with(authentication(superAdmin())))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(header().string("Allow", "POST"));
         mvc.perform(get("/admin/vets/" + v.getId() + "/edit").with(authentication(superAdmin())))
                 .andExpect(status().isNotFound());
     }

@@ -103,6 +103,7 @@ retired_note() {
     /admin/refunds/\{refundToken\}) echo "⛔ 本版退役（2.8，退款三段流）" ;;
     /admin/support-tickets/\{ticketToken\}) echo "⛔ 本版退役（2.7，客服工单抽屉）" ;;
     /admin/shop/orders/\{token\}) echo "⛔ 本版退役（10.2，订单履约抽屉）" ;;
+    /admin/shop/returns/\{token\}) echo "⛔ 本版退役（10.1，Toko 退货抽屉）" ;;
     *) echo "" ;;
   esac
 }
