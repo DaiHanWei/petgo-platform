@@ -57,6 +57,12 @@ function tailtopiaConfirmArgs(form) {
     }
     return args;
 }
+// V1.3.0 Story 8.1：删除用户是本后台唯一不可回退的动作 —— 第一层复述「真要删吗」，
+// 第二层（data-confirm-2）再问一次不可撤销。⚠️ 两层都过才放行；任一层取消即中止。
+function tailtopiaSecondConfirmPassed(form) {
+    var second = form.getAttribute && form.getAttribute('data-confirm-2');
+    return !second || window.confirm(second);
+}
 function tailtopiaConfirmMessage(form) {
     var msg = form.getAttribute && form.getAttribute('data-confirm');
     if (!msg) { return null; }
@@ -98,7 +104,7 @@ document.addEventListener('submit', function (e) {
     var form = e.target;
     if (!form.getAttribute || tailtopiaIsHxForm(form)) { return; }
     var msg = form.getAttribute('data-confirm') ? tailtopiaConfirmMessage(form) : tailtopiaConfirmDiffMessage(form);
-    if (msg && !window.confirm(msg)) {
+    if (msg && (!window.confirm(msg) || !tailtopiaSecondConfirmPassed(form))) {
         e.preventDefault();
     }
 }, true);
@@ -131,7 +137,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var msg = form.getAttribute('data-confirm') ? tailtopiaConfirmMessage(form) : tailtopiaConfirmDiffMessage(form);
         if (!msg) { return; } // 配置卡无改动（理论上保存钮已禁用）：不弹、照常发
         e.preventDefault();
-        if (window.confirm(msg)) { e.detail.issueRequest(true); }
+        if (window.confirm(msg) && tailtopiaSecondConfirmPassed(form)) { e.detail.issueRequest(true); }
     });
 });
 

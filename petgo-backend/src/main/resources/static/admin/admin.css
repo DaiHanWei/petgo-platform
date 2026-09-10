@@ -874,3 +874,21 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bt-images img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; }
 .bt-body { white-space: pre-wrap; word-break: break-word; }
 .bt-drawer .sticky-footer { bottom: 0; }
+
+/* ===== B7 用户列表 + 五页签抽屉（V1.3.0 Story 8.1）===== */
+.users-table td { vertical-align: middle; }
+.ud-head h2 { margin: 0 0 8px; font-size: var(--fs-md); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+/* 🔴 nowrap：切 ID 之后这五个词会变长，换行会把抽屉顶出两行 */
+.ud-tabs { margin: 0 0 10px; flex-wrap: nowrap; overflow-x: auto; }
+.ud-tabs .tab { white-space: nowrap; }
+.ud-card { margin-bottom: 10px; }
+.ud-card h3 { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.ud-table { font-size: var(--fs-xs); }
+.ud-table td { vertical-align: middle; }
+/* 一宠一卡 */
+.ud-pets { display: grid; gap: 8px; }
+.ud-pet { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 10px; }
+.ud-pet-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-tint); display: flex; align-items: center; justify-content: center; }
+.ud-pet-name { margin: 0 0 2px; display: flex; gap: 6px; align-items: center; }
+.ud-danger { border-color: var(--danger); }
+.user-drawer .sticky-footer { bottom: 0; }

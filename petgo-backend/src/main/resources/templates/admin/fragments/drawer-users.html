@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  B7 用户详情抽屉（V1.3.0 Story 8.1 · AC2，480px 抽屉体 res=user，UI 稿 3-2～3-6）。
+  五页签：基本信息 / 宠物档案 / 发布内容 / 历史问诊 / 处置。整页 `user-detail.html` 已删。
+
+  ⚠️ 五页签**一次性渲染、切页签不再请求**（AC2）：这几块数据本来就是一次 detail() 聚合出来的，
+     切一次发一次请求只会让运营在四个 loading 之间等。
+  ⚠️ 四个 POST 的路径与参数逐字不变（coins / reason / idempotencyToken / type / note），
+     只加 htmx 分支；每张处置卡的 sec:authorize 表达式**原样从整页搬过来**，一个字都没改
+     —— 历史事故：按钮在、点了 403。
+  ⚠️ hx-target 一律指**带 id 的** #user-drawer-err：htmx 只在目标带 id 时才发 HX-Target 头，
+     而 AdminBusinessExceptionAdvice 按这个头 HX-Retarget（7.1 复审 C1 的教训）。
+  🛡 手机号：无 user.phone_view 时**服务端就不装**（user.phone() 恒 null），不是这里藏起来的。
+*/-->
+<body>
+<!--/* 🔴 readOnly 不能只看 user.deleted()：删除走的是 7.3 的 @Async 级联，
+       `deletedAt` 要等异步线程跑完才落库。同步返回的这次重渲染里 `deleted()` 还是 false，
+       于是「注销已提交」的 toast 下面照旧摆着三张处置卡（还能再点一次删除、再写一条审计、
+       再触发一次级联）—— 与 AC5 正相反。所以删除那条路显式传 deletionPending=true。 */-->
+<div th:fragment="drawer" id="user-drawer-panel" class="user-drawer" th:attr="data-user-id=${user.id()}"
+     th:with="readOnly=${user.deleted() or deletionPending == true}">
+
+    <header class="ud-head">
+        <h2>
+            <span th:text="${user.displayName()}">用户</span>
+            <span class="muted">#<span th:text="${user.id()}">1</span></span>
+            <span th:if="${user.deleted()}" class="badge badge-muted"
+                  th:text="#{admin.users.status.deleted}">已注销</span>
+            <span th:unless="${user.deleted()}" class="badge"
+                  th:classappend="${user.deactivated()} ? 'badge-danger' : 'badge-ok'"
+                  th:text="${user.deactivated()} ? #{admin.users.status.deactivated} : #{admin.users.status.active}">正常</span>
+        </h2>
+    </header>
+
+    <!--/* 页签条。⚠️ nowrap：切 ID 之后这五个词会变长，换行会把抽屉顶出两行 */-->
+    <div class="tabs ud-tabs" role="tablist" data-user-tabs>
+        <button type="button" class="tab tab--on" role="tab" data-utab="basic"
+                th:text="#{admin.v130.users.tab.basic}">基本信息</button>
+        <button type="button" class="tab" role="tab" data-utab="pets"
+                th:text="#{admin.v130.users.tab.pets}">宠物档案</button>
+        <button type="button" class="tab" role="tab" data-utab="posts"
+                th:text="#{admin.v130.users.tab.posts}">发布内容</button>
+        <button type="button" class="tab" role="tab" data-utab="consults"
+                th:text="#{admin.v130.users.tab.consults}">历史问诊</button>
+        <button type="button" class="tab" role="tab" data-utab="actions"
+                th:text="#{admin.v130.users.tab.actions}">处置</button>
+    </div>
+
+    <!--/* ① 基本信息 */-->
+    <section class="card card-full ud-card" data-utab-panel="basic">
+        <p><span th:text="#{admin.userdetail.nickname}">昵称</span>:
+            <span th:text="${user.nickname()}">-</span></p>
+        <p><span th:text="#{admin.userdetail.email}">注册邮箱</span>:
+            <span th:text="${user.email()}">a@x</span></p>
+        <!-- 手机号（Story 11.4 · PII）。
+             🛡 无 user.phone_view 权限时，`user.phone()` 在**服务端就是 null** ——
+             号码根本没进这份 HTML，不是靠 CSS 藏起来的。
+             🛡 这里的表达式必须与 AdminUserController#hasPhoneView 判定的**同一个码**一致：
+               · 服务端不装值（真正的保护）
+               · 这道 sec:authorize（双重保险，并让 AdminPermissionWiringTest 看到 user.phone_view 有落点）
+             ⚠️ 只留 Java 那一处判断的话，权限码在源码里就没有 hasAuthority 落点，
+                护栏会（正确地）把它判成「勾了也没用」的死码。 -->
+        <p sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_view')"
+           th:if="${canSeePhone}">
+            <span th:text="#{admin.userdetail.phone}">手机号</span>:
+            <span th:text="${user.phone() != null and !user.phone().isBlank()}
+                           ? ${user.phone()} : #{admin.userdetail.phone.empty}">未填写</span>
+        </p>
+        <p><span th:text="#{admin.userdetail.created}">注册时间</span>:
+            <span th:text="${@adminTime.wib(user.createdAt())}">-</span> <span class="muted">WIB</span></p>
+        <p sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.grant_pawcoin')">
+            <span th:text="#{admin.userdetail.pawcoinBalance}">PawCoin 余额</span>:
+            <b th:text="${#numbers.formatInteger(user.pawcoinBalance(), 0, 'COMMA')}">0</b></p>
+    </section>
+
+    <!--/* ② 宠物档案：一宠一卡。性别 / 生日是 PRD §5 ③ 第 2 条例外（纯读展示）。 */-->
+    <section class="card card-full ud-card" data-utab-panel="pets" hidden>
+        <p class="hint" th:if="${#lists.isEmpty(user.pets())}" th:text="#{admin.userdetail.none}">无</p>
+        <div class="ud-pets">
+            <div class="ud-pet" th:each="p : ${user.pets()}">
+                <div class="ud-pet-avatar" aria-hidden="true">🐾</div>
+                <div>
+                    <p class="ud-pet-name">
+                        <b th:text="${p.name()}">旺财</b>
+                        <span class="badge badge-neutral" th:if="${p.petType() != null}"
+                              th:text="${p.petType()}">DOG</span>
+                    </p>
+                    <p class="muted rv-small">
+                        <span th:text="#{admin.userdetail.col.breed}">品种</span>:
+                        <span th:text="${p.breed()} ?: '—'">—</span>
+                        · <span th:text="#{admin.v130.users.pet.sex}">性别</span>:
+                        <span th:text="${p.sex() != null} ? #{'admin.v130.users.pet.sex.' + ${p.sex()}} : '—'">—</span>
+                    </p>
+                    <p class="muted rv-small">
+                        <span th:text="#{admin.v130.users.pet.birthday}">生日</span>:
+                        <!--/* ⚠️ birthday 是 LocalDate（不是时刻）：不能用 @adminTime.wib，
+                               那个是给 Instant 折算时区的；日期本身没有时区。 */-->
+                        <span th:text="${p.birthday() != null} ? ${#temporals.format(p.birthday(), 'yyyy-MM-dd')} : '—'">—</span>
+                        · <span th:text="#{admin.v130.users.pet.ktp}">档案 ID</span>:
+                        <span th:text="${p.id()}">1</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!--/* ③ 发布内容：只读，点行去 B1 抽屉（Story 7.1 的 ?open=） */-->
+    <section class="card card-full ud-card" data-utab-panel="posts" hidden>
+        <p class="hint" th:if="${#lists.isEmpty(user.posts())}" th:text="#{admin.userdetail.none}">无</p>
+        <table th:unless="${#lists.isEmpty(user.posts())}" class="ud-table">
+            <thead><tr>
+                <th>ID</th>
+                <th th:text="#{admin.userdetail.col.type}">类型</th>
+                <th th:text="#{admin.userdetail.col.post}">内容</th>
+                <th th:text="#{admin.userdetail.col.deleted}">状态</th>
+            </tr></thead>
+            <tbody>
+            <tr th:each="post : ${user.posts()}">
+                <td class="nowrap">
+                    <a data-no-drawer target="_blank" rel="noopener"
+                       th:href="@{/admin/content(open=${post.id()})}" th:text="${post.id()}">1</a>
+                </td>
+                <td th:text="#{'admin.contentType.' + ${post.type()}}">Moment</td>
+                <td class="cell-wide" th:text="${post.textPreview()}">…</td>
+                <td>
+                    <span class="badge" th:classappend="${post.deleted()} ? 'badge-danger' : 'badge-ok'"
+                          th:text="${post.deleted()} ? #{admin.userdetail.deleted} : #{admin.userdetail.published}">正常</span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!--/* ④ 历史问诊（仅元数据）：点会话去 B22（Story 9.2 的 ?open=） */-->
+    <section class="card card-full ud-card" data-utab-panel="consults" hidden>
+        <!--/* 🔴 这条提示不可删：不写的话，运营会以为这里能看到对话内容，
+               转而向工程要「把聊天记录也放上来」—— 而那是刻意不做的。 */-->
+        <p class="banner err" th:text="#{admin.userdetail.metaOnly}">仅元数据，不含对话内容</p>
+        <p class="hint" th:if="${#lists.isEmpty(user.sessions())}" th:text="#{admin.userdetail.none}">无</p>
+        <table th:unless="${#lists.isEmpty(user.sessions())}" class="ud-table">
+            <thead><tr>
+                <th th:text="#{admin.userdetail.col.session}">会话</th>
+                <th th:text="#{admin.userdetail.col.vet}">兽医</th>
+                <th class="nowrap" th:text="#{admin.userdetail.col.time}">时间</th>
+                <th th:text="#{admin.userdetail.col.cstatus}">状态</th>
+                <th th:text="#{admin.userdetail.col.rating}">评分</th>
+            </tr></thead>
+            <tbody>
+            <tr th:each="s : ${user.sessions()}">
+                <td class="nowrap">
+                    <a data-no-drawer target="_blank" rel="noopener"
+                       th:href="@{/admin/consult-sessions(open=${s.sessionId()})}"
+                       th:text="${s.sessionId()}">1</a>
+                </td>
+                <td th:text="${s.vetId()}">-</td>
+                <td class="nowrap" th:text="${@adminTime.wib(s.createdAt())}">-</td>
+                <td><code th:text="${s.status()}">CLOSED</code></td>
+                <td th:text="${s.stars() != null} ? ${s.stars()} + ' ★' : '—'">—</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!--/* ⑤ 处置：三张卡，一项一行。已注销账号**一个按钮都不渲染**（AC5）。 */-->
+    <section class="ud-actions" data-utab-panel="actions" hidden>
+        <p class="hint" th:if="${user.deleted()}" th:text="#{admin.v130.users.deletedReadonly}">
+            账号已注销，仅供查看，不再提供任何处置。</p>
+        <p class="banner ok" th:if="${!user.deleted() and deletionPending == true}"
+           th:text="#{admin.v130.users.deletionPending}">
+            注销已提交，正在后台处理；处理完成前不再提供处置。</p>
+
+        <!-- 账号处置（停用/激活，user.deactivate 门控）。 -->
+        <th:block th:unless="${readOnly}">
+            <div class="card card-full ud-card"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.deactivate')">
+                <h3 th:text="#{admin.userdetail.actions}">账号处置</h3>
+                <form class="inline" th:if="${!user.deactivated()}"
+                      th:attr="hx-post=@{/admin/users/{id}/deactivate(id=${user.id()})},
+                               data-confirm=#{admin.userdetail.deactivateConfirm}"
+                      hx-target="#user-drawer-err" hx-swap="innerHTML">
+                    <input type="text" name="reason" class="inp"
+                           th:placeholder="#{admin.userdetail.deactivateReason}" required/>
+                    <button type="submit" class="btn btn-danger" th:text="#{admin.userdetail.deactivate}">停用账号</button>
+                </form>
+                <form class="inline" th:if="${user.deactivated()}"
+                      th:attr="hx-post=@{/admin/users/{id}/reactivate(id=${user.id()})}"
+                      hx-target="#user-drawer-err" hx-swap="innerHTML">
+                    <button type="submit" class="btn btn-neutral" th:text="#{admin.userdetail.reactivate}">重新激活</button>
+                </form>
+            </div>
+            <!--/* 无权限：按钮渲染成禁用态并注明所缺权限（AC5）—— 整块空白会让人以为「这个账号没有处置」 */-->
+            <div class="card card-full ud-card"
+                 sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('user.deactivate'))">
+                <h3 th:text="#{admin.userdetail.actions}">账号处置</h3>
+                <button type="button" class="btn btn-danger" disabled
+                        th:title="#{admin.v130.err.forbidden(#{perm.user.deactivate})}"
+                        th:text="#{admin.userdetail.deactivate}">停用账号</button>
+                <p class="hint" th:text="#{admin.v130.err.forbidden(#{perm.user.deactivate})}">需要「停用用户」权限</p>
+            </div>
+
+            <!-- 赠送 PawCoin（bug 20260728-389，user.grant_pawcoin 门控）。 -->
+            <div class="card card-full ud-card"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.grant_pawcoin')">
+                <h3 th:text="#{admin.userdetail.grant}">赠送 PawCoin</h3>
+                <p><span th:text="#{admin.userdetail.pawcoinBalance}">PawCoin 余额</span>:
+                    <b th:text="${#numbers.formatInteger(user.pawcoinBalance(), 0, 'COMMA')}">0</b></p>
+                <form class="inline"
+                      th:attr="hx-post=@{/admin/users/{id}/grant-pawcoin(id=${user.id()})},
+                               data-confirm=#{admin.userdetail.grantConfirm}"
+                      hx-target="#user-drawer-err" hx-swap="innerHTML">
+                    <!--/* 一次性幂等 token（bug 20260728-389）：防双击 / 回退重提交重复入账。
+                           ⚠️ 每次渲染抽屉都换一个新的，所以处置成功后抽屉重渲染 = 新 token。 */-->
+                    <input type="hidden" name="idempotencyToken" th:value="${grantToken}"/>
+                    <input type="number" name="coins" class="inp" min="1" step="1"
+                           th:placeholder="#{admin.userdetail.grantAmount}" required/>
+                    <input type="text" name="reason" class="inp"
+                           th:placeholder="#{admin.userdetail.grantReason}" required/>
+                    <button type="submit" class="btn" th:text="#{admin.userdetail.grantSubmit}">赠送</button>
+                </form>
+            </div>
+            <div class="card card-full ud-card"
+                 sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('user.grant_pawcoin'))">
+                <h3 th:text="#{admin.userdetail.grant}">赠送 PawCoin</h3>
+                <button type="button" class="btn" disabled
+                        th:title="#{admin.v130.err.forbidden(#{perm.user.grant_pawcoin})}"
+                        th:text="#{admin.userdetail.grantSubmit}">赠送</button>
+                <p class="hint" th:text="#{admin.v130.err.forbidden(#{perm.user.grant_pawcoin})}">需要「赠送 PawCoin」权限</p>
+            </div>
+
+            <!-- 删除账号（不可逆，user.delete 门控）。 -->
+            <div class="card card-full ud-card ud-danger"
+                 sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.delete')">
+                <h3 th:text="#{admin.userdetail.delete}">删除账号</h3>
+                <p class="err" th:text="#{admin.userdetail.deleteIrreversible}">此操作不可撤销</p>
+                <!--/* 🔴 双重确认（AC2）：第一层复述昵称问「真要删吗」，第二层再问一次不可撤销。
+                       删除是本页唯一不可回退的动作，多按一次的成本远低于误删一个真人账号。 */-->
+                <form th:attr="hx-post=@{/admin/users/{id}/delete(id=${user.id()})},
+                               data-confirm=#{admin.userdetail.deleteConfirm},
+                               data-confirm-2=#{admin.v130.users.deleteConfirm2(${user.displayName()})}"
+                      hx-target="#user-drawer-err" hx-swap="innerHTML">
+                    <label class="field" th:text="#{admin.userdetail.deleteType}">删除类型</label>
+                    <label><input type="radio" name="type" value="USER_REQUEST" checked/>
+                        <span th:text="#{admin.userdetail.deleteType.userRequest}">用户申请注销</span></label>
+                    <label><input type="radio" name="type" value="VIOLATION"/>
+                        <span th:text="#{admin.userdetail.deleteType.violation}">违规处置</span></label>
+                    <label class="field" th:text="#{admin.userdetail.deleteNote}">删除备注（必填）</label>
+                    <input type="text" name="note" class="inp field-full" required/>
+                    <p><button type="submit" class="btn btn-danger" th:text="#{admin.userdetail.delete}">删除账号</button></p>
+                </form>
+            </div>
+            <div class="card card-full ud-card"
+                 sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('user.delete'))">
+                <h3 th:text="#{admin.userdetail.delete}">删除账号</h3>
+                <button type="button" class="btn btn-danger" disabled
+                        th:title="#{admin.v130.err.forbidden(#{perm.user.delete})}"
+                        th:text="#{admin.userdetail.delete}">删除账号</button>
+                <p class="hint" th:text="#{admin.v130.err.forbidden(#{perm.user.delete})}">需要「删除用户」权限</p>
+            </div>
+        </th:block>
+    </section>
+
+    <div id="user-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+
+    <!--/* 页签切换：纯前端切 hidden，不再请求（五块数据是一次聚合出来的）。
+           htmx 每次 swap 进来都会重新执行，不需要额外的 re-init 钩子。 */-->
+    <script>
+        (function () {
+            var root = document.querySelector('[data-user-tabs]');
+            if (!root) { return; }
+            root.addEventListener('click', function (e) {
+                var btn = e.target.closest('[data-utab]');
+                if (!btn) { return; }
+                var name = btn.getAttribute('data-utab');
+                root.querySelectorAll('[data-utab]').forEach(function (b) {
+                    var on = b === btn;
+                    b.classList.toggle('tab--on', on);
+                    b.setAttribute('aria-selected', String(on));
+                });
+                document.querySelectorAll('[data-utab-panel]').forEach(function (p) {
+                    p.hidden = p.getAttribute('data-utab-panel') !== name;
+                });
+            });
+        })();
+    </script>
+</div>
+
+<!--/* 处置成功：抽屉体 oob + 列表那一行 oob + toast。
+       ⚠️ 不整表重拉：停用 / 赠币 / 删除都不会让这一行换位置（列表按 id 倒序），
+          整表重拉只会把运营刚翻到的那一页跳回去。 */-->
+<th:block th:fragment="afterAction">
+    <div id="user-drawer-body-oob" hx-swap-oob="innerHTML:#user-drawer .drawer-body">
+        <div th:replace="~{admin/fragments/drawer-users :: drawer}"></div>
+    </div>
+    <!--/* 🔴 外壳必须是**真的** <table hidden>，不能 th:remove="tag"：
+           htmx 只有在响应**以 `<tr` 开头**时才补 <table><tbody> 外壳；这里响应的第一个标签是上面那个
+           div，于是走通用解析（body 上下文），裸 <tr>/<td> 被 HTML 解析器直接丢掉 ——
+           行不会被换掉（运营看着还是旧状态），单元格文本反而被 foster-parent 进抽屉的 err 槽，
+           显示成一条莫名其妙的行内报错。oob 换完之后留下的只是这个空壳。
+           （同样的坑 drawer-content.html 已经踩过一次，写法照抄那边。） */-->
+    <table hidden><tbody>
+        <tr th:replace="~{admin/fragments/users-list :: row(${row}, true)}"></tr>
+    </tbody></table>
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已完成</div>
+</th:block>
+</body>
+</html>

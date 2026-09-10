@@ -72,7 +72,9 @@ class AdminUserAccessControlTest {
     private void search() {
         // 传非空 q 走搜索分支（stub 了 search()）；页码与手机号筛选参数为新签名所需
         // （Story 11.4 加了 phone 筛选参数，null = 不筛）。
-        controller.users("42", 0, null, null, new ConcurrentModel());
+        // V1.3.0 Story 8.1：新增 status（状态筛选）与 open（?open= 深链）参数；
+        // HX-Request 头仍是倒数第二个。
+        controller.users("42", 0, null, null, null, null, new ConcurrentModel());
     }
 
     @Test
@@ -98,7 +100,13 @@ class AdminUserAccessControlTest {
     private void deactivate() {
         var admin = new com.tailtopia.admin.service.AdminUserDetails(1L, null, "a@x", null,
                 com.tailtopia.admin.account.domain.AdminAccountType.SUPER_ADMIN);
+        // V1.3.0 Story 8.1：多了 Authentication / HxRequest / Model / HttpServletResponse
+        //（htmx 分支用；这里走整页 PRG 分支，传 NONE 即可）。
         controller.deactivate(admin, 5L, "违规",
+                org.springframework.security.core.context.SecurityContextHolder.getContext()
+                        .getAuthentication(),
+                com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(),
+                new org.springframework.mock.web.MockHttpServletResponse(),
                 new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap());
     }
 
@@ -120,6 +128,10 @@ class AdminUserAccessControlTest {
         var admin = new com.tailtopia.admin.service.AdminUserDetails(1L, null, "a@x", null,
                 com.tailtopia.admin.account.domain.AdminAccountType.SUPER_ADMIN);
         controller.grantPawCoin(admin, 5L, 100L, "补偿", "tok-1",
+                org.springframework.security.core.context.SecurityContextHolder.getContext()
+                        .getAuthentication(),
+                com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(),
+                new org.springframework.mock.web.MockHttpServletResponse(),
                 new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap());
     }
 
@@ -147,6 +159,10 @@ class AdminUserAccessControlTest {
         var admin = new com.tailtopia.admin.service.AdminUserDetails(1L, null, "a@x", null,
                 com.tailtopia.admin.account.domain.AdminAccountType.SUPER_ADMIN);
         controller.delete(admin, 5L, "USER_REQUEST", "备注",
+                org.springframework.security.core.context.SecurityContextHolder.getContext()
+                        .getAuthentication(),
+                com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(),
+                new org.springframework.mock.web.MockHttpServletResponse(),
                 new org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap());
     }
 

@@ -3,6 +3,8 @@ package com.tailtopia.admin.usermgmt.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -33,6 +35,8 @@ class AdminUserServiceTest {
     private com.tailtopia.admin.audit.service.AdminAuditService auditService;
     private com.tailtopia.account.service.AccountDeletionService accountDeletion;
     private com.tailtopia.pay.service.PawCoinWalletService pawCoinWallet;
+    /** Story 8.1：浏览态列表的筛选下推要断言到参数，所以这个 mock 提成字段。 */
+    private com.tailtopia.auth.repository.UserRepository users;
     private AdminUserService service;
 
     @BeforeEach
@@ -46,10 +50,14 @@ class AdminUserServiceTest {
         auditService = mock(com.tailtopia.admin.audit.service.AdminAuditService.class);
         accountDeletion = mock(com.tailtopia.account.service.AccountDeletionService.class);
         pawCoinWallet = mock(com.tailtopia.pay.service.PawCoinWalletService.class);
+        users = mock(com.tailtopia.auth.repository.UserRepository.class);
         // Story 11.4：新增 UserRepository 入参（手机号筛选与召回名单导出专用）。
+        // V1.3.0 Story 8.1：新增 NamedParameterJdbcTemplate（摘要条的单条聚合，本类不测它）。
         service = new AdminUserService(accountQuery, profileService, contentService, consultHistory,
                 authService, consultInterrupt, auditService, accountDeletion, pawCoinWallet,
-                mock(com.tailtopia.auth.repository.UserRepository.class));
+                users,
+                mock(org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate.class),
+                com.tailtopia.support.TestMessages.real());
     }
 
     private User user() {
@@ -82,16 +90,41 @@ class AdminUserServiceTest {
         verify(accountQuery, never()).findUserById(anyLong());
     }
 
-    /** bug 20260701-164：列表页分页列出全部普通用户，逐条映射为行。 */
+    /**
+     * bug 20260701-164 + V1.3.0 Story 8.1：浏览态列表逐条映射为行，
+     * 且**两个筛选都作为参数下推到 SQL**（不筛时下推哨兵 any / all）。
+     *
+     * <p>⚠️ 断言参数值而不只是「返回了一行」：筛选如果没下推，
+     * 分页数会按全量算，而返回的行数看上去仍然正常。
+     */
     @Test
     void listPagesAllUsers() {
         var pageable = org.springframework.data.domain.PageRequest.of(0, 50);
         User u = user();
-        when(accountQuery.listUsers(pageable))
+        when(users.findAdminUsers(com.tailtopia.auth.domain.Role.USER, "any", "all",
+                com.tailtopia.auth.domain.UserStatus.DEACTIVATED, pageable))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(u), pageable, 1));
-        var page = service.list(pageable);
+        var page = service.listFiltered(null, null, pageable);
         assertThat(page.getTotalElements()).isEqualTo(1);
         assertThat(page.getContent().get(0).email()).isEqualTo("ming@x.com");
+    }
+
+    /** Story 8.1：手机号与状态筛选原样下推；认不得的状态值（旧书签乱传）一律当「全部」。 */
+    @Test
+    void listPushesBothFiltersDownAndIgnoresUnknownStatus() {
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        var empty = new org.springframework.data.domain.PageImpl<User>(List.of(), pageable, 0);
+        when(users.findAdminUsers(eq(com.tailtopia.auth.domain.Role.USER), anyString(), anyString(),
+                eq(com.tailtopia.auth.domain.UserStatus.DEACTIVATED), eq(pageable)))
+                .thenReturn(empty);
+
+        service.listFiltered("empty", "deactivated", pageable);
+        verify(users).findAdminUsers(com.tailtopia.auth.domain.Role.USER, "empty", "deactivated",
+                com.tailtopia.auth.domain.UserStatus.DEACTIVATED, pageable);
+
+        service.listFiltered("garbage", "garbage", pageable);
+        verify(users).findAdminUsers(com.tailtopia.auth.domain.Role.USER, "any", "all",
+                com.tailtopia.auth.domain.UserStatus.DEACTIVATED, pageable);
     }
 
     /** 2026-09-02：昵称模糊搜索 —— 非邮箱非数字的词也能经昵称匹配命中。 */

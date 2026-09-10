@@ -32,7 +32,14 @@ public record AdminUserDetailView(
         List<PostSummary> posts,
         List<SessionMeta> sessions) {
 
-    /** 宠物档案行（只读摘要）。 */
-    public record PetRow(long id, String name, String petType, String breed) {
+    /**
+     * 宠物档案行（只读摘要）。
+     *
+     * @param sex      性别（{@code PetSex} 的名字，可空）——V1.3.0 Story 8.1 增列（PRD §5 ③ 第 2 条例外，纯读展示）
+     * @param birthday 生日（{@code LocalDate}，可空）——同上。⚠️ 是**日期**不是时刻：
+     *                 别拿 {@code @adminTime.wib} 去格式化它，那是给 Instant 用的。
+     */
+    public record PetRow(long id, String name, String petType, String breed,
+            String sex, java.time.LocalDate birthday) {
     }
 }

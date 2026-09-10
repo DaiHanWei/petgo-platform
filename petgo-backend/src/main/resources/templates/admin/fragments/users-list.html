@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  B7 用户列表的摘要条 / 表格 / 单行（V1.3.0 Story 8.1，模板 B）。
+    sumbar(oob) — 四格：总用户数 · 今日新增（WIB）· 已停用 · 已删除（单条 COUNT(*) FILTER 聚合，随筛选联动）
+    rows(oob)   — 表格 + 空态 + 分页；oob=true 时摘要条随片段一并换
+  ⚠️ 四格各带 data-sum="<字段名>"：这是「摘要条随筛选联动」唯一可被测试钉住的锚点 ——
+     只断言「摘要条在」的话，一个完全不筛的实现照样绿。
+    row(u, oob) — 单行；抽屉里处置成功后以 oob=true 原位替换（停用不会让行换位置，所以只换这一行）
+  🛡 列表**只显示「手机号填了没填」，不显示号码本身** —— 少一处出现 PII 就少一个泄漏面。
+*/-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="users-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.users.summary.total}">总用户数</div>
+        <div class="sum-value" data-sum="total" th:text="${summary.total}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.users.summary.today}">今日新增（WIB）</div>
+        <div class="sum-value" data-sum="todayNew" th:text="${summary.todayNew}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.users.summary.deactivated}">已停用</div>
+        <div class="sum-value" data-sum="deactivated" th:text="${summary.deactivated}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.users.summary.deleted}">已注销</div>
+        <div class="sum-value" data-sum="deleted" th:text="${summary.deleted}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/users-list :: sumbar(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(results)}" class="users-table">
+        <thead>
+        <tr>
+            <th th:text="#{admin.users.col.id}">ID</th>
+            <th th:text="#{admin.users.col.name}">昵称</th>
+            <th th:text="#{admin.users.col.email}">注册邮箱</th>
+            <th class="nowrap" th:text="#{admin.users.col.created}">注册时间</th>
+            <th th:text="#{admin.users.col.phone}">手机号</th>
+            <th th:text="#{admin.users.col.status}">状态</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="u : ${results}"><tr th:replace="~{admin/fragments/users-list :: row(${u}, false)}"></tr></th:block>
+        </tbody>
+    </table>
+
+    <div class="empty" th:if="${#lists.isEmpty(results)}">
+        <span class="empty-emoji">🔍</span>
+        <p th:text="${searched} ? #{admin.users.empty} : #{admin.users.emptyAll}">无匹配用户</p>
+    </div>
+
+    <!-- bug 20260701-164：浏览态分页（搜索态无分页 —— 那是「找一个人」的用法）。 -->
+    <div class="pager" th:if="${page != null and page.totalElements > 0}" th:attr="data-page=${page.number}">
+        <!-- bug 20260901-469：翻页必须带上 phone / status 筛选 —— 不带的话点下一页筛选静默丢失、
+             列表变回全量，同时导出链接也跟着失去筛选（正是提报里两份名单对不上的来源）。 -->
+        <a th:if="${page.hasPrevious()}" data-no-drawer
+           th:href="@{/admin/users(page=${page.number - 1}, phone=${phone}, status=${status}, q=${q})}"
+           th:text="#{admin.audit.prev}">← 上一页</a>
+        <span th:text="#{admin.audit.page(${page.number + 1}, ${page.totalPages}, ${page.totalElements})}">分页</span>
+        <a th:if="${page.hasNext()}" data-no-drawer
+           th:href="@{/admin/users(page=${page.number + 1}, phone=${phone}, status=${status}, q=${q})}"
+           th:text="#{admin.audit.next}">下一页 →</a>
+    </div>
+</th:block>
+
+<!--/* 单行。点行开抽屉（「查看详情」列已删）。 */-->
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(u, oob)" th:id="'user-row-' + ${u.id()}" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${u.id()}" th:data-drawer-url="@{/admin/users/{id}/drawer(id=${u.id()})}" tabindex="0"
+        th:classappend="${u.deleted()} ? 'row-muted'">
+        <td class="nowrap" th:text="${u.id()}">1</td>
+        <td th:text="${u.displayName()}">用户</td>
+        <td th:text="${u.email()}">a@x</td>
+        <td class="nowrap" th:text="${@adminTime.wib(u.createdAt())}">-</td>
+        <td>
+            <!-- 🛡 只显示"填了 / 没填"，不显示号码 -->
+            <span class="badge" th:classappend="${u.phoneFilled()} ? 'badge-ok' : 'badge-neutral'"
+                  th:text="${u.phoneFilled()} ? #{admin.users.phone.filled} : #{admin.users.phone.empty}">未填写</span>
+        </td>
+        <td class="nowrap">
+            <span class="dot" th:classappend="${u.deleted()} ? 'dot--done' : (${u.deactivated()} ? 'dot--hot' : 'dot--ok')"></span>
+            <span th:if="${u.deleted()}" class="badge badge-muted"
+                  th:text="#{admin.users.status.deleted}">已注销</span>
+            <span th:unless="${u.deleted()}" class="badge"
+                  th:classappend="${u.deactivated()} ? 'badge-danger' : 'badge-ok'"
+                  th:text="${u.deactivated()} ? #{admin.users.status.deactivated} : #{admin.users.status.active}">正常</span>
+        </td>
+    </tr>
+</tbody></table>
+</body>
+</html>

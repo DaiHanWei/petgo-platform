@@ -1,120 +1,112 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- 用户搜索（Story 3.1，只读）。按 ID/注册邮箱精确、昵称模糊查普通用户；HTMX 片段刷新。门控 user.view。 -->
+<!--/*
+  用户列表（Story 3.1 只读 → V1.3.0 Story 8.1 套模板 B · tpl-b-list，UI 稿 3-1～3-6）。门控 user.view。
+  筛选（关键词 + 手机号）→ 摘要条四格 → 表格 → 分页；点行开 480px 五页签抽屉（详情整页已退役）。
+  🛡 列表只显示「手机号填了没填」，不显示号码本身；导出召回名单是**独立权限**且必须先选筛选。
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.users.title}">用户搜索 · TailTopia 运营</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
-    <div th:fragment="content" th:remove="tag">
+    <div th:fragment="content" th:remove="tag" th:with="res='user'">
         <h1 th:text="#{admin.users.title}">用户搜索</h1>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
-        <form class="filter-bar" th:action="@{/admin/users}" method="get"
-              hx-get="/admin/users" hx-target="#user-rows" hx-swap="outerHTML">
-            <label>
-                <input type="search" name="q" th:value="${q}" th:placeholder="#{admin.users.searchPlaceholder}"
-                       style="width:280px"/>
-            </label>
-            <button type="submit" class="btn btn-primary" th:text="#{admin.users.search}">搜索</button>
-        </form>
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::user-filters}, ~{::user-summary}, ~{::user-table}, ~{::user-drawer})}">
+            <!--/* 筛选栏。⚠️ 关键词走**显式「查询」钮**（模板 B 通用规格）：原先是即输即查，
+                   每敲一个字发一次请求，删字时还会把刚看到的结果换掉。
+                   手机号下拉保留 data-autosubmit（选项就那三个，选完即查是对的）。 */-->
+            <!--/* canExport 提成一个变量：三态（可用链接 / 置灰钮 / 提示语）用的是同一个判据，
+                   写三遍迟早漂移成两套 —— bug 20260901-469 的成因正是「屏幕一份、文件一份」。 */-->
+            <form th:fragment="user-filters" class="filter-bar" data-autosubmit
+                  th:with="canExport=${!searched and (phone == 'filled' or phone == 'empty')
+                                       and (status == null or status == '')}"
+                  th:action="@{/admin/users}" method="get"
+                  th:attr="hx-get=@{/admin/users}" hx-target="#users-rows" hx-swap="innerHTML" hx-push-url="true">
+                <label class="field">
+                    <span th:text="#{admin.v130.users.searchLabel}">关键词</span>
+                    <input type="search" name="q" class="inp" th:value="${q}"
+                           th:placeholder="#{admin.users.searchPlaceholder}" style="width:280px"/>
+                </label>
+                <!--/* 状态筛选（Story 8.1 · AC1，B7 规格「筛选：关键词 · 状态」）。
+                       下拉就三个选项，选完即查是对的 —— 显式「查询」钮是给文本框的。 */-->
+                <label class="field">
+                    <span th:text="#{admin.v130.users.statusFilter}">状态</span>
+                    <select name="status" class="sel">
+                        <option value="" th:text="#{admin.v130.users.statusFilter.any}"
+                                th:selected="${status == null or status == ''}">全部</option>
+                        <option value="active" th:text="#{admin.users.status.active}"
+                                th:selected="${status == 'active'}">正常</option>
+                        <option value="deactivated" th:text="#{admin.users.status.deactivated}"
+                                th:selected="${status == 'deactivated'}">已停用</option>
+                        <option value="deleted" th:text="#{admin.users.status.deleted}"
+                                th:selected="${status == 'deleted'}">已注销</option>
+                    </select>
+                </label>
+                <!-- 手机号筛选（Story 11.4 · AB-11A）：供运营挑催填名单。 -->
+                <label class="field">
+                    <span th:text="#{admin.users.phoneFilter}">手机号</span>
+                    <select name="phone" class="sel">
+                        <option value="" th:text="#{admin.users.phoneFilter.any}"
+                                th:selected="${phone == null or phone == ''}">全部</option>
+                        <option value="filled" th:text="#{admin.users.phoneFilter.filled}"
+                                th:selected="${phone == 'filled'}">已填写</option>
+                        <option value="empty" th:text="#{admin.users.phoneFilter.empty}"
+                                th:selected="${phone == 'empty'}">未填写</option>
+                    </select>
+                </label>
+                <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.users.search}">查询</button>
 
-        <!-- 手机号筛选（Story 11.4 · AB-11A）：供运营挑催填名单。
-             🛡 列表只显示"填了没填"，**不显示号码本身** —— 少一处出现 PII 就少一个泄漏面。 -->
-        <form class="filter-bar" th:action="@{/admin/users}" method="get" data-autosubmit>
-            <label>
-                <span th:text="#{admin.users.phoneFilter}">手机号</span>
-                <select name="phone">
-                    <option value="" th:text="#{admin.users.phoneFilter.any}"
-                            th:selected="${phone == null or phone == ''}">全部</option>
-                    <option value="filled" th:text="#{admin.users.phoneFilter.filled}"
-                            th:selected="${phone == 'filled'}">已填写</option>
-                    <option value="empty" th:text="#{admin.users.phoneFilter.empty}"
-                            th:selected="${phone == 'empty'}">未填写</option>
-                </select>
-            </label>
-            <!-- 🔴 导出是独立权限：把 PII 批量带出系统，风险高一档 -->
-            <!-- bug 20260901-469：按钮只在明确选了 已填写/未填写 时出现，phone 原样透传 ——
-                 原先「没选就当未填写」的回落，配上翻页丢参，导出的正好是相反的那份名单。 -->
-            <!-- ⚠️ 搜索态（q 非空）列表显示的是搜索结果、不按手机号筛 —— 此时也不给导出，
-                 否则又是「屏幕一份、文件一份」。 -->
-            <!-- bug 20260901-475：不可用时**置灰而不是消失** —— 整个按钮不见会被读成「功能没了」。 -->
-            <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
-               th:if="${!searched and (phone == 'filled' or phone == 'empty')}"
-               class="btn btn-sm"
-               th:href="@{/admin/users/phone-recall.xlsx(phone=${phone})}"
-               th:text="#{admin.users.exportRecall}">导出召回名单</a>
-            <button sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
-                    th:unless="${!searched and (phone == 'filled' or phone == 'empty')}"
-                    type="button" class="btn btn-sm" disabled
-                    th:title="#{admin.users.exportNeedsFilter}"
-                    th:text="#{admin.users.exportRecall}">导出召回名单</button>
-            <span sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
-                  th:unless="${!searched and (phone == 'filled' or phone == 'empty')}"
-                  class="muted" th:text="#{admin.users.exportNeedsFilter}">
-                选择「已填写 / 未填写」后可导出召回名单
-            </span>
-            <span class="muted" th:text="#{admin.users.exportNote}"
-                  sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')">
-                名单含已封号账号并标注状态，由运营自行判断。
-            </span>
-        </form>
+                <!-- 🔴 导出是独立权限：把 PII 批量带出系统，风险高一档 -->
+                <!-- bug 20260901-469：按钮只在明确选了 已填写/未填写 时可用，phone 原样透传 ——
+                     原先「没选就当未填写」的回落，配上翻页丢参，导出的正好是相反的那份名单。 -->
+                <!-- ⚠️ 搜索态（q 非空）不给导出：屏幕上是**关键词命中且封顶 50 条**的那批，
+                     而导出端点按 AC3 只认 phone、导的是全量 —— 又是「屏幕一份、文件一份」。 -->
+                <!-- ⚠️ 状态筛选（Story 8.1）生效时同理不给导出：导出端点按 AC3 **只认 phone 一个参数**
+                     （路径/参数逐字不变），它导的是全部状态的人；屏幕上只剩「已停用」而文件里是全量，
+                     正是同一类错位。要按状态导，得先把状态切回「全部」。 -->
+                <!-- bug 20260901-475：不可用时**置灰而不是消失** —— 整个按钮不见会被读成「功能没了」。 -->
+                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
+                   th:if="${canExport}"
+                   class="btn btn-sm" data-no-drawer
+                   th:href="@{/admin/users/phone-recall.xlsx(phone=${phone})}"
+                   th:text="#{admin.users.exportRecall}">导出召回名单</a>
+                <button sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
+                        th:unless="${canExport}"
+                        type="button" class="btn btn-sm" disabled
+                        th:title="#{admin.users.exportNeedsFilter}"
+                        th:text="#{admin.users.exportRecall}">导出召回名单</button>
+                <span sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
+                      th:unless="${canExport}"
+                      class="hint" th:text="#{admin.users.exportNeedsFilter}">
+                    选择「已填写 / 未填写」后可导出召回名单
+                </span>
+                <span class="hint" th:text="#{admin.users.exportNote}"
+                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')">
+                    名单含已封号账号并标注状态，由运营自行判断。
+                </span>
+            </form>
 
-        <table>
-            <thead>
-            <tr>
-                <th th:text="#{admin.users.col.id}">ID</th>
-                <th th:text="#{admin.users.col.name}">昵称</th>
-                <th th:text="#{admin.users.col.email}">注册邮箱</th>
-                <th th:text="#{admin.users.col.created}">注册时间</th>
-                <th th:text="#{admin.users.col.phone}">手机号</th>
-                <th th:text="#{admin.users.col.status}">状态</th>
-                <th th:text="#{admin.users.col.action}">操作</th>
-            </tr>
-            </thead>
-            <tbody id="user-rows" th:fragment="rows">
-            <tr th:each="u : ${results}">
-                <td th:text="${u.id()}">1</td>
-                <td th:text="${u.displayName()}">用户</td>
-                <td th:text="${u.email()}">a@x</td>
-                <td th:text="${@adminTime.wib(u.createdAt())}">-</td>
-                <td>
-                    <!-- 🛡 只显示"填了 / 没填"，不显示号码 -->
-                    <span class="badge" th:classappend="${u.phoneFilled()} ? 'badge-ok' : 'badge-neutral'"
-                          th:text="${u.phoneFilled()} ? #{admin.users.phone.filled} : #{admin.users.phone.empty}">未填写</span>
-                </td>
-                <td>
-                    <span th:if="${u.deleted()}" class="badge badge-neutral"
-                          th:text="#{admin.users.status.deleted}">已注销</span>
-                    <span th:unless="${u.deleted()}" class="badge"
-                          th:classappend="${u.deactivated()} ? 'badge-danger' : 'badge-ok'"
-                          th:text="${u.deactivated()} ? #{admin.users.status.deactivated} : #{admin.users.status.active}">正常</span>
-                </td>
-                <td>
-                    <a class="btn btn-neutral btn-sm" th:href="@{'/admin/users/' + ${u.id()}}"
-                       th:text="#{admin.users.view}">查看详情</a>
-                </td>
-            </tr>
-            <tr th:if="${#lists.isEmpty(results)}">
-                <td colspan="7" class="empty"
-                    th:text="${searched} ? #{admin.users.empty} : #{admin.users.emptyAll}">无匹配用户</td>
-            </tr>
-            </tbody>
-        </table>
+            <div th:fragment="user-summary" th:replace="~{admin/fragments/users-list :: sumbar(false)}"></div>
 
-        <!-- bug 20260701-164：浏览态分页（搜索态无分页）。整页导航刷新，页码文案随之更新。 -->
-        <div class="pager" th:if="${page != null and page.totalElements > 0}">
-            <!-- bug 20260901-469：翻页必须带上 phone 筛选 —— 不带的话点下一页筛选静默丢失、
-                 列表变回全量，同时导出链接也跟着失去筛选（正是提报里两份名单对不上的来源）。 -->
-            <a th:if="${page.hasPrevious()}"
-               th:href="@{/admin/users(page=${page.number - 1}, phone=${phone})}"
-               th:text="#{admin.audit.prev}">← 上一页</a>
-            <span th:text="#{admin.audit.page(${page.number + 1}, ${page.totalPages}, ${page.totalElements})}">分页</span>
-            <a th:if="${page.hasNext()}"
-               th:href="@{/admin/users(page=${page.number + 1}, phone=${phone})}"
-               th:text="#{admin.audit.next}">下一页 →</a>
+            <div th:fragment="user-table" id="users-rows">
+                <div th:replace="~{admin/fragments/users-list :: rows(false)}"></div>
+            </div>
+
+            <div th:fragment="user-drawer" class="drawer-title" th:text="#{admin.userdetail.title}">用户详情</div>
         </div>
+
+        <!--/* ?open=<userId> 深链兜底：admin-drawer.js 先按当前页找行，找不到就用这里给的 URL
+               （搜索态 / 翻过页之后那一行多半不在首屏，B1～B5 同一机制）。 */-->
+        <span hidden th:if="${open != null}" data-drawer-res="user"
+              th:attr="data-drawer-deeplink=@{/admin/users/{id}/drawer(id=${open})}"></span>
     </div>
 </div>
 </body>

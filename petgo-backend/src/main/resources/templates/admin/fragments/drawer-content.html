@@ -53,7 +53,7 @@
                 <div class="sum-label" th:text="#{admin.contentdetail.author}">作者</div>
                 <div class="sum-value rv-small">
                     <a th:if="${d.author() != null and !d.author().deleted()}" data-no-drawer
-                       th:href="@{'/admin/users/' + ${d.post().authorId()}}"
+                       th:href="@{/admin/users(open=${d.post().authorId()})}"
                        th:text="${d.author().nickname()} + ' (#' + ${d.post().authorId()} + ')'">昵称</a>
                     <span th:if="${d.author() != null and d.author().deleted()}" class="muted"
                           th:text="#{admin.contentdetail.deletedUser} + ' (#' + ${d.post().authorId()} + ')'">已注销</span>
@@ -194,7 +194,7 @@
     <div th:each="cm : ${d.comments()}" class="ct-comment">
         <p class="ct-comment-head">
             <a th:if="${!cm.authorDeleted() and cm.authorName() != null}" data-no-drawer
-               th:href="@{'/admin/users/' + ${cm.authorId()}}" th:text="${cm.authorName()}">评论人</a>
+               th:href="@{/admin/users(open=${cm.authorId()})}" th:text="${cm.authorName()}">评论人</a>
             <span th:if="${cm.authorDeleted() or cm.authorName() == null}" class="muted" th:text="#{admin.contentdetail.deletedUser}">已注销</span>
             <span class="muted rv-small" th:text="${@adminTime.wib(cm.createdAt())}">时间</span>
             <span class="badge badge-danger" th:if="${cm.status() != 'VISIBLE'}"
@@ -206,7 +206,7 @@
         <div th:each="r : ${cm.replies()}" class="ct-reply">
             <p class="ct-comment-head">
                 <a th:if="${!r.authorDeleted() and r.authorName() != null}" data-no-drawer
-                   th:href="@{'/admin/users/' + ${r.authorId()}}" th:text="${r.authorName()}">回复人</a>
+                   th:href="@{/admin/users(open=${r.authorId()})}" th:text="${r.authorName()}">回复人</a>
                 <span th:if="${r.authorDeleted() or r.authorName() == null}" class="muted" th:text="#{admin.contentdetail.deletedUser}">已注销</span>
                 <span class="muted rv-small" th:text="${@adminTime.wib(r.createdAt())}">时间</span>
                 <span class="badge badge-danger" th:if="${r.status() != 'VISIBLE'}"

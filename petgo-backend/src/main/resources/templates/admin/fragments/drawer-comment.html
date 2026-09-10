@@ -45,7 +45,7 @@
         <h3 th:text="#{admin.comments.col.author}">作者</h3>
         <p>
             <a th:if="${!c.authorDeleted and c.authorName != null}" data-no-drawer
-               th:href="@{'/admin/users/' + ${c.authorId}}" th:text="${c.authorName}">昵称</a>
+               th:href="@{/admin/users(open=${c.authorId})}" th:text="${c.authorName}">昵称</a>
             <span th:if="${c.authorDeleted or c.authorName == null}" class="muted" th:text="#{admin.contentdetail.deletedUser}">已注销</span>
             <span class="muted rv-small" th:text="'#' + ${c.authorId}">#1</span>
         </p>
