@@ -42,6 +42,9 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
     // 不必为两行测试辅助代码去包 TransactionTemplate。
     @Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbc;
+    /** 导出表头随界面语言（7.1 AC7）：断言用同一个 Messages 解析，避免把某一种语言的字面量钉进测试。 */
+    @Autowired
+    private com.tailtopia.shared.i18n.Messages msg;
 
     private long newPost(ContentType type, String text) {
         long author = newUser().getId(); // content_posts.author_id 有 FK→users
@@ -145,7 +148,13 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
         long actor = 828000L + SEQ.incrementAndGet();
         String csv = contentManage.exportCsv(actor, null, null, null, null, null, "oren", null);
 
-        assertThat(csv).startsWith("post_id,type,author_id,likes,views,viewers,created_at_wib,status,text");
+        // V1.3.0 Story 7.1 · AC7：导出走 AdminExportWriter，表头随界面语言（key 沿用列表页的 admin.content.col.*）。
+        assertThat(csv.lines().findFirst().orElse("")).isEqualTo(String.join(",",
+                msg.get("admin.v130.content.export.col.postId"), msg.get("admin.content.col.type"),
+                msg.get("admin.v130.content.export.col.authorId"), msg.get("admin.content.col.likes"),
+                msg.get("admin.content.col.views"), msg.get("admin.content.col.viewers"),
+                msg.get("admin.v130.content.export.col.createdWib"), msg.get("admin.content.col.status"),
+                msg.get("admin.content.col.preview")));
         assertThat(csv).contains(String.valueOf(keep));
         assertThat(csv).doesNotContain("tips merawat anjing")
                 .as("🔴 筛选条件没带进导出 ⇒ 导出的表与屏幕上看到的不是同一份");
@@ -221,7 +230,14 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
         String csv = contentManage.exportCsv(828100L + SEQ.incrementAndGet(), null, null,
                 today, today, null, null, "liked");
 
-        assertThat(csv).startsWith("post_id,type,author_id,likes_in_range,views,viewers,");
+        // 「按点赞时间」档：赞数列是窗口内的，表头必须跟着换，否则两份长得一样的表会被当成同一口径读。
+        // ⚠️ 整行比对而不是 contains：后者靠「窗口文案不以普通文案结尾」这种巧合成立，改一次文案就会红。
+        assertThat(csv.lines().findFirst().orElse("")).isEqualTo(String.join(",",
+                msg.get("admin.v130.content.export.col.postId"), msg.get("admin.content.col.type"),
+                msg.get("admin.v130.content.export.col.authorId"), msg.get("admin.content.col.likesInWindow"),
+                msg.get("admin.content.col.views"), msg.get("admin.content.col.viewers"),
+                msg.get("admin.v130.content.export.col.createdWib"), msg.get("admin.content.col.status"),
+                msg.get("admin.content.col.preview")));
         assertThat(csv).as("🔴 导出与屏幕口径不一致 ⇒ 两份表长得一样、数字对不上，"
                 + "运营不会想到是口径不同").contains(String.valueOf(p));
     }

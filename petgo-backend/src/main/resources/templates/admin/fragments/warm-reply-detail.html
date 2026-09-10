@@ -24,7 +24,7 @@
                 <span th:text="#{admin.v130.warmReplies.detail.post.author}">作者</span>
                 <span th:text="${d.postAuthorName}">作者</span> ·
                 <span th:text="#{admin.v130.comments.virtual.preview.visibleCount(${d.visibleCount})}">可见评论 N 条</span>
-                <a class="btn btn-neutral btn-sm" target="_blank" th:href="@{/admin/content/{id}(id=${d.postId})}"
+                <a class="btn btn-neutral btn-sm" target="_blank" th:href="@{/admin/content(open=${d.postId})}"
                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')"
                    th:text="#{admin.v130.warmReplies.detail.viewPost}">查看帖子 ↗</a>
             </p>

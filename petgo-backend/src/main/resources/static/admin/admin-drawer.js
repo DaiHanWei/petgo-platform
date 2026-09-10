@@ -6,6 +6,7 @@
 //   · 监听 admin:drawer-close（2.3a AdminHxEvents.DRAWER_CLOSE，服务端 HX-Trigger 带出；对象消失类动作才发）；
 //   · 抽屉内操作成功**不自动关**（UI 稿 10-6）；
 //   · ?open=<id> 页内深链（D-23：不是旧详情页 URL 的跳转规则）：DOMContentLoaded 找 tr[data-id=…] 自动 open；
+//     行不在当前页时退到页面提供的 [data-drawer-deeplink]（按 id 直取抽屉 URL，7.1 跨页深链）；
 //     打开 / 关闭同步 history.replaceState 的 open 参数（sync）。
 // 委托：tr[data-drawer-url] 点击（排除 a / button / input / label / select 内的点击）；[data-drawer-open] 按钮式入口（5.4 新建）。
 (function () {
@@ -19,6 +20,7 @@
         try {
             var url = new URL(window.location.href);
             if (state.rowEl && state.rowEl.dataset.id) { url.searchParams.set('open', state.rowEl.dataset.id); }
+            else if (state.keepOpenParam) { /* 跨页深链打开：地址栏上的 ?open= 原样留着，刷新还能回到同一条 */ }
             else { url.searchParams.delete('open'); }
             history.replaceState(history.state, '', url.toString());
         } catch (e) { /* 非浏览器环境 / 不支持 URL 时静默 */ }
@@ -32,6 +34,7 @@
         if (state.hideTimer) { clearTimeout(state.hideTimer); state.hideTimer = null; } // 关后 200ms 内再开：取消延迟隐藏
         state.res = res;
         state.rowEl = opts.rowEl || null;
+        state.keepOpenParam = !!opts.keepOpenParam;
         var body = d.querySelector('.drawer-body');
         if (typeof htmx !== 'undefined' && url) {
             htmx.ajax('GET', url, { target: body, swap: 'innerHTML' });
@@ -53,6 +56,7 @@
         state.hideTimer = setTimeout(function () { d.hidden = true; if (m) { m.hidden = true; } state.hideTimer = null; }, 200);
         var row = state.rowEl;
         state.rowEl = null;
+        state.keepOpenParam = false; // 关掉之后地址栏不该还挂着 ?open=
         sync();
         if (row && typeof row.focus === 'function') { row.setAttribute('tabindex', '-1'); row.focus(); }
     }
@@ -89,7 +93,12 @@
             var id = new URLSearchParams(window.location.search).get('open');
             if (!id) { return; }
             var tr = document.querySelector('tr[data-id="' + CSS.escape(id) + '"][data-drawer-url]');
-            if (tr) { open(tr.dataset.drawerUrl, { rowEl: tr }); }
-        } catch (e) { /* 忽略：id 不在当前页 */ }
+            if (tr) { open(tr.dataset.drawerUrl, { rowEl: tr }); return; }
+            // 🔴 行不在当前页（跨页深链：从复核队列 / 工单点「查看内容」过来的帖子多半不在首屏那一页）。
+            //    页面可以给一个按 id 直取抽屉的兜底入口；没有它就只能静默什么都不发生 —— 那正是删掉整页详情后
+            //    最容易留下的坑（V1.3.0 Story 7.1 复审 C6）。
+            var fb = document.querySelector('[data-drawer-deeplink]');
+            if (fb) { open(fb.dataset.drawerDeeplink, { res: fb.dataset.drawerRes, keepOpenParam: true }); }
+        } catch (e) { /* 忽略：id 非法 / 环境不支持 */ }
     });
 })();

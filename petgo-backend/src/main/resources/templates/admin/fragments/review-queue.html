@@ -51,7 +51,7 @@
             <!-- bug 480：内容类工单直达内容详情（用帖 id）；权限与 AdminContentManageController.DETAIL_AUTH 一致 -->
             <a th:if="${r.row.contentRefId() != null and r.tab.name() != 'PLACE'}" class="q-link" target="_blank"
                sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')"
-               th:href="@{'/admin/content/' + ${r.row.contentRefId()}}" th:text="#{admin.review.viewContent}" data-no-drawer>查看内容</a>
+               th:href="@{/admin/content(open=${r.row.contentRefId()})}" th:text="#{admin.review.viewContent}" data-no-drawer>查看内容</a>
             <!--/* 场所举报：content_ref = place_id，直达 B6 场所管理（复审 #1：不能链到同号帖子）；门控 = AdminPlaceController.VIEW_AUTH */-->
             <a th:if="${r.tab.name() == 'PLACE'}" class="q-link" target="_blank"
                sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('place.manage')"

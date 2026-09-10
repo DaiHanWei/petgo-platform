@@ -81,6 +81,18 @@ public class AdminThrottleController {
             @RequestParam(value = "reason", required = false) String reason,
             @RequestParam(value = "back", required = false) String back,
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        // 🛡 粒度缺失必须**显式报错**，不能落进下面的 else 分支。
+        //    B1 抽屉（Story 7.1）是第一处把 scope 做成可选下拉的地方：漏选时浏览器发的是空串，
+        //    Spring 的枚举转换器对空串返回 null（参数存在，required 不触发），
+        //    而 `scope == POST ? … : …` 会把 null 当成 ACCOUNT —— 漏选一次就把**整个账号**降权，
+        //    且界面上看不出降错了对象。表单的 required 只挡浏览器，挡不住脚本与重放。
+        if (scope == null) {
+            if (hx.isHtmx()) {
+                throw AppException.validation("请选择限流粒度").code("admin.err.throttle.scopeMissing");
+            }
+            flash.addFlashAttribute("error", msg.get("admin.err.throttle.scopeMissing"));
+            return redirect(back);
+        }
         Long resolved = targetId != null ? targetId
                 : (scope == ThrottleScope.POST ? postTargetId : accountTargetId);
         if (resolved == null) {
@@ -99,7 +111,7 @@ public class AdminThrottleController {
             } else {
                 service.throttleAccount(resolved, duration, now, adminId, reportId, reason);
             }
-            return refreshed(msg.get("admin.flash.throttle.applied"), model, response);
+            return refreshed(msg.get("admin.flash.throttle.applied"), back, model, response);
         }
         try {
             if (scope == ThrottleScope.POST) {
@@ -144,16 +156,29 @@ public class AdminThrottleController {
                 ? msg.get("admin.flash.throttle.lifted", lifted)
                 : msg.get("admin.flash.throttle.liftedWithStale", lifted, stale);
         if (hx.isHtmx()) {
-            return refreshed(notice, model, response);
+            return refreshed(notice, back, model, response);
         }
         flash.addFlashAttribute("notice", notice);
         return redirect(back);
     }
 
-    /** htmx 成功：toast + data-refresh-detail（停留本条，页内 JS 重拉右栏）+ HX-Trigger 刷角标。 */
-    private static String refreshed(String message, Model model, HttpServletResponse response) {
+    /**
+     * htmx 成功：toast + data-refresh-detail（停留本条，页内 JS 重拉右栏）+ HX-Trigger 刷角标。
+     *
+     * <p>V1.3.0 Story 7.1：B1 内容管理的限流卡也打到这两个端点。参数零变更是硬约束，
+     * 所以靠它们**既有的** {@code back} 值分辨调用方：{@code content} 时多发一个
+     * {@link AdminContentManageController#CONTENT_REFRESH}，内容页的抽屉与列表各自重拉
+     * （响应体照旧只是 toast，内容页那两个表单 swap 到隐藏 sink）。
+     */
+    private static String refreshed(String message, String back, Model model, HttpServletResponse response) {
         model.addAttribute("message", message);
         AdminFragmentResponses.triggerBadgeRefresh(response);
+        if ("content".equals(back)) {
+            // 限流改的是抽屉里的限流卡 + 列表的限流标记与摘要条 ⇒ 两个都要重拉。
+            AdminFragmentResponses.trigger(response,
+                    com.tailtopia.admin.moderation.web.AdminContentManageController.LIST_REFRESH,
+                    com.tailtopia.admin.moderation.web.AdminContentManageController.DRAWER_REFRESH);
+        }
         return "admin/fragments/tickets-done :: refresh";
     }
 

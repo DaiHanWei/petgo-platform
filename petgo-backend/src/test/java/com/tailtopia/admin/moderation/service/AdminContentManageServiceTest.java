@@ -50,7 +50,11 @@ class AdminContentManageServiceTest {
                 mock(com.tailtopia.auth.repository.UserRepository.class),
                 mock(com.tailtopia.content.repository.ContentLikeRepository.class),
                 mock(com.tailtopia.admin.virtual.service.AdminPublishIdentityService.class),
-                mock(com.tailtopia.content.service.ContentViewStatsService.class));
+                mock(com.tailtopia.content.service.ContentViewStatsService.class),
+                // V1.3.0 Story 7.1：摘要条聚合 / 作者投影 / 导出表头 —— 本类只验筛选参数透传，给 mock。
+                mock(org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate.class),
+                mock(com.tailtopia.auth.service.AccountQueryService.class),
+                mock(com.tailtopia.shared.i18n.Messages.class));
     }
 
     private void stubSummary(long postId, long authorId, boolean deleted) {

@@ -28,7 +28,7 @@
                 <div class="rv-images">
                     <img th:each="u : ${d.post.imageUrls}" th:src="${u}" alt="" loading="lazy" data-lightbox class="rv-img"/>
                 </div>
-                <a th:if="${d.contentRefId != null}" target="_blank" th:href="@{'/admin/content/' + ${d.contentRefId}}"
+                <a th:if="${d.contentRefId != null}" target="_blank" th:href="@{/admin/content(open=${d.contentRefId})}"
                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')"
                    th:text="#{admin.review.viewContent}">查看内容</a>
             </div>

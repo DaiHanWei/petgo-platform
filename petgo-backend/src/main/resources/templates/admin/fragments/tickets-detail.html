@@ -76,7 +76,7 @@
                 <img th:if="${!#lists.isEmpty(s.imageUrls)}" th:src="${s.imageUrls[0]}" alt="" data-lightbox loading="lazy"/>
                 <p class="tk-sample-text" th:text="${s.textPreview}">…</p>
                 <span class="muted" th:text="${@adminTime.wib(s.createdAt)}">时间</span>
-                <a target="_blank" th:href="@{'/admin/content/' + ${s.id}}"
+                <a target="_blank" th:href="@{/admin/content(open=${s.id})}"
                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')"
                    th:text="#{admin.review.viewContent}">查看内容</a>
             </div>

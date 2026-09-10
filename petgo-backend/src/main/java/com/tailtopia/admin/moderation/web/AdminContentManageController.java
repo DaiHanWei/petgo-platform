@@ -45,6 +45,23 @@ public class AdminContentManageController {
                     + " or hasAuthority('content.takedown')"
                     + " or hasAuthority('content.manual_review')";
 
+    /**
+     * 内容页局部刷新事件（V1.3.0 Story 7.1）——<b>列表</b>与<b>抽屉</b>分两个，不能合成一个。
+     *
+     * <p>本页三个内容端点处置成功时回的就是抽屉本体（{@code afterAction}），只需要让**列表**重拉
+     * （行 oob 只换那一行：状态变了但筛选口径下它可能整行都不该在了，摘要条五格也全是旧值）。
+     * 若把抽屉刷新混在同一个事件里，抽屉会在刚渲染完后又被重拉一遍 —— 多一次请求、闪一下、
+     * 还丢掉响应里刚带回来的状态。
+     *
+     * <p>限流两个端点（{@code /admin/throttles}、{@code /admin/throttles/lift}）与 A2 工单页共用控制器，
+     * story 要求**参数零变更** ⇒ 用它们既有的 {@code back=content} 分辨调用方，两个事件都发：
+     * 它们的响应体只是 toast，抽屉与列表都得自己去重拉。
+     */
+    public static final String LIST_REFRESH = "admin:content-list-refresh";
+
+    /** 见 {@link #LIST_REFRESH}：只有限流两个端点会发（本页自己的处置响应里已经带回了抽屉）。 */
+    public static final String DRAWER_REFRESH = "admin:content-drawer-refresh";
+
     private final AdminContentManageService contentManage;
     private final com.tailtopia.admin.moderation.service.AdminContentDetailService contentDetail;
     private final com.tailtopia.admin.throttle.service.AdminThrottleReadService throttleRead;
@@ -63,20 +80,26 @@ public class AdminContentManageController {
     }
 
     /**
-     * 内容详情页（2026-09-02，只读）：与 App 详情同一批元素 + 后台状态。
-     * 入口：内容管理列表「查看详情」、人工复核内容类工单「查看内容」。
-     * 已下架/审核挂起/私密内容照常可开（复核场景恰恰要看这些），页面顶部标注状态。
+     * 内容详情抽屉（V1.3.0 Story 7.1 · AC4）：吸收原 {@code /admin/content/{postId}} 整页详情
+     * （D-23：整页路由**已删且不做跳转**；外部入口一律改成 {@code /admin/content?open=<id>} 深链）。
+     *
+     * <p>正文全文 / 大图 / 数据卡 / 物种归属 / 限流 / 评论区，字段与原详情页一个不少；
+     * 处置动作在抽屉操作条上，端点与参数仍是 4.2 / 14.1 / 17.2 那几个（本 story 只加 htmx 返回分支）。
+     * 已下架 / 审核挂起 / 私密内容照常可开（复核场景恰恰要看这些），区块里标注状态。
+     * 非 htmx 直达 → 回列表并自动开该抽屉。
      */
-    @GetMapping("/admin/content/{postId}")
+    @GetMapping("/admin/content/{postId}/drawer")
     @PreAuthorize(DETAIL_AUTH)
-    public String contentDetail(@PathVariable long postId,
+    public String drawer(@PathVariable long postId,
             @RequestParam(value = "commentPage", required = false, defaultValue = "0")
             int commentPage,
-            @RequestParam(value = "expand", required = false) Long expand, Model model) {
-        model.addAttribute("active", "content");
-        model.addAttribute("d", contentDetail.detail(postId, commentPage, expand));
-        model.addAttribute("expand", expand);
-        return "admin/content-detail";
+            @RequestParam(value = "expand", required = false) Long expand,
+            com.tailtopia.admin.shared.web.HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            return "redirect:/admin/content?open=" + postId;
+        }
+        populateDrawer(postId, commentPage, expand, model);
+        return "admin/fragments/drawer-content :: drawer";
     }
 
     @GetMapping("/admin/content")
@@ -99,8 +122,13 @@ public class AdminContentManageController {
             // 点赞列是**窗口内**的赞数。两者回答的是两个不同的问题，见服务层注释。
             @RequestParam(value = "dateBasis", required = false, defaultValue = "published")
             String dateBasis,
+            // ?open=<postId> 深链（D-23：A1 复核队列 / A2 工单 / 暖贴跟进的「查看内容」都落这里）。
+            // ⚠️ 目标帖十有八九不在首页 20 行里，光靠 admin-drawer.js 按行找会静默什么都不发生 ——
+            //    所以把 id 原样带进模板，渲染一个按 id 直取抽屉的兜底入口。
+            @RequestParam(value = "open", required = false) Long open,
             @RequestHeader(value = "HX-Request", required = false) String hxRequest, Model model) {
         model.addAttribute("active", "content");
+        model.addAttribute("open", open);
         model.addAttribute("dateBasis", dateBasis);
         model.addAttribute("type", type);
         model.addAttribute("authorId", authorId);
@@ -123,6 +151,8 @@ public class AdminContentManageController {
         //    这一档是做互动周报用的，物种归属不是它要回答的问题。
         java.util.List<com.tailtopia.admin.moderation.dto.ContentSpeciesRow> items;
         java.util.Map<Long, Long> likeCounts;
+        // 「数据库那一页取满了没有」——物种过滤发生在应用层，判有无下一页只能用过滤前的行数。
+        boolean dbPageFull = false;
         if ("liked".equals(dateBasis)) {
             var win = contentManage.browseByLikeWindow(type, authorId, from, to, status, q, page);
             // ⚠️ species 传 NONE 而不是 null：模板里 speciesLabel() 会解引用它。
@@ -138,8 +168,10 @@ public class AdminContentManageController {
             model.addAttribute("sort", null);
             model.addAttribute("sortDisabled", true);
         } else {
-            items = contentManage.browseWithSpecies(type, authorId, from, to,
+            var pageResult = contentManage.browseWithSpeciesPage(type, authorId, from, to,
                     status, q, sort, page, species, speciesSource);
+            items = pageResult.rows();
+            dbPageFull = pageResult.dbPageFull();
             likeCounts = contentManage.likeCounts(
                     items.stream().map(r -> r.content().id()).toList());
         }
@@ -158,7 +190,62 @@ public class AdminContentManageController {
         // 给不出「窗口内的浏览」，所以「按点赞时间」档也照给累计值，模板里注明）。
         model.addAttribute("viewStats", contentManage.viewStats(
                 items.stream().map(r -> r.content().id()).toList()));
-        return hxRequest != null ? "admin/content :: rows" : "admin/content";
+        // AC6：作者注销 → 列表与抽屉都置灰 + #id。整页一次批量取（同上三条同一纪律）。
+        model.addAttribute("authors", contentManage.authorViews(
+                items.stream().map(r -> r.content().authorId()).toList()));
+        // AC2：摘要条五格随当前筛选联动（单条聚合查询）。
+        var summary = contentManage.summary(type, authorId, from, to, status, q, dateBasis);
+        model.addAttribute("summary", summary);
+        // 分页：默认口径用摘要条的总数判；带物种筛选时用「数据库那一页取满了没有」（过滤前的行数，
+        // 否则筛出 3 行就再也翻不到第 21 条）；「按点赞时间」档的行来自内存池，按本页是否装满判。
+        boolean speciesFiltered = (species != null && !species.isBlank())
+                || (speciesSource != null && !speciesSource.isBlank());
+        model.addAttribute("speciesFiltered", speciesFiltered);
+        boolean hasNext;
+        if ("liked".equals(dateBasis)) {
+            hasNext = items.size() >= AdminContentManageService.PAGE_SIZE;
+        } else if (speciesFiltered) {
+            hasNext = dbPageFull;
+        } else {
+            hasNext = (long) (Math.max(page, 0) + 1) * AdminContentManageService.PAGE_SIZE
+                    < summary.total();
+        }
+        model.addAttribute("hasNext", hasNext);
+        return hxRequest != null ? "admin/fragments/content-list :: rows(true)" : "admin/content";
+    }
+
+    /** 抽屉模型：详情聚合 + 物种归属 + 限流态；顺带备齐 oob 行片段要用的四张表。 */
+    private void populateDrawer(long postId, int commentPage, Long expand, Model model) {
+        model.addAttribute("active", "content");
+        model.addAttribute("d", contentDetail.detail(postId, commentPage, expand));
+        model.addAttribute("expand", expand);
+        var sp = contentManage.speciesRow(postId);
+        model.addAttribute("sp", sp);
+        model.addAttribute("speciesOptions", com.tailtopia.content.species.ContentSpecies.ALL);
+        Long authorId = sp.content().authorId();
+        var throttles = throttleRead.forPosts(java.util.List.of(postId),
+                authorId == null ? java.util.Map.of() : java.util.Map.of(postId, authorId),
+                java.time.Instant.now());
+        model.addAttribute("throttle", throttles.get(postId));
+        // 以下四项供 afterAction 里的 oob 列表行复用（与整页列表同一片段、同一口径）。
+        model.addAttribute("throttles", throttles);
+        model.addAttribute("likeCounts", contentManage.likeCounts(java.util.List.of(postId)));
+        model.addAttribute("viewStats", contentManage.viewStats(java.util.List.of(postId)));
+        model.addAttribute("authors", contentManage.authorViews(
+                authorId == null ? java.util.List.of() : java.util.List.of(authorId)));
+    }
+
+    /**
+     * 抽屉内处置成功的统一响应（AC5）：抽屉重渲染 + oob 列表行 + toast；
+     * 失败交给 {@code AdminBusinessExceptionAdvice} 出 422 / 403 行内 err（不在这里 try/catch）。
+     */
+    private String afterAction(long postId, String toast, Model model,
+            jakarta.servlet.http.HttpServletResponse response) {
+        populateDrawer(postId, 0, null, model);
+        model.addAttribute("toast", toast);
+        // 行 oob 只换那一行 —— 但状态变了之后它在当前筛选下可能整行都不该在，摘要条五格也全是旧值。
+        com.tailtopia.admin.shared.web.AdminFragmentResponses.trigger(response, LIST_REFRESH);
+        return "admin/fragments/drawer-content :: afterAction";
     }
 
     /**
@@ -208,7 +295,15 @@ public class AdminContentManageController {
     public String setSpecies(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam("postId") java.util.List<Long> postIds,
             @RequestParam(value = "species", required = false) String species,
-            RedirectAttributes flash) {
+            com.tailtopia.admin.shared.web.HxRequest hx, Model model,
+            jakarta.servlet.http.HttpServletResponse response, RedirectAttributes flash) {
+        // Story 7.1：抽屉里的物种卡是单条提交 —— 成功回抽屉 + oob 行；批量入口（非 htmx）维持 PRG。
+        if (hx.isHtmx() && !postIds.isEmpty()) {
+            int changed = contentManage.setSpeciesOverride(postIds, species, admin.getAdminAccountId());
+            return afterAction(postIds.get(0), msg.get(changed < postIds.size()
+                    ? "admin.flash.content.speciesUpdatedPartial"
+                    : "admin.flash.content.speciesUpdated", changed), model, response);
+        }
         try {
             int changed = contentManage.setSpeciesOverride(postIds, species,
                     admin.getAdminAccountId());
@@ -225,45 +320,33 @@ public class AdminContentManageController {
     @PreAuthorize(BROWSE_AUTH)
     public String takedown(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long postId,
             @RequestParam("reason") String reason,
-            @RequestHeader(value = "HX-Request", required = false) String hxRequest,
-            Model model, RedirectAttributes flash) {
+            com.tailtopia.admin.shared.web.HxRequest hx, Model model,
+            jakarta.servlet.http.HttpServletResponse response, RedirectAttributes flash) {
+        // htmx（抽屉操作条）：成功回抽屉 + oob 行 + toast；原因为空之类的业务错由 advice 出 422 行内 err。
+        if (hx.isHtmx()) {
+            contentManage.takedown(postId, reason, admin.getAdminAccountId());
+            return afterAction(postId, msg.get("admin.flash.content.takenDown"), model, response);
+        }
         try {
             contentManage.takedown(postId, reason, admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.content.takenDown"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
         }
-        // HTMX：只回该行片段（原地替换、不整页刷新、不回顶）；非 HTMX 退回 PRG 整页。
-        return rowOrRedirect(hxRequest, postId, model);
+        return "redirect:/admin/content";
     }
 
     @PostMapping("/admin/content/{postId}/restore")
     @PreAuthorize(RESTORE_AUTH)
     public String restore(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long postId,
-            @RequestHeader(value = "HX-Request", required = false) String hxRequest,
-            Model model, RedirectAttributes flash) {
+            com.tailtopia.admin.shared.web.HxRequest hx, Model model,
+            jakarta.servlet.http.HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            contentManage.restore(postId, admin.getAdminAccountId());
+            return afterAction(postId, msg.get("admin.flash.content.restored"), model, response);
+        }
         contentManage.restore(postId, admin.getAdminAccountId());
         flash.addFlashAttribute("notice", msg.get("admin.flash.content.restored"));
-        return rowOrRedirect(hxRequest, postId, model);
-    }
-
-    /** HTMX 请求 → 回单行片段（原地替换当前行）；否则 PRG 整页重定向。 */
-    private String rowOrRedirect(String hxRequest, long postId, Model model) {
-        if (hxRequest != null) {
-            model.addAttribute("c", contentManage.row(postId));
-            // ⚠️ 点赞数**这一行照样给**（与下面的物种两列不同）：下架/恢复不改变赞数，
-            //    但若这里不给，那一格会从「3」跳成「—」，看起来像数据丢了。
-            //    一行一次 count 很便宜，不值得为省它制造一个假象。
-            model.addAttribute("likeCounts", contentManage.likeCounts(java.util.List.of(postId)));
-            // 浏览两列同理：下架/恢复不改变浏览数，但不给这一行就会从数字跳成"—"。
-            model.addAttribute("viewStats", contentManage.viewStats(java.util.List.of(postId)));
-            // ⚠️ 这条 HTMX 路径只刷一行、**不放 `sp`**（物种推导要查作者+档案，
-            //    整页那次已经批量算过；为一行再算一次不值当）。
-            //    片段里 `sp` 未定义 ⇒ 物种两列渲染成 '—'。
-            //    🔴 这是刻意的取舍：下架/恢复之后那一行的物种并没有变化，
-            //    整页刷新时会显示正确值。
-            return "admin/content :: row";
-        }
         return "redirect:/admin/content";
     }
 }

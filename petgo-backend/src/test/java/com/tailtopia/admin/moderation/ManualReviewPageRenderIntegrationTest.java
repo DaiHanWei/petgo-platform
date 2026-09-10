@@ -65,7 +65,7 @@ class ManualReviewPageRenderIntegrationTest extends ApiIntegrationTest {
                 + "VALUES (?, 'CONTENT_POST', now(), 'PENDING', 'P0', now(), now())", post.getId());
 
         String html = renderPage(author.getId());
-        assertThat(html).contains("/admin/content/" + post.getId());
+        assertThat(html).contains("/admin/content?open=" + post.getId()); // 7.1：整页详情路由已删，入口改列表深链（D-23）
     }
 
     /** 480：头像审核渲染头像图本身，而不是一串 URL 文字。 */
@@ -81,7 +81,7 @@ class ManualReviewPageRenderIntegrationTest extends ApiIntegrationTest {
         String html = renderPage(target.getId());
         assertThat(html).contains("src=\"" + url + "\"");
         // 头像工单没有「查看内容」链接（contentRefId 为空）。
-        assertThat(html).doesNotContain("/admin/content/" + url);
+        assertThat(html).doesNotContain("/admin/content?open=" + url);
     }
 
     /** 481：时间列是 WIB 格式（UTC+7 换算 + 带 WIB 字样），不再是原始 ISO UTC。 */

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  B1 内容详情抽屉（V1.3.0 Story 7.1 AC4～AC6，480px 抽屉体 res=content；吸收原 content-detail.html 整页，D-23 整页路由已删）。
+  六区：① 正文全文 + 全部图片（点开大图）② 数据卡（作者 / 发布时间 / 点赞 / 评论 / 浏览次数 / 浏览人数）
+       ③ 物种归属卡（当前物种 + 推导来源 + 覆写下拉；真实用户内容只读）④ 限流卡（当前限流态 + 粒度×期限面板 + 解除）
+       ⑤ 评论区（一级 20 条/页，楼中楼前 3 条可展开，已删/已下架照列并标注）⑥ 底部操作条（下架 / 恢复）
+  处置端点与参数一律不变：POST /admin/content/{id}/takedown · /restore · /admin/content/species · /admin/throttles · /admin/throttles/lift。
+  ⚠️ 所有 hx 表单的 hx-target 一律指 #content-drawer-err（而不是 .drawer-body）：htmx 只有在目标元素**带 id** 时
+  才发 HX-Target 头，而 AdminBusinessExceptionAdvice 正是按这个头 HX-Retarget 的 —— 指 .drawer-body（无 id）会让
+  422 / 403 落到表格下方运营看不见的 #admin-inline-error 去。成功响应因此把抽屉体、列表行、toast 全部走 oob，
+  主目标（err 槽）顺带被清空（与 6.5 账号抽屉同一范式）。
+  内容侧三个端点 htmx 成功回 :: afterAction；限流两个端点是共用控制器，回它自己的 toast 片段
+  + HX-Trigger admin:content-list-refresh / admin:content-drawer-refresh → 列表与本抽屉各自重拉（参数零变更的代价最小解）。
+  d = AdminContentDetailService.Detail；sp = ContentSpeciesRow；throttle = ThrottleStatusRow（可空）。
+*/-->
+<body>
+<div th:fragment="drawer" class="ct-drawer" th:attr="data-post-id=${d.post().id()}"
+     th:with="canTakedown=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''content.proactive_takedown'')')},
+              canRestore=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''content.restore'')')},
+              canThrottle=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''content.throttle_manage'')')},
+              underReview=${d.post().status() != null and d.post().status().name() == 'UNDER_REVIEW'}">
+    <!--/* 处置成功后本抽屉按自身 URL 重拉（限流两个端点走 HX-Trigger；内容三个端点直接回抽屉 fragment） */-->
+    <span hidden data-content-drawer-refresh th:attr="hx-get=@{/admin/content/{id}/drawer(id=${d.post().id()})}"
+          hx-trigger="admin:content-drawer-refresh from:body" hx-target="#content-drawer .drawer-body" hx-swap="innerHTML"></span>
+    <div id="content-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+
+    <!--/* ① 正文全文（列表是截断预览，这里不截断）+ 大图 */-->
+    <section class="card card-full ct-card">
+        <h2>
+            <span th:text="#{'admin.contentType.' + ${d.post().type()}}">Daily</span>
+            <span class="muted">#<span th:text="${d.post().id()}">1</span></span>
+            <span class="badge badge-danger" th:if="${d.post().deleted()}" th:text="#{admin.contentdetail.status.deleted}">已下架</span>
+            <span class="badge badge-warn" th:if="${!d.post().deleted() and underReview}" th:text="#{admin.contentdetail.status.underReview}">审核挂起</span>
+            <span class="badge badge-ok" th:if="${!d.post().deleted() and !underReview}" th:text="#{admin.contentdetail.status.online}">已发布</span>
+            <span class="badge badge-muted"
+                  th:text="${d.post().visibility() != null and d.post().visibility().name() == 'PRIVATE'}
+                           ? #{admin.contentdetail.visibility.private} : #{admin.contentdetail.visibility.public}">公开</span>
+            <!--/* 装饰标签（当前生效中的）：后台看到的名字 = 用户在胶囊上看到的字 */-->
+            <span class="badge badge-muted" th:each="t : ${d.tags()}" th:text="${t.name()}">标签</span>
+        </h2>
+        <div th:if="${d.post().text() != null}" class="pl-desc" th:text="${d.post().text()}">正文</div>
+        <p class="muted" th:if="${d.post().text() == null}" th:text="#{admin.contentdetail.noText}">（无文字）</p>
+        <div class="rv-images" th:if="${d.post().imageUrls() != null and !#lists.isEmpty(d.post().imageUrls())}">
+            <img th:each="img : ${d.post().imageUrls()}" th:src="${img}" alt="" loading="lazy" data-lightbox class="rv-img"/>
+        </div>
+    </section>
+
+    <!--/* ② 数据卡：字段与原整页详情一个不少 */-->
+    <section class="card card-full ct-card">
+        <div class="sum pl-info">
+            <div class="sum-item">
+                <div class="sum-label" th:text="#{admin.contentdetail.author}">作者</div>
+                <div class="sum-value rv-small">
+                    <a th:if="${d.author() != null and !d.author().deleted()}" data-no-drawer
+                       th:href="@{'/admin/users/' + ${d.post().authorId()}}"
+                       th:text="${d.author().nickname()} + ' (#' + ${d.post().authorId()} + ')'">昵称</a>
+                    <span th:if="${d.author() != null and d.author().deleted()}" class="muted"
+                          th:text="#{admin.contentdetail.deletedUser} + ' (#' + ${d.post().authorId()} + ')'">已注销</span>
+                    <span th:if="${d.author() == null}" class="muted">—</span>
+                </div>
+            </div>
+            <div class="sum-item">
+                <div class="sum-label" th:text="#{admin.contentdetail.createdAt}">发布时间</div>
+                <div class="sum-value rv-small" th:text="${@adminTime.wib(d.post().createdAt())}">-</div>
+            </div>
+            <div class="sum-item">
+                <div class="sum-label" th:text="#{admin.content.col.likes}">点赞数</div>
+                <div class="sum-value" th:text="${d.likeCount()}">0</div>
+            </div>
+            <div class="sum-item">
+                <div class="sum-label" th:text="#{admin.content.col.comments}">评论数</div>
+                <div class="sum-value" th:text="${d.commentCount()}">0</div>
+            </div>
+            <div class="sum-item">
+                <div class="sum-label" th:title="#{admin.content.col.viewsHint}" th:text="#{admin.content.col.views}">浏览次数</div>
+                <div class="sum-value" th:text="${d.viewStat() != null ? d.viewStat().views() : 0}">0</div>
+            </div>
+            <div class="sum-item">
+                <div class="sum-label" th:title="#{admin.content.col.viewsHint}" th:text="#{admin.content.col.viewers}">浏览人数</div>
+                <div class="sum-value" th:text="${d.viewStat() != null ? d.viewStat().viewers() : 0}">0</div>
+            </div>
+        </div>
+    </section>
+
+    <!--/* ③ 物种归属（V1.1.6 Story 14.1 AC5）：存量种子内容唯一的物种修正入口；
+           🛡 真实用户内容只读 —— 服务层权威校验，界面不给控件只是体验 */-->
+    <section class="card card-full ct-card" data-section="content-species">
+        <h3 th:text="#{admin.species.col.value}">物种</h3>
+        <p>
+            <span class="badge badge-muted" th:text="${sp.speciesLabel()}">CAT</span>
+            <span class="muted rv-small"><span th:text="#{admin.species.col.source}">推导来源</span>
+                <span th:text="${sp.source()}">NONE</span></span>
+        </p>
+        <form th:if="${sp.editable() and canTakedown}" data-autosubmit th:attr="hx-post=@{/admin/content/species}"
+              hx-target="#content-drawer-err" hx-swap="innerHTML">
+            <input type="hidden" name="postId" th:value="${d.post().id()}"/>
+            <select name="species" class="sel">
+                <option value="" th:text="#{admin.species.clear}">（清除覆写）</option>
+                <option th:each="opt : ${speciesOptions}" th:value="${opt}" th:text="${opt}"
+                        th:selected="${d.post().speciesOverride() == opt}">GENERAL</option>
+            </select>
+        </form>
+        <p class="hint" th:unless="${sp.editable()}" th:text="#{admin.v130.content.species.readonly}">
+            真实用户内容的物种由作者的宠物档案决定，运营不做手工干预。</p>
+        <p class="hint" th:if="${sp.editable() and !canTakedown}"
+           th:text="#{admin.v130.err.forbidden(#{perm.content.proactive_takedown})}">需要「主动下架」权限</p>
+    </section>
+
+    <!--/* ④ 限流（V1.1.6 Story 17.2）：标记只需 throttle_view，面板需 throttle_manage */-->
+    <section class="card card-full ct-card" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_view')"
+             data-section="content-throttle">
+        <h3 th:text="#{admin.throttle.col}">限流状态</h3>
+        <p>
+            <span th:if="${throttle == null}" class="muted" th:text="#{admin.v130.content.throttle.none}">未限流</span>
+            <span th:if="${throttle != null}" class="badge badge-warn"
+                  th:text="${throttle.scope().name() == 'ACCOUNT'} ? #{admin.throttle.badge.account} : #{admin.throttle.badge.post}">限流中</span>
+            <span th:if="${throttle != null}" class="muted rv-small"
+                  th:text="${throttle.permanent()} ? #{admin.throttle.permanent} : ${@adminTime.wib(throttle.expiresAt())}">永久</span>
+        </p>
+        <!--/* 🔴 Story 17.2 AC2：必须明说这不是下架，否则运营会向举报人回复「已处理」而内容其实还在 */-->
+        <p class="hint" data-notice="throttle-not-takedown" th:utext="#{admin.throttle.notTakedown}">限流不是下架。</p>
+        <!--/* ⚠️ AC4：非 ALL Tab 无处施加（OQ-B6） */-->
+        <p class="hint" data-notice="throttle-all-tab-only" th:text="#{admin.throttle.allTabOnly}">限流只作用于首页推荐（ALL）。</p>
+
+        <th:block th:if="${canThrottle}">
+            <!--/* 粒度与期限都显式选，没有默认值 ——「永久」不该是漏选时的落点。
+                   ⚠️ 两种粒度指向不同的 id（帖 id / 作者 id）：用 postTargetId / accountTargetId 两个既有参数分别带，
+                      绝不复用同一个 name 赌浏览器的覆盖顺序（会把作者 id 当帖 id 限流，降错对象且没人会发现）。 */-->
+            <form class="ct-throttle-form" th:unless="${d.post().deleted()}" th:attr="hx-post=@{/admin/throttles}"
+                  hx-target="#content-drawer-err" hx-swap="innerHTML">
+                <input type="hidden" name="postTargetId" th:value="${d.post().id()}"/>
+                <input type="hidden" name="accountTargetId" th:value="${d.post().authorId()}"/>
+                <input type="hidden" name="back" value="content"/>
+                <label class="field"><span th:text="#{admin.throttle.scope}">粒度</span>
+                    <select name="scope" class="sel" required>
+                        <option value="" disabled selected th:text="#{admin.throttle.scope.pick}">选粒度</option>
+                        <option value="POST" th:text="#{admin.throttle.scope.post}">仅本条</option>
+                        <option value="ACCOUNT" th:disabled="${d.post().authorId() == null}" th:text="#{admin.throttle.scope.account}">该账号全部</option>
+                    </select></label>
+                <label class="field"><span th:text="#{admin.throttle.duration}">期限</span>
+                    <select name="duration" class="sel" required>
+                        <option value="" disabled selected th:text="#{admin.throttle.duration.pick}">选期限</option>
+                        <option value="DAYS_7" th:text="#{admin.throttle.duration.d7}">7 天</option>
+                        <option value="DAYS_30" th:text="#{admin.throttle.duration.d30}">30 天</option>
+                        <option value="PERMANENT" th:text="#{admin.throttle.duration.perm}">永久</option>
+                    </select></label>
+                <button type="submit" class="btn btn-warn btn-sm" th:text="#{admin.throttle.apply}">限流曝光</button>
+            </form>
+            <p class="hint" th:if="${d.post().deleted()}" th:text="#{admin.v130.content.throttle.deletedNote}">
+                已下架内容不再降权，限流面板不适用。</p>
+            <form class="inline" th:if="${throttle != null}" th:attr="hx-post=@{/admin/throttles/lift}"
+                  hx-target="#content-drawer-err" hx-swap="innerHTML">
+                <input type="hidden" name="throttleIds" th:value="${throttle.throttleId()}"/>
+                <input type="hidden" name="back" value="content"/>
+                <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.throttle.lift}">解除</button>
+            </form>
+        </th:block>
+        <p class="hint" th:unless="${canThrottle}" th:text="#{admin.v130.err.forbidden(#{perm.content.throttle_manage})}">需要「执行限流与解除」权限</p>
+    </section>
+
+    <!--/* ⑤ 评论区：一级 20 条/页，楼中楼收起显示前 3 条；已删/已下架评论照列并标注（后台全量视角） */-->
+    <section class="card card-full ct-card" th:replace="~{admin/fragments/drawer-content :: comments}"></section>
+
+    <!--/* ⑥ 底部操作条 */-->
+    <section class="pl-actions sticky-footer" data-content-actions>
+        <th:block th:unless="${d.post().deleted()}">
+            <form class="ct-takedown-form" th:if="${canTakedown and !underReview}" th:attr="hx-post=@{/admin/content/{id}/takedown(id=${d.post().id()})},data-confirm=#{admin.v130.content.confirm.takedown},data-confirm-args=${d.post().id()}"
+                  hx-target="#content-drawer-err" hx-swap="innerHTML">
+                <input type="text" name="reason" class="inp" required th:placeholder="#{admin.content.reason}" style="width:180px"/>
+                <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.content.takedown}">下架</button>
+            </form>
+            <!--/* AC6：审核中的帖子走 A1 送审队列，不在这里下架 */-->
+            <p class="hint" th:if="${canTakedown and underReview}" th:text="#{admin.v130.content.drawer.underReviewNoTakedown}">
+                审核中的内容不可在此下架，请到「人工复核」队列处置。</p>
+            <p class="hint" th:unless="${canTakedown}" th:text="#{admin.v130.err.forbidden(#{perm.content.proactive_takedown})}">需要「主动下架」权限</p>
+        </th:block>
+        <th:block th:if="${d.post().deleted()}">
+            <form class="inline" th:if="${canRestore}" th:attr="hx-post=@{/admin/content/{id}/restore(id=${d.post().id()})}"
+                  hx-target="#content-drawer-err" hx-swap="innerHTML">
+                <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.content.restore}">恢复</button>
+            </form>
+            <p class="hint" th:unless="${canRestore}" th:text="#{admin.v130.err.forbidden(#{perm.content.restore})}">需要「恢复内容」权限</p>
+        </th:block>
+    </section>
+</div>
+
+<!--/* 评论区片段：翻页 / 展开只换本节 —— 但仍走同一个抽屉端点（参数 commentPage / expand） */-->
+<section th:fragment="comments" class="card card-full ct-card" id="content-drawer-comments" data-section="content-comments">
+    <h3><span th:text="#{admin.contentdetail.comments}">评论</span>
+        (<span th:text="${d.commentTotalTopLevel()}">0</span>)</h3>
+    <p class="muted" th:if="${#lists.isEmpty(d.comments())}" th:text="#{admin.contentdetail.comments.empty}">暂无评论</p>
+
+    <div th:each="cm : ${d.comments()}" class="ct-comment">
+        <p class="ct-comment-head">
+            <a th:if="${!cm.authorDeleted() and cm.authorName() != null}" data-no-drawer
+               th:href="@{'/admin/users/' + ${cm.authorId()}}" th:text="${cm.authorName()}">评论人</a>
+            <span th:if="${cm.authorDeleted() or cm.authorName() == null}" class="muted" th:text="#{admin.contentdetail.deletedUser}">已注销</span>
+            <span class="muted rv-small" th:text="${@adminTime.wib(cm.createdAt())}">时间</span>
+            <span class="badge badge-danger" th:if="${cm.status() != 'VISIBLE'}"
+                  th:text="#{'admin.contentdetail.cstatus.' + ${cm.status()}}">状态</span>
+        </p>
+        <div class="pl-desc" th:text="${cm.body()}">评论内容</div>
+
+        <!--/* 楼中楼：默认前 3 条；「展开全部」带 expand=该评论 id 重渲染抽屉 */-->
+        <div th:each="r : ${cm.replies()}" class="ct-reply">
+            <p class="ct-comment-head">
+                <a th:if="${!r.authorDeleted() and r.authorName() != null}" data-no-drawer
+                   th:href="@{'/admin/users/' + ${r.authorId()}}" th:text="${r.authorName()}">回复人</a>
+                <span th:if="${r.authorDeleted() or r.authorName() == null}" class="muted" th:text="#{admin.contentdetail.deletedUser}">已注销</span>
+                <span class="muted rv-small" th:text="${@adminTime.wib(r.createdAt())}">时间</span>
+                <span class="badge badge-danger" th:if="${r.status() != 'VISIBLE'}"
+                      th:text="#{'admin.contentdetail.cstatus.' + ${r.status()}}">状态</span>
+            </p>
+            <div class="pl-desc" th:text="${r.body()}">回复内容</div>
+        </div>
+        <p th:if="${cm.replyTotal() > cm.replies().size()}" class="ct-reply">
+            <a href="#" data-no-drawer hx-target="#content-drawer .drawer-body" hx-swap="innerHTML"
+               th:attr="hx-get=@{/admin/content/{id}/drawer(id=${d.post().id()},commentPage=${d.commentPage()},expand=${cm.id()})}"
+               th:text="#{admin.contentdetail.replies.expand(${cm.replyTotal()})}">展开全部 N 条回复</a>
+        </p>
+    </div>
+
+    <div class="pager" th:if="${d.commentTotalPages() > 1}">
+        <a th:if="${d.commentPage() > 0}" href="#" data-no-drawer hx-target="#content-drawer .drawer-body" hx-swap="innerHTML"
+           th:attr="hx-get=@{/admin/content/{id}/drawer(id=${d.post().id()},commentPage=${d.commentPage() - 1})}"
+           th:text="#{admin.audit.prev}">← 上一页</a>
+        <span th:text="#{admin.audit.page(${d.commentPage() + 1}, ${d.commentTotalPages()}, ${d.commentTotalTopLevel()})}">分页</span>
+        <a th:if="${d.commentPage() + 1 < d.commentTotalPages()}" href="#" data-no-drawer hx-target="#content-drawer .drawer-body" hx-swap="innerHTML"
+           th:attr="hx-get=@{/admin/content/{id}/drawer(id=${d.post().id()},commentPage=${d.commentPage() + 1})}"
+           th:text="#{admin.audit.next}">下一页 →</a>
+    </div>
+</section>
+
+<!--/* 内容侧三个处置端点 htmx 成功的统一响应：抽屉重渲染（主体）+ oob 列表行 + toast */-->
+<th:block th:fragment="afterAction">
+    <!--/* 主目标是 err 槽（见文件头）：抽屉体走 oob 换回去，槽本身被清空 = 上一次的报错自动消失 */-->
+    <div id="content-drawer-body-oob" hx-swap-oob="innerHTML:#content-drawer .drawer-body">
+        <div th:replace="~{admin/fragments/drawer-content :: drawer}"></div>
+    </div>
+    <!--/* htmx 用 DOMParser（body 上下文）解析响应：裸 <tr> 会被丢掉、单元格内容泄进抽屉 → 包进隐藏 table，oob 后只剩空壳 */-->
+    <table hidden th:if="${sp != null}"><tbody><tr th:replace="~{admin/fragments/content-list :: row(${sp}, true)}"></tr></tbody></table>
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已处理</div>
+</th:block>
+</body>
+</html>

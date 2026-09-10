@@ -781,3 +781,14 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lst-readonly-badge { align-self: center; }
 .ac-drawer .card { margin-bottom: 10px; }
 .ac-drawer details.pl-inline > form { margin-top: 8px; }
+/* ===== B1 内容管理（V1.3.0 Story 7.1，模板 B + 480px 抽屉）===== */
+.content-table td { vertical-align: middle; }
+.content-table .sort-arrow { color: var(--muted); margin-left: 2px; }
+.ct-card { margin-bottom: 10px; }
+.ct-card h3 { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.ct-throttle-form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 6px; }
+.ct-takedown-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ct-comment { padding: 10px 0; border-bottom: 1px dashed var(--line); }
+.ct-comment:last-child { border-bottom: none; }
+.ct-comment-head { margin: 0 0 4px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ct-reply { margin: 8px 0 0 20px; padding-left: 10px; border-left: 2px solid var(--line); }

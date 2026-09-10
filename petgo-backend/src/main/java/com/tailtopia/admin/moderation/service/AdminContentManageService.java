@@ -30,7 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AdminContentManageService {
 
-    private static final int PAGE_SIZE = 50;
+    /** 每页 20（V1.3.0 Story 7.1 · AC3，模板 B 列表口径；原为 50）。 */
+    public static final int PAGE_SIZE = 20;
 
     private final ContentService contentService;
     private final AdminAuditService auditService;
@@ -44,13 +45,24 @@ public class AdminContentManageService {
     // 2026-08-31：浏览次数/人数列。经 content 模块的统计服务，不直读 view 表。
     private final com.tailtopia.content.service.ContentViewStatsService viewStats;
 
+    // V1.3.0 Story 7.1：摘要条聚合（单条 SQL）、作者昵称批量投影、导出表头随界面语言。
+    private final org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbc;
+    private final com.tailtopia.auth.service.AccountQueryService accountQuery;
+    private final com.tailtopia.shared.i18n.Messages msg;
+
     public AdminContentManageService(ContentService contentService, AdminAuditService auditService,
             ReportService reportService, ViolationCountService violationCountService,
             ContentSpeciesResolver speciesResolver,
             com.tailtopia.auth.repository.UserRepository usersRepo,
             com.tailtopia.content.repository.ContentLikeRepository likes,
             com.tailtopia.admin.virtual.service.AdminPublishIdentityService identities,
-            com.tailtopia.content.service.ContentViewStatsService viewStats) {
+            com.tailtopia.content.service.ContentViewStatsService viewStats,
+            org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbc,
+            com.tailtopia.auth.service.AccountQueryService accountQuery,
+            com.tailtopia.shared.i18n.Messages msg) {
+        this.jdbc = jdbc;
+        this.accountQuery = accountQuery;
+        this.msg = msg;
         this.contentService = contentService;
         this.auditService = auditService;
         this.reportService = reportService;
@@ -120,14 +132,32 @@ public class AdminContentManageService {
     public List<ContentSpeciesRow> browseWithSpecies(String type, Long authorId, LocalDate from,
             LocalDate to, String status, String q, String sort, int page, String species,
             String speciesSource) {
+        return browseWithSpeciesPage(type, authorId, from, to, status, q, sort, page, species,
+                speciesSource).rows();
+    }
+
+    /**
+     * 同上，外带「<b>数据库那一页取满了没有</b>」（V1.3.0 Story 7.1 分页用）。
+     *
+     * <p>🔴 物种是**取完一页之后在应用层过滤**的，所以「本页剩几行」<b>不能</b>用来判断有没有下一页：
+     * 筛 CAT 时一页 20 行里可能只剩 3 行，按行数判就永远是「没有下一页」——
+     * 运营只能看到前 20 条里恰好匹配的那几条，而且<b>看不出被截断</b>
+     * （AC5 举的典型用法「筛出被批量套上 CAT 的内容再逐条改」到第 21 条就够不着了）。
+     * 判据必须落在**过滤前**的行数上。
+     */
+    @Transactional(readOnly = true)
+    public SpeciesPage browseWithSpeciesPage(String type, Long authorId, LocalDate from,
+            LocalDate to, String status, String q, String sort, int page, String species,
+            String speciesSource) {
         List<AdminContentRow> rows = browse(type, authorId, from, to, status, q, sort, page);
+        boolean dbPageFull = rows.size() >= PAGE_SIZE;
         // 🛡 **整页一次算完**（resolveAll）—— 逐行 resolve 是 N+1，而这是运营最常打开的一页。
         var resolved = speciesResolver.resolveAll(rows.stream()
                 .map(r -> new ContentSpeciesResolver.Input(r.id(), r.speciesOverride(), r.authorId()))
                 .toList());
         // 可编辑判据用到的账号集合也一次查完。
         Set<Long> editableAuthors = editableAuthorIds(rows);
-        return rows.stream()
+        return new SpeciesPage(rows.stream()
                 .map(r -> new ContentSpeciesRow(r,
                         resolved.getOrDefault(r.id(), ResolvedSpecies.NONE),
                         r.authorId() != null && editableAuthors.contains(r.authorId())))
@@ -135,7 +165,116 @@ public class AdminContentManageService {
                         || species.equals(row.species().species()))
                 .filter(row -> speciesSource == null || speciesSource.isBlank()
                         || speciesSource.equals(row.source().name()))
-                .toList();
+                .toList(), dbPageFull);
+    }
+
+    /**
+     * 带物种信息的一页。
+     *
+     * @param dbPageFull 数据库那一页取满了 ⇒ <b>还有下一页</b>（与过滤后的 {@code rows.size()} 无关，
+     *                   见 {@link #browseWithSpeciesPage} 的说明）
+     */
+    public record SpeciesPage(List<ContentSpeciesRow> rows, boolean dbPageFull) {
+    }
+
+    /**
+     * 摘要条的 where —— ⚠️ 必须与列表查询（{@code adminSearch}）的条件<b>逐条对齐</b>，
+     * 否则摘要上的数与表格里看到的行对不上，而这种对不上没人会怀疑是两处 where 写岔了。
+     *
+     * <p>可空参数一律 {@code (:x IS NULL OR …)} + 绑定时给显式 SQL 类型，规避 Postgres
+     * 「无类型 null 参数无法推断类型」（42P18，这个仓库踩过两次）。
+     */
+    private static final String SUMMARY_WHERE = """
+            (:type IS NULL OR p.type = :type)
+              AND (:authorId IS NULL OR p.author_id = :authorId)
+              AND (:fromTs IS NULL OR p.created_at >= :fromTs)
+              AND (:toTs IS NULL OR p.created_at < :toTs)
+              AND (:deleted IS NULL OR (:deleted = TRUE AND p.deleted_at IS NOT NULL)
+                                    OR (:deleted = FALSE AND p.deleted_at IS NULL))
+              AND (:q IS NULL OR p.text ILIKE :q)
+            """;
+
+    /** 摘要条五格一条聚合（AC2）。限流用 EXISTS 子查询：内容级或作者账号级，且当前生效（未解除、未到期）。 */
+    private static final String SUMMARY_SQL = """
+            SELECT COUNT(*)                                                                          AS total,
+                   COUNT(*) FILTER (WHERE (p.created_at AT TIME ZONE 'Asia/Jakarta')::date = :today) AS today_new,
+                   COUNT(*) FILTER (WHERE p.status = 'UNDER_REVIEW' AND p.deleted_at IS NULL)        AS under_review,
+                   COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM rank_throttles t
+                                                   WHERE t.lifted_at IS NULL
+                                                     AND (t.expires_at IS NULL OR t.expires_at > now())
+                                                     AND ((t.scope = 'POST' AND t.target_id = p.id)
+                                                       OR (t.scope = 'ACCOUNT' AND t.target_id = p.author_id)))) AS throttled,
+                   COUNT(*) FILTER (WHERE p.deleted_at IS NOT NULL)                                  AS taken_down
+            FROM content_posts p
+            WHERE
+            """ + SUMMARY_WHERE; // ⚠️ 文本块会剥尾随空格：WHERE 必须单独一行，否则拼成 WHEREp.（5.2 复审踩过）
+
+    /**
+     * 摘要条（Story 7.1 · AC2）：总帖数 · 今日新增（WIB）· 审核中 · 限流中 · 已下架，随当前筛选联动。
+     *
+     * <p>⚠️ {@code dateBasis=liked} 时**不传日期区间**：那两个日期指的是<b>点赞发生的时间</b>，
+     * 塞进 {@code created_at} 会给出一份和屏幕对不上的数（界面上另有一行说明这一档的口径）。
+     *
+     * <p>⚠️ 物种 / 推导来源两个筛选<b>不进摘要</b>：物种是应用层按作者档案推导后再过滤的，
+     * SQL 里表达不出来。摘要因此是「不含物种筛选」的口径。
+     */
+    @Transactional(readOnly = true)
+    public com.tailtopia.admin.moderation.dto.ContentSummary summary(String type, Long authorId,
+            LocalDate from, LocalDate to, String status, String q, String dateBasis) {
+        boolean liked = "liked".equals(dateBasis);
+        Instant fromI = (liked || from == null) ? null : from.atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant toI = (liked || to == null) ? null : to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Boolean deleted = "DELETED".equals(status) ? Boolean.TRUE
+                : ("ONLINE".equals(status) ? Boolean.FALSE : null);
+        ContentType ct = parseType(type);
+        String keyword = (q == null || q.isBlank()) ? null
+                : "%" + q.trim().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+        var params = new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
+                .addValue("type", ct == null ? null : ct.name(), java.sql.Types.VARCHAR)
+                .addValue("authorId", authorId, java.sql.Types.BIGINT)
+                .addValue("fromTs", fromI == null ? null : java.sql.Timestamp.from(fromI), java.sql.Types.TIMESTAMP)
+                .addValue("toTs", toI == null ? null : java.sql.Timestamp.from(toI), java.sql.Types.TIMESTAMP)
+                .addValue("deleted", deleted, java.sql.Types.BOOLEAN)
+                .addValue("q", keyword, java.sql.Types.VARCHAR)
+                .addValue("today", LocalDate.now(WIB));
+        return jdbc.query(SUMMARY_SQL, params, rs -> rs.next()
+                ? new com.tailtopia.admin.moderation.dto.ContentSummary(rs.getLong("total"),
+                        rs.getLong("today_new"), rs.getLong("under_review"), rs.getLong("throttled"),
+                        rs.getLong("taken_down"))
+                : new com.tailtopia.admin.moderation.dto.ContentSummary(0, 0, 0, 0, 0));
+    }
+
+    /**
+     * 单条内容的物种归属行（Story 7.1 抽屉 / oob 行用）；内容不存在 → 404。
+     *
+     * <p>与列表同一套判据：物种由 {@link ContentSpeciesResolver} 推导，
+     * {@code editable} 仍是「作者是虚拟账号或在运营发布身份池内」（真实用户内容只读）。
+     */
+    @Transactional(readOnly = true)
+    public ContentSpeciesRow speciesRow(long postId) {
+        AdminContentRow row = contentService.adminRow(postId);
+        if (row == null) {
+            throw AppException.notFound("内容不存在").code("admin.err.content.notFound");
+        }
+        var resolved = speciesResolver.resolveAll(List.of(
+                new ContentSpeciesResolver.Input(row.id(), row.speciesOverride(), row.authorId())));
+        Set<Long> editable = editableAuthorIds(List.of(row));
+        return new ContentSpeciesRow(row, resolved.getOrDefault(row.id(), ResolvedSpecies.NONE),
+                row.authorId() != null && editable.contains(row.authorId()));
+    }
+
+    /**
+     * 本页作者的昵称 / 注销态投影（Story 7.1 · AC6：列表与抽屉作者列置灰 + #id）。
+     *
+     * <p>🔴 整页一次批量取，与物种推导、点赞数、限流状态同一条纪律。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, com.tailtopia.auth.dto.AuthorView> authorViews(
+            java.util.Collection<Long> userIds) {
+        var ids = userIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        // ⚠️ 空集合也回 HashMap 而不是 Map.of()：模板里是 authors?.get(authorId)，
+        //    Map.of() 对 null key 直接抛 NPE，两条路径的行为不该只在「这一页恰好没作者」时才不同。
+        return ids.isEmpty() ? new java.util.HashMap<>() : accountQuery.findAuthorViews(ids);
     }
 
     /**
@@ -328,25 +467,16 @@ public class AdminContentManageService {
         java.util.Map<Long, Long> likes = likeCounts(rows.stream().map(AdminContentRow::id).toList());
         var views = viewStats(rows.stream().map(AdminContentRow::id).toList());
 
-        StringBuilder csv = new StringBuilder(
-                "post_id,type,author_id,likes,views,viewers,created_at_wib,status,text\n");
+        List<List<Object>> data = new java.util.ArrayList<>();
         for (AdminContentRow r : rows) {
-            var vs = views.get(r.id());
-            csv.append(r.id()).append(',')
-                    .append(r.type() == null ? "" : r.type().name()).append(',')
-                    .append(r.authorId() == null ? "" : r.authorId()).append(',')
-                    .append(likes.getOrDefault(r.id(), 0L)).append(',')
-                    .append(vs == null ? 0 : vs.views()).append(',')
-                    .append(vs == null ? 0 : vs.viewers()).append(',')
-                    // 🔴 导出的时间一律 WIB —— 后台全站按雅加达解释，
-                    //    导出若给 UTC，运营会把两份对不上的数拿去做汇报。
-                    .append(WIB_CSV.format(r.createdAt().atZone(WIB))).append(',')
-                    .append(r.deleted() ? "DELETED" : "ONLINE").append(',')
-                    .append(csvCell(r.textPreview())).append('\n');
+            data.add(exportRow(r, likes.getOrDefault(r.id(), 0L), views.get(r.id())));
         }
+        StringBuilder csv = new StringBuilder(
+                com.tailtopia.admin.shared.export.AdminExportWriter.csv(exportHeaders(false), data));
         if (truncated) {
-            csv.append("# 已达单次导出上限 ").append(EXPORT_MAX_ROWS)
-                    .append(" 行，请收窄时间范围后分批导出\n");
+            // 说明行随界面语言（表头都本地化了，只有这一行是中文会显得像半成品）。
+            csv.append("# ").append(msg.get("admin.v130.content.export.truncated", EXPORT_MAX_ROWS))
+                    .append("\r\n");
         }
         auditService.record(actorAccountId, "CONTENT_LIST_EXPORT", "content_post", "-",
                 "rows=" + rows.size() + " truncated=" + truncated
@@ -360,12 +490,36 @@ public class AdminContentManageService {
     private static final java.time.format.DateTimeFormatter WIB_CSV =
             java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    /** 逗号/引号/换行都要转义，否则一条正文里的逗号就能把整份表的列错开。 */
-    private static String csvCell(String raw) {
-        if (raw == null) {
-            return "\"\"";
-        }
-        return '"' + raw.replace("\"", "\"\"") + '"';
+    /**
+     * 导出表头（Story 7.1 · AC7）：随界面语言，key 沿用列表页的 {@code admin.content.col.*}。
+     *
+     * @param likedWindow 「按点赞时间」档 —— 赞数列是<b>窗口内</b>的，表头必须跟着换，
+     *                    否则两份长得一样的表会被当成同一口径读
+     */
+    private List<String> exportHeaders(boolean likedWindow) {
+        // ⚠️ 三列**不复用**列表页的表头文案：屏幕上「作者」那一格是昵称、「创建时间」旁边有 WIB 字样，
+        //    而文件里这两格分别是**作者 id** 与**已折算成 WIB 的时间字符串**。沿用列表文案会把口径标记丢掉，
+        //    而「导出的时间到底是哪个时区」正是这个方法上方那条 🔴 注释在防的事。
+        return List.of(msg.get("admin.v130.content.export.col.postId"), msg.get("admin.content.col.type"),
+                msg.get("admin.v130.content.export.col.authorId"),
+                msg.get(likedWindow ? "admin.content.col.likesInWindow" : "admin.content.col.likes"),
+                msg.get("admin.content.col.views"), msg.get("admin.content.col.viewers"),
+                msg.get("admin.v130.content.export.col.createdWib"), msg.get("admin.content.col.status"),
+                msg.get("admin.content.col.preview"));
+    }
+
+    /**
+     * 一行导出数据（转义交给 {@code AdminExportWriter}：RFC 4180 + 前导 {@code =} 防公式注入）。
+     *
+     * <p>🔴 时间一律 WIB —— 后台全站按雅加达解释；导出若给 UTC，运营会把两份对不上的数拿去做汇报。
+     */
+    private static List<Object> exportRow(AdminContentRow r, long likeCount,
+            com.tailtopia.content.service.ContentViewStatsService.ViewStat vs) {
+        return java.util.Arrays.asList(r.id(), r.type() == null ? "" : r.type().name(),
+                r.authorId() == null ? "" : r.authorId(), likeCount,
+                vs == null ? 0 : vs.views(), vs == null ? 0 : vs.viewers(),
+                WIB_CSV.format(r.createdAt().atZone(WIB)), r.deleted() ? "DELETED" : "ONLINE",
+                r.textPreview());
     }
 
     /** 「按点赞时间」口径的导出。列头里的赞数是**窗口内**的，与屏幕一致。 */
@@ -376,23 +530,15 @@ public class AdminContentManageService {
         // ⚠️ 浏览两列是**至今累计**，不跟随「点赞时间」窗口 —— 浏览记录只存每人累计次数，
         //    没有逐次时间线，给不出「窗口内的浏览」。列名不带 in_range，就是为了不被误读成窗口值。
         var views = viewStats(all.rows().stream().map(AdminContentRow::id).toList());
-        StringBuilder csv = new StringBuilder(
-                "post_id,type,author_id,likes_in_range,views,viewers,created_at_wib,status,text\n");
+        List<List<Object>> data = new java.util.ArrayList<>();
         for (AdminContentRow r : all.rows()) {
-            var vs = views.get(r.id());
-            csv.append(r.id()).append(',')
-                    .append(r.type() == null ? "" : r.type().name()).append(',')
-                    .append(r.authorId() == null ? "" : r.authorId()).append(',')
-                    .append(all.windowLikes().getOrDefault(r.id(), 0L)).append(',')
-                    .append(vs == null ? 0 : vs.views()).append(',')
-                    .append(vs == null ? 0 : vs.viewers()).append(',')
-                    .append(WIB_CSV.format(r.createdAt().atZone(WIB))).append(',')
-                    .append(r.deleted() ? "DELETED" : "ONLINE").append(',')
-                    .append(csvCell(r.textPreview())).append('\n');
+            data.add(exportRow(r, all.windowLikes().getOrDefault(r.id(), 0L), views.get(r.id())));
         }
+        StringBuilder csv = new StringBuilder(
+                com.tailtopia.admin.shared.export.AdminExportWriter.csv(exportHeaders(true), data));
         if (all.poolFull()) {
-            csv.append("# 这段时间里有赞的内容超过单次上限 ").append(LIKE_WINDOW_POOL)
-                    .append(" 条，只算了赞数最高的一批，请收窄时间范围后分批导出\n");
+            csv.append("# ").append(msg.get("admin.v130.content.export.poolFull", LIKE_WINDOW_POOL))
+                    .append("\r\n");
         }
         auditService.record(actorAccountId, "CONTENT_LIST_EXPORT", "content_post", "-",
                 "basis=liked rows=" + all.rows().size() + " truncated=" + all.poolFull()

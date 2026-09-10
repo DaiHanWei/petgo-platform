@@ -90,7 +90,7 @@ development_status:
   epic-6-retrospective: optional
   # ---- Epic 7: 内容组页面重构 ----
   epic-7: in-progress
-  7-1-b1-内容管理-详情抽屉: ready-for-dev   # B1 内容管理 + 详情抽屉
+  7-1-b1-内容管理-详情抽屉: review   # B1 内容管理 + 详情抽屉
   7-2-b2-评论巡查页签套模板-b: ready-for-dev   # B2 评论巡查页签套模板 B
   7-3-b3-顶置管理: ready-for-dev   # B3 顶置管理
   7-4-b4-内容标签: ready-for-dev   # B4 内容标签（抽屉多页签，打标入口收拢）
