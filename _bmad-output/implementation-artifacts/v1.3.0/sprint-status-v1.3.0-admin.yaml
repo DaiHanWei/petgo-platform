@@ -127,5 +127,5 @@ development_status:
   11-2-三语与-id-占位全站验收: review   # 三语与 ID 占位全站验收
   11-3-退役路由与模板清理确认: review   # 退役路由与模板清理确认
   11-4-权限矩阵与导航一致性收口: review   # 权限矩阵与导航一致性收口
-  11-5-stag-全量验收与-ui-稿比对: ready-for-dev   # stag 全量验收与 UI 稿比对
+  11-5-stag-全量验收与-ui-稿比对: review   # stag 全量验收与 UI 稿比对
   epic-11-retrospective: optional

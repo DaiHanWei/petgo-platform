@@ -10,7 +10,7 @@ depends_on: [全部 Epic 1~10, 11-1, 11-3]
 
 # Story 11.5: stag 全量验收与 UI 稿比对
 
-Status: ready-for-dev
+Status: review
 
 > 自包含 story，**L2 为主，必须本地 + stag**（云端 headless 不能做）。与用户沟通用中文。
 > ⚠️ 只允许操作 staging 资源（`petgo-server-stag` / 8085 / `petgo_stag` / Redis `-n 3` / `~/.env.petgo-stag` / `scripts/deploy-backend-stag.sh`）；生产一律禁止（CLAUDE.md 部署纪律，`stag-guard` 会拦）。
@@ -60,8 +60,8 @@ so that 上线前有一份与 1.1.6 同等级的 L2 视觉验收报告。
 - [ ] **T3 · 逐页比对**（AC2）：Playwright 脚本批量截图（与 11.2 共用），人工对照 UI 稿逐帧勾表
 - [ ] **T4 · 看板核对**（AC3）：跑 `POST /admin/dashboard/materialize`（SUPER_ADMIN，stag）→ 取 3 日 → 页面 / 表 / SQL 三方对照表
 - [ ] **T5 · 角标与关键流**（AC4 / AC5）
-- [ ] **T6 · 写报告**（AC6）；缺陷回对应 story 修后回归，报告更新
-- [ ] **T7 · 云端执行须知**：本 story 全部本地；云端不可执行
+- [~] **T6 · 写报告**（AC6）：骨架已建（云端），结论待本地填；缺陷回对应 story 修后回归，报告更新
+- [x] **T7 · 云端执行须知**：本 story 全部本地；云端不可执行
 
 ---
 
@@ -114,10 +114,60 @@ AD-12：商城组 17 帧的比对要等电商线合入 `dev_1.3.0`；若合入�
 
 ### Agent Model Used
 
-（dev-story 填写）
+Claude Code（云端 headless session）
 
 ### Debug Log References
 
-### Completion Notes List
+无可跑项。本 story 的 T7 自己写着「**全部本地；云端不可执行**」，云端复核一致：
+
+| AC | 需要什么 | 云端有没有 |
+|---|---|---|
+| AC1 stag 部署 + Flyway 核对 | ssh 到 62.146.239.156、`docker exec petgo-postgres` | ❌ 无（且本会话的 stag-guard 纪律也不允许远程部署） |
+| AC2 逐页形态比对 | 真实浏览器渲染 + 人眼对 UI 稿 | ❌ headless，无 GUI |
+| AC3 看板数值 | stag 库 `ops_daily_metrics` 真实数据 | ❌ 无 Docker → 无 Postgres |
+| AC4 角标同源 | 跑起来的应用 + htmx 实时交互 | ❌ 同上 |
+| AC5 关键流闭环 | 两个浏览器会话 / 真实审核链路 / 真实第三方 | ❌ 同上 |
+| AC6 报告 | 写文件 | ✅ **只有这一项能做** |
+
+### Completion Notes
+
+**🔴 本 story 的 AC1～AC5 一条都没有执行。** 状态置 `review` 的含义与本轮其它 story 一致 ——
+「云端这一轮到此为止，等本地验收」，**不是「已完成」**。请不要把它读成验收通过。
+
+云端唯一能交付的是 **AC6 的报告骨架**：`L2-视觉验收报告-v1.3.0.md` 已按 Dev Notes 的范式建好，
+把「本地那一轮要照单做什么」写死到可以直接执行的粒度：
+
+- **〇、前置状态**：四条硬前置逐条列出当前状态（Epic 1～9 待合入 `dev_1.3.0`；**Epic 10 未执行**；
+  迁移待验；两个守门 workflow 待 `git mv`）。
+- **二、逐页比对表**：8 泳道路由逐行列好，每页四列（摘要条指标集合 / 表格列集合与顺序 /
+  抽屉页签与区块 / 操作表），照着勾即可。模板 A 的三条、模板 B 的三条单列 ——
+  其中 **「键盘 ↑/↓ 无效果」（D-14）是「不该有」的验收项，最容易漏验**。
+- **三～五**：看板三方对照表、角标同源、5 条关键流，各带预期值。
+- **八、已在云端完成、无需实机重验的部分**：11.1～11.4 的机器证据逐条列出，
+  实机时不必重复人肉核对；反过来也写清了「云端一条都验不了、必须实机看」的是哪几类。
+
+**🔴 报告里写死的一条硬约束**：**Epic 10 未完成时不要跑「全量」验收**。AC2 的分母是 8 泳道
+全部页面，缺一个泳道的报告会被当成「全量过了」，而实际有 13 个页面从没被看过。
+要么等 Epic 10，要么在结论标题里把泳道 5 单列成「未验收」。
+
+**为什么没有代写截图脚本**：T3 提到 Playwright 批量截图。云端**既跑不起后端也没装 playwright 包**
+（Chromium 在，npm 包不在），写出来的会是一份**从没跑过**的自动化 —— 而本仓库的规矩是
+「一条从来没绿过的护栏等于没有」。本地首次执行时现写现调比拿一份未验证的脚本去调更快，
+报告的「一、验收方法」里已把这个判断写明。
+
+**🔬 全部待本地 / stag 验收**（= AC1～AC5 全部）：
+
+1. **T1 部署与冒烟**：`git checkout dev_1.3.0 && git pull && ./scripts/deploy-backend-stag.sh` →
+   health `UP` → `flyway_schema_history` 查本版迁移。
+   ⚠️ 根 `CLAUDE.md`：只许碰 `petgo-server-stag` / `8085` / `petgo_stag` / Redis `-n 3` /
+   `~/.env.petgo-stag`；**`scripts/deploy-backend-stag.sh` 之外的部署脚本绝对禁止**。
+2. **T2 造数** → **T3 逐页截图与勾表** → **T4 看板三方对照** → **T5 角标与关键流** → **T6 写结论**。
+3. 与 **Story 11.2 的 ID 截图共用同一次部署与同一套脚本**，产出两份报告（11.2 比语言，本报告比形态）。
 
 ### File List
+
+**新增**
+
+- `_bmad-output/implementation-artifacts/v1.3.0/L2-视觉验收报告-v1.3.0.md`（AC6 骨架 + 前置状态 + 逐页勾表 + 执行顺序）
+
+**迁移**：无。**代码零改动**。
