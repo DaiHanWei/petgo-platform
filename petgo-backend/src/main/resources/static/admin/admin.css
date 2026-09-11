@@ -918,3 +918,17 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sr-inspect-form .inp { width: 100%; box-sizing: border-box; }
 /* 已全额取消的订单行置灰（AC3：已部分取消行不可再取消） */
 tr.is-muted td { opacity: .55; }
+
+/* ===== V1.3.0 Story 10.2：B15 订单抽屉 / C1 对账四卡 ===== */
+.so-card { margin-bottom: 12px; }
+.so-card table { width: 100%; }
+/* 四节点时间轴：复用 A6 的 .rf-flow，列数改 4（窄抽屉里塞不下就两列） */
+.so-flow { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 1279px) { .so-flow { grid-template-columns: repeat(2, 1fr); } }
+.so-actions { display: flex; flex-direction: column; gap: 10px; }
+.so-ship-form { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; }
+.so-ship-form .inp, .so-ship-form .sel { width: 100%; box-sizing: border-box; }
+.recon-card table { width: 100%; }
+.recon-card .recon-check th, .recon-card .recon-check td { border-top: 2px solid var(--line); font-weight: 700; }
+/* 🔴 校验行不平 → 整卡红框：现状只有一行文字变色，一屏数字里根本注意不到 */
+.card-alert { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }

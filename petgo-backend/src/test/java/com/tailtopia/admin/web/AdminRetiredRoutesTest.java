@@ -37,16 +37,13 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * <p>用超管跑：普通账号缺权限会拿到 403，403 和 404 都是「进不去」，
  * 但只有 404 能证明**路由不存在**。这条测试要的是后者。
  *
- * <p>⚠️ 商城两条都<b>不在名单里</b>，但理由已经不一样了：
- * <ul>
- *   <li>{@code /admin/shop/orders/{token}} 归 Story 10.2，尚未执行，仍在服役；</li>
- *   <li>{@code /admin/shop/returns/{token}} 的整页<b>已于 Story 10.1 退役</b>，
- *       但 T1 明确不许新开 {@code /{token}/detail} 端点，于是 A7 右栏片段<b>复用了同一条 mapping</b>
- *       （{@code HX-Request} 返片段、直达抛 404）。GET 映射<b>按设计仍然存在</b>，
- *       所以它进不了 {@link #noRetiredPathStillHasAGetMapping} 的口径 ——
- *       写进来只会把一条正确的实现判成「没删干净」。
- *       「直达旧地址返 404、不跳转」由 {@code AdminReturnEndpointIntegrationTest} 钉住。</li>
- * </ul>
+ * <p>⚠️ 商城两条都<b>不在名单里</b>，而且是同一个理由：它们的整页分别于 Story 10.1（退货）与
+ * 10.2（订单）<b>已经退役</b>，但两个 story 都明确「不许新开 {@code /{token}/detail}（或 {@code /drawer}）端点」，
+ * 于是右栏 / 抽屉片段<b>复用了原来那条整页 mapping</b>（{@code HX-Request} 返片段、直达抛 404）。
+ * GET 映射<b>按设计仍然存在</b>，所以它们进不了 {@link #noRetiredPathStillHasAGetMapping} 的口径 ——
+ * 写进来只会把两条正确的实现判成「没删干净」。
+ * 「直达旧地址返 404、不跳转」分别由 {@code AdminReturnEndpointIntegrationTest} 与
+ * {@code AdminShopOrderEndpointIntegrationTest} 钉住。
  *
  * <p>⚠️ {@code /admin/vets/{id}/qualification} 与 {@code /admin/vets/{id}/ratings} 也不在名单里：
  * 11.3 AC1 把它们列进了退役表，但 Story 9.1b 实际是把它们改成了**抽屉页签的懒加载片段**，

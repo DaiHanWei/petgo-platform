@@ -1,5 +1,6 @@
 package com.tailtopia.admin.shop.web;
 
+import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.admin.shop.service.ShopFinanceDashboardService;
 import java.time.LocalDate;
 import org.springframework.beans.factory.annotation.Value;
@@ -67,6 +68,12 @@ public class AdminShopFinanceController {
         return "admin/shop-inventory-turnover";
     }
 
+    /**
+     * 对账（V1.3.0 Story 10.2 AC4：模板 C 只读报表）。
+     *
+     * <p>期间切换走 htmx，只换四张核对卡那一块 —— 页头与只读标识不必重绘。
+     * <b>本页没有任何写操作，也没有导出端点</b>（AC4 明确不新增）。
+     */
     @GetMapping("/admin/shop/reconciliation")
     @PreAuthorize(FINANCE_AUTH)
     public String reconciliation(
@@ -74,13 +81,14 @@ public class AdminShopFinanceController {
                     LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate to,
-            Model model) {
+            HxRequest hx, Model model) {
         LocalDate end = to == null ? LocalDate.now() : to;
         LocalDate start = from == null ? end.minusDays(30) : from;
         model.addAttribute("from", start);
         model.addAttribute("to", end);
         model.addAttribute("r", finance.reconciliation(start, end));
         model.addAttribute("active", "shopReconciliation");
-        return "admin/shop-reconciliation";
+        return hx.isHtmx() ? "admin/fragments/cards-shop-reconciliation :: cards"
+                : "admin/shop-reconciliation";
     }
 }

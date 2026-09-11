@@ -9,7 +9,13 @@
 -->
 <body>
 <div th:fragment="done" class="se-done" data-done th:data-next-id="${nextId}">
-    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${message}">已处理</div>
+    <!--/* 🔴 toast 必须**多包一层**：htmx 的 `beforeend:` oob 搬的是这个元素的**子节点**，
+           直接把 hx-swap-oob 写在 .toast 上，落进宿主的只有一段裸文本 —— 没有样式、
+           admin-core.js 的 armToast 也找不到它，于是永远不消失。外层这个 div 会被丢掉。
+           （Story 10.2 复审查出；仓库里二十来处旧写法同病，见 drawer-consult-order.html 的说明。） */-->
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${message}">已处理</div>
+    </div>
     <th:block th:if="${#strings.isEmpty(nextId)}"><div th:replace="~{admin/fragments/tpl-a-empty :: queueEmpty('shop-order-exceptions', null)}"></div></th:block>
     <ul class="q-list" id="shop-exception-queue" hx-swap-oob="true">
         <th:block th:replace="~{admin/fragments/shop-exception-queue :: rows}"></th:block>

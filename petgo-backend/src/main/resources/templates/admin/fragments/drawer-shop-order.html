@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  B15 订单详情抽屉（V1.3.0 Story 10.2 AC2）—— 由退役的 shop-order-detail.html 整体迁入五区：
+    ① 订单卡（小计 / 运费 / 免运抵扣 / 合计 / 支付渠道 / PawCoin·QRIS 段 + 四节点时间轴）
+    ② 商品行表（含退货规则列）③ 收货信息卡 ④ 包裹表（每行「标记该包裹送达」）⑤ 底部固定操作条
+  三个写端点路径 / 参数 / @PreAuthorize **零变更**（AC2）；抽屉内 htmx 提交，成功原地刷新 + oob 列表行。
+  🔒 **本片段是收件人 PII（姓名 / 电话 / 详细地址）的唯一出口** —— 不进列表、不进日志、不进审计摘要。
+  ⚠️ 「在途」节点库里没有时间戳，按状态推导（AC2 的四节点里只有它不是时间戳）。
+-->
+<body>
+<div th:fragment="drawer" class="so-drawer" th:attr="data-order-token=${order.publicToken}">
+
+    <!-- ① 订单卡 -->
+    <section class="card card-full so-card">
+        <h2 th:text="#{admin.shop.order.section.summary}">订单</h2>
+        <div class="sum sum--grid2">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.token}">订单号</div>
+                <div class="sum-value rv-small" th:text="${order.publicToken}">abc</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.status}">状态</div>
+                <div class="sum-value rv-small"
+                     th:text="#{'admin.v130.shopOrders.status.' + ${order.status}}">SHIPPED</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.total}">合计</div>
+                <div class="sum-value" th:text="${#numbers.formatInteger(order.totalAmount, 0, 'COMMA')}">305.000</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.order.col.payChannel}">支付渠道</div>
+                <div class="sum-value rv-small" th:text="${order.payChannel} ?: '—'">MIXED</div></div>
+        </div>
+        <table>
+            <tr><th th:text="#{admin.shop.order.col.goodsSubtotal}">商品小计</th>
+                <td th:text="${#numbers.formatInteger(order.goodsSubtotal, 0, 'COMMA')}">285.000</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.shippingFee}">运费</th>
+                <td th:text="${#numbers.formatInteger(order.shippingFee, 0, 'COMMA')}">20.000</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.shippingDiscount}">免运抵扣</th>
+                <td th:text="${#numbers.formatInteger(order.shippingDiscount, 0, 'COMMA')}">0</td></tr>
+            <!-- 🔴 两段支付构成必须分开展示：客服对账时「用户说付了 305 000」与
+                 「网关只收到 245 000」的差额永远落在 PawCoin 段上。 -->
+            <tr><th th:text="#{admin.shop.order.col.coinAmount}">PawCoin 段</th>
+                <td th:text="${order.coinAmount != null} ? ${#numbers.formatInteger(order.coinAmount, 0, 'COMMA')} : '—'">60.000</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.cashAmount}">QRIS 段</th>
+                <td th:text="${order.cashAmount != null} ? ${#numbers.formatInteger(order.cashAmount, 0, 'COMMA')} : '—'">245.000</td></tr>
+            <!-- SPEC-2 的三条出口各自留痕：出了问题要能查出走的是哪条 -->
+            <tr><th th:text="#{admin.shop.order.col.completedAt}">完成</th>
+                <td><span th:text="${@adminTime.wib(order.completedAt)}">-</span>
+                    <span class="muted" th:if="${order.completionSource != null}"
+                          th:text="' · ' + ${order.completionSource}">USER_CONFIRM</span></td></tr>
+        </table>
+        <!-- 四节点时间轴：已下单 → 已发货 → 在途 → 已签收 -->
+        <ol class="rf-flow so-flow">
+            <li class="is-done">
+                <strong th:text="#{admin.v130.shopOrders.step.placed}">已下单</strong>
+                <span class="muted" th:text="${@adminTime.wib(order.createdAt)}">-</span>
+            </li>
+            <li th:classappend="${order.shippedAt != null} ? 'is-done'
+                     : (${order.status.name() == 'PENDING_SHIPMENT'} ? 'is-current' : '')">
+                <strong th:text="#{admin.v130.shopOrders.step.shipped}">已发货</strong>
+                <span class="muted" th:if="${order.shippedAt != null}" th:text="${@adminTime.wib(order.shippedAt)}">-</span>
+            </li>
+            <li th:classappend="${order.status.name() == 'SHIPPED'} ? 'is-current'
+                     : (${order.deliveredAt != null} ? 'is-done' : '')">
+                <strong th:text="#{admin.v130.shopOrders.step.inTransit}">在途</strong>
+            </li>
+            <li th:classappend="${order.deliveredAt != null} ? 'is-done'">
+                <strong th:text="#{admin.v130.shopOrders.step.delivered}">已签收</strong>
+                <span class="muted" th:if="${order.deliveredAt != null}" th:text="${@adminTime.wib(order.deliveredAt)}">-</span>
+                <span class="muted" th:if="${order.deliverySource != null}"
+                      th:text="' · ' + ${order.deliverySource}">ADMIN_MARK</span>
+            </li>
+        </ol>
+    </section>
+
+    <!-- ② 商品行表 -->
+    <section class="card card-full so-card">
+        <h2 th:text="#{admin.shop.order.section.lines}">商品行</h2>
+        <table>
+            <thead><tr>
+                <th th:text="#{admin.shop.col.name}">商品名</th>
+                <th th:text="#{admin.shop.sku.specName}">规格</th>
+                <th th:text="#{admin.shop.order.col.unitPrice}">单价</th>
+                <th th:text="#{admin.shop.inventory.col.qty}">数量</th>
+                <th th:text="#{admin.shop.order.col.lineTotal}">小计</th>
+                <th th:text="#{admin.shop.order.col.returnPolicy}">退货规则</th>
+            </tr></thead>
+            <tbody>
+            <tr th:each="l : ${lines}">
+                <td th:text="${l.productName}">Produk</td>
+                <td th:text="${l.specName}">3 kg</td>
+                <td th:text="${#numbers.formatInteger(l.unitPrice, 0, 'COMMA')}">285.000</td>
+                <td th:text="${l.qty}">1</td>
+                <td th:text="${#numbers.formatInteger(l.lineTotal, 0, 'COMMA')}">285.000</td>
+                <td th:text="#{'admin.v130.shopOrders.returnPolicy.' + ${l.returnPolicy}}">RETURNABLE</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- ③ 🔒 收货信息卡：含三项 PII。下单时定格，不随地址簿改动（AD-13）。 -->
+    <section class="card card-full so-card">
+        <h2 th:text="#{admin.shop.order.section.shipTo}">收货信息</h2>
+        <p class="hint" th:text="#{admin.shop.order.shipTo.hint}">以下信息含个人数据，仅用于履约与客服核对。</p>
+        <table>
+            <tr><th th:text="#{admin.shop.order.col.receiver}">收件人</th>
+                <td th:text="${shipTo.receiverName}">Budi</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.phone}">电话</th>
+                <td th:text="${shipTo.receiverPhone}">+628…</td></tr>
+            <tr><th th:text="#{admin.shop.order.col.address}">地址</th>
+                <td th:text="${shipTo.addressLine} + ', ' + ${shipTo.kecamatan} + ', '
+                             + ${shipTo.kotaKabupaten} + ', ' + ${shipTo.provinsi} + ' '
+                             + ${shipTo.kodePos}">Jl. …</td></tr>
+        </table>
+    </section>
+
+    <!-- ④ 包裹表 -->
+    <section class="card card-full so-card">
+        <h2 th:text="#{admin.shop.order.section.packages}">包裹</h2>
+        <p class="hint" th:text="#{admin.shop.order.packages.hint}">一个订单可分多个包裹发出。</p>
+        <table>
+            <thead><tr>
+                <th th:text="#{admin.shop.order.col.carrier}">承运商</th>
+                <th th:text="#{admin.shop.order.col.trackingNo}">物流单号</th>
+                <th th:text="#{admin.shop.order.col.carrierCost}">承运成本</th>
+                <th th:text="#{admin.shop.orders.col.status}">状态</th>
+                <th th:text="#{admin.shop.order.col.deliveredAt}">送达</th>
+                <th th:text="#{admin.common.action}">操作</th>
+            </tr></thead>
+            <tbody>
+            <tr th:each="p : ${packages}">
+                <td th:text="${p.carrier}">JNE</td>
+                <td th:text="${p.trackingNo}">JP123</td>
+                <td th:text="${#numbers.formatInteger(p.carrierCost, 0, 'COMMA')}">18.000</td>
+                <td th:text="${p.status}">SHIPPED</td>
+                <td th:text="${@adminTime.wib(p.deliveredAt)}">-</td>
+                <td>
+                    <!-- ⚠️ 这里**不标** data-inline-error：那个属性只被 admin-workbench.js 读，
+                         而模板 B 页不引那个文件（标了也是死属性）。抽屉体有 id ⇒ htmx 会发
+                         HX-Target: shop-order-drawer-body ⇒ 422 / 403 由 AdminBusinessExceptionAdvice
+                         回填到**抽屉体**——这正是 tpl-b-list 给抽屉体加 id 的用意（9.2 复审 M2），
+                         错误就落在运营正看着的那扇抽屉里，而不是被遮罩盖住的页面级错误槽。 -->
+                    <form th:if="${canFulfill and markable and !p.delivered}"
+                          th:attr="hx-post=@{/admin/shop/orders/{t}/packages/{id}/delivered(t=${order.publicToken},id=${p.id})}"
+                          hx-target="#shop-order-drawer-body" hx-swap="innerHTML" class="inline">
+                        <button class="btn btn-sm btn-neutral" type="submit"
+                                th:text="#{admin.shop.order.btn.packageDelivered}">标记该包裹送达</button>
+                    </form>
+                </td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(packages)}">
+                <td colspan="6" th:text="#{admin.shop.order.packages.empty}">尚未发货。</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- ⑤ 底部固定操作条 -->
+    <section class="sticky-footer so-actions">
+        <th:block sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.order_fulfill')">
+            <!-- 发货（AB-11B）。🔴 承运成本必填（S-11）：不录则毛利看板缺行，自营毛利是否成立就无法验证。 -->
+            <form th:if="${shippable}" data-requires-form
+                  th:attr="hx-post=@{/admin/shop/orders/{t}/ship(t=${order.publicToken})}"
+                  hx-target="#shop-order-drawer-body" hx-swap="innerHTML" class="so-ship-form">
+                <label class="field" for="so-carrier" th:text="#{admin.shop.order.col.carrier}">承运商</label>
+                <select id="so-carrier" name="carrier" class="sel" required data-requires-text>
+                    <option value="" th:text="#{admin.v130.shopOrders.ship.chooseCarrier}">选择承运商</option>
+                    <option th:each="c : ${carriers}" th:value="${c}" th:text="${c.displayName()}">JNE</option>
+                </select>
+                <label class="field" for="so-tracking" th:text="#{admin.shop.order.col.trackingNo}">物流单号</label>
+                <input id="so-tracking" type="text" name="trackingNo" class="inp" required maxlength="64"
+                       data-requires-text/>
+                <label class="field" for="so-cost" th:text="#{admin.shop.order.col.carrierCost}">承运成本</label>
+                <input id="so-cost" type="number" name="carrierCost" class="inp" min="0" required
+                       data-requires-text/>
+                <p class="hint" th:text="#{admin.shop.order.ship.hint}">承运成本填运单实际金额。</p>
+                <button type="submit" class="btn btn-primary" disabled data-requires-target
+                        th:text="#{admin.shop.order.btn.ship}">发货</button>
+            </form>
+            <!-- SPEC-2 出口①：整单标记已送达 -->
+            <form th:if="${markable}"
+                  th:attr="hx-post=@{/admin/shop/orders/{t}/mark-delivered(t=${order.publicToken})}"
+                  hx-target="#shop-order-drawer-body" hx-swap="innerHTML" class="inline">
+                <button type="submit" class="btn btn-neutral" data-confirm-button
+                        th:attr="data-confirm=#{admin.v130.shopOrders.confirm.markDelivered(${order.publicToken})}"
+                        th:text="#{admin.shop.order.btn.markDelivered}">标记整单已送达</button>
+            </form>
+        </th:block>
+        <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('shop.order_fulfill'))">
+            <button type="button" class="btn btn-primary" disabled
+                    th:title="#{admin.v130.err.forbidden(#{perm.shop.order_fulfill})}"
+                    th:text="#{admin.shop.order.btn.ship}">发货</button>
+            <span th:text="#{admin.v130.err.forbidden(#{perm.shop.order_fulfill})}">需要权限</span>
+        </p>
+    </section>
+</div>
+
+<!--
+  处置成功（AC2）：抽屉体原地换成刷新后的五区（抽屉**不自动关**，UI 稿 10-6）+ oob 列表该行 + toast。
+  摘要条不 oob —— 它是整页范围的聚合，跟着一次处置刷新要重跑一遍 COUNT FILTER，不值。
+-->
+<div th:fragment="done" th:remove="tag">
+    <!--/* 🔴 toast 必须**多包一层**：htmx 的 `beforeend:` oob 搬的是这个元素的**子节点**
+           （1.9.12 的 Ee/Fe）——直接把 hx-swap-oob 写在 .toast 上，落进宿主的只有一段裸文本：
+           没有 toast 样式，admin-core.js 的 armToast 也找不到它，于是**永远不消失**，
+           处置几单就在页脚堆几行无样式文字。外层这个 div 会被丢掉，正是我们要的。 */-->
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${message}">已处理</div>
+    </div>
+    <!--/* 🔴 外壳必须是**真的** <table hidden>，不能 th:remove="tag"：
+           htmx 只有在响应**以 `<tr` 开头**时才补 <table><tbody> 外壳；本响应的第一个标签是上面那个
+           toast div，于是走通用解析（body 上下文），裸 <tr>/<td> 被 HTML 解析器直接丢掉 ——
+           行不会被换掉（运营看着还是旧状态），单元格文本反而被 foster-parent 出来塞进抽屉顶部。
+           drawer-users.html / drawer-consult-order.html 都踩过这一条，写法照抄那边。 */-->
+    <table hidden><tbody>
+        <tr th:replace="~{admin/fragments/shop-orders-list :: row(${row}, true, ${flagged})}"></tr>
+    </tbody></table>
+    <div th:replace="~{admin/fragments/drawer-shop-order :: drawer}"></div>
+</div>
+</body>
+</html>

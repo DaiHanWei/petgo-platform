@@ -131,7 +131,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var elt = e.detail && e.detail.elt;
         var form = elt && elt.closest ? elt.closest('form[data-confirm], form[data-confirm-diff]') : null;
         if (!form || !tailtopiaIsHxForm(form)) { return; }
-        // 违规钮（data-confirm-button，admin-workbench.js）自己在 click 阶段确认过，这里不重复
+        // 钮级 data-confirm（data-confirm-button，见本文件末尾）自己在 click 阶段确认过，这里不重复
         if (e.detail.triggeringEvent && e.detail.triggeringEvent.submitter
                 && e.detail.triggeringEvent.submitter.hasAttribute && e.detail.triggeringEvent.submitter.hasAttribute('data-confirm-button')) { return; }
         var msg = form.getAttribute('data-confirm') ? tailtopiaConfirmMessage(form) : tailtopiaConfirmDiffMessage(form);
@@ -1003,5 +1003,49 @@ document.addEventListener('change', function (e) {
     });
     window.addEventListener('beforeunload', function (e) {
         if (document.querySelector('form[data-config-card].is-dirty')) { e.preventDefault(); e.returnValue = ''; }
+    });
+})();
+
+// ===== 钮级二次确认 + 「必填未填 → 提交钮禁用」（Story 2.4 / 2.8 起用；V1.3.0 Story 10.2 从
+//       admin-workbench.js 移到这里）=====
+//
+// 🔴 **为什么不能留在 admin-workbench.js**：那个文件只有模板 A 的页面引。
+//    模板 B 的抽屉里同样有这两种需求（B15 的发货表单三项必填、「标记整单已送达」要二次确认），
+//    而模板 B 页按惯例只引 admin-core.js + admin-drawer.js —— 属性照写、行为没有，
+//    表现是**按钮永远是灰的**、确认框**永远不弹**，且页面渲染与所有测试都正常（Story 10.2 复审实测）。
+//    两个处理器都是纯委托、只认自己的属性，放在 core 里对其它页面完全惰性。
+(function () {
+    // 钮级确认：同一表单里有多个提交钮、只有其中一个要确认时用它（form[data-confirm] 走 htmx:confirm）。
+    // capture 阶段先于 htmx 的 submit 处理。
+    document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('button[data-confirm-button]') : null;
+        if (btn && btn.getAttribute('data-confirm') && !window.confirm(btn.getAttribute('data-confirm'))) {
+            e.preventDefault(); e.stopPropagation();
+        }
+    }, true);
+
+    // form[data-requires-form] 里所有 [data-requires-text]（文本 / 下拉）都非空、
+    // 所有 [data-requires-file] 都选了文件，才放开 [data-requires-target]。
+    // 🔴 **必须在 htmx:afterSwap 里重扫**：右栏 / 抽屉是整块换进来的，只在 DOMContentLoaded 绑一次的话，
+    //    换进来的新表单永远停在 disabled —— 运营填完了按钮还是灰的。
+    function sync(form) {
+        var btn = form.querySelector('[data-requires-target]');
+        if (!btn) { return; }
+        var ok = true;
+        form.querySelectorAll('[data-requires-text]').forEach(function (i) { ok = ok && !!i.value.trim(); });
+        form.querySelectorAll('[data-requires-file]').forEach(function (i) { ok = ok && !!(i.files && i.files.length); });
+        btn.disabled = !ok;
+    }
+    ['input', 'change'].forEach(function (ev) {
+        document.addEventListener(ev, function (e) {
+            var f = e.target && e.target.closest ? e.target.closest('form[data-requires-form]') : null;
+            if (f) { sync(f); }
+        });
+    });
+    document.addEventListener('DOMContentLoaded', function () {
+        document.body.addEventListener('htmx:afterSwap', function (e) {
+            var t = e.detail && e.detail.target;
+            if (t && t.querySelectorAll) { t.querySelectorAll('form[data-requires-form]').forEach(sync); }
+        });
     });
 })();

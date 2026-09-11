@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  B15 订单列表片段（V1.3.0 Story 10.2 AC1）。
+  sumbar(oob) — 摘要条三格：待发货 · 在途 · 今日签收（WIB 当日）；oob=true 时随表格一起被换掉
+  rows        — 表格 + 翻页（htmx 换 #shop-order-rows 的 innerHTML，摘要条以 oob 跟上）
+  row(r, oob, flagged) — 单行（处置成功后以 oob 原位替换，见 drawer-shop-order :: done）
+      🔴 flagged（有没有异常挂起）是**形参**而不是读 model 的 exceptionTokens：done 片段那条渲染路径上
+         model 里没有 exceptionTokens，读它就是 `contains() on null` → 500，而写操作**已经提交**了
+         （htmx 不 swap 500，运营看到「什么都没发生」再点一次 ⇒ 一单登记两个运单号）。形参传不进来就编译不过。
+  🔒 **一列 PII 都没有**：收件人姓名 / 电话 / 详细地址只在抽屉里（列表只到 Kecamatan 区级，一个区几万人）。
+  模型：rows / summary / exceptionTokens / status / orderToken / from / to / page / hasNext。
+-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="shop-order-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.shopOrders.summary.pending}">待发货</div>
+        <div class="sum-value" th:text="${summary.pendingShipment()}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.shopOrders.summary.inTransit}">在途</div>
+        <div class="sum-value" th:text="${summary.inTransit()}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.shopOrders.summary.deliveredToday}">今日签收</div>
+        <div class="sum-value" th:text="${summary.deliveredToday()}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <!-- 筛选 / 翻页时摘要条随 oob 一并换；整页首屏（oob=false）不重复渲染 —— 那时它已由 so-summary 槽渲染过 -->
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/shop-orders-list :: sumbar(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(rows)}">
+        <thead>
+        <tr>
+            <th th:text="#{admin.shop.orders.col.token}">订单号</th>
+            <th th:text="#{admin.shop.orders.col.status}">状态</th>
+            <th th:text="#{admin.shop.orders.col.total}">金额</th>
+            <th th:text="#{admin.shop.orders.col.pay}">支付构成</th>
+            <th th:text="#{admin.shop.orders.col.kecamatan}">配送区</th>
+            <th th:text="#{admin.shop.orders.col.packages}">包裹数</th>
+            <th th:text="#{admin.shop.orders.col.createdAt}">下单时间</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="r : ${rows}"><tr th:replace="~{admin/fragments/shop-orders-list :: row(${r}, false, ${exceptionTokens.contains(r.orderToken)})}"></tr></th:block>
+        </tbody>
+    </table>
+    <div class="empty" th:if="${#lists.isEmpty(rows)}">
+        <span class="empty-emoji">🔍</span>
+        <p th:text="#{admin.shop.orders.empty}">暂无订单。</p>
+    </div>
+    <div class="pager" th:if="${!#lists.isEmpty(rows)}" th:attr="data-page=${page}">
+        <a th:if="${page > 0}" href="#" th:text="#{admin.v130.places.pager.prev}"
+           th:attr="hx-get=@{/admin/shop/orders(status=${status},orderToken=${orderToken},from=${from},to=${to},page=${page - 1})}"
+           hx-target="#shop-order-rows" hx-swap="innerHTML" hx-push-url="true">上一页</a>
+        <a th:if="${hasNext}" href="#" th:text="#{admin.v130.places.pager.next}"
+           th:attr="hx-get=@{/admin/shop/orders(status=${status},orderToken=${orderToken},from=${from},to=${to},page=${page + 1})}"
+           hx-target="#shop-order-rows" hx-swap="innerHTML" hx-push-url="true">下一页</a>
+    </div>
+</th:block>
+
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(r, oob, flagged)" th:id="'shop-order-row-' + ${r.orderToken}"
+        th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${r.orderToken}" th:data-drawer-url="@{/admin/shop/orders/{t}(t=${r.orderToken})}"
+        tabindex="0">
+        <td class="nowrap">
+            <span th:text="${r.orderToken}">abc</span>
+            <!-- AC1：有异常挂起（已付款待发货 ∧ 库存不足）→ 打标并链到 A8。
+                 ⚠️ 这是 <a>，点它不该同时把抽屉也开起来 —— admin-drawer.js 的行点击委托已排除 a / button。 -->
+            <a class="badge badge-danger" th:if="${flagged}"
+               th:href="@{/admin/shop/order-exceptions(open=${r.orderToken})}"
+               th:text="#{admin.v130.shopOrders.exception}">异常</a>
+        </td>
+        <td class="nowrap">
+            <span class="dot" th:classappend="${r.status == 'PENDING_SHIPMENT'} ? 'dot--todo'
+                     : (${r.status == 'SHIPPED'} ? 'dot--wait' : 'dot--done')"></span>
+            <span class="badge" th:classappend="${r.status == 'PENDING_SHIPMENT'} ? 'badge-warn'
+                     : (${r.status == 'DELIVERED' or r.status == 'COMPLETED'} ? 'badge-ok' : 'badge-neutral')"
+                  th:text="#{'admin.v130.shopOrders.status.' + ${r.status}}">SHIPPED</span>
+        </td>
+        <td th:text="${#numbers.formatInteger(r.totalAmount, 0, 'COMMA')}">305.000</td>
+        <td class="nowrap">
+            <span th:text="${r.payChannel} ?: '—'">MIXED</span>
+            <span class="muted" th:if="${r.coinAmount != null}"
+                  th:text="${#numbers.formatInteger(r.coinAmount, 0, 'COMMA')} + ' / '
+                           + ${#numbers.formatInteger(r.cashAmount ?: 0, 0, 'COMMA')}">0 / 0</span>
+        </td>
+        <td class="nowrap" th:text="${r.kecamatan}">Kebayoran Baru</td>
+        <td th:text="${r.packageCount}">1</td>
+        <td class="nowrap" th:text="${@adminTime.wib(r.createdAt)}">2026-08-18</td>
+    </tr>
+</tbody></table>
+</body>
+</html>

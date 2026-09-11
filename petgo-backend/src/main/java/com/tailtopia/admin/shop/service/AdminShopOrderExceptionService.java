@@ -191,6 +191,28 @@ public class AdminShopOrderExceptionService {
     }
 
     /**
+     * 这一批订单里哪些还挂着异常（V1.3.0 Story 10.2 AC1：B15 列表的「异常」标）。
+     *
+     * <p>🔴 <b>不能拿 {@link #exceptionCandidates} 的结果来求交</b>：那份候选集是
+     * <b>最旧的 N 条</b>待发货单（A8 的先进先出口径），而 B15 列表是<b>下单时间倒序</b>的最新 20 条 ——
+     * 待发货总数一超过那个 N，两个集合零交集，第一页就<b>永远不会出现「异常」标</b>，
+     * 而这件事在界面上和「真的没有异常」一模一样。
+     *
+     * <p>所以按<b>本页这几条</b>逐个判，并先用状态短路：只有 {@code PENDING_SHIPMENT} 才可能是异常，
+     * 其余状态一次库存查询都不发。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Set<String> flagged(java.util.Collection<String> orderTokens) {
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        for (String token : orderTokens) {
+            if (isCandidate(token)) {
+                out.add(token);
+            }
+        }
+        return out;
+    }
+
+    /**
      * 某一单还在不在候选集里（V1.3.0 Story 10.1）。
      *
      * <p>🔴 <b>本页是实时计算的候选清单，不是带状态字段的工单表</b> —— 处置完那一单就自然离开，

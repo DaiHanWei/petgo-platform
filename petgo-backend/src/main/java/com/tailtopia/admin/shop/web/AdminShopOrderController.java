@@ -2,7 +2,9 @@ package com.tailtopia.admin.shop.web;
 
 import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.admin.shop.dto.AdminShopOrderRow;
+import com.tailtopia.admin.shop.service.AdminShopOrderExceptionService;
 import com.tailtopia.admin.shop.service.AdminShopOrderService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.order.domain.Carrier;
@@ -51,22 +53,34 @@ public class AdminShopOrderController {
 
     private static final int PAGE_SIZE = 100;
 
+    /** V1.3.0 Story 10.2 AC1：列表每页 20（订单号精确查与电话搜索是「一把抓」，不分页）。 */
+    private static final int QUEUE_PAGE_SIZE = 20;
+
+    /**
+     * 🔴 非 htmx 处置后回<b>列表</b>而不是 {@code /{token}} —— 整页详情已退役（AC3），
+     * 往那里 302 等于把旧地址永久续上（D-23 明确不做旧地址跳转）。
+     */
+    private static final String REDIRECT_LIST = "redirect:/admin/shop/orders";
+
     private final AdminShopOrderService adminOrders;
     private final ShopOrderFulfillmentService fulfillment;
     private final ShopOrderRepository orders;
     private final ShopOrderLineRepository orderLines;
+    /** V1.3.0 Story 10.2 AC1：「有异常挂起」标的数据源 —— 复用 A8 的候选集，不另起一套判据。 */
+    private final AdminShopOrderExceptionService exceptions;
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
 
     public AdminShopOrderController(AdminShopOrderService adminOrders,
             ShopOrderFulfillmentService fulfillment, ShopOrderRepository orders,
-            ShopOrderLineRepository orderLines,
+            ShopOrderLineRepository orderLines, AdminShopOrderExceptionService exceptions,
             Messages msg) {
         this.adminOrders = adminOrders;
         this.fulfillment = fulfillment;
         this.orders = orders;
         this.orderLines = orderLines;
+        this.exceptions = exceptions;
         this.msg = msg;
     }
 
@@ -92,14 +106,19 @@ public class AdminShopOrderController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate to,
             @RequestParam(required = false) String phone,
-            Model model) {
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "open", required = false) String open,
+            HxRequest hx, Model model) {
         boolean canPhoneSearch = has(admin, AdminPermissions.SHOP_ORDER_PHONE_SEARCH);
         ShopOrderStatus filter = parseStatus(status);
         List<ShopOrder> found;
+        int current = Math.max(page, 0);
+        boolean hasNext = false;
 
         if (orderToken != null && !orderToken.isBlank()) {
             // 订单号精确查（token 本就不可枚举，无需额外权限）
             found = orders.findByPublicToken(orderToken.trim()).map(List::of).orElse(List.of());
+            current = 0;
         } else if (phone != null && !phone.isBlank()) {
             // 🔒 服务端独立再判一次——页面不渲染入口只是第一层
             if (!canPhoneSearch) {
@@ -111,22 +130,36 @@ public class AdminShopOrderController {
                 model.addAttribute("error", e.getMessage());
                 found = List.of();
             }
+            current = 0;
         } else {
-            found = adminOrders.search(filter, startOf(from), endOf(to), PAGE_SIZE);
+            var p = adminOrders.page(filter, startOf(from), endOf(to), current, QUEUE_PAGE_SIZE);
+            found = p.rows();
+            current = p.page();
+            hasNext = p.hasNext();
         }
 
-        model.addAttribute("rows", found.stream().map(this::toRow).toList());
+        List<AdminShopOrderRow> rows = found.stream().map(this::toRow).toList();
+        model.addAttribute("rows", rows);
+        // AC1：有异常挂起的行打「异常」标并链到 A8。
+        // 🔴 只判**本页这几条**（见 AdminShopOrderExceptionService#flagged）：拿 A8 的候选集来求交是错的
+        //    —— 那份是「最旧的 N 条」，而本列表是「最新 20 条」，待发货一多两边零交集，标就永远不出现。
+        model.addAttribute("exceptionTokens",
+                exceptions.flagged(rows.stream().map(AdminShopOrderRow::orderToken).toList()));
+        model.addAttribute("summary", adminOrders.summary(startOf(from), endOf(to)));
         model.addAttribute("statuses", ShopOrderStatus.values());
         model.addAttribute("status", filter == null ? "" : filter.name());
         model.addAttribute("orderToken", orderToken == null ? "" : orderToken);
         model.addAttribute("from", from);
         model.addAttribute("to", to);
+        model.addAttribute("page", current);
+        model.addAttribute("hasNext", hasNext);
         // 🔒 回显的是「是否搜过」，不回显号码本身 —— 回显会把 PII 带进 URL、浏览器历史与访问日志
         model.addAttribute("phoneSearched", phone != null && !phone.isBlank());
         model.addAttribute("canPhoneSearch", canPhoneSearch);
         model.addAttribute("canFulfill", has(admin, AdminPermissions.SHOP_ORDER_FULFILL));
+        model.addAttribute("open", open == null || open.isBlank() ? null : open.trim());
         model.addAttribute("active", "shopOrders");
-        return "admin/shop-orders";
+        return hx.isHtmx() ? "admin/fragments/shop-orders-list :: rows(true)" : "admin/shop-orders";
     }
 
     /** 日期按 UTC 起止换算（全库时间戳一律 UTC，CLAUDE.md 命名映射链）。 */
@@ -143,12 +176,30 @@ public class AdminShopOrderController {
         return admin == null ? null : admin.getAdminAccountId();
     }
 
-    // ---------- 详情 ----------
+    // ---------- 详情 → V1.3.0 Story 10.2：B15 抽屉 ----------
 
+    /**
+     * 订单抽屉 fragment（Story 10.2 AC2）。
+     *
+     * <p>🔴 <b>整页详情已退役</b>（AC3）：非 htmx 请求一律 404，<b>不做旧地址跳转</b>（D-23）。
+     * 路径复用同一 mapping 而不是新开 {@code /{token}/drawer} —— AB-19A「零新端点」
+     * （与 Story 10.1 的 A7 右栏同款处置）。
+     *
+     * <p>🔒 这里是收件人 PII（姓名 / 电话 / 详细地址）的<b>唯一出口</b>：列表不带、日志不记、审计摘要不记。
+     */
     @GetMapping("/admin/shop/orders/{token}")
     @PreAuthorize(VIEW_AUTH)
     public String detail(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable String token, Model model) {
+            @PathVariable String token, HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            throw AppException.notFound("该页面已并入订单列表的详情抽屉")
+                    .code("admin.err.common.pageRetired");
+        }
+        populateDrawer(admin, token, model);
+        return "admin/fragments/drawer-shop-order :: drawer";
+    }
+
+    private ShopOrder populateDrawer(AdminUserDetails admin, String token, Model model) {
         ShopOrder order = orders.findByPublicToken(token)
                 .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
 
@@ -162,7 +213,7 @@ public class AdminShopOrderController {
                 || order.getStatus() == ShopOrderStatus.SHIPPED);
         model.addAttribute("markable", order.getStatus() == ShopOrderStatus.SHIPPED);
         model.addAttribute("active", "shopOrders");
-        return "admin/shop-order-detail";
+        return order;
     }
 
     // ---------- 发货（AB-11B） ----------
@@ -174,7 +225,13 @@ public class AdminShopOrderController {
             @RequestParam String carrier,
             @RequestParam String trackingNo,
             @RequestParam(required = false) Long carrierCost,
-            RedirectAttributes ra) {
+            HxRequest hx, Model model, RedirectAttributes ra) {
+        if (hx.isHtmx()) {
+            Shipment s = adminOrders.ship(token, carrier, trackingNo, carrierCost,
+                    admin == null ? null : admin.getAdminAccountId());
+            return done(admin, token, msg.get("admin.flash.shopOrder.shipped",
+                    s.getCarrier().displayName(), s.getTrackingNo()), model);
+        }
         try {
             Shipment s = adminOrders.ship(token, carrier, trackingNo, carrierCost,
                     admin == null ? null : admin.getAdminAccountId());
@@ -184,28 +241,38 @@ public class AdminShopOrderController {
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/shop/orders/" + token;
+        return REDIRECT_LIST;
     }
 
     /** SPEC-2 出口①：整单标记已送达。 */
     @PostMapping("/admin/shop/orders/{token}/mark-delivered")
     @PreAuthorize(FULFILL_AUTH)
     public String markDelivered(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable String token, RedirectAttributes ra) {
+            @PathVariable String token, HxRequest hx, Model model, RedirectAttributes ra) {
+        if (hx.isHtmx()) {
+            adminOrders.markDelivered(token, admin == null ? null : admin.getAdminAccountId());
+            return done(admin, token, msg.get("admin.flash.shopOrder.delivered"), model);
+        }
         try {
             adminOrders.markDelivered(token, admin == null ? null : admin.getAdminAccountId());
             ra.addFlashAttribute("notice", msg.get("admin.flash.shopOrder.delivered"));
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/shop/orders/" + token;
+        return REDIRECT_LIST;
     }
 
     /** S-2：逐包裹标记送达（全部送达后订单才转已送达）。 */
     @PostMapping("/admin/shop/orders/{token}/packages/{shipmentId}/delivered")
     @PreAuthorize(FULFILL_AUTH)
     public String markPackageDelivered(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable String token, @PathVariable long shipmentId, RedirectAttributes ra) {
+            @PathVariable String token, @PathVariable long shipmentId, HxRequest hx, Model model,
+            RedirectAttributes ra) {
+        if (hx.isHtmx()) {
+            adminOrders.markPackageDelivered(token, shipmentId,
+                    admin == null ? null : admin.getAdminAccountId());
+            return done(admin, token, msg.get("admin.flash.shopOrder.parcelDelivered"), model);
+        }
         try {
             adminOrders.markPackageDelivered(token, shipmentId,
                     admin == null ? null : admin.getAdminAccountId());
@@ -213,7 +280,23 @@ public class AdminShopOrderController {
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/shop/orders/" + token;
+        return REDIRECT_LIST;
+    }
+
+    /**
+     * 处置成功统一响应（AC2）：抽屉 fragment 原地刷新 + oob 列表该行 + toast。
+     *
+     * <p>抽屉<b>不自动关</b>（UI 稿 10-6）—— 发完货运营通常还要看一眼包裹表。
+     * oob 行按 id 原位替换，状态色点与包裹数当场更新；摘要条不 oob
+     * （它是整页范围的聚合，要刷得靠筛选栏重拉，代价不值）。
+     */
+    private String done(AdminUserDetails admin, String token, String message, Model model) {
+        ShopOrder order = populateDrawer(admin, token, model);
+        model.addAttribute("row", toRow(order));
+        // oob 那一行的「异常」标：只判这一单（行片段把它当形参收，不去读 model —— 见 shop-orders-list.html 的注释）
+        model.addAttribute("flagged", exceptions.isCandidate(token));
+        model.addAttribute("message", message);
+        return "admin/fragments/drawer-shop-order :: done";
     }
 
     // ---------- 内部 ----------

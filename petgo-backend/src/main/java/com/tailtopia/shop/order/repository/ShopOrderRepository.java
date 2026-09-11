@@ -96,6 +96,34 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
             @Param("to") Instant to, Pageable pageable);
 
     /**
+     * 同一筛选的**分页**版（V1.3.0 Story 10.2 AC1：B15 列表每页 20）。
+     *
+     * <p>🔴 <b>不能用「多取一条判 hasNext」来省掉这个 count</b>：{@code PageRequest} 的偏移量是
+     * {@code pageNumber × pageSize}，把 pageSize 写成 {@code size + 1} 会让第 1 页从第 21 条开始 ——
+     * 全局第 21 条（第 0 页只显示前 20 条）<b>永远不会出现在任何一页</b>，而且越翻漏得越多。
+     * {@code Page.hasNext()} 是仓库里其它列表页的一致做法，代价是一次 count。
+     *
+     * <p>{@code countQuery} 显式给出：派生的 count 会把 {@code ORDER BY} 也带上，
+     * 有的方言下会报错；写清楚比赌它推得对稳。
+     */
+    @Query(value = """
+            SELECT o FROM ShopOrder o
+            WHERE (:status IS NULL OR o.status = :status)
+              AND (CAST(:from AS timestamp) IS NULL OR o.createdAt >= :from)
+              AND (CAST(:to AS timestamp) IS NULL OR o.createdAt < :to)
+            ORDER BY o.createdAt DESC, o.id DESC
+            """,
+            countQuery = """
+            SELECT count(o) FROM ShopOrder o
+            WHERE (:status IS NULL OR o.status = :status)
+              AND (CAST(:from AS timestamp) IS NULL OR o.createdAt >= :from)
+              AND (CAST(:to AS timestamp) IS NULL OR o.createdAt < :to)
+            """)
+    org.springframework.data.domain.Page<ShopOrder> searchPage(
+            @Param("status") ShopOrderStatus status, @Param("from") Instant from,
+            @Param("to") Instant to, Pageable pageable);
+
+    /**
      * 🔒 <b>按归一化后的收件人电话后缀匹配</b>（Story 4.3，AB-11A，NFR-11）。
      *
      * <p>得益于 C-15 的 E.164 归一化，{@code 08123…} / {@code 8123…} / {@code +62 812-3…}
