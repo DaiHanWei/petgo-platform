@@ -382,6 +382,16 @@
   "@commentAuthorBadge": {
     "description": "评论作者就是本帖作者时，昵称旁的小标签。判定在客户端比对两个已有 id，服务端不下发字段"
   },
+  "commentReplyHint": "Reply to @{name}…",
+  "@commentReplyHint": {
+    "description": "V1.3.0 Story 2.6 · AC2：回复态的输入框占位。现状占位恒为通用文案、不随回复态变化，正是用户分不清自己在回谁的直接原因",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "commentReplyingTo": "Replying to @{name}",
+  "@commentReplyingTo": {
+    "description": "回复态胶囊上的文字",
+    "placeholders": { "name": { "type": "String" } }
+  },
   "commentActionCopy": "Copy text",
   "commonCopied": "Copied",
   "commentActionReport": "Report",

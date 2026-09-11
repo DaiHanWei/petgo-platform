@@ -74,6 +74,15 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
     // trim 后非空才算「开始输入」—— 只敲了几个空格不该把点赞分享顶掉。
     final has = _controller.text.trim().isNotEmpty;
     if (_hasText != has) {
+      // AC3 第二种退出方式：**打过字又清空 = 退出回复态**。
+      // 改前只有点 ✕ 一条路，而「全选删掉重写」是用户改主意时最自然的动作 ——
+      // 删干净以后他以为自己在发新评论，实际还挂在别人的回复态上。
+      //
+      // 🔴 只在 true → false 这一跳上退出，不是「只要为空就退出」：
+      // 刚点回复时输入框本来就是空的，那时退出会让回复态当场自毁。
+      if (!has) {
+        ref.read(replyTargetProvider.notifier).clear();
+      }
       setState(() => _hasText = has);
     }
   }
@@ -94,7 +103,15 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
     try {
       final repo = ref.read(detailRepositoryProvider);
       if (parentId != null) {
-        await repo.postReply(parentId, text);
+        final created = await repo.postReply(parentId, text);
+        // 🔴 AC5：登记落点，让评论区重拉完成后**展开这条父评论并滚动过去**。
+        // 二级默认只内嵌 3 条，新回复按时间正序排在最后 —— 不登记的话，
+        // 回复超过 3 条的评论时，用户发完屏幕上什么都没变。
+        // 带上新回复的 id：回复区不止一页时，评论区要靠它知道翻到哪儿才算到位。
+        // 真正的展开/滚动在 CommentSection 里做（那边才知道刷新什么时候结束）。
+        ref
+            .read(replyLandingProvider.notifier)
+            .request(parentId: parentId, replyId: created.id);
       } else {
         final created = await repo.postComment(widget.postId, text);
         // 🔴 记下刚发的这条，让评论区把它置顶（Story 2.5 · AC6）。
@@ -182,21 +199,47 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // AC1：回复态指示改**胶囊**（原为一行纯文本）。有底色、有轮廓，
+          // 用户一眼能看出「我现在处在一个特殊状态里」，而不是以为那只是一行说明文字。
           if (replyTarget != null)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text('@${replyTarget.toName}',
-                        style: AppTypography.micro, overflow: TextOverflow.ellipsis),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  key: const ValueKey('replyingToPill'),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm, vertical: AppSpacing.xxs),
+                  decoration: BoxDecoration(
+                    color: AppColors.cream2,
+                    borderRadius: BorderRadius.circular(999),
                   ),
-                  GestureDetector(
-                    key: const ValueKey('cancelReply'),
-                    onTap: () => ref.read(replyTargetProvider.notifier).clear(),
-                    child: const Icon(Icons.close_rounded, size: 16, color: AppColors.textTertiary),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          l10n.commentReplyingTo(replyTarget.toName),
+                          style: AppTypography.micro.copyWith(color: AppColors.ink2),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      // 图标缩到 14 是为了配胶囊的密度；命中框靠 padding + opaque 补回来
+                      // （同 Story 2.3 · AC4 的做法：扩热区、不放大图标）。
+                      GestureDetector(
+                        key: const ValueKey('cancelReply'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => ref.read(replyTargetProvider.notifier).clear(),
+                        child: const Padding(
+                          padding: EdgeInsets.all(AppSpacing.xs),
+                          child: Icon(Icons.close_rounded,
+                              size: 14, color: AppColors.textTertiary),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           Row(
@@ -222,7 +265,11 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
                   maxLines: 3,
                   style: AppTypography.body,
                   decoration: InputDecoration(
-                    hintText: l10n.detailCommentHint,
+                    // AC2：占位随回复态切换。改前恒为通用文案 ——
+                    // 那正是用户分不清「我这条是发新评论还是回复某人」的直接原因。
+                    hintText: replyTarget == null
+                        ? l10n.detailCommentHint
+                        : l10n.commentReplyHint(replyTarget.toName),
                     counterText: '',
                     isDense: true,
                     filled: true,

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
+import '../../../core/theme/motion.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
@@ -69,10 +70,17 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   /// 「Using "ref" when a widget is about to or has been unmounted is unsafe」）。
   late final SessionPinnedCommentsNotifier _pinnedNotifier;
 
+  /// Story 2.6 · AC5 的落点入口。与 [_pinnedNotifier] 同样在 initState 取好（dispose 里不能碰 ref）。
+  late final ReplyLandingNotifier _landingNotifier;
+
+  /// 各父评论回复区的锚点（parentId → key），滚动定位用。
+  final Map<int, GlobalKey> _replyAnchors = {};
+
   @override
   void initState() {
     super.initState();
     _pinnedNotifier = ref.read(sessionPinnedCommentsProvider.notifier);
+    _landingNotifier = ref.read(replyLandingProvider.notifier);
     _loadInitial();
   }
 
@@ -81,6 +89,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     // AC6：置顶只在本次会话有效 —— 离开详情页立刻失效，免得它变成「永久置顶自己的评论」。
     // 排到下一帧：dispose 期间直接改 provider 会在 widget 树拆解中通知监听者。
     Future.microtask(_pinnedNotifier.clear);
+    // 落点同理：没消费掉的落点留着，会让下一个详情页莫名其妙自己展开一条评论。
+    Future.microtask(_landingNotifier.clear);
     super.dispose();
   }
 
@@ -172,9 +182,53 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
         _hasMore = page.hasMore;
         _expanded.clear();
       });
+      // 🔴 落点必须在**重拉之后**消费：上一行刚把 _expanded 清空，
+      // 先展开再刷新等于白展开（Story 2.6 · AC5）。
+      await _landOnPendingReply();
     } catch (_) {
       // 保持现状。
     }
+  }
+
+  /// 为定位新回复而额外翻页的上限（AC5）。回复区分页取数，新回复在最后一页 ——
+  /// 但「为了定位而无限翻页」会把一条有几百条回复的评论整块拉下来，那是另一种伤害。
+  static const int _replyPagingGuard = 5;
+
+  Iterable<int> _loadedReplyIds(int parentId) =>
+      (_expanded[parentId]?.items ?? const <Comment>[]).map((r) => r.id);
+
+  /// 回复发表成功后：展开该父评论的回复区并滚动定位过去（Story 2.6 · AC5）。
+  ///
+  /// 兜底口径与 AC6 一致 —— **父评论已不在列表里就什么都不做**：不报错、不跳、不留悬挂状态。
+  /// （父被删时 composer 那边已经给过专属提示并退出了回复态。）
+  Future<void> _landOnPendingReply() async {
+    final landing = ref.read(replyLandingProvider);
+    if (landing == null) return;
+    // 先清：无论后面能不能定位，这个落点都已经用过了，留着会在下次刷新时重放。
+    _landingNotifier.clear();
+    if (!_topLevel.any((c) => c.id == landing.parentId)) return;
+
+    await _expandReplies(landing.parentId);
+    // 🔴 新回复不一定在第一页：二级按时间正序，回复多的评论里**新的那条在最后一页**。
+    // 一路翻到它出现为止 —— 但设上限，免得某条有几百条回复的评论把整棵子树都拉下来
+    // （翻不到就停在已加载的末尾，也比停在第一页强）。
+    var guard = 0;
+    while (mounted &&
+        guard++ < _replyPagingGuard &&
+        !_loadedReplyIds(landing.parentId).contains(landing.replyId) &&
+        (_expanded[landing.parentId]?.hasMore ?? false)) {
+      await _expandReplies(landing.parentId);
+    }
+    if (!mounted) return;
+    // 展开后的那几行要先 layout 出来才量得到位置，所以滚动排到下一帧。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _replyAnchors[landing.parentId]?.currentContext;
+      if (ctx == null) return;
+      // alignment: 1.0 = 把回复区**底部**对齐到视口底部。二级回复是时间正序，
+      // 新回复永远是最后一条 —— 对齐底部才是「定位到新回复处」。
+      Scrollable.ensureVisible(ctx,
+          alignment: 1.0, duration: AppMotion.sheet, curve: Curves.easeOut);
+    });
   }
 
   /// 评论区迷你卡拉黑/举报成功后的收尾（修复清单 #7）：
@@ -468,6 +522,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
           _tile(l10n, c),
           if (shownReplies.isNotEmpty)
             Padding(
+              // AC5 的滚动锚点：回复区整块。定位时按底部对齐（新回复在最后一条）。
+              key: _replyAnchors.putIfAbsent(c.id, GlobalKey.new),
               padding: const EdgeInsets.only(left: AppSpacing.xl, top: AppSpacing.xs),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

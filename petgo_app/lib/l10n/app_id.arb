@@ -252,6 +252,8 @@
   "detailCommentsTitle": "Komentar",
   "detailNoComments": "Belum ada komentar, yuk mulai obrolan!",
   "commentAuthorBadge": "Penulis",
+  "commentReplyHint": "Balas @{name}…",
+  "commentReplyingTo": "Membalas @{name}",
   "commentActionCopy": "Salin teks",
   "commonCopied": "Tersalin",
   "commentActionReport": "Laporkan",

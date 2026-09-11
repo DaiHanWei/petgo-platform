@@ -43,6 +43,47 @@ class ReplyTargetNotifier extends Notifier<ReplyTarget?> {
 final NotifierProvider<ReplyTargetNotifier, ReplyTarget?> replyTargetProvider =
     NotifierProvider<ReplyTargetNotifier, ReplyTarget?>(ReplyTargetNotifier.new);
 
+/// 🔴 回复发表成功后的**落点**（V1.3.0 Story 2.6 · AC5）。
+///
+/// 二级回复按时间正序挂在父评论下，且默认只内嵌 3 条 —— 一条新回复很可能**落在折叠区里**，
+/// 用户发完看不到自己刚回的内容（与 Story 2.5 · AC6 的一级评论同一类问题，只是成因不同：
+/// 那边是热度序把它挤出第一页，这边是默认折叠把它藏起来）。
+///
+/// 所以回复成功后要做两件事：**展开该父评论的回复区** + **滚动定位过去**。
+///
+/// ⚠️ 带 [seq] 是因为「连着回同一条父评论两次」必须两次都定位 ——
+/// 只存 parentId 的话第二次状态没变，监听方收不到通知。
+/// ⚠️ 落点由 `CommentSection` 在**重拉完成之后**消费并清空（刷新会清掉 `_expanded`，
+/// 先展开再刷新等于白展开）。
+class ReplyLanding {
+  const ReplyLanding({required this.parentId, required this.replyId, required this.seq});
+
+  /// 要展开的父评论。
+  final int parentId;
+
+  /// 刚发出的那条回复。**回复区可能不止一页** —— 二级按时间正序，新回复落在**最后一页**，
+  /// 只展开第一页时它照样看不见。带上 id，评论区才能一路翻到它为止。
+  final int replyId;
+
+  final int seq;
+}
+
+class ReplyLandingNotifier extends Notifier<ReplyLanding?> {
+  @override
+  ReplyLanding? build() => null;
+
+  void request({required int parentId, required int replyId}) => state = ReplyLanding(
+        parentId: parentId,
+        replyId: replyId,
+        seq: (state?.seq ?? 0) + 1,
+      );
+
+  void clear() => state = null;
+}
+
+final NotifierProvider<ReplyLandingNotifier, ReplyLanding?> replyLandingProvider =
+    NotifierProvider<ReplyLandingNotifier, ReplyLanding?>(ReplyLandingNotifier.new);
+
 /// 评论框聚焦请求信号。点击互动栏评论图标时 [requestFocus]，CommentComposer 监听后弹出键盘。
 /// （回复按钮通过 [replyTargetProvider] 变更触发聚焦，无需经此信号。）
 class CommentFocusNotifier extends Notifier<int> {
