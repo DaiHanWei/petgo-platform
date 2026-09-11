@@ -321,7 +321,13 @@ class AdminShopInventoryEndpointIntegrationTest extends ApiIntegrationTest {
     void inventoryPageShowsThreeColumns() throws Exception {
         long skuId = seedSku(12, 5);      // actual=12 locked=5 available=7
 
-        String html = mvc.perform(get("/admin/shop/inventory")
+        // V1.3.0 Story 10.4 AC1 起本页每页 20 条，按 (product_id, id) 升序 ——
+        // 刚造的 SKU 带着最大的 product_id，必定落在**最后一页**。不带 page 参数只会看到第 1 页，
+        // 而那一页里没有这一行：断言会红，且红得像是三列渲染坏了。
+        long total = jdbc.queryForObject("SELECT count(*) FROM shop_skus", Long.class);
+        int lastPage = (int) ((total - 1) / 20);
+
+        String html = mvc.perform(get("/admin/shop/inventory").param("page", String.valueOf(lastPage))
                         .with(authentication(staffWith(AdminPermissions.SHOP_INVENTORY_VIEW))))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
@@ -422,5 +428,159 @@ class AdminShopInventoryEndpointIntegrationTest extends ApiIntegrationTest {
         } catch (Exception e) {
             return true;
         }
+    }
+
+    // ==================== V1.3.0 Story 10.4：B18 模板 B + 抽屉四操作 ====================
+
+    /** 某个 SKU 当前所在的页码（每页 20，按 product_id, id 升序）。 */
+    private int pageOf(long skuId) {
+        Long before = jdbc.queryForObject("""
+                SELECT count(*) FROM shop_skus s
+                WHERE (s.product_id, s.id) < (SELECT t.product_id, t.id FROM shop_skus t WHERE t.id = ?)
+                """, Long.class, skuId);
+        return (int) (before / 20);
+    }
+
+    @Test
+    @DisplayName("B18 列表整页：摘要条三格 + 抽屉壳；HX-Request 返行片段（不是整页）")
+    void inventoryListRendersSummaryAndDrawerShell() throws Exception {
+        seedSku(12, 5);
+        var viewer = staffWith(AdminPermissions.SHOP_INVENTORY_VIEW);
+
+        String html = mvc.perform(get("/admin/shop/inventory").with(authentication(viewer)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(html).contains("shop-inventory-summary").contains("shop-inventory-rows");
+        assertThat(html).as("AC2 的四操作在抽屉里，抽屉壳必须渲染").contains("shop-inventory-drawer-body");
+        assertThat(html).as("四张页尾常驻表单卡已收进抽屉，整页上不该再有它们")
+                .doesNotContain("/admin/shop/inventory/purchase\"");
+
+        String body = mvc.perform(get("/admin/shop/inventory").header("HX-Request", "true")
+                        .with(authentication(viewer)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain("<html").doesNotContain("shop-inventory-drawer-body");
+    }
+
+    /**
+     * AC2 / D-43：抽屉取数<b>复用 {@code inventory/{skuId}/movements} 的 HX-Request 分支</b> —— 零新端点。
+     * 同一条 mapping 非 htmx 时返的是 AC3 那张只读流水整页。
+     */
+    @Test
+    @DisplayName("B18 抽屉走 movements 的 HX-Request 分支（零新端点）；非 htmx 同 URL 返只读流水整页")
+    void inventoryDrawerComesFromTheMovementsMapping() throws Exception {
+        long skuId = seedSku(12, 5);
+        var editor = staffWith(AdminPermissions.SHOP_INVENTORY_EDIT, AdminPermissions.SHOP_COST_EDIT);
+
+        String drawer = mvc.perform(get("/admin/shop/inventory/{id}/movements", skuId)
+                        .header("HX-Request", "true").with(authentication(editor)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(drawer).doesNotContain("<html");
+        assertThat(drawer).as("四个操作页签都要在").contains("data-itab=\"purchase\"")
+                .contains("data-itab=\"returnInbound\"").contains("data-itab=\"damage\"")
+                .contains("data-itab=\"stocktake\"");
+        assertThat(drawer).as("🔴 四个操作不再有 SKU 下拉：抽屉绑定被点开的那一行，选错 SKU 在结构上不存在")
+                .doesNotContain("<select name=\"skuId\"");
+        assertThat(drawer).as("skuId 走隐藏字段").contains("name=\"skuId\"");
+
+        String page = mvc.perform(get("/admin/shop/inventory/{id}/movements", skuId)
+                        .with(authentication(editor)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(page).contains("<html");
+        assertThat(page).as("AC3：流水页只读，一个 form 都不能有").doesNotContain("<form");
+    }
+
+    /**
+     * AC2：抽屉里提交成功 → 主 swap 换抽屉体、oob 换<b>被操作的那一行</b>与<b>摘要条</b>。
+     *
+     * <p>🔴 这条路径此前<b>零覆盖</b>：htmx 分支只有运营真在抽屉里点保存时才会跑，
+     * 而既有用例走的全是非 htmx 的 302。片段里任何一个模板错误都只在那一刻才炸。
+     */
+    @Test
+    @DisplayName("B18 抽屉报损成功：返抽屉片段 + oob 行 + oob 摘要条，且抽屉【不关】")
+    void damageFromDrawerSwapsRowAndSummary() throws Exception {
+        long skuId = seedSku(10, 3);      // 可售 7
+        var editor = staffWith(AdminPermissions.SHOP_INVENTORY_EDIT);
+
+        var res = mvc.perform(post("/admin/shop/inventory/damage")
+                        .header("HX-Request", "true").header("HX-Target", "shop-inventory-drawer-body")
+                        .with(authentication(editor)).with(csrf())
+                        .param("skuId", String.valueOf(skuId)).param("qty", "2")
+                        .param("reason", "破损"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String body = res.getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("<html");
+        assertThat(body).as("被操作的那一行要 oob 换掉").contains("shop-inventory-row-" + skuId);
+        assertThat(body).as("摘要条是全表聚合，这一笔可能让别的格子也变 —— 必须一起 oob 换")
+                .contains("shop-inventory-summary");
+        assertThat(body).contains("hx-swap-oob");
+        assertThat(res.getResponse().getHeader("HX-Trigger"))
+                .as("🔴 库存操作常是连着几笔，成功后抽屉不自动关（UI 稿 10-6）—— 不该发 drawer-close")
+                .doesNotContain("admin:drawer-close");
+        assertThat(actualOf(skuId)).isEqualTo(8);
+    }
+
+    @Test
+    @DisplayName("B18 抽屉报损超过可售 → 4xx 且 HX-Retarget 落抽屉体（不是整表被红字换掉）")
+    void damageBeyondAvailableIsRetargetedToTheDrawer() throws Exception {
+        long skuId = seedSku(10, 7);      // 可售 3
+
+        var res = mvc.perform(post("/admin/shop/inventory/damage")
+                        .header("HX-Request", "true").header("HX-Target", "shop-inventory-drawer-body")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_INVENTORY_EDIT))).with(csrf())
+                        .param("skuId", String.valueOf(skuId)).param("qty", "5")
+                        .param("reason", "破损"))
+                .andReturn();
+
+        assertThat(res.getResponse().getStatus()).isBetween(400, 499);
+        assertThat(res.getResponse().getHeader("HX-Retarget")).isEqualTo("#shop-inventory-drawer-body");
+        assertThat(res.getResponse().getContentAsString())
+                .as("错误片段不该顺手把整表 / 摘要条 oob 换掉").doesNotContain("hx-swap-oob");
+        assertThat(actualOf(skuId)).as("拒绝就必须一件都没动").isEqualTo(10);
+    }
+
+    /**
+     * 🔒 AC2：无 {@code cost_edit} 的账号在抽屉里点采购入库 → 403 片段落抽屉体。
+     *
+     * <p>页面上那个页签是<b>渲染出来但禁用并注明</b>的（AC2），服务端这道判定才是真正的门。
+     */
+    @Test
+    @DisplayName("🔒 B18 无 cost_edit 的账号 htmx 采购入库 → 403，一件库存都不动")
+    void purchaseWithoutCostEditIsForbiddenUnderHtmx() throws Exception {
+        long skuId = seedSku(4, 0);
+
+        var res = mvc.perform(post("/admin/shop/inventory/purchase")
+                        .header("HX-Request", "true").header("HX-Target", "shop-inventory-drawer-body")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_INVENTORY_EDIT))).with(csrf())
+                        .param("skuId", String.valueOf(skuId)).param("qty", "3")
+                        .param("purchaseNo", "PO-9").param("costPrice", "1000"))
+                .andExpect(status().isForbidden())
+                .andReturn();
+
+        assertThat(res.getResponse().getHeader("HX-Retarget")).isEqualTo("#shop-inventory-drawer-body");
+        assertThat(actualOf(skuId)).isEqualTo(4);
+    }
+
+    /** AC1：摘要条的售罄计数必须把<b>还没有库存行</b>的 SKU 算进去（新建 SKU 到首次入库之间就是这个状态）。 */
+    @Test
+    @DisplayName("B18 摘要条：没有 sku_inventory 行的 SKU 也计入售罄")
+    void summaryCountsSkusWithoutAnInventoryRowAsOutOfStock() throws Exception {
+        long skuId = seedSku(0, 0);
+        jdbc.update("DELETE FROM sku_inventory WHERE sku_id = ?", skuId);
+
+        int page = pageOf(skuId);
+        String html = mvc.perform(get("/admin/shop/inventory").param("page", String.valueOf(page))
+                        .with(authentication(staffWith(AdminPermissions.SHOP_INVENTORY_VIEW))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).as("没有库存行的 SKU 在行上也要显示为售罄（可售按 0 算）")
+                .contains("shop-inventory-row-" + skuId).contains("row-danger");
+        // 状态列走 key：缺键时 Thymeleaf 渲染成 ??admin.…，而那在页面上只是一串乱码、不报错
+        assertThat(html).doesNotContain("??admin.");
     }
 }

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  B18 库存列表片段（V1.3.0 Story 10.4 AC1）。
+  sumbar — 摘要条三格；rows — 表格 + 分页；row — 单行（抽屉里处置成功后 oob 原位替换）。
+  🔴 三个数（实际 / 锁定 / 可售）必须并排，不得合并、不得只显示可售（AB-10C）：
+     客服排查「用户说买不了但后台显示有货」时，差异一定在锁定库存上 —— 合并等于把排查依据删掉。
+  🔴 可售是**查询期计算值**（actual − locked），不落库、不加第三列（继承 V102 表设计与 Story 1.2 口径）。
+-->
+<body>
+
+<!--/* 摘要条三格（AC1）。处置成功后由 done 片段以 oob 换掉：售罄 / 低库存 / 锁定合计都是**全表聚合**，
+       一笔入库可能让别的格子也跟着变，只换被点的那一行会让摘要条停在旧数。 */-->
+<div th:fragment="sumbar(oob)" id="shop-inventory-summary" class="sum"
+     th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <span class="sum-label" th:text="#{admin.v130.shopInventory.sum.outOfStock}">售罄 SKU</span>
+        <span class="sum-value" th:text="${summary.outOfStock()}">0</span>
+    </div>
+    <div class="sum-item">
+        <span class="sum-label" th:text="#{admin.v130.shopInventory.sum.lowStock}">低库存 SKU</span>
+        <span class="sum-value" th:text="${summary.lowStock()}">0</span>
+    </div>
+    <div class="sum-item">
+        <!--/* 锁定合计不是「卖出去的量」：它是已提交未出库的占用。客服最常把这两件事搞混。 */-->
+        <span class="sum-label" th:text="#{admin.v130.shopInventory.sum.lockedTotal}">锁定库存合计</span>
+        <span class="sum-value" th:text="${summary.lockedTotal()}">0</span>
+    </div>
+</div>
+
+<th:block th:fragment="rows">
+    <table th:if="${!#lists.isEmpty(rows)}">
+        <thead><tr>
+            <th th:text="#{admin.shop.col.name}">商品名</th>
+            <th th:text="#{admin.shop.sku.specName}">规格</th>
+            <th class="s-col-num" th:text="#{admin.shop.inventory.col.actual}">实际库存</th>
+            <th class="s-col-num" th:text="#{admin.shop.inventory.col.locked}">锁定库存</th>
+            <th class="s-col-num" th:text="#{admin.shop.inventory.col.available}">可售库存</th>
+            <th th:text="#{admin.shop.inventory.col.status}">状态</th>
+        </tr></thead>
+        <tbody>
+        <!--/* ⚠️ th:each 必须挂在外层 th:block 上：th:replace 的优先级比 th:each **高**，
+               写在同一个 <tr> 上时 replace 先跑，循环根本不会展开 —— 表格里只剩一行。 */-->
+        <th:block th:each="r : ${rows}"><tr th:replace="~{admin/fragments/shop-inventory-list :: row(${r}, false)}"></tr></th:block>
+        </tbody>
+    </table>
+    <div class="empty" th:if="${#lists.isEmpty(rows)}">
+        <span class="empty-emoji">📦</span>
+        <p th:text="#{admin.shop.inventory.empty}">暂无 SKU。请先在商品管理中录入商品与规格。</p>
+    </div>
+
+    <div class="pager" th:if="${!#lists.isEmpty(rows)}" th:attr="data-page=${page}">
+        <a th:if="${page > 0}" href="#" data-no-drawer hx-target="#shop-inventory-rows" hx-swap="innerHTML"
+           hx-push-url="true" th:attr="hx-get=@{/admin/shop/inventory(page=${page - 1})}"
+           th:text="#{admin.audit.prev}">← 上一页</a>
+        <span th:text="#{admin.v130.shopInventory.pager.page(${page + 1})}">第 1 页</span>
+        <a th:if="${hasNext}" href="#" data-no-drawer hx-target="#shop-inventory-rows" hx-swap="innerHTML"
+           hx-push-url="true" th:attr="hx-get=@{/admin/shop/inventory(page=${page + 1})}"
+           th:text="#{admin.audit.next}">下一页 →</a>
+    </div>
+</th:block>
+
+<!--/* 单行。置于 rows 之外 → 整页渲染时不会多输出一行游离的 <tr>。
+       🔴 行点开抽屉走的是 **inventory/{skuId}/movements**（零新端点，D-43）：抽屉上半就是那条流水，
+          复用它既省一个端点，也保证抽屉里的流水与流水页同源（两条查询各写一份早晚会分叉）。 */-->
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(r, oob)" th:id="'shop-inventory-row-' + ${r.skuId()}"
+        th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${r.skuId()}"
+        th:data-drawer-url="@{/admin/shop/inventory/{id}/movements(id=${r.skuId()})}" tabindex="0"
+        th:classappend="${r.stockStatus().name() == 'OUT_OF_STOCK'} ? 'row-danger'">
+        <td th:text="${r.productName()}">商品</td>
+        <td th:text="${r.specName()}">3 kg</td>
+        <td class="s-col-num" th:text="${r.actual()}">10</td>
+        <td class="s-col-num" th:text="${r.locked()}">3</td>
+        <td class="s-col-num" th:text="${r.available()}">7</td>
+        <td>
+            <!--/* 🔴 走 key 而不是直接渲染枚举常量名：原先这一列铺给运营的是 OUT_OF_STOCK / LOW_STOCK，
+                   切 ID 之后连英文都不是。售罄行整行红底（AC1）。 */-->
+            <span class="badge" th:classappend="${r.stockStatus().name() == 'OUT_OF_STOCK'} ? 'badge-danger'
+                     : (${r.stockStatus().name() == 'LOW_STOCK'} ? 'badge-warn' : 'badge-ok')"
+                  th:text="#{'admin.v130.shopInventory.status.' + ${r.stockStatus().name()}}">有货</span>
+        </td>
+    </tr>
+</tbody></table>
+</body>
+</html>

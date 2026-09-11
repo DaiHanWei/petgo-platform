@@ -1,6 +1,9 @@
 package com.tailtopia.admin.shop.web;
 
+import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.shared.web.AdminFragmentResponses;
+import com.tailtopia.admin.shared.web.AdminHxEvents;
 import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.admin.shared.web.StateTab;
 import com.tailtopia.admin.shop.service.AdminReturnService;
@@ -365,15 +368,51 @@ public class AdminReturnController {
         return REDIRECT_QUEUE;
     }
 
-    // ---------- 5.6 判例库 ----------
+    // ---------- 5.6 判例库（B19，V1.3.0 Story 10.4 AC4：模板 B + 抽屉） ----------
 
+    /**
+     * B19 开封判例（AC4）。
+     *
+     * <p>🔴 <b>判例库是一致性工具，不是风控工具</b>（SPEC-24）：它解决「同一情形不同客服判得不一样」。
+     * 骗退风控由 90 日 ≤2 次的频次上限承担，两者<b>不可互相替代</b> —— 查过判例不等于查过风险。
+     * 页头那句常驻提示是 AC 的一部分，不是装饰。
+     *
+     * <p>🔴 <b>与 B17 Banner 是两个不同的路由与数据模型</b>（UI 稿 09-04 拆帧），不要合页。
+     *
+     * <p>抽屉取数复用这同一条 mapping（{@code ?create=1} + {@code HX-Request}）—— <b>零新端点</b>，
+     * 与 10.1 / 10.2 / 10.3 同款处置。
+     */
     @GetMapping("/admin/shop/return-precedents")
     @PreAuthorize(VIEW_AUTH)
-    public String precedents(@RequestParam(required = false) String q, Model model) {
+    public String precedents(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam(required = false) String q,
+            @RequestParam(value = "create", required = false) String create,
+            HxRequest hx, Model model) {
+        model.addAttribute("active", "shopReturns");
+        // 🔒 只读账号不给「沉淀判例」入口：没有这道门，他能打开抽屉、填完提交才收到 403 —— 那是一次白填。
+        //    服务端的 @PreAuthorize 照旧兜底（模板隐藏可以看源码绕过）。
+        model.addAttribute("canAdd", hasApprove(admin));
+        if (hx.isHtmx() && create != null) {
+            return "admin/fragments/drawer-shop-precedent :: form";
+        }
         model.addAttribute("rows", adminReturns.searchPrecedents(q, PAGE_SIZE));
         model.addAttribute("q", q == null ? "" : q);
-        model.addAttribute("active", "shopReturns");
-        return "admin/shop-return-precedents";
+        model.addAttribute("openCreate", create != null);
+        return hx.isHtmx() ? "admin/fragments/shop-precedents-list :: rows"
+                : "admin/shop-return-precedents";
+    }
+
+    /** ⚠️ 与本类其它权限判定同款（各 Controller 各自 {@code private static}，跨类不可调用）。 */
+    private static boolean hasApprove(AdminUserDetails admin) {
+        if (admin == null) {
+            return false;
+        }
+        for (org.springframework.security.core.GrantedAuthority a : admin.getAuthorities()) {
+            if ("ROLE_SUPER_ADMIN".equals(a.getAuthority()) || AdminPermissions.REFUND_APPROVE.equals(a.getAuthority())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @PostMapping("/admin/shop/return-precedents")
@@ -381,7 +420,19 @@ public class AdminReturnController {
     public String addPrecedent(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam String situation, @RequestParam boolean judgedOpened,
             @RequestParam String rationale, @RequestParam(required = false) String evidenceKeys,
+            HxRequest hx, Model model, jakarta.servlet.http.HttpServletResponse response,
             RedirectAttributes ra) {
+        if (hx.isHtmx()) {
+            adminReturns.addPrecedent(situation, judgedOpened, rationale, evidenceKeys, null,
+                    actorOf(admin));
+            // 🔴 整表重拉：判例按时间倒序，新沉淀的那条落在第一行 —— 没有「被点的那一行」可换。
+            model.addAttribute("rows", adminReturns.searchPrecedents(null, PAGE_SIZE));
+            model.addAttribute("q", "");
+            model.addAttribute("canAdd", true);
+            model.addAttribute("message", msg.get("admin.flash.return.precedentSaved"));
+            AdminFragmentResponses.trigger(response, AdminHxEvents.DRAWER_CLOSE);
+            return "admin/fragments/shop-precedents-list :: done";
+        }
         try {
             adminReturns.addPrecedent(situation, judgedOpened, rationale, evidenceKeys, null,
                     actorOf(admin));

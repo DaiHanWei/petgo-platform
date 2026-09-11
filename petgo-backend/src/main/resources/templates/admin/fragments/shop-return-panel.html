@@ -152,8 +152,15 @@
 
     <!-- ⑤ 当前步操作区 -->
     <section class="wb-actions sr-actions">
+        <!--/* V1.3.0 Story 10.4 AC4：带 ?q= 预填检索。
+               🔴 预填的是**商品名**，不是用户的退货说明（r.reasonNote）：那是用户自由填写的文本，
+                  可能含姓名 / 地址 / 电话，放进 URL 就进了浏览器历史、Referer 与访问日志 ——
+                  而这条链接还是 target=_blank 的外跳。商品名不是 PII，且「同一款粮的开封判定」
+                  正是判例库要对齐的那个维度。 */-->
         <p class="hint">
-            <a th:href="@{/admin/shop/return-precedents}" target="_blank" rel="noopener"
+            <a th:href="@{/admin/shop/return-precedents(q=${lineNames != null and lines != null
+                         and !#lists.isEmpty(lines)} ? ${lineNames.get(lines[0].id)} : null)}"
+               target="_blank" rel="noopener"
                th:text="#{admin.v130.shopReturns.precedents.link}">查开封判例</a>
         </p>
 

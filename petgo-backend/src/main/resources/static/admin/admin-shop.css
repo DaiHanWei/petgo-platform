@@ -679,3 +679,17 @@ main > h2:first-child { margin-top: 0; }
 /* 大区之间的断点（如「商品表单」→「SKU 维护」）。
    .s-card 默认的 margin-bottom:14px 是同一区内相邻卡片的节奏，跨区需要更明显的间隔。 */
 .s-section { margin-top: 20px; }
+
+/* ===== B18 库存（V1.3.0 Story 10.4）===== */
+/* 🔴 售罄行整行红底（AC1）：状态徽标一个人在第六列，运营扫表时看的是行本身。 */
+tr.row-danger td { background: var(--danger-bg); }
+/* 抽屉：上半流水摘要是一张窄表，下半四个操作页签。 */
+.inv-drawer .drawer-sub { margin: 0 0 10px; font-size: var(--fs-md); }
+.inv-drawer .inv-movements { margin-top: 14px; }
+.inv-drawer .inv-mini { width: 100%; font-size: var(--fs-xs); }
+.inv-drawer .inv-mini td, .inv-drawer .inv-mini th { padding: 4px 6px; }
+.inv-drawer .inv-tabs { margin-top: 14px; }
+.inv-drawer .inv-tab-panel { padding-top: 10px; }
+.inv-drawer .inv-tab-panel label { display: block; margin-bottom: 8px; }
+.inv-drawer .inv-tab-panel label > span { display: block; color: var(--muted); font-size: var(--fs-xs); }
+.inv-drawer .inv-tab-panel .inp { width: 100%; box-sizing: border-box; }

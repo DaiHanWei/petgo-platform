@@ -549,4 +549,100 @@ class AdminReturnEndpointIntegrationTest extends ApiIntegrationTest {
         fulfillment.ship(o.getPublicToken(), Carrier.JNE, "JP" + SEQ.incrementAndGet(), 0L);
         return new Ctx(uid, sku, orders.findByPublicToken(o.getPublicToken()).orElseThrow());
     }
+
+    // ==================== V1.3.0 Story 10.4：B19 模板 B + 抽屉（AC4）====================
+
+    @Test
+    @DisplayName("B19 整页：常驻业务定位提示 + 抽屉壳；HX-Request 返行片段")
+    void precedentsPageRendersHintAndDrawerShell() throws Exception {
+        Authentication staff = staffWith(AdminPermissions.REFUND_APPROVE);
+
+        String html = mvc.perform(get("/admin/shop/return-precedents").with(authentication(staff)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        // 🔴 这句是 AC 的一部分不是装饰（SPEC-24）：删掉它，客服会把「查过判例」当成「查过风险」
+        assertThat(html).as("页头的业务定位提示必须常驻").contains("一致性工具");
+        assertThat(html).contains("shop-precedent-drawer-body").contains("shop-precedent-rows");
+        assertThat(html).as("沉淀表单已收进抽屉，整页上不该再有页尾那张常驻表单卡")
+                .doesNotContain("name=\"evidenceKeys\"");
+
+        String rows = mvc.perform(get("/admin/shop/return-precedents").header("HX-Request", "true")
+                        .with(authentication(staff)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(rows).doesNotContain("<html").doesNotContain("shop-precedent-drawer-body");
+    }
+
+    /** AC4：抽屉表单走 {@code ?create=1} 复用同一条 mapping —— 零新端点。 */
+    @Test
+    @DisplayName("B19 抽屉表单走 ?create=1（零新端点）")
+    void precedentDrawerComesFromTheListMapping() throws Exception {
+        String form = mvc.perform(get("/admin/shop/return-precedents").param("create", "1")
+                        .header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.REFUND_APPROVE))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(form).doesNotContain("<html").contains("f-situation").contains("f-judged");
+        assertThat(form).as("提交打到既有端点").contains("/admin/shop/return-precedents");
+    }
+
+    /**
+     * AC4：抽屉里沉淀成功 → oob 整表 + toast + 关抽屉。
+     *
+     * <p>🔴 重拉的是<b>不带检索词</b>的全量：刚沉淀的那条多半不匹配运营此刻的检索词，
+     * 按 q 重拉会得到「保存成功了但列表里找不到它」—— 最像失败的一种成功。
+     */
+    @Test
+    @DisplayName("B19 抽屉沉淀成功：oob 整表（含新沉淀那条）+ toast + HX-Trigger 关抽屉")
+    void precedentAddedFromDrawerRefreshesTheWholeTable() throws Exception {
+        var res = mvc.perform(post("/admin/shop/return-precedents")
+                        .header("HX-Request", "true").header("HX-Target", "shop-precedent-drawer-body")
+                        .with(authentication(staffWith(AdminPermissions.REFUND_APPROVE))).with(csrf())
+                        .param("situation", "抽屉沉淀的判例 A")
+                        .param("judgedOpened", "false")
+                        .param("rationale", "内袋密封完好"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String body = res.getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("<html");
+        assertThat(body).contains("hx-swap-oob").contains("id=\"shop-precedent-rows\"");
+        assertThat(body).as("新沉淀的那条要出现在重拉回来的整表里").contains("抽屉沉淀的判例 A");
+        assertThat(res.getResponse().getHeader("HX-Trigger"))
+                .as("不关抽屉的话，保存成功后表单还盖在表格上，运营会以为没生效")
+                .contains("admin:drawer-close");
+    }
+
+    @Test
+    @DisplayName("B19 抽屉提交理由为空 → 4xx 且 HX-Retarget 落抽屉体（不是整表被红字换掉）")
+    void precedentValidationErrorIsRetargetedToTheDrawer() throws Exception {
+        var res = mvc.perform(post("/admin/shop/return-precedents")
+                        .header("HX-Request", "true").header("HX-Target", "shop-precedent-drawer-body")
+                        .with(authentication(staffWith(AdminPermissions.REFUND_APPROVE))).with(csrf())
+                        .param("situation", "x").param("judgedOpened", "true").param("rationale", " "))
+                .andReturn();
+
+        assertThat(res.getResponse().getStatus()).isBetween(400, 499);
+        assertThat(res.getResponse().getHeader("HX-Retarget")).isEqualTo("#shop-precedent-drawer-body");
+        assertThat(res.getResponse().getContentAsString()).doesNotContain("hx-swap-oob");
+    }
+
+    /** 🔒 AC4：只读账号（{@code refund.view}）看得到判例，但沉淀入口不渲染、提交也被服务端拒。 */
+    @Test
+    @DisplayName("🔒 B19 只读账号：能看、没有沉淀入口、htmx 提交 → 403")
+    void precedentWritesRequireRefundApprove() throws Exception {
+        Authentication viewer = staffWith(AdminPermissions.REFUND_VIEW);
+
+        String html = mvc.perform(get("/admin/shop/return-precedents").with(authentication(viewer)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(html).as("🔒 没有这道门，只读账号能打开抽屉、填完提交才收到 403 —— 那是一次白填")
+                .doesNotContain("data-drawer-res=\"shop-precedent\"");
+
+        mvc.perform(post("/admin/shop/return-precedents")
+                        .header("HX-Request", "true").header("HX-Target", "shop-precedent-drawer-body")
+                        .with(authentication(viewer)).with(csrf())
+                        .param("situation", "x").param("judgedOpened", "true").param("rationale", "y"))
+                .andExpect(status().isForbidden());
+    }
 }
