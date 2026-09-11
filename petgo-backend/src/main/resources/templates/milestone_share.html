@@ -207,9 +207,12 @@
       window.addEventListener('pagehide', function () { clearTimeout(t); }, { once: true });
       return t;
     }
-    // 装了 Play 的机器用 market:// 直接开商店 App，少一跳。
-    function toMarket(webUrl) {
-      return webUrl.replace('https://play.google.com/store/apps/details', 'market://details');
+    // 安卓唤起用 intent://，由系统决定"唤起还是兜底"，不靠页面自己掐表。
+    // fallback 必须是 http(s)（Chrome 的硬性要求），所以给 Play 网页地址而不是 market://。
+    function toIntent(deep, fallbackWeb) {
+      var rest = deep.replace(/^tailtopia:\/\//, '');
+      return 'intent://' + rest + '#Intent;scheme=tailtopia;package=com.tailtopia.app;'
+           + 'S.browser_fallback_url=' + encodeURIComponent(fallbackWeb) + ';end';
     }
 
     el.addEventListener('click', function (e) {
@@ -219,14 +222,15 @@
       if (!isIOS && !isAndroid) { go(el.href); return; }
       if (!deep) { go(isAndroid ? el.dataset.android : el.dataset.ios); return; }
 
+      // 🔴 安卓走 intent://（2026-09-11，同 content_share.html）：
+      // `tailtopia://milestone` 的 intent-filter 本次才加，已装老版本的人系统不认这个 scheme，
+      // 在 WhatsApp / IG 内置 WebView 里会跳 ERR_UNKNOWN_URL_SCHEME 错误页，页面一没兜底
+      // 定时器跟着死。交给系统：装了新版→唤起；老版本或没装→走 browser_fallback_url。
       if (isAndroid) {
-        guard(function () {
-          guard(function () { go(el.dataset.android); }, 700);
-          go(toMarket(el.dataset.android));
-        }, 900);
-      } else {
-        guard(function () { go(el.dataset.ios); }, 900);
+        go(toIntent(deep, el.dataset.android));
+        return;
       }
+      guard(function () { go(el.dataset.ios); }, 900);
       go(deep);
     });
   })();
