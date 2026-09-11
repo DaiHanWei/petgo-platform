@@ -103,9 +103,13 @@ class ShopProductSummary {
 
 /// 商品图比例的收敛区间。**与内容侧 Feed 的 `kFeedRatioMin/Max` 取同值**：
 /// 同一个 App 里两处图片流用不同的比例区间，用户会觉得其中一处"图被压过"。
-/// 0.75 = 3:4 竖拍（最常见的竖图比例），1.34 ≈ 4:3 横图。
+/// 0.75 = 3:4 竖拍（最常见的竖图比例），1.78 = 16:9 横图。
+///
+/// 🔁 **2026-09-11 上界随内容侧由 1.34 放宽到 1.78**（起因见 `kFeedRatioMax` 的注释）。
+/// 两处**刻意保持同值**：商家传的横图与用户发的横图若一处被裁一处不裁，就是前述的"图被压过"。
+/// 代价是商品列表里横图卡片会比竖图矮一截、高度参差 —— 已知并接受。
 const double kShopImageRatioMin = 0.75;
-const double kShopImageRatioMax = 1.34;
+const double kShopImageRatioMax = 1.78;
 
 /// IDR 金额格式化：`285000` → `Rp 285.000`。
 ///
