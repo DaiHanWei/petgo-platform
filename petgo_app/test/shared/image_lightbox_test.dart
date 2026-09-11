@@ -167,6 +167,9 @@ void main() {
       calls.clear();
 
       await tester.tap(find.byKey(const ValueKey('lightboxPager')));
+      // ⚠️ Story 3.2 起，单击关闭要等过双击仲裁窗口（kLightboxSingleTapDelay）才执行 ——
+      // 不等这一下的话点了等于没点。窗口本身的约束在 lightbox_gesture_test.dart 里钉。
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
 
       expect(restoredSystemBars(calls), isTrue);

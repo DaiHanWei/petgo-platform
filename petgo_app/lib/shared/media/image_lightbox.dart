@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../widgets/app_image.dart';
+import 'lightbox_gestures.dart';
 
 /// 全屏图片查看器（灯箱）。V1.3.0 批次 A · Story 3.1（FR-115 · AD-A14）。
 ///
@@ -61,8 +64,16 @@ class ImageLightbox extends StatefulWidget {
     required String source,
   }) {
     if (urls.isEmpty) return Future<void>.value();
-    return Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => ImageLightbox(
+    return Navigator.of(context).push(PageRouteBuilder<void>(
+      // 🔴 `opaque: false` 是 Story 3.2 下滑关闭（AC1「背景随拖拽渐透明」）的**前提**：
+      // 不透明路由之下的那一页根本不参与绘制，把黑底调淡只会露出一片虚空，
+      // 而用户期待看见的是自己刚才那一页正在露出来。
+      opaque: false,
+      barrierColor: null,
+      // 进出场动画属 Story 3.3（Hero 飞入飞出），本 story 刻意留空（AC8）。
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+      pageBuilder: (_, _, _) => ImageLightbox(
         urls: urls,
         initialIndex: initialIndex,
         heroTagPrefix: heroTagPrefix,
@@ -82,23 +93,83 @@ class ImageLightbox extends StatefulWidget {
 /// Flutter 抛异常。缩略图一侧与查看器一侧必须用**这同一个函数**算 tag，否则飞不起来。
 String lightboxHeroTag(String prefix, int index) => '$prefix#$index';
 
-class _ImageLightboxState extends State<ImageLightbox> {
+class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProviderStateMixin {
   late final PageController _controller;
+
+  /// 回弹动画（下滑没过阈值时把图送回原位）。直接 setState 归零是"啪"地跳回去。
+  late final AnimationController _rebound;
+
+  /// 每一页各自的缩放/平移矩阵。**按页存**：翻到下一张时上一张的放大态要么带过去、
+  /// 要么各记各的 —— 各记各的更符合直觉（回头翻回去还是你离开时的样子）。
+  final Map<int, TransformationController> _transforms = {};
+
   late int _current;
+
+  /// 下滑关闭的当前位移（>0 向下）。
+  double _dragDy = 0;
+
+  /// 当前页是否已放大。**手势优先级的第一个输入**，所以它必须随矩阵实时更新。
+  bool _zoomed = false;
+
+  /// 当前页在横向上是否已经贴边（拖不动了）——「到边缘续拖才翻页」的判据。
+  bool _atHorizontalEdge = true;
+
+  /// 双击落点（用于以双击点为中心缩放）。
+  Offset _doubleTapPoint = Offset.zero;
+
+  /// 单击关闭的延时器：窗口内来了第二下就是双击（见 [kLightboxSingleTapDelay]）。
+  Timer? _singleTapTimer;
+
+  static const double _maxScale = 4;
+  static const double _doubleTapScale = 2.5;
 
   int get _safeInitialIndex =>
       widget.urls.isEmpty ? 0 : widget.initialIndex.clamp(0, widget.urls.length - 1);
+
+  TransformationController _transformOf(int index) =>
+      _transforms.putIfAbsent(index, () {
+        final c = TransformationController();
+        c.addListener(() {
+          if (index == _current) _syncZoomState(c);
+        });
+        return c;
+      });
+
+  /// 把矩阵状态折算成手势判定需要的两个布尔量。
+  void _syncZoomState(TransformationController c) {
+    final m = c.value;
+    final double scale = m.getMaxScaleOnAxis();
+    final double tx = m.getTranslation().x;
+    final double width = context.size?.width ?? MediaQuery.sizeOf(context).width;
+    // InteractiveViewer 的平移量落在 [-width*(scale-1), 0]：0 = 贴左边，最小值 = 贴右边。
+    final double maxPan = width * (scale - 1);
+    final bool zoomed = scale > 1.01;
+    final bool atEdge = !zoomed || tx >= -0.5 || tx <= -maxPan + 0.5;
+    if (zoomed != _zoomed || atEdge != _atHorizontalEdge) {
+      setState(() {
+        _zoomed = zoomed;
+        _atHorizontalEdge = atEdge;
+      });
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _current = _safeInitialIndex;
     _controller = PageController(initialPage: _current);
+    _rebound = AnimationController(vsync: this, duration: const Duration(milliseconds: 180))
+      ..addListener(() {
+        if (!mounted) return;
+        setState(() => _dragDy = _reboundFrom * (1 - _rebound.value));
+      });
     // AC1 全屏沉浸态：把系统栏收起来，图片铺满整块屏幕。
     // 改前这里是一个黑色 AppBar + 保留状态栏 —— 用户对比小红书后的原话是
     // 「点开放大不是全屏放大」，说的就是这一层。
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
   }
+
+  double _reboundFrom = 0;
 
   @override
   void dispose() {
@@ -107,26 +178,123 @@ class _ImageLightboxState extends State<ImageLightbox> {
     // 放进 ✕ 的 onTap 里只覆盖一条路，其余路径会把用户留在一个没有状态栏的界面上，
     // 而那个界面已经不是灯箱了。
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
+    _singleTapTimer?.cancel();
+    _rebound.dispose();
+    for (final c in _transforms.values) {
+      c.dispose();
+    }
     _controller.dispose();
     super.dispose();
   }
 
+  // ===== 手势：单击关闭 / 双击缩放（AC3 · AC6）=====
+
+  /// 自己仲裁单击与双击，不用 `onTap` + `onDoubleTap`（那会让单击等满 300ms，AC6）。
+  void _handleTapUp(TapUpDetails details) {
+    final Timer? pending = _singleTapTimer;
+    if (pending != null && pending.isActive) {
+      // 窗口内的第二下 = 双击 → 撤销待执行的关闭，改为缩放。
+      pending.cancel();
+      _singleTapTimer = null;
+      _doubleTapPoint = details.localPosition;
+      _toggleZoom();
+      return;
+    }
+    _singleTapTimer = Timer(kLightboxSingleTapDelay, () {
+      _singleTapTimer = null;
+      if (mounted) Navigator.of(context).pop();
+    });
+  }
+
+  /// AC3：在「适应屏幕」与 2.5 倍之间切换，**以双击点为中心**。
+  void _toggleZoom() {
+    final c = _transformOf(_current);
+    if (_zoomed) {
+      c.value = Matrix4.identity();
+      return;
+    }
+    const double s = _doubleTapScale;
+    // 让双击点在缩放前后落在同一个屏幕位置：先把该点挪到原点，放大，再挪回去。
+    final double x = -_doubleTapPoint.dx * (s - 1);
+    final double y = -_doubleTapPoint.dy * (s - 1);
+    c.value = Matrix4.identity()
+      ..translateByDouble(x, y, 0, 1)
+      ..scaleByDouble(s, s, 1, 1);
+  }
+
+  // ===== 手势：下滑关闭（AC1），且只在未放大时接线（AC2）=====
+
+  /// 未放大时，纵向拖拽归「关闭」；已放大时这几个回调**一律不挂**，
+  /// 拖拽因此落回 InteractiveViewer 的图内平移 —— 这就是优先级第 1 条的接线方式。
+  bool get _dismissEnabled =>
+      resolveLightboxGesture(
+        zoomed: _zoomed,
+        horizontal: false,
+        atEdgeInDragDirection: _atHorizontalEdge,
+      ) ==
+      LightboxGesture.dismiss;
+
+  /// 横向：未放大直接翻页；已放大则要先贴边（优先级第 2 条）。
+  bool get _pageScrollAllowed =>
+      resolveLightboxGesture(
+        zoomed: _zoomed,
+        horizontal: true,
+        atEdgeInDragDirection: _atHorizontalEdge,
+      ) ==
+      LightboxGesture.changePage;
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    setState(() => _dragDy += d.delta.dy);
+  }
+
+  void _onDragEnd(DragEndDetails d) {
+    final double height = MediaQuery.sizeOf(context).height;
+    if (LightboxDismissMetrics.shouldDismiss(
+      dy: _dragDy,
+      velocity: d.velocity.pixelsPerSecond.dy,
+      viewportHeight: height,
+    )) {
+      Navigator.of(context).pop();
+      return;
+    }
+    _reboundFrom = _dragDy;
+    _rebound.forward(from: 0);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final double height = MediaQuery.sizeOf(context).height;
+    final double progress =
+        LightboxDismissMetrics.progress(dy: _dragDy, viewportHeight: height);
     return Scaffold(
-      backgroundColor: Colors.black,
+      // 背景在 Stack 里自己画：下滑时要随拖拽渐透明（AC1），Scaffold 的固定底色做不到。
+      backgroundColor: Colors.transparent,
       // AC1：**没有 AppBar**。页码与关闭都是悬浮件，图片因此能延伸到状态栏区域。
       body: Stack(
         children: [
-          Positioned.fill(child: _pager()),
-          // 悬浮控件套 SafeArea：系统栏虽已隐藏，刘海/挖孔仍在，不套会被切掉一角。
-          SafeArea(
-            child: Stack(
-              children: [
-                Positioned(top: 0, left: 0, child: _closeButton()),
-                if (widget.urls.length > 1)
-                  Positioned(top: 0, left: 0, right: 0, child: Center(child: _counterPill())),
-              ],
+          Positioned.fill(
+            child: ColoredBox(
+              key: const ValueKey('lightboxBackdrop'),
+              color: Colors.black
+                  .withValues(alpha: 1 - progress * LightboxDismissMetrics.maxFade),
+            ),
+          ),
+          // 图跟手走。
+          Positioned.fill(
+            child: Transform.translate(offset: Offset(0, _dragDy), child: _pager()),
+          ),
+          // 悬浮控件随拖拽一起淡出：它们钉在屏幕上不动会显得图"掉"下去了。
+          Opacity(
+            opacity: 1 - progress,
+            // 悬浮控件套 SafeArea：系统栏虽已隐藏，刘海/挖孔仍在，不套会被切掉一角。
+            child: SafeArea(
+              child: Stack(
+                children: [
+                  Positioned(top: 0, left: 0, child: _closeButton()),
+                  if (widget.urls.length > 1)
+                    Positioned(top: 0, left: 0, right: 0, child: Center(child: _counterPill())),
+                ],
+              ),
             ),
           ),
         ],
@@ -137,18 +305,41 @@ class _ImageLightboxState extends State<ImageLightbox> {
   Widget _pager() => PageView.builder(
         key: const ValueKey('lightboxPager'),
         controller: _controller,
+        // 🔴 优先级第 2 条的接线：放大且还没贴边时**禁掉翻页**，拖拽全部留给图内平移；
+        // 贴边之后才把 PageView 放开。物理量只在拖拽开始时取一次 ——
+        // 真机上的表现是「平移到头 → 松手 → 再拖一次翻页」，见 story 的待验收清单。
+        physics: _pageScrollAllowed
+            ? const PageScrollPhysics()
+            : const NeverScrollableScrollPhysics(),
         // 🔴 **单图也用 PageView**（bug 20260727-372）：改前单图直接塞 InteractiveViewer，
         // 进灯箱后翻不到同一条内容的其余图。itemCount 是 1 时它退化成不可翻页，行为一致。
         itemCount: widget.urls.length,
-        onPageChanged: (i) => setState(() => _current = i),
+        onPageChanged: (i) {
+          // 离开的那一页复位，免得回头翻回来时它还停在某个奇怪的放大位置上。
+          _transforms[_current]?.value = Matrix4.identity();
+          setState(() {
+            _current = i;
+            _zoomed = false;
+            _atHorizontalEdge = true;
+          });
+        },
         itemBuilder: (context, i) => GestureDetector(
           // 🔴 **单击图片或黑边即关闭**（bug 20260701-192 的修复，对齐主流看图 App）。
-          // opaque 让黑边也算命中区。四个手势（Story 3.2）要与它并存 —— 改写时顺手删掉就是回归。
+          // opaque 让黑边也算命中区。走 _handleTapUp 自己仲裁，不用 onTap + onDoubleTap
+          // —— 后者会把单击拖慢到 300ms（AC6）。
           behavior: HitTestBehavior.opaque,
-          onTap: () => Navigator.of(context).pop(),
+          onTapUp: _handleTapUp,
+          // AC1/AC2：未放大才接下滑关闭；已放大时这三个回调为 null，
+          // 拖拽落回 InteractiveViewer 的图内平移。
+          onVerticalDragUpdate: _dismissEnabled ? _onDragUpdate : null,
+          onVerticalDragEnd: _dismissEnabled ? _onDragEnd : null,
           child: Center(
-            // 缩放实现沿用 InteractiveViewer，本 story 只换外壳与接口，不换实现（AD-A14 / Dev Notes）。
+            // 缩放实现沿用 InteractiveViewer（AD-A15.4：不换实现）。
             child: InteractiveViewer(
+              transformationController: _transformOf(i),
+              // 未放大时不许平移：否则它会和"下滑关闭"抢同一个手势。
+              panEnabled: _zoomed,
+              maxScale: _maxScale,
               child: AppImage.widget(widget.urls[i], fit: BoxFit.contain),
             ),
           ),

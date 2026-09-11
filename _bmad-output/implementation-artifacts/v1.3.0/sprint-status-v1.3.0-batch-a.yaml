@@ -81,7 +81,7 @@ development_status:
   # 建议排在 Epic 2 之后（少搬一次代码），非硬依赖。
   epic-3: in-progress
   3-1-灯箱上提为共享组件并全屏化: review            # 共享组件已落 shared/media；接口四参数有断言钉住（B1 的前置契约）
-  3-2-灯箱四个手势: ready-for-dev                   # 🔴 本批次最重的一条。不引包，全自实现；手势优先级顺序不可调换
+  3-2-灯箱四个手势: review                          # 🔴 本批次最重的一条。不引包，全自实现；手势优先级顺序不可调换
   3-3-灯箱过渡动画与加载态: ready-for-dev           # 🔴 Hero tag 必须用调用方前缀，不得从 URL 推导（B1 会同图同屏，直接抛异常）
   epic-3-retrospective: optional
 
