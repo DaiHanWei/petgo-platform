@@ -89,6 +89,12 @@ public class ContentSharePageController {
         model.addAttribute("downloadUrl", downloadUrl);
         model.addAttribute("iosUrl", iosUrl);
         model.addAttribute("androidUrl", androidUrl);
+        // 🔴 已装 App 的人必须先被唤起进 App（Bug 20260910-487，2026-09-11 修）。
+        // 此前本页只做「iOS→App Store / Android→Play」的平台分流，**从不尝试唤起** ——
+        // 于是装了 App 的人点开分享链接，一律被送去应用商店，永远进不了站内那一条内容。
+        // 落点与 App 的 `tailtopia://post/{token}` 映射逐字对齐（`app.dart` deepLinkToLocation）：
+        // 落 `/shared-post/{token}`，**只有被分享的那一条**，不是整本档案（AD-15 Rule 5 的隐私边界）。
+        model.addAttribute("deepLink", "tailtopia://post/" + shareToken);
         return "content_share";
     }
 
