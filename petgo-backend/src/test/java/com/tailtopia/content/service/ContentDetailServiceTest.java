@@ -47,7 +47,9 @@ class ContentDetailServiceTest {
         // Story 1.1：默认 isHidden → false（未隐藏该作者）
         hideRelations = mock(UserHideRelationReader.class);
         service = new ContentDetailService(posts, comments, likes, accounts, reportService, hideRelations,
-                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class),
+                // Story 2.1：尺寸对齐器是真实实例（纯函数、无依赖），mock 它等于把本 story 的逻辑测空。
+                new ImageSizeResolver());
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyLong())).thenReturn(5L);
