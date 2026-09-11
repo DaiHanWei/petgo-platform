@@ -606,14 +606,30 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 ],
                 if (controller.hasFailed) ...[
                   const SizedBox(height: 12),
-                  TextButton.icon(
-                    key: const ValueKey('publishRetry'),
-                    icon: const Icon(Icons.refresh, color: AppColors.mint700),
-                    label: Text(
-                      l10n.publishRetry,
-                      style: const TextStyle(color: AppColors.mint700),
-                    ),
-                    onPressed: () => controller.retryFailed(),
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        key: const ValueKey('publishRetry'),
+                        icon: const Icon(Icons.refresh, color: AppColors.mint700),
+                        label: Text(
+                          l10n.publishRetry,
+                          style: const TextStyle(color: AppColors.mint700),
+                        ),
+                        onPressed: () => controller.retryFailed(),
+                      ),
+                      // V1.3.0 Story 4.1 · AC5：重试沿用同一份顺序，**不重新读表单状态** ——
+                      // 想改顺序就得从这里整体取消回到可编辑态。
+                      // 没有这个出口的话，一次部分失败会把顺序永久锁死。
+                      if (!controller.canReorder)
+                        TextButton(
+                          key: const ValueKey('publishCancelUpload'),
+                          onPressed: controller.cancelUploadSession,
+                          child: Text(
+                            l10n.publishCancelUpload,
+                            style: const TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
                 const SizedBox(height: 16),
@@ -972,17 +988,26 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           ),
         ),
         const SizedBox(height: 8),
-        GridView.count(
-          crossAxisCount: 3,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 5,
-          crossAxisSpacing: 5,
-          children: [
-            if (showAdd) _addCell(controller, l10n),
-            if (_addingImage) _processingCell(),
-            for (int i = 0; i < items.length; i++) _thumb(controller, i),
-          ],
+        // 用 LayoutBuilder 量一格多宽：拖起来那张要按真实格子尺寸放大显示，
+        // 写死一个数会在不同屏宽上飘。
+        LayoutBuilder(
+          builder: (context, box) {
+            const double gap = 5;
+            final double cell = (box.maxWidth - gap * 2) / 3;
+            return GridView.count(
+              crossAxisCount: 3,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: gap,
+              crossAxisSpacing: gap,
+              children: [
+                if (showAdd) _addCell(controller, l10n),
+                if (_addingImage) _processingCell(),
+                for (int i = 0; i < items.length; i++)
+                  _thumb(controller, i, l10n, cell),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -1046,7 +1071,64 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     );
   }
 
-  Widget _thumb(PublishController controller, int index) {
+  /// 一格照片。V1.3.0 Story 4.1 起可长按拖拽重排（AC1），首格常驻「封面」角标（AC2）。
+  Widget _thumb(
+      PublishController controller, int index, AppLocalizations l10n, double cell) {
+    final cellContent = _thumbContent(controller, index, l10n);
+    // 🔴 AC4：上传会话里**整个拖拽入口不挂**（不是挂上去再判空）——
+    // 挂着的话手指还是能把那张图抬起来，只是放下没反应，看着像卡了。
+    if (!controller.canReorder) return cellContent;
+
+    return LongPressDraggable<int>(
+      data: index,
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      // 抬起：放大 + 阴影（AC1）。Material 包一层，免得 Overlay 里没有默认文字样式。
+      feedback: Material(
+        color: Colors.transparent,
+        child: Transform.translate(
+          offset: Offset(-cell * 0.54, -cell * 0.54),
+          child: Container(
+            width: cell * 1.08,
+            height: cell * 1.08,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(9),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.28),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(9),
+              child: Image.memory(controller.items[index].bytes,
+                  fit: BoxFit.cover, cacheWidth: 400),
+            ),
+          ),
+        ),
+      ),
+      // 原位留一个淡影：拖走的那格不能凭空消失，否则网格会当场重排、目标位置全乱。
+      childWhenDragging: Opacity(opacity: 0.28, child: cellContent),
+      child: DragTarget<int>(
+        onWillAcceptWithDetails: (d) => d.data != index,
+        onAcceptWithDetails: (d) => controller.reorderImage(d.data, index),
+        builder: (context, candidate, rejected) => DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(9),
+            // 让位提示：手指悬在哪一格，哪一格亮边框。
+            border: candidate.isNotEmpty
+                ? Border.all(color: AppColors.mint, width: 2)
+                : null,
+          ),
+          child: cellContent,
+        ),
+      ),
+    );
+  }
+
+  Widget _thumbContent(
+      PublishController controller, int index, AppLocalizations l10n) {
     final item = controller.items[index];
     return Stack(
       fit: StackFit.expand,
@@ -1082,6 +1164,27 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
             right: 4,
             top: 4,
             child: Icon(Icons.error, color: Colors.red, size: 18),
+          ),
+        // AC2：首格常驻「封面」角标。它只是顺序的**投影** ——
+        // 不另设「哪张是封面」的字段，否则迟早出现「界面第一张是 A、封面却是 B」。
+        // 重排后角标自然跟着新的第一张走，因为它本来就只认下标 0。
+        if (index == 0)
+          Positioned(
+            left: 3,
+            top: 3,
+            child: Container(
+              key: const ValueKey('publishCoverBadge'),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: Text(
+                l10n.publishCoverBadge,
+                style: const TextStyle(
+                    fontSize: 9, fontWeight: FontWeight.w600, color: Colors.white),
+              ),
+            ),
           ),
         Positioned(
           right: 3,

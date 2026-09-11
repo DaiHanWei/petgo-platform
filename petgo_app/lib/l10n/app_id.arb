@@ -108,6 +108,8 @@
   "publishLinkedToPet": "Tertaut ke {name}",
   "publishCreateProfile": "Buat",
   "publishRetry": "Coba lagi",
+  "publishCoverBadge": "Sampul",
+  "publishCancelUpload": "Batal",
   "publishAddImage": "Tambah foto",
   "publishPhotoLabel": "Foto / Gambar (maks. 9)",
   "publishPhotoLimit": "Maksimal 9 foto",

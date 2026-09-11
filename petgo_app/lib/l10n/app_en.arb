@@ -161,6 +161,14 @@
   },
   "publishCreateProfile": "Create",
   "publishRetry": "Retry",
+  "publishCoverBadge": "Cover",
+  "@publishCoverBadge": {
+    "description": "V1.3.0 Story 4.1 · AC2：发布页照片网格首格的「封面」角标。首图同时决定 Feed 封面 / 详情页首图 / 分享卡主图，三处都由这一个顺序决定"
+  },
+  "publishCancelUpload": "Cancel",
+  "@publishCancelUpload": {
+    "description": "部分上传失败后「整体取消」回到可编辑态（取消后才可以重新调整照片顺序）"
+  },
   "publishAddImage": "Add photo",
   "publishPhotoLabel": "Photos (max. 9)",
   "publishPhotoLimit": "Maximum 9 photos",
