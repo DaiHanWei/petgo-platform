@@ -70,11 +70,14 @@ class ContentDetailAndCommentContractTest {
                 10L, 7L, "小明", "https://cdn/a.jpg", false,
                 List.of(new com.tailtopia.auth.dto.UserTagView("vet", "兽医", "🩺", "已认证兽医", "#F6A609")),
                 "评论正文",
-                Instant.parse("2026-06-05T00:00:00Z"), 3, List.of(), "VISIBLE");
+                Instant.parse("2026-06-05T00:00:00Z"), 3, List.of(), "VISIBLE",
+                // V1.3.0 Story 2.4：点赞数与已赞状态恒下发（实时聚合，库里没有计数列）。
+                5L, true);
 
         assertThat(wire(top).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
-                "authorTags", "body", "createdAt", "replyCount", "replies", "moderationStatus"));
+                "authorTags", "body", "createdAt", "replyCount", "replies", "moderationStatus",
+                "likeCount", "liked"));
     }
 
     @Test
@@ -83,11 +86,11 @@ class ContentDetailAndCommentContractTest {
         CommentResponse reply = new CommentResponse(
                 // 无标签 → authorTags 为 null → NON_NULL 省略（下方字段集里因此没有它）。
                 11L, 8L, "小红", null, false, null, "回复正文",
-                Instant.parse("2026-06-05T00:00:00Z"), null, null, "VISIBLE");
+                Instant.parse("2026-06-05T00:00:00Z"), null, null, "VISIBLE", 0L, false);
 
         assertThat(wire(reply).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorDeleted", "body", "createdAt",
-                "moderationStatus"));
+                "moderationStatus", "likeCount", "liked"));
         assertThat(wire(reply)).doesNotContainKey("replyCount");
     }
 

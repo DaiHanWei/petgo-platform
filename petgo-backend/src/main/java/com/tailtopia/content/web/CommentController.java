@@ -2,6 +2,7 @@ package com.tailtopia.content.web;
 
 import com.tailtopia.content.dto.CommentCreateRequest;
 import com.tailtopia.content.dto.CommentResponse;
+import com.tailtopia.content.service.CommentLikeService;
 import com.tailtopia.content.service.CommentService;
 import com.tailtopia.shared.error.AppException;
 import jakarta.validation.Valid;
@@ -22,15 +23,19 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>{@code POST /content-posts/{postId}/comments} — 一级评论（≤200 字，服务端权威）。</li>
  *   <li>{@code POST /comments/{parentId}/replies} — 二级回复（归并到一级，绝不三级）。</li>
  *   <li>{@code DELETE /comments/{id}} — 删除（评论作者 / 内容作者，删一级级联删二级）。</li>
+ *   <li>{@code POST/DELETE /comments/{id}/likes} — 点赞 / 取消（V1.3.0 Story 2.4，幂等）。</li>
  * </ul>
  */
 @RestController
 public class CommentController {
 
     private final CommentService commentService;
+    private final CommentLikeService commentLikeService;
 
-    public CommentController(CommentService commentService) {
+    public CommentController(CommentService commentService,
+            CommentLikeService commentLikeService) {
         this.commentService = commentService;
+        this.commentLikeService = commentLikeService;
     }
 
     @PostMapping("/api/v1/content-posts/{postId}/comments")
@@ -51,6 +56,26 @@ public class CommentController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
         commentService.delete(id, currentUserId(jwt));
+    }
+
+    /**
+     * 给评论点赞（V1.3.0 Story 2.4 · AC3）。**幂等**：重复点赞不产生第二行，仍返回 204。
+     *
+     * <p>一级、二级评论共用本端点 —— 层级由 {@code comments.parent_id} 决定，与点赞无关。
+     * 响应**不带点赞数**：那是实时聚合值，由列表接口批量下发（写路径回一个数，
+     * 客户端拿到时它可能已经变了）。
+     */
+    @PostMapping("/api/v1/comments/{id}/likes")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void like(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        commentLikeService.like(id, currentUserId(jwt));
+    }
+
+    /** 取消点赞。没赞过也返回 204（幂等，客户端不必先查状态）。 */
+    @DeleteMapping("/api/v1/comments/{id}/likes")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void unlike(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        commentLikeService.unlike(id, currentUserId(jwt));
     }
 
     private static long currentUserId(Jwt jwt) {

@@ -27,6 +27,15 @@ abstract class DetailRepository {
   /// 删除评论（Story 3.5，作者本人 / 内容主；后端权威）。
   Future<void> deleteComment(int commentId);
 
+  /// 给评论点赞 / 取消（V1.3.0 Story 2.4）。一级、二级共用同一端点。
+  ///
+  /// **服务端幂等**：重复点赞不产生第二行，没赞过取消也成功 —— 客户端因此不必先查状态，
+  /// 直接按本地态翻转即可。端点**不返回赞数**（那是实时聚合值，回来时可能已经变了），
+  /// 所以按钮的即时反馈靠本地 ±1，下次拉列表以服务端为准。
+  Future<void> likeComment(int commentId);
+
+  Future<void> unlikeComment(int commentId);
+
   /// 删除内容（Story 3.6，仅作者；软删 + 级联清；后端权威）。
   Future<void> deleteContent(int postId);
 
@@ -100,6 +109,16 @@ class DioDetailRepository implements DetailRepository {
   @override
   Future<void> deleteComment(int commentId) async {
     await dio.delete<void>('${ApiPaths.base}/comments/$commentId');
+  }
+
+  @override
+  Future<void> likeComment(int commentId) async {
+    await dio.post<void>('${ApiPaths.base}/comments/$commentId/likes');
+  }
+
+  @override
+  Future<void> unlikeComment(int commentId) async {
+    await dio.delete<void>('${ApiPaths.base}/comments/$commentId/likes');
   }
 
   @override

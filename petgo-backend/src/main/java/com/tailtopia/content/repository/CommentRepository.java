@@ -171,6 +171,59 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
             Pageable pageable);
 
     /**
+     * 一级评论**热度序**游标分页（V1.3.0 批次 A · Story 2.4 · AD-A8）。
+     *
+     * <p>排序 {@code 点赞数 DESC, createdAt ASC, id ASC}。第二元用 ASC 而不是 DESC：
+     * 同样赞数时，先发的那条排前面 —— 「同样多人认可，谁先说的谁在上」比「谁刚发的谁在上」更合理。
+     *
+     * <h2>🔴 排序键第一元是跨表聚合值，**建不了索引**</h2>
+     * 这是「不加冗余计数列」（AD-A7.3）的直接后果，已明确接受：**每页对该帖一级评论做一次聚合**。
+     * 索引只支撑聚合与过滤两侧（{@code comment_likes(comment_id)} 与
+     * {@code comments(post_id, parent_id, deleted_at, created_at)}）。
+     *
+     * <p><b>该方案成立的唯一前提：单帖一级评论量级为几十到几百。</b>
+     * 若某帖评论数进入万级，本方案退化 —— 届时是**推翻 AD-A7.3**、须走正式变更，
+     * 不得就地加一个计数列了事。
+     *
+     * <h2>软删与可见性口径</h2>
+     * 与 {@link #findTopLevel} <b>逐字相同</b>：软删不返回、非 VISIBLE 仅作者本人可见、
+     * R1/R2 隐藏关系照旧。点赞行**不随软删物理删除**，但软删评论根本不在结果里，
+     * 所以它的赞数也不会出现在任何地方（AC9）。
+     *
+     * <p>游标语义（三元组 keyset，降序元在前）：取「排在游标之后」的那些 ——
+     * 赞数更少，或赞数相同但更晚发，或两者都相同但 id 更大。
+     */
+    @Query("""
+            SELECT c FROM Comment c
+            LEFT JOIN CommentLike l ON l.commentId = c.id
+            WHERE c.postId = :postId AND c.parentId IS NULL AND c.deletedAt IS NULL
+              AND (c.moderationStatus = com.tailtopia.content.domain.CommentModerationStatus.VISIBLE
+                   OR (:viewerId IS NOT NULL AND c.authorId = :viewerId))
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
+                                  WHERE h.holderId = :viewerId AND h.targetId = c.authorId))
+              AND ((:hasViewer = true AND c.authorId = :viewerId)
+                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h2
+                                  WHERE h2.holderId = :postAuthorId AND h2.targetId = c.authorId))
+            GROUP BY c
+            HAVING (:hasCursor = false
+                    OR COUNT(l) < :cursorLikes
+                    OR (COUNT(l) = :cursorLikes AND c.createdAt > :cursorTs)
+                    OR (COUNT(l) = :cursorLikes AND c.createdAt = :cursorTs AND c.id > :cursorId))
+            ORDER BY COUNT(l) DESC, c.createdAt ASC, c.id ASC
+            """)
+    List<Comment> findTopLevelByHot(
+            @Param("postId") long postId,
+            @Param("hasCursor") boolean hasCursor,
+            @Param("cursorLikes") long cursorLikes,
+            @Param("cursorTs") Instant cursorTs,
+            @Param("cursorId") Long cursorId,
+            @Param("hasViewer") boolean hasViewer,
+            @Param("viewerId") Long viewerId,
+            @Param("postAuthorId") long postAuthorId,
+            Pageable pageable);
+
+    /**
      * 某一级评论的二级回复时间正序游标分页（展开「查看全部 X 条回复」用），viewer 可见性过滤。
      *
      * <p><b>「父被隐藏 → 整串不展示」（AC4）不在本查询里</b>：本方法只按<b>回复自身作者</b>过滤。

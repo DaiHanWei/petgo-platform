@@ -153,6 +153,60 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     };
   }
 
+  /// 评论点赞 / 取消（V1.3.0 Story 2.4 · AC3）。
+  ///
+  /// **乐观更新**：先本地翻转再发请求 —— 服务端端点不返回赞数（那是实时聚合值，
+  /// 回来时可能已经变了），所以本地 ±1 是唯一能让按钮立刻有反馈的办法。
+  ///
+  /// 失败**回滚**并静默：点赞不是关键路径，为它弹一个错误提示比点不上还烦人。
+  /// 服务端本身幂等（重复点赞不产生第二行、没赞过取消也成功），所以不必先查状态。
+  Future<void> _toggleLike(Comment c) async {
+    final wasLiked = c.liked;
+    setState(() => _replaceComment(c.id, (x) => x.toggleLikedLocally()));
+    try {
+      if (wasLiked) {
+        await _repo.unlikeComment(c.id);
+      } else {
+        await _repo.likeComment(c.id);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _replaceComment(c.id, (x) => x.toggleLikedLocally()));
+    }
+  }
+
+  /// 就地替换一条评论（可能在一级列表、内嵌回复、或已展开的回复里）。
+  ///
+  /// 三处都要找：同一条评论在不同位置是**同一个对象的不同副本**，只改一处会让
+  /// 「收起再展开」时点赞态跳回去。
+  void _replaceComment(int id, Comment Function(Comment) update) {
+    for (var i = 0; i < _topLevel.length; i++) {
+      final top = _topLevel[i];
+      if (top.id == id) {
+        _topLevel[i] = update(top);
+        continue;
+      }
+      final inline = top.replies;
+      if (inline != null) {
+        for (var j = 0; j < inline.length; j++) {
+          if (inline[j].id == id) {
+            final copy = List<Comment>.of(inline)..[j] = update(inline[j]);
+            _topLevel[i] = top.copyWith(replies: copy);
+            break;
+          }
+        }
+      }
+    }
+    for (final exp in _expanded.values) {
+      for (var i = 0; i < exp.items.length; i++) {
+        if (exp.items[i].id == id) {
+          exp.items[i] = update(exp.items[i]);
+          break;
+        }
+      }
+    }
+  }
+
   Future<void> _confirmDelete(int commentId) async {
     final l10n = AppLocalizations.of(context);
     final ok = await showConfirmSheet(
@@ -281,6 +335,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       onReply: () =>
           ref.read(replyTargetProvider.notifier).set(ReplyTarget(parentId: c.id, toName: name)),
       onDelete: () => _confirmDelete(c.id),
+      // V1.3.0 Story 2.4：评论点赞。一级、二级共用同一端点（层级与点赞无关）。
+      onToggleLike: () => _toggleLike(c),
     );
   }
 }
@@ -294,8 +350,12 @@ class _CommentTile extends StatelessWidget {
     required this.onReply,
     required this.onDelete,
     required this.onAuthorTap,
+    required this.onToggleLike,
     this.takenDownLabel,
   });
+
+  /// 点赞 / 取消（V1.3.0 Story 2.4）。**乐观更新**：调用方先本地翻转再发请求。
+  final VoidCallback onToggleLike;
 
   final Comment comment;
   final String name;
@@ -384,6 +444,41 @@ class _CommentTile extends StatelessWidget {
                               size: 14, color: AppColors.textTertiary),
                         ),
                       ],
+                      const Spacer(),
+                      // 点赞：心 + 数字。0 赞时**不显示数字**（一排「0」会把评论区弄得很吵）。
+                      // 数字与心形同步变色，与帖子点赞（FR-93）同一规则 ——
+                      // 只有图标变红、数字仍是灰的，看上去像"没点上"。
+                      GestureDetector(
+                        key: ValueKey('likeComment_${comment.id}'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onToggleLike,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              comment.liked
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_border_rounded,
+                              size: 14,
+                              color: comment.liked
+                                  ? AppColors.likeHeart
+                                  : AppColors.textTertiary,
+                            ),
+                            if (comment.likeCount > 0) ...[
+                              const SizedBox(width: AppSpacing.xxs),
+                              Text(
+                                '${comment.likeCount}',
+                                key: ValueKey('likeCount_${comment.id}'),
+                                style: AppTypography.micro.copyWith(
+                                  color: comment.liked
+                                      ? AppColors.likeHeart
+                                      : AppColors.textTertiary,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ],

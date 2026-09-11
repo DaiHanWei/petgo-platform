@@ -16,6 +16,9 @@ import java.util.List;
  * @param replies          一级评论的前 3 条二级回复（二级回复为 null）
  * @param moderationStatus 审核可见性态（story 3）：VISIBLE 无标签；TAKEN_DOWN 渲染「仅你可见」灰标签
  *                         （仅作者本人会收到非 VISIBLE 行，读路径已按 viewer 过滤）
+ * @param likeCount        点赞数（V1.3.0 Story 2.4）。**实时聚合，库里没有计数列**；
+ *                         批量取数，无人点赞的评论为 0
+ * @param liked            当前查看者是否已赞（游客恒 false）。同样批量取数，不逐条查
  */
 public record CommentResponse(
         Long id,
@@ -30,21 +33,24 @@ public record CommentResponse(
         Instant createdAt,
         Integer replyCount,
         List<CommentResponse> replies,
-        String moderationStatus) {
+        String moderationStatus,
+        long likeCount,
+        boolean liked) {
 
     /** 二级回复（无嵌套）。 */
-    public static CommentResponse reply(Comment c, AuthorView author) {
+    public static CommentResponse reply(Comment c, AuthorView author, long likeCount, boolean liked) {
         return new CommentResponse(c.getId(), c.getAuthorId(), author.nickname(),
                 author.avatarUrl(), author.deleted(), author.tags().isEmpty() ? null : author.tags(),
-                c.getBody(), c.getCreatedAt(), null, null, statusName(c));
+                c.getBody(), c.getCreatedAt(), null, null, statusName(c), likeCount, liked);
     }
 
     /** 一级评论（带 replyCount + 前 3 条二级）。 */
     public static CommentResponse topLevel(Comment c, AuthorView author, int replyCount,
-            List<CommentResponse> firstReplies) {
+            List<CommentResponse> firstReplies, long likeCount, boolean liked) {
         return new CommentResponse(c.getId(), c.getAuthorId(), author.nickname(),
                 author.avatarUrl(), author.deleted(), author.tags().isEmpty() ? null : author.tags(),
-                c.getBody(), c.getCreatedAt(), replyCount, firstReplies, statusName(c));
+                c.getBody(), c.getCreatedAt(), replyCount, firstReplies, statusName(c),
+                likeCount, liked);
     }
 
     private static String statusName(Comment c) {

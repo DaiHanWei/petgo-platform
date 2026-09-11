@@ -67,7 +67,8 @@ public class CommentService {
         }
         Comment saved = comments.save(Comment.createUnderReview(postId, null, authorId, body));
         events.publishEvent(new CommentSubmittedEvent(saved.getId(), body, saved.getContentVersion()));
-        return CommentResponse.topLevel(saved, authorView(authorId), 0, List.of());
+        // 刚发的评论必然 0 赞、自己也还没赞（AC7 的批量口径在读路径，这里是写路径的即时回显）。
+        return CommentResponse.topLevel(saved, authorView(authorId), 0, List.of(), 0L, false);
     }
 
     /** 回复（二级）。回复二级评论时归并到其一级父（两级约束，绝不三级）。含同步审核过滤。 */
@@ -88,7 +89,7 @@ public class CommentService {
         Comment saved = comments.save(
                 Comment.createUnderReview(post.getId(), topLevelParentId, authorId, body));
         events.publishEvent(new CommentSubmittedEvent(saved.getId(), body, saved.getContentVersion()));
-        return CommentResponse.reply(saved, authorView(authorId));
+        return CommentResponse.reply(saved, authorView(authorId), 0L, false);
     }
 
     /**
