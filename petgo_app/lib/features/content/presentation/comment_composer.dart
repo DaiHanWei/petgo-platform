@@ -96,7 +96,11 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       if (parentId != null) {
         await repo.postReply(parentId, text);
       } else {
-        await repo.postComment(widget.postId, text);
+        final created = await repo.postComment(widget.postId, text);
+        // 🔴 记下刚发的这条，让评论区把它置顶（Story 2.5 · AC6）。
+        // 热度序下 0 赞的新评论会排到第一页之外 —— 不记的话用户发完找不到自己的评论。
+        // 只对**一级**评论做：二级回复挂在父评论下，位置由父决定，不存在找不到的问题。
+        ref.read(sessionPinnedCommentsProvider.notifier).add(created);
       }
       if (!mounted) return;
       // 仅成功后清空输入 + 收起键盘 + 退出回复态 + 刷新评论区（AC3）。

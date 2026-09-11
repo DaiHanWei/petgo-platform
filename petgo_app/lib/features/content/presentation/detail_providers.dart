@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/detail_repository.dart';
+import '../domain/comment.dart';
 import '../domain/content_detail.dart';
 
 /// 内容详情（按 id 的 family）。AsyncValue 三态：loading 骨架 / data / error（多态分类）。
@@ -53,3 +54,34 @@ class CommentFocusNotifier extends Notifier<int> {
 
 final NotifierProvider<CommentFocusNotifier, int> commentFocusProvider =
     NotifierProvider<CommentFocusNotifier, int>(CommentFocusNotifier.new);
+
+/// 🔴 本次会话内**自己新发的一级评论 id**（V1.3.0 Story 2.5 · AC6 · AD-A8.8）。
+///
+/// Story 2.4 把一级评论默认序改成了**热度序**，于是刚发的评论（0 赞）排在所有有赞评论之后
+/// —— 在一个有 10+ 条热门评论的帖子里，**用户发完看不到自己刚发的东西**。这是改热度序
+/// 必然带出来的副作用，不是偶发 bug。
+///
+/// 收口方式与三条约束：
+/// 1. **服务端排序一点不改** —— 置顶纯粹是客户端这一次会话的事；
+/// 2. **置顶项不参与游标计算** —— 游标取服务端返回那一页的最后一条，
+///    把插进来的项算进去会制造重复/漏条；
+/// 3. **离开详情页即失效** —— `CommentSection` 在 `dispose` 时清空本集合。
+///
+/// ⚠️ 不要把它做成持久化的「我的评论」标记：那会变成一个永久置顶自己评论的功能，
+/// 而这里要的只是「别让我找不到刚发的那条」。
+/// ⚠️ 存的是**整条评论**而不只是 id：热度序下 0 赞的新评论很可能**根本不在第一页里**，
+/// 只记 id 就只能"把已经拿到的那条挪到前面"，拿不到的时候还是看不见。
+/// 存下整条，列表就能在服务端没返回它时**直接把本地这份插到首位**。
+class SessionPinnedCommentsNotifier extends Notifier<Map<int, Comment>> {
+  @override
+  Map<int, Comment> build() => const <int, Comment>{};
+
+  void add(Comment comment) => state = {...state, comment.id: comment};
+
+  void clear() => state = const <int, Comment>{};
+}
+
+final NotifierProvider<SessionPinnedCommentsNotifier, Map<int, Comment>>
+    sessionPinnedCommentsProvider =
+    NotifierProvider<SessionPinnedCommentsNotifier, Map<int, Comment>>(
+        SessionPinnedCommentsNotifier.new);

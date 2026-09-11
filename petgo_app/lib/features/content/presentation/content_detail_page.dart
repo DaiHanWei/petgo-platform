@@ -232,20 +232,8 @@ class _DetailScaffold extends ConsumerWidget {
     );
   }
 
-  /// 发布时间（AC6）：7 天以内走相对时间，**超过 7 天改显示绝对日期**。
-  ///
-  /// 「173 天前」这种数字读者根本换算不过来，而详情页常有很久以前的内容。
-  /// 绝对日期复用现成的 [formatDayMonthYear]（输出如「15 Jun 2025」，已按 locale 本地化），
-  /// **不新写一套格式化** —— 那会让同一个日期在不同页面长得不一样。
-  static String _publishTime(BuildContext context, AppLocalizations l10n, DateTime t) {
-    final d = DateTime.now().difference(t);
-    if (d.inMinutes < 1) return l10n.timeJustNow;
-    if (d.inHours < 1) return l10n.timeMinutesAgo(d.inMinutes);
-    if (d.inDays < 1) return l10n.timeHoursAgo(d.inHours);
-    if (d.inDays > 7) return formatDayMonthYear(context, t);
-    return l10n.timeDaysAgo(d.inDays);
-  }
-
+  // 发布时间的规则已抽到 shared/utils/date_format.dart 的 formatPublishTime（V1.3.0 Story 2.5 · AC1）：
+  // 详情页与评论区显示的是同一类东西，**必须共用同一个函数**，各写一份迟早分叉。
 
   Widget _authorRow(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
     final name = detail.authorDeleted ? l10n.feedDeletedUser : (detail.authorNickname ?? l10n.feedDeletedUser);
@@ -272,7 +260,7 @@ class _DetailScaffold extends ConsumerWidget {
                 nameStyle: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
                 tags: detail.authorDeleted ? const [] : detail.authorTags,
               ),
-              Text(_publishTime(context, l10n, detail.createdAt),
+              Text(formatPublishTime(context, l10n, detail.createdAt),
                   style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
             ],
           ),
