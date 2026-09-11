@@ -2267,6 +2267,11 @@
     "placeholders": { "months": { "type": "int" } }
   },
   "ageCardShareCta": "Share",
+  "ageCardRewardToast": "+{coins} PawCoin 🎉",
+  "@ageCardRewardToast": {
+    "description": "V1.3.0 Story 5.3：年龄卡分享成功且真的发了币时的轻提示。🔴 只在发了币时出现；没发一律静默——不告知原因（告知会诱导「攒着别分享」或「月初集中刷满」）",
+    "placeholders": { "coins": { "type": "int" } }
+  },
   "@ageCardShareCta": { "description": "年龄卡预览页的吸底分享按钮" },
   "ageCardQuipPuppy1": "Still figuring the world out — one nap at a time.",
   "@ageCardQuipPuppy1": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Puppy 段第 1 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符"},

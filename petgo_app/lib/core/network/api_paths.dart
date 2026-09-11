@@ -172,6 +172,12 @@ class ApiPaths {
   static const String meIdCardShareReward =
       '$base/pet-profiles/me/id-cards/share-reward';
 
+  /// 年龄卡分享成功上报 → 试发分享奖励（V1.3.0 Story 5.3）。
+  /// 🔴 请求体**只有幂等键**：不带卡面内容、不上传图片。年龄卡本身纯客户端出图、
+  /// 不落服务端；领奖是已澄清的唯一例外，而这个例外只包含「谁、哪次分享」。
+  static const String meAgeCardShareRewards =
+      '$base/pet-profiles/me/age-cards/share-rewards';
+
   /// 单卡快照详情（Story 6.7）。非本人 404。
   static String meIdCard(int cardId) => '$base/pet-profiles/me/id-cards/$cardId';
 

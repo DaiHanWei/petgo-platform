@@ -312,12 +312,29 @@ void main() {
       expect(src, isNot(contains('id_card')));
     });
 
-    /// AC10：本 story **不接入 PawCoin 奖励**（属 5.3）。
-    test('没有提前接 PawCoin 奖励', () {
+    /// AC10 原文是「本 story 不接入 PawCoin 奖励（属 5.3）」。
+    /// **Story 5.3 已落地**，所以这条从「不许有」翻成「有且只能长这样」——
+    /// 直接删掉等于把这块地方交还给随便谁怎么写。
+    test('奖励只挂在分享成功回调上，且只带幂等键', () {
       final src =
           File('lib/features/profile/presentation/age_card_page.dart').readAsStringSync();
-      for (final banned in ['PawCoin', 'pawcoin', 'reward', 'Reward']) {
-        expect(src, isNot(contains(banned)), reason: '奖励链路属 Story 5.3');
+      final lines = src.split('\n');
+      final onShared = lines.indexWhere((l) => l.contains('onShared:'));
+      // 找**调用点**，不是声明处（声明那行也含 `_claimReward()`）。
+      final claim = lines.indexWhere((l) => l.contains('unawaited(_claimReward())'));
+
+      expect(onShared, isNonNegative);
+      expect(claim, greaterThan(onShared),
+          reason: '领奖必须在系统面板回调成功之后，不能挂在出图那一步');
+      // 🔴 AC6：上报只带幂等键 —— 卡面内容（宠物名 / 年龄 / 头像）一个字都不许带。
+      expect(src, contains('reportShareForReward(_shareIdempotencyKey)'));
+      for (final banned in ['petName:', 'avatarUrl:', 'humanAge', 'birthday:']) {
+        expect(
+          src.substring(src.indexOf('Future<void> _claimReward'),
+              src.indexOf('Future<void> _shareIt')),
+          isNot(contains(banned)),
+          reason: '领奖调用不得携带卡面内容（AC6）',
+        );
       }
     });
   });

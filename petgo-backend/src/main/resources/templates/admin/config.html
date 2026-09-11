@@ -109,6 +109,15 @@
                 <label><span th:text="#{admin.config.idCardShareDailyCap}">身份证分享每日次数上限</span>
                     <input type="number" name="idCardShareDailyCap" min="0" step="1"
                            th:value="${pawcoin.idCardShareDailyCap}"/></label>
+                <!-- 渠道②年龄卡（V1.3.0 Story 5.3）。⚠️ 与身份证渠道不同，本渠道**没有档案级去重**
+                     （同一只宠物隔几个月再生成是不同的分享物），日上限是它唯一的频次闸门 ——
+                     配 0 以外的值时请当真。 -->
+                <label><span th:text="#{admin.config.ageCardShareReward}">年龄卡分享每次发放</span>
+                    <input type="number" name="ageCardShareReward" min="0" step="1"
+                           th:value="${pawcoin.ageCardShareReward}"/></label>
+                <label><span th:text="#{admin.config.ageCardShareDailyCap}">年龄卡分享每日次数上限</span>
+                    <input type="number" name="ageCardShareDailyCap" min="0" step="1"
+                           th:value="${pawcoin.ageCardShareDailyCap}"/></label>
                 <button type="submit" class="btn btn-primary btn-sm"
                         th:text="#{admin.config.btn.saveShareReward}">保存分享奖励配置</button>
             </form>

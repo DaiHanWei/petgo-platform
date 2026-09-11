@@ -126,6 +126,13 @@ public class AdminConfigService {
         // 🔴 上界：误填天文数字会让 granted + coins 在 PG 里 bigint 溢出（发放静默失效），或一次真发出巨量币。
         require(form.idCardShareReward() <= 10_000, "身份证分享每次发放枚数须 ≤ 10000",
                 "admin.err.config.idCardShareRewardTooLarge");
+        // 年龄卡渠道（V1.3.0 Story 5.3）：与身份证渠道同一组校验，逐条对齐。
+        require(form.ageCardShareReward() >= 0, "年龄卡分享每次发放枚数须 ≥ 0（0 = 不发）",
+                "admin.err.config.ageCardShareRewardNegative");
+        require(form.ageCardShareDailyCap() >= 0, "年龄卡分享每日次数上限须 ≥ 0（0 = 不发）",
+                "admin.err.config.ageCardShareDailyCapNegative");
+        require(form.ageCardShareReward() <= 10_000, "年龄卡分享每次发放枚数须 ≤ 10000",
+                "admin.err.config.ageCardShareRewardTooLarge");
         require(form.shareRewardMonthlyCap() <= 10_000_000, "分享奖励月度上限须 ≤ 10000000",
                 "admin.err.config.shareRewardCapTooLarge");
         // 🔴 月度上限要装得下至少一次发放，否则卡面宣传「首次分享得 N」但永远发不出（AC6）。
@@ -133,6 +140,10 @@ public class AdminConfigService {
                 || form.shareRewardMonthlyCap() >= form.idCardShareReward(),
                 "分享奖励月度上限须 ≥ 身份证分享每次发放枚数",
                 "admin.err.config.shareRewardCapBelowReward");
+        require(form.ageCardShareReward() == 0 || form.shareRewardMonthlyCap() == 0
+                || form.shareRewardMonthlyCap() >= form.ageCardShareReward(),
+                "分享奖励月度上限须 ≥ 年龄卡分享每次发放枚数",
+                "admin.err.config.shareRewardCapBelowAgeCardReward");
 
         PawCoinConfig c = pawcoinRepo.findById(PawCoinConfig.SINGLETON_ID)
                 .orElseThrow(() -> new IllegalStateException("pawcoin_config 缺失"));
@@ -146,6 +157,10 @@ public class AdminConfigService {
                 form.idCardShareReward(), adminId);
         diff(logs, t, "id_card_share_daily_cap", c.getIdCardShareDailyCap(),
                 form.idCardShareDailyCap(), adminId);
+        diff(logs, t, "age_card_share_reward", c.getAgeCardShareReward(),
+                form.ageCardShareReward(), adminId);
+        diff(logs, t, "age_card_share_daily_cap", c.getAgeCardShareDailyCap(),
+                form.ageCardShareDailyCap(), adminId);
         if (logs.isEmpty()) {
             return; // 无变更 → 不写、不记日志、不审计（沿用本类既有口径）
         }
@@ -153,6 +168,8 @@ public class AdminConfigService {
         c.setShareRewardMonthlyCap(form.shareRewardMonthlyCap());
         c.setIdCardShareReward(form.idCardShareReward());
         c.setIdCardShareDailyCap(form.idCardShareDailyCap());
+        c.setAgeCardShareReward(form.ageCardShareReward());
+        c.setAgeCardShareDailyCap(form.ageCardShareDailyCap());
         pawcoinRepo.save(c);
         commit(logs, adminId, "PAWCOIN", "pawcoin_config");
     }

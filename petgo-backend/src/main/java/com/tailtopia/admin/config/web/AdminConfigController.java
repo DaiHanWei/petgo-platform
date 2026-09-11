@@ -99,11 +99,14 @@ public class AdminConfigController {
             @RequestParam(defaultValue = "0") long shareRewardMonthlyCap,
             @RequestParam(defaultValue = "0") long idCardShareReward,
             @RequestParam(defaultValue = "0") int idCardShareDailyCap,
+            @RequestParam(defaultValue = "0") long ageCardShareReward,
+            @RequestParam(defaultValue = "0") int ageCardShareDailyCap,
             RedirectAttributes flash) {
         try {
             write.updateShareReward(new com.tailtopia.admin.config.dto.ShareRewardForm(
                     shareRewardEnabled, shareRewardMonthlyCap, idCardShareReward,
-                    idCardShareDailyCap), admin.getAdminAccountId());
+                    idCardShareDailyCap, ageCardShareReward, ageCardShareDailyCap),
+                    admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.config.shareRewardSaved"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));

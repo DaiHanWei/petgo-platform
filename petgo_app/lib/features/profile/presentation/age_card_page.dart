@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -12,6 +13,7 @@ import '../../../shared/card_render/card_canvas.dart';
 import '../../../shared/card_render/card_export.dart';
 import '../../../shared/card_render/card_frame.dart';
 import '../../../shared/card_render/card_render_pipeline.dart';
+import '../data/age_card_reward_repository.dart';
 import '../data/profile_repository.dart';
 import '../domain/age_card_quips.dart';
 import '../domain/human_age.dart';
@@ -179,7 +181,7 @@ class _SizeTile extends StatelessWidget {
 ///
 /// ⚠️ **必须有这一屏**：出图靠截屏式导出，卡面得先真的画在屏幕上才能截。
 /// 藏在屏幕外 offstage 是不画的，`toImage` 会拿到空图。
-class AgeCardPreviewPage extends StatefulWidget {
+class AgeCardPreviewPage extends ConsumerStatefulWidget {
   const AgeCardPreviewPage({
     super.key,
     required this.petName,
@@ -211,10 +213,10 @@ class AgeCardPreviewPage extends StatefulWidget {
   static Future<Uint8List?> Function(CardCanvas canvas)? captureForTest;
 
   @override
-  State<AgeCardPreviewPage> createState() => _AgeCardPreviewPageState();
+  ConsumerState<AgeCardPreviewPage> createState() => _AgeCardPreviewPageState();
 }
 
-class _AgeCardPreviewPageState extends State<AgeCardPreviewPage> {
+class _AgeCardPreviewPageState extends ConsumerState<AgeCardPreviewPage> {
   final GlobalKey _boundaryKey = GlobalKey();
 
   /// 默认 9:16（Instagram Stories 是这个功能的主场景）。
@@ -235,6 +237,31 @@ class _AgeCardPreviewPageState extends State<AgeCardPreviewPage> {
   /// 用户还没看完就跳字了。"每次生成随机" 指的是每次**打开**，不是每一帧。
   late final AgeCardQuip _quip = pickQuip(_age.stage, random: widget.quipRandom);
 
+  /// 分享成功后试着领奖（Story 5.3）。
+  ///
+  /// 🛡 **失败一律当作没发**：分享本身已经成功，绝不因为领奖这一步报错给用户。
+  /// 🛡 发了才提示，没发**静默** —— 不告知原因（告知会诱导「攒着别分享」或「月初集中刷满」）。
+  Future<void> _claimReward() async {
+    int coins = 0;
+    try {
+      coins = await ref
+          .read(ageCardRewardRepositoryProvider)
+          // 幂等键 = 本次预览会话 + 这一次分享动作。重复上报同一次分享不会重复发。
+          .reportShareForReward(_shareIdempotencyKey);
+    } catch (_) {
+      coins = 0;
+    }
+    if (!mounted || coins <= 0) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(AppLocalizations.of(context).ageCardRewardToast(coins))),
+    );
+  }
+
+  /// 一次分享动作一个幂等键。每次点分享重新生成 —— 同一张卡分享两次是两次行为，
+  /// 是否都发由服务端的日上限说了算，不该被客户端的键顶掉。
+  /// 一次分享动作一个幂等键（见 [_shareIt]）。
+  String _shareIdempotencyKey = '';
+
   /// 埋点公共属性（AD-A26.4 值域）。
   Map<String, Object> _eventProps() => {
         'species': widget.isDog ? 'dog' : 'cat',
@@ -245,6 +272,8 @@ class _AgeCardPreviewPageState extends State<AgeCardPreviewPage> {
   Future<void> _shareIt() async {
     final l10n = AppLocalizations.of(context);
     setState(() => _busy = true);
+    // 一次分享动作一个幂等键（服务端会再拼上 userId 作为全局唯一键）。
+    _shareIdempotencyKey = 'age-card-${DateTime.now().microsecondsSinceEpoch}';
     try {
       final capture = AgeCardPreviewPage.captureForTest;
       final bytes = capture != null
@@ -268,8 +297,11 @@ class _AgeCardPreviewPageState extends State<AgeCardPreviewPage> {
         shareOrigin: origin,
         // 🔴 分享**只在系统面板回调成功后**才报，取消不报 ——
         // 报在出图那刻等于"看一眼就退出也算分享"，这个数只会高估且无法事后修正。
-        onShared: (channel) =>
-            Analytics.capture('age_card_shared', {..._eventProps(), 'channel': channel}),
+        // 领奖（Story 5.3）挂在同一个回调上，理由相同。
+        onShared: (channel) {
+          Analytics.capture('age_card_shared', {..._eventProps(), 'channel': channel});
+          unawaited(_claimReward());
+        },
       );
     } finally {
       if (mounted) setState(() => _busy = false);

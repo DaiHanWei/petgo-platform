@@ -1503,6 +1503,7 @@
   "ageCardRealAgeYearsMonths": "{years} thn {months} bln",
   "ageCardRealAgeMonths": "{months} bulan",
   "ageCardShareCta": "Bagikan",
+  "ageCardRewardToast": "+{coins} PawCoin 🎉",
   "ageCardQuipPuppy1": "Masih belajar soal dunia — sambil tidur siang.",
   "ageCardQuipPuppy2": "Kaki mungil, mimpi besar. Perjalanan {name} baru dimulai.",
   "ageCardQuipPuppy3": "Masih panjang jalan tidur siang {name}.",
