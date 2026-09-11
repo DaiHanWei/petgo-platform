@@ -131,4 +131,7 @@ const _sameInBothLocales = {
   'provinsi', 'kota', 'kabupaten', 'kecamatan',
   // 演示数据里的人名 / 宠物名
   'aurel', 'mochi',
+  // SI 单位符号：两语（以及所有语言）写法相同，翻译它反而是错的。
+  // V1.3.0 Story 5.2 的狗体型档标注体重区间时用到。
+  'kg',
 };

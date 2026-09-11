@@ -55,6 +55,7 @@ import '../../features/profile/presentation/health_list_page.dart';
 import '../../features/profile/presentation/id_card_create_page.dart';
 import '../../features/profile/presentation/id_card_detail_page.dart';
 import '../../features/profile/presentation/id_card_page.dart';
+import '../../features/profile/presentation/age_card_page.dart';
 import '../../features/profile/presentation/pet_insights_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
@@ -678,6 +679,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 它与下面的 /profile/pet-insights/* 子页**一律不得进 _controlledExactExceptions**
       // —— 那等于为放行一个子页把安全默认反转，踩「安全规则层只升不降不可绕过」这条红线。
       GoRoute(path: PetInsightsRoutes.hub, builder: (c, s) => const PetInsightsPage()),
+      // 宠物年龄卡（V1.3.0 Story 5.2 · FR-65）。狗先选体型档，猫直接进预览。
+      // 同样落在 /profile/ 前缀下自动受控，**不得进例外集合**。
+      GoRoute(path: PetInsightsRoutes.ageCard, builder: (c, s) => const AgeCardPage()),
       // 宠物身份证详情（Story 6.2 · FR-49B）。V1.3.0 Story 5.1 整体平移到聚合页之下，
       // 页面逻辑一字未改。
       GoRoute(path: PetInsightsRoutes.idCard, builder: (c, s) => const IdCardPage()),

@@ -2225,6 +2225,89 @@
   "@ageCardTitle": {
     "description": "聚合页年龄换算卡标题。⚠️ 文案需求清单未覆盖此条，取直白说法，待产品确认"
   },
+  "ageCardSizeQuestion": "How big is {name}?",
+  "@ageCardSizeQuestion": {
+    "description": "V1.3.0 Story 5.2 · AC1：狗的体型四选一页标题。所选档位只在本次生成中有效，不落档案字段",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "ageCardSizeSmall": "Small",
+  "ageCardSizeMedium": "Medium",
+  "ageCardSizeLarge": "Large",
+  "ageCardSizeXlarge": "Extra large",
+  "ageCardSizeUnderKg": "Under {kg} kg",
+  "@ageCardSizeUnderKg": {
+    "description": "体型档的体重区间标注（无下界那一档）",
+    "placeholders": { "kg": { "type": "String" } }
+  },
+  "ageCardSizeOverKg": "Over {kg} kg",
+  "@ageCardSizeOverKg": {
+    "description": "体型档的体重区间标注（无上界那一档）",
+    "placeholders": { "kg": { "type": "String" } }
+  },
+  "ageCardSizeBetweenKg": "{from}–{to} kg",
+  "@ageCardSizeBetweenKg": {
+    "description": "体型档的体重区间标注",
+    "placeholders": { "from": { "type": "String" }, "to": { "type": "String" } }
+  },
+  "ageCardPreviewTitle": "Pet Age Card",
+  "@ageCardPreviewTitle": { "description": "年龄卡预览页标题" },
+  "ageCardHumanYears": "≈ {years} human years",
+  "@ageCardHumanYears": {
+    "description": "卡面主视觉：人类年龄当量。「≈」不可省——这是个估算，写成等号会被当成精确结论",
+    "placeholders": { "years": { "type": "int" } }
+  },
+  "ageCardRealAgeYearsMonths": "{years}y {months}m",
+  "@ageCardRealAgeYearsMonths": {
+    "description": "卡面上的实际年龄",
+    "placeholders": { "years": { "type": "int" }, "months": { "type": "int" } }
+  },
+  "ageCardRealAgeMonths": "{months} months",
+  "@ageCardRealAgeMonths": {
+    "description": "未满 1 岁时的实际年龄",
+    "placeholders": { "months": { "type": "int" } }
+  },
+  "ageCardShareCta": "Share",
+  "@ageCardShareCta": { "description": "年龄卡预览页的吸底分享按钮" },
+  "ageCardQuipPuppy1": "Still figuring the world out — one nap at a time.",
+  "@ageCardQuipPuppy1": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Puppy 段第 1 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符"},
+  "ageCardQuipPuppy2": "Tiny paws, big dreams. {name} is just getting started.",
+  "@ageCardQuipPuppy2": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Puppy 段第 2 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符", "placeholders": {"name": {"type": "String"}}},
+  "ageCardQuipPuppy3": "{name} has a whole life of naps ahead.",
+  "@ageCardQuipPuppy3": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Puppy 段第 3 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符", "placeholders": {"name": {"type": "String"}}},
+  "ageCardQuipPuppy4": "Everything is new, and everything is exciting.",
+  "@ageCardQuipPuppy4": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Puppy 段第 4 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符"},
+  "ageCardQuipPuppy5": "Every day is a first for {name}.",
+  "@ageCardQuipPuppy5": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Puppy 段第 5 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符", "placeholders": {"name": {"type": "String"}}},
+  "ageCardQuipYoung1": "{name} is in their prime — full of energy and bad ideas.",
+  "@ageCardQuipYoung1": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Young 段第 1 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符", "placeholders": {"name": {"type": "String"}}},
+  "ageCardQuipYoung2": "Young, fast, and impossible to tire out.",
+  "@ageCardQuipYoung2": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Young 段第 2 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符"},
+  "ageCardQuipYoung3": "{name} runs on zoomies and snacks.",
+  "@ageCardQuipYoung3": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Young 段第 3 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符", "placeholders": {"name": {"type": "String"}}},
+  "ageCardQuipYoung4": "Peak mischief years for {name}.",
+  "@ageCardQuipYoung4": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Young 段第 4 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符", "placeholders": {"name": {"type": "String"}}},
+  "ageCardQuipYoung5": "{name} has figured out the whole house. Now what?",
+  "@ageCardQuipYoung5": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Young 段第 5 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符", "placeholders": {"name": {"type": "String"}}},
+  "ageCardQuipMiddle1": "{name} knows exactly what they want. Usually snacks.",
+  "@ageCardQuipMiddle1": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Middle 段第 1 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符", "placeholders": {"name": {"type": "String"}}},
+  "ageCardQuipMiddle2": "All grown up, still your baby.",
+  "@ageCardQuipMiddle2": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Middle 段第 2 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符"},
+  "ageCardQuipMiddle3": "{name} has mastered the art of the good nap.",
+  "@ageCardQuipMiddle3": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Middle 段第 3 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符", "placeholders": {"name": {"type": "String"}}},
+  "ageCardQuipMiddle4": "Wise enough to nap, young enough to play.",
+  "@ageCardQuipMiddle4": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Middle 段第 4 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符"},
+  "ageCardQuipMiddle5": "{name} runs this house now. You just live here.",
+  "@ageCardQuipMiddle5": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Middle 段第 5 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符", "placeholders": {"name": {"type": "String"}}},
+  "ageCardQuipSenior1": "{name} has earned every single nap.",
+  "@ageCardQuipSenior1": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Senior 段第 1 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符", "placeholders": {"name": {"type": "String"}}},
+  "ageCardQuipSenior2": "Grey around the muzzle, gold in the heart.",
+  "@ageCardQuipSenior2": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Senior 段第 2 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符"},
+  "ageCardQuipSenior3": "{name} has seen the world. Mostly the couch.",
+  "@ageCardQuipSenior3": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Senior 段第 3 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符", "placeholders": {"name": {"type": "String"}}},
+  "ageCardQuipSenior4": "Slower steps, same big heart.",
+  "@ageCardQuipSenior4": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Senior 段第 4 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符"},
+  "ageCardQuipSenior5": "{name} is a senior now — and a legend.",
+  "@ageCardQuipSenior5": {"description": "V1.3.0 Story 5.2 · AC6：年龄卡趣味文案（Senior 段第 5 条）。⚠️ 这是印在分享图片上的一句话，不是 App 界面文字——会被发到 WhatsApp / IG Stories 给陌生人看，单条 ≤ 60 字符", "placeholders": {"name": {"type": "String"}}},
   "ageCardUnavailableForSpecies": "Available for cats & dogs",
   "@ageCardUnavailableForSpecies": {
     "description": "V1.3.0 Story 5.1 · AC7：非猫狗时年龄卡置灰的副文案。文案需求清单 §2 已定稿。🔴 用正面陈述适用范围，不用否定式（「不支持」像故障）；禁用「即将推出」——这批明确不做，写了是不兑现的承诺"
