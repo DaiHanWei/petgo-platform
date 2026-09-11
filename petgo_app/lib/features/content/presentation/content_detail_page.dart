@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/media/image_lightbox.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/user_tag_row.dart';
@@ -162,6 +163,8 @@ class _DetailScaffold extends ConsumerWidget {
                         sizes: detail.imageSizes,
                         viewportHeight: viewport.maxHeight,
                         decorationTags: detail.decorationTags,
+                        // 前缀带上帖子 id：同一屏里不会有第二个同 tag 的 Hero。
+                        heroTagPrefix: 'content_detail_${detail.id}',
                       ),
                     ],
                     if (detail.body != null && detail.body!.isNotEmpty) ...[
@@ -413,10 +416,15 @@ class _ImageCarousel extends StatefulWidget {
     required this.urls,
     required this.sizes,
     required this.viewportHeight,
+    required this.heroTagPrefix,
     this.decorationTags = const [],
   });
 
   final List<String> urls;
+
+  /// 传给共享灯箱的 Hero tag 前缀（Story 3.1 · AD-A14.2b）。**由调用方给**，
+  /// 不从 URL 推导 —— 同一张图在一页里出现两次时，URL 相同会让两个 Hero 撞 tag 抛异常。
+  final String heroTagPrefix;
 
   /// 与 [urls] 同序等长的原始宽高；测不出来 / 存量内容为 null（走占位兜底）。
   final List<ImageSize?> sizes;
@@ -442,10 +450,16 @@ class _ImageCarouselState extends State<_ImageCarousel> {
   }
 
   void _openLightbox(int index) {
-    // bug 20260727-372：灯箱可左右翻页（此前单图 InteractiveViewer 进灯箱后无法滑动看其余图）。
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => _Lightbox(urls: widget.urls, initialIndex: index),
-    ));
+    // V1.3.0 Story 3.1：灯箱已上提为共享组件（`shared/media/image_lightbox.dart`），
+    // 详情页只负责把「哪些图 + 从第几张开始 + tag 前缀 + 埋点来源」交出去。
+    // 组件不认识「内容帖」这回事 —— 那正是批次 B1 的场所照片能直接接入的原因。
+    ImageLightbox.open(
+      context,
+      urls: widget.urls,
+      initialIndex: index,
+      heroTagPrefix: widget.heroTagPrefix,
+      source: 'content_detail',
+    );
   }
 
   @override
@@ -513,58 +527,6 @@ class _ImageCarouselState extends State<_ImageCarousel> {
             ),
           ),
       ],
-    );
-  }
-}
-
-/// 全屏灯箱（bug 20260727-372）：PageView 承载多图左右翻页，每页可捏合缩放；
-/// 顶栏显示页码，初始页为点击的那张。
-class _Lightbox extends StatefulWidget {
-  const _Lightbox({required this.urls, required this.initialIndex});
-
-  final List<String> urls;
-  final int initialIndex;
-
-  @override
-  State<_Lightbox> createState() => _LightboxState();
-}
-
-class _LightboxState extends State<_Lightbox> {
-  late final PageController _controller = PageController(initialPage: widget.initialIndex);
-  late int _current = widget.initialIndex;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: widget.urls.length > 1
-            ? Text('${_current + 1}/${widget.urls.length}',
-                style: AppTypography.body.copyWith(color: Colors.white))
-            : null,
-        centerTitle: true,
-      ),
-      body: PageView.builder(
-        controller: _controller,
-        itemCount: widget.urls.length,
-        onPageChanged: (i) => setState(() => _current = i),
-        // 点击图片（或黑边）关闭大图（bug 20260701-192，对齐主流看图 App 交互；与翻页/缩放手势不冲突）。
-        itemBuilder: (context, i) => GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => Navigator.of(context).pop(),
-          child: Center(
-            child: InteractiveViewer(child: AppImage.widget(widget.urls[i], fit: BoxFit.contain)),
-          ),
-        ),
-      ),
     );
   }
 }
