@@ -4,6 +4,7 @@ import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/user_tag_row.dart';
 import '../../../shared/widgets/content_tag_chip.dart';
 import '../domain/content_tag.dart';
+import '../domain/detail_bottom_bar.dart';
 import '../domain/detail_image_layout.dart';
 import '../domain/feed_image_layout.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,7 +31,6 @@ import 'comment_section.dart';
 import 'detail_providers.dart';
 import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
-import 'like_button.dart';
 import 'report_sheet.dart';
 import 'share_card/open_share_card.dart';
 
@@ -191,8 +191,10 @@ class _DetailScaffold extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // V1.3.0 Story 2.3：互动栏已迁到固定底栏（与评论输入框合并）。
+                          // 正文下方**不再单独存在互动栏** —— 点赞 / 分享始终悬浮可点，
+                          // 用户不必为了点个赞把页面滚回图片下方。
                           const SizedBox(height: AppSpacing.md),
-                          _interactionBar(ref),
                           const Divider(height: AppSpacing.xl, color: AppColors.divider),
                           // KOMENTAR (n) 计数标题（detail.html）。带 ?focus=comments 进来时滚到这里。
                           _ScrollIntoViewOnMount(
@@ -221,7 +223,9 @@ class _DetailScaffold extends ConsumerWidget {
                 ),
               ),
             ),
-            CommentComposer(postId: postId),
+            // 固定底栏 = 评论输入框 + 互动栏（Story 2.3 · AC1）。
+            // detail 传进去是为了底栏右侧的点赞 / 分享两个动作。
+            CommentComposer(postId: postId, detail: detail),
           ],
         ),
       ),
@@ -297,42 +301,6 @@ class _DetailScaffold extends ConsumerWidget {
         onReported: onAuthorHidden(ref, detail.authorId, popContext: context),
       ),
       child: row,
-    );
-  }
-
-  Widget _interactionBar(WidgetRef ref) {
-    // 点赞按钮（Story 3.4，乐观更新）+ 评论数。⚠️ V1.1.6 Story 3.2 起**首页卡片也展示**这两项。
-    return Row(
-      children: [
-        LikeButton(
-          postId: detail.id,
-          initialLiked: detail.liked,
-          initialCount: detail.likeCount,
-          // 🛡 两个挂载点都必须传来源，否则「首页点赞是净增还是前移」这个对比失效。
-          source: 'detail',
-        ),
-        const SizedBox(width: AppSpacing.lg),
-        // 点评论图标/计数 → 聚焦底部评论框弹键盘（游客转登录引导）。
-        GestureDetector(
-          key: const ValueKey('detailCommentIcon'),
-          behavior: HitTestBehavior.opaque,
-          onTap: () => ref.read(commentFocusProvider.notifier).requestFocus(),
-          child: Row(
-            children: [
-              const Icon(Icons.mode_comment_outlined, size: 20, color: AppColors.textSecondary),
-              const SizedBox(width: AppSpacing.xs),
-              Text('${detail.commentCount}', style: AppTypography.caption),
-            ],
-          ),
-        ),
-        const SizedBox(width: AppSpacing.lg),
-        // 分享卡入口（V1.1.6 Story 9.3 · FR-73）。
-        //
-        // 🔴 **刻意放在这里，不放顶栏** —— UI 稿 SH1 画的是顶栏右上角，但那么做会把顶栏的
-        // 「···」挤掉，而「···」是**举报入口**（合规入口，不能变难找）。
-        // 2026-08-14 产品决定：分享让位，顶栏保持现状。照 SH1 实现就是把合规入口做掉。
-        _ShareCardButton(detail: detail),
-      ],
     );
   }
 
@@ -656,17 +624,19 @@ class _ScrollIntoViewOnMountState extends State<_ScrollIntoViewOnMount> {
 /// 点击 → 取该条内容的对外分享链接（后端幂等，重复分享复用同一 token）
 /// → 进预览页（9-2 的两套模板）→ 出图 → 系统分享菜单。
 ///
-/// 🛡 **顶栏的「···」不受影响** —— 那是举报入口，见 `_interactionBar` 里的说明。
-class _ShareCardButton extends ConsumerStatefulWidget {
-  const _ShareCardButton({required this.detail});
+/// 🛡 **顶栏的「···」不受影响** —— 那是举报入口（合规入口，不能变难找）。
+/// UI 稿 SH1 画的是顶栏右上角放分享，但那会把「···」挤掉；2026-08-14 产品决定分享让位。
+/// V1.3.0 Story 2.3 把分享从正文下方的互动栏挪进**固定底栏**，顶栏仍然保持现状。
+class DetailShareCardButton extends ConsumerStatefulWidget {
+  const DetailShareCardButton({super.key, required this.detail});
 
   final ContentDetail detail;
 
   @override
-  ConsumerState<_ShareCardButton> createState() => _ShareCardButtonState();
+  ConsumerState<DetailShareCardButton> createState() => _ShareCardButtonState();
 }
 
-class _ShareCardButtonState extends ConsumerState<_ShareCardButton> {
+class _ShareCardButtonState extends ConsumerState<DetailShareCardButton> {
   bool _busy = false;
 
   /// 打开分享卡预览。
@@ -692,7 +662,7 @@ class _ShareCardButtonState extends ConsumerState<_ShareCardButton> {
       onTap: _busy ? null : _open,
       child: Icon(
         Icons.ios_share_rounded,
-        size: 20,
+        size: DetailBarMetrics.iconSize,
         color: _busy ? AppColors.muted : AppColors.textSecondary,
       ),
     );

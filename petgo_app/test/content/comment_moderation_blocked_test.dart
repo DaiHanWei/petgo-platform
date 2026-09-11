@@ -98,6 +98,8 @@ void main() {
     await _pumpComposer(tester, container);
 
     await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'judi online');
+    // V1.3.0 Story 2.3：底栏右侧两态互斥——有输入后发送键才出现，需要一帧让它挂上来。
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('detailCommentSend')));
     await tester.pumpAndSettle();
 
@@ -119,6 +121,8 @@ void main() {
     await _pumpComposer(tester, container);
 
     await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'hello');
+    // V1.3.0 Story 2.3：底栏右侧两态互斥——有输入后发送键才出现，需要一帧让它挂上来。
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('detailCommentSend')));
     await tester.pumpAndSettle();
 

@@ -11,15 +11,35 @@ import '../../../core/theme/typography.dart';
 import '../../../features/auth/domain/auth_guard.dart';
 import '../../../features/auth/domain/auth_state.dart';
 import '../../../l10n/app_localizations.dart';
+import '../domain/content_detail.dart';
+import '../domain/detail_bottom_bar.dart';
 import '../data/detail_repository.dart';
+import 'content_detail_page.dart';
 import 'detail_providers.dart';
+import 'like_button.dart';
 
-/// 底部固定评论框（Story 3.5，FR-24）。未登录点击触发 FR-0C；登录态可编辑发表一级评论
-/// 或回复（≤200 字实时计数，服务端权威）。发表成功后 bump 评论区刷新信号。
+/// 详情页**固定底栏**（Story 3.5 起为评论框；V1.3.0 Story 2.3 起合并互动栏，FR-114 · AD-A13）。
+///
+/// 未登录点击触发 FR-0C；登录态可编辑发表一级评论或回复（≤200 字实时计数，服务端权威）。
+/// 发表成功后 bump 评论区刷新信号。
+///
+/// ## 🔴 右侧两态互斥（Story 2.3 · AC2）
+/// - **未聚焦且无输入** → 点赞 + 分享（用户进页面看到的默认态）；
+/// - **已聚焦或已开始输入** → 发送。
+///
+/// 判定规则在 [resolveBottomBarMode]（纯函数、L0 可测），**不要在 build 里就地写条件** ——
+/// 写在 widget 里就没法钉住「没有第三种组合」这件事。
+///
+/// ## 评论数不在这里
+/// 评论数只在评论区标题「KOMENTAR (N)」出现**一次**（AC3）。底栏不展示计数：
+/// 输入框旁边再放一个数字，用户会以为那是「我打了几个字」。
 class CommentComposer extends ConsumerStatefulWidget {
-  const CommentComposer({super.key, required this.postId});
+  const CommentComposer({super.key, required this.postId, this.detail});
 
   final int postId;
+
+  /// 供底栏右侧的点赞 / 分享使用。为 null 时底栏退化成纯输入框（未接入互动栏的调用方）。
+  final ContentDetail? detail;
 
   @override
   ConsumerState<CommentComposer> createState() => _CommentComposerState();
@@ -30,11 +50,38 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
   final FocusNode _focusNode = FocusNode();
   static const int _maxLen = 200;
   bool _sending = false;
+  /// 右侧两态的输入端：焦点与「是否已开始输入」。两者任一为真即进 compose 态。
+  bool _focused = false;
+  bool _hasText = false;
   // 触达字数上限只提示一次（回落到 <上限再复位），避免满字后每敲一键连弹（bug 20260702-218）。
   bool _limitToasted = false;
 
   @override
+  void initState() {
+    super.initState();
+    // 焦点与文本都要驱动两态切换，各挂一个监听。
+    _focusNode.addListener(_onFocusChanged);
+    _controller.addListener(_onTextChanged);
+  }
+
+  void _onFocusChanged() {
+    if (_focused != _focusNode.hasFocus) {
+      setState(() => _focused = _focusNode.hasFocus);
+    }
+  }
+
+  void _onTextChanged() {
+    // trim 后非空才算「开始输入」—— 只敲了几个空格不该把点赞分享顶掉。
+    final has = _controller.text.trim().isNotEmpty;
+    if (_hasText != has) {
+      setState(() => _hasText = has);
+    }
+  }
+
+  @override
   void dispose() {
+    _focusNode.removeListener(_onFocusChanged);
+    _controller.removeListener(_onTextChanged);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -102,12 +149,25 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
     });
 
     // 游客：只读提示框，点击触发 FR-0C。
+    //
+    // 🔴 右侧动作**照常渲染**：游客不能评论，但点赞（转登录引导）与分享（本就允许）
+    // 都必须在。Story 2.3 把分享从正文下方挪进底栏，若这里省掉动作，
+    // 游客就彻底**没有分享入口**了 —— 那是把一个既有能力做没了。
     if (isGuest) {
       return _bottomBar(
-        child: GestureDetector(
-          key: const ValueKey('detailCommentBox'),
-          onTap: () => requireLogin(ref, context, onAllowed: () {}),
-          child: _hintPill(l10n.detailCommentHint),
+        child: Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                key: const ValueKey('detailCommentBox'),
+                onTap: () => requireLogin(ref, context, onAllowed: () {}),
+                child: _hintPill(l10n.detailCommentHint),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            // 游客永远停在 actions 态：他没有输入框可聚焦，也没有草稿。
+            _actions(),
+          ],
         ),
       );
     }
@@ -173,27 +233,69 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              // 紫色实心圆发送钮（detail.html）。
-              Material(
-                color: AppColors.mint,
-                shape: const CircleBorder(),
-                child: InkWell(
-                  key: const ValueKey('detailCommentSend'),
-                  customBorder: const CircleBorder(),
-                  onTap: _sending ? null : () => _send(replyTarget?.parentId),
-                  child: const SizedBox(
-                    width: 42,
-                    height: 42,
-                    child: Icon(Icons.send_rounded, size: 20, color: AppColors.onAccent),
-                  ),
-                ),
-              ),
+              // 🔴 右侧两态（AC2）：未聚焦且无输入 → 点赞 + 分享；否则 → 发送。
+              // 判定走 resolveBottomBarMode，**别在这里就地写 if** —— 枚举只有两个值，
+              // 「没有第三种组合」这件事因此在类型上成立。
+              switch (resolveBottomBarMode(focused: _focused, hasText: _hasText)) {
+                DetailBottomBarMode.compose => _sendButton(replyTarget?.parentId),
+                DetailBottomBarMode.actions => _actions(),
+              },
             ],
           ),
         ],
       ),
     );
   }
+
+  /// 紫色实心圆发送钮（detail.html）。
+  Widget _sendButton(int? parentId) => Material(
+        color: AppColors.mint,
+        shape: const CircleBorder(),
+        child: InkWell(
+          key: const ValueKey('detailCommentSend'),
+          customBorder: const CircleBorder(),
+          onTap: _sending ? null : () => _send(parentId),
+          child: const SizedBox(
+            width: 42,
+            height: 42,
+            child: Icon(Icons.send_rounded, size: 20, color: AppColors.onAccent),
+          ),
+        ),
+      );
+
+  /// 默认态：点赞 + 分享，始终悬浮可点（AC1）。
+  ///
+  /// detail 为 null（未接入互动栏的调用方）时退化成空占位，底栏仍是一条纯输入框。
+  Widget _actions() {
+    final detail = widget.detail;
+    if (detail == null) return const SizedBox.shrink();
+    return Row(
+      key: const ValueKey('detailBottomActions'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 🔴 热区**隐性扩展**到 44×44，可见图标仍是 19（AC4）：19px 直接当按钮手指点不准，
+        // 但把图标画大会改变设计稿的视觉密度。所以扩的是命中框，不是图标。
+        _tapTarget(LikeButton(
+          postId: detail.id,
+          initialLiked: detail.liked,
+          initialCount: detail.likeCount,
+          // 🛡 两个挂载点都必须传来源，否则「首页点赞是净增还是前移」这个对比失效。
+          source: 'detail',
+        )),
+        const SizedBox(width: DetailBarMetrics.iconGap),
+        _tapTarget(DetailShareCardButton(detail: detail)),
+      ],
+    );
+  }
+
+  /// 把一个小图标包进 44×44 的透明命中框（可见大小不变）。
+  Widget _tapTarget(Widget child) => ConstrainedBox(
+        constraints: const BoxConstraints(
+          minWidth: DetailBarMetrics.minTapTarget,
+          minHeight: DetailBarMetrics.minTapTarget,
+        ),
+        child: Center(widthFactor: 1, heightFactor: 1, child: child),
+      );
 
   Widget _bottomBar({required Widget child}) {
     return SafeArea(

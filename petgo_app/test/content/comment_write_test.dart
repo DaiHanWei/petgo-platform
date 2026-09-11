@@ -100,6 +100,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'hello pets');
+    // V1.3.0 Story 2.3：底栏右侧两态互斥——有输入后发送键才出现，需要一帧让它挂上来。
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('detailCommentSend')));
     await tester.pumpAndSettle();
     expect(repo.postCommentCalls, 1);
@@ -122,6 +124,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'keep me');
+    // V1.3.0 Story 2.3：底栏右侧两态互斥——有输入后发送键才出现，需要一帧让它挂上来。
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('detailCommentSend')));
     await tester.pumpAndSettle();
 
