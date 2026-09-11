@@ -14,7 +14,10 @@ class NotificationBell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final unread = ref.watch(unreadCountProvider).maybeWhen(data: (c) => c, orElse: () => 0);
+    // 🔴 用 `.value` 而不是 `maybeWhen(data:...)`（Bug 20260911-495）：
+    // 重新拉取期间 AsyncValue 是 loading 态，`maybeWhen(data:)` 匹配不上就回落 0 ——
+    // 角标会**先闪没再闪回来**。`.value` 在刷新期间保留上一次的值，画面稳定。
+    final unread = ref.watch(unreadCountProvider).value ?? 0;
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -31,10 +34,18 @@ class NotificationBell extends ConsumerWidget {
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(11),
               boxShadow: const [
-                BoxShadow(color: Color(0x12162233), blurRadius: 8, offset: Offset(0, 2)),
+                BoxShadow(
+                  color: Color(0x12162233),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
               ],
             ),
-            child: const Icon(Icons.notifications_outlined, size: 18, color: AppColors.ink2),
+            child: const Icon(
+              Icons.notifications_outlined,
+              size: 18,
+              color: AppColors.ink2,
+            ),
           ),
         ),
         if (unread > 0)
@@ -52,7 +63,11 @@ class NotificationBell extends ConsumerWidget {
               child: Text(
                 unread > 99 ? '99+' : '$unread',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ),
