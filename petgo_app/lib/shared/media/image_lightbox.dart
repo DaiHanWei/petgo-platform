@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/analytics/analytics.dart';
+import '../../l10n/app_localizations.dart';
 import '../widgets/app_image.dart';
 import 'lightbox_gestures.dart';
 
@@ -56,23 +59,31 @@ class ImageLightbox extends StatefulWidget {
 
   /// 打开查看器。调用方一律走这个入口，不要自己 push ——
   /// 路由形态（是否透明、是否全屏）是本组件的事，Story 3.3 还会改它。
-  static Future<void> open(
+  /// Hero 飞行时长（进出场同一档）。
+  static const Duration _flight = Duration(milliseconds: 260);
+
+  /// 返回**关闭时停留的那一张**的下标（被系统返回键关掉时为 null）。
+  ///
+  /// 调用方拿它把自己的缩略图轮播同步过去 —— 否则用户滑到第 5 张再关闭，
+  /// 图会缩回第 1 张缩略图的位置，那看上去像"飞错地方了"（AC1）。
+  static Future<int?> open(
     BuildContext context, {
     required List<String> urls,
     required int initialIndex,
     required String heroTagPrefix,
     required String source,
   }) {
-    if (urls.isEmpty) return Future<void>.value();
-    return Navigator.of(context).push(PageRouteBuilder<void>(
+    if (urls.isEmpty) return Future<int?>.value();
+    return Navigator.of(context).push(PageRouteBuilder<int>(
       // 🔴 `opaque: false` 是 Story 3.2 下滑关闭（AC1「背景随拖拽渐透明」）的**前提**：
       // 不透明路由之下的那一页根本不参与绘制，把黑底调淡只会露出一片虚空，
       // 而用户期待看见的是自己刚才那一页正在露出来。
       opaque: false,
       barrierColor: null,
-      // 进出场动画属 Story 3.3（Hero 飞入飞出），本 story 刻意留空（AC8）。
-      transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
+      // Story 3.3 · AC1：Hero 双向飞行需要一段非零的路由过渡时长，
+      // 否则「从缩略图原位放大飞入 / 关闭时缩回原位」两头都没有时间发生。
+      transitionDuration: _flight,
+      reverseTransitionDuration: _flight,
       pageBuilder: (_, _, _) => ImageLightbox(
         urls: urls,
         initialIndex: initialIndex,
@@ -123,6 +134,17 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
   static const double _maxScale = 4;
   static const double _doubleTapScale = 2.5;
 
+  /// 本次会话用到的**最大放大倍数**（埋点 `max_zoom_used`，Story 3.3 · AC5）。
+  double _maxZoomUsed = 1;
+
+  /// 关闭方式（埋点 `dismiss_gesture`）。默认 [LightboxDismissGesture.systemBack]：
+  /// 🔴 凡是没被 ✕ / 单击 / 下滑显式认领的退出，都是从系统那边走掉的 ——
+  /// 这条路径此前从不上报，关闭方式的分布因此一直是错的。
+  LightboxDismissGesture _dismissGesture = LightboxDismissGesture.systemBack;
+
+  /// 每页的重试计数：+1 就换掉 Image 的 key，强制重新发起加载（AC4）。
+  final Map<int, int> _retryTicks = {};
+
   int get _safeInitialIndex =>
       widget.urls.isEmpty ? 0 : widget.initialIndex.clamp(0, widget.urls.length - 1);
 
@@ -144,6 +166,7 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
     // InteractiveViewer 的平移量落在 [-width*(scale-1), 0]：0 = 贴左边，最小值 = 贴右边。
     final double maxPan = width * (scale - 1);
     final bool zoomed = scale > 1.01;
+    if (scale > _maxZoomUsed) _maxZoomUsed = scale;
     final bool atEdge = !zoomed || tx >= -0.5 || tx <= -maxPan + 0.5;
     if (zoomed != _zoomed || atEdge != _atHorizontalEdge) {
       setState(() {
@@ -167,6 +190,9 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
     // 改前这里是一个黑色 AppBar + 保留状态栏 —— 用户对比小红书后的原话是
     // 「点开放大不是全屏放大」，说的就是这一层。
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
+    // AC5：打开即上报。source 由调用方给（AD-A14.2b 登记的显式例外）——
+    // 没有它，B1 的场所照片上线后这两个事件就分不清帖子与场所。
+    Analytics.capture('lightbox_opened', {'source': widget.source});
   }
 
   double _reboundFrom = 0;
@@ -178,6 +204,14 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
     // 放进 ✕ 的 onTap 里只覆盖一条路，其余路径会把用户留在一个没有状态栏的界面上，
     // 而那个界面已经不是灯箱了。
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
+    // 🔴 AC5：关闭上报同样放在 dispose —— 与恢复系统栏同一个理由。
+    // 挂在 ✕ 的回调里就只有 ✕ 这一条会上报，系统返回键与 iOS 侧滑**静默丢失**，
+    // 而那恰恰是本 AC 点名「此前没人管」的那条路径。
+    Analytics.capture('lightbox_dismissed', {
+      'source': widget.source,
+      'dismiss_gesture': _dismissGesture.wire,
+      'max_zoom_used': double.parse(_maxZoomUsed.toStringAsFixed(2)),
+    });
     _singleTapTimer?.cancel();
     _rebound.dispose();
     for (final c in _transforms.values) {
@@ -185,6 +219,13 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
     }
     _controller.dispose();
     super.dispose();
+  }
+
+  /// 统一的关闭出口：记下**是怎么关的**（埋点值域四选一），并把停留页带回给调用方
+  /// （调用方据此把缩略图轮播同步过去，Hero 才飞得回正确那一格）。
+  void _close(LightboxDismissGesture gesture) {
+    _dismissGesture = gesture;
+    Navigator.of(context).pop(_current);
   }
 
   // ===== 手势：单击关闭 / 双击缩放（AC3 · AC6）=====
@@ -202,7 +243,7 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
     }
     _singleTapTimer = Timer(kLightboxSingleTapDelay, () {
       _singleTapTimer = null;
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) _close(LightboxDismissGesture.tap);
     });
   }
 
@@ -254,7 +295,7 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
       velocity: d.velocity.pixelsPerSecond.dy,
       viewportHeight: height,
     )) {
-      Navigator.of(context).pop();
+      _close(LightboxDismissGesture.swipeDown);
       return;
     }
     _reboundFrom = _dragDy;
@@ -340,17 +381,93 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
               // 未放大时不许平移：否则它会和"下滑关闭"抢同一个手势。
               panEnabled: _zoomed,
               maxScale: _maxScale,
-              child: AppImage.widget(widget.urls[i], fit: BoxFit.contain),
+              // AC1/AC2：Hero 包住这一页的图。tag 由**调用方前缀 + 下标**算出，
+              // 与缩略图一侧共用 lightboxHeroTag —— 两边算法不一致就飞不起来。
+              child: Hero(
+                tag: lightboxHeroTag(widget.heroTagPrefix, i),
+                // 飞行途中用一张静态图，避免把加载态/重试按钮一起拖着飞。
+                flightShuttleBuilder: (_, _, _, _, _) =>
+                    AppImage.widget(widget.urls[i], fit: BoxFit.contain, thumbWidth: _thumbWidth),
+                child: _page(i),
+              ),
             ),
           ),
         ),
       );
 
+  /// 缩略图取图宽度：**与 `_ImageCarousel` 现有口径一致，不另取一档**（AC3）。
+  /// 另取一档等于让同一张图在两处各缓存一份，白白多下一次。
+  static const int _thumbWidth = 1080;
+
+  /// 一页的内容：缩略图打底（模糊）→ 原图淡入（AC3）；加载失败给重试（AC4）。
+  Widget _page(int i) {
+    final String url = widget.urls[i];
+    final int tick = _retryTicks[i] ?? 0;
+    return Stack(
+      fit: StackFit.passthrough,
+      children: [
+        // 打底的缩略图：详情页多半已经缓存过它，所以打开瞬间就有东西看，
+        // 而不是一片黑等原图下完。模糊是为了让"还没清晰"这件事被看见，
+        // 否则用户会以为原图就是这么糊。
+        ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: AppImage.widget(url, fit: BoxFit.contain, thumbWidth: _thumbWidth),
+        ),
+        AppImage.widget(
+          url,
+          // 🔴 key 带重试计数：点重试时 key 变了，Element 重建 → 重新发起加载。
+          // 不换 key 的话 Image 会认为自己没变，失败态就此固化，按钮点了也没反应。
+          key: ValueKey('lightboxImage_${i}_$tick'),
+          fit: BoxFit.contain,
+          // 原图解码完成后淡入，接住下面那张模糊缩略图。
+          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+            if (wasSynchronouslyLoaded) return child;
+            return AnimatedOpacity(
+              opacity: frame == null ? 0 : 1,
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              child: child,
+            );
+          },
+          errorBuilder: (context, error, stack) => _retryTile(i),
+        ),
+      ],
+    );
+  }
+
+  /// AC4：失败提示 + 重试按钮。改前这里只有一个灰色方块 —— 用户既不知道发生了什么，
+  /// 也没有任何补救动作可做。
+  Widget _retryTile(int i) {
+    final l10n = AppLocalizations.of(context);
+    return Center(
+      key: ValueKey('lightboxRetry_$i'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.broken_image_outlined, size: 40, color: Colors.white70),
+          const SizedBox(height: 10),
+          Text(l10n.lightboxImageFailed,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: Colors.white70)),
+          const SizedBox(height: 10),
+          TextButton(
+            key: ValueKey('lightboxRetryButton_$i'),
+            // 重试要吃掉这次点击：不吞的话它会穿到底下的"单击关闭"，
+            // 用户点重试反而把灯箱关了。
+            onPressed: () => setState(() => _retryTicks[i] = (_retryTicks[i] ?? 0) + 1),
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            child: Text(l10n.feedRetry),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// 悬浮关闭 ✕（左上）。命中框 44×44，图标仍是 22 —— 扩热区不放大图标。
   Widget _closeButton() => GestureDetector(
         key: const ValueKey('lightboxClose'),
         behavior: HitTestBehavior.opaque,
-        onTap: () => Navigator.of(context).pop(),
+        onTap: () => _close(LightboxDismissGesture.closeButton),
         child: Container(
           width: 44,
           height: 44,

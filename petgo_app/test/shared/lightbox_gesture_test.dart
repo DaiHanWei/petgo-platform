@@ -314,13 +314,6 @@ void main() {
       }
     });
 
-    /// AC8：过渡动画与加载态属 Story 3.3，本 story 不碰。
-    test('没有提前做 3.3 的 Hero 飞入与失败重试', () {
-      final src = File('lib/shared/media/image_lightbox.dart').readAsStringSync();
-      expect(src, isNot(contains('Hero(')));
-      expect(src, isNot(contains('errorBuilder')));
-    });
-
     /// 判定逻辑是**纯函数**、不依赖 widget —— 这正是它能被上面那张真值表逐格验的原因。
     test('判定文件不 import 任何 widget 层', () {
       final src = File('lib/shared/media/lightbox_gestures.dart').readAsStringSync();

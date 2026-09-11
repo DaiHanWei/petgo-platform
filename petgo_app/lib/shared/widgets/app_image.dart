@@ -35,6 +35,9 @@ class AppImage {
 
   /// 渲染为 [Widget]（封面/轮播用）。[errorBuilder] 缺省回退到调用方传入的占位。
   ///
+  /// [frameBuilder]（V1.3.0 Story 3.3）：原图解码完成前后各渲染一次的钩子，
+  /// 灯箱用它做「缩略图模糊 → 原图清晰」的淡入。**可选，不传时行为与改前逐字相同。**
+  ///
   /// [thumbWidth]（物理像素）非空时，**仅网络 OSS 图**经 [ossResized] 取缩略图（列表/网格用）；
   /// asset/file 本地图与非 OSS 网络图不受影响。
   static Widget widget(
@@ -45,22 +48,43 @@ class AppImage {
     BoxFit fit = BoxFit.cover,
     int? thumbWidth,
     Widget Function(BuildContext, Object, StackTrace?)? errorBuilder,
+    ImageFrameBuilder? frameBuilder,
   }) {
     if (url.startsWith('asset:')) {
       return Image.asset(url.substring(6),
-          key: key, width: width, height: height, fit: fit, errorBuilder: errorBuilder);
+          key: key,
+          width: width,
+          height: height,
+          fit: fit,
+          errorBuilder: errorBuilder,
+          frameBuilder: frameBuilder);
     }
     if (url.startsWith('file:')) {
       return Image.file(File(url.substring(5)),
-          key: key, width: width, height: height, fit: fit, errorBuilder: errorBuilder);
+          key: key,
+          width: width,
+          height: height,
+          fit: fit,
+          errorBuilder: errorBuilder,
+          frameBuilder: frameBuilder);
     }
     if (url.startsWith('/')) {
       return Image.file(File(url),
-          key: key, width: width, height: height, fit: fit, errorBuilder: errorBuilder);
+          key: key,
+          width: width,
+          height: height,
+          fit: fit,
+          errorBuilder: errorBuilder,
+          frameBuilder: frameBuilder);
     }
     final net = thumbWidth == null ? url : ossResized(url, width: thumbWidth);
     return Image.network(net,
-        key: key, width: width, height: height, fit: fit, errorBuilder: errorBuilder);
+        key: key,
+        width: width,
+        height: height,
+        fit: fit,
+        errorBuilder: errorBuilder,
+        frameBuilder: frameBuilder);
   }
 
   /// 渲染为 [ImageProvider]（头像 CircleAvatar.backgroundImage 用）；空/null → null。

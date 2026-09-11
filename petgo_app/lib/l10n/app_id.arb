@@ -238,6 +238,7 @@
   "feedLoadError": "Gagal memuat Sosial, tarik untuk coba lagi",
   "feedLoadMoreError": "Gagal memuat lagi, ketuk untuk coba lagi",
   "feedRetry": "Coba lagi",
+  "lightboxImageFailed": "Gagal memuat gambar ini",
   "feedDeletedUser": "Pengguna terhapus",
   "detailGoneTitle": "Konten ini sudah tidak ada",
   "detailForbiddenTitle": "Anda tidak punya akses ke konten ini",

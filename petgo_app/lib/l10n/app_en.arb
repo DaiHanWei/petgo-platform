@@ -350,6 +350,10 @@
   "feedLoadError": "Could not load Social, pull to retry",
   "feedLoadMoreError": "Failed to load more, tap to retry",
   "feedRetry": "Retry",
+  "lightboxImageFailed": "Couldn't load this image",
+  "@lightboxImageFailed": {
+    "description": "V1.3.0 Story 3.3 · AC4：全屏查看器里某张图加载失败的提示。改前只有一个灰色方块，用户既不知道发生了什么也无处补救"
+  },
   "feedDeletedUser": "Deleted user",
   "detailGoneTitle": "This content no longer exists",
   "detailForbiddenTitle": "You don't have access to this content",

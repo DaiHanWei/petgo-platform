@@ -449,17 +449,22 @@ class _ImageCarouselState extends State<_ImageCarousel> {
     super.dispose();
   }
 
-  void _openLightbox(int index) {
+  Future<void> _openLightbox(int index) async {
     // V1.3.0 Story 3.1：灯箱已上提为共享组件（`shared/media/image_lightbox.dart`），
     // 详情页只负责把「哪些图 + 从第几张开始 + tag 前缀 + 埋点来源」交出去。
     // 组件不认识「内容帖」这回事 —— 那正是批次 B1 的场所照片能直接接入的原因。
-    ImageLightbox.open(
+    final int? landedOn = await ImageLightbox.open(
       context,
       urls: widget.urls,
       initialIndex: index,
       heroTagPrefix: widget.heroTagPrefix,
       source: 'content_detail',
     );
+    // Story 3.3 · AC1：用户在灯箱里滑到第几张，轮播就同步到第几张 ——
+    // 否则「关闭时缩回原缩略图位置」会缩回**打开时**那一张的位置，看上去像飞错了地方。
+    if (!mounted || landedOn == null || landedOn == _current) return;
+    if (!_controller.hasClients) return;
+    _controller.jumpToPage(landedOn);
   }
 
   @override
@@ -487,14 +492,19 @@ class _ImageCarouselState extends State<_ImageCarousel> {
               onPageChanged: (i) => setState(() => _current = i),
               itemBuilder: (context, i) => GestureDetector(
                 onTap: () => _openLightbox(i),
-                child: AppImage.widget(
-                  widget.urls[i],
-                  // 容器比例已按原图算好，cover 在比例相符时不裁切；
-                  // 仅当某张与首图比例不同（多图混排）才裁，这是容器锁首图的必然代价。
-                  fit: BoxFit.cover,
-                  thumbWidth: 1080, // 按手机全宽取缩略图（全屏放大走原图）
-                  errorBuilder: (context, error, stack) =>
-                      Container(color: AppColors.border),
+                // Story 3.3 · AC1/AC2：缩略图这一侧的 Hero。tag 与灯箱那侧**同一个函数**算出
+                // （前缀由本页给，绝不从 URL 推导 —— 同图两处同屏会直接抛异常）。
+                child: Hero(
+                  tag: lightboxHeroTag(widget.heroTagPrefix, i),
+                  child: AppImage.widget(
+                    widget.urls[i],
+                    // 容器比例已按原图算好，cover 在比例相符时不裁切；
+                    // 仅当某张与首图比例不同（多图混排）才裁，这是容器锁首图的必然代价。
+                    fit: BoxFit.cover,
+                    thumbWidth: 1080, // 按手机全宽取缩略图（全屏放大走原图）
+                    errorBuilder: (context, error, stack) =>
+                        Container(color: AppColors.border),
+                  ),
                 ),
               ),
             ),

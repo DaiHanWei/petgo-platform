@@ -75,9 +75,12 @@ void main() {
 
     /// AC5 第一条既有修复（bug 20260701-192）：**单击图片或黑边即关闭**。
     /// 改写外壳时顺手删掉就是回归 —— 所以在这里留一条明确的断言。
-    test('保留「单击关闭」：opaque 命中 + onTap pop', () {
+    test('保留「单击关闭」：opaque 命中 + 单击走关闭出口', () {
       expect(src, contains('HitTestBehavior.opaque'));
-      expect(src, contains('onTap: () => Navigator.of(context).pop()'));
+      // Story 3.2 起单击不再直接 pop，而是经 _close(LightboxDismissGesture.tap)
+      // 统一出口（要记下"是怎么关的"给埋点）——关闭这件事本身一步没少。
+      expect(src, contains('LightboxDismissGesture.tap'));
+      expect(src, contains('onTapUp: _handleTapUp'));
     });
 
     /// AC5 第二条既有修复（bug 20260727-372）：**单图进灯箱后也能左右翻页**。
