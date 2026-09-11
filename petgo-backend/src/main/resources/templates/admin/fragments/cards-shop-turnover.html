@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  C4 库存周转的卡区与明细（V1.3.0 Story 10.5 AC3）。字段**现状原样**：
+    cards：当前售罄 SKU 数
+    detail：各 SKU（库存 / 库存金额 / 窗口内销量 / 最近售出 / **建议动作**）
+  🔴 **库存金额按进货价算**，不是售价：那是资金占用的直接读数。
+     按售价算会把还没赚到的毛利也算成压着的钱 —— 数会大一截，而两者长得一模一样。
+-->
+<body>
+<div th:fragment="cards" class="cards" id="turnover-cards">
+    <section class="card card-kpi">
+        <h2 th:text="#{admin.shop.turnover.col.oos}">当前售罄 SKU 数</h2>
+        <p class="kpi-num" th:text="${outOfStockCount}">0</p>
+        <!--/* ⚠️ 缺货损失的口径说明不能删：这个数是服务端能给的**近似读数**，
+               真正的缺货损失（有多少人看到了售罄）是客户端事件，在 PostHog 里。
+               不写这句，它会被当成损失金额往上报。 */-->
+        <p class="hint" th:text="#{admin.shop.turnover.oosHint}">「当前售罄 SKU 数」是服务端能给的近似读数，不是损失金额。</p>
+    </section>
+</div>
+
+<div th:fragment="detail(oob)" id="turnover-detail" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <h2 th:text="#{admin.shop.turnover.section.rows}">各 SKU</h2>
+    <table th:if="${!#lists.isEmpty(rows)}">
+        <thead><tr>
+            <th th:text="#{admin.shop.col.name}">商品</th>
+            <th th:text="#{admin.shop.sku.specName}">规格</th>
+            <th class="s-col-num" th:text="#{admin.shop.inventory.col.actual}">实际库存</th>
+            <th class="s-col-num" th:text="#{admin.shop.turnover.col.stockValue}">库存金额（进货价）</th>
+            <th class="s-col-num" th:text="#{admin.shop.turnover.col.soldRecent}">窗口内销量</th>
+            <th th:text="#{admin.shop.turnover.col.lastSold}">最近售出</th>
+            <th th:text="#{admin.shop.turnover.col.advice}">建议动作</th>
+        </tr></thead>
+        <tbody>
+        <!--/* 滞销行标出来：一屏几十行数字里，「窗口内销量 0 且还压着货」那几行才是要处置的。 */-->
+        <tr th:each="row : ${rows}"
+            th:with="stale=${(row.get('sold_recent') == null or row.get('sold_recent') == 0)
+                             and row.get('actual') != null and row.get('actual') > 0}"
+            th:classappend="${stale} ? 'row-danger'">
+            <td th:text="${row.get('product_name')}">Produk</td>
+            <td th:text="${row.get('spec_name')}">3 kg</td>
+            <td class="s-col-num" th:text="${row.get('actual')}">0</td>
+            <td class="s-col-num" th:text="${#numbers.formatInteger(row.get('stock_value'), 0, 'COMMA')}">0</td>
+            <td class="s-col-num" th:text="${row.get('sold_recent')}">0</td>
+            <td th:text="${row.get('last_sold_at')} ?: '-'">-</td>
+            <!--/* 🔴 滞销预警必须给**建议动作** —— 只报「滞销」而不说怎么办，运营还是不会动。
+                   三档：压着货且卖不动 → 降价清货 / 停止补货 / 下架；卖不动但也没货 → 无需处置；其余正常。 */-->
+            <td th:switch="${row.get('sold_recent') == null or row.get('sold_recent') == 0}">
+                <span th:case="true" class="badge"
+                      th:classappend="${stale} ? 'badge-danger' : 'badge-muted'"
+                      th:text="${stale} ? #{admin.shop.turnover.advice.stale}
+                               : #{admin.shop.turnover.advice.none}">降价清货 / 停止补货 / 下架</span>
+                <span th:case="*" class="badge badge-ok"
+                      th:text="#{admin.shop.turnover.advice.healthy}">正常</span>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <div class="empty" th:if="${#lists.isEmpty(rows)}">
+        <span class="empty-emoji">📦</span>
+        <p th:text="#{admin.shop.inventory.empty}">暂无 SKU。</p>
+    </div>
+</div>
+
+<!--/* 窗口天数切换：主 swap 换卡区，各 SKU 表走 oob —— 「窗口内销量」与「建议动作」
+       整列都随窗口变，不一起换的话表里是上一个窗口的判断，而卡区已经是新的。 */-->
+<th:block th:fragment="refresh">
+    <div th:replace="~{admin/fragments/cards-shop-turnover :: cards}"></div>
+    <div th:replace="~{admin/fragments/cards-shop-turnover :: detail(true)}"></div>
+</th:block>
+</body>
+</html>

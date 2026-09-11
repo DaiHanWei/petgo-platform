@@ -17,6 +17,10 @@ import org.springframework.web.bind.annotation.RequestParam;
  * <p>🔒 <b>毛利与对账走独立权限位 {@code shop.finance_view}</b>（NFR-11）——
  * 默认仅财务与管理层，<b>不默认授予任何既有运营角色</b>。
  * 库存周转页含按进货价的库存金额，故同样受 {@code shop.cost_view} 之外的这道门控。
+ *
+ * <p>V1.3.0 Story 10.2 / 10.5（模板 C 只读报表）：三页的期间 / 窗口切换都走 htmx，
+ * 只换卡区 + 明细，页头与只读标识不重绘。<b>三页都没有写操作、没有导出端点</b>
+ * （AC4 明确不新增），路径与权限零变更。
  */
 @Controller
 public class AdminShopFinanceController {
@@ -43,7 +47,7 @@ public class AdminShopFinanceController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate to,
             @RequestParam(required = false) String category,
-            Model model) {
+            HxRequest hx, Model model) {
         LocalDate end = to == null ? LocalDate.now() : to;
         LocalDate start = from == null ? end.minusDays(30) : from;
         model.addAttribute("from", start);
@@ -54,18 +58,19 @@ public class AdminShopFinanceController {
         model.addAttribute("categories",
                 com.tailtopia.shop.domain.ProductCategory.values());
         model.addAttribute("active", "shopMargin");
-        return "admin/shop-margin";
+        return hx.isHtmx() ? "admin/fragments/cards-shop-margin :: refresh" : "admin/shop-margin";
     }
 
     @GetMapping("/admin/shop/inventory-turnover")
     @PreAuthorize(FINANCE_AUTH)
-    public String turnover(@RequestParam(required = false) Integer days, Model model) {
+    public String turnover(@RequestParam(required = false) Integer days, HxRequest hx, Model model) {
         int window = days == null || days <= 0 ? staleDays : days;
         model.addAttribute("staleDays", window);
         model.addAttribute("rows", finance.inventoryTurnover(window));
         model.addAttribute("outOfStockCount", finance.outOfStockSkuCount());
         model.addAttribute("active", "shopTurnover");
-        return "admin/shop-inventory-turnover";
+        return hx.isHtmx() ? "admin/fragments/cards-shop-turnover :: refresh"
+                : "admin/shop-inventory-turnover";
     }
 
     /**

@@ -47,8 +47,10 @@ petgo-backend/src/main/resources/templates/admin/vets.html|枚举未走 key   # 
 # --- 泳道 7 配置与安全（Epic 6）---
 petgo-backend/src/main/resources/templates/admin/audit-logs.html|枚举未走 key   # ${actionTypes} 审计动作类型，需新建 key
 
-# --- 泳道 5 商城（Epic 10，⏳ 本轮未执行；届时随页面重构一并修）---
-petgo-backend/src/main/resources/templates/admin/shop-margin.html|枚举未走 key   # ⏳ Epic 10
+# --- 泳道 5 商城 ---
+# ✅ shop-margin.html 的豁免已于 Story 10.5 摘除：品类下拉改走 admin.v130.shopProducts.category.*
+#    （原先把 MAKANAN / OBAT_VITAMIN 这类常量名直接铺给运营，切 ID 后连英文都不是）。
+#    同页「售后成本按退货类型」一列也改走 admin.v130.shopReturns.type.*。
 # ✅ shop-orders.html 的豁免已于 Story 10.2 摘除：状态下拉与表格状态列改走 admin.v130.shopOrders.status.*
 #    （原先把 PENDING_SHIPMENT / SHIPPED 这类常量名直接铺给运营，切 ID 后连英文都不是）。
 # ✅ shop-products.html / shop-product-form.html 的豁免已于 Story 10.3 摘除：

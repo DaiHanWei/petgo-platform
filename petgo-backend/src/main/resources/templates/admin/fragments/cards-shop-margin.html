@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  C3 销售与毛利的卡区与明细（V1.3.0 Story 10.5 AC2）。字段**现状原样**，一个都不少：
+    ① 核心（销售额 / 成本 / 毛利 / 毛利率 / 退款商品额 / 净额 / 售后成本）
+    ② 运费与手续费（SPEC-22：运费收入 / 承运成本 / 运费净额 A-19 / 退款手续费）
+    ③ 售后成本按退货类型
+    detail：按 SKU 下钻明细表
+  🔒 **整页商业敏感**：进入这一页就已经过了 shop.finance_view（AC2「本页整体门控，不再细分」），
+     所以卡内不再逐字段判权限 —— 再判一次只会给人「这页有些数是分级的」的错觉。
+-->
+<body>
+<div th:fragment="cards" class="cards" id="margin-cards">
+    <!-- ① 核心 -->
+    <section class="card card-kpi">
+        <h2 th:text="#{admin.shop.margin.section.core}">核心</h2>
+        <table>
+            <tr><th th:text="#{admin.shop.margin.col.revenue}">销售额</th>
+                <td class="s-col-num" th:text="${#numbers.formatInteger(m.revenue(), 0, 'COMMA')}">0</td></tr>
+            <!--/* 🔴 成本是**下单那一刻的进货价快照**，不是现在的进货价 ——
+                   用现价算不出当时的毛利，而两者长得一模一样。 */-->
+            <tr><th th:text="#{admin.shop.margin.col.cost}">成本（进货价）</th>
+                <td class="s-col-num" th:text="${#numbers.formatInteger(m.cost(), 0, 'COMMA')}">0</td></tr>
+            <tr><th th:text="#{admin.shop.margin.col.gross}">毛利</th>
+                <td class="s-col-num" th:text="${#numbers.formatInteger(m.grossProfit(), 0, 'COMMA')}">0</td></tr>
+            <tr><th th:text="#{admin.shop.margin.col.grossRate}">毛利率</th>
+                <td class="s-col-num" th:text="${#numbers.formatDecimal(m.grossMarginPercent(), 1, 2)} + ' %'">0 %</td></tr>
+            <tr><th th:text="#{admin.shop.margin.col.refunded}">退款商品额</th>
+                <td class="s-col-num" th:text="${#numbers.formatInteger(m.refundedGoods(), 0, 'COMMA')}">0</td></tr>
+            <tr><th th:text="#{admin.shop.margin.col.net}">净额</th>
+                <td class="s-col-num" th:text="${#numbers.formatInteger(m.netRevenue(), 0, 'COMMA')}">0</td></tr>
+            <tr><th th:text="#{admin.shop.margin.col.afterSales}">售后成本</th>
+                <td class="s-col-num" th:text="${#numbers.formatInteger(m.afterSalesCost(), 0, 'COMMA')}">0</td></tr>
+        </table>
+    </section>
+
+    <!-- ② 运费与手续费（SPEC-22）。🔴 运费净额为负 = 运费在补贴配送，整卡标红。 -->
+    <section class="card card-kpi" th:classappend="${m.shippingNet() < 0} ? 'card-alert'">
+        <h2 th:text="#{admin.shop.margin.section.spec22}">运费与手续费</h2>
+        <!--/* 🔴 这段是假设 A-19 的直接读数：A-19 承接的正是「不接承运商实时计费 API」省下工期的全部风险。
+               把它从页面上删掉，就没有任何地方能发现那个假设已经不成立了。 */-->
+        <p class="hint" th:text="#{admin.shop.margin.spec22Hint}">「运费净额」是假设 A-19 的直接读数：收取的运费减去实际承运成本。为负说明运费在补贴配送。</p>
+        <table>
+            <tr><th th:text="#{admin.shop.margin.col.shippingRevenue}">运费收入</th>
+                <td class="s-col-num" th:text="${#numbers.formatInteger(m.shippingRevenue(), 0, 'COMMA')}">0</td></tr>
+            <tr><th th:text="#{admin.shop.margin.col.carrierCost}">承运成本</th>
+                <td class="s-col-num" th:text="${#numbers.formatInteger(m.carrierCost(), 0, 'COMMA')}">0</td></tr>
+            <tr><th th:text="#{admin.shop.margin.col.shippingNet}">运费净额（A-19）</th>
+                <td class="s-col-num"><b th:text="${#numbers.formatInteger(m.shippingNet(), 0, 'COMMA')}">0</b></td></tr>
+            <tr><th th:text="#{admin.shop.margin.col.refundFee}">退款手续费</th>
+                <td class="s-col-num" th:text="${#numbers.formatInteger(m.refundChannelFee(), 0, 'COMMA')}">0</td></tr>
+        </table>
+    </section>
+
+    <!-- ③ 售后成本（按退货类型） -->
+    <section class="card card-kpi">
+        <h2 th:text="#{admin.shop.margin.section.byReturnType}">售后成本（按退货类型）</h2>
+        <!--/* 🔴 按退货类型下钻是用来**反向管理供应商**的：质量问题的售后成本长期偏高，
+               问题在供货而不在售后 —— 合并成一个总数就看不出该找谁。 */-->
+        <p class="hint" th:text="#{admin.shop.margin.byReturnTypeHint}">按退货类型下钻用于反向管理供应商。</p>
+        <table>
+            <thead><tr>
+                <th th:text="#{admin.shop.returns.col.type}">退货类型</th>
+                <th class="s-col-num" th:text="#{admin.shop.margin.col.afterSales}">售后成本</th>
+            </tr></thead>
+            <tbody>
+            <tr th:each="row : ${m.afterSalesByReturnType()}">
+                <!--/* 走 key 而不是直接铺 QUALITY_ISSUE：切 ID 后那个词连英文都不是。 */-->
+                <td th:text="#{'admin.v130.shopReturns.type.' + ${row.get('return_type')}}">质量问题</td>
+                <td class="s-col-num" th:text="${#numbers.formatInteger(row.get('cost'), 0, 'COMMA')}">0</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(m.afterSalesByReturnType())}">
+                <td colspan="2" th:text="#{admin.shop.margin.noAfterSales}">该时间段没有售后成本。</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+</div>
+
+<div th:fragment="detail(oob)" id="margin-detail" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <h2 th:text="#{admin.shop.margin.section.bySku}">按 SKU 下钻</h2>
+    <table>
+        <thead><tr>
+            <th th:text="#{admin.shop.col.name}">商品</th>
+            <th th:text="#{admin.shop.sku.specName}">规格</th>
+            <th class="s-col-num" th:text="#{admin.shop.inventory.col.qty}">件数</th>
+            <th class="s-col-num" th:text="#{admin.shop.margin.col.revenue}">销售额</th>
+            <th class="s-col-num" th:text="#{admin.shop.margin.col.cost}">成本</th>
+        </tr></thead>
+        <tbody>
+        <tr th:each="row : ${bySku}">
+            <td th:text="${row.get('product_name')}">Produk</td>
+            <td th:text="${row.get('spec_name')}">3 kg</td>
+            <td class="s-col-num" th:text="${row.get('qty')}">0</td>
+            <td class="s-col-num" th:text="${#numbers.formatInteger(row.get('revenue'), 0, 'COMMA')}">0</td>
+            <td class="s-col-num" th:text="${#numbers.formatInteger(row.get('cost'), 0, 'COMMA')}">0</td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(bySku)}">
+            <td colspan="5" th:text="#{admin.shop.margin.noSales}">该时间段没有销售。</td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+
+<!--/* 期间 / 品类切换：主 swap 换卡区，按 SKU 明细走 oob —— 它也随筛选变。
+       只换卡区的话明细表会停在上一个期间，两块数字并排摆着谁也看不出哪块是旧的。 */-->
+<th:block th:fragment="refresh">
+    <div th:replace="~{admin/fragments/cards-shop-margin :: cards}"></div>
+    <div th:replace="~{admin/fragments/cards-shop-margin :: detail(true)}"></div>
+</th:block>
+</body>
+</html>

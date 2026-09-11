@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  C2 复购引擎效果的卡区与明细（V1.3.0 Story 10.5 AC1）。字段**现状原样**，一个都不少：
+    ① 触发（按类型 / 总数 / 已转化 / 被关掉 / 转化率 / FR-109 覆盖率）
+    ② 归因（补货卡 / 档案推荐 / 全部订单行）
+    ③ 30 日复购率   ④ 粮量预估准确度（样本 / 平均偏差 / 区间）
+    detail：归因链核对底账表 + OQ-42 提示
+  🔴 **本页没有图表**：AC1 的原话是「Chart.js **只在有时间序列的区块**使用，其余数字卡」，
+     而 Snapshot 里一个日序列都没有（全是标量与分档 map）——要画趋势就得让服务端多算一份按日聚合，
+     那是后端功能改动。硬画一张「三根柱子」的图不会让任何人多看懂一点。
+  期间切换 htmx 换 cards（主 swap）+ detail（oob）：明细表也随期间变。
+-->
+<body>
+<div th:fragment="cards" class="cards" id="repurchase-cards">
+    <!--/* 🔴 DEP-6 未到位的显式提示：不写这句，运营会把「数据没填」读成「机制无效」——
+           而这块看板是裁决 A-16（复购引擎是否成立）的唯一依据，读反了会砍掉一条没被验证过的机制。 */-->
+    <p th:if="${s.looksLikeMissingFeedingData()}" class="banner err card-full"
+       th:text="#{admin.shop.repurchase.depSixWarning}">触发覆盖率为 0，但已有用户买过粮——这几乎可以肯定是商品的每日建议喂量还没录入（DEP-6），而不是复购机制无效。</p>
+
+    <!-- ① 触发 -->
+    <section class="card card-kpi">
+        <h2 th:text="#{admin.shop.repurchase.section.triggers}">触发</h2>
+        <table>
+            <tr><th th:text="#{admin.shop.repurchase.col.byType}">按类型</th>
+                <td>
+                    <!--/* 🔴 三个类型都列出来（含本版本恒为 0 的两个）—— 让「为什么是 0」有地方解释；
+                           走 key 而不是直接铺 DEWORM / VACCINE，切 ID 后那两个词连英文都不是。 */-->
+                    <span class="kv" th:each="e : ${s.triggersByType()}">
+                        <span th:text="#{'admin.v130.shopReports.triggerType.' + ${e.key}}">粮量见底</span>
+                        <b th:text="${e.value}">0</b>
+                    </span>
+                </td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.total}">触发总数</th>
+                <td th:text="${s.triggerTotal()}">0</td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.converted}">已转化</th>
+                <td th:text="${s.triggerConverted()}">0</td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.dismissed}">被关掉</th>
+                <td th:text="${s.triggerDismissed()}">0</td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.conversionRate}">触发卡转化率</th>
+                <td th:text="${#numbers.formatPercent(s.triggerConversionRate(), 1, 2)}">0%</td></tr>
+            <!--/* 🔴 DEP-6 是否到位的直接读数：分母是买过粮的人，分子是收到过触发的人。 */-->
+            <tr><th th:text="#{admin.shop.repurchase.col.coverage}">FR-109 触发覆盖率</th>
+                <td><span th:text="${#numbers.formatPercent(s.triggerCoverage(), 1, 2)}">0%</span>
+                    <span class="hint" th:text="' ' + ${s.usersWithTrigger()} + ' / ' + ${s.usersWithFoodPurchase()}"></span></td></tr>
+        </table>
+    </section>
+
+    <!-- ② 归因（服务端权威口径） -->
+    <section class="card card-kpi">
+        <h2 th:text="#{admin.shop.repurchase.section.attribution}">归因（服务端权威口径）</h2>
+        <p class="hint" th:text="#{admin.shop.repurchase.attributionNote}">下面的占比直接读订单行上的 entry_source / trigger_type——用户真的从那个入口买了，而不是「曝光过」。</p>
+        <table>
+            <tr><th th:text="#{admin.shop.repurchase.col.fromTrigger}">来自补货卡的订单行</th>
+                <td><span th:text="${s.linesFromTrigger()}">0</span>
+                    <span th:text="' (' + ${#numbers.formatPercent(s.triggerLineShare(), 1, 2)} + ')'"></span></td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.fromReco}">来自档案推荐的订单行</th>
+                <td><span th:text="${s.linesFromProfileReco()}">0</span>
+                    <span th:text="' (' + ${#numbers.formatPercent(s.profileRecoLineShare(), 1, 2)} + ')'"></span></td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.allLines}">全部订单行</th>
+                <td th:text="${s.linesTotal()}">0</td></tr>
+        </table>
+    </section>
+
+    <!-- ③ 复购率 -->
+    <section class="card card-kpi">
+        <h2 th:text="#{admin.shop.repurchase.section.repurchase}">复购率</h2>
+        <table>
+            <tr th:each="e : ${s.repurchaseRates()}">
+                <th th:text="#{admin.shop.repurchase.dayLabel(${e.key})}">30 日</th>
+                <td th:text="${#numbers.formatPercent(e.value, 1, 2)}">0%</td>
+            </tr>
+        </table>
+    </section>
+
+    <!-- ④ 粮量预估准确度 -->
+    <section class="card card-kpi">
+        <h2 th:text="#{admin.shop.repurchase.section.accuracy}">粮量预估准确度</h2>
+        <!--/* 🔴 偏差的正负号含义必须写出来：读反了会把「预估偏早」当成「预估偏晚」，
+               而这两者的处置（调喂量系数的方向）正好相反。 */-->
+        <p class="hint" th:text="#{admin.shop.repurchase.accuracyNote}">偏差 = 实际再购日 − 预估耗尽日。正值表示用户比预估晚买（预估偏早）。</p>
+        <table>
+            <tr><th th:text="#{admin.shop.repurchase.col.sample}">样本数</th>
+                <td th:text="${s.depletionDeviation().sampleCount()}">0</td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.avgDev}">平均偏差（天）</th>
+                <td th:text="${s.depletionDeviation().avgDays()}">0</td></tr>
+            <tr><th th:text="#{admin.shop.repurchase.col.devRange}">偏差区间（天）</th>
+                <td th:text="${s.depletionDeviation().minDays()} + ' ~ ' + ${s.depletionDeviation().maxDays()}">0 ~ 0</td></tr>
+        </table>
+    </section>
+</div>
+
+<!--
+  归因链核对底账（Story 9.2）：逐档列出服务端权威口径，供与 PostHog 客户端聚合对账。
+  🔴 这一档的「归因来源」是**端上原样上报的字符串**（服务端不做枚举校验，无归因的归到 `(none)`）——
+     所以它是**数据不是枚举**，不走 i18n key：给一个未知值配翻译是配不出来的，
+     而把它硬塞进 key 只会在切 ID 后显示成 `??admin.…`。
+-->
+<div th:fragment="detail(oob)" id="repurchase-detail" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <h2 th:text="#{admin.shop.repurchase.section.reconcile}">归因链核对底账</h2>
+    <p class="hint" th:text="#{admin.shop.repurchase.reconcileNote}">以服务端为准。</p>
+    <table>
+        <thead><tr>
+            <th th:text="#{admin.shop.repurchase.col.entrySource}">归因来源</th>
+            <th class="s-col-num" th:text="#{admin.shop.repurchase.col.lineCount}">订单行数（服务端）</th>
+        </tr></thead>
+        <tbody>
+        <tr th:each="e : ${s.linesByEntrySource()}">
+            <td class="s-mono" th:text="${e.key}">-</td>
+            <td class="s-col-num" th:text="${e.value}">0</td>
+        </tr>
+        </tbody>
+    </table>
+    <!--/* ⚠️ OQ-42 未拍板：kill criteria 的目标值与观察窗口。
+           不写这句，这一页会被当成「可以据此砍掉复购引擎」的依据 —— 而它现在还不是。 */-->
+    <p class="hint" th:text="#{admin.shop.repurchase.oq42}">⚠️ A-16 的判据「显著」目前无数值、无窗口、无处置（OQ-42 未拍板）。</p>
+</div>
+
+<!--/* 期间切换的响应：主 swap 换卡区，明细表走 oob —— 它也随期间变，
+       只换卡区的话底账表会停在上一个期间的数，而两块数字并排摆着、谁也看不出哪块是旧的。 */-->
+<th:block th:fragment="refresh">
+    <div th:replace="~{admin/fragments/cards-shop-repurchase :: cards}"></div>
+    <div th:replace="~{admin/fragments/cards-shop-repurchase :: detail(true)}"></div>
+</th:block>
+</body>
+</html>
