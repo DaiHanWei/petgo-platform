@@ -148,19 +148,40 @@ class AdminSeedPostIntegrationTest extends ApiIntegrationTest {
      */
     @Test
     void wideImageIsAcceptedButWarnedWithConcreteNumbers() throws Exception {
+        // 🔁 2026-09-11 上界 1.34→1.78 后改用 3:1 全景（原来的 16:9 已落在区间内、不再告警，
+        //    照旧断言会 NPE —— warning 字段 NON_NULL 序列化时根本不出现）。
+        //    与 ImageRatioAdvisorTest 的越界用例同一张尺寸，两处口径不分叉。
         String body = mvc.perform(multipart("/admin/seed-post/images")
-                        .file(new MockMultipartFile("file", "wide.png", "image/png", png(1920, 1080)))
+                        .file(new MockMultipartFile("file", "wide.png", "image/png", png(3000, 1000)))
                         .with(authentication(superAdmin())).with(csrf()))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
         var node = json.readTree(body);
         assertThat(node.get("url").asText()).isNotBlank();
-        assertThat(node.get("w").asInt()).isEqualTo(1920);
-        assertThat(node.get("h").asInt()).isEqualTo(1080);
+        assertThat(node.get("w").asInt()).isEqualTo(3000);
+        assertThat(node.get("h").asInt()).isEqualTo(1000);
         String warning = node.get("warning").asText();
-        // 16:9 ⇒ 共裁约 25%、每侧约 12%。两个数都要在文案里，只给一个必然被读错。
-        assertThat(warning).contains("25").contains("12");
+        // 3:1 ⇒ 可见宽度占 1.78/3 ≈ 59.3%，共裁约 41%、每侧约 20%。
+        // 两个数都要在文案里，只给一个必然被读错。
+        assertThat(warning).contains("41").contains("20");
+    }
+
+    /**
+     * 🛡 <b>16:9 在上界放宽后不得再告警</b>（2026-09-11 回归钉子）。
+     *
+     * <p>单放一条是因为它是这次放宽的**边界本身**（1.778 vs 上界 1.78）：
+     * 阈值若被谁改回去，这条会先红，而不是等运营收到假告警才发现。
+     */
+    @Test
+    void sixteenNineNoLongerWarnsAfterWidening() throws Exception {
+        String body = mvc.perform(multipart("/admin/seed-post/images")
+                        .file(new MockMultipartFile("file", "16x9.png", "image/png", png(1920, 1080)))
+                        .with(authentication(superAdmin())).with(csrf()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(json.readTree(body).hasNonNull("warning")).isFalse();
     }
 
     /** 区间内的图不该有警告 —— 乱报会让运营去裁一张本来没问题的图。 */
