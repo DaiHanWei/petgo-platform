@@ -28,6 +28,34 @@ import 'post_cover.dart';
 /// 统一组件返回的就是一个图片对象，而它的既有测试直接把返回值当图片对象用；
 /// 要拿到"解码后的真实尺寸"必须监听图片流，这里改用「取 provider + 自己渲染」的写法
 /// （项目里宠物资料卡已有同款先例），**不动统一组件的签名**，那批测试因此不受影响。
+/// 已量到的首图尺寸，按图片 URL 缓存（进程内，不落盘）。
+///
+/// 🔴 存在的理由：同一张图在一次会话里**只该从 1:1 跳一次**。
+/// 卡片重建（换 Tab、退出详情页回来、列表刷新）会新建 State，`_decoded` 随之清空，
+/// 于是那张图又从 1:1 起跳一遍 —— 每跳一次，它下方的所有内容就被推动一次。
+///
+/// ⚠️ 只缓存**量到的**尺寸，不缓存推测值；后端给了尺寸的图压根不进这里。
+final Map<String, ImageSize> _measuredSizes = <String, ImageSize>{};
+
+/// 图片区高度**已经变了**的通知（滚动锚定用）。
+///
+/// 🔴 这条通知存在的唯一理由是 Bug 20260911-491：存量图先按 1:1 占位、解码后换成真实比例，
+/// 于是**视口上方**的卡片在用户看不见的时候变高变矮，把正在看的内容推走。
+/// 用户的感受是「进详情页再返回，就找不到刚才那张卡了」——
+/// 而滚动位置其实一直没丢，是内容在它底下移动了。
+///
+/// 冒泡给外层滚动容器（[FeedMasonryView]），由它把 offset 补上同样的差值。
+/// 用 Notification 而不是逐层传回调：中间隔着卡片组件，穿参数要改一串与此无关的签名。
+class FeedImageHeightChanged extends Notification {
+  FeedImageHeightChanged({required this.delta, required this.context});
+
+  /// 高度变化量（逻辑像素，正数=变高）。
+  final double delta;
+
+  /// 发出通知的图片区所在 context —— 外层据此判断它是不是在视口上方。
+  final BuildContext context;
+}
+
 class FeedImage extends StatefulWidget {
   const FeedImage({
     super.key,
@@ -82,6 +110,9 @@ class _FeedImageState extends State<FeedImage> {
   /// 解码后量到的首图真实尺寸。
   ImageSize? _decoded;
 
+  /// 上一帧实际用出去的比例 —— 用来算高度差（通知外层做滚动锚定）。
+  double? _lastAspect;
+
   int _current = 0;
 
   bool get _multi => widget.urls.length > 1;
@@ -90,18 +121,29 @@ class _FeedImageState extends State<FeedImage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _firstProvider = _providerAt(0);
+    // 🛡 本次会话里量过这张图就直接用，别再从 1:1 起跳一遍（Bug 20260911-491）。
+    _decoded ??= _cachedSize();
     _subscribeIfNeeded();
     _precacheNext();
+  }
+
+  /// 本会话是否量过这张图。后端给了尺寸就不查缓存 —— 那条路本来就没有跳变。
+  ImageSize? _cachedSize() {
+    if (widget.declaredSize != null || widget.urls.isEmpty) return null;
+    return _measuredSizes[widget.urls.first];
   }
 
   @override
   void didUpdateWidget(covariant FeedImage old) {
     super.didUpdateWidget(old);
     if (!identical(old.urls, widget.urls) &&
-        (old.urls.isEmpty || widget.urls.isEmpty || old.urls.first != widget.urls.first)) {
+        (old.urls.isEmpty ||
+            widget.urls.isEmpty ||
+            old.urls.first != widget.urls.first)) {
       _decoded = null;
       _unsubscribe();
       _firstProvider = _providerAt(0);
+      _decoded ??= _cachedSize();
       _subscribeIfNeeded();
     }
   }
@@ -125,13 +167,19 @@ class _FeedImageState extends State<FeedImage> {
   /// 监听用的是与渲染**同一个** provider，因此共用图片缓存，不会多下载一次。
   void _subscribeIfNeeded() {
     if (widget.declaredSize != null || _firstProvider == null) return;
-    final stream = _firstProvider!.resolve(createLocalImageConfiguration(context));
+    final stream = _firstProvider!.resolve(
+      createLocalImageConfiguration(context),
+    );
     if (stream.key == _stream?.key) return;
     _unsubscribe();
     _listener = ImageStreamListener(
       (info, _) {
         final size = ImageSize(info.image.width, info.image.height);
         if (!mounted || !size.isUsable) return;
+        // 量到就记进会话缓存 —— 下次这张图重建时直接用，不再从 1:1 起跳。
+        if (widget.urls.isNotEmpty) {
+          _measuredSizes[widget.urls.first] = size;
+        }
         if (_decoded?.w == size.w && _decoded?.h == size.h) return;
         setState(() => _decoded = size);
       },
@@ -143,7 +191,9 @@ class _FeedImageState extends State<FeedImage> {
   }
 
   void _unsubscribe() {
-    if (_stream != null && _listener != null) _stream!.removeListener(_listener!);
+    if (_stream != null && _listener != null) {
+      _stream!.removeListener(_listener!);
+    }
     _stream = null;
     _listener = null;
   }
@@ -183,6 +233,28 @@ class _FeedImageState extends State<FeedImage> {
       maxImageHeight: widget.maxImageHeight,
     );
 
+    // 🔴 Bug 20260911-491：比例一变，这张卡的高度就变，**它下方的一切都会被推动**。
+    // 如果这张卡此刻在视口上方，用户正在看的内容就被推走了 —— 表现为「返回后找不到刚才那张卡」。
+    // 这里把高度差冒泡给外层滚动容器，由它把 offset 补上同样的值，视口内容因此纹丝不动。
+    //
+    // ⚠️ 首帧（_lastAspect == null）不发：那是这张卡第一次出现，它下方还没有"正在看的内容"，
+    // 补偿反而会把首帧位置搞乱。
+    final previous = _lastAspect;
+    _lastAspect = aspect;
+    if (previous != null && previous != aspect && widget.width > 0) {
+      final delta = widget.width / aspect - widget.width / previous;
+      if (delta.abs() > 0.5) {
+        // 布局这一帧还没跑完，通知要等它跑完再发 —— 外层要读的位置信息此刻还是旧的。
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          FeedImageHeightChanged(
+            delta: delta,
+            context: context,
+          ).dispatch(context);
+        });
+      }
+    }
+
     return AspectRatio(
       aspectRatio: aspect,
       child: Stack(
@@ -216,7 +288,9 @@ class _FeedImageState extends State<FeedImage> {
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [Color(0x00000000), Color(0x0F000000)]),
+                    gradient: LinearGradient(
+                      colors: [Color(0x00000000), Color(0x0F000000)],
+                    ),
                   ),
                 ),
               ),
@@ -232,13 +306,17 @@ class _FeedImageState extends State<FeedImage> {
               right: 0,
               bottom: 9,
               child: IgnorePointer(
-                child: _CarouselDots(count: widget.urls.length, current: _current),
+                child: _CarouselDots(
+                  count: widget.urls.length,
+                  current: _current,
+                ),
               ),
             ),
 
           // 🛡 角位二：右上 —— 顶置角标（Epic 4）。
           // UI 稿 `.pin-corner`：top/right 均为 9（原实现写的 8，2026-08-25 比对订正）。
-          if (widget.topRight != null) Positioned(top: 9, right: 9, child: widget.topRight!),
+          if (widget.topRight != null)
+            Positioned(top: 9, right: 9, child: widget.topRight!),
 
           // 🛡 角位三：左下 —— 装饰标签（Epic 5）。
           // UI 稿 `.deco-on-card`：left/bottom 均为 10。
@@ -274,8 +352,12 @@ class _CarouselDots extends StatelessWidget {
               height: i == current ? 5.5 : 5,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: i == current ? Colors.white : Colors.white.withValues(alpha: 0.55),
-                boxShadow: const [BoxShadow(color: Color(0x4D000000), blurRadius: 3)],
+                color: i == current
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.55),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x4D000000), blurRadius: 3),
+                ],
               ),
             ),
           ),

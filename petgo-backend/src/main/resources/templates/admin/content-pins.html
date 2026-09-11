@@ -131,15 +131,16 @@
                     <!-- 🔴 尺寸要求常驻在控件旁（2026-09-02，与标签图标的 AC3 同一条纪律）：
                          后端此前没有任何硬校验、页面也没写要求，运营只能靠猜。 -->
                     <p class="muted" th:text="#{admin.pins.promoImageSpec}">
-                        JPG / PNG / WebP，≤ 10MB。展示为 Feed 内容卡，宽高比 0.75–1.34 之间不裁切；
+                        JPG / PNG / WebP，≤ 10MB。展示为 Feed 内容卡，宽高比 0.75–1.78 之间不裁切；
                         超出按居中裁切（选图后与保存后都会提示具体裁切比例）。
                     </p>
                     <label>
                         <span th:text="#{admin.pins.promoImage}">或填图片 URL</span>
                         <input type="url" name="promoImageUrl" id="pinPromoImageUrl" class="field-full"/>
                     </label>
-                    <!-- 🔴 比例警告（AC7）：卡片在 Feed 里就是一张普通内容卡，同样受 0.75~1.34 的
-                         clamp + cover 裁切约束。运营按常见 16:9 出图会被左右各裁掉约 25%，而他不会知道。
+                    <!-- 🔴 比例警告（AC7）：卡片在 Feed 里就是一张普通内容卡，同样受 0.75~1.78 的
+                         clamp + cover 裁切约束。运营按 3:1、4:1 这类超宽横幅出图会被左右裁掉一大截，而他不会知道。
+                         🔁 2026-09-11：上界由 1.34 放宽到 1.78，16:9 从此免裁 —— 原注释举的就是 16:9 的例子，已作废。
                          这里在浏览器里量 naturalWidth/naturalHeight —— URL 与本地文件都量，
                          不需要上传，也不需要服务端抓图。 -->
                     <img id="pinPromoProbe" alt="" hidden/>
@@ -192,11 +193,13 @@
                     if (!src) { return; }
                     probe.onload = function () {
                         var ratio = probe.naturalWidth / probe.naturalHeight;
-                        if (ratio >= 0.75 && ratio <= 1.34) { warn.hidden = true; return; }
+                        // 🔴 这三个数必须与服务端 ImageRatioAdvisor.MIN_RATIO/MAX_RATIO 和
+                        //    App 端 kFeedRatioMin/Max 保持一致（第三份拷贝，改一处就得改三处）。
+                        if (ratio >= 0.75 && ratio <= 1.78) { warn.hidden = true; return; }
                         // 裁切百分比：cover 裁的是"多出来的那一边"。
                         var pct, how;
-                        if (ratio > 1.34) {
-                            pct = Math.round((1 - 1.34 / ratio) / 2 * 100);
+                        if (ratio > 1.78) {
+                            pct = Math.round((1 - 1.78 / ratio) / 2 * 100);
                             how = fmt(SIDES, pct, '');
                         } else {
                             pct = Math.round((1 - ratio / 0.75) / 2 * 100);

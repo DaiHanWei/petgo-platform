@@ -28,7 +28,7 @@ class ShopBanner {
   /// 宽高比（w / h）。未知时回落到 [kShopBannerFallbackAspect]。
   ///
   /// ⚠️ 与商品图不同，这里**不做区间收敛**：banner 是运营精心裁过的横幅，
-  /// 比例本身就是设计的一部分，clamp 会把一张精心做成 4:1 的长横幅压成 1.34，
+  /// 比例本身就是设计的一部分，clamp 会把一张精心做成 4:1 的长横幅压成 1.78，
   /// 主视觉直接被裁掉。商品图要 clamp 是因为那些图来源杂乱、比例不可控。
   double get aspect {
     final w = imageW;

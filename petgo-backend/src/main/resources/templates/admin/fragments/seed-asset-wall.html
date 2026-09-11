@@ -3,7 +3,7 @@
 <!--
   素材缩略图墙（V1.1.6 Story 13.2 · AC1）。上传完由 HTMX 刷这一块。
 
-  ⚠️ 超出 0.75~1.34 的图在这里就打标记 —— 避免整批发完才发现构图被裁。
+  ⚠️ 超出 0.75~1.78 的图在这里就打标记 —— 避免整批发完才发现构图被裁。
      裁切量的算法只有一份（服务端 ImageRatioAdvisor），这里只按宽高判断"要不要打标"。
 -->
 <body>
@@ -19,8 +19,10 @@
             <img th:src="${a.url}" alt="" data-lightbox="true"/>
             <!-- 文件名清单与缩略图同处一格：运营认的是文件名，光看图分不出哪张是哪张。 -->
             <p class="hint" th:text="${a.fileName}" style="font-size:11px;margin:4px 0 0;word-break:break-all">名</p>
+            <!-- 🔁 2026-09-11 上界随 ImageRatioAdvisor.MAX_RATIO 由 134 放宽到 178（=1.78×100，整数除法口径）。
+                 ⚠️ 这里是硬编码百分比，改阈值时**必须**连同 admin.batch.asset.ratioFlag 文案一起改，否则条件与文案会自相矛盾。 -->
             <p class="err" th:if="${a.width > 0 and a.height > 0
-                            and (a.width * 100 / a.height > 134 or a.width * 100 / a.height < 75)}"
+                            and (a.width * 100 / a.height > 178 or a.width * 100 / a.height < 75)}"
                th:text="#{admin.batch.asset.ratioFlag}">⚠️ 比例超出展示区间，展示时会被裁切</p>
             <!-- bug 20260901-467：内容重复标记（按文件字节哈希判，改名/跨批都认得出）。
                  只标后传的那张；标记不拦截 —— 运营刻意复用时照常可用。 -->

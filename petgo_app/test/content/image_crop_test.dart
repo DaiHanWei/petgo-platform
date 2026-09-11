@@ -16,21 +16,25 @@ void main() {
   group('AC2 容差区间内免裁剪', () {
     /// 🔴 端点必须算**区间内**。3:4 竖拍恰为 0.75 且最常见 ——
     /// 判成"超出"就等于每拍一张竖照片都要被裁剪框打断一次。
-    test('端点 0.75 与 1.34 都不需要裁', () {
+    test('端点 0.75 与 1.78 都不需要裁', () {
       expect(needsCrop(1200, 1600), isFalse); // 恰 0.75
-      expect(needsCrop(1340, 1000), isFalse); // 恰 1.34
+      expect(needsCrop(1780, 1000), isFalse); // 恰 1.78
     });
 
     test('区间内的常见比例都不需要裁', () {
       expect(needsCrop(1080, 1350), isFalse); // 4:5
       expect(needsCrop(1000, 1000), isFalse); // 1:1
       expect(needsCrop(4000, 3000), isFalse); // 手机默认 4:3 横拍 ≈1.333
+      // 🔴 2026-09-11 放宽上界的直接动因：KTP 身份证卡导出图。
+      // 它此前被判"需要裁"，而裁剪页只有 1:1 / 4:5 两档，横卡被裁成方/竖的，主体缺角。
+      expect(needsCrop(1988, 1200), isFalse); // KTP 导出图 ≈1.657
+      expect(needsCrop(1920, 1080), isFalse); // 16:9 录屏 / 截图
     });
 
     test('真正的长图与超宽图才需要裁', () {
       expect(needsCrop(1080, 1920), isTrue); // 9:16 竖屏长图
-      expect(needsCrop(1920, 1080), isTrue); // 16:9
-      expect(needsCrop(4000, 1000), isTrue); // 全景
+      expect(needsCrop(4000, 1000), isTrue); // 4:1 全景
+      expect(needsCrop(3000, 1000), isTrue); // 3:1 超宽
     });
 
     /// 量不出宽高时不该拿裁剪框去打扰用户。

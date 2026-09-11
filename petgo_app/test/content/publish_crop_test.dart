@@ -19,8 +19,11 @@ Uint8List _jpeg(int w, int h) =>
 /// 落在容差区间内（3:4）—— 不该被打扰。
 Uint8List get _inRange => _jpeg(1200, 1600);
 
-/// 超宽（16:9）—— 需要裁。
-Uint8List get _wide => _jpeg(1920, 1080);
+/// 超宽（3:1 全景）—— 需要裁。
+///
+/// 🔁 2026-09-11 由 16:9（1920×1080）换成 3:1：上界放宽到 1.78 后 16:9 **落在区间内**、
+/// 不再触发裁剪页，本组用例就全都失去了被测对象。换成真正越界的全景比例。
+Uint8List get _wide => _jpeg(3000, 1000);
 
 /// 超长（9:16）—— 需要裁。
 Uint8List get _tall => _jpeg(1080, 1920);
@@ -106,7 +109,7 @@ void main() {
       expect(crops, hasLength(2), reason: '只有两张超出区间');
       expect(crops.every((e) => e.$2!['batch_size'] == 3), isTrue,
           reason: 'batch_size 是本次选图的总张数，含免裁的');
-      expect(crops.first.$2!['original_ratio'], closeTo(1920 / 1080, 0.001));
+      expect(crops.first.$2!['original_ratio'], closeTo(3000 / 1000, 0.001));
       expect(crops.last.$2!['original_ratio'], closeTo(1080 / 1920, 0.001));
     });
 
@@ -134,7 +137,7 @@ void main() {
       await tester.pumpWidget(MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: PublishCropPage(bytes: _wide, size: const ImageSize(1920, 1080)),
+        home: PublishCropPage(bytes: _wide, size: const ImageSize(3000, 1000)),
       ));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('cropClose')));
@@ -142,7 +145,7 @@ void main() {
 
       final quit = seen.where((e) => e.$1 == 'publish_image_crop_exit_tapped').toList();
       expect(quit, hasLength(1));
-      expect(quit.first.$2!['original_ratio'], closeTo(1920 / 1080, 0.001));
+      expect(quit.first.$2!['original_ratio'], closeTo(3000 / 1000, 0.001));
     });
 
     testWidgets('全在区间内 → 一条都不报（理想状态就是这个事件量很小）', (tester) async {
@@ -160,7 +163,7 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: PublishCropPage(
           bytes: _wide,
-          size: const ImageSize(1920, 1080),
+          size: const ImageSize(3000, 1000),
           lockedPreset: locked,
         ),
       ));
@@ -208,7 +211,7 @@ void main() {
             onPressed: () async {
               got = await Navigator.of(ctx).push<CropChoice>(MaterialPageRoute<CropChoice>(
                 builder: (_) => PublishCropPage(
-                    bytes: _wide, size: const ImageSize(1920, 1080)),
+                    bytes: _wide, size: const ImageSize(3000, 1000)),
               ));
             },
             child: const Text('open'),

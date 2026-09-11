@@ -7,7 +7,7 @@ import com.tailtopia.content.domain.ImageSize;
  *
  * <h2>🔴 这个类为什么存在</h2>
  * App 端上传超比例图会弹裁剪框、由用户自选构图（FR-71）；**后台没有这一步**。
- * 超比例图会静默进库，然后在 Feed 渲染时被 clamp 到 {@code 0.75~1.34} 并 cover 裁切 ——
+ * 超比例图会静默进库，然后在 Feed 渲染时被 clamp 到 {@code 0.75~1.78} 并 cover 裁切 ——
  * <b>运营完全不知道自己的图会被裁掉多少，构图可能被毁</b>（比如一张左右两只猫的横图，
  * 上传后 Feed 里只剩中间）。
  *
@@ -17,19 +17,28 @@ import com.tailtopia.content.domain.ImageSize;
  * <h2>裁切量怎么算</h2>
  * Feed 用 cover 填充一个比例被 clamp 后的容器：
  * <ul>
- *   <li>图太宽（{@code r > 1.34}）⇒ 容器按高对齐，<b>左右</b>被裁：可见宽度占 {@code 1.34 / r}</li>
+ *   <li>图太宽（{@code r > 1.78}）⇒ 容器按高对齐，<b>左右</b>被裁：可见宽度占 {@code 1.78 / r}</li>
  *   <li>图太高（{@code r < 0.75}）⇒ 容器按宽对齐，<b>上下</b>被裁：可见高度占 {@code r / 0.75}</li>
  * </ul>
  *
  * <p>⚠️ <b>报的是"共裁掉多少"与"每侧多少"两个数</b>，因为这两个数差一倍，
- * 只给一个必然被读错。story 里的示例文案「16:9 …… 左右各裁切约 25%」正是这个歧义：
- * 16:9 的正确结论是 <b>共裁约 25%、每侧约 12%</b>，写成"各 25%"会让运营以为要裁掉一半。
+ * 只给一个必然被读错。story 里的示例文案「…… 左右各裁切约 25%」正是这个歧义：
+ * 写成"各 25%"会让运营以为要裁掉一半，正确说法是"共裁约 25%、每侧约 12%"。
+ *
+ * <p>🔁 <b>2026-09-11 上界由 1.34 放宽到 1.78</b>（随客户端，起因见 App 端 {@code kFeedRatioMax}）。
+ * 注意 story 原文与早期截图里那个 16:9 的例子<b>已经失效</b>：16:9（1.778）现在落在区间内、
+ * 完全不裁，别再拿它当"会被裁"的示例。现在真正会触发警告的是 3:1、4:1 这类超宽全景。
  */
 public final class ImageRatioAdvisor {
 
     /** 与 App 端 clamp 区间逐字一致（FR-71 / AD-6）。改这里必须同时改客户端，否则两边判读不一致。 */
     public static final double MIN_RATIO = 0.75;
-    public static final double MAX_RATIO = 1.34;
+
+    /**
+     * 上界。<b>2026-09-11 由 1.34 放宽到 1.78</b>，与 App 端 {@code kFeedRatioMax} 同步
+     * （客户端文件：{@code petgo_app/lib/features/content/domain/feed_image_layout.dart}）。
+     */
+    public static final double MAX_RATIO = 1.78;
 
     /** 裁切方向。 */
     public enum Crop {

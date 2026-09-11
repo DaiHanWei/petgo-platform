@@ -32,6 +32,7 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 ///
 /// - `tailtopia://card/{token}` → `/pet/{token}`（**被分享的那只宠物**，V1.1.6 Story 2.4）
 /// - `tailtopia://post/{token}` → `/shared-post/{token}`（**只有被分享的那一条内容**，V1.1.6 Story 9.3）
+/// - `tailtopia://milestone` → `/profile/milestones`（**自己的**里程碑列表，2026-09-11 产品定）
 /// - `tailtopia://open` → `/home`（下载引导落地页 `s.tailtopia.id/get` 唤起已装 app 的通用深链）
 /// - `tailtopia://open/<路径>` → 该路径（🔧 **仅 debug 包**，本地验收导航用；release 恒 `/home`）
 /// - 其它 scheme/host 暂不识别（返回 null，调用方忽略）
@@ -61,6 +62,18 @@ String? deepLinkToLocation(Uri uri) {
     // 没 token 就没有可展示的那一条 —— 落首页，不要退回任何档案页
     // （退到档案页就成了"点别人的分享链接看到自己家宠物"，正是 2.4 修掉的那个 bug）。
     return token.isEmpty ? '/home' : '/shared-post/$token';
+  }
+  // 里程碑分享页（/m/{token}）的唤起落点（2026-09-11 产品定，Bug 20260910-487 延伸）。
+  //
+  // 🔴 **刻意不带 token、也刻意不落"被分享的那一条里程碑"**：分享出去的是**别人**达成的
+  // 里程碑，站内没有"看别人里程碑"这一屏，也不该为此新造一个访客视图（那是另一条产品线）。
+  // 产品决定是「点进来先进自己的里程碑列表」—— 让被激励到的人立刻看到自己的进度。
+  // 因此 token 在 App 侧没有用武之地，不接收比接收了又忽略更诚实。
+  //
+  // ⚠️ `/profile/milestones` 在受控前缀 `/profile` 之下：未登录会被门控 redirect 回 `/home`。
+  // 这是对的 —— 那是「自己的」列表，没有登录态就没有"自己"。安全规则只升不降，不为深链开例外。
+  if (uri.scheme == 'tailtopia' && uri.host == 'milestone') {
+    return '/profile/milestones';
   }
   if (uri.scheme == 'tailtopia' && uri.host == 'open') {
     // 🔧 DEBUG ONLY：`tailtopia://open/<路径>` 直达任意路由，供本地验收导航用。
@@ -96,7 +109,8 @@ class TailTopiaApp extends ConsumerStatefulWidget {
   ConsumerState<TailTopiaApp> createState() => _TailTopiaAppState();
 }
 
-class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBindingObserver {
+class _TailTopiaAppState extends ConsumerState<TailTopiaApp>
+    with WidgetsBindingObserver {
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSub;
 
@@ -117,7 +131,8 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
     // ⚠️ 绝不在别处另写一套「同时命中谁先谁后」的判定，那正是 Rule 7 要消除的不确定性。
     PhoneSoftPrompt.register(
       prefs: AppPrefs.create,
-      registeredAt: () async => ref.read(authControllerProvider).profile?.createdAt,
+      registeredAt: () async =>
+          ref.read(authControllerProvider).profile?.createdAt,
       hasPhone: () async {
         final phone = ref.read(authControllerProvider).profile?.phone;
         return phone != null && phone.isNotEmpty;
@@ -133,6 +148,17 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     ref.read(pushServiceProvider).onAppLifecycleChanged(state);
+    // 🔴 回到前台重新拉未读角标（Bug 20260911-495）。
+    //
+    // 未读计数此前**只在启动与切账号时拉一次**，之后的失效点全是"变少"那一侧
+    // （点开通知、在通知中心标已读）。于是别人给你点赞/评论、服务端计数涨了，
+    // 客户端从不重新拉 —— 铃铛上永远是你启动那一刻的数字。
+    // 最典型的场景正是"退到后台 → 收到通知 → 回来看"，所以刷新挂在 resumed 上。
+    //
+    // ⚠️ 不做轮询：只在"用户回到 App"这个明确时点拉一次，不为角标烧流量和电。
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(unreadCountProvider);
+    }
   }
 
   Future<void> _initDeepLinks() async {
@@ -162,7 +188,6 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
     super.dispose();
   }
 
-
   @override
   Widget build(BuildContext context) {
     // 分析身份绑定：登录(含待引导新用户,有 id)→ identify(哈希 distinctId)；登出 → reset。
@@ -188,7 +213,9 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
       // 只在「变为某个非游客用户」时失效；退出登录（转 guest）**不**在此失效——游客态无 token，
       // 失效会立即触发 /me 等重拉 → 401 → 强制登录弹窗。清除靠受控 Tab 对游客不可见 + 下次登录重拉达成。
       // 兽医登录 profile=null（nextId=null）自动跳过，不误刷用户维度缓存。
-      if (next.status != AuthStatus.guest && nextId != null && nextId != prevId) {
+      if (next.status != AuthStatus.guest &&
+          nextId != null &&
+          nextId != prevId) {
         resetUserScopedCaches(ref);
       }
 
@@ -201,8 +228,10 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
       //    B 的设备持续收 A 的推送（跨用户隐私泄漏，与 IM 漏登出同型）。
       // fire-and-forget：注册失败静默，推送是增强能力。
       final becameAuthed =
-          next.status == AuthStatus.authenticated && prev?.status != AuthStatus.authenticated;
-      final switchedUser = next.status != AuthStatus.guest &&
+          next.status == AuthStatus.authenticated &&
+          prev?.status != AuthStatus.authenticated;
+      final switchedUser =
+          next.status != AuthStatus.guest &&
           nextId != null &&
           prevId != null &&
           nextId != prevId;
@@ -216,8 +245,10 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
             .unregister()
             .timeout(const Duration(seconds: 5))
             .catchError((_) {})
-            .whenComplete(() =>
-                im.logout(ifGeneration: logoutGeneration).catchError((_) {}))
+            .whenComplete(
+              () =>
+                  im.logout(ifGeneration: logoutGeneration).catchError((_) {}),
+            )
             .whenComplete(() => push.syncRegistration(isVet: next.isVet));
       } else if (becameAuthed) {
         ref.read(pushServiceProvider).syncRegistration(isVet: next.isVet);
@@ -245,7 +276,11 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
       builder: (context, child) {
         final mq = MediaQuery.of(context);
         return MediaQuery(
-          data: mq.copyWith(textScaler: mq.textScaler.clamp(maxScaleFactor: TailTopiaApp.maxTextScale)),
+          data: mq.copyWith(
+            textScaler: mq.textScaler.clamp(
+              maxScaleFactor: TailTopiaApp.maxTextScale,
+            ),
+          ),
           // 全局「点非输入区收起键盘」：translucent 使按钮/输入框仍在手势竞技场胜出正常响应，
           // 仅点到非交互空白处才触发 unfocus 收起软键盘（键盘避让标准的补充，见 CLAUDE.md）。
           // 埋点治理 P0（2026-07-27）：已移除全局 AnalyticsAutocapture——从 semantics 树反推
@@ -278,7 +313,9 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(dayDetailProvider); // 成长日记：日详情（按日 family 整族失效）
   ref.invalidate(myPostsProvider); // 我的：我的发布
   ref.invalidate(feedProvider); // 首页 Feed（按新用户宠物状态重过滤）
-  ref.invalidate(unreadCountProvider); // 通知铃铛未读角标（bug 20260625-088：换账号防显示上个用户角标）
+  ref.invalidate(
+    unreadCountProvider,
+  ); // 通知铃铛未读角标（bug 20260625-088：换账号防显示上个用户角标）
   // bug 20260731-446：宠物身份证是用户维度缓存（列表/单卡/详情 family），不登记则同设备
   // 换账号会看到上一账号（含已删档案）的历史卡片（隐私泄漏，同 421/上面健康记录同型）。
   ref.invalidate(idCardProvider); // 身份证：单卡（旧版入口）
@@ -286,6 +323,8 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(idCardDetailProvider); // 身份证：卡详情（按 cardId family 整族失效）
   ref.invalidate(newbieTasksProvider); // 新手任务进度（同型隐患：换账号防串任务状态）
   ref.invalidate(pawCoinProvider); // PawCoin 余额（同型隐患：换账号防显示上个账号余额）
-  ref.invalidate(orderListProvider); // 订单中心（keep-alive 且不 watch 登录态：换账号会看到上个账号的订单）
+  ref.invalidate(
+    orderListProvider,
+  ); // 订单中心（keep-alive 且不 watch 登录态：换账号会看到上个账号的订单）
   ref.read(consultRefreshProvider.notifier).bump(); // 问诊页 _active/_history 重拉
 }

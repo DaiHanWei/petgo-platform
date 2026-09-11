@@ -45,7 +45,7 @@ public class AdminContentPinController {
 
     /**
      * 推广卡片图本地上传（2026-09-02）。复用种子图片那条上传线：格式白名单（JPG/PNG/WebP、
-     * 拒 HEIC）、≤10MB、量宽高出 0.75–1.34 的裁切预判 —— 卡片在 Feed 里就是一张普通内容卡，
+     * 拒 HEIC）、≤10MB、量宽高出 0.75–1.78 的裁切预判 —— 卡片在 Feed 里就是一张普通内容卡，
      * 约束天然一致。
      */
     private final com.tailtopia.admin.seed.service.AdminSeedImageService images;
@@ -113,7 +113,7 @@ public class AdminContentPinController {
                 service.createPromoPin(admin.getAdminAccountId(), slot,
                         imageUrl, blankToNull(promoTitle),
                         blankToNull(promoLinkUrl), from, to);
-                // 🛡 比例超出 0.75–1.34 → 保存成功但明说会被裁多少（只提醒，不拦）。
+                // 🛡 比例超出 0.75–1.78 → 保存成功但明说会被裁多少（只提醒，不拦）。
                 if (cropWarning != null) {
                     flash.addFlashAttribute("error", cropWarning);
                 }
