@@ -81,6 +81,14 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="tailtopia" android:host="post"/>
             </intent-filter>
+            <!-- 里程碑分享深链：tailtopia://milestone → 打开 App 落**自己的**里程碑列表
+                 （milestone_share.html CTA 第①级，2026-09-11 产品定）。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="tailtopia" android:host="milestone"/>
+            </intent-filter>
             <!-- 场所分享页深链：tailtopia://place/{token} → 打开 App 落场所详情
                  （V1.3.0 batch-b1 Story 1.10 · AC6，place_share.html 的 CTA 第①级）。 -->
             <intent-filter>

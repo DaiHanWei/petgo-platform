@@ -100,9 +100,9 @@
         <div class="ch-grid" id="chGrid" th:attr="data-levels=${collectionLevels}"></div>
     </div>
 
-    <!-- 底部唯一差异：下载 App，直接跳应用商店（iOS App Store / Android Google Play；桌面落下载页） -->
+    <!-- 底部唯一差异：已装 App 先唤起（落自己的里程碑列表），未装再落应用商店 -->
     <a class="cta" id="downloadCta" th:href="${downloadUrl}"
-       th:attr="data-ios=${iosUrl},data-android=${androidUrl}"
+       th:attr="data-ios=${iosUrl},data-android=${androidUrl},data-deeplink=${deepLink}"
        th:text="${downloadCta}">Download</a>
     <div class="footnote">TailTopia</div>
 </div>
@@ -189,18 +189,45 @@
     }
   })();
 
-  // 下载 CTA：直接跳应用商店下载（不尝试深链）。Android→Play / iOS→App Store / 桌面→下载页。
+  // 下载 CTA：先试唤起 App（落**自己的**里程碑列表），没起来再落应用商店。
+  //
+  // 🔴 2026-09-11 产品定（Bug 20260910-487 延伸）：此前本页「直接跳应用商店、不尝试深链」，
+  //    已装 App 的人被白白送去商店。链路与名片页 / 内容分享页同一套，不另发明时序：
+  //    判「唤起成功」用 pagehide（App 接管时页面隐藏），计时器只是没唤起时的兜底。
   (function () {
     var ua = navigator.userAgent || '';
     var isIOS = /iPad|iPhone|iPod/.test(ua);
     var isAndroid = /Android/.test(ua);
     var el = document.getElementById('downloadCta');
     if (!el) return;
+
+    function go(url) { window.location.href = url; }
+    function guard(fn, ms) {
+      var t = setTimeout(fn, ms);
+      window.addEventListener('pagehide', function () { clearTimeout(t); }, { once: true });
+      return t;
+    }
+    // 装了 Play 的机器用 market:// 直接开商店 App，少一跳。
+    function toMarket(webUrl) {
+      return webUrl.replace('https://play.google.com/store/apps/details', 'market://details');
+    }
+
     el.addEventListener('click', function (e) {
       e.preventDefault();
-      if (isAndroid) window.location.href = el.dataset.android;
-      else if (isIOS) window.location.href = el.dataset.ios;
-      else window.location.href = el.href;
+      var deep = el.dataset.deeplink;
+      // 桌面没有 App 可唤起；深链缺失（理论上不会）时退回原来的平台分流，别把按钮点成死的。
+      if (!isIOS && !isAndroid) { go(el.href); return; }
+      if (!deep) { go(isAndroid ? el.dataset.android : el.dataset.ios); return; }
+
+      if (isAndroid) {
+        guard(function () {
+          guard(function () { go(el.dataset.android); }, 700);
+          go(toMarket(el.dataset.android));
+        }, 900);
+      } else {
+        guard(function () { go(el.dataset.ios); }, 900);
+      }
+      go(deep);
     });
   })();
 </script>
