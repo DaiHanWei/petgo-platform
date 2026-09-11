@@ -224,11 +224,30 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
       return true;
     }
 
-    // 这张卡的底边相对滚动视口顶部的位置；<= 0 表示它整个在视口上方。
-    final top = box.localToGlobal(Offset.zero, ancestor: viewport).dy;
-    if (top + box.size.height > 0) return true;
-
     final pos = _controller.position;
+
+    // 🔴 用户正在拖拽 / 惯性滑行时**不补偿**（review 2026-09-11 findings #2）。
+    //
+    // `jumpTo` 的第一件事是 `goIdle()`，而 `ScrollPositionWithSingleContext.beginActivity`
+    // 里有 `_currentDrag?.dispose()`，末尾还有 `goBallistic(0.0)` —— 于是只要有一张上方的图
+    // 恰好在手指按着或惯性滑行中解码完成，当前拖拽会被直接取消、fling 速度清零，
+    // 表现是首页快滑时莫名刹停、必须抬手重滑。首页一次性 build 全部卡片、图并发解码，
+    // 快滑正是最容易撞上的时刻。
+    //
+    // 不补的代价可以接受：本 bug 的场景是「进详情页再返回，找不到刚才那张卡」——
+    // 那一刻列表是静止的，补得上。用户正在滑的时候画面本来就在动，漂移感知不到。
+    if (pos.isScrollingNotifier.value) return true;
+
+    // 这张卡在**变高之前**的底边相对滚动视口顶部的位置；<= 0 表示它那时整个在视口上方。
+    //
+    // 🔴 必须减掉 delta（review 2026-09-11 findings #3）：本通知在 `addPostFrameCallback`
+    // 里发出，此时重排已完成，`box.size.height` 是**新**高度。一张原本整个在上方的卡变高后
+    // top 不动、底边下移 delta，若原底边落在 (-delta, 0] 就会被误判成「还在视口内」而直接返回，
+    // 可它下方的内容确实已被整体推下 delta —— 正是「返回后还是跳了一屏」的偶发复现来源。
+    // 1:1→3:4 在 390 宽屏上 delta ≈ 130px，图片区下面还有作者行/操作行，落进这个窗口很常见。
+    final top = box.localToGlobal(Offset.zero, ancestor: viewport).dy;
+    if (top + box.size.height - n.delta > 0) return true;
+
     final target = (pos.pixels + n.delta).clamp(
       pos.minScrollExtent,
       pos.maxScrollExtent,
