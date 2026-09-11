@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/user_tag_row.dart';
 import '../../../shared/widgets/content_tag_chip.dart';
 import '../domain/content_tag.dart';
+import '../domain/detail_image_layout.dart';
+import '../domain/feed_image_layout.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
@@ -129,60 +132,91 @@ class _DetailScaffold extends ConsumerWidget {
           children: [
             Expanded(
               // 点空白 / 滚动 → 收起评论键盘（仅返回键收回的体验问题修复）。
-              child: GestureDetector(
+              // 🔴 图片区的高度护栏要「滚动视口的实际高度」。在这里量最准：
+              // AppBar 与常驻底栏（CommentComposer）都已被外层扣掉，护栏里不必再减一次
+              // —— 重复扣就是 Feed 那次实机复核抓到的同类错误（AD-A11 / Story 2.2 · AC3）。
+              child: LayoutBuilder(
+                builder: (context, viewport) => GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onTap: () => FocusScope.of(context).unfocus(),
                 child: SingleChildScrollView(
                   keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.all(AppSpacing.screenEdge),
+                  // 🔴 横向 padding 从这里撤到各子块上：图片要**通栏全宽出血**（AC2），
+                  // 留在这里会让图片两侧各缩进一个 screenEdge —— 那正是本 story 要消灭的「两侧留边」。
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.screenEdge),
                   child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _authorRow(context, ref, l10n),
-                    const SizedBox(height: AppSpacing.md),
-                    if (detail.body != null && detail.body!.isNotEmpty)
-                      Text(detail.body!, style: AppTypography.body),
-                    // V1.1.6 Story 5.2：装饰标签的位置**按有无配图切换**（FR-75）。
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
+                      child: _authorRow(context, ref, l10n),
+                    ),
+                    // V1.3.0 Story 2.2 · AC1：元素顺序为 作者行 → **图片** → 文字 → 互动栏 → 评论区。
+                    // 图片前置的理由：详情页是「看图」的页面，正文在图上面会把图挤到首屏之外。
                     if (detail.imageUrls.isNotEmpty) ...[
                       const SizedBox(height: AppSpacing.md),
-                      // 有图 → 叠在首图角落。
+                      // V1.1.6 Story 5.2：装饰标签叠在首图角落（有图时的位置，FR-75）。
+                      // ⚠️ 刻意**不**包 Padding —— 通栏出血就是靠这一层缺席实现的。
                       _ImageCarousel(
                         urls: detail.imageUrls,
+                        sizes: detail.imageSizes,
+                        viewportHeight: viewport.maxHeight,
                         decorationTags: detail.decorationTags,
                       ),
-                    ] else if (detail.decorationTags.isNotEmpty) ...[
-                      // 无图 → 正文下方**单独一行**小胶囊。
-                      const SizedBox(height: AppSpacing.sm),
-                      Wrap(
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        children: [
-                          for (final t in detail.decorationTags) ContentTagChip.inline(tag: t, position: 'detail'),
-                        ],
+                    ],
+                    if (detail.body != null && detail.body!.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
+                        child: Text(detail.body!, style: AppTypography.body),
                       ),
                     ],
-                    const SizedBox(height: AppSpacing.md),
-                    _interactionBar(ref),
-                    const Divider(height: AppSpacing.xl, color: AppColors.divider),
-                    // KOMENTAR (n) 计数标题（detail.html）。带 ?focus=comments 进来时滚到这里。
-                    _ScrollIntoViewOnMount(
-                      enabled: focusComments,
-                      child: Text(
-                          '${l10n.detailCommentsTitle.toUpperCase()} (${detail.commentCount})',
-                          key: const ValueKey('detailCommentsTitle'),
-                          style: AppTypography.caption.copyWith(
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                              color: AppColors.ink2)),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    CommentSection(
-                      postId: postId,
-                      currentUserId: currentUserId,
-                      postAuthorId: detail.authorId,
-                      isContentAuthor: detail.isAuthor,
+                    // 无图 → 装饰标签落在正文下方**单独一行**小胶囊（AC5 回归保护）。
+                    if (detail.imageUrls.isEmpty && detail.decorationTags.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
+                        child: Wrap(
+                          spacing: AppSpacing.xs,
+                          runSpacing: AppSpacing.xs,
+                          children: [
+                            for (final t in detail.decorationTags) ContentTagChip.inline(tag: t, position: 'detail'),
+                          ],
+                        ),
+                      ),
+                    ],
+                    // 图片之下的所有内容仍按原来的横向留白排版，与改版前一致。
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: AppSpacing.md),
+                          _interactionBar(ref),
+                          const Divider(height: AppSpacing.xl, color: AppColors.divider),
+                          // KOMENTAR (n) 计数标题（detail.html）。带 ?focus=comments 进来时滚到这里。
+                          _ScrollIntoViewOnMount(
+                            enabled: focusComments,
+                            child: Text(
+                                '${l10n.detailCommentsTitle.toUpperCase()} (${detail.commentCount})',
+                                key: const ValueKey('detailCommentsTitle'),
+                                style: AppTypography.caption.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.5,
+                                    color: AppColors.ink2)),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          CommentSection(
+                            postId: postId,
+                            currentUserId: currentUserId,
+                            postAuthorId: detail.authorId,
+                            isContentAuthor: detail.isAuthor,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
+                ),
                 ),
                 ),
               ),
@@ -194,12 +228,17 @@ class _DetailScaffold extends ConsumerWidget {
     );
   }
 
-  /// 发布相对时间（双语 l10n）：<1分→刚刚 / <1时→N分钟前 / <1天→N小时前 / 否则 N天前。
-  static String _relativeTime(AppLocalizations l10n, DateTime t) {
+  /// 发布时间（AC6）：7 天以内走相对时间，**超过 7 天改显示绝对日期**。
+  ///
+  /// 「173 天前」这种数字读者根本换算不过来，而详情页常有很久以前的内容。
+  /// 绝对日期复用现成的 [formatDayMonthYear]（输出如「15 Jun 2025」，已按 locale 本地化），
+  /// **不新写一套格式化** —— 那会让同一个日期在不同页面长得不一样。
+  static String _publishTime(BuildContext context, AppLocalizations l10n, DateTime t) {
     final d = DateTime.now().difference(t);
     if (d.inMinutes < 1) return l10n.timeJustNow;
     if (d.inHours < 1) return l10n.timeMinutesAgo(d.inMinutes);
     if (d.inDays < 1) return l10n.timeHoursAgo(d.inHours);
+    if (d.inDays > 7) return formatDayMonthYear(context, t);
     return l10n.timeDaysAgo(d.inDays);
   }
 
@@ -229,7 +268,7 @@ class _DetailScaffold extends ConsumerWidget {
                 nameStyle: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
                 tags: detail.authorDeleted ? const [] : detail.authorTags,
               ),
-              Text(_relativeTime(l10n, detail.createdAt),
+              Text(_publishTime(context, l10n, detail.createdAt),
                   style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
             ],
           ),
@@ -414,9 +453,20 @@ class _DetailScaffold extends ConsumerWidget {
 
 /// 多图左右滑 + 角标 x/y（UX-DR12）；点击全屏 lightbox。
 class _ImageCarousel extends StatefulWidget {
-  const _ImageCarousel({required this.urls, this.decorationTags = const []});
+  const _ImageCarousel({
+    required this.urls,
+    required this.sizes,
+    required this.viewportHeight,
+    this.decorationTags = const [],
+  });
 
   final List<String> urls;
+
+  /// 与 [urls] 同序等长的原始宽高；测不出来 / 存量内容为 null（走占位兜底）。
+  final List<ImageSize?> sizes;
+
+  /// 滚动视口实际高度，喂给高度护栏（由详情页的 `LayoutBuilder` 量得）。
+  final double viewportHeight;
 
   /// V1.1.6 Story 5.2：装饰标签叠在**首图角落**（有图时的位置）。
   final List<ContentTag> decorationTags;
@@ -444,13 +494,24 @@ class _ImageCarouselState extends State<_ImageCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    // 🔴 容器高度按**首图**锁定（AC4）：PageView 的每一页共用一个 AspectRatio，
+    // 左右滑动时高度不变。按当前页算会让容器随翻页忽高忽低，正文跟着上下跳。
+    final width = MediaQuery.sizeOf(context).width;
+    final aspect = resolveDetailImageAspect(
+      size: widget.sizes.isNotEmpty ? widget.sizes.first : null,
+      width: width,
+      viewportHeight: widget.viewportHeight,
+    );
     return Stack(
       children: [
-        ClipRRect(
-          borderRadius: AppRounded.phoneRadius,
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: PageView.builder(
+        // 通栏出血：**不再 ClipRRect 圆角**，图片两侧贴屏幕边（AC2）。
+        // 圆角是「卡片」的语言，详情页的图不是卡片。
+        AspectRatio(
+          // ① 实际比例 → ② clamp 0.75~1.34 闭区间 → ③ 高度护栏，
+          // 三步全在 resolveFeedImageAspect 里，与 Feed **同一个出口函数**（AC2）。
+          // 详情页只负责把自己的护栏口径喂进去（见 detail_image_layout.dart）。
+          aspectRatio: aspect,
+          child: PageView.builder(
               controller: _controller,
               itemCount: widget.urls.length,
               onPageChanged: (i) => setState(() => _current = i),
@@ -458,14 +519,15 @@ class _ImageCarouselState extends State<_ImageCarousel> {
                 onTap: () => _openLightbox(i),
                 child: AppImage.widget(
                   widget.urls[i],
+                  // 容器比例已按原图算好，cover 在比例相符时不裁切；
+                  // 仅当某张与首图比例不同（多图混排）才裁，这是容器锁首图的必然代价。
                   fit: BoxFit.cover,
-                  thumbWidth: 1080, // 详情方图：按手机全宽取缩略图（全屏放大走原图）
+                  thumbWidth: 1080, // 按手机全宽取缩略图（全屏放大走原图）
                   errorBuilder: (context, error, stack) =>
                       Container(color: AppColors.border),
                 ),
               ),
             ),
-          ),
         ),
         // 装饰标签：左下角，与右上角的页码角标分处两角、互不遮挡。
         if (widget.decorationTags.isNotEmpty)
