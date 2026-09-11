@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
+import '../../../shared/widgets/feed_image.dart';
 import '../../../shared/widgets/masonry_card.dart';
 import '../domain/feed_image_layout.dart';
 import '../domain/feed_item.dart';
@@ -102,8 +103,11 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
   /// 回到顶部（bug 20260709-278）：已在首页再点 Home → 信号 +1 → 动画滚回顶。
   void _scrollToTop() {
     if (!_controller.hasClients) return;
-    _controller.animateTo(0,
-        duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    _controller.animateTo(
+      0,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
   }
 
   /// 距底预加载阈值（≈3~5 卡）。
@@ -198,6 +202,43 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
     }
   }
 
+  /// 🔴 滚动锚定（Bug 20260911-491）：视口**上方**的卡片变高变矮时，把 offset 补上同样的差值。
+  ///
+  /// ## 这条修的是什么
+  /// 存量内容没有图片尺寸（V1.1.6 才开始记，不回填），卡片先按 1:1 占位、图解码后换成真实比例。
+  /// 于是「用户进详情页的这几秒」，上方那些还没解码完的图陆续落定，累积出几百甚至上千像素的高度差 ——
+  /// 滚动位置这个**数字**一直没丢，但它对应的**内容**已经不是刚才那张卡了。
+  /// 实测（2026-09-11 模拟器）：快速滑动后立刻进详情页再返回，位置偏了一屏多。
+  ///
+  /// ## 为什么只补视口上方的
+  /// 下方的卡变高不会推动你正在看的东西（它们在你下面）；视口内的卡变高是**用户看得见**的，
+  /// 补偿反而会让画面自己动一下，更怪。只有上方的需要补 —— 这也是浏览器滚动锚定的同一条口径。
+  ///
+  /// ## 为什么用 jumpTo 而不是动画
+  /// 目的是让画面**看起来完全没动**。动画等于把一次本不该发生的位移演给用户看。
+  bool _anchorScroll(FeedImageHeightChanged n) {
+    if (!_controller.hasClients) return true;
+    final box = n.context.findRenderObject();
+    final viewport = context.findRenderObject();
+    if (box is! RenderBox || !box.attached || viewport is! RenderBox) {
+      return true;
+    }
+
+    // 这张卡的底边相对滚动视口顶部的位置；<= 0 表示它整个在视口上方。
+    final top = box.localToGlobal(Offset.zero, ancestor: viewport).dy;
+    if (top + box.size.height > 0) return true;
+
+    final pos = _controller.position;
+    final target = (pos.pixels + n.delta).clamp(
+      pos.minScrollExtent,
+      pos.maxScrollExtent,
+    );
+    if ((target - pos.pixels).abs() > 0.5) {
+      _controller.jumpTo(target);
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     // 已在首页再次点击 Home Tab → 回到顶部（bug 20260709-278）。
@@ -207,7 +248,9 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
         // 🔴 高度护栏（V1.1.6 Story 3.3）的「可视区高度」口径 = **滚动视口的实际高度**。
         // 在这里量最准：顶部标签行与底部导航栏已经被外层扣掉，卡片内不需要再减一次。
         // 视口无界时（理论上不会发生）算出的上限是无穷大，护栏自动不介入 —— 安全退化。
-        final maxImageHeight = FeedCardMetrics.maxImageHeight(constraints.maxHeight);
+        final maxImageHeight = FeedCardMetrics.maxImageHeight(
+          constraints.maxHeight,
+        );
         // 顶置卡：与普通卡**同一个组件**，只多挂一个右上角标。
         // 🛡 为空则整块不渲染 —— 不留占位。
         final pin = widget.pinned;
@@ -221,7 +264,9 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
               padding: const EdgeInsets.only(bottom: 12),
               margin: const EdgeInsets.only(bottom: 12),
               decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: AppColors.line2, width: 1)),
+                border: Border(
+                  bottom: BorderSide(color: AppColors.line2, width: 1),
+                ),
               ),
               child: PromoPinnedCard(
                 promo: promo,
@@ -245,13 +290,16 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
               padding: const EdgeInsets.only(bottom: 12),
               margin: const EdgeInsets.only(bottom: 12),
               decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: AppColors.line2, width: 1)),
+                border: Border(
+                  bottom: BorderSide(color: AppColors.line2, width: 1),
+                ),
               ),
               child: MasonryCard(
                 key: const ValueKey('feedPinnedCard'),
                 item: pinnedItem,
                 deletedUserLabel: widget.deletedUserLabel,
-                onShare: () => ShareCardEntry.openForPostId(context, ref, pinnedItem.id),
+                onShare: () =>
+                    ShareCardEntry.openForPostId(context, ref, pinnedItem.id),
                 feedTab: widget.feedTab,
                 rankMode: widget.rankMode,
                 maxImageHeight: maxImageHeight,
@@ -271,15 +319,18 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                 onComment: widget.onCommentItem == null
                     ? null
                     : () => widget.onCommentItem!(pinnedItem),
-                onAuthorTap:
-                    widget.onAuthorTap == null ? null : () => widget.onAuthorTap!(pinnedItem),
+                onAuthorTap: widget.onAuthorTap == null
+                    ? null
+                    : () => widget.onAuthorTap!(pinnedItem),
                 // 🔴 举报入口（长按 + 「···」）**必须一并挂上**：AC 要求"其余部分与普通条目完全一致，
                 // 常规互动入口位置不变"。实机上才发现漏了 —— 只挂点击与评论会让顶置卡少一个入口，
                 // 用户对顶置内容反而没法举报。
                 onLongPress: widget.onLongPressItem == null
                     ? null
                     : () => widget.onLongPressItem!(pinnedItem),
-                onMore: widget.onMoreItem == null ? null : () => widget.onMoreItem!(pinnedItem),
+                onMore: widget.onMoreItem == null
+                    ? null
+                    : () => widget.onMoreItem!(pinnedItem),
               ),
             ),
           for (var i = 0; i < widget.items.length; i++)
@@ -291,17 +342,25 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
               decoration: i == widget.items.length - 1
                   ? null
                   : const BoxDecoration(
-                      border: Border(bottom: BorderSide(color: AppColors.line2, width: 1)),
+                      border: Border(
+                        bottom: BorderSide(color: AppColors.line2, width: 1),
+                      ),
                     ),
               child: MasonryCard(
                 item: widget.items[i],
                 deletedUserLabel: widget.deletedUserLabel,
                 // 信息流分享入口（bug 20260826）。走 postId 版：卡面要的正文全文与首图原图
                 // 在流里是裁过的摘要，直接拿它拼卡会与详情页分享出去的不是同一张。
-                onShare: () => ShareCardEntry.openForPostId(context, ref, widget.items[i].id),
+                onShare: () => ShareCardEntry.openForPostId(
+                  context,
+                  ref,
+                  widget.items[i].id,
+                ),
                 feedTab: widget.feedTab,
                 rankMode: widget.rankMode,
-                onTap: widget.onTapItem == null ? null : () => widget.onTapItem!(widget.items[i]),
+                onTap: widget.onTapItem == null
+                    ? null
+                    : () => widget.onTapItem!(widget.items[i]),
                 onLongPress: widget.onLongPressItem == null
                     ? null
                     : () => widget.onLongPressItem!(widget.items[i]),
@@ -319,53 +378,66 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
             ),
         ];
 
-        return RefreshIndicator(
-          color: AppColors.accentGrowth,
-          onRefresh: widget.onRefresh,
-          child: SingleChildScrollView(
-            controller: _controller,
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: Column(
-              children: [
-                if (widget.header != null) widget.header!,
-                Padding(
-                  // 🔴 通栏：**去掉左右屏边距**，让卡片里的图片能贴到屏幕边缘。
-                  // ⚠️ 文字区的 16px 由卡片内部各块自己补（作者行/操作行/正文/时间），
-                  // 不是整张卡贴边 —— 那样文字会顶到屏幕边上。
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.screenEdge),
-                  child: Column(
-                    children: [
-                      // 单列通栏卡片（FR-93）。
-                      ...cards,
-                      if (widget.footer != null) widget.footer!,
-                      if (widget.loadingMore)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                          child: CircularProgressIndicator(color: AppColors.accentGrowth),
-                        ),
-                      // AC5：增量加载失败 → 底部「加载失败，点击重试」（已加载内容保留在上方）。
-                      if (widget.loadMoreFailed && !widget.loadingMore)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                          child: TextButton.icon(
-                            key: const ValueKey('feedLoadMoreRetry'),
-                            onPressed: widget.onLoadMore,
-                            icon: const Icon(
-                              Icons.refresh,
-                              size: 18,
+        return NotificationListener<FeedImageHeightChanged>(
+          onNotification: _anchorScroll,
+          child: RefreshIndicator(
+            color: AppColors.accentGrowth,
+            onRefresh: widget.onRefresh,
+            child: SingleChildScrollView(
+              controller: _controller,
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  if (widget.header != null) widget.header!,
+                  Padding(
+                    // 🔴 通栏：**去掉左右屏边距**，让卡片里的图片能贴到屏幕边缘。
+                    // ⚠️ 文字区的 16px 由卡片内部各块自己补（作者行/操作行/正文/时间），
+                    // 不是整张卡贴边 —— 那样文字会顶到屏幕边上。
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.screenEdge,
+                    ),
+                    child: Column(
+                      children: [
+                        // 单列通栏卡片（FR-93）。
+                        ...cards,
+                        if (widget.footer != null) widget.footer!,
+                        if (widget.loadingMore)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(
+                              vertical: AppSpacing.lg,
+                            ),
+                            child: CircularProgressIndicator(
                               color: AppColors.accentGrowth,
                             ),
-                            label: Text(
-                              widget.loadMoreErrorLabel ??
-                                  'Gagal memuat lagi, ketuk untuk coba lagi',
-                              style: const TextStyle(color: AppColors.accentGrowth),
+                          ),
+                        // AC5：增量加载失败 → 底部「加载失败，点击重试」（已加载内容保留在上方）。
+                        if (widget.loadMoreFailed && !widget.loadingMore)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: AppSpacing.lg,
+                            ),
+                            child: TextButton.icon(
+                              key: const ValueKey('feedLoadMoreRetry'),
+                              onPressed: widget.onLoadMore,
+                              icon: const Icon(
+                                Icons.refresh,
+                                size: 18,
+                                color: AppColors.accentGrowth,
+                              ),
+                              label: Text(
+                                widget.loadMoreErrorLabel ??
+                                    'Gagal memuat lagi, ketuk untuk coba lagi',
+                                style: const TextStyle(
+                                  color: AppColors.accentGrowth,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

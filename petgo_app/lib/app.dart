@@ -32,6 +32,7 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 ///
 /// - `tailtopia://card/{token}` → `/pet/{token}`（**被分享的那只宠物**，V1.1.6 Story 2.4）
 /// - `tailtopia://post/{token}` → `/shared-post/{token}`（**只有被分享的那一条内容**，V1.1.6 Story 9.3）
+/// - `tailtopia://milestone` → `/profile/milestones`（**自己的**里程碑列表，2026-09-11 产品定）
 /// - `tailtopia://open` → `/home`（下载引导落地页 `s.tailtopia.id/get` 唤起已装 app 的通用深链）
 /// - `tailtopia://open/<路径>` → 该路径（🔧 **仅 debug 包**，本地验收导航用；release 恒 `/home`）
 /// - 其它 scheme/host 暂不识别（返回 null，调用方忽略）
@@ -61,6 +62,18 @@ String? deepLinkToLocation(Uri uri) {
     // 没 token 就没有可展示的那一条 —— 落首页，不要退回任何档案页
     // （退到档案页就成了"点别人的分享链接看到自己家宠物"，正是 2.4 修掉的那个 bug）。
     return token.isEmpty ? '/home' : '/shared-post/$token';
+  }
+  // 里程碑分享页（/m/{token}）的唤起落点（2026-09-11 产品定，Bug 20260910-487 延伸）。
+  //
+  // 🔴 **刻意不带 token、也刻意不落"被分享的那一条里程碑"**：分享出去的是**别人**达成的
+  // 里程碑，站内没有"看别人里程碑"这一屏，也不该为此新造一个访客视图（那是另一条产品线）。
+  // 产品决定是「点进来先进自己的里程碑列表」—— 让被激励到的人立刻看到自己的进度。
+  // 因此 token 在 App 侧没有用武之地，不接收比接收了又忽略更诚实。
+  //
+  // ⚠️ `/profile/milestones` 在受控前缀 `/profile` 之下：未登录会被门控 redirect 回 `/home`。
+  // 这是对的 —— 那是「自己的」列表，没有登录态就没有"自己"。安全规则只升不降，不为深链开例外。
+  if (uri.scheme == 'tailtopia' && uri.host == 'milestone') {
+    return '/profile/milestones';
   }
   if (uri.scheme == 'tailtopia' && uri.host == 'open') {
     // 🔧 DEBUG ONLY：`tailtopia://open/<路径>` 直达任意路由，供本地验收导航用。
