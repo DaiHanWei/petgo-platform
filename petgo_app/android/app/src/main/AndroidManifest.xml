@@ -52,6 +52,17 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="tailtopia" android:host="card"/>
             </intent-filter>
+            <!-- 单条内容分享深链：tailtopia://post/{token} → 打开 App 落被分享的那一条
+                 （content_share.html CTA 第①级）。
+                 🔴 Bug 20260910-487（2026-09-11 补）：App 侧 `deepLinkToLocation` 一直支持
+                 `tailtopia://post/...`，iOS 的 scheme 注册也是全 host 通吃，唯独安卓漏了这条
+                 intent-filter —— 安卓系统因此不认这个链接，唤起必定失败、只能落商店。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="tailtopia" android:host="post"/>
+            </intent-filter>
             <!-- 下载引导落地页深链：tailtopia://open → 打开 App 落首页（s.tailtopia.id/get 唤起）。 -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
