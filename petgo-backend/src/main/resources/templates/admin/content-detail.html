@@ -119,7 +119,13 @@
                     <div style="white-space:pre-wrap;word-break:break-word" th:text="${r.body()}">回复内容</div>
                 </div>
                 <p th:if="${cm.replyTotal() > cm.replies().size()}" style="margin:6px 0 0 28px">
-                    <a th:href="@{'/admin/content/' + ${d.post().id()}(commentPage=${d.commentPage()},expand=${cm.id()}) + '#comment-' + ${cm.id()}}"
+                    <!-- 🔴 锚点必须拼在链接表达式**外面**（2026-09-11 修 Bug 20260908-486）。
+                         原写法 @{'...' + ${id}(params) + '#frag'} 在参数括号后面还接了内容 ——
+                         链接表达式的参数块必须是整个 @{...} 的结尾，后面再接东西就整体解析失败，
+                         于是「只要本页存在一条回复数 > 3 的评论」，这一页就直接 500。
+                         第一页没有这种评论所以看着正常，翻到有的那一页才炸 —— 正是提报的现象。
+                         正确写法：用 |...| 字面量替换，把 @{...} 建好的完整 URL（含 query）再接 #fragment。 -->
+                    <a th:href="|@{/admin/content/{postId}(postId=${d.post().id()},commentPage=${d.commentPage()},expand=${cm.id()})}#comment-${cm.id()}|"
                        th:id="'comment-' + ${cm.id()}"
                        th:text="#{admin.contentdetail.replies.expand(${cm.replyTotal()})}">展开全部 N 条回复</a>
                 </p>

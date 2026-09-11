@@ -86,11 +86,16 @@ class AdminLocaleResolutionTest {
         assertThat(id).isNotEqualTo(zh);
     }
 
-    /** 未受支持的语言即便绕过解析层直接问 MessageSource，也应落到默认语言而不是键名。 */
+    /**
+     * 未受支持的语言即便绕过解析层直接问 MessageSource，也应落到**英文基线** messages.properties
+     * （Story 11.7 · AC1）而不是键名。解析层（SupportedOnlyCookieLocaleResolver）已把不支持的语言
+     * 归到 DEFAULT_LOCALE，这里只守「绝不露键名」这一条。
+     */
     @Test
     void messageSourceFallsBackToDefaultLocaleNotCode() {
         MessageSource source = config.messageSource();
-        assertThat(source.getMessage("admin.nav.dashboard", null, Locale.FRENCH))
-                .isEqualTo(source.getMessage("admin.nav.dashboard", null, AdminLocaleConfig.DEFAULT_LOCALE));
+        String fr = source.getMessage("admin.nav.dashboard", null, Locale.FRENCH);
+        assertThat(fr).isNotEqualTo("admin.nav.dashboard");
+        assertThat(fr).isEqualTo(source.getMessage("admin.nav.dashboard", null, Locale.ROOT));
     }
 }

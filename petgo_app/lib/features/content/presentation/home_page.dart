@@ -20,6 +20,7 @@ import 'feed_view.dart';
 import 'promo_target.dart';
 import 'publish_compose_page.dart';
 import 'report_sheet.dart';
+import '../../notify/data/notification_repository.dart';
 import '../../../shared/widgets/mini_profile_sheet.dart';
 
 /// 首页 Beranda（TailTopia Prototype 全面换肤）。
@@ -44,7 +45,9 @@ class HomePage extends ConsumerWidget {
     // FR-0B：游客浏览至第 3 页 → 软性登录浮层（控制器内部 session 去重）。
     ref.listen<AsyncValue<FeedState>>(feedProvider, (prev, next) {
       final state = next.value;
-      if (state != null && state.pagesLoaded >= 3 && auth.status == AuthStatus.guest) {
+      if (state != null &&
+          state.pagesLoaded >= 3 &&
+          auth.status == AuthStatus.guest) {
         ref.read(loginGuideControllerProvider).showSoftSheet(context);
       }
     });
@@ -78,13 +81,24 @@ class HomePage extends ConsumerWidget {
                 onPressed: () => context.push('/login'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.mint,
-                  side: const BorderSide(color: AppColors.dashedViolet, width: 1.5),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  side: const BorderSide(
+                    color: AppColors.dashedViolet,
+                    width: 1.5,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                child: Text(l10n.loginTitle,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(
+                  l10n.loginTitle,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
         ],
@@ -107,7 +121,8 @@ class HomePage extends ConsumerWidget {
     final header = _BerandaTop(
       selectedCategory: category,
       labels: _tabLabels(l10n),
-      onSelectCategory: (c) => ref.read(feedCategoryProvider.notifier).select(c),
+      onSelectCategory: (c) =>
+          ref.read(feedCategoryProvider.notifier).select(c),
     );
 
     // 头部（分类 Tab）在四态恒渲染：data 非空时随瀑布同滚；
@@ -118,7 +133,11 @@ class HomePage extends ConsumerWidget {
         child: Column(children: [header, body]),
       );
       if (onRefresh == null) return scroll;
-      return RefreshIndicator(color: AppColors.mint, onRefresh: onRefresh, child: scroll);
+      return RefreshIndicator(
+        color: AppColors.mint,
+        onRefresh: onRefresh,
+        child: scroll,
+      );
     }
 
     return feedAsync.when(
@@ -190,18 +209,28 @@ class HomePage extends ConsumerWidget {
           onRefresh: () async {
             // 顶置与首页各自取数，下拉刷新要**两边一起**刷 —— 只刷一边会让坑位停在旧配置上。
             ref.invalidate(pinnedSlotProvider);
+            // 未读角标一并重算（Bug 20260911-495）：下拉就是用户在说「给我看最新的」，
+            // 而铃铛就在这一屏顶上。App 一直没退到后台时，这是角标唯一的刷新时机。
+            ref.invalidate(unreadCountProvider);
             await ref.read(feedProvider.notifier).refresh();
           },
           onTapItem: (item) => context.push('/content/${item.id}'),
-          onLongPressItem: (item) => openReport(context, ref, item.id, onReported: () {
-            // cm-6 §6.1：举报成功 → 乐观移除卡片 +「不再向你展示」提示（后端 §5.4 已过滤，刷新亦不复现）。
-            ref.read(feedProvider.notifier).removeItem(item.id);
-            if (context.mounted) {
-              ScaffoldMessenger.of(context)
-                ..hideCurrentSnackBar()
-                ..showSnackBar(SnackBar(content: Text(l10n.reportHiddenToast)));
-            }
-          }),
+          onLongPressItem: (item) => openReport(
+            context,
+            ref,
+            item.id,
+            onReported: () {
+              // cm-6 §6.1：举报成功 → 乐观移除卡片 +「不再向你展示」提示（后端 §5.4 已过滤，刷新亦不复现）。
+              ref.read(feedProvider.notifier).removeItem(item.id);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(
+                    SnackBar(content: Text(l10n.reportHiddenToast)),
+                  );
+              }
+            },
+          ),
           onAuthorTap: (item) => showMiniProfile(
             context,
             ref,
@@ -213,27 +242,35 @@ class HomePage extends ConsumerWidget {
           ),
           // V1.1.6 Story 3.2：评论跳详情页并**定位到评论区**。
           // ⚠️ `?focus=comments` 是既有参数名（通知深链一直在产出它），两侧必须同名。
-          onCommentItem: (item) => context.push('/content/${item.id}?focus=comments'),
+          onCommentItem: (item) =>
+              context.push('/content/${item.id}?focus=comments'),
           // 「···」：Feed 此前只有长按举报，没有显式入口；两者走同一个动作。
-          onMoreItem: (item) => openReport(context, ref, item.id, onReported: () {
-            ref.read(feedProvider.notifier).removeItem(item.id);
-            if (context.mounted) {
-              ScaffoldMessenger.of(context)
-                ..hideCurrentSnackBar()
-                ..showSnackBar(SnackBar(content: Text(l10n.reportHiddenToast)));
-            }
-          }),
+          onMoreItem: (item) => openReport(
+            context,
+            ref,
+            item.id,
+            onReported: () {
+              ref.read(feedProvider.notifier).removeItem(item.id);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(
+                    SnackBar(content: Text(l10n.reportHiddenToast)),
+                  );
+              }
+            },
+          ),
         );
       },
     );
   }
 
   Map<FeedCategory, String> _tabLabels(AppLocalizations l10n) => {
-        FeedCategory.all: l10n.feedTabAll,
-        FeedCategory.daily: l10n.feedTabDaily,
-        FeedCategory.growthMoment: l10n.feedTabGrowth,
-        FeedCategory.knowledge: l10n.feedTabKnowledge,
-      };
+    FeedCategory.all: l10n.feedTabAll,
+    FeedCategory.daily: l10n.feedTabDaily,
+    FeedCategory.growthMoment: l10n.feedTabGrowth,
+    FeedCategory.knowledge: l10n.feedTabKnowledge,
+  };
 }
 
 /// Social 滚动头部（原型 feed.html）：分类 Chips。
@@ -256,7 +293,11 @@ class _BerandaTop extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 8),
-        FeedTabRow(selected: selectedCategory, labels: labels, onSelected: onSelectCategory),
+        FeedTabRow(
+          selected: selectedCategory,
+          labels: labels,
+          onSelected: onSelectCategory,
+        ),
         const SizedBox(height: 8),
       ],
     );

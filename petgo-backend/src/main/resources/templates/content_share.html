@@ -82,17 +82,61 @@
 </div>
 
 <a class="cta" id="downloadCta" th:href="${downloadUrl}"
-   th:attr="data-ios=${iosUrl},data-android=${androidUrl}"
+   th:attr="data-ios=${iosUrl},data-android=${androidUrl},data-deeplink=${deepLink}"
    th:text="${downloadCta}">Download</a>
 
 <script>
-    // 平台分流：iOS → App Store、Android → Play、桌面 → 保持默认下载页。与名片/里程碑两页同做法。
+    // 唤起链：先试深链把已装 App 的人送进站内，没唤起成功再落应用商店。
+    //
+    // 🔴 Bug 20260910-487（2026-09-11 修）：此前本页只做「iOS→App Store / Android→Play」的
+    //    平台分流，**从不尝试唤起 App** —— 装了 App 的人点分享链接一律被送去商店，
+    //    永远进不了站内那一条内容。名片页（card.html）一直有这条链，本页漏了。
+    //
+    // 🛡 判「唤起成功」用的是 pagehide，不是计时器猜：App 接管时页面会隐藏，
+    //    这是名片页已经跑通的同一个信号，**不要在这里另发明一套时序**，两套迟早对不上。
     (function () {
         var el = document.getElementById('downloadCta');
         if (!el) { return; }
         var ua = navigator.userAgent || '';
-        if (/iPhone|iPad|iPod/i.test(ua) && el.dataset.ios) { el.href = el.dataset.ios; }
-        else if (/Android/i.test(ua) && el.dataset.android) { el.href = el.dataset.android; }
+        var isIOS = /iPhone|iPad|iPod/i.test(ua);
+        var isAndroid = /Android/i.test(ua);
+
+        // 桌面：没有 App 可唤起，保持默认下载页，连监听都不挂。
+        if (!isIOS && !isAndroid) { return; }
+
+        function go(url) { window.location.href = url; }
+        function guard(fn, ms) {
+            var t = setTimeout(fn, ms);
+            window.addEventListener('pagehide', function () { clearTimeout(t); }, { once: true });
+            return t;
+        }
+        // Play 网页地址换成 market:// —— 装了 Play 的机器直接开商店 App，少一跳。
+        function toMarket(webUrl) {
+            return webUrl.replace('https://play.google.com/store/apps/details', 'market://details');
+        }
+
+        el.addEventListener('click', function (e) {
+            var deep = el.dataset.deeplink;
+            var ios = el.dataset.ios;
+            var androidWeb = el.dataset.android;
+            // 没有深链可用（理论上不会）→ 退回原来的平台分流，别把按钮点成死的。
+            if (!deep) {
+                if (isIOS && ios) { el.href = ios; }
+                else if (isAndroid && androidWeb) { el.href = androidWeb; }
+                return;
+            }
+            e.preventDefault();
+
+            if (isAndroid) {
+                guard(function () {
+                    guard(function () { go(androidWeb); }, 700);
+                    go(toMarket(androidWeb));
+                }, 900);
+            } else {
+                guard(function () { go(ios); }, 900);
+            }
+            go(deep);
+        });
     })();
 </script>
 </body>

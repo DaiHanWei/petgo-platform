@@ -31,7 +31,8 @@ class FeedExpandedFieldsIntegrationTest extends ApiIntegrationTest {
     }
 
     private String feed(String bearer) throws Exception {
-        var req = get("/api/v1/content-posts");
+        // DAILY Tab（时间序）：本类所有帖都是 DAILY；ALL Tab 是推荐序，会被同库其它用例的帖挤出首页。
+        var req = get("/api/v1/content-posts").param("category", "DAILY");
         if (bearer != null) {
             req = req.header(HttpHeaders.AUTHORIZATION, bearer);
         }

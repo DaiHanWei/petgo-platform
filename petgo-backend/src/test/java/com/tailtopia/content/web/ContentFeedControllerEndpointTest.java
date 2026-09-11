@@ -1,6 +1,7 @@
 package com.tailtopia.content.web;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -37,6 +38,30 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
 
     @Autowired
     private PetProfileRepository petProfiles;
+
+    /** 沿 nextCursor 翻 ALL Tab，最多 {@code maxPages} 页，返回全部 items（推荐序下首页不保证含目标帖）。 */
+    private java.util.List<tools.jackson.databind.JsonNode> walkFeed(String bearer, int maxPages)
+            throws Exception {
+        java.util.List<tools.jackson.databind.JsonNode> out = new java.util.ArrayList<>();
+        String cursor = null;
+        for (int page = 0; page < maxPages; page++) {
+            var req = get("/api/v1/content-posts");
+            if (bearer != null) {
+                req = req.header("Authorization", bearer);
+            }
+            if (cursor != null) {
+                req = req.param("cursor", cursor);
+            }
+            var tree = json.readTree(mvc.perform(req).andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString());
+            tree.get("items").forEach(out::add);
+            if (!tree.path("hasMore").asBoolean(false) || tree.path("nextCursor").isNull()) {
+                break;
+            }
+            cursor = tree.get("nextCursor").asText();
+        }
+        return out;
+    }
 
     private ContentPost savePost(long authorId, ContentType type, Long petId, String text) {
         return posts.save(ContentPost.publish(authorId, type, petId, text, List.of()));
@@ -77,10 +102,9 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
         String marker = "feedmark-" + SEQ.incrementAndGet();
         savePost(author.getId(), ContentType.DAILY, null, marker);
 
-        // 倒序最新在前，首批 20 条内能取到刚发的。
-        mvc.perform(get("/api/v1/content-posts"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[?(@.body=='" + marker + "')]").exists());
+        // ALL Tab 是推荐序，首页不保证含刚发的帖：最多翻 10 页找。
+        assertThat(walkFeed(null, 10).stream().anyMatch(n -> marker.equals(n.path("body").asText(null))))
+                .as("游客翻推荐流应能看到刚发布的公开帖").isTrue();
     }
 
     @Test
@@ -171,11 +195,8 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
         savePost(poster.getId(), ContentType.GROWTH_MOMENT, petId, growth);
         savePost(poster.getId(), ContentType.DAILY, null, daily);
 
-        MvcResult res = mvc.perform(get("/api/v1/content-posts")
-                        .header("Authorization", userBearer(viewerB.getId())))
-                .andExpect(status().isOk())
-                .andReturn();
-        var items = json.readTree(res.getResponse().getContentAsString()).get("items");
+        // ALL Tab 是推荐序（本用例要验的正是混类），同库其它用例的帖会把目标帖挤出首页 → 最多翻 10 页收集
+        var items = walkFeed(userBearer(viewerB.getId()), 10);
         boolean sawGrowth = false;
         boolean sawDaily = false;
         for (var item : items) {
@@ -204,7 +225,8 @@ class ContentFeedControllerEndpointTest extends ApiIntegrationTest {
         savePost(authorId, ContentType.DAILY, null, marker);
         softDelete(author);
 
-        MvcResult res = mvc.perform(get("/api/v1/content-posts"))
+        // 走 DAILY Tab（时间序）：ALL Tab 是推荐序，同库其它用例的帖会把本帖挤出首页。
+        MvcResult res = mvc.perform(get("/api/v1/content-posts").param("category", "DAILY"))
                 .andExpect(status().isOk())
                 .andReturn();
         var items = json.readTree(res.getResponse().getContentAsString()).get("items");

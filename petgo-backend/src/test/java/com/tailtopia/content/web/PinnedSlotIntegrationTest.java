@@ -70,6 +70,26 @@ class PinnedSlotIntegrationTest extends ApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
     }
 
+    /**
+     * ALL Tab 是推荐序：同库其它用例灌的帖会把目标帖挤出首页。「不让位」只需证明它出现在
+     * 推荐流的**某一页**，故最多翻 10 页找。
+     */
+    private boolean feedEventuallyContains(long postId) throws Exception {
+        String cursor = null;
+        for (int page = 0; page < 10; page++) {
+            String json = feed(cursor);
+            if (json.contains("\"id\":" + postId + ",")) {
+                return true;
+            }
+            var tree = new tools.jackson.databind.ObjectMapper().readTree(json);
+            if (!tree.path("hasMore").asBoolean(false) || tree.path("nextCursor").isNull()) {
+                return false;
+            }
+            cursor = tree.get("nextCursor").asText();
+        }
+        return false;
+    }
+
     private String pinnedSlot() throws Exception {
         return mvc.perform(get("/api/v1/content-posts/pinned"))
                 .andExpect(status().isOk())
@@ -176,7 +196,8 @@ class PinnedSlotIntegrationTest extends ApiIntegrationTest {
         User author = newUser();
         ContentPost newest = savePost(author.getId(), "NEWEST-" + SEQ.incrementAndGet());
 
-        assertThat(feed(null)).contains("\"id\":" + newest.getId() + ",");
+        assertThat(feedEventuallyContains(newest.getId()))
+                .as("推荐序下首页不保证含目标帖：翻页仍应能找到").isTrue();
     }
 
     /**
@@ -190,7 +211,8 @@ class PinnedSlotIntegrationTest extends ApiIntegrationTest {
         pinService.schedule(ContentPin.ofContent(ContentPin.SLOT_HOME_FEED, future.getId(),
                 now.plusSeconds(3600), now.plusSeconds(7200)));
 
-        assertThat(feed(null)).contains("\"id\":" + future.getId() + ",");
+        assertThat(feedEventuallyContains(future.getId()))
+                .as("未生效的排期不得让位：目标帖应仍在推荐流里").isTrue();
     }
 
 
@@ -249,7 +271,8 @@ class PinnedSlotIntegrationTest extends ApiIntegrationTest {
                 "https://cdn.example.com/b.jpg", "Judul", null,
                 now.minusSeconds(60), now.plusSeconds(3600)));
 
-        assertThat(feed(null)).contains("\"id\":" + newest.getId() + ",");
+        assertThat(feedEventuallyContains(newest.getId()))
+                .as("推荐序下首页不保证含目标帖：翻页仍应能找到").isTrue();
     }
 
     private static String extractCursor(String body) {

@@ -92,6 +92,10 @@ public class MilestoneSharePageController {
         model.addAttribute("downloadUrl", downloadUrl);
         model.addAttribute("iosUrl", iosUrl);
         model.addAttribute("androidUrl", androidUrl);
+        // 🔴 已装 App 的人先唤起进 App（2026-09-11 产品定，Bug 20260910-487 延伸）。
+        // 落点是**观看者自己的**里程碑列表，不是被分享的那一条 —— 站内没有「看别人里程碑」这一屏，
+        // 产品要的是让被激励到的人立刻看到自己的进度。因此深链不带 token（App 侧也不接收）。
+        model.addAttribute("deepLink", "tailtopia://milestone");
         // E-24：里程碑分享页被打开。这条链路没有「零数据」形态（有分享记录就必有内容），故恒为 full。
         analytics.linkOpened(visitorId,
                 com.tailtopia.profile.service.CardPageAnalytics.STATE_FULL, request);

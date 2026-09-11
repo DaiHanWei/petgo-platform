@@ -10,9 +10,9 @@ void main() {
   group('AC1 ② 闭区间收敛', () {
     /// 🛡 端点必须**算在区间内**。3:4 竖拍恰为 0.75 且最常见 ——
     /// 若写成开区间，最该被保护的那种图恰好被判为"超出"而挨裁。
-    test('端点 0.75 与 1.34 原样保留', () {
+    test('端点 0.75 与 1.78 原样保留', () {
       expect(clampFeedRatio(0.75), 0.75);
-      expect(clampFeedRatio(1.34), 1.34);
+      expect(clampFeedRatio(1.78), 1.78);
     });
 
     test('区间内原样保留', () {
@@ -20,11 +20,14 @@ void main() {
       expect(clampFeedRatio(1.0), 1.0); // 方图
       expect(clampFeedRatio(1.2), 1.2);
       expect(clampFeedRatio(4 / 3), closeTo(1.3333, 0.0001)); // 手机默认横拍
+      // 🔁 2026-09-11 放宽上界后新进区间的两种：KTP 导出图与 16:9。
+      expect(clampFeedRatio(1988 / 1200), closeTo(1.6567, 0.0001)); // KTP 身份证卡
+      expect(clampFeedRatio(16 / 9), closeTo(1.7778, 0.0001)); // 录屏 / 截图 / 横向素材
     });
 
     test('超出者夹到最近边界', () {
       expect(clampFeedRatio(9 / 16), 0.75); // 竖屏长图
-      expect(clampFeedRatio(3.0), 1.34); // 全景
+      expect(clampFeedRatio(3.0), 1.78); // 全景
     });
 
     /// 非法比例不能把整张卡的布局带崩（除零 / 负数 / NaN）。
@@ -144,21 +147,24 @@ void main() {
     /// 🔴 这条是本 story 的核心防线。
     ///
     /// 构造一个「先护栏后 clamp」会**违反护栏**的场景：可视区被压得很扁，
-    /// 以致护栏要求的比例本身就超出了 1.34 上界。
+    /// 以致护栏要求的比例本身就超出了 1.78 上界。
     /// - 正确顺序（clamp → 护栏）：护栏最后施加，结果必然满足上限。
-    /// - 错误顺序（护栏 → clamp）：clamp 把 1.6 拉回 1.34，图片高度随即**超出上限** —— 护栏白做。
+    /// - 错误顺序（护栏 → clamp）：clamp 把 2.0 拉回 1.78，图片高度随即**超出上限** —— 护栏白做。
+    ///
+    /// ⚠️ 2026-09-11 上界由 1.34 放宽到 1.78 时，这里的构造值同步调过：
+    /// 原来的 1.6 现在**落在区间内**，clamp 不会动它，就再也演示不出换序的后果了。
     test('先 clamp 后护栏：结果必须满足高度上限', () {
       const width = 320.0;
-      const maxH = 200.0; // 320/200 = 1.6，已经越过 1.34 上界
+      const maxH = 160.0; // 320/160 = 2.0，已经越过 1.78 上界
 
       final correct = resolveFeedImageAspect(
           size: const ImageSize(3, 4), width: width, maxImageHeight: maxH);
       expect(width / correct, lessThanOrEqualTo(maxH + 0.001));
-      expect(correct, closeTo(1.6, 0.0001));
+      expect(correct, closeTo(2.0, 0.0001));
 
       // 错误顺序的等价演算：先套护栏、再 clamp
-      final wrongOrder = clampFeedRatio(1.6);
-      expect(wrongOrder, 1.34);
+      final wrongOrder = clampFeedRatio(2.0);
+      expect(wrongOrder, 1.78);
       expect(width / wrongOrder, greaterThan(maxH),
           reason: '这正是换序会造成的后果：图片区超出护栏上限');
     });
@@ -181,7 +187,7 @@ void main() {
           resolveFeedImageAspect(
               size: const ImageSize(3, 1), width: width, maxImageHeight: maxH);
       expect(tallest / placeholder, closeTo(1 / 0.75, 0.001)); // 最多变高约三成
-      expect(shortest / placeholder, closeTo(1 / 1.34, 0.001)); // 最多变矮约四分之一
+      expect(shortest / placeholder, closeTo(1 / 1.78, 0.001)); // 最多变矮约四成四
     });
 
     test('宽高非正的尺寸当作测不出来', () {

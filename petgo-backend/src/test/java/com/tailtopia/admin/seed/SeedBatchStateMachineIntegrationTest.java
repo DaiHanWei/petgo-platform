@@ -105,8 +105,8 @@ class SeedBatchStateMachineIntegrationTest extends ApiIntegrationTest {
         posts.save(com.tailtopia.content.domain.ContentPost.publish(author.getId(),
                 ContentType.DAILY, null, publishedMarker, List.of()));
 
-        // ① 公开 Feed
-        String feed = mvc.perform(get("/api/v1/content-posts")
+        // ① 公开 Feed —— 走 DAILY Tab（时间序）：ALL Tab 是推荐序，同库其它用例的帖会把正向对照帖挤出首页
+        String feed = mvc.perform(get("/api/v1/content-posts").param("category", "DAILY")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(author.getId())))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();

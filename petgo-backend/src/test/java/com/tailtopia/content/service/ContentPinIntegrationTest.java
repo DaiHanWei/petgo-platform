@@ -14,6 +14,7 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.schedule.ScheduleWindow;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,8 +39,11 @@ class ContentPinIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private ContentPostRepository posts;
 
-    private static final Instant START = Instant.parse("2026-09-01T03:00:00Z");
-    private static final Instant END = Instant.parse("2026-09-01T05:00:00Z");
+    // 🔴 相对时间：此前写死 2026-09-01，日期一过 terminateAt(now) 因「不得晚于结束时刻」恒 no-op，四个终止用例集体变红。
+    private static final Instant BASE = Instant.now().truncatedTo(ChronoUnit.HOURS).plus(30, ChronoUnit.DAYS);
+    private static final Instant START = BASE.plus(3, ChronoUnit.HOURS);
+    private static final Instant END = BASE.plus(5, ChronoUnit.HOURS);
+    private static final Instant MID = BASE.plus(4, ChronoUnit.HOURS);
 
     /** 每个用例用独立坑位名，避免同库历史数据串扰（L1 不回滚）。 */
     private String uniqueSlot() {
@@ -90,7 +94,7 @@ class ContentPinIntegrationTest extends ApiIntegrationTest {
         String slot = uniqueSlot();
         ContentPost post = savePost(newUser().getId());
         pinService.schedule(ContentPin.ofContent(slot, post.getId(), START, END));
-        Instant mid = Instant.parse("2026-09-01T04:00:00Z");
+        Instant mid = MID;
         assertThat(pins.findActiveOne(slot, mid)).isPresent();
 
         pinService.terminateForContent(post.getId(), mid);
@@ -109,7 +113,7 @@ class ContentPinIntegrationTest extends ApiIntegrationTest {
 
         assertThatThrownBy(() -> pinService.schedule(ContentPin.ofContent(
                 slot, savePost(author).getId(),
-                Instant.parse("2026-09-01T04:00:00Z"), Instant.parse("2026-09-01T06:00:00Z"))))
+                MID, END.plus(1, ChronoUnit.HOURS))))
                 .isInstanceOf(AppException.class);
     }
 
@@ -142,7 +146,7 @@ class ContentPinIntegrationTest extends ApiIntegrationTest {
         // 同一时间窗在另一个坑位上不算冲突
         pinService.schedule(ContentPin.ofContent(slotB, savePost(author).getId(), START, END));
 
-        Instant mid = Instant.parse("2026-09-01T04:00:00Z");
+        Instant mid = MID;
         assertThat(pins.findActiveOne(slotA, mid)).isPresent();
         assertThat(pins.findActiveOne(slotB, mid)).isPresent();
         assertThat(pins.findActiveOne(slotA, mid).get().getId())
@@ -215,9 +219,9 @@ class ContentPinIntegrationTest extends ApiIntegrationTest {
         ContentPost post = savePost(newUser().getId());
         pinService.schedule(ContentPin.ofContent(slot, post.getId(), START, END));
 
-        Instant first = Instant.parse("2026-09-01T03:30:00Z");
+        Instant first = START.plus(30, ChronoUnit.MINUTES);
         assertThat(pinService.terminateForContent(post.getId(), first)).isEqualTo(1);
-        assertThat(pinService.terminateForContent(post.getId(), Instant.parse("2026-09-01T04:30:00Z")))
+        assertThat(pinService.terminateForContent(post.getId(), MID.plus(30, ChronoUnit.MINUTES)))
                 .isEqualTo(0);
 
         assertThat(reload(slot).getTerminatedAt()).isEqualTo(first);

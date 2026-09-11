@@ -145,7 +145,7 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
         long actor = 828000L + SEQ.incrementAndGet();
         String csv = contentManage.exportCsv(actor, null, null, null, null, null, "oren", null);
 
-        assertThat(csv).startsWith("post_id,type,author_id,likes,created_at_wib,status,text");
+        assertThat(csv).startsWith("post_id,type,author_id,likes,views,viewers,created_at_wib,status,text");
         assertThat(csv).contains(String.valueOf(keep));
         assertThat(csv).doesNotContain("tips merawat anjing")
                 .as("🔴 筛选条件没带进导出 ⇒ 导出的表与屏幕上看到的不是同一份");
@@ -221,7 +221,7 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
         String csv = contentManage.exportCsv(828100L + SEQ.incrementAndGet(), null, null,
                 today, today, null, null, "liked");
 
-        assertThat(csv).startsWith("post_id,type,author_id,likes_in_range,");
+        assertThat(csv).startsWith("post_id,type,author_id,likes_in_range,views,viewers,");
         assertThat(csv).as("🔴 导出与屏幕口径不一致 ⇒ 两份表长得一样、数字对不上，"
                 + "运营不会想到是口径不同").contains(String.valueOf(p));
     }

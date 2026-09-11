@@ -10,7 +10,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -125,8 +124,10 @@ public class ContentPinService {
     }
 
     /** 某坑位当前生效中的排期；无则空。 */
-    // REQUIRES_NEW：同 FeedRecommendationService.page —— FeedService 对它 catch 降级，不能污染外层事务。
-    @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
+    // noRollbackFor：FeedService 对它 catch 降级；本方法自身抛错时不得把外层只读事务标成 rollback-only
+    // （否则降级查询跑完外层提交仍抛 UnexpectedRollbackException）。不用 REQUIRES_NEW —— 那会看不到
+    // 同事务内刚写入的顶置（集成测试即因此失败），且这里只有一条只读查询，无回滚可言。
+    @Transactional(readOnly = true, noRollbackFor = RuntimeException.class)
     public Optional<ContentPin> activePin(String slot, Instant now) {
         return pins.findActiveOne(slot, now);
     }
