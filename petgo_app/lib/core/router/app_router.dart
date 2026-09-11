@@ -55,6 +55,7 @@ import '../../features/profile/presentation/health_list_page.dart';
 import '../../features/profile/presentation/id_card_create_page.dart';
 import '../../features/profile/presentation/id_card_detail_page.dart';
 import '../../features/profile/presentation/id_card_page.dart';
+import '../../features/profile/presentation/pet_insights_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
 import '../../features/onboarding/presentation/splash_page.dart';
@@ -671,8 +672,24 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // 宠物档案编辑（Story 2.8）。两入口（档案 Tab 信息卡 /「我的」Tab）复用同一页。
       GoRoute(path: '/profile/edit', builder: (c, s) => const PetProfileEditPage()),
-      // 宠物身份证详情（Story 6.2 · FR-49B）。受控（/profile/ 前缀，游客被门控）。
-      GoRoute(path: '/profile/id-card', builder: (c, s) => const IdCardPage()),
+      // 「Know Your Pet」聚合页（V1.3.0 Story 5.1 · FR-65 · AD-A17）。
+      //
+      // 🔴 **落在 /profile/ 前缀下，自动继承游客门控**（AD-A17.5）。
+      // 它与下面的 /profile/pet-insights/* 子页**一律不得进 _controlledExactExceptions**
+      // —— 那等于为放行一个子页把安全默认反转，踩「安全规则层只升不降不可绕过」这条红线。
+      GoRoute(path: PetInsightsRoutes.hub, builder: (c, s) => const PetInsightsPage()),
+      // 宠物身份证详情（Story 6.2 · FR-49B）。V1.3.0 Story 5.1 整体平移到聚合页之下，
+      // 页面逻辑一字未改。
+      GoRoute(path: PetInsightsRoutes.idCard, builder: (c, s) => const IdCardPage()),
+      // 🔴 旧路径**保留为重定向，不得删除**（AD-A17.2）：站内两处跳转 + 潜在的历史通知深链，
+      // 断链是硬失败。
+      //
+      // ⚠️ 重定向发生在**门控之后**：顶层 redirect 先跑，游客在那里就被送回 /home，
+      // 根本走不到这条路由级 redirect —— 它因此不构成绕过门控的旁路（AD-A17.6）。
+      //
+      // ⚠️ 下面两条 `/profile/id-cards/...`（多卡子路由）**不受本次迁移影响**，
+      // 与本条只差一个字母。改动时**逐条改，禁止做前缀字符串替换**（AD-A17.7）。
+      GoRoute(path: '/profile/id-card', redirect: (c, s) => PetInsightsRoutes.idCard),
       // Story 6-7 多卡：建卡器（字面量在前，避免被 :id 吞）+ 单卡详情。
       GoRoute(path: '/profile/id-cards/create', builder: (c, s) => const IdCardCreatePage()),
       GoRoute(

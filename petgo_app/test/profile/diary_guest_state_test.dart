@@ -349,13 +349,16 @@ void main() {
       expect(edit.bottom < infoCard.top, isTrue);
     });
 
-    testWidgets('身份证卡沿用现网徽章图标，且不渲染编号（编号可空）', (tester) async {
+    testWidgets('综合入口卡有图标，且不渲染编号（编号可空）', (tester) async {
       await _pumpTall(tester, const DiaryGuestPage());
 
+      // V1.3.0 Story 5.1：这一格从「宠物身份证」改成了「Know Your Pet」聚合入口
+      // （身份证成为聚合页里的一张卡），图标随之由徽章换成爪印。
+      // key 不改 —— 入口在这一格的语义没变。
       expect(
           find.descendant(
               of: find.byKey(const ValueKey('diaryIdCardButton')),
-              matching: find.byIcon(Icons.badge_outlined)),
+              matching: find.byIcon(Icons.pets_outlined)),
           findsOneWidget);
       // 稿子里的 #00842 编号在**入口卡**上不实现（老档案未申请时为 null → 会多出未定义状态）。
       // 注意只约束入口卡子树：时间线里的类⑤ 证件卡条目按 A6 稿**是要显示编号的**，不能一起禁掉。

@@ -20,6 +20,7 @@ import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/card_link.dart';
 import '../domain/pet_profile.dart';
+import 'pet_insights_page.dart';
 import '../domain/share_service.dart';
 import '../domain/timeline_item.dart';
 import 'diary_guest_page.dart';
@@ -367,7 +368,10 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             milestoneUncelebrated: stats?.milestoneUncelebrated ?? 0,
             titleAction: _shareButton(),
             onEditProfile: widget.onEditProfile,
-            onOpenIdCard: () => context.push('/profile/id-card'),
+            // V1.3.0 Story 5.1：入口卡指向聚合页（身份证是其中一张卡）。
+            // ⚠️ 逐条改，**不做前缀字符串替换** —— `/profile/id-cards/*` 多卡子路由
+            // 与它只差一个字母，替换会误伤（AD-A17.7）。
+            onOpenIdCard: () => context.push(PetInsightsRoutes.hub),
             onOpenHealth: () => context.push('/profile/health'),
             onOpenMilestones: () => context.push('/profile/milestones'),
           ),
@@ -705,7 +709,9 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
       case TimelineItemType.idCardIssued:
         return () {
           report();
-          context.push('/profile/id-card');
+          // 时间线上的这一条说的是「发了一张身份证」，所以**直达身份证页**，
+          // 不绕聚合页 —— 点一条具体记录却落在一个功能列表上是走回头路。
+          context.push(PetInsightsRoutes.idCard);
         };
     }
   }

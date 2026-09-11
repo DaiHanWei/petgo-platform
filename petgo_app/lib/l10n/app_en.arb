@@ -2217,6 +2217,18 @@
     "description": "Diary header health entry subtitle when the pet has zero health records"
   },
   "idCardTitle": "Pet ID Card",
+  "petInsightsTitle": "Know Your Pet",
+  "@petInsightsTitle": {
+    "description": "V1.3.0 Story 5.1 · AC1/AC2：综合入口名。档案页头部入口卡标题与聚合页页面标题**同源**，用同一个 key。文案需求清单 §1 已定稿（ID ≤ 18 / EN ≤ 20 字符，超一行会撑高整行）"
+  },
+  "ageCardTitle": "Pet Age",
+  "@ageCardTitle": {
+    "description": "聚合页年龄换算卡标题。⚠️ 文案需求清单未覆盖此条，取直白说法，待产品确认"
+  },
+  "ageCardUnavailableForSpecies": "Available for cats & dogs",
+  "@ageCardUnavailableForSpecies": {
+    "description": "V1.3.0 Story 5.1 · AC7：非猫狗时年龄卡置灰的副文案。文案需求清单 §2 已定稿。🔴 用正面陈述适用范围，不用否定式（「不支持」像故障）；禁用「即将推出」——这批明确不做，写了是不兑现的承诺"
+  },
   "idCardLoadError": "Failed to load ID card. Please try again.",
   "idCardStyleKtp": "KTP",
   "idCardStylePaspor": "Passport",

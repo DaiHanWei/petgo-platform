@@ -189,12 +189,15 @@ class DiaryHeader extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: _entryCard(
-                // key 沿用（原为标题行的图标按钮）——入口语义未变，只是位置从标题行挪到入口区。
+                // key 沿用（原为标题行的图标按钮，后为身份证入口）——
+                // V1.3.0 Story 5.1 起它指向「Know Your Pet」聚合页，身份证是其中一张卡。
+                // key 不改：入口在这一格的语义没变，改了会白白弄断既有测试与埋点对照。
                 key: const ValueKey('diaryIdCardButton'),
                 onTap: onOpenIdCard,
-                icon: Icons.badge_outlined,
+                icon: Icons.pets_outlined,
                 iconColor: AppColors.mint,
-                title: l10n.idCardTitle,
+                title: l10n.petInsightsTitle,
+                // 副文案沿用现成 key，**不新写**（AC1）。
                 sub: l10n.timelineIdCardTapToView,
               ),
             ),
@@ -202,8 +205,10 @@ class DiaryHeader extends StatelessWidget {
         ),
       );
 
-  /// 入口卡（A3 `entry-card`）：白底 r14 + 柔阴影 + 纵向「图标 → 标题 → 副文案」。
-  /// 样式沿用现网健康记录卡（颜色 / 圆角 / 阴影 / 文案），只按稿改为半栏宽 + 纵向排布。
+  /// 入口卡（A3 `entry-card`）：白底 r14 + 柔阴影 + **横向**「左图标 → 右文字」。
+  ///
+  /// V1.3.0 Story 5.1 · AC1：由纵向改横向，与聚合页两张卡同一套样式 ——
+  /// 两处长得一样，用户才看得出「点进去是同一类东西」。
   Widget _entryCard({
     required Key key,
     required VoidCallback? onTap,
@@ -228,24 +233,36 @@ class DiaryHeader extends StatelessWidget {
             onTap: onTap,
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, size: 26, color: iconColor),
-                  const SizedBox(height: 7),
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          height: 1.25,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.ink)),
-                  const SizedBox(height: 3),
-                  Text(sub,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 10.5, height: 1.3, color: AppColors.textTertiary)),
+                  Icon(icon, size: 24, color: iconColor),
+                  const SizedBox(width: 9),
+                  // 文字块吃掉剩余宽度：入口名两语长度差得多（EN 13 / ID 14 字符），
+                  // 不给 Expanded 会在印尼语下把卡撑爆。
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 13,
+                                height: 1.25,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.ink)),
+                        const SizedBox(height: 3),
+                        Text(sub,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 10.5, height: 1.3, color: AppColors.textTertiary)),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
