@@ -899,3 +899,22 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ud-pet-name { margin: 0 0 2px; display: flex; gap: 6px; align-items: center; }
 .ud-danger { border-color: var(--danger); }
 .user-drawer .sticky-footer { bottom: 0; }
+
+/* ===== V1.3.0 Story 10.1：A7 Toko 退货审核 / A8 Toko 异常订单（模板 A 右栏） ===== */
+/* 五步进度条：复用 A6 的 .rf-flow，只把三列改成五列（窄屏塞不下就两列） */
+.rf-flow--5 { grid-template-columns: repeat(5, 1fr); }
+@media (max-width: 1279px) { .rf-flow--5 { grid-template-columns: repeat(2, 1fr); } }
+.rf-flow li.is-skip { opacity: .5; border-style: dashed; }
+/* 驳回步：必须与「完成」视觉上分得开——否则被驳回的单子读起来像「已批准，等寄回」 */
+.rf-flow li.is-rejected { border-color: var(--danger); box-shadow: inset 3px 0 0 var(--danger); }
+.sr-card, .se-card { margin-bottom: 12px; }
+.sr-card table, .se-card table { width: 100%; }
+.sr-grand th, .sr-grand td { border-top: 2px solid var(--line); font-weight: 700; }
+.sr-evidence { display: flex; flex-wrap: wrap; gap: 4px; }
+.sr-actions, .se-actions { display: flex; flex-direction: column; gap: 12px; }
+/* 质检两张表单视觉分离（D-15：原先四个输入框挤在一张卡里，运营看不出哪个框属于哪个操作） */
+.sr-inspect-form { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; }
+.sr-inspect-form h3 { margin: 0 0 6px; font-size: var(--fs-sm); }
+.sr-inspect-form .inp { width: 100%; box-sizing: border-box; }
+/* 已全额取消的订单行置灰（AC3：已部分取消行不可再取消） */
+tr.is-muted td { opacity: .55; }

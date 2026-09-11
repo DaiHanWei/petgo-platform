@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  A7 右栏五区（V1.3.0 Story 10.1 AC1 / AC2）—— 由退役的 shop-return-detail.html 整体迁入：
+    ① 五步进度条（申请 → 批准 → 寄回 → 质检 → 退款；当前步高亮，拒收 / 发货前取消跳过中间两步）
+    ② 退货行表（商品 / 数量 / 金额，整单退在表头标注）
+    ③ 退款试算卡 **8 行现状字段原样**（商品金额 / 去程运费退回 / PawCoin 段 / 现金段 / 平台责任补偿溢价 /
+       转 PawCoin 激励溢价 / 回程运费返还 / 总退回（含补偿）加粗）+ 打款去向（D-14：财务在这一页拿不到账号就没法打款）
+    ④ 用户说明 + 凭证图（🔴 私有桶 D-10，URL 由 Controller 现签短 TTL；data-lightbox 点开大图 —— D-13）
+    ⑤ 当前步操作区（仅渲染权限匹配段，其余只读并注明所缺权限名）+「查开封判例」新标签跳 B19
+  端点路径 / 参数 / @PreAuthorize **零变更**（AC2）；处置走 htmx，隐藏的 type / full 只是把当前筛选带回去，
+  好让 oob 的五页签计数与左栏口径一致（AC4「页签计数与页内同源」）。
+  🔴 质检照片落**公开桶**、用户凭证落**私有桶**，同一页两种图别混（见 AdminReturnController#uploadInspectionImage）。
+  upload-host: shop-returns.html
+    ↑ 本片段里的上传控件走 fetch，需要 CSRF meta；片段没有自己的 <head>，meta 来自把它 swap 进去的那张宿主页。
+      AdminTemplateStructureTest#everyFetchUploadPageDeclaresCsrfMeta 按这一行去查宿主页有没有那两个 meta ——
+      宿主改名或宿主漏了 meta，那条测试立刻红（不是豁免，是把检查转到该查的地方）。
+-->
+<body>
+<div th:fragment="detail" class="sr-detail" th:attr="data-return-token=${r.publicToken}">
+
+    <!-- ① 五步进度条 -->
+    <section class="card card-full sr-card">
+        <h2 th:text="#{admin.v130.shopReturns.card.flow}">流程</h2>
+        <ol class="rf-flow rf-flow--5">
+            <li th:each="s : ${steps}"
+                th:classappend="${s.state() == 'current'} ? 'is-current'
+                     : (${s.state() == 'done'} ? 'is-done'
+                     : (${s.state() == 'rejected'} ? 'is-rejected'
+                     : (${s.state() == 'skip'} ? 'is-skip' : '')))">
+                <strong th:text="#{'admin.v130.shopReturns.step.' + ${s.key()}}">步</strong>
+                <span class="badge badge-neutral" th:if="${s.state() == 'skip'}"
+                      th:text="#{admin.v130.shopReturns.step.skipped}">不适用</span>
+                <!-- 🔴 驳回必须自己有个标记：只靠「不是当前步就是完成步」的话，
+                     被驳回的单子会画成「批准 ✅ 某某 某时」，读起来就是「已批准，等寄回」。 -->
+                <span class="badge badge-danger" th:if="${s.state() == 'rejected'}"
+                      th:text="#{admin.v130.shopReturns.step.rejected}">已驳回</span>
+                <span class="muted" th:if="${s.actor() != null}" th:text="${s.actor()}">操作人</span>
+                <span class="muted" th:if="${s.at() != null}" th:text="${@adminTime.wib(s.at())}">时间</span>
+            </li>
+        </ol>
+        <div class="sum sum--grid2">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.returns.col.token}">申请编号</div>
+                <div class="sum-value rv-small" th:text="${r.publicToken}">tok</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.token}">订单号</div>
+                <!-- ⚠️ 去订单页的入口必须留着（退役的 shop-return-detail.html 一直有）：
+                     审核时要看收件地址与物流才判得了「拒收」是不是真的。新标签打开，不打断本页处置。
+                     Story 10.2 把订单详情整页退役时，这里改成 ?open=<token> 深链
+                     —— 届时 AdminRetiredRoutesStaticTest 的带参残留名单会主动报出这一处。 -->
+                <div class="sum-value rv-small">
+                    <a th:href="@{/admin/shop/orders/{t}(t=${order.publicToken})}" target="_blank"
+                       rel="noopener" th:text="${order.publicToken}">ord</a></div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.status}">状态</div>
+                <div class="sum-value rv-small" th:text="#{'admin.v130.shopReturns.status.' + ${r.status}}">状态</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.returns.col.type}">退货类型</div>
+                <div class="sum-value rv-small" th:text="#{'admin.v130.shopReturns.type.' + ${r.returnType}}">类型</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.returns.col.returnShip}">回程运费</div>
+                <div class="sum-value rv-small" th:text="${r.returnShipBearer}">PLATFORM</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.returns.col.outbound}">去程运费退回</div>
+                <div class="sum-value rv-small"
+                     th:text="${r.outboundFeeRefundable} ? #{admin.common.yes} : #{admin.common.no}">否</div></div>
+        </div>
+        <p class="hint" th:if="${r.rejectReason != null}"
+           th:text="#{admin.shop.returns.col.rejectReason} + ' · ' + ${r.rejectReason}">驳回原因</p>
+        <p class="hint" th:if="${r.rejectDisposal != null}"
+           th:text="#{admin.shop.returns.col.disposal} + ' · ' + #{'admin.shop.returns.disposal.' + ${r.rejectDisposal}}
+                    + (${r.returnShipBackTrackingNo} != null ? ' · ' + ${r.returnShipBackTrackingNo} : '')">商品处置</p>
+    </section>
+
+    <!-- ② 退货行表 -->
+    <section class="card card-full sr-card">
+        <h2>
+            <span th:text="#{admin.shop.returns.section.lines}">退货行</span>
+            <span class="badge badge-warn" th:if="${r.fullReturn}"
+                  th:text="#{admin.v130.shopReturns.fullReturn}">整单退</span>
+        </h2>
+        <table>
+            <thead><tr>
+                <th th:text="#{admin.shop.col.name}">商品</th>
+                <th th:text="#{admin.shop.inventory.col.qty}">数量</th>
+                <th th:text="#{admin.shop.order.col.lineTotal}">金额</th>
+            </tr></thead>
+            <tbody>
+            <tr th:each="l : ${lines}">
+                <td th:text="${lineNames.get(l.id)}">Produk</td>
+                <td th:text="${l.qty}">1</td>
+                <td th:text="${#numbers.formatInteger(l.lineRefundAmount, 0, 'COMMA')}">100.000</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- ③ 退款试算卡：🔴 8 行字段原样（5.5 AC：溢价金额与触发依据要能事后审计） -->
+    <section class="card card-full sr-card" th:if="${quote != null}">
+        <h2 th:text="#{admin.shop.returns.section.quote}">退款试算</h2>
+        <p class="hint" th:text="#{admin.shop.returns.quote.hint}">两段拆分按整数累计法计算。</p>
+        <table>
+            <tr><th th:text="#{admin.shop.returns.quote.goods}">商品金额</th>
+                <td th:text="${#numbers.formatInteger(quote.goodsAmount, 0, 'COMMA')}">0</td></tr>
+            <tr><th th:text="#{admin.shop.returns.quote.outbound}">去程运费退回</th>
+                <td th:text="${#numbers.formatInteger(quote.outboundFeeRefund, 0, 'COMMA')}">0</td></tr>
+            <tr><th th:text="#{admin.shop.returns.quote.coin}">PawCoin 段</th>
+                <td th:text="${#numbers.formatInteger(quote.coinRefund, 0, 'COMMA')}">0</td></tr>
+            <tr><th th:text="#{admin.shop.returns.quote.cash}">现金段</th>
+                <td th:text="${#numbers.formatInteger(quote.cashRefund, 0, 'COMMA')}">0</td></tr>
+            <tr><th th:text="#{admin.shop.returns.quote.compensation}">平台责任补偿溢价</th>
+                <td><span th:text="${#numbers.formatInteger(quote.compensationPremium, 0, 'COMMA')}">0</span>
+                    <span class="hint" th:if="${r.returnType.platformFault}"
+                          th:text="' · ' + #{admin.shop.returns.quote.compensationWhy}"></span></td></tr>
+            <tr><th th:text="#{admin.shop.returns.quote.incentive}">转 PawCoin 激励溢价</th>
+                <td th:text="${#numbers.formatInteger(quote.incentivePremium, 0, 'COMMA')}">0</td></tr>
+            <tr><th th:text="#{admin.shop.returns.quote.shipback}">回程运费返还</th>
+                <td th:text="${#numbers.formatInteger(quote.shipbackReimbursement, 0, 'COMMA')}">0</td></tr>
+            <tr class="sr-grand"><th th:text="#{admin.shop.returns.quote.grand}">总退回（含补偿）</th>
+                <td><b th:text="${#numbers.formatInteger(quote.grandTotal(), 0, 'COMMA')}">0</b></td></tr>
+        </table>
+        <!-- 🔴 D-14：现金段去向决定「要不要人工打款」，打款账户决定「财务能不能执行」。 -->
+        <div class="sum sum--grid2">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.returns.col.cashDestination}">现金段去向</div>
+                <div class="sum-value rv-small"><span th:text="${r.cashDestination} ?: '—'">—</span>
+                    <span class="hint" th:if="${r.cashDestination != null and r.cashDestination.name() == 'TO_BANK'}"
+                          th:text="' · ' + #{admin.shop.returns.payout.needsManual}"></span></div></div>
+            <div class="sum-item" th:if="${r.cashDestination != null and r.cashDestination.name() == 'TO_BANK'}">
+                <div class="sum-label" th:text="#{admin.shop.returns.col.payout}">打款账户</div>
+                <div class="sum-value rv-small">
+                    <b th:text="${r.payoutChannel} ?: '—'">—</b>
+                    <span th:text="' · ' + (${r.payoutAccount} ?: '—')">-</span>
+                    <span th:text="' · ' + (${r.payoutAccountHolder} ?: '—')">-</span>
+                    <span class="hint" th:if="${r.payoutChannelFee != null}"
+                          th:text="' · ' + #{admin.shop.returns.payout.channelFee} + ' ' + ${r.payoutChannelFee}"></span>
+                </div></div>
+        </div>
+    </section>
+
+    <!-- ④ 用户说明 + 凭证图（私有桶现签短 TTL URL） -->
+    <section class="card card-full sr-card">
+        <h2 th:text="#{admin.v130.shopReturns.card.user}">用户说明与凭证</h2>
+        <p th:text="${r.reasonNote} ?: '—'">—</p>
+        <div class="sr-evidence">
+            <span class="muted" th:if="${#lists.isEmpty(evidenceUrls)}"
+                  th:text="#{admin.shop.returns.evidence.none}">未上传</span>
+            <img th:each="url : ${evidenceUrls}" th:src="${url}" data-lightbox alt="evidence"
+                 style="max-height:120px;max-width:160px;margin:2px;cursor:zoom-in"/>
+        </div>
+        <th:block th:if="${!#lists.isEmpty(inspectionPhotoUrls)}">
+            <h3 th:text="#{admin.shop.returns.inspect.photosLabel}">质检照片</h3>
+            <div class="sr-evidence">
+                <img th:each="url : ${inspectionPhotoUrls}" th:src="${url}" data-lightbox alt="inspection"
+                     style="max-height:120px;max-width:160px;margin:2px;cursor:zoom-in"/>
+            </div>
+        </th:block>
+    </section>
+
+    <!-- ⑤ 当前步操作区 -->
+    <section class="wb-actions sr-actions">
+        <p class="hint">
+            <a th:href="@{/admin/shop/return-precedents}" target="_blank" rel="noopener"
+               th:text="#{admin.v130.shopReturns.precedents.link}">查开封判例</a>
+        </p>
+
+        <!-- 审核段（🔴 没有运费归属输入框：那是自动得出的，不是可调项 —— C-12） -->
+        <th:block th:if="${r.status.name() == 'PENDING_REVIEW'}">
+            <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.approve')" class="rv-action-group">
+                <form th:attr="hx-post=@{/admin/shop/returns/{t}/approve(t=${r.publicToken})}"
+                      hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline">
+                    <input type="hidden" name="type" th:value="${type}"/>
+                    <input type="hidden" name="full" th:value="${full}"/>
+                    <button type="submit" class="btn btn-primary" th:text="#{admin.shop.returns.btn.approve}">批准退货</button>
+                </form>
+                <form th:attr="hx-post=@{/admin/shop/returns/{t}/reject(t=${r.publicToken})}"
+                      hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-requires-form>
+                    <input type="hidden" name="type" th:value="${type}"/>
+                    <input type="hidden" name="full" th:value="${full}"/>
+                    <input type="text" name="reason" class="inp" maxlength="500" required data-requires-text
+                           th:placeholder="#{admin.shop.returns.reject.placeholder}"/>
+                    <button type="submit" class="btn btn-danger" disabled data-requires-target
+                            th:text="#{admin.shop.returns.btn.reject}">驳回</button>
+                </form>
+            </div>
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('refund.approve'))">
+                <button type="button" class="btn btn-primary" disabled
+                        th:title="#{admin.v130.err.forbidden(#{perm.refund.approve})}"
+                        th:text="#{admin.shop.returns.btn.approve}">批准退货</button>
+                <span th:text="#{admin.v130.err.forbidden(#{perm.refund.approve})}">需要权限</span>
+            </p>
+        </th:block>
+
+        <!-- 寄回登记段（S-7：用户自寄，不做上门取件） -->
+        <th:block th:if="${r.status.name() == 'AWAIT_SHIPBACK'}">
+            <p class="hint" th:text="#{admin.shop.returns.shipback.hint}">用户自寄到退货收件地址。</p>
+            <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.approve')">
+                <form th:attr="hx-post=@{/admin/shop/returns/{t}/shipback(t=${r.publicToken})}"
+                      hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-requires-form>
+                    <input type="hidden" name="type" th:value="${type}"/>
+                    <input type="hidden" name="full" th:value="${full}"/>
+                    <label class="field" for="sr-carrier" th:text="#{admin.v130.shopReturns.shipback.carrier}">承运商</label>
+                    <input id="sr-carrier" type="text" name="carrier" class="inp" required maxlength="16"
+                           data-requires-text th:placeholder="#{admin.v130.shopReturns.shipback.carrierPlaceholder}"/>
+                    <label class="field" for="sr-tracking" th:text="#{admin.v130.shopReturns.shipback.trackingNo}">运单号</label>
+                    <input id="sr-tracking" type="text" name="trackingNo" class="inp" required maxlength="64"
+                           data-requires-text/>
+                    <label class="field" for="sr-fee" th:text="#{admin.v130.shopReturns.shipback.fee}">回程运费</label>
+                    <input id="sr-fee" type="number" name="fee" class="inp" min="0"/>
+                    <button type="submit" class="btn btn-primary" disabled data-requires-target
+                            th:text="#{admin.shop.returns.btn.shipback}">登记寄回</button>
+                </form>
+            </div>
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('refund.approve'))">
+                <button type="button" class="btn btn-primary" disabled
+                        th:title="#{admin.v130.err.forbidden(#{perm.refund.approve})}"
+                        th:text="#{admin.shop.returns.btn.shipback}">登记寄回</button>
+                <span th:text="#{admin.v130.err.forbidden(#{perm.refund.approve})}">需要权限</span>
+            </p>
+        </th:block>
+
+        <!-- 质检段：通过并入库 / 不通过（🔴 不通过必须选处置方式，S-10 不留悬空） -->
+        <th:block th:if="${r.status.name() == 'INSPECTING'}">
+            <p class="hint" th:text="#{admin.shop.returns.inspect.hint}">只有质检通过的退货才进入可售库存。</p>
+            <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.approve')">
+                <form th:attr="hx-post=@{/admin/shop/returns/{t}/inspect-pass(t=${r.publicToken})}"
+                      hx-target=".wb-detail-body" hx-swap="innerHTML" class="sr-inspect-form">
+                    <h3 th:text="#{admin.shop.returns.inspect.passTitle}">质检通过</h3>
+                    <input type="hidden" name="type" th:value="${type}"/>
+                    <input type="hidden" name="full" th:value="${full}"/>
+                    <label class="field" for="sr-pass-note" th:text="#{admin.shop.returns.inspect.noteLabel}">质检备注</label>
+                    <input id="sr-pass-note" type="text" name="note" class="inp" maxlength="500"
+                           th:placeholder="#{admin.shop.returns.inspect.notePassPlaceholder}"/>
+                    <div th:replace="~{admin/fragments/shop-return-panel :: inspectUploader('sr-pass-photos')}"></div>
+                    <button type="submit" class="btn btn-primary"
+                            th:text="#{admin.shop.returns.btn.inspectPass}">质检通过并入库</button>
+                </form>
+                <form th:attr="hx-post=@{/admin/shop/returns/{t}/inspect-fail(t=${r.publicToken})}"
+                      hx-target=".wb-detail-body" hx-swap="innerHTML" class="sr-inspect-form" data-requires-form>
+                    <h3 th:text="#{admin.shop.returns.inspect.failTitle}">质检不通过</h3>
+                    <input type="hidden" name="type" th:value="${type}"/>
+                    <input type="hidden" name="full" th:value="${full}"/>
+                    <label class="field s-req" for="sr-fail-note" th:text="#{admin.shop.returns.inspect.failNoteLabel}">不通过原因</label>
+                    <input id="sr-fail-note" type="text" name="note" class="inp" required maxlength="500"
+                           data-requires-text th:placeholder="#{admin.shop.returns.inspect.reasonPlaceholder}"/>
+                    <div th:replace="~{admin/fragments/shop-return-panel :: inspectUploader('sr-fail-photos')}"></div>
+                    <!-- 🔴 D-15 第 3 条：处置方式不能铺枚举名 —— 退回用户 / 报损核销的成本归属差别很大。 -->
+                    <label class="field s-req" for="sr-fail-disposal" th:text="#{admin.shop.returns.col.disposal}">商品处置</label>
+                    <select id="sr-fail-disposal" name="disposal" class="inp" required data-requires-text>
+                        <option value="" th:text="#{admin.shop.returns.disposal.choose}">选择处置方式</option>
+                        <option th:each="d : ${disposals}" th:value="${d}"
+                                th:text="#{'admin.shop.returns.disposal.' + ${d}}">RETURN_TO_USER</option>
+                    </select>
+                    <label class="field" for="sr-fail-tracking" th:text="#{admin.shop.returns.disposal.trackingLabel}">回寄运单号</label>
+                    <input id="sr-fail-tracking" type="text" name="shipBackTrackingNo" class="inp" maxlength="64"
+                           th:placeholder="#{admin.shop.returns.disposal.trackingPlaceholder}"/>
+                    <p class="hint" th:text="#{admin.shop.returns.disposal.trackingHint}">选「退回用户」时填。</p>
+                    <button type="submit" class="btn btn-danger" disabled data-requires-target
+                            th:text="#{admin.shop.returns.btn.inspectFail}">质检不通过</button>
+                </form>
+            </div>
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('refund.approve'))">
+                <button type="button" class="btn btn-primary" disabled
+                        th:title="#{admin.v130.err.forbidden(#{perm.refund.approve})}"
+                        th:text="#{admin.shop.returns.btn.inspectPass}">质检通过并入库</button>
+                <span th:text="#{admin.v130.err.forbidden(#{perm.refund.approve})}">需要权限</span>
+            </p>
+        </th:block>
+
+        <!-- 退款执行段（财务 refund.payout；data-confirm 复述总退回金额） -->
+        <!-- grand 先算好再进 #{...(...)}：在消息参数位置里写整个三元表达式是容易踩解析坑的写法。
+             quote 为 null 的情形是真实存在的（Controller 里 quote() 抛 AppException 时置 null）。 -->
+        <th:block th:if="${r.status.name() == 'REFUNDING' or r.status.name() == 'REFUND_FAILED'}"
+                  th:with="grand=${quote != null} ? ${#numbers.formatInteger(quote.grandTotal(), 0, 'COMMA')} : '—'">
+            <p class="hint err" th:if="${r.status.name() == 'REFUND_FAILED' and r.refundFailureNote != null}"
+               th:text="${r.refundFailureNote}">上次失败原因</p>
+            <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('refund.payout')">
+                <form th:attr="hx-post=@{/admin/shop/returns/{t}/refund(t=${r.publicToken})}"
+                      hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline">
+                    <input type="hidden" name="type" th:value="${type}"/>
+                    <input type="hidden" name="full" th:value="${full}"/>
+                    <button type="submit" class="btn btn-primary" data-confirm-button
+                            th:attr="data-confirm=#{admin.v130.shopReturns.confirm.refund(${grand})}"
+                            th:text="#{admin.shop.returns.btn.refund}">执行退款</button>
+                </form>
+            </div>
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('refund.payout'))">
+                <button type="button" class="btn btn-primary" disabled
+                        th:title="#{admin.v130.err.forbidden(#{perm.refund.payout})}"
+                        th:text="#{admin.shop.returns.btn.refund}">执行退款</button>
+                <span th:text="#{admin.v130.err.forbidden(#{perm.refund.payout})}">需要权限</span>
+            </p>
+        </th:block>
+
+        <p class="muted" th:if="${r.status.name() == 'REFUNDED' or r.status.name() == 'CLOSED'
+                or r.status.name() == 'REJECTED' or r.status.name() == 'WITHDRAWN'}"
+           th:text="#{admin.v130.shopReturns.readonly.terminal}">已完结，只读</p>
+    </section>
+</div>
+
+<!--
+  质检照片上传控件（两处共用一份：通过 / 不通过各一张表单）。
+  🔴 落**公开桶**（2026-09-02 产品拍板），与上面用户凭证的私有桶不是一回事。
+  data-mode=objectkey + 平铺模式：一组等价的验货照全写进同一个 photoKeys（逗号分隔），没有"封面"。
+-->
+<div th:fragment="inspectUploader(fieldId)" class="s-ctl">
+    <label class="field" th:text="#{admin.shop.returns.inspect.photosLabel}">质检照片</label>
+    <div data-seed-uploader data-mode="objectkey" th:attr="data-field-keys=${fieldId},
+                  data-upload-url=@{/admin/shop/returns/images},
+                  data-msg-cover=#{admin.seed.images.cover},
+                  data-msg-limit=#{admin.shop.form.images.limit},
+                  data-msg-remove=#{admin.seed.images.remove},
+                  data-msg-uploading=#{admin.seed.images.uploading},
+                  data-msg-failed=#{admin.seed.upload.failed},
+                  data-msg-expired=#{admin.seed.upload.sessionExpired},
+                  data-max-bytes=${uploadMaxBytes},
+                  data-msg-too-large=#{admin.seed.upload.tooLarge(${uploadMaxMb})}">
+        <input type="file" data-seed-file accept="image/jpeg,image/png,image/webp" multiple/>
+        <p class="hint" th:text="#{admin.shop.returns.inspect.photosHint}">可多选、可 Ctrl+V 粘贴。</p>
+        <p class="hint" data-seed-status></p>
+        <div class="seed-thumbs" data-seed-thumbs></div>
+    </div>
+    <input type="hidden" th:id="${fieldId}" name="photoKeys"/>
+</div>
+</body>
+</html>

@@ -1,86 +1,58 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
-<!-- 退货审核队列（V1.4.0 Story 5.3，AB-12A）。🔒 列表不渲染收件人 PII。 -->
+<!--
+  A7 Toko 退货审核（V1.3.0 Story 10.1，模板 A · tpl-a-workbench；原 V1.4.0 Story 5.3 列表 + 独立详情页两页合一）。
+  五页签：待审核 / 待寄回 / 待质检 / 待退款 / 已完结·已驳回（公共片段 tpl-a-state-tabs，先进先出，计数与队列同源）；
+  筛选：退货类型 · 整单退；右栏五区由 fragments/shop-return-panel.html 渲染。
+  七个写端点路径 / 参数 / 权限**零变更**（AC2）；`GET /admin/shop/returns/{token}` 整页退役并入右栏，
+  旧地址 404、不做跳转（AC5 / D-23）。🔒 队列不渲染收件人 PII。无键盘 ↑/↓（D-14）。
+-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.shop.returns.title}">退货审核 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-workbench.js}"></script>
+    <!-- 🔴 质检照片上传走 fetch，而 /admin/** 那条过滤链**保留 CSRF** —— 少了这两个 meta 就是 403，
+         且会被误读成「权限不够」（D-8 的原形）。⚠️ 不能挪到 layout.html：业务页用 th:replace 只换 body 里那个 div，
+         各页保留自己的 <head>。有 L0 护栏盯着这条。 -->
+    <meta name="_csrf" th:content="${_csrf?.token}"/>
+    <meta name="_csrf_header" th:content="${_csrf?.headerName}"/>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <div class="s-page-head">
-            <div class="s-title-wrap">
-                <h1 th:text="#{admin.shop.returns.title}">退货审核</h1>
-                <p class="s-sub" th:text="#{admin.shop.returns.hint}">「是否批准退货」与「运费由谁承担」是两件事。运费归属由退货类型与勾选范围自动得出，没有手工开关——手工可调等于打开凑单-退货套利的口子。</p>
-            </div>
-        </div>
-        <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
-        <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
+        <div class="wb-title-row"><h1 th:text="#{admin.shop.returns.title}">退货审核</h1></div>
+        <p class="muted" th:text="#{admin.shop.returns.hint}">「是否批准退货」与「运费由谁承担」是两件事。</p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
-        <div class="s-card">
-            <div class="s-card-body">
-                <form method="get" th:action="@{/admin/shop/returns}" class="filters">
-            <label th:text="#{admin.shop.orders.col.status}">状态</label>
-            <select name="status">
-                <option value="" th:text="#{admin.shop.orders.filter.all}">全部</option>
-                <option th:each="s : ${statuses}" th:value="${s}" th:text="${s}"
-                        th:selected="${s.name() == status}">PENDING_REVIEW</option>
-            </select>
-            <button type="submit" th:text="#{admin.common.filter}">筛选</button>
-        </form>
-            </div>
-        </div>
-
-        <div class="s-card">
-            <!-- 状态 Tab（同订单页）。退货审核是按状态推进的流水作业，
-                 「待审核」有多少条是运营开工第一眼要看的。 -->
-            <div class="s-tabs">
-                <a th:href="@{/admin/shop/returns}"
-                   th:classappend="${#strings.isEmpty(status)} ? 'active'"
-                   th:text="#{admin.shop.orders.filter.all}">全部</a>
-                <a th:each="st : ${statuses}"
-                   th:href="@{/admin/shop/returns(status=${st})}"
-                   th:classappend="${st.name() == status} ? 'active'"
-                   th:text="${st}">PENDING_REVIEW</a>
-            </div>
-        <table>
-            <thead>
-            <tr>
-                <th th:text="#{admin.shop.returns.col.token}">申请编号</th>
-                <th th:text="#{admin.shop.orders.col.token}">订单号</th>
-                <th th:text="#{admin.shop.returns.col.type}">退货类型</th>
-                <th th:text="#{admin.shop.returns.col.lines}">退货行数</th>
-                <th th:text="#{admin.shop.returns.col.full}">整单退</th>
-                <th th:text="#{admin.shop.returns.col.returnShip}">回程运费</th>
-                <th th:text="#{admin.shop.returns.col.outbound}">去程运费退回</th>
-                <th th:text="#{admin.shop.orders.col.status}">状态</th>
-                <th th:text="#{admin.shop.orders.col.createdAt}">申请时间</th>
-                <th th:text="#{admin.common.action}">操作</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="r : ${rows}">
-                <td th:text="${r.publicToken}">abc</td>
-                <td th:text="${orderTokens.get(r.publicToken)}">ord</td>
-                <td th:text="${r.returnType}">QUALITY_ISSUE</td>
-                <td th:text="${lineCounts.get(r.publicToken)}">1</td>
-                <td th:text="${r.fullReturn}">false</td>
-                <td th:text="${r.returnShipBearer}">PLATFORM</td>
-                <td th:text="${r.outboundFeeRefundable}">false</td>
-                <td th:text="${r.status}">PENDING_REVIEW</td>
-                <td th:text="${@adminTime.wib(r.createdAt)}">-</td>
-                <td>
-                    <a th:href="@{/admin/shop/returns/{t}(t=${r.publicToken})}"
-                       th:text="#{admin.common.detail}">详情</a>
-                </td>
-            </tr>
-            <tr th:if="${#lists.isEmpty(rows)}">
-                <td colspan="10" th:text="#{admin.shop.returns.empty}">暂无退货申请。</td>
-            </tr>
-            </tbody>
-        </table>
+        <div th:replace="~{admin/fragments/tpl-a-workbench :: workbench(~{::sr-tabs}, ~{::sr-filters}, ~{::sr-queue}, ~{::sr-detail}, ~{::sr-actions})}">
+            <div th:fragment="sr-tabs" th:replace="~{admin/fragments/tpl-a-state-tabs :: tabs(${stateTabs})}"></div>
+            <!-- 筛选行 + 深链宿主：?open=<token> → admin-workbench.js 在 DOMContentLoaded 选中该行 / 直接拉右栏 -->
+            <form th:fragment="sr-filters" class="filter-bar" th:action="@{/admin/shop/returns}" method="get" data-autosubmit
+                  th:attr="data-open=${open},data-open-url=${open != null} ? @{/admin/shop/returns/{t}(t=${open},type=${type},full=${full})} : null">
+                <input type="hidden" name="tab" th:value="${tab}"/>
+                <label><span th:text="#{admin.shop.returns.col.type}">退货类型</span>
+                    <select name="type" class="sel">
+                        <option value="" th:text="#{admin.shop.orders.filter.all}">全部</option>
+                        <option th:each="t : ${types}" th:value="${t}" th:selected="${t.name() == type}"
+                                th:text="#{'admin.v130.shopReturns.type.' + ${t}}">QUALITY_ISSUE</option>
+                    </select>
+                </label>
+                <label><span th:text="#{admin.shop.returns.col.full}">整单退</span>
+                    <select name="full" class="sel">
+                        <option value="" th:text="#{admin.shop.orders.filter.all}">全部</option>
+                        <option value="true" th:selected="${full == 'true'}" th:text="#{admin.common.yes}">是</option>
+                        <option value="false" th:selected="${full == 'false'}" th:text="#{admin.common.no}">否</option>
+                    </select>
+                </label>
+                <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.common.filter}">筛选</button>
+            </form>
+            <div th:fragment="sr-queue" th:replace="~{admin/fragments/shop-return-queue :: list}"></div>
+            <div th:fragment="sr-detail" th:replace="~{admin/fragments/tpl-a-workbench :: detail-empty}"></div>
+            <div th:fragment="sr-actions"><span class="muted" th:text="#{admin.v130.review.actions.hint}">操作区随所选单据渲染</span></div>
         </div>
     </div>
 </div>

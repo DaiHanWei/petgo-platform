@@ -36,18 +36,25 @@ class AdminRetiredRoutesStaticTest {
     private static final Path SRC = Path.of("src", "main", "java");
 
     /**
-     * 本版退役的整页模板（Story 11.3 AC1 的表，去掉两条商城的）。
+     * 本版退役的整页模板（Story 11.3 AC1 的表 + Epic 10 陆续补进来的商城页）。
      *
-     * <p>⚠️ {@code shop-order-detail} / {@code shop-return-detail} **不在这里**：
-     * 它们归 Story 10.1 / 10.2，而 **Epic 10 前置是 v1.4.0 电商线合入（AD-12），本轮未执行**。
-     * 把它们写进来，这条测试从落地起就是红的 —— 一条从来没绿过的护栏，等于没有。
-     * Epic 10 落地时再加进来（届时 Story 11.1 的白名单里已经给了预授权）。
+     * <p>{@code shop-return-detail} 于 Story 10.1 落地时加入（五区并进 A7 工作台右栏）。
+     *
+     * <p>⚠️ {@code shop-order-detail} **还不在这里**：它归 Story 10.2，尚未执行；
+     * 提前写进来这条测试就从落地起是红的 —— 一条从来没绿过的护栏等于没有。
+     *
+     * <p>🔴 注意 {@code shop-return-detail} <b>只进这份模板名单，不进 {@link #RETIRED_PARAM_HREFS}</b>：
+     * Story 10.1 T1 明确「不许新开 {@code /{token}/detail} 端点」，于是右栏片段<b>复用了
+     * {@code GET /admin/shop/returns/{token}} 这同一条 mapping</b>（htmx 请求返片段、直达 404）。
+     * 把 {@code /admin/shop/returns/} 写进带参残留名单的话，队列行那句合法的
+     * {@code hx-get=@{/admin/shop/returns/{t}(...)}} 会被判成死链 —— 报的是自己刚建的正路。
+     * 「直达返 404」这一条由 {@code AdminReturnEndpointIntegrationTest} 在 L1 钉住。
      */
     private static final List<String> RETIRED_TEMPLATES = List.of(
             "content-detail", "user-detail", "consult-order-detail", "ai-order-detail",
             "anomaly-detail", "refund-detail", "support-ticket-detail",
             "vet-edit", "vet-online", "vet-qualification", "vet-ratings",
-            "ratings", "reports", "content-schedules");
+            "ratings", "reports", "content-schedules", "shop-return-detail");
 
     /**
      * 退役 GET 路由在模板里的**跳转字面量**。

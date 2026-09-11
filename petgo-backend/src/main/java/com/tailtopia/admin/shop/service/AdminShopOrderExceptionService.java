@@ -182,11 +182,56 @@ public class AdminShopOrderExceptionService {
      */
     @Transactional(readOnly = true)
     public List<ShopOrder> exceptionCandidates(int limit) {
-        return orders.findByStatusOrderByCreatedAtDescIdDesc(ShopOrderStatus.PENDING_SHIPMENT,
+        // V1.3.0 Story 10.1 AC3：工作台左栏**先进先出**（时间升序）——积压最久的那一单最该先处置。
+        return orders.findByStatusOrderByCreatedAtAscIdAsc(ShopOrderStatus.PENDING_SHIPMENT,
                         org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit)))
                 .stream()
                 .filter(this::hasInsufficientStock)
                 .toList();
+    }
+
+    /**
+     * 某一单还在不在候选集里（V1.3.0 Story 10.1）。
+     *
+     * <p>🔴 <b>本页是实时计算的候选清单，不是带状态字段的工单表</b> —— 处置完那一单就自然离开，
+     * 没有「已处理」这个可查询的集合（这正是 A8 只有一个页签的原因，见 story T0 重核 ③）。
+     * 处置后要判断「这条该留在左栏还是消失」，只能重算一次。
+     */
+    @Transactional(readOnly = true)
+    public boolean isCandidate(String orderToken) {
+        return orders.findByPublicToken(orderToken)
+                .filter(o -> o.getStatus() == ShopOrderStatus.PENDING_SHIPMENT)
+                .map(this::hasInsufficientStock)
+                .orElse(false);
+    }
+
+    /**
+     * 一行的库存现状（V1.3.0 Story 10.1 AC3 ①「异常原因说明卡」）。
+     *
+     * @param insufficient 这一行发不出去。判据见 {@link #hasInsufficientStock} 的注释
+     */
+    public record LineStock(long lineId, long actual, long locked, int needed, boolean insufficient) {
+    }
+
+    /**
+     * 订单各行的库存现状（只读，供说明卡与行表标注）。
+     *
+     * <p>🔴 <b>这是缺货判据的唯一实现</b>：{@link #hasInsufficientStock} 也走它
+     * （{@code anyMatch(LineStock::insufficient)}）。两处各写一份的话，
+     * 以后给判据加一项（比如扣掉在途 / 预留量）只改一处，就会出现
+     * 「左栏不再列这一单，右栏却照打缺货红标」——而且改动者不会有任何提示。
+     */
+    @Transactional(readOnly = true)
+    public List<LineStock> lineStocks(ShopOrder order) {
+        List<LineStock> out = new java.util.ArrayList<>();
+        for (ShopOrderLine line : orderLines.findByOrderIdOrderByIdAsc(order.getId())) {
+            var row = inventory.findBySkuId(line.getSkuId()).orElse(null);
+            long actual = row == null ? 0L : row.getActual();
+            long locked = row == null ? 0L : row.getLocked();
+            out.add(new LineStock(line.getId(), actual, locked, line.getQty(),
+                    row == null || actual < locked || actual < line.getQty()));
+        }
+        return List.copyOf(out);
     }
 
     /**
@@ -197,15 +242,8 @@ public class AdminShopOrderExceptionService {
      * 通常仍是正数。用 {@code actual < 0} 判会漏掉绝大多数真实超卖。
      */
     private boolean hasInsufficientStock(ShopOrder order) {
-        for (ShopOrderLine line : orderLines.findByOrderIdOrderByIdAsc(order.getId())) {
-            boolean short0 = inventory.findBySkuId(line.getSkuId())
-                    .map(row -> row.getActual() < row.getLocked() || row.getActual() < line.getQty())
-                    .orElse(true);
-            if (short0) {
-                return true;
-            }
-        }
-        return false;
+        // ⚠️ 判据只在 lineStocks() 里写一次（V1.3.0 Story 10.1）：这里曾经是同一段逻辑的第二份抄写。
+        return lineStocks(order).stream().anyMatch(LineStock::insufficient);
     }
 
     // ---------- 内部 ----------

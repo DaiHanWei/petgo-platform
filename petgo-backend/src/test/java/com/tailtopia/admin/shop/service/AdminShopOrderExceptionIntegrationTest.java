@@ -342,4 +342,161 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
                 .map(java.lang.reflect.Method::getName))
                 .doesNotContain("refundToBank", "payoutCash", "convertCoinToCash");
     }
+
+    // ---------- V1.3.0 Story 10.1：A8 模板 A 工作台（AC3 / AC4） ----------
+    // ⚠️ 端点级断言写在这个类而不是 admin/shop/web/ 下另起一个：造一张「真的缺货」的候选单
+    //    要走完整的采购入库 → 下单 → 付款链路，夹具全在这里；再抄一份只会两边分叉（story T0 重核 ②）。
+
+    /** 把这一单的 SKU 弄成「实际 < 已锁定」—— 候选集的判据（不是 actual < 0）。 */
+    private void makeShort(Ctx c) {
+        jdbc.update("UPDATE sku_inventory SET actual = 0, locked = 5 WHERE sku_id = ?",
+                skuId(c.skuToken()));
+    }
+
+    private org.springframework.security.core.Authentication staffWith(String... codes) {
+        long n = SEQ.incrementAndGet();
+        var acc = adminAccounts.save(com.tailtopia.admin.account.domain.AdminAccount.newSuperAdmin(
+                "exc-" + n + "@tailtopia.test", "异常订单测试账号", "{bcrypt}x"));
+        var principal = new com.tailtopia.admin.service.AdminUserDetails(acc.getId(), null,
+                acc.getLarkEmail(), acc.getPasswordHash(),
+                com.tailtopia.admin.account.domain.AdminAccountType.STAFF, java.util.Set.of(codes));
+        return new org.springframework.security.authentication.TestingAuthenticationToken(
+                principal, null, new java.util.ArrayList<>(principal.getAuthorities()));
+    }
+
+    @Autowired
+    private com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts;
+
+    @Test
+    @DisplayName("A8 工作台整页 200：单页签 + 左栏候选队列（AC3）")
+    void exceptionWorkbenchPageRendersQueue() throws Exception {
+        Ctx c = pureCoinPaidOrder(500_000L);
+        makeShort(c);
+
+        String html = mvc.perform(org.springframework.test.web.servlet.request
+                        .MockMvcRequestBuilders.get("/admin/shop/order-exceptions")
+                        .with(org.springframework.security.test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.authentication(
+                                        staffWith(com.tailtopia.admin.account.domain
+                                                .AdminPermissions.SHOP_ORDER_VIEW))))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).contains("data-workbench").contains("shop-exception-tab-count-pending");
+        // ⚠️ 不断言「这一条出现在 HTML 里」：候选集取的是**最旧的 100 条**待发货单（先进先出，AC3），
+        //    而 ApiIntegrationTest 不回滚 —— 共享库里积压够多时新造的这条压根不在扫描窗口内。
+        //    「它是不是候选」问服务层，那才是这条测试真正要的判据。
+        assertThat(exceptions.isCandidate(c.order().getPublicToken()))
+                .as("实际库存低于已锁定 ⇒ 这一单发不出去，应当是候选").isTrue();
+    }
+
+    @Test
+    @DisplayName("A8 右栏：?open=<token> + HX-Request 返三区片段（不新开 detail 端点）")
+    void exceptionDetailIsServedByTheSameMappingUnderHtmx() throws Exception {
+        Ctx c = pureCoinPaidOrder(500_000L);
+        makeShort(c);
+
+        String panel = mvc.perform(org.springframework.test.web.servlet.request
+                        .MockMvcRequestBuilders.get("/admin/shop/order-exceptions")
+                        .param("open", c.order().getPublicToken())
+                        .header("HX-Request", "true")
+                        .with(org.springframework.security.test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.authentication(
+                                        staffWith(com.tailtopia.admin.account.domain
+                                                .AdminPermissions.SHOP_ORDER_VIEW))))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(panel).doesNotContain("<html").doesNotContain("data-workbench");
+        assertThat(panel).contains("se-detail").contains(c.order().getPublicToken());
+    }
+
+    /**
+     * 🔴 处置后 oob 换掉的是<b>整条左栏队列</b>，不是删一行。
+     *
+     * <p>候选集是实时计算的：整单取消让这一单离开集合，而只删被点那一行的写法在
+     * 「部分取消后仍然缺货」的情形下会把还该留着的行删掉 —— 左栏从此与真相不符。
+     */
+    @Test
+    @DisplayName("A8 htmx 整单取消 → done 片段带 data-done + oob 重算整条队列（AC3）")
+    void htmxCancelWholeReturnsDoneFragmentWithRecomputedQueue() throws Exception {
+        Ctx c = pureCoinPaidOrder(500_000L);
+        makeShort(c);
+
+        String body = mvc.perform(org.springframework.test.web.servlet.request
+                        .MockMvcRequestBuilders.post("/admin/shop/order-exceptions/{t}/cancel",
+                                c.order().getPublicToken())
+                        .header("HX-Request", "true")
+                        .with(org.springframework.security.test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.authentication(
+                                        staffWith(com.tailtopia.admin.account.domain
+                                                .AdminPermissions.SHOP_ORDER_FULFILL)))
+                        .with(org.springframework.security.test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.csrf())
+                        .param("reason", "缺货"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).contains("data-done");
+        assertThat(body).contains("id=\"shop-exception-queue\"").contains("hx-swap-oob");
+        assertThat(orders.findByPublicToken(c.order().getPublicToken()).orElseThrow().getStatus())
+                .isEqualTo(ShopOrderStatus.CANCELLED);
+        assertThat(exceptions.isCandidate(c.order().getPublicToken()))
+                .as("已取消的单不该还留在候选集里").isFalse();
+    }
+
+    /**
+     * 🔴 三个处置端点的 {@code reason} <b>都是必填</b>（AC3 原文漏了这条，见 story T0 重核 ⑤）。
+     *
+     * <p>「联系用户后继续」也不例外：站内信要把它告诉用户，审计要靠它复盘。
+     */
+    @Test
+    @DisplayName("🔴 htmx 下不填原因 → 422 行内错误（continue 也一样），订单状态不动")
+    void htmxHandlingWithoutReasonIsRejected() throws Exception {
+        Ctx c = pureCoinPaidOrder(500_000L);
+        makeShort(c);
+        var staff = staffWith(com.tailtopia.admin.account.domain.AdminPermissions
+                .SHOP_ORDER_FULFILL);
+
+        for (String action : List.of("cancel", "continue")) {
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .post("/admin/shop/order-exceptions/{t}/{a}",
+                                    c.order().getPublicToken(), action)
+                            .header("HX-Request", "true")
+                            .with(org.springframework.security.test.web.servlet.request
+                                    .SecurityMockMvcRequestPostProcessors.authentication(staff))
+                            .with(org.springframework.security.test.web.servlet.request
+                                    .SecurityMockMvcRequestPostProcessors.csrf())
+                            .param("reason", " "))
+                    .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                            .status().isUnprocessableEntity());
+        }
+        assertThat(orders.findByPublicToken(c.order().getPublicToken()).orElseThrow().getStatus())
+                .isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
+    }
+
+    @Test
+    @DisplayName("🔒 只有 shop.order_view 的账号处置不了 → 403 片段（处置是 shop.order_fulfill）")
+    void viewOnlyCannotHandleViaHtmx() throws Exception {
+        Ctx c = pureCoinPaidOrder(500_000L);
+        makeShort(c);
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/admin/shop/order-exceptions/{t}/cancel", c.order().getPublicToken())
+                        .header("HX-Request", "true")
+                        .with(org.springframework.security.test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.authentication(
+                                        staffWith(com.tailtopia.admin.account.domain
+                                                .AdminPermissions.SHOP_ORDER_VIEW)))
+                        .with(org.springframework.security.test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.csrf())
+                        .param("reason", "缺货"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .status().isForbidden());
+        assertThat(orders.findByPublicToken(c.order().getPublicToken()).orElseThrow().getStatus())
+                .isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
+    }
 }

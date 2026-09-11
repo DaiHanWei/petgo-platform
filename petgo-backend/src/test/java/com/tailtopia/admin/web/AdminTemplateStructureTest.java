@@ -362,7 +362,53 @@ class AdminTemplateStructureTest {
      * <b>layout 的 &lt;head&gt; 根本不会被渲染</b>，各页保留自己的 head
      * （layout 注释亦言明「各业务页在自身 head 引入」）。所以只能逐页写，
      * 也正因为只能逐页写，才需要这条测试兜着 —— 下一个加上传的页面同样会漏。
+     *
+     * <h2>片段里的上传控件（V1.3.0 Story 10.1）</h2>
+     * 工作台把上传控件搬进了 htmx 片段（{@code shop-return-panel.html} 的质检照片）。
+     * 片段<b>没有自己的 &lt;head&gt;</b> —— meta 来自把它 swap 进去的那张宿主页，
+     * 所以对片段照搬「同文件里要有 meta」只会逼人往片段里塞一段永远不会渲染的 &lt;head&gt;。
+     *
+     * <p>但也不能直接豁免整个 {@code fragments/} 目录：那等于把这条守门在片段上作废，
+     * 而片段正是以后新增上传控件最可能去的地方。折中是让片段<b>指名宿主页</b>：
+     * 片段顶部写一行 {@code upload-host: xxx.html} 注释，本条去查那张页面有没有 meta。
+     *
+     * <p>🔴 <b>光查「那个文件名存在且有 meta」是不够的</b>：随手填一个确实有 meta 的页面
+     * （{@code seed-post.html} 就是这套 meta 的原产地）即可蒙混过关，而片段实际被 swap 进的是另一张
+     * 没有 meta 的页 —— 测试绿、线上 403，正是本条立项要防的那个原形。
+     * 所以还要求<b>有一个 Controller 同时返回这两个视图名</b>：片段与它声明的宿主页得真的
+     * 出自同一个 Controller，这个关系是编译期存在的事实，蒙不过去。
      */
+    private static final java.util.regex.Pattern UPLOAD_HOST =
+            java.util.regex.Pattern.compile("upload-host:\\s*([A-Za-z0-9_.-]+\\.html)");
+
+    /** 两个都要：admin-core.js 里是 {@code if (token && header)}，缺任一条就整体不带头。 */
+    private static boolean declaresCsrfMeta(String html) {
+        return html.contains("name=\"_csrf\"") && html.contains("name=\"_csrf_header\"");
+    }
+
+    /**
+     * 有没有哪个 Controller<b>同时</b>返回片段视图名与宿主页视图名。
+     *
+     * <p>片段视图名形如 {@code "admin/fragments/shop-return-panel :: detail"}，
+     * 宿主页视图名形如 {@code "admin/shop-returns"} —— 两者出现在同一个 java 文件里，
+     * 就说明这张页和这个片段确实是一对（同一个 Controller 既渲染整页也渲染它的片段）。
+     */
+    private static boolean aControllerServesBoth(String fragmentFile, String hostFile)
+            throws IOException {
+        String fragmentView = "admin/fragments/" + fragmentFile.replace(".html", "");
+        String pageView = "\"admin/" + hostFile.replace(".html", "\"");
+        try (Stream<Path> s = Files.walk(Path.of("src", "main", "java"))) {
+            for (Path p : s.filter(Files::isRegularFile)
+                    .filter(f -> f.toString().endsWith(".java")).toList()) {
+                String src = Files.readString(p, StandardCharsets.UTF_8);
+                if (src.contains(fragmentView) && src.contains(pageView)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     @Test
     void everyFetchUploadPageDeclaresCsrfMeta() throws IOException {
         List<String> withUploader = new ArrayList<>();
@@ -374,13 +420,29 @@ class AdminTemplateStructureTest {
             }
             withUploader.add(fileName(f));
             // 两个都要：admin.js 里是 `if (token && header)`，缺任一条就整体不带头。
-            if (!html.contains("name=\"_csrf\"") || !html.contains("name=\"_csrf_header\"")) {
+            if (declaresCsrfMeta(html)) {
+                continue;
+            }
+            java.util.regex.Matcher m = UPLOAD_HOST.matcher(html);
+            if (!m.find()) {
                 offenders.add(fileName(f));
+                continue;
+            }
+            String hostName = m.group(1);
+            Path host = DIR.resolve(hostName);
+            if (!Files.exists(host)) {
+                offenders.add(fileName(f) + "（声明的宿主 " + hostName + " 不存在）");
+            } else if (!declaresCsrfMeta(Files.readString(host, StandardCharsets.UTF_8))) {
+                offenders.add(fileName(f) + "（宿主 " + hostName + " 自己也没有 meta）");
+            } else if (!aControllerServesBoth(fileName(f), hostName)) {
+                offenders.add(fileName(f) + "（声明的宿主 " + hostName
+                        + " 与它不出自同一个 Controller —— 随手填一个有 meta 的页面蒙混不过去）");
             }
         }
         assertThat(withUploader).as("本条的前提是确实有页面走 fetch 上传").isNotEmpty();
         assertThat(offenders)
-                .as("🔴 这些页面走 fetch 上传却没在自己的 <head> 里放 CSRF meta ⇒ "
+                .as("🔴 这些页面走 fetch 上传却没在自己的 <head> 里放 CSRF meta（片段可写一行 "
+                        + "`upload-host: xxx.html` 注释指名宿主页）⇒ "
                         + "请求不带 CSRF 头 → 403 → 运营看到的是「选了图没反应」。"
                         + "补上 seed-post.html 里那两行 <meta name=\"_csrf\"…>（不能靠 layout 统一注入，"
                         + "layout 的 head 不参与业务页渲染）")

@@ -9,7 +9,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
@@ -146,6 +148,102 @@ class AdminMessagesExternalizedTest {
             }
         }
         assertThat(orphans).as("定义了但代码里没引用的动态文案码（死键）").isEmpty();
+    }
+
+    /**
+     * 🔴 <b>模板里 {@code #{…}} 引用的 key，四个包都必须有值</b>（V1.3.0 Story 10.1 补网）。
+     *
+     * <h2>这条补的是一个真实的空档</h2>
+     * 上面 {@link #everyReferencedCodeExistsInAllLocales} 只扫 <b>java 源码</b>里的
+     * {@code admin.flash.*} / {@code admin.err.*}；{@code check-i18n-keys.sh} 只比对
+     * <b>四个包之间</b>的 key 集合是否相等。两者交集之外是一大片空地：
+     * <b>模板里写了一个谁都没定义的 key</b> —— 四个包一致地都没有它，集合比对当然是绿的；
+     * java 侧也扫不到它。
+     *
+     * <p>后果是运行期 Thymeleaf 原样吐出 {@code ??admin.v130.xxx_zh_CN??} 到页面上，
+     * <b>不抛异常、不进日志</b>，渲染冒烟也只验「不报错」。本 story 开发时就真的漏过一个
+     * （{@code admin.v130.shopReturns.step.rejected}，模板写了、四个包都没加），
+     * 当时 L0 1850 条全绿。
+     *
+     * <p>两种形态分开判：
+     * <ul>
+     *   <li><b>字面 key</b>（{@code #{a.b.c}} / {@code #{a.b.c(参数)}}）→ 必须逐字存在；</li>
+     *   <li><b>拼前缀</b>（{@code #{'a.b.' + ${x}}}，枚举文案的标准写法）→ 无法静态求值，
+     *       改判「该前缀下至少得有一个 key」。它抓不到「少了某一个枚举值」，
+     *       但抓得到<b>整个前缀写错 / 整族忘了加</b>，而那正是拼前缀写法最常见的错法。</li>
+     * </ul>
+     * 完全动态的 {@code #{${x}}}（如公共页签片段的 {@code labelKey}）跳过 —— 无从判起。
+     */
+    @Test
+    void everyMessageKeyReferencedByAdminTemplatesExistsInAllLocales() throws IOException {
+        Path templates = Path.of("src", "main", "resources", "templates", "admin");
+        // #{a.b.c} / #{a.b.c(...)}：key 后面只允许紧跟 } 或 (
+        Pattern literal = Pattern.compile("#\\{([a-zA-Z][a-zA-Z0-9_.]*[a-zA-Z0-9_])\\s*[({]?");
+        // #{'a.b.' + ${...}}：取单引号里的前缀
+        Pattern prefixed = Pattern.compile("#\\{\\s*'([a-zA-Z][a-zA-Z0-9_.]*\\.)'\\s*\\+");
+
+        TreeSet<String> literalKeys = new TreeSet<>();
+        TreeSet<String> prefixes = new TreeSet<>();
+        try (Stream<Path> s = Files.walk(templates)) {
+            for (Path p : s.filter(x -> x.toString().endsWith(".html")).sorted().toList()) {
+                // 注释里贴一段示例写法是常事，连注释一起扫会误报
+                String html = Files.readString(p, StandardCharsets.UTF_8)
+                        .replaceAll("(?s)<!--.*?-->", "");
+                Matcher m = literal.matcher(html);
+                while (m.find()) {
+                    literalKeys.add(m.group(1));
+                }
+                Matcher pm = prefixed.matcher(html);
+                while (pm.find()) {
+                    prefixes.add(pm.group(1));
+                }
+            }
+        }
+        assertThat(literalKeys).as("一个字面 key 都没扫到 —— 路径或正则不对，这条此刻毫无意义")
+                .isNotEmpty();
+        assertThat(prefixes).as("一个拼前缀写法都没扫到 —— 枚举文案是后台的常规写法，扫不到说明正则坏了")
+                .isNotEmpty();
+
+        // 默认包（无后缀）也要查：语言协商回落到它时同样会露出 ??key??
+        Map<String, String> packs = new LinkedHashMap<>();
+        packs.put("zh_CN", "/i18n/messages_zh_CN.properties");
+        packs.put("en", "/i18n/messages_en.properties");
+        packs.put("id", "/i18n/messages_id.properties");
+        packs.put("default", "/i18n/messages.properties");
+        for (Map.Entry<String, String> pack : packs.entrySet()) {
+            String locale = pack.getKey();
+            Properties props = localeProps(pack.getValue());
+            TreeSet<String> missing = new TreeSet<>();
+            for (String key : literalKeys) {
+                if (props.getProperty(key) == null) {
+                    missing.add(key);
+                }
+            }
+            assertThat(missing)
+                    .as("🔴 " + locale + " 缺少模板里 #{…} 引用的 key —— 页面上会原样渲染出 "
+                            + "??key_" + locale + "??，不抛异常、不进日志，渲染冒烟也照样绿")
+                    .isEmpty();
+
+            TreeSet<String> emptyPrefixes = new TreeSet<>();
+            for (String prefix : prefixes) {
+                if (props.stringPropertyNames().stream().noneMatch(k -> k.startsWith(prefix))) {
+                    emptyPrefixes.add(prefix);
+                }
+            }
+            assertThat(emptyPrefixes)
+                    .as("🔴 " + locale + " 里这些前缀下一个 key 都没有 —— 模板在用 #{'前缀' + ${枚举}} "
+                            + "渲染一族文案，而整族都不存在")
+                    .isEmpty();
+        }
+    }
+
+    private Properties localeProps(String resource) throws IOException {
+        Properties props = new Properties();
+        try (InputStream in = getClass().getResourceAsStream(resource)) {
+            assertThat(in).as("读不到 " + resource).isNotNull();
+            props.load(new InputStreamReader(in, StandardCharsets.UTF_8));
+        }
+        return props;
     }
 
     private static String oneLine(String s) {

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  A8 右栏三区（V1.3.0 Story 10.1 AC3）：
+    ① 异常原因说明卡（缺货到什么程度：实际 / 已锁定 / 本单需要；外加「超卖真正来源」那段必读文案）
+    ② 订单行表（商品名 / 规格 / 数量 / 已取消 / 库存），已全额取消的行置灰
+    ③ 操作区：每行「取消这一行」+ 数量 · 整单取消并退款 · 联系用户后继续
+  🔴 三处 AC 偏差（story T0 重核 ③④⑤，已记 Completion Notes）：
+    · 只有一个页签 —— 候选集是实时计算的，没有「已处理」这个可查询的集合；
+    · **行级勾选改为每行一个按钮** —— `cancel-line` 的签名是 (lineId, qty, reason)，一次只取消一行；
+      多选批量要么改端点（破零变更），要么前端串行发 N 次（失败一半没有回滚语义）；
+    · **三个端点的 reason 都是必填**（服务层 requireReason 空值抛 422），`continue` 也不例外 ——
+      AC3 写的「无确认」与代码不符，按代码走。
+  端点路径 / 参数 / @PreAuthorize 零变更。🔒 本页不渲染收件人 PII。
+-->
+<body>
+<div th:fragment="detail" class="se-detail" th:attr="data-order-token=${order.publicToken}">
+
+    <!-- ① 异常原因说明卡 -->
+    <section class="card card-full se-card">
+        <h2 th:text="#{admin.v130.shopExceptions.card.reason}">异常原因</h2>
+        <div class="sum sum--grid2">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.token}">订单号</div>
+                <!-- ⚠️ 去订单页的入口必须留着（重构前的卡片标题就是这条链接）：
+                     异常单要看收件地址与物流才决定得了「取消还是继续」。新标签打开，不打断本页处置。
+                     Story 10.2 把订单详情整页退役时，这里改成 ?open=<token> 深链。 -->
+                <div class="sum-value rv-small">
+                    <a th:href="@{/admin/shop/orders/{t}(t=${order.publicToken})}" target="_blank"
+                       rel="noopener" th:text="${order.publicToken}">ord</a></div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.status}">状态</div>
+                <div class="sum-value rv-small" th:text="${order.status}">PENDING_SHIPMENT</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.total}">订单金额</div>
+                <div class="sum-value" th:text="${#numbers.formatInteger(order.totalAmount, 0, 'COMMA')}">0</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.createdAt}">下单时间</div>
+                <div class="sum-value rv-small" th:text="${@adminTime.wib(order.createdAt)}">-</div></div>
+        </div>
+        <p class="hint" th:text="#{admin.shop.exceptions.hint}">这里列出实际库存已不足以发出的待发货订单。</p>
+        <p class="hint" th:text="#{admin.shop.exceptions.manualHint}">系统不会自动取消任何订单。</p>
+        <p class="banner err" th:if="${!stillCandidate}"
+           th:text="#{admin.v130.shopExceptions.noLongerCandidate}">这一单已不在候选清单里。</p>
+    </section>
+
+    <!-- ② 订单行表 -->
+    <section class="card card-full se-card">
+        <h2 th:text="#{admin.v130.shopExceptions.card.lines}">订单行</h2>
+        <table>
+            <thead><tr>
+                <th th:text="#{admin.shop.col.name}">商品名</th>
+                <th th:text="#{admin.shop.sku.specName}">规格</th>
+                <th th:text="#{admin.shop.inventory.col.qty}">数量</th>
+                <th th:text="#{admin.shop.exceptions.col.cancelled}">已取消</th>
+                <th th:text="#{admin.v130.shopExceptions.col.stock}">库存（实际 / 已锁定）</th>
+                <th th:text="#{admin.common.action}">操作</th>
+            </tr></thead>
+            <tbody>
+            <tr th:each="l : ${lines}" th:with="st=${stockByLine.get(l.id)}, done=${l.refundedQty >= l.qty}"
+                th:classappend="${done} ? 'is-muted'">
+                <td th:text="${l.productName}">Produk</td>
+                <td th:text="${l.specName}">3 kg</td>
+                <td th:text="${l.qty}">1</td>
+                <td th:text="${l.refundedQty}">0</td>
+                <td>
+                    <span th:if="${st != null}" th:text="${st.actual()} + ' / ' + ${st.locked()}">0 / 0</span>
+                    <span class="badge badge-danger" th:if="${st != null and st.insufficient()}"
+                          th:text="#{admin.v130.shopExceptions.short}">缺货</span>
+                </td>
+                <td>
+                    <span class="muted" th:if="${done}" th:text="#{admin.v130.shopExceptions.lineCancelled}">本行已取消</span>
+                    <!-- 处置②：部分取消 —— 与端点 1:1（一次一行，含数量与必填原因） -->
+                    <!-- 🔴 data-inline-error 不能少：admin-workbench.js 只给 `.wb-actions` 里的请求把
+                         HX-Target 改指 #admin-inline-error，而这张表单在行表里（区②）。不标的话，
+                         htmx 会把 HX-Target: wb-detail-body 发上去，422 / 403 就把**整个右栏**清成一行错误。 -->
+                    <form th:if="${canHandle and !done}" data-inline-error
+                          th:attr="hx-post=@{/admin/shop/order-exceptions/{t}/cancel-line(t=${order.publicToken})}"
+                          hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-requires-form>
+                        <input type="hidden" name="lineId" th:value="${l.id}"/>
+                        <input type="number" name="qty" class="inp" min="1" th:max="${l.qty - l.refundedQty}"
+                               th:value="${l.qty - l.refundedQty}" required data-requires-text/>
+                        <input type="text" name="reason" class="inp" required maxlength="200" data-requires-text
+                               th:placeholder="#{admin.shop.exceptions.reason.placeholder}"/>
+                        <button type="submit" class="btn btn-sm btn-danger" disabled data-requires-target
+                                data-confirm-button
+                                th:attr="data-confirm=#{admin.v130.shopExceptions.confirm.cancelLine(${l.productName}, ${l.qty - l.refundedQty}, ${#numbers.formatInteger(l.unitPrice * (l.qty - l.refundedQty), 0, 'COMMA')})}"
+                                th:text="#{admin.v130.shopExceptions.btn.cancelLine}">取消这一行</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- ③ 操作区 -->
+    <section class="wb-actions se-actions">
+        <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('shop.order_fulfill')">
+            <!-- 处置①：整单取消并退款（全额含运费 + 补偿溢价补 Coin） -->
+            <form th:attr="hx-post=@{/admin/shop/order-exceptions/{t}/cancel(t=${order.publicToken})}"
+                  hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-requires-form>
+                <input type="text" name="reason" class="inp" required maxlength="200" data-requires-text
+                       th:placeholder="#{admin.shop.exceptions.reason.placeholder}"/>
+                <button type="submit" class="btn btn-danger" disabled data-requires-target data-confirm-button
+                        th:attr="data-confirm=#{admin.v130.shopExceptions.confirm.cancelWhole(${#numbers.formatInteger(order.totalAmount, 0, 'COMMA')})}"
+                        th:text="#{admin.shop.exceptions.btn.cancelWhole}">整单取消并退款</button>
+            </form>
+            <!-- 处置③：联系用户后继续（🔴 reason 同样必填：站内信要把它告诉用户，审计要靠它复盘） -->
+            <form th:attr="hx-post=@{/admin/shop/order-exceptions/{t}/continue(t=${order.publicToken})}"
+                  hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-requires-form>
+                <input type="text" name="reason" class="inp" required maxlength="200" data-requires-text
+                       th:placeholder="#{admin.shop.exceptions.reason.placeholder}"/>
+                <button type="submit" class="btn btn-neutral" disabled data-requires-target
+                        th:text="#{admin.shop.exceptions.btn.continue}">联系用户后继续</button>
+            </form>
+        </div>
+        <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('shop.order_fulfill'))">
+            <button type="button" class="btn btn-danger" disabled
+                    th:title="#{admin.v130.err.forbidden(#{perm.shop.order_fulfill})}"
+                    th:text="#{admin.shop.exceptions.btn.cancelWhole}">整单取消并退款</button>
+            <span th:text="#{admin.v130.err.forbidden(#{perm.shop.order_fulfill})}">需要权限</span>
+        </p>
+    </section>
+</div>
+</body>
+</html>

@@ -126,3 +126,33 @@
         }
     }, true);
 })();
+
+// ===== 必填未填 → 提交钮禁用（Story 2.8 起用，Story 10.1 起 A6 / A7 共用一份）=====
+//
+// form[data-requires-form] 里所有 [data-requires-text]（文本 / 下拉）都非空、
+// 所有 [data-requires-file] 都选了文件，才放开 [data-requires-target]。
+// 🔴 **必须在 htmx:afterSwap 里重扫**：右栏是整块换进来的，只在 DOMContentLoaded 绑一次的话，
+//    换进来的新表单永远停在 disabled —— 运营填完了按钮还是灰的（Story 2.8 页内脚本原样搬来，
+//    当时 A6 一页一份；A7 落地时两页一模一样，再抄一遍必然分叉）。
+(function () {
+    function sync(form) {
+        var btn = form.querySelector('[data-requires-target]');
+        if (!btn) { return; }
+        var ok = true;
+        form.querySelectorAll('[data-requires-text]').forEach(function (i) { ok = ok && !!i.value.trim(); });
+        form.querySelectorAll('[data-requires-file]').forEach(function (i) { ok = ok && !!(i.files && i.files.length); });
+        btn.disabled = !ok;
+    }
+    ['input', 'change'].forEach(function (ev) {
+        document.addEventListener(ev, function (e) {
+            var f = e.target && e.target.closest ? e.target.closest('form[data-requires-form]') : null;
+            if (f) { sync(f); }
+        });
+    });
+    document.addEventListener('DOMContentLoaded', function () {
+        document.body.addEventListener('htmx:afterSwap', function (e) {
+            var t = e.detail && e.detail.target;
+            if (t && t.querySelectorAll) { t.querySelectorAll('form[data-requires-form]').forEach(sync); }
+        });
+    });
+})();

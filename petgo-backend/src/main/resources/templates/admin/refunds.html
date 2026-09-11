@@ -28,30 +28,8 @@
             <div th:fragment="rf-detail" th:replace="~{admin/fragments/tpl-a-workbench :: detail-empty}"></div>
             <div th:fragment="rf-actions"><span class="muted" th:text="#{admin.v130.review.actions.hint}">操作区随所选单据渲染</span></div>
         </div>
-
-        <script>
-        // 页内 JS（Story 2.8）：必填输入未填 → 对应按钮禁用（驳回原因 / 审批备注 / 出款凭证）。无 ↑/↓（D-14）。
-        (function () {
-            function sync(form) {
-                var btn = form.querySelector('[data-requires-target]');
-                if (!btn) { return; }
-                var ok = true;
-                form.querySelectorAll('[data-requires-text]').forEach(function (i) { ok = ok && !!i.value.trim(); });
-                form.querySelectorAll('[data-requires-file]').forEach(function (i) { ok = ok && !!(i.files && i.files.length); });
-                btn.disabled = !ok;
-            }
-            ['input', 'change'].forEach(function (ev) {
-                document.addEventListener(ev, function (e) {
-                    var f = e.target && e.target.closest ? e.target.closest('form[data-requires-form]') : null;
-                    if (f) { sync(f); }
-                });
-            });
-            document.body.addEventListener('htmx:afterSwap', function (e) {
-                var t = e.detail && e.detail.target;
-                if (t && t.querySelectorAll) { t.querySelectorAll('form[data-requires-form]').forEach(sync); }
-            });
-        })();
-        </script>
+        <!-- 「必填未填 → 按钮禁用」原是本页的页内脚本；Story 10.1 起 A7 要用同一套，
+             已搬进 admin-workbench.js（两页各抄一份必然分叉）。本页照旧只标 data-requires-* 属性。 -->
     </div>
 </div>
 </body>

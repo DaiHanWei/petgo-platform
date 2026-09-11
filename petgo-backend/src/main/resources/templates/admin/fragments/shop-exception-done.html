@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  A8 处置成功 fragment（V1.3.0 Story 10.1 AC3）：根元素 data-next-id + data-done；toast 到 #admin-toast-host。
+  🔴 oob 把**整条左栏队列**换掉，而不是删被点的那一行：候选集是实时计算的 ——
+     部分取消可能让这一单不再缺货（该消失）也可能仍缺货（该留下），同一次库存变动还可能让**别的**单子进出候选集。
+     只删一行的话，左栏从此与真相不符。
+  data-next-id：这一单还在候选集里就仍是它（右栏刷新成处置后的样子），否则取队列里的下一条；都没有则右栏回空态。
+-->
+<body>
+<div th:fragment="done" class="se-done" data-done th:data-next-id="${nextId}">
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${message}">已处理</div>
+    <th:block th:if="${#strings.isEmpty(nextId)}"><div th:replace="~{admin/fragments/tpl-a-empty :: queueEmpty('shop-order-exceptions', null)}"></div></th:block>
+    <ul class="q-list" id="shop-exception-queue" hx-swap-oob="true">
+        <th:block th:replace="~{admin/fragments/shop-exception-queue :: rows}"></th:block>
+    </ul>
+    <span id="shop-exception-tab-count-pending" class="tab-count" hx-swap-oob="true"
+          th:text="${#lists.size(orders)}">0</span>
+</div>
+</body>
+</html>

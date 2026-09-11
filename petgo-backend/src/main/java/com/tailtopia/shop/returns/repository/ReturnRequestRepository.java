@@ -10,8 +10,20 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-/** 退货申请仓储（Story 5.1）。 */
-public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Long> {
+/**
+ * 退货申请仓储（Story 5.1）。
+ *
+ * <p>V1.3.0 Story 10.1：A7 工作台的五页签要按<b>状态集合</b>取一页（「待退款」对 2 个状态、
+ * 「已完结·已驳回」对 4 个），还要叠退货类型 / 整单退两个可选筛选。既有
+ * {@link #findByStatusOrderByCreatedAtAscIdAsc} 只接受<b>单个</b>状态且不分页，派生方法要穷举
+ * 「状态集 × 类型有无 × 整单退有无」四种组合各两份（列表 + 计数）。所以这里挂
+ * {@code JpaSpecificationExecutor}，条件在 {@code AdminReturnService} 里按「非空才加谓词」拼 ——
+ * 🔴 <b>同时绕开本仓库踩过的「{@code :param IS NULL OR …} 里无类型 null 参数 Postgres 推断不出类型」</b>
+ * （见 {@code AdminAuditLogRepositoryCustom} 类注释）：Specification 压根不绑定 null 参数。
+ * 纯读，不新增写口。
+ */
+public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Long>,
+        org.springframework.data.jpa.repository.JpaSpecificationExecutor<ReturnRequest> {
 
     /** 🔴 越权与不存在同为 404（与订单同口径）：双条件查。 */
     Optional<ReturnRequest> findByPublicTokenAndUserId(String publicToken, long userId);

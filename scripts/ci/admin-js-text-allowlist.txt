@@ -52,4 +52,5 @@ petgo-backend/src/main/resources/templates/admin/shop-margin.html|枚举未走 k
 petgo-backend/src/main/resources/templates/admin/shop-orders.html|枚举未走 key   # ⏳ Epic 10
 petgo-backend/src/main/resources/templates/admin/shop-products.html|枚举未走 key   # ⏳ Epic 10
 petgo-backend/src/main/resources/templates/admin/shop-product-form.html|枚举未走 key   # ⏳ Epic 10（6 处）
-petgo-backend/src/main/resources/templates/admin/shop-returns.html|枚举未走 key   # ⏳ Epic 10
+# ✅ shop-returns.html 的豁免已于 Story 10.1 摘除：退货类型下拉改走 admin.v130.shopReturns.type.*，
+#    状态、退货类型在队列 / 右栏也全部走 key（原先整页把枚举常量名直接铺给运营）。

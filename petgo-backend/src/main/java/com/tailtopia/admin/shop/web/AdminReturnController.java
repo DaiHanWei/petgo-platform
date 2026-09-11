@@ -1,13 +1,15 @@
 package com.tailtopia.admin.shop.web;
 
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.shared.web.HxRequest;
+import com.tailtopia.admin.shared.web.StateTab;
 import com.tailtopia.admin.shop.service.AdminReturnService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.order.repository.ShopOrderLineRepository;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.shop.returns.domain.RejectDisposal;
 import com.tailtopia.shop.returns.domain.ReturnRequest;
-import com.tailtopia.shop.returns.domain.ReturnStatus;
+import com.tailtopia.shop.returns.domain.ReturnType;
 import com.tailtopia.shop.returns.service.ReturnRequestService;
 import com.tailtopia.shared.i18n.Messages;
 import java.util.LinkedHashMap;
@@ -44,6 +46,15 @@ public class AdminReturnController {
             "hasRole('SUPER_ADMIN') or hasAuthority('refund.payout')";
 
     private static final int PAGE_SIZE = 100;
+
+    /** A7 工作台左栏每页 20 条滚动加载（Story 10.1 AC1）；判例库仍用 {@link #PAGE_SIZE}。 */
+    private static final int QUEUE_PAGE_SIZE = 20;
+
+    /**
+     * 🔴 非 htmx 处置后回<b>队列</b>而不是 {@code /{token}} —— 整页详情已退役（AC5），
+     * 往那里 302 等于把旧地址永久续上（D-23 明确不做旧地址跳转）。
+     */
+    private static final String REDIRECT_QUEUE = "redirect:/admin/shop/returns";
 
     private final AdminReturnService adminReturns;
     private final ReturnRequestService requests;
@@ -86,33 +97,58 @@ public class AdminReturnController {
                 .map(String::trim).filter(k -> !k.isEmpty()).toList();
     }
 
-    // ---------- 5.3 审核队列 ----------
+    // ---------- 5.3 审核队列 → V1.3.0 Story 10.1：A7 模板 A 工作台 ----------
 
+    /**
+     * A7 工作台整页；{@code tab=pending|shipback|inspect|refund|closed}（默认待审核）；
+     * 筛选 {@code type}（退货类型）/ {@code full}（整单退）；{@code open=<token>} 页内深链自动开该条。
+     *
+     * <p>htmx 请求返左栏行片段 —— 页签是整页 GET（{@code tpl-a-state-tabs} 约定），
+     * 走 htmx 的只有「加载更多」哨兵。<b>不新增 {@code /queue} 端点</b>（AB-19A 零新端点）。
+     */
     @GetMapping("/admin/shop/returns")
     @PreAuthorize(VIEW_AUTH)
-    public String queue(@RequestParam(required = false) String status, Model model) {
-        ReturnStatus filter = parseStatus(status);
-        List<ReturnRequest> rows = adminReturns.queue(filter, PAGE_SIZE);
-        // 订单号与退货行随列表一起给出 —— AB-12A 要求列表就能看到「退哪几行、多少件」
-        Map<String, String> orderTokens = new LinkedHashMap<>();
-        Map<String, Integer> lineCounts = new LinkedHashMap<>();
-        for (ReturnRequest r : rows) {
-            orders.findById(r.getShopOrderId())
-                    .ifPresent(o -> orderTokens.put(r.getPublicToken(), o.getPublicToken()));
-            lineCounts.put(r.getPublicToken(), requests.linesOf(r.getId()).size());
+    public String queue(@RequestParam(value = "tab", required = false) String tab,
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "full", required = false) String full,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "open", required = false) String open,
+            HxRequest hx, Model model) {
+        AdminReturnService.Tab t = AdminReturnService.Tab.of(tab);
+        String opened = open == null || open.isBlank() ? null : open.trim();
+        if (opened != null && (tab == null || tab.isBlank())) {
+            // 深链未指明页签：按该申请当前状态落页签，行才会在左栏出现（与 A6 同款）
+            try {
+                t = AdminReturnService.Tab.of(adminReturns.require(opened).getStatus());
+            } catch (AppException ignore) {
+                // 不存在的 token：留在默认页签，右栏由 JS 拉 detail 时得到 404 → 空态
+            }
         }
-        model.addAttribute("rows", rows);
-        model.addAttribute("orderTokens", orderTokens);
-        model.addAttribute("lineCounts", lineCounts);
-        model.addAttribute("statuses", ReturnStatus.values());
-        model.addAttribute("status", filter == null ? "" : filter.name());
+        populateQueue(t, type, full, page, model);
+        model.addAttribute("open", opened);
         model.addAttribute("active", "shopReturns");
-        return "admin/shop-returns";
+        return hx.isHtmx() ? "admin/fragments/shop-return-queue :: rows" : "admin/shop-returns";
     }
 
+    /**
+     * 右栏五区 fragment。
+     *
+     * <p>🔴 <b>整页详情已退役</b>（Story 10.1 AC5）：非 htmx 请求一律 404，<b>不做旧地址跳转</b>（D-23）。
+     * 路径复用同一 mapping 而不是新开 {@code /{token}/detail} —— AB-19A「零新端点」。
+     */
     @GetMapping("/admin/shop/returns/{token}")
     @PreAuthorize(VIEW_AUTH)
-    public String detail(@PathVariable String token, Model model) {
+    public String detail(@PathVariable String token,
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "full", required = false) String full,
+            HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            throw AppException.notFound("该页面已并入退货审核工作台")
+                    .code("admin.err.common.pageRetired");
+        }
+        // 当前筛选原样带进右栏的处置表单（隐藏字段）—— 处置后 oob 的页签计数才与左栏同口径（AC4）
+        model.addAttribute("type", parseType(type) == null ? "" : parseType(type).name());
+        model.addAttribute("full", parseFull(full) == null ? "" : String.valueOf(parseFull(full)));
         ReturnRequest r = adminReturns.require(token);
         var order = orders.findById(r.getShopOrderId()).orElseThrow();
         var lines = requests.linesOf(r.getId());
@@ -141,8 +177,10 @@ public class AdminReturnController {
         } catch (AppException e) {
             model.addAttribute("quote", null);
         }
+        // ① 五步进度条（Story 10.1 AC1）：状态机是既有的，这里只把它读成五步
+        model.addAttribute("steps", adminReturns.steps(r));
         model.addAttribute("active", "shopReturns");
-        return "admin/shop-return-detail";
+        return "admin/fragments/shop-return-panel :: detail";
     }
 
     // ---------- 审核动作 ----------
@@ -150,27 +188,44 @@ public class AdminReturnController {
     @PostMapping("/admin/shop/returns/{token}/approve")
     @PreAuthorize(APPROVE_AUTH)
     public String approve(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable String token, RedirectAttributes ra) {
+            @PathVariable String token, @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "full", required = false) String full,
+            HxRequest hx, Model model, RedirectAttributes ra) {
+        if (hx.isHtmx()) {
+            AdminReturnService.Tab from = tabOf(token);
+            adminReturns.approve(token, actorOf(admin));
+            return done(from, token, type, full,
+                    msg.get("admin.flash.return.approved"), model);
+        }
         try {
             adminReturns.approve(token, actorOf(admin));
             ra.addFlashAttribute("notice", msg.get("admin.flash.return.approved"));
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/shop/returns/" + token;
+        return REDIRECT_QUEUE;
     }
 
     @PostMapping("/admin/shop/returns/{token}/reject")
     @PreAuthorize(APPROVE_AUTH)
     public String reject(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable String token, @RequestParam String reason, RedirectAttributes ra) {
+            @PathVariable String token, @RequestParam String reason,
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "full", required = false) String full,
+            HxRequest hx, Model model, RedirectAttributes ra) {
+        if (hx.isHtmx()) {
+            AdminReturnService.Tab from = tabOf(token);
+            adminReturns.reject(token, reason, actorOf(admin));
+            return done(from, token, type, full,
+                    msg.get("admin.flash.return.rejected"), model);
+        }
         try {
             adminReturns.reject(token, reason, actorOf(admin));
             ra.addFlashAttribute("notice", msg.get("admin.flash.return.rejected"));
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/shop/returns/" + token;
+        return REDIRECT_QUEUE;
     }
 
     // ---------- 5.4 寄回登记与质检 ----------
@@ -180,14 +235,22 @@ public class AdminReturnController {
     public String shipback(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable String token, @RequestParam String carrier,
             @RequestParam String trackingNo, @RequestParam(required = false) Long fee,
-            RedirectAttributes ra) {
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "full", required = false) String full,
+            HxRequest hx, Model model, RedirectAttributes ra) {
+        if (hx.isHtmx()) {
+            AdminReturnService.Tab from = tabOf(token);
+            adminReturns.registerShipback(token, carrier, trackingNo, fee, actorOf(admin));
+            return done(from, token, type, full,
+                    msg.get("admin.flash.return.shipmentRegistered"), model);
+        }
         try {
             adminReturns.registerShipback(token, carrier, trackingNo, fee, actorOf(admin));
             ra.addFlashAttribute("notice", msg.get("admin.flash.return.shipmentRegistered"));
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/shop/returns/" + token;
+        return REDIRECT_QUEUE;
     }
 
     /**
@@ -230,14 +293,23 @@ public class AdminReturnController {
     @PreAuthorize(APPROVE_AUTH)
     public String inspectPass(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable String token, @RequestParam(required = false) String note,
-            @RequestParam(required = false) String photoKeys, RedirectAttributes ra) {
+            @RequestParam(required = false) String photoKeys,
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "full", required = false) String full,
+            HxRequest hx, Model model, RedirectAttributes ra) {
+        if (hx.isHtmx()) {
+            AdminReturnService.Tab from = tabOf(token);
+            adminReturns.passInspection(token, note, photoKeys, actorOf(admin));
+            return done(from, token, type, full,
+                    msg.get("admin.flash.return.inspectPassed"), model);
+        }
         try {
             adminReturns.passInspection(token, note, photoKeys, actorOf(admin));
             ra.addFlashAttribute("notice", msg.get("admin.flash.return.inspectPassed"));
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/shop/returns/" + token;
+        return REDIRECT_QUEUE;
     }
 
     @PostMapping("/admin/shop/returns/{token}/inspect-fail")
@@ -246,7 +318,17 @@ public class AdminReturnController {
             @PathVariable String token, @RequestParam String note,
             @RequestParam(required = false) String photoKeys,
             @RequestParam String disposal,
-            @RequestParam(required = false) String shipBackTrackingNo, RedirectAttributes ra) {
+            @RequestParam(required = false) String shipBackTrackingNo,
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "full", required = false) String full,
+            HxRequest hx, Model model, RedirectAttributes ra) {
+        if (hx.isHtmx()) {
+            AdminReturnService.Tab from = tabOf(token);
+            adminReturns.failInspection(token, note, photoKeys, parseDisposal(disposal),
+                    shipBackTrackingNo, actorOf(admin));
+            return done(from, token, type, full,
+                    msg.get("admin.flash.return.inspectFailed"), model);
+        }
         try {
             adminReturns.failInspection(token, note, photoKeys, parseDisposal(disposal),
                     shipBackTrackingNo, actorOf(admin));
@@ -254,7 +336,7 @@ public class AdminReturnController {
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/shop/returns/" + token;
+        return REDIRECT_QUEUE;
     }
 
     // ---------- 5.5 退款执行（财务） ----------
@@ -262,7 +344,16 @@ public class AdminReturnController {
     @PostMapping("/admin/shop/returns/{token}/refund")
     @PreAuthorize(PAYOUT_AUTH)
     public String refund(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable String token, RedirectAttributes ra) {
+            @PathVariable String token, @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "full", required = false) String full,
+            HxRequest hx, Model model, RedirectAttributes ra) {
+        if (hx.isHtmx()) {
+            AdminReturnService.Tab from = tabOf(token);
+            var out = adminReturns.executeRefund(token, actorOf(admin));
+            return done(from, token, type, full,
+                    msg.get("admin.flash.return.refunded", out.coinRefunded(),
+                            out.cashRefunded(), out.compensationPremium()), model);
+        }
         try {
             var out = adminReturns.executeRefund(token, actorOf(admin));
             ra.addFlashAttribute("notice",
@@ -271,7 +362,7 @@ public class AdminReturnController {
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/shop/returns/" + token;
+        return REDIRECT_QUEUE;
     }
 
     // ---------- 5.6 判例库 ----------
@@ -303,23 +394,105 @@ public class AdminReturnController {
 
     // ---------- 内部 ----------
 
+    /**
+     * 左栏队列 + 五页签计数（Story 10.1 AC1 / AC4「页签计数与页内同源」）。
+     *
+     * <p>🔴 计数与队列<b>共用同一组筛选</b>：两处各算各的，就会出现「待质检 5」配一张空队列。
+     */
+    private void populateQueue(AdminReturnService.Tab tab, String type, String full, int page,
+            Model model) {
+        ReturnType parsedType = parseType(type);
+        Boolean parsedFull = parseFull(full);
+        var found = adminReturns.page(tab, parsedType, parsedFull, page, QUEUE_PAGE_SIZE);
+        // 订单号与退货行随列表一起给出 —— AB-12A 要求列表就能看到「退哪几行、多少件」
+        Map<String, String> orderTokens = new LinkedHashMap<>();
+        Map<String, Integer> lineCounts = new LinkedHashMap<>();
+        for (ReturnRequest r : found.getContent()) {
+            orders.findById(r.getShopOrderId())
+                    .ifPresent(o -> orderTokens.put(r.getPublicToken(), o.getPublicToken()));
+            lineCounts.put(r.getPublicToken(), requests.linesOf(r.getId()).size());
+        }
+        Map<String, Long> counts = adminReturns.counts(parsedType, parsedFull);
+        model.addAttribute("queue", found);
+        model.addAttribute("orderTokens", orderTokens);
+        model.addAttribute("lineCounts", lineCounts);
+        model.addAttribute("tab", tab.param());
+        model.addAttribute("page", Math.max(page, 0));
+        model.addAttribute("type", parsedType == null ? "" : parsedType.name());
+        model.addAttribute("full", parsedFull == null ? "" : String.valueOf(parsedFull));
+        model.addAttribute("types", ReturnType.values());
+        model.addAttribute("counts", counts);
+        model.addAttribute("stateTabs", java.util.Arrays.stream(AdminReturnService.Tab.values())
+                .map(t -> new StateTab(
+                        StateTab.href("/admin/shop/returns", "tab", t.param(),
+                                "type", parsedType == null ? null : parsedType.name(),
+                                "full", parsedFull == null ? null : String.valueOf(parsedFull)),
+                        "admin.v130.shopReturns.tab." + t.param(),
+                        "shop-return-tab-count-" + t.param(),
+                        counts.getOrDefault(t.param(), 0L), t == tab))
+                .toList());
+    }
+
+    /**
+     * 处置<b>前</b>该单所在的页签 —— 「下一条」必须从这里取（AC2）。
+     *
+     * <p>🔴 <b>不按端点硬编码</b>：看着「批准 / 驳回只可能发生在待审核」很合理，但
+     * {@code ReturnRequest.reject} 允许的来源状态是 {@code PENDING_REVIEW} <b>或 {@code REFUND_FAILED}</b>。
+     * 硬编码成「待审核」的话，在「待退款」页签驳回一单，算出的 {@code data-next-id} 来自另一个队列，
+     * JS 会把运营直接弹到那边去（oob 的删行与计数倒是对的，所以这种错很难看出来）。
+     * 多一次按 token 的读，换掉一整类「端点与状态机各说各话」的错。
+     *
+     * <p>顺带：单据不存在时这里就 404，而不是等业务方法走到一半才抛。
+     */
+    private AdminReturnService.Tab tabOf(String token) {
+        return AdminReturnService.Tab.of(adminReturns.require(token).getStatus());
+    }
+
+    /**
+     * 处置成功 fragment（AC2）：{@code data-next-id}（同页签下一条）+ oob 行删除 + 五页签计数 + toast。
+     *
+     * <p>{@code from} 由 {@link #tabOf} 在处置<b>前</b>算出 —— 不从请求里读，免得前端传错就跳到别的队列去。
+     */
+    private String done(AdminReturnService.Tab from, String token, String type, String full,
+            String message, Model model) {
+        ReturnType parsedType = parseType(type);
+        Boolean parsedFull = parseFull(full);
+        model.addAttribute("removedToken", token);
+        model.addAttribute("nextId", adminReturns.nextToken(from, parsedType, parsedFull, token));
+        model.addAttribute("counts", adminReturns.counts(parsedType, parsedFull));
+        model.addAttribute("tabs", java.util.Arrays.stream(AdminReturnService.Tab.values())
+                .map(AdminReturnService.Tab::param).toList());
+        model.addAttribute("message", message);
+        return "admin/fragments/shop-return-done :: done";
+    }
+
+    /** 宽松解析：值不对（有人手改 URL）当作没筛，不为此让整页 500。 */
+    private static ReturnType parseType(String raw) {
+        if (raw != null && !raw.isBlank()) {
+            for (ReturnType t : ReturnType.values()) {
+                if (t.name().equalsIgnoreCase(raw.trim())) {
+                    return t;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** {@code null} = 不筛整单退；只认 {@code true} / {@code false} 两个字面量。 */
+    private static Boolean parseFull(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String v = raw.trim();
+        return "true".equalsIgnoreCase(v) ? Boolean.TRUE
+                : "false".equalsIgnoreCase(v) ? Boolean.FALSE : null;
+    }
+
     private static long actorOf(AdminUserDetails admin) {
         if (admin == null) {
             throw AppException.unauthorized("需要登录").code("admin.err.common.loginRequired");
         }
         return admin.getAdminAccountId();
-    }
-
-    private static ReturnStatus parseStatus(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        for (ReturnStatus s : ReturnStatus.values()) {
-            if (s.name().equalsIgnoreCase(raw.trim())) {
-                return s;
-            }
-        }
-        return null;
     }
 
     /** 🔴 处置方式不可默认：S-10 要求「不留悬空」，猜一个等于替 CS 决定货去哪。 */

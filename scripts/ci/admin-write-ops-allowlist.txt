@@ -84,7 +84,9 @@
 #    下列 4 条是「已授权、当前尚未删」的预授权项 —— 现在不命中，但漏了它们的话，
 #    Epic 10 / 后续 story 真按 11.3 去删时，guard 会把一次**有授权的删除**报成事故（PR 无端变红）。
 - GET /admin/shop/orders/{token}   # Story 10.2（订单履约抽屉，11.3 退役清单）—— ⏳ Epic 10 未执行，当前仍在服役
-- GET /admin/shop/returns/{token}   # Story 10.1（Toko 退货抽屉，11.3 退役清单）—— ⏳ Epic 10 未执行，当前仍在服役
+- GET /admin/shop/returns/{token}   # Story 10.1（Toko 退货工作台）—— ✅ 10.1 已执行；整页退役但 **mapping 按设计保留**
+                                    #   （T1「零新端点」：HX-Request 返右栏片段、直达抛 404），故本行**不会命中**，
+                                    #   留着只是说明「没删是对的」，删掉它反而会让人以为这条 GET 该没了。
 - GET /admin/vets/{id}/qualification   # Story 9.1b（11.3 列为退役，实际改为抽屉资质页签片段、路径保留）—— 🔄 当前仍在服役，勿删
 - GET /admin/vets/{id}/ratings   # Story 9.1b（11.3 列为退役，实际改为抽屉评分页签片段、路径保留）—— 🔄 当前仍在服役，勿删
 - GET /admin/ai-orders/{orderToken}   # Story 8.4（抽屉吸收详情页，11.3 退役清单）
