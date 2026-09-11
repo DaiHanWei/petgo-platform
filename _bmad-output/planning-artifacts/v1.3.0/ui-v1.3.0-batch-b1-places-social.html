@@ -1,0 +1,915 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>TailTopia V1.3.0 批次B — 场所发现与社交基建包 · 已定稿</title>
+<style>
+
+:root{
+  --page-bg:#FAF9FC; --page-bg-2:#F1EEF7; --page-ink:#211F2E; --page-ink-2:#57536B;
+  --page-muted:#8E89A3; --page-rule:#E4E0EE; --page-accent:#7D45F6; --page-accent-soft:#EFE6FF;
+  --lane-b:#C77B1F; --lane-a:#1F9E6A; --lane-c:#3D8BD1; --lane-d:#D1477A; --lane-e:#845EC9;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --page-bg:#15131C; --page-bg-2:#1D1A26; --page-ink:#EDEBF5; --page-ink-2:#B3AEC6; --page-muted:#837E99; --page-rule:#2C2838; --page-accent:#A98BFA; --page-accent-soft:#2C2444; }
+}
+:root[data-theme="dark"]{ --page-bg:#15131C; --page-bg-2:#1D1A26; --page-ink:#EDEBF5; --page-ink-2:#B3AEC6; --page-muted:#837E99; --page-rule:#2C2838; --page-accent:#A98BFA; --page-accent-soft:#2C2444; }
+:root[data-theme="light"]{ --page-bg:#FAF9FC; --page-bg-2:#F1EEF7; --page-ink:#211F2E; --page-ink-2:#57536B; --page-muted:#8E89A3; --page-rule:#E4E0EE; --page-accent:#7D45F6; --page-accent-soft:#EFE6FF; }
+
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; background:var(--page-bg); }
+body{ color:var(--page-ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; line-height:1.5; -webkit-font-smoothing:antialiased; }
+h1,h2,h3{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; font-weight:600; text-wrap:balance; margin:0; }
+.wrap{ max-width:1500px; margin:0 auto; padding:0 28px 140px; }
+
+.doc-header{ padding:56px 0 28px; border-bottom:1px solid var(--page-rule); margin-bottom:28px; }
+.eyebrow{ display:inline-flex; align-items:center; gap:8px; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--page-accent); font-weight:600; margin:0 0 12px; }
+.eyebrow::before{ content:""; width:16px; height:1.5px; background:var(--page-accent); display:inline-block; }
+.doc-header h1{ font-size:25px; margin:0; }
+.doc-sub{ max-width:88ch; color:var(--page-ink-2); font-size:14.5px; margin:14px 0 0; }
+.stage-tag{ display:inline-block; font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:6px; background:var(--page-accent-soft); color:var(--page-accent); margin-right:8px; }
+
+.scope-note{ margin:18px 0 0; padding:12px 16px; border-radius:10px; background:var(--page-bg-2); border:1px solid var(--page-rule); font-size:13px; color:var(--page-ink-2); max-width:88ch; }
+.scope-note b{ color:var(--page-ink); }
+.scope-note.good{ border-color:#9FD8BC; background:#EFFAF4; }
+@media (prefers-color-scheme: dark){ .scope-note.good{ background:#0f2a1c; border-color:#2f5a41; } }
+:root[data-theme="dark"] .scope-note.good{ background:#0f2a1c; border-color:#2f5a41; }
+
+.checklist{ margin:22px 0 0; border:1px solid var(--page-rule); border-radius:12px; overflow:hidden; }
+.checklist table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+.checklist th{ text-align:left; background:var(--page-bg-2); padding:9px 12px; font-weight:650; border-bottom:1px solid var(--page-rule); }
+.checklist td{ padding:8px 12px; border-bottom:1px solid var(--page-rule); vertical-align:top; color:var(--page-ink-2); }
+.checklist tr:last-child td{ border-bottom:none; }
+.checklist td b{ color:var(--page-ink); }
+.checklist .lane-b{ color:var(--lane-b); font-weight:700; } .checklist .lane-a{ color:var(--lane-a); font-weight:700; }
+.checklist .lane-c{ color:var(--lane-c); font-weight:700; } .checklist .lane-d{ color:var(--lane-d); font-weight:700; }
+.checklist .lane-e{ color:var(--lane-e); font-weight:700; }
+
+.jumpnav{ position:sticky; top:0; z-index:30; display:flex; gap:4px; flex-wrap:wrap; padding:10px 0; margin:20px 0 4px; background:color-mix(in srgb, var(--page-bg) 90%, transparent); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); border-bottom:1px solid var(--page-rule); }
+.jumpnav a{ font-size:12px; font-weight:600; color:var(--page-ink-2); text-decoration:none; padding:6px 10px; border-radius:7px; }
+.jumpnav a:hover{ background:var(--page-accent-soft); color:var(--page-accent); }
+
+.lane{ margin:44px 0 8px; }
+.lane-title{ display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+.lane-dot{ width:9px; height:9px; border-radius:50%; }
+.lane-title h2{ font-size:19px; margin:0; }
+.lane-fr{ font-size:11.5px; font-weight:700; color:#fff; background:var(--page-muted); padding:2px 9px; border-radius:999px; }
+.lane-desc{ color:var(--page-ink-2); font-size:13px; margin:4px 0 20px; max-width:88ch; }
+
+/* 流程条 */
+.flow{display:flex; flex-wrap:wrap; align-items:center; gap:7px; font-size:12.5px;
+  color:var(--page-ink-2); line-height:1.9; margin:0 0 22px; padding:12px 16px;
+  background:#fff; border:1px solid var(--page-rule); border-radius:10px;}
+.flow s{text-decoration:none; font-weight:600; color:var(--page-accent);
+  background:var(--page-accent-soft); border-radius:6px; padding:2px 8px;}
+.flow i{font-style:normal; color:var(--page-muted);}
+.flow em{font-style:normal; color:var(--page-ink); font-weight:600;}
+.flow .nl{flex-basis:100%; height:0;}
+@media (prefers-color-scheme: dark){ .flow{ background:var(--page-bg-2); } }
+:root[data-theme="dark"] .flow{ background:var(--page-bg-2); }
+
+/* 一行 3 屏 */
+.frames{display:grid; grid-template-columns:repeat(3, 408px); gap:40px 32px;
+  justify-content:start; padding:8px 4px 26px;}
+.frame-card{ display:flex; flex-direction:column; align-items:center; gap:10px; width:408px; }
+.frame-tag{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif; font-size:12.5px; font-weight:600; color:var(--page-accent); border:1px solid var(--page-accent); border-radius:999px; padding:3px 12px; text-align:center; }
+.frame-cap{ font-size:12px; color:var(--page-ink-2); text-align:left; align-self:stretch; }
+.frame-cap b{ color:var(--page-ink); }
+.frame-cap .tagN{ display:inline-block; font-size:10px; font-weight:700; color:#8A5A00; background:#FEF3DE; padding:1px 6px; border-radius:5px; margin-right:4px; }
+.frame-cap .tagR{ display:inline-block; font-size:10px; font-weight:700; color:#1F6B4A; background:#DFF3E9; padding:1px 6px; border-radius:5px; margin-right:4px; }
+.variant-flag{ display:inline-block; font-size:10.5px; font-weight:700; color:#8A5A00; background:#FEF3DE; padding:1px 7px; border-radius:5px; margin-right:5px; }
+@media (prefers-color-scheme: dark){ .variant-flag{ background:#3a2a10; color:#e8b862; } }
+.reuse-flag{ display:inline-block; font-size:10.5px; font-weight:700; color:#1F6B4A; background:#DFF3E9; padding:1px 7px; border-radius:5px; margin-right:5px; }
+@media (prefers-color-scheme: dark){ .reuse-flag{ background:#123326; color:#7fd4ab; } }
+
+/* ============================================================
+   真实页面手机框：CSS 取自 petgo-platform 仓库的原始设计原型
+   _bmad-output/pages/{feed,profil,notif,paspor-no-profile}.html
+   （代码注释里反复引用的"原型 feed.html / profil.html"就是这批文件）
+   —— 颜色/字号/圆角/组件类名与它们保持一致，是本项目真正的设计系统来源。
+   ============================================================ */
+:root{
+  --c-bg:#FFFFFF; --c-surface:#FFFFFF; --c-subtle:#F8F2FF; --c-muted:#EFEDF3;
+  --c-heading:#1C1830; --c-primary:#2E2A45; --c-secondary:#544864; --c-tertiary:#9690A6;
+  --c-violet:#845EC9; --c-line:#E6E6E6;
+}
+.phone-shell{ width:390px; height:844px; background:var(--c-bg); border-radius:44px; border:9px solid #18152A;
+  box-shadow:0 0 0 2px #2E2A4A, inset 0 0 0 1px rgba(255,255,255,.08), 0 20px 40px rgba(20,10,40,.14);
+  display:flex; flex-direction:column; overflow:hidden; position:relative; flex-shrink:0; }
+.pill{ position:absolute; top:13px; left:50%; transform:translateX(-50%); width:118px; height:33px; background:#18152A; border-radius:18px; z-index:100; }
+.statusbar{ height:54px; padding:17px 22px 0; display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
+.statusbar .t{ font-size:15px; font-weight:600; color:var(--c-primary); }
+.pages{ flex:1; overflow:hidden; position:relative; }
+.page{ position:absolute; inset:0; overflow-y:auto; overflow-x:hidden; padding-bottom:4px; background:var(--c-bg); }
+.appbar{ display:flex; align-items:center; justify-content:space-between; padding:8px 20px 12px; }
+.appbar-title{ font-size:19px; font-weight:700; color:var(--c-primary); }
+.ibtn{ width:38px; height:38px; border-radius:11px; border:none; background:var(--c-surface); display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(22,34,51,.07); flex-shrink:0; color:var(--c-primary); }
+.ibtn svg{ width:18px; height:18px; }
+.chips{ display:flex; gap:7px; padding:0 20px; overflow-x:auto; margin-bottom:14px; }
+.chip{ padding:6px 13px; border-radius:9999px; font-size:12px; font-weight:500; white-space:nowrap; border:1.5px solid var(--c-line); background:var(--c-surface); color:var(--c-secondary); }
+.chip.on{ background:var(--c-violet); border-color:var(--c-violet); color:#fff; }
+.card{ margin:0 20px 10px; background:var(--c-surface); border-radius:16px; box-shadow:0 4px 12px rgba(22,34,51,.06); overflow:hidden; }
+.cbody{ padding:13px; }
+.row{ display:flex; align-items:center; gap:9px; margin-bottom:9px; }
+.av{ width:34px; height:34px; border-radius:9999px; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#fff; flex-shrink:0; }
+.avlg{ width:62px; height:62px; border-radius:9999px; display:flex; align-items:center; justify-content:center; font-size:26px; flex-shrink:0; color:#fff; }
+.meta{ flex:1; min-width:0; }
+.meta-name{ font-size:13px; font-weight:600; color:var(--c-primary); }
+.meta-time{ font-size:11px; color:var(--c-tertiary); }
+.badge{ padding:3px 8px; border-radius:6px; font-size:10px; font-weight:600; white-space:nowrap; }
+.b-momen{ background:#F8F6FF; color:#845EC9; }
+.b-diary{ background:#E7F8F0; color:#0E7A4D; }
+.b-tips{ background:#FEF3DE; color:#8A5A00; }
+.ctext{ font-size:13px; color:var(--c-primary); line-height:1.55; margin-bottom:9px; }
+.imgph{ width:100%; height:130px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:32px; }
+.profhead{ background:var(--c-surface); padding:14px 20px 18px; box-shadow:0 2px 12px rgba(22,34,51,.06); }
+.profrow{ display:flex; align-items:center; gap:14px; margin-bottom:14px; }
+.unm{ font-size:17px; font-weight:700; color:var(--c-primary); }
+.uemail{ font-size:11px; color:var(--c-secondary); margin-top:2px; }
+.ucap{ font-size:11px; color:var(--c-secondary); margin-top:2px; }
+.editbtn{ padding:6px 12px; border-radius:8px; border:1.5px solid #C2B0EC; background:transparent; color:var(--c-violet); font-size:12px; font-weight:600; white-space:nowrap; }
+.petmini{ display:flex; align-items:center; gap:11px; background:#F8F6FF; border-radius:13px; padding:11px; }
+.pmname{ font-size:13px; font-weight:600; color:var(--c-primary); }
+.pmsub{ font-size:11px; color:var(--c-secondary); }
+.arrow{ font-size:12px; color:var(--c-violet); font-weight:600; white-space:nowrap; }
+.psec{ padding:14px 20px; }
+.psectitle{ font-size:11px; font-weight:600; color:var(--c-tertiary); margin-bottom:10px; text-transform:uppercase; letter-spacing:.6px; display:flex; justify-content:space-between; align-items:center; }
+.pgrid{ display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+.pthumb{ border-radius:11px; overflow:hidden; aspect-ratio:1; position:relative; }
+.pthumb-img{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:28px; background:var(--c-subtle); }
+.pthumb-badge{ position:absolute; top:5px; left:5px; padding:2px 6px; border-radius:5px; font-size:9px; font-weight:700; }
+.tabbar{ height:66px; background:var(--c-surface); border-radius:32px 32px 0 0; box-shadow:0 -4px 20px rgba(22,34,51,.08); display:flex; align-items:flex-start; padding:6px 0 0; flex-shrink:0; position:relative; }
+.tab{ flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; }
+.tab-hl{ width:44px; height:44px; border-radius:13px; display:flex; align-items:center; justify-content:center; }
+.tab.on .tab-hl{ background:var(--c-subtle); }
+.tab svg{ width:24px; height:24px; color:var(--c-primary); opacity:.5; }
+.tab.on svg{ color:var(--c-violet); opacity:1; }
+.tlabel{ font-size:10px; font-weight:500; color:var(--c-tertiary); }
+.tab.on .tlabel{ color:var(--c-violet); font-weight:600; }
+.tabplus{ flex:1; display:flex; align-items:flex-start; justify-content:center; }
+.plusinner{ width:56px; height:56px; border-radius:9999px; background:var(--c-violet); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 20px rgba(132,94,201,.30); margin-top:-14px; }
+.homebar{ height:10px; background:var(--c-surface); display:flex; justify-content:center; align-items:center; flex-shrink:0; }
+.homebar div{ width:130px; height:4px; background:#343434; border-radius:9999px; opacity:.25; }
+.n-tile{ display:flex; align-items:flex-start; gap:12px; margin:0 12px 4px; padding:12px; border-radius:14px; }
+.n-tile.unread{ background:var(--c-subtle); }
+.n-tile.read{ background:var(--c-bg); }
+.n-icon{ width:40px; height:40px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+.n-title{ font-size:13.5px; font-weight:700; color:var(--c-heading); margin-bottom:3px; }
+.n-body{ font-size:12px; color:var(--c-secondary); line-height:1.4; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.n-time{ font-size:11px; color:var(--c-tertiary); margin-top:6px; }
+.sheet-overlay{ position:absolute; inset:0; background:rgba(14,10,20,.55); display:flex; align-items:flex-end; z-index:20; }
+.sheet{ background:var(--c-surface); border-radius:24px 24px 0 0; width:100%; padding:14px 20px 30px; box-shadow:0 -8px 40px rgba(0,0,0,.18); }
+.sheet-handle{ width:36px; height:4px; background:var(--c-line); border-radius:9999px; margin:0 auto 16px; }
+.sheet-item{ width:100%; text-align:left; padding:14px 4px; border-bottom:1px solid #F3F3F3; font-size:14px; color:var(--c-primary); display:flex; align-items:center; gap:10px; }
+.sheet-item:last-child{ border-bottom:none; }
+.sheet-item.danger{ color:#F0425A; }
+.field{ padding:0 20px; margin-bottom:15px; }
+.field label{ display:block; font-size:11px; font-weight:700; color:var(--c-secondary); letter-spacing:.4px; text-transform:uppercase; margin-bottom:6px; }
+.field label .req{ color:#F0425A; text-transform:none; font-weight:400; }
+.finput{ border:1.5px solid var(--c-line); border-radius:12px; padding:12px 14px; font-size:14px; color:var(--c-heading); background:var(--c-surface); }
+.finput.err{ border-color:#F0425A; }
+.err-msg{ font-size:11px; color:#F0425A; margin-top:5px; }
+.btn-primary{ padding:13px; background:var(--c-violet); border-radius:14px; font-size:14px; font-weight:700; color:#fff; text-align:center; box-shadow:0 6px 18px rgba(132,94,201,.28); }
+.btn-outline{ padding:12px; background:transparent; border:1.5px solid var(--c-line); border-radius:14px; font-size:13px; color:var(--c-secondary); text-align:center; }
+.divider{ height:1px; background:var(--c-line); margin:12px 20px; }
+.empty-wrap{ position:absolute; inset:0; top:60px; bottom:83px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center; }
+.empty-icon{ font-size:64px; margin-bottom:8px; opacity:.55; }
+.empty-title{ font-size:17px; font-weight:700; color:var(--c-heading); margin-bottom:8px; }
+.empty-body{ font-size:13px; color:var(--c-secondary); line-height:1.6; max-width:270px; margin-bottom:20px; }
+.toast{ position:absolute; bottom:24px; left:20px; right:20px; background:#211F2E; color:#fff; padding:10px 14px; border-radius:12px; font-size:12px; text-align:center; z-index:30; box-shadow:0 8px 20px rgba(0,0,0,.2); }
+.map-fake{ position:absolute; inset:0; background:repeating-linear-gradient(0deg,#EDE9F7,#EDE9F7 22px,#E4DEF3 22px,#E4DEF3 23px),repeating-linear-gradient(90deg,transparent,transparent 22px,#E4DEF3 22px,#E4DEF3 23px); }
+.map-pin{ position:absolute; top:50%; left:50%; transform:translate(-50%,-100%); font-size:34px; }
+.web-chrome{ background:#EDEBF2; padding:7px 12px; font-size:10px; color:var(--c-secondary); border-radius:16px 16px 0 0; }
+.blur-card{ filter:blur(3px) opacity(.5); pointer-events:none; }
+.tag-outline{ display:inline-flex; align-items:center; padding:5px 11px; border-radius:9999px; border:1.3px solid var(--c-line); font-size:11px; color:var(--c-secondary); margin:0 6px 6px 0; }
+.tag-outline.sel{ background:var(--c-violet); border-color:var(--c-violet); color:#fff; }
+.list-row{ display:flex; gap:10px; padding:11px 20px; border-bottom:1px solid var(--c-line); }
+.thumb{ width:56px; height:56px; border-radius:10px; background:var(--c-subtle); flex-shrink:0; display:flex; align-items:center; justify-content:center; color:var(--c-tertiary); font-size:20px; }
+.t-title{ font-size:16px; font-weight:600; color:var(--c-heading); }
+.t-body{ font-size:13.5px; color:var(--c-primary); }
+.t-cap{ font-size:12px; color:var(--c-secondary); }
+.t-micro{ font-size:10.5px; color:var(--c-tertiary); }
+.violet{ color:var(--c-violet); }
+/* 第三步视觉优化：数字防抖动、图片描边、图标粗细统一（make-interfaces-feel-better） */
+.num{ font-variant-numeric:tabular-nums; }
+.pthumb-img, .imgph, .thumb, .av{ box-shadow:inset 0 0 0 1px rgba(0,0,0,.08); }
+.ibtn svg, .tab svg{ stroke-width:2; }
+/* 傻瓜式操作核对：可点元素统一给够 44×44 热区，不裸露文字/emoji当按钮 */
+.tap-more{ width:36px; height:36px; margin:-8px -8px -8px 0; display:flex; align-items:center; justify-content:center; border-radius:8px; flex-shrink:0; }
+.tap-icon{ min-height:36px; padding:6px 4px; margin:-6px -4px; display:flex; align-items:center; gap:5px; border-radius:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="doc-header">
+    <div class="eyebrow">TailTopia · V1.3.0 · 批次 B</div>
+    <h1>场所发现与社交基建包 —— 已定稿</h1>
+    <p class="doc-sub">
+      <span class="stage-tag">已定稿 · 2026-09-11 · 不拆页</span>
+      范围对应 <code>v1-3-0prd-B.md</code>：FR-112（不含⑧打卡）/ FR-118 / FR-119 / FR-121。视觉与交互取值以 <code>petgo-platform</code> <code>stag</code> 分支源码为准。制作过程中的核对记录、修正历史见 <code>.decision-log.md</code>。
+    </p>
+  </div>
+
+  <nav class="jumpnav">
+    <a href="#lane-b">探索顶部统一区</a>
+    <a href="#lane-a">FR-112 场所发现</a>
+    <a href="#lane-c">FR-118 公开主页</a>
+    <a href="#lane-d">FR-119 @提及</a>
+    <a href="#lane-e">FR-121 Diary推荐</a>
+  </nav>
+
+  <div class="checklist">
+    <table>
+      <tr><th>屏号</th><th>页面/状态</th><th>类型</th><th>所属 FR</th></tr>
+      <tr><td class="lane-b">B1</td><td>探索 Tab（顶部统一区：场所入口 + Diary 推荐横滑行）</td><td>现有页局部改动</td><td>FR-112④ / FR-121</td></tr>
+      <tr><td class="lane-a">A1</td><td>场所列表 · 默认态（按距离排序）</td><td>新页面</td><td>FR-112②</td></tr>
+      <tr><td class="lane-a">A2</td><td>场所列表 · 无定位权限（按最新 + 顶部提示）</td><td>变体</td><td>FR-112②</td></tr>
+      <tr><td class="lane-a">A3</td><td>场所列表 · 空态（引导标记场所）</td><td>空态</td><td>FR-112②</td></tr>
+      <tr><td class="lane-a">A4</td><td>场所详情页（不含打卡按钮）</td><td>新页面</td><td>FR-112③</td></tr>
+      <tr><td class="lane-a">A5</td><td>新建场所 · 表单页</td><td>新页面</td><td>FR-112①</td></tr>
+      <tr><td class="lane-a">A6</td><td>新建场所 · 地图选点弹层</td><td>叠加层</td><td>FR-112①</td></tr>
+      <tr><td class="lane-a">A7</td><td>新建场所 · 提交成功（Toast + 返回）</td><td>成功态</td><td>FR-112①</td></tr>
+      <tr><td class="lane-a">A8</td><td>新建场所 · 提交失败（表单内联错误）</td><td>失败态</td><td>FR-112①</td></tr>
+      <tr><td class="lane-a">A9</td><td>场所分享 H5 页（场所存在）</td><td>新页面（站外）</td><td>FR-112⑨</td></tr>
+      <tr><td class="lane-a">A10</td><td>场所分享 H5 页（场所已下架）</td><td>异常态（站外）</td><td>FR-112⑨</td></tr>
+      <tr><td class="lane-c">C1</td><td>完整主页 · 他人视角（访客）</td><td>新页面</td><td>FR-118</td></tr>
+      <tr><td class="lane-c">C2</td><td>完整主页 · 自己视角</td><td>变体</td><td>FR-118</td></tr>
+      <tr><td class="lane-c">C3</td><td>主页操作抽屉（举报 / 拉黑）</td><td>叠加层</td><td>FR-118</td></tr>
+      <tr><td class="lane-c">C4</td><td>主页 · 被拉黑者查看拉黑者（模糊空态）</td><td>变体</td><td>FR-118</td></tr>
+      <tr><td class="lane-c">C5</td><td>主页 · 对象已注销（空态）</td><td>变体</td><td>FR-118</td></tr>
+      <tr><td class="lane-c">C6</td><td>宠物卡片 → Diary 访客视图</td><td>复用现有页面</td><td>FR-118</td></tr>
+      <tr><td class="lane-d">D1</td><td>编辑器 · @ 选择器默认态</td><td>叠加层</td><td>FR-119</td></tr>
+      <tr><td class="lane-d">D2</td><td>编辑器 · @ 选择器空态（无候选）</td><td>变体</td><td>FR-119</td></tr>
+      <tr><td class="lane-d">D3</td><td>通知中心（含新增「有人提到了你」）</td><td>现有页局部改动</td><td>FR-119</td></tr>
+      <tr><td class="lane-d">D4</td><td>点击提及通知 · 内容已删除空态</td><td>异常态</td><td>FR-119</td></tr>
+      <tr><td class="lane-e">E1</td><td>Diary Tab · 未建档态（推荐宠物集合）</td><td>现有页局部改动</td><td>FR-121</td></tr>
+      <tr><td class="lane-e">E2</td><td>全屏推荐集合页（网格）</td><td>新页面</td><td>FR-121</td></tr>
+      <tr><td class="lane-e">E3</td><td>全屏推荐集合页 · 空态</td><td>空态</td><td>FR-121</td></tr>
+    </table>
+    <div style="padding:10px 12px; font-size:11.5px; color:var(--page-ink-2); border-top:1px solid var(--page-rule); background:var(--page-bg-2);">
+      <b>「类型」列说明：</b>新页面＝独立路由页 · 现有页局部改动＝在已上线页面上加减内容 · 变体＝同一屏的另一种状态（数据/权限不同） · 空态/成功态/失败态/异常态＝对应结果状态 ·
+      <b>叠加层</b>＝不单独占一屏路由，而是浮在当前页面之上的弹层/底部抽屉/菜单（比如 D1 的 @ 选择器浮在评论输入框上方，不是跳转到新页面）。
+    </div>
+  </div>
+
+  <!-- ============ 泳道 B：探索 Tab 顶部统一区 ============ -->
+  <div class="lane" id="lane-b">
+    <div class="lane-title"><span class="lane-dot" style="background:var(--lane-b)"></span><h2>探索 Tab 顶部统一区</h2><span class="lane-fr">FR-112④ + FR-121</span></div>
+    <p class="lane-desc">对应现有 <b>Sosial（首页 Feed，<code>home_page.dart</code>，底部 Tab 图标是指南针 compass，不是房子）</b>——现状顶部结构：AppBar（品牌 wordmark + 通知铃 <code>ibtn</code>）→ 分类 chips（Semua/Momen/Diary/Edukasi&nbsp;&amp;&nbsp;Tips）→ 瀑布流卡片。两个新模块插入 AppBar 与 chips 之间。</p>
+    <div class="flow">
+      <em>主路径：</em><i>Sosial 首屏 →</i> <s>B1</s> 顶部统一区（场所入口 → 跳<s>A1</s>场所列表 ／ 横滑卡片「查看全部」→ 跳<s>E2</s>推荐集合页）
+    </div>
+    <div class="frames">
+      <div class="frame-card"><span class="frame-tag">B1</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="appbar-title">TailTopia 🐾</span>
+              <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></span>
+            </div>
+            <div style="margin:0 20px 10px;display:flex;align-items:center;gap:10px;padding:11px 13px;background:var(--page-accent-soft);border-radius:12px;">
+              <span style="font-size:19px;">📍</span>
+              <span class="t-body" style="font-weight:600;flex:1;">Tempat Ramah Hewan</span>
+              <span class="t-cap violet">›</span>
+            </div>
+            <div style="margin:0 20px 12px;">
+              <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;"><span class="t-body" style="font-weight:600;">Lihat hewan peliharaan lain</span><span class="t-cap violet num" style="font-weight:600;">Lihat semua ›</span></div>
+              <div style="display:flex;gap:9px;overflow-x:auto;">
+                <div style="width:70px;flex-shrink:0;position:relative;">
+                  <div class="pthumb" style="aspect-ratio:auto;height:70px;"><div class="pthumb-img" style="background:#F8F6FF;">🌇</div></div>
+                  <div class="av" style="position:absolute;top:52px;left:-4px;width:24px;height:24px;border:2px solid #fff;background:#F8F6FF;font-size:11px;">🐱</div>
+                  <div class="t-micro" style="margin-top:6px;">Miu · 238h</div>
+                </div>
+                <div style="width:70px;flex-shrink:0;position:relative;">
+                  <div class="pthumb" style="aspect-ratio:auto;height:70px;"><div class="pthumb-img" style="background:#FEF3DE;">🌳</div></div>
+                  <div class="av" style="position:absolute;top:52px;left:-4px;width:24px;height:24px;border:2px solid #fff;background:#FEF3DE;font-size:11px;">🐶</div>
+                  <div class="t-micro" style="margin-top:6px;">Rex · 96h</div>
+                </div>
+                <div style="width:70px;flex-shrink:0;opacity:.55;position:relative;">
+                  <div class="pthumb" style="aspect-ratio:auto;height:70px;"><div class="pthumb-img" style="background:#E7F8F0;">🥕</div></div>
+                  <div class="av" style="position:absolute;top:52px;left:-4px;width:24px;height:24px;border:2px solid #fff;background:#E7F8F0;font-size:11px;">🐰</div>
+                  <div class="t-micro" style="margin-top:6px;">…</div>
+                </div>
+              </div>
+            </div>
+            <div class="chips"><div class="chip on">Semua</div><div class="chip">Momen</div><div class="chip">Diary</div><div class="chip">Edukasi &amp; Tips</div></div>
+            <div style="margin-bottom:14px;">
+              <div style="display:flex;align-items:center;gap:9px;padding:0 20px 10px;">
+                <div class="av" style="width:32px;height:32px;background:#9E83DA;font-size:13px;">P</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="display:flex;align-items:center;gap:6px;"><span class="t-cap" style="font-weight:700;color:var(--c-heading);">Putri Rahayu</span><span class="badge b-momen">Momen</span></div>
+                  <div class="t-micro" style="margin-top:1px;">2 jam lalu</div>
+                </div>
+                <span class="tap-more" style="color:var(--c-secondary);">⋯</span>
+              </div>
+              <div class="imgph" style="height:180px;border-radius:0;background:#F8F6FF;">🐱</div>
+              <div style="padding:10px 20px 0;"><p class="t-body" style="margin:0;">Oyen akhirnya mau makan lagi setelah semalam muntah 😮‍💨</p></div>
+              <div style="display:flex;align-items:center;gap:18px;padding:10px 20px 6px;color:var(--c-secondary);">
+                <span class="tap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="19" height="19"><path d="M12 20.5s-7-4.35-9.5-9A5.2 5.2 0 0112 6.2 5.2 5.2 0 0121.5 11.5c-2.5 4.65-9.5 9-9.5 9z"/></svg> <span class="t-cap num">124</span></span>
+                <span class="tap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="19" height="19"><path d="M21 11.5a8.38 8.38 0 01-4.8 7.6 8.5 8.5 0 01-8.9-.9L3 20l1.9-4.3a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.1z"/></svg> <span class="t-cap num">8</span></span>
+                <span class="tap-more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="19" height="19"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg></span>
+              </div>
+            </div>
+            <div style="margin-bottom:14px;">
+              <div style="display:flex;align-items:center;gap:9px;padding:0 20px 10px;">
+                <div class="av" style="width:32px;height:32px;background:#845EC9;font-size:13px;">A</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="display:flex;align-items:center;gap:6px;"><span class="t-cap" style="font-weight:700;color:var(--c-heading);">Aurel Kusuma</span><span class="badge b-diary">Diary</span></div>
+                  <div class="t-micro" style="margin-top:1px;">1 jam lalu</div>
+                </div>
+                <span class="tap-more" style="color:var(--c-secondary);">⋯</span>
+              </div>
+              <div style="padding:0 20px;"><p class="t-body" style="margin:0;">Mochi tiduran cantik di bawah sinar matahari sore ☀️</p></div>
+              <div style="display:flex;align-items:center;gap:18px;padding:10px 20px 6px;color:var(--c-secondary);">
+                <span class="tap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="19" height="19"><path d="M12 20.5s-7-4.35-9.5-9A5.2 5.2 0 0112 6.2 5.2 5.2 0 0121.5 11.5c-2.5 4.65-9.5 9-9.5 9z"/></svg> <span class="t-cap num">67</span></span>
+                <span class="tap-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="19" height="19"><path d="M21 11.5a8.38 8.38 0 01-4.8 7.6 8.5 8.5 0 01-8.9-.9L3 20l1.9-4.3a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.1z"/></svg> <span class="t-cap num">3</span></span>
+                <span class="tap-more"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="19" height="19"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg></span>
+              </div>
+            </div>
+          </div></div>
+          <div class="tabbar">
+            <div class="tab"><div class="tab-hl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h7a3 3 0 013 3v13a2 2 0 00-2-2H2V4z"/><path d="M22 4h-7a3 3 0 00-3 3v13a2 2 0 012-2h8V4z"/></svg></div><span class="tlabel">Diary</span></div>
+            <div class="tab"><div class="tab-hl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2l1.5 5h9L18 2M4 7h16l-1.5 13a2 2 0 01-2 2H7.5a2 2 0 01-2-2L4 7z"/></svg></div><span class="tlabel">Toko</span></div>
+            <div class="tabplus"><div class="plusinner"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" width="27" height="27"><path d="M12 5v14M5 12h14"/></svg></div></div>
+            <div class="tab on"><div class="tab-hl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M15 9l-2 6-6 2 2-6z"/></svg></div><span class="tlabel">Sosial</span></div>
+            <div class="tab"><div class="tab-hl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="7" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg></div><span class="tlabel">Saya</span></div>
+          </div>
+          <div class="homebar"><div></div></div>
+        </div>
+        <p class="frame-cap"><b>现有页局部改动</b> —— <span class="tagR">复用</span>AppBar/分类chips(Semua·Momen·Diary·Edukasi&nbsp;&amp;&nbsp;Tips)/瀑布流/底部Tab(指南针=Sosial) 全部保留原样；<span class="tagN">新增</span>两个模块<b>分层处理</b>（参考淘宝首页"入口宫格 / 内容横滑"思路）：场所入口是单行导航条（图标+文字+箭头），宠物推荐单独一行横滑卡片。Feed 卡片点赞/评论/分享图标对齐真实 <code>masonry_card.dart</code>：心形描边（<code>Icons.favorite_border_rounded</code>，点赞后转实心珊瑚红<code>#F0425A</code>）、对话气泡描边（<code>Icons.mode_comment_outlined</code>）、iOS 分享方框箭头（<code>Icons.ios_share</code>），颜色对齐真实 <code>textSecondary #544864</code>。宠物推荐卡同 E2：大图=最近一张公开照片，左下角小圆头像=宠物档案头像，两个不同字段</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 泳道 A：FR-112 ============ -->
+  <div class="lane" id="lane-a">
+    <div class="lane-title"><span class="lane-dot" style="background:var(--lane-a)"></span><h2>宠物友好场所发现 MVP</h2><span class="lane-fr">FR-112（①~⑦⑨，不含⑧打卡）</span></div>
+    <p class="lane-desc">全部为全新页面（代码里无「场所/venue」相关实现），沿用与已有页面同一套视觉语言（<code>_bmad-output/pages/</code> 原型体系）继续画，不另起一套风格。</p>
+    <div class="flow">
+      <em>主路径：</em><i>由 B1 场所入口进入 →</i> <s>A1</s> 场所列表默认态 <i>→ 点场所 →</i> <s>A4</s> 场所详情 <i>→ 点分享 → 系统分享面板（不重画）→</i> <s>A9</s> H5 场所页 <i>／ 场所已下架 →</i> <s>A10</s> H5「场所不存在」
+      <span class="nl"></span>
+      <em>变体：</em><s>A2</s> 场所列表（无定位权限，按最新+顶部提示，替代 A1）<i>／</i> <s>A3</s> 场所列表（空态，替代 A1）
+      <span class="nl"></span>
+      <em>分支：</em><i>列表页或详情页「+标记场所」→</i> <s>A5</s> 新建场所表单 <i>→ 点位置字段 →</i> <s>A6</s> 地图选点弹层（叠加在 A5 上，⚠️项目无地图依赖，需新引入）<i>→ 选点返回 A5 → 提交 →</i> <s>A7</s> 成功（Toast，回列表/详情）<i>／</i> <s>A8</s> 失败（A5 表单保持，内联错误）
+      <span class="nl"></span>
+      <em>复用（不重画）：</em><s>A4</s> 内点照片 → 复用批次A灯箱<b>设计规范</b>（代码尚未实现，待研发实现新版灯箱后场所照片自动切换）／ 点举报 → 复用现有五类选项举报抽屉（<code>report_sheet.dart</code>：Ilegal atau melanggar aturan / Informasi palsu / Konten tidak pantas / Pelecehan / Lainnya）／ 他人补充照片 → 复用既有 <code>MediaUploadUseCase</code> 上传链路 ／ 点标记人 → 跳 <s>C1</s> 用户主页
+    </div>
+    <div class="frames">
+      <div class="frame-card"><span class="frame-tag">A1</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span><span class="appbar-title" style="font-size:16px;">Tempat Ramah Hewan</span><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="18" height="18"><path d="M12 5v14M5 12h14"/></svg></span></div>
+            <div class="chips"><div class="chip">Jenis ▾</div><div class="chip">Tag ▾</div></div>
+            <div class="divider" style="margin:6px 20px 10px;"></div>
+            <div class="list-row"><div class="thumb">☕</div><div style="flex:1;"><div class="t-body" style="font-weight:600;">Kopi Kayu Manis</div><div class="t-cap">Kafe · 1.2 km</div><div style="margin-top:4px;"><span class="tag-outline" style="padding:3px 8px;">Boleh masuk</span><span class="tag-outline" style="padding:3px 8px;">+2</span></div><div class="t-micro" style="margin-top:4px;">📷 6 · 💬 3</div></div></div>
+            <div class="list-row"><div class="thumb">🌳</div><div style="flex:1;"><div class="t-body" style="font-weight:600;">Taman Suropati</div><div class="t-cap">Taman · 2.4 km</div><div style="margin-top:4px;"><span class="tag-outline" style="padding:3px 8px;">Area luar</span></div><div class="t-micro" style="margin-top:4px;">📷 12 · 💬 9</div></div></div>
+            <div class="list-row"><div class="thumb">🍽️</div><div style="flex:1;"><div class="t-body" style="font-weight:600;">Resto Anjing Senang</div><div class="t-cap">Restoran · 3.1 km</div><div style="margin-top:4px;"><span class="tag-outline" style="padding:3px 8px;">Makanan hewan</span></div><div class="t-micro" style="margin-top:4px;">📷 4 · 💬 1</div></div></div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b>新页面</b> —— 首图+名称+类型+距离+标签(≤2+N)+照片数/评论数，顶部类型/标签筛选chips</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">A2</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span><span class="appbar-title" style="font-size:16px;">Tempat Ramah Hewan</span><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="18" height="18"><path d="M12 5v14M5 12h14"/></svg></span></div>
+            <div style="margin:0 20px 10px;background:#FEF3DE;border-radius:12px;padding:10px 13px;"><span class="t-cap" style="color:#8A5A00;">📍 Aktifkan lokasi untuk urutkan berdasarkan jarak · <b>Aktifkan</b></span></div>
+            <div class="chips"><div class="chip">Jenis ▾</div><div class="chip">Tag ▾</div></div>
+            <div class="list-row"><div class="thumb">☕</div><div style="flex:1;"><div class="t-body" style="font-weight:600;">Kopi Kayu Manis</div><div class="t-cap">Kafe · Terbaru</div></div></div>
+            <div class="list-row"><div class="thumb">🍽️</div><div style="flex:1;"><div class="t-body" style="font-weight:600;">Resto Anjing Senang</div><div class="t-cap">Restoran · Terbaru</div></div></div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b><span class="variant-flag">变体</span>A1 的变体</b> —— 无定位权限：顶部提示条 + 列表改按最新排序</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">A3</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span><span class="appbar-title" style="font-size:16px;">Tempat Ramah Hewan</span><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="18" height="18"><path d="M12 5v14M5 12h14"/></svg></span></div>
+            <div class="empty-wrap"><div class="empty-icon">📍</div><div class="empty-title">Belum ada tempat di sekitar</div><div class="btn-primary" style="display:inline-block;padding:12px 26px;">Tandai Tempat</div></div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b>空态</b> —— 引导「标记一个场所」，样式对齐 <code>paspor-no-profile.html</code> 空态范式</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">A4</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page" style="padding-bottom:64px;">
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span><span class="appbar-title" style="flex:1;"></span><span class="ibtn"><svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span></div>
+            <div class="imgph" style="height:160px;margin:0 20px 12px;width:calc(100% - 40px);background:#F8F6FF;">📷 1/6</div>
+            <div style="padding:0 20px;">
+              <div class="t-title">Kopi Kayu Manis</div>
+              <div style="margin:7px 0 8px;"><span class="tag-outline">Kafe</span><span class="tag-outline">Boleh masuk</span><span class="tag-outline">+1</span></div>
+              <div class="t-cap">1.2 km</div>
+              <p class="t-cap" style="margin:8px 0;">Kafe nyaman, ada area luar untuk anjing. Kursi outdoor cukup banyak.</p>
+              <div style="display:flex;align-items:center;gap:8px;background:var(--c-subtle);border-radius:10px;padding:9px 11px;margin-bottom:10px;"><span class="t-cap" style="flex:1;">Jl. Senopati No.75, Kebayoran Baru</span><span class="t-cap violet" style="font-weight:600;">Salin</span></div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div class="av" style="width:26px;height:26px;background:#F0425A;font-size:11px;">R</div><span class="t-cap">Ditandai oleh Rani</span></div>
+              <div class="tag-outline" style="padding:8px 16px;">↗ Bagikan</div>
+            </div>
+            <div class="divider"></div>
+            <div style="padding:0 20px;">
+              <div class="t-cap" style="font-weight:700;margin-bottom:8px;">KOMENTAR (3)</div>
+              <div style="display:flex;gap:9px;margin-bottom:11px;"><div class="av" style="width:30px;height:30px;background:#9E83DA;font-size:12px;">B</div><div><div class="t-cap" style="font-weight:600;">Budi</div><div class="t-body">Enak buat kerja sambil bawa anjing!</div><div class="t-micro">👍 12 · 👎 0</div></div></div>
+              <div style="display:flex;gap:9px;"><div class="av" style="width:30px;height:30px;background:#F0425A;font-size:12px;">S</div><div><div class="t-cap" style="font-weight:600;">Sari</div><div class="t-body">Kursi outdoor terbatas pas weekend.</div><div class="t-micro">👍 4 · 👎 1</div></div></div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--c-line);padding:10px 20px;display:flex;gap:8px;align-items:center;">
+            <div class="finput" style="flex:1;color:var(--c-tertiary);padding:9px 13px;">Tulis komentar…</div>
+            <span style="width:38px;height:38px;border-radius:9999px;border:1.5px solid var(--c-line);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">👍</span>
+            <span style="width:38px;height:38px;border-radius:9999px;border:1.5px solid var(--c-line);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">👎</span>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b>新页面</b> —— 不含打卡按钮；底部评论输入条样式参考现有 <code>CommentComposer</code> 吸底 pill 输入框，附加👍/👎可选态度</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">A5</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="t-cap">Batal</span><span class="appbar-title" style="font-size:15px;">Tempat Baru</span><span class="t-cap violet" style="font-weight:700;">Simpan</span></div>
+            <div class="field"><label>Nama <span class="req">* (≤80)</span></label><div class="finput">Kopi Kayu Manis</div></div>
+            <div class="field"><label>Jenis <span class="req">*</span></label><div><span class="tag-outline sel">Kafe</span><span class="tag-outline">Restoran</span><span class="tag-outline">Taman</span><span class="tag-outline">Mal</span><span class="tag-outline">Hotel</span></div></div>
+            <div class="field"><label>Tag ramah hewan <span class="req">*（≥1）</span></label><div><span class="tag-outline sel">Boleh masuk</span><span class="tag-outline sel">Area luar</span><span class="tag-outline">Makanan hewan</span><span class="tag-outline">Perlu tali</span></div></div>
+            <div class="field"><label>Lokasi <span class="req">*</span></label><div class="finput" style="display:flex;background:var(--c-subtle);"><span style="flex:1;">📍 Pilih di peta</span><span>›</span></div></div>
+            <div class="field"><label>Alamat teks <span class="req">*</span></label><div class="finput">Jl. Senopati No.75</div></div>
+            <div class="field"><label>Foto (1–9)</label><div style="display:flex;gap:6px;"><div class="thumb" style="width:54px;height:54px;">📷</div><div class="thumb" style="width:54px;height:54px;">＋</div></div></div>
+            <div class="field"><label>Deskripsi (≤200)</label><div class="finput" style="height:48px;color:var(--c-tertiary);">Opsional…</div></div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b>新页面</b> —— 照片上传<span class="tagR">复用</span> <code>MediaUploadUseCase</code>；地图选点<span class="tagN">全新依赖</span>。<b>傻瓜式操作要求：</b>本帧展示的是必填项已填满的状态（Simpan 高亮可点）；空白表单下 Simpan 默认应是<b>灰色禁用</b>，等名称/类型/标签(≥1)/位置/地址全部满足才变亮可点——不能让用户点了没反应却不知道少填了什么</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">A6</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="map-fake"></div><div class="map-pin">📍</div>
+            <span class="ibtn" style="position:absolute;top:60px;left:20px;">✕</span>
+            <div style="position:absolute;bottom:0;left:0;right:0;background:#fff;padding:16px 20px;"><div class="btn-primary">Konfirmasi Lokasi</div></div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b>叠加层</b> —— flutter_map + OSM 底图占位（<span class="tagN">全新依赖</span>，项目 pubspec.yaml 目前无此库），拖动大头针选点</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">A7</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="toast">Tempat berhasil ditandai</div>
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span><span class="appbar-title" style="flex:1;"></span><span class="ibtn"><svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span></div>
+            <div class="imgph" style="height:160px;margin:0 20px;width:calc(100% - 40px);background:#F8F6FF;">📷</div>
+            <div class="t-title" style="padding:12px 20px 0;">Kopi Kayu Manis</div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b><span class="variant-flag">变体</span>成功态</b> —— Toast + 返回详情/列表</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">A8</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="t-cap">Batal</span><span class="appbar-title" style="font-size:15px;">Tempat Baru</span><span class="t-cap" style="color:var(--c-tertiary);">Simpan</span></div>
+            <div class="field"><label>Nama <span class="req">*</span></label><div class="finput">Kopi Kayu Manis</div></div>
+            <div class="field"><label>Lokasi <span class="req">*</span></label><div class="finput err">Belum dipilih</div><div class="err-msg">Wajib pilih lokasi di peta</div></div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b><span class="variant-flag">变体</span>A5 的变体</b> —— 表单保持，<b>只做字段级内联错误</b>（必填未填）；字段校验没过时请求不会真的发出，不叠加通用的"提交失败"横幅</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">A9</span>
+        <div class="phone-shell">
+          <div class="pages"><div class="page" style="display:flex;flex-direction:column;">
+            <div class="web-chrome" style="background:rgba(255,255,255,.12);color:#fff;position:relative;z-index:2;">🔒 tailtopia.id/place/kopi-kayu-manis</div>
+            <div style="position:relative;height:300px;flex-shrink:0;overflow:hidden;margin-bottom:-20px;">
+              <div style="position:absolute;inset:0;background:radial-gradient(120% 90% at 30% 20%,#F3D9A8 0%,#D9945B 45%,#7A4A32 100%);display:flex;align-items:center;justify-content:center;font-size:88px;">☕</div>
+              <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(28,24,48,.05) 0%,rgba(28,24,48,.2) 55%,rgba(28,24,48,.95) 100%);"></div>
+              <div style="position:absolute;top:16px;left:20px;right:20px;display:flex;gap:6px;">
+                <span class="tag-outline" style="background:rgba(255,255,255,.22);border:none;color:#fff;backdrop-filter:blur(4px);">☕ Kafe</span>
+                <span class="tag-outline" style="background:rgba(255,255,255,.22);border:none;color:#fff;backdrop-filter:blur(4px);">🐾 Ramah Hewan</span>
+              </div>
+              <div style="position:absolute;left:20px;right:20px;bottom:36px;">
+                <div style="font-size:26px;font-weight:700;color:#fff;line-height:1.15;text-shadow:0 2px 12px rgba(0,0,0,.35);">Kopi Kayu Manis</div>
+                <div style="font-size:12.5px;color:rgba(255,255,255,.85);margin-top:6px;">📍 Jl. Senopati No.75, Kebayoran Baru</div>
+              </div>
+            </div>
+            <div style="flex-shrink:0;background:#fff;border-radius:20px 20px 0 0;padding:22px 18px 28px;position:relative;box-shadow:0 -12px 24px rgba(0,0,0,.12);">
+              <div style="display:flex;align-items:center;gap:10px;background:var(--c-subtle);border-radius:13px;padding:12px 13px;margin-bottom:16px;">
+                <span style="font-size:18px;">🐾</span>
+                <span class="t-cap" style="color:var(--c-heading);font-weight:600;">Temanmu mengajak kamu nongkrong di sini!</span>
+              </div>
+              <p class="t-body" style="margin:0 0 14px;">Kafe nyaman, ada area luar untuk anjing. Kursi outdoor cukup banyak — cocok buat kopi sore sambil bawa peliharaan.</p>
+              <div style="display:flex;gap:16px;margin-bottom:16px;">
+                <span class="t-cap num">👍 12 suka</span>
+                <span class="t-cap num">📷 6 foto</span>
+                <span class="t-cap num">💬 3 komentar</span>
+              </div>
+              <div style="display:flex;gap:7px;margin-bottom:20px;">
+                <div class="pthumb" style="aspect-ratio:auto;width:72px;height:72px;flex-shrink:0;"><div class="pthumb-img" style="background:#F3E4D2;font-size:24px;">🪑</div></div>
+                <div class="pthumb" style="aspect-ratio:auto;width:72px;height:72px;flex-shrink:0;"><div class="pthumb-img" style="background:#E8DCCB;font-size:24px;">🐕</div></div>
+                <div class="pthumb" style="aspect-ratio:auto;width:72px;height:72px;flex-shrink:0;"><div class="pthumb-img" style="background:#EFE6D8;font-size:24px;">🌿</div></div>
+                <div class="pthumb" style="aspect-ratio:auto;width:72px;height:72px;flex-shrink:0;position:relative;"><div class="pthumb-img" style="background:#D9CBB3;font-size:24px;opacity:.4;">🍰</div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(28,24,48,.35);color:#fff;font-size:13px;font-weight:700;">+3</div></div>
+              </div>
+              <div class="btn-primary">Buka di TailTopia</div>
+              <div style="display:flex;gap:8px;justify-content:center;margin-top:10px;">
+                <span style="display:flex;align-items:center;gap:5px;border:1px solid var(--c-line);border-radius:8px;padding:5px 10px;font-size:11px;color:var(--c-secondary);">🍎 App Store</span>
+                <span style="display:flex;align-items:center;gap:5px;border:1px solid var(--c-line);border-radius:8px;padding:5px 10px;font-size:11px;color:var(--c-secondary);">▶ Google Play</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:20px;opacity:.6;">
+                <span style="font-size:14px;">🐾</span><span class="t-micro">TailTopia · Temukan tempat ramah hewan</span>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b>新页面（H5，站外服务端渲染）</b> —— 全屏图片 hero + 深色渐隐 + 悬浮白卡，参考社交平台"故事/名片"式分享页观感；邀约文案「Temanmu mengajak kamu nongkrong di sini!」+ 推荐/照片/评论数社交佐证 + 4 张照片缩略图预览（呼应"照片1-9张"字段，末张显示「+3」剩余张数）+ App Store/Google Play 徽章样式按钮 + 底部品牌小尾巴。<b>依赖：</b>需要至少 4 张构图尚可的场所照片，照片不全的场所这版效果会打折扣</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">A10</span>
+        <div class="phone-shell">
+          <div class="pages"><div class="page">
+            <div class="web-chrome">🔒 tailtopia.id/place/kopi-kayu-manis</div>
+            <div class="empty-wrap" style="top:30px;"><div class="empty-icon">🚫</div><div class="empty-title" style="font-size:15px;">Tempat ini sudah tidak ada</div></div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b><span class="variant-flag">变体</span>A9 的变体</b> —— 场所下架后统一文案，链接长期有效</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 泳道 C：FR-118 ============ -->
+  <div class="lane" id="lane-c">
+    <div class="lane-title"><span class="lane-dot" style="background:var(--lane-c)"></span><h2>用户公开主页 · 访客浏览</h2><span class="lane-fr">FR-118</span></div>
+    <p class="lane-desc">基于现状 <code>me_page.dart</code>（「我的」Tab，对应原型 <code>profil.html</code>）的三段真实结构改造：<code>.profhead</code>（头像/昵称/签名，访客态去掉 email 与相机上传角标）→ <code>.petmini</code>（头像/名字/种类·年龄·帖子数，同款保留）→ <code>.psec/.pgrid</code>（现状「Postinganku」2列裸网格，改为访客可见的 PUBLIC 内容）。「我的」Tab 本身保持不动，这是独立新页面。</p>
+    <div class="flow">
+      <em>主路径：</em><i>由 A4 标记人 / Feed头像 / 详情页作者行 / 评论区头像 / D3 通知 / E1E2 宠物卡 进入 →</i> <s>C1</s> 完整主页（他人视角）
+      <span class="nl"></span>
+      <em>变体：</em><s>C2</s> 完整主页（自己视角，替代 C1——多「编辑资料」入口、无「···」）
+      <span class="nl"></span>
+      <em>分支：</em><i>C1 顶栏「···」→</i> <s>C3</s> 举报/拉黑抽屉（互斥，沿用现有 <code>mini_profile_sheet.dart</code> 两项）
+      <span class="nl"></span>
+      <em>变体：</em><s>C4</s> 主页（被拉黑者查看拉黑者时的模糊空态，替代 C1 内容区）<i>／</i> <s>C5</s> 主页（对象已注销，替代 C1 全部内容）
+      <span class="nl"></span>
+      <em>延伸（复用，不重画）：</em><i>C1/C2 宠物卡片点击 →</i> <s>C6</s> 复用既有 Diary 访客视图（<code>VisitorArchiveView</code>）
+    </div>
+    <div class="frames">
+      <div class="frame-card"><span class="frame-tag">C1</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span><span class="appbar-title" style="flex:1;"></span><span class="ibtn"><svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span></div>
+            <div class="profhead" style="box-shadow:none;padding-top:0;">
+              <div class="profrow">
+                <div class="avlg" style="background:linear-gradient(135deg,#845EC9,#563A8E);">R</div>
+                <div style="flex:1;"><div class="unm">Rani <span class="tag-outline" style="margin-left:4px;background:var(--c-subtle);border:none;color:var(--c-violet);padding:2px 8px;">Official</span></div><div class="ucap">Bergabung Mar 2026</div><div class="ucap">Pecinta kucing 🐱</div></div>
+              </div>
+              <div class="petmini">
+                <div class="av" style="background:linear-gradient(135deg,#9E83DA,#845EC9);width:42px;height:42px;font-size:19px;">🐱</div>
+                <div style="flex:1;"><div class="pmname">Miu</div><div class="pmsub">Kucing · 2th 3bln · 42 diary</div></div>
+                <span class="arrow">Lihat →</span>
+              </div>
+            </div>
+            <div class="psec" style="padding-top:14px;">
+              <div class="psectitle"><span>POSTINGAN</span><span class="num" style="text-transform:none;">18 postingan · 342 suka</span></div>
+              <div class="pgrid">
+                <div class="pthumb"><div class="pthumb-img" style="background:#F8F6FF;">🖼️</div><span class="pthumb-badge b-momen">Momen</span></div>
+                <div class="pthumb"><div class="pthumb-img" style="background:#E7F8F0;">📔</div><span class="pthumb-badge b-diary">Diary</span></div>
+                <div class="pthumb"><div class="pthumb-img" style="background:#FEF3DE;">🖼️</div><span class="pthumb-badge b-tips">Tips</span></div>
+                <div class="pthumb"><div class="pthumb-img" style="background:#F8F6FF;">🖼️</div><span class="pthumb-badge b-momen">Momen</span></div>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b>新页面</b> —— <span class="tagR">复用</span><code>.profhead</code>(头像/昵称/签名)+<code>.petmini</code>同款+现状「Postinganku」2列裸网格(<code>.pgrid</code>)；<span class="tagN">新增</span>加入时间/发帖总数/获赞总数（代码现状无，需后端补充）；不含 email/编辑昵称/相机角标（自己视角专属）</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">C2</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span><span class="appbar-title" style="flex:1;"></span></div>
+            <div class="profhead" style="box-shadow:none;padding-top:0;">
+              <div class="profrow">
+                <div class="avlg" style="background:linear-gradient(135deg,#845EC9,#563A8E);">R</div>
+                <div style="flex:1;"><div class="unm">Rani <span class="tag-outline" style="margin-left:4px;background:var(--c-subtle);border:none;color:var(--c-violet);padding:2px 8px;">Official</span></div><div class="ucap">Bergabung Mar 2026</div><div class="ucap">Pecinta kucing 🐱</div></div>
+                <span class="editbtn">Edit Profil</span>
+              </div>
+              <div class="petmini">
+                <div class="av" style="background:linear-gradient(135deg,#9E83DA,#845EC9);width:42px;height:42px;font-size:19px;">🐱</div>
+                <div style="flex:1;"><div class="pmname">Miu</div><div class="pmsub">Kucing · 2th 3bln · 42 diary</div></div>
+                <span class="arrow">Lihat →</span>
+              </div>
+            </div>
+            <div class="psec" style="padding-top:14px;">
+              <div class="psectitle"><span>POSTINGAN</span><span class="num" style="text-transform:none;">18 · 342 suka</span></div>
+              <div class="pgrid">
+                <div class="pthumb"><div class="pthumb-img" style="background:#F8F6FF;">🖼️</div><span class="pthumb-badge b-momen">Momen</span></div>
+                <div class="pthumb"><div class="pthumb-img" style="background:#E7F8F0;">📔</div><span class="pthumb-badge b-diary">Diary</span></div>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b><span class="variant-flag">变体</span>C1 的变体</b> —— 运营标签保留（自己也是被打标签的用户，视觉上不该因为是自己就消失）；「编辑资料」按钮位置对齐真实 <code>me_page.dart</code>：在身份行内、与头像同一行（不是塞进顶部 AppBar），跳既有 <code>_editProfile</code> 抽屉（<code>profil-edit-sheet</code>：头像+昵称可编辑+邮箱只读），不重画；顶部不再出现「···」</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">C3</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="sheet-overlay"><div class="sheet">
+              <div class="sheet-handle"></div>
+              <div class="sheet-item">🚩 Laporkan</div>
+              <div class="sheet-item danger">🚫 Blokir</div>
+              <div class="sheet-item" style="justify-content:center;color:var(--c-secondary);font-weight:600;margin-top:10px;padding-top:14px;">Batal</div>
+            </div></div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b>叠加层</b> —— <span class="tagR">复用</span>现有 <code>mini_profile_sheet.dart</code> 举报/拉黑两项，抽屉样式与 <code>profil-edit-sheet</code> 同一套（顶部圆角24+手柄+slideUp）；<span class="tagN">补充</span>底部「Batal」取消按钮（点遮罩空白处也能收起，但显式按钮更明确）</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">C4</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span><span class="appbar-title" style="flex:1;"></span><span class="ibtn"><svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span></div>
+            <div class="profhead" style="box-shadow:none;padding-top:0;">
+              <div class="profrow">
+                <div class="avlg" style="background:linear-gradient(135deg,#845EC9,#563A8E);">R</div>
+                <div style="flex:1;"><div class="unm">Rani <span class="tag-outline" style="margin-left:4px;background:var(--c-subtle);border:none;color:var(--c-violet);padding:2px 8px;">Official</span></div><div class="ucap">Bergabung Mar 2026</div></div>
+              </div>
+            </div>
+            <div style="text-align:center;padding:44px 30px;"><div class="empty-icon" style="font-size:40px;">🔒</div><div class="t-cap">Belum ada konten (pengaturan privasi orang ini)</div></div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b><span class="variant-flag">变体</span>C1 的变体</b> —— 头像/昵称/加入时间正常展示（不做模糊/隐藏），只有下方内容区替换成空态文案；不明示拉黑，Feed/评论不受影响</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">C5</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span></div>
+            <div class="empty-wrap" style="top:60px;"><div class="empty-icon">👤</div><div class="empty-title" style="font-size:15px;">Pengguna tidak ditemukan</div></div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b><span class="variant-flag">变体</span>C1 的变体</b> —— 统一「用户不存在」空态</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">C6</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page" style="overflow-y:auto;">
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span><span class="appbar-title" style="font-size:19px;">Diary Miu</span></div>
+            <div style="margin:0 20px 12px;background:var(--c-subtle);border-radius:12px;padding:10px 13px;"><span class="t-cap" style="color:#5B3FA0;">👁 Dibagikan oleh <b>Rani</b> · hanya bisa dilihat</span></div>
+            <div style="margin:0 20px 14px;border:1px solid var(--c-line);border-radius:16px;padding:16px;">
+              <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;">
+                <div class="av" style="width:56px;height:56px;border-radius:14px;background:var(--c-subtle);font-size:26px;">🐱</div>
+                <div style="flex:1;">
+                  <div class="t-title" style="font-size:19px;">Miu</div>
+                  <div class="t-cap">Kucing Domestik · Betina · 2 tahun</div>
+                  <div class="t-cap" style="font-style:italic;margin-top:4px;">"Suka tidur di keyboard, benci mentimun."</div>
+                </div>
+              </div>
+              <div style="display:flex;background:var(--c-subtle);border-radius:12px;overflow:hidden;">
+                <div style="flex:1;text-align:center;padding:10px 6px;"><div class="t-title violet num" style="font-size:17px;">42</div><div class="t-micro">Diary</div></div>
+                <div style="flex:1;text-align:center;padding:10px 6px;border-left:1px solid var(--c-line);"><div class="t-title violet num" style="font-size:17px;">3</div><div class="t-micro">Konsultasi</div></div>
+                <div style="flex:1;text-align:center;padding:10px 6px;border-left:1px solid var(--c-line);"><div class="t-title violet num" style="font-size:17px;">7</div><div class="t-micro">Milestone</div></div>
+              </div>
+            </div>
+            <div style="margin:0 20px 12px;">
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span class="t-cap" style="font-weight:600;">🏆 Pencapaian Miu</span><span class="t-cap violet num" style="font-weight:700;">7 / 30</span></div>
+              <div style="height:6px;background:var(--c-subtle);border-radius:99px;overflow:hidden;"><div style="width:23%;height:100%;background:var(--c-violet);"></div></div>
+            </div>
+            <div style="display:flex;gap:8px;margin:0 20px 12px;">
+              <div style="flex:1;text-align:center;padding:9px;border-radius:10px;background:var(--c-violet);color:#fff;font-size:12.5px;font-weight:600;">⏱ Linimasa</div>
+              <div style="flex:1;text-align:center;padding:9px;border-radius:10px;border:1.5px solid var(--c-line);font-size:12.5px;">📅 Kalender</div>
+            </div>
+            <div style="padding:0 20px;">
+              <div style="display:flex;gap:12px;border:1px solid var(--c-line);border-radius:13px;padding:12px;margin-bottom:8px;">
+                <div style="width:32px;flex-shrink:0;text-align:center;"><div class="t-cap" style="font-weight:700;">12</div><div class="t-micro">Jul</div></div>
+                <div style="flex:1;"><div class="t-body" style="font-weight:700;">Hari pertama Miu berani naik ke sofa sendiri</div><div class="t-micro" style="margin-top:2px;">3 foto</div></div>
+                <div style="width:44px;height:44px;border-radius:9px;background:#F8E6EC;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;">😻</div>
+              </div>
+              <div style="display:flex;gap:12px;border:1px solid var(--c-line);border-radius:13px;padding:12px;">
+                <div style="width:32px;flex-shrink:0;text-align:center;"><div class="t-cap" style="font-weight:700;">03</div><div class="t-micro">Jul</div></div>
+                <div style="flex:1;"><div class="t-body" style="font-weight:700;">Milestone tercapai · Foto pertama</div><div class="t-micro" style="margin-top:2px;">Tonggak S</div></div>
+                <div style="width:44px;height:44px;border-radius:9px;background:#FEF3DE;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;">🏅</div>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><span class="reuse-flag">复用现有页面</span> —— <code>visitor_archive_view.dart</code>：PetInfoCard(头像+名字+品种/性别/年龄+个性签名+Diary/咨询/里程碑三栏统计) + 成就进度条 + Linimasa/Kalender 视图切换 + 时间线卡片；相对作者态删掉标题行分享/编辑按钮与入口网格，不重画。<b>待确认：</b>「Dibagikan oleh {name} · hanya bisa dilihat」这条分享出处提示是否要在 FR-118 新增的站内入口（点宠物卡进入）里继续显示——原组件是靠分享 token 触发，站内点击进入时"谁分享的"这个语境不成立，可能需要隐藏或改文案，需与研发确认</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 泳道 D：FR-119 ============ -->
+  <div class="lane" id="lane-d">
+    <div class="lane-title"><span class="lane-dot" style="background:var(--lane-d)"></span><h2>@ 提及</h2><span class="lane-fr">FR-119（依赖 FR-118）</span></div>
+    <p class="lane-desc">现状 <code>comment_composer.dart</code> 是纯文本 <code>TextField</code>（底部固定 pill 输入条，无任何@触发机制），@选择器是全新叠加层。通知中心（对应原型 <code>notif.html</code>）现状按「Hari ini / Kemarin」分组、图标块+标题+正文+相对时间、未读左侧紫条+浅紫底，新类型直接沿用同款视觉。</p>
+    <div class="flow">
+      <em>主路径：</em><i>内容/评论输入框输入「@」 →</i> <s>D1</s> 选择器默认态（最近互动过的人）<i>→ 选中 → @昵称高亮插入 → 发布 →</i> <s>D3</s> 通知中心新增「有人提到了你」条目 <i>→ 点击 → 深链到内容/评论（复用现有 <code>CONTENT_COMMENTED</code> 的 <code>?focus=comments</code> 锚点机制）</i>
+      <span class="nl"></span>
+      <em>变体：</em><s>D2</s> 选择器空态（无任何候选，替代 D1）
+      <span class="nl"></span>
+      <em>分支：</em><i>D3 点击的内容/评论已被删除 →</i> <s>D4</s> 「内容已删除」空态（替代跳转结果）
+      <span class="nl"></span>
+      <em>延伸：</em><i>D1 内点选中的用户昵称跳转 →</i> <s>C1</s> 完整主页
+    </div>
+    <div class="frames">
+      <div class="frame-card"><span class="frame-tag">D1</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span><span class="appbar-title" style="font-size:16px;">Komentar</span></div>
+            <div style="padding:14px 20px;"><p class="t-body">Hari ini jalan-jalan sama @</p></div>
+            <div class="sheet-overlay" style="align-items:flex-end;height:55%;top:45%;bottom:0;position:absolute;">
+              <div class="sheet" style="width:100%;">
+                <div class="finput" style="margin-bottom:8px;color:var(--c-tertiary);">Cari nama…</div>
+                <div style="display:flex;gap:9px;align-items:center;padding:9px 0;"><div class="av" style="width:30px;height:30px;background:#845EC9;font-size:12px;">B</div><span class="t-body">Budi</span></div>
+                <div style="display:flex;gap:9px;align-items:center;padding:9px 0;"><div class="av" style="width:30px;height:30px;background:#F0425A;font-size:12px;">S</div><span class="t-body">Sari</span></div>
+                <div style="display:flex;gap:9px;align-items:center;padding:9px 0;"><div class="av" style="width:30px;height:30px;background:#9E83DA;font-size:12px;">A</div><span class="t-body">Andi</span></div>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b>叠加层</b> —— <span class="tagN">全新组件</span>，现状输入框无任何触发机制；候选：评论过我/我评论过/赞过我的/互相回复过，最近30人。<b>「Cari nama…」不是全局搜索</b>——PRD 明确"无全局用户搜索，搜索留到1.6.0"，这里只是在最多30人的候选名单内按输入字过滤，@不到没互动过的陌生人，避免误读成能搜任何用户</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">D2</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span><span class="appbar-title" style="font-size:16px;">Komentar</span></div>
+            <div style="padding:14px 20px;"><p class="t-body">Hari ini jalan-jalan sama @</p></div>
+            <div class="sheet-overlay" style="align-items:flex-end;height:44%;top:56%;bottom:0;position:absolute;">
+              <div class="sheet" style="width:100%;">
+                <div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:16px 10px 6px;color:var(--c-tertiary);">
+                  <span style="font-size:32px;margin-bottom:8px;opacity:.5;">👥</span>
+                  <span class="t-cap">Belum ada orang yang bisa di-@</span>
+                  <span class="t-micro" style="margin-top:4px;">Berinteraksi dulu (komentar/suka) baru bisa menyebut orang</span>
+                </div>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b><span class="variant-flag">变体</span>D1 的变体</b> —— 当前用户在候选集里没有任何互动过的人（评论区弹层，替代 D1 的候选列表）；候选为空时不显示过滤搜索框</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">D3</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar" style="padding-bottom:8px;"><span class="appbar-title">Notifikasi</span></div>
+            <div class="n-tile unread"><div class="n-icon" style="background:#F8F6FF;color:#845EC9;">📣</div><div style="flex:1;"><div class="n-title">Ada yang menyebutmu</div><div class="n-body">Budi menyebutmu di sebuah postingan</div><div class="n-time">5 menit lalu</div></div></div>
+            <div class="n-tile read"><div class="n-icon" style="background:#FDE7EB;color:#F0425A;">❤️</div><div style="flex:1;"><div class="n-title">Rani Fitriani menyukai postinganmu</div><div class="n-body">"Oyen akhirnya mau makan lagi setelah semalam muntah..."</div><div class="n-time">1 jam lalu</div></div></div>
+            <div class="n-tile read"><div class="n-icon" style="background:#F8F6FF;color:#845EC9;">💬</div><div style="flex:1;"><div class="n-title">dr. Dewi mengomentari postinganmu</div><div class="n-body">"Syukurlah sudah membaik! Kalau dalam 24 jam..."</div><div class="n-time">Kemarin, 14:30</div></div></div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b>现有页局部改动</b> —— <span class="tagR">复用</span>现有24类通知同款样式（按日分组/图标块/未读左紫条+浅紫底）；<span class="tagN">新增</span>「有人提到了你」一类，紫色图标块与兽医回复同色系</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">D4</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span></div>
+            <div class="empty-wrap" style="top:60px;"><div class="empty-icon">🗑️</div><div class="empty-title" style="font-size:15px;">Konten sudah dihapus</div></div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b><span class="variant-flag">变体</span>异常态</b> —— 不做撤回链路，统一空态</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 泳道 E：FR-121 ============ -->
+  <div class="lane" id="lane-e">
+    <div class="lane-title"><span class="lane-dot" style="background:var(--lane-e)"></span><h2>宠物 Diary 推荐集合</h2><span class="lane-fr">FR-121</span></div>
+    <p class="lane-desc">对应原型 <code>paspor-no-profile.html</code>：未建档态是「大图标 + 标题 + 说明 + 主按钮」的居中空态（现已加「Ubah status」文字按钮）——本次在这个填充位追加推荐宠物集合，原有引导内容不删除。游客态是完全独立的文件（<code>DiaryGuestPage</code>），本批次不动。<b>卡片里显示哪些宠物由 PRD §2.4"推荐逻辑"（2026-09-01拍板）决定，不是随手挑的</b>：候选=近14天有新公开Diary帖 + 有头像 + 公开成长记录≥3条；排序=最近更新倒序，同日按互动量；互相拉黑的双方不互推、注销用户宠物不入池；不做"不想被推荐"关闭开关；不复用FR-95内容级算法（那是另一套独立规则）。本稿里的 Miu/Rex/Koko/Coco 只是示例名字，用来演示卡片长什么样，不代表真实排序结果。</p>
+    <div class="flow">
+      <em>主路径：</em><i>登录但未建档用户进 Diary Tab →</i> <s>E1</s> 推荐宠物集合（追加在空态引导之下）<i>→ 点「Lihat semua」→</i> <s>E2</s> 全屏推荐集合页（网格）
+      <span class="nl"></span>
+      <em>主路径：</em><i>由 B1 横滑行「Lihat semua」→</i> <s>E2</s> 全屏推荐集合页（网格，与 E1 入口同归一处）
+      <span class="nl"></span>
+      <em>边界：</em><s>E3</s> 全屏集合页空态（候选池为空，替代 E2）
+      <span class="nl"></span>
+      <em>延伸（复用，不重画）：</em><i>E1/E2/B1 宠物卡点击 →</i> <s>C6</s> 同款 Diary 访客视图
+    </div>
+    <div class="frames">
+      <div class="frame-card"><span class="frame-tag">E1</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="appbar-title">Diary</span></div>
+            <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;">
+              <div style="font-size:30px;flex-shrink:0;">🐾</div>
+              <div style="flex:1;min-width:0;">
+                <div class="t-body" style="font-weight:700;">Belum ada profil hewan</div>
+                <div class="t-micro" style="margin-top:2px;">Buat profil untuk mulai catat tumbuh kembangnya</div>
+              </div>
+            </div>
+            <div style="padding:0 20px 6px;">
+              <div class="btn-primary" style="padding:10px;">+ Buat Profil Sekarang</div>
+            </div>
+            <div style="text-align:center;padding:0 20px 14px;">
+              <span class="t-micro violet" style="text-decoration:underline;">Ubah status</span>
+            </div>
+            <div class="divider"></div>
+            <div style="padding:0 20px;">
+              <div class="t-cap" style="font-weight:700;margin-bottom:10px;">Lihat hewan peliharaan lain</div>
+              <div style="display:grid;grid-template-columns:repeat(2, 1fr);gap:14px 12px;">
+                <div style="position:relative;">
+                  <div class="pthumb" style="aspect-ratio:1;"><div class="pthumb-img" style="background:#F8F6FF;font-size:32px;">🌇</div></div>
+                  <div class="av" style="position:absolute;bottom:32px;left:-6px;width:32px;height:32px;border:2px solid #fff;background:#F8F6FF;font-size:15px;">🐱</div>
+                  <div class="t-body" style="font-weight:600;margin-top:8px;">Miu</div><div class="t-micro">Kucing · 238 hari</div>
+                </div>
+                <div style="position:relative;">
+                  <div class="pthumb" style="aspect-ratio:1;"><div class="pthumb-img" style="background:#FEF3DE;font-size:32px;">🌳</div></div>
+                  <div class="av" style="position:absolute;bottom:32px;left:-6px;width:32px;height:32px;border:2px solid #fff;background:#FEF3DE;font-size:15px;">🐶</div>
+                  <div class="t-body" style="font-weight:600;margin-top:8px;">Rex</div><div class="t-micro">Anjing · 96 hari</div>
+                </div>
+                <div style="position:relative;">
+                  <div class="pthumb" style="aspect-ratio:1;"><div class="pthumb-img" style="background:#E7F8F0;font-size:32px;">🥕</div></div>
+                  <div class="av" style="position:absolute;bottom:32px;left:-6px;width:32px;height:32px;border:2px solid #fff;background:#E7F8F0;font-size:15px;">🐰</div>
+                  <div class="t-body" style="font-weight:600;margin-top:8px;">Koko</div><div class="t-micro">Kelinci · 44 hari</div>
+                </div>
+                <div style="position:relative;">
+                  <div class="pthumb" style="aspect-ratio:1;"><div class="pthumb-img" style="background:#FDE7EB;font-size:32px;">🏖️</div></div>
+                  <div class="av" style="position:absolute;bottom:32px;left:-6px;width:32px;height:32px;border:2px solid #fff;background:#FDE7EB;font-size:15px;">🐹</div>
+                  <div class="t-body" style="font-weight:600;margin-top:8px;">Coco</div><div class="t-micro">Hamster · 12 hari</div>
+                </div>
+              </div>
+              <div style="text-align:center;padding:16px 0 14px;">
+                <span class="t-body violet" style="font-weight:600;">Lihat semua hewan peliharaan lain ›</span>
+              </div>
+            </div>
+          </div></div>
+          <div class="tabbar">
+            <div class="tab on"><div class="tab-hl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h7a3 3 0 013 3v13a2 2 0 00-2-2H2V4z"/><path d="M22 4h-7a3 3 0 00-3 3v13a2 2 0 012-2h8V4z"/></svg></div><span class="tlabel">Diary</span></div>
+            <div class="tab"><div class="tab-hl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2l1.5 5h9L18 2M4 7h16l-1.5 13a2 2 0 01-2 2H7.5a2 2 0 01-2-2L4 7z"/></svg></div><span class="tlabel">Toko</span></div>
+            <div class="tabplus"><div class="plusinner"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" width="27" height="27"><path d="M12 5v14M5 12h14"/></svg></div></div>
+            <div class="tab"><div class="tab-hl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M15 9l-2 6-6 2 2-6z"/></svg></div><span class="tlabel">Sosial</span></div>
+            <div class="tab"><div class="tab-hl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="7" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg></div><span class="tlabel">Saya</span></div>
+          </div>
+          <div class="homebar"><div></div></div>
+        </div>
+        <p class="frame-cap"><b>现有页局部改动</b> —— <span class="tagR">保留</span>现状「+ Buat Profil Sekarang」+「Ubah status」两个操作原样不删，压缩为横向条（图标+文案一行，两个按钮各占一行；「Ubah status」会改变宠物拥有状态，故意和主按钮拉开距离、缩小弱化，避免手滑误触）；<span class="tagN">新增</span>推荐集合追加在其下方，<b>2 列网格铺满当前页面</b>（本帧示例 4 张，实际视口能放几张就放几张，竖向浏览不用横滑）；「Lihat semua」放在<b>页面最下面</b>，看完这一屏能看到的所有卡片、想看更多再点进 E2 完整列表。大图=最近一张公开照片，左下角小圆头像=宠物档案头像；点卡片本身 → C6 该宠物访客视图，点底部「Lihat semua」→ E2</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">E2</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span><span class="appbar-title" style="font-size:16px;">Hewan Peliharaan Lain</span></div>
+            <div style="padding:0 20px;display:grid;grid-template-columns:repeat(2, 1fr);gap:14px 12px;">
+              <div style="position:relative;">
+                <div class="pthumb" style="aspect-ratio:1;"><div class="pthumb-img" style="background:#F8F6FF;font-size:34px;">🌇</div></div>
+                <div class="av" style="position:absolute;bottom:34px;left:-6px;width:34px;height:34px;border:2px solid #fff;background:#F8F6FF;font-size:16px;">🐱</div>
+                <div class="t-body" style="font-weight:600;margin-top:8px;">Miu</div><div class="t-micro">Kucing · 238 hari</div>
+              </div>
+              <div style="position:relative;">
+                <div class="pthumb" style="aspect-ratio:1;"><div class="pthumb-img" style="background:#FEF3DE;font-size:34px;">🌳</div></div>
+                <div class="av" style="position:absolute;bottom:34px;left:-6px;width:34px;height:34px;border:2px solid #fff;background:#FEF3DE;font-size:16px;">🐶</div>
+                <div class="t-body" style="font-weight:600;margin-top:8px;">Rex</div><div class="t-micro">Anjing · 96 hari</div>
+              </div>
+              <div style="position:relative;">
+                <div class="pthumb" style="aspect-ratio:1;"><div class="pthumb-img" style="background:#E7F8F0;font-size:34px;">🥕</div></div>
+                <div class="av" style="position:absolute;bottom:34px;left:-6px;width:34px;height:34px;border:2px solid #fff;background:#E7F8F0;font-size:16px;">🐰</div>
+                <div class="t-body" style="font-weight:600;margin-top:8px;">Koko</div><div class="t-micro">Kelinci · 44 hari</div>
+              </div>
+              <div style="position:relative;">
+                <div class="pthumb" style="aspect-ratio:1;"><div class="pthumb-img" style="background:#FDE7EB;font-size:34px;">🏖️</div></div>
+                <div class="av" style="position:absolute;bottom:34px;left:-6px;width:34px;height:34px;border:2px solid #fff;background:#FDE7EB;font-size:16px;">🐹</div>
+                <div class="t-body" style="font-weight:600;margin-top:8px;">Coco</div><div class="t-micro">Hamster · 12 hari</div>
+              </div>
+            </div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b>新页面</b> —— <b>2 列 grid</b>：头像+名字+物种/年龄+最近公开照片+陪伴天数。大图=该宠物<b>最近一张公开照片</b>（帖子配图），左下角叠加的小圆头像=<b>宠物档案本身的头像</b>（PetProfile.avatarUrl），两者是不同字段、不同来源，不是同一张图重复摆放</p>
+      </div>
+      <div class="frame-card"><span class="frame-tag">E3</span>
+        <div class="phone-shell">
+          <div class="pill"></div>
+          <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
+          <div class="pages"><div class="page">
+            <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span><span class="appbar-title" style="font-size:16px;">Hewan Peliharaan Lain</span></div>
+            <div class="empty-wrap" style="top:60px;"><div class="empty-icon">🐾</div><div class="empty-title" style="font-size:15px;">Belum ada rekomendasi</div></div>
+          </div></div>
+        </div>
+        <p class="frame-cap"><b><span class="variant-flag">变体</span>E2 的变体</b> —— 候选池为空（无满足门槛的宠物）时的边界态</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
