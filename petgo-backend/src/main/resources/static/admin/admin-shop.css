@@ -693,3 +693,20 @@ tr.row-danger td { background: var(--danger-bg); }
 .inv-drawer .inv-tab-panel label { display: block; margin-bottom: 8px; }
 .inv-drawer .inv-tab-panel label > span { display: block; color: var(--muted); font-size: var(--fs-xs); }
 .inv-drawer .inv-tab-panel .inp { width: 100%; box-sizing: border-box; }
+
+/* ===== D1 服务范围与运费（V1.3.0 Story 10.6）===== */
+/* 🔴 区域是 div 网格不是 <table>：每行自己是一个 <form>（一行一次 upsert），
+   而 <form> 不能直接包 <tr> —— 用表格的话浏览器会把 form 提到表外，行里的输入全部脱离它。 */
+.ship-zones { display: grid; gap: 6px; }
+.ship-zone-head, .ship-zone-form {
+    display: grid; grid-template-columns: 1.2fr 1.2fr 1.2fr .8fr auto; gap: 8px; align-items: center;
+}
+.ship-zone-head { color: var(--muted); font-size: var(--fs-xs); padding: 0 2px; }
+.ship-zone-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+/* 区域表 5 列 + 保存钮，比 .cfg-card 默认的 720px 宽 —— 挤在 720px 里每个输入只剩 ~100px。 */
+#cfg-ship-zones { max-width: 980px; }
+.ship-zone-row .inline-error-slot { grid-column: 1 / -1; margin: 0; }
+.ship-zone-row.is-off .ship-zone-form .inp { opacity: .6; }
+.ship-zone-save { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+.ship-zones-new { margin-top: 14px; }
+.ship-zones-new h3 { font-size: var(--fs-sm); margin: 0 0 6px; }

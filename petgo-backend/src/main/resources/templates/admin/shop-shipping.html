@@ -1,97 +1,230 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
-<!-- 服务范围与运费表（AB-11C）。补 Story 2.2 的缺口 + Epic 5 S-7 退货收件地址。
-     🔴 界面不出现「配送方式」维度：C-14 已把二维运费表降为一维，只剩 Reguler。 -->
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  D1 服务范围与运费配置（V1.3.0 Story 10.6，模板 D 三卡；原 AB-11C 的三区块表单）。
+  🔴 界面不出现「配送方式」维度：C-14 已把二维运费表降为一维，只剩 Reguler ——
+     留一个恒等于 Reguler 的下拉只会让人误以为多档已经支持。
+  🔴 停用区域用 active=false 不删行：历史订单的运费需要可追溯（AB-13D 对账）。
+  🔴 导航归**商城组**（UI 稿泳道 5 帧 5-17、D-8），权限码仍是 config.*（现状不规整，本 story 不改）。
+  端点与参数零变更：POST shipping/zones · zones/toggle · threshold · return-address。
+
+  🔴 **卡①不是一个 form**，见该卡自己的注释：模板 D 的 configCard 本身就是一个 <form>，
+     而区域是「一行一次 upsert」+「启停另走一个端点」—— 套成一张卡会出现 form 嵌套（HTML 直接吞掉内层）。
+-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.shop.shipping.title}">服务范围与运费 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <div class="s-page-head">
-            <div class="s-title-wrap">
-                <h1 th:text="#{admin.shop.shipping.title}">服务范围与运费</h1>
-                <p class="s-sub" th:text="#{admin.shop.shipping.hint}">以 Kecamatan 为粒度维护可配送区域，每个区域一个固定运费。不接承运商实时计费；配送方式只有 Reguler 一档，界面刻意不给「配送方式」维度。停用区域用停用而不是删除——历史订单的运费需要可追溯。</p>
-            </div>
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.shop.shipping.title}">服务范围与运费</h1>
         </div>
-        <p th:if="${notice}" class="flash" th:text="${notice}">已保存</p>
-        <p th:if="${error}" class="flash error" th:text="${error}">操作失败</p>
+        <p class="muted" th:text="#{admin.shop.shipping.hint}">以 Kecamatan 为粒度维护可配送区域，每个区域一个固定运费。不接承运商实时计费；配送方式只有 Reguler 一档，界面刻意不给「配送方式」维度。停用区域用停用而不是删除——历史订单的运费需要可追溯。</p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
-        <h2 th:text="#{admin.shop.shipping.section.zones}">可配送区域</h2>
-        <div class="s-card">
-        <table>
-            <thead><tr>
-                <th th:text="#{admin.shop.shipping.col.kecamatan}">Kecamatan</th>
-                <th th:text="#{admin.shop.shipping.col.kota}">Kota/Kabupaten</th>
-                <th th:text="#{admin.shop.shipping.col.provinsi}">Provinsi</th>
-                <th th:text="#{admin.shop.shipping.col.fee}">运费</th>
-                <th th:text="#{admin.shop.shipping.col.active}">启用</th>
-                <th th:text="#{admin.common.action}">操作</th>
-            </tr></thead>
-            <tbody>
-            <tr th:each="z : ${zones}">
-                <td th:text="${z.kecamatan}">Kebayoran Baru</td>
-                <td th:text="${z.kotaKabupaten}">Jakarta Selatan</td>
-                <td th:text="${z.provinsi}">DKI Jakarta</td>
-                <td th:text="${z.fee}">20000</td>
-                <td th:text="${z.active}">true</td>
-                <td>
-                    <form method="post" th:action="@{/admin/shop/shipping/zones/toggle}">
-                        <input type="hidden" name="kecamatan" th:value="${z.kecamatan}"/>
-                        <input type="hidden" name="active" th:value="${!z.active}"/>
-                        <button class="btn btn-sm btn-neutral" type="submit"
-                                th:text="${z.active} ? #{admin.shop.shipping.btn.disable} : #{admin.shop.shipping.btn.enable}">停用</button>
-                    </form>
-                </td>
-            </tr>
-            <tr th:if="${#lists.isEmpty(zones)}">
-                <td colspan="6" th:text="#{admin.shop.shipping.empty}">还没有可配送区域——没有区域就一单也发不出去，请先添加。</td>
-            </tr>
-            </tbody>
-        </table>
-        </div>
-
-        <div class="s-card">
-        <h2 th:text="#{admin.shop.shipping.section.addZone}">新增 / 更新区域</h2>
-        <form method="post" th:action="@{/admin/shop/shipping/zones}">
-            <input type="text" name="kecamatan" required maxlength="60" placeholder="Kecamatan"/>
-            <input type="text" name="kotaKabupaten" required maxlength="60" placeholder="Kota/Kabupaten"/>
-            <input type="text" name="provinsi" required maxlength="60" placeholder="Provinsi"/>
-            <input type="number" name="fee" min="0" required/>
-            <button class="btn btn-primary" type="submit" th:text="#{admin.shop.shipping.btn.saveZone}">保存区域</button>
-        </form>
-        </div>
-
-        <div class="s-card">
-        <h2 th:text="#{admin.shop.shipping.section.threshold}">免运门槛</h2>
-        <p class="hint" th:text="#{admin.shop.shipping.threshold.hint}">商品小计达到该金额即免运费。填 0 表示不做免运——不是「0 元即免运」。</p>
-        <form method="post" th:action="@{/admin/shop/shipping/threshold}">
-            <input type="number" name="threshold" min="0" required
-                   th:value="${settings != null} ? ${settings.freeShippingThreshold} : 0"/>
-            <button class="btn btn-primary" type="submit" th:text="#{admin.shop.shipping.btn.saveThreshold}">保存门槛</button>
-        </form>
-        </div>
-
-        <div class="s-card">
-        <h2 th:text="#{admin.shop.shipping.section.returnAddress}">退货收件地址</h2>
-        <p class="hint" th:text="#{admin.shop.shipping.returnAddress.hint}">用户自寄退货到这个地址；本版本不做上门取件。三项要么都填、要么都留空——只填一半的地址寄不到，而寄不到的退货会变成「货在路上、钱也没退」的双输。</p>
-        <form method="post" th:action="@{/admin/shop/shipping/return-address}">
-            <input type="text" name="receiverName" maxlength="60"
-                   th:value="${settings != null} ? ${settings.returnReceiverName} : ''"
-                   th:placeholder="#{admin.shop.order.col.receiver}"/>
-            <input type="text" name="receiverPhone" maxlength="20"
-                   th:value="${settings != null} ? ${settings.returnReceiverPhone} : ''"
-                   th:placeholder="#{admin.shop.order.col.phone}"/>
-            <input type="text" name="addressText" maxlength="300"
-                   th:value="${settings != null} ? ${settings.returnAddressText} : ''"
-                   th:placeholder="#{admin.shop.order.col.address}"/>
-            <button class="btn btn-primary" type="submit" th:text="#{admin.shop.shipping.btn.saveReturnAddress}">保存退货地址</button>
-        </form>
-        </div>
+        <!--/* ⚠️ 三张卡必须是**兄弟**：卡间距靠 admin.css 的 `.cfg-card + .cfg-card`，
+               中间夹一层包装 div 会让那条相邻选择器整个失效（卡会贴在一起，而且不报错）。 */-->
+        <div th:replace="~{admin/shop-shipping :: zonesCard}"></div>
+        <div th:replace="~{admin/shop-shipping :: thresholdCard}"></div>
+        <div th:replace="~{admin/shop-shipping :: returnAddressCard}"></div>
     </div>
 </div>
+
+<!--
+  ===== 卡① 可配送区域（AC1）=====
+  🔴 **每行一个 form，不是整卡一个 form**。三条约束把形状定死了：
+     ① 模板 D 的 `configCard` 片段**自身就是 <form>**；
+     ② `POST shipping/zones` 是**单行 upsert**（kecamatan / kota / provinsi / fee 四个参数），
+        一次提交只能存一行 —— 想「一个保存钮存整张表」就得新开一个批量端点，破零新端点；
+     ③ 启停走**另一个端点** `zones/toggle`（另一组参数），且 AC1 要它**即时提交、不受保存钮控制**。
+     把它们塞进一张卡 = form 嵌套，而 HTML 解析器会**直接丢掉内层 form**：
+     页面上按钮都在、点下去却提交到外层那个 action —— 启停会被当成一次 upsert。
+     所以卡①退化为「一卡多行、改哪行存哪行」，行级仍挂 data-config-card（未改禁用 → 改了激活 +「已修改」）。
+  🔴 **已有行的 Kecamatan 只读**：它是 upsert 的键 —— 在行内把它改掉不是「改这一条」，
+     而是**静默新建另一条**，原来那条还留在表里照常参与发货判定。要改名只能新增再停用旧的。
+-->
+<section th:fragment="zonesCard" id="cfg-ship-zones" class="card cfg-card"
+         th:with="canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')}">
+    <div class="cfg-head">
+        <h2 class="cfg-title" th:text="#{admin.shop.shipping.section.zones}">可配送区域</h2>
+    </div>
+    <div class="cfg-body">
+        <p class="hint cfg-readonly" th:unless="${canEdit}"
+           th:text="#{admin.v130.config.readonly(#{perm.config.edit})}">只读</p>
+        <div class="empty" th:if="${#lists.isEmpty(zones)}">
+            <span class="empty-emoji">🗺️</span>
+            <!--/* 空态必须说清后果：没有区域时整个商城一单也发不出去，而首页看起来一切正常。 */-->
+            <p th:text="#{admin.shop.shipping.empty}">还没有可配送区域——没有区域就一单也发不出去，请先添加。</p>
+        </div>
+
+        <div class="ship-zones" th:unless="${#lists.isEmpty(zones)}">
+            <div class="ship-zone-head">
+                <span th:text="#{admin.shop.shipping.col.kecamatan}">Kecamatan</span>
+                <span th:text="#{admin.shop.shipping.col.kota}">Kota/Kabupaten</span>
+                <span th:text="#{admin.shop.shipping.col.provinsi}">Provinsi</span>
+                <span th:text="#{admin.shop.shipping.col.fee}">运费</span>
+                <span th:text="#{admin.shop.shipping.col.active}">启用</span>
+            </div>
+            <div class="ship-zone-row" th:each="z,st : ${zones}"
+                 th:classappend="${!z.active} ? 'is-off'">
+                <form class="ship-zone-form" data-config-card method="post"
+                      th:attr="action=@{/admin/shop/shipping/zones},hx-post=@{/admin/shop/shipping/zones},
+                               hx-target='#cfg-ship-zone-err-' + ${st.index}"
+                      hx-swap="innerHTML">
+                    <!--/* 🔴 只读而不是 disabled：disabled 的输入**不会被提交**，
+                           upsert 会收到空 kecamatan 而不是这一行的键。 */-->
+                    <input class="inp" type="text" name="kecamatan" th:value="${z.kecamatan}"
+                           readonly th:title="#{admin.v130.shopShipping.keyReadonly}"/>
+                    <input class="inp" type="text" name="kotaKabupaten" maxlength="60" required
+                           th:value="${z.kotaKabupaten}" th:disabled="${!canEdit}"/>
+                    <input class="inp" type="text" name="provinsi" maxlength="60" required
+                           th:value="${z.provinsi}" th:disabled="${!canEdit}"/>
+                    <input class="inp" type="number" name="fee" min="0" required
+                           th:value="${z.fee}" th:disabled="${!canEdit}"/>
+                    <span class="ship-zone-save">
+                        <span class="tag tag-dirty" hidden data-dirty-flag
+                              th:text="#{admin.v130.tpl.dirty}">已修改</span>
+                        <button type="submit" class="btn btn-sm btn-primary" disabled data-save
+                                th:if="${canEdit}" th:text="#{admin.v130.tpl.save}">保存</button>
+                    </span>
+                </form>
+                <!--/* 启停是**另一个端点**，所以是一个独立的、与上面那个 form 平级的 form ——
+                       嵌进去的话 HTML 解析器会把它整个丢掉，点「停用」会变成一次 upsert。
+                       AC1：即时提交，不受保存钮控制。 */-->
+                <form class="ship-zone-toggle" method="post" th:if="${canEdit}"
+                      th:attr="action=@{/admin/shop/shipping/zones/toggle},
+                               hx-post=@{/admin/shop/shipping/zones/toggle},
+                               hx-target='#cfg-ship-zone-err-' + ${st.index},
+                               data-confirm=${z.active}
+                                   ? #{admin.v130.shopShipping.confirmDisable(${z.kecamatan})} : null"
+                      hx-swap="innerHTML">
+                    <input type="hidden" name="kecamatan" th:value="${z.kecamatan}"/>
+                    <input type="hidden" name="active" th:value="${!z.active}"/>
+                    <button class="btn btn-sm btn-neutral" type="submit"
+                            th:text="${z.active} ? #{admin.shop.shipping.btn.disable} : #{admin.shop.shipping.btn.enable}">停用</button>
+                </form>
+                <!--/* 🔴 状态徽标对**所有人**都显示，不只是只读账号：启停按钮上的字是「停用」/「启用」——
+                       那是**动作**不是状态。只看按钮的话，「停用」既可能读成「当前已停用」
+                       也可能读成「点我停用」，而这两种理解会导出完全相反的操作。 */-->
+                <span class="badge ship-zone-state"
+                      th:classappend="${z.active} ? 'badge-ok' : 'badge-muted'"
+                      th:text="${z.active} ? #{admin.shop.shipping.col.active}
+                               : #{admin.shop.shipping.btn.disable}">启用</span>
+                <p class="inline-error-slot" aria-live="polite"
+                   th:attr="id='cfg-ship-zone-err-' + ${st.index}"></p>
+            </div>
+        </div>
+
+        <!--/* 新增行：与上面的行同构，只是字段为空且 Kecamatan 可填（新增时它才是「要建哪一条」）。 */-->
+        <div class="ship-zones ship-zones-new" th:if="${canEdit}">
+            <h3 th:text="#{admin.shop.shipping.section.addZone}">新增 / 更新区域</h3>
+            <div class="ship-zone-row">
+                <form class="ship-zone-form" data-config-card method="post"
+                      th:attr="action=@{/admin/shop/shipping/zones},hx-post=@{/admin/shop/shipping/zones}"
+                      hx-target="#cfg-ship-zone-err-new" hx-swap="innerHTML">
+                    <input class="inp" type="text" name="kecamatan" maxlength="60" required
+                           th:placeholder="#{admin.shop.shipping.col.kecamatan}"/>
+                    <input class="inp" type="text" name="kotaKabupaten" maxlength="60" required
+                           th:placeholder="#{admin.shop.shipping.col.kota}"/>
+                    <input class="inp" type="text" name="provinsi" maxlength="60" required
+                           th:placeholder="#{admin.shop.shipping.col.provinsi}"/>
+                    <input class="inp" type="number" name="fee" min="0" required
+                           th:placeholder="#{admin.shop.shipping.col.fee}"/>
+                    <span class="ship-zone-save">
+                        <span class="tag tag-dirty" hidden data-dirty-flag
+                              th:text="#{admin.v130.tpl.dirty}">已修改</span>
+                        <button type="submit" class="btn btn-sm btn-primary" disabled data-save
+                                th:text="#{admin.shop.shipping.btn.saveZone}">保存区域</button>
+                    </span>
+                </form>
+                <p class="inline-error-slot" aria-live="polite" id="cfg-ship-zone-err-new"></p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ===== 卡② 免运门槛（标准模板 D 单 form）===== -->
+<th:block th:fragment="thresholdCard"
+          th:with="action=@{/admin/shop/shipping/threshold},hxPost=@{/admin/shop/shipping/threshold},
+                   cardId='cfg-ship-threshold',confirmDiff=true,
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.config.edit})}">
+    <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::th-title}, ~{::th-form}, #{admin.shop.shipping.btn.saveThreshold})}">
+        <h2 class="cfg-title" th:fragment="th-title"
+            th:text="#{admin.shop.shipping.section.threshold}">免运门槛</h2>
+        <div th:fragment="th-form">
+            <!--/* 🔴 「填 0 表示不做免运」这句不能删：0 在这里是关掉功能，不是「0 元即免运」。
+                   少了它，运营把门槛清空想「先不设」，结果是**全场包邮**。 */-->
+            <p class="hint" th:text="#{admin.shop.shipping.threshold.hint}">商品小计达到该金额即免运费。填 0 表示不做免运——不是「0 元即免运」。</p>
+            <label class="field"><span th:text="#{admin.shop.shipping.section.threshold}">免运门槛</span>
+                <input class="inp field-full" type="number" name="threshold" min="0" step="1" required
+                       th:value="${settings != null} ? ${settings.freeShippingThreshold} : 0"
+                       th:disabled="${!canEdit}"/>
+            </label>
+        </div>
+    </div>
+</th:block>
+
+<!-- ===== 卡③ 退货收件地址（标准模板 D 单 form）===== -->
+<th:block th:fragment="returnAddressCard"
+          th:with="action=@{/admin/shop/shipping/return-address},hxPost=@{/admin/shop/shipping/return-address},
+                   cardId='cfg-ship-return-address',confirmDiff=true,
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.config.edit})}">
+    <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::ra-title}, ~{::ra-form}, #{admin.shop.shipping.btn.saveReturnAddress})}">
+        <h2 class="cfg-title" th:fragment="ra-title"
+            th:text="#{admin.shop.shipping.section.returnAddress}">退货收件地址</h2>
+        <div th:fragment="ra-form">
+            <!--/* 🔴 「三项要么都填、要么都留空」是服务层的校验口径，这里如实复述：
+                   只填一半的地址寄不到，而寄不到的退货会变成「货在路上、钱也没退」的双输。 */-->
+            <p class="hint" th:text="#{admin.shop.shipping.returnAddress.hint}">用户自寄退货到这个地址；本版本不做上门取件。三项要么都填、要么都留空——只填一半的地址寄不到，而寄不到的退货会变成「货在路上、钱也没退」的双输。</p>
+            <label class="field"><span th:text="#{admin.shop.order.col.receiver}">收件人</span>
+                <input class="inp field-full" type="text" name="receiverName" maxlength="60"
+                       th:value="${settings != null} ? ${settings.returnReceiverName} : ''"
+                       th:disabled="${!canEdit}"/>
+            </label>
+            <label class="field"><span th:text="#{admin.shop.order.col.phone}">电话</span>
+                <input class="inp field-full" type="text" name="receiverPhone" maxlength="20"
+                       th:value="${settings != null} ? ${settings.returnReceiverPhone} : ''"
+                       th:disabled="${!canEdit}"/>
+            </label>
+            <label class="field"><span th:text="#{admin.shop.order.col.address}">地址</span>
+                <input class="inp field-full" type="text" name="addressText" maxlength="300"
+                       th:value="${settings != null} ? ${settings.returnAddressText} : ''"
+                       th:disabled="${!canEdit}"/>
+            </label>
+        </div>
+    </div>
+</th:block>
+
+<!--/* htmx 保存成功：原位换掉该卡（Controller 发 HX-Retarget #<cardId> + HX-Reswap outerHTML）+ toast。
+       ⚠️ toast 必须多包一层：`beforeend:` oob 搬的是**子节点**，直接写在 .toast 上落进宿主的只有裸文本。 */-->
+<th:block th:fragment="savedZones">
+    <div th:replace="~{admin/shop-shipping :: zonesCard}"></div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+<th:block th:fragment="savedThreshold">
+    <div th:replace="~{admin/shop-shipping :: thresholdCard}"></div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+<th:block th:fragment="savedReturnAddress">
+    <div th:replace="~{admin/shop-shipping :: returnAddressCard}"></div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
 </body>
 </html>
