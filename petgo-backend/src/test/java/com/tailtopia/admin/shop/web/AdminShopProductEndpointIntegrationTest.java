@@ -369,4 +369,172 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                 Integer.class, "%" + cost + "%");
         assertThat(leaked).as("审计详情不得出现进货价数值").isZero();
     }
+
+    // ---------- V1.3.0 Story 10.3：B16 列表套模板 B + B17 Banner 抽屉（AC1 / AC3 / AC4） ----------
+
+    @Test
+    @DisplayName("B16 列表整页 200：摘要条三格 + 表格容器（模板 B，且【不渲染抽屉壳】）")
+    void productListPageRendersSummaryAndNoDrawerShell() throws Exception {
+        createProductViaEndpoint(staffWith(AdminPermissions.SHOP_PRODUCT_EDIT), "p-" + SEQ.incrementAndGet());
+
+        String html = mvc.perform(get("/admin/shop/products")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_PRODUCT_VIEW))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).contains("shop-product-summary").contains("shop-product-rows");
+        // 🔴 AC1：本页刻意不做抽屉（字段量太大）。tpl-b-list 的 noDrawer=true 没传对的话，
+        //    页面上会留一段永远打不开的抽屉壳 —— 而那一段照样渲染、没有任何报错。
+        assertThat(html).as("商品列表不该有抽屉壳（AC1：编辑跳独立表单页）")
+                .doesNotContain("item-drawer").doesNotContain("drawer-mask");
+    }
+
+    @Test
+    @DisplayName("B16 列表 HX-Request 返表格片段（含 oob 摘要条），不是整页")
+    void productListUnderHtmxReturnsRowsFragment() throws Exception {
+        String body = mvc.perform(get("/admin/shop/products").header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_PRODUCT_VIEW))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("<html");
+        assertThat(body).contains("hx-swap-oob").contains("shop-product-summary");
+    }
+
+    @Test
+    @DisplayName("B17 Banner 列表整页 200 + 抽屉壳；HX-Request 返行片段")
+    void bannerListPageAndRowsFragment() throws Exception {
+        var viewer = staffWith(AdminPermissions.SHOP_PRODUCT_VIEW);
+
+        String html = mvc.perform(get("/admin/shop/banners").with(authentication(viewer)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(html).contains("shop-banner-rows").contains("shop-banner-drawer-body");
+
+        String body = mvc.perform(get("/admin/shop/banners").header("HX-Request", "true")
+                        .with(authentication(viewer)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain("<html").doesNotContain("shop-banner-drawer-body");
+    }
+
+    /**
+     * AC4：新建 / 编辑抽屉的取数<b>复用列表这同一条 mapping</b>（{@code ?create=1} / {@code ?open=<id>}）——
+     * 零新端点。编辑态必须把原图与权重回填，否则「不换图 = 保留原图」这条口径就不成立。
+     */
+    @Test
+    @DisplayName("B17 抽屉表单走 ?create=1 / ?open=<id>（零新端点），编辑态回填原图与权重")
+    void bannerDrawerFormComesFromTheListMapping() throws Exception {
+        var editor = staffWith(AdminPermissions.SHOP_PRODUCT_EDIT);
+        // 🔴 用**自己刚提交的那个 key** 反查 id，不用 `SELECT max(id)`：
+        //    302 只说明「没抛异常」，并不保证落了库（它也可能是 catch 掉 AppException 后的 302）。
+        //    max(id) 那时会指向别的用例留下的行，断言照常绿 —— 测的却不是这条。
+        String key = "shop-banner/b" + SEQ.incrementAndGet() + ".jpg";
+        mvc.perform(post("/admin/shop/banners").with(authentication(editor)).with(csrf())
+                        .param("imageKey", key)
+                        .param("sortWeight", "7"))
+                .andExpect(status().is3xxRedirection());
+        Long id = jdbc.queryForObject(
+                "SELECT id FROM shop_banners WHERE image_key = ?", Long.class, key);
+        assertThat(id).as("302 不等于落库：按刚提交的 key 反查不到行，说明 create 被静默吞掉了")
+                .isNotNull();
+
+        String create = mvc.perform(get("/admin/shop/banners").param("create", "1")
+                        .header("HX-Request", "true").with(authentication(editor)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(create).doesNotContain("<html").contains("f-bannerKey");
+
+        String edit = mvc.perform(get("/admin/shop/banners").param("open", String.valueOf(id))
+                        .header("HX-Request", "true").with(authentication(editor)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(edit).as("编辑态要回填权重，否则一保存就把它冲成 0").contains("value=\"7\"");
+        assertThat(edit).as("提交要打到 update 端点而不是 create").contains("/admin/shop/banners/" + id);
+    }
+
+    @Test
+    @DisplayName("🔒 B17 无 shop.product_edit 的账号改不了 banner → 403（查看仍可）")
+    void bannerWritesRequireProductEdit() throws Exception {
+        mvc.perform(post("/admin/shop/banners").with(authentication(
+                        staffWith(AdminPermissions.SHOP_PRODUCT_VIEW))).with(csrf())
+                        .param("imageKey", "shop-banner/x.jpg").param("sortWeight", "0"))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * AC4：抽屉里提交成功 → <b>整表 oob 重拉 + toast + 关抽屉</b>（{@code shop-banners-list :: done}）。
+     *
+     * <p>🔴 这个片段此前<b>零覆盖</b>：它只在 htmx 提交时才会被渲染，而全部既有用例走的都是
+     * 非 htmx 的 302 分支。片段里任何一个模板错误（少个 model 属性、oob id 写错）
+     * 都只在运营真点保存那一刻才炸，且表现是「点了没反应」。
+     *
+     * <p>🔴 <b>整表重拉而不是换一行</b>：三档状态是全表相对的 —— 新建一条高权重的会把
+     * 「生效中」从别的行抢过来，而那一行根本没被点过。
+     */
+    @Test
+    @DisplayName("B17 抽屉提交成功返 done 片段：oob 整表 + toast + HX-Trigger 关抽屉")
+    void bannerHtmxCreateReturnsDoneFragmentWithOobRowsAndDrawerClose() throws Exception {
+        var editor = staffWith(AdminPermissions.SHOP_PRODUCT_EDIT);
+        String key = "shop-banner/h" + SEQ.incrementAndGet() + ".jpg";
+
+        MvcResult res = mvc.perform(post("/admin/shop/banners")
+                        .header("HX-Request", "true").header("HX-Target", "shop-banner-drawer-body")
+                        .with(authentication(editor)).with(csrf())
+                        .param("imageKey", key).param("sortWeight", "3"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String body = res.getResponse().getContentAsString();
+
+        assertThat(body).as("htmx 提交要返片段而不是整页").doesNotContain("<html");
+        assertThat(body).as("列表必须走 oob 换掉：表单的 hx-target 是抽屉体，主 swap 落不到表格上")
+                .contains("hx-swap-oob").contains("id=\"shop-banner-rows\"");
+        assertThat(body).as("新建的那条要出现在重拉回来的整表里").contains(key);
+        assertThat(res.getResponse().getHeader("HX-Trigger"))
+                .as("不发 admin:drawer-close 的话，保存成功后抽屉还盖在表格上，运营以为没生效")
+                .contains("admin:drawer-close");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM shop_banners WHERE image_key = ?",
+                Integer.class, key)).isEqualTo(1);
+    }
+
+    /**
+     * AC4：抽屉里的 4xx 必须<b>落回抽屉体</b>，不能把整张表换成一行红字。
+     *
+     * <p>🔴 表单的 {@code hx-target} 指列表容器时，「没上传图」这种最常见的失误会把
+     * 表格整片换掉，而那片红字还被抽屉遮罩盖着 —— 运营看到的是「点了没反应」，
+     * 关掉抽屉才发现表格没了，只能 F5。这里钉的就是 {@code HX-Retarget}。
+     */
+    @Test
+    @DisplayName("B17 抽屉提交缺图 → 4xx 且 HX-Retarget 落在抽屉体（不是整表被红字换掉）")
+    void bannerHtmxValidationErrorIsRetargetedToTheDrawerBody() throws Exception {
+        MvcResult res = mvc.perform(post("/admin/shop/banners")
+                        .header("HX-Request", "true").header("HX-Target", "shop-banner-drawer-body")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_PRODUCT_EDIT)))
+                        .with(csrf())
+                        .param("imageKey", "").param("sortWeight", "0"))
+                .andReturn();
+
+        assertThat(res.getResponse().getStatus()).isBetween(400, 499);
+        assertThat(res.getResponse().getHeader("HX-Retarget"))
+                .as("4xx 要落在运营正看着的抽屉里；落到列表上就是「点了没反应 + 表格没了」")
+                .isEqualTo("#shop-banner-drawer-body");
+        assertThat(res.getResponse().getContentAsString())
+                .as("错误片段不该顺手把整表 oob 换掉").doesNotContain("hx-swap-oob");
+    }
+
+    /** 🔒 只读账号从抽屉提交（htmx）→ 403 也要落回抽屉体，而不是把整页 forward 成拒绝页。 */
+    @Test
+    @DisplayName("🔒 B17 只读账号 htmx 提交 banner → 403 片段 + HX-Retarget 抽屉体")
+    void bannerHtmxForbiddenIsRenderedAsFragment() throws Exception {
+        MvcResult res = mvc.perform(post("/admin/shop/banners")
+                        .header("HX-Request", "true").header("HX-Target", "shop-banner-drawer-body")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_PRODUCT_VIEW)))
+                        .with(csrf())
+                        .param("imageKey", "shop-banner/nope.jpg").param("sortWeight", "0"))
+                .andExpect(status().isForbidden())
+                .andReturn();
+
+        assertThat(res.getResponse().getHeader("HX-Retarget")).isEqualTo("#shop-banner-drawer-body");
+        assertThat(res.getResponse().getContentAsString()).doesNotContain("<html");
+    }
 }

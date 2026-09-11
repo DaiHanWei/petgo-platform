@@ -51,7 +51,9 @@ petgo-backend/src/main/resources/templates/admin/audit-logs.html|枚举未走 ke
 petgo-backend/src/main/resources/templates/admin/shop-margin.html|枚举未走 key   # ⏳ Epic 10
 # ✅ shop-orders.html 的豁免已于 Story 10.2 摘除：状态下拉与表格状态列改走 admin.v130.shopOrders.status.*
 #    （原先把 PENDING_SHIPMENT / SHIPPED 这类常量名直接铺给运营，切 ID 后连英文都不是）。
-petgo-backend/src/main/resources/templates/admin/shop-products.html|枚举未走 key   # ⏳ Epic 10
-petgo-backend/src/main/resources/templates/admin/shop-product-form.html|枚举未走 key   # ⏳ Epic 10（6 处）
+# ✅ shop-products.html / shop-product-form.html 的豁免已于 Story 10.3 摘除：
+#    品类 / 物种 / 体型 / 年龄段 / 退货规则五族枚举全部改走 admin.v130.shopProducts.* 与
+#    admin.v130.shopOrders.returnPolicy.*（原先把 MAKANAN / NO_RETURN_AFTER_OPEN 这类常量名
+#    直接铺给运营，切 ID 后连英文都不是）。
 # ✅ shop-returns.html 的豁免已于 Story 10.1 摘除：退货类型下拉改走 admin.v130.shopReturns.type.*，
 #    状态、退货类型在队列 / 右栏也全部走 key（原先整页把枚举常量名直接铺给运营）。

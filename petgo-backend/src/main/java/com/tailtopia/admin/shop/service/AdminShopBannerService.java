@@ -26,6 +26,42 @@ public class AdminShopBannerService {
         this.audit = audit;
     }
 
+    // ---------- V1.3.0 Story 10.3：三档状态（AC3） ----------
+
+    /** 后台列表：全部 banner，按 App 的取用顺序排列（权重降序、同权重取后建的）。 */
+    @Transactional(readOnly = true)
+    public java.util.List<ShopBanner> all() {
+        return banners.findAllByOrderBySortWeightDescIdDesc();
+    }
+
+    /**
+     * 当前真正会被 App 取到的那一张（{@code null} = 一张已上架的都没有）。
+     *
+     * <p>🔴 <b>刻意调 App 端那条 repository 方法</b>（{@code findFirstByActiveTrueOrderBySortWeightDescIdDesc}），
+     * 而不是在后台列表里自己「取第一条 active」：两种写法今天结果相同（排序规则一样），
+     * 但那是两份各自演化的判据 —— 哪天 App 侧的取图规则变了（加个生效时间窗、加个投放人群），
+     * 后台这边的「生效中」标就会指错一张，而<b>界面上完全看不出来</b>：运营以为 A 在投，用户看到的是 B。
+     * AC3 要的「与 App 端取图规则同源」，取的就是「同一个方法」这个更强的解释。
+     */
+    @Transactional(readOnly = true)
+    public Long liveId() {
+        return banners.findFirstByActiveTrueOrderBySortWeightDescIdDesc()
+                .map(ShopBanner::getId).orElse(null);
+    }
+
+    /**
+     * 三档状态（AC3）：{@code live} 生效中 · {@code activeNotLive} 已上架但被更高权重压住 · {@code inactive} 未上架。
+     *
+     * <p>只显示启用 / 停用两档会让运营反复怀疑「我明明上架了为什么没显示」——
+     * App 同一时间只展示一张，被压住的那些和没上架的在效果上完全一样，但处置动作完全不同。
+     */
+    public static String stateOf(ShopBanner b, Long liveId) {
+        if (!b.isActive()) {
+            return "inactive";
+        }
+        return b.getId().equals(liveId) ? "live" : "activeNotLive";
+    }
+
     @Transactional
     public ShopBanner create(ShopBannerForm form, long actorAccountId) {
         validate(form);
@@ -93,7 +129,9 @@ public class AdminShopBannerService {
                 String.valueOf(id), "删除 banner");
     }
 
-    private ShopBanner require(long id) {
+    /** 单条（写入路径与 V1.3.0 Story 10.3 的抽屉编辑态回填共用同一条「不存在即 404」口径）。 */
+    @Transactional(readOnly = true)
+    public ShopBanner require(long id) {
         return banners.findById(id)
                 .orElseThrow(() -> AppException.notFound("banner 不存在")
                         .code("admin.err.banner.notFound"));

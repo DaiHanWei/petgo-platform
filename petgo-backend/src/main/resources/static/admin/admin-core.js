@@ -516,6 +516,23 @@ function adminUploadError(root, text, selectors) {
     function fieldOf(id) { return document.getElementById(id); }
 
     /** 把当前缩略图顺序写回两个隐藏字段 —— **顺序就是首图顺序**。 */
+    /**
+     * 🔴 把值写进隐藏字段后**必须补发一个 input 事件**（V1.3.0 Story 10.3 复审 P0）。
+     *
+     * 本控件是靠 `el.value = …` 回填那几个真正提交的隐藏字段的，而**赋值不触发任何事件** ——
+     * 于是所有走事件委托的表单状态机都看不见这次改动：
+     *   · form[data-requires-form]（「必填未填 → 提交钮禁用」）⇒ 图传完了按钮还是灰的、点不动；
+     *   · form[data-config-card]（「未修改 → 保存钮禁用」）⇒ 只换图的编辑保存不了，
+     *     连 beforeunload 都不提示（form 不 dirty），离开即丢。
+     * 两条都是「界面上图已经在了，按钮却是灰的」——运营看不出是 bug 还是自己漏填了。
+     * bubbles:true 才能冒泡到 document 上的委托监听。
+     */
+    function setAndNotify(el, value) {
+        if (!el || el.value === value) { return; }
+        el.value = value;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
     function sync(root) {
         var thumbs = [].slice.call(root.querySelectorAll('[data-seed-thumb]'));
         var urls = [], sizes = [];
@@ -539,7 +556,7 @@ function adminUploadError(root, text, selectors) {
             //    给了 data-field-keys 就走这一支，主图/图集那套完全不参与。
             var flatEl = fieldOf(root.getAttribute('data-field-keys'));
             if (flatEl) {
-                flatEl.value = keys.join(',');
+                setAndNotify(flatEl, keys.join(','));
                 // 🔴 平铺模式**不打「封面」角标**：这一组图里没有"第一张更重要"这回事
                 //    （质检照片是一组等价的验货照）。留着角标会让运营以为顺序有含义、
                 //    去纠结该把哪张拖到最前面。
@@ -551,16 +568,16 @@ function adminUploadError(root, text, selectors) {
             }
             var mainEl = fieldOf(root.getAttribute('data-field-main'));
             var galEl = fieldOf(root.getAttribute('data-field-gallery'));
-            if (mainEl) { mainEl.value = keys.length ? keys[0] : ''; }
-            if (galEl) { galEl.value = keys.slice(1).join('\n'); }
+            if (mainEl) { setAndNotify(mainEl, keys.length ? keys[0] : ''); }
+            if (galEl) { setAndNotify(galEl, keys.slice(1).join('\n')); }
             // 主图尺寸随主图一起写回（2026-08-27）：App 端瀑布流用它预置卡片高度。
             // 🔴 必须跟着**第一张**走 —— 拖拽换序会换主图，尺寸不跟着换就会按旧比例预置，
             //    表现为卡片高度与图对不上。
             var wEl = fieldOf(root.getAttribute('data-field-w'));
             var hEl = fieldOf(root.getAttribute('data-field-h'));
             var first = thumbs.length ? thumbs[0] : null;
-            if (wEl) { wEl.value = first ? (first.getAttribute('data-w') || '') : ''; }
-            if (hEl) { hEl.value = first ? (first.getAttribute('data-h') || '') : ''; }
+            if (wEl) { setAndNotify(wEl, first ? (first.getAttribute('data-w') || '') : ''); }
+            if (hEl) { setAndNotify(hEl, first ? (first.getAttribute('data-h') || '') : ''); }
             markCover(root, thumbs);
             return;
         }
@@ -573,8 +590,9 @@ function adminUploadError(root, text, selectors) {
                 if (u) { urls.push(u); sizes.push('0x0'); }
             });
         }
-        fieldOf('imageUrlsRaw').value = urls.join('\n');
-        fieldOf('imageSizesRaw').value = sizes.join('\n');
+        // 模式一（URL 模式，内容侧）同样要补发事件 —— 理由见 setAndNotify 的注释
+        setAndNotify(fieldOf('imageUrlsRaw'), urls.join('\n'));
+        setAndNotify(fieldOf('imageSizesRaw'), sizes.join('\n'));
 
         markCover(root, thumbs);
     }

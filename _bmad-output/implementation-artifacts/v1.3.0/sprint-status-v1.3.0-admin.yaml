@@ -116,7 +116,7 @@ development_status:
   epic-10: in-progress
   10-1-a7-toko-退货审核-a8-toko-异常订单: review   # A7 Toko 退货审核 + A8 Toko 异常订单（模板 A，导航在商城组）
   10-2-b15-toko-订单履约-c1-toko-对账: review   # B15 Toko 订单履约 + C1 Toko 对账
-  10-3-b16-商品管理-b17-banner-抽屉化: ready-for-dev   # B16 商品管理（列表模板 B + 表单页模板 D）+ B17 Banner 抽屉化
+  10-3-b16-商品管理-b17-banner-抽屉化: review   # B16 商品管理（列表模板 B + 表单页模板 D）+ B17 Banner 抽屉化
   10-4-b18-库存管理-流水页-b19-开封判例: ready-for-dev   # B18 库存管理 + 流水页 + B19 开封判例
   10-6-d1-服务范围与运费配置: ready-for-dev   # D1 服务范围与运费配置（模板 D）
   10-5-c2-复购引擎效果-c3-销售与毛利-c4-库存周转: ready-for-dev   # C2 复购引擎效果 + C3 销售与毛利 + C4 库存周转（模板 C 只读）

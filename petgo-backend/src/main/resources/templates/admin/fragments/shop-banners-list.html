@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  B17 Banner 列表片段（V1.3.0 Story 10.3 AC3）。
+  rows — 三档状态表 + 空态 + 「一张都没上架」提示；done — 处置成功（整表重拉 + toast）。
+  🔴 三档状态（生效中 / 已上架但被压住 / 未上架）由服务层算，且「生效中」问的是 **App 端那条取图查询**
+     （AdminShopBannerService#liveId）—— 后台再写一遍「取第一条 active」就是第二份判据。
+  🔴 **整表重拉而不是换一行**：三档是全表相对的，上架 / 下架 / 改权重都可能让「生效中」跳到另一行，
+     而那一行根本没被点过。只换被点的那行，界面上就会出现两条「生效中」或一条都没有。
+-->
+<body>
+<th:block th:fragment="rows">
+    <!-- 没有生效中的 banner 时明确说明：App 顶部会是白色顶栏，这是设计内的空态。
+         不写这句，运营看到 App 上没有 banner 会以为配置没生效。 -->
+    <p th:unless="${hasLive}" class="banner warn" th:text="#{admin.shop.banners.noneHint}">
+        当前没有已上架的 banner —— App 顶部会显示白色顶栏。</p>
+    <table th:if="${!#lists.isEmpty(banners)}">
+        <thead><tr>
+            <th th:text="#{admin.shop.banners.col.preview}">预览</th>
+            <th th:text="#{admin.shop.banners.col.size}">原始尺寸</th>
+            <th class="s-col-num" th:text="#{admin.shop.banners.col.weight}">权重</th>
+            <th th:text="#{admin.shop.banners.col.status}">状态</th>
+            <th class="s-col-act" th:text="#{admin.common.actions}">操作</th>
+        </tr></thead>
+        <tbody>
+        <tr th:each="b : ${banners}" th:id="'shop-banner-row-' + ${b.id}">
+            <td>
+                <!-- CDN 未配时 imageUrl 为 null：显示提示而不是渲染一张裂图 -->
+                <img th:if="${b.imageUrl != null}" th:src="${b.imageUrl}" alt=""
+                     style="max-width:220px;max-height:88px;object-fit:contain;display:block"/>
+                <span th:if="${b.imageUrl == null}" class="err"
+                      th:text="#{admin.shop.banners.urlUnresolved}">URL 拼不出来</span>
+                <div class="s-mono" th:text="${b.imageKey}">shop-banner/xxx.jpg</div>
+            </td>
+            <td>
+                <span th:if="${b.w != null and b.h != null}"
+                      th:text="${b.w} + ' × ' + ${b.h}">1200 × 400</span>
+                <span th:if="${b.w == null or b.h == null}" class="muted"
+                      th:text="#{admin.shop.banners.sizeUnknown}">未知</span>
+            </td>
+            <td class="s-col-num" th:text="${b.sortWeight}">0</td>
+            <td>
+                <!-- 三档而不是两档：「已上架但被更高权重压住」的那些，运营必须能一眼分辨，
+                     否则会反复怀疑"我明明上架了为什么没显示"。 -->
+                <span class="badge" th:classappend="${b.state == 'live'} ? 'badge-ok'
+                         : (${b.state == 'activeNotLive'} ? 'badge-warn' : 'badge-muted')"
+                      th:text="#{'admin.v130.shopBanners.state.' + ${b.state}}">生效中</span>
+            </td>
+            <td class="s-col-act">
+                <!-- AC4：行「编辑」开抽屉。⚠️ 这个入口此前**根本不存在** ——
+                     POST /admin/shop/banners/{id}（update）是一条没有 UI 的死端点。 -->
+                <!-- 🔒 只有 shop.product_edit 才给编辑入口：没有这道门，只读账号能打开抽屉、
+                     填完提交才收到 403 —— 而 403 是一次白填。服务端的 @PreAuthorize 照旧兜底。 -->
+                <button th:if="${canEdit}" type="button" class="btn btn-sm btn-neutral"
+                        data-drawer-res="shop-banner"
+                        th:attr="data-drawer-open=@{/admin/shop/banners(open=${b.id})}"
+                        th:text="#{admin.shop.form.titleEdit}">编辑</button>
+                <form class="inline" th:if="${canEdit and b.state == 'inactive'}"
+                      th:attr="hx-post=@{/admin/shop/banners/{id}/activate(id=${b.id})}"
+                      hx-target="#shop-banner-drawer-body" hx-swap="innerHTML">
+                    <button class="btn btn-sm btn-primary" type="submit"
+                            th:text="#{admin.shop.banners.btn.activate}">上架</button>
+                </form>
+                <form class="inline" th:if="${canEdit and b.state != 'inactive'}"
+                      th:attr="hx-post=@{/admin/shop/banners/{id}/deactivate(id=${b.id})}"
+                      hx-target="#shop-banner-drawer-body" hx-swap="innerHTML">
+                    <button class="btn btn-sm btn-neutral" type="submit"
+                            th:text="#{admin.shop.banners.btn.deactivate}">下架</button>
+                </form>
+                <!-- 🔴 已上架的不给删除按钮：service 层也会拦，这里不渲染是为了不让人点了才知道不行。
+                     删一条正在首屏展示的 banner 不可撤销，而它与「下架」在运营眼里长得很像。 -->
+                <form class="inline" th:if="${canEdit and b.state == 'inactive'}"
+                      th:attr="hx-post=@{/admin/shop/banners/{id}/delete(id=${b.id})},data-confirm=#{admin.shop.banners.confirmDelete}"
+                      hx-target="#shop-banner-drawer-body" hx-swap="innerHTML">
+                    <button class="btn btn-sm btn-danger" type="submit"
+                            th:text="#{admin.shop.banners.btn.delete}">删除</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <div class="empty" th:if="${#lists.isEmpty(banners)}">
+        <span class="empty-emoji">🖼️</span>
+        <p th:text="#{admin.shop.banners.empty}">还没有配置任何 banner。</p>
+    </div>
+</th:block>
+
+<!--
+  处置成功。🔴 列表走 **oob** 而不是主 swap：抽屉表单的 hx-target 是抽屉体（4xx 要落在运营正看着的地方），
+  所以这里不能指望主 swap 去换表格；行上的上架 / 下架 / 删除三个按钮 hx-target 也统一指抽屉体（页面上抽屉是关着的，
+  换进去没人看得见），列表一律由下面这段 oob 换掉 —— 一套路径，不分「从抽屉提交」还是「从行上点」。
+  🔴 **整表重拉**：三档状态是全表相对的，上架 / 下架 / 改权重都可能让「生效中」跳到另一行，而那一行没被点过。
+-->
+<th:block th:fragment="done">
+    <!--/* toast 必须多包一层：`beforeend:` oob 搬的是子节点，直接写在 .toast 上落进宿主的只有裸文本。 */-->
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${message}">已保存</div>
+    </div>
+    <div id="shop-banner-rows" hx-swap-oob="true">
+        <div th:replace="~{admin/fragments/shop-banners-list :: rows}"></div>
+    </div>
+</th:block>
+</body>
+</html>
