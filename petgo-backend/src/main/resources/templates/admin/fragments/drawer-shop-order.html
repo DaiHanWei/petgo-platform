@@ -124,10 +124,16 @@
             </tr></thead>
             <tbody>
             <tr th:each="p : ${packages}">
-                <td th:text="${p.carrier}">JNE</td>
+                <!--/* 🔴 用 carrierName（品牌官方写法 SiCepat / Anteraja）而不是 carrier（枚举常量 SICEPAT）：
+                       下面那个发货下拉用的就是 carrierName，两处不一致时运营在下拉里选「SiCepat」、
+                       发完货表格里却显示「SICEPAT」，看起来像选错了家。
+                       ⚠️ 承运商名**不走 i18n**：它是品牌名，三语通用（与 places 的城市名同类）。 */-->
+                <td th:text="${p.carrierName}">SiCepat</td>
                 <td th:text="${p.trackingNo}">JP123</td>
                 <td th:text="${#numbers.formatInteger(p.carrierCost, 0, 'COMMA')}">18.000</td>
-                <td th:text="${p.status}">SHIPPED</td>
+                <!--/* ShipmentStatus 只有 SHIPPED / DELIVERED，与订单状态那两档同义，直接复用既有 key；
+                       原先直接铺枚举常量名，切 ID 后连英文都不是。 */-->
+                <td th:text="#{'admin.v130.shopOrders.status.' + ${p.status}}">已发货</td>
                 <td th:text="${@adminTime.wib(p.deliveredAt)}">-</td>
                 <td>
                     <!-- ⚠️ 这里**不标** data-inline-error：那个属性只被 admin-workbench.js 读，

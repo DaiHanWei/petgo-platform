@@ -141,7 +141,17 @@ Claude Code（云端 headless session，纯 L0：脚本 + 文档，无 Java 改�
 
 **观察项（不阻断本 story，转 Story 11.4 权限矩阵收口）**：新增的 `GET /admin/charts`、`GET /admin/nav/badges` 没有 `@PreAuthorize`，只靠 `/admin/**` 链级 `ROLE_ADMIN`（与基线里的 `/admin`、`/admin/dashboard` 同姿态，不算漂移）—— 11.4 应显式确认这是有意为之。另：11.3 AC1 的退役清单里有 `GET /admin/vets/{id}/qualification` 与 `GET .../ratings`，但 9.1b 实际是把它们改成抽屉页签片段、**路径保留**；按「未删」记账，**11.3 不要去删**。
 
-**⚠️ 覆盖边界（必须知会）**：**Epic 10（商城组）本轮未执行**（前置是 v1.4.0 电商线合入，AD-12）。`/admin/shop/**` 因此没被重构，本次 diff 中 shop 组零差异 —— 那是「没动过」，**不是「已核对通过」**。Epic 10 落地后必须重跑本流程、刷新白名单与核对报告。
+**✅ 覆盖边界已闭合（2026-09-11 补跑）**：上一轮写的是「**Epic 10（商城组）本轮未执行**（前置是 v1.4.0 电商线合入，AD-12）。`/admin/shop/**` 因此没被重构，本次 diff 中 shop 组零差异 —— 那是「没动过」，**不是「已核对通过」**。Epic 10 落地后必须重跑本流程、刷新白名单与核对报告。」
+
+Epic 10 六条 story 已于 2026-09-11 全部落地（`aafefd12` → `71049c85`），**本流程已重跑**：
+
+- `--out …-20260911-after.md` → 写端点 **150**、GET **117** —— 与 Epic 10 之前的 `…-20260910-after.md` **完全相同**。
+- 两份 after **逐字节 diff 唯一差异是 `baseline_commit` 一行**（`954b2ae9` → `71049c85`）。
+- `--baseline …-基线v2.md` → 仍是 `write-ops-guard: OK（与基线零未解释差异）`，**白名单一条都不用改**。
+
+这不是巧合：Epic 10 六条 story 各自受「零后端功能改动、零新端点」约束，需要的抽屉 / 卡区取数**一律复用既有 mapping 的 `HX-Request` 分支**（AD-9 的 `GET …/{id}/drawer` 惯例让位于零新端点，D-43），所以路由表纹丝不动。逐条对照见 `后台写操作清单-核对-20260911-epic10闭合.md`。
+
+**顺带闭合一条口径差**：11.3 AC1 的退役表把 `GET /admin/shop/orders/{token}`、`/admin/shop/returns/{token}` 列为「删除」，而 10.1 / 10.2 的实际处置是**保留 mapping**（htmx 下返片段，非 htmx 抛 404，code `admin.err.common.pageRetired`）—— 那条路径同时是抽屉的取数入口，删了抽屉就是空的。**这两条不要去删**；白名单里的预授权项保留。同形态的还有 9.1b 的 `GET /admin/vets/{id}/qualification` 与 `.../ratings`。四条合起来一句话：**退役表里有 4 条是「整页退役、路径保留」，不是「路由删除」。**
 
 **⏳ CI（AC5）文件已写好但「待安装」**：本 session 的 OAuth 令牌**没有 `workflow` scope**，GitHub 直接拒绝推送任何 `.github/workflows/*`（`refusing to allow an OAuth App to create or update workflow ... without workflow scope`）。这是凭证权限问题，不是文件问题 —— 与其把 CI 条款降级成「本地跑跑」，不如按最终形态写好、放在 `scripts/ci/github-workflows/`，等本地一次 `git mv` 落位（步骤见该目录 README）。**AC5 在文件移进 `.github/workflows/` 之前不算完成。**
 
