@@ -41,8 +41,15 @@ class DiaryHeader extends StatelessWidget {
     this.onOpenIdCard,
     this.onOpenHealth,
     this.onOpenMilestones,
+    this.insightsEntryAnchor,
     this.readOnly = false,
   });
+
+  /// 综合入口卡的**位置锚点**（V1.3.0 Story 5.4）。
+  ///
+  /// 迁移引导蒙层要知道「高亮框画在哪儿」，而那只能从真实布局里量。
+  /// ⚠️ 它**只用来量位置**，不改这张卡的任何行为 —— 三态判定仍只有 `readOnly` 一处（AD-A24.4）。
+  final GlobalKey? insightsEntryAnchor;
 
   /// 只读态（V1.1.6 Story 2.3 访客视图）。
   ///
@@ -188,6 +195,9 @@ class DiaryHeader extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
+              // 引导蒙层的锚点挂在**外层**：给 _entryCard 换 key 会动到它自己的
+              // ValueKey('diaryIdCardButton')，那把既有测试与埋点对照一起弄断。
+              key: insightsEntryAnchor,
               child: _entryCard(
                 // key 沿用（原为标题行的图标按钮，后为身份证入口）——
                 // V1.3.0 Story 5.1 起它指向「Know Your Pet」聚合页，身份证是其中一张卡。

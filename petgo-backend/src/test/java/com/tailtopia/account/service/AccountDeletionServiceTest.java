@@ -51,13 +51,15 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.shop.service.ShopAccountDeletionService shopDeletion;
     @Mock com.tailtopia.content.service.ContentShareService contentShareService;
     @Mock com.tailtopia.share.service.ShareRewardDeletionService shareRewardDeletion;
+    /** V1.3.0 Story 5.4：一次性引导标记随注销物理删除。 */
+    @Mock com.tailtopia.onboarding.service.OnboardingMarkDeletionService onboardingMarkDeletion;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
                 consultAnonymization, notificationDeletion, pawCoinDeletion, authDeletion,
                 mediaDeletion, imClient, events,
                 contentService, reviewService, violationCountService,
-                shopDeletion, contentShareService, shareRewardDeletion);
+                shopDeletion, contentShareService, shareRewardDeletion, onboardingMarkDeletion);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -89,6 +91,9 @@ class AccountDeletionServiceTest {
         verify(shopDeletion).deleteByUserId(7L);
         verify(contentShareService).deleteByAuthorForAccountDeletion(7L);
         verify(shareRewardDeletion).deleteByUserId(7L);
+        // V1.3.0 Story 5.4 · AC7：引导标记也在级联里 —— 漏接的表会在注销后留着
+        // 指向一个已不存在的人的行，而那不会有任何报错提醒。
+        verify(onboardingMarkDeletion).deleteByUserId(7L);
         verify(authDeletion).deleteByUserId(7L);
         // OSS 私密图（h1+t1+t2+c1）+ 公开头像 + IM 媒体
         verify(mediaDeletion).deletePrivateKeys(anyList());

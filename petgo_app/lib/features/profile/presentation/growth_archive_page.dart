@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,8 +21,10 @@ import '../data/milestone_repository.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/card_link.dart';
+import '../data/onboarding_mark_repository.dart';
 import '../domain/pet_profile.dart';
 import 'pet_insights_page.dart';
+import '../../../shared/widgets/coachmark_overlay.dart';
 import '../domain/share_service.dart';
 import '../domain/timeline_item.dart';
 import 'diary_guest_page.dart';
@@ -293,14 +297,77 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
   /// 提前 400px 预取：等真正到底再转圈，用户会先看到一段空白。
   static const double _kPrefetchExtent = 400;
 
+  /// 综合入口卡的位置锚点，供迁移引导蒙层量高亮框（V1.3.0 Story 5.4）。
+  final GlobalKey _insightsEntryAnchor = GlobalKey();
+
+  /// 蒙层当前挂着的 OverlayEntry。非空 = 正在展示。
+  OverlayEntry? _coachmark;
+
+  /// 本次页面生命周期内是否已经尝试过 —— 防止 build 多次就弹多次。
+  bool _coachmarkTried = false;
+
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_maybeLoadMore);
+    // 首帧之后再问「弹不弹」：initState 里没有布局，量不到入口卡的位置。
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowMigrationCoachmark());
+  }
+
+  /// 迁移引导（V1.3.0 Story 5.4 · AD-A21.4）：**首次进入成长档案页**时弹一次，
+  /// 指着新入口条说明「身份证挪进这里了」。看过即置位，之后不再弹。
+  ///
+  /// 🛡 只在**本人态**走到这里 —— 本方法挂在 `_ArchiveBodyState` 上，
+  /// 而这个 State 只在「已登录 + 有档案」那一支被构建（游客态与访客态是另外两支）。
+  /// 因此**没有第二处态判断**（AD-A24.4）。
+  ///
+  /// 🛡 标记读不到一律按「未看过」处理（AC4）：离线首启、接口失败都走这条 ——
+  /// 多弹一次是已接受的代价，而"读失败就当看过"会让引导对一批人**永远不出现**。
+  Future<void> _maybeShowMigrationCoachmark() async {
+    if (_coachmarkTried || _coachmark != null) return;
+    _coachmarkTried = true;
+
+    final marks = await ref.read(onboardingMarksProvider.future);
+    if (!mounted || marks.contains(kOnboardingMarkKtpMoved)) return;
+
+    // 等布局完成再量位置：入口卡在页头里，首帧时还没有 RenderBox。
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    final box = _insightsEntryAnchor.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return; // 量不到就不弹，不画一个错位的框
+    final rect = box.localToGlobal(Offset.zero) & box.size;
+
+    final l10n = AppLocalizations.of(context);
+    final entry = OverlayEntry(
+      builder: (_) => CoachmarkOverlay(
+        spotlight: rect,
+        text: l10n.ktpMovedCoachmark,
+        confirmLabel: l10n.commonGotIt,
+        onDismiss: _dismissCoachmark,
+      ),
+    );
+    _coachmark = entry;
+    Overlay.of(context).insert(entry);
+  }
+
+  /// 关闭并置位。
+  ///
+  /// 🔴 **先关再置位**：置位是一次网络往返，等它回来再关会让「知道了」点下去顿一下；
+  /// 而置位失败的代价只是下次再弹一次（与离线首启同一档，已接受）。
+  void _dismissCoachmark() {
+    _coachmark?.remove();
+    _coachmark = null;
+    unawaited(ref
+        .read(onboardingMarkRepositoryProvider)
+        .mark(kOnboardingMarkKtpMoved)
+        .catchError((_) {}));
   }
 
   @override
   void dispose() {
+    // 蒙层挂在 Overlay 上，不随本页的 widget 树一起拆 —— 不显式移除会留一层黑幕。
+    _coachmark?.remove();
+    _coachmark = null;
     _scroll.removeListener(_maybeLoadMore);
     _scroll.dispose();
     _loadMoreTick.dispose();
@@ -367,6 +434,8 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             // 未庆祝角标（V1.3.0 Story 1.5）：搭 stats 这一次请求，不为它多发一次。
             milestoneUncelebrated: stats?.milestoneUncelebrated ?? 0,
             titleAction: _shareButton(),
+            // 迁移引导蒙层的高亮框位置从这里量（Story 5.4）。只量位置，不改行为。
+            insightsEntryAnchor: _insightsEntryAnchor,
             onEditProfile: widget.onEditProfile,
             // V1.3.0 Story 5.1：入口卡指向聚合页（身份证是其中一张卡）。
             // ⚠️ 逐条改，**不做前缀字符串替换** —— `/profile/id-cards/*` 多卡子路由

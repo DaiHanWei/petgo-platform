@@ -172,6 +172,10 @@ class ApiPaths {
   static const String meIdCardShareReward =
       '$base/pet-profiles/me/id-cards/share-reward';
 
+  /// 一次性引导标记（V1.3.0 Story 5.4）。GET 取已置位的键；POST `{key}` 置位（幂等）。
+  /// 🔴 按**账号**存，所以挂在 /me 下（决策 C1：当前用户主体统一走 /me）。
+  static const String meOnboardingMarks = '$base/me/onboarding-marks';
+
   /// 年龄卡分享成功上报 → 试发分享奖励（V1.3.0 Story 5.3）。
   /// 🔴 请求体**只有幂等键**：不带卡面内容、不上传图片。年龄卡本身纯客户端出图、
   /// 不落服务端；领奖是已澄清的唯一例外，而这个例外只包含「谁、哪次分享」。

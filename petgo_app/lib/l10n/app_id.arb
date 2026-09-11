@@ -1489,6 +1489,8 @@
   "diaryHealthEntrySubEmpty": "Belum ada catatan",
   "idCardTitle": "Kartu Identitas",
   "petInsightsTitle": "Kenali Hewanmu",
+  "commonGotIt": "Oke, paham",
+  "ktpMovedCoachmark": "Kartu identitas hewanmu sekarang ada di sini, di dalam Kenali Hewanmu — bareng beberapa hal lain tentang hewanmu.",
   "ageCardTitle": "Umur Hewanmu",
   "ageCardSizeQuestion": "Seberapa besar {name}?",
   "ageCardSizeSmall": "Kecil",

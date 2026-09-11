@@ -2218,6 +2218,12 @@
   },
   "idCardTitle": "Pet ID Card",
   "petInsightsTitle": "Know Your Pet",
+  "commonGotIt": "Got it",
+  "@commonGotIt": { "description": "一次性引导蒙层的确认按钮" },
+  "ktpMovedCoachmark": "Your pet's ID card now lives here, inside Know Your Pet — along with a few more things about your pet.",
+  "@ktpMovedCoachmark": {
+    "description": "V1.3.0 Story 5.4：老用户首次进档案页时的一次性迁移引导，指着新入口条说明身份证挪去哪了。按账号存，看过即不再弹"
+  },
   "@petInsightsTitle": {
     "description": "V1.3.0 Story 5.1 · AC1/AC2：综合入口名。档案页头部入口卡标题与聚合页页面标题**同源**，用同一个 key。文案需求清单 §1 已定稿（ID ≤ 18 / EN ≤ 20 字符，超一行会撑高整行）"
   },
