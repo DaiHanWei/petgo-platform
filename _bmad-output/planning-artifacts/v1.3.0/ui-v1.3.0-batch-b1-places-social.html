@@ -214,6 +214,26 @@ h1,h2,h3{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ser
     </p>
   </div>
 
+  <div class="checklist" style="margin-bottom:22px;">
+    <div style="padding:11px 13px;border-bottom:1px solid var(--page-rule);">
+      <b style="font-size:13px;">🔁 2026-09-11 落地前核对修订（本稿已改，共 4 处）</b>
+      <div style="font-size:11.5px;color:var(--page-ink-2);margin-top:3px;">
+        起因：本稿与后端/前端现有代码逐条核对后发现 2 处与现状不符、2 处口径待定。修订依据 = <code>决策日志-batch-b1.md</code>（B1-D1~D9），核对全文见 <code>代码核对报告-batch-b1.md</code>。<b>与本稿冲突时以决策日志为准。</b>
+      </div>
+    </div>
+    <table>
+      <tr><th>屏号</th><th>改了什么</th><th>为什么</th><th>依据</th></tr>
+      <tr><td class="lane-c">C6</td><td>删掉「⏱ Linimasa / 📅 Kalender」切换钮（画面 + 说明文字两处）</td><td>这一屏是复用已上线页面，而那个页面<b>没有日历</b>。2026-08-18、08-28 两次拍板都是不做，代码里留了「别再当成缺口补上去」的注释。照原稿做 = 把已否掉的功能做回来</td><td>B1-D5</td></tr>
+      <tr><td class="lane-c">C6</td><td>顶部「Dibagikan oleh …」横幅标注为：站内入口进入时隐藏</td><td>横幅本是给「从 WhatsApp 点链接进来的人」看的。新增站内路径（主页点宠物卡）后，"谁分享的"这个前提不成立</td><td>B1-D1</td></tr>
+      <tr><td class="lane-a">A4</td><td>👍/👎 从底部输入条右侧移入评论输入的展开态；另<b>新增</b>文字地址下方的定位小地图 +「Buka di Google Maps」</td><td>原摆法像「给场所点赞/点踩」的独立动作，实际是<b>评论自带的态度</b>（不写评论不能表态）。小地图是移动端地图免费不限量后补的定位展示，与 PRD⑥「不做地图浏览视图」不冲突</td><td>B1-D3 / B1-D9</td></tr>
+      <tr><td class="lane-a">A6</td><td>底图由 flutter_map + OpenStreetMap 改为 Google 地图 SDK；A5 与泳道流程里的同名标注一并更新</td><td>产品定的地图方案变更。只用「显示地图 + 打自己的经纬度点」，不调用搜索/地址解析/路线（那三类才计费）</td><td>B1-D9</td></tr>
+      <tr><td class="lane-a">A9/A10</td><td>地址栏示意由 <code>/place/kopi-kayu-manis</code> 改为 <code>/place/8Fq2xK7m</code></td><td>架构硬规定「对外标识不可枚举」。用场所名拼链接能被按名字批量试出全站场所页。原稿只是示意，改掉是防研发照抄</td><td>B1-D6</td></tr>
+    </table>
+    <div style="padding:10px 12px; font-size:11.5px; color:var(--page-ink-2); border-top:1px solid var(--page-rule); background:var(--page-bg-2);">
+      <b>另有 3 处不改稿、但实现要按 PRD 全集走：</b>A5 表单的「类型」只画了 5 个（PRD 是 7 类：咖啡店/餐厅/公园/商场/酒店民宿/宠物服务/其他）、「宠物友好标签」只画了 4 个（PRD 是 6 个：允许入内/户外座位/宠物餐食/宠物活动区/需牵引/大型犬友好）——属示意省略；A9 的「👍 12 suka」只露推荐数、App 内详情页是推荐/不推荐都露，如属有意（分享页偏营销）保持即可。
+    </div>
+  </div>
+
   <nav class="jumpnav">
     <a href="#lane-b">探索顶部统一区</a>
     <a href="#lane-a">FR-112 场所发现</a>
@@ -355,7 +375,7 @@ h1,h2,h3{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ser
       <span class="nl"></span>
       <em>变体：</em><s>A2</s> 场所列表（无定位权限，按最新+顶部提示，替代 A1）<i>／</i> <s>A3</s> 场所列表（空态，替代 A1）
       <span class="nl"></span>
-      <em>分支：</em><i>列表页或详情页「+标记场所」→</i> <s>A5</s> 新建场所表单 <i>→ 点位置字段 →</i> <s>A6</s> 地图选点弹层（叠加在 A5 上，⚠️项目无地图依赖，需新引入）<i>→ 选点返回 A5 → 提交 →</i> <s>A7</s> 成功（Toast，回列表/详情）<i>／</i> <s>A8</s> 失败（A5 表单保持，内联错误）
+      <em>分支：</em><i>列表页或详情页「+标记场所」→</i> <s>A5</s> 新建场所表单 <i>→ 点位置字段 →</i> <s>A6</s> 地图选点弹层（叠加在 A5 上，⚠️新引入 Google 地图 SDK，见 B1-D9）<i>→ 选点返回 A5 → 提交 →</i> <s>A7</s> 成功（Toast，回列表/详情）<i>／</i> <s>A8</s> 失败（A5 表单保持，内联错误）
       <span class="nl"></span>
       <em>复用（不重画）：</em><s>A4</s> 内点照片 → 复用批次A灯箱<b>设计规范</b>（代码尚未实现，待研发实现新版灯箱后场所照片自动切换）／ 点举报 → 复用现有五类选项举报抽屉（<code>report_sheet.dart</code>：Ilegal atau melanggar aturan / Informasi palsu / Konten tidak pantas / Pelecehan / Lainnya）／ 他人补充照片 → 复用既有 <code>MediaUploadUseCase</code> 上传链路 ／ 点标记人 → 跳 <s>C1</s> 用户主页
     </div>
@@ -404,7 +424,7 @@ h1,h2,h3{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ser
         <div class="phone-shell">
           <div class="pill"></div>
           <div class="statusbar"><span class="t">9:41</span><span class="t">●●●●</span></div>
-          <div class="pages"><div class="page" style="padding-bottom:64px;">
+          <div class="pages"><div class="page" style="padding-bottom:104px;">
             <div class="appbar"><span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M15 18l-6-6 6-6"/></svg></span><span class="appbar-title" style="flex:1;"></span><span class="ibtn"><svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></span></div>
             <div class="imgph" style="height:160px;margin:0 20px 12px;width:calc(100% - 40px);background:#F8F6FF;">📷 1/6</div>
             <div style="padding:0 20px;">
@@ -412,7 +432,11 @@ h1,h2,h3{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ser
               <div style="margin:7px 0 8px;"><span class="tag-outline">Kafe</span><span class="tag-outline">Boleh masuk</span><span class="tag-outline">+1</span></div>
               <div class="t-cap">1.2 km</div>
               <p class="t-cap" style="margin:8px 0;">Kafe nyaman, ada area luar untuk anjing. Kursi outdoor cukup banyak.</p>
-              <div style="display:flex;align-items:center;gap:8px;background:var(--c-subtle);border-radius:10px;padding:9px 11px;margin-bottom:10px;"><span class="t-cap" style="flex:1;">Jl. Senopati No.75, Kebayoran Baru</span><span class="t-cap violet" style="font-weight:600;">Salin</span></div>
+              <div style="display:flex;align-items:center;gap:8px;background:var(--c-subtle);border-radius:10px;padding:9px 11px;margin-bottom:8px;"><span class="t-cap" style="flex:1;">Jl. Senopati No.75, Kebayoran Baru</span><span class="tap-icon t-cap violet" style="font-weight:600;">Salin</span></div>
+              <div style="position:relative;height:96px;border-radius:12px;overflow:hidden;margin-bottom:10px;border:1px solid var(--c-line);">
+                <div class="map-fake"></div><div class="map-pin" style="font-size:26px;">📍</div>
+                <span style="position:absolute;right:8px;bottom:8px;background:#fff;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;color:var(--c-violet);box-shadow:0 2px 6px rgba(0,0,0,.14);">Buka di Google Maps ›</span>
+              </div>
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><div class="av" style="width:26px;height:26px;background:#F0425A;font-size:11px;">R</div><span class="t-cap">Ditandai oleh Rani</span></div>
               <div class="tag-outline" style="padding:8px 16px;">↗ Bagikan</div>
             </div>
@@ -423,13 +447,21 @@ h1,h2,h3{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ser
               <div style="display:flex;gap:9px;"><div class="av" style="width:30px;height:30px;background:#F0425A;font-size:12px;">S</div><div><div class="t-cap" style="font-weight:600;">Sari</div><div class="t-body">Kursi outdoor terbatas pas weekend.</div><div class="t-micro">👍 4 · 👎 1</div></div></div>
             </div>
           </div>
-          <div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--c-line);padding:10px 20px;display:flex;gap:8px;align-items:center;">
-            <div class="finput" style="flex:1;color:var(--c-tertiary);padding:9px 13px;">Tulis komentar…</div>
-            <span style="width:38px;height:38px;border-radius:9999px;border:1.5px solid var(--c-line);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">👍</span>
-            <span style="width:38px;height:38px;border-radius:9999px;border:1.5px solid var(--c-line);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">👎</span>
+          <div style="position:absolute;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--c-line);padding:10px 20px;">
+            <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+              <span class="t-micro" style="flex-shrink:0;">Sikapmu (opsional)</span>
+              <span class="tag-outline sel" style="padding:4px 10px;margin:0;">👍 Rekomen</span>
+              <span class="tag-outline" style="padding:4px 10px;margin:0;">👎 Tidak</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <div class="finput" style="flex:1;color:var(--c-tertiary);padding:9px 13px;">Tulis komentar…</div>
+              <span class="tap-icon t-cap violet" style="font-weight:700;flex-shrink:0;">Kirim</span>
+            </div>
           </div></div>
         </div>
-        <p class="frame-cap"><b>新页面</b> —— 不含打卡按钮；底部评论输入条样式参考现有 <code>CommentComposer</code> 吸底 pill 输入框，附加👍/👎可选态度</p>
+        <p class="frame-cap"><b>新页面</b> —— 不含打卡按钮；底部评论输入条样式参考现有 <code>CommentComposer</code> 吸底 pill 输入框。
+        <br><b>🔁 2026-09-11 修订（B1-D3）：</b>原稿把 👍/👎 两个圆钮摆在输入条右侧、与发送键并列，看起来像「给场所点赞/点踩」的独立动作。<b>已改为收进评论输入的展开态</b>（输入框获焦后才出现「Sikapmu (opsional)」这一行）——PRD 定的是<b>评论自带的态度</b>：不写评论不能表态，详情页评论里那两个数字是<b>评论态度的累计</b>，不是场所本身的投票。
+        <br><b>🔁 2026-09-11 修订（B1-D9）：</b><span class="tagN">新增</span>文字地址下方的<b>定位小地图</b>（Google 地图 SDK，只显示 + 打我们自己的经纬度点），右下角「Buka di Google Maps」点击跳出到 Google 地图导航。文字地址 + 一键复制照旧保留。<b>注意：</b>这和 PRD ⑥「不做地图浏览视图」不冲突——那条指的是<b>列表页在地图上找场所</b>，本处只是详情页的定位展示。</p>
       </div>
       <div class="frame-card"><span class="frame-tag">A5</span>
         <div class="phone-shell">
@@ -446,7 +478,7 @@ h1,h2,h3{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ser
             <div class="field"><label>Deskripsi (≤200)</label><div class="finput" style="height:48px;color:var(--c-tertiary);">Opsional…</div></div>
           </div></div>
         </div>
-        <p class="frame-cap"><b>新页面</b> —— 照片上传<span class="tagR">复用</span> <code>MediaUploadUseCase</code>；地图选点<span class="tagN">全新依赖</span>。<b>傻瓜式操作要求：</b>本帧展示的是必填项已填满的状态（Simpan 高亮可点）；空白表单下 Simpan 默认应是<b>灰色禁用</b>，等名称/类型/标签(≥1)/位置/地址全部满足才变亮可点——不能让用户点了没反应却不知道少填了什么</p>
+        <p class="frame-cap"><b>新页面</b> —— 照片上传<span class="tagR">复用</span> <code>MediaUploadUseCase</code>；地图选点<span class="tagN">全新依赖</span>（Google 地图 SDK，见 A6）。<b>傻瓜式操作要求：</b>本帧展示的是必填项已填满的状态（Simpan 高亮可点）；空白表单下 Simpan 默认应是<b>灰色禁用</b>，等名称/类型/标签(≥1)/位置/地址全部满足才变亮可点——不能让用户点了没反应却不知道少填了什么</p>
       </div>
       <div class="frame-card"><span class="frame-tag">A6</span>
         <div class="phone-shell">
@@ -458,7 +490,8 @@ h1,h2,h3{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ser
             <div style="position:absolute;bottom:0;left:0;right:0;background:#fff;padding:16px 20px;"><div class="btn-primary">Konfirmasi Lokasi</div></div>
           </div></div>
         </div>
-        <p class="frame-cap"><b>叠加层</b> —— flutter_map + OSM 底图占位（<span class="tagN">全新依赖</span>，项目 pubspec.yaml 目前无此库），拖动大头针选点</p>
+        <p class="frame-cap"><b>叠加层</b> —— 拖动大头针选点，默认落在当前位置（人不在现场也能标）。
+        <br><b>🔁 2026-09-11 修订（B1-D9）：</b>底图由原稿的 <code>flutter_map + OpenStreetMap</code> 改为 <b>Google 地图 SDK</b>（<span class="tagN">全新依赖</span>，项目目前无任何地图库）。<b>只用「显示地图 + 传我们自己的经纬度打点」这两件事</b>，不调用 Google 的地点搜索 / 地址解析 / 路线（那三类才按次计费；移动端地图显示本身免费不限量）。后台冷启动录入是网页版、另一套密钥，每月前 1 万次免费，运营用量远在额度内。</p>
       </div>
       <div class="frame-card"><span class="frame-tag">A7</span>
         <div class="phone-shell">
@@ -488,7 +521,7 @@ h1,h2,h3{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ser
       <div class="frame-card"><span class="frame-tag">A9</span>
         <div class="phone-shell">
           <div class="pages"><div class="page" style="display:flex;flex-direction:column;">
-            <div class="web-chrome" style="background:rgba(255,255,255,.12);color:#fff;position:relative;z-index:2;">🔒 tailtopia.id/place/kopi-kayu-manis</div>
+            <div class="web-chrome" style="background:rgba(255,255,255,.12);color:#fff;position:relative;z-index:2;">🔒 tailtopia.id/place/8Fq2xK7m</div>
             <div style="position:relative;height:300px;flex-shrink:0;overflow:hidden;margin-bottom:-20px;">
               <div style="position:absolute;inset:0;background:radial-gradient(120% 90% at 30% 20%,#F3D9A8 0%,#D9945B 45%,#7A4A32 100%);display:flex;align-items:center;justify-content:center;font-size:88px;">☕</div>
               <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(28,24,48,.05) 0%,rgba(28,24,48,.2) 55%,rgba(28,24,48,.95) 100%);"></div>
@@ -534,7 +567,7 @@ h1,h2,h3{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ser
       <div class="frame-card"><span class="frame-tag">A10</span>
         <div class="phone-shell">
           <div class="pages"><div class="page">
-            <div class="web-chrome">🔒 tailtopia.id/place/kopi-kayu-manis</div>
+            <div class="web-chrome">🔒 tailtopia.id/place/8Fq2xK7m</div>
             <div class="empty-wrap" style="top:30px;"><div class="empty-icon">🚫</div><div class="empty-title" style="font-size:15px;">Tempat ini sudah tidak ada</div></div>
           </div></div>
         </div>
@@ -687,10 +720,6 @@ h1,h2,h3{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ser
               <div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span class="t-cap" style="font-weight:600;">🏆 Pencapaian Miu</span><span class="t-cap violet num" style="font-weight:700;">7 / 30</span></div>
               <div style="height:6px;background:var(--c-subtle);border-radius:99px;overflow:hidden;"><div style="width:23%;height:100%;background:var(--c-violet);"></div></div>
             </div>
-            <div style="display:flex;gap:8px;margin:0 20px 12px;">
-              <div style="flex:1;text-align:center;padding:9px;border-radius:10px;background:var(--c-violet);color:#fff;font-size:12.5px;font-weight:600;">⏱ Linimasa</div>
-              <div style="flex:1;text-align:center;padding:9px;border-radius:10px;border:1.5px solid var(--c-line);font-size:12.5px;">📅 Kalender</div>
-            </div>
             <div style="padding:0 20px;">
               <div style="display:flex;gap:12px;border:1px solid var(--c-line);border-radius:13px;padding:12px;margin-bottom:8px;">
                 <div style="width:32px;flex-shrink:0;text-align:center;"><div class="t-cap" style="font-weight:700;">12</div><div class="t-micro">Jul</div></div>
@@ -705,7 +734,9 @@ h1,h2,h3{ font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ser
             </div>
           </div></div>
         </div>
-        <p class="frame-cap"><span class="reuse-flag">复用现有页面</span> —— <code>visitor_archive_view.dart</code>：PetInfoCard(头像+名字+品种/性别/年龄+个性签名+Diary/咨询/里程碑三栏统计) + 成就进度条 + Linimasa/Kalender 视图切换 + 时间线卡片；相对作者态删掉标题行分享/编辑按钮与入口网格，不重画。<b>待确认：</b>「Dibagikan oleh {name} · hanya bisa dilihat」这条分享出处提示是否要在 FR-118 新增的站内入口（点宠物卡进入）里继续显示——原组件是靠分享 token 触发，站内点击进入时"谁分享的"这个语境不成立，可能需要隐藏或改文案，需与研发确认</p>
+        <p class="frame-cap"><span class="reuse-flag">复用现有页面</span> —— <code>visitor_archive_view.dart</code>：PetInfoCard(头像+名字+品种/性别/年龄+个性签名+Diary/咨询/里程碑三栏统计) + 成就进度条 + 时间线卡片；相对作者态删掉标题行分享/编辑按钮与入口网格，不重画。
+        <br><b>🔁 2026-09-11 修订（B1-D5）：</b>原稿画的「⏱ Linimasa / 📅 Kalender」切换钮<b>已删除</b> —— 访客视图<b>没有日历</b>，只有时间线，2026-08-18 与 08-28 两次拍板都是不做，代码里留了警告注释。别再补回来。
+        <br><b>🔁 2026-09-11 修订（B1-D1）：</b>顶部「Dibagikan oleh {name} · hanya bisa dilihat」横幅，<b>站内入口进入时隐藏</b>（从主页宠物卡 / 推荐集合点进来时，"谁分享的"这个前提不成立）；从分享链接进入时照旧显示。此外站内进入时返回应回到上一页，不落到首页。</p>
       </div>
     </div>
   </div>
