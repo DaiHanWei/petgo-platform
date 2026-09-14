@@ -25,7 +25,7 @@
 |---|---|---|---|---|
 | **admin** · 运营后台 UI 重构 | `feat/1.3.0-ops-ui-refactor` | Epic 1–11 | 59，全部 ready-for-dev | 云端批跑中（2026-09-09 起）；Epic 10 的 6 条跳过，等电商线合入后再做 |
 | **batch-a** · 内容体验修复包 | `feat/1.3.0-batch-a-content-fixes` | Epic 1–5 | 19，全部 ready-for-dev | 规划全套已入库（2026-09-10），待开跑 |
-| **batch-b1** · 场所发现与社交基建包 | `feat/1.3.0-batch-b1-places-social` | Epic 1–4 | 24，待生成 sprint-status | PRD / UI 稿 / 代码核对报告 / 决策日志 / 架构 delta 均已入库；13 条决策已定，AB-17A 已确认在做 —— **阻塞项清零，可拆 epics** |
+| **batch-b1** · 场所发现与社交基建包 | `feat/1.3.0-batch-b1-places-social` | Epic 1–4 | 24，全部 backlog（story 文件待生成） | PRD / UI 稿 / 代码核对报告 / 决策日志 / 架构 delta 均已入库；13 条决策已定，AB-17A 已确认在做 —— **阻塞项清零，可拆 epics** |
 
 **产物文件**（按主题定位时以本列为准）：
 
@@ -33,7 +33,7 @@
 |---|---|---|---|---|---|
 | admin | `PRD-v1.3.0-admin.md` | `architecture-v1.3.0-admin-delta.md` | `epics-v1.3.0-admin.md` | `决策日志-admin.md` | `sprint-status-v1.3.0-admin.yaml` |
 | batch-a | `PRD-v1.3.0-batch-a-content-fixes.md` | `architecture-v1.3.0-delta.md` ⚠️无后缀 | `epics-v1.3.0-batch-a.md` | `决策日志.md` ⚠️无后缀 | `sprint-status-v1.3.0-batch-a.yaml` |
-| batch-b1 | `PRD-v1.3.0-batch-b1-places-social.md` | `architecture-v1.3.0-batch-b1-delta.md` | `epics-v1.3.0-batch-b1.md` | `决策日志-batch-b1.md` | 待建 |
+| batch-b1 | `PRD-v1.3.0-batch-b1-places-social.md` | `architecture-v1.3.0-batch-b1-delta.md` | `epics-v1.3.0-batch-b1.md` | `决策日志-batch-b1.md` | `sprint-status-v1.3.0-batch-b1.yaml` |
 
 > **batch-b1 另有两份**：UI 稿 `ui-v1.3.0-batch-b1-places-social.html`、落地前核对报告 `代码核对报告-batch-b1.md`（PRD/UI 稿的「现状如此」逐条对代码核实的结果 + 待拍板问题，拆 epics 前必读）。
 > batch-b1 对应母版总 PRD 的批次 B1；批次 B2（FR-117 / FR-120 / 场所打卡 ⑧）尚未入库，引用时别与 B1 混说。

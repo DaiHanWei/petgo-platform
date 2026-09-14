@@ -1,0 +1,100 @@
+# generated: 2026-09-15
+# last_updated: 2026-09-15
+# project: TailTopia V1.3.0 · 主题 batch-b1（场所发现与社交基建包）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.3.0
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-batch-b1.md (4 Epic / 24 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-batch-b1-delta.md (AD-1~AD-10)
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-batch-b1-places-social.md
+# 决策日志: {project-root}/_bmad-output/planning-artifacts/v1.3.0/决策日志-batch-b1.md (B1-D1~D13)
+# 代码核对报告: {project-root}/_bmad-output/planning-artifacts/v1.3.0/代码核对报告-batch-b1.md
+# ui: {project-root}/_bmad-output/planning-artifacts/v1.3.0/ui-v1.3.0-batch-b1-places-social.html (24 屏 / 5 泳道)
+#
+# 🔴 口径优先级：决策日志 > PRD > UI 稿。
+#    PRD 有两处已被推翻 —— 地图选型（B1-D9：OSM → Google，且只做显示+打自己的点）、
+#    Diary 推荐覆盖人群（B1-D2：扩到「声明未养宠/计划养宠」态）。
+#    UI 稿 2026-09-11 已按代码核对结论修订 4 处，稿内首屏有修订说明表。
+#
+# NOTE: 同一版本目录下 admin / batch-a / batch-b1 三个主题**各自独立成域**，
+#       Epic 号段可以重复。技能按本文件里的**完整 key** 取 story，不按 `<epic>-<n>` 前缀通配。
+#       **口头引用 story 必须带主题**（如「batch-b1 的 1-1」）。
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+# Retrospective: optional <-> done
+#
+# WORKFLOW NOTES:
+# ===============
+# - 当前全部 backlog：epics 已定稿，**story 文件尚未生成**（下一步 bmad-create-story）
+# - Epic 首个 story 创建(create-story)时自动 -> in-progress
+# - 每 story 三段推进：后端 -> 前端 -> 联调（CLAUDE.md 纪律）
+# - 每条 AC 已标 L0(静态) / L1(集成) / L2(端到端) 层级
+# - ⚠️ 本批次 AC 里 **L2 占比近六成**（四个 epic 全是界面）。云端 headless 只跑到 L0 绿灯，
+#   L1/L2 留本地并在 Completion Notes 标注「待本地验收」。
+#   **建议分批回本地验收，不要等 24 条全跑完一次性看** —— 否则验收会堆成一座山。
+# - Dev 完成后转 review，再跑 code-review（建议新开 context）
+#
+# ===== Epic 依赖链（全后向，无环） =====
+# 零依赖、可立刻开工：Epic 1 · Epic 2（两者之间无硬依赖，可并行）
+# Epic 2 -> Epic 3        # @ 的点击落点是 2-1 交付的公开主页
+# Epic 2 -> Epic 4        # 宠物卡点击复用 2-3 交付的「宠物档案访客视图（站内入口）」，不新建通道
+# Epic 1 -> Epic 4        # 4-4 的宠物横滑行加在 1-1 已落地的场所入口行**之下**
+#                         #   （布局已在 UI 稿统一设计，不存在返工；这是顺序约束不是功能依赖）
+#
+# ===== 跨主题依赖（唯一一条，硬阻塞） =====
+# 后台 AB-17A「场所内容管理」—— 归 **admin 主题**，不在本文件的 story 序列里。
+#   ✅ 2026-09-14 已确认后台侧在做。
+#   ⚠️ 它是 App 端场所功能**上线**的硬依赖：没有它，场所上线后没人能下架违规场所、
+#      没人能合并重复条目；而本版**用户不可编辑场所**（2026-09-15 拍板），纠错只能走后台。
+#      不阻塞开发，阻塞发版 —— 见发版检查单 RC-4。
+#
+# ===== 发版检查单（RC-1~RC-4）不在本文件 =====
+# 定位权限商店合规 / 地图服务账号 / 冷启动数据 / 后台 AB-17A 四项**零代码零测试、验证全是 L2**，
+# 已从 story 序列摘出，放在 epics 文件末尾的「发版检查单」一节，归发版负责人。
+# 🔴 **不要**把它们加回本文件 —— 混进 sprint 的唯一后果是有人标成 done 而实际没人去点过那个表单。
+
+development_status:
+
+  # ===== Epic 1: 宠物友好场所发现 · FR-112（①~⑦⑨，不含⑧打卡）=====
+  # 零依赖起点。全新模块 place，前后端从零建（全仓现无任何场所/venue 实现）。
+  # 引入本批次唯一一处 App 新依赖：地图 SDK（使用边界见 AD-3，越界即计费）。
+  epic-1: backlog
+  1-1-场所列表与场所本体建模: backlog              # 建表(AD-1) + 列表接口 + 列表页 + 空态 + **首页场所入口**。入口与页面必须同条交付，否则页面不可达、无法验收
+  1-2-按距离排序与定位权限: backlog                # AD-2：经纬度范围粗筛 + 直线距离 + 两列索引；禁装地理扩展、禁接三方 LBS；「按距离」与「按最新」是两条独立查询分支
+  1-3-标记一个场所: backlog                        # 表单全集（7 类型 + 6 标签，UI 稿是示意省略）；必填未满时保存灰色禁用；**提交前告知不可修改**，服务端硬拒编辑接口
+  1-4-地图选点: backlog                            # 引入地图 SDK。🔴 只做「显示 + 打自己的点」，禁调搜索/地址解析/路线；地图只出现在选点弹层与详情页小地图两处
+  1-5-场所详情页: backlog                          # 照片流/地址复制/小地图/举报。标记人本条内走**现有迷你卡**（Epic 2 退役时统一改），故不依赖 Epic 2
+  1-6-灯箱抽成公共组件并接入场所照片: backlog      # 抽既有私有灯箱成公共件，内容详情页行为一字不变。**不等批次 A**（B1-D4）
+  1-7-场所评论与二元态度: backlog                  # AD-8 独立建表 place_comments，不改既有 comments、不用多态外键；一级评论 only；**用户可自删自己的评论**（校验本人）
+  1-8-推荐不推荐计数: backlog                      # AD-9 Redis 计数器 + DB 回算自愈。三个触发点：创建 / 用户自删 / 运营删下架。本版只展示不参与排序
+  1-9-他人为场所补充照片: backlog                  # 标注上传者；走既有上传链路 + 公开桶 + EXIF 剥离兜底
+  1-10-场所分享到站外: backlog                     # H5 直出 /place/{随机码} + OG + 唤起链 + 安卓深链声明。🔒 **审核通过前不下发 og:image**（预览图会被平台缓存，不随下架消失）
+
+  # ===== Epic 2: 用户公开主页 · FR-118 =====
+  # 零依赖。被 Epic 3（@ 落点）与 Epic 4（访客通道）依赖 —— 是本批次的关键路径，建议优先。
+  epic-2: backlog
+  2-1-公开主页他人视角与迷你卡退役: backlog        # ⚠️ **刻意不拆小**：迷你卡上挂着举报/拉黑两个入口，先切入口后做抽屉会出现用户找不到举报拉黑的功能回退期
+  2-2-主页内容区与聚合计数: backlog                # PUBLIC 混排 + 发帖总数（**已有可复用**）+ 获赞总数（本批次新补）；非 PUBLIC 服务端就不下发
+  2-3-宠物档案访客视图站内入口: backlog            # 🔴 **共用件，Epic 4 复用**。AD-4：新建 petId 入口 + 复用 v1.1.6 那层只读投影；不下发对方宠物的分享 token；⚠️ 访客视图**没有日历**，别照旧稿补回去
+  2-4-自己视角的主页: backlog                      # 同页两视角；「编辑资料」在身份行内与头像同行，不塞 AppBar；「我的」Tab 一行不改
+  2-5-被拉黑者视角与已注销用户的主页: backlog      # 🔴 模糊空态**必须与「真的没有公开内容」复用同一组件同一文案**，否则一对比就能推断出被拉黑；判定在服务端
+
+  # ===== Epic 3: @ 提及 · FR-119 =====
+  # 依赖 Epic 2（3-3 的跳转落点是 2-1 的公开主页）。
+  epic-3: backlog
+  3-1-at候选集: backlog                            # AD-10 独立建表。**维护逻辑是本条主体**：写入时机 / 裁剪策略 / 防无界增长，三者必须在 AC 里定死
+  3-2-at选择器与插入: backlog                      # 全新叠加层；仅在候选集内过滤（**不是搜索框**）；上限 5 人；🔴 **存 userId 不存昵称**
+  3-3-at的展示与跳转: backlog                      # 依赖 Epic 2。昵称按 userId 实时查（对方改名自动跟着变）；拉黑关系不高亮
+  3-4-被at的通知: backlog                          # 🔴 新增通知类型必须 **DROP + ADD 重列 CHECK 全集**，取值以代码枚举为唯一权威 + 复查并行分支。**此处已出过四次事故，是验收条件不是提醒**
+  3-5-at的存量与删除后边界: backlog                # 存量不回溯；删除后通知不撤回 → 「内容已删除」统一空态；埋点属性禁含自由文本
+
+  # ===== Epic 4: 逛别人家的毛孩子 · FR-121 + FR-112.4（顶部统一区另一半）=====
+  # 依赖 Epic 2（复用 2-3 的访客视图入口，不新建通道）；4-4 需 1-1 的场所入口行已落地。
+  epic-4: backlog
+  4-1-推荐规则与宠物卡: backlog                    # 近 14 天公开 Diary 帖 + 有头像 + 公开记录≥3；**不复用 FR-95 打分**。⚠️ 实时 SQL（不许加缓存）→ 必须给索引方案并贴执行计划；降级只许 @Scheduled 落表
+  4-2-diary声明未养宠态也看到推荐: backlog         # B1-D2 对 PRD 原文的扩展：代码里有**两种**无档案状态，PRD 只写了未建档那一种。游客态不动
+  4-3-全屏推荐集合页: backlog                      # 2 列网格 + 分页 + 空态；**「查看全部」入口由本条一并加上**（它的落点是本条才交付的页面，放 4-1 会成前向依赖）
+  4-4-探索tab顶部宠物横滑行: backlog               # 加在 1-1 已落地的场所入口行**之下**；两模块分层清晰不叠一堆；推荐池为空时整行不渲染
