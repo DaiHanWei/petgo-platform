@@ -73,13 +73,15 @@ public class PlaceMergeService {
         int movedPhotos = photos.reassignPlace(mergedId, keepId);
         int movedComments = comments.reassignPlace(mergedId, keepId);
         int movedCheckins = checkins.reassignPlace(mergedId, keepId);
+        // 被并方自己也曾是别人的保留方时，把那些历史指向一并改到新的最终保留方，保持 merged_into_id 恒为单跳
+        int repointed = places.repointMergedInto(mergedId, keepId, Instant.now());
         merged.markMerged(keepId);
         merged.recount(0, 0, 0, 0, 0); // MERGED 行不再展示计数
         places.saveAndFlush(merged);
         placeService.recount(keepId);
         audit.record(actorAdminAccountId, AuditActions.PLACE_MERGED, "PLACE", String.valueOf(mergedId),
                 merged.getName() + " → " + keep.getName() + " (keepId=" + keepId + ", photos=" + movedPhotos + ", comments=" + movedComments
-                        + ", checkins=" + movedCheckins + ")");
+                        + ", checkins=" + movedCheckins + ", repointed=" + repointed + ")");
         events.publishEvent(new PlaceMergedEvent(keepId, mergedId, Instant.now(), actorAdminAccountId));
         log.info("place merged mergedId={} keepId={} photos={} comments={} checkins={}", mergedId, keepId, movedPhotos, movedComments, movedCheckins);
         return places.findById(keepId).orElseThrow();

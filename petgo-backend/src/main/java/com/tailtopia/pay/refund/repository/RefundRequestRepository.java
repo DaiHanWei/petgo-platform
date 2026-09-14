@@ -12,6 +12,14 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
 
     Optional<RefundRequest> findByRefundToken(String refundToken);
 
+    /**
+     * 写路径行锁读取（V1.3.0 A6 三段流）：主管 / 财务 / 连点同时对同一张单提交时串行化，
+     * 后到者读到前者提交后的状态再过「仅 PENDING 可判定」「职责分离」守卫，不再 last-write-wins。须在事务内。
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select r from RefundRequest r where r.refundToken = :token")
+    Optional<RefundRequest> findForUpdateByRefundToken(@org.springframework.data.repository.query.Param("token") String refundToken);
+
     boolean existsByOrderId(long orderId);
 
     /** 订单详情退款子阶段派生（Story 5.3，一订单一退款）。 */

@@ -118,7 +118,9 @@ while IFS= read -r f; do
   awk -v CLS="$(basename "$f" .java)" '
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
     { t = trim($0)
-      if (collecting) { acc = acc " " t; if (t ~ /;[ \t]*$/) { v = trim(acc); sub(/;[ \t]*$/, "", v); gsub(/"[ \t]*\+[ \t]*"/, "", v); gsub(/[ \t]+/, " ", v); print CLS "." nm "\t" v; collecting = 0 } next }
+      # 🔴 跨行收集设长度上限：源码里的 NUL 字面量（AuditHashing.NULL_SENTINEL = "\0"）会让 awk 截断该行、
+      #    永远等不到分号，把后面整段方法体吞成「常量值」—— 真实权限表达式不可能这么长，超限直接丢弃。
+      if (collecting) { acc = acc " " t; if (length(acc) > 2000) { collecting = 0; next } if (t ~ /;[ \t]*$/) { v = trim(acc); sub(/;[ \t]*$/, "", v); gsub(/"[ \t]*\+[ \t]*"/, "", v); gsub(/[ \t]+/, " ", v); print CLS "." nm "\t" v; collecting = 0 } next }
       if (match(t, /static final String [A-Za-z_0-9]+[ \t]*=/)) {
         nm = t; sub(/.*static final String /, "", nm); sub(/[ \t]*=.*/, "", nm)
         rest = t; sub(/.*static final String [A-Za-z_0-9]+[ \t]*=[ \t]*/, "", rest)
@@ -138,16 +140,17 @@ awk -F'\t' '
         while (match(e, /[A-Za-z_][A-Za-z_0-9]*/)) {
           tok = substr(e, RSTART, RLENGTH)
           full = cls "." tok
-          out = out substr(e, 1, RSTART - 1) ((tok ~ /^[A-Z][A-Z_0-9]*$/ && (full in V)) ? V[full] : tok)
+          out = out substr(e, 1, RSTART - 1) ((tok ~ /^[A-Z][A-Z_0-9]*$/ && full != k && (full in V)) ? V[full] : tok)
           e = substr(e, RSTART + RLENGTH)
         }
         out = out e
         gsub(/"[ \t]*\+[ \t]*"/, "", out)
-        V[k] = out
+        # 防指数膨胀：值里多次引用会互相展开的常量时每轮成倍变长，BWK awk（macOS）直接段错误、输出空表。
+        if (length(out) <= 4000) V[k] = out
       }
     }
     for (k in V) print k "\t" V[k]
-  }' "$gconst.raw" > "$gconst"
+  }' "$gconst.raw" > "$gconst" || { echo "::error::list-admin-write-ops: 全局常量展开失败（awk 退出码 $?），权限列不可信" >&2; exit 1; }
 rm -f "$gconst.raw"
 
 # ---- 扫描：每个 Java 文件 → 行：METHOD<TAB>PATH<TAB>Class#method<TAB>preauth ----

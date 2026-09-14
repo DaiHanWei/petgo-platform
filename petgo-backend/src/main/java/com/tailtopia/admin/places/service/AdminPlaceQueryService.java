@@ -230,7 +230,15 @@ public class AdminPlaceQueryService {
         return out;
     }
 
-    private static String name(AuthorView v, Long userId) {
+    /**
+     * 场所 UGC 注销口径（2026-09-14 拍板）：评论 / 照片 / 打卡<b>保留不删</b>，作者名统一显示「已注销用户」
+     * （与内容评论同一 key）。user 行注销即就地匿名化，这里据 {@code deleted} 在服务端换名，
+     * 列表行 / 抽屉 / 复核工作台所有渲染点一处生效，不留 {@code #userId} 这种可追溯的残影。
+     */
+    private String name(AuthorView v, Long userId) {
+        if (v != null && v.deleted()) {
+            return msg.get("admin.contentdetail.deletedUser");
+        }
         return v == null || v.nickname() == null || v.nickname().isBlank() ? "#" + userId : v.nickname();
     }
 

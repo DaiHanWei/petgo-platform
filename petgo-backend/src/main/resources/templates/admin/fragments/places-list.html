@@ -80,7 +80,6 @@
             <td class="nowrap places-address" th:text="${r.addressText}" th:title="${r.addressText}">地址</td>
             <td class="nowrap">
                 <span th:text="${r.markerName}" th:classappend="${r.markerDeleted} ? 'muted'">标记人</span>
-                <span class="badge" th:if="${r.markerDeleted}" th:text="#{admin.review.subject.deactivated}">已注销</span>
             </td>
             <td th:text="${r.photoCount}">0</td>
             <td th:text="${r.commentCount}">0</td>

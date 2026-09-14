@@ -4,6 +4,7 @@ import com.tailtopia.admin.account.domain.AdminAccount;
 import com.tailtopia.admin.account.domain.AdminAccountStatus;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.shared.web.HxRequest;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -59,7 +60,7 @@ public class AdminSessionGuardFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
-    /** 失效会话 + 清 SecurityContext + 302 登录页（{@code ?expired} / {@code ?relogin}）。 */
+    /** 失效会话 + 清 SecurityContext + 跳登录页（{@code ?expired} / {@code ?relogin}）。 */
     private void kick(HttpServletRequest request, HttpServletResponse response, String reason)
             throws IOException {
         HttpSession session = request.getSession(false);
@@ -67,6 +68,22 @@ public class AdminSessionGuardFilter extends OncePerRequestFilter {
             session.invalidate();
         }
         SecurityContextHolder.clearContext();
-        response.sendRedirect(request.getContextPath() + "/admin/login?" + reason);
+        redirectToLogin(request, response, reason);
+    }
+
+    /**
+     * 跳登录页，区分 htmx：普通请求 302；htmx 请求改回 {@code HX-Redirect} 头让浏览器整页跳转。
+     * 不能对 htmx 发 302 —— XHR 会透明跟随到 200 的登录页，htmx 把整页登录 HTML 当片段 swap 进
+     * 抽屉 / 工作台右栏。{@code SecurityConfig} 的未认证入口（会话自然过期）复用同一出口。
+     */
+    public static void redirectToLogin(HttpServletRequest request, HttpServletResponse response, String reason)
+            throws IOException {
+        String target = request.getContextPath() + "/admin/login?" + reason;
+        if (HxRequest.of(request).isHtmx()) {
+            response.setStatus(HttpServletResponse.SC_OK);
+            response.setHeader("HX-Redirect", target);
+            return;
+        }
+        response.sendRedirect(target);
     }
 }

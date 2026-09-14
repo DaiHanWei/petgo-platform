@@ -122,7 +122,14 @@ public class SecurityConfig {
                         .logoutSuccessUrl("/admin/login?logout"))
                 // 权限不足（URL 级门控 + @PreAuthorize 方法级拒绝，经 GlobalExceptionHandler 重抛回到本链）：
                 // 403 + forward 到「权限不足」提示页，而非裸 Whitelabel/500。
-                .exceptionHandling(ex -> ex.accessDeniedHandler(adminAccessDeniedHandler()));
+                .exceptionHandling(ex -> ex.accessDeniedHandler(adminAccessDeniedHandler())
+                        // 会话自然过期后的 htmx 请求：formLogin 默认入口会 302 到登录页，被 XHR 透明跟随后
+                        // 整页登录 HTML 会被 swap 进片段目标；htmx 请求改走 HX-Redirect 整页跳转（非 htmx 仍走默认 302）。
+                        .defaultAuthenticationEntryPointFor(
+                                (request, response, e) -> com.tailtopia.admin.account.web.AdminSessionGuardFilter
+                                        .redirectToLogin(request, response, "expired"),
+                                new org.springframework.security.web.util.matcher.RequestHeaderRequestMatcher(
+                                        com.tailtopia.admin.shared.web.HxRequest.HEADER_REQUEST, "true")));
         // CSRF 保持开启（表单链默认即开）；会话按需创建（表单登录态）。
         return http.build();
     }

@@ -407,6 +407,11 @@ public class AdminAccountService {
         if (email.equalsIgnoreCase(old)) {
             return; // 幂等
         }
+        // 反方向同样挡：换绑「进」bootstrap 邮箱会让普通账号占住它（bootstrap 行停用时 ACTIVE 查重拦不住）。
+        if (isBootstrapEmail(email)) {
+            throw AppException.validation("该邮箱为 bootstrap 超管保留，不能换绑到其它账号")
+                    .code("admin.err.account.bootstrapEmailReserved");
+        }
         if (accounts.existsByLarkEmailIgnoreCaseAndStatusAndIdNot(email, AdminAccountStatus.ACTIVE, accountId)) {
             throw AppException.conflict("该 Lark 邮箱已存在后台账号：" + email)
                     .code("admin.err.account.emailExists", email);

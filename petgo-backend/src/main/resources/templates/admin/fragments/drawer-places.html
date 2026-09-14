@@ -26,8 +26,7 @@
             <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.type}">类型</div><div class="sum-value rv-small" th:text="${d.typeName}">类型</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.city}">城市</div><div class="sum-value rv-small" th:text="${d.city}">城市</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.marker}">标记人</div>
-                <div class="sum-value rv-small"><span th:text="${d.markerName}" th:classappend="${d.markerDeleted} ? 'muted'">标记人</span>
-                    <span class="badge" th:if="${d.markerDeleted}" th:text="#{admin.review.subject.deactivated}">已注销</span></div></div>
+                <div class="sum-value rv-small"><span th:text="${d.markerName}" th:classappend="${d.markerDeleted} ? 'muted'">标记人</span></div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.createdAt}">创建时间</div><div class="sum-value rv-small" th:text="${@adminTime.wib(d.createdAt)}">-</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.drawer.lat}">纬度</div><div class="sum-value rv-small" th:text="${d.lat}">0</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.drawer.lng}">经度</div><div class="sum-value rv-small" th:text="${d.lng}">0</div></div>

@@ -286,6 +286,12 @@ public class AdminReturnService {
                 .orElseThrow(() -> AppException.notFound("退货申请不存在").code("admin.err.return.notFound"));
     }
 
+    /** 写路径入口：行锁读取（并发处置同一张单串行化，见仓储方法注释）。须在写事务内调用。 */
+    private ReturnRequest lockForWrite(String returnToken) {
+        return returns.findForUpdateByPublicToken(returnToken)
+                .orElseThrow(() -> AppException.notFound("退货申请不存在").code("admin.err.return.notFound"));
+    }
+
     /**
      * 批准。拒收 / 发货前取消<b>跳过寄回与质检</b>，直接进入退款执行。
      *
@@ -294,7 +300,7 @@ public class AdminReturnService {
      */
     @Transactional
     public ReturnRequest approve(String returnToken, long adminId) {
-        ReturnRequest r = require(returnToken);
+        ReturnRequest r = lockForWrite(returnToken);
         r.approve(adminId);
         returns.save(r);
         audit.record(adminId, AuditActions.SHOP_RETURN_REVIEWED, "SHOP_RETURN", returnToken,
@@ -308,7 +314,7 @@ public class AdminReturnService {
     /** 驳回。🔴 理由必填并回告用户（复用 FR-52A）；订单回到申请前状态（SPEC-6 ②）。 */
     @Transactional
     public ReturnRequest reject(String returnToken, String reason, long adminId) {
-        ReturnRequest r = require(returnToken);
+        ReturnRequest r = lockForWrite(returnToken);
         r.reject(adminId, reason);
         returns.save(r);
         requests.restoreOrderStatus(r);
@@ -341,7 +347,7 @@ public class AdminReturnService {
     @Transactional
     public ReturnRequest registerShipback(String returnToken, String carrier, String trackingNo,
             Long fee, long adminId) {
-        ReturnRequest r = require(returnToken);
+        ReturnRequest r = lockForWrite(returnToken);
         r.registerShipback(carrier, trackingNo, fee);
         returns.save(r);
         // 🔒 运单号非 PII 可记；用户地址/电话不进摘要
@@ -361,7 +367,7 @@ public class AdminReturnService {
     @Transactional
     public ReturnRequest passInspection(String returnToken, String note, String photoKeys,
             long adminId) {
-        ReturnRequest r = require(returnToken);
+        ReturnRequest r = lockForWrite(returnToken);
         ShopOrder order = orders.findById(r.getShopOrderId()).orElseThrow();
         r.passInspection(note, photoKeys);
         returns.save(r);
@@ -389,7 +395,7 @@ public class AdminReturnService {
     @Transactional
     public ReturnRequest failInspection(String returnToken, String note, String photoKeys,
             RejectDisposal disposal, String shipBackTrackingNo, long adminId) {
-        ReturnRequest r = require(returnToken);
+        ReturnRequest r = lockForWrite(returnToken);
         if (disposal == RejectDisposal.RETURN_TO_USER
                 && (shipBackTrackingNo == null || shipBackTrackingNo.isBlank())) {
             throw AppException.validation("选择「退回用户」时必须填写回寄单号").code("admin.err.return.trackingRequired");
@@ -407,7 +413,7 @@ public class AdminReturnService {
 
     @Transactional
     public RefundExecutionService.Outcome executeRefund(String returnToken, long adminId) {
-        ReturnRequest before = require(returnToken);
+        ReturnRequest before = lockForWrite(returnToken);
         boolean firstExecution = before.getStatus() == ReturnStatus.REFUNDING;
         var out = refunds.execute(returnToken);
         // 🔴 发货前取消：货从未出库，但付款时已 commit 扣了实际库存 —— 退款执行的同时按原订单号

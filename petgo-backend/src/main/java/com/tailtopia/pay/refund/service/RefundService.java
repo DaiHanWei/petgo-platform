@@ -439,8 +439,9 @@ public class RefundService {
         }
     }
 
+    /** 仅供写事务调用（全部调用点均在 {@code @Transactional} 写方法内）：行锁读取，并发处置同一单串行化。 */
     private RefundRequest require(String refundToken) {
-        return refunds.findByRefundToken(refundToken)
+        return refunds.findForUpdateByRefundToken(refundToken)
                 .orElseThrow(() -> AppException.notFound("退款请求不存在"));
     }
 

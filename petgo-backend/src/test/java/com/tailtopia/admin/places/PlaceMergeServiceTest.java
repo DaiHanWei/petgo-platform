@@ -76,6 +76,8 @@ class PlaceMergeServiceTest {
         order.verify(photos).reassignPlace(2L, 1L);
         order.verify(comments).reassignPlace(2L, 1L);
         order.verify(checkins).reassignPlace(2L, 1L);
+        // 合并链压平：曾并入 B 的场所改指 A，merged_into_id 恒单跳（契约 X-1）
+        order.verify(places).repointMergedInto(eq(2L), eq(1L), any());
         order.verify(places).saveAndFlush(merged);
         order.verify(placeService).recount(1L);
         ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);

@@ -174,4 +174,24 @@ class AdminSessionGuardFilterTest {
         verify(resp, never()).sendRedirect(contains("relogin"));
         verify(chain, never()).doFilter(req, resp);
     }
+
+    // ---- htmx 请求：不能 302（XHR 透明跟随后整页登录 HTML 会被 swap 进片段目标），改回 HX-Redirect ----
+
+    @Test
+    void htmxRequestKickedViaHxRedirectNotRedirect() throws Exception {
+        when(req.getRequestURI()).thenReturn("/admin/refunds/tok/drawer");
+        when(req.getHeader("HX-Request")).thenReturn("true");
+        authenticateAs(7L, 0);
+        when(repo.findById(7L)).thenReturn(Optional.of(account(AdminAccountStatus.ACTIVE, 1)));
+        HttpSession session = mock(HttpSession.class);
+        when(req.getSession(false)).thenReturn(session);
+
+        filter.doFilterInternal(req, resp, chain);
+
+        verify(session).invalidate();
+        verify(resp).setStatus(HttpServletResponse.SC_OK);
+        verify(resp).setHeader("HX-Redirect", "/admin/login?relogin");
+        verify(resp, never()).sendRedirect(org.mockito.ArgumentMatchers.anyString());
+        verify(chain, never()).doFilter(req, resp);
+    }
 }

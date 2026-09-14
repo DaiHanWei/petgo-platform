@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.tailtopia.admin.account.domain.AdminAccount;
 import com.tailtopia.admin.account.domain.AdminAccountStatus;
+import com.tailtopia.admin.account.domain.AdminAccountType;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.User;
@@ -86,5 +87,38 @@ class AdminBootstrapTest {
         verify(adminAccounts).save(saved.capture());
         assertThat(saved.getValue().getId()).isNull();
         assertThat(saved.getValue().getLarkEmail()).isEqualTo("boot@tailtopia.id");
+    }
+
+    // ---- D-21 邮箱复用后：只认 SUPER_ADMIN 行，env 密码绝不落到 STAFF 账号上 ----
+
+    private AdminAccount staff(long id, AdminAccountStatus status) {
+        AdminAccount a = account(id, status);
+        ReflectionTestUtils.setField(a, "accountType", AdminAccountType.STAFF);
+        return a;
+    }
+
+    @Test
+    void disabledStaffWithSameEmailIsNotRevived() {
+        AdminAccount oldSuper = account(1L, AdminAccountStatus.DISABLED);
+        AdminAccount newerStaff = staff(50L, AdminAccountStatus.DISABLED);
+        when(adminAccounts.findByLarkEmailIgnoreCaseAndStatus("boot@tailtopia.id", AdminAccountStatus.ACTIVE))
+                .thenReturn(Optional.empty());
+        when(adminAccounts.findByLarkEmailIgnoreCaseOrderByIdDesc("boot@tailtopia.id"))
+                .thenReturn(List.of(newerStaff, oldSuper));
+        bootstrap.run(null);
+        assertThat(newerStaff.getStatus()).isEqualTo(AdminAccountStatus.DISABLED);
+        assertThat(newerStaff.getPasswordHash()).isEqualTo("{bcrypt}old");
+        assertThat(oldSuper.getStatus()).isEqualTo(AdminAccountStatus.ACTIVE);
+        assertThat(oldSuper.getPasswordHash()).isEqualTo("{bcrypt}h");
+    }
+
+    @Test
+    void activeStaffHoldingEmailIsLeftUntouched() {
+        AdminAccount activeStaff = staff(50L, AdminAccountStatus.ACTIVE);
+        when(adminAccounts.findByLarkEmailIgnoreCaseAndStatus("boot@tailtopia.id", AdminAccountStatus.ACTIVE))
+                .thenReturn(Optional.of(activeStaff));
+        bootstrap.run(null);
+        assertThat(activeStaff.getPasswordHash()).isEqualTo("{bcrypt}old");
+        verify(adminAccounts, never()).save(any(AdminAccount.class));
     }
 }

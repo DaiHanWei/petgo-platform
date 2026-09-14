@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -29,6 +30,15 @@ public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Lo
     Optional<ReturnRequest> findByPublicTokenAndUserId(String publicToken, long userId);
 
     Optional<ReturnRequest> findByPublicToken(String publicToken);
+
+    /**
+     * 后台写路径行锁读取（V1.3.0 A7 工作台）：两名客服同时处理同一张单 / 同一按钮连点两次时串行化，
+     * 后到的事务读到的是前者提交后的状态 —— 否则两边都过了「当前状态可批准 / 首次执行」判断，
+     * 发货前取消的退款执行会把库存回补两遍。须在事务内。
+     */
+    @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from ReturnRequest r where r.publicToken = :token")
+    Optional<ReturnRequest> findForUpdateByPublicToken(@Param("token") String publicToken);
 
     List<ReturnRequest> findByShopOrderIdOrderByIdDesc(long shopOrderId);
 
