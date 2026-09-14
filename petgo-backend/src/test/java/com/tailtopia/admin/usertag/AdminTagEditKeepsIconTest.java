@@ -64,6 +64,23 @@ class AdminTagEditKeepsIconTest {
     }
 
     @Test
+    void bulkAssignRejectsMoreThanCapBeforeWritingAnything() {
+        UserTagQueryService query = mock(UserTagQueryService.class);
+        AdminAuditService audit = mock(AdminAuditService.class);
+        AdminUserTagService service = new AdminUserTagService(mock(UserTagRepository.class), mock(UserTagAssignmentRepository.class),
+                mock(com.tailtopia.auth.repository.UserRepository.class), query, audit,
+                mock(com.tailtopia.admin.audit.repository.AdminAuditLogRepository.class),
+                mock(com.tailtopia.admin.account.repository.AdminAccountRepository.class));
+        java.util.List<Long> ids = java.util.stream.LongStream.rangeClosed(1, AdminUserTagService.MAX_BULK_ASSIGN + 1).boxed().toList();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.assignBulk(7L, ids, 1L, java.time.Instant.now(), null))
+                .isInstanceOf(com.tailtopia.shared.error.AppException.class)
+                .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.tailtopia.shared.error.AppException) e).getMessageCode())
+                        .isEqualTo("admin.err.userTag.tooManyUsers"));
+        org.mockito.Mockito.verifyNoInteractions(query, audit);
+    }
+
+    @Test
     void nullIconKeepsTheExistingOne() {
         UserTag tag = seed();
         svc(tag).editTag(7L, 1L, "新名字", null, "新说明");

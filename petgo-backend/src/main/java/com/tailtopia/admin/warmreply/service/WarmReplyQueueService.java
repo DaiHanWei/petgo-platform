@@ -62,6 +62,13 @@ public class WarmReplyQueueService {
                           updated_at = now()
             """;
 
+    /** 登记本次计入的回复（同事务内能读到刚 upsert 的 PENDING 行）。重复事件不重复登记。 */
+    public static final String REGISTER_REPLY_SQL = """
+            INSERT INTO warm_reply_followup_replies (followup_id, reply_comment_id)
+            SELECT id, ? FROM warm_reply_followups WHERE virtual_comment_id = ? AND status = 'PENDING'
+            ON CONFLICT DO NOTHING
+            """;
+
     /** 回复正文上限（与 App 端评论一致）。 */
     public static final int BODY_MAX = 200;
     /** 审计摘要只记正文前 50 字（同 4-2 规则）。 */
@@ -104,6 +111,7 @@ public class WarmReplyQueueService {
         }
         jdbc.update(UPSERT_SQL, e.parentCommentId(), e.postId(), e.parentAuthorId(), e.commentId(),
                 Timestamp.from(e.createdAt() == null ? Instant.now() : e.createdAt()));
+        jdbc.update(REGISTER_REPLY_SQL, e.commentId(), e.parentCommentId());
         log.info("warm-reply followup enqueued virtualCommentId={} replyId={}", e.parentCommentId(), e.commentId());
         return true;
     }
@@ -119,6 +127,13 @@ public class WarmReplyQueueService {
         }
         Optional<WarmReplyFollowup> pending = followups.findByVirtualCommentIdAndStatus(parentId, FollowupStatus.PENDING);
         if (pending.isEmpty()) {
+            return false;
+        }
+        // 只核销「确实计入当前 PENDING 项」的回复（复审 0914）：下架 → 恢复（不重新入队）→ 再移除的回复早已核销过，
+        // 不能再减 —— 否则会抵消另一条从未跟进过的新回复的待办
+        int registered = jdbc.update("DELETE FROM warm_reply_followup_replies WHERE followup_id = ? AND reply_comment_id = ?",
+                pending.get().getId(), commentId);
+        if (registered == 0) {
             return false;
         }
         int updated = jdbc.update("UPDATE warm_reply_followups SET pending_reply_count = pending_reply_count - 1, updated_at = now()"
@@ -218,6 +233,12 @@ public class WarmReplyQueueService {
         }
         if (isContentDeleted(f)) {
             throw AppException.validation("帖子或暖评已删除，只能标记已读").code("admin.err.warmReply.contentDeleted");
+        }
+        // 身份在入队时缓存，发之前按 AD-6 复核「∈ 虚拟池且启用」（与一级暖评 postAsVirtual 同口径，复审 0914）：
+        // 入队后被停用 / 转类型的账号不能再被拿来发言；此时只能标记已读
+        User identity = users.findById(f.getVirtualUserId()).orElse(null);
+        if (identity == null || identity.getAccountType() != AccountType.VIRTUAL || !identity.isEnabled()) {
+            throw AppException.validation("虚拟账号不存在或已停用，只能标记已读").code("admin.err.virtualComment.identityInvalid");
         }
         if (!posts.findById(f.getPostId()).map(p -> p.getStatus() == PostStatus.PUBLISHED).orElse(false)) {
             // 帖子未删但不可见（下架 / 挂审）：createReply 会 404 中文原文，这里先按后台码 422（复审 #5）

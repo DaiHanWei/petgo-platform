@@ -237,8 +237,7 @@ public class UnifiedTicketController {
      * 「一次别封掉几百个人」不能只靠前端。
      */
     @PostMapping("/admin/tickets/batch")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')"
-            + " or hasAuthority('content.takedown')")
+    @PreAuthorize(DISPOSE_AUTH + " or hasAuthority('content.takedown')")
     public String batch(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam("action") String action,
             @RequestParam(value = "ticketIds", required = false) List<String> ticketIds,

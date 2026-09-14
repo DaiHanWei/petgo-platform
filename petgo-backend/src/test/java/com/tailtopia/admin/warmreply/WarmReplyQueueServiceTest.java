@@ -75,6 +75,7 @@ class WarmReplyQueueServiceTest {
         ContentCommentedEvent e = new ContentCommentedEvent(POST, REPLY, REAL_USER, 5L, VIRTUAL_USER, at, VIRTUAL_COMMENT);
         assertThat(service.enqueueIfWarmReply(e)).isTrue();
         verify(jdbc).update(eq(WarmReplyQueueService.UPSERT_SQL), eq(VIRTUAL_COMMENT), eq(POST), eq(VIRTUAL_USER), eq(REPLY), any());
+        verify(jdbc).update(WarmReplyQueueService.REGISTER_REPLY_SQL, REPLY, VIRTUAL_COMMENT); // 登记计入的是哪条回复
         assertThat(WarmReplyQueueService.UPSERT_SQL).contains("ON CONFLICT (virtual_comment_id) WHERE status = 'PENDING'")
                 .contains("pending_reply_count + 1");
     }
@@ -112,6 +113,41 @@ class WarmReplyQueueServiceTest {
         assertThat(service.onReplyRemoved(REPLY, VIRTUAL_COMMENT, VIRTUAL_USER)).isFalse();
         verify(followups, org.mockito.Mockito.times(1)).findByVirtualCommentIdAndStatus(anyLong(), any());
         verify(jdbc, never()).update(anyString(), anyLong());
+    }
+
+    @Test
+    void dequeueOnlyConsumesRepliesRegisteredOnCurrentPendingItem() {
+        stubUsers();
+        WarmReplyFollowup pending = pendingFollowup(7L);
+        when(followups.findByVirtualCommentIdAndStatus(VIRTUAL_COMMENT, FollowupStatus.PENDING)).thenReturn(Optional.of(pending));
+        String consume = "DELETE FROM warm_reply_followup_replies WHERE followup_id = ? AND reply_comment_id = ?";
+
+        // 下架 → 恢复 → 再移除的旧回复：早已核销，不在当前项登记里 → 不减，不抵消新回复的待办（复审 0914）
+        when(jdbc.update(consume, 7L, 555L)).thenReturn(0);
+        assertThat(service.onReplyRemoved(555L, VIRTUAL_COMMENT, REAL_USER)).isFalse();
+        verify(jdbc, never()).update(org.mockito.ArgumentMatchers.startsWith("UPDATE warm_reply_followups"), any(Object[].class));
+
+        // 登记在当前项上的回复：核销 + 减一
+        when(jdbc.update(consume, 7L, REPLY)).thenReturn(1);
+        when(jdbc.update(org.mockito.ArgumentMatchers.startsWith("UPDATE warm_reply_followups"), eq(7L))).thenReturn(1);
+        assertThat(service.onReplyRemoved(REPLY, VIRTUAL_COMMENT, REAL_USER)).isTrue();
+        verify(jdbc).update(org.mockito.ArgumentMatchers.startsWith("UPDATE warm_reply_followups"), eq(7L));
+    }
+
+    @Test
+    void replyRejectedWhenVirtualIdentityDisabledAfterEnqueue() {
+        WarmReplyFollowup f = pendingFollowup(7L);
+        when(followups.findForUpdateById(7L)).thenReturn(Optional.of(f));
+        when(idempotency.findResourceId(any())).thenReturn(Optional.empty());
+        stubContentAlive();
+        User disabled = User.newVirtual("virtual:x", "马甲", null, 1L);
+        org.springframework.test.util.ReflectionTestUtils.setField(disabled, "enabled", false);
+        when(users.findById(VIRTUAL_USER)).thenReturn(Optional.of(disabled));
+
+        assertThatThrownBy(() -> service.reply(7L, "谢谢", null, 42L)).isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.virtualComment.identityInvalid"));
+        assertThat(f.getStatus()).isEqualTo(FollowupStatus.PENDING);
+        verify(commentService, never()).createReply(anyLong(), anyLong(), anyString());
     }
 
     @Test
@@ -169,6 +205,7 @@ class WarmReplyQueueServiceTest {
     }
 
     private void stubContentAlive() {
+        stubUsers(); // reply() 发前复核虚拟身份仍 VIRTUAL 且启用
         when(posts.findById(POST)).thenReturn(Optional.of(ContentPost.publish(5L, ContentType.DAILY, null, "帖", java.util.List.of())));
         when(comments.findById(VIRTUAL_COMMENT)).thenReturn(Optional.of(Comment.create(POST, null, VIRTUAL_USER, "暖评")));
     }

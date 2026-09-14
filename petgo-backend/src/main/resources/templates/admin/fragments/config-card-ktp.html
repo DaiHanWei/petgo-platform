@@ -16,14 +16,14 @@
         <div th:fragment="ktp-form">
             <p class="hint" th:text="#{admin.config.ktp.hint}">三价独立保存；改价只影响新发起的解锁，已解锁记录不受影响。</p>
             <label class="field"><span th:text="#{admin.config.ktp.rowKtpHd}">KTP 卡高清下载（IDR）</span>
-                <input class="inp field-full" type="number" name="idHdDownloadPrice" min="1" step="1" required th:value="${pricing.idHdDownloadPrice}" th:disabled="${!canEdit}"/>
+                <input class="inp field-full" type="number" name="idHdDownloadPrice" min="1" max="100000000" step="1" required th:value="${pricing.idHdDownloadPrice}" th:disabled="${!canEdit}"/>
             </label>
             <label class="field"><span th:text="#{admin.config.ktp.rowPassportPage}">护照 · 护照内页解锁（IDR）</span>
-                <input class="inp field-full" type="number" name="passportPagePrice" min="1" step="1" required th:value="${pricing.passportPageUnlockPrice}" th:disabled="${!canEdit}"/>
+                <input class="inp field-full" type="number" name="passportPagePrice" min="1" max="100000000" step="1" required th:value="${pricing.passportPageUnlockPrice}" th:disabled="${!canEdit}"/>
                 <span class="hint" data-ref-hint th:text="#{admin.config.ktp.refHint(${#numbers.formatInteger(pricing.idHdDownloadPrice, 0, 'COMMA')})}">参考：KTP 当前价 Rp 5,000</span>
             </label>
             <label class="field"><span th:text="#{admin.config.ktp.rowPassportBoarding}">护照 · 登机牌解锁（IDR）</span>
-                <input class="inp field-full" type="number" name="passportBoardingPrice" min="1" step="1" required th:value="${pricing.passportBoardingUnlockPrice}" th:disabled="${!canEdit}"/>
+                <input class="inp field-full" type="number" name="passportBoardingPrice" min="1" max="100000000" step="1" required th:value="${pricing.passportBoardingUnlockPrice}" th:disabled="${!canEdit}"/>
                 <span class="hint" data-ref-hint th:text="#{admin.config.ktp.refHint(${#numbers.formatInteger(pricing.idHdDownloadPrice, 0, 'COMMA')})}">参考：KTP 当前价 Rp 5,000</span>
             </label>
         </div>

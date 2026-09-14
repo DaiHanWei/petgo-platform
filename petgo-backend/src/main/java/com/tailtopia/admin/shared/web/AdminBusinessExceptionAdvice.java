@@ -90,8 +90,11 @@ public class AdminBusinessExceptionAdvice {
         if (!hx.isHtmx()) {
             throw ex; // 非 htmx：交回 Security 链 forward /admin/denied（与 GlobalExceptionHandler 现状一致）
         }
-        String code = missingPermission(handler);
-        String permission = code == null ? null : messages.get("perm." + code);
+        java.util.List<String> codes = missingPermissions(handler);
+        String code = codes.isEmpty() ? null : codes.get(0);
+        // 多选一门控（a or b or c）列出全部可满足的权限名，不再只报第一个误导「缺的就是它」（复审 0914）
+        String permission = codes.isEmpty() ? null
+                : codes.stream().map(c -> messages.get("perm." + c)).collect(java.util.stream.Collectors.joining(" / "));
         ModelAndView mav = new ModelAndView(VIEW_FORBIDDEN, HttpStatus.FORBIDDEN);
         mav.addObject("permission", permission);
         mav.addObject("permissionCode", code);
@@ -119,17 +122,27 @@ public class AdminBusinessExceptionAdvice {
 
     /** 尽力而为：方法级、其次类级 {@code @PreAuthorize} 里第一个 {@code hasAuthority('x')} 的 x。 */
     static String missingPermission(HandlerMethod handler) {
+        java.util.List<String> codes = missingPermissions(handler);
+        return codes.isEmpty() ? null : codes.get(0);
+    }
+
+    /** 方法级、其次类级 {@code @PreAuthorize} 里全部 {@code hasAuthority('x')} 的 x（按出现顺序去重）。 */
+    static java.util.List<String> missingPermissions(HandlerMethod handler) {
         if (handler == null) {
-            return null;
+            return java.util.List.of();
         }
         PreAuthorize pre = handler.getMethodAnnotation(PreAuthorize.class);
         if (pre == null) {
             pre = handler.getBeanType().getAnnotation(PreAuthorize.class);
         }
         if (pre == null) {
-            return null;
+            return java.util.List.of();
         }
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
         Matcher m = HAS_AUTHORITY.matcher(pre.value());
-        return m.find() ? m.group(1) : null;
+        while (m.find()) {
+            out.add(m.group(1));
+        }
+        return java.util.List.copyOf(out);
     }
 }

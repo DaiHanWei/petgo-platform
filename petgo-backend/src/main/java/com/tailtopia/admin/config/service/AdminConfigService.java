@@ -106,6 +106,10 @@ public class AdminConfigService {
     public void updateKtpPricing(KtpPricingForm form, long adminId) {
         require(form.idHdDownloadPrice() >= 1 && form.passportPagePrice() >= 1 && form.passportBoardingPrice() >= 1,
                 "价格须为 ≥1 的整数（IDR），不做 0 元限免", "admin.err.config.ktpPriceMin");
+        // 上限与充值档位同一把尺（复审 0914）：误填天文数字会让用户端解锁单无法支付（QRIS 单笔上限），且与同表其它金额护栏不一致
+        require(form.idHdDownloadPrice() <= MAX_TIER_AMOUNT && form.passportPagePrice() <= MAX_TIER_AMOUNT
+                        && form.passportBoardingPrice() <= MAX_TIER_AMOUNT,
+                "价格须 ≤ 100000000 IDR", "admin.err.config.ktpPriceMax");
 
         PricingConfig c = pricingRepo.findById(PricingConfig.SINGLETON_ID)
                 .orElseThrow(() -> new IllegalStateException("pricing_config 缺失"));

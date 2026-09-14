@@ -121,6 +121,18 @@ class AdminConfigServiceTest {
     }
 
     @Test
+    void ktpPricingRejectsAboveTierAmountCap() {
+        seedPricing();
+        long over = AdminConfigService.MAX_TIER_AMOUNT + 1;
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(over, 5000, 5000), 7L))
+                .isInstanceOf(AppException.class).hasMessageContaining("100000000");
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, over), 7L))
+                .isInstanceOf(AppException.class);
+        svc.updateKtpPricing(new KtpPricingForm(AdminConfigService.MAX_TIER_AMOUNT, 5000, 5000), 7L); // 恰好上限可存
+        verify(audit, times(1)).record(eq(7L), eq("CONFIG_UPDATE_PRICING"), anyString(), anyString(), anyString());
+    }
+
+    @Test
     void ktpPricingLogsOnlyChangedColumnsIndependentlyAndAuditsOnce() {
         PricingConfig c = seedPricing();
         svc.updateKtpPricing(new KtpPricingForm(5000, 8000, 5000), 7L); // 只改护照内页

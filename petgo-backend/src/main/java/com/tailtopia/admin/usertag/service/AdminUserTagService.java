@@ -69,6 +69,8 @@ public class AdminUserTagService {
 
     /** 抽屉页签二每页条数。与内容标签同量级（480px 抽屉一屏扫得完）。 */
     private static final int ASSIGNMENT_PAGE_SIZE = 20;
+    /** 一次批量分配的用户数上限（去重后）：整批在一个事务里逐条写分配 + 审计，几千条会长事务 / 请求超时（复审 0914）。 */
+    public static final int MAX_BULK_ASSIGN = 500;
 
     // ——————————————————— 标签本体 ———————————————————
 
@@ -256,6 +258,10 @@ public class AdminUserTagService {
         }
         // 去重但保持顺序：同一用户在表单里被勾两次不该分配两条。
         Set<Long> unique = new LinkedHashSet<>(userIds);
+        if (unique.size() > MAX_BULK_ASSIGN) {
+            throw AppException.validation("一次最多分配 " + MAX_BULK_ASSIGN + " 个用户")
+                    .code("admin.err.userTag.tooManyUsers", String.valueOf(MAX_BULK_ASSIGN));
+        }
         List<Long> failed = new java.util.ArrayList<>();
         for (Long uid : unique) {
             try {

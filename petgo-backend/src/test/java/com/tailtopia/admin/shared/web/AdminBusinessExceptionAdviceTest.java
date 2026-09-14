@@ -39,6 +39,13 @@ class AdminBusinessExceptionAdviceTest {
             throw AppException.validation("不能停用自己的账号").code("admin.err.account.selfDeactivate");
         }
 
+        @PostMapping("/admin/probe/denied-any")
+        @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('admin.deactivate') or hasAuthority('user.deactivate')")
+        @ResponseBody
+        String deniedAny() {
+            throw new AccessDeniedException("Access Denied");
+        }
+
         @PostMapping("/admin/probe/denied")
         @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('admin.deactivate')")
         @ResponseBody
@@ -124,6 +131,16 @@ class AdminBusinessExceptionAdviceTest {
         assertThat(body).startsWith("admin/fragments/tpl-shared :: forbidden|");
         // 所缺权限名 = perm.admin.deactivate 的三语显示名（D-37 固定显示）
         assertThat(body).contains(TestMessages.real().get("perm.admin.deactivate"));
+    }
+
+    @Test
+    void htmxAccessDeniedOnAnyOfGateNamesEveryAcceptablePermission() throws Exception {
+        // 多选一门控：两个可满足的权限都要报出来，不能只报第一个误导「缺的就是它」（复审 0914）
+        String body = mvc.perform(post("/admin/probe/denied-any").header("HX-Request", "true"))
+                .andExpect(status().isForbidden())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(body).contains(TestMessages.real().get("perm.admin.deactivate"))
+                .contains(TestMessages.real().get("perm.user.deactivate"));
     }
 
     @Test
