@@ -25,7 +25,7 @@
 |---|---|---|---|---|
 | **admin** · 运营后台 UI 重构 | `feat/1.3.0-ops-ui-refactor` | Epic 1–11 | 59，全部 ready-for-dev | 云端批跑中（2026-09-09 起）；Epic 10 的 6 条跳过，等电商线合入后再做 |
 | **batch-a** · 内容体验修复包 | `feat/1.3.0-batch-a-content-fixes` | Epic 1–5 | 19，全部 ready-for-dev | 规划全套已入库（2026-09-10），待开跑 |
-| **batch-b1** · 场所发现与社交基建包 | `feat/1.3.0-batch-b1-places-social` | Epic 1–4 | 24，全部 backlog（story 文件待生成） | PRD / UI 稿 / 代码核对报告 / 决策日志 / 架构 delta 均已入库；13 条决策已定，AB-17A 已确认在做 —— **阻塞项清零，可拆 epics** |
+| **batch-b1** · 场所发现与社交基建包 | `feat/1.3.0-batch-b1-places-social` | Epic 1–4 | 24，全部 ready-for-dev | PRD / UI 稿 / 代码核对报告 / 决策日志 / 架构 delta 均已入库；13 条决策已定，AB-17A 已确认在做 —— **阻塞项清零，可拆 epics** |
 
 **产物文件**（按主题定位时以本列为准）：
 
