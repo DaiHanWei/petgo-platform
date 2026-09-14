@@ -97,11 +97,17 @@ public class FailedRequestAdminController {
     public String followUp(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
             HxRequest hx, Model model, jakarta.servlet.http.HttpServletResponse response,
             RedirectAttributes flash) {
-        service.followUp(id, admin.getAdminAccountId());
         if (hx.isHtmx()) {
+            service.followUp(id, admin.getAdminAccountId());
             return afterAction(id, msg.get("admin.flash.failed.followedUp"), model, response);
         }
-        flash.addFlashAttribute("notice", msg.get("admin.flash.failed.followedUp"));
+        // 非 htmx（PRG 降级）：与 archive 同口径，业务异常回列表 + flash，而非裸 ProblemDetail（记录被并发归档 / 不存在）
+        try {
+            service.followUp(id, admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", msg.get("admin.flash.failed.followedUp"));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
         return "redirect:/admin/failed-requests";
     }
 
@@ -132,11 +138,16 @@ public class FailedRequestAdminController {
             @RequestParam("note") String note,
             HxRequest hx, Model model, jakarta.servlet.http.HttpServletResponse response,
             RedirectAttributes flash) {
-        service.note(id, note, admin.getAdminAccountId());
         if (hx.isHtmx()) {
+            service.note(id, note, admin.getAdminAccountId());
             return afterAction(id, msg.get("admin.flash.failed.noteSaved"), model, response);
         }
-        flash.addFlashAttribute("notice", msg.get("admin.flash.failed.noteSaved"));
+        try {
+            service.note(id, note, admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", msg.get("admin.flash.failed.noteSaved"));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
         return "redirect:/admin/failed-requests";
     }
 }

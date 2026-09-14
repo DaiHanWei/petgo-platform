@@ -98,7 +98,7 @@ awk -F'|' 'NF >= 7 && $2 ~ /^ *GET *$/ { p=$3; gsub(/`/, "", p); gsub(/^ +| +$/,
   | sort -u > "$tmp/page-routes.raw"
 # 例外清单：长得像页面路由、但其实是页签 / 片段 / 选择器 / 表单页的 GET。
 # 🔴 显式列表而不是脚本里一条 grep -v 正则：正则一改，真正漏配的页面会跟着被吞掉，且没人看得出来。
-sed -e 's/#.*$//' -e 's/[ \t]*$//' "$EXCEPTIONS" | grep -E '^/admin' | sort -u > "$tmp/exceptions.txt"
+sed -e 's/#.*$//' -e 's/[[:space:]]*$//' "$EXCEPTIONS" | grep -E '^/admin' | sort -u > "$tmp/exceptions.txt"
 comm -23 "$tmp/page-routes.raw" "$tmp/exceptions.txt" > "$tmp/page-routes.txt"
 # 例外清单里的死条目也要报：留着一条早已不存在的路径，等于给未来的漏配留了个后门。
 stale_exc=$(comm -13 "$tmp/page-routes.raw" "$tmp/exceptions.txt")

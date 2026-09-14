@@ -392,7 +392,9 @@ if [[ -n "$BASELINE" ]]; then
   md_rows "$OUT" > "$at"
 
   if [[ -f "$ALLOWLIST" ]]; then
-    sed -e 's/#.*$//' -e 's/[ \t]*$//' "$ALLOWLIST" | grep -E '^[+-] ' > "$al" || true
+    # ⚠️ 去行尾空白用 [[:space:]]：BSD sed（macOS）不认方括号里的 \t，会把它当字符 t，
+    #    `.../delist` 被削成 `.../delis`，白名单明明登记了却本地报「未解释」。
+    sed -e 's/#.*$//' -e 's/[[:space:]]*$//' "$ALLOWLIST" | grep -E '^[+-] ' > "$al" || true
   else
     : > "$al"
     echo "::warning::白名单文件不存在：$ALLOWLIST（所有差异都会被判为未解释）"
