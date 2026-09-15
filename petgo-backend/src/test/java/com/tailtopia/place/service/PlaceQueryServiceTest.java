@@ -37,6 +37,7 @@ class PlaceQueryServiceTest {
     private AccountQueryService accounts;
     private PlaceCommentQueryService placeComments;
     private PlaceAttitudeCounters attitudeCounters;
+    private com.tailtopia.place.repository.PlacePhotoRepository photos;
     private PlaceQueryService service;
 
     @BeforeEach
@@ -53,7 +54,13 @@ class PlaceQueryServiceTest {
                 .thenReturn(java.util.Map.of());
         Mockito.when(attitudeCounters.countsOf(Mockito.anyLong()))
                 .thenReturn(PlaceAttitudeCounters.Counts.ZERO);
-        service = new PlaceQueryService(places, accounts, placeComments, attitudeCounters);
+        // Story 1.9：照片从 place_photos 批量取（默认没有照片）。
+        photos = Mockito.mock(com.tailtopia.place.repository.PlacePhotoRepository.class);
+        Mockito.when(photos.findVisibleForPlaces(Mockito.anyList()))
+                .thenReturn(java.util.List.of());
+        Mockito.when(photos.findVisible(Mockito.anyLong(), Mockito.anyBoolean(), Mockito.any()))
+                .thenReturn(java.util.List.of());
+        service = new PlaceQueryService(places, accounts, placeComments, attitudeCounters, photos);
     }
 
     /** 自增 id 的发号器 —— 只要不同就行（评论数 Map 按 id 取）。 */
@@ -65,7 +72,7 @@ class PlaceQueryServiceTest {
         // 没有 id 的裸实体在真实路径上不存在（JPA 一定赋了值）。
         return withId(Place.mark(token, "Tempat " + token, PlaceType.CAFE,
                 List.of(PlaceTag.PETS_ALLOWED_INSIDE), lat, lng, "Jl. Test", null,
-                List.of("https://cdn/x.jpg"), 1L), SEQ.getAndIncrement());
+                1L), SEQ.getAndIncrement());
     }
 
     private static Place withId(Place p, long id) {

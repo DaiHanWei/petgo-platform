@@ -1,3 +1,4 @@
+import 'place_comment.dart';
 import 'place_summary.dart';
 
 /// 场所详情域模型（V1.3.0 batch-b1 Story 1.5，消费 `GET /api/v1/places/{token}`）。
@@ -13,7 +14,7 @@ class PlaceDetail {
     required this.token,
     required this.name,
     required this.tags,
-    required this.photoUrls,
+    required this.photos,
     required this.addressText,
     required this.latitude,
     required this.longitude,
@@ -34,8 +35,14 @@ class PlaceDetail {
   final PlaceType? type;
   final List<PlaceTag> tags;
 
-  /// 照片（公开桶 CDN URL，服务端已附去 EXIF 的 `x-oss-process`）。
-  final List<String> photoUrls;
+  /// 照片（Story 1.9 起**每张带上传者**，AC2）。
+  ///
+  /// ⚠️ 这取代了 1.5 的 `photoUrls`（一个字符串数组）—— 数组装不下"这张是谁传的"。
+  /// URL 仍然是公开桶 CDN 地址，服务端已附去 EXIF 的 `x-oss-process`（E4）。
+  final List<PlacePhoto> photos;
+
+  /// 只要 URL 的场合（灯箱、分享）—— 顺序与 [photos] 一致。
+  List<String> get photoUrls => photos.map((p) => p.url).toList(growable: false);
 
   /// 文字地址。
   ///
@@ -63,7 +70,7 @@ class PlaceDetail {
       name: json['name']?.toString() ?? '',
       type: PlaceType.fromApi(json['type']?.toString()),
       tags: _tags(json['tags']),
-      photoUrls: _strings(json['photoUrls']),
+      photos: _photos(json['photos']),
       addressText: json['addressText']?.toString() ?? '',
       description: _blankToNull(json['description']?.toString()),
       latitude: _double(json['latitude']),
@@ -83,9 +90,13 @@ class PlaceDetail {
           .whereType<PlaceTag>()
           .toList(growable: false);
 
-  static List<String> _strings(Object? raw) => raw is! List
+  static List<PlacePhoto> _photos(Object? raw) => raw is! List
       ? const []
-      : raw.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList(growable: false);
+      : raw
+          .whereType<Map>()
+          .map((e) => PlacePhoto.fromJson(Map<String, dynamic>.from(e)))
+          .where((p) => p.url.isNotEmpty)
+          .toList(growable: false);
 
   static String? _blankToNull(String? s) => (s == null || s.isEmpty) ? null : s;
 
@@ -137,4 +148,53 @@ class PlaceMarker {
 
   /// 能不能点开这个人（注销 / 拿不到 id → 不可点）。
   bool get tappable => !deleted && userId > 0;
+}
+
+/// 场所的一张照片（Story 1.9 · AC2「标注上传者」）。
+///
+/// 🔴 **非 VISIBLE 的行只会下发给上传者本人**（读路径已按 viewer 过滤）——
+/// 所以拿到一张 `underReview` 的照片时，它一定是你自己刚传的那张。
+class PlacePhoto {
+  const PlacePhoto({
+    required this.id,
+    required this.url,
+    required this.uploaderId,
+    required this.uploaderDeleted,
+    required this.moderation,
+    required this.mine,
+    this.uploaderNickname,
+  });
+
+  final int id;
+  final String url;
+
+  final int uploaderId;
+
+  /// 注销 → null，前端渲染本地化「已注销用户」（NFR-8）。
+  final String? uploaderNickname;
+  final bool uploaderDeleted;
+
+  final PlaceCommentModeration moderation;
+
+  /// 是不是本人传的 —— 决定要不要给删除入口。**服务端算给的**。
+  final bool mine;
+
+  /// 能不能点开这个人。
+  bool get uploaderTappable => !uploaderDeleted && uploaderId > 0;
+
+  factory PlacePhoto.fromJson(Map<String, dynamic> json) {
+    final id = json['id'];
+    final uploaderId = json['uploaderId'];
+    return PlacePhoto(
+      id: id is num ? id.toInt() : 0,
+      url: json['url']?.toString() ?? '',
+      uploaderId: uploaderId is num ? uploaderId.toInt() : 0,
+      uploaderNickname: _blankToNull(json['uploaderNickname']?.toString()),
+      uploaderDeleted: json['uploaderDeleted'] == true,
+      moderation: PlaceCommentModeration.fromApi(json['moderationStatus']?.toString()),
+      mine: json['mine'] == true,
+    );
+  }
+
+  static String? _blankToNull(String? s) => (s == null || s.isEmpty) ? null : s;
 }

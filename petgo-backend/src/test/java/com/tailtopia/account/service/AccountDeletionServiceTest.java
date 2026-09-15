@@ -52,13 +52,15 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.content.service.ContentShareService contentShareService;
     @Mock com.tailtopia.share.service.ShareRewardDeletionService shareRewardDeletion;
     @Mock com.tailtopia.place.service.PlaceCommentService placeCommentService;
+    @Mock com.tailtopia.place.service.PlacePhotoService placePhotoService;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
                 consultAnonymization, notificationDeletion, pawCoinDeletion, authDeletion,
                 mediaDeletion, imClient, events,
                 contentService, reviewService, violationCountService,
-                shopDeletion, contentShareService, shareRewardDeletion, placeCommentService);
+                shopDeletion, contentShareService, shareRewardDeletion, placeCommentService,
+                placePhotoService);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -93,6 +95,8 @@ class AccountDeletionServiceTest {
         // V1.3.0 场所评论注销联动（NFR-8 / D1/D2）：独立表，content 那条级联碰不到它 ——
         // 漏了的话注销用户的场所评论会继续挂着身份对所有人可见。
         verify(placeCommentService).deactivateAuthorComments(7L);
+        // Story 1.9：他**补充**的场所照片同样对他人隐藏（标记人那批不隐藏 —— 见服务层说明）。
+        verify(placePhotoService).deactivateUploaderPhotos(7L);
         verify(authDeletion).deleteByUserId(7L);
         // OSS 私密图（h1+t1+t2+c1）+ 公开头像 + IM 媒体
         verify(mediaDeletion).deletePrivateKeys(anyList());

@@ -368,7 +368,7 @@ class PlaceCommentServiceTest {
 
     private static Place place() {
         return Place.mark("tok", "Kopi", PlaceType.CAFE, List.of(PlaceTag.PET_MENU),
-                -6.2, 106.8, "Jl. X", null, List.of("https://cdn/a.jpg"), 1L);
+                -6.2, 106.8, "Jl. X", null, 1L);
     }
 
     /** 未持久化实体塞 id（id 由 JPA 赋值、无 setter —— 不为测试在生产代码里开口子）。 */

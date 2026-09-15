@@ -13,6 +13,7 @@ import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.notify.service.NotificationDeletionService;
 import com.tailtopia.pay.service.PawCoinAccountDeletionService;
 import com.tailtopia.place.service.PlaceCommentService;
+import com.tailtopia.place.service.PlacePhotoService;
 import com.tailtopia.profile.service.ProfileDeletionService;
 import com.tailtopia.share.service.ShareRewardDeletionService;
 import com.tailtopia.shared.im.ImAccountMapper;
@@ -64,6 +65,7 @@ public class AccountDeletionService {
     private final ContentShareService contentShareService;
     private final ShareRewardDeletionService shareRewardDeletion;
     private final PlaceCommentService placeCommentService;
+    private final PlacePhotoService placePhotoService;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -75,7 +77,7 @@ public class AccountDeletionService {
             ManualReviewService reviewService, ViolationCountService violationCountService,
             ShopAccountDeletionService shopDeletion, ContentShareService contentShareService,
             ShareRewardDeletionService shareRewardDeletion,
-            PlaceCommentService placeCommentService) {
+            PlaceCommentService placeCommentService, PlacePhotoService placePhotoService) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -93,6 +95,7 @@ public class AccountDeletionService {
         this.contentShareService = contentShareService;
         this.shareRewardDeletion = shareRewardDeletion;
         this.placeCommentService = placeCommentService;
+        this.placePhotoService = placePhotoService;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -144,6 +147,11 @@ public class AccountDeletionService {
         //    ⚠️ 同样必须在 user 行删除【前】：那之后 author_id 认不出人。
         //    这里**不删行**：评论内容是场所攻略的一部分，消失的是身份展示，不是攻略。
         placeCommentService.deactivateAuthorComments(userId);
+        // Story 1.9：他**补充**的场所照片同样对他人隐藏。
+        // ⚠️ 他作为**标记人**提交的那批**不隐藏** —— 那是场所条目本身的资料（首图 / OG 预览图
+        //    都取它），随人一起隐藏会把整个场所变成无图条目。那批的身份匿名化由
+        //    详情页的 markedBy 投影完成（显示「已注销用户」）。
+        placePhotoService.deactivateUploaderPhotos(userId);
 
         // 1.1.6 电商/分享注销联动（D1/D2 口径，同样须在 user 行匿名化【前】——此时 user_id 仍可识别）：
         //  ① shipping_addresses / shop_carts 纯个人数据物理删除；shop_orders 照 consult_orders 例

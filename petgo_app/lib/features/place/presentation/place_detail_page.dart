@@ -8,17 +8,25 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/image_processor.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/letter_avatar.dart';
 import '../../../shared/widgets/mini_profile_sheet.dart';
 import '../../../shared/widgets/photo_lightbox.dart';
+import '../../../core/media/media_scope.dart';
+import '../../../core/router/route_intent.dart';
+import '../../auth/domain/auth_guard.dart';
 import '../../content/presentation/report_sheet.dart';
+import '../../media/domain/media_upload_use_case.dart';
 import '../../profile/domain/share_service.dart';
 import '../data/place_repository.dart';
+import '../domain/place_comment.dart';
 import '../domain/place_detail.dart';
 import 'place_comment_composer.dart';
+import 'place_comments_controller.dart';
 import 'place_comment_section.dart';
 import 'place_distance_format.dart';
 import 'place_labels.dart';
@@ -43,6 +51,27 @@ import 'place_mini_map.dart';
 /// 本 story 内点标记人走**现有迷你主页卡**。写成「进公开主页」会让本 story 依赖 Epic 2
 /// （主页还不存在）—— Epic 2 的 Story 2-1 会统一收口三处入口，那时本页一并改掉。
 /// **别在这里提前接主页。**
+/// 「正在上传补充照片」（按场所 token 分族）。
+///
+/// 🔴 没有它的话，20 秒的上传过程中用户再点一次「+」就会起第二次并发补充 ——
+/// 两次都过了客户端的剩余张数判断，服务端那边一个成功一个 422，而失败的那几张
+/// 已经躺在公开桶里成了孤儿（code-review 2026-09-15）。
+/// ⚠️ Riverpod 3 的默认导出里**没有 `StateProvider`**（它退到了 legacy 命名空间）——
+/// 一个只装 bool 的 `Notifier` 就够，也省得把弃用的 API 重新引进来。
+class _PhotoUploading extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  // ignore: use_setters_to_change_properties
+  void set(bool value) => state = value;
+}
+
+final _photoUploadingProvider =
+    NotifierProvider.family<_PhotoUploading, bool, String>(
+  (_) => _PhotoUploading(),
+  isAutoDispose: true,
+);
+
 class PlaceDetailPage extends ConsumerWidget {
   const PlaceDetailPage({super.key, required this.token});
 
@@ -143,7 +172,13 @@ class PlaceDetailPage extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.only(bottom: AppSpacing.xl),
       children: [
-        _PhotoStrip(urls: p.photoUrls),
+        _PhotoStrip(
+          photos: p.photos,
+          // Story 1.9：任何登录用户都能补图（场所是共享条目，不是标记人的私产）。
+          onContribute: () => _onContributePhotos(context, ref, p),
+          onDeletePhoto: (photo) => _onDeletePhoto(context, ref, photo),
+          uploading: ref.watch(_photoUploadingProvider(token)),
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           child: Column(
@@ -267,6 +302,115 @@ class PlaceDetailPage extends ConsumerWidget {
     }
   }
 
+  /// 补充照片（Story 1.9 · AC1）。
+  ///
+  /// 🔒 **游客走登录引导**：看照片不需要登录，补图需要（后端要 JWT，而且照片要标注上传者）。
+  ///
+  /// 🔴 走**既有上传链路**（`MediaUploadUseCase` + 公开桶）——
+  /// 不新写一条上传路径：那条链路已经带着「仅图片、无视频」（F4）与客户端 EXIF 剥离，
+  /// 另起一条就等于把这两样重新实现一遍。
+  Future<void> _onContributePhotos(
+      BuildContext context, WidgetRef ref, PlaceDetail p) async {
+    requireLogin(
+      ref,
+      context,
+      // 与列表页「标记场所」同一处理：用 onResume 的命令式回调而不是声明式 location ——
+      // 详情页是 push 进来的，`go` 会把整个栈换掉。
+      pendingAction: RouteIntent(onResume: () {
+        if (context.mounted) _pickAndUploadPhotos(context, ref, p);
+      }),
+      onAllowed: () => _pickAndUploadPhotos(context, ref, p),
+    );
+  }
+
+  Future<void> _pickAndUploadPhotos(
+      BuildContext context, WidgetRef ref, PlaceDetail p) async {
+    final l10n = AppLocalizations.of(context);
+    final useCase = ref.read(mediaUploadUseCaseProvider);
+    final uploading = ref.read(_photoUploadingProvider(token).notifier);
+    // 🔴 上传中再点一次 → 直接返回（第二次并发补充会让两批各自算剩余张数，
+    // 服务端那边一个成功一个 422，失败的那几张已经在公开桶里成了孤儿）。
+    if (ref.read(_photoUploadingProvider(token))) return;
+
+    // 🔴 **按剩余张数选图**，不是固定 9（code-review 2026-09-15）：
+    // 一个已有 7 张照片的场所里选 9 张，会把 9 张全传上公开桶、然后整批 422 ——
+    // 用户只看到一句"上传失败"，而那 9 个对象已经在桶里了。
+    final slots = _PhotoStrip.maxPhotos - p.photos.length;
+    if (slots <= 0) return;
+
+    uploading.set(true);
+    try {
+      final picked = await useCase.pickMultiAndProcess(limit: slots, context: context);
+      if (picked.isEmpty) return;
+
+      final urls = <String>[];
+      Object? failure;
+      for (final bytes in picked) {
+        try {
+          final result =
+              await useCase.uploadBytes(scope: MediaScope.public, bytes: bytes);
+          final url = result.publicUrl;
+          if (url == null || url.isEmpty) {
+            throw StateError('公开桶上传没有回 publicUrl');
+          }
+          urls.add(url);
+        } catch (e) {
+          // 🔴 一张失败不丢已成功的那几张（同标记表单的既定处理）。
+          failure = e;
+        }
+      }
+      if (urls.isNotEmpty) {
+        await ref.read(placeRepositoryProvider).contributePhotos(token, urls);
+        invalidatePlaceDetail(ref, token);
+      }
+      if (!context.mounted) return;
+      if (failure != null) {
+        showAppToast(
+            context,
+            failure is ImageProcessingException
+                ? l10n.placeMarkPhotoTooLarge
+                : l10n.placeMarkPhotoUploadFailed);
+      } else if (urls.isNotEmpty) {
+        // ⚠️ 提示「审核中」而不是「已发布」：补充的照片先发后审，
+        // 此刻只有他自己看得见 —— 说成"已发布"他会去问别人为什么看不到。
+        showAppToast(context, l10n.placePhotoSubmitted);
+      }
+    } on ImageProcessingException {
+      if (context.mounted) showAppToast(context, l10n.placeMarkPhotoTooLarge);
+    } catch (_) {
+      if (context.mounted) showAppToast(context, l10n.placeMarkPhotoUploadFailed);
+    } finally {
+      uploading.set(false);
+    }
+  }
+
+  /// 删除**自己传的**那张照片。
+  ///
+  /// 🔒 「是不是本人」由服务端校验 —— `mine` 只决定画不画这个入口。
+  /// ⚠️ 服务端还会挡「删到零张」（场所照片是必填的，而场所不可编辑）——
+  /// 那条走通用失败提示，客户端不重复实现一遍判断（两处判断迟早会不一致）。
+  Future<void> _onDeletePhoto(
+      BuildContext context, WidgetRef ref, PlacePhoto photo) async {
+    final l10n = AppLocalizations.of(context);
+    final ok = await showConfirmSheet(
+      context,
+      title: l10n.placePhotoDeleteTitle,
+      confirmLabel: l10n.placeCommentDeleteConfirm,
+      cancelLabel: l10n.commonCancel,
+      icon: Icons.delete_outline_rounded,
+      danger: true,
+      confirmKey: const ValueKey('placePhotoDeleteConfirm'),
+    );
+    if (!ok) return;
+    try {
+      await ref.read(placeRepositoryProvider).deletePhoto(photo.id);
+      invalidatePlaceDetail(ref, token);
+      if (context.mounted) showAppToast(context, l10n.placePhotoDeleted);
+    } catch (_) {
+      if (context.mounted) showAppToast(context, l10n.placePhotoDeleteFailed);
+    }
+  }
+
   /// AC5：复用既有五类选项举报抽屉，**文案一字不改**。
   void _onReport(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
@@ -300,23 +444,49 @@ class PlaceDetailPage extends ConsumerWidget {
 ///       而不是在前端加参数（真·原图不能直接外发：那条路径没有 `format,jpg`，会带着 GPS）。</li>
 /// </ul>
 class _PhotoStrip extends StatelessWidget {
-  const _PhotoStrip({required this.urls});
+  const _PhotoStrip({
+    required this.photos,
+    required this.onContribute,
+    required this.onDeletePhoto,
+    required this.uploading,
+  });
 
-  final List<String> urls;
+  final List<PlacePhoto> photos;
+
+  /// 「补充照片」（Story 1.9 · AC1）。
+  final VoidCallback onContribute;
+
+  /// 删除**自己传的**那张。
+  final void Function(PlacePhoto photo) onDeletePhoto;
+
+  /// 正在上传 —— 「+」格换成转圈且点不动。
+  final bool uploading;
 
   static const double _height = 200;
 
   /// 横滑流每张图的宽度（逻辑像素）。
   static const double _itemWidth = 280;
 
+  /// 场所照片总上限（与服务端、与标记表单同一个数）。
+  static const int maxPhotos = 9;
+
   @override
   Widget build(BuildContext context) {
-    if (urls.isEmpty) {
-      return Container(
-        height: _height,
-        color: AppColors.cream2,
-        alignment: Alignment.center,
-        child: const Icon(Icons.photo_outlined, size: 36, color: AppColors.textTertiary),
+    final urls = photos.map((p) => p.url).toList(growable: false);
+    final canAdd = photos.length < maxPhotos;
+    if (photos.isEmpty) {
+      // 空态也要给补图入口 —— 一个没有照片的场所正是最需要别人补图的那个。
+      return GestureDetector(
+        onTap: uploading ? null : onContribute,
+        child: Container(
+          height: _height,
+          color: AppColors.cream2,
+          alignment: Alignment.center,
+          child: uploading
+              ? const CircularProgressIndicator()
+              : const Icon(Icons.add_a_photo_outlined,
+                  size: 36, color: AppColors.textTertiary),
+        ),
       );
     }
     return SizedBox(
@@ -324,25 +494,181 @@ class _PhotoStrip extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        itemCount: urls.length,
+        // 末尾多一格「+」：满 9 张就不给了（点了只会收到一个 422）。
+        itemCount: photos.length + (canAdd ? 1 : 0),
         separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
-        itemBuilder: (context, i) => GestureDetector(
-          onTap: () => openPhotoLightbox(context, urls: urls, initialIndex: i),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: AppImage.widget(
-              urls[i],
-              width: _itemWidth,
+        itemBuilder: (context, i) {
+          if (i >= photos.length) {
+            return _AddPhotoTile(
+              onTap: onContribute,
               height: _height,
+              uploading: uploading,
+            );
+          }
+          return _PhotoTile(
+            photo: photos[i],
+            width: _itemWidth,
+            height: _height,
+            onTap: () => openPhotoLightbox(context, urls: urls, initialIndex: i),
+            onDelete: photos[i].mine ? () => onDeletePhoto(photos[i]) : null,
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 一张照片 + **上传者标注**（AC2）。
+///
+/// 🔴 标注浮在图上而不是另起一行：横滑流一屏只放得下一张多一点，
+/// 另起一行会让每张图矮一截、还要用户把标注和图对上号。
+class _PhotoTile extends StatelessWidget {
+  const _PhotoTile({
+    required this.photo,
+    required this.width,
+    required this.height,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  final PlacePhoto photo;
+  final double width;
+  final double height;
+  final VoidCallback onTap;
+
+  /// 自己传的那张才有删除入口（null = 不画）。
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final name = photo.uploaderDeleted
+        ? l10n.feedDeletedUser
+        : (photo.uploaderNickname ?? '');
+    return GestureDetector(
+      onTap: onTap,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Stack(
+          children: [
+            AppImage.widget(
+              photo.url,
+              width: width,
+              height: height,
               errorBuilder: (_, _, _) => Container(
-                width: _itemWidth,
+                width: width,
                 color: AppColors.cream2,
                 alignment: Alignment.center,
                 child: const Icon(Icons.broken_image_outlined,
                     color: AppColors.textTertiary),
               ),
             ),
-          ),
+            // 非 VISIBLE 的行只会下发给上传者本人。不标的话他会以为照片没传上去。
+            // 🔴 **要区分"审核中"和"未通过"**（code-review 2026-09-15）：
+            // 被判死的照片是终态，一直标着"审核中"等于让他永远等一个不会来的结果。
+            if (photo.moderation.onlyVisibleToMe)
+              Positioned(
+                top: AppSpacing.xs,
+                left: AppSpacing.xs,
+                child: _PhotoChip(
+                  text: photo.moderation == PlaceCommentModeration.underReview
+                      ? l10n.placePhotoUnderReview
+                      : l10n.placePhotoRejected,
+                ),
+              ),
+            if (onDelete != null)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: GestureDetector(
+                  key: ValueKey('placePhotoDelete-${photo.id}'),
+                  onTap: onDelete,
+                  // 44×44 热区（UX-DR16）：图标只有 16，靠 padding 撑开。
+                  child: const Padding(
+                    padding: EdgeInsets.all(14),
+                    child: Icon(Icons.close_rounded, size: 16, color: Colors.white),
+                  ),
+                ),
+              ),
+            if (name.isNotEmpty)
+              Positioned(
+                left: AppSpacing.xs,
+                right: AppSpacing.xs,
+                bottom: AppSpacing.xs,
+                child: _PhotoChip(text: l10n.placePhotoBy(name)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 浮在照片上的小标签（半透明黑底 —— 图片底色不可控，纯白字在浅色照片上看不见）。
+class _PhotoChip extends StatelessWidget {
+  const _PhotoChip({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.micro.copyWith(color: Colors.white)),
+    );
+  }
+}
+
+/// 横滑流末尾的「补充照片」格（AC1）。
+class _AddPhotoTile extends StatelessWidget {
+  const _AddPhotoTile({
+    required this.onTap,
+    required this.height,
+    required this.uploading,
+  });
+
+  final VoidCallback onTap;
+  final double height;
+  final bool uploading;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return GestureDetector(
+      key: const ValueKey('placeAddPhoto'),
+      // 上传中点不动 —— 第二次并发补充会把两批都算错剩余张数。
+      onTap: uploading ? null : onTap,
+      child: Container(
+        width: 120,
+        height: height,
+        decoration: BoxDecoration(
+          color: AppColors.cream2,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.lineViolet),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (uploading)
+              const SizedBox(
+                  width: 26, height: 26, child: CircularProgressIndicator(strokeWidth: 2))
+            else
+              const Icon(Icons.add_a_photo_outlined, size: 26, color: AppColors.mint),
+            const SizedBox(height: AppSpacing.xs),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              child: Text(l10n.placePhotoAdd,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.micro.copyWith(color: AppColors.mint700)),
+            ),
+          ],
         ),
       ),
     );
@@ -470,7 +796,7 @@ class _CountsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _CountItem(icon: Icons.photo_library_outlined, value: detail.photoUrls.length),
+        _CountItem(icon: Icons.photo_library_outlined, value: detail.photos.length),
         _CountItem(
             icon: Icons.chat_bubble_outline_rounded, value: detail.commentCount),
         _CountItem(icon: Icons.thumb_up_outlined, value: detail.recommendCount),

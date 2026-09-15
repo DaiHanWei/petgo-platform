@@ -4,7 +4,6 @@ import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.place.domain.Place;
 import com.tailtopia.place.domain.PlaceTag;
 import com.tailtopia.place.domain.PlaceType;
-import com.tailtopia.shared.media.AliyunOssClient;
 import java.util.List;
 
 /**
@@ -25,7 +24,9 @@ import java.util.List;
  * @param name              场所名
  * @param type              类型
  * @param tags              宠物友好标签（全量，客户端自己决定显示几个）
- * @param photoUrls         照片（公开桶 CDN URL，**已附去 EXIF 的 `x-oss-process`**，E4）
+ * @param photos            照片（Story 1.9 起**每张带上传者**，AC2）。
+ *                          ⚠️ 这取代了 1.5 的 {@code photoUrls}（一个字符串数组）——
+ *                          数组装不下"这张是谁传的"。URL 仍然带着去 EXIF 的 `x-oss-process`（E4）
  * @param addressText       文字地址。**纯展示 + 一键复制**，平台不做地理编码、不校验它与坐标一致（AD-1 Rule 5）
  * @param description       描述（可空）
  * @param latitude          纬度 —— 详情页的**定位小地图**要用（AD-3 Rule 3 允许的两处之一）
@@ -42,7 +43,7 @@ public record PlaceDetailResponse(
         String name,
         PlaceType type,
         List<PlaceTag> tags,
-        List<String> photoUrls,
+        List<PlacePhotoView> photos,
         String addressText,
         String description,
         double latitude,
@@ -61,17 +62,21 @@ public record PlaceDetailResponse(
      *
      * <p>🔴 同时承担 **E4 的服务端 EXIF 兜底**（`format,jpg` 重编码即丢弃 GPS）——
      * 客户端剥离是主路径，但改过的客户端能绕过它，而场所照片进的是**公开桶**。
+     *
+     * <p>⚠️ Story 1.9 起由 {@link PlacePhotoView#of} 施加（每张照片各自带 URL），
+     * 传的仍是这个宽度。
      */
     public static final int DETAIL_PHOTO_WIDTH_PX = 1080;
 
-    public static PlaceDetailResponse of(Place p, AuthorView markedBy, Integer distanceMeters,
+    public static PlaceDetailResponse of(Place p, AuthorView markedBy,
+            List<PlacePhotoView> photos, Integer distanceMeters,
             long commentCount, long recommendCount, long notRecommendCount) {
         return new PlaceDetailResponse(
                 p.getPublicToken(),
                 p.getName(),
                 p.getType(),
                 p.getTags(),
-                exifStripped(p.getPhotoUrls()),
+                photos,
                 p.getAddressText(),
                 p.getDescription(),
                 p.getLatitude(),
@@ -83,12 +88,4 @@ public record PlaceDetailResponse(
                 notRecommendCount);
     }
 
-    private static List<String> exifStripped(List<String> urls) {
-        if (urls == null || urls.isEmpty()) {
-            return urls;
-        }
-        return urls.stream()
-                .map(u -> AliyunOssClient.exifStrippedThumbUrl(u, DETAIL_PHOTO_WIDTH_PX))
-                .toList();
-    }
 }

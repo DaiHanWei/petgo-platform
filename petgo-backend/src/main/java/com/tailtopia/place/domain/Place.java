@@ -21,7 +21,7 @@ import org.hibernate.type.SqlTypes;
  * <p><b>只存经纬度 + 文字地址</b>，不存任何地图厂商的对象 id / POI id —— 换厂商时数据一行不动。
  * 对外一律走不可枚举 {@link #publicToken}，自增 {@link #id} 只在站内 API 与后台使用。
  *
- * <p>弹性字段：{@code tags} / {@code photoUrls} 映射 JSONB；{@code type} / {@code status}
+ * <p>弹性字段：{@code tags} 映射 JSONB；{@code type} / {@code status}
  * 落 varchar + UPPER_SNAKE；时间戳 {@code timestamptz} UTC。
  *
  * <h2>🔴 不要往这里加的东西</h2>
@@ -81,14 +81,11 @@ public class Place {
     private String description;
 
     /**
-     * 照片（公开桶 CDN 全 URL，1–9 张）。
-     *
-     * <p>⚠️ 公开桶长期有效 URL，**不是签名 URL** —— 签名 URL 禁入库（NFR-5）。
-     * 公开桶也正是 AD-5 的 OG 预览图能成立的前提。
+     * 🔴 <b>照片不在这张表上</b>（Story 1.9 起）：它们搬到了 {@code place_photos}，
+     * 因为每张要带**上传者**与**自己的审核态**（他人可补充照片，先发后审）。
+     * 迁移 {@code V20260915_0927__init_place_photos.sql} 已把存量搬走并删掉了 {@code photo_urls} 列 ——
+     * **不要再往这里加一个照片字段**，那会立刻变成第二份真相。
      */
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "photo_urls")
-    private List<String> photoUrls;
 
     /** 标记人 {@code users.id}；冷启动数据为运营官方账号。 */
     @Column(name = "created_by", nullable = false, updatable = false)
@@ -114,7 +111,7 @@ public class Place {
      */
     public static Place mark(String publicToken, String name, PlaceType type, List<PlaceTag> tags,
             double latitude, double longitude, String addressText, String description,
-            List<String> photoUrls, long createdBy) {
+            long createdBy) {
         Place p = new Place();
         p.publicToken = publicToken;
         p.name = name;
@@ -124,7 +121,6 @@ public class Place {
         p.longitude = longitude;
         p.addressText = addressText;
         p.description = description;
-        p.photoUrls = photoUrls;
         p.createdBy = createdBy;
         p.status = PlaceStatus.ACTIVE;
         return p;
@@ -133,16 +129,6 @@ public class Place {
     /** 运营下架（AB-17A）。不物理删、不软删列，保留行结构供 H5 落统一空态。 */
     public void takeDown() {
         this.status = PlaceStatus.TAKEN_DOWN;
-    }
-
-    /** 首图（无照片 → null）。列表项与 OG 预览图都取这一张。 */
-    public String firstPhotoUrl() {
-        return (photoUrls == null || photoUrls.isEmpty()) ? null : photoUrls.get(0);
-    }
-
-    /** 照片数（列表项展示用）。 */
-    public int photoCount() {
-        return photoUrls == null ? 0 : photoUrls.size();
     }
 
     @PrePersist
@@ -191,10 +177,6 @@ public class Place {
 
     public String getDescription() {
         return description;
-    }
-
-    public List<String> getPhotoUrls() {
-        return photoUrls;
     }
 
     public Long getCreatedBy() {

@@ -20,9 +20,28 @@ void main() {
     'name': 'Kopi Kayu Manis',
     'type': 'CAFE',
     'tags': ['PETS_ALLOWED_INSIDE', 'OUTDOOR_SEATING', 'PET_MENU'],
-    'photoUrls': [
-      'https://cdn.example/oss/place-1.jpg?x-oss-process=image/resize,w_1080/format,jpg',
-      'https://cdn.example/oss/place-2.jpg?x-oss-process=image/resize,w_1080/format,jpg',
+    // Story 1.9：照片从字符串数组换成了**带上传者的对象**（AC2）。
+    'photos': [
+      {
+        'id': 11,
+        'url': 'https://cdn.example/oss/place-1.jpg'
+            '?x-oss-process=image/resize,w_1080/format,jpg',
+        'uploaderId': 4021,
+        'uploaderNickname': 'Rina',
+        'uploaderDeleted': false,
+        'moderationStatus': 'VISIBLE',
+        'mine': false,
+      },
+      {
+        'id': 12,
+        'url': 'https://cdn.example/oss/place-2.jpg'
+            '?x-oss-process=image/resize,w_1080/format,jpg',
+        'uploaderId': 9001,
+        'uploaderNickname': 'Budi',
+        'uploaderDeleted': false,
+        'moderationStatus': 'VISIBLE',
+        'mine': true,
+      },
     ],
     'addressText': 'Jl. Kemang Raya No. 12, Jakarta Selatan',
     'description': 'Ada area outdoor yang luas untuk anabul.',
@@ -50,7 +69,11 @@ void main() {
       expect(p.type, PlaceType.cafe);
       expect(p.tags,
           [PlaceTag.petsAllowedInside, PlaceTag.outdoorSeating, PlaceTag.petMenu]);
-      expect(p.photoUrls, hasLength(2));
+      expect(p.photos, hasLength(2));
+      // 🔴 AC2：每张都带上传者 —— 解析丢了的话界面会把别人拍的照片标成标记人的。
+      expect(p.photos[1].uploaderNickname, 'Budi');
+      expect(p.photos[1].mine, isTrue, reason: '本人传的 → 该给删除入口');
+      expect(p.photoUrls, hasLength(2), reason: '灯箱/分享只要 URL 的场合');
       expect(p.addressText, 'Jl. Kemang Raya No. 12, Jakarta Selatan',
           reason: '🔴 解析成空串的话地址行与「复制」按钮会复制一个空串，界面看不出错');
       expect(p.description, 'Ada area outdoor yang luas untuk anabul.');
@@ -103,16 +126,62 @@ void main() {
     test('无描述解析为 null、无照片解析为空列表', () {
       final json = Map<String, dynamic>.from(wire)
         ..remove('description')
-        ..['photoUrls'] = <Object>[];
+        ..['photos'] = <Object>[];
       final p = PlaceDetail.fromJson(json);
       expect(p.description, isNull);
-      expect(p.photoUrls, isEmpty);
+      expect(p.photos, isEmpty);
     });
 
     test('未知类型解析为 null，不兜底成 other', () {
       final p = PlaceDetail.fromJson(
           {...wire, 'type': 'BRAND_NEW_KIND'}.cast<String, dynamic>());
       expect(p.type, isNull);
+    });
+  });
+
+  group('照片的上传者标注（Story 1.9 · AC2）', () {
+    test('注销上传者：昵称为 null、标为已注销、不可点', () {
+      final json = Map<String, dynamic>.from(wire)
+        ..['photos'] = [
+          {
+            'id': 11,
+            'url': 'https://cdn/a.jpg',
+            'uploaderId': 4021,
+            'uploaderDeleted': true,
+            'moderationStatus': 'VISIBLE',
+            'mine': false,
+          },
+        ];
+      final photo = PlaceDetail.fromJson(json).photos.single;
+
+      expect(photo.uploaderNickname, isNull);
+      expect(photo.uploaderDeleted, isTrue);
+      expect(photo.uploaderTappable, isFalse);
+    });
+
+    /// 🔴 非 VISIBLE 的照片**只会下发给上传者本人** —— 拿到一张挂起的，它一定是你自己刚传的。
+    test('挂起中的照片标为仅本人可见', () {
+      final json = Map<String, dynamic>.from(wire)
+        ..['photos'] = [
+          {
+            'id': 12,
+            'url': 'https://cdn/b.jpg',
+            'uploaderId': 4021,
+            'uploaderNickname': 'Rina',
+            'uploaderDeleted': false,
+            'moderationStatus': 'UNDER_REVIEW',
+            'mine': true,
+          },
+        ];
+      final photo = PlaceDetail.fromJson(json).photos.single;
+
+      expect(photo.moderation.onlyVisibleToMe, isTrue);
+      expect(photo.mine, isTrue);
+    });
+
+    test('缺 photos 解析成空列表（走"还没有照片"的空态）', () {
+      final json = Map<String, dynamic>.from(wire)..remove('photos');
+      expect(PlaceDetail.fromJson(json).photos, isEmpty);
     });
   });
 

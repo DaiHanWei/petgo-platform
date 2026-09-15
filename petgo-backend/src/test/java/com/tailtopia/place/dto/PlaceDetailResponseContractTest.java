@@ -30,7 +30,7 @@ class PlaceDetailResponseContractTest {
             .build();
 
     private static final Set<String> FULL_FIELDS = Set.of(
-            "token", "name", "type", "tags", "photoUrls", "addressText", "description",
+            "token", "name", "type", "tags", "photos", "addressText", "description",
             "latitude", "longitude", "distanceMeters", "markedBy",
             "commentCount", "recommendCount", "notRecommendCount");
 
@@ -42,18 +42,33 @@ class PlaceDetailResponseContractTest {
     private static Place place() {
         return Place.mark("aZ09aZ09aZ09aZ09aZ09aZ09aZ09aZ09", "Kopi Kayu Manis", PlaceType.CAFE,
                 List.of(PlaceTag.PETS_ALLOWED_INSIDE, PlaceTag.OUTDOOR_SEATING),
-                -6.235, 106.81, "Jl. Senopati No.75", "Ada area outdoor",
-                List.of("https://cdn/a.jpg", "https://cdn/b.jpg"), 7L);
+                -6.235, 106.81, "Jl. Senopati No.75", "Ada area outdoor", 7L);
     }
 
     private static AuthorView marker() {
         return new AuthorView(7L, "Rani", "https://cdn/avatar.jpg", false, List.of());
     }
 
+    /**
+     * 照片投影（Story 1.9 起每张带上传者）。
+     *
+     * <p>⚠️ 服务层负责给每张 URL 施加去 EXIF 的 `x-oss-process`（{@link PlacePhotoView#of}），
+     * 所以这里构造的是**已经处理过**的形态 —— 本测试断言的是**信封形状**，
+     * 「URL 上有没有 process」那一条在下面单独一例里用 `PlacePhotoView.of` 真跑。
+     */
+    private static List<PlacePhotoView> photos(String... urls) {
+        return java.util.Arrays.stream(urls)
+                .map(u -> new PlacePhotoView(1L, u, 7L, "Rani", false, "VISIBLE", false))
+                .toList();
+    }
+
+    private static final List<PlacePhotoView> TWO_PHOTOS =
+            photos("https://cdn/a.jpg", "https://cdn/b.jpg");
+
     @Test
     void detailHasExactlyContractFields() {
         Map<String, Object> m =
-                wire(PlaceDetailResponse.of(place(), marker(), 1200, 3L, 11L, 2L));
+                wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L));
 
         assertThat(m.keySet()).isEqualTo(FULL_FIELDS);
         assertThat(m.get("type")).isEqualTo("CAFE");
@@ -65,7 +80,7 @@ class PlaceDetailResponseContractTest {
     /** 🔴 对外只有 token，绝不外露自增 id（NFR-1 / AD-1 Rule 3）。 */
     @Test
     void detailNeverLeaksDatabaseIds() {
-        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), null, 0L, 0L, 0L));
+        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, null, 0L, 0L, 0L));
 
         assertThat(m).doesNotContainKey("id");
         assertThat(m).doesNotContainKey("placeId");
@@ -80,7 +95,7 @@ class PlaceDetailResponseContractTest {
      */
     @Test
     void detailHasNoneOfTheExplicitlyExcludedFields() {
-        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), 1200, 3L, 11L, 2L));
+        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L));
 
         for (String excluded : List.of(
                 // 收藏
@@ -100,28 +115,68 @@ class PlaceDetailResponseContractTest {
     /** 「按最新」进来的详情没有距离 → 省略（不是 0）。 */
     @Test
     void detailWithoutCoordinatesOmitsDistance() {
-        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), null, 0L, 0L, 0L));
+        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, null, 0L, 0L, 0L));
 
         assertThat(m).doesNotContainKey("distanceMeters");
     }
 
-    /** 🔴 照片一律经服务端去 EXIF（E4）—— 场所照片进的是公开桶，URL 下发给所有人。 */
+    /**
+     * 🔴 照片一律经服务端去 EXIF（E4）—— 场所照片进的是公开桶，URL 下发给所有人。
+     *
+     * <p>Story 1.9 起施加点在 {@link PlacePhotoView#of}（每张照片各自带 URL 与上传者），
+     * 所以这一条直接对那个工厂断言。
+     */
     @Test
     void photosAreExifStrippedOnDelivery() {
-        PlaceDetailResponse r = PlaceDetailResponse.of(place(), marker(), null, 0L, 0L, 0L);
+        com.tailtopia.place.domain.PlacePhoto photo =
+                com.tailtopia.place.domain.PlacePhoto.fromMarking(
+                        42L, 7L, "https://cdn/a.jpg", 0);
 
-        assertThat(r.photoUrls()).hasSize(2);
-        assertThat(r.photoUrls()).allSatisfy(u -> assertThat(u)
+        PlacePhotoView v = PlacePhotoView.of(photo, marker(), 7L,
+                PlaceDetailResponse.DETAIL_PHOTO_WIDTH_PX);
+
+        assertThat(v.url())
                 .contains("x-oss-process=image/")
                 .contains("format,jpg")
-                .contains("resize,w_" + PlaceDetailResponse.DETAIL_PHOTO_WIDTH_PX));
+                .contains("resize,w_" + PlaceDetailResponse.DETAIL_PHOTO_WIDTH_PX);
+    }
+
+    /** AC2：每张照片都带上传者 —— 客户端据此在图上标注他。 */
+    @Test
+    void eachPhotoCarriesItsUploader() {
+        com.tailtopia.place.domain.PlacePhoto photo =
+                com.tailtopia.place.domain.PlacePhoto.contributed(
+                        42L, 9L, "https://cdn/c.jpg", 3);
+        AuthorView uploader = new AuthorView(9L, "Budi", "https://cdn/b.jpg", false, List.of());
+
+        PlacePhotoView v = PlacePhotoView.of(photo, uploader, 9L, 1080);
+
+        assertThat(v.uploaderId()).isEqualTo(9L);
+        assertThat(v.uploaderNickname()).isEqualTo("Budi");
+        assertThat(v.mine()).as("本人传的 → 给删除入口").isTrue();
+        assertThat(v.moderationStatus())
+                .as("补充的照片先发后审 —— 落挂起，过审才对他人可见")
+                .isEqualTo("UNDER_REVIEW");
+    }
+
+    /** 注销上传者 → 昵称省略、标记为已注销（NFR-8）。 */
+    @Test
+    void deactivatedUploaderIsAnonymizedOnPhotos() {
+        com.tailtopia.place.domain.PlacePhoto photo =
+                com.tailtopia.place.domain.PlacePhoto.fromMarking(42L, 9L, "https://cdn/c.jpg", 0);
+
+        PlacePhotoView v = PlacePhotoView.of(photo, AuthorView.anonymized(9L), 1L, 1080);
+
+        assertThat(v.uploaderNickname()).isNull();
+        assertThat(v.uploaderDeleted()).isTrue();
+        assertThat(v.mine()).isFalse();
     }
 
     /** 标记人已注销 → 昵称/头像为 null（NFR-8 匿名化），但 userId 仍在（前端据 deleted 决定可点性）。 */
     @Test
     void deletedMarkerIsAnonymized() {
         Map<String, Object> m = wire(
-                PlaceDetailResponse.of(place(), AuthorView.anonymized(7L), null, 0L, 0L, 0L));
+                PlaceDetailResponse.of(place(), AuthorView.anonymized(7L), TWO_PHOTOS, null, 0L, 0L, 0L));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> markedBy = (Map<String, Object>) m.get("markedBy");
@@ -136,10 +191,11 @@ class PlaceDetailResponseContractTest {
     @Test
     void optionalFieldsBehaveAsContracted() {
         Place noExtras = Place.mark("t".repeat(32), "Taman", PlaceType.PARK,
-                List.of(PlaceTag.LEASH_REQUIRED), -6.2, 106.8, "Jl. A", null, List.of(), 7L);
+                List.of(PlaceTag.LEASH_REQUIRED), -6.2, 106.8, "Jl. A", null, 7L);
 
-        Map<String, Object> m = wire(PlaceDetailResponse.of(noExtras, marker(), null, 0L, 0L, 0L));
+        Map<String, Object> m = wire(
+                PlaceDetailResponse.of(noExtras, marker(), List.of(), null, 0L, 0L, 0L));
         assertThat(m).doesNotContainKey("description");
-        assertThat(m.get("photoUrls")).isEqualTo(List.of());
+        assertThat(m.get("photos")).isEqualTo(List.of());
     }
 }

@@ -38,6 +38,7 @@ class PlaceServiceTest {
     private ContentModerationService moderation;
     private IdempotencyService idempotency;
     private PlaceReportRepository reports;
+    private PlacePhotoService photoService;
     private PlaceService service;
 
     @BeforeEach
@@ -47,10 +48,12 @@ class PlaceServiceTest {
         idempotency = Mockito.mock(IdempotencyService.class);
         when(idempotency.findResourceId(any())).thenReturn(java.util.Optional.empty());
         reports = Mockito.mock(PlaceReportRepository.class);
+        // Story 1.9：照片落 place_photos，由它负责。
+        photoService = Mockito.mock(PlacePhotoService.class);
         service = new PlaceService(places, new PlaceTokenGenerator(), moderation, idempotency,
-                reports);
-        // save 原样回传（本组用例不关心 id）。
-        when(places.save(any(Place.class))).thenAnswer(inv -> inv.getArgument(0));
+                reports, photoService);
+        // save 之后 id 一定不为空（JPA @GeneratedValue）—— Story 1.9 起照片要挂到它上面。
+        when(places.save(any(Place.class))).thenAnswer(inv -> withId(inv.getArgument(0), 42L));
     }
 
     private static PlaceCreateRequest request() {
@@ -175,6 +178,22 @@ class PlaceServiceTest {
         assertThat(saved.getDescription()).isNull();
     }
 
+    /**
+     * Story 1.9：标记时提交的照片落 {@code place_photos}（上传者 = 标记人）。
+     *
+     * <p>这批**已经在上面过了同步富审核**（连同名称/地址/描述一起送审，含图审），
+     * 所以直接可见，不再走一次异步 —— 同一批图审两遍是白花配额。
+     */
+    @Test
+    void initialPhotosAreStoredInThePhotoTableWithTheMarkerAsUploader() {
+        verdict(ModerationOutcome.pass(0.1, null));
+
+        service.mark(7L, request(), null);
+
+        verify(photoService).storeInitialPhotos(42L, 7L,
+                List.of("https://cdn/a.jpg", "https://cdn/b.jpg"));
+    }
+
     // ===== 幂等（code-review 2026-09-15 追加）=====
 
     /**
@@ -281,7 +300,7 @@ class PlaceServiceTest {
 
     private static Place place() {
         return withId(Place.mark("t".repeat(32), "X", PlaceType.CAFE, List.of(PlaceTag.PET_MENU),
-                -6.2, 106.8, "Jl. X", null, List.of("https://cdn/a.jpg"), 7L), 42L);
+                -6.2, 106.8, "Jl. X", null, 7L), 42L);
     }
 
     /**

@@ -231,6 +231,11 @@ public class SecurityConfig {
                         // 删除自己的场所评论（Story 1.7 AC7）：仅 role=USER；
                         // 「是不是本人」在 service 里硬校验，不靠这一行。
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/place-comments/*").hasRole("USER")
+                        // 为场所补充照片（Story 1.9）：**仅 role=USER**，同标记/评论的理由
+                        // （controller 把 jwt.sub 当 users.id 用；而且照片要"标注上传者"，
+                        // 兽医 token 写进去的那个 uploader_id 根本不是他，他自己也删不掉）。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/places/*/photos").hasRole("USER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/place-photos/*").hasRole("USER")
                         // 兽医工作台端点（Story 5.1+）：仅 role=VET 可达；user/guest → 403（双向门控）
                         .requestMatchers("/api/v1/vet/**").hasRole("VET")
                         // 用户侧问诊端点（Story 5.2+ / 计费流 3-2~3-4）：仅 role=USER 可达（vet/guest → 403）

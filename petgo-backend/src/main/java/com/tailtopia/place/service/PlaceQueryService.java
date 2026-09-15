@@ -5,9 +5,12 @@ import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.place.domain.GeoBox;
 import com.tailtopia.place.domain.Place;
 import com.tailtopia.place.domain.PlaceStatus;
+import com.tailtopia.place.domain.PlacePhoto;
 import com.tailtopia.place.dto.PlaceDetailResponse;
+import com.tailtopia.place.dto.PlacePhotoView;
 import com.tailtopia.place.dto.PlaceListItemResponse;
 import com.tailtopia.place.dto.PlaceListResponse;
+import com.tailtopia.place.repository.PlacePhotoRepository;
 import com.tailtopia.place.repository.PlaceRepository;
 import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
@@ -59,13 +62,16 @@ public class PlaceQueryService {
     private final AccountQueryService accounts;
     private final PlaceCommentQueryService placeComments;
     private final PlaceAttitudeCounters attitudeCounters;
+    private final PlacePhotoRepository photos;
 
     public PlaceQueryService(PlaceRepository places, AccountQueryService accounts,
-            PlaceCommentQueryService placeComments, PlaceAttitudeCounters attitudeCounters) {
+            PlaceCommentQueryService placeComments, PlaceAttitudeCounters attitudeCounters,
+            PlacePhotoRepository photos) {
         this.places = places;
         this.accounts = accounts;
         this.placeComments = placeComments;
         this.attitudeCounters = attitudeCounters;
+        this.photos = photos;
     }
 
     /**
@@ -86,14 +92,26 @@ public class PlaceQueryService {
                 ? (int) Math.round(
                         GeoBox.distanceMeters(lat, lng, p.getLatitude(), p.getLongitude()))
                 : null;
-        // 标记人：走既有作者投影出口（注销自动匿名化，不让 place 直 join users）。
-        AuthorView markedBy = accounts.findAuthorViews(List.of(p.getCreatedBy()))
-                .get(p.getCreatedBy());
+        // 照片（Story 1.9）：每张带上传者。viewer 自己挂起中的照片也给他看得见 ——
+        // 否则他刚传完就发现照片"没上去"。
+        List<PlacePhoto> rows = photos.findVisible(p.getId(), viewerId != null, viewerId);
+        // 🔴 标记人与全部上传者**一次批量取投影**（AD-6）：逐张查作者就是 N+1，
+        // 而一个场所最多 9 张、上传者可能是 9 个不同的人。
+        List<Long> userIds = new ArrayList<>(rows.size() + 1);
+        userIds.add(p.getCreatedBy());
+        rows.forEach(r -> userIds.add(r.getUploaderId()));
+        Map<Long, AuthorView> authors = accounts.findAuthorViews(userIds);
+
+        AuthorView markedBy = authors.get(p.getCreatedBy());
+        List<PlacePhotoView> photoViews = rows.stream()
+                .map(r -> PlacePhotoView.of(r, authors.get(r.getUploaderId()), viewerId,
+                        PlaceDetailResponse.DETAIL_PHOTO_WIDTH_PX))
+                .toList();
         // 评论数是 viewer 维度（Story 1.7）；两个态度计数是**平台口径**（Story 1.8）——
         // 两者口径不同是有意的，见 PlaceCommentRepository 的说明。
         long commentCount = placeComments.countForPlace(p.getId(), viewerId);
         PlaceAttitudeCounters.Counts attitudes = attitudeCounters.countsOf(p.getId());
-        return PlaceDetailResponse.of(p, markedBy, distance, commentCount,
+        return PlaceDetailResponse.of(p, markedBy, photoViews, distance, commentCount,
                 attitudes.recommend(), attitudes.notRecommend());
     }
 
@@ -175,16 +193,39 @@ public class PlaceQueryService {
         List<Long> ids = scored.stream().map(w -> w.place().getId()).toList();
         Map<Long, Long> commentCounts = placeComments.countsByPlaceIds(ids, viewerId);
         Map<Long, PlaceAttitudeCounters.Counts> attitudes = attitudeCounters.countsOf(ids);
+        Map<Long, List<PlacePhoto>> photosByPlace = photosOf(ids);
 
         List<PlaceListItemResponse> items = new ArrayList<>(scored.size());
         for (PlaceWithDistance w : scored) {
             long id = w.place().getId();
             PlaceAttitudeCounters.Counts a =
                     attitudes.getOrDefault(id, PlaceAttitudeCounters.Counts.ZERO);
+            List<PlacePhoto> ps = photosByPlace.getOrDefault(id, List.of());
             items.add(PlaceListItemResponse.of(w.place(), (int) Math.round(w.meters()),
+                    firstUrl(ps), ps.size(),
                     commentCounts.getOrDefault(id, 0L), a.recommend(), a.notRecommend()));
         }
         return PlaceListResponse.distance(items);
+    }
+
+    /**
+     * 整页照片一次取回后按场所分组（Story 1.9 · AD-6）。
+     *
+     * <p>🔴 **绝不按场所逐个查** —— 一页 20 个场所就是 20 次查询。
+     * 列表口径只认对外可见的（不含某个人自己挂起中的那张）：列表是概览，
+     * 没必要为一个人的待审照片让张数跳来跳去。
+     */
+    private Map<Long, List<PlacePhoto>> photosOf(List<Long> placeIds) {
+        if (placeIds.isEmpty()) {
+            return Map.of();
+        }
+        return photos.findVisibleForPlaces(placeIds).stream()
+                .collect(java.util.stream.Collectors.groupingBy(PlacePhoto::getPlaceId));
+    }
+
+    /** 首图 URL（无照片 → null）。查询已按 sortOrder 排好，取第一条即可。 */
+    private static String firstUrl(List<PlacePhoto> photos) {
+        return photos.isEmpty() ? null : photos.get(0).getUrl();
     }
 
     /** 排序中间体（距离只算一次）。 */
@@ -208,12 +249,14 @@ public class PlaceQueryService {
         List<Long> ids = rows.stream().map(Place::getId).toList();
         Map<Long, Long> commentCounts = placeComments.countsByPlaceIds(ids, viewerId);
         Map<Long, PlaceAttitudeCounters.Counts> attitudes = attitudeCounters.countsOf(ids);
+        Map<Long, List<PlacePhoto>> photosByPlace = photosOf(ids);
         List<PlaceListItemResponse> items = new ArrayList<>(rows.size());
         for (Place p : rows) {
             PlaceAttitudeCounters.Counts a =
                     attitudes.getOrDefault(p.getId(), PlaceAttitudeCounters.Counts.ZERO);
-            items.add(PlaceListItemResponse.of(p, commentCounts.getOrDefault(p.getId(), 0L),
-                    a.recommend(), a.notRecommend()));
+            List<PlacePhoto> ps = photosByPlace.getOrDefault(p.getId(), List.of());
+            items.add(PlaceListItemResponse.of(p, firstUrl(ps), ps.size(),
+                    commentCounts.getOrDefault(p.getId(), 0L), a.recommend(), a.notRecommend()));
         }
         return PlaceListResponse.recent(items);
     }

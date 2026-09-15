@@ -335,4 +335,7 @@ class ApiPaths {
   /// ⚠️ 不挂在 `/places/{token}/comments/{id}` 下：删除只认评论 id，
   /// 而那条路径会让人以为"换个 token 也能删同一条"。服务端亦然。
   static const String placeComments = '$base/place-comments';
+
+  /// 场所照片的删除端点（Story 1.9）。同评论：只认照片 id。
+  static const String placePhotos = '$base/place-photos';
 }

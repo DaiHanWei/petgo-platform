@@ -3364,5 +3364,22 @@
   "placeCommentDeleted": "Comment deleted",
   "@placeCommentDeleted": {"description": "Place detail: toast after your own comment is deleted."},
   "placeCommentDeleteFailed": "Could not delete. Try again.",
-  "@placeCommentDeleteFailed": {"description": "Place detail: delete failed (network/server)."}
+  "@placeCommentDeleteFailed": {"description": "Place detail: delete failed (network/server)."},
+
+  "placePhotoBy": "by {name}",
+  "@placePhotoBy": {"description": "Place detail: uploader credit shown over each photo (AC2). Confirmed 2026-08-28 to stay - a photo of a doorway is more trustworthy when you can see who took it.", "placeholders": {"name": {"type": "String"}}},
+  "placePhotoAdd": "Add photos",
+  "@placePhotoAdd": {"description": "Place detail: the \"+\" tile at the end of the photo strip. Anyone signed in can add photos - a place is a shared entry, not the place marker own post."},
+  "placePhotoUnderReview": "In review",
+  "@placePhotoUnderReview": {"description": "Place detail: badge on a photo that is still pending review. Only its uploader ever sees such a photo, so the badge explains why nobody else can see it yet."},
+  "placePhotoSubmitted": "Photos added - they will appear once reviewed.",
+  "@placePhotoSubmitted": {"description": "Place detail: toast after contributing photos. Must NOT say published: the photos are pending review and only visible to the uploader until they pass."},
+  "placePhotoRejected": "Not approved",
+  "@placePhotoRejected": {"description": "Place detail: badge on a photo that failed review (terminal). Only its uploader sees it. Must differ from the pending badge - leaving it on \"In review\" makes them wait for a result that never comes."},
+  "placePhotoDeleteTitle": "Remove this photo?",
+  "@placePhotoDeleteTitle": {"description": "Place detail: confirm before deleting a photo you uploaded."},
+  "placePhotoDeleted": "Photo removed",
+  "@placePhotoDeleted": {"description": "Place detail: toast after your own photo is removed."},
+  "placePhotoDeleteFailed": "Could not remove it. Try again.",
+  "@placePhotoDeleteFailed": {"description": "Place detail: photo delete failed. Also covers the server rule that a place must keep at least one photo."}
 }

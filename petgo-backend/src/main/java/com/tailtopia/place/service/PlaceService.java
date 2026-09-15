@@ -40,15 +40,17 @@ public class PlaceService {
     private final ContentModerationService moderation;
     private final IdempotencyService idempotency;
     private final PlaceReportRepository reports;
+    private final PlacePhotoService photoService;
 
     public PlaceService(PlaceRepository places, PlaceTokenGenerator tokens,
             ContentModerationService moderation, IdempotencyService idempotency,
-            PlaceReportRepository reports) {
+            PlaceReportRepository reports, PlacePhotoService photoService) {
         this.places = places;
         this.tokens = tokens;
         this.moderation = moderation;
         this.idempotency = idempotency;
         this.reports = reports;
+        this.photoService = photoService;
     }
 
     /**
@@ -110,9 +112,12 @@ public class PlaceService {
                 req.longitude(),
                 req.addressText().trim(),
                 blankToNull(req.description()),
-                req.photoUrls(),
                 createdBy);
         Place saved = places.save(place);
+        // Story 1.9：照片搬到了 place_photos（每张带上传者与自己的审核态）。
+        // 这一批**已经在上面过了同步富审核**（连同名称/地址/描述一起送审，含图审），
+        // 所以直接落 VISIBLE，不再走一次异步 —— 同一批图审两遍是白花配额。
+        photoService.storeInitialPhotos(saved.getId(), createdBy, req.photoUrls());
         // 没带 key 的老客户端：不记幂等（也就不会去拆 saved.getId()）。
         if (idempotencyKey != null && !idempotencyKey.isBlank() && saved.getId() != null) {
             idempotency.store(idempotencyKey, saved.getId());

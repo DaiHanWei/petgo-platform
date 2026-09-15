@@ -154,6 +154,27 @@ class PlaceRepository {
     await dio.delete<void>('${ApiPaths.placeComments}/$commentId');
   }
 
+  /// 为场所补充照片（Story 1.9 · AC1/AC3）。
+  ///
+  /// 🔴 **谁都能补**，不只是标记人 —— 场所是共享的地点条目（服务端也不做那个判断）。
+  ///
+  /// ⚠️ 传进来的是**已经上传到公开桶**的 URL（走既有 `MediaUploadUseCase`）。
+  /// 补充的照片落挂起、过审才对他人可见 —— 所以调用方拿到成功后要提示
+  /// 「审核中」而不是「已发布」。
+  Future<void> contributePhotos(String token, List<String> photoUrls) async {
+    await dio.post<void>(
+      '${ApiPaths.places}/$token/photos',
+      data: {'photoUrls': photoUrls},
+    );
+  }
+
+  /// 删除**自己传的**那张照片（Story 1.9）。
+  ///
+  /// 🔒 「是不是本人」由服务端校验（403）—— 标记人也不能删别人补的照片。
+  Future<void> deletePhoto(int photoId) async {
+    await dio.delete<void>('${ApiPaths.placePhotos}/$photoId');
+  }
+
   /// 举报一个场所（Story 1.5 · AC5）。
   ///
   /// 复用**既有五类原因**的线格式（`ReportReason.wire`）—— 抽屉文案一字不改，

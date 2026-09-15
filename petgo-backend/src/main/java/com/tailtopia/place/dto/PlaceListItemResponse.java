@@ -60,22 +60,29 @@ public record PlaceListItemResponse(
      * <p>⚠️ 计数三项由调用方传入 —— Story 1.7/1.8 接真实计数时改<b>服务层的批量聚合</b>，
      * 不要在这里偷偷补一次查询（那正是 N+1 的来源，AD-6 禁逐条查）。
      */
-    public static PlaceListItemResponse of(Place p, long commentCount, long recommendCount,
-            long notRecommendCount) {
-        return of(p, null, commentCount, recommendCount, notRecommendCount);
+    public static PlaceListItemResponse of(Place p, String firstPhotoUrl, int photoCount,
+            long commentCount, long recommendCount, long notRecommendCount) {
+        return of(p, null, firstPhotoUrl, photoCount, commentCount, recommendCount,
+                notRecommendCount);
     }
 
-    /** 规范工厂。{@code distanceMeters} 为 null 即「按最新」分支。 */
-    public static PlaceListItemResponse of(Place p, Integer distanceMeters, long commentCount,
-            long recommendCount, long notRecommendCount) {
+    /**
+     * 规范工厂。{@code distanceMeters} 为 null 即「按最新」分支。
+     *
+     * <p>⚠️ Story 1.9 起 {@code firstPhotoUrl} / {@code photoCount} 也由**调用方传入**：
+     * 照片搬到了 {@code place_photos}（每张带上传者与自己的审核态），不再挂在 {@code Place} 上。
+     * 服务层做**整页一次取回**再分组 —— 同计数三项，别在这里补一次查询（那就是 N+1）。
+     */
+    public static PlaceListItemResponse of(Place p, Integer distanceMeters, String firstPhotoUrl,
+            int photoCount, long commentCount, long recommendCount, long notRecommendCount) {
         return new PlaceListItemResponse(
                 p.getPublicToken(),
                 p.getName(),
                 p.getType(),
                 p.getTags(),
                 // E4：对外分发的公开桶图一律经服务端去 EXIF；顺带取列表尺寸的缩略图。
-                AliyunOssClient.exifStrippedThumbUrl(p.firstPhotoUrl(), LIST_THUMB_WIDTH_PX),
-                p.photoCount(),
+                AliyunOssClient.exifStrippedThumbUrl(firstPhotoUrl, LIST_THUMB_WIDTH_PX),
+                photoCount,
                 distanceMeters,
                 commentCount,
                 recommendCount,

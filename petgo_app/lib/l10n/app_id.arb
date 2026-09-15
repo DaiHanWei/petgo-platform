@@ -2238,5 +2238,13 @@
   "placeCommentDeleteBody": "Tindakan ini tidak bisa dibatalkan.",
   "placeCommentDeleteConfirm": "Hapus",
   "placeCommentDeleted": "Komentar dihapus",
-  "placeCommentDeleteFailed": "Gagal menghapus. Coba lagi."
+  "placeCommentDeleteFailed": "Gagal menghapus. Coba lagi.",
+  "placePhotoBy": "oleh {name}",
+  "placePhotoAdd": "Tambah foto",
+  "placePhotoUnderReview": "Sedang ditinjau",
+  "placePhotoSubmitted": "Foto ditambahkan - akan tampil setelah ditinjau.",
+  "placePhotoRejected": "Tidak lolos tinjauan",
+  "placePhotoDeleteTitle": "Hapus foto ini?",
+  "placePhotoDeleted": "Foto dihapus",
+  "placePhotoDeleteFailed": "Gagal menghapus. Coba lagi."
 }
