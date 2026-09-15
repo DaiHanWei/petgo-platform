@@ -95,14 +95,34 @@ public class AccountQueryService {
      */
     @Transactional(readOnly = true)
     public Map<Long, AuthorView> findAuthorViews(Collection<Long> userIds) {
+        return attachTags(basicViews(userIds));
+    }
+
+    /**
+     * 同 {@link #findAuthorViews}，但<b>不查运营标签</b>（V1.3.0 batch-b1 Story 3.1）。
+     *
+     * <h2>⚠️ 只给"确定不展示标签"的调用方</h2>
+     * 目前唯一的调用方是 <b>@ 候选集</b>：那是一个打字时弹出的选择列表，一行只有头像 + 昵称，
+     * 一次要取 50 个人 —— 为它多查一次 {@code user_tag_assignments} 纯属白跑
+     * （查完即丢，code-review 2026-09-15）。
+     *
+     * <p>🔴 <b>要展示标签就必须用 {@link #findAuthorViews}</b>：本方法回的投影里
+     * {@code tags} 恒为空表，误用的表现是「标签在某一处悄悄消失」，而<b>不会有任何报错</b>。
+     * 加新调用方之前先问一句：那个位置要不要显示标签？
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, AuthorView> findAuthorViewsWithoutTags(Collection<Long> userIds) {
+        return basicViews(userIds);
+    }
+
+    /** 身份三件套（id / 昵称 / 头像 + 是否注销）。缺失的 id 按匿名化补齐，调用方按 id 取必有值。 */
+    private Map<Long, AuthorView> basicViews(Collection<Long> userIds) {
         Map<Long, AuthorView> found = users.findAllById(userIds).stream()
                 .map(AccountQueryService::toAuthorView)
                 .collect(Collectors.toMap(AuthorView::userId, Function.identity()));
-        // 缺失的（不存在）也按匿名化补齐，调用方按 id 取必有值。
-        Map<Long, AuthorView> views = userIds.stream().distinct()
+        return userIds.stream().distinct()
                 .collect(Collectors.toMap(Function.identity(),
                         id -> found.getOrDefault(id, AuthorView.anonymized(id))));
-        return attachTags(views);
     }
 
     /**

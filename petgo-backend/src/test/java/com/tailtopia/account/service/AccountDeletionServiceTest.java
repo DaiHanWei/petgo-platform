@@ -53,6 +53,7 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.share.service.ShareRewardDeletionService shareRewardDeletion;
     @Mock com.tailtopia.place.service.PlaceCommentService placeCommentService;
     @Mock com.tailtopia.place.service.PlacePhotoService placePhotoService;
+    @Mock com.tailtopia.mention.service.MentionCandidateMaintenanceService mentionCandidateMaintenance;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
@@ -60,7 +61,7 @@ class AccountDeletionServiceTest {
                 mediaDeletion, imClient, events,
                 contentService, reviewService, violationCountService,
                 shopDeletion, contentShareService, shareRewardDeletion, placeCommentService,
-                placePhotoService);
+                placePhotoService, mentionCandidateMaintenance);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -97,6 +98,9 @@ class AccountDeletionServiceTest {
         verify(placeCommentService).deactivateAuthorComments(7L);
         // Story 1.9：他**补充**的场所照片同样对他人隐藏（标记人那批不隐藏 —— 见服务层说明）。
         verify(placePhotoService).deactivateUploaderPhotos(7L);
+        // V1.3.0 batch-b1 Story 3.1：@ 候选集两个方向都物理删 —— 只删他自己那份的话，
+        // 他还会继续出现在别人的 @ 候选里（点进去是「用户不存在」）。
+        verify(mentionCandidateMaintenance).purgeUser(7L);
         verify(authDeletion).deleteByUserId(7L);
         // OSS 私密图（h1+t1+t2+c1）+ 公开头像 + IM 媒体
         verify(mediaDeletion).deletePrivateKeys(anyList());

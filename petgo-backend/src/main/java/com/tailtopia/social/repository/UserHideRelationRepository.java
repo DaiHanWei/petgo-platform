@@ -40,6 +40,25 @@ public interface UserHideRelationRepository extends JpaRepository<UserHideRelati
     List<Long> findTargetIdsByHolderAndSourceIn(@Param("holderId") long holderId,
             @Param("source") HideSource source, @Param("targetIds") List<Long> targetIds);
 
+    /**
+     * 这批人里，哪些与 {@code userId} <b>任一方向</b>存在隐藏关系（V1.3.0 batch-b1 Story 3.1）。
+     *
+     * <p>🔴 <b>一次查询解决整批</b>：@ 候选集一次要判 50 个人，逐个 exists 就是 50 条查询，
+     * 而那个接口服务的是「打字时的即时交互」（AC4 明确要求无 N+1）。
+     *
+     * <p>⚠️ <b>不分来源</b>（与 {@code isHidden} 同口径）：拉黑与举报隐藏都算。
+     * @ 候选属于「向用户展示他人身份的位置」，走五处过滤那一档，
+     * 不是主页访问那个 BLOCK-only 的例外。
+     *
+     * @return 命中的**对方** id
+     */
+    @Query("SELECT CASE WHEN r.holderId = :userId THEN r.targetId ELSE r.holderId END "
+            + "FROM UserHideRelation r "
+            + "WHERE (r.holderId = :userId AND r.targetId IN :others) "
+            + "   OR (r.targetId = :userId AND r.holderId IN :others)")
+    List<Long> findHiddenEitherWay(@Param("userId") long userId,
+            @Param("others") List<Long> others);
+
     /** 删除指定来源的那一行；返回受影响行数（解除拉黑只删 BLOCK 行）。 */
     long deleteByHolderIdAndTargetIdAndSource(long holderId, long targetId, HideSource source);
 

@@ -12,6 +12,7 @@ import com.tailtopia.content.service.ContentShareService;
 import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.notify.service.NotificationDeletionService;
 import com.tailtopia.pay.service.PawCoinAccountDeletionService;
+import com.tailtopia.mention.service.MentionCandidateMaintenanceService;
 import com.tailtopia.place.service.PlaceCommentService;
 import com.tailtopia.place.service.PlacePhotoService;
 import com.tailtopia.profile.service.ProfileDeletionService;
@@ -66,6 +67,8 @@ public class AccountDeletionService {
     private final ShareRewardDeletionService shareRewardDeletion;
     private final PlaceCommentService placeCommentService;
     private final PlacePhotoService placePhotoService;
+    /** V1.3.0 batch-b1 Story 3.1：@ 候选集（派生表，两个方向都物理删）。 */
+    private final MentionCandidateMaintenanceService mentionCandidateMaintenance;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -77,7 +80,8 @@ public class AccountDeletionService {
             ManualReviewService reviewService, ViolationCountService violationCountService,
             ShopAccountDeletionService shopDeletion, ContentShareService contentShareService,
             ShareRewardDeletionService shareRewardDeletion,
-            PlaceCommentService placeCommentService, PlacePhotoService placePhotoService) {
+            PlaceCommentService placeCommentService, PlacePhotoService placePhotoService,
+            MentionCandidateMaintenanceService mentionCandidateMaintenance) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -95,6 +99,7 @@ public class AccountDeletionService {
         this.contentShareService = contentShareService;
         this.shareRewardDeletion = shareRewardDeletion;
         this.placeCommentService = placeCommentService;
+        this.mentionCandidateMaintenance = mentionCandidateMaintenance;
         this.placePhotoService = placePhotoService;
     }
 
@@ -152,6 +157,13 @@ public class AccountDeletionService {
         //    都取它），随人一起隐藏会把整个场所变成无图条目。那批的身份匿名化由
         //    详情页的 markedBy 投影完成（显示「已注销用户」）。
         placePhotoService.deactivateUploaderPhotos(userId);
+
+        // V1.3.0 batch-b1 Story 3.1：@ 候选集**两个方向都物理删**（D1/D2）。
+        // 🔴 只删他自己那份的话，他还会继续出现在**别人**的 @ 候选里 ——
+        //    一个已注销的账号被 @ 出来，点进去是「用户不存在」。
+        // ⚠️ 这张表是 comments / content_likes 的派生物，不是 UGC ——
+        //    所以是**删行**而不是像场所评论那样只做匿名化。
+        mentionCandidateMaintenance.purgeUser(userId);
 
         // 1.1.6 电商/分享注销联动（D1/D2 口径，同样须在 user 行匿名化【前】——此时 user_id 仍可识别）：
         //  ① shipping_addresses / shop_carts 纯个人数据物理删除；shop_orders 照 consult_orders 例

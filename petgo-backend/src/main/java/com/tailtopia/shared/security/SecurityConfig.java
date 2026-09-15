@@ -267,6 +267,11 @@ public class SecurityConfig {
                         // 兽医以无关用户名义写入不可撤销的举报隐藏行（安全评审三轮 #1）。
                         .requestMatchers("/api/v1/me/blocked-users", "/api/v1/me/blocked-users/**",
                                 "/api/v1/account-reports", "/api/v1/account-reports/**").hasRole("USER")
+                        // @ 候选集（V1.3.0 batch-b1 Story 3.1）：同上，仅 role=USER。
+                        // ⚠️ 落到 anyRequest().authenticated() 的话，兽医 token 会进到 controller
+                        // 再被那里的角色校验打成 401 —— 而同类 /me 端点给的是 403，
+                        // 客户端把 401 当成"token 过期"会直接强制登出（code-review 2026-09-15）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/me/mention-candidates").hasRole("USER")
                         // 用户端退款方式选择/填收款（Story 4.5）：列表 + PawCoin 即时退 + QRIS 填账户，仅 role=USER
                         .requestMatchers("/api/v1/me/refund-requests",
                                 "/api/v1/refund-requests/**").hasRole("USER")

@@ -173,7 +173,18 @@ development_status:
   # ===== Epic 3: @ 提及 · FR-119 =====
   # 依赖 Epic 2（3-3 的跳转落点是 2-1 的公开主页）。
   epic-3: in-progress
-  3-1-at候选集: ready-for-dev                            # AD-10 独立建表。**维护逻辑是本条主体**：写入时机 / 裁剪策略 / 防无界增长，三者必须在 AC 里定死
+  3-1-at候选集: review                                   # AD-10 独立建表。**维护逻辑是本条主体**：写入时机 / 裁剪策略 / 防无界增长，三者必须在 AC 里定死
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3316 例真实失败 0 / 前端 analyze 0 issue、1715 例）。**纯后端**
+                                                        # 迁移 V20260915_1402__init_mention_candidates.sql；新模块 com.tailtopia.mention
+                                                        # 🔴 AC2 两条口径定死：**写入**=随互动 @Async（消费既有 ContentLikedEvent/ContentCommentedEvent，content 侧零改动、AFTER_COMMIT）；**裁剪**=写入时顺手淘汰、每人留 50。表上界因此是硬的（用户数 × 50，与互动量无关），**没引任何调度中间件、连 @Scheduled 都没用**
+                                                        # ⚠️ 方向不是一律双向：评论双向 / 二级回复再多一对（「与我互相回复对话过」唯一落点）/ **点赞单向**（只有"赞过我的"，没有"我赞过的"）
+                                                        # 留 50 给 30 是刻意的冗余 —— 拉黑排除在查询时做，正好存 30 的话排掉 3 个就只剩 27
+                                                        # AC3 的双向拉黑排除走**既有统一出口**：在 UserHideRelationReader 上加了批量方法 hiddenEitherWay，没在 mention 模块自己写查询（AD-7）
+                                                        # AC4：一次取数**恰好三条查询**，与候选人数无关；AC5：端点没有任何查询参数（反射测试钉住），**没有全局用户搜索**
+                                                        # 注销级联（D1/D2）已接入 AccountDeletionService，**两个方向都物理删**
+                                                        # ⚠️ code-review 修掉 4 条：@Async 乱序到达让排序键倒退（→ GREATEST）/ 二级回复两对关系共用一个容错块，第一对失败会把"对话过"那一对整个跳过 / 为不展示的运营标签多查一次库（→ 新增 findAuthorViewsWithoutTags）/ SecurityConfig 漏 hasRole("USER")，兽医拿到 401 被客户端当成 token 过期强制登出
+                                                        # ⚠️ 存量互动**不回溯建表**：新表从上线起积累，再互动一次就有了
+                                                        # L1 待本地验收（清单见 story Completion Notes；本 story 无 L2 项）
   3-2-at选择器与插入: ready-for-dev                      # 全新叠加层；仅在候选集内过滤（**不是搜索框**）；上限 5 人；🔴 **存 userId 不存昵称**
   3-3-at的展示与跳转: ready-for-dev                      # 依赖 Epic 2。昵称按 userId 实时查（对方改名自动跟着变）；拉黑关系不高亮
   3-4-被at的通知: ready-for-dev                          # 🔴 新增通知类型必须 **DROP + ADD 重列 CHECK 全集**，取值以代码枚举为唯一权威 + 复查并行分支。**此处已出过四次事故，是验收条件不是提醒**
