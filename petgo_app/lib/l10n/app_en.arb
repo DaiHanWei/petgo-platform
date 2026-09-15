@@ -3299,5 +3299,16 @@
   "placeMarkImageBlocked": "One of the photos isn't allowed. Please replace it and try again.",
   "@placeMarkImageBlocked": {"description": "Mark-a-place form: moderation blocked a photo (422 content-image-blocked)"},
   "placeMarkRateLimited": "Too many places marked just now. Please wait a moment.",
-  "@placeMarkRateLimited": {"description": "Mark-a-place form: hit the write rate limit (429). Waiting is the fix, retrying immediately is not."}
+  "@placeMarkRateLimited": {"description": "Mark-a-place form: hit the write rate limit (429). Waiting is the fix, retrying immediately is not."},
+
+  "placeMarkPickOnMap": "Pick on map",
+  "@placeMarkPickOnMap": {"description": "Mark-a-place form: opens the map picker (Story 1.4). Always tappable, with or without location permission \u2014 marking a place you are not standing in is the whole point of the picker."},
+  "placeMapPickerTitle": "Pick the location",
+  "@placeMapPickerTitle": {"description": "Map picker sheet title (Story 1.4)"},
+  "placeMapPickerHint": "Drag the pin or tap the map to move it",
+  "@placeMapPickerHint": {"description": "Map picker sheet hint. The coordinates themselves are never shown."},
+  "placeMapPickerConfirm": "Confirm location",
+  "@placeMapPickerConfirm": {"description": "Map picker sheet: returns the picked coordinates to the form. Disabled until the pin has actually been placed when there was no device location to start from."},
+  "placeMapPickerNeedsPick": "Tap the map to mark where the place is",
+  "@placeMapPickerNeedsPick": {"description": "Map picker sheet hint when there was no device location: the pin sits on a city-centre starting point, so confirming without moving it would silently record the wrong coordinates \u2014 and places cannot be edited or deleted."}
 }

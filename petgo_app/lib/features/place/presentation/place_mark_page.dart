@@ -12,11 +12,16 @@ import '../../../shared/utils/image_processor.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../media/domain/media_upload_use_case.dart';
+import '../data/location_service.dart';
 import '../data/place_repository.dart';
 import '../domain/place_form.dart';
 import '../domain/place_summary.dart';
 import 'place_labels.dart';
 import 'place_location_controller.dart';
+import 'place_map_picker_sheet.dart';
+
+/// 内联错误的作用域。见 [_PlaceMarkPageState._touched]。
+enum _Field { name, type, tags, address, location, photos }
 
 /// 标记场所表单（V1.3.0 batch-b1 Story 1.3 · UI 稿 A5）。
 ///
@@ -31,11 +36,10 @@ import 'place_location_controller.dart';
 ///       而不是提交时才弹。</li>
 /// </ol>
 ///
-/// <p>位置来源：**当前定位**（AC3）。地图选点是 Story 1.4 —— 本页不依赖它，
-/// 也**不预留**一个点不动的「在地图上选」按钮。
-/// 内联错误的作用域。见 [_PlaceMarkPageState._touched]。
-enum _Field { name, type, tags, address, location, photos }
-
+/// <p>位置来源（Story 1.3 AC3 + Story 1.4 AC3）：默认取**当前定位**；点「在地图上选」
+/// 打开选点弹层（`PlaceMapPickerSheet`），针默认落当前位置 ——
+/// **不动它直接确认 = 与 1.3 的行为等价**。没有定位权限时弹层仍可用（落雅加达市中心），
+/// 因为「人不在现场也能标」正是 2026-08-28 把「必须现场标记」改掉的原因。
 class PlaceMarkPage extends ConsumerStatefulWidget {
   const PlaceMarkPage({super.key});
 
@@ -196,6 +200,9 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
                     locating: locationAsync.isLoading,
                     onEnable: _onEnableLocation,
                     onRetry: _onRetryLocate,
+                    // Story 1.4：地图选点。**替换**「只能取当前定位」那条路径，
+                    // 但默认落点仍是当前位置 —— 不动针直接确认 = 与 1.3 等价。
+                    onPickOnMap: _onPickOnMap,
                   ),
                   if (_errorFor(_Field.location, _draft.hasLocation))
                     _ErrorText(l10n.placeMarkLocationError),
@@ -267,6 +274,38 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
   Future<void> _onRetryLocate() async {
     ref.invalidate(placeLocationProvider);
     setState(() => _touch(_Field.location));
+  }
+
+  /// 地图选点（Story 1.4 · AC3）。
+  ///
+  /// 打开时大头针落**当前位置**；没有定位（未授权 / 没定点）→ 落雅加达市中心（AC4：
+  /// 不空白、不崩）。用户拖针或点地图选任意位置，「确认位置」回填坐标。
+  ///
+  /// 🔴 这条路径让「人不在现场也能标」成立 —— 而这正是 2026-08-28 把「必须现场标记」
+  /// 改成地图选点的原因。所以**即便没有定位权限也要能进这个弹层**。
+  Future<void> _onPickOnMap() async {
+    DeviceCoordinates? current;
+    if (_draft.hasLocation) {
+      current =
+          DeviceCoordinates(latitude: _draft.latitude!, longitude: _draft.longitude!);
+    } else {
+      // 🔴 **要 await 定位 future，不能只 read 当前值**（code-review 2026-09-15）：
+      // 定位链路还在跑（最长到 5 秒 GPS 超时）时 `value` 是 null —— 一个已授权的用户
+      // 早点了一下这个按钮，就会拿到雅加达兜底而不是他自己的位置。
+      try {
+        current = (await ref.read(placeLocationProvider.future)).coordinates;
+      } catch (_) {
+        // 定位链路失败不该挡住选点 —— 弹层本来就允许没有定位（AC4）。
+      }
+      if (!mounted) return;
+    }
+    final picked = await PlaceMapPickerSheet.open(context, current);
+    if (!mounted || picked == null) return;
+    setState(() {
+      _touch(_Field.location);
+      _draft =
+          _draft.copyWith(latitude: picked.latitude, longitude: picked.longitude);
+    });
   }
 
   /// 选图 + 上传。复用既有 `MediaUploadUseCase`（权限、压缩、EXIF 剥离、直传全在里面）。
@@ -458,6 +497,7 @@ class _LocationRow extends StatelessWidget {
     required this.locating,
     required this.onEnable,
     required this.onRetry,
+    required this.onPickOnMap,
   });
 
   final bool hasLocation;
@@ -470,6 +510,9 @@ class _LocationRow extends StatelessWidget {
   /// 权限有了但定点没拿到时的「重新定位」。
   final VoidCallback onRetry;
 
+  /// 地图选点（Story 1.4）。
+  final VoidCallback onPickOnMap;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -480,42 +523,75 @@ class _LocationRow extends StatelessWidget {
         color: hasLocation ? AppColors.mintTint : AppColors.goldTint,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(hasLocation ? Icons.check_circle_outline_rounded : Icons.place_outlined,
-              size: 16,
-              color: hasLocation ? AppColors.mint700 : AppColors.tipsBadgeText),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              hasLocation ? l10n.placeMarkLocationReady : l10n.placeMarkLocationNeeded,
-              style: AppTypography.caption.copyWith(
+          Row(
+            children: [
+              Icon(
+                  hasLocation
+                      ? Icons.check_circle_outline_rounded
+                      : Icons.place_outlined,
+                  size: 16,
                   color: hasLocation ? AppColors.mint700 : AppColors.tipsBadgeText),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  hasLocation
+                      ? l10n.placeMarkLocationReady
+                      : l10n.placeMarkLocationNeeded,
+                  style: AppTypography.caption.copyWith(
+                      color: hasLocation ? AppColors.mint700 : AppColors.tipsBadgeText),
+                ),
+              ),
+              // 🔴 没有坐标时**永远有一个可点的东西**：缺权限 → 「开启定位」；
+              // 权限有了但没定点 → 「重新定位」。两者都没有的话用户就卡死在这一页了。
+              if (!hasLocation)
+                if (locating)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                    child: SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2)),
+                  )
+                else
+                  TextButton(
+                    key: const ValueKey('placeMarkEnableLocation'),
+                    onPressed: needsPermission ? onEnable : onRetry,
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(44, 44),
+                      foregroundColor: AppColors.tipsBadgeText,
+                    ),
+                    child: Text(
+                        needsPermission
+                            ? l10n.placeLocationEnable
+                            : l10n.placeMarkLocationRetry,
+                        style: AppTypography.caption.copyWith(
+                            color: AppColors.tipsBadgeText,
+                            fontWeight: FontWeight.w700)),
+                  ),
+            ],
+          ),
+          // Story 1.4：地图选点。**无论有没有定位权限都可点** —— 「人不在现场也能标」
+          // 正是 2026-08-28 把「必须现场标记」改成地图选点的原因，
+          // 把它藏在「有权限」后面等于把那条决策废掉一半。
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const ValueKey('placeMarkPickOnMap'),
+              onPressed: onPickOnMap,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(44, 44),
+                foregroundColor: hasLocation ? AppColors.mint700 : AppColors.tipsBadgeText,
+                padding: EdgeInsets.zero,
+              ),
+              icon: const Icon(Icons.map_outlined, size: 16),
+              label: Text(l10n.placeMarkPickOnMap,
+                  style: AppTypography.caption.copyWith(
+                      color: hasLocation ? AppColors.mint700 : AppColors.tipsBadgeText,
+                      fontWeight: FontWeight.w700)),
             ),
           ),
-          // 🔴 没有坐标时**永远有一个可点的东西**：缺权限 → 「开启定位」；
-          // 权限有了但没定点 → 「重新定位」。两者都没有的话用户就卡死在这一页了。
-          if (!hasLocation)
-            if (locating)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                child: SizedBox(
-                    width: 16, height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2)),
-              )
-            else
-              TextButton(
-                key: const ValueKey('placeMarkEnableLocation'),
-                onPressed: needsPermission ? onEnable : onRetry,
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(44, 44),
-                  foregroundColor: AppColors.tipsBadgeText,
-                ),
-                child: Text(
-                    needsPermission ? l10n.placeLocationEnable : l10n.placeMarkLocationRetry,
-                    style: AppTypography.caption.copyWith(
-                        color: AppColors.tipsBadgeText, fontWeight: FontWeight.w700)),
-              ),
         ],
       ),
     );

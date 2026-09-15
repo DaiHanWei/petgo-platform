@@ -31,6 +31,13 @@
         android:label="TailTopia"
         android:name=".TailTopiaApplication"
         android:icon="@mipmap/ic_launcher">
+        <!-- Google 地图密钥（V1.3.0 batch-b1 Story 1.4 · AD-3 Rule 4）。
+             🔴 这里**只有占位符**，真实值由 build.gradle.kts 从环境变量或 gitignored 的
+             android/maps.properties 注入 —— 密钥绝不入库。
+             没配时占位符解析成空串：地图是灰的，但包能编能装。 -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${googleMapsApiKey}"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

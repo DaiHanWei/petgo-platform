@@ -39,6 +39,12 @@
 		        声明 Always 会在 App Store 审核里被要求解释一个我们并不存在的后台场景。 -->
 		<key>NSLocationWhenInUseUsageDescription</key>
 		<string>TailTopia memakai lokasimu untuk mengurutkan tempat ramah hewan terdekat berdasarkan jarak.</string>
+		<!-- Google 地图 iOS 密钥（V1.3.0 batch-b1 Story 1.4 · AD-3 Rule 4）。
+		     🔴 这里**只有构建变量引用**，真实值来自 gitignored 的 ios/Flutter/Maps.xcconfig
+		        （模板 Maps.xcconfig.example）—— 密钥绝不入库。
+		     没配时解析成空串：地图是灰的，但包能编能装。AppDelegate 读这个键去初始化 SDK。 -->
+		<key>GMSApiKey</key>
+		<string>$(GOOGLE_MAPS_API_KEY)</string>
 		<!-- ATT（iOS 14.5+，AppsFlyer 归因拿 IDFA 用）。⚠️ 提审前文案须与合规确认定稿并做
 		     中/英/印尼三语本地化（InfoPlist.strings），与 App Store 隐私标签一致——交付文档 §3.5。 -->
 		<key>NSUserTrackingUsageDescription</key>

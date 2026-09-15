@@ -19,6 +19,9 @@ Flutter/App.framework
 Flutter/Flutter.framework
 Flutter/Flutter.podspec
 Flutter/Generated.xcconfig
+# Google 地图 iOS 密钥（Story 1.4 · AD-3 Rule 4）：env 注入、绝不入库。
+# 模板是 Flutter/Maps.xcconfig.example（只放占位符，**是**入库的）。
+Flutter/Maps.xcconfig
 Flutter/ephemeral/
 Flutter/app.flx
 Flutter/app.zip

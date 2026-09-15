@@ -1,0 +1,15 @@
+# Google 地图 Android 密钥（V1.3.0 batch-b1 Story 1.4 · AD-3 Rule 4）。
+#
+# 用法：复制成同目录的 `maps.properties`（**已 gitignored**）并填入真实密钥。
+#   cp android/maps.properties.example android/maps.properties
+# 或者不建文件，直接给环境变量（CI / 出包脚本优先走这条）：
+#   export GOOGLE_MAPS_API_KEY_ANDROID=...
+#
+# 🔴 本文件**只放占位符**，真实密钥绝不入库（CLAUDE.md 护栏）。
+# ⚠️ 密钥三套不要混用：iOS / Android / 后台 Web 各一把。
+#    每把都要加平台限制（Android 这把绑包名 + 签名 SHA-1）+ 每日调用配额上限。
+# ⚠️ Google Cloud 项目**未开通结算（绑卡）**时，密钥在正式包里不工作 —— 即使用量为 0 也躲不掉。
+#    这属发版检查单 RC-2。
+# 🛡 只需要开「Maps SDK for Android」。**不要**开 Places / Geocoding / Directions ——
+#    那三类才是按次计费的，而本项目平台不做地理编码，根本不调它们（AD-3 Rule 2）。
+MAPS_API_KEY=YOUR_ANDROID_MAPS_API_KEY_HERE

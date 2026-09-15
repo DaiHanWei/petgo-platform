@@ -72,7 +72,11 @@ development_status:
                                                         # 2026-09-15 云端 L0 全绿 → review；无新迁移；AC5 用反射测试钉住「没有写端点」
                                                         # ⚠️ code-review 修掉 9 条：内联错误死代码 / 兽医 token 能创建场所（已限 hasRole USER）/ 创建无幂等键（已接 Idempotency-Key）
                                                         # L1/L2 待本地验收（清单见 story Completion Notes）
-  1-4-地图选点: ready-for-dev                            # 引入地图 SDK。🔴 只做「显示 + 打自己的点」，禁调搜索/地址解析/路线；地图只出现在选点弹层与详情页小地图两处
+  1-4-地图选点: review                                   # 引入地图 SDK。🔴 只做「显示 + 打自己的点」，禁调搜索/地址解析/路线；地图只出现在选点弹层与详情页小地图两处
+                                                        # 2026-09-15 云端 L0 全绿 → review；无新迁移；新增依赖 google_maps_flutter
+                                                        # AC1/AC2/AC5 用 test/place/map_usage_boundary_test.dart 扫源码机械守（越界即计费，靠人看守不住）
+                                                        # ⚠️ 密钥两套走 env / gitignored 文件注入，仓库内零明文；RC-2（绑卡+申请密钥）未闭合但**不阻塞本 story**
+                                                        # L2 待本地验收（需真实密钥；清单见 story Completion Notes）
   1-5-场所详情页: ready-for-dev                          # 照片流/地址复制/小地图/举报。标记人本条内走**现有迷你卡**（Epic 2 退役时统一改），故不依赖 Epic 2
   1-6-灯箱抽成公共组件并接入场所照片: ready-for-dev      # 抽既有私有灯箱成公共件，内容详情页行为一字不变。**不等批次 A**（B1-D4）
   1-7-场所评论与二元态度: ready-for-dev                  # AD-8 独立建表 place_comments，不改既有 comments、不用多态外键；一级评论 only；**用户可自删自己的评论**（校验本人）

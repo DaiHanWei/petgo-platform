@@ -2207,5 +2207,10 @@
   "placeMarkLocationRetry": "Cari lokasi lagi",
   "placeMarkTextBlocked": "Ada teks yang tidak diizinkan. Perbaiki lalu coba lagi.",
   "placeMarkImageBlocked": "Ada foto yang tidak diizinkan. Ganti lalu coba lagi.",
-  "placeMarkRateLimited": "Terlalu banyak tempat ditandai. Tunggu sebentar ya."
+  "placeMarkRateLimited": "Terlalu banyak tempat ditandai. Tunggu sebentar ya.",
+  "placeMarkPickOnMap": "Pilih di peta",
+  "placeMapPickerTitle": "Pilih lokasi",
+  "placeMapPickerHint": "Geser pin atau ketuk peta untuk memindahkannya",
+  "placeMapPickerConfirm": "Konfirmasi lokasi",
+  "placeMapPickerNeedsPick": "Ketuk peta untuk menandai lokasi tempatnya"
 }

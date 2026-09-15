@@ -17,7 +17,40 @@ import tencent_cloud_chat_push
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    provideGoogleMapsApiKeyIfConfigured()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  /// Google 地图 iOS 密钥（V1.3.0 batch-b1 Story 1.4 · AD-3 Rule 4）。
+  ///
+  /// 🔴 **密钥不在代码里**：从 Info.plist 的 `GMSApiKey` 读，而那个值是构建变量
+  /// `$(GOOGLE_MAPS_API_KEY)`，来自 **gitignored** 的 `ios/Flutter/Maps.xcconfig`
+  /// （模板 `Maps.xcconfig.example` 只放占位符）。
+  ///
+  /// 🔴 **没配密钥时也必须调用**（code-review 2026-09-15 订正）。
+  ///
+  /// iOS 与 Android 在这一点上**不一样**：`google_maps_flutter_ios` 创建地图时会走
+  /// `[GMSServices sharedServices]`，而 SDK 在**从未 provideAPIKey** 的情况下会直接抛异常 ——
+  /// 也就是说「不调用」的后果不是 Android 那种灰地图，而是**打开选点弹层就崩**
+  /// （而 AC4 明写「不空白、不崩」）。
+  ///
+  /// 所以没配时传一个**非空但显然无效**的哨兵串：SDK 正常初始化，地图落到标准的
+  /// 「授权失败」空白态并在控制台留一条清楚的原因，而不是把整个 App 带走。
+  ///
+  /// ⚠️ 用反射式的 `NSClassFromString` 调用，**避免在未装 Pod 的环境里编译失败** ——
+  /// `GoogleMaps` 是 google_maps_flutter_ios 通过 CocoaPods 带进来的，
+  /// 而本文件在 `pod install` 之前也要能编过。
+  private func provideGoogleMapsApiKeyIfConfigured() {
+    let configured = Bundle.main.object(forInfoDictionaryKey: "GMSApiKey") as? String
+    // 占位符没被替换掉时（例如有人直接把 example 复制成正式文件）也当没配。
+    let usable = (configured?.isEmpty == false && configured?.hasPrefix("YOUR_") == false)
+      ? configured!
+      : "MISSING_GOOGLE_MAPS_API_KEY"
+    guard let services = NSClassFromString("GMSServices") as AnyObject? else { return }
+    let selector = NSSelectorFromString("provideAPIKey:")
+    if services.responds(to: selector) {
+      _ = services.perform(selector, with: usable)
+    }
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
