@@ -13,6 +13,7 @@ import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/letter_avatar.dart';
 import '../../../shared/widgets/mini_profile_sheet.dart';
+import '../../../shared/widgets/photo_lightbox.dart';
 import '../../content/presentation/report_sheet.dart';
 import '../../profile/domain/share_service.dart';
 import '../data/place_repository.dart';
@@ -31,7 +32,7 @@ import 'place_mini_map.dart';
 ///
 /// <h2>范围边界（别顺手加）</h2>
 /// <ul>
-///   <li>**点照片看大图**归 Story 1.6（那条把既有私有灯箱抽成公共组件）—— 本页照片<b>暂不可点</b>；</li>
+///   <li>**点照片看大图**已接上（Story 1.6）：走公共 `PhotoLightbox`（从内容详情页原样抽出，行为一字未改）；</li>
 ///   <li>**评论区 + 二元态度**归 Story 1.7；本页只显示评论数（1.7 前恒 0）；</li>
 ///   <li>**分享出 H5 链接**归 Story 1.10 —— 本页的分享按钮只分享「名称 + 地址」文本（见 `_onShare`）。</li>
 /// </ul>
@@ -270,16 +271,29 @@ class PlaceDetailPage extends ConsumerWidget {
   }
 }
 
-/// 照片横滑流（AC1）。
+/// 照片横滑流（AC1）+ 点开全屏灯箱（Story 1.6 · AC2）。
 ///
-/// ⚠️ **暂不可点**：点开看大图归 Story 1.6（那条把既有私有灯箱抽成公共组件）。
-/// 现在挂一个空手势比不挂更糟 —— 用户会以为点了没反应。
+/// <h2>⚠️ 服务端已经决定了尺寸，客户端这里不能再缩</h2>
+/// 后端 `PlaceDetailResponse` 给每条 URL 都拼好了
+/// `x-oss-process=image/resize,w_1080/format,jpg` —— 那个 `format,jpg` 重编码**就是
+/// E4 的服务端 EXIF 兜底**（场所照片进的是公开桶，改过的客户端能绕过客户端剥离）。
+/// 所以：
+/// <ul>
+///   <li>**不传 `thumbWidth`**：`AppImage.ossResized` 对已带 `x-oss-process` 的 URL
+///       原样返回（app_image.dart），传了只是个看起来有用的死参数；</li>
+///   <li>**灯箱与横滑流拿的是同一条 URL**，也就是 1080 px 那一版 ——
+///       这是当前能拿到的最大安全尺寸，**不是真正的原图**。要更清晰得改后端出口尺寸，
+///       而不是在前端加参数（真·原图不能直接外发：那条路径没有 `format,jpg`，会带着 GPS）。</li>
+/// </ul>
 class _PhotoStrip extends StatelessWidget {
   const _PhotoStrip({required this.urls});
 
   final List<String> urls;
 
   static const double _height = 200;
+
+  /// 横滑流每张图的宽度（逻辑像素）。
+  static const double _itemWidth = 280;
 
   @override
   Widget build(BuildContext context) {
@@ -298,18 +312,21 @@ class _PhotoStrip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
         itemCount: urls.length,
         separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
-        itemBuilder: (context, i) => ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: AppImage.widget(
-            urls[i],
-            width: 280,
-            height: _height,
-            errorBuilder: (_, _, _) => Container(
-              width: 280,
-              color: AppColors.cream2,
-              alignment: Alignment.center,
-              child: const Icon(Icons.broken_image_outlined,
-                  color: AppColors.textTertiary),
+        itemBuilder: (context, i) => GestureDetector(
+          onTap: () => openPhotoLightbox(context, urls: urls, initialIndex: i),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: AppImage.widget(
+              urls[i],
+              width: _itemWidth,
+              height: _height,
+              errorBuilder: (_, _, _) => Container(
+                width: _itemWidth,
+                color: AppColors.cream2,
+                alignment: Alignment.center,
+                child: const Icon(Icons.broken_image_outlined,
+                    color: AppColors.textTertiary),
+              ),
             ),
           ),
         ),

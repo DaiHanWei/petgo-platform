@@ -17,6 +17,7 @@ import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/letter_avatar.dart';
 import '../../../shared/widgets/mini_profile_sheet.dart';
+import '../../../shared/widgets/photo_lightbox.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../data/detail_repository.dart';
 import '../domain/content_detail.dart';
@@ -437,9 +438,9 @@ class _ImageCarouselState extends State<_ImageCarousel> {
 
   void _openLightbox(int index) {
     // bug 20260727-372：灯箱可左右翻页（此前单图 InteractiveViewer 进灯箱后无法滑动看其余图）。
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => _Lightbox(urls: widget.urls, initialIndex: index),
-    ));
+    // 🔴 V1.3.0 batch-b1 Story 1.6：实现搬到了公共组件 `PhotoLightbox`，**行为一字未改**
+    //    （场所详情页也要用它）。别在这里加参数改行为 —— 重做灯箱是批次 A 的 FR-115。
+    openPhotoLightbox(context, urls: widget.urls, initialIndex: index);
   }
 
   @override
@@ -495,58 +496,6 @@ class _ImageCarouselState extends State<_ImageCarousel> {
             ),
           ),
       ],
-    );
-  }
-}
-
-/// 全屏灯箱（bug 20260727-372）：PageView 承载多图左右翻页，每页可捏合缩放；
-/// 顶栏显示页码，初始页为点击的那张。
-class _Lightbox extends StatefulWidget {
-  const _Lightbox({required this.urls, required this.initialIndex});
-
-  final List<String> urls;
-  final int initialIndex;
-
-  @override
-  State<_Lightbox> createState() => _LightboxState();
-}
-
-class _LightboxState extends State<_Lightbox> {
-  late final PageController _controller = PageController(initialPage: widget.initialIndex);
-  late int _current = widget.initialIndex;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: widget.urls.length > 1
-            ? Text('${_current + 1}/${widget.urls.length}',
-                style: AppTypography.body.copyWith(color: Colors.white))
-            : null,
-        centerTitle: true,
-      ),
-      body: PageView.builder(
-        controller: _controller,
-        itemCount: widget.urls.length,
-        onPageChanged: (i) => setState(() => _current = i),
-        // 点击图片（或黑边）关闭大图（bug 20260701-192，对齐主流看图 App 交互；与翻页/缩放手势不冲突）。
-        itemBuilder: (context, i) => GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => Navigator.of(context).pop(),
-          child: Center(
-            child: InteractiveViewer(child: AppImage.widget(widget.urls[i], fit: BoxFit.contain)),
-          ),
-        ),
-      ),
     );
   }
 }

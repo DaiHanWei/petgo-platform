@@ -83,7 +83,13 @@ development_status:
                                                         # 小地图是地图允许出现的**第二处也是最后一处**（全手势关闭 + liteMode），已进 map_usage_boundary_test 白名单
                                                         # ⚠️ code-review 修掉 4 条：举报并发撞唯一约束 500 / 安卓缺 geo: 包可见性声明（在地图中打开永远只开网页）/ 详情族键把已渲染页面顶掉 / launchUrl 返回值被丢弃
                                                         # L1/L2 待本地验收（清单见 story Completion Notes）
-  1-6-灯箱抽成公共组件并接入场所照片: ready-for-dev      # 抽既有私有灯箱成公共件，内容详情页行为一字不变。**不等批次 A**（B1-D4）
+  1-6-灯箱抽成公共组件并接入场所照片: review             # 抽既有私有灯箱成公共件，内容详情页行为一字不变。**不等批次 A**（B1-D4）
+                                                        # 2026-09-15 云端 L0 全绿 → review；无迁移、不碰后端
+                                                        # 抽成 shared/widgets/photo_lightbox.dart；两条历史 bug（20260727-372 单图翻页 / 20260701-192 点图关闭）各钉一例测试
+                                                        # 🔴 刻意不与 case_image_viewer.dart 合并（那是兽医/IM/病例/商品四处在用的另一套）——统一属批次 A FR-115
+                                                        # AC3 后续动作以 photo_lightbox.dart 里的 TODO(批次A/FR-115) 记录
+                                                        # ⚠️ code-review 修掉 5 条：thumbWidth 死参数 / "原图"注释不实（服务端只发 1080 px，真原图会带 GPS）/ 死链一屏全黑 / 夹取没下沉进组件 / 测试吞掉全部异常
+                                                        # L2 待本地验收（清单见 story Completion Notes）
   1-7-场所评论与二元态度: ready-for-dev                  # AD-8 独立建表 place_comments，不改既有 comments、不用多态外键；一级评论 only；**用户可自删自己的评论**（校验本人）
   1-8-推荐不推荐计数: ready-for-dev                      # AD-9 Redis 计数器 + DB 回算自愈。三个触发点：创建 / 用户自删 / 运营删下架。本版只展示不参与排序
   1-9-他人为场所补充照片: ready-for-dev                  # 标注上传者；走既有上传链路 + 公开桶 + EXIF 剥离兜底
