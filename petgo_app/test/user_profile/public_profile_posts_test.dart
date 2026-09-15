@@ -195,12 +195,18 @@ void main() {
       expect(tile.isPrivate, isFalse);
     });
 
-    testWidgets('一个公开内容都没有 → 空态，且文案不提「私密」', (tester) async {
+    /// ⚠️ 这一句文案**同时服务于**「被拉黑者看拉黑者的主页」（Story 2.5 · AC2）——
+    /// 两种情况在客户端根本区分不出来，见 `public_profile_blocked_view_test.dart`。
+    testWidgets('一个公开内容都没有 → 空态，且文案不提「拉黑」', (tester) async {
       await _pump(tester, postsRepo: _FakePostsRepo(const []));
 
       expect(find.byKey(const ValueKey('profilePostsEmpty')), findsOneWidget);
-      // 「他还有私密内容没给你看」同样是不该外泄的信息。
-      expect(l10n.profilePostsEmpty.toLowerCase(), isNot(contains('private')));
+      // 🔴 这一句同时服务于「被拉黑者」—— 出现任何与拉黑有关的字样，
+      // 被拉黑的人一对比就确认了自己被拉黑（Story 2.5 · AC2）。
+      final copy = l10n.profilePostsEmpty.toLowerCase();
+      for (final leak in ['block', 'blokir', 'hidden', 'disembunyikan']) {
+        expect(copy.contains(leak), isFalse, reason: '空态文案不得暗示拉黑：$leak');
+      }
     });
   });
 

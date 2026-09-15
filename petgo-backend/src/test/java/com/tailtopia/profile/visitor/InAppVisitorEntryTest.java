@@ -207,6 +207,30 @@ class InAppVisitorEntryTest {
         verify(visitors, never()).timeline(any(), anyInt());
     }
 
+    /**
+     * 🔴 反向：**对方拉黑了我** → 落进与「这只宠物不存在」**同一个 404 同一句文案**
+     * （V1.3.0 batch-b1 Story 2.5 · FR-118.5）。
+     *
+     * <p>⚠️ 这里**不能**抛 403 blocked-user：那等于明白告诉他"你被拉黑了"，
+     * 而整条 FR-118.5 的目的正是别让他确认这件事。
+     */
+    @Test
+    void anOwnerWhoBlockedMeLooksExactlyLikeAPetThatDoesNotExist() {
+        when(visitors.findVisibleProfileById(PET_ID)).thenReturn(Optional.of(pet()));
+        when(hideRelations.isBlocked(VIEWER, OWNER)).thenReturn(false); // 我没拉黑他
+        when(hideRelations.isBlocked(OWNER, VIEWER)).thenReturn(true);  // 他拉黑了我
+
+        AppException blocked = catchAppException(() -> inApp.profile(user(VIEWER), PET_ID));
+
+        when(visitors.findVisibleProfileById(404L)).thenReturn(Optional.empty());
+        AppException missing = catchAppException(() -> inApp.profile(user(VIEWER), 404L));
+
+        assertThat(blocked.getStatus()).isEqualTo(missing.getStatus());
+        assertThat(blocked.getType()).isEqualTo(missing.getType());
+        assertThat(blocked.getMessage()).isEqualTo(missing.getMessage());
+        assertThat(blocked.getStatus().value()).isEqualTo(404);
+    }
+
     /** ⚠️ **只认 BLOCK**：举报隐藏照常放行（与主页同口径）。 */
     @Test
     void aReportOnlyRelationDoesNotCloseTheDoor() {
@@ -298,6 +322,16 @@ class InAppVisitorEntryTest {
     }
 
     // ===== helpers =====
+
+    /** 取出 lambda 抛出的 {@link AppException}（两条路径的响应要逐字段比）。 */
+    private static AppException catchAppException(Runnable r) {
+        try {
+            r.run();
+        } catch (AppException e) {
+            return e;
+        }
+        throw new AssertionError("期望抛 AppException，但没有抛");
+    }
 
     private static List<String> forbiddenComponentsOf(Class<?> record, List<String> hints) {
         List<String> offenders = new java.util.ArrayList<>();

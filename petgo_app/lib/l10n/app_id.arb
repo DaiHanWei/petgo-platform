@@ -2253,6 +2253,7 @@
   "profileBlockedEmpty": "Kamu sudah memblokir pengguna ini",
   "profileCounts": "{postCount} postingan · {likeCount} suka",
   "profilePostsTitle": "Postingan",
-  "profilePostsEmpty": "Belum ada postingan publik",
+  "profilePostsEmpty": "Belum ada konten (pengaturan privasi orang ini)",
+  "profilePostsEmptySelf": "Kamu belum memposting konten publik",
   "profilePostsLoadMore": "Muat lagi"
 }

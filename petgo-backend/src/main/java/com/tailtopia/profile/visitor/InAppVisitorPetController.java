@@ -35,6 +35,11 @@ import org.springframework.web.bind.annotation.RestController;
  * 只拦主页等于留了一个绕过口（FR-94 第 4 条 / 架构 S2：纯前端拦截可被深链绕过）。
  * ⚠️ <b>只认 BLOCK</b>，与主页同口径：举报隐藏照常放行。
  *
+ * <h2>🔴 反向：**对方拉黑了我** → 与「这只宠物不存在」同一个 404（Story 2.5）</h2>
+ * 主页上那条路已经把宠物卡收成 204 了，但本端点按 petId 直达 —— 不拦就等于留了个绕过口。
+ * ⚠️ 用的是<b>同一句 GONE_DETAIL 同一个状态码</b>：与「档案已删 / 主人注销 / 主人被封」
+ * 一并不可区分，否则一对比就能推断出自己被拉黑。
+ *
  * <h2>⚠️ viewer 只认 {@code role=USER}</h2>
  * 兽医 token 的 {@code sub=vetId} 与 {@code users.id} 是两个会碰撞的命名空间，
  * 拿它查 {@code isBlocked} 就是用无关用户的隐藏关系做判断。非 USER 角色按「没有拉黑关系」走
@@ -104,6 +109,12 @@ public class InAppVisitorPetController {
         Long viewerId = viewerId(jwt);
         if (viewerId != null && hideRelations.isBlocked(viewerId, pet.getOwnerId())) {
             throw AppException.blockedUser("你已拉黑该用户");
+        }
+        // 🔴 Story 2.5：**对方拉黑了我** → 落进上面那句同样的 404。
+        // ⚠️ 这里**不能**抛 blockedUser（403）：那等于明白告诉他"你被拉黑了"，
+        // 而 FR-118.5 的全部意义就是别让他确认这件事。
+        if (viewerId != null && hideRelations.isBlocked(pet.getOwnerId(), viewerId)) {
+            throw AppException.notFound(GONE_DETAIL);
         }
         return pet;
     }

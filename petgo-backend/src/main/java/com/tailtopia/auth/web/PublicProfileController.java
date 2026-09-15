@@ -5,6 +5,7 @@ import com.tailtopia.auth.dto.PublicProfileResponse;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.content.dto.FeedPageResponse;
 import com.tailtopia.content.service.ContentService;
+import com.tailtopia.content.service.FeedCursor;
 import com.tailtopia.content.service.FeedService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.social.read.UserHideRelationReader;
@@ -36,6 +37,15 @@ import org.springframework.web.bind.annotation.RestController;
  * 逐条照抄 {@code MiniProfileController}：拦在取数之前，命中即 403，不触碰任何展示字段
  * （"200 + 标记字段"等于拦了一半）。
  * <p>⚠️ **只认 BLOCK**：举报隐藏照常放行 —— 「已举报」状态与重复举报入口全靠它。
+ *
+ * <h2>🔴 反向：**对方拉黑了我** → 身份照常、内容清空（Story 2.5 · FR-118.5）</h2>
+ * 这是对 V1.1.4 FR-94「被拉黑方完全无感」的<b>有意例外，且仅限主页维度</b>：
+ * Feed 与评论区对被拉黑者<b>一字不改</b>，他照常看得到对方的内容与互动。
+ * <p>主页上给的是一个<b>体面的空页面</b>：头像 / 昵称 / 加入时间 / 签名照常，
+ * 两个计数归零、内容区空 —— 与「这个人真的没发过公开内容」<b>逐字节同一个响应</b>。
+ * <p>🔴 <b>两者可区分，这条设计就作废了</b>：一对比就能推断出自己被拉黑，
+ * 而整条 FR-118.5 的目的正是不让他确认这件事、进而去闹。
+ * 所以服务端<b>不下发任何"被拉黑"标识</b>，客户端压根没有这个概念。
  *
  * <h2>🔴 viewer 只认 {@code role=USER}</h2>
  * 本端点 permitAll，兽医 token 也进得来。兽医的 {@code sub=vetId} 与 {@code users.id}
@@ -85,15 +95,21 @@ public class PublicProfileController {
         var joinedAt = accounts.findUserById(userId).map(u -> u.getCreatedAt()).orElse(null);
         // ⚠️ 游客传 null：Jackson NON_NULL 会把这个键整个省略，游客响应体 key 集合一字未变。
         Boolean reported = viewerId == null ? null : hideRelations.isReported(viewerId, userId);
+        // 🔴 Story 2.5：**对方拉黑了我** → 两个计数归零，与「这个人真的没发过公开内容」
+        // 逐字节同一个响应。走的是同一个 `isBlocked`，只是把两个参数掉过来
+        // （AD-7：四处共用同一个出口，禁各写各的查询）。
+        // ⚠️ 归零而不是"照常给数" —— 写着「18 postingan」配一个空网格，
+        // 用户一眼就知道自己被拉黑了，整条设计当场作废。
+        boolean hiddenByOwner = viewerId != null && hideRelations.isBlocked(userId, viewerId);
         return PublicProfileResponse.of(author,
                 accounts.activeSignatureOf(userId).orElse(null),
                 joinedAt,
                 // ⚠️ 发帖总数**复用既有统计**（Dev Notes 明确说别重新实现）；
                 //    Story 2.2 起它只数 PUBLIC —— 与下面那个内容区口径同源，
                 //    否则页面上「18 postingan」配一个 12 格的网格，差值就是私密内容条数。
-                contentService.countPublicPostsByAuthor(userId),
+                hiddenByOwner ? 0L : contentService.countPublicPostsByAuthor(userId),
                 // 获赞总数：本批次新补（Story 2.2 · AC2）。一条 SQL 出数，不新增冗余计数列。
-                contentService.sumLikesOnPublicPostsByAuthor(userId),
+                hiddenByOwner ? 0L : contentService.sumLikesOnPublicPostsByAuthor(userId),
                 viewerId != null && viewerId == userId,
                 reported);
     }
@@ -121,6 +137,20 @@ public class PublicProfileController {
         Long viewerId = viewerId(jwt);
         if (viewerId != null && hideRelations.isBlocked(viewerId, userId)) {
             throw AppException.blockedUser("你已拉黑该用户");
+        }
+        // 🔴 Story 2.5：**对方拉黑了我** → 空页，且形状与「这个人真的没发过公开内容」
+        // **逐字节一致**（空 items + hasMore=false + 无 nextCursor + 无 rankMode）。
+        // ⚠️ 这里刻意**不查库**：查了再丢弃只是白打一次；而且返回的是一个与空结果
+        // 完全一样的信封，客户端根本不存在"被拉黑"这个分支。
+        if (viewerId != null && hideRelations.isBlocked(userId, viewerId)) {
+            // 🔴 **先把游标解一遍再短路**（code-review 2026-09-15）。
+            // 少了这一句，一个畸形游标对普通访客是 422、对被拉黑者却是 200 空页 ——
+            // 两个请求就能问出"我是不是被他拉黑了"，而这条设计的全部意义就是别让他确认。
+            // 解出来的值不用，要的就是它抛不抛。
+            if (cursor != null && !cursor.isBlank()) {
+                FeedCursor.decode(cursor);
+            }
+            return new FeedPageResponse(List.of(), null, false, null);
         }
         return feedService.userPublicPosts(userId, viewerId, cursor);
     }

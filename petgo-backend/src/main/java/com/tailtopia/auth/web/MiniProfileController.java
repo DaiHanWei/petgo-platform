@@ -65,7 +65,13 @@ public class MiniProfileController {
                 // ⚠️ V1.3.0 batch-b1 Story 2.2 起这个数**只算 PUBLIC** —— 迷你卡同样是
                 // 「他人视角」，而 ContentVisibility 对这一类的判定口径就是按 PUBLIC 过滤（NFR-4）。
                 // 原实现把私密内容也数了进去，那个差值等于对外报出「这人有几篇私密内容」。
-                contentService.countPublicPostsByAuthor(userId),
+                // 🔴 Story 2.5：**对方拉黑了我** → 同样归零。这个端点 App 侧已无调用方，
+                //    但它还活着、还能被直接请求 —— 留着真实计数就是一个现成的问答口：
+                //    「/profile 说 0、/mini-profile 说 18」当场告诉他自己被拉黑了
+                //    （code-review 2026-09-15）。
+                viewerId != null && hideRelations.isBlocked(userId, viewerId)
+                        ? 0L
+                        : contentService.countPublicPostsByAuthor(userId),
                 reported);
     }
 

@@ -39,6 +39,11 @@ import org.springframework.web.bind.annotation.RestController;
  * <h2>🔴 主动拉黑者拿不到</h2>
  * 与 {@code /users/{id}/profile} 逐条一致：命中即 403，**只认 BLOCK**（举报隐藏放行）。
  * 三个端点（主页 / 内容区 / 宠物卡）各拦一次 —— 只拦一个就等于留了两个绕过口。
+ *
+ * <h2>🔴 反向：**对方拉黑了我** → 204，与「他没养宠物」同一个响应（Story 2.5）</h2>
+ * FR-118.5 给的是一个<b>体面的空页面</b>：身份区照常、内容区空。宠物卡属于内容区那一半。
+ * <p>⚠️ 必须与「真的没建过档案」<b>不可区分</b> —— 一对比就能推断出自己被拉黑，
+ * 而整条设计的目的正是不让他确认这件事。
  */
 @RestController
 public class PublicProfilePetController {
@@ -69,6 +74,11 @@ public class PublicProfilePetController {
         Long viewerId = viewerId(jwt);
         if (viewerId != null && hideRelations.isBlocked(viewerId, userId)) {
             throw AppException.blockedUser("你已拉黑该用户");
+        }
+        // 🔴 Story 2.5：**对方拉黑了我** → 204，与「他没养宠物」同一个响应。
+        // 同一个 `isBlocked`，只是把两个参数掉过来（AD-7：共用同一个出口）。
+        if (viewerId != null && hideRelations.isBlocked(userId, viewerId)) {
+            return ResponseEntity.noContent().build();
         }
         // 🛡 主人注销 / 被封 → 当作没有宠物，而不是把档案照常发出去。
         // 判定走 accountQueryService.isActive，与访客投影层同一句（不另写一套）。

@@ -264,7 +264,7 @@ class PublicProfilePage extends ConsumerWidget {
                 .copyWith(letterSpacing: 0.6, fontWeight: FontWeight.w600),
           ),
         ),
-        _PostGrid(userId: userId),
+        _PostGrid(userId: userId, self: p.self),
       ],
     );
   }
@@ -425,9 +425,15 @@ class PublicProfilePage extends ConsumerWidget {
 /// ⚠️ 网格用 `shrinkWrap + NeverScrollableScrollPhysics` 挂在外层 ListView 里 ——
 /// 与「我的」页同一种嵌法，两层滚动不会互相抢手势。
 class _PostGrid extends ConsumerWidget {
-  const _PostGrid({required this.userId});
+  const _PostGrid({required this.userId, required this.self});
 
   final int userId;
+
+  /// 自己视角。**只影响空态那一句文案**：「(对方的隐私设置)」写在自己的主页上是句废话。
+  ///
+  /// ⚠️ 在这里分一次是**安全的**，因为被拉黑的访客 `self` 永远是 false ——
+  /// 也正因如此，**他人视角那一侧绝不能再分第三种文案**（AC2）。
+  final bool self;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -457,9 +463,14 @@ class _PostGrid extends ConsumerWidget {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
             child: Text(
-              // ⚠️ 文案刻意**不提「私密」二字** —— 「他还有私密内容没给你看」同样是
-              // 不该外泄的信息，而「暂时没有公开内容」对两种情况都成立。
-              l10n.profilePostsEmpty,
+              // 🔴 **一句文案吃两种服务端情况**（Story 2.5 · AC2）：
+              // ① 这个人真的没发过公开内容；② 这个人**拉黑了当前访客**（FR-118.5）。
+              // 服务端对这两种情况返回的是**逐字节一样**的响应（空 items + 两个计数归零），
+              // 客户端因此**压根没有"被拉黑"这个概念** —— 这里不是"忘了分支"，
+              // 是这条设计的全部要点：两者只要有任何视觉或文案差异，
+              // 用户一对比就能推断出自己被拉黑，而整条 FR-118.5 正是为了不让他确认这件事。
+              // ⚠️ 别给"被拉黑"写一句更贴切的文案，那会当场毁掉它。
+              self ? l10n.profilePostsEmptySelf : l10n.profilePostsEmpty,
               key: const ValueKey('profilePostsEmpty'),
               style: AppTypography.caption,
             ),

@@ -3394,8 +3394,10 @@
   "@profileCounts": {"description": "Public profile: the two aggregate numbers under the identity block. Both count PUBLIC content only - the grid below shows exactly those posts.", "placeholders": {"postCount": {"type": "int"}, "likeCount": {"type": "int"}}},
   "profilePostsTitle": "Posts",
   "@profilePostsTitle": {"description": "Public profile: heading above the 2-column content grid. Someone else's posts, so NOT the \"My posts\" wording."},
-  "profilePostsEmpty": "Nothing public yet",
-  "@profilePostsEmpty": {"description": "Public profile: this person has no public posts. Deliberately says nothing about whether they have private ones."},
+  "profilePostsEmpty": "No content yet (this person's privacy settings)",
+  "@profilePostsEmpty": {"description": "Public profile: the content grid is empty. 🔴 ONE string for TWO server situations - this person genuinely has no public posts, AND this person has blocked the viewer (FR-118.5). Any wording that fits one better than the other lets a blocked user confirm they were blocked by comparing the two, which is exactly what the design prevents. Do not split it."},
+  "profilePostsEmptySelf": "You haven't posted anything public yet",
+  "@profilePostsEmptySelf": {"description": "Public profile, SELF view only: your own grid is empty. Separate from profilePostsEmpty because that one is worded for someone else's profile ('this person's privacy settings') and would be nonsense about yourself. ⚠️ Splitting it here is safe precisely because `self` is never true for a blocked viewer - do NOT add a third variant for the other-profile case."},
   "profilePostsLoadMore": "Load more",
   "@profilePostsLoadMore": {"description": "Public profile: fetch the next page of the content grid."}
 }
