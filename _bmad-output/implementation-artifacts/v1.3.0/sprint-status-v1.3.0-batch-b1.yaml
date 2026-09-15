@@ -291,6 +291,12 @@ development_status:
                                                         #    ③ 互动量子查询只按 pet_id 数点赞 → 私密/已删/DAILY 帖的点赞在影响**公开**推荐位排序（高赞帖改私密后仍稳坐第一）；现在与候选同一套谓词并有源码级守卫
                                                         #    ④ 相关子查询=每候选执行一次 → 改预聚合 CTE + hash join，并用 IN (SELECT pet_id FROM candidates) 把范围收在候选集内
                                                         #    ⑤ 大图没有 errorBuilder（图挂了一块白 + 抛 NetworkImageLoadException）→ 落回爪印占位 ⑥ _EmptyProfileView 无条件换版面，与旁边「引导一字未改」自相矛盾 → 只在真有卡时换
+                                                        # ⚠️ code-review 第二轮（复审，审查者起临时 postgres 真跑了迁移与 SQL）再修 3 条 + 升 1 条为 L1 决策：
+                                                        #    ⑦ date(c.last_at) 的「同日」吃**会话时区**（生产是 UTC）→ 雅加达 00:00–07:00 的帖算进前一天、AC1 的「同日按互动量」静默失效（实测 1 赞排到 3 赞前）→ 改 AT TIME ZONE 'Asia/Jakarta'（与 ScheduleWindow.WIB 同口径）
+                                                        #    ⑧ 封面索引谓词的 jsonb_array_length 对非数组 jsonb **抛错**：库里一旦有一行非数组，这类行再也插不进去、CREATE INDEX 也失败 → **迁移中断 → 启动即拒**；查询与索引两处都加 jsonb_typeof='array' 且必须在取长度之前
+                                                        #    ⑨ petRecommendationsProvider 常驻（Riverpod 3 legacy 默认不 autoDispose）且从不 invalidate → AC3 的拉黑/封号过滤只在本进程第一次取数时生效（拉黑完回 Diary 卡还在、点进去 403）→ autoDispose + onAuthorHidden 里 invalidate
+                                                        #    🔴 ⑩ **未修，升为 L1 决策项**：liked 段是主要成本（实测 EXPLAIN ANALYZE ~205ms，其中 ~200ms 是 content_posts 17.5 万行 + content_likes 10 万行两次 Seq Scan），且排序键含 interactions、LIMIT 在排序之后 → 必须先算每个候选的互动量，没有捷径。
+                                                        #       本轮只做不改口径的优化（idx_content_posts_pet_recommend 加第三列 id，让点赞归并走 index-only scan）。AC2 允许的降级只有 @Scheduled 落表，而「扛不住」须以真库实测为判据 → **未自行降级、未自行改口径**
                                                         # 🔸 **一条建议埋点/产品确认**：pet_card_tapped 由 AC7 与架构 §4.2 明写，但与 FR-92 H5 名片那组 pet_card_* **共用前缀**；按 AC 原样落地、未擅自改名（改名只动调用点一行 + 两条用例）
                                                         # L1/L2 待本地验收（清单见 story Completion Notes；**L1 最重要的是 AC2 的 EXPLAIN** —— 云端无 postgres，两条部分索引是否真被选中只能对真库验；扛不住时允许的降级只有 @Scheduled 落表）
   4-2-diary声明未养宠态也看到推荐: ready-for-dev         # B1-D2 对 PRD 原文的扩展：代码里有**两种**无档案状态，PRD 只写了未建档那一种。游客态不动

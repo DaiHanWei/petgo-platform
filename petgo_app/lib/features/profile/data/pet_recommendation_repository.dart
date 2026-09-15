@@ -80,13 +80,20 @@ final Provider<PetRecommendationRepository> petRecommendationRepositoryProvider 
     Provider<PetRecommendationRepository>(
         (ref) => DioPetRecommendationRepository(ref.read(dioProvider)));
 
-/// 推荐池（Story 4.1 · AC6 的 Diary 未建档态用它）。
+/// 推荐池（Story 4.1 的 Diary 未建档态、4.2 的「声明未养宠 / 计划养宠」态用它）。
 ///
 /// ⚠️ 关掉自动重试：取不到时那一整片推荐区**整块不渲染**（它是锦上添花，
 /// 不是这一屏的主体 —— 主体是「+ 建档」那两个操作）。让它在后台反复重试
 /// 只会让页面在「有一片网格 ↔ 没有」之间自己横跳。
-final FutureProvider<List<RecommendedPet>> petRecommendationsProvider =
-    FutureProvider<List<RecommendedPet>>(
+///
+/// 🔴 **必须 autoDispose**（code-review 2026-09-15）：AC3 的「拉黑 / 封号 / 注销不入池」
+/// 是**服务端每次取数时**算的，而 Riverpod 3 的 legacy `FutureProvider` 默认常驻 ——
+/// 常驻的表现是那几条过滤只在本进程**第一次**取数时生效：在 Feed 里拉黑某人之后回到
+/// Diary，他家的宠物卡还在，点进去撞 403。
+/// ⚠️ autoDispose 只覆盖「离开这一屏再回来」；**拉黑发生在别的屏、而这一屏还活着**那一路
+/// 由 `onAuthorHidden` 里的 invalidate 兜住（那是全 App 拉黑收尾的唯一出口）。
+final petRecommendationsProvider =
+    FutureProvider.autoDispose<List<RecommendedPet>>(
   (ref) => ref.read(petRecommendationRepositoryProvider).recommendations(),
   retry: (_, _) => null,
 );

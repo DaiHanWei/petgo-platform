@@ -33,6 +33,12 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      * 「同日」是按 {@code created_at} 的日期截断分桶 —— 不截断的话同一天里先发的永远排后面，
      * 互动量那一半就永远用不上。互动量取该宠物<b>入池的那些帖子</b>的点赞总数。
      *
+     * <h3>⚠️ 「同日」必须按 **WIB（Asia/Jakarta）** 截断，不能用会话时区</h3>
+     * {@code date(timestamptz)} 隐式吃数据库会话时区（生产容器里是 UTC），于是雅加达
+     * <b>00:00–07:00</b> 发的帖会被算进前一天：那段时间里「同日按互动量」静默失效
+     * （实测 1 赞的排到 3 赞前面，code-review 2026-09-15）。用户看到的「今天」是 WIB 的今天，
+     * 与运营配置时间、月度额度那几处 <b>逐字同一个口径</b>（{@code ScheduleWindow.WIB}）。
+     *
      * <h3>⚠️ 点赞数必须与候选口径**同一套谓词**</h3>
      * 只按 {@code pet_id} 数点赞（不带 type/visibility/status/deleted_at）的表现是
      * <b>「私密帖 / 已删帖 / DAILY 帖的点赞在悄悄影响公开推荐位的排序」</b>——
@@ -86,7 +92,8 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
                    COALESCE(k.cnt, 0)      AS interactions
               FROM candidates c
               LEFT JOIN liked k ON k.pet_id = c.pet_id
-             ORDER BY date(c.last_at) DESC, interactions DESC, c.last_at DESC, c.pet_id DESC
+             ORDER BY date(c.last_at AT TIME ZONE 'Asia/Jakarta') DESC, interactions DESC,
+                      c.last_at DESC, c.pet_id DESC
              LIMIT :limit
             """, nativeQuery = true)
     List<Object[]> findRecommendablePets(@Param("since") java.time.Instant since,
@@ -102,6 +109,9 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      *
      * <p>⚠️ 判据比推荐池多一条「有配图」：{@code image_urls} 是 JSONB 数组，
      * 空数组与 NULL 都算没图。走 {@code idx_content_posts_pet_cover}。
+     * <p>⚠️ {@code jsonb_typeof = 'array'} 这一条**必须在 length 之前、且与索引条件逐字相同**：
+     * {@code jsonb_array_length} 对非数组 jsonb 直接抛错（不是返回 null），而部分索引的条件
+     * 与查询谓词不一致时 planner 用不上那条索引 —— 两处改一处就等于悄悄全表扫。
      *
      * <p>⚠️ {@code DISTINCT ON} 是 postgres 方言 —— 本项目只跑 postgres（架构基线），
      * 用它换掉窗口函数是为了让「每个 pet 只要最新那一条」一步到位。
@@ -119,6 +129,7 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
                AND status = 'PUBLISHED'
                AND deleted_at IS NULL
                AND image_urls IS NOT NULL
+               AND jsonb_typeof(image_urls) = 'array'
                AND jsonb_array_length(image_urls) > 0
              ORDER BY pet_id, created_at DESC, id DESC
             """, nativeQuery = true)

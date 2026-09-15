@@ -9,6 +9,8 @@ import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/content/data/feed_repository.dart';
+import 'package:tailtopia/features/content/presentation/author_moderation_callbacks.dart';
 import 'package:tailtopia/features/profile/data/pet_recommendation_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
@@ -18,6 +20,8 @@ import 'package:tailtopia/features/profile/presentation/visitor_archive_view.dar
 import 'package:tailtopia/features/profile/presentation/widgets/pet_recommendation_grid.dart';
 import 'package:tailtopia/features/profile/presentation/widgets/recommended_pet_card.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+
+import '../support/fake_feed_repository.dart';
 
 /// L0：推荐宠物卡与 2 列网格（V1.3.0 batch-b1 Story 4.1 · AC4/AC5/AC6/AC7）。
 ///
@@ -267,19 +271,21 @@ void main() {
       expect(repo.calls, 1);
     });
 
-    testWidgetsWithImages('🛡 窄屏（360 / 375 / 390dp）卡片不溢出，陪伴天数不被裁掉', (tester) async {
-      // code-review 2026-09-15：大图锁死 1:1 时，网格的固定 childAspectRatio 撑不住
-      // 「名字 + 物种·年龄 + 陪伴天数」三行，最窄的 360dp 上底部被裁 7.8px。
-      // 现在大图吃剩余高度（Expanded），任何宽度都不会溢出。
-      addTearDown(tester.view.reset);
-      for (final width in <double>[360, 375, 390]) {
+    // code-review 2026-09-15：大图锁死 1:1 时，网格的固定 childAspectRatio 撑不住
+    // 「名字 + 物种·年龄 + 陪伴天数」三行，最窄的 360dp 上底部被裁 7.8px。
+    // 现在大图吃剩余高度（Expanded），任何宽度都不会溢出。
+    // ⚠️ 三个宽度**各一个用例**：一个用例里反复 pumpWidget 会把上一棵树的 Consumer 卸下来，
+    //    autoDispose 的回收任务留成 pending timer 把用例带红（与被测行为无关）。
+    for (final width in <double>[360, 375, 390]) {
+      testWidgetsWithImages('🛡 窄屏 ${width.toInt()}dp 卡片不溢出，陪伴天数不被裁掉', (tester) async {
+        addTearDown(tester.view.reset);
         tester.view.devicePixelRatio = 1.0;
         tester.view.physicalSize = Size(width, 800);
         await pumpGrid(tester, _FakeRepo([_pet(1), _pet(2)]));
         expect(find.byKey(const ValueKey('recommendedPetDays_1')), findsOneWidget);
-        expect(tester.takeException(), isNull, reason: '\${width}dp 上卡片溢出了');
-      }
-    });
+        expect(tester.takeException(), isNull, reason: '${width.toInt()}dp 上卡片溢出了');
+      });
+    }
 
     testWidgetsWithImages('⚠️「查看全部」入口不在本 story（它的落点是 4.3 才交付的页面）', (tester) async {
       await pumpGrid(tester, _FakeRepo([_pet(7)]));
@@ -337,6 +343,45 @@ void main() {
         debugNetworkImageHttpClientProvider = null;
       }
       tester.takeException(); // 图挂了本身不该把用例带红
+    });
+  });
+
+  group('AC3 拉黑收尾要让推荐位重算', () {
+    testWidgets('🔴 在别处拉黑某人 → 推荐池 invalidate 重取（那几条过滤只在服务端算）',
+        (tester) async {
+      // code-review 2026-09-15：provider 常驻 + 从不 invalidate 的表现是
+      // 「在 Feed 里拉黑某人后回到 Diary，他家的宠物卡还在，点进去撞 403」。
+      final repo = _FakeRepo([_pet(7)]);
+      late WidgetRef capturedRef;
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          petRecommendationRepositoryProvider.overrideWithValue(repo),
+          feedRepositoryProvider.overrideWithValue(FakeFeedRepository()),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Consumer(builder: (context, ref, _) {
+            capturedRef = ref;
+            // 这一屏一直活着（拉黑发生在别的屏）——  autoDispose 兜不到，只能靠 invalidate。
+            ref.watch(petRecommendationsProvider);
+            return const Scaffold(body: SizedBox.shrink());
+          }),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(repo.calls, 1);
+
+      onAuthorHidden(capturedRef, 110)();
+      await tester.pumpAndSettle();
+      expect(repo.calls, 2, reason: '拉黑收尾之后必须重取推荐池');
+    });
+
+    test('🔴 provider 必须是 autoDispose（离开这一屏再回来要重取）', () {
+      // 常驻的表现是拉黑/封号/注销过滤只在本进程第一次取数时生效。
+      final src = File('lib/features/profile/data/pet_recommendation_repository.dart')
+          .readAsStringSync();
+      expect(src.contains('FutureProvider.autoDispose<List<RecommendedPet>>'), isTrue);
     });
   });
 

@@ -400,6 +400,42 @@ class PetRecommendationServiceTest {
         assertThat(sql).doesNotContain("WHERE p2.pet_id = c.pet_id");
     }
 
+    @Test
+    void 同日分桶按WIB截断而不是会话时区() {
+        // 🔴 code-review 2026-09-15：date(timestamptz) 隐式吃**数据库会话时区**（生产容器是 UTC），
+        //    于是雅加达 00:00–07:00 发的帖被算进前一天 —— 那段时间里 AC1 的「同日按互动量」
+        //    静默失效（实测 1 赞的排到 3 赞前面）。用户看到的「今天」是 WIB 的今天。
+        String src = readSource("src/main/java/com/tailtopia/content/repository/"
+                + "ContentPostRepository.java");
+        int start = src.indexOf("WITH candidates AS (");
+        String sql = src.substring(start, src.indexOf("findRecommendablePets", start));
+        assertThat(sql).contains("date(c.last_at AT TIME ZONE 'Asia/Jakarta')");
+        // 不许回到裸 date(c.last_at)。
+        assertThat(sql.replace("date(c.last_at AT TIME ZONE 'Asia/Jakarta')", ""))
+                .doesNotContain("date(c.last_at)");
+        // 与运营配置时间那几处同一个口径。
+        assertThat(com.tailtopia.shared.schedule.ScheduleWindow.WIB.getId())
+                .isEqualTo("Asia/Jakarta");
+    }
+
+    @Test
+    void 封面判据里jsonb类型守卫必须在取长度之前且查询与索引逐字相同() {
+        // 🔴 code-review 2026-09-15：jsonb_array_length 对非数组 jsonb **抛错**（不是返回 null）。
+        //    部分索引的条件是每次 INSERT 都要算的 → 库里出现一行非数组，这类行就再也插不进去，
+        //    而 CREATE INDEX 本身也会失败 → 迁移中断 → 启动即拒。
+        //    ⚠️ 两处谓词还必须一致，否则 planner 用不上那条部分索引（= 悄悄全表扫）。
+        String src = readSource("src/main/java/com/tailtopia/content/repository/"
+                + "ContentPostRepository.java");
+        String sql = readSource("src/main/resources/db/migration/"
+                + "V20260915_1727__add_pet_recommendation_index.sql");
+        for (String text : List.of(src, sql)) {
+            int typeAt = text.indexOf("jsonb_typeof(image_urls) = 'array'");
+            int lenAt = text.indexOf("jsonb_array_length(image_urls) > 0");
+            assertThat(typeAt).as("缺少 jsonb_typeof 守卫").isGreaterThan(0);
+            assertThat(typeAt).as("jsonb_typeof 必须写在 jsonb_array_length 之前").isLessThan(lenAt);
+        }
+    }
+
     private static String readSource(String relative) {
         try {
             return java.nio.file.Files.readString(java.nio.file.Path.of(relative));
