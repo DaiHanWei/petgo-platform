@@ -25,6 +25,7 @@ import '../../profile/presentation/visitor_archive_view.dart';
 import '../data/public_profile_pet_repository.dart';
 import '../data/public_profile_repository.dart';
 import 'public_user_posts_controller.dart';
+import '../../profile/data/pet_recommendation_repository.dart';
 
 /// 用户在主页上对目标用户做成了什么 —— 主页 pop 时回给调用方的**收尾信号**。
 ///
@@ -393,6 +394,9 @@ class PublicProfilePage extends ConsumerWidget {
       onConfirm: () async {
         try {
           await ref.read(blockedUsersRepositoryProvider).block(userId);
+          // 「逛别人家的毛孩子」推荐位要跟着重算（Story 4.1 AC3 / 4.4）——
+          // 「互相拉黑不互推」是服务端取数时算的，不重取就等于这条过滤对当前那份数据不生效。
+          invalidatePetRecommendations(ref);
           // ⚠️ 埋点在**成功之后**（V1.1.2 的教训：门控前就上报会让指标系统性高估）。
           // 拉黑失败不上报，取消也不上报。
           Analytics.capture('social_user_hide_submitted', {

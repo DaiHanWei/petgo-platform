@@ -144,3 +144,17 @@ final petRecommendationsProvider = FutureProvider.autoDispose<List<RecommendedPe
       (await ref.read(petRecommendationRepositoryProvider).recommendations()).items,
   retry: (_, _) => null,
 );
+
+/// 拉黑 / 举报隐藏成功之后让推荐位重算的**唯一出口**（Story 4.1 AC3 的客户端那一半）。
+///
+/// 🔴 为什么不能只靠 autoDispose：Story 4.4 把推荐位放上了**常驻的首页**，
+/// 于是那条 provider 在整个 App 生命周期里都有人 watch、永远不回收 ——
+/// autoDispose 在那一刻就形同失效（code-review 2026-09-15）。
+/// 而「互相拉黑不互推」是**服务端每次取数时**算的，不重取就等于这条过滤对当前这份数据不生效：
+/// 表现是拉黑完回首页，他家的宠物卡还在横滑行里，点进去撞 403。
+///
+/// ⚠️ 必须挂在**每一处拉黑成功**的地方（迷你卡 / 公开主页 / 举报后的隐藏收尾），
+/// 而不是某一个入口：场所评论区那条路径就不走 `onAuthorHidden`。
+void invalidatePetRecommendations(WidgetRef ref) {
+  ref.invalidate(petRecommendationsProvider);
+}

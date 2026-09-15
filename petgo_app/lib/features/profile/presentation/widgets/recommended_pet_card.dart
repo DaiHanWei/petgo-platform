@@ -36,6 +36,13 @@ const String kPetRecommendFromDiaryNonOwner = 'diary_non_owner';
 /// 它与 Story 4.4 的探索 Tab 横滑行是**两个位置**，到时各有各的 `from`。
 const String kPetRecommendFromExploreGrid = 'explore_grid';
 
+/// Story 4.4（AC4）：首页顶部的宠物横滑行。
+///
+/// ⚠️ 与 [kPetRecommendFromExploreGrid] 是**两个位置**：横滑行是首页顶上那一行，
+/// 集合页是点「查看全部」之后的整屏网格。合成一个值就分不清「顺手滑到的」
+/// 与「专门点进去看的」——而这两批人的意图强弱完全不同。
+const String kPetRecommendFromExploreStrip = 'explore_strip';
+
 /// 「逛别人家的毛孩子」宠物卡（V1.3.0 batch-b1 Story 4.1 · AC4/AC5/AC7）。
 ///
 /// <h3>🔴 大图与小圆头像是**两个不同字段、不同来源**</h3>

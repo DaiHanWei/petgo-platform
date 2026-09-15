@@ -29,11 +29,9 @@ VoidCallback onAuthorHidden(WidgetRef ref, int authorId, {BuildContext? popConte
     // 列表会因此突然变短，产品已接受这个代价：不补位、不占位、不提示「已移除 N 条」——
     // 任何补偿动作都会重新暴露「刚才发生了什么」。
     ref.read(feedProvider.notifier).removeByAuthor(authorId);
-    // 「逛别人家的毛孩子」推荐位也得跟着重算（V1.3.0 batch-b1 Story 4.1 · AC3）：
-    // 「互相拉黑不互推」是服务端取数时算的，本地不重取就等于这条过滤对**已经拉起来的
-    // 那一屏**不生效 —— 表现是拉黑完回到 Diary，他家的宠物卡还在，点进去撞 403。
+    // 「逛别人家的毛孩子」推荐位也得跟着重算（V1.3.0 batch-b1 Story 4.1 · AC3）。
     // ⚠️ 这里只 invalidate、**不做本地按 ownerId 剔除**：宠物卡下发的是 petId，
     // 压根没有 ownerId（AD-4 刻意不给访客身份字段），本地无从判断哪张卡是他的。
-    ref.invalidate(petRecommendationsProvider);
+    invalidatePetRecommendations(ref);
   };
 }

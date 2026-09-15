@@ -19,6 +19,7 @@ import 'app_image.dart';
 import 'app_toast.dart';
 import 'confirm_sheet.dart';
 import 'user_tag_row.dart';
+import '../../features/profile/data/pet_recommendation_repository.dart';
 
 /// 他人迷你主页预览卡（Story 3.8，FR-26）。点他人头像/昵称从底部弹卡。
 ///
@@ -383,6 +384,9 @@ class _MiniProfileCard extends StatelessWidget {
       onConfirm: () async {
         try {
           await ref.read(blockedUsersRepositoryProvider).block(userId);
+          // 「逛别人家的毛孩子」推荐位要跟着重算（Story 4.1 AC3 / 4.4）——
+          // 「互相拉黑不互推」是服务端取数时算的，不重取就等于这条过滤对当前那份数据不生效。
+          invalidatePetRecommendations(ref);
           // ⚠️ 埋点在**成功之后**（V1.1.2 的教训：门控前就上报会让指标系统性高估）。
           // 拉黑失败不上报，取消也不上报。
           // origin=BLOCK 与举报自动产生的隐藏（origin=REPORT）分开 ——
