@@ -80,7 +80,9 @@ public class FeedService {
     public FeedService(ContentPostRepository posts, AccountQueryService accountQueryService,
             ContentLikeRepository likes, CommentRepository comments, ContentPinService pins,
             ContentTagQueryService contentTags, UserHideRelationReader hideRelations,
-            FeedRecommendationService recommendations) {
+            FeedRecommendationService recommendations,
+            com.tailtopia.mention.service.MentionViewService mentionViews) {
+        this.mentionViews = mentionViews;
         this.posts = posts;
         this.accountQueryService = accountQueryService;
         this.likes = likes;
@@ -89,6 +91,20 @@ public class FeedService {
         this.contentTags = contentTags;
         this.hideRelations = hideRelations;
         this.recommendations = recommendations;
+    }
+
+    /** V1.3.0 batch-b1 Story 3.3：正文里 @ 的渲染投影（可点与否在服务端判）。 */
+    private final com.tailtopia.mention.service.MentionViewService mentionViews;
+
+    /**
+     * 一页内容各自的 @ 投影（Story 3.3）。**整页一次**，与装饰标签同一个形状（AD-6）。
+     *
+     * <p>⚠️ 别改成在 map 里按条判：一页 20 行就是 40 次查询。
+     */
+    private Map<Long, com.tailtopia.mention.dto.MentionView> mentionsFor(
+            List<ContentPost> page, Long viewerId) {
+        return mentionViews.resolveAll(viewerId,
+                page.stream().flatMap(p -> p.getMentionedUserIds().stream()).toList());
     }
 
     /** 一页内容各自的装饰标签（整页一次查询）。 */
@@ -310,12 +326,16 @@ public class FeedService {
 
         Map<Long, List<ContentTagView>> decorations = decorationTags(page);
 
+        var mentions = mentionsFor(page, viewerId);
+
         List<FeedItemResponse> items = page.stream()
                 .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
                         likeCounts.getOrDefault(p.getId(), 0L),
                         liked.contains(p.getId()),
                         commentCounts.getOrDefault(p.getId(), 0L),
-                        decorations.get(p.getId())))
+                        decorations.get(p.getId()),
+                        com.tailtopia.mention.service.MentionViewService.pick(
+                                p.getMentionedUserIds(), mentions)))
                 .toList();
         return new FeedPageResponse(items, nextCursor, hasMore, rankMode);
     }
@@ -373,7 +393,9 @@ public class FeedService {
                 likeCounts(one).getOrDefault(post.getId(), 0L),
                 likedIds(one, viewerId).contains(post.getId()),
                 commentCounts(one, viewerId).getOrDefault(post.getId(), 0L),
-                decorationTags(one).get(post.getId()));
+                decorationTags(one).get(post.getId()),
+                com.tailtopia.mention.service.MentionViewService.pick(
+                        post.getMentionedUserIds(), mentionsFor(one, viewerId)));
         return new PinnedSlotResponse(new PinnedSlotResponse.Pinned(
                 pin.getId(), pin.getObjectType().name(), item, null));
     }
@@ -435,11 +457,14 @@ public class FeedService {
         Map<Long, Long> likeCounts = likeCounts(page);
         Set<Long> liked = likedIds(page, viewerId);
         Map<Long, Long> commentCounts = commentCounts(page, viewerId);
+        var mentions = mentionsFor(page, viewerId);
         List<FeedItemResponse> items = page.stream()
                 .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
                         likeCounts.getOrDefault(p.getId(), 0L),
                         liked.contains(p.getId()),
-                        commentCounts.getOrDefault(p.getId(), 0L), null))
+                        commentCounts.getOrDefault(p.getId(), 0L), null,
+                        com.tailtopia.mention.service.MentionViewService.pick(
+                                p.getMentionedUserIds(), mentions)))
                 .toList();
 
         String nextCursor = null;
@@ -478,11 +503,14 @@ public class FeedService {
         Map<Long, Long> commentCounts = commentCounts(page, userId);
         // ⚠️「我的发布」**不是** FR-75 列的三处展示位之一，故不查装饰标签 ——
         // 为一个不展示它的页面多发一次查询没有意义。真要展示时把这里换成 decorationTags(page) 即可。
+        var mentions = mentionsFor(page, userId);
         List<FeedItemResponse> items = page.stream()
                 .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
                         likeCounts.getOrDefault(p.getId(), 0L),
                         liked.contains(p.getId()),
-                        commentCounts.getOrDefault(p.getId(), 0L), null))
+                        commentCounts.getOrDefault(p.getId(), 0L), null,
+                        com.tailtopia.mention.service.MentionViewService.pick(
+                                p.getMentionedUserIds(), mentions)))
                 .toList();
 
         String nextCursor = null;

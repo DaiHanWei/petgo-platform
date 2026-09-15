@@ -9,6 +9,8 @@ import com.tailtopia.content.dto.CommentPageResponse;
 import com.tailtopia.content.dto.CommentResponse;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.mention.dto.MentionView;
+import com.tailtopia.mention.service.MentionViewService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.util.ArrayList;
@@ -37,13 +39,27 @@ public class CommentQueryService {
     private final ContentPostRepository posts;
     private final AccountQueryService accountQueryService;
     private final UserHideRelationReader hideRelations;
+    /** V1.3.0 batch-b1 Story 3.3：评论里 @ 的渲染投影（可点与否在服务端判）。 */
+    private final MentionViewService mentionViews;
 
     public CommentQueryService(CommentRepository comments, ContentPostRepository posts,
-            AccountQueryService accountQueryService, UserHideRelationReader hideRelations) {
+            AccountQueryService accountQueryService, UserHideRelationReader hideRelations,
+            MentionViewService mentionViews) {
         this.comments = comments;
         this.posts = posts;
         this.accountQueryService = accountQueryService;
         this.hideRelations = hideRelations;
+        this.mentionViews = mentionViews;
+    }
+
+    /**
+     * 这一页（含内嵌二级回复）涉及的被 @ 人，**一次判完**（Story 3.3 · AD-6）。
+     *
+     * <p>⚠️ 别改成在循环里按条判：一页 10 条一级 + 30 条二级 = 80 次查询。
+     */
+    private Map<Long, MentionView> resolveMentions(Long viewerId, Stream<Comment> all) {
+        return mentionViews.resolveAll(viewerId,
+                all.flatMap(c -> c.getMentionedUserIds().stream()).toList());
     }
 
     /**
@@ -86,15 +102,22 @@ public class CommentQueryService {
                         repliesByParent.values().stream().flatMap(List::stream).map(Comment::getAuthorId))
                         .toList());
 
+        // Story 3.3：@ 投影。与上面那批作者投影同一个形状 —— **整页一次**，含内嵌的二级回复。
+        Map<Long, MentionView> mentions = resolveMentions(viewerId, Stream.concat(
+                page.stream(),
+                repliesByParent.values().stream().flatMap(List::stream)));
+
         List<CommentResponse> items = new ArrayList<>(page.size());
         for (Comment top : page) {
             List<Comment> replies = repliesByParent.getOrDefault(top.getId(), List.of());
             List<CommentResponse> first = replies.stream()
                     .limit(INLINE_REPLY_COUNT)
-                    .map(r -> CommentResponse.reply(r, authors.get(r.getAuthorId())))
+                    .map(r -> CommentResponse.reply(r, authors.get(r.getAuthorId()),
+                            MentionViewService.pick(r.getMentionedUserIds(), mentions)))
                     .toList();
             items.add(CommentResponse.topLevel(top, authors.get(top.getAuthorId()),
-                    replies.size(), first));
+                    replies.size(), first,
+                    MentionViewService.pick(top.getMentionedUserIds(), mentions)));
         }
 
         return new CommentPageResponse(items, nextCursor(hasMore, page), hasMore);
@@ -141,8 +164,10 @@ public class CommentQueryService {
 
         Map<Long, AuthorView> authors = accountQueryService.findAuthorViews(
                 page.stream().map(Comment::getAuthorId).toList());
+        Map<Long, MentionView> mentions = resolveMentions(viewerId, page.stream());
         List<CommentResponse> items = page.stream()
-                .map(c -> CommentResponse.reply(c, authors.get(c.getAuthorId())))
+                .map(c -> CommentResponse.reply(c, authors.get(c.getAuthorId()),
+                        MentionViewService.pick(c.getMentionedUserIds(), mentions)))
                 .toList();
         return new CommentPageResponse(items, nextCursor(hasMore, page), hasMore);
     }

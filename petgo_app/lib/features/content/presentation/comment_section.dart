@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../mention/presentation/mention_text.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -282,6 +283,13 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       canDelete: _canDelete(c),
       onReply: () =>
           ref.read(replyTargetProvider.notifier).set(ReplyTarget(parentId: c.id, toName: name)),
+      // V1.3.0 batch-b1 Story 3.3：点评论里的 @ → 那个人的公开主页（AC2）。
+      // ⚠️ 与 onAuthorTap 分开：被 @ 的人通常**不是**这条评论的作者，
+      //    共用回调会把错的人从列表里清掉。
+      onTapMention: (userId) => openUserProfile(context, ref, userId,
+          onBlocked: _onCommentAuthorHidden(userId),
+          onReported: _onCommentAuthorHidden(userId),
+          entry: AccountActionEntry.mention),
       onDelete: () => _confirmDelete(c.id),
     );
   }
@@ -296,6 +304,7 @@ class _CommentTile extends StatelessWidget {
     required this.onReply,
     required this.onDelete,
     required this.onAuthorTap,
+    required this.onTapMention,
     this.takenDownLabel,
   });
 
@@ -309,6 +318,9 @@ class _CommentTile extends StatelessWidget {
   /// 点头像/作者名 → 迷你卡（Story 1.6）。**为 null = 已注销**，此时头像与名字都不可点，
   /// 整行只剩「点了回复」的既有行为。
   final VoidCallback? onAuthorTap;
+
+  /// 点评论里的 @ → 那个人的公开主页（V1.3.0 batch-b1 Story 3.3 · AC2）。
+  final void Function(int userId) onTapMention;
 
   /// 非空 = 该评论被下架/移除、仅作者可见 → 渲染灰态提示标签（story 3）。
   final String? takenDownLabel;
@@ -360,7 +372,16 @@ class _CommentTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xxs),
-                  Text(comment.body, style: AppTypography.body),
+                  // V1.3.0 batch-b1 Story 3.3：评论里的 @ 高亮可点（AC1/AC2）。
+                  // 🔴 高亮与可点的判定**全在后端**（拉黑 AC3 / 注销 AC4），这里只照做。
+                  // ⚠️ 点 @ 与「点整条评论 = 回复」是两个手势，靠手势竞技场分开
+                  //    （同上面作者名那处的既有做法），有测试钉着。
+                  MentionText(
+                    text: comment.body,
+                    mentions: comment.mentions,
+                    onTapUser: onTapMention,
+                    style: AppTypography.body,
+                  ),
                   if (takenDownLabel != null)
                     Padding(
                       padding: const EdgeInsets.only(top: AppSpacing.xxs),

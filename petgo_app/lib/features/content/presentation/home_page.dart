@@ -12,6 +12,7 @@ import '../../../features/notify/presentation/notification_bell.dart';
 import '../../../features/place/presentation/place_entry_row.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../social/domain/account_action_entry.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
 import '../domain/feed_item.dart';
 import 'author_moderation_callbacks.dart';
@@ -212,6 +213,16 @@ class HomePage extends ConsumerWidget {
             // 拉黑的成功 Toast 由主页统一给；**举报一律静默**（提示会泄露「举报会隐藏内容」）。
             onBlocked: onAuthorHidden(ref, item.authorId),
             onReported: onAuthorHidden(ref, item.authorId),
+          ),
+          // V1.3.0 batch-b1 Story 3.3：点正文里的 @ → 那个人的公开主页（AC2）。
+          // ⚠️ 收尾回调按**被 @ 的那个人**清列表，不是按卡片作者 —— 两者通常不是同一个人。
+          onTapMention: (userId) => openUserProfile(
+            context,
+            ref,
+            userId,
+            entry: AccountActionEntry.mention,
+            onBlocked: onAuthorHidden(ref, userId),
+            onReported: onAuthorHidden(ref, userId),
           ),
           // V1.1.6 Story 3.2：评论跳详情页并**定位到评论区**。
           // ⚠️ `?focus=comments` 是既有参数名（通知深链一直在产出它），两侧必须同名。

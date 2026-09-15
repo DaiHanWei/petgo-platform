@@ -67,7 +67,15 @@ public record FeedItemResponse(
          * <p>🔴 口径与内容详情页<b>完全一致</b>（含访客自己那条尚未对外可见的评论）——
          * 两处显示的是同一个东西，数字不一致用户只会以为出 bug 了。
          */
-        long commentCount) {
+        long commentCount,
+        /**
+         * 正文里的 @（V1.3.0 batch-b1 Story 3.3 · AC1/AC3/AC4）。
+         *
+         * <p>🔴 <b>能不能点、显示什么昵称都是服务端算好的</b>
+         * （见 {@link com.tailtopia.mention.dto.MentionView}）。
+         * 空表不下发 —— Feed 一页 20 行，每行一个空数组白占体积（同 authorTags 的口径）。
+         */
+        List<com.tailtopia.mention.dto.MentionView> mentions) {
 
     /**
      * ⚠️ {@code visibility} 恒下发（Story 4.1 · AC7）。Feed 里只会出现 PUBLIC，
@@ -78,7 +86,8 @@ public record FeedItemResponse(
      * 要加字段就加在这里，<b>不要为某一个出口另写一个</b> —— 那正是口径分叉的起点。
      */
     public static FeedItemResponse of(ContentPost p, AuthorView author, long likeCount,
-            boolean liked, long commentCount, List<ContentTagView> decorationTags) {
+            boolean liked, long commentCount, List<ContentTagView> decorationTags,
+            List<com.tailtopia.mention.dto.MentionView> mentions) {
         List<String> images = p.getImageUrls();
         String firstImage = (images != null && !images.isEmpty()) ? images.get(0) : null;
         return new FeedItemResponse(
@@ -99,6 +108,7 @@ public record FeedItemResponse(
                 images,
                 p.getImageSizes(),
                 liked,
-                commentCount);
+                commentCount,
+                mentions);
     }
 }

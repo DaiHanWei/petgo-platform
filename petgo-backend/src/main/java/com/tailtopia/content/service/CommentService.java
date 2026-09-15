@@ -11,7 +11,9 @@ import com.tailtopia.content.event.CommentSubmittedEvent;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.mention.dto.MentionView;
 import com.tailtopia.mention.service.MentionSanitizer;
+import com.tailtopia.mention.service.MentionViewService;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.util.List;
@@ -46,11 +48,13 @@ public class CommentService {
     private final ManualReviewGate reviewGate;
     /** V1.3.0 batch-b1 Story 3.2：@ 名单落库前的权威过滤（≤5 / 去重 / 去自己 / 去注销 / 去拉黑）。 */
     private final MentionSanitizer mentions;
+    /** V1.3.0 batch-b1 Story 3.3：刚发出那条评论的 @ 渲染投影（客户端就地渲染，不必重拉一页）。 */
+    private final MentionViewService mentionViews;
 
     public CommentService(CommentRepository comments, ContentPostRepository posts,
             AccountQueryService accountQueryService, ApplicationEventPublisher events,
             ContentModerationService moderation, ManualReviewGate reviewGate,
-            MentionSanitizer mentions) {
+            MentionSanitizer mentions, MentionViewService mentionViews) {
         this.comments = comments;
         this.posts = posts;
         this.accountQueryService = accountQueryService;
@@ -58,6 +62,7 @@ public class CommentService {
         this.moderation = moderation;
         this.reviewGate = reviewGate;
         this.mentions = mentions;
+        this.mentionViews = mentionViews;
     }
 
     /**
@@ -88,7 +93,8 @@ public class CommentService {
         comment.setMentionedUserIds(mentioned);
         Comment saved = comments.save(comment);
         events.publishEvent(new CommentSubmittedEvent(saved.getId(), body, saved.getContentVersion()));
-        return CommentResponse.topLevel(saved, authorView(authorId), 0, List.of());
+        return CommentResponse.topLevel(saved, authorView(authorId), 0, List.of(),
+                mentionViewsFor(authorId, mentioned));
     }
 
     /** 回复（二级）。回复二级评论时归并到其一级父（两级约束，绝不三级）。含同步审核过滤。 */
@@ -118,7 +124,19 @@ public class CommentService {
         reply.setMentionedUserIds(mentioned);
         Comment saved = comments.save(reply);
         events.publishEvent(new CommentSubmittedEvent(saved.getId(), body, saved.getContentVersion()));
-        return CommentResponse.reply(saved, authorView(authorId));
+        return CommentResponse.reply(saved, authorView(authorId),
+                mentionViewsFor(authorId, mentioned));
+    }
+
+    /**
+     * 刚发出那条评论自己的 @ 投影（Story 3.3）。
+     *
+     * <p>⚠️ viewer 就是作者本人 —— 名单已经被 {@code MentionSanitizer} 洗过（去注销、去拉黑），
+     * 所以这里正常情况下每一条都是可点的；仍然走同一个服务而不是自己拼，
+     * 是为了让"可点与否"只有一个判定处（story Dev Notes 的 🔴）。
+     */
+    private List<MentionView> mentionViewsFor(long authorId, List<Long> mentioned) {
+        return MentionViewService.pick(mentioned, mentionViews.resolveAll(authorId, mentioned));
     }
 
     /**

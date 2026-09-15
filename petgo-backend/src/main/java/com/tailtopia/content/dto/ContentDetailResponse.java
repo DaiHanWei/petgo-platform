@@ -43,17 +43,24 @@ public record ContentDetailResponse(
          * 所以这个数是产品判断，不是拦人的依据。
          */
         ContentVisibility visibility,
-        Instant createdAt) {
+        Instant createdAt,
+        /**
+         * 正文里的 @（V1.3.0 batch-b1 Story 3.3 · AC1/AC3/AC4）。
+         *
+         * <p>🔴 <b>能不能点、显示什么昵称都是服务端算好的</b>（见 {@link com.tailtopia.mention.dto.MentionView}）。空表不下发。
+         */
+        List<com.tailtopia.mention.dto.MentionView> mentions) {
 
     public static ContentDetailResponse of(ContentPost p, AuthorView author, long likeCount,
             long commentCount, boolean liked, boolean isAuthor,
-            List<ContentTagView> decorationTags) {
+            List<ContentTagView> decorationTags,
+            List<com.tailtopia.mention.dto.MentionView> mentions) {
         return new ContentDetailResponse(
                 p.getId(), p.getAuthorId(), author.nickname(), author.avatarUrl(),
                 author.deleted(), author.tags().isEmpty() ? null : author.tags(),
                 (decorationTags == null || decorationTags.isEmpty()) ? null : decorationTags,
                 p.getType(), p.getText(), p.getImageUrls(),
                 likeCount, commentCount, liked, isAuthor, p.getVisibility(),
-                p.getCreatedAt());
+                p.getCreatedAt(), mentions);
     }
 }

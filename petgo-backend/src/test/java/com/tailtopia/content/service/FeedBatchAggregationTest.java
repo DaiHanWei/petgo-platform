@@ -62,7 +62,13 @@ class FeedBatchAggregationTest {
                 Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class),
                 // V1.1.6 Story 16.3：ALL Tab 走推荐序。本类验的是**组装那一步**的批量聚合，
                 // 两条排序路径共用它（AD-7 Rule 4），所以用分类 Tab 验即可、不需要真的推荐序。
-                Mockito.mock(com.tailtopia.content.rank.FeedRecommendationService.class));
+                Mockito.mock(com.tailtopia.content.rank.FeedRecommendationService.class),
+                // V1.3.0 batch-b1 Story 3.3：@ 渲染投影。本类夹具都没有 @，
+                // resolveAll 在碰任何依赖之前就返回空 Map，所以两个 mock 无需 stub
+                // （也因此**不会**多发查询 —— 批量聚合的用例计数不受影响）。
+                new com.tailtopia.mention.service.MentionViewService(
+                        Mockito.mock(com.tailtopia.auth.service.AccountQueryService.class),
+                        Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class)));
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);
             return ids.stream().distinct().collect(Collectors.toMap(

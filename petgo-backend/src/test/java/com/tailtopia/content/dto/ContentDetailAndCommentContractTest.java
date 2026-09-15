@@ -49,13 +49,15 @@ class ContentDetailAndCommentContractTest {
                 // V1.1.6 Story 10.1：**恒下发**（与 FeedItemResponse 同口径）。
                 // 补它的唯一理由是埋点 E-11 的加粗属性 is_private_diary。
                 com.tailtopia.content.domain.ContentVisibility.PRIVATE,
-                Instant.parse("2026-06-05T00:00:00Z"));
+                Instant.parse("2026-06-05T00:00:00Z"),
+                // V1.3.0 batch-b1 Story 3.3：正文里的 @（能不能点是服务端算好的）。
+                List.of(new com.tailtopia.mention.dto.MentionView(9L, "阿花", true)));
 
         assertThat(wire(d).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
                 "authorTags", "decorationTags", "type",
                 "body", "imageUrls", "likeCount", "commentCount", "liked", "isAuthor",
-                "visibility", "createdAt"));
+                "visibility", "createdAt", "mentions"));
         // 线格式是枚举名大写（客户端按字符串比 PRIVATE / PUBLIC，不做数字映射）。
         assertThat(wire(d)).containsEntry("visibility", "PRIVATE");
     }
@@ -67,11 +69,14 @@ class ContentDetailAndCommentContractTest {
                 10L, 7L, "小明", "https://cdn/a.jpg", false,
                 List.of(new com.tailtopia.auth.dto.UserTagView("vet", "兽医", "🩺", "已认证兽医", "#F6A609")),
                 "评论正文",
-                Instant.parse("2026-06-05T00:00:00Z"), 3, List.of(), "VISIBLE");
+                Instant.parse("2026-06-05T00:00:00Z"), 3, List.of(), "VISIBLE",
+                // V1.3.0 batch-b1 Story 3.3：评论里的 @。
+                List.of(new com.tailtopia.mention.dto.MentionView(9L, "阿花", true)));
 
         assertThat(wire(top).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
-                "authorTags", "body", "createdAt", "replyCount", "replies", "moderationStatus"));
+                "authorTags", "body", "createdAt", "replyCount", "replies", "moderationStatus",
+                "mentions"));
     }
 
     @Test
@@ -80,12 +85,14 @@ class ContentDetailAndCommentContractTest {
         CommentResponse reply = new CommentResponse(
                 // 无标签 → authorTags 为 null → NON_NULL 省略（下方字段集里因此没有它）。
                 11L, 8L, "小红", null, false, null, "回复正文",
-                Instant.parse("2026-06-05T00:00:00Z"), null, null, "VISIBLE");
+                Instant.parse("2026-06-05T00:00:00Z"), null, null, "VISIBLE", null);
 
         assertThat(wire(reply).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorDeleted", "body", "createdAt",
                 "moderationStatus"));
         assertThat(wire(reply)).doesNotContainKey("replyCount");
+        // Story 3.3：没 @ 人的评论整列省略（存量评论恒如此）。
+        assertThat(wire(reply)).doesNotContainKey("mentions");
     }
 
     @Test

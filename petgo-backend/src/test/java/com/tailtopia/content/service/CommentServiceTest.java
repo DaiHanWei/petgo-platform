@@ -62,7 +62,10 @@ class CommentServiceTest {
         service = new CommentService(comments, posts, accounts, events, moderation, reviewGate,
                 new com.tailtopia.mention.service.MentionSanitizer(accounts,
                         mock(com.tailtopia.social.read.UserHideRelationReader.class),
-                        mock(com.tailtopia.mention.repository.MentionCandidateRepository.class)));
+                        mock(com.tailtopia.mention.repository.MentionCandidateRepository.class)),
+                // Story 3.3：@ 渲染投影。同上，没 @ 就不碰依赖。
+                new com.tailtopia.mention.service.MentionViewService(accounts,
+                        mock(com.tailtopia.social.read.UserHideRelationReader.class)));
         // 默认审核放行（PASS）——现网正常路径；各审核态在专项测试内覆写。
         when(moderation.moderateComment(anyString())).thenReturn(CommentVerdict.PASS);
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {

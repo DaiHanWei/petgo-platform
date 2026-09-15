@@ -1,4 +1,5 @@
 import '../../auth/domain/user_tag.dart';
+import '../../mention/domain/mention_view.dart';
 /// 评论（对应后端 `CommentResponse`）。两级：一级含 [replyCount] + 内嵌前 3 条 [replies]；
 /// 二级回复 [replyCount]/[replies] 为 null。
 class Comment {
@@ -14,6 +15,7 @@ class Comment {
     this.replyCount,
     this.replies,
     this.moderationStatus = 'VISIBLE',
+    this.mentions = const [],
   });
 
   final int id;
@@ -41,6 +43,12 @@ class Comment {
   /// 缺省 VISIBLE（旧后端不下发此字段时向后兼容）。
   final String moderationStatus;
 
+  /// 这条评论里的 @（V1.3.0 batch-b1 Story 3.3）。
+  ///
+  /// 🔴 每一项的「能不能点、显示什么昵称」都是**后端算好的**（拉黑 AC3 / 注销 AC4）——
+  /// 渲染侧只照做，不自己判。空表 = 这段文字里没有可点的 @。
+  final List<MentionView> mentions;
+
   bool get isTopLevel => replyCount != null;
 
   /// 仅作者可见的「已被下架/移除」态（读路径已按 viewer 过滤，他人根本收不到该行）。
@@ -63,6 +71,7 @@ class Comment {
           ? rawReplies.map((e) => Comment.fromJson((e as Map).cast<String, dynamic>())).toList()
           : null,
       moderationStatus: (json['moderationStatus'] as String?) ?? 'VISIBLE',
+      mentions: MentionView.listFromJson(json['mentions']),
     );
   }
 }

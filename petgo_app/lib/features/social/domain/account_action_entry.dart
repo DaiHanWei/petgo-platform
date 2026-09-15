@@ -23,7 +23,13 @@ enum AccountActionEntry {
   reportFlow('report_flow'),
 
   /// 评论区点作者（Story 1.6）。
-  comment('comment');
+  comment('comment'),
+
+  /// 点正文 / 评论里的 @ 进来的（V1.3.0 batch-b1 Story 3.3 · AC2）。
+  ///
+  /// ⚠️ **新增值，不改任何既有值**：@ 是本批次才有的新入口，给它一个新字面量
+  /// 不会动到既有那几条时间序列（同上面 miniProfile 那条注释的理由）。
+  mention('mention');
 
   const AccountActionEntry(this.wire);
 

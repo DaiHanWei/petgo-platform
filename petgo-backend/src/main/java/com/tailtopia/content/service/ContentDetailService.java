@@ -36,12 +36,16 @@ public class ContentDetailService {
     private final AccountQueryService accountQueryService;
     private final ReportService reportService;
     private final UserHideRelationReader hideRelations;
+    /** V1.3.0 batch-b1 Story 3.3：正文里 @ 的渲染投影（可点与否在服务端判）。 */
+    private final com.tailtopia.mention.service.MentionViewService mentionViews;
 
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
             ReportService reportService, UserHideRelationReader hideRelations,
-            ContentTagQueryService contentTags) {
+            ContentTagQueryService contentTags,
+            com.tailtopia.mention.service.MentionViewService mentionViews) {
         this.contentTags = contentTags;
+        this.mentionViews = mentionViews;
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -97,7 +101,11 @@ public class ContentDetailService {
         // 仓储刻意不提供逐条取法，免得别处照着写成逐条查。
         var decorations = contentTags.findVisibleTags(java.util.List.of(postId), java.time.Instant.now())
                 .get(postId);
+        // Story 3.3：@ 的渲染投影。⚠️ 拉黑与注销在这里判（AC3/AC4），客户端只照做。
+        var mentions = com.tailtopia.mention.service.MentionViewService.pick(
+                post.getMentionedUserIds(),
+                mentionViews.resolveAll(viewerId, post.getMentionedUserIds()));
         return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor,
-                decorations);
+                decorations, mentions);
     }
 }

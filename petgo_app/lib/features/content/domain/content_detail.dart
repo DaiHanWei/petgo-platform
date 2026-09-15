@@ -1,4 +1,5 @@
 import '../../auth/domain/user_tag.dart';
+import '../../mention/domain/mention_view.dart';
 import 'content_tag.dart';
 /// 内容详情（对应后端 `ContentDetailResponse`）。
 class ContentDetail {
@@ -19,6 +20,7 @@ class ContentDetail {
     this.body,
     this.imageUrls = const [],
     this.visibility = 'PUBLIC',
+    this.mentions = const [],
   });
 
   final int id;
@@ -49,6 +51,12 @@ class ContentDetail {
   /// 私密内容照样允许用户自己分享（AD-15 Rule 6），拿它去藏分享按钮就改了产品规则。
   final String visibility;
 
+  /// 正文里的 @（V1.3.0 batch-b1 Story 3.3）。
+  ///
+  /// 🔴 每一项的「能不能点、显示什么昵称」都是**后端算好的**（拉黑 AC3 / 注销 AC4）——
+  /// 渲染侧只照做，不自己判。空表 = 这段文字里没有可点的 @。
+  final List<MentionView> mentions;
+
   /// 是否「私密日记」（埋点 E-11 的加粗属性）。Diary = `GROWTH_MOMENT`。
   bool get isPrivateDiary => type == 'GROWTH_MOMENT' && visibility == 'PRIVATE';
 
@@ -71,6 +79,7 @@ class ContentDetail {
       body: json['body'] as String?,
       imageUrls: raw is List ? raw.map((e) => e.toString()).toList() : const [],
       visibility: (json['visibility'] ?? 'PUBLIC') as String,
+      mentions: MentionView.listFromJson(json['mentions']),
     );
   }
 }

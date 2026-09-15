@@ -47,7 +47,13 @@ class CommentQueryServiceTest {
         accounts = mock(AccountQueryService.class);
         // Story 1.3：默认无任何隐藏关系（isHidden → false），既有四个用例语义保持不变。
         hideRelations = mock(UserHideRelationReader.class);
-        service = new CommentQueryService(comments, posts, accounts, hideRelations);
+        service = new CommentQueryService(comments, posts, accounts, hideRelations,
+                // V1.3.0 batch-b1 Story 3.3：@ 渲染投影。本类夹具都没有 @，
+                // resolveAll 在碰任何依赖之前就返回空 Map，所以两个 mock 无需 stub
+                // （也因此**不会**多发查询 —— 批量聚合的用例计数不受影响）。
+                new com.tailtopia.mention.service.MentionViewService(
+                        org.mockito.Mockito.mock(com.tailtopia.auth.service.AccountQueryService.class),
+                        org.mockito.Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class)));
         // 帖默认可见。
         when(posts.findById(anyLong())).thenReturn(Optional.of(visiblePost()));
         // 作者投影：按 id 给非注销视图。

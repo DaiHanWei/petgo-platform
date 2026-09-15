@@ -47,7 +47,13 @@ class ContentDetailServiceTest {
         // Story 1.1：默认 isHidden → false（未隐藏该作者）
         hideRelations = mock(UserHideRelationReader.class);
         service = new ContentDetailService(posts, comments, likes, accounts, reportService, hideRelations,
-                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class),
+                // V1.3.0 batch-b1 Story 3.3：@ 渲染投影。本类夹具都没有 @，
+                // resolveAll 在碰任何依赖之前就返回空 Map，所以两个 mock 无需 stub
+                // （也因此**不会**多发查询 —— 批量聚合的用例计数不受影响）。
+                new com.tailtopia.mention.service.MentionViewService(
+                        Mockito.mock(com.tailtopia.auth.service.AccountQueryService.class),
+                        Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class)));
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyLong())).thenReturn(5L);

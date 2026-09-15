@@ -1,3 +1,5 @@
+import 'mention_token.dart';
+
 /// 一条已经插进正文的 @（V1.3.0 batch-b1 Story 3.2 · AC4）。
 ///
 /// 🔴 [userId] 是**被提交、被存库**的那一份；[nickname] 只是它当时在文本里长什么样，
@@ -143,31 +145,12 @@ class MentionDraft {
     final List<int> out = <int>[];
     for (final MentionRef ref in _refs) {
       if (out.contains(ref.userId)) continue;
-      if (_mentionPresent(text, ref.nickname)) out.add(ref.userId);
+      // 🔴 边界判定与渲染侧共用同一份（MentionToken）—— 两处分叉过一次：
+      //    @ 了「An」又删掉、后文写了「@Ana」，裸 contains 会认为 An 还在。
+      if (MentionToken.contains(text, ref.nickname)) out.add(ref.userId);
     }
     return out;
   }
-
-  /// 文本里是否还有一处**完整的** `@昵称`。
-  ///
-  /// 🔴 不能用裸 `contains`：昵称是别的昵称的前缀时会误判 —— @ 了「An」又删掉、
-  /// 后文里写了「@Ana」，裸 contains 认为 An 还在，于是给 An 发一条他并不在其中的通知
-  /// （code-review 2026-09-15）。所以要求昵称后面**不是**字母 / 数字 / 下划线。
-  static bool _mentionPresent(String text, String nickname) {
-    final String token = '@$nickname';
-    int from = 0;
-    while (true) {
-      final int at = text.indexOf(token, from);
-      if (at < 0) return false;
-      final int after = at + token.length;
-      if (after >= text.length || !_wordChar.hasMatch(text[after])) return true;
-      from = at + 1; // 这一处是更长昵称的前缀，接着往后找
-    }
-  }
-
-  /// 「昵称还没结束」的判据。用 Unicode 字母 / 数字类，而不是 `[A-Za-z0-9]` ——
-  /// 印尼语昵称里带重音字母、中文昵称全是 `\p{L}`，只认 ASCII 等于对它们全部失效。
-  static final RegExp _wordChar = RegExp(r'[\p{L}\p{N}_]', unicode: true);
 
   static bool _isWhitespace(String ch) => ch.trim().isEmpty;
 }

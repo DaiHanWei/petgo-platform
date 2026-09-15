@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../mention/presentation/mention_text.dart';
+import '../../social/domain/account_action_entry.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/user_tag_row.dart';
 import '../../../shared/widgets/content_tag_chip.dart';
@@ -142,7 +144,29 @@ class _DetailScaffold extends ConsumerWidget {
                     _authorRow(context, ref, l10n),
                     const SizedBox(height: AppSpacing.md),
                     if (detail.body != null && detail.body!.isNotEmpty)
-                      Text(detail.body!, style: AppTypography.body),
+                      // V1.3.0 batch-b1 Story 3.3：正文里的 @ 高亮可点（AC1/AC2）。
+                      // 🔴 高亮与可点的判定**全在后端**（拉黑 AC3 / 注销 AC4），这里只照做。
+                      MentionText(
+                        text: detail.body!,
+                        mentions: detail.mentions,
+                        style: AppTypography.body,
+                        onTapUser: (userId) => openUserProfile(
+                          context,
+                          ref,
+                          userId,
+                          entry: AccountActionEntry.mention,
+                          // ⚠️ 与作者入口那处**刻意不同**：不传 popContext。
+                          //    被 @ 的人通常不是帖主，拉黑他之后**这条帖依然可见**，
+                          //    把用户踢回列表反而莫名其妙。只清列表里他自己的卡片。
+                          // 🔴 但**必须就地刷新本页**：不刷的话 detail.mentions 里那条
+                          //    还是 tappable=true，回到详情页可以立刻再点进刚拉黑那个人的
+                          //    主页（违反 AC3），他的评论也还挂着。bump 评论刷新信号会
+                          //    连带 invalidate detailProvider（见本页 ref.listen），
+                          //    一条就够 —— 与评论区那条路径同一套（code-review 2026-09-15）。
+                          onBlocked: _hideMentionedUser(ref, userId),
+                          onReported: _hideMentionedUser(ref, userId),
+                        ),
+                      ),
                     // V1.1.6 Story 5.2：装饰标签的位置**按有无配图切换**（FR-75）。
                     if (detail.imageUrls.isNotEmpty) ...[
                       const SizedBox(height: AppSpacing.md),
@@ -204,6 +228,15 @@ class _DetailScaffold extends ConsumerWidget {
     return l10n.timeDaysAgo(d.inDays);
   }
 
+
+  /// 在本页拉黑 / 举报了**被 @ 的那个人**之后的收尾（Story 3.3）。
+  ///
+  /// 两件事：清列表里他的卡片（与其它入口同一套）+ 就地刷新本页
+  /// （让那处 @ 变成不可点、他的评论消失）。
+  VoidCallback _hideMentionedUser(WidgetRef ref, int userId) => () {
+        onAuthorHidden(ref, userId)();
+        ref.read(commentsRefreshProvider.notifier).bump();
+      };
 
   Widget _authorRow(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
     final name = detail.authorDeleted ? l10n.feedDeletedUser : (detail.authorNickname ?? l10n.feedDeletedUser);
