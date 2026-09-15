@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/router/route_intent.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../auth/domain/auth_guard.dart';
 import '../data/location_service.dart';
 import '../data/place_repository.dart';
 import '../domain/place_summary.dart';
 import 'place_distance_format.dart';
 import 'place_labels.dart';
 import 'place_location_controller.dart';
+import 'place_mark_page.dart';
 
 /// 场所列表页（V1.3.0 batch-b1 Story 1.1 AC5/AC6 + Story 1.2 AC1/AC5 · UI 稿 A1/A2/A3）。
 ///
@@ -40,7 +44,8 @@ class PlaceListPage extends ConsumerWidget {
     // 定位态还在读（只是一次不弹窗的权限状态查询 + 可能一次取缓存定点）→ 先转圈，
     // 不要用「没有坐标」去发一次请求再用「有坐标」发第二次：那是两次网络请求换一次排序。
     if (locationAsync.isLoading && !locationAsync.hasValue) {
-      return _scaffold(l10n, const Center(child: CircularProgressIndicator()));
+      return _scaffold(l10n, const Center(child: CircularProgressIndicator()),
+          onMark: () => _openMarkForm(context, ref));
     }
     // 定位这条链路失败也不能让列表打不开 —— 退回按最新。
     final location = locationAsync.value ??
@@ -68,6 +73,7 @@ class PlaceListPage extends ConsumerWidget {
           ],
         ),
       ),
+      onMark: () => _openMarkForm(context, ref),
     );
   }
 
@@ -96,15 +102,54 @@ class PlaceListPage extends ConsumerWidget {
     }
   }
 
-  Widget _scaffold(AppLocalizations l10n, Widget body) => Scaffold(
+  Widget _scaffold(AppLocalizations l10n, Widget body, {VoidCallback? onMark}) => Scaffold(
         backgroundColor: AppColors.cream,
         appBar: AppBar(
           backgroundColor: AppColors.cream,
           scrolledUnderElevation: 0,
           title: Text(l10n.placeListTitle, style: AppTypography.title),
+          actions: [
+            if (onMark != null)
+              IconButton(
+                key: const ValueKey('placeListMarkAction'),
+                tooltip: l10n.placeMarkEntry,
+                onPressed: onMark,
+                icon: const Icon(Icons.add),
+              ),
+          ],
         ),
         body: body,
       );
+
+  /// 「标记场所」入口（Story 1.3）。
+  ///
+  /// 🔒 **游客走登录引导**：列表是只读的、对游客开放，但标记是写动作、后端要 JWT。
+  /// 门控放在入口这一刻（`requireLogin`），而不是让游客进到表单填完才发现要登录。
+  Future<void> _openMarkForm(BuildContext context, WidgetRef ref) async {
+    requireLogin(
+      ref,
+      context,
+      // 🔴 **用 onResume（命令式 push）而不是 location（声明式 go）**：
+      // `RouteIntent.location` 走的是 `context.go`，而 `/places/new` 是 shell 之外的顶层路由 ——
+      // `go` 会把整个栈换成它：没有返回按钮、没有底部导航、安卓返回键直接退出 App，
+      // 表单里那句 `pop(true)` 弹掉的还是唯一一页（code-review 2026-09-15 抓到，
+      // 与 V1.1.6 Story 2.4 名片深链踩过的是同一个坑）。
+      pendingAction: RouteIntent(onResume: () {
+        if (!context.mounted) return;
+        _pushMarkForm(context, ref);
+      }),
+      onAllowed: () => _pushMarkForm(context, ref),
+    );
+  }
+
+  Future<void> _pushMarkForm(BuildContext context, WidgetRef ref) async {
+    final created = await context.push<bool>(PlaceMarkPage.routePath);
+    // 表单成功返回后列表要把新场所显示出来（表单侧已 invalidate 列表，这里补刷定位：
+    // 用户可能在表单页停留期间移动过，回来时族键已变）。
+    if (created == true) {
+      ref.invalidate(placeLocationProvider);
+    }
+  }
 
   /// 「开启定位」（AC5）。
   ///
@@ -153,11 +198,15 @@ class PlaceListPage extends ConsumerWidget {
       return const Center(child: CircularProgressIndicator());
     }
     if (previous.items.isEmpty) {
-      // AC6 空态：复用既有 EmptyState，文案引导「标记一个场所」。
+      // Story 1.1 AC6 空态：复用既有 EmptyState，文案引导「标记一个场所」。
+      // Story 1.3 起 CTA 真的能点了（表单页已存在）—— 1.1 交付时刻意没挂按钮，
+      // 挂一个点了跳不到任何地方的按钮比没有按钮更糟。
       return _scrollable(EmptyState(
         title: l10n.placeEmptyTitle,
         message: l10n.placeEmptyBody,
         icon: Icons.place_outlined,
+        actionLabel: l10n.placeMarkEntry,
+        onAction: () => _openMarkForm(context, ref),
       ));
     }
     return _list(previous);

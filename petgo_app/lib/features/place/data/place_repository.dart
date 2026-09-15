@@ -46,6 +46,54 @@ class PlaceRepository {
     }
     return PlaceListResult.fromJson(data);
   }
+
+  /// 标记一个场所（Story 1.3）。返回新场所的不可枚举 token。
+  ///
+  /// 🔴 **没有、也不会有 `updatePlace` / `deletePlace`**：本版用户不可修改、不可删除自己标记的
+  /// 场所（2026-09-15 拍板），服务端也不提供那两个端点（后端有一条反射测试钉着）。
+  /// 纠错走后台 AB-17A。
+  ///
+  /// 校验失败（422）与审核硬拦截（TEXT/IMAGE_BLOCKED）都以 [DioException] 抛给页面。
+  /// ⚠️ 客户端在必填未满时**根本不发这个请求**（保存按钮是灰的，AC2/AC7），
+  /// 所以真正走到 422 的只有「客户端与服务端口径漂了」这一种情况 —— 那是 bug，不是用户错误。
+  Future<String> createPlace({
+    required String name,
+    required PlaceType type,
+    required List<PlaceTag> tags,
+    required double latitude,
+    required double longitude,
+    required String addressText,
+    required List<String> photoUrls,
+    String? description,
+    String? idempotencyKey,
+  }) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      ApiPaths.places,
+      // 🔴 **幂等键是必须的**：用户既不能编辑也不能删除自己标记的场所。丢一个 201
+      // （弱网下很常见）+ 用户再点一次保存 = 一个**永久重复**的场所，只能等运营去后台合并。
+      // 同一次提交必须复用同一个 key —— 所以它由调用方（页面）生成并持有，不在这里造。
+      options: idempotencyKey == null
+          ? null
+          : Options(headers: {'Idempotency-Key': idempotencyKey}),
+      data: {
+        'name': name,
+        'type': type.api,
+        'tags': tags.map((t) => t.api).toList(growable: false),
+        'latitude': latitude,
+        'longitude': longitude,
+        'addressText': addressText,
+        'photoUrls': photoUrls,
+        'description': ?description,
+      },
+    );
+    final token = resp.data?['token']?.toString();
+    if (token == null || token.isEmpty) {
+      // 服务端契约是「201 + token」。拿不到 token 说明契约漂了 ——
+      // 不要静默当成功：调用方会跳去一个 token 为空的详情页。
+      throw StateError('创建场所成功但响应里没有 token');
+    }
+    return token;
+  }
 }
 
 final placeRepositoryProvider =

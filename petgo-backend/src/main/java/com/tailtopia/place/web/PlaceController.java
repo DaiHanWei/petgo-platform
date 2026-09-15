@@ -1,12 +1,25 @@
 package com.tailtopia.place.web;
 
 import com.tailtopia.place.domain.GeoBox;
+import com.tailtopia.place.dto.PlaceCreateRequest;
+import com.tailtopia.place.dto.PlaceCreatedResponse;
 import com.tailtopia.place.dto.PlaceListResponse;
 import com.tailtopia.place.service.PlaceQueryService;
+import com.tailtopia.place.service.PlaceService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.ratelimit.RedisRateLimiter;
+import jakarta.validation.Valid;
+import java.time.Duration;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -26,10 +39,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/places")
 public class PlaceController {
 
-    private final PlaceQueryService query;
+    /** 标记场所限流：20/分钟。低频动作，挡的是脚本批量灌场所。 */
+    private static final int MARK_LIMIT = 20;
+    private static final Duration MARK_WINDOW = Duration.ofMinutes(1);
 
-    public PlaceController(PlaceQueryService query) {
+    private final PlaceQueryService query;
+    private final PlaceService placeService;
+    private final RedisRateLimiter rateLimiter;
+
+    public PlaceController(PlaceQueryService query, PlaceService placeService,
+            RedisRateLimiter rateLimiter) {
         this.query = query;
+        this.placeService = placeService;
+        this.rateLimiter = rateLimiter;
     }
 
     /**
@@ -56,5 +78,49 @@ public class PlaceController {
             throw AppException.validation("坐标超出合法范围");
         }
         return query.list(lat, lng);
+    }
+
+    /**
+     * 标记一个场所（Story 1.3 · AC1/AC6/AC8）。需登录；201 + 不可枚举 token。
+     *
+     * <p>字段级校验由 {@code @Valid} 完成 → 违反即 <b>422 ProblemDetail</b>（字段内联错误由客户端渲染，
+     * AC7：客户端在必填未满时**根本不发这个请求**，保存按钮是灰的）。
+     *
+     * <p>写端点限流：与内容发布同一范式。标记场所是低频动作，20/分钟远高于真实使用，
+     * 挡的是脚本批量灌场所。
+     *
+     * <p>🔴 <b>{@code Idempotency-Key} 头不是可选的加分项</b>：用户既不能编辑也不能删除场所，
+     * 丢一个 201（弱网下很常见）+ 客户端重试 = 一个<b>永久重复</b>的场所，只能等运营去后台合并。
+     *
+     * <p>🔒 <b>仅 {@code role=USER}</b>（{@code SecurityConfig} 显式限定）：本方法把
+     * {@code jwt.sub} 当 {@code users.id} 用，而<b>兽医 token 的 sub 是 vetId</b>、
+     * 与 {@code users.id} 是两个会大量碰撞的命名空间。落到
+     * {@code anyRequest().authenticated()} 的话，兽医能以一个无关用户的名义创建场所，
+     * 而 {@code created_by} 没有外键、会被静默写进去（同拉黑/举报端点显式限定的理由）。
+     *
+     * <h2>🔴 这个类里**只有** GET 列表 + POST 创建，永远不会有 PUT/PATCH/DELETE</h2>
+     * 本版用户不可修改、也不可删除自己标记的场所（2026-09-15 拍板），纠错走后台 AB-17A。
+     * {@code PlaceControllerNoEditEndpointTest} 用反射把这条约束钉成了**可证伪的测试** ——
+     * 谁加一个写端点，那条测试就会红。要加之前先回决策日志改口径。
+     */
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public PlaceCreatedResponse mark(@AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            @Valid @RequestBody PlaceCreateRequest req) {
+        long userId = currentUserId(jwt);
+        rateLimiter.check("rl:place:mark:" + userId, MARK_LIMIT, MARK_WINDOW);
+        return PlaceCreatedResponse.from(placeService.mark(userId, req, idempotencyKey));
+    }
+
+    private static long currentUserId(Jwt jwt) {
+        if (jwt == null || jwt.getSubject() == null) {
+            throw AppException.unauthorized("需要登录后访问");
+        }
+        try {
+            return Long.parseLong(jwt.getSubject());
+        } catch (NumberFormatException e) {
+            throw AppException.unauthorized("无效的登录凭证");
+        }
     }
 }

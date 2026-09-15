@@ -203,6 +203,13 @@ public class SecurityConfig {
                         //    且这次放行在安全配置里看不见。子路径（详情 1.5 / H5 1.10）
                         //    各自在本文件显式加一行，这样每一次放开都留痕。
                         .requestMatchers(HttpMethod.GET, "/api/v1/places").permitAll()
+                        // 标记场所（V1.3.0 batch-b1 Story 1.3）：**仅 role=USER**。
+                        // 🔴 必须显式限定 —— PlaceController 把 jwt.sub 当 users.id 用，而兽医
+                        // token 的 sub 是 vetId，与 users.id 是两个会大量碰撞的命名空间。落到
+                        // anyRequest().authenticated() 的话，兽医能以一个无关用户的名义创建场所，
+                        // 而 places.created_by 没有外键、会被静默写进去（同拉黑/举报端点的理由）。
+                        // ⚠️ 用户不可编辑/删除场所，所以这条错写出去的归属**没有自助纠正途径**。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/places").hasRole("USER")
                         // 兽医工作台端点（Story 5.1+）：仅 role=VET 可达；user/guest → 403（双向门控）
                         .requestMatchers("/api/v1/vet/**").hasRole("VET")
                         // 用户侧问诊端点（Story 5.2+ / 计费流 3-2~3-4）：仅 role=USER 可达（vet/guest → 403）

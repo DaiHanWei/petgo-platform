@@ -68,7 +68,10 @@ development_status:
                                                         # 2026-09-15 云端 L0 全绿 → review；迁移 V20260915_0458__add_places_geo_index.sql；新增依赖 geolocator
                                                         # ⚠️ code-review 修掉一条 NFR-4 违反：坐标经 query string 进了落盘 access log（已按键打码）
                                                         # L1/L2 待本地验收（含「贴 EXPLAIN 确认走索引」，清单见 story Completion Notes）
-  1-3-标记一个场所: ready-for-dev                        # 表单全集（7 类型 + 6 标签，UI 稿是示意省略）；必填未满时保存灰色禁用；**提交前告知不可修改**，服务端硬拒编辑接口
+  1-3-标记一个场所: review                               # 表单全集（7 类型 + 6 标签，UI 稿是示意省略）；必填未满时保存灰色禁用；**提交前告知不可修改**，服务端硬拒编辑接口
+                                                        # 2026-09-15 云端 L0 全绿 → review；无新迁移；AC5 用反射测试钉住「没有写端点」
+                                                        # ⚠️ code-review 修掉 9 条：内联错误死代码 / 兽医 token 能创建场所（已限 hasRole USER）/ 创建无幂等键（已接 Idempotency-Key）
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes）
   1-4-地图选点: ready-for-dev                            # 引入地图 SDK。🔴 只做「显示 + 打自己的点」，禁调搜索/地址解析/路线；地图只出现在选点弹层与详情页小地图两处
   1-5-场所详情页: ready-for-dev                          # 照片流/地址复制/小地图/举报。标记人本条内走**现有迷你卡**（Epic 2 退役时统一改），故不依赖 Epic 2
   1-6-灯箱抽成公共组件并接入场所照片: ready-for-dev      # 抽既有私有灯箱成公共件，内容详情页行为一字不变。**不等批次 A**（B1-D4）

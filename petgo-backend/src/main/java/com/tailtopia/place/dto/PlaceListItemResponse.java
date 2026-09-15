@@ -3,6 +3,7 @@ package com.tailtopia.place.dto;
 import com.tailtopia.place.domain.Place;
 import com.tailtopia.place.domain.PlaceTag;
 import com.tailtopia.place.domain.PlaceType;
+import com.tailtopia.shared.media.AliyunOssClient;
 import java.util.List;
 
 /**
@@ -16,7 +17,8 @@ import java.util.List;
  * @param type               类型（7 类，UPPER_SNAKE）
  * @param tags               宠物友好标签全量下发；**≤2 个 +N 的截断归客户端**
  *                           —— 服务端截断的话，详情页与列表页就会显示两套标签集
- * @param firstPhotoUrl      首图（公开桶 CDN 全 URL）；无照片时省略
+ * @param firstPhotoUrl      首图（公开桶 CDN URL，**已附去 EXIF + 缩放的 `x-oss-process`**）；
+ *                           无照片时省略。见 {@link #LIST_THUMB_WIDTH_PX}
  * @param photoCount         照片数
  * @param distanceMeters     距离（米）。🔴 **只有携带坐标的「按距离」分支才有值**；
  *                           「按最新」分支恒为 null（NON_NULL 省略），客户端据此隐藏距离位。
@@ -42,6 +44,17 @@ public record PlaceListItemResponse(
         long notRecommendCount) {
 
     /**
+     * 列表缩略图宽度（物理像素）。
+     *
+     * <p>列表项缩略图 72pt，3× 屏 = 216px → 320 留足余量，比原图小一到两个数量级。
+     *
+     * <p>🔴 这个数同时承担 **E4 的服务端 EXIF 兜底**：URL 上那条 `x-oss-process` 里的
+     * `format,jpg` 会重编码、丢弃 EXIF/GPS。客户端剥离是主路径，但改过的客户端能绕过它 ——
+     * 所以对外分发的公开桶图一律经此（见 {@code AliyunOssClient.exifStrippedThumbUrl} 的说明）。
+     */
+    public static final int LIST_THUMB_WIDTH_PX = 320;
+
+    /**
      * 「按最新」分支的工厂（无距离）。
      *
      * <p>⚠️ 计数三项由调用方传入 —— Story 1.7/1.8 接真实计数时改<b>服务层的批量聚合</b>，
@@ -60,7 +73,8 @@ public record PlaceListItemResponse(
                 p.getName(),
                 p.getType(),
                 p.getTags(),
-                p.firstPhotoUrl(),
+                // E4：对外分发的公开桶图一律经服务端去 EXIF；顺带取列表尺寸的缩略图。
+                AliyunOssClient.exifStrippedThumbUrl(p.firstPhotoUrl(), LIST_THUMB_WIDTH_PX),
                 p.photoCount(),
                 distanceMeters,
                 commentCount,

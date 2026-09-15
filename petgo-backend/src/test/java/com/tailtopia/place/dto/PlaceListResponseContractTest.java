@@ -114,6 +114,41 @@ class PlaceListResponseContractTest {
         assertThat(m.get("notRecommendCount")).isEqualTo(0L);
     }
 
+    /**
+     * 🔴 E4 服务端 EXIF 兜底：经工厂产出的首图 URL **必须带 `x-oss-process`**
+     * （V1.3.0 batch-b1 Story 1.3 · AC8）。
+     *
+     * <p>客户端剥离是主路径，但改过的客户端能绕过它 —— 而场所照片进的是**公开桶**，
+     * URL 一旦下发给所有人，带 GPS 的原图就人人可取。`format,jpg` 的重编码即丢弃 EXIF/GPS。
+     *
+     * <p>⚠️ 上面那些用例直接 new record、绕过了工厂，所以**这条必须走 `of(...)`** ——
+     * 否则「工厂里那行忘了加」不会被任何测试发现。
+     */
+    @Test
+    void factoryStripsExifAndAsksForAListSizedThumbnail() {
+        com.tailtopia.place.domain.Place p = com.tailtopia.place.domain.Place.mark(
+                "aZ09aZ09aZ09aZ09aZ09aZ09aZ09aZ09", "Kopi", PlaceType.CAFE,
+                List.of(PlaceTag.PETS_ALLOWED_INSIDE), -6.235, 106.81, "Jl. Senopati", null,
+                List.of("https://cdn.example/oss/place-1.jpg"), 1L);
+
+        PlaceListItemResponse item = PlaceListItemResponse.of(p, 0L, 0L, 0L);
+
+        assertThat(item.firstPhotoUrl())
+                .startsWith("https://cdn.example/oss/place-1.jpg?x-oss-process=image/")
+                .contains("format,jpg")
+                .contains("resize,w_" + PlaceListItemResponse.LIST_THUMB_WIDTH_PX);
+    }
+
+    /** 无照片：工厂不得凭空造出一个带 process 的 URL。 */
+    @Test
+    void factoryLeavesFirstPhotoNullWhenThereIsNoPhoto() {
+        com.tailtopia.place.domain.Place p = com.tailtopia.place.domain.Place.mark(
+                "aZ09aZ09aZ09aZ09aZ09aZ09aZ09aZ09", "Taman", PlaceType.PARK,
+                List.of(PlaceTag.LEASH_REQUIRED), -6.2, 106.8, "Jl. A", null, List.of(), 1L);
+
+        assertThat(PlaceListItemResponse.of(p, 0L, 0L, 0L).firstPhotoUrl()).isNull();
+    }
+
     @Test
     void listEnvelopeShapeMatchesContract() {
         PlaceListResponse resp = PlaceListResponse.recent(List.of(item("https://cdn/x.jpg", null)));

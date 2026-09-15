@@ -73,6 +73,7 @@ import '../../features/consult/presentation/vet_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
 import '../../features/place/presentation/place_list_page.dart';
+import '../../features/place/presentation/place_mark_page.dart';
 import '../../features/profile/presentation/pet_card_page.dart';
 import '../../features/vet/domain/vet_workbench_lists.dart';
 import '../../features/vet/presentation/vet_conversation_page.dart';
@@ -533,6 +534,15 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: PlaceListPage.routePath,
         builder: (c, s) => const PlaceListPage(),
+      ),
+      // 标记场所表单（Story 1.3）。🔒 **需登录**：写端点要 JWT，而门控在入口处
+      //    （列表页的入口按钮对游客走登录引导），不靠 redirect —— 把游客从表单页甩回 /home
+      //    等于告诉他「这里没有这个功能」，而真相是「登录后就有」（同购物车的既定处理）。
+      // ⚠️ 路径挂在 /places 下但**不是** PlaceListPage 的子路由：它是独立一页、
+      //    从列表页 push 进来，返回即回列表。
+      GoRoute(
+        path: PlaceMarkPage.routePath,
+        builder: (c, s) => const PlaceMarkPage(),
       ),
 
       // ===== Toko（V1.4.0 Story 1.6，FR-93 / FR-93A）=====
