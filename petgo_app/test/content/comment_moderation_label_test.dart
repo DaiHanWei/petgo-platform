@@ -24,9 +24,9 @@ class _CommentsRepo implements DetailRepository {
   Future<CommentPage> getReplies(int parentId, {String? cursor}) async =>
       const CommentPage(items: [], nextCursor: null, hasMore: false);
   @override
-  Future<Comment> postComment(int postId, String body) => throw UnimplementedError();
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds = const []}) => throw UnimplementedError();
   @override
-  Future<Comment> postReply(int parentId, String body) => throw UnimplementedError();
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds = const []}) => throw UnimplementedError();
   @override
   Future<ContentDetail> getDetail(int id) => throw UnimplementedError();
   @override

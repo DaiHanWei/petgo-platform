@@ -30,9 +30,9 @@ class _ReportRepo implements DetailRepository {
   @override
   Future<CommentPage> getReplies(int parentId, {String? cursor}) => throw UnimplementedError();
   @override
-  Future<Comment> postComment(int postId, String body) => throw UnimplementedError();
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds = const []}) => throw UnimplementedError();
   @override
-  Future<Comment> postReply(int parentId, String body) => throw UnimplementedError();
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds = const []}) => throw UnimplementedError();
   @override
   Future<void> deleteComment(int commentId) async {}
   @override

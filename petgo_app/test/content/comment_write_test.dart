@@ -48,14 +48,14 @@ class _RecordingRepo implements DetailRepository {
       const CommentPage(items: [], nextCursor: null, hasMore: false);
 
   @override
-  Future<Comment> postComment(int postId, String body) async {
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds = const []}) async {
     postCommentCalls++;
     if (failPost) throw Exception('boom');
     return _c(999, 1);
   }
 
   @override
-  Future<Comment> postReply(int parentId, String body) async {
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds = const []}) async {
     postReplyCalls++;
     if (failPost) throw Exception('boom');
     return _c(999, 1);

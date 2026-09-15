@@ -185,7 +185,31 @@ development_status:
                                                         # ⚠️ code-review 修掉 4 条：@Async 乱序到达让排序键倒退（→ GREATEST）/ 二级回复两对关系共用一个容错块，第一对失败会把"对话过"那一对整个跳过 / 为不展示的运营标签多查一次库（→ 新增 findAuthorViewsWithoutTags）/ SecurityConfig 漏 hasRole("USER")，兽医拿到 401 被客户端当成 token 过期强制登出
                                                         # ⚠️ 存量互动**不回溯建表**：新表从上线起积累，再互动一次就有了
                                                         # L1 待本地验收（清单见 story Completion Notes；本 story 无 L2 项）
-  3-2-at选择器与插入: ready-for-dev                      # 全新叠加层；仅在候选集内过滤（**不是搜索框**）；上限 5 人；🔴 **存 userId 不存昵称**
+  3-2-at选择器与插入: review                             # 全新叠加层；仅在候选集内过滤（**不是搜索框**）；上限 5 人；🔴 **存 userId 不存昵称**
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3337 例真实失败 0 / 前端 analyze 0 issue、1763 例）
+                                                        # 迁移 V20260915_1429__add_mentioned_user_ids.sql：content_posts + comments 各加一列 mentioned_user_ids JSONB
+                                                        # 🔴 **刻意不建 mentions 表**：v1.1.6 AD-10 的先例是「不用多态外键」，而 mentions(target_type,target_id) 正是那个形状；
+                                                        #    要守住它就得建两张表、每张只装 ≤5 行 bigint。这份数据从不被独立查询（3.3 渲染 / 3.4 发通知都是那一行在手时才用），上限硬定 5
+                                                        # 存量一律 NULL、零回填（AD-10 Rule 6）；读取侧统一归一成空表，永不返回 null
+                                                        # 🔴 AD-10 Rule 3「@ 不到没打过交道的陌生人」做成**服务端闸门**：MentionSanitizer 与 mention_candidates 求交集。
+                                                        #    判据是「在不在这张表里」而不是「在下发的那 30 个里」（30 是展示口径、表里留 50；拿 30 卡会假拒 —— 选中瞬间被两个人顶到第 31）
+                                                        # 四类过滤只有「超过 5 人」报 422（产品规则该给反馈），其余（陌生人/自己/已注销/任一方向拉黑）**一律静默剔除** ——
+                                                        #    报错等于把「这个 id 存不存在 / 他有没有拉黑我 / 跟我互动过吗」做成逐个试探的问答口（同 2-5 口径）
+                                                        # 取数恰好三条批量查询、与人数无关（AD-6）；拉黑走 UserHideRelationReader 统一出口（AD-7）
+                                                        # 运营内容源 publishTrusted（Lark 定时发帖）**刻意不写 @ 名单**：@ 会发通知，运营账号批量发出去就是骚扰，且那条路径本就免审
+                                                        # 🔴 **给 3-4 的两条硬约束（已写进源码注释，别照记忆抄）**：① 非 PUBLIC 内容不得发 @ 通知 ——
+                                                        #    PRIVATE Diary 照样落名单（作者自视那条时间线要能高亮能点，3.3），但可见范围创建后不可改（FR-83 AC7），被 @ 的人永远打不开；
+                                                        #    判据用 visibility==PUBLIC，别用「有没有 mentionedUserIds」。② 挂起帖/挂起评论的通知落在「转可见那一刻」（同 approveComment 既有口径）
+                                                        # 前端 @ 数据层是**纯 Dart 类**（mention_draft.dart，不依赖 Flutter/Riverpod）：触发规则 / 上限 / 「删字之后还算不算」全在 L0 钉住
+                                                        #    触发要求 @ 在词首 —— 少了这条 user@mail.com 打到一半就弹人名；@ 绑定住在 PublishController 上（与正文同生同死），不在页面 State
+                                                        # AC2/AC3「不是搜索框」有机械守卫：打字不发任何网络请求 / 占位是「Cari nama…」非「搜索用户」/ 无放大镜 /
+                                                        #    筛不到说「没有匹配的名字」非「用户不存在」/ 候选为空不渲染过滤框 / 取数失败与无候选走同一个空态
+                                                        # ⚠️ code-review 修掉 4 条：插入绕过 maxLength（两处都中 → 200 字评论插长昵称成 218 字，服务端必拒而 toast 只说「发送失败请重试」，重试永远不成功）/
+                                                        #    服务端没与候选集求交（for 循环遍历 userId = 对任意陌生人的定向推送口）/ userIdsIn 裸 contains（@「An」删掉后写「@Ana」会给 An 发一条他不在其中的通知）/
+                                                        #    PRIVATE 内容的 @ 会被 3-4 通知出去（不改行为，把约束写进 javadoc 与调用点）
+                                                        # 🔸 **一条残留的已知不精确**：候选集里两人昵称一模一样时，一处 @同名 会把两个 id 都发出去（两人各收一条通知）。
+                                                        #    要分清得在文本里埋不可见标记或逐键维护区段偏移，代价远大于这点误差；已写进 userIdsIn 注释
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；L1 最重要的一条是「候选交集真的拦得住」+ JSONB 往返）
   3-3-at的展示与跳转: ready-for-dev                      # 依赖 Epic 2。昵称按 userId 实时查（对方改名自动跟着变）；拉黑关系不高亮
   3-4-被at的通知: ready-for-dev                          # 🔴 新增通知类型必须 **DROP + ADD 重列 CHECK 全集**，取值以代码枚举为唯一权威 + 复查并行分支。**此处已出过四次事故，是验收条件不是提醒**
   3-5-at的存量与删除后边界: ready-for-dev                # 存量不回溯；删除后通知不撤回 → 「内容已删除」统一空态；埋点属性禁含自由文本

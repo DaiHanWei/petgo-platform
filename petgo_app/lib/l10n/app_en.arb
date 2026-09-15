@@ -369,6 +369,30 @@
   "@commentModerationBlocked": {
     "description": "Toast when a comment is blocked by moderation (422 COMMENT_BLOCKED); input is kept"
   },
+  "mentionFilterHint": "Find a name…",
+  "@mentionFilterHint": {
+    "description": "Placeholder of the @ picker filter field. NOT a search box: it only filters the ~30 recent-interaction candidates, so never word it as 'search users'"
+  },
+  "mentionEmptyTitle": "No one to mention yet",
+  "@mentionEmptyTitle": {
+    "description": "Empty state of the @ picker when the candidate list is empty (Story 3.2 AC3); the filter field is hidden in this state"
+  },
+  "mentionEmptyHint": "Comment or like first, then you can mention people",
+  "@mentionEmptyHint": {
+    "description": "Second line of the @ picker empty state: how to get candidates"
+  },
+  "mentionNoMatch": "No matching name",
+  "@mentionNoMatch": {
+    "description": "Shown when the filter matches none of the candidates. Deliberately not 'user not found' - that would promise global user search"
+  },
+  "mentionLimitReached": "You can mention at most 5 people",
+  "@mentionLimitReached": {
+    "description": "Toast when the 5-mention cap is reached (Story 3.2 AC5)"
+  },
+  "publishTextLimitReached": "Post text can be at most 1000 characters",
+  "@publishTextLimitReached": {
+    "description": "Toast when inserting an @ mention would push the post text past the 1000-char limit (Story 3.2)"
+  },
   "commentTakenDownSelfOnly": "This comment was removed for violating guidelines; only you can see it",
   "@commentTakenDownSelfOnly": {
     "description": "Gray label on the author's own comment that was taken down by moderation"

@@ -85,6 +85,23 @@ public interface MentionCandidateRepository extends JpaRepository<MentionCandida
     List<MentionCandidate> findRecent(@Param("ownerId") long ownerId, Pageable pageable);
 
     /**
+     * 这批 id 里，哪些**确实在** owner 的候选集里（Story 3.2 · AD-10 Rule 3 的服务端闸门）。
+     *
+     * <h2>🔴 判据是「在不在这张表里」，不是「在下发的那 30 个里」</h2>
+     * 下发上限（{@code MentionCandidateQueryService.MAX_CANDIDATES}=30）是**展示**口径；
+     * 表里留着 {@value MentionCandidateMaintenanceService#KEEP_PER_OWNER} 条。
+     * 拿 30 去卡会造成一类假拒：用户打开选择器时某人排第 29，选中的瞬间又有两个人
+     * 冒到前面 —— 提交时他掉到第 31，于是"刚刚还能选、现在 @ 不了了"。
+     * 「打过交道」这件事没有排名，判存在就够。
+     *
+     * <p>⚠️ **一次批量**（AD-6）：这是发布 / 评论的同步写路径，逐个 exists 是 N 次往返。
+     */
+    @Query("SELECT c.candidateId FROM MentionCandidate c "
+            + "WHERE c.ownerId = :ownerId AND c.candidateId IN :candidateIds")
+    List<Long> findExistingCandidateIds(@Param("ownerId") long ownerId,
+            @Param("candidateIds") java.util.Collection<Long> candidateIds);
+
+    /**
      * 注销级联（D1/D2）：把这个人从候选集里**两个方向**都抹掉。
      *
      * <p>🔴 <b>两个方向都要删</b>：只删 {@code owner_id} 的话，他还会继续出现在**别人**的

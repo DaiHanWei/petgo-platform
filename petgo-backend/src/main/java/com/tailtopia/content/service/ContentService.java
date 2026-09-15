@@ -15,6 +15,7 @@ import com.tailtopia.content.moderation.ModerationOutcome;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.mention.service.MentionSanitizer;
 import com.tailtopia.profile.service.ProfileService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.IdempotencyService;
@@ -59,13 +60,19 @@ public class ContentService {
     private final ImageSizeBackfillService sizeBackfill;
     /** V1.1.6 Story 4.1：注销联动收口顶置排期（注销是批量隐藏，发不出逐条事件）。 */
     private final ContentPinService pins;
+    /**
+     * V1.3.0 batch-b1 Story 3.2：@ 名单落库前的权威过滤（≤5 / 去重 / 去自己 / 去注销 / 去拉黑）。
+     *
+     * <p>⚠️ 客户端的候选集端点只决定**选择器里能点到谁**，请求体里那串 id 是纯客户端输入。
+     */
+    private final MentionSanitizer mentions;
 
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, ProfileService profileService,
             IdempotencyService idempotency, ContentModerationService moderation,
             ApplicationEventPublisher events, ManualReviewGate manualReviewGate,
             ImageSizeResolver imageSizes, ImageSizeBackfillService sizeBackfill,
-            ContentPinService pins) {
+            ContentPinService pins, MentionSanitizer mentions) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -77,6 +84,7 @@ public class ContentService {
         this.imageSizes = imageSizes;
         this.sizeBackfill = sizeBackfill;
         this.pins = pins;
+        this.mentions = mentions;
     }
 
     /**
@@ -411,6 +419,11 @@ public class ContentService {
                     .code("admin.err.seed.textOrImageRequired");
         }
 
+        // V1.3.0 batch-b1 Story 3.2（AC4/AC5）：@ 名单落库前先洗。
+        // ⚠️ 放在**三方审核之前** —— 超过 5 人是本地就能判死的畸形请求，
+        //    没理由先花一次三方审核的往返再拒。
+        List<Long> mentionedUserIds = mentions.sanitize(authorId, req.mentionedUserIds());
+
         Long petId = req.petId();
         LocalDate eventDate = null;
         if (req.type() == ContentType.GROWTH_MOMENT) {
@@ -470,6 +483,11 @@ public class ContentService {
                 // 只写下面那条正常分支的话，审核挂起的帖会永远没有尺寸。
                 List<ImageSize> pendingSizes = imageSizes.normalize(imageUrls, req.imageSizes());
                 pendingPost.setImageSizes(pendingSizes);
+                // Story 3.2：🔴 挂起分支**同样要写 @ 名单**（与上面尺寸那条同一个坑）——
+                // 只写下面正常分支的话，审核挂起的帖过审后正文里那串「@昵称」是死的、点不动。
+                // ⚠️ 挂起帖此刻**不发任何事件**，所以 @ 通知也天然不会在这里发出去；
+                //    Story 3.4 的落点应是「转可见那一刻」（同评论 approveComment 的口径）。
+                pendingPost.setMentionedUserIds(mentionedUserIds);
                 ContentPost pending = posts.save(pendingPost);
                 scheduleSizeBackfill(pending, pendingSizes);
                 idempotency.store(idempotencyKey, pending.getId());
@@ -489,6 +507,15 @@ public class ContentService {
         // 缺失的位置交由异步兜底测量 —— 绝不在本事务里同步拉图。
         List<ImageSize> sizes = imageSizes.normalize(imageUrls, req.imageSizes());
         post.setImageSizes(sizes);
+        // Story 3.2 AC4：正文里显示昵称，可点的身份存这里（存 userId 不存昵称）。
+        //
+        // 🔴 **给 Story 3.4（被 @ 的通知）的硬约束：非 PUBLIC 的内容不得发 @ 通知。**
+        // 这里对 PRIVATE（同步开关关掉的 Diary）**照样落库** —— 作者自己那条时间线上
+        // 那串「@昵称」得能高亮、能点（Story 3.3），不落库就成了一段死文字。
+        // 但 PRIVATE 内容只有作者看得见，且可见范围创建后不可更改（FR-83 AC7），
+        // 所以被 @ 的人**永远打不开它**：通知发出去就是一条点进去是空态的骚扰。
+        // ⚠️ 判据是 saved.getVisibility() == PUBLIC，别用「有没有 mentionedUserIds」。
+        post.setMentionedUserIds(mentionedUserIds);
         ContentPost saved = posts.save(post);
         scheduleSizeBackfill(saved, sizes);
 
@@ -550,6 +577,9 @@ public class ContentService {
 
         ContentPost post = ContentPost.publish(authorId, req.type(), null, text, imageUrls);
         post.setVisibility(req.visibilityOrPublic());
+        // ⚠️ Story 3.2：运营内容源**刻意不写 @ 名单**。@ 的语义是「一个用户点名另一个用户」，
+        //    它会给被 @ 的人发通知（Story 3.4）——由运营账号批量发出去就是骚扰。
+        //    这条路径本就免审（见类注释），再放开 @ 等于给它一个绕过候选集的群发口子。
         ContentPost saved = posts.save(post);
         idempotency.store(idempotencyKey, saved.getId());
         // 与 publish 同口径发布事件（非 GROWTH_MOMENT → growthCount=0）。

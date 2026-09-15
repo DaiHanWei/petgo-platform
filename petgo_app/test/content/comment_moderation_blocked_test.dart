@@ -23,7 +23,7 @@ class _BlockingRepo implements DetailRepository {
   int postCommentCalls = 0;
 
   @override
-  Future<Comment> postComment(int postId, String body) async {
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds = const []}) async {
     postCommentCalls++;
     if (commentBlocked) {
       throw DioException(
@@ -48,7 +48,7 @@ class _BlockingRepo implements DetailRepository {
   }
 
   @override
-  Future<Comment> postReply(int parentId, String body) => throw UnimplementedError();
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds = const []}) => throw UnimplementedError();
   @override
   Future<ContentDetail> getDetail(int id) => throw UnimplementedError();
   @override

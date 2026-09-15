@@ -370,4 +370,12 @@ class ApiPaths {
 
   /// 场所照片的删除端点（Story 1.9）。同评论：只认照片 id。
   static const String placePhotos = '$base/place-photos';
+
+  // ===== @ 提及（V1.3.0 batch-b1 Epic 3，FR-119）=====
+  /// 🔒 @ 候选集：最近互动过的最多 30 人（Story 3.1 · AD-10）。
+  ///
+  /// 🔴 **没有任何查询参数，也不接受关键词** —— 这不是用户搜索接口
+  /// （全局搜索留在 1.6.0，未前移）。昵称过滤由客户端在这批人之内做（Story 3.2 AC2）。
+  /// ⚠️ 别"顺手"给它拼上 `?q=`，那一刻它就变成了全局用户搜索。
+  static const String meMentionCandidates = '$base/me/mention-candidates';
 }

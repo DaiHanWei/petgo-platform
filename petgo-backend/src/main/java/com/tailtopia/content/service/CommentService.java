@@ -11,6 +11,7 @@ import com.tailtopia.content.event.CommentSubmittedEvent;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.mention.service.MentionSanitizer;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.util.List;
@@ -43,16 +44,20 @@ public class CommentService {
     private final ApplicationEventPublisher events;
     private final ContentModerationService moderation;
     private final ManualReviewGate reviewGate;
+    /** V1.3.0 batch-b1 Story 3.2：@ 名单落库前的权威过滤（≤5 / 去重 / 去自己 / 去注销 / 去拉黑）。 */
+    private final MentionSanitizer mentions;
 
     public CommentService(CommentRepository comments, ContentPostRepository posts,
             AccountQueryService accountQueryService, ApplicationEventPublisher events,
-            ContentModerationService moderation, ManualReviewGate reviewGate) {
+            ContentModerationService moderation, ManualReviewGate reviewGate,
+            MentionSanitizer mentions) {
         this.comments = comments;
         this.posts = posts;
         this.accountQueryService = accountQueryService;
         this.events = events;
         this.moderation = moderation;
         this.reviewGate = reviewGate;
+        this.mentions = mentions;
     }
 
     /**
@@ -61,11 +66,27 @@ public class CommentService {
      */
     @Transactional
     public CommentResponse createTopLevel(long postId, long authorId, String body) {
+        return createTopLevel(postId, authorId, body, null);
+    }
+
+    /**
+     * 发表一级评论，并带上 @ 名单（V1.3.0 batch-b1 Story 3.2 · AC4/AC5）。
+     *
+     * <p>🔴 {@code body} 里那串「@昵称」只是给人读的文本，可点的身份存
+     * {@code mentionedUserIds}（存 userId 不存昵称 —— AD-10 Rule 4）。
+     */
+    @Transactional
+    public CommentResponse createTopLevel(long postId, long authorId, String body,
+            List<Long> mentionedUserIds) {
         requireVisible(postId);
+        // ⚠️ 先洗 @ 名单再过审：超过 5 人是本地就能判死的畸形请求（Story 3.2 AC5）。
+        List<Long> mentioned = mentions.sanitize(authorId, mentionedUserIds);
         if (moderation.isL1Blocked(body)) {
             throw AppException.commentBlocked(L1_BLOCKED_MESSAGE);
         }
-        Comment saved = comments.save(Comment.createUnderReview(postId, null, authorId, body));
+        Comment comment = Comment.createUnderReview(postId, null, authorId, body);
+        comment.setMentionedUserIds(mentioned);
+        Comment saved = comments.save(comment);
         events.publishEvent(new CommentSubmittedEvent(saved.getId(), body, saved.getContentVersion()));
         return CommentResponse.topLevel(saved, authorView(authorId), 0, List.of());
     }
@@ -73,11 +94,19 @@ public class CommentService {
     /** 回复（二级）。回复二级评论时归并到其一级父（两级约束，绝不三级）。含同步审核过滤。 */
     @Transactional
     public CommentResponse createReply(long parentId, long authorId, String body) {
+        return createReply(parentId, authorId, body, null);
+    }
+
+    /** 回复（二级），并带上 @ 名单（Story 3.2 · AC4/AC5）。口径同 {@code createTopLevel}。 */
+    @Transactional
+    public CommentResponse createReply(long parentId, long authorId, String body,
+            List<Long> mentionedUserIds) {
         Comment parent = comments.findById(parentId)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> AppException.notFound("评论不存在"));
         ContentPost post = requireVisible(parent.getPostId());
 
+        List<Long> mentioned = mentions.sanitize(authorId, mentionedUserIds);
         if (moderation.isL1Blocked(body)) {
             throw AppException.commentBlocked(L1_BLOCKED_MESSAGE);
         }
@@ -85,8 +114,9 @@ public class CommentService {
         // 两级约束：若被回复者本身是二级，则归并到它的一级父。
         long topLevelParentId = parent.isTopLevel() ? parent.getId() : parent.getParentId();
 
-        Comment saved = comments.save(
-                Comment.createUnderReview(post.getId(), topLevelParentId, authorId, body));
+        Comment reply = Comment.createUnderReview(post.getId(), topLevelParentId, authorId, body);
+        reply.setMentionedUserIds(mentioned);
+        Comment saved = comments.save(reply);
         events.publishEvent(new CommentSubmittedEvent(saved.getId(), body, saved.getContentVersion()));
         return CommentResponse.reply(saved, authorView(authorId));
     }

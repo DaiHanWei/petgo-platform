@@ -56,7 +56,13 @@ class CommentServiceTest {
         events = mock(ApplicationEventPublisher.class);
         moderation = mock(ContentModerationService.class);
         reviewGate = mock(ManualReviewGate.class);
-        service = new CommentService(comments, posts, accounts, events, moderation, reviewGate);
+        // V1.3.0 batch-b1 Story 3.2：@ 名单过滤器。本类用例都不带 @ 名单，
+        // sanitize(null) 在碰任何依赖之前就返回空表，所以下面那两个 mock 都无需 stub。
+        // 过滤逻辑本身由 MentionSanitizerTest 覆盖。
+        service = new CommentService(comments, posts, accounts, events, moderation, reviewGate,
+                new com.tailtopia.mention.service.MentionSanitizer(accounts,
+                        mock(com.tailtopia.social.read.UserHideRelationReader.class),
+                        mock(com.tailtopia.mention.repository.MentionCandidateRepository.class)));
         // 默认审核放行（PASS）——现网正常路径；各审核态在专项测试内覆写。
         when(moderation.moderateComment(anyString())).thenReturn(CommentVerdict.PASS);
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {

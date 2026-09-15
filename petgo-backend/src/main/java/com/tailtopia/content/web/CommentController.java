@@ -37,14 +37,16 @@ public class CommentController {
     @ResponseStatus(HttpStatus.CREATED)
     public CommentResponse comment(@AuthenticationPrincipal Jwt jwt, @PathVariable long postId,
             @Valid @RequestBody CommentCreateRequest req) {
-        return commentService.createTopLevel(postId, currentUserId(jwt), req.body());
+        return commentService.createTopLevel(postId, currentUserId(jwt), req.body(),
+                req.mentionedUserIds());
     }
 
     @PostMapping("/api/v1/comments/{parentId}/replies")
     @ResponseStatus(HttpStatus.CREATED)
     public CommentResponse reply(@AuthenticationPrincipal Jwt jwt, @PathVariable long parentId,
             @Valid @RequestBody CommentCreateRequest req) {
-        return commentService.createReply(parentId, currentUserId(jwt), req.body());
+        return commentService.createReply(parentId, currentUserId(jwt), req.body(),
+                req.mentionedUserIds());
     }
 
     @DeleteMapping("/api/v1/comments/{id}")
