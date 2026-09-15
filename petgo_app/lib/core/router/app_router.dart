@@ -72,6 +72,7 @@ import '../../features/consult/presentation/vet_timed_pay_page.dart';
 import '../../features/consult/presentation/vet_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
+import '../../features/place/presentation/place_detail_page.dart';
 import '../../features/place/presentation/place_list_page.dart';
 import '../../features/place/presentation/place_mark_page.dart';
 import '../../features/profile/presentation/pet_card_page.dart';
@@ -543,6 +544,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: PlaceMarkPage.routePath,
         builder: (c, s) => const PlaceMarkPage(),
+      ),
+      // 场所详情（Story 1.5）。🔒 GET 对游客放行，所以同样**不进 _controlledLocations**。
+      // ⚠️ 必须注册在 /places/new 之后：go_router 按声明顺序匹配，
+      //    反过来的话 `/places/new` 会被 `:token` 吃掉、把 "new" 当成一个场所 token 去查。
+      GoRoute(
+        path: PlaceDetailPage.routePattern,
+        builder: (c, s) => PlaceDetailPage(token: s.pathParameters['token']!),
       ),
 
       // ===== Toko（V1.4.0 Story 1.6，FR-93 / FR-93A）=====

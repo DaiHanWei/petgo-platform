@@ -1,8 +1,10 @@
 package com.tailtopia.place.web;
 
+import com.tailtopia.moderation.dto.ReportRequest;
 import com.tailtopia.place.domain.GeoBox;
 import com.tailtopia.place.dto.PlaceCreateRequest;
 import com.tailtopia.place.dto.PlaceCreatedResponse;
+import com.tailtopia.place.dto.PlaceDetailResponse;
 import com.tailtopia.place.dto.PlaceListResponse;
 import com.tailtopia.place.service.PlaceQueryService;
 import com.tailtopia.place.service.PlaceService;
@@ -14,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -42,6 +45,10 @@ public class PlaceController {
     /** 标记场所限流：20/分钟。低频动作，挡的是脚本批量灌场所。 */
     private static final int MARK_LIMIT = 20;
     private static final Duration MARK_WINDOW = Duration.ofMinutes(1);
+
+    /** 举报限流：10/分钟。重复举报本身幂等，这条挡的是换着场所刷工单。 */
+    private static final int REPORT_LIMIT = 10;
+    private static final Duration REPORT_WINDOW = Duration.ofMinutes(1);
 
     private final PlaceQueryService query;
     private final PlaceService placeService;
@@ -111,6 +118,38 @@ public class PlaceController {
         long userId = currentUserId(jwt);
         rateLimiter.check("rl:place:mark:" + userId, MARK_LIMIT, MARK_WINDOW);
         return PlaceCreatedResponse.from(placeService.mark(userId, req, idempotencyKey));
+    }
+
+    /**
+     * 场所详情（Story 1.5 · AC1/AC7）。🔒 GET 对游客放行。
+     *
+     * <p>带 {@code lat}+{@code lng} 时回距离位（AC1 的「距离」）。
+     *
+     * <p>🔴 <b>下架 / 不存在一律 404 且文案相同</b>（AC7）：客户端两种情况都落同一个
+     * 「场所不存在」空态。让两者可区分等于泄漏「这个 token 曾经存在」。
+     */
+    @GetMapping("/{token}")
+    public PlaceDetailResponse detail(@PathVariable String token,
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lng) {
+        return query.detail(token, lat, lng);
+    }
+
+    /**
+     * 举报一个场所（Story 1.5 · AC5）。需登录；202。
+     *
+     * <p><b>复用既有五类原因</b>（{@code ReportRequest} / {@code ReportReason}）——
+     * AC5 要求那张抽屉「文案一字不改」，所以取值域也必须是同一个枚举，不另抄一份。
+     *
+     * <p>写工单 PENDING 进运营队列、**不触发任何自动下架**（同内容举报）；重复举报幂等。
+     */
+    @PostMapping("/{token}/reports")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public void report(@AuthenticationPrincipal Jwt jwt, @PathVariable String token,
+            @Valid @RequestBody ReportRequest req) {
+        long userId = currentUserId(jwt);
+        rateLimiter.check("rl:place:report:" + userId, REPORT_LIMIT, REPORT_WINDOW);
+        placeService.report(token, userId, req.reasonType());
     }
 
     private static long currentUserId(Jwt jwt) {

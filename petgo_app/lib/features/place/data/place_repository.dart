@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
+import '../domain/place_detail.dart';
 import '../domain/place_summary.dart';
 
 /// 场所数据层（V1.3.0 batch-b1 Story 1.1，消费 `GET /api/v1/places`）。
@@ -94,6 +95,33 @@ class PlaceRepository {
     }
     return token;
   }
+
+  /// 场所详情（Story 1.5）。
+  ///
+  /// 🔴 **下架与不存在都是 404**（后端刻意不可区分，防泄漏「这个 token 曾经存在」）——
+  /// 页面把 404 渲染成统一的「场所不存在」空态，不区分两种情况。
+  Future<PlaceDetail> fetchDetail(String token, {double? lat, double? lng}) async {
+    final withCoords = lat != null && lng != null;
+    final resp = await dio.get<Map<String, dynamic>>(
+      '${ApiPaths.places}/$token',
+      queryParameters: {
+        'lat': ?(withCoords ? lat : null),
+        'lng': ?(withCoords ? lng : null),
+      },
+    );
+    return PlaceDetail.fromJson(resp.data ?? const {});
+  }
+
+  /// 举报一个场所（Story 1.5 · AC5）。
+  ///
+  /// 复用**既有五类原因**的线格式（`ReportReason.wire`）—— 抽屉文案一字不改，
+  /// 取值域也必须是同一套。后端写工单 PENDING 进运营队列，不自动下架；重复举报幂等。
+  Future<void> reportPlace(String token, String reasonWire) async {
+    await dio.post<void>(
+      '${ApiPaths.places}/$token/reports',
+      data: {'reasonType': reasonWire},
+    );
+  }
 }
 
 final placeRepositoryProvider =
@@ -138,4 +166,25 @@ double _round(double v) {
 final placeListProvider = FutureProvider.autoDispose
     .family<PlaceListResult, PlaceListQuery>((ref, q) async {
   return ref.read(placeRepositoryProvider).fetchPlaces(lat: q.lat, lng: q.lng);
+});
+
+/// 场所详情（按 token + 可选坐标分族）。
+///
+/// `autoDispose`：详情是 push 进来的一次性页面。
+typedef PlaceDetailQuery = ({String token, double? lat, double? lng});
+
+/// 从 token + 一对坐标构造详情族键。
+///
+/// 🔴 **坐标必须与列表页同一套归一规则**（[_queryCoordinatePrecision]，~110 m）：
+/// 用原始坐标当键的话，GPS 每次米级抖动都会造出一个**全新的、没有缓存的 family provider** ——
+/// 已经渲染好的详情会被整屏转圈顶掉，再发一次请求（F13 要避免的正是这个）。
+/// 顺带也少往服务端送几位精度（详情与列表的精度口径因此一致）。
+PlaceDetailQuery placeDetailQueryFor(String token, double? lat, double? lng) {
+  if (lat == null || lng == null) return (token: token, lat: null, lng: null);
+  return (token: token, lat: _round(lat), lng: _round(lng));
+}
+
+final placeDetailProvider = FutureProvider.autoDispose
+    .family<PlaceDetail, PlaceDetailQuery>((ref, q) async {
+  return ref.read(placeRepositoryProvider).fetchDetail(q.token, lat: q.lat, lng: q.lng);
 });

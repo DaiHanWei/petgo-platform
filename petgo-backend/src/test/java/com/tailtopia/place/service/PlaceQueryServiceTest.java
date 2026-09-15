@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.place.domain.Place;
 import com.tailtopia.place.domain.PlaceStatus;
 import com.tailtopia.place.domain.PlaceTag;
@@ -33,12 +34,14 @@ class PlaceQueryServiceTest {
     private static final double JKT_LNG = 106.8100;
 
     private PlaceRepository places;
+    private AccountQueryService accounts;
     private PlaceQueryService service;
 
     @BeforeEach
     void setUp() {
         places = Mockito.mock(PlaceRepository.class);
-        service = new PlaceQueryService(places);
+        accounts = Mockito.mock(AccountQueryService.class);
+        service = new PlaceQueryService(places, accounts);
     }
 
     private static Place place(String token, double lat, double lng) {
@@ -195,6 +198,61 @@ class PlaceQueryServiceTest {
         verify(places).findActiveWithinBox(eq(PlaceStatus.ACTIVE), eq(JKT_LAT), eq(JKT_LNG),
                 anyDouble(), anyDouble(), anyDouble(), anyDouble(),
                 eq(Limit.of(PlaceQueryService.MAX_LIST_SIZE)));
+    }
+
+    // ===== Story 1.5 详情 =====
+
+    /**
+     * 🔴 **下架与不存在必须无法区分**（AC7）：两者都走同一个 `findByPublicTokenAndStatus(ACTIVE)`
+     * 的空结果 → 同一个 404 + 同一句文案。让它们可区分等于给出「这个 token 曾经存在」这条信息。
+     */
+    @Test
+    void detailOfATakenDownOrUnknownPlaceIsNotFound() {
+        when(places.findByPublicTokenAndStatus("gone", PlaceStatus.ACTIVE))
+                .thenReturn(java.util.Optional.empty());
+
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> service.detail("gone", null, null))
+                .isInstanceOf(com.tailtopia.shared.error.AppException.class)
+                .hasMessageContaining("场所不存在");
+    }
+
+    @Test
+    void detailWithCoordinatesFillsDistanceAndWithoutLeavesItNull() {
+        Place p = place("kopi", JKT_LAT + 0.01, JKT_LNG);
+        when(places.findByPublicTokenAndStatus("kopi", PlaceStatus.ACTIVE))
+                .thenReturn(java.util.Optional.of(p));
+        when(accounts.findAuthorViews(any()))
+                .thenReturn(java.util.Map.of(1L, com.tailtopia.auth.dto.AuthorView.anonymized(1L)));
+
+        assertThat(service.detail("kopi", JKT_LAT, JKT_LNG).distanceMeters())
+                .isNotNull().isBetween(900, 1300);
+        assertThat(service.detail("kopi", null, null).distanceMeters()).isNull();
+    }
+
+    /** 非法坐标不当距离用（也不报错）—— 详情页比列表宽容：缺个距离位 ≠ 打不开页面。 */
+    @Test
+    void detailIgnoresOutOfRangeCoordinates() {
+        Place p = place("kopi", JKT_LAT, JKT_LNG);
+        when(places.findByPublicTokenAndStatus("kopi", PlaceStatus.ACTIVE))
+                .thenReturn(java.util.Optional.of(p));
+        when(accounts.findAuthorViews(any()))
+                .thenReturn(java.util.Map.of(1L, com.tailtopia.auth.dto.AuthorView.anonymized(1L)));
+
+        assertThat(service.detail("kopi", 999d, 999d).distanceMeters()).isNull();
+    }
+
+    /** 标记人经既有作者投影出口取（不让 place 直 join users；注销自动匿名化）。 */
+    @Test
+    void detailResolvesMarkerThroughTheSharedAuthorProjection() {
+        Place p = place("kopi", JKT_LAT, JKT_LNG);
+        when(places.findByPublicTokenAndStatus("kopi", PlaceStatus.ACTIVE))
+                .thenReturn(java.util.Optional.of(p));
+        when(accounts.findAuthorViews(any()))
+                .thenReturn(java.util.Map.of(1L, com.tailtopia.auth.dto.AuthorView.anonymized(1L)));
+
+        assertThat(service.detail("kopi", null, null).markedBy().deleted()).isTrue();
+        verify(accounts).findAuthorViews(List.of(1L));
     }
 
     /** 空库两条分支都给空 items（客户端走空态，不是错误态）。 */

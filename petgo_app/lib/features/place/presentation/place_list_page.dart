@@ -13,6 +13,7 @@ import '../../auth/domain/auth_guard.dart';
 import '../data/location_service.dart';
 import '../data/place_repository.dart';
 import '../domain/place_summary.dart';
+import 'place_detail_page.dart';
 import 'place_distance_format.dart';
 import 'place_labels.dart';
 import 'place_location_controller.dart';
@@ -28,7 +29,8 @@ import 'place_mark_page.dart';
 ///   <li>**类型 / 标签筛选 chips**（UI 稿 A1 顶部那两个 `Jenis ▾ / Tag ▾`）不在 1.1/1.2 的任何 AC 里；</li>
 ///   <li>**AppBar 的「+ 标记场所」与空态的 CTA 按钮**归 Story 1.3（表单页还不存在）。
 ///       空态这里只给引导**文案**：挂一个点了跳不到任何地方的按钮比没有按钮更糟。</li>
-///   <li>**点列表项进详情**归 Story 1.5 —— 详情页还不存在，所以列表项现在不可点。</li>
+///   <li>**点列表项进详情**（Story 1.5）已接上 —— `context.push` 到 `/places/{token}`。
+///       🔴 用 `push` 而不是 `go`：详情是压在列表上的一层，要能返回列表（同 `_pushMarkForm` 的理由）。</li>
 /// </ul>
 class PlaceListPage extends ConsumerWidget {
   const PlaceListPage({super.key});
@@ -218,7 +220,14 @@ class PlaceListPage extends ConsumerWidget {
         separatorBuilder: (_, _) => const Divider(
             height: 1, thickness: 1, indent: AppSpacing.lg, endIndent: AppSpacing.lg,
             color: AppColors.line2),
-        itemBuilder: (context, i) => _PlaceRow(place: page.items[i]),
+        itemBuilder: (context, i) {
+          final place = page.items[i];
+          return _PlaceRow(
+            place: place,
+            // 🔒 **详情对游客开放**（后端 GET 已放行）→ 这里不套 requireLogin。
+            onTap: () => context.push(PlaceDetailPage.routeFor(place.token)),
+          );
+        },
       );
 
   /// 把不满屏的空态 / 错误态变成可滚动内容 —— 否则 [RefreshIndicator] 收不到下拉手势。
@@ -292,10 +301,13 @@ class _LocationBanner extends StatelessWidget {
 }
 
 /// 列表项（UX-DR2）：首图 + 名称 + 类型 + 距离 + 标签（≤2 个 +N）+ 照片数/评论数/推荐计数。
+///
+/// 整行可点进详情（Story 1.5）—— 热区是整行而不是名称文字（UX-DR16）。
 class _PlaceRow extends StatelessWidget {
-  const _PlaceRow({required this.place});
+  const _PlaceRow({required this.place, required this.onTap});
 
   final PlaceSummary place;
+  final VoidCallback onTap;
 
   /// 缩略图边长（逻辑像素）。
   static const double _thumbSize = 72;
@@ -317,44 +329,50 @@ class _PlaceRow extends StatelessWidget {
         formatPlaceDistance(l10n, place.distanceMeters!),
     ].join(' · ');
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _Thumb(url: place.firstPhotoUrl, size: _thumbSize),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(place.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
-                if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: AppSpacing.xxs),
-                  Text(subtitle, style: AppTypography.caption),
-                ],
-                if (place.tags.isNotEmpty) ...[
+    return InkWell(
+      key: ValueKey('placeRow-${place.token}'),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _Thumb(url: place.firstPhotoUrl, size: _thumbSize),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(place.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.xxs),
+                    Text(subtitle, style: AppTypography.caption),
+                  ],
+                  if (place.tags.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Wrap(
+                      spacing: AppSpacing.xs,
+                      runSpacing: AppSpacing.xs,
+                      children: [
+                        for (final t in place.tags.take(_visibleTags))
+                          _TagChip(label: t.label(l10n)),
+                        if (hidden > 0) _TagChip(label: l10n.placeTagOverflow(hidden)),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.xs),
-                  Wrap(
-                    spacing: AppSpacing.xs,
-                    runSpacing: AppSpacing.xs,
-                    children: [
-                      for (final t in place.tags.take(_visibleTags))
-                        _TagChip(label: t.label(l10n)),
-                      if (hidden > 0) _TagChip(label: l10n.placeTagOverflow(hidden)),
-                    ],
-                  ),
+                  _Counts(place: place),
                 ],
-                const SizedBox(height: AppSpacing.xs),
-                _Counts(place: place),
-              ],
+              ),
             ),
-          ),
-        ],
+            const Icon(Icons.chevron_right_rounded,
+                size: 18, color: AppColors.textTertiary),
+          ],
+        ),
       ),
     );
   }

@@ -2,13 +2,18 @@ package com.tailtopia.place.service;
 
 import com.tailtopia.content.moderation.ModerationOutcome;
 import com.tailtopia.content.service.ContentModerationService;
+import com.tailtopia.moderation.domain.ReportReason;
 import com.tailtopia.place.domain.Place;
+import com.tailtopia.place.domain.PlaceReport;
+import com.tailtopia.place.domain.PlaceStatus;
 import com.tailtopia.place.dto.PlaceCreateRequest;
+import com.tailtopia.place.repository.PlaceReportRepository;
 import com.tailtopia.place.repository.PlaceRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.IdempotencyService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,13 +39,16 @@ public class PlaceService {
     private final PlaceTokenGenerator tokens;
     private final ContentModerationService moderation;
     private final IdempotencyService idempotency;
+    private final PlaceReportRepository reports;
 
     public PlaceService(PlaceRepository places, PlaceTokenGenerator tokens,
-            ContentModerationService moderation, IdempotencyService idempotency) {
+            ContentModerationService moderation, IdempotencyService idempotency,
+            PlaceReportRepository reports) {
         this.places = places;
         this.tokens = tokens;
         this.moderation = moderation;
         this.idempotency = idempotency;
+        this.reports = reports;
     }
 
     /**
@@ -110,6 +118,36 @@ public class PlaceService {
             idempotency.store(idempotencyKey, saved.getId());
         }
         return saved;
+    }
+
+    /**
+     * 举报一个场所（Story 1.5 · AC5）。
+     *
+     * <p><b>写工单 PENDING 进运营队列，不触发任何自动下架</b>（同内容举报 Story 3.7 / FR-25）。
+     * 处置在后台 AB-17A。
+     *
+     * <p><b>重复举报幂等</b>：同一个人对同一个场所连点五次 → 队列里只有一条。
+     * 报错也不行 —— 用户会以为"没举报成功"再点一次。
+     *
+     * <p>🔴 <b>下架 / 不存在一律 404</b>，与详情同一口径：让两者可区分等于给出「这个 token
+     * 曾经存在」这条信息。
+     */
+    @Transactional
+    public void report(String token, long reporterId, ReportReason reason) {
+        Place p = places.findByPublicTokenAndStatus(token, PlaceStatus.ACTIVE)
+                .orElseThrow(() -> AppException.notFound("场所不存在"));
+        if (reports.existsByPlaceIdAndReporterId(p.getId(), reporterId)) {
+            return; // 幂等：已举报过，不再写一条。
+        }
+        try {
+            reports.save(PlaceReport.of(p.getId(), reporterId, reason));
+        } catch (DataIntegrityViolationException e) {
+            // 🔴 `existsBy` 预查挡不住并发：两次点击同时过了预查，后到的那条撞
+            // `uq_place_reports_reporter_place` → 500 →「举报失败」，正是上面那句
+            // "报错也不行"要避免的结果。与内容举报（ReportService.submit）同样吞掉：
+            // 队列里已经有那条工单，本次不新增即为成功。
+            log.debug("场所举报并发撞唯一约束，按幂等吞掉");
+        }
     }
 
     /**

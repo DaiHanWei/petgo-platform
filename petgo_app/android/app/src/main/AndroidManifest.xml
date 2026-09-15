@@ -95,5 +95,18 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- 场所详情的「在地图中打开」（V1.3.0 batch-b1 Story 1.5）。
+
+             🔴 Android 11+ 的包可见性：没有这条声明，`canLaunchUrl(geo:…)` 一律返回 false
+             （它走 Intent.resolveActivity(PackageManager)，查不到就当"没人能处理"），于是永远
+             回落到 google.com/maps 的**网页**链接 —— 装了 Gojek / Waze 而没装 Google Maps
+             的用户拿到的是浏览器页面，而不是自己的地图 App。
+
+             🛡 这只是「系统里有谁接管 geo:」的查询声明，**不是**任何计费 API
+             （Places / Geocoding / Directions 一个都没碰，AD-3 Rule 5）。 -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="geo"/>
+        </intent>
     </queries>
 </manifest>

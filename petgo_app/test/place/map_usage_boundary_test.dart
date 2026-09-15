@@ -79,11 +79,15 @@ void main() {
     /// 允许出现 `GoogleMap` widget 的文件。
     ///
     /// - 选点弹层（Story 1.4）
-    /// - 详情页的定位小地图（Story 1.5 —— 落地时把它加进来，**不是**把这条测试删掉）
+    /// - 详情页的定位小地图（Story 1.5 —— 全手势关闭、只显示位置）
+    ///
+    /// 🔴 **这个名单到此为止（两处，AD-3 Rule 3 的原文就是"只有两处"）**：
+    /// 再加第三处之前先回 AD-3 改口径，不要顺手往这里塞一行。
     ///
     /// ⚠️ **列表页永远不在这个名单里**：那是 PRD ⑥ 明确排除的「地图浏览视图」。
     const allowed = <String>{
       'lib/features/place/presentation/place_map_picker_sheet.dart',
+      'lib/features/place/presentation/place_mini_map.dart',
     };
 
     test('只有白名单里的文件用 GoogleMap widget', () {
@@ -108,6 +112,22 @@ void main() {
       final list = File('lib/features/place/presentation/place_list_page.dart')
           .readAsStringSync();
       expect(list.contains('google_maps_flutter'), isFalse);
+    });
+  });
+
+  /// Story 1.5 AC3「在地图中打开」依赖的**包可见性声明**。
+  ///
+  /// 🔴 Android 11+ 起，没有这条 `<queries>` 声明的话 `canLaunchUrl(geo:…)` 恒为 false，
+  /// 于是永远回落到 google.com/maps 网页链接 —— 装了 Gojek / Waze 而没装 Google Maps
+  /// 的用户拿到浏览器页面。这个退化**不会让任何别的测试变红**，所以机械钉一条。
+  group('🔴 Story 1.5 AC3：geo: 的包可见性声明在位', () {
+    test('AndroidManifest 的 <queries> 里声明了 geo: 的 VIEW intent', () {
+      final manifest =
+          File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+      final queries = manifest.substring(manifest.indexOf('<queries>'));
+      expect(queries.contains('android:scheme="geo"'), isTrue,
+          reason: '🔴 少了它，「在地图中打开」在安卓上永远只能打开网页版地图');
+      expect(queries.contains('android.intent.action.VIEW'), isTrue);
     });
   });
 

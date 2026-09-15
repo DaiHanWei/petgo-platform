@@ -210,6 +210,13 @@ public class SecurityConfig {
                         // 而 places.created_by 没有外键、会被静默写进去（同拉黑/举报端点的理由）。
                         // ⚠️ 用户不可编辑/删除场所，所以这条错写出去的归属**没有自助纠正途径**。
                         .requestMatchers(HttpMethod.POST, "/api/v1/places").hasRole("USER")
+                        // 场所详情（Story 1.5）：同列表，GET 对游客放行。
+                        // 🔴 仍然**不写 `/places/**` 通配** —— 只列出真实存在的路径形状，
+                        //    每一次放开都留痕（评论列表 1.7 落地时在这里再加一行）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/places/*").permitAll()
+                        // 举报场所（Story 1.5）：**仅 role=USER**，与标记场所同一理由
+                        // （controller 把 jwt.sub 当 users.id 用，兽医 token 的 sub 是 vetId）。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/places/*/reports").hasRole("USER")
                         // 兽医工作台端点（Story 5.1+）：仅 role=VET 可达；user/guest → 403（双向门控）
                         .requestMatchers("/api/v1/vet/**").hasRole("VET")
                         // 用户侧问诊端点（Story 5.2+ / 计费流 3-2~3-4）：仅 role=USER 可达（vet/guest → 403）

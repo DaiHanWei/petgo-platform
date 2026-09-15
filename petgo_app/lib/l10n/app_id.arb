@@ -2212,5 +2212,17 @@
   "placeMapPickerTitle": "Pilih lokasi",
   "placeMapPickerHint": "Geser pin atau ketuk peta untuk memindahkannya",
   "placeMapPickerConfirm": "Konfirmasi lokasi",
-  "placeMapPickerNeedsPick": "Ketuk peta untuk menandai lokasi tempatnya"
+  "placeMapPickerNeedsPick": "Ketuk peta untuk menandai lokasi tempatnya",
+  "placeDetailTitle": "Tempat",
+  "placeDetailCopyAddress": "Salin",
+  "placeDetailAddressCopied": "Alamat tersalin",
+  "placeDetailOpenInMaps": "Buka di Maps",
+  "placeDetailOpenMapsFailed": "Tidak ada aplikasi peta yang bisa dibuka.",
+  "placeDetailMarkedBy": "Ditandai oleh {name}",
+  "placeDetailShare": "Bagikan",
+  "placeDetailShareFailed": "Tidak bisa membuka menu berbagi.",
+  "placeDetailReport": "Laporkan",
+  "placeDetailReported": "Terima kasih \u2014 kami akan memeriksanya.",
+  "placeDetailGoneTitle": "Tempat ini tidak tersedia",
+  "placeDetailGoneBody": "Mungkin sudah dihapus."
 }

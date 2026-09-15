@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -17,6 +18,7 @@ import com.tailtopia.place.domain.PlaceStatus;
 import com.tailtopia.place.domain.PlaceTag;
 import com.tailtopia.place.domain.PlaceType;
 import com.tailtopia.place.dto.PlaceCreateRequest;
+import com.tailtopia.place.repository.PlaceReportRepository;
 import com.tailtopia.place.repository.PlaceRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.IdempotencyService;
@@ -35,6 +37,7 @@ class PlaceServiceTest {
     private PlaceRepository places;
     private ContentModerationService moderation;
     private IdempotencyService idempotency;
+    private PlaceReportRepository reports;
     private PlaceService service;
 
     @BeforeEach
@@ -43,7 +46,9 @@ class PlaceServiceTest {
         moderation = Mockito.mock(ContentModerationService.class);
         idempotency = Mockito.mock(IdempotencyService.class);
         when(idempotency.findResourceId(any())).thenReturn(java.util.Optional.empty());
-        service = new PlaceService(places, new PlaceTokenGenerator(), moderation, idempotency);
+        reports = Mockito.mock(PlaceReportRepository.class);
+        service = new PlaceService(places, new PlaceTokenGenerator(), moderation, idempotency,
+                reports);
         // save 原样回传（本组用例不关心 id）。
         when(places.save(any(Place.class))).thenAnswer(inv -> inv.getArgument(0));
     }
@@ -203,9 +208,98 @@ class PlaceServiceTest {
         verify(places, never()).save(any());
     }
 
+    // ===== Story 1.5 举报（AC5）=====
+
+    @Test
+    void reportWritesAPendingTicket() {
+        Place p = place();
+        when(places.findByPublicTokenAndStatus("tok", PlaceStatus.ACTIVE))
+                .thenReturn(java.util.Optional.of(p));
+        when(reports.existsByPlaceIdAndReporterId(anyLong(), anyLong())).thenReturn(false);
+
+        service.report("tok", 9L, com.tailtopia.moderation.domain.ReportReason.INAPPROPRIATE);
+
+        ArgumentCaptor<com.tailtopia.place.domain.PlaceReport> saved =
+                ArgumentCaptor.forClass(com.tailtopia.place.domain.PlaceReport.class);
+        verify(reports).save(saved.capture());
+        assertThat(saved.getValue().getReporterId()).isEqualTo(9L);
+        assertThat(saved.getValue().getReasonType())
+                .isEqualTo(com.tailtopia.moderation.domain.ReportReason.INAPPROPRIATE);
+        assertThat(saved.getValue().getStatus())
+                .as("写工单 PENDING 进运营队列，**不自动下架**")
+                .isEqualTo(com.tailtopia.moderation.domain.ReportStatus.PENDING);
+    }
+
+    /**
+     * 🔴 重复举报**幂等**：连点五次 → 队列里只有一条。
+     *
+     * <p>报错也不行 —— 用户会以为"没举报成功"再点一次。
+     */
+    @Test
+    void reportingTwiceIsIdempotentAndDoesNotThrow() {
+        Place p = place();
+        when(places.findByPublicTokenAndStatus("tok", PlaceStatus.ACTIVE))
+                .thenReturn(java.util.Optional.of(p));
+        when(reports.existsByPlaceIdAndReporterId(anyLong(), anyLong())).thenReturn(true);
+
+        service.report("tok", 9L, com.tailtopia.moderation.domain.ReportReason.OTHER);
+
+        verify(reports, never()).save(any());
+    }
+
+    /**
+     * 🔴 **并发撞唯一约束也必须幂等**（code-review 2026-09-15）。
+     *
+     * <p>`existsBy` 预查挡不住并发：两次点击同时过了预查，后到的那条撞
+     * `uq_place_reports_reporter_place`。让 `DataIntegrityViolationException` 冒出去
+     * = 500 =「举报失败」，正好是上一条用例要避免的那个结果。
+     */
+    @Test
+    void concurrentDuplicateReportIsSwallowedInsteadOf500() {
+        Place p = place();
+        when(places.findByPublicTokenAndStatus("tok", PlaceStatus.ACTIVE))
+                .thenReturn(java.util.Optional.of(p));
+        when(reports.existsByPlaceIdAndReporterId(anyLong(), anyLong())).thenReturn(false);
+        when(reports.save(any())).thenThrow(
+                new org.springframework.dao.DataIntegrityViolationException("uq"));
+
+        // 不抛 = 用户看到的是成功（队列里已经有那条工单了）。
+        service.report("tok", 9L, com.tailtopia.moderation.domain.ReportReason.OTHER);
+    }
+
+    /** 举报一个已下架 / 不存在的场所 → 404（与详情同口径，不泄漏 token 曾存在）。 */
+    @Test
+    void reportingAMissingPlaceIsNotFound() {
+        when(places.findByPublicTokenAndStatus("gone", PlaceStatus.ACTIVE))
+                .thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> service.report("gone", 9L,
+                com.tailtopia.moderation.domain.ReportReason.OTHER))
+                .isInstanceOf(AppException.class);
+        verify(reports, never()).save(any());
+    }
+
     private static Place place() {
-        return Place.mark("t".repeat(32), "X", PlaceType.CAFE, List.of(PlaceTag.PET_MENU),
-                -6.2, 106.8, "Jl. X", null, List.of("https://cdn/a.jpg"), 7L);
+        return withId(Place.mark("t".repeat(32), "X", PlaceType.CAFE, List.of(PlaceTag.PET_MENU),
+                -6.2, 106.8, "Jl. X", null, List.of("https://cdn/a.jpg"), 7L), 42L);
+    }
+
+    /**
+     * 给一个未持久化的实体塞上 id。
+     *
+     * <p>`Place` 的 id 由 JPA 在 save 时赋值、没有 setter（刻意的：它不是业务可写的字段）。
+     * 而举报路径拿的是**从库里取出来的**实体，那时 id 必然非空 —— 所以这里用反射补上，
+     * 而不是为了测试在生产代码里开一个 setter。
+     */
+    private static Place withId(Place p, long id) {
+        try {
+            var f = Place.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(p, id);
+            return p;
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Place.id 字段名变了，改这里", e);
+        }
     }
 
     /** 每次标记都生成一个新 token（不可枚举、不由 id 派生）。 */

@@ -1,11 +1,15 @@
 package com.tailtopia.place.service;
 
+import com.tailtopia.auth.dto.AuthorView;
+import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.place.domain.GeoBox;
 import com.tailtopia.place.domain.Place;
 import com.tailtopia.place.domain.PlaceStatus;
+import com.tailtopia.place.dto.PlaceDetailResponse;
 import com.tailtopia.place.dto.PlaceListItemResponse;
 import com.tailtopia.place.dto.PlaceListResponse;
 import com.tailtopia.place.repository.PlaceRepository;
+import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -48,9 +52,35 @@ public class PlaceQueryService {
     static final int MAX_LIST_SIZE = 200;
 
     private final PlaceRepository places;
+    private final AccountQueryService accounts;
 
-    public PlaceQueryService(PlaceRepository places) {
+    public PlaceQueryService(PlaceRepository places, AccountQueryService accounts) {
         this.places = places;
+        this.accounts = accounts;
+    }
+
+    /**
+     * 场所详情（Story 1.5 · AC1/AC7）。
+     *
+     * <p>🔴 <b>下架 / 不存在一律 404，且文案相同</b>（AC7）：下架后不能泄漏任何原内容，
+     * 也不能让「下架了」与「从来没有过」在响应上可区分 —— 后者可以被用来判断某个 token
+     * 曾经存在。客户端两种情况都落同一个「场所不存在」空态。
+     *
+     * @param lat 可空；与 {@code lng} 同时给时计算距离（AC1 的「距离」位）
+     */
+    @Transactional(readOnly = true)
+    public PlaceDetailResponse detail(String token, Double lat, Double lng) {
+        Place p = places.findByPublicTokenAndStatus(token, PlaceStatus.ACTIVE)
+                .orElseThrow(() -> AppException.notFound("场所不存在"));
+        Integer distance = (lat != null && lng != null && GeoBox.isValidCoordinate(lat, lng))
+                ? (int) Math.round(
+                        GeoBox.distanceMeters(lat, lng, p.getLatitude(), p.getLongitude()))
+                : null;
+        // 标记人：走既有作者投影出口（注销自动匿名化，不让 place 直 join users）。
+        AuthorView markedBy = accounts.findAuthorViews(List.of(p.getCreatedBy()))
+                .get(p.getCreatedBy());
+        // Story 1.5：评论与态度计数尚未交付 → 恒 0（契约先定，1.7/1.8 接真值）。
+        return PlaceDetailResponse.of(p, markedBy, distance, 0L, 0L, 0L);
     }
 
     /**

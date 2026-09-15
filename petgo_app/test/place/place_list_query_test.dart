@@ -36,4 +36,32 @@ void main() {
     expect(placeListQueryFor(-6.235, 106.81).hashCode,
         placeListQueryFor(-6.235, 106.81).hashCode);
   });
+
+  /// Story 1.5：**详情族键必须与列表同一套归一规则**（code-review 2026-09-15）。
+  /// 详情页同样会被抖动打回 loading —— 而且它没有列表页那样的"保留旧数据"分支可兜。
+  group('详情族键（Story 1.5）', () {
+    test('无坐标 → 坐标位为 null（距离位隐藏），token 保留', () {
+      expect(placeDetailQueryFor('tok', null, null),
+          (token: 'tok', lat: null, lng: null));
+      // 只给一条坐标也当没有（后端对半套坐标回 422，不该发出去）。
+      expect(placeDetailQueryFor('tok', -6.2, null),
+          (token: 'tok', lat: null, lng: null));
+    });
+
+    test('🔴 米级抖动落在同一个详情族键上', () {
+      expect(placeDetailQueryFor('tok', -6.235012, 106.810004),
+          placeDetailQueryFor('tok', -6.235047, 106.809960));
+    });
+
+    test('与列表用同样的 3 位归一（两侧送往服务端的精度一致）', () {
+      final d = placeDetailQueryFor('tok', -6.2354999, 106.8104999);
+      final l = placeListQueryFor(-6.2354999, 106.8104999);
+      expect((d.lat, d.lng), (l.lat, l.lng));
+    });
+
+    test('不同 token 不共用族键', () {
+      expect(placeDetailQueryFor('a', -6.235, 106.81),
+          isNot(placeDetailQueryFor('b', -6.235, 106.81)));
+    });
+  });
 }
