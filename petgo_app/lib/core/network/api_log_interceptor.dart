@@ -62,7 +62,24 @@ class ApiLogInterceptor extends Interceptor {
     handler.next(err);
   }
 
-  String _q(RequestOptions o) => o.uri.query.isEmpty ? '' : '?${o.uri.query}';
+  /// 敏感 query 参数名 —— 值打码，只留键名。
+  ///
+  /// 🔴 `lat`/`lng` 是位置坐标（V1.3.0 batch-b1 Story 1.2 的 `GET /api/v1/places`）。
+  /// NFR-4 的红线是**位置坐标禁止进日志**；而上面那套请求体脱敏管不到 query string ——
+  /// 它此前是原样 `debugPrint` 的。虽然只在 debug 构建打印，但 debug 控制台一样会被
+  /// 录屏、被整段贴进工单。
+  ///
+  /// ⚠️ 加新的位置 / PII 类 query 参数时必须往这里加一行。
+  /// 服务端侧的同一道口子在 `ApiAccessLoggingFilter.redactQuery`（那边是落盘日志，更要紧）。
+  static const Set<String> _redactQueryKeys = {'lat', 'lng', 'latitude', 'longitude'};
+
+  String _q(RequestOptions o) {
+    final params = o.uri.queryParameters;
+    if (params.isEmpty) return '';
+    final parts = params.entries.map((e) =>
+        '${e.key}=${_redactQueryKeys.contains(e.key.toLowerCase()) ? '***' : e.value}');
+    return '?${parts.join('&')}';
+  }
 
   String _ms(RequestOptions o) {
     final start = o.extra[_startKey];

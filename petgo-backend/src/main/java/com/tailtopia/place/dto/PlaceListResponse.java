@@ -30,4 +30,15 @@ public record PlaceListResponse(
     public static PlaceListResponse recent(List<PlaceListItemResponse> items) {
         return new PlaceListResponse(items, SORT_MODE_RECENT);
     }
+
+    /**
+     * 「按距离」分支（Story 1.2）。
+     *
+     * <p>⚠️ 只有**真的按距离排过**才用这个工厂：坐标合法但粗筛半径内一个场所都没有时，
+     * 服务端回落到按最新，那时必须回 {@link #recent} —— `sortMode` 撒谎会让客户端
+     * 把一堆没有距离的项按距离序去显示。
+     */
+    public static PlaceListResponse distance(List<PlaceListItemResponse> items) {
+        return new PlaceListResponse(items, SORT_MODE_DISTANCE);
+    }
 }

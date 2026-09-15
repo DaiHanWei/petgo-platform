@@ -1,9 +1,12 @@
 package com.tailtopia.place.web;
 
+import com.tailtopia.place.domain.GeoBox;
 import com.tailtopia.place.dto.PlaceListResponse;
 import com.tailtopia.place.service.PlaceQueryService;
+import com.tailtopia.shared.error.AppException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -30,13 +33,28 @@ public class PlaceController {
     }
 
     /**
-     * 场所列表（AC2）。未带坐标 → 按创建时间倒序。
+     * 场所列表（Story 1.1 AC2 / Story 1.2 AC1）。
      *
-     * <p>⚠️ Story 1.2 会在这里加 {@code lat}/{@code lng} 两个可选参数走距离分支；本 story 的
+     * <p>带 {@code lat}+{@code lng} → 按直线距离升序；不带 → 按创建时间倒序。
      * 「按最新」是**默认路径而不是降级路径** —— 无定位权限是 PRD ② 明定的正常态。
+     *
+     * <p>🔴 <b>坐标只能同时给或同时不给</b>，且必须落在合法区间（纬度 ±90 / 经度 ±180）：
+     * 违反即 <b>422</b>，不静默忽略。静默忽略会让客户端拿到「按最新」的列表却以为是按距离排的 ——
+     * 用户看到的是「最近的店在 20 公里外」，而没有任何地方能看出坐标其实没送到
+     * （同 {@code ShopProductController} 对非法品类的处理）。
+     *
+     * <p>🛡 <b>坐标绝不进日志</b>（NFR-4/NFR-5）：这里不打任何带 lat/lng 的日志，
+     * 校验失败的 ProblemDetail 里也不回显坐标值。
      */
     @GetMapping
-    public PlaceListResponse list() {
-        return query.listRecent();
+    public PlaceListResponse list(@RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lng) {
+        if ((lat == null) != (lng == null)) {
+            throw AppException.validation("经纬度必须同时提供");
+        }
+        if (lat != null && !GeoBox.isValidCoordinate(lat, lng)) {
+            throw AppException.validation("坐标超出合法范围");
+        }
+        return query.list(lat, lng);
     }
 }

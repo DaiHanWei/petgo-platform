@@ -3229,5 +3229,16 @@
   "placeTagLeashRequired": "Leash required",
   "@placeTagLeashRequired": {"description": "Pet-friendly tag LEASH_REQUIRED"},
   "placeTagLargeDogFriendly": "Large dogs welcome",
-  "@placeTagLargeDogFriendly": {"description": "Pet-friendly tag LARGE_DOG_FRIENDLY"}
+  "@placeTagLargeDogFriendly": {"description": "Pet-friendly tag LARGE_DOG_FRIENDLY"},
+
+  "placeLocationBanner": "Turn on location to sort by distance",
+  "@placeLocationBanner": {"description": "Place list top banner shown when location permission is not granted (Story 1.2 AC5). Stays visible after a refusal — it doubles as the explanation for why the list is not distance-sorted."},
+  "placeLocationEnable": "Turn on",
+  "@placeLocationEnable": {"description": "Place list location banner action. Requests the system permission; once permanently denied it opens system settings instead."},
+  "placeLocationDeniedHint": "Location is off for this app. You can turn it on in system settings.",
+  "@placeLocationDeniedHint": {"description": "Shown once when the location permission came back permanently denied — asking again will not raise a system prompt, so the banner button switches to opening settings."},
+  "placeDistanceMeters": "{meters} m",
+  "@placeDistanceMeters": {"description": "Place list distance under 1 km, in whole metres. For the last few hundred metres '850 m' is more useful than '0.8 km'.", "placeholders": {"meters": {"type": "int", "example": "850"}}},
+  "placeDistanceKilometers": "{km} km",
+  "@placeDistanceKilometers": {"description": "Place list distance of 1 km or more. The number is already formatted for the device locale (Indonesian uses a comma as the decimal separator), so do not reformat it here.", "placeholders": {"km": {"type": "String", "example": "1,2"}}}
 }

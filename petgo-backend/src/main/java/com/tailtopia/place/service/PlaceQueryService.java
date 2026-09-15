@@ -1,11 +1,13 @@
 package com.tailtopia.place.service;
 
+import com.tailtopia.place.domain.GeoBox;
 import com.tailtopia.place.domain.Place;
 import com.tailtopia.place.domain.PlaceStatus;
 import com.tailtopia.place.dto.PlaceListItemResponse;
 import com.tailtopia.place.dto.PlaceListResponse;
 import com.tailtopia.place.repository.PlaceRepository;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
@@ -52,9 +54,94 @@ public class PlaceQueryService {
     }
 
     /**
+     * 粗筛半径（米）—— AD-2 Rule 2 的「合理半径」在本版取 50 km。
+     *
+     * <p>依据：冷启动数据是**雅加达核心区** 10–20 个场所（PRD ⑤），大雅加达都会区东西向约 40 km，
+     * 50 km 足够把「城里所有场所」都装进候选集。
+     *
+     * <p>🔴 **半径外不是「排在后面」而是「不出现」** —— 这正是 AD-2 说的「把候选缩到合理半径内」。
+     * 为了不让外地用户面对一个空列表，{@link #list(Double, Double)} 在粗筛为空时**整条回落到按最新**
+     * （并把 {@code sortMode} 如实下发为 {@code recent}），而不是给出一个空结果。
+     *
+     * <p>⚠️ 场所覆盖扩到雅加达以外时这个值要重新评估；调它之前先想清楚
+     * 「一个 300 km 外的场所排在列表里对用户有没有意义」。
+     */
+    static final double SEARCH_RADIUS_METERS = 50_000d;
+
+    /**
+     * 场所列表（AC1/AC4）：带坐标走**距离分支**，不带坐标走**按最新分支**。
+     *
+     * <p>🔴 <b>两条分支在这里就分开，不在 SQL 里合并</b>（AD-2 Rule 5 / AC4）：
+     * 合并成一条「距离为 null 排最后」的 SQL 会让无坐标请求也带着距离计算跑全表，
+     * 而且两种排序语义缠在一起之后没人敢改。
+     *
+     * @param lat 纬度，可空；与 {@code lng} <b>必须同时给或同时不给</b>（校验在 controller）
+     * @param lng 经度，可空
+     */
+    @Transactional(readOnly = true)
+    public PlaceListResponse list(Double lat, Double lng) {
+        if (lat == null || lng == null) {
+            return listRecent();
+        }
+        return listByDistance(lat, lng);
+    }
+
+    /**
+     * 「按距离」分支（AC1/AC2）：矩形范围粗筛 → 应用层算直线距离 → 升序。
+     *
+     * <p>🔴 <b>距离不在 SQL 里算</b>：对经纬度列套三角函数会让 Story 1.2 建的两条索引全部失效
+     * （见 {@code PlaceRepository.findActiveWithinBox} 的说明）。
+     *
+     * <p>粗筛一个都没捞到（用户在雅加达以外）→ <b>回落按最新</b>，`sortMode` 如实回 {@code recent}。
+     * 给一个空列表在技术上"正确"，但用户看到的是「这个功能什么都没有」。
+     */
+    private PlaceListResponse listByDistance(double lat, double lng) {
+        GeoBox box = GeoBox.around(lat, lng, SEARCH_RADIUS_METERS);
+        List<Place> rows = places.findActiveWithinBox(PlaceStatus.ACTIVE, lat, lng,
+                box.minLatitude(), box.maxLatitude(), box.minLongitude(), box.maxLongitude(),
+                Limit.of(MAX_LIST_SIZE));
+        if (rows.isEmpty()) {
+            return listRecent();
+        }
+        // 先算好距离再排序（一次 map + 一次 sort），不要在比较器里反复算 haversine。
+        //
+        // 🔴 这里**还要按半径复筛一次**：矩形的四个角到中心是 √2 × 半径（50 km 的框角上有 70.7 km），
+        // 而 GeoBox.around 在贴极点 / 跨对日线时会把经度放宽成全范围。不复筛的话
+        // SEARCH_RADIUS_METERS 的注释（「半径外不出现」）就是假的，而这个端点任何人都能
+        // 用任意合法坐标调 —— 传一个极点坐标就能把整条纬度带的场所当「按距离」拿走。
+        List<PlaceWithDistance> scored = new ArrayList<>(rows.size());
+        for (Place p : rows) {
+            double meters = GeoBox.distanceMeters(lat, lng, p.getLatitude(), p.getLongitude());
+            if (meters <= SEARCH_RADIUS_METERS) {
+                scored.add(new PlaceWithDistance(p, meters));
+            }
+        }
+        if (scored.isEmpty()) {
+            // 框里有行但全在半径外（用户在两个城市之间）→ 与「框里一个都没有」同一处理。
+            return listRecent();
+        }
+        // 距离相同时按 id 倒序兜底，保证同一请求顺序稳定（否则刷新一次顺序就变了）。
+        // nullsLast：已落库实体的 id 不会为空，但比较器不该因为一个未持久化实体就抛 NPE。
+        scored.sort(Comparator.comparingDouble(PlaceWithDistance::meters)
+                .thenComparing(w -> w.place().getId(),
+                        Comparator.nullsLast(Comparator.reverseOrder())));
+
+        List<PlaceListItemResponse> items = new ArrayList<>(scored.size());
+        for (PlaceWithDistance w : scored) {
+            items.add(PlaceListItemResponse.of(w.place(), (int) Math.round(w.meters()),
+                    0L, 0L, 0L));
+        }
+        return PlaceListResponse.distance(items);
+    }
+
+    /** 排序中间体（距离只算一次）。 */
+    private record PlaceWithDistance(Place place, double meters) {
+    }
+
+    /**
      * 场所列表「按最新」分支（AC2）：在架场所按创建时间倒序。
      *
-     * <p>🔴 「按距离」是 Story 1.2 加的<b>另一条独立分支</b>（AD-2 Rule 5），不是给这条加个
+     * <p>🔴 「按距离」是{@link #listByDistance}那条<b>独立分支</b>（AD-2 Rule 5），不是给这条加个
      * 可空坐标参数然后在 SQL 里把两种语义混在一起。
      */
     @Transactional(readOnly = true)

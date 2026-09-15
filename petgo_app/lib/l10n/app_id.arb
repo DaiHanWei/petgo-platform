@@ -2173,5 +2173,10 @@
   "placeTagPetMenu": "Makanan hewan",
   "placeTagPetPlayArea": "Area bermain",
   "placeTagLeashRequired": "Wajib tali",
-  "placeTagLargeDogFriendly": "Ramah anjing besar"
+  "placeTagLargeDogFriendly": "Ramah anjing besar",
+  "placeLocationBanner": "Aktifkan lokasi untuk urutkan berdasarkan jarak",
+  "placeLocationEnable": "Aktifkan",
+  "placeLocationDeniedHint": "Izin lokasi mati. Kamu bisa mengaktifkannya di pengaturan sistem.",
+  "placeDistanceMeters": "{meters} m",
+  "placeDistanceKilometers": "{km} km"
 }
