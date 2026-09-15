@@ -23,6 +23,13 @@ import '../visitor_archive_view.dart';
 /// （同 `MentionContext` 那条教训）。
 const String kPetRecommendFromDiaryEmpty = 'diary_empty';
 
+/// Story 4.2（B1-D2）：Diary「声明未养宠 / 计划养宠」态。
+///
+/// 🔴 **必须与 [kPetRecommendFromDiaryEmpty] 是两个不同的值**（4.2 AC3）：两屏覆盖的是
+/// 两批完全不同的人（「养了但没建档」vs「从没养过」），合成一个值之后
+/// 再也分不开两批人的转化 —— 而那正是 B1-D2 扩这一屏的理由。
+const String kPetRecommendFromDiaryNonOwner = 'diary_non_owner';
+
 /// 「逛别人家的毛孩子」宠物卡（V1.3.0 batch-b1 Story 4.1 · AC4/AC5/AC7）。
 ///
 /// <h3>🔴 大图与小圆头像是**两个不同字段、不同来源**</h3>

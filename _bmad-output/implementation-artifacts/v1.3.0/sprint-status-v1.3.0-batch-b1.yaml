@@ -299,6 +299,14 @@ development_status:
                                                         #       本轮只做不改口径的优化（idx_content_posts_pet_recommend 加第三列 id，让点赞归并走 index-only scan）。AC2 允许的降级只有 @Scheduled 落表，而「扛不住」须以真库实测为判据 → **未自行降级、未自行改口径**
                                                         # 🔸 **一条建议埋点/产品确认**：pet_card_tapped 由 AC7 与架构 §4.2 明写，但与 FR-92 H5 名片那组 pet_card_* **共用前缀**；按 AC 原样落地、未擅自改名（改名只动调用点一行 + 两条用例）
                                                         # L1/L2 待本地验收（清单见 story Completion Notes；**L1 最重要的是 AC2 的 EXPLAIN** —— 云端无 postgres，两条部分索引是否真被选中只能对真库验；扛不住时允许的降级只有 @Scheduled 落表）
-  4-2-diary声明未养宠态也看到推荐: ready-for-dev         # B1-D2 对 PRD 原文的扩展：代码里有**两种**无档案状态，PRD 只写了未建档那一种。游客态不动
+  4-2-diary声明未养宠态也看到推荐: review                  # B1-D2 对 PRD 原文的扩展：代码里有**两种**无档案状态，PRD 只写了未建档那一种。游客态不动
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（前端 analyze 0 issue、1848 例；**纯前端、无迁移、后端一行未动**）
+                                                        # _NonOwnerView 改 ConsumerWidget，在既有引导之下追加 4.1 的 PetRecommendationGrid —— 组件/接口/卡片全部复用，零新增接口
+                                                        # PLANNING / ENTHUSIAST 各一条用例：两者折叠到同一个 DiaryUserState.nonOwner 分支（AD-15 单一判定），但 AC1 说的是两种人，用例按人写
+                                                        # 🛡 版面只在**真有卡**时才换（与 4.1 同一条纪律）：池子空 / 取不到 / 加载中 → 整块不渲染且这一屏与改动前逐像素相同；真有卡才换滚动容器（否则「Ubah status」被网格挤出可视区）
+                                                        # AC2 游客态：DiaryGuestPage 一行未改，除 widget 用例外另加**源码级**守卫（diary_guest_page.dart 里不许出现 PetRecommendationGrid / RecommendedPet / pet_card_tapped）
+                                                        # AC3：新常量 kPetRecommendFromDiaryNonOwner='diary_non_owner'，与 4.1 的 diary_empty **是两个值**（有用例直接断言两者不等）；事件名与属性形状不变，不加新属性
+                                                        # code-review：本 story 改动无 CONFIRMED finding；同一轮对 4.1 提的 4 条见 4-1 那一节（其中 provider autoDispose + 拉黑收尾 invalidate 对本屏同样生效，两屏共用同一个 provider）
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；另依赖 4.1 的 AC2 EXPLAIN —— 同一个接口）
   4-3-全屏推荐集合页: ready-for-dev                      # 2 列网格 + 分页 + 空态；**「查看全部」入口由本条一并加上**（它的落点是本条才交付的页面，放 4-1 会成前向依赖）
   4-4-探索tab顶部宠物横滑行: ready-for-dev               # 加在 1-1 已落地的场所入口行**之下**；两模块分层清晰不叠一堆；推荐池为空时整行不渲染

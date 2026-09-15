@@ -29,7 +29,8 @@ import 'visitor_archive_view.dart';
 import 'widgets/archive_calendar.dart';
 import 'widgets/diary_header.dart';
 import 'widgets/pet_recommendation_grid.dart';
-import 'widgets/recommended_pet_card.dart' show kPetRecommendFromDiaryEmpty;
+import 'widgets/recommended_pet_card.dart'
+    show kPetRecommendFromDiaryEmpty, kPetRecommendFromDiaryNonOwner;
 import 'widgets/share_fab.dart';
 import 'widgets/timeline_item_tile.dart';
 import '../../shop/presentation/widgets/repurchase_zones_v2.dart';
@@ -1018,34 +1019,64 @@ class _EmptyProfileView extends ConsumerWidget {
   }
 }
 
-class _NonOwnerView extends StatelessWidget {
+/// 状态 B / C（PLANNING / ENTHUSIAST）：「声明未养宠 / 计划养宠」那一屏。
+///
+/// <h3>🔴 V1.3.0 batch-b1 Story 4.2：这一屏**也**给推荐集合（B1-D2）</h3>
+/// PRD §2.4 只写了「未建档态」，但代码里登录用户其实有**两种**无档案状态，
+/// 而「从没养过宠物、只是想先看看」的这批人恰恰最该被引去逛别人家的宠物 ——
+/// 看到一句「你还没有宠物」就退出去是这一屏改版前的真实结局。
+///
+/// ⚠️ 与未建档态（[_EmptyProfileView]）是**两批完全不同的人**，所以埋点的 `from` 也分开
+/// （AC3：`diary_non_owner` vs `diary_empty`），好分别看两批人的转化。
+/// 🛡 原有引导内容（标题 + 「Ubah status」）**原样保留、一个不删**（AC1）。
+class _NonOwnerView extends ConsumerWidget {
   const _NonOwnerView({required this.onChangeStatus});
 
   final VoidCallback onChangeStatus;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    // 🔴 同 _EmptyProfileView：**推荐位真的有卡**时才换版面。
+    // 池子为空 / 取不到 / 还在加载都远比有卡常见，那些情形下这一屏必须与改动前逐像素相同。
+    final hasRecommendations =
+        ref.watch(petRecommendationsProvider).value?.isNotEmpty ?? false;
+    final guidance = [
+      Text(l10n.growthArchiveNonOwnerTitle, textAlign: TextAlign.center),
+      const SizedBox(height: AppSpacing.lg),
+      FilledButton(
+        key: const ValueKey('changeStatusButton'),
+        onPressed: onChangeStatus,
+        child: Text(l10n.growthArchiveChangeStatus),
+      ),
+    ];
     return Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(title: Text(l10n.tabProfile), backgroundColor: AppColors.base),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(l10n.growthArchiveNonOwnerTitle, textAlign: TextAlign.center),
-              const SizedBox(height: AppSpacing.lg),
-              FilledButton(
-                key: const ValueKey('changeStatusButton'),
-                onPressed: onChangeStatus,
-                child: Text(l10n.growthArchiveChangeStatus),
+      body: hasRecommendations
+          ? SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ...guidance,
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xl),
+                    child:
+                        PetRecommendationGrid(from: kPetRecommendFromDiaryNonOwner),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-      ),
+            )
+          : Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: guidance,
+                ),
+              ),
+            ),
     );
   }
 }
