@@ -36,6 +36,8 @@ import '../../features/me/presentation/delete_account_page.dart';
 import '../../features/me/presentation/language_settings_page.dart';
 import '../../features/me/presentation/me_page.dart';
 import '../../features/me/presentation/settings_page.dart';
+import '../../features/profile/domain/archive_scope.dart';
+import '../../features/profile/presentation/visitor_archive_view.dart';
 import '../../features/social/domain/account_action_entry.dart';
 import '../../features/social/presentation/blocked_users_page.dart';
 import '../../features/support/presentation/my_tickets_page.dart';
@@ -916,6 +918,19 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //
       // `?entry=` 只喂埋点（从 Feed / 详情页 / 评论区哪儿点进来的），**不影响任何行为**；
       // 缺省或写错 → 回落 `mini_profile`，页面照常。
+      // 宠物访客视图的**站内入口**（V1.3.0 batch-b1 Story 2.3 · AD-4）。
+      //
+      // 🔴 与分享链接落点 `/pet/{token}`（单数）**是两条路由，刻意不合并**：
+      //    那条按不可枚举 token、**对未登录开放**（同一个链接在浏览器里不用登录就能看完，
+      //    App 内要求登录只会把人推回浏览器）；这条按 petId、**必须登录**（AD-4 Rule 1）。
+      // ⚠️ 本路由**故意不进** `_controlledLocations` —— 登录门控在**进入前**由宠物卡
+      //    的 `requireLogin` 做（FR-0C 的既有惯例），真正的边界在服务端那条不放行的规则上。
+      GoRoute(
+        path: VisitorArchiveView.inAppRoutePattern,
+        builder: (c, s) => VisitorArchiveView(
+          scope: ArchiveScope.inAppVisitor(int.parse(s.pathParameters['petId']!)),
+        ),
+      ),
       GoRoute(
         path: PublicProfilePage.routePattern,
         builder: (c, s) => PublicProfilePage(

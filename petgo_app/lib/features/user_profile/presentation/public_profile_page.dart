@@ -19,6 +19,9 @@ import '../../auth/domain/auth_guard.dart';
 import '../../social/data/blocked_users_repository.dart';
 import '../../social/domain/account_action_entry.dart';
 import '../../social/presentation/account_report_sheet.dart';
+import '../../profile/domain/pet_age.dart';
+import '../../profile/presentation/visitor_archive_view.dart';
+import '../data/public_profile_pet_repository.dart';
 import '../data/public_profile_repository.dart';
 import 'public_user_posts_controller.dart';
 
@@ -70,8 +73,8 @@ Future<void> openUserProfile(
 ///
 /// ## 页面结构（UI 稿 C1）
 /// 身份区（头像 / 昵称 / 运营标签 / **加入时间** / 签名 / 两个聚合计数）
+/// → 宠物区（一张卡，点进去看那只宠物的访客视图）
 /// → 内容区（2 列裸网格，复用「我的」页那一格的公共组件）。
-/// **宠物卡是 Story 2.3** —— 还没有。
 ///
 /// ## 🔴 FR-118.7 的「不放」清单（AC5 反向验收）
 /// 主页上**没有**里程碑徽章墙、护照集章数、打卡足迹、主页级 H5 分享入口、
@@ -235,6 +238,9 @@ class PublicProfilePage extends ConsumerWidget {
             ),
           ],
         ),
+        // 宠物区（Story 2.3 · AC3）。没建过档案的人这里整块不渲染 ——
+        // 「他还没养宠物」不需要一张空卡片来说明。
+        _PetSection(userId: userId),
         const SizedBox(height: AppSpacing.lg),
         Padding(
           padding: const EdgeInsets.only(left: AppSpacing.xs, bottom: AppSpacing.sm),
@@ -484,6 +490,111 @@ class _PostGrid extends ConsumerWidget {
     } catch (_) {
       if (context.mounted) showAppToast(context, l10n.profileLoadFailed);
     }
+  }
+}
+
+/// 主页宠物区（V1.3.0 batch-b1 Story 2.3 · AC3）：头像 / 名字 / 物种 · 年龄 · Diary 数
+/// +「Lihat →」，点进去是那只宠物的**访客视图**。
+///
+/// 视觉照 `me_page.dart` 的 `petmini`（紫浅底圆角行），两边是同一种行。
+///
+/// ## 🔴 点进去要登录（AC1），但卡片本身游客也看得见
+/// 站内访客接口**仅对登录用户开放**（AD-4 Rule 1），所以跳转前走 FR-0C 登录门控；
+/// 而「看这人养了只什么」与「看这人是谁」同一档，不需要登录。两层边界不同是刻意的。
+///
+/// ## ⚠️ Tailsonality 角色小标位是**天然空状态**
+/// FR-117 在批次 B2。这里**不做占位设计** —— 一个「敬请期待」的灰条比什么都没有更碍眼。
+class _PetSection extends ConsumerWidget {
+  const _PetSection({required this.userId});
+
+  final int userId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final pet = ref.watch(publicProfilePetProvider(userId)).value;
+    // 没有宠物 / 还在取 / 取失败 → 整块不渲染。
+    // 🛡 失败也不给错误态：这是主页上的一个装饰区块，为它摆一条红字会喧宾夺主
+    //    （身份区与内容区各自已经有自己的失败态）。
+    if (pet == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.md),
+      child: GestureDetector(
+        key: const ValueKey('profilePetCard'),
+        onTap: () => _open(context, ref, pet),
+        child: Container(
+          padding: const EdgeInsets.all(11),
+          decoration: BoxDecoration(
+            color: AppColors.mintTint2, // 与「我的」页 petmini 同一个底色
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 21,
+                backgroundColor: AppColors.border,
+                backgroundImage: AppImage.provider(pet.avatarUrl, thumbWidth: 160),
+                child: (pet.avatarUrl == null || pet.avatarUrl!.isEmpty)
+                    ? const Icon(Icons.pets, size: 20, color: AppColors.textTertiary)
+                    : null,
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      pet.name,
+                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _meta(l10n, pet),
+                      key: const ValueKey('profilePetMeta'),
+                      style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                '${l10n.meViewArchive} →',
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.mint),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 「种类 · 年龄 · Diary 数」—— **逐项复用「我的」页那套出口**
+  /// （物种文案 / `formatPetAge` / `meDiaryCount`），两处不另起口径。
+  String _meta(AppLocalizations l10n, PublicProfilePet pet) {
+    final species = switch (pet.petType) {
+      'CAT' => l10n.petTypeCat,
+      'DOG' => l10n.petTypeDog,
+      'OTHER' => l10n.petTypeOther,
+      _ => null,
+    };
+    return [
+      ?species,
+      // 不满 1 个月按天表达，避免「0th 0bln」（与档案页同一出口）。
+      ?formatPetAge(l10n, pet.birthday),
+      l10n.meDiaryCount(pet.diaryCount > 99 ? '99+' : '${pet.diaryCount}'),
+    ].join(' · ');
+  }
+
+  /// FR-0C：游客点进访客视图 → 强登录引导，**不发请求**（站内访客接口仅登录可用）。
+  void _open(BuildContext context, WidgetRef ref, PublicProfilePet pet) {
+    requireLogin(ref, context,
+        onAllowed: () => context.push('${VisitorArchiveView.inAppRouteBase}/${pet.petId}'));
   }
 }
 

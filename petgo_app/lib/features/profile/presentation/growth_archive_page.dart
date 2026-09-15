@@ -21,6 +21,7 @@ import '../data/timeline_repository.dart';
 import '../domain/card_link.dart';
 import '../domain/pet_profile.dart';
 import '../domain/share_service.dart';
+import '../domain/archive_scope.dart';
 import '../domain/timeline_item.dart';
 import 'diary_guest_page.dart';
 import 'visitor_archive_view.dart';
@@ -158,7 +159,8 @@ class GrowthArchivePage extends ConsumerWidget {
       DiaryUserState.guest => const DiaryGuestPage(),
       DiaryUserState.nonOwner =>
         _NonOwnerView(onChangeStatus: () => _openStatusEditor(context, ref)),
-      DiaryUserState.visitor => VisitorArchiveView(token: visitorToken!),
+      DiaryUserState.visitor =>
+        VisitorArchiveView(scope: ArchiveScope.visitor(visitorToken!)),
       DiaryUserState.ownerWithoutProfile ||
       DiaryUserState.ownerWithProfile =>
         _ownerBranch(context, ref, profileAsync!, state),

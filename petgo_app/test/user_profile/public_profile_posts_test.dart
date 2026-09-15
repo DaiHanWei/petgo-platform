@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/user_profile/data/public_profile_pet_repository.dart';
 import 'package:tailtopia/features/user_profile/data/public_profile_repository.dart';
 import 'package:tailtopia/features/user_profile/data/public_user_posts_repository.dart';
 import 'package:tailtopia/features/user_profile/presentation/public_profile_page.dart';
@@ -106,6 +107,8 @@ Future<_Nav> _pump(
   final container = ProviderContainer(overrides: [
     publicProfileRepositoryProvider.overrideWithValue(_FakeProfileRepo(profile ?? _profile())),
     publicUserPostsRepositoryProvider.overrideWithValue(postsRepo),
+    // 宠物卡在本文件里不是被验对象 —— 给一个「没有宠物」，免得走真网络。
+    publicProfilePetProvider(_kTargetId).overrideWith((ref) async => null),
     authControllerProvider.overrideWith(_LoggedInAuth.new),
   ]);
   addTearDown(container.dispose);
@@ -263,7 +266,11 @@ void main() {
           .readAsLinesSync()
           .map((l) => l.trimLeft())
           .where((l) => !l.startsWith('import ') && !l.startsWith('//') && !l.startsWith('*'))
-          .join('\n');
+          .join('\n')
+          // ⚠️ `VisitorArchiveView` 是**宠物访客视图**（Story 2.3 交付的入口，该有），
+          // 与 FR-118.7 说的「访客记录」（谁看过我的主页）是两回事 —— 先剔掉再扫，
+          // 否则这条会把一个正确的实现判成违规。
+          .replaceAll('VisitorArchiveView', '');
       const forbidden = <String, String>{
         'milestone': '里程碑徽章墙',
         'passport': '护照集章数',

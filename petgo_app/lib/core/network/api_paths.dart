@@ -203,6 +203,26 @@ class ApiPaths {
 
   static String sharedPetDay(String token) => '$base/public/shared-pets/$token/day';
 
+  // ===== 宠物访客视图的**站内入口**（V1.3.0 batch-b1 Story 2.3 · AD-4）=====
+  //
+  // 🔴 与上面那组 `/public/shared-pets/{token}/*` **落到同一层服务端投影**，差的只是鉴权边界：
+  //    那组游客可读、按不可枚举分享 token；这组**仅登录可用**、按 petId。
+  // 🛡 站内入口**拿不到也不需要**对方的分享 token —— 那是一条可转发到站外的永久公开链接
+  //    （B1-D1 否掉的方案）。站内可见 ≠ 可对外分发。
+  // ⚠️ **没有 calendar / day**：访客视图没有日历（两次拍板不做），不是漏写。
+
+  /// 站内访客：宠物档案。
+  static String inAppPetProfile(int petId) => '$base/pets/$petId/visitor/profile';
+
+  /// 站内访客：统计条三列。
+  static String inAppPetStats(int petId) => '$base/pets/$petId/visitor/stats';
+
+  /// 站内访客：时间线（不分页，`?limit=`）。
+  static String inAppPetTimeline(int petId) => '$base/pets/$petId/visitor/timeline';
+
+  /// 他人公开主页的**宠物卡**（Story 2.3 · AC3）。游客可读；没有档案时 204。
+  static String userPublicPet(int userId) => '$base/users/$userId/pet';
+
   /// 里程碑列表/进度（Story 8.1/8.2 · FR-42）。
   static const String petProfileMilestones = '$base/pet-profiles/me/milestones';
 

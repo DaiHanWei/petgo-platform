@@ -189,6 +189,11 @@ public class SecurityConfig {
                         // ⚠️ 可见范围**不靠这条放行**把关 —— 非 PUBLIC 的内容在 SQL 层就查不出来（NFR-2）；
                         // 拉黑守卫在 controller 里与 /profile **各拦一次**（只拦主页会留个绕过口）。
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/posts").permitAll()
+                        // 主页宠物卡（Story 2.3 · AC3）：看这人养了只什么，同样不需要登录。
+                        // ⚠️ **点进去**的宠物访客视图（`/api/v1/pets/*/visitor/**`）**刻意不在这里放行** ——
+                        // AC1 明写"仅对登录用户开放"，它靠落进默认的 authenticated 规则实现，
+                        // 而不是再写一条规则（少动一次安全配置就少一次出错机会）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/*/pet").permitAll()
                         // Toko 商品只读对游客可见（V1.4.0 Story 1.1，FR-93A）：GET 商品列表/详情放行。
                         // 与 FR-78「未登录点击非落地 Tab 触发登录引导」有意不同——商品浏览是转化漏斗
                         // 最上层，登录墙会直接杀掉转化；登录引导推迟到「加入购物车」（Story 3.6）。

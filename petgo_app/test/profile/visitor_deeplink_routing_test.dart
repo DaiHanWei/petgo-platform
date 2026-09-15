@@ -6,6 +6,7 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
+import 'package:tailtopia/features/profile/domain/archive_scope.dart';
 import 'package:tailtopia/features/profile/domain/archive_stats.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/domain/share_service.dart';
@@ -66,10 +67,10 @@ Widget _wrap({
           happyMomentCount: 0, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
       shareFabAnimatedShownProvider.overrideWith((ref) async => true),
       // 访客态数据
-      visitorProfileProvider(_sharedToken).overrideWith((ref) async => _sharedPet),
-      visitorStatsProvider(_sharedToken).overrideWith((ref) async => const ArchiveStats(
+      visitorProfileProvider(const ArchiveScope.visitor(_sharedToken)).overrideWith((ref) async => _sharedPet),
+      visitorStatsProvider(const ArchiveScope.visitor(_sharedToken)).overrideWith((ref) async => const ArchiveStats(
           happyMomentCount: 1, consultCount: 0, milestoneCompleted: 1, milestoneTotal: 31)),
-      visitorTimelineProvider(_sharedToken)
+      visitorTimelineProvider(const ArchiveScope.visitor(_sharedToken))
           .overrideWith((ref) async => const TimelinePage(items: [])),
     ],
     child: const MaterialApp(

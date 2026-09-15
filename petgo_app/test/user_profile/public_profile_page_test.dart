@@ -12,6 +12,7 @@ import 'package:tailtopia/features/social/data/blocked_users_repository.dart';
 import 'package:tailtopia/features/social/domain/account_action_entry.dart';
 import 'package:tailtopia/features/social/domain/account_report_reason.dart';
 import 'package:tailtopia/features/social/domain/blocked_user.dart';
+import 'package:tailtopia/features/user_profile/data/public_profile_pet_repository.dart';
 import 'package:tailtopia/features/user_profile/data/public_profile_repository.dart';
 import 'package:tailtopia/features/user_profile/data/public_user_posts_repository.dart';
 import 'package:tailtopia/features/user_profile/presentation/public_profile_page.dart';
@@ -191,6 +192,8 @@ Future<_Probe> _pump(
     blockedUsersRepositoryProvider.overrideWithValue(blockRepo ?? _FakeBlockRepo()),
     accountReportRepositoryProvider.overrideWithValue(reportRepo ?? _FakeReportRepo()),
     publicUserPostsRepositoryProvider.overrideWithValue(postsRepo ?? _FakePostsRepo()),
+    // 宠物卡在本文件里不是被验对象 —— 给一个「没有宠物」，免得走真网络。
+    publicProfilePetProvider(_kTargetId).overrideWith((ref) async => null),
     authControllerProvider.overrideWith(_LoggedInAuth.new),
   ]);
   addTearDown(container.dispose);
@@ -501,6 +504,7 @@ void main() {
         blockedUsersRepositoryProvider.overrideWithValue(_FakeBlockRepo()),
         accountReportRepositoryProvider.overrideWithValue(_FakeReportRepo()),
         publicUserPostsRepositoryProvider.overrideWithValue(_FakePostsRepo()),
+        publicProfilePetProvider(_kTargetId).overrideWith((ref) async => null),
         authControllerProvider.overrideWith(_LoggedInAuth.new),
       ]);
       addTearDown(container.dispose);

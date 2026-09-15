@@ -145,7 +145,15 @@ development_status:
                                                         # 🔸 **一条自行判定的口径，建议本地确认**：上面那条隐藏排除只作用于网格、不作用于两个计数（计数说"这个人发了多少"，网格说"你能看到哪些"；访客知道自己隐藏过谁，所以不泄漏也不困惑）。story AC 与决策日志都没写到它
                                                         # 宠物卡(2-3)、编辑资料(2-4)、被拉黑/注销空态(2-5) 均未做
                                                         # L1/L2 待本地验收（清单见 story Completion Notes）
-  2-3-宠物档案访客视图站内入口: ready-for-dev            # 🔴 **共用件，Epic 4 复用**。AD-4：新建 petId 入口 + 复用 v1.1.6 那层只读投影；不下发对方宠物的分享 token；⚠️ 访客视图**没有日历**，别照旧稿补回去
+  2-3-宠物档案访客视图站内入口: review                    # 🔴 **共用件，Epic 4 复用**。AD-4：新建 petId 入口 + 复用 v1.1.6 那层只读投影；不下发对方宠物的分享 token；⚠️ 访客视图**没有日历**，别照旧稿补回去
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3285 例真实失败 0 / 前端 analyze 0 issue、1701 例）
+                                                        # 新端点 GET /api/v1/pets/{petId}/visitor/{profile,stats,timeline}（仅登录，靠"不写 permitAll"实现，没改安全配置）+ GET /api/v1/users/{id}/pet（宠物卡，游客可读，无档案回 204）
+                                                        # **无数据库迁移**。站内入口与分享入口落到同一层 VisitorProjectionService（AD-4 Rule 2），新增的只有一句 findVisibleProfileById
+                                                        # 🔴 拉黑守卫在主页/内容区/宠物卡/站内入口**各拦一次** —— 站内入口按 petId 直达，只拦主页等于留绕过口
+                                                        # ⚠️ 站内入口**根本没有 calendar/day 端点**，页面也没有切换行（测试断言映射恰好三条）
+                                                        # ⚠️ code-review 修掉 4 条：三个访客 provider 漏 isAutoDispose（换账号吃旧缓存 → 服务端拉黑守卫根本不被调用，与 bug 20260730-421/446 同型）/ return null 出去是 200 不是 204 / 为一个 Diary 数算了五条查询含两次健康表计数 / token ?? "" 把 fail-fast 变成畸形 URL
+                                                        # 🔸 **一条待产品确认的口径（本 story 按 AD-4 原样保留、未改）**：访客视图的 Diary 时间线含作者设为私密的条目（PRD §2.9 §② 的既有拍板，前提是"作者自己按下分享键"）。站内入口没有这个前提，而 ContentVisibility 把"他人主页"归在按 PUBLIC 过滤那一档 —— 两处口径在这个新入口上第一次撞上。缓解现状：私密条目点不开（openableByVisitor=false），但卡片文字与图片是渲染出来的
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes）
   2-4-自己视角的主页: ready-for-dev                      # 同页两视角；「编辑资料」在身份行内与头像同行，不塞 AppBar；「我的」Tab 一行不改
   2-5-被拉黑者视角与已注销用户的主页: ready-for-dev      # 🔴 模糊空态**必须与「真的没有公开内容」复用同一组件同一文案**，否则一对比就能推断出被拉黑；判定在服务端
 

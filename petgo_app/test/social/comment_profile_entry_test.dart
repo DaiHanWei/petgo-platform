@@ -12,6 +12,7 @@ import 'package:tailtopia/features/social/data/blocked_users_repository.dart';
 import 'package:tailtopia/features/social/domain/account_action_entry.dart';
 import 'package:tailtopia/features/social/domain/blocked_user.dart';
 import 'package:tailtopia/features/user_profile/data/public_profile_repository.dart';
+import 'package:tailtopia/features/user_profile/data/public_profile_pet_repository.dart';
 import 'package:tailtopia/features/user_profile/data/public_user_posts_repository.dart';
 import 'package:tailtopia/features/user_profile/presentation/public_profile_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -154,6 +155,7 @@ Future<_FakeProfileRepo> _pump(WidgetTester tester, List<Comment> comments,
     detailRepositoryProvider.overrideWithValue(_CommentsRepo(comments)),
     publicProfileRepositoryProvider.overrideWithValue(repo),
     publicUserPostsRepositoryProvider.overrideWithValue(_EmptyPostsRepo()),
+    publicProfilePetProvider(7).overrideWith((ref) async => null),
   ]);
   addTearDown(container.dispose);
   await _pumpWith(tester, container: container);
@@ -222,6 +224,7 @@ void main() {
       detailRepositoryProvider.overrideWithValue(repo),
       publicProfileRepositoryProvider.overrideWithValue(_FakeProfileRepo(_budi)),
       publicUserPostsRepositoryProvider.overrideWithValue(_EmptyPostsRepo()),
+      publicProfilePetProvider(7).overrideWith((ref) async => null),
       blockedUsersRepositoryProvider.overrideWithValue(blocks),
       authControllerProvider.overrideWith(_LoggedInAuth.new),
     ]);
