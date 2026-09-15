@@ -90,7 +90,14 @@ development_status:
                                                         # AC3 后续动作以 photo_lightbox.dart 里的 TODO(批次A/FR-115) 记录
                                                         # ⚠️ code-review 修掉 5 条：thumbWidth 死参数 / "原图"注释不实（服务端只发 1080 px，真原图会带 GPS）/ 死链一屏全黑 / 夹取没下沉进组件 / 测试吞掉全部异常
                                                         # L2 待本地验收（清单见 story Completion Notes）
-  1-7-场所评论与二元态度: ready-for-dev                  # AD-8 独立建表 place_comments，不改既有 comments、不用多态外键；一级评论 only；**用户可自删自己的评论**（校验本人）
+  1-7-场所评论与二元态度: review                         # AD-8 独立建表 place_comments，不改既有 comments、不用多态外键；一级评论 only；**用户可自删自己的评论**（校验本人）
+                                                        # 2026-09-15 云端 L0 全绿 → review；新迁移 V20260915_0813__init_place_comments.sql
+                                                        # 🔴 表里没有 parent_id = 「只有一级」是结构性保证（实体/DTO/端点三层同样没有回复的位置）
+                                                        # 拉黑只做 R1（按查看者），**刻意没有 R2 影子评论**：场所没有主人，标记人连场所本身都改不了
+                                                        # 评论数接真值（viewer 维度、批量取）；两个态度计数仍为 0 → Story 1.8
+                                                        # ⚠️ code-review 修掉 4 条：兽医 token 被当成 users.id 读到未过审评论（安全）/ 注销级联漏了 place_comments（D1/D2）/ 两个零调用的状态迁移 / 发评论后详情计数不刷
+                                                        # 🔴 待 admin 主题：降级/高危评论目前一直挂 UNDER_REVIEW —— 入运营队列需扩 ReviewContentType（塞进现有 COMMENT 会让运营放行 comments 表里同号的别人评论）
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes）
   1-8-推荐不推荐计数: ready-for-dev                      # AD-9 Redis 计数器 + DB 回算自愈。三个触发点：创建 / 用户自删 / 运营删下架。本版只展示不参与排序
   1-9-他人为场所补充照片: ready-for-dev                  # 标注上传者；走既有上传链路 + 公开桶 + EXIF 剥离兜底
   1-10-场所分享到站外: ready-for-dev                     # H5 直出 /place/{随机码} + OG + 唤起链 + 安卓深链声明。🔒 **审核通过前不下发 og:image**（预览图会被平台缓存，不随下架消失）

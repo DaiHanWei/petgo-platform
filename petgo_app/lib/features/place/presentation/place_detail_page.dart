@@ -18,6 +18,8 @@ import '../../content/presentation/report_sheet.dart';
 import '../../profile/domain/share_service.dart';
 import '../data/place_repository.dart';
 import '../domain/place_detail.dart';
+import 'place_comment_composer.dart';
+import 'place_comment_section.dart';
 import 'place_distance_format.dart';
 import 'place_labels.dart';
 import 'place_location_controller.dart';
@@ -33,7 +35,7 @@ import 'place_mini_map.dart';
 /// <h2>范围边界（别顺手加）</h2>
 /// <ul>
 ///   <li>**点照片看大图**已接上（Story 1.6）：走公共 `PhotoLightbox`（从内容详情页原样抽出，行为一字未改）；</li>
-///   <li>**评论区 + 二元态度**归 Story 1.7；本页只显示评论数（1.7 前恒 0）；</li>
+///   <li>**评论区 + 二元态度**已接上（Story 1.7）：一级 only，态度在输入的展开态里；</li>
 ///   <li>**分享出 H5 链接**归 Story 1.10 —— 本页的分享按钮只分享「名称 + 地址」文本（见 `_onShare`）。</li>
 /// </ul>
 ///
@@ -80,10 +82,14 @@ class PlaceDetailPage extends ConsumerWidget {
       },
       // 举报入口（AC5）。⚠️ 只在**真的有这个场所**时才给 —— 下架态弹举报抽屉毫无意义。
       onReport: async.hasValue ? () => _onReport(context, ref) : null,
+      // 🔴 输入条只在**场所真的存在**时出现（Story 1.7）：
+      // 404 空态下挂一个输入框，用户打完字一发就是另一个 404。
+      composer: async.hasValue ? PlaceCommentComposer(token: token) : null,
     );
   }
 
-  Widget _scaffold(AppLocalizations l10n, Widget body, {VoidCallback? onReport}) =>
+  Widget _scaffold(AppLocalizations l10n, Widget body,
+          {VoidCallback? onReport, Widget? composer}) =>
       Scaffold(
         backgroundColor: AppColors.cream,
         appBar: AppBar(
@@ -101,6 +107,9 @@ class PlaceDetailPage extends ConsumerWidget {
           ],
         ),
         body: body,
+        // 吸底输入条（UI 稿 A4）。⚠️ 用 bottomNavigationBar 而不是 Stack：
+        // 前者会自动把 body 的底部内边距让出来，评论区最后一条不会被输入条盖住。
+        bottomNavigationBar: composer,
       );
 
   Widget _errorBody(BuildContext context, WidgetRef ref, AppLocalizations l10n,
@@ -183,8 +192,13 @@ class PlaceDetailPage extends ConsumerWidget {
               const SizedBox(height: AppSpacing.md),
               _ShareButton(onTap: (origin) => _onShare(context, ref, l10n, p, origin)),
               const SizedBox(height: AppSpacing.lg),
-              // 评论数（Story 1.7 接真实评论区；这里只是那个数字）。
+              // 计数行：照片数 / 评论数 / 👍 / 👎（两个态度计数由 Story 1.8 接真值）。
               _CountsRow(detail: p),
+              const SizedBox(height: AppSpacing.lg),
+              const Divider(height: 1, thickness: 1, color: AppColors.line2),
+              const SizedBox(height: AppSpacing.md),
+              // 评论区（Story 1.7）。🔒 游客可读，发言时才走登录引导。
+              PlaceCommentSection(token: token),
             ],
           ),
         ),

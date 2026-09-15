@@ -217,6 +217,20 @@ public class SecurityConfig {
                         // 举报场所（Story 1.5）：**仅 role=USER**，与标记场所同一理由
                         // （controller 把 jwt.sub 当 users.id 用，兽医 token 的 sub 是 vetId）。
                         .requestMatchers(HttpMethod.POST, "/api/v1/places/*/reports").hasRole("USER")
+                        // 场所评论列表（Story 1.7）：同详情，GET 对游客放行。
+                        // ⚠️ 这条**必须写在** `GET /api/v1/places/*` 之后也无妨（两者路径形状不同，
+                        //    `/*` 只匹配一段），但绝不能省 —— 省了它游客拉评论会 401，
+                        //    而详情页本身对游客开着，评论区就成了一块登录墙。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/places/*/comments").permitAll()
+                        // 发表场所评论（Story 1.7）：**仅 role=USER**，与标记/举报同一理由
+                        // （controller 把 jwt.sub 当 users.id 用，兽医 token 的 sub 是 vetId ——
+                        // 落到 authenticated() 的话，兽医会以一个无关用户的名义发评论，
+                        // 而 author_id 没有外键、会被静默写进去，且评论**只有作者本人能删**，
+                        // 那个"作者"根本不是他 → 谁都删不掉）。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/places/*/comments").hasRole("USER")
+                        // 删除自己的场所评论（Story 1.7 AC7）：仅 role=USER；
+                        // 「是不是本人」在 service 里硬校验，不靠这一行。
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/place-comments/*").hasRole("USER")
                         // 兽医工作台端点（Story 5.1+）：仅 role=VET 可达；user/guest → 403（双向门控）
                         .requestMatchers("/api/v1/vet/**").hasRole("VET")
                         // 用户侧问诊端点（Story 5.2+ / 计费流 3-2~3-4）：仅 role=USER 可达（vet/guest → 403）

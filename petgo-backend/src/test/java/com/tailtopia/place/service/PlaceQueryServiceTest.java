@@ -35,19 +35,41 @@ class PlaceQueryServiceTest {
 
     private PlaceRepository places;
     private AccountQueryService accounts;
+    private PlaceCommentQueryService placeComments;
     private PlaceQueryService service;
 
     @BeforeEach
     void setUp() {
         places = Mockito.mock(PlaceRepository.class);
         accounts = Mockito.mock(AccountQueryService.class);
-        service = new PlaceQueryService(places, accounts);
+        // Story 1.7：评论数从这里批量取（默认空 Map = 一条评论都没有）。
+        placeComments = Mockito.mock(PlaceCommentQueryService.class);
+        Mockito.when(placeComments.countsByPlaceIds(Mockito.anyList(), Mockito.any()))
+                .thenReturn(java.util.Map.of());
+        service = new PlaceQueryService(places, accounts, placeComments);
     }
 
+    /** 自增 id 的发号器 —— 只要不同就行（评论数 Map 按 id 取）。 */
+    private static final java.util.concurrent.atomic.AtomicLong SEQ =
+            new java.util.concurrent.atomic.AtomicLong(1);
+
     private static Place place(String token, double lat, double lng) {
-        return Place.mark(token, "Tempat " + token, PlaceType.CAFE,
+        // 🔴 必须带 id：Story 1.7 起列表/详情要按 placeId 批量取评论数，
+        // 没有 id 的裸实体在真实路径上不存在（JPA 一定赋了值）。
+        return withId(Place.mark(token, "Tempat " + token, PlaceType.CAFE,
                 List.of(PlaceTag.PETS_ALLOWED_INSIDE), lat, lng, "Jl. Test", null,
-                List.of("https://cdn/x.jpg"), 1L);
+                List.of("https://cdn/x.jpg"), 1L), SEQ.getAndIncrement());
+    }
+
+    private static Place withId(Place p, long id) {
+        try {
+            var f = Place.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(p, id);
+            return p;
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Place.id 字段名变了，改这里", e);
+        }
     }
 
     // ===== AC4：两条独立分支 =====
@@ -57,7 +79,7 @@ class PlaceQueryServiceTest {
         when(places.findByStatusOrderByCreatedAtDescIdDesc(eq(PlaceStatus.ACTIVE), any(Limit.class)))
                 .thenReturn(List.of(place("a", JKT_LAT, JKT_LNG)));
 
-        PlaceListResponse resp = service.list(null, null);
+        PlaceListResponse resp = service.list(null, null, null);
 
         assertThat(resp.sortMode()).isEqualTo(PlaceListResponse.SORT_MODE_RECENT);
         // 🔴 按最新分支**一次都不能**走粗筛查询 —— 合并成一条 SQL 的写法在这里会红。
@@ -71,7 +93,7 @@ class PlaceQueryServiceTest {
                 anyDouble(), anyDouble(), anyDouble(), any(Limit.class)))
                 .thenReturn(List.of(place("a", JKT_LAT, JKT_LNG)));
 
-        PlaceListResponse resp = service.list(JKT_LAT, JKT_LNG);
+        PlaceListResponse resp = service.list(JKT_LAT, JKT_LNG, null);
 
         assertThat(resp.sortMode()).isEqualTo(PlaceListResponse.SORT_MODE_DISTANCE);
         verify(places, never())
@@ -84,9 +106,9 @@ class PlaceQueryServiceTest {
         when(places.findByStatusOrderByCreatedAtDescIdDesc(any(), any(Limit.class)))
                 .thenReturn(List.of());
 
-        assertThat(service.list(JKT_LAT, null).sortMode())
+        assertThat(service.list(JKT_LAT, null, null).sortMode())
                 .isEqualTo(PlaceListResponse.SORT_MODE_RECENT);
-        assertThat(service.list(null, JKT_LNG).sortMode())
+        assertThat(service.list(null, JKT_LNG, null).sortMode())
                 .isEqualTo(PlaceListResponse.SORT_MODE_RECENT);
     }
 
@@ -101,7 +123,7 @@ class PlaceQueryServiceTest {
         when(places.findActiveWithinBox(any(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
                 anyDouble(), anyDouble(), any(Limit.class))).thenReturn(List.of(far, mid, near));
 
-        PlaceListResponse resp = service.list(JKT_LAT, JKT_LNG);
+        PlaceListResponse resp = service.list(JKT_LAT, JKT_LNG, null);
 
         assertThat(resp.items()).extracting("token")
                 .containsExactly("near", "mid", "far");
@@ -120,7 +142,7 @@ class PlaceQueryServiceTest {
         when(places.findByStatusOrderByCreatedAtDescIdDesc(any(), any(Limit.class)))
                 .thenReturn(List.of(place("a", JKT_LAT, JKT_LNG)));
 
-        PlaceListResponse resp = service.list(null, null);
+        PlaceListResponse resp = service.list(null, null, null);
 
         assertThat(resp.items().get(0).distanceMeters()).isNull();
     }
@@ -138,7 +160,7 @@ class PlaceQueryServiceTest {
                 .thenReturn(List.of(place("jakarta", JKT_LAT, JKT_LNG)));
 
         // 泗水（Surabaya），离雅加达约 660 km，远在 50 km 粗筛半径外。
-        PlaceListResponse resp = service.list(-7.2575, 112.7521);
+        PlaceListResponse resp = service.list(-7.2575, 112.7521, null);
 
         assertThat(resp.sortMode()).isEqualTo(PlaceListResponse.SORT_MODE_RECENT);
         assertThat(resp.items()).hasSize(1);
@@ -159,7 +181,7 @@ class PlaceQueryServiceTest {
         when(places.findActiveWithinBox(any(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
                 anyDouble(), anyDouble(), any(Limit.class))).thenReturn(List.of(inside, corner));
 
-        PlaceListResponse resp = service.list(JKT_LAT, JKT_LNG);
+        PlaceListResponse resp = service.list(JKT_LAT, JKT_LNG, null);
 
         assertThat(resp.items()).extracting("token").containsExactly("inside");
     }
@@ -173,7 +195,7 @@ class PlaceQueryServiceTest {
         when(places.findByStatusOrderByCreatedAtDescIdDesc(any(), any(Limit.class)))
                 .thenReturn(List.of(place("jakarta", JKT_LAT, JKT_LNG)));
 
-        PlaceListResponse resp = service.list(JKT_LAT, JKT_LNG);
+        PlaceListResponse resp = service.list(JKT_LAT, JKT_LNG, null);
 
         assertThat(resp.sortMode()).isEqualTo(PlaceListResponse.SORT_MODE_RECENT);
         assertThat(resp.items()).extracting("token").containsExactly("jakarta");
@@ -193,7 +215,7 @@ class PlaceQueryServiceTest {
         when(places.findByStatusOrderByCreatedAtDescIdDesc(any(), any(Limit.class)))
                 .thenReturn(List.of());
 
-        service.list(JKT_LAT, JKT_LNG);
+        service.list(JKT_LAT, JKT_LNG, null);
 
         verify(places).findActiveWithinBox(eq(PlaceStatus.ACTIVE), eq(JKT_LAT), eq(JKT_LNG),
                 anyDouble(), anyDouble(), anyDouble(), anyDouble(),
@@ -212,7 +234,7 @@ class PlaceQueryServiceTest {
                 .thenReturn(java.util.Optional.empty());
 
         org.assertj.core.api.Assertions
-                .assertThatThrownBy(() -> service.detail("gone", null, null))
+                .assertThatThrownBy(() -> service.detail("gone", null, null, null))
                 .isInstanceOf(com.tailtopia.shared.error.AppException.class)
                 .hasMessageContaining("场所不存在");
     }
@@ -225,9 +247,9 @@ class PlaceQueryServiceTest {
         when(accounts.findAuthorViews(any()))
                 .thenReturn(java.util.Map.of(1L, com.tailtopia.auth.dto.AuthorView.anonymized(1L)));
 
-        assertThat(service.detail("kopi", JKT_LAT, JKT_LNG).distanceMeters())
+        assertThat(service.detail("kopi", JKT_LAT, JKT_LNG, null).distanceMeters())
                 .isNotNull().isBetween(900, 1300);
-        assertThat(service.detail("kopi", null, null).distanceMeters()).isNull();
+        assertThat(service.detail("kopi", null, null, null).distanceMeters()).isNull();
     }
 
     /** 非法坐标不当距离用（也不报错）—— 详情页比列表宽容：缺个距离位 ≠ 打不开页面。 */
@@ -239,7 +261,7 @@ class PlaceQueryServiceTest {
         when(accounts.findAuthorViews(any()))
                 .thenReturn(java.util.Map.of(1L, com.tailtopia.auth.dto.AuthorView.anonymized(1L)));
 
-        assertThat(service.detail("kopi", 999d, 999d).distanceMeters()).isNull();
+        assertThat(service.detail("kopi", 999d, 999d, null).distanceMeters()).isNull();
     }
 
     /** 标记人经既有作者投影出口取（不让 place 直 join users；注销自动匿名化）。 */
@@ -251,7 +273,7 @@ class PlaceQueryServiceTest {
         when(accounts.findAuthorViews(any()))
                 .thenReturn(java.util.Map.of(1L, com.tailtopia.auth.dto.AuthorView.anonymized(1L)));
 
-        assertThat(service.detail("kopi", null, null).markedBy().deleted()).isTrue();
+        assertThat(service.detail("kopi", null, null, null).markedBy().deleted()).isTrue();
         verify(accounts).findAuthorViews(List.of(1L));
     }
 
@@ -263,8 +285,8 @@ class PlaceQueryServiceTest {
         when(places.findActiveWithinBox(any(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
                 anyDouble(), anyDouble(), any(Limit.class))).thenReturn(List.of());
 
-        assertThat(service.list(null, null).items()).isEmpty();
-        assertThat(service.list(JKT_LAT, JKT_LNG).items()).isEmpty();
+        assertThat(service.list(null, null, null).items()).isEmpty();
+        assertThat(service.list(JKT_LAT, JKT_LNG, null).items()).isEmpty();
     }
 
     /** 安全上限传到了仓储（端点匿名可达，没上限等于把整张表序列化一遍）。 */
@@ -273,7 +295,7 @@ class PlaceQueryServiceTest {
         when(places.findByStatusOrderByCreatedAtDescIdDesc(any(), any(Limit.class)))
                 .thenReturn(List.of());
 
-        service.list(null, null);
+        service.list(null, null, null);
 
         verify(places).findByStatusOrderByCreatedAtDescIdDesc(PlaceStatus.ACTIVE,
                 Limit.of(PlaceQueryService.MAX_LIST_SIZE));

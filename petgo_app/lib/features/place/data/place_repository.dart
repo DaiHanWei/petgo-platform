@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
+import '../domain/place_comment.dart';
 import '../domain/place_detail.dart';
 import '../domain/place_summary.dart';
 
@@ -110,6 +111,47 @@ class PlaceRepository {
       },
     );
     return PlaceDetail.fromJson(resp.data ?? const {});
+  }
+
+  /// 场所评论列表（Story 1.7）。🔒 **游客可读**（后端 GET 放行）。
+  ///
+  /// [cursor] 为空取第一页；下一页传上一页的 `nextCursor`。
+  Future<PlaceCommentPage> fetchComments(String token, {String? cursor}) async {
+    final resp = await dio.get<Map<String, dynamic>>(
+      '${ApiPaths.places}/$token/comments',
+      queryParameters: {'cursor': ?cursor},
+    );
+    final data = resp.data;
+    if (data == null) return PlaceCommentPage.empty;
+    return PlaceCommentPage.fromJson(data);
+  }
+
+  /// 发表一条场所评论（Story 1.7 · AC2/AC3）。
+  ///
+  /// 🔴 **没有 `parentId` 参数，也不会有**：场所评论只有一级（PRD ③）。
+  ///
+  /// [attitude] 可空 —— 可以不表态（AC3）。反过来**不能只表态不写评论**（B1-D3），
+  /// 所以正文是必填的位置参数。
+  ///
+  /// 审核拦截（422 `comment-blocked`）与场所已下架（404）都以 [DioException] 抛给页面 ——
+  /// 两者的提示文案不同，判别在页面侧（同 `comment_composer.dart` 的既定处理）。
+  Future<PlaceComment> createComment(
+    String token,
+    String body, {
+    PlaceCommentAttitude? attitude,
+  }) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      '${ApiPaths.places}/$token/comments',
+      data: {'body': body, 'attitude': ?attitude?.api},
+    );
+    return PlaceComment.fromJson(resp.data ?? const {});
+  }
+
+  /// 删除**自己的**场所评论（Story 1.7 · AC7）。
+  ///
+  /// 🔒 「是不是本人」由**服务端**校验（403）——客户端的 `mine` 只决定画不画这个入口。
+  Future<void> deleteComment(int commentId) async {
+    await dio.delete<void>('${ApiPaths.placeComments}/$commentId');
   }
 
   /// 举报一个场所（Story 1.5 · AC5）。

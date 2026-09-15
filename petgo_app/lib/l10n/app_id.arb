@@ -2224,5 +2224,19 @@
   "placeDetailReport": "Laporkan",
   "placeDetailReported": "Terima kasih \u2014 kami akan memeriksanya.",
   "placeDetailGoneTitle": "Tempat ini tidak tersedia",
-  "placeDetailGoneBody": "Mungkin sudah dihapus."
+  "placeDetailGoneBody": "Mungkin sudah dihapus.",
+  "placeCommentsTitleCount": "Komentar ({count})",
+  "placeCommentsTitle": "Komentar",
+  "placeCommentsEmpty": "Belum ada komentar. Bagikan tipsmu untuk yang datang berikutnya.",
+  "placeCommentsLoadMore": "Muat lagi",
+  "placeCommentHint": "Tulis komentar…",
+  "placeAttitudeLabel": "Sikapmu (opsional)",
+  "placeAttitudeRecommend": "Rekomen",
+  "placeAttitudeNotRecommend": "Tidak",
+  "placeCommentOnlyVisibleToYou": "Hanya kamu yang bisa melihat",
+  "placeCommentDeleteTitle": "Hapus komentar ini?",
+  "placeCommentDeleteBody": "Tindakan ini tidak bisa dibatalkan.",
+  "placeCommentDeleteConfirm": "Hapus",
+  "placeCommentDeleted": "Komentar dihapus",
+  "placeCommentDeleteFailed": "Gagal menghapus. Coba lagi."
 }

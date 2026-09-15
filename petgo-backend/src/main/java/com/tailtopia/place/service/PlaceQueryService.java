@@ -13,6 +13,7 @@ import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,14 +25,17 @@ import org.springframework.transaction.annotation.Transactional;
  * <b>永远不会有编辑方法</b> —— 用户不可修改场所（2026-09-15 拍板），服务端硬拒而不是只藏入口。
  *
  * <h2>🔴 取数一律批量（AD-6）</h2>
- * 列表项的照片数直接从行内 JSONB 长度算，评论数与两个态度计数在本 story <b>恒为 0</b>
- * （{@code place_comments} 由 Story 1.7 建表、Redis 计数器由 1.8 接上）——
- * 所以整个列表<b>只有一条 SQL</b>，天然无 N+1。
+ * 列表项的照片数直接从行内 JSONB 长度算；<b>评论数经
+ * {@link PlaceCommentQueryService#countsByPlaceIds(List, Long)} 一次查询取回整页的 Map</b>
+ * （Story 1.7）—— <b>绝不在循环里按 placeId 逐条查</b>：逐条查在 20 个场所的冷启动数据上
+ * 看不出问题，正式运营起来就是整屏卡住的那个原因。
  *
- * <p>⚠️ <b>1.7 / 1.8 接真实计数时，必须在这里做「一次查询取回整页的计数 Map」</b>
- * （范式见 {@code AdminContentManageService} 的 {@code likeCounts(...)}），
- * 而不是在循环里按 placeId 逐条查。逐条查在 20 个场所的冷启动数据上看不出问题，
- * 正式运营起来就是整屏卡住的那个原因。
+ * <p>⚠️ 两个**态度**计数（👍/👎）在本 story 仍为 0 —— Redis 计数器 + DB 回算自愈是 Story 1.8
+ * 的交付物（AD-9）。接的时候同样是「整页一次取回」，位置就在下面那两个循环之前。
+ *
+ * <p>🔴 <b>评论数是 viewer 维度的</b>：拉黑过滤会让同一个场所对不同的人数字不同。
+ * 所以计数与评论列表**共用同一套过滤条件**（见 {@code PlaceCommentRepository}）——
+ * 不共用的话，用户会看到列表写着 3 条、点进去只有 2 条。
  *
  * <p>🛡 <b>不引入任何缓存</b>：AD-9 授权的只有「单个整数计数器 + DB 回算自愈」，
  * 给列表整页结果做缓存<b>不在授权范围内</b>，仍受基线「禁通用缓存层」约束。
@@ -53,10 +57,13 @@ public class PlaceQueryService {
 
     private final PlaceRepository places;
     private final AccountQueryService accounts;
+    private final PlaceCommentQueryService placeComments;
 
-    public PlaceQueryService(PlaceRepository places, AccountQueryService accounts) {
+    public PlaceQueryService(PlaceRepository places, AccountQueryService accounts,
+            PlaceCommentQueryService placeComments) {
         this.places = places;
         this.accounts = accounts;
+        this.placeComments = placeComments;
     }
 
     /**
@@ -66,10 +73,11 @@ public class PlaceQueryService {
      * 也不能让「下架了」与「从来没有过」在响应上可区分 —— 后者可以被用来判断某个 token
      * 曾经存在。客户端两种情况都落同一个「场所不存在」空态。
      *
-     * @param lat 可空；与 {@code lng} 同时给时计算距离（AC1 的「距离」位）
+     * @param lat      可空；与 {@code lng} 同时给时计算距离（AC1 的「距离」位）
+     * @param viewerId 当前查看者（游客为 null）—— 评论数是 viewer 维度的（拉黑过滤）
      */
     @Transactional(readOnly = true)
-    public PlaceDetailResponse detail(String token, Double lat, Double lng) {
+    public PlaceDetailResponse detail(String token, Double lat, Double lng, Long viewerId) {
         Place p = places.findByPublicTokenAndStatus(token, PlaceStatus.ACTIVE)
                 .orElseThrow(() -> AppException.notFound("场所不存在"));
         Integer distance = (lat != null && lng != null && GeoBox.isValidCoordinate(lat, lng))
@@ -79,8 +87,9 @@ public class PlaceQueryService {
         // 标记人：走既有作者投影出口（注销自动匿名化，不让 place 直 join users）。
         AuthorView markedBy = accounts.findAuthorViews(List.of(p.getCreatedBy()))
                 .get(p.getCreatedBy());
-        // Story 1.5：评论与态度计数尚未交付 → 恒 0（契约先定，1.7/1.8 接真值）。
-        return PlaceDetailResponse.of(p, markedBy, distance, 0L, 0L, 0L);
+        // Story 1.7：评论数接真值（viewer 维度）；两个态度计数仍为 0，等 Story 1.8 的 Redis 计数器。
+        long commentCount = placeComments.countForPlace(p.getId(), viewerId);
+        return PlaceDetailResponse.of(p, markedBy, distance, commentCount, 0L, 0L);
     }
 
     /**
@@ -109,11 +118,11 @@ public class PlaceQueryService {
      * @param lng 经度，可空
      */
     @Transactional(readOnly = true)
-    public PlaceListResponse list(Double lat, Double lng) {
+    public PlaceListResponse list(Double lat, Double lng, Long viewerId) {
         if (lat == null || lng == null) {
-            return listRecent();
+            return listRecent(viewerId);
         }
-        return listByDistance(lat, lng);
+        return listByDistance(lat, lng, viewerId);
     }
 
     /**
@@ -125,13 +134,13 @@ public class PlaceQueryService {
      * <p>粗筛一个都没捞到（用户在雅加达以外）→ <b>回落按最新</b>，`sortMode` 如实回 {@code recent}。
      * 给一个空列表在技术上"正确"，但用户看到的是「这个功能什么都没有」。
      */
-    private PlaceListResponse listByDistance(double lat, double lng) {
+    private PlaceListResponse listByDistance(double lat, double lng, Long viewerId) {
         GeoBox box = GeoBox.around(lat, lng, SEARCH_RADIUS_METERS);
         List<Place> rows = places.findActiveWithinBox(PlaceStatus.ACTIVE, lat, lng,
                 box.minLatitude(), box.maxLatitude(), box.minLongitude(), box.maxLongitude(),
                 Limit.of(MAX_LIST_SIZE));
         if (rows.isEmpty()) {
-            return listRecent();
+            return listRecent(viewerId);
         }
         // 先算好距离再排序（一次 map + 一次 sort），不要在比较器里反复算 haversine。
         //
@@ -148,7 +157,7 @@ public class PlaceQueryService {
         }
         if (scored.isEmpty()) {
             // 框里有行但全在半径外（用户在两个城市之间）→ 与「框里一个都没有」同一处理。
-            return listRecent();
+            return listRecent(viewerId);
         }
         // 距离相同时按 id 倒序兜底，保证同一请求顺序稳定（否则刷新一次顺序就变了）。
         // nullsLast：已落库实体的 id 不会为空，但比较器不该因为一个未持久化实体就抛 NPE。
@@ -156,10 +165,14 @@ public class PlaceQueryService {
                 .thenComparing(w -> w.place().getId(),
                         Comparator.nullsLast(Comparator.reverseOrder())));
 
+        // 整页评论数一次取回（AD-6）。⚠️ 别挪进下面的循环 —— 那就是 N+1。
+        Map<Long, Long> commentCounts = placeComments.countsByPlaceIds(
+                scored.stream().map(w -> w.place().getId()).toList(), viewerId);
+
         List<PlaceListItemResponse> items = new ArrayList<>(scored.size());
         for (PlaceWithDistance w : scored) {
             items.add(PlaceListItemResponse.of(w.place(), (int) Math.round(w.meters()),
-                    0L, 0L, 0L));
+                    commentCounts.getOrDefault(w.place().getId(), 0L), 0L, 0L));
         }
         return PlaceListResponse.distance(items);
     }
@@ -175,17 +188,20 @@ public class PlaceQueryService {
      * 可空坐标参数然后在 SQL 里把两种语义混在一起。
      */
     @Transactional(readOnly = true)
-    public PlaceListResponse listRecent() {
+    public PlaceListResponse listRecent(Long viewerId) {
         List<Place> rows = places.findByStatusOrderByCreatedAtDescIdDesc(
                 PlaceStatus.ACTIVE, Limit.of(MAX_LIST_SIZE));
         if (rows.isEmpty()) {
             // 空列表让客户端走空态（引导「标记一个场所」），不是错误路径。
             return PlaceListResponse.recent(List.of());
         }
+        Map<Long, Long> commentCounts = placeComments.countsByPlaceIds(
+                rows.stream().map(Place::getId).toList(), viewerId);
         List<PlaceListItemResponse> items = new ArrayList<>(rows.size());
         for (Place p : rows) {
-            // Story 1.1：评论与态度计数尚未交付 → 恒 0（契约先定，1.7/1.8 接真值）。
-            items.add(PlaceListItemResponse.of(p, 0L, 0L, 0L));
+            // Story 1.7：评论数接真值；两个态度计数仍为 0（Story 1.8 的 Redis 计数器）。
+            items.add(PlaceListItemResponse.of(p, commentCounts.getOrDefault(p.getId(), 0L),
+                    0L, 0L));
         }
         return PlaceListResponse.recent(items);
     }

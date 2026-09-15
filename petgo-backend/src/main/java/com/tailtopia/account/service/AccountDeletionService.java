@@ -12,6 +12,7 @@ import com.tailtopia.content.service.ContentShareService;
 import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.notify.service.NotificationDeletionService;
 import com.tailtopia.pay.service.PawCoinAccountDeletionService;
+import com.tailtopia.place.service.PlaceCommentService;
 import com.tailtopia.profile.service.ProfileDeletionService;
 import com.tailtopia.share.service.ShareRewardDeletionService;
 import com.tailtopia.shared.im.ImAccountMapper;
@@ -62,6 +63,7 @@ public class AccountDeletionService {
     private final ShopAccountDeletionService shopDeletion;
     private final ContentShareService contentShareService;
     private final ShareRewardDeletionService shareRewardDeletion;
+    private final PlaceCommentService placeCommentService;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -72,7 +74,8 @@ public class AccountDeletionService {
             ApplicationEventPublisher events, ContentService contentService,
             ManualReviewService reviewService, ViolationCountService violationCountService,
             ShopAccountDeletionService shopDeletion, ContentShareService contentShareService,
-            ShareRewardDeletionService shareRewardDeletion) {
+            ShareRewardDeletionService shareRewardDeletion,
+            PlaceCommentService placeCommentService) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -89,6 +92,7 @@ public class AccountDeletionService {
         this.shopDeletion = shopDeletion;
         this.contentShareService = contentShareService;
         this.shareRewardDeletion = shareRewardDeletion;
+        this.placeCommentService = placeCommentService;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -133,6 +137,13 @@ public class AccountDeletionService {
         contentService.deactivateAuthorContent(userId);
         reviewService.removePendingForAuthor(userId);
         violationCountService.deleteByAccount(userId);
+
+        // V1.3.0 batch-b1 Story 1.7：场所评论同一口径（AUTHOR_DEACTIVATED，对他人隐藏）。
+        // 🔴 **不能漏**：场所评论是独立表（AD-8），content 那条级联碰不到它 ——
+        //    漏掉的结果是注销用户的场所评论继续挂着他的身份对所有人可见（违反 D1/D2）。
+        //    ⚠️ 同样必须在 user 行删除【前】：那之后 author_id 认不出人。
+        //    这里**不删行**：评论内容是场所攻略的一部分，消失的是身份展示，不是攻略。
+        placeCommentService.deactivateAuthorComments(userId);
 
         // 1.1.6 电商/分享注销联动（D1/D2 口径，同样须在 user 行匿名化【前】——此时 user_id 仍可识别）：
         //  ① shipping_addresses / shop_carts 纯个人数据物理删除；shop_orders 照 consult_orders 例

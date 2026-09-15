@@ -329,4 +329,10 @@ class ApiPaths {
   /// 场所列表是「这个功能里已经攒了些什么地方」的展示面，用登录墙拦它没有意义。
   /// ⚠️ Story 1.2 会加 `?lat=&lng=` 走距离分支；排序路径由服务端下发的 `sortMode` 说明。
   static const String places = '$base/places';
+
+  /// 场所评论的删除端点（Story 1.7 AC7）。
+  ///
+  /// ⚠️ 不挂在 `/places/{token}/comments/{id}` 下：删除只认评论 id，
+  /// 而那条路径会让人以为"换个 token 也能删同一条"。服务端亦然。
+  static const String placeComments = '$base/place-comments';
 }

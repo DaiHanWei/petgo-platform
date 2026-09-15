@@ -76,7 +76,8 @@ public class PlaceController {
      * 校验失败的 ProblemDetail 里也不回显坐标值。
      */
     @GetMapping
-    public PlaceListResponse list(@RequestParam(required = false) Double lat,
+    public PlaceListResponse list(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng) {
         if ((lat == null) != (lng == null)) {
             throw AppException.validation("经纬度必须同时提供");
@@ -84,7 +85,8 @@ public class PlaceController {
         if (lat != null && !GeoBox.isValidCoordinate(lat, lng)) {
             throw AppException.validation("坐标超出合法范围");
         }
-        return query.list(lat, lng);
+        // viewer 维度：评论数要按拉黑关系过滤（Story 1.7）。游客为 null，**不抛 401**。
+        return query.list(lat, lng, optionalUserId(jwt));
     }
 
     /**
@@ -129,10 +131,11 @@ public class PlaceController {
      * 「场所不存在」空态。让两者可区分等于泄漏「这个 token 曾经存在」。
      */
     @GetMapping("/{token}")
-    public PlaceDetailResponse detail(@PathVariable String token,
+    public PlaceDetailResponse detail(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String token,
             @RequestParam(required = false) Double lat,
             @RequestParam(required = false) Double lng) {
-        return query.detail(token, lat, lng);
+        return query.detail(token, lat, lng, optionalUserId(jwt));
     }
 
     /**
@@ -150,6 +153,32 @@ public class PlaceController {
         long userId = currentUserId(jwt);
         rateLimiter.check("rl:place:report:" + userId, REPORT_LIMIT, REPORT_WINDOW);
         placeService.report(token, userId, req.reasonType());
+    }
+
+    /**
+     * 游客路径用的「当前用户」：没有 JWT、或 JWT 不是 {@code role=USER} → null，**不抛 401**。
+     *
+     * <p>🔴 **必须看 role，不能只看 sub**：兽医 token 的 {@code sub} 是 **vetId**，
+     * 与 {@code users.id} 是两个会大量碰撞的命名空间。只认 sub 的话，一个兽医带着自己的
+     * token 打开场所详情，就会被当成「users.id 恰好等于该 vetId 的那个用户」——
+     * 于是**那个人尚未过审 / 已被下架的评论原文会下发给他**，还标着 `mine=true`
+     * （删除会被服务端拦下，但内容已经泄漏了）。
+     * <p>写端点靠 SecurityConfig 的 `hasRole("USER")` 挡住了同一个坑；读端点对游客放行，
+     * 挡不住，所以这道门只能写在这里。
+     */
+    private static Long optionalUserId(Jwt jwt) {
+        if (jwt == null || jwt.getSubject() == null) {
+            return null;
+        }
+        // 非 USER 角色（兽医 / 运营）一律按游客读：他们的 sub 不是 users.id。
+        if (!"USER".equals(jwt.getClaimAsString("role"))) {
+            return null;
+        }
+        try {
+            return Long.parseLong(jwt.getSubject());
+        } catch (NumberFormatException e) {
+            return null; // 凭证形状不对 → 当游客读，写端点那侧才明确 401
+        }
     }
 
     private static long currentUserId(Jwt jwt) {
