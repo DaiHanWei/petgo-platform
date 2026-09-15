@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/typography.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../data/pet_recommendation_repository.dart';
+import '../pet_recommendation_list_page.dart';
 import 'recommended_pet_card.dart';
 
 /// 「逛别人家的毛孩子」2 列网格（V1.3.0 batch-b1 Story 4.1 · AC6）。
@@ -19,9 +21,11 @@ import 'recommended_pet_card.dart';
 /// 会让用户以为「我这个页面坏了」，而他要做的那件事（建档）明明是好的。
 /// 加载中同理不占位 —— 一闪而过的骨架屏会把下面的按钮顶得跳一下。
 ///
-/// <h3>⚠️ 「查看全部」入口不在本组件</h3>
-/// 它的落点是 **Story 4.3** 才交付的全屏集合页，由 4.3 一并加上（AC6 明写）。
-/// 现在放一个点不动的入口比没有更糟。
+/// <h3>「查看全部」在**网格下面**（Story 4.3 · AC1 · UX-DR14）</h3>
+/// 位置是「页面最下面」—— 看完这一屏想看更多再点，不是摆在标题右边勾人先点。
+/// 它的落点是 Story 4.3 交付的 [PetRecommendationListPage]。
+/// ⚠️ Story 4.1 交付时刻意**没有**这个入口：那时集合页还不存在，
+/// 挂一个点不动的入口比没有更糟。
 class PetRecommendationGrid extends ConsumerWidget {
   const PetRecommendationGrid({super.key, required this.from});
 
@@ -57,6 +61,16 @@ class PetRecommendationGrid extends ConsumerWidget {
           ),
           itemCount: pets.length,
           itemBuilder: (context, i) => RecommendedPetCard(pet: pets[i], from: from),
+        ),
+        // AC1：「查看全部」放**页面最下面**（UX-DR14）。
+        // ⚠️ 只在真有网格时才出现 —— 上面已经 return 掉了空池子，所以这里天然成立。
+        Align(
+          alignment: Alignment.center,
+          child: TextButton(
+            key: const ValueKey('petRecommendSeeAll'),
+            onPressed: () => context.push(PetRecommendationListPage.routePath),
+            child: Text(l10n.petRecommendSeeAll),
+          ),
         ),
       ],
     );

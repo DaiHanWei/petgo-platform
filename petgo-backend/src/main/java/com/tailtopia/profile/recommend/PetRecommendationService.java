@@ -77,21 +77,50 @@ public class PetRecommendationService {
     }
 
     /**
-     * 推荐给 {@code viewerId} 看的宠物卡。
+     * 推荐给 {@code viewerId} 看的宠物卡（**第一页**，不翻页）。
+     *
+     * <p>Story 4.1 / 4.2 的两个推荐位用它：一屏铺满就够，没有「加载更多」。
      *
      * @param viewerId 查看者（本接口仅登录可达，故非空）
      * @param limit    要几张卡
      */
     @Transactional(readOnly = true)
     public List<RecommendedPetResponse> recommendFor(long viewerId, int limit, Instant now) {
+        return pageFor(viewerId, limit, null, now).items();
+    }
+
+    /**
+     * 推荐给 {@code viewerId} 看的**一页**宠物卡（Story 4.3 的全屏集合页用它翻页）。
+     *
+     * <h2>🔴 游标取自「最后**看过**的那一行候选」，不是「最后**返回**的那一张卡」</h2>
+     * 被过滤掉的宠物（没头像 / owner 注销封号 / 互相拉黑 / 档案已删）是**确定性排除**，
+     * 下一页再扫一遍它们只会再排除一次 —— 所以游标越过它们是对的、也更省。
+     * ⚠️ 反过来（游标取自最后返回的卡）不会出错，但每翻一页都要重扫一遍这些必然被丢掉的行。
+     *
+     * <h2>hasMore 的判据有两条，缺一条就会提前断页</h2>
+     * <ol>
+     *   <li>这一页**装满了**（{@code picked == capped}）→ 后面可能还有；</li>
+     *   <li>没装满，但 content 侧**把候选池给满了**（{@code candidates == poolSize}）→
+     *       说明是被过滤吃掉的，池子后面还有候选没看。</li>
+     * </ol>
+     * 只看第 ① 条的表现是「一页里被过滤掉几个就再也翻不动了」——
+     * 而池子越往后拉黑/注销的比例并不会降低。
+     *
+     * @param cursor 上一页返回的游标（null = 第一页）
+     */
+    @Transactional(readOnly = true)
+    public RecommendedPetResponse.Page pageFor(long viewerId, int limit,
+            PetRecommendCursor cursor, Instant now) {
         int capped = Math.max(1, Math.min(limit, DEFAULT_LIMIT * 5));
         int poolSize = Math.max(capped * CANDIDATE_MULTIPLIER, MIN_CANDIDATE_POOL);
 
         // ① content 侧候选（已按「最近更新倒序，同日按互动量」排好序）。
         List<ContentService.RecommendablePet> candidates = contentService.findRecommendablePets(
-                now.minus(ACTIVE_WINDOW), MIN_PUBLIC_RECORDS, poolSize);
+                now.minus(ACTIVE_WINDOW), MIN_PUBLIC_RECORDS, poolSize,
+                cursor == null ? null : new ContentService.RecommendCursor(
+                        cursor.interactions(), cursor.lastPostedAt(), cursor.petId()));
         if (candidates.isEmpty()) {
-            return List.of();
+            return RecommendedPetResponse.Page.last(List.of());
         }
 
         // ② 宠物档案（批量）。⚠️ 保持 content 给的顺序 —— 那才是 AC1 的排序口径。
@@ -117,10 +146,14 @@ public class PetRecommendationService {
         Set<Long> hiddenOwners = hideRelations.hiddenEitherWay(viewerId, ownerIds);
 
         List<PetProfile> picked = new ArrayList<>(capped);
-        for (Long petId : petIds) {
+        // 最后**看过**的那一行候选 —— 下一页的游标从它算（见方法注释）。
+        ContentService.RecommendablePet lastSeen = null;
+        for (ContentService.RecommendablePet candidate : candidates) {
             if (picked.size() >= capped) {
                 break;
             }
+            lastSeen = candidate;
+            long petId = candidate.petId();
             PetProfile pet = byId.get(petId);
             if (pet == null) {
                 continue; // 档案已删（内容还在但档案没了）
@@ -141,15 +174,19 @@ public class PetRecommendationService {
             }
             picked.add(pet);
         }
+        boolean hasMore = picked.size() >= capped || candidates.size() >= poolSize;
         if (picked.isEmpty()) {
-            return List.of();
+            // 🛡 这一页全被过滤光了也可能后面还有 —— 带着游标回空页，客户端照旧能往下翻。
+            return hasMore && lastSeen != null
+                    ? new RecommendedPetResponse.Page(List.of(), cursorOf(lastSeen), true)
+                    : RecommendedPetResponse.Page.last(List.of());
         }
 
         // ④ 封面图（批量）。没有带图公开帖的宠物拿不到，客户端按占位渲染。
         Map<Long, String> covers = contentService.findLatestPublicCovers(
                 picked.stream().map(PetProfile::getId).toList());
 
-        return picked.stream()
+        List<RecommendedPetResponse> items = picked.stream()
                 .map(pet -> new RecommendedPetResponse(
                         pet.getId(),
                         pet.getName(),
@@ -159,6 +196,14 @@ public class PetRecommendationService {
                         covers.get(pet.getId()),
                         companionDays(pet.getCreatedAt(), now)))
                 .toList();
+        return hasMore
+                ? new RecommendedPetResponse.Page(items, cursorOf(lastSeen), true)
+                : RecommendedPetResponse.Page.last(items);
+    }
+
+    /** 候选行 → 对外游标 token（整个排序键，见 {@link PetRecommendCursor}）。 */
+    private static String cursorOf(ContentService.RecommendablePet row) {
+        return new PetRecommendCursor(row.interactions(), row.lastPostedAt(), row.petId()).encode();
     }
 
     /**

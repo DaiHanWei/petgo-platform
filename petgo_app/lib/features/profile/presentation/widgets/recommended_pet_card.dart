@@ -30,6 +30,12 @@ const String kPetRecommendFromDiaryEmpty = 'diary_empty';
 /// 再也分不开两批人的转化 —— 而那正是 B1-D2 扩这一屏的理由。
 const String kPetRecommendFromDiaryNonOwner = 'diary_non_owner';
 
+/// Story 4.3（AC5）：全屏推荐集合页。
+///
+/// ⚠️ 取值是 `explore_grid` 而不是 `recommend_grid` —— **AC5 原文照抄**。
+/// 它与 Story 4.4 的探索 Tab 横滑行是**两个位置**，到时各有各的 `from`。
+const String kPetRecommendFromExploreGrid = 'explore_grid';
+
 /// 「逛别人家的毛孩子」宠物卡（V1.3.0 batch-b1 Story 4.1 · AC4/AC5/AC7）。
 ///
 /// <h3>🔴 大图与小圆头像是**两个不同字段、不同来源**</h3>

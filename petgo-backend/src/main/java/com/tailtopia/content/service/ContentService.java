@@ -779,13 +779,23 @@ public class ContentService {
      * <p>⚠️ 调用方要<b>多取一些</b>：那三层过滤都在本方法返回之后，取多少就展示多少的话
      * 一页会越过滤越空（同 Story 3.1「留 50 给 30」的冗余思路）。
      *
-     * @param since      候选窗口起点（「近 14 天」那一刻）
-     * @param minRecords 公开成长记录条数门槛
-     * @param limit      取多少候选（含给后续过滤留的冗余）
+     * <p>⚠️ {@code afterCursor} 非空 = 只取排序键**严格在它之后**的候选（Story 4.3 的翻页）。
+     * 游标是整个排序键，不是「最后那只宠物的 id」—— 理由见 {@code PetRecommendCursor}。
+     *
+     * @param since       候选窗口起点（「近 14 天」那一刻）
+     * @param minRecords  公开成长记录条数门槛
+     * @param limit       取多少候选（含给后续过滤留的冗余）
+     * @param afterCursor 从哪个排序键之后继续（null = 第一页）
      */
     @Transactional(readOnly = true)
-    public List<RecommendablePet> findRecommendablePets(Instant since, int minRecords, int limit) {
-        return posts.findRecommendablePets(since, minRecords, limit).stream()
+    public List<RecommendablePet> findRecommendablePets(Instant since, int minRecords, int limit,
+            RecommendCursor afterCursor) {
+        return posts.findRecommendablePets(since, minRecords, limit,
+                        afterCursor != null,
+                        afterCursor == null ? null : afterCursor.lastPostedAt(),
+                        afterCursor == null ? null : afterCursor.interactions(),
+                        afterCursor == null ? null : afterCursor.petId())
+                .stream()
                 .map(row -> new RecommendablePet(
                         ((Number) row[0]).longValue(),
                         toInstant(row[1]),
@@ -841,6 +851,16 @@ public class ContentService {
      */
     public record RecommendablePet(long petId, Instant lastPostedAt, long publicRecords,
             long interactions) {
+    }
+
+    /**
+     * 推荐池翻页的排序键（Story 4.3 · AC3）——「从这一行之后继续取」。
+     *
+     * <p>🔴 本记录**只是个参数载体**，不做编解码：对外那个 base64url token 的形态归
+     * {@code profile.recommend.PetRecommendCursor}。content 侧不该知道游标长什么样，
+     * 就像它不知道宠物有没有头像一样（架构边界）。
+     */
+    public record RecommendCursor(long interactions, Instant lastPostedAt, long petId) {
     }
 
     /**

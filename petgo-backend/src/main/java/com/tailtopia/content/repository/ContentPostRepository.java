@@ -57,8 +57,23 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      * {@code profile.recommend.PetRecommendationService} 里做，因此调用方要<b>多取一些</b>
      * 候选留给那三层过滤（见那里的冗余系数）。
      *
+     * <h2>🔴 翻页是 keyset，游标必须是**整个排序键**（Story 4.3 · AC3）</h2>
+     * 比较写成行构造器 {@code (桶, 互动量, 时刻, petId) < (…)} —— 与 ORDER BY 的四列
+     * <b>逐字同序同向</b>。少比一列就等于按一个与排序无关的位置切页，
+     * 表现是「第二页重复第一页看过的宠物，另一批永远刷不到」（见 {@code PetRecommendCursor}）。
+     * <p>⚠️ 日期桶**不作为参数传进来**，由 SQL 从 {@code :cursorLastAt} 现算 ——
+     * 传两份的表现是「桶与时刻对不上时翻页跳掉一大段」。
+     * <p>⚠️ 用 {@code :hasCursor} 布尔门控而不是判 {@code :cursorLastAt IS NULL}：
+     * 全 NULL 参数会触发 42P18（同 {@code findFeed} 的既定写法）；所有游标参数都显式 CAST，
+     * 好让 postgres 在门控为 false 时也能定出类型。
+     *
      * @param since      14 天前那一刻
      * @param minRecords 公开成长记录条数门槛（3）
+     * @param limit      取多少候选（调用方已按过滤冗余放大）
+     * @param hasCursor  是否从游标之后取（false = 第一页，后三个参数被忽略）
+     * @param cursorLastAt        游标行的最后发帖时刻
+     * @param cursorInteractions  游标行的互动量
+     * @param cursorPetId         游标行的 petId
      * @return 每行 {@code [petId(Long), lastPostedAt(Instant), publicRecords(Long), interactions(Long)]}
      */
     @Query(value = """
@@ -92,12 +107,23 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
                    COALESCE(k.cnt, 0)      AS interactions
               FROM candidates c
               LEFT JOIN liked k ON k.pet_id = c.pet_id
+             WHERE :hasCursor = FALSE
+                OR (date(c.last_at AT TIME ZONE 'Asia/Jakarta'), COALESCE(k.cnt, 0),
+                    c.last_at, c.pet_id)
+                 < (date(CAST(:cursorLastAt AS timestamptz) AT TIME ZONE 'Asia/Jakarta'),
+                    CAST(:cursorInteractions AS bigint),
+                    CAST(:cursorLastAt AS timestamptz),
+                    CAST(:cursorPetId AS bigint))
              ORDER BY date(c.last_at AT TIME ZONE 'Asia/Jakarta') DESC, interactions DESC,
                       c.last_at DESC, c.pet_id DESC
              LIMIT :limit
             """, nativeQuery = true)
     List<Object[]> findRecommendablePets(@Param("since") java.time.Instant since,
-            @Param("minRecords") int minRecords, @Param("limit") int limit);
+            @Param("minRecords") int minRecords, @Param("limit") int limit,
+            @Param("hasCursor") boolean hasCursor,
+            @Param("cursorLastAt") java.time.Instant cursorLastAt,
+            @Param("cursorInteractions") Long cursorInteractions,
+            @Param("cursorPetId") Long cursorPetId);
 
     /**
      * 这批宠物各自**最近一张公开照片**（Story 4.1 · AC4 的卡片大图）。

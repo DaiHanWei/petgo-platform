@@ -37,6 +37,7 @@ import '../../features/me/presentation/language_settings_page.dart';
 import '../../features/me/presentation/me_page.dart';
 import '../../features/me/presentation/settings_page.dart';
 import '../../features/profile/domain/archive_scope.dart';
+import '../../features/profile/presentation/pet_recommendation_list_page.dart';
 import '../../features/profile/presentation/visitor_archive_view.dart';
 import '../../features/social/domain/account_action_entry.dart';
 import '../../features/social/presentation/blocked_users_page.dart';
@@ -932,6 +933,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
           // `?from=` 只喂埋点（Story 4.1 AC7 的 diary_visitor_viewed）；缺省 → 不报。
           analyticsFrom: s.uri.queryParameters['from'],
         ),
+      ),
+      // 全屏推荐集合页（V1.3.0 batch-b1 Story 4.3）。
+      //
+      // 🔴 路径是 `/pet-recommendations`，**不是** `/pets/recommendations` ——
+      //    后者会被上面那条 `/pets/:petId` 抢先匹配成 petId='recommendations'。
+      // ⚠️ 本路由**故意不进** `_controlledLocations`：Story 4.4 会从**首页**加入口，
+      //    而首页游客也能进。塞进受控前缀的话那个入口对游客就是 redirect 回 /home
+      //    的一条死路。登录门控在宠物卡的 `requireLogin` 与服务端那条规则上。
+      GoRoute(
+        path: PetRecommendationListPage.routePath,
+        builder: (c, s) => const PetRecommendationListPage(),
       ),
       GoRoute(
         path: PublicProfilePage.routePattern,

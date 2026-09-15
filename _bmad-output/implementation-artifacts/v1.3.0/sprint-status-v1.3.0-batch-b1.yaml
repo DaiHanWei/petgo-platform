@@ -308,5 +308,22 @@ development_status:
                                                         # AC3：新常量 kPetRecommendFromDiaryNonOwner='diary_non_owner'，与 4.1 的 diary_empty **是两个值**（有用例直接断言两者不等）；事件名与属性形状不变，不加新属性
                                                         # code-review：本 story 改动无 CONFIRMED finding；同一轮对 4.1 提的 4 条见 4-1 那一节（其中 provider autoDispose + 拉黑收尾 invalidate 对本屏同样生效，两屏共用同一个 provider）
                                                         # L1/L2 待本地验收（清单见 story Completion Notes；另依赖 4.1 的 AC2 EXPLAIN —— 同一个接口）
-  4-3-全屏推荐集合页: ready-for-dev                      # 2 列网格 + 分页 + 空态；**「查看全部」入口由本条一并加上**（它的落点是本条才交付的页面，放 4-1 会成前向依赖）
+  4-3-全屏推荐集合页: review                              # 2 列网格 + 分页 + 空态；**「查看全部」入口由本条一并加上**（它的落点是本条才交付的页面，放 4-1 会成前向依赖）
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3420 例真实失败 0 / 前端 analyze 0 issue、1871 例）；**无新增迁移**
+                                                        # 🔴 Dev Notes 写「推荐接口加分页参数即可」，实际不是加个参数：AC1 的排序是 (WIB 日期桶, 互动量, 最后发帖时刻, petId) 四层，游标必须是**整个排序键**
+                                                        #    只带 petId 等于假设按 id 排序 → 第二页从与排序无关的位置开始（重复 + 另一批永远刷不到，即 KeysetCursor 注释里记的那类事故）
+                                                        #    → 新增 PetRecommendCursor（base64url 三元组，对外不可枚举、客户端原样回传）+ 候选查询的行比较 WHERE (桶,互动量,时刻,petId) < (…) + Page 信封加 nextCursor/hasMore
+                                                        # hasMore **两条判据**：这一页装满了 或 候选池给满了（只看前者的表现是「一页里被过滤掉几个就再也翻不动」）；游标取自最后**看过**的候选（越过必然被过滤的行）
+                                                        # AC1：「查看全部」加在 PetRecommendationGrid 的网格**下面**（UX-DR14「页面最下面」）→ 4.1 与 4.2 两屏同时有了它（共用组件）；池子为空整块不渲染 → 也就没有这个入口
+                                                        # AC2：路由 /pet-recommendations（**不是** /pets/recommendations —— 那会被 /pets/:petId 抢成 petId='recommendations'）；卡片是 4.1 那个组件**本体**
+                                                        #    ⚠️ 按 Dev Notes **没有**塞进 _controlledLocations（4.4 要从首页加入口、首页游客也能进；塞进去对游客就是 redirect 回 /home 的死路）——有 L0 用例钉着
+                                                        # AC3 三种形态各自不同：第一页失败=整屏错误态+重试 / **翻页失败=已加载的一只不动+底部重试**（F13）/ 池子为空=空态（不是错误态）
+                                                        # ⚠️ code-review 修掉 4 条（全在前端，都是「客户端没按后端契约来」）：
+                                                        #    ① items.isEmpty 就摆空态、没看 hasMore → 服务端「一页全被过滤掉」时回的正是空 items+游标+hasMore=true，于是永久停在「还没有宠物」，而空态里没网格没滚动、**没有任何东西能触发下一页**
+                                                        #    ② loadMore 只挂滚动回调 → 「1 只 + hasMore」时 maxScrollExtent 只有十几像素（实测 15.8px），用户滚不动、回调一次不发，池子后面永远刷不出来 → 改成每帧渲染完回头看一眼，判据与触底逐字相同
+                                                        #    ③ 底部重试没走 setState + 重复失败时新旧 AsyncData **值相等**（Riverpod 跳过通知）→ 重试不转圈、再失败毫无反馈；三处触发改走同一个出口
+                                                        #    ④ 新路由被插在 VisitorArchiveView 的注释块与它描述的 GoRoute 之间 → 两段互相矛盾的登录门控说明
+                                                        #    🛡 两条自动续抓路径都**有上限**（maxChainedFetches / maxAutoEmptyRounds）：没有上限就是用户什么都没做却不停发请求的死循环；额度用完仍为空 → 按空态处理，不留永远转不完的圈
+                                                        # 🔸 **一条建议埋点确认**：AC5 的 explore_grid 按原文照抄，但这一屏是从 Diary 进的全屏集合页，与 4.4 的探索 Tab 横滑行是两个位置；若看板上 explore_* 专指探索 Tab，请给这一屏另一个值
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；**L1 最重要的是「第二页真的接着第一页」与带 cursor 的查询是否仍走 idx_content_posts_pet_recommend** —— 与 4-1 的 EXPLAIN 一起做）
   4-4-探索tab顶部宠物横滑行: ready-for-dev               # 加在 1-1 已落地的场所入口行**之下**；两模块分层清晰不叠一堆；推荐池为空时整行不渲染

@@ -30,7 +30,8 @@ class _FakeRepo implements PetRecommendationRepository {
   final List<RecommendedPet> pets;
 
   @override
-  Future<List<RecommendedPet>> recommendations({int? limit}) async => pets;
+  Future<RecommendedPetPage> recommendations({int? limit, String? cursor}) async =>
+      RecommendedPetPage(items: pets, hasMore: false);
 }
 
 /// ⚠️ 两个图片字段都给空：本文件不验图（4.1 那边验），而真去拉网络图会让用例带上

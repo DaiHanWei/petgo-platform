@@ -35,11 +35,12 @@ class _FakeRepo implements PetRecommendationRepository {
   final bool fail;
   int calls = 0;
 
+  /// 每一页的游标（本 fake 只回一页：Diary 那两个位置不翻页）。
   @override
-  Future<List<RecommendedPet>> recommendations({int? limit}) async {
+  Future<RecommendedPetPage> recommendations({int? limit, String? cursor}) async {
     calls++;
     if (fail) throw Exception('boom');
-    return pets;
+    return RecommendedPetPage(items: pets, hasMore: false);
   }
 }
 
@@ -287,11 +288,13 @@ void main() {
       });
     }
 
-    testWidgetsWithImages('⚠️「查看全部」入口不在本 story（它的落点是 4.3 才交付的页面）', (tester) async {
+    testWidgetsWithImages('「查看全部」由 Story 4.3 一并加上（4.1 交付时刻意没有它）', (tester) async {
+      // 🔴 本条随 4.3 一起从「不许有」翻成「必须有」：
+      //    4.1 交付时集合页还不存在，挂一个点不动的入口比没有更糟；
+      //    4.3 把集合页与这个入口**同时**加上（AC1 明写，避免前向依赖）。
+      //    位置与跳转由 4.3 的用例验（pet_recommendation_list_page_test.dart）。
       await pumpGrid(tester, _FakeRepo([_pet(7)]));
-      // 现在放一个点不动的入口比没有更糟。
-      expect(find.textContaining('Lihat semua'), findsNothing);
-      expect(find.textContaining('See all'), findsNothing);
+      expect(find.byKey(const ValueKey('petRecommendSeeAll')), findsOneWidget);
     });
   });
 

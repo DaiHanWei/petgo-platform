@@ -91,8 +91,8 @@ class PetRecommendationServiceTest {
             rows.add(new ContentService.RecommendablePet(
                     id, NOW.minusSeconds(++offset * 60), 5L, 10L));
         }
-        when(content.findRecommendablePets(org.mockito.ArgumentMatchers.any(), anyInt(), anyInt()))
-                .thenReturn(rows);
+        when(content.findRecommendablePets(org.mockito.ArgumentMatchers.any(), anyInt(), anyInt(),
+                org.mockito.ArgumentMatchers.any())).thenReturn(rows);
     }
 
     private void withProfiles(PetProfile... pets) {
@@ -122,7 +122,8 @@ class PetRecommendationServiceTest {
 
         ArgumentCaptor<Instant> since = ArgumentCaptor.forClass(Instant.class);
         ArgumentCaptor<Integer> minRecords = ArgumentCaptor.forClass(Integer.class);
-        verify(content).findRecommendablePets(since.capture(), minRecords.capture(), anyInt());
+        verify(content).findRecommendablePets(since.capture(), minRecords.capture(), anyInt(),
+                org.mockito.ArgumentMatchers.any());
         assertThat(ChronoUnit.DAYS.between(since.getValue(), NOW)).isEqualTo(14);
         assertThat(minRecords.getValue()).isEqualTo(3);
     }
@@ -137,7 +138,7 @@ class PetRecommendationServiceTest {
 
         ArgumentCaptor<Integer> limit = ArgumentCaptor.forClass(Integer.class);
         verify(content).findRecommendablePets(org.mockito.ArgumentMatchers.any(), anyInt(),
-                limit.capture());
+                limit.capture(), org.mockito.ArgumentMatchers.any());
         assertThat(limit.getValue()).isGreaterThan(10);
     }
 
@@ -150,7 +151,7 @@ class PetRecommendationServiceTest {
         service.recommendFor(VIEWER, 10, NOW);
 
         verify(content, times(1)).findRecommendablePets(org.mockito.ArgumentMatchers.any(),
-                anyInt(), anyInt());
+                anyInt(), anyInt(), org.mockito.ArgumentMatchers.any());
         verify(profiles, times(1)).findAllById(anyCollection());
         verify(accounts, times(1)).activeIdsAmong(anyCollection());
         verify(hideRelations, times(1)).hiddenEitherWay(anyLong(), anyCollection());
@@ -280,7 +281,7 @@ class PetRecommendationServiceTest {
         ArgumentCaptor<Integer> poolSize = ArgumentCaptor.forClass(Integer.class);
         verify(content, org.mockito.Mockito.atLeastOnce())
                 .findRecommendablePets(org.mockito.ArgumentMatchers.any(), anyInt(),
-                        poolSize.capture());
+                        poolSize.capture(), org.mockito.ArgumentMatchers.any());
         assertThat(poolSize.getAllValues()).allSatisfy(v -> assertThat(v).isLessThan(1000));
     }
 

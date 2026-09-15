@@ -46,7 +46,21 @@ public record RecommendedPetResponse(
         String coverImageUrl,
         long companionDays) {
 
-    /** 游标分页留给 Story 4.3 的全屏集合页；本 story 只要一页，故信封只有 items。 */
-    public record Page(List<RecommendedPetResponse> items) {
+    /**
+     * 一页宠物卡（Story 4.3 · AC3 起带游标）。
+     *
+     * <p>🔴 {@code nextCursor} 是 base64url 不可枚举串，客户端<b>原样回传，不要解析</b>
+     * （形态见 {@link PetRecommendCursor}）。
+     * <p>⚠️ {@code hasMore} 与「{@code items} 是不是空的」**不等价**：一页里的宠物
+     * 全被过滤掉（拉黑 / 注销 / 没头像）时会回**空 items + 有游标 + hasMore=true** ——
+     * 客户端据此继续往下翻，而不是把空 items 当作到底了。
+     * 判「到底」只看 {@code hasMore}。
+     */
+    public record Page(List<RecommendedPetResponse> items, String nextCursor, boolean hasMore) {
+
+        /** 最后一页（没有更多了）。 */
+        public static Page last(List<RecommendedPetResponse> items) {
+            return new Page(items, null, false);
+        }
     }
 }

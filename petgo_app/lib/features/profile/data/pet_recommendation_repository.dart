@@ -53,9 +53,52 @@ class RecommendedPet {
       );
 }
 
+/// 一页推荐宠物（V1.3.0 batch-b1 Story 4.3 · AC3 起带游标）。
+///
+/// 🔴 [nextCursor] 是服务端给的 base64url 串，**原样回传，不要解析、不要自己拼**。
+///
+/// 🔴 判「到底了」**只看 [hasMore]**，不看 `items.isEmpty`：一页里的宠物全被服务端
+/// 过滤掉（拉黑 / 注销 / 没头像）时会回**空 items + 有游标 + hasMore=true** ——
+/// 把空 items 当作到底的表现是「列表在第二页莫名其妙断掉，而后面明明还有」。
+class RecommendedPetPage {
+  const RecommendedPetPage({required this.items, required this.hasMore, this.nextCursor});
+
+  final List<RecommendedPet> items;
+  final String? nextCursor;
+  final bool hasMore;
+
+  static const RecommendedPetPage empty =
+      RecommendedPetPage(items: <RecommendedPet>[], hasMore: false);
+
+  factory RecommendedPetPage.fromJson(Map<String, dynamic> json) {
+    final raw = json['items'];
+    final items = raw is! List
+        ? const <RecommendedPet>[]
+        : raw
+            .whereType<Map>()
+            .map((e) => RecommendedPet.fromJson(Map<String, dynamic>.from(e)))
+            .toList(growable: false);
+    final cursor = json['nextCursor']?.toString();
+    return RecommendedPetPage(
+      items: items,
+      nextCursor: (cursor == null || cursor.isEmpty) ? null : cursor,
+      hasMore: json['hasMore'] == true,
+    );
+  }
+
+  /// 追加下一页（游标分页的累积，同 `PlaceCommentPage.append`）。
+  RecommendedPetPage append(RecommendedPetPage next) => RecommendedPetPage(
+        items: [...items, ...next.items],
+        nextCursor: next.nextCursor,
+        hasMore: next.hasMore,
+      );
+}
+
 abstract class PetRecommendationRepository {
-  /// 取推荐池。🔒 需登录（游客态不展示该区 —— story Dev Notes「游客态不动」）。
-  Future<List<RecommendedPet>> recommendations({int? limit});
+  /// 取推荐池的一页。🔒 需登录（游客态不展示该区 —— story Dev Notes「游客态不动」）。
+  ///
+  /// [cursor] 为空 = 第一页。
+  Future<RecommendedPetPage> recommendations({int? limit, String? cursor});
 }
 
 class DioPetRecommendationRepository implements PetRecommendationRepository {
@@ -64,15 +107,16 @@ class DioPetRecommendationRepository implements PetRecommendationRepository {
   final Dio dio;
 
   @override
-  Future<List<RecommendedPet>> recommendations({int? limit}) async {
+  Future<RecommendedPetPage> recommendations({int? limit, String? cursor}) async {
     final resp = await dio.get<Map<String, dynamic>>(
       ApiPaths.mePetRecommendations,
-      queryParameters: limit == null ? null : {'limit': limit},
+      queryParameters: {
+        'limit': ?limit,
+        // 空串不是游标 —— 传上去会被服务端当坏游标（虽然它会宽容地当第一页处理）。
+        if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+      },
     );
-    final items = resp.data?['items'] as List<dynamic>? ?? const <dynamic>[];
-    return items
-        .map((e) => RecommendedPet.fromJson((e as Map).cast<String, dynamic>()))
-        .toList(growable: false);
+    return RecommendedPetPage.fromJson(resp.data ?? const <String, dynamic>{});
   }
 }
 
@@ -92,8 +136,11 @@ final Provider<PetRecommendationRepository> petRecommendationRepositoryProvider 
 /// Diary，他家的宠物卡还在，点进去撞 403。
 /// ⚠️ autoDispose 只覆盖「离开这一屏再回来」；**拉黑发生在别的屏、而这一屏还活着**那一路
 /// 由 `onAuthorHidden` 里的 invalidate 兜住（那是全 App 拉黑收尾的唯一出口）。
-final petRecommendationsProvider =
-    FutureProvider.autoDispose<List<RecommendedPet>>(
-  (ref) => ref.read(petRecommendationRepositoryProvider).recommendations(),
+/// ⚠️ 这两处推荐位**只要第一页**（一屏铺满就够，没有「加载更多」），所以只取 items。
+/// 全屏集合页的累积翻页归 `PetRecommendationListController`（Story 4.3）——
+/// 那种状态不能放在 `FutureProvider` 里：翻到第三页时 invalidate 会把人弹回顶部。
+final petRecommendationsProvider = FutureProvider.autoDispose<List<RecommendedPet>>(
+  (ref) async =>
+      (await ref.read(petRecommendationRepositoryProvider).recommendations()).items,
   retry: (_, _) => null,
 );

@@ -23,9 +23,11 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>AC6 的场景是「养宠但尚未建档」的<b>登录用户</b>；Story 4.2 会扩到另一种无档案状态，
  * 但**游客态一行不动**（story Dev Notes 明写）。所以这里不做游客降级，直接 401。
  *
- * <h2>⚠️ 不分页</h2>
- * 一页就是一页（AC6：2 列网格铺满当前页）。全屏集合页的分页是 <b>Story 4.3</b> 的事 ——
- * 那时再加游标，而不是现在先摆一个没人用的 {@code cursor} 参数。
+ * <h2>分页（Story 4.3 · AC3）</h2>
+ * {@code ?cursor=} 是 <b>keyset</b> 游标（整个排序键的 base64url 串，见 {@link PetRecommendCursor}）——
+ * 客户端原样回传。Story 4.1 / 4.2 的两个推荐位不传它（一屏铺满就够），全屏集合页靠它往下翻。
+ * <p>🔴 <b>坏游标当第一页处理，不 400</b>：游标是客户端传回来的，为一个坏串把整页锁死
+ * 是把用户关在门外（与 {@code KeysetCursor} 同一条既定口径）。
  */
 @RestController
 public class PetRecommendationController {
@@ -38,11 +40,12 @@ public class PetRecommendationController {
 
     @GetMapping("/api/v1/me/pet-recommendations")
     public RecommendedPetResponse.Page recommendations(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam(name = "limit", required = false) Integer limit) {
+            @RequestParam(name = "limit", required = false) Integer limit,
+            @RequestParam(name = "cursor", required = false) String cursor) {
         long viewerId = currentUserId(jwt);
         int size = limit == null ? PetRecommendationService.DEFAULT_LIMIT : limit;
-        return new RecommendedPetResponse.Page(
-                recommendations.recommendFor(viewerId, size, Instant.now()));
+        return recommendations.pageFor(viewerId, size,
+                PetRecommendCursor.decodeOrNull(cursor), Instant.now());
     }
 
     /**
