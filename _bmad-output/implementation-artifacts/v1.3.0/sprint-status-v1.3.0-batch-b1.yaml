@@ -98,7 +98,13 @@ development_status:
                                                         # ⚠️ code-review 修掉 4 条：兽医 token 被当成 users.id 读到未过审评论（安全）/ 注销级联漏了 place_comments（D1/D2）/ 两个零调用的状态迁移 / 发评论后详情计数不刷
                                                         # 🔴 待 admin 主题：降级/高危评论目前一直挂 UNDER_REVIEW —— 入运营队列需扩 ReviewContentType（塞进现有 COMMENT 会让运营放行 comments 表里同号的别人评论）
                                                         # L1/L2 待本地验收（清单见 story Completion Notes）
-  1-8-推荐不推荐计数: ready-for-dev                      # AD-9 Redis 计数器 + DB 回算自愈。三个触发点：创建 / 用户自删 / 运营删下架。本版只展示不参与排序
+  1-8-推荐不推荐计数: review                             # AD-9 Redis 计数器 + DB 回算自愈。三个触发点：创建 / 用户自删 / 运营删下架。本版只展示不参与排序
+                                                        # 2026-09-15 云端 L0 全绿 → review；无新迁移
+                                                        # 🔴 计数只认 VISIBLE：先发后审之下「创建」那一刻评论还没过审，自增落在转可见那一刻（与 DB 回算口径逐字一致）
+                                                        # 触发点实际是四个：转可见 / 用户自删 / 运营下架 / 作者注销；删未过审的不减
+                                                        # 整页 MGET 一次取回（AC6）；AC2/AC4 用扫源码的机械检查守（不缓存整页、不参与排序降权警示）
+                                                        # ⚠️ code-review 修掉 4 条「丢一次增量就永久偏差」：写失败永不自愈→加 TTL 10min / 事务提交前改计数→afterCommit / 回算写回无条件覆盖→setIfAbsent / 负值被洗成 0→当缺失回算
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；自愈与 TTL 必须真 Redis 验）
   1-9-他人为场所补充照片: ready-for-dev                  # 标注上传者；走既有上传链路 + 公开桶 + EXIF 剥离兜底
   1-10-场所分享到站外: ready-for-dev                     # H5 直出 /place/{随机码} + OG + 唤起链 + 安卓深链声明。🔒 **审核通过前不下发 og:image**（预览图会被平台缓存，不随下架消失）
 

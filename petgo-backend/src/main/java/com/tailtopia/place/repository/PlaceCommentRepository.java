@@ -100,6 +100,27 @@ public interface PlaceCommentRepository extends JpaRepository<PlaceComment, Long
             @Param("hasViewer") boolean hasViewer,
             @Param("viewerId") Long viewerId);
 
+    /**
+     * 一批场所各自的**可见**态度计数（Story 1.8 · AD-9 的 DB 回算口径）。
+     *
+     * <p>🔴 **不是 viewer 维度**：这两个数字是"大家觉得这地方行不行"的**平台口径**，
+     * 与谁在看无关。对比 {@link #countVisibleByPlaceIds}（评论数）——那个必须按 viewer 过滤，
+     * 因为它要与列出来的条数一致。两者口径不同是**有意的**，不要"统一"它们。
+     *
+     * <p>口径：未删 + {@code moderation_status = VISIBLE} + 有态度。
+     * ⚠️ 必须与 {@code PlaceAttitudeCounters} 的增减时机逐字一致，否则自愈一跑数字就变。
+     *
+     * @return 每行 {@code [placeId, attitude, count]}
+     */
+    @Query("""
+            SELECT c.placeId, c.attitude, COUNT(c) FROM PlaceComment c
+            WHERE c.placeId IN :placeIds AND c.deletedAt IS NULL
+              AND c.moderationStatus = com.tailtopia.content.domain.CommentModerationStatus.VISIBLE
+              AND c.attitude IS NOT NULL
+            GROUP BY c.placeId, c.attitude
+            """)
+    List<Object[]> countVisibleAttitudesByPlaceIds(@Param("placeIds") List<Long> placeIds);
+
     /** 删除 / 审核处置用：按 id 取未删的那条。 */
     Optional<PlaceComment> findByIdAndDeletedAtIsNull(long id);
 

@@ -26,9 +26,9 @@ import java.time.Instant;
  * 而状态本身落在 {@code place_comments.moderation_status} —— 两张表各存各的（AD-8 §3）。
  * 其中 {@code AUTHOR_DEACTIVATED} 由注销级联写入（见 {@link #deactivateAuthor()}）——
  * 读路径的「非 VISIBLE 即对他人不可见」对它天然成立。
- * ⚠️ {@code REJECTED} / {@code TAKEN_DOWN} 两个值目前**没有任何代码往本表写**：
- * 它们要等运营队列接上场所评论（见 {@code PlaceCommentModerationListener} 的待办）。
- * 刻意不先写两个没人调的迁移方法 —— 没被执行过的状态迁移只会给人"已经能处置了"的错觉。
+ * ⚠️ {@code REJECTED} 目前**没有任何代码往本表写**：它要等运营队列接上场所评论
+ * （见 {@code PlaceCommentModerationListener} 的待办）。刻意不先写一个没人调的迁移方法 ——
+ * 没被执行过的状态迁移只会给人"已经能处置了"的错觉。
  */
 @Entity
 @Table(name = "place_comments")
@@ -95,6 +95,22 @@ public class PlaceComment {
     public boolean approveModeration() {
         if (moderationStatus == CommentModerationStatus.UNDER_REVIEW) {
             moderationStatus = CommentModerationStatus.VISIBLE;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 运营下架（Story 1.8 · AC5 触发点 ③）：仅 VISIBLE 可下架 → TAKEN_DOWN（仅作者可见）。
+     * 返回是否发生迁移（幂等）。
+     *
+     * <p>⚠️ 调用它的 {@code PlaceCommentService.takedown} 目前**还没有 admin 端点**（后台处置
+     * 走 AB-17A，属 admin 主题）。它存在的理由是**计数的三个触发点必须在同一层收口** ——
+     * 没有它，admin 那侧接上时最省事的做法就是直接改仓储，把 👍/👎 计数绕过去。
+     */
+    public boolean takedown() {
+        if (moderationStatus == CommentModerationStatus.VISIBLE) {
+            moderationStatus = CommentModerationStatus.TAKEN_DOWN;
             return true;
         }
         return false;

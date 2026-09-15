@@ -36,6 +36,7 @@ class PlaceQueryServiceTest {
     private PlaceRepository places;
     private AccountQueryService accounts;
     private PlaceCommentQueryService placeComments;
+    private PlaceAttitudeCounters attitudeCounters;
     private PlaceQueryService service;
 
     @BeforeEach
@@ -46,7 +47,13 @@ class PlaceQueryServiceTest {
         placeComments = Mockito.mock(PlaceCommentQueryService.class);
         Mockito.when(placeComments.countsByPlaceIds(Mockito.anyList(), Mockito.any()))
                 .thenReturn(java.util.Map.of());
-        service = new PlaceQueryService(places, accounts, placeComments);
+        // Story 1.8：态度计数从这里批量取（默认空 Map = 都是 0）。
+        attitudeCounters = Mockito.mock(PlaceAttitudeCounters.class);
+        Mockito.when(attitudeCounters.countsOf(Mockito.anyList()))
+                .thenReturn(java.util.Map.of());
+        Mockito.when(attitudeCounters.countsOf(Mockito.anyLong()))
+                .thenReturn(PlaceAttitudeCounters.Counts.ZERO);
+        service = new PlaceQueryService(places, accounts, placeComments, attitudeCounters);
     }
 
     /** 自增 id 的发号器 —— 只要不同就行（评论数 Map 按 id 取）。 */

@@ -3,6 +3,7 @@ package com.tailtopia.place.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -44,6 +45,7 @@ class PlaceCommentServiceTest {
     private PlaceRepository places;
     private ContentModerationService moderation;
     private ApplicationEventPublisher events;
+    private PlaceAttitudeCounters counters;
     private PlaceCommentService service;
 
     @BeforeEach
@@ -52,7 +54,8 @@ class PlaceCommentServiceTest {
         places = Mockito.mock(PlaceRepository.class);
         moderation = Mockito.mock(ContentModerationService.class);
         events = Mockito.mock(ApplicationEventPublisher.class);
-        service = new PlaceCommentService(comments, places, moderation, events);
+        counters = Mockito.mock(PlaceAttitudeCounters.class);
+        service = new PlaceCommentService(comments, places, moderation, events, counters);
         // save 之后 id 一定不为空（JPA @GeneratedValue）—— 审核事件要用它。
         when(comments.save(any())).thenAnswer(inv ->
                 withCommentId(inv.getArgument(0), 7L));
@@ -190,6 +193,102 @@ class PlaceCommentServiceTest {
     void deletingAMissingCommentIsNotFound() {
         when(comments.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.deleteOwn(7L, 9L)).isInstanceOf(AppException.class);
+    }
+
+    // ===== Story 1.8 计数触发点（AC5）=====
+
+    /**
+     * 🔴 **创建那一刻不计数**：先发后审之下这条还是 UNDER_REVIEW、对他人不可见。
+     * 创建即 +1 会让一条尚未过审、甚至最终被拒的评论立刻出现在公开计数里。
+     */
+    @Test
+    void creatingACommentDoesNotBumpTheCounterYet() {
+        when(moderation.isL1Blocked(anyString())).thenReturn(false);
+
+        service.create("tok", 9L,
+                new PlaceCommentCreateRequest("mantap", PlaceCommentAttitude.RECOMMEND));
+
+        verify(counters, never()).onCommentBecameVisible(anyLong(), any());
+    }
+
+    /** 触发点 ①：评论**转为可见**那一刻才 +1。 */
+    @Test
+    void approvingACommentBumpsTheCounter() {
+        PlaceComment c = withCommentId(PlaceComment.createUnderReview(
+                42L, 9L, "mantap", PlaceCommentAttitude.RECOMMEND), 7L);
+        when(comments.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(c));
+
+        service.approve(7L);
+
+        verify(counters).onCommentBecameVisible(42L, PlaceCommentAttitude.RECOMMEND);
+    }
+
+    /** 幂等：重复 approve 不重复加。 */
+    @Test
+    void approvingTwiceBumpsOnlyOnce() {
+        PlaceComment c = withCommentId(PlaceComment.createUnderReview(
+                42L, 9L, "mantap", PlaceCommentAttitude.RECOMMEND), 7L);
+        c.approveModeration();
+        when(comments.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(c));
+
+        service.approve(7L);
+
+        verify(counters, never()).onCommentBecameVisible(anyLong(), any());
+    }
+
+    /** 触发点 ②：用户自删一条**已可见**的评论 → −1。 */
+    @Test
+    void deletingAVisibleCommentDecrementsTheCounter() {
+        PlaceComment c = withCommentId(PlaceComment.createUnderReview(
+                42L, 9L, "mantap", PlaceCommentAttitude.NOT_RECOMMEND), 7L);
+        c.approveModeration();
+        when(comments.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(c));
+
+        service.deleteOwn(7L, 9L);
+
+        verify(counters).onVisibleCommentRemoved(42L, PlaceCommentAttitude.NOT_RECOMMEND);
+    }
+
+    /**
+     * 🔴 删一条**还没过审**的评论**不减** —— 它从来没被加进去过。
+     * 减了会把这个场所的数字一直压低，直到下一次自愈。
+     */
+    @Test
+    void deletingAPendingCommentDoesNotDecrement() {
+        PlaceComment c = withCommentId(PlaceComment.createUnderReview(
+                42L, 9L, "mantap", PlaceCommentAttitude.RECOMMEND), 7L);
+        when(comments.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(c));
+
+        service.deleteOwn(7L, 9L);
+
+        verify(counters, never()).onVisibleCommentRemoved(anyLong(), any());
+    }
+
+    /** 触发点 ③：运营下架 → −1；幂等（非 VISIBLE 不动）。 */
+    @Test
+    void takedownDecrementsOnceAndIsIdempotent() {
+        PlaceComment c = withCommentId(PlaceComment.createUnderReview(
+                42L, 9L, "mantap", PlaceCommentAttitude.RECOMMEND), 7L);
+        c.approveModeration();
+        when(comments.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(c));
+
+        assertThat(service.takedown(7L)).isTrue();
+        assertThat(service.takedown(7L)).as("已下架 → no-op").isFalse();
+
+        verify(counters).onVisibleCommentRemoved(42L, PlaceCommentAttitude.RECOMMEND);
+    }
+
+    /** 注销一条已可见的评论 → 它对他人不可见了，计数也要跟着减。 */
+    @Test
+    void deactivatingAuthorAlsoRemovesVisibleCommentsFromTheCounters() {
+        PlaceComment c = withCommentId(PlaceComment.createUnderReview(
+                42L, 9L, "mantap", PlaceCommentAttitude.RECOMMEND), 7L);
+        c.approveModeration();
+        when(comments.findByAuthorIdAndDeletedAtIsNull(9L)).thenReturn(List.of(c));
+
+        service.deactivateAuthorComments(9L);
+
+        verify(counters).onVisibleCommentRemoved(42L, PlaceCommentAttitude.RECOMMEND);
     }
 
     // ===== 注销级联（NFR-8 / D1/D2，安全攸关）=====

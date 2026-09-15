@@ -30,8 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
  * （Story 1.7）—— <b>绝不在循环里按 placeId 逐条查</b>：逐条查在 20 个场所的冷启动数据上
  * 看不出问题，正式运营起来就是整屏卡住的那个原因。
  *
- * <p>⚠️ 两个**态度**计数（👍/👎）在本 story 仍为 0 —— Redis 计数器 + DB 回算自愈是 Story 1.8
- * 的交付物（AD-9）。接的时候同样是「整页一次取回」，位置就在下面那两个循环之前。
+ * <p>两个**态度**计数（👍/👎）经 {@link PlaceAttitudeCounters#countsOf(List)} 同样
+ * **整页一次取回**（Story 1.8 · AC6：逐个场所查 Redis 等于把 N+1 从数据库搬到了 Redis）。
  *
  * <p>🔴 <b>评论数是 viewer 维度的</b>：拉黑过滤会让同一个场所对不同的人数字不同。
  * 所以计数与评论列表**共用同一套过滤条件**（见 {@code PlaceCommentRepository}）——
@@ -58,12 +58,14 @@ public class PlaceQueryService {
     private final PlaceRepository places;
     private final AccountQueryService accounts;
     private final PlaceCommentQueryService placeComments;
+    private final PlaceAttitudeCounters attitudeCounters;
 
     public PlaceQueryService(PlaceRepository places, AccountQueryService accounts,
-            PlaceCommentQueryService placeComments) {
+            PlaceCommentQueryService placeComments, PlaceAttitudeCounters attitudeCounters) {
         this.places = places;
         this.accounts = accounts;
         this.placeComments = placeComments;
+        this.attitudeCounters = attitudeCounters;
     }
 
     /**
@@ -87,9 +89,12 @@ public class PlaceQueryService {
         // 标记人：走既有作者投影出口（注销自动匿名化，不让 place 直 join users）。
         AuthorView markedBy = accounts.findAuthorViews(List.of(p.getCreatedBy()))
                 .get(p.getCreatedBy());
-        // Story 1.7：评论数接真值（viewer 维度）；两个态度计数仍为 0，等 Story 1.8 的 Redis 计数器。
+        // 评论数是 viewer 维度（Story 1.7）；两个态度计数是**平台口径**（Story 1.8）——
+        // 两者口径不同是有意的，见 PlaceCommentRepository 的说明。
         long commentCount = placeComments.countForPlace(p.getId(), viewerId);
-        return PlaceDetailResponse.of(p, markedBy, distance, commentCount, 0L, 0L);
+        PlaceAttitudeCounters.Counts attitudes = attitudeCounters.countsOf(p.getId());
+        return PlaceDetailResponse.of(p, markedBy, distance, commentCount,
+                attitudes.recommend(), attitudes.notRecommend());
     }
 
     /**
@@ -165,14 +170,19 @@ public class PlaceQueryService {
                 .thenComparing(w -> w.place().getId(),
                         Comparator.nullsLast(Comparator.reverseOrder())));
 
-        // 整页评论数一次取回（AD-6）。⚠️ 别挪进下面的循环 —— 那就是 N+1。
-        Map<Long, Long> commentCounts = placeComments.countsByPlaceIds(
-                scored.stream().map(w -> w.place().getId()).toList(), viewerId);
+        // 整页计数一次取回（AD-6 / AC6）。⚠️ 别挪进下面的循环 —— 那就是 N+1
+        // （无论后面那个 N+1 落在数据库还是 Redis 上）。
+        List<Long> ids = scored.stream().map(w -> w.place().getId()).toList();
+        Map<Long, Long> commentCounts = placeComments.countsByPlaceIds(ids, viewerId);
+        Map<Long, PlaceAttitudeCounters.Counts> attitudes = attitudeCounters.countsOf(ids);
 
         List<PlaceListItemResponse> items = new ArrayList<>(scored.size());
         for (PlaceWithDistance w : scored) {
+            long id = w.place().getId();
+            PlaceAttitudeCounters.Counts a =
+                    attitudes.getOrDefault(id, PlaceAttitudeCounters.Counts.ZERO);
             items.add(PlaceListItemResponse.of(w.place(), (int) Math.round(w.meters()),
-                    commentCounts.getOrDefault(w.place().getId(), 0L), 0L, 0L));
+                    commentCounts.getOrDefault(id, 0L), a.recommend(), a.notRecommend()));
         }
         return PlaceListResponse.distance(items);
     }
@@ -195,13 +205,15 @@ public class PlaceQueryService {
             // 空列表让客户端走空态（引导「标记一个场所」），不是错误路径。
             return PlaceListResponse.recent(List.of());
         }
-        Map<Long, Long> commentCounts = placeComments.countsByPlaceIds(
-                rows.stream().map(Place::getId).toList(), viewerId);
+        List<Long> ids = rows.stream().map(Place::getId).toList();
+        Map<Long, Long> commentCounts = placeComments.countsByPlaceIds(ids, viewerId);
+        Map<Long, PlaceAttitudeCounters.Counts> attitudes = attitudeCounters.countsOf(ids);
         List<PlaceListItemResponse> items = new ArrayList<>(rows.size());
         for (Place p : rows) {
-            // Story 1.7：评论数接真值；两个态度计数仍为 0（Story 1.8 的 Redis 计数器）。
+            PlaceAttitudeCounters.Counts a =
+                    attitudes.getOrDefault(p.getId(), PlaceAttitudeCounters.Counts.ZERO);
             items.add(PlaceListItemResponse.of(p, commentCounts.getOrDefault(p.getId(), 0L),
-                    0L, 0L));
+                    a.recommend(), a.notRecommend()));
         }
         return PlaceListResponse.recent(items);
     }

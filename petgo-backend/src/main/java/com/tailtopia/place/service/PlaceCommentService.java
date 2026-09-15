@@ -1,5 +1,6 @@
 package com.tailtopia.place.service;
 
+import com.tailtopia.content.domain.CommentModerationStatus;
 import com.tailtopia.content.service.ContentModerationService;
 import com.tailtopia.place.domain.Place;
 import com.tailtopia.place.domain.PlaceComment;
@@ -46,13 +47,16 @@ public class PlaceCommentService {
     private final PlaceRepository places;
     private final ContentModerationService moderation;
     private final ApplicationEventPublisher events;
+    private final PlaceAttitudeCounters counters;
 
     public PlaceCommentService(PlaceCommentRepository comments, PlaceRepository places,
-            ContentModerationService moderation, ApplicationEventPublisher events) {
+            ContentModerationService moderation, ApplicationEventPublisher events,
+            PlaceAttitudeCounters counters) {
         this.comments = comments;
         this.places = places;
         this.moderation = moderation;
         this.events = events;
+        this.counters = counters;
     }
 
     /**
@@ -74,9 +78,10 @@ public class PlaceCommentService {
                 PlaceComment.createUnderReview(place.getId(), authorId, body, req.attitude()));
         events.publishEvent(new PlaceCommentSubmittedEvent(
                 saved.getId(), body, saved.getContentVersion()));
-        // ⬇️ Story 1.8 的计数触发点之一（AD-9 §5「评论创建（带态度）」）。
-        // 本 story 刻意不写计数：态度已正确落库，而 Redis 计数器 + DB 回算自愈是 1.8 的交付物。
-        // 1.8 接入时**就在这一行**加（不要挪到 controller —— 那样运营删评论的路径会绕过它）。
+        // 🔴 **这里不加计数**（Story 1.8 · AC5 触发点 ① 的落点在 approve 那一步）：
+        // 先发后审之下，此刻这条评论还是 UNDER_REVIEW、对他人不可见 ——
+        // 创建即 +1 会让一条尚未过审、甚至最终被拒的评论立刻出现在所有人看到的公开计数里。
+        // 计数只认 VISIBLE，与 DB 回算口径逐字一致（见 PlaceAttitudeCounters 的类注释）。
         return saved;
     }
 
@@ -97,9 +102,36 @@ public class PlaceCommentService {
         if (c.getAuthorId() == null || c.getAuthorId() != userId) {
             throw AppException.forbidden("无权删除该评论");
         }
+        // 🔴 计数只减"此前确实计入过"的那些（Story 1.8 · AC5 触发点 ②）：
+        // 一条还挂在 UNDER_REVIEW 的评论被删时不该减 —— 它从来没被加进去过，
+        // 减了会把这个场所的数字一直压低，直到下一次自愈。
+        boolean wasCounted = c.getModerationStatus() == CommentModerationStatus.VISIBLE;
         c.softDelete();
         comments.save(c);
-        // ⬇️ Story 1.8 的另一个计数触发点（AD-9 §5「评论被删/被下架」）。同上，本 story 只留位置。
+        if (wasCounted) {
+            counters.onVisibleCommentRemoved(c.getPlaceId(), c.getAttitude());
+        }
+    }
+
+    /**
+     * 运营下架一条评论（Story 1.8 · AC5 触发点 ③）。仅 VISIBLE 可下架。
+     *
+     * <p>⚠️ 本 story **不提供 admin 端点** —— 后台处置走 AB-17A（admin 主题）。
+     * 这个方法存在的理由是：计数的三个触发点必须**在同一层**收口，
+     * 否则 admin 那侧接上时很容易直接改仓储、把计数绕过去。
+     *
+     * @return 是否真的发生了下架（幂等：已下架 / 非 VISIBLE → false）
+     */
+    @Transactional
+    public boolean takedown(long commentId) {
+        return comments.findByIdAndDeletedAtIsNull(commentId)
+                .filter(PlaceComment::takedown)
+                .map(c -> {
+                    comments.save(c);
+                    counters.onVisibleCommentRemoved(c.getPlaceId(), c.getAttitude());
+                    return true;
+                })
+                .orElse(false);
     }
 
     /**
@@ -118,20 +150,32 @@ public class PlaceCommentService {
     public int deactivateAuthorComments(long userId) {
         int changed = 0;
         for (PlaceComment c : comments.findByAuthorIdAndDeletedAtIsNull(userId)) {
+            // 注销前它是否计入过公开计数 —— 之后要把它从计数里拿掉（它对他人已不可见）。
+            boolean wasCounted = c.getModerationStatus() == CommentModerationStatus.VISIBLE;
             if (c.deactivateAuthor()) {
                 comments.save(c);
+                if (wasCounted) {
+                    counters.onVisibleCommentRemoved(c.getPlaceId(), c.getAttitude());
+                }
                 changed++;
             }
         }
         return changed;
     }
 
-    /** 异步审核：通过 → VISIBLE。幂等（非挂起态 no-op）。 */
+    /**
+     * 异步审核：通过 → VISIBLE。幂等（非挂起态 no-op）。
+     *
+     * <p>这里也是 **Story 1.8 计数触发点 ①** 的真正落点：评论转为可见的那一刻才 +1。
+     * 幂等保证了它不会重复加 —— {@code approveModeration()} 只在 UNDER_REVIEW → VISIBLE
+     * 时返回 true。
+     */
     @Transactional
     public void approve(long commentId) {
         comments.findByIdAndDeletedAtIsNull(commentId).ifPresent(c -> {
             if (c.approveModeration()) {
                 comments.save(c);
+                counters.onCommentBecameVisible(c.getPlaceId(), c.getAttitude());
             }
         });
     }
