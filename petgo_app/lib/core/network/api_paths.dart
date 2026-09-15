@@ -245,7 +245,15 @@ class ApiPaths {
   static String publicSharedPost(String shareToken) => '$base/public/shared-posts/$shareToken';
 
   /// 他人迷你主页投影（Story 3.8）。
+  ///
+  /// ⚠️ **V1.3.0 batch-b1 Story 2.1 起 App 侧已无入口调用**（点头像一律进完整主页，
+  /// 见 [userPublicProfile]）。端点与这条常量一并保留：迷你卡组件与其回归用例还在，
+  /// 删接口属另一次清理。
   static String userMiniProfile(int userId) => '$base/users/$userId/mini-profile';
+
+  /// 用户**公开主页**投影（V1.3.0 batch-b1 Story 2.1 · FR-118）。
+  /// 游客可读；比迷你卡多「加入时间」与「是否本人视角」两个字段。
+  static String userPublicProfile(int userId) => '$base/users/$userId/profile';
 
   /// 账号举报（V1.1.4 Story 2.1/2.2，FR-58）。POST body `{targetUserId, reason, detail?}` → 204。
   static const String accountReports = '$base/account-reports';

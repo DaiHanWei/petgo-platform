@@ -16,8 +16,8 @@ import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/letter_avatar.dart';
-import '../../../shared/widgets/mini_profile_sheet.dart';
 import '../../../shared/widgets/photo_lightbox.dart';
+import '../../user_profile/presentation/public_profile_page.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../data/detail_repository.dart';
 import '../domain/content_detail.dart';
@@ -245,11 +245,12 @@ class _DetailScaffold extends ConsumerWidget {
         ),
       ],
     );
-    // 作者点击触发迷你卡（Story 3.8）：注销作者不可点（NFR-8）。
+    // 作者点击 → **完整主页**（V1.3.0 batch-b1 Story 2.1 · FR-118.1，此前是迷你卡）：
+    // 注销作者不可点（NFR-8）。
     if (detail.authorDeleted) return row;
     return GestureDetector(
       key: const ValueKey('detailAuthorRow'),
-      onTap: () => showMiniProfile(
+      onTap: () => openUserProfile(
         context,
         ref,
         detail.authorId,

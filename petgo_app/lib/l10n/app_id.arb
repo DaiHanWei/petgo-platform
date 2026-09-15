@@ -2246,5 +2246,9 @@
   "placePhotoRejected": "Tidak lolos tinjauan",
   "placePhotoDeleteTitle": "Hapus foto ini?",
   "placePhotoDeleted": "Foto dihapus",
-  "placePhotoDeleteFailed": "Gagal menghapus. Coba lagi."
+  "placePhotoDeleteFailed": "Gagal menghapus. Coba lagi.",
+  "profileJoinedAt": "Bergabung {date}",
+  "profileLoadFailed": "Gagal memuat profil ini",
+  "profileNotFound": "Pengguna tidak ditemukan",
+  "profileBlockedEmpty": "Kamu sudah memblokir pengguna ini"
 }

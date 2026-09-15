@@ -14,10 +14,10 @@ import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/letter_avatar.dart';
-import '../../../shared/widgets/mini_profile_sheet.dart';
 import '../../../shared/widgets/photo_lightbox.dart';
 import '../../../core/media/media_scope.dart';
 import '../../../core/router/route_intent.dart';
+import '../../user_profile/presentation/public_profile_page.dart';
 import '../../auth/domain/auth_guard.dart';
 import '../../content/presentation/report_sheet.dart';
 import '../../media/domain/media_upload_use_case.dart';
@@ -220,9 +220,10 @@ class PlaceDetailPage extends ConsumerWidget {
               const SizedBox(height: AppSpacing.md),
               _MarkerRow(
                 marker: p.markedBy,
-                // AC4：本 story 走**现有迷你主页卡**（Epic 2 统一收口时一并改）。
+                // 点标记人 → 完整主页（UI 稿 A4 的「点标记人 → 跳 C1」）。
+                // ⚠️ Story 1.5 落地时主页还不存在，先接的迷你卡；Story 2.1 统一收口时改到这里。
                 onTap: p.markedBy.tappable
-                    ? () => showMiniProfile(context, ref, p.markedBy.userId)
+                    ? () => openUserProfile(context, ref, p.markedBy.userId)
                     : null,
               ),
               const SizedBox(height: AppSpacing.md),

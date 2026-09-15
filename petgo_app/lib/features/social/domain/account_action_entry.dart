@@ -9,7 +9,11 @@
 ///
 /// **实际上报在 Story 4.1 统一收口**；各 story 只负责把这个参数正确传到发起处。
 enum AccountActionEntry {
-  /// 迷你主页卡的「⋯」菜单（Story 1.2 / 2.2）。
+  /// 用户主页的「···」（Story 1.2 / 2.2；V1.3.0 batch-b1 Story 2.1 起由迷你卡改为整页主页）。
+  ///
+  /// ⚠️ **上报值仍是 `mini_profile`，不要顺手改成 `profile`**：改版前后在看板上是
+  /// **同一条时间序列** —— 换字面量会在改版当天把曲线断成两截，而那天恰好是最需要
+  /// 对比改版前后的。入口没变（还是"从这个人的主页发起"），只是主页换了形态。
   miniProfile('mini_profile'),
 
   /// 黑名单页的行内「⋯」（Story 1.5 / 2.4）。
@@ -25,4 +29,15 @@ enum AccountActionEntry {
 
   /// 埋点属性值（snake_case，与后端/看板口径一致）。
   final String wire;
+}
+
+/// 从 [AccountActionEntry.wire] 反解（主页路由的 `?entry=` 参数用）。
+///
+/// 🛡 **认不出来一律回落 [AccountActionEntry.miniProfile]，绝不抛**：这个参数只喂埋点，
+/// 一个手敲错的深链不该让用户看到一屏崩溃。
+AccountActionEntry accountActionEntryFromWire(String? wire) {
+  for (final e in AccountActionEntry.values) {
+    if (e.wire == wire) return e;
+  }
+  return AccountActionEntry.miniProfile;
 }

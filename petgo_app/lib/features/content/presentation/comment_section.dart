@@ -7,13 +7,13 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/letter_avatar.dart';
-import '../../../shared/widgets/mini_profile_sheet.dart';
 import '../../social/domain/account_action_entry.dart';
 import '../data/detail_repository.dart';
 import '../domain/comment.dart';
 import 'author_moderation_callbacks.dart';
 import 'detail_providers.dart';
 import '../../../shared/widgets/user_tag_row.dart';
+import '../../user_profile/presentation/public_profile_page.dart';
 
 /// 评论区（Story 3.3 只读 + Story 3.5 回复/删除入口）。一级时间正序首 10 + 「查看更多评论」；
 /// 二级默认内嵌 3 条 + 「查看全部 X 条回复」展开。非自身滚动（嵌入详情页滚动）。
@@ -256,18 +256,20 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       comment: c,
       name: name,
       replyLabel: l10n.detailReply,
-      // V1.1.4 Story 1.6：点评论作者 → 迷你卡（举报 / 拉黑的入口）。
+      // V1.1.4 Story 1.6：点评论作者 → 举报 / 拉黑的入口。
+      // V1.3.0 batch-b1 Story 2.1 起该入口从迷你卡换成**完整主页**（FR-118.1），
+      // 收尾回调语义一字未变（仅成功路径触发）。
       //
       // ⚠️ 这是本版本最大的闭环缺口：影子评论 / R1 / R2 / 通知抑制**全是为评论区骚扰设计的**，
-      // 而在此之前 `showMiniProfile` 全 App 只有 Feed 卡片作者与详情页作者两个触发点——
+      // 而在此之前这个入口全 App 只有 Feed 卡片作者与详情页作者两个触发点——
       // 一个只在评论区骚扰、从不发帖的账号，用户既举报不了也拉黑不了。
       //
       // ⚠️ 已注销 → 传 null，整体去掉点击手势（NFR-8，与首页/详情两处一致），且**不给任何 Toast**。
-      // `showMiniProfile` 内部虽有第二道防线（isDeactivated 直接 return），但那要先走一次网络往返，
-      // 用户看到的是「点了没反应」——与网络失败无法区分。
+      // 主页内部虽有第二道防线（注销 → 通用空态），但那要先走一次网络往返，
+      // 用户看到的是「进去一片空白」——与网络失败无法区分。
       onAuthorTap: c.authorDeleted
           ? null
-          : () => showMiniProfile(context, ref, c.authorId,
+          : () => openUserProfile(context, ref, c.authorId,
               // 修复清单 #7：与首页/详情入口同一套收尾（onAuthorHidden = 乐观清 Feed 该作者
               // 全部卡片；对象是帖主时顺带退出本详情页），再刷本帖评论。只接 _reload 的话，
               // 用户回到首页会看见「我明明处理了，他的东西还在」。

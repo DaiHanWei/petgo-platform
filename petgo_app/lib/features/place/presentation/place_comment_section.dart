@@ -8,7 +8,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/letter_avatar.dart';
-import '../../../shared/widgets/mini_profile_sheet.dart';
+import '../../user_profile/presentation/public_profile_page.dart';
 import '../data/place_repository.dart';
 import '../domain/place_comment.dart';
 import 'place_comments_controller.dart';
@@ -64,7 +64,7 @@ class PlaceCommentSection extends ConsumerWidget {
             _CommentRow(
               comment: c,
               onAuthorTap: c.authorTappable
-                  ? () => showMiniProfile(context, ref, c.authorId)
+                  ? () => openUserProfile(context, ref, c.authorId)
                   : null,
               onDelete: c.mine ? () => _confirmDelete(context, ref, c) : null,
             ),

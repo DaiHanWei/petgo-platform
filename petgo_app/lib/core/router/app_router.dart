@@ -36,8 +36,10 @@ import '../../features/me/presentation/delete_account_page.dart';
 import '../../features/me/presentation/language_settings_page.dart';
 import '../../features/me/presentation/me_page.dart';
 import '../../features/me/presentation/settings_page.dart';
+import '../../features/social/domain/account_action_entry.dart';
 import '../../features/social/presentation/blocked_users_page.dart';
 import '../../features/support/presentation/my_tickets_page.dart';
+import '../../features/user_profile/presentation/public_profile_page.dart';
 import '../../features/support/presentation/ticket_compose_page.dart';
 import '../../features/support/presentation/ticket_detail_page.dart';
 import '../../features/support/presentation/csat_page.dart';
@@ -905,6 +907,20 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         builder: (c, s) => ContentDetailPage(
           postId: int.parse(s.pathParameters['id']!),
           focusComments: s.uri.queryParameters['focus'] == 'comments',
+        ),
+      ),
+      // 用户公开主页（V1.3.0 batch-b1 Story 2.1 · FR-118）。shell 外顶层 push（隐藏 Tab Bar）。
+      //
+      // 🛡 **游客可进**：点头像看这人是谁本来就不需要登录（与迷你卡端点同一口径，
+      // 页面内的举报 / 拉黑各自走 FR-0C 登录门控）。因此**不要挪到受控前缀之下**。
+      //
+      // `?entry=` 只喂埋点（从 Feed / 详情页 / 评论区哪儿点进来的），**不影响任何行为**；
+      // 缺省或写错 → 回落 `mini_profile`，页面照常。
+      GoRoute(
+        path: PublicProfilePage.routePattern,
+        builder: (c, s) => PublicProfilePage(
+          userId: int.parse(s.pathParameters['userId']!),
+          entry: accountActionEntryFromWire(s.uri.queryParameters['entry']),
         ),
       ),
       // ===== V1.1.6 Story 2.3：App 内访客只读视图（AD-2 Rule 6）=====

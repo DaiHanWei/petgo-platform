@@ -1,0 +1,456 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/analytics/analytics.dart';
+import '../../../core/network/problem_detail.dart';
+import '../../../core/theme/colors.dart';
+import '../../../core/theme/spacing.dart';
+import '../../../core/theme/typography.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/date_format.dart';
+import '../../../shared/widgets/app_image.dart';
+import '../../../shared/widgets/app_toast.dart';
+import '../../../shared/widgets/confirm_sheet.dart';
+import '../../../shared/widgets/user_tag_row.dart';
+import '../../auth/domain/auth_guard.dart';
+import '../../social/data/blocked_users_repository.dart';
+import '../../social/domain/account_action_entry.dart';
+import '../../social/presentation/account_report_sheet.dart';
+import '../data/public_profile_repository.dart';
+
+/// 用户在主页上对目标用户做成了什么 —— 主页 pop 时回给调用方的**收尾信号**。
+///
+/// 🔴 为什么要有这个枚举：迷你卡是个弹层，`onBlocked` / `onReported` 两个回调可以
+/// 直接闭包捕获调用方那一屏。换成整页之后，调用方与主页之间只剩 Navigator 的返回值，
+/// 而**那两条收尾行为一字都不能丢**（AC4：拉黑后退出详情页、从列表移除该作者全部内容）。
+enum ProfileActionOutcome {
+  /// 拉黑成功（成功提示已由主页给过）。
+  blocked,
+
+  /// 举报成功。**静默** —— 提示会泄露「举报会隐藏内容」。
+  reported,
+}
+
+/// 进入某人的公开主页（V1.3.0 batch-b1 Story 2.1 · FR-118.1）。
+///
+/// 🔴 **这是 `showMiniProfile` 的替代品**：本 story 之后，App 里所有「点头像看这人是谁」
+/// 的入口一律走这里，迷你卡组件零引用（AC2）。
+///
+/// [onBlocked] / [onReported] 的语义**与迷你卡逐字相同**（AC4）：
+/// 仅成功路径触发，取消与失败都不触发；触发时机是主页已经收起、调用方那一屏回到前台。
+/// 两者收尾动作一般相同，调用方通常传同一个回调。
+///
+/// [entry]：从哪儿点进来的，只用于埋点，不影响任何行为。
+Future<void> openUserProfile(
+  BuildContext context,
+  WidgetRef ref,
+  int userId, {
+  VoidCallback? onBlocked,
+  VoidCallback? onReported,
+  AccountActionEntry entry = AccountActionEntry.miniProfile,
+}) async {
+  final outcome = await context.push<ProfileActionOutcome>(
+    '${PublicProfilePage.routeBase}/$userId?entry=${entry.wire}',
+  );
+  switch (outcome) {
+    case ProfileActionOutcome.blocked:
+      onBlocked?.call();
+    case ProfileActionOutcome.reported:
+      onReported?.call();
+    case null:
+      break; // 只是看完返回 —— 什么都不做。
+  }
+}
+
+/// 用户公开主页（他人视角，UI 稿 C1）。
+///
+/// <h2>本 story 只做身份区</h2>
+/// 头像 / 昵称 / 运营标签 / **加入时间** / 签名 / 发帖总数。
+/// **内容网格与获赞总数是 Story 2.2、宠物卡是 Story 2.3** —— 这里刻意不摆空网格占位：
+/// 一个恒空的「Postingan」区块会被当成「这人没发过东西」，那是错误信息，不是占位。
+///
+/// <h2>自己视角（UI 稿 C2）是 Story 2.4</h2>
+/// 服务端已经在下发 `self`，本页据此**只做一件事：不渲染「···」**
+/// （对自己举报 / 拉黑没有意义）。「编辑资料」入口留给 2.4。
+class PublicProfilePage extends ConsumerWidget {
+  const PublicProfilePage({super.key, required this.userId, this.entry = AccountActionEntry.miniProfile});
+
+  /// 路由前缀。拼 `'$routeBase/$userId'` 即为某人主页。
+  static const String routeBase = '/users';
+
+  /// go_router 的路由模板。
+  static const String routePattern = '$routeBase/:userId';
+
+  final int userId;
+
+  /// 从哪儿进来的（仅埋点）。
+  final AccountActionEntry entry;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final async = ref.watch(publicProfileProvider(userId));
+    final profile = async.value;
+    // 「···」只在**确定是他人、且账号还在**时渲染：自己没什么可举报可拉黑的，
+    // 已注销的人也一样（NFR-3：连身份都不下发了，再挂一个举报入口是自相矛盾）。
+    final showMore = profile != null && !profile.self && !profile.isDeactivated;
+    return Scaffold(
+      backgroundColor: AppColors.base,
+      appBar: AppBar(
+        backgroundColor: AppColors.base,
+        scrolledUnderElevation: 0,
+        actions: [
+          if (showMore)
+            IconButton(
+              key: const ValueKey('profileMore'),
+              icon: const Icon(Icons.more_horiz_rounded, color: AppColors.ink),
+              onPressed: () => _openActionSheet(context, ref, l10n, profile),
+            ),
+          const SizedBox(width: AppSpacing.xs),
+        ],
+      ),
+      body: async.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => _error(context, ref, l10n, e),
+        data: (p) => p.isDeactivated
+            // AC5：本 story 以通用空态兜底；完整「用户不存在」视觉由 Story 2.5 补。
+            // ⚠️ 与「id 不存在」用**同一句文案**：两者可区分就等于确认了「这个 id 曾经有人」。
+            ? _EmptyState(
+                key: const ValueKey('profileDeactivated'),
+                icon: Icons.person_off_outlined,
+                message: l10n.profileNotFound,
+              )
+            : _identity(context, p),
+      ),
+    );
+  }
+
+  Widget _error(BuildContext context, WidgetRef ref, AppLocalizations l10n, Object e) {
+    final problem = e is DioException ? ProblemDetail.fromDioException(e) : null;
+    // 🔴 「我拉黑了对方」是**独立分支**（服务端 403 + type .../blocked-user）：
+    // 混进网络失败的话，用户会一直重试一个永远不会成功的动作。这里**不给重试按钮**。
+    if (problem?.typeSlug == 'blocked-user') {
+      return _EmptyState(
+        key: const ValueKey('profileBlocked'),
+        icon: Icons.block_rounded,
+        message: l10n.profileBlockedEmpty,
+      );
+    }
+    // ⚠️ **服务端当前不会为「id 不存在」发 404** —— 它与已注销合流成 200 +「什么都没有」的投影
+    // （刻意不可区分，见 `PublicProfileController` 类注释）。这条分支是**防御性映射**：
+    // 真收到 404（路由改了 / 网关拦了）时给「用户不存在」，比给「网络失败 + 重试」贴切得多 ——
+    // 后者会让用户对着一个永远不会好的按钮点下去。
+    if (problem?.status == 404) {
+      return _EmptyState(
+        key: const ValueKey('profileNotFound'),
+        icon: Icons.person_off_outlined,
+        message: l10n.profileNotFound,
+      );
+    }
+    return _EmptyState(
+      key: const ValueKey('profileLoadFailed'),
+      icon: Icons.wifi_off_rounded,
+      message: l10n.profileLoadFailed,
+      action: TextButton(
+        key: const ValueKey('profileRetry'),
+        onPressed: () => ref.invalidate(publicProfileProvider(userId)),
+        child: Text(l10n.commonRetry),
+      ),
+    );
+  }
+
+  /// 身份区（UI 稿 C1 的 `.profhead`）。
+  ///
+  /// ⚠️ **没有 email、没有相机角标、没有「编辑资料」** —— 那三样是自己视角专属。
+  Widget _identity(BuildContext context, PublicProfile p) {
+    final l10n = AppLocalizations.of(context);
+    final joinedAt = p.joinedAt;
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.screenEdge),
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              key: const ValueKey('profileAvatar'),
+              radius: 31,
+              backgroundColor: AppColors.border,
+              backgroundImage: AppImage.provider(p.avatarUrl, thumbWidth: 240),
+              child: (p.avatarUrl == null || p.avatarUrl!.isEmpty)
+                  ? const Icon(Icons.person_rounded, size: 31, color: AppColors.textTertiary)
+                  : null,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 运营标签的第五处展示位（前四处：feed / detail / comment / mini_profile）。
+                  UserTagRow(
+                    position: 'profile',
+                    name: p.nickname ?? '',
+                    nameStyle: AppTypography.title,
+                    tags: p.tags,
+                  ),
+                  if (joinedAt != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      // 到月不到日 —— 确切注册日期没必要外泄（见 `formatMonthAbbrYear`）。
+                      l10n.profileJoinedAt(formatMonthAbbrYear(context, joinedAt.toLocal())),
+                      key: const ValueKey('profileJoinedAt'),
+                      style: AppTypography.caption,
+                    ),
+                  ],
+                  if (p.hasSignature) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      p.signature!.trim(),
+                      key: const ValueKey('profileSignature'),
+                      style: AppTypography.caption,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 3),
+                  // ⚠️ 发帖总数**复用既有统计**（迷你卡一直在用的那个），没有重新实现。
+                  // 获赞总数是 Story 2.2 新补的，这里还没有。
+                  Text(
+                    l10n.miniProfilePostCount(p.postCount),
+                    key: const ValueKey('profilePostCount'),
+                    style: AppTypography.caption,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// 操作抽屉（UI 稿 C3）：举报 / 拉黑两项 + 底部「取消」。
+  ///
+  /// 样式沿用「编辑资料」抽屉那一套（顶部圆角 24 + 手柄 + 上滑），
+  /// **不是**迷你卡那个锚在右上角的浮层 —— 那个浮层是为了不遮住小卡片的内容，
+  /// 整页之下这个理由不存在了。
+  Future<void> _openActionSheet(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    PublicProfile profile,
+  ) async {
+    final action = await showModalBottomSheet<_ProfileAction>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 「举报」与「拉黑」**并列、不分主次**（与迷你卡菜单同一口径）。
+              //
+              // ⚠️ 已举报过 → 文案换成「已举报 / 点击可再次举报」并用品牌色，
+              // **必须读起来像「还能再点」而不是禁用态**：再报一次是有意义的
+              // （每次的类型独立留存，第一次报骚扰、第二次报仿冒正是问题在升级的证据）。
+              _ActionTile(
+                itemKey: const ValueKey('profileMenuReport'),
+                emoji: profile.reported ? '📌' : '🚩',
+                label: profile.reported ? l10n.accountReportedAction : l10n.accountReportAction,
+                subtitle: profile.reported
+                    ? l10n.accountReportedActionSub
+                    : l10n.accountReportActionSub,
+                labelColor: profile.reported ? AppColors.mint : AppColors.ink,
+                onTap: () => Navigator.of(sheetContext).pop(_ProfileAction.report),
+              ),
+              // ⚠️ 举报之后**拉黑项照常可点、不置灰不隐藏**：拉黑带来一个举报没有的效果 ——
+              // 从此进不去对方主页。以「已举报」为由禁掉它是错的。
+              _ActionTile(
+                itemKey: const ValueKey('profileMenuBlock'),
+                emoji: '🚫',
+                label: l10n.blockUserAction,
+                subtitle: l10n.blockUserActionSub,
+                onTap: () => Navigator.of(sheetContext).pop(_ProfileAction.block),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              // UI 稿 C3 明确要一个**显式**的「取消」：点遮罩也能收起，但显式按钮更明确。
+              TextButton(
+                key: const ValueKey('profileMenuCancel'),
+                onPressed: () => Navigator.of(sheetContext).pop(),
+                child: Text(l10n.commonCancel),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!context.mounted) return;
+    switch (action) {
+      case _ProfileAction.report:
+        await _startReport(context, ref, profile);
+      case _ProfileAction.block:
+        await _startBlock(context, ref, l10n, profile);
+      case null:
+        break;
+    }
+  }
+
+  /// 举报 → 成功后收起主页并把 [ProfileActionOutcome.reported] 交回调用方。
+  ///
+  /// ⚠️ **全程静默**：不给任何成功提示 —— 提示会泄露「举报会隐藏内容」（AC4）。
+  Future<void> _startReport(BuildContext context, WidgetRef ref, PublicProfile profile) async {
+    // FR-0C：游客点社区动作 → 强登录引导，不发请求（与拉黑同一门控）。
+    if (!requireLogin(ref, context, onAllowed: () {})) return;
+    final submitted = await openAccountReport(
+      context,
+      ref,
+      userId,
+      // 「已举报」来自服务端标记，不是前端会话态。
+      alreadyReported: profile.reported,
+      entry: entry,
+    );
+    if (!submitted || !context.mounted) return;
+    context.pop(ProfileActionOutcome.reported);
+  }
+
+  /// 拉黑二次确认 → 提交 → 成功收起主页 + 成功提示 / 失败**保持停在主页**。
+  ///
+  /// 成功收起、失败留下，两者行为相反是刻意的：失败不该让用户重新走一遍入口。
+  Future<void> _startBlock(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+    PublicProfile profile,
+  ) async {
+    if (!requireLogin(ref, context, onAllowed: () {})) return;
+    // toast 要在主页收起**之后**给，那时 context 已失效 → 先把 root Overlay 拿在手里。
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    final ok = await showConfirmSheet(
+      context,
+      title: l10n.blockUserTitle(profile.nickname ?? ''),
+      // 只说「不再看到 TA 的内容和评论」——**刻意不提影子评论、不提「对方不会收到通知」**（A-A27）。
+      message: l10n.blockUserMessage,
+      confirmLabel: l10n.blockUserAction,
+      cancelLabel: l10n.commonCancel,
+      danger: true,
+      // 头像重复出现：**确认拉黑谁比确认动作本身更重要**（C1，刻意的冗余）。
+      leading: CircleAvatar(
+        radius: 30,
+        backgroundColor: AppColors.border,
+        backgroundImage: AppImage.provider(profile.avatarUrl, thumbWidth: 200),
+        child: (profile.avatarUrl == null || profile.avatarUrl!.isEmpty)
+            ? const Icon(Icons.person_rounded, size: 28, color: AppColors.textTertiary)
+            : null,
+      ),
+      confirmKey: const ValueKey('confirmBlockUser'),
+      onConfirm: () async {
+        try {
+          await ref.read(blockedUsersRepositoryProvider).block(userId);
+          // ⚠️ 埋点在**成功之后**（V1.1.2 的教训：门控前就上报会让指标系统性高估）。
+          // 拉黑失败不上报，取消也不上报。
+          Analytics.capture('social_user_hide_submitted', {
+            'origin': 'BLOCK',
+            'entry': entry.wire,
+          });
+          return true;
+        } catch (_) {
+          // 失败提示必须在这里给：此时确认抽屉仍然开着，`showConfirmSheet` 尚未返回。
+          // `top: true` 与举报失败同口径：抽屉还开着时，toast 的默认底部位置正好压在按钮区上。
+          if (overlay != null) {
+            showAppToastOnOverlay(overlay, l10n.blockUserFailed, top: true);
+          }
+          return false;
+        }
+      },
+    );
+    if (!ok || !context.mounted) return;
+    context.pop(ProfileActionOutcome.blocked);
+    if (overlay != null) showAppToastOnOverlay(overlay, l10n.blockUserSuccess);
+  }
+}
+
+enum _ProfileAction { report, block }
+
+/// 抽屉里的一项：emoji + 主文案 14/w600 + 副标题 12（规格取自迷你卡菜单，逐条对齐）。
+class _ActionTile extends StatelessWidget {
+  const _ActionTile({
+    required this.itemKey,
+    required this.emoji,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+    this.labelColor = AppColors.ink,
+  });
+
+  final Key itemKey;
+  final String emoji;
+  final String label;
+  final String subtitle;
+  final VoidCallback onTap;
+  final Color labelColor;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        key: itemKey,
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(emoji, style: const TextStyle(fontSize: 16)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(label,
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600, color: labelColor)),
+                    const SizedBox(height: 2),
+                    Text(subtitle,
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
+/// 页面级空态 / 失败态（本 story 的通用兜底；完整视觉由 Story 2.5 补）。
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({super.key, required this.icon, required this.message, this.action});
+
+  final IconData icon;
+  final String message;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 40, color: AppColors.textTertiary),
+              const SizedBox(height: AppSpacing.sm),
+              Text(message, style: AppTypography.caption, textAlign: TextAlign.center),
+              if (action != null) ...[const SizedBox(height: AppSpacing.xs), action!],
+            ],
+          ),
+        ),
+      );
+}

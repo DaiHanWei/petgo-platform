@@ -3381,5 +3381,13 @@
   "placePhotoDeleted": "Photo removed",
   "@placePhotoDeleted": {"description": "Place detail: toast after your own photo is removed."},
   "placePhotoDeleteFailed": "Could not remove it. Try again.",
-  "@placePhotoDeleteFailed": {"description": "Place detail: photo delete failed. Also covers the server rule that a place must keep at least one photo."}
+  "@placePhotoDeleteFailed": {"description": "Place detail: photo delete failed. Also covers the server rule that a place must keep at least one photo."},
+  "profileJoinedAt": "Joined {date}",
+  "@profileJoinedAt": {"description": "Public profile: when this person joined. Already-formatted string, month + year only - the exact day is personal information nobody needs.", "placeholders": {"date": {"type": "String"}}},
+  "profileLoadFailed": "Couldn't load this profile",
+  "@profileLoadFailed": {"description": "Public profile: network failure while loading; shown next to a retry button."},
+  "profileNotFound": "User not found",
+  "@profileNotFound": {"description": "Public profile: the account is deactivated, or the id does not exist. Deliberately the SAME wording for both - which one it is must not leak."},
+  "profileBlockedEmpty": "You've blocked this user",
+  "@profileBlockedEmpty": {"description": "Public profile: you blocked this person, so their profile can no longer be opened. Distinct from a network failure - retrying will never work."}
 }
