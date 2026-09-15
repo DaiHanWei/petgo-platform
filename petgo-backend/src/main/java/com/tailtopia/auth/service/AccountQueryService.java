@@ -62,6 +62,27 @@ public class AccountQueryService {
                 .orElse(false);
     }
 
+    /**
+     * {@link #isActive} 的**批量**版：这批 id 里哪些账号对外有效（未注销 + 未封号）。
+     *
+     * <h2>🔴 判据与 {@link #isActive} 逐字相同，不许各写一遍</h2>
+     * V1.3.0 batch-b1 Story 4.1 的推荐池要判一页十几个 owner，逐个 {@code isActive} 就是
+     * 十几次往返（AD-6）。而只判「注销」不判「封号」的表现是
+     * <b>「推荐位里那只宠物点进去 404」</b>—— 落地页的可见性判据用的正是 {@code isActive}
+     * （code-review 2026-09-15 抓到过一次）。
+     *
+     * <p>⚠️ 同 {@code isActive}：这是**对外可见性**判据，不是「能否登录」判据。
+     *
+     * @return 有效账号的 id 集合（入参里缺失的 id 不出现）
+     */
+    @Transactional(readOnly = true)
+    public java.util.Set<Long> activeIdsAmong(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return new java.util.HashSet<>(users.findActiveIds(userIds));
+    }
+
     /** 取用户语言偏好（bug 20260625-105）：'en' 或 'id'（默认/未设=id）。供系统推送文案本地化。 */
     @Transactional(readOnly = true)
     public java.util.Locale localeOf(long userId) {

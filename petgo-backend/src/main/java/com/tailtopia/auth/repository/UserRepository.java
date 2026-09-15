@@ -18,6 +18,17 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByGoogleSub(String googleSub);
 
+    /**
+     * 这批 id 里哪些是**仍然可见**的账号（V1.3.0 batch-b1 Story 4.1）。
+     *
+     * <p>判据与 {@code AccountQueryService.isActive} 逐字相同（未软删 + status=ACTIVE）——
+     * 那个是单个查，这里是**批量**版（AD-6：推荐池一页十几只宠物，逐个查就是十几次往返）。
+     * ⚠️ 两处判据必须一致：不一致的表现是「推荐位里那只宠物点进去 404」。
+     */
+    @Query("SELECT u.id FROM User u WHERE u.id IN :ids AND u.deletedAt IS NULL "
+            + "AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE")
+    java.util.List<Long> findActiveIds(@Param("ids") java.util.Collection<Long> ids);
+
     /** FR-44：Apple 登录按 apple_sub 取号（首登未命中则建号）。 */
     Optional<User> findByAppleSub(String appleSub);
 

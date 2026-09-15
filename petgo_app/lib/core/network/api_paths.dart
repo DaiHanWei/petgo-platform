@@ -378,4 +378,13 @@ class ApiPaths {
   /// （全局搜索留在 1.6.0，未前移）。昵称过滤由客户端在这批人之内做（Story 3.2 AC2）。
   /// ⚠️ 别"顺手"给它拼上 `?q=`，那一刻它就变成了全局用户搜索。
   static const String meMentionCandidates = '$base/me/mention-candidates';
+
+  // ===== 逛别人家的毛孩子（V1.3.0 batch-b1 Epic 4，FR-121）=====
+  /// 🔒 宠物推荐池（Story 4.1）。**在 `/me` 下是刻意的**：结果按查看者算
+  /// （互相拉黑的双方不互推），同一时刻给两个人的不一样 —— 挂成 `/pet-recommendations`
+  /// 会让它看着像一份全站公共列表。先例是 `meShopRecommendations`。
+  ///
+  /// ⚠️ 游客不展示该区（story Dev Notes「游客态不动」），所以后端也不放行未登录。
+  /// 可选 `?limit=`；全屏集合页的游标分页属 Story 4.3，现在不先摆一个没人用的参数。
+  static const String mePetRecommendations = '$base/me/pet-recommendations';
 }

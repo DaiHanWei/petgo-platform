@@ -929,6 +929,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         path: VisitorArchiveView.inAppRoutePattern,
         builder: (c, s) => VisitorArchiveView(
           scope: ArchiveScope.inAppVisitor(int.parse(s.pathParameters['petId']!)),
+          // `?from=` 只喂埋点（Story 4.1 AC7 的 diary_visitor_viewed）；缺省 → 不报。
+          analyticsFrom: s.uri.queryParameters['from'],
         ),
       ),
       GoRoute(

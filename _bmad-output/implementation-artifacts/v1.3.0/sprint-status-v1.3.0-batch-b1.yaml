@@ -278,7 +278,21 @@ development_status:
   # ===== Epic 4: 逛别人家的毛孩子 · FR-121 + FR-112.4（顶部统一区另一半）=====
   # 依赖 Epic 2（复用 2-3 的访客视图入口，不新建通道）；4-4 需 1-1 的场所入口行已落地。
   epic-4: in-progress
-  4-1-推荐规则与宠物卡: ready-for-dev                    # 近 14 天公开 Diary 帖 + 有头像 + 公开记录≥3；**不复用 FR-95 打分**。⚠️ 实时 SQL（不许加缓存）→ 必须给索引方案并贴执行计划；降级只许 @Scheduled 落表
+  4-1-推荐规则与宠物卡: review                            # 近 14 天公开 Diary 帖 + 有头像 + 公开记录≥3；**不复用 FR-95 打分**。⚠️ 实时 SQL（不许加缓存）→ 必须给索引方案并贴执行计划；降级只许 @Scheduled 落表
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3405 例真实失败 0 / 前端 analyze 0 issue、1835 例）
+                                                        # 迁移 V20260915_1727__add_pet_recommendation_index.sql（两条**部分索引**，谓词已下推 → 索引里只剩 (pet_id, created_at)）
+                                                        # 候选查询是 CTE 形态：candidates（GROUP BY + HAVING 两个门槛）LEFT JOIN 预聚合的 liked（点赞数）；排序 date(last_at) DESC, interactions DESC, ...
+                                                        #    「同日」按日期截断分桶 —— 不截断的话同一天先发的永远排后面、互动量那一半永远用不上
+                                                        # AC3 六条边界各一条 L0 用例：没头像 / 已注销 / **被封号** / 任一方向拉黑 / 自己的宠物 / 档案已删 —— 拉黑走 hiddenEitherWay（AD-7 单一出口，双向）
+                                                        # AC4：大图（最近一张公开照片）与小圆头像（PetProfile.avatarUrl）是**两个字段两个来源**（UX-DR15）；AC5 落 /pets/{petId} 复用 2-3 站内入口，**不下发 cardToken**（AD-4）
+                                                        # AC6：推荐区追加在既有引导之下，「+ 建档」「Ubah status」原样保留；取不到 / 池子为空 → **整块不渲染且版面不变**
+                                                        # ⚠️ code-review 修掉 6 条：① 卡片在 360/375/390dp 溢出（「一起 238 天」被裁）→ 大图 AspectRatio(1) 改 Expanded，新增三宽度用例（旧版面下必红，已反向验证）
+                                                        #    ② owner 过滤只判注销漏了**封号**，而落地页用的是 isActive → 推荐位里那只宠物**点进去 404**；新增 AccountQueryService.activeIdsAmong（批量版 isActive，判据逐字相同）
+                                                        #    ③ 互动量子查询只按 pet_id 数点赞 → 私密/已删/DAILY 帖的点赞在影响**公开**推荐位排序（高赞帖改私密后仍稳坐第一）；现在与候选同一套谓词并有源码级守卫
+                                                        #    ④ 相关子查询=每候选执行一次 → 改预聚合 CTE + hash join，并用 IN (SELECT pet_id FROM candidates) 把范围收在候选集内
+                                                        #    ⑤ 大图没有 errorBuilder（图挂了一块白 + 抛 NetworkImageLoadException）→ 落回爪印占位 ⑥ _EmptyProfileView 无条件换版面，与旁边「引导一字未改」自相矛盾 → 只在真有卡时换
+                                                        # 🔸 **一条建议埋点/产品确认**：pet_card_tapped 由 AC7 与架构 §4.2 明写，但与 FR-92 H5 名片那组 pet_card_* **共用前缀**；按 AC 原样落地、未擅自改名（改名只动调用点一行 + 两条用例）
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；**L1 最重要的是 AC2 的 EXPLAIN** —— 云端无 postgres，两条部分索引是否真被选中只能对真库验；扛不住时允许的降级只有 @Scheduled 落表）
   4-2-diary声明未养宠态也看到推荐: ready-for-dev         # B1-D2 对 PRD 原文的扩展：代码里有**两种**无档案状态，PRD 只写了未建档那一种。游客态不动
   4-3-全屏推荐集合页: ready-for-dev                      # 2 列网格 + 分页 + 空态；**「查看全部」入口由本条一并加上**（它的落点是本条才交付的页面，放 4-1 会成前向依赖）
   4-4-探索tab顶部宠物横滑行: ready-for-dev               # 加在 1-1 已落地的场所入口行**之下**；两模块分层清晰不叠一堆；推荐池为空时整行不渲染

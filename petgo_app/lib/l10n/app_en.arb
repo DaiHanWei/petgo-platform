@@ -179,6 +179,10 @@
       }
     }
   },
+  "petRecommendSectionTitle": "Meet other pets",
+  "@petRecommendSectionTitle": {"description": "Section title above the pet recommendation grid on the Diary no-profile state (Story 4.1)"},
+  "petRecommendCompanionDays": "{days, plural, =1{Together 1 day} other{Together {days} days}}",
+  "@petRecommendCompanionDays": {"description": "Companion days on a recommended pet card; same algorithm as the H5 card", "placeholders": {"days": {"type": "int"}}},
   "growthArchiveAgeDays": "{days, plural, =1{1 day} other{{days} days}}",
   "@growthArchiveAgeDays": {
     "description": "Pet age under one month — shown in days instead of 0y 0m",

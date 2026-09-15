@@ -116,6 +116,8 @@
   "publishTextBlocked": "Postingan mengandung kata tidak pantas, silakan ubah lalu coba lagi",
   "publishImageBlocked": "Ada gambar dengan konten terlarang, silakan ganti lalu coba lagi",
   "growthArchiveAge": "{years}th {months}bln",
+  "petRecommendSectionTitle": "Kenalan sama anabul lain",
+  "petRecommendCompanionDays": "{days, plural, =1{Bersama 1 hari} other{Bersama {days} hari}}",
   "growthArchiveAgeDays": "{days} hari",
   "growthArchiveEmptyTitle": "Belum ada profil hewan",
   "growthArchiveEmptyCreate": "Buat Profil Sekarang",

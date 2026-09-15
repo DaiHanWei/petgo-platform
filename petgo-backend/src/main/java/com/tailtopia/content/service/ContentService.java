@@ -770,6 +770,80 @@ public class ContentService {
     }
 
     /**
+     * 推荐池的 content 侧一半（V1.3.0 batch-b1 Story 4.1 · AC1/AC2）。
+     *
+     * <p>经 service 暴露，<b>不让 profile 直读 content_posts 表</b>（架构边界，同
+     * {@link #countGrowthMoments}）。「有头像 / owner 未注销 / 互相拉黑不互推」那三条
+     * 要读 pet_profiles / users / 拉黑关系，由 {@code profile.recommend} 那一侧做。
+     *
+     * <p>⚠️ 调用方要<b>多取一些</b>：那三层过滤都在本方法返回之后，取多少就展示多少的话
+     * 一页会越过滤越空（同 Story 3.1「留 50 给 30」的冗余思路）。
+     *
+     * @param since      候选窗口起点（「近 14 天」那一刻）
+     * @param minRecords 公开成长记录条数门槛
+     * @param limit      取多少候选（含给后续过滤留的冗余）
+     */
+    @Transactional(readOnly = true)
+    public List<RecommendablePet> findRecommendablePets(Instant since, int minRecords, int limit) {
+        return posts.findRecommendablePets(since, minRecords, limit).stream()
+                .map(row -> new RecommendablePet(
+                        ((Number) row[0]).longValue(),
+                        toInstant(row[1]),
+                        ((Number) row[2]).longValue(),
+                        ((Number) row[3]).longValue()))
+                .toList();
+    }
+
+    /**
+     * 这批宠物各自最近一张**公开照片**的 URL（Story 4.1 · AC4 卡片大图）。
+     *
+     * <p>🔴 与宠物档案自身的头像是<b>两个不同字段</b> —— 做成同一张图重复摆放是明显 bug
+     * （UI 稿 UX-DR15 专门点过）。
+     *
+     * @return petId → 首图 URL；没有带图公开帖的宠物**不在结果里**（调用方按缺失处理）
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, String> findLatestPublicCovers(java.util.Collection<Long> petIds) {
+        if (petIds == null || petIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.Map<Long, String> out = new java.util.HashMap<>();
+        for (Object[] row : posts.findLatestPublicCovers(petIds)) {
+            String url = (String) row[1];
+            if (url != null && !url.isBlank()) {
+                out.put(((Number) row[0]).longValue(), url);
+            }
+        }
+        return out;
+    }
+
+    /** JDBC 可能给回 Timestamp 或 Instant，两种都收（native query 的返回类型不由我们定）。 */
+    private static Instant toInstant(Object value) {
+        if (value instanceof Instant instant) {
+            return instant;
+        }
+        if (value instanceof java.sql.Timestamp ts) {
+            return ts.toInstant();
+        }
+        if (value instanceof java.time.OffsetDateTime odt) {
+            return odt.toInstant();
+        }
+        throw new IllegalStateException("无法识别的时间类型: " + value.getClass());
+    }
+
+    /**
+     * 推荐池里的一只宠物（content 侧视角）。
+     *
+     * @param petId         宠物档案 id
+     * @param lastPostedAt  最近一条公开成长日历帖的时间（排序主键）
+     * @param publicRecords 公开成长记录条数（已过门槛，带出来供排查）
+     * @param interactions  互动量（点赞总数）——<b>只用作同日的次级排序</b>（AC1）
+     */
+    public record RecommendablePet(long petId, Instant lastPostedAt, long publicRecords,
+            long interactions) {
+    }
+
+    /**
      * 校验 {@code postId} 是否为 {@code ownerId} 本人的、未删的成长日历内容（里程碑用户打卡关联，Story 8.4）。
      * 经 service 接口供 profile 模块调用，**避免 profile 直读 content_posts 表**（架构边界）。
      */

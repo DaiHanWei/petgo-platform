@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
@@ -37,7 +38,7 @@ import 'widgets/timeline_item_tile.dart';
 /// 健康记录与问诊存档**服务端根本没下发**（访客投影层结构上就取不到）。
 /// 客户端过滤只是「看不见」，抓包照样拿得到 —— 真正的边界在服务端。
 class VisitorArchiveView extends ConsumerStatefulWidget {
-  const VisitorArchiveView({super.key, required this.scope});
+  const VisitorArchiveView({super.key, required this.scope, this.analyticsFrom});
   // ⚠️ 这里**刻意没有** `assert(scope.isVisitor)`：const 构造器的断言里既不能调 getter、
   // 也不能读参数对象的字段，三种写法（`isVisitor` / 读字段 / `!= ArchiveScope.me()`）
   // 都会让 `const VisitorArchiveView(...)` 编译不过。作者态走不到这一屏是由**调用方**
@@ -45,6 +46,13 @@ class VisitorArchiveView extends ConsumerStatefulWidget {
 
   /// 数据作用域：分享 token 态 或 站内 petId 态。
   final ArchiveScope scope;
+
+  /// 从哪个推荐位点进来的（V1.3.0 batch-b1 Story 4.1 · AC7 的 `from`）。
+  ///
+  /// 非空 → 首帧上报一次 `diary_visitor_viewed`。为空（分享链接落地 / 公开主页的宠物卡
+  /// 等既有入口）→ **一条都不报**，本 story 不给既有入口补埋点。
+  /// ⚠️ 只喂埋点，不影响任何行为。
+  final String? analyticsFrom;
 
   /// 站内入口的路由前缀。拼 `'$inAppRouteBase/$petId'`。
   ///
@@ -60,6 +68,17 @@ class VisitorArchiveView extends ConsumerStatefulWidget {
 }
 
 class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
+  @override
+  void initState() {
+    super.initState();
+    // Story 4.1 AC7：`diary_visitor_viewed`（属性只有 from —— 没有宠物名、没有 petId
+    // 之外的任何东西）。⚠️ 放 initState 而不是 build：build 会随每次数据到达重跑，
+    // 那样一次浏览会报出三四条。
+    final from = widget.analyticsFrom;
+    if (from != null) {
+      Analytics.capture('diary_visitor_viewed', {'from': from});
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

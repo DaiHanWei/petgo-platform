@@ -18,6 +18,113 @@ import org.springframework.transaction.annotation.Transactional;
 public interface ContentPostRepository extends JpaRepository<ContentPost, Long>, ContentPostAdminSearch {
 
     /**
+     * 推荐池候选（V1.3.0 batch-b1 Story 4.1 · AC1/AC2）—— <b>一条实时聚合查询，不许加缓存</b>。
+     *
+     * <h2>🔴 两个门槛是同一条聚合的两半</h2>
+     * <ul>
+     *   <li>「近 14 天有新公开 Diary 帖」→ {@code HAVING MAX(created_at) >= :since}；</li>
+     *   <li>「公开成长记录 ≥3 条」→ {@code HAVING COUNT(*) >= :minRecords}。</li>
+     * </ul>
+     * 谓词完全相同（GROWTH_MOMENT + PUBLIC + PUBLISHED + 未删 + pet_id 非空），
+     * 所以 {@code idx_content_posts_pet_recommend}（部分索引，谓词已下推）一条就够，
+     * 索引里只剩 {@code (pet_id, created_at)} —— GROUP BY 键 + 聚合列，可 index-only scan。
+     *
+     * <h2>🔴 排序：最近更新倒序，**同日**按互动量（AC1）</h2>
+     * 「同日」是按 {@code created_at} 的日期截断分桶 —— 不截断的话同一天里先发的永远排后面，
+     * 互动量那一半就永远用不上。互动量取该宠物<b>入池的那些帖子</b>的点赞总数。
+     *
+     * <h3>⚠️ 点赞数必须与候选口径**同一套谓词**</h3>
+     * 只按 {@code pet_id} 数点赞（不带 type/visibility/status/deleted_at）的表现是
+     * <b>「私密帖 / 已删帖 / DAILY 帖的点赞在悄悄影响公开推荐位的排序」</b>——
+     * 一只宠物把高赞帖改成私密后仍稳坐第一（code-review 2026-09-15）。
+     * 所以 {@code liked} 这一段的 WHERE 与 {@code candidates} <b>逐字相同</b>，改一处必须改两处。
+     *
+     * <h3>⚠️ 用 CTE 预聚合，**不用相关子查询**</h3>
+     * {@code LIMIT} 发生在 {@code ORDER BY interactions} 之后 —— 要排序就得先算出<b>每一个</b>
+     * 候选的互动量，没有捷径。相关子查询的形态下这就是「候选数次独立执行」；
+     * 换成「一次预聚合 + hash join」后是<b>一遍扫描</b>，且 {@code liked} 已用
+     * {@code pet_id IN (SELECT ...)} 半连接把范围收在候选集内，不扫全表点赞。
+     *
+     * <h2>⚠️ 这里**只**做 content 侧的过滤</h2>
+     * 「有头像」「owner 未注销」「互相拉黑不互推」三条要读 pet_profiles / users / 拉黑关系，
+     * 不在本仓储的边界内（架构：content 不直读 pet_profiles）。它们在
+     * {@code profile.recommend.PetRecommendationService} 里做，因此调用方要<b>多取一些</b>
+     * 候选留给那三层过滤（见那里的冗余系数）。
+     *
+     * @param since      14 天前那一刻
+     * @param minRecords 公开成长记录条数门槛（3）
+     * @return 每行 {@code [petId(Long), lastPostedAt(Instant), publicRecords(Long), interactions(Long)]}
+     */
+    @Query(value = """
+            WITH candidates AS (
+                SELECT pet_id,
+                       MAX(created_at) AS last_at,
+                       COUNT(*)        AS total
+                  FROM content_posts
+                 WHERE type = 'GROWTH_MOMENT'
+                   AND visibility = 'PUBLIC'
+                   AND status = 'PUBLISHED'
+                   AND deleted_at IS NULL
+                   AND pet_id IS NOT NULL
+                 GROUP BY pet_id
+                HAVING COUNT(*) >= :minRecords
+                   AND MAX(created_at) >= :since
+            ), liked AS (
+                SELECT p.pet_id AS pet_id, COUNT(*) AS cnt
+                  FROM content_likes l
+                  JOIN content_posts p ON p.id = l.post_id
+                 WHERE p.pet_id IN (SELECT pet_id FROM candidates)
+                   AND p.type = 'GROWTH_MOMENT'
+                   AND p.visibility = 'PUBLIC'
+                   AND p.status = 'PUBLISHED'
+                   AND p.deleted_at IS NULL
+                 GROUP BY p.pet_id
+            )
+            SELECT c.pet_id                AS pet_id,
+                   c.last_at               AS last_at,
+                   c.total                 AS total,
+                   COALESCE(k.cnt, 0)      AS interactions
+              FROM candidates c
+              LEFT JOIN liked k ON k.pet_id = c.pet_id
+             ORDER BY date(c.last_at) DESC, interactions DESC, c.last_at DESC, c.pet_id DESC
+             LIMIT :limit
+            """, nativeQuery = true)
+    List<Object[]> findRecommendablePets(@Param("since") java.time.Instant since,
+            @Param("minRecords") int minRecords, @Param("limit") int limit);
+
+    /**
+     * 这批宠物各自**最近一张公开照片**（Story 4.1 · AC4 的卡片大图）。
+     *
+     * <h2>🔴 与左下角小圆头像是**两个不同字段、不同来源**</h2>
+     * 大图 = 该宠物最近一条<b>带配图的</b>公开成长日历帖的首图；
+     * 小圆头像 = {@code PetProfile.avatarUrl}（宠物档案自身）。
+     * 做成同一张图重复摆放是 UI 稿 UX-DR15 专门点出来的明显 bug。
+     *
+     * <p>⚠️ 判据比推荐池多一条「有配图」：{@code image_urls} 是 JSONB 数组，
+     * 空数组与 NULL 都算没图。走 {@code idx_content_posts_pet_cover}。
+     *
+     * <p>⚠️ {@code DISTINCT ON} 是 postgres 方言 —— 本项目只跑 postgres（架构基线），
+     * 用它换掉窗口函数是为了让「每个 pet 只要最新那一条」一步到位。
+     *
+     * @return 每行 {@code [petId(Long), firstImageUrl(String)]}；没有带图公开帖的宠物不出现
+     */
+    @Query(value = """
+            SELECT DISTINCT ON (pet_id)
+                   pet_id AS pet_id,
+                   (image_urls ->> 0) AS cover_url
+              FROM content_posts
+             WHERE pet_id IN (:petIds)
+               AND type = 'GROWTH_MOMENT'
+               AND visibility = 'PUBLIC'
+               AND status = 'PUBLISHED'
+               AND deleted_at IS NULL
+               AND image_urls IS NOT NULL
+               AND jsonb_array_length(image_urls) > 0
+             ORDER BY pet_id, created_at DESC, id DESC
+            """, nativeQuery = true)
+    List<Object[]> findLatestPublicCovers(@Param("petIds") java.util.Collection<Long> petIds);
+
+    /**
      * 他人主页的**发帖总数**（V1.3.0 batch-b1 Story 2.2 · FR-118.2）。
      *
      * <p>🔴 <b>必须带 {@code visibility = PUBLIC}</b> —— 与上面那个方法的全部区别就在这一条谓词上。
