@@ -2,7 +2,9 @@ import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
+import '../domain/mention_context.dart';
 import '../domain/mention_token.dart';
 import '../domain/mention_view.dart';
 
@@ -32,6 +34,7 @@ class MentionText extends StatefulWidget {
     required this.text,
     required this.mentions,
     required this.onTapUser,
+    required this.mentionContext,
     this.style,
     this.maxLines,
     this.overflow,
@@ -44,6 +47,12 @@ class MentionText extends StatefulWidget {
 
   /// 点了某个 @ → 去那个人的公开主页（AC2）。
   final void Function(int userId) onTapUser;
+
+  /// 这段文字是正文还是评论（Story 3.5 · AC4 的 `context` 属性）。
+  ///
+  /// 🔴 **必填，而且埋点由本组件自己发** —— 交给每个调用方发的话，
+  /// 下一个接入点忘了发就是看板上少一截，而没有任何东西会报错。
+  final MentionContext mentionContext;
 
   final TextStyle? style;
   final int? maxLines;
@@ -95,9 +104,18 @@ class _MentionTextState extends State<MentionText> {
               end: r.end,
               userId: r.userId,
               // 闭包里读 widget.onTapUser 而不是捕获当前值：回调换了不必重建 recognizer。
-              recognizer: TapGestureRecognizer()..onTap = () => widget.onTapUser(r.userId),
+              recognizer: TapGestureRecognizer()..onTap = () => _onTap(r.userId),
             ))
         .toList(growable: false);
+  }
+
+  void _onTap(int userId) {
+    // Story 3.5 AC4：属性**只有** context（post / comment），没有任何自由文本 ——
+    // 不传昵称、不传正文片段，源头就不给（别依赖埋点层的兜底黑名单）。
+    // ⚠️ 事件名与属性 Map 都写字面量：埋点守卫是正则扫源码的，抽成常量等于对它们隐身
+    //    （见 MentionContext 的类注释）。
+    Analytics.capture('mention_tapped', {'context': widget.mentionContext.wire});
+    widget.onTapUser(userId);
   }
 
   @override

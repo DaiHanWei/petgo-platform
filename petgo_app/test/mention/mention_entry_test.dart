@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/content/data/content_repository.dart';
@@ -239,6 +240,39 @@ void main() {
       expect(detail.lastCommentMentions, isEmpty);
     });
 
+    testWidgets('Story 3.5 AC4：插入成功 → mention_inserted(context=comment)', (tester) async {
+      final captured = <(String, Map<String, Object>?)>[];
+      Analytics.debugCaptureSink = (e, p) => captured.add((e, p));
+      addTearDown(() => Analytics.debugCaptureSink = null);
+
+      await pumpComposer(tester, candidates: [_c(42, 'Aurel')]);
+      await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'hai @');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('mentionCandidate_42')));
+      await tester.pumpAndSettle();
+
+      expect(captured.where((e) => e.$1 == 'mention_inserted').map((e) => e.$2),
+          [{'context': 'comment'}]);
+    });
+
+    testWidgets('🔴 被上限拦住的那次**不**报 mention_inserted（没插进去就不算）', (tester) async {
+      final captured = <(String, Map<String, Object>?)>[];
+      Analytics.debugCaptureSink = (e, p) => captured.add((e, p));
+      addTearDown(() => Analytics.debugCaptureSink = null);
+
+      final candidates = [for (int i = 1; i <= 6; i++) _c(i, 'U$i')];
+      await pumpComposer(tester, candidates: candidates);
+      for (int i = 1; i <= 6; i++) {
+        await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'hai @U$i');
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(ValueKey('mentionCandidate_$i')));
+        await tester.pumpAndSettle();
+      }
+      // 只有前 5 次真的插进去了 —— 第 6 次被 AC5 的上限拦住。
+      expect(captured.where((e) => e.$1 == 'mention_inserted'), hasLength(5));
+      await tester.pump(const Duration(seconds: 3)); // 走完 toast 定时器
+    });
+
     testWidgets('AC5：第 6 个人插不进去并给出提示', (tester) async {
       final candidates = [for (int i = 1; i <= 6; i++) _c(i, 'U$i')];
       await pumpComposer(tester, candidates: candidates);
@@ -348,6 +382,21 @@ void main() {
       expect(controller.mentions.refs.single.userId, 42);
       // 提交口径：文本里还留着 @Aurel → 发 id。
       expect(controller.mentions.userIdsIn(controller.text), [42]);
+    });
+
+    testWidgets('Story 3.5 AC4：插入成功 → mention_inserted(context=post)', (tester) async {
+      final captured = <(String, Map<String, Object>?)>[];
+      Analytics.debugCaptureSink = (e, p) => captured.add((e, p));
+      addTearDown(() => Analytics.debugCaptureSink = null);
+
+      await pumpCompose(tester, candidates: [_c(42, 'Aurel')]);
+      await tester.enterText(find.byKey(const ValueKey('publishText')), 'hari ini @');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('mentionCandidate_42')));
+      await tester.pumpAndSettle();
+
+      expect(captured.where((e) => e.$1 == 'mention_inserted').map((e) => e.$2),
+          [{'context': 'post'}]);
     });
 
     testWidgets('AC5：第 6 个人插不进去并给出提示', (tester) async {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/rounded.dart';
@@ -12,6 +13,7 @@ import '../../../features/auth/domain/auth_guard.dart';
 import '../../../features/auth/domain/auth_state.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../mention/data/mention_candidate_repository.dart';
+import '../../mention/domain/mention_context.dart';
 import '../../mention/domain/mention_draft.dart';
 import '../../mention/presentation/mention_picker.dart';
 import '../data/detail_repository.dart';
@@ -85,6 +87,9 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       text: inserted.text,
       selection: TextSelection.collapsed(offset: inserted.cursor),
     );
+    // Story 3.5 AC4：**真的插进去了**才报（被上限 / 字数拦住的那两条 return 都在上面）。
+    // ⚠️ 字面量写法是给埋点守卫看的，见 MentionContext 的类注释。
+    Analytics.capture('mention_inserted', {'context': MentionContext.comment.wire});
     setState(() => _mentionQuery = null);
   }
 

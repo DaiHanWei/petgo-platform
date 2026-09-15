@@ -6,6 +6,7 @@ import '../../core/theme/typography.dart';
 import '../../features/content/domain/feed_image_layout.dart';
 import '../../features/content/domain/feed_item.dart';
 import '../../features/content/presentation/like_button.dart';
+import '../../features/mention/domain/mention_context.dart';
 import '../../features/mention/presentation/mention_text.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_image.dart';
@@ -289,6 +290,7 @@ class MasonryCard extends StatelessWidget {
                             text: item.body!,
                             mentions: item.mentions,
                             onTapUser: onTapMention!,
+                            mentionContext: MentionContext.post,
                             style: AppTypography.body,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/mention/domain/mention_context.dart';
 import 'package:tailtopia/features/mention/domain/mention_view.dart';
 import 'package:tailtopia/features/mention/presentation/mention_text.dart';
 
@@ -23,6 +24,7 @@ void main() {
           text: text,
           mentions: mentions,
           onTapUser: taps.add,
+          mentionContext: MentionContext.post,
         ),
       ),
     ));
@@ -172,6 +174,7 @@ void main() {
                     MentionView(userId: 42, nickname: 'Aurel', tappable: true),
                   ],
                   onTapUser: taps.add,
+                  mentionContext: MentionContext.post,
                 ),
               ],
             ),
@@ -204,6 +207,7 @@ void main() {
                   MentionView(userId: 42, nickname: 'Aurel', tappable: true),
                 ],
                 onTapUser: (_) {},
+                mentionContext: MentionContext.post,
               ),
             ),
           ));
@@ -238,6 +242,7 @@ void main() {
               text: '@A ' * 200,
               mentions: mentions,
               onTapUser: (_) {},
+              mentionContext: MentionContext.post,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -261,6 +266,7 @@ void main() {
               text: 'halo @Aurel $i',
               mentions: [tappable(42, 'Aurel')],
               onTapUser: (_) {},
+              mentionContext: MentionContext.post,
             ),
           ),
         ));

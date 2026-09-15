@@ -29,6 +29,7 @@ import '../../../shared/widgets/keyboard_safe_area.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../me/data/my_posts_repository.dart';
 import '../../mention/data/mention_candidate_repository.dart';
+import '../../mention/domain/mention_context.dart';
 import '../../mention/domain/mention_draft.dart';
 import '../../mention/presentation/mention_picker.dart';
 import '../data/content_repository.dart';
@@ -203,6 +204,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       selection: TextSelection.collapsed(offset: inserted.cursor),
     );
     controller.setText(inserted.text);
+    // Story 3.5 AC4：**真的插进去了**才报（被上限 / 字数拦住的那两条 return 都在上面）。
+    // ⚠️ 字面量写法是给埋点守卫看的，见 MentionContext 的类注释。
+    Analytics.capture('mention_inserted', {'context': MentionContext.post.wire});
     setState(() => _mentionQuery = null);
   }
 

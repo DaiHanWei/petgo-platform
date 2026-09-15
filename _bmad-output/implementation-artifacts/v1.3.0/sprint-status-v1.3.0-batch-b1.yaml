@@ -257,7 +257,23 @@ development_status:
                                                         #    AC5 只判了单向（挂起帖过审可能几小时后，这中间 actor 可以拉黑对方）/ 新加的私有辅助把路由映射契约那段文档顶成了悬空注释
                                                         # 🔸 **本 story 零埋点上报**：mention_inserted / mention_tapped 属 **3-5 T2**
                                                         # L1/L2 待本地验收（清单见 story Completion Notes；L1 最重要的两条是「迁移应用后服务起得来」与「写一条 CONTENT_MENTIONED 不报 23514」）
-  3-5-at的存量与删除后边界: ready-for-dev                # 存量不回溯；删除后通知不撤回 → 「内容已删除」统一空态；埋点属性禁含自由文本
+  3-5-at的存量与删除后边界: review                        # 存量不回溯；删除后通知不撤回 → 「内容已删除」统一空态；埋点属性禁含自由文本
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（前端 analyze 0 issue、1812 例；**纯前端、无迁移、后端一行未动**）
+                                                        # AC4：mention_inserted / mention_tapped，属性**只有一个 context**（post / comment）。被 5 人上限或字数上限拦住的那次**不报**（漏斗分母是曝光不是点击）
+                                                        #    mention_tapped 由 MentionText **自己发**，不交给三个调用点 —— 交出去的话下一个接入点忘了发就是看板少一截，而没有任何东西会报错
+                                                        #    埋点守卫已同步注册：新模块前缀 mention_（横跨五处界面，挂任何单页前缀都会误导，同 phone_/push_/login_ 的入表理由）+ 新动作后缀 _inserted
+                                                        #    ⚠️ _inserted 刻意不用 _selected：选中但没插进去也叫 selected，这里要数的是**结果**
+                                                        # AC1 三道机械守卫：客户端绝不自己扫文本找 @（存量文本整段纯文字、零 recognizer、点了不报事件）/ 没有任何迁移回填 mentioned_user_ids / 后端存量读出来是空表（3-2 已钉）
+                                                        # AC3：机械判据 —— ContentModerationService / ManualReviewGate 源码里不许出现任何 mention 字样（塞进审核入参就红）
+                                                        # AC2：**复用既有统一空态，不为 @ 另开一个**。深链 → /content/{postId} → 404 → detailGoneTitle（既有用例一直钉着）；
+                                                        #    本 story 加的是反向守卫：失效态仍只有三种、_errorBody 里无 mention、ContentLoadErrorKind 没多取值
+                                                        # 🔸 **一条对 AC2 字面读法的说明，建议本地/产品确认**：帖子被删 → 统一空态 ✅；**只删评论**（帖子还在）→ 落该帖评论区、**没有**额外空态 ——
+                                                        #    那条帖子是可达的，说「内容已删除」是错的。要给「那条评论没了」得让客户端知道 commentId 并能查它存不存在，
+                                                        #    而 targetRef 刻意只带 postId（3-4 的口径）。未自行扩大改动；若产品要的是前者，属 targetRef 契约 + 新端点的独立决策
+                                                        # ⚠️ code-review 修掉 2 条：① 两个事件用**常量**写 → 对所有埋点守卫隐身（v112 命名检查与 v140 的 NFR-5 全局 PII 体检都是正则扫源码字面量），
+                                                        #    且 mention_ / _inserted 从未注册进白名单 —— 改回字面量 + 正式注册 + 加一条「调用点必须是字面量」的用例
+                                                        #    ② context 是自由 String（插值一个昵称进来既编译得过也过得了脱敏，因为 context 不在任何黑名单上）→ 换成枚举 MentionContext，类型系统就是那道红线
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；L1 必须在**真 PostHog 后台**看属性 —— 「属性被脱敏层整键丢掉」在端上是静默的）
 
   # ===== Epic 4: 逛别人家的毛孩子 · FR-121 + FR-112.4（顶部统一区另一半）=====
   # 依赖 Epic 2（复用 2-3 的访客视图入口，不新建通道）；4-4 需 1-1 的场所入口行已落地。

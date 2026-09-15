@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../mention/domain/mention_context.dart';
 import '../../mention/presentation/mention_text.dart';
 import '../../social/domain/account_action_entry.dart';
 import '../../../shared/widgets/app_toast.dart';
@@ -149,6 +150,7 @@ class _DetailScaffold extends ConsumerWidget {
                       MentionText(
                         text: detail.body!,
                         mentions: detail.mentions,
+                        mentionContext: MentionContext.post,
                         style: AppTypography.body,
                         onTapUser: (userId) => openUserProfile(
                           context,

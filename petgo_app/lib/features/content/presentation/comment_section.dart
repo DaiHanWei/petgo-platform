@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../mention/domain/mention_context.dart';
 import '../../mention/presentation/mention_text.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
@@ -380,6 +381,7 @@ class _CommentTile extends StatelessWidget {
                     text: comment.body,
                     mentions: comment.mentions,
                     onTapUser: onTapMention,
+                    mentionContext: MentionContext.comment,
                     style: AppTypography.body,
                   ),
                   if (takenDownLabel != null)
