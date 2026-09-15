@@ -2151,5 +2151,27 @@
   "notifyBodyLifecycleReview": "Lihat rangkuman minggu ini.",
 
   "publishDoneShareGrowthBook": "Bagikan buku tumbuh kembangnya",
-  "publishDoneShareGrowthBookNamed": "Bagikan buku tumbuh kembang {petName}"
+  "publishDoneShareGrowthBookNamed": "Bagikan buku tumbuh kembang {petName}",
+
+  "placeEntryLabel": "Tempat Ramah Hewan",
+  "placeListTitle": "Tempat Ramah Hewan",
+  "placeEmptyTitle": "Belum ada tempat di sekitar",
+  "placeEmptyBody": "Jadilah yang pertama menandai tempat ramah hewan di sekitarmu.",
+  "placeErrorTitle": "Gagal memuat tempat",
+  "placeErrorBody": "Periksa koneksi internetmu lalu coba lagi.",
+  "placeRetry": "Coba lagi",
+  "placeTagOverflow": "+{count}",
+  "placeTypeCafe": "Kafe",
+  "placeTypeRestaurant": "Restoran",
+  "placeTypePark": "Taman",
+  "placeTypeMall": "Mal",
+  "placeTypeHotel": "Hotel & penginapan",
+  "placeTypePetService": "Layanan hewan",
+  "placeTypeOther": "Lainnya",
+  "placeTagPetsAllowedInside": "Boleh masuk",
+  "placeTagOutdoorSeating": "Area luar",
+  "placeTagPetMenu": "Makanan hewan",
+  "placeTagPetPlayArea": "Area bermain",
+  "placeTagLeashRequired": "Wajib tali",
+  "placeTagLargeDogFriendly": "Ramah anjing besar"
 }

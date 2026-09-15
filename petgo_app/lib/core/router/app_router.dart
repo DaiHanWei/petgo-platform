@@ -72,6 +72,7 @@ import '../../features/consult/presentation/vet_timed_pay_page.dart';
 import '../../features/consult/presentation/vet_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
+import '../../features/place/presentation/place_list_page.dart';
 import '../../features/profile/presentation/pet_card_page.dart';
 import '../../features/vet/domain/vet_workbench_lists.dart';
 import '../../features/vet/presentation/vet_conversation_page.dart';
@@ -522,6 +523,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(path: '/login', builder: (c, s) => const LoginPage()),
+
+      // ===== 宠物友好场所（V1.3.0 batch-b1 Story 1.1，FR-112）=====
+      // 🔒 游客可直接进入：靠【不在 _controlledLocations 白名单里】达成，零安全规则改动。
+      //    后端 GET /api/v1/places 已对游客放行，页面本身不发任何 /me 请求。
+      //    ⚠️ **不要**把它加进 _controlledLocations（Story 1.1 Dev Notes 明写「场所列表游客可看」）。
+      // ⚠️ **不是 Tab 分支根**：入口是 Sosial 顶部那一行（PlaceEntryRow），走 push 进来，
+      //    保留返回栈与底部导航；做成 Tab 分支会动 AppTab 枚举与底部 Tab 结构（AC7 明令不改）。
+      GoRoute(
+        path: PlaceListPage.routePath,
+        builder: (c, s) => const PlaceListPage(),
+      ),
 
       // ===== Toko（V1.4.0 Story 1.6，FR-93 / FR-93A）=====
       // 🔒 游客可直接进入：靠【不在 _controlledLocations 白名单里】达成，零安全规则改动。

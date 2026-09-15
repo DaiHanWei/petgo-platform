@@ -190,6 +190,19 @@ public class SecurityConfig {
                         // 行政区划树（Story 2.4）：区划与是否可配送都不敏感，
                         // 且用户在注册前就该能看到「你们送不送我这儿」。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/regions").permitAll()
+                        // 宠物友好场所只读对游客可见（V1.3.0 batch-b1 Story 1.1，FR-112.2）：
+                        // 场所列表是「这个功能里已经攒了些什么地方」的展示面，用登录墙拦它没有意义
+                        // ——同 Toko 商品列表的既定取舍。App 侧对应地**不把 /places 放进
+                        // _controlledLocations**（Story 1.1 Dev Notes 明写「场所列表游客可看」）。
+                        // 🔴 只放 GET：标记场所（Story 1.3）与场所评论（1.7）仍需 JWT；
+                        //    且服务端**永远不提供场所编辑端点**（2026-09-15 拍板，纠错走后台 AB-17A）。
+                        // 🔴 **只放这一个精确路径，不写 `/places/**` 通配**：通配等于替
+                        //    还不存在的端点预先授权。1.7/1.8 一旦加 `/places/{token}/my-reaction`
+                        //    这类「按调用者」的读接口，它会默认匿名可达 —— 而 controller 里
+                        //    盲取的 currentUserId 是空 principal，结果是 500 而不是 401，
+                        //    且这次放行在安全配置里看不见。子路径（详情 1.5 / H5 1.10）
+                        //    各自在本文件显式加一行，这样每一次放开都留痕。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/places").permitAll()
                         // 兽医工作台端点（Story 5.1+）：仅 role=VET 可达；user/guest → 403（双向门控）
                         .requestMatchers("/api/v1/vet/**").hasRole("VET")
                         // 用户侧问诊端点（Story 5.2+ / 计费流 3-2~3-4）：仅 role=USER 可达（vet/guest → 403）

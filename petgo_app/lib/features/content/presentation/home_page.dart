@@ -9,6 +9,7 @@ import '../../../features/auth/domain/auth_guard.dart';
 import '../../../features/auth/domain/auth_state.dart';
 import '../../../features/auth/domain/login_guide_controller.dart';
 import '../../../features/notify/presentation/notification_bell.dart';
+import '../../../features/place/presentation/place_entry_row.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../domain/feed_item.dart';
@@ -236,9 +237,13 @@ class HomePage extends ConsumerWidget {
       };
 }
 
-/// Social 滚动头部（原型 feed.html）：分类 Chips。
+/// Social 滚动头部（原型 feed.html）：场所入口行 + 分类 Chips。
 /// 已移除 Momo 问候头 / 快捷入口卡 / 每日提示卡 / 「Untukmu」区头（推倒重做决策 #6），
 /// 以及建档提示条（V1.1.2 Story 2.3：FR-0H 整条废止，**顶部不再预留该区域**）。
+///
+/// V1.3.0 batch-b1 Story 1.1（AC7 · FR-112.4）：分类 chips **之上**新增场所入口行。
+/// ⚠️ AppBar（品牌标 + 通知铃）、分类 chips、瀑布流、底部 Tab **一处不改**。
+/// Epic 4 的宠物横滑行将加在场所入口行**之下**，本 story **不为它预留占位**。
 class _BerandaTop extends StatelessWidget {
   const _BerandaTop({
     required this.selectedCategory,
@@ -256,6 +261,8 @@ class _BerandaTop extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 8),
+        // 场所入口行（Story 1.1 AC7）：在分类 chips 之上。
+        const PlaceEntryRow(),
         FeedTabRow(selected: selectedCategory, labels: labels, onSelected: onSelectCategory),
         const SizedBox(height: 8),
       ],

@@ -323,4 +323,10 @@ class ApiPaths {
 
   /// 🔒 提交 / 重提评价（Story 7.1；供 Story 7.2 评价页调用，该页待 UX-DR4 补稿）。
   static const String meShopReviews = '$base/me/shop-reviews';
+
+  // ===== 宠物友好场所（V1.3.0 batch-b1 Story 1.1，FR-112）=====
+  /// 场所列表。🔒 **对游客开放**（后端 SecurityConfig 已放行 GET）——
+  /// 场所列表是「这个功能里已经攒了些什么地方」的展示面，用登录墙拦它没有意义。
+  /// ⚠️ Story 1.2 会加 `?lat=&lng=` 走距离分支；排序路径由服务端下发的 `sortMode` 说明。
+  static const String places = '$base/places';
 }
