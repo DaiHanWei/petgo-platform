@@ -255,6 +255,10 @@ class ApiPaths {
   /// 游客可读；比迷你卡多「加入时间」与「是否本人视角」两个字段。
   static String userPublicProfile(int userId) => '$base/users/$userId/profile';
 
+  /// 公开主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2）：
+  /// 该用户全部 PUBLIC 内容，三类混排、时间倒序、`?cursor=` 游标分页。游客可读。
+  static String userPublicPosts(int userId) => '$base/users/$userId/posts';
+
   /// 账号举报（V1.1.4 Story 2.1/2.2，FR-58）。POST body `{targetUserId, reason, detail?}` → 204。
   static const String accountReports = '$base/account-reports';
 

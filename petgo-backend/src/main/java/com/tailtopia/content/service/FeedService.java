@@ -387,6 +387,72 @@ public class FeedService {
     }
 
     /**
+     * 他人公开主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2 · AC1/AC3）：
+     * 目标用户全部 PUBLIC 内容，Diary / Moment / Tips <b>混排不分流</b>，时间倒序游标分页。
+     *
+     * <h2>🔴 可见范围在服务端判定</h2>
+     * 非 PUBLIC 的内容**这条查询就不查出来**（见 {@code findPublicPostsByAuthor} 的两条谓词），
+     * 不是查出来再让客户端藏 —— 客户端过滤只是「看不见」，抓包照样拿得到（NFR-2）。
+     *
+     * <h2>AC3：无 N+1</h2>
+     * 作者投影 / 点赞数 / 已赞 / 评论数**四项各自整页一次批量取**，与
+     * {@link #myPosts} 和 {@code loadFeed} 同一套聚合、同一个投影工厂
+     * （AD-7 Rule 4：复用同一投影的出口口径不得分叉）。
+     *
+     * <p>⚠️ 这里**不查装饰标签**，理由同「我的发布」：主页网格不展示它，
+     * 为一个不展示它的页面多发一次查询没有意义。
+     *
+     * <h2>🔴 访客自己隐藏过的，这里也要排</h2>
+     * 访客<b>举报过的那一条</b>与<b>隐藏过的那个人</b>（不分 BLOCK / REPORT）一律不进网格 ——
+     * {@code ContentDetailService} 对这两种情况都是 404，不排就等于摆一排点不开的格子。
+     * <p>⚠️ 这条排除**只作用于网格，不作用于两个计数**：计数说的是「这个人发了多少」，
+     * 网格说的是「你能看到哪些」。访客知道自己隐藏过谁，所以这处不一致既不泄漏也不困惑
+     * —— 与 PRIVATE 那种（关于作者、访客无从得知）的差值是两回事。
+     *
+     * @param viewerId 访客（未登录为 null）—— 影响「我赞过没」、评论数口径，
+     *                 以及上面那两条隐藏排除；**不影响 PUBLIC/PUBLISHED 这层可见范围**
+     */
+    @Transactional(readOnly = true)
+    public FeedPageResponse userPublicPosts(long authorId, Long viewerId, String cursor) {
+        FeedCursor decoded = (cursor == null || cursor.isBlank()) ? null : FeedCursor.decode(cursor);
+        List<ContentPost> rows = posts.findPublicPostsByAuthor(
+                authorId,
+                // 🔴 访客自己隐藏过的（举报过的那一条 / 隐藏过的那个人）在**查询里**就排掉，
+                //    与 Feed 逐条相同 —— 详情页对这两种情况一律 404，不排的话网格里
+                //    会摆出一排点进去全是 404 的死格子（code-review 2026-09-15）。
+                viewerId != null,
+                viewerId,
+                decoded != null,
+                decoded == null ? null : decoded.createdAt(),
+                decoded == null ? null : decoded.id(),
+                PageRequest.of(0, PAGE_SIZE + 1));
+
+        boolean hasMore = rows.size() > PAGE_SIZE;
+        List<ContentPost> page = hasMore ? rows.subList(0, PAGE_SIZE) : rows;
+
+        Map<Long, AuthorView> authors = accountQueryService.findAuthorViews(
+                page.stream().map(ContentPost::getAuthorId).toList());
+        Map<Long, Long> likeCounts = likeCounts(page);
+        Set<Long> liked = likedIds(page, viewerId);
+        Map<Long, Long> commentCounts = commentCounts(page, viewerId);
+        List<FeedItemResponse> items = page.stream()
+                .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
+                        likeCounts.getOrDefault(p.getId(), 0L),
+                        liked.contains(p.getId()),
+                        commentCounts.getOrDefault(p.getId(), 0L), null))
+                .toList();
+
+        String nextCursor = null;
+        if (hasMore && !page.isEmpty()) {
+            ContentPost last = page.get(page.size() - 1);
+            nextCursor = new FeedCursor(last.getCreatedAt(), last.getId()).encode();
+        }
+        // ⚠️ 主页不是 Feed 出口，rankMode 省略（Jackson NON_NULL）——
+        // 给它填个 chrono 会让埋点侧把它算进首页排序的分母里（同「我的发布」）。
+        return new FeedPageResponse(items, nextCursor, hasMore, null);
+    }
+
+    /**
      * 「我的发布」（Story 7.1，FR-36）：当前用户未软删的三类混合内容，时间倒序游标分页。
      * 经本 service 接口供 me 端点调用（禁 profile/auth 直 join content repository）。
      */

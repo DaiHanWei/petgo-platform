@@ -18,6 +18,32 @@ public interface ContentLikeRepository extends JpaRepository<ContentLike, Long> 
 
     long countByPostId(long postId);
 
+    /**
+     * 某作者**全部 PUBLIC 内容的获赞总和**（V1.3.0 batch-b1 Story 2.2 · FR-118.2 · AC2/AC3）。
+     *
+     * <p>🔴 <b>一条 SQL 出数，绝不逐帖 count 再相加</b> —— 后者在一个发过 200 条的人身上
+     * 就是 200 次查询（AD-6 / NFR-6）。
+     *
+     * <p>🛡 <b>也绝不为这个数新增冗余计数列</b>（AD-6 明令）。Story 1.8 的场所推荐/不推荐
+     * 走 Redis 计数器是<b>经明确拍板的例外，仅限那一处，不构成先例</b>。
+     *
+     * <p>⚠️ 口径与主页网格<b>必须同源</b>：只数 PUBLIC + PUBLISHED + 未软删的帖。
+     * 否则页面上那句「342 suka」里混着私密内容的赞，而那个差值又是一条可推断的私密信息。
+     *
+     * @return 没有任何赞时为 0（{@code COUNT} 恒有一行，不会是 null）
+     */
+    @Query("""
+            SELECT COUNT(l) FROM ContentLike l
+            WHERE l.postId IN (
+                SELECT p.id FROM ContentPost p
+                WHERE p.authorId = :authorId
+                  AND p.deletedAt IS NULL
+                  AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+                  AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+            )
+            """)
+    long sumLikesOnPublicPostsByAuthor(@Param("authorId") long authorId);
+
     /** 批量点赞数（Feed 卡片 likeCount，PRD-642）：一次 GROUP BY 取一页帖子的赞数，避免 N+1。 */
     @Query("SELECT l.postId AS postId, COUNT(l) AS likeCount FROM ContentLike l "
             + "WHERE l.postId IN :postIds GROUP BY l.postId")

@@ -3389,5 +3389,13 @@
   "profileNotFound": "User not found",
   "@profileNotFound": {"description": "Public profile: the account is deactivated, or the id does not exist. Deliberately the SAME wording for both - which one it is must not leak."},
   "profileBlockedEmpty": "You've blocked this user",
-  "@profileBlockedEmpty": {"description": "Public profile: you blocked this person, so their profile can no longer be opened. Distinct from a network failure - retrying will never work."}
+  "@profileBlockedEmpty": {"description": "Public profile: you blocked this person, so their profile can no longer be opened. Distinct from a network failure - retrying will never work."},
+  "profileCounts": "{postCount} posts · {likeCount} likes",
+  "@profileCounts": {"description": "Public profile: the two aggregate numbers under the identity block. Both count PUBLIC content only - the grid below shows exactly those posts.", "placeholders": {"postCount": {"type": "int"}, "likeCount": {"type": "int"}}},
+  "profilePostsTitle": "Posts",
+  "@profilePostsTitle": {"description": "Public profile: heading above the 2-column content grid. Someone else's posts, so NOT the \"My posts\" wording."},
+  "profilePostsEmpty": "Nothing public yet",
+  "@profilePostsEmpty": {"description": "Public profile: this person has no public posts. Deliberately says nothing about whether they have private ones."},
+  "profilePostsLoadMore": "Load more",
+  "@profilePostsLoadMore": {"description": "Public profile: fetch the next page of the content grid."}
 }

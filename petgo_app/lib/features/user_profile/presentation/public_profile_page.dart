@@ -13,12 +13,14 @@ import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
+import '../../../shared/widgets/post_grid_tile.dart';
 import '../../../shared/widgets/user_tag_row.dart';
 import '../../auth/domain/auth_guard.dart';
 import '../../social/data/blocked_users_repository.dart';
 import '../../social/domain/account_action_entry.dart';
 import '../../social/presentation/account_report_sheet.dart';
 import '../data/public_profile_repository.dart';
+import 'public_user_posts_controller.dart';
 
 /// 用户在主页上对目标用户做成了什么 —— 主页 pop 时回给调用方的**收尾信号**。
 ///
@@ -66,10 +68,15 @@ Future<void> openUserProfile(
 
 /// 用户公开主页（他人视角，UI 稿 C1）。
 ///
-/// <h2>本 story 只做身份区</h2>
-/// 头像 / 昵称 / 运营标签 / **加入时间** / 签名 / 发帖总数。
-/// **内容网格与获赞总数是 Story 2.2、宠物卡是 Story 2.3** —— 这里刻意不摆空网格占位：
-/// 一个恒空的「Postingan」区块会被当成「这人没发过东西」，那是错误信息，不是占位。
+/// ## 页面结构（UI 稿 C1）
+/// 身份区（头像 / 昵称 / 运营标签 / **加入时间** / 签名 / 两个聚合计数）
+/// → 内容区（2 列裸网格，复用「我的」页那一格的公共组件）。
+/// **宠物卡是 Story 2.3** —— 还没有。
+///
+/// ## 🔴 FR-118.7 的「不放」清单（AC5 反向验收）
+/// 主页上**没有**里程碑徽章墙、护照集章数、打卡足迹、主页级 H5 分享入口、
+/// 关注 / 粉丝、访客记录、独立 bio 字段。这些不是"还没做"，是**明确不做** ——
+/// 一条扫源码的测试钉着它们不出现（`test/user_profile/public_profile_posts_test.dart`）。
 ///
 /// <h2>自己视角（UI 稿 C2）是 Story 2.4</h2>
 /// 服务端已经在下发 `self`，本页据此**只做一件事：不渲染「···」**
@@ -215,11 +222,12 @@ class PublicProfilePage extends ConsumerWidget {
                     ),
                   ],
                   const SizedBox(height: 3),
-                  // ⚠️ 发帖总数**复用既有统计**（迷你卡一直在用的那个），没有重新实现。
-                  // 获赞总数是 Story 2.2 新补的，这里还没有。
+                  // 两个聚合计数（AC2）。发帖总数**复用既有统计**（没有重新实现），
+                  // 获赞总数是本批次新补的；**两者都只算 PUBLIC**，与下面的网格同源 ——
+                  // 对不上的话，那个差值就是「这人有几篇私密内容」。
                   Text(
-                    l10n.miniProfilePostCount(p.postCount),
-                    key: const ValueKey('profilePostCount'),
+                    l10n.profileCounts(p.postCount, p.likeCount),
+                    key: const ValueKey('profileCounts'),
                     style: AppTypography.caption,
                   ),
                 ],
@@ -227,6 +235,16 @@ class PublicProfilePage extends ConsumerWidget {
             ),
           ],
         ),
+        const SizedBox(height: AppSpacing.lg),
+        Padding(
+          padding: const EdgeInsets.only(left: AppSpacing.xs, bottom: AppSpacing.sm),
+          child: Text(
+            l10n.profilePostsTitle.toUpperCase(),
+            style: AppTypography.caption
+                .copyWith(letterSpacing: 0.6, fontWeight: FontWeight.w600),
+          ),
+        ),
+        _PostGrid(userId: userId),
       ],
     );
   }
@@ -375,6 +393,97 @@ class PublicProfilePage extends ConsumerWidget {
     if (!ok || !context.mounted) return;
     context.pop(ProfileActionOutcome.blocked);
     if (overlay != null) showAppToastOnOverlay(overlay, l10n.blockUserSuccess);
+  }
+}
+
+/// 内容区：2 列裸网格 + 「加载更多」（V1.3.0 batch-b1 Story 2.2 · AC1/AC4）。
+///
+/// 🔴 **这里不做任何可见范围过滤** —— 服务端只给 PUBLIC（NFR-2）。
+/// 客户端过滤只是"看不见"，抓包照样拿得到；真要在这里加一行 `where`，
+/// 反而会掩盖服务端漏过滤的 bug。
+///
+/// ⚠️ 网格用 `shrinkWrap + NeverScrollableScrollPhysics` 挂在外层 ListView 里 ——
+/// 与「我的」页同一种嵌法，两层滚动不会互相抢手势。
+class _PostGrid extends ConsumerWidget {
+  const _PostGrid({required this.userId});
+
+  final int userId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final async = ref.watch(publicUserPostsProvider(userId));
+    return async.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(AppSpacing.lg),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      // 内容区取数失败**不接管整页**：身份区已经渲染出来了，把它换成一屏错误没有道理。
+      error: (_, _) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+        child: Row(
+          children: [
+            Expanded(child: Text(l10n.profileLoadFailed, style: AppTypography.caption)),
+            TextButton(
+              key: const ValueKey('profilePostsRetry'),
+              onPressed: () => ref.invalidate(publicUserPostsProvider(userId)),
+              child: Text(l10n.commonRetry),
+            ),
+          ],
+        ),
+      ),
+      data: (page) {
+        if (page.items.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Text(
+              // ⚠️ 文案刻意**不提「私密」二字** —— 「他还有私密内容没给你看」同样是
+              // 不该外泄的信息，而「暂时没有公开内容」对两种情况都成立。
+              l10n.profilePostsEmpty,
+              key: const ValueKey('profilePostsEmpty'),
+              style: AppTypography.caption,
+            ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 7,
+              crossAxisSpacing: 7,
+              children: [
+                for (final post in page.items)
+                  PostGridTile(
+                    postId: post.id,
+                    type: post.type,
+                    firstImageUrl: post.firstImageUrl,
+                    // 他人主页永远不会有私密内容（服务端就没给），这里不传。
+                    onTap: () => context.push('/content/${post.id}'),
+                  ),
+              ],
+            ),
+            if (page.hasMore)
+              TextButton(
+                key: const ValueKey('profilePostsLoadMore'),
+                onPressed: () => _loadMore(context, ref, l10n),
+                child: Text(l10n.profilePostsLoadMore),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 追加下一页。失败只提示一声，**不动已加载的网格**。
+  Future<void> _loadMore(BuildContext context, WidgetRef ref, AppLocalizations l10n) async {
+    try {
+      await ref.read(publicUserPostsProvider(userId).notifier).loadMore();
+    } catch (_) {
+      if (context.mounted) showAppToast(context, l10n.profileLoadFailed);
+    }
   }
 }
 

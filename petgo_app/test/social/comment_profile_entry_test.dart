@@ -12,6 +12,7 @@ import 'package:tailtopia/features/social/data/blocked_users_repository.dart';
 import 'package:tailtopia/features/social/domain/account_action_entry.dart';
 import 'package:tailtopia/features/social/domain/blocked_user.dart';
 import 'package:tailtopia/features/user_profile/data/public_profile_repository.dart';
+import 'package:tailtopia/features/user_profile/data/public_user_posts_repository.dart';
 import 'package:tailtopia/features/user_profile/presentation/public_profile_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/letter_avatar.dart';
@@ -76,6 +77,13 @@ class _FakeBlockRepo implements BlockedUsersRepository {
   Future<void> unblock(int userId) async {}
 }
 
+/// 内容区在本文件里不是被验对象 —— 给个恒空页，免得走真网络。
+class _EmptyPostsRepo implements PublicUserPostsRepository {
+  @override
+  Future<PublicUserPostPage> fetch(int userId, {String? cursor}) async =>
+      PublicUserPostPage.empty;
+}
+
 class _LoggedInAuth extends AuthController {
   @override
   AuthState build() => const AuthState(
@@ -102,6 +110,7 @@ Comment _comment({
 
 const PublicProfile _budi = PublicProfile(
   postCount: 2,
+  likeCount: 0,
   isDeactivated: false,
   self: false,
   nickname: 'Budi',
@@ -144,6 +153,7 @@ Future<_FakeProfileRepo> _pump(WidgetTester tester, List<Comment> comments,
   final container = ProviderContainer(overrides: [
     detailRepositoryProvider.overrideWithValue(_CommentsRepo(comments)),
     publicProfileRepositoryProvider.overrideWithValue(repo),
+    publicUserPostsRepositoryProvider.overrideWithValue(_EmptyPostsRepo()),
   ]);
   addTearDown(container.dispose);
   await _pumpWith(tester, container: container);
@@ -211,6 +221,7 @@ void main() {
     final container = ProviderContainer(overrides: [
       detailRepositoryProvider.overrideWithValue(repo),
       publicProfileRepositoryProvider.overrideWithValue(_FakeProfileRepo(_budi)),
+      publicUserPostsRepositoryProvider.overrideWithValue(_EmptyPostsRepo()),
       blockedUsersRepositoryProvider.overrideWithValue(blocks),
       authControllerProvider.overrideWith(_LoggedInAuth.new),
     ]);

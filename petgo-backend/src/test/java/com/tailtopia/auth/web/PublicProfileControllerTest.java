@@ -2,6 +2,7 @@ package com.tailtopia.auth.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -14,7 +15,9 @@ import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.auth.dto.PublicProfileResponse;
 import com.tailtopia.auth.dto.UserTagView;
 import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.content.dto.FeedPageResponse;
 import com.tailtopia.content.service.ContentService;
+import com.tailtopia.content.service.FeedService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.error.ErrorTypes;
 import com.tailtopia.social.read.UserHideRelationReader;
@@ -28,15 +31,16 @@ import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
  * L0（mock 服务，无 Spring MVC / 无 DB）：公开主页端点
- * （V1.3.0 batch-b1 Story 2.1 · AC1/AC5）。
+ * （V1.3.0 batch-b1 Story 2.1 · AC1/AC5 + Story 2.2 · AC1/AC2）。
  *
- * <p>AC2/AC3/AC4（入口收口、操作抽屉、收尾行为）在 App 侧；这里守的是
- * <b>投影字段 + 注销匿名化 + 拉黑拦截 + viewer 解析</b>。
+ * <p>入口收口 / 操作抽屉 / 收尾行为在 App 侧；这里守的是
+ * <b>投影字段 + 注销匿名化 + 拉黑拦截 + viewer 解析 + 两个计数的口径</b>。
  */
 class PublicProfileControllerTest {
 
     private AccountQueryService accounts;
     private ContentService content;
+    private FeedService feed;
     private UserHideRelationReader hideRelations;
     private PublicProfileController controller;
 
@@ -44,8 +48,9 @@ class PublicProfileControllerTest {
     void setUp() {
         accounts = mock(AccountQueryService.class);
         content = mock(ContentService.class);
+        feed = mock(FeedService.class);
         hideRelations = mock(UserHideRelationReader.class);
-        controller = new PublicProfileController(accounts, content, hideRelations);
+        controller = new PublicProfileController(accounts, content, feed, hideRelations);
     }
 
     private static Jwt guest() {
@@ -77,7 +82,8 @@ class PublicProfileControllerTest {
         UserTagView tag = new UserTagView("KOL", "Kreator", "⭐", "Kreator pilihan", "#F6A609");
         stubActive(9L, "Rina", "https://cdn/r.jpg", List.of(tag), joined);
         when(accounts.activeSignatureOf(9L)).thenReturn(Optional.of("爱猫的人运气都不会太差"));
-        when(content.countPublishedByAuthor(9L)).thenReturn(3L);
+        when(content.countPublicPostsByAuthor(9L)).thenReturn(3L);
+        when(content.sumLikesOnPublicPostsByAuthor(9L)).thenReturn(342L);
 
         PublicProfileResponse r = controller.profile(guest(), 9L);
 
@@ -87,6 +93,8 @@ class PublicProfileControllerTest {
         assertThat(r.signature()).isEqualTo("爱猫的人运气都不会太差");
         assertThat(r.tags()).extracting(UserTagView::code).containsExactly("KOL");
         assertThat(r.postCount()).isEqualTo(3L);
+        // Story 2.2 · AC2：获赞总数是本批次新补的字段（发帖总数是复用的）。
+        assertThat(r.likeCount()).isEqualTo(342L);
         // 🔴 加入时间是本批次新补的字段，取 users.created_at。
         assertThat(r.joinedAt()).isEqualTo(joined);
         assertThat(r.self()).isFalse();
@@ -100,7 +108,7 @@ class PublicProfileControllerTest {
     void ownProfileIsMarkedSelf() {
         stubActive(9L, "Rina", null, List.of(), Instant.parse("2025-03-04T05:06:07Z"));
         when(accounts.activeSignatureOf(9L)).thenReturn(Optional.empty());
-        when(content.countPublishedByAuthor(9L)).thenReturn(0L);
+        when(content.countPublicPostsByAuthor(9L)).thenReturn(0L);
 
         assertThat(controller.profile(viewer(9L), 9L).self()).isTrue();
         assertThat(controller.profile(viewer(5L), 9L).self()).isFalse();
@@ -111,7 +119,7 @@ class PublicProfileControllerTest {
     void guestNeverConsultsHideRelationsAndGetsNoReportedKey() {
         stubActive(9L, "Rina", null, List.of(), Instant.EPOCH);
         when(accounts.activeSignatureOf(9L)).thenReturn(Optional.empty());
-        when(content.countPublishedByAuthor(9L)).thenReturn(0L);
+        when(content.countPublicPostsByAuthor(9L)).thenReturn(0L);
 
         PublicProfileResponse r = controller.profile(guest(), 9L);
 
@@ -130,7 +138,7 @@ class PublicProfileControllerTest {
     void aVetTokenIsTreatedAsAGuest() {
         stubActive(9L, "Rina", null, List.of(), Instant.EPOCH);
         when(accounts.activeSignatureOf(9L)).thenReturn(Optional.empty());
-        when(content.countPublishedByAuthor(9L)).thenReturn(0L);
+        when(content.countPublicPostsByAuthor(9L)).thenReturn(0L);
 
         PublicProfileResponse r = controller.profile(vet(9L), 9L);
 
@@ -156,7 +164,9 @@ class PublicProfileControllerTest {
         // 「这个账号是 2024 年注册的」同样是身份信息 —— 注销的含义是这个人站内不再可识别。
         assertThat(r.joinedAt()).isNull();
         // 不查发布数、不查签名、不查 users 行（不暴露信息，也不白打三次库）。
-        verify(content, never()).countPublishedByAuthor(anyLong());
+        assertThat(r.likeCount()).isZero();
+        verify(content, never()).countPublicPostsByAuthor(anyLong());
+        verify(content, never()).sumLikesOnPublicPostsByAuthor(anyLong());
         verify(accounts, never()).activeSignatureOf(anyLong());
         verify(accounts, never()).findUserById(anyLong());
     }
@@ -211,7 +221,58 @@ class PublicProfileControllerTest {
 
         verify(accounts, never()).findAuthorViews(anyList());
         verify(accounts, never()).activeSignatureOf(anyLong());
-        verify(content, never()).countPublishedByAuthor(anyLong());
+        verify(content, never()).countPublicPostsByAuthor(anyLong());
+        verify(content, never()).sumLikesOnPublicPostsByAuthor(anyLong());
+    }
+
+    // ===== Story 2.2：内容区端点 =====
+
+    /**
+     * 🔴 内容区端点**自己也要拦拉黑**。
+     *
+     * <p>只在 {@code /profile} 上拦，等于留了一个「绕过主页直接拉他内容列表」的口子 ——
+     * 而 FR-94 第 4 条要挡的就是「主动拉黑者不该再看到对方」。
+     */
+    @Test
+    void thePostsEndpointBlocksTheSameWayTheProfileDoes() {
+        when(hideRelations.isBlocked(5L, 9L)).thenReturn(true);
+
+        assertThatThrownBy(() -> controller.posts(viewer(5L), 9L, null))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> {
+                    AppException ex = (AppException) e;
+                    assertThat(ex.getStatus().value()).isEqualTo(403);
+                    assertThat(ex.getType()).isEqualTo(ErrorTypes.BLOCKED_USER);
+                });
+
+        verify(feed, never()).userPublicPosts(anyLong(), any(), any());
+    }
+
+    /** 游客（无 viewer）照常读得到，且**不查隐藏关系**。 */
+    @Test
+    void aGuestReadsThePostsWithoutAnyViewerScopedLookup() {
+        FeedPageResponse page = new FeedPageResponse(List.of(), null, false, null);
+        when(feed.userPublicPosts(9L, null, null)).thenReturn(page);
+
+        assertThat(controller.posts(guest(), 9L, null)).isSameAs(page);
+        verify(hideRelations, never()).isBlocked(anyLong(), anyLong());
+    }
+
+    /** viewer 与 cursor 原样透传（viewer 只影响「我赞过没」，**不影响可见范围**）。 */
+    @Test
+    void viewerAndCursorArePassedThrough() {
+        controller.posts(viewer(5L), 9L, "c2");
+
+        verify(feed).userPublicPosts(9L, 5L, "c2");
+    }
+
+    /** 🔴 兽医 token 在内容区同样按游客走（{@code sub=vetId} 与 {@code users.id} 会碰撞）。 */
+    @Test
+    void aVetTokenReadsThePostsAsAGuest() {
+        controller.posts(vet(5L), 9L, null);
+
+        verify(feed).userPublicPosts(9L, null, null);
+        verify(hideRelations, never()).isBlocked(anyLong(), anyLong());
     }
 
     /**
@@ -226,7 +287,7 @@ class PublicProfileControllerTest {
         when(hideRelations.isReported(5L, 9L)).thenReturn(true);
         stubActive(9L, "Rina", null, List.of(), Instant.EPOCH);
         when(accounts.activeSignatureOf(9L)).thenReturn(Optional.empty());
-        when(content.countPublishedByAuthor(9L)).thenReturn(3L);
+        when(content.countPublicPostsByAuthor(9L)).thenReturn(3L);
 
         PublicProfileResponse r = controller.profile(viewer(5L), 9L);
 

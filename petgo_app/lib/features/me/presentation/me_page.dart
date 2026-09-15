@@ -14,7 +14,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/customer_service_sheet.dart';
-import '../../../shared/widgets/post_cover.dart';
+import '../../../shared/widgets/post_grid_tile.dart';
 import '../../auth/data/me_repository.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../auth/domain/login_response.dart';
@@ -861,115 +861,7 @@ class _InitialAvatar extends StatelessWidget {
   }
 }
 
-/// 「我的发布」网格缩略图（原型 pthumb）：方形封面（无图→类型彩块）+ 左上角类型 badge。
-class _MyPostCard extends StatelessWidget {
-  const _MyPostCard({required this.post, required this.onTap});
-
-  final MyPost post;
-  final VoidCallback onTap;
-
-  /// 类型 → (badge 文案, 文字色, 底色)：Momen 绿 / Tips 黄 / Cerita 紫（原型 b-happy/b-tips/b-story）。
-  static (String, Color, Color) _badgeStyle(
-    String type,
-    AppLocalizations l10n,
-  ) {
-    switch (type) {
-      case 'GROWTH_MOMENT':
-        return (
-          l10n.mePostTypeMomen,
-          AppColors.momenBadgeText,
-          AppColors.momenBadgeBg,
-        );
-      case 'KNOWLEDGE':
-        return (
-          l10n.mePostTypeTips,
-          AppColors.tipsBadgeText,
-          AppColors.goldTint,
-        );
-      default: // DAILY
-        return (l10n.mePostTypeCerita, AppColors.mint, AppColors.skyTint);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final hasImage =
-        post.firstImageUrl != null && post.firstImageUrl!.isNotEmpty;
-    final (label, fg, bg) = _badgeStyle(post.type, l10n);
-    return GestureDetector(
-      key: ValueKey('myPost_${post.id}'),
-      onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(11),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            hasImage
-                ? AppImage.widget(
-                    post.firstImageUrl!,
-                    fit: BoxFit.cover,
-                    thumbWidth: 400, // 「我的帖子」网格小图
-                    errorBuilder: (context, error, stack) =>
-                        PostCoverPlaceholder(type: post.type, emojiSize: 30),
-                  )
-                : PostCoverPlaceholder(type: post.type, emojiSize: 30),
-            // 私密标识（Story 4.2 · AC8）：未同步到 Moment 的 Diary 打「仅自己可见」。
-            // 放右上角与左上角的类型 badge 分开，两者可同时出现（一条内容既是 Diary 又是私密）。
-            if (post.isPrivate)
-              Positioned(
-                top: 5,
-                right: 5,
-                child: Container(
-                  key: ValueKey('myPostPrivate_${post.id}'),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.ink.withValues(alpha: 0.62),
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.lock_outline, size: 9, color: AppColors.onAccent),
-                      const SizedBox(width: 2),
-                      Text(
-                        l10n.mePostPrivateBadge,
-                        style: const TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.onAccent,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            Positioned(
-              top: 5,
-              left: 5,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: bg,
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: fg,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
+/// 「我的发布」列表（原型 Postinganku）：2 列裸网格；一格的样子见 `PostGridTile`。
 class _MyPostsList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1001,8 +893,13 @@ class _MyPostsList extends ConsumerWidget {
           crossAxisSpacing: 7,
           children: [
             for (final p in items)
-              _MyPostCard(
-                post: p,
+              // V1.3.0 batch-b1 Story 2.2：这一格抽成了公共组件，与他人公开主页共用
+              // （复制一份的话，圆角 / badge 配色 / 首图降级会各改各的）。
+              PostGridTile(
+                postId: p.id,
+                type: p.type,
+                firstImageUrl: p.firstImageUrl,
+                isPrivate: p.isPrivate,
                 onTap: () => context.push('/content/${p.id}'),
               ),
           ],

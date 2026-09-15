@@ -185,6 +185,10 @@ public class SecurityConfig {
                         // 点头像即看，无登录要求。登录者可识别（viewer 用于 isBlocked / isReported），
                         // 但**只认 role=USER**（判定在 controller，兽医 token 的 sub 是 vetId）。
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/profile").permitAll()
+                        // 公开主页的内容区（Story 2.2 · FR-118.2）：同上，游客可读。
+                        // ⚠️ 可见范围**不靠这条放行**把关 —— 非 PUBLIC 的内容在 SQL 层就查不出来（NFR-2）；
+                        // 拉黑守卫在 controller 里与 /profile **各拦一次**（只拦主页会留个绕过口）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/*/posts").permitAll()
                         // Toko 商品只读对游客可见（V1.4.0 Story 1.1，FR-93A）：GET 商品列表/详情放行。
                         // 与 FR-78「未登录点击非落地 Tab 触发登录引导」有意不同——商品浏览是转化漏斗
                         // 最上层，登录墙会直接杀掉转化；登录引导推迟到「加入购物车」（Story 3.6）。

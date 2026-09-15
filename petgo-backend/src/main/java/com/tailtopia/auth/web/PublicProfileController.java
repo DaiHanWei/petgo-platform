@@ -3,7 +3,9 @@ package com.tailtopia.auth.web;
 import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.auth.dto.PublicProfileResponse;
 import com.tailtopia.auth.service.AccountQueryService;
+import com.tailtopia.content.dto.FeedPageResponse;
 import com.tailtopia.content.service.ContentService;
+import com.tailtopia.content.service.FeedService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.util.List;
@@ -11,6 +13,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -44,12 +47,14 @@ public class PublicProfileController {
 
     private final AccountQueryService accounts;
     private final ContentService contentService;
+    private final FeedService feedService;
     private final UserHideRelationReader hideRelations;
 
     public PublicProfileController(AccountQueryService accounts, ContentService contentService,
-            UserHideRelationReader hideRelations) {
+            FeedService feedService, UserHideRelationReader hideRelations) {
         this.accounts = accounts;
         this.contentService = contentService;
+        this.feedService = feedService;
         this.hideRelations = hideRelations;
     }
 
@@ -83,10 +88,41 @@ public class PublicProfileController {
         return PublicProfileResponse.of(author,
                 accounts.activeSignatureOf(userId).orElse(null),
                 joinedAt,
-                // ⚠️ 发帖总数**复用既有统计**（AC1 的 Dev Notes 明确说别重新实现）。
-                contentService.countPublishedByAuthor(userId),
+                // ⚠️ 发帖总数**复用既有统计**（Dev Notes 明确说别重新实现）；
+                //    Story 2.2 起它只数 PUBLIC —— 与下面那个内容区口径同源，
+                //    否则页面上「18 postingan」配一个 12 格的网格，差值就是私密内容条数。
+                contentService.countPublicPostsByAuthor(userId),
+                // 获赞总数：本批次新补（Story 2.2 · AC2）。一条 SQL 出数，不新增冗余计数列。
+                contentService.sumLikesOnPublicPostsByAuthor(userId),
                 viewerId != null && viewerId == userId,
                 reported);
+    }
+
+    /**
+     * 公开主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2 · AC1）。
+     * {@code GET /api/v1/users/{userId}/posts?cursor=}
+     *
+     * <p>目标用户全部 PUBLIC 内容，三类混排不分流、时间倒序、游标分页。
+     * 投影与 Feed / 「我的发布」**同一个**（{@code FeedItemResponse}），点进去就是既有内容详情页。
+     *
+     * <h2>🔴 拉黑守卫与 {@code /profile} 完全一致</h2>
+     * 两个端点<b>各自都要拦</b>：只拦主页那条，等于留了一个「绕过主页直接拉他内容列表」的口子，
+     * 而 FR-94 第 4 条要挡的就是「主动拉黑者不该再看到对方」。
+     *
+     * <h2>⚠️ 已注销 / 不存在 → 空页，不是 404</h2>
+     * 与 {@code /profile} 同口径：**可区分就等于给了一个按 id 遍历确认谁注册过的枚举口子**。
+     * 注销用户的内容本就在 {@code findPublicPostsByAuthor} 里查不到（注销走批量隐藏），
+     * 这里不另加分支。
+     */
+    @GetMapping("/api/v1/users/{userId}/posts")
+    public FeedPageResponse posts(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable long userId,
+            @RequestParam(required = false) String cursor) {
+        Long viewerId = viewerId(jwt);
+        if (viewerId != null && hideRelations.isBlocked(viewerId, userId)) {
+            throw AppException.blockedUser("你已拉黑该用户");
+        }
+        return feedService.userPublicPosts(userId, viewerId, cursor);
     }
 
     /** 登录<b>用户</b> id（游客 / 无效 JWT / 非 USER 角色 → null）。见类注释。 */

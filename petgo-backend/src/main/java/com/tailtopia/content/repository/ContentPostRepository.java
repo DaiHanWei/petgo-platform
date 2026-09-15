@@ -17,8 +17,77 @@ import org.springframework.transaction.annotation.Transactional;
 
 public interface ContentPostRepository extends JpaRepository<ContentPost, Long>, ContentPostAdminSearch {
 
-    /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。 */
-    long countByAuthorIdAndDeletedAtIsNullAndStatus(long authorId, PostStatus status);
+    /**
+     * 他人主页的**发帖总数**（V1.3.0 batch-b1 Story 2.2 · FR-118.2）。
+     *
+     * <p>🔴 <b>必须带 {@code visibility = PUBLIC}</b> —— 与上面那个方法的全部区别就在这一条谓词上。
+     * {@link com.tailtopia.content.domain.ContentVisibility} 的判定口径写得很死：
+     * <b>他人主页属于「平台自动分发」，按 PUBLIC 过滤</b>（NFR-4）。
+     * <p>不带这条谓词的后果有两层：① 主页上写着「18 postingan」而网格里只有 12 个格子，
+     * 用户一眼看出对不上；② 更要紧的是，那个差值<b>就是这个人有几篇私密内容</b> ——
+     * 访客不该能推断出这个数。
+     */
+    @Query("""
+            SELECT count(p) FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+            """)
+    long countPublicPublishedByAuthor(@Param("authorId") long authorId);
+
+    /**
+     * 他人主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2 · AC1）：
+     * 该作者全部 PUBLIC 内容，三类混排不分流，时间倒序游标分页。
+     *
+     * <p>🔴 与 {@link #findMyPosts}（作者自视）**有两处谓词不同，缺一处就是漏**：
+     * <ul>
+     *   <li>加 {@code visibility = PUBLIC} —— 他人主页是平台自动分发（NFR-4）；</li>
+     *   <li>去掉 {@code UNDER_REVIEW} —— 挂起帖<b>仅作者本人可见</b>，
+     *       放进他人主页等于把审核中的内容提前对外放出来。</li>
+     * </ul>
+     * 两者都必须在**服务端**过滤：查出来再让客户端藏只是「看不见」，抓包照样拿得到（NFR-2）。
+     *
+     * <h2>🔴 两条「访客自己隐藏过的」排除，与 {@link #findFeed} 逐条相同</h2>
+     * <ul>
+     *   <li>访客**举报过的那一条**（{@code ContentReport}）；</li>
+     *   <li>访客**隐藏过的那个人**（{@code UserHideRelation}，<b>不区分 BLOCK / REPORT</b>）。</li>
+     * </ul>
+     * <b>不是可选项</b>：{@code ContentDetailService} 对这两种情况一律 404
+     * （「举报一条帖它就 404、拉黑整个人他每条帖却照样打得开」的语义倒挂，PRD §7 已消灭）。
+     * 少了这两条，主页网格里会摆出一排**点进去全是 404** 的格子 —— 每一格都是死的。
+     * <p>⚠️ 用 {@code hasViewer} 布尔门控而不是直接判 {@code :viewerId IS NULL}：
+     * 游客时传 NULL 会触发 42P18（同 {@link #findFeed} 的既定写法）。
+     * <p>⚠️ 这条排除**只影响网格，不影响两个计数** —— 计数说的是「这个人发了多少」，
+     * 网格说的是「你能看到哪些」。两者在"访客自己隐藏过对方"时本就该不一致，
+     * 而访客<b>知道自己做过那件事</b>，所以这里不存在泄漏也不存在困惑
+     * （与 {@code PRIVATE} 那种差值完全不同：那个差值是关于作者的、访客无从得知的信息）。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM ContentReport r
+                                  WHERE r.postId = p.id AND r.reporterId = :viewerId))
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
+                                  WHERE h.holderId = :viewerId AND h.targetId = p.authorId))
+              AND (:hasCursor = false
+                   OR p.createdAt < :cursorTs
+                   OR (p.createdAt = :cursorTs AND p.id < :cursorId))
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> findPublicPostsByAuthor(
+            @Param("authorId") long authorId,
+            @Param("hasViewer") boolean hasViewer,
+            @Param("viewerId") Long viewerId,
+            @Param("hasCursor") boolean hasCursor,
+            @Param("cursorTs") Instant cursorTs,
+            @Param("cursorId") Long cursorId,
+            Pageable pageable);
 
     /** 概览看板（bug 20260731-442）：仅真实用户发的帖（剔除虚拟/种子账号铺量内容）。 */
     @Query("select count(p) from ContentPost p join User u on u.id = p.authorId "

@@ -12,11 +12,12 @@ import '../../auth/domain/user_tag.dart';
 /// 迷你卡是一张「什么都点不动的小卡片」；本 story 之后所有入口**直接进完整主页**。
 /// 字段**不是照抄迷你卡**：多了 [joinedAt]（本批次新补）与 [self]（同页两视角）。
 ///
-/// ⚠️ **获赞总数 / 内容网格 / 宠物卡不在这里** —— Story 2.2 与 2.3 各自补，
-/// 别提前塞占位字段（前端一旦读了个恒 0 的键，后面接真值时没人记得改）。
+/// ⚠️ **宠物卡不在这里** —— Story 2.3 补。内容网格是独立的分页端点
+/// （见 `public_user_posts_controller.dart`），不塞进本投影。
 class PublicProfile {
   const PublicProfile({
     required this.postCount,
+    required this.likeCount,
     required this.isDeactivated,
     required this.self,
     this.nickname,
@@ -27,8 +28,14 @@ class PublicProfile {
     this.tags = const [],
   });
 
-  /// 已发布（未软删）内容数。
+  /// 已发布（未软删）**PUBLIC** 内容数。
+  ///
+  /// ⚠️ 只数 PUBLIC —— 与下方内容网格同源。否则「18 postingan」配一个 12 格的网格，
+  /// 而那个差值就是「这人有几篇私密内容」（服务端口径，见 `ContentService`）。
   final int postCount;
+
+  /// 获赞总数（全部 PUBLIC 内容被赞数之和）。V1.3.0 batch-b1 Story 2.2 新补。
+  final int likeCount;
 
   /// 目标用户是否已注销。为 true 时其余身份字段**服务端一个都不下发**（NFR-3）。
   final bool isDeactivated;
@@ -63,6 +70,7 @@ class PublicProfile {
 
   factory PublicProfile.fromJson(Map<String, dynamic> json) => PublicProfile(
         postCount: (json['postCount'] ?? 0) as int,
+        likeCount: (json['likeCount'] ?? 0) as int,
         isDeactivated: (json['isDeactivated'] ?? false) as bool,
         self: (json['self'] ?? false) as bool,
         nickname: json['nickname'] as String?,

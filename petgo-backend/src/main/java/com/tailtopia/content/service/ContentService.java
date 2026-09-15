@@ -153,10 +153,34 @@ public class ContentService {
         }
     }
 
-    /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。经 service 暴露，不让 auth 直读 content 表。 */
+    /**
+     * 他人主页 / 迷你卡的**发帖总数**（Story 3.8；V1.3.0 batch-b1 Story 2.2 加 PUBLIC 过滤）。
+     * 经 service 暴露，不让 auth 直读 content 表。
+     *
+     * <p>🔴 <b>2026-09-15 改口：只数 PUBLIC</b>。原实现把私密内容也数了进去 ——
+     * 而这个数字的两个出口（迷你卡 / 公开主页）<b>都是他人视角</b>，
+     * {@link com.tailtopia.content.domain.ContentVisibility} 对这一类的判定口径是
+     * 「按 PUBLIC 过滤」（NFR-4）。
+     * <p>不改的后果：主页上写着「18 postingan」而网格里只有 12 格；更要紧的是那个差值
+     * <b>就是这个人有几篇私密内容</b>，访客不该能推断出来。
+     * <p>⚠️ 作者自视的口径不受影响 —— 「我的发布」走 {@code findMyPosts}，
+     * 那边**刻意不过滤** visibility。
+     */
     @Transactional(readOnly = true)
-    public long countPublishedByAuthor(long authorId) {
-        return posts.countByAuthorIdAndDeletedAtIsNullAndStatus(authorId, PostStatus.PUBLISHED);
+    public long countPublicPostsByAuthor(long authorId) {
+        return posts.countPublicPublishedByAuthor(authorId);
+    }
+
+    /**
+     * 他人主页的**获赞总数**（V1.3.0 batch-b1 Story 2.2 · FR-118.2 · AC2）。
+     *
+     * <p>口径与 {@link #countPublicPostsByAuthor} 同源（PUBLIC + PUBLISHED + 未软删），
+     * 一条 SQL 出数、无 N+1、不新增冗余计数列 —— 理由见
+     * {@link ContentLikeRepository#sumLikesOnPublicPostsByAuthor}。
+     */
+    @Transactional(readOnly = true)
+    public long sumLikesOnPublicPostsByAuthor(long authorId) {
+        return likes.sumLikesOnPublicPostsByAuthor(authorId);
     }
 
     /** 内容是否存在且可见（Story 3.7：举报前校验，经 service 暴露给 moderation，不让其直读 content 表）。 */

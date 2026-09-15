@@ -2250,5 +2250,9 @@
   "profileJoinedAt": "Bergabung {date}",
   "profileLoadFailed": "Gagal memuat profil ini",
   "profileNotFound": "Pengguna tidak ditemukan",
-  "profileBlockedEmpty": "Kamu sudah memblokir pengguna ini"
+  "profileBlockedEmpty": "Kamu sudah memblokir pengguna ini",
+  "profileCounts": "{postCount} postingan · {likeCount} suka",
+  "profilePostsTitle": "Postingan",
+  "profilePostsEmpty": "Belum ada postingan publik",
+  "profilePostsLoadMore": "Muat lagi"
 }

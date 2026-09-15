@@ -13,6 +13,7 @@ import 'package:tailtopia/features/social/domain/account_action_entry.dart';
 import 'package:tailtopia/features/social/domain/account_report_reason.dart';
 import 'package:tailtopia/features/social/domain/blocked_user.dart';
 import 'package:tailtopia/features/user_profile/data/public_profile_repository.dart';
+import 'package:tailtopia/features/user_profile/data/public_user_posts_repository.dart';
 import 'package:tailtopia/features/user_profile/presentation/public_profile_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -70,6 +71,14 @@ class _FakeBlockRepo implements BlockedUsersRepository {
   }
 }
 
+/// 内容区在本文件里不是被验对象（那是 `public_profile_posts_test.dart` 的事）——
+/// 给个恒空页，免得走真网络。
+class _FakePostsRepo implements PublicUserPostsRepository {
+  @override
+  Future<PublicUserPostPage> fetch(int userId, {String? cursor}) async =>
+      PublicUserPostPage.empty;
+}
+
 class _FakeReportRepo implements AccountReportRepository {
   final List<int> reported = <int>[];
   @override
@@ -111,9 +120,12 @@ PublicProfile _target({
   DateTime? joinedAt,
   String? signature,
   List<UserTag> tags = const [],
+  int postCount = 18,
+  int likeCount = 342,
 }) =>
     PublicProfile(
-      postCount: 18,
+      postCount: postCount,
+      likeCount: likeCount,
       isDeactivated: isDeactivated,
       self: self,
       nickname: isDeactivated ? null : 'Rina',
@@ -137,6 +149,7 @@ Future<_Probe> _pump(
   required PublicProfileRepository repo,
   BlockedUsersRepository? blockRepo,
   AccountReportRepository? reportRepo,
+  PublicUserPostsRepository? postsRepo,
   AccountActionEntry entry = AccountActionEntry.miniProfile,
 }) async {
   final probe = _Probe();
@@ -177,6 +190,7 @@ Future<_Probe> _pump(
     publicProfileRepositoryProvider.overrideWithValue(repo),
     blockedUsersRepositoryProvider.overrideWithValue(blockRepo ?? _FakeBlockRepo()),
     accountReportRepositoryProvider.overrideWithValue(reportRepo ?? _FakeReportRepo()),
+    publicUserPostsRepositoryProvider.overrideWithValue(postsRepo ?? _FakePostsRepo()),
     authControllerProvider.overrideWith(_LoggedInAuth.new),
   ]);
   addTearDown(container.dispose);
@@ -218,7 +232,7 @@ void main() {
 
       expect(find.text('Rina'), findsOneWidget);
       expect(find.byKey(const ValueKey('profileSignature')), findsOneWidget);
-      expect(find.text(l10n.miniProfilePostCount(18)), findsOneWidget);
+      expect(find.text(l10n.profileCounts(18, 342)), findsOneWidget);
       // 🔴 到月不到日：确切注册日期是没必要外泄的个人信息。
       final joined = tester.widget<Text>(find.byKey(const ValueKey('profileJoinedAt')));
       expect(joined.data, l10n.profileJoinedAt('Mar 2026'));
@@ -231,12 +245,10 @@ void main() {
       expect(find.text(l10n.miniProfileComingSoon), findsNothing);
     });
 
-    testWidgets('⚠️ 本 story 不摆空的内容网格 —— 恒空的「已发布」区会被当成「这人没发过东西」',
-        (tester) async {
+    testWidgets('宠物卡还没有（Story 2.3）', (tester) async {
       await _pump(tester, repo: _FakeProfileRepo(_target(joinedAt: DateTime.utc(2026, 3, 4))));
 
-      // 内容区与获赞总数是 Story 2.2；宠物卡是 Story 2.3。
-      expect(find.byType(GridView), findsNothing);
+      expect(find.byKey(const ValueKey('profilePetCard')), findsNothing);
     });
 
     testWidgets('自己视角 → 不渲染「···」（对自己举报 / 拉黑没有意义）', (tester) async {
@@ -488,6 +500,7 @@ void main() {
         publicProfileRepositoryProvider.overrideWithValue(_FakeProfileRepo(_target())),
         blockedUsersRepositoryProvider.overrideWithValue(_FakeBlockRepo()),
         accountReportRepositoryProvider.overrideWithValue(_FakeReportRepo()),
+        publicUserPostsRepositoryProvider.overrideWithValue(_FakePostsRepo()),
         authControllerProvider.overrideWith(_LoggedInAuth.new),
       ]);
       addTearDown(container.dispose);
