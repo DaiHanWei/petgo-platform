@@ -130,7 +130,7 @@ class PlaceDetailResponseContractTest {
     void photosAreExifStrippedOnDelivery() {
         com.tailtopia.place.domain.PlacePhoto photo =
                 com.tailtopia.place.domain.PlacePhoto.fromMarking(
-                        42L, 7L, "https://cdn/a.jpg", 0);
+                        42L, 7L, "https://cdn/a.jpg", 0, true);
 
         PlacePhotoView v = PlacePhotoView.of(photo, marker(), 7L,
                 PlaceDetailResponse.DETAIL_PHOTO_WIDTH_PX);
@@ -163,7 +163,7 @@ class PlaceDetailResponseContractTest {
     @Test
     void deactivatedUploaderIsAnonymizedOnPhotos() {
         com.tailtopia.place.domain.PlacePhoto photo =
-                com.tailtopia.place.domain.PlacePhoto.fromMarking(42L, 9L, "https://cdn/c.jpg", 0);
+                com.tailtopia.place.domain.PlacePhoto.fromMarking(42L, 9L, "https://cdn/c.jpg", 0, true);
 
         PlacePhotoView v = PlacePhotoView.of(photo, AuthorView.anonymized(9L), 1L, 1080);
 

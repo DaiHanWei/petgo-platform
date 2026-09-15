@@ -33,6 +33,13 @@ CREATE TABLE IF NOT EXISTS place_photos (
     -- 都取它，随人一起隐藏会把整个场所变成无图条目），不是"这个人传的所有图"。
     -- 存成一列而不是每次去比对 places.created_by：后者既判错、又是一次按行的额外查询。
     is_original       BOOLEAN      NOT NULL DEFAULT false,
+    -- 🔴 这张图能不能当**站外分享页的 og:image**（Story 1.10 · AC5）。
+    -- 它比 moderation_status='VISIBLE' **更严**，两者不是一回事：
+    --   标记场所时那批是"先发后审"——三方 RISKY / DEGRADED（也就是"有点像"或"压根没查成"）
+    --   照样落 VISIBLE 对外展示（Story 1.3 拍板的产品口径，不改）。
+    -- 而 og:image 会被社交平台**抓取并缓存**，运营下架也撤不回来 —— 那个场景下
+    -- "没查成"必须当"不给图"。所以只有**干净 PASS** 的图才置 true。
+    og_eligible       BOOLEAN      NOT NULL DEFAULT false,
     deleted_at        TIMESTAMPTZ,
     created_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
     updated_at        TIMESTAMPTZ  NOT NULL DEFAULT now()
@@ -48,9 +55,12 @@ CREATE INDEX IF NOT EXISTS ix_place_photos_uploader
 
 -- 存量搬迁：把 places.photo_urls 里的每个元素展开成一行，上传者 = 标记人，顺序 = 数组下标。
 -- ⚠️ 用 WITH ORDINALITY 拿下标；空数组 / NULL 的场所自然不产生行。
+-- ⚠️ 存量行的 og_eligible 置 true：它们在搬迁前就已经在 App 里对外展示了，
+--    而当时的判定结果没有留存 —— 沿用"已经在展示"这个既成事实，不做更保守的猜测。
+--    新写入的行一律按下面的规则（只有干净 PASS 才 true）。
 INSERT INTO place_photos (place_id, uploader_id, url, moderation_status, sort_order, is_original,
-                          created_at, updated_at)
-SELECT p.id, p.created_by, elem.url, 'VISIBLE', elem.ord - 1, true, p.created_at, p.created_at
+                          og_eligible, created_at, updated_at)
+SELECT p.id, p.created_by, elem.url, 'VISIBLE', elem.ord - 1, true, true, p.created_at, p.created_at
 FROM places p
 CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(p.photo_urls, '[]'::jsonb))
      WITH ORDINALITY AS elem(url, ord)
@@ -65,3 +75,4 @@ COMMENT ON COLUMN place_photos.url               IS '公开桶 CDN 全 URL，非
 COMMENT ON COLUMN place_photos.moderation_status IS '审核态，取值域同 Java 枚举 CommentModerationStatus；补充的照片先发后审';
 COMMENT ON COLUMN place_photos.sort_order        IS '同场所内的展示顺序；标记人首批 0..n-1，补充的排在后面';
 COMMENT ON COLUMN place_photos.is_original       IS '是否为标记场所时一并提交的那批（注销级联豁免它，因为它是场所条目本身的资料）';
+COMMENT ON COLUMN place_photos.og_eligible       IS '能否当站外分享页的 og:image；比 VISIBLE 更严——只有干净 PASS（非 RISKY/DEGRADED）才为 true';

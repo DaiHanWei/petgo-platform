@@ -114,7 +114,14 @@ development_status:
                                                         # ⚠️ code-review 修掉 8 条：选图数写死 9 导致公开桶孤儿对象 / 上限把不可见行算进去（场所永远加不进新图）/ 被判死的照片一直标「审核中」/ 删除入口点不到 / 无上传中保护 / 可以把照片删到零张（场所不可编辑，删光就回不去了）/ 注销豁免判据按人判且 N+1 → 改 is_original 列 / 注入未用的依赖
                                                         # 🔴 同 1-7 的待办：降级挂起的照片需 admin 主题扩 ReviewContentType 才能进运营队列
                                                         # L1/L2 待本地验收（清单见 story Completion Notes）
-  1-10-场所分享到站外: ready-for-dev                     # H5 直出 /place/{随机码} + OG + 唤起链 + 安卓深链声明。🔒 **审核通过前不下发 og:image**（预览图会被平台缓存，不随下架消失）
+  1-10-场所分享到站外: review                             # H5 直出 /place/{随机码} + OG + 唤起链 + 安卓深链声明。🔒 **审核通过前不下发 og:image**（预览图会被平台缓存，不随下架消失）
+                                                        # 2026-09-15 云端 L0 全绿 → review；无新迁移（只给 place_photos 加了一列 og_eligible，那个迁移尚未合入 main）
+                                                        # /place/{不可枚举 token} 服务端直出；下架/不存在统一 card_gone + 404 + noindex（不可区分）
+                                                        # 🔴 OG 预览图是对名片/里程碑「不放图」边界的**有意例外**（场所照片不含个人与宠物隐私）——理由写进代码且有测试钉着（AC4 原文要求）
+                                                        # 🔴 AC5 的门控判据是 og_eligible 而非 VISIBLE：标记时那批在三方 RISKY/DEGRADED 下照样对外展示（1.3 口径），但不给 og——预览卡会被平台缓存、下架也撤不回来
+                                                        # ⚠️ 新写的 deeplink_manifest_test 当场抓到存量漏网：tailtopia://post（V1.1.6 Story 9.3）从来没进过安卓清单，那条深链在安卓上一直不工作，已补
+                                                        # ⚠️ code-review 修掉 4 条：/place/ 没进 H5 错误页白名单（异常回 JSON 给站外访客，/c/ 同样漏了一并补）/ og 门控只判 VISIBLE 挡不住 RISKY-DEGRADED / 品牌图裂图（抄了 App 才有的文件名）/ 跨仓守门测试放在 App 仓但读后端文件，纯后端 PR 上根本不会跑
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes）
 
   # ===== Epic 2: 用户公开主页 · FR-118 =====
   # 零依赖。被 Epic 3（@ 落点）与 Epic 4（访客通道）依赖 —— 是本批次的关键路径，建议优先。

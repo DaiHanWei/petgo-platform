@@ -62,6 +62,15 @@ String? deepLinkToLocation(Uri uri) {
     // （退到档案页就成了"点别人的分享链接看到自己家宠物"，正是 2.4 修掉的那个 bug）。
     return token.isEmpty ? '/home' : '/shared-post/$token';
   }
+  // 场所对外分享页（V1.3.0 batch-b1 Story 1.10）。
+  // H5 的 `/place/{token}` 与深链 `tailtopia://place/{token}` 是同一个 token ——
+  // 那是**不可枚举**的 public_token，不是场所名也不是自增 id（AD-1 Rule 3 / NFR-1）。
+  if (uri.scheme == 'tailtopia' && uri.host == 'place') {
+    final token = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
+    // 没 token 就没有可展示的那一个 —— 落**场所列表**（而不是首页）：
+    // 用户点的是一条场所链接，给他场所列表至少还在同一个功能里。
+    return token.isEmpty ? '/places' : '/places/$token';
+  }
   if (uri.scheme == 'tailtopia' && uri.host == 'open') {
     // 🔧 DEBUG ONLY：`tailtopia://open/<路径>` 直达任意路由，供本地验收导航用。
     //

@@ -90,6 +90,11 @@ public class PlaceService {
         // 「把违规内容写在地址栏里」的口子。
         String moderatedText = joinForModeration(req.name(), req.addressText(), req.description());
         ModerationOutcome outcome = moderation.evaluate(moderatedText, req.photoUrls());
+        // 🔴 记住这次判定是不是**干净 PASS**：RISKY / DEGRADED 的图照样展示（先发后审），
+        // 但**不能当站外分享页的 og:image** —— 预览卡会被社交平台缓存、下架也撤不回来
+        // （Story 1.10 · AC5）。判定在这里，因为只有这里知道那次富审核的结论。
+        boolean cleanPass = !outcome.degraded()
+                && outcome.verdict() == ContentModerationService.Verdict.PASS;
         switch (outcome.verdict()) {
             case TEXT_BLOCKED -> throw AppException.contentTextBlocked("内容包含不当词汇，请修改后重试");
             case IMAGE_BLOCKED -> throw AppException.contentImageBlocked("图片包含违规内容，请替换后重试");
@@ -117,7 +122,7 @@ public class PlaceService {
         // Story 1.9：照片搬到了 place_photos（每张带上传者与自己的审核态）。
         // 这一批**已经在上面过了同步富审核**（连同名称/地址/描述一起送审，含图审），
         // 所以直接落 VISIBLE，不再走一次异步 —— 同一批图审两遍是白花配额。
-        photoService.storeInitialPhotos(saved.getId(), createdBy, req.photoUrls());
+        photoService.storeInitialPhotos(saved.getId(), createdBy, req.photoUrls(), cleanPass);
         // 没带 key 的老客户端：不记幂等（也就不会去拆 saved.getId()）。
         if (idempotencyKey != null && !idempotencyKey.isBlank() && saved.getId() != null) {
             idempotency.store(idempotencyKey, saved.getId());

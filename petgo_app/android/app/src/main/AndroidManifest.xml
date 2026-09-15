@@ -71,6 +71,24 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="tailtopia" android:host="card"/>
             </intent-filter>
+            <!-- 单条内容分享页深链：tailtopia://post/{token} → 打开 App 落被分享的那一条。
+                 ⚠️ V1.1.6 Story 9.3 只加了 Dart 侧映射、**漏了这条清单声明** ——
+                 安卓上那条深链从来没工作过（深链是系统行为，所有测试照样绿）。
+                 由 V1.3.0 Story 1.10 新写的 deeplink_manifest_test 扫出来并补上。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="tailtopia" android:host="post"/>
+            </intent-filter>
+            <!-- 场所分享页深链：tailtopia://place/{token} → 打开 App 落场所详情
+                 （V1.3.0 batch-b1 Story 1.10 · AC6，place_share.html 的 CTA 第①级）。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="tailtopia" android:host="place"/>
+            </intent-filter>
             <!-- 下载引导落地页深链：tailtopia://open → 打开 App 落首页（s.tailtopia.id/get 唤起）。 -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>

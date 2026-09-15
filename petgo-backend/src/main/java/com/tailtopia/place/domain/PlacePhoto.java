@@ -64,6 +64,18 @@ public class PlacePhoto {
     @Column(name = "is_original", nullable = false)
     private boolean original;
 
+    /**
+     * 能不能当**站外分享页的 og:image**（Story 1.10 · AC5）。
+     *
+     * <p>🔴 **比 {@code moderationStatus = VISIBLE} 更严**，两者不是一回事：
+     * 标记场所时那批走"先发后审"——三方 {@code RISKY} / {@code DEGRADED}
+     * （"有点像"或"压根没查成"）照样落 VISIBLE 对外展示（Story 1.3 的产品口径，不改）。
+     * 而 og:image 会被社交平台**抓取并缓存**，运营下架也撤不回来 ——
+     * 那个场景下"没查成"必须当"不给图"。所以只有**干净 PASS** 的图才是 true。
+     */
+    @Column(name = "og_eligible", nullable = false)
+    private boolean ogEligible;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
@@ -76,9 +88,18 @@ public class PlacePhoto {
     protected PlacePhoto() {
     }
 
-    /** 标记场所时一并提交的照片：已过同步富审核，直接可见。 */
-    public static PlacePhoto fromMarking(long placeId, long uploaderId, String url, int sortOrder) {
-        return create(placeId, uploaderId, url, sortOrder, CommentModerationStatus.VISIBLE, true);
+    /**
+     * 标记场所时一并提交的照片：已过同步富审核，直接可见。
+     *
+     * @param cleanPass 那次富审核是不是**干净 PASS**（不是 RISKY / DEGRADED）。
+     *                  只有干净 PASS 的图才能当站外分享页的 og:image —— 见 {@link #isOgEligible()}。
+     */
+    public static PlacePhoto fromMarking(long placeId, long uploaderId, String url, int sortOrder,
+            boolean cleanPass) {
+        PlacePhoto p = create(placeId, uploaderId, url, sortOrder,
+                CommentModerationStatus.VISIBLE, true);
+        p.ogEligible = cleanPass;
+        return p;
     }
 
     /** 事后补充的照片（AC1/AC3）：先发后审 —— 落挂起，过审才对他人可见。 */
@@ -99,10 +120,16 @@ public class PlacePhoto {
         return p;
     }
 
-    /** 审核通过：UNDER_REVIEW → VISIBLE。仅挂起态可转（幂等）。 */
+    /**
+     * 审核通过：UNDER_REVIEW → VISIBLE。仅挂起态可转（幂等）。
+     *
+     * <p>走到这里的判定是**干净 PASS**（高危与降级各有自己的分支，见
+     * {@code PlacePhotoModerationListener}），所以同时开放 og:image 资格。
+     */
     public boolean approveModeration() {
         if (moderationStatus == CommentModerationStatus.UNDER_REVIEW) {
             moderationStatus = CommentModerationStatus.VISIBLE;
+            ogEligible = true;
             return true;
         }
         return false;
@@ -182,6 +209,11 @@ public class PlacePhoto {
     /** 是不是标记场所时一并提交的那批。 */
     public boolean isOriginal() {
         return original;
+    }
+
+    /** 能不能当站外分享页的 og:image（比"对外可见"更严，见字段注释）。 */
+    public boolean isOgEligible() {
+        return ogEligible;
     }
 
     public Instant getDeletedAt() {

@@ -108,7 +108,7 @@ class PlacePhotoServiceTest {
     void photosFromMarkingAreVisibleImmediately() {
         ArgumentCaptor<PlacePhoto> saved = ArgumentCaptor.forClass(PlacePhoto.class);
 
-        service.storeInitialPhotos(42L, 7L, List.of("https://cdn/a.jpg", "https://cdn/b.jpg"));
+        service.storeInitialPhotos(42L, 7L, List.of("https://cdn/a.jpg", "https://cdn/b.jpg"), true);
 
         verify(photos, Mockito.times(2)).save(saved.capture());
         assertThat(saved.getAllValues()).allSatisfy(p ->
@@ -181,7 +181,7 @@ class PlacePhotoServiceTest {
      */
     @Test
     void theLastVisiblePhotoCannotBeDeleted() {
-        PlacePhoto only = withId(PlacePhoto.fromMarking(42L, 9L, "https://cdn/a.jpg", 0), 7L);
+        PlacePhoto only = withId(PlacePhoto.fromMarking(42L, 9L, "https://cdn/a.jpg", 0, true), 7L);
         when(photos.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(only));
         when(photos.countVisible(42L)).thenReturn(1L);
 
@@ -247,7 +247,7 @@ class PlacePhotoServiceTest {
         assertThat(pending.getModerationStatus()).isEqualTo(CommentModerationStatus.REJECTED);
 
         // 已可见的照片不该被这条路径打成 REJECTED（那是运营下架该做的事）。
-        PlacePhoto visible = withId(PlacePhoto.fromMarking(42L, 7L, "https://cdn/b.jpg", 0), 8L);
+        PlacePhoto visible = withId(PlacePhoto.fromMarking(42L, 7L, "https://cdn/b.jpg", 0, true), 8L);
         when(photos.findByIdAndDeletedAtIsNull(8L)).thenReturn(Optional.of(visible));
         service.reject(8L);
         assertThat(visible.isVisible()).isTrue();
@@ -285,7 +285,7 @@ class PlacePhotoServiceTest {
      */
     @Test
     void deactivationHidesContributedPhotosButKeepsTheOriginalBatch() {
-        PlacePhoto original = withId(PlacePhoto.fromMarking(42L, 1L, "https://cdn/a.jpg", 0), 1L);
+        PlacePhoto original = withId(PlacePhoto.fromMarking(42L, 1L, "https://cdn/a.jpg", 0, true), 1L);
         PlacePhoto contributed = withId(PlacePhoto.contributed(42L, 9L, "https://cdn/b.jpg", 5), 2L);
         contributed.approveModeration();
         when(photos.findByUploaderIdAndDeletedAtIsNull(1L)).thenReturn(List.of(original));

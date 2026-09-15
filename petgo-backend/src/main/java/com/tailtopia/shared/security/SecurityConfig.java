@@ -151,7 +151,11 @@ public class SecurityConfig {
                         // ⚠️ 三个前缀是**三种不同的分享类型**，各自落地页不同（Story 9.3 · AD-15 Rule 5）——
                         // 不可合并成一个通配。
                         .requestMatchers("/actuator/**", "/v3/api-docs/**", "/swagger-ui/**",
-                                "/swagger-ui.html", "/p/**", "/m/**", "/c/**").permitAll()
+                                "/swagger-ui.html", "/p/**", "/m/**", "/c/**",
+                                // 场所对外 H5（V1.3.0 batch-b1 Story 1.10 · AD-5）：
+                                // 与前三页同性质 —— 服务端直出、公开无鉴权、noindex，
+                                // 下架/不存在统一落 card_gone + 404（防枚举）。
+                                "/place/**").permitAll()
                         // 品牌静态资源（H5 名片/分享页左上角 wordmark，bug 20260701-182）公开放行。
                         .requestMatchers(HttpMethod.GET, "/brand/**").permitAll()
                         // 法律政策 H5（隐私 / 条款 / Mitra 条款 / 账号删除 / 儿童安全 / 支持）+ 下载引导落地页公开放行（商店上架 + App WebView 引用）

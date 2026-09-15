@@ -61,12 +61,18 @@ public class PlacePhotoService {
      *
      * <p>这批**已经过了同步富审核**（`PlaceService.mark` 里连同名称/地址/描述一起送审，
      * 含图审）→ 直接落 VISIBLE，不再走一次异步。
+     *
+     * @param cleanPass 那次富审核是不是**干净 PASS**。RISKY / DEGRADED 时照样落 VISIBLE
+     *                  （Story 1.3 的先发后审口径，不改），但**不给 og:image 资格** ——
+     *                  站外预览卡会被平台缓存、运营下架也撤不回来，那个场景下
+     *                  "有点像"和"压根没查成"都必须当"不给图"（Story 1.10 · AC5）。
      */
     @Transactional
-    public void storeInitialPhotos(long placeId, long uploaderId, List<String> urls) {
+    public void storeInitialPhotos(long placeId, long uploaderId, List<String> urls,
+            boolean cleanPass) {
         int order = 0;
         for (String url : urls) {
-            photos.save(PlacePhoto.fromMarking(placeId, uploaderId, url, order++));
+            photos.save(PlacePhoto.fromMarking(placeId, uploaderId, url, order++, cleanPass));
         }
     }
 

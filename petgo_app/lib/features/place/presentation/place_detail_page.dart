@@ -21,6 +21,7 @@ import '../../../core/router/route_intent.dart';
 import '../../auth/domain/auth_guard.dart';
 import '../../content/presentation/report_sheet.dart';
 import '../../media/domain/media_upload_use_case.dart';
+import '../../profile/domain/card_link.dart';
 import '../../profile/domain/share_service.dart';
 import '../data/place_repository.dart';
 import '../domain/place_comment.dart';
@@ -44,7 +45,7 @@ import 'place_mini_map.dart';
 /// <ul>
 ///   <li>**点照片看大图**已接上（Story 1.6）：走公共 `PhotoLightbox`（从内容详情页原样抽出，行为一字未改）；</li>
 ///   <li>**评论区 + 二元态度**已接上（Story 1.7）：一级 only，态度在输入的展开态里；</li>
-///   <li>**分享出 H5 链接**归 Story 1.10 —— 本页的分享按钮只分享「名称 + 地址」文本（见 `_onShare`）。</li>
+///   <li>**分享**（Story 1.10）分享的是 **H5 场所页链接**（`/place/{不可枚举 token}`），见 `_onShare`。</li>
 /// </ul>
 ///
 /// <h2>⚠️ 标记人点击是有意的临时方案（AC4）</h2>
@@ -285,17 +286,22 @@ class PlaceDetailPage extends ConsumerWidget {
     }
   }
 
-  /// 分享（AC1 要求按钮在位）。
+  /// 分享（Story 1.10 · AC1）：唤起系统面板，内容是 **H5 场所页链接**。
   ///
-  /// ⚠️ **本 story 只分享「名称 + 地址」文本** —— H5 场所页链接是 Story 1.10 的交付物，
-  /// 那条落地后把这里的 payload 换成链接即可（按钮、埋点位置都不用动）。
-  /// 刻意不做成一个点了没反应的按钮：AC1 要求它在位，而一个死按钮比没有按钮更糟。
+  /// 🔴 链接里是**不可枚举 token**（`placeShareUrl`）—— 不是场所名、不是自增 id（AC2）。
+  ///
+  /// ⚠️ **不接分享奖励**（AC8）：FR-96 的奖励渠道只有年龄卡 / Tailsonality 卡 / 护照卡三个，
+  /// 场所不在其中。所以这里**不调** `shareRewardProvider` 之类的东西 ——
+  /// 加进去就是给一条没人批准过的渠道发币。
+  ///
+  /// 文案 = 名称 + 链接：只发链接的话，IM 预览卡还没抓出来的那一两秒里，
+  /// 收到的人看到的是一串不知道是什么的 URL。
   Future<void> _onShare(BuildContext context, WidgetRef ref, AppLocalizations l10n,
       PlaceDetail p, Rect? origin) async {
     try {
       // 走既有 shareServiceProvider —— 它带 sharePositionOrigin，而 **iOS 上缺了这个参数
       // iPad 会崩、iPhone 会「点了没反应」**（bug 20260707 踩过）。别绕过它直接调 Share.share。
-      await ref.read(shareServiceProvider)('${p.name}\n${p.addressText}',
+      await ref.read(shareServiceProvider)('${p.name}\n${placeShareUrl(p.token)}',
           sharePositionOrigin: origin);
     } catch (_) {
       if (context.mounted) showAppToast(context, l10n.placeDetailShareFailed);

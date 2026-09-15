@@ -191,7 +191,7 @@ class PlaceServiceTest {
         service.mark(7L, request(), null);
 
         verify(photoService).storeInitialPhotos(42L, 7L,
-                List.of("https://cdn/a.jpg", "https://cdn/b.jpg"));
+                List.of("https://cdn/a.jpg", "https://cdn/b.jpg"), true);
     }
 
     // ===== 幂等（code-review 2026-09-15 追加）=====

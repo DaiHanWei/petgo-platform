@@ -221,8 +221,17 @@ public class GlobalExceptionHandler {
         return mav;
     }
 
+    /**
+     * 是不是服务端直出的 H5 分享页。
+     *
+     * <p>⚠️ **加一个新的分享页就要加进来**（code-review 2026-09-15）：漏了的话，
+     * 那个页面上抛出的任何异常会回一坨 ProblemDetail JSON（还带 traceId）给访客看，
+     * 而不是失效页 —— 而这几条路径是**发给站外陌生人**的。
+     * `/c/`（单条内容，V1.1.6）与 `/place/`（场所，V1.3.0）都是这么漏掉又补上的。
+     */
     private static boolean isH5Path(String uri) {
-        return uri != null && (uri.startsWith("/p/") || uri.startsWith("/m/"));
+        return uri != null && (uri.startsWith("/p/") || uri.startsWith("/m/")
+                || uri.startsWith("/c/") || uri.startsWith("/place/"));
     }
 
     /**
