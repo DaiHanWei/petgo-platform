@@ -5,10 +5,12 @@ import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.content.domain.Comment;
 import com.tailtopia.content.domain.CommentModerationStatus;
 import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentVisibility;
 import com.tailtopia.content.domain.PostStatus;
 import com.tailtopia.content.dto.CommentResponse;
 import com.tailtopia.content.event.CommentSubmittedEvent;
 import com.tailtopia.content.event.ContentCommentedEvent;
+import com.tailtopia.content.event.ContentMentionedEvent;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.mention.dto.MentionView;
@@ -192,9 +194,10 @@ public class CommentService {
                 .ifPresent(c -> {
                     c.approveModeration();
                     comments.save(c);
-                    long contentAuthorId = posts.findById(c.getPostId())
-                            .map(ContentPost::getAuthorId).orElse(-1L);
-                    publishCommented(c, contentAuthorId);
+                    // ⚠️ 取回整个 post 而不只是 authorId：Story 3.4 还要它的 visibility
+                    //    （非 PUBLIC 不发 @ 通知）。**同一次查询**，不多一趟。
+                    ContentPost post = posts.findById(c.getPostId()).orElse(null);
+                    publishCommented(c, post == null ? -1L : post.getAuthorId(), post);
                 });
     }
 
@@ -263,12 +266,32 @@ public class CommentService {
             int contentVersion, CommentModerationStatus moderationStatus) {
     }
 
-    /** 发「新评论」事件（携 parentAuthorId：二级回复时为其一级父作者，一级评论为 null）。 */
-    private void publishCommented(Comment c, long contentAuthorId) {
+    /**
+     * 发「新评论」事件（携 parentAuthorId：二级回复时为其一级父作者，一级评论为 null），
+     * 以及 Story 3.4 的「有人被 @ 了」事件。
+     *
+     * @param post 该评论所属内容；<b>可为 null</b>（帖已消失）。只用来判可见范围 ——
+     *             {@code contentAuthorId} 单独传是为了保住既有那条 -1L 兜底口径。
+     */
+    private void publishCommented(Comment c, long contentAuthorId, ContentPost post) {
         Long parentAuthorId = c.isTopLevel() ? null
                 : comments.findById(c.getParentId()).map(Comment::getAuthorId).orElse(null);
         events.publishEvent(new ContentCommentedEvent(
                 c.getPostId(), c.getId(), c.getAuthorId(), contentAuthorId, parentAuthorId, Instant.now()));
+        // Story 3.4：@ 通知与「新评论」通知**同一个落点** —— 评论 UNDER_REVIEW → VISIBLE 的那一刻。
+        // 🔴 提交那一刻发的话，审核没过的评论会让被 @ 的人点进去看不到任何东西。
+        List<Long> mentioned = c.getMentionedUserIds();
+        // 🔴 **非 PUBLIC 的帖子，连它评论里的 @ 也不发通知**（与 ContentService.publishMentioned
+        //    同一条不变式 —— ContentMentionedEvent 的 javadoc 让 notify 侧信任它，
+        //    两条路径口径不一致就等于那句话是假的）。
+        //    PRIVATE 内容只有作者看得见，通知一个第三方"你在某条内容的评论里被提到了"
+        //    还顺带告诉了他那条内容存在（code-review 2026-09-15）。
+        //    ⚠️ 帖子查不到（post == null）时同样不发：宁可少一条通知，不要一条点进去 404 的。
+        if (!mentioned.isEmpty() && post != null
+                && post.getVisibility() == ContentVisibility.PUBLIC) {
+            events.publishEvent(new ContentMentionedEvent(c.getPostId(), c.getId(), c.getAuthorId(),
+                    contentAuthorId, mentioned, Instant.now()));
+        }
     }
 
     private ContentPost requireVisible(long postId) {

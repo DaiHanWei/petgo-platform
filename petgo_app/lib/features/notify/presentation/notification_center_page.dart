@@ -742,6 +742,13 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.gold,
       AppColors.goldTint,
     ),
+    // 被 @ 提及（Story 3.4 · AC6）：@ 符号图标；配色**与兽医回复同色系**
+    // （mint + cream2 —— AC6 原文要求"紫色图标块与兽医回复同色系"）。
+    'CONTENT_MENTIONED' => (
+      Icons.alternate_email_rounded,
+      AppColors.mint,
+      AppColors.cream2,
+    ),
     _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
   };
 
@@ -775,6 +782,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     'LIFECYCLE_D3' => l10n.notifyTypeLifecycleD3,
     'LIFECYCLE_D7' => l10n.notifyTypeLifecycleD7,
     'LIFECYCLE_WINBACK' => l10n.notifyTypeLifecycleWinback,
+    // 被 @ 提及（V1.3.0 batch-b1 Story 3.4）：标题两种文案共用一句，正文才分帖子 / 评论。
+    'CONTENT_MENTIONED' => l10n.notifyTypeContentMentioned,
     // 未知类型兜底：中性「系统通知」，不再复用页面标题（bug 20260729-391 的「克隆卡」观感来源）。
     _ => l10n.notifyTypeSystem,
   };
@@ -821,9 +830,21 @@ class _NotificationTileState extends State<_NotificationTile> {
       // CREATE_PROFILE 与未知 variant 一律落建档引导（与深链落点同口径）。
       _ => l10n.notifyBodyLifecycleCreateProfile,
     },
+    // 被 @ 提及（Story 3.4 · AC3）：**文案区分「帖子提及」与「评论提及」两种**。
+    // 走 targetRef 的 variant 前缀，与深链落点同一个判据（认不出来按帖子说，
+    // 与 DeepLinkRoutes 那边"认不出前缀落通知中心"配合：话说得通、点得动）。
+    'CONTENT_MENTIONED' => _isCommentMention
+        ? l10n.notifyBodyContentMentionedComment
+        : l10n.notifyBodyContentMentionedPost,
     // 未知类型兜底：中性正文，不再复用空态提示串（那本身就是个 bug）。
     _ => l10n.notifyBodySystem,
   };
+
+  /// 这条 @ 通知指的是评论提及还是正文提及（Story 3.4）。
+  ///
+  /// ⚠️ 判据是 targetRef 的前缀，**与深链落点同一处口径** —— 两边分叉的表现是
+  /// 「正文里说在评论里提到你，点进去却没锚到评论区」。
+  bool get _isCommentMention => (widget.item.targetRef ?? '').startsWith('COMMENT:');
 
   /// 相对时间，随 App 语言本地化（今天：刚刚 / N 分钟前 / N 小时前；更早：本地化日期）。
   String _relativeTime(AppLocalizations l10n, String locale) {

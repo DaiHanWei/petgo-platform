@@ -3,11 +3,13 @@ package com.tailtopia.content.service;
 import com.tailtopia.content.domain.Comment;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.domain.ContentVisibility;
 import com.tailtopia.content.domain.DeleteReason;
 import com.tailtopia.content.domain.ImageSize;
 import com.tailtopia.content.domain.PostStatus;
 import com.tailtopia.content.dto.ContentPostCreateRequest;
 import com.tailtopia.content.dto.ContentPostResponse;
+import com.tailtopia.content.event.ContentMentionedEvent;
 import com.tailtopia.content.event.ContentPublishedEvent;
 import com.tailtopia.content.event.ContentRemovedEvent;
 import com.tailtopia.content.event.ContentUnavailableEvent;
@@ -310,6 +312,8 @@ public class ContentService {
                         : 0L;
                 events.publishEvent(new ContentPublishedEvent(p.getId(), p.getAuthorId(), p.getType(),
                         p.getPetId(), growthCount, p.getVisibility(), p.getCreatedAt()));
+                // Story 3.4：挂起帖过审 → **此刻**才发 @ 通知（提交那一刻发就是点进去 404）。
+                publishMentioned(p, null, p.getAuthorId());
             }
         });
     }
@@ -529,7 +533,30 @@ public class ContentService {
                 : 0L;
         events.publishEvent(new ContentPublishedEvent(saved.getId(), authorId, req.type(), petId,
                 growthCount, saved.getVisibility(), saved.getCreatedAt()));
+        // Story 3.4：@ 通知。发布时机 = **这条内容变成别人看得见的那一刻**（本分支就是）。
+        publishMentioned(saved, null, authorId);
         return ContentPostResponse.from(saved);
+    }
+
+    /**
+     * 发「有人被 @ 了」事件（Story 3.4）。
+     *
+     * <h2>🔴 两道门，缺一条就是骚扰</h2>
+     * <ol>
+     *   <li><b>名单为空直接不发</b>（绝大多数内容都走这一支，连事件对象都不建）；</li>
+     *   <li><b>非 PUBLIC 不发</b> —— PRIVATE Diary 照样落 @ 名单（作者自视那条时间线要能高亮能点，
+     *       Story 3.3），但可见范围创建后不可改（FR-83 AC7），被 @ 的人永远打不开它。
+     *       ⚠️ 判据是 {@code visibility == PUBLIC}，**不是**「有没有 mentionedUserIds」。</li>
+     * </ol>
+     * 这两条写在**发布侧**，notify 侧因此不必再判一次可见范围。
+     */
+    private void publishMentioned(ContentPost post, Long commentId, long actorId) {
+        List<Long> mentioned = post.getMentionedUserIds();
+        if (mentioned.isEmpty() || post.getVisibility() != ContentVisibility.PUBLIC) {
+            return;
+        }
+        events.publishEvent(new ContentMentionedEvent(post.getId(), commentId, actorId,
+                post.getAuthorId(), mentioned, Instant.now()));
     }
 
     /**
