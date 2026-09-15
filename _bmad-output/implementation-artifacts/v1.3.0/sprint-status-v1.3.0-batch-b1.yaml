@@ -154,7 +154,13 @@ development_status:
                                                         # ⚠️ code-review 修掉 4 条：三个访客 provider 漏 isAutoDispose（换账号吃旧缓存 → 服务端拉黑守卫根本不被调用，与 bug 20260730-421/446 同型）/ return null 出去是 200 不是 204 / 为一个 Diary 数算了五条查询含两次健康表计数 / token ?? "" 把 fail-fast 变成畸形 URL
                                                         # 🔸 **一条待产品确认的口径（本 story 按 AD-4 原样保留、未改）**：访客视图的 Diary 时间线含作者设为私密的条目（PRD §2.9 §② 的既有拍板，前提是"作者自己按下分享键"）。站内入口没有这个前提，而 ContentVisibility 把"他人主页"归在按 PUBLIC 过滤那一档 —— 两处口径在这个新入口上第一次撞上。缓解现状：私密条目点不开（openableByVisitor=false），但卡片文字与图片是渲染出来的
                                                         # L1/L2 待本地验收（清单见 story Completion Notes）
-  2-4-自己视角的主页: ready-for-dev                      # 同页两视角；「编辑资料」在身份行内与头像同行，不塞 AppBar；「我的」Tab 一行不改
+  2-4-自己视角的主页: review                             # 同页两视角；「编辑资料」在身份行内与头像同行，不塞 AppBar；「我的」Tab 一行不改
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（前端 analyze 0 issue、1709 例；后端未动、3285 例真实失败 0）
+                                                        # **纯前端、无迁移**：self 字段 Story 2.1 就在下发了
+                                                        # 🔴 AC3 的「跳既有抽屉、不重画」靠**抽取**实现：资料编辑抽屉与 _InitialAvatar 从 me_page.dart 逐行抽成 me/presentation/profile_edit_sheet.dart 与 shared/widgets/initial_avatar.dart（复制一份的话两处细节会各改各的，且没有任何测试会红）。两条 L0 测试钉住「两处调同一个函数」「me_page 里不再有抽屉本体」
+                                                        # ⚠️ code-review 修掉 3 条 ref-after-await：主页 invalidate 缺 mounted 守卫（riverpod 3 真抛 StateError，release 也抛）/ 保存成功却不更新本地也不提示（异常被 catch(_) 吞）/ 换头像上传完 PATCH 根本没发。三条在「我的」Tab 上都碰不到（那个 Tab 常驻），但公开主页是可 pop 的路由，从此真实可达
+                                                        # 🔸 **一条既有缺陷，按 AC5「行为一字不改」有意保留**：抽屉里昵称清空时整表当 no-op，用户同时改的签名一并丢弃，且无校验提示、保存按钮不置灰。源码已标注，留给产品决定
+                                                        # L2 待本地验收（清单见 story Completion Notes；本 story 无 L1 项）
   2-5-被拉黑者视角与已注销用户的主页: ready-for-dev      # 🔴 模糊空态**必须与「真的没有公开内容」复用同一组件同一文案**，否则一对比就能推断出被拉黑；判定在服务端
 
   # ===== Epic 3: @ 提及 · FR-119 =====

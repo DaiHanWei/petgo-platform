@@ -18,6 +18,7 @@ import '../../../shared/widgets/user_tag_row.dart';
 import '../../auth/domain/auth_guard.dart';
 import '../../social/data/blocked_users_repository.dart';
 import '../../social/domain/account_action_entry.dart';
+import '../../me/presentation/profile_edit_sheet.dart';
 import '../../social/presentation/account_report_sheet.dart';
 import '../../profile/domain/pet_age.dart';
 import '../../profile/presentation/visitor_archive_view.dart';
@@ -81,9 +82,13 @@ Future<void> openUserProfile(
 /// 关注 / 粉丝、访客记录、独立 bio 字段。这些不是"还没做"，是**明确不做** ——
 /// 一条扫源码的测试钉着它们不出现（`test/user_profile/public_profile_posts_test.dart`）。
 ///
-/// <h2>自己视角（UI 稿 C2）是 Story 2.4</h2>
-/// 服务端已经在下发 `self`，本页据此**只做一件事：不渲染「···」**
-/// （对自己举报 / 拉黑没有意义）。「编辑资料」入口留给 2.4。
+/// ## 同页两视角（UI 稿 C1 / C2 · Story 2.4）
+/// 自己看自己的主页走**同一套页面**，由服务端下发的 `self` 切换两处：
+/// - 顶栏**没有「···」**（对自己举报 / 拉黑没有意义）；
+/// - 身份行内多一个「编辑资料」按钮，跳**既有**的资料编辑抽屉。
+///
+/// 🔴 **「我的」Tab 一行不改**：那是另一个页面（带订单入口、设置、宠物引导卡……），
+/// 公开主页只是"别人眼里的我"。两者刻意不合并。
 class PublicProfilePage extends ConsumerWidget {
   const PublicProfilePage({super.key, required this.userId, this.entry = AccountActionEntry.miniProfile});
 
@@ -132,7 +137,7 @@ class PublicProfilePage extends ConsumerWidget {
                 icon: Icons.person_off_outlined,
                 message: l10n.profileNotFound,
               )
-            : _identity(context, p),
+            : _identity(context, ref, p),
       ),
     );
   }
@@ -173,8 +178,10 @@ class PublicProfilePage extends ConsumerWidget {
 
   /// 身份区（UI 稿 C1 的 `.profhead`）。
   ///
-  /// ⚠️ **没有 email、没有相机角标、没有「编辑资料」** —— 那三样是自己视角专属。
-  Widget _identity(BuildContext context, PublicProfile p) {
+  /// ⚠️ **他人视角没有 email、没有相机角标、没有「编辑资料」**。
+  /// 自己视角（C2）只多出「编辑资料」一个按钮 —— email 与相机角标是
+  /// 「我的」Tab 专属，这一页两种视角都不给。
+  Widget _identity(BuildContext context, WidgetRef ref, PublicProfile p) {
     final l10n = AppLocalizations.of(context);
     final joinedAt = p.joinedAt;
     return ListView(
@@ -236,6 +243,13 @@ class PublicProfilePage extends ConsumerWidget {
                 ],
               ),
             ),
+            // AC3：「编辑资料」在**身份行内、与头像同一行**（对齐真实的 me_page）——
+            // 🔴 **不塞进顶部 AppBar**：UI 稿 C2 明确标了位置，而 AppBar 那个位置
+            // 在他人视角上是「···」，两种视角共用一个槽位会让人第一眼分不清自己在看谁的主页。
+            if (p.self) ...[
+              const SizedBox(width: AppSpacing.sm),
+              _EditProfileButton(userId: userId),
+            ],
           ],
         ),
         // 宠物区（Story 2.3 · AC3）。没建过档案的人这里整块不渲染 ——
@@ -595,6 +609,48 @@ class _PetSection extends ConsumerWidget {
   void _open(BuildContext context, WidgetRef ref, PublicProfilePet pet) {
     requireLogin(ref, context,
         onAllowed: () => context.push('${VisitorArchiveView.inAppRouteBase}/${pet.petId}'));
+  }
+}
+
+/// 「编辑资料」按钮（Story 2.4 · AC3）：跳**既有**的资料编辑抽屉，**不重画**。
+///
+/// 视觉照 `me_page.dart` 的 `editbtn`（圆角 8 + 1.5px 浅紫描边 + 紫字，无图标）——
+/// 两处是同一个按钮，用户不该在两个地方看到两种样子。
+class _EditProfileButton extends ConsumerWidget {
+  const _EditProfileButton({required this.userId});
+
+  final int userId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    return OutlinedButton(
+      key: const ValueKey('profileEditButton'),
+      onPressed: () async {
+        await openProfileEditSheet(context, ref);
+        // 🔴 `context.mounted` 不可省：保存请求在途时用户按返回退出主页，
+        // 这一行就会在**已销毁的 ref** 上调 invalidate —— riverpod 3 的
+        // `_assertNotDisposed()` 是真抛 StateError（不是 assert，release 也抛），
+        // 而这里没有 catch，出去就是一条未捕获异步异常（code-review 2026-09-15）。
+        if (!context.mounted) return;
+        // 改完昵称 / 签名 / 头像要让这一页跟上 —— 不刷的话用户改完回到自己的主页，
+        // 看到的还是旧昵称，会以为没保存成功（而 authController 那份已经更新了，
+        // 「我的」Tab 是对的，两处对不上更糟）。
+        ref.invalidate(publicProfileProvider(userId));
+      },
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.accentGrowth,
+        side: const BorderSide(color: AppColors.dashedViolet, width: 1.5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(
+        l10n.meEditButton,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+    );
   }
 }
 
