@@ -11,6 +11,7 @@ import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.pay.service.PaymentIntentService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.pay.GatewayStatus;
+import com.tailtopia.shared.analytics.AnalyticsClient;
 import com.tailtopia.shared.pay.PaymentCallback;
 import com.tailtopia.shop.address.domain.AddressFields;
 import com.tailtopia.shop.address.service.ShippingAddressService;
@@ -27,12 +28,16 @@ import com.tailtopia.shop.shipping.service.AdminShippingZoneService;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
  * L1：电商订单支付（Story 3.8，FR-100 / AD-8 / AD-9）。
@@ -65,6 +70,15 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
     private SkuInventoryRepository inventory;
     @Autowired
     private JdbcTemplate jdbc;
+
+    /**
+     * Story 1-2：捕获服务端埋点实参。
+     *
+     * <p>用 spy 而不是 mock —— 真实现（{@code PostHogAnalyticsClient}）在测试环境
+     * {@code key} 为空 ⇒ {@code isEnabled()} 为 false ⇒ 本就不出网，spy 只负责记下调用。
+     */
+    @MockitoSpyBean
+    private AnalyticsClient analytics;
 
     private static final long ACTOR = 1L;
 
@@ -494,6 +508,74 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         var view = detailOf(uid, order.getPublicToken());
         assertThat(view.paymentStatus()).isNull();
         assertThat(view.paymentFailureCategory()).isNull();
+    }
+
+    // ---------- Story 1-2：支付漏斗埋点（AC9 / AC10） ----------
+
+    @SuppressWarnings("unchecked")
+    private List<String> capturedEvents() {
+        ArgumentCaptor<String> event = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(analytics, Mockito.atLeast(0))
+                .capture(Mockito.anyString(), event.capture(), Mockito.any(Map.class));
+        return event.getAllValues();
+    }
+
+    @Test
+    @DisplayName("🔴 AC9：连点三次「去支付」只发一条 shop_payment_intent_created（幂等不灌水）")
+    void repeatedPayEmitsIntentCreatedOnlyOnce() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        ShopOrder order = placeOrder(uid, seedSku(10, 285_000L), 1, 285_000L);
+
+        payments.pay(uid, order.getPublicToken(), null);
+        payments.pay(uid, order.getPublicToken(), null);
+        payments.pay(uid, order.getPublicToken(), null);
+
+        assertThat(capturedEvents())
+                .as("ensureIntent 幂等：三次拿回同一个意图，漏斗入口不该多出两个")
+                .filteredOn("shop_payment_intent_created"::equals)
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("AC10：到账 → shop_payment_paid，属性恰好是白名单允许的子集")
+    void paidEmitsShopPaymentPaid() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        ShopOrder order = placeOrder(uid, seedSku(10, 285_000L), 1, 285_000L);
+        payments.pay(uid, order.getPublicToken(), null);
+        payCallback(orders.findByPublicToken(order.getPublicToken()).orElseThrow()
+                .getPaymentIntentToken());
+
+        ArgumentCaptor<Map<String, Object>> props = propsCaptorFor("shop_payment_paid");
+        assertThat(props.getValue().keySet())
+                .isSubsetOf("order_amount", "pay_channel", "has_pawcoin");
+        assertThat(props.getValue()).containsEntry("order_amount", 285_000L);
+    }
+
+    @Test
+    @DisplayName("AC10：网关拒付 → shop_payment_declined，带 failure_category，且无订单号与 PII")
+    void declinedEmitsShopPaymentDeclined() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        ShopOrder order = placeOrder(uid, seedSku(10, 285_000L), 1, 285_000L);
+        payments.pay(uid, order.getPublicToken(), null);
+        paymentIntents.applyCallback(new PaymentCallback(
+                orders.findByPublicToken(order.getPublicToken()).orElseThrow()
+                        .getPaymentIntentToken(),
+                "gw-" + SEQ.incrementAndGet(), GatewayStatus.FAILED, Map.of("status", "deny")));
+
+        ArgumentCaptor<Map<String, Object>> props = propsCaptorFor("shop_payment_declined");
+        assertThat(props.getValue()).containsEntry("failure_category", "GATEWAY_DECLINED");
+        assertThat(props.getValue().keySet())
+                .isSubsetOf("order_amount", "pay_channel", "has_pawcoin", "failure_category");
+    }
+
+    @SuppressWarnings("unchecked")
+    private ArgumentCaptor<Map<String, Object>> propsCaptorFor(String event) {
+        ArgumentCaptor<Map<String, Object>> props = ArgumentCaptor.forClass(Map.class);
+        Mockito.verify(analytics).capture(Mockito.anyString(), Mockito.eq(event), props.capture());
+        return props;
     }
 
     /** 把支付窗拨到过去（真等 60 分钟不现实；服务端时刻仍是唯一判定依据）。 */

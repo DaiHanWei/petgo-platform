@@ -1,10 +1,12 @@
 package com.tailtopia.pay.service;
 
 import com.tailtopia.pay.domain.PayChannel;
+import com.tailtopia.pay.domain.PaymentFailureCategory;
 import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.domain.PaymentStatus;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
+import com.tailtopia.pay.event.PaymentIntentFailedEvent;
 import com.tailtopia.pay.event.PaymentIntentPaidEvent;
 import com.tailtopia.pay.repository.PaymentIntentRepository;
 import com.tailtopia.profile.service.CardTokenGenerator;
@@ -162,6 +164,8 @@ public class PaymentIntentService {
             }
             intent.markFailed(java.util.Map.of("reason", reason == null ? "CANCELLED" : reason));
             intents.saveAndFlush(intent);
+            // 🔴 只在真的写了 FAILED 时发 —— 上面 terminal 短路那支是 no-op，发事件会灌水。
+            publishFailed(intent);
         });
     }
 
@@ -201,9 +205,36 @@ public class PaymentIntentService {
             }
             intent.markExpired(null);
             intents.save(intent);
+            publishFailed(intent);
             expired++;
         }
         return expired;
+    }
+
+    /**
+     * 发布 {@link PaymentIntentFailedEvent}（Story 1-2 AC8）。
+     *
+     * <p>🔴 <b>必须在 save 之后调</b>：{@link PaymentFailureCategory#of} 读的是意图的 status 与 meta，
+     * 两者都要先定下来才算得对。
+     *
+     * <p>⚠️ <b>本类共有 9 个置终态的写入点，只有下面 4 个发事件</b>（Story 1-2 AC8 划定的范围）：
+     * {@link #applyCallback} 的 {@code FAILED} / {@code EXPIRED} 两支、{@link #failByToken}、
+     * {@link #expireOverduePending}。**不发**的另外几处及其理由：
+     * <ul>
+     *   <li>{@code createIntent} / {@code createMixedIntent} 的复用分支懒过期 —— 电商侧进不来
+     *       （{@code requirePayable} 会先挡下过窗订单），且 {@code expireOverduePending}
+     *       每 60 秒扫一遍会补上；</li>
+     *   <li>{@link #findReusablePending} 的懒过期 —— 只服务 PAWCOIN_TOPUP 的复用查询；</li>
+     *   <li>{@link #failPending} —— 唯一调用方是问诊线，非电商。</li>
+     * </ul>
+     * 所以电商漏斗今天不缺口径。但<b>这不是一条「所有失败都发事件」的不变式</b>——
+     * 下一个要订阅本事件的业务线必须先自己核一遍这几处，别照着方法名想当然。
+     */
+    private void publishFailed(PaymentIntent intent) {
+        events.publishEvent(new PaymentIntentFailedEvent(
+                intent.getId(), intent.getPublicToken(), intent.getUserId(),
+                intent.getPurpose(), intent.getChannel(), intent.getAmount(), intent.getCurrency(),
+                PaymentFailureCategory.of(intent)));
     }
 
     /**
@@ -251,10 +282,12 @@ public class PaymentIntentService {
             case FAILED -> {
                 intent.markFailed(cb.rawMeta());
                 intents.saveAndFlush(intent);
+                publishFailed(intent);
             }
             case EXPIRED -> {
                 intent.markExpired(cb.rawMeta());
                 intents.saveAndFlush(intent);
+                publishFailed(intent);
             }
             default -> { /* PENDING 已在入口挡下，不可达 */ }
         }

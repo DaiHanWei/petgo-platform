@@ -11,6 +11,7 @@ import com.tailtopia.shared.pay.PaymentGateway;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.domain.ShopOrderLine;
 import com.tailtopia.shop.order.domain.ShopOrderStatus;
+import com.tailtopia.shop.order.event.ShopPaymentIntentCreatedEvent;
 import com.tailtopia.shop.order.repository.ShopOrderLineRepository;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.shop.service.InventoryService;
@@ -22,6 +23,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,10 +68,14 @@ public class ShopOrderPaymentService {
      */
     private final org.springframework.beans.factory.ObjectProvider<ShopOrderPaymentService> selfProvider;
 
+    /** 领域事件发布（Story 1-2：支付漏斗入口）。Spring 原生，不引任何 MQ。 */
+    private final ApplicationEventPublisher events;
+
     public ShopOrderPaymentService(ShopOrderRepository orders, ShopOrderLineRepository orderLines,
             InventoryService inventory, CheckoutService checkout,
             PaymentIntentService paymentIntents, PaymentGateway gateway,
-            org.springframework.beans.factory.ObjectProvider<ShopOrderPaymentService> selfProvider) {
+            org.springframework.beans.factory.ObjectProvider<ShopOrderPaymentService> selfProvider,
+            ApplicationEventPublisher events) {
         this.orders = orders;
         this.orderLines = orderLines;
         this.inventory = inventory;
@@ -77,6 +83,7 @@ public class ShopOrderPaymentService {
         this.paymentIntents = paymentIntents;
         this.gateway = gateway;
         this.selfProvider = selfProvider;
+        this.events = events;
     }
 
     // ---------- 读 ----------
@@ -183,8 +190,25 @@ public class ShopOrderPaymentService {
         PaymentIntent entity = paymentIntents.findByToken(response.token())
                 .orElseThrow(() -> AppException.notFound("支付意图不存在"));
         ShopOrder managed = orders.findById(order.getId()).orElseThrow();
+        // 🔴 判据是「换了新意图」而不是「调了 ensureIntent」（Story 1-2 AC9）：本方法幂等，
+        //    连点三次「去支付」拿回的是同一个意图，照调用次数发事件会把漏斗入口灌水，
+        //    转化率被用户自己的重试稀释。比对必须在 attachPaymentIntent 之前做。
+        boolean newIntent = !java.util.Objects.equals(
+                managed.getPaymentIntentToken(), entity.getPublicToken());
         managed.attachPaymentIntent(entity.getPublicToken());
         orders.save(managed);
+        if (newIntent) {
+            // 本方法是 @Transactional，监听方是 AFTER_COMMIT —— 本事务回滚则不上报。
+            // ⚠️ 但**只覆盖到本事务**：调用方 pay(...) 随后才调 gateway.createCharge()，
+            //    那一步刻意在事务外（网关往返不入库事务）。网关故障时用户拿到 500、没有二维码，
+            //    而本事件已经提交发出 ⇒ GemPay 宕机期间漏斗入口会被抬高。
+            //    语义上「意图确实创建了」没错（payment_intents 行真的在），但分析时要知道
+            //    intent_created → paid 的转化率在网关故障窗口内会失真，不是用户放弃了。
+            events.publishEvent(new ShopPaymentIntentCreatedEvent(userId,
+                    managed.getPayChannel() == null ? null : managed.getPayChannel().name(),
+                    managed.getTotalAmount(),
+                    managed.getCoinAmount() != null && managed.getCoinAmount() > 0));
+        }
         return entity;
     }
 
