@@ -11,6 +11,7 @@ import 'package:tailtopia/features/shop/domain/shop_order_detail.dart';
 import 'package:tailtopia/features/shop/domain/shop_return.dart';
 import 'package:tailtopia/features/shop/presentation/shop_order_detail_page_v2.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_buttons.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/shop_surface.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_countdown.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_decor.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -520,20 +521,37 @@ void main() {
       expect(find.byKey(const ValueKey('shopOrderTrackV2')), findsOneWidget);
     });
 
-    testWidgets('🔴 已有进行中的退货申请 → 入口置灰而不是隐藏', (tester) async {
-      await tester.pumpWidget(host(
-        order(status: ShopOrderStatus.completed),
-        eligibility: const ReturnEligibility(
-          orderToken: 'ord1',
-          eligible: true,
-          activeRequestToken: 'ret1',
-          lines: [],
-        ),
-      ));
+    /// 🔴 V1.3.0 · SD-5：本条原先断言「已有进行中的退货申请 → 入口置灰而不是隐藏」。
+    /// 退货整块在 App 侧隐藏后，那条不变式不再成立 —— **改断言是对的，不是迁就实现**：
+    /// 「置灰而不隐藏」守的是「别让用户以为没提交成功」，而现在他根本没有提交的入口。
+    /// 后端退货接口与后台退货页面都还在、都可用；下一版恢复时这条要一并改回去。
+    testWidgets('🔴 SD-5：任何状态都不出现退货入口（含有进行中申请的已完成单）', (tester) async {
+      for (final s in ShopOrderStatus.values) {
+        await tester.pumpWidget(host(
+          order(
+            status: s,
+            expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+          ),
+          eligibility: const ReturnEligibility(
+            orderToken: 'ord1',
+            eligible: true,
+            activeRequestToken: 'ret1',
+            lines: [],
+          ),
+        ));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const ValueKey('shopOrderReturnV2')), findsNothing,
+            reason: '$s 态出现了退货入口 —— 点了走不通，用户会白填一遍表单和凭证照片');
+      }
+    });
+
+    testWidgets('🔴 已完成态底部条整条消失（不留空白 bar，也不塞别的按钮）', (tester) async {
+      await tester.pumpWidget(host(order(status: ShopOrderStatus.completed)));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('shopOrderReturnV2')), findsOneWidget,
-          reason: '隐藏会让用户以为没提交成功，转头再提交一次');
+      expect(find.byKey(const ValueKey('shopOrderReturnV2')), findsNothing);
+      expect(find.byType(ShopBottomBarActions), findsNothing);
     });
   });
 

@@ -11,7 +11,7 @@ fr: [SHOP-FR-05]
 
 # Story 2-1: App 隐藏退货入口与文案
 
-Status: ready-for-dev
+Status: review
 
 > 自包含 story，可本地或云端执行。与用户沟通用中文。执行纪律见根 `CLAUDE.md`。
 > **本 story 只碰 App 一侧**（`petgo_app/`）：后端退货接口、运营后台退货页面（`/admin/shop/returns*`）保留且可用，**一行后端代码都不改、无迁移**。
@@ -208,3 +208,90 @@ flutter test test/l10n/microcopy_rules_test.dart
 - [ ] `test/shop/return_flow_page_v2_test.dart` 未被修改且全绿
 - [ ] AC6（L2）已在本地验收并附截图，或 Completion Notes 明确标注「L2 待本地验收」
 - [ ] Completion Notes 记录：下一版恢复退货的最小改动清单（两行 builder + 一行 `_bottomBar` 分支 + 两条文案值）
+
+---
+
+## Completion Notes（2026-09-16 · 云端 headless 执行）
+
+### 🔴 L2 待本地验收（4 项）
+
+云端无 GUI，模拟器视觉一律未执行。AC6 的四项：
+
+1. 待发货 / 已发货 / 已送达 / 已完成四种订单详情逐个进，**底部条无退货按钮**
+2. 帮助区文案不提退货
+3. 已发货单点「Barang Diterima」，**弹窗 body 不提退货**
+4. 手动进深链 `/shop/orders/{已完成单 token}/return`，看到说明页 + **点客服按钮弹出客服抽屉**
+
+本 story **无 L1**（不碰后端、不碰 DB）。
+
+### 已完成（L0 绿：`flutter analyze` 零 issue；`flutter test` **1550 例全绿**）
+
+- **AC1**：删掉 `_bottomBar` 的 `COMPLETED → _returnBar` 那一行分支 + 整块删除 `_returnBar()`，
+  并清掉随之未用的两条 import（`go_router` 与 `shop_return_repository`）——
+  页面**不再 `ref.watch(returnEligibilityProvider)`**，少一次注定无用的网络请求。
+  其余三条分支（待支付未过期 / 待支付已过期 / `canConfirmReceipt`）**一行未动**。
+  新测试遍历 `ShopOrderStatus` 全部 8 个值断言 `shopOrderReturnV2` 恒 `findsNothing`，
+  外加一条断言已完成态 `ShopBottomBarActions` 整个不存在（不留空白 bar）。
+- **AC2**：`shopOrderHelpBody` 与 `shopOrderConfirmReceiptBody` 两个值已改，六个退货 key
+  **一个都没删**（有专门用例钉住），另四个已无渲染点的 key **值原样未动**、只在 `@` 描述里
+  追加「V1.3.0 hidden by SD-5 — restore in next version」。两包 key 集合仍相等（各 1675）。
+- **AC3**：`git diff --name-only` 核实 —— **`petgo-backend/` 零文件、`.sql` 零文件**。
+  后端 `/api/v1/me/shop-returns*` 与后台 `/admin/shop/returns**` 未做任何下线或门控。
+- **AC4**：新建 `ShopReturnUnavailablePage`，两条路由的 **path 字符串逐字未动**，只换 builder。
+  该页不 watch 任何 provider（有专门用例断言无 `CircularProgressIndicator`），
+  客服入口复用共享件 `showCustomerServiceSheet`，**本页无任何号码字面量**（留给 3-1）。
+- **DoD 零改动核对**（`git diff --numstat` 逐个为 0）：`return_request_page_v2.dart` ·
+  `refund_method_page_v2.dart` · `shop_return_repository.dart` · `shop_return.dart` ·
+  **`test/shop/return_flow_page_v2_test.dart`**（约 20 条守「回程运费归属 / 凑单套利 /
+  没有的补偿不许承诺」的资损用例，原样全绿）· `customer_service_sheet.dart`。
+
+### 📋 下一版恢复退货的最小改动清单（DoD 要求）
+
+1. `app_router.dart`：两行 builder 改回 `ReturnRequestPageV2(orderToken: token)` /
+   `RefundMethodPageV2(returnToken: token)`，并把那两条 import 加回来
+2. `shop_order_detail_page_v2.dart`：从 git 历史取回 `_returnBar()` 方法，
+   在 `_bottomBar` 末尾加回 `if (order.status == ShopOrderStatus.completed) return _returnBar(l10n, order);`，
+   并加回 `go_router` 与 `shop_return_repository` 两条 import
+3. 两条文案值改回（`shopOrderHelpBody` / `shopOrderConfirmReceiptBody`，en + id 各一处），
+   四个 key 的 `@` 描述去掉「V1.3.0 hidden by SD-5」尾注
+4. 改回 `test/shop/shop_order_detail_page_v2_test.dart` 里那条「任何状态都不出现退货入口」，
+   删掉 `shop_return_unavailable_page*` 两个文件与三个 `shopReturnUnavailable*` key
+
+**页面类、数据层、那 20 条测试一个字都不用动** —— 这正是选「保留路由 + 换 builder」而不是
+「删路由」的原因。
+
+### 代码复审（bmad-code-review）结论
+
+**已修 1 条 CONFIRMED：**
+
+- `@shopOrderConfirmReceiptBody` 的 description 仍写着「states plainly that the return window
+  survives confirmation」，与改后的新值不符（同一批里其它四个 key 的描述都更新了，独漏它）。
+  会误导翻译与下一版恢复，已改写并注明「V1.3.0 (SD-5) 删掉了 7 天退货窗那句，恢复时与入口一并改回」。
+
+**未改，按 story 原文施工 + 留痕：**
+
+1. **已完成订单页现在零可点动作**，而帮助区文案说「联系客服」却没有按钮。
+   story 的 Dev Notes **明确要求不要在帮助区加客服按钮**：Story 3-1 会把客服号改成后端下发的
+   配置项，本 story 现在塞一个读硬编码号码的按钮，3-1 要拆一次。AC2 给的建议文案原文就是
+   「Having trouble with this order? Contact our customer service.」，已逐字采用。
+   用户仍可从「我的」页的帮助入口找到客服。**提请 3-1 施工时一并处理这个可达性缺口。**
+2. **商详页与结算页仍在承诺「Bisa diretur」**（`tokoReturnable*` 等三处）。
+   story Context 明写这三处是**商品「开封不退」属性的合规明示**（电商一期 FR-104），
+   不是退货入口也不是窗口时长文案，SHOP-FR-05 点名的范围是「订单详情 / 订单列表 / 帮助区」，
+   **要连那三处一并隐藏属范围变更，须回决策日志确认，不得自行扩大**。
+   已在守门测试里就地写明本守门**只覆盖两个 key、不是「全仓无退货措辞」的保证**，
+   免得下一个人误以为有全局护栏。
+
+**复审提出的一条事实，值得记下来：**
+
+`ShopReturnUnavailablePage` 在本仓**实际不可达** —— `DeepLinkRoutes.pushPayloadToLocation`
+没有任何退货 type，AndroidManifest 只注册了 `tailtopia://card` 与 `tailtopia://open`，
+lib 内也已无跳这两条 path 的代码。story 的立论（接住老深链 / 通知跳转 / 站外链接）
+在本仓没有对应面。**仍按 AC4 保留**（成本只有一个无状态页 + 三条文案，且 AC4 是硬要求），
+但成本要心里有数：它是一张给「万一」准备的网。
+
+### 云端环境说明
+
+云端 headless，无 GUI ⇒ L2 全部留本地。`petgo_app/analysis_options.yaml` 的 exclude 是
+Flutter 工具自己写进去的（每次 analyze 都会「Upgrading analysis_options.yaml...」），
+不是手改，提交前已 checkout 还原。本容器无 git remote，推送未执行。

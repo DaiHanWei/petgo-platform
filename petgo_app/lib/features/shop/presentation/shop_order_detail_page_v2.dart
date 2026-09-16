@@ -31,7 +31,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/analytics/analytics.dart';
@@ -43,7 +42,6 @@ import '../../../shared/widgets/qr_payment_sheet.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../data/cart_repository.dart';
 import '../data/shop_order_repository.dart';
-import '../data/shop_return_repository.dart';
 import '../domain/shop_order_detail.dart';
 import '../domain/shop_product.dart';
 import 'widgets/shop_buttons.dart';
@@ -678,34 +676,13 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
       );
     }
 
-    // 已完成：退货入口（退货窗口内才给）。
-    if (order.status == ShopOrderStatus.completed) return _returnBar(l10n, order);
+    // 🔴 已完成态原先在这里给退货入口，V1.3.0 按 SD-5 整块摘掉 ——
+    //    后端退货接口与后台退货页面都还在、都可用，只是 App 侧不给入口：
+    //    一个点了走不通的入口会让用户白填一遍表单、传完凭证照片才发现这条路不通。
+    //    ⚠️ 下一版恢复只需把 `_returnBar` 从 git 历史取回并加回这一行分支；
+    //      `shop_return_repository.dart` / `ReturnRequestPageV2` / `RefundMethodPageV2`
+    //      与 `test/shop/return_flow_page_v2_test.dart` 全部原样留着，一个字都不用改。
     return null;
-  }
-
-  /// 退货入口。
-  ///
-  /// 🔴 已有进行中的退货申请时**置灰并说明**（UX-DR3 / C-12），不是隐藏 ——
-  /// 隐藏会让用户以为自己没提交成功，转头再提交一次。
-  Widget? _returnBar(AppLocalizations l10n, ShopOrderDetail order) {
-    final e = ref.watch(returnEligibilityProvider(order.orderToken)).maybeWhen(
-          data: (v) => v,
-          orElse: () => null,
-        );
-    if (e == null) return null;
-    final blocked = !e.eligible || e.activeRequestToken != null;
-    return ShopBottomBarActions(
-      primary: ShopButton(
-        key: const ValueKey('shopOrderReturnV2'),
-        label: e.activeRequestToken != null
-            ? l10n.shopOrderReturnInProgress
-            : l10n.shopOrderRequestReturn,
-        variant: blocked ? ShopButtonVariant.disabled : ShopButtonVariant.pay,
-        onTap: blocked
-            ? null
-            : () => context.push('/shop/orders/${order.orderToken}/return'),
-      ),
-    );
   }
 
   // ---------------------------------------------------------------- 动作
