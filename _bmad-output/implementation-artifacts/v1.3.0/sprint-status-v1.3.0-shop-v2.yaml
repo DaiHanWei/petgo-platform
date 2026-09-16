@@ -84,7 +84,7 @@ development_status:
   1-1-后端下发支付状态与失败类别: review   # SHOP-FR-01 · AD-S9(a) · L0 绿，L1/L2 待本地验收
   1-2-埋点护栏环境标记与服务端支付事件: review   # SHOP-FR-02 · AD-S9(b) · 变异验证两次均变红；L0 绿，L1/L2 待本地验收；⚠️ 待运维给两个 env 文件加 APP_ENV
   1-3-app-支付三态处置: review   # SHOP-FR-01 · L0 绿（analyze 零 issue / test 1531 例）；AC8 五个回归文件零 diff；L2 模拟器待本地
-  1-4-app-支付环节埋点: ready-for-dev   # SHOP-FR-02 · 依赖 1-2
+  1-4-app-支付环节埋点: review   # SHOP-FR-02 · 新增 6 事件；L0 绿（analyze 零 issue / test 1543 例）；AC9 全 L2 待本地（PostHog 拼漏斗）
   epic-1-retrospective: optional
 
   # ---- Epic 2: 售后收口 ----

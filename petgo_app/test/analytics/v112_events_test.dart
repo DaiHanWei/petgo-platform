@@ -317,6 +317,14 @@ void main() {
         //    叫 tapped 会被当成"该入口的全部点击数"拿去做分母，而它只是被拦的那部分。
         //    分母请用曝光类事件或 bottom_nav_tab_switched。
         '_blocked',
+        // 面板被关掉而**没完成**（V1.3.0 shop-v2 Story 1-4 的 `toko_payment_sheet_dismissed`）：
+        // `_dismissed` = 用户主动关掉了一个还没走完的流程。
+        // 🔴 刻意不用 `_closed`：关闭是中性的，而这条事件的全部意义在于「他放弃了」——
+        //    它是支付漏斗里「出码之后自己走掉」那一格，服务端**没有任何对应事件**
+        //    （关面板不产生服务端状态变化），只有客户端看得见。
+        // 🔴 也刻意不用 `_tapped`：那会被当成「取消按钮的全部点击数」拿去做分母，
+        //    而这条只统计「未完成就关」，付成功后面板自动关不算。
+        '_dismissed',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

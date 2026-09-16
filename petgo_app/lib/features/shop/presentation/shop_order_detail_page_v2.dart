@@ -727,8 +727,33 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
     if (!ok && mounted) showAppToast(context, l10n.shopOrderTrackOpenFailed);
   }
 
+  /// 上一次支付是否停在「被拒」（Story 1-4 AC2）。
+  ///
+  /// 🔴 用**上次失败类别**做判据，不是「点了几次支付」的计数器 —— 计数器分不出
+  /// 「被拒后重试」和「关了面板待会再付」，而这两件事对运营是完全不同的信号。
+  /// 成功 / 超时 / 用户取消一律清回 false（那些结局之后的下一次支付不是重试）。
+  bool _lastPaymentDeclined = false;
+
+  /// 支付类事件的属性（Story 1-4 AC3）。**只有这四个键。**
+  ///
+  /// 🔒 绝不放 `order.orderToken` —— 订单号对运营有用但对漏斗没用，且它是对外标识，
+  /// 进第三方等于把标识面扩出去（SHOP-NFR-01）。要排查有后端接口日志。
+  /// 🔒 也绝不放 `receiverName` / `receiverPhone` / `addressText` —— 它们就在同一个
+  /// `ShopOrderDetail` 上，离得最近、最容易手滑。
+  Map<String, Object> _payProps(ShopOrderDetail order, {String? failureCategory}) => {
+        // 与既有 toko_order_payment_succeeded 同一写法，保持口径一致。
+        'pay_channel': order.payChannel ?? 'UNKNOWN',
+        'attribution_source': order.attributionSource,
+        'has_pawcoin': (order.coinAmount ?? 0) > 0,
+        'failure_category': ?failureCategory,
+      };
+
   Future<void> _pay(AppLocalizations l10n, ShopOrderDetail order) async {
+    // 🔴 既有事件照发不误：漏斗「进入支付」这一格的分母靠它，重试也是一次进入支付。
     Analytics.capture('toko_order_pay_tapped');
+    if (_lastPaymentDeclined) {
+      Analytics.capture('toko_payment_retry_tapped', _payProps(order));
+    }
     setState(() => _busyAction = _OrderAction.pay);
     try {
       final result = await ref.read(shopOrderRepositoryProvider).pay(widget.orderToken);
@@ -744,12 +769,25 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
       }
       // 🔴 中止**不是**异常路径：它由 onAborted 回调带出来，走下面的正常分派。
       //    塞进 catch 会让三态一律弹通用失败 toast，正是本 story 要消灭的那个行为。
+      // 🔴 **两个变量缺一不可**：`aborted == null` 有两种成因 ——
+      //    ① 根本没中止（用户自己关了面板）；② 中止了但没带类别（老后端的兜底分支，
+      //    见下面 pollPaid 里那条 `const QrPaymentAborted()`）。
+      //    只看类别的话，灰度期每一单被服务端取消的订单都会被记成
+      //    `toko_payment_sheet_dismissed`＝「用户自己走掉了」，把那一格彻底污染掉。
+      bool abortSignalled = false;
       ShopPaymentFailure? aborted;
+      // 🔴 从**电商侧**发，不跑去 sheet 内部发：sheet 是共用组件，在里面埋点会给
+      //    AI 解锁与高清身份证两条线凭空多出事件（AC6）。
+      //    纯 PawCoin 单不出码，上面已 return，走不到这里。
+      Analytics.capture('toko_payment_qr_shown', _payProps(order));
       final paid = await showQrPaymentSheet(
         context,
         payload: result.payload!,
         orderRef: order.orderToken,
-        onAborted: (abort) => aborted = ShopPaymentFailure.fromApi(abort.category),
+        onAborted: (abort) {
+          abortSignalled = true;
+          aborted = ShopPaymentFailure.fromApi(abort.category);
+        },
         // 轮询问的是订单本身的状态 —— 到账由服务端在回调里推进，客户端不自行判定。
         pollPaid: () async {
           final fresh =
@@ -776,9 +814,10 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
           'attribution_source': order.attributionSource,
         });
         showAppToast(context, l10n.shopOrderPaid);
+        _lastPaymentDeclined = false;
         return;
       }
-      _onPaymentAborted(l10n, aborted);
+      _onPaymentAborted(l10n, order, aborted, abortSignalled: abortSignalled);
     } catch (_) {
       if (mounted) {
         Analytics.capture('toko_order_payment_failed_shown');
@@ -801,23 +840,46 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
   /// 🔴 最后两行是本 story 最容易写错的地方：两者都表现为「面板关闭 + 返回 false」，
   /// 唯一可靠的判据是 `pollPaid` 有没有抛出中止信号 —— 面板的取消按钮走 `pop(false)`
   /// 而不抛异常，所以 `aborted` 为 null 就是「用户自己关掉的」。
-  void _onPaymentAborted(AppLocalizations l10n, ShopPaymentFailure? aborted) {
-    if (aborted == null) {
+  /// @param abortSignalled `pollPaid` 是否抛过中止信号。与 [aborted] 是**两件事**：
+  ///     老后端不下发失败类别时会走 `const QrPaymentAborted()`（已中止、无类别），
+  ///     此时 [aborted] 同样是 null，但它绝不是「用户自己关掉的」。
+  void _onPaymentAborted(
+      AppLocalizations l10n, ShopOrderDetail order, ShopPaymentFailure? aborted,
+      {required bool abortSignalled}) {
+    if (!abortSignalled) {
       // 仅关闭面板：订单原样不动，什么都不做。弹一句失败会让用户以为订单出事了。
+      // 🔴 但**要埋点**：这一格在服务端没有任何对应事件（关面板不产生服务端状态变化），
+      //    这正是它的价值 —— 「出码后自己走掉」只有客户端看得见。
+      Analytics.capture('toko_payment_sheet_dismissed', _payProps(order));
+      return;
+    }
+    if (aborted == null) {
+      // 中止了但没带类别 = 老后端（1-1 未上线）。UI 上与改动前完全一致：静默关闭。
+      // 🔴 埋点也**保持改动前的样子：什么都不发**。发 sheet_dismissed 是谎
+      //    （不是用户走的），发 declined/expired 是猜（不知道到底哪一种）。
+      //    灰度期这一格的数据由服务端 1-2 的 shop_payment_* 兜着，它不看 App 版本。
+      _lastPaymentDeclined = false;
       return;
     }
     switch (aborted) {
       case ShopPaymentFailure.gatewayDeclined:
-        Analytics.capture('toko_order_payment_declined_shown');
+        _lastPaymentDeclined = true;
+        Analytics.capture('toko_payment_declined_shown',
+            _payProps(order, failureCategory: ShopPaymentFailure.gatewayDeclined.api));
         showAppToast(context, l10n.shopPaymentDeclinedNotice);
       case ShopPaymentFailure.expired:
+        _lastPaymentDeclined = false;
+        Analytics.capture('toko_payment_expired_shown',
+            _payProps(order, failureCategory: ShopPaymentFailure.expired.api));
         // 🔴 **不弹** shopOrderPayFailed —— 那是「再试一次」的口吻，而这一单已经没了。
         showAppToast(context, l10n.shopOrderExpiredNotice);
       case ShopPaymentFailure.userCancelled:
         // 是用户自己取消的，他知道发生了什么。只刷新，不弹错误。
-        break;
+        // 埋点走 toko_order_cancel_* 那套（那是用户的动作，不是失败反馈）。
+        _lastPaymentDeclined = false;
       case ShopPaymentFailure.unknown:
         // 后端加了 App 不认识的类别：按通用失败处理，不猜它该不该重试。
+        _lastPaymentDeclined = false;
         Analytics.capture('toko_order_payment_failed_shown');
         showAppToast(context, l10n.shopOrderPayFailed);
     }
@@ -875,6 +937,9 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
       ref.invalidate(shopOrderDetailProvider(widget.orderToken));
       // 取消会把库存还回去，购物车角标不受影响，但订单相关缓存要刷。
       ref.invalidate(cartProvider);
+      // 取消成功后这一单已经没了，下一次支付（如果有）不是「被拒后重试」。
+      _lastPaymentDeclined = false;
+      Analytics.capture('toko_order_cancel_succeeded');
       showAppToast(context, l10n.shopOrderCancelled);
     } catch (_) {
       // 2026-08-27：原先复用 shopOrderPayFailed，取消失败会提示「支付失败」。

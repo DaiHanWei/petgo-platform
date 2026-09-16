@@ -12,7 +12,7 @@ nfr: [SHOP-NFR-01]
 
 # Story 1-4: App 支付环节埋点
 
-Status: ready-for-dev
+Status: review
 
 > 自包含 story，可本地或云端 L0 执行。与用户沟通用中文。执行纪律见根 `CLAUDE.md`（后端→前端→联调、AC 标 L0/L1/L2、Flyway 时间戳版本号、`mvn -B clean package`）。
 > 本 story **只碰 App**（`petgo_app/`），后端一行不改。
@@ -290,3 +290,113 @@ so that 我能判断卡点在出码前还是出码后（SD-1：不查库定性�
 - [ ] 全部上报走 `Analytics.capture`，无旁路直调 PostHog/AppsFlyer
 - [ ] `flutter analyze` + `flutter test` 全绿，既有测试无需修改
 - [ ] Completion Notes 已写「L1/L2 待本地验收」+ 白名单腿 N/A 理由 + 事件名全集
+
+---
+
+## Completion Notes（2026-09-16 · 云端 headless 执行）
+
+### 🔴 L1/L2 待本地验收
+
+**AC9 全部是 L2**，云端做不了（需模拟器 + staging 后端 + PostHog 访问）：
+
+- 跑通一次完整支付，PostHog 中确认三格漏斗可拼：
+  `toko_order_pay_tapped` → `toko_payment_qr_shown` → `toko_order_payment_succeeded`
+- 跑一次被拒、一次超时、一次「只关面板」，确认三个事件各自出现且**只出现一次**
+- 确认与 1-2 的服务端 `shop_payment_*` 落在**同一个 PostHog project**、`distinct_id` 对得上
+  （App 走 `Analytics.distinctIdFor`，服务端走 `AnalyticsDistinctId.of`，同为 `sha256('tailtopia-user-$id')`；本 story 未碰这两处）
+- 出包必须走 `scripts/build-stag-apk.sh`（自动注入 `-stag` 版本后缀，埋点按 App Version 区分 stag 与生产）
+
+本 story **无独立 L1**（纯客户端上报，无后端契约变更）。
+
+### 📋 事件名全集（交付给运营配看板）
+
+**本 story 新增 6 个**
+
+| 事件名 | 漏斗格 | 属性 |
+|---|---|---|
+| `toko_payment_qr_shown` | 二维码展示成功 | `pay_channel` / `attribution_source` / `has_pawcoin` |
+| `toko_payment_sheet_dismissed` | 关闭面板（未完成） | 同上 |
+| `toko_payment_declined_shown` | 收到被拒反馈 | 同上 + `failure_category=GATEWAY_DECLINED` |
+| `toko_payment_expired_shown` | 收到超时反馈 | 同上 + `failure_category=EXPIRED` |
+| `toko_payment_retry_tapped` | 点击重试 | 同上 |
+| `toko_order_cancel_succeeded` | 取消成功 | 无 |
+
+**复用既有 4 个**（名称与属性一个字未改）：`toko_order_pay_tapped` ·
+`toko_order_payment_succeeded` · `toko_order_payment_failed_shown` · `toko_order_cancel_tapped`
+
+**与 1-2 服务端事件的对应**：`qr_shown`↔`shop_payment_intent_created` ·
+`payment_succeeded`↔`shop_payment_paid` · `declined_shown`↔`shop_payment_declined` ·
+`expired_shown`↔`shop_payment_expired`。
+`toko_payment_sheet_dismissed` **无服务端对应** —— 关面板不产生任何服务端状态变化，这正是它的价值。
+
+### 已完成（L0 绿：`flutter analyze` 零 issue；`flutter test` **1543 例全绿**）
+
+- AC1/AC2/AC3/AC4：6 个新事件；属性由私有 `_payProps(order, {failureCategory})` 一处收口，
+  **只有四个键**，绝无 `orderToken` / `receiverName` / `receiverPhone` / `addressText`。
+- AC5：新建 `test/shop/shop_payment_analytics_test.dart`，**12 条用例**，含 epics 点名的
+  「关闭面板」「点击重试」两条，以及「首次支付不发 retry」与「只关面板之后再点支付仍不算重试」两条反例。
+  PII 那条**逐事件逐键**遍历本次捕获的全部事件，并额外断言订单 token / 姓名 / 电话
+  **不作为值**混进任何属性。
+- AC6/AC7 零改动（已用 `git diff --numstat` 逐个核实，**8 个文件全为 0 行**）：
+  `qr_payment_sheet.dart` · `unlock_method_sheet.dart` · `id_card_create_page.dart` ·
+  `id_card_detail_page.dart` · `vet_timed_pay_page.dart` · `recharge_page.dart` ·
+  `core/analytics/analytics.dart` · `core/analytics/button_ids.dart`。
+- AC2 的判据是**上次失败类别是否为被拒**（`_lastPaymentDeclined`），不是计数器 ——
+  计数器分不出「被拒后重试」和「关了面板待会再付」，有专门反例用例钉住这点。
+
+### ⚠️ 与 AC8「既有 test/analytics/* 不需修改」的一处偏离
+
+`test/analytics/v112_events_test.dart` 的事件命名护栏要求动作词落在词尾且取自白名单，
+`_dismissed` **不在**白名单里 ⇒ `toko_payment_sheet_dismissed`（AC1 指定的名字）会让它变红。
+
+**处置：给白名单加 `_dismissed` 并写明理由**，未改事件名。依据是该护栏自己的既定做法 ——
+文件里 `_responded` / `_reported` / `_sent` / `_generated` / `_opened` / `_rewarded` / `_blocked`
+每一条都是这样加进去的，且原文写着「🔴 刻意**没有**提前把它加进来 —— 白名单里放尚未用到的条目，
+就失去了『改动时被迫想一次』的作用。**本 story 用到了才加**」。这正是「被迫想一次」的那一次。
+
+加的注释说明了为什么不用别的词：不用 `_closed`（关闭是中性的，而这条事件的意义在于「他放弃了」）、
+不用 `_tapped`（会被当成取消按钮的全部点击数拿去做分母，而这条只统计「未完成就关」）。
+
+### 与 epics 的偏离：AC7 按钮白名单腿 **N/A**
+
+epics 1-4 AC2 写的「按钮类事件的 id 进 `_allowedButtonIds` 与 `button_ids.dart`」在电商侧不适用：
+`Analytics.buttonTapped(id)` 发出的事件名**固定是 `button_tapped`**，`button_id` 只是一个属性 ——
+走那条通路，重试与取消就**拼不进 `toko_*` 漏斗**，而漏斗正是 SHOP-FR-02 的验收物。
+电商既有 10 个事件全部走 `Analytics.capture('toko_*')`，本 story 保持一致。
+`button_ids.dart` 与 `_allowedButtonIds` **零改动**，并有一条用例断言白名单仍是那 8 条。
+
+### 一处事件改名（承 1-3）
+
+1-3 里临时用的 `toko_order_payment_declined_shown` 已按本 story AC1 的规范名改为
+**`toko_payment_declined_shown`**。1-3 尚未发版，无线上历史序列，改名无成本。
+
+### 代码复审（bmad-code-review）结论
+
+**已修 1 条 CONFIRMED（本 story 自己的真 bug）：**
+
+`aborted == null` 被我当成了「用户自己关掉面板」，但它其实有**两种成因**：
+① 根本没中止；② **中止了但没带类别** —— 也就是 1-3 刻意保留的老后端兜底分支
+（`throw const QrPaymentAborted()`，1-1 未上线时的形态）。
+⇒ **灰度期每一单被服务端取消的订单都会被记成 `toko_payment_sheet_dismissed`＝「用户自己走掉了」**，
+把「出码后放弃率」这个指标整个做废。
+已拆成 `abortSignalled`（有没有抛过中止）+ `aborted`（类别）两个变量。第二种成因下
+**UI 与改动前完全一致（静默关闭），埋点也保持改动前的样子：什么都不发** ——
+发 `sheet_dismissed` 是谎，发 `declined`/`expired` 是猜；灰度期这一格由服务端 1-2 的
+`shop_payment_*` 兜着（它不看 App 版本）。已补专门用例钉住。
+
+**未改，第三次留痕（同一条，前两轮已记在 1-1 / 1-3）：**
+
+`gateway_meta` 的 `reason` 键同时承载我方 `failByToken` 的哨兵值与网关回调原文。
+本轮复审把后果说得更具体：网关若返回 `reason=CANCELLED`，会被判成 `USER_CANCELLED`，
+而 App 对这一态的处置是**完全静默**，订单却仍可支付 —— 用户看到二维码消失、没有任何解释。
+AC1 的映射表明确要求 `CANCELLED` → `USER_CANCELLED`，**未自行改动**。
+建议后续 story 把我方哨兵换成独立键（如 `petgoReason`）与网关原文隔离。
+
+### 一处无关变更已剔除
+
+`petgo_app/analysis_options.yaml` 的 `build/**`、`android/**` 等 exclude 是 **Flutter 工具自己写进去的**
+（每次跑 `flutter analyze` 都会「Upgrading analysis_options.yaml...」），不是手改，已在提交前 checkout 还原。
+
+### 云端环境说明
+
+云端 headless，无 GUI ⇒ L2 全部留本地。本容器无 git remote，推送未执行。
