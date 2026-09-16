@@ -112,7 +112,7 @@ development_status:
 
   # ---- Epic 5: 缺陷收口 ----
   epic-5: in-progress
-  5-1-评价原文不进日志: ready-for-dev   # SHOP-FR-27 · 变异验证
+  5-1-评价原文不进日志: review   # SHOP-FR-27 · 纯 L0，无 L1/L2 缺口；变异验证 2 次（删 content → 1 条红；再删 detail → 2 条红）；L0 绿 1801；🔶 OD-12 端点去留未处理（独立决策）
   5-2-请求方法错误不再返回-500: ready-for-dev   # SHOP-FR-31 · 只剩 405/415
   5-3-看板统计口径修正查询层: ready-for-dev   # SHOP-FR-28 · 页面部分见 9-5
   epic-5-retrospective: optional

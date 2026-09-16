@@ -40,8 +40,18 @@ public class LogSanitizer {
      * 「其他」补充说明，V102 建表注释明写「禁止进日志」）。
      * ⚠️ 刻意不并入 {@link #SENSITIVE_KEYS}：RFC 9457 错误<b>响应</b>体的 {@code detail}
      * 是排障主字段，全局打码会把所有错误响应弄瞎。
+     *
+     * <p>🔴 <b>{@code content} 同理，而且理由更直白</b>（Story 5-1 · SHOP-FR-27 / SHOP-NFR-01）：
+     * 评价正文（{@code SubmitReviewRequest.content}）是<b>用户自由文本</b>，落进请求日志
+     * 就是在盘上留下一个泄露面；而 {@code ShopReviewView.content} 是<b>公开响应字段</b> ——
+     * 那些正文本来就展示给所有人看，全局打码对隐私零收益、对排障是纯损失。
+     * 放在这个集合里，两件事各得其所。
+     *
+     * <p>⚠️ 请求侧爆炸半径已核实很小：全仓请求 DTO 里叫 {@code content} 的只有
+     * {@code SubmitReviewRequest}（评论正文叫 {@code body}、发帖正文叫 {@code text}、
+     * {@code UploadUrlRequest} 里是 {@code contentType} —— 整键 equals 比较不会误伤）。
      */
-    private static final Set<String> REQUEST_ONLY_SENSITIVE_KEYS = Set.of("detail");
+    private static final Set<String> REQUEST_ONLY_SENSITIVE_KEYS = Set.of("detail", "content");
 
     /** 签名 URL 特征（命中即整串打码——OSS/S3 预签名、带 Signature/Expires 的链接）。 */
     private static final Pattern SIGNED_URL = Pattern.compile(
