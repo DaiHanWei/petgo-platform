@@ -90,7 +90,7 @@ development_status:
   # ---- Epic 2: 售后收口 ----
   epic-2: in-progress
   2-1-app-隐藏退货入口与文案: review   # SHOP-FR-05 · SD-5 · 纯前端；L0 绿（analyze 零 issue / test 1550 例）；六个退货 key 一个未删；L2 模拟器待本地
-  2-2-售后兜底配置与运营流程: ready-for-dev   # SHOP-FR-35 · SD-13 · 非代码 story（配置 + 文档）
+  2-2-售后兜底配置与运营流程: review   # SHOP-FR-35 · SD-13 · 非代码 story，交付物只有 docs/runbooks/runbook-after-sales-v1.3.0.md；配置置 0 / 只读核实 / L1 实测 / 运营确认 四项待本地
   epic-2-retrospective: optional
 
   # ---- Epic 3: 客服可达 ----
