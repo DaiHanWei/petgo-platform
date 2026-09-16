@@ -114,7 +114,7 @@ development_status:
   epic-5: in-progress
   5-1-评价原文不进日志: review   # SHOP-FR-27 · 纯 L0，无 L1/L2 缺口；变异验证 2 次（删 content → 1 条红；再删 detail → 2 条红）；L0 绿 1801；🔶 OD-12 端点去留未处理（独立决策）
   5-2-请求方法错误不再返回-500: review   # SHOP-FR-31 · 纯 L0，无 L1/L2 缺口；405+Allow / 415+Accept 且日志降为 warn 不带堆栈；type 复用 VALIDATION（已核实 App 不按它分支）；L0 绿 1806
-  5-3-看板统计口径修正查询层: ready-for-dev   # SHOP-FR-28 · 页面部分见 9-5
+  5-3-看板统计口径修正查询层: review   # SHOP-FR-28 · AD-S12 · 无迁移；SQL 换 LEFT JOIN + 去 is_active + 双 COALESCE；变异验证 2 次（加回 is_active / 改回 JOIN 各 1 条红）；L0 绿 1811；🔴 L1 待本地（A/B/C/D delta==3 是口径正确性的唯一实证）；页面标注见 9-5
   epic-5-retrospective: optional
 
   # ════════ 第二批 · ⛔ 等 admin 主题 Epic 10 ════════
