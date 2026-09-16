@@ -157,7 +157,18 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
           ref.invalidate(repurchaseCardsProvider);
           ref.invalidate(recommendationsProvider);
         },
-        child: CustomScrollView(
+        // 🔴 触底预加载（Story 4-5）：距底部还有 600px 时就去取下一页 ——
+        //    等真滚到底再请求，用户必然先看到一段空白。
+        //    并发与「到底了」两道短路都在 `loadMore` 里，这里不必再判一次：
+        //    判据分散在两处，迟早有一处漏掉。
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (n) {
+            if (n.metrics.pixels >= n.metrics.maxScrollExtent - 600) {
+              ref.read(shopProductsProvider(_query).notifier).loadMore();
+            }
+            return false;   // 不吞掉通知：RefreshIndicator 还要用它
+          },
+          child: CustomScrollView(
           // 🔴 内容撑不满一屏时（错误态、空态）Android 的 ClampingScrollPhysics 拉不动，
           //    RefreshIndicator 于是形同虚设。Always… 让下拉刷新在任何长度下都可用。
           physics: const AlwaysScrollableScrollPhysics(),
@@ -197,7 +208,7 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
                   onRetry: () => ref.invalidate(shopProductsProvider(_query)),
                 ),
               ),
-              data: (items) => items.isEmpty
+              data: (feed) => feed.items.isEmpty
                   // 本页只会是「这个品类下没有商品」。「关键词搜不到」是搜索页的空态，
                   // 两句话必须分开 —— 混用会让用户以为整个店没货。
                   ? SliverToBoxAdapter(
@@ -208,14 +219,24 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
                     )
                   : SliverToBoxAdapter(
                       child: ShopProductMasonry(
-                        items: items,
+                        items: feed.items,
                         entrySource:
                             _selected == null ? 'TOKO_ALL_FEATURED' : 'TOKO_CATEGORY',
                       ),
                     ),
             ),
+            // 分页尾部三态（Story 4-5 AC5）：加载中 / 到底了 / 都不是。
+            // 🔴 **空列表时不渲染它** —— 空态已经在上面说过一次「这个品类没有商品」，
+            //    底下再补一句「已经到底了」是同一件事说两遍。
+            products.maybeWhen(
+              data: (feed) => feed.items.isEmpty
+                  ? const SliverToBoxAdapter(child: SizedBox.shrink())
+                  : SliverToBoxAdapter(child: _ListFooter(feed: feed, l10n: l10n)),
+              orElse: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
+            ),
             const SliverToBoxAdapter(child: SizedBox(height: kShopGutter)),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -959,6 +980,43 @@ class _RailCardState extends State<_RailCard> {
         ),
       ),
     );
+  }
+}
+
+/// 商品流尾部的三态（Story 4-5 AC5）。
+///
+/// 🔴 三种状态各有明确呈现，**不共用一个 spinner**：
+/// - 正在追加 → 转圈（用户知道还有东西在来）；
+/// - 到底了 → 一句「没有更多了」（不给这句话，用户会一直往下拽，以为是加载卡住了）；
+/// - 还有但没在加载 → 什么都不画（滚动回调会去取，不需要占位）。
+class _ListFooter extends StatelessWidget {
+  const _ListFooter({required this.feed, required this.l10n});
+
+  final ShopProductFeed feed;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    if (feed.loadingMore) {
+      return const Padding(
+        key: ValueKey('tokoLoadingMore'),
+        padding: EdgeInsets.symmetric(vertical: 18),
+        child: Center(
+            child: SizedBox(
+                width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+      );
+    }
+    if (!feed.hasMore) {
+      return Padding(
+        key: const ValueKey('tokoNoMore'),
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        child: Center(
+          child: Text(l10n.tokoNoMore,
+              style: ShopText.meta.copyWith(color: ShopColors.text4)),
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 }
 

@@ -11,6 +11,7 @@ import 'package:tailtopia/features/shop/domain/shop_product_detail.dart';
 import 'package:tailtopia/features/shop/presentation/product_detail_page_v2.dart';
 import 'package:tailtopia/features/shop/presentation/toko_page_v2.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'fake_shop_products.dart';
 
 /// Story 1.8：Epic 1 埋点收口。
 ///
@@ -58,10 +59,9 @@ void main() {
       [
         // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
         shopBannerProvider.overrideWith((ref) async => null),
-        shopProductsProvider.overrideWith((ref, c) async => [
-              const ShopProductSummary(
-                  token: 'tok1', name: 'n', brand: 'b', minPrice: 285000),
-            ]),
+        fakeShopProducts(const [
+          ShopProductSummary(token: 'tok1', name: 'n', brand: 'b', minPrice: 285000),
+        ]),
       ],
     ));
     await t.pumpAndSettle();

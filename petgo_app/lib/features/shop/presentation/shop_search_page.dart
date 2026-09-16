@@ -107,18 +107,54 @@ class _ShopSearchPageState extends ConsumerState<ShopSearchPage> {
                   onRetry: () => ref.invalidate(
                       shopProductsProvider((category: null, keyword: kw))),
                 ),
-                data: (items) => items.isEmpty
+                data: (feed) => feed.items.isEmpty
                     ? _noResult(l10n, kw)
-                    : ListView(
-                        padding: const EdgeInsets.only(bottom: kShopGutter),
-                        children: [
-                          ShopProductMasonry(
-                            items: items,
-                            // 行级归因：服务端加购时把它记在购物车行上，
-                            // 之后能回答「搜出来的商品到底转化如何」。
-                            entrySource: 'TOKO_SEARCH',
-                          ),
-                        ],
+                    // 🔴 Story 4-5：搜索结果同样分页。触底预加载 600px ——
+                    //    等真滚到底再请求，用户必然先看到一段空白。
+                    : NotificationListener<ScrollNotification>(
+                        onNotification: (n) {
+                          if (n.metrics.pixels >=
+                              n.metrics.maxScrollExtent - 600) {
+                            ref
+                                .read(shopProductsProvider(
+                                        (category: null, keyword: kw))
+                                    .notifier)
+                                .loadMore();
+                          }
+                          return false;
+                        },
+                        child: ListView(
+                          padding: const EdgeInsets.only(bottom: kShopGutter),
+                          children: [
+                            ShopProductMasonry(
+                              items: feed.items,
+                              // 行级归因：服务端加购时把它记在购物车行上，
+                              // 之后能回答「搜出来的商品到底转化如何」。
+                              entrySource: 'TOKO_SEARCH',
+                            ),
+                            if (feed.loadingMore)
+                              const Padding(
+                                key: ValueKey('searchLoadingMore'),
+                                padding: EdgeInsets.symmetric(vertical: 18),
+                                child: Center(
+                                    child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2))),
+                              )
+                            else if (!feed.hasMore)
+                              Padding(
+                                key: const ValueKey('searchNoMore'),
+                                padding: const EdgeInsets.symmetric(vertical: 18),
+                                child: Center(
+                                  child: Text(l10n.tokoNoMore,
+                                      style: ShopText.meta
+                                          .copyWith(color: ShopColors.text4)),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
               ),
     );

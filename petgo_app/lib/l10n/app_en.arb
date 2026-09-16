@@ -2572,6 +2572,8 @@
   "@tokoCategoryCamilan": {"description": "Toko category: treats"},
   "tokoCategoryPerawatan": "Grooming",
   "@tokoCategoryPerawatan": {"description": "Toko category: grooming and care"},
+  "tokoNoMore": "That's everything for now",
+  "@tokoNoMore": {"description": "Product list footer shown when the last page has loaded (Story 4-5). Without it users keep pulling down, assuming loading is stuck."},
   "tokoEmpty": "No products yet.",
   "@tokoEmpty": {"description": "Toko page: empty state for the product grid"},
   "tokoLoadFailed": "Could not load products.",

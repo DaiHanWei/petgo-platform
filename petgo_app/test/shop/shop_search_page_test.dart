@@ -6,6 +6,7 @@ import 'package:tailtopia/features/shop/data/shop_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_product.dart';
 import 'package:tailtopia/features/shop/presentation/shop_search_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'fake_shop_products.dart';
 
 /// 商品搜索页（2026-09-02 产品定形）。
 ///
@@ -22,10 +23,7 @@ void main() {
   Widget host(List<ShopProductSummary> products, {List<ShopProductsQuery>? seen}) {
     return ProviderScope(
       overrides: [
-        shopProductsProvider.overrideWith((ref, query) async {
-          seen?.add(query);
-          return products;
-        }),
+        fakeShopProducts(products, seen: seen),
       ],
       child: MaterialApp(
         localizationsDelegates: const [

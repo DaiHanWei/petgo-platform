@@ -13,6 +13,7 @@ import 'package:tailtopia/features/shop/presentation/widgets/shop_controls.dart'
 import 'package:tailtopia/features/shop/presentation/widgets/shop_pressable.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_surface.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'fake_shop_products.dart';
 
 /// Toko 首页 · **设计稿版式**（V1.4.0 第 1 批）。
 ///
@@ -41,10 +42,7 @@ void main() {
         cartItemCountProvider.overrideWithValue(cartCount),
         // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
         shopBannerProvider.overrideWith((ref) async => banner),
-        shopProductsProvider.overrideWith((ref, query) async {
-          seen?.add(query);
-          return products;
-        }),
+        fakeShopProducts(products, seen: seen),
       ],
       child: MaterialApp(
         localizationsDelegates: const [
@@ -280,7 +278,7 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         overrides: [
           shopBannerProvider.overrideWith((ref) async => null),
-          shopProductsProvider.overrideWith((ref, query) async => [p('a', price: 185000)]),
+          fakeShopProducts([p('a', price: 185000)]),
         ],
         child: MaterialApp.router(
           localizationsDelegates: const [
