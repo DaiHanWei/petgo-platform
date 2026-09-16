@@ -38,6 +38,10 @@ class SupportTicketViewContractTest {
         assertThat(fields()).contains(
                 "ticketToken", "subject", "body", "contactType", "contactValue",
                 "needContactCustomer", "contactedCustomer", "status",
-                "labels", "attachmentObjectKeys", "csatScore", "createdAt");
+                "labels", "attachmentObjectKeys", "csatScore", "createdAt",
+                // Story 3-3：关联电商订单的**展示号**（用户自己的订单号，非电商工单为 null）。
+                // 🔴 它不是对上面那份禁字段名单的放宽 —— 那两个是内部标识，
+                //    这个是用户在自己订单列表里天天看见的东西。
+                "relatedShopOrderNo");
     }
 }

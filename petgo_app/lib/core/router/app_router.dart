@@ -739,7 +739,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/consult/case', builder: (c, s) => const ConsultCaseFormPage()),
       // 客服工单（Story 4.2，/me 受控前缀）。/new 必须在 /:token 之前注册，否则 token 段会吞 'new'。
       GoRoute(path: '/me/support-tickets', builder: (c, s) => const MyTicketsPage()),
-      GoRoute(path: '/me/support-tickets/new', builder: (c, s) => const TicketComposePage()),
+      // Story 3-3：路径不变，多接一个可选 `?orderToken=` 用来预选关联订单（可改可清空）。
+      // 无参数进入（「我」页那条路）时行为与今天一致。
+      GoRoute(
+        path: '/me/support-tickets/new',
+        builder: (c, s) =>
+            TicketComposePage(presetOrderToken: s.uri.queryParameters['orderToken']),
+      ),
       GoRoute(
         path: '/me/support-tickets/:token',
         builder: (c, s) => TicketDetailPage(token: s.pathParameters['token']!),

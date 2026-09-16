@@ -51,9 +51,14 @@
              th:if="${ticket.status == 'OPEN' or ticket.status == 'IN_PROGRESS'}">
             <h3 th:text="#{admin.ticket.relatedOrder}">关联订单</h3>
             <form method="post" th:action="@{/admin/support-tickets/{t}/link-order(t=${ticket.ticketToken})}">
+                <!-- 🔴 必须 th:selected 回显当前类型：重新关联一张电商工单时若默认跳回
+                     CONSULT，客服把电商 token 粘对了也只会拿到「订单不存在」404，
+                     而错误信息完全看不出是类型选错了。 -->
                 <select name="orderType">
-                    <option value="CONSULT" th:text="#{admin.ticket.orderType.consult}">问诊单</option>
-                    <option value="SHOP" th:text="#{admin.ticket.orderType.shop}">电商订单</option>
+                    <option value="CONSULT" th:selected="${ticket.relatedOrderType != 'SHOP'}"
+                            th:text="#{admin.ticket.orderType.consult}">问诊单</option>
+                    <option value="SHOP" th:selected="${ticket.relatedOrderType == 'SHOP'}"
+                            th:text="#{admin.ticket.orderType.shop}">电商订单</option>
                 </select>
                 <input type="text" name="orderToken" th:placeholder="#{admin.ticket.ph.orderToken}" placeholder="订单号（orderToken）" required/>
                 <button class="btn btn-sm" type="submit" th:text="${ticket.relatedOrderToken == null} ? #{admin.ticket.btn.linkOrder} : #{admin.ticket.btn.relinkOrder}">关联订单</button>

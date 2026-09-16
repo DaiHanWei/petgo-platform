@@ -11,7 +11,7 @@ fr: [SHOP-FR-25, SHOP-FR-26, SHOP-NFR-05]
 
 # Story 3-3: App 工单选订单与 WhatsApp 深链（AD-S7 / AD-S8）
 
-Status: ready-for-dev
+Status: review
 
 > 自包含 story，可本地或云端 L0 执行。与用户沟通用中文。执行纪律见根 `CLAUDE.md`。
 > **前置**：Story 3-1（客服号配置与 `GET /api/v1/support/contact`）、Story 3-2（`related_order_type` 与后端按类型解析）。两条都合入后再开工，否则深链没号可读、选中的电商单后端会静默丢弃。
@@ -345,16 +345,132 @@ epics 里 3-3 的 AC4 要求「工单页**仅当关联了电商订单时**显示
 
 ### Agent Model Used
 
-（实施时填写）
-
-### Debug Log References
-
-（实施时填写）
+claude-opus-5[1m]（云端 headless session，2026-09-16）
 
 ### Completion Notes List
 
-（实施时填写）
+#### 🔴 AC6 变异验证 —— 做了，红了
+
+把 `buildSupportWhatsAppText` 改成拼上收件人姓名：
+```dart
+String buildSupportWhatsAppText({required String orderNo, required AppLocalizations l10n,
+    String receiverName = 'Budi Santoso'}) {
+  return '${l10n.supportWhatsappPrefill(orderNo)} ($receiverName)';
+}
+```
+跑 `flutter test test/support/support_whatsapp_test.dart` →
+```
+🔒 SHOP-NFR-05：预填只含订单号 🎯 输出含订单号，且**不含任何收件人信息**（en + id 两包都验） [E]
+  Expected: false
+    Actual: <true>
+  预填串里出现了 receiverName = "Budi Santoso" —— 它会进用户的聊天记录与截图（SHOP-NFR-05）
+```
+失败信息直接点名是哪个字段漏出去的。已恢复原文（`grep -c MUTATION` → 0）。
+
+#### 🔴 L1/L2 待本地验收
+
+| 层 | 待验内容 |
+|---|---|
+| **L1** | 建单带 `relatedOrderToken` → `feedback_tickets.related_order_id/type` 落 **SHOP**；工单详情返回 `relatedShopOrderNo` |
+| **L2** | 装了 WhatsApp 的设备：点击 → 打开对话框 → 输入框里是预填文案（含订单号）→ **可编辑** → 能发出 |
+| **L2** | 未装 WhatsApp：落到 `wa.me` 浏览器页，**不白屏** |
+| **L2** | 打不开时：提示 + 「复制号码」动作，复制的是展示形态 `081290906953` |
+| **L2** | 建单页选中一笔电商订单提交后，**后台工单详情能看到那一单**（与 3-2 联调） |
+
+#### 已完成（L0 绿：后端 1708 例 / `flutter analyze` 零 issue / `flutter test` **1570 例**）
+
+- **AC1/AC2**：建单页加「关联订单」选择器 + 路由 `?orderToken=` 预选（可改可清空）。
+  **`grep -rn 'relatedOrderToken' petgo_app/lib/features/support/presentation/` 现在有命中** ——
+  这正是本 story 的核心：在它之前，「用户建单关联订单」这条能力**在线上从未被触发过一次**。
+  选择器**没有复用 `orderListProvider`**（那是订单中心的共享状态，`setFilter` 会把用户的筛选改掉），
+  另起了一个 `autoDispose` 的一次性查询。
+- **AC3/AC4**：共享件 `SupportWhatsAppButton`，订单详情页与工单页**共用同一份实现**
+  （两份实现早晚漂移，而漂移的那一处一定是 PII 红线那一处）。
+  工单页**仅当 `relatedShopOrderNo != null`** 才显示。
+- **AC5**：`SupportTicketView` 加可空 `relatedShopOrderNo`；3-2 的禁字段列表**一个字未动**
+  （`relatedOrderId` / `relatedOrderType` 仍在禁列），正向断言加了新字段。
+  后端 `toView` 里**仍比对一次 userId** —— 按构造它必然属于本人，但这是下发给用户的出口，
+  不依赖上游是最便宜的保险。
+- **AC7**：**未调 `canLaunchUrl`**（我新写的代码里零调用）、**未改 `AndroidManifest.xml`**（0 行 diff）。
+  `await` 返回值 + `try/catch` 都有。
+- **AC8**：`ButtonId.supportWhatsapp` 与 `_allowedButtonIds` **两处都改了**，并有专门用例钉住
+  `isRegisteredButtonId` 为 true —— 只加常量不加白名单会在 release 静默丢弃，
+  表现是「开发机有数据、线上永远零」。事件只带 `button_id` + `screen`，不带订单号与号码。
+- 未改 `_bottomBar` / `_returnBar` / `orderListProvider` / `support_repository.dart`。
+
+#### ⚠️ ARB 是**两包**不是三包（epics 与代码不符，以代码为准）
+
+`l10n.yaml` + `supportedLocales` = `[en, id]`，目录下只有 `app_en.arb`（模板）与 `app_id.arb`。
+epics / PRD 写的「ARB 三语」是笔误（后端 `i18n/messages_*` 才是四包）。
+按两包做，两包 key 集合**完全相等，各 1686 个**。
+
+#### ⚠️ 另一处文档与代码不符（以代码为准）
+
+story Context 写「五个 `url_launcher` 调用点**五处都不调 `canLaunchUrl`**」——
+实测 `features/vet/presentation/vet_me_page.dart:72` **是调的**（`if (await canLaunchUrl(uri))`）。
+结论不受影响（本 story 新写的代码不调它，理由见 AC7），但那句「五处都不调」不准确。
+**未去动 `vet_me_page`**（不在本 story 范围）。
+
+#### 📌 一处 TODO：4-3 后切 `display_no`
+
+`SupportTicketService.relatedShopOrderNo(...)` 里标了 `TODO(Story 4-3)`，
+与 3-2 在 `AdminSupportTicketQueryService` 留的那处是**同一次切换**，一起改。
+
+#### 📌 深链预填用哪个号（story 已拍板，此处只记落点）
+
+- 订单详情页 → `_displayedOrderNo(order)`，**与页面上那行等宽订单号同源**。
+  复审提出「两个入口给客服的号对不上」（订单详情给 token、工单页给 `TOKO-...`）——
+  这正是 SHOP-FR-29「订单号统一」要修的缺陷，story 明确划在范围外。
+  已把「本页展示给用户的订单号」收成一个 `_displayedOrderNo` getter，
+  **SHOP-FR-29 落地那天只改这一处**，展示与深链自动同步。
+- 工单页 → 后端下发的 `relatedShopOrderNo`（人可读的 `TOKO-...`），因为工单页没有 token 可展示。
+
+#### 代码复审（bmad-code-review）结论 —— 修了 4 条，1 条按 story 划界不改
+
+1. **🔴🔴 `ref.read` 一个 `autoDispose` 的 `FutureProvider`，读到的恒是 `AsyncLoading`。**
+   于是深链**永远**用编译进包的兜底号码 —— 3-1 的「客服号码配置化」在这条路径上完全失效，
+   而且失效得毫无征兆（号码是对的，只是永远不会更新）。
+   已改为 build 里 `ref.watch` 订阅（按钮一出现就开始拉）+ 点击时
+   `await ref.read(...future)`（还没落地就等它落地，而不是拿 Loading 当「没有」）。
+2. **🔴 选择器列出了全部订单类型，而后端 `resolveRelatedOrder` 只认问诊单与电商单。**
+   选中 AI 解锁单或充值单会被**静默丢成 NULL**，用户以为关联好了，客服看到的是「关联订单 —」。
+   已把选择器筛到 `{vetConsult, ecommerce}` 两类（取 50 条再筛 20，免得最近全是充值筛完一条不剩）。
+3. **🔴 后台 `orderType` 下拉没有 `th:selected`。** 重新关联一张 SHOP 工单时默认跳回 CONSULT，
+   客服把电商 token 粘对了也只会拿到「订单不存在」404，而错误信息完全看不出是类型选错了。已补。
+4. **预选路径会把不透明 `orderToken` 当订单号显示给用户** —— 22 位随机串，他在自己的订单列表里
+   从来没见过。已改为显示中性的「已选择订单」（新增两包文案），token 照常提交。
+   ⚠️ 复审同时指出**该预选参数今天没有任何调用方**：story 的 T5 原文就写了
+   「若该页今天没有提工单入口，则本条只保留路由能力」，故按 story 保留能力、不自行造入口。
+5. **未改**：两个入口预填的号不一致 —— 见上一节，story 明确划在 SHOP-FR-29 范围内。
+
+#### 部署提示
+
+AC5 是契约变更（工单详情新增可空字段）。老版本 App 忽略未知字段、行为不变，
+但 App 端功能要等后端上线才可用 ⇒ **前后端同批部署**。
+
+#### 云端环境说明
+
+云端 headless，无 GUI ⇒ L2 全部留本地。本容器无 git remote，推送未执行。
 
 ### File List
 
-（实施时填写）
+**新增（App）**
+- `lib/features/support/domain/support_whatsapp.dart`
+- `lib/features/support/presentation/support_whatsapp_button.dart`
+- `lib/features/support/presentation/ticket_order_picker.dart`
+- `test/support/support_whatsapp_test.dart`
+
+**修改（App）**
+- `lib/features/support/presentation/ticket_compose_page.dart`（选择器 + 预选 + 传参）
+- `lib/features/support/presentation/ticket_detail_page.dart`（条件入口）
+- `lib/features/support/domain/support_ticket.dart`（+ `relatedShopOrderNo`）
+- `lib/features/shop/presentation/shop_order_detail_page_v2.dart`（`_helpBlock` 内加 CTA + `_displayedOrderNo` 收口）
+- `lib/core/router/app_router.dart`（`?orderToken=`）
+- `lib/core/analytics/button_ids.dart` + `lib/core/analytics/analytics.dart`（两处都加）
+- `lib/l10n/app_en.arb` / `app_id.arb`（+ 11 key × 2）
+
+**修改（后端）**
+- `src/main/java/com/tailtopia/support/dto/SupportTicketView.java`（+ `relatedShopOrderNo`）
+- `src/main/java/com/tailtopia/support/service/SupportTicketService.java`（+ `relatedShopOrderNo(...)`）
+- `src/main/resources/templates/admin/support-ticket-detail.html`（`th:selected`）
+- `src/test/java/com/tailtopia/support/dto/SupportTicketViewContractTest.java`（正向断言）

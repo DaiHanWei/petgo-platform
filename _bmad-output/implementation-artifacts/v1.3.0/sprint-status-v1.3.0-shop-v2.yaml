@@ -97,7 +97,7 @@ development_status:
   epic-3: in-progress
   3-1-客服联系方式配置化: review   # SHOP-FR-26 · AD-S8 · 迁移 V20260916_0925；L0 绿（后端 1692 / App 1562）；AC9 第三处随 3-3 验；L1/L2 待本地
   3-2-工单关联电商订单后端: review   # SHOP-FR-25 · AD-S7 · 迁移 V20260916_0953；变异验证已做（删守卫 2 条红）；L0 绿 1708；L1/L2 待本地；⚠️ 电商单展示号待 4-3 切 display_no
-  3-3-app-工单选订单与-whatsapp-深链: ready-for-dev   # SHOP-FR-25/26 · 依赖 3-1 + 3-2
+  3-3-app-工单选订单与-whatsapp-深链: review   # SHOP-FR-25/26 · 变异验证已做（预填拼姓名即红）；L0 绿（后端 1708 / App 1570）；L1/L2 待本地；⚠️ 前后端同批部署
   3-4-新订单-lark-提醒: ready-for-dev   # SHOP-FR-24 · 主线 C · 须节流汇总
   epic-3-retrospective: optional
 

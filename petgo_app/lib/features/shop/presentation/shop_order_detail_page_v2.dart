@@ -40,6 +40,7 @@ import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/qr_payment_sheet.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
+import '../../support/presentation/support_whatsapp_button.dart';
 import '../data/cart_repository.dart';
 import '../data/shop_order_repository.dart';
 import '../domain/shop_order_detail.dart';
@@ -121,8 +122,11 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
         _itemsBlock(l10n, order),
         _shipToBlock(l10n, order),
         _metaBlock(l10n, order),
-        if (order.status.canConfirmReceipt || order.status == ShopOrderStatus.completed)
-          _helpBlock(l10n),
+        // 🔴 V1.3.0 Story 3-3：本块由「只在待收货/已完成显示」改为**始终显示**。
+        //    理由是它现在装着客服入口，而「找不到客服」这件事在任何订单状态下都可能发生 ——
+        //    待支付付不了、待发货迟迟不发货，恰恰是最需要找人的时候。
+        //    （2-1 之后本块的文案也已经从「2×24 小时可退」换成了指向客服的中性表述。）
+        _helpBlock(l10n, order),
         const SizedBox(height: kShopGutter),
       ],
     );
@@ -575,7 +579,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
                   child: Text(l10n.orderNumberLabel, style: ShopText.body.copyWith(fontSize: 10.5)),
                 ),
                 // 🔴 订单号用等宽 —— 用户要报给客服、要逐位核对。
-                Text(order.orderToken, style: ShopText.serialNo),
+                Text(_displayedOrderNo(order), style: ShopText.serialNo),
               ],
             ),
             if (order.createdAt != null) ...[
@@ -599,7 +603,18 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
   ///
   /// 🔴 发货态**只做告知不给退货按钮** —— 货还没到手，退不了。
   /// 设计稿因此把这里做成「有问题？」的说明而不是操作入口。
-  Widget _helpBlock(AppLocalizations l10n) => ShopSection(
+  /// 🔴 **本页展示给用户的那个订单号，唯一一处**（Story 3-3）。
+  ///
+  /// 页面上的订单号（`_metaBlock` 里那行等宽字）与 WhatsApp 深链的预填**必须同源**：
+  /// 用户拿去跟客服核对的就是他屏幕上看得见的那串字符，深链填另一个号只会让客服
+  /// 拿到一个用户那儿找不到的号。
+  ///
+  /// ⚠️ 今天这里是 `orderToken`（22 位随机串），而订单中心列表展示的是
+  /// `TOKO-yyyyMMdd-NNNNNN`。这个不一致是 SHOP-FR-29「订单号统一」的修复对象，
+  /// **不是本 story 的事**。收成一个 getter 是为了让那天**只改这一处**。
+  String _displayedOrderNo(ShopOrderDetail order) => order.orderToken;
+
+  Widget _helpBlock(AppLocalizations l10n, ShopOrderDetail order) => ShopSection(
         key: const ValueKey('shopOrderHelpBlockV2'),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -607,6 +622,16 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
             Text(l10n.shopOrderHelpTitle, style: ShopText.cardTitle.copyWith(fontSize: 11.5)),
             const SizedBox(height: 2),
             Text(l10n.shopOrderHelpBody, style: ShopText.meta),
+            const SizedBox(height: 10),
+            // 🔴 客服入口落在**这里**而不是 `_bottomBar`（Story 3-3）：
+            //    `_bottomBar` 针对 8 个订单状态返回不同组合、无动作状态直接 return null，
+            //    要让入口「始终显示」就得把 null 那支改成「返回一个只含客服按钮的 bar」——
+            //    8 个状态的底栏高度与排布全要重新验收，还会和隐藏退货入口的改动撞在同一块代码。
+            //    本块本来就是「有问题？」的售后告知块，只有文案没有动作，语义天然吻合。
+            //    预填用的是本页 `:580` 展示给用户的那个号，两处同源 ——
+            //    将来订单号口径统一（SHOP-FR-29）时深链自动跟随，一行码都不用改。
+            SupportWhatsAppButton(
+                orderNo: _displayedOrderNo(order), screen: 'shop_order_detail'),
           ],
         ),
       );

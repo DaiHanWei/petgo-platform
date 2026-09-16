@@ -15,14 +15,20 @@ import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/dashed_rect.dart';
 import '../../media/data/oss_uploader.dart';
 import '../../media/domain/media_upload_use_case.dart';
+import '../../order/domain/order_summary.dart';
 import '../data/support_repository.dart';
 import '../domain/support_ticket.dart';
 import 'support_l10n.dart';
+import 'ticket_order_picker.dart';
 
 /// 提交投诉工单页（Story 4.2）。主题(选填)/正文(必填)/联系方式(必填)/标签(多选)/≤5 图。
 /// 附件复用 media 私密桶直传（照 consult_case_form_page）。提交成功 → 详情页。
 class TicketComposePage extends ConsumerStatefulWidget {
-  const TicketComposePage({super.key});
+  const TicketComposePage({super.key, this.presetOrderToken});
+
+  /// 从订单详情进来时预选的订单 token（Story 3-3，路由 `?orderToken=`）。
+  /// 预选**可被用户改掉或清空**；直接从「我」页进来（无参数）时行为与今天一致。
+  final String? presetOrderToken;
 
   @override
   ConsumerState<TicketComposePage> createState() => _TicketComposePageState();
@@ -46,6 +52,23 @@ class _TicketComposePageState extends ConsumerState<TicketComposePage> {
   bool _needContact = true;
   bool _uploading = false;
   bool _submitting = false;
+
+  /// 关联订单（Story 3-3）。null = 不关联，请求体里干脆没有这个 key。
+  OrderSummary? _relatedOrder;
+
+  /// 从路由预选、但订单列表还没拉回来时先记着的 token。
+  /// 🔴 预选**只影响提交时传什么**，不需要等列表加载 —— 那样会让「从订单详情提工单」
+  /// 卡在一次网络往返上，而用户本来就已经知道自己要说哪一单了。
+  String? _presetToken;
+
+  /// 提交时真正要传的 token：用户选过就用选的，没选过就用路由带来的预选值。
+  String? get _relatedOrderToken => _relatedOrder?.orderToken ?? _presetToken;
+
+  @override
+  void initState() {
+    super.initState();
+    _presetToken = widget.presetOrderToken;
+  }
 
   @override
   void dispose() {
@@ -120,6 +143,10 @@ class _TicketComposePageState extends ConsumerState<TicketComposePage> {
             needContact: _needContact,
             labels: _labels.toList(),
             attachmentObjectKeys: _photos.map((p) => p.objectKey).toList(),
+            // Story 3-3：这一行就是本 story 的核心 —— 在它之前，
+            // 「用户建单关联订单」这条能力在线上从未被触发过一次。
+            // 🔴 不选时为 null，repository 的条件加入保证请求体里没有这个 key（与今天一致）。
+            relatedOrderToken: _relatedOrderToken,
           );
       if (!mounted) return;
       // bug 20260729-390：列表页常驻 watch，autoDispose 不触发重建——创建成功必须显式失效
@@ -162,6 +189,10 @@ class _TicketComposePageState extends ConsumerState<TicketComposePage> {
                   // 联系方式隐私说明（0711）。
                   Text(l10n.ticketContactPrivacy,
                       style: const TextStyle(fontSize: 11, color: AppColors.muted, height: 1.4)),
+                  const SizedBox(height: AppSpacing.md),
+                  _label(l10n.ticketRelatedOrderLabel),
+                  const SizedBox(height: AppSpacing.sm),
+                  _relatedOrderField(l10n),
                   const SizedBox(height: AppSpacing.md),
                   _label(l10n.ticketLabelsLabel),
                   const SizedBox(height: AppSpacing.sm),
@@ -229,6 +260,33 @@ class _TicketComposePageState extends ConsumerState<TicketComposePage> {
           border: InputBorder.none,
         ),
       ),
+    );
+  }
+
+  /// 关联订单选择行（Story 3-3）。**选填** —— 不选照样能提交，与今天完全一致。
+  Widget _relatedOrderField(AppLocalizations l10n) {
+    // 🔴 **绝不把 orderToken 原样显示给用户**：那是 22 位不透明随机串，
+    //    他在自己的订单列表里从来没见过它，显示出来只会让人怀疑选错了。
+    //    路由预选只给得到 token，此时显示一句中性的「已选择订单」。
+    final picked = _relatedOrder != null
+        ? _relatedOrder!.displayNo
+        : (_presetToken != null ? l10n.ticketRelatedOrderPreset : null);
+    return ListTile(
+      key: const ValueKey('ticketRelatedOrderField'),
+      contentPadding: EdgeInsets.zero,
+      title: Text(picked ?? l10n.ticketRelatedOrderNone,
+          style: TextStyle(color: picked == null ? AppColors.muted : AppColors.ink)),
+      trailing: const Icon(Icons.chevron_right, size: 20, color: AppColors.muted),
+      onTap: () async {
+        final pick = await showTicketOrderPicker(context);
+        if (pick == null || !mounted) return; // 直接关掉弹窗 = 什么都不改
+        setState(() {
+          _relatedOrder = pick.order;
+          // 用户主动做过选择之后，路由带来的预选值就作废了 ——
+          // 否则「选不关联」会被预选值悄悄盖回去。
+          _presetToken = null;
+        });
+      },
     );
   }
 

@@ -4,6 +4,7 @@ import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.repository.ConsultOrderRepository;
+import com.tailtopia.order.dto.OrderDisplayNo;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.service.NotificationService;
@@ -266,6 +267,27 @@ public class SupportTicketService {
                 t.getCsatComment(),
                 t.getCreatedAt(),
                 t.getUpdatedAt(),
-                t.getResolvedAt());
+                t.getResolvedAt(),
+                relatedShopOrderNo(t));
+    }
+
+    /**
+     * 关联电商订单的展示号（Story 3-3 AC5）。非电商工单 / 查不到 → {@code null}。
+     *
+     * <p>🔒 <b>仍然比对一次 userId</b>：按构造它必然属于本人（3-2 的解析与后台补挂都做了
+     * 归属校验），但这里是**下发给用户的出口**，不依赖上游是最便宜的保险 ——
+     * 上游哪天多一条写入路径忘了校验，泄的就是别人的订单号。
+     */
+    private String relatedShopOrderNo(FeedbackTicket t) {
+        if (t.getRelatedOrderId() == null || t.getRelatedOrderType() != RelatedOrderType.SHOP) {
+            return null;
+        }
+        return shopOrders.findById(t.getRelatedOrderId())
+                .filter(o -> o.getUserId().equals(t.getUserId()))
+                // TODO(Story 4-3)：4-3 会给 shop_orders 加 display_no 列并回填存量。
+                //   落地后改成直接读 o.getDisplayNo()，删掉这行计算式与本 TODO。
+                //   与 AdminSupportTicketQueryService 里那处 TODO 是同一次切换，一起改。
+                .map(o -> OrderDisplayNo.of(OrderDisplayNo.ECOMMERCE, o.getId(), o.getCreatedAt()))
+                .orElse(null);
     }
 }
