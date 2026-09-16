@@ -230,6 +230,33 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('🔴 跨页面/跨进程：进来时订单就停在被拒 → 首次点支付也算重试', (tester) async {
+    // 用户被拒后退出详情页（或杀掉进程）再回来 —— State 里的记忆没了，但服务端
+    // 下发的 paymentFailureCategory 还在。只认 State 的话这一格就永久漏报，
+    // 而它**没有服务端事件兜底**（服务端只知道「又创建了一个意图」，不知道是不是重试）。
+    await tester.pumpWidget(
+        host(order(paymentFailureCategory: 'GATEWAY_DECLINED'), _FakeShopOrderRepo()));
+    await tester.pumpAndSettle();
+    await tapPayAndOpenSheet(tester);
+
+    expect(names(), contains('toko_payment_retry_tapped'));
+
+    await tester.tap(find.byKey(const ValueKey('qrPayCancel')));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('反例：进来时订单是超时态 → 不算重试（只有被拒才算）', (tester) async {
+    await tester.pumpWidget(
+        host(order(paymentFailureCategory: 'EXPIRED'), _FakeShopOrderRepo()));
+    await tester.pumpAndSettle();
+    await tapPayAndOpenSheet(tester);
+
+    expect(names(), isNot(contains('toko_payment_retry_tapped')));
+
+    await tester.tap(find.byKey(const ValueKey('qrPayCancel')));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('反例：只关面板（没被拒）之后再点支付，仍不算重试', (tester) async {
     await tester.pumpWidget(host(order(), _FakeShopOrderRepo()));
     await tester.pumpAndSettle();

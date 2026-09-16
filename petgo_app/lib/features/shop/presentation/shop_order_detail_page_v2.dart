@@ -704,12 +704,26 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
     if (!ok && mounted) showAppToast(context, l10n.shopOrderTrackOpenFailed);
   }
 
-  /// 上一次支付是否停在「被拒」（Story 1-4 AC2）。
+  /// 本次会话内看到过「被拒」（Story 1-4 AC2）。
   ///
   /// 🔴 用**上次失败类别**做判据，不是「点了几次支付」的计数器 —— 计数器分不出
   /// 「被拒后重试」和「关了面板待会再付」，而这两件事对运营是完全不同的信号。
   /// 成功 / 超时 / 用户取消一律清回 false（那些结局之后的下一次支付不是重试）。
+  ///
+  /// ⚠️ 它只是**本次页面停留期间**的记忆。跨页面、跨进程的那一半由
+  /// [_isRetry] 从服务端下发的 `paymentFailureCategory` 补齐 —— 只靠这个字段的话，
+  /// 用户退出详情页（或杀掉进程）再回来重试就不算重试了，而这一格**没有服务端事件兜底**
+  /// （服务端只知道「又创建了一个意图」，不知道用户是不是在重试）。
   bool _lastPaymentDeclined = false;
+
+  /// 这一次点支付算不算「重试」。
+  ///
+  /// 服务端下发的 `paymentFailureCategory` 才是权威的「上一次失败类别」：
+  /// 订单仍在待支付窗内、而它的支付单停在 `GATEWAY_DECLINED` ⇒ 这一次点下去就是重试，
+  /// 不管用户中间有没有离开过页面。
+  bool _isRetry(ShopOrderDetail order) =>
+      _lastPaymentDeclined ||
+      order.paymentFailure == ShopPaymentFailure.gatewayDeclined;
 
   /// 支付类事件的属性（Story 1-4 AC3）。**只有这四个键。**
   ///
@@ -728,7 +742,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
   Future<void> _pay(AppLocalizations l10n, ShopOrderDetail order) async {
     // 🔴 既有事件照发不误：漏斗「进入支付」这一格的分母靠它，重试也是一次进入支付。
     Analytics.capture('toko_order_pay_tapped');
-    if (_lastPaymentDeclined) {
+    if (_isRetry(order)) {
       Analytics.capture('toko_payment_retry_tapped', _payProps(order));
     }
     setState(() => _busyAction = _OrderAction.pay);
