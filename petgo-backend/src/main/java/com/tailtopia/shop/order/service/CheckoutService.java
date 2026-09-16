@@ -28,6 +28,7 @@ import com.tailtopia.shop.service.InventoryService;
 import com.tailtopia.shop.service.ShopTokenGenerator;
 import com.tailtopia.shop.shipping.dto.ShippingQuote;
 import com.tailtopia.shop.shipping.service.ShippingQuoteService;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +63,7 @@ public class CheckoutService {
     private final ShopPawcoinRulesRepository rules;
     private final PawCoinWalletService wallet;
     private final ShopTokenGenerator tokens;
+    private final ShopOrderDisplayNoGenerator displayNos;
     private final IdempotencyService idempotency;
 
     public CheckoutService(CartService carts, ShippingAddressService addresses,
@@ -69,7 +71,8 @@ public class CheckoutService {
             ShopProductRepository products,
             ShopOrderRepository orders, ShopOrderLineRepository orderLines,
             ShopPawcoinRulesRepository rules, PawCoinWalletService wallet,
-            ShopTokenGenerator tokens, IdempotencyService idempotency) {
+            ShopTokenGenerator tokens, ShopOrderDisplayNoGenerator displayNos,
+            IdempotencyService idempotency) {
         this.carts = carts;
         this.addresses = addresses;
         this.quotes = quotes;
@@ -81,6 +84,7 @@ public class CheckoutService {
         this.rules = rules;
         this.wallet = wallet;
         this.tokens = tokens;
+        this.displayNos = displayNos;
         this.idempotency = idempotency;
     }
 
@@ -218,7 +222,15 @@ public class CheckoutService {
         }
 
         // ③ 建单
-        ShopOrder order = orders.save(ShopOrder.place(tokens.generate(), userId,
+        // 🔴 Story 4-3：now 只取一次，展示号的日期段与 created_at 共用它。
+        //    各取各的 Instant.now()，在 WIB 跨午夜的那一瞬就会产出「号上写着昨天、
+        //    建单时间是今天」的单 —— 客服按日期对账时无解，且一天只可能出现几笔、
+        //    谁也复现不了。
+        // 🔴 查重走 existsByDisplayNo（「先查后插」），不靠捕获唯一约束异常重试：
+        //    唯一冲突会把当前事务打成 aborted，同一事务内重试必然再失败。
+        Instant now = Instant.now();
+        String displayNo = displayNos.generateUnique(now, orders::existsByDisplayNo);
+        ShopOrder order = orders.save(ShopOrder.place(tokens.generate(), displayNo, now, userId,
                 cart.selectedSubtotal(), quote.fee(), quote.discount(), snapshotOf(addr)));
 
         Map<String, ShopSku> skuByToken = skusOf(cart);

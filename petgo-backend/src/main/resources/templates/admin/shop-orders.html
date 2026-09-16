@@ -23,7 +23,11 @@
         <div class="s-card">
             <div class="s-card-body">
                 <form method="get" th:action="@{/admin/shop/orders}" class="filters">
-            <label th:text="#{admin.shop.orders.col.token}">订单号</label>
+            <!-- Story 4-3：一个输入框吃三种号（新展示号 / 旧展示号 / 内部 token）。
+                 运营手里只有用户报过来的那串字符，他不知道那是哪一种 —— 提示语要说清楚。
+                 ⚠️ 列头仍用共享的 col.token（另外 4 处模板在用），这里另起一个 key。
+                 maxlength=32 不用改：新号 TOKO-yyyyMMdd-XXXXXX 长 20。 -->
+            <label th:text="#{admin.shop.orders.search.orderNo}">订单号 / 旧订单号 / 内部标识</label>
             <input type="text" name="orderToken" th:value="${orderToken}" maxlength="32"/>
             <label th:text="#{admin.shop.orders.col.status}">状态</label>
             <select name="status">

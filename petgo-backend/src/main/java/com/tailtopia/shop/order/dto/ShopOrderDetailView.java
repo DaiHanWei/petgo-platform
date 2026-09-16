@@ -23,6 +23,15 @@ import java.util.Map;
  */
 public record ShopOrderDetailView(
         String orderToken,
+        /**
+         * 对外展示号 {@code TOKO-yyyyMMdd-XXXXXX}（Story 4-3 · SHOP-FR-29）。
+         *
+         * <p>🔴 <b>{@code orderToken} 不删</b>：它仍是 App 路由与 API 的查询键。
+         * 变的是<b>给人看的那一个</b> —— 此前本页展示的就是 22 位 {@code orderToken}，
+         * 而订单中心列表/详情展示的是 {@code TOKO-…}，同一张单两个字符串，
+         * 用户报给客服的号后台还搜不到。
+         */
+        String displayNo,
         String status,
         long goodsSubtotal,
         long shippingFee,
@@ -127,6 +136,7 @@ public record ShopOrderDetailView(
         PaymentFailureCategory failureCategory = PaymentFailureCategory.of(intent);
         return new ShopOrderDetailView(
                 o.getPublicToken(),
+                o.getDisplayNo(),
                 o.getStatus().name(),
                 o.getGoodsSubtotal(),
                 o.getShippingFee(),

@@ -4,7 +4,7 @@ import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.repository.ConsultOrderRepository;
-import com.tailtopia.order.dto.OrderDisplayNo;
+import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.service.NotificationService;
@@ -284,10 +284,10 @@ public class SupportTicketService {
         }
         return shopOrders.findById(t.getRelatedOrderId())
                 .filter(o -> o.getUserId().equals(t.getUserId()))
-                // TODO(Story 4-3)：4-3 会给 shop_orders 加 display_no 列并回填存量。
-                //   落地后改成直接读 o.getDisplayNo()，删掉这行计算式与本 TODO。
-                //   与 AdminSupportTicketQueryService 里那处 TODO 是同一次切换，一起改。
-                .map(o -> OrderDisplayNo.of(OrderDisplayNo.ECOMMERCE, o.getId(), o.getCreatedAt()))
+                // 🔴 Story 4-3 已切换：读库列 display_no。
+                //   这个值会被 App 填进 WhatsApp 预填文案发给客服 ——
+                //   它必须和用户在订单中心看到的号一模一样，否则客服照样搜不到。
+                .map(ShopOrder::getDisplayNo)
                 .orElse(null);
     }
 }

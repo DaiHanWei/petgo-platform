@@ -34,6 +34,8 @@ class ShopOrderNotifyIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private ShopTokenGenerator tokens;
     @Autowired
+    private com.tailtopia.shop.order.service.ShopOrderDisplayNoGenerator displayNos;
+    @Autowired
     private JdbcTemplate jdbc;
 
     private long seedUser() {
@@ -44,7 +46,7 @@ class ShopOrderNotifyIntegrationTest extends ApiIntegrationTest {
     }
 
     private ShopOrder seedOrder(long amount) {
-        return orders.save(ShopOrder.place(tokens.generate(), seedUser(), amount, 0L, 0L,
+        return orders.save(ShopOrder.place(tokens.generate(), displayNos.generate(Instant.now()), Instant.now(), seedUser(), amount, 0L, 0L,
                 new AddressSnapshot("Budi Santoso", "+628123456789", "DKI Jakarta",
                         "Jakarta Selatan", "Kebayoran Baru", "Jl. Melawai IV No. 12", "12160")));
     }

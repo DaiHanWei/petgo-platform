@@ -36,6 +36,30 @@ public class ShopOrder {
     @Column(name = "seq_no", insertable = false, updatable = false)
     private Long seqNo;
 
+    /**
+     * 对外展示号 {@code TOKO-yyyyMMdd-XXXXXX}（Story 4-3 · SHOP-FR-29/30 · AD-S3）。
+     *
+     * <p>🔴 <b>随机段是 SecureRandom，不是 id。</b>它取代的旧算法把自增主键零填充 6 位直接外露，
+     * 任何用户拿自己的号就能推断平台当日单量、还能顺着序号试探别人的单。
+     * 生成见 {@code ShopOrderDisplayNoGenerator}。
+     *
+     * <p>🔴 <b>一单只有这一个号</b>：App 的四个出口（订单中心列表 / 订单中心详情 /
+     * 电商订单详情 / 客服与工单）全部展示它。此前电商详情页展示的是 22 位 {@code publicToken}，
+     * 与订单中心显示的号对不上 —— 用户报给客服的号，客服在后台搜不到。
+     */
+    @Column(name = "display_no", nullable = false, updatable = false, length = 32)
+    private String displayNo;
+
+    /**
+     * 旧算法算出来的号（仅存量订单有值，新订单为 {@code null}）。
+     *
+     * <p>🔴 <b>留着它只为一件事：用户手里那张旧号还能在后台搜到。</b>
+     * 旧号早已发到用户手里、印在他们的聊天记录里，后台搜不到就等于让客服对着
+     * 一个「系统里不存在的订单号」跟用户解释。它<b>不对外展示</b>，只作搜索命中用。
+     */
+    @Column(name = "legacy_display_no", updatable = false, length = 32)
+    private String legacyDisplayNo;
+
     @Column(name = "user_id", nullable = false, updatable = false)
     private Long userId;
 
@@ -138,10 +162,20 @@ public class ShopOrder {
     protected ShopOrder() {
     }
 
-    public static ShopOrder place(String publicToken, long userId, long goodsSubtotal,
-            long shippingFee, long shippingDiscount, AddressSnapshot ship) {
+    /**
+     * 建单。
+     *
+     * <p>🔴 <b>{@code displayNo} 与 {@code now} 都由调用方传入，本方法不再自己取
+     * {@code Instant.now()}</b>（Story 4-3）。理由只有一条：展示号里的日期段与
+     * {@code created_at} 必须来自<b>同一个时刻</b>。各取各的 {@code Instant.now()}，
+     * 在 WIB 跨午夜的那一瞬就会产出「号上写着昨天、建单时间是今天」的单 ——
+     * 客服按日期对账时无解，而这种单一天只可能出现几笔、谁也复现不了。
+     */
+    public static ShopOrder place(String publicToken, String displayNo, Instant now, long userId,
+            long goodsSubtotal, long shippingFee, long shippingDiscount, AddressSnapshot ship) {
         ShopOrder o = new ShopOrder();
         o.publicToken = publicToken;
+        o.displayNo = displayNo;
         o.userId = userId;
         o.status = ShopOrderStatus.PENDING_PAYMENT;
         o.goodsSubtotal = goodsSubtotal;
@@ -155,8 +189,8 @@ public class ShopOrder {
         o.shipKecamatan = ship.kecamatan();
         o.shipAddressLine = ship.addressLine();
         o.shipKodePos = ship.kodePos();
-        o.createdAt = Instant.now();
-        o.updatedAt = o.createdAt;
+        o.createdAt = now;
+        o.updatedAt = now;
         // 🔴 AD-8：60 分钟支付窗。窗到即取消并释放库存 —— 锁着别人买不到的库存等一个
         //    可能永远不会来的付款，是自营模式下最贵的一种沉默损失。
         o.expiresAt = o.createdAt.plus(PAYMENT_WINDOW);
@@ -336,6 +370,14 @@ public class ShopOrder {
     }
 
     /** 🔴 对账用，绝不下发给用户。 */
+    public String getDisplayNo() {
+        return displayNo;
+    }
+
+    public String getLegacyDisplayNo() {
+        return legacyDisplayNo;
+    }
+
     public Long getSeqNo() {
         return seqNo;
     }

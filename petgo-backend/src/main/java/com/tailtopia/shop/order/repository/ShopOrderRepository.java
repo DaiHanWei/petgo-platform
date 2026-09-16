@@ -21,6 +21,26 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
 
     Optional<ShopOrder> findByPublicToken(String publicToken);
 
+    /**
+     * 展示号查重（Story 4-3）。
+     *
+     * <p>🔴 <b>「先查后插」是重试机制的一半</b>：唯一索引冲突会把当前事务打成 aborted，
+     * 同一事务内接着重试每次都会撞在「事务已中止」而不是撞在号上。
+     * 索引是兜底报错（防并发穿越），这个查询才是重试的依据。
+     */
+    boolean existsByDisplayNo(String displayNo);
+
+    /** 后台按用户报出来的新号搜单（Story 4-3 AC4）。 */
+    Optional<ShopOrder> findByDisplayNo(String displayNo);
+
+    /**
+     * 后台按<b>旧号</b>搜单（Story 4-3 AC4）。
+     *
+     * <p>用户手里那张 {@code TOKO-yyyyMMdd-000673} 是早就发出去的，
+     * 搜不到就等于让客服对着一个「系统里不存在的订单号」跟用户解释。
+     */
+    Optional<ShopOrder> findByLegacyDisplayNo(String legacyDisplayNo);
+
     List<ShopOrder> findByUserIdOrderByCreatedAtDescIdDesc(long userId);
 
     /**

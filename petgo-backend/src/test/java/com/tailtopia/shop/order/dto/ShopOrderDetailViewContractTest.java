@@ -39,9 +39,19 @@ class ShopOrderDetailViewContractTest {
         return json.convertValue(dto, Map.class);
     }
 
-    /** 顶层键集（顺序即 record 组件顺序；新字段一律末尾追加，插中间会让按位置构造的调用方静默错位）。 */
+    /**
+     * 顶层键集（顺序即 record 组件顺序）。
+     *
+     * <p>⚠️ <b>惯例是新字段末尾追加</b>，插中间会让按位置构造的调用方静默错位。
+     * Story 4-3 的 {@code displayNo} 是<b>刻意的例外</b>：它在语义上就该紧挨 {@code orderToken}
+     * （一个是内部查询键、一个是给人看的号，成对出现才读得懂）。
+     * 破例的前提是本仓只有<b>两个</b>按位置构造的调用点（{@code ShopOrderDetailView.of} 与本类），
+     * 且两个都在本次 diff 里一起改了。
+     * 🔴 但「两个 String 挨在一起」正是编译器抓不住的那种错位 ——
+     * 所以另加了 {@link #displayNoAndOrderTokenAreNotSwapped()} 专门钉这一处。
+     */
     private static final Set<String> TOP_LEVEL_KEYS = Set.of(
-            "orderToken", "status", "goodsSubtotal", "shippingFee", "shippingDiscount",
+            "orderToken", "displayNo", "status", "goodsSubtotal", "shippingFee", "shippingDiscount",
             "totalAmount", "payChannel", "coinAmount", "cashAmount", "expiresAt", "createdAt",
             "paymentIntentToken", "shipTo", "lines", "shippedAt", "deliveredAt", "completedAt",
             "returnWindowEndsAt", "packages", "attributionSource",
@@ -51,7 +61,7 @@ class ShopOrderDetailViewContractTest {
     private ShopOrderDetailView fullyPopulated(String paymentStatus, String failureCategory) {
         Instant t = Instant.parse("2026-09-16T10:00:00Z");
         return new ShopOrderDetailView(
-                "ord-tok-1", "COMPLETED", 100_000L, 15_000L, 5_000L, 110_000L, "MIXED",
+                "ord-tok-1", "TOKO-20260916-7M4KQ2", "COMPLETED", 100_000L, 15_000L, 5_000L, 110_000L, "MIXED",
                 10_000L, 100_000L, t, t, "pi-tok-1",
                 new ShopOrderDetailView.ShipTo("Budi", "0811", "DKI", "Jakarta Selatan",
                         "Kebayoran", "Jl. Melati 1", "12110"),
@@ -64,10 +74,28 @@ class ShopOrderDetailViewContractTest {
     }
 
     @Test
-    @DisplayName("顶层字段集恰好 22 个，paymentStatus / paymentFailureCategory 在列")
+    @DisplayName("顶层字段集恰好 23 个，displayNo / paymentStatus / paymentFailureCategory 在列")
     void fullOrderHasExactlyTheContractFields() {
         assertThat(wire(fullyPopulated("FAILED", "GATEWAY_DECLINED")).keySet())
                 .isEqualTo(TOP_LEVEL_KEYS);
+    }
+
+    @Test
+    @DisplayName("🔴 Story 4-3：displayNo 与 orderToken 没有被位置错位串掉")
+    void displayNoAndOrderTokenAreNotSwapped() {
+        // 两个相邻的 String 组件，编译器换过来也一样过 —— 而线上的后果是
+        // 用户看到 22 位内部 token（正是本 story 要修的那个毛病），
+        // 同时 App 拿 TOKO-… 去当路由键请求详情，直接 404。
+        Map<String, Object> w = wire(fullyPopulated("PAID", null));
+
+        assertThat(w.get("orderToken")).isEqualTo("ord-tok-1");
+        assertThat(w.get("displayNo")).isEqualTo("TOKO-20260916-7M4KQ2");
+        assertThat(String.valueOf(w.get("displayNo")))
+                .as("展示号必须是给人看的那一个：TOKO 前缀 + WIB 日期 + 6 位 Crockford")
+                .matches("^TOKO-\\d{8}-[0-9A-HJKMNP-TV-Z]{6}$");
+        assertThat(String.valueOf(w.get("orderToken")))
+                .as("内部 token 不是展示号，它不该长成 TOKO-… 的样子")
+                .doesNotStartWith("TOKO-");
     }
 
     @Test
@@ -101,7 +129,7 @@ class ShopOrderDetailViewContractTest {
         // NON_NULL：不是「键在、值为 null」，而是键根本不出现。
         // App 侧 j['paymentStatus']?.toString() 对缺键与 null 同样得到 null —— 两端在此对齐。
         assertThat(w).doesNotContainKeys("paymentStatus", "paymentFailureCategory");
-        // 其余 20 个键一个不少 —— 省的只能是这两个。
+        // 其余 21 个键一个不少 —— 省的只能是这两个。
         assertThat(w.keySet()).containsExactlyInAnyOrderElementsOf(TOP_LEVEL_KEYS.stream()
                 .filter(k -> !k.equals("paymentStatus") && !k.equals("paymentFailureCategory"))
                 .toList());

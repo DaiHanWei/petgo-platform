@@ -1,6 +1,5 @@
 package com.tailtopia.shop.order.notify;
 
-import com.tailtopia.order.dto.OrderDisplayNo;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.domain.ShopOrderLine;
 import com.tailtopia.shop.order.repository.ShopOrderLineRepository;
@@ -161,11 +160,9 @@ public class ShopOrderNotifyService {
         for (ShopOrderLine l : orderLines.findByOrderIdOrderByIdAsc(order.getId())) {
             itemCount += l.getQty();
         }
-        // TODO(Story 4-3)：4-3 会给 shop_orders 加 display_no 并回填存量。
-        //   落地后改成 order.getDisplayNo()，删掉这行计算式与本 TODO。
-        //   与 3-2 / 3-3 留的那两处是同一次切换。
-        String displayNo =
-                OrderDisplayNo.of(OrderDisplayNo.ECOMMERCE, order.getId(), order.getCreatedAt());
-        return new ShopOrderNotifyMessage.Line(displayNo, order.getTotalAmount(), itemCount);
+        // 🔴 Story 4-3 已切换：读库列 display_no。
+        //   运营在 Lark 群里看到的号，要能直接粘进后台搜索框搜出这一单。
+        return new ShopOrderNotifyMessage.Line(order.getDisplayNo(), order.getTotalAmount(),
+                itemCount);
     }
 }

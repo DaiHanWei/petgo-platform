@@ -3,7 +3,7 @@ package com.tailtopia.admin.support.service;
 import com.tailtopia.admin.support.dto.AdminTicketView;
 import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.repository.ConsultOrderRepository;
-import com.tailtopia.order.dto.OrderDisplayNo;
+import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.support.domain.RelatedOrderType;
 import com.tailtopia.pay.refund.domain.RefundRequest;
@@ -110,12 +110,10 @@ public class AdminSupportTicketQueryService {
                     refundNeedDecision = refund.getNeedDecision().name();
                 }
             } else {
-                // TODO(Story 4-3)：4-3 会给 shop_orders 加 display_no 列并回填存量。
-                //   落地后这里改成直接读 o.getDisplayNo()，删掉这行计算式与本 TODO。
-                //   两处都只是展示，切换时改一行取值 + 一条测试断言，不涉及数据迁移。
+                // 🔴 Story 4-3 已切换：读库列 display_no，不再用旧算法算。
+                //   运营在工单上看到的号，必须与用户报出来的、与订单中心显示的是同一个。
                 relatedOrderToken = shopOrders.findById(t.getRelatedOrderId())
-                        .map(o -> OrderDisplayNo.of(OrderDisplayNo.ECOMMERCE, o.getId(),
-                                o.getCreatedAt()))
+                        .map(ShopOrder::getDisplayNo)
                         .orElse(null);
             }
         }

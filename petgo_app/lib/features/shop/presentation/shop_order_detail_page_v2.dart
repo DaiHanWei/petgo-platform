@@ -609,10 +609,14 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
   /// 用户拿去跟客服核对的就是他屏幕上看得见的那串字符，深链填另一个号只会让客服
   /// 拿到一个用户那儿找不到的号。
   ///
-  /// ⚠️ 今天这里是 `orderToken`（22 位随机串），而订单中心列表展示的是
-  /// `TOKO-yyyyMMdd-NNNNNN`。这个不一致是 SHOP-FR-29「订单号统一」的修复对象，
-  /// **不是本 story 的事**。收成一个 getter 是为了让那天**只改这一处**。
-  String _displayedOrderNo(ShopOrderDetail order) => order.orderToken;
+  /// 🔴 **Story 4-3 已切换**：这里曾经是 `orderToken`（22 位随机串），而订单中心列表
+  /// 展示的是 `TOKO-…` —— 同一张单两个字符串，用户报给客服的号后台还搜不到。
+  /// 3-3 把它收成这一个 getter，就是为了让今天只改这一行。
+  ///
+  /// `displayNo` 为空时回落到 `orderToken`：灰度期老后端不下发这个字段，
+  /// **显示一个旧格式的号，好过显示一片空白**。
+  String _displayedOrderNo(ShopOrderDetail order) =>
+      order.displayNo.isEmpty ? order.orderToken : order.displayNo;
 
   Widget _helpBlock(AppLocalizations l10n, ShopOrderDetail order) => ShopSection(
         key: const ValueKey('shopOrderHelpBlockV2'),

@@ -167,6 +167,7 @@ class ShopOrderLine {
 class ShopOrderDetail {
   const ShopOrderDetail({
     required this.orderToken,
+    this.displayNo = '',
     required this.status,
     required this.goodsSubtotal,
     required this.shippingFee,
@@ -192,6 +193,17 @@ class ShopOrderDetail {
   });
 
   final String orderToken;
+
+  /// 对外展示号 `TOKO-yyyyMMdd-XXXXXX`（Story 4-3 · SHOP-FR-29）。
+  ///
+  /// 🔴 **给人看的是它，查询用的仍是 [orderToken]**。此前本页展示的就是 22 位
+  /// `orderToken`，而订单中心列表/详情展示的是 `TOKO-…` —— 同一张单两个字符串，
+  /// 用户报给客服的号后台还搜不到。
+  ///
+  /// 🔴 **缺省空串而不是 null**：灰度期老后端不下发这个字段，页面回落到 `orderToken`
+  /// 显示（见 `_displayedOrderNo`）—— 显示一个旧格式的号，好过显示一片空白。
+  final String displayNo;
+
   final ShopOrderStatus status;
   final int goodsSubtotal;
   final int shippingFee;
@@ -269,6 +281,7 @@ class ShopOrderDetail {
     final s = ship is Map<String, dynamic> ? ship : const <String, dynamic>{};
     return ShopOrderDetail(
       orderToken: j['orderToken']?.toString() ?? '',
+      displayNo: j['displayNo']?.toString() ?? '',
       status: ShopOrderStatus.fromApi(j['status']?.toString()),
       goodsSubtotal: _int(j['goodsSubtotal']) ?? 0,
       shippingFee: _int(j['shippingFee']) ?? 0,

@@ -66,9 +66,11 @@ void main() {
     List<ShopOrderPackage> packages = const [],
     String? paymentStatus,
     String? paymentFailureCategory,
+    String displayNo = 'TOKO-20260916-7M4KQ2',
   }) =>
       ShopOrderDetail(
         orderToken: 'ord1',
+        displayNo: displayNo,
         paymentStatus: paymentStatus,
         paymentFailureCategory: paymentFailureCategory,
         status: status,
@@ -748,6 +750,49 @@ void main() {
 
       expect(find.byKey(const ValueKey('qrPayImage')), findsNothing, reason: '仍按中止关闭');
       expect(find.byKey(const ValueKey('shopOrderPayV2')), findsNothing);
+    });
+  });
+
+  group('🔴 Story 4-3 · 一单一号（SHOP-FR-29）', () {
+    testWidgets('详情页展示 displayNo，不再展示 22 位 orderToken', (tester) async {
+      // 这正是本 story 要修的毛病：同一张单，订单中心显示 TOKO-…、
+      // 详情页显示 22 位内部 token，用户报给客服的号后台还搜不到。
+      await tester.pumpWidget(host(order()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('TOKO-20260916-7M4KQ2'), findsOneWidget);
+      expect(find.text('ord1'), findsNothing,
+          reason: 'orderToken 是查询键，不是给人看的号');
+    });
+
+    testWidgets('🔴 展示的号与订单中心列表卡是同一个字符串', (tester) async {
+      // 订单中心列表卡读的是 OrderSummary.displayNo，详情页读的是
+      // ShopOrderDetail.displayNo —— 后端两处都取 shop_orders.display_no，
+      // 所以这里断言的是「前端没有在某一侧擅自加工」。
+      const fromOrderCenter = 'TOKO-20260916-7M4KQ2';
+      await tester.pumpWidget(host(order(displayNo: fromOrderCenter)));
+      await tester.pumpAndSettle();
+
+      expect(find.text(fromOrderCenter), findsOneWidget);
+    });
+
+    testWidgets('号用等宽样式 —— 用户要逐位报给客服', (tester) async {
+      await tester.pumpWidget(host(order()));
+      await tester.pumpAndSettle();
+
+      // 等宽在本仓是靠 ShopText.serialNo 的 fontFamily（mono）实现的，不是 fontFeatures。
+      final t = tester.widget<Text>(find.text('TOKO-20260916-7M4KQ2'));
+      expect(t.style, ShopText.serialNo,
+          reason: '换成普通字体后逐位核对就容易串行 —— 用户要把这个号念给客服');
+    });
+
+    testWidgets('🔴 灰度期老后端不下发 displayNo → 回落显示 orderToken，不是空白',
+        (tester) async {
+      await tester.pumpWidget(host(order(displayNo: '')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ord1'), findsOneWidget,
+          reason: '显示一个旧格式的号，好过在订单号那一行显示一片空白');
     });
   });
 }
