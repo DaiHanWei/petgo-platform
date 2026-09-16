@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -96,6 +97,20 @@ public class ShopOrderPaymentService {
     @Transactional(readOnly = true)
     public List<ShopOrderLine> linesOf(ShopOrder order) {
         return orderLines.findByOrderIdOrderByIdAsc(order.getId());
+    }
+
+    /**
+     * 取该订单的支付意图（Story 1-1，供详情装配下发支付状态与失败类别）。
+     *
+     * <p>🔴 <b>电商侧访问 pay 模块一律经本 service</b>——让 controller 直接注入
+     * {@code PaymentIntentService} 等于在表现层开第二条跨模块口子。
+     *
+     * @return 纯 PawCoin 单（无 {@code payment_intent_token}）返回 {@link Optional#empty()}
+     */
+    @Transactional(readOnly = true)
+    public Optional<PaymentIntent> intentOf(ShopOrder order) {
+        String token = order.getPaymentIntentToken();
+        return token == null ? Optional.empty() : paymentIntents.findByToken(token);
     }
 
     // ---------- 支付 ----------

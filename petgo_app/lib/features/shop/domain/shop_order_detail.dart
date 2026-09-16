@@ -155,6 +155,8 @@ class ShopOrderDetail {
     this.returnWindowEndsAt,
     this.packages = const [],
     this.attributionSource = 'unknown',
+    this.paymentStatus,
+    this.paymentFailureCategory,
   });
 
   final String orderToken;
@@ -200,6 +202,22 @@ class ShopOrderDetail {
   /// **与服务端行级归因互为校验**（Story 9.2）。⚠️ 权威值始终在服务端。
   final String attributionSource;
 
+  // ---------- 支付可感知（Story 1-1，后端 AD-S9(a) 下发） ----------
+
+  /// 支付意图状态原文：`PENDING` / `PAID` / `FAILED` / `EXPIRED`。
+  /// 无支付单（纯 PawCoin 单）或后端版本较老时为 null。
+  ///
+  /// 🔴 **刻意保持 `String?` 不在此处枚举化、不兜底成某个默认值**（C4：禁止在客户端
+  /// 兜底转换抹平契约差异）——把未知值悄悄折成 `FAILED` 之类，等于用客户端的猜测
+  /// 覆盖服务端的事实。枚举化与界面处置全部留给 Story 1-3。
+  final String? paymentStatus;
+
+  /// 支付失败类别原文：`GATEWAY_DECLINED` / `EXPIRED` / `USER_CANCELLED`。未失败为 null。
+  ///
+  /// 🔒 分类由后端一处算出（`PaymentFailureCategory.of`），App **不解析网关 meta** ——
+  /// meta 是第三方回调原文，随时可能含 PII。
+  final String? paymentFailureCategory;
+
   bool get isMixed => (coinAmount ?? 0) > 0 && (cashAmount ?? 0) > 0;
 
   /// 剩余支付时间。🔴 只用于**渲染**；「是否已过期」的判定权在服务端。
@@ -230,6 +248,9 @@ class ShopOrderDetail {
       completedAt: _time(j['completedAt']),
       returnWindowEndsAt: _time(j['returnWindowEndsAt']),
       attributionSource: j['attributionSource']?.toString() ?? 'unknown',
+      // 缺键 → null（老后端）。不做任何值的归一化或兜底，见字段注释。
+      paymentStatus: j['paymentStatus']?.toString(),
+      paymentFailureCategory: j['paymentFailureCategory']?.toString(),
       packages: j['packages'] is List
           ? (j['packages'] as List)
               .whereType<Map<String, dynamic>>()

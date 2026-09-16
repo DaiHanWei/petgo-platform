@@ -17,6 +17,7 @@ import com.tailtopia.shop.address.service.ShippingAddressService;
 import com.tailtopia.shop.cart.service.CartService;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.domain.ShopOrderStatus;
+import com.tailtopia.shop.order.dto.ShopOrderDetailView;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.shop.order.service.AdminShopPawcoinRulesService;
 import com.tailtopia.shop.order.service.CheckoutService;
@@ -386,6 +387,113 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         assertThatThrownBy(() -> payments.cancel(stranger, order.getPublicToken()))
                 .isInstanceOf(AppException.class)
                 .hasMessageContaining("订单不存在");
+    }
+
+    // ---------- Story 1-1：支付失败类别下发（AC5 / AC8） ----------
+
+    /** 详情装配走的是 controller 的 detailOf 同一条路：取意图 → 传进带意图的重载。 */
+    private ShopOrderDetailView detailOf(long uid, String orderToken) {
+        ShopOrder order = payments.requireOwn(uid, orderToken);
+        return ShopOrderDetailView.of(order, payments.linesOf(order), java.util.List.of(),
+                java.util.Map.of(), payments.intentOf(order).orElse(null));
+    }
+
+    private ShopOrder payableOrder(long uid) {
+        rules.update(true, true, 1_000_000L, ACTOR);
+        ShopOrder order = placeOrder(uid, seedSku(10, 285_000L), 1, 285_000L);
+        payments.pay(uid, order.getPublicToken(), null);
+        return order;
+    }
+
+    @Test
+    @DisplayName("🔴 网关回调 FAILED（rawMeta 无 reason）→ paymentFailureCategory = GATEWAY_DECLINED")
+    void gatewayDeclinedIsReported() {
+        long uid = seedUser();
+        ShopOrder order = payableOrder(uid);
+        String intentToken = orders.findByPublicToken(order.getPublicToken()).orElseThrow()
+                .getPaymentIntentToken();
+
+        // 网关拒付的常态：rawMeta 是第三方原文，一般没有 reason 键。
+        paymentIntents.applyCallback(new PaymentCallback(intentToken,
+                "gw-" + SEQ.incrementAndGet(), GatewayStatus.FAILED,
+                Map.of("status", "deny", "code", "51")));
+
+        var view = detailOf(uid, order.getPublicToken());
+        assertThat(view.paymentStatus()).isEqualTo(PaymentStatus.FAILED.name());
+        assertThat(view.paymentFailureCategory()).isEqualTo("GATEWAY_DECLINED");
+    }
+
+    @Test
+    @DisplayName("🔴 超时取消（reason=TIMEOUT）→ EXPIRED，不得是 GATEWAY_DECLINED")
+    void timeoutCancelIsExpiredNotDeclined() {
+        long uid = seedUser();
+        ShopOrder order = payableOrder(uid);
+        expireOrder(order.getPublicToken());
+
+        // 懒过期：读一次详情即触发 releaseAndCancel(order, "TIMEOUT")
+        var view = detailOf(uid, order.getPublicToken());
+
+        assertThat(view.status()).isEqualTo(ShopOrderStatus.CANCELLED.name());
+        assertThat(view.paymentFailureCategory())
+                .as("超时被标成网关拒付会给出一个不该给的重试入口")
+                .isEqualTo("EXPIRED");
+    }
+
+    @Test
+    @DisplayName("🔴 用户主动取消（reason=USER_CANCEL）→ USER_CANCELLED")
+    void userCancelIsReported() {
+        long uid = seedUser();
+        ShopOrder order = payableOrder(uid);
+
+        payments.cancel(uid, order.getPublicToken());
+
+        var view = detailOf(uid, order.getPublicToken());
+        assertThat(view.status()).isEqualTo(ShopOrderStatus.CANCELLED.name());
+        assertThat(view.paymentFailureCategory()).isEqualTo("USER_CANCELLED");
+    }
+
+    @Test
+    @DisplayName("🔴 判序钉子：意图被扫描器抢先置 EXPIRED（meta 无 reason）→ 仍是 EXPIRED")
+    void scannerExpiredIntentStaysExpired() {
+        long uid = seedUser();
+        ShopOrder order = payableOrder(uid);
+        String intentToken = orders.findByPublicToken(order.getPublicToken()).orElseThrow()
+                .getPaymentIntentToken();
+
+        // 把意图的付款窗拨到过去，让 PaymentIntentExpiryScanner 那条路先把它置 EXPIRED。
+        jdbc.update("UPDATE payment_intents SET expires_at = ? WHERE public_token = ?",
+                java.sql.Timestamp.from(Instant.now().minusSeconds(60)), intentToken);
+        paymentIntents.expireOverduePending(10);
+        assertThat(paymentIntents.findByToken(intentToken).orElseThrow().getStatus())
+                .isEqualTo(PaymentStatus.EXPIRED);
+
+        // 订单侧随后取消 —— failByToken 因「已终态即 no-op」写不进 reason，meta 仍无 reason 键。
+        expireOrder(order.getPublicToken());
+        payments.cancelOneOverdue(
+                orders.findByPublicToken(order.getPublicToken()).orElseThrow().getId());
+
+        var view = detailOf(uid, order.getPublicToken());
+        assertThat(view.paymentStatus()).isEqualTo(PaymentStatus.EXPIRED.name());
+        assertThat(view.paymentFailureCategory())
+                .as("这是 AC5 的核心：判序写反了这里就会变成 GATEWAY_DECLINED，不许改断言迁就实现")
+                .isEqualTo("EXPIRED");
+    }
+
+    @Test
+    @DisplayName("纯 PawCoin 单（无支付意图）→ paymentStatus / paymentFailureCategory 均为 null")
+    void pureCoinOrderHasNoPaymentFields() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        topUp(uid, 500_000L);
+        String sku = seedSku(10, 100_000L);
+        ShopOrder order = placeOrder(uid, sku, 1, 100_000L);
+        payments.pay(uid, order.getPublicToken(), null);
+
+        assertThat(orders.findByPublicToken(order.getPublicToken()).orElseThrow()
+                .getPaymentIntentToken()).isNull();
+        var view = detailOf(uid, order.getPublicToken());
+        assertThat(view.paymentStatus()).isNull();
+        assertThat(view.paymentFailureCategory()).isNull();
     }
 
     /** 把支付窗拨到过去（真等 60 分钟不现实；服务端时刻仍是唯一判定依据）。 */
