@@ -7,19 +7,24 @@
 /// 平台自营是唯一卖家（设计稿关键原则 1），因此**无店铺分组行、无分店铺小计、
 /// 无分店铺凑单**，整车只有一个总计。照搬第三方电商的多店铺分组只会凭空多一层。
 ///
-/// ## 🔴 设计稿的「每行勾选框」**刻意不实现**
+/// ## 每行勾选框 —— 已由 4-1 + 4-2 补齐（V1.3.0）
 ///
-/// 设计稿给每行画了勾选框，底部总计写「已勾选的可购商品件数」。
-/// 但下单接口是 `placeOrder(addressToken)` —— **整车下单，没有行选择的概念**。
+/// 这里曾经有一段注释说明「设计稿的每行勾选框刻意不实现」，理由是下单接口
+/// `placeOrder(addressToken)` 整车下单、服务端没有行选择的概念，而
+/// **画一个不影响下单的勾选框是「能造成资损的谎」**。
 ///
-/// 三条路都不能走：
-/// - 画勾选框但不影响下单 → 用户勾掉一行仍然会被买走，这是**能造成资损的谎**；
-/// - 勾选框全选中且禁用 → 一个点不动的控件，比没有更让人困惑；
-/// - 结算前把未勾选的行删掉 → 用破坏性操作模拟一个查询语义，取消结算就丢数据。
+/// V1.3.0 把这个接口能力缺口补上了：
+/// - **4-1（后端）**：`shop_cart_items.selected` 列 + 两个选择端点；
+///   `GET /checkout` 与 `POST /shop-orders` 只结算「勾选且有效」的行。
+/// - **4-2（本文件）**：每个有效行一个勾选框、底栏左侧「全选」、
+///   底栏金额与件数改读 `selectedSubtotal` / `selectedCount`。
 ///
-/// 故本版式**不画勾选框**，底部总计 = 全部有效行。
-/// 补齐需要后端支持「行选择」（购物车行加 selected 位，或下单接受 skuToken 列表），
-/// 属接口能力缺口，不是版式取舍。
+/// 🔴 当年那三条不能走的路，现在仍然不能走，落到本文件是三条硬约束：
+/// - **金额只认后端下发的 `selectedSubtotal`**，前端绝不自己把选中行加起来 ——
+///   两套实现只要有一处对失效行的口径不同，用户看到的数就和实际扣的钱不一样。
+/// - **取消勾选只调选择端点，绝不调 `remove`/`DELETE`** ——
+///   用破坏性操作模拟查询语义，取消结算就丢数据。
+/// - **失效行的勾选框是禁用而非隐藏**，判定用 `line.isValid`（不是枚举白名单）。
 ///
 /// ## 其余按设计稿空态规则降级
 ///
@@ -233,20 +238,37 @@ class _CartPageV2State extends ConsumerState<CartPageV2> {
         ),
       );
 
-  Widget _bottomBar(BuildContext context, AppLocalizations l10n, CartView cart) =>
-      ShopBottomBarWithTotal(
-        // 🔴 「n barang」是**件数**不是种类数（FR-96）—— 要跟用户脑子里的
-        //    「我买了几件」对上。后端 itemCount 只累计有效行。
-        label: l10n.cartTotalLabel(cart.itemCount),
-        amount: formatIdr(cart.subtotal),
-        action: ShopButton(
-          key: const ValueKey('cartCheckoutV2'),
-          label: l10n.cartCheckout,
-          variant: ShopButtonVariant.pay,
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          onTap: () => context.push('/shop/checkout'),
-        ),
-      );
+  /// 底栏。
+  ///
+  /// 🔴 <b>金额与件数只来自 `selectedSubtotal` / `selectedCount`</b>（Story 4-2 AC2）——
+  /// 本文件里不存在任何对选中行求和的代码。前端求一遍、后端 `CheckoutService` 求一遍
+  /// 是两套独立实现，只要有一处口径不同，用户看到的数就和实际扣的钱不一样。
+  ///
+  /// 🔴 <b>一件没勾时结算按钮禁用，且不发任何请求</b>（AC4）：
+  /// 「点了才由后端 422 告诉你」是把一次本可以在端上说清的事，换成一次失败的往返。
+  Widget _bottomBar(BuildContext context, AppLocalizations l10n, CartView cart) {
+    final nothingSelected = cart.selectedCount == 0;
+    return ShopBottomBarWithTotal(
+      // 全选控件。🔴 选中态判定**排除失效行**（见 CartView.allValidSelected）——
+      //    车里有一个永远选不上的失效行时，它必须仍能显示成「已全选」，否则永远点不亮。
+      leading: _SelectAllToggle(cart: cart),
+      // 🔴 「n barang」是**件数**不是种类数（FR-96）—— 要跟用户脑子里的
+      //    「我买了几件」对上。改读 selectedCount：底栏说的是「这一单买几件」。
+      label: nothingSelected
+          ? l10n.cartSelectNoneHint
+          : l10n.cartTotalLabel(cart.selectedCount),
+      amount: formatIdr(cart.selectedSubtotal),
+      // 一件没勾时金额转灰：玫红是「待付款」的颜色，而此刻没有任何东西待付。
+      amountColor: nothingSelected ? ShopColors.text4 : ShopColors.accent,
+      action: ShopButton(
+        key: const ValueKey('cartCheckoutV2'),
+        label: l10n.cartCheckout,
+        variant: ShopButtonVariant.pay,
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        onTap: nothingSelected ? null : () => context.push('/shop/checkout'),
+      ),
+    );
+  }
 
   Widget _guestState(BuildContext context, AppLocalizations l10n) => _CenteredState(
         title: l10n.cartGuestTitle,
@@ -262,6 +284,58 @@ class _CartPageV2State extends ConsumerState<CartPageV2> {
         onTap: () => context.go('/shop'),
       );
 
+}
+
+/// 底栏左侧的「全选」控件（Story 4-2 AC1）。
+///
+/// 🔴 <b>选中态判定排除失效行</b>：读的是 [CartView.allValidSelected]，也就是
+/// 「全部**有效**行都已勾选」。若把失效行算进去，车里只要有一件下架商品，
+/// 这个框就永远点不亮 —— 用户会以为控件坏了，而他其实什么都没做错。
+///
+/// 🔴 点击语义是「全选 / 全不选」，作用于**车内全部行（含失效行）**，与后端一致：
+/// 失效行的 `selected` 照实记着，只是永不计入合计。这样用户在商品补货后，
+/// 会发现自己当初点过的全选确实生效了。
+class _SelectAllToggle extends ConsumerStatefulWidget {
+  const _SelectAllToggle({required this.cart});
+
+  final CartView cart;
+
+  @override
+  ConsumerState<_SelectAllToggle> createState() => _SelectAllToggleState();
+}
+
+class _SelectAllToggleState extends ConsumerState<_SelectAllToggle> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final all = widget.cart.allValidSelected;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ShopCheckbox(
+          key: const ValueKey('cartSelectAllV2'),
+          value: all,
+          onChanged: _busy ? null : (v) => _toggle(l10n, v),
+          semanticLabel: l10n.cartSelectAll,
+        ),
+        const SizedBox(width: 4),
+        Text(l10n.cartSelectAll, style: ShopText.meta.copyWith(fontSize: 9.5)),
+      ],
+    );
+  }
+
+  Future<void> _toggle(AppLocalizations l10n, bool selected) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(cartProvider.notifier).setAllSelected(selected);
+    } on CartMutationError {
+      if (mounted) showAppToast(context, l10n.cartGenericError);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 }
 
 /// 可购商品行。
@@ -296,6 +370,18 @@ class _ValidLineState extends ConsumerState<_ValidLine> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 🔴 勾选框在最左，与失效行的占位对齐 —— 两组的左边缘不能参差。
+          Padding(
+            padding: const EdgeInsets.only(top: 22),
+            child: ShopCheckbox(
+              key: ValueKey('cartLineCheckbox_${line.skuToken}'),
+              value: line.selected,
+              onChanged: _busy ? null : (v) => _setSelected(l10n, line, v),
+              semanticLabel:
+                  l10n.cartSelectLine(line.productName ?? line.specName),
+            ),
+          ),
+          const SizedBox(width: 9),
           ShopImage(
               url: line.mainImageUrl, size: 64, radius: ShopShape.radiusField),
           const SizedBox(width: 11),
@@ -387,6 +473,26 @@ class _ValidLineState extends ConsumerState<_ValidLine> {
     }
   }
 
+  /// 勾选 / 取消勾选本行。
+  ///
+  /// 🔴 <b>绝不调 `remove`</b>（AC5）：取消勾选是「这次不买」，不是「不要了」。
+  /// 商品仍在列表里、数量不变，下单后也仍留在购物车（由 4-1 的清车范围保证）。
+  ///
+  /// 🔴 <b>不做乐观更新</b>：勾选是服务端状态，直接用端点返回的整份 CartView 覆盖
+  /// （见 `CartController.setSelected`）。先在本地勾上再发请求，一旦失败就会留下
+  /// 「看着勾上了其实没勾上」—— 而底栏金额按服务端的 selectedSubtotal 显示，
+  /// 两者会当场对不上。
+  Future<void> _setSelected(AppLocalizations l10n, CartLine line, bool selected) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(cartProvider.notifier).setSelected(line.skuToken, selected);
+    } on CartMutationError {
+      if (mounted) showAppToast(context, l10n.cartGenericError);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _setQty(AppLocalizations l10n, CartLine line, int qty) async {
     setState(() => _busy = true);
     try {
@@ -423,6 +529,16 @@ class _InvalidLine extends ConsumerWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 🔴 <b>禁用而不是隐藏</b>（AC3）：位置对齐才不会让列表左边缘参差。
+          //    判定用 `line.isValid`（本组行恒为 false），**不是枚举白名单** ——
+          //    Epic 6 加第三种失效原因时，未知值会落进 `unavailable`，
+          //    `isValid` 自动为 false；写成 `reason == delisted || reason == outOfStock`
+          //    则会让停用品类的行变成「可勾选、可结算、然后被后端 422 打回」。
+          const Padding(
+            padding: EdgeInsets.only(top: 22),
+            child: ShopCheckbox(value: false, enabled: false, onChanged: null),
+          ),
+          const SizedBox(width: 9),
           Opacity(
             opacity: .75,
             child: SizedBox(

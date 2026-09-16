@@ -11,7 +11,7 @@ fr: [SHOP-FR-04]
 
 # Story 4-2: 购物车勾选（App）
 
-Status: ready-for-dev
+Status: review
 
 > 自包含 story，可本地或云端 L0 执行。与用户沟通用中文。执行纪律见根 `CLAUDE.md`（后端→前端→联调、AC 标 L0/L1/L2）。
 > 本 story **只有 App 端**，后端能力全部由 4-1 提供。
@@ -233,3 +233,94 @@ so that 我下单前就知道这一单要付多少、不用为了买一件先删
 - [ ] 新文案全部进 ARB（en + id），dart 里无硬编码印尼语
 - [ ] C5 的 ③④ 两处已同改，`flutter test` 全绿
 - [ ] `flutter analyze` + `flutter test` 通过
+
+---
+
+## Dev Agent Record
+
+**执行环境**：云端 headless session（claude.ai/code），仅跑 **L0**。
+**状态**：`review`（未 done）。**L2 待本地验收**（本 story 无后端改动 ⇒ 无独立 L1）。
+
+### 🔴 T0 前置确认
+
+- **4-1 已合入本分支**，就在本 story 的**前一个 commit**（`8daf63b`）。提交顺序即上线顺序，
+  分支 diff 中**不存在**「勾选框已画、后端还不支持」的中间态提交 —— DoD 第一条成立。
+- ⚠️ **「目标联调环境已部署」云端无法确认**（不允许部署、也没有 remote 可推）。
+  合并上线时**必须确认后端 4-1 先于 App 4-2 到达目标环境** —— 反过来就是
+  `cart_page_v2.dart` 原注释点名禁止的第一条路。已列入下方待验收清单。
+
+### File List
+
+| 文件 | 改了什么 |
+|---|---|
+| `lib/features/shop/domain/shop_cart.dart` | **C5 ③**：`CartLine + selected`（缺省 `true`）、`CartView + selectedSubtotal/selectedCount`（缺省回落 `subtotal`/`itemCount`）、`+ allValidSelected` |
+| `lib/core/network/api_paths.dart` | `+ meCartItemSelected(skuToken)` / `+ meCartSelection` |
+| `lib/features/shop/data/cart_repository.dart` | `CartRepository + setSelected/setAllSelected`；`CartController` 同名两方法（直接用返回的整份 `CartView` 覆盖） |
+| `lib/features/shop/presentation/cart_page_v2.dart` | 文件头注释**替换**；有效行 + `ShopCheckbox`；失效行 + 禁用占位；底栏改读选中口径 + 禁用态；新增 `_SelectAllToggle` |
+| `lib/features/shop/presentation/widgets/shop_surface.dart` | `ShopBottomBarWithTotal` 加**可选** `leading`（可空、默认不渲染，其余四屏零改动） |
+| `lib/l10n/app_en.arb` / `app_id.arb` | +3 key × 2 语（`cartSelectAll` / `cartSelectLine` / `cartSelectNoneHint`） |
+| `test/shop/cart_page_v2_test.dart` | **C5 ④**：`_FakeCartController` 支持新字段与两个新方法；替换旧的「不渲染勾选框」组为 7 条新用例 |
+| `test/shop/cart_attribution_test.dart` / `cart_guest_add_test.dart` | 两个 `CartRepository` 假实现补齐新方法 |
+
+**未改任何后端文件**（本 story 只有 App 端）。
+
+### AC 完成情况
+
+| AC | 层级 | 状态 |
+|---|---|---|
+| AC1 每行勾选框 + 全选，默认全选 | L0 | ✅ 默认态由后端 `selected` 驱动，前端不造默认值；跨冷启动保持 **L2 待本地** |
+| AC2 底栏按选中行实时更新 | L0 | ✅ 金额/件数只读 `selectedSubtotal`/`selectedCount`；**页面里没有任何求和代码** |
+| AC3 失效行不可勾选、不计入 | L0 | ✅ 禁用而非隐藏；判定用 `line.isValid` |
+| AC4 全不选时结算禁用并提示 | L0 | ✅ `onTap: null` + `cartSelectNoneHint`；有用例断言点下去零请求 |
+| AC5 取消勾选不删除商品 | L0/L2 | ✅ 有用例断言 `setSelected` 一次 / `remove` 零次；下单后未选中行仍在车里 **L2 待本地** |
+| AC6 契约与 L0 全绿 | L0 | ✅ `flutter analyze` **零 issue**；`flutter test` **1576 条全绿** |
+| AC7 模拟器验收 | L2 | **待本地验收**（云端 headless 无 GUI） |
+
+### 🔴 三条硬约束的落点（当年「勾选框刻意不实现」那三条理由的现形态）
+
+1. **金额只认 `selectedSubtotal`** —— `cart_page_v2.dart` 全文没有 `fold` / `price * qty` 求和。
+   前端求一遍、后端 `CheckoutService` 求一遍是两套实现，一处口径不同，用户看到的数
+   就和实际扣的钱不一样。
+2. **取消勾选绝不调 `remove`/`DELETE`** —— 用例 ② 直接断言 `ctrl.removed` 为空。
+   用破坏性操作模拟查询语义，取消结算就丢数据。
+3. **失效行禁用而非隐藏，判定用 `line.isValid`** —— 不是 `reason == delisted || reason == outOfStock`。
+   Epic 6 加第三种失效原因（停用品类）时，未知值经 `CartInvalidReason.fromApi` 落进
+   `unavailable`，`isValid` 自动为 false；写成枚举白名单则会让那些行「可勾选、可结算、
+   然后被后端 422 打回」。
+
+### 🔍 实现中的判断（各一行）
+
+1. **缺省值方向**：`CartLine.selected` 缺省 `true`，`selectedSubtotal`/`selectedCount`
+   缺省**回落到 `subtotal`/`itemCount` 而不是 0**。老后端不下发这些字段时，
+   每行都是选中态，「选中合计」本就等于全车合计；缺省成 0 会让底栏显示 Rp 0
+   并禁用结算按钮，用户**彻底买不了东西**。
+2. **不做乐观更新**：勾选是服务端状态，直接用端点返回的整份 `CartView` 覆盖。
+   先在本地勾上再发请求，失败就会留下「看着勾上了其实没勾上」，
+   而底栏金额按服务端的 `selectedSubtotal` 显示 —— 两者会当场对不上。
+3. **全选态判定排除失效行**（`allValidSelected` 只看 `lines`）：否则车里只要有一件下架
+   商品，全选框就永远点不亮，用户会以为控件坏了。但**点击**作用于车内全部行（含失效行），
+   与后端一致 —— 这样商品补货后，用户当初点的全选确实生效了。
+4. **`ShopBottomBarWithTotal` 加的是可选 `leading`**（可空、默认不渲染），
+   结算页 / 订单详情 / 退款方式三屏一行不用改。
+5. **测试替身「不能比真实现更宽容」**：`_FakeCartController.setSelected` 真的改状态
+   并真的重算四个合计（沿用本文件 `remove` 那条 2026-09-03 的教训）。只记调用不动状态，
+   「取消一行后底栏变小」会在一个永远不变的界面上绿着。
+6. **ARB**：`@` description 只写进模板 `app_en.arb`（与仓内既有 `cart*` 键一致，
+   `app_id.arb` 的 cart 系列都没有 `@`）。两语可翻译 key 集合已校验相等。
+   ⚠️ 一度用 `json.dumps` 重写 ARB，把 `app_en.arb` 整个重排出 1600 行噪音 diff，
+   已回退改为保持原格式的文本插入（最终 +9 行）。
+
+### ⚠️ 待本地验收清单
+
+- **🔴 上线次序**：合并时必须确认**后端 4-1 先于 App 4-2 到达目标环境**。
+  App 先到 = 勾选框已画但服务端不认 `selected` ⇒ 用户勾掉一行仍会被买走，正是资损。
+- **L2（Android 模拟器连 staging，云端 headless 做不到）**：
+  1. 购物车放 3 件商品，确认默认全部勾选、底栏金额 = 三件合计；
+  2. 取消勾选 1 件 → 底栏金额与件数同步变小；
+  3. 进结算页，确认结算页金额 **= 底栏金额**（4-1 的 `CheckoutPreviewView` 已改按选中集）；
+  4. 下单成功 → 回购物车，确认**另外 2 件仍在车里**；
+  5. 取消勾选后杀进程重进 → 勾选状态保持（它落在服务端）；
+  6. 全不选 → 结算按钮灰、提示文案出现、点击无反应。
+- **不做（沿用文件头既有说明，本次未动）**：凑单条 / 免运进度条（`CartView` 无免运门槛字段）、
+  批量管理态 `Ubah`、停用品类失效判定（Epic 6 第二批）。
+- **推送限制**：本分支**无 git remote**（云端 clone 未配置 origin），仅本地提交。

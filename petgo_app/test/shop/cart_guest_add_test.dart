@@ -227,6 +227,15 @@ class _FakeCartRepo implements CartRepository {
   @override
   Future<CartView> remove(String skuToken) async => _write('remove:$skuToken');
 
+  // Story 4-2：行选择。同样记进 calls，便于断言「取消勾选没走 remove」。
+  @override
+  Future<CartView> setSelected(String skuToken, bool selected) async =>
+      _write('setSelected:$skuToken:$selected');
+
+  @override
+  Future<CartView> setAllSelected(bool selected) async =>
+      _write('setAllSelected:$selected');
+
   @override
   Future<CartView> clearInvalid() async => _write('clearInvalid');
 

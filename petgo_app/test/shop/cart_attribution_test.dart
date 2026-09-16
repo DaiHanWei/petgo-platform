@@ -206,4 +206,11 @@ class _RecordingCartRepo implements CartRepository {
 
   @override
   Future<CartView> clearInvalid() async => CartView.empty;
+
+  // Story 4-2：行选择。本类只关心归因，选择端点不参与断言。
+  @override
+  Future<CartView> setSelected(String skuToken, bool selected) async => CartView.empty;
+
+  @override
+  Future<CartView> setAllSelected(bool selected) async => CartView.empty;
 }
