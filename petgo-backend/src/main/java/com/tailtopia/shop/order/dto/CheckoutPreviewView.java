@@ -62,9 +62,20 @@ public record CheckoutPreviewView(
             String triggerType) {
     }
 
+    /**
+     * 组装结算页试算视图。
+     *
+     * <p>🔴 <b>Story 4-1 起，{@code lines} 与 {@code goodsSubtotal} 取的是「选中且有效」的集合</b>
+     * （SHOP-FR-04 / AD-S6）。<b>字段集一个没变</b>，所以本 DTO 不触发 C5 的四处同改，
+     * 但语义变了：结算页展示的必须与 {@code placeOrder} 真正下单的是同一批行，
+     * 否则「结算页显示买 2 件、提交后买了 3 件」—— 那是会造成资损的谎。
+     * 过滤与求和都不在这里做：行取 {@code CartView.selectedLines()}，
+     * 金额取 {@code CartView.selectedSubtotal()} —— <b>全仓只有 {@code CartService.view}
+     * 那一个循环在求和</b>，这里再算一遍就是给漂移留口子。
+     */
     public static CheckoutPreviewView of(CheckoutPreview p) {
         List<CheckoutLine> lines = new ArrayList<>();
-        for (CartView.CartLine l : p.cart().lines()) {
+        for (CartView.CartLine l : p.cart().selectedLines()) {
             ReturnPolicy policy = p.returnPolicies().get(l.skuToken());
             lines.add(line(l, policy == null ? null : policy.name()));
         }
@@ -77,7 +88,7 @@ public record CheckoutPreviewView(
                 p.serviceable(),
                 lines,
                 unavailable,
-                p.cart().subtotal(),
+                p.cart().selectedSubtotal(),
                 p.shipping() == null ? null : p.shipping().fee(),
                 p.shipping() == null ? null : p.shipping().discount(),
                 p.split() == null ? null : p.split().total(),

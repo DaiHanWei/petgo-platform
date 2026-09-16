@@ -280,4 +280,179 @@ class CheckoutIntegrationTest extends ApiIntegrationTest {
         }
         assertThat(rejected).as("ck_shop_orders_split_sum 必须拦住对不平的拆分").isTrue();
     }
+
+    // ---------- Story 4-1：部分结算（SHOP-FR-04 / AD-S6 / SD-6） ----------
+
+    @Test
+    @DisplayName("🔴🔴 三件选两件：订单只含 2 行、金额是 2 行合计、第三行**下单后仍在车里**、库存只锁 2 件")
+    void placingOrderTakesOnlySelectedLines() {
+        long uid = seedUser();
+        String a = seedSku(10, 100_000L);
+        String b = seedSku(10, 50_000L);
+        String c = seedSku(10, 30_000L);
+        zones.setFreeShippingThreshold(0, ACTOR);
+        String addr = seedAddress(uid, 0L);
+        carts.add(uid, a, 2);   // 200.000
+        carts.add(uid, b, 1);   //  50.000
+        carts.add(uid, c, 3);   //  90.000（不买）
+
+        carts.setSelected(uid, c, false);
+        ShopOrder o = checkout.placeOrder(uid, addr, null, null);
+
+        assertThat(orderLines.findByOrderIdOrderByIdAsc(o.getId())).hasSize(2);
+        assertThat(o.getGoodsSubtotal())
+                .as("订单金额必须是选中两行的合计，不是全车合计")
+                .isEqualTo(250_000L);
+
+        // 🔴 本 story 最容易漏的一处：清车循环若还遍历 cart.lines()，
+        //    未选中的行会被连带删掉 —— 用户会发现购物车里的东西凭空消失且无从追回。
+        var cart = carts.view(uid);
+        assertThat(cart.lines()).hasSize(1);
+        assertThat(cart.lines().getFirst().skuToken())
+                .as("没勾的行是「这次不买」，不是「不要了」")
+                .isEqualTo(c);
+
+        // 🔴 库存只锁选中的：未选中行分毫不动。
+        assertThat(inventory.findBySkuId(skuId(a)).orElseThrow().getLocked()).isEqualTo(2L);
+        assertThat(inventory.findBySkuId(skuId(b)).orElseThrow().getLocked()).isEqualTo(1L);
+        assertThat(inventory.findBySkuId(skuId(c)).orElseThrow().getLocked())
+                .as("没勾的行库存分毫不动")
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("🔴 车里有货但一件都没勾 → 422「请至少选择一件商品」，**与「购物车为空」区分开**")
+    void nothingSelectedIsItsOwnError() {
+        long uid = seedUser();
+        String sku = seedSku(10, 100_000L);
+        zones.setFreeShippingThreshold(0, ACTOR);
+        String addr = seedAddress(uid, 0L);
+        carts.add(uid, sku, 2);
+        carts.setAllSelected(uid, false);
+
+        assertThatThrownBy(() -> checkout.placeOrder(uid, addr, null, null))
+                .isInstanceOf(AppException.class)
+                .as("给他一句「购物车为空」，他会去找一辆并不空的空车")
+                .hasMessageContaining("请至少选择一件商品")
+                .hasMessageNotContainingAny("购物车为空");
+    }
+
+    @Test
+    @DisplayName("空车仍走既有「购物车为空」分支，两条错误并存且文案不同")
+    void trulyEmptyCartKeepsItsOwnMessage() {
+        long uid = seedUser();
+        zones.setFreeShippingThreshold(0, ACTOR);
+        String addr = seedAddress(uid, 0L);
+
+        assertThatThrownBy(() -> checkout.placeOrder(uid, addr, null, null))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("购物车为空");
+    }
+
+    @Test
+    @DisplayName("整车失效仍报逐行明细，不报「购物车为空」也不报「请至少选择一件」")
+    void wholeCartInvalidStillReportsLineDetails() {
+        long uid = seedUser();
+        String sku = seedSku(10, 100_000L);
+        zones.setFreeShippingThreshold(0, ACTOR);
+        String addr = seedAddress(uid, 0L);
+        carts.add(uid, sku, 2);
+        listing.delist(jdbc.queryForObject(
+                "SELECT product_id FROM shop_skus WHERE public_token = ?", Long.class, sku), ACTOR);
+
+        // cart.lines() 空但 invalidLines 非空 —— 新的「一件没勾」判定不得吃掉这条既有语义。
+        assertThatThrownBy(() -> checkout.placeOrder(uid, addr, null, null))
+                .isInstanceOf(CheckoutUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("🔴 没勾的失效行不挡结算 —— 这正是「先删掉再买」那个老毛病的根")
+    void unselectedInvalidLineDoesNotBlockCheckout() {
+        long uid = seedUser();
+        String good = seedSku(10, 100_000L);
+        String dead = seedSku(10, 50_000L);
+        zones.setFreeShippingThreshold(0, ACTOR);
+        String addr = seedAddress(uid, 0L);
+        carts.add(uid, good, 1);
+        carts.add(uid, dead, 1);
+        listing.delist(jdbc.queryForObject(
+                "SELECT product_id FROM shop_skus WHERE public_token = ?", Long.class, dead),
+                ACTOR);
+        carts.setSelected(uid, dead, false);
+
+        ShopOrder o = checkout.placeOrder(uid, addr, null, null);
+
+        assertThat(o.getGoodsSubtotal()).isEqualTo(100_000L);
+        assertThat(carts.view(uid).invalidLines())
+                .as("下架行还留在车里给用户看（失效行不静默消失）")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("🔴 勾着的失效行照旧 409 逐行明细（选中集里有不可买的东西就得拦）")
+    void selectedInvalidLineStillBlocks() {
+        long uid = seedUser();
+        String good = seedSku(10, 100_000L);
+        String dead = seedSku(10, 50_000L);
+        zones.setFreeShippingThreshold(0, ACTOR);
+        String addr = seedAddress(uid, 0L);
+        carts.add(uid, good, 1);
+        carts.add(uid, dead, 1);
+        listing.delist(jdbc.queryForObject(
+                "SELECT product_id FROM shop_skus WHERE public_token = ?", Long.class, dead),
+                ACTOR);
+
+        assertThatThrownBy(() -> checkout.placeOrder(uid, addr, null, null))
+                .isInstanceOf(CheckoutUnavailableException.class)
+                .satisfies(e -> assertThat(((CheckoutUnavailableException) e).getLines())
+                        .extracting(UnavailableLine::reason)
+                        .containsExactly(UnavailableLine.REASON_DELISTED));
+    }
+
+    /**
+     * 🔴🔴 <b>AC7 老版本兼容（SHOP-NFR-04）—— 本用例代表线上正在跑的老版本 App。</b>
+     *
+     * <p>老版本 App <b>从不调用</b>两个选择端点（它的界面上根本没有勾选框）。
+     * 本用例全程只走加购 → 下单，断言结果与 Story 4-1 改动前逐项一致：
+     * 全部行进订单、金额是全车合计、库存全锁、车被清空。
+     *
+     * <p><b>删掉这个测试方法，等于删掉了老版本兼容性保证</b> ——
+     * 它一旦变红，说明某次改动让「没点过勾选框的客户端」行为发生了变化，
+     * 而那些用户没有任何办法察觉或纠正。
+     */
+    @Test
+    @DisplayName("🔴 AC7 老版本兼容：全程不调选择端点 → 行为与改动前逐项一致")
+    void legacyClientNeverTouchingSelectionBehavesAsBefore() {
+        long uid = seedUser();
+        String a = seedSku(10, 100_000L);
+        String b = seedSku(10, 50_000L);
+        zones.setFreeShippingThreshold(0, ACTOR);
+        String addr = seedAddress(uid, 20_000L);
+
+        // ——— 老版本能做的全部动作：加购。没有 setSelected / setAllSelected。———
+        carts.add(uid, a, 2);
+        carts.add(uid, b, 3);
+
+        var cart = carts.view(uid);
+        assertThat(cart.lines()).allSatisfy(l -> assertThat(l.selected())
+                .as("老版本看到的每一行都必须是选中态，否则它会漏单且用户毫无察觉")
+                .isTrue());
+        assertThat(cart.selectedSubtotal())
+                .as("没点过勾选框 ⇒ 选中合计恒等于 subtotal")
+                .isEqualTo(cart.subtotal());
+        assertThat(cart.selectedCount()).isEqualTo(cart.itemCount());
+
+        var preview = checkout.preview(uid, addr);
+        assertThat(preview.cart().subtotal()).isEqualTo(350_000L);
+
+        ShopOrder o = checkout.placeOrder(uid, addr, null, null);
+
+        assertThat(orderLines.findByOrderIdOrderByIdAsc(o.getId()))
+                .as("全部行进订单").hasSize(2);
+        assertThat(o.getGoodsSubtotal()).as("金额是全车合计").isEqualTo(350_000L);
+        assertThat(o.getShippingFee()).isEqualTo(20_000L);
+        assertThat(inventory.findBySkuId(skuId(a)).orElseThrow().getLocked()).isEqualTo(2L);
+        assertThat(inventory.findBySkuId(skuId(b)).orElseThrow().getLocked()).isEqualTo(3L);
+        assertThat(carts.view(uid).lines()).as("车被清空").isEmpty();
+    }
 }

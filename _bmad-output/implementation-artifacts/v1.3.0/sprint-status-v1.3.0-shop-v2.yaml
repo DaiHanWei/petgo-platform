@@ -103,7 +103,7 @@ development_status:
 
   # ---- Epic 4: 购买闭环 ----
   epic-4: in-progress
-  4-1-购物车部分结算后端: ready-for-dev   # SHOP-FR-04 · AD-S6 · 🔴 必须先于 4-2
+  4-1-购物车部分结算后端: review   # SHOP-FR-04 · AD-S6 · 🔴 必须先于 4-2 上线；迁移 V20260916_1056；变异验证已做 2 次（去过滤 2 条红 / subtotal 条件累加 2 条红）；L0 绿 1751；L1 待本地；⚠️ C5 的 App 两处留给 4-2
   4-2-购物车勾选-app: ready-for-dev   # SHOP-FR-04 · 🔴 依赖 4-1 上线
   4-3-订单号统一且不可推算: ready-for-dev   # SHOP-FR-29/30 · AD-S3 · 含存量回填
   4-4-复购卡显示价格: ready-for-dev   # SHOP-FR-03
