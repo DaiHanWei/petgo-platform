@@ -113,6 +113,9 @@ class ApiPaths {
   /// App 版本信息（Story 6.5，公开可读，App 内更新提醒）。
   static const String appVersion = '$base/app-version';
 
+  /// 客服联系方式（V1.3.0 Story 3-1）。🔓 免鉴权 —— 客服弹窗在登录前也会出现。
+  static const String supportContact = '$base/support/contact';
+
   /// 通知中心（Story 6.6）。列表 / 未读角标 / 标记已读。
   static const String notifications = '$base/notifications';
   static const String notificationsUnreadCount = '$base/notifications/unread-count';

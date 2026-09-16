@@ -21,6 +21,7 @@ import com.tailtopia.shared.security.GoogleIdentity;
 import com.tailtopia.shared.security.GoogleTokenVerifier;
 import com.tailtopia.shared.security.JwtService;
 import com.tailtopia.vet.domain.VetAccount;
+import com.tailtopia.shared.config.SupportContactProvider;
 import com.tailtopia.vet.service.VetAccountService;
 import java.time.Instant;
 import org.springframework.context.ApplicationEventPublisher;
@@ -36,9 +37,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthService {
 
-    /** Story 3.2：停用账号登录/刷新被拒的用户文案（App 据此引导外部联系渠道；用户已无法进入 App 工单）。 */
-    static final String DEACTIVATED_MESSAGE =
-            "账号已被停用，如有疑问请联系客服：WhatsApp 081290906953 / 邮箱 cs@tailtopia.id";
 
     private final UserRepository users;
     private final RefreshTokenRepository refreshTokens;
@@ -48,11 +46,12 @@ public class AuthService {
     private final VetAccountService vetAccounts;
     private final PetProfileRepository petProfiles;
     private final ApplicationEventPublisher events;
+    private final SupportContactProvider supportContacts;
 
     public AuthService(UserRepository users, RefreshTokenRepository refreshTokens,
             GoogleTokenVerifier googleVerifier, AppleTokenVerifier appleVerifier,
             JwtService jwt, VetAccountService vetAccounts, PetProfileRepository petProfiles,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, SupportContactProvider supportContacts) {
         this.users = users;
         this.refreshTokens = refreshTokens;
         this.googleVerifier = googleVerifier;
@@ -61,6 +60,25 @@ public class AuthService {
         this.vetAccounts = vetAccounts;
         this.petProfiles = petProfiles;
         this.events = events;
+        this.supportContacts = supportContacts;
+    }
+
+    /**
+     * Story 3.2：停用账号登录 / 刷新被拒的用户文案（App 据此引导外部联系渠道 ——
+     * 此时用户已经进不了 App 的工单页，这行字是他唯一的出口）。
+     *
+     * <p>🔴 V1.3.0 Story 3-1：由 {@code static final} 常量改成运行时拼装，号码来自
+     * {@link SupportContactProvider} —— 换客服号不再需要发版。
+     * provider 的实现保证永不抛异常（读不到就回退内置值），所以**这行文案不会因为配置表出问题
+     * 而挂掉** —— 那恰恰是用户最需要看到客服号的时刻。
+     *
+     * <p>⚠️ 文案保持中文原样：App 直接把 ProblemDetail 的 detail 显示给用户，这是既有行为。
+     * i18n 化是另一个话题，别顺手做。
+     */
+    private String deactivatedMessage() {
+        var c = supportContacts.contact();
+        return "账号已被停用，如有疑问请联系客服：WhatsApp %s / 邮箱 %s"
+                .formatted(c.whatsappNumber(), c.email());
     }
 
     /**
@@ -87,7 +105,7 @@ public class AuthService {
 
         // Story 3.2：停用账号即时不可登录（即便是已存在用户）。
         if (!user.isActiveStatus()) {
-            throw AppException.forbidden(DEACTIVATED_MESSAGE);
+            throw AppException.forbidden(deactivatedMessage());
         }
 
         // 内容审核 story 4（§10.2）：Google displayName→nickname 自动初值也送审（防第三方脏昵称绕过），
@@ -129,7 +147,7 @@ public class AuthService {
         // Story 3.2：停用账号即时不可登录——与 loginWithGoogle / rotateRefresh 同一道闸。
         // 漏掉这里等于给被封号的 Apple 用户留一条「重新登录就复活」的旁路。
         if (!user.isActiveStatus()) {
-            throw AppException.forbidden(DEACTIVATED_MESSAGE);
+            throw AppException.forbidden(deactivatedMessage());
         }
 
         if (isNew[0]) {
@@ -208,7 +226,7 @@ public class AuthService {
                 .orElseThrow(() -> AppException.unauthorized("登录已过期，请重新登录"));
         // Story 3.2：停用账号刷新被拒（带停用语义，App 据此展示外部联系渠道）。
         if (!user.isActiveStatus()) {
-            throw AppException.forbidden(DEACTIVATED_MESSAGE);
+            throw AppException.forbidden(deactivatedMessage());
         }
 
         String access = jwt.issueAccessToken(user);

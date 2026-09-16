@@ -77,6 +77,9 @@ public class AdminConfigController {
         model.addAttribute("pricing", read.pricing());
         model.addAttribute("pawcoin", read.pawcoin());
         model.addAttribute("tiers", read.allTiers());
+        // V1.3.0 Story 3-1：客服联系方式。⚠️ read.supportContact() 返回 Optional
+        //    （缺行时消费方回退内置值而不是抛），页面这里用 orElse(null) 让模板自行判空。
+        model.addAttribute("supportContact", read.supportContact().orElse(null));
         // V1.1.6 Story 16.4：推荐算法参数（挂既有配置页，🛡 不新建后台模块）
         // Story 18.3 · AC2/AC3：白嫖倍数与当月消耗必须**同屏**——
         // 「月度上限 30」和「HD 解锁 60」分开看都合理，放一起才看得出「两个月白嫖一次」。
@@ -124,6 +127,29 @@ public class AdminConfigController {
                 shareStats.sumGranted(period),
                 cap > 0 ? shareStats.countAtCap(period, cap) : 0,
                 period);
+    }
+
+    /**
+     * 客服联系方式（V1.3.0 Story 3-1 / AD-S8）。
+     *
+     * <p>🔴 <b>复用既有 {@code config.view} / {@code config.edit} 权限码，不新增权限码</b> ——
+     * 新增一个要改满 6 道关卡（常量 / 分组 / 四个 properties / 双向守门测试 / 预置角色），
+     * 而客服号与定价、PawCoin 参数是同一类「平台运营配置」，没有独立授权的理由。
+     */
+    @PostMapping("/admin/config/support-contact")
+    @PreAuthorize(EDIT_AUTH)
+    public String updateSupportContact(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam String whatsappNumber, @RequestParam String email,
+            RedirectAttributes flash) {
+        try {
+            write.updateSupportContact(whatsappNumber, email, admin.getAdminAccountId());
+            flash.addFlashAttribute("toast", msg.get("admin.flash.config.supportContactSaved"));
+        } catch (AppException e) {
+            // 🔒 msg.resolve 走的是 AppException 的 code + args，号码本身不在 args 里
+            //    （IndonesiaPhone 的 detail 刻意不含输入）——错误提示不会把号码回显出去。
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/config";
     }
 
     @PostMapping("/admin/config/pricing")

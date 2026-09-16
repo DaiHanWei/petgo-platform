@@ -44,6 +44,32 @@
             当前定价（只读，需 config.edit 权限修改）
         </p>
 
+        <!-- 客服联系方式（V1.3.0 Story 3-1 / AD-S8）——改完即生效，不需发版、不需重启。
+             号码由 App 客服弹窗、登录被拒提示、WhatsApp 深链三处共同消费。 -->
+        <h2 th:text="#{admin.config.supportContact}">客服联系方式</h2>
+        <form class="card" method="post" th:action="@{/admin/config/support-contact}"
+              th:if="${supportContact != null}"
+              sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('config.edit')">
+            <label class="field"><span th:text="#{admin.config.supportWhatsapp}">客服 WhatsApp 号</span>
+                <input class="field-full" type="text" name="whatsappNumber" maxlength="20"
+                       th:value="${supportContact.whatsappNumber}"/>
+            </label>
+            <label class="field"><span th:text="#{admin.config.supportEmail}">客服邮箱</span>
+                <input class="field-full" type="email" name="email" maxlength="120"
+                       th:value="${supportContact.email}"/>
+            </label>
+            <p class="hint" th:text="#{admin.config.supportContactHint}">
+                填印尼手机号（08 开头或 +62 开头都行，系统会自行归一化）。改完立即对全部用户生效。
+            </p>
+            <button type="submit" class="btn btn-primary btn-sm mt-sm"
+                    th:text="#{admin.config.btn.saveSupportContact}">保存客服联系方式</button>
+        </form>
+        <p class="hint" th:if="${supportContact != null}"
+           sec:authorize="!hasRole('SUPER_ADMIN') and !hasAuthority('config.edit')"
+           th:text="#{admin.config.supportContactReadonly(${supportContact.whatsappNumber}, ${supportContact.email})}">
+            当前客服联系方式（只读，需 config.edit 权限修改）
+        </p>
+
         <!-- PawCoin（AB-6A/6C）-->
         <h2>PawCoin</h2>
         <form method="post" th:action="@{/admin/config/pawcoin}"

@@ -4,11 +4,14 @@ import com.tailtopia.config.domain.FeedRankConfig;
 import com.tailtopia.config.domain.PawCoinConfig;
 import com.tailtopia.config.domain.PawCoinTopupTier;
 import com.tailtopia.config.domain.PricingConfig;
+import com.tailtopia.config.domain.SupportContactConfig;
 import com.tailtopia.config.repository.FeedRankConfigRepository;
 import com.tailtopia.config.repository.PawCoinConfigRepository;
 import com.tailtopia.config.repository.PawCoinTopupTierRepository;
 import com.tailtopia.config.repository.PricingConfigRepository;
+import com.tailtopia.config.repository.SupportContactConfigRepository;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,13 +30,29 @@ public class PlatformConfigService {
     private final PawCoinConfigRepository pawcoin;
     private final PawCoinTopupTierRepository tiers;
     private final FeedRankConfigRepository feedRank;
+    private final SupportContactConfigRepository supportContact;
 
     public PlatformConfigService(PricingConfigRepository pricing, PawCoinConfigRepository pawcoin,
-            PawCoinTopupTierRepository tiers, FeedRankConfigRepository feedRank) {
+            PawCoinTopupTierRepository tiers, FeedRankConfigRepository feedRank,
+            SupportContactConfigRepository supportContact) {
         this.pricing = pricing;
         this.pawcoin = pawcoin;
         this.tiers = tiers;
         this.feedRank = feedRank;
+        this.supportContact = supportContact;
+    }
+
+    /**
+     * 当前客服联系方式（单行，Story 3-1）。
+     *
+     * <p>🔴 <b>刻意返回 {@link Optional} 而不是像上面几个那样缺行即抛</b>：
+     * 客服号的消费方里有**登录被拒的文案**与**兽医登录页的客服弹窗** ——
+     * 配置表出问题时抛异常，等于让「账号被停用」这条提示和登录页一起挂掉，
+     * 用户连找谁申诉都看不到。缺行由 {@code DbSupportContactProvider} 回退到内置默认值。
+     */
+    @Transactional(readOnly = true)
+    public Optional<SupportContactConfig> supportContact() {
+        return supportContact.findById(SupportContactConfig.SINGLETON_ID);
     }
 
     /**

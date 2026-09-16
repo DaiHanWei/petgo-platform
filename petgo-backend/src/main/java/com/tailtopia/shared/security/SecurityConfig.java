@@ -168,6 +168,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/im/usersig").authenticated()
                         // App 版本信息（Story 6.5，游客可读，App 内更新提醒用）
                         .requestMatchers(HttpMethod.GET, "/api/v1/app-version").permitAll()
+                        // 客服联系方式（V1.3.0 Story 3-1）：客服弹窗在**登录前**也会出现
+                        // （兽医登录页就有一个），登录墙会让「登不进去的人找客服」这条路直接断掉。
+                        // 🔴 **必须精确匹配，不得写成 /api/v1/support/**** —— 下面那条
+                        //    /api/v1/support-tickets/** 是 USER 角色专属，通配会给未来任何
+                        //    /api/v1/support/* 子路径开天窗。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/support/contact").permitAll()
                         // 游客只读放行锚点（Story 1.5 细化具体业务 GET）
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
                         // Feed 只读对游客可见（Story 3.2，FR-0A/17）：GET 内容流放行（写仍需 JWT）

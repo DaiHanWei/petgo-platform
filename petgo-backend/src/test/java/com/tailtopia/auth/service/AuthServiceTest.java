@@ -28,7 +28,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.tailtopia.shared.config.SupportContactProvider;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -52,6 +54,17 @@ class AuthServiceTest {
     VetAccountService vetAccounts;
     @Mock
     PetProfileRepository petProfiles;
+
+    /**
+     * V1.3.0 Story 3-1：停用提示里的客服号改成运行时从 provider 取。
+     *
+     * <p>🔴 用**真的 Default 实现**而不是 Mockito mock：mock 的 {@code contact()} 返回 null，
+     * 会让 {@code deactivatedMessage()} 抛 NPE —— 两条「停用账号被拒」的用例断言的是
+     * {@code AppException}，NPE 一来它们就红，而红的原因与它们要守的东西毫无关系。
+     * 生产实现契约上也是「永不返回 null、永不抛」，这里用真货更贴近现实。
+     */
+    @Spy
+    SupportContactProvider supportContacts = new SupportContactProvider.Default();
 
     @InjectMocks
     AuthService authService;

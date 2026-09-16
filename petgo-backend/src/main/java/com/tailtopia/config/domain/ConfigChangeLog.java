@@ -19,8 +19,15 @@ public class ConfigChangeLog {
     public enum ConfigType {
         PRICING, PAWCOIN, TOPUP_TIER,
         /** 首页推荐算法打分参数（V1.1.6 Story 16.4）。 */
-        FEED_RANK
+        FEED_RANK,
+        /** 客服联系方式（V1.3.0 Story 3-1）。 */
+        SUPPORT_CONTACT
     }
+
+    // 🔴 加枚举值**不够**：列上有 CHECK 白名单，不同步放开会在写日志时撞约束，
+    //    表现是「保存配置报 500」而错误栈指向 config_change_logs、不指向配置模块。
+    //    放开必须 DROP + ADD **重列全集**，值集取自当前树里最后一条重建该约束的迁移。
+    //    此处已出过三次事故（每次都是照着一份过期列表抄，丢掉一批值）。
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

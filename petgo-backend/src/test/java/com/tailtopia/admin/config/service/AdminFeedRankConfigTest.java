@@ -36,7 +36,8 @@ class AdminFeedRankConfigTest {
         audit = Mockito.mock(AdminAuditService.class);
         svc = new AdminConfigService(Mockito.mock(PricingConfigRepository.class),
                 Mockito.mock(PawCoinConfigRepository.class),
-                Mockito.mock(PawCoinTopupTierRepository.class), changeLogs, audit, repo);
+                Mockito.mock(PawCoinTopupTierRepository.class), changeLogs, audit, repo,
+                Mockito.mock(com.tailtopia.config.repository.SupportContactConfigRepository.class));
         cfg = seed();
         Mockito.when(repo.findById(FeedRankConfig.SINGLETON_ID)).thenReturn(Optional.of(cfg));
     }
