@@ -1,10 +1,10 @@
 # generated: 2026-09-16
-# last_updated: 2026-09-16（epics 拆分完成，story 文件待生成）
+# last_updated: 2026-09-16（第一批 18 个 story 文件已生成 → ready-for-dev；第二批待 admin Epic 10）
 # project: petgo-platform (V1.3.0 电商板块 V2 · 主题 shop-v2 · 分支 feat/1.3.0-shop-v2 → dev_1.3.0)
 # project_key: NOKEY
 # tracking_system: file-system
 # story_location: {project-root}/_bmad-output/implementation-artifacts/v1.3.0
-# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-shop-v2.md (9 Epic / 40 Story)
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-shop-v2.md (9 Epic / 40 Story = 第一批 18 + 第二批 22)
 # architecture: {project-root}/_bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-shop-v2-delta.md (AD-S1~AD-S13)
 # prd: {project-root}/_bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-shop-v2.md (SHOP-FR-01~35 / SHOP-NFR-01~06)
 # decisions: {project-root}/_bmad-output/planning-artifacts/v1.3.0/决策日志-shop-v2.md (SD-1~SD-18) —— 冲突时以它为准
@@ -15,7 +15,7 @@
 # 批次与执行顺序
 # ═══════════════════════════════════════════════════════════════
 #
-# 【第一批】Epic 1-5（17 story）—— 随 V1.3.0，无外部前置，可立即开工
+# 【第一批】Epic 1-5（18 story）—— 随 V1.3.0，无外部前置，可立即开工
 #   Epic 1 | 2 | 3 | 5 可并行；Epic 4 内部有强顺序（见下）
 #   建议序：1-1 → 1-2 → 1-3 → 1-4（支付链路，后端先行）
 #           2-1 / 2-2（售后收口，独立）
@@ -23,7 +23,7 @@
 #           4-1 → 4-2（🔴 强顺序，见下）；4-3 → 之后 3-2 的电商单展示切新号；4-4 / 4-5 独立
 #           5-1 / 5-2 / 5-3（独立小修）
 #
-# 【第二批】Epic 6-9（23 story）—— ⛔ 前置：admin 主题 Epic 10（电商后台 17 页模板化重构）完成
+# 【第二批】Epic 6-9（22 story）—— ⛔ 前置：admin 主题 Epic 10（电商后台 17 页模板化重构）完成
 #   🔴 发布规则（SD-16）：V1.3.0 代码冻结时 Epic 10 未完成 ⇒ 本批整组顺延到下一版，第一批照常发布
 #   建议序：6-1 → 6-2 → 6-3（品类）；6-4（编号，与 6-x 可并行）
 #           → 7-1（批量框架，必须先于 7-2/7-3/7-4）→ 7-2 | 7-3 | 7-4
@@ -47,7 +47,8 @@
 #   · 每条 AC 已标 L0/L1/L2；云端只跑 L0，Completion Notes 必须写「L1/L2 待本地验收」
 #   · Flyway 一律时间戳版本号（E7）；提交前跑 scripts/ci/check-flyway-versions.sh origin/main
 #   · 打包一律 mvn -B clean package（改迁移后旧 class 残留会让 Flyway 报重复版本）
-#   · 契约变更四处同改（C5）：后端 record + App DTO + App mock + 契约 test
+#   · 契约变更同改（C5）：后端 record + App DTO + 契约 test —— ⚠️ C5 原文写「四处」含 App mock，
+#     但 mock 子系统已于 8e85b40d 整体删除，实为三处
 #   · 新权限码改满 5 处：常量 → 两个 GROUPS 分组 → 四语 perm.* → AdminPermissionsTest 断言数
 #     → admin 预置角色默认授予与种子迁移
 #   · 三处必须做变异验证（删掉护栏那行看测试变不变红）：1-2 埋点白名单 / 5-1 日志脱敏 /
@@ -77,41 +78,41 @@ development_status:
   # ════════ 第一批 · 随 V1.3.0 ════════
 
   # ---- Epic 1: 支付可感知与支付监控 ----
-  epic-1: backlog
-  1-1-后端下发支付状态与失败类别: backlog   # SHOP-FR-01 · AD-S9(a)
-  1-2-埋点护栏环境标记与服务端支付事件: backlog   # SHOP-FR-02 · AD-S9(b) · 变异验证
-  1-3-app-支付三态处置: backlog   # SHOP-FR-01 · 依赖 1-1 · 须回归其余四条支付链路
-  1-4-app-支付环节埋点: backlog   # SHOP-FR-02 · 依赖 1-2
+  epic-1: in-progress
+  1-1-后端下发支付状态与失败类别: ready-for-dev   # SHOP-FR-01 · AD-S9(a)
+  1-2-埋点护栏环境标记与服务端支付事件: ready-for-dev   # SHOP-FR-02 · AD-S9(b) · 变异验证
+  1-3-app-支付三态处置: ready-for-dev   # SHOP-FR-01 · 依赖 1-1 · 须回归其余业务线（实为 3 条线/4 调用点）
+  1-4-app-支付环节埋点: ready-for-dev   # SHOP-FR-02 · 依赖 1-2
   epic-1-retrospective: optional
 
   # ---- Epic 2: 售后收口 ----
-  epic-2: backlog
-  2-1-app-隐藏退货入口与文案: backlog   # SHOP-FR-05 · SD-5 · 纯前端
-  2-2-售后兜底配置与运营流程: backlog   # SHOP-FR-35 · SD-13 · 非代码 story（配置 + 文档）
+  epic-2: in-progress
+  2-1-app-隐藏退货入口与文案: ready-for-dev   # SHOP-FR-05 · SD-5 · 纯前端
+  2-2-售后兜底配置与运营流程: ready-for-dev   # SHOP-FR-35 · SD-13 · 非代码 story（配置 + 文档）
   epic-2-retrospective: optional
 
   # ---- Epic 3: 客服可达 ----
-  epic-3: backlog
-  3-1-客服联系方式配置化: backlog   # SHOP-FR-26 · AD-S8 · 新建 support_contact_config
-  3-2-工单关联电商订单后端: backlog   # SHOP-FR-25 · AD-S7 · 加 related_order_type
-  3-3-app-工单选订单与-whatsapp-深链: backlog   # SHOP-FR-25/26 · 依赖 3-1 + 3-2
-  3-4-新订单-lark-提醒: backlog   # SHOP-FR-24 · 主线 C · 须节流汇总
+  epic-3: in-progress
+  3-1-客服联系方式配置化: ready-for-dev   # SHOP-FR-26 · AD-S8 · 新建 support_contact_config
+  3-2-工单关联电商订单后端: ready-for-dev   # SHOP-FR-25 · AD-S7 · 加 related_order_type
+  3-3-app-工单选订单与-whatsapp-深链: ready-for-dev   # SHOP-FR-25/26 · 依赖 3-1 + 3-2
+  3-4-新订单-lark-提醒: ready-for-dev   # SHOP-FR-24 · 主线 C · 须节流汇总
   epic-3-retrospective: optional
 
   # ---- Epic 4: 购买闭环 ----
-  epic-4: backlog
-  4-1-购物车部分结算后端: backlog   # SHOP-FR-04 · AD-S6 · 🔴 必须先于 4-2
-  4-2-购物车勾选-app: backlog   # SHOP-FR-04 · 🔴 依赖 4-1 上线
-  4-3-订单号统一且不可推算: backlog   # SHOP-FR-29/30 · AD-S3 · 含存量回填
-  4-4-复购卡显示价格: backlog   # SHOP-FR-03
-  4-5-c-端商品列表分页: backlog   # SHOP-FR-13 · 🔴 破坏性契约变更，须老版本兼容
+  epic-4: in-progress
+  4-1-购物车部分结算后端: ready-for-dev   # SHOP-FR-04 · AD-S6 · 🔴 必须先于 4-2
+  4-2-购物车勾选-app: ready-for-dev   # SHOP-FR-04 · 🔴 依赖 4-1 上线
+  4-3-订单号统一且不可推算: ready-for-dev   # SHOP-FR-29/30 · AD-S3 · 含存量回填
+  4-4-复购卡显示价格: ready-for-dev   # SHOP-FR-03
+  4-5-c-端商品列表分页: ready-for-dev   # SHOP-FR-13 · 🔴 破坏性契约变更，须老版本兼容
   epic-4-retrospective: optional
 
   # ---- Epic 5: 缺陷收口 ----
-  epic-5: backlog
-  5-1-评价原文不进日志: backlog   # SHOP-FR-27 · 变异验证
-  5-2-请求方法错误不再返回-500: backlog   # SHOP-FR-31 · 只剩 405/415
-  5-3-看板统计口径修正查询层: backlog   # SHOP-FR-28 · 页面部分见 9-5
+  epic-5: in-progress
+  5-1-评价原文不进日志: ready-for-dev   # SHOP-FR-27 · 变异验证
+  5-2-请求方法错误不再返回-500: ready-for-dev   # SHOP-FR-31 · 只剩 405/415
+  5-3-看板统计口径修正查询层: ready-for-dev   # SHOP-FR-28 · 页面部分见 9-5
   epic-5-retrospective: optional
 
   # ════════ 第二批 · ⛔ 等 admin 主题 Epic 10 ════════
@@ -171,3 +172,18 @@ development_status:
 #
 # 行动项：ACT-A 推动 admin Epic 10 排期 · ACT-B 告知运营（无销量排序 / 详情只能纯文本）
 #         ACT-C 上线前四件事 · ACT-D 补电商一期决策留痕 · ACT-E 下一版 Meta 企业验证
+
+# ═══════════════════════════════════════════════════════════════
+# 2026-09-16 写 story 时的代码核实更正（已回写 PRD / 架构 / epics / 决策日志）
+# ═══════════════════════════════════════════════════════════════
+#   1. 支付失败分类须「先判 status 后判 reason」—— EXPIRED 是独立终态且不写 reason，
+#      照原映射会把超时稳定误判成网关拒付并给出不该有的重试入口（1-1）
+#   2. QrPaymentSheet 实为 4 调用点 / 3 条业务线（电商、AI 解锁、高清身份证）；
+#      问诊与充值各自内联实现、不走它 —— 回归范围按此（1-3）
+#   3. C5「四处同改」实为三处：App mock 子系统已于 8e85b40d 整体删除
+#   4. App 只有 app_en.arb / app_id.arb 两包，没有中文包；「三语」指后台 properties
+#   5. SD-13：平台责任补偿两项后台无入口（只读核实即可）；激励另有固定加钱项
+#      premium_fixed，与比例相加，必须一并为 0（2-2）
+#   6. 售后成本统计有真实盲区：后台「整单取消」发的补偿只落 PawCoin 流水、不建退货单，
+#      从不计入售后成本；本版三项补偿为 0 时无差别（5-3 注释备查）
+#   7. Lark 发消息能力当前不存在（只有 Sheets/Drive 与 OAuth 客户端），3-4 需新建

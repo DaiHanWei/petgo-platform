@@ -37,7 +37,7 @@ inputDocuments:
 | F-4 | 库存全部是**条件原子写**：`SkuInventoryRepository.lock/release/commit/restock/damage/stocktakeTo`，后者对前值做 CAS | 批量改库存复用 `stocktakeTo`（AD-S5），不新造扣减路径 |
 | F-5 | 资金三条硬线：`ck_payment_intents_mixed_shape`（coin+cash=amount 库级强制）· AD-2 整数累计法 · **PawCoin 段只退 PawCoin** | 本 delta 不碰退款执行链路（退货整体移出本版，SD-5） |
 | F-6 | 对外标识 = 不可枚举 token（`ShopTokenGenerator`：SecureRandom + Base62 × 22）；但展示号 `OrderDisplayNo = TOKO-yyyyMMdd-%06d` 用自增 id、**可枚举、从不落库** | SHOP-FR-30 要改的正是后者（AD-S3） |
-| F-7 | 对外契约四处同改（C5）：后端 record + App data DTO + App mock + 契约 test，缺一 PR 不绿 | 本 delta 所有契约变更条目均标注 |
+| F-7 | 对外契约同改（C5）：后端 record + App data DTO + 契约 test，缺一 PR 不绿。⚠️ **C5 原文写「四处」含 App mock，但 mock 子系统已于 `8e85b40d` 整体删除，实为三处** | 本 delta 所有契约变更条目均标注 |
 | F-8 | 后台侧必须遵守 admin delta：五套模板 A~E + htmx 局部更新 · **AB-19A「零端点变更」**（详情 GET 按 `HX-Request` 返抽屉，不新增 `…/drawer`）· 写操作三件套 `@PreAuthorize` + `AdminAuditService.record` + 三语 key | 本 delta 后台部分逐条标注模板归属；新增端点按 AD-S13 登记为 AB-19A 的新例外 |
 | F-9 | 权限码 `AdminPermissions` 现 **72 个**（本分支），admin 主题合入后为 74 并新增 `admin_roles` / `admin_role_permissions` 与 4 个预置角色 | 新权限码须改 **5 处**（AD-S13） |
 | F-10 | **服务端不剥 EXIF**：字节原样进 OSS，剥离靠投递期 `x-oss-process`，且只施用于 5 处，shop 图片路径全未套（E4 只做了一半） | 外链转存路径必须自己剥（AD-S4） |
@@ -82,7 +82,7 @@ inputDocuments:
 - 新增 `shop/category/{domain,repository,service,dto}`：`ShopCategory` 实体 + `ShopCategoryService`（缓存？**不缓存** —— 四到十几行的表，每次查库，禁通用缓存层，F-3）。
 - **物种不动**（SD-12）：`Species` 仍是枚举，`ck_shop_products_species` 保留。
 
-**对外契约（C5 四处同改）**：
+**对外契约（C5 同改，实为三处）**：
 - 新端点 `GET /api/v1/shop/categories` → `[{code, name, sortWeight}]`，`name` 由后端按 `Accept-Language` 选 `name_id` / `name_en`（**只下发一个 name，不下发双语对象**，避免 App 做语言选择逻辑）。
 - 商品 DTO 中 `category` 字段语义不变（仍是 code），App 显示名改从上述端点取。
 - 🔴 **这是对「App 不渲染后端显示串、按 code 本地化」模型的有意例外**（AD-S1-E）：理由是运营新建的品类不可能预先存在于 ARB。**例外仅限品类名**，不得扩散到其它文案。ARB 中现有四个品类名保留，作为端点不可达时的兜底。
@@ -169,7 +169,7 @@ inputDocuments:
 - `CartView` 增 `selected`（行级）与 `selectedSubtotal`、`selectedCount`；`subtotal` 语义不变（全车合计），避免老版本读到变味的字段。
 - **免运门槛、PawCoin 抵扣上限、库存锁定全部按选中行计算**（SD-6）——即 `CheckoutService.preview/placeOrder` 的输入集合从「整车」换成「选中集」，其余算式不动。
 - **老版本兼容**（SHOP-NFR-04）：老版本不调选择端点、所有行默认 `selected=true` ⇒ 行为与今日一致。
-- 契约变更四处同改（C5）。
+- 契约变更同改（C5，实为三处）。
 
 ### AD-S7 · 工单关联电商订单（SHOP-FR-25）
 
@@ -199,9 +199,9 @@ inputDocuments:
 
 **(a) App 感知不到「网关拒付」** —— 根因：网关拒付只改 `payment_intents`，不改订单，App 轮询的是订单状态。
 - 订单详情 DTO 增 `paymentStatus`（透传支付单状态）与 `paymentFailureCategory` 枚举：`GATEWAY_DECLINED` / `EXPIRED` / `USER_CANCELLED` / `null`。
-- 分类来源：`payment_intents.gateway_meta->>'reason'`（内部作废写 `TIMEOUT`/`USER_CANCEL`/`CANCELLED`，其余为网关回调）—— **分类逻辑落在后端一处** `PaymentFailureCategory.of(intent)`，不让 App 解析 meta（meta 可能含 PII）。
+- 分类来源：🔴 **先判 status、再判 reason**（2026-09-16 代码核实更正）—— `PaymentStatus` 有独立的 `EXPIRED` 终态，电商意图带 ttl，`PaymentIntentExpiryScanner` 每 60s 扫且不按 purpose 过滤，会先把超时意图置 `EXPIRED` 且 `markExpired(null)` **不写 reason**；随后 `failByToken` 因 `isTerminal()` 短路，reason 永远写不进去。若照「其余 → GATEWAY_DECLINED」映射，**超时会被稳定误判为网关拒付并给出不该有的重试入口**。正确顺序：`status==EXPIRED` → `EXPIRED`；否则读 `gateway_meta->>'reason'`（`TIMEOUT` → `EXPIRED`、`USER_CANCEL`/`CANCELLED` → `USER_CANCELLED`、其余 → `GATEWAY_DECLINED`）。**分类逻辑落在后端一处** `PaymentFailureCategory.of(intent)`，不让 App 解析 meta（meta 可能含 PII）。
 - App 轮询改为读订单详情中的这两个字段；三种结局的处置见 SHOP-FR-01。
-- 🔴 **`QrPaymentSheet` 是五条链路共用组件**（问诊 / AI 解锁 / 高清身份证 / 充值 / 电商）：本次改造须**走参数而非改默认行为**，其余四条链路表现不变，回归用例写进 story。
+- 🔴 **`QrPaymentSheet` 是共用组件**：本次改造须**走参数而非改默认行为**，其余业务线表现不变，回归用例写进 story。⚠️ **2026-09-16 代码核实更正**：实际 **4 个调用点 / 3 条业务线**（电商、AI 解锁、高清身份证×2）；**问诊（`vet_timed_pay_page.dart`）与充值（`recharge_page.dart`）各自内联 `QrImageView` + 自轮询，不走本组件**。
 
 **(b) 监控口径**
 - **服务端**：新增 `ShopPaymentAnalyticsListener`（`shop/order/service`），`@TransactionalEventListener(AFTER_COMMIT)` + `@Async`，事件名固定集合：`shop_payment_intent_created` / `shop_payment_paid` / `shop_payment_declined` / `shop_payment_expired` / `shop_payment_user_cancelled`。属性只允许**枚举与数值**（订单金额、失败类别、支付渠道），`distinctId` 走既有 `AnalyticsDistinctId`。
@@ -288,7 +288,7 @@ inputDocuments:
 
 ---
 
-## 5 · 契约变更清单（C5 四处同改）
+## 5 · 契约变更清单（C5 同改 —— 后端 record + App DTO + 契约 test 三处；C5 原文的 App mock 一腿已随 `8e85b40d` 删除）
 
 | # | 变更 | 老版本影响 |
 |---|---|---|
