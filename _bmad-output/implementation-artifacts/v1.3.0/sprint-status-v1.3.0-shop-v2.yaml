@@ -1,0 +1,173 @@
+# generated: 2026-09-16
+# last_updated: 2026-09-16（epics 拆分完成，story 文件待生成）
+# project: petgo-platform (V1.3.0 电商板块 V2 · 主题 shop-v2 · 分支 feat/1.3.0-shop-v2 → dev_1.3.0)
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.3.0
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-shop-v2.md (9 Epic / 40 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-shop-v2-delta.md (AD-S1~AD-S13)
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-shop-v2.md (SHOP-FR-01~35 / SHOP-NFR-01~06)
+# decisions: {project-root}/_bmad-output/planning-artifacts/v1.3.0/决策日志-shop-v2.md (SD-1~SD-18) —— 冲突时以它为准
+# NOTE: 本文件是 V1.3.0 电商线 sprint 跟踪，与同版本 admin 主题的 sprint-status 并存，Epic 号段各自独立。
+#       引用 story 必须带主题（如「shop-v2 的 1-1」），本目录下 admin 主题也有 1-1。
+#
+# ═══════════════════════════════════════════════════════════════
+# 批次与执行顺序
+# ═══════════════════════════════════════════════════════════════
+#
+# 【第一批】Epic 1-5（17 story）—— 随 V1.3.0，无外部前置，可立即开工
+#   Epic 1 | 2 | 3 | 5 可并行；Epic 4 内部有强顺序（见下）
+#   建议序：1-1 → 1-2 → 1-3 → 1-4（支付链路，后端先行）
+#           2-1 / 2-2（售后收口，独立）
+#           3-1 → 3-2 → 3-3（3-3 依赖 3-1 的配置与 3-2 的后端）；3-4 独立
+#           4-1 → 4-2（🔴 强顺序，见下）；4-3 → 之后 3-2 的电商单展示切新号；4-4 / 4-5 独立
+#           5-1 / 5-2 / 5-3（独立小修）
+#
+# 【第二批】Epic 6-9（23 story）—— ⛔ 前置：admin 主题 Epic 10（电商后台 17 页模板化重构）完成
+#   🔴 发布规则（SD-16）：V1.3.0 代码冻结时 Epic 10 未完成 ⇒ 本批整组顺延到下一版，第一批照常发布
+#   建议序：6-1 → 6-2 → 6-3（品类）；6-4（编号，与 6-x 可并行）
+#           → 7-1（批量框架，必须先于 7-2/7-3/7-4）→ 7-2 | 7-3 | 7-4
+#           → 7-5 → 7-6（导入与抓图）→ 7-7（导出，须与 7-5 模板同构）
+#           → 8-1~8-6（商品编辑，彼此独立；8-4 须与 7-5/7-7 模板同批定稿）
+#           → 9-1 | 9-2 | 9-3 | 9-4 | 9-5（9-2 依赖 4-3 的新旧订单号；9-5 依赖 5-3 的查询口径）
+#
+# ═══════════════════════════════════════════════════════════════
+# 🔴 强顺序约束（违反会出事，不是风格问题）
+# ═══════════════════════════════════════════════════════════════
+#   · 4-1 必须先于 4-2 上线 —— 后端不支持行选择时画勾选框＝「能造成资损的谎」
+#   · 7-1 必须先于 7-2 / 7-3 / 7-4 —— 批量写的预览、条件写、逐条审计都在框架里
+#   · 6-1（品类表）与 6-4（编号）必须先于 7-4（调品类）与 7-5（导入认亲）
+#   · 3-2 的电商订单展示在 4-3 完成后切换为新订单号
+#   · 9-5 依赖 5-3 已修正查询口径
+#   · 7-5 / 7-7 / 8-4 的 Excel 模板必须同批定稿，否则定稿后改模板要重导数据
+#
+# ═══════════════════════════════════════════════════════════════
+# 实施纪律（每条 story 都适用）
+# ═══════════════════════════════════════════════════════════════
+#   · 每条 AC 已标 L0/L1/L2；云端只跑 L0，Completion Notes 必须写「L1/L2 待本地验收」
+#   · Flyway 一律时间戳版本号（E7）；提交前跑 scripts/ci/check-flyway-versions.sh origin/main
+#   · 打包一律 mvn -B clean package（改迁移后旧 class 残留会让 Flyway 报重复版本）
+#   · 契约变更四处同改（C5）：后端 record + App DTO + App mock + 契约 test
+#   · 新权限码改满 5 处：常量 → 两个 GROUPS 分组 → 四语 perm.* → AdminPermissionsTest 断言数
+#     → admin 预置角色默认授予与种子迁移
+#   · 三处必须做变异验证（删掉护栏那行看测试变不变红）：1-2 埋点白名单 / 5-1 日志脱敏 /
+#     7-1 批量条件写 + 7-6 SSRF 校验
+#
+# ═══════════════════════════════════════════════════════════════
+# STATUS DEFINITIONS
+# ═══════════════════════════════════════════════════════════════
+# Epic Status:   backlog → in-progress → done
+# Story Status:  backlog → ready-for-dev → in-progress → review → done
+# Retrospective: optional ↔ done
+#   - backlog: story 只存在于 epics 文件
+#   - ready-for-dev: story 文件已在 story_location 生成（create-story）
+#   - in-progress / review / done: 由 dev-story / code-review 推进
+# WORKFLOW NOTES:
+#   - 首个 story 被 create-story 后 epic 自动转 in-progress；全部 done 后手动置 done
+#   - blocked-on-admin-epic-10: 本主题专用标记，表示等 admin 主题 Epic 10，不是标准状态
+
+generated: "2026-09-16"
+last_updated: "2026-09-16"
+project: petgo-platform
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.3.0"
+
+development_status:
+  # ════════ 第一批 · 随 V1.3.0 ════════
+
+  # ---- Epic 1: 支付可感知与支付监控 ----
+  epic-1: backlog
+  1-1-后端下发支付状态与失败类别: backlog   # SHOP-FR-01 · AD-S9(a)
+  1-2-埋点护栏环境标记与服务端支付事件: backlog   # SHOP-FR-02 · AD-S9(b) · 变异验证
+  1-3-app-支付三态处置: backlog   # SHOP-FR-01 · 依赖 1-1 · 须回归其余四条支付链路
+  1-4-app-支付环节埋点: backlog   # SHOP-FR-02 · 依赖 1-2
+  epic-1-retrospective: optional
+
+  # ---- Epic 2: 售后收口 ----
+  epic-2: backlog
+  2-1-app-隐藏退货入口与文案: backlog   # SHOP-FR-05 · SD-5 · 纯前端
+  2-2-售后兜底配置与运营流程: backlog   # SHOP-FR-35 · SD-13 · 非代码 story（配置 + 文档）
+  epic-2-retrospective: optional
+
+  # ---- Epic 3: 客服可达 ----
+  epic-3: backlog
+  3-1-客服联系方式配置化: backlog   # SHOP-FR-26 · AD-S8 · 新建 support_contact_config
+  3-2-工单关联电商订单后端: backlog   # SHOP-FR-25 · AD-S7 · 加 related_order_type
+  3-3-app-工单选订单与-whatsapp-深链: backlog   # SHOP-FR-25/26 · 依赖 3-1 + 3-2
+  3-4-新订单-lark-提醒: backlog   # SHOP-FR-24 · 主线 C · 须节流汇总
+  epic-3-retrospective: optional
+
+  # ---- Epic 4: 购买闭环 ----
+  epic-4: backlog
+  4-1-购物车部分结算后端: backlog   # SHOP-FR-04 · AD-S6 · 🔴 必须先于 4-2
+  4-2-购物车勾选-app: backlog   # SHOP-FR-04 · 🔴 依赖 4-1 上线
+  4-3-订单号统一且不可推算: backlog   # SHOP-FR-29/30 · AD-S3 · 含存量回填
+  4-4-复购卡显示价格: backlog   # SHOP-FR-03
+  4-5-c-端商品列表分页: backlog   # SHOP-FR-13 · 🔴 破坏性契约变更，须老版本兼容
+  epic-4-retrospective: optional
+
+  # ---- Epic 5: 缺陷收口 ----
+  epic-5: backlog
+  5-1-评价原文不进日志: backlog   # SHOP-FR-27 · 变异验证
+  5-2-请求方法错误不再返回-500: backlog   # SHOP-FR-31 · 只剩 405/415
+  5-3-看板统计口径修正查询层: backlog   # SHOP-FR-28 · 页面部分见 9-5
+  epic-5-retrospective: optional
+
+  # ════════ 第二批 · ⛔ 等 admin 主题 Epic 10 ════════
+
+  # ---- Epic 6: 品类可配置与商品编号 ----
+  epic-6: blocked-on-admin-epic-10
+  6-1-品类表与迁移后端: backlog   # SHOP-FR-19 · AD-S1 · 🔴 FK 取代 CHECK
+  6-2-品类管理页后台: backlog   # SHOP-FR-19 · 新权限码 shop.category_manage
+  6-3-app-品类下发与停用适配: backlog   # SHOP-FR-19 · i18n 模型的有意例外 AD-S1-E
+  6-4-spu-与-sku-编号: backlog   # SHOP-FR-06 · AD-S2 · 含存量回填
+  epic-6-retrospective: optional
+
+  # ---- Epic 7: 批量操作与 Excel 导入导出 ----
+  epic-7: blocked-on-admin-epic-10
+  7-1-批量写统一框架: backlog   # SHOP-NFR-02 · AD-S5 · 🔴 必须先于 7-2/7-3/7-4 · 变异验证
+  7-2-批量改价: backlog   # SHOP-FR-15 · 资金字段
+  7-3-批量修改库存: backlog   # SHOP-FR-17 · 🔴 风险高于导入，复用盘点 CAS
+  7-4-批量上下架与批量调品类: backlog   # SHOP-FR-16/18 · 依赖 6-1
+  7-5-excel-导入任务: backlog   # SHOP-FR-07 · AD-S4 · 依赖 6-4 认亲
+  7-6-外链图片转存: backlog   # SHOP-FR-07 · 🔴 唯一新出网面，五道闸 · 变异验证
+  7-7-商品导出: backlog   # SHOP-FR-08 · 须与 7-5 模板同构
+  epic-7-retrospective: optional
+
+  # ---- Epic 8: 商品编辑体验 ----
+  epic-8: blocked-on-admin-epic-10
+  8-1-图片设为主图与替换: backlog   # SHOP-FR-10
+  8-2-新建商品时即可配置-sku: backlog   # SHOP-FR-11 · 🔴 曾出静默覆盖 SKU 事故的端点
+  8-3-sku-级图片: backlog   # SHOP-FR-12 · AD-S10
+  8-4-药品注册号: backlog   # SHOP-FR-21 · SD-18 不做有效期 · 模板须与 7-5/7-7 同批
+  8-5-必填项即时校验: backlog   # SHOP-FR-20 · 敏感词待 OD-4
+  8-6-banner-多图与跳转: backlog   # SHOP-FR-22 · AD-S11 · 翻案须连注释一起改
+  epic-8-retrospective: optional
+
+  # ---- Epic 9: 订单与财务后台 ----
+  epic-9: blocked-on-admin-epic-10
+  9-1-商品与库存列表的分页搜索筛选: backlog   # SHOP-FR-13 · 无销量排序（ACT-B 告知运营）
+  9-2-订单五维搜索与下单账号信息: backlog   # SHOP-FR-13/14 · 依赖 4-3 · 邮箱受 OD-1
+  9-3-订单导出: backlog   # SHOP-FR-09 · 含 PII，独立权限位 + 审计 + 公式转义
+  9-4-对账明细下钻与导出: backlog   # SHOP-FR-23 · 下钻走 HX-Request 分支，不新增端点
+  9-5-看板口径的页面呈现: backlog   # SHOP-FR-28 · 依赖 5-3
+  epic-9-retrospective: optional
+
+# ═══════════════════════════════════════════════════════════════
+# 开放项（不阻断开工，须在对应 story 前定）
+# ═══════════════════════════════════════════════════════════════
+#   OD-1  邮箱搜订单做不做 → 9-2（决定是否加 shop.order_email_search 权限码）
+#   OD-4  商品文案走不走内容审核 → 8-5（敏感词部分）
+#   OD-5  Lark 提醒发给谁 / 窗口 / 夜间静默 → 3-4（代码不写死收件人）
+#   OD-6  banner 轮播参数 → 8-6（不写死在代码里）
+#   OD-7  批量改价 / 改库存输入模型 → 7-2 / 7-3（已按推荐值实现）
+#   OD-8  处方药限制（法务）→ 8-4（本版不区分）
+#   OD-9  订单号随机段长度与字符集 → 4-3（已按 Base32×6）
+#   OD-10 订单导出字段范围（法务）→ 9-3（定论前不导电话与详细地址）
+#   OD-11 客服号最终确认 → 3-1（是配置项，随时可改）
+#   OD-12 评价提交端点去留 → 5-1（推荐关闭）
+#   OD-13 外链图片来源白名单 → 7-6（配置项，开工前定范围）
+#
+# 行动项：ACT-A 推动 admin Epic 10 排期 · ACT-B 告知运营（无销量排序 / 详情只能纯文本）
+#         ACT-C 上线前四件事 · ACT-D 补电商一期决策留痕 · ACT-E 下一版 Meta 企业验证
