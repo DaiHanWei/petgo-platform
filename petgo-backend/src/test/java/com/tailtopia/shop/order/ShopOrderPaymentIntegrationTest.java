@@ -80,6 +80,10 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
     @MockitoSpyBean
     private AnalyticsClient analytics;
 
+    /** Story 3-4：用 spy 是为了能让 {@code enqueue} 在一条用例里定向炸掉，其余用例走真实现。 */
+    @MockitoSpyBean
+    private com.tailtopia.shop.order.notify.ShopOrderNotifyService orderNotify;
+
     private static final long ACTOR = 1L;
 
     private long seedUser() {
@@ -569,6 +573,53 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         assertThat(props.getValue()).containsEntry("failure_category", "GATEWAY_DECLINED");
         assertThat(props.getValue().keySet())
                 .isSubsetOf("order_amount", "pay_channel", "has_pawcoin", "failure_category");
+    }
+
+    // ---------- Story 3-4：新订单提醒登记绝不拖累支付 ----------
+
+    @Test
+    @DisplayName("3-4 AC1：到账后订单被登记为「待提醒」")
+    void paidEnqueuesTheOrderForNotify() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        ShopOrder order = placeOrder(uid, seedSku(10, 285_000L), 1, 285_000L);
+        payments.pay(uid, order.getPublicToken(), null);
+        payCallback(orders.findByPublicToken(order.getPublicToken()).orElseThrow()
+                .getPaymentIntentToken());
+
+        long orderId = orders.findByPublicToken(order.getPublicToken()).orElseThrow().getId();
+        Integer rows = jdbc.queryForObject(
+                "SELECT count(*) FROM shop_order_notify_queue WHERE shop_order_id = ?",
+                Integer.class, orderId);
+        assertThat(rows).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("🔴🔴 3-4 AC1：登记炸了，支付照样到账、库存照样扣 —— 一条运维提醒不配回滚一笔钱")
+    void notifyEnqueueFailureNeverRollsBackThePayment() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        String sku = seedSku(10, 285_000L);
+        ShopOrder order = placeOrder(uid, sku, 1, 285_000L);
+        payments.pay(uid, order.getPublicToken(), null);
+
+        // 让登记必然失败。onPaid 是 MANDATORY 传播：异常冒出去会把整个支付回调事务
+        // 连同意图的 markPaid 一起回滚 —— 那才是真的丢账。
+        Mockito.doThrow(new IllegalStateException("notify queue down"))
+                .when(orderNotify).enqueue(Mockito.anyLong());
+
+        payCallback(orders.findByPublicToken(order.getPublicToken()).orElseThrow()
+                .getPaymentIntentToken());
+
+        ShopOrder after = orders.findByPublicToken(order.getPublicToken()).orElseThrow();
+        assertThat(after.getStatus())
+                .as("提醒登记失败不得影响订单状态迁移")
+                .isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
+        var inv = inventory.findBySkuId(skuId(sku)).orElseThrow();
+        assertThat(inv.getActual()).as("库存扣减必须照常发生").isEqualTo(9L);
+        assertThat(inv.getLocked()).isZero();
+        assertThat(paymentIntents.findByToken(after.getPaymentIntentToken()).orElseThrow()
+                .getStatus()).isEqualTo(PaymentStatus.PAID);
     }
 
     @SuppressWarnings("unchecked")

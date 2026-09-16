@@ -11,7 +11,7 @@ fr: [SHOP-FR-24, SHOP-NFR-03, SHOP-NFR-06]
 
 # Story 3-4: 新订单 Lark 提醒
 
-Status: ready-for-dev
+Status: review
 
 > 自包含 story，可本地或云端 L0 执行。与用户沟通用中文。执行纪律见根 `CLAUDE.md`（后端→前端→联调、AC 标 L0/L1/L2、Flyway 时间戳版本号、`mvn -B clean package`）。
 > 本 story **纯后端**，无 App 端改动。主线 C（履约效率）在本版的唯一条目。
@@ -177,3 +177,119 @@ so that 我不用一直靠人工打开后台页面盯着，发货时效不再取
 - [ ] 消息文本无 PII，有单测钉住
 - [ ] 收件人不硬编码，配置项名与默认值写进 Completion Notes
 - [ ] 既有测试全绿，`mvn -B clean package` 通过
+
+---
+
+## Dev Agent Record
+
+**执行环境**：云端 headless session（claude.ai/code），仅跑 **L0**。
+**状态**：`review`（未 done）。**L1 / L2 待本地验收**。
+
+### 新增 / 修改文件
+
+| 文件 | 说明 |
+|---|---|
+| `db/migration/V20260916_1035__init_shop_order_notify_queue.sql` | 新表（时间戳版本号，flyway-guard 通过） |
+| `shop/order/notify/ShopOrderNotifyQueueEntry.java` | 队列实体（`retry_count` 用 `INTEGER`/`int` 配对，避开 SMALLINT-validate 坑） |
+| `shop/order/notify/ShopOrderNotifyQueueRepository.java` | `existsByShopOrderId` + 按 `(status, created_at)` 升序取待发 |
+| `shop/order/notify/ShopOrderNotifyProperties.java` | `petgo.shop.order-notify.*` |
+| `shop/order/notify/ShopOrderNotifyConfig.java` | `@EnableConfigurationProperties` |
+| `shop/order/notify/ShopOrderNotifyMessage.java` | 🔒 纯函数渲染，只收 `Line(displayNo, totalAmount, itemCount)` |
+| `shop/order/notify/LarkMessageClient.java` | `/open-apis/im/v1/messages` + tenant token 缓存 |
+| `shop/order/notify/ShopOrderNotifyService.java` | 登记（`REQUIRES_NEW`）+ 窗口收拢 + 回写，三个独立短事务 |
+| `shop/order/notify/ShopOrderNotifyScanner.java` | 薄 `@Scheduled` 扫描器 |
+| `shop/order/service/ShopOrderPaidHandler.java` | 末尾 try/catch 登记 |
+| `application.yml` / `.env.example` | 配置段与占位 |
+
+测试：`ShopOrderNotifyMessageTest`(5) · `ShopOrderNotifyPropertiesTest`(7) · `ShopOrderNotifyScannerTest`(10) · `LarkMessageClientTest`(4) · `ShopOrderNotifyIntegrationTest`(9, L1) · `ShopOrderPaymentIntegrationTest` +2(L1)。
+
+### AC 完成情况
+
+| AC | 层级 | 状态 |
+|---|---|---|
+| AC1 登记 + 不拖累支付事务 | L1 | 代码完成（`REQUIRES_NEW` + try/catch 双层）；**L1 待本地** |
+| AC2 待提醒表 | L0/L1 | 迁移 + COMMENT + flyway-guard ✅；约束生效性 **L1 待本地** |
+| AC3 汇总节流 | L0/L1 | 窗口可配 ✅ L0；三笔合一条 / 跨窗分两条 / 空窗不发 **L1 待本地**（L0 已用 mock 钉住「一批只调一次 `sendText`」「空批不调」） |
+| AC4 扫描与投递范式 | L0/L1 | `@Scheduled` + cron 可配 ✅；无任何中间件 ✅；重试/放弃 **L1 待本地** |
+| AC5 消息无 PII | L0 | ✅ **含变异验证，见下** |
+| AC6 客户端与开关 | L0/L1 | 配置 ✅；`mode=off` 零出网 L0 已用 mock 钉住（AC 原标 L1），真实静默 **L1 待本地** |
+| AC7 失败不影响订单 | L0/L1 | 扫描器只读订单只写队列 ✅ L0；**L1 待本地** |
+| AC8 收件人不写死 | L0 | ✅ 默认值见下 |
+| AC9 10 分钟内送达 | L2 | **待本地/线上验收**（需真实 Lark 凭证与目标群） |
+| AC10 回归 | L0 | ✅ 1734 个单测全绿 |
+
+### 🎯 变异验证（AC5 PII 红线）
+
+- **变异内容**：在 `ShopOrderNotifyMessage.render()` 的行拼接末尾加上 `.append(" | Budi Santoso")`（模拟「顺手往提醒里加个收件人」）。
+- **结果：2 条用例变红，且红得对**
+  - `ShopOrderNotifyMessageTest.neverContainsAnyPersonalInformation` —— 报「消息里出现了 receiverName = "Budi Santoso"」
+  - `ShopOrderNotifyMessageTest.eachLineHasExactlyThreeSegments` —— 报「Expected size: 3 but was: 4」
+- 已还原，还原后全绿。
+- 补充：`render` 的签名**只收三字段的 `Line`**，拿不到 `ShopOrder`，所以「加 PII」这件事在编译期就要先改签名 —— 签名本身是第一道护栏，上面两条断言是第二道。
+
+### 🔴 OD-5 待拍板：当前默认配置值
+
+配置前缀 `petgo.shop.order-notify`（全部可经 env 覆盖，**代码里没有任何具体收件人 id**）：
+
+| 配置项 | env | 默认值 | 备注 |
+|---|---|---|---|
+| `mode` | `SHOP_ORDER_NOTIFY_MODE` | `off` | 🔴 默认关，合并进任何环境都不出网 |
+| `receive-id` | `SHOP_ORDER_NOTIFY_RECEIVE_ID` | **空** | 🔴 OD-5「发给谁」未定；空 = 视同 off |
+| `receive-id-type` | `SHOP_ORDER_NOTIFY_RECEIVE_ID_TYPE` | `chat_id` | 发个人改 `open_id` |
+| `app-id` / `app-secret` | `SHOP_ORDER_NOTIFY_APP_ID` / `_SECRET` | 空 | env 注入，绝不入库 |
+| `base-url` | `SHOP_ORDER_NOTIFY_BASE_URL` | `https://open.larksuite.com` | 国内租户换 `open.feishu.cn` |
+| `window-minutes` | `SHOP_ORDER_NOTIFY_WINDOW_MINUTES` | `10` | 🔴 OD-5「窗口多长」未定 |
+| `cron` | `SHOP_ORDER_NOTIFY_CRON` | `0 */5 * * * *` | 必须短于窗口 |
+| `max-orders-per-message` | `SHOP_ORDER_NOTIFY_MAX_ORDERS` | `50` | |
+| `max-retries` | `SHOP_ORDER_NOTIFY_MAX_RETRIES` | `3` | 超限转 `FAILED` |
+| `timeout-seconds` | `SHOP_ORDER_NOTIFY_TIMEOUT_SECONDS` | `10` | |
+| `quiet-hours-enabled` | `SHOP_ORDER_NOTIFY_QUIET_ENABLED` | `false` | 🔴 OD-5「夜间是否静默」未定，默认关 |
+| `quiet-start-hour` / `quiet-end-hour` | `SHOP_ORDER_NOTIFY_QUIET_START` / `_END` | `22` / `8` | WIB，跨午夜已 L0 逐小时钉住 |
+
+### 🔶 与 story 文字的偏离（各一行，均已在代码注释里写明理由）
+
+1. **AC4 的「`@Async` 投递」未实现，扫描器是同步的。**
+   AC4 同时点名了两个范式，其中 `ShopOrderExpiryScanner` 全篇没有 `@Async`；本 story 的形状也更像它。
+   `ScheduledPushJob` 的 `@Async` 是**逐条**投递几百条互相独立的推送，异步化省的是串行等待；
+   本 story 一个窗口**只发一条** HTTP，异步化省不到任何东西，却会引入一个真问题 ——
+   `@Scheduled` 立刻返回后队列行仍是 `PENDING`，下一次 cron 唤醒把同一批再捞一次，**运营收到重复的汇总消息**。
+   要修就得加 `SENDING` 中间态 + 崩溃后的回收扫描，比这条提醒本身重得多。
+   **若 OD-5 或架构方坚持要 `@Async`，请连同 `SENDING` 中间态一起排，不要只加注解。**
+
+2. **AC6 的「不要复制第二份 token 缓存逻辑，优先抽取共用」—— 复制了，未抽取。**
+   `LarkContentClient` 的 token 缓存是它的私有字段，抽出来要动一条**跑在生产上**的定时发帖链路。
+   T3 允许「抽不动再复制并注明原因」。两份的行为必须保持一致，`LarkMessageClient` 类注释里已写明交叉引用。
+
+3. **AC5 的 `display_no` 依赖 Story 4-3，当前用 `OrderDisplayNo.of(ECOMMERCE, id, createdAt)` 计算。**
+   `ShopOrderNotifyService.toLine()` 里留了 `TODO(Story 4-3)`。这是 3-2 / 3-3 之外的**第三处**同一次切换点。
+
+### 🔍 自审发现并修复（本 session，无 bmad-code-review 技能可用）
+
+1. **🔴 token 过期会让提醒永久静默（已修）**：`LarkMessageClient.sendText` 原本只在 `RestClientException`
+   分支作废 token 缓存。但 Lark 对失效的 `tenant_access_token` 返回的是 **HTTP 200 + body `code` 非 0**
+   （99991663 / 99991661 / 99991664），根本不走那个分支 —— 结果是拿着同一个坏 token 一直重试，
+   `max-retries=3` 撑不过三轮，队列里的订单全部转 `FAILED`，**提醒从此静默直到进程重启**。
+   已改为 `ensureOk` 失败时也作废缓存，并用 `LarkMessageClientTest.nonZeroBodyCodeInvalidatesTheCachedToken`
+   （进程内 HTTP 桩，不出网）钉住「失败后必须重新取 token」。
+2. **事务跨出网调用（已修）**：扫描器原本把 `@Transactional` 直接标在 `@Scheduled` 方法上，
+   一个连接池连接会被一次 Lark 往返（默认超时 10s）占住整整 10 秒。
+   已按 `ShopOrderExpiryScanner` 的形状重构成「薄扫描器 + 三个独立短事务」，出网在事务之外。
+3. **跨午夜静默窗口是纯逻辑却测不到（已修）**：原 `isQuietNow()` 直接读时钟，测试只能断言
+   `isIn(true,false)` —— 一条**永远不会红**的用例。已抽出纯函数 `isQuietAt(int hour)`，
+   L0 逐小时钉死 22/23/0/3/7 静默、8/9/12/18/21 不静默。22:00–08:00 这种窗口若误写成「与」分支，
+   开关打开了却永远不生效且不报任何错。
+4. `ShopOrderNotifyProperties.isLive()` 对 `receiveId == null` 会 NPE（已加空值判断）。
+5. `ShopOrderNotifyQueueRepository` 的 javadoc 原本写「上界是窗口右端」，与代码传 `now` 矛盾
+   ——**以代码为准**，javadoc 已改写为「升序是窗口切分的前提」。
+6. `application.yml` 一度插出**第二个 `petgo.shop:` 键**（YAML 后者覆盖前者，会静默丢掉整段既有电商配置）。
+   已合并进既有块，并用 `yaml.safe_load` 验证。
+
+### ⚠️ 待本地/线上验收清单
+
+- **L1（需 Docker postgres + redis）**：`ShopOrderNotifyIntegrationTest`（9 条：登记幂等 / 唯一约束兜底 /
+  status CHECK / 三笔合一批 / 跨窗分两批 / 空队列不发 / 孤儿行退队 / markSent 打戳 / 重试三次转 FAILED /
+  失败不动订单）+ `ShopOrderPaymentIntegrationTest` 新增 2 条（到账后登记 / **登记炸了支付照样到账且库存照扣**）。
+- **L2**：配好 Lark 凭证与目标群，真实下一单，确认 10 分钟内群里收到**一条**汇总提醒，
+  且消息里**没有**收件人姓名 / 电话 / 地址（AC9 + AC5 的线上确认）。
+- **OD-5**：上表的默认值需运营拍板后经 env 调整；拍板前保持 `mode=off`。
+- **推送限制**：本分支**无 git remote**（云端 clone 未配置 origin），story 无法 push，仅本地提交。

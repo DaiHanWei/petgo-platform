@@ -3,6 +3,7 @@ package com.tailtopia.shop.order.service;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.event.PaymentIntentPaidEvent;
 import com.tailtopia.shop.order.domain.ShopOrder;
+import com.tailtopia.shop.order.notify.ShopOrderNotifyService;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,11 +36,15 @@ public class ShopOrderPaidHandler {
     private final ShopOrderPaymentService payments;
     private final CheckoutService checkout;
 
+    /** Story 3-4：新订单 Lark 提醒的待发登记。它的失败不得影响本事务（见 onPaid 末尾）。 */
+    private final ShopOrderNotifyService orderNotify;
+
     public ShopOrderPaidHandler(ShopOrderRepository orders, ShopOrderPaymentService payments,
-            CheckoutService checkout) {
+            CheckoutService checkout, ShopOrderNotifyService orderNotify) {
         this.orders = orders;
         this.payments = payments;
         this.checkout = checkout;
+        this.orderNotify = orderNotify;
     }
 
     @EventListener
@@ -67,5 +72,15 @@ public class ShopOrderPaidHandler {
         }
         checkout.settlePawCoinSegment(order);
         log.info("电商订单支付到账 order={} intent={}", order.getPublicToken(), event.publicToken());
+        // 🔴🔴 Story 3-4：登记「待提醒」。**必须整段 try/catch，且 service 侧用 REQUIRES_NEW**。
+        //    本方法是 MANDATORY 传播 —— 跑在支付回调的事务里。在这里放跑任何异常，
+        //    都会把整个回调事务连同意图的 markPaid 一起回滚，那才是真的丢账。
+        //    一条运维提醒发不出去是小事，一笔钱记不上账不是。
+        try {
+            orderNotify.enqueue(order.getId());
+        } catch (RuntimeException e) {
+            log.warn("新订单提醒登记失败（不影响支付） order={} reason={}",
+                    order.getPublicToken(), e.getClass().getSimpleName());
+        }
     }
 }

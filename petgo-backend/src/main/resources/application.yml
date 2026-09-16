@@ -129,6 +129,31 @@ petgo:
     # 低库存提示阈值（FR-95）：可售 ≤ 此值时详情页展示「Sisa {n}」。
     # {n} 取真实剩余数——制造合理紧迫感但不虚构数字。
     low-stock-threshold: ${SHOP_LOW_STOCK_THRESHOLD:5}
+    # 新订单 Lark 提醒（V1.3.0 shop-v2 Story 3-4 · SHOP-FR-24 · 主线 C）。
+    # 运营接单原本靠「人工打开后台页面盯着」，零通知 —— 发货时效取决于有没有人想起来刷。
+    # 🔴 mode=off（默认）或 receive-id 为空 ⇒ 扫描器静默跳过、**零出网**，队列行保持 PENDING。
+    # 🔴 收件人一律从这里读，**代码里不出现任何具体 id**（OD-5「发给谁」尚未拍板）。
+    # 凭证 env 注入，绝不入库、绝不落日志；.env.example 只放占位。
+    order-notify:
+      mode: ${SHOP_ORDER_NOTIFY_MODE:off}
+      app-id: ${SHOP_ORDER_NOTIFY_APP_ID:}
+      app-secret: ${SHOP_ORDER_NOTIFY_APP_SECRET:}
+      base-url: ${SHOP_ORDER_NOTIFY_BASE_URL:https://open.larksuite.com}
+      # 群 chat_id 或个人 open_id。空 = 不发（视同 off）。
+      receive-id: ${SHOP_ORDER_NOTIFY_RECEIVE_ID:}
+      receive-id-type: ${SHOP_ORDER_NOTIFY_RECEIVE_ID_TYPE:chat_id}
+      # 汇总窗口（分钟）。同窗口内的订单合成一条消息 —— 每单一条会在促销时段把运营刷屏，
+      # 而被刷屏的通知等于没有通知。默认 10 与 SHOP-NFR-03「10 分钟内送达」对齐。
+      window-minutes: ${SHOP_ORDER_NOTIFY_WINDOW_MINUTES:10}
+      max-orders-per-message: ${SHOP_ORDER_NOTIFY_MAX_ORDERS:50}
+      max-retries: ${SHOP_ORDER_NOTIFY_MAX_RETRIES:3}
+      timeout-seconds: ${SHOP_ORDER_NOTIFY_TIMEOUT_SECONDS:10}
+      # 扫描周期必须短于窗口，否则时延会顶穿 NFR-03。
+      cron: ${SHOP_ORDER_NOTIFY_CRON:0 */5 * * * *}
+      # 夜间静默（WIB）。🔴 默认关闭 —— OD-5 定值前不启用。
+      quiet-hours-enabled: ${SHOP_ORDER_NOTIFY_QUIET_ENABLED:false}
+      quiet-start-hour: ${SHOP_ORDER_NOTIFY_QUIET_START:22}
+      quiet-end-hour: ${SHOP_ORDER_NOTIFY_QUIET_END:8}
 
 # 退款收款账户 PII 加密（Story 4.3，A-1/FR-NFR-4）。AES-256-GCM 密钥（base64 的 32 字节）。
 # 凭证 env 注入红线，绝不入库；缺失时加/解密抛异常（不静默存明文）。dev/test 用 application-dev.yml 的占位密钥。
