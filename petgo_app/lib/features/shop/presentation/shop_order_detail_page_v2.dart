@@ -742,14 +742,25 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
         showAppToast(context, l10n.shopOrderPaid);
         return;
       }
+      // 🔴 中止**不是**异常路径：它由 onAborted 回调带出来，走下面的正常分派。
+      //    塞进 catch 会让三态一律弹通用失败 toast，正是本 story 要消灭的那个行为。
+      ShopPaymentFailure? aborted;
       final paid = await showQrPaymentSheet(
         context,
         payload: result.payload!,
         orderRef: order.orderToken,
+        onAborted: (abort) => aborted = ShopPaymentFailure.fromApi(abort.category),
         // 轮询问的是订单本身的状态 —— 到账由服务端在回调里推进，客户端不自行判定。
         pollPaid: () async {
           final fresh =
               await ref.refresh(shopOrderDetailProvider(widget.orderToken).future);
+          // 🔴 先看支付单：网关拒付**只改 payment_intents、不改订单**，订单会一直停在
+          //    PENDING_PAYMENT，只看 status 的话二维码要挂到 60 分钟窗口耗尽。
+          final failure = fresh.paymentFailure;
+          if (failure != null) {
+            throw QrPaymentAborted(fresh.paymentFailureCategory);
+          }
+          // 兜底：后端未升级或纯 PawCoin 单时两字段为 null，行为与改动前完全一致。
           if (fresh.status == ShopOrderStatus.cancelled) {
             throw const QrPaymentAborted();
           }
@@ -765,7 +776,9 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
           'attribution_source': order.attributionSource,
         });
         showAppToast(context, l10n.shopOrderPaid);
+        return;
       }
+      _onPaymentAborted(l10n, aborted);
     } catch (_) {
       if (mounted) {
         Analytics.capture('toko_order_payment_failed_shown');
@@ -773,6 +786,40 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
       }
     } finally {
       if (mounted) setState(() => _busyAction = null);
+    }
+  }
+
+  /// 面板关闭后的四态分派（Story 1-3 AC2~AC5）。
+  ///
+  /// | 结局 | `aborted` | 重试入口 | 文案 |
+  /// |---|---|---|---|
+  /// | 支付被拒 | `gatewayDeclined` | **保留**（订单未取消未过期，`_bottomBar` 自然给） | 被拒说明 |
+  /// | 超时未付 | `expired` | **不给**（订单已 CANCELLED，`_bottomBar` 返 null） | 已取消告知 |
+  /// | 用户取消订单 | `userCancelled` | — | **无**（静默） |
+  /// | 仅关闭面板 | **null** | 保留 | **无** |
+  ///
+  /// 🔴 最后两行是本 story 最容易写错的地方：两者都表现为「面板关闭 + 返回 false」，
+  /// 唯一可靠的判据是 `pollPaid` 有没有抛出中止信号 —— 面板的取消按钮走 `pop(false)`
+  /// 而不抛异常，所以 `aborted` 为 null 就是「用户自己关掉的」。
+  void _onPaymentAborted(AppLocalizations l10n, ShopPaymentFailure? aborted) {
+    if (aborted == null) {
+      // 仅关闭面板：订单原样不动，什么都不做。弹一句失败会让用户以为订单出事了。
+      return;
+    }
+    switch (aborted) {
+      case ShopPaymentFailure.gatewayDeclined:
+        Analytics.capture('toko_order_payment_declined_shown');
+        showAppToast(context, l10n.shopPaymentDeclinedNotice);
+      case ShopPaymentFailure.expired:
+        // 🔴 **不弹** shopOrderPayFailed —— 那是「再试一次」的口吻，而这一单已经没了。
+        showAppToast(context, l10n.shopOrderExpiredNotice);
+      case ShopPaymentFailure.userCancelled:
+        // 是用户自己取消的，他知道发生了什么。只刷新，不弹错误。
+        break;
+      case ShopPaymentFailure.unknown:
+        // 后端加了 App 不认识的类别：按通用失败处理，不猜它该不该重试。
+        Analytics.capture('toko_order_payment_failed_shown');
+        showAppToast(context, l10n.shopOrderPayFailed);
     }
   }
 

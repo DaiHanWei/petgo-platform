@@ -225,7 +225,12 @@ public class PaymentIntentService {
      *       （{@code requirePayable} 会先挡下过窗订单），且 {@code expireOverduePending}
      *       每 60 秒扫一遍会补上；</li>
      *   <li>{@link #findReusablePending} 的懒过期 —— 只服务 PAWCOIN_TOPUP 的复用查询；</li>
-     *   <li>{@link #failPending} —— 唯一调用方是问诊线，非电商。</li>
+     *   <li>{@link #failPending} —— 唯一调用方是问诊线，非电商；</li>
+     *   <li>🔴 {@link #statusOf} 的懒过期 —— <b>这一处的事件是永久丢失的</b>，与上面几处不同：
+     *       {@link #expireOverduePending} 只扫 {@code status = PENDING}，补不回来；
+     *       {@link #failByToken} 又因「已终态即 no-op」写不进去。今天不影响电商是因为
+     *       App 轮询的是订单详情而不是意图状态端点。<b>谁要做充值 / 问诊的支付漏斗，
+     *       第一件事就是补上这里</b>。</li>
      * </ul>
      * 所以电商漏斗今天不缺口径。但<b>这不是一条「所有失败都发事件」的不变式</b>——
      * 下一个要订阅本事件的业务线必须先自己核一遍这几处，别照着方法名想当然。

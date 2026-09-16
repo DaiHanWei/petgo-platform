@@ -11,7 +11,7 @@ fr: [SHOP-FR-01]
 
 # Story 1-3: App 支付三态处置
 
-Status: ready-for-dev
+Status: review
 
 > 自包含 story，可本地或云端 L0 执行。与用户沟通用中文。执行纪律见根 `CLAUDE.md`（后端→前端→联调、AC 标 L0/L1/L2、Flyway 时间戳版本号、`mvn -B clean package`）。
 > 本 story **只碰 App**（`petgo_app/`），后端一行不改。
@@ -313,3 +313,77 @@ AD-S9 原话：「🔴 `QrPaymentSheet` 是共用组件……本次改造须**�
 - [ ] 未改 `_bottomBar` 过期判定、未改 sheet 的 `_cancel()`、未碰问诊与充值页面
 - [ ] `flutter analyze` + `flutter test` 全绿
 - [ ] Completion Notes 已写「L1/L2 待本地验收」+ ARB 两语偏离 + 共用 sheet 实测 4 个调用点
+
+---
+
+## Completion Notes（2026-09-16 · 云端 headless 执行）
+
+### 🔴 L1/L2 待本地验收
+
+云端 VM 是 headless 的，**模拟器 / 真机视觉一律未执行**。
+
+| AC | 待验内容 | 怎么验 |
+|---|---|---|
+| AC2 末条 | 再次点支付拿到**新的** payload（拒付后意图已 FAILED 终态，`createIntent` 不复用 → 自然出新码） | `[L1]` 联调看接口日志 |
+| AC5 第 1 条 | 「仅关闭面板」确实没发出任何取消请求 | `[L1]` 联调看接口日志 |
+| **AC8** | **其余四条业务线各跑一次**：AI 解锁 / 高清身份证（创建页 + 详情页）/ 问诊计时付款 / PawCoin 充值 —— 成功与超时/取消表现与改动前一致 | `[L2]` 模拟器 |
+| AC10 | 模拟器连 staging，用支付模拟器构造拒付 / 超时两支；「仅关闭面板」后再次点支付能出新码 | `[L2]`，支付模拟器只在 `origin/stag` 分支 |
+
+### AC8 的 L0 部分：五个回归文件**零 diff**（已用 `git diff --numstat` 逐个核实）
+
+```
+0  petgo_app/lib/features/consult/presentation/vet_timed_pay_page.dart
+0  petgo_app/lib/features/pawcoin/presentation/recharge_page.dart
+0  petgo_app/lib/features/triage/presentation/widgets/unlock_method_sheet.dart
+0  petgo_app/lib/features/profile/presentation/id_card_create_page.dart
+0  petgo_app/lib/features/profile/presentation/id_card_detail_page.dart
+```
+既有 `test/shared/qr_payment_sheet_test.dart` 的那条老用例**一个字没改**且全绿 —— 它就是
+「默认行为未变」的活证据（新用例追加在它后面）。
+
+### 已完成（L0 绿：`flutter analyze` 零 issue；`flutter test` **1531 例全绿**）
+
+- **AC1**：`pollPaid` 先看 `paymentFailure`（拒付只改 `payment_intents`、订单一直停在
+  `PENDING_PAYMENT`，只看 status 会挂到 60 分钟窗口耗尽），再保留 `status == cancelled` 的兜底。
+  新增用例「两字段为 null（后端未升级）时行为与改动前一致」。
+- **AC2~AC5**：四条分支各一条 widget 用例。**「用户取消订单」与「仅关闭面板」是两条独立用例，
+  未合并断言**（AC5 明令）—— 两者都表现为「面板关闭 + 返回 false」，唯一判据是
+  `pollPaid` 有没有抛中止信号；面板取消按钮走 `pop(false)` 不抛异常，天然分开。
+- **AC6**：新增 `shopPaymentDeclinedNotice` 落 `app_en.arb` + `app_id.arb`；
+  两包 key 集合**已用脚本比对：完全相等，各 1672 个**。文案不回显后端 detail 串。
+- **AC7**：`showQrPaymentSheet` 返回类型**仍是 `Future<bool>`**；新能力走可选具名参数
+  `onAborted`，默认 null；`const QrPaymentAborted()` 无参构造保留。三条 sheet 级用例：
+  不传参数时行为不变 / 传了时带类别回调恰好一次 / **点面板取消时不回调**。
+- **AC9**：新增 widget 测试 8 条（详情页 5 + sheet 3）。
+- 未改 `_bottomBar` 的过期判定（「过期不留支付入口」本就实现了）、未改 sheet 的 `_cancel()`。
+- 未知类别 → `ShopPaymentFailure.unknown` → 按通用失败处理，**不猜它该不该重试**（C4）。
+
+### 与 epics 的两处偏离（Dev Notes 要求留痕）
+
+1. **ARB 是两语不是三语**：本仓 App 只有 `app_en.arb` / `app_id.arb`（`l10n.yaml` 为证，
+   `find -name "*.arb"` 只有这两个）。epics AC5 的「三语」指后台 Thymeleaf 的
+   `messages*.properties`，与 App 无关。
+2. **共用 sheet 是 3 条业务线 / 4 个调用点，不是「五条链路共用」**：问诊
+   （`vet_timed_pay_page.dart`）与充值（`recharge_page.dart`）各自内联 `QrImageView` + 自己的轮询，
+   **不走 sheet**；高清身份证占 2 个调用点。回归范围仍按 SHOP-FR-01 覆盖全部 5 条业务线
+   （含这两条不走 sheet 的），见 AC8。
+
+### 代码复审（bmad-code-review）结论
+
+本轮两条 CONFIRMED **都落在 1-2 的后端**（1-3 的 Flutter 侧无 finding），已随本次提交一并修掉：
+
+1. **埋点白名单抄了字面量而不是引常量**（`AnalyticsEventGuard`）。四个既有事件名已有
+   `public static final` 常量（`CardPageAnalytics.EVENT_*` / `PostSharePageAnalytics.EVENT_OPENED`），
+   白名单却抄了一份字面量 ⇒ 改了常量值**编译照过、测试照绿**（测试断言的是同一串过期字面量），
+   线上那条埋点却当场停掉 —— 正是该类 javadoc 自己警告的「静默关停」。
+   已改为引常量，并给 `MilestoneAnalyticsListener` 补了 `EVENT_MILESTONE_ACHIEVED` 常量。
+   测试那边**保持字面量**并加注释说明分工：白名单跟着生产方动（埋点不会停），测试钉住线上事件名（改名必红）。
+2. **`statusOf` 的懒过期是第 10 个置终态写入点，且事件永久丢失**。它不在我上一条 javadoc
+   「不发事件的几处」的枚举里，而且与其余几处不同：`expireOverduePending` 只扫
+   `status = PENDING` 补不回来，`failByToken` 又因「已终态即 no-op」写不进去。
+   今天不影响电商（App 轮的是订单详情而非意图状态端点），**未扩大发布点**（AC8 把范围钉在四处），
+   已在 javadoc 就地标红并写明「谁要做充值/问诊的支付漏斗，第一件事就是补上这里」。
+
+### 云端环境说明
+
+云端 headless，无 GUI ⇒ 不尝试 `flutter run` 截屏。本容器无 git remote，推送未执行。

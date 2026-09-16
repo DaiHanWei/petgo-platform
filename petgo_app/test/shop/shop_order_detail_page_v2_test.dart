@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -62,9 +63,13 @@ void main() {
     int? coinAmount = 50000,
     int? cashAmount = 154000,
     List<ShopOrderPackage> packages = const [],
+    String? paymentStatus,
+    String? paymentFailureCategory,
   }) =>
       ShopOrderDetail(
         orderToken: 'ord1',
+        paymentStatus: paymentStatus,
+        paymentFailureCategory: paymentFailureCategory,
         status: status,
         goodsSubtotal: 189000,
         shippingFee: 15000,
@@ -558,4 +563,194 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  // ================================================================
+  // Story 1-3：支付三态处置（AC2~AC5）
+  //
+  // 🔴 四种结局里，「用户取消订单」与「仅关闭面板」都表现为「面板关闭 + 返回 false」，
+  //    唯一可靠的判据是 pollPaid 有没有抛出中止信号。两者各有一条用例，**不合并断言**。
+  // ================================================================
+  group('🔴 Story 1-3 · 支付三态处置', () {
+    /// 让 pollPaid 每次 refresh 都读到「当前」订单：测试中途改这个引用即可模拟服务端推进。
+    late ShopOrderDetail current;
+
+    Widget payHost(ShopOrderDetail initial, _FakeShopOrderRepo repo) {
+      current = initial;
+      return ProviderScope(
+        overrides: [
+          shopOrderRepositoryProvider.overrideWithValue(repo),
+          shopOrderDetailProvider.overrideWith((ref, token) async => current),
+          returnEligibilityProvider.overrideWith((ref, token) async =>
+              const ReturnEligibility(orderToken: 'ord1', eligible: false, lines: [])),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('id'),
+          home: const MediaQuery(
+            data: MediaQueryData(size: Size(411, 891)),
+            child: ShopOrderDetailPageV2(orderToken: 'ord1'),
+          ),
+        ),
+      );
+    }
+
+    ShopOrderDetail payable() =>
+        order(expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)));
+
+    /// Toast 自己挂着一个 2.6s 的消失定时器；不放它跑完，测试结束时会报
+    /// 「A Timer is still pending even after the widget tree was disposed」。
+    Future<void> flushToast(WidgetTester tester) async {
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    }
+
+    /// 点支付 → 出码 → 把服务端状态换成 [next] → 等一个轮询周期（3s）。
+    Future<void> payThenServerMovesTo(WidgetTester tester, ShopOrderDetail next) async {
+      await tester.tap(find.byKey(const ValueKey('shopOrderPayV2')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500)); // sheet 滑入
+      expect(find.byKey(const ValueKey('qrPayImage')), findsOneWidget,
+          reason: '二维码没出来，后面的断言都没有意义');
+
+      current = next;
+      await tester.pump(const Duration(seconds: 3)); // 轮询 tick
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500)); // 关闭动画
+      await tester.pump();
+    }
+
+    testWidgets('AC2 · 网关拒付 → 关码 + 说明原因 + **保留**支付按钮', (tester) async {
+      final repo = _FakeShopOrderRepo();
+      await tester.pumpWidget(payHost(payable(), repo));
+      await tester.pumpAndSettle();
+
+      // 🔴 拒付只改 payment_intents：订单状态**仍是 PENDING_PAYMENT**。
+      //    只看 status 的旧实现在这里会一直轮询到 60 分钟窗口耗尽。
+      await payThenServerMovesTo(
+          tester,
+          order(
+            expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 30)),
+            paymentStatus: 'FAILED',
+            paymentFailureCategory: 'GATEWAY_DECLINED',
+          ));
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      expect(find.byKey(const ValueKey('qrPayImage')), findsNothing, reason: '二维码必须关掉');
+      expect(find.text(l10n.shopPaymentDeclinedNotice), findsOneWidget,
+          reason: '不说原因用户会以为是自己手机坏了');
+      expect(find.byKey(const ValueKey('shopOrderPayV2')), findsOneWidget,
+          reason: '订单没取消也没过期 —— 重试入口必须留着');
+      expect(repo.cancelCalls, 0, reason: '拒付不该顺手取消订单');
+      await flushToast(tester);
+    });
+
+    testWidgets('AC3 · 超时未付 → 关码 + 告知已取消 + **不给**任何支付入口', (tester) async {
+      final repo = _FakeShopOrderRepo();
+      await tester.pumpWidget(payHost(payable(), repo));
+      await tester.pumpAndSettle();
+
+      await payThenServerMovesTo(
+          tester,
+          order(
+            status: ShopOrderStatus.cancelled,
+            paymentStatus: 'EXPIRED',
+            paymentFailureCategory: 'EXPIRED',
+          ));
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      expect(find.byKey(const ValueKey('qrPayImage')), findsNothing);
+      expect(find.byKey(const ValueKey('shopOrderPayV2')), findsNothing,
+          reason: '一个点下去必然失败的按钮比没有更糟');
+      expect(find.text(l10n.shopOrderExpiredNotice), findsOneWidget);
+      // 🔴 不弹 shopOrderPayFailed —— 那是「再试一次」的口吻，而这一单已经没了。
+      expect(find.text(l10n.shopOrderPayFailed), findsNothing);
+      await flushToast(tester);
+    });
+
+    testWidgets('AC4 · 用户取消订单 → 关码，**不弹任何错误**', (tester) async {
+      final repo = _FakeShopOrderRepo();
+      await tester.pumpWidget(payHost(payable(), repo));
+      await tester.pumpAndSettle();
+
+      await payThenServerMovesTo(
+          tester,
+          order(
+            status: ShopOrderStatus.cancelled,
+            paymentStatus: 'FAILED',
+            paymentFailureCategory: 'USER_CANCELLED',
+          ));
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      expect(find.byKey(const ValueKey('qrPayImage')), findsNothing);
+      expect(find.text(l10n.shopOrderPayFailed), findsNothing);
+      expect(find.text(l10n.shopPaymentDeclinedNotice), findsNothing);
+      expect(find.text(l10n.shopOrderExpiredNotice), findsNothing,
+          reason: '是他自己取消的，他知道发生了什么');
+    });
+
+    testWidgets('AC5 · 仅关闭面板 → 不调任何接口、不弹文案、支付按钮仍在', (tester) async {
+      final repo = _FakeShopOrderRepo();
+      await tester.pumpWidget(payHost(payable(), repo));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('shopOrderPayV2')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byKey(const ValueKey('qrPayImage')), findsOneWidget);
+
+      // 服务端状态一个字没变 —— 用户只是点了面板上的取消。
+      await tester.tap(find.byKey(const ValueKey('qrPayCancel')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('id'));
+      expect(find.byKey(const ValueKey('qrPayImage')), findsNothing);
+      expect(repo.cancelCalls, 0, reason: '关个面板不等于作废订单（pending intent 可复用）');
+      expect(find.text(l10n.shopOrderPayFailed), findsNothing);
+      expect(find.text(l10n.shopPaymentDeclinedNotice), findsNothing);
+      expect(find.text(l10n.shopOrderExpiredNotice), findsNothing);
+      expect(find.byKey(const ValueKey('shopOrderPayV2')), findsOneWidget,
+          reason: '还能接着付');
+    });
+
+    testWidgets('AC1 兜底 · 两字段为 null（后端未升级）时行为与改动前一致', (tester) async {
+      final repo = _FakeShopOrderRepo();
+      await tester.pumpWidget(payHost(payable(), repo));
+      await tester.pumpAndSettle();
+
+      // 老后端：只有订单转 CANCELLED，没有 paymentFailureCategory。
+      await payThenServerMovesTo(tester, order(status: ShopOrderStatus.cancelled));
+
+      expect(find.byKey(const ValueKey('qrPayImage')), findsNothing, reason: '仍按中止关闭');
+      expect(find.byKey(const ValueKey('shopOrderPayV2')), findsNothing);
+    });
+  });
+}
+
+/// 只桩 pay / cancel 两个方法，其余继承真实现（本组用例不会走到）。
+class _FakeShopOrderRepo extends ShopOrderRepository {
+  _FakeShopOrderRepo() : super(dio: Dio());
+
+  int payCalls = 0;
+  int cancelCalls = 0;
+
+  @override
+  Future<ShopPayResult> pay(String orderToken) async {
+    payCalls++;
+    return const ShopPayResult(
+        orderStatus: 'PENDING_PAYMENT', paymentIntentToken: 'pi-1', payload: 'QR-DATA');
+  }
+
+  @override
+  Future<ShopOrderDetail> cancel(String orderToken) async {
+    cancelCalls++;
+    throw UnimplementedError('本组用例不该调到取消接口');
+  }
 }

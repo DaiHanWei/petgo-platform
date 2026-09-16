@@ -2831,6 +2831,8 @@
   "@shopOrderPaid": {"description": "Shop order detail: toast after payment lands"},
   "shopOrderPayFailed": "Payment failed. Please try again.",
   "@shopOrderPayFailed": {"description": "Shop order detail: pay error. Never echoes the server detail string"},
+  "shopPaymentDeclinedNotice": "Your bank or e-wallet declined the payment. You can try paying again with another method.",
+  "@shopPaymentDeclinedNotice": {"description": "Shop order detail (Story 1-3): payment intent came back GATEWAY_DECLINED while the order is still within its payment window. The order is NOT cancelled and the pay button stays available, so the copy must invite a retry. Never echoes the server detail string."},
   "shopOrderItems": "Items",
   "@shopOrderItems": {"description": "Shop order detail: line list section title"},
   "shopOrderShipTo": "Ship to",

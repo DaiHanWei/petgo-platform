@@ -27,6 +27,12 @@ class AnalyticsEventGuardTest {
 
     // ---------- 事件名白名单（AC1） ----------
 
+    /**
+     * 🔴 这里**刻意写字面量而不是引常量**，与 {@code AnalyticsEventGuard} 的做法相反 ——
+     * 那边引常量是为了跟着生产方一起动，这边写字面量是为了<b>钉住线上的事件名</b>。
+     * 两者合起来：改常量值 → 白名单与生产方同步跟上（埋点不会静默停掉），但本用例变红，
+     * 逼改动者确认「PostHog 里这条事件确实要改名」。
+     */
     @Test
     @DisplayName("既有 5 个事件全部放行 —— 漏登记一个就等于静默关停一条线上埋点")
     void allowsAllPreExistingEvents() {

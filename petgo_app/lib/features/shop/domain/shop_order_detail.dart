@@ -58,6 +58,38 @@ enum ShopOrderStatus {
       this == ShopOrderStatus.completed;
 }
 
+/// 支付失败类别（Story 1-3；后端 `PaymentFailureCategory` 三值的镜像）。
+///
+/// 🔴 **未知字符串一律落 [unknown]，绝不映射成三态中的任何一个**（C4：禁止在客户端
+/// 兜底转换抹平契约差异）。后端将来加第四个值时，App 猜错一次就是给用户一个错误的
+/// 处置建议 —— 该给重试的不给、不该给的给了。[unknown] 在 UI 上按「通用失败」处理。
+enum ShopPaymentFailure {
+  /// 网关拒付。订单仍在待支付窗内，**保留重试入口**。
+  gatewayDeclined('GATEWAY_DECLINED'),
+
+  /// 付款窗超时。订单已取消，**不给重试**。
+  expired('EXPIRED'),
+
+  /// 用户自己取消了订单。静默，不弹任何错误。
+  userCancelled('USER_CANCELLED'),
+
+  /// 认不出的类别（后端新增而 App 未升级）。
+  unknown('');
+
+  const ShopPaymentFailure(this.api);
+
+  final String api;
+
+  /// 缺值 / 空串 → null（＝没失败）；认不出的非空值 → [unknown]。
+  static ShopPaymentFailure? fromApi(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    for (final f in values) {
+      if (f.api == raw && f != unknown) return f;
+    }
+    return unknown;
+  }
+}
+
 /// 一个包裹（Story 4.5，S-2 一单多包）。
 ///
 /// 🔴 **不接承运商 API、不在 App 内渲染物流轨迹**（FR-103）：[trackingUrl] 是承运商官网
@@ -217,6 +249,10 @@ class ShopOrderDetail {
   /// 🔒 分类由后端一处算出（`PaymentFailureCategory.of`），App **不解析网关 meta** ——
   /// meta 是第三方回调原文，随时可能含 PII。
   final String? paymentFailureCategory;
+
+  /// [paymentFailureCategory] 的枚举形态（Story 1-3）。未失败为 null。
+  ShopPaymentFailure? get paymentFailure =>
+      ShopPaymentFailure.fromApi(paymentFailureCategory);
 
   bool get isMixed => (coinAmount ?? 0) > 0 && (cashAmount ?? 0) > 0;
 

@@ -1945,6 +1945,7 @@
   "shopOrderCancelled": "Pesanan dibatalkan",
   "shopOrderPaid": "Pembayaran berhasil",
   "shopOrderPayFailed": "Pembayaran gagal. Coba lagi.",
+  "shopPaymentDeclinedNotice": "Pembayaran ditolak bank atau e-wallet kamu. Coba bayar lagi dengan metode lain.",
   "shopOrderItems": "Produk",
   "shopOrderShipTo": "Dikirim ke",
   "shopOrderNumber": "No. pesanan {token}",

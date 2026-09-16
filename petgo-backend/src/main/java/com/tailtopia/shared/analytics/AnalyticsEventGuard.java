@@ -1,5 +1,8 @@
 package com.tailtopia.shared.analytics;
 
+import com.tailtopia.content.service.PostSharePageAnalytics;
+import com.tailtopia.profile.service.CardPageAnalytics;
+import com.tailtopia.profile.service.MilestoneAnalyticsListener;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
@@ -42,11 +45,13 @@ public class AnalyticsEventGuard {
      */
     private static final Set<String> ALLOWED_EVENTS = Set.of(
             // ---- 既有 5 个（Story 1-2 前就在发，漏一个就等于把它关掉）----
-            "milestone_achieved",       // MilestoneAnalyticsListener
-            "pet_card_link_opened",     // CardPageAnalytics.linkOpened
-            "pet_card_cta_tapped",      // CardTrackController → CardPageAnalytics.capture
-            "pet_card_cta_outcome",     // 同上
-            "post_share_link_opened",   // PostSharePageAnalytics.linkOpened
+            // 🔴 有常量的一律**引常量、不抄字面量**：抄一份的话，改了那边的常量值这边编译照过、
+            //    测试照绿（测试断言的是同一串过期字面量），线上那条埋点却当场停掉。
+            MilestoneAnalyticsListener.EVENT_MILESTONE_ACHIEVED,
+            CardPageAnalytics.EVENT_OPENED,
+            CardPageAnalytics.EVENT_CTA_TAPPED,
+            CardPageAnalytics.EVENT_CTA_OUTCOME,
+            PostSharePageAnalytics.EVENT_OPENED,
             // ---- Story 1-2 新增 5 个：电商支付漏斗的五个结局 ----
             "shop_payment_intent_created",
             "shop_payment_paid",
