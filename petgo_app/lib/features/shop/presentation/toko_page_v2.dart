@@ -765,7 +765,15 @@ class _RestockCardState extends State<_RestockCard> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: ShopText.cardTitle.copyWith(fontSize: 12.5, fontWeight: FontWeight.w600)),
-                // ⚠️ 价格行：RepurchaseCardView 不下发价格，故整行不画（不编造、不显示 0）。
+                // 价格取**触发 SKU**（用户买过的那一档），不是商品最低价 ——
+                // 本卡的 CTA 是「再买一次」，最低价会在多规格商品上系统性低报。
+                // 🔴 null 或 0 时整行不画：不编造、不显示 0。
+                if (c.hasPrice) ...[
+                  const SizedBox(height: 2),
+                  Text(formatIdr(c.price!),
+                      key: ValueKey('tokoRestockPrice_${c.triggerId}'),
+                      style: ShopText.priceRail.copyWith(color: ShopColors.accent)),
+                ],
               ],
             ),
           ),

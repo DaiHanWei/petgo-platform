@@ -158,13 +158,29 @@ class _CardState extends ConsumerState<_Card> {
                     url: null, size: 48, radius: ShopShape.radiusChip, onInk: true),
                 const SizedBox(width: 9),
                 Expanded(
-                  child: Text(c.productName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: ShopColors.surface)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(c.productName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: ShopColors.surface)),
+                      // 与 Toko 首页那张是**同一份数据的两个入口**，口径必须一致：
+                      // 价格取触发 SKU，null 或 0 整行不画（不编造、不显示 0）。
+                      // ⚠️ 本卡是深色底（ShopColors.ink），价格不能用 accent 玫红那套浅底色。
+                      if (c.hasPrice) ...[
+                        const SizedBox(height: 2),
+                        Text(formatIdr(c.price!),
+                            key: ValueKey('recoTriggerPrice_${c.triggerId}'),
+                            style: ShopText.priceRail
+                                .copyWith(color: ShopColors.surface)),
+                      ],
+                    ],
+                  ),
                 ),
               ],
             ),

@@ -106,7 +106,7 @@ development_status:
   4-1-购物车部分结算后端: review   # SHOP-FR-04 · AD-S6 · 🔴 必须先于 4-2 上线；迁移 V20260916_1056；变异验证已做 2 次（去过滤 2 条红 / subtotal 条件累加 2 条红）；L0 绿 1751；L1 待本地；⚠️ C5 的 App 两处留给 4-2
   4-2-购物车勾选-app: review   # SHOP-FR-04 · 🔴 上线次序：后端 4-1 必须先到目标环境；C5 的 App 两处已同改；L0 绿（analyze 0 issue / test 1576）；L2 待本地
   4-3-订单号统一且不可推算: review   # SHOP-FR-29/30 · AD-S3 · 迁移 V20260916_1129（含存量回填，🔴 仓内首个 DO $$ 块，必须本地实跑）；3-2/3-3/3-4 留的三处 TODO 已全切；变异验证 2 次（第 1 次未变红→补了两条能分辨随机/递增的断言后才红）；L0 绿（后端 1764 / App 1580）；L1/L2 待本地
-  4-4-复购卡显示价格: ready-for-dev   # SHOP-FR-03
+  4-4-复购卡显示价格: review   # SHOP-FR-03 · 无迁移；价格取触发 SKU 非最低价；两处卡片同改；L0 绿（后端 1770 / App 1585）；L2 待本地；🔶 两个开放项（specName / Beli Lagi 带 skuToken）均未做，待产品确认
   4-5-c-端商品列表分页: ready-for-dev   # SHOP-FR-13 · 🔴 破坏性契约变更，须老版本兼容
   epic-4-retrospective: optional
 
