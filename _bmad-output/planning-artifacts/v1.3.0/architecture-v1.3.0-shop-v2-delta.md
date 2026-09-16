@@ -39,7 +39,7 @@ inputDocuments:
 | F-6 | 对外标识 = 不可枚举 token（`ShopTokenGenerator`：SecureRandom + Base62 × 22）；但展示号 `OrderDisplayNo = TOKO-yyyyMMdd-%06d` 用自增 id、**可枚举、从不落库** | SHOP-FR-30 要改的正是后者（AD-S3） |
 | F-7 | 对外契约同改（C5）：后端 record + App data DTO + 契约 test，缺一 PR 不绿。⚠️ **C5 原文写「四处」含 App mock，但 mock 子系统已于 `8e85b40d` 整体删除，实为三处** | 本 delta 所有契约变更条目均标注 |
 | F-8 | 后台侧必须遵守 admin delta：五套模板 A~E + htmx 局部更新 · **AB-19A「零端点变更」**（详情 GET 按 `HX-Request` 返抽屉，不新增 `…/drawer`）· 写操作三件套 `@PreAuthorize` + `AdminAuditService.record` + 三语 key | 本 delta 后台部分逐条标注模板归属；新增端点按 AD-S13 登记为 AB-19A 的新例外 |
-| F-9 | 权限码 `AdminPermissions` 现 **72 个**（本分支），admin 主题合入后为 74 并新增 `admin_roles` / `admin_role_permissions` 与 4 个预置角色 | 新权限码须改 **5 处**（AD-S13） |
+| F-9 | 权限码 `AdminPermissions` 现 **72 个**（本分支），admin 主题合入后为 74 并新增 `admin_roles` / `admin_role_permissions` 与 4 个预置角色（**本分支两表尚不存在**） | 新权限码要改的地方见 AD-S13（**实为 6 道关卡，非 5 处**） |
 | F-10 | **服务端不剥 EXIF**：字节原样进 OSS，剥离靠投递期 `x-oss-process`，且只施用于 5 处，shop 图片路径全未套（E4 只做了一半） | 外链转存路径必须自己剥（AD-S4） |
 | F-11 | 客服号硬编码**实为 2 处**（`customer_service_sheet.dart:12`、`AuthService.java:41`），深链尚不存在；**无任何通用配置表可挂它**（`platform_config` 只有 pricing / pawcoin / topup_tiers） | 需新建配置载体（AD-S8） |
 | F-12 | `feedback_tickets.related_order_id` **nullable、无 FK、只认问诊单**；用户建单路径 Flutter 从不传 token ⇒ 恒为 NULL，唯一活路径是后台 `link-order` | SHOP-FR-25 是「新建能力」而非「扩展」（AD-S7） |
@@ -123,7 +123,7 @@ inputDocuments:
 | `shop_import_jobs` | `id` · `public_token`(22 Base62) · `status` varchar(16)（`PENDING`/`RUNNING`/`DONE`/`PARTIAL_FAILED`/`FAILED`）· `total_rows` · `success_rows` · `failed_rows` · `result_object_key`（结果文件，生成后才填）· `operator_account_id` · `retry_count` · `created_at`/`updated_at` |
 | `shop_import_rows` | `id` · `job_id` FK CASCADE · `row_no` · `raw_json` jsonb · `error_message` varchar(500) · `product_id` / `sku_id`（成功时回填） |
 
-- 执行：`@Async` + 启动重扫（`RetryScanner` 范式），**禁引入调度中间件**（F-3）。
+- 执行：`@Async` + 启动重扫 —— ⚠️ **2026-09-16 更正：`RetryScanner` 类在本仓不存在**，真实范式是 `TriageTaskScanner`（`@Async` + `@EventListener(ApplicationReadyEvent.class)`）。**禁引入调度中间件**（F-3）。
 - **列规则（SD-14）**，落为 `ShopImportColumnSpec` 单一事实源，模板生成与解析共用：
 
 | 列 | 新建 | 更新 | 空值语义（更新时） |
@@ -141,9 +141,9 @@ inputDocuments:
   1. **协议与主机**：仅 `https`，主机须在白名单（OD-13 定范围；配置项，非硬编码）。
   2. **SSRF 防护**：解析后的 IP 不得落在私网 / 回环 / 链路本地 / 元数据地址段；禁跟随跳转到白名单外主机。⚠️ 既有 `ImageSizeBackfillService.measure` 是**反例**（无 scheme/host 校验），勿参照。
   3. **大小**：边读边计数，超过 10MB 立即中断 —— **不得先全量下载再判**（`LarkContentClient` 的现状是反例）。
-  4. **类型**：魔数校验 jpg/png/webp（比照 `looksLikeImage`），不信 `Content-Type`。
+  4. **类型**：魔数校验 jpg/png/webp，不信 `Content-Type`。⚠️ **2026-09-16 更正**：既有 `looksLikeImage` **含 GIF**，照抄会静默放宽白名单 —— 必须去掉 GIF 分支。
   5. **EXIF 剥离**：入库前以 `ImageIO` 重编码为 jpg/png 后再上传（F-10：服务端无剥离能力，投递期 `x-oss-process` 未覆盖 shop 路径）。同时测出宽高写入 `main_image_w/h`。
-- objectKey 沿用既有 `public/shop-product/<UUID>.<ext>` 约定。
+- objectKey 沿用既有约定 —— ⚠️ **2026-09-16 更正**：完整形态是 **`<环境前缀>public/shop-product/<UUID>.<ext>`**（staging 前缀为 `stag/`），漏掉前缀会让 staging 图片写进生产命名空间。
 
 ### AD-S5 · 批量写统一规格（SHOP-FR-15~18，SHOP-NFR-02）
 
@@ -152,7 +152,7 @@ inputDocuments:
 | 操作 | 条件写守卫 | 实现 |
 |---|---|---|
 | 批量改价 | `WHERE price = :expectedPrice` | 预览时记录每行现价，提交时带上；影响 0 行 ⇒ 整批回滚 |
-| 批量改库存 | 复用 `SkuInventoryRepository.stocktakeTo(skuId, counted, expectedBefore)` 的 CAS | 天然满足「预览后被改即拒」；**设的是在手量，`locked` 不变**，CAS 的 `i.locked <= :counted` 守卫防止可售量为负 |
+| 批量改库存 | 复用 `SkuInventoryRepository.stocktakeTo(skuId, counted, expectedBefore)` 的 CAS | 天然满足「预览后被改即拒」；**设的是在手量，`locked` 不变**，CAS 的 `i.locked <= :counted` 守卫防止可售量为负。<br>🔴 **2026-09-16 关键更正**：**不能循环调既有的四参 `stocktake`** —— 它内部自己重读前值，会让 CAS 形同虚设、「预览即契约」变成假保护。须新增带 `expectedBefore` 的重载。 |
 | 批量上下架 | `WHERE is_active = :expectedActive` | 同上 |
 | 批量调品类 | `WHERE category = :expectedCategory` | 目标品类须 `is_active=true` |
 
@@ -212,7 +212,7 @@ inputDocuments:
 
 ### AD-S10 · SKU 级图片（SHOP-FR-12）
 
-- `shop_skus.main_image_key` varchar(200) NULL + `main_image_w` / `main_image_h` int NULL（与商品级同构）。
+- `shop_skus.main_image_key` **varchar(255)** NULL + `main_image_w` / `main_image_h` int NULL（与商品级同构 —— ⚠️ 2026-09-16 更正：商品级实际是 255 不是 200）。
 - App 商品详情选中规格时主图切换；规格无图回退商品主图。
 - 上传复用既有后台 multipart 路径与 `folder=shop-product`。
 
@@ -239,16 +239,23 @@ inputDocuments:
 
 > 全部在 admin 主题 Epic 10 迁移后的页面上叠加（AD-S13 之外不新增端点）。
 
-| 页面 | 模板 | 增量 |
+> 🔴 **2026-09-16 更正**：本表原先的模板字母与 admin 主题的定义**对不上**。admin 的真实定义是 **A=处置工作台 · B=管理列表 · C=报表 · D=配置卡 · E=分步**，各页归属以 admin 主题 Story 10.x 为准，下表已按其修正。
+
+| 页面 | 模板（admin 定义） | 增量 |
 |---|---|---|
-| 商品列表 | A（列表 + 筛选） | 搜索（名称 / SPU / SKU 编号）、分页、批量勾选工具条 |
-| 商品表单 | C（表单） | 新建态 SKU 区（SHOP-FR-11）、图片设为主图与替换（SHOP-FR-10）、SKU 图片与注册号、即时校验 |
-| 库存列表 | A | 分页 / 搜索 / 筛选、批量盘点 |
-| 订单列表 | A | 五维搜索、下单人昵称列、导出 |
-| 对账 | B（只读看板）→ 扩为可下钻 | 汇总行点击进明细抽屉（`HX-Request` 分支，不新增 `…/drawer`）、导出 |
-| 品类管理 | A + C（新页） | 新增 / 改名 / 停用 / 排序 |
+| 商品列表 | **B**（管理列表） | 搜索（名称 / SPU / SKU 编号）、分页、批量勾选工具条 |
+| 商品表单 | **D**（配置卡） | 新建态 SKU 区（SHOP-FR-11）、图片设为主图与替换（SHOP-FR-10）、SKU 图片与注册号、即时校验 |
+| 库存列表 | **B** | 分页 / 搜索 / 筛选、批量盘点 |
+| 订单列表 | **B** | 五维搜索、下单人昵称列、导出 |
+| 对账 | **C**（报表）→ 扩为可下钻 | 汇总行点击进明细抽屉（`HX-Request` 分支，不新增 `…/drawer`）、导出 |
+| 品类管理 | **B + D**（新页） | 新增 / 改名 / 停用 / 排序 |
 | 导入工作台 | 新页，比照 `seed-batch-workspace` | 上传 → 任务状态轮询 → 结果文件下载 |
-| banner | C | 多图、跳转配置 |
+| banner | **B** | 多图、跳转配置 |
+| 库存周转 / 毛利看板 | **C** | 售罄数口径与标注（SHOP-FR-28） |
+
+🔴 **模板 D/E 与所有整页表单维持现状 PRG，不与 htmx 混用**（admin AD-9 原文）。商品表单页是模板 D ⇒ **SHOP-FR-20 的即时校验不能想当然用 htmx 422**，须按 PRG 分支实现或先与 admin 主题对齐，见 §9 更正表第 4 条。
+
+🔴 **导出一律走 admin 主题 AD-10 的 `AdminExportWriter`**（xlsx 走 POI、CSV 走 RFC 4180 且已含前导 `=` 防公式注入），**禁止各页自拼字符串**。本 delta 原先要求各导出自行实现公式转义，改为复用它；若 Epic 10 尚未交付该类，则在本主题内先实现同名工具并在 Epic 10 合入时收敛为一份。
 
 ### AD-S13 · 新权限码与「零端点变更」例外
 
@@ -263,7 +270,13 @@ inputDocuments:
 | `shop.finance_export` | 对账明细导出 |
 | `shop.order_email_search` | 按账号邮箱搜订单（受 OD-1 约束；OD-1 若定为不做，此码不加） |
 
-🔴 **加码必改 5 处**（F-9）：`AdminPermissions` 常量 → 两个 `GROUPS` 分组 → 四语 `perm.*` key → `AdminPermissionsTest.listStableSize` 断言数 → **admin 主题预置角色的默认授予 + 种子迁移**。默认授予建议：`category_manage` / `product_import` / `bulk_edit` → 运营专员；`order_export` / `order_email_search` → 客服 + 财务；`finance_export` → 财务。**不默认授予任何含 PII 的码给运营专员**。
+🔴 **加码要改的地方（2026-09-16 代码核实更正，原写「5 处」不准）**：
+1. `AdminPermissions` 常量；
+2. **`GROUPS` 里的其中一组**（view 或 edit，**不是两组都加**）—— `ALL` 由 `GROUPS` 派生，不进组 ＝ 不在 `ALL` ＝ `isValid` 拒绝，且**编译不报错**；
+3. **4 个** properties 文件的 `perm.*`（`messages.properties` 默认包 + `_zh_CN` + `_en` + `_id`），⚠️ 守门测试**只校验 zh_CN 与 en**，漏写默认包或印尼包**不会变红**，须人工核对；
+4. `AdminPermissionsTest.listStableSize` 断言数；
+5. `AdminPermissionWiringTest` 是**双向守门**：不只要求代码里的 `hasAuthority` 字面量 ∈ ALL，还要求**每个 ALL 码至少有一处闸门** ⇒ 加码与写页面必须**同批完成**，中间态测试必红；
+6. admin 主题预置角色的默认授予 —— ⚠️ **本分支上 `admin_roles` / `admin_role_permissions` 两张表尚不存在**（admin 主题产物），预置角色目前是 Java 枚举。**不要为了凑满这一处而自己造表或造迁移**（会与 admin 撞车），登记为待办、待 admin 合入后补。默认授予建议：`category_manage` / `product_import` / `bulk_edit` → 运营专员；`order_export` / `order_email_search` → 客服 + 财务；`finance_export` → 财务。**不默认授予任何含 PII 的码给运营专员**。
 
 **AB-19A「零端点变更」新增例外**（须在 admin 主题登记）：品类管理、导入工作台、批量操作提交、两个导出 —— 这些是**新能力**，不存在可复用的既有端点。对账下钻**不是**例外（走既有详情 GET 的 `HX-Request` 分支）。
 
@@ -299,6 +312,8 @@ inputDocuments:
 | K5 | `GET /api/v1/shop/products` 分页 | 🔴 **老版本不带分页参数时必须仍返全量**，直到最低支持版本升级 |
 | K6 | `GET /api/v1/support/contact`（新） | 无 |
 | K7 | 建单请求真正使用 `relatedOrderToken` | 无（字段早已存在） |
+| K8 | **banner 由单张改多张** | 🔴 **2026-09-16 补**：现 App 端按**对象**解析该端点，改成数组会让**所有存量 App 的首页 banner 静默消失**（解析异常被「失败当作没有」吞掉，不报错、无人发现）。⇒ **老端点原样保留返回单张，多图另开复数端点**；老版本继续看到权重最高的那一张 |
+| K9 | SKU 图片字段进商品详情 DTO | 无（新增字段） |
 
 ---
 
@@ -335,3 +350,39 @@ inputDocuments:
 3. **第二批**（Epic 10 后）：AD-S1 品类 → AD-S2 编号 → AD-S4 导入导出 → AD-S5 批量写 → AD-S10/11/12 图片、banner、口径 → 对账下钻导出
 
 > 顺序依据：AD-S1 与 AD-S2 是 AD-S4 / AD-S5 的数据前置；AD-S9(b) 的环境标记越早越好，否则后续验收数据都是脏的。
+
+---
+
+## 9 · 2026-09-16 写 story 时的代码核实更正（权威）
+
+> 40 个 story 生成过程中逐条 grep 核实，发现本 delta 与代码现状不符之处。**下表结论优先于正文**；正文中易误导的几处已就地改。
+
+| # | 文档原说法 | 代码现状 | 影响 |
+|---|---|---|---|
+| 1 | 批量改库存「复用盘点原语」 | 既有四参 `stocktake` **内部自己重读前值** | 🔴 循环调它会让 CAS 形同虚设、「预览即契约」成为**假保护**。须加带 `expectedBefore` 的重载（已改 AD-S5） |
+| 2 | banner 改多图 | App 端按**对象**解析该端点，失败被「当作没有」吞掉 | 🔴 直接改数组 ⇒ **存量 App 首页 banner 静默消失**。老端点保留、多图另开复数端点（已补 K8） |
+| 3 | 后台页面模板字母 | admin 真实定义 A=工作台 B=列表 C=报表 D=配置卡 E=分步 | 🔴 §3 原表**四个页面全标错**，已按 admin Story 10.x 更正 |
+| 4 | 即时校验走 htmx 422 | admin AD-9：**模板 D/E 与所有整页表单维持 PRG，不混用**；商品表单页是模板 D | 🔴 SHOP-FR-20 须按 PRG 实现或先与 admin 对齐，不能想当然用 htmx |
+| 5 | 加权限码「5 处」 | 实为 **6 道关卡**；`GROUPS` 只加**一组**；properties 是 **4 个文件**且守门只覆盖 zh_CN/en；`AdminPermissionWiringTest` **双向**守门；预置角色两表**本分支不存在** | 已重写 AD-S13。**不要为凑满而自己造表** |
+| 6 | 「三语 key」 | `i18n/` 是 **4 个** properties（默认包 + zh_CN + en + id），各 74 个 `perm.*` | 漏写默认包或印尼包**测试不会红**，须人工核对 |
+| 7 | 导出各自实现公式转义 | admin AD-10 已定 **`AdminExportWriter`**（含前导 `=` 防注入）；⚠️ 全仓现有导出**一个都没做转义** | 一律复用 AD-10；Epic 10 未交付时先实现同名工具，合入时收敛为一份 |
+| 8 | 启动重扫用 `RetryScanner` | **该类不存在**，真实范式是 `TriageTaskScanner` | 已改 AD-S4 |
+| 9 | 魔数校验「比照 `looksLikeImage`」 | 该方法**含 GIF** | 照抄＝静默放宽白名单，须去掉 GIF（已改 AD-S4） |
+| 10 | objectKey `public/shop-product/…` | 实际带**环境前缀**（staging 为 `stag/`） | 漏掉会让 staging 图写进生产命名空间（已改 AD-S4） |
+| 11 | SKU 图片列 varchar(200) | 商品级同构列是 **255** | 已改 AD-S10 |
+| 12 | 「品类超过 4 个改横向滑动」需实现 | ✅ **App 侧早已是横向滚动**，与品类数解耦 | SHOP-FR-19 该条降级为「验证 + 换数据源」，**省一块工作量** |
+| 13 | `ProductCategory` 枚举可退为废弃常量 | 它被另一模块引用，且有**反射断言测试钉死** | 枚举**不能删**；AD-S1 的「保留」有代码层强制理由 |
+| 14 | 品类改表的改造面 | 另有：原生 SQL 里**硬编码品类字面量**、模板调 `枚举.name()`、Controller 用**枚举 `==` 内存过滤**（改 String 后会**静默筛出空列表**） | 三处必须一并改，已写进 6-1 |
+| 15 | 加外键 / 加编号列的波及面 | **16 个集成测试**用原生 SQL 插商品 | 是 6-1 / 6-4 的工作量大头 |
+| 16 | 服务端校验「8 处」 | 实为 **12 个抛点 / 16 条规则** | 结论不变（服务端已完备），数字更正 |
+| 17 | 对账页「12 个汇总数字」 | 实为 **11 字段 + 2 派生 = 13 个数字** | 已写进 9-4 |
+| 18 | 「按电话搜索」的三道处置 | 权限位**不走 `@PreAuthorize`**，是渲染门控 + 服务端手写再判 403 两段代码 | 邮箱搜索照抄时别写成注解 |
+| 19 | 本仓有批量操作先例可循 | **没有合格先例**：现有三个「批量」只记一条汇总审计、无行数上限、部分失败不回滚 | 7-1 是首个；已标为**反例，禁止照抄** |
+| 20 | 8-2 只需遵守命名纪律 | 另有**同类隐患未修**：改商品的端点今天安全只因表单类恰好没有同名字段，而本 story 正要往它上面加字段 | 须一并改名（对外地址不变） |
+| 21 | banner 对比度基线 9.09:1 | 该数字是**某一张实测图**的测值；代码里真正门槛是标题 ≥3:1、胶囊 ≥4.5:1 | 「每张图都验」的要求保留，口径待澄清 |
+| 22 | 后台规格表单可编辑 | 今天**只能新增、不预填已有规格**（标题却写「新增/编辑」） | 影响 SKU 图片能否补传，8-3 列为实施前确认项 |
+| 23 | Epic 10 基建 | 本分支上模板 fragment 与前端脚本**一个都不存在** | 「前置 Epic 10」已具体化为可检查的停手条件 |
+
+**另有两条跨 story 的钉子**：
+- 7-7 的「导出→原样导入」闭环会把自家 CDN URL 送进 7-6 的白名单校验 ⇒ **自家 CDN 域名必须在白名单里**，否则闭环测试必红。
+- 9-5 并非纯页面 story：5-3 把「可用 / 冻结中」的**查询实现**交接给了它（不加列、不加迁移）。

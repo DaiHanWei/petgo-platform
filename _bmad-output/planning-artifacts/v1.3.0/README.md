@@ -25,7 +25,7 @@
 |---|---|---|---|---|
 | **admin** · 运营后台 UI 重构 | `feat/1.3.0-ops-ui-refactor` | Epic 1–11 | 59，全部 ready-for-dev | 云端批跑中（2026-09-09 起）；Epic 10 的 6 条跳过，等电商线合入后再做 |
 | **batch-a** · 内容体验修复包 | `feat/1.3.0-batch-a-content-fixes` | Epic 1–5 | 19，全部 ready-for-dev | 规划全套已入库（2026-09-10），待开跑 |
-| **shop-v2** · 电商板块 V2（体验 / 运营后台 / 履约 / 客服可达） | `feat/1.3.0-shop-v2` | Epic 1–9 | 40，待 sprint-planning | PRD 两轮校验后定稿（SD-1~18）；架构 delta（AD-S1~S13）+ epics 已出（2026-09-16）；第二批运营提效组依赖 admin Epic 10 |
+| **shop-v2** · 电商板块 V2（体验 / 运营后台 / 履约 / 客服可达） | `feat/1.3.0-shop-v2` | Epic 1–9 | 40，全部 ready-for-dev | PRD 两轮校验后定稿（SD-1~18）；架构 delta（AD-S1~S13）+ epics + 40 story 全套已出（2026-09-16，含 23 条代码核实更正，见架构 delta §9）；第二批运营提效组依赖 admin Epic 10 |
 
 **产物文件**（按主题定位时以本列为准）：
 
@@ -33,7 +33,7 @@
 |---|---|---|---|---|---|
 | admin | `PRD-v1.3.0-admin.md` | `architecture-v1.3.0-admin-delta.md` | `epics-v1.3.0-admin.md` | `决策日志-admin.md` | `sprint-status-v1.3.0-admin.yaml` |
 | batch-a | `PRD-v1.3.0-batch-a-content-fixes.md` | `architecture-v1.3.0-delta.md` ⚠️无后缀 | `epics-v1.3.0-batch-a.md` | `决策日志.md` ⚠️无后缀 | `sprint-status-v1.3.0-batch-a.yaml` |
-| shop-v2 | `PRD-v1.3.0-shop-v2.md`（附录 `PRD-v1.3.0-shop-v2-addendum.md`） | `architecture-v1.3.0-shop-v2-delta.md` | `epics-v1.3.0-shop-v2.md` | `决策日志-shop-v2.md` | — |
+| shop-v2 | `PRD-v1.3.0-shop-v2.md`（附录 `PRD-v1.3.0-shop-v2-addendum.md`） | `architecture-v1.3.0-shop-v2-delta.md` | `epics-v1.3.0-shop-v2.md` | `决策日志-shop-v2.md` | `sprint-status-v1.3.0-shop-v2.yaml` |
 
 > **Epic 号段跨主题会重复，这是允许的**：两主题的 epics 文件与 sprint-status 各自独立，story 文件名带中文名互不覆盖，技能按 sprint-status 里的完整 key 定位 story，不按 `<epic>-<n>` 前缀通配。
 > 代价只在口头引用：同一目录下 admin 与 batch-a 都有 `1-1-*`，**说 story 必须带主题**（如「batch-a 的 1-1」）。
