@@ -27,7 +27,10 @@ class SupportTicketViewContractTest {
                 "handledBy",       // 处理人（内部）
                 "csRating",        // 客服评级（内部 AB-5G）
                 "csatDeadline",    // CSAT 截止（内部调度）
-                "relatedOrderId"); // 内部自增 id 不外露
+                "relatedOrderId",   // 内部自增 id 不外露
+                // Story 3-2：类型同样是内部实现细节。用户不需要知道「他的工单挂的是
+                // consult_orders 还是 shop_orders」—— 那是两张表的名字，不是产品概念。
+                "relatedOrderType");
     }
 
     @Test

@@ -39,6 +39,13 @@ public record AdminTicketView(
         int attachmentCount,
         List<String> attachmentUrls,
         String relatedOrderToken,
+        /**
+         * 关联订单类型（Story 3-2）：{@code CONSULT} / {@code SHOP}。
+         *
+         * <p>🔴 模板据它决定**渲不渲染退款判定块** —— 电商单本版不进退款审批链路。
+         * {@code relatedOrderToken} 为 null 时本字段无意义。
+         */
+        String relatedOrderType,
         String refundToken,
         String refundNeedDecision,
         Short csatScore,

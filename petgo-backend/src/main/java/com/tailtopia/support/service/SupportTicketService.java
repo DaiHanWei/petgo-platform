@@ -4,12 +4,15 @@ import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.repository.ConsultOrderRepository;
+import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.service.NotificationService;
 import com.tailtopia.profile.service.CardTokenGenerator;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.support.domain.ContactType;
 import com.tailtopia.support.domain.FeedbackTicket;
+import com.tailtopia.support.domain.FeedbackTicket.ResolvedOrder;
+import com.tailtopia.support.domain.RelatedOrderType;
 import com.tailtopia.support.domain.TicketAttachment;
 import com.tailtopia.support.domain.TicketInternalNote;
 import com.tailtopia.support.domain.TicketLabel;
@@ -52,6 +55,8 @@ public class SupportTicketService {
     private final TicketInternalNoteRepository internalNotes;
     private final CardTokenGenerator tokenGenerator;
     private final ConsultOrderRepository orders;
+    /** Story 3-2：电商订单也能挂到工单上。只读，只用来解析 token → (id, type)。 */
+    private final ShopOrderRepository shopOrders;
     private final NotificationService notifications;
     private final AdminAuditService audit;
 
@@ -62,12 +67,14 @@ public class SupportTicketService {
     public SupportTicketService(FeedbackTicketRepository tickets, TicketAttachmentRepository attachments,
             TicketLabelRepository labels, TicketInternalNoteRepository internalNotes,
             CardTokenGenerator tokenGenerator, ConsultOrderRepository orders,
+            ShopOrderRepository shopOrders,
             NotificationService notifications, AdminAuditService audit) {
         this.tickets = tickets;
         this.attachments = attachments;
         this.labels = labels;
         this.internalNotes = internalNotes;
         this.tokenGenerator = tokenGenerator;
+        this.shopOrders = shopOrders;
         this.orders = orders;
         this.notifications = notifications;
         this.audit = audit;
@@ -89,12 +96,13 @@ public class SupportTicketService {
 
         ContactType contactType = parseContactType(contactTypeRaw);
         LinkedHashSet<TicketLabelType> dedupedLabels = parseLabels(labelsRaw);
-        Long relatedOrderId = resolveRelatedOrder(userId, relatedOrderToken);
+        ResolvedOrder relatedOrder = resolveRelatedOrder(userId, relatedOrderToken);
         boolean needContactCustomer = needContact == null || needContact;
 
         String token = tokenGenerator.generate();
         FeedbackTicket ticket = tickets.save(FeedbackTicket.create(
-                userId, token, subject, body, contactType, contactValue, needContactCustomer, relatedOrderId));
+                userId, token, subject, body, contactType, contactValue, needContactCustomer,
+                relatedOrder));
 
         for (String key : keys) {
             attachments.save(TicketAttachment.of(ticket.getId(), key));
@@ -207,18 +215,29 @@ public class SupportTicketService {
     }
 
     /**
-     * 解析 relatedOrderToken → related_order_id：校验订单属本人；不符或不存在则**忽略存 null**
-     * （OPEN-1 宽松，用户可能误传；退款工单 4-3 才严格绑单）。
+     * 解析 relatedOrderToken → {@code (related_order_id, related_order_type)}：校验订单属本人；
+     * 不符或不存在则**忽略存 null**（OPEN-1 宽松，用户可能误传；退款工单 4-3 才严格绑单）。
+     *
+     * <p>🔴 <b>顺序固定为「先问诊单、再电商单」</b>（Story 3-2 / AD-S7）：先查问诊单保证
+     * <b>任何现有 token 的解释结果一个字都不变</b>，回归风险归零；电商单只在问诊查不到时才试。
+     * 两类 token 都是 32 位随机串，跨表重复可以忽略，但顺序固定能让行为可预测、可测试。
+     *
+     * <p>🔴 <b>任何情况都不抛异常</b>：App 误传一个 token 不能把建单整个打挂 ——
+     * 用户是来求助的，把他的求助拒之门外是最糟的处置。
      */
-    private Long resolveRelatedOrder(long userId, String relatedOrderToken) {
+    private ResolvedOrder resolveRelatedOrder(long userId, String relatedOrderToken) {
         if (!StringUtils.hasText(relatedOrderToken)) {
             return null;
         }
-        Optional<ConsultOrder> order = orders.findByOrderToken(relatedOrderToken);
-        if (order.isPresent() && order.get().getUserId() == userId) {
-            return order.get().getId();
+        String token = relatedOrderToken.trim();
+        Optional<ConsultOrder> consult = orders.findByOrderToken(token);
+        if (consult.isPresent() && consult.get().getUserId() == userId) {
+            return new ResolvedOrder(consult.get().getId(), RelatedOrderType.CONSULT);
         }
-        return null;
+        // 一次查询即带归属校验，比「先查后比」少一个能写错的地方。
+        return shopOrders.findByPublicTokenAndUserId(token, userId)
+                .map(o -> new ResolvedOrder(o.getId(), RelatedOrderType.SHOP))
+                .orElse(null);
     }
 
     private SupportTicketView toView(FeedbackTicket t) {

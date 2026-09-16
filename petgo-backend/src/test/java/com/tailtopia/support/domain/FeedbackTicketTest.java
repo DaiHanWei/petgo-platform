@@ -12,7 +12,8 @@ class FeedbackTicketTest {
     @Test
     void create_setsOpenStatusAndFields() {
         FeedbackTicket t = FeedbackTicket.create(42L, "tok-abc", "主题", "投诉正文",
-                ContactType.EMAIL, "a@b.com", true, 7L);
+                ContactType.EMAIL, "a@b.com", true,
+                new FeedbackTicket.ResolvedOrder(7L, RelatedOrderType.CONSULT));
 
         assertThat(t.getStatus()).isEqualTo(TicketStatus.OPEN);
         assertThat(t.getTicketToken()).isEqualTo("tok-abc");
@@ -23,6 +24,7 @@ class FeedbackTicketTest {
         assertThat(t.getContactValue()).isEqualTo("a@b.com");
         assertThat(t.isNeedContactCustomer()).isTrue();
         assertThat(t.getRelatedOrderId()).isEqualTo(7L);
+        assertThat(t.getRelatedOrderType()).isEqualTo(RelatedOrderType.CONSULT);
         // 预留/默认字段本 story 不填
         assertThat(t.isContactedCustomer()).isFalse();
         assertThat(t.getHandledBy()).isNull();
@@ -37,6 +39,8 @@ class FeedbackTicketTest {
 
         assertThat(t.getSubject()).isNull();
         assertThat(t.getRelatedOrderId()).isNull();
+        // 🔴 id 为 null 时 type 无意义，但列是 NOT NULL —— 取 CONSULT。
+        assertThat(t.getRelatedOrderType()).isEqualTo(RelatedOrderType.CONSULT);
         assertThat(t.isNeedContactCustomer()).isFalse();
         assertThat(t.getStatus()).isEqualTo(TicketStatus.OPEN);
     }

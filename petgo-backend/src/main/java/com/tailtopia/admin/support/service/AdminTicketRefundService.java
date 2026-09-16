@@ -7,7 +7,10 @@ import com.tailtopia.consult.repository.ConsultOrderRepository;
 import com.tailtopia.pay.refund.repository.RefundRequestRepository;
 import com.tailtopia.pay.refund.service.RefundService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shop.order.domain.ShopOrder;
+import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.support.domain.FeedbackTicket;
+import com.tailtopia.support.domain.RelatedOrderType;
 import com.tailtopia.support.domain.TicketStatus;
 import com.tailtopia.support.repository.FeedbackTicketRepository;
 import org.springframework.stereotype.Service;
@@ -26,42 +29,96 @@ public class AdminTicketRefundService {
 
     private final FeedbackTicketRepository tickets;
     private final ConsultOrderRepository orders;
+    /** Story 3-2：电商订单也能挂到工单上。🔴 只用于 link，**绝不进退款链路**。 */
+    private final ShopOrderRepository shopOrders;
     private final RefundRequestRepository refunds;
     private final RefundService refundService;
     private final AdminAuditService audit;
 
     public AdminTicketRefundService(FeedbackTicketRepository tickets, ConsultOrderRepository orders,
+            ShopOrderRepository shopOrders,
             RefundRequestRepository refunds, RefundService refundService, AdminAuditService audit) {
         this.tickets = tickets;
         this.orders = orders;
+        this.shopOrders = shopOrders;
         this.refunds = refunds;
         this.refundService = refundService;
         this.audit = audit;
     }
 
-    /** 补挂关联订单：校验订单存在且属于工单用户；仅未结案工单可挂。 */
+    /**
+     * 补挂**问诊单**：校验订单存在且属于工单用户；仅未结案工单可挂。
+     *
+     * <p>Story 3-2 之前叫 {@code linkOrder}，行为逐行等价 —— 只是名字说清了它认哪一类订单。
+     */
     @Transactional
-    public void linkOrder(String ticketToken, String orderToken, long adminId) {
+    public void linkConsultOrder(String ticketToken, String orderToken, long adminId) {
         FeedbackTicket t = requireOpen(ticketToken);
         ConsultOrder order = orders.findByOrderToken(orderToken == null ? "" : orderToken.trim())
                 .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
         if (!order.getUserId().equals(t.getUserId())) {
             throw AppException.validation("该订单不属于本工单用户，无法关联").code("admin.err.ticket.orderNotOwned");
         }
-        // PR#34 finding #5：工单退款视图从「当前关联订单」推导——已批出退款后再重关联，
-        // 审批区块会重新出现，可对第二笔订单再批退款（且可经 refundToPawCoin 自助到账）。
-        // 已有已批准退款的工单禁止改挂订单；确需二次退款走独立主管线并留审计。
-        if (t.getRelatedOrderId() != null && !t.getRelatedOrderId().equals(order.getId())) {
-            boolean approvedRefundExists = refunds.findByOrderId(t.getRelatedOrderId())
-                    .map(r -> r.getNeedDecision() == com.tailtopia.pay.refund.domain.NeedDecision.APPROVED)
-                    .orElse(false);
-            if (approvedRefundExists) {
-                throw AppException.conflict("本工单关联订单已批准退款，禁止改挂其他订单").code("admin.err.ticket.refundApprovedLocked");
-            }
-        }
-        t.linkRelatedOrder(order.getId());
+        requireNotRefundApprovedLocked(t, order.getId(), RelatedOrderType.CONSULT);
+        t.linkConsultOrder(order.getId());
         audit.record(adminId, AuditActions.TICKET_ORDER_LINKED, "feedback_ticket", ticketToken,
-                "工单关联订单 order=" + order.getOrderToken());
+                "工单关联订单 type=CONSULT order=" + order.getOrderToken());
+    }
+
+    /**
+     * 补挂**电商订单**（Story 3-2 / AD-S7）。
+     *
+     * <p>🔴 <b>本方法体内不出现任何 {@code refunds} / {@code refundService} 引用</b>，
+     * 这是三层守卫里的第一层（编译期就断开）：电商单本版不进退款审批链路，退款走线下。
+     * 第二层是 {@link #ensureRefundRequest} 入口的类型守卫（运行期兜底，**那才是真正的护栏**），
+     * 第三层是模板不渲染退款块（界面上点不到）。
+     */
+    @Transactional
+    public void linkShopOrder(String ticketToken, String orderToken, long adminId) {
+        FeedbackTicket t = requireOpen(ticketToken);
+        ShopOrder order = shopOrders.findByPublicToken(orderToken == null ? "" : orderToken.trim())
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
+        // 🔴 两边都是 Long（对象），必须 equals —— `!=` 是引用比较，真实 userId 一旦超出
+        //    Long 的 [-128,127] 缓存区间就恒为 true，本人的电商单也会被判成「不是你的」。
+        //    上面问诊单那一支用的就是 equals，两支必须写法一致。
+        if (!order.getUserId().equals(t.getUserId())) {
+            throw AppException.validation("该订单不属于本工单用户，无法关联").code("admin.err.ticket.orderNotOwned");
+        }
+        requireNotRefundApprovedLocked(t, order.getId(), RelatedOrderType.SHOP);
+        t.linkShopOrder(order.getId());
+        audit.record(adminId, AuditActions.TICKET_ORDER_LINKED, "feedback_ticket", ticketToken,
+                "工单关联订单 type=SHOP order=" + order.getPublicToken());
+    }
+
+    /**
+     * PR#34 finding #5：工单退款视图从「当前关联订单」推导 —— 已批出退款后再重关联，
+     * 审批区块会重新出现，可对第二笔订单再批退款（且可经 refundToPawCoin 自助到账）。
+     * 已有已批准退款的工单禁止改挂订单；确需二次退款走独立主管线并留审计。
+     *
+     * <p>🔴 <b>本守卫对两支 link 都生效</b>（不能靠挂个电商单绕过它）。
+     *
+     * <p>🔴 <b>查退款表前必须先判当前类型是 CONSULT</b>：工单当前挂的是电商单时，
+     * 无条件 {@code refunds.findByOrderId(电商单 id)} 会命中一条**同号问诊单的退款请求**，
+     * 于是出现「挂着电商单的工单，因为某个不相干问诊单有 APPROVED 退款而被禁止改挂」——
+     * 症状很怪、很难查。这是串号 bug 的镜像，不是优化。
+     */
+    private void requireNotRefundApprovedLocked(FeedbackTicket t, long newOrderId,
+            RelatedOrderType newType) {
+        boolean sameOrder = t.getRelatedOrderId() != null
+                && t.getRelatedOrderId().equals(newOrderId)
+                && t.getRelatedOrderType() == newType;
+        if (t.getRelatedOrderId() == null || sameOrder) {
+            return;
+        }
+        if (t.getRelatedOrderType() != RelatedOrderType.CONSULT) {
+            return; // 电商单没有 refund_requests 行，查了只会查出同号问诊单的。
+        }
+        boolean approvedRefundExists = refunds.findByOrderId(t.getRelatedOrderId())
+                .map(r -> r.getNeedDecision() == com.tailtopia.pay.refund.domain.NeedDecision.APPROVED)
+                .orElse(false);
+        if (approvedRefundExists) {
+            throw AppException.conflict("本工单关联订单已批准退款，禁止改挂其他订单").code("admin.err.ticket.refundApprovedLocked");
+        }
     }
 
     /** 批准退款需求：无退款单则先建（绑工单溯源），再 approveNeed（订单 CAS COMPLETED→REFUNDING，解锁 App 选方式）。 */
@@ -91,6 +148,15 @@ public class AdminTicketRefundService {
     private String ensureRefundRequest(FeedbackTicket t, long adminId) {
         if (t.getRelatedOrderId() == null) {
             throw AppException.validation("请先关联订单，再判定退款需求").code("admin.err.ticket.linkOrderFirst");
+        }
+        // 🔴🔴 **整条链路的雷管就在下面那行 `orders.findById`**（orders 是 ConsultOrderRepository）：
+        //    工单挂的是电商单 42 时，它会捞出 consult_orders(42) —— 一条别人的问诊单 ——
+        //    然后给那条订单建退款请求。**一次点击就能给无关订单开退款。**
+        //    这道守卫是三层防线里唯一真正的护栏，删掉它另外两层都只是「不容易走到」。
+        //    ⚠️ 位置必须在 `relatedOrderId == null` 之后、`findById` 之前。
+        if (t.getRelatedOrderType() != RelatedOrderType.CONSULT) {
+            throw AppException.validation("电商订单的退款不走工单审批，请按售后流程线下处理")
+                    .code("admin.err.ticket.refundNotForShopOrder");
         }
         return refunds.findByOrderId(t.getRelatedOrderId())
                 .map(r -> r.getRefundToken())

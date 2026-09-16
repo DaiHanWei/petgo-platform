@@ -4,6 +4,7 @@ import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.support.service.AdminSupportTicketQueryService;
 import com.tailtopia.admin.support.service.AdminTicketRefundService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.support.domain.RelatedOrderType;
 import com.tailtopia.support.service.SupportTicketService;
 import com.tailtopia.shared.i18n.Messages;
 import org.springframework.data.domain.PageRequest;
@@ -102,19 +103,40 @@ public class AdminSupportTicketController {
 
     // ===== AB-5B 退款判定（bug 20260728-384/388）=====
 
-    /** 补挂关联订单（按订单 token；归属校验在 service）。 */
+    /**
+     * 补挂关联订单（按订单 token；归属校验在 service）。
+     *
+     * <p>Story 3-2：多一个 {@code orderType} 参数分流到两支 service 方法。
+     * 🔴 <b>路径与 {@code @PreAuthorize} 都不变，参数 {@code defaultValue="CONSULT"}</b> ——
+     * 老表单不传参即旧行为（admin 主题 AB-19A「零端点变更」的姿态）。
+     */
     @PostMapping("/admin/support-tickets/{ticketToken}/link-order")
     @PreAuthorize(HANDLE_AUTH)
     public String linkOrder(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable String ticketToken, @RequestParam("orderToken") String orderToken,
+            @RequestParam(name = "orderType", defaultValue = "CONSULT") String orderType,
             RedirectAttributes flash) {
         try {
-            ticketRefund.linkOrder(ticketToken, orderToken, admin.getAdminAccountId());
+            RelatedOrderType type = parseOrderType(orderType);
+            if (type == RelatedOrderType.SHOP) {
+                ticketRefund.linkShopOrder(ticketToken, orderToken, admin.getAdminAccountId());
+            } else {
+                ticketRefund.linkConsultOrder(ticketToken, orderToken, admin.getAdminAccountId());
+            }
             flash.addFlashAttribute("notice", msg.get("admin.flash.ticket.orderLinked"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/support-tickets/" + ticketToken;
+    }
+
+    /** 非法 {@code orderType} → 422（不静默当 CONSULT —— 那会把电商单挂成问诊单，正是串单）。 */
+    private static RelatedOrderType parseOrderType(String raw) {
+        try {
+            return RelatedOrderType.valueOf(raw == null ? "CONSULT" : raw.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw AppException.validation("关联订单类型非法").code("admin.err.ticket.orderTypeInvalid");
+        }
     }
 
     /** 批准退款需求：建退款单（如无）+ need→APPROVED，订单进 REFUNDING，App 解锁「选退款方式」（不发通知，AB-5B）。 */
