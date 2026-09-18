@@ -14,6 +14,12 @@ petgo:
     apple:
       # Apple Sign-In client id（aud 校验，通常 = iOS bundle id）。env 注入；留空时跳过 aud 严格校验（仅 dev/L0）。
       client-id: ${APPLE_CLIENT_ID:}
+  # 运营后台数据看板跑批（V1.3.0 Story 3.3，AD-3 自愈跑批）：每天 WIB 01:00 把缺失的日子物化到「昨天」，
+  # 上线首日同一循环完成 D-15 全量回填（起点 2026-07-17 = 参考 SQL 创建日）。cron 按 Asia/Jakarta 解释。
+  admin:
+    dashboard:
+      cron: ${ADMIN_DASHBOARD_CRON:0 0 1 * * *}
+      backfill-from: ${ADMIN_DASHBOARD_BACKFILL_FROM:2026-07-17}
   # 生命周期推送（留存运营作战手册 · 抓手 1）：D1 / D3 / D7 / 7 天未回召回，打 D1 留存 9.6% → 20%。
   # 🔴 enabled 默认 false：迁移把存量用户 last_active_at 回填成 updated_at 后，一大批老用户会立刻
   #    满足「7 天未回」。随部署自动生效 = 第一次日扫给几百人同时推召回。手册要的是「按 SOP 放量、

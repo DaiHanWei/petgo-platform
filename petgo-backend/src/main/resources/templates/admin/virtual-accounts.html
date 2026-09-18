@@ -1,184 +1,128 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- 运营发布身份管理。两区：
-       【虚拟账号】（Story 9.8，A-6）无登录，复用 content_posts.author_id 发种子
-       【运营真实账号】（V1.1.6 Story 12.1 · AB-3I）公司人格化 IP 号，独立权限码 seed.publish_as_real
-     🛡 虚拟账号侧的既有能力一处未改。 -->
+<!--/*
+  运营发布身份管理（Story 9.8 / V1.1.6 Story 12.1 → V1.3.0 Story 8.3 双区块各套一次模板 B，UI 稿 3-12 / 3-13）。
+  两区：
+    【虚拟账号】（A-6）无登录，复用 content_posts.author_id 发种子 —— 权限 virtual_account.*
+    【运营真实账号】（AB-3I）公司人格化 IP 号 —— **独立**权限码 seed.publish_as_real
+  🔴 两套权限刻意不合并：**能管虚拟账号 ≠ 能以真人身份发言**。整区 sec:authorize 与控制器逐字一致。
+  🛡 虚拟账号侧的既有能力一处未改；两个整页确认路由（disable / remove）并入弹层后退役（AC3）。
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.publishIdentity.pageTitle}">运营发布身份 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
-    <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.publishIdentity.pageTitle}">运营发布身份</h1>
-        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
-        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+    <!--/* ⚠️ res 必须设在**这里**（content 这一层），不能写在下面那个带 th:replace 的 div 上：
+           th:replace 优先级 100、th:with 600 —— 同标签时 th:with 被静默忽略，
+           抽屉容器会渲染成 id="item-drawer"，而抽屉 JS / oob 选择器 / 深链全按 virtual-drawer 找，
+           表现是「点行什么都不发生」。（AdminTemplateStructureTest 已加守门。） */-->
+    <div th:fragment="content" th:remove="tag" th:with="res='virtual'">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.publishIdentity.pageTitle}">运营发布身份</h1>
+            <button type="button" class="btn btn-primary btn-sm"
+                    th:attr="data-drawer-open=@{/admin/virtual-accounts/new/drawer},data-drawer-autoopen=${openCreate} ? 'true' : null"
+                    data-drawer-res="virtual"
+                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('virtual_account.manage')"
+                    th:text="#{admin.virtualAccounts.create}">＋ 新建虚拟账号</button>
+        </div>
         <p class="hint" th:text="#{admin.publishIdentity.pageHint}">这一页管两类发布身份：虚拟账号与运营真实账号。</p>
 
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!--/* ===================== 区块一 · 虚拟账号 ===================== */-->
         <h2 th:text="#{admin.virtualAccounts.title}">虚拟账号</h2>
-        <h3 th:text="#{admin.virtualAccounts.create}">新建虚拟账号</h3>
-        <!-- enctype 必须是 multipart —— 少了它头像文件不会被提交，而且**没有任何报错**
-             （表单照常发出去，只是文件字段为空），是最难查的那类失败。 -->
-        <form method="post" th:action="@{/admin/virtual-accounts}" enctype="multipart/form-data">
-            <label><span th:text="#{admin.virtualAccounts.nickname}">昵称（≤20）</span><input type="text" name="nickname" maxlength="20" required/></label>
-            <!-- V1.1.6 Story 12.2 · AC2：头像默认路径改为**上传**，URL 折叠作兜底。 -->
-            <label><span th:text="#{admin.virtualAccounts.avatarUpload}">头像（选填，JPG/PNG/WEBP，≤10MB）</span>
-                <input type="file" name="avatarFile" accept="image/jpeg,image/png,image/webp"/></label>
-            <!-- 🔴 账号物种定位（V1.1.6 Story 14.1 · AC2）。必填。
-                 改它会**立即影响该号全部历史内容**的物种归属（读时推导、零回填）。 -->
-            <label><span th:text="#{admin.species.accountLabel}">账号物种定位（必填）</span>
-                <select name="accountSpecies" required>
-                    <option th:each="sp : ${speciesOptions}" th:value="${sp}" th:text="${sp}">GENERAL</option>
-                </select></label>
-            <details>
-                <summary th:text="#{admin.virtualAccounts.avatarUrl}">头像 URL（兜底）</summary>
-                <input type="text" name="avatarUrl" maxlength="1024"/>
-            </details>
-            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.virtualAccounts.btn.create}">创建</button>
-        </form>
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::virtual-filters}, ~{::virtual-summary}, ~{::virtual-table}, ~{::virtual-drawer})}">
+            <!--/* 筛选栏：关键词（走显式「查询」钮）+ 物种下拉（data-autosubmit，只作用于 select）。
+                   ⚠️ 关键词参数叫 vq 不叫 q —— q 是区块二「搜索并纳入」的候选搜索（V1.1.6 既有，
+                      参数名不能动）。共用一个 q 的话，在上面找一个马甲会顺手把下面的候选表刷成另一批人。
+                   ⚠️ 刷新监听挂在这里（#virtual-rows 之外）：放里面会被自己那次 swap 连听众一起换掉。 */-->
+            <form th:fragment="virtual-filters" class="filter-bar" data-autosubmit
+                  th:action="@{/admin/virtual-accounts}" method="get"
+                  th:attr="hx-get=@{/admin/virtual-accounts}" hx-target="#virtual-rows" hx-swap="innerHTML"
+                  hx-push-url="true">
+                <label class="field">
+                    <span th:text="#{admin.v130.publishIdentity.searchLabel}">关键词</span>
+                    <input type="search" name="vq" class="inp" th:value="${vq}"
+                           th:placeholder="#{admin.v130.publishIdentity.searchPlaceholder}" style="width:240px"/>
+                </label>
+                <label class="field">
+                    <span th:text="#{admin.species.filter}">按账号物种定位筛选</span>
+                    <select name="species" class="sel">
+                        <option value="" th:text="#{admin.species.all}">全部</option>
+                        <option th:each="sp : ${speciesOptions}" th:value="${sp}" th:text="${sp}"
+                                th:selected="${species == sp}">GENERAL</option>
+                    </select>
+                </label>
+                <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.users.search}">查询</button>
+                <!--/* 🔴 hx-include="closest form" 不能省：筛选值若烤进 hx-get 就是**页面渲染那一刻**的值，
+                       而筛选本身走 htmx 局部 swap（整页不重载、这个 span 不会被重渲染）。
+                       结果是：筛完 → 在抽屉里改点东西 → 刷新事件按**加载时**的空筛选重拉，
+                       表格无声无息跳回全量，运营刚才的筛选就没了。GET 请求 htmx 默认不带 closest form。 */-->
+                <span hidden data-virtual-refresh
+                      th:attr="hx-get=@{/admin/virtual-accounts}"
+                      hx-include="closest form"
+                      hx-trigger="admin:virtual-account-list-refresh from:body"
+                      hx-target="#virtual-rows" hx-swap="innerHTML"></span>
+            </form>
 
-        <h3 th:text="#{admin.virtualAccounts.list}">虚拟账号列表</h3>
-        <!-- 按账号物种定位筛选（AC2）。运营配完定位要能自查"还有哪些是 GENERAL"。 -->
-        <form method="get" th:action="@{/admin/virtual-accounts}" data-autosubmit>
-            <label><span th:text="#{admin.species.filter}">按账号物种定位筛选</span>
-                <select name="species">
-                    <option value="" th:text="#{admin.species.all}">全部</option>
-                    <option th:each="sp : ${speciesOptions}" th:value="${sp}" th:text="${sp}"
-                            th:selected="${species == sp}">GENERAL</option>
-                </select></label>
-        </form>
-        <table>
-            <thead>
-            <tr><th>ID</th><th th:text="#{admin.virtualAccounts.col.nickname}">昵称</th><th th:text="#{admin.virtualAccounts.col.avatar}">头像</th><th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.virtualAccounts.col.published}">已发布</th><th th:text="#{admin.species.col}">账号物种定位</th><th th:text="#{admin.virtualAccounts.col.createdBy}">建号人</th><th th:text="#{admin.common.actions}">操作</th></tr>
-            </thead>
-            <tbody>
-            <tr th:each="a : ${accounts}">
-                <td th:text="${a.id}">0</td>
-                <td th:text="${a.nickname}">名</td>
-                <td th:text="${a.avatarUrl} ?: '—'">—</td>
-                <td th:text="${a.enabled} ? #{admin.common.enabled} : #{admin.common.disabled}">启用</td>
-                <td th:text="${a.publishedCount}">0</td>
-                <td>
-                    <form method="post" th:action="@{/admin/virtual-accounts/{id}/species(id=${a.id})}"
-                          style="display:inline" data-autosubmit>
-                        <select name="accountSpecies">
-                            <option th:each="sp : ${speciesOptions}" th:value="${sp}" th:text="${sp}"
-                                    th:selected="${a.accountSpecies == sp}">GENERAL</option>
-                        </select>
-                    </form>
-                </td>
-                <td th:text="${a.createdBy} ?: '—'">—</td>
-                <td>
-                    <!-- 🔴 禁用先过确认页（AC4）：那一页要显示"还有 N 条待发布排期"，
-                         而 N 只有服务端算得出来。启用是无害的，直接提交。 -->
-                    <a th:if="${a.enabled}" class="btn btn-neutral btn-sm"
-                       th:href="@{/admin/virtual-accounts/{id}/disable(id=${a.id})}"
-                       th:text="#{admin.common.disable}">停用</a>
-                    <form th:unless="${a.enabled}" method="post"
-                          th:action="@{/admin/virtual-accounts/{id}/enabled(id=${a.id})}"
-                          style="display:inline">
-                        <input type="hidden" name="enabled" value="true"/>
-                        <button type="submit" class="btn btn-neutral btn-sm"
-                                th:text="#{admin.common.enable}">启用</button>
-                    </form>
-                </td>
-            </tr>
-            <tr th:if="${accounts.isEmpty()}"><td colspan="8" th:text="#{admin.virtualAccounts.empty}">暂无虚拟账号</td></tr>
-            </tbody>
-        </table>
+            <div th:fragment="virtual-summary" th:replace="~{admin/fragments/virtual-accounts-list :: sumbar(false)}"></div>
 
-        <!-- ===== 运营真实账号（V1.1.6 Story 12.1）=====
-             整区门控 seed.publish_as_real，与 virtual_account.manage 完全解耦：
-             🔴 能管虚拟账号 ≠ 能以真人身份发言。
-             🛡 本表达式与控制器 @PreAuthorize(REAL_AUTH) 必须逐字一致。 -->
+            <div th:fragment="virtual-table" id="virtual-rows">
+                <div th:replace="~{admin/fragments/virtual-accounts-list :: rows(false)}"></div>
+            </div>
+
+            <div th:fragment="virtual-drawer" class="drawer-title"
+                 th:text="#{admin.v130.publishIdentity.drawer.title}">虚拟账号详情</div>
+        </div>
+
+        <!--/* ===================== 区块二 · 运营真实账号 =====================
+               整区门控 seed.publish_as_real，与 virtual_account.manage 完全解耦。
+               🛡 本表达式与控制器 @PreAuthorize(REAL_AUTH) 必须逐字一致。
+               ⚠️ 本区**不用 tpl-b-list**：它没有抽屉（AC2 只有候选表 + 池内表 + 确认弹层），
+                  套一个永远打不开的抽屉壳只会在页面上留一段死标记（tpl-b-list 的 noDrawer 是为
+                  只读列表页准备的，这里连筛选栏槽位也用不上）。 */-->
         <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('seed.publish_as_real')">
             <h2 th:text="#{admin.publishIdentity.realSection}">运营真实账号</h2>
             <p class="hint" th:text="#{admin.publishIdentity.realHint}">
                 只接纳公司资产性质的人格化 IP 号，不接纳员工私人账号。</p>
 
             <h3 th:text="#{admin.publishIdentity.search}">搜索并纳入</h3>
-            <form method="get" th:action="@{/admin/virtual-accounts}">
-                <label><span th:text="#{admin.publishIdentity.searchField}">用户 ID 或昵称</span>
-                    <input type="text" name="q" th:value="${q}" maxlength="50"/></label>
+            <!--/* 显式「搜索」钮（AC2）：候选搜索会把一批真人账号列出来，不该即输即查。 */-->
+            <form class="filter-bar" th:action="@{/admin/virtual-accounts}" method="get"
+                  th:attr="hx-get=@{/admin/virtual-accounts(section='candidates')}"
+                  hx-target="#identity-candidates" hx-swap="innerHTML">
+                <label class="field">
+                    <span th:text="#{admin.publishIdentity.searchField}">用户 ID 或昵称</span>
+                    <input type="search" name="q" class="inp" th:value="${q}" maxlength="50"/>
+                </label>
                 <button type="submit" class="btn btn-neutral btn-sm"
                         th:text="#{admin.publishIdentity.btn.search}">搜索</button>
             </form>
 
-            <table th:if="${q != null and !q.isBlank()}">
-                <thead>
-                <tr><th>ID</th><th th:text="#{admin.virtualAccounts.col.nickname}">昵称</th>
-                    <th th:text="#{admin.common.status}">状态</th>
-                    <th th:text="#{admin.publishIdentity.col.note}">授权说明</th>
-                    <th th:text="#{admin.common.actions}">操作</th></tr>
-                </thead>
-                <tbody>
-                <tr th:each="c : ${candidates}">
-                    <td th:text="${c.userId}">0</td>
-                    <td th:text="${c.nickname}">名</td>
-                    <td th:text="${c.deactivated} ? #{admin.common.disabled} : #{admin.common.enabled}">正常</td>
-                    <td>
-                        <!-- 授权说明必填：风险边界是"内部人冒充内部人"，技术强绑定挡不住，
-                             靠的是审计可追责 —— 而说明是这条链上唯一记录"为什么可以"的地方。 -->
-                        <form method="post" th:action="@{/admin/publish-identities}" style="display:inline"
-                              th:id="'grant-' + ${c.userId}">
-                            <input type="hidden" name="userId" th:value="${c.userId}"/>
-                            <input type="text" name="authorizationNote" maxlength="500" required
-                                   th:placeholder="#{admin.publishIdentity.notePlaceholder}"/>
-                        </form>
-                    </td>
-                    <td>
-                        <button type="submit" class="btn btn-primary btn-sm" th:form="'grant-' + ${c.userId}"
-                                th:disabled="${c.alreadyInPool}"
-                                th:text="${c.alreadyInPool} ? #{admin.publishIdentity.alreadyInPool} : #{admin.publishIdentity.btn.grant}">纳入</button>
-                    </td>
-                </tr>
-                <tr th:if="${candidates.isEmpty()}"><td colspan="5"
-                        th:text="#{admin.publishIdentity.noCandidate}">没有匹配的真实用户账号</td></tr>
-                </tbody>
-            </table>
+            <div id="identity-candidates">
+                <div th:replace="~{admin/fragments/publish-identities :: candidates}"></div>
+            </div>
+            <!--/* 纳入的 422 / 403 落点。**必须无条件渲染**：挂在候选行的表单里的话，
+                   候选表一换（搜索 / 纳入成功）目标就没了，htmx 连请求都不会发。 */-->
+            <p id="identity-inline-err" class="lst-inline-error" aria-live="polite"></p>
 
             <h3 th:text="#{admin.publishIdentity.realList}">身份池内的真实账号</h3>
-            <table>
-                <thead>
-                <tr><th>ID</th><th th:text="#{admin.virtualAccounts.col.nickname}">昵称</th>
-                    <th th:text="#{admin.virtualAccounts.col.avatar}">头像</th>
-                    <th th:text="#{admin.publishIdentity.col.note}">授权说明</th>
-                    <th th:text="#{admin.publishIdentity.col.grantedAt}">纳入时间</th>
-                    <th th:text="#{admin.publishIdentity.col.grantedBy}">纳入人</th>
-                    <th th:text="#{admin.common.status}">状态</th>
-                    <th th:text="#{admin.publishIdentity.col.published}">经后台发布</th>
-                    <th th:text="#{admin.publishIdentity.col.species}">物种推导</th>
-                    <th th:text="#{admin.common.actions}">操作</th></tr>
-                </thead>
-                <tbody>
-                <tr th:each="r : ${realAccounts}">
-                    <td th:text="${r.userId}">0</td>
-                    <td th:text="${r.nickname}">名</td>
-                    <td th:text="${r.avatarUrl} ?: '—'">—</td>
-                    <td th:text="${r.authorizationNote}">说明</td>
-                    <td th:text="${@adminTime.wib(r.grantedAt)}">时间</td>
-                    <td th:text="${r.grantedBy}">人</td>
-                    <td th:text="${r.deactivated} ? #{admin.common.disabled} : #{admin.common.enabled}">正常</td>
-                    <!-- 🛡 只统计经后台代发的；持有人在 App 内自主发布的不计入。
-                         括号里的"已被删除"来自另一个写入方（持有人本人）—— 后台不阻止他删，
-                         但记录必须反映出来，不可继续显示为在线。 -->
-                    <td th:text="${r.deletedCount} > 0
-                                 ? ${r.publishedByAdminCount} + ' (' + #{admin.publishIdentity.deleted(${r.deletedCount})} + ')'
-                                 : ${r.publishedByAdminCount}">0</td>
-                    <td th:text="${r.speciesGuess} + ' · ' + ${r.speciesSource}">—</td>
-                    <td>
-                        <a class="btn btn-neutral btn-sm"
-                           th:href="@{/admin/publish-identities/{id}/remove(id=${r.userId})}"
-                           th:text="#{admin.publishIdentity.btn.remove}">移出</a>
-                    </td>
-                </tr>
-                <tr th:if="${realAccounts.isEmpty()}"><td colspan="10"
-                        th:text="#{admin.publishIdentity.realEmpty}">身份池内暂无真实账号</td></tr>
-                </tbody>
-            </table>
+            <div th:replace="~{admin/fragments/publish-identities :: rows(false)}"></div>
         </div>
+
+        <!--/* 确认弹层的宿主（AC3）：停用虚拟账号 / 移出真实账号都把弹层片段拉到这里，
+               片段自带 data-autoopen，admin-core.js 在 htmx swap 之后把它 showModal。 */-->
+        <div id="confirm-host"></div>
+
+        <!--/* ?open=<id> 深链兜底：admin-drawer.js 先按当前页找行，找不到就用这里给的 URL。 */-->
+        <span hidden th:if="${open != null}" data-drawer-res="virtual"
+              th:attr="data-drawer-deeplink=@{/admin/virtual-accounts/{id}/drawer(id=${open})}"></span>
     </div>
 </div>
 </body>

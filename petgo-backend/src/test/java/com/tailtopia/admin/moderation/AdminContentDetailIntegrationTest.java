@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.tailtopia.admin.account.domain.AdminAccount;
 import com.tailtopia.admin.account.domain.AdminAccountType;
@@ -138,9 +139,11 @@ class AdminContentDetailIntegrationTest extends ApiIntegrationTest {
                 .isAfterOrEqualTo(page0.comments().get(19).createdAt());
     }
 
-    /** 端点渲染冒烟：超管打开详情页 200，页面带类型名与评论区。 */
+    /**
+     * 端点渲染冒烟（V1.3.0 Story 7.1）：详情已改抽屉 fragment；<b>整页路由删除且不做跳转</b>（D-23）。
+     */
     @Test
-    void detailPageRendersForSuperAdmin() throws Exception {
+    void detailRendersAsDrawerFragmentAndLegacyPageIsGone() throws Exception {
         var author = newUser();
         long postId = newPost(author.getId(), "render-" + SEQ.incrementAndGet(), List.of());
 
@@ -152,9 +155,17 @@ class AdminContentDetailIntegrationTest extends ApiIntegrationTest {
         Authentication auth = new TestingAuthenticationToken(principal, null,
                 new java.util.ArrayList<>(principal.getAuthorities()));
 
-        String html = mvc.perform(get("/admin/content/" + postId).with(authentication(auth)))
+        String html = mvc.perform(get("/admin/content/" + postId + "/drawer")
+                        .header("HX-Request", "true").with(authentication(auth)))
                 .andReturn().getResponse().getContentAsString();
-        assertThat(html).contains("render-");
-        assertThat(html).contains(author.getNickname());
+        assertThat(html).contains("render-").contains(author.getNickname())
+                .contains("data-post-id=\"" + postId + "\"");
+
+        // 🔴 旧整页详情路由不再存在，也不兜底 302（D-23）——留着跳转就等于两套 URL 并存。
+        mvc.perform(get("/admin/content/" + postId).with(authentication(auth)))
+                .andExpect(status().isNotFound());
+        // 非 htmx 直达抽屉 URL → 回列表并自动开该抽屉
+        mvc.perform(get("/admin/content/" + postId + "/drawer").with(authentication(auth)))
+                .andExpect(status().is3xxRedirection());
     }
 }

@@ -16,6 +16,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.springframework.ui.ConcurrentModel;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -89,7 +90,9 @@ class AdminVetQualAccessControlTest {
     }
 
     private void approve() {
-        controller.approve(principal(), 5L, new RedirectAttributesModelMap());
+        controller.approve(principal(), 5L, null, new ConcurrentModel(),
+                new org.springframework.mock.web.MockHttpServletResponse(),
+                new RedirectAttributesModelMap());
     }
 
     @Test

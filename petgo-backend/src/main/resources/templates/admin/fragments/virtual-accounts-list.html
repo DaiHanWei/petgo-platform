@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  B9 区块一「虚拟账号」的摘要条 / 表格 / 单行（V1.3.0 Story 8.3，模板 B）。
+    sumbar(oob) — 三格：虚拟账号数 · 启用中 · 累计已发布
+    rows(oob)   — 表格 + 空态；oob=true 时摘要条随片段一并换
+    row(a, oob) — 单行；点行开抽屉（资料 / 物种定位 / 启停都在抽屉里）
+  🔴 原先「改物种定位」是**表格里一个 data-autosubmit 的下拉**：选错一格立刻生效，
+     而它会立即改写该号**全部历史内容**的物种归属，没有任何复述与撤回余地 —— 收进抽屉。
+*/-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="virtual-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.publishIdentity.summary.total}">虚拟账号数</div>
+        <div class="sum-value" data-sum="total" th:text="${summary.total}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.publishIdentity.summary.enabled}">启用中</div>
+        <div class="sum-value" data-sum="enabled" th:text="${summary.enabled}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.publishIdentity.summary.published}">累计已发布</div>
+        <div class="sum-value" data-sum="published" th:text="${summary.published}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/virtual-accounts-list :: sumbar(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(accounts)}" class="tags-table">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th th:text="#{admin.virtualAccounts.col.nickname}">昵称</th>
+            <th th:text="#{admin.virtualAccounts.col.avatar}">头像</th>
+            <th th:text="#{admin.common.status}">状态</th>
+            <th class="nowrap" th:text="#{admin.virtualAccounts.col.published}">已发布</th>
+            <th th:text="#{admin.species.col}">账号物种定位</th>
+            <th th:text="#{admin.virtualAccounts.col.createdBy}">建号人</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="a : ${accounts}"><tr th:replace="~{admin/fragments/virtual-accounts-list :: row(${a}, false)}"></tr></th:block>
+        </tbody>
+    </table>
+
+    <div class="empty" th:if="${#lists.isEmpty(accounts)}">
+        <span class="empty-emoji">🎭</span>
+        <p th:text="#{admin.virtualAccounts.empty}">暂无虚拟账号</p>
+    </div>
+</th:block>
+
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(a, oob)" th:id="'virtual-row-' + ${a.id}" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${a.id}" th:data-drawer-url="@{/admin/virtual-accounts/{id}/drawer(id=${a.id})}" tabindex="0"
+        th:classappend="${!a.enabled()} ? 'row-muted'">
+        <td class="nowrap muted" th:text="${a.id}">0</td>
+        <td th:text="${a.nickname}">名</td>
+        <td class="nowrap">
+            <img th:if="${a.avatarUrl != null and #strings.startsWith(a.avatarUrl, 'http')}"
+                 th:src="${a.avatarUrl}" alt="" style="height:28px;width:28px;border-radius:50%;object-fit:cover;vertical-align:middle"/>
+            <span th:unless="${a.avatarUrl != null and #strings.startsWith(a.avatarUrl, 'http')}" class="muted">—</span>
+        </td>
+        <td class="nowrap">
+            <span class="dot" th:classappend="${a.enabled()} ? 'dot--ok' : 'dot--done'"></span>
+            <span class="badge" th:classappend="${a.enabled()} ? 'badge-ok' : 'badge-muted'"
+                  th:text="${a.enabled()} ? #{admin.common.enabled} : #{admin.common.disabled}">启用</span>
+        </td>
+        <td class="nowrap" th:text="${a.publishedCount}">0</td>
+        <!--/* ⚠️ 存量为 NULL 时这里显示的是读时默认值 GENERAL —— 界面上分不出「配过 GENERAL」
+               与「从没配过」，这是零回填换来的代价（两者对算法效果完全一样）。 */-->
+        <td class="nowrap"><code th:text="${a.accountSpecies}">GENERAL</code></td>
+        <td class="muted" th:text="${a.createdBy} ?: '—'">—</td>
+    </tr>
+</tbody></table>
+</body>
+</html>

@@ -60,6 +60,10 @@ import tools.jackson.databind.ObjectMapper;
             //    共享库不回滚，撞上并发写就会随机红），② 改写共享库那一行单行配置。
             // ⚠️ 别为了"更像生产"打开它 —— 打开就是给整个套件加随机红。
             "petgo.feed.rank.p95-recompute-enabled=false",
+            // V1.3.0 Story 3.3：看板物化定时器（默认 01:00 WIB = 18:00 UTC）在测试上下文里同样会跑；
+            // 套件恰跨那一刻时它会抢先物化近几天，让 DashboardMaterializerIntegrationTest 的「恰好补 3 天」随机红。
+            // "-" = Scheduled.CRON_DISABLED；跑批本身由该测试类直接调用验证。
+            "petgo.admin.dashboard.cron=-",
         })
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")

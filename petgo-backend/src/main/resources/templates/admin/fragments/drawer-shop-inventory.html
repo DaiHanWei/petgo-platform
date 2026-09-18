@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  B18 库存抽屉（V1.3.0 Story 10.4 AC2）：上半该 SKU 流水摘要，下半四个操作页签。
+  取数复用 GET /admin/shop/inventory/{skuId}/movements 的 HX-Request 分支 —— **零新端点**（D-43）。
+
+  🔴 **四个操作不再有 SKU 下拉**：原先是页尾四张常驻表单卡，每张自带一个 SKU 下拉，
+     运营在「报损」那张卡里选错 SKU 是随时会发生的事，而流水是 append-only 的 ——
+     落错了只能再开一笔反向流水，原始那笔永远留在账上。抽屉天然绑定被点开的那一行，
+     skuId 走隐藏字段，选错 SKU 这件事在结构上就不存在了。
+
+  🔴 **hx-target 一律是抽屉体**：AdminBusinessExceptionAdvice 按 HX-Target 回填 4xx ——
+     指着列表的话，「报损数量超过可售」（422）、「无 cost_edit 点了采购入库」（403）
+     都会把整张表换成一行红字，而那行字还被遮罩盖着：运营看到的是「点了没反应」。
+
+  🔴 **成功后抽屉不自动关**（UI 稿 10-6）：库存操作常是连着几笔（入库完接着盘点）。
+-->
+<body>
+
+<div th:fragment="panel" class="inv-drawer" th:attr="data-sku-id=${row.skuId()}">
+    <h3 class="drawer-sub" th:text="${row.productName()} + ' / ' + ${row.specName()}">商品 / 3 kg</h3>
+
+    <!--/* 三个数在抽屉里再摆一遍：运营做报损 / 盘点时要盯着的就是它们，
+           让他为了看一眼可售库存去关抽屉是没有道理的。 */-->
+    <div class="sum">
+        <div class="sum-item"><span class="sum-label" th:text="#{admin.shop.inventory.col.actual}">实际库存</span>
+            <span class="sum-value" th:text="${row.actual()}">10</span></div>
+        <div class="sum-item"><span class="sum-label" th:text="#{admin.shop.inventory.col.locked}">锁定库存</span>
+            <span class="sum-value" th:text="${row.locked()}">3</span></div>
+        <div class="sum-item"><span class="sum-label" th:text="#{admin.shop.inventory.col.available}">可售库存</span>
+            <span class="sum-value" th:text="${row.available()}">7</span></div>
+    </div>
+
+    <!-- ===== 上半：流水摘要 ===== -->
+    <section class="inv-movements">
+        <h4 th:text="#{admin.v130.shopInventory.drawer.recent}">最近流水</h4>
+        <p class="hint" th:if="${#lists.isEmpty(movements)}"
+           th:text="#{admin.shop.inventory.movements.empty}">该 SKU 暂无库存流水。</p>
+        <table th:unless="${#lists.isEmpty(movements)}" class="inv-mini">
+            <thead><tr>
+                <th th:text="#{admin.shop.inventory.col.time}">时间</th>
+                <th th:text="#{admin.shop.inventory.col.type}">类型</th>
+                <th class="s-col-num" th:text="#{admin.shop.inventory.col.delta}">增减</th>
+                <th class="s-col-num" th:text="#{admin.shop.inventory.col.after}">变更后</th>
+            </tr></thead>
+            <tbody>
+            <tr th:each="m : ${movements}">
+                <td th:text="${@adminTime.wib(m.createdAt)}">2026-08-17</td>
+                <td th:text="#{'admin.v130.shopInventory.movementType.' + ${m.movementType.name()}}">采购入库</td>
+                <td class="s-col-num" th:text="${m.qtyDelta}">+10</td>
+                <td class="s-col-num" th:text="${m.actualAfter}">10</td>
+            </tr>
+            </tbody>
+        </table>
+        <!--/* 抽屉里只放最近几条：全量流水是审计用的长表，塞进 480px 抽屉既看不清也翻不动。 */-->
+        <p><a th:href="@{/admin/shop/inventory/{id}/movements(id=${row.skuId()})}" data-no-drawer
+              th:text="#{admin.v130.shopInventory.drawer.viewAll}">查看全部流水 →</a></p>
+    </section>
+
+    <!-- ===== 下半：四个操作页签 ===== -->
+    <!--/* 🔒 无权限**不是整块不渲染而是禁用并注明**（AC2）：整块不渲染时运营看到的是一个
+           少了两个页签的抽屉，他不会知道那两个操作存在、更不会知道该去要哪个权限 ——
+           于是这类工单最后都变成「系统坏了」。服务端的 @PreAuthorize 与 cost_edit 独立判定照旧兜底。 */-->
+    <div class="tabs inv-tabs" role="tablist" data-inv-tabs>
+        <button type="button" class="tab tab--on" role="tab" data-itab="purchase"
+                th:text="#{admin.v130.shopInventory.tab.purchase}">采购入库</button>
+        <button type="button" class="tab" role="tab" data-itab="returnInbound"
+                th:text="#{admin.v130.shopInventory.tab.returnInbound}">退货入库</button>
+        <button type="button" class="tab" role="tab" data-itab="damage"
+                th:text="#{admin.v130.shopInventory.tab.damage}">报损</button>
+        <button type="button" class="tab" role="tab" data-itab="stocktake"
+                th:text="#{admin.v130.shopInventory.tab.stocktake}">盘点调整</button>
+    </div>
+
+    <!--/* ① 采购入库：需 inventory_edit + cost_edit 双权限 */-->
+    <section class="inv-tab-panel" data-itab-panel="purchase">
+        <p class="hint" th:text="#{admin.shop.inventory.purchase.hint}">进货单价必填，不允许留空。</p>
+        <p class="banner warn" th:unless="${canPurchase}"
+           th:text="#{admin.v130.shopInventory.needCostEdit}">需要「编辑进货价」权限才能采购入库。</p>
+        <form th:if="${canPurchase}" th:attr="hx-post=@{/admin/shop/inventory/purchase}"
+              hx-target="#shop-inventory-drawer-body" hx-swap="innerHTML" data-requires-form>
+            <input type="hidden" name="skuId" th:value="${row.skuId()}"/>
+            <label><span th:text="#{admin.shop.inventory.col.qty}">数量</span>
+                <input type="number" class="inp" name="qty" min="1" required data-requires-text/></label>
+            <label><span th:text="#{admin.shop.inventory.col.purchaseNo}">采购单号</span>
+                <input type="text" class="inp" name="purchaseNo" maxlength="64" required data-requires-text/></label>
+            <label><span th:text="#{admin.shop.inventory.col.supplier}">供应商</span>
+                <input type="text" class="inp" name="supplier" maxlength="200"/></label>
+            <label><span th:text="#{admin.shop.sku.costPrice}">进货单价</span>
+                <input type="number" class="inp" name="costPrice" min="0" required data-requires-text/></label>
+            <label><span th:text="#{admin.shop.inventory.col.inboundDate}">入库日期</span>
+                <input type="date" class="inp" name="inboundDate"/></label>
+            <button type="submit" class="btn btn-primary" disabled data-requires-target
+                    th:text="#{admin.shop.inventory.btn.purchase}">登记入库</button>
+        </form>
+    </section>
+
+    <!--/* ② 退货入库：单价由系统取该 SKU 最近一次采购单价（S-9）→ 只需 inventory_edit */-->
+    <section class="inv-tab-panel" data-itab-panel="returnInbound" hidden>
+        <p class="hint" th:text="#{admin.shop.inventory.return.hint}">退货与拒收的货走此入口。</p>
+        <p class="banner warn" th:unless="${canEdit}"
+           th:text="#{admin.v130.shopInventory.needEdit}">需要「库存编辑」权限。</p>
+        <form th:if="${canEdit}" th:attr="hx-post=@{/admin/shop/inventory/return-inbound}"
+              hx-target="#shop-inventory-drawer-body" hx-swap="innerHTML" data-requires-form>
+            <input type="hidden" name="skuId" th:value="${row.skuId()}"/>
+            <label><span th:text="#{admin.shop.inventory.col.qty}">数量</span>
+                <input type="number" class="inp" name="qty" min="1" required data-requires-text/></label>
+            <label><span th:text="#{admin.shop.inventory.col.originalOrderNo}">原订单号</span>
+                <input type="text" class="inp" name="originalOrderNo" maxlength="64" required data-requires-text/></label>
+            <label><span th:text="#{admin.shop.inventory.col.inboundDate}">入库日期</span>
+                <input type="date" class="inp" name="inboundDate"/></label>
+            <button type="submit" class="btn" disabled data-requires-target
+                    th:text="#{admin.shop.inventory.btn.return}">登记退货入库</button>
+        </form>
+    </section>
+
+    <!--/* ③ 报损：上限是**可售库存**不是实际库存（报损已锁定的货 = 把卖给用户的东西销账）。 */-->
+    <section class="inv-tab-panel" data-itab-panel="damage" hidden>
+        <p class="hint" th:text="#{admin.shop.inventory.damage.hint}">只能报损可售库存。</p>
+        <p class="banner warn" th:unless="${canEdit}"
+           th:text="#{admin.v130.shopInventory.needEdit}">需要「库存编辑」权限。</p>
+        <!--/* 🔴 data-confirm 复述**可售上限**：报损不可撤销，而运营最常见的错是照着「实际库存」填数。 */-->
+        <form th:if="${canEdit}" th:attr="hx-post=@{/admin/shop/inventory/damage},
+                     data-confirm=#{admin.v130.shopInventory.confirmDamage(${row.available()})}"
+              hx-target="#shop-inventory-drawer-body" hx-swap="innerHTML" data-requires-form>
+            <input type="hidden" name="skuId" th:value="${row.skuId()}"/>
+            <label><span th:text="#{admin.shop.inventory.col.qty}">数量</span>
+                <input type="number" class="inp" name="qty" min="1" th:max="${row.available()}"
+                       required data-requires-text/></label>
+            <label><span th:text="#{admin.shop.inventory.col.reason}">原因</span>
+                <input type="text" class="inp" name="reason" maxlength="500" required data-requires-text/></label>
+            <button type="submit" class="btn btn-danger" disabled data-requires-target
+                    th:text="#{admin.shop.inventory.btn.damage}">登记报损</button>
+        </form>
+    </section>
+
+    <!--/* ④ 盘点调整：下限是锁定库存；确认框**复述差异数**（AC2）。 */-->
+    <section class="inv-tab-panel" data-itab-panel="stocktake" hidden>
+        <p class="hint" th:text="#{admin.shop.inventory.stocktake.hint}">填写实际盘点到的数量，系统按差额记流水。</p>
+        <p class="banner warn" th:unless="${canEdit}"
+           th:text="#{admin.v130.shopInventory.needEdit}">需要「库存编辑」权限。</p>
+        <!--/* 🔴 确认框复述的是**差异数**而不是盘点值：盘点填的是「我数出来多少」，
+               而真正落账的是「差多少」。只复述盘点值的话，把 12 误填成 120 与正确填 120
+               在确认框里长得一模一样 —— 差异数 +108 才会让人停下来。差异由 JS 现算（见下方脚本）。 */-->
+        <!--/* 🔴 **静态兜底 data-confirm 必须先在属性上**：下面那段脚本会把它覆盖成带差异数的版本，
+               但脚本若没跑（CSP 拦了内联脚本 / 片段被别处以非 htmx 方式插入），
+               admin-core.js 的 `form[data-confirm]` 选择器就一个都选不中 ——
+               盘点这条**直接赋值 actual** 的路径会变成「点一下就改库存、零确认」。
+               宁可先问一句不带数字的，也不能一句都不问。 */-->
+        <form th:if="${canEdit}" th:attr="hx-post=@{/admin/shop/inventory/stocktake},
+                     data-confirm=#{admin.v130.shopInventory.confirmStocktakeFallback}"
+              hx-target="#shop-inventory-drawer-body" hx-swap="innerHTML"
+              data-requires-form data-stocktake-form
+              th:data-actual="${row.actual()}"
+              th:data-confirm-tpl="#{admin.v130.shopInventory.confirmStocktake}">
+            <input type="hidden" name="skuId" th:value="${row.skuId()}"/>
+            <label><span th:text="#{admin.shop.inventory.col.counted}">盘点数量</span>
+                <input type="number" class="inp" name="countedActual" min="0" required
+                       data-requires-text data-stocktake-counted/></label>
+            <p class="hint" data-stocktake-diff></p>
+            <label><span th:text="#{admin.shop.inventory.col.reason}">差异原因</span>
+                <input type="text" class="inp" name="reason" maxlength="500" required data-requires-text/></label>
+            <button type="submit" class="btn" disabled data-requires-target
+                    th:text="#{admin.shop.inventory.btn.stocktake}">登记盘点</button>
+        </form>
+    </section>
+
+    <!--/* 页签切换 + 盘点差异复述。纯前端，htmx 每次把抽屉体 swap 进来都会重新执行，不需要 re-init 钩子。
+           ⚠️ 作用域限定在本抽屉内（root.closest），不要用 document.querySelectorAll ——
+              流水整页上也有表格，全局选择器会误伤。 */-->
+    <script>
+        (function () {
+            var root = document.querySelector('[data-inv-tabs]');
+            if (!root) { return; }
+            var panel = root.closest('.inv-drawer') || document;
+            root.addEventListener('click', function (e) {
+                var btn = e.target.closest('[data-itab]');
+                if (!btn) { return; }
+                var name = btn.getAttribute('data-itab');
+                root.querySelectorAll('[data-itab]').forEach(function (b) {
+                    var on = b === btn;
+                    b.classList.toggle('tab--on', on);
+                    b.setAttribute('aria-selected', String(on));
+                });
+                panel.querySelectorAll('[data-itab-panel]').forEach(function (p) {
+                    p.hidden = p.getAttribute('data-itab-panel') !== name;
+                });
+            });
+
+            // 盘点差异：确认框文案由 data-confirm 承载（admin-core.js 的通用确认拦截读它），
+            // 每次输入变化就重写一遍 —— 提交那一刻读到的一定是当前值。
+            var form = panel.querySelector('[data-stocktake-form]');
+            if (!form) { return; }
+            var actual = parseInt(form.getAttribute('data-actual'), 10);
+            var tpl = form.getAttribute('data-confirm-tpl') || '';
+            var fallback = form.getAttribute('data-confirm') || '';
+            var input = form.querySelector('[data-stocktake-counted]');
+            var out = form.querySelector('[data-stocktake-diff]');
+            function refresh() {
+                var counted = parseInt(input.value, 10);
+                if (isNaN(counted)) {
+                    // ⚠️ 不能 removeAttribute：那会把上面那条静态兜底也抹掉，变成零确认。
+                    form.setAttribute('data-confirm', fallback);
+                    if (out) { out.textContent = ''; }
+                    return;
+                }
+                var diff = counted - actual;
+                var signed = (diff > 0 ? '+' : '') + diff;
+                var text = tpl.replace('{0}', String(actual)).replace('{1}', String(counted))
+                        .replace('{2}', signed);
+                form.setAttribute('data-confirm', text);
+                if (out) { out.textContent = text; }
+            }
+            input.addEventListener('input', refresh);
+            refresh();
+        })();
+    </script>
+</div>
+
+<!--
+  处置成功（AC2「htmx 局部刷新抽屉与列表行」）。
+  主 swap 换抽屉体（表单的 hx-target 就是它）→ 流水摘要里立刻多出刚落的那一笔；
+  oob 换**被操作的那一行** + **摘要条** + toast。
+  🔴 不整表重拉：列表按 productId, id 升序（与库存无关），库存变化不会让行换位置，
+     整表重拉只会把运营刚翻到的第 3 页跳回第 1 页。
+  🔴 但摘要条必须换：售罄数 / 低库存数 / 锁定合计是全表聚合，这一笔可能让别的格子也变。
+-->
+<th:block th:fragment="done">
+    <div th:replace="~{admin/fragments/drawer-shop-inventory :: panel}"></div>
+    <!--/* toast 必须多包一层：`beforeend:` oob 搬的是子节点，直接写在 .toast 上落进宿主的只有裸文本。 */-->
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${message}">已保存</div>
+    </div>
+    <div th:replace="~{admin/fragments/shop-inventory-list :: sumbar(true)}"></div>
+    <!--/* 🔴 外壳必须是**真的** <table hidden>，不能 th:remove="tag"：htmx 只有在响应**以 `<tr` 开头**时
+           才补 <table><tbody> 外壳；这里响应的第一个标签是上面那个 div，于是走通用解析（body 上下文），
+           裸 <tr>/<td> 被 HTML 解析器直接丢掉 —— 行不会被换掉（运营看着还是旧库存数），
+           单元格文本反而被 foster-parent 进抽屉里，显示成一串莫名其妙的数字。 */-->
+    <table hidden><tbody>
+        <tr th:replace="~{admin/fragments/shop-inventory-list :: row(${row}, true)}"></tr>
+    </tbody></table>
+</th:block>
+</body>
+</html>

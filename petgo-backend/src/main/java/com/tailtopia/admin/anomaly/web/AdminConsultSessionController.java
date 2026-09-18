@@ -35,6 +35,7 @@ public class AdminConsultSessionController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(value = "to", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(value = "open", required = false) Long open,
             @RequestHeader(value = "HX-Request", required = false) String hxRequest, Model model) {
         model.addAttribute("active", "consult-sessions");
         model.addAttribute("userId", userId);
@@ -43,10 +44,42 @@ public class AdminConsultSessionController {
         model.addAttribute("to", to);
         boolean searched = userId != null || vetId != null || from != null || to != null;
         model.addAttribute("searched", searched);
+        // 🔴 一个条件都没填时**不查库**（V1.3.0 Story 9.2 起）：
+        //    原先空条件会走 `cb.and(new Predicate[0])` —— 那是恒真式，等于把整张
+        //    consult_sessions 摊平返回。这一页是按用户/兽医/时间取证的，不是会话总账；
+        //    「打开即全量」既是无谓的全表扫描，也让一次误点就把全站会话元数据摆在屏幕上。
+        //    空态文案（admin.v130.sessions.searchFirst）说的就是这个行为。
         // 日期按 UTC 日界换算：from 取当日 00:00、to 取次日 00:00（不含）。
-        model.addAttribute("items", queryService.search(userId, vetId,
-                from == null ? null : from.atStartOfDay(ZoneOffset.UTC).toInstant(),
-                to == null ? null : to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()));
-        return hxRequest != null ? "admin/consult-sessions :: rows" : "admin/consult-sessions";
+        model.addAttribute("items", searched
+                ? queryService.search(userId, vetId,
+                        from == null ? null : from.atStartOfDay(ZoneOffset.UTC).toInstant(),
+                        to == null ? null : to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant())
+                : java.util.List.of());
+        model.addAttribute("open", open);
+        return hxRequest != null
+                ? "admin/fragments/consult-sessions-list :: rows(true)" : "admin/consult-sessions";
+    }
+
+    /**
+     * 会话取证抽屉（V1.3.0 Story 9.2 · AC2）。
+     *
+     * <p>🔴 **只把列表那一行摊开**：会话元数据 + 评分，一个字段都不多。
+     * 这里绝不新增任何读 IM 正文 / AI 分诊 / 用户媒体的查询 —— 抽屉是取证视图，不是聊天记录
+     * （NFR5；产品曾提「查不到内容不如合并」，已拍板维持并保留页内说明）。
+     *
+     * <p>非 htmx 直达 → 回列表并自动开该抽屉（A4 异常工单的「去取证」就落在这条链上）。
+     */
+    @GetMapping("/admin/consult-sessions/{sessionId}/drawer")
+    @PreAuthorize(VIEW_AUTH)
+    public String drawer(@org.springframework.web.bind.annotation.PathVariable long sessionId,
+            @RequestHeader(value = "HX-Request", required = false) String hxRequest, Model model) {
+        if (hxRequest == null) {
+            return "redirect:/admin/consult-sessions?open=" + sessionId;
+        }
+        model.addAttribute("active", "consult-sessions");
+        model.addAttribute("s", queryService.findMeta(sessionId)
+                .orElseThrow(() -> com.tailtopia.shared.error.AppException.notFound("会话不存在")
+                        .code("admin.err.sessions.notFound")));
+        return "admin/fragments/drawer-consult-session :: drawer";
     }
 }

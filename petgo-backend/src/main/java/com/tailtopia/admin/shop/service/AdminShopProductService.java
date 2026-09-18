@@ -46,6 +46,31 @@ public class AdminShopProductService {
         this.audit = audit;
     }
 
+    // ---------- V1.3.0 Story 10.3：B16 列表分页与摘要条（AC1） ----------
+
+    /**
+     * 一页商品（每页 20，权重降序 + id 降序）。
+     *
+     * <p>⚠️ 重构前控制器是 {@code products.findAll()} 拉回内存再过滤排序 —— 那不是分页，
+     * 翻页器也没法从它身上长出来。筛选与排序现在都落在查询层。
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<ShopProduct> page(ProductCategory category,
+            Boolean active, int page, int size) {
+        return products.adminSearch(category, active,
+                org.springframework.data.domain.PageRequest.of(Math.max(page, 0), Math.max(1, size)));
+    }
+
+    /** 摘要条三格：上架商品数 · 下架商品数 · SKU 总数（AC1）。 */
+    @Transactional(readOnly = true)
+    public Summary summary() {
+        return new Summary(products.countByActive(true), products.countByActive(false), skus.count());
+    }
+
+    /** 摘要条三格。 */
+    public record Summary(long activeCount, long inactiveCount, long skuCount) {
+    }
+
     // ---------- 商品 ----------
 
     @Transactional

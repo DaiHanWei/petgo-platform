@@ -68,6 +68,18 @@ public class PlatformConfigService {
         return tiers.findByEnabledTrueOrderBySortOrderAsc();
     }
 
+    /** 已停用的充值档位（按 sortOrder；V1.3.0 Story 6.2「查看已停用」，D-25 停用不能变单向）。 */
+    @Transactional(readOnly = true)
+    public List<PawCoinTopupTier> disabledTiers() {
+        return tiers.findByEnabledFalseOrderBySortOrderAsc();
+    }
+
+    /** 已停用档位数（「查看已停用（N）」链接，0 时不渲染）。 */
+    @Transactional(readOnly = true)
+    public long disabledTierCount() {
+        return tiers.countByEnabledFalse();
+    }
+
     /** 全部充值档位（含停用，按 sortOrder）。 */
     @Transactional(readOnly = true)
     public List<PawCoinTopupTier> allTiers() {

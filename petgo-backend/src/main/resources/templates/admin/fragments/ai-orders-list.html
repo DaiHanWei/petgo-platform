@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  B11 AI 订单的摘要条 / 表格 / 单行（V1.3.0 Story 8.4，模板 B）。
+    sumbar(oob) — 收入汇总**六格照搬**（总收入 / QRIS 现金 / PawCoin / 已完成 / 待支付 / 异常）
+    rows(oob)   — 表格 + 空态
+    row(o, oob) — 单行；点行开抽屉（本页抽屉全只读，没有 oob 换行的场景，参数保留是为与其它页同形）
+  🔴 收入口径 = **COMPLETED 金额之和**（PENDING 不计、ABNORMAL 供对账不计）——
+     这句提示不可删：不写的话运营会拿「总收入」跟支付渠道的流水直接对，永远对不上。
+*/-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="ai-orders-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.aiOrders.totalRevenue}">总收入（IDR）</div>
+        <div class="sum-value" data-sum="totalRevenue" th:text="${#numbers.formatInteger(summary.totalRevenue, 1, 'COMMA')}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.aiOrders.revenueQris}">· QRIS 现金</div>
+        <div class="sum-value" data-sum="revenueQris" th:text="${#numbers.formatInteger(summary.revenueQris, 1, 'COMMA')}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.aiOrders.revenuePawcoin}">· PawCoin</div>
+        <div class="sum-value" data-sum="revenuePawcoin" th:text="${#numbers.formatInteger(summary.revenuePawcoin, 1, 'COMMA')}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.aiOrders.completedCount}">已完成订单数</div>
+        <div class="sum-value" data-sum="completedCount" th:text="${summary.completedCount}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.aiOrders.pendingCount}">待支付</div>
+        <div class="sum-value" data-sum="pendingCount" th:text="${summary.pendingCount}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.aiOrders.abnormalCount}">异常（对账）</div>
+        <div class="sum-value" data-sum="abnormalCount" th:text="${summary.abnormalCount}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/ai-orders-list :: sumbar(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(orders)}" class="tags-table">
+        <thead>
+        <tr>
+            <th th:text="#{admin.common.order}">订单</th>
+            <th th:text="#{admin.common.user}">用户</th>
+            <th th:text="#{admin.aiOrders.col.triageTask}">分诊任务</th>
+            <th class="nowrap" th:text="#{admin.common.amount}">金额</th>
+            <th th:text="#{admin.common.channel}">渠道</th>
+            <th th:text="#{admin.common.status}">状态</th>
+            <th class="nowrap" th:text="#{admin.common.paidAt}">成交时间</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="o : ${orders}"><tr th:replace="~{admin/fragments/ai-orders-list :: row(${o}, false)}"></tr></th:block>
+        </tbody>
+    </table>
+
+    <div class="empty" th:if="${#lists.isEmpty(orders)}">
+        <span class="empty-emoji">🤖</span>
+        <p th:text="#{admin.aiOrders.empty}">暂无 AI 问诊订单</p>
+    </div>
+</th:block>
+
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(o, oob)" th:id="'ai-order-row-' + ${o.orderToken}" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${o.orderToken}" th:data-drawer-url="@{/admin/ai-orders/{t}/drawer(t=${o.orderToken})}"
+        tabindex="0">
+        <td class="nowrap" th:text="${o.displayNo}">no</td>
+        <td class="nowrap muted" th:text="${o.userId}">0</td>
+        <td class="nowrap muted" th:text="${o.triageTaskId}">0</td>
+        <td class="nowrap" th:text="${#numbers.formatInteger(o.amount, 1, 'COMMA')}">0</td>
+        <td class="nowrap"><code th:text="${o.payChannel}">QRIS</code></td>
+        <td class="nowrap"><code th:text="${o.status}">COMPLETED</code></td>
+        <td class="nowrap" th:text="${@adminTime.wib(o.paidAt)}">—</td>
+    </tr>
+</tbody></table>
+</body>
+</html>

@@ -72,10 +72,14 @@ public class AdminTicketRefundService {
     }
 
     /** 驳回退款需求：无退款单则先建（留痕），再 rejectNeed（发 REFUND_REJECTED 用户通知）。 */
+    /** 驳回退款需求 + 必填原因（V1.3.0 Story 2.7，D-36）：服务层判空（≤200 字），透传到退款单 reject_reason 与审计。 */
     @Transactional
-    public void rejectRefundNeed(String ticketToken, long adminId) {
+    public void rejectRefundNeed(String ticketToken, long adminId, String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw AppException.validation("驳回退款需求必须填写原因").code("admin.err.ticket.rejectReasonRequired");
+        }
         FeedbackTicket t = requireOpen(ticketToken);
-        refundService.rejectNeed(ensureRefundRequest(t, adminId), adminId);
+        refundService.rejectNeed(ensureRefundRequest(t, adminId), adminId, reason.trim());
     }
 
     private FeedbackTicket requireOpen(String ticketToken) {

@@ -62,6 +62,18 @@ public class ConsultSessionAdminQueryService {
                 .toList();
     }
 
+    /**
+     * 单条会话元数据（V1.3.0 Story 9.2 · AC2：取证抽屉）。不存在 → 空。
+     *
+     * <p>🔴 与 {@link #search} **同一个 {@code toRow}**：抽屉是取证视图，不是聊天记录 ——
+     * 这里绝不新增任何读 IM 正文 / AI 分诊 / 用户媒体的查询（NFR5）。
+     * 抽屉比列表多出来的只有「把同一行摊开看」，一个字段都不多。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<ConsultSessionMetaRow> findMeta(long sessionId) {
+        return sessions.findById(sessionId).map(this::toRow);
+    }
+
     private ConsultSessionMetaRow toRow(ConsultSession s) {
         ConsultRating rating = ratings.findBySessionId(s.getId()).orElse(null);
         return new ConsultSessionMetaRow(

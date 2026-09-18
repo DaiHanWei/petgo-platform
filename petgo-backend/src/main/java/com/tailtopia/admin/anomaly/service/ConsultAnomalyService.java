@@ -76,7 +76,58 @@ public class ConsultAnomalyService {
         return anomalies.findById(anomalyId);
     }
 
-    /** 加内部备注（用户不可见）+ 审计。 */
+    /** 工作台分页（V1.3.0 Story 2.6，只读）：按状态、时间倒序。 */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<ConsultAnomaly> page(AnomalyStatus status,
+            org.springframework.data.domain.Pageable pageable) {
+        return anomalies.findByStatusOrderByCreatedAtDesc(status, pageable);
+    }
+
+    /** 两态计数（只读）。 */
+    @Transactional(readOnly = true)
+    public long count(AnomalyStatus status) {
+        return anomalies.countByStatus(status);
+    }
+
+    /** 处置后「下一条」= 当前最新一条 OPEN 的 id；无则空串（只读）。 */
+    @Transactional(readOnly = true)
+    public String nextOpenId() {
+        return anomalies.findFirstByStatusOrderByCreatedAtDesc(AnomalyStatus.OPEN)
+                .map(a -> String.valueOf(a.getId())).orElse("");
+    }
+
+    /**
+     * 追加一条内部备注到时间线（V1.3.0 Story 2.6 AC2）。{@code internal_note} 仍是那一列 TEXT，
+     * 只是改为按行追加「{@code epochMillis|操作人|内容}」（见 {@link com.tailtopia.admin.anomaly.dto.AnomalyNoteLine}），
+     * 不建表、不改 schema；{@link #addNote} 的覆盖语义与审计原样保留。备注用户不可见；内容不进日志。
+     */
+    @Transactional
+    public void appendNote(long anomalyId, String note, long actorAccountId, String actorName) {
+        if (note == null || note.isBlank()) {
+            throw AppException.validation("备注内容不能为空").code("admin.err.anomaly.noteRequired");
+        }
+        if (note.trim().length() > NOTE_MAX_LENGTH) {
+            throw AppException.validation("备注不能超过 500 字").code("admin.err.anomaly.noteTooLong");
+        }
+        String line = com.tailtopia.admin.anomaly.dto.AnomalyNoteLine.encode(Instant.now(),
+                actorName == null || actorName.isBlank() ? "#" + actorAccountId : actorName, note.trim());
+        // 数据库端追加（复审 #1）：并发加备注不丢行；0 行 = 工单不存在。
+        if (anomalies.appendNoteLine(anomalyId, line) == 0) {
+            throw AppException.notFound("异常工单不存在").code("admin.err.anomaly.notFound");
+        }
+        auditService.record(actorAccountId, AuditActions.ANOMALY_NOTE_ADDED, "CONSULT_ANOMALY",
+                String.valueOf(anomalyId), "异常工单加内部备注");
+    }
+
+    /** 备注单条上限（与模板 maxlength 一致）。 */
+    static final int NOTE_MAX_LENGTH = 500;
+
+    /**
+     * 加内部备注（用户不可见）+ 审计。<b>覆盖式</b>（Story 5.1 旧口径）。
+     *
+     * @deprecated V1.3.0 Story 2.6 起后台走 {@link #appendNote} 时间线追加；本方法会抹掉整条时间线，仅保留给旧调用方 / 旧测试。
+     */
+    @Deprecated
     @Transactional
     public void addNote(long anomalyId, String note, long actorAccountId) {
         if (note == null || note.isBlank()) {
@@ -93,6 +144,10 @@ public class ConsultAnomalyService {
     @Transactional
     public void resolve(long anomalyId, String resolutionImageKey, long actorAccountId) {
         ConsultAnomaly a = require(anomalyId);
+        if (a.getStatus() == AnomalyStatus.RESOLVED) {
+            // 过期页面 / 双击重放：不覆盖处置人与时间、不重复审计（V1.3.0 Story 2.6 复审 #7）。
+            throw AppException.conflict("该工单已处理").code("admin.err.anomaly.alreadyResolved");
+        }
         a.resolve(actorAccountId, Instant.now(), resolutionImageKey);
         anomalies.save(a);
         auditService.record(actorAccountId, AuditActions.ANOMALY_RESOLVED, "CONSULT_ANOMALY",

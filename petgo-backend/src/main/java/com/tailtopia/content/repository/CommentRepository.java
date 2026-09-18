@@ -1,6 +1,7 @@
 package com.tailtopia.content.repository;
 
 import com.tailtopia.content.domain.Comment;
+import com.tailtopia.content.domain.CommentModerationStatus;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -41,7 +42,8 @@ import org.springframework.data.repository.query.Param;
  * <p><b>跨模块引用说明</b>：子查询里写的是 {@code social} 的实体名 {@code UserHideRelation}，Java 侧不 import 其仓储 ——
  * 与 {@code findFeed} 在 JPQL 里引用 {@code moderation} 的 {@code ContentReport} 是同一既定破例（AD-5 优先于 AD-8 的字面）。
  */
-public interface CommentRepository extends JpaRepository<Comment, Long> {
+public interface CommentRepository extends JpaRepository<Comment, Long>,
+        org.springframework.data.jpa.repository.JpaSpecificationExecutor<Comment> {
 
     /** 某帖未删评论总数（含一级+二级）。<b>已弃用于 detail commentCount</b>，改用 viewer 维度计数。 */
     long countByPostIdAndDeletedAtIsNull(long postId);
@@ -254,15 +256,34 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
             """)
     int deactivateByAuthor(@Param("authorId") long authorId, @Param("now") Instant now);
 
-    /** 后台内容管理近评论列表（Story 9.9，含已删软删项）。 */
-    java.util.List<Comment> findTop200ByOrderByIdDesc();
-
     /**
      * 后台内容详情（2026-09-02）：某帖一级评论分页，**含已删与全部审核状态**（运营全量视角），
      * 时间正序（与 App 一致）。排序由 Pageable 携带（createdAt asc, id asc）。
      */
     org.springframework.data.domain.Page<Comment> findByPostIdAndParentIdIsNull(
             long postId, Pageable pageable);
+
+    // ===== V1.3.0 Story 4.2 暖评抽屉只读查询（平台口径，不套 R1/R2）=====
+
+    /** 一批作者在 [from, to) 内发出的评论数（含审核中，排软删）：「今日已评 N 条」，区间由调用方按 WIB 自然日算。 */
+    @org.springframework.data.jpa.repository.Query("select c.authorId, count(c) from Comment c where c.authorId in :authorIds"
+            + " and c.deletedAt is null and c.createdAt >= :from and c.createdAt < :to group by c.authorId")
+    java.util.List<Object[]> countByAuthorsBetween(@Param("authorIds") java.util.Collection<Long> authorIds,
+            @Param("from") Instant from, @Param("to") Instant to);
+
+    /** 某帖自 since 起评过的作者 id（含审核中，排软删）：10 分钟内连发软提示。 */
+    @org.springframework.data.jpa.repository.Query("select distinct c.authorId from Comment c where c.postId = :postId"
+            + " and c.deletedAt is null and c.createdAt >= :since")
+    java.util.List<Long> findRecentAuthorIdsOnPost(@Param("postId") long postId, @Param("since") Instant since);
+
+    /** 某帖上虚拟账号发的评论数（可见 + 审核中，排软删）：≥3 条黄条提示。 */
+    @org.springframework.data.jpa.repository.Query("select count(c) from Comment c join User u on u.id = c.authorId"
+            + " where c.postId = :postId and u.accountType = :virtual and c.deletedAt is null and c.moderationStatus in :statuses")
+    long countByPostAndAuthorType(@Param("postId") long postId, @Param("virtual") com.tailtopia.auth.domain.AccountType virtual,
+            @Param("statuses") java.util.Collection<CommentModerationStatus> statuses);
+
+    /** 某帖可见评论数（一级 + 二级，排软删）：抽屉预览。 */
+    long countByPostIdAndDeletedAtIsNullAndModerationStatus(long postId, CommentModerationStatus status);
 
     /** 后台内容详情：一批一级评论的全部二级回复（含已删），时间正序；service 端裁「收起前 3 条」。 */
     java.util.List<Comment> findByParentIdInOrderByCreatedAtAscIdAsc(

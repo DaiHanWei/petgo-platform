@@ -3,6 +3,9 @@ package com.tailtopia.admin.pin.web;
 import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.pin.service.AdminContentPinService;
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.shared.web.AdminFragmentResponses;
+import com.tailtopia.admin.shared.web.AdminHxEvents;
+import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.content.domain.ContentPin;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
@@ -62,15 +65,80 @@ public class AdminContentPinController {
 
     @GetMapping("/admin/content-pins")
     @PreAuthorize(VIEW)
-    public String list(@RequestParam(value = "slot", required = false) String slot, Model model) {
+    public String list(@RequestParam(value = "slot", required = false) String slot,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "page", required = false, defaultValue = "0") int page,
+            @RequestParam(value = "open", required = false) Long open,
+            @RequestParam(value = "create", required = false) String create,
+            HxRequest hx, Model model) {
         String s = (slot == null || slot.isBlank()) ? ContentPin.SLOT_HOME_FEED : slot;
         model.addAttribute("active", "content-pins");
         model.addAttribute("slot", s);
         // 🛡 本版本只有一个坑位，但界面按「坑位是个下拉」渲染 —— 表上 slot 是普通列、
         //    无 CHECK 约束，将来新增坑位只需多一个取值，不改结构（AD-8 Rule 5）。
         model.addAttribute("slots", java.util.List.of(ContentPin.SLOT_HOME_FEED));
-        model.addAttribute("rows", service.list(s, Instant.now()));
-        return "admin/content-pins";
+        populate(s, status, page, model);
+        model.addAttribute("open", open);
+        // ?create=1 深链（无 htmx 时直达新建表单 URL 的落点）：整页渲染后自动展开新建抽屉。
+        model.addAttribute("openCreate", create != null);
+        // htmx 局部刷新只回表格（摘要条随 oob 一并换）；整页请求回完整视图。
+        return hx.isHtmx() ? "admin/fragments/pins-list :: rows(true)" : "admin/content-pins";
+    }
+
+    /** 顶置详情抽屉（Story 7.3 · AC3）；非 htmx 直达 → 回列表并自动开该抽屉。 */
+    @GetMapping("/admin/content-pins/{id}/drawer")
+    @PreAuthorize(VIEW)
+    public String drawer(@PathVariable long id, HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            return "redirect:/admin/content-pins?open=" + id;
+        }
+        model.addAttribute("active", "content-pins");
+        model.addAttribute("d", service.detail(id, Instant.now()));
+        return "admin/fragments/drawer-content-pin :: drawer";
+    }
+
+    /**
+     * 新建顶置表单（Story 7.3 · AC4）：原先常驻页尾的表单收进抽屉，字段与 {@code POST} 的参数逐字不变。
+     * 非 htmx 直达 → 回列表并自动展开新建抽屉。
+     */
+    @GetMapping("/admin/content-pins/new/drawer")
+    @PreAuthorize(MANAGE)
+    public String newDrawer(@RequestParam(value = "slot", required = false) String slot,
+            HxRequest hx, Model model) {
+        String s = (slot == null || slot.isBlank()) ? ContentPin.SLOT_HOME_FEED : slot;
+        if (!hx.isHtmx()) {
+            return "redirect:/admin/content-pins?create=1&slot="
+                    + java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8);
+        }
+        model.addAttribute("active", "content-pins");
+        model.addAttribute("slot", s);
+        // 首屏候选：与原页尾表单一样，进来就有一批可选内容（不必先搜一次）。
+        model.addAttribute("candidates", service.pickable(null, 0));
+        model.addAttribute("q", null);
+        model.addAttribute("page", 0);
+        return "admin/fragments/drawer-content-pin :: createForm";
+    }
+
+    private void populate(String slot, String status, int page, Model model) {
+        // ⚠️ 整表只读一次、now 只取一次：列表与摘要条共用，两者的状态判定不会在跨秒时打架。
+        Instant now = Instant.now();
+        var all = service.list(slot, now);
+        var found = service.page(all, status, page);
+        model.addAttribute("rows", found.rows());
+        model.addAttribute("hasNext", found.hasNext());
+        model.addAttribute("page", found.page());
+        model.addAttribute("status", status);
+        model.addAttribute("summary", service.summary(all));
+        model.addAttribute("phases", java.util.List.of("ACTIVE", "PENDING", "ENDED"));
+    }
+
+    /** 处置成功统一响应（AC5）：抽屉重渲染 + oob 行 + toast + 列表刷新（摘要条与筛选口径都要跟着变）。 */
+    private String afterAction(long id, String toast, Model model,
+            jakarta.servlet.http.HttpServletResponse response) {
+        model.addAttribute("d", service.detail(id, Instant.now()));
+        model.addAttribute("toast", toast);
+        AdminFragmentResponses.trigger(response, AdminHxEvents.PIN_LIST_REFRESH);
+        return "admin/fragments/drawer-content-pin :: afterAction";
     }
 
     /** 内容选择器（HTMX 局部）：只返回可公开展示的内容，分页。 */
@@ -97,7 +165,31 @@ public class AdminContentPinController {
             @RequestParam(required = false) String promoLinkUrl,
             @RequestParam String startsAt,
             @RequestParam String endsAt,
+            HxRequest hx, Model model, jakarta.servlet.http.HttpServletResponse response,
             RedirectAttributes flash) {
+        // Story 7.3：抽屉里的新建表单走 htmx —— 成功回新排期的抽屉 + toast + 列表重拉
+        //（新行不能用 oob 插：页面上还没有这一行，oob 会被直接丢掉）；
+        // 失败（重叠 / 缺必填 / 时间窗非法）不在这里 catch，交给 AdminBusinessExceptionAdvice 出 422 行内 err。
+        if (hx.isHtmx()) {
+            Instant hFrom = toInstant(startsAt);
+            Instant hTo = toInstant(endsAt);
+            long id;
+            if ("PROMO".equals(objectType)) {
+                var up = uploadPromo(promoImageFile, promoImageUrl);
+                id = service.createPromoPin(admin.getAdminAccountId(), slot, up.url(),
+                        blankToNull(promoTitle), blankToNull(promoLinkUrl), hFrom, hTo);
+                if (up.warning() != null) {
+                    model.addAttribute("warn", up.warning());
+                }
+            } else {
+                if (contentId == null) {
+                    throw AppException.validation("请选择要顶置的内容")
+                            .code("admin.err.pins.contentRequired");
+                }
+                id = service.createContentPin(admin.getAdminAccountId(), slot, contentId, hFrom, hTo);
+            }
+            return afterAction(id, msg.get("admin.flash.pins.saved"), model, response);
+        }
         try {
             Instant from = toInstant(startsAt);
             Instant to = toInstant(endsAt);
@@ -136,7 +228,12 @@ public class AdminContentPinController {
     @PreAuthorize(MANAGE)
     public String edit(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
             @RequestParam String startsAt, @RequestParam String endsAt,
+            HxRequest hx, Model model, jakarta.servlet.http.HttpServletResponse response,
             RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            service.reschedule(admin.getAdminAccountId(), id, toInstant(startsAt), toInstant(endsAt));
+            return afterAction(id, msg.get("admin.flash.pins.rescheduled"), model, response);
+        }
         try {
             service.reschedule(admin.getAdminAccountId(), id, toInstant(startsAt), toInstant(endsAt));
             flash.addFlashAttribute("notice", msg.get("admin.flash.pins.rescheduled"));
@@ -149,7 +246,13 @@ public class AdminContentPinController {
     @PostMapping("/admin/content-pins/{id}/terminate")
     @PreAuthorize(MANAGE)
     public String terminate(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
+            HxRequest hx, Model model, jakarta.servlet.http.HttpServletResponse response,
             RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            boolean changed = service.terminate(admin.getAdminAccountId(), id, Instant.now());
+            return afterAction(id, msg.get(changed ? "admin.flash.pins.terminated"
+                    : "admin.flash.pins.alreadyEnded"), model, response);
+        }
         try {
             boolean changed = service.terminate(admin.getAdminAccountId(), id, Instant.now());
             flash.addFlashAttribute(changed ? "notice" : "error",
@@ -158,6 +261,19 @@ public class AdminContentPinController {
             flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/content-pins";
+    }
+
+    /** 推广卡片图：本地上传与 URL 二选一，都给时以上传为准（与整页路径同一份逻辑）。 */
+    private UploadedPromo uploadPromo(org.springframework.web.multipart.MultipartFile file, String url) {
+        if (file != null && !file.isEmpty()) {
+            var uploaded = images.upload(file, "pin-promo");
+            return new UploadedPromo(uploaded.url(), uploaded.warning());
+        }
+        return new UploadedPromo(blankToNull(url), null);
+    }
+
+    /** @param warning 比例超出 0.75–1.34 时的提示（🛡 只提醒、不拦） */
+    private record UploadedPromo(String url, String warning) {
     }
 
     /**

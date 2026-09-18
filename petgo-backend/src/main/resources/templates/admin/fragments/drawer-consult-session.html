@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  B22 会话取证抽屉（V1.3.0 Story 9.2 · AC2，480px 抽屉体 res=session，UI 稿 6-9）。
+  🔴 **只把列表那一行摊开**：会话元数据 + 评分，一个字段都不多。
+     绝不读 IM 正文 / AI 分诊结论 / 用户媒体（NFR5）—— 抽屉是取证视图，不是聊天记录。
+     产品曾提「查不到内容不如把两页合并」，已拍板维持独立并保留页内说明；
+     所以这里也**不要**为了「抽屉更丰富」去加任何内容读取。
+  🔴 全只读：一个 <form>、一个写端点都没有。
+*/-->
+<body>
+<div th:fragment="drawer" id="session-drawer-panel" class="tag-drawer" th:attr="data-session-id=${s.sessionId()}">
+    <section class="card card-full tag-card" data-section="session-meta">
+        <h3 th:text="#{admin.v130.sessions.drawer.title}">会话取证</h3>
+        <table class="ud-table">
+            <tr><th th:text="#{admin.sessions.col.session}">会话</th>
+                <td th:text="${s.sessionId()}">1</td></tr>
+            <tr><th th:text="#{admin.sessions.col.user}">用户</th>
+                <td th:text="${s.userId() != null} ? ${s.userId()} : #{admin.sessions.anonymized}">-</td></tr>
+            <tr><th th:text="#{admin.sessions.col.vet}">兽医</th><td th:text="${s.vetId()}">-</td></tr>
+            <tr><th th:text="#{admin.sessions.col.started}">开始</th>
+                <td class="nowrap" th:text="${@adminTime.wib(s.startedAt())}">-</td></tr>
+            <!--/* 「结束」= 终态时刻（中断取 interruptedAt，否则 updatedAt 兜底 createdAt）。 */-->
+            <tr><th th:text="#{admin.sessions.col.ended}">结束</th>
+                <td class="nowrap" th:text="${@adminTime.wib(s.endedAt())}">-</td></tr>
+            <tr><th th:text="#{admin.sessions.col.status}">状态</th>
+                <td><code th:text="${s.status()}">CLOSED</code></td></tr>
+        </table>
+    </section>
+
+    <section class="card card-full tag-card" data-section="session-rating">
+        <h3 th:text="#{admin.sessions.col.rating}">评分</h3>
+        <table th:if="${s.stars() != null}" class="ud-table">
+            <tr><th th:text="#{admin.ratings.col.stars}">星级</th>
+                <td th:text="${s.stars()} + ' ★'">5 ★</td></tr>
+            <tr><th th:text="#{admin.ratings.col.comment}">评价</th>
+                <td th:text="${s.comment()} ?: '—'">—</td></tr>
+        </table>
+        <p class="hint" th:unless="${s.stars() != null}" th:text="#{admin.sessions.noRating}">未评分</p>
+    </section>
+
+    <!--/* 🔴 这句不可删：抽屉里没有聊天记录**是刻意的**，不是没做完。
+           不写的话，运营会一直等一个永远不会出现的「查看对话」按钮，或者去找工程要。 */-->
+    <p class="hint" data-notice="session-nfr5" th:text="#{admin.sessions.note}">
+        仅展示系统内会话元数据 + 评分；不触达第三方消息正文 / AI / 媒体。</p>
+</div>
+</body>
+</html>

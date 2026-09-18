@@ -182,7 +182,9 @@ class AdminShopOrderEndpointIntegrationTest extends ApiIntegrationTest {
                         .with(csrf())
                         .param("carrier", "JNE").param("trackingNo", tracking)
                         .param("carrierCost", "18000"))
-                .andExpect(redirectedUrl("/admin/shop/orders/" + order.getPublicToken()))
+                // V1.3.0 Story 10.2 AC3：整页详情已退役，非 htmx 处置后回**列表**
+                // —— 往退役地址 302 等于把它永久续上（D-23 明确不做旧地址跳转）
+                .andExpect(redirectedUrl("/admin/shop/orders"))
                 .andExpect(flash().attributeExists("notice"));
 
         assertThat(orders.findByPublicToken(order.getPublicToken()).orElseThrow().getStatus())
@@ -283,18 +285,124 @@ class AdminShopOrderEndpointIntegrationTest extends ApiIntegrationTest {
                                 "name=\"phone\""))));
     }
 
+    /**
+     * 🔴 <b>V1.3.0 Story 10.2 AC3 改了这条既有断言</b>：原来是直接 GET 详情页断言 200 + 含收件人。
+     * 整页详情已退役并进抽屉，同一条 mapping 只在 {@code HX-Request} 下返片段、直达一律 404。
+     * PII 断言原样保留 —— 换的是入口，不是「哪里能看到收件人」这条口径。
+     */
     @Test
-    @DisplayName("详情页展示收件信息与两段支付构成（这里才是 PII 的唯一出口）")
-    void detailPageShowsShipToAndPaymentSplit() throws Exception {
+    @DisplayName("抽屉展示收件信息与两段支付构成（这里才是 PII 的唯一出口）")
+    void detailDrawerShowsShipToAndPaymentSplit() throws Exception {
         ShopOrder order = paidOrder(seedUser());
         String html = mvc.perform(get("/admin/shop/orders/{t}", order.getPublicToken())
+                        .header("HX-Request", "true")
                         .with(authentication(staffWith(AdminPermissions.SHOP_ORDER_VIEW))))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
+        assertThat(html).doesNotContain("<html");   // 是片段不是整页
         assertThat(html).contains(RECEIVER).contains(ADDRESS_LINE);
         assertThat(html).contains("PAWCOIN");     // 两段支付构成
         assertThat(html).contains(order.getPublicToken());
+    }
+
+    /**
+     * 🔴 AC3：旧详情地址<b>直达 404</b>，不是 302、不是 200。
+     *
+     * <p>这条路径上的 mapping 按设计保留（T1 / AB-19A「零新端点」：htmx 请求返抽屉片段），
+     * 所以 {@code AdminRetiredRoutesTest} 那种「不该有 GET 映射」的判据在这里不适用 ——
+     * 「直达返 404」只能在这里钉。留个 302 跳转壳的话，书签与外部文档会把旧地址永远续上。
+     */
+    @Test
+    @DisplayName("🔴 旧订单详情地址直达 → 404（不是 302，不是 200）")
+    void oldDetailPageIsRetired() throws Exception {
+        ShopOrder order = paidOrder(seedUser());
+        mvc.perform(get("/admin/shop/orders/{t}", order.getPublicToken())
+                        .with(authentication(staffWith(AdminPermissions.SHOP_ORDER_VIEW))))
+                .andExpect(status().isNotFound());
+    }
+
+    // ---------- V1.3.0 Story 10.2：B15 模板 B 列表 + 抽屉（AC1 / AC2 / AC5） ----------
+
+    @Test
+    @DisplayName("列表整页 200：摘要条三格 + 抽屉壳（模板 B）")
+    void listPageRendersSummaryAndDrawerShell() throws Exception {
+        paidOrder(seedUser());
+        String html = mvc.perform(get("/admin/shop/orders")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_ORDER_VIEW))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).contains("shop-order-summary").contains("shop-order-rows");
+        assertThat(html).as("模板 B 的抽屉壳与抽屉体 id").contains("shop-order-drawer-body");
+    }
+
+    @Test
+    @DisplayName("HX-Request 下列表返行片段（含 oob 摘要条），不是整页")
+    void listUnderHtmxReturnsRowsFragmentWithOobSummary() throws Exception {
+        paidOrder(seedUser());
+        String body = mvc.perform(get("/admin/shop/orders").header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_ORDER_VIEW))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("<html").doesNotContain("shop-order-drawer-body");
+        assertThat(body).contains("hx-swap-oob").contains("shop-order-summary");
+    }
+
+    @Test
+    @DisplayName("htmx 发货 → 抽屉片段原地刷新 + oob 列表行 + toast（AC2）")
+    void htmxShipReturnsDrawerFragmentWithOobRow() throws Exception {
+        ShopOrder order = paidOrder(seedUser());
+        String body = mvc.perform(post("/admin/shop/orders/{t}/ship", order.getPublicToken())
+                        .header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_ORDER_FULFILL)))
+                        .with(csrf())
+                        .param("carrier", "JNE").param("trackingNo", "JP" + SEQ.incrementAndGet())
+                        .param("carrierCost", "18000"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).contains("shop-order-row-" + order.getPublicToken()).contains("hx-swap-oob");
+        assertThat(body).contains("so-drawer");   // 抽屉不自动关，原地换成刷新后的五区
+        assertThat(orders.findByPublicToken(order.getPublicToken()).orElseThrow().getStatus())
+                .isEqualTo(ShopOrderStatus.SHIPPED);
+    }
+
+    @Test
+    @DisplayName("🔒 htmx 下越权发货 → 403 片段（点名所缺权限），订单状态不动")
+    void htmxShipWithoutFulfillIsForbidden() throws Exception {
+        ShopOrder order = paidOrder(seedUser());
+        var res = mvc.perform(post("/admin/shop/orders/{t}/ship", order.getPublicToken())
+                        .header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_ORDER_VIEW)))
+                        .with(csrf())
+                        .param("carrier", "JNE").param("trackingNo", "JP" + SEQ.incrementAndGet())
+                        .param("carrierCost", "18000"))
+                .andExpect(status().isForbidden())
+                .andReturn().getResponse();
+
+        assertThat(res.getHeader("HX-Reswap")).isEqualTo("innerHTML");
+        assertThat(orders.findByPublicToken(order.getPublicToken()).orElseThrow().getStatus())
+                .isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
+    }
+
+    @Test
+    @DisplayName("htmx 下业务失败 → 422 行内错误（未知承运商），订单状态不动")
+    void htmxShipWithUnknownCarrierReturnsInlineError() throws Exception {
+        ShopOrder order = paidOrder(seedUser());
+        var res = mvc.perform(post("/admin/shop/orders/{t}/ship", order.getPublicToken())
+                        .header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.SHOP_ORDER_FULFILL)))
+                        .with(csrf())
+                        .param("carrier", "GOSEND").param("trackingNo", "JP" + SEQ.incrementAndGet())
+                        .param("carrierCost", "18000"))
+                .andExpect(status().isUnprocessableEntity())
+                .andReturn().getResponse();
+
+        assertThat(res.getHeader("HX-Reswap")).isEqualTo("innerHTML");
+        assertThat(orders.findByPublicToken(order.getPublicToken()).orElseThrow().getStatus())
+                .isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
     }
 
     // ---------- 🔒 按电话搜索（AB-11A） ----------

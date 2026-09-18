@@ -9,14 +9,25 @@ import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.dto.AdminAccountView;
 import com.tailtopia.admin.account.repository.AdminAccountPermissionRepository;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
+import com.tailtopia.admin.audit.service.AdminAlertService;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.admin.roles.domain.AdminRoleEntity;
+import com.tailtopia.admin.roles.dto.RoleSelection;
+import com.tailtopia.admin.roles.repository.AdminRoleRepository;
+import com.tailtopia.admin.roles.service.RolePermissionResolver;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import com.tailtopia.shared.error.AppException;
 import java.util.ArrayList;
+import java.util.Locale;
+import java.util.regex.Pattern;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,15 +45,32 @@ public class AdminAccountService {
     /** 超管上限（AC4）。 */
     static final int SUPER_ADMIN_CAP = 5;
 
+    /** 邮箱格式（与建号表单 {@code @Email} 同口径的宽松校验：本地部分@域名，无空白、恰一个 @；不强制顶级域）。 */
+    static final Pattern EMAIL = Pattern.compile("^[^\\s@]+@[^\\s@]+$");
+
     private final AdminAccountRepository accounts;
     private final AdminAccountPermissionRepository permissions;
     private final AdminAuditService auditService;
+    private final AdminAlertService alertService;
+    /** 权限来源唯一出口（V1.3.0 Story 1.4）：列表回显 / carry / 审计摘要都经它，与登录装载同口径。 */
+    private final RolePermissionResolver resolver;
+    /** 自定义角色名回显（Story 1.6 列表「岗位角色」列）。 */
+    private final AdminRoleRepository roleRows;
+    /** bootstrap 超管邮箱（与 {@code AdminBootstrap} 同一 env）；空表示未配置、护栏不生效。 */
+    private final String bootstrapEmail;
 
     public AdminAccountService(AdminAccountRepository accounts,
-            AdminAccountPermissionRepository permissions, AdminAuditService auditService) {
+            AdminAccountPermissionRepository permissions, AdminAuditService auditService,
+            AdminAlertService alertService, RolePermissionResolver resolver,
+            AdminRoleRepository roleRows,
+            @Value("${ADMIN_BOOTSTRAP_EMAIL:}") String bootstrapEmail) {
         this.accounts = accounts;
         this.permissions = permissions;
         this.auditService = auditService;
+        this.alertService = alertService;
+        this.resolver = resolver;
+        this.roleRows = roleRows;
+        this.bootstrapEmail = bootstrapEmail == null ? "" : bootstrapEmail.trim();
     }
 
     /**
@@ -55,25 +83,56 @@ public class AdminAccountService {
     @Transactional(readOnly = true)
     public List<AdminAccountView> list() {
         List<AdminAccountView> views = new ArrayList<>();
-        for (AdminAccount a : accounts.findAll()) {
+        List<AdminAccount> all = accounts.findAll();
+        // Story 1.6：自定义角色名一次批量取（避免 N+1）。
+        Set<Long> customIds = all.stream().filter(a -> a.getRole() == AdminRole.ROLE_TEMPLATE)
+                .map(AdminAccount::getRoleId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<Long, String> names = customIds.isEmpty() ? Map.of()
+                : roleRows.findAllById(customIds).stream()
+                        .collect(Collectors.toMap(AdminRoleEntity::getId, AdminRoleEntity::getName));
+        for (AdminAccount a : all) {
             views.add(new AdminAccountView(a.getId(), a.getLarkEmail(), a.getDisplayName(),
-                    a.getAccountType(), a.getRole(), a.getStatus(), effectivePermissions(a)));
+                    a.getAccountType(), a.getRole(), a.getStatus(), effectivePermissions(a),
+                    a.getRoleId(), a.getRoleId() == null ? null : names.get(a.getRoleId()), a.getCreatedAt()));
         }
         views.sort((x, y) -> Long.compare(x.id(), y.id()));
         return views;
     }
 
-    /** 该账号实际生效的权限码（排序稳定，供 UI 回显）。 */
+    /**
+     * 单个账号视图（V1.3.0 Story 6.5 抽屉 / oob 行）；不存在 → 404。
+     *
+     * <p>⚠️ <b>按 id 单条取</b>，不要写成 {@code list().stream().filter(...)} ——
+     * {@code list()} 会把全部账号连同逐账号的权限解析（{@link RolePermissionResolver}）跑一遍，
+     * 而抽屉每开一次、每处置一次都会走这里。
+     */
+    @Transactional(readOnly = true)
+    public AdminAccountView view(long id) {
+        AdminAccount a = accounts.findById(id)
+                .orElseThrow(() -> AppException.notFound("账号不存在").code("admin.err.account.notFound"));
+        String roleName = a.getRoleId() == null ? null
+                : roleRows.findById(a.getRoleId()).map(AdminRoleEntity::getName).orElse(null);
+        return new AdminAccountView(a.getId(), a.getLarkEmail(), a.getDisplayName(), a.getAccountType(),
+                a.getRole(), a.getStatus(), effectivePermissions(a), a.getRoleId(), roleName, a.getCreatedAt());
+    }
+
+    /** B24 摘要条（Story 6.5 AC2）：账号总数 · 启用中 · 已停用 · 超管数 / 5。 */
+    public record Summary(long total, long active, long disabled, long superAdmins) {
+    }
+
+    @Transactional(readOnly = true)
+    public Summary summary() {
+        long total = accounts.count();
+        long active = accounts.countByStatus(AdminAccountStatus.ACTIVE);
+        // 🔴 超管数取 **ACTIVE** 口径：上限判定（assertSuperAdminCap）数的就是在职超管，停用的不占名额（Story 1.5 AC4）。
+        //    用含 DISABLED 的总数会显示「4 / 5」却还能再建两个 —— 分母与系统判定不是同一件事。
+        return new Summary(total, active, total - active,
+                accounts.countByAccountTypeAndStatus(AdminAccountType.SUPER_ADMIN, AdminAccountStatus.ACTIVE));
+    }
+
+    /** 该账号实际生效的权限码（排序稳定，供 UI 回显）——与登录装载同源（{@link RolePermissionResolver}）。 */
     private List<String> effectivePermissions(AdminAccount a) {
-        AdminRole role = a.getRole();
-        if (a.getAccountType() == AdminAccountType.SUPER_ADMIN || role == null) {
-            return List.of();
-        }
-        if (role.isTemplated()) {
-            return role.permissionCodes().stream().sorted().toList();
-        }
-        return permissions.findByAccountId(a.getId()).stream()
-                .map(AdminAccountPermission::getPermissionCode).sorted().toList();
+        return resolver.resolve(a).stream().sorted().toList();
     }
 
     /**
@@ -88,6 +147,16 @@ public class AdminAccountService {
     @Transactional
     public long createAccount(String larkEmail, String displayName, AdminRole role,
             List<String> permissionCodes, long actorAccountId) {
+        return createAccount(larkEmail, displayName,
+                role == null ? null : RoleSelection.ofEnum(role, resolver.roleIdFor(role).orElse(null)),
+                permissionCodes, actorAccountId);
+    }
+
+    /** Story 1.6：按 {@link RoleSelection}（role + role_id 成对）建号；自定义角色 role=ROLE_TEMPLATE。 */
+    @Transactional
+    public long createAccount(String larkEmail, String displayName, RoleSelection sel,
+            List<String> permissionCodes, long actorAccountId) {
+        AdminRole role = sel == null ? null : sel.role();
         String email = larkEmail == null ? "" : larkEmail.trim();
         if (email.isEmpty()) {
             throw AppException.validation("Lark 邮箱不能为空").code("admin.err.account.emailRequired");
@@ -95,10 +164,11 @@ public class AdminAccountService {
         if (displayName == null || displayName.isBlank()) {
             throw AppException.validation("显示名不能为空").code("admin.err.account.displayNameRequired");
         }
-        if (role == null) {
+        if (role == null || (role == AdminRole.ROLE_TEMPLATE && sel.roleId() == null)) {
             throw AppException.validation("必须选择岗位角色").code("admin.err.account.roleRequired");
         }
-        if (accounts.findByLarkEmail(email).isPresent()) {
+        // V1.3.0 Story 1.3（D-21）：只对 ACTIVE 账号查重，已停用账号的邮箱视为已释放（部分唯一索引兜底）。
+        if (accounts.findByLarkEmailIgnoreCaseAndStatus(email, AdminAccountStatus.ACTIVE).isPresent()) {
             throw AppException.conflict("该 Lark 邮箱已存在后台账号：" + email)
                     .code("admin.err.account.emailExists", email);
         }
@@ -110,8 +180,10 @@ public class AdminAccountService {
                 ? Set.of()
                 : sanitizePermissions(AdminAccountType.STAFF, permissionCodes);
 
-        AdminAccount saved = accounts.save(
-                AdminAccount.create(email, displayName.trim(), role, actorAccountId));
+        AdminAccount fresh = AdminAccount.create(email, displayName.trim(), role, actorAccountId);
+        // Story 1.4/1.6：表驱动岗位与自定义角色落 role_id（权限按表解析）；SUPER_ADMIN / OPS_MANAGER / CUSTOM 为 NULL。
+        fresh.assignRole(role, sel.roleId());
+        AdminAccount saved = accounts.save(fresh);
         if (!codes.isEmpty()) {
             permissions.saveAll(codes.stream()
                     .map(c -> new AdminAccountPermission(saved.getId(), c)).toList());
@@ -120,11 +192,11 @@ public class AdminAccountService {
         // 模板角色只记角色名 + 权限条数：整份码表能由 AdminRole 反查，且随 git 留痕；
         // 摘要列只有 varchar(500)，运营主管那 40 多个码直接撑爆它，而审计写失败会回滚整个建号事务。
         String permSummary = role.isTemplated()
-                ? role.permissionCodes().size() + " 项（按角色）"
+                ? templateCodes(role, sel.roleId()).size() + " 项（按角色）"
                 : String.valueOf(new TreeSet<>(codes));
         auditService.record(actorAccountId, AuditActions.ACCOUNT_CREATED, "ADMIN_ACCOUNT",
                 String.valueOf(saved.getId()),
-                "创建后台账号 " + email + "（角色 " + role + "）权限=" + permSummary);
+                "创建后台账号 " + email + "（角色 " + sel.label() + "）权限=" + permSummary);
         return saved.getId();
     }
 
@@ -142,14 +214,27 @@ public class AdminAccountService {
      */
     @Transactional
     public void changeRole(long accountId, AdminRole newRole, long actorAccountId) {
+        changeRole(accountId,
+                newRole == null ? null : RoleSelection.ofEnum(newRole, resolver.roleIdFor(newRole).orElse(null)),
+                actorAccountId);
+    }
+
+    /** Story 1.6：按 {@link RoleSelection} 改角色（role + role_id 成对）；幂等 = 同 role 且同 roleId。 */
+    @Transactional
+    public void changeRole(long accountId, RoleSelection sel, long actorAccountId) {
         AdminAccount a = accounts.findById(accountId)
                 .orElseThrow(() -> AppException.notFound("后台账号不存在").code("admin.err.account.notFound"));
-        if (newRole == null) {
+        AdminRole newRole = sel == null ? null : sel.role();
+        if (newRole == null || (newRole == AdminRole.ROLE_TEMPLATE && sel.roleId() == null)) {
             throw AppException.validation("必须选择岗位角色").code("admin.err.account.roleRequired");
         }
+        // V1.3.0 Story 1.2 self 护栏：放在幂等判断之前——「给自己选当前角色再保存」也应被拒。
+        if (accountId == actorAccountId) {
+            throw AppException.validation("不能修改自己的岗位角色").code("admin.err.account.selfRoleChange");
+        }
         AdminRole oldRole = a.getRole();
-        if (oldRole == newRole) {
-            return; // 幂等
+        if (oldRole == newRole && Objects.equals(a.getRoleId(), sel.roleId())) {
+            return; // 幂等（同 role 且同 role_id）
         }
         if (newRole.isSuperAdmin()) {
             assertSuperAdminCap();
@@ -161,7 +246,9 @@ public class AdminAccountService {
         }
 
         List<String> carried = effectivePermissions(a);
-        a.setRole(newRole);
+        String oldLabel = oldRole == AdminRole.ROLE_TEMPLATE ? "ROLE_TEMPLATE#" + a.getRoleId() : String.valueOf(oldRole);
+        a.assignRole(newRole, sel.roleId()); // Story 1.4/1.6：role 与 role_id 成对写，其余清空
+        a.bumpSecurityVersion(); // AD-1：角色真变 → 会话下次请求被踢重登
         accounts.save(a);
 
         permissions.deleteByAccountId(accountId);
@@ -172,7 +259,7 @@ public class AdminAccountService {
 
         auditService.record(actorAccountId, AuditActions.ACCOUNT_ROLE_CHANGED, "ADMIN_ACCOUNT",
                 String.valueOf(accountId),
-                "岗位角色 " + oldRole + " → " + newRole + "（" + a.getLarkEmail() + "）");
+                "岗位角色 " + oldLabel + " → " + sel.label() + "（" + a.getLarkEmail() + "）");
     }
 
     /** 调整 STAFF 模块权限（AC7）：diff 增删 + 分别审计。SUPER_ADMIN 不可改权限（隐式全权）。 */
@@ -210,6 +297,8 @@ public class AdminAccountService {
             permissions.saveAll(desired.stream()
                     .map(c -> new AdminAccountPermission(accountId, c)).toList());
         }
+        a.bumpSecurityVersion(); // AD-1：权限真变（added/removed 非空）→ 踢重登
+        accounts.save(a);
         if (!added.isEmpty()) {
             auditService.record(actorAccountId, AuditActions.PERMISSION_GRANTED, "ADMIN_ACCOUNT",
                     String.valueOf(accountId), "授予权限 " + added + " 给 " + a.getLarkEmail());
@@ -220,11 +309,23 @@ public class AdminAccountService {
         }
     }
 
+    /** 模板角色的权限码：自定义角色按 role_id 读表，其余经 resolver（枚举 / 预置表行）。 */
+    private java.util.Collection<String> templateCodes(AdminRole role, Long roleId) {
+        if (role == AdminRole.ROLE_TEMPLATE) {
+            return roleId == null ? List.of() : resolver.codesOfRoleId(roleId);
+        }
+        return resolver.codesOf(role);
+    }
+
     /** 停用账号（AC5，A1 即时撤权靠会话守卫）。 */
     @Transactional
     public void deactivate(long accountId, long actorAccountId) {
         AdminAccount a = accounts.findById(accountId)
                 .orElseThrow(() -> AppException.notFound("后台账号不存在").code("admin.err.account.notFound"));
+        // V1.3.0 Story 1.2 self 护栏（服务层是安全边界；模板禁用态只是体验）。
+        if (accountId == actorAccountId) {
+            throw AppException.validation("不能停用自己的账号").code("admin.err.account.selfDeactivate");
+        }
         if (a.getStatus() == AdminAccountStatus.DISABLED) {
             return; // 幂等
         }
@@ -235,9 +336,98 @@ public class AdminAccountService {
             throw AppException.validation("不能停用最后一个在职超级管理员").code("admin.err.account.lastSuperAdminDisable");
         }
         a.setStatus(AdminAccountStatus.DISABLED);
+        a.bumpSecurityVersion(); // AD-1：停用真变 → 版本 +1（会话守卫仍先判 ACTIVE、走 ?expired）
         accounts.save(a);
         auditService.record(actorAccountId, AuditActions.ACCOUNT_DEACTIVATED, "ADMIN_ACCOUNT",
                 String.valueOf(accountId), "停用后台账号 " + a.getLarkEmail());
+    }
+
+    /**
+     * 账号安全版本号 +1（V1.3.0 Story 1.1，AD-1）——公开、独立事务，供后续横切调用：
+     * 1.3 换绑邮箱、1.5 角色模板改权限后对该角色下全部账号批量 bump。
+     * 版本号是内部机制，不写审计；{@code reactivate} 不调（对方本来就登不进）。
+     */
+    @Transactional
+    public void bumpSecurityVersion(long accountId) {
+        AdminAccount a = accounts.findById(accountId)
+                .orElseThrow(() -> AppException.notFound("后台账号不存在").code("admin.err.account.notFound"));
+        a.bumpSecurityVersion();
+        accounts.save(a);
+    }
+
+    /**
+     * 改显示名（V1.3.0 Story 1.2，AB-16A ①）。trim 后非空且 ≤100（与列 {@code display_name VARCHAR(100)} 一致）；
+     * 与旧值相同幂等 no-op（不审计）。<b>不</b> bump 安全版本号（D-2：显示名不参与鉴权，顶栏名下次登录自然更新）。
+     */
+    @Transactional
+    public void rename(long accountId, String displayName, long actorAccountId) {
+        AdminAccount a = accounts.findById(accountId)
+                .orElseThrow(() -> AppException.notFound("后台账号不存在").code("admin.err.account.notFound"));
+        String name = displayName == null ? "" : displayName.trim();
+        if (name.isEmpty()) {
+            throw AppException.validation("显示名不能为空").code("admin.err.account.displayNameRequired");
+        }
+        if (name.length() > 100) {
+            throw AppException.validation("显示名不能超过 100 个字符").code("admin.err.account.displayNameTooLong");
+        }
+        String old = a.getDisplayName();
+        if (name.equals(old)) {
+            return; // 幂等
+        }
+        a.setDisplayName(name);
+        accounts.save(a);
+        auditService.record(actorAccountId, AuditActions.ACCOUNT_RENAMED, "ADMIN_ACCOUNT",
+                String.valueOf(accountId), "显示名 " + old + " → " + name + "（" + a.getLarkEmail() + "）");
+    }
+
+    /**
+     * 换绑 Lark 邮箱（V1.3.0 Story 1.3，AB-16A ②，D-21）= 身份移交。改邮箱、bump 安全版本号、写审计
+     * 三件事同一事务：任一失败整体回滚，不会出现「邮箱换了但旧人还在线」或「换了没留痕」。
+     * 顺序：findById → 须 ACTIVE → bootstrap 邮箱拒绝 → trim + 格式 → 同值 no-op → ACTIVE 唯一性（排除自身）
+     * → 写 larkEmail → bump → 审计 → 超管告警（只记事件 + actorId，不记邮箱）。
+     */
+    @Transactional
+    public void rebindEmail(long accountId, String newEmail, long actorAccountId) {
+        AdminAccount a = accounts.findById(accountId)
+                .orElseThrow(() -> AppException.notFound("后台账号不存在").code("admin.err.account.notFound"));
+        if (a.getStatus() != AdminAccountStatus.ACTIVE) {
+            throw AppException.validation("账号已停用，请先重新激活再换绑邮箱").code("admin.err.account.rebindDisabled");
+        }
+        if (isBootstrapEmail(a.getLarkEmail())) {
+            throw AppException.validation("bootstrap 超管的邮箱不能换绑").code("admin.err.account.bootstrapRebind");
+        }
+        String email = newEmail == null ? "" : newEmail.trim();
+        if (email.isEmpty()) {
+            throw AppException.validation("Lark 邮箱不能为空").code("admin.err.account.emailRequired");
+        }
+        if (!EMAIL.matcher(email).matches()) {
+            throw AppException.validation("邮箱格式不正确").code("admin.err.account.emailInvalid");
+        }
+        String old = a.getLarkEmail();
+        if (email.equalsIgnoreCase(old)) {
+            return; // 幂等
+        }
+        // 反方向同样挡：换绑「进」bootstrap 邮箱会让普通账号占住它（bootstrap 行停用时 ACTIVE 查重拦不住）。
+        if (isBootstrapEmail(email)) {
+            throw AppException.validation("该邮箱为 bootstrap 超管保留，不能换绑到其它账号")
+                    .code("admin.err.account.bootstrapEmailReserved");
+        }
+        if (accounts.existsByLarkEmailIgnoreCaseAndStatusAndIdNot(email, AdminAccountStatus.ACTIVE, accountId)) {
+            throw AppException.conflict("该 Lark 邮箱已存在后台账号：" + email)
+                    .code("admin.err.account.emailExists", email);
+        }
+        a.setLarkEmail(email);
+        a.bumpSecurityVersion(); // AD-1：旧持有人下一次请求被踢到 /admin/login?relogin
+        accounts.save(a);
+        auditService.record(actorAccountId, AuditActions.ACCOUNT_EMAIL_REBOUND, "ADMIN_ACCOUNT",
+                String.valueOf(accountId), "Lark 邮箱 " + old + " → " + email);
+        alertService.alertSuperAdmins(AuditActions.ACCOUNT_EMAIL_REBOUND, actorAccountId);
+    }
+
+    /** 是否 bootstrap 超管邮箱（忽略大小写、trim；env 未配置时恒 false）。供页面禁用态与服务层护栏共用。 */
+    public boolean isBootstrapEmail(String email) {
+        return !bootstrapEmail.isEmpty() && email != null
+                && bootstrapEmail.toLowerCase(Locale.ROOT).equals(email.trim().toLowerCase(Locale.ROOT));
     }
 
     /** 重新激活账号（AC5）。 */

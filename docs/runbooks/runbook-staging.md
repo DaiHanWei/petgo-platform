@@ -150,10 +150,17 @@ git push origin stag                 # ← 需明确同意
   > 克隆后 `flyway_schema_history` 停在生产当前版本；stag 分支若有更高版本迁移，应用启动时 Flyway 顺延执行。
 
 - [ ] **C2 · staging env 文件**（基于生产 env 覆盖差异项；DB_HOST/PORT、REDIS_HOST/PORT、OSS 桶名全不动）
+
+  > 🔴 **`SPRING_PROFILES_ACTIVE` 必须是 `prod,stag`，不能只写 `prod`**（V1.3.0 Story 8.5 发现）。
+  > `@StagOnly` = `@Profile("stag")`，它是**一整类能力的总开关**：顶栏 STAG 角标（Story 2.2）、
+  > 手动跑批端点（Story 3.3）、B12 支付记录的模拟回调三钮（Story 8.5 / 决策 D-41）都挂在它上面。
+  > 少了 `stag` 这一段，这些东西在 staging 上**全部不渲染、路由 404**，而页面本身一切正常 ——
+  > 看起来像「功能没做」，实际是 profile 没开。改完需重启容器（profile 只在启动时读一次）。
+
   ```bash
   cp ~/.env.petgo ~/.env.petgo-stag
   sed -i \
-    -e 's/^SPRING_PROFILES_ACTIVE=.*/SPRING_PROFILES_ACTIVE=prod/' \
+    -e 's/^SPRING_PROFILES_ACTIVE=.*/SPRING_PROFILES_ACTIVE=prod,stag/' \
     -e 's/^DB_NAME=.*/DB_NAME=petgo_stag/' \
     -e 's/^REDIS_DB=.*/REDIS_DB=3/' \
     ~/.env.petgo-stag

@@ -77,4 +77,14 @@ public class UserTagAssignment {
     public Instant getEndsAt() {
         return endsAt;
     }
+
+    /**
+     * 分配时刻（V1.3.0 Story 8.2 · AC3 的「分配时间」列）。
+     *
+     * <p>⚠️ 与 {@link #getStartsAt()} 不是一回事：本表支持先排期后生效，
+     * 开始时间可以填未来。
+     */
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

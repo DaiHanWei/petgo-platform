@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  B9 区块一 · 虚拟账号抽屉（V1.3.0 Story 8.3 · AC1，480px 抽屉体 res=virtual，UI 稿 3-12）。三种渲染：
+    drawer     — 资料 + 账号物种定位改写 + 启停
+    createForm — 新建虚拟账号（nickname / avatarFile / avatarUrl 兜底折叠 / accountSpecies）
+    created    — 新建成功：只回一个 toast，抽屉由 HX-Trigger admin:drawer-open 打开**新号**
+  ⚠️ 三个 POST 的路径与参数逐字不变（nickname / avatarUrl / avatarFile / accountSpecies / enabled）。
+  ⚠️ hx-target 一律指**带 id 的** #virtual-drawer-err：htmx 只在目标带 id 时才发 HX-Target 头，
+     而 AdminBusinessExceptionAdvice 按这个头 HX-Retarget。
+  🔴 **停用**必须先过确认弹层（服务端算的待发布排期数），**启用不用** —— 启用是无害的。
+     这条不是装饰：不提示的话那 N 条排期会在未来若干天里陆续失败，运营要等到失败才发现。
+*/-->
+<body>
+<div th:fragment="drawer" id="virtual-drawer-panel" class="tag-drawer" th:attr="data-account-id=${a.id}"
+     th:with="canManage=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''virtual_account.manage'')')}">
+
+    <section class="card card-full tag-card" data-section="virtual-head">
+        <h2>
+            <img th:if="${a.avatarUrl != null and #strings.startsWith(a.avatarUrl, 'http')}"
+                 th:src="${a.avatarUrl}" alt=""
+                 style="height:36px;width:36px;border-radius:50%;object-fit:cover;vertical-align:middle"/>
+            <span th:text="${a.nickname}">昵称</span>
+            <span class="muted">#<span th:text="${a.id}">1</span></span>
+            <span class="badge" th:classappend="${a.enabled()} ? 'badge-ok' : 'badge-muted'"
+                  th:text="${a.enabled()} ? #{admin.common.enabled} : #{admin.common.disabled}">启用</span>
+        </h2>
+        <p class="muted rv-small">
+            <span th:text="#{admin.virtualAccounts.col.published}">已发布</span>:
+            <b th:text="${a.publishedCount}">0</b>
+            · <span th:text="#{admin.virtualAccounts.col.createdBy}">建号人</span>:
+            <span th:text="${a.createdBy} ?: '—'">—</span>
+        </p>
+    </section>
+
+    <!--/* 🔴 账号物种定位（V1.1.6 Story 14.1 · AC2）：改它会**立即影响该号全部历史内容**的物种归属
+           （读时推导、零回填）。所以这里是显式表单 + 确认复述，不是表格里那个选完即生效的下拉。 */-->
+    <section class="card card-full tag-card" data-section="virtual-species">
+        <h3 th:text="#{admin.species.accountLabel}">账号物种定位</h3>
+        <p class="hint" th:text="#{admin.v130.publishIdentity.speciesHint}">
+            改动立即影响该号全部历史内容的物种归属。</p>
+        <form class="inline" th:if="${canManage}"
+              th:attr="hx-post=@{/admin/virtual-accounts/{id}/species(id=${a.id})},
+                       data-confirm=#{admin.v130.publishIdentity.speciesConfirm(${a.nickname})}"
+              hx-target="#virtual-drawer-err" hx-swap="innerHTML">
+            <select name="accountSpecies" class="sel" required>
+                <option th:each="sp : ${speciesOptions}" th:value="${sp}" th:text="${sp}"
+                        th:selected="${a.accountSpecies == sp}">GENERAL</option>
+            </select>
+            <button type="submit" class="btn btn-sm" th:text="#{admin.common.save}">保存</button>
+        </form>
+        <p class="hint" th:unless="${canManage}"
+           th:text="#{admin.v130.err.forbidden(#{perm.virtual_account.manage})}">需要「管理虚拟账号」权限</p>
+    </section>
+
+    <div id="virtual-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+
+    <!--/* 启停。停用 → 拉确认弹层（hx-get 到 #confirm-host）；启用 → 直接 POST。 */-->
+    <section class="pl-actions sticky-footer" data-section="virtual-actions">
+        <th:block th:if="${canManage}">
+            <button th:if="${a.enabled()}" type="button" class="btn btn-danger btn-sm" data-no-drawer
+                    th:attr="hx-get=@{/admin/virtual-accounts/{id}/disable/confirm(id=${a.id})}"
+                    hx-target="#confirm-host" hx-swap="innerHTML"
+                    th:text="#{admin.common.disable}">停用</button>
+            <form class="inline" th:unless="${a.enabled()}"
+                  th:attr="hx-post=@{/admin/virtual-accounts/{id}/enabled(id=${a.id})}"
+                  hx-target="#virtual-drawer-err" hx-swap="innerHTML">
+                <input type="hidden" name="enabled" value="true"/>
+                <button type="submit" class="btn btn-neutral btn-sm"
+                        th:text="#{admin.common.enable}">启用</button>
+            </form>
+        </th:block>
+        <!--/* 只读权限：按钮渲染成禁用态并注明缺哪个权限 —— 整块空白会让人以为「这个号没有操作」。 */-->
+        <button type="button" class="btn btn-sm btn-danger" disabled th:unless="${canManage}"
+                th:title="#{admin.v130.err.forbidden(#{perm.virtual_account.manage})}"
+                th:text="#{admin.common.disable}">停用</button>
+    </section>
+</div>
+
+<!--/* 新建虚拟账号：字段与 POST /admin/virtual-accounts 的参数逐字不变；multipart（头像本地上传）。 */-->
+<div th:fragment="createForm" class="tag-create" id="virtual-create">
+    <form th:attr="hx-post=@{/admin/virtual-accounts}" hx-encoding="multipart/form-data"
+          hx-target="#virtual-drawer-err" hx-swap="innerHTML" id="virtualCreateForm">
+        <h3 th:text="#{admin.virtualAccounts.create}">新建虚拟账号</h3>
+        <label class="field field-full">
+            <span th:text="#{admin.virtualAccounts.nickname}">昵称（≤20）</span>
+            <input type="text" name="nickname" class="inp field-full" maxlength="20" required/>
+        </label>
+
+        <!--/* V1.1.6 Story 12.2 · AC2：头像默认路径是**上传**，URL 折叠作兜底。 */-->
+        <label class="field field-full">
+            <span th:text="#{admin.virtualAccounts.avatarUpload}">头像（选填，JPG/PNG/WEBP，≤10MB）</span>
+            <input type="file" name="avatarFile" accept="image/jpeg,image/png,image/webp"/>
+        </label>
+        <details>
+            <summary th:text="#{admin.virtualAccounts.avatarUrl}">头像 URL（兜底）</summary>
+            <input type="text" name="avatarUrl" class="inp field-full" maxlength="1024"/>
+        </details>
+
+        <!--/* 🔴 账号物种定位必填：它补偿的是「虚拟号没有宠物档案」，留空等于让该号全部内容落进 GENERAL。 */-->
+        <label class="field field-full">
+            <span th:text="#{admin.species.accountLabel}">账号物种定位（必填）</span>
+            <select name="accountSpecies" class="sel" required>
+                <option value="" disabled selected th:text="#{admin.v130.publishIdentity.speciesPick}">请选择</option>
+                <option th:each="sp : ${speciesOptions}" th:value="${sp}" th:text="${sp}">GENERAL</option>
+            </select>
+        </label>
+
+        <!--/* ⚠️ err 槽放在提交钮**正上方**：422 落在表单顶部时早已滚出 480px 抽屉的视口 */-->
+        <div id="virtual-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+        <button type="submit" class="btn btn-primary" th:text="#{admin.virtualAccounts.btn.create}">创建</button>
+    </form>
+</div>
+
+<!--/* 新建成功：抽屉体不在这里换 —— HX-Trigger admin:drawer-open 会带着新号的抽屉 URL
+       让 admin-drawer.js 走正常的 open 流程（这样地址栏的 ?open= 与「当前对象」才对得上）。 */-->
+<th:block th:fragment="created">
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已创建</div>
+</th:block>
+
+<!--/* 处置成功：抽屉体 oob + toast；列表由 HX-Trigger admin:virtual-account-list-refresh 整表重拉
+       （摘要条三格与状态列都要跟着变）。 */-->
+<th:block th:fragment="afterAction">
+    <div id="virtual-drawer-body-oob" hx-swap-oob="innerHTML:#virtual-drawer .drawer-body">
+        <div th:replace="~{admin/fragments/drawer-virtual-account :: drawer}"></div>
+    </div>
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+</th:block>
+</body>
+</html>

@@ -122,7 +122,10 @@ public class SecurityConfig {
                         .logoutSuccessUrl("/admin/login?logout"))
                 // 权限不足（URL 级门控 + @PreAuthorize 方法级拒绝，经 GlobalExceptionHandler 重抛回到本链）：
                 // 403 + forward 到「权限不足」提示页，而非裸 Whitelabel/500。
-                .exceptionHandling(ex -> ex.accessDeniedHandler(adminAccessDeniedHandler()));
+                .exceptionHandling(ex -> ex.accessDeniedHandler(adminAccessDeniedHandler())
+                        // 未认证入口显式装配（不要改回 defaultAuthenticationEntryPointFor 追加，原因见类注释）：
+                        // htmx 请求 HX-Redirect 整页跳转，其余照旧 302 登录页。
+                        .authenticationEntryPoint(new com.tailtopia.admin.account.web.AdminLoginEntryPoint()));
         // CSRF 保持开启（表单链默认即开）；会话按需创建（表单登录态）。
         return http.build();
     }

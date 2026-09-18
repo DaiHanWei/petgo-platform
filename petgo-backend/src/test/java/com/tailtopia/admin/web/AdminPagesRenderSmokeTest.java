@@ -89,6 +89,9 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(html).as("定价配置整块不见了").contains("/admin/config/pricing");
+        // V1.3.0 Story 6.1：KTP 模块高清图解锁定价独立卡；HD 行已从定价卡移出
+        assertThat(html).as("KTP 解锁定价卡不见了").contains("/admin/config/ktp-pricing").contains("name=\"passportBoardingPrice\"")
+                .doesNotContain("name=\"idHdDownloadPrice\" min=\"0\"");
         assertThat(html).as("PawCoin 整块不见了").contains("/admin/config/pawcoin");
         assertThat(html).as("分享奖励整块不见了（Story 18.3）")
                 .contains("/admin/config/share-reward");
@@ -116,8 +119,9 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
         assertThat(html).as("算法参数表单不见了").contains("/admin/algo-params");
         assertThat(html).as("🔴 限流系数输入框不见了（Story 17.1 挂在这个表单里）")
                 .contains("throttleFactor");
-        assertThat(html).as("🔴 变更记录表不见了 —— 没有 A/B 时它是唯一的锚点")
-                .contains("data-section=\"algo-changelog\"");
+        // V1.3.0 Story 6.4（D-10）：页尾常驻变更表改为页头「变更记录」按钮开抽屉（fragments/drawer-algo-changes），锚点换成入口
+        assertThat(html).as("🔴 变更记录入口不见了 —— 没有 A/B 时它是唯一的锚点")
+                .contains("data-drawer-open=\"/admin/algo-params/changes/drawer\"").doesNotContain("data-section=\"algo-changelog\"");
         assertThat(html).as("「不对运营开放」的说明不见了")
                 .contains("data-notice=\"algo-not-for-ops\"");
         assertThat(html).as("「无 A/B 实验基建」的提醒不见了")
@@ -145,13 +149,16 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
      */
     @Test
     void contentNavKeepsTheProductSpecifiedOrder() throws Exception {
+        // V1.3.0 Story 2.2 新 IA（D-8，UI 稿泳道 0）：📥 待办中心 → ✍️ 内容 → 👥 用户；组内顺序 = AdminPageCatalog。
         String html = visibleText("/admin/dashboard");
         java.util.List<String> expected = java.util.List.of(
+                // 待办中心组
+                "/admin/manual-review", "/admin/tickets", "/admin/anomalies", "/admin/support-tickets", "/admin/refunds",
                 // 内容组
-                "/admin/seed-post", "/admin/content", "/admin/comments",
-                "/admin/manual-review", "/admin/content-pins", "/admin/content-tags",
-                // 用户运营组（在内容组之后）
-                "/admin/users", "/admin/tickets", "/admin/user-tags");
+                "/admin/content", "/admin/comments", "/admin/content-pins", "/admin/content-tags",
+                "/admin/seed-batches", "/admin/seed-post",
+                // 用户组
+                "/admin/users", "/admin/user-tags", "/admin/virtual-accounts");
         java.util.List<Integer> positions = expected.stream().map(html::indexOf).toList();
         assertThat(positions).as("每个入口都应渲染出来").doesNotContain(-1);
         assertThat(positions).as("侧栏次序：" + String.join(" → ", expected))
@@ -259,15 +266,16 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
     static final java.util.List<String> SWEPT_PAGES = java.util.List.of("/admin/dashboard", "/admin/seed-post", "/admin/tickets", "/admin/content",
                 "/admin/content-pins", "/admin/content-tags", "/admin/user-tags",
                 "/admin/manual-review", "/admin/anomalies", "/admin/consult-sessions", "/admin/vets",
-                "/admin/vets/online", "/admin/failed-requests", "/admin/ratings", "/admin/users",
+                // ⛔ /admin/vets/online 已退役（V1.3.0 Story 9.1a：并入兽医列表与抽屉）。
+                // ⛔ /admin/ratings 已退役（V1.3.0 Story 9.1b：并入兽医列表筛选栏与抽屉评分页签）。
+                "/admin/failed-requests", "/admin/users",
                 "/admin/audit-logs", "/admin/accounts",
                 // V1.1.6 Story 12.1：「运营发布身份」页（虚拟账号 + 运营真实账号两区）。
                 // ⚠️ 这一页此前不在本表里 —— 加进来才会验它的 i18n 键在两种语言下都齐。
                 "/admin/virtual-accounts",
                 // V1.1.6 Story 13.2：批次列表（工作台需要一个真实 batchId，另在其专属测试里渲染）。
                 "/admin/seed-batches",
-                // V1.1.6 Story 13.5：排期管理（12-1 的移出提示会跳到这里）。
-                "/admin/content-schedules",
+                // V1.1.6 Story 13.5 的排期页已于 V1.3.0 Story 7.5 退役（并入 /admin/seed-batches 第二页签）。
                 // V1.1.6 Story 15.1：内容互动积分榜。
             // 2026-08-26：算法参数独立成页，须一并纳入逐页双语扫描
             "/admin/algo-params");
@@ -493,5 +501,47 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 assertRenders(p, locale.toString());
             }
         }
+    }
+
+    // ---- V1.3.0 Story 2.2：G0 全局壳 ----
+
+    /** 8 组按目录顺序渲染（超管视角），组头文案来自 admin.group.*。 */
+    @Test
+    void navGroupsFollowCatalogOrder() throws Exception {
+        String nav = navHtmlFor();
+        java.util.List<String> groups = java.util.List.of("📥", "✍️", "👥", "💰", "🛍", "🩺", "⚙️");
+        java.util.List<Integer> positions = groups.stream().map(nav::indexOf).toList();
+        assertThat(positions).as("每个组头都应渲染：" + groups).doesNotContain(-1);
+        assertThat(positions).isSorted();
+        assertThat(nav).contains("id=\"nav-badge-total\"").contains("hx-get=\"/admin/nav/badges\"");
+    }
+
+    /** 只持 config.view 的账号看不到待办中心组（整组不渲染），也看不到内容 / 用户组。 */
+    @Test
+    void todoGroupHiddenWhenNoQueuePermission() throws Exception {
+        String nav = navHtmlFor("config.view");
+        assertThat(nav).doesNotContain("nav-badge-total").doesNotContain("/admin/manual-review")
+                .doesNotContain("/admin/users").contains("/admin/config").contains("/admin/dashboard");
+    }
+
+    /** 默认 profile 不渲染 STAG 角标；顶栏账号菜单显示登录时 principal 的显示名与角色。 */
+    @Test
+    void topbarShowsAccountMenuAndNoStagBadgeByDefault() throws Exception {
+        String html = mvc.perform(get("/admin/dashboard").param("lang", "zh_CN").with(authentication(superAdminAuth())))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(html).doesNotContain("stag-badge");
+        assertThat(html).contains("account-menu").contains("/admin/logout");
+        assertThat(html).as("语言切换当前语言应高亮").contains("class=\"on\"");
+    }
+
+    /** 角标 fragment：超管 5 个队列 + 总数（oob）；模板不带 load 触发器（防循环）。 */
+    @Test
+    void navBadgesFragmentRendersForSuperAdmin() throws Exception {
+        String html = mvc.perform(get("/admin/nav/badges").with(authentication(superAdminAuth())))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(html).contains("id=\"nav-badge-total\"").contains("hx-swap-oob=\"true\"")
+                .contains("nav-badge-manual-review").contains("nav-badge-refunds")
+                .doesNotContain("hx-trigger=\"load");
     }
 }

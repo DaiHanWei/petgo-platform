@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  B19「沉淀判例」抽屉表单（V1.3.0 Story 10.4 AC4；原页尾常驻表单卡）。
+  提交走既有端点 POST /admin/shop/return-precedents —— **零新增**。
+  🔴 hx-target 指抽屉体而不是列表容器：AdminBusinessExceptionAdvice 按 HX-Target 回填 4xx ——
+     指着列表的话，「情形为空」（422）、「只有 refund.view 的人点了提交」（403）
+     都会把整张判例表换成一行红字，而那行字还被遮罩盖着：运营看到的是「点了没反应」。
+     成功时 Controller 用 oob 刷列表 + HX-Trigger: admin:drawer-close 关抽屉。
+-->
+<body>
+<form th:fragment="form" class="precedent-drawer-form"
+      th:attr="hx-post=@{/admin/shop/return-precedents}"
+      hx-target="#shop-precedent-drawer-body" hx-swap="innerHTML" data-requires-form>
+    <div class="s-form-row">
+        <label class="s-label s-req" for="f-situation"
+               th:text="#{admin.shop.precedents.col.situation}">情形</label>
+        <div class="s-ctl">
+            <input id="f-situation" type="text" class="inp" name="situation" maxlength="300"
+                   required data-requires-text
+                   th:placeholder="#{admin.v130.shopPrecedents.situationPlaceholder}"/>
+            <p class="hint" th:text="#{admin.v130.shopPrecedents.situationHint}">
+                写清楚包装状态与可复述的判断依据，别写订单号 —— 判例是给下一个客服看的。</p>
+        </div>
+    </div>
+    <div class="s-form-row">
+        <label class="s-label s-req" for="f-judged"
+               th:text="#{admin.shop.precedents.col.judged}">判定</label>
+        <div class="s-ctl">
+            <!--/* 🔴 默认「不算开封」是有意的：判成「算开封」等于拒退，是对用户不利的那一侧，
+                   不该由一个没被改动过的默认值替客服做出来。 */-->
+            <select id="f-judged" class="sel" name="judgedOpened" required>
+                <option value="false" th:text="#{admin.shop.precedents.notOpened}">不算开封</option>
+                <option value="true" th:text="#{admin.shop.precedents.opened}">算开封</option>
+            </select>
+        </div>
+    </div>
+    <div class="s-form-row">
+        <label class="s-label s-req" for="f-rationale"
+               th:text="#{admin.shop.precedents.col.rationale}">理由</label>
+        <div class="s-ctl">
+            <textarea id="f-rationale" class="inp" name="rationale" maxlength="1000" rows="3"
+                      required data-requires-text></textarea>
+        </div>
+    </div>
+    <div class="s-form-row">
+        <!--/* evidenceKeys 是端点现有字段（对象 key，逗号分隔），原先是页尾一个没有标签的裸 input ——
+               运营根本不知道该往里填什么。这里给它标签与说明；AC4 没列这个字段，但端点接受它，不砍。 */-->
+        <label class="s-label" for="f-evidence"
+               th:text="#{admin.v130.shopPrecedents.evidence}">证据图 key</label>
+        <div class="s-ctl">
+            <input id="f-evidence" type="text" class="inp" name="evidenceKeys" maxlength="1000"/>
+            <p class="hint" th:text="#{admin.v130.shopPrecedents.evidenceHint}">
+                可留空。填质检照片的对象 key，逗号分隔。</p>
+        </div>
+    </div>
+    <div class="sticky-footer">
+        <button type="submit" class="btn btn-primary" disabled data-requires-target
+                th:text="#{admin.shop.precedents.btn.add}">沉淀判例</button>
+    </div>
+</form>
+</body>
+</html>

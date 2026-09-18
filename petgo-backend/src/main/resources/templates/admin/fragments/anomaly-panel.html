@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  A4 右栏四区（V1.3.0 Story 2.6 AC2/AC4/AC5）：① 工单卡 ② 会话卡 + 「去取证」深链（/admin/consult-sessions?open=会话号，
+  Story 9.2 落地自动开抽屉）③ 内部备注时间线（人 + 时间 + 内容）+ 追加输入框（notes fragment，加备注后局部替换不换条）
+  ④ 操作区（标记已处理 + 处理图 key 选填 / 已有处理图预览）。RESOLVED 只读但备注仍可追加；有 VIEW 无 HANDLE → 按钮禁用 + 所缺权限名。
+  仅会话元数据（NFR5）；处理图为现签短 TTL URL，不入库不落日志。
+-->
+<body>
+<div th:fragment="detail" class="an-detail" th:attr="data-anomaly-id=${anomaly.id}">
+    <!-- ① 工单卡 -->
+    <section class="card card-full an-card">
+        <h2 th:text="#{admin.v130.anomalies.card.ticket}">工单</h2>
+        <div class="sum">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.anomalies.col.id}">工单</div><div class="sum-value" th:text="'#' + ${anomaly.id}">#1</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.anomalies.col.type}">类型</div><div class="sum-value rv-small" th:text="${anomaly.anomalyType}">VET_BANNED</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.anomalies.col.created}">生成时间</div><div class="sum-value rv-small" th:text="${@adminTime.wib(anomaly.createdAt)}">-</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.anomalies.col.status}">状态</div>
+                <div class="sum-value rv-small"><span class="badge" th:classappend="${anomaly.status.name() == 'OPEN'} ? 'badge-danger' : 'badge-ok'"
+                      th:text="${anomaly.status.name() == 'OPEN'} ? #{admin.anomalies.status.open} : #{admin.anomalies.status.resolved}">待处理</span></div></div>
+        </div>
+        <p class="muted" th:if="${anomaly.status.name() == 'RESOLVED'}">
+            <span th:text="#{admin.v130.anomalies.resolvedAt}">处理时间</span>
+            <span th:text="${@adminTime.wib(anomaly.resolvedAt)}">-</span>
+            <span th:if="${anomaly.resolvedBy != null}" th:text="'· #' + ${anomaly.resolvedBy}">#op</span>
+        </p>
+    </section>
+
+    <!-- ② 会话卡 + 去取证 -->
+    <section class="card card-full an-card">
+        <h2 th:text="#{admin.v130.anomalies.card.session}">会话</h2>
+        <div class="sum">
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.anomalies.col.session}">会话</div><div class="sum-value" th:text="'#' + ${anomaly.sessionId}">#1</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.anomalies.col.sessionStatus}">会话状态</div><div class="sum-value rv-small" th:text="${anomaly.sessionStatus ?: '—'}">-</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.anomalies.col.user}">用户</div><div class="sum-value rv-small" th:text="${anomaly.userId != null} ? ${anomaly.userId} : #{admin.anomalies.anonymized}">-</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.anomalies.col.vet}">兽医</div><div class="sum-value rv-small" th:text="${anomaly.vetId}">-</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.anomalies.col.started}">开始</div><div class="sum-value rv-small" th:text="${@adminTime.wib(anomaly.sessionStartedAt)}">-</div></div>
+            <div class="sum-item"><div class="sum-label" th:text="#{admin.anomalies.col.ended}">结束</div><div class="sum-value rv-small" th:text="${@adminTime.wib(anomaly.sessionEndedAt)}">-</div></div>
+        </div>
+        <!-- 去取证：跳「兽医与问诊」组历史会话查询页并带会话号（?open= 自动开抽屉由 Story 9.2 落地） -->
+        <a class="btn btn-neutral btn-sm" target="_blank" th:href="@{/admin/consult-sessions(open=${anomaly.sessionId})}"
+           sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.view_sessions')"
+           th:text="#{admin.v130.anomalies.evidence}">去取证</a>
+    </section>
+
+    <!-- ③ 内部备注时间线（notes fragment：加备注后 htmx 局部替换本节） -->
+    <section th:replace="~{admin/fragments/anomaly-panel :: notes}"></section>
+
+    <!-- ④ 操作区 -->
+    <section class="wb-actions an-actions">
+        <p th:if="${resolutionImageUrl}">
+            <a th:href="${resolutionImageUrl}" target="_blank" th:text="#{admin.anomalies.image}">查看处理图</a>
+        </p>
+        <th:block th:if="${anomaly.status.name() == 'OPEN'}">
+            <form th:attr="hx-post=@{/admin/anomalies/{id}/resolve(id=${anomaly.id})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline"
+                  sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.handle')">
+                <input type="text" name="resolutionImageKey" class="inp" th:placeholder="#{admin.anomalies.imageKeyPlaceholder}"/>
+                <button type="submit" class="btn btn-danger" th:text="#{admin.anomalies.resolve}">标记已处理</button>
+            </form>
+            <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('consult.handle'))">
+                <button type="button" class="btn btn-danger" disabled th:title="#{admin.v130.err.forbidden(#{perm.consult.handle})}" th:text="#{admin.anomalies.resolve}">标记已处理</button>
+                <span th:text="#{admin.v130.err.forbidden(#{perm.consult.handle})}">需要权限</span>
+            </p>
+        </th:block>
+        <p class="muted" th:if="${anomaly.status.name() == 'RESOLVED'}" th:text="#{admin.v130.anomalies.readonly}">已处理，只读回看（仍可追加备注）</p>
+    </section>
+</div>
+
+<!-- 备注时间线 + 追加框（独立 fragment；加备注成功后服务端只回这一节，hx-target 指向它） -->
+<section th:fragment="notes" class="card card-full an-card an-notes" id="anomaly-notes">
+    <div class="toast" role="status" th:if="${toast}" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">toast</div>
+    <h2 th:text="#{admin.anomalies.internalNote}">内部备注</h2>
+    <p class="muted" th:if="${#lists.isEmpty(notes)}" th:text="#{admin.v130.anomalies.notes.empty}">暂无备注</p>
+    <ul class="an-timeline" th:if="${!#lists.isEmpty(notes)}">
+        <li th:each="n : ${notes}">
+            <span class="muted" th:if="${n.author != null}" th:text="${n.author}">操作人</span>
+            <span class="muted" th:if="${n.at != null}" th:text="${@adminTime.wib(n.at)}">时间</span>
+            <span th:text="${n.text}">内容</span>
+        </li>
+    </ul>
+    <form th:attr="hx-post=@{/admin/anomalies/{id}/note(id=${anomaly.id})}" hx-target="#anomaly-notes" hx-swap="outerHTML" class="an-note-form" data-inline-error
+          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('consult.handle')">
+        <input type="text" name="note" class="inp field-full" required maxlength="500" th:placeholder="#{admin.anomalies.notePlaceholder}"/>
+        <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.anomalies.addNote}">加备注</button>
+    </form>
+    <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('consult.handle'))">
+        <button type="button" class="btn btn-primary btn-sm" disabled th:title="#{admin.v130.err.forbidden(#{perm.consult.handle})}" th:text="#{admin.anomalies.addNote}">加备注</button>
+        <span th:text="#{admin.v130.err.forbidden(#{perm.consult.handle})}">需要权限</span>
+    </p>
+</section>
+</body>
+</html>

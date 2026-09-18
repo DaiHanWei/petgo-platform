@@ -141,12 +141,6 @@ public class AccountQueryService {
         return users.findByEmailAndRole(email, Role.USER);
     }
 
-    /** bug 20260701-164：后台用户管理分页列出全部普通用户（role=USER），供列表浏览。 */
-    @Transactional(readOnly = true)
-    public Page<User> listUsers(Pageable pageable) {
-        return users.findByRole(Role.USER, pageable);
-    }
-
     /**
      * 后台搜索（2026-09-02）：按展示昵称或注册邮箱模糊匹配普通用户（role=USER，未注销），
      * 近注册在前，至多 {@code limit} 条。口径见 {@code UserRepository#searchByDisplayedNameOrEmail}。

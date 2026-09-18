@@ -46,6 +46,13 @@ public class AdminAccount {
     @Column(name = "role", nullable = false, length = 32)
     private AdminRole role = AdminRole.CUSTOM;
 
+    /**
+     * 岗位角色表引用（V1.3.0 Story 1.4）：四个已迁移岗位 → {@code admin_roles} 对应行；
+     * SUPER_ADMIN / OPS_MANAGER / CUSTOM 为 NULL。由服务层显式设置，{@link #setRole} 不自动改它。
+     */
+    @Column(name = "role_id")
+    private Long roleId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private AdminAccountStatus status = AdminAccountStatus.ACTIVE;
@@ -57,6 +64,14 @@ public class AdminAccount {
     /** 创建者后台账号 id（首个超管由 bootstrap 预置时为 null）。 */
     @Column(name = "created_by")
     private Long createdBy;
+
+    /**
+     * 账号安全版本号（V1.3.0 Story 1.1，AD-1）。停用 / 改岗位角色 / 改账号级权限 / 换绑邮箱 /
+     * 所属角色模板改权限时 +1；登录时快照进 {@code AdminUserDetails}，会话守卫每请求比对，不等即踢重登。
+     * 列类型 INT ↔ {@code int}（{@code ddl-auto=validate}；勿用 SMALLINT）。
+     */
+    @Column(name = "security_version", nullable = false)
+    private int securityVersion;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -119,6 +134,16 @@ public class AdminAccount {
         this.status = status;
     }
 
+    /** 换绑 Lark 邮箱（V1.3.0 Story 1.3）。校验 / 唯一性 / bump 版本号在 {@code AdminAccountService.rebindEmail}。 */
+    public void setLarkEmail(String larkEmail) {
+        this.larkEmail = larkEmail;
+    }
+
+    /** 改显示名（V1.3.0 Story 1.2）。校验（非空 / ≤100）在 {@code AdminAccountService.rename}。 */
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
     /**
      * 改岗位角色（同步推导 {@code accountType}，二者永不脱钩）。
      * 超管名额上限与「不降级最后一个超管」的护栏在 {@code AdminAccountService} 侧校验。
@@ -126,6 +151,27 @@ public class AdminAccount {
     public void setRole(AdminRole role) {
         this.role = role;
         this.accountType = role.accountType();
+    }
+
+    /**
+     * 成对写 {@code role} 与 {@code role_id}（V1.3.0 Story 1.6；对照表见 Story 1.4）。任何一处只写一个字段
+     * 都会让 {@code RolePermissionResolver} 走进「异常数据 → 空集」分支（改了角色后登录什么权限都没有）。
+     */
+    public void assignRole(AdminRole role, Long roleId) {
+        setRole(role);
+        this.roleId = roleId;
+    }
+
+    /**
+     * 安全版本号 +1（AD-1）。仅在「确实发生了变更」的分支调用；幂等 no-op 不加。
+     * 服务层（{@code admin.account.service}，与本实体不同包）统一经 {@code AdminAccountService.bumpSecurityVersion} 调用。
+     */
+    public void bumpSecurityVersion() {
+        this.securityVersion++;
+    }
+
+    public int getSecurityVersion() {
+        return securityVersion;
     }
 
     public Long getId() {
@@ -146,6 +192,14 @@ public class AdminAccount {
 
     public AdminRole getRole() {
         return role;
+    }
+
+    public Long getRoleId() {
+        return roleId;
+    }
+
+    public void setRoleId(Long roleId) {
+        this.roleId = roleId;
     }
 
     public AdminAccountStatus getStatus() {

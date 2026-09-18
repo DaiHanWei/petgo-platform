@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  移出运营真实账号 / 禁用虚拟账号的确认**弹层**（V1.1.6 Story 12.1 · AC4 → V1.3.0 Story 8.3 · AC3
+  由整页 publish-identity-confirm.html 改为片段，内容与口径一个字没动）。
+
+  🔴 为什么必须是服务端渲染的确认，而不是浏览器 confirm()：这里要显示
+     「该账号当前有 N 条待发布排期」—— N 只有服务端算得出来，而这个提示就是本条 AC 的全部意义。
+     不提示的话，那 N 条会在未来若干天里陆续、分散地失败，运营要等到失败才发现，
+     而届时内容的时间窗（如配合某活动）多半已经错过。
+
+  🛡 三条不许改成「顺手更贴心」的行为：
+     ① 不阻止操作 —— 运营可能正是要停掉这个号
+     ② 排期不自动取消、不自动转草稿 —— 保持「到点标记失败并注明原因」
+        （自动取消是替运营做决定；失败记录带原因比静默转草稿更可追溯）
+     ③ 移出 ≠ 封号
+
+  ⚠️ 提交表单的 hx-target 指向**弹层内部**的 #confirm-modal-err：指到宿主上的话，
+     422（如「被种子内容引用的身份不可移出」）一回来就把整个弹层换掉，
+     运营看到的是弹层凭空消失，而不是「为什么没成功」。成功路径靠服务端发
+     HX-Trigger admin:confirm-close 把弹层收掉。
+*/-->
+<body>
+<dialog th:fragment="modal" class="modal" id="confirm-modal" data-autoopen="true">
+    <div class="modal-head">
+        <h3 th:text="${mode == 'REMOVE_REAL'}
+                     ? #{admin.publishIdentity.confirm.removeTitle}
+                     : #{admin.publishIdentity.confirm.disableTitle}">确认</h3>
+        <button type="button" class="modal-close" data-close-dialog aria-label="close">✕</button>
+    </div>
+    <div class="modal-body">
+        <p th:text="${mode == 'REMOVE_REAL'}
+                    ? #{admin.publishIdentity.confirm.removeBody(${targetUserId})}
+                    : #{admin.publishIdentity.confirm.disableBody(${targetUserId})}">说明</p>
+
+        <div class="banner err" th:if="${pendingSchedules > 0}" data-notice="confirm-pending">
+            <span th:text="#{admin.publishIdentity.confirm.pending(${pendingSchedules})}">
+                该账号当前有 N 条待发布排期，操作后这些内容到点将发布失败。</span>
+            <!--/* 🛡 只在真有排期时给链接：那一页由 13.5 交付，之前 pending 恒 0 ⇒ 不会渲染死链。 */-->
+            <a th:if="${scheduleListUrl}" th:href="@{${scheduleListUrl}}" data-no-drawer
+               target="_blank" rel="noopener"
+               th:text="#{admin.publishIdentity.confirm.viewSchedules}">查看这些排期</a>
+        </div>
+        <p class="hint" th:if="${pendingSchedules == 0}" data-notice="confirm-no-pending"
+           th:text="#{admin.publishIdentity.confirm.noPending}">该账号当前没有待发布排期。</p>
+
+        <p class="hint" th:if="${mode == 'REMOVE_REAL'}"
+           th:text="#{admin.publishIdentity.confirm.notBan}">
+            移出 ≠ 封号：只收回「后台可代其发布」这一项。</p>
+
+        <div id="confirm-modal-err" class="lst-inline-error" aria-live="polite"></div>
+    </div>
+    <div class="modal-foot">
+        <form class="inline" th:attr="hx-post=@{${actionPath}}"
+              hx-target="#confirm-modal-err" hx-swap="innerHTML">
+            <!--/* 禁用走既有的启停端点，需要带上目标状态（端点与参数逐字不变）。 */-->
+            <input type="hidden" name="enabled" value="false" th:if="${mode == 'DISABLE_VIRTUAL'}"/>
+            <button type="submit" class="btn btn-danger btn-sm"
+                    th:text="${mode == 'REMOVE_REAL'}
+                             ? #{admin.publishIdentity.btn.remove} : #{admin.common.disable}">确认</button>
+        </form>
+        <button type="button" class="btn btn-neutral btn-sm" data-close-dialog
+                th:text="#{admin.publishIdentity.btn.cancel}">取消</button>
+    </div>
+</dialog>
+</body>
+</html>

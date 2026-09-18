@@ -12,6 +12,14 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
 
     Optional<RefundRequest> findByRefundToken(String refundToken);
 
+    /**
+     * 写路径行锁读取（V1.3.0 A6 三段流）：主管 / 财务 / 连点同时对同一张单提交时串行化，
+     * 后到者读到前者提交后的状态再过「仅 PENDING 可判定」「职责分离」守卫，不再 last-write-wins。须在事务内。
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select r from RefundRequest r where r.refundToken = :token")
+    Optional<RefundRequest> findForUpdateByRefundToken(@org.springframework.data.repository.query.Param("token") String refundToken);
+
     boolean existsByOrderId(long orderId);
 
     /** 订单详情退款子阶段派生（Story 5.3，一订单一退款）。 */
@@ -20,6 +28,36 @@ public interface RefundRequestRepository extends JpaRepository<RefundRequest, Lo
     /** 用户端「我的退款」列表（Story 4.5，仅本人，倒序）。 */
     List<RefundRequest> findByUserIdOrderByCreatedAtDesc(long userId);
 
-    /** 后台退款管理列表（Story 4.6，全量倒序）。 */
-    List<RefundRequest> findAllByOrderByCreatedAtDesc();
+    /** 待办中心角标（V1.3.0 Story 2.2）：待审批 + 已审批待打款。 */
+    long countByApprovalStatusIn(java.util.Collection<com.tailtopia.pay.refund.domain.ApprovalStatus> statuses);
+
+    // ===== V1.3.0 Story 2.8：A6 三段流页签（只读查询；先进先出 = createdAt 升序） =====
+
+    /** 待客服判定：need_decision = PENDING。 */
+    org.springframework.data.domain.Page<RefundRequest> findByNeedDecisionOrderByCreatedAtAsc(
+            com.tailtopia.pay.refund.domain.NeedDecision needDecision, org.springframework.data.domain.Pageable pageable);
+
+    long countByNeedDecision(com.tailtopia.pay.refund.domain.NeedDecision needDecision);
+
+    /** 待主管审批：客服已批 且（用户尚未填收款 approval_status 为空 / 已填 PENDING_APPROVAL）。 */
+    @org.springframework.data.jpa.repository.Query("select r from RefundRequest r where r.needDecision = com.tailtopia.pay.refund.domain.NeedDecision.APPROVED"
+            + " and (r.approvalStatus is null or r.approvalStatus = com.tailtopia.pay.refund.domain.ApprovalStatus.PENDING_APPROVAL) order by r.createdAt asc")
+    org.springframework.data.domain.Page<RefundRequest> findApprovalStage(org.springframework.data.domain.Pageable pageable);
+
+    @org.springframework.data.jpa.repository.Query("select count(r) from RefundRequest r where r.needDecision = com.tailtopia.pay.refund.domain.NeedDecision.APPROVED"
+            + " and (r.approvalStatus is null or r.approvalStatus = com.tailtopia.pay.refund.domain.ApprovalStatus.PENDING_APPROVAL)")
+    long countApprovalStage();
+
+    /** 待财务打款：APPROVED / PROCESSING。 */
+    org.springframework.data.domain.Page<RefundRequest> findByApprovalStatusInOrderByCreatedAtAsc(
+            java.util.Collection<com.tailtopia.pay.refund.domain.ApprovalStatus> statuses, org.springframework.data.domain.Pageable pageable);
+
+    /** 已完结 · 已驳回：客服驳回 / 主管驳回 / 已打款（最新在前）。 */
+    @org.springframework.data.jpa.repository.Query("select r from RefundRequest r where r.needDecision = com.tailtopia.pay.refund.domain.NeedDecision.REJECTED"
+            + " or r.approvalStatus in (com.tailtopia.pay.refund.domain.ApprovalStatus.REJECTED, com.tailtopia.pay.refund.domain.ApprovalStatus.DONE) order by r.createdAt desc")
+    org.springframework.data.domain.Page<RefundRequest> findClosedStage(org.springframework.data.domain.Pageable pageable);
+
+    @org.springframework.data.jpa.repository.Query("select count(r) from RefundRequest r where r.needDecision = com.tailtopia.pay.refund.domain.NeedDecision.REJECTED"
+            + " or r.approvalStatus in (com.tailtopia.pay.refund.domain.ApprovalStatus.REJECTED, com.tailtopia.pay.refund.domain.ApprovalStatus.DONE)")
+    long countClosedStage();
 }

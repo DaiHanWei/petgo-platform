@@ -17,8 +17,15 @@ import com.tailtopia.admin.account.domain.AdminAccountType;
 import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.repository.AdminAccountPermissionRepository;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
+import com.tailtopia.admin.audit.service.AdminAlertService;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.admin.roles.AdminRoleSeedSnapshot;
+import com.tailtopia.admin.roles.domain.AdminRoleEntity;
+import com.tailtopia.admin.roles.domain.AdminRolePermission;
+import com.tailtopia.admin.roles.repository.AdminRolePermissionRepository;
+import com.tailtopia.admin.roles.repository.AdminRoleRepository;
+import com.tailtopia.admin.roles.service.RolePermissionResolver;
 import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import java.util.Optional;
@@ -32,6 +39,9 @@ class AdminAccountServiceTest {
     private AdminAccountRepository accounts;
     private AdminAccountPermissionRepository permissions;
     private AdminAuditService auditService;
+    private AdminAlertService alertService;
+    private AdminRoleRepository roles;
+    private AdminRolePermissionRepository rolePermissions;
     private AdminAccountService service;
 
     @BeforeEach
@@ -39,8 +49,21 @@ class AdminAccountServiceTest {
         accounts = mock(AdminAccountRepository.class);
         permissions = mock(AdminAccountPermissionRepository.class);
         auditService = mock(AdminAuditService.class);
-        service = new AdminAccountService(accounts, permissions, auditService);
-        when(accounts.findByLarkEmail(any())).thenReturn(Optional.empty());
+        alertService = mock(AdminAlertService.class);
+        roles = mock(AdminRoleRepository.class);
+        rolePermissions = mock(AdminRolePermissionRepository.class);
+        // Story 1.4：四个已迁移岗位的角色表行与权限码（mock 数据源 = 迁移前快照）。
+        for (var e : AdminRoleSeedSnapshot.MIGRATED.entrySet()) {
+            long id = AdminRoleSeedSnapshot.mockRoleId(e.getKey());
+            AdminRoleEntity row = AdminRoleEntity.newCustom(e.getKey().name(), e.getKey().name(), null);
+            ReflectionTestUtils.setField(row, "id", id);
+            when(roles.findByCode(e.getKey().name())).thenReturn(Optional.of(row));
+            when(rolePermissions.findByRoleId(id)).thenReturn(
+                    e.getValue().stream().map(c -> new AdminRolePermission(id, c)).toList());
+        }
+        service = new AdminAccountService(accounts, permissions, auditService, alertService,
+                new RolePermissionResolver(permissions, roles, rolePermissions), roles, "boot@x");
+        when(accounts.findByLarkEmailIgnoreCaseAndStatus(any(), any())).thenReturn(Optional.empty());
         when(accounts.save(any(AdminAccount.class))).thenAnswer(inv -> {
             AdminAccount a = inv.getArgument(0);
             if (a.getId() == null) {
@@ -71,7 +94,7 @@ class AdminAccountServiceTest {
 
     @Test
     void createRejectsDuplicateEmail() {
-        when(accounts.findByLarkEmail("dup@x")).thenReturn(Optional.of(staff(9L, AdminAccountStatus.ACTIVE)));
+        when(accounts.findByLarkEmailIgnoreCaseAndStatus("dup@x", AdminAccountStatus.ACTIVE)).thenReturn(Optional.of(staff(9L, AdminAccountStatus.ACTIVE)));
         assertThatThrownBy(() -> service.createAccount("dup@x", "X", AdminRole.CUSTOM, List.of(), 1L))
                 .isInstanceOf(AppException.class);
         verify(accounts, never()).save(any());
@@ -163,5 +186,224 @@ class AdminAccountServiceTest {
         service.reactivate(8L, 1L);
         assertThat(a.getStatus()).isEqualTo(AdminAccountStatus.ACTIVE);
         verify(auditService).record(eq(1L), eq(AuditActions.ACCOUNT_REACTIVATED), any(), eq("8"), any());
+    }
+
+    // ---- V1.3.0 Story 1.1（AD-1）：安全版本号 bump ----
+
+    @Test
+    void deactivateBumpsSecurityVersionOnlyWhenChanged() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.deactivate(8L, 1L);
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+        service.deactivate(8L, 1L); // 幂等 no-op 不加
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void reactivateDoesNotBumpSecurityVersion() {
+        AdminAccount a = staff(8L, AdminAccountStatus.DISABLED);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.reactivate(8L, 1L);
+        assertThat(a.getSecurityVersion()).isZero();
+    }
+
+    @Test
+    void changeRoleBumpsSecurityVersionOnlyWhenChanged() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.changeRole(8L, AdminRole.OPERATIONS, 1L);
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+        service.changeRole(8L, AdminRole.OPERATIONS, 1L); // 同角色幂等
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void updatePermissionsBumpsSecurityVersionOnlyWhenDiffNonEmpty() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        when(permissions.findByAccountId(8L)).thenReturn(List.of(
+                new AdminAccountPermission(8L, "vet.view")));
+        service.updatePermissions(8L, List.of("vet.view"), 1L); // 无 diff
+        assertThat(a.getSecurityVersion()).isZero();
+        service.updatePermissions(8L, List.of("vet.view", "content.takedown"), 1L);
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void bumpSecurityVersionIsPublicAndNoAudit() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.bumpSecurityVersion(8L);
+        service.bumpSecurityVersion(8L);
+        assertThat(a.getSecurityVersion()).isEqualTo(2);
+        verify(accounts, org.mockito.Mockito.times(2)).save(a);
+        verify(auditService, never()).record(anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    void bumpSecurityVersionUnknownAccountRejected() {
+        when(accounts.findById(404L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.bumpSecurityVersion(404L)).isInstanceOf(AppException.class);
+    }
+
+    // ---- V1.3.0 Story 1.2：改名 + self 护栏 ----
+
+    @Test
+    void renamePersistsTrimmedNameAndAudits() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.rename(8L, "  新名字  ", 1L);
+        assertThat(a.getDisplayName()).isEqualTo("新名字");
+        verify(accounts).save(a);
+        verify(auditService).record(eq(1L), eq(AuditActions.ACCOUNT_RENAMED), eq("ADMIN_ACCOUNT"),
+                eq("8"), org.mockito.ArgumentMatchers.contains("S → 新名字"));
+    }
+
+    @Test
+    void renameRejectsBlank() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.rename(8L, "   ", 1L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.rename(8L, null, 1L)).isInstanceOf(AppException.class);
+        assertThat(a.getDisplayName()).isEqualTo("S");
+        verify(accounts, never()).save(any());
+    }
+
+    @Test
+    void renameRejectsOver100() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.rename(8L, "x".repeat(101), 1L))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("100");
+        service.rename(8L, "x".repeat(100), 1L); // 边界 100 允许
+        assertThat(a.getDisplayName()).hasSize(100);
+    }
+
+    @Test
+    void renameSameValueIsNoOp() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.rename(8L, " S ", 1L);
+        verify(accounts, never()).save(any());
+        verify(auditService, never()).record(anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    void renameDoesNotBumpSecurityVersion() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.rename(8L, "改了", 1L);
+        assertThat(a.getSecurityVersion()).isZero();
+    }
+
+    @Test
+    void cannotDeactivateSelf() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.deactivate(8L, 8L)).isInstanceOf(AppException.class);
+        assertThat(a.getStatus()).isEqualTo(AdminAccountStatus.ACTIVE);
+        verify(accounts, never()).save(any());
+        verify(auditService, never()).record(anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    void cannotChangeOwnRoleEvenToSameRole() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE); // CUSTOM
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.changeRole(8L, AdminRole.OPERATIONS, 8L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.changeRole(8L, AdminRole.CUSTOM, 8L)).isInstanceOf(AppException.class);
+        assertThat(a.getRole()).isEqualTo(AdminRole.CUSTOM);
+        verify(accounts, never()).save(any());
+    }
+
+    // ---- V1.3.0 Story 1.3：换绑 Lark 邮箱 ----
+
+    @Test
+    void rebindEmailUpdatesBumpsAuditsAndAlerts() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE); // s@x
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        when(accounts.existsByLarkEmailIgnoreCaseAndStatusAndIdNot("new@x", AdminAccountStatus.ACTIVE, 8L))
+                .thenReturn(false);
+
+        service.rebindEmail(8L, "  new@x ", 1L);
+
+        assertThat(a.getLarkEmail()).isEqualTo("new@x");
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+        verify(accounts).save(a);
+        verify(auditService).record(eq(1L), eq(AuditActions.ACCOUNT_EMAIL_REBOUND), eq("ADMIN_ACCOUNT"),
+                eq("8"), org.mockito.ArgumentMatchers.contains("s@x → new@x"));
+        verify(alertService).alertSuperAdmins(AuditActions.ACCOUNT_EMAIL_REBOUND, 1L);
+    }
+
+    @Test
+    void rebindRejectsBootstrapEmail() {
+        AdminAccount a = AdminAccount.create("Boot@X", "B", AdminRole.SUPER_ADMIN, null);
+        ReflectionTestUtils.setField(a, "id", 1L);
+        when(accounts.findById(1L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.rebindEmail(1L, "other@x", 2L)).isInstanceOf(AppException.class);
+        assertThat(a.getLarkEmail()).isEqualTo("Boot@X");
+        assertThat(service.isBootstrapEmail(" BOOT@x ")).isTrue();
+        assertThat(service.isBootstrapEmail("s@x")).isFalse();
+    }
+
+    @Test
+    void rebindRejectsDisabledTarget() {
+        AdminAccount a = staff(8L, AdminAccountStatus.DISABLED);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.rebindEmail(8L, "new@x", 1L)).isInstanceOf(AppException.class);
+        verify(accounts, never()).save(any());
+    }
+
+    @Test
+    void rebindRejectsInvalidFormatAndBlank() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        assertThatThrownBy(() -> service.rebindEmail(8L, "   ", 1L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.rebindEmail(8L, "not-an-email", 1L)).isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> service.rebindEmail(8L, "a b@x.io", 1L)).isInstanceOf(AppException.class);
+        assertThat(a.getLarkEmail()).isEqualTo("s@x");
+        assertThat(a.getSecurityVersion()).isZero();
+    }
+
+    @Test
+    void rebindRejectsActiveDuplicate() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        when(accounts.existsByLarkEmailIgnoreCaseAndStatusAndIdNot("taken@x", AdminAccountStatus.ACTIVE, 8L))
+                .thenReturn(true);
+        assertThatThrownBy(() -> service.rebindEmail(8L, "taken@x", 1L)).isInstanceOf(AppException.class);
+        assertThat(a.getSecurityVersion()).isZero();
+        verify(auditService, never()).record(anyLong(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rebindAllowsDisabledDuplicate() {
+        // D-21：已停用账号的邮箱视为已释放（仓库查重只看 ACTIVE，DISABLED 同邮箱返回 false）。
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        when(accounts.existsByLarkEmailIgnoreCaseAndStatusAndIdNot("released@x", AdminAccountStatus.ACTIVE, 8L))
+                .thenReturn(false);
+        service.rebindEmail(8L, "released@x", 1L);
+        assertThat(a.getLarkEmail()).isEqualTo("released@x");
+    }
+
+    @Test
+    void rebindSameEmailIsNoOp() {
+        AdminAccount a = staff(8L, AdminAccountStatus.ACTIVE);
+        when(accounts.findById(8L)).thenReturn(Optional.of(a));
+        service.rebindEmail(8L, "S@X", 1L);
+        assertThat(a.getSecurityVersion()).isZero();
+        verify(accounts, never()).save(any());
+        verify(auditService, never()).record(anyLong(), any(), any(), any(), any());
+        verify(alertService, never()).alertSuperAdmins(any(), any());
+    }
+
+    @Test
+    void createAllowsReuseOfDisabledEmail() {
+        // D-21：建号查重只对 ACTIVE 比对（mock 默认 findByLarkEmailIgnoreCaseAndStatus → empty）。
+        long id = service.createAccount("released@x", "新人", AdminRole.CUSTOM, List.of(), 1L);
+        assertThat(id).isEqualTo(42L);
     }
 }

@@ -129,15 +129,32 @@ public class RefundService {
      */
     @Transactional
     public void rejectNeed(String refundToken, long submitterAdminId) {
+        rejectNeed(refundToken, submitterAdminId, null);
+    }
+
+    /**
+     * 驳回退款需求并记原因（V1.3.0 Story 2.7，D-36）：{@code reason} 存入退款单 {@code reject_reason} 并写进审计摘要
+     * （≤200 字，运营内部依据）；<b>用户通知文案不变、不透出原因</b>。{@code reason} 为空走旧口径（审计记「-」）。
+     */
+    @Transactional
+    public void rejectNeed(String refundToken, long submitterAdminId, String reason) {
         RefundRequest r = requirePending(refundToken);
-        r.markNeedDecision(NeedDecision.REJECTED, submitterAdminId);
+        String cleaned = reason == null || reason.isBlank() ? null : reason.strip().replaceAll("\\s+", " ");
+        if (cleaned != null && cleaned.length() > 200) {
+            cleaned = cleaned.substring(0, 200);
+        }
+        if (cleaned == null) {
+            r.markNeedDecision(NeedDecision.REJECTED, submitterAdminId);
+        } else {
+            r.markNeedRejected(submitterAdminId, cleaned);
+        }
         orders.markRefundRejected(r.getOrderId()); // CAS 幂等：0=订单已非 COMPLETED，跳过
-        // 驳回通知（AB-5B：仅驳回发，批准不发）。护栏：文案不含金额/账号；targetRef 为稳定 refundToken（非随机）。
+        // 驳回通知（AB-5B：仅驳回发，批准不发）。护栏：文案不含金额/账号/原因；targetRef 为稳定 refundToken（非随机）。
         notifications.send(r.getUserId(), NotificationType.REFUND_REJECTED,
                 "退款申请未通过", "你的退款申请未通过审核，如有疑问可在工单中联系客服。",
                 NotificationType.REFUND_REJECTED.name(), refundToken);
         audit.record(submitterAdminId, AuditActions.REFUND_NEED_REJECTED, "refund_request", refundToken,
-                "退款需求驳回（订单回落 COMPLETED+refund_rejected，已通知用户）");
+                "退款需求驳回（订单回落 COMPLETED+refund_rejected，已通知用户）理由：" + (cleaned == null ? "-" : cleaned));
     }
 
     /**
@@ -330,6 +347,15 @@ public class RefundService {
      */
     @Transactional
     public void payoutRefund(String refundToken, long payerAdminId) {
+        payoutRefund(refundToken, payerAdminId, null);
+    }
+
+    /**
+     * 财务打款 + 出款凭证 objectKey（V1.3.0 Story 2.8 D-36）：凭证 key 存退款单 {@code payout_proof_key} 并进审计 detail
+     * （只记 objectKey，不记 URL）。职责分离 / 金额校验 / 三闸幂等与 {@link #payoutRefund(String, long)} 完全相同。
+     */
+    @Transactional
+    public void payoutRefund(String refundToken, long payerAdminId, String payoutProofKey) {
         RefundRequest r = require(refundToken);
         if (r.getApprovalStatus() == ApprovalStatus.DONE) {
             return; // 已打款，幂等短路
@@ -353,7 +379,7 @@ public class RefundService {
             // 未即时完成（异步/失败）→ 抛出令事务回滚（保持 APPROVED，可重试）。OPEN-5：V1 sandbox 按同步处理。
             throw AppException.serviceUnavailable("退款出款未即时完成，请稍后重试");
         }
-        r.completePayout(payerAdminId, res.disbursementRef());
+        r.completePayout(payerAdminId, res.disbursementRef(), payoutProofKey);
         orders.markRefunded(order.getId()); // CAS REFUNDING→REFUNDED（返 0=已退，跳过）
         // REFUND_OUT 双分录（真钱退款流出）：DEBIT REFUND_OUT net / CREDIT CASH_IN net。借贷平 + 幂等键。
         ledger.post(UUID.randomUUID().toString(), List.of(
@@ -361,7 +387,8 @@ public class RefundService {
                 LedgerLine.credit(LedgerAccount.CASH_IN, r.getNetAmount(), null, "refund_request", r.getId())),
                 "refund-out-" + refundToken);
         audit.record(payerAdminId, AuditActions.REFUND_PAYOUT_RECORDED, "refund_request", refundToken,
-                "退款打款完成（Iris ref=" + res.disbursementRef() + "）");
+                "退款打款完成（Iris ref=" + res.disbursementRef() + "）"
+                        + (payoutProofKey == null || payoutProofKey.isBlank() ? "" : " 凭证=" + payoutProofKey));
     }
 
     private void requirePendingApproval(RefundRequest r) {
@@ -412,8 +439,9 @@ public class RefundService {
         }
     }
 
+    /** 仅供写事务调用（全部调用点均在 {@code @Transactional} 写方法内）：行锁读取，并发处置同一单串行化。 */
     private RefundRequest require(String refundToken) {
-        return refunds.findByRefundToken(refundToken)
+        return refunds.findForUpdateByRefundToken(refundToken)
                 .orElseThrow(() -> AppException.notFound("退款请求不存在"));
     }
 

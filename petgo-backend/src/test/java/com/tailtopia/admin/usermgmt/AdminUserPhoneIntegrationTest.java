@@ -81,7 +81,9 @@ class AdminUserPhoneIntegrationTest extends ApiIntegrationTest {
     @Test
     void withPhoneViewPermissionTheNumberIsRendered() throws Exception {
         User u = userWithPhone();
-        String html = mvc.perform(get("/admin/users/" + u.getId())
+        // V1.3.0 Story 8.1：整页详情退役，手机号现在渲染在抽屉里（同一份服务端判定）。
+        String html = mvc.perform(get("/admin/users/" + u.getId() + "/drawer")
+                        .header("HX-Request", "true")
                         .with(authentication(auth(AdminAccountType.STAFF, "user.view", "user.phone_view")))
                         .param("lang", "zh_CN"))
                 .andExpect(status().isOk())
@@ -99,7 +101,8 @@ class AdminUserPhoneIntegrationTest extends ApiIntegrationTest {
     void withoutPhoneViewPermissionTheNumberNeverReachesTheResponse() throws Exception {
         User u = userWithPhone();
         String phone = u.getPhone();
-        String html = mvc.perform(get("/admin/users/" + u.getId())
+        String html = mvc.perform(get("/admin/users/" + u.getId() + "/drawer")
+                        .header("HX-Request", "true")
                         .with(authentication(auth(AdminAccountType.STAFF, "user.view")))
                         .param("lang", "zh_CN"))
                 .andExpect(status().isOk())

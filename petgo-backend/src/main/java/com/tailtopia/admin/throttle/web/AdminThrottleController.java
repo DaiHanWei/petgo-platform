@@ -17,6 +17,10 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import com.tailtopia.admin.shared.web.AdminFragmentResponses;
+import com.tailtopia.admin.shared.web.HxRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.ui.Model;
 
 /**
  * 限流处置动作（V1.1.6 Story 17.2）。内容列表与工单页的限流按钮都打到这里。
@@ -31,6 +35,11 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  * <h2>⚠️ 这里不改限流的生效逻辑</h2>
  * 生效判定、到期、系数全在 17.1 的 {@link RankThrottleService} 里（AC7）。
  * 本类只做「谁能点、点了传什么参数、结果怎么回显」。
+ *
+ * <h2>V1.3.0 Story 2.5：htmx 分叉</h2>
+ * 带 {@code HX-Request} 时返回 toast fragment（根元素 {@code data-refresh-detail}，A2 页内 JS 据此重拉当前右栏，
+ * 「停留本条」）；{@code back} 在 htmx 路径忽略。参数全集与 {@code MANAGE} 门控不变；业务错交给
+ * {@code AdminBusinessExceptionAdvice} 出 422 行内 err。
  */
 @Controller
 public class AdminThrottleController {
@@ -71,16 +80,39 @@ public class AdminThrottleController {
             @RequestParam(value = "reportId", required = false) Long reportId,
             @RequestParam(value = "reason", required = false) String reason,
             @RequestParam(value = "back", required = false) String back,
-            RedirectAttributes flash) {
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        // 🛡 粒度缺失必须**显式报错**，不能落进下面的 else 分支。
+        //    B1 抽屉（Story 7.1）是第一处把 scope 做成可选下拉的地方：漏选时浏览器发的是空串，
+        //    Spring 的枚举转换器对空串返回 null（参数存在，required 不触发），
+        //    而 `scope == POST ? … : …` 会把 null 当成 ACCOUNT —— 漏选一次就把**整个账号**降权，
+        //    且界面上看不出降错了对象。表单的 required 只挡浏览器，挡不住脚本与重放。
+        if (scope == null) {
+            if (hx.isHtmx()) {
+                throw AppException.validation("请选择限流粒度").code("admin.err.throttle.scopeMissing");
+            }
+            flash.addFlashAttribute("error", msg.get("admin.err.throttle.scopeMissing"));
+            return redirect(back);
+        }
         Long resolved = targetId != null ? targetId
                 : (scope == ThrottleScope.POST ? postTargetId : accountTargetId);
         if (resolved == null) {
+            if (hx.isHtmx()) {
+                throw AppException.validation("被限流对象缺失").code("admin.err.throttle.targetMissing");
+            }
             // 内容举报里被举报账号已注销时 accountTargetId 会是空 —— 给人话而不是 500。
             flash.addFlashAttribute("error", msg.get("admin.err.throttle.targetMissing"));
             return redirect(back);
         }
         Instant now = Instant.now();
         long adminId = admin.getAdminAccountId();
+        if (hx.isHtmx()) {
+            if (scope == ThrottleScope.POST) {
+                service.throttlePost(resolved, duration, now, adminId, reportId, reason);
+            } else {
+                service.throttleAccount(resolved, duration, now, adminId, reportId, reason);
+            }
+            return refreshed(msg.get("admin.flash.throttle.applied"), back, model, response);
+        }
         try {
             if (scope == ThrottleScope.POST) {
                 service.throttlePost(resolved, duration, now, adminId, reportId, reason);
@@ -106,7 +138,7 @@ public class AdminThrottleController {
     public String lift(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam("throttleIds") List<Long> throttleIds,
             @RequestParam(value = "back", required = false) String back,
-            RedirectAttributes flash) {
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         Instant now = Instant.now();
         long adminId = admin.getAdminAccountId();
         int lifted = 0;
@@ -120,10 +152,34 @@ public class AdminThrottleController {
             // 已到期或已被别人解除 —— 不是错误，但要说清，否则运营会以为按钮没生效。
             log.info("限流批量解除：成功 {} 条，已非生效态 {} 条", lifted, stale);
         }
-        flash.addFlashAttribute("notice", stale == 0
+        String notice = stale == 0
                 ? msg.get("admin.flash.throttle.lifted", lifted)
-                : msg.get("admin.flash.throttle.liftedWithStale", lifted, stale));
+                : msg.get("admin.flash.throttle.liftedWithStale", lifted, stale);
+        if (hx.isHtmx()) {
+            return refreshed(notice, back, model, response);
+        }
+        flash.addFlashAttribute("notice", notice);
         return redirect(back);
+    }
+
+    /**
+     * htmx 成功：toast + data-refresh-detail（停留本条，页内 JS 重拉右栏）+ HX-Trigger 刷角标。
+     *
+     * <p>V1.3.0 Story 7.1：B1 内容管理的限流卡也打到这两个端点。参数零变更是硬约束，
+     * 所以靠它们**既有的** {@code back} 值分辨调用方：{@code content} 时多发一个
+     * {@link AdminContentManageController#CONTENT_REFRESH}，内容页的抽屉与列表各自重拉
+     * （响应体照旧只是 toast，内容页那两个表单 swap 到隐藏 sink）。
+     */
+    private static String refreshed(String message, String back, Model model, HttpServletResponse response) {
+        model.addAttribute("message", message);
+        AdminFragmentResponses.triggerBadgeRefresh(response);
+        if ("content".equals(back)) {
+            // 限流改的是抽屉里的限流卡 + 列表的限流标记与摘要条 ⇒ 两个都要重拉。
+            AdminFragmentResponses.trigger(response,
+                    com.tailtopia.admin.moderation.web.AdminContentManageController.LIST_REFRESH,
+                    com.tailtopia.admin.moderation.web.AdminContentManageController.DRAWER_REFRESH);
+        }
+        return "admin/fragments/tickets-done :: refresh";
     }
 
     /**

@@ -4,6 +4,8 @@ import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.consult.dto.AdminConsultOrderDetail;
 import com.tailtopia.admin.consult.dto.AdminConsultOrderRow;
 import com.tailtopia.admin.consult.dto.AdminConsultOrderStageRow;
+import com.tailtopia.admin.consult.dto.ConsultOrderSummary;
+import com.tailtopia.admin.shared.export.AdminExportWriter;
 import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.domain.ConsultOrderVerifyStatus;
 import com.tailtopia.consult.repository.ConsultOrderRepository;
@@ -25,12 +27,36 @@ public class AdminConsultOrderService {
     private final ConsultOrderRepository orders;
     private final ConsultOrderStageEventRepository stageEvents;
     private final AdminAuditService audit;
+    /** 导出表头随当前 locale（V1.3.0 Story 8.4 走 AdminExportWriter 之后）。 */
+    private final com.tailtopia.shared.i18n.Messages msg;
 
     public AdminConsultOrderService(ConsultOrderRepository orders,
-            ConsultOrderStageEventRepository stageEvents, AdminAuditService audit) {
+            ConsultOrderStageEventRepository stageEvents, AdminAuditService audit,
+            com.tailtopia.shared.i18n.Messages msg) {
         this.orders = orders;
         this.stageEvents = stageEvents;
         this.audit = audit;
+        this.msg = msg;
+    }
+
+    /**
+     * 摘要条三格（Story 8.4 · AC1）。入参就是列表那一份 rows，不另查一遍。
+     *
+     * <p>⚠️ 成交额算的是**全部单**的金额之和，与列表口径一致；不按状态过滤 ——
+     * 过滤了的话「成交额 ÷ 单数」得不到列表上看得到的那个均价，运营对不上账。
+     */
+    public ConsultOrderSummary summary(List<AdminConsultOrderRow> rows) {
+        return new ConsultOrderSummary(
+                rows.stream().mapToLong(AdminConsultOrderRow::amount).sum(),
+                rows.size(),
+                rows.stream().filter(r -> "TO_VERIFY".equals(r.verifyStatus())).count());
+    }
+
+    /** 单行（抽屉里标记成功后 oob 换掉列表里的那一行，Story 8.4）。 */
+    @Transactional(readOnly = true)
+    public AdminConsultOrderRow row(String orderToken) {
+        return toRow(orders.findByOrderToken(orderToken)
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound")));
     }
 
     @Transactional(readOnly = true)
@@ -67,24 +93,42 @@ public class AdminConsultOrderService {
                 "verify=" + (status == null ? "CLEARED" : status.name()));
     }
 
-    /** CSV 导出（订单号/用户/兽医/金额/分成/状态/重播/待核查/时间）。 */
+    /**
+     * CSV 导出（订单号/用户/兽医/金额/分成/状态/重播/待核查/时间）。
+     *
+     * <p>⚠️ <b>永远导出全表</b>：本端点不接收任何筛选参数（页面上的按钮因此写「导出全部」）。
+     *
+     * <p>V1.3.0 Story 8.4：改经 {@link AdminExportWriter#csv}（AD-10 规则 12，全站导出一个出口）——
+     * RFC 4180 转义 + 前导 {@code = + - @} 的公式注入防护 + 表头随会话 locale。
+     * 原先是各自手拼字符串、各自处理引号：同一个转义规则在仓库里有两份实现，
+     * 而其中一份漏掉了 CR（{@code \r}）。
+     */
     @Transactional(readOnly = true)
     public String exportCsv() {
-        StringBuilder sb = new StringBuilder(
-                "order_token,user_id,vet_id,amount,vet_payout,status,rebroadcast_count,verify_status,paid_at,created_at\n");
-        for (AdminConsultOrderRow r : list()) {
-            sb.append(csv(r.orderToken())).append(',')
-                    .append(r.userId()).append(',')
-                    .append(r.vetId()).append(',')
-                    .append(r.amount()).append(',')
-                    .append(r.vetPayout() == null ? "" : r.vetPayout()).append(',')
-                    .append(csv(r.statusCode())).append(',')
-                    .append(r.rebroadcastCount()).append(',')
-                    .append(csv(r.verifyStatus())).append(',')
-                    .append(r.paidAt() == null ? "" : r.paidAt()).append(',')
-                    .append(r.createdAt() == null ? "" : r.createdAt()).append('\n');
-        }
-        return sb.toString();
+        List<String> headers = List.of(
+                msg.get("admin.v130.consultOrders.export.orderToken"),
+                msg.get("admin.v130.consultOrders.export.userId"),
+                msg.get("admin.v130.consultOrders.export.vetId"),
+                msg.get("admin.v130.consultOrders.export.amount"),
+                msg.get("admin.v130.consultOrders.export.vetPayout"),
+                msg.get("admin.v130.consultOrders.export.status"),
+                msg.get("admin.v130.consultOrders.export.rebroadcast"),
+                msg.get("admin.v130.consultOrders.export.verify"),
+                msg.get("admin.v130.consultOrders.export.paidAt"),
+                msg.get("admin.v130.consultOrders.export.createdAt"));
+        List<List<Object>> rows = list().stream().map(r -> List.<Object>of(
+                        r.orderToken(),
+                        r.userId(),
+                        r.vetId(),
+                        r.amount(),
+                        r.vetPayout() == null ? "" : r.vetPayout(),
+                        r.statusCode(),
+                        r.rebroadcastCount(),
+                        r.verifyStatus(),
+                        r.paidAt() == null ? "" : r.paidAt(),
+                        r.createdAt() == null ? "" : r.createdAt()))
+                .toList();
+        return AdminExportWriter.csv(headers, rows);
     }
 
     private static AdminConsultOrderRow toRow(ConsultOrder o) {
@@ -109,14 +153,4 @@ public class AdminConsultOrderService {
         return s == null ? "" : s.name();
     }
 
-    /** CSV 字段转义（逗号/引号/换行 → 双引号包裹 + 引号翻倍）。 */
-    private static String csv(String v) {
-        if (v == null) {
-            return "";
-        }
-        if (v.contains(",") || v.contains("\"") || v.contains("\n")) {
-            return '"' + v.replace("\"", "\"\"") + '"';
-        }
-        return v;
-    }
 }

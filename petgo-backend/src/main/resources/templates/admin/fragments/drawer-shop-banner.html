@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  B17 Banner 新建 / 编辑抽屉（V1.3.0 Story 10.3 AC4）。
+  Banner 图（objectKey 直传，第一张即唯一图，可 Ctrl+V 粘贴；编辑时不换图就保留原图）+ 权重（默认 0，越大越优先）。
+  提交走既有端点：新建 `POST /admin/shop/banners`、编辑 `POST /admin/shop/banners/{id}` —— **零新增**。
+  🔴 **hx-target 指的是抽屉体而不是列表容器**：AdminBusinessExceptionAdvice 按 HX-Target 回填 4xx ——
+     指着列表的话，「没上传图」（422）、「只有 product_view 的人点了提交」（403）、
+     「?open= 的那条已被并发删掉」（404）都会把**整张表换成一行红字**，而且那行字还被遮罩盖着：
+     运营看到的是「点了没反应」，关掉抽屉才发现表格没了，只能 F5。指抽屉体就落在他正看着的地方。
+     成功时 Controller 用 oob 刷列表 + HX-Trigger: admin:drawer-close 关抽屉（三档状态是全表相对的，必须整表重拉）。
+  🔴 Banner **纯展示、不可点击跳转**：库里只有图 + 权重两个字段，这里不加任何跳转配置（AC4）。
+  upload-host: shop-banners.html
+    ↑ 本片段的上传控件走 fetch，需要 CSRF meta；片段没有自己的 <head>，meta 来自宿主页。
+-->
+<body>
+<form th:fragment="form" class="banner-drawer-form"
+      th:object="${form}"
+      th:attr="hx-post=${bannerId} == null ? @{/admin/shop/banners} : @{/admin/shop/banners/{id}(id=${bannerId})}"
+      hx-target="#shop-banner-drawer-body" hx-swap="innerHTML" data-requires-form>
+    <div class="s-form-row">
+        <!-- 🔴 键必须是 banners 自己的：借用 admin.shop.form.images.* 会渲染成
+             「商品图片（第一张为主图，其余进图集，共 ≤9 张…）」—— banner 是单图无图集，
+             那句话每个字都是错的（2026-09-03 stag 回归 P2）。 -->
+        <div class="s-label s-req" th:text="#{admin.shop.banners.form.image.label}">Banner 图</div>
+        <div class="s-ctl">
+            <div data-seed-uploader data-mode="objectkey"
+                 data-field-main="f-bannerKey" data-field-w="f-bannerW" data-field-h="f-bannerH"
+                 th:attr="data-upload-url=@{/admin/shop/banners/images},
+                          data-msg-cover=#{admin.seed.images.cover},
+                          data-msg-limit=#{admin.shop.form.images.limit},
+                          data-msg-remove=#{admin.seed.images.remove},
+                          data-msg-uploading=#{admin.seed.images.uploading},
+                          data-msg-failed=#{admin.seed.upload.failed},
+                          data-msg-expired=#{admin.seed.upload.sessionExpired},
+                          data-max-bytes=${uploadMaxBytes},
+                          data-msg-too-large=#{admin.seed.upload.tooLarge(${uploadMaxMb})}">
+                <input type="file" data-seed-file accept="image/jpeg,image/png,image/webp"/>
+                <p class="hint" th:text="#{admin.shop.banners.form.image.hint}">可直接 Ctrl+V 粘贴。</p>
+                <p class="hint" data-seed-status></p>
+                <div class="seed-thumbs" data-seed-thumbs>
+                    <!-- 编辑态回填：库里存的是 objectKey，直接塞进 <img> 显示不出来，所以服务端顺带给了 url。
+                         不换图时这张缩略图就是提交回去的那个 key（隐藏字段已回填），所以「不换图 = 保留原图」。 -->
+                    <div th:if="${existingImage != null}" class="seed-thumb" data-seed-thumb draggable="true"
+                         th:attr="data-key=${existingImage.key},data-url=${existingImage.url},
+                                  data-w=${existingImage.w},data-h=${existingImage.h}">
+                        <img th:src="${existingImage.url}" alt=""/>
+                        <span class="seed-cover" data-seed-cover th:text="#{admin.seed.images.cover}">封面</span>
+                        <button type="button" class="seed-thumb-del" data-seed-del
+                                th:title="#{admin.seed.images.remove}">&times;</button>
+                    </div>
+                </div>
+            </div>
+            <!-- 🔴 这三个才是真正提交给服务端的字段，上传控件只是它们的可视化编辑器。
+                 imageKey 挂 data-requires-text ⇒ 没图时保存钮是灰的（服务层 validate 也会拦，双保险）。 -->
+            <input type="hidden" id="f-bannerKey" th:field="*{imageKey}" data-requires-text/>
+            <input type="hidden" id="f-bannerW" th:field="*{imageW}"/>
+            <input type="hidden" id="f-bannerH" th:field="*{imageH}"/>
+        </div>
+    </div>
+    <div class="s-form-row">
+        <label class="s-label s-req" for="f-bannerWeight" th:text="#{admin.shop.banners.col.weight}">权重</label>
+        <div class="s-ctl">
+            <input id="f-bannerWeight" type="number" class="inp" th:field="*{sortWeight}"/>
+            <p class="hint" th:text="#{admin.v130.shopBanners.weightHint}">越大越优先；同权重取后建的那张。</p>
+        </div>
+    </div>
+    <div class="sticky-footer">
+        <button type="submit" class="btn btn-primary" disabled data-requires-target
+                th:text="${bannerId} == null ? #{admin.shop.banners.btn.add} : #{admin.common.save}">新增</button>
+    </div>
+</form>
+</body>
+</html>

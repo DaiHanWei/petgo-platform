@@ -32,6 +32,9 @@ class AdminConsultOrderIntegrationTest extends ApiIntegrationTest {
         return orders.save(o);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.tailtopia.shared.i18n.Messages msg;
+
     @Test
     void listAndDetailAreReadOnlyWithStages() {
         ConsultOrder o = seedOrder(2);
@@ -57,11 +60,19 @@ class AdminConsultOrderIntegrationTest extends ApiIntegrationTest {
         assertThat(reloaded.getStatus().name()).isEqualTo("IN_PROGRESS");
     }
 
+    /**
+     * 导出 CSV（V1.3.0 Story 8.4 起走 {@code AdminExportWriter}）。
+     *
+     * <p>⚠️ 表头从写死的 {@code order_token,…} 改成**随 locale 的文案**，所以这里断言的是
+     * 「表头就是那几个 message 的值」而不是某个字面量 —— 后者一改文案就红，且改错了也看不出来。
+     * 顺带钉 RFC 4180 的 CRLF：写入器换行写错的话 Excel 会把整份文件读成一行。
+     */
     @Test
-    void exportCsvContainsHeaderAndSeededOrder() {
+    void exportCsvHasLocalisedHeaderAndTheSeededOrder() {
         ConsultOrder o = seedOrder(1);
         String csv = service.exportCsv();
-        assertThat(csv).startsWith("order_token,");
+        assertThat(csv).startsWith(msg.get("admin.v130.consultOrders.export.orderToken") + ",");
+        assertThat(csv).contains("\r\n");
         assertThat(csv).contains(o.getOrderToken());
     }
 }

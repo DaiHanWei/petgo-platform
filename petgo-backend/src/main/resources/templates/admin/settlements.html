@@ -1,54 +1,48 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!-- 兽医分成月结对账（Story 9.5，AB-8D）。财务流转 PENDING_FINANCE→PAID→ARCHIVED + 凭证 + 审计。 -->
+<!--/*
+  兽医分成月结对账（Story 9.5 · AB-8D → V1.3.0 Story 8.5 套模板 B · tpl-b-list，UI 稿 4-4）。
+  财务流转 PENDING_FINANCE → PAID（+凭证）→ ARCHIVED + 审计，状态机守卫在 VetSettlement。
+  8.5 的改动是页面组织：行内两张表单移进抽屉、加摘要条三格、点行开抽屉；
+  两个写端点 POST {id}/pay(proof) / {id}/archive 的路径与参数逐字未动。
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.settlements.title}">兽医月结对账 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
-    <div th:fragment="content" th:remove="tag">
+    <!--/* ⚠️ res 设在这一层，不能写在下面那个带 th:replace 的 div 上（优先级 100 vs 600，
+           同标签时 th:with 被静默丢弃 —— 见 AdminTemplateStructureTest 的守门）。 */-->
+    <div th:fragment="content" th:remove="tag" th:with="res='settlement'">
         <h1 th:text="#{admin.settlements.title}">兽医分成月结对账</h1>
+        <p class="hint" th:text="#{admin.settlements.hint}">每月 1 日生成上月月结（待财务打款）。确认打款请回填凭证；打款后可归档。到手 = Σ 兽医分成快照。</p>
+
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
-        <p class="hint" th:text="#{admin.settlements.hint}">每月 1 日生成上月月结（待财务打款）。确认打款请回填凭证；打款后可归档。到手 = Σ 兽医分成快照。</p>
-        <table>
-            <thead>
-            <tr>
-                <th th:text="#{admin.settlements.col.vet}">兽医</th><th th:text="#{admin.settlements.col.period}">月份</th><th th:text="#{admin.settlements.col.orders}">单数</th><th th:text="#{admin.settlements.col.gross}">成交额</th><th th:text="#{admin.settlements.col.payout}">到手</th>
-                <th th:text="#{admin.common.status}">状态</th><th th:text="#{admin.settlements.col.proof}">凭证</th><th th:text="#{admin.settlements.col.paidAt}">打款时间</th><th th:text="#{admin.common.actions}">操作</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="s : ${settlements}">
-                <td th:text="${s.vetId}">0</td>
-                <td th:text="${s.period}">2026-06</td>
-                <td th:text="${s.orderCount}">0</td>
-                <td th:text="${s.grossAmount}">0</td>
-                <td th:text="${s.payoutAmount}">0</td>
-                <td th:text="${s.status}">PENDING_FINANCE</td>
-                <td th:text="${s.paymentProof} ?: '—'">—</td>
-                <td th:text="${@adminTime.wib(s.paidAt)}">—</td>
-                <td>
-                    <!-- 待打款：确认打款（填凭证）；已打款：归档；已归档：无操作 -->
-                    <form th:if="${s.status == 'PENDING_FINANCE'}" method="post"
-                          th:action="@{/admin/settlements/{id}/pay(id=${s.id})}" style="display:inline"
-                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('settlement.payout')">
-                        <input type="text" name="proof" th:placeholder="#{admin.settlements.ph.proof}" placeholder="打款凭证/参考号" maxlength="512"/>
-                        <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.settlements.btn.pay}">确认打款</button>
-                    </form>
-                    <form th:if="${s.status == 'PAID'}" method="post"
-                          th:action="@{/admin/settlements/{id}/archive(id=${s.id})}" style="display:inline"
-                          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('settlement.payout')">
-                        <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.settlements.btn.archive}">归档</button>
-                    </form>
-                    <span th:if="${s.status == 'ARCHIVED'}" class="muted">—</span>
-                </td>
-            </tr>
-            <tr th:if="${settlements.isEmpty()}"><td colspan="9" th:text="#{admin.settlements.empty}">暂无月结</td></tr>
-            </tbody>
-        </table>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{::settlement-filters}, ~{::settlement-summary}, ~{::settlement-table}, ~{::settlement-drawer})}">
+            <!--/* 本页现状没有筛选参数（月结按月生成，量级是「兽医数 × 月数」）。
+                   槽位留一句口径说明 —— 空槽位会让摘要条紧贴提示，读起来像提示的一部分。 */-->
+            <p th:fragment="settlement-filters" class="hint" data-notice="settlements-scope"
+               th:text="#{admin.v130.settlements.summaryScope}">摘要按全部月结统计；「本月已打款」按打款时间（WIB）算，不是按月结所属月份。</p>
+
+            <div th:fragment="settlement-summary" th:replace="~{admin/fragments/settlements-list :: sumbar(false)}"></div>
+
+            <div th:fragment="settlement-table" id="settlements-rows">
+                <div th:replace="~{admin/fragments/settlements-list :: rows(false)}"></div>
+            </div>
+
+            <div th:fragment="settlement-drawer" class="drawer-title"
+                 th:text="#{admin.v130.settlements.drawer.title}">月结详情</div>
+        </div>
+
+        <!--/* ?open=<id> 深链兜底：admin-drawer.js 先按当前页找行，找不到就用这里给的 URL。 */-->
+        <span hidden th:if="${open != null}" data-drawer-res="settlement"
+              th:attr="data-drawer-deeplink=@{/admin/settlements/{id}/drawer(id=${open})}"></span>
     </div>
 </div>
 </body>

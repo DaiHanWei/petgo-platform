@@ -2,10 +2,12 @@ package com.tailtopia.admin.service;
 
 import com.tailtopia.admin.account.domain.AdminAccount;
 import com.tailtopia.admin.account.domain.AdminAccountStatus;
+import com.tailtopia.admin.account.domain.AdminAccountType;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.repository.UserRepository;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -61,16 +63,28 @@ public class AdminBootstrap implements ApplicationRunner {
         String hash = passwordEncoder.encode(bootstrapPassword);
 
         // 1) admin_accounts 超管（认证源真相）
-        adminAccounts.findByLarkEmail(bootstrapEmail).ifPresentOrElse(existing -> {
-            existing.setPasswordHash(hash);
-            existing.setStatus(AdminAccountStatus.ACTIVE);
-            adminAccounts.save(existing);
-            // 不记 bootstrapEmail（PII）。
-            log.info("ADMIN bootstrap：已重置超管密码（admin_accounts）");
-        }, () -> {
-            adminAccounts.save(AdminAccount.newSuperAdmin(bootstrapEmail, "TailTopia 运营", hash));
-            log.info("ADMIN bootstrap：已创建超管（admin_accounts）");
-        });
+        // V1.3.0 Story 1.3：邮箱仅 ACTIVE 唯一（D-21）。优先取 ACTIVE 行；没有 ACTIVE 时取最新的已停用行复活
+        // （沿用既有「重启即复活 bootstrap 超管」语义，且此时无 ACTIVE 同邮箱行、不会撞部分唯一索引）；都没有才建号。
+        // 🔴 D-21 放开了邮箱复用，同邮箱可能挂着非超管账号：两条路径都只认 SUPER_ADMIN 行，
+        //    否则 env 里的 bootstrap 密码会被写到一个 STAFF 账号上并把它复活（还绕过审计）。
+        Optional<AdminAccount> active =
+                adminAccounts.findByLarkEmailIgnoreCaseAndStatus(bootstrapEmail, AdminAccountStatus.ACTIVE);
+        if (active.isPresent()) {
+            if (active.get().getAccountType() == AdminAccountType.SUPER_ADMIN) {
+                resetAndActivate(active.get(), hash);
+            } else {
+                // 在职非超管占着该邮箱：不改它的密码、也不另建（会撞 ACTIVE 部分唯一索引）。需人工处理。
+                log.warn("ADMIN bootstrap：bootstrap 邮箱被在职非超管账号占用，已跳过（需人工处理）");
+            }
+        } else {
+            adminAccounts.findByLarkEmailIgnoreCaseOrderByIdDesc(bootstrapEmail).stream()
+                    .filter(a -> a.getAccountType() == AdminAccountType.SUPER_ADMIN)
+                    .findFirst()
+                    .ifPresentOrElse(existing -> resetAndActivate(existing, hash), () -> {
+                        adminAccounts.save(AdminAccount.newSuperAdmin(bootstrapEmail, "TailTopia 运营", hash));
+                        log.info("ADMIN bootstrap：已创建超管（admin_accounts）");
+                    });
+        }
 
         // 2) users(role=ADMIN) 官方内容作者 shim（AC5；不再作登录依据）
         users.findByEmailAndRole(bootstrapEmail, Role.ADMIN).ifPresentOrElse(existing -> {
@@ -80,5 +94,13 @@ public class AdminBootstrap implements ApplicationRunner {
             users.save(User.newAdmin(bootstrapEmail, "TailTopia 运营", hash));
             log.info("ADMIN bootstrap：已创建官方内容作者 users 行");
         });
+    }
+
+    private void resetAndActivate(AdminAccount existing, String hash) {
+        existing.setPasswordHash(hash);
+        existing.setStatus(AdminAccountStatus.ACTIVE);
+        adminAccounts.save(existing);
+        // 不记 bootstrapEmail（PII）。
+        log.info("ADMIN bootstrap：已重置超管密码（admin_accounts）");
     }
 }

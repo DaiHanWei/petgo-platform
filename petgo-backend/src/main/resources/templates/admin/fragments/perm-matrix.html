@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  权限矩阵 fragment（V1.3.0 Story 1.6，抽自 1-5 roles-edit.html；角色配置页与账号页共用）。
+  行 = 页面（AdminPageCatalog，按 8 个导航组），列 = 查看 / 编辑 / 其他操作；每格一个复选框对应一个权限码；
+  沿用码只展示「沿用 …」文字 + 注脚，不出复选框（一个码在全站只有一个复选框）。
+  参数：
+    groups   — List<PermissionMatrixView.GroupRows>
+    checked  — 当前勾选的码集合（useField=true 时忽略，由 th:field 回显）
+    useField — true：复选框用 th:field="*{permissionCodes}"（须在 th:object 表单内）；false：name="permissionCodes" + th:checked
+    compact  — true：账号页行内面板用的紧凑模式（隐藏路由）
+-->
+<body>
+<table class="matrix" th:fragment="matrix(groups, checked, useField, compact)">
+    <thead>
+    <tr>
+        <th th:text="#{admin.roles.matrix.page}">页面</th>
+        <th th:text="#{admin.roles.matrix.view}">查看</th>
+        <th th:text="#{admin.roles.matrix.edit}">编辑</th>
+        <th th:text="#{admin.roles.matrix.other}">其他操作</th>
+    </tr>
+    </thead>
+    <tbody>
+    <th:block th:each="g : ${groups}">
+        <tr class="group-row"><td colspan="4" th:text="#{${g.group.titleKey}}">分组</td></tr>
+        <tr th:each="p : ${g.pages}">
+            <td>
+                <span th:text="#{${p.titleKey()}}">页面名</span>
+                <span class="route" th:if="${!compact and p.route != null}" th:text="${p.route}">/admin/x</span>
+                <span class="muted" th:if="${p.superAdminOnly}" th:text="#{admin.roles.matrix.superOnly}">（仅超管）</span>
+                <div class="shared" th:if="${!#lists.isEmpty(p.sharedCodes)}">
+                    <span th:text="#{admin.roles.matrix.shared}">沿用：</span>
+                    <span th:each="c : ${p.sharedCodes}" th:text="#{'perm.' + ${c}} + ' '" th:title="${c}">码</span>
+                    <sup>*</sup>
+                </div>
+            </td>
+            <td th:each="col : ${ {p.viewCodes, p.editCodes, p.otherCodes} }">
+                <label th:each="c : ${col}">
+                    <input type="checkbox" th:if="${useField}" th:field="*{permissionCodes}" th:value="${c}"/>
+                    <input type="checkbox" th:unless="${useField}" name="permissionCodes" th:value="${c}"
+                           th:checked="${checked != null and #lists.contains(checked, c)}"/>
+                    <span th:text="#{'perm.' + ${c}}" th:title="${c}">码</span>
+                </label>
+            </td>
+        </tr>
+    </th:block>
+    </tbody>
+</table>
+</body>
+</html>

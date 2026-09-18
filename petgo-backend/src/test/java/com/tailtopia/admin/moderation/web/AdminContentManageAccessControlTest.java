@@ -38,7 +38,22 @@ class AdminContentManageAccessControlTest {
     static class TestConfig {
         @Bean
         AdminContentManageService contentManage() {
-            return mock(AdminContentManageService.class);
+            AdminContentManageService m = mock(AdminContentManageService.class);
+            // V1.3.0 Story 7.1：列表要渲染摘要条 —— mock 默认返 null 会在门控通过后 NPE，
+            // 掩盖掉本类真正要验的东西（是否 403）。给一个空摘要即可。
+            org.mockito.Mockito.when(m.browseWithSpeciesPage(org.mockito.ArgumentMatchers.any(),
+                            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                            org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any(),
+                            org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(new AdminContentManageService.SpeciesPage(java.util.List.of(), false));
+            org.mockito.Mockito.when(m.summary(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                            org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(new com.tailtopia.admin.moderation.dto.ContentSummary(0, 0, 0, 0, 0));
+            return m;
         }
 
         @Bean
@@ -90,17 +105,21 @@ class AdminContentManageAccessControlTest {
 
     private void browse() {
         // type, authorId, from, to, status, q, sort, page, species, speciesSource,
-        // dateBasis, hxRequest, model
+        // dateBasis, open, hxRequest, model
         controller.content(null, null, null, null, null, null, null, 0, null, null,
-                "published", null, new ConcurrentModel());
+                "published", null, null, new ConcurrentModel());
     }
 
     private void takedown() {
-        controller.takedown(admin(), 5L, "违规", null, new ConcurrentModel(), new RedirectAttributesModelMap());
+        controller.takedown(admin(), 5L, "违规", com.tailtopia.admin.shared.web.HxRequest.NONE,
+                new ConcurrentModel(), new org.springframework.mock.web.MockHttpServletResponse(),
+                new RedirectAttributesModelMap());
     }
 
     private void restore() {
-        controller.restore(admin(), 5L, null, new ConcurrentModel(), new RedirectAttributesModelMap());
+        controller.restore(admin(), 5L, com.tailtopia.admin.shared.web.HxRequest.NONE,
+                new ConcurrentModel(), new org.springframework.mock.web.MockHttpServletResponse(),
+                new RedirectAttributesModelMap());
     }
 
     @Test

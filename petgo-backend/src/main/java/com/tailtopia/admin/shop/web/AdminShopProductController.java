@@ -2,6 +2,7 @@ package com.tailtopia.admin.shop.web;
 
 import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.seed.service.AdminSeedImageService;
+import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.shop.dto.ShopProductForm;
 import com.tailtopia.admin.shop.dto.ShopSkuForm;
@@ -54,6 +55,9 @@ public class AdminShopProductController {
     private static final String EDIT_AUTH =
             "hasRole('SUPER_ADMIN') or hasAuthority('shop.product_edit')";
 
+    /** V1.3.0 Story 10.3 AC1：列表每页 20。 */
+    private static final int PAGE_SIZE = 20;
+
     private final AdminShopProductService service;
     private final AdminShopListingService listing;
     private final ShopProductRepository products;
@@ -87,19 +91,21 @@ public class AdminShopProductController {
 
     // ---------- 列表 ----------
 
+    /**
+     * 商品列表（V1.3.0 Story 10.3 AC1：模板 B，每页 20，摘要条三格）。
+     *
+     * <p>htmx 请求（筛选 / 翻页）只回表格片段，摘要条随 oob 一并换。
+     * <b>本页刻意不做抽屉</b>（AC1）：字段量太大，表单保留独立路由。
+     */
     @GetMapping("/admin/shop/products")
     @PreAuthorize(VIEW_AUTH)
     public String list(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam(required = false) ProductCategory category,
-            @RequestParam(required = false) Boolean active, Model model) {
-        List<ShopProduct> rows = products.findAll().stream()
-                .filter(p -> category == null || p.getCategory() == category)
-                .filter(p -> active == null || p.isActive() == active)
-                .sorted((a, b) -> {
-                    int c = Integer.compare(b.getSortWeight(), a.getSortWeight());
-                    return c != 0 ? c : Long.compare(b.getId(), a.getId());
-                })
-                .toList();
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            HxRequest hx, Model model) {
+        var found = service.page(category, active, page, PAGE_SIZE);
+        List<ShopProduct> rows = found.getContent();
         Map<Long, Integer> skuCount = new LinkedHashMap<>();
         Map<Long, Long> minPrice = new LinkedHashMap<>();
         for (ShopProduct p : rows) {
@@ -110,6 +116,9 @@ public class AdminShopProductController {
         }
         model.addAttribute("active", "shopProducts");
         model.addAttribute("products", rows);
+        model.addAttribute("page", Math.max(page, 0));
+        model.addAttribute("hasNext", found.hasNext());
+        model.addAttribute("summary", service.summary());
         model.addAttribute("skuCount", skuCount);
         model.addAttribute("minPrice", minPrice);
         model.addAttribute("categories", ProductCategory.values());
@@ -120,7 +129,7 @@ public class AdminShopProductController {
         model.addAttribute("activeSkuCount", listing.activeSkuCount());
         model.addAttribute("skuCap", listing.skuCap());
         model.addAttribute("skuCapReached", listing.atOrOverCap());
-        return "admin/shop-products";
+        return hx.isHtmx() ? "admin/fragments/shop-products-list :: rows(true)" : "admin/shop-products";
     }
 
     // ---------- 表单 ----------

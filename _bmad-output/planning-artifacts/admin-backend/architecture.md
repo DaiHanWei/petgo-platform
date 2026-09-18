@@ -93,7 +93,7 @@ _本文档通过逐步协作发现的方式构建。每完成一项架构决策�
 **增强项（本架构新增，落 step-04+ 决策与故事）：**
 1. **双语 i18n（zh-CN + en）**：引入 Spring `MessageSource` + `messages_zh_CN.properties` / `messages_en.properties` + Cookie/Session `LocaleResolver` + 顶栏语言切换；现有模板硬编码中文逐步外化为 `th:text="#{key}"`。语言集独立于 App（App 为 id/en）。
 2. **Lark OAuth 主入口 + 密码降级为紧急入口**：`spring-boot-starter-oauth2-client`，自定义飞书 `ClientRegistration`（**飞书 OAuth 非标准 OIDC**：token 需 app_access_token、user-info 走自有端点，`oauth2Login` 不能完全开箱，需自定义 token/userinfo 处理或一段轻量手写 OAuth 流）；登录成功比对 Lark 邮箱白名单；现有表单密码登录保留为超管紧急入口（底部小字）。
-3. **交互承载 = Thymeleaf + HTMX 2.0.x（稳定线，永久支持；不上 4.0 beta）**：PRD 大量列表/筛选/搜索/批量操作，用 HTMX（~14KB、无构建步骤、SSR 原生增强）做局部刷新与批量提交；不引入打包链、不破坏同源会话。
+3. **交互承载 = Thymeleaf + HTMX**（本文档原写 2.0.x；代码实际 vendored **1.9.12**，2026-09-09 V1.3.0 架构 delta D-31 决定维持 1.9.12 不升级，以代码为准）：PRD 大量列表/筛选/搜索/批量操作，用 HTMX（~14KB、无构建步骤、SSR 原生增强）做局部刷新与批量提交；不引入打包链、不破坏同源会话。
 
 **Initialization（无 init 命令，brownfield 增量）：**
 ```xml

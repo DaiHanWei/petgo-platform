@@ -1,7 +1,11 @@
 package com.tailtopia.admin.virtual.web;
 
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.shared.web.AdminFragmentResponses;
+import com.tailtopia.admin.shared.web.AdminHxEvents;
+import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.admin.virtual.service.AdminPublishIdentityService;
+import jakarta.servlet.http.HttpServletResponse;
 import com.tailtopia.admin.virtual.service.AdminVirtualAccountService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
@@ -13,6 +17,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import java.util.List;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -64,19 +69,105 @@ public class AdminVirtualAccountController {
         this.images = images;
     }
 
+    /**
+     * 「运营发布身份」页（V1.3.0 Story 8.3 起两块各套一次模板 B）。
+     *
+     * <p>⚠️ <b>两个关键词参数是两回事，刻意不合并</b>：
+     * <ul>
+     *   <li>{@code q} —— 区块二「搜索并纳入」的候选搜索（V1.1.6 既有，参数名不能动，
+     *       只有真搜了才查，空搜索返回空表而不是把全站用户列出来）；</li>
+     *   <li>{@code vq} —— 区块一虚拟账号列表的关键词筛选（8.3 新增）。</li>
+     * </ul>
+     * 用同一个 {@code q} 驱动两块的话，运营在上面找一个马甲会顺手把下面的候选表也刷成另一批人。
+     *
+     * <p>htmx 局部刷新按 {@code section} 分流：三块内容（虚拟账号表 / 候选表 / 池内表）
+     * 都挂在同一个 URL 上，不给判据的话谁触发都只会拿到第一块。
+     */
     @GetMapping("/admin/virtual-accounts")
     @PreAuthorize(VIEW_AUTH)
-    public String list(Model model, @RequestParam(required = false) String q,
-            @RequestParam(required = false) String species) {
+    public String list(@AuthenticationPrincipal AdminUserDetails admin,
+            Model model, @RequestParam(required = false) String q,
+            @RequestParam(required = false) String vq,
+            @RequestParam(required = false) String species,
+            @RequestParam(required = false) String section,
+            @RequestParam(value = "open", required = false) Long open,
+            @RequestParam(value = "create", required = false) String create,
+            HxRequest hx) {
         model.addAttribute("active", "virtual-accounts");
         model.addAttribute("species", species);
+        model.addAttribute("vq", vq);
         model.addAttribute("speciesOptions", com.tailtopia.content.species.ContentSpecies.ALL);
-        model.addAttribute("accounts", service.list(species));
-        model.addAttribute("realAccounts", identities.listRealAccounts());
+        var rows = service.list(species, vq);
+        model.addAttribute("accounts", rows);
+        model.addAttribute("summary", service.summary(rows));
+        // 🔴🔴 区块二的数据**必须自己判权限**，不能靠模板上那句 sec:authorize 遮。
+        //    整页上遮得住，但下面的 section 分流是**独立的 fragment 端点**，模板那层遮挡不存在：
+        //    只持 virtual_account.view 的人请求 ?section=identities 就能拿到整个真实账号身份池
+        //    （含**授权说明**、纳入人、经后台发布数）。这正是本页反复标红的
+        //    「能管虚拟账号 ≠ 能以真人身份发言」被绕开的那条缝。
+        boolean mayReal = AdminPublishIdentityService.mayPublishAsReal(admin);
+        model.addAttribute("mayReal", mayReal);
+        model.addAttribute("realAccounts", mayReal ? identities.listRealAccounts() : List.of());
         // 纳入候选：只有真搜了才查（空搜索返回空表，不会把全站用户列出来）。
-        model.addAttribute("candidates", identities.searchCandidates(q));
+        model.addAttribute("candidates", mayReal ? identities.searchCandidates(q) : List.of());
         model.addAttribute("q", q);
+        model.addAttribute("open", open);
+        model.addAttribute("openCreate", create != null);
+        if (hx.isHtmx()) {
+            String s = section == null ? "" : section;
+            if (("candidates".equals(s) || "identities".equals(s)) && !mayReal) {
+                // 与整页一致：没有这个码就当这一块不存在（403，不是回一张空表 —— 空表会被读成「池子是空的」）。
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "seed.publish_as_real required");
+            }
+            return switch (s) {
+                case "candidates" -> "admin/fragments/publish-identities :: candidates";
+                case "identities" -> "admin/fragments/publish-identities :: rows(true)";
+                default -> "admin/fragments/virtual-accounts-list :: rows(true)";
+            };
+        }
         return "admin/virtual-accounts";
+    }
+
+    /**
+     * 虚拟账号抽屉（Story 8.3 · AC1）：资料 + 物种定位改写 + 启停。
+     *
+     * <p>非 htmx 直达 → 回列表并自动开该抽屉（与 B1～B8 同一机制）。
+     */
+    @GetMapping("/admin/virtual-accounts/{id}/drawer")
+    @PreAuthorize(VIEW_AUTH)
+    public String drawer(@PathVariable long id, HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            return "redirect:/admin/virtual-accounts?open=" + id;
+        }
+        populateDrawer(id, model);
+        return "admin/fragments/drawer-virtual-account :: drawer";
+    }
+
+    /** 新建虚拟账号表单（Story 8.3 · AC1）：字段与 {@code POST} 参数逐字不变。 */
+    @GetMapping("/admin/virtual-accounts/new/drawer")
+    @PreAuthorize(AUTH)
+    public String newDrawer(HxRequest hx, Model model) {
+        if (!hx.isHtmx()) {
+            return "redirect:/admin/virtual-accounts?create=1";
+        }
+        model.addAttribute("active", "virtual-accounts");
+        model.addAttribute("speciesOptions", com.tailtopia.content.species.ContentSpecies.ALL);
+        return "admin/fragments/drawer-virtual-account :: createForm";
+    }
+
+    private void populateDrawer(long id, Model model) {
+        model.addAttribute("active", "virtual-accounts");
+        model.addAttribute("a", service.one(id));
+        model.addAttribute("speciesOptions", com.tailtopia.content.species.ContentSpecies.ALL);
+    }
+
+    /** 抽屉内处置成功统一响应：抽屉重渲染 + toast + 列表整表重拉（摘要条三格都要跟着变）。 */
+    private String afterAction(long id, String toast, Model model, HttpServletResponse response) {
+        populateDrawer(id, model);
+        model.addAttribute("toast", toast);
+        AdminFragmentResponses.trigger(response, AdminHxEvents.VIRTUAL_ACCOUNT_LIST_REFRESH);
+        return "admin/fragments/drawer-virtual-account :: afterAction";
     }
 
     /**
@@ -93,14 +184,19 @@ public class AdminVirtualAccountController {
             @RequestParam String nickname, @RequestParam(required = false) String avatarUrl,
             @RequestParam(required = false) MultipartFile avatarFile,
             @RequestParam(required = false) String accountSpecies,
-            RedirectAttributes flash) {
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            // ⚠️ 上传失败（对象存储未配置 / 凭证异常）在这条路上**不能吞成成功**：
+            //    交给 AdminBusinessExceptionAdvice 回 422 落进抽屉的行内错误槽。
+            long id = doCreate(admin, nickname, avatarUrl, avatarFile, accountSpecies);
+            AdminFragmentResponses.trigger(response, AdminHxEvents.DRAWER_OPEN,
+                    "{\"url\":\"/admin/virtual-accounts/" + id + "/drawer\",\"id\":" + id + "}");
+            AdminFragmentResponses.trigger(response, AdminHxEvents.VIRTUAL_ACCOUNT_LIST_REFRESH);
+            model.addAttribute("toast", msg.get("admin.flash.virtualAccount.created", id));
+            return "admin/fragments/drawer-virtual-account :: created";
+        }
         try {
-            String finalUrl = avatarUrl;
-            if (avatarFile != null && !avatarFile.isEmpty()) {
-                finalUrl = images.upload(avatarFile, "virtual-avatar").url();
-            }
-            long id = service.create(nickname, finalUrl, accountSpecies,
-                    admin.getAdminAccountId());
+            long id = doCreate(admin, nickname, avatarUrl, avatarFile, accountSpecies);
             flash.addFlashAttribute("notice", msg.get("admin.flash.virtualAccount.created", id));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));
@@ -109,6 +205,24 @@ public class AdminVirtualAccountController {
             flash.addFlashAttribute("error", msg.get("admin.flash.vet.avatarUploadFailed"));
         }
         return "redirect:/admin/virtual-accounts";
+    }
+
+    private long doCreate(AdminUserDetails admin, String nickname, String avatarUrl,
+            MultipartFile avatarFile, String accountSpecies) {
+        // 上传优先；两个都没给就没有头像（选填）。URL 输入框保留作兜底 ——
+        // 运营手上确实存在已有 CDN 链接的素材。
+        String finalUrl = avatarUrl;
+        if (avatarFile != null && !avatarFile.isEmpty()) {
+            try {
+                finalUrl = images.upload(avatarFile, "virtual-avatar").url();
+            } catch (AppException e) {
+                throw e;
+            } catch (Exception e) {
+                throw AppException.validation("头像上传失败，请稍后重试")
+                        .code("admin.flash.vet.avatarUploadFailed");
+            }
+        }
+        return service.create(nickname, finalUrl, accountSpecies, admin.getAdminAccountId());
     }
 
     /**
@@ -120,7 +234,13 @@ public class AdminVirtualAccountController {
     @PostMapping("/admin/virtual-accounts/{id}/species")
     @PreAuthorize(AUTH)
     public String setSpecies(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable long id, @RequestParam String accountSpecies, RedirectAttributes flash) {
+            @PathVariable long id, @RequestParam String accountSpecies,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            service.setAccountSpecies(id, accountSpecies, admin.getAdminAccountId());
+            return afterAction(id, msg.get("admin.flash.virtualAccount.speciesUpdated"),
+                    model, response);
+        }
         try {
             service.setAccountSpecies(id, accountSpecies, admin.getAdminAccountId());
             flash.addFlashAttribute("notice",
@@ -134,7 +254,15 @@ public class AdminVirtualAccountController {
     @PostMapping("/admin/virtual-accounts/{id}/enabled")
     @PreAuthorize(AUTH)
     public String setEnabled(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
-            @RequestParam boolean enabled, RedirectAttributes flash) {
+            @RequestParam boolean enabled,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            service.setEnabled(id, enabled, admin.getAdminAccountId());
+            // 🛡 停用走确认弹层（服务端算的待发布排期数），成功后要把弹层收掉。
+            AdminFragmentResponses.trigger(response, AdminHxEvents.CONFIRM_CLOSE);
+            return afterAction(id, msg.get("admin.flash.virtualAccount.statusUpdated"),
+                    model, response);
+        }
         try {
             service.setEnabled(id, enabled, admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.virtualAccount.statusUpdated"));
