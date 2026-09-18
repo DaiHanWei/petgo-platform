@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../shared/media/image_lightbox.dart';
 import '../../../shared/utils/date_format.dart';
+import '../../mention/domain/mention_context.dart';
+import '../../mention/presentation/mention_text.dart';
+import '../../social/domain/account_action_entry.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/user_tag_row.dart';
 import '../../../shared/widgets/content_tag_chip.dart';
@@ -21,7 +24,7 @@ import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/letter_avatar.dart';
-import '../../../shared/widgets/mini_profile_sheet.dart';
+import '../../user_profile/presentation/public_profile_page.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../data/detail_repository.dart';
 import '../domain/content_detail.dart';
@@ -171,7 +174,31 @@ class _DetailScaffold extends ConsumerWidget {
                       const SizedBox(height: AppSpacing.md),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
-                        child: Text(detail.body!, style: AppTypography.body),
+                        // V1.3.0 batch-b1 Story 3.3：正文里的 @ 高亮可点（AC1/AC2）。
+                        // 🔴 高亮与可点的判定**全在后端**（拉黑 AC3 / 注销 AC4），这里只照做。
+                        // （合并注：位置随批次 A Story 2.2 的新顺序 —— 作者行 → 图片 → 正文。）
+                        child: MentionText(
+                          text: detail.body!,
+                          mentions: detail.mentions,
+                          mentionContext: MentionContext.post,
+                          style: AppTypography.body,
+                          onTapUser: (userId) => openUserProfile(
+                            context,
+                            ref,
+                            userId,
+                            entry: AccountActionEntry.mention,
+                            // ⚠️ 与作者入口那处**刻意不同**：不传 popContext。
+                            //    被 @ 的人通常不是帖主，拉黑他之后**这条帖依然可见**，
+                            //    把用户踢回列表反而莫名其妙。只清列表里他自己的卡片。
+                            // 🔴 但**必须就地刷新本页**：不刷的话 detail.mentions 里那条
+                            //    还是 tappable=true，回到详情页可以立刻再点进刚拉黑那个人的
+                            //    主页（违反 AC3），他的评论也还挂着。bump 评论刷新信号会
+                            //    连带 invalidate detailProvider（见本页 ref.listen），
+                            //    一条就够 —— 与评论区那条路径同一套（code-review 2026-09-15）。
+                            onBlocked: _hideMentionedUser(ref, userId),
+                            onReported: _hideMentionedUser(ref, userId),
+                          ),
+                        ),
                       ),
                     ],
                     // 无图 → 装饰标签落在正文下方**单独一行**小胶囊（AC5 回归保护）。
@@ -238,6 +265,15 @@ class _DetailScaffold extends ConsumerWidget {
   // 发布时间的规则已抽到 shared/utils/date_format.dart 的 formatPublishTime（V1.3.0 Story 2.5 · AC1）：
   // 详情页与评论区显示的是同一类东西，**必须共用同一个函数**，各写一份迟早分叉。
 
+  /// 在本页拉黑 / 举报了**被 @ 的那个人**之后的收尾（Story 3.3）。
+  ///
+  /// 两件事：清列表里他的卡片（与其它入口同一套）+ 就地刷新本页
+  /// （让那处 @ 变成不可点、他的评论消失）。
+  VoidCallback _hideMentionedUser(WidgetRef ref, int userId) => () {
+        onAuthorHidden(ref, userId)();
+        ref.read(commentsRefreshProvider.notifier).bump();
+      };
+
   Widget _authorRow(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
     final name = detail.authorDeleted ? l10n.feedDeletedUser : (detail.authorNickname ?? l10n.feedDeletedUser);
     // 映射单一来源：分享卡也用它（见 ContentTypeBadge 的注释）。
@@ -278,11 +314,12 @@ class _DetailScaffold extends ConsumerWidget {
         ),
       ],
     );
-    // 作者点击触发迷你卡（Story 3.8）：注销作者不可点（NFR-8）。
+    // 作者点击 → **完整主页**（V1.3.0 batch-b1 Story 2.1 · FR-118.1，此前是迷你卡）：
+    // 注销作者不可点（NFR-8）。
     if (detail.authorDeleted) return row;
     return GestureDetector(
       key: const ValueKey('detailAuthorRow'),
-      onTap: () => showMiniProfile(
+      onTap: () => openUserProfile(
         context,
         ref,
         detail.authorId,

@@ -29,6 +29,10 @@ import '../../../shared/widgets/dashed_rect.dart';
 import '../../../shared/widgets/keyboard_safe_area.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../me/data/my_posts_repository.dart';
+import '../../mention/data/mention_candidate_repository.dart';
+import '../../mention/domain/mention_context.dart';
+import '../../mention/domain/mention_draft.dart';
+import '../../mention/presentation/mention_picker.dart';
 import '../data/content_repository.dart';
 import '../domain/content_type.dart';
 import '../domain/feed_image_layout.dart';
@@ -156,6 +160,56 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   /// 选图/处理中（拍照返回 → 解码压缩剥 EXIF）：网格显占位 loading，避免「拍完没反应」。
   bool _addingImage = false;
+
+  /// 光标前正在打的那个 `@查询词`；非 null 即 @ 浮层可见
+  /// （V1.3.0 batch-b1 Story 3.2 · AC1）。
+  ///
+  /// ⚠️ 只有"现在该不该弹"这一个瞬时状态放在页面上；**已插入的 @ 绑定住在
+  /// `PublishController.mentions`**（与正文同生同死，见那里的注释）。
+  MentionQuery? _mentionQuery;
+
+  /// 每次输入重算 @ 触发态（AC1：输入「@」即弹）。
+  void _syncMentionQuery() {
+    final next = MentionDraft.queryAt(_textController.text, _textController.selection.baseOffset);
+    if (next?.start != _mentionQuery?.start || next?.keyword != _mentionQuery?.keyword) {
+      setState(() => _mentionQuery = next);
+    }
+  }
+
+  /// 选中候选人：正文里插 `@昵称`，控制器里记 userId（AC4）。
+  void _onMentionSelected(PublishController controller, MentionCandidate candidate) {
+    final query = _mentionQuery;
+    if (query == null) return;
+    final l10n = AppLocalizations.of(context);
+    // 🔴 插入是直接写 controller.value，**绕过 maxLength 的格式化器** ——
+    // 不先自己拦一次，1000 字的正文插一个长昵称就超了上限，而这一页的表现是
+    // 「发布按钮悄悄变灰」，用户完全不知道为什么。
+    if (MentionDraft.textAfterInsert(_textController.text, query, candidate.nickname)
+            .characters
+            .length >
+        kMaxPostTextLength) {
+      showAppToast(context, l10n.publishTextLimitReached);
+      setState(() => _mentionQuery = null);
+      return;
+    }
+    final inserted = controller.mentions
+        .insert(_textController.text, query, candidate.userId, candidate.nickname);
+    if (inserted == null) {
+      // AC5：达上限不能再插入，并给出提示。
+      showAppToast(context, l10n.mentionLimitReached);
+      setState(() => _mentionQuery = null);
+      return;
+    }
+    _textController.value = TextEditingValue(
+      text: inserted.text,
+      selection: TextSelection.collapsed(offset: inserted.cursor),
+    );
+    controller.setText(inserted.text);
+    // Story 3.5 AC4：**真的插进去了**才报（被上限 / 字数拦住的那两条 return 都在上面）。
+    // ⚠️ 字面量写法是给埋点守卫看的，见 MentionContext 的类注释。
+    Analytics.capture('mention_inserted', {'context': MentionContext.post.wire});
+    setState(() => _mentionQuery = null);
+  }
 
   @override
   void dispose() {
@@ -571,7 +625,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                         minLines: 3,
                         maxLines: 6,
                         maxLength: kMaxPostTextLength,
-                        onChanged: controller.setText,
+                        onChanged: (v) {
+                          controller.setText(v);
+                          // Story 3.2 AC1：输入「@」弹出用户选择器浮层。
+                          _syncMentionQuery();
+                        },
                         style: const TextStyle(
                           fontSize: 14,
                           color: AppColors.ink,
@@ -589,6 +647,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                           counterText: '', // 隐藏默认计数器，改放容器内右下
                         ),
                       ),
+                      // AC1：输入「@」弹出用户选择器浮层，紧贴正文框下沿展开。
+                      if (_mentionQuery != null) ...[
+                        const SizedBox(height: 7),
+                        MentionPicker(
+                          keyword: _mentionQuery!.keyword,
+                          onSelected: (c) => _onMentionSelected(controller, c),
+                        ),
+                      ],
                       const SizedBox(height: 7),
                       // 原型 charcount：框内右下「已用 / 总数」，弱色 11px。
                       Text(

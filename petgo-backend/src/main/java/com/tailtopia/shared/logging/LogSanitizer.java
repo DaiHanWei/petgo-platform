@@ -41,7 +41,11 @@ public class LogSanitizer {
             // 爆炸半径已核实极小：全仓 JSON 键为 content 的只有评价族；评论正文叫 body、
             //    发帖正文叫 text、UploadUrlRequest 里是 contentType（整键 equals 不误伤）。
             //    代价仅是日志里看不到公开评价原文 —— 用户自由文本，本就无排障价值。
-            "content");
+            "content",
+            // 位置坐标（NFR-4，batch-b1 复审）：`POST /places` 请求体带的是用户标记时的设备 GPS
+            // （表单默认取当前定位）。query 里的 lat/lng 已由 ApiAccessLoggingFilter.redactQuery 打码，
+            // 请求体这一半此前是明文落盘的。响应里的场所坐标同样来自标记人的 GPS，一并打码。
+            "lat", "lng", "latitude", "longitude");
 
     /**
      * <b>仅请求体</b>打码的字段名：用户自由文本，可含第三者 PII / 指控原文（如账号举报的

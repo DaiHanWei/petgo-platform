@@ -19,8 +19,19 @@ import 'app_image.dart';
 import 'app_toast.dart';
 import 'confirm_sheet.dart';
 import 'user_tag_row.dart';
+import '../../features/profile/data/pet_recommendation_repository.dart';
 
 /// 他人迷你主页预览卡（Story 3.8，FR-26）。点他人头像/昵称从底部弹卡。
+///
+/// # 🔴 已退役（V1.3.0 batch-b1 Story 2.1 · FR-118.1）
+///
+/// **本组件不再被任何入口引用** —— App 里所有「点头像看这人是谁」的地方都改成了
+/// `openUserProfile`（完整主页）。一条守门测试（`test/user_profile/mini_profile_retired_test.dart`）
+/// 钉着这一点：任何人把它接回某个入口，那条测试当场红。
+///
+/// ⚠️ **文件与后端 `/mini-profile` 端点都刻意保留**：它们各自还挂着一批既有回归用例
+/// （拉黑 / 举报 / 埋点入口），删组件等于同时删掉那批覆盖。清理属另一次改动，
+/// 前提是主页侧的等价用例已经稳下来。**在那之前不要往这里加新功能**。
 ///
 /// 含头像+昵称、发布数、签名或「主页筹备中」措辞（**非技术性表达**）、关闭按钮；
 /// **无「关注」「查看主页」按钮**。已注销用户（isDeactivated）**不弹卡**（NFR-8）。
@@ -373,6 +384,9 @@ class _MiniProfileCard extends StatelessWidget {
       onConfirm: () async {
         try {
           await ref.read(blockedUsersRepositoryProvider).block(userId);
+          // 「逛别人家的毛孩子」推荐位要跟着重算（Story 4.1 AC3 / 4.4）——
+          // 「互相拉黑不互推」是服务端取数时算的，不重取就等于这条过滤对当前那份数据不生效。
+          invalidatePetRecommendations(ref);
           // ⚠️ 埋点在**成功之后**（V1.1.2 的教训：门控前就上报会让指标系统性高估）。
           // 拉黑失败不上报，取消也不上报。
           // origin=BLOCK 与举报自动产生的隐藏（origin=REPORT）分开 ——

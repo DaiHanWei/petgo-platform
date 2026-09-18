@@ -95,6 +95,26 @@ dependencies:
   appsflyer_sdk: ^6.18.1
   # iOS 14.5+ ATT 授权弹窗（拿 IDFA 用；AppsFlyer 插件只等待不弹框）。Android 上无操作。
   app_tracking_transparency: ^2.0.6
+  # V1.3.0 batch-b1 Story 1.2：设备定位（场所列表按距离排序）。
+  # 🔴 **选独立定位库而不是地图 SDK 自带的定位**：地图 SDK 要到 Story 1.4 才引入，
+  #    靠它取坐标会让 1.2 前向依赖 1.4（顺序反了，1.2 在前）。多一个依赖换本 story 自足。
+  # 🛡 只用「取一次当前位置」这一个能力 —— 不做后台定位、不做持续追踪、不做地理围栏。
+  #    经纬度**只随请求发给自家后端**，绝不进日志、绝不进埋点属性（NFR-4 / NFR-5）。
+  # 权限申请仍走既有 permission_handler（见 shared/utils/media_permission.dart 的范式），
+  #    不用 geolocator 自带的权限方法 —— 全 App 只保留一条权限申请路径。
+  # ⚠️ 上界钉在 14.0.3 之下：14.0.3 起 geolocator_linux 要求 package_info_plus ^10，
+  #    而本项目钉 ^8.1.0（上面那行）。为一个**根本不构建 Linux 桌面**的传递依赖去升
+  #    package_info_plus 大版本，代价是全仓回归，不值。上界只有在 package_info_plus
+  #    自身该升的时候才一起动。
+  geolocator: ">=14.0.0 <14.0.3"
+  # V1.3.0 batch-b1 Story 1.4：地图选点（AD-3 / B1-D9）。
+  # 🔴 **只用两件事：显示地图 + 渲染我们自己库里的经纬度标记**。
+  #    禁调 Google 的地点搜索/自动补全（Places）、地址与坐标互转（Geocoding）、路线（Directions）——
+  #    **那三类才是按次计费的大头**，而 PRD ① 明定「平台不做地理编码」，天然避开。
+  #    移动端原生地图显示本身免费且不限量（2026-09-11 核实官方价目）。
+  # 🛡 边界有测试守着：test/place/map_usage_boundary_test.dart 扫全仓源码，
+  #    出现 Places/Geocoding/Directions 的调用面、或地图出现在第三个页面，即红。
+  google_maps_flutter: ^2.18.0
 
 dependency_overrides:
   # jcenter() 已被 Gradle 9 移除而 pub.dev 原版 9.0.7652 仍在用 → vendor 打补丁

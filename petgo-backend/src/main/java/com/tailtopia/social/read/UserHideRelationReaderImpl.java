@@ -2,6 +2,9 @@ package com.tailtopia.social.read;
 
 import com.tailtopia.social.domain.HideSource;
 import com.tailtopia.social.repository.UserHideRelationRepository;
+import java.util.Collection;
+import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,5 +41,15 @@ public class UserHideRelationReaderImpl implements UserHideRelationReader {
     public boolean isReported(long holderId, long targetId) {
         // 「已举报」标记（Story 2.1 AC8）：由 REPORT 行是否存在派生，不是前端会话态。
         return relations.existsByHolderIdAndTargetIdAndSource(holderId, targetId, HideSource.REPORT);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> hiddenEitherWay(long userId, Collection<Long> others) {
+        if (others == null || others.isEmpty()) {
+            // 🛡 空表短路：`IN ()` 在 Postgres 上是语法错误，而「没有人要判」是个正常场景。
+            return Set.of();
+        }
+        return Set.copyOf(relations.findHiddenEitherWay(userId, List.copyOf(others)));
     }
 }

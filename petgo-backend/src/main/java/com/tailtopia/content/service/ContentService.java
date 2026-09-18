@@ -3,11 +3,13 @@ package com.tailtopia.content.service;
 import com.tailtopia.content.domain.Comment;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.domain.ContentVisibility;
 import com.tailtopia.content.domain.DeleteReason;
 import com.tailtopia.content.domain.ImageSize;
 import com.tailtopia.content.domain.PostStatus;
 import com.tailtopia.content.dto.ContentPostCreateRequest;
 import com.tailtopia.content.dto.ContentPostResponse;
+import com.tailtopia.content.event.ContentMentionedEvent;
 import com.tailtopia.content.event.ContentPublishedEvent;
 import com.tailtopia.content.event.ContentRemovedEvent;
 import com.tailtopia.content.event.ContentUnavailableEvent;
@@ -15,6 +17,7 @@ import com.tailtopia.content.moderation.ModerationOutcome;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentLikeRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.mention.service.MentionSanitizer;
 import com.tailtopia.profile.service.ProfileService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.IdempotencyService;
@@ -59,13 +62,19 @@ public class ContentService {
     private final ImageSizeBackfillService sizeBackfill;
     /** V1.1.6 Story 4.1：注销联动收口顶置排期（注销是批量隐藏，发不出逐条事件）。 */
     private final ContentPinService pins;
+    /**
+     * V1.3.0 batch-b1 Story 3.2：@ 名单落库前的权威过滤（≤5 / 去重 / 去自己 / 去注销 / 去拉黑）。
+     *
+     * <p>⚠️ 客户端的候选集端点只决定**选择器里能点到谁**，请求体里那串 id 是纯客户端输入。
+     */
+    private final MentionSanitizer mentions;
 
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, ProfileService profileService,
             IdempotencyService idempotency, ContentModerationService moderation,
             ApplicationEventPublisher events, ManualReviewGate manualReviewGate,
             ImageSizeResolver imageSizes, ImageSizeBackfillService sizeBackfill,
-            ContentPinService pins) {
+            ContentPinService pins, MentionSanitizer mentions) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -77,6 +86,7 @@ public class ContentService {
         this.imageSizes = imageSizes;
         this.sizeBackfill = sizeBackfill;
         this.pins = pins;
+        this.mentions = mentions;
     }
 
     /**
@@ -153,10 +163,34 @@ public class ContentService {
         }
     }
 
-    /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。经 service 暴露，不让 auth 直读 content 表。 */
+    /**
+     * 他人主页 / 迷你卡的**发帖总数**（Story 3.8；V1.3.0 batch-b1 Story 2.2 加 PUBLIC 过滤）。
+     * 经 service 暴露，不让 auth 直读 content 表。
+     *
+     * <p>🔴 <b>2026-09-15 改口：只数 PUBLIC</b>。原实现把私密内容也数了进去 ——
+     * 而这个数字的两个出口（迷你卡 / 公开主页）<b>都是他人视角</b>，
+     * {@link com.tailtopia.content.domain.ContentVisibility} 对这一类的判定口径是
+     * 「按 PUBLIC 过滤」（NFR-4）。
+     * <p>不改的后果：主页上写着「18 postingan」而网格里只有 12 格；更要紧的是那个差值
+     * <b>就是这个人有几篇私密内容</b>，访客不该能推断出来。
+     * <p>⚠️ 作者自视的口径不受影响 —— 「我的发布」走 {@code findMyPosts}，
+     * 那边**刻意不过滤** visibility。
+     */
     @Transactional(readOnly = true)
-    public long countPublishedByAuthor(long authorId) {
-        return posts.countByAuthorIdAndDeletedAtIsNullAndStatus(authorId, PostStatus.PUBLISHED);
+    public long countPublicPostsByAuthor(long authorId) {
+        return posts.countPublicPublishedByAuthor(authorId);
+    }
+
+    /**
+     * 他人主页的**获赞总数**（V1.3.0 batch-b1 Story 2.2 · FR-118.2 · AC2）。
+     *
+     * <p>口径与 {@link #countPublicPostsByAuthor} 同源（PUBLIC + PUBLISHED + 未软删），
+     * 一条 SQL 出数、无 N+1、不新增冗余计数列 —— 理由见
+     * {@link ContentLikeRepository#sumLikesOnPublicPostsByAuthor}。
+     */
+    @Transactional(readOnly = true)
+    public long sumLikesOnPublicPostsByAuthor(long authorId) {
+        return likes.sumLikesOnPublicPostsByAuthor(authorId);
     }
 
     /** 内容是否存在且可见（Story 3.7：举报前校验，经 service 暴露给 moderation，不让其直读 content 表）。 */
@@ -278,6 +312,8 @@ public class ContentService {
                         : 0L;
                 events.publishEvent(new ContentPublishedEvent(p.getId(), p.getAuthorId(), p.getType(),
                         p.getPetId(), growthCount, p.getVisibility(), p.getCreatedAt()));
+                // Story 3.4：挂起帖过审 → **此刻**才发 @ 通知（提交那一刻发就是点进去 404）。
+                publishMentioned(p, null, p.getAuthorId());
             }
         });
     }
@@ -387,6 +423,11 @@ public class ContentService {
                     .code("admin.err.seed.textOrImageRequired");
         }
 
+        // V1.3.0 batch-b1 Story 3.2（AC4/AC5）：@ 名单落库前先洗。
+        // ⚠️ 放在**三方审核之前** —— 超过 5 人是本地就能判死的畸形请求，
+        //    没理由先花一次三方审核的往返再拒。
+        List<Long> mentionedUserIds = mentions.sanitize(authorId, req.mentionedUserIds());
+
         Long petId = req.petId();
         LocalDate eventDate = null;
         if (req.type() == ContentType.GROWTH_MOMENT) {
@@ -446,6 +487,11 @@ public class ContentService {
                 // 只写下面那条正常分支的话，审核挂起的帖会永远没有尺寸。
                 List<ImageSize> pendingSizes = imageSizes.normalize(imageUrls, req.imageSizes());
                 pendingPost.setImageSizes(pendingSizes);
+                // Story 3.2：🔴 挂起分支**同样要写 @ 名单**（与上面尺寸那条同一个坑）——
+                // 只写下面正常分支的话，审核挂起的帖过审后正文里那串「@昵称」是死的、点不动。
+                // ⚠️ 挂起帖此刻**不发任何事件**，所以 @ 通知也天然不会在这里发出去；
+                //    Story 3.4 的落点应是「转可见那一刻」（同评论 approveComment 的口径）。
+                pendingPost.setMentionedUserIds(mentionedUserIds);
                 ContentPost pending = posts.save(pendingPost);
                 scheduleSizeBackfill(pending, pendingSizes);
                 idempotency.store(idempotencyKey, pending.getId());
@@ -465,6 +511,15 @@ public class ContentService {
         // 缺失的位置交由异步兜底测量 —— 绝不在本事务里同步拉图。
         List<ImageSize> sizes = imageSizes.normalize(imageUrls, req.imageSizes());
         post.setImageSizes(sizes);
+        // Story 3.2 AC4：正文里显示昵称，可点的身份存这里（存 userId 不存昵称）。
+        //
+        // 🔴 **给 Story 3.4（被 @ 的通知）的硬约束：非 PUBLIC 的内容不得发 @ 通知。**
+        // 这里对 PRIVATE（同步开关关掉的 Diary）**照样落库** —— 作者自己那条时间线上
+        // 那串「@昵称」得能高亮、能点（Story 3.3），不落库就成了一段死文字。
+        // 但 PRIVATE 内容只有作者看得见，且可见范围创建后不可更改（FR-83 AC7），
+        // 所以被 @ 的人**永远打不开它**：通知发出去就是一条点进去是空态的骚扰。
+        // ⚠️ 判据是 saved.getVisibility() == PUBLIC，别用「有没有 mentionedUserIds」。
+        post.setMentionedUserIds(mentionedUserIds);
         ContentPost saved = posts.save(post);
         scheduleSizeBackfill(saved, sizes);
 
@@ -478,7 +533,30 @@ public class ContentService {
                 : 0L;
         events.publishEvent(new ContentPublishedEvent(saved.getId(), authorId, req.type(), petId,
                 growthCount, saved.getVisibility(), saved.getCreatedAt()));
+        // Story 3.4：@ 通知。发布时机 = **这条内容变成别人看得见的那一刻**（本分支就是）。
+        publishMentioned(saved, null, authorId);
         return ContentPostResponse.from(saved);
+    }
+
+    /**
+     * 发「有人被 @ 了」事件（Story 3.4）。
+     *
+     * <h2>🔴 两道门，缺一条就是骚扰</h2>
+     * <ol>
+     *   <li><b>名单为空直接不发</b>（绝大多数内容都走这一支，连事件对象都不建）；</li>
+     *   <li><b>非 PUBLIC 不发</b> —— PRIVATE Diary 照样落 @ 名单（作者自视那条时间线要能高亮能点，
+     *       Story 3.3），但可见范围创建后不可改（FR-83 AC7），被 @ 的人永远打不开它。
+     *       ⚠️ 判据是 {@code visibility == PUBLIC}，**不是**「有没有 mentionedUserIds」。</li>
+     * </ol>
+     * 这两条写在**发布侧**，notify 侧因此不必再判一次可见范围。
+     */
+    private void publishMentioned(ContentPost post, Long commentId, long actorId) {
+        List<Long> mentioned = post.getMentionedUserIds();
+        if (mentioned.isEmpty() || post.getVisibility() != ContentVisibility.PUBLIC) {
+            return;
+        }
+        events.publishEvent(new ContentMentionedEvent(post.getId(), commentId, actorId,
+                post.getAuthorId(), mentioned, Instant.now()));
     }
 
     /**
@@ -526,6 +604,9 @@ public class ContentService {
 
         ContentPost post = ContentPost.publish(authorId, req.type(), null, text, imageUrls);
         post.setVisibility(req.visibilityOrPublic());
+        // ⚠️ Story 3.2：运营内容源**刻意不写 @ 名单**。@ 的语义是「一个用户点名另一个用户」，
+        //    它会给被 @ 的人发通知（Story 3.4）——由运营账号批量发出去就是骚扰。
+        //    这条路径本就免审（见类注释），再放开 @ 等于给它一个绕过候选集的群发口子。
         ContentPost saved = posts.save(post);
         idempotency.store(idempotencyKey, saved.getId());
         // 与 publish 同口径发布事件（非 GROWTH_MOMENT → growthCount=0）。
@@ -686,6 +767,100 @@ public class ContentService {
         return posts.countByAuthorIdAndPetIdAndTypeAndDeletedAtIsNullAndStatusIn(
                 authorId, petId, ContentType.GROWTH_MOMENT,
                 List.of(PostStatus.PUBLISHED, PostStatus.UNDER_REVIEW));
+    }
+
+    /**
+     * 推荐池的 content 侧一半（V1.3.0 batch-b1 Story 4.1 · AC1/AC2）。
+     *
+     * <p>经 service 暴露，<b>不让 profile 直读 content_posts 表</b>（架构边界，同
+     * {@link #countGrowthMoments}）。「有头像 / owner 未注销 / 互相拉黑不互推」那三条
+     * 要读 pet_profiles / users / 拉黑关系，由 {@code profile.recommend} 那一侧做。
+     *
+     * <p>⚠️ 调用方要<b>多取一些</b>：那三层过滤都在本方法返回之后，取多少就展示多少的话
+     * 一页会越过滤越空（同 Story 3.1「留 50 给 30」的冗余思路）。
+     *
+     * <p>⚠️ {@code afterCursor} 非空 = 只取排序键**严格在它之后**的候选（Story 4.3 的翻页）。
+     * 游标是整个排序键，不是「最后那只宠物的 id」—— 理由见 {@code PetRecommendCursor}。
+     *
+     * @param since       候选窗口起点（「近 14 天」那一刻）
+     * @param minRecords  公开成长记录条数门槛
+     * @param limit       取多少候选（含给后续过滤留的冗余）
+     * @param afterCursor 从哪个排序键之后继续（null = 第一页）
+     */
+    @Transactional(readOnly = true)
+    public List<RecommendablePet> findRecommendablePets(Instant since, int minRecords, int limit,
+            RecommendCursor afterCursor) {
+        return posts.findRecommendablePets(since, minRecords, limit,
+                        afterCursor != null,
+                        afterCursor == null ? null : afterCursor.lastPostedAt(),
+                        afterCursor == null ? null : afterCursor.interactions(),
+                        afterCursor == null ? null : afterCursor.petId())
+                .stream()
+                .map(row -> new RecommendablePet(
+                        ((Number) row[0]).longValue(),
+                        toInstant(row[1]),
+                        ((Number) row[2]).longValue(),
+                        ((Number) row[3]).longValue()))
+                .toList();
+    }
+
+    /**
+     * 这批宠物各自最近一张**公开照片**的 URL（Story 4.1 · AC4 卡片大图）。
+     *
+     * <p>🔴 与宠物档案自身的头像是<b>两个不同字段</b> —— 做成同一张图重复摆放是明显 bug
+     * （UI 稿 UX-DR15 专门点过）。
+     *
+     * @return petId → 首图 URL；没有带图公开帖的宠物**不在结果里**（调用方按缺失处理）
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, String> findLatestPublicCovers(java.util.Collection<Long> petIds) {
+        if (petIds == null || petIds.isEmpty()) {
+            return java.util.Map.of();
+        }
+        java.util.Map<Long, String> out = new java.util.HashMap<>();
+        for (Object[] row : posts.findLatestPublicCovers(petIds)) {
+            String url = (String) row[1];
+            if (url != null && !url.isBlank()) {
+                out.put(((Number) row[0]).longValue(), url);
+            }
+        }
+        return out;
+    }
+
+    /** JDBC 可能给回 Timestamp 或 Instant，两种都收（native query 的返回类型不由我们定）。 */
+    private static Instant toInstant(Object value) {
+        if (value instanceof Instant instant) {
+            return instant;
+        }
+        if (value instanceof java.sql.Timestamp ts) {
+            return ts.toInstant();
+        }
+        if (value instanceof java.time.OffsetDateTime odt) {
+            return odt.toInstant();
+        }
+        throw new IllegalStateException("无法识别的时间类型: " + value.getClass());
+    }
+
+    /**
+     * 推荐池里的一只宠物（content 侧视角）。
+     *
+     * @param petId         宠物档案 id
+     * @param lastPostedAt  最近一条公开成长日历帖的时间（排序主键）
+     * @param publicRecords 公开成长记录条数（已过门槛，带出来供排查）
+     * @param interactions  互动量（点赞总数）——<b>只用作同日的次级排序</b>（AC1）
+     */
+    public record RecommendablePet(long petId, Instant lastPostedAt, long publicRecords,
+            long interactions) {
+    }
+
+    /**
+     * 推荐池翻页的排序键（Story 4.3 · AC3）——「从这一行之后继续取」。
+     *
+     * <p>🔴 本记录**只是个参数载体**，不做编解码：对外那个 base64url token 的形态归
+     * {@code profile.recommend.PetRecommendCursor}。content 侧不该知道游标长什么样，
+     * 就像它不知道宠物有没有头像一样（架构边界）。
+     */
+    public record RecommendCursor(long interactions, Instant lastPostedAt, long petId) {
     }
 
     /**

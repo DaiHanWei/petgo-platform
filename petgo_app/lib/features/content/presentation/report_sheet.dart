@@ -13,6 +13,28 @@ import '../domain/report_reason.dart';
 /// [onReported]（cm-6）：举报成功且用户关闭成功态后回调——Feed 侧乐观移除卡片、详情侧 pop 回列表
 /// （该帖对本人已「不存在」，后端 §5.4 亦已过滤）。仅成功路径触发（成功态点关闭）；表单取消/未提交不触发。
 void openReport(BuildContext context, WidgetRef ref, int postId, {VoidCallback? onReported}) {
+  openReportSheet(
+    context,
+    ref,
+    submit: (reason) =>
+        ref.read(detailRepositoryProvider).submitReport(postId, reason.wire),
+    onReported: onReported,
+  );
+}
+
+/// 举报某个**非内容**目标时用这一条（V1.3.0 batch-b1 Story 1.5：场所举报）。
+///
+/// 🔴 **抽屉本身完全不变** —— 标题 / 副标题 / 五个理由卡 / 成功态 / 文案全部照旧
+/// （Story 1.5 AC5 要求「文案一字不改」）。唯一不同的是**提交到哪儿**，所以这里只把
+/// 提交动作变成一个参数，而不是复制一份抽屉出来。
+///
+/// 复制一份的后果很具体：五条理由文案会分叉，而它们在两处必须一模一样。
+void openReportSheet(
+  BuildContext context,
+  WidgetRef ref, {
+  required Future<void> Function(ReportReason reason) submit,
+  VoidCallback? onReported,
+}) {
   // 门控：未登录 → FR-0C，不弹 sheet。
   final allowed = requireLogin(ref, context, onAllowed: () {});
   if (!allowed) return;
@@ -20,17 +42,18 @@ void openReport(BuildContext context, WidgetRef ref, int postId, {VoidCallback? 
     context: context,
     backgroundColor: AppColors.surface,
     isScrollControlled: true,
-    builder: (_) => _ReportSheet(postId: postId, ref: ref),
+    builder: (_) => _ReportSheet(submit: submit),
   ).then((submitted) {
     if (submitted == true) onReported?.call();
   });
 }
 
 class _ReportSheet extends StatefulWidget {
-  const _ReportSheet({required this.postId, required this.ref});
+  const _ReportSheet({required this.submit});
 
-  final int postId;
-  final WidgetRef ref;
+  /// 提交动作。内容举报打 `/content-posts/{id}/reports`，场所举报打
+  /// `/places/{token}/reports` —— 抽屉本身不关心是哪个。
+  final Future<void> Function(ReportReason reason) submit;
 
   @override
   State<_ReportSheet> createState() => _ReportSheetState();
@@ -53,7 +76,7 @@ class _ReportSheetState extends State<_ReportSheet> {
     if (_selected == null || _submitting) return;
     setState(() => _submitting = true);
     try {
-      await widget.ref.read(detailRepositoryProvider).submitReport(widget.postId, _selected!.wire);
+      await widget.submit(_selected!);
       if (mounted) setState(() => _done = true); // 切 sheet 内成功态（不再 toast）
     } catch (_) {
       if (mounted) setState(() => _submitting = false);

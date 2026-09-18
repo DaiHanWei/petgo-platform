@@ -56,7 +56,13 @@ class FeedServiceTest {
                 mock(com.tailtopia.content.service.ContentTagQueryService.class),
                 // V1.1.6 Story 4.4：顶置位隐藏过滤；本类不验它，mock 默认 isHidden=false（等于没拉黑）。
                 mock(com.tailtopia.social.read.UserHideRelationReader.class),
-                recommendations);
+                recommendations,
+                // V1.3.0 batch-b1 Story 3.3：@ 渲染投影。本类夹具都没有 @，
+                // resolveAll 在碰任何依赖之前就返回空 Map，所以两个 mock 无需 stub
+                // （也因此**不会**多发查询 —— 批量聚合的用例计数不受影响）。
+                new com.tailtopia.mention.service.MentionViewService(
+                        mock(com.tailtopia.auth.service.AccountQueryService.class),
+                        mock(com.tailtopia.social.read.UserHideRelationReader.class)));
         // 默认作者视图：返回非注销，nickname 由 id 推。
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);

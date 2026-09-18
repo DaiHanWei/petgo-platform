@@ -53,13 +53,17 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.share.service.ShareRewardDeletionService shareRewardDeletion;
     /** V1.3.0 Story 5.4：一次性引导标记随注销物理删除。 */
     @Mock com.tailtopia.onboarding.service.OnboardingMarkDeletionService onboardingMarkDeletion;
+    @Mock com.tailtopia.place.service.PlaceCommentService placeCommentService;
+    @Mock com.tailtopia.place.service.PlacePhotoService placePhotoService;
+    @Mock com.tailtopia.mention.service.MentionCandidateMaintenanceService mentionCandidateMaintenance;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
                 consultAnonymization, notificationDeletion, pawCoinDeletion, authDeletion,
                 mediaDeletion, imClient, events,
                 contentService, reviewService, violationCountService,
-                shopDeletion, contentShareService, shareRewardDeletion, onboardingMarkDeletion);
+                shopDeletion, contentShareService, shareRewardDeletion, onboardingMarkDeletion,
+                placeCommentService, placePhotoService, mentionCandidateMaintenance);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -94,6 +98,14 @@ class AccountDeletionServiceTest {
         // V1.3.0 Story 5.4 · AC7：引导标记也在级联里 —— 漏接的表会在注销后留着
         // 指向一个已不存在的人的行，而那不会有任何报错提醒。
         verify(onboardingMarkDeletion).deleteByUserId(7L);
+        // V1.3.0 场所评论注销联动（NFR-8 / D1/D2）：独立表，content 那条级联碰不到它 ——
+        // 漏了的话注销用户的场所评论会继续挂着身份对所有人可见。
+        verify(placeCommentService).deactivateAuthorComments(7L);
+        // Story 1.9：他**补充**的场所照片同样对他人隐藏（标记人那批不隐藏 —— 见服务层说明）。
+        verify(placePhotoService).deactivateUploaderPhotos(7L);
+        // V1.3.0 batch-b1 Story 3.1：@ 候选集两个方向都物理删 —— 只删他自己那份的话，
+        // 他还会继续出现在别人的 @ 候选里（点进去是「用户不存在」）。
+        verify(mentionCandidateMaintenance).purgeUser(7L);
         verify(authDeletion).deleteByUserId(7L);
         // OSS 私密图（h1+t1+t2+c1）+ 公开头像 + IM 媒体
         verify(mediaDeletion).deletePrivateKeys(anyList());

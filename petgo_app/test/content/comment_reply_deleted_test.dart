@@ -17,7 +17,7 @@ class _ReplyDeletedRepo implements DetailRepository {
   int postReplyCalls = 0;
 
   @override
-  Future<Comment> postReply(int parentId, String body) async {
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds = const []}) async {
     postReplyCalls++;
     throw DioException(
       requestOptions: RequestOptions(path: '/comments/$parentId/replies'),
@@ -35,7 +35,7 @@ class _ReplyDeletedRepo implements DetailRepository {
   }
 
   @override
-  Future<Comment> postComment(int postId, String body) => throw UnimplementedError();
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds = const []}) => throw UnimplementedError();
   @override
   Future<ContentDetail> getDetail(int id) => throw UnimplementedError();
   @override

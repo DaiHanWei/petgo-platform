@@ -12,6 +12,7 @@ import 'package:tailtopia/core/router/app_router.dart';
 import 'package:tailtopia/core/theme/app_theme.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/consult/presentation/consult_refresh.dart';
+import 'package:tailtopia/features/mention/data/mention_candidate_repository.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/me/presentation/phone_edit_sheet.dart';
@@ -25,6 +26,7 @@ import 'package:tailtopia/features/profile/data/id_card_repository.dart';
 import 'package:tailtopia/features/profile/data/milestone_celebration_reporter.dart';
 import 'package:tailtopia/features/profile/data/onboarding_mark_repository.dart';
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
+import 'package:tailtopia/features/profile/data/pet_recommendation_repository.dart';
 import 'package:tailtopia/features/profile/data/newbie_task_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
@@ -63,6 +65,15 @@ String? deepLinkToLocation(Uri uri) {
     // 没 token 就没有可展示的那一条 —— 落首页，不要退回任何档案页
     // （退到档案页就成了"点别人的分享链接看到自己家宠物"，正是 2.4 修掉的那个 bug）。
     return token.isEmpty ? '/home' : '/shared-post/$token';
+  }
+  // 场所对外分享页（V1.3.0 batch-b1 Story 1.10）。
+  // H5 的 `/place/{token}` 与深链 `tailtopia://place/{token}` 是同一个 token ——
+  // 那是**不可枚举**的 public_token，不是场所名也不是自增 id（AD-1 Rule 3 / NFR-1）。
+  if (uri.scheme == 'tailtopia' && uri.host == 'place') {
+    final token = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
+    // 没 token 就没有可展示的那一个 —— 落**场所列表**（而不是首页）：
+    // 用户点的是一条场所链接，给他场所列表至少还在同一个功能里。
+    return token.isEmpty ? '/places' : '/places/$token';
   }
   if (uri.scheme == 'tailtopia' && uri.host == 'open') {
     // 🔧 DEBUG ONLY：`tailtopia://open/<路径>` 直达任意路由，供本地验收导航用。
@@ -291,5 +302,8 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(pawCoinProvider); // PawCoin 余额（同型隐患：换账号防显示上个账号余额）
   ref.invalidate(onboardingMarksProvider); // 一次性引导标记（按账号存：换账号不得沿用上个账号的）
   ref.invalidate(orderListProvider); // 订单中心（keep-alive 且不 watch 登录态：换账号会看到上个账号的订单）
+  // batch-b1 复审：以下两项都是按当前用户算的（排除自己 / 互相拉黑的人 / 最近互动的人）。
+  ref.invalidate(petRecommendationsProvider); // 宠物推荐（首页横滑行常驻 watch，autoDispose 不会回收）
+  ref.invalidate(mentionCandidatesProvider); // @ 候选集（最近互动的人：不清 = 隐私泄漏）
   ref.read(consultRefreshProvider.notifier).bump(); // 问诊页 _active/_history 重拉
 }

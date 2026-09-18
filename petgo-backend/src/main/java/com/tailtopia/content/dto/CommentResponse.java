@@ -3,6 +3,7 @@ package com.tailtopia.content.dto;
 import com.tailtopia.auth.dto.AuthorView;
 import com.tailtopia.content.domain.Comment;
 import com.tailtopia.content.domain.CommentModerationStatus;
+import com.tailtopia.mention.dto.MentionView;
 import java.time.Instant;
 import java.util.List;
 
@@ -35,22 +36,37 @@ public record CommentResponse(
         List<CommentResponse> replies,
         String moderationStatus,
         long likeCount,
-        boolean liked) {
+        boolean liked,
+        /**
+         * 这条评论里的 @（V1.3.0 batch-b1 Story 3.3 · AC1/AC3/AC4）。
+         *
+         * <p>🔴 <b>能不能点、显示什么昵称都是服务端算好的</b>（见 {@link MentionView}）。
+         * 空表不下发 —— 评论区一页 40 行，每行挂一个空数组是白占体积。
+         */
+        List<MentionView> mentions) {
 
-    /** 二级回复（无嵌套）。 */
-    public static CommentResponse reply(Comment c, AuthorView author, long likeCount, boolean liked) {
+    /** 二级回复（无嵌套）。{@code mentions} 为 @ 投影（Story 3.3），没 @ 人时传 null。 */
+    public static CommentResponse reply(Comment c, AuthorView author, long likeCount, boolean liked,
+            List<MentionView> mentions) {
         return new CommentResponse(c.getId(), c.getAuthorId(), author.nickname(),
                 author.avatarUrl(), author.deleted(), author.tags().isEmpty() ? null : author.tags(),
-                c.getBody(), c.getCreatedAt(), null, null, statusName(c), likeCount, liked);
+                c.getBody(), c.getCreatedAt(), null, null, statusName(c), likeCount, liked, mentions);
     }
 
-    /** 一级评论（带 replyCount + 前 3 条二级）。 */
+    /**
+     * 一级评论（带 replyCount + 前 3 条二级）。{@code mentions} 为 @ 投影（Story 3.3），
+     * 没 @ 人时传 null。
+     *
+     * <p>⚠️ <b>刻意只有这一个签名</b>：留一个"不带 @"的窄重载，下一个出口按自动补全挑了它
+     * 就会让那一屏的 @ 全变纯文字 —— 没有编译错误、没有测试兜底（code-review 2026-09-15）。
+     */
     public static CommentResponse topLevel(Comment c, AuthorView author, int replyCount,
-            List<CommentResponse> firstReplies, long likeCount, boolean liked) {
+            List<CommentResponse> firstReplies, long likeCount, boolean liked,
+            List<MentionView> mentions) {
         return new CommentResponse(c.getId(), c.getAuthorId(), author.nickname(),
                 author.avatarUrl(), author.deleted(), author.tags().isEmpty() ? null : author.tags(),
                 c.getBody(), c.getCreatedAt(), replyCount, firstReplies, statusName(c),
-                likeCount, liked);
+                likeCount, liked, mentions);
     }
 
     private static String statusName(Comment c) {

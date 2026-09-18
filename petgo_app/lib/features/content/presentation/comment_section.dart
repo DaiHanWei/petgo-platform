@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../mention/domain/mention_context.dart';
+import '../../mention/presentation/mention_text.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/motion.dart';
 import '../../../core/theme/spacing.dart';
@@ -11,7 +13,6 @@ import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/letter_avatar.dart';
-import '../../../shared/widgets/mini_profile_sheet.dart';
 import '../../social/domain/account_action_entry.dart';
 import '../data/detail_repository.dart';
 import '../domain/comment.dart';
@@ -20,6 +21,7 @@ import 'detail_providers.dart';
 import 'report_sheet.dart';
 import '../../../shared/widgets/user_tag_row.dart';
 import '../../auth/domain/auth_guard.dart';
+import '../../user_profile/presentation/public_profile_page.dart';
 
 /// 评论区（Story 3.3 只读 + Story 3.5 回复/删除入口）。一级时间正序首 10 + 「查看更多评论」；
 /// 二级默认内嵌 3 条 + 「查看全部 X 条回复」展开。非自身滚动（嵌入详情页滚动）。
@@ -562,18 +564,20 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       comment: c,
       name: name,
       replyLabel: l10n.detailReply,
-      // V1.1.4 Story 1.6：点评论作者 → 迷你卡（举报 / 拉黑的入口）。
+      // V1.1.4 Story 1.6：点评论作者 → 举报 / 拉黑的入口。
+      // V1.3.0 batch-b1 Story 2.1 起该入口从迷你卡换成**完整主页**（FR-118.1），
+      // 收尾回调语义一字未变（仅成功路径触发）。
       //
       // ⚠️ 这是本版本最大的闭环缺口：影子评论 / R1 / R2 / 通知抑制**全是为评论区骚扰设计的**，
-      // 而在此之前 `showMiniProfile` 全 App 只有 Feed 卡片作者与详情页作者两个触发点——
+      // 而在此之前这个入口全 App 只有 Feed 卡片作者与详情页作者两个触发点——
       // 一个只在评论区骚扰、从不发帖的账号，用户既举报不了也拉黑不了。
       //
       // ⚠️ 已注销 → 传 null，整体去掉点击手势（NFR-8，与首页/详情两处一致），且**不给任何 Toast**。
-      // `showMiniProfile` 内部虽有第二道防线（isDeactivated 直接 return），但那要先走一次网络往返，
-      // 用户看到的是「点了没反应」——与网络失败无法区分。
+      // 主页内部虽有第二道防线（注销 → 通用空态），但那要先走一次网络往返，
+      // 用户看到的是「进去一片空白」——与网络失败无法区分。
       onAuthorTap: c.authorDeleted
           ? null
-          : () => showMiniProfile(context, ref, c.authorId,
+          : () => openUserProfile(context, ref, c.authorId,
               // 修复清单 #7：与首页/详情入口同一套收尾（onAuthorHidden = 乐观清 Feed 该作者
               // 全部卡片；对象是帖主时顺带退出本详情页），再刷本帖评论。只接 _reload 的话，
               // 用户回到首页会看见「我明明处理了，他的东西还在」。
@@ -586,6 +590,13 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       canDelete: _canDelete(c),
       onReply: () =>
           ref.read(replyTargetProvider.notifier).set(ReplyTarget(parentId: c.id, toName: name)),
+      // V1.3.0 batch-b1 Story 3.3：点评论里的 @ → 那个人的公开主页（AC2）。
+      // ⚠️ 与 onAuthorTap 分开：被 @ 的人通常**不是**这条评论的作者，
+      //    共用回调会把错的人从列表里清掉。
+      onTapMention: (userId) => openUserProfile(context, ref, userId,
+          onBlocked: _onCommentAuthorHidden(userId),
+          onReported: _onCommentAuthorHidden(userId),
+          entry: AccountActionEntry.mention),
       onDelete: () => _confirmDelete(c.id),
       // V1.3.0 Story 2.4：评论点赞。一级、二级共用同一端点（层级与点赞无关）。
       onToggleLike: () => _toggleLike(c),
@@ -609,6 +620,7 @@ class _CommentTile extends StatelessWidget {
     required this.onToggleLike,
     required this.onLongPress,
     required this.isPostAuthor,
+    required this.onTapMention,
     this.takenDownLabel,
   });
 
@@ -634,6 +646,9 @@ class _CommentTile extends StatelessWidget {
   /// 点头像/作者名 → 迷你卡（Story 1.6）。**为 null = 已注销**，此时头像与名字都不可点，
   /// 整行只剩「点了回复」的既有行为。
   final VoidCallback? onAuthorTap;
+
+  /// 点评论里的 @ → 那个人的公开主页（V1.3.0 batch-b1 Story 3.3 · AC2）。
+  final void Function(int userId) onTapMention;
 
   /// 非空 = 该评论被下架/移除、仅作者可见 → 渲染灰态提示标签（story 3）。
   final String? takenDownLabel;
@@ -714,9 +729,19 @@ class _CommentTile extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.xxs),
-                  Text(comment.body, style: AppTypography.body),
+                  // V1.3.0 batch-b1 Story 3.3：评论里的 @ 高亮可点（AC1/AC2）。
+                  // 🔴 高亮与可点的判定**全在后端**（拉黑 AC3 / 注销 AC4），这里只照做。
+                  // ⚠️ 点 @ 与「点整条评论 = 回复」是两个手势，靠手势竞技场分开
+                  //    （同上面作者名那处的既有做法），有测试钉着。
+                  MentionText(
+                    text: comment.body,
+                    mentions: comment.mentions,
+                    onTapUser: onTapMention,
+                    mentionContext: MentionContext.comment,
+                    style: AppTypography.body,
+                  ),
                   const SizedBox(height: AppSpacing.xxs),
-                  // 时间走**与详情页同一个** formatPublishTime（AC1）：7 天内相对、超 7 天绝对日期。
+                  // 时间走**与详情页同一个** formatPublishTime（批次 A · AC1）：7 天内相对、超 7 天绝对日期。
                   Text(
                     formatPublishTime(context, AppLocalizations.of(context), comment.createdAt),
                     key: ValueKey('commentTime_${comment.id}'),
