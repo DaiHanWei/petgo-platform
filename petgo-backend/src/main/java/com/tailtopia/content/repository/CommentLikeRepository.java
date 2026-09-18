@@ -4,6 +4,7 @@ import com.tailtopia.content.domain.CommentLike;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -23,6 +24,20 @@ public interface CommentLikeRepository extends JpaRepository<CommentLike, Long> 
     boolean existsByCommentIdAndUserId(long commentId, long userId);
 
     long deleteByCommentIdAndUserId(long commentId, long userId);
+
+    /**
+     * 幂等插入：已赞过则什么都不做，返回 0。
+     *
+     * <p>🔴 不能用「save 撞唯一约束再 catch」：约束异常一出，PostgreSQL 已把本事务置为 aborted、
+     * Spring 也已标 rollback-only，catch 住之后提交时照样抛 UnexpectedRollbackException → 500。
+     * {@code ON CONFLICT DO NOTHING} 让撞键根本不成为错误。
+     */
+    @Modifying
+    @Query(value = "INSERT INTO comment_likes (comment_id, user_id, created_at) "
+            + "VALUES (:commentId, :userId, now()) "
+            + "ON CONFLICT ON CONSTRAINT uq_comment_likes_comment_user DO NOTHING",
+            nativeQuery = true)
+    int insertIfAbsent(@Param("commentId") long commentId, @Param("userId") long userId);
 
     /**
      * 一批评论各自的点赞数（AC7）。

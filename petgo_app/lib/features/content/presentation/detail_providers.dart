@@ -119,6 +119,20 @@ class SessionPinnedCommentsNotifier extends Notifier<Map<int, Comment>> {
 
   void add(Comment comment) => state = {...state, comment.id: comment};
 
+  /// 删除后必须摘掉 —— 否则服务端已无此条，`_orderedTopLevel` 仍会用本地副本把它补回列表顶部。
+  void remove(int id) {
+    if (!state.containsKey(id)) return;
+    state = {...state}..remove(id);
+  }
+
+  /// 就地改本地副本（点赞态等）。置顶项常常不在服务端那一页里，界面渲染的就是这份副本，
+  /// 只改列表不改它，点了心形界面不动。
+  void update(int id, Comment Function(Comment) change) {
+    final c = state[id];
+    if (c == null) return;
+    state = {...state, id: change(c)};
+  }
+
   void clear() => state = const <int, Comment>{};
 }
 

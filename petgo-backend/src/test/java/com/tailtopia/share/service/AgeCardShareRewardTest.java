@@ -246,6 +246,25 @@ class AgeCardShareRewardTest {
             assertThat(monthly).as("月度额度必须在日上限之后").isGreaterThan(dailyCap);
         }
 
+        /**
+         * 🔴 batch-a 复审 #2：日上限「先数再插」之间没有唯一约束兜底（幂等键由客户端生成），
+         * 并发 N 个键不同的请求会读到同一个计数、全部放行。必须先按用户加事务级锁再数。
+         */
+        @Test
+        void dailyCapCountIsSerializedPerUser() {
+            String src = serviceSource();
+            int dedup = src.indexOf("rewards.findByIdempotencyKey");
+            int lock = src.indexOf("pg_advisory_xact_lock(:ns, :uid)");
+            int count = src.indexOf("rewards.countByUserIdAndShareDate");
+            int insert = src.indexOf("rewards.saveAndFlush");
+
+            assertThat(lock).as("日上限计数前必须加锁").isPositive();
+            assertThat(lock).isGreaterThan(dedup).isLessThan(count);
+            assertThat(insert).as("插入须在同一把锁内").isGreaterThan(count);
+            // 锁必须是事务级（随 REQUIRES_NEW 事务释放），不能是会话级的 pg_advisory_lock。
+            assertThat(src).doesNotContain("pg_advisory_lock(");
+        }
+
         /** AC5：共用全局月度上限（走 ShareRewardService），本渠道不另设一个。 */
         @Test
         void sharesTheGlobalMonthlyCap() {

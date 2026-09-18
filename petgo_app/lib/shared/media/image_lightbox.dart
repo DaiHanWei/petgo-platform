@@ -125,8 +125,20 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
   /// 当前页在横向上是否已经贴边（拖不动了）——「到边缘续拖才翻页」的判据。
   bool _atHorizontalEdge = true;
 
-  /// 双击落点（用于以双击点为中心缩放）。
-  Offset _doubleTapPoint = Offset.zero;
+  /// 双击落点，**全局坐标**（用于以双击点为中心缩放）。
+  ///
+  /// 🔴 不能直接拿 GestureDetector 的 localPosition 算矩阵：手势层铺满整页，
+  /// 而 InteractiveViewer 被 Center 收成了图片 contain 后的大小（横图上下、竖图左右留黑边），
+  /// 矩阵作用在后者的坐标系里。两套坐标差一个黑边偏移，放大后画面会大半是空白。
+  Offset _doubleTapGlobal = Offset.zero;
+
+  /// 每页 InteractiveViewer 的锚点：量它的尺寸与位置，把手势坐标换算进矩阵坐标系。
+  final Map<int, GlobalKey> _viewerKeys = {};
+
+  RenderBox? _viewerBoxOf(int index) {
+    final ro = _viewerKeys[index]?.currentContext?.findRenderObject();
+    return ro is RenderBox && ro.hasSize ? ro : null;
+  }
 
   /// 单击关闭的延时器：窗口内来了第二下就是双击（见 [kLightboxSingleTapDelay]）。
   Timer? _singleTapTimer;
@@ -162,7 +174,11 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
     final m = c.value;
     final double scale = m.getMaxScaleOnAxis();
     final double tx = m.getTranslation().x;
-    final double width = context.size?.width ?? MediaQuery.sizeOf(context).width;
+    // 🔴 用 InteractiveViewer 自己的宽，不是整页宽：竖图比屏幕窄时两者不等，
+    //    拿整页宽算永远判不到「贴右边」，放大后没法续拖翻页。
+    final double width = _viewerBoxOf(_current)?.size.width ??
+        context.size?.width ??
+        MediaQuery.sizeOf(context).width;
     // InteractiveViewer 的平移量落在 [-width*(scale-1), 0]：0 = 贴左边，最小值 = 贴右边。
     final double maxPan = width * (scale - 1);
     final bool zoomed = scale > 1.01;
@@ -237,7 +253,7 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
       // 窗口内的第二下 = 双击 → 撤销待执行的关闭，改为缩放。
       pending.cancel();
       _singleTapTimer = null;
-      _doubleTapPoint = details.localPosition;
+      _doubleTapGlobal = details.globalPosition;
       _toggleZoom();
       return;
     }
@@ -255,9 +271,16 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
       return;
     }
     const double s = _doubleTapScale;
+    // 双击点换算进 InteractiveViewer 的坐标系；点在黑边上就夹到图片边缘 ——
+    // 这样平移量恰好落在 [-size*(s-1), 0] 内，不会放大出一片空白。
+    final RenderBox? box = _viewerBoxOf(_current);
+    Offset p = box?.globalToLocal(_doubleTapGlobal) ?? _doubleTapGlobal;
+    if (box != null) {
+      p = Offset(p.dx.clamp(0.0, box.size.width), p.dy.clamp(0.0, box.size.height));
+    }
     // 让双击点在缩放前后落在同一个屏幕位置：先把该点挪到原点，放大，再挪回去。
-    final double x = -_doubleTapPoint.dx * (s - 1);
-    final double y = -_doubleTapPoint.dy * (s - 1);
+    final double x = -p.dx * (s - 1);
+    final double y = -p.dy * (s - 1);
     c.value = Matrix4.identity()
       ..translateByDouble(x, y, 0, 1)
       ..scaleByDouble(s, s, 1, 1);
@@ -377,6 +400,7 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
           child: Center(
             // 缩放实现沿用 InteractiveViewer（AD-A15.4：不换实现）。
             child: InteractiveViewer(
+              key: _viewerKeys.putIfAbsent(i, GlobalKey.new),
               transformationController: _transformOf(i),
               // 未放大时不许平移：否则它会和"下滑关闭"抢同一个手势。
               panEnabled: _zoomed,

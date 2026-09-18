@@ -3,6 +3,8 @@ package com.tailtopia.share.service;
 import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.share.domain.AgeCardShareReward;
 import com.tailtopia.share.repository.AgeCardShareRewardRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.time.Instant;
 import java.time.LocalDate;
 import org.slf4j.Logger;
@@ -61,6 +63,15 @@ public class AgeCardShareRewardService {
      * 代价是三处字符串要人肉保持一致，改那边前缀时记得同步。
      */
     private static final String REDIS_IDEM_PREFIX = "idem:";
+
+    /**
+     * 按用户串行化「数当日次数 → 落留痕行」的 advisory 锁命名空间（两参形式的第一参）。
+     * 与单参 bigint 键空间互不相交；取值任意，全应用唯一占用即可。
+     */
+    static final int DAILY_CAP_LOCK_NS = 0x4147_4543; // "AGEC"
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     private final AgeCardShareRewardRepository rewards;
     private final PlatformConfigService platformConfig;
@@ -145,6 +156,13 @@ public class AgeCardShareRewardService {
         // ② 第二层：渠道日上限。
         // 🔴 WIB 当地日，复用唯一实现，不另写换算 —— 按 UTC 切会让用户在 06:00–07:00 领双份。
         LocalDate day = IdCardShareRewardService.shareDateOf(at);
+        // 🔴 先按用户加事务级锁再数：「数 → 插」之间没有唯一约束兜底（幂等键由客户端生成，
+        //    N 个键不同的并发请求各自读到同一个计数、全部放行），日上限又是本渠道唯一的频次闸门。
+        //    锁随本 REQUIRES_NEW 事务提交/回滚释放；userId 取模只会让极少数用户偶尔互相排队，无正确性影响。
+        entityManager.createNativeQuery("SELECT pg_advisory_xact_lock(:ns, :uid)")
+                .setParameter("ns", DAILY_CAP_LOCK_NS)
+                .setParameter("uid", (int) (userId % Integer.MAX_VALUE))
+                .getSingleResult();
         if (cfg.getAgeCardShareDailyCap() <= 0
                 || rewards.countByUserIdAndShareDate(userId, day) >= cfg.getAgeCardShareDailyCap()) {
             return 0;

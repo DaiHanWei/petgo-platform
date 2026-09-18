@@ -322,6 +322,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           localizedMilestoneTitle(done.code, locale),
         );
         final router = GoRouter.maybeOf(context);
+        // 弹出前先记本地：下面那个列表页可能在庆祝期间被重拉并自行补弹。
+        markMilestonesCelebrating(ref, [done.code]);
         await showMilestoneCelebration(
           context,
           done,

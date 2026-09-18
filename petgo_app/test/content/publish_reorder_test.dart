@@ -221,6 +221,53 @@ void main() {
       expect(m.c.canReorder, isTrue, reason: '发布成功，会话结束');
     });
 
+    /// 🔴 batch-a 复审 #9：锁的唯一理由是「有失败件等重试」。失败件没了锁必须放掉 ——
+    /// 「整体取消」按钮随 hasFailed 一起消失，锁还在的话顺序就被永久锁死。
+    test('重试成功（未再发布）→ 失败件没了，锁随之放掉', () async {
+      final m = make();
+      m.c.addImage(bytes('good'));
+      m.c.addImage(bytes('bad'));
+      m.failing.add('bad');
+      await m.c.publish(idempotencyKey: 'k');
+      expect(m.c.canReorder, isFalse);
+
+      m.failing.remove('bad');
+      await m.c.retryFailed();
+
+      expect(m.c.hasFailed, isFalse, reason: '取消按钮随之消失');
+      expect(m.c.canReorder, isTrue, reason: '没有出口时锁不能留着');
+      m.c.reorderImage(1, 0);
+      expect(order(m.c), ['bad', 'good']);
+    });
+
+    test('删掉失败的那张 → 锁随之放掉', () async {
+      final m = make();
+      m.c.addImage(bytes('a'));
+      m.c.addImage(bytes('bad'));
+      m.c.addImage(bytes('c'));
+      m.failing.add('bad');
+      await m.c.publish(idempotencyKey: 'k');
+      expect(m.c.canReorder, isFalse);
+
+      m.c.removeImage(1);
+
+      expect(m.c.hasFailed, isFalse);
+      expect(m.c.canReorder, isTrue);
+    });
+
+    test('重试仍失败 → 锁保持（出口按钮还在）', () async {
+      final m = make();
+      m.c.addImage(bytes('good'));
+      m.c.addImage(bytes('bad'));
+      m.failing.add('bad');
+      await m.c.publish(idempotencyKey: 'k');
+
+      await m.c.retryFailed();
+
+      expect(m.c.hasFailed, isTrue);
+      expect(m.c.canReorder, isFalse);
+    });
+
     /// 🔴 AC3 的另一面：**不存在两套顺序**。
     /// 收口方式不是"再存一份快照"（那恰恰造出第二份数据），而是把 items 本身冻住 ——
     /// 所以控制器里不该有任何第二个图片列表。

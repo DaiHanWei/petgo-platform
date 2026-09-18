@@ -93,12 +93,19 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
     if (_catchupDone) return;
     final catchup = resolveCatchup(
       [for (final g in data.groups) ...g.items],
-      justCelebrated: widget.justCelebrated,
+      // 本次导航带来的 + 本 App 会话内已在本机弹过的（回报在途/已落库）一并扣除。
+      justCelebrated: {
+        ...widget.justCelebrated,
+        ...ref.read(locallyCelebratedMilestonesProvider),
+      },
     );
     if (catchup.isEmpty) return;
     _catchupDone = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      // 弹出前先记本地：回报要等弹窗关掉才发，这期间列表若被重拉不能再补一次。
+      // ⚠️ 必须在帧后记：本方法从 build 里调用，build 期间改 provider 会直接抛。
+      markMilestonesCelebrating(ref, catchup.codesToReport);
       final item = catchup.toCelebrate!;
       final l10n = AppLocalizations.of(context);
       final locale = Localizations.localeOf(context);
@@ -131,8 +138,7 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
   void _reportCelebrated(List<String> codes) {
     reportMilestoneCelebrated(ref, codes, onDone: () {
       if (!mounted) return;
-      // 回报落库后刷新，让本页与档案 Tab 的角标口径立刻一致。
-      ref.invalidate(milestoneListProvider);
+      // 回报落库后刷新（列表已由 reporter 统一刷新），让档案 Tab 的角标口径立刻一致。
       ref.invalidate(archiveStatsProvider);
     });
   }
@@ -936,6 +942,9 @@ class _CandidateTile extends ConsumerWidget {
       final petName = listData?.petName ?? '';
       final completed =
           await ref.read(milestoneRepositoryProvider).checkIn(milestoneCode, candidate.contentId);
+      // 🔴 必须在 invalidate 之前记本地：重拉回来这条仍是 celebratedAt == null，
+      //    而回报要等下面的庆祝弹窗关掉才发 —— 不先记，列表页会在即时庆祝之上再补弹一次。
+      markMilestonesCelebrating(ref, [completed.code]);
       ref.invalidate(milestoneListProvider);
       // 合集预览：用 checkIn 前的快照，并把刚打卡的那条替换为已完成态（refetch 是异步的，拿不到即时新值）。
       final collection = listData == null

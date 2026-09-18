@@ -1,11 +1,9 @@
 package com.tailtopia.content.service;
 
 import com.tailtopia.content.domain.Comment;
-import com.tailtopia.content.domain.CommentLike;
 import com.tailtopia.content.repository.CommentLikeRepository;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.shared.error.AppException;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,8 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 评论点赞（V1.3.0 批次 A · Story 2.4 · AD-A7）。
  *
  * <p>🔴 <b>幂等靠唯一约束兜底，不靠「先查后插」</b>（AC3）：`exists → save` 之间有并发窗口，
- * 两个请求同时进来都会查到「没赞过」，然后一个成功一个抛约束异常。这里的做法是
- * <b>直接插，撞约束就当作已赞</b> —— 结果对用户完全一样，且没有窗口。
+ * 两个请求同时进来都会查到「没赞过」。这里的做法是 <b>INSERT … ON CONFLICT DO NOTHING</b>
+ * —— 撞约束不是错误，结果对用户完全一样，且没有窗口。
+ * ⚠️ 不要改回「save 后 catch 约束异常」：异常已让事务 rollback-only，提交时仍会 500。
  *
  * <p>点赞数<b>不在这里返回</b>：它是实时聚合值，由读路径（{@code CommentQueryService}）
  * 批量取。写路径回一个数就得再查一次，而那个数在客户端拿到时又可能变了。
@@ -38,14 +37,8 @@ public class CommentLikeService {
     @Transactional
     public void like(long commentId, long userId) {
         requireAliveComment(commentId);
-        if (likes.existsByCommentIdAndUserId(commentId, userId)) {
-            return; // 常见路径的快速短路；真正的幂等保证在下面的约束兜底
-        }
-        try {
-            likes.save(CommentLike.of(commentId, userId));
-        } catch (DataIntegrityViolationException e) {
-            // 并发双击：uq_comment_likes_comment_user 兜底 → 视为已赞，不报错。
-        }
+        // 并发双击：uq_comment_likes_comment_user 兜底 → 返回 0，视为已赞，不报错。
+        likes.insertIfAbsent(commentId, userId);
     }
 
     /** 取消点赞。没赞过也算成功（幂等，客户端不必先查状态）。 */

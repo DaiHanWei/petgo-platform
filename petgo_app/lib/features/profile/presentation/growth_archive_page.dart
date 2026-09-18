@@ -358,7 +358,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
     _coachmark?.remove();
     _coachmark = null;
     unawaited(ref
-        .read(onboardingMarkRepositoryProvider)
+        .read(onboardingMarksProvider.notifier)
         .mark(kOnboardingMarkKtpMoved)
         .catchError((_) {}));
   }

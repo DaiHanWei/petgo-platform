@@ -4,7 +4,6 @@ import com.tailtopia.onboarding.domain.OnboardingMarkKey;
 import com.tailtopia.onboarding.domain.UserOnboardingMark;
 import com.tailtopia.onboarding.repository.UserOnboardingMarkRepository;
 import java.util.List;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,17 +32,14 @@ public class OnboardingMarkService {
      * 置位一个键。**幂等**：已置位就什么都不做。
      *
      * <p>🛡 先查是为了省一次写；真正兜底的是唯一约束 —— 并发两次置位，
-     * 第二次撞键后按「已置位」处理，不外抛。
+     * 第二次走 ON CONFLICT DO NOTHING，按「已置位」处理。
+     * ⚠️ 不要改回「撞键再 catch」：异常已让事务 rollback-only，提交时仍会 500。
      */
     @Transactional
     public void mark(long userId, OnboardingMarkKey key) {
         if (marks.existsByUserIdAndMarkKey(userId, key.wire())) {
             return;
         }
-        try {
-            marks.saveAndFlush(UserOnboardingMark.of(userId, key));
-        } catch (DataIntegrityViolationException alreadyMarked) {
-            // 并发下别人先置位了 —— 这正是我们想要的结果，不是错误。
-        }
+        marks.insertIfAbsent(userId, key.wire());
     }
 }

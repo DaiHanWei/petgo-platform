@@ -176,4 +176,25 @@ class OnboardingMarkTest {
             assertThat(ddl()).contains("references users (id)");
         }
     }
+
+    /** batch-a 复审 #7：并发置位不得 500（撞键 catch 后提交仍会抛回滚异常）。 */
+    @Nested
+    @DisplayName("复审 #7 幂等置位不靠 catch 约束异常")
+    class IdempotentInsert {
+
+        @Test
+        void serviceUsesOnConflictInsert() throws Exception {
+            String src = Files.readString(Path.of("src/main/java/com/tailtopia/onboarding/service/"
+                    + "OnboardingMarkService.java"), StandardCharsets.UTF_8);
+            assertThat(src).doesNotContain("catch (DataIntegrityViolationException");
+            assertThat(src).contains("marks.insertIfAbsent(userId, key.wire())");
+
+            var m = com.tailtopia.onboarding.repository.UserOnboardingMarkRepository.class
+                    .getMethod("insertIfAbsent", long.class, String.class);
+            var q = m.getAnnotation(org.springframework.data.jpa.repository.Query.class);
+            assertThat(q.nativeQuery()).isTrue();
+            assertThat(q.value()).contains("ON CONFLICT ON CONSTRAINT uq_user_onboarding_marks DO NOTHING");
+            assertThat(ddl()).contains("uq_user_onboarding_marks");
+        }
+    }
 }

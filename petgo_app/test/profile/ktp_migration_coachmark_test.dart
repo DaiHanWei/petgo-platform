@@ -141,6 +141,53 @@ void main() {
       expect(backend, contains('KTP_MOVED("$kOnboardingMarkKtpMoved")'));
     });
   });
+
+  group('batch-a 复审 #8：缓存按会话/账号正确', () {
+    /// 置位必须先改本地缓存：provider 常驻整个会话，只打服务端的话，
+    /// 页面重建读到的仍是「未看过」→ 同一会话里反复弹（读失败缓存成空集时尤甚）。
+    test('置位 → 本会话缓存立即含该键（即使取标记曾失败、置位也失败）', () async {
+      final container = ProviderContainer(overrides: [
+        onboardingMarkRepositoryProvider.overrideWithValue(_FlakyRepo()),
+      ]);
+      addTearDown(container.dispose);
+      expect(await container.read(onboardingMarksProvider.future), isEmpty);
+
+      await container
+          .read(onboardingMarksProvider.notifier)
+          .mark(kOnboardingMarkKtpMoved)
+          .catchError((_) {});
+
+      expect(await container.read(onboardingMarksProvider.future),
+          contains(kOnboardingMarkKtpMoved));
+    });
+
+    /// 用户维度缓存必须登记到换账号清理 —— 否则 B 沿用 A 的标记。
+    test('已登记 resetUserScopedCaches', () {
+      final app = File('lib/app.dart').readAsStringSync();
+      final body = app.substring(app.indexOf('void resetUserScopedCaches'));
+      expect(body, contains('ref.invalidate(onboardingMarksProvider)'));
+    });
+
+    /// 页面置位不得绕过 notifier 直接打仓库（那样缓存不更新）。
+    test('成长档案页置位走 notifier', () {
+      final page =
+          File('lib/features/profile/presentation/growth_archive_page.dart').readAsStringSync();
+      expect(page, isNot(contains('onboardingMarkRepositoryProvider')));
+      expect(page, contains('onboardingMarksProvider.notifier'));
+    });
+  });
+}
+
+/// 取标记与置位都失败。
+class _FlakyRepo implements OnboardingMarkRepository {
+  @override
+  Future<Set<String>> fetchMarks() async => throw Exception('offline');
+
+  @override
+  Future<void> mark(String key) async => throw Exception('offline');
+
+  @override
+  noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 /// 离线：取标记必失败。

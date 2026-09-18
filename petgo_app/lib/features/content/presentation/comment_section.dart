@@ -19,6 +19,7 @@ import 'author_moderation_callbacks.dart';
 import 'detail_providers.dart';
 import 'report_sheet.dart';
 import '../../../shared/widgets/user_tag_row.dart';
+import '../../auth/domain/auth_guard.dart';
 
 /// 评论区（Story 3.3 只读 + Story 3.5 回复/删除入口）。一级时间正序首 10 + 「查看更多评论」；
 /// 二级默认内嵌 3 条 + 「查看全部 X 条回复」展开。非自身滚动（嵌入详情页滚动）。
@@ -206,7 +207,11 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     if (landing == null) return;
     // 先清：无论后面能不能定位，这个落点都已经用过了，留着会在下次刷新时重放。
     _landingNotifier.clear();
-    if (!_topLevel.any((c) => c.id == landing.parentId)) return;
+    // 父评论可能只存在于本会话置顶集合里（热度序下 0 赞的新评论通常不在第一页）——那也算「在列表里」。
+    if (!_topLevel.any((c) => c.id == landing.parentId) &&
+        !ref.read(sessionPinnedCommentsProvider).containsKey(landing.parentId)) {
+      return;
+    }
 
     await _expandReplies(landing.parentId);
     // 🔴 新回复不一定在第一页：二级按时间正序，回复多的评论里**新的那条在最后一页**。
@@ -255,6 +260,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   /// 失败**回滚**并静默：点赞不是关键路径，为它弹一个错误提示比点不上还烦人。
   /// 服务端本身幂等（重复点赞不产生第二行、没赞过取消也成功），所以不必先查状态。
   Future<void> _toggleLike(Comment c) async {
+    // 门控：游客不做乐观翻转、不发请求，直接走登录引导（与帖子 LikeButton 同一入口）。
+    if (!requireLogin(ref, context)) return;
     final wasLiked = c.liked;
     setState(() => _replaceComment(c.id, (x) => x.toggleLikedLocally()));
     try {
@@ -275,21 +282,11 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   /// 「收起再展开」时点赞态跳回去。
   void _replaceComment(int id, Comment Function(Comment) update) {
     for (var i = 0; i < _topLevel.length; i++) {
-      final top = _topLevel[i];
-      if (top.id == id) {
-        _topLevel[i] = update(top);
-        continue;
-      }
-      final inline = top.replies;
-      if (inline != null) {
-        for (var j = 0; j < inline.length; j++) {
-          if (inline[j].id == id) {
-            final copy = List<Comment>.of(inline)..[j] = update(inline[j]);
-            _topLevel[i] = top.copyWith(replies: copy);
-            break;
-          }
-        }
-      }
+      _topLevel[i] = _replaceIn(_topLevel[i], id, update);
+    }
+    // 第四处：本会话置顶的本地副本。它不在服务端那一页时，界面渲染的就是这份。
+    for (final pinnedId in ref.read(sessionPinnedCommentsProvider).keys) {
+      _pinnedNotifier.update(pinnedId, (top) => _replaceIn(top, id, update));
     }
     for (final exp in _expanded.values) {
       for (var i = 0; i < exp.items.length; i++) {
@@ -299,6 +296,19 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
         }
       }
     }
+  }
+
+  /// 在一条一级评论（含它的内嵌回复）里找 [id] 并替换；找不到原样返回。
+  Comment _replaceIn(Comment top, int id, Comment Function(Comment) update) {
+    if (top.id == id) return update(top);
+    final inline = top.replies;
+    if (inline == null) return top;
+    for (var j = 0; j < inline.length; j++) {
+      if (inline[j].id == id) {
+        return top.copyWith(replies: List<Comment>.of(inline)..[j] = update(inline[j]));
+      }
+    }
+    return top;
   }
 
   /// 长按评论的操作菜单（AC3）。样式参照详情页 `_showMoreSheet` 的列表行
@@ -443,6 +453,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     if (!ok) return;
     try {
       await _repo.deleteComment(commentId);
+      // 先摘置顶：服务端已无此条，不摘的话 _orderedTopLevel 会用本地副本把它补回顶部。
+      _pinnedNotifier.remove(commentId);
       await _reload();
       // 详情计数随之变化：触发刷新信号（详情页可据此重拉）。
       ref.read(commentsRefreshProvider.notifier).bump();

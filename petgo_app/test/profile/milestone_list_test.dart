@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
+import 'package:tailtopia/features/profile/data/milestone_celebration_reporter.dart';
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
 import 'package:tailtopia/features/profile/data/newbie_task_repository.dart';
 import 'package:tailtopia/features/profile/domain/milestone.dart';
@@ -230,6 +231,73 @@ void main() {
 
     expect(events, hasLength(1));
     expect(events.single['code'], 'C-S1', reason: 'C-M8 被抑制后，轮到 S 级那条');
+  });
+
+  // ===== batch-a 复审 #1：本机已庆祝（回报在途/已落库）的条目不得再补弹 =====
+
+  testWidgets('本机本会话已弹过的条目 → 即使列表仍读到未庆祝也不补弹', (tester) async {
+    final container = ProviderContainer(overrides: [
+      milestoneListProvider.overrideWith((ref) async => _uncelebrated()),
+      newbieTasksProvider.overrideWith((ref) async => const NewbieTasks(
+          items: [], completedCount: 6, total: 6, lulusPemulaUnlocked: true)),
+    ]);
+    addTearDown(container.dispose);
+    // 即时庆祝路径（打卡 / 健康记录 / 去发布）弹出前就记下了，回报还没落库。
+    container.read(locallyCelebratedMilestonesProvider.notifier).add(['C-M8', 'C-S1']);
+
+    final events = await pumpAndCollect(
+      tester,
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MilestoneListPage(),
+        ),
+      ),
+    );
+
+    expect(events, isEmpty, reason: '同一条已在本机庆祝过，不得在其上再弹一次');
+  });
+
+  testWidgets('补弹一次后列表重拉（回报未落库）→ 不再弹第二次', (tester) async {
+    final container = ProviderContainer(overrides: [
+      milestoneListProvider.overrideWith((ref) async => _uncelebrated()),
+      newbieTasksProvider.overrideWith((ref) async => const NewbieTasks(
+          items: [], completedCount: 6, total: 6, lulusPemulaUnlocked: true)),
+    ]);
+    addTearDown(container.dispose);
+    final seen = <String>[];
+    Analytics.debugCaptureSink = (e, p) {
+      if (e == 'milestone_celebration_shown') seen.add(p?['code'] as String);
+    };
+    addTearDown(() => Analytics.debugCaptureSink = null);
+    await tester.binding.setSurfaceSize(const Size(500, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    // 同一 provider 容器里先后挂两个列表页（模拟底下那个列表页 + 新 push 的那个）。
+    Widget page(Key k) => UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MilestoneListPage(key: k),
+          ),
+        );
+    await tester.pumpWidget(page(const ValueKey('first')));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(seen, ['C-M8']);
+
+    // 新页面实例（_catchupDone 闸门重置），数据仍是未庆祝 —— 回报还没落库。
+    await tester.pumpWidget(page(const ValueKey('second')));
+    container.invalidate(milestoneListProvider);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(seen, ['C-M8'], reason: '补弹时就记本地了，别的列表页实例重拉也不得再弹');
   });
 
   testWidgets('全部已庆祝 → 进页面不补弹（线上回填后的正常形态）', (tester) async {

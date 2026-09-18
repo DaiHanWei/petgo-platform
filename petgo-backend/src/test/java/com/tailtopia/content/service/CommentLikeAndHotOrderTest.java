@@ -218,10 +218,51 @@ class CommentLikeAndHotOrderTest {
 
             assertThat(names).containsExactlyInAnyOrder(
                     "existsByCommentIdAndUserId", // 幂等快速短路（单条+单用户）
+                    "insertIfAbsent", // 幂等点赞（单条+单用户，ON CONFLICT DO NOTHING）
                     "deleteByCommentIdAndUserId", // 取消点赞（单条+单用户）
                     "countByCommentIdIn", // 批量赞数
                     "findLikedCommentIds"); // 批量已赞集合
             assertThat(names).noneMatch(n -> n.equals("countByCommentId"));
+        }
+    }
+
+    /**
+     * batch-a 复审 #6：并发重复点赞不得 500。
+     *
+     * <p>「save 撞唯一约束再 catch」在 PostgreSQL 下行不通：约束异常一出，事务已 aborted、
+     * Spring 已标 rollback-only，catch 住之后提交时照样抛 UnexpectedRollbackException。
+     * 撞键必须根本不成为错误 —— INSERT … ON CONFLICT DO NOTHING。
+     */
+    @Nested
+    @DisplayName("复审 #6 幂等点赞不靠 catch 约束异常")
+    class IdempotentInsert {
+
+        private String serviceSource() {
+            try {
+                return Files.readString(Path.of("src/main/java/com/tailtopia/content/service/"
+                        + "CommentLikeService.java"), StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                throw new AssertionError(e);
+            }
+        }
+
+        @Test
+        void serviceDoesNotSwallowConstraintViolation() {
+            assertThat(serviceSource()).doesNotContain("catch (DataIntegrityViolationException");
+            assertThat(serviceSource()).contains("likes.insertIfAbsent(commentId, userId)");
+        }
+
+        @Test
+        void insertIsOnConflictDoNothingOnTheUniqueConstraint() throws NoSuchMethodException {
+            Method m = CommentLikeRepository.class
+                    .getMethod("insertIfAbsent", long.class, long.class);
+            var q = m.getAnnotation(org.springframework.data.jpa.repository.Query.class);
+            assertThat(q.nativeQuery()).isTrue();
+            assertThat(q.value())
+                    .contains("ON CONFLICT ON CONSTRAINT uq_comment_likes_comment_user DO NOTHING");
+            assertThat(migrationDdl()).contains("constraint uq_comment_likes_comment_user unique");
+            assertThat(m.getAnnotation(org.springframework.data.jpa.repository.Modifying.class))
+                    .isNotNull();
         }
     }
 

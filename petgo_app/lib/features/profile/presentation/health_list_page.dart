@@ -715,6 +715,8 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
         ? const <MilestoneItem>[]
         : [for (final g in listData.groups) ...g.items];
     final shareText = l10n.milestoneShareText(localizedMilestoneTitle(done.code, locale));
+    // 弹出前先记本地：短轮询已把「未庆祝」写进列表缓存，回报又要等弹窗关掉才发。
+    markMilestonesCelebrating(ref, [done.code]);
     await showMilestoneCelebration(
       context,
       done,

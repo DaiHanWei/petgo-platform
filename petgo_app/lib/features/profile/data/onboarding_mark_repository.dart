@@ -39,13 +39,31 @@ final onboardingMarkRepositoryProvider =
 ///
 /// 🛡 **读不到一律按「未看过」处理**（AC4）：离线首启、接口失败都走这条 ——
 /// 多弹一次是已接受的代价，而"读失败就当看过"会让引导对一批人**永远不出现**。
-final onboardingMarksProvider = FutureProvider<Set<String>>((ref) async {
-  try {
-    return await ref.read(onboardingMarkRepositoryProvider).fetchMarks();
-  } catch (_) {
-    return const <String>{};
+///
+/// 🔴 置位一律走 [OnboardingMarks.mark]，不要直接调仓库：本 provider 常驻整个 App 会话，
+/// 只打服务端不改缓存的话，页面下次重建读到的仍是「未看过」，同一会话里会反复弹。
+/// 🔴 用户维度缓存，已登记 `resetUserScopedCaches` —— 否则换账号后沿用上个账号的标记。
+final onboardingMarksProvider =
+    AsyncNotifierProvider<OnboardingMarks, Set<String>>(OnboardingMarks.new);
+
+class OnboardingMarks extends AsyncNotifier<Set<String>> {
+  @override
+  Future<Set<String>> build() async {
+    try {
+      return await ref.read(onboardingMarkRepositoryProvider).fetchMarks();
+    } catch (_) {
+      return const <String>{};
+    }
   }
-});
+
+  /// 置位：**先**改本地缓存（本会话不再弹），再打服务端。
+  /// 服务端失败的代价只是下次冷启动再弹一次（与离线首启同一档，已接受）。
+  Future<void> mark(String key) async {
+    final current = state.asData?.value ?? const <String>{};
+    state = AsyncData({...current, key});
+    await ref.read(onboardingMarkRepositoryProvider).mark(key);
+  }
+}
 
 /// 本批次唯一的键（AC6）。批次 C 的性格测试引导**必须另起一个键**，禁止共用 ——
 /// 共用会让看过第一次的人再也收不到第二次。

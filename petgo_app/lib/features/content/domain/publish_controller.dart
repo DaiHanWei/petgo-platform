@@ -157,8 +157,16 @@ class PublishController extends ChangeNotifier {
   void removeImage(int index) {
     if (index >= 0 && index < items.length) {
       items.removeAt(index);
+      _releaseLockIfResolved();
       notifyListeners();
     }
+  }
+
+  /// 锁的唯一理由是「还有失败件等重试、重试要沿用同一份顺序」。
+  /// 失败件没了（重试成功 / 被用户删掉），理由就不在了，锁必须跟着放掉 ——
+  /// 否则「整体取消」按钮随 hasFailed 一起消失，顺序被永久锁死。
+  void _releaseLockIfResolved() {
+    if (_orderLocked && !publishing && !hasFailed) _orderLocked = false;
   }
 
   /// 上传所有待传/失败项。
@@ -181,6 +189,8 @@ class PublishController extends ChangeNotifier {
       }
       notifyListeners();
     }
+    _releaseLockIfResolved();
+    notifyListeners();
   }
 
   /// 发布：先确保图片全部上传成功；有失败件返回 null（调用方提示重试）。
