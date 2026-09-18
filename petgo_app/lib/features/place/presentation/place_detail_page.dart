@@ -175,6 +175,7 @@ class PlaceDetailPage extends ConsumerWidget {
       children: [
         _PhotoStrip(
           photos: p.photos,
+          slotsRemaining: p.photoSlotsRemaining,
           // Story 1.9：任何登录用户都能补图（场所是共享条目，不是标记人的私产）。
           onContribute: () => _onContributePhotos(context, ref, p),
           onDeletePhoto: (photo) => _onDeletePhoto(context, ref, photo),
@@ -333,18 +334,30 @@ class PlaceDetailPage extends ConsumerWidget {
   Future<void> _pickAndUploadPhotos(
       BuildContext context, WidgetRef ref, PlaceDetail p) async {
     final l10n = AppLocalizations.of(context);
-    final useCase = ref.read(mediaUploadUseCaseProvider);
-    final uploading = ref.read(_photoUploadingProvider(token).notifier);
+    // 🔴 **第一个 await 之前**把后面要用的全部取好（batch-b1 复审）：上传可能要 20 秒，
+    // 用户中途返回后 WidgetRef 已随页面销毁，再 ref.read 会抛 —— 被下面的 catch 吞掉，
+    // 于是 contributePhotos 永远没调，已传上公开桶的照片成了孤儿。
+    // 走 ProviderContainer：它比页面活得久，离开页面后照样能把这批照片提交出去。
+    final container = ProviderScope.containerOf(context, listen: false);
+    final useCase = container.read(mediaUploadUseCaseProvider);
+    final repo = container.read(placeRepositoryProvider);
+    final uploadingProvider = _photoUploadingProvider(token);
     // 🔴 上传中再点一次 → 直接返回（第二次并发补充会让两批各自算剩余张数，
     // 服务端那边一个成功一个 422，失败的那几张已经在公开桶里成了孤儿）。
-    if (ref.read(_photoUploadingProvider(token))) return;
+    if (container.read(uploadingProvider)) return;
 
     // 🔴 **按剩余张数选图**，不是固定 9（code-review 2026-09-15）：
     // 一个已有 7 张照片的场所里选 9 张，会把 9 张全传上公开桶、然后整批 422 ——
     // 用户只看到一句"上传失败"，而那 9 个对象已经在桶里了。
-    final slots = _PhotoStrip.maxPhotos - p.photos.length;
+    // 剩余张数以服务端下发为准（batch-b1 复审：本地看不到别人审核中的照片）。
+    final slots = p.photoSlotsRemaining;
     if (slots <= 0) return;
 
+    // 上传期间持有一个订阅：_photoUploadingProvider 是 autoDispose，页面一走它就会被回收，
+    // finally 里再 set(false) 会抛 UnmountedRefException。持有订阅 = 上传期间它一直活着
+    // （用户中途回到本页也能看到"上传中"）。
+    final keepAlive = container.listen(uploadingProvider, (_, _) {});
+    final uploading = container.read(uploadingProvider.notifier);
     uploading.set(true);
     try {
       final picked = await useCase.pickMultiAndProcess(limit: slots, context: context);
@@ -367,8 +380,8 @@ class PlaceDetailPage extends ConsumerWidget {
         }
       }
       if (urls.isNotEmpty) {
-        await ref.read(placeRepositoryProvider).contributePhotos(token, urls);
-        invalidatePlaceDetail(ref, token);
+        await repo.contributePhotos(token, urls);
+        invalidatePlaceDetailIn(container, token);
       }
       if (!context.mounted) return;
       if (failure != null) {
@@ -388,6 +401,7 @@ class PlaceDetailPage extends ConsumerWidget {
       if (context.mounted) showAppToast(context, l10n.placeMarkPhotoUploadFailed);
     } finally {
       uploading.set(false);
+      keepAlive.close();
     }
   }
 
@@ -453,6 +467,7 @@ class PlaceDetailPage extends ConsumerWidget {
 class _PhotoStrip extends StatelessWidget {
   const _PhotoStrip({
     required this.photos,
+    required this.slotsRemaining,
     required this.onContribute,
     required this.onDeletePhoto,
     required this.uploading,
@@ -469,22 +484,24 @@ class _PhotoStrip extends StatelessWidget {
   /// 正在上传 —— 「+」格换成转圈且点不动。
   final bool uploading;
 
+  /// 服务端算好的剩余名额（见 [PlaceDetail.photoSlotsRemaining]）。
+  final int slotsRemaining;
+
   static const double _height = 200;
 
   /// 横滑流每张图的宽度（逻辑像素）。
   static const double _itemWidth = 280;
 
-  /// 场所照片总上限（与服务端、与标记表单同一个数）。
-  static const int maxPhotos = 9;
-
   @override
   Widget build(BuildContext context) {
     final urls = photos.map((p) => p.url).toList(growable: false);
-    final canAdd = photos.length < maxPhotos;
+    // 🔴 按服务端的剩余名额，不按 photos.length（看不到别人审核中的照片）。
+    final canAdd = slotsRemaining > 0;
     if (photos.isEmpty) {
       // 空态也要给补图入口 —— 一个没有照片的场所正是最需要别人补图的那个。
+      // （名额被别人审核中的照片占满时除外：点了只会收到一个 422。）
       return GestureDetector(
-        onTap: uploading ? null : onContribute,
+        onTap: uploading || !canAdd ? null : onContribute,
         child: Container(
           height: _height,
           color: AppColors.cream2,

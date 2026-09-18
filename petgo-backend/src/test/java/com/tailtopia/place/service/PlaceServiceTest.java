@@ -205,7 +205,7 @@ class PlaceServiceTest {
     @Test
     void replayWithSameKeyReturnsTheExistingPlaceAndCreatesNothing() {
         Place existing = place();
-        when(idempotency.findResourceId("k1")).thenReturn(java.util.Optional.of(42L));
+        when(idempotency.findResourceId("place-mark:7:k1")).thenReturn(java.util.Optional.of(42L));
         when(places.findById(42L)).thenReturn(java.util.Optional.of(existing));
 
         Place returned = service.mark(7L, request(), "k1");
@@ -219,12 +219,30 @@ class PlaceServiceTest {
     /** 幂等键指向的资源不在了（TTL 内被运营下架并物删）→ 404 而不是静默新建一条。 */
     @Test
     void replayPointingAtAMissingPlaceIsNotFound() {
-        when(idempotency.findResourceId("k1")).thenReturn(java.util.Optional.of(42L));
+        when(idempotency.findResourceId("place-mark:7:k1")).thenReturn(java.util.Optional.of(42L));
         when(places.findById(42L)).thenReturn(java.util.Optional.empty());
 
         assertThatThrownBy(() -> service.mark(7L, request(), "k1"))
                 .isInstanceOf(AppException.class);
         verify(places, never()).save(any());
+    }
+
+    /**
+     * 🔴 batch-a/b1 复审 B4：幂等键按「业务 + 用户」隔离。幂等表是发帖 / 支付 / 结账共用的，
+     * 裸 key 撞上别人或别的业务会取回一个无关 id → 新场所被静默吞掉。
+     */
+    @Test
+    void idempotencyKeyIsScopedByBusinessAndUser() {
+        // 另一个业务 / 另一个用户用过同一串 "k1" —— 裸 key 下会被错当成重放。
+        verdict(ModerationOutcome.pass(0.1, null));
+        when(idempotency.findResourceId("k1")).thenReturn(java.util.Optional.of(999L));
+
+        service.mark(7L, request(), "k1");
+
+        verify(idempotency).findResourceId("place-mark:7:k1");
+        verify(places).save(any());
+        verify(places, never()).findById(999L);
+        verify(idempotency).store("place-mark:7:k1", 42L);
     }
 
     // ===== Story 1.5 举报（AC5）=====

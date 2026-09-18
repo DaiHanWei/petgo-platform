@@ -29,11 +29,19 @@ class PublicUserPostsController extends AsyncNotifier<PublicUserPostPage> {
   ///
   /// 失败**不改动已加载内容**：保留现有网格，由调用方提示一声即可 ——
   /// 把整屏换成错误态是这条口径首先要避免的事（同场所评论区）。
-  Future<void> loadMore() async {
+  /// 在途的那次「加载更多」。🔴 连点两下会用同一个游标发两次请求、把同一页追加两遍
+  /// （重复条目 + 重复 ValueKey），所以在途时直接复用它（batch-b1 复审）。
+  Future<void>? _loadingMore;
+
+  Future<void> loadMore() => _loadingMore ??= _loadMore().whenComplete(() => _loadingMore = null);
+
+  Future<void> _loadMore() async {
     final current = state.value;
     final cursor = current?.nextCursor;
     if (current == null || !current.hasMore || cursor == null) return;
     final next = await ref.read(publicUserPostsRepositoryProvider).fetch(userId, cursor: cursor);
+    // 等待期间页面走了（autoDispose）或列表被整体重拉过：这一页已经不属于当前列表，丢掉。
+    if (!ref.mounted || !identical(state.value, current)) return;
     state = AsyncData(current.append(next));
   }
 }

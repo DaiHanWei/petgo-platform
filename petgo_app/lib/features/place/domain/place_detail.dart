@@ -22,6 +22,7 @@ class PlaceDetail {
     required this.commentCount,
     required this.recommendCount,
     required this.notRecommendCount,
+    this.photoSlotsRemaining = maxPhotos,
     this.type,
     this.description,
     this.distanceMeters,
@@ -64,6 +65,17 @@ class PlaceDetail {
   final int recommendCount;
   final int notRecommendCount;
 
+  /// 场所照片总上限（与服务端、与标记表单同一个数）。
+  static const int maxPhotos = 9;
+
+  /// 还能补充几张（batch-b1 复审）。
+  ///
+  /// 🔴 **以服务端下发为准**：占位口径是**所有人**的 VISIBLE + UNDER_REVIEW（REJECTED 不占），
+  /// 而 [photos] 里看不到别人审核中的、却含自己被拒的 —— 按 `photos.length` 算，
+  /// 要么传完才被 422（照片成了公开桶孤儿），要么服务端还收、「+」已经藏了。
+  /// 老后端不下发时退回按本地可见的非拒绝照片估算。
+  final int photoSlotsRemaining;
+
   factory PlaceDetail.fromJson(Map<String, dynamic> json) {
     return PlaceDetail(
       token: json['token']?.toString() ?? '',
@@ -80,7 +92,16 @@ class PlaceDetail {
       commentCount: _nonNegInt(json['commentCount']),
       recommendCount: _nonNegInt(json['recommendCount']),
       notRecommendCount: _nonNegInt(json['notRecommendCount']),
+      photoSlotsRemaining: json.containsKey('photoSlotsRemaining')
+          ? _nonNegInt(json['photoSlotsRemaining'])
+          : _estimateSlots(_photos(json['photos'])),
     );
+  }
+
+  static int _estimateSlots(List<PlacePhoto> photos) {
+    final occupying =
+        photos.where((p) => p.moderation != PlaceCommentModeration.rejected).length;
+    return occupying >= maxPhotos ? 0 : maxPhotos - occupying;
   }
 
   static List<PlaceTag> _tags(Object? raw) => raw is! List

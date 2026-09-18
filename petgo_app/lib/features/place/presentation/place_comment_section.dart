@@ -64,7 +64,11 @@ class PlaceCommentSection extends ConsumerWidget {
             _CommentRow(
               comment: c,
               onAuthorTap: c.authorTappable
-                  ? () => openUserProfile(context, ref, c.authorId)
+                  ? () => openUserProfile(context, ref, c.authorId,
+                      // 主页里拉黑 / 举报成功后回到这里：服务端已隐藏此人的评论，
+                      // 不重拉的话他的评论还挂着、点进去落在「你已屏蔽此人」页（同帖子评论区）。
+                      onBlocked: () => _onAuthorHidden(ref),
+                      onReported: () => _onAuthorHidden(ref))
                   : null,
               onDelete: c.mine ? () => _confirmDelete(context, ref, c) : null,
             ),
@@ -74,6 +78,12 @@ class PlaceCommentSection extends ConsumerWidget {
           _LoadMore(onTap: () => _loadMore(context, ref)),
       ],
     );
+  }
+
+  /// 拉黑 / 举报评论作者之后：评论区与详情一起重拉（详情里的评论数也要跟着变）。
+  void _onAuthorHidden(WidgetRef ref) {
+    ref.read(placeCommentsProvider(token).notifier).reload();
+    invalidatePlaceDetail(ref, token);
   }
 
   /// 追加下一页。失败只提示一声，**不动已加载的列表**（F13）。

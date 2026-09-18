@@ -4,6 +4,7 @@ import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.content.service.ContentService;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.shared.media.AliyunOssClient;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.time.Duration;
 import java.time.Instant;
@@ -40,6 +41,12 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class PetRecommendationService {
+
+    /** 卡片大图的物理像素宽（与客户端 RecommendedPetCard 的 thumbWidth 480 一致）。 */
+    static final int COVER_THUMB_WIDTH_PX = 480;
+
+    /** 卡片左下角小圆头像的物理像素宽。 */
+    static final int AVATAR_THUMB_WIDTH_PX = 160;
 
     /** 候选窗口：近 14 天有新公开 Diary 帖（AC1）。 */
     static final Duration ACTIVE_WINDOW = Duration.ofDays(14);
@@ -190,10 +197,13 @@ public class PetRecommendationService {
                 .map(pet -> new RecommendedPetResponse(
                         pet.getId(),
                         pet.getName(),
-                        pet.getAvatarUrl(),
+                        // 🔒 他人宠物的图对外分发一律服务端去 EXIF（防改过的客户端绕过客户端剥离泄漏 GPS），
+                        //    与他人主页 / 访客视图同口径。用「缩放 + 去 EXIF」一体串：
+                        //    客户端遇到已带 x-oss-process 的 URL 不再追加缩略图参数，只去 EXIF 会让卡片拉原图。
+                        AliyunOssClient.exifStrippedThumbUrl(pet.getAvatarUrl(), AVATAR_THUMB_WIDTH_PX),
                         pet.getPetType(),
                         pet.getBirthday(),
-                        covers.get(pet.getId()),
+                        AliyunOssClient.exifStrippedThumbUrl(covers.get(pet.getId()), COVER_THUMB_WIDTH_PX),
                         companionDays(pet.getCreatedAt(), now)))
                 .toList();
         return hasMore

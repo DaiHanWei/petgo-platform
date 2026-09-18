@@ -36,6 +36,18 @@ class LogSanitizerTest {
         assertThat(out).doesNotContain("muntah");
     }
 
+    /** batch-b1 复审：`POST /places` 请求体里的设备 GPS 不得明文落盘（NFR-4）。 */
+    @Test
+    void masksCoordinatesInBodies() {
+        String out = sanitizeJson(
+                "{\"name\":\"Kopi\",\"latitude\":-6.2351,\"longitude\":106.8102,"
+                        + "\"lat\":-6.2,\"lng\":106.8,\"distanceMeters\":1200}");
+        assertThat(out).doesNotContain("-6.2351").doesNotContain("106.8102")
+                .doesNotContain("-6.2,").doesNotContain("106.8,");
+        assertThat(out).contains("\"latitude\":\"***\"").contains("\"longitude\":\"***\"");
+        assertThat(out).contains("\"distanceMeters\":1200").contains("Kopi");
+    }
+
     @Test
     void masksSignedUrlValues() {
         String out = sanitizeJson(

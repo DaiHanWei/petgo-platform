@@ -214,8 +214,17 @@ public class PlaceAttitudeCounters {
                 return; // 回算出来的已经是含这一条的最新值，不要再加一次
             }
             Long after = redis.opsForValue().increment(key, delta);
+            // 🔴 两种情况都**删键**而不是就地修正：删掉 = 下一次读自动回库重算，
+            //    且不会留下一个没有 TTL 的永久键（TTL 是偏差有界的唯一保证）。
+            // ① 减成负数：计数已经偏了。⚠️ 不能 set(key, "0") —— 普通 SET 会清掉 TTL。
             if (after != null && after < 0) {
-                redis.opsForValue().set(key, "0");
+                redis.delete(key);
+                return;
+            }
+            // ② 键恰好在 hasKey 与 INCR 之间过期：INCR 新建了一个无 TTL、值只含这一次增量的键。
+            Long ttl = redis.getExpire(key);
+            if (ttl != null && ttl == -1) {
+                redis.delete(key);
             }
         } catch (RuntimeException e) {
             log.warn("场所计数写 Redis 失败（下次读取时会自愈）：{}", e.getClass().getSimpleName());

@@ -207,15 +207,47 @@ class PlaceAttitudeCountersTest {
         verify(ops, never()).increment(anyString(), org.mockito.ArgumentMatchers.anyLong());
     }
 
-    /** 减到负数就置 0（同既有未读角标的处理）。 */
+    /**
+     * 减到负数 = 计数已偏 → **删键**（下一次读回库重算）。
+     * 🔴 不能 set(key, "0")：普通 SET 会清掉 TTL，留下一个永不自愈的永久键（batch-b1 复审 B2）。
+     */
     @Test
-    void decrementNeverGoesBelowZero() {
+    void decrementBelowZeroDropsTheKeyInsteadOfResettingWithoutTtl() {
         when(redis.hasKey(anyString())).thenReturn(true);
         when(ops.increment(anyString(), eq(-1L))).thenReturn(-1L);
 
         counters.onVisibleCommentRemoved(10L, PlaceCommentAttitude.RECOMMEND);
 
-        verify(ops).set("place:rec:10", "0");
+        verify(redis).delete("place:rec:10");
+        verify(ops, never()).set(anyString(), anyString());
+    }
+
+    /**
+     * 键在 hasKey 与 INCR 之间过期 → INCR 新建了一个**无 TTL**、只含这一次增量的键。
+     * 必须删掉，否则它永不过期、永不回库（batch-b1 复审 B2）。
+     */
+    @Test
+    void incrCreatingAKeyWithoutTtlDropsIt() {
+        when(redis.hasKey(anyString())).thenReturn(true);
+        when(ops.increment(anyString(), eq(1L))).thenReturn(1L);
+        when(redis.getExpire("place:rec:10")).thenReturn(-1L);
+
+        counters.onCommentBecameVisible(10L, PlaceCommentAttitude.RECOMMEND);
+
+        verify(redis).delete("place:rec:10");
+    }
+
+    /** 正常路径（键带 TTL）不删、也不续 TTL —— 续了就永远不回库，偏差不再有界。 */
+    @Test
+    void normalIncrementKeepsKeyAndDoesNotRefreshTtl() {
+        when(redis.hasKey(anyString())).thenReturn(true);
+        when(ops.increment(anyString(), eq(1L))).thenReturn(5L);
+        when(redis.getExpire("place:rec:10")).thenReturn(300L);
+
+        counters.onCommentBecameVisible(10L, PlaceCommentAttitude.RECOMMEND);
+
+        verify(redis, never()).delete(anyString());
+        verify(redis, never()).expire(anyString(), org.mockito.ArgumentMatchers.any(java.time.Duration.class));
     }
 
     /**

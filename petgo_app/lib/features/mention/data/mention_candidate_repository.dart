@@ -54,8 +54,12 @@ final Provider<MentionCandidateRepository> mentionCandidateRepositoryProvider =
 /// ⚠️ 关掉自动重试：候选集取不到时选择器显示的是空态（AC3 同一个空态），
 /// 让它在后台反复重试只会让浮层在"空态 ↔ 转圈"之间自己横跳，而用户正在打字。
 /// （同 Story 2.1 的 publicProfileProvider。）
-final FutureProvider<List<MentionCandidate>> mentionCandidatesProvider =
-    FutureProvider<List<MentionCandidate>>(
+///
+/// 🔴 **autoDispose**（batch-b1 复审）：这是按当前用户算的「最近互动的人」。常驻整个进程的话：
+/// 换账号后 B 看到 A 的联系人（隐私泄漏，且选中后被服务端按 B 的候选集静默丢弃）；
+/// 之后新互动的人要重启才出现；首次取数失败则整个会话都是空态。
+/// 浮层每次弹出重新取一次（30 人以内的小列表），关掉即回收。另已登记 `resetUserScopedCaches`。
+final mentionCandidatesProvider = FutureProvider.autoDispose<List<MentionCandidate>>(
   (ref) => ref.read(mentionCandidateRepositoryProvider).getCandidates(),
   retry: (_, _) => null,
 );

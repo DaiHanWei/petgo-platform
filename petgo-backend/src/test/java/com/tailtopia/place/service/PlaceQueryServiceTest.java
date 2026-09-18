@@ -266,6 +266,26 @@ class PlaceQueryServiceTest {
         assertThat(service.detail("kopi", null, null, null).distanceMeters()).isNull();
     }
 
+    /**
+     * batch-b1 复审 F3：剩余补充名额由服务端按**占位口径**算（所有人的 VISIBLE + UNDER_REVIEW），
+     * 与补充照片时的上限判定同一条查询。客户端看不到别人审核中的照片，自己算必然不一致。
+     */
+    @Test
+    void detailCarriesPhotoSlotsRemainingFromTheOccupyingCount() {
+        Place p = place("kopi", JKT_LAT, JKT_LNG);
+        when(places.findByPublicTokenAndStatus("kopi", PlaceStatus.ACTIVE))
+                .thenReturn(java.util.Optional.of(p));
+        when(accounts.findAuthorViews(any()))
+                .thenReturn(java.util.Map.of(1L, com.tailtopia.auth.dto.AuthorView.anonymized(1L)));
+
+        when(photos.countOccupyingSlots(Mockito.anyLong())).thenReturn(7L);
+        assertThat(service.detail("kopi", null, null, null).photoSlotsRemaining()).isEqualTo(2);
+
+        when(photos.countOccupyingSlots(Mockito.anyLong())).thenReturn(12L);
+        assertThat(service.detail("kopi", null, null, null).photoSlotsRemaining())
+                .as("超额（历史数据）夹到 0，不回负数").isZero();
+    }
+
     /** 非法坐标不当距离用（也不报错）—— 详情页比列表宽容：缺个距离位 ≠ 打不开页面。 */
     @Test
     void detailIgnoresOutOfRangeCoordinates() {

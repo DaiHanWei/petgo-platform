@@ -52,7 +52,14 @@ public record PlaceDetailResponse(
         AuthorView markedBy,
         long commentCount,
         long recommendCount,
-        long notRecommendCount) {
+        long notRecommendCount,
+        /**
+         * 还能补充几张照片（batch-b1 复审）。🔴 由服务端算：占位口径是**所有人**的
+         * VISIBLE + UNDER_REVIEW（REJECTED 不占），客户端看不到别人审核中的那些，
+         * 自己按 photos.length 算会与服务端判定不一致 —— 要么传完才 422（桶里留孤儿），
+         * 要么服务端还收、客户端已把「+」藏掉。
+         */
+        int photoSlotsRemaining) {
 
     /**
      * 详情大图宽度（物理像素）。
@@ -70,7 +77,8 @@ public record PlaceDetailResponse(
 
     public static PlaceDetailResponse of(Place p, AuthorView markedBy,
             List<PlacePhotoView> photos, Integer distanceMeters,
-            long commentCount, long recommendCount, long notRecommendCount) {
+            long commentCount, long recommendCount, long notRecommendCount,
+            int photoSlotsRemaining) {
         return new PlaceDetailResponse(
                 p.getPublicToken(),
                 p.getName(),
@@ -85,7 +93,8 @@ public record PlaceDetailResponse(
                 markedBy,
                 commentCount,
                 recommendCount,
-                notRecommendCount);
+                notRecommendCount,
+                Math.max(0, photoSlotsRemaining));
     }
 
 }

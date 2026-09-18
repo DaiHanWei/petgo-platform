@@ -12,6 +12,7 @@ import 'package:tailtopia/core/router/app_router.dart';
 import 'package:tailtopia/core/theme/app_theme.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/consult/presentation/consult_refresh.dart';
+import 'package:tailtopia/features/mention/data/mention_candidate_repository.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/me/presentation/phone_edit_sheet.dart';
@@ -23,6 +24,7 @@ import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart'
 import 'package:tailtopia/features/profile/data/health_record_repository.dart';
 import 'package:tailtopia/features/profile/data/id_card_repository.dart';
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
+import 'package:tailtopia/features/profile/data/pet_recommendation_repository.dart';
 import 'package:tailtopia/features/profile/data/newbie_task_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
@@ -296,5 +298,8 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(newbieTasksProvider); // 新手任务进度（同型隐患：换账号防串任务状态）
   ref.invalidate(pawCoinProvider); // PawCoin 余额（同型隐患：换账号防显示上个账号余额）
   ref.invalidate(orderListProvider); // 订单中心（keep-alive 且不 watch 登录态：换账号会看到上个账号的订单）
+  // batch-b1 复审：以下两项都是按当前用户算的（排除自己 / 互相拉黑的人 / 最近互动的人）。
+  ref.invalidate(petRecommendationsProvider); // 宠物推荐（首页横滑行常驻 watch，autoDispose 不会回收）
+  ref.invalidate(mentionCandidatesProvider); // @ 候选集（最近互动的人：不清 = 隐私泄漏）
   ref.read(consultRefreshProvider.notifier).bump(); // 问诊页 _active/_history 重拉
 }

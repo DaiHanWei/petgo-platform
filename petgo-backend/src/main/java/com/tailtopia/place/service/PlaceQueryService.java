@@ -111,8 +111,11 @@ public class PlaceQueryService {
         // 两者口径不同是有意的，见 PlaceCommentRepository 的说明。
         long commentCount = placeComments.countForPlace(p.getId(), viewerId);
         PlaceAttitudeCounters.Counts attitudes = attitudeCounters.countsOf(p.getId());
+        // 剩余名额与补充照片时的上限判定**同一条查询**（countOccupyingSlots），两处不会走歧。
+        int slotsRemaining = (int) (PlacePhotoService.MAX_PHOTOS_PER_PLACE
+                - photos.countOccupyingSlots(p.getId()));
         return PlaceDetailResponse.of(p, markedBy, photoViews, distance, commentCount,
-                attitudes.recommend(), attitudes.notRecommend());
+                attitudes.recommend(), attitudes.notRecommend(), slotsRemaining);
     }
 
     /**

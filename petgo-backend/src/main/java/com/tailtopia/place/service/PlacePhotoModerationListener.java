@@ -2,6 +2,7 @@ package com.tailtopia.place.service;
 
 import com.tailtopia.content.moderation.ModerationOutcome;
 import com.tailtopia.content.service.ContentModerationService;
+import com.tailtopia.content.service.ContentModerationService.Verdict;
 import com.tailtopia.place.event.PlacePhotosSubmittedEvent;
 import java.util.List;
 import org.slf4j.Logger;
@@ -22,6 +23,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *   <li><b>确定性违规</b>（图审命中高置信违规）→ <b>REJECTED</b>（终态，仅上传者可见）；</li>
  *   <li><b>三方降级</b>（超时 / 配额 / 熔断 / 异常，也就是"不知道"）→ <b>保持挂起</b>，
  *       绝不自动放行。</li>
+ *   <li><b>RISKY</b>（"有点像"）→ 同样<b>保持挂起</b>。🔴 不能落进放行分支：
+ *       {@code approveModeration} 会同时开放 og:image 资格，站外预览卡被平台缓存后撤不回来。</li>
  * </ul>
  * ⚠️ 第二条是场所评论那边**没有**的：文本审核接口把"高危"和"降级"混在一个判定里，
  * 分不开就只能全部挂起；图审这里能分开 —— <b>"确定违规"可以判死，"不知道"不行</b>。
@@ -69,6 +72,13 @@ public class PlacePhotoModerationListener {
             log.info("场所照片审核降级，保持挂起 count={}", event.photoIds().size());
             return; // "不知道" → 挂着，绝不自动放行
         }
+        if (outcome.verdict() != Verdict.PASS) {
+            // RISKY 等非干净 PASS：挂着。放行会连带开放 og:image（见类注释）。
+            log.info("场所照片审核存疑，保持挂起 count={} verdict={}",
+                    event.photoIds().size(), outcome.verdict());
+            return;
+        }
+        // 只有干净 PASS 走到这里 —— approveModeration 据此开放 og:image 资格。
         event.photoIds().forEach(photos::approve);
     }
 }

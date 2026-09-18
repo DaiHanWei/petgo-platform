@@ -28,6 +28,12 @@ class ApiLogInterceptor extends Interceptor {
     'symptomtext',
     'symptom',
     'symptoms',
+    // 位置坐标（NFR-4，batch-b1 复审）：`POST /places` 的请求体带设备 GPS（表单默认用当前定位）。
+    // 与下面 query 参数那一组同一批键 —— 只打码 query 不打码 body 等于只堵了一半。
+    'lat',
+    'lng',
+    'latitude',
+    'longitude',
   };
 
   /// 签名 URL 特征（命中即整串打码）。

@@ -33,7 +33,11 @@ public class LogSanitizer {
             // 收货地址 PII（V1.4.0 Story 2.1 · Epic 2 头注要求）——App 内首个用户地址数据集。
             // 🔴 收件人姓名/履约电话/详细地址三项：快递员靠它们找到人，泄露即等同泄露住址。
             //    receiverphone 虽已被上面的 "phone" 命中，仍显式列出以免将来有人改那条时连带打开这里。
-            "receivername", "receiverphone", "addressline", "kodepos");
+            "receivername", "receiverphone", "addressline", "kodepos",
+            // 位置坐标（NFR-4，batch-b1 复审）：`POST /places` 请求体带的是用户标记时的设备 GPS
+            // （表单默认取当前定位）。query 里的 lat/lng 已由 ApiAccessLoggingFilter.redactQuery 打码，
+            // 请求体这一半此前是明文落盘的。响应里的场所坐标同样来自标记人的 GPS，一并打码。
+            "lat", "lng", "latitude", "longitude");
 
     /**
      * <b>仅请求体</b>打码的字段名：用户自由文本，可含第三者 PII / 指控原文（如账号举报的

@@ -32,7 +32,7 @@ class PlaceDetailResponseContractTest {
     private static final Set<String> FULL_FIELDS = Set.of(
             "token", "name", "type", "tags", "photos", "addressText", "description",
             "latitude", "longitude", "distanceMeters", "markedBy",
-            "commentCount", "recommendCount", "notRecommendCount");
+            "commentCount", "recommendCount", "notRecommendCount", "photoSlotsRemaining");
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> wire(Object dto) {
@@ -68,7 +68,7 @@ class PlaceDetailResponseContractTest {
     @Test
     void detailHasExactlyContractFields() {
         Map<String, Object> m =
-                wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L));
+                wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L, 7));
 
         assertThat(m.keySet()).isEqualTo(FULL_FIELDS);
         assertThat(m.get("type")).isEqualTo("CAFE");
@@ -80,7 +80,7 @@ class PlaceDetailResponseContractTest {
     /** 🔴 对外只有 token，绝不外露自增 id（NFR-1 / AD-1 Rule 3）。 */
     @Test
     void detailNeverLeaksDatabaseIds() {
-        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, null, 0L, 0L, 0L));
+        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, null, 0L, 0L, 0L, 7));
 
         assertThat(m).doesNotContainKey("id");
         assertThat(m).doesNotContainKey("placeId");
@@ -95,7 +95,7 @@ class PlaceDetailResponseContractTest {
      */
     @Test
     void detailHasNoneOfTheExplicitlyExcludedFields() {
-        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L));
+        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L, 7));
 
         for (String excluded : List.of(
                 // 收藏
@@ -115,7 +115,7 @@ class PlaceDetailResponseContractTest {
     /** 「按最新」进来的详情没有距离 → 省略（不是 0）。 */
     @Test
     void detailWithoutCoordinatesOmitsDistance() {
-        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, null, 0L, 0L, 0L));
+        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, null, 0L, 0L, 0L, 7));
 
         assertThat(m).doesNotContainKey("distanceMeters");
     }
@@ -176,7 +176,7 @@ class PlaceDetailResponseContractTest {
     @Test
     void deletedMarkerIsAnonymized() {
         Map<String, Object> m = wire(
-                PlaceDetailResponse.of(place(), AuthorView.anonymized(7L), TWO_PHOTOS, null, 0L, 0L, 0L));
+                PlaceDetailResponse.of(place(), AuthorView.anonymized(7L), TWO_PHOTOS, null, 0L, 0L, 0L, 7));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> markedBy = (Map<String, Object>) m.get("markedBy");
@@ -194,7 +194,7 @@ class PlaceDetailResponseContractTest {
                 List.of(PlaceTag.LEASH_REQUIRED), -6.2, 106.8, "Jl. A", null, 7L);
 
         Map<String, Object> m = wire(
-                PlaceDetailResponse.of(noExtras, marker(), List.of(), null, 0L, 0L, 0L));
+                PlaceDetailResponse.of(noExtras, marker(), List.of(), null, 0L, 0L, 0L, 7));
         assertThat(m).doesNotContainKey("description");
         assertThat(m.get("photos")).isEqualTo(List.of());
     }

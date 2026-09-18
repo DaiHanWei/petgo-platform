@@ -33,12 +33,20 @@ class PlaceCommentsController extends AsyncNotifier<PlaceCommentPage> {
   ///
   /// 失败**不改动已加载内容**（F13）：保留现有列表，由调用方提示一声即可 ——
   /// 把整屏换成错误态是这条口径首先要避免的事。
-  Future<void> loadMore() async {
+  /// 在途的那次「加载更多」。🔴 连点两下会用同一个游标发两次请求、把同一页追加两遍
+  /// （重复条目 + 重复 ValueKey），所以在途时直接复用它（batch-b1 复审）。
+  Future<void>? _loadingMore;
+
+  Future<void> loadMore() => _loadingMore ??= _loadMore().whenComplete(() => _loadingMore = null);
+
+  Future<void> _loadMore() async {
     final current = state.value;
     final cursor = current?.nextCursor;
     if (current == null || !current.hasMore || cursor == null) return;
     final next =
         await ref.read(placeRepositoryProvider).fetchComments(token, cursor: cursor);
+    // 等待期间页面走了（autoDispose）或列表被整体重拉过：这一页已经不属于当前列表，丢掉。
+    if (!ref.mounted || !identical(state.value, current)) return;
     state = AsyncData(current.append(next));
   }
 
@@ -77,6 +85,17 @@ void invalidatePlaceDetail(WidgetRef ref, String token) {
   final coords = ref.read(placeLocationProvider).value?.coordinates;
   if (coords != null) {
     ref.invalidate(
+        placeDetailProvider(placeDetailQueryFor(token, coords.latitude, coords.longitude)));
+  }
+}
+
+/// 同 [invalidatePlaceDetail]，但作用在 [ProviderContainer] 上 —— 给**可能在页面销毁后**
+/// 才走到收尾的异步流程用（例如补充照片上传途中用户返回）：那时 WidgetRef 已不可用。
+void invalidatePlaceDetailIn(ProviderContainer container, String token) {
+  container.invalidate(placeDetailProvider((token: token, lat: null, lng: null)));
+  final coords = container.read(placeLocationProvider).value?.coordinates;
+  if (coords != null) {
+    container.invalidate(
         placeDetailProvider(placeDetailQueryFor(token, coords.latitude, coords.longitude)));
   }
 }

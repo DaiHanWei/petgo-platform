@@ -296,9 +296,32 @@ class PetRecommendationServiceTest {
                 .thenReturn(Map.of(10L, "https://cdn/latest-post.jpg"));
 
         RecommendedPetResponse card = service.recommendFor(VIEWER, 10, NOW).getFirst();
-        assertThat(card.avatarUrl()).isEqualTo("https://cdn/avatar.jpg");
-        assertThat(card.coverImageUrl()).isEqualTo("https://cdn/latest-post.jpg");
+        assertThat(card.avatarUrl()).startsWith("https://cdn/avatar.jpg?");
+        assertThat(card.coverImageUrl()).startsWith("https://cdn/latest-post.jpg?");
         assertThat(card.coverImageUrl()).isNotEqualTo(card.avatarUrl());
+    }
+
+    /**
+     * 🔒 batch-b1 复审 B3：他人宠物的头像与帖子配图对外分发一律服务端去 EXIF
+     * （与他人主页 / 访客视图同口径），防改过的客户端绕过客户端剥离泄漏 GPS。
+     * 用「缩放 + 去 EXIF」一体串 —— 客户端遇到已带 x-oss-process 的 URL 不再追加缩略图参数。
+     */
+    @Test
+    void 两张图都经服务端去EXIF且带缩放() {
+        candidates(List.of(10L));
+        withProfiles(pet(10L, 110L, "https://cdn/avatar.jpg", NOW));
+        when(content.findLatestPublicCovers(anyCollection()))
+                .thenReturn(Map.of(10L, "https://cdn/latest-post.jpg"));
+
+        RecommendedPetResponse card = service.recommendFor(VIEWER, 10, NOW).getFirst();
+        assertThat(card.avatarUrl()).isEqualTo(com.tailtopia.shared.media.AliyunOssClient
+                .exifStrippedThumbUrl("https://cdn/avatar.jpg",
+                        PetRecommendationService.AVATAR_THUMB_WIDTH_PX));
+        assertThat(card.coverImageUrl()).isEqualTo(com.tailtopia.shared.media.AliyunOssClient
+                .exifStrippedThumbUrl("https://cdn/latest-post.jpg",
+                        PetRecommendationService.COVER_THUMB_WIDTH_PX));
+        assertThat(card.avatarUrl()).contains("x-oss-process=image/resize,w_").contains("/format,jpg");
+        assertThat(card.coverImageUrl()).contains("x-oss-process=image/resize,w_").contains("/format,jpg");
     }
 
     @Test
@@ -310,7 +333,7 @@ class PetRecommendationServiceTest {
 
         RecommendedPetResponse card = service.recommendFor(VIEWER, 10, NOW).getFirst();
         assertThat(card.coverImageUrl()).isNull();
-        assertThat(card.avatarUrl()).isEqualTo("a10");
+        assertThat(card.avatarUrl()).startsWith("a10?");
     }
 
     @Test

@@ -79,7 +79,11 @@ public class PlaceService {
     @Transactional
     public Place mark(long createdBy, PlaceCreateRequest req, String idempotencyKey) {
         // 幂等重放：同 key 已落一条则取回，不重复创建（也不重复过审核、不重复扣限流）。
-        var existing = idempotency.findResourceId(idempotencyKey);
+        // 🔴 键按业务 + 用户隔离（同 CheckoutService）：幂等表是发帖 / 支付 / 结账共用的全局命名空间，
+        //    裸 key 撞上别的业务或别人的 key 会取回一个无关 id → 新场所被静默吞掉。
+        String scopedKey = idempotencyKey == null || idempotencyKey.isBlank()
+                ? null : "place-mark:" + createdBy + ":" + idempotencyKey;
+        var existing = idempotency.findResourceId(scopedKey);
         if (existing.isPresent()) {
             return places.findById(existing.get())
                     .orElseThrow(() -> AppException.notFound("场所不存在"));
@@ -124,8 +128,8 @@ public class PlaceService {
         // 所以直接落 VISIBLE，不再走一次异步 —— 同一批图审两遍是白花配额。
         photoService.storeInitialPhotos(saved.getId(), createdBy, req.photoUrls(), cleanPass);
         // 没带 key 的老客户端：不记幂等（也就不会去拆 saved.getId()）。
-        if (idempotencyKey != null && !idempotencyKey.isBlank() && saved.getId() != null) {
-            idempotency.store(idempotencyKey, saved.getId());
+        if (scopedKey != null && saved.getId() != null) {
+            idempotency.store(scopedKey, saved.getId());
         }
         return saved;
     }

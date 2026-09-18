@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/location_service.dart';
@@ -43,6 +44,10 @@ class PlaceLocationState {
 class PlaceLocationController extends AsyncNotifier<PlaceLocationState> {
   @override
   Future<PlaceLocationState> build() async {
+    ref.onDispose(() {
+      _resumeListener?.dispose();
+      _resumeListener = null;
+    });
     final gateway = ref.read(locationGatewayProvider);
     final outcome = await gateway.status();
     if (outcome != LocationPermissionOutcome.granted) {
@@ -67,7 +72,23 @@ class PlaceLocationController extends AsyncNotifier<PlaceLocationState> {
   }
 
   /// 跳系统设置（永久拒绝后的唯一出路）。
-  Future<void> openSettings() => ref.read(locationGatewayProvider).openSettings();
+  ///
+  /// 🔴 **回到 App 时重读权限**（batch-b1 复审）：用户去设置里开了权限回来，页面一直都在
+  /// （没有离开 → autoDispose 不会触发重建），状态里仍是「永久拒绝」—— 提示条不消失、
+  /// 列表仍按最新排、再点按钮又跳设置，用户原地打转。
+  /// 所以挂一个一次性的前台回调：回来即 [Ref.invalidateSelf]，build 重读 `status()`（不弹窗）。
+  Future<void> openSettings() async {
+    _resumeListener?.dispose();
+    final listener = AppLifecycleListener(onResume: () {
+      _resumeListener?.dispose();
+      _resumeListener = null;
+      if (ref.mounted) ref.invalidateSelf();
+    });
+    _resumeListener = listener;
+    await ref.read(locationGatewayProvider).openSettings();
+  }
+
+  AppLifecycleListener? _resumeListener;
 }
 
 /// 🔴 **必须 `isAutoDispose: true`**：定位态里存着坐标与权限状态，两者都会在页面之外变化 ——

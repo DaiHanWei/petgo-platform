@@ -72,6 +72,8 @@ ProviderContainer _container(_FakeLocationGateway gateway) {
 }
 
 void main() {
+  // openSettings 会挂一个 AppLifecycleListener（回前台重读权限，batch-b1 复审 F6），需要绑定。
+  TestWidgetsFlutterBinding.ensureInitialized();
   test('未授权时初始化：只读状态，绝不弹系统窗，也不去取坐标', () async {
     final gateway =
         _FakeLocationGateway(initialStatus: LocationPermissionOutcome.denied);
