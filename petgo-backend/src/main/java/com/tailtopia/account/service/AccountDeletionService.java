@@ -62,6 +62,8 @@ public class AccountDeletionService {
     private final ShopAccountDeletionService shopDeletion;
     private final ContentShareService contentShareService;
     private final ShareRewardDeletionService shareRewardDeletion;
+    // V1.3.0 批次 A Story 5.4：一次性引导标记（纯个人数据，物理删）。
+    private final com.tailtopia.onboarding.service.OnboardingMarkDeletionService onboardingMarkDeletion;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -72,7 +74,8 @@ public class AccountDeletionService {
             ApplicationEventPublisher events, ContentService contentService,
             ManualReviewService reviewService, ViolationCountService violationCountService,
             ShopAccountDeletionService shopDeletion, ContentShareService contentShareService,
-            ShareRewardDeletionService shareRewardDeletion) {
+            ShareRewardDeletionService shareRewardDeletion,
+            com.tailtopia.onboarding.service.OnboardingMarkDeletionService onboardingMarkDeletion) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -89,6 +92,7 @@ public class AccountDeletionService {
         this.shopDeletion = shopDeletion;
         this.contentShareService = contentShareService;
         this.shareRewardDeletion = shareRewardDeletion;
+        this.onboardingMarkDeletion = onboardingMarkDeletion;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -143,6 +147,9 @@ public class AccountDeletionService {
         shopDeletion.deleteByUserId(userId);
         contentShareService.deleteByAuthorForAccountDeletion(userId);
         shareRewardDeletion.deleteByUserId(userId);
+        // V1.3.0 批次 A Story 5.4：一次性引导标记（谁看过哪个引导）随注销物理删除。
+        // ⚠️ 漏接的表会在注销后留着指向一个已不存在的人的行，而这类遗漏没有任何报错提醒。
+        onboardingMarkDeletion.deleteByUserId(userId);
 
         // PawCoin 余额作废（Story 1.6，FR-50D）：写 FORFEITURE 终结分录归零 + 物理删钱包/流水；在删 user 行前。
         pawCoinDeletion.voidBalanceAndPurge(userId);

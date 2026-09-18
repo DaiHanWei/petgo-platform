@@ -13,6 +13,7 @@ import 'package:tailtopia/features/profile/domain/share_service.dart';
 import 'package:tailtopia/features/profile/domain/timeline_item.dart';
 import 'package:tailtopia/features/profile/presentation/growth_archive_page.dart';
 import 'package:tailtopia/features/profile/presentation/widgets/timeline_item_tile.dart';
+import 'package:tailtopia/features/profile/presentation/pet_insights_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// Story 3.3 · L0：真实时间线的五类渲染与跳转。
@@ -64,7 +65,10 @@ Widget _wrapRouted(TimelinePage page) {
       GoRoute(path: '/content/:id', builder: (_, s) => Text('content:${s.pathParameters['id']}')),
       GoRoute(path: '/profile/milestones', builder: (_, _) => const Text('milestones')),
       GoRoute(path: '/profile/health', builder: (_, _) => const Text('health-list')),
-      GoRoute(path: '/profile/id-card', builder: (_, _) => const Text('id-card')),
+      // V1.3.0 Story 5.1：KTP 整体平移到聚合页之下。时间线的「证件卡」条目
+      // **直达身份证页**，不绕聚合页 —— 点一条具体记录却落在功能列表上是走回头路。
+      GoRoute(
+          path: PetInsightsRoutes.idCard, builder: (_, _) => const Text('id-card')),
       GoRoute(path: '/triage/result/:id', builder: (_, s) => Text('triage:${s.pathParameters['id']}')),
     ],
   );

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
+import '../../../shared/widgets/count_badge.dart';
 import '../data/notification_repository.dart';
 
 /// 首页顶部通知铃铛 + 未读红色角标（Story 6.6 F1，FR-34）。
@@ -41,20 +42,10 @@ class NotificationBell extends ConsumerWidget {
           Positioned(
             right: -2,
             top: -2,
-            child: Container(
-              key: const ValueKey('notificationBadge'),
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-              constraints: const BoxConstraints(minWidth: 16),
-              decoration: BoxDecoration(
-                color: AppColors.danger,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                unread > 99 ? '99+' : '$unread',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
-              ),
-            ),
+            // 样式已抽到 CountBadge（V1.3.0 Story 1.5），里程碑未庆祝角标复用同一份 ——
+            // 抽出前它不是可复用单位，第二处只能照着再画一个，两份手抄迟早走散。
+            // **视觉零变化**，只是不再内联那段 Container。
+            child: CountBadge(key: const ValueKey('notificationBadge'), count: unread),
           ),
       ],
     );

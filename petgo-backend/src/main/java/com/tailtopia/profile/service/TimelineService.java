@@ -69,13 +69,16 @@ public class TimelineService {
     private final com.tailtopia.content.service.ContentTagQueryService contentTags;
     private final ObjectProvider<HealthEventTimelineSource> healthSource;
     private final MilestoneService milestoneService;
+    /** V1.3.0 Story 1.4：档案统计栏顺带下发的「未庆祝」角标数（AD-A2.2）。 */
+    private final MilestoneCelebrationService celebrationService;
     private final HealthRecordRepository healthRecords;
     private final MilestoneCompletionRepository milestoneCompletions;
     private final IdCardRepository idCards;
 
     public TimelineService(ProfileService profileService, ContentService contentService,
             ObjectProvider<HealthEventTimelineSource> healthSource,
-            MilestoneService milestoneService, HealthRecordRepository healthRecords,
+            MilestoneService milestoneService, MilestoneCelebrationService celebrationService,
+            HealthRecordRepository healthRecords,
             MilestoneCompletionRepository milestoneCompletions, IdCardRepository idCards,
             com.tailtopia.content.service.ContentTagQueryService contentTags) {
         this.profileService = profileService;
@@ -83,6 +86,7 @@ public class TimelineService {
         this.contentService = contentService;
         this.healthSource = healthSource;
         this.milestoneService = milestoneService;
+        this.celebrationService = celebrationService;
         this.healthRecords = healthRecords;
         this.milestoneCompletions = milestoneCompletions;
         this.idCards = idCards;
@@ -490,6 +494,9 @@ public class TimelineService {
     /**
      * 档案统计栏（Story 2.4 AC5 · 8.2 连带 AC5）：快乐时刻数 + 问诊数 + 里程碑真进度
      * （已完成 / 总数，接 8.1 roster + completions 真计数）。
+     *
+     * <p>V1.3.0 Story 1.4 起多带一个「已完成且未庆祝」数（角标用，AD-A2.2）——
+     * 这里本来就要查 roster 与 completions，角标是同一次请求的第三个数，**不新开接口**。
      */
     @Transactional(readOnly = true)
     public ArchiveStatsResponse getStats(long ownerId) {
@@ -500,8 +507,10 @@ public class TimelineService {
         MilestoneService.MilestoneProgress progress =
                 milestoneService.getProgress(profile.getId(), profile.getPetType());
         long healthRecordCount = healthRecords.countByPetProfileId(profile.getId());
+        // 角标数（V1.3.0 Story 1.4 · AD-A2.2）：搭这一次请求的顺风车，不为它多发一次。
+        long uncelebrated = celebrationService.countUncelebrated(profile.getId());
         return new ArchiveStatsResponse(happy, consult, progress.completed(), progress.total(),
-                healthRecordCount);
+                healthRecordCount, uncelebrated);
     }
 
     /** 当天详情的大类序号（AD-10）：diary=0 &gt; 问诊=1 &gt; 结构化健康记录=2。 */

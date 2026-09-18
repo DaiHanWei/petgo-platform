@@ -14,6 +14,8 @@ class Comment {
     this.replyCount,
     this.replies,
     this.moderationStatus = 'VISIBLE',
+    this.likeCount = 0,
+    this.liked = false,
   });
 
   final int id;
@@ -41,6 +43,38 @@ class Comment {
   /// 缺省 VISIBLE（旧后端不下发此字段时向后兼容）。
   final String moderationStatus;
 
+  /// 点赞数（V1.3.0 Story 2.4）。**后端实时聚合，库里没有计数列** ——
+  /// 所以这个数每次拉取都是当下的真值，不存在「对不上账」的历史包袱。
+  final int likeCount;
+
+  /// 当前查看者是否已赞（游客恒 false）。
+  final bool liked;
+
+  /// 乐观更新用：本地翻转点赞态，不等服务端回包。
+  ///
+  /// 服务端点赞端点**不返回赞数**（那是聚合值，回来时可能已经变了），所以本地
+  /// ±1 是唯一能让按钮立刻有反馈的办法。下次拉列表时以服务端为准。
+  Comment toggleLikedLocally() => copyWith(
+        liked: !liked,
+        likeCount: liked ? (likeCount - 1).clamp(0, 1 << 30) : likeCount + 1,
+      );
+
+  Comment copyWith({int? likeCount, bool? liked, List<Comment>? replies}) => Comment(
+        id: id,
+        authorId: authorId,
+        authorDeleted: authorDeleted,
+        body: body,
+        createdAt: createdAt,
+        authorNickname: authorNickname,
+        authorTags: authorTags,
+        authorAvatarUrl: authorAvatarUrl,
+        replyCount: replyCount,
+        replies: replies ?? this.replies,
+        moderationStatus: moderationStatus,
+        likeCount: likeCount ?? this.likeCount,
+        liked: liked ?? this.liked,
+      );
+
   bool get isTopLevel => replyCount != null;
 
   /// 仅作者可见的「已被下架/移除」态（读路径已按 viewer 过滤，他人根本收不到该行）。
@@ -63,6 +97,8 @@ class Comment {
           ? rawReplies.map((e) => Comment.fromJson((e as Map).cast<String, dynamic>())).toList()
           : null,
       moderationStatus: (json['moderationStatus'] as String?) ?? 'VISIBLE',
+      likeCount: (json['likeCount'] ?? 0) as int,
+      liked: (json['liked'] ?? false) as bool,
     );
   }
 }

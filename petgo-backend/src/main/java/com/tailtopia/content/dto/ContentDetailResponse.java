@@ -30,6 +30,24 @@ public record ContentDetailResponse(
         ContentType type,
         String body,
         List<String> imageUrls,
+        /**
+         * 图片原始宽高（V1.3.0 批次 A · Story 2.1 · AD-A12），与 {@link #imageUrls()}
+         * <b>同序等长</b>；测不出来的位置为 {@code null}，存量内容（V1.1.6 之前发布的）整列各位为
+         * {@code null}。无图时整个字段省略（NON_NULL）。
+         *
+         * <p><b>为什么详情页需要它</b>：没有尺寸，页面只能等图片下载完才知道该留多高 ——
+         * 于是首屏加载时整页跳动。PRD 把 FR-113 归为「纯前端」是一处疏漏：详情响应此前
+         * 只有 {@code imageUrls}（v1.1.6 AD-5 明写「既有五处图片读取点一处不动」，
+         * 详情页正是其中之一）。
+         *
+         * <p>🛡 <b>只有原始宽高。</b>展示比例的收敛（clamp）与高度护栏<b>一律客户端算</b> ——
+         * 护栏依赖可视区高度，服务端算不了；服务端先 clamp 一遍、客户端再 clamp 一遍
+         * 就是<b>双重裁切</b>（v1.1.6 AD-6 Rule 6）。
+         * ⚠️ 想在这里加「比例」或「已算好的高度」字段之前，先读一遍这段。
+         *
+         * <p>元素类型与 {@code FeedItemResponse.imageSizes()} <b>完全一致</b>，客户端两处共用一套解析。
+         */
+        List<com.tailtopia.content.domain.ImageSize> imageSizes,
         long likeCount,
         long commentCount,
         boolean liked,
@@ -45,14 +63,20 @@ public record ContentDetailResponse(
         ContentVisibility visibility,
         Instant createdAt) {
 
+    /**
+     * @param imageSizes 已由 {@code ImageSizeResolver.alignForRead} 对齐到 {@code imageUrls} 长度的尺寸列；
+     *                   无图时为 {@code null}。**不要在这里现场取 {@code p.getImageSizes()}** ——
+     *                   那是未对齐的原始列，存量内容整列为 null，下标会对不上（Story 2.1 · AC1/AC2）。
+     */
     public static ContentDetailResponse of(ContentPost p, AuthorView author, long likeCount,
             long commentCount, boolean liked, boolean isAuthor,
-            List<ContentTagView> decorationTags) {
+            List<ContentTagView> decorationTags,
+            List<com.tailtopia.content.domain.ImageSize> imageSizes) {
         return new ContentDetailResponse(
                 p.getId(), p.getAuthorId(), author.nickname(), author.avatarUrl(),
                 author.deleted(), author.tags().isEmpty() ? null : author.tags(),
                 (decorationTags == null || decorationTags.isEmpty()) ? null : decorationTags,
-                p.getType(), p.getText(), p.getImageUrls(),
+                p.getType(), p.getText(), p.getImageUrls(), imageSizes,
                 likeCount, commentCount, liked, isAuthor, p.getVisibility(),
                 p.getCreatedAt());
     }

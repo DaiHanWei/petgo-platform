@@ -218,7 +218,7 @@ class WarmReplyQueueServiceTest {
         stubContentAlive();
         String longBody = "谢谢你！".repeat(20); // 80 字
         when(commentService.createReply(VIRTUAL_COMMENT, VIRTUAL_USER, longBody)).thenReturn(
-                new CommentResponse(900L, VIRTUAL_USER, "马甲", null, false, null, longBody, Instant.now(), 0, java.util.List.of(), "UNDER_REVIEW"));
+                new CommentResponse(900L, VIRTUAL_USER, "马甲", null, false, null, longBody, Instant.now(), 0, java.util.List.of(), "UNDER_REVIEW", 0L, false));
 
         WarmReplyQueueService.ReplyResult r = service.reply(7L, "  " + longBody + "  ", "k1", 42L);
 

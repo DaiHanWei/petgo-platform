@@ -87,17 +87,21 @@ public class MilestoneCheckInService {
         if (completions.existsByLinkedContentId(contentId)) {
             throw AppException.conflict("该内容已关联其它里程碑");
         }
-        boolean done = completionService.completeForOwner(
-                ownerId, suffixOf(code), MilestoneCompletionSource.USER_CHECKIN, contentId);
+        // 打卡路径本就持有完整 code，直接传（V1.3.0 Story 1.1 · AD-A4：不再拆后缀再拼回去）。
+        boolean done = completionService.completeCodeForOwner(
+                ownerId, code, MilestoneCompletionSource.USER_CHECKIN, contentId);
         if (!done) {
             // 并发兜底（唯一约束）：已被另一请求完成。
             throw AppException.conflict("该里程碑已完成");
         }
+        // 刚打卡完成的这一条**必然未庆祝**（庆祝页还没弹）—— celebratedAt 恒为 null，
+        // 客户端据此把它计入本次要庆祝的集合（V1.3.0 Story 1.5）。
         return new MilestoneItemResponse(
                 milestone.getCode(), titleOf(milestone.getCode()),
                 milestone.getLevel().name(), milestone.getTriggerType().name(),
                 true, completions.findByPetMilestoneId(milestone.getId())
-                        .map(c -> c.getCompletedAt()).orElse(null));
+                        .map(c -> c.getCompletedAt()).orElse(null),
+                null);
     }
 
     private Set<Long> linkedContentIds(long petProfileId) {
@@ -122,11 +126,6 @@ public class MilestoneCheckInService {
     private PetProfile requireProfile(long ownerId) {
         return profiles.findByOwnerId(ownerId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
-    }
-
-    private static String suffixOf(String code) {
-        int dash = code.indexOf('-');
-        return dash >= 0 ? code.substring(dash + 1) : code;
     }
 
     private static String titleOf(String code) {

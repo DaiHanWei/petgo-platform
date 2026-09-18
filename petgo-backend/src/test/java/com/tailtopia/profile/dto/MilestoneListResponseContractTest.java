@@ -35,8 +35,9 @@ class MilestoneListResponseContractTest {
             "petName", "petAvatarUrl", "completedCount", "totalCount", "groups");
     private static final Set<String> GROUP_FIELDS = Set.of(
             "level", "completedCount", "totalCount", "items");
+    /** 已完成**且已庆祝**的条目才带满 7 个字段；未庆祝的会省略 celebratedAt（见下方用例）。 */
     private static final Set<String> ITEM_FIELDS = Set.of(
-            "code", "title", "level", "triggerType", "completed", "completedAt");
+            "code", "title", "level", "triggerType", "completed", "completedAt", "celebratedAt");
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> wire(Object dto) {
@@ -47,7 +48,8 @@ class MilestoneListResponseContractTest {
     void completedItemHasExactlyContractFieldsWithUpperSnakeEnums() {
         MilestoneItemResponse item = new MilestoneItemResponse(
                 "C-S1", "宠物档案创建完成", "S", "SYSTEM_AUTO", true,
-                Instant.parse("2026-06-05T00:00:00Z"));
+                Instant.parse("2026-06-05T00:00:00Z"),
+                Instant.parse("2026-06-05T00:00:01Z"));
 
         Map<String, Object> m = wire(item);
         assertThat(m.keySet()).isEqualTo(ITEM_FIELDS);
@@ -61,12 +63,29 @@ class MilestoneListResponseContractTest {
     @Test
     void uncompletedItemOmitsCompletedAtButKeepsRequired() {
         MilestoneItemResponse item = new MilestoneItemResponse(
-                "C-S6", "第一次洗澡", "S", "USER_CHECKIN", false, null);
+                "C-S6", "第一次洗澡", "S", "USER_CHECKIN", false, null, null);
 
         Map<String, Object> m = wire(item);
         assertThat(m).doesNotContainKey("completedAt"); // NON_NULL：未完成省略
         assertThat(m.keySet()).isEqualTo(Set.of("code", "title", "level", "triggerType", "completed"));
         assertThat(m.get("completed")).isEqualTo(false);
+    }
+
+    /**
+     * V1.3.0 Story 1.5 · AD-A1.3：**「已完成且未庆祝」的线格式就是「有 completed=true、
+     * 没有 celebratedAt 这个 key」**。客户端补弹的判据全靠这一条，别为了「字段齐整」
+     * 给它补一个 null 或哨兵值 —— 那会让 NON_NULL 的语义和判据同时失效。
+     */
+    @Test
+    void completedButUncelebratedOmitsCelebratedAt() {
+        MilestoneItemResponse item = new MilestoneItemResponse(
+                "C-S15", "第一次收到点赞", "S", "SYSTEM_AUTO", true,
+                Instant.parse("2026-06-05T00:00:00Z"), null);
+
+        Map<String, Object> m = wire(item);
+        assertThat(m).doesNotContainKey("celebratedAt");
+        assertThat(m.get("completed")).isEqualTo(true);
+        assertThat(m).containsKey("completedAt");
     }
 
     @Test

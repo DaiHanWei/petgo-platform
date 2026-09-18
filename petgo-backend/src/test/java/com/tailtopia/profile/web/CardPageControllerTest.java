@@ -85,8 +85,9 @@ class CardPageControllerTest {
         when(accountQueryService.isActive(7L)).thenReturn(true);
         when(accountQueryService.findAuthorViews(any()))
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Aurel", null, false, java.util.List.of())));
+        // 第 6 个字段是 V1.3.0 Story 1.4 的「未庆祝」角标数；访客页不展示它，给 0。
         when(timelineService.getStats(7L))
-                .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30, 0));
+                .thenReturn(new ArchiveStatsResponse(happy, consult, milestoneCompleted, 30, 0, 0));
     }
 
     @Test
@@ -176,8 +177,9 @@ class CardPageControllerTest {
 
     /** 造一个「已完成」的里程碑项。 */
     private static com.tailtopia.profile.dto.MilestoneItemResponse done(String code, Instant at) {
+        // 第 7 个字段 celebratedAt 是 V1.3.0 Story 1.5 的补庆祝判据；名片页不关心，给 null。
         return new com.tailtopia.profile.dto.MilestoneItemResponse(
-                code, "中文标题", "S", "SYSTEM_AUTO", true, at);
+                code, "中文标题", "S", "SYSTEM_AUTO", true, at, null);
     }
 
     private void stubMilestones(com.tailtopia.profile.dto.MilestoneItemResponse... items) {

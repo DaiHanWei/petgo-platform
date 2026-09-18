@@ -115,7 +115,7 @@ class VirtualCommentServiceTest {
         when(idempotency.findResourceId("k9")).thenReturn(Optional.empty());
         when(users.findById(2L)).thenReturn(Optional.of(virtual(true)));
         when(posts.findById(1L)).thenReturn(Optional.of(publishedPost()));
-        CommentResponse resp = new CommentResponse(123L, 2L, "MeowSisters", null, false, null, "x", Instant.now(), 0, List.of(), "UNDER_REVIEW");
+        CommentResponse resp = new CommentResponse(123L, 2L, "MeowSisters", null, false, null, "x", Instant.now(), 0, List.of(), "UNDER_REVIEW", 0L, false);
         when(commentService.createTopLevel(1L, 2L, "好可爱的猫！".repeat(12))).thenReturn(resp);
 
         String longBody = "好可爱的猫！".repeat(12); // 72 字

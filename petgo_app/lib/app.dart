@@ -22,6 +22,8 @@ import 'package:tailtopia/features/order/presentation/order_list_controller.dart
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/features/profile/data/health_record_repository.dart';
 import 'package:tailtopia/features/profile/data/id_card_repository.dart';
+import 'package:tailtopia/features/profile/data/milestone_celebration_reporter.dart';
+import 'package:tailtopia/features/profile/data/onboarding_mark_repository.dart';
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
 import 'package:tailtopia/features/profile/data/newbie_task_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
@@ -271,6 +273,7 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(timelineFirstPageProvider); // 成长档案：时间线首页
   ref.invalidate(archiveStatsProvider); // 成长档案 / 我的：统计栏
   ref.invalidate(milestoneListProvider); // 成长档案：里程碑
+  ref.invalidate(locallyCelebratedMilestonesProvider); // 里程碑：本机已庆祝（补弹抑制）
   // bug 20260730-421 同类隐患：健康记录/日历/日详情是宠物维度缓存（非 autoDispose），
   // 不登记则同设备换账号会看到上一用户的健康数据（隐私）。
   ref.invalidate(healthListProvider); // 健康记录页
@@ -286,6 +289,7 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(idCardDetailProvider); // 身份证：卡详情（按 cardId family 整族失效）
   ref.invalidate(newbieTasksProvider); // 新手任务进度（同型隐患：换账号防串任务状态）
   ref.invalidate(pawCoinProvider); // PawCoin 余额（同型隐患：换账号防显示上个账号余额）
+  ref.invalidate(onboardingMarksProvider); // 一次性引导标记（按账号存：换账号不得沿用上个账号的）
   ref.invalidate(orderListProvider); // 订单中心（keep-alive 且不 watch 登录态：换账号会看到上个账号的订单）
   ref.read(consultRefreshProvider.notifier).bump(); // 问诊页 _active/_history 重拉
 }

@@ -36,12 +36,15 @@ public class ContentDetailService {
     private final AccountQueryService accountQueryService;
     private final ReportService reportService;
     private final UserHideRelationReader hideRelations;
+    /** V1.3.0 Story 2.1：把库里的尺寸列对齐到图片数组再下发（不新增测量路径，AC4）。 */
+    private final ImageSizeResolver imageSizes;
 
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
             ReportService reportService, UserHideRelationReader hideRelations,
-            ContentTagQueryService contentTags) {
+            ContentTagQueryService contentTags, ImageSizeResolver imageSizes) {
         this.contentTags = contentTags;
+        this.imageSizes = imageSizes;
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -97,7 +100,11 @@ public class ContentDetailService {
         // 仓储刻意不提供逐条取法，免得别处照着写成逐条查。
         var decorations = contentTags.findVisibleTags(java.util.List.of(postId), java.time.Instant.now())
                 .get(postId);
+        // Story 2.1（AD-A12）：图片原始宽高随详情下发，客户端据此在图片加载完成前就留对高度。
+        // 走 alignForRead 而不是直接 post.getImageSizes()：存量内容整列为 null，
+        // 不对齐的话客户端按下标取会错位（AC1/AC2）。**只下发原始宽高，不下发比例/高度**（AC3）。
+        var sizes = imageSizes.alignForRead(post.getImageUrls(), post.getImageSizes());
         return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor,
-                decorations);
+                decorations, sizes);
     }
 }

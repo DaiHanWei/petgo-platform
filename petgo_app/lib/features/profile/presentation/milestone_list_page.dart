@@ -9,10 +9,13 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_image.dart';
+import '../data/milestone_celebration_reporter.dart';
 import '../data/milestone_repository.dart';
 import '../data/newbie_task_repository.dart';
+import '../data/timeline_repository.dart';
 import '../domain/milestone.dart';
 import '../domain/health_milestones.dart';
+import '../domain/milestone_catchup.dart';
 import '../domain/milestone_checkin_prompt_copy.dart';
 import '../domain/milestone_share.dart';
 import '../domain/milestone_titles.dart';
@@ -26,7 +29,14 @@ import 'widgets/milestone_celebration.dart';
 /// 承接 `MILESTONE_NODE` 推送深链（`/profile/milestones`）。三级庆祝动效在 8.5；
 /// 「已打卡」picker + 打卡 API、「去发布」预选成长日历的完成回填在 8.4。
 class MilestoneListPage extends ConsumerStatefulWidget {
-  const MilestoneListPage({super.key});
+  const MilestoneListPage({super.key, this.justCelebrated = const {}});
+
+  /// 本次导航内**刚庆祝过**的 code（V1.3.0 Story 1.5 · AD-A2.3c）。
+  ///
+  /// 🔴 「去发布」路径的时序是「发布成功 → 回填打卡 → 弹庆祝 → 关 sheet → 跳本页」，
+  /// 而庆祝回报是**异步**的 —— 本页极可能在回报落库前就读到 `celebratedAt == null`，
+  /// 于是两秒内连弹两次同一条。这份集合在补弹判定前先被扣除，**不依赖回报是否已落库**。
+  final Set<String> justCelebrated;
 
   @override
   ConsumerState<MilestoneListPage> createState() => _MilestoneListPageState();
@@ -34,6 +44,9 @@ class MilestoneListPage extends ConsumerStatefulWidget {
 
 class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
   bool _devShown = false;
+
+  /// 补弹只做一次：`build` 会因 provider 刷新反复跑，没有这道闸就会重复弹。
+  bool _catchupDone = false;
 
   /// 筛选（0711）：false=「Belum Semua Selesai」显示未全完成级别；true=「Semua Sudah Selesai」显示已全完成级别。
 
@@ -59,8 +72,74 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
           _ => MilestoneLevel.m,
         };
         showMilestoneCelebration(context, _devItem(level),
-            petName: data.petName, collection: [for (final g in data.groups) ...g.items]);
+            petName: data.petName,
+            path: MilestoneCelebrationPath.revisit, // debug 钩子，按"回看"计
+            collection: [for (final g in data.groups) ...g.items]);
       }
+    });
+  }
+
+  /// 补庆祝（V1.3.0 Story 1.5 · AC2/AC3 · AD-A2）：进本页时若有「已完成且未庆祝」的条目，
+  /// **自动弹一次**，取级别最高的一条，其余由 KOLEKSI 圆点带过。
+  ///
+  /// 三条不要改坏：
+  /// - **不按级别过滤，S 级也补**（AD-A2.4）：入口是用户主动点进来的，没有打扰问题；
+  /// - 回报**只报本次展示覆盖的那批 code**（AD-A2.3b），不是「所有未庆祝的」——
+  ///   否则会吞掉读取到回报之间新解锁的条目，让它永不补弹；
+  /// - 回报 **best-effort**：不 await 到阻塞 UI、失败静默（AD-A3.1）。
+  ///
+  /// 既有的即时庆祝路径与 500/800/1200ms 三次短轮询**全部保留** —— 补庆祝是兜底，不是替代。
+  void _maybeCatchUp(MilestoneList data) {
+    if (_catchupDone) return;
+    final catchup = resolveCatchup(
+      [for (final g in data.groups) ...g.items],
+      // 本次导航带来的 + 本 App 会话内已在本机弹过的（回报在途/已落库）一并扣除。
+      justCelebrated: {
+        ...widget.justCelebrated,
+        ...ref.read(locallyCelebratedMilestonesProvider),
+      },
+    );
+    if (catchup.isEmpty) return;
+    _catchupDone = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      // 弹出前先记本地：回报要等弹窗关掉才发，这期间列表若被重拉不能再补一次。
+      // ⚠️ 必须在帧后记：本方法从 build 里调用，build 期间改 provider 会直接抛。
+      markMilestonesCelebrating(ref, catchup.codesToReport);
+      final item = catchup.toCelebrate!;
+      final l10n = AppLocalizations.of(context);
+      final locale = Localizations.localeOf(context);
+      final collection = [for (final g in data.groups) ...g.items];
+      final shareText = l10n.milestoneShareText(localizedMilestoneTitle(item.code, locale));
+      // 先回报再展示还是先展示再回报？——**先展示**（AD-A3.1：展示成功后才回报）。
+      // 回报失败的代价只是下次再补弹一次，而「没弹却已置位」会让用户永远看不到这次庆祝。
+      await showMilestoneCelebration(
+        context,
+        item,
+        petName: data.petName,
+        path: MilestoneCelebrationPath.catchup,
+        collection: collection,
+        onShare: () => shareMilestoneWithLink(ref,
+            item: item,
+            locale: locale,
+            petName: data.petName,
+            shareText: shareText,
+            collection: collection),
+      );
+      _reportCelebrated(catchup.codesToReport);
+    });
+  }
+
+  /// 庆祝回报（AD-A3.1）：**best-effort** —— 异步发、失败静默、不重试到用户可感知。
+  ///
+  /// ⚠️ 刻意不 `await`、不弹错、不重试。失败的代价只是下次进本页再补弹一次，可接受；
+  /// **不得**为了「保证落库」把它改成同步 —— 那会让庆祝页（乃至发布流程）卡在一个可失败的写上。
+  /// 回报成功后刷新列表，让本页与档案 Tab 的角标口径立刻一致。
+  void _reportCelebrated(List<String> codes) {
+    reportMilestoneCelebrated(ref, codes, onDone: () {
+      if (!mounted) return;
+      // 回报落库后刷新（列表已由 reporter 统一刷新），让档案 Tab 的角标口径立刻一致。
+      ref.invalidate(archiveStatsProvider);
     });
   }
 
@@ -79,6 +158,7 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
     final l10n = AppLocalizations.of(context);
     final async = ref.watch(milestoneListProvider);
     async.whenData(_maybeDevShow);
+    async.whenData(_maybeCatchUp);
     return Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(
@@ -460,7 +540,7 @@ class _Badge extends ConsumerWidget {
     final completed = item.completed;
     return GestureDetector(
       key: ValueKey('milestoneBadge_${item.code}'),
-      // 已完成 → 重温 P-35 解锁庆祝；未完成健康类（疫苗 M3/驱虫 M4）→ 直跳健康记录页并预选类型
+      // 已完成 → 重温 P-35 解锁庆祝；未完成健康类 → 按 kHealthMilestoneDestinations 跳去处
       // （bug 20260729-406：下线旧三选项打卡浮层，里程碑数据源受健康记录约束）；
       // 其余未完成 → P-33b 详情底抽屉。
       onTap: () {
@@ -468,10 +548,17 @@ class _Badge extends ConsumerWidget {
           _showCelebration(context, ref, item);
           return;
         }
-        final healthPreset = healthPresetTypeFor(item.code);
-        if (healthPreset != null) {
-          GoRouter.of(context).push('/profile/health?add=$healthPreset');
-          return;
+        // 未完成健康类：一律有去处（AD-A6.5）。有记录类型可填的进健康记录页并预选，
+        // 没有的（第一次看兽医 M5 / G-M1）进真人兽医问诊入口 —— 不是 AI 分诊。
+        switch (healthDestinationFor(item.code)) {
+          case MilestoneDestination.healthRecord:
+            GoRouter.of(context).push('/profile/health?add=${healthPresetTypeFor(item.code)}');
+            return;
+          case MilestoneDestination.vetConsult:
+            GoRouter.of(context).push('/consult');
+            return;
+          case null:
+            break; // 非健康类 → 维持 P-33b 徽章详情底抽屉
         }
         _showBadgeSheet(context, ref, item);
       },
@@ -530,6 +617,9 @@ void _showCelebration(BuildContext context, WidgetRef ref, MilestoneItem item) {
     context,
     item,
     petName: petName,
+    // AC5 重温：正常展示庆祝，但**不改写 celebrated_at、不产生回报**（AD-A3.3）——
+    // 这里刻意没有 _reportCelebrated 调用。埋点仍上报（埋点与回报是两件事）。
+    path: MilestoneCelebrationPath.revisit,
     collection: collection,
     onShare: () => shareMilestoneWithLink(ref,
         item: item, locale: locale, petName: petName, shareText: shareText, collection: collection),
@@ -852,6 +942,9 @@ class _CandidateTile extends ConsumerWidget {
       final petName = listData?.petName ?? '';
       final completed =
           await ref.read(milestoneRepositoryProvider).checkIn(milestoneCode, candidate.contentId);
+      // 🔴 必须在 invalidate 之前记本地：重拉回来这条仍是 celebratedAt == null，
+      //    而回报要等下面的庆祝弹窗关掉才发 —— 不先记，列表页会在即时庆祝之上再补弹一次。
+      markMilestonesCelebrating(ref, [completed.code]);
       ref.invalidate(milestoneListProvider);
       // 合集预览：用 checkIn 前的快照，并把刚打卡的那条替换为已完成态（refetch 是异步的，拿不到即时新值）。
       final collection = listData == null
@@ -869,6 +962,7 @@ class _CandidateTile extends ConsumerWidget {
         context,
         completed,
         petName: petName,
+        path: MilestoneCelebrationPath.instant,
         collection: collection,
         onShare: () => shareMilestoneWithLink(ref,
             item: completed,
@@ -878,6 +972,8 @@ class _CandidateTile extends ConsumerWidget {
             collection: collection),
         onSeeAll: router == null ? null : () => router.go(DeepLinkRoutes.milestoneList),
       );
+      // 即时庆祝也要回报，否则这一条会在下次进列表页时被当成"未庆祝"再弹一遍（AD-A3.1）。
+      reportMilestoneCelebrated(ref, [completed.code]);
     } catch (_) {
       showAppToastOnOverlay(overlay, l10n.milestoneCheckinFailed);
     }
@@ -912,11 +1008,58 @@ class _MilestoneError extends StatelessWidget {
   }
 }
 
-/// 健康类里程碑 → 健康记录预选类型（bug 20260729-406，纯函数 L0 可测）：
-/// 疫苗 `*-M3`→VACCINE、驱虫 `*-M4`→DEWORM（镜像后端 MilestoneAutoCompleteListener 映射）；
-/// 其余返回 null（维持 P-33b 徽章弹层）。
-String? healthPresetTypeFor(String code) {
-  if (code.endsWith('-M3')) return 'VACCINE';
-  if (code.endsWith('-M4')) return 'DEWORM';
-  return null;
+/// 未完成健康类灰徽章的**点击去向**（V1.3.0 Story 1.3 · AD-A6，纯函数 L0 可测）。
+///
+/// 🔴 **收口判据：任何一枚未完成的健康类灰徽章，点下去都必须有明确去处**（AD-A6.5）。
+/// 改造前 `M5`（第一次看兽医）与 `M9`（绝育）落到 null → 只弹一段只读说明、**没有任何去处**，
+/// 用户看完不知道该干什么。现在按完整 code 逐条列举，[kAutoOnlyHealthMilestoneCodes] 里
+/// 每一条都在本表里有值 —— 由测试钉住（AC5）。
+///
+/// 两类去向：
+/// - [MilestoneDestination.healthRecord]：有对应的健康记录类型可预选（疫苗 / 驱虫 / 绝育）；
+/// - [MilestoneDestination.vetConsult]：没有记录类型可填，只能真去看一次兽医
+///   （`*-M5` 与通用宠物的 `G-M1`，两者语义与触发源相同，去向必须一致 —— AD-A6.3）。
+///
+/// ⚠️ 去的是**真人兽医问诊入口**（`/consult`），**不是 AI 分诊**：AI 问诊不解锁这两条
+/// （同 FR-86 OQ-17 口径），把用户领到 AI 分诊等于带他去一个点不亮它的地方（AD-A6.6）。
+///
+/// ⚠️ 本表与 [kAutoOnlyHealthMilestoneCodes]（门控集合，决定出不出打卡按钮）**是两个用途**：
+/// 门控集合与后端逐字等长，本表覆盖同一批 code 但**去向可以不同**。不要合并。
+const Map<String, MilestoneDestination> kHealthMilestoneDestinations = {
+  // 猫狗：疫苗 / 驱虫 / 绝育都有对应的健康记录类型可预选。
+  'C-M3': MilestoneDestination.healthRecord, 'D-M3': MilestoneDestination.healthRecord,
+  'C-M4': MilestoneDestination.healthRecord, 'D-M4': MilestoneDestination.healthRecord,
+  'C-M9': MilestoneDestination.healthRecord, 'D-M9': MilestoneDestination.healthRecord,
+  // 「第一次看兽医」没有健康记录类型可填 → 去真人问诊入口。
+  'C-M5': MilestoneDestination.vetConsult, 'D-M5': MilestoneDestination.vetConsult,
+  // 通用宠物：G-M1 同上；G-M2「第一次健康检查 / 疫苗」只由 VACCINE 记录点亮（决策 A-1）。
+  'G-M1': MilestoneDestination.vetConsult,
+  'G-M2': MilestoneDestination.healthRecord,
+};
+
+/// 走健康记录页时预选的 `health_records.type`；[MilestoneDestination.vetConsult] 不需要。
+const Map<String, String> kHealthMilestonePresetTypes = {
+  'C-M3': 'VACCINE', 'D-M3': 'VACCINE', 'G-M2': 'VACCINE',
+  'C-M4': 'DEWORM', 'D-M4': 'DEWORM',
+  'C-M9': 'NEUTER', 'D-M9': 'NEUTER',
+};
+
+/// 未完成健康类灰徽章的去向；非健康类返回 null（维持 P-33b 徽章弹层）。
+MilestoneDestination? healthDestinationFor(String code) =>
+    kHealthMilestoneDestinations[code];
+
+/// 健康类里程碑 → 健康记录预选类型（bug 20260729-406）。
+///
+/// ⚠️ V1.3.0 Story 1.3 起**按完整 code 查表，不再用 `endsWith` 判后缀**：通用清单的
+/// `G-M3` 是「陪伴满 30 天」、`G-M4` 是「记录满 10 条」，跟健康毫无关系，按后缀判会把它们
+/// 一点就跳到健康记录页去录疫苗 / 驱虫 —— 用户完全摸不着头脑。
+String? healthPresetTypeFor(String code) => kHealthMilestonePresetTypes[code];
+
+/// 未完成健康类灰徽章点下去到哪（AD-A6）。
+enum MilestoneDestination {
+  /// 健康记录页，带 [kHealthMilestonePresetTypes] 里的预选类型。
+  healthRecord,
+
+  /// 真人兽医问诊入口（**不是** AI 分诊）。
+  vetConsult,
 }

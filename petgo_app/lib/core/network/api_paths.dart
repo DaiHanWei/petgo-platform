@@ -175,6 +175,16 @@ class ApiPaths {
   static const String meIdCardShareReward =
       '$base/pet-profiles/me/id-cards/share-reward';
 
+  /// 一次性引导标记（V1.3.0 Story 5.4）。GET 取已置位的键；POST `{key}` 置位（幂等）。
+  /// 🔴 按**账号**存，所以挂在 /me 下（决策 C1：当前用户主体统一走 /me）。
+  static const String meOnboardingMarks = '$base/me/onboarding-marks';
+
+  /// 年龄卡分享成功上报 → 试发分享奖励（V1.3.0 Story 5.3）。
+  /// 🔴 请求体**只有幂等键**：不带卡面内容、不上传图片。年龄卡本身纯客户端出图、
+  /// 不落服务端；领奖是已澄清的唯一例外，而这个例外只包含「谁、哪次分享」。
+  static const String meAgeCardShareRewards =
+      '$base/pet-profiles/me/age-cards/share-rewards';
+
   /// 单卡快照详情（Story 6.7）。非本人 404。
   static String meIdCard(int cardId) => '$base/pet-profiles/me/id-cards/$cardId';
 
@@ -217,6 +227,11 @@ class ApiPaths {
       '$base/pet-profiles/me/milestones/checkin-candidates';
   static String petProfileMilestoneCheckIn(String code) =>
       '$base/pet-profiles/me/milestones/$code/check-in';
+
+  /// 庆祝回报（V1.3.0 Story 1.5 · FR-111）：POST `{codes: [...]}`，服务端按列表幂等置位
+  /// `celebrated_at`。best-effort —— 失败静默，代价只是下次进列表页再补弹一次。
+  static const String petProfileMilestoneCelebrations =
+      '$base/pet-profiles/me/milestones/celebrations';
 
   /// P-35 里程碑庆祝对外分享：创建 / 刷新分享，返回不可枚举 shareToken（H5 `GET /m/{token}`）。
   static String petProfileMilestoneShares(String code) =>

@@ -89,7 +89,10 @@ public class AdminConfigController {
                     "admin.err.config.shareRewardCapBelowReward", "shareRewardMonthlyCap,idCardShareReward",
                     "admin.err.config.idCardShareRewardNegative", "idCardShareReward",
                     "admin.err.config.idCardShareRewardTooLarge", "idCardShareReward",
-                    "admin.err.config.idCardShareDailyCapNegative", "idCardShareDailyCap")));
+                    "admin.err.config.idCardShareDailyCapNegative", "idCardShareDailyCap",
+                    "admin.err.config.ageCardShareRewardNegative", "ageCardShareReward",
+                    "admin.err.config.ageCardShareRewardTooLarge", "ageCardShareReward",
+                    "admin.err.config.ageCardShareDailyCapNegative", "ageCardShareDailyCap")));
 
     private static String json(Map<String, String> m) {
         StringBuilder sb = new StringBuilder("{");
@@ -172,16 +175,20 @@ public class AdminConfigController {
             @RequestParam(defaultValue = "0") long shareRewardMonthlyCap,
             @RequestParam(defaultValue = "0") long idCardShareReward,
             @RequestParam(defaultValue = "0") int idCardShareDailyCap,
+            @RequestParam(defaultValue = "0") long ageCardShareReward,
+            @RequestParam(defaultValue = "0") int ageCardShareDailyCap,
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         if (hx.isHtmx()) {
             write.updateShareReward(new com.tailtopia.admin.config.dto.ShareRewardForm(
-                    shareRewardEnabled, shareRewardMonthlyCap, idCardShareReward, idCardShareDailyCap), admin.getAdminAccountId());
+                    shareRewardEnabled, shareRewardMonthlyCap, idCardShareReward, idCardShareDailyCap,
+                    ageCardShareReward, ageCardShareDailyCap), admin.getAdminAccountId());
             return savedCard("cfg-share-reward", "config-card-share-reward", "admin.flash.config.shareRewardSaved", model, response);
         }
         try {
             write.updateShareReward(new com.tailtopia.admin.config.dto.ShareRewardForm(
                     shareRewardEnabled, shareRewardMonthlyCap, idCardShareReward,
-                    idCardShareDailyCap), admin.getAdminAccountId());
+                    idCardShareDailyCap, ageCardShareReward, ageCardShareDailyCap),
+                    admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.config.shareRewardSaved"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));

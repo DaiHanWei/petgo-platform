@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/widgets/count_badge.dart';
 import '../../domain/pet_header_info.dart';
 import 'pet_info_card.dart';
 
@@ -33,14 +34,22 @@ class DiaryHeader extends StatelessWidget {
     this.consultCount,
     this.milestoneCompleted,
     this.milestoneTotal,
+    this.milestoneUncelebrated = 0,
     this.healthRecordCount,
     this.titleAction,
     this.onEditProfile,
     this.onOpenIdCard,
     this.onOpenHealth,
     this.onOpenMilestones,
+    this.insightsEntryAnchor,
     this.readOnly = false,
   });
+
+  /// 综合入口卡的**位置锚点**（V1.3.0 Story 5.4）。
+  ///
+  /// 迁移引导蒙层要知道「高亮框画在哪儿」，而那只能从真实布局里量。
+  /// ⚠️ 它**只用来量位置**，不改这张卡的任何行为 —— 三态判定仍只有 `readOnly` 一处（AD-A24.4）。
+  final GlobalKey? insightsEntryAnchor;
 
   /// 只读态（V1.1.6 Story 2.3 访客视图）。
   ///
@@ -61,6 +70,12 @@ class DiaryHeader extends StatelessWidget {
   /// 里程碑进度；任一为 null → 不渲染进度条（沿用现状：统计未就绪时该条不出现）。
   final int? milestoneCompleted;
   final int? milestoneTotal;
+
+  /// 「已完成且未庆祝」条目数（V1.3.0 Story 1.5 · AD-A2.2）：>0 时在里程碑进度卡右上角出红点。
+  ///
+  /// ⚠️ 档案 Tab **只显示角标、永不弹全屏庆祝**（AD-A2.1）—— 补弹只挂里程碑列表页。
+  /// 两处都弹的话，用户从这里点进列表页会被连弹两次。
+  final int milestoneUncelebrated;
 
   /// 结构化健康记录条数。为 0 时健康入口副文案改「还没有记录」（A4 近空态）；
   /// **null = 未知**（统计未就绪 / 游客示例态）→ 沿用固定副文案，不冒充空态。
@@ -180,13 +195,19 @@ class DiaryHeader extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Expanded(
+              // 引导蒙层的锚点挂在**外层**：给 _entryCard 换 key 会动到它自己的
+              // ValueKey('diaryIdCardButton')，那把既有测试与埋点对照一起弄断。
+              key: insightsEntryAnchor,
               child: _entryCard(
-                // key 沿用（原为标题行的图标按钮）——入口语义未变，只是位置从标题行挪到入口区。
+                // key 沿用（原为标题行的图标按钮，后为身份证入口）——
+                // V1.3.0 Story 5.1 起它指向「Know Your Pet」聚合页，身份证是其中一张卡。
+                // key 不改：入口在这一格的语义没变，改了会白白弄断既有测试与埋点对照。
                 key: const ValueKey('diaryIdCardButton'),
                 onTap: onOpenIdCard,
-                icon: Icons.badge_outlined,
+                icon: Icons.pets_outlined,
                 iconColor: AppColors.mint,
-                title: l10n.idCardTitle,
+                title: l10n.petInsightsTitle,
+                // 副文案沿用现成 key，**不新写**（AC1）。
                 sub: l10n.timelineIdCardTapToView,
               ),
             ),
@@ -194,8 +215,10 @@ class DiaryHeader extends StatelessWidget {
         ),
       );
 
-  /// 入口卡（A3 `entry-card`）：白底 r14 + 柔阴影 + 纵向「图标 → 标题 → 副文案」。
-  /// 样式沿用现网健康记录卡（颜色 / 圆角 / 阴影 / 文案），只按稿改为半栏宽 + 纵向排布。
+  /// 入口卡（A3 `entry-card`）：白底 r14 + 柔阴影 + **横向**「左图标 → 右文字」。
+  ///
+  /// V1.3.0 Story 5.1 · AC1：由纵向改横向，与聚合页两张卡同一套样式 ——
+  /// 两处长得一样，用户才看得出「点进去是同一类东西」。
   Widget _entryCard({
     required Key key,
     required VoidCallback? onTap,
@@ -220,24 +243,36 @@ class DiaryHeader extends StatelessWidget {
             onTap: onTap,
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, size: 26, color: iconColor),
-                  const SizedBox(height: 7),
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          height: 1.25,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.ink)),
-                  const SizedBox(height: 3),
-                  Text(sub,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 10.5, height: 1.3, color: AppColors.textTertiary)),
+                  Icon(icon, size: 24, color: iconColor),
+                  const SizedBox(width: 9),
+                  // 文字块吃掉剩余宽度：入口名两语长度差得多（EN 13 / ID 14 字符），
+                  // 不给 Expanded 会在印尼语下把卡撑爆。
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 13,
+                                height: 1.25,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.ink)),
+                        const SizedBox(height: 3),
+                        Text(sub,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 10.5, height: 1.3, color: AppColors.textTertiary)),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -246,7 +281,31 @@ class DiaryHeader extends StatelessWidget {
       );
 
   /// 里程碑进度卡（msbar）：「🏆 Pencapaian {name}」+ "X / N" 紫色 + 进度槽。
+  ///
+  /// V1.3.0 Story 1.5：有未庆祝条目时右上角挂一枚红色角标（复用通知铃铛那颗 [CountBadge]，
+  /// 不另画）。**卡片本身的布局与视觉一字不改** —— 角标由外层 Stack 叠上去，不挤占内容。
   Widget _milestoneBar(AppLocalizations l10n, int completed, int total) {
+    final bar = _milestoneBarCard(l10n, completed, total);
+    if (milestoneUncelebrated <= 0) {
+      return bar;
+    }
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        bar,
+        Positioned(
+          right: -4,
+          top: -4,
+          child: CountBadge(
+            key: const ValueKey('milestoneUncelebratedBadge'),
+            count: milestoneUncelebrated,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _milestoneBarCard(AppLocalizations l10n, int completed, int total) {
     final ratio = total == 0 ? 0.0 : completed / total;
     return GestureDetector(
       key: const ValueKey('archiveMilestoneBar'),

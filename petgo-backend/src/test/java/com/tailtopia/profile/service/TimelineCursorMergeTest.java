@@ -109,6 +109,8 @@ class TimelineCursorMergeTest {
                 .thenReturn(List.of());
         when(idCards.findByUserIdOrderByCreatedAtDesc(anyLong())).thenReturn(List.of());
         service = new TimelineService(profileService, contentService, healthProvider, milestoneService,
+                // V1.3.0 Story 1.4：档案统计栏顺带下发的「未庆祝」角标数；本类不验它，给 mock（默认 0）。
+                Mockito.mock(MilestoneCelebrationService.class),
                 healthRecords, milestoneCompletions, idCards,
                 // V1.1.6 Story 5.2：装饰标签统一贴标点；本类不验它，给 mock（默认无标签）。
                 Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
