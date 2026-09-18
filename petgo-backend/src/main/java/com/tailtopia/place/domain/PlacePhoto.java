@@ -121,15 +121,18 @@ public class PlacePhoto {
     }
 
     /**
-     * 审核通过：UNDER_REVIEW → VISIBLE。仅挂起态可转（幂等）。
+     * 审核放行：UNDER_REVIEW → VISIBLE。仅挂起态可转（幂等）。
      *
-     * <p>走到这里的判定是**干净 PASS**（高危与降级各有自己的分支，见
-     * {@code PlacePhotoModerationListener}），所以同时开放 og:image 资格。
+     * <p>🔴 og:image 资格**只给干净 PASS**：RISKY（"有点像"）照样对所有人可见（先发后审，
+     * 与标记时那批 {@link #fromMarking} 同一口径），但不能当站外分享页的预览图 ——
+     * 预览卡会被社交平台缓存、运营下架也撤不回来。
+     *
+     * @param cleanPass 那次审核是不是干净 PASS（不是 RISKY）
      */
-    public boolean approveModeration() {
+    public boolean approveModeration(boolean cleanPass) {
         if (moderationStatus == CommentModerationStatus.UNDER_REVIEW) {
             moderationStatus = CommentModerationStatus.VISIBLE;
-            ogEligible = true;
+            ogEligible = cleanPass;
             return true;
         }
         return false;

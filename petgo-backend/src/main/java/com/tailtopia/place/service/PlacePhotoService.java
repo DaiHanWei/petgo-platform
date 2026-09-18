@@ -137,11 +137,15 @@ public class PlacePhotoService {
         photos.save(p);
     }
 
-    /** 异步审核：通过 → VISIBLE。幂等。 */
+    /**
+     * 异步审核：放行 → VISIBLE。幂等。
+     *
+     * @param cleanPass 干净 PASS 才开放 og:image 资格；RISKY 可见但不当预览图
+     */
     @Transactional
-    public void approve(long photoId) {
+    public void approve(long photoId, boolean cleanPass) {
         photos.findByIdAndDeletedAtIsNull(photoId).ifPresent(p -> {
-            if (p.approveModeration()) {
+            if (p.approveModeration(cleanPass)) {
                 photos.save(p);
             }
         });

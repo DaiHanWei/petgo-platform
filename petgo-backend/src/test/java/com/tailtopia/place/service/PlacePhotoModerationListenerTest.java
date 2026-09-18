@@ -19,8 +19,9 @@ import org.mockito.Mockito;
 /**
  * 补充照片异步审核的判定分支（batch-b1 复审 B1）。
  *
- * <p>🔴 只有**干净 PASS** 才放行：{@code approveModeration} 会同时开放 og:image 资格，
- * 而站外预览卡被社交平台缓存后撤不回来。RISKY 此前落进了放行分支。
+ * <p>🔴 og:image 资格**只给干净 PASS**：站外预览卡被社交平台缓存后撤不回来。
+ * RISKY 此前被当成 PASS 放行（连带开放了 og:image）；产品 2026-09-18 拍板：
+ * RISKY 照样可见（先发后审，与标记时那批同口径），但不当预览图。
  */
 class PlacePhotoModerationListenerTest {
 
@@ -48,17 +49,19 @@ class PlacePhotoModerationListenerTest {
 
         listener.onPhotosSubmitted(event);
 
-        verify(photos).approve(1L);
-        verify(photos).approve(2L);
+        verify(photos).approve(1L, true);
+        verify(photos).approve(2L, true);
     }
 
     @Test
-    void riskyStaysPendingAndIsNeverApproved() {
+    void riskyIsVisibleButNeverOgEligible() {
         verdict(ModerationOutcome.risky(0.7, "PORN"));
 
         listener.onPhotosSubmitted(event);
 
-        verify(photos, never()).approve(anyLong());
+        verify(photos).approve(1L, false);
+        verify(photos).approve(2L, false);
+        verify(photos, never()).approve(anyLong(), org.mockito.ArgumentMatchers.eq(true));
         verify(photos, never()).reject(anyLong());
     }
 
@@ -68,7 +71,7 @@ class PlacePhotoModerationListenerTest {
 
         listener.onPhotosSubmitted(event);
 
-        verify(photos, never()).approve(anyLong());
+        verify(photos, never()).approve(anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
         verify(photos, never()).reject(anyLong());
     }
 
@@ -80,6 +83,6 @@ class PlacePhotoModerationListenerTest {
 
         verify(photos).reject(1L);
         verify(photos).reject(2L);
-        verify(photos, never()).approve(anyLong());
+        verify(photos, never()).approve(anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 }

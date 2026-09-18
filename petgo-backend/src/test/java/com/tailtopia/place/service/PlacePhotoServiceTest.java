@@ -232,7 +232,7 @@ class PlacePhotoServiceTest {
         PlacePhoto p = withId(PlacePhoto.contributed(42L, 9L, "https://cdn/a.jpg", 1), 7L);
         when(photos.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(p));
 
-        service.approve(7L);
+        service.approve(7L, true);
 
         assertThat(p.isVisible()).isTrue();
     }
@@ -275,6 +275,21 @@ class PlacePhotoServiceTest {
                 .isFalse();
     }
 
+    /** 🔴 og:image 资格只给干净 PASS；RISKY 放行可见但不当预览图（产品 2026-09-18 拍板）。 */
+    @Test
+    void approveGrantsOgOnlyOnCleanPass() {
+        PlacePhoto clean = PlacePhoto.contributed(42L, 9L, "https://cdn/a.jpg", 1);
+        PlacePhoto risky = PlacePhoto.contributed(42L, 9L, "https://cdn/b.jpg", 2);
+
+        assertThat(clean.approveModeration(true)).isTrue();
+        assertThat(risky.approveModeration(false)).isTrue();
+
+        assertThat(clean.getModerationStatus()).isEqualTo(CommentModerationStatus.VISIBLE);
+        assertThat(risky.getModerationStatus()).isEqualTo(CommentModerationStatus.VISIBLE);
+        assertThat(clean.isOgEligible()).isTrue();
+        assertThat(risky.isOgEligible()).as("RISKY 可见但绝不当站外预览图").isFalse();
+    }
+
     // ===== 注销级联 =====
 
     /**
@@ -287,7 +302,7 @@ class PlacePhotoServiceTest {
     void deactivationHidesContributedPhotosButKeepsTheOriginalBatch() {
         PlacePhoto original = withId(PlacePhoto.fromMarking(42L, 1L, "https://cdn/a.jpg", 0, true), 1L);
         PlacePhoto contributed = withId(PlacePhoto.contributed(42L, 9L, "https://cdn/b.jpg", 5), 2L);
-        contributed.approveModeration();
+        contributed.approveModeration(true);
         when(photos.findByUploaderIdAndDeletedAtIsNull(1L)).thenReturn(List.of(original));
         when(photos.findByUploaderIdAndDeletedAtIsNull(9L)).thenReturn(List.of(contributed));
 
@@ -310,7 +325,7 @@ class PlacePhotoServiceTest {
     @Test
     void thePlaceMarkersLaterContributionsAreStillHiddenOnDeactivation() {
         PlacePhoto later = withId(PlacePhoto.contributed(42L, 1L, "https://cdn/c.jpg", 7), 3L);
-        later.approveModeration();
+        later.approveModeration(true);
         when(photos.findByUploaderIdAndDeletedAtIsNull(1L)).thenReturn(List.of(later));
 
         assertThat(service.deactivateUploaderPhotos(1L)).isEqualTo(1);
