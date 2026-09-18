@@ -33,17 +33,15 @@ public class PlaceMergeService {
     private final PlacePhotoRepository photos;
     private final PlaceCommentRepository comments;
     private final PlaceCheckinRepository checkins;
-    private final AdminPlaceService placeService;
     private final AdminAuditService audit;
     private final ApplicationEventPublisher events;
 
     public PlaceMergeService(PlaceRepository places, PlacePhotoRepository photos, PlaceCommentRepository comments,
-            PlaceCheckinRepository checkins, AdminPlaceService placeService, AdminAuditService audit, ApplicationEventPublisher events) {
+            PlaceCheckinRepository checkins, AdminAuditService audit, ApplicationEventPublisher events) {
         this.places = places;
         this.photos = photos;
         this.comments = comments;
         this.checkins = checkins;
-        this.placeService = placeService;
         this.audit = audit;
         this.events = events;
     }
@@ -76,9 +74,7 @@ public class PlaceMergeService {
         // 被并方自己也曾是别人的保留方时，把那些历史指向一并改到新的最终保留方，保持 merged_into_id 恒为单跳
         int repointed = places.repointMergedInto(mergedId, keepId, Instant.now());
         merged.markMerged(keepId);
-        merged.recount(0, 0, 0, 0, 0); // MERGED 行不再展示计数
         places.saveAndFlush(merged);
-        placeService.recount(keepId);
         audit.record(actorAdminAccountId, AuditActions.PLACE_MERGED, "PLACE", String.valueOf(mergedId),
                 merged.getName() + " → " + keep.getName() + " (keepId=" + keepId + ", photos=" + movedPhotos + ", comments=" + movedComments
                         + ", checkins=" + movedCheckins + ", repointed=" + repointed + ")");

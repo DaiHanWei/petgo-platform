@@ -60,7 +60,10 @@ class PlaceQueryServiceTest {
                 .thenReturn(java.util.List.of());
         Mockito.when(photos.findVisible(Mockito.anyLong(), Mockito.anyBoolean(), Mockito.any()))
                 .thenReturn(java.util.List.of());
-        service = new PlaceQueryService(places, accounts, placeComments, attitudeCounters, photos);
+        service = new PlaceQueryService(places, accounts, placeComments, attitudeCounters, photos,
+                // 照片 key → URL（对齐 D5）：真实实例，只用到 publicUrlOf。
+                new com.tailtopia.place.service.PlacePhotoService(places, photos, null,
+                        com.tailtopia.place.PlaceTestSupport.oss()));
     }
 
     /** 自增 id 的发号器 —— 只要不同就行（评论数 Map 按 id 取）。 */
@@ -72,7 +75,7 @@ class PlaceQueryServiceTest {
         // 没有 id 的裸实体在真实路径上不存在（JPA 一定赋了值）。
         return withId(Place.mark(token, "Tempat " + token, PlaceType.CAFE,
                 List.of(PlaceTag.PETS_ALLOWED_INSIDE), lat, lng, "Jl. Test", null,
-                1L), SEQ.getAndIncrement());
+                1L, "Jakarta"), SEQ.getAndIncrement());
     }
 
     private static Place withId(Place p, long id) {
@@ -239,12 +242,12 @@ class PlaceQueryServiceTest {
     // ===== Story 1.5 详情 =====
 
     /**
-     * 🔴 **下架与不存在必须无法区分**（AC7）：两者都走同一个 `findByPublicTokenAndStatus(ACTIVE)`
+     * 🔴 **下架与不存在必须无法区分**（AC7）：两者都走同一个 `resolveForView`（D4 起合并也经它）
      * 的空结果 → 同一个 404 + 同一句文案。让它们可区分等于给出「这个 token 曾经存在」这条信息。
      */
     @Test
     void detailOfATakenDownOrUnknownPlaceIsNotFound() {
-        when(places.findByPublicTokenAndStatus("gone", PlaceStatus.ACTIVE))
+        when(places.resolveForView("gone"))
                 .thenReturn(java.util.Optional.empty());
 
         org.assertj.core.api.Assertions
@@ -256,7 +259,7 @@ class PlaceQueryServiceTest {
     @Test
     void detailWithCoordinatesFillsDistanceAndWithoutLeavesItNull() {
         Place p = place("kopi", JKT_LAT + 0.01, JKT_LNG);
-        when(places.findByPublicTokenAndStatus("kopi", PlaceStatus.ACTIVE))
+        when(places.resolveForView("kopi"))
                 .thenReturn(java.util.Optional.of(p));
         when(accounts.findAuthorViews(any()))
                 .thenReturn(java.util.Map.of(1L, com.tailtopia.auth.dto.AuthorView.anonymized(1L)));
@@ -273,7 +276,7 @@ class PlaceQueryServiceTest {
     @Test
     void detailCarriesPhotoSlotsRemainingFromTheOccupyingCount() {
         Place p = place("kopi", JKT_LAT, JKT_LNG);
-        when(places.findByPublicTokenAndStatus("kopi", PlaceStatus.ACTIVE))
+        when(places.resolveForView("kopi"))
                 .thenReturn(java.util.Optional.of(p));
         when(accounts.findAuthorViews(any()))
                 .thenReturn(java.util.Map.of(1L, com.tailtopia.auth.dto.AuthorView.anonymized(1L)));
@@ -290,7 +293,7 @@ class PlaceQueryServiceTest {
     @Test
     void detailIgnoresOutOfRangeCoordinates() {
         Place p = place("kopi", JKT_LAT, JKT_LNG);
-        when(places.findByPublicTokenAndStatus("kopi", PlaceStatus.ACTIVE))
+        when(places.resolveForView("kopi"))
                 .thenReturn(java.util.Optional.of(p));
         when(accounts.findAuthorViews(any()))
                 .thenReturn(java.util.Map.of(1L, com.tailtopia.auth.dto.AuthorView.anonymized(1L)));
@@ -302,7 +305,7 @@ class PlaceQueryServiceTest {
     @Test
     void detailResolvesMarkerThroughTheSharedAuthorProjection() {
         Place p = place("kopi", JKT_LAT, JKT_LNG);
-        when(places.findByPublicTokenAndStatus("kopi", PlaceStatus.ACTIVE))
+        when(places.resolveForView("kopi"))
                 .thenReturn(java.util.Optional.of(p));
         when(accounts.findAuthorViews(any()))
                 .thenReturn(java.util.Map.of(1L, com.tailtopia.auth.dto.AuthorView.anonymized(1L)));

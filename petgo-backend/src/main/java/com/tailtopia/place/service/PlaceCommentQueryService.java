@@ -5,7 +5,6 @@ import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.content.service.FeedCursor;
 import com.tailtopia.place.domain.Place;
 import com.tailtopia.place.domain.PlaceComment;
-import com.tailtopia.place.domain.PlaceStatus;
 import com.tailtopia.place.dto.PlaceCommentPageResponse;
 import com.tailtopia.place.dto.PlaceCommentResponse;
 import com.tailtopia.place.repository.PlaceCommentRepository;
@@ -57,7 +56,7 @@ public class PlaceCommentQueryService {
      */
     @Transactional(readOnly = true)
     public PlaceCommentPageResponse list(String placeToken, String cursor, Long viewerId) {
-        Place place = places.findByPublicTokenAndStatus(placeToken, PlaceStatus.ACTIVE)
+        Place place = places.resolveForView(placeToken)
                 .orElseThrow(() -> AppException.notFound("场所不存在"));
         long placeId = place.getId();
         boolean hasViewer = viewerId != null;

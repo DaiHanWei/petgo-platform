@@ -42,11 +42,16 @@ public class PlacePhoto {
     @Column(name = "place_id", nullable = false)
     private Long placeId;
 
-    @Column(name = "uploader_id", nullable = false)
+    /** 列名随后台 schema（2026-09-18 场所表对齐）；Java 字段名不变，JPQL 照旧写 uploaderId。 */
+    @Column(name = "uploader_user_id", nullable = false, updatable = false)
     private Long uploaderId;
 
-    @Column(name = "url", nullable = false, length = 1024)
-    private String url;
+    /**
+     * OSS 对象 key（对齐决策 D5：与后台同一口径，存 key 不存 URL）。
+     * 对外 URL 由 {@code AliyunOssClient#publicUrl} 现拼，再加 {@code exifStrippedThumbUrl} —— 与改动前逐字一致。
+     */
+    @Column(name = "object_key", nullable = false, length = 255, updatable = false)
+    private String objectKey;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "moderation_status", nullable = false, length = 24)
@@ -94,26 +99,26 @@ public class PlacePhoto {
      * @param cleanPass 那次富审核是不是**干净 PASS**（不是 RISKY / DEGRADED）。
      *                  只有干净 PASS 的图才能当站外分享页的 og:image —— 见 {@link #isOgEligible()}。
      */
-    public static PlacePhoto fromMarking(long placeId, long uploaderId, String url, int sortOrder,
+    public static PlacePhoto fromMarking(long placeId, long uploaderId, String objectKey, int sortOrder,
             boolean cleanPass) {
-        PlacePhoto p = create(placeId, uploaderId, url, sortOrder,
+        PlacePhoto p = create(placeId, uploaderId, objectKey, sortOrder,
                 CommentModerationStatus.VISIBLE, true);
         p.ogEligible = cleanPass;
         return p;
     }
 
     /** 事后补充的照片（AC1/AC3）：先发后审 —— 落挂起，过审才对他人可见。 */
-    public static PlacePhoto contributed(long placeId, long uploaderId, String url, int sortOrder) {
-        return create(placeId, uploaderId, url, sortOrder,
+    public static PlacePhoto contributed(long placeId, long uploaderId, String objectKey, int sortOrder) {
+        return create(placeId, uploaderId, objectKey, sortOrder,
                 CommentModerationStatus.UNDER_REVIEW, false);
     }
 
-    private static PlacePhoto create(long placeId, long uploaderId, String url, int sortOrder,
+    private static PlacePhoto create(long placeId, long uploaderId, String objectKey, int sortOrder,
             CommentModerationStatus status, boolean original) {
         PlacePhoto p = new PlacePhoto();
         p.placeId = placeId;
         p.uploaderId = uploaderId;
-        p.url = url;
+        p.objectKey = objectKey;
         p.sortOrder = sortOrder;
         p.moderationStatus = status;
         p.original = original;
@@ -197,8 +202,8 @@ public class PlacePhoto {
         return uploaderId;
     }
 
-    public String getUrl() {
-        return url;
+    public String getObjectKey() {
+        return objectKey;
     }
 
     public CommentModerationStatus getModerationStatus() {

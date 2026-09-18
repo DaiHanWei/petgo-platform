@@ -128,7 +128,7 @@ class PlaceListResponseContractTest {
     void factoryStripsExifAndAsksForAListSizedThumbnail() {
         com.tailtopia.place.domain.Place p = com.tailtopia.place.domain.Place.mark(
                 "aZ09aZ09aZ09aZ09aZ09aZ09aZ09aZ09", "Kopi", PlaceType.CAFE,
-                List.of(PlaceTag.PETS_ALLOWED_INSIDE), -6.235, 106.81, "Jl. Senopati", null, 1L);
+                List.of(PlaceTag.PETS_ALLOWED_INSIDE), -6.235, 106.81, "Jl. Senopati", null, 1L, "Jakarta");
 
         // Story 1.9：照片搬到了 place_photos，首图与张数由服务层批量取回后传进来。
         PlaceListItemResponse item = PlaceListItemResponse.of(
@@ -145,7 +145,7 @@ class PlaceListResponseContractTest {
     void factoryLeavesFirstPhotoNullWhenThereIsNoPhoto() {
         com.tailtopia.place.domain.Place p = com.tailtopia.place.domain.Place.mark(
                 "aZ09aZ09aZ09aZ09aZ09aZ09aZ09aZ09", "Taman", PlaceType.PARK,
-                List.of(PlaceTag.LEASH_REQUIRED), -6.2, 106.8, "Jl. A", null, 1L);
+                List.of(PlaceTag.LEASH_REQUIRED), -6.2, 106.8, "Jl. A", null, 1L, "Jakarta");
 
         assertThat(PlaceListItemResponse.of(p, null, 0, 0L, 0L, 0L).firstPhotoUrl()).isNull();
     }

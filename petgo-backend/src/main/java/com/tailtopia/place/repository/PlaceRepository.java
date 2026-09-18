@@ -21,7 +21,12 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
      * 端点对游客放行，没有上限的话每个匿名请求都会序列化整张表（含全部标签与照片 URL）。
      * 见 {@code PlaceQueryService.MAX_LIST_SIZE}。
      */
-    List<Place> findByStatusOrderByCreatedAtDescIdDesc(PlaceStatus status, Limit limit);
+    // 🔴 2026-09-18 场所表对齐：本表有后台的软删列 deleted_at，「对用户可见」= status 匹配 **且** 未软删。
+    //    方法名沿用派生查询的旧名（调用方与测试不动），但一律改成显式 JPQL 把 deletedAt 条件写进去 ——
+    //    漏了它，后台软删的场所会继续出现在 App 里。
+    @Query("select p from Place p where p.status = :status and p.deletedAt is null "
+            + "order by p.createdAt desc, p.id desc")
+    List<Place> findByStatusOrderByCreatedAtDescIdDesc(@Param("status") PlaceStatus status, Limit limit);
 
     /**
      * 列表「按距离」分支的<b>粗筛</b>（Story 1.2 · AD-2 Rule 2）：在架 + 落在矩形范围内。
@@ -48,16 +53,51 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
      * <p>⚠️ 这条 order by <b>不影响索引</b>：范围条件已经用 BitmapAnd 把候选集缩小，
      * 排序是在那个结果集上做的（无论按什么排都要排一次）。
      */
-    @Query("select p from Place p where p.status = :status "
+    @Query("select p from Place p where p.status = :status and p.deletedAt is null "
             + "and p.latitude between :minLat and :maxLat "
             + "and p.longitude between :minLng and :maxLng "
             + "order by abs(p.latitude - :lat) + abs(p.longitude - :lng) asc, p.id desc")
     List<Place> findActiveWithinBox(@Param("status") PlaceStatus status,
-            @Param("lat") double lat, @Param("lng") double lng,
-            @Param("minLat") double minLat, @Param("maxLat") double maxLat,
-            @Param("minLng") double minLng, @Param("maxLng") double maxLng,
+            @Param("lat") java.math.BigDecimal lat, @Param("lng") java.math.BigDecimal lng,
+            @Param("minLat") java.math.BigDecimal minLat, @Param("maxLat") java.math.BigDecimal maxLat,
+            @Param("minLng") java.math.BigDecimal minLng, @Param("maxLng") java.math.BigDecimal maxLng,
             Limit limit);
 
+    /** double 入参的便捷重载（列是 NUMERIC(9,6)，JPQL 参数须与列类型一致）。 */
+    default List<Place> findActiveWithinBox(PlaceStatus status, double lat, double lng,
+            double minLat, double maxLat, double minLng, double maxLng, Limit limit) {
+        return findActiveWithinBox(status, bd(lat), bd(lng), bd(minLat), bd(maxLat), bd(minLng), bd(maxLng), limit);
+    }
+
+    private static java.math.BigDecimal bd(double v) {
+        return java.math.BigDecimal.valueOf(v);
+    }
+
     /** 按不可枚举 token 取在架场所（详情 / H5）。未知 token → 空，调用方回 404 防枚举探测。 */
-    Optional<Place> findByPublicTokenAndStatus(String publicToken, PlaceStatus status);
+    /**
+     * 按 token 取（D4 解析的底层）：**不看状态**（MERGED 要转去保留场所），但软删的不算。
+     * 🔴 面向用户的入口一律用 {@link #resolveForView}，别直接用它。
+     * 调用方自己判：ACTIVE → 本身；MERGED → {@link #findVisibleById} 取保留场所；其余 → 不存在。
+     */
+    @Query("select p from Place p where p.publicToken = :publicToken and p.deletedAt is null")
+    Optional<Place> findUndeletedByPublicToken(@Param("publicToken") String publicToken);
+
+    /** 按 id 取「对用户可见」的场所（ACTIVE 且未软删）。合并跳转只跳一层：目标不可见就按不存在处理。 */
+    @Query("select p from Place p where p.id = :id "
+            + "and p.status = com.tailtopia.place.domain.PlaceStatus.ACTIVE and p.deletedAt is null")
+    Optional<Place> findVisibleById(@Param("id") Long id);
+
+    /**
+     * 详情 / 分享页用的解析（对齐决策 D4）：ACTIVE → 本身；MERGED → 保留场所（只跳一层）；其余 → 不存在。
+     *
+     * <p>🔴 调用方拿到的可能是**另一个场所**（token 不同）—— 响应里一律用返回值的 token，App 以它为准。
+     * 下架、软删、合并目标不可见，三种情况与「从来没有过」同一个结果（AC7：不泄漏曾经存在）。
+     */
+    default Optional<Place> resolveForView(String publicToken) {
+        return findUndeletedByPublicToken(publicToken).flatMap(p -> switch (p.getStatus()) {
+            case ACTIVE -> Optional.of(p);
+            case MERGED -> p.getMergedIntoId() == null ? Optional.empty() : findVisibleById(p.getMergedIntoId());
+            case DELISTED -> Optional.<Place>empty();
+        });
+    }
 }

@@ -38,10 +38,9 @@ class PlaceMergeServiceTest {
     private final PlacePhotoRepository photos = mock(PlacePhotoRepository.class);
     private final PlaceCommentRepository comments = mock(PlaceCommentRepository.class);
     private final PlaceCheckinRepository checkins = mock(PlaceCheckinRepository.class);
-    private final AdminPlaceService placeService = mock(AdminPlaceService.class);
     private final AdminAuditService audit = mock(AdminAuditService.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
-    private final PlaceMergeService service = new PlaceMergeService(places, photos, comments, checkins, placeService, audit, events);
+    private final PlaceMergeService service = new PlaceMergeService(places, photos, comments, checkins, audit, events);
 
     private static Place place(long id, String name) {
         Place p = Place.create("tok" + id, name, "CAFE", List.of(), null, "Jakarta", "addr", new BigDecimal("-6.2"), new BigDecimal("106.8"), 1L);
@@ -71,15 +70,14 @@ class PlaceMergeServiceTest {
         assertThat(result).isSameAs(keep);
         assertThat(merged.getStatus()).isEqualTo(PlaceStatus.MERGED);
         assertThat(merged.getMergedIntoId()).isEqualTo(1L);
-        assertThat(merged.getPhotoCount()).isZero();
-        var order = inOrder(photos, comments, checkins, places, placeService, audit, events);
+        var order = inOrder(photos, comments, checkins, places, audit, events);
         order.verify(photos).reassignPlace(2L, 1L);
         order.verify(comments).reassignPlace(2L, 1L);
         order.verify(checkins).reassignPlace(2L, 1L);
         // 合并链压平：曾并入 B 的场所改指 A，merged_into_id 恒单跳（契约 X-1）
         order.verify(places).repointMergedInto(eq(2L), eq(1L), any());
         order.verify(places).saveAndFlush(merged);
-        order.verify(placeService).recount(1L);
+        // 计数实时统计（2026-09-18 场所表对齐 D3）：合并不再重算缓存列。
         ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
         order.verify(audit).record(eq(42L), eq(AuditActions.PLACE_MERGED), eq("PLACE"), eq("2"), summary.capture());
         assertThat(summary.getValue()).startsWith("B → A");

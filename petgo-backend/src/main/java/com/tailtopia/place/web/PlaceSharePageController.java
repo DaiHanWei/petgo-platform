@@ -66,22 +66,35 @@ public class PlaceSharePageController {
     private final String iosUrl;
     private final String androidUrl;
 
+    /** 照片 key → 公开 URL（对齐决策 D5）。 */
+    private final com.tailtopia.place.service.PlacePhotoService photoService;
+
     public PlaceSharePageController(PlaceRepository places, PlacePhotoRepository photos,
+            com.tailtopia.place.service.PlacePhotoService photoService,
             @Value("${petgo.card.app-download-url:https://petgo.example/download}") String downloadUrl,
             @Value("${petgo.card.ios-url:https://apps.apple.com/app/petgo}") String iosUrl,
             @Value("${petgo.card.android-url:https://play.google.com/store/apps/details?id=com.tailtopia.app}")
                     String androidUrl) {
         this.places = places;
         this.photos = photos;
+        this.photoService = photoService;
         this.downloadUrl = downloadUrl;
         this.iosUrl = iosUrl;
         this.androidUrl = androidUrl;
     }
 
     @GetMapping("/place/{token}")
-    public String placePage(@PathVariable String token, Model model,
+    public Object placePage(@PathVariable String token, Model model,
             HttpServletResponse response) {
-        Optional<Place> opt = places.findByPublicTokenAndStatus(token, PlaceStatus.ACTIVE);
+        Optional<Place> opt = places.resolveForView(token);
+        if (opt.isPresent() && !opt.get().getPublicToken().equals(token)) {
+            // D4：被合并的场所 → 301 到保留场所的分享页。分享出去的旧链接因此继续有效，
+            //    社交平台的预览抓取也会跟着跳，缓存落到保留场所上。
+            org.springframework.web.servlet.view.RedirectView rv =
+                    new org.springframework.web.servlet.view.RedirectView("/place/" + opt.get().getPublicToken());
+            rv.setStatusCode(org.springframework.http.HttpStatus.MOVED_PERMANENTLY);
+            return rv;
+        }
         if (opt.isEmpty()) {
             // 🔴 下架与从未存在**同一个响应**（AC7）：可区分就等于给出「这个 token 曾经存在」。
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
@@ -94,7 +107,7 @@ public class PlaceSharePageController {
         List<PlacePhoto> visible = photos.findVisible(place.getId(), false, null);
         List<String> imageUrls = visible.stream()
                 .map(p -> AliyunOssClient.exifStrippedThumbUrl(
-                        p.getUrl(), PlaceDetailResponse.DETAIL_PHOTO_WIDTH_PX))
+                        photoService.publicUrlOf(p), PlaceDetailResponse.DETAIL_PHOTO_WIDTH_PX))
                 .toList();
 
         // 页面语言恒印尼语（与名片 / 里程碑 / 单条内容三页同口径：H5 无登录态，拿不到语言偏好）。
@@ -120,7 +133,7 @@ public class PlaceSharePageController {
         String ogImage = visible.stream()
                 .filter(PlacePhoto::isOgEligible)
                 .findFirst()
-                .map(p -> AliyunOssClient.exifStrippedThumbUrl(p.getUrl(), OG_IMAGE_WIDTH_PX))
+                .map(p -> AliyunOssClient.exifStrippedThumbUrl(photoService.publicUrlOf(p), OG_IMAGE_WIDTH_PX))
                 .orElse(null);
         model.addAttribute("ogImage", ogImage);
         model.addAttribute("hasOgImage", ogImage != null);

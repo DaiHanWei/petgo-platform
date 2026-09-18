@@ -10,7 +10,9 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 /** 场所打卡（Story 5.1；表 {@code place_checkins}，护照章）。合并场所时的归并由 App 分支监听 {@code PlaceMergedEvent} 实现（契约 X-1）。 */
-@Entity
+// JPA 实体名与 App 侧 com.tailtopia.place.domain.PlaceCheckin 区分（同表两套映射，2026-09-18 场所表对齐）；
+// 🔴 JPQL 里要写 AdminPlaceCheckin，不是类名。
+@Entity(name = "AdminPlaceCheckin")
 @Table(name = "place_checkins")
 public class PlaceCheckin {
 

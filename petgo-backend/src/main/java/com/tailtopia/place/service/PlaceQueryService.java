@@ -64,10 +64,14 @@ public class PlaceQueryService {
     private final PlaceAttitudeCounters attitudeCounters;
     private final PlacePhotoRepository photos;
 
+    /** 照片 key → 公开 URL（对齐决策 D5）。 */
+    private final PlacePhotoService photoService;
+
     public PlaceQueryService(PlaceRepository places, AccountQueryService accounts,
             PlaceCommentQueryService placeComments, PlaceAttitudeCounters attitudeCounters,
-            PlacePhotoRepository photos) {
+            PlacePhotoRepository photos, PlacePhotoService photoService) {
         this.places = places;
+        this.photoService = photoService;
         this.accounts = accounts;
         this.placeComments = placeComments;
         this.attitudeCounters = attitudeCounters;
@@ -86,7 +90,8 @@ public class PlaceQueryService {
      */
     @Transactional(readOnly = true)
     public PlaceDetailResponse detail(String token, Double lat, Double lng, Long viewerId) {
-        Place p = places.findByPublicTokenAndStatus(token, PlaceStatus.ACTIVE)
+        // D4：被合并的场所直接返回保留场所（响应 token 随之变成保留场所的，App 以它为准）。
+        Place p = places.resolveForView(token)
                 .orElseThrow(() -> AppException.notFound("场所不存在"));
         Integer distance = (lat != null && lng != null && GeoBox.isValidCoordinate(lat, lng))
                 ? (int) Math.round(
@@ -104,7 +109,7 @@ public class PlaceQueryService {
 
         AuthorView markedBy = authors.get(p.getCreatedBy());
         List<PlacePhotoView> photoViews = rows.stream()
-                .map(r -> PlacePhotoView.of(r, authors.get(r.getUploaderId()), viewerId,
+                .map(r -> PlacePhotoView.of(r, photoService.publicUrlOf(r), authors.get(r.getUploaderId()), viewerId,
                         PlaceDetailResponse.DETAIL_PHOTO_WIDTH_PX))
                 .toList();
         // 评论数是 viewer 维度（Story 1.7）；两个态度计数是**平台口径**（Story 1.8）——
@@ -227,8 +232,8 @@ public class PlaceQueryService {
     }
 
     /** 首图 URL（无照片 → null）。查询已按 sortOrder 排好，取第一条即可。 */
-    private static String firstUrl(List<PlacePhoto> photos) {
-        return photos.isEmpty() ? null : photos.get(0).getUrl();
+    private String firstUrl(List<PlacePhoto> photos) {
+        return photos.isEmpty() ? null : photoService.publicUrlOf(photos.get(0));
     }
 
     /** 排序中间体（距离只算一次）。 */

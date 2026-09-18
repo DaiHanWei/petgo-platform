@@ -42,7 +42,7 @@ class PlaceDetailResponseContractTest {
     private static Place place() {
         return Place.mark("aZ09aZ09aZ09aZ09aZ09aZ09aZ09aZ09", "Kopi Kayu Manis", PlaceType.CAFE,
                 List.of(PlaceTag.PETS_ALLOWED_INSIDE, PlaceTag.OUTDOOR_SEATING),
-                -6.235, 106.81, "Jl. Senopati No.75", "Ada area outdoor", 7L);
+                -6.235, 106.81, "Jl. Senopati No.75", "Ada area outdoor", 7L, "Jakarta");
     }
 
     private static AuthorView marker() {
@@ -132,7 +132,7 @@ class PlaceDetailResponseContractTest {
                 com.tailtopia.place.domain.PlacePhoto.fromMarking(
                         42L, 7L, "https://cdn/a.jpg", 0, true);
 
-        PlacePhotoView v = PlacePhotoView.of(photo, marker(), 7L,
+        PlacePhotoView v = PlacePhotoView.of(photo, photo.getObjectKey(), marker(), 7L,
                 PlaceDetailResponse.DETAIL_PHOTO_WIDTH_PX);
 
         assertThat(v.url())
@@ -149,7 +149,7 @@ class PlaceDetailResponseContractTest {
                         42L, 9L, "https://cdn/c.jpg", 3);
         AuthorView uploader = new AuthorView(9L, "Budi", "https://cdn/b.jpg", false, List.of());
 
-        PlacePhotoView v = PlacePhotoView.of(photo, uploader, 9L, 1080);
+        PlacePhotoView v = PlacePhotoView.of(photo, photo.getObjectKey(), uploader, 9L, 1080);
 
         assertThat(v.uploaderId()).isEqualTo(9L);
         assertThat(v.uploaderNickname()).isEqualTo("Budi");
@@ -165,7 +165,7 @@ class PlaceDetailResponseContractTest {
         com.tailtopia.place.domain.PlacePhoto photo =
                 com.tailtopia.place.domain.PlacePhoto.fromMarking(42L, 9L, "https://cdn/c.jpg", 0, true);
 
-        PlacePhotoView v = PlacePhotoView.of(photo, AuthorView.anonymized(9L), 1L, 1080);
+        PlacePhotoView v = PlacePhotoView.of(photo, photo.getObjectKey(), AuthorView.anonymized(9L), 1L, 1080);
 
         assertThat(v.uploaderNickname()).isNull();
         assertThat(v.uploaderDeleted()).isTrue();
@@ -191,7 +191,7 @@ class PlaceDetailResponseContractTest {
     @Test
     void optionalFieldsBehaveAsContracted() {
         Place noExtras = Place.mark("t".repeat(32), "Taman", PlaceType.PARK,
-                List.of(PlaceTag.LEASH_REQUIRED), -6.2, 106.8, "Jl. A", null, 7L);
+                List.of(PlaceTag.LEASH_REQUIRED), -6.2, 106.8, "Jl. A", null, 7L, "Jakarta");
 
         Map<String, Object> m = wire(
                 PlaceDetailResponse.of(noExtras, marker(), List.of(), null, 0L, 0L, 0L, 7));

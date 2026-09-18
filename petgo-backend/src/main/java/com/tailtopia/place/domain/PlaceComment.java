@@ -41,10 +41,12 @@ public class PlaceComment {
     @Column(name = "place_id", nullable = false)
     private Long placeId;
 
-    @Column(name = "author_id", nullable = false)
+    /** 列名随后台 schema（2026-09-18 场所表对齐）；Java 字段名不变。 */
+    @Column(name = "author_user_id", nullable = false, updatable = false)
     private Long authorId;
 
-    @Column(name = "body", nullable = false, length = 200)
+    /** 列宽 500（后台 schema）；App 接口仍校验 ≤200。 */
+    @Column(name = "body", nullable = false, length = 500)
     private String body;
 
     /** 二元态度，null = 未表态（AC3 可以不选）。 */

@@ -187,3 +187,20 @@
 - §3 的决策已全部拍板，以本文件为准；实现中遇到本文件没覆盖的取舍，停下来问，不要自己定。
 - 新迁移用时间戳版本号，打包一律 `mvn -B clean package`。
 - 云端只跑到 L0，Completion Notes 里写明「L1 待本地验收」。
+
+## 执行记录（2026-09-18，本地）
+
+按 §7 在 `feat/1.3.0-places-align` 上执行。原方案之外、执行中发现并一并处理的：
+
+1. **合并 batch-b1 的冲突远多于试合并**：dev 里已有批次 A，与 b1 在评论区 / 内容详情大面积重叠（点赞 × @提及 × ops 回复目标预留）。
+   合并提交 `c11d0830` 逐条说明；其中 `Comment.copyWith` 必须带上 `mentions`（否则点一下赞 @ 变纯文字）。
+2. **标签值域**：App 按 `List<PlaceTag>` 读，后台原先标签「不做值域校验」—— 运营写进未知标签，App 读这个场所整页 500。
+   后台录入 / 编辑改为按 App 的 `PlaceTag` 服务端校验（`admin.err.places.tagUnknown`）；后台测试数据里的编造标签 / 旧类型同步换成正式值。
+3. **后台抽屉对 null 态度调 `.name()`**：App 允许不表态，后台打开这类场所抽屉会 500。已加判空；照片 / 评论非 VISIBLE 时打审核标。
+4. **D4 扩到写入口**：只改详情的话，App 在合并场所的详情页里发评论 / 补图 / 举报仍用旧 token → 404。
+   评论列表、发评论、补图、举报一律经 `resolveForView`，App 不用改；旧的 `findByPublicTokenAndStatus` 已删。
+5. **后台删评论 / 合并**不经过 App 的 Redis 态度计数 → 提交后丢键（`PlaceAttitudeCounters#evictAfterCommit`），下次读回库重算。
+6. **App 侧 `PlaceReport.status` 改存字符串**：全站 `ReportStatus` 没有后台的 `ACTIONED`，App 读到运营处理过的举报行会枚举解析失败。
+7. **灯箱统一**：批次 A（FR-115 重做的 `ImageLightbox`）与 b1（从旧详情页原样抽出的 `PhotoLightbox`）各有一个公共灯箱。
+   场所详情改用 `ImageLightbox`（`source=place_detail`），`PhotoLightbox` 及其测试删除。
+8. **照片 URL 校验**：D5 顺带堵住「客户端可塞任意外链」—— 非本平台公开桶的地址 422，且在送审之前拒（不白花审核配额）。

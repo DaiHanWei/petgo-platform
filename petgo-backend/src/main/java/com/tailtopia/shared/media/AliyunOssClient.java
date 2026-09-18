@@ -87,6 +87,38 @@ public class AliyunOssClient {
     }
 
     /**
+     * 公开 URL → 对象 key（{@link #publicUrl} 的逆运算）。不是本平台公开桶 CDN 前缀下的地址 → empty。
+     *
+     * <p>🔒 用途：客户端直传后回报的是**完整 URL**，落库前必须证明它确实是我们桶里的对象 ——
+     * 否则客户端可以塞任意外部链接进来，而那个链接会被当成「平台的图」对所有人分发
+     * （2026-09-18 场所表对齐 D5：场所照片改存 object_key 时顺带堵上）。
+     * 查询串（如 {@code ?x-oss-process=}）一律剥掉；含 {@code ..} 或为空的 key 拒绝。
+     */
+    public java.util.Optional<String> objectKeyOfPublicUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String base = props.getOss().getCdnBaseUrl();
+        if (base == null || base.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String prefix = base.endsWith("/") ? base : base + "/";
+        String u = url.strip();
+        int q = u.indexOf('?');
+        if (q >= 0) {
+            u = u.substring(0, q);
+        }
+        if (!u.startsWith(prefix)) {
+            return java.util.Optional.empty();
+        }
+        String key = u.substring(prefix.length());
+        if (key.isEmpty() || key.contains("..") || key.startsWith("/")) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(key);
+    }
+
+    /**
      * （E4 服务端 EXIF 兜底）公开桶对外图片附 {@code x-oss-process} 去元数据样式：
      * 即便客户端绕过了客户端剥离，对外分发（尤其 H5 名片）经此 URL 取回的图也已重编码、无 GPS。
      */

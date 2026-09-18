@@ -131,6 +131,11 @@ petgo:
     row-limit: ${LARK_CONTENT_ROW_LIMIT:500}
 
   # 精选自营电商（V1.4.0）
+  # 场所（V1.3.0）。default-city：App 标记的场所没有城市字段（不接第三方地理服务、不反查地址），
+  # 由服务端填这个值；后台录入表单的默认值也读它（2026-09-18 场所表对齐 D2，为多城市预留：
+  # 将来开新城市只换 PlaceCityResolver 的实现，别在代码里写死城市名）。
+  places:
+    default-city: Jakarta
   shop:
     # 低库存提示阈值（FR-95）：可售 ≤ 此值时详情页展示「Sisa {n}」。
     # {n} 取真实剩余数——制造合理紧迫感但不虚构数字。

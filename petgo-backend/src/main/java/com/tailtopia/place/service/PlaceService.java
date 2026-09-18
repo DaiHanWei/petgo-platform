@@ -5,12 +5,12 @@ import com.tailtopia.content.service.ContentModerationService;
 import com.tailtopia.moderation.domain.ReportReason;
 import com.tailtopia.place.domain.Place;
 import com.tailtopia.place.domain.PlaceReport;
-import com.tailtopia.place.domain.PlaceStatus;
 import com.tailtopia.place.dto.PlaceCreateRequest;
 import com.tailtopia.place.repository.PlaceReportRepository;
 import com.tailtopia.place.repository.PlaceRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.IdempotencyService;
+import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -42,10 +42,15 @@ public class PlaceService {
     private final PlaceReportRepository reports;
     private final PlacePhotoService photoService;
 
+    /** 新标记场所的城市（对齐决策 D2，为多城市预留）。 */
+    private final PlaceCityResolver cityResolver;
+
     public PlaceService(PlaceRepository places, PlaceTokenGenerator tokens,
             ContentModerationService moderation, IdempotencyService idempotency,
-            PlaceReportRepository reports, PlacePhotoService photoService) {
+            PlaceReportRepository reports, PlacePhotoService photoService,
+            PlaceCityResolver cityResolver) {
         this.places = places;
+        this.cityResolver = cityResolver;
         this.tokens = tokens;
         this.moderation = moderation;
         this.idempotency = idempotency;
@@ -93,6 +98,8 @@ public class PlaceService {
         // ⚠️ **文字地址也要过审**：它同样是用户自由输入的一行字，把它漏掉等于留了个
         // 「把违规内容写在地址栏里」的口子。
         String moderatedText = joinForModeration(req.name(), req.addressText(), req.description());
+        // D5：照片地址先换成对象 key（不是本平台公开桶的地址 → 422）—— 在送审之前，非法请求不白花审核配额。
+        List<String> photoKeys = photoService.toObjectKeys(req.photoUrls());
         ModerationOutcome outcome = moderation.evaluate(moderatedText, req.photoUrls());
         // 🔴 记住这次判定是不是**干净 PASS**：RISKY / DEGRADED 的图照样展示（先发后审），
         // 但**不能当站外分享页的 og:image** —— 预览卡会被社交平台缓存、下架也撤不回来
@@ -121,12 +128,15 @@ public class PlaceService {
                 req.longitude(),
                 req.addressText().trim(),
                 blankToNull(req.description()),
-                createdBy);
+                createdBy,
+                // D2（2026-09-18 场所表对齐）：后台 city 必填，App 表单没有城市 —— 收口在 resolver，别在这里写死。
+                cityResolver.resolve(java.math.BigDecimal.valueOf(req.latitude()),
+                        java.math.BigDecimal.valueOf(req.longitude())));
         Place saved = places.save(place);
         // Story 1.9：照片搬到了 place_photos（每张带上传者与自己的审核态）。
         // 这一批**已经在上面过了同步富审核**（连同名称/地址/描述一起送审，含图审），
         // 所以直接落 VISIBLE，不再走一次异步 —— 同一批图审两遍是白花配额。
-        photoService.storeInitialPhotos(saved.getId(), createdBy, req.photoUrls(), cleanPass);
+        photoService.storeInitialPhotos(saved.getId(), createdBy, photoKeys, cleanPass);
         // 没带 key 的老客户端：不记幂等（也就不会去拆 saved.getId()）。
         if (scopedKey != null && saved.getId() != null) {
             idempotency.store(scopedKey, saved.getId());
@@ -148,7 +158,7 @@ public class PlaceService {
      */
     @Transactional
     public void report(String token, long reporterId, ReportReason reason) {
-        Place p = places.findByPublicTokenAndStatus(token, PlaceStatus.ACTIVE)
+        Place p = places.resolveForView(token)
                 .orElseThrow(() -> AppException.notFound("场所不存在"));
         if (reports.existsByPlaceIdAndReporterId(p.getId(), reporterId)) {
             return; // 幂等：已举报过，不再写一条。

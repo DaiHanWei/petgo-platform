@@ -50,7 +50,7 @@ class PlaceSchemaIntegrationTest extends ApiIntegrationTest {
     private JdbcTemplate jdbc;
 
     private Place newPlace(User marker) {
-        return places.save(Place.create(tokens.generate(), "Kopi Kucing " + SEQ.incrementAndGet(), "CAFE", List.of("PET_FRIENDLY", "OUTDOOR"),
+        return places.save(Place.create(tokens.generate(), "Kopi Kucing " + SEQ.incrementAndGet(), "CAFE", List.of("PETS_ALLOWED_INSIDE", "OUTDOOR_SEATING"),
                 "猫咪咖啡馆", "Jakarta", "Jl. Sudirman 1", new BigDecimal("-6.208763"), new BigDecimal("106.845599"), marker.getId()));
     }
 
@@ -60,7 +60,7 @@ class PlaceSchemaIntegrationTest extends ApiIntegrationTest {
         User other = newUser();
         Place p = newPlace(marker);
         Place loaded = places.findByPublicToken(p.getPublicToken()).orElseThrow();
-        assertThat(loaded.getTags()).containsExactly("PET_FRIENDLY", "OUTDOOR");
+        assertThat(loaded.getTags()).containsExactly("PETS_ALLOWED_INSIDE", "OUTDOOR_SEATING");
         assertThat(loaded.getLat()).isEqualByComparingTo("-6.208763");
         assertThat(loaded.getCity()).isEqualTo("Jakarta");
         assertThat(loaded.getStatus()).isEqualTo(PlaceStatus.ACTIVE);

@@ -3,7 +3,6 @@ package com.tailtopia.place.service;
 import com.tailtopia.content.moderation.ModerationOutcome;
 import com.tailtopia.place.domain.Place;
 import com.tailtopia.place.domain.PlacePhoto;
-import com.tailtopia.place.domain.PlaceStatus;
 import com.tailtopia.place.dto.PlacePhotoContributeRequest;
 import com.tailtopia.place.event.PlacePhotosSubmittedEvent;
 import com.tailtopia.place.repository.PlacePhotoRepository;
@@ -49,11 +48,36 @@ public class PlacePhotoService {
     private final PlacePhotoRepository photos;
     private final ApplicationEventPublisher events;
 
+    /** URL ↔ object_key（对齐决策 D5）。 */
+    private final com.tailtopia.shared.media.AliyunOssClient oss;
+
     public PlacePhotoService(PlaceRepository places, PlacePhotoRepository photos,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, com.tailtopia.shared.media.AliyunOssClient oss) {
         this.places = places;
         this.photos = photos;
         this.events = events;
+        this.oss = oss;
+    }
+
+    /**
+     * 客户端回报的照片 URL → OSS 对象 key（对齐决策 D5）。任一张不是本平台公开桶的地址 → 整批 422。
+     *
+     * <p>🔒 这一步同时是安全闸：此前 URL 原样落库，客户端可以塞任意外部链接，
+     * 而它会被当成「平台的图」对所有人分发、甚至进站外预览卡。
+     * ⚠️ 调用方应在**送审与落库之前**调它 —— 地址非法的请求不该白花一次三方审核配额。
+     */
+    public List<String> toObjectKeys(List<String> urls) {
+        List<String> keys = new ArrayList<>(urls.size());
+        for (String url : urls) {
+            keys.add(oss.objectKeyOfPublicUrl(url)
+                    .orElseThrow(() -> AppException.validation("照片地址无效，请重新上传")));
+        }
+        return keys;
+    }
+
+    /** 照片的对外 URL（公开桶 CDN 前缀 + key），与改动前落库的 URL 逐字一致。 */
+    public String publicUrlOf(PlacePhoto photo) {
+        return oss.publicUrl(photo.getObjectKey());
     }
 
     /**
@@ -68,11 +92,11 @@ public class PlacePhotoService {
      *                  "有点像"和"压根没查成"都必须当"不给图"（Story 1.10 · AC5）。
      */
     @Transactional
-    public void storeInitialPhotos(long placeId, long uploaderId, List<String> urls,
+    public void storeInitialPhotos(long placeId, long uploaderId, List<String> objectKeys,
             boolean cleanPass) {
         int order = 0;
-        for (String url : urls) {
-            photos.save(PlacePhoto.fromMarking(placeId, uploaderId, url, order++, cleanPass));
+        for (String key : objectKeys) {
+            photos.save(PlacePhoto.fromMarking(placeId, uploaderId, key, order++, cleanPass));
         }
     }
 
@@ -85,9 +109,10 @@ public class PlacePhotoService {
     @Transactional
     public List<PlacePhoto> contribute(String placeToken, long uploaderId,
             PlacePhotoContributeRequest req) {
-        Place place = places.findByPublicTokenAndStatus(placeToken, PlaceStatus.ACTIVE)
+        Place place = places.resolveForView(placeToken)
                 .orElseThrow(() -> AppException.notFound("场所不存在"));
         List<String> urls = req.photoUrls();
+        List<String> keys = toObjectKeys(urls); // D5：先证明是我们桶里的对象，再算名额、再落库
 
         // 🔴 只数**占着位置**的那些（VISIBLE + 待审）：被判死 / 上传者注销的行谁都看不见，
         // 算进上限会让一个界面上只有 4 张图的场所永远加不进第 5 张，而用户腾不出位置。
@@ -102,8 +127,8 @@ public class PlacePhotoService {
         // 排在现有照片之后 —— 首图永远是标记人那张（AD-5 的 OG 预览图也取首图）。
         int next = maxSortOrder(place.getId()) + 1;
         List<PlacePhoto> saved = new ArrayList<>(urls.size());
-        for (String url : urls) {
-            saved.add(photos.save(PlacePhoto.contributed(place.getId(), uploaderId, url, next++)));
+        for (String key : keys) {
+            saved.add(photos.save(PlacePhoto.contributed(place.getId(), uploaderId, key, next++)));
         }
 
         // 异步送审（先发后审）。事件里只带 id 与 URL —— 不带上传者（审核不需要，

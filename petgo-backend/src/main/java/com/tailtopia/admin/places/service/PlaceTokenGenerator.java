@@ -10,7 +10,9 @@ import org.springframework.stereotype.Component;
  * 🔴 <b>字符表与长度须与 {@code profile.service.CardTokenGenerator} / {@code ShopTokenGenerator} 完全一致</b>（Base62 / 22 位），
  * 否则各套 token 的碰撞概率与外观不一致。不跨模块复用是为了不让 {@code admin/places} 依赖 {@code shop/} 或 {@code profile/}。
  */
-@Component
+// Bean 名与 App 侧 com.tailtopia.place.service.PlaceTokenGenerator 区分（同名 = 启动即冲突，2026-09-18 场所表对齐）。
+// 两者只差长度（后台 22 / App 32），列宽 32 都放得下；随机串，不会互撞。
+@Component("adminPlaceTokenGenerator")
 public class PlaceTokenGenerator {
 
     private static final char[] BASE62 =

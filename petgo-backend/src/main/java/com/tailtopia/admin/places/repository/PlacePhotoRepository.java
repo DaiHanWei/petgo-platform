@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** {@code place_photos} 仓储（Story 5.1）。 */
+// Bean 名与 App 侧 com.tailtopia.place.repository.PlacePhotoRepository 区分（同名 Spring Data 仓库 = 启动即 ConflictingBeanDefinition，2026-09-18 场所表对齐）。
+@org.springframework.stereotype.Repository("adminPlacePhotoRepository")
 public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
 
     List<PlacePhoto> findByPlaceIdAndDeletedAtIsNullOrderByCreatedAtAsc(Long placeId);
@@ -16,6 +18,6 @@ public interface PlacePhotoRepository extends JpaRepository<PlacePhoto, Long> {
 
     /** 合并（Story 5.3）：整批改指保留场所；返回迁移行数。须在事务内。 */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update PlacePhoto p set p.placeId = :keepId where p.placeId = :mergedId")
+    @Query("update AdminPlacePhoto p set p.placeId = :keepId where p.placeId = :mergedId")
     int reassignPlace(@Param("mergedId") long mergedId, @Param("keepId") long keepId);
 }

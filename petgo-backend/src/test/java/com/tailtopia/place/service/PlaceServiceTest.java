@@ -50,8 +50,12 @@ class PlaceServiceTest {
         reports = Mockito.mock(PlaceReportRepository.class);
         // Story 1.9：照片落 place_photos，由它负责。
         photoService = Mockito.mock(PlacePhotoService.class);
+        // D5：照片 URL → key 由 PlacePhotoService 负责；本类不验它，按原样透传（断言里的 URL 因此不用改）。
+        when(photoService.toObjectKeys(anyList())).thenAnswer(inv -> inv.getArgument(0));
         service = new PlaceService(places, new PlaceTokenGenerator(), moderation, idempotency,
-                reports, photoService);
+                reports, photoService,
+                // D2：默认城市（本版 Jakarta，为多城市预留）。
+                new com.tailtopia.place.service.DefaultPlaceCityResolver("Jakarta"));
         // save 之后 id 一定不为空（JPA @GeneratedValue）—— Story 1.9 起照片要挂到它上面。
         when(places.save(any(Place.class))).thenAnswer(inv -> withId(inv.getArgument(0), 42L));
     }
@@ -79,6 +83,27 @@ class PlaceServiceTest {
         assertThat(saved.getCreatedBy()).isEqualTo(7L);
         assertThat(saved.getStatus()).isEqualTo(PlaceStatus.ACTIVE);
         assertThat(saved.getPublicToken()).hasSize(32);
+    }
+
+    /** 对齐决策 D2：城市来自 PlaceCityResolver（换一个解析结果，落库的城市就跟着变 —— 没写死）。 */
+    @Test
+    void cityComesFromTheResolver() {
+        verdict(ModerationOutcome.pass(0.1, null));
+        PlaceService surabaya = new PlaceService(places, new PlaceTokenGenerator(), moderation, idempotency,
+                reports, photoService, new com.tailtopia.place.service.DefaultPlaceCityResolver("Surabaya"));
+
+        assertThat(surabaya.mark(7L, request(), null).getCity()).isEqualTo("Surabaya");
+        assertThat(service.mark(7L, request(), null).getCity()).isEqualTo("Jakarta");
+    }
+
+    /** 对齐决策 D5：照片先换成对象 key 再落库；非本平台地址在送审之前就被拒（不白花审核配额）。 */
+    @Test
+    void photoUrlsAreConvertedBeforeModeration() {
+        when(photoService.toObjectKeys(anyList())).thenThrow(AppException.validation("照片地址无效，请重新上传"));
+
+        assertThatThrownBy(() -> service.mark(7L, request(), null)).isInstanceOf(AppException.class);
+        verify(moderation, never()).evaluate(anyString(), anyList());
+        verify(places, never()).save(any());
     }
 
     @Test
@@ -250,7 +275,7 @@ class PlaceServiceTest {
     @Test
     void reportWritesAPendingTicket() {
         Place p = place();
-        when(places.findByPublicTokenAndStatus("tok", PlaceStatus.ACTIVE))
+        when(places.resolveForView("tok"))
                 .thenReturn(java.util.Optional.of(p));
         when(reports.existsByPlaceIdAndReporterId(anyLong(), anyLong())).thenReturn(false);
 
@@ -264,7 +289,7 @@ class PlaceServiceTest {
                 .isEqualTo(com.tailtopia.moderation.domain.ReportReason.INAPPROPRIATE);
         assertThat(saved.getValue().getStatus())
                 .as("写工单 PENDING 进运营队列，**不自动下架**")
-                .isEqualTo(com.tailtopia.moderation.domain.ReportStatus.PENDING);
+                .isEqualTo(com.tailtopia.moderation.domain.ReportStatus.PENDING.name());
     }
 
     /**
@@ -275,7 +300,7 @@ class PlaceServiceTest {
     @Test
     void reportingTwiceIsIdempotentAndDoesNotThrow() {
         Place p = place();
-        when(places.findByPublicTokenAndStatus("tok", PlaceStatus.ACTIVE))
+        when(places.resolveForView("tok"))
                 .thenReturn(java.util.Optional.of(p));
         when(reports.existsByPlaceIdAndReporterId(anyLong(), anyLong())).thenReturn(true);
 
@@ -294,7 +319,7 @@ class PlaceServiceTest {
     @Test
     void concurrentDuplicateReportIsSwallowedInsteadOf500() {
         Place p = place();
-        when(places.findByPublicTokenAndStatus("tok", PlaceStatus.ACTIVE))
+        when(places.resolveForView("tok"))
                 .thenReturn(java.util.Optional.of(p));
         when(reports.existsByPlaceIdAndReporterId(anyLong(), anyLong())).thenReturn(false);
         when(reports.save(any())).thenThrow(
@@ -307,7 +332,7 @@ class PlaceServiceTest {
     /** 举报一个已下架 / 不存在的场所 → 404（与详情同口径，不泄漏 token 曾存在）。 */
     @Test
     void reportingAMissingPlaceIsNotFound() {
-        when(places.findByPublicTokenAndStatus("gone", PlaceStatus.ACTIVE))
+        when(places.resolveForView("gone"))
                 .thenReturn(java.util.Optional.empty());
 
         assertThatThrownBy(() -> service.report("gone", 9L,
@@ -318,7 +343,7 @@ class PlaceServiceTest {
 
     private static Place place() {
         return withId(Place.mark("t".repeat(32), "X", PlaceType.CAFE, List.of(PlaceTag.PET_MENU),
-                -6.2, 106.8, "Jl. X", null, 7L), 42L);
+                -6.2, 106.8, "Jl. X", null, 7L, "Jakarta"), 42L);
     }
 
     /**

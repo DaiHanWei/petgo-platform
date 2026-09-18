@@ -28,12 +28,13 @@ public record PlacePhotoView(
         String moderationStatus,
         boolean mine) {
 
-    public static PlacePhotoView of(PlacePhoto photo, AuthorView uploader, Long viewerId,
+    /** @param publicUrl 该照片的公开 URL（{@code AliyunOssClient#publicUrl(photo.getObjectKey())}）。 */
+    public static PlacePhotoView of(PlacePhoto photo, String publicUrl, AuthorView uploader, Long viewerId,
             int widthPx) {
         CommentModerationStatus s = photo.getModerationStatus();
         return new PlacePhotoView(
                 photo.getId(),
-                AliyunOssClient.exifStrippedThumbUrl(photo.getUrl(), widthPx),
+                AliyunOssClient.exifStrippedThumbUrl(publicUrl, widthPx),
                 photo.getUploaderId(),
                 uploader == null ? null : uploader.nickname(),
                 uploader == null || uploader.deleted(),

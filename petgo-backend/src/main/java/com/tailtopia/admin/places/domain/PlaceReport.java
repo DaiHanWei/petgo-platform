@@ -17,7 +17,9 @@ import java.util.Objects;
  * 场所举报（Story 5.1，D-5 独立建表；表 {@code place_reports}）。同 reporter 对同 place 唯一（{@code uq_place_reports_reporter_place}），重复举报幂等。
  * 处置流在 Story 5.4 接进 A1 统一队列；{@link #handleBy} 照 {@code ContentReport.resolveBy}。{@link #handledBy} 是后台账号 id（不加 FK）。
  */
-@Entity
+// JPA 实体名与 App 侧 com.tailtopia.place.domain.PlaceReport 区分（同表两套映射，2026-09-18 场所表对齐）；
+// 🔴 JPQL 里要写 AdminPlaceReport，不是类名。
+@Entity(name = "AdminPlaceReport")
 @Table(name = "place_reports")
 public class PlaceReport {
 

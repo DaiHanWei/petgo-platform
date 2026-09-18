@@ -63,7 +63,7 @@ class AdminPlaceIntegrationTest extends ApiIntegrationTest {
     }
 
     private Place place(User marker, String name, String type, String city) {
-        return places.save(Place.create(tokens.generate(), name, type, List.of("PET_FRIENDLY", "OUTDOOR", "WIFI", "PARKING"), "描述 " + name,
+        return places.save(Place.create(tokens.generate(), name, type, List.of("PETS_ALLOWED_INSIDE", "OUTDOOR_SEATING", "PET_MENU", "PET_PLAY_AREA"), "描述 " + name,
                 city, "Jl. " + name + " 1", new BigDecimal("-6.208763"), new BigDecimal("106.845599"), marker.getId()));
     }
 
@@ -74,7 +74,7 @@ class AdminPlaceIntegrationTest extends ApiIntegrationTest {
         User visitor = newUser();
         String tag = "K" + UUID.randomUUID().toString().substring(0, 8);
         Place active = place(marker, "Kopi " + tag, "CAFE", "Jakarta");
-        Place delisted = place(marker, "Park " + tag, "PET_PARK", "Bandung");
+        Place delisted = place(marker, "Park " + tag, "PARK", "Bandung");
         delisted.delist();
         places.save(delisted);
         Place merged = place(marker, "Dup " + tag, "CAFE", "Jakarta");
@@ -84,20 +84,18 @@ class AdminPlaceIntegrationTest extends ApiIntegrationTest {
         comments.save(PlaceComment.create(active.getId(), visitor.getId(), "很友好 " + tag, PlaceAttitude.RECOMMEND));
         checkins.save(PlaceCheckin.create(active.getId(), visitor.getId()));
         reports.save(PlaceReport.create(active.getId(), visitor.getId(), PlaceReportReason.DUPLICATE));
-        Place fresh = places.findById(active.getId()).orElseThrow();
-        fresh.recount(1, 1, 1, 1, 0);
-        places.save(fresh);
+        // 计数实时统计（场所表对齐 D3）：上面真实落了 1 照片 / 1 评论 / 1 打卡，无需手工 recount。
 
         // 整页：三行 + 侧栏项 + 摘要条 + 城市下拉
         String page = mvc.perform(get("/admin/places").param("q", tag).param("lang", "zh_CN").with(user(ops)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(page).contains("id=\"places-rows\"").contains("id=\"places-summary\"").contains("id=\"places-drawer\"")
                 .contains("data-id=\"" + active.getId() + "\"").contains("data-id=\"" + delisted.getId() + "\"").contains("data-id=\"" + merged.getId() + "\"")
-                .contains("Kopi " + tag).contains("咖啡店").contains("宠物公园").contains("已下架").contains("已合并").contains("上架")
-                .contains("PET_FRIENDLY").contains("+1") // 标签最多 3 个 + N
+                .contains("Kopi " + tag).contains("咖啡店").contains("公园").contains("已下架").contains("已合并").contains("上架")
+                .contains("PETS_ALLOWED_INSIDE").contains("+1") // 标签最多 3 个 + N
                 .contains("Jakarta").contains("Bandung").contains("/admin/places\"").contains("场所管理")
                 .contains("/admin/manual-review?type=PLACE_REPORT");
-        // 摘要条随筛选联动：上架 1（active）、待处理举报 1、累计打卡 1（recount 后）
+        // 摘要条随筛选联动：上架 1（active）、待处理举报 1、累计打卡 1（实时统计）
         assertThat(page).containsPattern("上架场所</div>\\s*<div class=\"sum-value\">1<").containsPattern(">1</a>");
 
         // 筛选状态 → 只剩一行；关键词 ILIKE 地址；城市

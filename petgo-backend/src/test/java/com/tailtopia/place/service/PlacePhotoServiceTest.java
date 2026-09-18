@@ -48,9 +48,9 @@ class PlacePhotoServiceTest {
         places = Mockito.mock(PlaceRepository.class);
         photos = Mockito.mock(PlacePhotoRepository.class);
         events = Mockito.mock(ApplicationEventPublisher.class);
-        service = new PlacePhotoService(places, photos, events);
+        service = new PlacePhotoService(places, photos, events, com.tailtopia.place.PlaceTestSupport.oss());
         when(photos.save(any())).thenAnswer(inv -> withId(inv.getArgument(0), 7L));
-        when(places.findByPublicTokenAndStatus("tok", PlaceStatus.ACTIVE))
+        when(places.resolveForView("tok"))
                 .thenReturn(Optional.of(withPlaceId(place(), 42L)));
     }
 
@@ -155,7 +155,7 @@ class PlacePhotoServiceTest {
 
     @Test
     void contributingToAMissingOrTakenDownPlaceIsNotFound() {
-        when(places.findByPublicTokenAndStatus("gone", PlaceStatus.ACTIVE))
+        when(places.resolveForView("gone"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.contribute("gone", 9L,
@@ -335,7 +335,7 @@ class PlacePhotoServiceTest {
 
     private static Place place() {
         return Place.mark("tok", "Kopi", PlaceType.CAFE, List.of(PlaceTag.PET_MENU),
-                -6.2, 106.8, "Jl. X", null, 1L);
+                -6.2, 106.8, "Jl. X", null, 1L, "Jakarta");
     }
 
     private static Place withPlaceId(Place p, long id) {

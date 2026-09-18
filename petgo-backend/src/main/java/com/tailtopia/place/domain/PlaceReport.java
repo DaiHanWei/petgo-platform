@@ -38,16 +38,21 @@ public class PlaceReport {
     @Column(name = "place_id", nullable = false, updatable = false)
     private Long placeId;
 
-    @Column(name = "reporter_id", nullable = false, updatable = false)
+    /** 列名随后台 schema（2026-09-18 场所表对齐）。 */
+    @Column(name = "reporter_user_id", nullable = false, updatable = false)
     private Long reporterId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "reason_type", nullable = false, length = 16)
+    @Column(name = "reason_type", nullable = false, length = 24, updatable = false)
     private ReportReason reasonType;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 16)
-    private ReportStatus status = ReportStatus.PENDING;
+    /**
+     * 处置状态。🔴 值域归后台（PENDING / DISMISSED / ACTIONED，{@code ck_place_reports_status}），
+     * 与全站的 {@link ReportStatus} 不同（那边没有 ACTIONED）—— 所以这里存字符串、App 只写 PENDING、从不改：
+     * 映射成 ReportStatus 的话，App 一旦读到运营处理过的行，枚举解析就会直接抛。
+     */
+    @Column(name = "status", nullable = false, length = 16, updatable = false)
+    private String status = ReportStatus.PENDING.name();
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -63,7 +68,7 @@ public class PlaceReport {
         r.placeId = placeId;
         r.reporterId = reporterId;
         r.reasonType = reason;
-        r.status = ReportStatus.PENDING;
+        r.status = ReportStatus.PENDING.name();
         return r;
     }
 
@@ -95,7 +100,7 @@ public class PlaceReport {
         return reasonType;
     }
 
-    public ReportStatus getStatus() {
+    public String getStatus() {
         return status;
     }
 

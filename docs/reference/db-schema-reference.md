@@ -1272,7 +1272,16 @@
 > ① `status != 'ACTIVE'` **或** `deleted_at IS NOT NULL` 的场所对用户端「**不存在**」——直链一律落「场所不存在」统一文案，不区分下架 / 删除 / 合并；
 > ② `status = 'MERGED'` 行的 `merged_into_id` 供 App 把直链**跳到保留场所**（保留方自身不会是 MERGED，服务层保证）；
 > ③ 后台合并（Story 5.3）时发布 `PlaceMergedEvent(keepId, mergedId)`，**护照章（`place_checkins`）归并由 App 分支监听实现**，后台不改打卡行。
-> 另：`place_type` / `tags` 值域由 App 端定义，表不加 CHECK（后台 Java 枚举软校验）；五个计数列是缓存，以明细表为准。
+> 另：`place_type` / `tags` 值域由 App 端定义。
+>
+> **2026-09-18 场所表对齐**（`V20260918_2110__align_places_for_app.sql`，规格 `_bmad-output/implementation-artifacts/specs/spec-v130-places-schema-alignment.md`）：
+> batch-b1 曾另建一套场所表，已删除并改为在本组表上 ALTER。要点：
+> - `place_type` 加 CHECK `ck_places_type`，7 值 = App 的 `PlaceType`；`tags` 值域 = App 的 `PlaceTag`（后台录入 / 编辑服务端校验，App 按枚举读，写进未知值整页 500）；
+> - **五个计数缓存列已删**，后台实时统计（App 的写路径不维护它们）；App 的 👍/👎 仍在 Redis（`PlaceAttitudeCounters`）；
+> - `city` 保持必填：App 标记由 `PlaceCityResolver` 填配置项 `petgo.places.default-city`（本版 Jakarta，为多城市预留）；
+> - `place_photos` / `place_comments` 追加 App 的审核态等列；`place_comments.attitude` 可空（App 允许不表态）；
+> - 同表两套 JPA 实体：App 侧 `com.tailtopia.place.domain.*`，后台侧 `com.tailtopia.admin.places.domain.*`（**JPA 实体名 `AdminPlace*`**，JPQL 要写实体名）；
+> - 语义 ② 已实现：App 详情 / 分享页 / 评论 / 补图 / 举报遇 MERGED 一律转到保留场所（只跳一层）。
 
 <a id="places"></a>
 ## `places`
@@ -1286,31 +1295,28 @@
 | 1 | `id` | bigint | ● | PK | 主键，内部 id（不对外暴露） |
 | 2 | `public_token` | character varying(32) | ● |  | 对外标识（Base62 22 位，不可枚举）。全表唯一 |
 | 3 | `name` | character varying(80) | ● |  | 场所名 |
-| 4 | `place_type` | character varying(32) | ● |  | 场所类型（UPPER_SNAKE），值域由 App 端 FR-112 定义（如 CAFE / PET_PARK / PET_HOTEL / PET_FRIENDLY_RESTAURANT），暂不加 CHECK |
-| 5 | `tags` | jsonb | ● |  | 宠物友好标签码列表（JSON 字符串数组），默认 `[]`，值域由 App 端定义 |
-| 6 | `description` | text |  |  | 简介 |
-| 7 | `city` | character varying(60) | ● |  | 城市名（D-39），运营录入时填 / 选；App 端标记时由 App 分支传入 |
+| 4 | `place_type` | character varying(32) | ● |  | 场所类型：CAFE / RESTAURANT / PARK / MALL / HOTEL / PET_SERVICE / OTHER（CHECK `ck_places_type`，值域 = App `PlaceType`） |
+| 5 | `tags` | jsonb | ● |  | 宠物友好标签码列表（JSON 字符串数组），默认 `[]`，值域 = App `PlaceTag`（PETS_ALLOWED_INSIDE / OUTDOOR_SEATING / PET_MENU / PET_PLAY_AREA / LEASH_REQUIRED / LARGE_DOG_FRIENDLY） |
+| 6 | `description` | text |  |  | 简介（App 接口校验 ≤200） |
+| 7 | `city` | character varying(60) | ● |  | 城市名（D-39），运营录入时填 / 选；App 标记时服务端填默认城市（`PlaceCityResolver`，配置项 `petgo.places.default-city`） |
 | 8 | `address_text` | character varying(255) | ● |  | 文字地址（供用户复制导航） |
 | 9 | `lat` | numeric(9,6) | ● |  | 纬度，-90～90 |
 | 10 | `lng` | numeric(9,6) | ● |  | 经度，-180～180 |
 | 11 | `marked_by_user_id` | bigint | ● | FK→`users` | 标记人：App 用户或运营发布身份池账号（users 表里的虚拟号 / 授权真实号），**不是后台账号**；不可改 |
 | 12 | `status` | character varying(16) | ● |  | ACTIVE=上架 / DELISTED=下架（对用户端「不存在」，可恢复）/ MERGED=已并入 merged_into_id |
 | 13 | `merged_into_id` | bigint |  | FK→`places` | 合并指向：仅 status=MERGED 时非空（CHECK `ck_places_merged_ref` 强制成对）；App 直链据此跳到保留场所 |
-| 14 | `photo_count` | integer | ● |  | 缓存：place_photos 未删行数（服务层同事务维护） |
-| 15 | `comment_count` | integer | ● |  | 缓存：place_comments 未删行数 |
-| 16 | `checkin_count` | integer | ● |  | 缓存：place_checkins 行数 |
-| 17 | `recommend_count` | integer | ● |  | 缓存：place_comments 未删且 attitude=RECOMMEND 的行数 |
-| 18 | `not_recommend_count` | integer | ● |  | 缓存：place_comments 未删且 attitude=NOT_RECOMMEND 的行数 |
-| 19 | `created_at` | timestamp with time zone | ● |  | 创建时间（UTC） |
-| 20 | `updated_at` | timestamp with time zone | ● |  | 最后更新时间（UTC） |
-| 21 | `deleted_at` | timestamp with time zone |  |  | 软删时间；非空即对用户端「不存在」，任何列表查询默认 `deleted_at IS NULL` |
+| 14 | `created_at` | timestamp with time zone | ● |  | 创建时间（UTC） |
+| 15 | `updated_at` | timestamp with time zone | ● |  | 最后更新时间（UTC） |
+| 16 | `deleted_at` | timestamp with time zone |  |  | 软删时间；非空即对用户端「不存在」，任何列表查询默认 `deleted_at IS NULL` |
 
-**索引**：🔑唯一 `public_token` · `(status, created_at DESC) WHERE deleted_at IS NULL` · `lower(name)` · `marked_by_user_id` · `(city, status) WHERE deleted_at IS NULL`
+> 计数（照片 / 评论 / 打卡 / 推荐 / 不推荐）**不在本表**（2026-09-18 删除缓存列），后台 `AdminPlaceQueryService#countsOf` 实时统计。
+
+**索引**：🔑唯一 `public_token` · `(status, created_at DESC) WHERE deleted_at IS NULL` · `lower(name)` · `marked_by_user_id` · `(city, status) WHERE deleted_at IS NULL` · App：`(created_at DESC, id DESC)`、`lat`、`lng` 三条 `WHERE status='ACTIVE' AND deleted_at IS NULL`
 
 <a id="place-photos"></a>
 ## `place_photos`
 
-**场所照片：只存 OSS objectKey（非 URL），签名 URL 现签不落库；运营可删（软删）**
+**场所照片：只存 OSS objectKey（非 URL）；后台现签 URL，App 用公开 CDN 前缀 + key（均不落库）；运营可删、上传者可自删（软删）。App 补充的照片先发后审**
 
 （新表，staging 暂无量级。）
 
@@ -1321,14 +1327,19 @@
 | 3 | `object_key` | character varying(255) | ● |  | OSS objectKey，非 URL |
 | 4 | `uploader_user_id` | bigint | ● | FK→`users` | 上传人 |
 | 5 | `created_at` | timestamp with time zone | ● |  | 上传时间（UTC） |
-| 6 | `deleted_at` | timestamp with time zone |  |  | 软删时间（运营删照片） |
+| 6 | `deleted_at` | timestamp with time zone |  |  | 软删时间（运营删照片 / 上传者自删） |
+| 7 | `moderation_status` | character varying(24) | ● |  | 审核态，默认 VISIBLE；App 补图先落 UNDER_REVIEW，审核后 VISIBLE / REJECTED |
+| 8 | `sort_order` | integer | ● |  | 照片流顺序，默认 0 |
+| 9 | `is_original` | boolean | ● |  | 首批图（标记时 / 运营录入）；注销隐藏补充照片时不动它们 |
+| 10 | `og_eligible` | boolean | ● |  | 可作分享页 og:image（只给干净 PASS 与运营录入） |
+| 11 | `updated_at` | timestamp with time zone | ● |  | 最后更新时间（UTC） |
 
-**索引**：`(place_id, created_at) WHERE deleted_at IS NULL`
+**索引**：`(place_id, created_at) WHERE deleted_at IS NULL` · `(place_id, sort_order, id) WHERE deleted_at IS NULL` · `uploader_user_id`
 
 <a id="place-comments"></a>
 ## `place_comments`
 
-**场所评论：正文 ≤500 字 + 二元态度（推荐 / 不推荐）；运营可删（软删）**
+**场所评论：正文 ≤500 字（App 接口 ≤200）+ 态度（推荐 / 不推荐 / 不表态）；运营可删、作者可自删（软删）；App 发的评论先发后审**
 
 （新表，staging 暂无量级。）
 
@@ -1338,11 +1349,14 @@
 | 2 | `place_id` | bigint | ● | FK→`places` | 所属场所（级联删除） |
 | 3 | `author_user_id` | bigint | ● | FK→`users` | 评论人 |
 | 4 | `body` | character varying(500) | ● |  | 正文 |
-| 5 | `attitude` | character varying(16) | ● |  | RECOMMEND=推荐 / NOT_RECOMMEND=不推荐 |
+| 5 | `attitude` | character varying(16) |  |  | RECOMMEND=推荐 / NOT_RECOMMEND=不推荐 / NULL=未表态 |
 | 6 | `created_at` | timestamp with time zone | ● |  | 发表时间（UTC） |
 | 7 | `deleted_at` | timestamp with time zone |  |  | 软删时间 |
+| 8 | `moderation_status` | character varying(24) | ● |  | 审核态（VISIBLE / UNDER_REVIEW / TAKEN_DOWN / REJECTED），默认 VISIBLE |
+| 9 | `content_version` | integer | ● |  | 内容版本（审核回调防串），默认 1 |
+| 10 | `updated_at` | timestamp with time zone | ● |  | 最后更新时间（UTC） |
 
-**索引**：`(place_id, created_at DESC) WHERE deleted_at IS NULL`
+**索引**：`(place_id, created_at DESC) WHERE deleted_at IS NULL` · `(place_id, created_at DESC, id DESC) WHERE deleted_at IS NULL` · `(place_id, attitude) WHERE deleted_at IS NULL` · `author_user_id`
 
 <a id="place-checkins"></a>
 ## `place_checkins`

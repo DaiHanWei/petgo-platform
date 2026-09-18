@@ -44,9 +44,12 @@ class PlaceSharePageControllerTest {
         photos = Mockito.mock(PlacePhotoRepository.class);
         response = Mockito.mock(HttpServletResponse.class);
         controller = new PlaceSharePageController(places, photos,
+                // 照片 key → URL（对齐 D5）：真实实例，只用到 publicUrlOf。
+                new com.tailtopia.place.service.PlacePhotoService(places, photos, null,
+                        com.tailtopia.place.PlaceTestSupport.oss()),
                 "https://dl.test", "https://ios.test", "https://play.test");
         when(photos.findVisible(anyLong(), anyBoolean(), any())).thenReturn(List.of());
-        when(places.findByPublicTokenAndStatus("tok", PlaceStatus.ACTIVE))
+        when(places.resolveForView("tok"))
                 .thenReturn(Optional.of(withId(place(), 42L)));
     }
 
@@ -58,7 +61,7 @@ class PlaceSharePageControllerTest {
      */
     @Test
     void takenDownAndUnknownTokensAreIndistinguishable() {
-        when(places.findByPublicTokenAndStatus("gone", PlaceStatus.ACTIVE))
+        when(places.resolveForView("gone"))
                 .thenReturn(Optional.empty());
 
         Model a = new ConcurrentModel();
@@ -218,10 +221,29 @@ class PlaceSharePageControllerTest {
         assertThat(template).contains("noindex,nofollow");
     }
 
+    /**
+     * 对齐决策 D4：被合并的场所 → 301 到保留场所的分享页（旧链接继续有效，预览抓取也跟着跳）。
+     * {@code resolveForView} 返回的是**另一个** token 的场所，控制器据此判断要不要跳。
+     */
+    @Test
+    void mergedPlaceRedirectsPermanentlyToTheKeptOne() {
+        Place keep = withId(Place.mark("keeptok", "Kopi Baru", PlaceType.CAFE, List.of(PlaceTag.PET_MENU),
+                -6.2, 106.8, "Jl. Baru", null, 7L, "Jakarta"), 43L);
+        when(places.resolveForView("oldtok")).thenReturn(Optional.of(keep));
+
+        Object result = controller.placePage("oldtok", new org.springframework.ui.ExtendedModelMap(), response);
+
+        assertThat(result).isInstanceOf(org.springframework.web.servlet.view.RedirectView.class);
+        var rv = (org.springframework.web.servlet.view.RedirectView) result;
+        assertThat(rv.getUrl()).isEqualTo("/place/keeptok");
+        assertThat(org.springframework.test.util.ReflectionTestUtils.getField(rv, "statusCode"))
+                .isEqualTo(org.springframework.http.HttpStatus.MOVED_PERMANENTLY);
+    }
+
     private static Place place() {
         return Place.mark("tok", "Kopi Kayu Manis", PlaceType.CAFE,
                 List.of(PlaceTag.PETS_ALLOWED_INSIDE, PlaceTag.OUTDOOR_SEATING),
-                -6.235, 106.81, "Jl. Senopati No.75", "Ada area outdoor", 7L);
+                -6.235, 106.81, "Jl. Senopati No.75", "Ada area outdoor", 7L, "Jakarta");
     }
 
     private static Place withId(Place p, long id) {

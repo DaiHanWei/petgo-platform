@@ -3,7 +3,6 @@ package com.tailtopia.admin.places.service;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.places.domain.Place;
-import com.tailtopia.admin.places.domain.PlaceAttitude;
 import com.tailtopia.admin.places.domain.PlaceComment;
 import com.tailtopia.admin.places.domain.PlacePhoto;
 import com.tailtopia.admin.places.domain.PlaceReportStatus;
@@ -35,18 +34,6 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class AdminPlaceService {
 
-    /** 五个计数列一条 SQL 全量重算（合并 / 举报处置也用）。 */
-    static final String RECOUNT_SQL = """
-            UPDATE places p SET
-                photo_count         = (SELECT COUNT(*) FROM place_photos   x WHERE x.place_id = p.id AND x.deleted_at IS NULL),
-                comment_count       = (SELECT COUNT(*) FROM place_comments x WHERE x.place_id = p.id AND x.deleted_at IS NULL),
-                checkin_count       = (SELECT COUNT(*) FROM place_checkins x WHERE x.place_id = p.id),
-                recommend_count     = (SELECT COUNT(*) FROM place_comments x WHERE x.place_id = p.id AND x.deleted_at IS NULL AND x.attitude = 'RECOMMEND'),
-                not_recommend_count = (SELECT COUNT(*) FROM place_comments x WHERE x.place_id = p.id AND x.deleted_at IS NULL AND x.attitude = 'NOT_RECOMMEND'),
-                updated_at          = now()
-            WHERE p.id = ?
-            """;
-
     private final PlaceRepository places;
     private final PlacePhotoRepository photos;
     private final PlaceCommentRepository comments;
@@ -61,9 +48,14 @@ public class AdminPlaceService {
 
     public static final int MAX_PHOTOS = 9;
 
+    /** App 侧态度计数（Redis）；后台删评论后丢键（场所表对齐）。 */
+    private final com.tailtopia.place.service.PlaceAttitudeCounters attitudeCounters;
+
     public AdminPlaceService(PlaceRepository places, PlacePhotoRepository photos, PlaceCommentRepository comments,
             PlaceCoordinateValidator coordinates, AdminAuditService audit, JdbcTemplate jdbc, PlaceReportRepository reports,
-            PlaceTokenGenerator tokens, AdminPublishIdentityService identities, AdminSeedImageService images) {
+            PlaceTokenGenerator tokens, AdminPublishIdentityService identities, AdminSeedImageService images,
+            com.tailtopia.place.service.PlaceAttitudeCounters attitudeCounters) {
+        this.attitudeCounters = attitudeCounters;
         this.places = places;
         this.photos = photos;
         this.comments = comments;
@@ -103,10 +95,10 @@ public class AdminPlaceService {
         int uploaded = 0;
         for (MultipartFile f : files) {
             UploadedImage up = images.upload(f, "places/" + p.getId());
-            photos.save(PlacePhoto.create(p.getId(), up.objectKey(), markerUserId));
+            // D6（2026-09-18 场所表对齐）：运营录入是可信来源 —— 直接可见、算首批图、可作站外预览图。
+            photos.save(PlacePhoto.createByOperator(p.getId(), up.objectKey(), markerUserId, uploaded));
             uploaded++;
         }
-        p.recount(uploaded, 0, 0, 0, 0);
         audit.record(actorAdminAccountId, AuditActions.PLACE_CREATED, "PLACE", String.valueOf(p.getId()),
                 "name=" + p.getName() + ", photos=" + uploaded + ", markerUserId=" + markerUserId);
         return new CreateResult(p.getId(), coordinates.isOutsideJakarta(form.lat(), form.lng()));
@@ -216,7 +208,7 @@ public class AdminPlaceService {
         return true;
     }
 
-    /** 删单张照片（AC3）：软删 + `photo_count −1`（允许删至 0）；不属于该场所 → 404；已删 no-op。 */
+    /** 删单张照片（AC3）：软删（允许删至 0；计数实时统计，无需加减）；不属于该场所 → 404；已删 no-op。 */
     @Transactional
     public boolean removePhoto(long placeId, long photoId, long actorAdminAccountId) {
         Place p = requirePlace(placeId);
@@ -225,12 +217,11 @@ public class AdminPlaceService {
         if (!photo.softDelete()) {
             return false;
         }
-        p.recount(p.getPhotoCount() - 1, p.getCommentCount(), p.getCheckinCount(), p.getRecommendCount(), p.getNotRecommendCount());
         audit.record(actorAdminAccountId, AuditActions.PLACE_PHOTO_REMOVED, "PLACE_PHOTO", String.valueOf(photoId), "placeId=" + p.getId());
         return true;
     }
 
-    /** 删单条评论（AC3）：软删 + `comment_count −1` + 按态度扣 `recommend_count` / `not_recommend_count`；审计不记正文。 */
+    /** 删单条评论（AC3）：软删（计数实时统计，无需加减）；审计不记正文。 */
     @Transactional
     public boolean removeComment(long placeId, long commentId, long actorAdminAccountId) {
         Place p = requirePlace(placeId);
@@ -239,9 +230,8 @@ public class AdminPlaceService {
         if (!c.softDelete()) {
             return false;
         }
-        boolean rec = c.getAttitude() == PlaceAttitude.RECOMMEND;
-        p.recount(p.getPhotoCount(), p.getCommentCount() - 1, p.getCheckinCount(),
-                p.getRecommendCount() - (rec ? 1 : 0), p.getNotRecommendCount() - (rec ? 0 : 1));
+        // App 侧 👍/👎 计数在 Redis，后台删评论不经过它的增减 → 提交后丢键，下次读回库重算（场所表对齐）。
+        attitudeCounters.evictAfterCommit(p.getId());
         audit.record(actorAdminAccountId, AuditActions.PLACE_COMMENT_REMOVED, "PLACE_COMMENT", String.valueOf(commentId),
                 "placeId=" + p.getId() + ", attitude=" + c.getAttitude());
         return true;
@@ -249,11 +239,6 @@ public class AdminPlaceService {
 
     private static String blankToNull(String s) {
         return s == null || s.isBlank() ? null : s;
-    }
-
-    /** 五个计数列全量重算（合并保留方 / 5.4 举报处置用）。须在调用方事务内。 */
-    public void recount(long placeId) {
-        jdbc.update(RECOUNT_SQL, placeId);
     }
 
     /** 写操作一律行锁读取（复审 #4：与合并并发时不能把陈旧列写回覆盖 MERGED）。须在事务内。 */

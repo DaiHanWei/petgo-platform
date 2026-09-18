@@ -59,7 +59,7 @@ class PlaceCommentServiceTest {
         // save 之后 id 一定不为空（JPA @GeneratedValue）—— 审核事件要用它。
         when(comments.save(any())).thenAnswer(inv ->
                 withCommentId(inv.getArgument(0), 7L));
-        when(places.findByPublicTokenAndStatus("tok", PlaceStatus.ACTIVE))
+        when(places.resolveForView("tok"))
                 .thenReturn(Optional.of(withId(place(), 42L)));
     }
 
@@ -131,7 +131,7 @@ class PlaceCommentServiceTest {
 
     @Test
     void commentingOnAMissingOrTakenDownPlaceIsNotFound() {
-        when(places.findByPublicTokenAndStatus("gone", PlaceStatus.ACTIVE))
+        when(places.resolveForView("gone"))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create("gone", 9L,
@@ -368,7 +368,7 @@ class PlaceCommentServiceTest {
 
     private static Place place() {
         return Place.mark("tok", "Kopi", PlaceType.CAFE, List.of(PlaceTag.PET_MENU),
-                -6.2, 106.8, "Jl. X", null, 1L);
+                -6.2, 106.8, "Jl. X", null, 1L, "Jakarta");
     }
 
     /** 未持久化实体塞 id（id 由 JPA 赋值、无 setter —— 不为测试在生产代码里开口子）。 */

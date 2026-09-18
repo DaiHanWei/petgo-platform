@@ -14,7 +14,7 @@ import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/letter_avatar.dart';
-import '../../../shared/widgets/photo_lightbox.dart';
+import '../../../shared/media/image_lightbox.dart';
 import '../../../core/media/media_scope.dart';
 import '../../../core/router/route_intent.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
@@ -43,7 +43,7 @@ import 'place_mini_map.dart';
 ///
 /// <h2>范围边界（别顺手加）</h2>
 /// <ul>
-///   <li>**点照片看大图**已接上（Story 1.6）：走公共 `PhotoLightbox`（从内容详情页原样抽出，行为一字未改）；</li>
+///   <li>**点照片看大图**已接上（Story 1.6）：走公共 `ImageLightbox`（批次 A FR-115 重做的那个；合并时统一，b1 原先抽出的旧版 `PhotoLightbox` 已删）；</li>
 ///   <li>**评论区 + 二元态度**已接上（Story 1.7）：一级 only，态度在输入的展开态里；</li>
 ///   <li>**分享**（Story 1.10）分享的是 **H5 场所页链接**（`/place/{不可枚举 token}`），见 `_onShare`。</li>
 /// </ul>
@@ -533,7 +533,9 @@ class _PhotoStrip extends StatelessWidget {
             photo: photos[i],
             width: _itemWidth,
             height: _height,
-            onTap: () => openPhotoLightbox(context, urls: urls, initialIndex: i),
+            // source 区分帖子与场所（批次 A 灯箱埋点 lightbox_opened / dismissed 的维度）。
+            onTap: () => ImageLightbox.open(context,
+                urls: urls, initialIndex: i, heroTagPrefix: 'place_detail', source: 'place_detail'),
             onDelete: photos[i].mine ? () => onDeletePhoto(photos[i]) : null,
           );
         },

@@ -36,8 +36,12 @@ public class SignedUrlService {
     public String sign(String objectKey) {
         long ttl = props.getSignedUrl().getTtlSeconds();
         Date expiration = new Date(System.currentTimeMillis() + ttl * 1000L);
-        OSS oss = ossClient.buildClient();
+        // 🔴 buildClient 也要在 try 里：凭证缺失时 SDK 在这一步就抛（InvalidCredentialsException），
+        //    放在外面会绕过下面的 mediaCredential 转换，调用方的「签名失败降级」接不住它 → 500
+        //    （2026-09-18 场所表对齐 L1 抓到：后台场所抽屉在无凭证环境整页 500）。
+        OSS oss = null;
         try {
+            oss = ossClient.buildClient();
             return oss.generatePresignedUrl(
                     ossClient.privateBucket(), stripLeadingSlash(objectKey), expiration, HttpMethod.GET)
                     .toString();
@@ -45,7 +49,9 @@ public class SignedUrlService {
             log.warn("Signed URL generation failed: {}", e.getClass().getSimpleName());
             throw AppException.mediaCredential("私密图访问凭证暂不可用");
         } finally {
-            oss.shutdown();
+            if (oss != null) {
+                oss.shutdown();
+            }
         }
     }
 
@@ -53,8 +59,9 @@ public class SignedUrlService {
     public List<String> signAll(List<String> objectKeys) {
         long ttl = props.getSignedUrl().getTtlSeconds();
         Date expiration = new Date(System.currentTimeMillis() + ttl * 1000L);
-        OSS oss = ossClient.buildClient();
+        OSS oss = null; // 同 sign()：buildClient 也必须在 try 里
         try {
+            oss = ossClient.buildClient();
             List<String> urls = new ArrayList<>(objectKeys.size());
             for (String key : objectKeys) {
                 urls.add(oss.generatePresignedUrl(
@@ -66,7 +73,9 @@ public class SignedUrlService {
             log.warn("Batch signed URL generation failed: {}", e.getClass().getSimpleName());
             throw AppException.mediaCredential("私密图访问凭证暂不可用");
         } finally {
-            oss.shutdown();
+            if (oss != null) {
+                oss.shutdown();
+            }
         }
     }
 

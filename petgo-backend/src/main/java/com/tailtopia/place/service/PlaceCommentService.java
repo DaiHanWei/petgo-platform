@@ -4,7 +4,6 @@ import com.tailtopia.content.domain.CommentModerationStatus;
 import com.tailtopia.content.service.ContentModerationService;
 import com.tailtopia.place.domain.Place;
 import com.tailtopia.place.domain.PlaceComment;
-import com.tailtopia.place.domain.PlaceStatus;
 import com.tailtopia.place.dto.PlaceCommentCreateRequest;
 import com.tailtopia.place.event.PlaceCommentSubmittedEvent;
 import com.tailtopia.place.repository.PlaceCommentRepository;
@@ -181,7 +180,7 @@ public class PlaceCommentService {
     }
 
     private Place requireActive(String token) {
-        return places.findByPublicTokenAndStatus(token, PlaceStatus.ACTIVE)
+        return places.resolveForView(token)
                 .orElseThrow(() -> AppException.notFound("场所不存在"));
     }
 }

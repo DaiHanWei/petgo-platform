@@ -139,6 +139,28 @@ public class PlaceAttitudeCounters {
     }
 
     /** 单个场所（详情页）。内部就是 {@link #countsOf} 的一元调用，不另写一套读逻辑。 */
+    /**
+     * 丢弃这些场所的计数键，下一次读自动回库重算（2026-09-18 场所表对齐）。
+     *
+     * <p>用在**不经过本类增减**的写路径之后：后台合并场所（子表整体改指保留场所）、后台删评论。
+     * 不丢的话最长偏 {@link #TTL}；丢了是一次回算查询，很便宜。
+     * 在事务里调用时推迟到提交之后（回滚了就不该丢）；Redis 不可用只记日志。
+     */
+    public void evictAfterCommit(long... placeIds) {
+        afterCommit(() -> {
+            try {
+                List<String> keys = new ArrayList<>(placeIds.length * 2);
+                for (long id : placeIds) {
+                    keys.add(RECOMMEND_KEY_PREFIX + id);
+                    keys.add(NOT_RECOMMEND_KEY_PREFIX + id);
+                }
+                redis.delete(keys);
+            } catch (RuntimeException e) {
+                log.warn("场所计数键清理失败（TTL 到期会自愈）：{}", e.getClass().getSimpleName());
+            }
+        });
+    }
+
     public Counts countsOf(long placeId) {
         return countsOf(List.of(placeId)).getOrDefault(placeId, Counts.ZERO);
     }

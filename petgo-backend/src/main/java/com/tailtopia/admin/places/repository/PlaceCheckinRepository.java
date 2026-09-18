@@ -13,6 +13,6 @@ public interface PlaceCheckinRepository extends JpaRepository<PlaceCheckin, Long
 
     /** 合并（Story 5.3）：打卡整批改指保留场所（护照章归并由 App 分支监听事件实现）。 */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update PlaceCheckin c set c.placeId = :keepId where c.placeId = :mergedId")
+    @Query("update AdminPlaceCheckin c set c.placeId = :keepId where c.placeId = :mergedId")
     int reassignPlace(@Param("mergedId") long mergedId, @Param("keepId") long keepId);
 }
