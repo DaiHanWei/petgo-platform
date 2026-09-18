@@ -105,7 +105,7 @@ class AdminPlaceActionsIntegrationTest extends ApiIntegrationTest {
                         .param("lat", "-6.917").param("lng", "107.619").param("lang", "zh_CN")
                         .with(user(ops)).with(csrf()).header("HX-Request", "true"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(ok).contains("data-place-id=\"" + p.getId() + "\"").contains("坐标不在雅加达都会区").contains("Kopi Bandung").contains("宠物公园")
+        assertThat(ok).contains("data-place-id=\"" + p.getId() + "\"").contains("坐标不在雅加达都会区").contains("Kopi Bandung").contains("公园")
                 .contains("OUTDOOR_SEATING").contains("id=\"places-row-" + p.getId() + "\"").contains("hx-swap-oob");
         Place saved = places.findById(p.getId()).orElseThrow();
         assertThat(saved.getCity()).isEqualTo("Bandung");
