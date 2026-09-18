@@ -205,7 +205,7 @@ public class CheckoutService {
         //    「车里有东西但一件都没勾」与「车是空的」是两回事，给同一句话会让用户
         //    去找一辆并不空的空车。整车失效仍走上面那条（逐行明细）—— 那段语义不动。
         List<CartView.CartLine> selected = cart.selectedLines();
-        if (selected.isEmpty() && !cart.lines().isEmpty()) {
+        if (nothingSelected(cart, selected)) {
             throw AppException.validation("请至少选择一件商品");
         }
 
@@ -295,6 +295,25 @@ public class CheckoutService {
      * <p>🔴 Story 4-1：<b>只看选中集</b>。失效行里也只报选中的那些 ——
      * 一件用户压根没勾的下架商品不该把他的结算挡在门外（那正是「先删掉再买」的老毛病）。
      */
+    /**
+     * 本单「一件都没选」——有效行没选中，<b>且</b>失效行里也没有选中的。
+     *
+     * <p>🔴 两个条件缺一不可（v1.3.0 shop-v2 复审 #2）：
+     * <ul>
+     *   <li>只判 {@code selected.isEmpty() && !cart.lines().isEmpty()}（原写法）会漏掉
+     *       「整车失效且全部未勾选」——此时 {@code lines()} 为空使守卫不触发，而
+     *       {@link #collectUnavailable} 又按 {@code !l.selected()} 跳过了那些失效行，
+     *       三道检查全不拦，落库一张<b>零订单行、商品额 0 却带全额运费</b>的待支付单。</li>
+     *   <li>只判 {@code selected.isEmpty()} 则会抢走「整车失效但仍勾选着」本该走的
+     *       {@link CheckoutUnavailableException} 逐行明细（409）—— 那条路径要告诉用户
+     *       哪一件下架了、哪一件售罄了，换成一句「请至少选择一件商品」是信息倒退。</li>
+     * </ul>
+     */
+    private boolean nothingSelected(CartView cart, List<CartView.CartLine> selected) {
+        return selected.isEmpty()
+                && cart.invalidLines().stream().noneMatch(CartView.CartLine::selected);
+    }
+
     private List<UnavailableLine> collectUnavailable(CartView cart,
             List<CartView.CartLine> selected) {
         List<UnavailableLine> out = new ArrayList<>();

@@ -83,13 +83,17 @@ class LogSanitizerTest {
     // ================================================================
     // Story 5-1：评价正文不进日志（SHOP-FR-27 / SHOP-NFR-01）
     //
-    // 🎯 **变异靶子**：从 LogSanitizer.REQUEST_ONLY_SENSITIVE_KEYS 里删掉 "content"，
-    //    reviewContentIsMaskedInRequestBody 必须变红；删掉 "detail"，
+    // 🎯 **变异靶子**：从 LogSanitizer.SENSITIVE_KEYS 里删掉 "content"，
+    //    reviewContentIsMaskedInRequestBody 与 reviewContentIsMaskedInResponseBody
+    //    必须同时变红；从 REQUEST_ONLY_SENSITIVE_KEYS 删掉 "detail"，
     //    reportDetailIsMaskedInRequestBody 必须变红。
     //
-    // 🔴 这一整组同时守着「请求打码」与「响应不打码」两侧。只测前者是不够的：
-    //    把 content 挪进 SENSITIVE_KEYS 也能让前者变绿，但那会把所有公开评价
-    //    在响应日志里全打成 ***，排障时等于瞎了。
+    // 🔴 **2026-09-18 复审 #3 推翻了本组原来的立场**：原实现只打码请求侧，理由是
+    //    「ShopReviewView.content 是公开响应字段，打码零收益」。该理由不成立 ——
+    //    ShopReviewView.mine 会返回本人 PENDING / REJECTED 的评价，那些正文**从未公开**，
+    //    却照样随响应体原样落盘（同一行日志里 req 打码、resp 明文）。
+    //    日志脱敏不能按「这个字段通常是公开的」来判，要按「它有没有可能不是」。
+    //    现在两侧都打码；代价只是日志里看不到公开评价原文，而那本就无排障价值。
     // ================================================================
 
     @Test
@@ -121,24 +125,31 @@ class LogSanitizerTest {
     }
 
     @Test
-    @DisplayName("🔴 响应侧的 content 原样保留 —— 公开评价打码对隐私零收益、对排障是纯损失")
-    void publicReviewContentSurvivesInResponseBody() {
+    @DisplayName("🎯 响应侧的 content 同样被打码 —— 「我的评价」会带出审核未通过的正文")
+    void reviewContentIsMaskedInResponseBody() {
+        // 这条 JSON 模拟的正是 ShopReviewView.mine 的形状：reviewStatus 非 null，
+        // 意味着它是本人可见、**外人从来看不到**的待审 / 被驳回评价。
         String out = sanitizeJson(
-                "{\"items\":[{\"id\":1,\"rating\":5,\"content\":\"公开可见的评价正文\"}]}");
+                "{\"items\":[{\"id\":1,\"rating\":5,\"reviewStatus\":\"REJECTED\","
+                        + "\"content\":\"这条被审核驳回了，从未公开\"}]}");
 
         assertThat(out)
-                .as("把 content 放进 SENSITIVE_KEYS 会让这条红 —— 那正是本 story 刻意避开的做法")
-                .contains("公开可见的评价正文");
-        assertThat(out).doesNotContain("\"content\":\"***\"");
+                .as("🎯 从 SENSITIVE_KEYS 删掉 \"content\"，这条必须红")
+                .contains("\"content\":\"***\"");
+        // 逐片段断言：只断言「有 ***」不够——截断也会留下 ***，而原文可能还在别处。
+        assertThat(out).doesNotContain("驳回").doesNotContain("从未公开");
+        // 邻居字段不受牵连：出了问题还得靠它们定位是哪条评价。
+        assertThat(out).contains("\"reviewStatus\":\"REJECTED\"").contains("\"rating\":5");
     }
 
     @Test
-    @DisplayName("🔴 嵌套在数组对象里的响应 content 同样不受影响（递归路径）")
-    void nestedResponseContentSurvives() {
+    @DisplayName("🎯 嵌套在数组对象里的响应 content 同样打码（递归路径不得漏）")
+    void nestedResponseContentIsMasked() {
         String out = sanitizeJson(
                 "{\"page\":{\"items\":[{\"content\":\"第一条\"},{\"content\":\"第二条\"}]}}");
 
-        assertThat(out).contains("第一条").contains("第二条");
+        assertThat(out).doesNotContain("第一条").doesNotContain("第二条");
+        assertThat(out).contains("\"content\":\"***\"");
     }
 
     @Test

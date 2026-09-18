@@ -366,6 +366,40 @@ class CheckoutIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("🎯 整车失效【且全部没勾】→ 422，绝不落一张零商品却带运费的单")
+    void wholeCartInvalidAndNothingSelectedNeverCreatesZeroLineOrder() {
+        // 🔴 v1.3.0 shop-v2 复审 #2：这是三道检查同时漏掉的那条缝。
+        //    ① 空车检查看的是「lines 与 invalidLines 都空」—— 这里 invalidLines 非空，放行；
+        //    ② 原「一件没勾」判定写的是 selected.isEmpty() && !cart.lines().isEmpty()，
+        //       整车失效时 lines() 恰好为空，判定自己失效；
+        //    ③ collectUnavailable 按 !l.selected() 跳过没勾的失效行，收集结果为空。
+        //    于是一路走到建单，落库一张 goodsSubtotal=0、却带全额运费的 PENDING_PAYMENT 单
+        //    —— 用户被要求为「什么都没有」付运费，订单中心与对账口径同时被污染。
+        long uid = seedUser();
+        String sku = seedSku(10, 100_000L);
+        // 🔴 运费门槛设成够不着，确保真有运费 —— 门槛为 0 时运费也是 0，
+        //    那样即便 bug 复发，落库的也是一张「0 元」单，这条测试会假绿。
+        zones.setFreeShippingThreshold(9_999_999L, ACTOR);
+        String addr = seedAddress(uid, 0L);
+        carts.add(uid, sku, 2);
+        listing.delist(jdbc.queryForObject(
+                "SELECT product_id FROM shop_skus WHERE public_token = ?", Long.class, sku), ACTOR);
+        carts.setAllSelected(uid, false);
+
+        long ordersBefore = jdbc.queryForObject("SELECT count(*) FROM shop_orders", Long.class);
+
+        assertThatThrownBy(() -> checkout.placeOrder(uid, addr, null, null))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("请至少选择一件商品");
+
+        // 🎯 只断言抛异常不够：真正要守的是「没有单被落下来」。
+        //    把 nothingSelected 改回原来的 && !cart.lines().isEmpty()，这一条必须红。
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM shop_orders", Long.class))
+                .as("🎯 零商品订单一张都不许落库")
+                .isEqualTo(ordersBefore);
+    }
+
+    @Test
     @DisplayName("🔴 没勾的失效行不挡结算 —— 这正是「先删掉再买」那个老毛病的根")
     void unselectedInvalidLineDoesNotBlockCheckout() {
         long uid = seedUser();

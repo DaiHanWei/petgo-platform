@@ -215,6 +215,18 @@ public class SecurityConfig {
                                 "/api/v1/refund-requests/**").hasRole("USER")
                         // 订单中心聚合读接口（Story 5.1 列表 / 5.3 详情）：泛化 3 类订单，仅 role=USER
                         .requestMatchers(HttpMethod.GET, "/api/v1/orders", "/api/v1/orders/**").hasRole("USER")
+                        // 电商用户侧全族（v1.3.0 shop-v2 复审 #1）：与上面 blocked-users 完全同一个坑 ——
+                        // 这些 controller 的 currentUserId 同样盲取 jwt.sub 当 users.id，而兽医 token 的
+                        // sub=vetId 与 users.id 是独立命名空间且大量碰撞。此前它们一直落在
+                        // anyRequest().authenticated()，等于兽医 token 可读同号用户的收货地址（姓名/电话/详址）、
+                        // 改其购物车、以其名义下单。⚠️ 新增任何 /api/v1/me 下的电商端点必须同步加进本表。
+                        .requestMatchers("/api/v1/me/cart", "/api/v1/me/cart/**",
+                                "/api/v1/me/checkout",
+                                "/api/v1/me/shop-orders", "/api/v1/me/shop-orders/**",
+                                "/api/v1/me/shipping-addresses", "/api/v1/me/shipping-addresses/**",
+                                "/api/v1/me/shop-reviews", "/api/v1/me/shop-reviews/**",
+                                "/api/v1/me/shop-returns", "/api/v1/me/shop-returns/**",
+                                "/api/v1/me/shop/**").hasRole("USER")
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
