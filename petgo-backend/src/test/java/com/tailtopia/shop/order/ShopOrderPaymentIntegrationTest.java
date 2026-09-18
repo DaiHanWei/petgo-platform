@@ -45,7 +45,14 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
  * <p>🔴 本类看的是**钱与货的一致性**：重复回调只扣一次库存、超时必须把库存还回去、
  * 纯 PawCoin 单当场结清、支付窗以服务端时刻为准。这些错了都是真实损失，不是显示问题。
  */
-@TestPropertySource(properties = "petgo.shop.sku-cap=500")
+@TestPropertySource(properties = {
+        "petgo.shop.sku-cap=500",
+        // 🔴 v1.3.0 shop-v2 复审 #14：enqueue 现在受 isLive() 闸门约束（mode 默认 off），
+        //    不显式开就一行都登记不上，本类 3-4 那几条会静默失真。
+        //    cron=- 关掉扫描器的定时任务：live 配置下它会在测试中途真去连 Lark（10s 超时出网）。
+        "petgo.shop.order-notify.mode=live",
+        "petgo.shop.order-notify.receive-id=oc_integration_test_fake",
+        "petgo.shop.order-notify.cron=-"})
 class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
@@ -576,6 +583,34 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
     }
 
     // ---------- Story 3-4：新订单提醒登记绝不拖累支付 ----------
+
+    @Test
+    @DisplayName("🎯 复审 #6：纯 PawCoin 单同样被登记 —— 它不产生支付意图、不发到账事件")
+    void pureCoinOrderIsAlsoEnqueuedForNotify() {
+        // 🔴 这是 #6 的回归：原实现把登记挂在 PaymentIntentPaidEvent 上，
+        //    而纯币单走 settlePureCoin —— 既不建意图也不发那个事件，于是整条路径
+        //    永不入队：用户付了钱，运营永远收不到这批单的发货信号。
+        //    现在登记挂在「订单真的转为待发货」这个事实（ShopOrderPaidEvent）上。
+        //    🎯 把 ShopOrderPaymentService.fulfillPaid 里的 publishEvent 删掉，本条必须红。
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        long price = 100_000L;
+        topUp(uid, 500_000L);       // 余额足以全额抵扣 → 现金段为 0 → 纯 PawCoin 路径
+        ShopOrder order = placeOrder(uid, seedSku(10, price), 1, price);
+        assertThat(order.getPayChannel())
+                .as("前提：这条用例必须真的走纯币路径，否则它证明不了 #6")
+                .isEqualTo(PayChannel.PAWCOIN);
+
+        payments.pay(uid, order.getPublicToken(), null);   // 当场结清，无网关往返
+
+        ShopOrder settled = orders.findByPublicToken(order.getPublicToken()).orElseThrow();
+        assertThat(settled.getStatus()).isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM shop_order_notify_queue WHERE shop_order_id = ?",
+                Integer.class, settled.getId()))
+                .as("🎯 纯币单也必须进待提醒队列")
+                .isEqualTo(1);
+    }
 
     @Test
     @DisplayName("3-4 AC1：到账后订单被登记为「待提醒」")

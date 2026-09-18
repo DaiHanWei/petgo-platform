@@ -66,6 +66,9 @@ public class ShopOrderNotifyScanner {
         if (isQuietNow()) {
             return; // 夜间静默：行保持 PENDING，等天亮那一轮一起发
         }
+        // 🔴 复审 #15：先把冷却期已过的 FAILED 行放回队列，再收拢本轮。
+        //    没有这一步，一次十几分钟的 Lark 故障就会把那段时间的订单永久判死。
+        safely(notify::requeueFailed, "重入队失败行");
 
         Optional<ShopOrderNotifyService.Batch> batch;
         try {

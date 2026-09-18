@@ -71,6 +71,15 @@ public class ShopOrderNotifyService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void enqueue(long shopOrderId) {
+        if (!props.isLive()) {
+            // 🔴 复审 #14：mode=off 时**根本不登记**，而不是「先攒着、等开了再发」。
+            //    原实现只在扫描器那头判 isLive，行却照样入队。于是运营在 OD-5 定下
+            //    receive_id、把 mode 切到 live 的那一天，几个月的存量单会被当成新单
+            //    从最旧的一条开始重播（collectWindow 按 created_at 升序取），
+            //    刷屏约几十分钟，而运营分不清哪些是真的新订单。
+            //    这批历史单要么早发完了、要么已由别的渠道处理 —— 它们不是「待办」。
+            return;
+        }
         if (queue.existsByShopOrderId(shopOrderId)) {
             return; // 已登记过，重复到账事件不再产生第二行
         }
@@ -101,12 +110,24 @@ public class ShopOrderNotifyService {
 
         Instant windowEnd = batch.get(0).getCreatedAt()
                 .plus(Math.max(1, props.getWindowMinutes()), ChronoUnit.MINUTES);
+        // 🔴 复审 #14 的第二道闸：即便 enqueue 那头没拦住（配置中途改动、
+        //    或长时间故障后积压），也绝不把一天前的单当新单报出去。
+        Instant staleBefore = Instant.now()
+                .minus(Math.max(1, props.getStaleAfterHours()), ChronoUnit.HOURS);
 
         List<Long> ids = new ArrayList<>();
         List<ShopOrderNotifyMessage.Line> lines = new ArrayList<>();
         for (ShopOrderNotifyQueueEntry e : batch) {
             if (e.getCreatedAt().isAfter(windowEnd)) {
                 break; // 已按 created_at 升序，后面的都在窗口外
+            }
+            if (e.getCreatedAt().isBefore(staleBefore)) {
+                // 清出队列但**不发**：这单早过了「催今天的货」的有效期。
+                e.markSent();
+                queue.save(e);
+                log.warn("新订单提醒已过期，跳过不发 orderId={} createdAt={}",
+                        e.getShopOrderId(), e.getCreatedAt());
+                continue;
             }
             ShopOrder order = orders.findById(e.getShopOrderId()).orElse(null);
             if (order == null) {
@@ -119,6 +140,35 @@ public class ShopOrderNotifyService {
             lines.add(toLine(order));
         }
         return lines.isEmpty() ? Optional.empty() : Optional.of(new Batch(ids, lines));
+    }
+
+    /**
+     * 把冷却期已过的 {@code FAILED} 行放回队列（复审 #15）。
+     *
+     * <p>🔴 <b>FAILED 不该是不可恢复的终态</b>。原实现里 {@code collectWindow} 只查 PENDING，
+     * 全仓又没有任何重入队路径、没有后台入口、没有恢复跑批 —— 一次约 15 分钟的 Lark 故障
+     * （5 分钟扫一次 × 3 次重试）就足以把整批积压永久判死，事后把 receive_id 改对也救不回。
+     * 那批订单于是彻底从发货信号里消失，而用户的钱已经付了。
+     *
+     * <p>代价是配置若长期错误会周期性重试 —— 但「多试几次」远好过「永久丢掉发货信号」。
+     *
+     * @return 本轮放回的行数（0 = 没有可恢复的）
+     */
+    @Transactional
+    public int requeueFailed() {
+        Instant cooledBefore = Instant.now()
+                .minus(Math.max(1, props.getRetryCooldownMinutes()), ChronoUnit.MINUTES);
+        List<ShopOrderNotifyQueueEntry> dead = queue.findByStatusAndUpdatedAtBefore(
+                ShopOrderNotifyQueueEntry.Status.FAILED, cooledBefore,
+                PageRequest.of(0, Math.max(1, props.getMaxOrdersPerMessage())));
+        for (ShopOrderNotifyQueueEntry e : dead) {
+            e.requeue();
+            queue.save(e);
+        }
+        if (!dead.isEmpty()) {
+            log.warn("新订单提醒：{} 行冷却期已过，放回队列重试", dead.size());
+        }
+        return dead.size();
     }
 
     /** 投递成功：整批转 {@code SENT} + {@code sent_at}（AC4）。 */

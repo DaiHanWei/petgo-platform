@@ -11,6 +11,7 @@ import com.tailtopia.shared.pay.PaymentGateway;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.domain.ShopOrderLine;
 import com.tailtopia.shop.order.domain.ShopOrderStatus;
+import com.tailtopia.shop.order.event.ShopOrderPaidEvent;
 import com.tailtopia.shop.order.event.ShopPaymentIntentCreatedEvent;
 import com.tailtopia.shop.order.repository.ShopOrderLineRepository;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
@@ -253,6 +254,13 @@ public class ShopOrderPaymentService {
         }
         order.transitionTo(ShopOrderStatus.PENDING_SHIPMENT);
         orders.save(order);
+        // 🔴 复审 #6 / #13：「该发货了」这个事实的**唯一发点**。
+        //    挂在状态迁移上而不是支付方式上 —— 纯 PawCoin 单走 settlePureCoin，
+        //    既不产生支付意图也不发 PaymentIntentPaidEvent，原先挂在意图事件上的
+        //    待提醒登记对整条纯币路径完全失效（用户付了钱、运营收不到发货信号）。
+        //    消费方用 @TransactionalEventListener（AFTER_COMMIT）：本事务若回滚，
+        //    监听器根本不跑，也就不会为一张没付成的单留下孤儿提醒行。
+        events.publishEvent(new ShopOrderPaidEvent(order.getId(), order.getPublicToken()));
         return true;
     }
 

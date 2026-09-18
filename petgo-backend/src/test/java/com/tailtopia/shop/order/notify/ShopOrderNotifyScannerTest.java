@@ -174,4 +174,45 @@ class ShopOrderNotifyScannerTest {
             assertThat(s.isQuietAt(h)).isFalse();
         }
     }
+
+    // ================================================================
+    // v1.3.0 shop-v2 复审 #15：FAILED 不是不可恢复的终态
+    // ================================================================
+
+    @Test
+    @DisplayName("🎯 每轮先把冷却期已过的 FAILED 行放回队列，再收拢本轮")
+    void requeuesCooledDownFailuresBeforeCollecting() {
+        goLive();
+        when(notify.collectWindow()).thenReturn(Optional.empty());
+
+        scanner().scan();
+
+        // 🎯 删掉 scan() 里的 safely(notify::requeueFailed, ...)，这条必须红。
+        //    没有它，一次约 15 分钟的 Lark 故障（5 分钟一轮 × 3 次重试）就会把那段时间的
+        //    订单永久判死 —— collectWindow 只查 PENDING，全仓没有任何其它重入队路径，
+        //    事后把 receive_id 改对也救不回来。而这条提醒是通知仓库发货的唯一信号。
+        verify(notify).requeueFailed();
+    }
+
+    @Test
+    @DisplayName("重入队自身失败不得中断本轮投递（它只是尽力而为的一步）")
+    void requeueFailureDoesNotAbortTheRound() {
+        goLive();
+        when(notify.requeueFailed()).thenThrow(new IllegalStateException("db hiccup"));
+        when(notify.collectWindow()).thenReturn(Optional.empty());
+
+        scanner().scan();       // 不抛
+
+        verify(notify).collectWindow();
+    }
+
+    @Test
+    @DisplayName("mode=off 时连重入队都不做 —— 关掉的功能不该有任何副作用")
+    void offModeDoesNotEvenRequeue() {
+        // props 默认 mode=off
+        scanner().scan();
+
+        verifyNoInteractions(notify);
+        verifyNoInteractions(lark);
+    }
 }

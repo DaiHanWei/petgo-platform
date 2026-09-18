@@ -112,6 +112,16 @@ public class CheckoutService {
         //    算式本身一行不改 —— ShippingQuoteService / PaymentSplit / InventoryService
         //    三个类在本 story 的 diff 里零改动。
         long goodsSubtotal = cart.selectedSubtotal();
+        if (nothingSelected(cart, cart.selectedLines())) {
+            // 🔴 复审 #10：一件都没选时**不算运费、不给应付总额**。
+            //    原实现照常往下走，于是返回一个「商品 0 元、只有运费」的应付总额，
+            //    而同一状态去下单会被 422 拦住 —— 预览与下单自相矛盾，
+            //    此前只靠 App 端 selectedCount==0 兜着，接口自己是不自洽的。
+            //    这里沿用本方法「不抛异常、返回降级视图」的既有姿态（见方法头注释）：
+            //    quote / split 为 null ⇒ 前端拿不到应付总额，自然也就不会显示「只付运费」。
+            return new CheckoutPreview(cart, addr, null, null, wallet.balanceOf(userId),
+                    maxCoinPerOrder(), false, true, policiesOf(cart));
+        }
         ShippingQuote quote = quotes.quote(addr.getKecamatan(), goodsSubtotal);
         PaymentSplit split = splitFor(userId, goodsSubtotal, quote);
         return new CheckoutPreview(cart, addr, quote, split, wallet.balanceOf(userId),

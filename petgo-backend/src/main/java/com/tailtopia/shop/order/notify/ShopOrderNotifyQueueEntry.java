@@ -81,6 +81,21 @@ public class ShopOrderNotifyQueueEntry {
         return false; // 保持 PENDING，下一轮再试
     }
 
+    /**
+     * 冷却后把 {@link Status#FAILED} 放回队列重试（v1.3.0 shop-v2 复审 #15）。
+     *
+     * <p>🔴 原实现里 FAILED 是<b>不可恢复的终态</b>：{@code collectWindow} 只查 PENDING，
+     * 全仓又没有任何重入队路径。于是「Lark 挂了十几分钟」或「receive_id 填错」这种
+     * 完全可恢复的故障，会把那段时间里的整批订单永久判死 —— 事后把配置改对也救不回来，
+     * 而这条提醒正是通知仓库发货的唯一信号。
+     *
+     * <p>重试次数一并清零：它计的是「这一轮故障里试了几次」，不是这行的终身账。
+     */
+    public void requeue() {
+        this.status = Status.PENDING;
+        this.retryCount = 0;
+    }
+
     @jakarta.persistence.PrePersist
     void onCreate() {
         Instant now = Instant.now();

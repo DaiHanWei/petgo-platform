@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/shop/data/shop_repository.dart';
@@ -154,6 +156,135 @@ void main() {
     expect(page.items, isEmpty);
     expect(page.hasMore, isFalse);
   });
+
+  /// 🔴🔴 <b>响应形状按实际形状分支，不靠强转</b>（2026-09-18 复审 #11）。
+  ///
+  /// `fetchProductPage` 恒传 `size`，所以新后端恒回信封 —— 但那只防住了
+  /// 「老 App + 新后端」**一个方向**。反方向同样会发生，而且更常见：
+  /// App 先于后端发版、或后端回滚到没有分页的版本，端点回的就是**老的全量数组**。
+  /// 原写法 `dio.get<Map<String, dynamic>>` 会在那一刻抛 `TypeError`，
+  /// Toko 与搜索**整页挂掉**（数据其实就在手里，只是形状不同）。
+  ///
+  /// 🎯 **变异靶子**：把 `dio.get<dynamic>` 改回 `dio.get<Map<String, dynamic>>`
+  /// 并直接 `ShopProductPage.fromJson(resp.data ?? const {})`，本组第一条必须变红。
+  group('🔴 响应形状容错（真 ShopRepository，只换掉最外层网络）', () {
+    ShopRepository repoReturning(String body) => ShopRepository(
+        dio: Dio()..httpClientAdapter = _BodyAdapter(body));
+
+    test('🎯 后端返回**数组**（老接口 / 回滚）→ 当成一页装完的全量，不抛', () async {
+      final repo = repoReturning(
+          '[{"token":"a","name":"A","brand":"B","minPrice":1000},'
+          '{"token":"b","name":"B","brand":"B","minPrice":2000}]');
+
+      final page = await repo.fetchProductPage();
+
+      expect(page.items.map((e) => e.token), ['a', 'b'],
+          reason: '数据就在手里，只是形状不同 —— 不该让用户看到一个错误页');
+      expect(page.hasMore, isFalse,
+          reason: '老接口一次给全量：再去翻第二页是拿着不存在的游标空转');
+      expect(page.nextCursor, isNull);
+    });
+
+    test('后端返回信封 → 照常解析（别把正常路径一起改坏了）', () async {
+      final repo = repoReturning(
+          '{"items":[{"token":"a","name":"A","brand":"B","minPrice":1000}],'
+          '"nextCursor":"c1","hasMore":true}');
+
+      final page = await repo.fetchProductPage();
+
+      expect(page.items.map((e) => e.token), ['a']);
+      expect(page.nextCursor, 'c1');
+      expect(page.hasMore, isTrue);
+    });
+
+    test('后端返回 null / 其它形状 → 空页，不抛（页面显示空态而不是错误页）', () async {
+      final page = await repoReturning('null').fetchProductPage();
+
+      expect(page.items, isEmpty);
+      expect(page.hasMore, isFalse);
+    });
+  });
+
+  /// 🔴🔴 <b>autoDispose 回收后不得再写 state</b>（2026-09-18 复审 #12）。
+  ///
+  /// `shopProductsProvider` 是 `autoDispose.family`：用户在这一页还在路上时切品类、
+  /// 改搜索词或离开页面，旧族键当场被回收。此后给 `state` 赋值会抛，而 `loadMore`
+  /// 是滚动回调里 **fire-and-forget** 调的 —— 没人 await 它的 Future，
+  /// 抛出来的异常没有任何接手方，debug 包直接红屏。
+  ///
+  /// ⚠️ 更隐蔽的是 `catch` 那一支：原实现在 try 里抛一次，catch 里做**同一个赋值**
+  /// 再抛第二次，第二次连 catch 都没有。两条路径都要测。
+  ///
+  /// 🎯 **变异靶子**：删掉 `loadMore` 里任意一句 `if (!ref.mounted) return;`，
+  /// 对应那条用例必须变红。
+  group('🔴 加载中途被回收：不得抛（fire-and-forget 没人接）', () {
+    test('🎯 成功返回时才发现族键已回收 → 静默收手', () async {
+      final repo = _FakeRepo([
+        ShopProductPage(items: [p('a')], nextCursor: 'c1', hasMore: true),
+        ShopProductPage(items: [p('b')], hasMore: false),
+      ], holdSecond: true);
+      final c = hosted(repo);
+
+      // 🔴 用 listen 建立订阅再取消 —— autoDispose 的回收就是这么发生的
+      //    （页面 dispose / 切族键，最后一个监听者走了）。
+      final sub = c.listen(shopProductsProvider(query), (_, _) {});
+      await c.read(shopProductsProvider(query).future);
+      final n = c.read(shopProductsProvider(query).notifier);
+
+      final pending = n.loadMore();      // 卡在第二页的网络上
+      sub.close();                       // 用户切品类 / 离开页面 → 这一族被回收
+      // ⚠️ 必须让出一次事件循环：autoDispose 的回收不是同步发生的。
+      //    不等就会变成「请求先返回、回收后发生」，测不到要测的那一格。
+      await Future<void>.delayed(Duration.zero);
+      expect(c.exists(shopProductsProvider(query)), isFalse,
+          reason: '这一族没被回收的话，本用例只是在测一条普通的成功路径（假绿）');
+
+      repo.release();
+
+      await expectLater(pending, completes,
+          reason: '写一个已回收的 provider 会抛 UnmountedRefException，'
+              '而这个 Future 没有任何接手方 —— debug 包直接红屏');
+    });
+
+    test('🎯 失败路径同样不得抛（catch 里那句赋值也会炸）', () async {
+      final repo = _FakeRepo([
+        ShopProductPage(items: [p('a')], nextCursor: 'c1', hasMore: true),
+      ], holdSecond: true, failAfterFirst: true);
+      final c = hosted(repo);
+
+      final sub = c.listen(shopProductsProvider(query), (_, _) {});
+      await c.read(shopProductsProvider(query).future);
+      final n = c.read(shopProductsProvider(query).notifier);
+
+      final pending = n.loadMore();
+      sub.close();
+      await Future<void>.delayed(Duration.zero);
+      expect(c.exists(shopProductsProvider(query)), isFalse);
+
+      repo.release();   // 放行之后这一发请求才抛 boom
+
+      await expectLater(pending, completes,
+          reason: '失败路径上的恢复动作自己也会失败 —— 这类崩溃最难查');
+    });
+  });
+}
+
+/// 固定返回一段原始响应体的适配器：真 [ShopRepository] + 真 dio 在跑，
+/// 只把最外层网络换掉 —— 形状容错要测的正是「dio 把它解成什么」那一层。
+class _BodyAdapter implements HttpClientAdapter {
+  _BodyAdapter(this.body);
+
+  final String body;
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options,
+          Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async =>
+      ResponseBody.fromString(body, 200, headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType]
+      });
+
+  @override
+  void close({bool force = false}) {}
 }
 
 /// 按脚本逐页返回的假 repository。
@@ -181,11 +312,14 @@ class _FakeRepo implements ShopRepository {
   }) async {
     cursors.add(cursor);
     keywords.add(keyword);
-    if (failAfterFirst && _i >= 1) {
-      throw Exception('boom');
-    }
+    // ⚠️ 先 hold 再判失败：两个开关同时打开时要模拟的是
+    //    「请求挂在路上 → 期间 provider 被回收 → 然后才失败」。
+    //    顺序反了就变成「立刻失败」，测不到 catch 分支里那句赋值。
     if (holdSecond && _i == 1) {
       await _gate.future;
+    }
+    if (failAfterFirst && _i >= 1) {
+      throw Exception('boom');
     }
     return _pages[_i++];
   }

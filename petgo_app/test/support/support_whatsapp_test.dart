@@ -46,11 +46,48 @@ void main() {
           whatsappE164: '+6281290906953',
           text: 'Halo, saya butuh bantuan untuk pesanan TOKO-20260916-000042');
 
-      // Uri 自己会编码；反解回来必须逐字相等（没有双重编码）。
+      // 反解回来必须逐字相等（没有双重编码）。
       expect(uri.queryParameters['text'],
           'Halo, saya butuh bantuan untuk pesanan TOKO-20260916-000042');
       expect(uri.toString(), contains('text='));
       expect(uri.toString(), isNot(contains(' ')), reason: '空格必须被编码');
+    });
+
+    // 🎯 **变异靶子**（2026-09-18 复审 #5）：把 buildSupportWhatsAppUri 改回
+    //    `Uri.https('wa.me', '/$digits', {'text': text})`，下面两条必须变红。
+    test('🎯 空格编成 %20 而不是 +（断言打在最终 URI 字符串上）', () {
+      final uri = buildSupportWhatsAppUri(
+          whatsappE164: '+6281290906953', text: 'Halo, saya butuh bantuan');
+
+      final raw = uri.toString();
+      // 🔴 断言 **raw 字符串**，不是 `uri.queryParameters['text']` ——
+      //    后者把 `+` 和 `%20` 都反解成空格，两种编码在它眼里一模一样，
+      //    于是「每个空格都变成加号」这个线上缺陷在测试里永远是绿的。
+      expect(raw, contains('Halo%2C%20saya%20butuh%20bantuan'),
+          reason: 'WhatsApp 不按表单规则反解 text —— `+` 会原样出现在输入框里');
+      expect(raw.split('?').last, isNot(contains('+')),
+          reason: 'query 段里出现 `+` 就是 x-www-form-urlencoded 那条错路');
+    });
+
+    test('🎯 真实预填串（带订单号）在 query 段里一个 + 都没有', () {
+      final uri = buildSupportWhatsAppUri(
+          whatsappE164: '+6281290906953',
+          text: 'Halo, saya butuh bantuan untuk pesanan TOKO-20260916-000042');
+
+      expect(uri.toString().split('?').last, isNot(contains('+')));
+      // 订单号里的连字符是 unreserved，不该被编码 —— 编了用户就看不出这是订单号。
+      expect(uri.toString(), contains('TOKO-20260916-000042'));
+    });
+
+    test('% 与 & 这类字符仍被正确编码（没有因手工拼串而漏编）', () {
+      final uri =
+          buildSupportWhatsAppUri(whatsappE164: '+62812', text: 'a&b=c 100% #1');
+
+      expect(uri.queryParameters['text'], 'a&b=c 100% #1',
+          reason: '反解必须逐字还原 —— 漏编 & 会把后半段切成另一个参数');
+      final q = uri.toString().split('?').last;
+      expect(q, isNot(contains('&')));
+      expect(q, isNot(contains('#')));
     });
 
     test('兜底号码拼出来的链接是可用的', () {

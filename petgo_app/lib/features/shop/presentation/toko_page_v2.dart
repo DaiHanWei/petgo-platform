@@ -163,6 +163,15 @@ class _TokoPageV2State extends ConsumerState<TokoPageV2> {
         //    判据分散在两处，迟早有一处漏掉。
         child: NotificationListener<ScrollNotification>(
           onNotification: (n) {
+            // 🔴 <b>先认领通知，再看距离</b>（2026-09-18 复审 #7）：
+            //    `ScrollNotification` 会从**页内每一个**滚动组件往上冒泡 ——
+            //    品类条、档案精选横滑位、补货卡横滑都在本页里。它们的
+            //    `maxScrollExtent` 只有几十像素，`pixels >= max - 600` 对它们**恒成立**，
+            //    于是用户横划几下品类就把整个商品目录一页页拉完了。
+            //    - `depth != 0`：来自嵌套滚动组件（冒泡穿过了本页的 viewport），不是我们的列表。
+            //    - `axis != vertical`：横向滚动与「还剩多少内容可往下翻」无关。
+            //    两道都要：横向的外层组件、竖向的内层组件将来都可能出现。
+            if (n.depth != 0 || n.metrics.axis != Axis.vertical) return false;
             if (n.metrics.pixels >= n.metrics.maxScrollExtent - 600) {
               ref.read(shopProductsProvider(_query).notifier).loadMore();
             }

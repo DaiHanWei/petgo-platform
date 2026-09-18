@@ -50,6 +50,19 @@ public class ShopOrderNotifyProperties {
     /** 投递失败重试上限，超过转 FAILED 不再重试。 */
     private int maxRetries = 3;
 
+    /**
+     * 重试冷却（分钟）：{@code FAILED} 行静置这么久后放回队列重试（复审 #15）。
+     * 默认 30 分钟 —— 足够熬过一次十几分钟的 Lark 故障，又不会每轮都去撞同一堵墙。
+     */
+    private int retryCooldownMinutes = 30;
+
+    /**
+     * 过期阈值（小时）：登记超过这么久还没发出去的行，直接清出队列**不再发**（复审 #14）。
+     * 默认 24 小时。理由：这条提醒的用途是「催今天的货」，一天前的单要么早发了、
+     * 要么已经由别的渠道处理了；把它当新单报出来只会让运营分不清真假。
+     */
+    private int staleAfterHours = 24;
+
     /** 出网超时（秒）。🔴 必须有：没有超时的出网会把异步线程池挂满。 */
     private int timeoutSeconds = 10;
 
@@ -116,6 +129,22 @@ public class ShopOrderNotifyProperties {
 
     public void setReceiveIdType(String receiveIdType) {
         this.receiveIdType = receiveIdType;
+    }
+
+    public int getRetryCooldownMinutes() {
+        return retryCooldownMinutes;
+    }
+
+    public void setRetryCooldownMinutes(int retryCooldownMinutes) {
+        this.retryCooldownMinutes = retryCooldownMinutes;
+    }
+
+    public int getStaleAfterHours() {
+        return staleAfterHours;
+    }
+
+    public void setStaleAfterHours(int staleAfterHours) {
+        this.staleAfterHours = staleAfterHours;
     }
 
     public int getWindowMinutes() {

@@ -11,6 +11,7 @@ import com.tailtopia.config.domain.ConfigChangeLog.ConfigType;
 import com.tailtopia.config.repository.ConfigChangeLogRepository;
 import com.tailtopia.shared.config.SupportContactProvider;
 import com.tailtopia.shared.error.AppException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +37,28 @@ class SupportContactIntegrationTest extends ApiIntegrationTest {
 
     private static final long ACTOR = 1L;
 
+    /** 迁移灌进去的种子值 —— 既是断言口径，也是每个用例跑完要还原到的那一行。 */
+    private static final String SEED_NUMBER = "081290906953";
+    private static final String SEED_E164 = "+6281290906953";
+    private static final String SEED_EMAIL = "cs@tailtopia.id";
+
+    /**
+     * 🔴 无条件还原共享的单行配置 {@code support_contact_config}。
+     *
+     * <p>原先几个用例是把还原写成<b>方法体最后一条语句</b>的。那样只要中间任何一条断言失败，
+     * 还原就执行不到 —— L1 跑的是共享库、<b>不回滚</b>，于是那一行被永久写脏：
+     * 本类另外四条断言种子号的用例跟着一起变红（真凶在别的用例里，极难定位），
+     * 而且 {@code AuthService} 的停用文案会一直引用一个不存在的客服号，直到有人手工 UPDATE。
+     *
+     * <p>放进 {@code @AfterEach}：断言失败、抛异常、提前 return 都照样执行；
+     * 值没变时 {@code updateSupportContact} 本身是 no-op（见
+     * {@link #noChangeWritesNothing()}），所以对没改过配置的用例零副作用。
+     */
+    @AfterEach
+    void restoreSeedContact() {
+        adminConfig.updateSupportContact(SEED_NUMBER, SEED_EMAIL, ACTOR);
+    }
+
     @Test
     @DisplayName("🔓 不带 Authorization 的 GET 返 200，字段恰好三项")
     void anonymousGetReturnsContact() throws Exception {
@@ -51,9 +74,9 @@ class SupportContactIntegrationTest extends ApiIntegrationTest {
     @DisplayName("种子值就是现网号码（迁移灌进去的，行为零变化）")
     void seedIsTheCurrentNumber() throws Exception {
         mvc.perform(get("/api/v1/support/contact"))
-                .andExpect(jsonPath("$.whatsappNumber").value("081290906953"))
-                .andExpect(jsonPath("$.whatsappE164").value("+6281290906953"))
-                .andExpect(jsonPath("$.email").value("cs@tailtopia.id"));
+                .andExpect(jsonPath("$.whatsappNumber").value(SEED_NUMBER))
+                .andExpect(jsonPath("$.whatsappE164").value(SEED_E164))
+                .andExpect(jsonPath("$.email").value(SEED_EMAIL));
     }
 
     @Test
@@ -70,9 +93,7 @@ class SupportContactIntegrationTest extends ApiIntegrationTest {
         var c = contacts.contact();
         assertThat(c.whatsappNumber()).isEqualTo("+62 813-1111-2222");
         assertThat(c.email()).isEqualTo("halo@tailtopia.id");
-
-        // 还原，免得污染同进程内后续用例（共享库不回滚）。
-        adminConfig.updateSupportContact("081290906953", "cs@tailtopia.id", ACTOR);
+        // 还原交给 @AfterEach —— 上面任何一条断言挂掉都不会把这一行留脏。
     }
 
     @Test
@@ -80,23 +101,24 @@ class SupportContactIntegrationTest extends ApiIntegrationTest {
     void changeLogAcceptsSupportContactType() {
         long before = changeLogs.count();
 
-        adminConfig.updateSupportContact("081290906954", "cs@tailtopia.id", ACTOR);
+        // 刻意用一个与种子不同的号，确保真的产生一次变更（同值是 no-op，不写日志）。
+        adminConfig.updateSupportContact("081290906954", SEED_EMAIL, ACTOR);
 
         // 撞 CHECK 的话上面这行就抛了；能走到这里说明迁移里的 DROP+ADD 重列生效了。
         assertThat(changeLogs.count()).isGreaterThan(before);
         assertThat(changeLogs.findAll().stream()
                 .anyMatch(l -> l.getConfigType() == ConfigType.SUPPORT_CONTACT)).isTrue();
-
-        adminConfig.updateSupportContact("081290906953", "cs@tailtopia.id", ACTOR);
+        // 还原交给 @AfterEach。
     }
 
     @Test
     @DisplayName("无变更 → 不写日志、不记审计（与本类其它配置一致）")
     void noChangeWritesNothing() {
-        adminConfig.updateSupportContact("081290906953", "cs@tailtopia.id", ACTOR);
+        // 第一次把配置归到种子值（@AfterEach 已保证如此，这里是显式前置条件）。
+        adminConfig.updateSupportContact(SEED_NUMBER, SEED_EMAIL, ACTOR);
         long before = changeLogs.count();
 
-        adminConfig.updateSupportContact("081290906953", "cs@tailtopia.id", ACTOR);
+        adminConfig.updateSupportContact(SEED_NUMBER, SEED_EMAIL, ACTOR);
 
         assertThat(changeLogs.count()).isEqualTo(before);
     }
@@ -106,13 +128,13 @@ class SupportContactIntegrationTest extends ApiIntegrationTest {
     void invalidNumberIsRejectedWithoutEchoingInput() {
         String bogus = "12345-not-a-phone";
         try {
-            adminConfig.updateSupportContact(bogus, "cs@tailtopia.id", ACTOR);
+            adminConfig.updateSupportContact(bogus, SEED_EMAIL, ACTOR);
             throw new AssertionError("非法号码应当被拒");
         } catch (AppException e) {
             assertThat(e.getMessage()).doesNotContain(bogus);
         }
         // 整单拒绝：邮箱也没被改。
-        assertThat(contacts.contact().whatsappNumber()).isEqualTo("081290906953");
+        assertThat(contacts.contact().whatsappNumber()).isEqualTo(SEED_NUMBER);
     }
 
     @Test
@@ -123,19 +145,17 @@ class SupportContactIntegrationTest extends ApiIntegrationTest {
         String longButNormalisable = "+62 812-3456-789 0000000000";
         assertThat(longButNormalisable.length()).isGreaterThan(20);
         assertThatThrownBy(
-                () -> adminConfig.updateSupportContact(longButNormalisable, "cs@tailtopia.id",
-                        ACTOR))
+                () -> adminConfig.updateSupportContact(longButNormalisable, SEED_EMAIL, ACTOR))
                 .isInstanceOf(AppException.class);
 
         // ② 邮箱：config_change_logs.old_value/new_value 是 VARCHAR(64)，比本表的 120 更紧。
         String longEmail = "a".repeat(60) + "@tailtopia.id";
         assertThat(longEmail.length()).isGreaterThan(64);
-        assertThatThrownBy(
-                () -> adminConfig.updateSupportContact("081290906953", longEmail, ACTOR))
+        assertThatThrownBy(() -> adminConfig.updateSupportContact(SEED_NUMBER, longEmail, ACTOR))
                 .isInstanceOf(AppException.class);
 
         // 两次都整单拒绝，配置原样未动。
-        assertThat(contacts.contact().whatsappNumber()).isEqualTo("081290906953");
-        assertThat(contacts.contact().email()).isEqualTo("cs@tailtopia.id");
+        assertThat(contacts.contact().whatsappNumber()).isEqualTo(SEED_NUMBER);
+        assertThat(contacts.contact().email()).isEqualTo(SEED_EMAIL);
     }
 }

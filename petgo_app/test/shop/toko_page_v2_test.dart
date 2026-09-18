@@ -36,13 +36,22 @@ void main() {
     ShopBanner? banner,
     int cartCount = 0,
     List<ShopProductsQuery>? seen, // 搜索用例用它观察页面到底按什么族键取数
+    bool hasMore = false, // 翻页用例才打开（见 fake_shop_products.dart 的说明）
+    List<ShopProductSummary> nextPageItems = const [],
+    List<ShopProductsQuery>? loadMoreCalls, // 记录页面调了几次 loadMore
   }) {
     return ProviderScope(
       overrides: [
         cartItemCountProvider.overrideWithValue(cartCount),
         // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
         shopBannerProvider.overrideWith((ref) async => banner),
-        fakeShopProducts(products, seen: seen),
+        fakeShopProducts(
+          products,
+          seen: seen,
+          hasMore: hasMore,
+          nextPageItems: nextPageItems,
+          loadMoreCalls: loadMoreCalls,
+        ),
       ],
       child: MaterialApp(
         localizationsDelegates: const [
@@ -589,6 +598,113 @@ void main() {
               (w.decoration as BoxDecoration).gradient is LinearGradient))
           .decoration as BoxDecoration;
       expect((deco.gradient! as LinearGradient).colors.last.a, 0);
+    });
+  });
+
+  /// 🔴🔴 <b>触底预加载的滚动接线</b>（Story 4-5 · 2026-09-18 复审 #7 + 测试质量）。
+  ///
+  /// 这一组是**本文件此前整块缺失**的那一块：`fake_shop_products.dart` 曾把
+  /// `hasMore` 硬写成 false，于是真实 `loadMore()` 的第一道守卫就短路了，
+  /// 「滚动 → 翻页」这条线在 widget 层一次都没被执行过。
+  /// 结果是 `NotificationListener` 里既不判 `depth` 也不判轴向的写法一路绿灯合入 ——
+  /// 而它在真机上的表现是：<b>用户横划几下品类条，整个商品目录就被一页页拉完了</b>。
+  ///
+  /// 所以这一组必须**同时守住正反两面**：
+  /// - 正面：竖向滚到接近底部 → 必须触发 `loadMore`（去掉滚动接线就红）。
+  /// - 反面：横划页内的品类条 → 必须**不**触发（去掉 depth / 轴向判定就红）。
+  group('🔴 触底预加载：竖向触发，横向不得触发', () {
+    /// 页内的横向滚动组件（品类条）。
+    ///
+    /// ⚠️ 只有**有 banner** 时筛选行才落在 body 的 `CustomScrollView` 里（走 sliver）；
+    /// 无 banner 时它挂在 `AppBar.bottom` 上，压根不在 `NotificationListener` 的子树里，
+    /// 横划的通知到不了那个回调 —— 用无 banner 的页面测「横划不触发」会**假绿**。
+    const banner = ShopBanner(
+        imageUrl: 'https://example.test/b.jpg', imageW: 1200, imageH: 400);
+
+    Finder horizontalScrollable() => find.byWidgetPredicate(
+        (w) => w is Scrollable && w.axisDirection == AxisDirection.right);
+
+    List<ShopProductSummary> many(int n) =>
+        [for (var i = 0; i < n; i++) p('t$i', price: 100000 + i, name: 'Produk $i')];
+
+    testWidgets('🎯 竖向滚动到接近底部 → 取下一页', (tester) async {
+      final calls = <ShopProductsQuery>[];
+      await tester.pumpWidget(host(
+        many(10),
+        hasMore: true,
+        nextPageItems: [p('next', price: 9000, name: 'Halaman Dua')],
+        loadMoreCalls: calls,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(calls, isEmpty, reason: '还没滚呢');
+
+      // 一次划到底：600px 的预取阈值是相对 `maxScrollExtent` 的，
+      // 商品流有多长取决于卡片渲染，写死一个位移量会让用例随卡片高度漂。
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -5000));
+      await tester.pumpAndSettle();
+
+      expect(calls, isNotEmpty,
+          reason: '滚到底才请求的话，用户必然先看到一段空白');
+      // 追加的那一页真的进了列表 —— 只断言「调用过」会漏掉「调了但没接上」。
+      expect(find.text('Halaman Dua'), findsOneWidget);
+    });
+
+    testWidgets('🎯 横划品类条**不得**触发预加载（depth + 轴向）', (tester) async {
+      // 🔴 必须动 `tester.view.physicalSize`，**光传 MediaQuery 的 size 不算数** ——
+      //    渲染面默认恒是 800×600，`host(size:)` 只改 MediaQuery 读到的值。
+      //    在 800 宽上五个品类标签一行放得下，品类条 `maxScrollExtent == 0`、划不动，
+      //    整条用例就成了假绿（下面那句 greaterThan(0) 正是为此而设）。
+      tester.view.physicalSize = const Size(960, 1920);   // 320×640 @3x
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+
+      final calls = <ShopProductsQuery>[];
+      await tester.pumpWidget(host(
+        many(10),
+        banner: banner,
+        size: const Size(320, 640),
+        hasMore: true,
+        nextPageItems: [p('next', price: 9000, name: 'Halaman Dua')],
+        loadMoreCalls: calls,
+      ));
+      await tester.pumpAndSettle();
+
+      final chips = horizontalScrollable();
+      expect(chips, findsOneWidget, reason: '品类条必须在 body 的滚动区里，否则本用例是假绿');
+      final pos = tester.state<ScrollableState>(chips).position;
+      expect(pos.maxScrollExtent, greaterThan(0),
+          reason: '品类条滑不动的话下面那一划什么通知都不会发，用例会假绿');
+
+      // 往左划两下：真实用户找品类就是这么操作的。
+      await tester.drag(chips, const Offset(-120, 0));
+      await tester.pumpAndSettle();
+      await tester.drag(chips, const Offset(-120, 0));
+      await tester.pumpAndSettle();
+
+      expect(pos.pixels, greaterThan(0), reason: '确认它真的被划动了（否则无从谈误触发）');
+      expect(calls, isEmpty,
+          reason: '横划品类条把整个目录拉完 —— 用户没往下翻一行，流量和后端压力却全付了');
+      expect(find.text('Halaman Dua'), findsNothing);
+    });
+
+    testWidgets('🎯 有 banner 时竖向滚动照样能翻页（别把自家通知一起挡掉）', (tester) async {
+      // 反向保护：depth / 轴向判定写歪了（比如误判成 `depth != 0` 才处理）
+      // 会让正常的下滑也不再翻页，而那种回归在只测「横划不触发」时是绿的。
+      final calls = <ShopProductsQuery>[];
+      await tester.pumpWidget(host(
+        many(10),
+        banner: banner,
+        hasMore: true,
+        nextPageItems: [p('next', price: 9000, name: 'Halaman Dua')],
+        loadMoreCalls: calls,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -5000));
+      await tester.pumpAndSettle();
+
+      expect(calls, isNotEmpty);
     });
   });
 

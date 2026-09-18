@@ -21,4 +21,13 @@ public interface ShopOrderNotifyQueueRepository
      */
     List<ShopOrderNotifyQueueEntry> findByStatusAndCreatedAtBeforeOrderByCreatedAtAsc(
             ShopOrderNotifyQueueEntry.Status status, Instant createdAtBefore, Pageable pageable);
+
+    /**
+     * 取冷却期已过的 {@code FAILED} 行，放回队列重试（复审 #15）。
+     *
+     * <p>按 {@code updated_at} 而不是 {@code created_at} 卡 —— 要等的是「离上次失败多久」，
+     * 不是「这单下了多久」。
+     */
+    List<ShopOrderNotifyQueueEntry> findByStatusAndUpdatedAtBefore(
+            ShopOrderNotifyQueueEntry.Status status, Instant updatedAtBefore, Pageable pageable);
 }

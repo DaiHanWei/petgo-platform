@@ -121,14 +121,30 @@ class ShopOrderDisplayNoGeneratorTest {
     }
 
     @Test
-    @DisplayName("🎯 1 万次生成全不相同（唯一性 —— 但它单独并不能证明随机）")
-    void tenThousandGeneratedNumbersAreAllDifferent() {
+    @DisplayName("1 万次生成的碰撞数落在生日悖论的容忍区间内（≤ 5）")
+    void collisionCountStaysWithinTheBirthdayBound() {
+        // ⚠️ 这条原来断言的是「1 万次**全不相同**」，那是一条 4.55% 概率红的用例：
+        //    号空间 N = 32^6 = 1_073_741_824，抽 n = 10_000 次，
+        //    期望碰撞数 λ = n(n-1)/(2N) = 99_990_000 / 2_147_483_648 ≈ 0.0466，
+        //    至少撞一次的概率 = 1 − e^(−λ) ≈ 4.55% —— 约每 22 次 CI 就红一次，
+        //    而红的时候生成器完全正常。**这是在用随机性惩罚随机性。**
+        //
+        //    也不能用固定种子把它做成确定性：被测性质就是「不可预测」，
+        //    钉死种子等于把这条性质本身架空（退回递增序号照样能过）。
+        //
+        //    改成给碰撞数一个有统计意义的上界：碰撞数服从 Poisson(λ≈0.0466)，
+        //    P(X > 5) ≈ λ⁶/6! · e^(−λ) ≈ 1.4e-11 —— 稳定到可以忽略。
+        //    同时它仍然抓得住真正的故障：随机源退化（比如只剩几十种输出）
+        //    会让碰撞数从 0 级直接跳到数千级，远远越过这个上界。
         Set<String> seen = new HashSet<>();
         for (int i = 0; i < 10_000; i++) {
             seen.add(gen.generate(NOON_UTC));
         }
 
-        assertThat(seen).hasSize(10_000);
+        int collisions = 10_000 - seen.size();
+        assertThat(collisions)
+                .as("期望碰撞 ≈ 0.047 次；撞到 %d 次说明随机源退化，不是运气差", collisions)
+                .isLessThanOrEqualTo(5);
     }
 
     // ---------- 日期段：WIB，不是 UTC ----------

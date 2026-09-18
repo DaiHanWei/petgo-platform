@@ -19,8 +19,12 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 /// 本类看的是**会造成资损或误导**的几件事：失效行不得计入合计、库存不明时不得加、
 /// 单店模型不得长出店铺分组，以及 V1.3.0 起的行选择（Story 4-2）——
 /// 底栏金额必须来自后端的 `selectedSubtotal`、取消勾选不得走 `remove`、
-/// 失效行的勾选框必须禁用。这三条是当年「勾选框刻意不实现」那个决定的
-/// 三条理由，能力补齐之后它们并没有消失，只是换了形态。
+/// 失效行的勾选框必须**占位且如实反映服务端的 selected**。这三条是当年
+/// 「勾选框刻意不实现」那个决定的三条理由，能力补齐之后它们并没有消失，只是换了形态。
+///
+/// ⚠️ 第三条在 2026-09-18 的复审里被纠正过一次：它曾经写作「必须**禁用**」，
+/// 而服务端的 `selected` 缺省是 TRUE —— 画成「没勾」会让结算恒 409 且无从解除。
+/// 详见「Story 4-2：行选择」那一组里 ③ 的说明。
 void main() {
   Widget host(
     CartView cart, {
@@ -263,18 +267,72 @@ void main() {
           reason: '用 DELETE 模拟「不买这件」= 用破坏性操作实现查询语义，取消结算就丢数据');
     });
 
-    testWidgets('🔴 ③ 失效行的勾选框禁用（不是隐藏）', (tester) async {
+    /// 🔴🔴 ③ 失效行的勾选框：**占位、如实、可点**（2026-09-18 复审 #4 改写）。
+    ///
+    /// 这一条原本断言的是「禁用」，代码也就写死了 `value:false, enabled:false`。
+    /// 但服务端 `shop_cart_items.selected` 缺省是 **TRUE**，失效行照样勾着 ——
+    /// 于是界面说「没勾」、`CheckoutService` 按「勾着」在结算时抛 409，
+    /// 而用户手上**没有任何控件**能取消那个勾：Story 4-1 的「跳过失效行」对失效行
+    /// 完全失效，唯一出路又变回破坏性的「清空失效商品」。
+    ///
+    /// 🎯 **变异靶子**：把 `_InvalidLine` 的勾选框改回
+    /// `ShopCheckbox(value: false, enabled: false, onChanged: null)`，本组必须变红。
+    testWidgets('🔴 ③ 失效行勾选框占位且如实反映服务端的 selected', (tester) async {
       await tester.pumpWidget(host(cartOf(
         valid: [line('a')],
         invalid: [line('x', invalid: CartInvalidReason.outOfStock)],
       )));
       await tester.pumpAndSettle();
 
-      final boxes = tester.widgetList<ShopCheckbox>(find.byType(ShopCheckbox));
-      final disabled = boxes.where((b) => !b.enabled).toList();
-      expect(disabled, hasLength(1), reason: '失效行要占位，不能整个隐藏 —— 否则列表左边缘参差');
-      expect(disabled.single.onChanged, isNull);
-      expect(disabled.single.value, isFalse, reason: '禁用态是浅底空块，不是灰色的勾');
+      // 全选 + 有效行 + 失效行 = 三个；一个都不能少（少了列表左边缘会参差）。
+      expect(find.byType(ShopCheckbox), findsNWidgets(3),
+          reason: '失效行要占位，不能整个隐藏');
+
+      final box = tester.widget<ShopCheckbox>(
+          find.byKey(const ValueKey('cartInvalidLineCheckbox_x')));
+      expect(box.value, isTrue,
+          reason: '服务端 selected 缺省 TRUE —— 界面画成没勾就是在说谎，'
+              '而结算会因为这个看不见的勾恒 409');
+      expect(box.onChanged, isNotNull,
+          reason: '不可点的话用户没有任何办法取消那个勾');
+      expect(box.enabled, isTrue);
+    });
+
+    testWidgets('🎯 ③b 取消勾选失效行 → 走 setSelected(false)，不走 remove',
+        (tester) async {
+      final ctrl = await pumpCart(
+          tester,
+          cartOf(
+            valid: [line('a', price: 100000)],
+            invalid: [line('x', invalid: CartInvalidReason.delisted)],
+          ));
+
+      await tester.tap(find.byKey(const ValueKey('cartInvalidLineCheckbox_x')));
+      await tester.pumpAndSettle();
+
+      expect(ctrl.selectedCalls, [(sku: 'x', selected: false)],
+          reason: '这是用户让结算放行的唯一出口 —— 少了它就只剩「清空失效商品」');
+      // 🔴 取消勾选是「这次不买」，不是「不要了」：商品得留在车里等补货。
+      expect(ctrl.removed, isEmpty);
+      expect(find.text('Rp 100.000'), findsWidgets,
+          reason: '失效行本来就不计入合计，取消勾选不该让有效行的钱跟着变');
+
+      // 改完之后界面要跟着变成「没勾」（不做乐观更新，读的是端点返回的整份车）。
+      final box = tester.widget<ShopCheckbox>(
+          find.byKey(const ValueKey('cartInvalidLineCheckbox_x')));
+      expect(box.value, isFalse);
+    });
+
+    testWidgets('③c 失效行的勾选**不进任何合计**（可点 ≠ 可买）', (tester) async {
+      await tester.pumpWidget(host(cartOf(
+        valid: [line('a', price: 100000)],
+        invalid: [line('x', price: 95000, invalid: CartInvalidReason.outOfStock)],
+      )));
+      await tester.pumpAndSettle();
+
+      expect(_totalOf(tester), 'Rp 100.000',
+          reason: '勾着的失效行一旦进合计，用户付了钱才发现买不到');
+      expect(find.text('Total (1 barang)'), findsOneWidget);
     });
 
     testWidgets('🔴 ④ 全不选：结算按钮禁用，且点击不发任何请求', (tester) async {
@@ -321,19 +379,25 @@ void main() {
       expect(ctrl.selectedCalls, isEmpty, reason: 'N 次请求做一件事，中途失败还会留下半选态');
     });
 
-    testWidgets('🔴 勾选一个失效行不可能发生：它的勾选框根本点不动', (tester) async {
+    /// ⚠️ 这里原本有一条「勾选一个失效行不可能发生：它的勾选框根本点不动」。
+    /// 它守的正是 2026-09-18 复审 #4 判定为缺陷的那个行为（见 ③ 的说明），
+    /// 已随修复一并改写成下面这条：**重新勾上**同样要能走通 ——
+    /// 用户补货回来想买，不该被迫先删掉再重新加购。
+    testWidgets('失效行取消勾选后还能再勾回来（等补货）', (tester) async {
       final ctrl = await pumpCart(
           tester,
           cartOf(
             valid: [line('a')],
-            invalid: [line('x', invalid: CartInvalidReason.outOfStock)],
+            invalid: [
+              line('x', invalid: CartInvalidReason.outOfStock, selected: false)
+            ],
           ));
 
-      final disabled = find.byType(ShopCheckbox).at(2); // 全选、有效行、失效行
-      await tester.tap(disabled, warnIfMissed: false);
+      await tester.tap(find.byKey(const ValueKey('cartInvalidLineCheckbox_x')));
       await tester.pumpAndSettle();
 
-      expect(ctrl.selectedCalls, isEmpty);
+      expect(ctrl.selectedCalls, [(sku: 'x', selected: true)]);
+      expect(ctrl.removed, isEmpty);
     });
   });
 
@@ -620,31 +684,46 @@ class _FakeCartController extends CartController {
   ///
   /// 🔴 <b>本方法绝不碰 `removed`</b>：AC5 的可测化就是
   /// 「取消勾选后 `setSelected` 被调一次、`remove` 零次」。
+  /// 🔴 <b>失效行同样要改到</b>（2026-09-18 复审 #4）：服务端的选择端点按 skuToken
+  /// 寻址，压根不分这一行当下有效没有效。假实现只翻 `lines` 的话，
+  /// 「取消勾选失效行」点下去界面纹丝不动，而那正是本次要修的缺陷所在的那一格。
   @override
   Future<void> setSelected(String skuToken, bool selected) async {
     selectedCalls.add((sku: skuToken, selected: selected));
-    _cart = _rebuild([
-      for (final l in _cart.lines)
-        l.skuToken == skuToken ? _copyWithSelected(l, selected) : l,
-    ]);
+    _cart = _rebuild(
+      [
+        for (final l in _cart.lines)
+          l.skuToken == skuToken ? _copyWithSelected(l, selected) : l,
+      ],
+      invalid: [
+        for (final l in _cart.invalidLines)
+          l.skuToken == skuToken ? _copyWithSelected(l, selected) : l,
+      ],
+    );
     state = AsyncData(_cart);
   }
 
   @override
   Future<void> setAllSelected(bool selected) async {
     selectAllCalls.add(selected);
+    // 🔴 作用于**车内全部行（含失效行）**，与后端一致 —— 失效行的 selected 照实记着。
     _cart = _rebuild(
-        [for (final l in _cart.lines) _copyWithSelected(l, selected)]);
+      [for (final l in _cart.lines) _copyWithSelected(l, selected)],
+      invalid: [
+        for (final l in _cart.invalidLines) _copyWithSelected(l, selected)
+      ],
+    );
     state = AsyncData(_cart);
   }
 
   /// 🔴 重算四个合计。subtotal / itemCount 恒按**全部有效行**算（与勾选无关），
   /// selectedSubtotal / selectedCount 才按勾选集 —— 与后端 CartService.view 一致。
-  CartView _rebuild(List<CartLine> lines) {
+  /// 失效行无论勾没勾都不进任何一个数（「把卖不了的东西放进合计」是资损形态）。
+  CartView _rebuild(List<CartLine> lines, {List<CartLine>? invalid}) {
     final picked = lines.where((l) => l.selected);
     return CartView(
       lines: lines,
-      invalidLines: _cart.invalidLines,
+      invalidLines: invalid ?? _cart.invalidLines,
       subtotal: lines.fold(0, (n, l) => n + l.price * l.qty),
       itemCount: lines.fold(0, (n, l) => n + l.qty),
       selectedSubtotal: picked.fold(0, (n, l) => n + l.price * l.qty),

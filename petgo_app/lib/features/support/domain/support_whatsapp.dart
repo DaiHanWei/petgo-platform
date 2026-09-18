@@ -35,6 +35,18 @@ Uri buildSupportWhatsAppUri({
   final digits = whatsappE164.startsWith('+')
       ? whatsappE164.substring(1)
       : whatsappE164;
-  // Uri.https 会自行对 query 做百分号编码，不必也不该再手工 encode 一遍（会双重编码）。
-  return Uri.https('wa.me', '/$digits', {'text': text});
+  // 🔴 <b>query 必须手工 encode，不能交给 `Uri.https` 的 queryParameters</b>
+  //    （2026-09-18 复审 #5 实跑验证）：那条路径走的是 `Uri.encodeQueryComponent`，
+  //    也就是 **application/x-www-form-urlencoded** 规则 —— 空格编成 `+` 而不是 `%20`。
+  //    WhatsApp 不按表单规则反解 `text`，于是用户的输入框里出现的是
+  //    `Halo,+saya+butuh+bantuan+untuk+pesanan+TOKO-…`，每个空格都是一个加号。
+  //    `Uri.encodeComponent` 走的才是通用百分号编码（空格 → `%20`）。
+  //
+  // ⚠️ 这里**不存在双重编码**：`Uri.parse` 对已经合法的 `%XX` 只做规范化、不会再编一次。
+  //    真正的双重编码是「先 encodeComponent 再塞进 queryParameters」那种写法。
+  //
+  // ⚠️ 验收断言必须打在**最终 URI 字符串**上：`uri.queryParameters['text']` 会把
+  //    `+` 和 `%20` 一起反解成空格，两种编码在它眼里长得一模一样 ——
+  //    这正是本缺陷带着绿灯上线的原因（见 `test/support/support_whatsapp_test.dart`）。
+  return Uri.parse('https://wa.me/$digits?text=${Uri.encodeComponent(text)}');
 }

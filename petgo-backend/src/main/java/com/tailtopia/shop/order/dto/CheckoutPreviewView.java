@@ -81,7 +81,15 @@ public record CheckoutPreviewView(
         }
         List<CheckoutLine> unavailable = new ArrayList<>();
         for (CartView.CartLine l : p.cart().invalidLines()) {
-            unavailable.add(line(l, null));
+            // 🔴 复审 #8：只报**选中的**失效行。
+            //    lines / goodsSubtotal 已经切到选中集，这里却还在遍历全部失效行 ——
+            //    于是结算页会对用户**主动取消勾选、下单时根本不拦**的商品弹「无法购买」，
+            //    逼他先回购物车删掉才能继续。那正是 Story 4-1 要消除的摩擦，
+            //    也与 CheckoutService.collectUnavailable 的判定（按 selected 过滤）不一致：
+            //    预览说买不了、下单却放行，两边对不上。
+            if (l.selected()) {
+                unavailable.add(line(l, null));
+            }
         }
         return new CheckoutPreviewView(
                 ShippingAddressView.of(p.address()),

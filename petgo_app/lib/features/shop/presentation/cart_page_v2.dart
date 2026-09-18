@@ -24,7 +24,12 @@
 ///   两套实现只要有一处对失效行的口径不同，用户看到的数就和实际扣的钱不一样。
 /// - **取消勾选只调选择端点，绝不调 `remove`/`DELETE`** ——
 ///   用破坏性操作模拟查询语义，取消结算就丢数据。
-/// - **失效行的勾选框是禁用而非隐藏**，判定用 `line.isValid`（不是枚举白名单）。
+/// - **失效行的勾选框是显示而非隐藏**，位置与有效行对齐（左边缘不参差）。
+///   ⚠️ 2026-09-18 复审 #4 纠正了这里的第三条：它曾经写作「**禁用**而非隐藏」，
+///   于是代码写死了 `value: false, enabled: false`。而服务端 `selected` 缺省是
+///   **TRUE** —— 界面说「没勾」、后端按「勾着」在结算时 409 拦下，
+///   用户手上却没有任何能取消那个勾的控件。现在它**如实反映服务端值且可点**，
+///   详见 [_InvalidLine] 里那段注释。
 ///
 /// ## 其余按设计稿空态规则降级
 ///
@@ -190,7 +195,11 @@ class _CartPageV2State extends ConsumerState<CartPageV2> {
         //    悄悄删掉会让用户以为自己记错了。
         if (cart.invalidLines.isNotEmpty) ...[
           _invalidHeader(context, ref, l10n, cart),
-          for (final line in cart.invalidLines) _InvalidLine(line: line),
+          // 🔴 带 key：失效行自 2026-09-18 起有自己的 State（勾选的 busy 态），
+          //    不给 key 的话行序变化会把 A 行的「请求进行中」串到 B 行上
+          //    —— 与 [_ValidLine] 同一个理由。
+          for (final line in cart.invalidLines)
+            _InvalidLine(key: ValueKey('invalid_${line.skuToken}'), line: line),
         ],
         // 凑单条：无免运门槛数据源 → 整条不渲染（见文件头）。
         const SizedBox(height: kShopGutter),
@@ -517,26 +526,57 @@ class _ValidLineState extends ConsumerState<_ValidLine> {
 /// 一次。降权要表达的是「这些东西买不到」，不是「这两个出口也不太好用」。
 /// 两个出口：`Cari mirip`（紫描边，**优先级更高**）与 `Hapus`（浅描边）——
 /// 🔴 失效不等于流失：一件买不到的东西，用户真正想要的是「有没有别的」。
-class _InvalidLine extends ConsumerWidget {
-  const _InvalidLine({required this.line});
+class _InvalidLine extends ConsumerStatefulWidget {
+  const _InvalidLine({super.key, required this.line});
 
   final CartLine line;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_InvalidLine> createState() => _InvalidLineState();
+}
+
+class _InvalidLineState extends ConsumerState<_InvalidLine> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final line = widget.line;
     return ShopSection(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 🔴 <b>禁用而不是隐藏</b>（AC3）：位置对齐才不会让列表左边缘参差。
-          //    判定用 `line.isValid`（本组行恒为 false），**不是枚举白名单** ——
-          //    Epic 6 加第三种失效原因时，未知值会落进 `unavailable`，
-          //    `isValid` 自动为 false；写成 `reason == delisted || reason == outOfStock`
-          //    则会让停用品类的行变成「可勾选、可结算、然后被后端 422 打回」。
-          const Padding(
-            padding: EdgeInsets.only(top: 22),
-            child: ShopCheckbox(value: false, enabled: false, onChanged: null),
+          // 🔴 <b>如实反映服务端的 `selected`，而且可点</b>（2026-09-18 复审 #4）。
+          //
+          //    这里原先写死 `value: false, enabled: false`。但服务端
+          //    `shop_cart_items.selected` 的缺省是 **TRUE**，失效行照样是勾着的 ——
+          //    于是产生了一个**闭死的死循环**：
+          //    界面显示「没勾」→ 用户以为它不参与结算 → 点结算 →
+          //    `CheckoutService.collectUnavailable` 按 `l.selected()` 把这一行收进
+          //    `CheckoutUnavailableException`（409）→ 每次结算都被一件「看上去没勾」的
+          //    商品挡住，且**界面上没有任何控件能让他取消那个勾**。
+          //    Story 4-1 特意做的「跳过失效行」对失效行因此完全失效，
+          //    用户唯一的出路又变回了破坏性的「清空失效商品」。
+          //
+          //    🔴 两条路二选一，这里选的是**前端如实反映 + 可点**：
+          //    另一条是让后端在商品失效那一刻把 `selected` 置 false，但那要在
+          //    「什么时候算失效」这个**每次读车才算得出来**的派生态上做持久化写入
+          //    （`availableStock` 是不落库、每次读车重算的），等于把一个视图层的判断
+          //    倒灌回数据。而且商品补货回来后，用户当初勾过的那一下就被悄悄抹掉了。
+          //    如实反映则保住了后端注释里那句「失效行的 selected 照实记着」。
+          //
+          //    ⚠️ 勾选框可点，**不等于失效行能被买走**：它仍不计入
+          //    `selectedSubtotal` / `selectedCount`，服务端也仍会在结算时按 409 拦下 ——
+          //    可点的意义只是给用户一个「这次不买它」的出口。
+          Padding(
+            padding: const EdgeInsets.only(top: 22),
+            child: ShopCheckbox(
+              key: ValueKey('cartInvalidLineCheckbox_${line.skuToken}'),
+              value: line.selected,
+              onChanged: _busy ? null : (v) => _setSelected(l10n, line, v),
+              semanticLabel:
+                  l10n.cartSelectLine(line.productName ?? line.specName),
+            ),
           ),
           const SizedBox(width: 9),
           Opacity(
@@ -610,6 +650,25 @@ class _InvalidLine extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// 勾选 / 取消勾选一条**失效**行。
+  ///
+  /// 与 [_ValidLineState._setSelected] 逐字同构（同一个端点、同样不做乐观更新）——
+  /// 失效只是这一行当下卖不了，不是它在选择语义上是另一种东西。
+  ///
+  /// 🔴 <b>绝不改调 `remove`</b>：「这次不买」与「不要了」是两件事。用户取消勾选
+  /// 只是想让结算放行，商品得留在车里等补货（后端的 `selected` 位也照实记着）。
+  Future<void> _setSelected(
+      AppLocalizations l10n, CartLine line, bool selected) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(cartProvider.notifier).setSelected(line.skuToken, selected);
+    } on CartMutationError {
+      if (mounted) showAppToast(context, l10n.cartGenericError);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   /// 蒙层上的短原因。

@@ -113,6 +113,15 @@ class _ShopSearchPageState extends ConsumerState<ShopSearchPage> {
                     //    等真滚到底再请求，用户必然先看到一段空白。
                     : NotificationListener<ScrollNotification>(
                         onNotification: (n) {
+                          // 🔴 与 Toko 首页同一条纪律（2026-09-18 复审 #7）：
+                          //    先认领通知再看距离。结果卡片里的任何嵌套滚动
+                          //    （横滑规格条、将来的图片轮播）冒泡上来时，
+                          //    它们几十像素的 maxScrollExtent 会让距离判据恒成立，
+                          //    用户横划几下就把整份搜索结果拉完。
+                          if (n.depth != 0 ||
+                              n.metrics.axis != Axis.vertical) {
+                            return false;
+                          }
                           if (n.metrics.pixels >=
                               n.metrics.maxScrollExtent - 600) {
                             ref
