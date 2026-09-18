@@ -20,8 +20,7 @@ import '../../features/shop/presentation/shop_search_page.dart';
 import '../../features/shop/presentation/cart_page_v2.dart';
 import '../../features/shop/presentation/checkout_page_v2.dart';
 import '../../features/shop/presentation/product_detail_page_v2.dart';
-import '../../features/shop/presentation/refund_method_page_v2.dart';
-import '../../features/shop/presentation/return_request_page_v2.dart';
+import '../../features/shop/presentation/shop_return_unavailable_page.dart';
 import '../../features/shop/presentation/shop_order_detail_page_v2.dart';
 import '../../features/shop/presentation/toko_page_v2.dart';
 import '../../features/auth/presentation/nickname_page.dart';
@@ -578,18 +577,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // （UX-DR3）而不是 redirect —— 用户需要知道「已在处理中」，而不是被弹走。
       GoRoute(
         path: '/shop/orders/:token/return',
-        builder: (c, s) {
-          final token = s.pathParameters['token']!;
-          return ReturnRequestPageV2(orderToken: token);
-        },
+        // 🔴 V1.3.0 · SD-5：path 逐字不变，builder 换成说明页。
+        //    删路由会让老深链落到 errorBuilder（＝「链接坏了」），而我们要告诉用户的是
+        //    「这条路现在走不通，找谁能解决」。下一版恢复只需把这两行 builder 改回去，
+        //    ReturnRequestPageV2 / RefundMethodPageV2 与那 20 条测试一个字都不用动。
+        builder: (c, s) => const ShopReturnUnavailablePage(),
       ),
       // 退款方式选择页（Story 5.8）。token 寻址（退货申请的不可枚举 token）。
       GoRoute(
         path: '/shop/returns/:token/refund-method',
-        builder: (c, s) {
-          final token = s.pathParameters['token']!;
-          return RefundMethodPageV2(returnToken: token);
-        },
+        // 同上（SD-5）：path 不动，builder 换说明页。
+        builder: (c, s) => const ShopReturnUnavailablePage(),
       ),
       // ⏳ 退货进度页（Story 5.9）路由暂不挂载：UX-DR5 视觉稿未交付，
       //    AC 写死「实现前不得自行发挥」。后端与数据层已就绪，补稿后只差这一页。
@@ -741,7 +739,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/consult/case', builder: (c, s) => const ConsultCaseFormPage()),
       // 客服工单（Story 4.2，/me 受控前缀）。/new 必须在 /:token 之前注册，否则 token 段会吞 'new'。
       GoRoute(path: '/me/support-tickets', builder: (c, s) => const MyTicketsPage()),
-      GoRoute(path: '/me/support-tickets/new', builder: (c, s) => const TicketComposePage()),
+      // Story 3-3：路径不变，多接一个可选 `?orderToken=` 用来预选关联订单（可改可清空）。
+      // 无参数进入（「我」页那条路）时行为与今天一致。
+      GoRoute(
+        path: '/me/support-tickets/new',
+        builder: (c, s) =>
+            TicketComposePage(presetOrderToken: s.uri.queryParameters['orderToken']),
+      ),
       GoRoute(
         path: '/me/support-tickets/:token',
         builder: (c, s) => TicketDetailPage(token: s.pathParameters['token']!),

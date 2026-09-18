@@ -3,6 +3,7 @@ package com.tailtopia.shared.error;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,6 +11,10 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -104,6 +109,70 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 用错 HTTP 方法 → <b>405</b>（而非 catch-all 误报 500）。Story 5-2 · SHOP-FR-31。
+     *
+     * <p>🔴 <b>这个 story 的动机是「污染告警」，所以状态码与日志级别缺一不可。</b>
+     * 只改状态码、日志仍是 catch-all 的 {@code log.error(..., ex)} + 整条堆栈，
+     * 告警噪声一点没少 —— 需求等于没做完。
+     *
+     * <p>🔴 <b>必须自己设 {@code Allow} 头</b>：HTTP 语义要求 405 响应携带它。
+     * Spring 的 {@code DefaultHandlerExceptionResolver} 本来会自动加，但本类的
+     * {@code @ExceptionHandler(Exception.class)} 兜住了所有异常，那条默认路径
+     * <b>永远走不到</b>。本类每接管一个 Spring 原生异常，就同时接管了它原有的响应头职责
+     * （与下面 {@code H5ErrorController} 接不到是同一种坑）。
+     *
+     * <p>🔴 这也不是理论情况（ops 主题 Story 8.3）：一条路径上常常 GET 与 POST 并存，
+     * **只退役 GET、保留 POST** 是重构里的常规动作 —— 运营的旧书签仍然会 GET 它。
+     *
+     * <p>⚠️ 合并注（2026-09-18）：ops 与 shop-v2 两个主题各自加过一份本异常的处理器，
+     * 同类里两个 {@code @ExceptionHandler} 映射同一异常 = 启动即 Ambiguous 失败。已合成这一份：
+     * shop-v2 的「warn 不打堆栈」+ ops 的「H5 分享页给能看的页面而不是 JSON」。
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public Object handleMethodNotAllowed(
+            HttpRequestMethodNotSupportedException ex, HttpServletRequest req) {
+        Set<HttpMethod> supported = ex.getSupportedHttpMethods();
+        // 🔴 不把 ex 传给 logger：SLF4J 见到末位 Throwable 就打整条堆栈，
+        //    那正是本 story 要消除的东西。只记够定位的三样。
+        log.warn("Method not supported {} {} supported={}", req.getMethod(), req.getRequestURI(),
+                supported);
+        // H5 对外分享页：访客拿到一坨 JSON 没法看（ops 主题）。
+        Object page = h5PageOrNull(req, HttpStatus.METHOD_NOT_ALLOWED, "card_gone");
+        if (page != null) {
+            return page;
+        }
+        ProblemDetail pd = base(HttpStatus.METHOD_NOT_ALLOWED, ErrorTypes.VALIDATION,
+                "Method Not Allowed", "请求方法不被支持", req);
+        HttpHeaders headers = new HttpHeaders();
+        if (supported != null && !supported.isEmpty()) {
+            headers.setAllow(supported);
+        }
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).headers(headers).body(pd);
+    }
+
+    /**
+     * 请求体 Content-Type 不被接受 → <b>415</b>（同样不再落进 catch-all）。Story 5-2。
+     *
+     * <p>🔴 <b>与 405 分开写而不是合并成一个 {@code @ExceptionHandler({A, B})}</b>：
+     * 两者的响应头不同（{@code Allow} vs {@code Accept}），合并后要在方法体里做
+     * {@code instanceof} 分叉，比分开写更难读。
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ProblemDetail> handleUnsupportedMediaType(
+            HttpMediaTypeNotSupportedException ex, HttpServletRequest req) {
+        List<MediaType> supported = ex.getSupportedMediaTypes();
+        log.warn("Media type not supported {} {} contentType={} supported={}", req.getMethod(),
+                req.getRequestURI(), req.getContentType(), supported);
+        ProblemDetail pd = base(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ErrorTypes.VALIDATION,
+                "Unsupported Media Type", "不支持的请求内容类型", req);
+        HttpHeaders headers = new HttpHeaders();
+        if (supported != null && !supported.isEmpty()) {
+            headers.setAccept(supported);
+        }
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).headers(headers).body(pd);
+    }
+
+    /**
      * 上传超出 multipart 上限 → 413，并给出**具体 MB 数**。
      *
      * <p>🔴 这一段是在 controller <b>之前</b>发生的：Tomcat 解析 multipart 时就抛，
@@ -169,35 +238,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public void handleAccessDenied(org.springframework.security.access.AccessDeniedException ex) {
         throw ex;
-    }
-
-    /**
-     * 路径存在但方法不对 → <b>405</b>（而不是落到 catch-all 误报 500 并打一条堆栈）。
-     *
-     * <p>🔴 这不是理论情况：一条路径上常常 GET 与 POST 并存，而**只退役 GET、保留 POST**
-     * 是重构里的常规动作（V1.3.0 Story 8.3：移出确认页从整页改成弹层片段，
-     * `GET /admin/publish-identities/{userId}/remove` 退役、同路径的 POST 必须留着）。
-     * 退役之后运营的旧书签仍然会 GET 它 —— 拿到 500 的话，
-     * ① 页面上是「服务器开小差」这种会让人来报障的文案；② 服务端每次都刷一条 ERROR 级堆栈。
-     * 两者都是噪音：这就是个方法不匹配。
-     *
-     * <p>⚠️ 带上 {@code Allow} 头（HTTP 语义要求），告诉调用方这条路径到底支持什么。
-     */
-    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
-    public Object handleMethodNotSupported(
-            org.springframework.web.HttpRequestMethodNotSupportedException ex,
-            HttpServletRequest req) {
-        Object page = h5PageOrNull(req, HttpStatus.METHOD_NOT_ALLOWED, "card_gone");
-        if (page != null) {
-            return page;
-        }
-        ProblemDetail pd = base(HttpStatus.METHOD_NOT_ALLOWED, ErrorTypes.NOT_FOUND,
-                "Method Not Allowed", "该地址不支持这种请求方式", req);
-        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
-        if (ex.getSupportedHttpMethods() != null && !ex.getSupportedHttpMethods().isEmpty()) {
-            builder.allow(ex.getSupportedHttpMethods().toArray(new org.springframework.http.HttpMethod[0]));
-        }
-        return builder.body(pd);
     }
 
     @ExceptionHandler(Exception.class)

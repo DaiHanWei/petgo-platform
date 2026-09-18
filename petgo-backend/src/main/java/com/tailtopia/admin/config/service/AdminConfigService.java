@@ -12,14 +12,17 @@ import com.tailtopia.config.domain.FeedRankConfig;
 import com.tailtopia.config.domain.PawCoinConfig;
 import com.tailtopia.config.domain.PawCoinTopupTier;
 import com.tailtopia.config.domain.PricingConfig;
+import com.tailtopia.config.domain.SupportContactConfig;
 import com.tailtopia.config.repository.ConfigChangeLogRepository;
 import com.tailtopia.config.repository.FeedRankConfigRepository;
 import com.tailtopia.config.repository.PawCoinConfigRepository;
 import com.tailtopia.config.repository.PawCoinTopupTierRepository;
 import com.tailtopia.config.repository.PricingConfigRepository;
+import com.tailtopia.config.repository.SupportContactConfigRepository;
 import com.tailtopia.content.rank.AttributeTemplate;
 import com.tailtopia.admin.config.dto.ShareRewardForm;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shop.address.domain.IndonesiaPhone;
 import java.util.ArrayList;
 import java.util.List;
 import jakarta.persistence.EntityManager;
@@ -43,6 +46,7 @@ public class AdminConfigService {
     private final ConfigChangeLogRepository changeLogs;
     private final AdminAuditService audit;
     private final FeedRankConfigRepository feedRankRepo;
+    private final SupportContactConfigRepository supportContactRepo;
 
     /** 启用档位上限（AB-22A：活动调档最多 4 档；表上无约束，服务层数 + advisory 锁串行）。 */
     public static final int MAX_ENABLED_TIERS = 4;
@@ -55,8 +59,10 @@ public class AdminConfigService {
 
     public AdminConfigService(PricingConfigRepository pricingRepo, PawCoinConfigRepository pawcoinRepo,
             PawCoinTopupTierRepository tierRepo, ConfigChangeLogRepository changeLogs,
-            AdminAuditService audit, FeedRankConfigRepository feedRankRepo) {
+            AdminAuditService audit, FeedRankConfigRepository feedRankRepo,
+            SupportContactConfigRepository supportContactRepo) {
         this.feedRankRepo = feedRankRepo;
+        this.supportContactRepo = supportContactRepo;
         this.pricingRepo = pricingRepo;
         this.pawcoinRepo = pawcoinRepo;
         this.tierRepo = tierRepo;
@@ -363,6 +369,74 @@ public class AdminConfigService {
         if (em != null) {
             em.createNativeQuery("SELECT pg_advisory_xact_lock(hashtext('pawcoin_topup_tiers'))").getSingleResult();
         }
+    }
+
+    /** {@code support_contact_config.whatsapp_number} 列宽。 */
+    private static final int MAX_WHATSAPP_LEN = 20;
+
+    /**
+     * {@code config_change_logs.old_value} / {@code new_value} 的列宽（V78，VARCHAR(64)）。
+     *
+     * <p>🔴 任何要写进变更日志的配置值都受它约束 —— 比字段自己那张表的列宽更紧时，
+     * 以它为准，否则保存时炸的是审计写入而不是业务校验（500 而不是 422）。
+     */
+    private static final int MAX_CHANGE_LOG_VALUE_LEN = 64;
+
+    // ── 客服联系方式（V1.3.0 Story 3-1 / AD-S8）────────────────────────────────
+
+    /**
+     * 改客服 WhatsApp 号与邮箱。改完即生效：**不需发版、不需重启**。
+     *
+     * <p>号码用 {@link IndonesiaPhone#normalize} 校验，格式不对整单拒绝。
+     * 🔒 **错误文案里不回显用户输入的号码**（{@code IndonesiaPhone} 的 NFR-5 纪律，
+     * 它的 detail 本来就不含输入，这里只要别自己拼进去）。
+     *
+     * <p>🔴 <b>落库的是运营输入的原样写法</b>（印尼人认 {@code 08xx} 这个形式），
+     * E.164 由消费方读时派生。两份都落库必然走散。
+     */
+    @Transactional
+    public void updateSupportContact(String whatsappNumber, String email, long adminId) {
+        String number = whatsappNumber == null ? "" : whatsappNumber.trim();
+        String mail = email == null ? "" : email.trim();
+
+        // 🔴 **长度先于格式校验**，两个上限都是 DB 给的，超了就是 500 而不是 422：
+        //    · whatsapp_number 列是 VARCHAR(20)；
+        //    · config_change_logs.old_value/new_value 是 **VARCHAR(64)**（V78），
+        //      两个字段的新旧值都要写进那两列，所以 64 是比本表 VARCHAR(120) 更紧的那道闸。
+        //    IndonesiaPhone.normalize 会先剔掉空格与连字符再判长度，因此**光靠它拦不住**
+        //    一个 26 字符的原始输入 —— 它归一化后合法，落库时才炸。
+        require(number.length() <= MAX_WHATSAPP_LEN, "客服 WhatsApp 号过长",
+                "admin.err.config.supportWhatsappTooLong", MAX_WHATSAPP_LEN);
+        require(mail.length() <= MAX_CHANGE_LOG_VALUE_LEN, "客服邮箱过长",
+                "admin.err.config.supportEmailTooLong", MAX_CHANGE_LOG_VALUE_LEN);
+
+        // 🔴 **不直接让 IndonesiaPhone.normalize 的异常冒出去**：它的文案是
+        //    「请填写收件人手机号 / 手机号格式不正确……」——那是收货地址的口径，
+        //    出现在客服配置表单上驴唇不对马嘴；而且它不带 messageCode，
+        //    英文/印尼文后台会看到一段中文。这里用 isValid + 自己的带 code 的 require。
+        require(!number.isBlank(), "请填写客服 WhatsApp 号",
+                "admin.err.config.supportWhatsappBlank");
+        require(IndonesiaPhone.isValid(number), "客服 WhatsApp 号格式不正确：应为印尼手机号",
+                "admin.err.config.supportWhatsappInvalid");
+
+        require(!mail.isBlank(), "请填写客服邮箱", "admin.err.config.supportEmailBlank");
+        require(mail.contains("@"), "客服邮箱格式不正确",
+                "admin.err.config.supportEmailInvalid");
+
+        SupportContactConfig c = supportContactRepo.findById(SupportContactConfig.SINGLETON_ID)
+                .orElseThrow(() -> new IllegalStateException("support_contact_config 缺失"));
+        List<ConfigChangeLog> logs = new ArrayList<>();
+        diff(logs, ConfigType.SUPPORT_CONTACT, "whatsapp_number", c.getWhatsappNumber(), number,
+                adminId);
+        diff(logs, ConfigType.SUPPORT_CONTACT, "email", c.getEmail(), mail, adminId);
+        if (logs.isEmpty()) {
+            return; // 无变更 → 不写、不审计（与本类其它配置一致）。
+        }
+        c.update(number, mail);
+        supportContactRepo.save(c);
+        // commit 拼出的审计 action 自动是 CONFIG_UPDATE_SUPPORT_CONTACT —— 不需要在
+        // AuditActions 加常量，与既有 PRICING / PAWCOIN 一致。
+        commit(logs, adminId, "SUPPORT_CONTACT", "support_contact_config");
     }
 
     // ── 内部 ──────────────────────────────────────────────────────────────────

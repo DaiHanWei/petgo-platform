@@ -89,6 +89,7 @@ class SupportTicket {
     this.createdAt,
     this.updatedAt,
     this.resolvedAt,
+    this.relatedShopOrderNo,
   });
 
   final String ticketToken;
@@ -107,6 +108,13 @@ class SupportTicket {
   final DateTime? updatedAt;
   final DateTime? resolvedAt;
 
+  /// 关联电商订单的**展示号**（V1.3.0 Story 3-3）。非电商工单为 null。
+  ///
+  /// 🔴 它同时是**显示条件**与**预填内容**：非空即「本工单关联的是电商单」，
+  /// 值即 WhatsApp 深链要填的订单号。后端刻意下发这个而不是内部 id 或类型枚举 ——
+  /// 那两个是内部标识（自增主键可枚举、跨表撞号），而订单号是用户自己天天看见的东西。
+  final String? relatedShopOrderNo;
+
   int get attachmentCount => attachmentObjectKeys.length;
 
   factory SupportTicket.fromJson(Map<String, dynamic> json) {
@@ -118,6 +126,8 @@ class SupportTicket {
       body: json['body'] as String? ?? '',
       contactType: ContactType.parse(json['contactType'] as String?),
       contactValue: json['contactValue'] as String? ?? '',
+      // 缺键 / 空串 → null（老后端或非电商工单）。null 即「不显示 WhatsApp 入口」。
+      relatedShopOrderNo: _blankToNullTicket(json['relatedShopOrderNo'] as String?),
       needContactCustomer: json['needContactCustomer'] as bool? ?? true,
       contactedCustomer: json['contactedCustomer'] as bool? ?? false,
       status: TicketStatus.parse(json['status'] as String?),
@@ -134,3 +144,6 @@ class SupportTicket {
     );
   }
 }
+
+/// 空串按「没有」处理 —— 一个空订单号会让入口显示出来却预填不出东西。
+String? _blankToNullTicket(String? v) => (v == null || v.isEmpty) ? null : v;

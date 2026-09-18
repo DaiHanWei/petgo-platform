@@ -32,6 +32,9 @@ class PostHogAnalyticsClientTest {
 
     private static final String KEY = "phc_test_write_only";
 
+    /** 真 guard，不是桩：护栏与出网通路的接线是本类要验的东西之一。 */
+    private static final AnalyticsEventGuard GUARD = new AnalyticsEventGuard();
+
     @Test
     @DisplayName("启用态：POST /i/v0/e/，body 含 api_key/event/timestamp，distinct_id 在 properties 里")
     void sendsExpectedWireFormat() {
@@ -50,7 +53,7 @@ class PostHogAnalyticsClientTest {
                 .andExpect(jsonPath("$.properties.path").value("consult"))
                 .andRespond(withSuccess());
 
-        new PostHogAnalyticsClient(KEY, builder)
+        new PostHogAnalyticsClient(KEY, builder, "stag", GUARD)
                 .capture("hash-abc", "milestone_achieved", Map.of("code", "C-M5", "path", "consult"));
 
         server.verify();
@@ -62,7 +65,7 @@ class PostHogAnalyticsClientTest {
         RestClient.Builder builder = RestClient.builder().baseUrl("https://ph.test");
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         // 刻意不设任何 expectation：MockRestServiceServer 对任何请求都会失败。
-        PostHogAnalyticsClient client = new PostHogAnalyticsClient("", builder);
+        PostHogAnalyticsClient client = new PostHogAnalyticsClient("", builder, "stag", GUARD);
 
         assertThat(client.isEnabled()).isFalse();
         client.capture("hash-abc", "milestone_achieved", Map.of("code", "C-S1"));
@@ -77,10 +80,90 @@ class PostHogAnalyticsClientTest {
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         server.expect(requestTo("https://ph.test/i/v0/e/")).andRespond(withServerError());
 
-        new PostHogAnalyticsClient(KEY, builder)
+        new PostHogAnalyticsClient(KEY, builder, "stag", GUARD)
                 .capture("hash-abc", "milestone_achieved", Map.of("code", "C-S1"));
 
         server.verify();
+    }
+
+    // ---------- Story 1-2：护栏与环境标记 ----------
+
+    @Test
+    @DisplayName("🔴 每条事件都带 app_env —— staging 与生产同跑 prod profile，靠它才分得开")
+    void everyEventCarriesAppEnv() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://ph.test");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("https://ph.test/i/v0/e/"))
+                .andExpect(jsonPath("$.properties.app_env").value("stag"))
+                .andExpect(jsonPath("$.properties.distinct_id").value("hash-abc"))
+                .andExpect(jsonPath("$.properties.order_amount").value(285000))
+                .andRespond(withSuccess());
+
+        new PostHogAnalyticsClient(KEY, builder, "stag", GUARD)
+                .capture("hash-abc", "shop_payment_paid", Map.of("order_amount", 285_000L));
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("🔴 被 guard 拒掉的事件名 → 一个出网请求都不发")
+    void rejectedEventProducesNoHttpRequest() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://ph.test");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        // 刻意不设 expectation：MockRestServiceServer 对任何请求都会失败。
+        new PostHogAnalyticsClient(KEY, builder, "prod", GUARD)
+                .capture("hash-abc", "not_a_registered_event", Map.of("code", "X"));
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("🔒 白名单外的属性键不会出现在出网 body 里，事件本身照发")
+    void disallowedPropertyKeysNeverReachTheWire() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://ph.test");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("https://ph.test/i/v0/e/"))
+                .andExpect(jsonPath("$.properties.order_amount").value(100))
+                .andExpect(jsonPath("$.properties.receiver_name").doesNotExist())
+                .andExpect(jsonPath("$.properties.order_token").doesNotExist())
+                .andRespond(withSuccess());
+
+        new PostHogAnalyticsClient(KEY, builder, "prod", GUARD).capture("hash-abc",
+                "shop_payment_paid",
+                Map.of("order_amount", 100L, "receiver_name", "Budi", "order_token", "ord-1"));
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("app_env 归一化：prod/stag/dev 之外（含 null、空串、大小写变体）一律回 dev")
+    void appEnvFallsBackToDev() {
+        assertThat(PostHogAnalyticsClient.resolveAppEnv("prod")).isEqualTo("prod");
+        assertThat(PostHogAnalyticsClient.resolveAppEnv("stag")).isEqualTo("stag");
+        assertThat(PostHogAnalyticsClient.resolveAppEnv("dev")).isEqualTo("dev");
+        assertThat(PostHogAnalyticsClient.resolveAppEnv(" stag ")).isEqualTo("stag");
+        assertThat(PostHogAnalyticsClient.resolveAppEnv("PROD")).isEqualTo("dev");
+        assertThat(PostHogAnalyticsClient.resolveAppEnv("staging")).isEqualTo("dev");
+        assertThat(PostHogAnalyticsClient.resolveAppEnv("")).isEqualTo("dev");
+        assertThat(PostHogAnalyticsClient.resolveAppEnv(null)).isEqualTo("dev");
+    }
+
+    @Test
+    @DisplayName("既有三条埋点没被白名单误伤（milestone / 名片页 / 分享页）")
+    void preExistingEventsStillGoOut() {
+        for (String event : new String[] {"milestone_achieved", "pet_card_link_opened",
+                "pet_card_cta_tapped", "pet_card_cta_outcome", "post_share_link_opened"}) {
+            RestClient.Builder builder = RestClient.builder().baseUrl("https://ph.test");
+            MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+            server.expect(requestTo("https://ph.test/i/v0/e/"))
+                    .andExpect(jsonPath("$.event").value(event))
+                    .andRespond(withSuccess());
+
+            new PostHogAnalyticsClient(KEY, builder, "prod", GUARD)
+                    .capture("hash-abc", event, Map.of("page_state", "HAS_PET"));
+
+            server.verify();
+        }
     }
 
     @Test

@@ -36,7 +36,24 @@ public record RepurchaseCardView(
         /** 估算剩余量（克）。已吃超时为 0，**不给负数**。 */
         Integer remainingGrams,
         /** 购买（送达）日期。 */
-        LocalDate purchasedOn) {
+        LocalDate purchasedOn,
+
+        /**
+         * 触发 SKU 的价格（最小币种单位，IDR 无小数；Story 4-4 · SHOP-FR-03）。
+         *
+         * <p>🔴 <b>取的是「用户当初买的那一档」，不是商品最低价。</b>
+         * 本卡的 CTA 是「Beli Lagi（再买一次）」—— 他要再买的就是他买过的那一档。
+         * 在多规格商品上用最低价会<b>系统性低报</b>，等于用一个他付不到的价钱
+         * 把他骗进详情页。（最低价逻辑 {@code ProfileRecommendationService.minPriceOf}
+         * 只服务推荐位，别挪过来。）
+         *
+         * <p>可为 {@code null}（SKU 价格缺失）。🔴 <b>null 与 0 前端都整行不画</b> ——
+         * 沿用本卡一贯的「不编造、不显示 0」口径：0 元不是一个可信的复购价。
+         *
+         * <p>⚠️ 追加在 record 末尾，遵守上面那条「不动既有字段顺序（并行契约）」。
+         * story 里「建议紧跟 productName」只是排版建议，而这条规则是写在本文件里的。
+         */
+        Long price) {
 
     /** 🔴 区域① 最多 2 张（FR-93）。⚠️ 超过 2 张时的排序规则 SPEC-16 未拍板。 */
     public static final int MAX_CARDS = 2;

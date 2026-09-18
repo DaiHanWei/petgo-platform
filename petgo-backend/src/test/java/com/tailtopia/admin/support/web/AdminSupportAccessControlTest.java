@@ -112,7 +112,8 @@ class AdminSupportAccessControlTest {
     }
 
     private void linkOrder() {
-        controller.linkOrder(admin(), "tok", "ord", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), null, new RedirectAttributesModelMap());
+        // shop-v2 Story 3-2：多了一个 orderType 参数（默认 CONSULT），本类只验 @PreAuthorize 闸门。
+        controller.linkOrder(admin(), "tok", "ord", "CONSULT", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), null, new RedirectAttributesModelMap());
     }
 
     private void refundApprove() {

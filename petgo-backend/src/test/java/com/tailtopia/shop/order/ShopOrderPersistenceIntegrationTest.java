@@ -9,6 +9,7 @@ import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.shop.service.ShopTokenGenerator;
 import com.tailtopia.support.ApiIntegrationTest;
+import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +25,8 @@ class ShopOrderPersistenceIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private ShopTokenGenerator tokens;
     @Autowired
+    private com.tailtopia.shop.order.service.ShopOrderDisplayNoGenerator displayNos;
+    @Autowired
     private JdbcTemplate jdbc;
 
     private long seedUser() {
@@ -36,7 +39,7 @@ class ShopOrderPersistenceIntegrationTest extends ApiIntegrationTest {
     @DisplayName("V109 已应用：八态 CHECK 生效，非法状态写不进去")
     void statusCheckRejectsUnknownValue() {
         long uid = seedUser();
-        ShopOrder o = orders.save(ShopOrder.place(tokens.generate(), uid, 1000L, 0L, 0L,
+        ShopOrder o = orders.save(ShopOrder.place(tokens.generate(), displayNos.generate(Instant.now()), Instant.now(), uid, 1000L, 0L, 0L,
                 new AddressSnapshot("B", "+628123456789", "P", "K", "Kec", "Jl", "12160")));
 
         boolean rejected;
@@ -57,7 +60,7 @@ class ShopOrderPersistenceIntegrationTest extends ApiIntegrationTest {
                 "DKI Jakarta", "Jakarta Selatan", "Kebayoran Baru",
                 "Jl. Melawai IV No. 12", "12160", "Rumah"));
 
-        ShopOrder o = orders.save(ShopOrder.place(tokens.generate(), uid, 1000L, 0L, 0L,
+        ShopOrder o = orders.save(ShopOrder.place(tokens.generate(), displayNos.generate(Instant.now()), Instant.now(), uid, 1000L, 0L, 0L,
                 new AddressSnapshot(saved.getReceiverName(), saved.getReceiverPhone(),
                         saved.getProvinsi(), saved.getKotaKabupaten(), saved.getKecamatan(),
                         saved.getAddressLine(), saved.getKodePos())));
@@ -79,9 +82,9 @@ class ShopOrderPersistenceIntegrationTest extends ApiIntegrationTest {
     @DisplayName("🔒 seq_no 自增且与 public_token 无关（对账用，绝不外露）")
     void seqNoIsInternalOnly() {
         long uid = seedUser();
-        var a = orders.save(ShopOrder.place(tokens.generate(), uid, 1000L, 0L, 0L,
+        var a = orders.save(ShopOrder.place(tokens.generate(), displayNos.generate(Instant.now()), Instant.now(), uid, 1000L, 0L, 0L,
                 new AddressSnapshot("B", "+628123456789", "P", "K", "Kec", "Jl", "12160")));
-        var b = orders.saveAndFlush(ShopOrder.place(tokens.generate(), uid, 2000L, 0L, 0L,
+        var b = orders.saveAndFlush(ShopOrder.place(tokens.generate(), displayNos.generate(Instant.now()), Instant.now(), uid, 2000L, 0L, 0L,
                 new AddressSnapshot("B", "+628123456789", "P", "K", "Kec", "Jl", "12160")));
 
         Long seqA = jdbc.queryForObject(
@@ -98,7 +101,7 @@ class ShopOrderPersistenceIntegrationTest extends ApiIntegrationTest {
     void crossUserOrderLookupReturnsEmpty() {
         long owner = seedUser();
         long attacker = seedUser();
-        ShopOrder o = orders.save(ShopOrder.place(tokens.generate(), owner, 1000L, 0L, 0L,
+        ShopOrder o = orders.save(ShopOrder.place(tokens.generate(), displayNos.generate(Instant.now()), Instant.now(), owner, 1000L, 0L, 0L,
                 new AddressSnapshot("B", "+628123456789", "P", "K", "Kec", "Jl", "12160")));
 
         assertThat(orders.findByPublicTokenAndUserId(o.getPublicToken(), attacker)).isEmpty();

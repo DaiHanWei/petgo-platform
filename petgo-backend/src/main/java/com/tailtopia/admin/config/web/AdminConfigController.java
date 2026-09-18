@@ -75,6 +75,14 @@ public class AdminConfigController {
             "pawcoin", json(Map.of(
                     "admin.err.config.premiumRateRange", "premiumRate",
                     "admin.err.config.premiumFixedNegative", "premiumFixed")),
+            // shop-v2 Story 3-1 客服联系方式（合入 ops 模板 D 时补的字段映射）
+            "support", json(Map.of(
+                    "admin.err.config.supportWhatsappBlank", "whatsappNumber",
+                    "admin.err.config.supportWhatsappInvalid", "whatsappNumber",
+                    "admin.err.config.supportWhatsappTooLong", "whatsappNumber",
+                    "admin.err.config.supportEmailBlank", "email",
+                    "admin.err.config.supportEmailInvalid", "email",
+                    "admin.err.config.supportEmailTooLong", "email")),
             "shareReward", json(Map.of(
                     "admin.err.config.shareRewardCapNegative", "shareRewardMonthlyCap",
                     "admin.err.config.shareRewardCapTooLarge", "shareRewardMonthlyCap",
@@ -128,6 +136,10 @@ public class AdminConfigController {
     private void populateCards(Model model) {
         model.addAttribute("pricing", read.pricing());
         model.addAttribute("pawcoin", read.pawcoin());
+        // V1.3.0 shop-v2 Story 3-1：客服联系方式。⚠️ read.supportContact() 返回 Optional
+        //    （缺行时消费方回退内置值而不是抛），页面这里用 orElse(null) 让模板自行判空。
+        // （合并注：充值档位 tiers 由 view() 按 ops 6.2 口径单独设置，这里不再重复放。）
+        model.addAttribute("supportContact", read.supportContact().orElse(null));
         model.addAttribute("shareRewardOverview", shareRewardOverview());
         model.addAttribute("errorFields", ERROR_FIELDS);
     }
@@ -190,6 +202,35 @@ public class AdminConfigController {
                 shareStats.sumGranted(period),
                 cap > 0 ? shareStats.countAtCap(period, cap) : 0,
                 period);
+    }
+
+    /**
+     * 客服联系方式（V1.3.0 Story 3-1 / AD-S8）。
+     *
+     * <p>🔴 <b>复用既有 {@code config.view} / {@code config.edit} 权限码，不新增权限码</b> ——
+     * 新增一个要改满 6 道关卡（常量 / 分组 / 四个 properties / 双向守门测试 / 预置角色），
+     * 而客服号与定价、PawCoin 参数是同一类「平台运营配置」，没有独立授权的理由。
+     */
+    @PostMapping("/admin/config/support-contact")
+    @PreAuthorize(EDIT_AUTH)
+    public String updateSupportContact(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam String whatsappNumber, @RequestParam String email,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            // ops 模板 D：成功回卡 + toast；失败 AppException 冒给 advice 出 422 行内 err（号码不在 args 里，不回显）。
+            write.updateSupportContact(whatsappNumber, email, admin.getAdminAccountId());
+            return savedCard("cfg-support", "config-card-support", "admin.flash.config.supportContactSaved",
+                    model, response);
+        }
+        try {
+            write.updateSupportContact(whatsappNumber, email, admin.getAdminAccountId());
+            flash.addFlashAttribute("toast", msg.get("admin.flash.config.supportContactSaved"));
+        } catch (AppException e) {
+            // 🔒 msg.resolve 走的是 AppException 的 code + args，号码本身不在 args 里
+            //    （IndonesiaPhone 的 detail 刻意不含输入）——错误提示不会把号码回显出去。
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/config";
     }
 
     /** 定价卡四项（V1.3.0 Story 6.1 起不再接收 {@code idHdDownloadPrice}——KTP 卡高清价归 {@link #updateKtpPricing}）。 */

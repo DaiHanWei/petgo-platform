@@ -3,6 +3,9 @@ package com.tailtopia.admin.support.service;
 import com.tailtopia.admin.support.dto.AdminTicketView;
 import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.repository.ConsultOrderRepository;
+import com.tailtopia.shop.order.domain.ShopOrder;
+import com.tailtopia.shop.order.repository.ShopOrderRepository;
+import com.tailtopia.support.domain.RelatedOrderType;
 import com.tailtopia.pay.refund.domain.RefundRequest;
 import com.tailtopia.pay.refund.repository.RefundRequestRepository;
 import com.tailtopia.shared.error.AppException;
@@ -39,16 +42,20 @@ public class AdminSupportTicketQueryService {
     private final TicketLabelRepository labels;
     private final TicketAttachmentRepository attachments;
     private final ConsultOrderRepository orders;
+    /** Story 3-2：电商工单的订单号从这里取（只读）。 */
+    private final ShopOrderRepository shopOrders;
     private final RefundRequestRepository refunds;
     private final SignedUrlService signedUrls;
 
     public AdminSupportTicketQueryService(FeedbackTicketRepository tickets, TicketLabelRepository labels,
             TicketAttachmentRepository attachments, ConsultOrderRepository orders,
+            ShopOrderRepository shopOrders,
             RefundRequestRepository refunds, SignedUrlService signedUrls) {
         this.tickets = tickets;
         this.labels = labels;
         this.attachments = attachments;
         this.orders = orders;
+        this.shopOrders = shopOrders;
         this.refunds = refunds;
         this.signedUrls = signedUrls;
     }
@@ -60,7 +67,8 @@ public class AdminSupportTicketQueryService {
                 t.getTicketToken(), t.getSubject(), null,
                 t.getContactType().name(), null,
                 t.isNeedContactCustomer(), t.isContactedCustomer(), t.getStatus().name(),
-                List.of(), 0, List.of(), null, null, null,
+                // 列表 / 工作台左栏不渲染订单/退款，这些位置照旧留空（finding #7：不为列表发额外查询）。
+                List.of(), 0, List.of(), null, null, null, null,
                 t.getCsatScore(), null, t.getCreatedAt(), t.getResolvedAt(), null, null, null, null));
     }
 
@@ -102,7 +110,8 @@ public class AdminSupportTicketQueryService {
                 t.getTicketToken(), t.getSubject(), null,
                 t.getContactType().name(), null,
                 t.isNeedContactCustomer(), t.isContactedCustomer(), t.getStatus().name(),
-                List.of(), 0, List.of(), null, null, null,
+                // 列表 / 工作台左栏不渲染订单/退款，这些位置照旧留空（finding #7：不为列表发额外查询）。
+                List.of(), 0, List.of(), null, null, null, null,
                 t.getCsatScore(), null, t.getCreatedAt(), t.getResolvedAt(), null, null, null, null));
     }
 
@@ -171,19 +180,31 @@ public class AdminSupportTicketQueryService {
         String orderStatus = null;
         java.time.Instant orderPaidAt = null;
         String refundRejectReason = null;
+        String relatedOrderType = t.getRelatedOrderType().name();
         if (t.getRelatedOrderId() != null) {
-            ConsultOrder order = orders.findById(t.getRelatedOrderId()).orElse(null);
-            if (order != null) {
-                relatedOrderToken = order.getOrderToken();
-                orderAmount = order.getAmount();
-                orderStatus = order.getStatus() == null ? null : order.getStatus().name();
-                orderPaidAt = order.getPaidAt();
-            }
-            RefundRequest refund = refunds.findByOrderId(t.getRelatedOrderId()).orElse(null);
-            if (refund != null) {
-                refundToken = refund.getRefundToken();
-                refundNeedDecision = refund.getNeedDecision().name();
-                refundRejectReason = refund.getRejectReason();
+            // 🔴 **必须按类型分流**（shop-v2 Story 3-2）：两类订单 id 数值空间完全重叠，无条件当问诊单查
+            //    会给电商工单展示一条不相干的问诊单号（串单的可见形态）。
+            if (t.getRelatedOrderType() == RelatedOrderType.CONSULT) {
+                ConsultOrder order = orders.findById(t.getRelatedOrderId()).orElse(null);
+                if (order != null) {
+                    relatedOrderToken = order.getOrderToken();
+                    orderAmount = order.getAmount();
+                    orderStatus = order.getStatus() == null ? null : order.getStatus().name();
+                    orderPaidAt = order.getPaidAt();
+                }
+                // 退款单只对问诊单存在 —— 拿电商单 id 去查会命中同号问诊单的退款请求。
+                RefundRequest refund = refunds.findByOrderId(t.getRelatedOrderId()).orElse(null);
+                if (refund != null) {
+                    refundToken = refund.getRefundToken();
+                    refundNeedDecision = refund.getNeedDecision().name();
+                    refundRejectReason = refund.getRejectReason();
+                }
+            } else {
+                // 🔴 Story 4-3 已切换：读库列 display_no，不再用旧算法算。
+                //   运营在工单上看到的号，必须与用户报出来的、与订单中心显示的是同一个。
+                relatedOrderToken = shopOrders.findById(t.getRelatedOrderId())
+                        .map(ShopOrder::getDisplayNo)
+                        .orElse(null);
             }
         }
         String contactValue = includeContactPii ? t.getContactValue() : maskContact(t.getContactValue());
@@ -192,7 +213,7 @@ public class AdminSupportTicketQueryService {
                 t.getContactType().name(), contactValue,
                 t.isNeedContactCustomer(), t.isContactedCustomer(), t.getStatus().name(),
                 labelNames, atts.size(), attachmentUrls,
-                relatedOrderToken, refundToken, refundNeedDecision,
+                relatedOrderToken, relatedOrderType, refundToken, refundNeedDecision,
                 t.getCsatScore(), t.getCsatComment(),
                 t.getCreatedAt(), t.getResolvedAt(), orderAmount, orderStatus, orderPaidAt, refundRejectReason);
     }

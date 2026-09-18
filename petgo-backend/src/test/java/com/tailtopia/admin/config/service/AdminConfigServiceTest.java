@@ -53,7 +53,9 @@ class AdminConfigServiceTest {
         // V1.1.6 Story 16.4：推荐算法参数（本类既有用例不碰它，另有专门用例）
         feedRankRepo = Mockito.mock(com.tailtopia.config.repository.FeedRankConfigRepository.class);
         svc = new AdminConfigService(pricingRepo, pawcoinRepo, tierRepo, changeLogs, audit,
-                feedRankRepo);
+                feedRankRepo,
+                // V1.3.0 Story 3-1：客服联系方式（本类既有用例不碰它，另有专门用例）
+                Mockito.mock(com.tailtopia.config.repository.SupportContactConfigRepository.class));
     }
 
     private PricingConfig seedPricing() {

@@ -58,6 +58,38 @@ enum ShopOrderStatus {
       this == ShopOrderStatus.completed;
 }
 
+/// 支付失败类别（Story 1-3；后端 `PaymentFailureCategory` 三值的镜像）。
+///
+/// 🔴 **未知字符串一律落 [unknown]，绝不映射成三态中的任何一个**（C4：禁止在客户端
+/// 兜底转换抹平契约差异）。后端将来加第四个值时，App 猜错一次就是给用户一个错误的
+/// 处置建议 —— 该给重试的不给、不该给的给了。[unknown] 在 UI 上按「通用失败」处理。
+enum ShopPaymentFailure {
+  /// 网关拒付。订单仍在待支付窗内，**保留重试入口**。
+  gatewayDeclined('GATEWAY_DECLINED'),
+
+  /// 付款窗超时。订单已取消，**不给重试**。
+  expired('EXPIRED'),
+
+  /// 用户自己取消了订单。静默，不弹任何错误。
+  userCancelled('USER_CANCELLED'),
+
+  /// 认不出的类别（后端新增而 App 未升级）。
+  unknown('');
+
+  const ShopPaymentFailure(this.api);
+
+  final String api;
+
+  /// 缺值 / 空串 → null（＝没失败）；认不出的非空值 → [unknown]。
+  static ShopPaymentFailure? fromApi(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    for (final f in values) {
+      if (f.api == raw && f != unknown) return f;
+    }
+    return unknown;
+  }
+}
+
 /// 一个包裹（Story 4.5，S-2 一单多包）。
 ///
 /// 🔴 **不接承运商 API、不在 App 内渲染物流轨迹**（FR-103）：[trackingUrl] 是承运商官网
@@ -135,6 +167,7 @@ class ShopOrderLine {
 class ShopOrderDetail {
   const ShopOrderDetail({
     required this.orderToken,
+    this.displayNo = '',
     required this.status,
     required this.goodsSubtotal,
     required this.shippingFee,
@@ -155,9 +188,22 @@ class ShopOrderDetail {
     this.returnWindowEndsAt,
     this.packages = const [],
     this.attributionSource = 'unknown',
+    this.paymentStatus,
+    this.paymentFailureCategory,
   });
 
   final String orderToken;
+
+  /// 对外展示号 `TOKO-yyyyMMdd-XXXXXX`（Story 4-3 · SHOP-FR-29）。
+  ///
+  /// 🔴 **给人看的是它，查询用的仍是 [orderToken]**。此前本页展示的就是 22 位
+  /// `orderToken`，而订单中心列表/详情展示的是 `TOKO-…` —— 同一张单两个字符串，
+  /// 用户报给客服的号后台还搜不到。
+  ///
+  /// 🔴 **缺省空串而不是 null**：灰度期老后端不下发这个字段，页面回落到 `orderToken`
+  /// 显示（见 `_displayedOrderNo`）—— 显示一个旧格式的号，好过显示一片空白。
+  final String displayNo;
+
   final ShopOrderStatus status;
   final int goodsSubtotal;
   final int shippingFee;
@@ -200,6 +246,26 @@ class ShopOrderDetail {
   /// **与服务端行级归因互为校验**（Story 9.2）。⚠️ 权威值始终在服务端。
   final String attributionSource;
 
+  // ---------- 支付可感知（Story 1-1，后端 AD-S9(a) 下发） ----------
+
+  /// 支付意图状态原文：`PENDING` / `PAID` / `FAILED` / `EXPIRED`。
+  /// 无支付单（纯 PawCoin 单）或后端版本较老时为 null。
+  ///
+  /// 🔴 **刻意保持 `String?` 不在此处枚举化、不兜底成某个默认值**（C4：禁止在客户端
+  /// 兜底转换抹平契约差异）——把未知值悄悄折成 `FAILED` 之类，等于用客户端的猜测
+  /// 覆盖服务端的事实。枚举化与界面处置全部留给 Story 1-3。
+  final String? paymentStatus;
+
+  /// 支付失败类别原文：`GATEWAY_DECLINED` / `EXPIRED` / `USER_CANCELLED`。未失败为 null。
+  ///
+  /// 🔒 分类由后端一处算出（`PaymentFailureCategory.of`），App **不解析网关 meta** ——
+  /// meta 是第三方回调原文，随时可能含 PII。
+  final String? paymentFailureCategory;
+
+  /// [paymentFailureCategory] 的枚举形态（Story 1-3）。未失败为 null。
+  ShopPaymentFailure? get paymentFailure =>
+      ShopPaymentFailure.fromApi(paymentFailureCategory);
+
   bool get isMixed => (coinAmount ?? 0) > 0 && (cashAmount ?? 0) > 0;
 
   /// 剩余支付时间。🔴 只用于**渲染**；「是否已过期」的判定权在服务端。
@@ -215,6 +281,7 @@ class ShopOrderDetail {
     final s = ship is Map<String, dynamic> ? ship : const <String, dynamic>{};
     return ShopOrderDetail(
       orderToken: j['orderToken']?.toString() ?? '',
+      displayNo: j['displayNo']?.toString() ?? '',
       status: ShopOrderStatus.fromApi(j['status']?.toString()),
       goodsSubtotal: _int(j['goodsSubtotal']) ?? 0,
       shippingFee: _int(j['shippingFee']) ?? 0,
@@ -230,6 +297,9 @@ class ShopOrderDetail {
       completedAt: _time(j['completedAt']),
       returnWindowEndsAt: _time(j['returnWindowEndsAt']),
       attributionSource: j['attributionSource']?.toString() ?? 'unknown',
+      // 缺键 → null（老后端）。不做任何值的归一化或兜底，见字段注释。
+      paymentStatus: j['paymentStatus']?.toString(),
+      paymentFailureCategory: j['paymentFailureCategory']?.toString(),
       packages: j['packages'] is List
           ? (j['packages'] as List)
               .whereType<Map<String, dynamic>>()

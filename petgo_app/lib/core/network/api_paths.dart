@@ -113,6 +113,9 @@ class ApiPaths {
   /// App 版本信息（Story 6.5，公开可读，App 内更新提醒）。
   static const String appVersion = '$base/app-version';
 
+  /// 客服联系方式（V1.3.0 Story 3-1）。🔓 免鉴权 —— 客服弹窗在登录前也会出现。
+  static const String supportContact = '$base/support/contact';
+
   /// 通知中心（Story 6.6）。列表 / 未读角标 / 标记已读。
   static const String notifications = '$base/notifications';
   static const String notificationsUnreadCount = '$base/notifications/unread-count';
@@ -290,6 +293,14 @@ class ApiPaths {
   static String meCartItem(String skuToken) => '$meCart/items/$skuToken';
   /// 一键清空全部失效行（已下架 / 已售罄）。
   static const String meCartInvalidItems = '$meCart/invalid-items';
+  /// 勾选 / 取消勾选单行（`?selected=true|false`，Story 4-1 后端 · 4-2 前端）。
+  ///
+  /// 🔴 三段路径，与两段的 [meCartItem] 不冲突。**这不是删除** ——
+  /// 取消勾选只是「这次不买」，商品仍留在车里。
+  static String meCartItemSelected(String skuToken) =>
+      '$meCart/items/$skuToken/selected';
+  /// 全选 / 全不选（`?selected=true|false`）。作用于车内全部行，含失效行。
+  static const String meCartSelection = '$meCart/selection';
 
   /// 🔒 结算试算（Story 3.7）。`?addressToken=`；超服务范围回 `serviceable=false` 而非报错。
   static const String meCheckout = '$base/me/checkout';

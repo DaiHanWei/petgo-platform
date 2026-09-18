@@ -31,7 +31,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/analytics/analytics.dart';
@@ -41,9 +40,9 @@ import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/qr_payment_sheet.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
+import '../../support/presentation/support_whatsapp_button.dart';
 import '../data/cart_repository.dart';
 import '../data/shop_order_repository.dart';
-import '../data/shop_return_repository.dart';
 import '../domain/shop_order_detail.dart';
 import '../domain/shop_product.dart';
 import 'widgets/shop_buttons.dart';
@@ -123,8 +122,11 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
         _itemsBlock(l10n, order),
         _shipToBlock(l10n, order),
         _metaBlock(l10n, order),
-        if (order.status.canConfirmReceipt || order.status == ShopOrderStatus.completed)
-          _helpBlock(l10n),
+        // 🔴 V1.3.0 Story 3-3：本块由「只在待收货/已完成显示」改为**始终显示**。
+        //    理由是它现在装着客服入口，而「找不到客服」这件事在任何订单状态下都可能发生 ——
+        //    待支付付不了、待发货迟迟不发货，恰恰是最需要找人的时候。
+        //    （2-1 之后本块的文案也已经从「2×24 小时可退」换成了指向客服的中性表述。）
+        _helpBlock(l10n, order),
         const SizedBox(height: kShopGutter),
       ],
     );
@@ -577,7 +579,7 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
                   child: Text(l10n.orderNumberLabel, style: ShopText.body.copyWith(fontSize: 10.5)),
                 ),
                 // 🔴 订单号用等宽 —— 用户要报给客服、要逐位核对。
-                Text(order.orderToken, style: ShopText.serialNo),
+                Text(_displayedOrderNo(order), style: ShopText.serialNo),
               ],
             ),
             if (order.createdAt != null) ...[
@@ -601,7 +603,22 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
   ///
   /// 🔴 发货态**只做告知不给退货按钮** —— 货还没到手，退不了。
   /// 设计稿因此把这里做成「有问题？」的说明而不是操作入口。
-  Widget _helpBlock(AppLocalizations l10n) => ShopSection(
+  /// 🔴 **本页展示给用户的那个订单号，唯一一处**（Story 3-3）。
+  ///
+  /// 页面上的订单号（`_metaBlock` 里那行等宽字）与 WhatsApp 深链的预填**必须同源**：
+  /// 用户拿去跟客服核对的就是他屏幕上看得见的那串字符，深链填另一个号只会让客服
+  /// 拿到一个用户那儿找不到的号。
+  ///
+  /// 🔴 **Story 4-3 已切换**：这里曾经是 `orderToken`（22 位随机串），而订单中心列表
+  /// 展示的是 `TOKO-…` —— 同一张单两个字符串，用户报给客服的号后台还搜不到。
+  /// 3-3 把它收成这一个 getter，就是为了让今天只改这一行。
+  ///
+  /// `displayNo` 为空时回落到 `orderToken`：灰度期老后端不下发这个字段，
+  /// **显示一个旧格式的号，好过显示一片空白**。
+  String _displayedOrderNo(ShopOrderDetail order) =>
+      order.displayNo.isEmpty ? order.orderToken : order.displayNo;
+
+  Widget _helpBlock(AppLocalizations l10n, ShopOrderDetail order) => ShopSection(
         key: const ValueKey('shopOrderHelpBlockV2'),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -609,6 +626,16 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
             Text(l10n.shopOrderHelpTitle, style: ShopText.cardTitle.copyWith(fontSize: 11.5)),
             const SizedBox(height: 2),
             Text(l10n.shopOrderHelpBody, style: ShopText.meta),
+            const SizedBox(height: 10),
+            // 🔴 客服入口落在**这里**而不是 `_bottomBar`（Story 3-3）：
+            //    `_bottomBar` 针对 8 个订单状态返回不同组合、无动作状态直接 return null，
+            //    要让入口「始终显示」就得把 null 那支改成「返回一个只含客服按钮的 bar」——
+            //    8 个状态的底栏高度与排布全要重新验收，还会和隐藏退货入口的改动撞在同一块代码。
+            //    本块本来就是「有问题？」的售后告知块，只有文案没有动作，语义天然吻合。
+            //    预填用的是本页 `:580` 展示给用户的那个号，两处同源 ——
+            //    将来订单号口径统一（SHOP-FR-29）时深链自动跟随，一行码都不用改。
+            SupportWhatsAppButton(
+                orderNo: _displayedOrderNo(order), screen: 'shop_order_detail'),
           ],
         ),
       );
@@ -678,34 +705,13 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
       );
     }
 
-    // 已完成：退货入口（退货窗口内才给）。
-    if (order.status == ShopOrderStatus.completed) return _returnBar(l10n, order);
+    // 🔴 已完成态原先在这里给退货入口，V1.3.0 按 SD-5 整块摘掉 ——
+    //    后端退货接口与后台退货页面都还在、都可用，只是 App 侧不给入口：
+    //    一个点了走不通的入口会让用户白填一遍表单、传完凭证照片才发现这条路不通。
+    //    ⚠️ 下一版恢复只需把 `_returnBar` 从 git 历史取回并加回这一行分支；
+    //      `shop_return_repository.dart` / `ReturnRequestPageV2` / `RefundMethodPageV2`
+    //      与 `test/shop/return_flow_page_v2_test.dart` 全部原样留着，一个字都不用改。
     return null;
-  }
-
-  /// 退货入口。
-  ///
-  /// 🔴 已有进行中的退货申请时**置灰并说明**（UX-DR3 / C-12），不是隐藏 ——
-  /// 隐藏会让用户以为自己没提交成功，转头再提交一次。
-  Widget? _returnBar(AppLocalizations l10n, ShopOrderDetail order) {
-    final e = ref.watch(returnEligibilityProvider(order.orderToken)).maybeWhen(
-          data: (v) => v,
-          orElse: () => null,
-        );
-    if (e == null) return null;
-    final blocked = !e.eligible || e.activeRequestToken != null;
-    return ShopBottomBarActions(
-      primary: ShopButton(
-        key: const ValueKey('shopOrderReturnV2'),
-        label: e.activeRequestToken != null
-            ? l10n.shopOrderReturnInProgress
-            : l10n.shopOrderRequestReturn,
-        variant: blocked ? ShopButtonVariant.disabled : ShopButtonVariant.pay,
-        onTap: blocked
-            ? null
-            : () => context.push('/shop/orders/${order.orderToken}/return'),
-      ),
-    );
   }
 
   // ---------------------------------------------------------------- 动作
@@ -727,8 +733,47 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
     if (!ok && mounted) showAppToast(context, l10n.shopOrderTrackOpenFailed);
   }
 
+  /// 本次会话内看到过「被拒」（Story 1-4 AC2）。
+  ///
+  /// 🔴 用**上次失败类别**做判据，不是「点了几次支付」的计数器 —— 计数器分不出
+  /// 「被拒后重试」和「关了面板待会再付」，而这两件事对运营是完全不同的信号。
+  /// 成功 / 超时 / 用户取消一律清回 false（那些结局之后的下一次支付不是重试）。
+  ///
+  /// ⚠️ 它只是**本次页面停留期间**的记忆。跨页面、跨进程的那一半由
+  /// [_isRetry] 从服务端下发的 `paymentFailureCategory` 补齐 —— 只靠这个字段的话，
+  /// 用户退出详情页（或杀掉进程）再回来重试就不算重试了，而这一格**没有服务端事件兜底**
+  /// （服务端只知道「又创建了一个意图」，不知道用户是不是在重试）。
+  bool _lastPaymentDeclined = false;
+
+  /// 这一次点支付算不算「重试」。
+  ///
+  /// 服务端下发的 `paymentFailureCategory` 才是权威的「上一次失败类别」：
+  /// 订单仍在待支付窗内、而它的支付单停在 `GATEWAY_DECLINED` ⇒ 这一次点下去就是重试，
+  /// 不管用户中间有没有离开过页面。
+  bool _isRetry(ShopOrderDetail order) =>
+      _lastPaymentDeclined ||
+      order.paymentFailure == ShopPaymentFailure.gatewayDeclined;
+
+  /// 支付类事件的属性（Story 1-4 AC3）。**只有这四个键。**
+  ///
+  /// 🔒 绝不放 `order.orderToken` —— 订单号对运营有用但对漏斗没用，且它是对外标识，
+  /// 进第三方等于把标识面扩出去（SHOP-NFR-01）。要排查有后端接口日志。
+  /// 🔒 也绝不放 `receiverName` / `receiverPhone` / `addressText` —— 它们就在同一个
+  /// `ShopOrderDetail` 上，离得最近、最容易手滑。
+  Map<String, Object> _payProps(ShopOrderDetail order, {String? failureCategory}) => {
+        // 与既有 toko_order_payment_succeeded 同一写法，保持口径一致。
+        'pay_channel': order.payChannel ?? 'UNKNOWN',
+        'attribution_source': order.attributionSource,
+        'has_pawcoin': (order.coinAmount ?? 0) > 0,
+        'failure_category': ?failureCategory,
+      };
+
   Future<void> _pay(AppLocalizations l10n, ShopOrderDetail order) async {
+    // 🔴 既有事件照发不误：漏斗「进入支付」这一格的分母靠它，重试也是一次进入支付。
     Analytics.capture('toko_order_pay_tapped');
+    if (_isRetry(order)) {
+      Analytics.capture('toko_payment_retry_tapped', _payProps(order));
+    }
     setState(() => _busyAction = _OrderAction.pay);
     try {
       final result = await ref.read(shopOrderRepositoryProvider).pay(widget.orderToken);
@@ -742,14 +787,38 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
         showAppToast(context, l10n.shopOrderPaid);
         return;
       }
+      // 🔴 中止**不是**异常路径：它由 onAborted 回调带出来，走下面的正常分派。
+      //    塞进 catch 会让三态一律弹通用失败 toast，正是本 story 要消灭的那个行为。
+      // 🔴 **两个变量缺一不可**：`aborted == null` 有两种成因 ——
+      //    ① 根本没中止（用户自己关了面板）；② 中止了但没带类别（老后端的兜底分支，
+      //    见下面 pollPaid 里那条 `const QrPaymentAborted()`）。
+      //    只看类别的话，灰度期每一单被服务端取消的订单都会被记成
+      //    `toko_payment_sheet_dismissed`＝「用户自己走掉了」，把那一格彻底污染掉。
+      bool abortSignalled = false;
+      ShopPaymentFailure? aborted;
+      // 🔴 从**电商侧**发，不跑去 sheet 内部发：sheet 是共用组件，在里面埋点会给
+      //    AI 解锁与高清身份证两条线凭空多出事件（AC6）。
+      //    纯 PawCoin 单不出码，上面已 return，走不到这里。
+      Analytics.capture('toko_payment_qr_shown', _payProps(order));
       final paid = await showQrPaymentSheet(
         context,
         payload: result.payload!,
         orderRef: order.orderToken,
+        onAborted: (abort) {
+          abortSignalled = true;
+          aborted = ShopPaymentFailure.fromApi(abort.category);
+        },
         // 轮询问的是订单本身的状态 —— 到账由服务端在回调里推进，客户端不自行判定。
         pollPaid: () async {
           final fresh =
               await ref.refresh(shopOrderDetailProvider(widget.orderToken).future);
+          // 🔴 先看支付单：网关拒付**只改 payment_intents、不改订单**，订单会一直停在
+          //    PENDING_PAYMENT，只看 status 的话二维码要挂到 60 分钟窗口耗尽。
+          final failure = fresh.paymentFailure;
+          if (failure != null) {
+            throw QrPaymentAborted(fresh.paymentFailureCategory);
+          }
+          // 兜底：后端未升级或纯 PawCoin 单时两字段为 null，行为与改动前完全一致。
           if (fresh.status == ShopOrderStatus.cancelled) {
             throw const QrPaymentAborted();
           }
@@ -765,7 +834,10 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
           'attribution_source': order.attributionSource,
         });
         showAppToast(context, l10n.shopOrderPaid);
+        _lastPaymentDeclined = false;
+        return;
       }
+      _onPaymentAborted(l10n, order, aborted, abortSignalled: abortSignalled);
     } catch (_) {
       if (mounted) {
         Analytics.capture('toko_order_payment_failed_shown');
@@ -773,6 +845,63 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
       }
     } finally {
       if (mounted) setState(() => _busyAction = null);
+    }
+  }
+
+  /// 面板关闭后的四态分派（Story 1-3 AC2~AC5）。
+  ///
+  /// | 结局 | `aborted` | 重试入口 | 文案 |
+  /// |---|---|---|---|
+  /// | 支付被拒 | `gatewayDeclined` | **保留**（订单未取消未过期，`_bottomBar` 自然给） | 被拒说明 |
+  /// | 超时未付 | `expired` | **不给**（订单已 CANCELLED，`_bottomBar` 返 null） | 已取消告知 |
+  /// | 用户取消订单 | `userCancelled` | — | **无**（静默） |
+  /// | 仅关闭面板 | **null** | 保留 | **无** |
+  ///
+  /// 🔴 最后两行是本 story 最容易写错的地方：两者都表现为「面板关闭 + 返回 false」，
+  /// 唯一可靠的判据是 `pollPaid` 有没有抛出中止信号 —— 面板的取消按钮走 `pop(false)`
+  /// 而不抛异常，所以 `aborted` 为 null 就是「用户自己关掉的」。
+  /// @param abortSignalled `pollPaid` 是否抛过中止信号。与 [aborted] 是**两件事**：
+  ///     老后端不下发失败类别时会走 `const QrPaymentAborted()`（已中止、无类别），
+  ///     此时 [aborted] 同样是 null，但它绝不是「用户自己关掉的」。
+  void _onPaymentAborted(
+      AppLocalizations l10n, ShopOrderDetail order, ShopPaymentFailure? aborted,
+      {required bool abortSignalled}) {
+    if (!abortSignalled) {
+      // 仅关闭面板：订单原样不动，什么都不做。弹一句失败会让用户以为订单出事了。
+      // 🔴 但**要埋点**：这一格在服务端没有任何对应事件（关面板不产生服务端状态变化），
+      //    这正是它的价值 —— 「出码后自己走掉」只有客户端看得见。
+      Analytics.capture('toko_payment_sheet_dismissed', _payProps(order));
+      return;
+    }
+    if (aborted == null) {
+      // 中止了但没带类别 = 老后端（1-1 未上线）。UI 上与改动前完全一致：静默关闭。
+      // 🔴 埋点也**保持改动前的样子：什么都不发**。发 sheet_dismissed 是谎
+      //    （不是用户走的），发 declined/expired 是猜（不知道到底哪一种）。
+      //    灰度期这一格的数据由服务端 1-2 的 shop_payment_* 兜着，它不看 App 版本。
+      _lastPaymentDeclined = false;
+      return;
+    }
+    switch (aborted) {
+      case ShopPaymentFailure.gatewayDeclined:
+        _lastPaymentDeclined = true;
+        Analytics.capture('toko_payment_declined_shown',
+            _payProps(order, failureCategory: ShopPaymentFailure.gatewayDeclined.api));
+        showAppToast(context, l10n.shopPaymentDeclinedNotice);
+      case ShopPaymentFailure.expired:
+        _lastPaymentDeclined = false;
+        Analytics.capture('toko_payment_expired_shown',
+            _payProps(order, failureCategory: ShopPaymentFailure.expired.api));
+        // 🔴 **不弹** shopOrderPayFailed —— 那是「再试一次」的口吻，而这一单已经没了。
+        showAppToast(context, l10n.shopOrderExpiredNotice);
+      case ShopPaymentFailure.userCancelled:
+        // 是用户自己取消的，他知道发生了什么。只刷新，不弹错误。
+        // 埋点走 toko_order_cancel_* 那套（那是用户的动作，不是失败反馈）。
+        _lastPaymentDeclined = false;
+      case ShopPaymentFailure.unknown:
+        // 后端加了 App 不认识的类别：按通用失败处理，不猜它该不该重试。
+        _lastPaymentDeclined = false;
+        Analytics.capture('toko_order_payment_failed_shown');
+        showAppToast(context, l10n.shopOrderPayFailed);
     }
   }
 
@@ -828,6 +957,9 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
       ref.invalidate(shopOrderDetailProvider(widget.orderToken));
       // 取消会把库存还回去，购物车角标不受影响，但订单相关缓存要刷。
       ref.invalidate(cartProvider);
+      // 取消成功后这一单已经没了，下一次支付（如果有）不是「被拒后重试」。
+      _lastPaymentDeclined = false;
+      Analytics.capture('toko_order_cancel_succeeded');
       showAppToast(context, l10n.shopOrderCancelled);
     } catch (_) {
       // 2026-08-27：原先复用 shopOrderPayFailed，取消失败会提示「支付失败」。

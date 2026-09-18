@@ -116,8 +116,8 @@ public class AdminShopOrderController {
         boolean hasNext = false;
 
         if (orderToken != null && !orderToken.isBlank()) {
-            // 订单号精确查（token 本就不可枚举，无需额外权限）
-            found = orders.findByPublicToken(orderToken.trim()).map(List::of).orElse(List.of());
+            // 订单号精确查。🔴 shop-v2 Story 4-3：新号 / 旧号 / 内部 token 三种输入都要命中同一单。
+            found = searchByAnyOrderNo(orderToken).map(List::of).orElse(List.of());
             current = 0;
         } else if (phone != null && !phone.isBlank()) {
             // 🔒 服务端独立再判一次——页面不渲染入口只是第一层
@@ -163,6 +163,30 @@ public class AdminShopOrderController {
     }
 
     /** 日期按 UTC 起止换算（全库时间戳一律 UTC，CLAUDE.md 命名映射链）。 */
+    /**
+     * 🔴 Story 4-3：一个输入框吃三种号。
+     *
+     * <p>运营手里只有<b>用户报过来的那串字符</b>，他不知道（也不该知道）那是新号、旧号
+     * 还是内部 token。此前这里只对 {@code public_token} 精确匹配 —— 用户报的
+     * {@code TOKO-20260819-000673} 根本搜不出来，客服只能对着一个「系统里不存在的订单号」
+     * 跟用户解释。
+     *
+     * <p>依次尝试：内部 token → 新展示号 → 旧展示号，任一命中即返回。
+     * 三者都不可枚举，所以不需要额外权限门控（对照：按电话搜索要 NFR-11 权限）。
+     *
+     * <p>🔴 <b>大写归一只作用于展示号</b>：Crockford 字母表是大写，而运营从聊天窗口复制粘贴
+     * 很可能带小写 —— 让他因为大小写搜不到，等于把这个修复做了一半。
+     * ⚠️ 但 {@code public_token} 是 Base62、<b>大小写敏感</b>，对它归一会把它搜坏，
+     * 所以第一跳用的是原串。
+     */
+    private java.util.Optional<ShopOrder> searchByAnyOrderNo(String raw) {
+        String trimmed = raw.trim();
+        String normalized = trimmed.toUpperCase(java.util.Locale.ROOT);
+        return orders.findByPublicToken(trimmed)
+                .or(() -> orders.findByDisplayNo(normalized))
+                .or(() -> orders.findByLegacyDisplayNo(normalized));
+    }
+
     private static Instant startOf(LocalDate d) {
         return d == null ? null : d.atStartOfDay(ZoneOffset.UTC).toInstant();
     }

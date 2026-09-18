@@ -93,7 +93,12 @@ public class MeRepurchaseController {
                     ChronoUnit.DAYS.between(today, t.getEstimatedDepletionDate()),
                     basis == null ? null : basis.dailyGrams(),
                     basis == null ? null : basis.remainingGrams(),
-                    basis == null ? null : basis.purchasedOn()));
+                    basis == null ? null : basis.purchasedOn(),
+                    // 🔴 Story 4-4：价格早就在手上（循环里持有的就是 ShopSku 实体），
+                    //    只是一直没下发 —— 加这一行零额外查询。
+                    //    取触发 SKU 的价，**不是** minPriceOf(productId)：那会多打一次查询，
+                    //    且在多规格商品上系统性低报。
+                    sku.getPrice()));
         }
         return RepurchaseCardView.capped(out);
     }

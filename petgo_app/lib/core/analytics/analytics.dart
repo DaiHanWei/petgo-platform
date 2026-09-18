@@ -219,6 +219,8 @@ class Analytics {
     ButtonId.triageStart, ButtonId.triageUpload, ButtonId.consultStart,
     ButtonId.publishSubmit, ButtonId.profileCreate, ButtonId.milestoneShare,
     ButtonId.vetAcceptQueue, ButtonId.vetAdviceTemplate,
+    // V1.3.0 Story 3-3：客服 WhatsApp 深链入口。
+    ButtonId.supportWhatsapp,
   };
 
   /// 按钮 id 是否已登记（纯函数，L0 可测）。

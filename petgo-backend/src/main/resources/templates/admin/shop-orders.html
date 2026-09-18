@@ -30,7 +30,10 @@
             <div th:fragment="so-filters">
                 <form class="filter-bar" data-autosubmit th:attr="hx-get=@{/admin/shop/orders}"
                       hx-target="#shop-order-rows" hx-swap="innerHTML" hx-push-url="true">
-                    <label class="field"><span th:text="#{admin.shop.orders.col.token}">订单号</span>
+                    <!-- shop-v2 Story 4-3：一个输入框吃三种号（新展示号 / 旧展示号 / 内部 token）。
+                         运营手里只有用户报过来的那串字符，他不知道那是哪一种 —— 提示语要说清楚。
+                         ⚠️ 列头仍用共享的 col.token（另外几处模板在用），这里另起一个 key。 -->
+                    <label class="field"><span th:text="#{admin.shop.orders.search.orderNo}">订单号 / 旧订单号 / 内部标识</span>
                         <input type="text" name="orderToken" class="inp" th:value="${orderToken}" maxlength="32"/>
                     </label>
                     <label class="field"><span th:text="#{admin.shop.orders.col.status}">状态</span>

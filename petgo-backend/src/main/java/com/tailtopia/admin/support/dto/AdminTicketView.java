@@ -43,6 +43,13 @@ public record AdminTicketView(
         int attachmentCount,
         List<String> attachmentUrls,
         String relatedOrderToken,
+        /**
+         * 关联订单类型（Story 3-2）：{@code CONSULT} / {@code SHOP}。
+         *
+         * <p>🔴 模板据它决定**渲不渲染退款判定块** —— 电商单本版不进退款审批链路。
+         * {@code relatedOrderToken} 为 null 时本字段无意义。
+         */
+        String relatedOrderType,
         String refundToken,
         String refundNeedDecision,
         Short csatScore,
@@ -61,7 +68,8 @@ public record AdminTicketView(
 
     /** 判定区可用：未结案 且 已关联订单 且 判定态为空或 PENDING（防呆 F7-4）。 */
     public boolean refundDecidable() {
-        return open() && relatedOrderToken != null
+        // 电商单本版不进退款审批链路（shop-v2 Story 3-2）—— 只有问诊单才渲染退款判定块。
+        return open() && relatedOrderToken != null && !"SHOP".equals(relatedOrderType)
                 && (refundNeedDecision == null || "PENDING".equals(refundNeedDecision));
     }
 }

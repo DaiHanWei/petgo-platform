@@ -59,6 +59,27 @@ class CartRepository {
     return CartView.fromJson(resp.data!);
   }
 
+  /// 勾选 / 取消勾选单行（Story 4-2 / SHOP-FR-04）。
+  ///
+  /// 🔴 **这不是删除**：取消勾选只改 `selected` 位，商品仍在车里、数量不变。
+  /// 用 `DELETE` 模拟「不买这件」是用破坏性操作实现查询语义 —— 取消结算就丢数据。
+  Future<CartView> setSelected(String skuToken, bool selected) async {
+    final resp = await dio.put<Map<String, dynamic>>(
+      ApiPaths.meCartItemSelected(skuToken),
+      queryParameters: {'selected': selected},
+    );
+    return CartView.fromJson(resp.data!);
+  }
+
+  /// 全选 / 全不选。
+  Future<CartView> setAllSelected(bool selected) async {
+    final resp = await dio.put<Map<String, dynamic>>(
+      ApiPaths.meCartSelection,
+      queryParameters: {'selected': selected},
+    );
+    return CartView.fromJson(resp.data!);
+  }
+
   Future<CartView> clearInvalid() async {
     final resp = await dio.delete<Map<String, dynamic>>(ApiPaths.meCartInvalidItems);
     return CartView.fromJson(resp.data!);
@@ -119,6 +140,17 @@ class CartController extends AsyncNotifier<CartView> {
       _mutate((repo) => repo.setQty(skuToken, qty));
 
   Future<void> remove(String skuToken) => _mutate((repo) => repo.remove(skuToken));
+
+  /// 勾选 / 取消勾选单行。
+  ///
+  /// 🔴 **不做乐观更新**：勾选是服务端状态，直接用端点返回的整份 CartView 覆盖。
+  /// 先在本地勾上再发请求，一旦失败就会留下「看着勾上了其实没勾上」——
+  /// 而底栏金额是按服务端的 selectedSubtotal 显示的，两者会当场对不上。
+  Future<void> setSelected(String skuToken, bool selected) =>
+      _mutate((repo) => repo.setSelected(skuToken, selected));
+
+  Future<void> setAllSelected(bool selected) =>
+      _mutate((repo) => repo.setAllSelected(selected));
 
   Future<void> clearInvalid() => _mutate((repo) => repo.clearInvalid());
 

@@ -62,22 +62,41 @@ public record CheckoutPreviewView(
             String triggerType) {
     }
 
+    /**
+     * 组装结算页试算视图。
+     *
+     * <p>🔴 <b>Story 4-1 起，{@code lines} 与 {@code goodsSubtotal} 取的是「选中且有效」的集合</b>
+     * （SHOP-FR-04 / AD-S6）。<b>字段集一个没变</b>，所以本 DTO 不触发 C5 的四处同改，
+     * 但语义变了：结算页展示的必须与 {@code placeOrder} 真正下单的是同一批行，
+     * 否则「结算页显示买 2 件、提交后买了 3 件」—— 那是会造成资损的谎。
+     * 过滤与求和都不在这里做：行取 {@code CartView.selectedLines()}，
+     * 金额取 {@code CartView.selectedSubtotal()} —— <b>全仓只有 {@code CartService.view}
+     * 那一个循环在求和</b>，这里再算一遍就是给漂移留口子。
+     */
     public static CheckoutPreviewView of(CheckoutPreview p) {
         List<CheckoutLine> lines = new ArrayList<>();
-        for (CartView.CartLine l : p.cart().lines()) {
+        for (CartView.CartLine l : p.cart().selectedLines()) {
             ReturnPolicy policy = p.returnPolicies().get(l.skuToken());
             lines.add(line(l, policy == null ? null : policy.name()));
         }
         List<CheckoutLine> unavailable = new ArrayList<>();
         for (CartView.CartLine l : p.cart().invalidLines()) {
-            unavailable.add(line(l, null));
+            // 🔴 复审 #8：只报**选中的**失效行。
+            //    lines / goodsSubtotal 已经切到选中集，这里却还在遍历全部失效行 ——
+            //    于是结算页会对用户**主动取消勾选、下单时根本不拦**的商品弹「无法购买」，
+            //    逼他先回购物车删掉才能继续。那正是 Story 4-1 要消除的摩擦，
+            //    也与 CheckoutService.collectUnavailable 的判定（按 selected 过滤）不一致：
+            //    预览说买不了、下单却放行，两边对不上。
+            if (l.selected()) {
+                unavailable.add(line(l, null));
+            }
         }
         return new CheckoutPreviewView(
                 ShippingAddressView.of(p.address()),
                 p.serviceable(),
                 lines,
                 unavailable,
-                p.cart().subtotal(),
+                p.cart().selectedSubtotal(),
                 p.shipping() == null ? null : p.shipping().fee(),
                 p.shipping() == null ? null : p.shipping().discount(),
                 p.split() == null ? null : p.split().total(),

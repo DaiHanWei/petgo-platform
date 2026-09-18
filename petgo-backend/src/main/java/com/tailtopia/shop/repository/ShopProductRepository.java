@@ -4,6 +4,7 @@ import com.tailtopia.shop.domain.ProductCategory;
 import com.tailtopia.shop.domain.ShopProduct;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -67,4 +68,44 @@ public interface ShopProductRepository extends JpaRepository<ShopProduct, Long> 
             + "order by p.sortWeight desc, p.id desc")
     List<ShopProduct> searchActiveByCategory(@Param("pattern") String pattern,
             @Param("category") ProductCategory category);
+
+    // ---------- 游标分页（Story 4-5 · SHOP-FR-13）----------
+    // 🔴 四个方法与上面四条**排序逐字一致**（sortWeight desc, id desc）——
+    //    分页换一套排序，运营调过的权重在翻到第二页时就失效了。
+    //
+    // 🔴 keyset 条件 `(sw < :sw or (sw = :sw and id < :id))` 而不是 OFFSET：
+    //    OFFSET 在运营调权重时会让同一件商品在两页里出现两次（或一次都不出现）。
+    //
+    // ⚠️ 首页传的是哨兵游标 ShopProductCursor.START（比任何真实行都大），
+    //    所以**首页与后续页走同一条 SQL** —— 没有「第一页特判」，
+    //    也就没有「第一页和第二页过滤口径不一致」这一整类 bug。
+
+    @Query("select p from ShopProduct p where p.active = true "
+            + "and (p.sortWeight < :sw or (p.sortWeight = :sw and p.id < :id)) "
+            + "order by p.sortWeight desc, p.id desc")
+    List<ShopProduct> pageActive(@Param("sw") int sortWeight, @Param("id") long id,
+            Pageable pageable);
+
+    @Query("select p from ShopProduct p where p.active = true and p.category = :category "
+            + "and (p.sortWeight < :sw or (p.sortWeight = :sw and p.id < :id)) "
+            + "order by p.sortWeight desc, p.id desc")
+    List<ShopProduct> pageActiveByCategory(@Param("category") ProductCategory category,
+            @Param("sw") int sortWeight, @Param("id") long id, Pageable pageable);
+
+    @Query("select p from ShopProduct p where p.active = true "
+            + "and (lower(p.name) like :pattern escape '\\' "
+            + "  or lower(p.brand) like :pattern escape '\\') "
+            + "and (p.sortWeight < :sw or (p.sortWeight = :sw and p.id < :id)) "
+            + "order by p.sortWeight desc, p.id desc")
+    List<ShopProduct> pageSearchActive(@Param("pattern") String pattern,
+            @Param("sw") int sortWeight, @Param("id") long id, Pageable pageable);
+
+    @Query("select p from ShopProduct p where p.active = true and p.category = :category "
+            + "and (lower(p.name) like :pattern escape '\\' "
+            + "  or lower(p.brand) like :pattern escape '\\') "
+            + "and (p.sortWeight < :sw or (p.sortWeight = :sw and p.id < :id)) "
+            + "order by p.sortWeight desc, p.id desc")
+    List<ShopProduct> pageSearchActiveByCategory(@Param("pattern") String pattern,
+            @Param("category") ProductCategory category,
+            @Param("sw") int sortWeight, @Param("id") long id, Pageable pageable);
 }

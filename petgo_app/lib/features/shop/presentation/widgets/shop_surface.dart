@@ -290,6 +290,7 @@ class ShopBottomBarWithTotal extends StatelessWidget {
     required this.amount,
     required this.action,
     this.amountColor = ShopColors.accent,
+    this.leading,
   });
 
   /// 总价上方的小灰标签（`Total · 2 barang` / `Total bayar`）。
@@ -305,11 +306,18 @@ class ShopBottomBarWithTotal extends StatelessWidget {
   /// 超服务范围/售罄 [ShopColors.text4] 灰。默认玫红是最常见的「待付款」态。
   final Color amountColor;
 
+  /// 金额左侧的可选控件（购物车的「全选」勾选框，Story 4-2）。
+  ///
+  /// 可空且默认不渲染 —— 其余用到本组件的屏（结算页、订单详情、退款方式）
+  /// 一行都不用改。
+  final Widget? leading;
+
   @override
   Widget build(BuildContext context) {
     return _BottomBarShell(
       child: Row(
         children: [
+          if (leading != null) ...[leading!, const SizedBox(width: 8)],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

@@ -27,6 +27,12 @@ import org.springframework.transaction.event.TransactionalEventListener;
 @Component
 public class MilestoneAnalyticsListener {
 
+    /**
+     * 事件名。提成常量供 {@code AnalyticsEventGuard} 的白名单引用（Story 1-2）——
+     * 白名单抄一份字面量的话，改了这里编译照过、测试照绿，线上这条埋点却当场停掉。
+     */
+    public static final String EVENT_MILESTONE_ACHIEVED = "milestone_achieved";
+
     private final AnalyticsClient analytics;
 
     public MilestoneAnalyticsListener(AnalyticsClient analytics) {
@@ -37,7 +43,7 @@ public class MilestoneAnalyticsListener {
     public void onMilestoneCompleted(MilestoneCompletedEvent event) {
         analytics.capture(
                 AnalyticsDistinctId.of(event.ownerId()),
-                "milestone_achieved",
+                EVENT_MILESTONE_ACHIEVED,
                 Map.of(
                         "code", event.code(),
                         "level", event.level().name(),

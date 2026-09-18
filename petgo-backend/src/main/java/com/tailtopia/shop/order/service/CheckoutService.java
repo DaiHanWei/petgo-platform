@@ -28,6 +28,7 @@ import com.tailtopia.shop.service.InventoryService;
 import com.tailtopia.shop.service.ShopTokenGenerator;
 import com.tailtopia.shop.shipping.dto.ShippingQuote;
 import com.tailtopia.shop.shipping.service.ShippingQuoteService;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +63,7 @@ public class CheckoutService {
     private final ShopPawcoinRulesRepository rules;
     private final PawCoinWalletService wallet;
     private final ShopTokenGenerator tokens;
+    private final ShopOrderDisplayNoGenerator displayNos;
     private final IdempotencyService idempotency;
 
     public CheckoutService(CartService carts, ShippingAddressService addresses,
@@ -69,7 +71,8 @@ public class CheckoutService {
             ShopProductRepository products,
             ShopOrderRepository orders, ShopOrderLineRepository orderLines,
             ShopPawcoinRulesRepository rules, PawCoinWalletService wallet,
-            ShopTokenGenerator tokens, IdempotencyService idempotency) {
+            ShopTokenGenerator tokens, ShopOrderDisplayNoGenerator displayNos,
+            IdempotencyService idempotency) {
         this.carts = carts;
         this.addresses = addresses;
         this.quotes = quotes;
@@ -81,6 +84,7 @@ public class CheckoutService {
         this.rules = rules;
         this.wallet = wallet;
         this.tokens = tokens;
+        this.displayNos = displayNos;
         this.idempotency = idempotency;
     }
 
@@ -103,10 +107,25 @@ public class CheckoutService {
             return new CheckoutPreview(cart, addr, null, null, wallet.balanceOf(userId),
                     maxCoinPerOrder(), false, false, policiesOf(cart));
         }
-        ShippingQuote quote = quotes.quote(addr.getKecamatan(), cart.subtotal());
-        PaymentSplit split = splitFor(userId, cart.subtotal(), quote);
+        // 🔴 Story 4-1：三个计算点（免运门槛 / PawCoin 上限 / 库存锁定）的输入集合
+        //    全部换成「选中且有效」的行（CartView.selectedLines / selectedSubtotal）。
+        //    算式本身一行不改 —— ShippingQuoteService / PaymentSplit / InventoryService
+        //    三个类在本 story 的 diff 里零改动。
+        long goodsSubtotal = cart.selectedSubtotal();
+        if (nothingSelected(cart, cart.selectedLines())) {
+            // 🔴 复审 #10：一件都没选时**不算运费、不给应付总额**。
+            //    原实现照常往下走，于是返回一个「商品 0 元、只有运费」的应付总额，
+            //    而同一状态去下单会被 422 拦住 —— 预览与下单自相矛盾，
+            //    此前只靠 App 端 selectedCount==0 兜着，接口自己是不自洽的。
+            //    这里沿用本方法「不抛异常、返回降级视图」的既有姿态（见方法头注释）：
+            //    quote / split 为 null ⇒ 前端拿不到应付总额，自然也就不会显示「只付运费」。
+            return new CheckoutPreview(cart, addr, null, null, wallet.balanceOf(userId),
+                    maxCoinPerOrder(), false, true, policiesOf(cart));
+        }
+        ShippingQuote quote = quotes.quote(addr.getKecamatan(), goodsSubtotal);
+        PaymentSplit split = splitFor(userId, goodsSubtotal, quote);
         return new CheckoutPreview(cart, addr, quote, split, wallet.balanceOf(userId),
-                maxCoinPerOrder(), coinCapped(userId, cart.subtotal(), quote, split), true,
+                maxCoinPerOrder(), coinCapped(userId, goodsSubtotal, quote, split), true,
                 policiesOf(cart));
     }
 
@@ -119,7 +138,10 @@ public class CheckoutService {
     private Map<String, ReturnPolicy> policiesOf(CartView cart) {
         Map<String, ShopSku> skuByToken = skusOf(cart);
         Map<String, ReturnPolicy> out = new java.util.LinkedHashMap<>();
-        for (CartView.CartLine l : cart.lines()) {
+        // 🔴 Story 4-1：只收选中集。这个 map 除了逐行查规则，还要喂给
+        //    CheckoutPreviewView.strictest 算**整单**的退货标识 —— 把用户没勾的商品
+        //    算进去，会让他为一件自己压根不买的东西看到「本单不可退」。
+        for (CartView.CartLine l : cart.selectedLines()) {
             ShopSku sku = skuByToken.get(l.skuToken());
             if (sku != null) {
                 out.put(l.skuToken(), effectiveReturnPolicy(sku));
@@ -189,22 +211,40 @@ public class CheckoutService {
             throw AppException.validation("购物车为空");
         }
 
+        // 🔴 Story 4-1：判序在既有空车检查【之后】。
+        //    「车里有东西但一件都没勾」与「车是空的」是两回事，给同一句话会让用户
+        //    去找一辆并不空的空车。整车失效仍走上面那条（逐行明细）—— 那段语义不动。
+        List<CartView.CartLine> selected = cart.selectedLines();
+        if (nothingSelected(cart, selected)) {
+            throw AppException.validation("请至少选择一件商品");
+        }
+
         // ① 地址与服务范围。🔴 超范围在这里阻断（保存地址时不校验，FR-99）
         ShippingAddress addr = addresses.require(userId, addressToken);
-        ShippingQuote quote = quotes.quote(addr.getKecamatan(), cart.subtotal());
+        ShippingQuote quote = quotes.quote(addr.getKecamatan(), cart.selectedSubtotal());
 
         // ② 🔴 第二次库存校验（第一次在加购时）。逐行收集问题，不遇到第一个就抛
-        List<UnavailableLine> unavailable = collectUnavailable(cart);
+        //    🔴 Story 4-1：只校验选中集 —— 未选中的行有没有货与本单无关，
+        //    因它 409 会让用户被一件自己压根没打算买的东西挡住。
+        List<UnavailableLine> unavailable = collectUnavailable(cart, selected);
         if (!unavailable.isEmpty()) {
             throw new CheckoutUnavailableException(unavailable);
         }
 
         // ③ 建单
-        ShopOrder order = orders.save(ShopOrder.place(tokens.generate(), userId,
-                cart.subtotal(), quote.fee(), quote.discount(), snapshotOf(addr)));
+        // 🔴 Story 4-3：now 只取一次，展示号的日期段与 created_at 共用它。
+        //    各取各的 Instant.now()，在 WIB 跨午夜的那一瞬就会产出「号上写着昨天、
+        //    建单时间是今天」的单 —— 客服按日期对账时无解，且一天只可能出现几笔、
+        //    谁也复现不了。
+        // 🔴 查重走 existsByDisplayNo（「先查后插」），不靠捕获唯一约束异常重试：
+        //    唯一冲突会把当前事务打成 aborted，同一事务内重试必然再失败。
+        Instant now = Instant.now();
+        String displayNo = displayNos.generateUnique(now, orders::existsByDisplayNo);
+        ShopOrder order = orders.save(ShopOrder.place(tokens.generate(), displayNo, now, userId,
+                cart.selectedSubtotal(), quote.fee(), quote.discount(), snapshotOf(addr)));
 
         Map<String, ShopSku> skuByToken = skusOf(cart);
-        for (CartView.CartLine line : cart.lines()) {
+        for (CartView.CartLine line : selected) {
             ShopSku sku = skuByToken.get(line.skuToken());
             ShopOrderLine ol = ShopOrderLine.of(order.getId(), sku.getId(),
                     line.productName(), line.specName(), line.price(), line.qty(),
@@ -224,11 +264,14 @@ public class CheckoutService {
         }
 
         // ⑤ 支付拆分在建单时【固化】，不随后续部分退款重算
-        PaymentSplit split = splitFor(userId, cart.subtotal(), quote);
+        PaymentSplit split = splitFor(userId, cart.selectedSubtotal(), quote);
         order.applyPaymentSplit(channelOf(split), split);
 
-        // ⑥ 清掉已下单的行（失效行留在车里，用户还需要看到它们）
-        for (CartView.CartLine line : cart.lines()) {
+        // ⑥ 🔴 只清**已下单**的行（Story 4-1）。失效行留在车里（用户还需要看到它们），
+        //    未勾选的有效行同样留在车里 —— 他只是这次没买，不是不想要了。
+        //    这里若还遍历 cart.lines()，「只结算选中项」会变成「结算选中项并顺手删掉其余」，
+        //    用户会发现购物车里的东西凭空消失且无从追回。
+        for (CartView.CartLine line : selected) {
             carts.remove(userId, line.skuToken());
         }
 
@@ -256,20 +299,48 @@ public class CheckoutService {
 
     // ---------- 内部 ----------
 
-    /** 🔴 逐行收集，不遇到第一个就抛 —— 用户要一次看清全部问题。 */
-    private List<UnavailableLine> collectUnavailable(CartView cart) {
+    /**
+     * 🔴 逐行收集，不遇到第一个就抛 —— 用户要一次看清全部问题。
+     *
+     * <p>🔴 Story 4-1：<b>只看选中集</b>。失效行里也只报选中的那些 ——
+     * 一件用户压根没勾的下架商品不该把他的结算挡在门外（那正是「先删掉再买」的老毛病）。
+     */
+    /**
+     * 本单「一件都没选」——有效行没选中，<b>且</b>失效行里也没有选中的。
+     *
+     * <p>🔴 两个条件缺一不可（v1.3.0 shop-v2 复审 #2）：
+     * <ul>
+     *   <li>只判 {@code selected.isEmpty() && !cart.lines().isEmpty()}（原写法）会漏掉
+     *       「整车失效且全部未勾选」——此时 {@code lines()} 为空使守卫不触发，而
+     *       {@link #collectUnavailable} 又按 {@code !l.selected()} 跳过了那些失效行，
+     *       三道检查全不拦，落库一张<b>零订单行、商品额 0 却带全额运费</b>的待支付单。</li>
+     *   <li>只判 {@code selected.isEmpty()} 则会抢走「整车失效但仍勾选着」本该走的
+     *       {@link CheckoutUnavailableException} 逐行明细（409）—— 那条路径要告诉用户
+     *       哪一件下架了、哪一件售罄了，换成一句「请至少选择一件商品」是信息倒退。</li>
+     * </ul>
+     */
+    private boolean nothingSelected(CartView cart, List<CartView.CartLine> selected) {
+        return selected.isEmpty()
+                && cart.invalidLines().stream().noneMatch(CartView.CartLine::selected);
+    }
+
+    private List<UnavailableLine> collectUnavailable(CartView cart,
+            List<CartView.CartLine> selected) {
         List<UnavailableLine> out = new ArrayList<>();
         // 失效行（已下架/已售罄）直接进列表
         for (CartView.CartLine l : cart.invalidLines()) {
+            if (!l.selected()) {
+                continue;
+            }
             out.add(new UnavailableLine(l.skuToken(), l.productName(), l.specName(),
                     CartView.REASON_DELISTED.equals(l.invalidReason())
                             ? UnavailableLine.REASON_DELISTED
                             : UnavailableLine.REASON_INSUFFICIENT_STOCK,
                     l.availableStock() == null ? 0L : l.availableStock(), l.qty()));
         }
-        // 有效行再核一次可售量：加购到结算之间可能已被别人买走
+        // 选中的有效行再核一次可售量：加购到结算之间可能已被别人买走
         Map<String, ShopSku> skuByToken = skusOf(cart);
-        for (CartView.CartLine l : cart.lines()) {
+        for (CartView.CartLine l : selected) {
             ShopSku sku = skuByToken.get(l.skuToken());
             if (sku == null) {
                 continue;

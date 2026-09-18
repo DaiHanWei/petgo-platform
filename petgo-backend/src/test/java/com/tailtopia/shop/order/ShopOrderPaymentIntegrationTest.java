@@ -11,12 +11,14 @@ import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.pay.service.PaymentIntentService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.pay.GatewayStatus;
+import com.tailtopia.shared.analytics.AnalyticsClient;
 import com.tailtopia.shared.pay.PaymentCallback;
 import com.tailtopia.shop.address.domain.AddressFields;
 import com.tailtopia.shop.address.service.ShippingAddressService;
 import com.tailtopia.shop.cart.service.CartService;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.domain.ShopOrderStatus;
+import com.tailtopia.shop.order.dto.ShopOrderDetailView;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.shop.order.service.AdminShopPawcoinRulesService;
 import com.tailtopia.shop.order.service.CheckoutService;
@@ -26,12 +28,16 @@ import com.tailtopia.shop.shipping.service.AdminShippingZoneService;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 /**
  * L1：电商订单支付（Story 3.8，FR-100 / AD-8 / AD-9）。
@@ -39,7 +45,14 @@ import org.springframework.test.context.TestPropertySource;
  * <p>🔴 本类看的是**钱与货的一致性**：重复回调只扣一次库存、超时必须把库存还回去、
  * 纯 PawCoin 单当场结清、支付窗以服务端时刻为准。这些错了都是真实损失，不是显示问题。
  */
-@TestPropertySource(properties = "petgo.shop.sku-cap=500")
+@TestPropertySource(properties = {
+        "petgo.shop.sku-cap=500",
+        // 🔴 v1.3.0 shop-v2 复审 #14：enqueue 现在受 isLive() 闸门约束（mode 默认 off），
+        //    不显式开就一行都登记不上，本类 3-4 那几条会静默失真。
+        //    cron=- 关掉扫描器的定时任务：live 配置下它会在测试中途真去连 Lark（10s 超时出网）。
+        "petgo.shop.order-notify.mode=live",
+        "petgo.shop.order-notify.receive-id=oc_integration_test_fake",
+        "petgo.shop.order-notify.cron=-"})
 class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
@@ -64,6 +77,19 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
     private SkuInventoryRepository inventory;
     @Autowired
     private JdbcTemplate jdbc;
+
+    /**
+     * Story 1-2：捕获服务端埋点实参。
+     *
+     * <p>用 spy 而不是 mock —— 真实现（{@code PostHogAnalyticsClient}）在测试环境
+     * {@code key} 为空 ⇒ {@code isEnabled()} 为 false ⇒ 本就不出网，spy 只负责记下调用。
+     */
+    @MockitoSpyBean
+    private AnalyticsClient analytics;
+
+    /** Story 3-4：用 spy 是为了能让 {@code enqueue} 在一条用例里定向炸掉，其余用例走真实现。 */
+    @MockitoSpyBean
+    private com.tailtopia.shop.order.notify.ShopOrderNotifyService orderNotify;
 
     private static final long ACTOR = 1L;
 
@@ -386,6 +412,256 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
         assertThatThrownBy(() -> payments.cancel(stranger, order.getPublicToken()))
                 .isInstanceOf(AppException.class)
                 .hasMessageContaining("订单不存在");
+    }
+
+    // ---------- Story 1-1：支付失败类别下发（AC5 / AC8） ----------
+
+    /** 详情装配走的是 controller 的 detailOf 同一条路：取意图 → 传进带意图的重载。 */
+    private ShopOrderDetailView detailOf(long uid, String orderToken) {
+        ShopOrder order = payments.requireOwn(uid, orderToken);
+        return ShopOrderDetailView.of(order, payments.linesOf(order), java.util.List.of(),
+                java.util.Map.of(), payments.intentOf(order).orElse(null));
+    }
+
+    private ShopOrder payableOrder(long uid) {
+        rules.update(true, true, 1_000_000L, ACTOR);
+        ShopOrder order = placeOrder(uid, seedSku(10, 285_000L), 1, 285_000L);
+        payments.pay(uid, order.getPublicToken(), null);
+        return order;
+    }
+
+    @Test
+    @DisplayName("🔴 网关回调 FAILED（rawMeta 无 reason）→ paymentFailureCategory = GATEWAY_DECLINED")
+    void gatewayDeclinedIsReported() {
+        long uid = seedUser();
+        ShopOrder order = payableOrder(uid);
+        String intentToken = orders.findByPublicToken(order.getPublicToken()).orElseThrow()
+                .getPaymentIntentToken();
+
+        // 网关拒付的常态：rawMeta 是第三方原文，一般没有 reason 键。
+        paymentIntents.applyCallback(new PaymentCallback(intentToken,
+                "gw-" + SEQ.incrementAndGet(), GatewayStatus.FAILED,
+                Map.of("status", "deny", "code", "51")));
+
+        var view = detailOf(uid, order.getPublicToken());
+        assertThat(view.paymentStatus()).isEqualTo(PaymentStatus.FAILED.name());
+        assertThat(view.paymentFailureCategory()).isEqualTo("GATEWAY_DECLINED");
+    }
+
+    @Test
+    @DisplayName("🔴 超时取消（reason=TIMEOUT）→ EXPIRED，不得是 GATEWAY_DECLINED")
+    void timeoutCancelIsExpiredNotDeclined() {
+        long uid = seedUser();
+        ShopOrder order = payableOrder(uid);
+        expireOrder(order.getPublicToken());
+
+        // 懒过期：读一次详情即触发 releaseAndCancel(order, "TIMEOUT")
+        var view = detailOf(uid, order.getPublicToken());
+
+        assertThat(view.status()).isEqualTo(ShopOrderStatus.CANCELLED.name());
+        assertThat(view.paymentFailureCategory())
+                .as("超时被标成网关拒付会给出一个不该给的重试入口")
+                .isEqualTo("EXPIRED");
+    }
+
+    @Test
+    @DisplayName("🔴 用户主动取消（reason=USER_CANCEL）→ USER_CANCELLED")
+    void userCancelIsReported() {
+        long uid = seedUser();
+        ShopOrder order = payableOrder(uid);
+
+        payments.cancel(uid, order.getPublicToken());
+
+        var view = detailOf(uid, order.getPublicToken());
+        assertThat(view.status()).isEqualTo(ShopOrderStatus.CANCELLED.name());
+        assertThat(view.paymentFailureCategory()).isEqualTo("USER_CANCELLED");
+    }
+
+    @Test
+    @DisplayName("🔴 判序钉子：意图被扫描器抢先置 EXPIRED（meta 无 reason）→ 仍是 EXPIRED")
+    void scannerExpiredIntentStaysExpired() {
+        long uid = seedUser();
+        ShopOrder order = payableOrder(uid);
+        String intentToken = orders.findByPublicToken(order.getPublicToken()).orElseThrow()
+                .getPaymentIntentToken();
+
+        // 把意图的付款窗拨到过去，让 PaymentIntentExpiryScanner 那条路先把它置 EXPIRED。
+        jdbc.update("UPDATE payment_intents SET expires_at = ? WHERE public_token = ?",
+                java.sql.Timestamp.from(Instant.now().minusSeconds(60)), intentToken);
+        paymentIntents.expireOverduePending(10);
+        assertThat(paymentIntents.findByToken(intentToken).orElseThrow().getStatus())
+                .isEqualTo(PaymentStatus.EXPIRED);
+
+        // 订单侧随后取消 —— failByToken 因「已终态即 no-op」写不进 reason，meta 仍无 reason 键。
+        expireOrder(order.getPublicToken());
+        payments.cancelOneOverdue(
+                orders.findByPublicToken(order.getPublicToken()).orElseThrow().getId());
+
+        var view = detailOf(uid, order.getPublicToken());
+        assertThat(view.paymentStatus()).isEqualTo(PaymentStatus.EXPIRED.name());
+        assertThat(view.paymentFailureCategory())
+                .as("这是 AC5 的核心：判序写反了这里就会变成 GATEWAY_DECLINED，不许改断言迁就实现")
+                .isEqualTo("EXPIRED");
+    }
+
+    @Test
+    @DisplayName("纯 PawCoin 单（无支付意图）→ paymentStatus / paymentFailureCategory 均为 null")
+    void pureCoinOrderHasNoPaymentFields() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        topUp(uid, 500_000L);
+        String sku = seedSku(10, 100_000L);
+        ShopOrder order = placeOrder(uid, sku, 1, 100_000L);
+        payments.pay(uid, order.getPublicToken(), null);
+
+        assertThat(orders.findByPublicToken(order.getPublicToken()).orElseThrow()
+                .getPaymentIntentToken()).isNull();
+        var view = detailOf(uid, order.getPublicToken());
+        assertThat(view.paymentStatus()).isNull();
+        assertThat(view.paymentFailureCategory()).isNull();
+    }
+
+    // ---------- Story 1-2：支付漏斗埋点（AC9 / AC10） ----------
+
+    @SuppressWarnings("unchecked")
+    private List<String> capturedEvents() {
+        ArgumentCaptor<String> event = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(analytics, Mockito.atLeast(0))
+                .capture(Mockito.anyString(), event.capture(), Mockito.any(Map.class));
+        return event.getAllValues();
+    }
+
+    @Test
+    @DisplayName("🔴 AC9：连点三次「去支付」只发一条 shop_payment_intent_created（幂等不灌水）")
+    void repeatedPayEmitsIntentCreatedOnlyOnce() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        ShopOrder order = placeOrder(uid, seedSku(10, 285_000L), 1, 285_000L);
+
+        payments.pay(uid, order.getPublicToken(), null);
+        payments.pay(uid, order.getPublicToken(), null);
+        payments.pay(uid, order.getPublicToken(), null);
+
+        assertThat(capturedEvents())
+                .as("ensureIntent 幂等：三次拿回同一个意图，漏斗入口不该多出两个")
+                .filteredOn("shop_payment_intent_created"::equals)
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("AC10：到账 → shop_payment_paid，属性恰好是白名单允许的子集")
+    void paidEmitsShopPaymentPaid() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        ShopOrder order = placeOrder(uid, seedSku(10, 285_000L), 1, 285_000L);
+        payments.pay(uid, order.getPublicToken(), null);
+        payCallback(orders.findByPublicToken(order.getPublicToken()).orElseThrow()
+                .getPaymentIntentToken());
+
+        ArgumentCaptor<Map<String, Object>> props = propsCaptorFor("shop_payment_paid");
+        assertThat(props.getValue().keySet())
+                .isSubsetOf("order_amount", "pay_channel", "has_pawcoin");
+        assertThat(props.getValue()).containsEntry("order_amount", 285_000L);
+    }
+
+    @Test
+    @DisplayName("AC10：网关拒付 → shop_payment_declined，带 failure_category，且无订单号与 PII")
+    void declinedEmitsShopPaymentDeclined() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        ShopOrder order = placeOrder(uid, seedSku(10, 285_000L), 1, 285_000L);
+        payments.pay(uid, order.getPublicToken(), null);
+        paymentIntents.applyCallback(new PaymentCallback(
+                orders.findByPublicToken(order.getPublicToken()).orElseThrow()
+                        .getPaymentIntentToken(),
+                "gw-" + SEQ.incrementAndGet(), GatewayStatus.FAILED, Map.of("status", "deny")));
+
+        ArgumentCaptor<Map<String, Object>> props = propsCaptorFor("shop_payment_declined");
+        assertThat(props.getValue()).containsEntry("failure_category", "GATEWAY_DECLINED");
+        assertThat(props.getValue().keySet())
+                .isSubsetOf("order_amount", "pay_channel", "has_pawcoin", "failure_category");
+    }
+
+    // ---------- Story 3-4：新订单提醒登记绝不拖累支付 ----------
+
+    @Test
+    @DisplayName("🎯 复审 #6：纯 PawCoin 单同样被登记 —— 它不产生支付意图、不发到账事件")
+    void pureCoinOrderIsAlsoEnqueuedForNotify() {
+        // 🔴 这是 #6 的回归：原实现把登记挂在 PaymentIntentPaidEvent 上，
+        //    而纯币单走 settlePureCoin —— 既不建意图也不发那个事件，于是整条路径
+        //    永不入队：用户付了钱，运营永远收不到这批单的发货信号。
+        //    现在登记挂在「订单真的转为待发货」这个事实（ShopOrderPaidEvent）上。
+        //    🎯 把 ShopOrderPaymentService.fulfillPaid 里的 publishEvent 删掉，本条必须红。
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        long price = 100_000L;
+        topUp(uid, 500_000L);       // 余额足以全额抵扣 → 现金段为 0 → 纯 PawCoin 路径
+        ShopOrder order = placeOrder(uid, seedSku(10, price), 1, price);
+        assertThat(order.getPayChannel())
+                .as("前提：这条用例必须真的走纯币路径，否则它证明不了 #6")
+                .isEqualTo(PayChannel.PAWCOIN);
+
+        payments.pay(uid, order.getPublicToken(), null);   // 当场结清，无网关往返
+
+        ShopOrder settled = orders.findByPublicToken(order.getPublicToken()).orElseThrow();
+        assertThat(settled.getStatus()).isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM shop_order_notify_queue WHERE shop_order_id = ?",
+                Integer.class, settled.getId()))
+                .as("🎯 纯币单也必须进待提醒队列")
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("3-4 AC1：到账后订单被登记为「待提醒」")
+    void paidEnqueuesTheOrderForNotify() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        ShopOrder order = placeOrder(uid, seedSku(10, 285_000L), 1, 285_000L);
+        payments.pay(uid, order.getPublicToken(), null);
+        payCallback(orders.findByPublicToken(order.getPublicToken()).orElseThrow()
+                .getPaymentIntentToken());
+
+        long orderId = orders.findByPublicToken(order.getPublicToken()).orElseThrow().getId();
+        Integer rows = jdbc.queryForObject(
+                "SELECT count(*) FROM shop_order_notify_queue WHERE shop_order_id = ?",
+                Integer.class, orderId);
+        assertThat(rows).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("🔴🔴 3-4 AC1：登记炸了，支付照样到账、库存照样扣 —— 一条运维提醒不配回滚一笔钱")
+    void notifyEnqueueFailureNeverRollsBackThePayment() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        String sku = seedSku(10, 285_000L);
+        ShopOrder order = placeOrder(uid, sku, 1, 285_000L);
+        payments.pay(uid, order.getPublicToken(), null);
+
+        // 让登记必然失败。onPaid 是 MANDATORY 传播：异常冒出去会把整个支付回调事务
+        // 连同意图的 markPaid 一起回滚 —— 那才是真的丢账。
+        Mockito.doThrow(new IllegalStateException("notify queue down"))
+                .when(orderNotify).enqueue(Mockito.anyLong());
+
+        payCallback(orders.findByPublicToken(order.getPublicToken()).orElseThrow()
+                .getPaymentIntentToken());
+
+        ShopOrder after = orders.findByPublicToken(order.getPublicToken()).orElseThrow();
+        assertThat(after.getStatus())
+                .as("提醒登记失败不得影响订单状态迁移")
+                .isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
+        var inv = inventory.findBySkuId(skuId(sku)).orElseThrow();
+        assertThat(inv.getActual()).as("库存扣减必须照常发生").isEqualTo(9L);
+        assertThat(inv.getLocked()).isZero();
+        assertThat(paymentIntents.findByToken(after.getPaymentIntentToken()).orElseThrow()
+                .getStatus()).isEqualTo(PaymentStatus.PAID);
+    }
+
+    @SuppressWarnings("unchecked")
+    private ArgumentCaptor<Map<String, Object>> propsCaptorFor(String event) {
+        ArgumentCaptor<Map<String, Object>> props = ArgumentCaptor.forClass(Map.class);
+        Mockito.verify(analytics).capture(Mockito.anyString(), Mockito.eq(event), props.capture());
+        return props;
     }
 
     /** 把支付窗拨到过去（真等 60 分钟不现实；服务端时刻仍是唯一判定依据）。 */

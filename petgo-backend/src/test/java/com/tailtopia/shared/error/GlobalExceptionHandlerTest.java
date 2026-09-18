@@ -1,6 +1,8 @@
 package com.tailtopia.shared.error;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -144,5 +146,102 @@ class GlobalExceptionHandlerTest {
         } finally {
             org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
         }
+    }
+
+    // ================================================================
+    // Story 5-2：用错请求方法 / Content-Type 不再返回 500（SHOP-FR-31）
+    //
+    // 🔴 本组守的是**告警噪声**，不只是状态码。只改状态码而日志仍是 catch-all 的
+    //    log.error(..., ex) + 整条堆栈，告警一点没少 —— 需求等于没做完。
+    // ================================================================
+
+    /**
+     * 🔴 用<b>真实 MockMvc 分发</b>而不是直接调 handler 方法：
+     * 直接调只能证明「这个方法能构造出 ProblemDetail」，证明不了
+     * <b>advice 真的接得住</b> Spring 在进 controller 之前抛出的那个异常。
+     */
+    @Test
+    void wrongHttpMethodIs405WithAllowHeader() throws Exception {
+        // PingErrorController 只声明了 GET /api/v1/_ping-error，对它 POST 即触发。
+        mockMvc.perform(post("/api/v1/_ping-error"))
+                .andExpect(status().isMethodNotAllowed())
+                // HTTP 语义要求 405 必须带 Allow。Spring 的 DefaultHandlerExceptionResolver
+                // 本来会自动加，但本类的 catch-all 把所有异常都截走了，那条路径永远走不到。
+                .andExpect(header().string("Allow", org.hamcrest.Matchers.containsString("GET")))
+                .andExpect(jsonPath("$.status").value(405))
+                .andExpect(jsonPath("$.title").value("Method Not Allowed"))
+                .andExpect(jsonPath("$.detail").value("请求方法不被支持"))
+                .andExpect(jsonPath("$.type").exists())
+                .andExpect(jsonPath("$.instance").value("/api/v1/_ping-error"))
+                .andExpect(jsonPath("$.traceId").exists());
+    }
+
+    @Test
+    void methodNotAllowedBodyLeaksNothing() throws Exception {
+        String body = mockMvc.perform(post("/api/v1/_ping-error"))
+                .andReturn().getResponse().getContentAsString();
+
+        // 绝不外泄堆栈 / 类名 / 包名 —— 它们对客户端无用，只暴露实现。
+        org.assertj.core.api.Assertions.assertThat(body)
+                .doesNotContain("HttpRequestMethodNotSupportedException")
+                .doesNotContain("org.springframework")
+                .doesNotContain("at com.tailtopia")
+                .doesNotContain("Exception");
+    }
+
+    @Test
+    void unsupportedContentTypeIs415WithAcceptHeader() throws Exception {
+        MockMvc mvc = MockMvcBuilders
+                .standaloneSetup(new MediaTypeTestController())
+                .setControllerAdvice(handler())
+                .build();
+
+        mvc.perform(post("/api/v1/_media-test")
+                        .contentType(org.springframework.http.MediaType.TEXT_PLAIN)
+                        .content("hello"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(header().exists("Accept"))
+                .andExpect(jsonPath("$.status").value(415))
+                .andExpect(jsonPath("$.title").value("Unsupported Media Type"))
+                .andExpect(jsonPath("$.detail").value("不支持的请求内容类型"))
+                .andExpect(jsonPath("$.type").exists())
+                .andExpect(jsonPath("$.instance").value("/api/v1/_media-test"))
+                .andExpect(jsonPath("$.traceId").exists());
+    }
+
+    @Test
+    void unsupportedMediaTypeBodyLeaksNothing() throws Exception {
+        MockMvc mvc = MockMvcBuilders
+                .standaloneSetup(new MediaTypeTestController())
+                .setControllerAdvice(handler())
+                .build();
+
+        String body = mvc.perform(post("/api/v1/_media-test")
+                        .contentType(org.springframework.http.MediaType.TEXT_PLAIN)
+                        .content("hello"))
+                .andReturn().getResponse().getContentAsString();
+
+        org.assertj.core.api.Assertions.assertThat(body)
+                .doesNotContain("HttpMediaTypeNotSupportedException")
+                .doesNotContain("org.springframework")
+                .doesNotContain("Exception");
+    }
+
+    /**
+     * 🔴 信封里<b>只有</b> base(...) 的六项，没有多余属性。
+     *
+     * <p>多一个属性就是多一处可能外泄实现细节的地方，而这类响应是**任何人**
+     * 随便发一个请求就能拿到的。
+     */
+    @Test
+    void methodNotAllowedEnvelopeHasExactlyTheSixFields() throws Exception {
+        String body = mockMvc.perform(post("/api/v1/_ping-error"))
+                .andReturn().getResponse().getContentAsString();
+
+        var map = new com.fasterxml.jackson.databind.ObjectMapper()
+                .readValue(body, java.util.Map.class);
+        org.assertj.core.api.Assertions.assertThat(map.keySet())
+                .containsExactlyInAnyOrder("type", "title", "status", "detail", "instance",
+                        "traceId");
     }
 }
