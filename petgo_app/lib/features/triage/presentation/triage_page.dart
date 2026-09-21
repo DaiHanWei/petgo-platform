@@ -135,15 +135,12 @@ class _TriagePageState extends ConsumerState<TriagePage> {
       // 标题复用 triageHeroTitle（Kesehatan/Health），不新增 arb key。
       appBar: AppBar(
         backgroundColor: AppColors.cream,
-        centerTitle: true,
         leading: IconButton(
           key: const ValueKey('triageBack'),
-          icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+          icon: const Icon(Icons.chevron_left_rounded, size: 28, color: AppColors.ink),
           onPressed: () => canPop ? context.pop() : context.go('/home'),
         ),
-        title: Text(l10n.triageHeroTitle,
-            style: const TextStyle(
-                fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        title: Text(l10n.triageHeroTitle),
       ),
       body: SafeArea(
         bottom: false,

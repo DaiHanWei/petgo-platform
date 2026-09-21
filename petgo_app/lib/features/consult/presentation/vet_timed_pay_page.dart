@@ -276,11 +276,6 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
           automaticallyImplyLeading: false,
           title: Text(
             l10n.vetPayTitle,
-            style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: AppColors.ink,
-            ),
           ),
         ),
         body: SafeArea(

@@ -67,8 +67,7 @@ class _VetRequestConfirmPageState extends ConsumerState<VetRequestConfirmPage> {
         backgroundColor: AppColors.base,
         elevation: 0,
         foregroundColor: AppColors.ink,
-        title: Text(l10n.vetRequestConfirmTitle,
-            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        title: Text(l10n.vetRequestConfirmTitle),
       ),
       body: SafeArea(
         child: Column(

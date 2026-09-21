@@ -109,7 +109,7 @@ class PlaceListPage extends ConsumerWidget {
         appBar: AppBar(
           backgroundColor: AppColors.cream,
           scrolledUnderElevation: 0,
-          title: Text(l10n.placeListTitle, style: AppTypography.title),
+          title: Text(l10n.placeListTitle),
           actions: [
             if (onMark != null)
               IconButton(

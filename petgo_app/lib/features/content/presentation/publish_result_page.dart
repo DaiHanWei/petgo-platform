@@ -509,7 +509,7 @@ class PublishRejectedPage extends StatelessWidget {
           child: const SizedBox(
             width: 36,
             height: 36,
-            child: Icon(Icons.arrow_back, size: 18, color: AppColors.ink2),
+            child: Icon(Icons.chevron_left_rounded, size: 24, color: AppColors.ink2),
           ),
         ),
       );

@@ -197,7 +197,7 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
                 color: const Color(0xFFEFEDF3),
                 borderRadius: BorderRadius.circular(11),
               ),
-              child: const Icon(Icons.arrow_back, size: 18, color: AppColors.ink2),
+              child: const Icon(Icons.chevron_left_rounded, size: 24, color: AppColors.ink2),
             ),
           ),
           const SizedBox(width: 12),

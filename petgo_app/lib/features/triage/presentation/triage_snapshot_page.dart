@@ -83,7 +83,7 @@ class _ErrorState extends StatelessWidget {
             padding: const EdgeInsets.all(8),
             child: IconButton(
               key: const ValueKey('triageSnapshotBack'),
-              icon: const Icon(Icons.arrow_back),
+              icon: const Icon(Icons.chevron_left_rounded, size: 28),
               onPressed: () => context.canPop() ? context.pop() : context.go('/triage'),
             ),
           ),

@@ -239,7 +239,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
           child: const SizedBox(
             width: 40,
             height: 40,
-            child: Icon(Icons.arrow_back, size: 20, color: AppColors.ink),
+            child: Icon(Icons.chevron_left_rounded, size: 26, color: AppColors.ink),
           ),
         ),
       );

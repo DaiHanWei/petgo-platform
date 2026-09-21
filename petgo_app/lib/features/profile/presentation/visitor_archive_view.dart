@@ -144,7 +144,7 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
           key: const ValueKey('visitorBackButton'),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-          icon: const Icon(Icons.arrow_back, size: 22, color: AppColors.ink),
+          icon: const Icon(Icons.chevron_left_rounded, size: 28, color: AppColors.ink),
           onPressed: () {
             if (context.canPop()) {
               context.pop();
