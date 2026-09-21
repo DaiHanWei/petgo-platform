@@ -284,7 +284,7 @@ class _VetRequestDetailPageState extends ConsumerState<VetRequestDetailPage> {
                     color: Colors.white.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.arrow_back, size: 18, color: Colors.white),
+                  child: const Icon(Icons.chevron_left_rounded, size: 24, color: Colors.white),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),

@@ -130,7 +130,7 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
           child: Text(l10n.commonCancel,
               style: AppTypography.body.copyWith(color: AppColors.textSecondary)),
         ),
-        title: Text(l10n.placeMarkTitle, style: AppTypography.title),
+        title: Text(l10n.placeMarkTitle),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: AppSpacing.sm),

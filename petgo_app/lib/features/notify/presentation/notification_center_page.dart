@@ -307,7 +307,6 @@ class _NotificationCenterPageState
       appBar: AppBar(
         backgroundColor: AppColors.base,
         scrolledUnderElevation: 0,
-        titleSpacing: 20,
         // 🐛 2026-08-07：**永远给一个出口**。
         //
         // `AppBar` 只在 `Navigator.canPop()` 为真时才自动生成返回箭头。冷启动点推送落到这里时
@@ -320,18 +319,14 @@ class _NotificationCenterPageState
             ? null // 有上一页 → 交给 AppBar 的默认返回键（保留系统返回语义与左滑手势）
             : IconButton(
                 key: const ValueKey('notificationCenterHome'),
-                icon: const Icon(Icons.arrow_back),
+                // 与全局返回键同形（主题 backButtonIconBuilder：‹），兜底出口不该长得不一样。
+                icon: const Icon(Icons.chevron_left_rounded, size: 28),
                 color: AppColors.ink,
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
                 onPressed: () => context.go('/home'),
               ),
         title: Text(
           l10n.notificationCenterTitle,
-          style: const TextStyle(
-            fontSize: 19,
-            fontWeight: FontWeight.w700,
-            color: AppColors.ink,
-          ),
         ),
         // 「全部已读」（2026-08-19 加，产品定：右上角、**不做二次确认**）。
         // 仅在已加载到至少一条未读时露出 —— 没有未读时这个按钮没有意义，露出来只是噪音。

@@ -163,17 +163,15 @@ class _MilestoneListPageState extends ConsumerState<MilestoneListPage> {
       backgroundColor: AppColors.base,
       appBar: AppBar(
         backgroundColor: AppColors.base,
-        centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+          icon: const Icon(Icons.chevron_left_rounded, size: 28, color: AppColors.ink),
           onPressed: () => context.canPop() ? context.pop() : context.go('/profile'),
         ),
         // 标题带宠名（0711「Milestone Mochi」）；数据未就绪时回退通用词。
         title: Text(
             async.asData?.value.petName != null
                 ? l10n.milestoneListTitleNamed(async.asData!.value.petName)
-                : l10n.milestoneListTitle,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                : l10n.milestoneListTitle),
       ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),

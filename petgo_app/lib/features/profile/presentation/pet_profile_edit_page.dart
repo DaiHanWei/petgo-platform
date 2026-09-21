@@ -201,7 +201,7 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
         backgroundColor: AppColors.base,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+          icon: const Icon(Icons.chevron_left_rounded, size: 28, color: AppColors.ink),
           onPressed: () => context.canPop() ? context.pop() : context.go('/profile'),
         ),
         // 标题随宠物名（原型 P-32「Edit Profil {名}」）；加载中回退通用标题。
@@ -209,7 +209,6 @@ class _PetProfileEditPageState extends ConsumerState<PetProfileEditPage> {
           (loadedName != null && loadedName.isNotEmpty)
               ? l10n.petProfileEditTitleNamed(loadedName)
               : l10n.petProfileEditTitle,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink),
         ),
         // 保存按钮在右上角（原型 P-32，区别于创建页底部按钮）。
         actions: [

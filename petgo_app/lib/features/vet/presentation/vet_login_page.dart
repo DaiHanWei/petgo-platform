@@ -82,7 +82,7 @@ class _VetLoginPageState extends ConsumerState<VetLoginPage> {
                   child: const SizedBox(
                     width: 40,
                     height: 40,
-                    child: Icon(Icons.arrow_back, size: 20, color: AppColors.vetPrimaryDeep),
+                    child: Icon(Icons.chevron_left_rounded, size: 26, color: AppColors.vetPrimaryDeep),
                   ),
                 ),
               ),

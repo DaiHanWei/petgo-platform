@@ -69,7 +69,7 @@ class _PetStatusPageState extends ConsumerState<PetStatusPage> {
                       child: Container(
                         width: 36, height: 36,
                         decoration: BoxDecoration(color: const Color(0xFFEFEDF3), borderRadius: BorderRadius.circular(11)),
-                        child: const Icon(Icons.arrow_back, size: 18, color: Color(0xFF544864)),
+                        child: const Icon(Icons.chevron_left_rounded, size: 24, color: Color(0xFF544864)),
                       ),
                     ),
                     const SizedBox(width: 12),

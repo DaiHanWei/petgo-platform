@@ -678,7 +678,7 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                     color: const Color(0xFFF3F3F3),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.arrow_back, size: 18, color: AppColors.ink2),
+                  child: const Icon(Icons.chevron_left_rounded, size: 24, color: AppColors.ink2),
                 ),
               ),
               const SizedBox(width: 11),
