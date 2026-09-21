@@ -134,7 +134,8 @@ class _MentionPickerState extends ConsumerState<MentionPicker> {
           // UI 稿 D1：白底 + 1px 描边、圆角 12（不是填充胶囊 —— 胶囊更像全局搜索栏）。
           filled: true,
           fillColor: AppColors.surface,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          // UI 稿 D1：输入框总高约 46（竖向内边距 13）。
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
           border: const OutlineInputBorder(
             borderRadius: AppRounded.mdRadius,
             borderSide: BorderSide(color: AppColors.border),
@@ -163,7 +164,7 @@ class _MentionPickerState extends ConsumerState<MentionPicker> {
         children: [
           if (withIcon) ...[
             const Icon(Icons.people_outline_rounded,
-                size: 36, color: AppColors.textSecondary),
+                size: 30, color: AppColors.textTertiary),
             const SizedBox(height: AppSpacing.sm),
           ],
           Text(title,

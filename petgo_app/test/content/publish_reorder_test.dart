@@ -364,6 +364,10 @@ void main() {
       expect([for (final i in c.items) i.bytes], original);
       // 拖动途中所有 ✕ 都收起（反馈卡本身也不带 ✕）。
       expect(find.byIcon(Icons.close), findsNothing);
+      // U2：拖动途中添加格只留虚线格，「＋」与文字都藏起。
+      final addCell = find.byKey(const ValueKey('publishAddImage'));
+      expect(addCell, findsOneWidget);
+      expect(find.descendant(of: addCell, matching: find.byIcon(Icons.add_rounded)), findsNothing);
 
       await g.up();
       // 不能 pumpAndSettle：pending 态的格子带着常转的 spinner，永远 settle 不了。
@@ -372,6 +376,21 @@ void main() {
 
       expect([for (final i in c.items) i.bytes], [original[2], original[0], original[1]]);
       expect(find.byIcon(Icons.close), findsNWidgets(3), reason: '松手后 ✕ 回来');
+      expect(find.descendant(of: addCell, matching: find.byIcon(Icons.add_rounded)), findsOneWidget,
+          reason: '松手后添加格的「＋」回来');
+    });
+
+    /// a11y：添加格自成一个按钮语义节点（label = 添加格文案），
+    /// 不再与字段标题合并成一个节点。
+    testWidgets('添加格是独立的按钮语义节点', (tester) async {
+      final handle = tester.ensureSemantics();
+      await pumpGrid(tester, images: 0);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+      final node = tester.getSemantics(find.byKey(const ValueKey('publishAddImage')));
+      expect(node.label, l10n.tabAdd);
+      expect(node.flagsCollection.isButton, isTrue);
+      handle.dispose();
     });
 
     testWidgets('拖出网格再松手 → 预览复原，controller 不变', (tester) async {

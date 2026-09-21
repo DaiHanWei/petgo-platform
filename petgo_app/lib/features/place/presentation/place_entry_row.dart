@@ -30,7 +30,7 @@ class PlaceEntryRow extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.sm),
       child: Material(
-        color: AppColors.mintTint,
+        color: AppColors.violet100,
         borderRadius: BorderRadius.circular(12),
         clipBehavior: Clip.antiAlias,
         child: InkWell(

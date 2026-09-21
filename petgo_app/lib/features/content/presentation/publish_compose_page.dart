@@ -1205,37 +1205,48 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   /// 虚线添加格（pcell-add）：2px 虚线紫描边 + 「＋」+ Tambah。
   Widget _addCell(PublishController controller, AppLocalizations l10n) {
-    return GestureDetector(
-      key: const ValueKey('publishAddImage'),
-      // 处理中禁用，避免连点触发多次 _addImage 提前撤占位/闪烁。
-      onTap: _addingImage ? null : () => _pickImageSource(controller, l10n),
-      child: CustomPaint(
-        painter: DashedRRectPainter(
-          color: AppColors.dashedViolet,
-          radius: 9,
-          dash: 5,
-          gap: 4,
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.cream2,
-            borderRadius: BorderRadius.circular(9),
+    // U2：拖动途中只留虚线格，藏起「＋」与文字 —— 手指正在排序，它此刻不是可点的入口。
+    final bool dragging = _dragActive(controller);
+    // a11y：自成一个按钮节点。不包的话空网格时「Tambah」会和上方字段标题合并成一个节点。
+    return Semantics(
+      button: true,
+      container: true,
+      label: l10n.tabAdd,
+      excludeSemantics: true,
+      child: GestureDetector(
+        key: const ValueKey('publishAddImage'),
+        // 处理中禁用，避免连点触发多次 _addImage 提前撤占位/闪烁。
+        onTap: _addingImage ? null : () => _pickImageSource(controller, l10n),
+        child: CustomPaint(
+          painter: DashedRRectPainter(
+            color: AppColors.dashedViolet,
+            radius: 9,
+            dash: 5,
+            gap: 4,
           ),
-          alignment: Alignment.center,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.add_rounded, size: 22, color: AppColors.mint),
-              const SizedBox(height: 3),
-              Text(
-                l10n.tabAdd,
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.mint,
-                ),
-              ),
-            ],
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.cream2,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            alignment: Alignment.center,
+            child: dragging
+                ? null
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.add_rounded, size: 22, color: AppColors.mint),
+                      const SizedBox(height: 3),
+                      Text(
+                        l10n.tabAdd,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.mint,
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ),
       ),
@@ -1278,10 +1289,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(9),
                   boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.28),
-                      blurRadius: 14,
-                      offset: const Offset(0, 6),
+                    // 稿值（U2）：0 10px 24px rgba(30,20,60,.35)。
+                    const BoxShadow(
+                      color: Color(0x591E143C),
+                      blurRadius: 24,
+                      offset: Offset(0, 10),
                     ),
                   ],
                 ),
@@ -1341,23 +1353,25 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         // 不另设「哪张是封面」的字段，否则迟早出现「界面第一张是 A、封面却是 B」。
         // 重排后角标自然跟着新的第一张走，因为它本来就只认下标 0。
         if (index == 0)
+          // 稿值（U1）：top/left 4、padding 1×6、圆角 5、9px/700、rgba(0,0,0,.5)。
           Positioned(
-            left: 3,
-            top: 3,
+            left: 4,
+            top: 4,
             child: Container(
               key: const ValueKey('publishCoverBadge'),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.circular(6),
+                color: Colors.black.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(5),
               ),
               child: Text(
                 l10n.publishCoverBadge,
                 style: const TextStyle(
-                    fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
+                    fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white),
               ),
             ),
           ),
+        // 稿值（U1）：16 圆、rgba(0,0,0,.4)、✕ 图标 10。
         if (showRemove)
           Positioned(
             right: 3,
@@ -1365,11 +1379,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
             child: GestureDetector(
               onTap: () => controller.removeImage(index),
               child: Container(
+                width: 16,
+                height: 16,
+                alignment: Alignment.center,
                 decoration: const BoxDecoration(
-                  color: Colors.black54,
+                  color: Colors.black38,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.close, size: 16, color: Colors.white),
+                child: const Icon(Icons.close, size: 10, color: Colors.white),
               ),
             ),
           ),

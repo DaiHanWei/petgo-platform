@@ -12,7 +12,6 @@ import '../../../../shared/widgets/app_image.dart';
 import '../../../../shared/widgets/initial_avatar.dart';
 import '../../../auth/domain/auth_guard.dart';
 import '../../data/pet_recommendation_repository.dart';
-import '../../domain/pet_age.dart';
 import '../visitor_archive_view.dart';
 
 /// 推荐位埋点的 `from` 取值（Story 4.1 AC7 / 4.3 / 4.4 各一个位置）。
@@ -68,7 +67,10 @@ class RecommendedPetCard extends ConsumerWidget {
 
   /// 小圆头像（含 2px 白边）的直径。UI 稿 E1/E2：头像**一半压在大图下沿之外**，
   /// 所以文字区要先让出半个头像的高度。
-  static const double _avatarDiameter = 36;
+  static const double _avatarDiameter = 28;
+
+  /// UI 稿 E2：小圆头像略**探出大图左边缘**（负偏移，Stack 不裁剪）。
+  static const double _avatarLeft = -AppSpacing.xs;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -85,8 +87,8 @@ class RecommendedPetCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 🛡 大图**吃剩下的高度**，不锁 1:1 —— 网格的 `childAspectRatio` 是个定值，
-            //    而下面三行文字的高度随系统字号/机型变。锁死 1:1 的表现是
-            //    窄屏（360dp）上「一起 238 天」那一行被裁掉（code-review 2026-09-15）。
+            //    而下面两行文字的高度随系统字号/机型变。锁死 1:1 的表现是
+            //    窄屏（360dp）上「物种 · 天数」那一行被裁掉（code-review 2026-09-15）。
             Expanded(child: _cover()),
             Padding(
               // 顶部让出**半个头像**（它从大图下沿探出来），再留一点呼吸。
@@ -102,18 +104,12 @@ class RecommendedPetCard extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: AppSpacing.xxs),
+                  // UI 稿 E2：名字下面**只有一行** micro 灰字「物种 · 陪伴天数」（Kucing · 238 hari）。
+                  // 陪伴天数由后端与 H5 名片同一个算法算好下发。
                   Text(
                     _meta(l10n),
-                    style: AppTypography.micro,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: AppSpacing.xxs),
-                  // 陪伴天数（「一起 238 天」）—— 后端与 H5 名片同一个算法算好下发。
-                  Text(
-                    l10n.petRecommendCompanionDays(pet.companionDays),
                     key: ValueKey('recommendedPetDays_${pet.petId}'),
-                    style: AppTypography.micro.copyWith(color: AppColors.mint600),
+                    style: AppTypography.micro,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -150,7 +146,7 @@ class RecommendedPetCard extends ConsumerWidget {
               : _coverPlaceholder(),
         ),
         Positioned(
-          left: AppSpacing.sm,
+          left: _avatarLeft,
           bottom: -_avatarDiameter / 2,
           child: Container(
             decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.surface),
@@ -160,7 +156,8 @@ class RecommendedPetCard extends ConsumerWidget {
               key: ValueKey('recommendedPetAvatar_${pet.petId}'),
               avatarUrl: pet.avatarUrl,
               nickname: pet.name,
-              radius: 16,
+              // 直径 28 = 2 × 12 + 2px 白边 × 2。
+              radius: (_avatarDiameter - 4) / 2,
             ),
           ),
         ),
@@ -179,7 +176,8 @@ class RecommendedPetCard extends ConsumerWidget {
     );
   }
 
-  /// 「物种 · 年龄」—— **逐项复用既有出口**（物种文案 / `formatPetAge`），不另起口径。
+  /// 「物种 · 陪伴天数」（UI 稿 E2）—— **逐项复用既有文案**（物种文案 / `petCardDays`），不另起口径。
+  /// 物种未知时只剩天数，不留孤零零的分隔符。
   String _meta(AppLocalizations l10n) {
     final species = switch (pet.petType) {
       'CAT' => l10n.petTypeCat,
@@ -189,8 +187,7 @@ class RecommendedPetCard extends ConsumerWidget {
     };
     return [
       ?species,
-      // 不满 1 个月按天表达，避免「0th 0bln」（与档案页同一出口）。
-      ?formatPetAge(l10n, pet.birthday),
+      l10n.petCardDays(pet.companionDays),
     ].join(' · ');
   }
 }

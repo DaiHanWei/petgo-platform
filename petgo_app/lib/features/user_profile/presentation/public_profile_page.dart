@@ -252,36 +252,14 @@ class PublicProfilePage extends ConsumerWidget {
         // 「他还没养宠物」不需要一张空卡片来说明。
         _PetSection(userId: userId),
         const SizedBox(height: AppSpacing.lg),
-        Padding(
-          padding: const EdgeInsets.only(left: AppSpacing.xs, bottom: AppSpacing.sm),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                l10n.profilePostsTitle.toUpperCase(),
-                style: AppTypography.caption
-                    .copyWith(letterSpacing: 0.6, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              // 两个聚合计数（AC2）。UI 稿 C1/C2：与「POSTINGAN」分区标题**同一行右对齐**，
-              // 两种视角同一处。发帖总数**复用既有统计**（没有重新实现），
-              // 获赞总数是本批次新补的；**两者都只算 PUBLIC**，与下面的网格同源 ——
-              // 对不上的话，那个差值就是「这人有几篇私密内容」。
-              Expanded(
-                child: Text(
-                  l10n.profileCounts(p.postCount, p.likeCount),
-                  key: const ValueKey('profileCounts'),
-                  style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
-                  textAlign: TextAlign.right,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
+        // 「POSTINGAN / N postingan · M suka」分区标题行归 `_PostGrid` 管：
+        // UI 稿 C4 —— 内容区为空时**整行不渲染**，空态直接跟在身份区下。
+        _PostGrid(
+          userId: userId,
+          self: p.self,
+          postCount: p.postCount,
+          likeCount: p.likeCount,
         ),
-        _PostGrid(userId: userId, self: p.self),
       ],
     );
   }
@@ -300,18 +278,33 @@ class PublicProfilePage extends ConsumerWidget {
     final action = await showModalBottomSheet<_ProfileAction>(
       context: context,
       backgroundColor: AppColors.surface,
-      showDragHandle: true,
+      // 手柄自己画：`showModalBottomSheet` 不收 `dragHandleColor`，而 Material 默认
+      // 手柄色（onSurfaceVariant）比 UI 稿 C3 那条浅灰手柄深得多。尺寸沿用 Material
+      // 默认（32×4，上下各 22 → 占 48 高），版面与原 `showDragHandle: true` 一致。
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetContext) => SafeArea(
         child: Padding(
+          // UI 稿 C3：两条分隔线左右各让出 lg，不贴抽屉边。
           padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+              AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.md),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Center(
+                child: Container(
+                  key: const ValueKey('profileMenuDragHandle'),
+                  width: 32,
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 22),
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
               // 「举报」与「拉黑」**并列、不分主次**（与迷你卡菜单同一口径）。
               //
               // ⚠️ 已举报过 → 文案换成「已举报 / 点击可再次举报」并用品牌色，
@@ -321,9 +314,9 @@ class PublicProfilePage extends ConsumerWidget {
                 itemKey: const ValueKey('profileMenuReport'),
                 emoji: profile.reported ? '📌' : '🚩',
                 label: profile.reported ? l10n.accountReportedAction : l10n.accountReportAction,
-                subtitle: profile.reported
-                    ? l10n.accountReportedActionSub
-                    : l10n.accountReportActionSub,
+                // UI 稿 C3：常态只有一行主文案；副标题**只在已举报时出现** ——
+                // 它承担「还能再点」的提示，缺了它「已举报」会读成禁用态。
+                subtitle: profile.reported ? l10n.accountReportedActionSub : null,
                 labelColor: profile.reported ? AppColors.mint : AppColors.ink,
                 onTap: () => Navigator.of(sheetContext).pop(_ProfileAction.report),
               ),
@@ -336,7 +329,6 @@ class PublicProfilePage extends ConsumerWidget {
                 itemKey: const ValueKey('profileMenuBlock'),
                 emoji: '🚫',
                 label: l10n.blockUserAction,
-                subtitle: l10n.blockUserActionSub,
                 labelColor: AppColors.popRed,
                 onTap: () => Navigator.of(sheetContext).pop(_ProfileAction.block),
               ),
@@ -453,9 +445,18 @@ class PublicProfilePage extends ConsumerWidget {
 /// ⚠️ 网格用 `shrinkWrap + NeverScrollableScrollPhysics` 挂在外层 ListView 里 ——
 /// 与「我的」页同一种嵌法，两层滚动不会互相抢手势。
 class _PostGrid extends ConsumerWidget {
-  const _PostGrid({required this.userId, required this.self});
+  const _PostGrid({
+    required this.userId,
+    required this.self,
+    required this.postCount,
+    required this.likeCount,
+  });
 
   final int userId;
+
+  /// 分区标题行右侧的两个聚合计数（AC2）。
+  final int postCount;
+  final int likeCount;
 
   /// 自己视角。**只影响空态那一句文案**：「(对方的隐私设置)」写在自己的主页上是句废话。
   ///
@@ -473,18 +474,25 @@ class _PostGrid extends ConsumerWidget {
         child: Center(child: CircularProgressIndicator()),
       ),
       // 内容区取数失败**不接管整页**：身份区已经渲染出来了，把它换成一屏错误没有道理。
-      error: (_, _) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        child: Row(
-          children: [
-            Expanded(child: Text(l10n.profileLoadFailed, style: AppTypography.caption)),
-            TextButton(
-              key: const ValueKey('profilePostsRetry'),
-              onPressed: () => ref.invalidate(publicUserPostsProvider(userId)),
-              child: Text(l10n.commonRetry),
+      // 计数来自身份接口、与列表取数无关 → 失败时标题行照常在（只有「确实为空」才隐藏）。
+      error: (_, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _header(l10n),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Row(
+              children: [
+                Expanded(child: Text(l10n.profileLoadFailed, style: AppTypography.caption)),
+                TextButton(
+                  key: const ValueKey('profilePostsRetry'),
+                  onPressed: () => ref.invalidate(publicUserPostsProvider(userId)),
+                  child: Text(l10n.commonRetry),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
       data: (page) {
         if (page.items.isEmpty) {
@@ -500,7 +508,7 @@ class _PostGrid extends ConsumerWidget {
               children: [
                 if (!self) ...[
                   const Icon(Icons.lock_outline_rounded,
-                      size: 40, color: AppColors.textSecondary),
+                      size: 32, color: AppColors.textTertiary),
                   const SizedBox(height: AppSpacing.sm),
                 ],
                 Text(
@@ -523,6 +531,7 @@ class _PostGrid extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _header(l10n),
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
@@ -551,6 +560,48 @@ class _PostGrid extends ConsumerWidget {
       },
     );
   }
+
+  /// 分区标题行：「POSTINGAN」+ 右对齐的两个聚合计数（UI 稿 C1/C2）。
+  ///
+  /// 🔴 **只在内容区有帖子时渲染**（UI 稿 C4）：空态直接跟在身份区下。
+  /// 「真没发过」与「对方拉黑了我」服务端返回逐字节一样（空 items + 计数归零），
+  /// 两种情况在这里**同样隐藏、不区分**（FR-118.5 / Story 2.5 AC2）。
+  Widget _header(AppLocalizations l10n) => Padding(
+        // 与下方网格左对齐：不再额外缩进。
+        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Text(
+              l10n.profilePostsTitle.toUpperCase(),
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textTertiary,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            // 两个聚合计数（AC2）。与「POSTINGAN」分区标题**同一行右对齐**，
+            // 两种视角同一处。发帖总数**复用既有统计**（没有重新实现），
+            // 获赞总数是本批次新补的；**两者都只算 PUBLIC**，与下面的网格同源 ——
+            // 对不上的话，那个差值就是「这人有几篇私密内容」。
+            Expanded(
+              child: Text(
+                l10n.profileCounts(postCount, likeCount),
+                key: const ValueKey('profileCounts'),
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.textTertiary,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      );
 
   /// 追加下一页。失败只提示一声，**不动已加载的网格**。
   Future<void> _loadMore(BuildContext context, WidgetRef ref, AppLocalizations l10n) async {
@@ -615,7 +666,7 @@ class _PetSection extends ConsumerWidget {
                   children: [
                     Text(
                       pet.name,
-                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
+                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w600),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -632,10 +683,11 @@ class _PetSection extends ConsumerWidget {
               ),
               const SizedBox(width: AppSpacing.sm),
               Text(
-                '${l10n.meViewArchive} →',
+                l10n.meViewArchive,
                 style: const TextStyle(
                     fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.mint),
               ),
+              const Icon(Icons.chevron_right_rounded, size: 16, color: AppColors.mint),
             ],
           ),
         ),
@@ -711,13 +763,13 @@ class _EditProfileButton extends ConsumerWidget {
 
 enum _ProfileAction { report, block }
 
-/// 抽屉里的一项：emoji + 主文案 14/w600 + 副标题 12（规格取自迷你卡菜单，逐条对齐）。
+/// 抽屉里的一项：emoji + 主文案 14/w400 +（仅需要提示时）副标题 12（UI 稿 C3）。
 class _ActionTile extends StatelessWidget {
   const _ActionTile({
     required this.itemKey,
     required this.emoji,
     required this.label,
-    required this.subtitle,
+    this.subtitle,
     required this.onTap,
     this.labelColor = AppColors.ink,
   });
@@ -725,7 +777,9 @@ class _ActionTile extends StatelessWidget {
   final Key itemKey;
   final String emoji;
   final String label;
-  final String subtitle;
+
+  /// null → 不渲染副标题（常态）。
+  final String? subtitle;
   final VoidCallback onTap;
   final Color labelColor;
 
@@ -748,10 +802,12 @@ class _ActionTile extends StatelessWidget {
                   children: [
                     Text(label,
                         style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600, color: labelColor)),
-                    const SizedBox(height: 2),
-                    Text(subtitle,
-                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                            fontSize: 14, fontWeight: FontWeight.w400, color: labelColor)),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(subtitle!,
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    ],
                   ],
                 ),
               ),

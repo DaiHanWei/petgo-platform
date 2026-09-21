@@ -203,14 +203,25 @@ class PlaceListPage extends ConsumerWidget {
       // Story 1.1 AC6 空态：复用既有 EmptyState，文案引导「标记一个场所」。
       // Story 1.3 起 CTA 真的能点了（表单页已存在）—— 1.1 交付时刻意没挂按钮，
       // 挂一个点了跳不到任何地方的按钮比没有按钮更糟。
-      return _scrollable(EmptyState(
-        title: l10n.placeEmptyTitle,
-        message: l10n.placeEmptyBody,
-        icon: Icons.place_outlined,
-        // UI 稿 A3：对齐 paspor-no-profile 空态范式 —— 图标放在浅紫圆底里。
-        iconBackground: AppColors.mintTint,
-        actionLabel: l10n.placeMarkEntry,
-        onAction: () => _openMarkForm(context, ref),
+      // UI 稿 A3：设计稿是一枚红色 📍（无圆底）。EmptyState 的图标恒为灰色，
+      // 所以这里隐藏它的图标、在上方自己放 emoji，标题/副文/CTA 仍复用 EmptyState。
+      return _scrollable(Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('📍',
+                key: ValueKey('placeEmptyPin'),
+                style: TextStyle(fontSize: 48, height: 1.1)),
+            const SizedBox(height: AppSpacing.md),
+            EmptyState(
+              title: l10n.placeEmptyTitle,
+              message: l10n.placeEmptyBody,
+              hideIcon: true,
+              actionLabel: l10n.placeMarkEntry,
+              onAction: () => _openMarkForm(context, ref),
+            ),
+          ],
+        ),
       ));
     }
     return _list(previous, sortedByRecent: query == placeListRecentQuery);
@@ -220,9 +231,9 @@ class PlaceListPage extends ConsumerWidget {
   Widget _list(PlaceListResult page, {required bool sortedByRecent}) => ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
         itemCount: page.items.length,
-        separatorBuilder: (_, _) => const Divider(
-            height: 1, thickness: 1, indent: AppSpacing.lg, endIndent: AppSpacing.lg,
-            color: AppColors.line2),
+        // UI 稿 A1：分隔线通栏（不缩进）+ 中性 line 色。
+        separatorBuilder: (_, _) =>
+            const Divider(height: 1, thickness: 1, color: AppColors.line),
         itemBuilder: (context, i) {
           final place = page.items[i];
           return _PlaceRow(
@@ -364,7 +375,7 @@ class _PlaceRow extends StatelessWidget {
                     Text(subtitle, style: AppTypography.caption),
                   ],
                   if (place.tags.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.xs),
+                    const SizedBox(height: AppSpacing.sm),
                     Wrap(
                       spacing: AppSpacing.xs,
                       runSpacing: AppSpacing.xs,
@@ -375,7 +386,7 @@ class _PlaceRow extends StatelessWidget {
                       ],
                     ),
                   ],
-                  const SizedBox(height: AppSpacing.xs),
+                  const SizedBox(height: AppSpacing.sm),
                   _Counts(place: place),
                 ],
               ),
@@ -404,18 +415,25 @@ class _Thumb extends StatelessWidget {
       child: const Icon(Icons.place_outlined, size: 22, color: AppColors.textTertiary),
     );
     final src = url;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: src == null
-          ? placeholder
-          // 死链 / 网络失败一律回落占位，不留白块（同三卡面照片框的 errorBuilder 处理）。
-          : AppImage.widget(
-              src,
-              width: size,
-              height: size,
-              thumbWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
-              errorBuilder: (_, _, _) => placeholder,
-            ),
+    // UI 稿 A1：缩略图 1px 浅紫描边，画在前景层（盖在图片边缘上），不改变 56 的外尺寸。
+    return Container(
+      foregroundDecoration: BoxDecoration(
+        border: Border.all(color: AppColors.lineViolet),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: src == null
+            ? placeholder
+            // 死链 / 网络失败一律回落占位，不留白块（同三卡面照片框的 errorBuilder 处理）。
+            : AppImage.widget(
+                src,
+                width: size,
+                height: size,
+                thumbWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
+                errorBuilder: (_, _, _) => placeholder,
+              ),
+      ),
     );
   }
 }
@@ -478,7 +496,7 @@ class _TagChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 5),
       decoration: BoxDecoration(
         // UI 稿 A1：中性灰描边 + 次级文字色（标签是属性说明，不该抢品牌紫的注意力）。
         border: Border.all(color: AppColors.line),

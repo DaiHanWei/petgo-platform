@@ -22,6 +22,7 @@ class AppColors {
   static const Color mint700 = Color(0xFF6C48AE); // tint 上深色文字
   static const Color mintTint = Color(0xFFF8F2FF); // violet-50 柔填充
   static const Color mintTint2 = Color(0xFFF8F6FF);
+  static const Color violet100 = Color(0xFFEFE6FF); // violet-100 场所入口条
 
   // —— Canvas: 纯白（原型 QA：画布纯白无紫调）——
   static const Color cream = Color(0xFFFFFFFF); // app 画布

@@ -223,6 +223,10 @@ class _Header extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.card,
         borderRadius: BorderRadius.circular(16),
+        // UI 稿 M3：白卡落在白底页上，没有柔阴影就看不出卡片轮廓。
+        boxShadow: const [
+          BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
+        ],
       ),
       child: Column(
         children: [

@@ -108,7 +108,9 @@ void main() {
       expect(find.text('Rani'), findsOneWidget);
       expect(find.byKey(const ValueKey('profileJoinedAt')), findsOneWidget);
       expect(find.byKey(const ValueKey('profileSignature')), findsOneWidget);
-      expect(find.text(l10n.profileCounts(0, 0)), findsOneWidget);
+      // UI 稿 C4：内容区为空 →「POSTINGAN / 计数」整行不渲染（与真没发过同样隐藏，不区分）。
+      expect(find.byKey(const ValueKey('profileCounts')), findsNothing);
+      expect(find.text(l10n.profilePostsTitle.toUpperCase()), findsNothing);
 
       expect(find.byKey(const ValueKey('profilePostsEmpty')), findsOneWidget);
       expect(find.byType(PostGridTile), findsNothing);

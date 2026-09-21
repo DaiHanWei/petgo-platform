@@ -133,18 +133,33 @@ void main() {
 
   group('AC2：两个聚合计数', () {
     testWidgets('发帖总数与获赞总数同在一行', (tester) async {
-      await _pump(tester, postsRepo: _FakePostsRepo(const []));
+      await _pump(tester, postsRepo: _FakePostsRepo([
+        PublicUserPostPage(items: [_post(1)], hasMore: false),
+      ]));
 
       expect(find.text(l10n.profileCounts(18, 342)), findsOneWidget);
     });
 
-    /// ⚠️ 零赞不是「没有这个数」—— 新用户主页上写「0 suka」是对的，
+    /// ⚠️ 零赞不是「没有这个数」—— 有帖子但没人点赞时写「0 suka」是对的，
     /// 把它藏起来反而会让人以为这一版又没做。
-    testWidgets('零发帖零获赞照常显示 0', (tester) async {
+    testWidgets('有帖子、零获赞照常显示 0', (tester) async {
+      await _pump(tester,
+          postsRepo: _FakePostsRepo([
+            PublicUserPostPage(items: [_post(1)], hasMore: false),
+          ]),
+          profile: _profile(postCount: 1, likeCount: 0));
+
+      expect(find.text(l10n.profileCounts(1, 0)), findsOneWidget);
+    });
+
+    /// UI 稿 C4：内容区为空时「POSTINGAN / 计数」**整行不渲染**，空态直接跟在身份区下。
+    testWidgets('内容区为空 → 分区标题与计数整行不渲染，只剩空态', (tester) async {
       await _pump(tester,
           postsRepo: _FakePostsRepo(const []), profile: _profile(postCount: 0, likeCount: 0));
 
-      expect(find.text(l10n.profileCounts(0, 0)), findsOneWidget);
+      expect(find.byKey(const ValueKey('profileCounts')), findsNothing);
+      expect(find.text(l10n.profilePostsTitle.toUpperCase()), findsNothing);
+      expect(find.byKey(const ValueKey('profilePostsEmpty')), findsOneWidget);
     });
   });
 

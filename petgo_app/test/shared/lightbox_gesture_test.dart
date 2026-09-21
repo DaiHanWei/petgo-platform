@@ -223,6 +223,13 @@ void main() {
           tester.widget<InteractiveViewer>(find.byType(InteractiveViewer).first);
 
       expect(viewer().panEnabled, isFalse);
+      // L3：关闭钮未放大时全不透明、放大后退到 .5。
+      double closeOpacity() => tester
+          .widget<Opacity>(find
+              .ancestor(of: find.byKey(const ValueKey('lightboxClose')), matching: find.byType(Opacity))
+              .first)
+          .opacity;
+      expect(closeOpacity(), 1);
 
       final pager = find.byKey(const ValueKey('lightboxPager'));
       await tester.tap(pager);
@@ -232,6 +239,7 @@ void main() {
       await tester.settleLightbox();
 
       expect(viewer().panEnabled, isTrue);
+      expect(closeOpacity(), 0.5);
     });
 
     /// AC4 的接线：放大且没贴边时 PageView 不可滑；未放大时照常可翻页。
@@ -254,16 +262,19 @@ void main() {
       expect(pager().physics, isA<NeverScrollableScrollPhysics>());
     });
 
-    /// 🔴 双击点必须换算进 InteractiveViewer 的坐标系（它被 Center 收成了图片大小，
-    /// 与铺满整页的手势层差一个黑边偏移）。换算错了，放大后画面大半是黑边。
+    /// 🔴 双击点必须换算进 InteractiveViewer 的坐标系。L3 起 viewer 撑满整页（放大后铺满全屏），
+    /// 图片在其内居中；落点仍以图片内一点为中心放大，屏幕位置不动。
     testWidgets('双击点按图片坐标换算：以图片内落点为中心，屏幕位置不动', (tester) async {
       await openLightbox(tester);
       final finder = find.byType(InteractiveViewer).first;
       final rect = tester.getRect(finder);
-      // 页面比图片大才有黑边可言；否则这条测不出东西。
-      expect(rect.size, isNot(tester.getSize(find.byKey(const ValueKey('lightboxPager')))));
+      // L3：viewer 撑满整页 —— 改前它被收成图片大小，放大后图被裁在那个框里。
+      expect(rect.size, tester.getSize(find.byKey(const ValueKey('lightboxPager'))));
+      // 图片比页面小才有黑边可言；否则这条测不出东西。
+      final img = tester.getRect(find.byType(Hero).first);
+      expect(img.size, isNot(rect.size));
 
-      final at = Offset(rect.left + rect.width * 0.25, rect.top + rect.height * 0.75);
+      final at = Offset(img.left + img.width * 0.25, img.top + img.height * 0.75);
       await tester.tapAt(at);
       await tester.pump(const Duration(milliseconds: 60));
       await tester.tapAt(at);
@@ -282,10 +293,11 @@ void main() {
       await openLightbox(tester);
       final finder = find.byType(InteractiveViewer).first;
       final rect = tester.getRect(finder);
+      final img = tester.getRect(find.byType(Hero).first);
 
       // 图片左侧的黑边，纵向取中（避开左上角的关闭按钮）。
-      expect(rect.left, greaterThan(20), reason: '要有左黑边才测得出');
-      final at = Offset(rect.left / 2, rect.center.dy);
+      expect(img.left - rect.left, greaterThan(20), reason: '要有左黑边才测得出');
+      final at = Offset((rect.left + img.left) / 2, img.center.dy);
       await tester.tapAt(at);
       await tester.pump(const Duration(milliseconds: 60));
       await tester.tapAt(at);
@@ -294,9 +306,13 @@ void main() {
 
       final t = tester.widget<InteractiveViewer>(finder).transformationController!.value
           .getTranslation();
-      // 横向夹到图片左边 → 平移为 0，正好贴左，不会往外推出一片空白。
-      expect(t.x, moreOrLessEquals(0, epsilon: 0.5));
-      expect(t.y, moreOrLessEquals(-(rect.height / 2) * 1.5, epsilon: 0.5));
+      // 横向夹到图片左边（viewer 坐标 = img.left - rect.left）→ 以图片左缘为中心放大，
+      // 平移量落在 [-width*(s-1), 0] 内，不越出视口。
+      final double edgeX = img.left - rect.left;
+      expect(t.x, moreOrLessEquals(-edgeX * 1.5, epsilon: 0.5));
+      expect(t.x, lessThanOrEqualTo(0));
+      expect(t.x, greaterThanOrEqualTo(-rect.width * 1.5));
+      expect(t.y, moreOrLessEquals(-(img.center.dy - rect.top) * 1.5, epsilon: 0.5));
     });
   });
 

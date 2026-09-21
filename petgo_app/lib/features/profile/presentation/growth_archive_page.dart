@@ -357,7 +357,9 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
       ),
     );
     _coachmark = entry;
-    Overlay.of(context).insert(entry);
+    // rootOverlay：插到**根** Overlay，遮罩才盖得住底部 Tab 栏；插在 Shell 分支的 Overlay 里
+    // Tab 栏既不被压暗、也还能点（2026-09-21 对稿复审发现）。
+    Overlay.of(context, rootOverlay: true).insert(entry);
   }
 
   /// 关闭并置位。
@@ -1059,8 +1061,9 @@ class _EmptyProfileView extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ..._compactGuidance(context),
+          // UI 稿 E1：分隔线上方留 xl，下方收紧到 md（让标题贴近网格）。
           const Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+            padding: EdgeInsets.only(top: AppSpacing.xl, bottom: AppSpacing.md),
             child: Divider(height: 1, thickness: 1, color: AppColors.divider),
           ),
           PetRecommendationGrid(from: kPetRecommendFromDiaryEmpty),

@@ -61,8 +61,10 @@ class PetRecommendationGrid extends ConsumerWidget {
             crossAxisCount: 2,
             crossAxisSpacing: AppSpacing.sm,
             mainAxisSpacing: AppSpacing.sm,
-            // 大图是 1:1，下面还有三行文字 —— 比例给瘦一点，免得卡片底部被裁。
-            childAspectRatio: 0.72,
+            // UI 稿 E1/E2：卡下文字压成两行（名字 + 「物种 · 天数」），约 54dp；
+            // 比例据此调到大图在常见宽度（360–390dp）上接近 1:1。
+            // 大图是 Expanded 吃剩余高度，字号放大时只会压扁大图、不会溢出。
+            childAspectRatio: 0.76,
           ),
           itemCount: pets.length,
           itemBuilder: (context, i) => RecommendedPetCard(pet: pets[i], from: from),

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
+import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/content/data/feed_repository.dart';
@@ -51,12 +52,13 @@ RecommendedPet _pet(
   String? cover = 'https://cdn/cover.jpg',
   int days = 238,
   DateTime? birthday,
+  String petType = 'CAT',
 }) =>
     RecommendedPet(
       petId: id,
       name: 'Mochi$id',
       avatarUrl: avatar,
-      petType: 'CAT',
+      petType: petType,
       companionDays: days,
       birthday: birthday,
       coverImageUrl: cover,
@@ -203,26 +205,34 @@ void main() {
       expect(find.byKey(const ValueKey('recommendedPetAvatar_7')), findsOneWidget);
     });
 
-    testWidgetsWithImages('陪伴天数按天数渲染（「一起 238 天」）', (tester) async {
+    // UI 稿 E2：名字下面只有**一行** micro 灰字「物种 · 陪伴天数」（Kucing · 238 hari）。
+    testWidgetsWithImages('陪伴天数与物种同一行（「Kucing · 238 hari」）', (tester) async {
       await pumpGrid(tester, _FakeRepo([_pet(7, days: 238)]));
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-      expect(find.text(l10n.petRecommendCompanionDays(238)), findsOneWidget);
+      final meta = tester.widget<Text>(find.byKey(const ValueKey('recommendedPetDays_7')));
+      expect(meta.data, '${l10n.petTypeCat} · ${l10n.petCardDays(238)}');
+      // 灰字（micro 默认色），不再是单独一行品牌色。
+      expect(meta.style?.color, AppColors.textTertiary);
     });
 
-    testWidgetsWithImages('物种与年龄走既有出口（不满 1 个月按天，不显示 0 岁 0 月）', (tester) async {
+    testWidgetsWithImages('卡下文字只有两行：名字 + 「物种 · 天数」，不再单列年龄', (tester) async {
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
       await pumpGrid(tester, _FakeRepo([
         _pet(7, birthday: DateTime.now().subtract(const Duration(days: 5))),
       ]));
-      // 「Kucing · 5 days」这类 —— 关键是**不出现** growthArchiveAge(0, 0)。
-      expect(find.textContaining(l10n.petTypeCat), findsOneWidget);
+      final card = find.byKey(const ValueKey('recommendedPet_7'));
+      expect(find.descendant(of: card, matching: find.byType(Text)), findsNWidgets(2));
+      expect(find.text('Mochi7'), findsOneWidget);
+      expect(find.text('${l10n.petTypeCat} · ${l10n.petCardDays(238)}'), findsOneWidget);
+      // 年龄不在卡上（UI 稿 E2），更不会出现「0 岁 0 月」。
       expect(find.textContaining(l10n.growthArchiveAge(0, 0)), findsNothing);
     });
 
-    testWidgetsWithImages('没有生日时只显示物种，不留下一个孤零零的分隔符', (tester) async {
+    testWidgetsWithImages('物种不认识时只显示天数，不留下一个孤零零的分隔符', (tester) async {
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-      await pumpGrid(tester, _FakeRepo([_pet(7)]));
-      expect(find.text(l10n.petTypeCat), findsOneWidget);
+      await pumpGrid(tester, _FakeRepo([_pet(7, petType: 'UNKNOWN')]));
+      final meta = tester.widget<Text>(find.byKey(const ValueKey('recommendedPetDays_7')));
+      expect(meta.data, l10n.petCardDays(238));
     });
   });
 

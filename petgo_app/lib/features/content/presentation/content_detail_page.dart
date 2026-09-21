@@ -121,6 +121,9 @@ class _DetailScaffold extends ConsumerWidget {
       backgroundColor: AppColors.base,
       appBar: AppBar(
         backgroundColor: AppColors.base,
+        // M3 默认滚动后给 AppBar 染一层灰紫（243,242,246），稿里始终是白色。
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         actions: [
           // 「···」更多：原型 detail.html 为底抽屉。按归属互斥（自己→删除[3.6] / 他人→举报[3.7]，
           // 游客点举报由 openReport 触发 FR-0C）。绝不同时出现举报与删除。

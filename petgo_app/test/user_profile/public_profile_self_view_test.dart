@@ -35,6 +35,15 @@ class _EmptyPostsRepo implements PublicUserPostsRepository {
       PublicUserPostPage.empty;
 }
 
+/// 一页一条帖子 —— UI 稿 C4 之后「POSTINGAN / 计数」行只在有帖子时渲染，
+/// 验计数的用例需要它。
+class _OnePostRepo implements PublicUserPostsRepository {
+  @override
+  Future<PublicUserPostPage> fetch(int userId, {String? cursor}) async =>
+      const PublicUserPostPage(
+          items: [PublicUserPost(id: 1, type: 'DAILY')], hasMore: false);
+}
+
 class _LoggedInAuth extends AuthController {
   @override
   AuthState build() => const AuthState(
@@ -67,7 +76,12 @@ const UserTag _kolTag = UserTag(
   description: 'Kreator pilihan',
 );
 
-Future<void> _pump(WidgetTester tester, {required bool self, List<UserTag> tags = const []}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  required bool self,
+  List<UserTag> tags = const [],
+  bool withPosts = false,
+}) async {
   final router = GoRouter(
     initialLocation: '${PublicProfilePage.routeBase}/$_kMeId',
     routes: [
@@ -82,7 +96,8 @@ Future<void> _pump(WidgetTester tester, {required bool self, List<UserTag> tags 
   final container = ProviderContainer(overrides: [
     publicProfileRepositoryProvider
         .overrideWithValue(_FakeProfileRepo(_profile(self: self, tags: tags))),
-    publicUserPostsRepositoryProvider.overrideWithValue(_EmptyPostsRepo()),
+    publicUserPostsRepositoryProvider
+        .overrideWithValue(withPosts ? _OnePostRepo() : _EmptyPostsRepo()),
     publicProfilePetProvider(_kMeId).overrideWith((ref) async => null),
     authControllerProvider.overrideWith(_LoggedInAuth.new),
   ]);
@@ -109,7 +124,7 @@ void main() {
     /// 🔴 两种视角的差别**只有两处**：「···」与「编辑资料」。
     /// 其余（头像 / 昵称 / 加入时间 / 签名 / 计数 / 内容区）一字不差。
     testWidgets('自己视角：有「编辑资料」、没有「···」', (tester) async {
-      await _pump(tester, self: true);
+      await _pump(tester, self: true, withPosts: true);
 
       expect(find.byKey(const ValueKey('profileEditButton')), findsOneWidget);
       expect(find.byKey(const ValueKey('profileMore')), findsNothing);
@@ -129,7 +144,7 @@ void main() {
     /// UI 稿 C1/C2：两个计数挪到「POSTINGAN」分区标题**同一行右侧**，两种视角同一处。
     for (final self in [true, false]) {
       testWidgets('计数与分区标题同一行、在其右侧（self=$self）', (tester) async {
-        await _pump(tester, self: self);
+        await _pump(tester, self: self, withPosts: true);
 
         final counts = find.byKey(const ValueKey('profileCounts'));
         final title = find.text(l10n.profilePostsTitle.toUpperCase());

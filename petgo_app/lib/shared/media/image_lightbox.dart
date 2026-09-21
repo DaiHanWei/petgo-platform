@@ -128,9 +128,9 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
 
   /// 双击落点，**全局坐标**（用于以双击点为中心缩放）。
   ///
-  /// 🔴 不能直接拿 GestureDetector 的 localPosition 算矩阵：手势层铺满整页，
-  /// 而 InteractiveViewer 被 Center 收成了图片 contain 后的大小（横图上下、竖图左右留黑边），
-  /// 矩阵作用在后者的坐标系里。两套坐标差一个黑边偏移，放大后画面会大半是空白。
+  /// 🔴 不直接拿 GestureDetector 的 localPosition 算矩阵，统一经 InteractiveViewer 的
+  /// RenderBox 换算：L3 之后它撑满整页（图在其内居中），两套坐标恰好重合，
+  /// 但下拖缩放（Transform.scale）期间仍可能有偏差，换算一次最稳。
   Offset _doubleTapGlobal = Offset.zero;
 
   /// 每页 InteractiveViewer 的锚点：量它的尺寸与位置，把手势坐标换算进矩阵坐标系。
@@ -138,6 +138,15 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
 
   RenderBox? _viewerBoxOf(int index) {
     final ro = _viewerKeys[index]?.currentContext?.findRenderObject();
+    return ro is RenderBox && ro.hasSize ? ro : null;
+  }
+
+  /// 每页**图片本体**（contain 后的大小，居中于整页 viewer 内）的锚点：
+  /// 双击落在黑边上时，据它把落点夹回图片边缘。
+  final Map<int, GlobalKey> _imageKeys = {};
+
+  RenderBox? _imageBoxOf(int index) {
+    final ro = _imageKeys[index]?.currentContext?.findRenderObject();
     return ro is RenderBox && ro.hasSize ? ro : null;
   }
 
@@ -276,12 +285,23 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
       return;
     }
     const double s = _doubleTapScale;
-    // 双击点换算进 InteractiveViewer 的坐标系；点在黑边上就夹到图片边缘 ——
-    // 这样平移量恰好落在 [-size*(s-1), 0] 内，不会放大出一片空白。
+    // 双击点换算进 InteractiveViewer（整页）的坐标系；点在黑边上就夹到**图片**边缘 ——
+    // 图片矩形在 viewer 之内，所以平移量仍落在 [-size*(s-1), 0] 内，不会越出视口，
+    // 放大中心也总在图上，不会放大出一片黑边。
     final RenderBox? box = _viewerBoxOf(_current);
     Offset p = box?.globalToLocal(_doubleTapGlobal) ?? _doubleTapGlobal;
     if (box != null) {
-      p = Offset(p.dx.clamp(0.0, box.size.width), p.dy.clamp(0.0, box.size.height));
+      Rect bounds = Offset.zero & box.size;
+      final RenderBox? img = _imageBoxOf(_current);
+      if (img != null) {
+        final Offset tl = box.globalToLocal(img.localToGlobal(Offset.zero));
+        final Offset br = box.globalToLocal(img.localToGlobal(img.size.bottomRight(Offset.zero)));
+        bounds = Rect.fromPoints(tl, br).intersect(bounds);
+      }
+      p = Offset(
+        p.dx.clamp(bounds.left, bounds.right),
+        p.dy.clamp(bounds.top, bounds.bottom),
+      );
     }
     // 让双击点在缩放前后落在同一个屏幕位置：先把该点挪到原点，放大，再挪回去。
     final double x = -p.dx * (s - 1);
@@ -366,7 +386,12 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
             child: SafeArea(
               child: Stack(
                 children: [
-                  Positioned(top: 0, left: 0, child: _closeButton()),
+                  // L3：放大时关闭钮退到半透明，不抢图的注意力（仍可点）。
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    child: Opacity(opacity: _zoomed ? 0.5 : 1, child: _closeButton()),
+                  ),
                   if (widget.urls.length > 1)
                     Positioned(top: 0, left: 0, right: 0, child: Center(child: _counterPill())),
                 ],
@@ -415,23 +440,28 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
           // 拖拽落回 InteractiveViewer 的图内平移。
           onVerticalDragUpdate: _dismissEnabled ? _onDragUpdate : null,
           onVerticalDragEnd: _dismissEnabled ? _onDragEnd : null,
-          child: Center(
-            // 缩放实现沿用 InteractiveViewer（AD-A15.4：不换实现）。
-            child: InteractiveViewer(
-              key: _viewerKeys.putIfAbsent(i, GlobalKey.new),
-              transformationController: _transformOf(i),
-              // 未放大时不许平移：否则它会和"下滑关闭"抢同一个手势。
-              panEnabled: _zoomed,
-              maxScale: _maxScale,
-              // AC1/AC2：Hero 包住这一页的图。tag 由**调用方前缀 + 下标**算出，
-              // 与缩略图一侧共用 lightboxHeroTag —— 两边算法不一致就飞不起来。
-              child: Hero(
-                tag: lightboxHeroTag(widget.heroTagPrefix, i),
-                // 飞行途中用一张静态图，避免把加载态/重试按钮一起拖着飞。
-                flightShuttleBuilder: (_, _, _, _, _) =>
-                    AppImage.widget(widget.urls[i], fit: BoxFit.contain, thumbWidth: _thumbWidth),
-                // 只有正在拖的那一页带圆角与阴影；其余页不在屏上，套了也是白算。
-                child: i == _current ? _dragDecor(_page(i), progress) : _page(i),
+          // 缩放实现沿用 InteractiveViewer（AD-A15.4：不换实现）。
+          // 🔴 L3：InteractiveViewer **撑满整页**，图在它里面居中。改前是 Center 把它收成
+          // 图片 contain 后的大小，放大后图被裁在那个框里、上下黑边还在；稿是放大后铺满整屏。
+          child: InteractiveViewer(
+            key: _viewerKeys.putIfAbsent(i, GlobalKey.new),
+            transformationController: _transformOf(i),
+            // 未放大时不许平移：否则它会和"下滑关闭"抢同一个手势。
+            panEnabled: _zoomed,
+            maxScale: _maxScale,
+            child: SizedBox.expand(
+              child: Center(
+                // AC1/AC2：Hero 包住这一页的图。tag 由**调用方前缀 + 下标**算出，
+                // 与缩略图一侧共用 lightboxHeroTag —— 两边算法不一致就飞不起来。
+                child: Hero(
+                  key: _imageKeys.putIfAbsent(i, GlobalKey.new),
+                  tag: lightboxHeroTag(widget.heroTagPrefix, i),
+                  // 飞行途中用一张静态图，避免把加载态/重试按钮一起拖着飞。
+                  flightShuttleBuilder: (_, _, _, _, _) =>
+                      AppImage.widget(widget.urls[i], fit: BoxFit.contain, thumbWidth: _thumbWidth),
+                  // 只有正在拖的那一页带圆角与阴影；其余页不在屏上，套了也是白算。
+                  child: i == _current ? _dragDecor(_page(i), progress) : _page(i),
+                ),
               ),
             ),
           ),
@@ -476,9 +506,13 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
         // 而不是一片黑等原图下完。模糊是为了让"还没清晰"这件事被看见，
         // 否则用户会以为原图就是这么糊。失败态撤掉它（L6：纯黑底）。
         if (!_failed.contains(i))
-          ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: AppImage.widget(url, fit: BoxFit.contain, thumbWidth: _thumbWidth),
+          // L5：模糊底图压到 0.7，让「还没清晰」与原图淡入的反差更明显。
+          Opacity(
+            opacity: 0.7,
+            child: ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: AppImage.widget(url, fit: BoxFit.contain, thumbWidth: _thumbWidth),
+            ),
           ),
         AppImage.widget(
           url,
@@ -504,9 +538,13 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
                 fading,
                 const SizedBox(
                   key: ValueKey('lightboxLoading'),
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white70),
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    backgroundColor: Colors.white30,
+                    color: Colors.white,
+                  ),
                 ),
               ],
             );
@@ -540,7 +578,7 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
           Text(l10n.lightboxImageFailed,
               textAlign: TextAlign.center,
               // 次级文字用浅灰紫：纯白会和「重试」按钮抢主次。
-              style: const TextStyle(fontSize: 13, color: AppColors.textTertiary)),
+              style: const TextStyle(fontSize: 12, color: AppColors.textTertiary)),
           const SizedBox(height: 14),
           // 描边胶囊按钮：纯文字按钮在黑底上几乎看不出是可点的。
           OutlinedButton.icon(
@@ -555,9 +593,11 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
               foregroundColor: Colors.white,
               side: const BorderSide(color: Colors.white38),
               shape: const StadiumBorder(),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              minimumSize: const Size(0, 32),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 7),
+              textStyle: const TextStyle(fontSize: 12),
             ),
-            icon: const Icon(Icons.refresh_rounded, size: 18),
+            icon: const Icon(Icons.refresh_rounded, size: 13),
             label: Text(l10n.feedRetry),
           ),
         ],
@@ -581,7 +621,7 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
             width: 34,
             height: 34,
             decoration: const BoxDecoration(color: Colors.black38, shape: BoxShape.circle),
-            child: const Icon(Icons.close_rounded, size: 22, color: Colors.white),
+            child: const Icon(Icons.close_rounded, size: 17, color: Colors.white),
           ),
         ),
       );
@@ -589,15 +629,16 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
   /// 页码胶囊（顶部居中），替代改前那个黑色 AppBar 标题（AC2）。
   Widget _counterPill() => Container(
         key: const ValueKey('lightboxCounter'),
-        margin: const EdgeInsets.only(top: 14),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        // 与关闭圆钮中心对齐：圆心在 y=11+22=33，胶囊高约 26 → 顶边约 20（L2）。
+        margin: const EdgeInsets.only(top: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         decoration: BoxDecoration(
           color: Colors.black38,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
           '${_current + 1}/${widget.urls.length}',
-          style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w500),
+          style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
         ),
       );
 }

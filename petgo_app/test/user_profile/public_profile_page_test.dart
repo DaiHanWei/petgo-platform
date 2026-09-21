@@ -73,11 +73,14 @@ class _FakeBlockRepo implements BlockedUsersRepository {
 }
 
 /// 内容区在本文件里不是被验对象（那是 `public_profile_posts_test.dart` 的事）——
-/// 给个恒空页，免得走真网络。
+/// 默认给个恒空页，免得走真网络；[items] 非空时给一页（验「POSTINGAN / 计数」行用 ——
+/// UI 稿 C4 之后那一行只在有帖子时渲染）。
 class _FakePostsRepo implements PublicUserPostsRepository {
+  _FakePostsRepo([this.items = const []]);
+  final List<PublicUserPost> items;
   @override
   Future<PublicUserPostPage> fetch(int userId, {String? cursor}) async =>
-      PublicUserPostPage.empty;
+      items.isEmpty ? PublicUserPostPage.empty : PublicUserPostPage(items: items, hasMore: false);
 }
 
 class _FakeReportRepo implements AccountReportRepository {
@@ -231,6 +234,7 @@ void main() {
           joinedAt: DateTime.utc(2026, 3, 4, 5, 6),
           signature: 'Pecinta kucing',
         )),
+        postsRepo: _FakePostsRepo(const [PublicUserPost(id: 1, type: 'DAILY')]),
       );
 
       expect(find.text('Rina'), findsOneWidget);
