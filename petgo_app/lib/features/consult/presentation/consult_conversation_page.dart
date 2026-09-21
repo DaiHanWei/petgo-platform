@@ -670,15 +670,11 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                 key: const ValueKey('consultLeave'),
                 onTap: _leave,
                 borderRadius: BorderRadius.circular(10),
-                child: Container(
+                // 纯「‹」无底块，与全局标题栏返回键同形（决策 UI-2）。
+                child: const SizedBox(
                   width: 34,
                   height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF3F3F3),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.chevron_left_rounded, size: 24, color: AppColors.ink2),
+                  child: Icon(Icons.chevron_left_rounded, size: 28, color: AppColors.ink),
                 ),
               ),
               const SizedBox(width: 11),

@@ -136,20 +136,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
     };
     return Scaffold(
       backgroundColor: AppColors.base,
+      // 标题栏跟随全局主题（决策 UI-2）：「‹」+ 16/w700 左对齐标题。
+      appBar: AppBar(
+        leading: _backBtn(),
+        title: Text(l10n.settingsTitle),
+      ),
       body: SafeArea(
+        top: false,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
           children: [
-            // 顶栏：圆角方钮返回 + Pengaturan 大标题
-            Row(
-              children: [
-                _backBtn(),
-                const SizedBox(width: 14),
-                Text(l10n.settingsTitle,
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.ink)),
-              ],
-            ),
-            const SizedBox(height: 22),
 
             _sectionTitle(l10n.settingsSectionAccount),
             _card([
@@ -229,19 +225,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
     );
   }
 
-  Widget _backBtn() => Material(
-        color: AppColors.cream2,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          key: const ValueKey('settingsBack'),
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => context.canPop() ? context.pop() : context.go('/me'),
-          child: const SizedBox(
-            width: 40,
-            height: 40,
-            child: Icon(Icons.chevron_left_rounded, size: 26, color: AppColors.ink),
-          ),
-        ),
+  Widget _backBtn() => IconButton(
+        key: const ValueKey('settingsBack'),
+        icon: const Icon(Icons.chevron_left_rounded, size: 28),
+        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+        onPressed: () => context.canPop() ? context.pop() : context.go('/me'),
       );
 
   Widget _sectionTitle(String text) => Padding(

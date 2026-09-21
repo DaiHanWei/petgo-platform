@@ -100,10 +100,11 @@ class _NicknamePageState extends ConsumerState<NicknamePage> {
                     GestureDetector(
                       key: const ValueKey('nicknameBack'),
                       onTap: _onBackExitFlow,
-                      child: Container(
+                      behavior: HitTestBehavior.opaque,
+                      // 纯「‹」无底块，与全局标题栏返回键同形（决策 UI-2）。
+                      child: const SizedBox(
                         width: 36, height: 36,
-                        decoration: BoxDecoration(color: const Color(0xFFEFEDF3), borderRadius: BorderRadius.circular(11)),
-                        child: const Icon(Icons.chevron_left_rounded, size: 24, color: Color(0xFF544864)),
+                        child: Icon(Icons.chevron_left_rounded, size: 28, color: Color(0xFF2E2A45)),
                       ),
                     ),
                     const SizedBox(width: 12),
