@@ -658,9 +658,15 @@ class ShopOrderPaymentIntegrationTest extends ApiIntegrationTest {
     }
 
     @SuppressWarnings("unchecked")
+    /**
+     * ⚠️ 必须带 {@code timeout}：{@link AnalyticsClient#capture} 自身是
+     * {@code @Async("analyticsExecutor")}（ShopPaymentAnalyticsListener 的注释说明了为什么不再叠一层），
+     * 裸 {@code verify} 在全量跑时会赶在异步任务执行前断言 —— 单跑绿、全量偶发红。
+     */
     private ArgumentCaptor<Map<String, Object>> propsCaptorFor(String event) {
         ArgumentCaptor<Map<String, Object>> props = ArgumentCaptor.forClass(Map.class);
-        Mockito.verify(analytics).capture(Mockito.anyString(), Mockito.eq(event), props.capture());
+        Mockito.verify(analytics, Mockito.timeout(5_000))
+                .capture(Mockito.anyString(), Mockito.eq(event), props.capture());
         return props;
     }
 
