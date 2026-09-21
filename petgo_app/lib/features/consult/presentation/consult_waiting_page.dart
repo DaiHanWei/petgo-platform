@@ -240,20 +240,15 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
             Align(
               alignment: Alignment.centerLeft,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: InkWell(
-                  key: const ValueKey('consultWaitingBack'),
-                  onTap: _confirmCancel,
-                  borderRadius: BorderRadius.circular(11),
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFEDF3),
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                    child: const Icon(Icons.chevron_left_rounded, size: 24, color: AppColors.ink2),
+                padding: EdgeInsets.zero,
+                // 与全局标题栏返回键同形同位（决策 UI-2）：44 高区、纯「‹」无底块。
+                child: SizedBox(
+                  height: 44,
+                  child: IconButton(
+                    key: const ValueKey('consultWaitingBack'),
+                    icon: const Icon(Icons.chevron_left_rounded, size: 28, color: AppColors.ink),
+                    tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                    onPressed: _confirmCancel,
                   ),
                 ),
               ),
@@ -329,20 +324,15 @@ class _ConsultWaitingPageState extends ConsumerState<ConsultWaitingPage>
         Align(
           alignment: Alignment.centerLeft,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
-            child: InkWell(
-              key: const ValueKey('consultTimeoutBack'),
-              onTap: _continueWaiting,
-              borderRadius: BorderRadius.circular(11),
-              child: Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEFEDF3),
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: const Icon(Icons.chevron_left_rounded, size: 24, color: AppColors.ink2),
+            padding: EdgeInsets.zero,
+            // 与全局标题栏返回键同形同位（决策 UI-2）：44 高区、纯「‹」无底块。
+            child: SizedBox(
+              height: 44,
+              child: IconButton(
+                key: const ValueKey('consultTimeoutBack'),
+                icon: const Icon(Icons.chevron_left_rounded, size: 28, color: AppColors.ink),
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: _continueWaiting,
               ),
             ),
           ),

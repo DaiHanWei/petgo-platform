@@ -68,21 +68,16 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
 
     return Scaffold(
       backgroundColor: AppColors.base,
+      // 标题栏跟随全局主题（决策 UI-2）。
+      appBar: AppBar(
+        leading: _backBtn(),
+        title: Text(l10n.meDeleteAccount),
+      ),
       body: SafeArea(
+        top: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(22, 4, 22, 28),
+          padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
           children: [
-            // 顶栏：返回 + 标题。
-            Row(
-              children: [
-                _backBtn(),
-                const SizedBox(width: 12),
-                Text(l10n.meDeleteAccount,
-                    style: const TextStyle(
-                        fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink)),
-              ],
-            ),
-            const SizedBox(height: 20),
             // 警示图标 + 标题 + 永久不可撤销。
             Column(
               children: [
@@ -235,19 +230,11 @@ class _DeleteAccountPageState extends ConsumerState<DeleteAccountPage> {
     );
   }
 
-  Widget _backBtn() => Material(
-        color: const Color(0xFFEFEDF3), // bg-muted
-        borderRadius: BorderRadius.circular(11),
-        child: InkWell(
-          key: const ValueKey('deleteAccountBack'),
-          borderRadius: BorderRadius.circular(11),
-          onTap: () => context.canPop() ? context.pop() : context.go('/me/settings'),
-          child: const SizedBox(
-            width: 36,
-            height: 36,
-            child: Icon(Icons.chevron_left_rounded, size: 24, color: AppColors.ink2),
-          ),
-        ),
+  Widget _backBtn() => IconButton(
+        key: const ValueKey('deleteAccountBack'),
+        icon: const Icon(Icons.chevron_left_rounded, size: 28),
+        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+        onPressed: () => context.canPop() ? context.pop() : context.go('/me/settings'),
       );
 
   Widget _item(String text) => Padding(
