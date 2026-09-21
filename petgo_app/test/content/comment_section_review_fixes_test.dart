@@ -40,9 +40,11 @@ class _Repo implements DetailRepository {
   @override
   Future<String> getShareUrl(int postId) => throw UnimplementedError();
   @override
-  Future<Comment> postComment(int postId, String body) => throw UnimplementedError();
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds = const []}) =>
+      throw UnimplementedError();
   @override
-  Future<Comment> postReply(int parentId, String body) => throw UnimplementedError();
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds = const []}) =>
+      throw UnimplementedError();
   @override
   Future<ContentDetail> getDetail(int id) => throw UnimplementedError();
   @override

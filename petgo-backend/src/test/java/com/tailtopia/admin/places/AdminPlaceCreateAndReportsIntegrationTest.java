@@ -51,6 +51,10 @@ import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequ
  */
 class AdminPlaceCreateAndReportsIntegrationTest extends ApiIntegrationTest {
 
+    /** 计数实时统计（2026-09-18 场所表对齐 D3）：断言一律走它，不再读实体上的缓存列。 */
+    @Autowired
+    private com.tailtopia.admin.places.service.AdminPlaceQueryService placeQuery;
+
     @Autowired
     private PlaceRepository places;
     @Autowired
@@ -82,7 +86,7 @@ class AdminPlaceCreateAndReportsIntegrationTest extends ApiIntegrationTest {
     }
 
     private Place place(User marker, String name) {
-        return places.save(Place.create(tokens.generate(), name, "CAFE", List.of("PET_FRIENDLY"), "desc", "Jakarta", "Jl. " + name,
+        return places.save(Place.create(tokens.generate(), name, "CAFE", List.of("PETS_ALLOWED_INSIDE"), "desc", "Jakarta", "Jl. " + name,
                 new BigDecimal("-6.208763"), new BigDecimal("106.845599"), marker.getId()));
     }
 
@@ -101,7 +105,7 @@ class AdminPlaceCreateAndReportsIntegrationTest extends ApiIntegrationTest {
         if (name != null) {
             b.param("name", name);
         }
-        b.param("placeType", "CAFE").param("city", "Jakarta").param("addressText", "Jl. Kemang Raya 1").param("tags", "pet_friendly outdoor")
+        b.param("placeType", "CAFE").param("city", "Jakarta").param("addressText", "Jl. Kemang Raya 1").param("tags", "pets_allowed_inside outdoor_seating")
                 .param("description", "desc");
         if (lat != null) {
             b.param("lat", lat);
@@ -168,8 +172,8 @@ class AdminPlaceCreateAndReportsIntegrationTest extends ApiIntegrationTest {
         assertThat(p.getStatus()).isEqualTo(PlaceStatus.ACTIVE);
         assertThat(p.getPublicToken()).isNotBlank();
         assertThat(p.getMarkedByUserId()).isEqualTo(marker.getId());
-        assertThat(p.getTags()).containsExactly("PET_FRIENDLY", "OUTDOOR");
-        assertThat(p.getPhotoCount()).isEqualTo(2);
+        assertThat(p.getTags()).containsExactly("PETS_ALLOWED_INSIDE", "OUTDOOR_SEATING");
+        assertThat(placeQuery.countsOf(List.of(id)).get(id).photos()).isEqualTo(2);
         List<PlacePhoto> saved = photos.findAll().stream().filter(x -> x.getPlaceId().equals(id)).toList();
         assertThat(saved).hasSize(2).allSatisfy(ph -> {
             assertThat(ph.getObjectKey()).startsWith("places/" + id + "/").doesNotStartWith("http"); // 只存 objectKey

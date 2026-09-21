@@ -1,0 +1,16 @@
+// Google 地图 iOS 密钥（V1.3.0 batch-b1 Story 1.4 · AD-3 Rule 4）。
+//
+// 用法：复制成同目录的 `Maps.xcconfig`（**已 gitignored**）并填入真实密钥。
+//   cp ios/Flutter/Maps.xcconfig.example ios/Flutter/Maps.xcconfig
+//
+// Debug.xcconfig / Release.xcconfig 用 `#include?`（问号 = 可选）引它，
+// 所以**文件不存在时也能正常构建** —— 此时 Info.plist 里的 GMSApiKey 解析成空串，
+// 地图是灰的但包能编能装（同 Android 侧的取舍）。
+//
+// 🔴 本文件**只放占位符**，真实密钥绝不入库（CLAUDE.md 护栏）。
+// ⚠️ 密钥三套不要混用：iOS / Android / 后台 Web 各一把。
+//    iOS 这把要加平台限制（绑 bundle id）+ 每日调用配额上限。
+// ⚠️ Google Cloud 项目**未开通结算（绑卡）**时密钥在正式包里不工作 —— 属发版检查单 RC-2。
+// 🛡 只需要开「Maps SDK for iOS」。**不要**开 Places / Geocoding / Directions ——
+//    那三类才是按次计费的，本项目根本不调（AD-3 Rule 2）。
+GOOGLE_MAPS_API_KEY=YOUR_IOS_MAPS_API_KEY_HERE

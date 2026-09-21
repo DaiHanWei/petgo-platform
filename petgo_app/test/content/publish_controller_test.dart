@@ -31,6 +31,7 @@ class _FakeRepo implements ContentRepository {
     DateTime? eventDate,
     required String idempotencyKey,
     bool syncToMoment = true,
+    List<int> mentionedUserIds = const [],
   }) async {
     publishCalls++;
     lastType = type;

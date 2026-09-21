@@ -19,10 +19,15 @@ abstract class DetailRepository {
   Future<CommentPage> getReplies(int parentId, {String? cursor});
 
   /// 发表一级评论（Story 3.5，≤200 字服务端权威）。
-  Future<Comment> postComment(int postId, String body);
+  ///
+  /// [mentionedUserIds]：这条评论 @ 到的人（V1.3.0 batch-b1 Story 3.2 · AC4）。
+  /// 🔴 **只发 userId，不发昵称** —— body 里那串「@昵称」只是给人读的文本，
+  /// 对方改名后它就对不上人了，可点的身份靠这份 id（AD-10 Rule 4）。
+  /// 上限 5 人由服务端权威把关（AC5）。
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds});
 
-  /// 回复（二级，归并到一级；Story 3.5）。
-  Future<Comment> postReply(int parentId, String body);
+  /// 回复（二级，归并到一级；Story 3.5）。[mentionedUserIds] 口径同 [postComment]。
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds});
 
   /// 删除评论（Story 3.5，作者本人 / 内容主；后端权威）。
   Future<void> deleteComment(int commentId);
@@ -89,21 +94,31 @@ class DioDetailRepository implements DetailRepository {
   }
 
   @override
-  Future<Comment> postComment(int postId, String body) async {
+  Future<Comment> postComment(int postId, String body,
+      {List<int> mentionedUserIds = const []}) async {
     final resp = await dio.post<Map<String, dynamic>>(
       ApiPaths.contentPostComments(postId),
-      data: {'body': body},
+      data: _commentBody(body, mentionedUserIds),
     );
     return Comment.fromJson(resp.data!);
   }
 
   @override
-  Future<Comment> postReply(int parentId, String body) async {
+  Future<Comment> postReply(int parentId, String body,
+      {List<int> mentionedUserIds = const []}) async {
     final resp = await dio.post<Map<String, dynamic>>(
       ApiPaths.commentReplies(parentId),
-      data: {'body': body},
+      data: _commentBody(body, mentionedUserIds),
     );
     return Comment.fromJson(resp.data!);
+  }
+
+  /// 没 @ 人时**整个字段不出现**（Story 3.2）：与老客户端的请求体逐字节一致，
+  /// 服务端把省略与空表当同一件事。
+  static Map<String, dynamic> _commentBody(String body, List<int> mentionedUserIds) {
+    final data = <String, dynamic>{'body': body};
+    if (mentionedUserIds.isNotEmpty) data['mentionedUserIds'] = mentionedUserIds;
+    return data;
   }
 
   @override

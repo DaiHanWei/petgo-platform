@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/rounded.dart';
@@ -13,6 +14,10 @@ import '../../../features/auth/domain/auth_state.dart';
 import '../../../l10n/app_localizations.dart';
 import '../domain/content_detail.dart';
 import '../domain/detail_bottom_bar.dart';
+import '../../mention/data/mention_candidate_repository.dart';
+import '../../mention/domain/mention_context.dart';
+import '../../mention/domain/mention_draft.dart';
+import '../../mention/presentation/mention_picker.dart';
 import '../data/detail_repository.dart';
 import 'content_detail_page.dart';
 import 'detail_providers.dart';
@@ -56,6 +61,12 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
   // 触达字数上限只提示一次（回落到 <上限再复位），避免满字后每敲一键连弹（bug 20260702-218）。
   bool _limitToasted = false;
 
+  /// V1.3.0 batch-b1 Story 3.2：这条评论里 @ 了谁（存 userId，不存昵称 —— AC4）。
+  final MentionDraft _mentions = MentionDraft();
+
+  /// 光标前正在打的那个 `@查询词`；非 null 即浮层可见（AC1）。
+  MentionQuery? _mentionQuery;
+
   @override
   void initState() {
     super.initState();
@@ -96,14 +107,59 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
     super.dispose();
   }
 
+  /// 每次输入都重算「现在该不该弹 @ 浮层」（AC1：输入 @ 即弹）。
+  void _syncMentionQuery() {
+    final next = MentionDraft.queryAt(_controller.text, _controller.selection.baseOffset);
+    if (next?.start != _mentionQuery?.start || next?.keyword != _mentionQuery?.keyword) {
+      setState(() => _mentionQuery = next);
+    }
+  }
+
+  /// 选中一个候选人：正文里插 `@昵称`，数据层记 userId（AC4）。
+  void _onMentionSelected(MentionCandidate candidate) {
+    final query = _mentionQuery;
+    if (query == null) return;
+    final l10n = AppLocalizations.of(context);
+    // 🔴 插入是直接写 controller.value，**绕过 maxLength 的格式化器** ——
+    // 不先自己拦一次，200 字的评论插一个长昵称就成了 218 字，服务端 @Size(max=200)
+    // 必拒，而用户只看到通用的「发送失败，请重试」，重试永远不会成功。
+    if (MentionDraft.textAfterInsert(_controller.text, query, candidate.nickname)
+            .characters
+            .length >
+        _maxLen) {
+      showAppToast(context, l10n.commentLimitReached);
+      setState(() => _mentionQuery = null);
+      return;
+    }
+    final inserted =
+        _mentions.insert(_controller.text, query, candidate.userId, candidate.nickname);
+    if (inserted == null) {
+      // AC5：达上限不能再插入，并给出提示。
+      showAppToast(context, l10n.mentionLimitReached);
+      setState(() => _mentionQuery = null);
+      return;
+    }
+    _controller.value = TextEditingValue(
+      text: inserted.text,
+      selection: TextSelection.collapsed(offset: inserted.cursor),
+    );
+    // Story 3.5 AC4：**真的插进去了**才报（被上限 / 字数拦住的那两条 return 都在上面）。
+    // ⚠️ 字面量写法是给埋点守卫看的，见 MentionContext 的类注释。
+    Analytics.capture('mention_inserted', {'context': MentionContext.comment.wire});
+    setState(() => _mentionQuery = null);
+  }
+
   Future<void> _send(int? parentId) async {
     final text = _controller.text.trim();
     if (text.isEmpty || _sending) return;
+    // 🔴 只发文本里还留着 `@昵称` 的那些 id（插完又删掉的不算，否则对方会收到一条
+    //    点进去找不到自己的通知）。服务端还会再洗一遍（MentionSanitizer）。
+    final mentionedUserIds = _mentions.userIdsIn(text);
     setState(() => _sending = true);
     try {
       final repo = ref.read(detailRepositoryProvider);
       if (parentId != null) {
-        final created = await repo.postReply(parentId, text);
+        final created = await repo.postReply(parentId, text, mentionedUserIds: mentionedUserIds);
         // 🔴 AC5：登记落点，让评论区重拉完成后**展开这条父评论并滚动过去**。
         // 二级默认只内嵌 3 条，新回复按时间正序排在最后 —— 不登记的话，
         // 回复超过 3 条的评论时，用户发完屏幕上什么都没变。
@@ -113,7 +169,7 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
             .read(replyLandingProvider.notifier)
             .request(parentId: parentId, replyId: created.id);
       } else {
-        final created = await repo.postComment(widget.postId, text);
+        final created = await repo.postComment(widget.postId, text, mentionedUserIds: mentionedUserIds);
         // 🔴 记下刚发的这条，让评论区把它置顶（Story 2.5 · AC6）。
         // 热度序下 0 赞的新评论会排到第一页之外 —— 不记的话用户发完找不到自己的评论。
         // 只对**一级**评论做：二级回复挂在父评论下，位置由父决定，不存在找不到的问题。
@@ -122,6 +178,8 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       if (!mounted) return;
       // 仅成功后清空输入 + 收起键盘 + 退出回复态 + 刷新评论区（AC3）。
       _controller.clear();
+      _mentions.clear();
+      _mentionQuery = null;
       _limitToasted = false;
       FocusScope.of(context).unfocus();
       ref.read(replyTargetProvider.notifier).clear();
@@ -134,6 +192,8 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       final status = problem?.status;
       if (parentId != null && status == 404) {
         _controller.clear();
+        _mentions.clear(); // 输入被清空，@ 绑定跟着作废（留着会跟下一条评论串味）
+        _mentionQuery = null;
         ref.read(replyTargetProvider.notifier).clear(); // 退出回复态（父已不存在，重试无意义）
         ref.read(commentsRefreshProvider.notifier).bump(); // 刷新评论区，让已删除的父评论从列表消失
         showAppToast(context, l10n.commentReplyTargetDeleted);
@@ -242,6 +302,15 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
                 ),
               ),
             ),
+          // AC1：输入「@」弹出用户选择器浮层。贴着输入条上沿 —— 这一条本来就浮在
+          // 键盘之上，浮层长在它上面即可，不必另起一层 Overlay。
+          if (_mentionQuery != null) ...[
+            MentionPicker(
+              keyword: _mentionQuery!.keyword,
+              onSelected: _onMentionSelected,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+          ],
           Row(
             children: [
               Expanded(
@@ -260,6 +329,8 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
                     } else if (!atLimit && _limitToasted) {
                       _limitToasted = false;
                     }
+                    // Story 3.2 AC1：每次输入重算 @ 触发态。
+                    _syncMentionQuery();
                   },
                   minLines: 1,
                   maxLines: 3,

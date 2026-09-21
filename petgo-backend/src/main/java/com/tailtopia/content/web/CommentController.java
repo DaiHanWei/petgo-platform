@@ -42,7 +42,8 @@ public class CommentController {
     @ResponseStatus(HttpStatus.CREATED)
     public CommentResponse comment(@AuthenticationPrincipal Jwt jwt, @PathVariable long postId,
             @Valid @RequestBody CommentCreateRequest req) {
-        return commentService.createTopLevel(postId, currentUserId(jwt), req.body());
+        return commentService.createTopLevel(postId, currentUserId(jwt), req.body(),
+                req.mentionedUserIds());
     }
 
     @PostMapping("/api/v1/comments/{parentId}/replies")
@@ -50,7 +51,8 @@ public class CommentController {
     public CommentResponse reply(@AuthenticationPrincipal Jwt jwt, @PathVariable long parentId,
             @Valid @RequestBody CommentCreateRequest req) {
         // V1.3.0 X-2：req.replyToCommentId() 本版接收但忽略（D-35 只落列不启用）
-        return commentService.createReply(parentId, currentUserId(jwt), req.body());
+        return commentService.createReply(parentId, currentUserId(jwt), req.body(),
+                req.mentionedUserIds());
     }
 
     @DeleteMapping("/api/v1/comments/{id}")

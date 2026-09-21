@@ -114,6 +114,20 @@ class DeepLinkRoutes {
     if (type == 'ACCOUNT_WARNED' || type == 'ACCOUNT_SUSPENDED') {
       return '/me/support-tickets/new';
     }
+    // 被 @ 提及（V1.3.0 batch-b1 Story 3.4 · AC4）：**一个 type，两种落点**，
+    // 由 targetRef 的 variant 前缀分流（沿用 NAME_RESET / LIFECYCLE_* 范式；
+    // 也避免 ck_notifications_type 每多一种提及场景就再重列一次 —— 那个约束已出过四次事故）。
+    //   'POST:{postId}'    → 内容详情页
+    //   'COMMENT:{postId}' → 内容详情页 + 锚定评论区（复用既有 ?focus=comments）
+    // ⚠️ 前缀后面那个 id 是 **postId 而不是 commentId** —— 要跳的是帖子详情，评论区靠锚点定位。
+    // 🛡 认不出前缀 / 缺 targetRef 一律落通知中心，绝不拼出 /content/POST:12 这种非法路由。
+    if (type == 'CONTENT_MENTIONED') {
+      final postId = _mentionPostId(targetRef);
+      if (postId == null) return notificationsCenter;
+      return targetRef!.startsWith('COMMENT:')
+          ? '/content/$postId?focus=comments'
+          : '/content/$postId';
+    }
     // id 寻址类：缺 targetRef 落兜底（避免拼出非法路由）。
     if (targetRef == null || targetRef.isEmpty) return notificationsCenter;
     switch (type) {
@@ -138,5 +152,18 @@ class DeepLinkRoutes {
         // targetRef=null 已在上方短路兜底（无深链，点击不跳）；此处为其它未知类兜底。
         return notificationsCenter;
     }
+  }
+  /// 从 `POST:{postId}` / `COMMENT:{postId}` 里取出 postId；认不出来返回 null。
+  ///
+  /// ⚠️ 刻意不接受裸数字：那说明后端换了 targetRef 口径而客户端没跟上，
+  /// 此时落通知中心（看得见、点得动）比跳到一个猜出来的帖子安全。
+  static int? _mentionPostId(String? targetRef) {
+    if (targetRef == null) return null;
+    for (final prefix in const ['POST:', 'COMMENT:']) {
+      if (targetRef.startsWith(prefix)) {
+        return int.tryParse(targetRef.substring(prefix.length));
+      }
+    }
+    return null;
   }
 }

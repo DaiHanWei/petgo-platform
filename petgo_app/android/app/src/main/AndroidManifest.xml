@@ -11,6 +11,18 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- 里程碑解锁庆祝振动（直接驱动 Vibrator，绕过系统触感反馈开关）。 -->
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- 定位（V1.3.0 batch-b1 Story 1.2）：场所列表按距离排序。
+         COARSE 与 FINE 都声明 —— Android 12+ 的权限弹窗把「精确 / 大致」交给用户选，
+         只声明 FINE 时选了「大致」会拿不到坐标。
+         🛡 **刻意不声明 ACCESS_BACKGROUND_LOCATION**：按距离排序只需要用户正在看列表
+            的那一刻；后台定位要单独过 Google Play 的敏感权限审核，而我们没有那个需求。
+         🛡 权限申请统一走 permission_handler（Permission.locationWhenInUse），
+            见 features/place/data/location_service.dart。 -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <!-- 定位非必需：没有 GPS 的设备照样能装（列表回落按最新排序）。 -->
+    <uses-feature android:name="android.hardware.location" android:required="false"/>
+    <uses-feature android:name="android.hardware.location.gps" android:required="false"/>
     <!-- 相机非必需：无相机设备仍可装（走相册）。 -->
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
@@ -19,6 +31,13 @@
         android:label="TailTopia"
         android:name=".TailTopiaApplication"
         android:icon="@mipmap/ic_launcher">
+        <!-- Google 地图密钥（V1.3.0 batch-b1 Story 1.4 · AD-3 Rule 4）。
+             🔴 这里**只有占位符**，真实值由 build.gradle.kts 从环境变量或 gitignored 的
+             android/maps.properties 注入 —— 密钥绝不入库。
+             没配时占位符解析成空串：地图是灰的，但包能编能装。 -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${googleMapsApiKey}"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -52,6 +71,24 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="tailtopia" android:host="card"/>
             </intent-filter>
+            <!-- 单条内容分享页深链：tailtopia://post/{token} → 打开 App 落被分享的那一条。
+                 ⚠️ V1.1.6 Story 9.3 只加了 Dart 侧映射、**漏了这条清单声明** ——
+                 安卓上那条深链从来没工作过（深链是系统行为，所有测试照样绿）。
+                 由 V1.3.0 Story 1.10 新写的 deeplink_manifest_test 扫出来并补上。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="tailtopia" android:host="post"/>
+            </intent-filter>
+            <!-- 场所分享页深链：tailtopia://place/{token} → 打开 App 落场所详情
+                 （V1.3.0 batch-b1 Story 1.10 · AC6，place_share.html 的 CTA 第①级）。 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="tailtopia" android:host="place"/>
+            </intent-filter>
             <!-- 下载引导落地页深链：tailtopia://open → 打开 App 落首页（s.tailtopia.id/get 唤起）。 -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
@@ -75,6 +112,19 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- 场所详情的「在地图中打开」（V1.3.0 batch-b1 Story 1.5）。
+
+             🔴 Android 11+ 的包可见性：没有这条声明，`canLaunchUrl(geo:…)` 一律返回 false
+             （它走 Intent.resolveActivity(PackageManager)，查不到就当"没人能处理"），于是永远
+             回落到 google.com/maps 的**网页**链接 —— 装了 Gojek / Waze 而没装 Google Maps
+             的用户拿到的是浏览器页面，而不是自己的地图 App。
+
+             🛡 这只是「系统里有谁接管 geo:」的查询声明，**不是**任何计费 API
+             （Places / Geocoding / Directions 一个都没碰，AD-3 Rule 5）。 -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="geo"/>
         </intent>
     </queries>
 </manifest>

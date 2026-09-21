@@ -74,10 +74,10 @@ class _FakeDetailRepo implements DetailRepository {
       const CommentPage(items: [], nextCursor: null, hasMore: false);
 
   @override
-  Future<Comment> postComment(int postId, String body) async => _top(999);
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds = const []}) async => _top(999);
 
   @override
-  Future<Comment> postReply(int parentId, String body) async => _reply(999);
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds = const []}) async => _reply(999);
 
   @override
   Future<void> deleteComment(int commentId) async {}

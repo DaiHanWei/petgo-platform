@@ -64,13 +64,15 @@ class _Repo implements DetailRepository {
   }
 
   @override
-  Future<Comment> postComment(int postId, String body) async {
+  Future<Comment> postComment(int postId, String body,
+      {List<int> mentionedUserIds = const []}) async {
     postCommentCalls++;
     return _c(999, 1);
   }
 
   @override
-  Future<Comment> postReply(int parentId, String body) async {
+  Future<Comment> postReply(int parentId, String body,
+      {List<int> mentionedUserIds = const []}) async {
     postReplyCalls++;
     return _c(newReplyId, 1);
   }

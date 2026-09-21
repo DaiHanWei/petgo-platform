@@ -10,6 +10,8 @@ import com.tailtopia.content.dto.CommentResponse;
 import com.tailtopia.content.repository.CommentLikeRepository;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.mention.dto.MentionView;
+import com.tailtopia.mention.service.MentionViewService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.util.ArrayList;
@@ -41,15 +43,29 @@ public class CommentQueryService {
     private final ContentPostRepository posts;
     private final AccountQueryService accountQueryService;
     private final UserHideRelationReader hideRelations;
+    /** V1.3.0 batch-b1 Story 3.3：评论里 @ 的渲染投影（可点与否在服务端判）。 */
+    private final MentionViewService mentionViews;
 
     public CommentQueryService(CommentRepository comments, CommentLikeRepository commentLikes,
             ContentPostRepository posts,
-            AccountQueryService accountQueryService, UserHideRelationReader hideRelations) {
+            AccountQueryService accountQueryService, UserHideRelationReader hideRelations,
+            MentionViewService mentionViews) {
         this.comments = comments;
         this.commentLikes = commentLikes;
         this.posts = posts;
         this.accountQueryService = accountQueryService;
         this.hideRelations = hideRelations;
+        this.mentionViews = mentionViews;
+    }
+
+    /**
+     * 这一页（含内嵌二级回复）涉及的被 @ 人，**一次判完**（Story 3.3 · AD-6）。
+     *
+     * <p>⚠️ 别改成在循环里按条判：一页 10 条一级 + 30 条二级 = 80 次查询。
+     */
+    private Map<Long, MentionView> resolveMentions(Long viewerId, Stream<Comment> all) {
+        return mentionViews.resolveAll(viewerId,
+                all.flatMap(c -> c.getMentionedUserIds().stream()).toList());
     }
 
     /**
@@ -109,6 +125,10 @@ public class CommentQueryService {
                         repliesByParent.values().stream().flatMap(List::stream).map(Comment::getId))
                         .toList(),
                 viewerId);
+        // Story 3.3：@ 投影。与上面那批作者投影同一个形状 —— **整页一次**，含内嵌的二级回复。
+        Map<Long, MentionView> mentions = resolveMentions(viewerId, Stream.concat(
+                page.stream(),
+                repliesByParent.values().stream().flatMap(List::stream)));
 
         List<CommentResponse> items = new ArrayList<>(page.size());
         for (Comment top : page) {
@@ -116,11 +136,13 @@ public class CommentQueryService {
             List<CommentResponse> first = replies.stream()
                     .limit(INLINE_REPLY_COUNT)
                     .map(r -> CommentResponse.reply(r, authors.get(r.getAuthorId()),
-                            likes.countOf(r.getId()), likes.likedBy(r.getId())))
+                            likes.countOf(r.getId()), likes.likedBy(r.getId()),
+                            MentionViewService.pick(r.getMentionedUserIds(), mentions)))
                     .toList();
             items.add(CommentResponse.topLevel(top, authors.get(top.getAuthorId()),
                     replies.size(), first,
-                    likes.countOf(top.getId()), likes.likedBy(top.getId())));
+                    likes.countOf(top.getId()), likes.likedBy(top.getId()),
+                    MentionViewService.pick(top.getMentionedUserIds(), mentions)));
         }
 
         // 🔴 下一页游标取**本页最后一条**的三元组。赞数必须来自同一次批量结果，
@@ -171,9 +193,11 @@ public class CommentQueryService {
                 page.stream().map(Comment::getAuthorId).toList());
         // 二级回复同样可被点赞（一级二级共用 comment_likes），批量取。
         LikeView likes = loadLikes(page.stream().map(Comment::getId).toList(), viewerId);
+        Map<Long, MentionView> mentions = resolveMentions(viewerId, page.stream());
         List<CommentResponse> items = page.stream()
                 .map(c -> CommentResponse.reply(c, authors.get(c.getAuthorId()),
-                        likes.countOf(c.getId()), likes.likedBy(c.getId())))
+                        likes.countOf(c.getId()), likes.likedBy(c.getId()),
+                        MentionViewService.pick(c.getMentionedUserIds(), mentions)))
                 .toList();
         return new CommentPageResponse(items, nextCursor(hasMore, page), hasMore);
     }

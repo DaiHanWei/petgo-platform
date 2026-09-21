@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 class PlaceDomainTest {
 
     private static Place place() {
-        return Place.create("tok", "Kopi Kucing", "CAFE", List.of("PET_FRIENDLY"), null, "Jakarta", "Jl. Sudirman 1",
+        return Place.create("tok", "Kopi Kucing", "CAFE", List.of("PETS_ALLOWED_INSIDE"), null, "Jakarta", "Jl. Sudirman 1",
                 new BigDecimal("-6.208763"), new BigDecimal("106.845599"), 7L);
     }
 
@@ -41,11 +41,8 @@ class PlaceDomainTest {
     }
 
     @Test
-    void recountClampsAndSoftDeleteIsIdempotent() {
+    void softDeleteIsIdempotent() {
         Place p = place();
-        p.recount(3, 2, 5, 1, -4);
-        assertThat(p.getPhotoCount()).isEqualTo(3);
-        assertThat(p.getNotRecommendCount()).isZero();
         assertThat(p.isDeleted()).isFalse();
         p.softDelete();
         var first = p.getDeletedAt();

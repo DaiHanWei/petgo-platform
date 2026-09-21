@@ -17,10 +17,13 @@ public record PlaceDrawerView(long id, String publicToken, String name, String p
         List<PhotoView> photos, CommentsPage comments) {
 
     /** 照片：{@code url} 为短时效签名 URL（模板一次性使用，禁止记日志）；签名不可用时为 null → 占位图。 */
-    public record PhotoView(long id, String url, String uploaderName, Instant createdAt) {
+    /** {@code moderationStatus}：App 侧的审核态（VISIBLE 以外在抽屉里打标，2026-09-18 场所表对齐）。 */
+    public record PhotoView(long id, String url, String uploaderName, Instant createdAt, String moderationStatus) {
     }
 
-    public record CommentView(long id, String body, String authorName, boolean authorDeleted, PlaceAttitude attitude, Instant createdAt) {
+    /** {@code attitude} 可为 null（App 允许只发文字不表态）；{@code moderationStatus} 同上。 */
+    public record CommentView(long id, String body, String authorName, boolean authorDeleted, PlaceAttitude attitude, Instant createdAt,
+            String moderationStatus) {
     }
 
     /** 评论分页（每页 20）。 */

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../mention/domain/mention_draft.dart';
 import '../data/content_repository.dart';
 import 'content_type.dart';
 import 'feed_image_layout.dart';
@@ -56,6 +57,14 @@ class PublishController extends ChangeNotifier {
   /// ⚠️ 发布后不可更改（FR-83 AC7），所以这里只影响创建，不存在事后切换入口。
   bool syncToMoment = true;
   String text = '';
+
+  /// 正文里 @ 了谁（V1.3.0 batch-b1 Story 3.2 · AC4）。
+  ///
+  /// 🔴 住在控制器上而不是页面 State 上：正文与 @ 绑定必须同生同死 ——
+  /// 控制器随 sheet dispose 即清空（无持久草稿，NFR-10），@ 绑定也跟着没了。
+  /// 放在页面 State 上的话，重建一次就会出现「正文里还写着 @阿花、id 已经丢了」。
+  final MentionDraft mentions = MentionDraft();
+
   final List<ImageUploadItem> items = <ImageUploadItem>[];
   bool publishing = false;
 
@@ -210,10 +219,14 @@ class PublishController extends ChangeNotifier {
       // 所以量不出来的位置也要占一个 null，绝不能"跳过不放"。
       final sizes = items.map((i) => i.size).toList();
       final growth = type == ContentType.growthMoment;
+      final trimmed = text.trim();
       return await repository.publish(
         type: type,
         petId: growth ? petId : null,
-        text: text.trim().isEmpty ? null : text.trim(),
+        text: trimmed.isEmpty ? null : trimmed,
+        // 🔴 只发正文里还留着 `@昵称` 的那些 id（插完又删掉的不算，否则对方会收到
+        //    一条点进去正文里根本没有他的通知）。服务端还会再洗一遍。
+        mentionedUserIds: mentions.userIdsIn(trimmed),
         imageUrls: urls,
         imageSizes: sizes,
         eventDate: growth ? (eventDate ?? DateTime.now()) : null,

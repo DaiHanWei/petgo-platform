@@ -25,8 +25,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
- * L1：合并事务性（V1.3.0 Story 5.3 AC6）——让保留方 {@code recount} 抛异常 → 子表未迁移、B 仍 ACTIVE、无审计。
- * 合并是本版本唯一不可逆操作，半成功比失败更糟。{@code @MockitoBean} 替换 {@code AdminPlaceService}（合并里只用它的 recount）。
+ * L1：合并事务性（V1.3.0 Story 5.3 AC6）——让合并中途（打卡改指）抛异常 → 已改指的评论回滚、B 仍 ACTIVE、无审计。
+ * 合并是本版本唯一不可逆操作，半成功比失败更糟。
+ * <p>2026-09-18 场所表对齐：原先的注入点是保留方 {@code recount}，计数改实时统计后它不存在了 ——
+ * 改为在评论改指**之后**的打卡改指处抛，同样证明「前面已经做了的一步」会随事务回滚。
  */
 class PlaceMergeRollbackIntegrationTest extends ApiIntegrationTest {
 
@@ -41,17 +43,17 @@ class PlaceMergeRollbackIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private AdminAuditLogRepository audits;
     @MockitoBean
-    private AdminPlaceService placeService;
+    private com.tailtopia.admin.places.repository.PlaceCheckinRepository checkins;
 
     @Test
-    void recountFailureRollsBackEverything() {
+    void midMergeFailureRollsBackEverything() {
         User marker = newUser();
         Place keep = places.save(Place.create(tokens.generate(), "Keep " + UUID.randomUUID(), "CAFE", List.of(), null, "Jakarta", "a",
                 new BigDecimal("-6.2"), new BigDecimal("106.8"), marker.getId()));
         Place dup = places.save(Place.create(tokens.generate(), "Dup " + UUID.randomUUID(), "CAFE", List.of(), null, "Jakarta", "b",
                 new BigDecimal("-6.2"), new BigDecimal("106.8"), marker.getId()));
         PlaceComment c = comments.save(PlaceComment.create(dup.getId(), marker.getId(), "评论", PlaceAttitude.RECOMMEND));
-        doThrow(new IllegalStateException("boom")).when(placeService).recount(anyLong());
+        doThrow(new IllegalStateException("boom")).when(checkins).reassignPlace(anyLong(), anyLong());
         int auditsBefore = audits.findAllByOrderByIdAsc().size();
 
         assertThatThrownBy(() -> mergeService.merge(dup.getId(), keep.getId(), 1L)).isInstanceOf(IllegalStateException.class);

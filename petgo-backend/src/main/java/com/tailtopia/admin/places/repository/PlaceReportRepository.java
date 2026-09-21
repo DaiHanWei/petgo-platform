@@ -11,6 +11,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** {@code place_reports} 仓储（Story 5.1）。{@link #countByStatus} 供 B6 摘要条「待处理举报数」。 */
+// Bean 名与 App 侧 com.tailtopia.place.repository.PlaceReportRepository 区分（同名 Spring Data 仓库 = 启动即 ConflictingBeanDefinition，2026-09-18 场所表对齐）。
+@org.springframework.stereotype.Repository("adminPlaceReportRepository")
 public interface PlaceReportRepository extends JpaRepository<PlaceReport, Long> {
 
     long countByStatus(PlaceReportStatus status);
@@ -27,7 +29,7 @@ public interface PlaceReportRepository extends JpaRepository<PlaceReport, Long> 
      * 原子 + 幂等：并发双击 / 驳回与下架竞态只有一方改到行（复审 #7）。须在调用方事务内。
      */
     @Modifying(flushAutomatically = true)
-    @Query("UPDATE PlaceReport r SET r.status = :decision, r.handledBy = :adminId, r.handledAt = :now, r.updatedAt = :now"
+    @Query("UPDATE AdminPlaceReport r SET r.status = :decision, r.handledBy = :adminId, r.handledAt = :now, r.updatedAt = :now"
             + " WHERE r.placeId = :placeId AND r.status = com.tailtopia.admin.places.domain.PlaceReportStatus.PENDING")
     int settlePending(@Param("placeId") long placeId, @Param("decision") PlaceReportStatus decision, @Param("adminId") long adminId,
             @Param("now") Instant now);

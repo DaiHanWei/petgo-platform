@@ -5,14 +5,19 @@ import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.content.domain.Comment;
 import com.tailtopia.content.domain.CommentModerationStatus;
 import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentVisibility;
 import com.tailtopia.content.domain.PostStatus;
 import com.tailtopia.content.dto.CommentResponse;
 import com.tailtopia.content.event.CommentSubmittedEvent;
 import com.tailtopia.content.event.CommentRemovedEvent;
 import com.tailtopia.content.event.CommentRemovedReason;
 import com.tailtopia.content.event.ContentCommentedEvent;
+import com.tailtopia.content.event.ContentMentionedEvent;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.mention.dto.MentionView;
+import com.tailtopia.mention.service.MentionSanitizer;
+import com.tailtopia.mention.service.MentionViewService;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import java.util.List;
@@ -45,16 +50,23 @@ public class CommentService {
     private final ApplicationEventPublisher events;
     private final ContentModerationService moderation;
     private final ManualReviewGate reviewGate;
+    /** V1.3.0 batch-b1 Story 3.2：@ 名单落库前的权威过滤（≤5 / 去重 / 去自己 / 去注销 / 去拉黑）。 */
+    private final MentionSanitizer mentions;
+    /** V1.3.0 batch-b1 Story 3.3：刚发出那条评论的 @ 渲染投影（客户端就地渲染，不必重拉一页）。 */
+    private final MentionViewService mentionViews;
 
     public CommentService(CommentRepository comments, ContentPostRepository posts,
             AccountQueryService accountQueryService, ApplicationEventPublisher events,
-            ContentModerationService moderation, ManualReviewGate reviewGate) {
+            ContentModerationService moderation, ManualReviewGate reviewGate,
+            MentionSanitizer mentions, MentionViewService mentionViews) {
         this.comments = comments;
         this.posts = posts;
         this.accountQueryService = accountQueryService;
         this.events = events;
         this.moderation = moderation;
         this.reviewGate = reviewGate;
+        this.mentions = mentions;
+        this.mentionViews = mentionViews;
     }
 
     /**
@@ -63,24 +75,49 @@ public class CommentService {
      */
     @Transactional
     public CommentResponse createTopLevel(long postId, long authorId, String body) {
+        return createTopLevel(postId, authorId, body, null);
+    }
+
+    /**
+     * 发表一级评论，并带上 @ 名单（V1.3.0 batch-b1 Story 3.2 · AC4/AC5）。
+     *
+     * <p>🔴 {@code body} 里那串「@昵称」只是给人读的文本，可点的身份存
+     * {@code mentionedUserIds}（存 userId 不存昵称 —— AD-10 Rule 4）。
+     */
+    @Transactional
+    public CommentResponse createTopLevel(long postId, long authorId, String body,
+            List<Long> mentionedUserIds) {
         requireVisible(postId);
+        // ⚠️ 先洗 @ 名单再过审：超过 5 人是本地就能判死的畸形请求（Story 3.2 AC5）。
+        List<Long> mentioned = mentions.sanitize(authorId, mentionedUserIds);
         if (moderation.isL1Blocked(body)) {
             throw AppException.commentBlocked(L1_BLOCKED_MESSAGE);
         }
-        Comment saved = comments.save(Comment.createUnderReview(postId, null, authorId, body));
+        Comment comment = Comment.createUnderReview(postId, null, authorId, body);
+        comment.setMentionedUserIds(mentioned);
+        Comment saved = comments.save(comment);
         events.publishEvent(new CommentSubmittedEvent(saved.getId(), body, saved.getContentVersion()));
         // 刚发的评论必然 0 赞、自己也还没赞（AC7 的批量口径在读路径，这里是写路径的即时回显）。
-        return CommentResponse.topLevel(saved, authorView(authorId), 0, List.of(), 0L, false);
+        return CommentResponse.topLevel(saved, authorView(authorId), 0, List.of(), 0L, false,
+                mentionViewsFor(authorId, mentioned));
     }
 
     /** 回复（二级）。回复二级评论时归并到其一级父（两级约束，绝不三级）。含同步审核过滤。 */
     @Transactional
     public CommentResponse createReply(long parentId, long authorId, String body) {
+        return createReply(parentId, authorId, body, null);
+    }
+
+    /** 回复（二级），并带上 @ 名单（Story 3.2 · AC4/AC5）。口径同 {@code createTopLevel}。 */
+    @Transactional
+    public CommentResponse createReply(long parentId, long authorId, String body,
+            List<Long> mentionedUserIds) {
         Comment parent = comments.findById(parentId)
                 .filter(c -> c.getDeletedAt() == null)
                 .orElseThrow(() -> AppException.notFound("评论不存在"));
         ContentPost post = requireVisible(parent.getPostId());
 
+        List<Long> mentioned = mentions.sanitize(authorId, mentionedUserIds);
         if (moderation.isL1Blocked(body)) {
             throw AppException.commentBlocked(L1_BLOCKED_MESSAGE);
         }
@@ -88,10 +125,23 @@ public class CommentService {
         // 两级约束：若被回复者本身是二级，则归并到它的一级父。
         long topLevelParentId = parent.isTopLevel() ? parent.getId() : parent.getParentId();
 
-        Comment saved = comments.save(
-                Comment.createUnderReview(post.getId(), topLevelParentId, authorId, body));
+        Comment reply = Comment.createUnderReview(post.getId(), topLevelParentId, authorId, body);
+        reply.setMentionedUserIds(mentioned);
+        Comment saved = comments.save(reply);
         events.publishEvent(new CommentSubmittedEvent(saved.getId(), body, saved.getContentVersion()));
-        return CommentResponse.reply(saved, authorView(authorId), 0L, false);
+        return CommentResponse.reply(saved, authorView(authorId), 0L, false,
+                mentionViewsFor(authorId, mentioned));
+    }
+
+    /**
+     * 刚发出那条评论自己的 @ 投影（Story 3.3）。
+     *
+     * <p>⚠️ viewer 就是作者本人 —— 名单已经被 {@code MentionSanitizer} 洗过（去注销、去拉黑），
+     * 所以这里正常情况下每一条都是可点的；仍然走同一个服务而不是自己拼，
+     * 是为了让"可点与否"只有一个判定处（story Dev Notes 的 🔴）。
+     */
+    private List<MentionView> mentionViewsFor(long authorId, List<Long> mentioned) {
+        return MentionViewService.pick(mentioned, mentionViews.resolveAll(authorId, mentioned));
     }
 
     /**
@@ -160,9 +210,10 @@ public class CommentService {
                 .ifPresent(c -> {
                     c.approveModeration();
                     comments.save(c);
-                    long contentAuthorId = posts.findById(c.getPostId())
-                            .map(ContentPost::getAuthorId).orElse(-1L);
-                    publishCommented(c, contentAuthorId);
+                    // ⚠️ 取回整个 post 而不只是 authorId：Story 3.4 还要它的 visibility
+                    //    （非 PUBLIC 不发 @ 通知）。**同一次查询**，不多一趟。
+                    ContentPost post = posts.findById(c.getPostId()).orElse(null);
+                    publishCommented(c, post == null ? -1L : post.getAuthorId(), post);
                 });
     }
 
@@ -234,13 +285,33 @@ public class CommentService {
             int contentVersion, CommentModerationStatus moderationStatus) {
     }
 
-    /** 发「新评论」事件（携 parentAuthorId：二级回复时为其一级父作者，一级评论为 null）。 */
-    private void publishCommented(Comment c, long contentAuthorId) {
+    /**
+     * 发「新评论」事件（携 parentAuthorId：二级回复时为其一级父作者，一级评论为 null），
+     * 以及 Story 3.4 的「有人被 @ 了」事件。
+     *
+     * @param post 该评论所属内容；<b>可为 null</b>（帖已消失）。只用来判可见范围 ——
+     *             {@code contentAuthorId} 单独传是为了保住既有那条 -1L 兜底口径。
+     */
+    private void publishCommented(Comment c, long contentAuthorId, ContentPost post) {
         Long parentAuthorId = c.isTopLevel() ? null
                 : comments.findById(c.getParentId()).map(Comment::getAuthorId).orElse(null);
         events.publishEvent(new ContentCommentedEvent(
                 c.getPostId(), c.getId(), c.getAuthorId(), contentAuthorId, parentAuthorId, Instant.now(),
                 c.isTopLevel() ? null : c.getParentId()));
+        // Story 3.4：@ 通知与「新评论」通知**同一个落点** —— 评论 UNDER_REVIEW → VISIBLE 的那一刻。
+        // 🔴 提交那一刻发的话，审核没过的评论会让被 @ 的人点进去看不到任何东西。
+        List<Long> mentioned = c.getMentionedUserIds();
+        // 🔴 **非 PUBLIC 的帖子，连它评论里的 @ 也不发通知**（与 ContentService.publishMentioned
+        //    同一条不变式 —— ContentMentionedEvent 的 javadoc 让 notify 侧信任它，
+        //    两条路径口径不一致就等于那句话是假的）。
+        //    PRIVATE 内容只有作者看得见，通知一个第三方"你在某条内容的评论里被提到了"
+        //    还顺带告诉了他那条内容存在（code-review 2026-09-15）。
+        //    ⚠️ 帖子查不到（post == null）时同样不发：宁可少一条通知，不要一条点进去 404 的。
+        if (!mentioned.isEmpty() && post != null
+                && post.getVisibility() == ContentVisibility.PUBLIC) {
+            events.publishEvent(new ContentMentionedEvent(c.getPostId(), c.getId(), c.getAuthorId(),
+                    contentAuthorId, mentioned, Instant.now()));
+        }
     }
 
     private ContentPost requireVisible(long postId) {

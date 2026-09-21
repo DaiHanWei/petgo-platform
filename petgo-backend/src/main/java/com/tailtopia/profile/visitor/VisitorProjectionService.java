@@ -88,6 +88,27 @@ public class VisitorProjectionService {
     }
 
     /**
+     * 按 <b>petId</b> 取可见的档案 —— 站内入口用（V1.3.0 batch-b1 Story 2.3 · AD-4 Rule 1）。
+     *
+     * <p>🔴 与 {@link #findVisibleProfile(String)} <b>只差"拿什么去查"这一件事</b>，
+     * 可见性判定（主人是否 active）走的是同一句 —— AD-4 Rule 2 要的就是这个：
+     * 两个入口落到同一层投影，否则迟早分叉，而分叉的表现是私密数据从新入口漏出去。
+     *
+     * <p>🛡 档案不存在 / 主人注销 / 主人被封 <b>返回同一个 empty</b>，调用方无从区分（同上）。
+     *
+     * <p>⚠️ 这条按<b>自增 id</b> 寻址，与「对外标识一律不可枚举」的护栏看似冲突 —— 是 AD-4
+     * Rule 1 明写的口径，代价被三件事框住：① <b>仅登录用户可用</b>（游客零可达）；
+     * ② 投影层<b>结构上取不到</b>健康记录与问诊存档；③ <b>不下发 cardToken</b>，
+     * 拿到的东西无法转发到站外（Rule 3）。与既有 {@code /users/{userId}/profile}
+     * 暴露 userId 是同一档取舍。
+     */
+    @Transactional(readOnly = true)
+    public Optional<PetProfile> findVisibleProfileById(long petId) {
+        return profileService.findById(petId)
+                .filter(p -> accountQueryService.isActive(p.getOwnerId()));
+    }
+
+    /**
      * 档案主人的公开昵称（页面上的「和 <b>Aurel</b> 在一起 128 天」）。
      *
      * <p>放在这一层，是为了让调用方<b>不必自己持有 {@link AccountQueryService}</b> ——
@@ -228,6 +249,22 @@ public class VisitorProjectionService {
                 authorStats.milestoneCompleted(),
                 MilestoneCatalog.forType(profile.getPetType()).size());
         // healthRecordCount 到此为止，不进 VisitorStats。
+    }
+
+    /**
+     * 主页宠物卡上的 **Diary 条数**（V1.3.0 batch-b1 Story 2.3 · AC3）。
+     *
+     * <p>🔴 <b>与 {@link #stats(PetProfile)} 里的 {@code happyMomentCount} 是同一个实现</b>
+     * （{@code TimelineService.getStats} 内部调的也是这句）—— 卡上写「42 diary」、
+     * 点进去统计条也写 42，对不上用户第一眼就看得出来。
+     *
+     * <p>⚠️ <b>不要</b>为了这一个数去调 {@code stats(...)}：那会连带算问诊次数、里程碑进度、
+     * 以及<b>两次健康表计数</b> —— 五条查询换一个数，而这是个游客可达、userId 可枚举的端点
+     * （code-review 2026-09-15）。
+     */
+    @Transactional(readOnly = true)
+    public long diaryCount(PetProfile profile) {
+        return contentService.countGrowthMoments(profile.getOwnerId(), profile.getId());
     }
 
     /**

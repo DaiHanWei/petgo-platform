@@ -12,6 +12,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** {@code places} 仓储（Story 5.1）。列表查询默认 {@code deleted_at IS NULL}（AC2）。 */
+// Bean 名与 App 侧 com.tailtopia.place.repository.PlaceRepository 区分（同名 Spring Data 仓库 = 启动即 ConflictingBeanDefinition，2026-09-18 场所表对齐）。
+@org.springframework.stereotype.Repository("adminPlaceRepository")
 public interface PlaceRepository extends JpaRepository<Place, Long> {
 
     Optional<Place> findByPublicToken(String publicToken);
@@ -22,7 +24,7 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
 
     /** 合并用行锁读取（Story 5.3：并发合并 / 合并 + 下架只成功一个）。须在事务内。 */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select p from Place p where p.id = :id")
+    @Query("select p from AdminPlace p where p.id = :id")
     Optional<Place> findForUpdateById(@Param("id") Long id);
 
     /**
@@ -30,6 +32,6 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
      * 否则 B→A 之后再 A→C，B 仍指向已 MERGED 的 A，App 单跳直链落到死链。返回改指行数。须在事务内。
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update Place p set p.mergedIntoId = :keepId, p.updatedAt = :now where p.mergedIntoId = :mergedId")
+    @Query("update AdminPlace p set p.mergedIntoId = :keepId, p.updatedAt = :now where p.mergedIntoId = :mergedId")
     int repointMergedInto(@Param("mergedId") long mergedId, @Param("keepId") long keepId, @Param("now") Instant now);
 }

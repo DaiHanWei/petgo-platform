@@ -11,6 +11,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** {@code place_comments} 仓储（Story 5.1）。 */
+// Bean 名与 App 侧 com.tailtopia.place.repository.PlaceCommentRepository 区分（同名 Spring Data 仓库 = 启动即 ConflictingBeanDefinition，2026-09-18 场所表对齐）。
+@org.springframework.stereotype.Repository("adminPlaceCommentRepository")
 public interface PlaceCommentRepository extends JpaRepository<PlaceComment, Long> {
 
     List<PlaceComment> findByPlaceIdAndDeletedAtIsNullOrderByCreatedAtDesc(Long placeId);
@@ -24,6 +26,6 @@ public interface PlaceCommentRepository extends JpaRepository<PlaceComment, Long
 
     /** 合并（Story 5.3）：整批改指保留场所；返回迁移行数。 */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update PlaceComment c set c.placeId = :keepId where c.placeId = :mergedId")
+    @Query("update AdminPlaceComment c set c.placeId = :keepId where c.placeId = :mergedId")
     int reassignPlace(@Param("mergedId") long mergedId, @Param("keepId") long keepId);
 }

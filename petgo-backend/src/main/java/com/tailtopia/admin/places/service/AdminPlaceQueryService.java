@@ -69,10 +69,33 @@ public class AdminPlaceQueryService {
             SELECT COUNT(*) FILTER (WHERE p.status = 'ACTIVE')                                          AS active_count,
                    COUNT(*) FILTER (WHERE (p.created_at AT TIME ZONE 'Asia/Jakarta')::date = :today)    AS today_new,
                    COALESCE(SUM((SELECT COUNT(*) FROM place_reports r WHERE r.place_id = p.id AND r.status = 'PENDING')), 0) AS pending_reports,
-                   COALESCE(SUM(p.checkin_count), 0)                                                    AS checkins
+                   COALESCE(SUM((SELECT COUNT(*) FROM place_checkins c WHERE c.place_id = p.id)), 0)    AS checkins
             FROM places p
             WHERE
             """ + WHERE; // 文本块会剥尾随空格：WHERE 必须单独一行，否则拼成 WHEREp.deleted_at（复审 #1）
+
+    /**
+     * 计数实时统计（2026-09-18 场所表对齐 D3：计数缓存列已删 —— App 的写路径不维护它们，留着只会越偏越远）。
+     * <p>口径：照片 / 评论按「未软删」，与改动前后台一致（后台要看得到审核中的内容）；推荐 / 不推荐同样按未软删。
+     * 一次查一批 id（列表 ≤20 行），子表都有 place_id 前缀索引。
+     */
+    static final String COUNTS_SQL = """
+            SELECT p.id,
+                   (SELECT COUNT(*) FROM place_photos   x WHERE x.place_id = p.id AND x.deleted_at IS NULL) AS photos,
+                   (SELECT COUNT(*) FROM place_comments x WHERE x.place_id = p.id AND x.deleted_at IS NULL) AS comments,
+                   (SELECT COUNT(*) FROM place_checkins x WHERE x.place_id = p.id)                          AS checkins,
+                   (SELECT COUNT(*) FROM place_comments x WHERE x.place_id = p.id AND x.deleted_at IS NULL
+                                                           AND x.attitude = 'RECOMMEND')                     AS rec,
+                   (SELECT COUNT(*) FROM place_comments x WHERE x.place_id = p.id AND x.deleted_at IS NULL
+                                                           AND x.attitude = 'NOT_RECOMMEND')                 AS notrec
+            FROM places p
+            WHERE p.id IN (:ids)
+            """;
+
+    /** 一个场所的五个实时计数。 */
+    public record Counts(int photos, int comments, int checkins, int recommend, int notRecommend) {
+        static final Counts ZERO = new Counts(0, 0, 0, 0, 0);
+    }
 
     static final String CITIES_SQL = "SELECT DISTINCT p.city FROM places p WHERE p.deleted_at IS NULL ORDER BY p.city";
 
@@ -113,13 +136,10 @@ public class AdminPlaceQueryService {
         Map<Long, Place> byId = places.findAllById(ids).stream().collect(Collectors.toMap(Place::getId, x -> x));
         List<Place> ordered = ids.stream().map(byId::get).filter(x -> x != null).toList();
         Map<Long, AuthorView> markers = authorViews(ordered.stream().map(Place::getMarkedByUserId).collect(Collectors.toSet()));
+        Map<Long, Counts> counts = countsOf(ids);
         List<PlaceRow> rows = new ArrayList<>(ordered.size());
         for (Place pl : ordered) {
-            AuthorView m = markers.get(pl.getMarkedByUserId());
-            rows.add(new PlaceRow(pl.getId(), pl.getPublicToken(), pl.getName(), pl.getPlaceType(), typeName(pl.getPlaceType()), pl.getTags(),
-                    pl.getCity(), pl.getAddressText(), name(m, pl.getMarkedByUserId()), m != null && m.deleted(),
-                    pl.getPhotoCount(), pl.getCommentCount(), pl.getCheckinCount(), pl.getRecommendCount(), pl.getNotRecommendCount(),
-                    pl.getStatus(), pl.getMergedIntoId(), pl.getCreatedAt()));
+            rows.add(toRow(pl, markers.get(pl.getMarkedByUserId()), counts.getOrDefault(pl.getId(), Counts.ZERO)));
         }
         return new ListResult(List.copyOf(rows), total, (long) (f.page() + 1) * PlaceFilter.PAGE_SIZE < total);
     }
@@ -129,10 +149,27 @@ public class AdminPlaceQueryService {
     public PlaceRow row(long id) {
         Place pl = requirePlace(id);
         AuthorView m = authorViews(Set.of(pl.getMarkedByUserId())).get(pl.getMarkedByUserId());
+        return toRow(pl, m, countsOf(List.of(pl.getId())).getOrDefault(pl.getId(), Counts.ZERO));
+    }
+
+    private PlaceRow toRow(Place pl, AuthorView m, Counts c) {
         return new PlaceRow(pl.getId(), pl.getPublicToken(), pl.getName(), pl.getPlaceType(), typeName(pl.getPlaceType()), pl.getTags(),
                 pl.getCity(), pl.getAddressText(), name(m, pl.getMarkedByUserId()), m != null && m.deleted(),
-                pl.getPhotoCount(), pl.getCommentCount(), pl.getCheckinCount(), pl.getRecommendCount(), pl.getNotRecommendCount(),
+                c.photos(), c.comments(), c.checkins(), c.recommend(), c.notRecommend(),
                 pl.getStatus(), pl.getMergedIntoId(), pl.getCreatedAt());
+    }
+
+    /** 一批场所的实时计数（见 {@link #COUNTS_SQL}）。MERGED 行照常统计（其子表已改指保留场所，自然为 0）。 */
+    public Map<Long, Counts> countsOf(java.util.Collection<Long> ids) {
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Counts> out = new java.util.HashMap<>();
+        jdbc.query(COUNTS_SQL, new MapSqlParameterSource("ids", ids), rs -> {
+            out.put(rs.getLong("id"), new Counts(rs.getInt("photos"), rs.getInt("comments"), rs.getInt("checkins"),
+                    rs.getInt("rec"), rs.getInt("notrec")));
+        });
+        return out;
     }
 
     @Transactional(readOnly = true)
@@ -174,20 +211,22 @@ public class AdminPlaceQueryService {
         List<PhotoView> photoViews = new ArrayList<>(photoRows.size());
         for (int i = 0; i < photoRows.size(); i++) {
             PlacePhoto ph = photoRows.get(i);
-            photoViews.add(new PhotoView(ph.getId(), urls.get(i), name(views.get(ph.getUploaderUserId()), ph.getUploaderUserId()), ph.getCreatedAt()));
+            photoViews.add(new PhotoView(ph.getId(), urls.get(i), name(views.get(ph.getUploaderUserId()), ph.getUploaderUserId()), ph.getCreatedAt(),
+                    ph.getModerationStatus()));
         }
         List<CommentView> commentViews = new ArrayList<>();
         for (PlaceComment c : commentRows.getContent()) {
             AuthorView a = views.get(c.getAuthorUserId());
             commentViews.add(new CommentView(c.getId(), c.getBody(), name(a, c.getAuthorUserId()), a != null && a.deleted(), c.getAttitude(),
-                    c.getCreatedAt()));
+                    c.getCreatedAt(), c.getModerationStatus()));
         }
+        Counts counts = countsOf(List.of(pl.getId())).getOrDefault(pl.getId(), Counts.ZERO);
         String mergedIntoName = pl.getStatus() == PlaceStatus.MERGED && pl.getMergedIntoId() != null
                 ? places.findById(pl.getMergedIntoId()).map(Place::getName).orElse("#" + pl.getMergedIntoId()) : null;
         return new PlaceDrawerView(pl.getId(), pl.getPublicToken(), pl.getName(), pl.getPlaceType(), typeName(pl.getPlaceType()), pl.getTags(),
                 pl.getDescription(), pl.getCity(), pl.getAddressText(), pl.getLat(), pl.getLng(), name(marker, pl.getMarkedByUserId()),
                 marker != null && marker.deleted(), pl.getStatus(), pl.getMergedIntoId(), mergedIntoName, pl.getCreatedAt(), pl.getUpdatedAt(),
-                pl.getPhotoCount(), pl.getCommentCount(), pl.getCheckinCount(), pl.getRecommendCount(), pl.getNotRecommendCount(),
+                counts.photos(), counts.comments(), counts.checkins(), counts.recommend(), counts.notRecommend(),
                 List.copyOf(photoViews), new CommentsPage(List.copyOf(commentViews), commentRows.getNumber(), commentRows.hasNext(),
                         commentRows.getTotalElements()));
     }

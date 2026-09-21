@@ -49,7 +49,13 @@ class ContentDetailServiceTest {
         service = new ContentDetailService(posts, comments, likes, accounts, reportService, hideRelations,
                 Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class),
                 // Story 2.1：尺寸对齐器是真实实例（纯函数、无依赖），mock 它等于把本 story 的逻辑测空。
-                new ImageSizeResolver());
+                new ImageSizeResolver(),
+                // V1.3.0 batch-b1 Story 3.3：@ 渲染投影。本类夹具都没有 @，
+                // resolveAll 在碰任何依赖之前就返回空 Map，所以两个 mock 无需 stub
+                // （也因此**不会**多发查询 —— 批量聚合的用例计数不受影响）。
+                new com.tailtopia.mention.service.MentionViewService(
+                        Mockito.mock(com.tailtopia.auth.service.AccountQueryService.class),
+                        Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class)));
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyLong())).thenReturn(5L);

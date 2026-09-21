@@ -40,10 +40,10 @@ class PlaceCoordinateValidatorTest {
 
     @Test
     void editFormParsesTagsAndValidatesLengths() {
-        PlaceEditForm f = PlaceEditForm.of(" Kopi ", "cafe", "pet_friendly, outdoor wifi，PET_FRIENDLY", null, "Jakarta", "Jl. 1", "-6.2", "106.8");
+        PlaceEditForm f = PlaceEditForm.of(" Kopi ", "cafe", "pets_allowed_inside, outdoor_seating pet_menu，PETS_ALLOWED_INSIDE", null, "Jakarta", "Jl. 1", "-6.2", "106.8");
         assertThat(f.name()).isEqualTo("Kopi");
         assertThat(f.placeType()).isEqualTo("CAFE");
-        assertThat(f.tags()).containsExactly("PET_FRIENDLY", "OUTDOOR", "WIFI"); // 去重、大写
+        assertThat(f.tags()).containsExactly("PETS_ALLOWED_INSIDE", "OUTDOOR_SEATING", "PET_MENU"); // 去重、大写
         assertThat(f.description()).isNull();
         assertThat(f.lat()).isEqualByComparingTo("-6.2");
         assertThatThrownBy(() -> PlaceEditForm.of("x".repeat(81), "CAFE", null, null, "Jakarta", "a", "0", "0")).satisfies(e -> assertThat(code(e)).isEqualTo("admin.err.places.nameInvalid"));

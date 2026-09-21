@@ -21,7 +21,7 @@
                 <option th:each="t : ${typeOptions}" th:value="${t}" th:text="#{'admin.v130.places.type.' + ${t}}">类型</option>
             </select></label>
         <label class="field"><span th:text="#{admin.v130.places.edit.city}">城市</span>
-            <input type="text" name="city" class="inp" maxlength="60" required list="places-create-cities" value="Jakarta"/>
+            <input type="text" name="city" class="inp" maxlength="60" required list="places-create-cities" th:value="${defaultCity}"/>
             <datalist id="places-create-cities">
                 <option th:each="c : ${cities}" th:value="${c}"></option>
             </datalist></label>

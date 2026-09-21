@@ -45,6 +45,8 @@
             <figure th:each="ph : ${d.photos}" class="pl-photo" th:attr="data-photo-id=${ph.id}">
                 <img th:if="${ph.url != null}" th:src="${ph.url}" alt="" data-lightbox loading="lazy"/>
                 <div class="pl-photo-missing" th:if="${ph.url == null}" th:text="#{admin.v130.places.drawer.photos.unavailable}">图片暂不可用</div>
+                <span class="badge badge-neutral" th:if="${ph.moderationStatus != null and ph.moderationStatus != 'VISIBLE'}"
+                      th:text="#{'admin.v130.places.moderation.' + ${ph.moderationStatus}}">审核中</span>
                 <figcaption class="muted rv-small"><span th:text="${ph.uploaderName}">上传者</span>
                     <form class="inline" th:if="${d.status.name() != 'MERGED'}" th:attr="hx-post=@{/admin/places/{id}/photos/{pid}/remove(id=${d.id},pid=${ph.id})}"
                           hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
@@ -146,8 +148,11 @@
     <p class="muted" th:if="${#lists.isEmpty(d.comments.items)}" th:text="#{admin.v130.places.drawer.comments.empty}">暂无评论</p>
     <ul class="pl-comment-list" th:if="${!#lists.isEmpty(d.comments.items)}">
         <li th:each="c : ${d.comments.items}" th:attr="data-comment-id=${c.id}">
-            <span class="badge" th:classappend="${c.attitude.name() == 'RECOMMEND'} ? 'badge-ok' : 'badge-warn'"
+            <!--/* 态度可为空（App 允许只发文字不表态，2026-09-18 场所表对齐）—— 为空时不渲染这枚徽章，别对 null 调 name() */-->
+            <span class="badge" th:if="${c.attitude != null}" th:classappend="${c.attitude.name() == 'RECOMMEND'} ? 'badge-ok' : 'badge-warn'"
                   th:text="${c.attitude.name() == 'RECOMMEND'} ? '👍' : '👎'" th:title="#{'admin.v130.places.attitude.' + ${c.attitude.name()}}">👍</span>
+            <span class="badge badge-neutral" th:if="${c.moderationStatus != null and c.moderationStatus != 'VISIBLE'}"
+                  th:text="#{'admin.v130.places.moderation.' + ${c.moderationStatus}}">审核中</span>
             <span th:text="${c.authorName}" th:classappend="${c.authorDeleted} ? 'muted'">作者</span>
             <span class="muted rv-small" th:text="${@adminTime.wib(c.createdAt)}">时间</span>
             <form class="inline" th:if="${d.status.name() != 'MERGED'}" th:attr="hx-post=@{/admin/places/{id}/comments/{cid}/remove(id=${d.id},cid=${c.id})}"

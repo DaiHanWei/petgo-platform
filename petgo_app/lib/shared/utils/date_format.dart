@@ -30,6 +30,13 @@ String formatDayMonth(BuildContext context, DateTime d) =>
 String formatWeekdayNarrow(BuildContext context, DateTime d) =>
     DateFormat('EEEEE', _ln(context)).format(d);
 
+/// "Mar 2026"。缩写月份 + 年（公开主页的「加入时间」，UI 稿 C1「Bergabung Mar 2026」）。
+///
+/// ⚠️ 到月不到日是刻意的：**加入的确切日期是没必要外泄的个人信息**，
+/// 而「这人是不是新号」看到月份就够了。
+String formatMonthAbbrYear(BuildContext context, DateTime d) =>
+    DateFormat('MMM yyyy', _ln(context)).format(d);
+
 /// "Jun"。仅缩写月份（日期列）。
 String formatMonthAbbr(BuildContext context, DateTime d) =>
     DateFormat('MMM', _ln(context)).format(d);

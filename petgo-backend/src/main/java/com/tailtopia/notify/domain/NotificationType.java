@@ -138,5 +138,27 @@ public enum NotificationType {
     /** D7：周回顾「这一周 {petName} 的成长」，留存钩子 + 分享获客。 */
     LIFECYCLE_D7,
     /** 流失召回：{@code last_active_at} 距今 ≥ N 天，深链直达建档 / 发布。每月至多一次。 */
-    LIFECYCLE_WINBACK
+    LIFECYCLE_WINBACK,
+
+    // ===== V1.3.0 batch-b1 Story 3.4：被 @ 提及（FR-119 · AD-10 Rule 5）=====
+    /**
+     * 有人在正文或评论里 @ 了你。
+     *
+     * <h2>🔴 一个类型，帖子 / 评论两种文案由 targetRef 的 variant 分流</h2>
+     * AD-10 Rule 5 写的是「新增**一个**通知类型」。所以这里**没有** POST_MENTIONED /
+     * COMMENT_MENTIONED 两个值 —— 沿用 {@link #NAME_RESET} / {@link #AVATAR_RESET} /
+     * {@code LIFECYCLE_*} 的「单类型 + variant」范式：
+     * <ul>
+     *   <li>{@code targetRef = "POST:{postId}"} → 内容详情页；</li>
+     *   <li>{@code targetRef = "COMMENT:{postId}"} → 内容详情页 + 锚定评论区
+     *       （复用既有 {@code ?focus=comments}）。</li>
+     * </ul>
+     * ⚠️ 两个值也能做，但那意味着 {@code ck_notifications_type} 每多一种提及场景就得再重列一次 ——
+     * 而那个约束已经出过四次漏值事故。
+     *
+     * <h2>⚠️ 加了这个值就必须重列 CHECK 全集</h2>
+     * 见 {@code V20260915_1614__rebuild_ck_notifications_type_with_mention.sql}。
+     * 本枚举是那份清单的**唯一权威**。
+     */
+    CONTENT_MENTIONED
 }

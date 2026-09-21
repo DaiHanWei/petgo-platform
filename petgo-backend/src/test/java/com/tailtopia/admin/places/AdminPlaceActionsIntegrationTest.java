@@ -47,6 +47,10 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 @RecordApplicationEvents
 class AdminPlaceActionsIntegrationTest extends ApiIntegrationTest {
 
+    /** 计数实时统计（2026-09-18 场所表对齐 D3）：断言一律走它，不再读实体上的缓存列。 */
+    @Autowired
+    private com.tailtopia.admin.places.service.AdminPlaceQueryService placeQuery;
+
     @Autowired
     private PlaceRepository places;
     @Autowired
@@ -76,7 +80,7 @@ class AdminPlaceActionsIntegrationTest extends ApiIntegrationTest {
     }
 
     private Place place(User marker, String name) {
-        return places.save(Place.create(tokens.generate(), name, "CAFE", List.of("PET_FRIENDLY"), "desc", "Jakarta", "Jl. " + name,
+        return places.save(Place.create(tokens.generate(), name, "CAFE", List.of("PETS_ALLOWED_INSIDE"), "desc", "Jakarta", "Jl. " + name,
                 new BigDecimal("-6.208763"), new BigDecimal("106.845599"), marker.getId()));
     }
 
@@ -96,23 +100,23 @@ class AdminPlaceActionsIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isUnprocessableEntity()).andReturn().getResponse().getContentAsString();
         assertThat(err).contains("inline-error").contains("-90");
         // 雅加达外 → 200 + 黄条；审计只记字段名，不记坐标 / 地址
-        String ok = mvc.perform(post("/admin/places/" + p.getId() + "/edit").param("name", "Kopi Bandung").param("placeType", "PET_PARK")
-                        .param("tags", "outdoor, wifi").param("description", "新描述").param("city", "Bandung").param("addressText", "Jl. Braga 9")
+        String ok = mvc.perform(post("/admin/places/" + p.getId() + "/edit").param("name", "Kopi Bandung").param("placeType", "PARK")
+                        .param("tags", "outdoor_seating, pet_menu").param("description", "新描述").param("city", "Bandung").param("addressText", "Jl. Braga 9")
                         .param("lat", "-6.917").param("lng", "107.619").param("lang", "zh_CN")
                         .with(user(ops)).with(csrf()).header("HX-Request", "true"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(ok).contains("data-place-id=\"" + p.getId() + "\"").contains("坐标不在雅加达都会区").contains("Kopi Bandung").contains("宠物公园")
-                .contains("OUTDOOR").contains("id=\"places-row-" + p.getId() + "\"").contains("hx-swap-oob");
+        assertThat(ok).contains("data-place-id=\"" + p.getId() + "\"").contains("坐标不在雅加达都会区").contains("Kopi Bandung").contains("公园")
+                .contains("OUTDOOR_SEATING").contains("id=\"places-row-" + p.getId() + "\"").contains("hx-swap-oob");
         Place saved = places.findById(p.getId()).orElseThrow();
         assertThat(saved.getCity()).isEqualTo("Bandung");
-        assertThat(saved.getTags()).containsExactly("OUTDOOR", "WIFI");
+        assertThat(saved.getTags()).containsExactly("OUTDOOR_SEATING", "PET_MENU");
         assertThat(saved.getMarkedByUserId()).isEqualTo(p.getMarkedByUserId());
         var audit = audits.findAllByOrderByIdAsc().stream()
                 .filter(a -> AuditActions.PLACE_EDITED.equals(a.getActionType()) && String.valueOf(p.getId()).equals(a.getTargetId())).findFirst().orElseThrow();
         assertThat(audit.getSummary()).contains("name").contains("lat").contains("city").doesNotContain("Braga").doesNotContain("107.619");
         // 无改动 → 200 不写审计
         int before = audits.findAllByOrderByIdAsc().size();
-        mvc.perform(post("/admin/places/" + p.getId() + "/edit").param("name", "Kopi Bandung").param("placeType", "PET_PARK").param("tags", "outdoor, wifi")
+        mvc.perform(post("/admin/places/" + p.getId() + "/edit").param("name", "Kopi Bandung").param("placeType", "PARK").param("tags", "outdoor_seating, pet_menu")
                         .param("description", "新描述").param("city", "Bandung").param("addressText", "Jl. Braga 9").param("lat", "-6.917").param("lng", "107.619")
                         .with(user(ops)).with(csrf()).header("HX-Request", "true"))
                 .andExpect(status().isOk());
@@ -127,9 +131,6 @@ class AdminPlaceActionsIntegrationTest extends ApiIntegrationTest {
         PlacePhoto ph = photos.save(PlacePhoto.create(p.getId(), "places/x.jpg", visitor.getId()));
         PlaceComment c1 = comments.save(PlaceComment.create(p.getId(), visitor.getId(), "推荐！", PlaceAttitude.RECOMMEND));
         comments.save(PlaceComment.create(p.getId(), visitor.getId(), "不推荐", PlaceAttitude.NOT_RECOMMEND));
-        Place fresh = places.findById(p.getId()).orElseThrow();
-        fresh.recount(1, 2, 0, 1, 1);
-        places.save(fresh);
 
         String delisted = mvc.perform(post("/admin/places/" + p.getId() + "/delist").param("lang", "zh_CN").with(user(ops)).with(csrf()).header("HX-Request", "true"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -143,19 +144,19 @@ class AdminPlaceActionsIntegrationTest extends ApiIntegrationTest {
         assertThat(places.findById(p.getId()).orElseThrow().getStatus()).isEqualTo(PlaceStatus.ACTIVE);
         assertThat(audited(AuditActions.PLACE_RESTORED, String.valueOf(p.getId()))).isTrue();
 
-        // 删照片 → photo_count −1（允许到 0）
+        // 删照片 → 实时统计照片数 −1（允许到 0）
         mvc.perform(post("/admin/places/" + p.getId() + "/photos/" + ph.getId() + "/remove").with(user(ops)).with(csrf()).header("HX-Request", "true"))
                 .andExpect(status().isOk());
         assertThat(photos.findById(ph.getId()).orElseThrow().isDeleted()).isTrue();
-        assertThat(places.findById(p.getId()).orElseThrow().getPhotoCount()).isZero();
+        assertThat(placeQuery.countsOf(List.of(p.getId())).get(p.getId()).photos()).isZero();
         assertThat(audited(AuditActions.PLACE_PHOTO_REMOVED, String.valueOf(ph.getId()))).isTrue();
-        // 删评论 → comment_count −1、recommend_count −1；审计不记正文
+        // 删评论 → 实时统计评论数 −1、推荐数 −1；审计不记正文
         mvc.perform(post("/admin/places/" + p.getId() + "/comments/" + c1.getId() + "/remove").with(user(ops)).with(csrf()).header("HX-Request", "true"))
                 .andExpect(status().isOk());
-        Place after = places.findById(p.getId()).orElseThrow();
-        assertThat(after.getCommentCount()).isEqualTo(1);
-        assertThat(after.getRecommendCount()).isZero();
-        assertThat(after.getNotRecommendCount()).isEqualTo(1);
+        var after = placeQuery.countsOf(List.of(p.getId())).get(p.getId());
+        assertThat(after.comments()).isEqualTo(1);
+        assertThat(after.recommend()).isZero();
+        assertThat(after.notRecommend()).isEqualTo(1);
         var audit = audits.findAllByOrderByIdAsc().stream()
                 .filter(a -> AuditActions.PLACE_COMMENT_REMOVED.equals(a.getActionType()) && String.valueOf(c1.getId()).equals(a.getTargetId())).findFirst().orElseThrow();
         assertThat(audit.getSummary()).doesNotContain("推荐！");
@@ -194,11 +195,12 @@ class AdminPlaceActionsIntegrationTest extends ApiIntegrationTest {
         assertThat(mergedRow.getStatus()).isEqualTo(PlaceStatus.MERGED);
         assertThat(mergedRow.getMergedIntoId()).isEqualTo(keep.getId());
         Place keepRow = places.findById(keep.getId()).orElseThrow();
-        assertThat(keepRow.getPhotoCount()).isEqualTo(1);
-        assertThat(keepRow.getCommentCount()).isEqualTo(2);
-        assertThat(keepRow.getCheckinCount()).isEqualTo(1);
-        assertThat(keepRow.getRecommendCount()).isEqualTo(1);
-        assertThat(keepRow.getNotRecommendCount()).isEqualTo(1);
+        var keepCounts = placeQuery.countsOf(List.of(keep.getId())).get(keep.getId());
+        assertThat(keepCounts.photos()).isEqualTo(1);
+        assertThat(keepCounts.comments()).isEqualTo(2);
+        assertThat(keepCounts.checkins()).isEqualTo(1);
+        assertThat(keepCounts.recommend()).isEqualTo(1);
+        assertThat(keepCounts.notRecommend()).isEqualTo(1);
         assertThat(photos.countByPlaceIdAndDeletedAtIsNull(dup.getId())).isZero();
         assertThat(checkins.countByPlaceId(keep.getId())).isEqualTo(1);
         // 举报不迁移，仍指向 B

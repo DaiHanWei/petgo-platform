@@ -25,11 +25,14 @@ import org.hibernate.type.SqlTypes;
  * <li>状态机：{@code ACTIVE ⇄ DELISTED}（下架 / 恢复）；{@code → MERGED}（合并，须带 {@link #mergedIntoId}，CHECK {@code ck_places_merged_ref}）。
  * {@code status != ACTIVE} 或 {@code deleted_at IS NOT NULL} 对用户端即「场所不存在」。</li>
  * <li>{@link #placeType} / {@link #tags} 值域由 App 端定义，这里只存字符串（{@link PlaceType} 软校验）。</li>
- * <li>五个计数列是反规范化缓存：服务层同事务 {@link #recount} / 增减维护，本实体不含业务逻辑（Story 5.3）。</li>
+ * <li>计数（照片 / 评论 / 打卡 / 推荐 / 不推荐）**不在本表**：2026-09-18 场所表对齐（D3）删掉了缓存列 ——
+ * App 的写路径不会维护它们，留着只会越偏越远。后台一律实时统计（{@code AdminPlaceQueryService#countsOf}）。</li>
  * <li>{@link #markedByUserId} 指 {@code users}（App 用户或运营发布身份池账号），不是后台账号，不可改。</li>
  * </ul>
  */
-@Entity
+// JPA 实体名与 App 侧 com.tailtopia.place.domain.Place 区分（同表两套映射，2026-09-18 场所表对齐）；
+// 🔴 JPQL 里要写 AdminPlace，不是类名。
+@Entity(name = "AdminPlace")
 @Table(name = "places")
 public class Place {
 
@@ -78,20 +81,10 @@ public class Place {
     @Column(name = "merged_into_id")
     private Long mergedIntoId;
 
-    @Column(name = "photo_count", nullable = false)
-    private int photoCount;
 
-    @Column(name = "comment_count", nullable = false)
-    private int commentCount;
 
-    @Column(name = "checkin_count", nullable = false)
-    private int checkinCount;
 
-    @Column(name = "recommend_count", nullable = false)
-    private int recommendCount;
 
-    @Column(name = "not_recommend_count", nullable = false)
-    private int notRecommendCount;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -105,7 +98,7 @@ public class Place {
     protected Place() {
     }
 
-    /** 新建场所（ACTIVE、计数全 0）。{@code publicToken} 由 {@code PlaceTokenGenerator} 生成后传入。 */
+    /** 新建场所（ACTIVE）。{@code publicToken} 由 {@code PlaceTokenGenerator} 生成后传入。 */
     public static Place create(String publicToken, String name, String placeType, List<String> tags, String description,
             String city, String addressText, BigDecimal lat, BigDecimal lng, long markedByUserId) {
         Place p = new Place();
@@ -185,15 +178,6 @@ public class Place {
         }
     }
 
-    /** 全量重算五个缓存计数（合并 / 删除时由服务层在同一事务里调用；负数视为 0）。 */
-    public void recount(int photoCount, int commentCount, int checkinCount, int recommendCount, int notRecommendCount) {
-        this.photoCount = Math.max(0, photoCount);
-        this.commentCount = Math.max(0, commentCount);
-        this.checkinCount = Math.max(0, checkinCount);
-        this.recommendCount = Math.max(0, recommendCount);
-        this.notRecommendCount = Math.max(0, notRecommendCount);
-    }
-
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();
@@ -268,25 +252,10 @@ public class Place {
         return mergedIntoId;
     }
 
-    public int getPhotoCount() {
-        return photoCount;
-    }
 
-    public int getCommentCount() {
-        return commentCount;
-    }
 
-    public int getCheckinCount() {
-        return checkinCount;
-    }
 
-    public int getRecommendCount() {
-        return recommendCount;
-    }
 
-    public int getNotRecommendCount() {
-        return notRecommendCount;
-    }
 
     public Instant getCreatedAt() {
         return createdAt;

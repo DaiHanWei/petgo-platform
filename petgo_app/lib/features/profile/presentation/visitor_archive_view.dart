@@ -2,19 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../data/timeline_repository.dart';
+import '../domain/archive_scope.dart';
 import '../domain/timeline_item.dart';
 import 'widgets/diary_header.dart';
 import 'widgets/timeline_item_tile.dart';
 
 /// 访客只读视图（V1.1.6 Story 2.3 · AD-2 / AD-3 / AD-4）。
 ///
-/// 拿着分享 token 看**别人的**宠物时渲染这一屏。它是 Diary 页
-/// [DiaryUserState] 的第五个分支，不是另一个页面。
+/// 看**别人的**宠物时渲染这一屏。两种来源共用它（V1.3.0 batch-b1 Story 2.3 · AD-4）：
+/// - **分享链接**（`/pet/{token}`，游客可读）—— 它是 Diary 页 [DiaryUserState] 的第五个分支；
+/// - **站内**（别人主页的宠物卡，`/pets/{petId}`，仅登录可用）。
+///
+/// 两者**同一屏、同一份服务端投影**，差别只有两处：打哪个地址（由 [ArchiveScope] 决定）、
+/// 以及顶部那条「由 XX 分享」横幅显不显示。**不要为站内再复制一个页面。**
 ///
 /// ## 这一屏是「作者态减法」，不是新画的一套
 /// 页头（[DiaryHeader]）与五类条目渲染（[TimelineItemTile]）与作者态**同一批组件**，只是：
@@ -32,22 +38,53 @@ import 'widgets/timeline_item_tile.dart';
 /// 健康记录与问诊存档**服务端根本没下发**（访客投影层结构上就取不到）。
 /// 客户端过滤只是「看不见」，抓包照样拿得到 —— 真正的边界在服务端。
 class VisitorArchiveView extends ConsumerStatefulWidget {
-  const VisitorArchiveView({super.key, required this.token});
+  const VisitorArchiveView({super.key, required this.scope, this.analyticsFrom});
+  // ⚠️ 这里**刻意没有** `assert(scope.isVisitor)`：const 构造器的断言里既不能调 getter、
+  // 也不能读参数对象的字段，三种写法（`isVisitor` / 读字段 / `!= ArchiveScope.me()`）
+  // 都会让 `const VisitorArchiveView(...)` 编译不过。作者态走不到这一屏是由**调用方**
+  // 保证的（`GrowthArchivePage` 的状态分支 + 站内路由），不是靠这里挡。
 
-  /// 分享 token。
-  final String token;
+  /// 数据作用域：分享 token 态 或 站内 petId 态。
+  final ArchiveScope scope;
+
+  /// 从哪个推荐位点进来的（V1.3.0 batch-b1 Story 4.1 · AC7 的 `from`）。
+  ///
+  /// 非空 → 首帧上报一次 `diary_visitor_viewed`。为空（分享链接落地 / 公开主页的宠物卡
+  /// 等既有入口）→ **一条都不报**，本 story 不给既有入口补埋点。
+  /// ⚠️ 只喂埋点，不影响任何行为。
+  final String? analyticsFrom;
+
+  /// 站内入口的路由前缀。拼 `'$inAppRouteBase/$petId'`。
+  ///
+  /// ⚠️ 与分享链接落点 `/pet/{token}`（单数、游客可进）**是两条路由，刻意不合并**：
+  /// 一条按不可枚举 token 且对未登录开放，一条按 petId 且必须登录 —— 鉴权边界不同。
+  static const String inAppRouteBase = '/pets';
+
+  /// go_router 的路由模板（站内入口）。
+  static const String inAppRoutePattern = '$inAppRouteBase/:petId';
 
   @override
   ConsumerState<VisitorArchiveView> createState() => _VisitorArchiveViewState();
 }
 
 class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
+  @override
+  void initState() {
+    super.initState();
+    // Story 4.1 AC7：`diary_visitor_viewed`（属性只有 from —— 没有宠物名、没有 petId
+    // 之外的任何东西）。⚠️ 放 initState 而不是 build：build 会随每次数据到达重跑，
+    // 那样一次浏览会报出三四条。
+    final from = widget.analyticsFrom;
+    if (from != null) {
+      Analytics.capture('diary_visitor_viewed', {'from': from});
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final profileAsync = ref.watch(visitorProfileProvider(widget.token));
-    final stats = ref.watch(visitorStatsProvider(widget.token)).asData?.value;
+    final profileAsync = ref.watch(visitorProfileProvider(widget.scope));
+    final stats = ref.watch(visitorStatsProvider(widget.scope)).asData?.value;
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -60,7 +97,10 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
             padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 8, AppSpacing.lg, 40),
             children: [
               _backRow(context),
-              _banner(l10n, profile.ownerNickname),
+              // AC4：**站内入口不渲染来源横幅** —— 从别人主页点宠物卡进来时，
+              // 「谁分享的」这个前提根本不成立（B1-D1 / AD-4 Rule 5）。
+              // 从分享链接进来时照旧显示。
+              if (!widget.scope.isInApp) _banner(l10n, profile.ownerNickname),
               const SizedBox(height: 12),
               DiaryHeader(
                 profile: profile.header,
@@ -143,7 +183,7 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
   }
 
   Widget _timeline(AppLocalizations l10n, String petName) {
-    final async = ref.watch(visitorTimelineProvider(widget.token));
+    final async = ref.watch(visitorTimelineProvider(widget.scope));
     return async.when(
       loading: () => const Padding(
         padding: EdgeInsets.symmetric(vertical: 40),

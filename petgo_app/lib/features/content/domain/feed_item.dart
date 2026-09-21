@@ -1,4 +1,5 @@
 import '../../auth/domain/user_tag.dart';
+import '../../mention/domain/mention_view.dart';
 import 'content_tag.dart';
 import 'feed_image_layout.dart';
 
@@ -101,6 +102,7 @@ class FeedItem {
     this.imageUrls = const [],
     this.authorTags = const [],
     this.decorationTags = const [],
+    this.mentions = const [],
   });
 
   final int id;
@@ -116,6 +118,12 @@ class FeedItem {
 
   /// 内容装饰标签（V1.1.6 Story 5.2 · FR-75）。挂在图片区**左下角位**。
   final List<ContentTag> decorationTags;
+
+  /// 正文里的 @（V1.3.0 batch-b1 Story 3.3）。
+  ///
+  /// 🔴 每一项的「能不能点、显示什么昵称」都是**后端算好的**（拉黑 AC3 / 注销 AC4）——
+  /// 渲染侧只照做，不自己判。空表 = 这段文字里没有可点的 @。
+  final List<MentionView> mentions;
 
   /// 内容类型线格式（DAILY/GROWTH_MOMENT/KNOWLEDGE）。
   final String type;
@@ -198,6 +206,7 @@ class FeedItem {
         decorationTags: ContentTag.listFromJson(json['decorationTags']),
         imageUrls: (json['imageUrls'] as List?)?.whereType<String>().toList(growable: false) ??
             const [],
+        mentions: MentionView.listFromJson(json['mentions']),
       );
 }
 

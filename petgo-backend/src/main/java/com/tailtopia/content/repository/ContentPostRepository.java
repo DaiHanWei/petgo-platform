@@ -17,8 +17,221 @@ import org.springframework.transaction.annotation.Transactional;
 
 public interface ContentPostRepository extends JpaRepository<ContentPost, Long>, ContentPostAdminSearch {
 
-    /** 迷你主页发布数（Story 3.8）：某作者未软删的已发布内容数。 */
-    long countByAuthorIdAndDeletedAtIsNullAndStatus(long authorId, PostStatus status);
+    /**
+     * 推荐池候选（V1.3.0 batch-b1 Story 4.1 · AC1/AC2）—— <b>一条实时聚合查询，不许加缓存</b>。
+     *
+     * <h2>🔴 两个门槛是同一条聚合的两半</h2>
+     * <ul>
+     *   <li>「近 14 天有新公开 Diary 帖」→ {@code HAVING MAX(created_at) >= :since}；</li>
+     *   <li>「公开成长记录 ≥3 条」→ {@code HAVING COUNT(*) >= :minRecords}。</li>
+     * </ul>
+     * 谓词完全相同（GROWTH_MOMENT + PUBLIC + PUBLISHED + 未删 + pet_id 非空），
+     * 所以 {@code idx_content_posts_pet_recommend}（部分索引，谓词已下推）一条就够，
+     * 索引里只剩 {@code (pet_id, created_at)} —— GROUP BY 键 + 聚合列，可 index-only scan。
+     *
+     * <h2>🔴 排序：最近更新倒序，**同日**按互动量（AC1）</h2>
+     * 「同日」是按 {@code created_at} 的日期截断分桶 —— 不截断的话同一天里先发的永远排后面，
+     * 互动量那一半就永远用不上。互动量取该宠物<b>入池的那些帖子</b>的点赞总数。
+     *
+     * <h3>⚠️ 「同日」必须按 **WIB（Asia/Jakarta）** 截断，不能用会话时区</h3>
+     * {@code date(timestamptz)} 隐式吃数据库会话时区（生产容器里是 UTC），于是雅加达
+     * <b>00:00–07:00</b> 发的帖会被算进前一天：那段时间里「同日按互动量」静默失效
+     * （实测 1 赞的排到 3 赞前面，code-review 2026-09-15）。用户看到的「今天」是 WIB 的今天，
+     * 与运营配置时间、月度额度那几处 <b>逐字同一个口径</b>（{@code ScheduleWindow.WIB}）。
+     *
+     * <h3>⚠️ 点赞数必须与候选口径**同一套谓词**</h3>
+     * 只按 {@code pet_id} 数点赞（不带 type/visibility/status/deleted_at）的表现是
+     * <b>「私密帖 / 已删帖 / DAILY 帖的点赞在悄悄影响公开推荐位的排序」</b>——
+     * 一只宠物把高赞帖改成私密后仍稳坐第一（code-review 2026-09-15）。
+     * 所以 {@code liked} 这一段的 WHERE 与 {@code candidates} <b>逐字相同</b>，改一处必须改两处。
+     *
+     * <h3>⚠️ 用 CTE 预聚合，**不用相关子查询**</h3>
+     * {@code LIMIT} 发生在 {@code ORDER BY interactions} 之后 —— 要排序就得先算出<b>每一个</b>
+     * 候选的互动量，没有捷径。相关子查询的形态下这就是「候选数次独立执行」；
+     * 换成「一次预聚合 + hash join」后是<b>一遍扫描</b>，且 {@code liked} 已用
+     * {@code pet_id IN (SELECT ...)} 半连接把范围收在候选集内，不扫全表点赞。
+     *
+     * <h2>⚠️ 这里**只**做 content 侧的过滤</h2>
+     * 「有头像」「owner 未注销」「互相拉黑不互推」三条要读 pet_profiles / users / 拉黑关系，
+     * 不在本仓储的边界内（架构：content 不直读 pet_profiles）。它们在
+     * {@code profile.recommend.PetRecommendationService} 里做，因此调用方要<b>多取一些</b>
+     * 候选留给那三层过滤（见那里的冗余系数）。
+     *
+     * <h2>🔴 翻页是 keyset，游标必须是**整个排序键**（Story 4.3 · AC3）</h2>
+     * 比较写成行构造器 {@code (桶, 互动量, 时刻, petId) < (…)} —— 与 ORDER BY 的四列
+     * <b>逐字同序同向</b>。少比一列就等于按一个与排序无关的位置切页，
+     * 表现是「第二页重复第一页看过的宠物，另一批永远刷不到」（见 {@code PetRecommendCursor}）。
+     * <p>⚠️ 日期桶**不作为参数传进来**，由 SQL 从 {@code :cursorLastAt} 现算 ——
+     * 传两份的表现是「桶与时刻对不上时翻页跳掉一大段」。
+     * <p>⚠️ 用 {@code :hasCursor} 布尔门控而不是判 {@code :cursorLastAt IS NULL}：
+     * 全 NULL 参数会触发 42P18（同 {@code findFeed} 的既定写法）；所有游标参数都显式 CAST，
+     * 好让 postgres 在门控为 false 时也能定出类型。
+     *
+     * @param since      14 天前那一刻
+     * @param minRecords 公开成长记录条数门槛（3）
+     * @param limit      取多少候选（调用方已按过滤冗余放大）
+     * @param hasCursor  是否从游标之后取（false = 第一页，后三个参数被忽略）
+     * @param cursorLastAt        游标行的最后发帖时刻
+     * @param cursorInteractions  游标行的互动量
+     * @param cursorPetId         游标行的 petId
+     * @return 每行 {@code [petId(Long), lastPostedAt(Instant), publicRecords(Long), interactions(Long)]}
+     */
+    @Query(value = """
+            WITH candidates AS (
+                SELECT pet_id,
+                       MAX(created_at) AS last_at,
+                       COUNT(*)        AS total
+                  FROM content_posts
+                 WHERE type = 'GROWTH_MOMENT'
+                   AND visibility = 'PUBLIC'
+                   AND status = 'PUBLISHED'
+                   AND deleted_at IS NULL
+                   AND pet_id IS NOT NULL
+                 GROUP BY pet_id
+                HAVING COUNT(*) >= :minRecords
+                   AND MAX(created_at) >= :since
+            ), liked AS (
+                SELECT p.pet_id AS pet_id, COUNT(*) AS cnt
+                  FROM content_likes l
+                  JOIN content_posts p ON p.id = l.post_id
+                 WHERE p.pet_id IN (SELECT pet_id FROM candidates)
+                   AND p.type = 'GROWTH_MOMENT'
+                   AND p.visibility = 'PUBLIC'
+                   AND p.status = 'PUBLISHED'
+                   AND p.deleted_at IS NULL
+                 GROUP BY p.pet_id
+            )
+            SELECT c.pet_id                AS pet_id,
+                   c.last_at               AS last_at,
+                   c.total                 AS total,
+                   COALESCE(k.cnt, 0)      AS interactions
+              FROM candidates c
+              LEFT JOIN liked k ON k.pet_id = c.pet_id
+             WHERE :hasCursor = FALSE
+                OR (date(c.last_at AT TIME ZONE 'Asia/Jakarta'), COALESCE(k.cnt, 0),
+                    c.last_at, c.pet_id)
+                 < (date(CAST(:cursorLastAt AS timestamptz) AT TIME ZONE 'Asia/Jakarta'),
+                    CAST(:cursorInteractions AS bigint),
+                    CAST(:cursorLastAt AS timestamptz),
+                    CAST(:cursorPetId AS bigint))
+             ORDER BY date(c.last_at AT TIME ZONE 'Asia/Jakarta') DESC, interactions DESC,
+                      c.last_at DESC, c.pet_id DESC
+             LIMIT :limit
+            """, nativeQuery = true)
+    List<Object[]> findRecommendablePets(@Param("since") java.time.Instant since,
+            @Param("minRecords") int minRecords, @Param("limit") int limit,
+            @Param("hasCursor") boolean hasCursor,
+            @Param("cursorLastAt") java.time.Instant cursorLastAt,
+            @Param("cursorInteractions") Long cursorInteractions,
+            @Param("cursorPetId") Long cursorPetId);
+
+    /**
+     * 这批宠物各自**最近一张公开照片**（Story 4.1 · AC4 的卡片大图）。
+     *
+     * <h2>🔴 与左下角小圆头像是**两个不同字段、不同来源**</h2>
+     * 大图 = 该宠物最近一条<b>带配图的</b>公开成长日历帖的首图；
+     * 小圆头像 = {@code PetProfile.avatarUrl}（宠物档案自身）。
+     * 做成同一张图重复摆放是 UI 稿 UX-DR15 专门点出来的明显 bug。
+     *
+     * <p>⚠️ 判据比推荐池多一条「有配图」：{@code image_urls} 是 JSONB 数组，
+     * 空数组与 NULL 都算没图。走 {@code idx_content_posts_pet_cover}。
+     * <p>⚠️ {@code jsonb_typeof = 'array'} 这一条**必须在 length 之前、且与索引条件逐字相同**：
+     * {@code jsonb_array_length} 对非数组 jsonb 直接抛错（不是返回 null），而部分索引的条件
+     * 与查询谓词不一致时 planner 用不上那条索引 —— 两处改一处就等于悄悄全表扫。
+     *
+     * <p>⚠️ {@code DISTINCT ON} 是 postgres 方言 —— 本项目只跑 postgres（架构基线），
+     * 用它换掉窗口函数是为了让「每个 pet 只要最新那一条」一步到位。
+     *
+     * @return 每行 {@code [petId(Long), firstImageUrl(String)]}；没有带图公开帖的宠物不出现
+     */
+    @Query(value = """
+            SELECT DISTINCT ON (pet_id)
+                   pet_id AS pet_id,
+                   (image_urls ->> 0) AS cover_url
+              FROM content_posts
+             WHERE pet_id IN (:petIds)
+               AND type = 'GROWTH_MOMENT'
+               AND visibility = 'PUBLIC'
+               AND status = 'PUBLISHED'
+               AND deleted_at IS NULL
+               AND image_urls IS NOT NULL
+               AND jsonb_typeof(image_urls) = 'array'
+               AND jsonb_array_length(image_urls) > 0
+             ORDER BY pet_id, created_at DESC, id DESC
+            """, nativeQuery = true)
+    List<Object[]> findLatestPublicCovers(@Param("petIds") java.util.Collection<Long> petIds);
+
+    /**
+     * 他人主页的**发帖总数**（V1.3.0 batch-b1 Story 2.2 · FR-118.2）。
+     *
+     * <p>🔴 <b>必须带 {@code visibility = PUBLIC}</b> —— 与上面那个方法的全部区别就在这一条谓词上。
+     * {@link com.tailtopia.content.domain.ContentVisibility} 的判定口径写得很死：
+     * <b>他人主页属于「平台自动分发」，按 PUBLIC 过滤</b>（NFR-4）。
+     * <p>不带这条谓词的后果有两层：① 主页上写着「18 postingan」而网格里只有 12 个格子，
+     * 用户一眼看出对不上；② 更要紧的是，那个差值<b>就是这个人有几篇私密内容</b> ——
+     * 访客不该能推断出这个数。
+     */
+    @Query("""
+            SELECT count(p) FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+            """)
+    long countPublicPublishedByAuthor(@Param("authorId") long authorId);
+
+    /**
+     * 他人主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2 · AC1）：
+     * 该作者全部 PUBLIC 内容，三类混排不分流，时间倒序游标分页。
+     *
+     * <p>🔴 与 {@link #findMyPosts}（作者自视）**有两处谓词不同，缺一处就是漏**：
+     * <ul>
+     *   <li>加 {@code visibility = PUBLIC} —— 他人主页是平台自动分发（NFR-4）；</li>
+     *   <li>去掉 {@code UNDER_REVIEW} —— 挂起帖<b>仅作者本人可见</b>，
+     *       放进他人主页等于把审核中的内容提前对外放出来。</li>
+     * </ul>
+     * 两者都必须在**服务端**过滤：查出来再让客户端藏只是「看不见」，抓包照样拿得到（NFR-2）。
+     *
+     * <h2>🔴 两条「访客自己隐藏过的」排除，与 {@link #findFeed} 逐条相同</h2>
+     * <ul>
+     *   <li>访客**举报过的那一条**（{@code ContentReport}）；</li>
+     *   <li>访客**隐藏过的那个人**（{@code UserHideRelation}，<b>不区分 BLOCK / REPORT</b>）。</li>
+     * </ul>
+     * <b>不是可选项</b>：{@code ContentDetailService} 对这两种情况一律 404
+     * （「举报一条帖它就 404、拉黑整个人他每条帖却照样打得开」的语义倒挂，PRD §7 已消灭）。
+     * 少了这两条，主页网格里会摆出一排**点进去全是 404** 的格子 —— 每一格都是死的。
+     * <p>⚠️ 用 {@code hasViewer} 布尔门控而不是直接判 {@code :viewerId IS NULL}：
+     * 游客时传 NULL 会触发 42P18（同 {@link #findFeed} 的既定写法）。
+     * <p>⚠️ 这条排除**只影响网格，不影响两个计数** —— 计数说的是「这个人发了多少」，
+     * 网格说的是「你能看到哪些」。两者在"访客自己隐藏过对方"时本就该不一致，
+     * 而访客<b>知道自己做过那件事</b>，所以这里不存在泄漏也不存在困惑
+     * （与 {@code PRIVATE} 那种差值完全不同：那个差值是关于作者的、访客无从得知的信息）。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM ContentReport r
+                                  WHERE r.postId = p.id AND r.reporterId = :viewerId))
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
+                                  WHERE h.holderId = :viewerId AND h.targetId = p.authorId))
+              AND (:hasCursor = false
+                   OR p.createdAt < :cursorTs
+                   OR (p.createdAt = :cursorTs AND p.id < :cursorId))
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> findPublicPostsByAuthor(
+            @Param("authorId") long authorId,
+            @Param("hasViewer") boolean hasViewer,
+            @Param("viewerId") Long viewerId,
+            @Param("hasCursor") boolean hasCursor,
+            @Param("cursorTs") Instant cursorTs,
+            @Param("cursorId") Long cursorId,
+            Pageable pageable);
 
     /** 概览看板（bug 20260731-442）：仅真实用户发的帖（剔除虚拟/种子账号铺量内容）。 */
     @Query("select count(p) from ContentPost p join User u on u.id = p.authorId "

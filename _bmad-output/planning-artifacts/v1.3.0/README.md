@@ -1,7 +1,7 @@
 # V1.3.0 规划产物
 
 > 集成分支 `dev_1.3.0`。本版本由**多份 PRD** 组成，各在自己的功能分支上产出并合回，最终在本目录汇齐。
-> 状态：**实现中**（2026-09-10）。两个主题的规划产物均已入库，story 全部 ready-for-dev。
+> 状态：**实现中**（2026-09-11）。admin / batch-a 两主题规划全套已入库、story 全部 ready-for-dev；batch-b1 刚入库 PRD + UI 稿，epics 未拆。
 
 ## 1. 文件约定
 
@@ -25,6 +25,7 @@
 |---|---|---|---|---|
 | **admin** · 运营后台 UI 重构 | `feat/1.3.0-ops-ui-refactor` | Epic 1–11 | 59，全部 ready-for-dev | 云端批跑中（2026-09-09 起）；Epic 10 的 6 条跳过，等电商线合入后再做 |
 | **batch-a** · 内容体验修复包 | `feat/1.3.0-batch-a-content-fixes` | Epic 1–5 | 19，全部 ready-for-dev | 规划全套已入库（2026-09-10），待开跑 |
+| **batch-b1** · 场所发现与社交基建包 | `feat/1.3.0-batch-b1-places-social` | Epic 1–4 | 24，全部 ready-for-dev | PRD / UI 稿 / 代码核对报告 / 决策日志 / 架构 delta 均已入库；13 条决策已定，AB-17A 已确认在做 —— **阻塞项清零，可拆 epics** |
 | **shop-v2** · 电商板块 V2（体验 / 运营后台 / 履约 / 客服可达） | `feat/1.3.0-shop-v2` | Epic 1–9 | 40，全部 ready-for-dev | PRD 两轮校验后定稿（SD-1~18）；架构 delta（AD-S1~S13）+ epics + 40 story 全套已出（2026-09-16，含 23 条代码核实更正，见架构 delta §9）；第二批运营提效组依赖 admin Epic 10 |
 
 **产物文件**（按主题定位时以本列为准）：
@@ -33,10 +34,14 @@
 |---|---|---|---|---|---|
 | admin | `PRD-v1.3.0-admin.md` | `architecture-v1.3.0-admin-delta.md` | `epics-v1.3.0-admin.md` | `决策日志-admin.md` | `sprint-status-v1.3.0-admin.yaml` |
 | batch-a | `PRD-v1.3.0-batch-a-content-fixes.md` | `architecture-v1.3.0-delta.md` ⚠️无后缀 | `epics-v1.3.0-batch-a.md` | `决策日志.md` ⚠️无后缀 | `sprint-status-v1.3.0-batch-a.yaml` |
+| batch-b1 | `PRD-v1.3.0-batch-b1-places-social.md` | `architecture-v1.3.0-batch-b1-delta.md` | `epics-v1.3.0-batch-b1.md` | `决策日志-batch-b1.md` | `sprint-status-v1.3.0-batch-b1.yaml` |
 | shop-v2 | `PRD-v1.3.0-shop-v2.md`（附录 `PRD-v1.3.0-shop-v2-addendum.md`） | `architecture-v1.3.0-shop-v2-delta.md` | `epics-v1.3.0-shop-v2.md` | `决策日志-shop-v2.md` | `sprint-status-v1.3.0-shop-v2.yaml` |
 
 > **Epic 号段跨主题会重复，这是允许的**：两主题的 epics 文件与 sprint-status 各自独立，story 文件名带中文名互不覆盖，技能按 sprint-status 里的完整 key 定位 story，不按 `<epic>-<n>` 前缀通配。
 > 代价只在口头引用：同一目录下 admin 与 batch-a 都有 `1-1-*`，**说 story 必须带主题**（如「batch-a 的 1-1」）。
+
+> **batch-b1 另有两份**：UI 稿 `ui-v1.3.0-batch-b1-places-social.html`、落地前核对报告 `代码核对报告-batch-b1.md`（PRD/UI 稿的「现状如此」逐条对代码核实的结果 + 待拍板问题，拆 epics 前必读）。
+> batch-b1 对应母版总 PRD 的批次 B1；批次 B2（FR-117 / FR-120 / 场所打卡 ⑧）尚未入库，引用时别与 B1 混说。
 
 ## 3. 实现层
 

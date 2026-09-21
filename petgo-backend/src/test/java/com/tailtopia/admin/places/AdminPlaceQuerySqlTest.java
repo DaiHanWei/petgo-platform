@@ -15,7 +15,9 @@ class AdminPlaceQuerySqlTest {
             assertThat(sql).containsPattern("WHERE\\s+p\\.deleted_at IS NULL").doesNotContain("WHEREp").contains(":q").contains(":city");
         }
         assertThat(AdminPlaceQueryService.SUMMARY_SQL).contains("FILTER (WHERE p.status = 'ACTIVE')").contains("AT TIME ZONE 'Asia/Jakarta'")
-                .contains("r.status = 'PENDING'").contains("SUM(p.checkin_count)");
+                .contains("r.status = 'PENDING'")
+                // 计数缓存列已删（场所表对齐 D3）：累计打卡改为实时统计子表。
+                .contains("FROM place_checkins c WHERE c.place_id = p.id").doesNotContain("checkin_count");
         assertThat(AdminPlaceQueryService.LIST_SQL).contains("ORDER BY p.created_at DESC, p.id DESC LIMIT :limit OFFSET :offset");
         assertThat(AdminPlaceQueryService.escapeLike("50%_x\\")).isEqualTo("50\\%\\_x\\\\");
     }

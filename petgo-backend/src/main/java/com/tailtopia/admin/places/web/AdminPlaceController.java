@@ -49,10 +49,14 @@ public class AdminPlaceController {
     /** Story 5.4：A1 场所举报页签从本控制器的端点处置（form {@code from=review}）→ 回复核工作台的 done / detail fragment。 */
     private final ManualReviewWorkbenchService reviewWorkbench;
     private final Messages msg;
+    /** 录入表单的默认城市（与 App 标记同一来源，D2）。 */
+    private final com.tailtopia.place.service.PlaceCityResolver cityResolver;
 
     public AdminPlaceController(AdminPlaceQueryService query, AdminPlaceService placeService, PlaceMergeService mergeService,
-            ManualReviewWorkbenchService reviewWorkbench, Messages msg) {
+            ManualReviewWorkbenchService reviewWorkbench, Messages msg,
+            com.tailtopia.place.service.PlaceCityResolver cityResolver) {
         this.query = query;
+        this.cityResolver = cityResolver;
         this.placeService = placeService;
         this.mergeService = mergeService;
         this.reviewWorkbench = reviewWorkbench;
@@ -228,6 +232,8 @@ public class AdminPlaceController {
         model.addAttribute("markers", placeService.markerOptions());
         model.addAttribute("cities", query.cities());
         model.addAttribute("typeOptions", com.tailtopia.admin.places.domain.PlaceType.KNOWN);
+        // D2：默认城市与 App 标记同一来源（petgo.places.default-city），不在模板里写死。
+        model.addAttribute("defaultCity", cityResolver.defaultCity());
         return "admin/fragments/drawer-places-create :: create-form";
     }
 

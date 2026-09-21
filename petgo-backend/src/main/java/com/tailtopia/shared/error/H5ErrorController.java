@@ -42,7 +42,13 @@ import org.springframework.web.servlet.ModelAndView;
 public class H5ErrorController extends AbstractErrorController {
 
     /** 只有这两条对外 H5 链路走剪贴簿错误页；其余保持默认。 */
-    private static final String[] H5_PREFIXES = {"/p/", "/m/"};
+    /**
+     * 服务端直出的 H5 分享页前缀。
+     *
+     * <p>⚠️ **加一个新的分享页就要加进来**（同 {@code GlobalExceptionHandler.isH5Path}）——
+     * 漏了的话访客看到的是 JSON 错误体，而不是失效页。
+     */
+    private static final String[] H5_PREFIXES = {"/p/", "/m/", "/c/", "/place/"};
 
     public H5ErrorController(ErrorAttributes errorAttributes) {
         super(errorAttributes);

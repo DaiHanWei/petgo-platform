@@ -1,4 +1,5 @@
 import '../../auth/domain/user_tag.dart';
+import '../../mention/domain/mention_view.dart';
 /// 评论（对应后端 `CommentResponse`）。两级：一级含 [replyCount] + 内嵌前 3 条 [replies]；
 /// 二级回复 [replyCount]/[replies] 为 null。
 class Comment {
@@ -16,6 +17,7 @@ class Comment {
     this.moderationStatus = 'VISIBLE',
     this.likeCount = 0,
     this.liked = false,
+    this.mentions = const [],
   });
 
   final int id;
@@ -73,7 +75,15 @@ class Comment {
         moderationStatus: moderationStatus,
         likeCount: likeCount ?? this.likeCount,
         liked: liked ?? this.liked,
+        // 🔴 合并注：@ 投影必须带过去 —— 漏了的话点一下赞，这条评论里的 @ 就变成不可点的纯文字。
+        mentions: mentions,
       );
+
+  /// 这条评论里的 @（V1.3.0 batch-b1 Story 3.3）。
+  ///
+  /// 🔴 每一项的「能不能点、显示什么昵称」都是**后端算好的**（拉黑 AC3 / 注销 AC4）——
+  /// 渲染侧只照做，不自己判。空表 = 这段文字里没有可点的 @。
+  final List<MentionView> mentions;
 
   bool get isTopLevel => replyCount != null;
 
@@ -99,6 +109,7 @@ class Comment {
       moderationStatus: (json['moderationStatus'] as String?) ?? 'VISIBLE',
       likeCount: (json['likeCount'] ?? 0) as int,
       liked: (json['liked'] ?? false) as bool,
+      mentions: MentionView.listFromJson(json['mentions']),
     );
   }
 }
