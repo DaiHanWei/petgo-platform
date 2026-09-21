@@ -183,12 +183,15 @@ public class AdminContentManageService {
      *
      * <p>可空参数一律 {@code (:x IS NULL OR …)} + 绑定时给显式 SQL 类型，规避 Postgres
      * 「无类型 null 参数无法推断类型」（42P18，这个仓库踩过两次）。
+     * ⚠️ 时间戳例外：pgjdbc 对 {@code Types.TIMESTAMP} 的 null 仍按 unspecified 发送（好让服务端在 timestamp /
+     * timestamptz 间自选），显式 SQL 类型救不了 → 必须在 SQL 里 {@code CAST(... AS timestamptz)}。
+     * 不 CAST 时「不带日期筛选」打开 /admin/content 就是 500（第三次踩）。
      */
     private static final String SUMMARY_WHERE = """
             (:type IS NULL OR p.type = :type)
               AND (:authorId IS NULL OR p.author_id = :authorId)
-              AND (:fromTs IS NULL OR p.created_at >= :fromTs)
-              AND (:toTs IS NULL OR p.created_at < :toTs)
+              AND (CAST(:fromTs AS timestamptz) IS NULL OR p.created_at >= CAST(:fromTs AS timestamptz))
+              AND (CAST(:toTs AS timestamptz) IS NULL OR p.created_at < CAST(:toTs AS timestamptz))
               AND (:deleted IS NULL OR (:deleted = TRUE AND p.deleted_at IS NOT NULL)
                                     OR (:deleted = FALSE AND p.deleted_at IS NULL))
               AND (:q IS NULL OR p.text ILIKE :q)

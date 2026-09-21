@@ -309,7 +309,7 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                 .doesNotContainKey("costBySku");
         assertThat(noCost.getResponse().getContentAsString())
                 .as("🔒 进货价数值出现在 HTML 里 = 已泄露（NFR-11）")
-                .doesNotContain(String.valueOf(cost));
+                .doesNotContain(String.valueOf(cost)).doesNotContain("190,777"); // 页面按千分位显示（formatInteger COMMA）
 
         // 反向对照：有权限时它必须真的在 —— 否则上面那条 doesNotContain 是恒真的废断言
         MvcResult withCost = mvc.perform(get("/admin/shop/products/" + productId)
@@ -318,7 +318,7 @@ class AdminShopProductEndpointIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn();
         assertThat(withCost.getModelAndView().getModel()).containsKey("costBySku");
-        assertThat(withCost.getResponse().getContentAsString()).contains(String.valueOf(cost));
+        assertThat(withCost.getResponse().getContentAsString()).contains("190,777");
     }
 
     @Test

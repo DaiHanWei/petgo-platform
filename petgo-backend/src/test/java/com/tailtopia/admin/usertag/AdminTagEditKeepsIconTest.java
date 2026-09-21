@@ -60,7 +60,8 @@ class AdminTagEditKeepsIconTest {
                 mock(com.tailtopia.auth.repository.UserRepository.class),
                 mock(UserTagQueryService.class), mock(AdminAuditService.class),
                 mock(com.tailtopia.admin.audit.repository.AdminAuditLogRepository.class),
-                mock(com.tailtopia.admin.account.repository.AdminAccountRepository.class));
+                mock(com.tailtopia.admin.account.repository.AdminAccountRepository.class),
+                mock(org.springframework.transaction.PlatformTransactionManager.class));
     }
 
     @Test
@@ -70,7 +71,8 @@ class AdminTagEditKeepsIconTest {
         AdminUserTagService service = new AdminUserTagService(mock(UserTagRepository.class), mock(UserTagAssignmentRepository.class),
                 mock(com.tailtopia.auth.repository.UserRepository.class), query, audit,
                 mock(com.tailtopia.admin.audit.repository.AdminAuditLogRepository.class),
-                mock(com.tailtopia.admin.account.repository.AdminAccountRepository.class));
+                mock(com.tailtopia.admin.account.repository.AdminAccountRepository.class),
+                mock(org.springframework.transaction.PlatformTransactionManager.class));
         java.util.List<Long> ids = java.util.stream.LongStream.rangeClosed(1, AdminUserTagService.MAX_BULK_ASSIGN + 1).boxed().toList();
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.assignBulk(7L, ids, 1L, java.time.Instant.now(), null))

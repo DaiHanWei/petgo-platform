@@ -26,7 +26,7 @@ public enum ReviewTab {
         this.subTypes = subTypes;
     }
 
-    public String param() {
+    public String slug() {
         return param;
     }
 

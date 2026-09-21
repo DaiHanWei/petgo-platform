@@ -78,22 +78,23 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
         return html.split(java.util.regex.Pattern.quote(needle), -1).length - 1;
     }
 
-    /** AC1：四卡各自成 form[data-config-card]，action / hx-post / 参数名逐字不变；组头无「高危」。 */
+    /** AC1：五卡（四卡 + shop-v2 3-1 合入的客服联系方式卡）各自成 form[data-config-card]，action / hx-post / 参数名逐字不变；组头无「高危」。 */
     @Test
     void pageRendersFourIndependentCardsWithUnchangedEndpoints() throws Exception {
         String html = mvc.perform(get("/admin/config").param("lang", "zh_CN").with(authentication(superAdmin())))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(count(html, "data-config-card")).isEqualTo(4);
+        assertThat(count(html, "data-config-card")).isEqualTo(5);
         for (String[] card : new String[][] {
                 {"cfg-pricing", "/admin/config/pricing", "vetConsultPrice"}, {"cfg-ktp", "/admin/config/ktp-pricing", "passportPagePrice"},
-                {"cfg-pawcoin", "/admin/config/pawcoin", "premiumRate"}, {"cfg-share-reward", "/admin/config/share-reward", "shareRewardMonthlyCap"}}) {
+                {"cfg-pawcoin", "/admin/config/pawcoin", "premiumRate"}, {"cfg-share-reward", "/admin/config/share-reward", "shareRewardMonthlyCap"},
+                {"cfg-support", "/admin/config/support-contact", "whatsappNumber"}}) {
             assertThat(html).as(card[0]).contains("id=\"" + card[0] + "\"").contains("action=\"" + card[1] + "\"").contains("hx-post=\"" + card[1] + "\"")
                     .contains("hx-target=\"#" + card[0] + "-err\"").contains("id=\"" + card[0] + "-err\"").contains("name=\"" + card[2] + "\"")
                     .containsPattern("id=\"" + card[0] + "\"[^>]*data-confirm-diff=\"true\"").containsPattern("id=\"" + card[0] + "\"[^>]*data-error-fields=");
         }
         // 保存钮初始禁用 + 「已修改」标；确认弹层文案模板挂在表单上（前端拼旧值 → 新值）
-        assertThat(count(html, "data-save")).isEqualTo(4);
-        assertThat(count(html, "data-dirty-flag")).isEqualTo(4);
+        assertThat(count(html, "data-save")).isEqualTo(5);
+        assertThat(count(html, "data-dirty-flag")).isEqualTo(5);
         assertThat(html).contains("data-confirm-diff-line=\"{0}：{1} → {2}\"").contains("确认修改以下配置");
         assertThat(html).doesNotContain("高危");
         // PawCoin 卡附属：档位两表 + 新建（Story 6.2）端点不变
@@ -145,7 +146,7 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
         String viewOnly = mvc.perform(get("/admin/config").param("lang", "zh_CN")
                         .with(authentication(staffWith(AdminPermissions.CONFIG_VIEW, AdminPermissions.CONFIG_SHARE_REWARD_VIEW))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(count(viewOnly, "data-readonly=\"true\"")).isEqualTo(4);
+        assertThat(count(viewOnly, "data-readonly=\"true\"")).isEqualTo(5); // 含客服联系方式卡（同按 config.edit）
         assertThat(viewOnly).containsPattern("name=\"vetConsultPrice\"[^>]*disabled").containsPattern("name=\"shareRewardMonthlyCap\"[^>]*disabled")
                 .contains("需要「编辑配置」权限").contains("需要「改分享奖励配置（含总开关）」权限").doesNotContain("action=\"/admin/config/tiers\"");
         // 只持 share_reward_edit 的应急操作员：分享奖励卡可编辑，其它三卡不渲染

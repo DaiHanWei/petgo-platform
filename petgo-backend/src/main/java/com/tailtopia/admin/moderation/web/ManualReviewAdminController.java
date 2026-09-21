@@ -155,8 +155,8 @@ public class ManualReviewAdminController {
         model.addAttribute("counts", counts);
         // 公共页签行（Story 2.9 T2）：四页签 + 同源计数
         model.addAttribute("stateTabs", java.util.Arrays.stream(ReviewTab.values()).map(t -> new StateTab(
-                StateTab.href("/admin/manual-review", "tab", t.param(), "state", filters.state(), "q", filters.q()),
-                t.titleKey(), "review-tab-count-" + t.param(), counts.getOrDefault(t, 0L), t == filters.tab())).toList());
+                StateTab.href("/admin/manual-review", "tab", t.slug(), "state", filters.state(), "q", filters.q()),
+                t.titleKey(), "review-tab-count-" + t.slug(), counts.getOrDefault(t, 0L), t == filters.tab())).toList());
         model.addAttribute("queue", workbench.queue(filters));
         model.addAttribute("categories", com.tailtopia.moderation.domain.ReportReason.values());
     }

@@ -16,6 +16,6 @@ public record ReviewDisposeResult(ReviewTab tab, String nextId, long removedSour
     }
 
     public String rowId() {
-        return "review-row-" + tab.param() + "-" + removedSourceId;
+        return "review-row-" + tab.slug() + "-" + removedSourceId;
     }
 }

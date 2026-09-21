@@ -48,6 +48,7 @@ class DashboardMaterializeEndpointStagTest extends ApiIntegrationTest {
     }
 
     private AdminUserDetails superAdmin() {
+        makeRoomForSuperAdmin();
         return account(AdminRole.SUPER_ADMIN, "super");
     }
 

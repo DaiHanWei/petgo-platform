@@ -60,6 +60,7 @@ class RefundsWorkbenchMvcTest extends ApiIntegrationTest {
     void refundsWorkbenchFourWays() throws Exception {
         long seq = SEQ.incrementAndGet();
         long actor = 990000L + seq;
+        makeRoomForSuperAdmin();
         accountService.createAccount("rf-super-" + seq + "@tailtopia.test", "超管", AdminRole.SUPER_ADMIN, List.of(), actor);
         AdminUserDetails superAdmin = userDetailsService.loadByEmail("rf-super-" + seq + "@tailtopia.test", false);
         accountService.createAccount("rf-cs-" + seq + "@tailtopia.test", "客服", AdminRole.CUSTOM, List.of(AdminPermissions.REFUND_SUBMIT), actor);

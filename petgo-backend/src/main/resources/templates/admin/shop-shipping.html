@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org"
       xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
-<!--
+<!--/*
   D1 服务范围与运费配置（V1.3.0 Story 10.6，模板 D 三卡；原 AB-11C 的三区块表单）。
   🔴 界面不出现「配送方式」维度：C-14 已把二维运费表降为一维，只剩 Reguler ——
      留一个恒等于 Reguler 的下拉只会让人误以为多档已经支持。
@@ -11,7 +11,7 @@
 
   🔴 **卡①不是一个 form**，见该卡自己的注释：模板 D 的 configCard 本身就是一个 <form>，
      而区域是「一行一次 upsert」+「启停另走一个端点」—— 套成一张卡会出现 form 嵌套（HTML 直接吞掉内层）。
--->
+*/-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.shop.shipping.title}">服务范围与运费 · TailTopia 运营后台</title>

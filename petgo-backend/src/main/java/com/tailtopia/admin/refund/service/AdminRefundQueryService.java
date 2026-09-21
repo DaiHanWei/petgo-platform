@@ -12,6 +12,7 @@ import com.tailtopia.pay.refund.repository.RefundRequestRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.support.domain.FeedbackTicket;
 import com.tailtopia.support.repository.FeedbackTicketRepository;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -75,7 +76,8 @@ public class AdminRefundQueryService {
     public AdminRefundView find(String refundToken) {
         RefundRequest r = refunds.findByRefundToken(refundToken)
                 .orElseThrow(() -> AppException.notFound("退款请求不存在").code("admin.err.refund.notFound"));
-        return toView(r, operatorNames(List.of(r.getSubmitterAdminId(), r.getApproverAdminId(), r.getPayerAdminId())));
+        // 未审批 / 未打款时 approver、payer 为 null —— List.of 不收 null 会直接 NPE（详情页 500）
+        return toView(r, operatorNames(Arrays.asList(r.getSubmitterAdminId(), r.getApproverAdminId(), r.getPayerAdminId())));
     }
 
     /** 工作台左栏一页（按段；判定 / 审批 / 打款段先进先出，已完结最新在前）。 */

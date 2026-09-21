@@ -80,7 +80,8 @@ class AdminVetDrawerIntegrationTest extends ApiIntegrationTest {
     @Test
     void vetListUsesTemplateBAndDropsTheThreeActionColumns() throws Exception {
         VetAccount v = seedVet();
-        String html = body(mvc.perform(get("/admin/vets").param("lang", "zh_CN")
+        // 按本测试的兽医筛：共享库兽医多，新建的那个不一定在第一页（q 匹配昵称 / 登录名）
+        String html = body(mvc.perform(get("/admin/vets").param("lang", "zh_CN").param("q", v.getUsername())
                         .with(authentication(superAdmin())))
                 .andExpect(status().isOk()).andReturn());
 

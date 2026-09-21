@@ -159,7 +159,7 @@ public class AdminShopOrderController {
         model.addAttribute("canFulfill", has(admin, AdminPermissions.SHOP_ORDER_FULFILL));
         model.addAttribute("open", open == null || open.isBlank() ? null : open.trim());
         model.addAttribute("active", "shopOrders");
-        return hx.isHtmx() ? "admin/fragments/shop-orders-list :: rows(true)" : "admin/shop-orders";
+        return hx.isHtmx() ? "admin/fragments/shop-orders-list :: rows(oob=true)" : "admin/shop-orders";
     }
 
     /** 日期按 UTC 起止换算（全库时间戳一律 UTC，CLAUDE.md 命名映射链）。 */
@@ -236,6 +236,9 @@ public class AdminShopOrderController {
         model.addAttribute("shippable", order.getStatus() == ShopOrderStatus.PENDING_SHIPMENT
                 || order.getStatus() == ShopOrderStatus.SHIPPED);
         model.addAttribute("markable", order.getStatus() == ShopOrderStatus.SHIPPED);
+        // 标记缺货只对待发货单开放；已标记的不再给按钮（重复标记服务层也会拒）
+        model.addAttribute("flaggable", order.getStatus() == ShopOrderStatus.PENDING_SHIPMENT
+                && !order.isShortageFlagged());
         model.addAttribute("active", "shopOrders");
         return order;
     }
@@ -301,6 +304,32 @@ public class AdminShopOrderController {
             adminOrders.markPackageDelivered(token, shipmentId,
                     admin == null ? null : admin.getAdminAccountId());
             ra.addFlashAttribute("notice", msg.get("admin.flash.shopOrder.parcelDelivered"));
+        } catch (AppException e) {
+            ra.addFlashAttribute("error", msg.resolve(e));
+        }
+        return REDIRECT_LIST;
+    }
+
+    // ---------- 标记缺货（A8 入口） ----------
+
+    /**
+     * 标记缺货：待发货单进入异常订单工作台（A8）。拣货时发现实物不够的那一刻，运营在这里点。
+     *
+     * <p>🔴 这是 A8 的<b>唯一入口</b>：库存不变式 {@code locked <= actual} 让账面上不可能出现缺货，
+     * 系统无从自动识别（见 {@link AdminShopOrderExceptionService} 类注释）。
+     */
+    @PostMapping("/admin/shop/orders/{token}/flag-shortage")
+    @PreAuthorize(FULFILL_AUTH)
+    public String flagShortage(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable String token, @RequestParam String note,
+            HxRequest hx, Model model, RedirectAttributes ra) {
+        if (hx.isHtmx()) {
+            exceptions.flagShortage(token, note, admin == null ? null : admin.getAdminAccountId());
+            return done(admin, token, msg.get("admin.flash.shopOrder.shortageFlagged"), model);
+        }
+        try {
+            exceptions.flagShortage(token, note, admin == null ? null : admin.getAdminAccountId());
+            ra.addFlashAttribute("notice", msg.get("admin.flash.shopOrder.shortageFlagged"));
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }

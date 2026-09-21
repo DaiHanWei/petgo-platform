@@ -193,8 +193,9 @@ class AdminUserTagDrawerIntegrationTest extends ApiIntegrationTest {
                 .contains("hx-post=\"/admin/user-tags/assign\"")
                 .contains("name=\"tagId\"").contains("name=\"userIds\"")
                 .contains("name=\"startsAt\"").contains("name=\"endsAt\"");
+        // 抽屉里这份刻意不用 id（整页已有同 id 的一份，见 drawer-user-tag.html 注释），用 data-notice
         assertThat(html).as("展示上限提示在分配页签里也有一份")
-                .contains("id=\"userTagCapNotice\"");
+                .contains("data-notice=\"utag-cap\"");
     }
 
     /** AC3：操作人列 —— 经后台分配的记录能反查到是谁分的。 */
@@ -435,9 +436,16 @@ class AdminUserTagDrawerIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    /** 最小合法 PNG（1×1）。图标校验只看得懂真图片。 */
+    /** 合法 PNG，42×42 = 图标最短边下限（AdminTagIconService.MIN_SIDE，2026-09-02 起）。图标校验只看得懂真图片。 */
     private static byte[] pngBytes() {
-        return java.util.Base64.getDecoder().decode(
-                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+        try {
+            var img = new java.awt.image.BufferedImage(com.tailtopia.admin.tagicon.AdminTagIconService.MIN_SIDE,
+                    com.tailtopia.admin.tagicon.AdminTagIconService.MIN_SIDE, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            var out = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(img, "png", out);
+            return out.toByteArray();
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 }

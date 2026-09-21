@@ -79,7 +79,7 @@ public class AdminPaymentController {
         // 🔴 汇总覆盖**整个筛选结果**，不是当前这一页（见 summarize 的说明）。
         model.addAttribute("summary", service.summarize(filter));
         // htmx 局部：只回表格 + 摘要条 oob（模拟回调改了状态之后由页面上的刷新槽拉一次）。
-        return hx.isHtmx() ? "admin/fragments/payments-list :: rows(true)" : "admin/payments";
+        return hx.isHtmx() ? "admin/fragments/payments-list :: rows(oob=true)" : "admin/payments";
     }
 
     /**

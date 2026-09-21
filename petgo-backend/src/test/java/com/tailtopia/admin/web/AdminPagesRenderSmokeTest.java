@@ -437,7 +437,10 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 authorities.length == 0 ? AdminAccountType.SUPER_ADMIN : AdminAccountType.STAFF);
         java.util.List<org.springframework.security.core.GrantedAuthority> granted =
                 new java.util.ArrayList<>();
-        granted.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"));
+        // 超管视角要带上 principal 自己的 ROLE_SUPER_ADMIN —— 侧栏可见性（AdminNavModel.visible）只认这个 authority，
+        // 不看 accountType；只给 ROLE_ADMIN 的「超管」在侧栏里只剩概览一项。
+        granted.addAll(authorities.length == 0 ? principal.getAuthorities()
+                : java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN")));
         for (String a : authorities) {
             granted.add(new org.springframework.security.core.authority.SimpleGrantedAuthority(a));
         }

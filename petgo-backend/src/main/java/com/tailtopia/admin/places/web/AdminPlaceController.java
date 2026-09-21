@@ -72,7 +72,7 @@ public class AdminPlaceController {
         PlaceFilter filter = PlaceFilter.of(q, type, status, city, page);
         populate(filter, model);
         if (hx.isHtmx()) {
-            return "admin/fragments/places-list :: rows(true)"; // 摘要条随 oob 一并换
+            return "admin/fragments/places-list :: rows(oob=true)"; // 摘要条随 oob 一并换
         }
         model.addAttribute("active", "places");
         if ("outsideJakarta".equals(warn)) {

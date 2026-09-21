@@ -17,6 +17,7 @@ import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -53,6 +54,7 @@ class AdminNavPermissionMatrixTest extends ApiIntegrationTest {
     @Autowired
     private AdminAccountRepository adminAccounts;
     @Autowired
+    @Qualifier("requestMappingHandlerMapping") // actuator 另有同类型 controllerEndpointHandlerMapping
     private RequestMappingHandlerMapping handlerMapping;
 
     private Authentication staffWith(String... codes) {

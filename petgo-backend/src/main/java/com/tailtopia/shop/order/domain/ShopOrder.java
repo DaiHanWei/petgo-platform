@@ -146,6 +146,17 @@ public class ShopOrder {
     private CompletionSource completionSource;
 
     /**
+     * 运营手工标记缺货（异常订单 A8 的唯一判据，V20260918_2243）。三列同生同灭：未标记 = 全空。
+     * 库存不变式 {@code locked <= actual} 让「账面缺货」不可能出现，真实缺货只在拣货时被人发现。
+     */
+    @Column(name = "shortage_flagged_at")
+    private Instant shortageFlaggedAt;
+    @Column(name = "shortage_flagged_by")
+    private Long shortageFlaggedBy;
+    @Column(name = "shortage_note", length = 200)
+    private String shortageNote;
+
+    /**
      * 🔴 乐观锁（照 {@code PaymentIntent} 同款）：支付回调与取消/懒过期两个事务同时读到
      * {@code PENDING_PAYMENT} 时，后提交者在同一行上撞版本号整体回滚 ——
      * 这是「{@code inventory.commit} 与 {@code inventory.release} 不会双双落库」的库级裁决。
@@ -432,6 +443,48 @@ public class ShopOrder {
         this.refundedTotal += total;
         this.refundedCoin += coin;
         this.updatedAt = Instant.now();
+    }
+
+    /**
+     * 标记缺货（进入异常订单工作台）。只允许待发货单 —— 已发货的出口是退货，不是缺货处置。
+     * 重复标记报冲突而不是覆盖：覆盖会抹掉第一个人写的原因，而那往往是最接近现场的描述。
+     */
+    public void flagShortage(Long adminAccountId, String note, Instant now) {
+        if (this.status != ShopOrderStatus.PENDING_SHIPMENT) {
+            throw AppException.conflict("只有待发货订单可标记缺货，当前状态：" + this.status)
+                    .code("admin.err.orderException.flagOnlyPending", this.status);
+        }
+        if (this.shortageFlaggedAt != null) {
+            throw AppException.conflict("该订单已标记缺货").code("admin.err.orderException.alreadyFlagged");
+        }
+        this.shortageFlaggedAt = now;
+        this.shortageFlaggedBy = adminAccountId;
+        this.shortageNote = note;
+        this.updatedAt = now;
+    }
+
+    /** 清除缺货标记（整单取消 / 联系用户后继续履约 = 这一单的缺货已处置完）。 */
+    public void clearShortageFlag() {
+        this.shortageFlaggedAt = null;
+        this.shortageFlaggedBy = null;
+        this.shortageNote = null;
+        this.updatedAt = Instant.now();
+    }
+
+    public boolean isShortageFlagged() {
+        return shortageFlaggedAt != null;
+    }
+
+    public Instant getShortageFlaggedAt() {
+        return shortageFlaggedAt;
+    }
+
+    public Long getShortageFlaggedBy() {
+        return shortageFlaggedBy;
+    }
+
+    public String getShortageNote() {
+        return shortageNote;
     }
 
     public long getRefundedTotal() {

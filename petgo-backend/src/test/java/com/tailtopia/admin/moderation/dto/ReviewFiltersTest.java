@@ -81,7 +81,7 @@ class ReviewFiltersTest {
     @Test
     void tabsAreSelfDescribing() {
         for (ReviewTab t : ReviewTab.values()) {
-            assertThat(t.titleKey()).isEqualTo("admin.v130.review.tab." + t.param());
+            assertThat(t.titleKey()).isEqualTo("admin.v130.review.tab." + t.slug());
             assertThat(t.type()).isNotNull();
             assertThat(t.subTypes()).isNotNull();
         }

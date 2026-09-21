@@ -104,7 +104,7 @@
     <!-- ===== 哈希链状态徽标（GET /admin/audit-logs/chain-status）===== -->
     <th:block th:fragment="chainStatus">
         <span th:if="${chain.intact}" class="badge badge-ok" data-chain="intact" th:text="#{admin.v130.audit.chain.intact(${chain.verifiedCount})}">链完整 ✓（N 行）</span>
-        <span th:unless="${chain.intact}" class="badge badge-danger" data-chain="broken" th:text="#{admin.v130.audit.chain.broken(${chain.firstBrokenId})}">断链告警：首个断裂行 #id</span>
+        <span th:unless="${chain.intact}" class="badge badge-danger" data-chain="broken" th:text="#{admin.v130.audit.chain.broken(${#strings.toString(chain.firstBrokenId)})}">断链告警：首个断裂行 #id</span>
     </th:block>
 </div>
 </body>

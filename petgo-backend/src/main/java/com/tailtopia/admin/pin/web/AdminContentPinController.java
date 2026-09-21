@@ -82,7 +82,7 @@ public class AdminContentPinController {
         // ?create=1 深链（无 htmx 时直达新建表单 URL 的落点）：整页渲染后自动展开新建抽屉。
         model.addAttribute("openCreate", create != null);
         // htmx 局部刷新只回表格（摘要条随 oob 一并换）；整页请求回完整视图。
-        return hx.isHtmx() ? "admin/fragments/pins-list :: rows(true)" : "admin/content-pins";
+        return hx.isHtmx() ? "admin/fragments/pins-list :: rows(oob=true)" : "admin/content-pins";
     }
 
     /** 顶置详情抽屉（Story 7.3 · AC3）；非 htmx 直达 → 回列表并自动开该抽屉。 */

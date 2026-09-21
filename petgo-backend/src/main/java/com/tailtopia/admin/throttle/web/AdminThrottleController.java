@@ -69,7 +69,9 @@ public class AdminThrottleController {
     @PostMapping("/admin/throttles")
     @PreAuthorize(MANAGE)
     public String apply(@AuthenticationPrincipal AdminUserDetails admin,
-            @RequestParam("scope") ThrottleScope scope,
+            // required = false 是刻意的：Spring 7 对「必填参数存在但转换成 null」直接回 400（MissingServletRequestParameter），
+            // 下面那段显式的 422 + 「请选择限流粒度」就永远走不到。缺失由下面自己判。
+            @RequestParam(value = "scope", required = false) ThrottleScope scope,
             @RequestParam(value = "targetId", required = false) Long targetId,
             // 内容举报的弹窗里粒度是可选的，两种粒度指向**不同的 id**（帖 id / 作者 id）。
             // ⚠️ 刻意不复用同一个 name 让浏览器"后者覆盖前者"——那是未定义行为，

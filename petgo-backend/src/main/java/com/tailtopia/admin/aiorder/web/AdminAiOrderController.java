@@ -37,7 +37,7 @@ public class AdminAiOrderController {
         model.addAttribute("summary", service.summary());
         model.addAttribute("orders", service.list());
         model.addAttribute("open", open);
-        return hx.isHtmx() ? "admin/fragments/ai-orders-list :: rows(true)" : "admin/ai-orders";
+        return hx.isHtmx() ? "admin/fragments/ai-orders-list :: rows(oob=true)" : "admin/ai-orders";
     }
 
     /**

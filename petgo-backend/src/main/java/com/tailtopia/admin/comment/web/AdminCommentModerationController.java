@@ -60,7 +60,7 @@ public class AdminCommentModerationController {
         populate(status, postId, q, page, model);
         model.addAttribute("open", open);
         // htmx 局部刷新只回表格（摘要条随 oob 一并换）；整页请求回完整视图。
-        return hx.isHtmx() ? "admin/fragments/comments-inspect :: rows(true)" : "admin/comments";
+        return hx.isHtmx() ? "admin/fragments/comments-inspect :: rows(oob=true)" : "admin/comments";
     }
 
     /** 评论详情抽屉（AC4）：评论全文 + 所属帖子卡 + 作者卡 + 操作条；非 htmx 直达 → 回列表并自动开该抽屉。 */

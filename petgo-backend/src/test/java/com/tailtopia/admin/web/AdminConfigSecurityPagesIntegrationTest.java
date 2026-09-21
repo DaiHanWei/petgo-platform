@@ -35,6 +35,7 @@ class AdminConfigSecurityPagesIntegrationTest extends ApiIntegrationTest {
     private AdminUserDetails superAdmin() {
         long seq = SEQ.incrementAndGet();
         String email = "cfgsec-" + seq + "@tailtopia.test";
+        makeRoomForSuperAdmin();
         accountService.createAccount(email, "配置安全超管 " + seq, AdminRole.SUPER_ADMIN, List.of(), 980000L + seq);
         return userDetailsService.loadByEmail(email, false);
     }

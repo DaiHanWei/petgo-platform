@@ -449,7 +449,8 @@ class AdminPublishIdentityIntegrationTest extends ApiIntegrationTest {
         var row = batchService.addDraft(batchId, 1, u.getId(),
                 com.tailtopia.content.domain.ContentType.DAILY, null,
                 "要留操作人痕迹的一条-" + SEQ.incrementAndGet(), null, null);
-        batchService.markValidated(row.getId());
+        // 不手动 markValidated：确认发布（publishOrScheduleRow）自己走 DRAFT → VALIDATED，预先标过会撞
+        // 「非法状态流转：VALIDATED → VALIDATED」，整行发布失败、一条哈希都不写
         mvc.perform(post("/admin/seed-batches/" + batchId + "/confirm")
                         .with(authentication(admin)).with(csrf()))
                 .andExpect(status().is3xxRedirection());

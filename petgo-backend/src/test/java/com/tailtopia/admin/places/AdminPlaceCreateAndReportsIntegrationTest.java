@@ -78,7 +78,7 @@ class AdminPlaceCreateAndReportsIntegrationTest extends ApiIntegrationTest {
     /** 发布身份池成员：启用中的虚拟账号（{@code selectableIdentities()} 第一段）。 */
     private User virtualMarker(String nickname) {
         long n = SEQ.incrementAndGet();
-        return users.save(User.newVirtual("v-place-" + n, nickname, null, 1L));
+        return users.save(User.newVirtual("virtual:place-" + n, nickname, null, 1L)); // 虚拟号 sub 前缀须是 virtual:（SyntheticAccountParityTest 全表护栏）
     }
 
     private Place place(User marker, String name) {
@@ -88,6 +88,12 @@ class AdminPlaceCreateAndReportsIntegrationTest extends ApiIntegrationTest {
 
     private MockMultipartHttpServletRequestBuilder createReq(AdminUserDetails ops, String name, Long markerId, String lat, String lng,
             MockMultipartFile... files) {
+        return createReq(true, ops, name, markerId, lat, lng, files);
+    }
+
+    /** htmx=false 模拟整页表单提交（PRG 分支）。header 只能追加不能覆盖，所以得在这里决定带不带。 */
+    private MockMultipartHttpServletRequestBuilder createReq(boolean htmx, AdminUserDetails ops, String name, Long markerId,
+            String lat, String lng, MockMultipartFile... files) {
         var b = multipart("/admin/places");
         for (MockMultipartFile f : files) {
             b.file(f);
@@ -106,7 +112,10 @@ class AdminPlaceCreateAndReportsIntegrationTest extends ApiIntegrationTest {
         if (markerId != null) {
             b.param("markerUserId", String.valueOf(markerId));
         }
-        b.param("lang", "zh_CN").with(user(ops)).with(csrf()).header("HX-Request", "true");
+        b.param("lang", "zh_CN").with(user(ops)).with(csrf());
+        if (htmx) {
+            b.header("HX-Request", "true");
+        }
         return b;
     }
 
@@ -174,7 +183,7 @@ class AdminPlaceCreateAndReportsIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(page).contains("data-id=\"" + id + "\"").contains("/admin/places/" + id + "/drawer");
         // 非 htmx 提交 → 302（PRG）
-        mvc.perform(createReq(ops, name + " 2", marker.getId(), "-6.2607", "106.8137").header("HX-Request", ""))
+        mvc.perform(createReq(false, ops, name + " 2", marker.getId(), "-6.2607", "106.8137"))
                 .andExpect(status().is3xxRedirection());
     }
 
@@ -239,7 +248,7 @@ class AdminPlaceCreateAndReportsIntegrationTest extends ApiIntegrationTest {
     @Test
     void placeReportsAggregatePerPlaceAndDismissAllSettlesThemAndRefreshesBadge() throws Exception {
         AdminUserDetails ops = admin(AdminPermissions.PLACE_MANAGE, AdminPermissions.CONTENT_TAKEDOWN);
-        User marker = virtualMarker("Marker " + SEQ.incrementAndGet());
+        User marker = virtualMarker("Marker " + SEQ.incrementAndGet() % 1_000_000);
         Place p = place(marker, "Reported " + UUID.randomUUID());
         for (int i = 0; i < 3; i++) {
             reports.save(PlaceReport.create(p.getId(), newUser().getId(), i == 0 ? PlaceReportReason.CLOSED : PlaceReportReason.MISINFO));
@@ -297,7 +306,7 @@ class AdminPlaceCreateAndReportsIntegrationTest extends ApiIntegrationTest {
     @Test
     void delistFromReviewActionsPendingReportsAndMergedPlaceIsFlagged() throws Exception {
         AdminUserDetails ops = admin(AdminPermissions.PLACE_MANAGE, AdminPermissions.CONTENT_TAKEDOWN);
-        User marker = virtualMarker("Marker " + SEQ.incrementAndGet());
+        User marker = virtualMarker("Marker " + SEQ.incrementAndGet() % 1_000_000);
         Place p = place(marker, "Delist " + UUID.randomUUID());
         reports.save(PlaceReport.create(p.getId(), newUser().getId(), PlaceReportReason.CLOSED));
         reports.save(PlaceReport.create(p.getId(), newUser().getId(), PlaceReportReason.INAPPROPRIATE));

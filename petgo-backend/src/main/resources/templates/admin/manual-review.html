@@ -47,7 +47,7 @@
             <div th:fragment="rv-tabs" th:replace="~{admin/fragments/tpl-a-state-tabs :: tabs(${stateTabs})}"></div>
             <!-- 筛选行：两态 + 类别 / 优先级 / 子类型（下拉自动提交）+ 关键词（显式查询钮） -->
             <form th:fragment="rv-filters" class="filter-bar review-filters" th:action="@{/admin/manual-review}" method="get" data-autosubmit>
-                <input type="hidden" name="tab" th:value="${filters.tab.param()}"/>
+                <input type="hidden" name="tab" th:value="${filters.tab.slug()}"/>
                 <label><span th:text="#{admin.v130.review.state}">状态</span>
                     <select name="state" class="sel">
                         <option value="pending" th:selected="${!filters.handled}" th:text="#{admin.v130.review.state.pending}">待处理</option>

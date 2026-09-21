@@ -104,6 +104,7 @@ class AdminRoleIntegrationTest extends ApiIntegrationTest {
     void mockMvcGates() throws Exception {
         long seq = SEQ.incrementAndGet();
         long actor = 920000L + seq;
+        makeRoomForSuperAdmin();
         long superId = accountService.createAccount("super-" + seq + "@tailtopia.test", "超管", AdminRole.SUPER_ADMIN, List.of(), actor);
         AdminUserDetails superAdmin = userDetailsService.loadByEmail("super-" + seq + "@tailtopia.test", false);
         long staffId = accountService.createAccount("staff-" + seq + "@tailtopia.test", "员工", AdminRole.CUSTOM,
@@ -133,6 +134,7 @@ class AdminRoleIntegrationTest extends ApiIntegrationTest {
     void accountPageRendersAllPermissionCheckboxesAndCustomRoleLoginGetsRoleCodes() throws Exception {
         long seq = SEQ.incrementAndGet();
         long actor = 930000L + seq;
+        makeRoomForSuperAdmin();
         accountService.createAccount("super-" + seq + "@tailtopia.test", "超管", AdminRole.SUPER_ADMIN, List.of(), actor);
         long roleId = roleService.create("自定义角色" + seq, List.of(AdminPermissions.VET_VIEW, AdminPermissions.RATING_VIEW), actor);
         String email = "tpl-login-" + seq + "@tailtopia.test";

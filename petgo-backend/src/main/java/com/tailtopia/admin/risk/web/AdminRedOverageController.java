@@ -49,7 +49,7 @@ public class AdminRedOverageController {
         model.addAttribute("rows", rows);
         model.addAttribute("summary", service.summary(rows));
         model.addAttribute("open", open);
-        return hx.isHtmx() ? "admin/fragments/red-overage-list :: rows(true)" : "admin/red-overage";
+        return hx.isHtmx() ? "admin/fragments/red-overage-list :: rows(oob=true)" : "admin/red-overage";
     }
 
     /**

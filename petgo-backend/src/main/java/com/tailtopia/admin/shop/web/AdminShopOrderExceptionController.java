@@ -64,8 +64,8 @@ public class AdminShopOrderExceptionController {
      * A8 工作台（V1.3.0 Story 10.1 AC3，模板 A）。
      *
      * <p>🔴 <b>只有一个页签</b>：AC3 原写「待处理 ｜ 已处理」，但
-     * {@link AdminShopOrderExceptionService#exceptionCandidates} 是<b>实时计算</b>的候选集
-     * （已付款待发货 ∧ 库存不足），处置完那一单就离开集合 —— 库里<b>不存在</b>「已处理」这个可查询的集合。
+     * {@link AdminShopOrderExceptionService#exceptionCandidates} 的候选集是「已付款待发货 ∧ 运营已标记缺货」，
+     * 处置（整单取消 / 继续履约）会清掉标记、那一单就离开集合 —— 库里<b>不存在</b>「已处理」这个可查询的集合。
      * 造出来需要新查询甚至新持久化，破本 story 的「零后端功能改动」（见 story T0 重核 ③，AC 偏差已记 Completion Notes）。
      * 页内常驻说明把这件事讲清楚，处置记录在操作审计里。
      *
@@ -180,9 +180,9 @@ public class AdminShopOrderExceptionController {
     /**
      * 处置成功 fragment（AC3）：toast + oob 整条左栏队列 + {@code data-next-id}。
      *
-     * <p>🔴 <b>左栏整体重算而不是删一行</b>：候选集是实时计算的 —— 部分取消可能让这一单
-     * 不再缺货（于是它该消失），也可能仍然缺货（于是它该留下）；同一次库存变动还可能让
-     * <b>别的</b>单子进出候选集。只删被点的那一行，左栏从此与真相不符。
+     * <p>🔴 <b>左栏整体重算而不是删一行</b>：部分取消后这一单仍留着（标记保留，逐行处理），
+     * 整单取消 / 继续履约后它才消失；同时别的运营可能刚标记了新的缺货单。
+     * 只删被点的那一行，左栏从此与真相不符。
      */
     private String done(AdminUserDetails admin, String token, String message, Model model) {
         populateQueue(model);

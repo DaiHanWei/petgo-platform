@@ -44,6 +44,7 @@ class ManualReviewWorkbenchMvcTest extends ApiIntegrationTest {
     void workbenchFourWays() throws Exception {
         long seq = SEQ.incrementAndGet();
         long actor = 950000L + seq;
+        makeRoomForSuperAdmin();
         accountService.createAccount("wb-super-" + seq + "@tailtopia.test", "超管", AdminRole.SUPER_ADMIN, List.of(), actor);
         AdminUserDetails superAdmin = userDetailsService.loadByEmail("wb-super-" + seq + "@tailtopia.test", false);
         // 只有无关内容权的员工：整页 403；htmx 处置 403 禁用态（content.restore 既不在 QUEUE_AUTH 也不在 DECIDE_AUTH）。

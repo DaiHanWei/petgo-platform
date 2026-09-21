@@ -6,7 +6,7 @@
   已处理态：结果徽标 + 操作人 + 时间 + 理由（只读回看）。
 -->
 <body>
-<ul th:fragment="list" class="q-list" id="review-queue" th:attr="data-tab=${filters.tab.param()}">
+<ul th:fragment="list" class="q-list" id="review-queue" th:attr="data-tab=${filters.tab.slug()}">
     <th:block th:replace="~{admin/fragments/review-queue :: rows}"></th:block>
 </ul>
 
@@ -16,7 +16,7 @@
         <div th:replace="~{admin/fragments/tpl-a-empty :: queueEmpty('manual-review', ${filters.handled} ? #{admin.v130.review.empty.handled} : null)}"></div>
         <p class="muted" th:unless="${filters.handled}">
             <th:block th:each="t : ${tabs}" th:if="${t != filters.tab and counts.get(t) > 0}">
-                <a th:href="@{/admin/manual-review(tab=${t.param()})}"
+                <a th:href="@{/admin/manual-review(tab=${t.slug()})}"
                    th:text="#{admin.v130.review.empty.elsewhere(#{${t.titleKey()}}, ${counts.get(t)})}">其他页签还有 N 条</a>
             </th:block>
         </p>
@@ -24,7 +24,7 @@
     <th:block th:each="r : ${queue.content}"><li th:replace="~{admin/fragments/review-queue :: row(${r}, false)}"></li></th:block>
     <!-- 滚动到底加载下一页（每页 20） -->
     <li th:if="${queue.hasNext()}" class="q-more" hx-swap="outerHTML" hx-trigger="revealed"
-        th:attr="hx-get=@{/admin/manual-review/queue(tab=${filters.tab.param()},state=${filters.state()},subType=${filters.subType},priority=${filters.priority},category=${filters.category},q=${filters.q},page=${filters.page + 1})}">
+        th:attr="hx-get=@{/admin/manual-review/queue(tab=${filters.tab.slug()},state=${filters.state()},subType=${filters.subType},priority=${filters.priority},category=${filters.category},q=${filters.q},page=${filters.page + 1})}">
         <span class="muted" th:text="#{admin.v130.review.more}">加载更多…</span>
     </li>
 </th:block>
@@ -33,10 +33,10 @@
 <ul th:remove="tag">
     <li th:fragment="row(r, oob)" class="q-row" th:classappend="${r.row.overdue()} ? 'row-overdue'"
         th:hx-swap-oob="${oob} ? 'true' : null"
-        th:id="'review-row-' + ${r.tab.param()} + '-' + ${r.row.sourceId()}"
+        th:id="'review-row-' + ${r.tab.slug()} + '-' + ${r.row.sourceId()}"
         th:data-id="${r.row.sourceId()}"
-        th:data-detail-url="@{/admin/manual-review/{id}/detail(id=${r.row.sourceId()},tab=${r.tab.param()})}"
-        th:attr="hx-get=@{/admin/manual-review/{id}/detail(id=${r.row.sourceId()},tab=${r.tab.param()})}"
+        th:data-detail-url="@{/admin/manual-review/{id}/detail(id=${r.row.sourceId()},tab=${r.tab.slug()})}"
+        th:attr="hx-get=@{/admin/manual-review/{id}/detail(id=${r.row.sourceId()},tab=${r.tab.slug()})}"
         hx-target=".wb-detail-body" hx-swap="innerHTML" tabindex="0">
         <span class="q-title">
             <span class="dot" th:classappend="'dot--' + ${r.dot()}"></span>

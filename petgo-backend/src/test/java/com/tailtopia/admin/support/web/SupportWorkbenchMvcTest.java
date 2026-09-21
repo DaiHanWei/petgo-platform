@@ -48,6 +48,7 @@ class SupportWorkbenchMvcTest extends ApiIntegrationTest {
     void supportWorkbenchFourWays() throws Exception {
         long seq = SEQ.incrementAndGet();
         long actor = 980000L + seq;
+        makeRoomForSuperAdmin();
         accountService.createAccount("sp-super-" + seq + "@tailtopia.test", "超管", AdminRole.SUPER_ADMIN, List.of(), actor);
         AdminUserDetails superAdmin = userDetailsService.loadByEmail("sp-super-" + seq + "@tailtopia.test", false);
         accountService.createAccount("sp-view-" + seq + "@tailtopia.test", "只看", AdminRole.CUSTOM,

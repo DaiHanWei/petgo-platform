@@ -32,6 +32,7 @@ class AdminHtmxParadigmIntegrationTest extends ApiIntegrationTest {
     void deactivateFourWays() throws Exception {
         long seq = SEQ.incrementAndGet();
         long actor = 940000L + seq;
+        makeRoomForSuperAdmin();
         accountService.createAccount("hx-super-" + seq + "@tailtopia.test", "超管", AdminRole.SUPER_ADMIN, List.of(), actor);
         AdminUserDetails superAdmin = userDetailsService.loadByEmail("hx-super-" + seq + "@tailtopia.test", false);
         long target1 = accountService.createAccount("hx-t1-" + seq + "@tailtopia.test", "T1", AdminRole.CUSTOM, List.of(), actor);

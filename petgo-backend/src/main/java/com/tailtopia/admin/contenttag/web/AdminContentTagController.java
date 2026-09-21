@@ -80,7 +80,7 @@ public class AdminContentTagController {
         // 2026-08-28：胶囊底色调色板（固定几档，见 ContentTagBadgeStyle 的说明）。
         model.addAttribute("badgeStyles", com.tailtopia.content.domain.ContentTagBadgeStyle.values());
         // htmx 局部刷新只回表格（摘要条随 oob 一并换）。
-        return hx.isHtmx() ? "admin/fragments/tags-list :: rows(true)" : "admin/content-tags";
+        return hx.isHtmx() ? "admin/fragments/tags-list :: rows(oob=true)" : "admin/content-tags";
     }
 
     /**

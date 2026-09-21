@@ -22,7 +22,7 @@ class StagBadgeRenderIntegrationTest extends ApiIntegrationTest {
     @Test
     void stagBadgeRenderedInStagProfile() throws Exception {
         assertThat(stagFlag.isStag()).isTrue();
-        AdminUserDetails admin = new AdminUserDetails(1L, null, "stag@tailtopia.test", null,
+        AdminUserDetails admin = new AdminUserDetails(persistedSuperAdminId("stag"), null, "stag@tailtopia.test", null,
                 AdminAccountType.SUPER_ADMIN, Set.of(), 0, "Stag 超管", "SUPER_ADMIN");
         String html = mvc.perform(get("/admin/dashboard").param("lang", "zh_CN").with(user(admin)))
                 .andReturn().getResponse().getContentAsString();
@@ -33,7 +33,7 @@ class StagBadgeRenderIntegrationTest extends ApiIntegrationTest {
     /** Story 2.3b AC7：stag profile 下 kitchen-sink 五壳 + 抽屉 fragment + 处置 fragment（data-next-id）可渲染。 */
     @Test
     void kitchenSinkRendersInStagProfile() throws Exception {
-        AdminUserDetails admin = new AdminUserDetails(1L, null, "stag@tailtopia.test", null,
+        AdminUserDetails admin = new AdminUserDetails(persistedSuperAdminId("stag"), null, "stag@tailtopia.test", null,
                 AdminAccountType.SUPER_ADMIN, Set.of(), 0, "Stag 超管", "SUPER_ADMIN");
         String html = mvc.perform(get("/admin/_kitchen-sink").with(user(admin))).andReturn().getResponse().getContentAsString();
         assertThat(html).contains("data-workbench").contains("id=\"ks-drawer\"").contains("data-readonly")

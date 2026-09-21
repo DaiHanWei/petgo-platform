@@ -83,8 +83,10 @@ class AdminShippingEndpointIntegrationTest extends ApiIntegrationTest {
         // 每卡自带 err 槽：422 要落在改错的那张卡里，不能都挤到页面顶端一条横幅
         assertThat(html).contains("cfg-ship-threshold-err").contains("cfg-ship-return-address-err");
         assertThat(html).doesNotContain("??admin.");
-        // 🔴 界面上不得出现「配送方式」维度（C-14 已把二维运费表降为一维，只剩 Reguler）
-        assertThat(html).doesNotContain("Reguler");
+        // 🔴 界面上不得出现「配送方式」维度（C-14 已把二维运费表降为一维，只剩 Reguler）。
+        //    判「有没有这个选择控件」而不是判字面词：卡片说明文案本身就写着「配送方式只有 Reguler 一档，界面刻意不给维度」。
+        assertThat(html).doesNotContainPattern("<option[^>]*>\\s*Reguler").doesNotContain("name=\"deliveryMethod\"")
+                .doesNotContain("name=\"serviceLevel\"");
     }
 
     /**
@@ -102,8 +104,12 @@ class AdminShippingEndpointIntegrationTest extends ApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(html).contains("cfg-ship-zones");
+        // 模板 D 的只读态是「保存钮常驻但禁用 + 注明只读」（与配置页 AC4 同一套），不是把按钮删掉；
+        // 区域卡的行内保存 / 启停是 canEdit 才渲染的写入口。
         assertThat(html).as("🔒 只读账号不该拿到任何写入口（服务端 @PreAuthorize 照旧兜底）")
-                .doesNotContain("data-save");
+                .contains("data-readonly=\"true\"")
+                .doesNotContain("/admin/shop/shipping/zones/toggle")
+                .doesNotContainPattern("<button(?![^>]*\\bdisabled\\b)[^>]*data-save");
         assertThat(html).as("新增区域那一块整块不渲染").doesNotContain("ship-zones-new");
     }
 

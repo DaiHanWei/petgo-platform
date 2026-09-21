@@ -165,7 +165,9 @@ class AdminSchedulesTabIntegrationTest extends ApiIntegrationTest {
         String pending = "待发布的-" + SEQ.incrementAndGet();
         scheduledRow(authorId, pending, Instant.now().plus(1, ChronoUnit.DAYS));
 
+        // 按本测试的作者筛：共享库里别的测试攒了大量排期，按时间排序时新行可能挤不进第一页
         String html = body(mvc.perform(get("/admin/seed-batches").param("tab", "schedules")
+                        .param("authorId", String.valueOf(authorId))
                         .param("lang", "zh_CN").with(authentication(superAdmin())))
                 .andExpect(status().isOk()).andReturn());
 

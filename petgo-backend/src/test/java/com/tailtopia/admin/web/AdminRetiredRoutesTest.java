@@ -6,7 +6,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.tailtopia.admin.account.domain.AdminAccount;
 import com.tailtopia.admin.account.domain.AdminAccountType;
+import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.util.ArrayList;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -52,6 +55,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 class AdminRetiredRoutesTest extends ApiIntegrationTest {
 
     @Autowired
+    @Qualifier("requestMappingHandlerMapping") // actuator 另有同类型 controllerEndpointHandlerMapping
     private RequestMappingHandlerMapping handlerMapping;
 
     /**
@@ -90,12 +94,17 @@ class AdminRetiredRoutesTest extends ApiIntegrationTest {
      */
     private static final java.util.Set<String> SHADOWED_BY_POST = java.util.Set.of("/admin/vets/online");
 
+    @Autowired
+    private AdminAccountRepository adminAccounts;
+
     private Authentication superAdmin() {
-        // ⚠️ 不落库：这 14 条断言的权限全部来自 TestingAuthenticationToken，一次库都不读；
-        //    而 ApiIntegrationTest 不回滚，每跑一次就往共享库 admin_accounts 白扔一行（复审 P6）。
+        // ⚠️ 必须落库：AdminSessionGuardFilter 每个请求都按 principal 的账号 id 查库核 ACTIVE + 安全版本号，
+        //    库里没有这一行就被踢去 /admin/login?expired（302），14 条断言会全部红成「302 不是 404」。
+        //    直接 save 而非 AdminAccountService.createAccount：后者要过「ACTIVE 超管 < 5」上限。
+        AdminAccount acc = adminAccounts.save(AdminAccount.newSuperAdmin(
+                "retired-routes-" + SEQ.incrementAndGet() + "@tailtopia.test", "退役路由测试", "{bcrypt}x"));
         AdminUserDetails p = new AdminUserDetails(
-                900_000_000L + SEQ.incrementAndGet(), null, "retired-routes@tailtopia.test",
-                "{bcrypt}x", AdminAccountType.SUPER_ADMIN);
+                acc.getId(), null, acc.getLarkEmail(), acc.getPasswordHash(), AdminAccountType.SUPER_ADMIN);
         return new TestingAuthenticationToken(p, null, new ArrayList<>(p.getAuthorities()));
     }
 
@@ -132,7 +141,7 @@ class AdminRetiredRoutesTest extends ApiIntegrationTest {
 
     /** `/admin/users/1` → `/admin/users/\{[^/]+\}`，用来匹配注册时的模板化 pattern。 */
     private static String templatize(String concrete) {
-        return concrete.replaceAll("/(?:\\d+|tok-[a-z]+)(?=/|$)", "/\\{[^/]+\\}");
+        return concrete.replaceAll("/(?:\\d+|tok-[a-z]+)(?=/|$)", "/\\\\{[^/]+\\\\}"); // 替换串里 \\ 才是字面反斜杠
     }
 
     @TestFactory

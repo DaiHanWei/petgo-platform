@@ -58,7 +58,9 @@ class AdminCommentInspectIntegrationTest extends ApiIntegrationTest {
     /** AC1 / AC2 / AC3：页签条 + 模板 B 壳 + 筛选参数 + 摘要条随筛选联动 + 行开抽屉、行内无处置表单。 */
     @Test
     void inspectTabIsTemplateBWithSummaryAndDrawerRows() throws Exception {
-        AdminUserDetails ops = admin(AdminPermissions.CONTENT_PROACTIVE_TAKEDOWN, AdminPermissions.CONTENT_RESTORE);
+        // + content.view：页签二「帖子评论分布」按 comment.virtual_post / content.view 门控，没有它页签条只剩一项
+        AdminUserDetails ops = admin(AdminPermissions.CONTENT_PROACTIVE_TAKEDOWN, AdminPermissions.CONTENT_RESTORE,
+                AdminPermissions.CONTENT_VIEW);
         User author = newUser();
         long postId = newPost(author);
         long visible = comments.save(Comment.create(postId, null, author.getId(), "B2 可见评论")).getId();

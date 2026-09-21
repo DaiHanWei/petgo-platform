@@ -1,6 +1,7 @@
 package com.tailtopia.shop;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -335,15 +336,14 @@ class Epic8ChainIntegrationTest extends ApiIntegrationTest {
      * 「卖不了」，漏掉才是错的。
      */
     @Test
-    @DisplayName("🔴 可售为负也算售罄（库级约束理论上挡着，读数侧仍按 <= 0 防御）")
+    @DisplayName("🔴 可售为负在库级就插不进去（ck_sku_inventory_locked_le_actual）")
     void negativeAvailableCountsAsOutOfStock() {
-        long before = finance.outOfStockSkuCount();
         long skuId = seedSkuId(true);
-        // 绕过服务层直接构造负可售。若库级约束不允许，这里会抛 —— 那说明约束已经挡住了，
-        // 届时把本用例改成断言「插不进去」即可。
-        jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 1, 5)", skuId);
-
-        assertThat(finance.outOfStockSkuCount() - before).isEqualTo(1L);
+        // 原用例绕过服务层构造负可售，并注明「若库级约束不允许，改成断言插不进去」——
+        // 约束 locked <= actual 已上线（V20260817_1220），负可售在结构上不存在；读数侧的 <= 0 防御仍保留。
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 1, 5)", skuId))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_sku_inventory_locked_le_actual");
     }
 
     /** 造一个「可售为 0」的规格。{@code withInventoryRow=false} 时连库存行都不建（C 类）。 */

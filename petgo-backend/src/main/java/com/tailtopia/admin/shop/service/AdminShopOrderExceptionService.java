@@ -25,9 +25,13 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 异常订单处置（Story 4.4，AB-11D / S-3）。
  *
- * <p>⚠️ <b>真正的超卖来源是盘点 / 报损 / 退货入库撤销，不是并发</b> —— 并发已由 Story 1.2 的
+ * <p>⚠️ <b>真正的超卖来源是实物比账面少（盘点 / 报损没跟上），不是并发</b> —— 并发已由 Story 1.2 的
  * 条件原子写解决。这句话不只是注释：异常订单视图的说明文案也必须写明它，
  * 否则运营会一直以为这是系统 bug 而不去查自己刚做的那次盘点。
+ *
+ * <p>🔴 <b>判据 = 运营手工标记缺货</b>（{@link #flagShortage}，V20260918_2243），不是库存数字：
+ * 库存不变式 {@code locked <= actual} 让「账面缺货」在库里不可能出现（盘点低于锁定量直接被拒），
+ * 原判据 {@code actual < locked} 因此永远不成立、工作台恒空。真实缺货只在拣货时被人发现。
  *
  * <p>🔴 <b>S-3：运营手工选单取消，不做自动取消。</b>SKU ≤ 30、单量低，手工完全可行；
  * 自动取消会误杀大客户 —— 而被误杀的那一单往往正是最该保住的那一单。
@@ -72,6 +76,30 @@ public class AdminShopOrderExceptionService {
         this.notifications = notifications;
     }
 
+    // ---------- 入口：标记缺货 ----------
+
+    /**
+     * 标记缺货：待发货单进入异常订单工作台。原因必填（后台可见，不告知用户 ——
+     * 用户在处置时才收到带原因的站内信，标记本身只是「这单要人来决定」）。
+     */
+    @Transactional
+    public void flagShortage(String orderToken, String note, Long actorAccountId) {
+        ShopOrder order = orders.findByPublicToken(orderToken)
+                .orElseThrow(() -> AppException.notFound("订单不存在").code("admin.err.order.notFound"));
+        if (note == null || note.isBlank()) {
+            throw AppException.validation("请填写缺货说明（缺哪个商品、差几件）")
+                    .code("admin.err.orderException.flagNoteRequired");
+        }
+        String trimmed = note.trim();
+        if (trimmed.length() > 200) {
+            throw AppException.validation("缺货说明不能超过 200 字").code("admin.err.orderException.flagNoteTooLong");
+        }
+        order.flagShortage(actorAccountId, trimmed, java.time.Instant.now()); // 不兜底成 0：列上有 FK → admin_accounts
+        orders.save(order);
+        audit.record(actorAccountId, AuditActions.SHOP_ORDER_SHORTAGE_FLAGGED, "SHOP_ORDER", orderToken,
+                "标记缺货：" + trimmed);
+    }
+
     // ---------- 处置① 整单取消并退款 ----------
 
     /**
@@ -105,6 +133,7 @@ public class AdminShopOrderExceptionService {
 
         // ③ 记账：已退回的部分（现金段待 Epic 5 打款，不在这里记为已退）
         order.recordRefund(coinRefunded, coinRefunded);
+        order.clearShortageFlag();
         order.transitionTo(ShopOrderStatus.CANCELLED);
         orders.save(order);
 
@@ -168,6 +197,9 @@ public class AdminShopOrderExceptionService {
     public void contactAndContinue(String orderToken, String reason, Long actorAccountId) {
         ShopOrder order = requireHandleable(orderToken);
         requireReason(reason);
+        // 继续履约 = 这单的缺货处置完了（补到货 / 用户同意等）→ 离开工作台
+        order.clearShortageFlag();
+        orders.save(order);
         audit.record(actorAccountId, AuditActions.SHOP_ORDER_EXCEPTION_HANDLED, "SHOP_ORDER",
                 orderToken, "联系用户后继续履约：" + reason);
         notifyUser(order, "关于你的订单，我们已与你沟通并将继续为你发货。说明：" + reason);
@@ -176,18 +208,16 @@ public class AdminShopOrderExceptionService {
     // ---------- 异常视图 ----------
 
     /**
-     * 异常订单候选：已付款待发货、且至少一行的<b>实际库存不足以发出</b>。
+     * 异常订单候选：已付款待发货、且<b>运营已标记缺货</b>。
      *
      * <p>⚠️ 这不是一份「系统检测到的 bug 清单」，而是一份<b>待人工判断的清单</b>（S-3）。
      */
     @Transactional(readOnly = true)
     public List<ShopOrder> exceptionCandidates(int limit) {
         // V1.3.0 Story 10.1 AC3：工作台左栏**先进先出**（时间升序）——积压最久的那一单最该先处置。
-        return orders.findByStatusOrderByCreatedAtAscIdAsc(ShopOrderStatus.PENDING_SHIPMENT,
-                        org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit)))
-                .stream()
-                .filter(this::hasInsufficientStock)
-                .toList();
+        return orders.findByStatusAndShortageFlaggedAtIsNotNullOrderByCreatedAtAscIdAsc(
+                ShopOrderStatus.PENDING_SHIPMENT,
+                org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit)));
     }
 
     /**
@@ -215,33 +245,35 @@ public class AdminShopOrderExceptionService {
     /**
      * 某一单还在不在候选集里（V1.3.0 Story 10.1）。
      *
-     * <p>🔴 <b>本页是实时计算的候选清单，不是带状态字段的工单表</b> —— 处置完那一单就自然离开，
-     * 没有「已处理」这个可查询的集合（这正是 A8 只有一个页签的原因，见 story T0 重核 ③）。
-     * 处置后要判断「这条该留在左栏还是消失」，只能重算一次。
+     * <p>候选集没有「已处理」页签：处置（整单取消 / 继续履约）会清掉缺货标记，那一单就离开本页；
+     * 处置记录在操作审计里（这正是 A8 只有一个页签的原因，见 story T0 重核 ③）。
      */
     @Transactional(readOnly = true)
     public boolean isCandidate(String orderToken) {
         return orders.findByPublicToken(orderToken)
-                .filter(o -> o.getStatus() == ShopOrderStatus.PENDING_SHIPMENT)
-                .map(this::hasInsufficientStock)
+                .map(AdminShopOrderExceptionService::isCandidate)
                 .orElse(false);
     }
 
+    /** 判据的唯一实现：待发货 ∧ 已标记缺货。列表「异常」标、工作台左栏、处置后去留都走它。 */
+    static boolean isCandidate(ShopOrder order) {
+        return order.getStatus() == ShopOrderStatus.PENDING_SHIPMENT && order.isShortageFlagged();
+    }
+
     /**
-     * 一行的库存现状（V1.3.0 Story 10.1 AC3 ①「异常原因说明卡」）。
+     * 一行的库存现状（V1.3.0 Story 10.1 AC3 ①「异常原因说明卡」），只读参考。
      *
-     * @param insufficient 这一行发不出去。判据见 {@link #hasInsufficientStock} 的注释
+     * @param insufficient 该 SKU 连库存记录都没有 —— 库存不变式下账面上唯一可能「发不出」的情形。
+     *                     实物缺多少看运营标记时写的说明，不看这里。
      */
     public record LineStock(long lineId, long actual, long locked, int needed, boolean insufficient) {
     }
 
     /**
-     * 订单各行的库存现状（只读，供说明卡与行表标注）。
+     * 订单各行的账面库存（只读，供说明卡与行表标注）。
      *
-     * <p>🔴 <b>这是缺货判据的唯一实现</b>：{@link #hasInsufficientStock} 也走它
-     * （{@code anyMatch(LineStock::insufficient)}）。两处各写一份的话，
-     * 以后给判据加一项（比如扣掉在途 / 预留量）只改一处，就会出现
-     * 「左栏不再列这一单，右栏却照打缺货红标」——而且改动者不会有任何提示。
+     * <p>⚠️ <b>不是候选判据</b>：{@code locked <= actual} 是库级不变式，账面数字永远「够发」；
+     * 列出来是让运营对照实物（账面 12 / 已锁 5，仓里只剩 3 —— 差额就是要回查的那次盘点）。
      */
     @Transactional(readOnly = true)
     public List<LineStock> lineStocks(ShopOrder order) {
@@ -250,22 +282,9 @@ public class AdminShopOrderExceptionService {
             var row = inventory.findBySkuId(line.getSkuId()).orElse(null);
             long actual = row == null ? 0L : row.getActual();
             long locked = row == null ? 0L : row.getLocked();
-            out.add(new LineStock(line.getId(), actual, locked, line.getQty(),
-                    row == null || actual < locked || actual < line.getQty()));
+            out.add(new LineStock(line.getId(), actual, locked, line.getQty(), row == null));
         }
         return List.copyOf(out);
-    }
-
-    /**
-     * 判定「这一单发不出去」。
-     *
-     * <p>🔴 口径是 <b>{@code actual < locked}</b>，不是 {@code actual < 0}：
-     * 实际库存低于已被订单锁定的量，就意味着有订单注定发不出货 —— 而 {@code actual} 本身
-     * 通常仍是正数。用 {@code actual < 0} 判会漏掉绝大多数真实超卖。
-     */
-    private boolean hasInsufficientStock(ShopOrder order) {
-        // ⚠️ 判据只在 lineStocks() 里写一次（V1.3.0 Story 10.1）：这里曾经是同一段逻辑的第二份抄写。
-        return lineStocks(order).stream().anyMatch(LineStock::insufficient);
     }
 
     // ---------- 内部 ----------

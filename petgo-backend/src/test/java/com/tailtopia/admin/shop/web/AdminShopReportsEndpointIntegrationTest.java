@@ -117,14 +117,25 @@ class AdminShopReportsEndpointIntegrationTest extends ApiIntegrationTest {
     @Test
     @DisplayName("C2 四区块字段现状原样，且 DEP-6 / OQ-42 两条口径提示都在")
     void repurchaseDashboardKeepsEveryBlock() throws Exception {
-        String html = page("/admin/shop/repurchase-dashboard", staffWith(AdminPermissions.ORDER_VIEW));
+        var result = mvc.perform(get("/admin/shop/repurchase-dashboard").with(authentication(staffWith(AdminPermissions.ORDER_VIEW))))
+                .andExpect(status().isOk()).andReturn();
+        String html = result.getResponse().getContentAsString();
+        var snapshot = (com.tailtopia.admin.shop.service.RepurchaseDashboardService.Snapshot)
+                result.getModelAndView().getModel().get("s");
 
         assertThat(html).contains("repurchase-cards").contains("repurchase-detail");
         // 🔴 三个触发类型都要列出来（含本版本恒为 0 的两个）—— 让「为什么是 0」有地方解释
         assertThat(html).contains("粮量见底").contains("驱虫周期").contains("疫苗周期");
         // ⚠️ 这两条提示是 AC 的一部分：少了它们，「恒为 0」会被读成埋点坏了，
         //    而这一页会被当成「可以据此砍掉复购引擎」的依据 —— 它现在还不是。
-        assertThat(html).contains("DEP-6").contains("OQ-42");
+        // OQ-42 常驻；DEP-6 是条件提示（「覆盖率为 0 且有人买过粮」才亮）—— 共享库里别的测试造了触发记录就不该亮，
+        // 所以按页面自己的判定断言：亮 / 不亮都要与 looksLikeMissingFeedingData() 一致
+        assertThat(html).contains("OQ-42");
+        if (snapshot.looksLikeMissingFeedingData()) {
+            assertThat(html).contains("DEP-6");
+        } else {
+            assertThat(html).doesNotContain("DEP-6");
+        }
     }
 
     @Test
