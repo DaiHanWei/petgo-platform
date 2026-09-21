@@ -132,6 +132,7 @@
   "growthArchiveNonOwnerTitle": "Diary khusus pemilik hewan. Ubah status hewan untuk membukanya.",
   "growthArchiveChangeStatus": "Ubah status",
   "growthArchiveTimelineEmpty": "Tulis Diary pertama {name}",
+  "growthArchiveVisitorTimelineEmpty": "{name} belum punya Diary publik",
   "growthEditStatusTitle": "Ubah status hewan",
   "growthStatusSaveFailed": "Gagal memperbarui status, coba lagi",
   "growthStatsConsult": "{count} konsultasi",

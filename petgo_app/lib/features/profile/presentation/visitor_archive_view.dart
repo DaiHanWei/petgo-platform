@@ -203,7 +203,8 @@ class _VisitorArchiveViewState extends ConsumerState<VisitorArchiveView> {
             key: const ValueKey('visitorTimelineEmpty'),
             padding: const EdgeInsets.symmetric(vertical: 30),
             child: Center(
-              child: Text(l10n.growthArchiveTimelineEmpty(petName),
+              // 访客看的是别人的宠物 —— 不能沿用主人态「去写第一篇」的引导（2026-09-21 stag 验收）。
+              child: Text(l10n.growthArchiveVisitorTimelineEmpty(petName),
                   style: const TextStyle(fontSize: 13, color: AppColors.ink2)),
             ),
           );
