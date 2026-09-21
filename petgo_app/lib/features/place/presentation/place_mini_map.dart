@@ -50,8 +50,13 @@ class PlaceMiniMap extends StatelessWidget {
     final target = LatLng(latitude, longitude);
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: SizedBox(
+      child: Container(
         height: _height,
+        // UI 稿 A4：1px 中性描边画在前景层（地图瓦片之上），圆角与裁剪一致。
+        foregroundDecoration: BoxDecoration(
+          border: Border.all(color: AppColors.line),
+          borderRadius: BorderRadius.circular(12),
+        ),
         child: Stack(
           children: [
             Positioned.fill(
@@ -87,6 +92,9 @@ class PlaceMiniMap extends StatelessWidget {
               child: Material(
                 color: AppColors.card,
                 borderRadius: BorderRadius.circular(8),
+                // UI 稿 A4：胶囊浮在地图上要一点轻阴影。
+                elevation: 2,
+                shadowColor: Colors.black26,
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
                   key: const ValueKey('placeDetailOpenInMaps'),

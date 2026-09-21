@@ -47,6 +47,9 @@ class CoachmarkOverlay extends StatelessWidget {
   static const double _cardGap = 12;
   static const double _cardEstimatedHeight = 150;
 
+  /// 说明区距屏幕底部的比例（高亮框在上半屏时）。
+  static const double _cardBottomFraction = 0.14;
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -89,11 +92,15 @@ class CoachmarkOverlay extends StatelessWidget {
             ),
           ),
           // 说明卡：Stack 的**最后一个兄弟**，不塞进任何一块遮罩里。
+          // UI 稿 P7：说明文字落在**屏幕下部的空白处**，不紧贴高亮框 ——
+          // 紧贴时白字压在被压暗的页面内容上（实测和「Pencapaian」撞在一起）。
+          // 高亮框在上半屏时贴底放；在下半屏时仍挂到框上方。
           Positioned(
             left: 24,
             right: 24,
-            top: below ? hole.bottom + _cardGap : null,
-            bottom: below ? null : (size.height - hole.top) + _cardGap,
+            bottom: below
+                ? size.height * _cardBottomFraction
+                : (size.height - hole.top) + _cardGap,
             child: _card(context),
           ),
         ],

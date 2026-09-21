@@ -380,6 +380,11 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
                     hintText: replyTarget == null
                         ? l10n.detailCommentHint
                         : l10n.commentReplyHint(replyTarget.toName),
+                    // 占位字必须明显浅于正文：M3 默认色太深，回复态的「Balas @某人…」
+                    // 看上去像已经打进去的字（2026-09-21 对稿复审，取像素 51 vs 稿 150）。
+                    hintStyle: AppTypography.body.copyWith(
+                      color: AppColors.muted,
+                    ),
                     counterText: '',
                     isDense: true,
                     filled: true,
@@ -427,7 +432,7 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       child: const SizedBox(
         width: 42,
         height: 42,
-        child: Icon(Icons.send_rounded, size: 20, color: AppColors.onAccent),
+        child: Icon(Icons.send_outlined, size: 20, color: AppColors.onAccent),
       ),
     ),
   );

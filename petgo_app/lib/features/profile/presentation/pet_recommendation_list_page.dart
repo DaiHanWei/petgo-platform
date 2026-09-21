@@ -190,7 +190,8 @@ class _PetRecommendationListPageState extends ConsumerState<PetRecommendationLis
         crossAxisCount: 2,
         crossAxisSpacing: AppSpacing.sm,
         mainAxisSpacing: AppSpacing.sm,
-        childAspectRatio: 0.72,
+        // 与 E1 网格同一比例：卡下文字已压成两行，0.76 时大图约 1:1（UI 稿 E2）。
+        childAspectRatio: 0.76,
       ),
       // 末尾那一格是「底部状态」（加载中 / 重试 / 到底了），所以 +1。
       itemCount: page.items.length + 1,

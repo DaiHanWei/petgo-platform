@@ -103,6 +103,12 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
 
     // AC2：必填未满 / 提交中 / 照片上传中 → 顶栏「Simpan」灰色禁用。
     final canSubmit = _draft.canSubmit && !_submitting && !_uploading;
+    // 输入框的错误文字外置到 [_WithError]（与 chip 组同一套，左边缘对齐 —— UI 稿 A8），
+    // 输入框自身只保留红框。
+    final nameError =
+        _errorFor(_Field.name, _draft.nameOk) ? l10n.placeMarkNameError : null;
+    final addressError =
+        _errorFor(_Field.address, _draft.addressOk) ? l10n.placeMarkAddressError : null;
 
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -159,20 +165,23 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
             _field(
               label: l10n.placeMarkNameLabel,
               required: true,
-              child: TextField(
-                controller: _nameController,
-                maxLength: PlaceFormDraft.nameMaxLength,
-                buildCounter: _noCounter,
-                decoration: _inputDecoration(
-                  hint: l10n.placeMarkNameHint,
-                  error: _errorFor(_Field.name, _draft.nameOk) ? l10n.placeMarkNameError : null,
-                  length: _nameController.text.length,
+              child: _WithError(
+                error: nameError,
+                child: TextField(
+                  controller: _nameController,
                   maxLength: PlaceFormDraft.nameMaxLength,
+                  buildCounter: _noCounter,
+                  decoration: _inputDecoration(
+                    hint: l10n.placeMarkNameHint,
+                    hasError: nameError != null,
+                    length: _nameController.text.length,
+                    maxLength: PlaceFormDraft.nameMaxLength,
+                  ),
+                  onChanged: (v) => setState(() {
+                    _touch(_Field.name);
+                    _draft = _draft.copyWith(name: v);
+                  }),
                 ),
-                onChanged: (v) => setState(() {
-                  _touch(_Field.name);
-                  _draft = _draft.copyWith(name: v);
-                }),
               ),
             ),
             _field(
@@ -182,7 +191,8 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
                 error: _errorFor(_Field.type, _draft.typeOk) ? l10n.placeMarkTypeError : null,
                 child: Wrap(
                   spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
+                  // 行距由 chip 外层 6+6 的透明热区提供（视觉行距 12），不再叠加。
+                  runSpacing: 0,
                   children: [
                     // 🔴 全部 7 类，一个不少。
                     for (final t in PlaceType.values)
@@ -205,7 +215,8 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
                 error: _errorFor(_Field.tags, _draft.tagsOk) ? l10n.placeMarkTagsError : null,
                 child: Wrap(
                   spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.sm,
+                  // 行距由 chip 外层 6+6 的透明热区提供（视觉行距 12），不再叠加。
+                  runSpacing: 0,
                   children: [
                     // 🔴 全部 6 个，一个不少。
                     for (final t in PlaceTag.values)
@@ -246,24 +257,25 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
             _field(
               label: l10n.placeMarkAddressLabel,
               required: true,
-              child: TextField(
-                controller: _addressController,
-                maxLength: PlaceFormDraft.addressMaxLength,
-                buildCounter: _noCounter,
-                maxLines: 2,
-                minLines: 1,
-                decoration: _inputDecoration(
-                  hint: l10n.placeMarkAddressHint,
-                  error: _errorFor(_Field.address, _draft.addressOk)
-                      ? l10n.placeMarkAddressError
-                      : null,
-                  length: _addressController.text.length,
+              child: _WithError(
+                error: addressError,
+                child: TextField(
+                  controller: _addressController,
                   maxLength: PlaceFormDraft.addressMaxLength,
+                  buildCounter: _noCounter,
+                  maxLines: 2,
+                  minLines: 1,
+                  decoration: _inputDecoration(
+                    hint: l10n.placeMarkAddressHint,
+                    hasError: addressError != null,
+                    length: _addressController.text.length,
+                    maxLength: PlaceFormDraft.addressMaxLength,
+                  ),
+                  onChanged: (v) => setState(() {
+                    _touch(_Field.address);
+                    _draft = _draft.copyWith(addressText: v);
+                  }),
                 ),
-                onChanged: (v) => setState(() {
-                  _touch(_Field.address);
-                  _draft = _draft.copyWith(addressText: v);
-                }),
               ),
             ),
             _field(
@@ -295,7 +307,7 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
                 minLines: 2,
                 decoration: _inputDecoration(
                   hint: l10n.placeMarkDescriptionHint,
-                  error: null,
+                  hasError: false,
                   length: _descriptionController.text.length,
                   maxLength: PlaceFormDraft.descriptionMaxLength,
                 ),
@@ -317,11 +329,13 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
 
   /// UI 稿 A5 的圆角描边输入框：常态灰边、聚焦品牌色边、错误红边（A8）。
   ///
-  /// 🔴 错误走 `errorText`（框下一行红字）+ 红边，而不是框外另挂一行文字 ——
-  /// 这样「哪个框有问题」一眼就能对上。
+  /// 🔴 错误 = 红边（本 decoration）+ 框下一行红字（外置的 [_WithError]）。
+  /// 红字不走本 decoration 的 `errorText` —— 那会被 contentPadding 缩进 12，
+  /// 与 chip 组 / 位置行 / 照片格的错误字左边缘对不齐（UI 稿 A8）。
+  /// `error: SizedBox.shrink()` 只为触发 errorBorder，不占文字行。
   InputDecoration _inputDecoration({
     required String hint,
-    required String? error,
+    required bool hasError,
     required int length,
     required int maxLength,
   }) {
@@ -332,8 +346,7 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
     return InputDecoration(
       hintText: hint,
       hintStyle: AppTypography.body.copyWith(color: AppColors.textTertiary),
-      errorText: error,
-      errorStyle: AppTypography.caption.copyWith(color: AppColors.popRed),
+      error: hasError ? const SizedBox.shrink() : null,
       suffixText: '$length/$maxLength',
       suffixStyle: AppTypography.micro,
       filled: true,
@@ -514,8 +527,8 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
 
   /// 字段外框：全大写 overline 标签（UI 稿 A5：小号、加粗、字距、次级色）+ 必填星号 + 控件。
   ///
-  /// 错误不在这里画 —— 输入框走 `InputDecoration.errorText`，非输入框走 [_WithError]，
-  /// 两者样式同源（都是 InputDecoration 的 error 行）。
+  /// 错误不在这里画 —— 所有字段（输入框也一样）的错误字都走 [_WithError]，
+  /// 左边缘一致；输入框额外由自身 decoration 画红框。
   Widget _field({
     required String label,
     required bool required,
@@ -576,10 +589,10 @@ class _ImmutableNotice extends StatelessWidget {
   }
 }
 
-/// 非输入框字段（chips / 位置行 / 照片格）的内联错误（AC7 · UI 稿 A8）。
+/// 全部字段（输入框 / chips / 位置行 / 照片格）的内联错误（AC7 · UI 稿 A8）。
 ///
-/// 用无边框的 [InputDecorator] 承载 `errorText`，让错误行与输入框的完全同款
-/// （字号、颜色、间距），而不是另起一套外挂文字。
+/// 用无边框、零 contentPadding 的 [InputDecorator] 承载 `errorText`：所有字段的错误字
+/// 同一字号颜色、同一左边缘（输入框自身只画红框，见 `_inputDecoration`）。
 class _WithError extends StatelessWidget {
   const _WithError({required this.error, required this.child});
 
@@ -729,21 +742,36 @@ class _ChoiceChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // UI 稿 A5：未选 = 白底 + 灰描边，已选 = 品牌紫实底。
-    return Material(
-      color: selected ? AppColors.mint : AppColors.card,
-      shape: StadiumBorder(
-          side: BorderSide(color: selected ? AppColors.mint : AppColors.line)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          // 竖向 12 + 文本行高 ≈ 44（UX-DR16 热区）。
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 12),
-          child: Text(label,
-              style: AppTypography.caption.copyWith(
-                color: selected ? Colors.white : AppColors.ink2,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              )),
+    // 视觉高度 ≈ 32（竖向 6 + caption 行高 ≈ 18 + 描边）；44 热区（UX-DR16）靠外层
+    // 透明的 6px 上下留白 + 最小高度 44 保证，不靠 chip 本体撑高。
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Center(
+            widthFactor: 1,
+            child: Material(
+              color: selected ? AppColors.mint : AppColors.card,
+              shape: StadiumBorder(
+                  side: BorderSide(color: selected ? AppColors.mint : AppColors.line)),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: onTap,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md, vertical: 6),
+                  child: Text(label,
+                      style: AppTypography.caption.copyWith(
+                        color: selected ? Colors.white : AppColors.ink2,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      )),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -766,7 +794,12 @@ class _PhotoGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const cell = 76.0;
+    // UI 稿 A5：56 见方 + 1px 浅紫描边（照片格与「+」格同一套边）。
+    const cell = 56.0;
+    final cellBorder = BoxDecoration(
+      border: Border.all(color: AppColors.lineViolet),
+      borderRadius: BorderRadius.circular(10),
+    );
     return Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
@@ -778,9 +811,12 @@ class _PhotoGrid extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: AppImage.widget(urls[i], fit: BoxFit.cover),
+                Container(
+                  foregroundDecoration: cellBorder,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: AppImage.widget(urls[i], fit: BoxFit.cover),
+                  ),
                 ),
                 Positioned(
                   right: 0,
@@ -805,7 +841,10 @@ class _PhotoGrid extends StatelessWidget {
             height: cell,
             child: Material(
               color: AppColors.cream2,
-              borderRadius: BorderRadius.circular(10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+                side: const BorderSide(color: AppColors.lineViolet),
+              ),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
                 key: const ValueKey('placeMarkAddPhoto'),

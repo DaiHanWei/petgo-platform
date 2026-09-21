@@ -182,7 +182,9 @@ class PlaceDetailPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: AppSpacing.md),
-              Text(p.name, style: AppTypography.headline),
+              Text(p.name,
+                  style: AppTypography.headline
+                      .copyWith(fontSize: 20, fontWeight: FontWeight.w600)),
               // UI 稿 A4：类型做成 chip 排在标签 Wrap 的第一个，距离单独一行。
               if (p.type != null || p.tags.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.sm),
@@ -728,8 +730,9 @@ class _AddressRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Container(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.xs,
-          AppSpacing.sm),
+      // 纵向只留 2：行高由 Salin 按钮的 44 热区撑开，不再额外加 padding（UI 稿 A4）。
+      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.xxs, AppSpacing.xs,
+          AppSpacing.xxs),
       decoration: BoxDecoration(
         color: AppColors.cream2,
         borderRadius: BorderRadius.circular(10),
@@ -805,8 +808,9 @@ class _ShareButton extends StatelessWidget {
         onPressed: () => onTap(_originOf(buttonContext)),
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(44, 44),
-          foregroundColor: AppColors.mint,
-          side: const BorderSide(color: AppColors.lineViolet),
+          // UI 稿 A4：中性描边 + ink2 文字/图标（不是品牌紫）。
+          foregroundColor: AppColors.ink2,
+          side: const BorderSide(color: AppColors.line),
         ),
         icon: const Icon(Icons.share_outlined, size: 16),
         label: Text(l10n.placeDetailShare),

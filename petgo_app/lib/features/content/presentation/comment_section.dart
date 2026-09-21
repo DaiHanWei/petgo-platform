@@ -768,52 +768,64 @@ class _CommentTile extends StatelessWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Flexible(
-                        child: GestureDetector(
-                          key: ValueKey('commentAuthor_${comment.id}'),
-                          onTap: onAuthorTap,
-                          // V1.1.6 Story 5.1：评论区昵称旁挂运营标签（四处展示位之一）。
-                          // ⚠️ 一页评论可达数十条 —— 标签是随作者投影**整批**取回来的，这里没有任何逐条查询。
-                          child: UserTagRow(
-                            position: 'comment',
-                            name: name,
-                            nameStyle: AppTypography.caption.copyWith(
-                              color: AppColors.ink,
-                              fontWeight: FontWeight.w700,
+                      // 昵称 + 作者标签整体吃掉剩余宽度，时间才真正贴右 ——
+                      // 原来 Flexible 与 Spacer 各占一份 flex，把空白对半分，时间停在中间偏右
+                      //（2026-09-21 对稿复审发现）。
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: GestureDetector(
+                                key: ValueKey('commentAuthor_${comment.id}'),
+                                onTap: onAuthorTap,
+                                // V1.1.6 Story 5.1：评论区昵称旁挂运营标签（四处展示位之一）。
+                                // ⚠️ 一页评论可达数十条 —— 标签是随作者投影**整批**取回来的，这里没有任何逐条查询。
+                                child: UserTagRow(
+                                  position: 'comment',
+                                  name: name,
+                                  nameStyle: AppTypography.caption.copyWith(
+                                    color: AppColors.ink,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  tags: comment.authorDeleted
+                                      ? const []
+                                      : comment.authorTags,
+                                ),
+                              ),
                             ),
-                            tags: comment.authorDeleted
-                                ? const []
-                                : comment.authorTags,
-                          ),
+                            // AC2「作者 / Penulis」标签：**零接口变更**，客户端比两个已有 id 得出。
+                            // 注销作者不挂（与 NFR-8 一致：不给注销账号任何身份线索）。
+                            if (isPostAuthor && !comment.authorDeleted) ...[
+                              const SizedBox(width: AppSpacing.xs),
+                              Container(
+                                key: ValueKey(
+                                  'commentAuthorBadge_${comment.id}',
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.cream2,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  AppLocalizations.of(
+                                    context,
+                                  ).commentAuthorBadge,
+                                  style: AppTypography.micro.copyWith(
+                                    color: AppColors.mint,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
-                      // AC2「作者 / Penulis」标签：**零接口变更**，客户端比两个已有 id 得出。
-                      // 注销作者不挂（与 NFR-8 一致：不给注销账号任何身份线索）。
-                      if (isPostAuthor && !comment.authorDeleted) ...[
-                        const SizedBox(width: AppSpacing.xs),
-                        Container(
-                          key: ValueKey('commentAuthorBadge_${comment.id}'),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.cream2,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            AppLocalizations.of(context).commentAuthorBadge,
-                            style: AppTypography.micro.copyWith(
-                              color: AppColors.mint,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
                       // UI 稿 C1：时间与昵称同一行、靠右（原先单独占一行）。
                       // 时间走**与详情页同一个** formatPublishTime（批次 A · AC1）：7 天内相对、超 7 天绝对日期。
                       const SizedBox(width: AppSpacing.sm),
-                      const Spacer(),
                       Text(
                         formatPublishTime(
                           context,
