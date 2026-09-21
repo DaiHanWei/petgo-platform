@@ -65,7 +65,6 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   /// 已展开全部回复的一级评论（parentId → 已加载二级）。
   final Map<int, _ExpandedReplies> _expanded = {};
 
-
   DetailRepository get _repo => ref.read(detailRepositoryProvider);
 
   /// AC6 的置顶集合入口。**在 initState 就取好存下来** ——
@@ -108,9 +107,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     final byId = {for (final c in _topLevel) c.id: c};
     // 服务端那份优先（赞数、审核态都更新）；服务端这一页没返回它时用本地存下的那份
     // —— 热度序下 0 赞的新评论很可能压根不在第一页，这一步才是「始终可见」的保证。
-    final mine = [
-      for (final id in pinned.keys) byId[id] ?? pinned[id]!,
-    ];
+    final mine = [for (final id in pinned.keys) byId[id] ?? pinned[id]!];
     final rest = [
       for (final c in _topLevel)
         if (!pinned.containsKey(c.id)) c,
@@ -156,11 +153,18 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     final existing = _expanded[parentId];
     if (existing != null && !existing.hasMore) return;
     try {
-      final page = await _repo.getReplies(parentId, cursor: existing?.nextCursor);
+      final page = await _repo.getReplies(
+        parentId,
+        cursor: existing?.nextCursor,
+      );
       if (!mounted) return;
       setState(() {
         if (existing == null) {
-          _expanded[parentId] = _ExpandedReplies(page.items, page.nextCursor, page.hasMore);
+          _expanded[parentId] = _ExpandedReplies(
+            page.items,
+            page.nextCursor,
+            page.hasMore,
+          );
         } else {
           existing.items.addAll(page.items);
           existing.nextCursor = page.nextCursor;
@@ -211,7 +215,9 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     _landingNotifier.clear();
     // 父评论可能只存在于本会话置顶集合里（热度序下 0 赞的新评论通常不在第一页）——那也算「在列表里」。
     if (!_topLevel.any((c) => c.id == landing.parentId) &&
-        !ref.read(sessionPinnedCommentsProvider).containsKey(landing.parentId)) {
+        !ref
+            .read(sessionPinnedCommentsProvider)
+            .containsKey(landing.parentId)) {
       return;
     }
 
@@ -233,8 +239,12 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       if (ctx == null) return;
       // alignment: 1.0 = 把回复区**底部**对齐到视口底部。二级回复是时间正序，
       // 新回复永远是最后一条 —— 对齐底部才是「定位到新回复处」。
-      Scrollable.ensureVisible(ctx,
-          alignment: 1.0, duration: AppMotion.sheet, curve: Curves.easeOut);
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 1.0,
+        duration: AppMotion.sheet,
+        curve: Curves.easeOut,
+      );
     });
   }
 
@@ -245,9 +255,14 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   ///    「KOMENTAR (N)」计数失效。只调 _reload 的话列表变短、计数不动，正是 AD-13 要消灭的
   ///    「标 5 条只数得出 3 条」拉黑泄底破绽。
   VoidCallback _onCommentAuthorHidden(int authorId) {
-    final bool isPostAuthor = widget.postAuthorId != null && authorId == widget.postAuthorId;
+    final bool isPostAuthor =
+        widget.postAuthorId != null && authorId == widget.postAuthorId;
     return () {
-      onAuthorHidden(ref, authorId, popContext: isPostAuthor ? context : null)();
+      onAuthorHidden(
+        ref,
+        authorId,
+        popContext: isPostAuthor ? context : null,
+      )();
       if (!isPostAuthor) {
         ref.read(commentsRefreshProvider.notifier).bump();
       }
@@ -307,7 +322,9 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     if (inline == null) return top;
     for (var j = 0; j < inline.length; j++) {
       if (inline[j].id == id) {
-        return top.copyWith(replies: List<Comment>.of(inline)..[j] = update(inline[j]));
+        return top.copyWith(
+          replies: List<Comment>.of(inline)..[j] = update(inline[j]),
+        );
       }
     }
     return top;
@@ -323,13 +340,18 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   /// 点下去仍走既有 `_confirmDelete` 的二次确认；举报走既有 `openReport` 流程。
   /// 这个菜单只是**多一个入口**，不是多一条权限路径。
   void _showCommentActions(
-      BuildContext context, AppLocalizations l10n, Comment c, String name) {
+    BuildContext context,
+    AppLocalizations l10n,
+    Comment c,
+    String name,
+  ) {
     final canDelete = _canDelete(c);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       builder: (sheetCtx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
@@ -343,7 +365,9 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 14),
                   decoration: BoxDecoration(
-                      color: AppColors.line, borderRadius: BorderRadius.circular(9999)),
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(9999),
+                  ),
                 ),
               ),
               _actionRow(
@@ -393,8 +417,9 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                 child: TextButton(
                   onPressed: () => Navigator.of(sheetCtx).pop(),
                   style: TextButton.styleFrom(
-                      foregroundColor: AppColors.textSecondary,
-                      padding: const EdgeInsets.symmetric(vertical: 12)),
+                    foregroundColor: AppColors.textSecondary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
                   child: Text(l10n.commonCancel),
                 ),
               ),
@@ -413,33 +438,33 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     required String label,
     required VoidCallback onTap,
     bool danger = false,
-  }) =>
-      InkWell(
-        key: key,
-        onTap: () {
-          Navigator.of(sheetCtx).pop();
-          onTap();
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: AppColors.line2)),
+  }) => InkWell(
+    key: key,
+    onTap: () {
+      Navigator.of(sheetCtx).pop();
+      onTap();
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.line2)),
+      ),
+      child: Row(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 16)),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: danger ? AppColors.popRed : AppColors.ink,
+            ),
           ),
-          child: Row(
-            children: [
-              Text(emoji, style: const TextStyle(fontSize: 16)),
-              const SizedBox(width: 10),
-              Text(
-                label,
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: danger ? AppColors.popRed : AppColors.ink),
-              ),
-            ],
-          ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 
   Future<void> _confirmDelete(int commentId) async {
     final l10n = AppLocalizations.of(context);
@@ -482,7 +507,9 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.all(AppSpacing.lg),
-        child: Center(child: CircularProgressIndicator(color: AppColors.accentGrowth)),
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.accentGrowth),
+        ),
       );
     }
     if (_topLevel.isEmpty) {
@@ -500,7 +527,9 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
               Text(
                 l10n.detailNoComments,
                 textAlign: TextAlign.center,
-                style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.textTertiary,
+                ),
               ),
             ],
           ),
@@ -510,7 +539,12 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final c in _orderedTopLevel) _buildTopLevel(context, l10n, c),
+        // UI 稿 C1：一级评论之间一条细分隔线。
+        for (final (i, c) in _orderedTopLevel.indexed) ...[
+          if (i > 0)
+            const Divider(height: 1, thickness: 1, color: AppColors.line2),
+          _buildTopLevel(context, l10n, c),
+        ],
         if (_hasMore)
           TextButton(
             key: const ValueKey('viewMoreComments'),
@@ -521,12 +555,18 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     );
   }
 
-  Widget _buildTopLevel(BuildContext context, AppLocalizations l10n, Comment c) {
+  Widget _buildTopLevel(
+    BuildContext context,
+    AppLocalizations l10n,
+    Comment c,
+  ) {
     final expanded = _expanded[c.id];
-    final List<Comment> shownReplies = expanded?.items ?? (c.replies ?? const []);
+    final List<Comment> shownReplies =
+        expanded?.items ?? (c.replies ?? const []);
     final int replyCount = c.replyCount ?? 0;
     // 未展开且总数 > 内嵌数 → 显示「查看全部 X 条回复」。
-    final bool showViewAll = expanded == null && replyCount > shownReplies.length;
+    final bool showViewAll =
+        expanded == null && replyCount > shownReplies.length;
     // 已展开但仍有下一页 → 继续加载。
     final bool showLoadMoreReplies = expanded != null && expanded.hasMore;
 
@@ -540,10 +580,24 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
             Padding(
               // AC5 的滚动锚点：回复区整块。定位时按底部对齐（新回复在最后一条）。
               key: _replyAnchors.putIfAbsent(c.id, GlobalKey.new),
-              padding: const EdgeInsets.only(left: AppSpacing.xl, top: AppSpacing.xs),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [for (final r in shownReplies) _tile(l10n, r)],
+              padding: const EdgeInsets.only(
+                left: AppSpacing.xl,
+                top: AppSpacing.xs,
+              ),
+              // UI 稿 C1：二级回复左侧一条竖线，与一级在视觉上分层。
+              child: Container(
+                padding: const EdgeInsets.only(left: AppSpacing.sm),
+                decoration: const BoxDecoration(
+                  border: Border(
+                    left: BorderSide(color: AppColors.line, width: 2),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final r in shownReplies) _tile(l10n, r, isReply: true),
+                  ],
+                ),
               ),
             ),
           if (showViewAll || showLoadMoreReplies)
@@ -560,8 +614,10 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     );
   }
 
-  Widget _tile(AppLocalizations l10n, Comment c) {
-    final name = c.authorDeleted ? l10n.feedDeletedUser : (c.authorNickname ?? l10n.feedDeletedUser);
+  Widget _tile(AppLocalizations l10n, Comment c, {bool isReply = false}) {
+    final name = c.authorDeleted
+        ? l10n.feedDeletedUser
+        : (c.authorNickname ?? l10n.feedDeletedUser);
     return _CommentTile(
       comment: c,
       name: name,
@@ -579,33 +635,46 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       // 用户看到的是「进去一片空白」——与网络失败无法区分。
       onAuthorTap: c.authorDeleted
           ? null
-          : () => openUserProfile(context, ref, c.authorId,
+          : () => openUserProfile(
+              context,
+              ref,
+              c.authorId,
               // 修复清单 #7：与首页/详情入口同一套收尾（onAuthorHidden = 乐观清 Feed 该作者
               // 全部卡片；对象是帖主时顺带退出本详情页），再刷本帖评论。只接 _reload 的话，
               // 用户回到首页会看见「我明明处理了，他的东西还在」。
               onBlocked: _onCommentAuthorHidden(c.authorId),
               onReported: _onCommentAuthorHidden(c.authorId),
               // 评论区这个入口的量单独可查（本版本的主场景就是评论区骚扰）。
-              entry: AccountActionEntry.comment),
+              entry: AccountActionEntry.comment,
+            ),
       // story 3：仅作者会收到 TAKEN_DOWN/REJECTED 行 → 渲染「仅你可见」灰标签（VISIBLE/UNDER_REVIEW 无标签，D-CM2）。
-      takenDownLabel: c.isTakenDownForAuthor ? l10n.commentTakenDownSelfOnly : null,
+      takenDownLabel: c.isTakenDownForAuthor
+          ? l10n.commentTakenDownSelfOnly
+          : null,
       canDelete: _canDelete(c),
-      onReply: () =>
-          ref.read(replyTargetProvider(widget.postId).notifier).set(ReplyTarget(parentId: c.id, toName: name)),
+      onReply: () => ref
+          .read(replyTargetProvider(widget.postId).notifier)
+          .set(ReplyTarget(parentId: c.id, toName: name)),
       // V1.3.0 batch-b1 Story 3.3：点评论里的 @ → 那个人的公开主页（AC2）。
       // ⚠️ 与 onAuthorTap 分开：被 @ 的人通常**不是**这条评论的作者，
       //    共用回调会把错的人从列表里清掉。
-      onTapMention: (userId) => openUserProfile(context, ref, userId,
-          onBlocked: _onCommentAuthorHidden(userId),
-          onReported: _onCommentAuthorHidden(userId),
-          entry: AccountActionEntry.mention),
+      onTapMention: (userId) => openUserProfile(
+        context,
+        ref,
+        userId,
+        onBlocked: _onCommentAuthorHidden(userId),
+        onReported: _onCommentAuthorHidden(userId),
+        entry: AccountActionEntry.mention,
+      ),
       onDelete: () => _confirmDelete(c.id),
       // V1.3.0 Story 2.4：评论点赞。一级、二级共用同一端点（层级与点赞无关）。
       onToggleLike: () => _toggleLike(c),
       // V1.3.0 Story 2.5 · AC3：长按操作菜单。
       onLongPress: () => _showCommentActions(context, l10n, c, name),
       // AC2：客户端比两个已有 id —— 服务端不下发任何标记位。
-      isPostAuthor: widget.postAuthorId != null && c.authorId == widget.postAuthorId,
+      isPostAuthor:
+          widget.postAuthorId != null && c.authorId == widget.postAuthorId,
+      isReply: isReply,
     );
   }
 }
@@ -624,7 +693,11 @@ class _CommentTile extends StatelessWidget {
     required this.isPostAuthor,
     required this.onTapMention,
     this.takenDownLabel,
+    this.isReply = false,
   });
+
+  /// 二级回复：头像缩小一号（UI 稿 C1）。
+  final bool isReply;
 
   /// 长按弹操作菜单（AC3）。
   final VoidCallback onLongPress;
@@ -682,7 +755,7 @@ class _CommentTile extends StatelessWidget {
                 url: comment.authorDeleted ? null : comment.authorAvatarUrl,
                 name: name,
                 deleted: comment.authorDeleted,
-                size: 30,
+                size: isReply ? 24 : 30,
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -704,9 +777,13 @@ class _CommentTile extends StatelessWidget {
                           child: UserTagRow(
                             position: 'comment',
                             name: name,
-                            nameStyle:
-                                AppTypography.caption.copyWith(fontWeight: FontWeight.w600),
-                            tags: comment.authorDeleted ? const [] : comment.authorTags,
+                            nameStyle: AppTypography.caption.copyWith(
+                              color: AppColors.ink,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            tags: comment.authorDeleted
+                                ? const []
+                                : comment.authorTags,
                           ),
                         ),
                       ),
@@ -716,18 +793,38 @@ class _CommentTile extends StatelessWidget {
                         const SizedBox(width: AppSpacing.xs),
                         Container(
                           key: ValueKey('commentAuthorBadge_${comment.id}'),
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
                             color: AppColors.cream2,
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             AppLocalizations.of(context).commentAuthorBadge,
-                            style: AppTypography.micro
-                                .copyWith(color: AppColors.ink2, fontWeight: FontWeight.w600),
+                            style: AppTypography.micro.copyWith(
+                              color: AppColors.mint,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
+                      // UI 稿 C1：时间与昵称同一行、靠右（原先单独占一行）。
+                      // 时间走**与详情页同一个** formatPublishTime（批次 A · AC1）：7 天内相对、超 7 天绝对日期。
+                      const SizedBox(width: AppSpacing.sm),
+                      const Spacer(),
+                      Text(
+                        formatPublishTime(
+                          context,
+                          AppLocalizations.of(context),
+                          comment.createdAt,
+                        ),
+                        key: ValueKey('commentTime_${comment.id}'),
+                        style: AppTypography.micro.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.xxs),
@@ -742,74 +839,76 @@ class _CommentTile extends StatelessWidget {
                     mentionContext: MentionContext.comment,
                     style: AppTypography.body,
                   ),
-                  const SizedBox(height: AppSpacing.xxs),
-                  // 时间走**与详情页同一个** formatPublishTime（批次 A · AC1）：7 天内相对、超 7 天绝对日期。
-                  Text(
-                    formatPublishTime(context, AppLocalizations.of(context), comment.createdAt),
-                    key: ValueKey('commentTime_${comment.id}'),
-                    style: AppTypography.micro.copyWith(color: AppColors.textTertiary),
-                  ),
                   if (takenDownLabel != null)
                     Padding(
                       padding: const EdgeInsets.only(top: AppSpacing.xxs),
                       child: Text(
                         takenDownLabel!,
                         key: ValueKey('commentTakenDown_${comment.id}'),
-                        style: AppTypography.micro.copyWith(color: AppColors.textTertiary),
+                        style: AppTypography.micro.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
                       ),
                     ),
-                  Row(
-                    children: [
-                      GestureDetector(
-                        key: ValueKey('replyComment_${comment.id}'),
-                        onTap: onReply,
-                        child: Text(replyLabel, style: AppTypography.micro),
-                      ),
-                      if (canDelete) ...[
+                  // UI 稿 C1：操作行左对齐「♡12  Balas」—— 点赞在前、紧挨回复（原先点赞被 Spacer 推到最右）。
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xxs),
+                    child: Row(
+                      children: [
+                        // 点赞：心 + 数字。0 赞时**不显示数字**（一排「0」会把评论区弄得很吵）。
+                        // 数字与心形同步变色，与帖子点赞（FR-93）同一规则 ——
+                        // 只有图标变红、数字仍是灰的，看上去像"没点上"。
+                        GestureDetector(
+                          key: ValueKey('likeComment_${comment.id}'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: onToggleLike,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                comment.liked
+                                    ? Icons.favorite_rounded
+                                    : Icons.favorite_border_rounded,
+                                size: 14,
+                                color: comment.liked
+                                    ? AppColors.likeHeart
+                                    : AppColors.textTertiary,
+                              ),
+                              if (comment.likeCount > 0) ...[
+                                const SizedBox(width: AppSpacing.xxs),
+                                Text(
+                                  '${comment.likeCount}',
+                                  key: ValueKey('likeCount_${comment.id}'),
+                                  style: AppTypography.micro.copyWith(
+                                    color: comment.liked
+                                        ? AppColors.likeHeart
+                                        : AppColors.textTertiary,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                         const SizedBox(width: AppSpacing.md),
                         GestureDetector(
-                          key: ValueKey('deleteComment_${comment.id}'),
-                          onTap: onDelete,
-                          child: Icon(Icons.delete_outline_rounded,
-                              size: 14, color: AppColors.textTertiary),
+                          key: ValueKey('replyComment_${comment.id}'),
+                          onTap: onReply,
+                          child: Text(replyLabel, style: AppTypography.micro),
                         ),
-                      ],
-                      const Spacer(),
-                      // 点赞：心 + 数字。0 赞时**不显示数字**（一排「0」会把评论区弄得很吵）。
-                      // 数字与心形同步变色，与帖子点赞（FR-93）同一规则 ——
-                      // 只有图标变红、数字仍是灰的，看上去像"没点上"。
-                      GestureDetector(
-                        key: ValueKey('likeComment_${comment.id}'),
-                        behavior: HitTestBehavior.opaque,
-                        onTap: onToggleLike,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              comment.liked
-                                  ? Icons.favorite_rounded
-                                  : Icons.favorite_border_rounded,
+                        if (canDelete) ...[
+                          const SizedBox(width: AppSpacing.md),
+                          GestureDetector(
+                            key: ValueKey('deleteComment_${comment.id}'),
+                            onTap: onDelete,
+                            child: Icon(
+                              Icons.delete_outline_rounded,
                               size: 14,
-                              color: comment.liked
-                                  ? AppColors.likeHeart
-                                  : AppColors.textTertiary,
+                              color: AppColors.textTertiary,
                             ),
-                            if (comment.likeCount > 0) ...[
-                              const SizedBox(width: AppSpacing.xxs),
-                              Text(
-                                '${comment.likeCount}',
-                                key: ValueKey('likeCount_${comment.id}'),
-                                style: AppTypography.micro.copyWith(
-                                  color: comment.liked
-                                      ? AppColors.likeHeart
-                                      : AppColors.textTertiary,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ],
               ),

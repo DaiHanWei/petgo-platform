@@ -10,6 +10,19 @@ import 'package:tailtopia/shared/media/image_lightbox.dart';
 /// 沉浸态好不好看、图铺没铺满是 L2；这里钉住 L0 能钉的三件事：
 /// **接口形状**（AC4，它同时是批次 B1 的前置契约）、**系统栏恢复**（AC3，最容易漏路径的一条）、
 /// 以及三条「不许做」的反向约束（AC6/AC7 + 两条既有 bug 修复）。
+
+/// 灯箱里原图没解码完时叠着一个常转的 spinner（L5 加载态），而测试环境里图片解码
+/// 可能迟迟不完成 —— `pumpAndSettle` 会因此永远等不到安静而超时。
+/// 改为推进一段足以覆盖 Hero 飞行（260ms）/ 回弹（180ms）/ 淡入（220ms）/
+/// 单击判定窗（220ms）的固定时长；断言本身不变。
+extension _LightboxSettle on WidgetTester {
+  Future<void> settleLightbox() async {
+    for (var i = 0; i < 60; i++) {
+      await pump(const Duration(milliseconds: 16));
+    }
+  }
+}
+
 void main() {
   final File source = File('lib/shared/media/image_lightbox.dart');
   final String src = source.readAsStringSync();
@@ -145,7 +158,7 @@ void main() {
         ),
       ));
       await tester.tap(find.byKey(const ValueKey('openIt')));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
     }
 
     testWidgets('打开 → 进沉浸态；关闭 → 恢复系统栏', (tester) async {
@@ -156,7 +169,7 @@ void main() {
       calls.clear();
 
       await tester.tap(find.byKey(const ValueKey('lightboxClose')));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(restoredSystemBars(calls), isTrue,
           reason: '不恢复的话用户会停在一个没有状态栏、且已经不是灯箱的界面上');
@@ -173,7 +186,7 @@ void main() {
       // ⚠️ Story 3.2 起，单击关闭要等过双击仲裁窗口（kLightboxSingleTapDelay）才执行 ——
       // 不等这一下的话点了等于没点。窗口本身的约束在 lightbox_gesture_test.dart 里钉。
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(restoredSystemBars(calls), isTrue);
     });
@@ -184,7 +197,7 @@ void main() {
       calls.clear();
 
       await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(restoredSystemBars(calls), isTrue);
     });
@@ -223,7 +236,7 @@ void main() {
           source: 'content_detail',
         ),
       ));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
       expect(find.text('2/2'), findsOneWidget);
     });
 
@@ -239,7 +252,7 @@ void main() {
         ),
       ));
       await tester.tap(find.byKey(const ValueKey('openIt')));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(find.byType(ImageLightbox), findsNothing);
     });

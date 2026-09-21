@@ -2226,7 +2226,7 @@
   "notifyTypeLifecycleD1": "Catat momen",
   "notifyTypeLifecycleD3": "Ada yang baru",
   "notifyTypeLifecycleD7": "Rangkuman mingguan",
-  "notifyTypeContentMentioned": "Kamu disebut",
+  "notifyTypeContentMentioned": "Ada yang menyebutmu",
   "notifyBodyContentMentionedPost": "Seseorang menyebutmu di sebuah postingan",
   "notifyBodyContentMentionedComment": "Seseorang menyebutmu di sebuah komentar",
   "notifyTypeLifecycleWinback": "Lanjutkan yang tertunda",
@@ -2340,5 +2340,11 @@
   "profilePostsTitle": "Postingan",
   "profilePostsEmpty": "Belum ada konten (pengaturan privasi orang ini)",
   "profilePostsEmptySelf": "Kamu belum memposting konten publik",
-  "profilePostsLoadMore": "Muat lagi"
+  "profilePostsLoadMore": "Muat lagi",
+  "ageCardSizePickerTitle": "Pilih Ukuran Tubuh",
+  "ageCardSizeContinue": "Lanjutkan",
+  "ktpMovedCoachmarkTitle": "Kartu Identitas pindah ke sini!",
+  "placeSortRecent": "Terbaru",
+  "petRecommendListTitle": "Hewan Peliharaan Lain",
+  "placeMarkLocationLabel": "Lokasi"
 }

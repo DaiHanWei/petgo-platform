@@ -100,7 +100,7 @@ class _MentionPickerState extends ConsumerState<MentionPicker> {
               ),
             )
           else if (all.isEmpty)
-            _emptyState(l10n.mentionEmptyTitle, l10n.mentionEmptyHint)
+            _emptyState(l10n.mentionEmptyTitle, l10n.mentionEmptyHint, withIcon: true)
           else if (shown.isEmpty)
             // 过滤不出来 ≠ 没有候选：这里说的是"这批人里没有叫这个的"，
             // ⚠️ 不能说成"没有找到该用户"（那是在承诺能搜到任何人）。
@@ -131,26 +131,44 @@ class _MentionPickerState extends ConsumerState<MentionPicker> {
           // ⚠️ 占位是「找名字」，**不是**「搜索用户」；也刻意不放放大镜图标。
           hintText: l10n.mentionFilterHint,
           isDense: true,
+          // UI 稿 D1：白底 + 1px 描边、圆角 12（不是填充胶囊 —— 胶囊更像全局搜索栏）。
           filled: true,
-          fillColor: AppColors.cream2,
+          fillColor: AppColors.surface,
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(999),
-            borderSide: BorderSide.none,
+          border: const OutlineInputBorder(
+            borderRadius: AppRounded.mdRadius,
+            borderSide: BorderSide(color: AppColors.border),
+          ),
+          enabledBorder: const OutlineInputBorder(
+            borderRadius: AppRounded.mdRadius,
+            borderSide: BorderSide(color: AppColors.border),
+          ),
+          focusedBorder: const OutlineInputBorder(
+            borderRadius: AppRounded.mdRadius,
+            borderSide: BorderSide(color: AppColors.mint500),
           ),
         ),
       ),
     );
   }
 
-  Widget _emptyState(String title, String? hint) {
+  /// [withIcon]：只有「候选集为空」（UI 稿 D2）带人像图标；
+  /// 「过滤不出结果」只是一行提示，不配图（那不是一个"空"的状态，删两个字就回来了）。
+  Widget _emptyState(String title, String? hint, {bool withIcon = false}) {
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
         key: const ValueKey('mentionPickerEmpty'),
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(title, style: AppTypography.caption, textAlign: TextAlign.center),
+          if (withIcon) ...[
+            const Icon(Icons.people_outline_rounded,
+                size: 36, color: AppColors.textSecondary),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          Text(title,
+              style: AppTypography.body.copyWith(color: AppColors.ink2),
+              textAlign: TextAlign.center),
           if (hint != null) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(hint, style: AppTypography.micro, textAlign: TextAlign.center),

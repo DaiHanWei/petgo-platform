@@ -42,8 +42,13 @@ class PlaceCommentSection extends ConsumerWidget {
         Text(
           // 数字拿不到（还在加载 / 失败）就先只显示标题，不要显示「评论 (0)」——
           // 那会和"真的一条都没有"混淆。
-          page == null ? l10n.placeCommentsTitle : l10n.placeCommentsTitleCount(page.total),
-          style: AppTypography.caption.copyWith(fontWeight: FontWeight.w700),
+          (page == null ? l10n.placeCommentsTitle : l10n.placeCommentsTitleCount(page.total))
+              // UI 稿 A4：区块标题用全大写 overline（「KOMENTAR (3)」）。
+              .toUpperCase(),
+          style: AppTypography.caption.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+              color: AppColors.textSecondary),
         ),
         const SizedBox(height: AppSpacing.sm),
         if (async.isLoading && page == null)

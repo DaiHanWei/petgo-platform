@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/profile_repository.dart';
+import 'widgets/insight_entry_card.dart';
 
 /// 「Know Your Pet」聚合页的路由路径（V1.3.0 批次 A · Story 5.1 · AD-A17）。
 ///
@@ -53,110 +54,44 @@ class PetInsightsPage extends ConsumerWidget {
     final bool ageCardEnabled = petType == 'CAT' || petType == 'DOG';
 
     return Scaffold(
-      backgroundColor: AppColors.cream2,
+      backgroundColor: AppColors.cream,
       // 页面标题与入口卡标题**同源**（同一个 key），改名时不会只改一处（AC2）。
       appBar: AppBar(title: Text(l10n.petInsightsTitle)),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: GridView.count(
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 0.95,
-            shrinkWrap: true,
-            children: [
-              _InsightCard(
-                cardKey: const ValueKey('insightIdCard'),
-                icon: Icons.badge_outlined,
-                title: l10n.idCardTitle,
-                // 副文案沿用现成 key，不新写（AC1）。
-                sub: l10n.timelineIdCardTapToView,
-                onTap: () => context.push(PetInsightsRoutes.idCard),
-              ),
-              _InsightCard(
-                cardKey: const ValueKey('insightAgeCard'),
-                icon: Icons.cake_outlined,
-                title: l10n.ageCardTitle,
-                // 置灰态换掉召唤语：用**正面陈述适用范围**，不用否定式
-                // （「不支持」听起来像故障），也禁用「即将推出」——这批明确不做。
-                sub: ageCardEnabled
-                    ? l10n.timelineIdCardTapToView
-                    : l10n.ageCardUnavailableForSpecies,
-                // 🔴 置灰即**彻底不可点**：onTap 为 null，连水波纹都不会有。
-                onTap: ageCardEnabled ? () => context.push(PetInsightsRoutes.ageCard) : null,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 聚合页的卡片。样式与档案页头部的入口卡同一套（白底 r14 + 柔阴影）。
-class _InsightCard extends StatelessWidget {
-  const _InsightCard({
-    required this.cardKey,
-    required this.icon,
-    required this.title,
-    required this.sub,
-    required this.onTap,
-  });
-
-  final Key cardKey;
-  final IconData icon;
-  final String title;
-  final String sub;
-
-  /// null = 置灰不可点。
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool disabled = onTap == null;
-    return Opacity(
-      opacity: disabled ? 0.55 : 1,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
-            BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
-          ],
-        ),
-        child: Material(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            key: cardKey,
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, size: 28, color: disabled ? AppColors.textTertiary : AppColors.mint),
-                  const SizedBox(height: 10),
-                  Text(
-                    title,
-                    style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.25,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.ink),
+          // UI 稿 P2：两张**横向**矮卡并排（AC1「与档案页入口卡同一样式」），
+          // 不是竖排高卡的网格。IntrinsicHeight 让两卡等高（文案两语长度不同）。
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: InsightEntryCard(
+                    inkKey: const ValueKey('insightIdCard'),
+                    icon: Icons.badge_outlined,
+                    title: l10n.idCardTitle,
+                    // 副文案沿用现成 key，不新写（AC1）。
+                    sub: l10n.timelineIdCardTapToView,
+                    onTap: () => context.push(PetInsightsRoutes.idCard),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    sub,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 11, height: 1.3, color: AppColors.textTertiary),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: InsightEntryCard(
+                    inkKey: const ValueKey('insightAgeCard'),
+                    icon: Icons.calendar_month_outlined,
+                    title: l10n.ageCardTitle,
+                    // 置灰态换掉召唤语：用**正面陈述适用范围**，不用否定式
+                    // （「不支持」听起来像故障），也禁用「即将推出」——这批明确不做。
+                    sub: ageCardEnabled
+                        ? l10n.timelineIdCardTapToView
+                        : l10n.ageCardUnavailableForSpecies,
+                    // 🔴 置灰即**彻底不可点**：onTap 为 null，连水波纹都不会有。
+                    onTap: ageCardEnabled ? () => context.push(PetInsightsRoutes.ageCard) : null,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/colors.dart';
+import '../../../../core/theme/rounded.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/typography.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/widgets/app_image.dart';
+import '../../../../shared/widgets/initial_avatar.dart';
 import '../../../auth/domain/auth_state.dart';
 import '../../data/pet_recommendation_repository.dart';
 import '../pet_recommendation_list_page.dart';
@@ -36,11 +39,18 @@ import 'recommended_pet_card.dart';
 class PetRecommendationStrip extends ConsumerWidget {
   const PetRecommendationStrip({super.key});
 
-  /// 卡片宽度。一屏能露出两张半 —— 露出「半张」是横滑行可滑的唯一视觉暗示。
-  static const double cardWidth = 150;
+  /// 小卡宽度 = 方图边长（UI 稿 B1 的 72×72）。一屏露出四张多 ——
+  /// 露出「半张」是横滑行可滑的唯一视觉暗示。
+  static const double cardWidth = 72;
 
-  /// 行高 = 卡片宽 / 网格里那个 0.72 的比例，再给文字留一点余量。
-  static const double rowHeight = 216;
+  /// 行高 ≈ 方图 72 + 头像探出的一截 + 一行 micro 文字（按 1.3 倍字号上限留足）。
+  ///
+  /// ⚠️ 这一行在首页**最显眼的位置**、feed 之上：早先直接塞网格卡（宽 150、三行字、
+  /// 行高 216）把 feed 顶到了屏幕下半截，稿子要的是一条「顺手瞄一眼」的窄带。
+  static const double rowHeight = 100;
+
+  /// 小卡间距（UI 稿 B1）。
+  static const double cardGap = 9;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -82,8 +92,10 @@ class PetRecommendationStrip extends ConsumerWidget {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                       child: Center(
-                        child: Text(l10n.petRecommendSeeAll,
-                            style: AppTypography.micro.copyWith(color: AppColors.mint600)),
+                        // UI 稿 B1：「Lihat semua ›」w600 —— 带箭头才读得出「这是个入口」。
+                        child: Text('${l10n.petRecommendSeeAll} ›',
+                            style: AppTypography.micro.copyWith(
+                                color: AppColors.mint600, fontWeight: FontWeight.w600)),
                       ),
                     ),
                   ),
@@ -97,18 +109,107 @@ class PetRecommendationStrip extends ConsumerWidget {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               itemCount: pets.length,
-              separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
-              itemBuilder: (context, i) => SizedBox(
-                width: cardWidth,
-                // 卡片是 Story 4.1 那个组件**本体**（不另画一套）——
-                // 它的大图用 Expanded 吃剩余高度，所以这里给一个确定的高度就够。
-                child: RecommendedPetCard(
-                    pet: pets[i], from: kPetRecommendFromExploreStrip),
-              ),
+              separatorBuilder: (_, _) => const SizedBox(width: cardGap),
+              itemBuilder: (context, i) => _StripPetTile(pet: pets[i]),
             ),
           ),
         ],
       ),
     );
   }
+}
+
+/// 横滑行里的紧凑小卡（UI 稿 B1）：72×72 圆角方图 + 左下角探出的小圆头像 +
+/// 一行「名字 · 陪伴天数」。
+///
+/// <h3>为什么不直接用 [RecommendedPetCard]</h3>
+/// 网格卡是「大图 + 三行字」，在 2 列网格里刚好；塞进首页顶部的横滑行就是一整块
+/// 216 高的墙。两者**长相**不同，但**点下去必须是同一件事** —— 所以点击走
+/// [openRecommendedPet]（同一个落点、同一个埋点、同一道登录门控），key 也沿用
+/// `recommendedPet_{petId}`，只有 `from` 是这个位置自己的 `explore_strip`。
+///
+/// 🔴 大图与小圆头像仍是**两个字段、两个来源**（UX-DR15）：方图 = 最近一张公开照片，
+/// 头像 = 宠物档案头像；没有公开照片时落占位底色，绝不拿头像顶上去。
+class _StripPetTile extends ConsumerWidget {
+  const _StripPetTile({required this.pet});
+
+  final RecommendedPet pet;
+
+  static const double _size = PetRecommendationStrip.cardWidth;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    return SizedBox(
+      width: _size,
+      child: GestureDetector(
+        key: ValueKey('recommendedPet_${pet.petId}'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => openRecommendedPet(context, ref,
+            pet: pet, from: kPetRecommendFromExploreStrip),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: _size,
+              height: _size,
+              child: Stack(
+                // 头像探出方图左下角（UI 稿 B1）→ 不裁剪溢出。
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: AppRounded.mdRadius,
+                      child: (pet.coverImageUrl != null && pet.coverImageUrl!.isNotEmpty)
+                          ? Image(
+                              key: ValueKey('recommendedPetCover_${pet.petId}'),
+                              image: AppImage.provider(pet.coverImageUrl, thumbWidth: 240)!,
+                              fit: BoxFit.cover,
+                              // 🛡 图挂了落回占位，不留一块白（同网格卡）。
+                              errorBuilder: (context, _, _) => _placeholder(),
+                            )
+                          : _placeholder(),
+                    ),
+                  ),
+                  Positioned(
+                    left: -4,
+                    bottom: -6,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                          shape: BoxShape.circle, color: AppColors.surface),
+                      padding: const EdgeInsets.all(2),
+                      child: InitialAvatar(
+                        key: ValueKey('recommendedPetAvatar_${pet.petId}'),
+                        avatarUrl: pet.avatarUrl,
+                        nickname: pet.name,
+                        radius: 10, // 20 + 2×2 白边 = 24
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            // 「Miu · 238 hari」—— 陪伴天数复用名片页那个「N hari」出口（petCardDays），
+            // 数值是后端与 H5 名片同一个算法下发的 companionDays。
+            Text(
+              '${pet.name} · ${l10n.petCardDays(pet.companionDays)}',
+              key: ValueKey('recommendedPetDays_${pet.petId}'),
+              style: AppTypography.micro,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _placeholder() => Container(
+        key: ValueKey('recommendedPetCoverPlaceholder_${pet.petId}'),
+        color: AppColors.cream2,
+        alignment: Alignment.center,
+        child: const Icon(Icons.pets_rounded, size: 20, color: AppColors.textTertiary),
+      );
 }

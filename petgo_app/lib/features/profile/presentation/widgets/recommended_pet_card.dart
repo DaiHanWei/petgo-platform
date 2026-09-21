@@ -66,16 +66,21 @@ class RecommendedPetCard extends ConsumerWidget {
   /// ⚠️ 只喂埋点，**不影响任何行为**。
   final String from;
 
+  /// 小圆头像（含 2px 白边）的直径。UI 稿 E1/E2：头像**一半压在大图下沿之外**，
+  /// 所以文字区要先让出半个头像的高度。
+  static const double _avatarDiameter = 36;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    // UI 稿 E1/E2：卡片**没有卡底**（透明），只有大图裁圆角 —— 卡底会把 2 列网格
+    // 切成一块块白板，稿子里是「图 + 下面几行字」直接落在页面底色上。
     return Material(
-      color: AppColors.surface,
-      borderRadius: AppRounded.lgRadius,
-      clipBehavior: Clip.antiAlias,
+      type: MaterialType.transparency,
       child: InkWell(
         key: ValueKey('recommendedPet_${pet.petId}'),
-        onTap: () => _open(context, ref),
+        borderRadius: AppRounded.lgRadius,
+        onTap: () => openRecommendedPet(context, ref, pet: pet, from: from),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -84,7 +89,9 @@ class RecommendedPetCard extends ConsumerWidget {
             //    窄屏（360dp）上「一起 238 天」那一行被裁掉（code-review 2026-09-15）。
             Expanded(child: _cover()),
             Padding(
-              padding: const EdgeInsets.all(AppSpacing.sm),
+              // 顶部让出**半个头像**（它从大图下沿探出来），再留一点呼吸。
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xxs, _avatarDiameter / 2 + AppSpacing.xxs, AppSpacing.xxs, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -120,25 +127,31 @@ class RecommendedPetCard extends ConsumerWidget {
   }
 
   /// 大图 + 左下角小圆头像。**两张图，两个来源。**
+  ///
+  /// UI 稿 E1/E2：头像压在大图**下沿**（一半在图外）→ Stack 不裁剪溢出部分；
+  /// 圆角只裁大图本身。
   Widget _cover() {
     return Stack(
       fit: StackFit.expand,
+      clipBehavior: Clip.none,
       children: [
-        if (pet.coverImageUrl != null && pet.coverImageUrl!.isNotEmpty)
-          Image(
-            key: ValueKey('recommendedPetCover_${pet.petId}'),
-            image: AppImage.provider(pet.coverImageUrl, thumbWidth: 480)!,
-            fit: BoxFit.cover,
-            // 🛡 图挂了要落回占位，**不能什么都不画**：`Image` 默认在加载失败时
-            //    渲染空白并把 NetworkImageLoadException 抛到 FlutterError 里 ——
-            //    表现是「卡片上方一块白，没人知道为什么」（code-review 2026-09-15）。
-            errorBuilder: (context, _, _) => _coverPlaceholder(),
-          )
-        else
-          _coverPlaceholder(),
+        ClipRRect(
+          borderRadius: AppRounded.lgRadius,
+          child: (pet.coverImageUrl != null && pet.coverImageUrl!.isNotEmpty)
+              ? Image(
+                  key: ValueKey('recommendedPetCover_${pet.petId}'),
+                  image: AppImage.provider(pet.coverImageUrl, thumbWidth: 480)!,
+                  fit: BoxFit.cover,
+                  // 🛡 图挂了要落回占位，**不能什么都不画**：`Image` 默认在加载失败时
+                  //    渲染空白并把 NetworkImageLoadException 抛到 FlutterError 里 ——
+                  //    表现是「卡片上方一块白，没人知道为什么」（code-review 2026-09-15）。
+                  errorBuilder: (context, _, _) => _coverPlaceholder(),
+                )
+              : _coverPlaceholder(),
+        ),
         Positioned(
           left: AppSpacing.sm,
-          bottom: AppSpacing.sm,
+          bottom: -_avatarDiameter / 2,
           child: Container(
             decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.surface),
             padding: const EdgeInsets.all(2),
@@ -180,18 +193,28 @@ class RecommendedPetCard extends ConsumerWidget {
       ?formatPetAge(l10n, pet.birthday),
     ].join(' · ');
   }
+}
 
-  /// AC5：复用 Story 2.3 的**站内**访客入口，不新建通道。
-  ///
-  /// AC7 埋点：`pet_card_tapped`（属性只有 `from`，没有宠物名、没有图片 URL）。
-  /// ⚠️ 上报在 `requireLogin` **之前** —— 「游客点了卡」也是一次真实的点击意图，
-  /// 漏掉它会让转化漏斗的分子凭空少掉游客那一截。
-  void _open(BuildContext context, WidgetRef ref) {
-    Analytics.capture('pet_card_tapped', {'from': from});
-    requireLogin(
-      ref,
-      context,
-      onAllowed: () => context.push('${VisitorArchiveView.inAppRouteBase}/${pet.petId}?from=$from'),
-    );
-  }
+/// 点一张推荐宠物卡（Story 4.1 AC5/AC7）—— **所有推荐位的唯一点击出口**。
+///
+/// 网格卡（[RecommendedPetCard]）与首页横滑行的紧凑小卡长得不同，但点下去必须
+/// 是同一件事：同一个落点、同一个埋点、同一道登录门控。抽成函数就是为了让
+/// 「两种卡片的点击行为慢慢长歪」在结构上不可能发生。
+///
+/// AC5：复用 Story 2.3 的**站内**访客入口，不新建通道。
+/// AC7 埋点：`pet_card_tapped`（属性只有 `from`，没有宠物名、没有图片 URL）。
+/// ⚠️ 上报在 `requireLogin` **之前** —— 「游客点了卡」也是一次真实的点击意图，
+/// 漏掉它会让转化漏斗的分子凭空少掉游客那一截。
+void openRecommendedPet(
+  BuildContext context,
+  WidgetRef ref, {
+  required RecommendedPet pet,
+  required String from,
+}) {
+  Analytics.capture('pet_card_tapped', {'from': from});
+  requireLogin(
+    ref,
+    context,
+    onAllowed: () => context.push('${VisitorArchiveView.inAppRouteBase}/${pet.petId}?from=$from'),
+  );
 }

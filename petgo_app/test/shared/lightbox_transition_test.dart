@@ -12,6 +12,19 @@ import 'package:tailtopia/shared/media/lightbox_gestures.dart';
 /// 动画连不连贯、模糊转清晰好不好看是 L2；这里钉 L0 能钉的：
 /// **Hero tag 的唯一性来源**（AC2，B1 上线后同图同屏会直接抛异常）、
 /// **埋点值域四值**（AC5，`system_back` 是此前从没人管的那条路），以及失败重试的接线（AC4）。
+
+/// 灯箱里原图没解码完时叠着一个常转的 spinner（L5 加载态），而测试环境里图片解码
+/// 可能迟迟不完成 —— `pumpAndSettle` 会因此永远等不到安静而超时。
+/// 改为推进一段足以覆盖 Hero 飞行（260ms）/ 回弹（180ms）/ 淡入（220ms）/
+/// 单击判定窗（220ms）的固定时长；断言本身不变。
+extension _LightboxSettle on WidgetTester {
+  Future<void> settleLightbox() async {
+    for (var i = 0; i < 60; i++) {
+      await pump(const Duration(milliseconds: 16));
+    }
+  }
+}
+
 void main() {
   const String night = 'asset:assets/demo_diary/demo_diary_night.jpg';
   const String balcony = 'asset:assets/demo_diary/demo_diary_balcony.jpg';
@@ -72,7 +85,7 @@ void main() {
           source: 'content_detail',
         ),
       ));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       final tags = tester
           .widgetList<Hero>(find.byType(Hero))
@@ -112,7 +125,7 @@ void main() {
         ),
       ));
       await tester.tap(find.byKey(const ValueKey('openIt')));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
     }
 
     Map<String, Object>? dismissed(List<MapEntry<String, Map<String, Object>?>> seen) =>
@@ -140,7 +153,7 @@ void main() {
       await openLightbox(tester);
 
       await tester.tap(find.byKey(const ValueKey('lightboxClose')));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(dismissed(seen)!['dismiss_gesture'], 'close_button');
     });
@@ -151,7 +164,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('lightboxPager')));
       await tester.pump(kLightboxSingleTapDelay + const Duration(milliseconds: 40));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(dismissed(seen)!['dismiss_gesture'], 'tap');
     });
@@ -161,7 +174,7 @@ void main() {
       await openLightbox(tester);
 
       await tester.drag(find.byKey(const ValueKey('lightboxPager')), const Offset(0, 400));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(dismissed(seen)!['dismiss_gesture'], 'swipe_down');
     });
@@ -174,7 +187,7 @@ void main() {
       await openLightbox(tester);
 
       await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(seen.map((e) => e.key), contains('lightbox_dismissed'));
       expect(dismissed(seen)!['dismiss_gesture'], 'system_back');
@@ -185,7 +198,7 @@ void main() {
       await openLightbox(tester);
 
       await tester.tap(find.byKey(const ValueKey('lightboxClose')));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       final p = dismissed(seen)!;
       expect(p['source'], 'content_detail');
@@ -204,10 +217,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 60));
       await tester.tap(pager);
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       await tester.tap(find.byKey(const ValueKey('lightboxClose')));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(dismissed(seen)!['max_zoom_used'] as double, greaterThan(1.0));
     });
@@ -237,16 +250,18 @@ void main() {
           source: 'content_detail',
         ),
       ));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
       expect(find.byKey(const ValueKey('lightboxRetry_0')), findsOneWidget);
       expect(find.text(l10n.lightboxImageFailed), findsOneWidget);
+      // L6：失败态撤掉模糊缩略图（纯黑底），提示不压在一团色块上。
+      expect(find.byType(ImageFiltered), findsNothing);
 
       // 🔴 点重试**不能穿到底下的"单击关闭"**：用户点重试反而把灯箱关了是最气人的一种。
       await tester.tap(find.byKey(const ValueKey('lightboxRetryButton_0')));
       await tester.pump(kLightboxSingleTapDelay + const Duration(milliseconds: 60));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(find.byType(ImageLightbox), findsOneWidget);
       // 重试会换掉 Image 的 key（不换的话失败态就此固化，按钮点了也没反应）。
@@ -279,13 +294,13 @@ void main() {
         ),
       ));
       await tester.tap(find.byKey(const ValueKey('openIt')));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       // 翻到第 2 张再点 ✕。
       await tester.drag(find.byKey(const ValueKey('lightboxPager')), const Offset(-500, 0));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
       await tester.tap(find.byKey(const ValueKey('lightboxClose')));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(landed, 1);
     });

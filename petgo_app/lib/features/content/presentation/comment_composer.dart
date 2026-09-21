@@ -55,6 +55,7 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
   final FocusNode _focusNode = FocusNode();
   static const int _maxLen = 200;
   bool _sending = false;
+
   /// 右侧两态的输入端：焦点与「是否已开始输入」。两者任一为真即进 compose 态。
   bool _focused = false;
   bool _hasText = false;
@@ -109,8 +110,12 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
 
   /// 每次输入都重算「现在该不该弹 @ 浮层」（AC1：输入 @ 即弹）。
   void _syncMentionQuery() {
-    final next = MentionDraft.queryAt(_controller.text, _controller.selection.baseOffset);
-    if (next?.start != _mentionQuery?.start || next?.keyword != _mentionQuery?.keyword) {
+    final next = MentionDraft.queryAt(
+      _controller.text,
+      _controller.selection.baseOffset,
+    );
+    if (next?.start != _mentionQuery?.start ||
+        next?.keyword != _mentionQuery?.keyword) {
       setState(() => _mentionQuery = next);
     }
   }
@@ -123,16 +128,22 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
     // 🔴 插入是直接写 controller.value，**绕过 maxLength 的格式化器** ——
     // 不先自己拦一次，200 字的评论插一个长昵称就成了 218 字，服务端 @Size(max=200)
     // 必拒，而用户只看到通用的「发送失败，请重试」，重试永远不会成功。
-    if (MentionDraft.textAfterInsert(_controller.text, query, candidate.nickname)
-            .characters
-            .length >
+    if (MentionDraft.textAfterInsert(
+          _controller.text,
+          query,
+          candidate.nickname,
+        ).characters.length >
         _maxLen) {
       showAppToast(context, l10n.commentLimitReached);
       setState(() => _mentionQuery = null);
       return;
     }
-    final inserted =
-        _mentions.insert(_controller.text, query, candidate.userId, candidate.nickname);
+    final inserted = _mentions.insert(
+      _controller.text,
+      query,
+      candidate.userId,
+      candidate.nickname,
+    );
     if (inserted == null) {
       // AC5：达上限不能再插入，并给出提示。
       showAppToast(context, l10n.mentionLimitReached);
@@ -145,7 +156,9 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
     );
     // Story 3.5 AC4：**真的插进去了**才报（被上限 / 字数拦住的那两条 return 都在上面）。
     // ⚠️ 字面量写法是给埋点守卫看的，见 MentionContext 的类注释。
-    Analytics.capture('mention_inserted', {'context': MentionContext.comment.wire});
+    Analytics.capture('mention_inserted', {
+      'context': MentionContext.comment.wire,
+    });
     setState(() => _mentionQuery = null);
   }
 
@@ -159,7 +172,11 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
     try {
       final repo = ref.read(detailRepositoryProvider);
       if (parentId != null) {
-        final created = await repo.postReply(parentId, text, mentionedUserIds: mentionedUserIds);
+        final created = await repo.postReply(
+          parentId,
+          text,
+          mentionedUserIds: mentionedUserIds,
+        );
         // 🔴 AC5：登记落点，让评论区重拉完成后**展开这条父评论并滚动过去**。
         // 二级默认只内嵌 3 条，新回复按时间正序排在最后 —— 不登记的话，
         // 回复超过 3 条的评论时，用户发完屏幕上什么都没变。
@@ -169,7 +186,11 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
             .read(replyLandingProvider.notifier)
             .request(parentId: parentId, replyId: created.id);
       } else {
-        final created = await repo.postComment(widget.postId, text, mentionedUserIds: mentionedUserIds);
+        final created = await repo.postComment(
+          widget.postId,
+          text,
+          mentionedUserIds: mentionedUserIds,
+        );
         // 🔴 记下刚发的这条，让评论区把它置顶（Story 2.5 · AC6）。
         // 热度序下 0 赞的新评论会排到第一页之外 —— 不记的话用户发完找不到自己的评论。
         // 只对**一级**评论做：二级回复挂在父评论下，位置由父决定，不存在找不到的问题。
@@ -188,14 +209,20 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       if (!mounted) return;
       final l10n = AppLocalizations.of(context);
       // 回复态遇 404 → 父评论已被删除（评论从列表点出，加载后被删才会 404）：给专属提示，别再吞成通用「重试」。
-      final problem = e is DioException ? ProblemDetail.fromDioException(e) : null;
+      final problem = e is DioException
+          ? ProblemDetail.fromDioException(e)
+          : null;
       final status = problem?.status;
       if (parentId != null && status == 404) {
         _controller.clear();
         _mentions.clear(); // 输入被清空，@ 绑定跟着作废（留着会跟下一条评论串味）
         _mentionQuery = null;
-        ref.read(replyTargetProvider(widget.postId).notifier).clear(); // 退出回复态（父已不存在，重试无意义）
-        ref.read(commentsRefreshProvider.notifier).bump(); // 刷新评论区，让已删除的父评论从列表消失
+        ref
+            .read(replyTargetProvider(widget.postId).notifier)
+            .clear(); // 退出回复态（父已不存在，重试无意义）
+        ref
+            .read(commentsRefreshProvider.notifier)
+            .bump(); // 刷新评论区，让已删除的父评论从列表消失
         showAppToast(context, l10n.commentReplyTargetDeleted);
       } else if (problem?.typeSlug == 'comment-blocked') {
         // story 3（G1/F13）：内容审核拦截（L1 或风险 ≥0.8，422 COMMENT_BLOCKED）→ **保留输入与回复态**，
@@ -213,7 +240,8 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isGuest = ref.watch(authControllerProvider).status == AuthStatus.guest;
+    final isGuest =
+        ref.watch(authControllerProvider).status == AuthStatus.guest;
     final replyTarget = ref.watch(replyTargetProvider(widget.postId));
 
     // 点「回复」设置回复目标 → 自动弹键盘（游客无回复入口，无需判 guest）。
@@ -269,7 +297,9 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
                 child: Container(
                   key: const ValueKey('replyingToPill'),
                   padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm, vertical: AppSpacing.xxs),
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xxs,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.cream2,
                     borderRadius: BorderRadius.circular(999),
@@ -280,7 +310,11 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
                       Flexible(
                         child: Text(
                           l10n.commentReplyingTo(replyTarget.toName),
-                          style: AppTypography.micro.copyWith(color: AppColors.ink2),
+                          // UI 稿 C2：胶囊文字紫色粗体，与普通说明文字区分开。
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.mint,
+                            fontWeight: FontWeight.w700,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -290,11 +324,16 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
                       GestureDetector(
                         key: const ValueKey('cancelReply'),
                         behavior: HitTestBehavior.opaque,
-                        onTap: () => ref.read(replyTargetProvider(widget.postId).notifier).clear(),
+                        onTap: () => ref
+                            .read(replyTargetProvider(widget.postId).notifier)
+                            .clear(),
                         child: const Padding(
                           padding: EdgeInsets.all(AppSpacing.xs),
-                          child: Icon(Icons.close_rounded,
-                              size: 14, color: AppColors.textTertiary),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 14,
+                            color: AppColors.mint,
+                          ),
                         ),
                       ),
                     ],
@@ -345,7 +384,10 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
                     isDense: true,
                     filled: true,
                     fillColor: AppColors.cream2,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     // 原型 pill 输入框：无边框圆角填充。
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(999),
@@ -358,8 +400,13 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
               // 🔴 右侧两态（AC2）：未聚焦且无输入 → 点赞 + 分享；否则 → 发送。
               // 判定走 resolveBottomBarMode，**别在这里就地写 if** —— 枚举只有两个值，
               // 「没有第三种组合」这件事因此在类型上成立。
-              switch (resolveBottomBarMode(focused: _focused, hasText: _hasText)) {
-                DetailBottomBarMode.compose => _sendButton(replyTarget?.parentId),
+              switch (resolveBottomBarMode(
+                focused: _focused,
+                hasText: _hasText,
+              )) {
+                DetailBottomBarMode.compose => _sendButton(
+                  replyTarget?.parentId,
+                ),
                 DetailBottomBarMode.actions => _actions(),
               },
             ],
@@ -371,19 +418,19 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
 
   /// 紫色实心圆发送钮（detail.html）。
   Widget _sendButton(int? parentId) => Material(
-        color: AppColors.mint,
-        shape: const CircleBorder(),
-        child: InkWell(
-          key: const ValueKey('detailCommentSend'),
-          customBorder: const CircleBorder(),
-          onTap: _sending ? null : () => _send(parentId),
-          child: const SizedBox(
-            width: 42,
-            height: 42,
-            child: Icon(Icons.send_rounded, size: 20, color: AppColors.onAccent),
-          ),
-        ),
-      );
+    color: AppColors.mint,
+    shape: const CircleBorder(),
+    child: InkWell(
+      key: const ValueKey('detailCommentSend'),
+      customBorder: const CircleBorder(),
+      onTap: _sending ? null : () => _send(parentId),
+      child: const SizedBox(
+        width: 42,
+        height: 42,
+        child: Icon(Icons.send_rounded, size: 20, color: AppColors.onAccent),
+      ),
+    ),
+  );
 
   /// 默认态：点赞 + 分享，始终悬浮可点（AC1）。
   ///
@@ -397,14 +444,25 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       children: [
         // 🔴 热区**隐性扩展**到 44×44，可见图标仍是 19（AC4）：19px 直接当按钮手指点不准，
         // 但把图标画大会改变设计稿的视觉密度。所以扩的是命中框，不是图标。
-        _tapTarget(LikeButton(
-          postId: detail.id,
-          initialLiked: detail.liked,
-          initialCount: detail.likeCount,
-          // 🛡 两个挂载点都必须传来源，否则「首页点赞是净增还是前移」这个对比失效。
-          source: 'detail',
-        )),
-        const SizedBox(width: DetailBarMetrics.iconGap),
+        _tapTarget(
+          LikeButton(
+            postId: detail.id,
+            initialLiked: detail.liked,
+            initialCount: detail.likeCount,
+            // 🛡 两个挂载点都必须传来源，否则「首页点赞是净增还是前移」这个对比失效。
+            source: 'detail',
+          ),
+        ),
+        // iconGap 是**可见**间距：两个 44 热区各自已带 (44-19)/2 的透明边，
+        // 再整段垫 22 会让可见间距变成 ~47（2026-09-21 对稿发现）。只补不足的部分。
+        const SizedBox(
+          width:
+              DetailBarMetrics.iconGap >
+                  DetailBarMetrics.minTapTarget - DetailBarMetrics.iconSize
+              ? DetailBarMetrics.iconGap -
+                    (DetailBarMetrics.minTapTarget - DetailBarMetrics.iconSize)
+              : 0,
+        ),
         _tapTarget(DetailShareCardButton(detail: detail)),
       ],
     );
@@ -412,18 +470,21 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
 
   /// 把一个小图标包进 44×44 的透明命中框（可见大小不变）。
   Widget _tapTarget(Widget child) => ConstrainedBox(
-        constraints: const BoxConstraints(
-          minWidth: DetailBarMetrics.minTapTarget,
-          minHeight: DetailBarMetrics.minTapTarget,
-        ),
-        child: Center(widthFactor: 1, heightFactor: 1, child: child),
-      );
+    constraints: const BoxConstraints(
+      minWidth: DetailBarMetrics.minTapTarget,
+      minHeight: DetailBarMetrics.minTapTarget,
+    ),
+    child: Center(widthFactor: 1, heightFactor: 1, child: child),
+  );
 
   Widget _bottomBar({required Widget child}) {
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
         decoration: const BoxDecoration(
           color: AppColors.surface,
           border: Border(top: BorderSide(color: AppColors.border)),
@@ -435,8 +496,14 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
 
   Widget _hintPill(String hint) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      decoration: BoxDecoration(color: AppColors.base, borderRadius: AppRounded.lgRadius),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.base,
+        borderRadius: AppRounded.lgRadius,
+      ),
       child: Text(hint, style: AppTypography.caption),
     );
   }

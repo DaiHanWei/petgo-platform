@@ -37,16 +37,23 @@ class PlaceSharePageControllerTest {
     private PlacePhotoRepository photos;
     private PlaceSharePageController controller;
     private HttpServletResponse response;
+    private com.tailtopia.place.service.PlaceCommentQueryService placeComments;
+    private com.tailtopia.place.service.PlaceAttitudeCounters attitudeCounters;
 
     @BeforeEach
     void setUp() {
         places = Mockito.mock(PlaceRepository.class);
         photos = Mockito.mock(PlacePhotoRepository.class);
         response = Mockito.mock(HttpServletResponse.class);
+        placeComments = Mockito.mock(com.tailtopia.place.service.PlaceCommentQueryService.class);
+        attitudeCounters = Mockito.mock(com.tailtopia.place.service.PlaceAttitudeCounters.class);
+        when(attitudeCounters.countsOf(anyLong()))
+                .thenReturn(com.tailtopia.place.service.PlaceAttitudeCounters.Counts.ZERO);
         controller = new PlaceSharePageController(places, photos,
                 // 照片 key → URL（对齐 D5）：真实实例，只用到 publicUrlOf。
                 new com.tailtopia.place.service.PlacePhotoService(places, photos, null,
                         com.tailtopia.place.PlaceTestSupport.oss()),
+                placeComments, attitudeCounters,
                 "https://dl.test", "https://ios.test", "https://play.test");
         when(photos.findVisible(anyLong(), anyBoolean(), any())).thenReturn(List.of());
         when(places.resolveForView("tok"))
@@ -68,8 +75,52 @@ class PlaceSharePageControllerTest {
         assertThat(controller.placePage("gone", a, response)).isEqualTo("card_gone");
         Mockito.verify(response).setStatus(HttpServletResponse.SC_NOT_FOUND);
 
-        // 失效页上**不带任何场所信息** —— 下架后不泄漏原内容。
-        assertThat(a.asMap()).containsOnlyKeys("downloadUrl");
+        // 失效页上**不带任何场所信息** —— 下架后不泄漏原内容；只有下载链接与三条场所文案常量。
+        assertThat(a.asMap()).containsOnlyKeys("downloadUrl", "goneTitle", "goneSubtitle", "goneCta");
+        assertThat(a.getAttribute("goneTitle")).isEqualTo("Tempat ini sudah tidak ada");
+        // 🔴 防枚举：副标题必须同时给出两种原因（「atau」），不暴露到底是删了还是从未存在。
+        assertThat((String) a.getAttribute("goneSubtitle")).contains("dihapus atau tautannya");
+    }
+
+    // ===== A9 社交佐证 / 缩略图 =====
+
+    /** 评论数按**无登录态**口径取（viewerId=null → 只数对外可见的），推荐数与详情页同一套计数器。 */
+    @Test
+    void socialProofUsesPublicCounts() {
+        when(placeComments.countForPlace(42L, null)).thenReturn(3L);
+        when(attitudeCounters.countsOf(42L))
+                .thenReturn(new com.tailtopia.place.service.PlaceAttitudeCounters.Counts(12, 5));
+
+        Model model = new ConcurrentModel();
+        controller.placePage("tok", model, response);
+
+        assertThat(model.getAttribute("recommendCount")).isEqualTo(12L);
+        assertThat(model.getAttribute("commentCount")).isEqualTo(3L);
+        Mockito.verify(placeComments).countForPlace(42L, null);
+    }
+
+    /** 6 张照片 → 4 格缩略，末格「+3」（与稿子 A9 一致）；1 张 → 不列缩略（已在 hero）。 */
+    @Test
+    void thumbsShowFourSlotsWithRemainingCountOnTheLast() {
+        List<PlacePhoto> six = java.util.stream.IntStream.range(0, 6)
+                .mapToObj(i -> PlacePhoto.fromMarking(42L, 7L, "https://cdn/" + i + ".jpg", i, true))
+                .toList();
+        when(photos.findVisible(anyLong(), anyBoolean(), any())).thenReturn(six);
+        Model model = new ConcurrentModel();
+        controller.placePage("tok", model, response);
+        assertThat((List<?>) model.getAttribute("thumbs")).hasSize(4);
+        assertThat(model.getAttribute("morePhotos")).isEqualTo(3);
+        assertThat(model.getAttribute("hasThumbs")).isEqualTo(true);
+
+        when(photos.findVisible(anyLong(), anyBoolean(), any())).thenReturn(six.subList(0, 4));
+        Model four = new ConcurrentModel();
+        controller.placePage("tok", four, response);
+        assertThat(four.getAttribute("morePhotos")).isEqualTo(0);
+
+        when(photos.findVisible(anyLong(), anyBoolean(), any())).thenReturn(six.subList(0, 1));
+        Model one = new ConcurrentModel();
+        controller.placePage("tok", one, response);
+        assertThat(one.getAttribute("hasThumbs")).isEqualTo(false);
     }
 
     // ===== AC5 审核前不给图 =====

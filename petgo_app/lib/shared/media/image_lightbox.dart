@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/analytics/analytics.dart';
+import '../../core/theme/colors.dart';
 import '../../l10n/app_localizations.dart';
 import '../widgets/app_image.dart';
 import 'lightbox_gestures.dart';
@@ -156,6 +157,10 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
 
   /// 每页的重试计数：+1 就换掉 Image 的 key，强制重新发起加载（AC4）。
   final Map<int, int> _retryTicks = {};
+
+  /// 已进入失败态的页。失败时要把底下那张模糊缩略图撤掉（纯黑底）——
+  /// 模糊图还垫在下面的话，提示文字压在一团色块上，既难读又像「其实加载出来了」。
+  final Set<int> _failed = {};
 
   int get _safeInitialIndex =>
       widget.urls.isEmpty ? 0 : widget.initialIndex.clamp(0, widget.urls.length - 1);
@@ -343,9 +348,16 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
                   .withValues(alpha: 1 - progress * LightboxDismissMetrics.maxFade),
             ),
           ),
-          // 图跟手走。
+          // 图跟手走，同时随进度缩小一点（L4）：只平移的话像整张图"掉"下去，
+          // 缩小才读得出「这张图正在被收起来」。
           Positioned.fill(
-            child: Transform.translate(offset: Offset(0, _dragDy), child: _pager()),
+            child: Transform.translate(
+              offset: Offset(0, _dragDy),
+              child: Transform.scale(
+                scale: 1 - _dragShrink * progress,
+                child: _pager(progress),
+              ),
+            ),
           ),
           // 悬浮控件随拖拽一起淡出：它们钉在屏幕上不动会显得图"掉"下去了。
           Opacity(
@@ -366,7 +378,13 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
     );
   }
 
-  Widget _pager() => PageView.builder(
+  /// 下拖到底时图片缩小的比例（L4：scale = 1 - 0.07 × progress）。
+  static const double _dragShrink = 0.07;
+
+  /// 下拖到底时图片的圆角（L4：0 → 16）。
+  static const double _dragRadius = 16;
+
+  Widget _pager(double progress) => PageView.builder(
         key: const ValueKey('lightboxPager'),
         controller: _controller,
         // 🔴 优先级第 2 条的接线：放大且还没贴边时**禁掉翻页**，拖拽全部留给图内平移；
@@ -412,7 +430,8 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
                 // 飞行途中用一张静态图，避免把加载态/重试按钮一起拖着飞。
                 flightShuttleBuilder: (_, _, _, _, _) =>
                     AppImage.widget(widget.urls[i], fit: BoxFit.contain, thumbWidth: _thumbWidth),
-                child: _page(i),
+                // 只有正在拖的那一页带圆角与阴影；其余页不在屏上，套了也是白算。
+                child: i == _current ? _dragDecor(_page(i), progress) : _page(i),
               ),
             ),
           ),
@@ -423,20 +442,44 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
   /// 另取一档等于让同一张图在两处各缓存一份，白白多下一次。
   static const int _thumbWidth = 1080;
 
+  /// L4 下拖态的「卡片化」：圆角 0→16 + 随进度加深的阴影。
+  /// 没拖时原样返回 —— ClipRRect 半径为 0 也照样开裁剪层，常驻它纯属浪费。
+  Widget _dragDecor(Widget child, double progress) {
+    if (progress <= 0) return child;
+    final BorderRadius radius = BorderRadius.circular(_dragRadius * progress);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        // 阴影在黑底上本来看不见，是随背景变淡才浮出来的 —— 正好与「露出下面那一页」同步。
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.45 * progress),
+            blurRadius: 32 * progress,
+            offset: Offset(0, 12 * progress),
+          ),
+        ],
+      ),
+      child: ClipRRect(borderRadius: radius, child: child),
+    );
+  }
+
   /// 一页的内容：缩略图打底（模糊）→ 原图淡入（AC3）；加载失败给重试（AC4）。
   Widget _page(int i) {
     final String url = widget.urls[i];
     final int tick = _retryTicks[i] ?? 0;
     return Stack(
       fit: StackFit.passthrough,
+      // 居中对齐：加载中的 spinner 要落在模糊缩略图正中，而不是左上角。
+      alignment: Alignment.center,
       children: [
         // 打底的缩略图：详情页多半已经缓存过它，所以打开瞬间就有东西看，
         // 而不是一片黑等原图下完。模糊是为了让"还没清晰"这件事被看见，
-        // 否则用户会以为原图就是这么糊。
-        ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-          child: AppImage.widget(url, fit: BoxFit.contain, thumbWidth: _thumbWidth),
-        ),
+        // 否则用户会以为原图就是这么糊。失败态撤掉它（L6：纯黑底）。
+        if (!_failed.contains(i))
+          ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: AppImage.widget(url, fit: BoxFit.contain, thumbWidth: _thumbWidth),
+          ),
         AppImage.widget(
           url,
           // 🔴 key 带重试计数：点重试时 key 变了，Element 重建 → 重新发起加载。
@@ -446,14 +489,38 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
           // 原图解码完成后淡入，接住下面那张模糊缩略图。
           frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
             if (wasSynchronouslyLoaded) return child;
-            return AnimatedOpacity(
+            final Widget fading = AnimatedOpacity(
               opacity: frame == null ? 0 : 1,
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOut,
               child: child,
             );
+            if (frame != null) return fading;
+            // L5：原图还在路上时叠一个小 spinner —— 只有模糊图的话，
+            // 慢网下用户分不清「在加载」还是「就这么糊」。
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                fading,
+                const SizedBox(
+                  key: ValueKey('lightboxLoading'),
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white70),
+                ),
+              ],
+            );
           },
-          errorBuilder: (context, error, stack) => _retryTile(i),
+          errorBuilder: (context, error, stack) {
+            // 失败是在 Image 的 build 里被告知的，不能就地 setState ——
+            // 推到帧后再撤模糊缩略图。
+            if (!_failed.contains(i)) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) setState(() => _failed.add(i));
+              });
+            }
+            return _retryTile(i);
+          },
         ),
       ],
     );
@@ -468,26 +535,38 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.broken_image_outlined, size: 40, color: Colors.white70),
+          const Icon(Icons.broken_image_outlined, size: 32, color: Colors.white70),
           const SizedBox(height: 10),
           Text(l10n.lightboxImageFailed,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: Colors.white70)),
-          const SizedBox(height: 10),
-          TextButton(
+              // 次级文字用浅灰紫：纯白会和「重试」按钮抢主次。
+              style: const TextStyle(fontSize: 13, color: AppColors.textTertiary)),
+          const SizedBox(height: 14),
+          // 描边胶囊按钮：纯文字按钮在黑底上几乎看不出是可点的。
+          OutlinedButton.icon(
             key: ValueKey('lightboxRetryButton_$i'),
             // 重试要吃掉这次点击：不吞的话它会穿到底下的"单击关闭"，
-            // 用户点重试反而把灯箱关了。
-            onPressed: () => setState(() => _retryTicks[i] = (_retryTicks[i] ?? 0) + 1),
-            style: TextButton.styleFrom(foregroundColor: Colors.white),
-            child: Text(l10n.feedRetry),
+            // 用户点重试反而把灯箱关了。重试期间把模糊缩略图放回来垫底。
+            onPressed: () => setState(() {
+              _failed.remove(i);
+              _retryTicks[i] = (_retryTicks[i] ?? 0) + 1;
+            }),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: Colors.white38),
+              shape: const StadiumBorder(),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: Text(l10n.feedRetry),
           ),
         ],
       ),
     );
   }
 
-  /// 悬浮关闭 ✕（左上）。命中框 44×44，图标仍是 22 —— 扩热区不放大图标。
+  /// 悬浮关闭 ✕（左上）。命中框 44×44，可见圆底只有 34 —— 扩热区不放大视觉（L1）。
+  /// 外层 44 透明（opaque 命中），内层 34 才是看得见的圆。
   Widget _closeButton() => GestureDetector(
         key: const ValueKey('lightboxClose'),
         behavior: HitTestBehavior.opaque,
@@ -495,9 +574,15 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
         child: Container(
           width: 44,
           height: 44,
-          margin: const EdgeInsets.all(8),
-          decoration: const BoxDecoration(color: Colors.black38, shape: BoxShape.circle),
-          child: const Icon(Icons.close_rounded, size: 22, color: Colors.white),
+          // 44 命中区里 34 圆居中各缩进 5：外边距 11 → 可见圆落在 16（UI 稿 L1 的位置）。
+          margin: const EdgeInsets.only(left: 11, top: 11),
+          alignment: Alignment.center,
+          child: Container(
+            width: 34,
+            height: 34,
+            decoration: const BoxDecoration(color: Colors.black38, shape: BoxShape.circle),
+            child: const Icon(Icons.close_rounded, size: 22, color: Colors.white),
+          ),
         ),
       );
 
@@ -512,7 +597,7 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
         ),
         child: Text(
           '${_current + 1}/${widget.urls.length}',
-          style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600),
+          style: const TextStyle(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w500),
         ),
       );
 }

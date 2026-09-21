@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
+import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/empty_state.dart';
@@ -349,6 +350,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
     final entry = OverlayEntry(
       builder: (_) => CoachmarkOverlay(
         spotlight: rect,
+        title: l10n.ktpMovedCoachmarkTitle,
         text: l10n.ktpMovedCoachmark,
         confirmLabel: l10n.commonGotIt,
         onDismiss: _dismissCoachmark,
@@ -1048,26 +1050,29 @@ class _EmptyProfileView extends ConsumerWidget {
     }
     // V1.3.0 batch-b1 Story 4.1 · AC6：推荐集合**追加在现有引导之下**，
     // 原有「+ 建档」与「Ubah status」两个操作**原样保留、一个不删**。
+    // UI 稿 E1：有推荐时引导压成一条**紧凑横条**（图标 + 标题/副文案一行），
+    // 把首屏让给下面的 2 列网格；引导与推荐区之间一条分隔线。
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.screenEdge, vertical: AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ..._guidance(context),
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.xl),
-            child: PetRecommendationGrid(from: kPetRecommendFromDiaryEmpty),
+          ..._compactGuidance(context),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
+            child: Divider(height: 1, thickness: 1, color: AppColors.divider),
           ),
+          PetRecommendationGrid(from: kPetRecommendFromDiaryEmpty),
         ],
       ),
     );
   }
 
-  /// 建档引导那一段（EmptyState + 两个操作）—— **两个版面共用同一份**。
+  /// 建档引导那一段（EmptyState + 两个操作）—— **无推荐时的原版面**，一字未改。
   ///
-  /// 🔴 抽出来是为了让「引导内容一字未改」可被机械保证：两个分支渲染的是同一个
-  /// children 列表，连 key 都不可能在某一支里漂掉。
+  /// 🔴 两个操作按钮由 [_createButton] / [_changeStatusButton] 出，与紧凑版共用：
+  /// 两个版面换的只是「怎么排」，按钮本身（key、回调、文案）不可能在某一支里漂掉。
   List<Widget> _guidance(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return [
@@ -1076,24 +1081,76 @@ class _EmptyProfileView extends ConsumerWidget {
         title: l10n.growthArchiveEmptyTitle,
         message: l10n.growthArchiveEmptyBody,
       ),
-      FilledButton(
-        key: const ValueKey('growthCreateButton'),
-        onPressed: onCreate,
-        child: Text(l10n.growthArchiveEmptyCreate),
-      ),
+      _createButton(l10n),
       if (onChangeStatus != null)
         // 🔴 AC6：「Ubah status」会改变宠物拥有状态 → **刻意弱化、与主按钮拉开距离**，
         //    避免手滑误触。视觉上仍是既有的 TextButton（不重画），只多一段间距。
         Padding(
           padding: const EdgeInsets.only(top: AppSpacing.lg),
-          child: TextButton(
-            key: const ValueKey('growthChangeStatusButton'),
-            onPressed: onChangeStatus,
-            child: Text(l10n.growthArchiveChangeStatus),
-          ),
+          child: _changeStatusButton(l10n),
         ),
     ];
   }
+
+  /// 有推荐时的紧凑引导（UI 稿 E1）：横条（🐾 + 标题 / 副文案）+ 全宽主按钮 +
+  /// 单独一行、再弱化一档的「Ubah status」。
+  ///
+  /// ⚠️ 文案与 [_guidance] **同一组 key**（标题 / 副文案 / 按钮），只是换了排法 ——
+  /// 紧凑不等于删字：「为什么先建档」那句副文案仍在。
+  List<Widget> _compactGuidance(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return [
+      Row(
+        children: [
+          const Icon(Icons.pets_rounded, size: 32, color: AppColors.ink),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  l10n.growthArchiveEmptyTitle,
+                  style: AppTypography.body
+                      .copyWith(fontWeight: FontWeight.w700, color: AppColors.ink),
+                ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(l10n.growthArchiveEmptyBody, style: AppTypography.micro),
+              ],
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      _createButton(l10n),
+      if (onChangeStatus != null)
+        // 🔴 AC6：与主按钮**拉开距离、单独一行、再弱化一档**（小字号 + 下划线），
+        //    它会改变宠物拥有状态，不能长得像第二个 CTA。
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.md),
+          child: Center(child: _changeStatusButton(l10n, subdued: true)),
+        ),
+    ];
+  }
+
+  Widget _createButton(AppLocalizations l10n) => FilledButton(
+        key: const ValueKey('growthCreateButton'),
+        onPressed: onCreate,
+        child: Text(l10n.growthArchiveEmptyCreate),
+      );
+
+  /// [subdued]：紧凑版里再弱化一档（caption 字号 + 下划线，UI 稿 E1）。
+  Widget _changeStatusButton(AppLocalizations l10n, {bool subdued = false}) => TextButton(
+        key: const ValueKey('growthChangeStatusButton'),
+        onPressed: onChangeStatus,
+        child: Text(
+          l10n.growthArchiveChangeStatus,
+          style: subdued
+              ? AppTypography.caption.copyWith(
+                  color: AppColors.mint600, decoration: TextDecoration.underline)
+              : null,
+        ),
+      );
 }
 
 /// 状态 B / C（PLANNING / ENTHUSIAST）：「声明未养宠 / 计划养宠」那一屏。

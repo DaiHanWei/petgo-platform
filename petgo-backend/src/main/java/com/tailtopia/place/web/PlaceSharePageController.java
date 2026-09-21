@@ -46,6 +46,9 @@ import org.springframework.web.bind.annotation.PathVariable;
  *
  * <h2>下架 / 不存在（AC7）</h2>
  * 统一复用名片失效页 {@code card_gone} + 404 + noindex，<b>绝不区分原因</b>（防枚举）。
+ * 该模板默认是宠物护照文案；本页经 {@code goneTitle / goneSubtitle / goneCta} 三个 model 键
+ * 换成场所文案（UI 稿 A10）—— 其它复用方不传这三个键，渲染结果逐字不变。
+ * 副标题照样用「已删除<b>或</b>链接失效」把两种原因糊在一起，不得改成只说其一。
  * ⚠️ <b>链接本身长期有效</b> —— token 不回收、不重发；下架只是让这一次访问落到失效页。
  */
 @Controller
@@ -60,8 +63,20 @@ public class PlaceSharePageController {
      */
     static final int OG_IMAGE_WIDTH_PX = 1200;
 
+    /** 缩略图格数（UI 稿 A9：一行 4 格，末格照片更多时叠「+N」）。 */
+    static final int THUMB_SLOTS = 4;
+
+    /** 失效页场所文案（UI 稿 A10 · AC7）。⚠️ 副标题的「atau」是防枚举，不要拆成两种原因。 */
+    static final String GONE_TITLE = "Tempat ini sudah tidak ada";
+    static final String GONE_SUBTITLE = "Tempat ini sudah dihapus atau tautannya tidak berlaku lagi.";
+    static final String GONE_CTA = "Temukan tempat lain";
+
     private final PlaceRepository places;
     private final PlacePhotoRepository photos;
+    /** 社交佐证行的评论数（只读，复用详情页同一条计数）。 */
+    private final com.tailtopia.place.service.PlaceCommentQueryService placeComments;
+    /** 社交佐证行的推荐数 👍（只读，复用详情页同一套计数器）。 */
+    private final com.tailtopia.place.service.PlaceAttitudeCounters attitudeCounters;
     private final String downloadUrl;
     private final String iosUrl;
     private final String androidUrl;
@@ -71,6 +86,8 @@ public class PlaceSharePageController {
 
     public PlaceSharePageController(PlaceRepository places, PlacePhotoRepository photos,
             com.tailtopia.place.service.PlacePhotoService photoService,
+            com.tailtopia.place.service.PlaceCommentQueryService placeComments,
+            com.tailtopia.place.service.PlaceAttitudeCounters attitudeCounters,
             @Value("${petgo.card.app-download-url:https://petgo.example/download}") String downloadUrl,
             @Value("${petgo.card.ios-url:https://apps.apple.com/app/petgo}") String iosUrl,
             @Value("${petgo.card.android-url:https://play.google.com/store/apps/details?id=com.tailtopia.app}")
@@ -78,6 +95,8 @@ public class PlaceSharePageController {
         this.places = places;
         this.photos = photos;
         this.photoService = photoService;
+        this.placeComments = placeComments;
+        this.attitudeCounters = attitudeCounters;
         this.downloadUrl = downloadUrl;
         this.iosUrl = iosUrl;
         this.androidUrl = androidUrl;
@@ -99,6 +118,10 @@ public class PlaceSharePageController {
             // 🔴 下架与从未存在**同一个响应**（AC7）：可区分就等于给出「这个 token 曾经存在」。
             response.setStatus(HttpServletResponse.SC_NOT_FOUND);
             model.addAttribute("downloadUrl", downloadUrl);
+            // 场所专用文案（A10）；只含常量，不带任何场所信息 —— 下架后不泄漏原内容。
+            model.addAttribute("goneTitle", GONE_TITLE);
+            model.addAttribute("goneSubtitle", GONE_SUBTITLE);
+            model.addAttribute("goneCta", GONE_CTA);
             return "card_gone";
         }
         Place place = opt.get();
@@ -113,6 +136,7 @@ public class PlaceSharePageController {
         // 页面语言恒印尼语（与名片 / 里程碑 / 单条内容三页同口径：H5 无登录态，拿不到语言偏好）。
         model.addAttribute("placeName", place.getName());
         model.addAttribute("typeLabel", typeLabel(place));
+        model.addAttribute("typeEmoji", typeEmoji(place));
         model.addAttribute("tagLabels", tagLabels(place));
         model.addAttribute("hasTags", !tagLabels(place).isEmpty());
         model.addAttribute("addressText", place.getAddressText());
@@ -122,6 +146,18 @@ public class PlaceSharePageController {
         model.addAttribute("images", imageUrls);
         model.addAttribute("hasImages", !imageUrls.isEmpty());
         model.addAttribute("photoCount", imageUrls.size());
+        // 缩略图（A9）：取前 4 张；照片多于 4 张时末格叠「+N」，N = 末格起算的剩余张数
+        // （稿子 6 张 → 显示 3 张 + 末格「+3」）。只有 1 张时它已经是 hero，不再重复列缩略。
+        model.addAttribute("thumbs", imageUrls.subList(0, Math.min(THUMB_SLOTS, imageUrls.size())));
+        model.addAttribute("hasThumbs", imageUrls.size() > 1);
+        model.addAttribute("morePhotos",
+                imageUrls.size() > THUMB_SLOTS ? imageUrls.size() - (THUMB_SLOTS - 1) : 0);
+
+        // 社交佐证行（A9）：👍 推荐 · 📷 照片 · 💬 评论。与 App 详情页**同一套**计数：
+        //   评论数按"无登录态访客"口径（viewerId=null → 只数 VISIBLE），挂起中的不算；
+        //   照片数就是上面这批对外可见的照片 —— 页面上能看到几张就写几张。
+        model.addAttribute("recommendCount", attitudeCounters.countsOf(place.getId()).recommend());
+        model.addAttribute("commentCount", placeComments.countForPlace(place.getId(), null));
 
         model.addAttribute("ogTitle", place.getName());
         model.addAttribute("ogDescription", ogDescription(place));
@@ -139,7 +175,7 @@ public class PlaceSharePageController {
         model.addAttribute("hasOgImage", ogImage != null);
 
         model.addAttribute("deeplink", "tailtopia://place/" + place.getPublicToken());
-        model.addAttribute("downloadCta", "Buka di aplikasi TailTopia");
+        model.addAttribute("downloadCta", "Buka di TailTopia");
         model.addAttribute("downloadUrl", downloadUrl);
         model.addAttribute("iosUrl", iosUrl);
         model.addAttribute("androidUrl", androidUrl);
@@ -164,6 +200,22 @@ public class PlaceSharePageController {
             case HOTEL -> "Hotel & penginapan";
             case PET_SERVICE -> "Layanan hewan";
             case OTHER -> "Lainnya";
+        };
+    }
+
+    /** 类型胶囊前的小图标（A9 hero 左上角胶囊）。 */
+    private static String typeEmoji(Place place) {
+        if (place.getType() == null) {
+            return "📍";
+        }
+        return switch (place.getType()) {
+            case CAFE -> "☕";
+            case RESTAURANT -> "🍽";
+            case PARK -> "🌳";
+            case MALL -> "🛍";
+            case HOTEL -> "🏨";
+            case PET_SERVICE -> "🐾";
+            case OTHER -> "📍";
         };
     }
 

@@ -77,40 +77,69 @@ class AgeCardPage extends ConsumerWidget {
 /// 🔴 **所选档位不落档案字段、不持久化、不校验**（AD-A18.2）——
 /// 只在本次生成中有效。用户这次选中型、下次选大型是他自己的事；
 /// 档案里不该因此多出一个说不清的字段。
-class _SizePickerPage extends StatelessWidget {
+class _SizePickerPage extends StatefulWidget {
   const _SizePickerPage({required this.petName, required this.onPicked});
 
   final String petName;
   final void Function(DogSizeClass) onPicked;
 
   @override
+  State<_SizePickerPage> createState() => _SizePickerPageState();
+}
+
+/// UI 稿 P4：**先选、再点「Lanjutkan」确认**（两步），不是点一下档位就直接跳走 ——
+/// 直接跳走的话手滑点错一档，就得退回来重选（2026-09-21 对稿修正）。
+class _SizePickerPageState extends State<_SizePickerPage> {
+  DogSizeClass? _selected;
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final selected = _selected;
     return Scaffold(
-      backgroundColor: AppColors.cream2,
-      appBar: AppBar(title: Text(l10n.ageCardPreviewTitle)),
+      backgroundColor: AppColors.cream,
+      appBar: AppBar(title: Text(l10n.ageCardSizePickerTitle)),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
             Text(
-              l10n.ageCardSizeQuestion(petName),
-              style: const TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink),
+              l10n.ageCardSizeQuestion(widget.petName),
+              style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink2),
             ),
             const SizedBox(height: AppSpacing.lg),
             for (final size in DogSizeClass.values) ...[
               _SizeTile(
                 size: size,
                 label: dogSizeLabel(l10n, size),
-                // 档位名旁标注体重区间（AC1）—— 不标的话「中型」全凭感觉，
+                // 档位名下标注体重区间（AC1）—— 不标的话「中型」全凭感觉，
                 // 而不同人对「中型狗」的理解能差一倍。
                 range: dogSizeRange(l10n, size),
-                onTap: () => onPicked(size),
+                selected: size == selected,
+                onTap: () => setState(() => _selected = size),
               ),
               const SizedBox(height: AppSpacing.sm),
             ],
           ],
+        ),
+      ),
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          color: AppColors.card,
+          border: Border(top: BorderSide(color: AppColors.line2)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.md),
+            child: FilledButton(
+              key: const ValueKey('ageCardSizeContinue'),
+              // 没选之前禁用：点了没反应却不知道缺什么，比按钮灰着更糟。
+              onPressed: selected == null ? null : () => widget.onPicked(selected),
+              child: Text(l10n.ageCardSizeContinue),
+            ),
+          ),
         ),
       ),
     );
@@ -138,36 +167,71 @@ class _SizeTile extends StatelessWidget {
     required this.size,
     required this.label,
     required this.range,
+    required this.selected,
     required this.onTap,
   });
 
   final DogSizeClass size;
   final String label;
   final String range;
+  final bool selected;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Material(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(14),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          key: ValueKey('ageCardSize_${size.wire}'),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(label,
-                      style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.ink)),
-                ),
-                Text(range,
-                    style: const TextStyle(fontSize: 13, color: AppColors.textTertiary)),
-              ],
+  Widget build(BuildContext context) => DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
+          ],
+        ),
+        child: Material(
+          color: AppColors.card,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: selected
+                ? const BorderSide(color: AppColors.mint, width: 1.5)
+                : BorderSide.none,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: ValueKey('ageCardSize_${size.wire}'),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(label,
+                            style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.ink)),
+                        const SizedBox(height: 2),
+                        Text(range,
+                            style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+                      ],
+                    ),
+                  ),
+                  // 单选圆点：未选 2px 灰边，选中 6px 品牌紫边（UI 稿 P4）。
+                  Container(
+                    key: ValueKey('ageCardSizeMark_${size.wire}'),
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: selected ? AppColors.mint : AppColors.line,
+                        width: selected ? 6 : 2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

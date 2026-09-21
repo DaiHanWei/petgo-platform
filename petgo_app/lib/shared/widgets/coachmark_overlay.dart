@@ -21,6 +21,7 @@ class CoachmarkOverlay extends StatelessWidget {
   const CoachmarkOverlay({
     super.key,
     required this.spotlight,
+    this.title,
     required this.text,
     required this.confirmLabel,
     required this.onDismiss,
@@ -28,6 +29,9 @@ class CoachmarkOverlay extends StatelessWidget {
 
   /// 要高亮的那块区域（全局坐标）。
   final Rect spotlight;
+
+  /// 标题行（UI 稿 P7：白色粗体一句话点明「什么东西搬家了」）。null = 只有正文。
+  final String? title;
 
   final String text;
   final String confirmLabel;
@@ -37,7 +41,7 @@ class CoachmarkOverlay extends StatelessWidget {
 
   /// 高亮框四周多留一点，免得描边贴着内容。
   static const double _pad = 6;
-  static const double _scrimAlpha = 0.62;
+  static const double _scrimAlpha = 0.72;
 
   /// 说明卡挂在高亮区的下方；下方放不下时挂到上方。
   static const double _cardGap = 12;
@@ -78,7 +82,7 @@ class CoachmarkOverlay extends StatelessWidget {
               child: Container(
                 key: const ValueKey('coachmarkSpotlight'),
                 decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.mint, width: 2),
+                  border: Border.all(color: AppColors.mint, width: 2.5),
                   borderRadius: BorderRadius.circular(14),
                 ),
               ),
@@ -86,8 +90,8 @@ class CoachmarkOverlay extends StatelessWidget {
           ),
           // 说明卡：Stack 的**最后一个兄弟**，不塞进任何一块遮罩里。
           Positioned(
-            left: 16,
-            right: 16,
+            left: 24,
+            right: 24,
             top: below ? hole.bottom + _cardGap : null,
             bottom: below ? null : (size.height - hole.top) + _cardGap,
             child: _card(context),
@@ -115,35 +119,46 @@ class CoachmarkOverlay extends StatelessWidget {
           key: const ValueKey('coachmarkScrim'),
           behavior: HitTestBehavior.opaque,
           onTap: onDismiss,
-          child: ColoredBox(color: Colors.black.withValues(alpha: _scrimAlpha)),
+          // UI 稿 P7：深紫黑（品牌 splashInk），不是纯黑 —— 纯黑压在淡紫页面上发脏。
+          child: ColoredBox(color: AppColors.splashInk.withValues(alpha: _scrimAlpha)),
         ),
       );
 
-  Widget _card(BuildContext context) => Container(
+  /// 说明区（UI 稿 P7）：**文字直接压在遮罩上**、居中 —— 标题白色粗体、正文浅紫、
+  /// 下接白底胶囊「知道了」。改前是一张白卡片 + 右对齐紫按钮，像个普通弹窗，
+  /// 和「这里有个东西换了位置」的轻提示语气不符（2026-09-21 对稿修正）。
+  Widget _card(BuildContext context) => Column(
         key: const ValueKey('coachmarkCard'),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                text,
-                style: const TextStyle(fontSize: 14, height: 1.5, color: AppColors.ink),
-              ),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (title != null) ...[
+            Text(
+              title!,
+              key: const ValueKey('coachmarkTitle'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
             ),
-            const SizedBox(height: 10),
-            FilledButton(
-              key: const ValueKey('coachmarkGotIt'),
-              onPressed: onDismiss,
-              child: Text(confirmLabel),
-            ),
+            const SizedBox(height: 8),
           ],
-        ),
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, height: 1.6, color: AppColors.lineViolet),
+          ),
+          const SizedBox(height: 20),
+          FilledButton(
+            key: const ValueKey('coachmarkGotIt'),
+            onPressed: onDismiss,
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.ink,
+              shape: const StadiumBorder(),
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 11),
+              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+            child: Text(confirmLabel),
+          ),
+        ],
       );
 }

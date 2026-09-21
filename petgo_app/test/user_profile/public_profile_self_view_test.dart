@@ -126,6 +126,28 @@ void main() {
       expect(find.byKey(const ValueKey('profileEditButton')), findsNothing);
     });
 
+    /// UI 稿 C1/C2：两个计数挪到「POSTINGAN」分区标题**同一行右侧**，两种视角同一处。
+    for (final self in [true, false]) {
+      testWidgets('计数与分区标题同一行、在其右侧（self=$self）', (tester) async {
+        await _pump(tester, self: self);
+
+        final counts = find.byKey(const ValueKey('profileCounts'));
+        final title = find.text(l10n.profilePostsTitle.toUpperCase());
+        expect(counts, findsOneWidget);
+        expect(title, findsOneWidget);
+        expect((tester.getCenter(counts).dy - tester.getCenter(title).dy).abs(), lessThan(2));
+        expect(tester.getTopLeft(counts).dx, greaterThan(tester.getTopRight(title).dx));
+      });
+    }
+
+    /// UI 稿 C4：自己视角空态也居中，但**不带锁**（自己的主页上一把锁读起来像「你被限制了」）。
+    testWidgets('自己视角空态不带锁图标', (tester) async {
+      await _pump(tester, self: true);
+
+      expect(find.byKey(const ValueKey('profilePostsEmpty')), findsOneWidget);
+      expect(find.byIcon(Icons.lock_outline_rounded), findsNothing);
+    });
+
     /// 🔴 `self` 是**服务端算的**，不是客户端拿本地 id 比出来的。
     /// 这里用一个「本地登录 id 与所看主页 id 相同、但服务端说 self=false」的组合钉住：
     /// 页面必须信服务端（客户端各算一次，两边口径迟早会漂）。
@@ -155,6 +177,9 @@ void main() {
         find.ancestor(of: button, matching: find.byType(Row)),
         findsWidgets,
       );
+      // UI 稿 C2：与头像**垂直居中**，不贴顶。
+      final avatarY = tester.getCenter(find.byKey(const ValueKey('profileAvatar'))).dy;
+      expect((tester.getCenter(button).dy - avatarY).abs(), lessThan(1));
     });
 
     testWidgets('点它弹出的是既有的资料编辑抽屉（昵称 / 签名 / 只读邮箱）', (tester) async {

@@ -232,24 +232,19 @@ class PublicProfilePage extends ConsumerWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                  const SizedBox(height: 3),
-                  // 两个聚合计数（AC2）。发帖总数**复用既有统计**（没有重新实现），
-                  // 获赞总数是本批次新补的；**两者都只算 PUBLIC**，与下面的网格同源 ——
-                  // 对不上的话，那个差值就是「这人有几篇私密内容」。
-                  Text(
-                    l10n.profileCounts(p.postCount, p.likeCount),
-                    key: const ValueKey('profileCounts'),
-                    style: AppTypography.caption,
-                  ),
                 ],
               ),
             ),
             // AC3：「编辑资料」在**身份行内、与头像同一行**（对齐真实的 me_page）——
             // 🔴 **不塞进顶部 AppBar**：UI 稿 C2 明确标了位置，而 AppBar 那个位置
             // 在他人视角上是「···」，两种视角共用一个槽位会让人第一眼分不清自己在看谁的主页。
+            // UI 稿 C2：按钮与**头像**垂直居中（头像直径 62），而不是贴着身份行顶端。
             if (p.self) ...[
               const SizedBox(width: AppSpacing.sm),
-              _EditProfileButton(userId: userId),
+              SizedBox(
+                height: 62,
+                child: Center(child: _EditProfileButton(userId: userId)),
+              ),
             ],
           ],
         ),
@@ -259,10 +254,31 @@ class PublicProfilePage extends ConsumerWidget {
         const SizedBox(height: AppSpacing.lg),
         Padding(
           padding: const EdgeInsets.only(left: AppSpacing.xs, bottom: AppSpacing.sm),
-          child: Text(
-            l10n.profilePostsTitle.toUpperCase(),
-            style: AppTypography.caption
-                .copyWith(letterSpacing: 0.6, fontWeight: FontWeight.w600),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                l10n.profilePostsTitle.toUpperCase(),
+                style: AppTypography.caption
+                    .copyWith(letterSpacing: 0.6, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              // 两个聚合计数（AC2）。UI 稿 C1/C2：与「POSTINGAN」分区标题**同一行右对齐**，
+              // 两种视角同一处。发帖总数**复用既有统计**（没有重新实现），
+              // 获赞总数是本批次新补的；**两者都只算 PUBLIC**，与下面的网格同源 ——
+              // 对不上的话，那个差值就是「这人有几篇私密内容」。
+              Expanded(
+                child: Text(
+                  l10n.profileCounts(p.postCount, p.likeCount),
+                  key: const ValueKey('profileCounts'),
+                  style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
         ),
         _PostGrid(userId: userId, self: p.self),
@@ -311,21 +327,29 @@ class PublicProfilePage extends ConsumerWidget {
                 labelColor: profile.reported ? AppColors.mint : AppColors.ink,
                 onTap: () => Navigator.of(sheetContext).pop(_ProfileAction.report),
               ),
+              // UI 稿 C3：两项之间一条细分隔线。
+              const Divider(height: 1, thickness: 1, color: AppColors.divider),
               // ⚠️ 举报之后**拉黑项照常可点、不置灰不隐藏**：拉黑带来一个举报没有的效果 ——
               // 从此进不去对方主页。以「已举报」为由禁掉它是错的。
+              // UI 稿 C3：「拉黑」是破坏性动作 → 文字用危险红（与 Pop 红同一 token）。
               _ActionTile(
                 itemKey: const ValueKey('profileMenuBlock'),
                 emoji: '🚫',
                 label: l10n.blockUserAction,
                 subtitle: l10n.blockUserActionSub,
+                labelColor: AppColors.popRed,
                 onTap: () => Navigator.of(sheetContext).pop(_ProfileAction.block),
               ),
+              const Divider(height: 1, thickness: 1, color: AppColors.divider),
               const SizedBox(height: AppSpacing.xs),
               // UI 稿 C3 明确要一个**显式**的「取消」：点遮罩也能收起，但显式按钮更明确。
+              // 取消是中性动作 → 次级文字色，**不用品牌紫**（紫色会读成「推荐你点这个」）。
               TextButton(
                 key: const ValueKey('profileMenuCancel'),
+                style: TextButton.styleFrom(foregroundColor: AppColors.textSecondary),
                 onPressed: () => Navigator.of(sheetContext).pop(),
-                child: Text(l10n.commonCancel),
+                child: Text(l10n.commonCancel,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -464,9 +488,22 @@ class _PostGrid extends ConsumerWidget {
       ),
       data: (page) {
         if (page.items.isEmpty) {
+          // UI 稿 C4：内容区居中空态，上下留 xl。
+          // 他人视角带一把锁（「这里的内容看不到」）；自己视角**不带** ——
+          // 自己的主页上一把锁读起来像「你被限制了」，而事实只是还没发。
+          // 🔴 锁图标只按 `self` 分，**与"是否被拉黑"无关**（客户端也无从得知）：
+          // 被拉黑者与"真没发过"看到的是同一个组件、同一句文案、同一把锁（AC2）。
           return Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-            child: Text(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!self) ...[
+                  const Icon(Icons.lock_outline_rounded,
+                      size: 40, color: AppColors.textSecondary),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
+                Text(
               // 🔴 **一句文案吃两种服务端情况**（Story 2.5 · AC2）：
               // ① 这个人真的没发过公开内容；② 这个人**拉黑了当前访客**（FR-118.5）。
               // 服务端对这两种情况返回的是**逐字节一样**的响应（空 items + 两个计数归零），
@@ -474,9 +511,12 @@ class _PostGrid extends ConsumerWidget {
               // 是这条设计的全部要点：两者只要有任何视觉或文案差异，
               // 用户一对比就能推断出自己被拉黑，而整条 FR-118.5 正是为了不让他确认这件事。
               // ⚠️ 别给"被拉黑"写一句更贴切的文案，那会当场毁掉它。
-              self ? l10n.profilePostsEmptySelf : l10n.profilePostsEmpty,
-              key: const ValueKey('profilePostsEmpty'),
-              style: AppTypography.caption,
+                  self ? l10n.profilePostsEmptySelf : l10n.profilePostsEmpty,
+                  key: const ValueKey('profilePostsEmpty'),
+                  style: AppTypography.caption,
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
           );
         }
@@ -721,7 +761,9 @@ class _ActionTile extends StatelessWidget {
       );
 }
 
-/// 页面级空态 / 失败态（本 story 的通用兜底；完整视觉由 Story 2.5 补）。
+/// 页面级空态 / 失败态（「用户不存在」/ 已注销 / 我拉黑了对方 / 加载失败共用，UI 稿 C5）。
+///
+/// 视觉：56 图标 + body w700 ink 主文案 —— 整页只剩这一句话时，它就是这一屏的标题。
 class _EmptyState extends StatelessWidget {
   const _EmptyState({super.key, required this.icon, required this.message, this.action});
 
@@ -736,9 +778,14 @@ class _EmptyState extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 40, color: AppColors.textTertiary),
-              const SizedBox(height: AppSpacing.sm),
-              Text(message, style: AppTypography.caption, textAlign: TextAlign.center),
+              Icon(icon, size: 56, color: AppColors.textTertiary),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                message,
+                style: AppTypography.body
+                    .copyWith(fontWeight: FontWeight.w700, color: AppColors.ink),
+                textAlign: TextAlign.center,
+              ),
               if (action != null) ...[const SizedBox(height: AppSpacing.xs), action!],
             ],
           ),

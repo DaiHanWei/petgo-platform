@@ -182,6 +182,14 @@ void main() {
       // ⚠️ 只断言「渲染出了卡」——GridView 是懒构建的，屏幕里能装几张与测试窗口有关。
       expect(find.byType(RecommendedPetCard), findsWidgets);
     });
+
+    testWidgets('UI 稿 E2：AppBar 标题是「其他宠物」，不是分区那句邀约', (tester) async {
+      await pumpPage(tester, _PagedRepo([_page([1])]));
+      final l10n = AppLocalizations.of(tester.element(find.byType(Scaffold).first));
+      expect(find.descendant(of: find.byType(AppBar), matching: find.text(l10n.petRecommendListTitle)),
+          findsOneWidget);
+      expect(find.text(l10n.petRecommendSectionTitle), findsNothing);
+    });
   });
 
   group('AC3 分页与失败态', () {

@@ -146,6 +146,16 @@ void main() {
       expect(empty.data, l10n.profilePostsEmpty);
     });
 
+    /// UI 稿 C4：他人视角空态居中 + 一把锁。锁只按 `self` 分（他人视角一律带），
+    /// **与"是否被拉黑"无关** —— 真没发过内容的他人主页也是这把锁、这句话。
+    testWidgets('他人视角空态：居中 + 锁图标（与真没内容同一个组件）', (tester) async {
+      await _pump(tester);
+
+      expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
+      final empty = tester.widget<Text>(find.byKey(const ValueKey('profilePostsEmpty')));
+      expect(empty.textAlign, TextAlign.center);
+    });
+
     /// 🔴 空态文案**只有一个 key**。
     ///
     /// 直觉会驱使人给"被拉黑"写一句更贴切的文案 —— 那正好毁掉整个设计：
