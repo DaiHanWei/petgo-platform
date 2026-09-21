@@ -1,5 +1,5 @@
 # generated: 2026-09-15
-# last_updated: 2026-09-15  # 24 条 story 文件全部生成
+# last_updated: 2026-09-21  # 追加 1-11 场所列表类型与标签筛选（B1-D14）
 # project: TailTopia V1.3.0 · 主题 batch-b1（场所发现与社交基建包）
 # project_key: NOKEY
 # tracking_system: file-system
@@ -122,6 +122,7 @@ development_status:
                                                         # ⚠️ 新写的 deeplink_manifest_test 当场抓到存量漏网：tailtopia://post（V1.1.6 Story 9.3）从来没进过安卓清单，那条深链在安卓上一直不工作，已补
                                                         # ⚠️ code-review 修掉 4 条：/place/ 没进 H5 错误页白名单（异常回 JSON 给站外访客，/c/ 同样漏了一并补）/ og 门控只判 VISIBLE 挡不住 RISKY-DEGRADED / 品牌图裂图（抄了 App 才有的文件名）/ 跨仓守门测试放在 App 仓但读后端文件，纯后端 PR 上根本不会跑
                                                         # L1/L2 待本地验收（清单见 story Completion Notes）
+  1-11-场所列表类型与标签筛选: ready-for-dev                  # 2026-09-21 追加（B1-D14）：FR-112.2 的类型/标签筛选此前无 story 覆盖。🔴 筛选进 SQL WHERE、在 200 截断之前；两条分支各自加；标签 JSONB 原生查询、只拼已校验枚举名
 
   # ===== Epic 2: 用户公开主页 · FR-118 =====
   # 零依赖。被 Epic 3（@ 落点）与 Epic 4（访客通道）依赖 —— 是本批次的关键路径，建议优先。
