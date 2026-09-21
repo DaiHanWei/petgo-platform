@@ -11,6 +11,7 @@
 # ===== 允许新增 · 写端点 =====
 + POST /admin/comments/virtual   # Story 4.2（AB-20A 虚拟身份发布评论，走完整审核）
 + POST /admin/config/ktp-pricing   # Story 6.1（AB-18A KTP 高清图解锁定价三行）
++ POST /admin/config/support-contact   # shop-v2 Story 3-1（客服联系方式配置化，合入 D2 运营配置模板 D；合并 dev_1.3.0 时漏登）
 + POST /admin/config/tiers   # Story 6.2（AB-22A PawCoin 档位）
 + POST /admin/dashboard/materialize   # Story 3.3（AD-3 自愈跑批，@StagOnly 生产不注册）
 + POST /admin/payments/{intentToken}/simulate-expired   # Story 8.5（D-41 支付模拟回调，@StagOnly 生产不注册）
@@ -26,6 +27,7 @@
 + POST /admin/places/{id:\d+}/restore   # Story 5.2 / 5.3 / 5.4（AB-17A 场所管理，PRD 定义的新增页与处置动作）
 + POST /admin/warm-replies/{id:\d+}/read   # Story 4.4（AB-20A A9 暖贴回复跟进工作台）
 + POST /admin/warm-replies/{id:\d+}/reply   # Story 4.4（AB-20A A9 暖贴回复跟进工作台）
++ POST /admin/shop/orders/{token}/flag-shortage   # 异常订单判据改为运营手工标记缺货（库存不变式 locked<=actual 下账面缺货不可能出现，2026-09-18 拍板）
 
 # ===== 允许新增 · GET（抽屉片段 / 模板 A 工作台片段 / 本版新页面）=====
 + GET /admin/accounts/new/drawer   # Story 6.5（B24 后台账号抽屉 / 创建账号）

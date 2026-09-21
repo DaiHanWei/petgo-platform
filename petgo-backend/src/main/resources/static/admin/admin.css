@@ -928,6 +928,9 @@ tr.is-muted td { opacity: .55; }
 .so-actions { display: flex; flex-direction: column; gap: 10px; }
 .so-ship-form { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; }
 .so-ship-form .inp, .so-ship-form .sel { width: 100%; box-sizing: border-box; }
+/* 标记缺货（A8 入口）：与发货表单同框，红框提示这是一条「发不出货」的路径 */
+.so-shortage-form { border: 1px solid var(--danger); border-radius: var(--radius-sm); padding: 10px 12px; }
+.so-shortage-form .inp { width: 100%; box-sizing: border-box; }
 .recon-card table { width: 100%; }
 .recon-card .recon-check th, .recon-card .recon-check td { border-top: 2px solid var(--line); font-weight: 700; }
 /* 🔴 校验行不平 → 整卡红框：现状只有一行文字变色，一屏数字里根本注意不到 */

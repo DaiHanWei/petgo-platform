@@ -25,6 +25,12 @@
             <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.order.col.payChannel}">支付渠道</div>
                 <div class="sum-value rv-small" th:text="${order.payChannel} ?: '—'">MIXED</div></div>
         </div>
+        <!--/* 已标记缺货：说明 + 去 A8 处置的入口（A8 的判据就是这个标记，见 AdminShopOrderExceptionService） */-->
+        <p class="banner warn" th:if="${order.shortageFlagged}" data-notice="shortage-flagged">
+            <span th:text="#{admin.v130.shopOrders.shortage.flagged(${order.shortageNote})}">已标记缺货：…</span>
+            <a th:href="@{/admin/shop/order-exceptions(open=${order.publicToken})}" target="_blank" rel="noopener"
+               th:text="#{admin.v130.shopOrders.shortage.goto}">去异常订单处置</a>
+        </p>
         <table>
             <tr><th th:text="#{admin.shop.order.col.goodsSubtotal}">商品小计</th>
                 <td th:text="${#numbers.formatInteger(order.goodsSubtotal, 0, 'COMMA')}">285.000</td></tr>
@@ -177,6 +183,16 @@
                 <p class="hint" th:text="#{admin.shop.order.ship.hint}">承运成本填运单实际金额。</p>
                 <button type="submit" class="btn btn-primary" disabled data-requires-target
                         th:text="#{admin.shop.order.btn.ship}">发货</button>
+            </form>
+            <!--/* 标记缺货（A8 唯一入口）：拣货时发现实物不够。说明仅后台可见，处置时才带原因告知用户。 */-->
+            <form th:if="${flaggable}" data-requires-form
+                  th:attr="hx-post=@{/admin/shop/orders/{t}/flag-shortage(t=${order.publicToken})}"
+                  hx-target="#shop-order-drawer-body" hx-swap="innerHTML" class="so-shortage-form">
+                <label class="field" for="so-shortage-note" th:text="#{admin.v130.shopOrders.shortage.label}">缺货说明</label>
+                <input id="so-shortage-note" type="text" name="note" class="inp field-full" required maxlength="200"
+                       th:placeholder="#{admin.v130.shopOrders.shortage.placeholder}" data-requires-text/>
+                <button type="submit" class="btn btn-danger" disabled data-requires-target
+                        th:text="#{admin.v130.shopOrders.shortage.btn}">标记缺货</button>
             </form>
             <!-- SPEC-2 出口①：整单标记已送达 -->
             <form th:if="${markable}"

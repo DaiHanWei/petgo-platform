@@ -74,7 +74,13 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
-    private static final long ACTOR = 1L;
+    /** 真实后台账号 id（库存流水 / 缺货标记人都对 admin_accounts 有 FK，不能写死 1L）。 */
+    private long actor;
+
+    @org.junit.jupiter.api.BeforeEach
+    void resolveActor() {
+        actor = adminActorId();
+    }
 
     /**
      * 🔴 <b>单行 {@code pawcoin_config} 是共享态，测完必须还原</b>。
@@ -117,7 +123,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         //    没有采购历史就登记不了退货入库 —— 直接 INSERT 造出的 SKU 在现实中并不存在
         //    （货是怎么进来的？），用它测异常处置会掩盖这条真实约束。
         movements.receivePurchase(sid, stock, "PO-" + SEQ.incrementAndGet(), "供应商",
-                price / 2, java.time.LocalDate.now(), ACTOR);
+                price / 2, java.time.LocalDate.now(), actor);
         return sToken;
     }
 
@@ -129,12 +135,12 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     /** 纯 PawCoin 已付款单（Coin 段 = 全额，便于验退回与溢价）。 */
     private Ctx pureCoinPaidOrder(long coins) {
         long uid = seedUser();
-        rules.update(true, true, 1_000_000L, ACTOR);
+        rules.update(true, true, 1_000_000L, actor);
         wallet.credit(uid, coins, PawCoinTxnType.TOPUP, "TEST", null,
                 "exc-topup:" + uid + ":" + SEQ.incrementAndGet());
-        zones.setFreeShippingThreshold(0, ACTOR);
+        zones.setFreeShippingThreshold(0, actor);
         String kec = "Kexc" + SEQ.incrementAndGet();
-        zones.upsert(kec, "Jakarta Selatan", "DKI Jakarta", 0L, ACTOR);
+        zones.upsert(kec, "Jakarta Selatan", "DKI Jakarta", 0L, actor);
         String addr = addresses.create(uid, new AddressFields("Budi", "08123456789", "DKI Jakarta",
                 "Jakarta Selatan", kec, "Jl. Test No. 1", "12160", "Rumah")).getPublicToken();
         String sku = seedSku(10, 100_000L);
@@ -158,7 +164,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
                 .as("付款后已出库").isEqualTo(9L);
         long balanceBefore = wallet.balanceOf(c.userId());
 
-        var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", ACTOR);
+        var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", actor);
 
         ShopOrder after = orders.findByPublicToken(c.order().getPublicToken()).orElseThrow();
         assertThat(after.getStatus()).isEqualTo(ShopOrderStatus.CANCELLED);
@@ -190,7 +196,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
                 + "compensation_premium_cap = 0");
         Ctx c = pureCoinPaidOrder(500_000L);
 
-        var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", ACTOR);
+        var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", actor);
 
         // 100 000 × 10%（补偿溢价），不是 × 50%（激励溢价）
         assertThat(out.compensationPremium()).isEqualTo(10_000L);
@@ -207,7 +213,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         jdbc.update("UPDATE pawcoin_config SET compensation_premium_rate = 50, "
                 + "compensation_premium_cap = 3000");
         Ctx c = pureCoinPaidOrder(500_000L);
-        var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", ACTOR);
+        var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", actor);
         assertThat(out.compensationPremium()).isEqualTo(3_000L);
     }
 
@@ -216,7 +222,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     void noPremiumWhenRateIsZero() {
         jdbc.update("UPDATE pawcoin_config SET compensation_premium_rate = 0");
         Ctx c = pureCoinPaidOrder(500_000L);
-        var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", ACTOR);
+        var out = exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货", actor);
         assertThat(out.compensationPremium()).isZero();
         Long bonusRows = jdbc.queryForObject(
                 "SELECT count(*) FROM pawcoin_transactions WHERE user_id = ? AND type = 'BONUS'",
@@ -229,7 +235,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     void reasonIsRequired() {
         Ctx c = pureCoinPaidOrder(500_000L);
         assertThatThrownBy(() -> exceptions.cancelWholeOrder(c.order().getPublicToken(), "  ",
-                ACTOR)).isInstanceOf(AppException.class).hasMessageContaining("原因");
+                actor)).isInstanceOf(AppException.class).hasMessageContaining("原因");
         assertThat(orders.findByPublicToken(c.order().getPublicToken()).orElseThrow().getStatus())
                 .isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
     }
@@ -240,14 +246,14 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         Ctx c = pureCoinPaidOrder(500_000L);
         fulfillment.ship(c.order().getPublicToken(), Carrier.JNE, "JP" + SEQ.incrementAndGet(), 1L);
         assertThatThrownBy(() -> exceptions.cancelWholeOrder(c.order().getPublicToken(), "缺货",
-                ACTOR)).isInstanceOf(AppException.class).hasMessageContaining("待发货");
+                actor)).isInstanceOf(AppException.class).hasMessageContaining("待发货");
     }
 
     @Test
     @DisplayName("审计摘要记全三段金额与原因，但不含收件人任何字段")
     void auditRecordsAmountsWithoutPii() {
         Ctx c = pureCoinPaidOrder(500_000L);
-        exceptions.cancelWholeOrder(c.order().getPublicToken(), "盘点后发现少货", ACTOR);
+        exceptions.cancelWholeOrder(c.order().getPublicToken(), "盘点后发现少货", actor);
 
         String summary = jdbc.queryForObject("""
                 SELECT summary FROM admin_audit_logs
@@ -266,12 +272,12 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     @DisplayName("部分取消：该行 refundedQty 累加 + 该行库存回补，订单状态不变")
     void cancelLineRestocksThatLineOnly() {
         long uid = seedUser();
-        rules.update(true, true, 1_000_000L, ACTOR);
+        rules.update(true, true, 1_000_000L, actor);
         wallet.credit(uid, 900_000L, PawCoinTxnType.TOPUP, "TEST", null,
                 "exc-topup2:" + uid + ":" + SEQ.incrementAndGet());
-        zones.setFreeShippingThreshold(0, ACTOR);
+        zones.setFreeShippingThreshold(0, actor);
         String kec = "Kexc" + SEQ.incrementAndGet();
-        zones.upsert(kec, "Jakarta Selatan", "DKI Jakarta", 0L, ACTOR);
+        zones.upsert(kec, "Jakarta Selatan", "DKI Jakarta", 0L, actor);
         String addr = addresses.create(uid, new AddressFields("Budi", "08123456789", "DKI Jakarta",
                 "Jakarta Selatan", kec, "Jl. Test No. 1", "12160", "Rumah")).getPublicToken();
         String sku = seedSku(10, 100_000L);
@@ -283,7 +289,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
 
         List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(
                 orders.findByPublicToken(order.getPublicToken()).orElseThrow().getId());
-        exceptions.cancelLine(order.getPublicToken(), lines.get(0).getId(), 2, "缺 2 件", ACTOR);
+        exceptions.cancelLine(order.getPublicToken(), lines.get(0).getId(), 2, "缺 2 件", actor);
 
         assertThat(inventory.findBySkuId(sid).orElseThrow().getActual()).isEqualTo(9L);
         assertThat(orderLines.findById(lines.get(0).getId()).orElseThrow().getRefundedQty())
@@ -298,7 +304,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         Ctx c = pureCoinPaidOrder(500_000L);
         List<ShopOrderLine> lines = orderLines.findByOrderIdOrderByIdAsc(c.order().getId());
         assertThatThrownBy(() -> exceptions.cancelLine(c.order().getPublicToken(),
-                lines.get(0).getId(), 2, "x", ACTOR))
+                lines.get(0).getId(), 2, "x", actor))
                 .isInstanceOf(AppException.class).hasMessageContaining("超过下单数量");
     }
 
@@ -311,7 +317,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         long sid = skuId(c.skuToken());
         long balanceBefore = wallet.balanceOf(c.userId());
 
-        exceptions.contactAndContinue(c.order().getPublicToken(), "用户同意等 3 天", ACTOR);
+        exceptions.contactAndContinue(c.order().getPublicToken(), "用户同意等 3 天", actor);
 
         assertThat(orders.findByPublicToken(c.order().getPublicToken()).orElseThrow().getStatus())
                 .isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
@@ -347,10 +353,14 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
     // ⚠️ 端点级断言写在这个类而不是 admin/shop/web/ 下另起一个：造一张「真的缺货」的候选单
     //    要走完整的采购入库 → 下单 → 付款链路，夹具全在这里；再抄一份只会两边分叉（story T0 重核 ②）。
 
-    /** 把这一单的 SKU 弄成「实际 < 已锁定」—— 候选集的判据（不是 actual < 0）。 */
+    /**
+     * 让这一单进候选集：运营标记缺货（A8 判据）。
+     *
+     * <p>⚠️ 曾经是「UPDATE sku_inventory SET actual = 0, locked = 5」—— 库存不变式
+     * {@code ck_sku_inventory_locked_le_actual} 直接拒，这条路在库里根本走不通，判据也因此改成手工标记。
+     */
     private void makeShort(Ctx c) {
-        jdbc.update("UPDATE sku_inventory SET actual = 0, locked = 5 WHERE sku_id = ?",
-                skuId(c.skuToken()));
+        exceptions.flagShortage(c.order().getPublicToken(), "仓里只剩 0 袋", actor);
     }
 
     private org.springframework.security.core.Authentication staffWith(String... codes) {
@@ -388,7 +398,7 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
         //    而 ApiIntegrationTest 不回滚 —— 共享库里积压够多时新造的这条压根不在扫描窗口内。
         //    「它是不是候选」问服务层，那才是这条测试真正要的判据。
         assertThat(exceptions.isCandidate(c.order().getPublicToken()))
-                .as("实际库存低于已锁定 ⇒ 这一单发不出去，应当是候选").isTrue();
+                .as("待发货且已标记缺货 ⇒ 应当是候选").isTrue();
     }
 
     @Test
@@ -498,5 +508,122 @@ class AdminShopOrderExceptionIntegrationTest extends ApiIntegrationTest {
                         .status().isForbidden());
         assertThat(orders.findByPublicToken(c.order().getPublicToken()).orElseThrow().getStatus())
                 .isEqualTo(ShopOrderStatus.PENDING_SHIPMENT);
+    }
+
+    // ---------- 判据：运营手工标记缺货（2026-09-18 拍板，V20260918_2243） ----------
+
+    @Test
+    @DisplayName("🔴 未标记的待发货单不是候选 —— 账面库存永远够发（locked <= actual），不再按库存数字判")
+    void unflaggedPendingOrderIsNotACandidate() {
+        Ctx c = pureCoinPaidOrder(500_000L);
+        assertThat(exceptions.isCandidate(c.order().getPublicToken())).isFalse();
+        assertThat(exceptions.lineStocks(orders.findByPublicToken(c.order().getPublicToken()).orElseThrow()))
+                .as("有库存记录的行不打「无库存记录」标").noneMatch(AdminShopOrderExceptionService.LineStock::insufficient);
+    }
+
+    @Test
+    @DisplayName("标记缺货：进候选集 + 留说明 / 标记人 / 时间 + 写审计；不告知用户")
+    void flaggingPutsTheOrderIntoTheWorkbenchAndIsAudited() {
+        Ctx c = pureCoinPaidOrder(500_000L);
+        String token = c.order().getPublicToken();
+
+        exceptions.flagShortage(token, "  Royal Canin 3kg 差 1 袋  ", actor);
+
+        var o = orders.findByPublicToken(token).orElseThrow();
+        assertThat(o.isShortageFlagged()).isTrue();
+        assertThat(o.getShortageNote()).isEqualTo("Royal Canin 3kg 差 1 袋");
+        assertThat(o.getShortageFlaggedBy()).isEqualTo(actor);
+        assertThat(o.getShortageFlaggedAt()).isNotNull();
+        assertThat(exceptions.isCandidate(token)).isTrue();
+        assertThat(exceptions.exceptionCandidates(10_000).stream().map(ShopOrder::getPublicToken)).contains(token);
+        Long audited = jdbc.queryForObject(
+                "SELECT count(*) FROM admin_audit_logs WHERE action_type = ? AND target_id = ?",
+                Long.class, AuditActions.SHOP_ORDER_SHORTAGE_FLAGGED, token);
+        assertThat(audited).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("标记缺货的三道拒绝：说明必填 / 已标记不重复覆盖 / 只允许待发货单")
+    void flaggingRejectsBlankNoteDuplicatesAndNonPendingOrders() {
+        Ctx c = pureCoinPaidOrder(500_000L);
+        String token = c.order().getPublicToken();
+
+        assertThatThrownBy(() -> exceptions.flagShortage(token, " ", actor))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getMessageCode())
+                .isEqualTo("admin.err.orderException.flagNoteRequired");
+        assertThat(exceptions.isCandidate(token)).isFalse();
+
+        exceptions.flagShortage(token, "第一个人写的原因", actor);
+        assertThatThrownBy(() -> exceptions.flagShortage(token, "第二个人", actor))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getMessageCode())
+                .isEqualTo("admin.err.orderException.alreadyFlagged");
+        assertThat(orders.findByPublicToken(token).orElseThrow().getShortageNote())
+                .as("重复标记不得覆盖第一条说明").isEqualTo("第一个人写的原因");
+
+        exceptions.cancelWholeOrder(token, "缺货", actor);
+        assertThatThrownBy(() -> exceptions.flagShortage(token, "再标", actor))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getMessageCode())
+                .isEqualTo("admin.err.orderException.flagOnlyPending");
+    }
+
+    @Test
+    @DisplayName("处置去留：部分取消保留标记（逐行处理不掉队），联系后继续 / 整单取消清除标记")
+    void handlingDecidesWhetherTheOrderStaysOnTheWorkbench() {
+        Ctx partial = pureCoinPaidOrder(500_000L);
+        makeShort(partial);
+        var line = orderLines.findByOrderIdOrderByIdAsc(partial.order().getId()).get(0);
+        exceptions.cancelLine(partial.order().getPublicToken(), line.getId(), 1, "缺 1 件", actor);
+        assertThat(exceptions.isCandidate(partial.order().getPublicToken()))
+                .as("部分取消后仍待运营决定其余行 → 留在工作台").isTrue();
+
+        exceptions.contactAndContinue(partial.order().getPublicToken(), "其余照发", actor);
+        assertThat(exceptions.isCandidate(partial.order().getPublicToken())).isFalse();
+        assertThat(orders.findByPublicToken(partial.order().getPublicToken()).orElseThrow().isShortageFlagged())
+                .isFalse();
+
+        Ctx whole = pureCoinPaidOrder(500_000L);
+        makeShort(whole);
+        exceptions.cancelWholeOrder(whole.order().getPublicToken(), "缺货", actor);
+        var cancelled = orders.findByPublicToken(whole.order().getPublicToken()).orElseThrow();
+        assertThat(cancelled.isShortageFlagged()).as("已取消的单不留残标").isFalse();
+    }
+
+    @Test
+    @DisplayName("订单抽屉「标记缺货」端点：fulfill 可标、抽屉原地刷新出已标记横幅；只读账号 403")
+    void flagShortageEndpointFromTheOrderDrawer() throws Exception {
+        Ctx c = pureCoinPaidOrder(500_000L);
+        String token = c.order().getPublicToken();
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/admin/shop/orders/{t}/flag-shortage", token)
+                        .header("HX-Request", "true")
+                        .with(org.springframework.security.test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.authentication(
+                                        staffWith(com.tailtopia.admin.account.domain.AdminPermissions.SHOP_ORDER_VIEW)))
+                        .with(org.springframework.security.test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.csrf())
+                        .param("note", "差 1 袋"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isForbidden());
+        assertThat(exceptions.isCandidate(token)).isFalse();
+
+        String body = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/admin/shop/orders/{t}/flag-shortage", token)
+                        .header("HX-Request", "true").param("lang", "zh_CN")
+                        .with(org.springframework.security.test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.authentication(
+                                        staffWith(com.tailtopia.admin.account.domain.AdminPermissions.SHOP_ORDER_FULFILL)))
+                        .with(org.springframework.security.test.web.servlet.request
+                                .SecurityMockMvcRequestPostProcessors.csrf())
+                        .param("note", "差 1 袋"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(exceptions.isCandidate(token)).isTrue();
+        assertThat(body).contains("data-notice=\"shortage-flagged\"").contains("差 1 袋")
+                .contains("/admin/shop/order-exceptions?open=" + token)
+                .as("已标记的单不再给标记按钮").doesNotContain("/flag-shortage");
     }
 }

@@ -99,6 +99,10 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
     /** 先进先出（V1.3.0 Story 10.1：A8 异常订单工作台左栏，积压最久的排最前）。 */
     List<ShopOrder> findByStatusOrderByCreatedAtAscIdAsc(ShopOrderStatus status, Pageable pageable);
 
+    /** 异常订单工作台（A8）：待发货 ∧ 运营已标记缺货，先进先出。 */
+    List<ShopOrder> findByStatusAndShortageFlaggedAtIsNotNullOrderByCreatedAtAscIdAsc(ShopOrderStatus status,
+            Pageable pageable);
+
     /**
      * 后台组合筛选（Story 4.3，AB-11A）：状态 + 时间范围，任一为 null 即不参与筛选。
      *

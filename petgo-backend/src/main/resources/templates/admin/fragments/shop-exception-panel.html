@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!--
   A8 右栏三区（V1.3.0 Story 10.1 AC3）：
-    ① 异常原因说明卡（缺货到什么程度：实际 / 已锁定 / 本单需要；外加「超卖真正来源」那段必读文案）
+    ① 异常原因说明卡（运营标记缺货时写的说明 + 时间；外加「超卖真正来源」那段必读文案）
     ② 订单行表（商品名 / 规格 / 数量 / 已取消 / 库存），已全额取消的行置灰
     ③ 操作区：每行「取消这一行」+ 数量 · 整单取消并退款 · 联系用户后继续
   🔴 三处 AC 偏差（story T0 重核 ③④⑤，已记 Completion Notes）：
@@ -34,7 +34,12 @@
             <div class="sum-item"><div class="sum-label" th:text="#{admin.shop.orders.col.createdAt}">下单时间</div>
                 <div class="sum-value rv-small" th:text="${@adminTime.wib(order.createdAt)}">-</div></div>
         </div>
-        <p class="hint" th:text="#{admin.shop.exceptions.hint}">这里列出实际库存已不足以发出的待发货订单。</p>
+        <!--/* 标记时写的说明就是「缺货到什么程度」—— 账面库存（区②）在不变式下永远够发，看它判断不了 */-->
+        <div class="banner warn" th:if="${order.shortageFlagged}" data-notice="shortage-note">
+            <b th:text="#{admin.v130.shopExceptions.flag.note}">缺货说明</b> <span th:text="${order.shortageNote}">…</span>
+            <span class="muted" th:text="#{admin.v130.shopExceptions.flag.at(${@adminTime.wib(order.shortageFlaggedAt)})}">标记于 -</span>
+        </div>
+        <p class="hint" th:text="#{admin.shop.exceptions.hint}">这里列出运营标记为缺货的待发货订单。</p>
         <p class="hint" th:text="#{admin.shop.exceptions.manualHint}">系统不会自动取消任何订单。</p>
         <p class="banner err" th:if="${!stillCandidate}"
            th:text="#{admin.v130.shopExceptions.noLongerCandidate}">这一单已不在候选清单里。</p>

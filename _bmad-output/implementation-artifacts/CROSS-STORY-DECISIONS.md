@@ -200,3 +200,17 @@
 
 漏改任何一处的表现是「**站内看到新文案、推送收到旧文案**」，用户会觉得平台在自说自话。三处都有测试守着（后端 `ReportReviewedCopyTest`，前端通知中心用例）。
 - 印尼语措辞随 OQ-A4 同批送运营确认，**不阻塞发版**。
+
+## 2026-09-18 追加决策（V1.3.0 A8 异常订单：缺货判据改为运营手工标记）
+
+**冲突**：库存 Epic 1（Story 1.2 / 1.4）的不变式 `ck_sku_inventory_locked_le_actual`（`locked <= actual`，NFR-8「超卖目标为 0」）
+与 Story 4.4 / 10.1 的缺货判据 `actual < locked` 互斥 —— 盘点 / 报损也不允许把 actual 压到 locked 以下，
+于是账面缺货在库里**不可能出现**，A8 异常订单工作台恒为空（全量 L1 暴露：`AdminShopOrderExceptionIntegrationTest` 造数被约束拒）。
+
+**拍板（用户 2026-09-18）**：库存不变式不动，改判据 —— **A8 候选 = 待发货 ∧ 运营已标记缺货**。
+- 入口：B15 订单抽屉「标记缺货」（`POST /admin/shop/orders/{token}/flag-shortage`，`shop.order_fulfill`），说明必填、≤200 字、仅后台可见；
+  审计 `SHOP_ORDER_SHORTAGE_FLAGGED`；重复标记报冲突不覆盖；只允许 `PENDING_SHIPMENT`。
+- 落库：`shop_orders.shortage_flagged_at / shortage_flagged_by(FK admin_accounts) / shortage_note`（`V20260918_2243`）。
+- 去留：整单取消、联系用户后继续 → 清标记离开工作台；部分取消 → **保留**（一单缺多行要逐行处理）。
+- 右栏库存列（实际 / 已锁定）保留为对照参考，不再是判据；「缺货」行标只剩「该 SKU 无库存记录」一种含义。
+- 未做（未拍板）：盘点时记录缺口自动判定（方案 B）。真实超卖来源仍是盘点 / 报损没跟上实物，文案照写。

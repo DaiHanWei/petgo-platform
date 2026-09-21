@@ -210,6 +210,8 @@ public final class AuditActions {
     public static final String SHOP_ORDER_SEARCHED_BY_PHONE = "SHOP_ORDER_SEARCHED_BY_PHONE";
     /** 异常订单处置：整单取消并退款 / 部分取消 / 联系用户后继续（Story 4.4，AB-11D）。 */
     public static final String SHOP_ORDER_EXCEPTION_HANDLED = "SHOP_ORDER_EXCEPTION_HANDLED";
+    /** 运营标记缺货，订单进入异常订单工作台（A8 判据，V20260918_2243）。 */
+    public static final String SHOP_ORDER_SHORTAGE_FLAGGED = "SHOP_ORDER_SHORTAGE_FLAGGED";
 
     // ===== 退货与退款（V1.4.0 Story 5.3 / 5.4 / 5.5 / 5.6，模块 12）=====
     /** 退货申请审核（批准 / 驳回）。摘要记类型、整单退与两处运费归属 —— 它们直接决定退款金额。 */
