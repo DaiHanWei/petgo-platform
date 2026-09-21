@@ -161,6 +161,17 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   /// 选图/处理中（拍照返回 → 解码压缩剥 EXIF）：网格显占位 loading，避免「拍完没反应」。
   bool _addingImage = false;
 
+  /// 拖拽重排的**仅 UI 层**预览态（V1.3.0 Story 4.1 · U2「其余格实时让位」）。
+  ///
+  /// 🔴 这里只放「正在拖哪张、悬在第几位」两个下标，**不是第二份顺序**：
+  /// 预览顺序每次 build 由 controller.items + 这两个下标现算，松手才调
+  /// `reorderImage` 写回 controller —— 顺序的唯一事实源仍是 controller（AC3）。
+  int? _dragFrom;
+  int? _hoverIndex;
+
+  /// 网格的锚点：拖拽途中把指针的全局坐标换算成「悬在第几格」。
+  final GlobalKey _gridKey = GlobalKey();
+
   /// 光标前正在打的那个 `@查询词`；非 null 即 @ 浮层可见
   /// （V1.3.0 batch-b1 Story 3.2 · AC1）。
   ///
@@ -1062,23 +1073,115 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           builder: (context, box) {
             const double gap = 5;
             final double cell = (box.maxWidth - gap * 2) / 3;
-            return GridView.count(
-              crossAxisCount: 3,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: gap,
-              crossAxisSpacing: gap,
-              children: [
-                if (showAdd) _addCell(controller, l10n),
-                if (_addingImage) _processingCell(),
-                for (int i = 0; i < items.length; i++)
-                  _thumb(controller, i, l10n, cell),
-              ],
+            // 缩略图前面的固定格（添加格 / 处理中占位格）数：缩略图从这之后排。
+            final int lead = (showAdd ? 1 : 0) + (_addingImage ? 1 : 0);
+            final int slots = lead + items.length;
+            final int rows = (slots + 2) ~/ 3;
+            final double height = rows == 0 ? 0 : rows * cell + (rows - 1) * gap;
+            Offset slotAt(int slot) =>
+                Offset((slot % 3) * (cell + gap), (slot ~/ 3) * (cell + gap));
+            final List<int> preview = _previewOrder(controller);
+            // 不用 GridView：GridView 换序是瞬移，做不出「其余格滑过去让位」。
+            // 手排 Stack + AnimatedPositioned，按 item 身份打 key，位置一变就补间过去。
+            final grid = SizedBox(
+              key: _gridKey,
+              height: height,
+              child: Stack(
+                children: [
+                  if (showAdd)
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      width: cell,
+                      height: cell,
+                      child: _addCell(controller, l10n),
+                    ),
+                  if (_addingImage)
+                    Positioned(
+                      left: slotAt(showAdd ? 1 : 0).dx,
+                      top: slotAt(showAdd ? 1 : 0).dy,
+                      width: cell,
+                      height: cell,
+                      child: _processingCell(),
+                    ),
+                  for (int p = 0; p < preview.length; p++)
+                    AnimatedPositioned(
+                      key: ObjectKey(items[preview[p]]),
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      left: slotAt(lead + p).dx,
+                      top: slotAt(lead + p).dy,
+                      width: cell,
+                      height: cell,
+                      child: _thumb(controller, preview[p], l10n, cell),
+                    ),
+                ],
+              ),
+            );
+            if (!controller.canReorder) return grid;
+            // 整个网格一个 DragTarget：悬停位置按指针坐标算，不靠「悬在哪一格上」——
+            // 格子在让位动画里会从指针下滑走，按格子判定会来回抖。
+            return DragTarget<int>(
+              // 🔴 无条件接：Draggable 构造拖影时就做了第一次命中判定，那时 onDragStarted
+              // 还没回调、_dragFrom 仍是 null —— 在这里判它，整次拖拽都会被拒收、松手不落。
+              onWillAcceptWithDetails: (_) => true,
+              onMove: (d) => _updateHover(d.offset, lead, cell, gap, items.length),
+              // 拖出网格：预览复原（空位回到原处），此时松手也不落 controller。
+              onLeave: (_) {
+                if (_hoverIndex != null) setState(() => _hoverIndex = null);
+              },
+              onAcceptWithDetails: (d) {
+                final int? to = _hoverIndex;
+                _clearDragPreview();
+                // 🔴 松手这一刻才写 controller —— 顺序的唯一事实源（AC3）。
+                if (to != null) controller.reorderImage(d.data, to);
+              },
+              builder: (context, candidate, rejected) => grid,
             );
           },
         ),
       ],
     );
+  }
+
+  /// 当前是否处于有效拖拽中。拖拽途中若因上传开始而失去重排资格，Draggable 会被整个撤掉、
+  /// 其 onDragEnd 不再回调 —— 所以这里现场判一次，不信任残留的下标。
+  bool _dragActive(PublishController controller) {
+    final int? from = _dragFrom;
+    return from != null && controller.canReorder && from < controller.items.length;
+  }
+
+  /// 预览顺序：controller 的原下标序列，按「把 _dragFrom 挪到 _hoverIndex」现算。
+  /// 🔴 只是投影，不回写、不缓存。
+  List<int> _previewOrder(PublishController controller) {
+    final int n = controller.items.length;
+    final order = List<int>.generate(n, (i) => i);
+    final int? from = _dragFrom;
+    final int? to = _hoverIndex;
+    if (!_dragActive(controller) || from == null || to == null || to == from) return order;
+    order.removeAt(from);
+    order.insert(to.clamp(0, n - 1), from);
+    return order;
+  }
+
+  /// 指针（pointerDragAnchorStrategy 下 details.offset 即指针全局坐标）→ 悬停位。
+  void _updateHover(Offset global, int lead, double cell, double gap, int count) {
+    final box = _gridKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize || count == 0) return;
+    final Offset local = box.globalToLocal(global);
+    final int col = (local.dx / (cell + gap)).floor().clamp(0, 2);
+    final int row = (local.dy / (cell + gap)).floor().clamp(0, 99);
+    // 落在添加格上就当第 0 位，落在末尾空白处就当最后一位。
+    final int pos = (row * 3 + col - lead).clamp(0, count - 1);
+    if (pos != _hoverIndex) setState(() => _hoverIndex = pos);
+  }
+
+  void _clearDragPreview() {
+    if (_dragFrom == null && _hoverIndex == null) return;
+    setState(() {
+      _dragFrom = null;
+      _hoverIndex = null;
+    });
   }
 
   /// 选图/处理中的占位格：拍照返回后到缩略图出现前显示，给「正在加图」的即时反馈。
@@ -1142,7 +1245,9 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
   /// 一格照片。V1.3.0 Story 4.1 起可长按拖拽重排（AC1），首格常驻「封面」角标（AC2）。
   Widget _thumb(
       PublishController controller, int index, AppLocalizations l10n, double cell) {
-    final cellContent = _thumbContent(controller, index, l10n);
+    // 拖动途中所有格都藏起 ✕：手指正在排序，误触到删除就是丢图。
+    final cellContent = _thumbContent(controller, index, l10n,
+        showRemove: !_dragActive(controller));
     // 🔴 AC4：上传会话里**整个拖拽入口不挂**（不是挂上去再判空）——
     // 挂着的话手指还是能把那张图抬起来，只是放下没反应，看着像卡了。
     if (!controller.canReorder) return cellContent;
@@ -1150,53 +1255,52 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     return LongPressDraggable<int>(
       data: index,
       dragAnchorStrategy: pointerDragAnchorStrategy,
-      // 抬起：放大 + 阴影（AC1）。Material 包一层，免得 Overlay 里没有默认文字样式。
+      onDragStarted: () => setState(() {
+        _dragFrom = index;
+        _hoverIndex = index;
+      }),
+      // 放下（DragTarget 已先行处理）/ 拖出网格取消，都在这里把预览清掉。
+      onDragEnd: (_) => _clearDragPreview(),
+      // 抬起：放大 1.08 + 微倾 + 阴影（AC1 · U2）。内容复用格子本身 —— 首图带「封面」角标，
+      // 看得出「我正拖着封面」—— 只是不带 ✕。
+      // Material 包一层，免得 Overlay 里没有默认文字样式。
       feedback: Material(
         color: Colors.transparent,
         child: Transform.translate(
-          offset: Offset(-cell * 0.54, -cell * 0.54),
-          child: Container(
-            width: cell * 1.08,
-            height: cell * 1.08,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(9),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.28),
-                  blurRadius: 14,
-                  offset: const Offset(0, 6),
+          offset: Offset(-cell / 2, -cell / 2),
+          child: Transform.rotate(
+            angle: -0.035,
+            child: Transform.scale(
+              scale: 1.08,
+              child: Container(
+                width: cell,
+                height: cell,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.28),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(9),
-              child: Image.memory(controller.items[index].bytes,
-                  fit: BoxFit.cover, cacheWidth: 400),
+                child: _thumbContent(controller, index, l10n, showRemove: false),
+              ),
             ),
           ),
         ),
       ),
-      // 原位留一个淡影：拖走的那格不能凭空消失，否则网格会当场重排、目标位置全乱。
-      childWhenDragging: Opacity(opacity: 0.28, child: cellContent),
-      child: DragTarget<int>(
-        onWillAcceptWithDetails: (d) => d.data != index,
-        onAcceptWithDetails: (d) => controller.reorderImage(d.data, index),
-        builder: (context, candidate, rejected) => DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(9),
-            // 让位提示：手指悬在哪一格，哪一格亮边框。
-            border: candidate.isNotEmpty
-                ? Border.all(color: AppColors.mint, width: 2)
-                : null,
-          ),
-          child: cellContent,
-        ),
-      ),
+      // 原位是**空位**而不是淡影：其余格已按预览顺序让开，
+      // 这个空位本身就是「松手会落在这里」的提示。
+      childWhenDragging: const SizedBox.expand(),
+      child: cellContent,
     );
   }
 
   Widget _thumbContent(
-      PublishController controller, int index, AppLocalizations l10n) {
+      PublishController controller, int index, AppLocalizations l10n,
+      {bool showRemove = true}) {
     final item = controller.items[index];
     return Stack(
       fit: StackFit.expand,
@@ -1242,32 +1346,33 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
             top: 3,
             child: Container(
               key: const ValueKey('publishCoverBadge'),
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: Colors.black54,
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(6),
               ),
               child: Text(
                 l10n.publishCoverBadge,
                 style: const TextStyle(
-                    fontSize: 9, fontWeight: FontWeight.w600, color: Colors.white),
+                    fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
               ),
             ),
           ),
-        Positioned(
-          right: 3,
-          top: 3,
-          child: GestureDetector(
-            onTap: () => controller.removeImage(index),
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.black54,
-                shape: BoxShape.circle,
+        if (showRemove)
+          Positioned(
+            right: 3,
+            top: 3,
+            child: GestureDetector(
+              onTap: () => controller.removeImage(index),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.black54,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.close, size: 16, color: Colors.white),
               ),
-              child: const Icon(Icons.close, size: 16, color: Colors.white),
             ),
           ),
-        ),
       ],
     );
   }

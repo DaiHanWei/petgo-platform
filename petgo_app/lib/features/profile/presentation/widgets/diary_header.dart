@@ -6,6 +6,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/count_badge.dart';
 import '../../domain/pet_header_info.dart';
 import 'pet_info_card.dart';
+import 'insight_entry_card.dart';
 
 /// Diary 页头**共用组件**（V1.1.2 Story 2.2 · FR-80/82）。
 ///
@@ -184,7 +185,6 @@ class DiaryHeader extends StatelessWidget {
                 key: const ValueKey('diaryHealthEntry'),
                 onTap: onOpenHealth,
                 icon: Icons.check_circle_outline,
-                iconColor: AppColors.mint,
                 title: l10n.diaryHealthEntryTitle,
                 // A4 近空态：一条记录都没有时，别用「疫苗 · 驱虫 · 病历」这种
                 // 读起来像「里面已经有东西」的描述；顺带这条短文案不再折两行撑高整行。
@@ -204,8 +204,8 @@ class DiaryHeader extends StatelessWidget {
                 // key 不改：入口在这一格的语义没变，改了会白白弄断既有测试与埋点对照。
                 key: const ValueKey('diaryIdCardButton'),
                 onTap: onOpenIdCard,
-                icon: Icons.pets_outlined,
-                iconColor: AppColors.mint,
+                // UI 稿 P1：综合入口用星芒图标（原 pets 爪印与「宠物」语义重复、看不出是聚合入口）。
+                icon: Icons.auto_awesome_outlined,
                 title: l10n.petInsightsTitle,
                 // 副文案沿用现成 key，**不新写**（AC1）。
                 sub: l10n.timelineIdCardTapToView,
@@ -223,62 +223,10 @@ class DiaryHeader extends StatelessWidget {
     required Key key,
     required VoidCallback? onTap,
     required IconData icon,
-    required Color iconColor,
     required String title,
     required String sub,
   }) =>
-      DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
-            BoxShadow(color: Color(0x0D2B2A27), offset: Offset(0, 2), blurRadius: 8),
-          ],
-        ),
-        child: Material(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(14),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            key: key,
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 24, color: iconColor),
-                  const SizedBox(width: 9),
-                  // 文字块吃掉剩余宽度：入口名两语长度差得多（EN 13 / ID 14 字符），
-                  // 不给 Expanded 会在印尼语下把卡撑爆。
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 13,
-                                height: 1.25,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.ink)),
-                        const SizedBox(height: 3),
-                        Text(sub,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 10.5, height: 1.3, color: AppColors.textTertiary)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
+      InsightEntryCard(inkKey: key, onTap: onTap, icon: icon, title: title, sub: sub);
 
   /// 里程碑进度卡（msbar）：「🏆 Pencapaian {name}」+ "X / N" 紫色 + 进度槽。
   ///

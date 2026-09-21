@@ -98,59 +98,53 @@ class _PlaceMapPickerSheetState extends State<PlaceMapPickerSheet> {
       child: Column(
         children: [
           _SheetHeader(title: l10n.placeMapPickerTitle),
+          // 🔴 **确认栏不叠在地图上**（UI 稿 A6 · Google 署名合规）：原先确认栏
+          // Positioned 在 Stack 里，正好盖住左下角的 Google logo —— 地图 SDK 条款要求
+          // 署名不得遮挡。改成地图下方独立的白色底栏，地图本身完整可见。
           Expanded(
-            child: Stack(
-              children: [
-                GoogleMap(
-                  initialCameraPosition:
-                      CameraPosition(target: _picked, zoom: _initialZoom),
-                  // 🔴 **地图必须在手势竞技场里抢到手势**：外面是个 BottomSheet，
-                  // 不给 EagerGestureRecognizer 的话竖向平移与拖针都会被弹层的拖拽手势吃掉。
-                  gestureRecognizers: {
-                    Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
-                  },
-                  // 🛡 只显示 + 打点。刻意关掉的：
-                  //   - myLocationEnabled：蓝点需要地图 SDK 自己去要定位权限，而权限统一
-                  //     走 permission_handler（全 App 一条路径，见 location_service.dart）；
-                  //   - mapToolbarEnabled：那个工具条会直接跳 Google 地图的路线规划；
-                  //   - zoomControlsEnabled：手势够用，按钮挤掉地图面积。
-                  myLocationEnabled: false,
-                  myLocationButtonEnabled: false,
-                  mapToolbarEnabled: false,
-                  zoomControlsEnabled: false,
-                  markers: {
-                    Marker(
-                      markerId: _pinId,
-                      position: _picked,
-                      draggable: true,
-                      // 拖完才更新（onDrag 每帧都回调，setState 会把地图拖出卡顿）。
-                      onDragEnd: _move,
-                    ),
-                  },
-                  // 点地图任意处也能移针 —— 拖那个小针在手机上并不好按。
-                  onTap: _move,
+            child: GoogleMap(
+              initialCameraPosition:
+                  CameraPosition(target: _picked, zoom: _initialZoom),
+              // 🔴 **地图必须在手势竞技场里抢到手势**：外面是个 BottomSheet，
+              // 不给 EagerGestureRecognizer 的话竖向平移与拖针都会被弹层的拖拽手势吃掉。
+              gestureRecognizers: {
+                Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
+              },
+              // 🛡 只显示 + 打点。刻意关掉的：
+              //   - myLocationEnabled：蓝点需要地图 SDK 自己去要定位权限，而权限统一
+              //     走 permission_handler（全 App 一条路径，见 location_service.dart）；
+              //   - mapToolbarEnabled：那个工具条会直接跳 Google 地图的路线规划；
+              //   - zoomControlsEnabled：手势够用，按钮挤掉地图面积。
+              myLocationEnabled: false,
+              myLocationButtonEnabled: false,
+              mapToolbarEnabled: false,
+              zoomControlsEnabled: false,
+              markers: {
+                Marker(
+                  markerId: _pinId,
+                  position: _picked,
+                  draggable: true,
+                  // 拖完才更新（onDrag 每帧都回调，setState 会把地图拖出卡顿）。
+                  onDragEnd: _move,
                 ),
-                Positioned(
-                  left: AppSpacing.lg,
-                  right: AppSpacing.lg,
-                  bottom: AppSpacing.lg,
-                  child: _ConfirmBar(
-                    hint: _canConfirm
-                        ? l10n.placeMapPickerHint
-                        : l10n.placeMapPickerNeedsPick,
-                    label: l10n.placeMapPickerConfirm,
-                    // 无定位且还没动过针 → 禁用（否则一进来点确认就把市中心当成了店址）。
-                    onConfirm: _canConfirm
-                        ? () => Navigator.of(context).pop(
-                              DeviceCoordinates(
-                                  latitude: _picked.latitude,
-                                  longitude: _picked.longitude),
-                            )
-                        : null,
-                  ),
-                ),
-              ],
+              },
+              // 点地图任意处也能移针 —— 拖那个小针在手机上并不好按。
+              onTap: _move,
             ),
+          ),
+          _ConfirmBar(
+            hint: _canConfirm
+                ? l10n.placeMapPickerHint
+                : l10n.placeMapPickerNeedsPick,
+            label: l10n.placeMapPickerConfirm,
+            // 无定位且还没动过针 → 禁用（否则一进来点确认就把市中心当成了店址）。
+            onConfirm: _canConfirm
+                ? () => Navigator.of(context).pop(
+                      DeviceCoordinates(
+                          latitude: _picked.latitude,
+                          longitude: _picked.longitude),
+                    )
+                : null,
           ),
         ],
       ),
@@ -195,29 +189,28 @@ class _ConfirmBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        // 🛡 **不显示坐标数值**：对用户没有意义，而且那是 PII（NFR-4 同一条精神）。
-        Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(10),
+    return Container(
+      color: AppColors.card,
+      // 底部补系统手势条高度（弹层的 useSafeArea 只让出顶部）。
+      padding: EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg,
+          AppSpacing.lg + MediaQuery.paddingOf(context).bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 🛡 **不显示坐标数值**：对用户没有意义，而且那是 PII（NFR-4 同一条精神）。
+          Text(hint, style: AppTypography.caption, textAlign: TextAlign.center),
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: FilledButton(
+              key: const ValueKey('placeMapPickerConfirm'),
+              onPressed: onConfirm,
+              child: Text(label),
+            ),
           ),
-          child: Text(hint, style: AppTypography.caption),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: FilledButton(
-            key: const ValueKey('placeMapPickerConfirm'),
-            onPressed: onConfirm,
-            child: Text(label),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -138,7 +138,9 @@ class _PetRecommendationListPageState extends ConsumerState<PetRecommendationLis
       appBar: AppBar(
         backgroundColor: AppColors.cream,
         scrolledUnderElevation: 0,
-        title: Text(l10n.petRecommendSectionTitle, style: AppTypography.title),
+        // UI 稿 E2：集合页的标题是「其他宠物」—— 分区标题那句「认识别人家的毛孩子」
+        // 是一段邀约，放在整页 AppBar 上读起来像一句口号。
+        title: Text(l10n.petRecommendListTitle, style: AppTypography.title),
       ),
       body: _body(l10n, async, page, controller),
     );

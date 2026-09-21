@@ -8,8 +8,10 @@
     <meta name="robots" content="noindex,nofollow"/>
     <title>TailTopia</title>
 
-    <!--/* ⚠️ 本页被**两条链路共用**：宠物名片（CardPageController）与里程碑分享
-         （MilestoneSharePageController）。改动会同时影响两处，两条都要验。
+    <!--/* ⚠️ 本页被**多条链路共用**：宠物名片（CardPageController）、里程碑分享
+         （MilestoneSharePageController）、单条内容（ContentSharePageController）、
+         场所分享（PlaceSharePageController，覆盖了三处文案）、GlobalExceptionHandler 的 H5 兜底。
+         改动会同时影响各处，都要验。
 
          ⚠️ **本页只能是单语的（印尼语），这不是漏做。**
          里程碑分享页本身是双语的（按 share.getLocale()，即分享者分享时快照的语言），
@@ -87,16 +89,20 @@
             <div class="corner tl"></div><div class="corner tr"></div>
             <div class="corner bl"></div><div class="corner br"></div>
         </div>
-        <div class="stitle">Halaman ini<br/>sudah tidak ada</div>
+        <!--/* 标题 / 副标题 / CTA 三处可由 model 覆盖（goneTitle / goneSubtitle / goneCta）：
+             目前只有场所分享页（PlaceSharePageController）传，换成场所文案（V1.3.0 UI 稿 A10）。
+             其它复用方不传 → 走 th:unless 分支，输出与改动前逐字相同（默认文案保留原样）。 */-->
+        <div class="stitle" th:if="${goneTitle != null}" th:text="${goneTitle}">Tempat ini sudah tidak ada</div>
+        <div class="stitle" th:unless="${goneTitle != null}">Halaman ini<br/>sudah tidak ada</div>
         <!--/* ⚠️ 文案刻意用「或」把两种原因糊在一起 —— 防枚举：不得让访客分辨出
              「这个 token 从来不存在」还是「存在过但已删除/注销」。改文案时不要加原因说明。 */-->
-        <div class="ssub">Paspor hewan ini sudah dihapus atau tautannya tidak berlaku lagi.</div>
+        <div class="ssub" th:text="${goneSubtitle} ?: 'Paspor hewan ini sudah dihapus atau tautannya tidak berlaku lagi.'">Paspor hewan ini sudah dihapus atau tautannya tidak berlaku lagi.</div>
     </div>
 </div>
 
 <div class="ctabar">
     <div class="ctainner">
-        <a class="btn" th:href="${downloadUrl}">Jelajahi hewan lain</a>
+        <a class="btn" th:href="${downloadUrl}" th:text="${goneCta} ?: 'Jelajahi hewan lain'">Jelajahi hewan lain</a>
     </div>
 </div>
 </body>

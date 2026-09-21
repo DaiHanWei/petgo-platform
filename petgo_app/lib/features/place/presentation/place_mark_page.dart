@@ -101,155 +101,251 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
       });
     }
 
+    // AC2：必填未满 / 提交中 / 照片上传中 → 顶栏「Simpan」灰色禁用。
+    final canSubmit = _draft.canSubmit && !_submitting && !_uploading;
+
     return Scaffold(
       backgroundColor: AppColors.cream,
+      // UI 稿 A5：iOS 表单式顶栏 ——「Batal」在左、标题居中、「Simpan」在右。
+      // 原先的吸底大按钮已删：保存动作挪到顶栏，判定 / 防重复 / 上传中禁用口径不变。
       appBar: AppBar(
         backgroundColor: AppColors.cream,
         scrolledUnderElevation: 0,
+        automaticallyImplyLeading: false,
+        centerTitle: true,
+        leadingWidth: 88,
+        leading: TextButton(
+          key: const ValueKey('placeMarkCancel'),
+          onPressed: () => Navigator.of(context).maybePop(),
+          style: TextButton.styleFrom(
+            minimumSize: const Size(44, 44),
+            foregroundColor: AppColors.textSecondary,
+          ),
+          child: Text(l10n.commonCancel,
+              style: AppTypography.body.copyWith(color: AppColors.textSecondary)),
+        ),
         title: Text(l10n.placeMarkTitle, style: AppTypography.title),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.sm),
+            child: TextButton(
+              key: const ValueKey('placeMarkSubmit'),
+              // AC2：必填未满 → null（灰色禁用态）。
+              onPressed: canSubmit ? _onSubmit : null,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(44, 44),
+                foregroundColor: AppColors.mint,
+                disabledForegroundColor: AppColors.textTertiary,
+              ),
+              child: _submitting
+                  ? const SizedBox(
+                      width: 18, height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : Text(l10n.placeMarkSubmit,
+                      style: AppTypography.body.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: canSubmit ? AppColors.mint : AppColors.textTertiary)),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
-        child: Column(
+        child: ListView(
+          padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                children: [
-                  // AC4：前置告知，放在最上面、在所有输入之前。
-                  _ImmutableNotice(text: l10n.placeMarkImmutableNotice),
-                  const SizedBox(height: AppSpacing.lg),
-                  _field(
-                    label: l10n.placeMarkNameLabel,
-                    required: true,
-                    error: _errorFor(_Field.name, _draft.nameOk) ? l10n.placeMarkNameError : null,
-                    child: TextField(
-                      controller: _nameController,
-                      maxLength: PlaceFormDraft.nameMaxLength,
-                      decoration: InputDecoration(hintText: l10n.placeMarkNameHint),
-                      onChanged: (v) => setState(() {
-                        _touch(_Field.name);
-                        _draft = _draft.copyWith(name: v);
-                      }),
-                    ),
-                  ),
-                  _field(
-                    label: l10n.placeMarkTypeLabel,
-                    required: true,
-                    error: _errorFor(_Field.type, _draft.typeOk) ? l10n.placeMarkTypeError : null,
-                    child: Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: [
-                        // 🔴 全部 7 类，一个不少。
-                        for (final t in PlaceType.values)
-                          _ChoiceChip(
-                            label: t.label(l10n),
-                            selected: _draft.type == t,
-                            onTap: () => setState(() {
-                              _touch(_Field.type);
-                              _draft = _draft.copyWith(type: t);
-                            }),
-                          ),
-                      ],
-                    ),
-                  ),
-                  _field(
-                    label: l10n.placeMarkTagsLabel,
-                    required: true,
-                    error: _errorFor(_Field.tags, _draft.tagsOk) ? l10n.placeMarkTagsError : null,
-                    child: Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: [
-                        // 🔴 全部 6 个，一个不少。
-                        for (final t in PlaceTag.values)
-                          _ChoiceChip(
-                            label: t.label(l10n),
-                            selected: _draft.tags.contains(t),
-                            onTap: () => setState(() {
-                              _touch(_Field.tags);
-                              _draft = _draft.toggleTag(t);
-                            }),
-                          ),
-                      ],
-                    ),
-                  ),
-                  _field(
-                    label: l10n.placeMarkAddressLabel,
-                    required: true,
-                    error: _errorFor(_Field.address, _draft.addressOk)
-                        ? l10n.placeMarkAddressError
-                        : null,
-                    child: TextField(
-                      controller: _addressController,
-                      maxLength: PlaceFormDraft.addressMaxLength,
-                      maxLines: 2,
-                      minLines: 1,
-                      decoration: InputDecoration(hintText: l10n.placeMarkAddressHint),
-                      onChanged: (v) => setState(() {
-                        _touch(_Field.address);
-                        _draft = _draft.copyWith(addressText: v);
-                      }),
-                    ),
-                  ),
-                  _LocationRow(
-                    hasLocation: _draft.hasLocation,
-                    // AC3：未授权定位时**明确提示需要位置**，不静默失败。
-                    needsPermission:
-                        locationAsync.value?.needsPermissionBanner ?? true,
-                    locating: locationAsync.isLoading,
-                    onEnable: _onEnableLocation,
-                    onRetry: _onRetryLocate,
-                    // Story 1.4：地图选点。**替换**「只能取当前定位」那条路径，
-                    // 但默认落点仍是当前位置 —— 不动针直接确认 = 与 1.3 等价。
-                    onPickOnMap: _onPickOnMap,
-                  ),
-                  if (_errorFor(_Field.location, _draft.hasLocation))
-                    _ErrorText(l10n.placeMarkLocationError),
-                  const SizedBox(height: AppSpacing.lg),
-                  _field(
-                    label: l10n.placeMarkPhotosLabel,
-                    required: true,
-                    error: _errorFor(_Field.photos, _draft.photosOk)
-                        ? l10n.placeMarkPhotosError
-                        : null,
-                    child: _PhotoGrid(
-                      urls: _draft.photoUrls,
-                      uploading: _uploading,
-                      onAdd: _onAddPhotos,
-                      onRemove: (i) => setState(() {
-                        _touch(_Field.photos);
-                        _draft = _draft.removePhotoAt(i);
-                      }),
-                    ),
-                  ),
-                  _field(
-                    label: l10n.placeMarkDescriptionLabel,
-                    required: false,
-                    error: null,
-                    child: TextField(
-                      controller: _descriptionController,
-                      maxLength: PlaceFormDraft.descriptionMaxLength,
-                      maxLines: 4,
-                      minLines: 2,
-                      decoration: InputDecoration(hintText: l10n.placeMarkDescriptionHint),
-                      onChanged: (v) =>
-                          setState(() => _draft = _draft.copyWith(description: v)),
-                    ),
-                  ),
-                ],
+            // AC4：前置告知，放在最上面、在所有输入之前。
+            _ImmutableNotice(text: l10n.placeMarkImmutableNotice),
+            const SizedBox(height: AppSpacing.lg),
+            _field(
+              label: l10n.placeMarkNameLabel,
+              required: true,
+              child: TextField(
+                controller: _nameController,
+                maxLength: PlaceFormDraft.nameMaxLength,
+                buildCounter: _noCounter,
+                decoration: _inputDecoration(
+                  hint: l10n.placeMarkNameHint,
+                  error: _errorFor(_Field.name, _draft.nameOk) ? l10n.placeMarkNameError : null,
+                  length: _nameController.text.length,
+                  maxLength: PlaceFormDraft.nameMaxLength,
+                ),
+                onChanged: (v) => setState(() {
+                  _touch(_Field.name);
+                  _draft = _draft.copyWith(name: v);
+                }),
               ),
             ),
-            _SubmitBar(
-              // AC2：必填未满 → 灰色禁用。
-              enabled: _draft.canSubmit && !_submitting && !_uploading,
-              submitting: _submitting,
-              label: l10n.placeMarkSubmit,
-              onSubmit: _onSubmit,
+            _field(
+              label: l10n.placeMarkTypeLabel,
+              required: true,
+              child: _WithError(
+                error: _errorFor(_Field.type, _draft.typeOk) ? l10n.placeMarkTypeError : null,
+                child: Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    // 🔴 全部 7 类，一个不少。
+                    for (final t in PlaceType.values)
+                      _ChoiceChip(
+                        label: t.label(l10n),
+                        selected: _draft.type == t,
+                        onTap: () => setState(() {
+                          _touch(_Field.type);
+                          _draft = _draft.copyWith(type: t);
+                        }),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            _field(
+              label: l10n.placeMarkTagsLabel,
+              required: true,
+              child: _WithError(
+                error: _errorFor(_Field.tags, _draft.tagsOk) ? l10n.placeMarkTagsError : null,
+                child: Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    // 🔴 全部 6 个，一个不少。
+                    for (final t in PlaceTag.values)
+                      _ChoiceChip(
+                        label: t.label(l10n),
+                        selected: _draft.tags.contains(t),
+                        onTap: () => setState(() {
+                          _touch(_Field.tags);
+                          _draft = _draft.toggleTag(t);
+                        }),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            // UI 稿 A5 字段顺序：位置在前、文字地址在后（先在地图上点出来，再补一句人话地址）。
+            _field(
+              label: l10n.placeMarkLocationLabel,
+              required: true,
+              child: _WithError(
+                error: _errorFor(_Field.location, _draft.hasLocation)
+                    ? l10n.placeMarkLocationError
+                    : null,
+                child: _LocationRow(
+                  hasLocation: _draft.hasLocation,
+                  hasError: _errorFor(_Field.location, _draft.hasLocation),
+                  // AC3：未授权定位时**明确提示需要位置**，不静默失败。
+                  needsPermission: locationAsync.value?.needsPermissionBanner ?? true,
+                  locating: locationAsync.isLoading,
+                  onEnable: _onEnableLocation,
+                  onRetry: _onRetryLocate,
+                  // Story 1.4：地图选点。**替换**「只能取当前定位」那条路径，
+                  // 但默认落点仍是当前位置 —— 不动针直接确认 = 与 1.3 等价。
+                  onPickOnMap: _onPickOnMap,
+                ),
+              ),
+            ),
+            _field(
+              label: l10n.placeMarkAddressLabel,
+              required: true,
+              child: TextField(
+                controller: _addressController,
+                maxLength: PlaceFormDraft.addressMaxLength,
+                buildCounter: _noCounter,
+                maxLines: 2,
+                minLines: 1,
+                decoration: _inputDecoration(
+                  hint: l10n.placeMarkAddressHint,
+                  error: _errorFor(_Field.address, _draft.addressOk)
+                      ? l10n.placeMarkAddressError
+                      : null,
+                  length: _addressController.text.length,
+                  maxLength: PlaceFormDraft.addressMaxLength,
+                ),
+                onChanged: (v) => setState(() {
+                  _touch(_Field.address);
+                  _draft = _draft.copyWith(addressText: v);
+                }),
+              ),
+            ),
+            _field(
+              label: l10n.placeMarkPhotosLabel,
+              required: true,
+              child: _WithError(
+                error: _errorFor(_Field.photos, _draft.photosOk)
+                    ? l10n.placeMarkPhotosError
+                    : null,
+                child: _PhotoGrid(
+                  urls: _draft.photoUrls,
+                  uploading: _uploading,
+                  onAdd: _onAddPhotos,
+                  onRemove: (i) => setState(() {
+                    _touch(_Field.photos);
+                    _draft = _draft.removePhotoAt(i);
+                  }),
+                ),
+              ),
+            ),
+            _field(
+              label: l10n.placeMarkDescriptionLabel,
+              required: false,
+              child: TextField(
+                controller: _descriptionController,
+                maxLength: PlaceFormDraft.descriptionMaxLength,
+                buildCounter: _noCounter,
+                maxLines: 4,
+                minLines: 2,
+                decoration: _inputDecoration(
+                  hint: l10n.placeMarkDescriptionHint,
+                  error: null,
+                  length: _descriptionController.text.length,
+                  maxLength: PlaceFormDraft.descriptionMaxLength,
+                ),
+                onChanged: (v) =>
+                    setState(() => _draft = _draft.copyWith(description: v)),
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  /// 去掉 Material 默认的「0/80」计数行（它在输入框下面单独占一整行空白）。
+  /// 计数挪进框内右侧，见 [_inputDecoration] 的 `suffixText`。
+  static Widget? _noCounter(BuildContext context,
+          {required int currentLength, required bool isFocused, required int? maxLength}) =>
+      null;
+
+  /// UI 稿 A5 的圆角描边输入框：常态灰边、聚焦品牌色边、错误红边（A8）。
+  ///
+  /// 🔴 错误走 `errorText`（框下一行红字）+ 红边，而不是框外另挂一行文字 ——
+  /// 这样「哪个框有问题」一眼就能对上。
+  InputDecoration _inputDecoration({
+    required String hint,
+    required String? error,
+    required int length,
+    required int maxLength,
+  }) {
+    OutlineInputBorder border(Color c, [double w = 1]) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: c, width: w),
+        );
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: AppTypography.body.copyWith(color: AppColors.textTertiary),
+      errorText: error,
+      errorStyle: AppTypography.caption.copyWith(color: AppColors.popRed),
+      suffixText: '$length/$maxLength',
+      suffixStyle: AppTypography.micro,
+      filled: true,
+      fillColor: AppColors.card,
+      isDense: true,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 14),
+      border: border(AppColors.line),
+      enabledBorder: border(AppColors.line),
+      focusedBorder: border(AppColors.mint, 1.5),
+      errorBorder: border(AppColors.popRed),
+      focusedErrorBorder: border(AppColors.popRed, 1.5),
     );
   }
 
@@ -416,10 +512,13 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
     }
   }
 
+  /// 字段外框：全大写 overline 标签（UI 稿 A5：小号、加粗、字距、次级色）+ 必填星号 + 控件。
+  ///
+  /// 错误不在这里画 —— 输入框走 `InputDecoration.errorText`，非输入框走 [_WithError]，
+  /// 两者样式同源（都是 InputDecoration 的 error 行）。
   Widget _field({
     required String label,
     required bool required,
-    required String? error,
     required Widget child,
   }) {
     return Padding(
@@ -429,14 +528,19 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
         children: [
           Row(
             children: [
-              Text(label, style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
+              Text(label.toUpperCase(),
+                  style: AppTypography.micro.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                      color: AppColors.textSecondary)),
               if (required)
-                Text(' *', style: AppTypography.body.copyWith(color: AppColors.popRed)),
+                Text(' *',
+                    style: AppTypography.micro.copyWith(
+                        fontWeight: FontWeight.w700, color: AppColors.popRed)),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
           child,
-          if (error != null) _ErrorText(error),
         ],
       ),
     );
@@ -472,17 +576,27 @@ class _ImmutableNotice extends StatelessWidget {
   }
 }
 
-class _ErrorText extends StatelessWidget {
-  const _ErrorText(this.text);
+/// 非输入框字段（chips / 位置行 / 照片格）的内联错误（AC7 · UI 稿 A8）。
+///
+/// 用无边框的 [InputDecorator] 承载 `errorText`，让错误行与输入框的完全同款
+/// （字号、颜色、间距），而不是另起一套外挂文字。
+class _WithError extends StatelessWidget {
+  const _WithError({required this.error, required this.child});
 
-  final String text;
+  final String? error;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.xs),
-      child: Text(text,
-          style: AppTypography.caption.copyWith(color: AppColors.popRed)),
+    return InputDecorator(
+      decoration: InputDecoration(
+        border: InputBorder.none,
+        isDense: true,
+        contentPadding: EdgeInsets.zero,
+        errorText: error,
+        errorStyle: AppTypography.caption.copyWith(color: AppColors.popRed),
+      ),
+      child: child,
     );
   }
 }
@@ -493,6 +607,7 @@ class _ErrorText extends StatelessWidget {
 class _LocationRow extends StatelessWidget {
   const _LocationRow({
     required this.hasLocation,
+    required this.hasError,
     required this.needsPermission,
     required this.locating,
     required this.onEnable,
@@ -501,6 +616,9 @@ class _LocationRow extends StatelessWidget {
   });
 
   final bool hasLocation;
+
+  /// 碰过且仍没有位置（A8）→ 整行红色描边，与输入框的错误态一致。
+  final bool hasError;
   final bool needsPermission;
 
   /// 定位链路正在跑（转圈，不给按钮 —— 否则用户会连点好几次）。
@@ -516,84 +634,87 @@ class _LocationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: hasLocation ? AppColors.mintTint : AppColors.goldTint,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(
-                  hasLocation
-                      ? Icons.check_circle_outline_rounded
-                      : Icons.place_outlined,
-                  size: 16,
-                  color: hasLocation ? AppColors.mint700 : AppColors.tipsBadgeText),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  hasLocation
-                      ? l10n.placeMarkLocationReady
-                      : l10n.placeMarkLocationNeeded,
-                  style: AppTypography.caption.copyWith(
-                      color: hasLocation ? AppColors.mint700 : AppColors.tipsBadgeText),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // UI 稿 A5：单行可点「📍 Pilih di peta ›」。整行就是地图选点入口 ——
+        // Story 1.4：**无论有没有定位权限都可点**，「人不在现场也能标」正是 2026-08-28
+        // 把「必须现场标记」改成地图选点的原因，把它藏在「有权限」后面等于把那条决策废掉一半。
+        Material(
+          color: AppColors.mintTint,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: hasError ? AppColors.popRed : AppColors.lineViolet),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: const ValueKey('placeMarkPickOnMap'),
+            onTap: onPickOnMap,
+            child: ConstrainedBox(
+              // 44 热区（UX-DR16）。
+              constraints: const BoxConstraints(minHeight: 52),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                child: Row(
+                  children: [
+                    Icon(
+                        hasLocation
+                            ? Icons.check_circle_rounded
+                            : Icons.location_on_rounded,
+                        size: 18,
+                        color: hasLocation ? AppColors.mint : AppColors.popRed),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      // 已取点 →「已取点」态文案；再点一次可以在地图上改。
+                      // 🛡 **不显示坐标数值**：那是 PII，而且对用户毫无意义。
+                      child: Text(
+                        hasLocation ? l10n.placeMarkLocationReady : l10n.placeMarkPickOnMap,
+                        style: AppTypography.body.copyWith(
+                            color: hasLocation ? AppColors.mint700 : AppColors.textPrimary),
+                      ),
+                    ),
+                    // 🔴 没有坐标时**永远有一个可点的东西**：整行本身就能选点；另外
+                    // 缺权限 → 「开启定位」；权限有了但没定点 → 「重新定位」。
+                    if (!hasLocation)
+                      if (locating)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                          child: SizedBox(
+                              width: 16, height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2)),
+                        )
+                      else
+                        TextButton(
+                          key: const ValueKey('placeMarkEnableLocation'),
+                          onPressed: needsPermission ? onEnable : onRetry,
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(44, 44),
+                            foregroundColor: AppColors.mint,
+                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                          ),
+                          child: Text(
+                              needsPermission
+                                  ? l10n.placeLocationEnable
+                                  : l10n.placeMarkLocationRetry,
+                              style: AppTypography.caption.copyWith(
+                                  color: AppColors.mint, fontWeight: FontWeight.w700)),
+                        ),
+                    const Icon(Icons.chevron_right_rounded,
+                        size: 20, color: AppColors.textTertiary),
+                  ],
                 ),
               ),
-              // 🔴 没有坐标时**永远有一个可点的东西**：缺权限 → 「开启定位」；
-              // 权限有了但没定点 → 「重新定位」。两者都没有的话用户就卡死在这一页了。
-              if (!hasLocation)
-                if (locating)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                    child: SizedBox(
-                        width: 16, height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2)),
-                  )
-                else
-                  TextButton(
-                    key: const ValueKey('placeMarkEnableLocation'),
-                    onPressed: needsPermission ? onEnable : onRetry,
-                    style: TextButton.styleFrom(
-                      minimumSize: const Size(44, 44),
-                      foregroundColor: AppColors.tipsBadgeText,
-                    ),
-                    child: Text(
-                        needsPermission
-                            ? l10n.placeLocationEnable
-                            : l10n.placeMarkLocationRetry,
-                        style: AppTypography.caption.copyWith(
-                            color: AppColors.tipsBadgeText,
-                            fontWeight: FontWeight.w700)),
-                  ),
-            ],
-          ),
-          // Story 1.4：地图选点。**无论有没有定位权限都可点** —— 「人不在现场也能标」
-          // 正是 2026-08-28 把「必须现场标记」改成地图选点的原因，
-          // 把它藏在「有权限」后面等于把那条决策废掉一半。
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              key: const ValueKey('placeMarkPickOnMap'),
-              onPressed: onPickOnMap,
-              style: TextButton.styleFrom(
-                minimumSize: const Size(44, 44),
-                foregroundColor: hasLocation ? AppColors.mint700 : AppColors.tipsBadgeText,
-                padding: EdgeInsets.zero,
-              ),
-              icon: const Icon(Icons.map_outlined, size: 16),
-              label: Text(l10n.placeMarkPickOnMap,
-                  style: AppTypography.caption.copyWith(
-                      color: hasLocation ? AppColors.mint700 : AppColors.tipsBadgeText,
-                      fontWeight: FontWeight.w700)),
             ),
           ),
-        ],
-      ),
+        ),
+        // AC3：未授权定位时**明确提示需要位置**，不静默失败。
+        if (!hasLocation && needsPermission && !hasError)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs),
+            child: Text(l10n.placeMarkLocationNeeded,
+                style: AppTypography.caption.copyWith(color: AppColors.tipsBadgeText)),
+          ),
+      ],
     );
   }
 }
@@ -607,9 +728,11 @@ class _ChoiceChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // UI 稿 A5：未选 = 白底 + 灰描边，已选 = 品牌紫实底。
     return Material(
-      color: selected ? AppColors.mint : AppColors.cream2,
-      borderRadius: BorderRadius.circular(999),
+      color: selected ? AppColors.mint : AppColors.card,
+      shape: StadiumBorder(
+          side: BorderSide(color: selected ? AppColors.mint : AppColors.line)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
@@ -699,41 +822,6 @@ class _PhotoGrid extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _SubmitBar extends StatelessWidget {
-  const _SubmitBar({
-    required this.enabled,
-    required this.submitting,
-    required this.label,
-    required this.onSubmit,
-  });
-
-  final bool enabled;
-  final bool submitting;
-  final String label;
-  final VoidCallback onSubmit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: SizedBox(
-        width: double.infinity,
-        height: 48,
-        child: FilledButton(
-          key: const ValueKey('placeMarkSubmit'),
-          // AC2：必填未满 → null（灰色禁用态）。
-          onPressed: enabled ? onSubmit : null,
-          child: submitting
-              ? const SizedBox(
-                  width: 20, height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : Text(label),
-        ),
-      ),
     );
   }
 }

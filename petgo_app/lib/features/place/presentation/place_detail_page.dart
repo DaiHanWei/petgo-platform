@@ -125,7 +125,7 @@ class PlaceDetailPage extends ConsumerWidget {
         appBar: AppBar(
           backgroundColor: AppColors.cream,
           scrolledUnderElevation: 0,
-          title: Text(l10n.placeDetailTitle, style: AppTypography.title),
+          // UI 稿 A4：顶栏不放「Tempat」标题 —— 场所名就在照片下方大字，顶栏再写一遍是噪音。
           actions: [
             if (onReport != null)
               IconButton(
@@ -165,11 +165,6 @@ class PlaceDetailPage extends ConsumerWidget {
 
   Widget _body(
       BuildContext context, WidgetRef ref, AppLocalizations l10n, PlaceDetail p) {
-    final subtitle = [
-      if (p.type != null) p.type!.label(l10n),
-      if (p.distanceMeters != null) formatPlaceDistance(l10n, p.distanceMeters!),
-    ].join(' · ');
-
     return ListView(
       padding: const EdgeInsets.only(bottom: AppSpacing.xl),
       children: [
@@ -188,18 +183,24 @@ class PlaceDetailPage extends ConsumerWidget {
             children: [
               const SizedBox(height: AppSpacing.md),
               Text(p.name, style: AppTypography.headline),
-              if (subtitle.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xs),
-                Text(subtitle, style: AppTypography.caption),
-              ],
-              if (p.tags.isNotEmpty) ...[
+              // UI 稿 A4：类型做成 chip 排在标签 Wrap 的第一个，距离单独一行。
+              if (p.type != null || p.tags.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Wrap(
                   spacing: AppSpacing.xs,
                   runSpacing: AppSpacing.xs,
                   // 详情页给**全部**标签（列表页才截断到 2 个 +N）。
-                  children: [for (final t in p.tags) _TagChip(label: t.label(l10n))],
+                  children: [
+                    if (p.type != null) _TagChip(label: p.type!.label(l10n)),
+                    for (final t in p.tags) _TagChip(label: t.label(l10n)),
+                  ],
                 ),
+              ],
+              // 🔴 距离为 null（没有定位）时整行省掉 —— 不显示「0 m」也不显示占位横线。
+              if (p.distanceMeters != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(formatPlaceDistance(l10n, p.distanceMeters!),
+                    style: AppTypography.caption),
               ],
               if (p.description != null) ...[
                 const SizedBox(height: AppSpacing.md),
@@ -531,6 +532,8 @@ class _PhotoStrip extends StatelessWidget {
           }
           return _PhotoTile(
             photo: photos[i],
+            index: i,
+            total: photos.length,
             width: _itemWidth,
             height: _height,
             // source 区分帖子与场所（批次 A 灯箱埋点 lightbox_opened / dismissed 的维度）。
@@ -551,6 +554,8 @@ class _PhotoStrip extends StatelessWidget {
 class _PhotoTile extends StatelessWidget {
   const _PhotoTile({
     required this.photo,
+    required this.index,
+    required this.total,
     required this.width,
     required this.height,
     required this.onTap,
@@ -558,6 +563,10 @@ class _PhotoTile extends StatelessWidget {
   });
 
   final PlacePhoto photo;
+
+  /// 第几张（0 起）/ 共几张 —— 右上角「i/n」角标（UI 稿 A4）。
+  final int index;
+  final int total;
   final double width;
   final double height;
   final VoidCallback onTap;
@@ -602,6 +611,13 @@ class _PhotoTile extends StatelessWidget {
                       : l10n.placePhotoRejected,
                 ),
               ),
+            // 「i/n」角标：横滑流一屏只露一张多一点，不标的话用户不知道后面还有几张。
+            // 有删除入口时往左让出 44 的热区，不与 ✕ 重叠。
+            Positioned(
+              top: AppSpacing.xs,
+              right: onDelete != null ? 44 : AppSpacing.xs,
+              child: _PhotoChip(text: '${index + 1}/$total'),
+            ),
             if (onDelete != null)
               Positioned(
                 top: 0,
@@ -863,11 +879,12 @@ class _TagChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 4),
       decoration: BoxDecoration(
-        border: Border.all(color: AppColors.lineViolet),
+        // 与列表页同款：中性灰描边 + 次级文字色（UI 稿 A1/A4）。
+        border: Border.all(color: AppColors.line),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(label,
-          style: AppTypography.micro.copyWith(color: AppColors.mint700)),
+          style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
     );
   }
 }

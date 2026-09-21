@@ -20,6 +20,7 @@ import 'package:tailtopia/features/profile/presentation/visitor_archive_view.dar
 import 'package:tailtopia/features/profile/presentation/widgets/pet_recommendation_grid.dart';
 import 'package:tailtopia/features/profile/presentation/widgets/recommended_pet_card.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'package:tailtopia/shared/widgets/empty_state.dart';
 
 import '../support/fake_feed_repository.dart';
 
@@ -328,6 +329,22 @@ void main() {
       expect(find.byKey(const ValueKey('growthCreateButton')), findsOneWidget);
       expect(find.byKey(const ValueKey('growthChangeStatusButton')), findsOneWidget);
       expect(find.byKey(const ValueKey('petRecommendationGrid')), findsOneWidget);
+    });
+
+    testWidgetsWithImages('UI 稿 E1：有卡时引导压成紧凑横条 + 分隔线，主按钮在「Ubah status」之上',
+        (tester) async {
+      await tester.pumpWidget(_wrapDiaryEmptyProfile(_FakeRepo([_pet(7)])));
+      await tester.pumpAndSettle();
+      final l10n = AppLocalizations.of(tester.element(find.byType(Scaffold).first));
+      // 紧凑版不删字：标题与「为什么先建档」副文案都还在。
+      expect(find.text(l10n.growthArchiveEmptyTitle), findsOneWidget);
+      expect(find.text(l10n.growthArchiveEmptyBody), findsOneWidget);
+      expect(find.byType(EmptyState), findsNothing, reason: '有卡时不再是竖排大空态');
+      expect(find.byType(Divider), findsOneWidget);
+      final create = tester.getRect(find.byKey(const ValueKey('growthCreateButton')));
+      final change = tester.getRect(find.byKey(const ValueKey('growthChangeStatusButton')));
+      // 各占一行，且拉开距离（AC6：避免手滑误触）。
+      expect(change.top, greaterThanOrEqualTo(create.bottom + 8));
     });
   });
 

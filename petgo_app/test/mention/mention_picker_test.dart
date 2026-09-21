@@ -130,6 +130,8 @@ void main() {
     await pumpPicker(tester, _FakeRepo([_c(1, 'Aurel')]), keyword: 'zzz');
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     expect(find.text(l10n.mentionNoMatch), findsOneWidget);
+    // 筛不出来不是「空」，不配 D2 那个人像图标。
+    expect(find.byIcon(Icons.people_outline_rounded), findsNothing);
     // 「用户不存在 / 没找到该用户」是在承诺全局搜索过了 —— 不许这么说。
     for (final forbidden in <String>['not found', 'no user', 'tidak ditemukan']) {
       expect(l10n.mentionNoMatch.toLowerCase().contains(forbidden), isFalse);
@@ -141,6 +143,8 @@ void main() {
     expect(find.byKey(const ValueKey('mentionPickerEmpty')), findsOneWidget);
     // 🔴 一个搜不出任何东西的输入框只会让人一直敲。
     expect(find.byKey(const ValueKey('mentionFilterInput')), findsNothing);
+    // UI 稿 D2：候选为空的空态顶部有人像图标。
+    expect(find.byIcon(Icons.people_outline_rounded), findsOneWidget);
   });
 
   testWidgets('AC3：空态告诉用户怎么才能有候选（去互动）', (tester) async {

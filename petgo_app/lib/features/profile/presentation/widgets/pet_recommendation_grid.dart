@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/theme/colors.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/typography.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -45,7 +46,11 @@ class PetRecommendationGrid extends ConsumerWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: Text(l10n.petRecommendSectionTitle, style: AppTypography.title),
+          // UI 稿 E1：分区标题是 body w600 次级墨色 —— 这一屏的主体是上面的「去建档」，
+          // 推荐区是锦上添花，标题不该比建档引导还抢眼。
+          child: Text(l10n.petRecommendSectionTitle,
+              style: AppTypography.body
+                  .copyWith(fontWeight: FontWeight.w600, color: AppColors.ink2)),
         ),
         GridView.builder(
           // 外层是可滚动容器（Diary 未建档态那一屏），这里不再自己滚。

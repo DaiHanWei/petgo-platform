@@ -14,6 +14,19 @@ import 'package:tailtopia/shared/media/lightbox_gestures.dart';
 /// 2. 下滑关闭的量化口径（阈值 / 回弹 / 只认下拖）；
 /// 3. 单击与双击的仲裁 —— 它是 AC6 那条回归保护的实现基础；
 /// 4. 没引任何新包（AC7）。
+
+/// 灯箱里原图没解码完时叠着一个常转的 spinner（L5 加载态），而测试环境里图片解码
+/// 可能迟迟不完成 —— `pumpAndSettle` 会因此永远等不到安静而超时。
+/// 改为推进一段足以覆盖 Hero 飞行（260ms）/ 回弹（180ms）/ 淡入（220ms）/
+/// 单击判定窗（220ms）的固定时长；断言本身不变。
+extension _LightboxSettle on WidgetTester {
+  Future<void> settleLightbox() async {
+    for (var i = 0; i < 60; i++) {
+      await pump(const Duration(milliseconds: 16));
+    }
+  }
+}
+
 void main() {
   group('AC5 🔴 手势优先级：已放大→平移 > 到边缘续拖→翻页 > 未放大下拖→关闭', () {
     /// 真值表把三条规则的**全部输入组合**列完。顺序一旦被调换，
@@ -150,7 +163,7 @@ void main() {
         ),
       ));
       await tester.tap(find.byKey(const ValueKey('openIt')));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
       expect(find.byType(ImageLightbox), findsOneWidget);
     }
 
@@ -159,7 +172,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('lightboxPager')));
       await tester.pump(kLightboxSingleTapDelay + const Duration(milliseconds: 40));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(find.byType(ImageLightbox), findsNothing);
     });
@@ -173,7 +186,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 60));
       await tester.tap(pager);
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(find.byType(ImageLightbox), findsOneWidget, reason: '双击的第一下不该把灯箱关掉');
       // 放大后 InteractiveViewer 的矩阵不再是单位阵。
@@ -195,7 +208,7 @@ void main() {
 
       await doubleTap();
       await doubleTap();
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       final viewer = tester.widget<InteractiveViewer>(find.byType(InteractiveViewer).first);
       expect(viewer.transformationController!.value, Matrix4.identity());
@@ -216,7 +229,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 60));
       await tester.tap(pager);
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(viewer().panEnabled, isTrue);
     });
@@ -236,7 +249,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 60));
       await tester.tapAt(at);
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(pager().physics, isA<NeverScrollableScrollPhysics>());
     });
@@ -255,7 +268,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 60));
       await tester.tapAt(at);
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       final m = tester.widget<InteractiveViewer>(finder).transformationController!.value;
       final local = at - rect.topLeft;
@@ -277,7 +290,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 60));
       await tester.tapAt(at);
       await tester.pump(const Duration(milliseconds: 400));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       final t = tester.widget<InteractiveViewer>(finder).transformationController!.value
           .getTranslation();
@@ -307,14 +320,14 @@ void main() {
         ),
       ));
       await tester.tap(find.byKey(const ValueKey('openIt')));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
     }
 
     testWidgets('下拖超过阈值 → 关闭', (tester) async {
       await openLightbox(tester);
 
       await tester.drag(find.byKey(const ValueKey('lightboxPager')), const Offset(0, 400));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(find.byType(ImageLightbox), findsNothing);
     });
@@ -323,7 +336,7 @@ void main() {
       await openLightbox(tester);
 
       await tester.drag(find.byKey(const ValueKey('lightboxPager')), const Offset(0, 20));
-      await tester.pumpAndSettle();
+      await tester.settleLightbox();
 
       expect(find.byType(ImageLightbox), findsOneWidget);
       // 回弹结束后位移归零：图必须回到原位，不能停在半路。

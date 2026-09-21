@@ -118,14 +118,26 @@ void main() {
       expect(stripY, lessThan(chipsY));
     });
 
-    testWidgets('横着滑的一行（6~10 张），卡片是 4.1 那个组件本体', (tester) async {
+    testWidgets('横着滑的一行（6~10 张），是 UI 稿 B1 的紧凑小卡（不是网格大卡）', (tester) async {
+      // 🔁 2026-09-21 还原度修正（B1）：原先直接塞 4.1 的网格卡（宽 150 / 三行字 / 行高 216），
+      //    在首页最显眼的位置顶出一整堵墙。现在是 72×72 方图 + 一行「名字 · 天数」的小卡；
+      //    **点击行为**仍与网格卡同源（openRecommendedPet），由下面 AC4 的埋点用例钉住。
       await pumpHome(tester, _FakeRepo([for (int i = 1; i <= 8; i++) _pet(i)]));
-      final list = find.descendant(
-          of: find.byKey(const ValueKey('petRecommendationStrip')),
-          matching: find.byType(ListView));
+      final strip = find.byKey(const ValueKey('petRecommendationStrip'));
+      final list = find.descendant(of: strip, matching: find.byType(ListView));
       expect(tester.widget<ListView>(list).scrollDirection, Axis.horizontal);
       // ⚠️ 懒构建：只断言「渲染出了卡」，不数个数（一屏露几张与测试窗口有关）。
-      expect(find.byType(RecommendedPetCard), findsWidgets);
+      expect(find.descendant(of: strip, matching: find.byKey(const ValueKey('recommendedPet_1'))),
+          findsOneWidget);
+      expect(find.descendant(of: strip, matching: find.byType(RecommendedPetCard)), findsNothing);
+      // 行高 ≈100（稿），不再是网格卡那 216。
+      expect(tester.getSize(list).height, lessThanOrEqualTo(100));
+      // 一行「名字 · 陪伴天数」，天数复用名片页的「N hari」出口。
+      expect(find.text('Mochi1 · 12 hari'), findsOneWidget);
+      // 大图与小圆头像仍是两个字段、两个来源（UX-DR15）：头像在，大图空 → 占位，不拿头像顶。
+      expect(find.byKey(const ValueKey('recommendedPetAvatar_1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('recommendedPetCoverPlaceholder_1')), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('AC2 既有顶部区域一处不改（场所入口行 + 分类 chips 都还在）', (tester) async {

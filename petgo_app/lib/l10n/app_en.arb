@@ -3390,7 +3390,7 @@
   "@notifyTypeLifecycleD3": {"description": "Notification center: title for LIFECYCLE_D3, the day-3 content hook"},
   "notifyTypeLifecycleD7": "Your week in review",
   "@notifyTypeLifecycleD7": {"description": "Notification center: title for LIFECYCLE_D7 weekly recap"},
-  "notifyTypeContentMentioned": "You were mentioned",
+  "notifyTypeContentMentioned": "Someone mentioned you",
   "@notifyTypeContentMentioned": {"description": "Notification center: title for CONTENT_MENTIONED (Story 3.4). One title for both post and comment mentions; only the body differs"},
   "notifyBodyContentMentionedPost": "Someone mentioned you in a post",
   "@notifyBodyContentMentionedPost": {"description": "Notification center: body for CONTENT_MENTIONED whose targetRef variant is POST:"},
@@ -3623,5 +3623,17 @@
   "profilePostsEmptySelf": "You haven't posted anything public yet",
   "@profilePostsEmptySelf": {"description": "Public profile, SELF view only: your own grid is empty. Separate from profilePostsEmpty because that one is worded for someone else's profile ('this person's privacy settings') and would be nonsense about yourself. ⚠️ Splitting it here is safe precisely because `self` is never true for a blocked viewer - do NOT add a third variant for the other-profile case."},
   "profilePostsLoadMore": "Load more",
-  "@profilePostsLoadMore": {"description": "Public profile: fetch the next page of the content grid."}
+  "@profilePostsLoadMore": {"description": "Public profile: fetch the next page of the content grid."},
+  "ageCardSizePickerTitle": "Choose body size",
+  "@ageCardSizePickerTitle": {"description": "Age card: title of the dog body-size picker page (UI P4)."},
+  "ageCardSizeContinue": "Continue",
+  "@ageCardSizeContinue": {"description": "Age card: sticky button under the body-size picker; enabled once a size is chosen (UI P4)."},
+  "ktpMovedCoachmarkTitle": "Your ID card moved here!",
+  "@ktpMovedCoachmarkTitle": {"description": "One-time coachmark title pointing at the Know Your Pet entry (UI P7)."},
+  "placeSortRecent": "Latest",
+  "@placeSortRecent": {"description": "Places list: shown instead of distance when location is off and the list is sorted by newest (UI A2)."},
+  "petRecommendListTitle": "Other pets",
+  "@petRecommendListTitle": {"description": "Full-screen pet recommendation list: app bar title (UI E2)."},
+  "placeMarkLocationLabel": "Location",
+  "@placeMarkLocationLabel": {"description": "Mark a place form: label of the location (map pin) field (UI A5)."}
 }

@@ -184,7 +184,7 @@ class PlaceListPage extends ConsumerWidget {
     final previous = async.value;
     if (async.hasError && previous != null) {
       _toastRefreshFailure(context, l10n);
-      return _list(previous);
+      return _list(previous, sortedByRecent: query == placeListRecentQuery);
     }
     if (async.hasError) {
       // 首次加载就失败（没有任何旧数据）：明确文案 + 重试入口，不是一个空白页。
@@ -207,14 +207,17 @@ class PlaceListPage extends ConsumerWidget {
         title: l10n.placeEmptyTitle,
         message: l10n.placeEmptyBody,
         icon: Icons.place_outlined,
+        // UI 稿 A3：对齐 paspor-no-profile 空态范式 —— 图标放在浅紫圆底里。
+        iconBackground: AppColors.mintTint,
         actionLabel: l10n.placeMarkEntry,
         onAction: () => _openMarkForm(context, ref),
       ));
     }
-    return _list(previous);
+    return _list(previous, sortedByRecent: query == placeListRecentQuery);
   }
 
-  Widget _list(PlaceListResult page) => ListView.separated(
+  /// [sortedByRecent]：本次是按最新排序（无坐标）—— 行副标题的距离位改写「最新」（UI 稿 A2）。
+  Widget _list(PlaceListResult page, {required bool sortedByRecent}) => ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
         itemCount: page.items.length,
         separatorBuilder: (_, _) => const Divider(
@@ -224,6 +227,7 @@ class PlaceListPage extends ConsumerWidget {
           final place = page.items[i];
           return _PlaceRow(
             place: place,
+            sortedByRecent: sortedByRecent,
             // 🔒 **详情对游客开放**（后端 GET 已放行）→ 这里不套 requireLogin。
             onTap: () => context.push(PlaceDetailPage.routeFor(place.token)),
           );
@@ -304,13 +308,17 @@ class _LocationBanner extends StatelessWidget {
 ///
 /// 整行可点进详情（Story 1.5）—— 热区是整行而不是名称文字（UX-DR16）。
 class _PlaceRow extends StatelessWidget {
-  const _PlaceRow({required this.place, required this.onTap});
+  const _PlaceRow(
+      {required this.place, required this.sortedByRecent, required this.onTap});
 
   final PlaceSummary place;
+
+  /// 列表按最新排序（无定位）—— 距离位显示「最新」而不是留空（UI 稿 A2「Kafe · Terbaru」）。
+  final bool sortedByRecent;
   final VoidCallback onTap;
 
-  /// 缩略图边长（逻辑像素）。
-  static const double _thumbSize = 72;
+  /// 缩略图边长（逻辑像素）。UI 稿 A1 为 56。
+  static const double _thumbSize = 56;
 
   /// 标签最多显示 2 个，其余折成 `+N`（UX-DR2）。
   ///
@@ -322,11 +330,14 @@ class _PlaceRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final hidden = place.tags.length - _visibleTags;
     // 类型 · 距离 合成一行（UI 稿 A1「Kafe · 1.2 km」）。
-    // 🔴 距离为 null（按最新分支）时整段省掉 —— 不显示「0 m」也不显示占位横线。
+    // 🔴 距离为 null 时不显示「0 m」也不显示占位横线：按最新分支写「最新」
+    // （同时解释了这个列表为什么不是按远近排的），其它情况整段省掉。
     final subtitle = [
       if (place.type != null) place.type!.label(l10n),
       if (place.distanceMeters != null)
-        formatPlaceDistance(l10n, place.distanceMeters!),
+        formatPlaceDistance(l10n, place.distanceMeters!)
+      else if (sortedByRecent)
+        l10n.placeSortRecent,
     ].join(' · ');
 
     return InkWell(
@@ -369,8 +380,7 @@ class _PlaceRow extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded,
-                size: 18, color: AppColors.textTertiary),
+            // UI 稿 A1 行尾无 chevron：整行可点本身已足够表达"可进入"。
           ],
         ),
       ),
@@ -391,7 +401,7 @@ class _Thumb extends StatelessWidget {
       height: size,
       color: AppColors.cream2,
       alignment: Alignment.center,
-      child: const Icon(Icons.place_outlined, size: 26, color: AppColors.textTertiary),
+      child: const Icon(Icons.place_outlined, size: 22, color: AppColors.textTertiary),
     );
     final src = url;
     return ClipRRect(
@@ -470,10 +480,11 @@ class _TagChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 3),
       decoration: BoxDecoration(
-        border: Border.all(color: AppColors.lineViolet),
+        // UI 稿 A1：中性灰描边 + 次级文字色（标签是属性说明，不该抢品牌紫的注意力）。
+        border: Border.all(color: AppColors.line),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(label, style: AppTypography.micro.copyWith(color: AppColors.mint700)),
+      child: Text(label, style: AppTypography.micro.copyWith(color: AppColors.textSecondary)),
     );
   }
 }

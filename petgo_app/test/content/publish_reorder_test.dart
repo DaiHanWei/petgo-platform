@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/gestures.dart' show kLongPressTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -335,6 +336,65 @@ void main() {
     testWidgets('可编辑态：每格都能长按拖起', (tester) async {
       await pumpGrid(tester);
       expect(find.byType(LongPressDraggable<int>), findsNWidgets(3));
+    });
+
+    /// U2：拖动途中其余格**实时让位**，但那只是 UI 层的预览 ——
+    /// controller 的顺序在松手前一动不动，松手才落一次（AC3 顺序只有一份）。
+    testWidgets('拖动中预览让位、controller 不变；松手才落 controller', (tester) async {
+      final c = await pumpGrid(tester);
+      final original = [for (final i in c.items) i.bytes];
+      Finder cellOf(int data) => find.byWidgetPredicate(
+          (w) => w is LongPressDraggable<int> && w.data == data);
+      final Offset slot0 = tester.getTopLeft(cellOf(0));
+      final Offset slot1 = tester.getTopLeft(cellOf(1));
+
+      // 长按第 3 张抬起，拖到第 1 张的位置上。
+      final g = await tester.startGesture(tester.getCenter(cellOf(2)));
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      await g.moveBy(const Offset(-5, 0));
+      await tester.pump();
+      await g.moveTo(tester.getCenter(cellOf(0)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300)); // 让位动画走完
+
+      // 预览：第 3 张的空位移到首位，原第 1、2 张各后退一格。
+      expect(tester.getTopLeft(cellOf(2)), slot0);
+      expect(tester.getTopLeft(cellOf(0)), slot1);
+      // 🔴 controller 一动不动。
+      expect([for (final i in c.items) i.bytes], original);
+      // 拖动途中所有 ✕ 都收起（反馈卡本身也不带 ✕）。
+      expect(find.byIcon(Icons.close), findsNothing);
+
+      await g.up();
+      // 不能 pumpAndSettle：pending 态的格子带着常转的 spinner，永远 settle 不了。
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect([for (final i in c.items) i.bytes], [original[2], original[0], original[1]]);
+      expect(find.byIcon(Icons.close), findsNWidgets(3), reason: '松手后 ✕ 回来');
+    });
+
+    testWidgets('拖出网格再松手 → 预览复原，controller 不变', (tester) async {
+      final c = await pumpGrid(tester);
+      final original = [for (final i in c.items) i.bytes];
+      Finder cellOf(int data) => find.byWidgetPredicate(
+          (w) => w is LongPressDraggable<int> && w.data == data);
+      final Offset home2 = tester.getTopLeft(cellOf(2));
+
+      final g = await tester.startGesture(tester.getCenter(cellOf(2)));
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      await g.moveTo(tester.getCenter(cellOf(0)));
+      await tester.pump();
+      await g.moveTo(const Offset(600, 3000)); // 远离网格
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(tester.getTopLeft(cellOf(2)), home2, reason: '拖出网格，空位回到原处');
+
+      await g.up();
+      // 不能 pumpAndSettle：pending 态的格子带着常转的 spinner，永远 settle 不了。
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect([for (final i in c.items) i.bytes], original);
     });
 
     /// 🔴 AC4：锁定期**整个拖拽入口不挂**，不是挂上去再判空 ——
