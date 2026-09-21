@@ -47,7 +47,12 @@ class ManualReviewPageRenderIntegrationTest extends ApiIntegrationTest {
      * 上一轮跑测试造的行会把本轮新行挤出第一屏（2026-09-02 复跑真的红过一次）。
      */
     private String renderPage(long targetUserId) throws Exception {
-        return mvc.perform(get("/admin/manual-review").param("status", "PENDING")
+        return renderPage(targetUserId, "submission");
+    }
+
+    /** A1 工作台按页签分队列（2.4）：头像工单只在 {@code tab=avatar} 下出现，默认页签是内容送审。 */
+    private String renderPage(long targetUserId, String tab) throws Exception {
+        return mvc.perform(get("/admin/manual-review").param("status", "PENDING").param("tab", tab)
                         .param("q", String.valueOf(targetUserId))
                         .with(authentication(superAdminAuth())))
                 .andReturn().getResponse().getContentAsString();
@@ -78,7 +83,7 @@ class ManualReviewPageRenderIntegrationTest extends ApiIntegrationTest {
                 + "priority) VALUES ('USER_AVATAR', ?, ?, 'MANUAL_PENDING', 'HIGH')",
                 target.getId(), url);
 
-        String html = renderPage(target.getId());
+        String html = renderPage(target.getId(), "avatar");
         assertThat(html).contains("src=\"" + url + "\"");
         // 头像工单没有「查看内容」链接（contentRefId 为空）。
         assertThat(html).doesNotContain("/admin/content?open=" + url);

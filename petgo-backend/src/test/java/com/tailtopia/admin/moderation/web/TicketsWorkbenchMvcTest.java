@@ -52,6 +52,7 @@ class TicketsWorkbenchMvcTest extends ApiIntegrationTest {
     void ticketsWorkbenchFourWays() throws Exception {
         long seq = SEQ.incrementAndGet();
         long actor = 960000L + seq;
+        makeRoomForSuperAdmin();
         accountService.createAccount("tk-super-" + seq + "@tailtopia.test", "超管", AdminRole.SUPER_ADMIN, List.of(), actor);
         AdminUserDetails superAdmin = userDetailsService.loadByEmail("tk-super-" + seq + "@tailtopia.test", false);
         // 只有处置权、没有停用权：能进页面、能警告，封号 403（SUSPEND_AUTH 是 AND 关系）

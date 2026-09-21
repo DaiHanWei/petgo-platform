@@ -98,7 +98,7 @@ public class AdminUserTagController {
         // ?create=1 深链（无 htmx 时直达新建表单 URL 的落点）。
         model.addAttribute("openCreate", create != null);
         // htmx 局部刷新只回表格（摘要条随 oob 一并换）。
-        return hx.isHtmx() ? "admin/fragments/user-tags-list :: rows(true)" : "admin/user-tags";
+        return hx.isHtmx() ? "admin/fragments/user-tags-list :: rows(oob=true)" : "admin/user-tags";
     }
 
     /**

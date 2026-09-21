@@ -43,7 +43,7 @@
                🔴 **不静默忽略**：静默忽略的话运营看到的是一张「他要找的那个人不在里面」的全量标签表，
                   会以为数据没了。说清楚它去哪了，比让他自己猜强。 */-->
         <div class="banner warn" th:if="${legacyUserId != null}" data-notice="utags-legacy-user"
-             th:text="#{admin.v130.utags.legacyUserView(${legacyUserId})}">
+             th:text="#{admin.v130.utags.legacyUserView(${#strings.toString(legacyUserId)})}">
             「按用户看」已并入标签抽屉的分配记录页签。
         </div>
 

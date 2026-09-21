@@ -30,8 +30,8 @@
     </div>
     <div class="modal-body">
         <p th:text="${mode == 'REMOVE_REAL'}
-                    ? #{admin.publishIdentity.confirm.removeBody(${targetUserId})}
-                    : #{admin.publishIdentity.confirm.disableBody(${targetUserId})}">说明</p>
+                    ? #{admin.publishIdentity.confirm.removeBody(${#strings.toString(targetUserId)})}
+                    : #{admin.publishIdentity.confirm.disableBody(${#strings.toString(targetUserId)})}">说明</p>
 
         <div class="banner err" th:if="${pendingSchedules > 0}" data-notice="confirm-pending">
             <span th:text="#{admin.publishIdentity.confirm.pending(${pendingSchedules})}">

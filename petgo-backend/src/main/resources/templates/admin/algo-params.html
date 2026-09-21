@@ -90,9 +90,13 @@
       </div>
     </th:block>
 
+    <!--/* th:remove="all"：saved 只给 htmx 保存成功按片段选取（控制器返回 algo-params :: saved）。
+           不包这一层，整页渲染时它也会原地渲染 —— 同一张卡出现两次（两个 id="cfg-algo"）外加一个空 toast。 */-->
+    <th:block th:remove="all">
     <th:block th:fragment="saved">
         <th:block th:replace="~{admin/algo-params :: card}"></th:block>
         <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+    </th:block>
     </th:block>
 
     <!-- 变更记录抽屉（AC3）：admin-drawer.js 的 [data-drawer-open] 按钮式入口装进 #algo-drawer .drawer-body -->

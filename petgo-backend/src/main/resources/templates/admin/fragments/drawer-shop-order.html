@@ -124,11 +124,11 @@
             </tr></thead>
             <tbody>
             <tr th:each="p : ${packages}">
-                <!--/* 🔴 用 carrierName（品牌官方写法 SiCepat / Anteraja）而不是 carrier（枚举常量 SICEPAT）：
+                <!--/* 🔴 用 carrier.displayName()（品牌官方写法 SiCepat / Anteraja）而不是 carrier（枚举常量 SICEPAT）；Shipment 上没有 carrierName 属性，写成它整个抽屉 500：
                        下面那个发货下拉用的就是 carrierName，两处不一致时运营在下拉里选「SiCepat」、
                        发完货表格里却显示「SICEPAT」，看起来像选错了家。
                        ⚠️ 承运商名**不走 i18n**：它是品牌名，三语通用（与 places 的城市名同类）。 */-->
-                <td th:text="${p.carrierName}">SiCepat</td>
+                <td th:text="${p.carrier.displayName()}">SiCepat</td>
                 <td th:text="${p.trackingNo}">JP123</td>
                 <td th:text="${#numbers.formatInteger(p.carrierCost, 0, 'COMMA')}">18.000</td>
                 <!--/* ShipmentStatus 只有 SHIPPED / DELIVERED，与订单状态那两档同义，直接复用既有 key；

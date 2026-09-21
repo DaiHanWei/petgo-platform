@@ -134,7 +134,7 @@ public class AdminSeedBatchWorkspaceController {
         model.addAttribute("active", "seed");
         model.addAttribute("tab", "schedules");
         populateSchedules(authorId, status, date, page, model);
-        return "admin/fragments/schedules-tab :: rows(true)";
+        return "admin/fragments/schedules-tab :: rows(oob=true)";
     }
 
     private void populateSchedules(Long authorId, String status, String date, int page, Model model) {

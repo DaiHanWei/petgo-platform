@@ -172,7 +172,9 @@ public class AdminRoleService {
             throw AppException.validation("至少勾选 1 项权限").code("admin.err.role.noPermission");
         }
         assertNameFree(n, null);
-        AdminRoleEntity saved = roles.save(AdminRoleEntity.newCustom("tmp-" + UUID.randomUUID(), n, actorAccountId));
+        // 先占位再改 role-<id>：占位 code 须 ≤ 32（列宽）—— 整串 UUID 带 tmp- 是 40 位，曾让新建自定义角色必 500
+        String placeholder = "tmp-" + UUID.randomUUID().toString().replace("-", "").substring(0, 28);
+        AdminRoleEntity saved = roles.save(AdminRoleEntity.newCustom(placeholder, n, actorAccountId));
         saved.setCode("role-" + saved.getId());
         saved = roles.save(saved);
         long id = saved.getId();

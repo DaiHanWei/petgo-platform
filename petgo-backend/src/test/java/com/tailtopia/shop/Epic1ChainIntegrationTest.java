@@ -48,7 +48,8 @@ class Epic1ChainIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
-    private static final long ACTOR = 1L;
+    /** 真实后台账号 id（库存流水对 admin_accounts 有 FK，不能写死 1L）。 */
+    private long actor;
 
     /**
      * 上限是全局计数，共享测试库里已有几百个在售 SKU。本类关注的是<b>链路是否通</b>，
@@ -57,6 +58,7 @@ class Epic1ChainIntegrationTest extends ApiIntegrationTest {
     @BeforeEach
     void resetListingState() {
         jdbc.update("UPDATE shop_products SET is_active = false");
+        actor = adminActorId();
     }
 
     private ShopProductForm productForm(String name) {
@@ -99,7 +101,7 @@ class Epic1ChainIntegrationTest extends ApiIntegrationTest {
     @DisplayName("🔗 全链路：后台建商品 → 配 SKU → 采购入库 → 上架 → App 列表与详情可见且数据一致")
     void fullChainFromAdminEntryToAppVisibility() throws Exception {
         // ① 后台建商品（默认未上架）
-        ShopProduct p = products.create(productForm("chain" + SEQ.incrementAndGet()), ACTOR);
+        ShopProduct p = products.create(productForm("chain" + SEQ.incrementAndGet()), actor);
         assertThat(p.isActive()).as("新建商品默认未上架").isFalse();
 
         // 未上架 → App 查不到
@@ -108,14 +110,14 @@ class Epic1ChainIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isNotFound());
 
         // ② 配 SKU 与价格
-        ShopSku sku = products.upsertSku(p.getId(), skuForm("3 kg", 285_000L), ACTOR);
+        ShopSku sku = products.upsertSku(p.getId(), skuForm("3 kg", 285_000L), actor);
 
         // ③ 登记采购入库（此时才有可售库存）
         inventory.receivePurchase(sku.getId(), 12L, "PO-CHAIN", "供应商A", 190_000L,
-                LocalDate.now(), ACTOR);
+                LocalDate.now(), actor);
 
         // ④ 上架
-        listing.list(p.getId(), ACTOR);
+        listing.list(p.getId(), actor);
 
         // ⑤ App 列表可见
         assertThat(publicList()).contains(p.getPublicToken());
@@ -141,13 +143,13 @@ class Epic1ChainIntegrationTest extends ApiIntegrationTest {
     @Test
     @DisplayName("🔗 后台把库存改到 0 → App 详情显示 OUT_OF_STOCK，但商品仍可见（售罄不下架）")
     void stockToZeroShowsOutOfStockWithoutDelisting() throws Exception {
-        ShopProduct p = products.create(productForm("zero" + SEQ.incrementAndGet()), ACTOR);
-        ShopSku sku = products.upsertSku(p.getId(), skuForm("3 kg", 285_000L), ACTOR);
-        inventory.receivePurchase(sku.getId(), 5L, "PO-Z", "A", 100_000L, LocalDate.now(), ACTOR);
-        listing.list(p.getId(), ACTOR);
+        ShopProduct p = products.create(productForm("zero" + SEQ.incrementAndGet()), actor);
+        ShopSku sku = products.upsertSku(p.getId(), skuForm("3 kg", 285_000L), actor);
+        inventory.receivePurchase(sku.getId(), 5L, "PO-Z", "A", 100_000L, LocalDate.now(), actor);
+        listing.list(p.getId(), actor);
 
         // 走真实的盘点入口把库存归零（不是 UPDATE 抄近路）
-        inventory.stocktake(sku.getId(), 0L, "全部损毁", ACTOR);
+        inventory.stocktake(sku.getId(), 0L, "全部损毁", actor);
 
         String detail = mvc.perform(get("/api/v1/shop/products/" + p.getPublicToken()))
                 .andExpect(status().isOk())
@@ -161,10 +163,10 @@ class Epic1ChainIntegrationTest extends ApiIntegrationTest {
     @Test
     @DisplayName("🔗 库存降到低位 → App 详情返回 LOW_STOCK 且 remaining 是真实剩余数（FR-95）")
     void lowStockExposesRealRemaining() throws Exception {
-        ShopProduct p = products.create(productForm("low" + SEQ.incrementAndGet()), ACTOR);
-        ShopSku sku = products.upsertSku(p.getId(), skuForm("3 kg", 285_000L), ACTOR);
-        inventory.receivePurchase(sku.getId(), 4L, "PO-L", "A", 100_000L, LocalDate.now(), ACTOR);
-        listing.list(p.getId(), ACTOR);
+        ShopProduct p = products.create(productForm("low" + SEQ.incrementAndGet()), actor);
+        ShopSku sku = products.upsertSku(p.getId(), skuForm("3 kg", 285_000L), actor);
+        inventory.receivePurchase(sku.getId(), 4L, "PO-L", "A", 100_000L, LocalDate.now(), actor);
+        listing.list(p.getId(), actor);
 
         String detail = mvc.perform(get("/api/v1/shop/products/" + p.getPublicToken()))
                 .andReturn().getResponse().getContentAsString();
@@ -179,13 +181,13 @@ class Epic1ChainIntegrationTest extends ApiIntegrationTest {
     @Test
     @DisplayName("🔗 后台下架 → App 列表与详情都查不到，且库存一个数都没动（SPEC-7 口径）")
     void delistHidesFromAppWithoutTouchingInventory() throws Exception {
-        ShopProduct p = products.create(productForm("delist" + SEQ.incrementAndGet()), ACTOR);
-        ShopSku sku = products.upsertSku(p.getId(), skuForm("3 kg", 285_000L), ACTOR);
-        inventory.receivePurchase(sku.getId(), 9L, "PO-D", "A", 100_000L, LocalDate.now(), ACTOR);
-        listing.list(p.getId(), ACTOR);
+        ShopProduct p = products.create(productForm("delist" + SEQ.incrementAndGet()), actor);
+        ShopSku sku = products.upsertSku(p.getId(), skuForm("3 kg", 285_000L), actor);
+        inventory.receivePurchase(sku.getId(), 9L, "PO-D", "A", 100_000L, LocalDate.now(), actor);
+        listing.list(p.getId(), actor);
         assertThat(publicList()).contains(p.getPublicToken());
 
-        listing.delist(p.getId(), ACTOR);
+        listing.delist(p.getId(), actor);
 
         assertThat(publicList()).doesNotContain(p.getPublicToken());
         mvc.perform(get("/api/v1/shop/products/" + p.getPublicToken()))
@@ -202,10 +204,10 @@ class Epic1ChainIntegrationTest extends ApiIntegrationTest {
     @Test
     @DisplayName("🔒 上述全部对外读取均以游客身份完成 —— 全链路无一处要求登录（FR-93A）")
     void entireReadPathIsGuestAccessible() throws Exception {
-        ShopProduct p = products.create(productForm("guest" + SEQ.incrementAndGet()), ACTOR);
-        ShopSku sku = products.upsertSku(p.getId(), skuForm("3 kg", 285_000L), ACTOR);
-        inventory.receivePurchase(sku.getId(), 3L, "PO-G", "A", 100_000L, LocalDate.now(), ACTOR);
-        listing.list(p.getId(), ACTOR);
+        ShopProduct p = products.create(productForm("guest" + SEQ.incrementAndGet()), actor);
+        ShopSku sku = products.upsertSku(p.getId(), skuForm("3 kg", 285_000L), actor);
+        inventory.receivePurchase(sku.getId(), 3L, "PO-G", "A", 100_000L, LocalDate.now(), actor);
+        listing.list(p.getId(), actor);
 
         // 本类所有 mvc.perform 都不带任何 authentication —— 能 200 即证明游客可达
         mvc.perform(get("/api/v1/shop/products")).andExpect(status().isOk());

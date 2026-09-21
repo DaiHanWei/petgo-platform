@@ -40,6 +40,10 @@ class AdminUserDrawerIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
     private com.tailtopia.profile.repository.PetProfileRepository pets;
+    @Autowired
+    private com.tailtopia.content.repository.ContentPostRepository posts;
+    @Autowired
+    private com.tailtopia.consult.repository.ConsultSessionRepository sessions;
 
     private Authentication auth(AdminAccountType type, String... permissions) {
         long n = SEQ.incrementAndGet();
@@ -122,6 +126,11 @@ class AdminUserDrawerIntegrationTest extends ApiIntegrationTest {
     @Test
     void drawerRendersAllFiveTabsInOneRequest() throws Exception {
         User u = newUser();
+        // 深链只在有行时渲染（空列表显示「无」）—— 造一条帖子 + 一次问诊，不然下面那条断言永远等不到链接
+        posts.save(com.tailtopia.content.domain.ContentPost.publish(u.getId(),
+                com.tailtopia.content.domain.ContentType.DAILY, null, "抽屉深链-" + SEQ.incrementAndGet(), List.of()));
+        sessions.save(com.tailtopia.consult.domain.ConsultSession.startWaiting(u.getId(),
+                com.tailtopia.consult.domain.ConsultSource.DIRECT));
         String html = body(mvc.perform(get("/admin/users/" + u.getId() + "/drawer")
                         .param("lang", "zh_CN").header("HX-Request", "true")
                         .with(authentication(superAdmin())))
@@ -149,7 +158,7 @@ class AdminUserDrawerIntegrationTest extends ApiIntegrationTest {
         com.tailtopia.profile.domain.PetProfile pet = pets.save(
                 com.tailtopia.profile.domain.PetProfile.create(u.getId(),
                         com.tailtopia.profile.domain.PetType.DOG, "旺财", null, "柴犬",
-                        java.time.LocalDate.of(2024, 3, 8), null, null));
+                        java.time.LocalDate.of(2024, 3, 8), null, "it-card-" + SEQ.incrementAndGet()));
         pet.setSex(com.tailtopia.profile.domain.PetSex.MALE);
         pets.save(pet);
 
@@ -314,7 +323,7 @@ class AdminUserDrawerIntegrationTest extends ApiIntegrationTest {
     @Test
     void inSearchModeThePhoneFilterNarrowsTheRowsToo() throws Exception {
         Authentication admin = superAdmin();
-        String tag = "sfx" + SEQ.incrementAndGet();
+        String tag = "sfx" + SEQ.incrementAndGet() % 1_000_000;
         User withPhone = newUser();
         withPhone.setNickname(tag + "-有号");
         withPhone.setPhone("+62813" + (5000000 + (SEQ.incrementAndGet() % 1000000)));

@@ -42,6 +42,7 @@ class AnomaliesWorkbenchMvcTest extends ApiIntegrationTest {
     void anomaliesWorkbenchFourWays() throws Exception {
         long seq = SEQ.incrementAndGet();
         long actor = 970000L + seq;
+        makeRoomForSuperAdmin();
         accountService.createAccount("an-super-" + seq + "@tailtopia.test", "超管", AdminRole.SUPER_ADMIN, List.of(), actor);
         AdminUserDetails superAdmin = userDetailsService.loadByEmail("an-super-" + seq + "@tailtopia.test", false);
         accountService.createAccount("an-view-" + seq + "@tailtopia.test", "只看", AdminRole.CUSTOM,

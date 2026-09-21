@@ -12,6 +12,7 @@ import com.tailtopia.shop.cart.service.CartService;
 import com.tailtopia.shop.service.InventoryMovementService;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.time.LocalDate;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,7 +32,13 @@ class CartIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
-    private static final long ACTOR = 1L;
+    /** 真实后台账号 id（库存流水对 admin_accounts 有 FK，不能写死 1L）。 */
+    private long actor;
+
+    @BeforeEach
+    void resolveActor() {
+        actor = adminActorId();
+    }
 
     private long seedUser() {
         long n = SEQ.incrementAndGet();
@@ -142,7 +149,7 @@ class CartIntegrationTest extends ApiIntegrationTest {
         cart.add(uid, good, 2);
         cart.add(uid, willDelist, 3);
 
-        listing.delist(productIdOfSku(willDelist), ACTOR);
+        listing.delist(productIdOfSku(willDelist), actor);
 
         CartView v = cart.view(uid);
         assertThat(v.lines()).hasSize(1);
@@ -163,7 +170,7 @@ class CartIntegrationTest extends ApiIntegrationTest {
         // 盘点归零 → 售罄（商品仍在架上）
         long skuId = jdbc.queryForObject(
                 "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sku);
-        inventory.stocktake(skuId, 0L, "清仓", ACTOR);
+        inventory.stocktake(skuId, 0L, "清仓", actor);
 
         CartView v = cart.view(uid);
         assertThat(v.invalidLines()).hasSize(1);
@@ -179,7 +186,7 @@ class CartIntegrationTest extends ApiIntegrationTest {
         String bad = seedSku(10, 2000L);
         cart.add(uid, good, 2);
         cart.add(uid, bad, 3);
-        listing.delist(productIdOfSku(bad), ACTOR);
+        listing.delist(productIdOfSku(bad), actor);
 
         CartView v = cart.clearInvalid(uid);
 
@@ -261,7 +268,7 @@ class CartIntegrationTest extends ApiIntegrationTest {
         String bad = seedSku(10, 50_000L);
         cart.add(uid, good, 2);
         cart.add(uid, bad, 3);
-        listing.delist(productIdOfSku(bad), ACTOR);
+        listing.delist(productIdOfSku(bad), actor);
 
         CartView v = cart.setAllSelected(uid, true);
 

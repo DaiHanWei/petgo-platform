@@ -25,7 +25,10 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 用户标签管理的后台视图与写入（Story 11.3 · AB-12A）。
@@ -53,11 +56,14 @@ public class AdminUserTagService {
      */
     private final com.tailtopia.admin.audit.repository.AdminAuditLogRepository auditLogs;
     private final com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts;
+    /** 批量分配的逐人独立事务（REQUIRES_NEW），见 {@link #assignBulk}。 */
+    private final TransactionTemplate perUserTx;
 
     public AdminUserTagService(UserTagRepository tags, UserTagAssignmentRepository assignments,
             UserRepository users, UserTagQueryService tagService, AdminAuditService audit,
             com.tailtopia.admin.audit.repository.AdminAuditLogRepository auditLogs,
-            com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts) {
+            com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts,
+            PlatformTransactionManager txManager) {
         this.tags = tags;
         this.assignments = assignments;
         this.users = users;
@@ -65,6 +71,8 @@ public class AdminUserTagService {
         this.audit = audit;
         this.auditLogs = auditLogs;
         this.adminAccounts = adminAccounts;
+        this.perUserTx = new TransactionTemplate(txManager);
+        this.perUserTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /** 抽屉页签二每页条数。与内容标签同量级（480px 抽屉一屏扫得完）。 */
@@ -264,13 +272,18 @@ public class AdminUserTagService {
         }
         List<Long> failed = new java.util.ArrayList<>();
         for (Long uid : unique) {
+            // 🔴 每人一个独立事务（REQUIRES_NEW）：tagService.assign 自己是 @Transactional，直接在本方法事务里调用时
+            //    它一抛 AppException 就把**外层整个事务**标成 rollback-only —— catch 住也没用，提交时
+            //    UnexpectedRollbackException（500），连已成功的几条一起回滚，「部分失败 = 部分成功」从未成立过。
             try {
-                UserTagAssignment saved = tagService.assign(uid, tagId, startsAt, endsAt);
-                // Story 8.2 · AC3：**逐条**再记一行（target = 本条分配 id）——
-                // 抽屉里的「操作人」列靠它反查。汇总那条照旧写（下面），两条各有用途：
-                // 汇总回答「这一批是谁一次分出去的」，逐条回答「这一行是谁分的」。
-                audit.record(adminId, "USER_TAG_ASSIGN", "user_tag_assignment",
-                        String.valueOf(saved.getId()), "tag=" + tagId + " user=" + uid);
+                perUserTx.executeWithoutResult(status -> {
+                    UserTagAssignment saved = tagService.assign(uid, tagId, startsAt, endsAt);
+                    // Story 8.2 · AC3：**逐条**再记一行（target = 本条分配 id）——
+                    // 抽屉里的「操作人」列靠它反查。汇总那条照旧写（下面），两条各有用途：
+                    // 汇总回答「这一批是谁一次分出去的」，逐条回答「这一行是谁分的」。
+                    audit.record(adminId, "USER_TAG_ASSIGN", "user_tag_assignment",
+                            String.valueOf(saved.getId()), "tag=" + tagId + " user=" + uid);
+                });
             } catch (AppException e) {
                 failed.add(uid);
             }

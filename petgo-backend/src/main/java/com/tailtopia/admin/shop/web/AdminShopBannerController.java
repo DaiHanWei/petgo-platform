@@ -180,7 +180,7 @@ public class AdminShopBannerController {
             HttpServletResponse response, RedirectAttributes ra) {
         if (hx.isHtmx()) {
             service.create(form, admin.getAdminAccountId());
-            return done(msg.get("admin.flash.banner.created"), model, response);
+            return done(msg.get("admin.flash.banner.created"), admin, model, response);
         }
         try {
             service.create(form, admin.getAdminAccountId());
@@ -198,7 +198,7 @@ public class AdminShopBannerController {
             HttpServletResponse response, RedirectAttributes ra) {
         if (hx.isHtmx()) {
             service.update(id, form, admin.getAdminAccountId());
-            return done(msg.get("admin.flash.banner.updated"), model, response);
+            return done(msg.get("admin.flash.banner.updated"), admin, model, response);
         }
         try {
             service.update(id, form, admin.getAdminAccountId());
@@ -215,7 +215,7 @@ public class AdminShopBannerController {
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes ra) {
         if (hx.isHtmx()) {
             service.activate(id, admin.getAdminAccountId());
-            return done(msg.get("admin.flash.banner.activated"), model, response);
+            return done(msg.get("admin.flash.banner.activated"), admin, model, response);
         }
         try {
             service.activate(id, admin.getAdminAccountId());
@@ -232,7 +232,7 @@ public class AdminShopBannerController {
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes ra) {
         if (hx.isHtmx()) {
             service.deactivate(id, admin.getAdminAccountId());
-            return done(msg.get("admin.flash.banner.deactivated"), model, response);
+            return done(msg.get("admin.flash.banner.deactivated"), admin, model, response);
         }
         try {
             service.deactivate(id, admin.getAdminAccountId());
@@ -249,7 +249,7 @@ public class AdminShopBannerController {
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes ra) {
         if (hx.isHtmx()) {
             service.delete(id, admin.getAdminAccountId());
-            return done(msg.get("admin.flash.banner.deleted"), model, response);
+            return done(msg.get("admin.flash.banner.deleted"), admin, model, response);
         }
         try {
             service.delete(id, admin.getAdminAccountId());
@@ -270,8 +270,10 @@ public class AdminShopBannerController {
      * <p>新建 / 编辑是在抽屉里提交的，成功后发 {@code admin:drawer-close} 把它关掉
      * （上架 / 下架 / 删除本来就不开抽屉，多发一个事件无害）。
      */
-    private String done(String message, Model model, HttpServletResponse response) {
+    private String done(String message, AdminUserDetails admin, Model model, HttpServletResponse response) {
         populateList(model);
+        // 列表片段的行内按钮按 canEdit 渲染 —— 漏了它，th:if="${canEdit and …}" 取到 null 直接 500（每次处置成功都挂）
+        model.addAttribute("canEdit", has(admin, AdminPermissions.SHOP_PRODUCT_EDIT));
         model.addAttribute("message", message);
         AdminFragmentResponses.trigger(response, AdminHxEvents.DRAWER_CLOSE);
         return "admin/fragments/shop-banners-list :: done";

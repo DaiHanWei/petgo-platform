@@ -34,6 +34,9 @@ public class SignedUrlService {
 
     /** 为单个私密桶对象签发短 TTL GET 签名 URL。 */
     public String sign(String objectKey) {
+        if (!ossClient.hasCredentials()) {
+            return stub(objectKey);
+        }
         long ttl = props.getSignedUrl().getTtlSeconds();
         Date expiration = new Date(System.currentTimeMillis() + ttl * 1000L);
         OSS oss = ossClient.buildClient();
@@ -51,6 +54,9 @@ public class SignedUrlService {
 
     /** 批量签名（健康历史多图）。复用单个 OSS 客户端，减少重复构建。 */
     public List<String> signAll(List<String> objectKeys) {
+        if (!ossClient.hasCredentials()) {
+            return objectKeys.stream().map(this::stub).toList();
+        }
         long ttl = props.getSignedUrl().getTtlSeconds();
         Date expiration = new Date(System.currentTimeMillis() + ttl * 1000L);
         OSS oss = ossClient.buildClient();
@@ -68,6 +74,17 @@ public class SignedUrlService {
         } finally {
             oss.shutdown();
         }
+    }
+
+    /**
+     * 🔴 无凭证时打桩（与 {@link AliyunOssClient#putPublicObject} 的 Story 11.5 同一判据）：不签名，返回一个
+     * 不带签名的占位 URL。判据是**凭证是否配了**而不是开关 —— 生产必然配了凭证 ⇒ 必然走真实签名。
+     * 不打桩时 {@code buildClient()} 在 try 外直接抛 InvalidCredentialsException，本地 / CI 上所有带私密图的
+     * 后台抽屉（问诊异常处理图、场所照片……）一律 500，连与图片无关的规则都验不了。
+     */
+    private String stub(String objectKey) {
+        log.warn("OSS 未配凭证，签名 URL 走打桩（仅本地/测试）");
+        return ossClient.publicUrl(objectKey);
     }
 
     private static String stripLeadingSlash(String key) {

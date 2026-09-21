@@ -211,7 +211,7 @@ public class AdminContentManageController {
                     < summary.total();
         }
         model.addAttribute("hasNext", hasNext);
-        return hxRequest != null ? "admin/fragments/content-list :: rows(true)" : "admin/content";
+        return hxRequest != null ? "admin/fragments/content-list :: rows(oob=true)" : "admin/content";
     }
 
     /** 抽屉模型：详情聚合 + 物种归属 + 限流态；顺带备齐 oob 行片段要用的四张表。 */

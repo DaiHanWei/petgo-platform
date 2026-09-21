@@ -46,7 +46,7 @@ public class AdminSettlementController {
         model.addAttribute("settlements", rows);
         model.addAttribute("summary", service.summary(rows));
         model.addAttribute("open", open);
-        return hx.isHtmx() ? "admin/fragments/settlements-list :: rows(true)" : "admin/settlements";
+        return hx.isHtmx() ? "admin/fragments/settlements-list :: rows(oob=true)" : "admin/settlements";
     }
 
     /**

@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
@@ -44,6 +45,7 @@ class AdminPageCatalogCoverageTest extends ApiIntegrationTest {
     private static final Path EXCEPTIONS = Path.of("..", "scripts", "ci", "admin-page-catalog-exceptions.txt");
 
     @Autowired
+    @Qualifier("requestMappingHandlerMapping") // actuator 另有同类型 controllerEndpointHandlerMapping
     private RequestMappingHandlerMapping handlerMapping;
 
     /**

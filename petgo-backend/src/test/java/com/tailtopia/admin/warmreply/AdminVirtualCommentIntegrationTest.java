@@ -112,7 +112,8 @@ class AdminVirtualCommentIntegrationTest extends ApiIntegrationTest {
                 .andExpect(header().string("HX-Retarget", "#vc-composer"))
                 .andReturn().getResponse().getContentAsString();
         assertThat(frag).contains("id=\"vc-composer\"").contains("已提交，审核通过后显示").contains("id=\"vc-existing\"")
-                .contains(body).contains("审核中").contains("value=\"" + cat.getId() + "\" selected");
+                .contains(body).contains("审核中")
+                .containsPattern("value=\"" + cat.getId() + "\"[^>]*\\bselected\\b"); // th:selected 渲染成 selected="selected"，且中间夹着 data-species
         assertThat(comments.count()).isEqualTo(before + 1);
         Comment saved = comments.findAll().stream().filter(c -> c.getPostId() == postId && c.getAuthorId().equals(cat.getId()))
                 .findFirst().orElseThrow();

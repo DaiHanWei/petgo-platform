@@ -141,7 +141,7 @@
                 <tbody>
                 <tr th:each="a : ${assignments}" th:id="'utag-assign-' + ${a.id}">
                     <td>
-                        <span class="muted">#<span th:text="${a.userId}">1</span></span>
+                        <span class="muted" th:text="${'#' + a.userId}">#1</span>
                         <span th:text="${a.userName} ?: '—'">昵称</span>
                     </td>
                     <td class="nowrap"

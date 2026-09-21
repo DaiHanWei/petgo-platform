@@ -1,5 +1,8 @@
 package com.tailtopia.support;
 
+import com.tailtopia.admin.account.domain.AdminAccount;
+import com.tailtopia.admin.account.domain.AdminRole;
+import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.auth.domain.PetStatus;
 import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.User;
@@ -7,6 +10,7 @@ import com.tailtopia.auth.repository.UserRepository;
 import com.tailtopia.shared.security.JwtService;
 import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -95,6 +99,49 @@ public abstract class ApiIntegrationTest {
 
     @Autowired
     protected UserRepository users;
+
+    @Autowired
+    private JdbcTemplate superAdminCapJdbc;
+
+    /**
+     * 给 {@code createAccount(SUPER_ADMIN)} 腾名额：生产规则「ACTIVE 超管 &lt; 5」在共享测试库里会被
+     * 前面测试类攒下的超管撑满（全量 L1 实测上百个），此后新建超管一律 422。这里把除最新 3 个以外的
+     * ACTIVE 超管置 DISABLED —— 只动测试库，调用方新建的超管是最新的，不受影响。
+     */
+    protected void makeRoomForSuperAdmin() {
+        superAdminCapJdbc.update("""
+                UPDATE admin_accounts SET status = 'DISABLED'
+                 WHERE account_type = 'SUPER_ADMIN' AND status = 'ACTIVE'
+                   AND id NOT IN (SELECT id FROM admin_accounts
+                                   WHERE account_type = 'SUPER_ADMIN' AND status = 'ACTIVE'
+                                   ORDER BY id DESC LIMIT 3)""");
+    }
+
+    @Autowired
+    private AdminAccountRepository adminActorAccounts;
+
+    /**
+     * 一个真实存在的后台账号 id，给「操作人」类参数用。{@code inventory_movements.operator_account_id} 等列对
+     * {@code admin_accounts} 有 FK，写死 {@code 1L} 只在别的测试类先建过后台账号时才成立（全量 L1 里 shop 包排在前面就挂）。
+     */
+    protected long adminActorId() {
+        Long id = superAdminCapJdbc.queryForObject("SELECT min(id) FROM admin_accounts", Long.class);
+        if (id != null) {
+            return id;
+        }
+        return adminActorAccounts.save(AdminAccount.create(
+                "it-actor-" + SEQ.incrementAndGet() + "@tailtopia.test", "测试操作人", AdminRole.CUSTOM, null)).getId();
+    }
+
+    /**
+     * 落库一个 ACTIVE 超管行并返回 id（直接 save，不过 createAccount 的「ACTIVE 超管 &lt; 5」上限）。
+     * 给要走完整 admin 过滤链的测试用：AdminSessionGuardFilter 每个请求都按 principal 的账号 id 查库核
+     * ACTIVE + 安全版本号，手造的 {@code 1L} 只在别的测试恰好建过 1 号且它仍 ACTIVE 时才不被踢去登录页。
+     */
+    protected long persistedSuperAdminId(String emailPrefix) {
+        return adminActorAccounts.save(AdminAccount.newSuperAdmin(
+                emailPrefix + "-" + SEQ.incrementAndGet() + "@tailtopia.test", "测试超管", "{bcrypt}x")).getId();
+    }
 
     /** 造一个已完成 onboarding 的持久化测试用户（唯一 sub），返回实体。 */
     protected User newUser() {

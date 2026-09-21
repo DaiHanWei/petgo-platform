@@ -146,6 +146,7 @@ class AdminCommentDistributionIntegrationTest extends ApiIntegrationTest {
     @Test
     void fullPageAndFragmentAndPermissionsAndBadN() throws Exception {
         seed();
+        makeRoomForSuperAdmin();
         AdminUserDetails superAdmin = admin(AdminRole.SUPER_ADMIN);
         AdminUserDetails viewer = admin(AdminRole.CUSTOM, AdminPermissions.CONTENT_VIEW);
         AdminUserDetails commenter = admin(AdminRole.CUSTOM, AdminPermissions.COMMENT_VIRTUAL_POST);

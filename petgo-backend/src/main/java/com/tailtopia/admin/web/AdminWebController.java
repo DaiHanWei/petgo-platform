@@ -277,7 +277,7 @@ public class AdminWebController {
             model.addAttribute("createVetForm", new CreateVetForm());
         }
         // HTMX 局部刷新返表格 + 摘要条 oob；整页请求返完整视图。
-        return hxRequest != null ? "admin/fragments/vets-list :: rows(true)" : "admin/vets";
+        return hxRequest != null ? "admin/fragments/vets-list :: rows(oob=true)" : "admin/vets";
     }
 
     @PostMapping("/admin/vets")

@@ -14,7 +14,7 @@ class KitchenSinkAbsentByDefaultIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void kitchenSinkIs404WithoutStagProfile() throws Exception {
-        AdminUserDetails admin = new AdminUserDetails(1L, null, "ks@tailtopia.test", null, AdminAccountType.SUPER_ADMIN);
+        AdminUserDetails admin = new AdminUserDetails(persistedSuperAdminId("ks"), null, "ks@tailtopia.test", null, AdminAccountType.SUPER_ADMIN);
         mvc.perform(get("/admin/_kitchen-sink").with(user(admin))).andExpect(status().isNotFound());
     }
 }

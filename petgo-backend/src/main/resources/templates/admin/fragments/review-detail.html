@@ -6,7 +6,7 @@
   已删除 / 已注销 → 只读作废态；有入口权限无处置权限 → 按钮禁用 + 所缺权限名。
 -->
 <body>
-<div th:fragment="detail" class="rv-detail" th:attr="data-tab=${d.tab.param()},data-source-id=${d.sourceId}">
+<div th:fragment="detail" class="rv-detail" th:attr="data-tab=${d.tab.slug()},data-source-id=${d.sourceId}">
     <div class="toast" role="status" th:if="${toast}" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">toast</div>
 
     <!-- ① 对象快照卡 -->

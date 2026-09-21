@@ -57,7 +57,7 @@ public class AdminConsultSessionController {
                 : java.util.List.of());
         model.addAttribute("open", open);
         return hxRequest != null
-                ? "admin/fragments/consult-sessions-list :: rows(true)" : "admin/consult-sessions";
+                ? "admin/fragments/consult-sessions-list :: rows(oob=true)" : "admin/consult-sessions";
     }
 
     /**

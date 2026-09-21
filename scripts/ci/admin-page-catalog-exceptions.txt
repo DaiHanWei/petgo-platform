@@ -11,7 +11,7 @@
 # 非注释行按整行精确匹配（不做前缀 / 通配）。
 
 # ---- 同一处理器的多路径别名 ----
-/admin/dashboard   # 与 /admin 是同一个 @GetMapping({"/admin","/admin/dashboard"})，目录里以 /admin 登记
+/admin   # 与 /admin/dashboard 是同一个 @GetMapping({"/admin","/admin/dashboard"})，目录里以 /admin/dashboard 登记（@{/admin} 会被静态资源内容指纹误改写成 /admin-<md5>.null）
 
 # ---- 页内片段（htmx 拉取，不是能独立打开的页面）----
 /admin/charts   # 看板五卡图表片段（3.4），随 /admin 渲染

@@ -41,7 +41,8 @@ class DashboardChartsMvcTest extends ApiIntegrationTest {
 
     @Test
     void fullPageEmbedsFiveCardsWithInlineJsonAndSummaryRow() throws Exception {
-        AdminUserDetails staff = staff();
+        // 第五张付费卡自 3.5 起只对 payment.view / 超管下发 —— 无码员工只有四卡
+        AdminUserDetails staff = staffWith("payment.view");
         String html = mvc.perform(get("/admin").param("lang", "zh_CN").with(user(staff)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(html).contains("id=\"dashboard-charts\"").contains("data-chart=\"users\"").contains("data-chart=\"pets\"")
@@ -108,6 +109,10 @@ class DashboardChartsMvcTest extends ApiIntegrationTest {
     @Test
     void anonymousIsRedirectedToLogin() throws Exception {
         mvc.perform(get("/admin")).andExpect(status().is3xxRedirection());
-        mvc.perform(get("/admin/charts").param("range", "7").header("HX-Request", "true")).andExpect(status().is3xxRedirection());
+        // htmx 请求不能 302（XHR 会透明跟随、把登录页当片段塞进页面）→ 200 + HX-Redirect 整页跳（AdminLoginEntryPoint）
+        mvc.perform(get("/admin/charts").param("range", "7").header("HX-Request", "true"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("HX-Redirect", org.hamcrest.Matchers.containsString("/admin/login")));
     }
 }

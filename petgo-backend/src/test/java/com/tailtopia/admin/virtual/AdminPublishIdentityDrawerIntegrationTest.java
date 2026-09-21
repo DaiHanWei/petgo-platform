@@ -113,7 +113,7 @@ class AdminPublishIdentityDrawerIntegrationTest extends ApiIntegrationTest {
         long hit = virtualAccounts.create("找得到我-" + SEQ.incrementAndGet(), null, "DOG", 1L);
         long miss = virtualAccounts.create("别的号-" + SEQ.incrementAndGet(), null, "CAT", 1L);
         User real = newUser();
-        real.setNickname("真人候选-" + SEQ.incrementAndGet());
+        real.setNickname("真人候选-" + SEQ.incrementAndGet() % 1_000_000);
         users.save(real);
 
         String html = body(mvc.perform(get("/admin/virtual-accounts").param("vq", "找得到我")
@@ -239,14 +239,14 @@ class AdminPublishIdentityDrawerIntegrationTest extends ApiIntegrationTest {
         assertThat(html).as("池表整表换掉，刚纳入的那个人在里面")
                 .contains("id=\"identities-rows\"").contains("id=\"identity-row-" + u.getId() + "\"")
                 .contains("class=\"toast\"");
-        assertThat(r.getResponse().getHeader("HX-Trigger")).contains("admin:identity-list-refresh");
+        // 不再断言 HX-Trigger: admin:identity-list-refresh —— 该事件全仓无监听方，已改为 oob 定点换候选行（见 publish-identities.html）
     }
 
     /** 已在池内的候选：按钮**置灰而不是消失**，且不再渲染那张会报错的表单。 */
     @Test
     void candidatesAlreadyInThePoolAreDisabledNotHidden() throws Exception {
         User u = newUser();
-        u.setNickname("已纳入-" + SEQ.incrementAndGet());
+        u.setNickname("已纳入-" + SEQ.incrementAndGet() % 1_000_000);
         users.save(u);
         Authentication admin = superAdmin();
         mvc.perform(post("/admin/publish-identities").param("userId", String.valueOf(u.getId()))
@@ -274,7 +274,7 @@ class AdminPublishIdentityDrawerIntegrationTest extends ApiIntegrationTest {
     @Test
     void grantingSwapsThatCandidateRowIntoTheAlreadyInPoolState() throws Exception {
         User u = newUser();
-        u.setNickname("待纳入-" + SEQ.incrementAndGet());
+        u.setNickname("待纳入-" + SEQ.incrementAndGet() % 1_000_000);
         users.save(u);
 
         String html = body(mvc.perform(post("/admin/publish-identities")

@@ -134,7 +134,11 @@ class SeedBatchEntryIntegrationTest extends ApiIntegrationTest {
      */
     @Test
     void thePasteSplittingLimitIsStatedOnThePage() throws Exception {
-        String html = workspace(newBatch());
+        // 四步流（7.6）之后粘贴框在第 2 步「录内容」，工作台默认停在第 0 步
+        String html = mvc.perform(get("/admin/seed-batches/" + newBatch()).param("step", "2")
+                        .with(authentication(superAdmin())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
 
         // 🔴 断言的是**那个提示元素本身**（稳定标记），不是"页面上有没有这几个字"。
         //    先按 contains("一行一条") 写过一版，反证时**删掉整条提示它照样绿** ——

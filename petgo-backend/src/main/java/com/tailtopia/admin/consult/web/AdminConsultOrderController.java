@@ -52,7 +52,7 @@ public class AdminConsultOrderController {
         model.addAttribute("orders", rows);
         model.addAttribute("summary", service.summary(rows));
         model.addAttribute("open", open);
-        return hx.isHtmx() ? "admin/fragments/consult-orders-list :: rows(true)" : "admin/consult-orders";
+        return hx.isHtmx() ? "admin/fragments/consult-orders-list :: rows(oob=true)" : "admin/consult-orders";
     }
 
     /**

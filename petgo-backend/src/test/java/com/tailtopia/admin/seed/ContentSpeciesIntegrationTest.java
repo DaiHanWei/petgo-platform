@@ -397,8 +397,9 @@ class ContentSpeciesIntegrationTest extends ApiIntegrationTest {
     void theVirtualAccountPageExposesTheAccountTag() throws Exception {
         long virtualId = virtualAccount(ContentSpecies.DOG);
 
-        String html = mvc.perform(get("/admin/virtual-accounts")
-                        .with(authentication(superAdmin())))
+        // 模板 B 之后「账号定位」表单在虚拟账号抽屉里（drawer-virtual-account.html），列表页只有行
+        String html = mvc.perform(get("/admin/virtual-accounts/" + virtualId + "/drawer")
+                        .header("HX-Request", "true").with(authentication(superAdmin())))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 

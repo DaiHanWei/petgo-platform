@@ -46,22 +46,42 @@ class SupportTicketShopOrderLinkIntegrationTest extends ApiIntegrationTest {
                 null, List.of(), List.of());
     }
 
-    /** 直接插一条 shop_orders 并把 id 钉成 {@code forcedId}，用来制造与问诊单撞号。 */
-    private String seedShopOrderWithId(long forcedId, long userId) {
+    /** 最近一次 {@link #seedShopOrderWithId} 实际用的 id（首选 id 被占时会换）。 */
+    private long seededId;
+
+    /**
+     * 直接插一条 shop_orders 并把 id 钉死，用来制造与问诊单撞号。
+     *
+     * <p>⚠️ 首选 id 只在 shop_orders 里还空着时才用：全量 L1 里商城包先跑，1～4 早被正常建的单占了
+     * （DuplicateKey）。被占时改取「问诊单有、电商单没有」的 id —— 撞号的意图不变；插完把序列推过它，
+     * 免得后面的测试正常建单时撞上这个手插的 id。
+     */
+    private String seedShopOrderWithId(long preferredId, long userId) {
+        Long taken = jdbc.queryForObject("SELECT count(*) FROM shop_orders WHERE id = ?", Long.class, preferredId);
+        long forcedId = preferredId;
+        if (taken != null && taken > 0) {
+            Long colliding = jdbc.queryForObject("SELECT min(c.id) FROM consult_orders c "
+                    + "WHERE NOT EXISTS (SELECT 1 FROM shop_orders s WHERE s.id = c.id)", Long.class);
+            forcedId = colliding != null ? colliding
+                    : jdbc.queryForObject("SELECT coalesce(max(id), 0) + 1 FROM shop_orders", Long.class);
+        }
+        seededId = forcedId;
         String token = "shoptok" + SEQ.incrementAndGet();
         // ⚠️ 收货地址快照列名**带 ship_ 前缀**（V20260817_2308:32-38）。
         //    少写前缀会让整个类在 L1 直接 "column does not exist"，
         //    而本 story 最关键的「不串单」验收正好全在这个类里。
         jdbc.update("""
-                INSERT INTO shop_orders (id, public_token, user_id, status, goods_subtotal,
+                INSERT INTO shop_orders (id, public_token, display_no, user_id, status, goods_subtotal,
                         shipping_fee, shipping_discount, total_amount,
                         ship_receiver_name, ship_receiver_phone, ship_provinsi,
                         ship_kota_kabupaten, ship_kecamatan, ship_address_line, ship_kode_pos,
                         created_at, updated_at)
-                VALUES (?, ?, ?, 'PENDING_PAYMENT', 100000, 0, 0, 100000,
+                VALUES (?, ?, ?, ?, 'PENDING_PAYMENT', 100000, 0, 0, 100000,
                         'Budi', '08123', 'DKI', 'Jaksel', 'Kebayoran', 'Jl. 1', '12110',
                         now(), now())
-                """, forcedId, token, userId);
+                """, forcedId, token, "TOKO-IT-" + SEQ.incrementAndGet() % 100_000_000, userId); // display_no NOT NULL（V20260916_1129）
+        jdbc.queryForObject("SELECT setval('shop_orders_id_seq', GREATEST((SELECT max(id) FROM shop_orders), ?))",
+                Long.class, forcedId);
         return token;
     }
 
@@ -134,7 +154,7 @@ class SupportTicketShopOrderLinkIntegrationTest extends ApiIntegrationTest {
                 "u@petgo.test", true, shopToken, List.of(), List.of());
 
         var t = ticketRepo.findByTicketToken(ticket).orElseThrow();
-        assertThat(t.getRelatedOrderId()).isEqualTo(3L);
+        assertThat(t.getRelatedOrderId()).isEqualTo(seededId);
         assertThat(t.getRelatedOrderType()).isEqualTo(RelatedOrderType.SHOP);
     }
 

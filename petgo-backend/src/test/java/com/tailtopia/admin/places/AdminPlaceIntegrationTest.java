@@ -121,10 +121,11 @@ class AdminPlaceIntegrationTest extends ApiIntegrationTest {
         assertThat(drawer).contains("data-place-id=\"" + active.getId() + "\"").contains("Kopi " + tag).contains("很友好 " + tag).contains("👍")
                 .contains("data-photo-id=") // 有 OSS 凭证 → data-lightbox 缩略图；无凭证（本地 / CI）→ 「图片暂不可用」占位，抽屉照常打开
                 .contains("id=\"places-drawer-comments\"").contains("Jakarta").contains("-6.208763")
-                .contains("disabled").doesNotContain("<html");
+                .doesNotContain("<html"); // 5-2 的 disabled 占位按钮已在 5-3 换成真操作，不再断言
         String mergedDrawer = mvc.perform(get("/admin/places/" + merged.getId() + "/drawer").param("lang", "zh_CN").with(user(ops)).header("HX-Request", "true"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(mergedDrawer).contains("已并入").contains("/admin/places?open=" + active.getId()).contains("Kopi " + tag);
+        // 复审 #4：「已并入 →」直接换抽屉体（hx-get 保留场所的抽屉），不再走 ?open= 深链
+        assertThat(mergedDrawer).contains("已并入").contains("hx-get=\"/admin/places/" + active.getId() + "/drawer\"").contains("Kopi " + tag);
         // 评论翻页 fragment
         String commentsFrag = mvc.perform(get("/admin/places/" + active.getId() + "/drawer").param("part", "comments").param("commentPage", "0")
                         .with(user(ops)).header("HX-Request", "true"))

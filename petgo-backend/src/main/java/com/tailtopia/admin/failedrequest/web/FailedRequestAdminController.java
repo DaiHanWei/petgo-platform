@@ -51,7 +51,7 @@ public class FailedRequestAdminController {
         // ⚠️ 摘要与表格同源、随页签联动（在「已归档」页签上给活动区的数，读起来是骗人的）。
         model.addAttribute("summary", service.summary(rows));
         model.addAttribute("open", open);
-        return hx.isHtmx() ? "admin/fragments/failed-requests-list :: rows(true)" : "admin/failed-requests";
+        return hx.isHtmx() ? "admin/fragments/failed-requests-list :: rows(oob=true)" : "admin/failed-requests";
     }
 
     /**

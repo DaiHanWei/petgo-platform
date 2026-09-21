@@ -122,8 +122,8 @@ public class AdminVirtualAccountController {
             }
             return switch (s) {
                 case "candidates" -> "admin/fragments/publish-identities :: candidates";
-                case "identities" -> "admin/fragments/publish-identities :: rows(true)";
-                default -> "admin/fragments/virtual-accounts-list :: rows(true)";
+                case "identities" -> "admin/fragments/publish-identities :: rows(oob=true)";
+                default -> "admin/fragments/virtual-accounts-list :: rows(oob=true)";
             };
         }
         return "admin/virtual-accounts";

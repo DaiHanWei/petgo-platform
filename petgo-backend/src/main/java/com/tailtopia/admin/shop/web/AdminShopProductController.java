@@ -129,7 +129,7 @@ public class AdminShopProductController {
         model.addAttribute("activeSkuCount", listing.activeSkuCount());
         model.addAttribute("skuCap", listing.skuCap());
         model.addAttribute("skuCapReached", listing.atOrOverCap());
-        return hx.isHtmx() ? "admin/fragments/shop-products-list :: rows(true)" : "admin/shop-products";
+        return hx.isHtmx() ? "admin/fragments/shop-products-list :: rows(oob=true)" : "admin/shop-products";
     }
 
     // ---------- 表单 ----------

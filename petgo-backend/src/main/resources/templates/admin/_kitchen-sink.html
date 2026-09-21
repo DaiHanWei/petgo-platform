@@ -111,6 +111,9 @@
     </div>
 </div>
 
+<!--/* th:remove="all"：detail / done 只给控制器按片段选取（_kitchen-sink :: detail / :: done）。
+       不包这一层，整页渲染时它们也跟在布局后面原样渲染，而整页没有 item → ${item.title} 直接 500。 */-->
+<th:block th:remove="all">
 <!-- 详情 / 抽屉体 fragment（工作台右栏与模板 B 抽屉共用） -->
 <div th:fragment="detail" class="ks-detail">
     <h3 th:text="${item.title}">标题</h3>
@@ -131,5 +134,6 @@
     <p class="ok">✅ <span th:text="${item.title}">x</span> 已处理</p>
     <p class="muted" th:if="${#strings.isEmpty(nextId)}" th:text="#{admin.v130.empty.queue}">队列已清空</p>
 </div>
+</th:block>
 </body>
 </html>

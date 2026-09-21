@@ -489,7 +489,9 @@ class AdminShopInventoryEndpointIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(page).contains("<html");
-        assertThat(page).as("AC3：流水页只读，一个 form 都不能有").doesNotContain("<form");
+        // 顶栏账号菜单的「退出登录」是布局自带的 form（每个后台页都有），不算流水页的写入口
+        assertThat(page).as("AC3：流水页只读，一个 form 都不能有")
+                .doesNotContainPattern("<form(?![^>]*action=\"/admin/logout\")");
     }
 
     /**
@@ -518,7 +520,8 @@ class AdminShopInventoryEndpointIntegrationTest extends ApiIntegrationTest {
         assertThat(body).as("摘要条是全表聚合，这一笔可能让别的格子也变 —— 必须一起 oob 换")
                 .contains("shop-inventory-summary");
         assertThat(body).contains("hx-swap-oob");
-        assertThat(res.getResponse().getHeader("HX-Trigger"))
+        // 不发任何事件时 HX-Trigger 头就是 null —— 那正是期望的结果，按空串断言
+        assertThat(java.util.Objects.requireNonNullElse(res.getResponse().getHeader("HX-Trigger"), ""))
                 .as("🔴 库存操作常是连着几笔，成功后抽屉不自动关（UI 稿 10-6）—— 不该发 drawer-close")
                 .doesNotContain("admin:drawer-close");
         assertThat(actualOf(skuId)).isEqualTo(8);
