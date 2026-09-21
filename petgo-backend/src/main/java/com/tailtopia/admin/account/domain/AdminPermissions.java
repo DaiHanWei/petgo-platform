@@ -288,7 +288,16 @@ public final class AdminPermissions {
     public static final String ADMIN_DEACTIVATE = "admin.deactivate";
     public static final String ADMIN_VIEW_LOGS = "admin.view_logs";
 
-    /** 按查看/编辑分组，供账号页勾选区展示。 */
+    /** 场所内容管理（V1.3.0 Story 1.4 预留，Epic 5 建端点）：编辑 / 下架 / 合并 / 新建场所。不预授予任何预置角色。 */
+    public static final String PLACE_MANAGE = "place.manage";
+    /** 暖贴——以虚拟身份「去评论」（V1.3.0 Story 1.4 预留，Epic 4 建端点）。不预授予任何预置角色。 */
+    public static final String COMMENT_VIRTUAL_POST = "comment.virtual_post";
+
+    /**
+     * 按查看/编辑分组。V1.3.0 Story 1.6 起账号页勾选区改用 {@code AdminPageCatalog} 8 组矩阵，本常量已无页面引用；
+     * 保留仅作 {@link #ALL} 的派生来源（全集定义处），勿删。
+     */
+    @Deprecated
     public static final List<PermissionGroup> GROUPS = List.of(
             new PermissionGroup("perm.group.view", List.of(
                     CONTENT_VIEW_REPORTS, CONTENT_VIEW_TICKETS, CONTENT_VIEW, CONTENT_PIN_VIEW, CONTENT_TAG_VIEW,
@@ -314,7 +323,8 @@ public final class AdminPermissions {
                     VIRTUAL_ACCOUNT_MANAGE, SEED_PUBLISH_AS_REAL,
                     ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE,
                     SHOP_PRODUCT_EDIT, SHOP_COST_EDIT, SHOP_INVENTORY_EDIT,
-                    SHOP_ORDER_FULFILL)));
+                    SHOP_ORDER_FULFILL,
+                    PLACE_MANAGE, COMMENT_VIRTUAL_POST)));
 
     /** 全部合法权限码（UI 勾选项 + 校验白名单），保持模块分组顺序。 */
     // 采用 v1.1-dev 的 GROUPS 派生模型（更细粒度权限，为 stag 硬编码列表的超集）。

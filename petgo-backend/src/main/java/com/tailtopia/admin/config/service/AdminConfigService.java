@@ -1,7 +1,9 @@
 package com.tailtopia.admin.config.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.config.dto.FeedRankForm;
+import com.tailtopia.admin.config.dto.KtpPricingForm;
 import com.tailtopia.admin.config.dto.PawCoinForm;
 import com.tailtopia.admin.config.dto.PricingForm;
 import com.tailtopia.config.domain.ConfigChangeLog;
@@ -10,16 +12,21 @@ import com.tailtopia.config.domain.FeedRankConfig;
 import com.tailtopia.config.domain.PawCoinConfig;
 import com.tailtopia.config.domain.PawCoinTopupTier;
 import com.tailtopia.config.domain.PricingConfig;
+import com.tailtopia.config.domain.SupportContactConfig;
 import com.tailtopia.config.repository.ConfigChangeLogRepository;
 import com.tailtopia.config.repository.FeedRankConfigRepository;
 import com.tailtopia.config.repository.PawCoinConfigRepository;
 import com.tailtopia.config.repository.PawCoinTopupTierRepository;
 import com.tailtopia.config.repository.PricingConfigRepository;
+import com.tailtopia.config.repository.SupportContactConfigRepository;
 import com.tailtopia.content.rank.AttributeTemplate;
 import com.tailtopia.admin.config.dto.ShareRewardForm;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shop.address.domain.IndonesiaPhone;
 import java.util.ArrayList;
 import java.util.List;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,11 +46,23 @@ public class AdminConfigService {
     private final ConfigChangeLogRepository changeLogs;
     private final AdminAuditService audit;
     private final FeedRankConfigRepository feedRankRepo;
+    private final SupportContactConfigRepository supportContactRepo;
+
+    /** 启用档位上限（AB-22A：活动调档最多 4 档；表上无约束，服务层数 + advisory 锁串行）。 */
+    public static final int MAX_ENABLED_TIERS = 4;
+    /** 单档金额上限（IDR）：`tier_key VARCHAR(16)` 与 QRIS 单笔上限都装不下天文数字（复审 #6）；与 `shareRewardCapTooLarge` 同风格。 */
+    public static final long MAX_TIER_AMOUNT = 100_000_000L;
+
+    /** 事务级 advisory 锁（V1.3.0 Story 6.2）：新建 / 启用同一把锁串行化，随事务提交 / 回滚自动释放；L0 单测不注入（为 null 时跳过）。 */
+    @PersistenceContext
+    private EntityManager em;
 
     public AdminConfigService(PricingConfigRepository pricingRepo, PawCoinConfigRepository pawcoinRepo,
             PawCoinTopupTierRepository tierRepo, ConfigChangeLogRepository changeLogs,
-            AdminAuditService audit, FeedRankConfigRepository feedRankRepo) {
+            AdminAuditService audit, FeedRankConfigRepository feedRankRepo,
+            SupportContactConfigRepository supportContactRepo) {
         this.feedRankRepo = feedRankRepo;
+        this.supportContactRepo = supportContactRepo;
         this.pricingRepo = pricingRepo;
         this.pawcoinRepo = pawcoinRepo;
         this.tierRepo = tierRepo;
@@ -52,9 +71,10 @@ public class AdminConfigService {
     }
 
     // ── 定价 ──────────────────────────────────────────────────────────────────
+    /** 定价卡四项（V1.3.0 Story 6.1 起不再含 KTP 卡高清价——那一项归 {@link #updateKtpPricing}）。 */
     @Transactional
     public void updatePricing(PricingForm form, long adminId) {
-        require(form.vetConsultPrice() >= 0 && form.aiUnlockPrice() >= 0 && form.idHdDownloadPrice() >= 0,
+        require(form.vetConsultPrice() >= 0 && form.aiUnlockPrice() >= 0,
                 "价格不可为负", "admin.err.config.priceNegative");
         require(form.vetShareRate() >= 0 && form.vetShareRate() <= 100, "兽医分成须在 0–100",
                 "admin.err.config.vetShareRateRange");
@@ -67,7 +87,6 @@ public class AdminConfigService {
         diff(logs, ConfigType.PRICING, "vet_consult_price", c.getVetConsultPrice(), form.vetConsultPrice(), adminId);
         diff(logs, ConfigType.PRICING, "vet_share_rate", c.getVetShareRate(), form.vetShareRate(), adminId);
         diff(logs, ConfigType.PRICING, "ai_unlock_price", c.getAiUnlockPrice(), form.aiUnlockPrice(), adminId);
-        diff(logs, ConfigType.PRICING, "id_hd_download_price", c.getIdHdDownloadPrice(), form.idHdDownloadPrice(), adminId);
         diff(logs, ConfigType.PRICING, "monthly_free_quota", c.getMonthlyFreeQuota(), form.monthlyFreeQuota(), adminId);
         if (logs.isEmpty()) {
             return; // 无变更 → 不写、不审计。
@@ -75,8 +94,42 @@ public class AdminConfigService {
         c.setVetConsultPrice(form.vetConsultPrice());
         c.setVetShareRate(form.vetShareRate());
         c.setAiUnlockPrice(form.aiUnlockPrice());
-        c.setIdHdDownloadPrice(form.idHdDownloadPrice());
         c.setMonthlyFreeQuota(form.monthlyFreeQuota());
+        pricingRepo.save(c);
+        commit(logs, adminId, "PRICING", "pricing_config");
+    }
+
+    // ── KTP 模块高清图解锁定价三行（V1.3.0 Story 6.1 · AB-18A / AD-7）───────────
+    /**
+     * KTP 卡高清 / 护照·护照内页 / 护照·登机牌 三个一次性解锁价。
+     *
+     * <p>🔴 D-7：三价一律 ≥1（不做 0 元限免——账本 CHECK amount &gt; 0、收款渠道不接 0 元单），与迁移加的 DB CHECK 同口径，
+     * 这里先拦成人话 422 而不是让 CHECK 以 500 露出来。三价独立保存、不联动；只对真变化的字段写 {@code config_change_logs}
+     * （PRICING 类型，字段名 = 列名）+ 一条审计 {@code CONFIG_UPDATE_PRICING}；无变化不写不审计（本类既有口径）。
+     * 改价即时生效、只影响新发起的解锁（{@code IdCardHdService} 扣费逻辑不动）。
+     */
+    @Transactional
+    public void updateKtpPricing(KtpPricingForm form, long adminId) {
+        require(form.idHdDownloadPrice() >= 1 && form.passportPagePrice() >= 1 && form.passportBoardingPrice() >= 1,
+                "价格须为 ≥1 的整数（IDR），不做 0 元限免", "admin.err.config.ktpPriceMin");
+        // 上限与充值档位同一把尺（复审 0914）：误填天文数字会让用户端解锁单无法支付（QRIS 单笔上限），且与同表其它金额护栏不一致
+        require(form.idHdDownloadPrice() <= MAX_TIER_AMOUNT && form.passportPagePrice() <= MAX_TIER_AMOUNT
+                        && form.passportBoardingPrice() <= MAX_TIER_AMOUNT,
+                "价格须 ≤ 100000000 IDR", "admin.err.config.ktpPriceMax");
+
+        PricingConfig c = pricingRepo.findById(PricingConfig.SINGLETON_ID)
+                .orElseThrow(() -> new IllegalStateException("pricing_config 缺失"));
+        List<ConfigChangeLog> logs = new ArrayList<>();
+        diff(logs, ConfigType.PRICING, "id_hd_download_price", c.getIdHdDownloadPrice(), form.idHdDownloadPrice(), adminId);
+        diff(logs, ConfigType.PRICING, "passport_page_unlock_price", c.getPassportPageUnlockPrice(), form.passportPagePrice(), adminId);
+        diff(logs, ConfigType.PRICING, "passport_boarding_unlock_price", c.getPassportBoardingUnlockPrice(),
+                form.passportBoardingPrice(), adminId);
+        if (logs.isEmpty()) {
+            return; // 无变更 → 不写、不审计。
+        }
+        c.setIdHdDownloadPrice(form.idHdDownloadPrice());
+        c.setPassportPageUnlockPrice(form.passportPagePrice());
+        c.setPassportBoardingUnlockPrice(form.passportBoardingPrice());
         pricingRepo.save(c);
         commit(logs, adminId, "PRICING", "pricing_config");
     }
@@ -126,6 +179,13 @@ public class AdminConfigService {
         // 🔴 上界：误填天文数字会让 granted + coins 在 PG 里 bigint 溢出（发放静默失效），或一次真发出巨量币。
         require(form.idCardShareReward() <= 10_000, "身份证分享每次发放枚数须 ≤ 10000",
                 "admin.err.config.idCardShareRewardTooLarge");
+        // 年龄卡渠道（V1.3.0 Story 5.3）：与身份证渠道同一组校验，逐条对齐。
+        require(form.ageCardShareReward() >= 0, "年龄卡分享每次发放枚数须 ≥ 0（0 = 不发）",
+                "admin.err.config.ageCardShareRewardNegative");
+        require(form.ageCardShareDailyCap() >= 0, "年龄卡分享每日次数上限须 ≥ 0（0 = 不发）",
+                "admin.err.config.ageCardShareDailyCapNegative");
+        require(form.ageCardShareReward() <= 10_000, "年龄卡分享每次发放枚数须 ≤ 10000",
+                "admin.err.config.ageCardShareRewardTooLarge");
         require(form.shareRewardMonthlyCap() <= 10_000_000, "分享奖励月度上限须 ≤ 10000000",
                 "admin.err.config.shareRewardCapTooLarge");
         // 🔴 月度上限要装得下至少一次发放，否则卡面宣传「首次分享得 N」但永远发不出（AC6）。
@@ -133,6 +193,10 @@ public class AdminConfigService {
                 || form.shareRewardMonthlyCap() >= form.idCardShareReward(),
                 "分享奖励月度上限须 ≥ 身份证分享每次发放枚数",
                 "admin.err.config.shareRewardCapBelowReward");
+        require(form.ageCardShareReward() == 0 || form.shareRewardMonthlyCap() == 0
+                || form.shareRewardMonthlyCap() >= form.ageCardShareReward(),
+                "分享奖励月度上限须 ≥ 年龄卡分享每次发放枚数",
+                "admin.err.config.shareRewardCapBelowAgeCardReward");
 
         PawCoinConfig c = pawcoinRepo.findById(PawCoinConfig.SINGLETON_ID)
                 .orElseThrow(() -> new IllegalStateException("pawcoin_config 缺失"));
@@ -146,6 +210,10 @@ public class AdminConfigService {
                 form.idCardShareReward(), adminId);
         diff(logs, t, "id_card_share_daily_cap", c.getIdCardShareDailyCap(),
                 form.idCardShareDailyCap(), adminId);
+        diff(logs, t, "age_card_share_reward", c.getAgeCardShareReward(),
+                form.ageCardShareReward(), adminId);
+        diff(logs, t, "age_card_share_daily_cap", c.getAgeCardShareDailyCap(),
+                form.ageCardShareDailyCap(), adminId);
         if (logs.isEmpty()) {
             return; // 无变更 → 不写、不记日志、不审计（沿用本类既有口径）
         }
@@ -153,6 +221,8 @@ public class AdminConfigService {
         c.setShareRewardMonthlyCap(form.shareRewardMonthlyCap());
         c.setIdCardShareReward(form.idCardShareReward());
         c.setIdCardShareDailyCap(form.idCardShareDailyCap());
+        c.setAgeCardShareReward(form.ageCardShareReward());
+        c.setAgeCardShareDailyCap(form.ageCardShareDailyCap());
         pawcoinRepo.save(c);
         commit(logs, adminId, "PAWCOIN", "pawcoin_config");
     }
@@ -253,9 +323,10 @@ public class AdminConfigService {
         commit(logs, adminId, "FEED_RANK", "feed_rank_config");
     }
 
-    // ── 充值档位启停（保底 ≥1）─────────────────────────────────────────────────
+    // ── 充值档位启停（保底 ≥1；V1.3.0 Story 6.2 加启用上限 ≤4）────────────────────
     @Transactional
     public void setTierEnabled(long tierId, boolean enabled, long adminId) {
+        lockTiers(); // 先锁再读（复审 #4）：两个运营同时停用不会把启用数减到 0，同时启用同一档位不会重复记日志；与 createTier 同一把锁
         PawCoinTopupTier tier = tierRepo.findById(tierId)
                 .orElseThrow(() -> AppException.notFound("充值档位不存在").code("admin.err.config.tierNotFound"));
         if (tier.isEnabled() == enabled) {
@@ -264,12 +335,125 @@ public class AdminConfigService {
         if (!enabled && tierRepo.countByEnabledTrue() <= 1) {
             throw AppException.validation("至少保留 1 个启用的充值档位").code("admin.err.config.keepOneTier");
         }
+        if (enabled) {
+            require(tierRepo.countByEnabledTrue() < MAX_ENABLED_TIERS, "已有 4 个启用档位，请先停用一个",
+                    "admin.err.config.tierCapReached");
+        }
         tier.setEnabled(enabled);
         tierRepo.save(tier);
         List<ConfigChangeLog> logs = new ArrayList<>();
         logs.add(ConfigChangeLog.of(ConfigType.TOPUP_TIER, "tier." + tier.getTierKey() + ".enabled",
                 String.valueOf(!enabled), String.valueOf(enabled), adminId));
         commit(logs, adminId, "TOPUP_TIER", "tier:" + tier.getTierKey());
+    }
+
+    // ── 新建充值档位（V1.3.0 Story 6.2 · AB-22A / D-24）────────────────────────
+    /**
+     * 新建档位：金额 ≥1 → advisory 锁串行 → 金额不与任何既有档位（含已停用）重复 → 启用中 &lt; 4 → {@code tier_key = "t" + amount}、
+     * 新建即启用 → 全部档位按金额升序重排 {@code sort_order} 1..n → 变更日志一条（TOPUP_TIER，{@code tier.t<金额>.created}，old 空 new 金额）
+     * + 审计 {@link AuditActions#TIER_CREATED}。不提供删除（AC4）。
+     */
+    @Transactional
+    public PawCoinTopupTier createTier(long amountIdr, long adminId) {
+        require(amountIdr >= 1, "档位金额须为 ≥1 的整数（IDR）", "admin.err.config.tierAmountMin");
+        require(amountIdr <= MAX_TIER_AMOUNT, "档位金额须 ≤ 100000000 IDR", "admin.err.config.tierAmountMax");
+        lockTiers();
+        require(!tierRepo.existsByAmountIdr(amountIdr), "已存在相同金额的档位", "admin.err.config.tierAmountExists");
+        require(tierRepo.countByEnabledTrue() < MAX_ENABLED_TIERS, "已有 4 个启用档位，请先停用一个",
+                "admin.err.config.tierCapReached");
+        PawCoinTopupTier t = tierRepo.save(PawCoinTopupTier.create("t" + amountIdr, amountIdr));
+        resortAll();
+        List<ConfigChangeLog> logs = List.of(ConfigChangeLog.of(ConfigType.TOPUP_TIER,
+                "tier." + t.getTierKey() + ".created", "", String.valueOf(amountIdr), adminId));
+        changeLogs.saveAll(logs);
+        audit.record(adminId, AuditActions.TIER_CREATED, "config", "tier:" + t.getTierKey(), "新建充值档位 " + amountIdr + " IDR");
+        return t;
+    }
+
+    /** 全部档位（含停用）按金额升序重排 {@code sort_order} 1..n；须在事务内。 */
+    void resortAll() {
+        List<PawCoinTopupTier> all = tierRepo.findAllByOrderByAmountIdrAsc();
+        for (int i = 0; i < all.size(); i++) {
+            if (all.get(i).getSortOrder() != i + 1) {
+                all.get(i).setSortOrder(i + 1);
+            }
+        }
+        tierRepo.saveAll(all);
+    }
+
+    /** {@code pg_advisory_xact_lock(hashtext('pawcoin_topup_tiers'))}：随事务自动释放，不需要 unlock。 */
+    private void lockTiers() {
+        if (em != null) {
+            em.createNativeQuery("SELECT pg_advisory_xact_lock(hashtext('pawcoin_topup_tiers'))").getSingleResult();
+        }
+    }
+
+    /** {@code support_contact_config.whatsapp_number} 列宽。 */
+    private static final int MAX_WHATSAPP_LEN = 20;
+
+    /**
+     * {@code config_change_logs.old_value} / {@code new_value} 的列宽（V78，VARCHAR(64)）。
+     *
+     * <p>🔴 任何要写进变更日志的配置值都受它约束 —— 比字段自己那张表的列宽更紧时，
+     * 以它为准，否则保存时炸的是审计写入而不是业务校验（500 而不是 422）。
+     */
+    private static final int MAX_CHANGE_LOG_VALUE_LEN = 64;
+
+    // ── 客服联系方式（V1.3.0 Story 3-1 / AD-S8）────────────────────────────────
+
+    /**
+     * 改客服 WhatsApp 号与邮箱。改完即生效：**不需发版、不需重启**。
+     *
+     * <p>号码用 {@link IndonesiaPhone#normalize} 校验，格式不对整单拒绝。
+     * 🔒 **错误文案里不回显用户输入的号码**（{@code IndonesiaPhone} 的 NFR-5 纪律，
+     * 它的 detail 本来就不含输入，这里只要别自己拼进去）。
+     *
+     * <p>🔴 <b>落库的是运营输入的原样写法</b>（印尼人认 {@code 08xx} 这个形式），
+     * E.164 由消费方读时派生。两份都落库必然走散。
+     */
+    @Transactional
+    public void updateSupportContact(String whatsappNumber, String email, long adminId) {
+        String number = whatsappNumber == null ? "" : whatsappNumber.trim();
+        String mail = email == null ? "" : email.trim();
+
+        // 🔴 **长度先于格式校验**，两个上限都是 DB 给的，超了就是 500 而不是 422：
+        //    · whatsapp_number 列是 VARCHAR(20)；
+        //    · config_change_logs.old_value/new_value 是 **VARCHAR(64)**（V78），
+        //      两个字段的新旧值都要写进那两列，所以 64 是比本表 VARCHAR(120) 更紧的那道闸。
+        //    IndonesiaPhone.normalize 会先剔掉空格与连字符再判长度，因此**光靠它拦不住**
+        //    一个 26 字符的原始输入 —— 它归一化后合法，落库时才炸。
+        require(number.length() <= MAX_WHATSAPP_LEN, "客服 WhatsApp 号过长",
+                "admin.err.config.supportWhatsappTooLong", MAX_WHATSAPP_LEN);
+        require(mail.length() <= MAX_CHANGE_LOG_VALUE_LEN, "客服邮箱过长",
+                "admin.err.config.supportEmailTooLong", MAX_CHANGE_LOG_VALUE_LEN);
+
+        // 🔴 **不直接让 IndonesiaPhone.normalize 的异常冒出去**：它的文案是
+        //    「请填写收件人手机号 / 手机号格式不正确……」——那是收货地址的口径，
+        //    出现在客服配置表单上驴唇不对马嘴；而且它不带 messageCode，
+        //    英文/印尼文后台会看到一段中文。这里用 isValid + 自己的带 code 的 require。
+        require(!number.isBlank(), "请填写客服 WhatsApp 号",
+                "admin.err.config.supportWhatsappBlank");
+        require(IndonesiaPhone.isValid(number), "客服 WhatsApp 号格式不正确：应为印尼手机号",
+                "admin.err.config.supportWhatsappInvalid");
+
+        require(!mail.isBlank(), "请填写客服邮箱", "admin.err.config.supportEmailBlank");
+        require(mail.contains("@"), "客服邮箱格式不正确",
+                "admin.err.config.supportEmailInvalid");
+
+        SupportContactConfig c = supportContactRepo.findById(SupportContactConfig.SINGLETON_ID)
+                .orElseThrow(() -> new IllegalStateException("support_contact_config 缺失"));
+        List<ConfigChangeLog> logs = new ArrayList<>();
+        diff(logs, ConfigType.SUPPORT_CONTACT, "whatsapp_number", c.getWhatsappNumber(), number,
+                adminId);
+        diff(logs, ConfigType.SUPPORT_CONTACT, "email", c.getEmail(), mail, adminId);
+        if (logs.isEmpty()) {
+            return; // 无变更 → 不写、不审计（与本类其它配置一致）。
+        }
+        c.update(number, mail);
+        supportContactRepo.save(c);
+        // commit 拼出的审计 action 自动是 CONFIG_UPDATE_SUPPORT_CONTACT —— 不需要在
+        // AuditActions 加常量，与既有 PRICING / PAWCOIN 一致。
+        commit(logs, adminId, "SUPPORT_CONTACT", "support_contact_config");
     }
 
     // ── 内部 ──────────────────────────────────────────────────────────────────

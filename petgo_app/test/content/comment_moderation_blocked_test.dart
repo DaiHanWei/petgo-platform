@@ -23,7 +23,7 @@ class _BlockingRepo implements DetailRepository {
   int postCommentCalls = 0;
 
   @override
-  Future<Comment> postComment(int postId, String body) async {
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds = const []}) async {
     postCommentCalls++;
     if (commentBlocked) {
       throw DioException(
@@ -48,7 +48,7 @@ class _BlockingRepo implements DetailRepository {
   }
 
   @override
-  Future<Comment> postReply(int parentId, String body) => throw UnimplementedError();
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds = const []}) => throw UnimplementedError();
   @override
   Future<ContentDetail> getDetail(int id) => throw UnimplementedError();
   @override
@@ -59,6 +59,16 @@ class _BlockingRepo implements DetailRepository {
       const CommentPage(items: [], nextCursor: null, hasMore: false);
   @override
   Future<void> deleteComment(int commentId) async {}
+
+  /// V1.3.0 Story 2.4 新增的点赞通道；本类不验它，记下调用即可。
+  final List<int> likedComments = <int>[];
+  final List<int> unlikedComments = <int>[];
+
+  @override
+  Future<void> likeComment(int commentId) async => likedComments.add(commentId);
+
+  @override
+  Future<void> unlikeComment(int commentId) async => unlikedComments.add(commentId);
   @override
   Future<void> deleteContent(int postId) async {}
   @override
@@ -98,6 +108,8 @@ void main() {
     await _pumpComposer(tester, container);
 
     await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'judi online');
+    // V1.3.0 Story 2.3：底栏右侧两态互斥——有输入后发送键才出现，需要一帧让它挂上来。
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('detailCommentSend')));
     await tester.pumpAndSettle();
 
@@ -119,6 +131,8 @@ void main() {
     await _pumpComposer(tester, container);
 
     await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'hello');
+    // V1.3.0 Story 2.3：底栏右侧两态互斥——有输入后发送键才出现，需要一帧让它挂上来。
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('detailCommentSend')));
     await tester.pumpAndSettle();
 

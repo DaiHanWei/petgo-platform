@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  成帖效果抽屉（V1.3.0 Story 7.6 · AC3，480px 抽屉体 res=batchrow，UI 稿 2-29～2-30）。
+  这一行发出去之后在 App Feed 里长什么样：作者 + 多图缩略网格 + 正文 + 类型 / 物种 / 计划时间。
+
+  🔴 **只读**：这里不放任何写入口。预览页的定位是「发之前再看一眼」，
+     顺手在这里改一笔就会绕开第 2 步的逐行保存与校验，改完还是没校验过。要改就回第 2 步。
+  🔴 可以直接翻上一行 / 下一行：50 行的批次，关一次开一次要点 100 下。
+  ⚠️ 卡片是**近似**：真实 Feed 卡还有点赞 / 评论 / 装饰标签等运行时元素，
+     这里只画内容本身（图 + 文 + 作者），够回答「配错图没有、正文截断没有」。
+*/-->
+<body>
+<div th:fragment="drawer" id="batchrow-drawer-panel" class="bt-drawer" th:attr="data-row-id=${c.row.id}"
+     th:with="r=${c.row}">
+
+    <section class="card card-full bt-card" data-section="bt-preview">
+        <h2>
+            <span class="muted">#<span th:text="${r.rowNo}">1</span></span>
+            <span class="badge badge-danger" th:unless="${c.passes()}"
+                  th:text="#{admin.v130.batch.rowHasError}">这一行有问题</span>
+            <span class="badge badge-ok" th:if="${c.passes() and !c.warns()}"
+                  th:text="#{admin.batch.preview.pass}">通过</span>
+            <span class="badge badge-warn" th:if="${c.warns()}"
+                  th:text="#{admin.batch.preview.duplicate}">疑似重复</span>
+        </h2>
+
+        <!--/* 作者：显示**实际会用谁发**（行留空就是批次默认），Feed 卡上就是这一行，
+               配错账号在这里一眼看得出来。解析不到时单独出声，不印成「继承批次默认 #123」。 */-->
+        <p class="muted rv-small">
+            <span th:if="${author != null}" th:text="${author.nickname()}">昵称</span>
+            <span class="muted" th:if="${effectiveAuthorId != null}">#<span th:text="${effectiveAuthorId}">0</span></span>
+            <span class="hint" th:if="${authorInherited and author != null}"
+                  th:text="#{admin.v130.batch.authorInherited}">（继承批次默认）</span>
+            <span class="err" th:if="${authorUnresolved}"
+                  th:text="#{admin.v130.batch.authorUnresolved}">这一行解析不出发布账号：行内留空且批次也没设默认，或那个账号已不在可选身份池。</span>
+            <span class="badge badge-warn" th:if="${author != null and author.real()}"
+                  th:text="#{admin.v130.batch.realIdentity}">运营真实账号</span>
+        </p>
+
+        <!--/* 多图缩略网格：顺序即展示顺序，第一张是封面（也决定整帖容器高度） */-->
+        <div class="bt-images" th:if="${!#lists.isEmpty(r.imageUrls)}">
+            <figure th:each="u, s : ${r.imageUrls}">
+                <img th:src="${u}" alt="" loading="lazy" data-lightbox class="rv-img"/>
+                <figcaption class="muted" th:if="${s.index == 0}" th:text="#{admin.seed.images.cover}">封面</figcaption>
+            </figure>
+        </div>
+        <p class="hint" th:if="${#lists.isEmpty(r.imageUrls)}" th:text="#{admin.v130.batch.noImages}">这一行没有图。</p>
+
+        <p class="pl-desc bt-body" th:text="${r.body} ?: #{admin.v130.schedules.noBody}">正文</p>
+    </section>
+
+    <section class="card card-full bt-card" data-section="bt-meta">
+        <p class="muted rv-small">
+            <span th:text="#{admin.v130.batch.metaType}">类型</span>:
+            <span th:text="${r.contentType != null} ? #{'admin.contentType.' + ${r.contentType.name()}} : #{admin.batch.inherit}">DAILY</span>
+            · <span th:text="#{admin.v130.batch.metaSpecies}">物种</span>:
+            <span th:text="${r.species} ?: #{admin.batch.speciesInherit}">按账号解析</span>
+        </p>
+        <p class="muted rv-small">
+            <span th:text="#{admin.v130.batch.metaAt}">计划时间</span>:
+            <span th:if="${r.scheduledAt != null}"
+                  th:text="${#temporals.format(r.scheduledAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">时间</span>
+            <span th:if="${r.scheduledAt == null}" th:text="#{admin.v130.batch.publishNow}">立即发布</span>
+            <span class="muted" th:if="${r.scheduledAt != null}">WIB</span>
+        </p>
+        <!--/* 校验没过的原因写全 —— 表格里那一列宽度有限，长原因会被挤 */-->
+        <p class="err" th:each="e : ${c.errors}" th:text="${e}">错误</p>
+    </section>
+
+    <!--/* 翻行。⚠️ 目标是抽屉体本身（outerHTML 换整块），不是列表 */-->
+    <section class="pl-actions sticky-footer" data-bt-actions>
+        <a href="#" data-no-drawer class="btn btn-neutral btn-sm" th:if="${prevRowId != null}"
+           th:attr="hx-get=@{/admin/seed-batches/{b}/preview/{r}/drawer(b=${batchId},r=${prevRowId})}"
+           hx-target="#batchrow-drawer-panel" hx-swap="outerHTML"
+           th:text="#{admin.v130.batch.prevRow}">← 上一行</a>
+        <a href="#" data-no-drawer class="btn btn-neutral btn-sm" th:if="${nextRowId != null}"
+           th:attr="hx-get=@{/admin/seed-batches/{b}/preview/{r}/drawer(b=${batchId},r=${nextRowId})}"
+           hx-target="#batchrow-drawer-panel" hx-swap="outerHTML"
+           th:text="#{admin.v130.batch.nextRow}">下一行 →</a>
+        <span class="hint" th:text="#{admin.v130.batch.previewReadonly}">要改内容请回第 2 步。</span>
+    </section>
+</div>
+</body>
+</html>

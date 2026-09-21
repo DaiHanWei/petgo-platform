@@ -1,1 +1,0 @@
-../../architecture-v1.1.2-delta.md

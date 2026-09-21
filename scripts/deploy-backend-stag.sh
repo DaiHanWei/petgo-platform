@@ -4,7 +4,7 @@
 #
 # 与 scripts/deploy-backend.sh 完全隔离：独立镜像 tag / 容器名 / 端口 / env 文件。
 # **全程绝不触碰生产** 的 petgo-server 容器、petgo-server:latest / :previous 镜像。
-# 详见 docs/runbook-staging.md。
+# 详见 docs/runbooks/runbook-staging.md。
 #
 # 用法:
 #   ./scripts/deploy-backend-stag.sh          # 本地 mvn build（stag 分支）→ scp → 服务器 docker build + 重启 staging 容器
@@ -15,7 +15,7 @@
 #   SKIP_TESTS=0                     本地 build 时跑测试（默认 1=skip）
 #   ALLOW_BRANCH=1                   允许在非 stag 分支部署 staging（默认拒绝）
 #
-# 前置（一次性，详见 docs/runbook-staging.md §C）:
+# 前置（一次性，详见 docs/runbooks/runbook-staging.md §C）:
 #   1. 服务器已有 jbp-net / petgo-postgres / redis（与生产共用）
 #   2. petgo_stag 库已从生产克隆
 #   3. ~/.env.petgo-stag 已就位（DB_NAME=petgo_stag / REDIS_DB=3 / profile=prod ...）

@@ -151,10 +151,24 @@ public class IdCardHdService {
         return purchases.existsByUserId(userId);
     }
 
-    /** HD 下载当前定价（前端展示用，与扣费同源实时读 pricing_config，417 同类修复）。 */
+    /**
+     * HD 下载当前定价（与扣费同源实时读 pricing_config，417 同类修复）。V1.3.0 Story 6.1 起下发接口改走 {@link #currentPricing()}（三价），
+     * 本方法保留作扣费口径对照 / 旧调用方入口（story「必须保留」列）。
+     */
     @Transactional(readOnly = true)
     public long currentHdPrice() {
         return platformConfig.pricing().getIdHdDownloadPrice();
+    }
+
+    /**
+     * 下发给 App 的 KTP 模块三价（V1.3.0 Story 6.1，契约 X-4）：KTP 卡高清 + 护照·护照内页 + 护照·登机牌，一次读 {@code pricing_config}
+     * 单行（无缓存），改价即时生效、只影响新发起的解锁；已解锁记录不受影响（扣费逻辑不动）。
+     */
+    @Transactional(readOnly = true)
+    public com.tailtopia.profile.dto.IdCardHdPricingResponse currentPricing() {
+        var p = platformConfig.pricing();
+        return new com.tailtopia.profile.dto.IdCardHdPricingResponse(p.getIdHdDownloadPrice(), p.getPassportPageUnlockPrice(),
+                p.getPassportBoardingUnlockPrice());
     }
 
     /**

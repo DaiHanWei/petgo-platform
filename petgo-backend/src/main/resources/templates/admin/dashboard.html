@@ -1,53 +1,69 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
-<!-- 运营概览看板（Story 9.10，AB-1.1-01）。四模块指标聚合；种子发布降为链接入口。 -->
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  内容运营数据看板（V1.3.0 Story 3.4，AB-15A；模板 C · tpl-c-report）。原 Story 9.10 四模块表格改为底部「当前时点总量」摘要行。
+  自上而下：范围切换（近 7 / 30 天，htmx 只换 #dashboard-charts）→ 五卡图表（fragments/dashboard-charts.html）
+  → 摘要行（复用 AdminDashboardService.overview() 九个数字）+ 发布种子内容链接 + 次日留存说明（去 PostHog 查看，无外链）。
+  Chart.js 只在本页引入（vendored，无 CDN）；静态资源有内容指纹，必须 th:src="@{…}"。
+-->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.dashboard.title}">概览 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/vendor/chart.umd.min.js}"></script>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-charts.js}"></script>
 </head>
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.dashboard.title}">运营概览</h1>
-        <p class="hint" th:text="#{admin.dashboard.overviewNote}">四模块运营态势（实时聚合）。</p>
-
-        <div class="metric-grid">
-            <section class="metric-card">
-                <h2 th:text="#{admin.dashboard.mod.users}">用户</h2>
-                <table class="param-table">
-                    <tr><th th:text="#{admin.dashboard.m.totalUsers}">总用户</th><td th:text="${metrics.totalUsers}">0</td></tr>
-                    <tr><th th:text="#{admin.dashboard.m.virtualAccounts}">虚拟账号</th><td th:text="${metrics.virtualAccounts}">0</td></tr>
-                </table>
-            </section>
-
-            <section class="metric-card">
-                <h2 th:text="#{admin.dashboard.mod.orders}">订单</h2>
-                <table class="param-table">
-                    <tr><th th:text="#{admin.dashboard.m.vetConsultOrders}">兽医咨询单</th><td th:text="${metrics.vetConsultOrders}">0</td></tr>
-                    <tr><th th:text="#{admin.dashboard.m.aiCompletedOrders}">AI 完成单</th><td th:text="${metrics.aiCompletedOrders}">0</td></tr>
-                    <tr><th th:text="#{admin.dashboard.m.aiRevenue}">AI 收入（IDR）</th><td th:text="${#numbers.formatInteger(metrics.aiRevenue, 1, 'COMMA')}">0</td></tr>
-                </table>
-            </section>
-
-            <section class="metric-card">
-                <h2 th:text="#{admin.dashboard.mod.content}">内容</h2>
-                <table class="param-table">
-                    <tr><th th:text="#{admin.dashboard.m.posts}">帖子数</th><td th:text="${metrics.posts}">0</td></tr>
-                    <tr><th th:text="#{admin.dashboard.m.comments}">评论数</th><td th:text="${metrics.comments}">0</td></tr>
-                </table>
-            </section>
-
-            <section class="metric-card">
-                <h2 th:text="#{admin.dashboard.mod.vets}">兽医</h2>
-                <table class="param-table">
-                    <tr><th th:text="#{admin.dashboard.m.totalVets}">兽医总数</th><td th:text="${metrics.totalVets}">0</td></tr>
-                    <tr><th th:text="#{admin.dashboard.m.pendingSettlements}">待打款月结</th><td th:text="${metrics.pendingSettlements}">0</td></tr>
-                </table>
-            </section>
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.v130.dashboard.title}">内容运营数据看板</h1>
+            <p class="hint" th:text="#{admin.v130.dashboard.subtitle}">日粒度 · WIB · 截至昨天 24:00</p>
         </div>
 
-        <p><a th:href="@{/admin/seed-post}" th:text="#{admin.dashboard.seedLink}">发布种子内容</a></p>
+        <div th:replace="~{admin/fragments/tpl-c-report :: report(~{::db-range}, ~{::db-cards}, ~{::db-detail})}">
+            <div th:fragment="db-range" class="chips" data-range-switch role="group">
+                <button type="button" class="chip" th:classappend="${charts.rangeDays == 7} ? 'chip--on'" data-range="7"
+                        th:attr="hx-get=@{/admin/charts(range=7)},aria-pressed=${charts.rangeDays == 7}"
+                        hx-target="#dashboard-charts" hx-swap="innerHTML" hx-indicator="#dashboard-charts"
+                        th:text="#{admin.v130.dashboard.range.7}">近 7 天</button>
+                <button type="button" class="chip" th:classappend="${charts.rangeDays == 30} ? 'chip--on'" data-range="30"
+                        th:attr="hx-get=@{/admin/charts(range=30)},aria-pressed=${charts.rangeDays == 30}"
+                        hx-target="#dashboard-charts" hx-swap="innerHTML" hx-indicator="#dashboard-charts"
+                        th:text="#{admin.v130.dashboard.range.30}">近 30 天</button>
+            </div>
+            <div th:fragment="db-cards" id="dashboard-charts" class="dashboard-charts">
+                <div th:replace="~{admin/fragments/dashboard-charts :: charts}"></div>
+            </div>
+            <div th:fragment="db-detail" class="dashboard-detail">
+                <!-- 底部「当前时点总量」摘要行：复用 overview() 九个数字（Story 9.10 的 admin.dashboard.m.* key 原样保留） -->
+                <section class="summary-row card card-full">
+                    <h2 th:text="#{admin.v130.dashboard.summary}">当前时点总量</h2>
+                    <ul class="summary-list">
+                        <li><span th:text="#{admin.dashboard.m.totalUsers}">总用户</span><b th:text="${metrics.totalUsers}">0</b></li>
+                        <li><span th:text="#{admin.dashboard.m.virtualAccounts}">运营发布身份</span><b th:text="${metrics.virtualAccounts}">0</b></li>
+                        <li><span th:text="#{admin.dashboard.m.vetConsultOrders}">兽医咨询单</span><b th:text="${metrics.vetConsultOrders}">0</b></li>
+                        <li><span th:text="#{admin.dashboard.m.aiCompletedOrders}">AI 完成单</span><b th:text="${metrics.aiCompletedOrders}">0</b></li>
+                        <li><span th:text="#{admin.dashboard.m.aiRevenue}">AI 收入（IDR）</span><b th:text="${#numbers.formatInteger(metrics.aiRevenue, 1, 'COMMA')}">0</b></li>
+                        <li><span th:text="#{admin.dashboard.m.posts}">帖子数</span><b th:text="${metrics.posts}">0</b></li>
+                        <li><span th:text="#{admin.dashboard.m.comments}">评论数</span><b th:text="${metrics.comments}">0</b></li>
+                        <li><span th:text="#{admin.dashboard.m.totalVets}">兽医总数</span><b th:text="${metrics.totalVets}">0</b></li>
+                        <li><span th:text="#{admin.dashboard.m.pendingSettlements}">待打款月结</span><b th:text="${metrics.pendingSettlements}">0</b></li>
+                    </ul>
+                    <p class="muted" th:text="#{admin.v130.dashboard.summaryNote}">已剔除虚拟 / 种子账号与已注销用户数据。</p>
+                    <p><a th:href="@{/admin/seed-post}" th:text="#{admin.dashboard.seedLink}">发布种子内容</a></p>
+                </section>
+                <p class="hint retention-note" th:text="#{admin.v130.dashboard.retentionNote}">次日留存：登录事件只进 PostHog，不落库；请去 PostHog 查看。</p>
+                <!-- Story 3.3 AC3：stag 专用手动跑批入口（Bean 只在 stag profile 注册；按钮也只在 stag 渲染）。htmx 自动带 CSRF 头。 -->
+                <div class="stag-tools" th:if="${stag}" sec:authorize="hasRole('SUPER_ADMIN')">
+                    <button type="button" class="btn btn-neutral btn-sm" th:attr="hx-post=@{/admin/dashboard/materialize}"
+                            hx-target="#materialize-result" hx-swap="innerHTML" hx-indicator="#materialize-result"
+                            th:text="#{admin.v130.dashboard.materializeNow}">立即跑批（stag）</button>
+                    <pre id="materialize-result" class="muted"></pre>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 </body>

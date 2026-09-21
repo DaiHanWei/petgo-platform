@@ -33,13 +33,30 @@ public class LogSanitizer {
             // 收货地址 PII（V1.4.0 Story 2.1 · Epic 2 头注要求）——App 内首个用户地址数据集。
             // 🔴 收件人姓名/履约电话/详细地址三项：快递员靠它们找到人，泄露即等同泄露住址。
             //    receiverphone 虽已被上面的 "phone" 命中，仍显式列出以免将来有人改那条时连带打开这里。
-            "receivername", "receiverphone", "addressline", "kodepos");
+            "receivername", "receiverphone", "addressline", "kodepos",
+            // 评价正文（Story 5-1 · SHOP-FR-27；v1.3.0 shop-v2 复审 #3 由「仅请求体」上提至全局）。
+            // 🔴 原先只打码请求体，理由是「ShopReviewView.content 是公开字段，打码零收益」——
+            //    该理由不成立：ShopReviewView.mine 会返回本人 PENDING / REJECTED 的评价，
+            //    那些正文**从未公开**，却照样随响应体原样落盘（同一行日志里 req 打码、resp 明文）。
+            // 爆炸半径已核实极小：全仓 JSON 键为 content 的只有评价族；评论正文叫 body、
+            //    发帖正文叫 text、UploadUrlRequest 里是 contentType（整键 equals 不误伤）。
+            //    代价仅是日志里看不到公开评价原文 —— 用户自由文本，本就无排障价值。
+            "content",
+            // 位置坐标（NFR-4，batch-b1 复审）：`POST /places` 请求体带的是用户标记时的设备 GPS
+            // （表单默认取当前定位）。query 里的 lat/lng 已由 ApiAccessLoggingFilter.redactQuery 打码，
+            // 请求体这一半此前是明文落盘的。响应里的场所坐标同样来自标记人的 GPS，一并打码。
+            "lat", "lng", "latitude", "longitude");
 
     /**
      * <b>仅请求体</b>打码的字段名：用户自由文本，可含第三者 PII / 指控原文（如账号举报的
      * 「其他」补充说明，V102 建表注释明写「禁止进日志」）。
      * ⚠️ 刻意不并入 {@link #SENSITIVE_KEYS}：RFC 9457 错误<b>响应</b>体的 {@code detail}
      * 是排障主字段，全局打码会把所有错误响应弄瞎。
+     *
+     * <p>⚠️ <b>{@code content} 曾在此集合，v1.3.0 shop-v2 复审 #3 已上提到
+     * {@link #SENSITIVE_KEYS}（全局打码）</b> —— 原来的理由「评价正文是公开响应字段」
+     * 漏掉了 {@code ShopReviewView.mine} 会返回本人 PENDING / REJECTED 的正文，那些从未公开。
+     * 别再把它挪回来。
      */
     private static final Set<String> REQUEST_ONLY_SENSITIVE_KEYS = Set.of("detail");
 

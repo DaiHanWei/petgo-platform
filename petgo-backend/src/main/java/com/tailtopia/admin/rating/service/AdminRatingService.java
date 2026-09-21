@@ -46,7 +46,30 @@ public class AdminRatingService {
                 q.ratedCount(), q.unratedCount(), q.ratedCount() + q.unratedCount());
     }
 
-    private Comparator<VetRatingOverviewRow> comparator(String sort) {
+    /**
+     * 排序键归一（V1.3.0 Story 9.1b）：同时接受 {@code avg_desc} 与 {@code avgDesc} 两种拼法。
+     *
+     * <p>🔴 这不是「兼容心太软」：退役的评分总览页发出去的链接用的是 snake_case（运营存了书签），
+     * 而 Story 9.1b 的 AC3 把参数写成 camelCase。两种拼法都得认 ——
+     * 认错的代价是**静默落进 default（均分倒序）**：下拉框仍高亮着运营选的那一项，
+     * 界面上一点异常都看不出，只能靠人肉核对数字。
+     *
+     * <p>⚠️ 未知值仍然落默认（保守退化，与改前一致），但**已知的六种拼法必须精确命中**。
+     */
+    static String normalizeSort(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return null;
+        }
+        return switch (sort.trim()) {
+            case AVG_DESC, "avgDesc" -> AVG_DESC;
+            case AVG_ASC, "avgAsc" -> AVG_ASC;
+            case VOLUME_DESC, "volumeDesc" -> VOLUME_DESC;
+            default -> sort.trim();
+        };
+    }
+
+    private Comparator<VetRatingOverviewRow> comparator(String rawSort) {
+        String sort = normalizeSort(rawSort);
         return switch (sort == null ? AVG_DESC : sort) {
             case AVG_ASC -> Comparator.comparingDouble(VetRatingOverviewRow::average)
                     .thenComparing(VetRatingOverviewRow::vetId);

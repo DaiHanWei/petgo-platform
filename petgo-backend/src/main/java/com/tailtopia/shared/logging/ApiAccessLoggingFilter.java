@@ -85,7 +85,7 @@ public class ApiAccessLoggingFilter extends OncePerRequestFilter {
         String respBody = sanitizer.sanitize(resp.getContentAsByteArray(), resp.getContentType());
 
         String[] subRole = subAndRole(original.getHeader("Authorization"));
-        String query = original.getQueryString();
+        String query = redactQuery(original.getQueryString());
 
         log.info("api method={} path={}{} status={} durMs={} sub={} role={} req={} resp={}",
                 original.getMethod(),
@@ -97,6 +97,54 @@ public class ApiAccessLoggingFilter extends OncePerRequestFilter {
                 subRole[1],
                 reqBody,
                 respBody);
+    }
+
+    /**
+     * 敏感 query 参数名（小写）—— 值一律打码，只留键名。
+     *
+     * <p>🔴 <b>{@code lat}/{@code lng} 是位置坐标</b>（V1.3.0 batch-b1 Story 1.2
+     * 的 {@code GET /api/v1/places?lat=&lng=}）。CLAUDE.md / NFR-4 的红线是
+     * <b>位置坐标禁止进日志</b>，而 {@link LogSanitizer} 只脱敏 JSON body、管不到 URL ——
+     * prod 这条 access log 是 INFO 且落盘保留 14 天，不打码就等于把每个用户每次打开
+     * 场所列表时的精确位置写进了日志文件。
+     *
+     * <p>⚠️ 加新的位置/PII 类 query 参数时**必须往这里加一行** —— 这是 URL 侧唯一的脱敏出口。
+     */
+    private static final java.util.Set<String> REDACTED_QUERY_KEYS =
+            java.util.Set.of("lat", "lng", "latitude", "longitude");
+
+    /**
+     * 按键打码 query string：{@code lat=-6.23&type=CAFE} → {@code lat=***&type=CAFE}。
+     *
+     * <p>只动 {@link #REDACTED_QUERY_KEYS} 命中的键，其余原样保留 —— 排查问题要看筛选参数。
+     * 解析故意写得很宽松（不 URL-decode、不校验格式）：这里的目标是「绝不漏掉一个坐标」，
+     * 而不是精确解析；形如 {@code lat} 但没有 {@code =} 的片段也一并打码。
+     */
+    static String redactQuery(String query) {
+        if (query == null || query.isEmpty()) {
+            return query;
+        }
+        String lower = query.toLowerCase(java.util.Locale.ROOT);
+        boolean hit = REDACTED_QUERY_KEYS.stream().anyMatch(lower::contains);
+        if (!hit) {
+            return query; // 绝大多数请求走这条：零分配、零拼接。
+        }
+        String[] parts = query.split("&", -1);
+        StringBuilder sb = new StringBuilder(query.length());
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) {
+                sb.append('&');
+            }
+            int eq = parts[i].indexOf('=');
+            String key = (eq < 0 ? parts[i] : parts[i].substring(0, eq))
+                    .toLowerCase(java.util.Locale.ROOT);
+            if (REDACTED_QUERY_KEYS.contains(key)) {
+                sb.append(key).append("=***");
+            } else {
+                sb.append(parts[i]);
+            }
+        }
+        return sb.toString();
     }
 
     private boolean hasJsonBody(HttpServletRequest request) {

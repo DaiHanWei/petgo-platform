@@ -308,30 +308,38 @@ class AdminTemplateStructureTest {
     }
 
     /**
-     * 🔴 **没有可用标签时，「给内容打标」不许渲染一个点不开的空下拉**（bug 20260828）。
+     * 🔴 **打不成的标，不许渲染一张打标表单**（bug 20260828 的延续）。
      *
-     * <p>实机：一个标签都还没建，页面照样把整张打标表单铺出来 —— 一个空的、点开什么都没有的
+     * <p>原始事故：一个标签都还没建，页面照样把整张打标表单铺出来 —— 一个空的、点开什么都没有的
      * 下拉，底下跟着几十条待选内容。界面上没有任何一句话说明「先去建标签」，
      * 于是它读起来像**坏了**，而不是像**还没准备好**。运营的原话就是「点不开，是空的」。
      *
-     * <p>⚠️ 用文本结构断言而不是渲染断言：要渲染出这一屏得先准备一个「零标签」的库，
-     * 而这一页的判据只有两条、都写在模板里，扫文本就够，且不依赖 Docker。
+     * <p>V1.3.0 Story 7.4 把打标收进**标签自己的抽屉**（标签在抽屉里定死，不再有选标签的下拉），
+     * 「零标签」那一屏结构上不复存在 —— 但同一个坑换了个位置还在：**已下线的标签不可再分配**
+     * （校验在 {@code ContentTagQueryService.assign}）。抽屉里照渲染表单的话，运营选完内容、
+     * 填完时间、点提交才收到一句报错，白填一遍。所以判据同样是两条：不渲染 + 说清为什么。
+     *
+     * <p>⚠️ 用文本结构断言而不是渲染断言：判据都写在模板里，扫文本就够，且不依赖 Docker。
      */
     @Test
-    void tagAssignFormIsHiddenWhenNoTagExistsYet() throws IOException {
-        String html = Files.readString(DIR.resolve("content-tags.html"));
+    void tagAssignFormIsHiddenWhenTheTagCannotBeAssigned() throws IOException {
+        String drawer = Files.readString(DIR.resolve("fragments").resolve("drawer-content-tag.html"));
 
-        assertThat(html)
-                .as("🔴 打标表单没有「无可用标签时不渲染」的条件 ⇒ 运营会看到一个点不开的空下拉")
-                .contains("th:unless=\"${#lists.isEmpty(assignable)}\"");
-        assertThat(html)
-                .as("🔴 少了「先去建标签」那句提示 ⇒ 表单藏起来之后，那一块变成一片空白，"
-                        + "比空下拉更让人不知道该干什么")
-                .contains("data-notice=\"assign-needs-tag\"");
-        assertThat(html)
-                .as("🔴 判据必须是 assignable（**在线**标签）而不是 tags —— "
-                        + "标签全部下线时同样打不了标，用 tags 判会漏掉那种情况")
-                .doesNotContain("th:unless=\"${#lists.isEmpty(tags)}\"");
+        assertThat(drawer)
+                .as("🔴 打标表单没有「标签已下线时不渲染」的条件 ⇒ 运营会白填一整张表单才收到报错")
+                .contains("th:unless=\"${t.retired()}\"");
+        assertThat(drawer)
+                .as("🔴 少了「该标签已下线」那句提示 ⇒ 表单藏起来之后，那一块变成一片空白，"
+                        + "比一张提交必报错的表单更让人不知道该干什么")
+                .contains("data-notice=\"assign-retired\"");
+
+        String page = Files.readString(DIR.resolve("content-tags.html"));
+        assertThat(page)
+                .as("🔴 页尾那个独立的「给内容打标」区块必须删干净（AC3）—— "
+                        + "留着就又有两个打标入口，而它那个「选择标签」下拉与新建表单的「名称」同屏，"
+                        + "正是运营读不懂的那一屏")
+                .doesNotContain("admin.tags.assignTitle")
+                .doesNotContain("admin.tags.assignPickTag");
     }
 
     /**
@@ -354,7 +362,53 @@ class AdminTemplateStructureTest {
      * <b>layout 的 &lt;head&gt; 根本不会被渲染</b>，各页保留自己的 head
      * （layout 注释亦言明「各业务页在自身 head 引入」）。所以只能逐页写，
      * 也正因为只能逐页写，才需要这条测试兜着 —— 下一个加上传的页面同样会漏。
+     *
+     * <h2>片段里的上传控件（V1.3.0 Story 10.1）</h2>
+     * 工作台把上传控件搬进了 htmx 片段（{@code shop-return-panel.html} 的质检照片）。
+     * 片段<b>没有自己的 &lt;head&gt;</b> —— meta 来自把它 swap 进去的那张宿主页，
+     * 所以对片段照搬「同文件里要有 meta」只会逼人往片段里塞一段永远不会渲染的 &lt;head&gt;。
+     *
+     * <p>但也不能直接豁免整个 {@code fragments/} 目录：那等于把这条守门在片段上作废，
+     * 而片段正是以后新增上传控件最可能去的地方。折中是让片段<b>指名宿主页</b>：
+     * 片段顶部写一行 {@code upload-host: xxx.html} 注释，本条去查那张页面有没有 meta。
+     *
+     * <p>🔴 <b>光查「那个文件名存在且有 meta」是不够的</b>：随手填一个确实有 meta 的页面
+     * （{@code seed-post.html} 就是这套 meta 的原产地）即可蒙混过关，而片段实际被 swap 进的是另一张
+     * 没有 meta 的页 —— 测试绿、线上 403，正是本条立项要防的那个原形。
+     * 所以还要求<b>有一个 Controller 同时返回这两个视图名</b>：片段与它声明的宿主页得真的
+     * 出自同一个 Controller，这个关系是编译期存在的事实，蒙不过去。
      */
+    private static final java.util.regex.Pattern UPLOAD_HOST =
+            java.util.regex.Pattern.compile("upload-host:\\s*([A-Za-z0-9_.-]+\\.html)");
+
+    /** 两个都要：admin-core.js 里是 {@code if (token && header)}，缺任一条就整体不带头。 */
+    private static boolean declaresCsrfMeta(String html) {
+        return html.contains("name=\"_csrf\"") && html.contains("name=\"_csrf_header\"");
+    }
+
+    /**
+     * 有没有哪个 Controller<b>同时</b>返回片段视图名与宿主页视图名。
+     *
+     * <p>片段视图名形如 {@code "admin/fragments/shop-return-panel :: detail"}，
+     * 宿主页视图名形如 {@code "admin/shop-returns"} —— 两者出现在同一个 java 文件里，
+     * 就说明这张页和这个片段确实是一对（同一个 Controller 既渲染整页也渲染它的片段）。
+     */
+    private static boolean aControllerServesBoth(String fragmentFile, String hostFile)
+            throws IOException {
+        String fragmentView = "admin/fragments/" + fragmentFile.replace(".html", "");
+        String pageView = "\"admin/" + hostFile.replace(".html", "\"");
+        try (Stream<Path> s = Files.walk(Path.of("src", "main", "java"))) {
+            for (Path p : s.filter(Files::isRegularFile)
+                    .filter(f -> f.toString().endsWith(".java")).toList()) {
+                String src = Files.readString(p, StandardCharsets.UTF_8);
+                if (src.contains(fragmentView) && src.contains(pageView)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     @Test
     void everyFetchUploadPageDeclaresCsrfMeta() throws IOException {
         List<String> withUploader = new ArrayList<>();
@@ -366,13 +420,29 @@ class AdminTemplateStructureTest {
             }
             withUploader.add(fileName(f));
             // 两个都要：admin.js 里是 `if (token && header)`，缺任一条就整体不带头。
-            if (!html.contains("name=\"_csrf\"") || !html.contains("name=\"_csrf_header\"")) {
+            if (declaresCsrfMeta(html)) {
+                continue;
+            }
+            java.util.regex.Matcher m = UPLOAD_HOST.matcher(html);
+            if (!m.find()) {
                 offenders.add(fileName(f));
+                continue;
+            }
+            String hostName = m.group(1);
+            Path host = DIR.resolve(hostName);
+            if (!Files.exists(host)) {
+                offenders.add(fileName(f) + "（声明的宿主 " + hostName + " 不存在）");
+            } else if (!declaresCsrfMeta(Files.readString(host, StandardCharsets.UTF_8))) {
+                offenders.add(fileName(f) + "（宿主 " + hostName + " 自己也没有 meta）");
+            } else if (!aControllerServesBoth(fileName(f), hostName)) {
+                offenders.add(fileName(f) + "（声明的宿主 " + hostName
+                        + " 与它不出自同一个 Controller —— 随手填一个有 meta 的页面蒙混不过去）");
             }
         }
         assertThat(withUploader).as("本条的前提是确实有页面走 fetch 上传").isNotEmpty();
         assertThat(offenders)
-                .as("🔴 这些页面走 fetch 上传却没在自己的 <head> 里放 CSRF meta ⇒ "
+                .as("🔴 这些页面走 fetch 上传却没在自己的 <head> 里放 CSRF meta（片段可写一行 "
+                        + "`upload-host: xxx.html` 注释指名宿主页）⇒ "
                         + "请求不带 CSRF 头 → 403 → 运营看到的是「选了图没反应」。"
                         + "补上 seed-post.html 里那两行 <meta name=\"_csrf\"…>（不能靠 layout 统一注入，"
                         + "layout 的 head 不参与业务页渲染）")
@@ -396,7 +466,7 @@ class AdminTemplateStructureTest {
         // ⚠️ 只看**代码行**：本文件的注释里逐字引用了那句被废弃的写法（讲清楚当初错在哪），
         //    连注释一起扫会把说明文字本身判成违规 —— 与 blockTagsAreBalanced 先剥注释同理。
         String js = Files.readString(
-                        Path.of("src", "main", "resources", "static", "admin", "admin.js"),
+                        Path.of("src", "main", "resources", "static", "admin", "admin-core.js"),
                         StandardCharsets.UTF_8)
                 .lines()
                 .filter(l -> !l.strip().startsWith("//"))
@@ -524,6 +594,219 @@ class AdminTemplateStructureTest {
             n++;
         }
         return n;
+    }
+
+    /**
+     * 🔴 同一个标签上<b>不能</b>既写 {@code th:each} 又写 {@code th:replace}/{@code th:insert}（bug 20260909，Story 6.5 复审）。
+     *
+     * <h2>这条守的是一个真实事故</h2>
+     * 账号页写成 {@code <tr th:each="a : ${accounts}" th:replace="~{… :: row(${a}, false)}">}。
+     * Thymeleaf 的属性优先级里 <b>replace(100) 先于 each(200)</b> ⇒ 循环<b>根本没跑</b>，
+     * {@code ${a}} 在上下文中不存在、以 {@code null} 进片段，一开页就是 500。
+     *
+     * <p>⚠️ 这类错<b>看起来完全正常</b>：语法合法、模板结构检查、i18n 扫描、编译全绿，
+     * 只有真渲染一次才炸 —— 而整页渲染测试是 L1（要真库），云端跑不到。
+     *
+     * <p>正确写法是外面套一层 {@code <th:block th:each=...>}（见 {@code fragments/places-list.html}）。
+     */
+    @Test
+    void noTagCarriesBothEachAndReplace() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            List<String> lines = Files.readAllLines(f, StandardCharsets.UTF_8);
+            for (int i = 0; i < lines.size(); i++) {
+                String tag = wholeOpenTagAt(lines, i);
+                if (tag == null || !tag.contains("th:each")) {
+                    continue;
+                }
+                if (tag.contains("th:replace") || tag.contains("th:insert")) {
+                    offenders.add(fileName(f) + ":" + (i + 1) + "  " + lines.get(i).trim());
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 th:each 与 th:replace/th:insert 同标签：replace 优先级更高 ⇒ 循环不执行、循环变量为 null，"
+                        + "开页即 500。改成外层 <th:block th:each=…> 包住。")
+                .isEmpty();
+    }
+
+    /**
+     * 🔴 {@code sec:authorize} 不能与 {@code th:replace}/{@code th:insert} 写在同一个标签上（同一批复审）。
+     *
+     * <p>{@code AuthorizeAttrProcessor} 的优先级是 300，同样低于 {@code th:replace}(100)：
+     * 元素照样被替换、片段照样渲染，<b>这道门形同虚设</b>。
+     * 账号页的「创建账号」抽屉就这么把整份建号表单与权限码全集渲染给了只读账号。
+     * 正确写法：把门挂在外层 {@code <th:block sec:authorize=…>}（见 {@code config.html}）。
+     */
+    @Test
+    void noTagCarriesBothAuthorizeAndReplace() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            List<String> lines = Files.readAllLines(f, StandardCharsets.UTF_8);
+            for (int i = 0; i < lines.size(); i++) {
+                String tag = wholeOpenTagAt(lines, i);
+                if (tag == null || !tag.contains("sec:authorize")) {
+                    continue;
+                }
+                if (tag.contains("th:replace") || tag.contains("th:insert")) {
+                    offenders.add(fileName(f) + ":" + (i + 1) + "  " + lines.get(i).trim());
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 sec:authorize 与 th:replace/th:insert 同标签：优先级低于 replace ⇒ 门被静默忽略，"
+                        + "无权限的人照样拿到片段内容。改成外层 <th:block sec:authorize=…> 包住。")
+                .isEmpty();
+    }
+
+    /**
+     * 🔴 {@code th:if}/{@code th:unless} 同样不能与 {@code th:replace}/{@code th:insert} 同标签
+     * （V1.3.0 Story 7.5 补齐这一族的第三条）。
+     *
+     * <p>{@code th:if} 的优先级是 300，低于 {@code th:replace}(100) —— 元素照样被替换，
+     * <b>条件一次都不会被求值</b>。已实测：{@code <div th:if="${false}" th:replace="~{::frag}">} 照样插入。
+     *
+     * <p>这不是理论问题，本条落地时当场抓到两处存量缺陷：
+     * <ul>
+     *   <li>{@code dashboard-charts.html}：付费卡被无条件再渲染一遍 ⇒ 有 payment.view 的人看到两张一样的卡；</li>
+     *   <li>{@code config-tiers-disabled.html}：「已停用」表每次都 oob 换出来，紧接着又被一个空 div 换掉 ⇒
+     *       折叠区展开着时启停一个档位，那张表当场被清空。</li>
+     * </ul>
+     * 两处都是**静默**的：页面照样渲染、其它测试照样绿。正确写法：外层 {@code <th:block th:if=…>} 包住。
+     */
+    @Test
+    void noTagCarriesBothConditionAndReplace() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            List<String> lines = Files.readAllLines(f, StandardCharsets.UTF_8);
+            for (int i = 0; i < lines.size(); i++) {
+                String tag = wholeOpenTagAt(lines, i);
+                if (tag == null || !(tag.contains("th:if=") || tag.contains("th:unless="))) {
+                    continue;
+                }
+                if (tag.contains("th:replace") || tag.contains("th:insert")) {
+                    offenders.add(fileName(f) + ":" + (i + 1) + "  " + lines.get(i).trim());
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 th:if / th:unless 与 th:replace/th:insert 同标签：优先级低于 replace ⇒ 条件被静默忽略，"
+                        + "片段无条件渲染。改成外层 <th:block th:if=…> 包住。")
+                .isEmpty();
+    }
+
+    /**
+     * 🔴 <b>{@code th:with} 不能与 {@code th:replace}/{@code th:insert} 同标签</b>
+     * （V1.3.0 Story 8.3 实测踩到）。
+     *
+     * <p>优先级：{@code th:insert}/{@code th:replace} = 100，{@code th:with} = 600 ——
+     * 数字小的先处理，所以同标签时 {@code th:with} **压根轮不到执行**，被声明的局部变量静默消失。
+     *
+     * <p>它比 {@code th:if} 那条更难发现：条件失效至少会多渲染一块看得见的东西，
+     * 而变量丢失只是让片段拿到默认值。实测后果 ——
+     * {@code <div th:with="res='virtual'" th:replace="~{… :: list(…)}">} 里的 {@code res} 没传进去，
+     * 模板 B 壳按默认值把抽屉容器渲染成 {@code id="item-drawer"}，
+     * 而抽屉 JS、oob 选择器（{@code #virtual-drawer .drawer-body}）与 {@code ?open=} 深链
+     * 全按 {@code virtual-drawer} 找 —— 表现是「点行什么都不发生」，页面上却看不出任何异常。
+     *
+     * <p>写法：把 {@code th:with} 挪到**外层**任意祖先标签上（各页惯例是放在 {@code content} 片段那一层）。
+     */
+    @Test
+    void noTagCarriesBothWithAndReplace() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            List<String> lines = Files.readAllLines(f, StandardCharsets.UTF_8);
+            for (int i = 0; i < lines.size(); i++) {
+                String tag = wholeOpenTagAt(lines, i);
+                if (tag == null || !tag.contains("th:with=")) {
+                    continue;
+                }
+                if (tag.contains("th:replace") || tag.contains("th:insert")) {
+                    offenders.add(fileName(f) + ":" + (i + 1) + "  " + lines.get(i).trim());
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 th:with 与 th:replace/th:insert 同标签：优先级低于 replace ⇒ 变量被静默丢弃，"
+                        + "片段拿到的是默认值。把 th:with 挪到外层祖先标签上。")
+                .isEmpty();
+    }
+
+    /**
+     * 🔴 <b>片段名不能与同文件里另一个同名 HTML 标签撞车</b>（V1.3.0 Story 7.5 复审 C1 展开）。
+     *
+     * <p>{@code ~{tpl :: name}} 的选择器**不只匹配 {@code th:fragment="name"}，也按标签名匹配** ——
+     * 同一文件里另有一个 {@code <name>} 元素时，两个节点都会被选中并一起输出。已实测：
+     * <ul>
+     *   <li>{@code th:fragment="summary"} + 行内编辑态的 {@code <summary>} ⇒ 摘要条后面凭空多出一个「改时间」；</li>
+     *   <li>{@code th:fragment="body"} ⇒ 选中的干脆是整个 {@code <body>}：文件里定义在片段**之外**的
+     *       其它片段（如 {@code row(c, oob)}）也会被当场求值，{@code c} 未绑定 ⇒ <b>EL1007E，整页 500</b>。</li>
+     * </ul>
+     *
+     * <p>⚠️ 判据是「同文件里存在一个**不是片段自己**的同名标签」：
+     * {@code <nav th:fragment="nav(...)">} 这种片段就长在同名标签上、文件里也只此一个，没有歧义。
+     *
+     * <p>本条**刻意比最小必要条件严**：嵌套在片段**内部**的同名标签实测不会被重复输出
+     * （外层已经包含它，Thymeleaf 只发出最外层那个节点），但「这个同名标签到底在片段里面还是外面」
+     * 得靠人逐个判断 —— 而判断错的代价是一处静默的重复渲染，甚至整页 500。
+     * 换个不与标签同名的片段名成本只有一次改名，所以这里不给这种豁免。
+     */
+    @Test
+    void noFragmentIsNamedAfterAnHtmlTagThatAlsoAppearsInTheSameFile() throws IOException {
+        // 后台模板里真正出现过、又容易被拿来当片段名的标签。
+        Set<String> tags = Set.of("summary", "table", "form", "header", "footer", "section", "details",
+                "main", "nav", "aside", "body", "head", "title", "label", "option", "select",
+                "legend", "fieldset", "dialog", "figure", "output", "progress", "template");
+        Pattern fragment = Pattern.compile("th:fragment=\"\\s*([A-Za-z0-9_-]+)");
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            String html = Files.readString(f, StandardCharsets.UTF_8);
+            Matcher m = fragment.matcher(html);
+            while (m.find()) {
+                String name = m.group(1).toLowerCase(java.util.Locale.ROOT);
+                if (!tags.contains(name)) {
+                    continue;
+                }
+                long uses = Pattern.compile("<" + name + "[\\s>/]").matcher(html).results().count();
+                // 片段就长在同名标签上时，它自己那一次不算。
+                boolean selfTagged = html.substring(0, m.start()).lastIndexOf('<' + name) >= 0
+                        && html.substring(0, m.start()).lastIndexOf('<') == html.substring(0, m.start()).lastIndexOf('<' + name);
+                if (uses > (selfTagged ? 1 : 0)) {
+                    offenders.add(fileName(f) + "  片段名 '" + name + "' 与文件里的 <" + name + "> 撞车（出现 "
+                            + uses + " 次）");
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 片段名与同文件里的 HTML 标签同名：选择器会把那个标签一并选中，"
+                        + "轻则多渲染一段、重则把整个 <body> 连同别的片段一起求值而 500。换个不与标签同名的片段名。")
+                .isEmpty();
+    }
+
+    /**
+     * 从第 {@code i} 行起的<b>开标签全文</b>（属性常跨行写，取到 {@code >} 为止；本行不是开标签则返回 null）。
+     * 注释行不算 —— 注释里写反例是常事，连注释一起扫会误报。
+     */
+    private String wholeOpenTagAt(List<String> lines, int i) {
+        String line = lines.get(i);
+        int lt = line.indexOf('<');
+        if (lt < 0 || !OPEN_TAG.matcher(line.substring(lt)).lookingAt()) {
+            return null;
+        }
+        String trimmed = line.stripLeading();
+        if (trimmed.startsWith("<!--")) {
+            return null;
+        }
+        StringBuilder tag = new StringBuilder();
+        for (int j = i; j < lines.size() && j < i + 12; j++) {
+            String s = j == i ? line.substring(lt) : lines.get(j);
+            int gt = s.indexOf('>');
+            tag.append(gt >= 0 ? s.substring(0, gt) : s).append(' ');
+            if (gt >= 0) {
+                break;
+            }
+        }
+        return tag.toString();
     }
 
     private List<Path> templates() throws IOException {

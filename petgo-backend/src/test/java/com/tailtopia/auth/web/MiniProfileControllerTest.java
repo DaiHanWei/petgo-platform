@@ -62,7 +62,7 @@ class MiniProfileControllerTest {
         when(accounts.findAuthorViews(anyList()))
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", "https://cdn/a.jpg", false, java.util.List.of())));
         when(accounts.activeSignatureOf(7L)).thenReturn(java.util.Optional.of("爱猫的人运气都不会太差"));
-        when(content.countPublishedByAuthor(7L)).thenReturn(2L);
+        when(content.countPublicPostsByAuthor(7L)).thenReturn(2L);
 
         MiniProfileResponse r = controller.miniProfile(guest(), 7L);
         assertThat(r.isDeactivated()).isFalse();
@@ -78,7 +78,7 @@ class MiniProfileControllerTest {
         when(accounts.findAuthorViews(anyList()))
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
         when(accounts.activeSignatureOf(7L)).thenReturn(java.util.Optional.empty());
-        when(content.countPublishedByAuthor(7L)).thenReturn(0L);
+        when(content.countPublicPostsByAuthor(7L)).thenReturn(0L);
 
         assertThat(controller.miniProfile(guest(), 7L).signature()).isNull();
     }
@@ -95,7 +95,7 @@ class MiniProfileControllerTest {
         // 🔒 注销不外泄签名（NFR-8 匿名化）——签名是用户自填文本，同属身份信息。
         assertThat(r.signature()).isNull();
         // 注销不查发布数、也不查签名（不暴露任何信息、也不白打一次库）。
-        verify(content, never()).countPublishedByAuthor(eq(8L));
+        verify(content, never()).countPublicPostsByAuthor(eq(8L));
         verify(accounts, never()).activeSignatureOf(eq(8L));
     }
 
@@ -105,7 +105,7 @@ class MiniProfileControllerTest {
         when(accounts.findAuthorViews(anyList()))
                 .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
         when(accounts.activeSignatureOf(7L)).thenReturn(java.util.Optional.empty());
-        when(content.countPublishedByAuthor(7L)).thenReturn(0L);
+        when(content.countPublicPostsByAuthor(7L)).thenReturn(0L);
 
         controller.miniProfile(guest(), 7L);
 
@@ -128,7 +128,7 @@ class MiniProfileControllerTest {
         // 拦在取数之前：不查投影、不查签名、不查发布数。
         verify(accounts, never()).findAuthorViews(anyList());
         verify(accounts, never()).activeSignatureOf(anyLong());
-        verify(content, never()).countPublishedByAuthor(anyLong());
+        verify(content, never()).countPublicPostsByAuthor(anyLong());
     }
 
     /**
@@ -144,7 +144,7 @@ class MiniProfileControllerTest {
         when(accounts.findAuthorViews(anyList()))
                 .thenReturn(Map.of(9L, new AuthorView(9L, "Rina", "https://cdn/r.jpg", false, java.util.List.of())));
         when(accounts.activeSignatureOf(9L)).thenReturn(java.util.Optional.empty());
-        when(content.countPublishedByAuthor(9L)).thenReturn(3L);
+        when(content.countPublicPostsByAuthor(9L)).thenReturn(3L);
 
         MiniProfileResponse r = controller.miniProfile(viewer(5L), 9L);
 

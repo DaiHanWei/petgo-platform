@@ -1,2 +1,5 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
+// Google 地图 iOS 密钥（Story 1.4）：可选 include —— 文件不存在也能构建（地图灰但包能编）。
+// 模板 Maps.xcconfig.example；真实文件 gitignored，密钥绝不入库。
+#include? "Maps.xcconfig"

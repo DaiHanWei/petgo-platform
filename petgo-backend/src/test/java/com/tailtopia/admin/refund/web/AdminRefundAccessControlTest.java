@@ -49,7 +49,8 @@ class AdminRefundAccessControlTest {
 
         @Bean
         AdminRefundController controller(RefundService s, AdminRefundQueryService q) {
-            return new AdminRefundController(s, q, TestMessages.real());
+            return new AdminRefundController(s, q, mock(com.tailtopia.admin.refund.service.AdminRefundProofService.class),
+                    TestMessages.real());
         }
     }
 
@@ -82,23 +83,23 @@ class AdminRefundAccessControlTest {
     }
 
     private void approveNeed() {
-        controller.approveNeed(admin(), "tok", new RedirectAttributesModelMap());
+        controller.approveNeed(admin(), "tok", com.tailtopia.admin.shared.web.HxRequest.NONE, new org.springframework.ui.ConcurrentModel(), new org.springframework.mock.web.MockHttpServletResponse(), new RedirectAttributesModelMap());
     }
 
     private void rejectNeed() {
-        controller.rejectNeed(admin(), "tok", new RedirectAttributesModelMap());
+        controller.rejectNeed(admin(), "tok", "原因", com.tailtopia.admin.shared.web.HxRequest.NONE, new org.springframework.ui.ConcurrentModel(), new org.springframework.mock.web.MockHttpServletResponse(), new RedirectAttributesModelMap());
     }
 
     private void approveRefund() {
-        controller.approveRefund(admin(), "tok", "note", new RedirectAttributesModelMap());
+        controller.approveRefund(admin(), "tok", "note", com.tailtopia.admin.shared.web.HxRequest.NONE, new org.springframework.ui.ConcurrentModel(), new org.springframework.mock.web.MockHttpServletResponse(), new RedirectAttributesModelMap());
     }
 
     private void rejectRefund() {
-        controller.rejectRefund(admin(), "tok", "reason", new RedirectAttributesModelMap());
+        controller.rejectRefund(admin(), "tok", "reason", com.tailtopia.admin.shared.web.HxRequest.NONE, new org.springframework.ui.ConcurrentModel(), new org.springframework.mock.web.MockHttpServletResponse(), new RedirectAttributesModelMap());
     }
 
     private void payout() {
-        controller.payout(admin(), "tok", new RedirectAttributesModelMap());
+        controller.payout(admin(), "tok", null, com.tailtopia.admin.shared.web.HxRequest.NONE, new org.springframework.ui.ConcurrentModel(), new org.springframework.mock.web.MockHttpServletResponse(), new RedirectAttributesModelMap());
     }
 
     // ---- 客服 need 判定：refund.submit（4-4）----

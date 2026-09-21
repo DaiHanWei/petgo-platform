@@ -124,6 +124,10 @@ const _sameInBothLocales = {
   'checkout', 'online', 'offline', 'normal', 'rating', 'refund', 'bonus',
   'edit', 'bug', 'email', 'whatsapp', 'label', 'diary', 'milestone', 'health',
   'major', 'small', 'legend', 'no', 'm', 's', 'l',
+  // SI 单位符号：中英印尼三语写法完全相同（`m` 已在上面那行）。
+  // 距离文案 `{km} km`（V1.3.0 batch-b1 Story 1.2）两个 locale 只差小数点分隔符，
+  // 而那个差异落在**数值**里、由 NumberFormat 按 locale 产出，不在这个字符串里。
+  'km',
   // 语言名（各自的自称，刻意不翻译）
   'english', 'bahasa', 'indonesia',
   // 印尼行政区划专名 —— 2026-09-02 产品拍板：保留原词，
@@ -131,4 +135,7 @@ const _sameInBothLocales = {
   'provinsi', 'kota', 'kabupaten', 'kecamatan',
   // 演示数据里的人名 / 宠物名
   'aurel', 'mochi',
+  // SI 单位符号：两语（以及所有语言）写法相同，翻译它反而是错的。
+  // V1.3.0 Story 5.2 的狗体型档标注体重区间时用到。
+  'kg',
 };

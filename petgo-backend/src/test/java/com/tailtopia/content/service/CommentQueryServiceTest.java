@@ -18,6 +18,7 @@ import com.tailtopia.content.domain.Comment;
 import com.tailtopia.content.domain.ContentPost;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.dto.CommentPageResponse;
+import com.tailtopia.content.repository.CommentLikeRepository;
 import com.tailtopia.content.repository.CommentRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.shared.error.AppException;
@@ -35,6 +36,7 @@ import org.springframework.data.domain.Pageable;
 class CommentQueryServiceTest {
 
     private CommentRepository comments;
+    private CommentLikeRepository commentLikes;
     private ContentPostRepository posts;
     private AccountQueryService accounts;
     private UserHideRelationReader hideRelations;
@@ -47,7 +49,18 @@ class CommentQueryServiceTest {
         accounts = mock(AccountQueryService.class);
         // Story 1.3：默认无任何隐藏关系（isHidden → false），既有四个用例语义保持不变。
         hideRelations = mock(UserHideRelationReader.class);
-        service = new CommentQueryService(comments, posts, accounts, hideRelations);
+        // Story 2.4：点赞仓库给 mock —— 本类验的是可见性与分页，不是点赞聚合
+        // （聚合另有 CommentHotOrderTest）。默认无人点赞：countByCommentIdIn 返回空表。
+        commentLikes = mock(CommentLikeRepository.class);
+        when(commentLikes.countByCommentIdIn(anyList())).thenReturn(List.of());
+        when(commentLikes.findLikedCommentIds(anyList(), anyLong())).thenReturn(List.of());
+        service = new CommentQueryService(comments, commentLikes, posts, accounts, hideRelations,
+                // V1.3.0 batch-b1 Story 3.3：@ 渲染投影。本类夹具都没有 @，
+                // resolveAll 在碰任何依赖之前就返回空 Map，所以两个 mock 无需 stub
+                // （也因此**不会**多发查询 —— 批量聚合的用例计数不受影响）。
+                new com.tailtopia.mention.service.MentionViewService(
+                        org.mockito.Mockito.mock(com.tailtopia.auth.service.AccountQueryService.class),
+                        org.mockito.Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class)));
         // 帖默认可见。
         when(posts.findById(anyLong())).thenReturn(Optional.of(visiblePost()));
         // 作者投影：按 id 给非注销视图。
@@ -103,7 +116,7 @@ class CommentQueryServiceTest {
         List<Comment> rows = IntStream.range(0, 11)
                 .mapToObj(i -> comment(i + 1, null, 100 + i, base.plusSeconds(i)))
                 .toList();
-        when(comments.findTopLevel(eq(1L), anyBoolean(), any(), any(), anyBoolean(), any(),
+        when(comments.findTopLevelByHot(eq(1L), anyBoolean(), anyLong(), any(), any(), anyBoolean(), any(),
                 anyLong(), any(Pageable.class)))
                 .thenReturn(rows);
         when(comments.findRepliesForParents(anyList(), anyBoolean(), any(), anyLong())).thenReturn(List.of());
@@ -121,7 +134,7 @@ class CommentQueryServiceTest {
     void topLevelInlinesFirstThreeRepliesWithCount() {
         Instant base = Instant.parse("2026-06-02T00:00:00Z");
         Comment top = comment(1, null, 50, base);
-        when(comments.findTopLevel(eq(1L), anyBoolean(), any(), any(), anyBoolean(), any(),
+        when(comments.findTopLevelByHot(eq(1L), anyBoolean(), anyLong(), any(), any(), anyBoolean(), any(),
                 anyLong(), any(Pageable.class)))
                 .thenReturn(List.of(top));
         // 该一级有 8 条二级回复。
@@ -170,7 +183,7 @@ class CommentQueryServiceTest {
     @Test
     void topLevelPassesPostAuthorIdAndViewerFlagIntoQuery() {
         Instant base = Instant.parse("2026-06-02T00:00:00Z");
-        when(comments.findTopLevel(eq(1L), anyBoolean(), any(), any(), anyBoolean(), any(),
+        when(comments.findTopLevelByHot(eq(1L), anyBoolean(), anyLong(), any(), any(), anyBoolean(), any(),
                 anyLong(), any(Pageable.class))).thenReturn(List.of(comment(1, null, 50, base)));
         when(comments.findRepliesForParents(anyList(), anyBoolean(), any(), anyLong()))
                 .thenReturn(List.of());
@@ -178,7 +191,7 @@ class CommentQueryServiceTest {
         service.topLevel(1L, null, 88L);
 
         // visiblePost() 的作者是 7；hasViewer 随 viewerId 是否为 null 走。
-        verify(comments).findTopLevel(eq(1L), anyBoolean(), any(), any(), eq(true), eq(88L),
+        verify(comments).findTopLevelByHot(eq(1L), anyBoolean(), anyLong(), any(), any(), eq(true), eq(88L),
                 eq(7L), any(Pageable.class));
         verify(comments).findRepliesForParents(anyList(), eq(true), eq(88L), eq(7L));
     }
@@ -186,12 +199,12 @@ class CommentQueryServiceTest {
     /** 游客：hasViewer=false（不能靠裸 `:viewerId IS NULL` 判空，PG 会 42P18）。 */
     @Test
     void topLevelMarksGuestWithHasViewerFalse() {
-        when(comments.findTopLevel(eq(1L), anyBoolean(), any(), any(), anyBoolean(), any(),
+        when(comments.findTopLevelByHot(eq(1L), anyBoolean(), anyLong(), any(), any(), anyBoolean(), any(),
                 anyLong(), any(Pageable.class))).thenReturn(List.of());
 
         service.topLevel(1L, null, null);
 
-        verify(comments).findTopLevel(eq(1L), anyBoolean(), any(), any(), eq(false), eq(null),
+        verify(comments).findTopLevelByHot(eq(1L), anyBoolean(), anyLong(), any(), any(), eq(false), eq(null),
                 eq(7L), any(Pageable.class));
     }
 

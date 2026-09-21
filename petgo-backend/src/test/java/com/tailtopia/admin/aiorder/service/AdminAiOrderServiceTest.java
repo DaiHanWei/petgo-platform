@@ -23,7 +23,8 @@ class AdminAiOrderServiceTest {
     @BeforeEach
     void setUp() {
         orders = Mockito.mock(AiConsultOrderRepository.class);
-        svc = new AdminAiOrderService(orders);
+        // V1.3.0 Story 8.4：新增 Messages 入参（导出表头随 locale），本类不测导出。
+        svc = new AdminAiOrderService(orders, com.tailtopia.support.TestMessages.real());
     }
 
     @Test
@@ -57,8 +58,10 @@ class AdminAiOrderServiceTest {
 
         String csv = svc.exportCsv();
 
+        // V1.3.0 Story 8.4：表头随 locale（走 AdminExportWriter），并按 RFC 4180 用 CRLF 换行。
         assertThat(csv).startsWith(
-                "order_token,user_id,triage_task_id,amount,pay_channel,status,paid_at,created_at\n");
+                com.tailtopia.support.TestMessages.real().get("admin.v130.aiOrders.export.orderToken") + ",");
+        assertThat(csv).contains("\r\n");
         assertThat(csv).contains("ai-tok,100,5,10000,PAWCOIN,COMPLETED,");
     }
 }

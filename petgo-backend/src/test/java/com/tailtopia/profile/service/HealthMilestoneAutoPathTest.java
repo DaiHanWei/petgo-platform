@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import com.tailtopia.consult.event.ConsultClosedEvent;
 import com.tailtopia.profile.domain.HealthMilestones;
 import com.tailtopia.profile.domain.HealthRecordType;
+import com.tailtopia.profile.domain.MilestoneAutoEvent;
 import com.tailtopia.profile.domain.MilestoneCompletionSource;
 import com.tailtopia.profile.event.HealthRecordCreatedEvent;
 import java.lang.reflect.Method;
@@ -45,7 +46,8 @@ class HealthMilestoneAutoPathTest {
     void neuterRecordCompletesM9() {
         listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.NEUTER));
 
-        verify(completion).completeForOwner(7L, "M9", MilestoneCompletionSource.SYSTEM_AUTO);
+        verify(completion).completeForOwner(7L, MilestoneAutoEvent.HEALTH_RECORD_NEUTER,
+                MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     @Test
@@ -53,8 +55,10 @@ class HealthMilestoneAutoPathTest {
         listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.VACCINE));
         listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.DEWORM));
 
-        verify(completion).completeForOwner(7L, "M3", MilestoneCompletionSource.SYSTEM_AUTO);
-        verify(completion).completeForOwner(7L, "M4", MilestoneCompletionSource.SYSTEM_AUTO);
+        verify(completion).completeForOwner(7L, MilestoneAutoEvent.HEALTH_RECORD_VACCINE,
+                MilestoneCompletionSource.SYSTEM_AUTO);
+        verify(completion).completeForOwner(7L, MilestoneAutoEvent.HEALTH_RECORD_DEWORM,
+                MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     @Test
@@ -64,20 +68,25 @@ class HealthMilestoneAutoPathTest {
         listener.onHealthRecordCreated(new HealthRecordCreatedEvent(7L, HealthRecordType.CUSTOM));
 
         // PRD 明确：这两类无对应里程碑节点 —— 只应触发「Lulus Pemula」聚合尝试，不完成任何里程碑。
-        verify(completion, never()).completeForOwner(anyLong(), eq("M3"), Mockito.any());
-        verify(completion, never()).completeForOwner(anyLong(), eq("M4"), Mockito.any());
-        verify(completion, never()).completeForOwner(anyLong(), eq("M9"), Mockito.any());
-        verify(completion, never()).completeForOwner(anyLong(), eq("M5"), Mockito.any());
+        verify(completion, never()).completeForOwner(
+                anyLong(), eq(MilestoneAutoEvent.HEALTH_RECORD_VACCINE), Mockito.any());
+        verify(completion, never()).completeForOwner(
+                anyLong(), eq(MilestoneAutoEvent.HEALTH_RECORD_DEWORM), Mockito.any());
+        verify(completion, never()).completeForOwner(
+                anyLong(), eq(MilestoneAutoEvent.HEALTH_RECORD_NEUTER), Mockito.any());
+        verify(completion, never()).completeForOwner(
+                anyLong(), eq(MilestoneAutoEvent.CONSULT_CLOSED), Mockito.any());
     }
 
     // ===== AC2 M5：真人兽医咨询结束 =====
 
     @Test
-    void vetConsultClosedCompletesM5() {
+    void vetConsultClosedCompletesVetVisitMilestone() {
         listener.onConsultClosed(new ConsultClosedEvent(1L, 7L, 42L, 9L, "im-1", List.of(), true,
                 LocalDate.of(2026, 8, 4), "摘要", "GREEN", "建议"));
 
-        verify(completion).completeForOwner(7L, "M5", MilestoneCompletionSource.SYSTEM_AUTO);
+        verify(completion).completeForOwner(7L, MilestoneAutoEvent.CONSULT_CLOSED,
+                MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     @Test
@@ -104,18 +113,33 @@ class HealthMilestoneAutoPathTest {
 
     // ===== B0 健康类里程碑集合的单一定义 =====
 
+    /**
+     * V1.3.0 Story 1.2：集合改按完整 code，并补进通用宠物的 G-M1 / G-M2。
+     *
+     * <p>三系成员数不等是正常的（猫狗各 4、通用 2）：通用清单本就没有独立的驱虫 / 绝育节点。
+     * **别为了"对齐"给通用宠物硬凑两条。**
+     */
     @Test
-    void healthMilestoneSetIsTheFourAutoOnlyOnes_acrossAllSeries() {
-        assertThat(HealthMilestones.SUFFIXES).containsExactlyInAnyOrder("M3", "M4", "M5", "M9");
+    void healthMilestoneSetIsListedByFullCode() {
+        assertThat(HealthMilestones.CODES).containsExactlyInAnyOrder(
+                "C-M3", "C-M4", "C-M5", "C-M9",
+                "D-M3", "D-M4", "D-M5", "D-M9",
+                "G-M1", "G-M2");
+        for (String code : HealthMilestones.CODES) {
+            assertThat(HealthMilestones.isHealthMilestone(code)).isTrue();
+        }
         for (String prefix : List.of("C", "D", "G")) {
-            for (String suffix : HealthMilestones.SUFFIXES) {
-                assertThat(HealthMilestones.isHealthMilestone(prefix + "-" + suffix)).isTrue();
-            }
             // 非健康类：打卡路径保留，不受 5.2 护栏影响
             assertThat(HealthMilestones.isHealthMilestone(prefix + "-S1")).isFalse();
             assertThat(HealthMilestones.isHealthMilestone(prefix + "-L2")).isFalse();
             assertThat(HealthMilestones.isHealthMilestone(prefix + "-S4")).isFalse();
         }
+        // 🔴 通用清单的 M3 / M4 是「陪伴满 30 天」「记录满 10 条」，与健康无关；
+        //    M5 / M9 在通用清单压根不存在。按后缀判会把这四个都误判成健康类。
+        assertThat(HealthMilestones.isHealthMilestone("G-M3")).isFalse();
+        assertThat(HealthMilestones.isHealthMilestone("G-M4")).isFalse();
+        assertThat(HealthMilestones.isHealthMilestone("G-M5")).isFalse();
+        assertThat(HealthMilestones.isHealthMilestone("G-M9")).isFalse();
         assertThat(HealthMilestones.isHealthMilestone(null)).isFalse();
     }
 }

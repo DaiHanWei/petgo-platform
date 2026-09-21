@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  待办中心角标 fragment（V1.3.0 Story 2.2 AC2）。GET /admin/nav/badges 返回：
+  · 主体 = 组头总数角标（替换 #nav-badge-total，并重新挂 admin:badge-refresh 触发器，不再带 load 防循环）；
+  · 各队列角标 hx-swap-oob 按 id 一并替换。计数只含登录者可见队列；0 时不显示数字（is-empty）。
+-->
+<body>
+<th:block th:fragment="badges">
+    <span class="badge nav-badge" id="nav-badge-total"
+          th:classappend="${badges.get('total') == 0} ? 'is-empty'"
+          th:attr="hx-get=@{/admin/nav/badges}"
+          hx-trigger="admin:badge-refresh from:body" hx-swap="outerHTML"
+          th:text="${badges.get('total') > 0} ? ${badges.get('total')} : ''">23</span>
+    <span th:each="q : ${queues}" th:if="${badges.containsKey(q)}" class="badge nav-badge"
+          th:id="'nav-badge-' + ${q}" hx-swap-oob="true"
+          th:classappend="${badges.get(q) == 0} ? 'is-empty'"
+          th:text="${badges.get(q) > 0} ? ${badges.get(q)} : ''">12</span>
+</th:block>
+</body>
+</html>

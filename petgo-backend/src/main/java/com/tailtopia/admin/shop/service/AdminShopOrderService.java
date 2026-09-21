@@ -40,13 +40,18 @@ public class AdminShopOrderService {
     private final AdminAuditService audit;
     private final NotificationService notifications;
 
+    /** V1.3.0 Story 10.2：摘要条一条 SQL 出三个数（见 {@link #summary}）。 */
+    private final org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbc;
+
     public AdminShopOrderService(ShopOrderFulfillmentService fulfillment,
             ShopOrderRepository orders, AdminAuditService audit,
-            NotificationService notifications) {
+            NotificationService notifications,
+            org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbc) {
         this.fulfillment = fulfillment;
         this.orders = orders;
         this.audit = audit;
         this.notifications = notifications;
+        this.jdbc = jdbc;
     }
 
     /**
@@ -131,6 +136,81 @@ public class AdminShopOrderService {
     @Transactional(readOnly = true)
     public List<ShopOrder> search(ShopOrderStatus status, Instant from, Instant to, int limit) {
         return orders.search(status, from, to, PageRequest.of(0, Math.max(1, limit)));
+    }
+
+    /**
+     * 一页订单（V1.3.0 Story 10.2 AC1，每页 20，下单时间倒序）。
+     *
+     * <p>⚠️ 曾经想用「多取一条判 hasNext」省掉 count —— 那是<b>错的</b>：
+     * {@code PageRequest} 的偏移量是 {@code pageNumber × pageSize}，把 pageSize 写成 {@code size + 1}
+     * 会让第 1 页从第 21 条开始，全局第 21 条永远不出现在任何一页（复审实测）。
+     * 老实走 {@code Page.hasNext()}。
+     */
+    @Transactional(readOnly = true)
+    public Page page(ShopOrderStatus status, Instant from, Instant to, int page, int size) {
+        int p = Math.max(page, 0);
+        int s = Math.max(1, size);
+        var found = orders.searchPage(status, from, to, PageRequest.of(p, s));
+        return new Page(found.getContent(), p, found.hasNext());
+    }
+
+    /** 一页订单。 */
+    public record Page(List<ShopOrder> rows, int page, boolean hasNext) {
+    }
+
+    /**
+     * 列表摘要条：待发货 · 在途 · 今日签收（V1.3.0 Story 10.2 AC1）。
+     *
+     * <p>AC 原文要求<b>单条 {@code COUNT FILTER} 聚合</b> —— 三个数一次往返，
+     * 而不是三条 count 各扫一遍。走 {@code NamedParameterJdbcTemplate} 而不是 JPQL：
+     * {@code FILTER (WHERE …)} 是 Postgres 的聚合过滤语法，JPQL 没有对应写法。
+     *
+     * <p>⚠️ 可空的时间范围参数<b>必须显式给 SQL 类型</b>（{@code Types.TIMESTAMP}，与
+     * {@code AdminContentManageService} 的绑定口径一致）—— 本仓库踩过
+     * 「{@code :param IS NULL OR …} 里无类型 null 参数 Postgres 推断不出类型」这个坑。
+     *
+     * <p>「待发货」「在途」随时间范围筛选联动（AC1），<b>但「今日签收」只按 WIB 当日的
+     * {@code delivered_at} 窗口算，不叠加下单时间范围</b>：叠加的话，运营选「今天」这个最常用的区间时，
+     * 它就只数「今天下单且今天签收」的单 —— 而前几天下单、今天签收的才是签收的主体，
+     * 那个数会小得离谱且没人看得出为什么。「今日签收」按定义就是一个当天口径的数。
+     */
+    @Transactional(readOnly = true)
+    public Summary summary(Instant from, Instant to) {
+        java.time.ZonedDateTime dayStart = java.time.LocalDate.now(WIB).atStartOfDay(WIB);
+        var params = new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
+                .addValue("from", from == null ? null : java.sql.Timestamp.from(from),
+                        java.sql.Types.TIMESTAMP)
+                .addValue("to", to == null ? null : java.sql.Timestamp.from(to),
+                        java.sql.Types.TIMESTAMP)
+                .addValue("dayStart", java.sql.Timestamp.from(dayStart.toInstant()),
+                        java.sql.Types.TIMESTAMP)
+                .addValue("dayEnd", java.sql.Timestamp.from(dayStart.plusDays(1).toInstant()),
+                        java.sql.Types.TIMESTAMP);
+        return jdbc.query(SUMMARY_SQL, params, rs -> rs.next()
+                ? new Summary(rs.getLong("pending_shipment"), rs.getLong("in_transit"),
+                        rs.getLong("delivered_today"))
+                : new Summary(0, 0, 0));
+    }
+
+    private static final java.time.ZoneId WIB = java.time.ZoneId.of("Asia/Jakarta");
+
+    private static final String SUMMARY_SQL = """
+            SELECT count(*) FILTER (WHERE status = 'PENDING_SHIPMENT' AND in_range) AS pending_shipment,
+                   count(*) FILTER (WHERE status = 'SHIPPED'          AND in_range) AS in_transit,
+                   -- 「今日签收」刻意**不带 in_range**：见方法注释
+                   count(*) FILTER (WHERE status = 'DELIVERED'
+                                      AND delivered_at >= :dayStart
+                                      AND delivered_at <  :dayEnd)              AS delivered_today
+              FROM (
+                    SELECT status, delivered_at,
+                           (CAST(:from AS timestamptz) IS NULL OR created_at >= :from)
+                       AND (CAST(:to   AS timestamptz) IS NULL OR created_at <  :to) AS in_range
+                      FROM shop_orders
+                   ) t
+            """;
+
+    /** 摘要条三格。 */
+    public record Summary(long pendingShipment, long inTransit, long deliveredToday) {
     }
 
     /** 至少 6 位才允许搜 —— 再短就不是搜索而是遍历。 */

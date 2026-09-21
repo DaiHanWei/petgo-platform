@@ -46,7 +46,7 @@ class RefundServiceDutyTest {
         if (approverId != null) {
             r.approve(approverId);
         }
-        when(refunds.findByRefundToken("tok")).thenReturn(Optional.of(r));
+        when(refunds.findForUpdateByRefundToken("tok")).thenReturn(Optional.of(r));
         return r;
     }
 

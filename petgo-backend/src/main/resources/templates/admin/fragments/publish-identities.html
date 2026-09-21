@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  B9 区块二「运营真实账号身份池」的候选表 / 池内表（V1.3.0 Story 8.3，模板 B）。
+    candidates  — 搜索并纳入的候选表（htmx 局部，GET /admin/virtual-accounts?section=candidates&q=）
+    rows(oob)   — 池内表；oob=true 时整表随片段一并换
+    granted     — 纳入 / 移出成功后的响应体：池表 oob + toast
+  🔴 整区门控 seed.publish_as_real，与 virtual_account.manage 完全解耦：
+     **能管虚拟账号 ≠ 能以真人身份发言**。本片段里的 sec:authorize 与控制器 REAL_AUTH 逐字一致。
+*/-->
+<body>
+<!--/* 候选表。🛡 已注销账号在查询层就不出现（AdminPublishIdentityService.searchCandidates）。 */-->
+<div th:fragment="candidates" th:remove="tag">
+    <p class="hint" th:if="${q == null or q.isBlank()}" data-notice="identity-search-first"
+       th:text="#{admin.v130.publishIdentity.searchFirst}">先搜索用户 ID 或昵称，再决定纳入谁。</p>
+    <th:block th:if="${q != null and !q.isBlank()}">
+        <p class="hint" th:if="${#lists.isEmpty(candidates)}"
+           th:text="#{admin.publishIdentity.noCandidate}">没有匹配的真实用户账号</p>
+        <table th:if="${!#lists.isEmpty(candidates)}" class="tag-assign-table">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th th:text="#{admin.virtualAccounts.col.nickname}">昵称</th>
+                <th th:text="#{admin.common.status}">状态</th>
+                <th th:text="#{admin.publishIdentity.col.note}">授权说明</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            <th:block th:each="c : ${candidates}">
+                <tr th:replace="~{admin/fragments/publish-identities :: candidateRow(${c}, false)}"></tr>
+            </th:block>
+            </tbody>
+        </table>
+    </th:block>
+</div>
+
+<!--/* 候选表的单行。🔴 纳入 / 移出成功后**定点 oob 换掉这一行**：
+       原来发的 admin:identity-list-refresh 全仓没有任何监听方（模板里没有 hx-trigger、JS 里也没有），
+       表现是「纳入成功了，可上面那一行还是可点的『纳入』按钮」，运营再点一次拿到 422。
+       ⚠️ 不整表重拉候选：重拉要带上当时的搜索词 q，而 POST 请求里没有它。 */-->
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="candidateRow(c, oob)" th:id="'identity-candidate-' + ${c.userId}"
+        th:hx-swap-oob="${oob} ? 'true' : null">
+                <td class="nowrap muted" th:text="${c.userId}">0</td>
+                <td th:text="${c.nickname}">名</td>
+                <td class="nowrap">
+                    <span class="badge" th:classappend="${c.deactivated} ? 'badge-danger' : 'badge-ok'"
+                          th:text="${c.deactivated} ? #{admin.common.disabled} : #{admin.common.enabled}">正常</span>
+                </td>
+                <td>
+                    <!--/* 🔴 授权说明必填：风险边界是「内部人冒充内部人」，技术强绑定挡不住，
+                           靠的是审计可追责 —— 而说明是这条链上唯一记录「为什么可以」的地方。
+                           ⚠️ 已在池内的行不渲染表单（渲染一个提交就报错的表单等于让人白填一遍）。 */-->
+                    <form th:unless="${c.alreadyInPool}" class="inline"
+                          th:id="'grant-' + ${c.userId}"
+                          th:attr="hx-post=@{/admin/publish-identities}"
+                          hx-target="#identity-inline-err" hx-swap="innerHTML">
+                        <input type="hidden" name="userId" th:value="${c.userId}"/>
+                        <input type="text" name="authorizationNote" class="inp field-full"
+                               maxlength="500" required
+                               th:placeholder="#{admin.publishIdentity.notePlaceholder}"/>
+                    </form>
+                    <span th:if="${c.alreadyInPool}" class="muted">—</span>
+                </td>
+                <td class="nowrap">
+                    <button th:unless="${c.alreadyInPool}" type="submit" class="btn btn-primary btn-sm"
+                            th:form="'grant-' + ${c.userId}"
+                            th:text="#{admin.publishIdentity.btn.grant}">纳入</button>
+                    <!--/* 已在池内：置灰而不是消失 —— 整个按钮不见会被读成「这一行不能操作」。 */-->
+                    <button th:if="${c.alreadyInPool}" type="button" class="btn btn-sm" disabled
+                            th:text="#{admin.publishIdentity.alreadyInPool}">已在池内</button>
+                </td>
+    </tr>
+</tbody></table>
+
+<!--/* 池内表。 */-->
+<th:block th:fragment="rows(oob)">
+    <div th:attr="hx-swap-oob=${oob} ? 'true' : null" id="identities-rows">
+        <table th:if="${!#lists.isEmpty(realAccounts)}" class="tag-assign-table">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th th:text="#{admin.virtualAccounts.col.nickname}">昵称</th>
+                <th th:text="#{admin.virtualAccounts.col.avatar}">头像</th>
+                <th th:text="#{admin.publishIdentity.col.note}">授权说明</th>
+                <th class="nowrap" th:text="#{admin.publishIdentity.col.grantedAt}">纳入时间</th>
+                <th th:text="#{admin.publishIdentity.col.grantedBy}">纳入人</th>
+                <th th:text="#{admin.common.status}">状态</th>
+                <th class="nowrap" th:text="#{admin.publishIdentity.col.published}">经后台发布</th>
+                <th th:text="#{admin.publishIdentity.col.species}">物种推导</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${realAccounts}" th:id="'identity-row-' + ${r.userId}">
+                <td class="nowrap muted" th:text="${r.userId}">0</td>
+                <td th:text="${r.nickname}">名</td>
+                <td class="nowrap">
+                    <img th:if="${r.avatarUrl != null and #strings.startsWith(r.avatarUrl, 'http')}"
+                         th:src="${r.avatarUrl}" alt="" style="height:28px;width:28px;border-radius:50%;object-fit:cover;vertical-align:middle"/>
+                    <span th:unless="${r.avatarUrl != null and #strings.startsWith(r.avatarUrl, 'http')}" class="muted">—</span>
+                </td>
+                <td class="cell-wide" th:text="${r.authorizationNote}">说明</td>
+                <td class="nowrap" th:text="${@adminTime.wib(r.grantedAt)}">时间</td>
+                <td class="muted" th:text="${r.grantedBy}">人</td>
+                <td class="nowrap">
+                    <span class="badge" th:classappend="${r.deactivated} ? 'badge-danger' : 'badge-ok'"
+                          th:text="${r.deactivated} ? #{admin.common.disabled} : #{admin.common.enabled}">正常</span>
+                </td>
+                <!--/* 🛡 只统计经后台代发的；持有人在 App 内自主发布的不计入。
+                       括号里的「已被删除」来自另一个写入方（持有人本人）—— 后台不阻止他删，
+                       但记录必须反映出来，不可继续显示为在线。 */-->
+                <td class="nowrap" th:text="${r.deletedCount} > 0
+                             ? ${r.publishedByAdminCount} + ' (' + #{admin.publishIdentity.deleted(${r.deletedCount})} + ')'
+                             : ${r.publishedByAdminCount}">0</td>
+                <td class="muted" th:text="${r.speciesGuess} + ' · ' + ${r.speciesSource}">—</td>
+                <td class="nowrap">
+                    <!--/* 🔴 移出前必须过确认弹层：那里要显示「还有 N 条待发布排期」——
+                           N 只有服务端算得出来，而这个提示就是这条 AC 的全部意义。 */-->
+                    <button type="button" class="btn btn-neutral btn-sm" data-no-drawer
+                            th:attr="hx-get=@{/admin/publish-identities/{id}/remove/confirm(id=${r.userId})}"
+                            hx-target="#confirm-host" hx-swap="innerHTML"
+                            th:text="#{admin.publishIdentity.btn.remove}">移出</button>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="empty" th:if="${#lists.isEmpty(realAccounts)}">
+            <span class="empty-emoji">👤</span>
+            <p th:text="#{admin.publishIdentity.realEmpty}">身份池内暂无真实账号</p>
+        </div>
+    </div>
+</th:block>
+
+<!--/* 纳入 / 移出成功：池表整表 oob + toast。
+       ⚠️ 主体（非 oob）刻意留空 —— 它会落进发起请求那个 hx-target（纳入是 #identity-inline-err，
+       移出是弹层里的错误槽），正好把上一次的报错清掉。 */-->
+<th:block th:fragment="granted">
+    <div th:replace="~{admin/fragments/publish-identities :: rows(true)}"></div>
+    <!--/* 候选表里那一行的状态也变了（纳入后 →「已在池内」禁用；移出后 → 重新可纳入）。
+           🔴 外壳必须是**真的** <table hidden>：响应不以 `<tr` 开头时 htmx 走通用解析，
+              裸 <tr>/<td> 会被 HTML 解析器丢掉（8.2 踩过）。
+           ⚠️ 只有当那个人**正好在当前候选结果里**才需要换 —— 控制器按 id 精确查一次，查不到就不渲染。 */-->
+    <table hidden th:if="${candidateRow != null}"><tbody>
+        <tr th:replace="~{admin/fragments/publish-identities :: candidateRow(${candidateRow}, true)}"></tr>
+    </tbody></table>
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已完成</div>
+</th:block>
+</body>
+</html>

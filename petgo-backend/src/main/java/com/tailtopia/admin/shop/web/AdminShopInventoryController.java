@@ -2,21 +2,20 @@ package com.tailtopia.admin.shop.web;
 
 import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.admin.shop.dto.InventoryRowView;
+import com.tailtopia.admin.shop.service.AdminShopInventoryService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.domain.InventoryMovement;
-import com.tailtopia.shop.domain.ShopProduct;
 import com.tailtopia.shop.domain.ShopSku;
-import com.tailtopia.shop.repository.ShopProductRepository;
 import com.tailtopia.shop.repository.ShopSkuRepository;
 import com.tailtopia.shop.service.InventoryMovementService;
-import com.tailtopia.shop.service.InventoryService;
 import com.tailtopia.shared.i18n.Messages;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.GrantedAuthority;
@@ -50,67 +49,105 @@ public class AdminShopInventoryController {
 
     private static final int MOVEMENT_PAGE_SIZE = 50;
 
+    private static final String REDIRECT_LIST = "redirect:/admin/shop/inventory";
+
     private final InventoryMovementService movements;
-    private final InventoryService inventory;
-    private final ShopProductRepository products;
+    private final AdminShopInventoryService view;
     private final ShopSkuRepository skus;
 
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
 
     public AdminShopInventoryController(InventoryMovementService movements,
-            InventoryService inventory, ShopProductRepository products, ShopSkuRepository skus,
-            Messages msg) {
+            AdminShopInventoryService view, ShopSkuRepository skus, Messages msg) {
         this.movements = movements;
-        this.inventory = inventory;
-        this.products = products;
+        this.view = view;
         this.skus = skus;
         this.msg = msg;
     }
 
     // ---------- 列表：三个数不合并显示 ----------
 
+    /**
+     * B18 列表（V1.3.0 Story 10.4 · AC1，模板 B）。
+     *
+     * <p>🔴 <b>抽屉取数不走这条 mapping</b>，走 {@code GET inventory/{skuId}/movements} 的
+     * {@code HX-Request} 分支（AD-9 的 {@code …/{id}/drawer} 惯例让位于「零新端点」，D-43）：
+     * 抽屉上半本来就是那条流水，复用它比另开一条省一个端点，也保证抽屉里的流水与流水页同源。
+     */
     @GetMapping("/admin/shop/inventory")
     @PreAuthorize(VIEW_AUTH)
-    public String list(@AuthenticationPrincipal AdminUserDetails admin, Model model) {
-        List<ShopSku> allSkus = skus.findAll();
-        Map<Long, String> productNames = products.findAll().stream()
-                .collect(Collectors.toMap(ShopProduct::getId, ShopProduct::getName, (a, b) -> a));
-
-        List<Long> skuIds = allSkus.stream().map(ShopSku::getId).toList();
-        Map<Long, Long> availableBySku = inventory.availableBySkuId(skuIds);
-        Map<Long, Long> actualBySku = actualBySkuId(skuIds);
-
-        List<InventoryRowView> rows = new ArrayList<>();
-        for (ShopSku sku : allSkus) {
-            long actual = actualBySku.getOrDefault(sku.getId(), 0L);
-            long available = availableBySku.getOrDefault(sku.getId(), 0L);
-            rows.add(InventoryRowView.of(sku.getId(), sku.getPublicToken(),
-                    productNames.getOrDefault(sku.getProductId(), "-"), sku.getSpecName(),
-                    actual, actual - available, inventory.statusOf(available)));
+    public String list(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "open", required = false) Long open,
+            HxRequest hx, Model model) {
+        Page<InventoryRowView> rows = view.page(page);
+        model.addAttribute("rows", rows.getContent());
+        model.addAttribute("page", rows.getNumber());
+        model.addAttribute("hasNext", rows.hasNext());
+        populatePermissions(admin, model);
+        model.addAttribute("open", open);
+        model.addAttribute("active", "shopInventory");
+        if (hx.isHtmx()) {
+            // ⚠️ 翻页**不重算摘要条**：它是全表聚合（一次 sku_inventory 全表扫描），
+            //    而翻页压根不会改变它 —— rows 片段也不引用它。算了就是白扫一遍。
+            return "admin/fragments/shop-inventory-list :: rows";
         }
+        model.addAttribute("summary", view.summary());
+        return "admin/shop-inventory";
+    }
 
-        model.addAttribute("rows", rows);
+    /**
+     * 三个权限位。
+     *
+     * <p>🔒 <b>{@code canPurchase} 是双权限</b>（{@code inventory_edit} + {@code cost_edit}）：
+     * 采购入库要填进货单价，而单价按 S-9 不允许留空。服务端在写端点里<b>独立再判一次</b>，
+     * 页面上的禁用只是第一层。
+     */
+    private void populatePermissions(AdminUserDetails admin, Model model) {
         model.addAttribute("canEdit", has(admin, AdminPermissions.SHOP_INVENTORY_EDIT));
-        // 🔒 采购入库要填进货单价 → 无 cost_edit 则连入库入口都不渲染（服务端另有独立判定）
         model.addAttribute("canPurchase", has(admin, AdminPermissions.SHOP_INVENTORY_EDIT)
                 && has(admin, AdminPermissions.SHOP_COST_EDIT));
         model.addAttribute("canViewCost", has(admin, AdminPermissions.SHOP_COST_VIEW));
-        model.addAttribute("active", "shopInventory");
-        return "admin/shop-inventory";
     }
 
     // ---------- 流水（含前后值，可审计） ----------
 
+    /**
+     * 同一条 mapping 两种响应（AC2 / AC3）：{@code HX-Request} 返<b>抽屉</b>片段
+     * （流水摘要最近 {@value AdminShopInventoryService#DRAWER_MOVEMENTS} 条 + 四操作页签），
+     * 否则返<b>整页流水</b>（模板 B 只读，最近 {@value #MOVEMENT_PAGE_SIZE} 条）。
+     *
+     * <p>🔴 <b>不新建全局流水路由</b> {@code /admin/shop/inventory-movements}（D-43）：
+     * 那是新增端点。UI 稿 5-7 的「独立账本页」按现状的 per-SKU 路由实现，
+     * 抽屉里的「查看全部流水」链到它。
+     */
     @GetMapping("/admin/shop/inventory/{skuId}/movements")
     @PreAuthorize(VIEW_AUTH)
     public String movements(@AuthenticationPrincipal AdminUserDetails admin,
-            @PathVariable long skuId, Model model) {
+            @PathVariable long skuId, HxRequest hx, Model model) {
+        model.addAttribute("active", "shopInventory");
+        if (hx.isHtmx()) {
+            populateDrawer(admin, skuId, model);
+            return "admin/fragments/drawer-shop-inventory :: panel";
+        }
+        populateMovements(admin, skuId, MOVEMENT_PAGE_SIZE, model);
+        return "admin/shop-inventory-movements";
+    }
+
+    /** 抽屉体：上半流水摘要 + 下半四操作页签（AC2）。 */
+    private void populateDrawer(AdminUserDetails admin, long skuId, Model model) {
+        populateMovements(admin, skuId, AdminShopInventoryService.DRAWER_MOVEMENTS, model);
+        model.addAttribute("row", view.row(skuId));
+        populatePermissions(admin, model);
+    }
+
+    private void populateMovements(AdminUserDetails admin, long skuId, int limit, Model model) {
         ShopSku sku = skus.findById(skuId)
                 .orElseThrow(() -> AppException.notFound("SKU 不存在").code("admin.err.product.skuNotFound2"));
         boolean canViewCost = has(admin, AdminPermissions.SHOP_COST_VIEW);
 
-        List<InventoryMovement> rows = movements.recentMovements(skuId, MOVEMENT_PAGE_SIZE);
+        List<InventoryMovement> rows = movements.recentMovements(skuId, limit);
         model.addAttribute("sku", sku);
         model.addAttribute("movements", rows);
         model.addAttribute("canViewCost", canViewCost);
@@ -120,8 +157,6 @@ public class AdminShopInventoryController {
                         .collect(Collectors.toMap(InventoryMovement::getId,
                                 InventoryMovement::getCostPrice, (a, b) -> a))
                 : Map.of());
-        model.addAttribute("active", "shopInventory");
-        return "admin/shop-inventory-movements";
     }
 
     // ---------- 四条增减路径中的三条（第四条退货质检入库属 Story 5.4） ----------
@@ -145,19 +180,29 @@ public class AdminShopInventoryController {
             @RequestParam(required = false) Long costPrice,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate inboundDate,
-            RedirectAttributes ra) {
+            HxRequest hx, Model model, RedirectAttributes ra) {
+        if (hx.isHtmx()) {
+            requireCostEdit(admin);
+            movements.receivePurchase(skuId, qty, purchaseNo, supplier, costPrice, inboundDate,
+                    admin.getAdminAccountId());
+            return done(admin, skuId, msg.get("admin.flash.inventory.purchaseIn"), model);
+        }
         try {
-            // 🔒 服务端独立再判一次——页面不渲染入口只是第一层，看源码可绕过
-            if (!has(admin, AdminPermissions.SHOP_COST_EDIT)) {
-                throw AppException.forbidden("采购入库需要「编辑进货价」权限：入库单的进货单价不允许留空（S-9）").code("admin.err.inventory.costEditRequired");
-            }
+            requireCostEdit(admin);
             movements.receivePurchase(skuId, qty, purchaseNo, supplier, costPrice, inboundDate,
                     admin.getAdminAccountId());
             ra.addFlashAttribute("notice", msg.get("admin.flash.inventory.purchaseIn"));
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/shop/inventory";
+        return REDIRECT_LIST;
+    }
+
+    /** 🔒 服务端独立再判一次——页面禁用页签只是第一层，看源码可绕过。 */
+    private static void requireCostEdit(AdminUserDetails admin) {
+        if (!has(admin, AdminPermissions.SHOP_COST_EDIT)) {
+            throw AppException.forbidden("采购入库需要「编辑进货价」权限：入库单的进货单价不允许留空（S-9）").code("admin.err.inventory.costEditRequired");
+        }
     }
 
     @PostMapping("/admin/shop/inventory/return-inbound")
@@ -168,16 +213,21 @@ public class AdminShopInventoryController {
             @RequestParam String originalOrderNo,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
                     LocalDate inboundDate,
-            RedirectAttributes ra) {
+            HxRequest hx, Model model, RedirectAttributes ra) {
+        // 单价由系统取该 SKU 最近一次采购入库单价（S-9）→ 不需要 cost_edit
+        if (hx.isHtmx()) {
+            movements.receiveReturn(skuId, qty, originalOrderNo, inboundDate,
+                    admin.getAdminAccountId());
+            return done(admin, skuId, msg.get("admin.flash.inventory.returnIn"), model);
+        }
         try {
-            // 单价由系统取该 SKU 最近一次采购入库单价（S-9）→ 不需要 cost_edit
             movements.receiveReturn(skuId, qty, originalOrderNo, inboundDate,
                     admin.getAdminAccountId());
             ra.addFlashAttribute("notice", msg.get("admin.flash.inventory.returnIn"));
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/shop/inventory";
+        return REDIRECT_LIST;
     }
 
     @PostMapping("/admin/shop/inventory/damage")
@@ -186,14 +236,18 @@ public class AdminShopInventoryController {
             @RequestParam long skuId,
             @RequestParam long qty,
             @RequestParam String reason,
-            RedirectAttributes ra) {
+            HxRequest hx, Model model, RedirectAttributes ra) {
+        if (hx.isHtmx()) {
+            movements.writeOff(skuId, qty, reason, admin.getAdminAccountId());
+            return done(admin, skuId, msg.get("admin.flash.inventory.damage"), model);
+        }
         try {
             movements.writeOff(skuId, qty, reason, admin.getAdminAccountId());
             ra.addFlashAttribute("notice", msg.get("admin.flash.inventory.damage"));
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/shop/inventory";
+        return REDIRECT_LIST;
     }
 
     @PostMapping("/admin/shop/inventory/stocktake")
@@ -202,26 +256,41 @@ public class AdminShopInventoryController {
             @RequestParam long skuId,
             @RequestParam long countedActual,
             @RequestParam String reason,
-            RedirectAttributes ra) {
+            HxRequest hx, Model model, RedirectAttributes ra) {
+        if (hx.isHtmx()) {
+            movements.stocktake(skuId, countedActual, reason, admin.getAdminAccountId());
+            return done(admin, skuId, msg.get("admin.flash.inventory.stocktake"), model);
+        }
         try {
             movements.stocktake(skuId, countedActual, reason, admin.getAdminAccountId());
             ra.addFlashAttribute("notice", msg.get("admin.flash.inventory.stocktake"));
         } catch (AppException e) {
             ra.addFlashAttribute("error", msg.resolve(e));
         }
-        return "redirect:/admin/shop/inventory";
+        return REDIRECT_LIST;
+    }
+
+    /**
+     * 四个操作成功后的统一响应（AC2「提交 htmx 局部刷新抽屉与列表行」）。
+     *
+     * <p>主 swap 换<b>抽屉体</b>（表单的 {@code hx-target} 就是它）：流水摘要里立刻多出刚落的那一笔，
+     * 运营在同一个抽屉里连着做第二笔时看到的是已经更新过的数。oob 换<b>被操作的那一行</b>与<b>摘要条</b>。
+     *
+     * <p>🔴 <b>只换那一行，不整表重拉</b>：列表按 {@code productId, id} 升序（与库存无关），
+     * 库存变化不会让行换位置；整表重拉只会把运营刚翻到的第 3 页跳回第 1 页。
+     * 但<b>摘要条必须换</b> —— 售罄数 / 低库存数 / 锁定合计是全表聚合，这一笔可能让别的格子也变。
+     *
+     * <p>🔴 <b>抽屉不自动关</b>（UI 稿 10-6）：库存操作常是连着几笔（入库完接着盘点），
+     * 关掉等于每笔都要重新点开那一行。对象消失类动作才发 {@code admin:drawer-close}，库存不是。
+     */
+    private String done(AdminUserDetails admin, long skuId, String message, Model model) {
+        populateDrawer(admin, skuId, model);
+        model.addAttribute("summary", view.summary());
+        model.addAttribute("message", message);
+        return "admin/fragments/drawer-shop-inventory :: done";
     }
 
     // ---------- 内部 ----------
-
-    /** 批量取实际库存，避免列表 N+1（与 {@code availableBySkuId} 同一次数据来源口径）。 */
-    private Map<Long, Long> actualBySkuId(List<Long> skuIds) {
-        if (skuIds.isEmpty()) {
-            return Map.of();
-        }
-        return inventory.rowsBySkuId(skuIds).stream()
-                .collect(Collectors.toMap(r -> r.getSkuId(), r -> r.getActual(), (a, b) -> a));
-    }
 
     /**
      * 权限判定。

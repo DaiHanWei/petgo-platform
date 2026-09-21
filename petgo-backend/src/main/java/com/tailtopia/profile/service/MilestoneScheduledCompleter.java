@@ -1,5 +1,6 @@
 package com.tailtopia.profile.service;
 
+import com.tailtopia.profile.domain.MilestoneAutoEvent;
 import com.tailtopia.profile.domain.MilestoneCompletionSource;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.PetProfileRepository;
@@ -25,7 +26,6 @@ public class MilestoneScheduledCompleter {
 
     private static final Logger log = LoggerFactory.getLogger(MilestoneScheduledCompleter.class);
 
-    /** 陪伴满 30 天对应的清单后缀：猫/狗 = M8，其他 = M3。 */
     private static final Duration COMPANION_30 = Duration.ofDays(30);
 
     private final PetProfileRepository profiles;
@@ -43,11 +43,11 @@ public class MilestoneScheduledCompleter {
         Instant threshold = Instant.now().minus(COMPANION_30);
         int newlyCompleted = 0;
         for (PetProfile pet : profiles.findByCreatedAtLessThanEqual(threshold)) {
-            String suffix = switch (pet.getPetType()) {
-                case CAT, DOG -> "M8";
-                case OTHER -> "M3";
-            };
-            if (completion.complete(pet.getId(), pet.getPetType(), suffix,
+            // 物种差异（猫狗 M8 / 通用 G-M3）本就在这条路径上被正确处理过，V1.3.0 Story 1.1 只是把它
+            // 从这里的局部 switch 收进 MilestoneAutoCompleteMap —— 行为一字不变，但从此与其余自动
+            // 路径共用同一张表，不会再出现「某一条路径单独漏改」的分叉。
+            if (completion.complete(pet.getId(), pet.getPetType(),
+                    MilestoneAutoEvent.COMPANION_30_DAYS,
                     MilestoneCompletionSource.SYSTEM_AUTO, null)) {
                 newlyCompleted++;
             }

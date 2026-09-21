@@ -89,6 +89,24 @@ public class PawCoinConfig {
     @Column(name = "id_card_share_daily_cap", nullable = false)
     private int idCardShareDailyCap;
 
+    /**
+     * 年龄卡分享一次发几枚（V1.3.0 Story 5.3 · 渠道层）。🔴 种子值 <b>0 = 不发币</b>。
+     *
+     * <p>与身份证渠道并列的第二个渠道，共用同一个全局层（总开关 + 月度上限）。
+     */
+    @Column(name = "age_card_share_reward", nullable = false)
+    private long ageCardShareReward;
+
+    /**
+     * 年龄卡分享的**日上限次数**（V1.3.0 Story 5.3 · 渠道层）。🔴 种子值 <b>0 = 不发币</b>。
+     *
+     * <p>⚠️ 与身份证渠道不同，年龄卡**没有档案级去重**（决策 A-8：同一只宠物隔几个月
+     * 再生成是不同的分享物）。所以这一项在本渠道**不是冗余保险，而是唯一的频次闸门** ——
+     * 配 0 以外的值时请当真。
+     */
+    @Column(name = "age_card_share_daily_cap", nullable = false)
+    private int ageCardShareDailyCap;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -133,6 +151,22 @@ public class PawCoinConfig {
 
     public void setIdCardShareDailyCap(int v) {
         this.idCardShareDailyCap = v;
+    }
+
+    public long getAgeCardShareReward() {
+        return ageCardShareReward;
+    }
+
+    public void setAgeCardShareReward(long v) {
+        this.ageCardShareReward = v;
+    }
+
+    public int getAgeCardShareDailyCap() {
+        return ageCardShareDailyCap;
+    }
+
+    public void setAgeCardShareDailyCap(int v) {
+        this.ageCardShareDailyCap = v;
     }
 
     public Long getId() {

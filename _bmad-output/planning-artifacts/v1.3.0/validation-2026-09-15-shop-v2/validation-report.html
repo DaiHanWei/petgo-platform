@@ -1,0 +1,334 @@
+<title>电商 V2 PRD 体检</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root{
+  --ground:#F6F4FA; --surface:#FFFFFF; --ink:#211C2B; --muted:#6A6378; --line:#E3DEEC;
+  --accent:#845EC9; --accent-soft:#EEE7F8;
+  --crit:#C0333D; --crit-soft:#FBE9EA; --high:#C9661A; --high-soft:#FCEFE3; --mid:#8A7412; --mid-soft:#F6F1DC;
+  --good:#2F8A57; --good-soft:#E4F3EA;
+  --sans:"Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#16131C; --surface:#1F1B27; --ink:#ECE8F3; --muted:#A49CB3; --line:#332D3F;
+    --accent:#B196E6; --accent-soft:#2C2440;
+    --crit:#F0787F; --crit-soft:#3A1F24; --high:#F0A060; --high-soft:#3A2A1C; --mid:#D9C265; --mid-soft:#332E1A;
+    --good:#6CCB93; --good-soft:#1C3326;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#16131C; --surface:#1F1B27; --ink:#ECE8F3; --muted:#A49CB3; --line:#332D3F;
+  --accent:#B196E6; --accent-soft:#2C2440;
+  --crit:#F0787F; --crit-soft:#3A1F24; --high:#F0A060; --high-soft:#3A2A1C; --mid:#D9C265; --mid-soft:#332E1A;
+  --good:#6CCB93; --good-soft:#1C3326;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.75;padding-inline:20px;padding-block:40px 72px}
+.wrap{max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:48px}
+h1,h2,h3{text-wrap:balance;margin:0;line-height:1.35}
+p{margin:0}
+.mono{font-family:var(--mono);font-size:12.5px}
+.eyebrow{font-size:12.5px;letter-spacing:.08em;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 14px}
+.eyebrow span+span::before{content:"·";margin-right:14px;color:var(--line)}
+
+header{display:flex;flex-direction:column;gap:18px}
+h1{font-size:34px;font-weight:900;letter-spacing:-.01em}
+.verdict{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 24px;display:flex;flex-direction:column;gap:14px}
+.verdict-top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
+.stamp{display:inline-flex;align-items:center;gap:8px;font-weight:700;color:var(--crit);background:var(--crit-soft);padding:4px 12px;border-radius:999px;font-size:14px}
+.stamp::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--crit)}
+.counts{display:flex;gap:14px;font-size:13.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.counts b{font-weight:700}
+.counts .c b{color:var(--crit)} .counts .h b{color:var(--high)} .counts .m b{color:var(--mid)}
+.verdict ol{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:6px}
+.verdict .lead{max-width:65ch}
+.next{font-size:14px;color:var(--muted)}
+.next strong{color:var(--ink);font-weight:500}
+
+section{display:flex;flex-direction:column;gap:18px}
+.sec-head{display:flex;flex-direction:column;gap:4px}
+h2{font-size:22px;font-weight:700}
+.sec-head p{color:var(--muted);font-size:14px}
+
+.dims{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.dim{background:var(--surface);padding:12px 16px;display:flex;flex-direction:column;gap:2px}
+.dim .n{font-size:13px;color:var(--muted)}
+.dim .v{font-weight:700;font-size:14.5px}
+.v.ok{color:var(--good)} .v.thin{color:var(--high)} .v.strong{color:var(--good)}
+
+.decide{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.decide li{list-style:none;display:grid;grid-template-columns:34px 1fr auto;gap:4px 12px;padding:14px 20px;border-top:1px solid var(--line);align-items:baseline}
+.decide li:first-child{border-top:none}
+.decide ul{margin:0;padding:0}
+.num{font-family:var(--mono);color:var(--accent);font-weight:500;font-variant-numeric:tabular-nums}
+.ref{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+
+.sev-group{display:flex;flex-direction:column;gap:0}
+.sev-title{display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:2px solid var(--ink)}
+.sev-title h3{font-size:17px;font-weight:700}
+.sev-title p{font-size:13.5px;color:var(--muted)}
+.chip{font-size:12px;font-weight:700;padding:2px 10px;border-radius:6px;white-space:nowrap}
+.chip.c{color:var(--crit);background:var(--crit-soft)}
+.chip.h{color:var(--high);background:var(--high-soft)}
+.chip.m{color:var(--mid);background:var(--mid-soft)}
+
+.issue{padding:20px 0;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.issue-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px}
+.issue-head h4{margin:0;font-size:16.5px;font-weight:700;flex:1 1 320px;text-wrap:balance}
+.issue dl{margin:0;display:grid;grid-template-columns:3.2em 1fr;gap:6px 14px}
+.issue dt{font-size:13px;color:var(--muted);font-weight:500;padding-top:2px}
+.issue dd{margin:0;max-width:62ch}
+.issue ul{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px;max-width:64ch}
+.who{font-size:12.5px;color:var(--accent);background:var(--accent-soft);padding:2px 9px;border-radius:6px;white-space:nowrap}
+
+.minor{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px;padding-top:14px}
+
+.good{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.good div{background:var(--good-soft);border-radius:10px;padding:14px 16px;font-size:14.5px}
+
+details.sources{border-top:1px solid var(--line);padding-top:18px;font-size:14px;color:var(--muted)}
+details.sources summary{cursor:pointer;color:var(--ink);font-weight:500}
+details.sources summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+details.sources ul{margin:10px 0 0;padding-left:1.2em;display:flex;flex-direction:column;gap:4px}
+
+@media (max-width:520px){
+  h1{font-size:27px}
+  .decide li{grid-template-columns:28px 1fr}
+  .decide .ref{grid-column:2}
+  .issue dl{grid-template-columns:1fr}
+  .issue dt{padding-top:0}
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow"><span>PRD 校验</span><span>v1.3.0 · shop-v2</span><span>2026-09-15</span></div>
+  <h1>电商 V2 PRD 体检</h1>
+  <div class="verdict">
+    <div class="verdict-top">
+      <span class="stamp">暂不能进入下一步</span>
+      <div class="counts"><span class="c">严重 <b>6</b></span><span class="h">重要 <b>9</b></span><span class="m">一般 <b>6</b></span></div>
+    </div>
+    <p class="lead">这份 PRD 底子是好的：用「只做用户被卡住、运营在人肉、货发得慢的事，不为多卖货」来砍需求，标准清楚，而且真的用上了；对退款套利、批量改价误操作这类风险也很警觉。但现在还不能交给设计、架构和拆开发任务，原因有三个：</p>
+    <ol>
+      <li><strong>有几个关键判断的前提和系统实际不符</strong>，照着做会做反：支付失败怎么查、取消订单后库存怎么回补、退款补偿给不给。</li>
+      <li><strong>9 月 15 日砍掉 WhatsApp 工作台后没改干净</strong>，还和同版本的其他文档撞了编号、改同一批页面。</li>
+      <li><strong>卡住下一步的 6 个决定</strong>都没有负责人和期限。</li>
+    </ol>
+    <p class="next"><strong>建议：</strong>先回复下面 9 件待拍板的事，再修订一轮 PRD，然后重新校验。</p>
+  </div>
+</header>
+
+<section>
+  <div class="sec-head"><h2>需要产品拍板的 9 件事</h2><p>这些不定下来，后面的设计和开发都只能猜。</p></div>
+  <div class="decide"><ul>
+    <li><span class="num">1</span><span>支付失败定性：谁去查、哪天给结果（查法要先由技术修正，见严重问题第 1 条）</span><span class="ref">ACT-1</span></li>
+    <li><span class="num">2</span><span>拒收、发货前取消，到底给不给额外补偿？沿用 v1.4.0 的规则，还是改规则？</span><span class="ref">D-22</span></li>
+    <li><span class="num">3</span><span>「不做批发」是指「不做批量发货」吗？这是文档作者的推断，而 v1.4.0 原本要做批量发货</span><span class="ref">§1.4</span></li>
+    <li><span class="num">4</span><span>退货进度页砍掉后：撤销退货申请、驳回原因、申诉入口，放到哪里，还是不做？</span><span class="ref">§1.4</span></li>
+    <li><span class="num">5</span><span>「已送达、未确认收货」能否申请退款？「不可退」商品能否取消或拒收？</span><span class="ref">FR-115/117/118</span></li>
+    <li><span class="num">6</span><span>购物车只买部分商品时：免运费门槛、PawCoin 抵扣、库存占用，按选中的算还是整车算？</span><span class="ref">FR-145</span></li>
+    <li><span class="num">7</span><span>和「后台 UI 重构」主题改的是同一批电商后台页面：谁先谁后，冲突时以谁为准？</span><span class="ref">后台主题 Epic 10</span></li>
+    <li><span class="num">8</span><span>这一版随哪个版本发布？目录在 v1.3.0，PRD 自称 V1.4.0 之后，路线图又写 2.1.0</span><span class="ref">全文</span></li>
+    <li><span class="num">9</span><span>原 §8.1 的四项：商品编码方案、导入带不带图、WhatsApp 用哪个号、品类改配置后老数据怎么迁</span><span class="ref">D-20/21/24/25</span></li>
+  </ul></div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>问题清单</h2><p>已合并 4 位评审员的发现并去重，改成需求语言表述。</p></div>
+
+  <div class="sev-group">
+    <div class="sev-title"><span class="chip c">严重</span><p>不改会做错事，或者下一步做不下去</p></div>
+
+    <article class="issue">
+      <div class="issue-head"><h4>支付失败的查法，会得出相反的结论</h4><span class="ref">ACT-1 · R-1</span><span class="who">产品指派 · 技术执行</span></div>
+      <dl>
+        <dt>问题</dt><dd>PRD 的判读是「过期多＝用户没付，失败多＝支付通道坏了」。但系统里用户超时没付、主动取消，记录的都是「失败」，没有「过期」；这张表里还混着问诊、充值等 5 类支付。</dd>
+        <dt>影响</dt><dd>照现在的写法查，大概率会读出「支付通道故障」，从而触发「整份 PRD 让路、先修支付」，把排期错误地打乱。</dd>
+        <dt>建议</dt><dd>请技术重写查法：只看电商订单，把「用户放弃」「通道拒绝」「付了钱但系统没收到通知」分开统计；明确查正式环境，并定好人和日期。</dd>
+      </dl>
+    </article>
+
+    <article class="issue">
+      <div class="issue-head"><h4>「发货前取消会让库存凭空少一件」不成立</h4><span class="ref">D-23 · FR-115</span><span class="who">技术</span></div>
+      <dl>
+        <dt>问题</dt><dd>系统执行退款时，已经会自动把库存加回去。PRD 却要求「必须再补一次」。</dd>
+        <dt>影响</dt><dd>照做会加两次，库存虚高，导致超卖。真正的问题在另一处：一件从没登记过进货的商品被取消时，退款会直接失败、卡住。</dd>
+        <dt>建议</dt><dd>撤回 D-23「已闭合」的结论，把 FR-115 的要求改成修复这个卡住的问题。</dd>
+      </dl>
+    </article>
+
+    <article class="issue">
+      <div class="issue-head"><h4>退款补偿的推荐，和已定的规则相反</h4><span class="ref">D-22 · FR-116</span><span class="who">产品拍板</span></div>
+      <dl>
+        <dt>问题</dt><dd>v1.4.0 定过：拒收、发货前取消都<strong>不给</strong>额外补偿。现在系统实际给拒收发了补偿，本身已偏离规则；PRD 却推荐保留这笔补偿，改为关掉「选 PawCoin 退款的激励」。而这种激励只在这两个场景里有，关掉等于整个功能下线。</dd>
+        <dt>影响</dt><dd>直接决定多发还是少发钱。</dd>
+        <dt>建议</dt><dd>先回答拍板清单第 2 项，结论写进决策日志，再改 FR-116。</dd>
+      </dl>
+    </article>
+
+    <article class="issue">
+      <div class="issue-head"><h4>需求编号和同版本的其他 PRD 撞号</h4><span class="ref">§4 · §8</span><span class="who">PRD 作者</span></div>
+      <dl>
+        <dt>问题</dt><dd>v1.3.0 的 FR-111~121 已被里程碑、场所、评论、灯箱等需求占用；D-20~33 在后台主题里也已经有含义。「全仓最大 FR-110」的说法不成立。</dd>
+        <dt>影响</dt><dd>开发、测试、验收时说「FR-115」，分不清指的是哪件事。</dd>
+        <dt>建议</dt><dd>整体换号段，比如加主题前缀 <span class="mono">SHOP-FR-</span>。</dd>
+      </dl>
+    </article>
+
+    <article class="issue">
+      <div class="issue-head"><h4>卡住下一步的 6 个决定，没人负责、没有期限</h4><span class="ref">§8.1</span><span class="who">产品</span></div>
+      <dl>
+        <dt>问题</dt><dd>支付失败定性、商品编码、导入带图、退款补偿、WhatsApp 号码、品类迁移，全都写着「待指派」。</dd>
+        <dt>影响</dt><dd>这些不定，设计、架构、拆任务都开始不了；其中支付定性还可能让整份 PRD 的优先级重排。</dd>
+        <dt>建议</dt><dd>每项指定负责人和日期。</dd>
+      </dl>
+    </article>
+
+    <article class="issue">
+      <div class="issue-head"><h4>两条关键需求没写「怎样算做完」</h4><span class="ref">FR-145 · FR-142</span><span class="who">产品</span></div>
+      <dl>
+        <dt>问题</dt><dd>购物车「只买部分商品」：没写免运费门槛、PawCoin 抵扣、库存占用怎么算。「品类可配置」：没写停用品类下的商品怎么处理、老版本 App 遇到新品类显示什么。</dd>
+        <dt>影响</dt><dd>前者连着钱，后者连着线上老用户，开发只能猜。</dd>
+        <dt>建议</dt><dd>补上验收标准（拍板清单第 6、9 项）。</dd>
+      </dl>
+    </article>
+  </div>
+
+  <div class="sev-group">
+    <div class="sev-title"><span class="chip h">重要</span><p>会导致返工、误解或暴露风险</p></div>
+
+    <article class="issue">
+      <div class="issue-head"><h4>砍掉 WhatsApp 工作台后，还有约 8 处没改干净</h4><span class="who">PRD 作者</span></div>
+      <ul>
+        <li>「客服可达」的成功指标（24 小时回复率、区分人工和模板回复、月发送条数）都依赖工作台，本版量不了。建议改成本版能量的，比如带订单号的工单占比、深链点击量。</li>
+        <li>「后台代用户退货不做」的理由，写的是「有工作台兜底」。</li>
+        <li>寄回单号登记：一处说「可以让运营代填」，另一处说「这是唯一路径」。</li>
+      </ul>
+    </article>
+
+    <article class="issue">
+      <div class="issue-head"><h4>和「后台 UI 重构」主题改的是同一批页面</h4><span class="who">产品拍板</span></div>
+      <ul>
+        <li>后台重构的验收写着：banner「纯展示、不可点」，对账页「只读」，不改接口。</li>
+        <li>本 PRD 要做可点击的轮播、对账下钻和导出、各种批量操作。</li>
+        <li>不先对齐谁先谁后，一边做完另一边就要推翻（拍板清单第 7 项）。</li>
+      </ul>
+    </article>
+
+    <article class="issue">
+      <div class="issue-head"><h4>推翻了已有决定却没留记录，有一条还是推断</h4><span class="who">产品确认 · 补决策日志</span></div>
+      <ul>
+        <li>「不做批发」被解读成「不做批量发货」。这是文档作者的推断，而 v1.4.0 后台 PRD 原本要求支持批量发货。</li>
+        <li>商品详情从「图文富文本」降为「只能写纯文本」，运营排的版会全部丢失。</li>
+        <li>还有：订单里显示下单人信息、SKU 数量上限、评价页、退货进度页、banner 轮播。</li>
+      </ul>
+    </article>
+
+    <article class="issue">
+      <div class="issue-head"><h4>退货进度页砍掉后，用户有三件事没地方做</h4><span class="who">产品拍板</span></div>
+      <ul>
+        <li>撤销退货申请、查看被驳回的原因、对驳回提出申诉，原本都在进度页里。</li>
+        <li>要么放进订单详情，要么明确不做并记下来。</li>
+      </ul>
+    </article>
+
+    <article class="issue">
+      <div class="issue-head"><h4>售后入口漏了场景，「自助取消」的说法也不准</h4><span class="ref">FR-115/117/118</span><span class="who">产品拍板</span></div>
+      <ul>
+        <li>「已送达、未确认收货」的订单也应能申请退款，PRD 漏了。</li>
+        <li>标为「不可退」的商品，取消和拒收目前会被系统拒绝，要不要放开？</li>
+        <li>「自助取消」实际上仍要运营手动批准、再手动执行退款。用户点完不会立刻成功，PRD 的写法容易让人以为是即时的。</li>
+      </ul>
+    </article>
+
+    <article class="issue">
+      <div class="issue-head"><h4>有几条需求已经做完或写错了对象，工作量要重估</h4><span class="who">技术复核</span></div>
+      <ul>
+        <li>推荐区商品图片（FR-114）已经上线。</li>
+        <li>「67 处硬编码中文」（FR-135）其实在后端报错提示里，不在 App 界面上。</li>
+        <li>「报错返回 500」（FR-138）已修一半。</li>
+        <li>工单关联电商订单（FR-131）比写的要大，需要改数据结构。</li>
+        <li>品类实际有 4 个（多了护理类），物种有 3 个（多了「通用」）。</li>
+      </ul>
+    </article>
+
+    <article class="issue">
+      <div class="issue-head"><h4>订单号能被猜出来</h4><span class="ref">FR-137 · FR-152</span><span class="who">技术方案 · 产品确认</span></div>
+      <dl>
+        <dt>问题</dt><dd>列表上的订单号带连续序号，按项目安全规定不应对外展示；本 PRD 却要把它放进详情页，还要预填进 WhatsApp。</dd>
+        <dt>影响</dt><dd>外人能推算平台订单量，或者猜到别人的订单号。</dd>
+        <dt>建议</dt><dd>换成不可推算的展示号。</dd>
+      </dl>
+    </article>
+
+    <article class="issue">
+      <div class="issue-head"><h4>商品列表改分页，会影响线上老版本 App</h4><span class="ref">FR-127</span><span class="who">技术 · 发版计划</span></div>
+      <dl>
+        <dt>问题</dt><dd>老版本 App 一次性拉取全部商品，改成分页后，老用户可能只看到第一页，甚至打不开。</dd>
+        <dt>建议</dt><dd>写明兼容方案，并和新版 App 同批发布。</dd>
+      </dl>
+    </article>
+
+    <article class="issue">
+      <div class="issue-head"><h4>版本归属不清</h4><span class="who">产品拍板</span></div>
+      <dl>
+        <dt>问题</dt><dd>PRD 自称「V1.4.0 之后的下一版」，却放在 v1.3.0 目录，路线图又把电商后续扩展排在 2.1.0。</dd>
+        <dt>建议</dt><dd>确定这一版随哪个版本发布（拍板清单第 8 项）。</dd>
+      </dl>
+    </article>
+  </div>
+
+  <div class="sev-group">
+    <div class="sev-title"><span class="chip m">一般</span><p>建议顺手改</p></div>
+    <ul class="minor">
+      <li>缺少量级边界：单次最多导入多少行、导出能多大、Lark 提醒多久内送达。</li>
+      <li>FR-123 和 FR-144 都写了商品导出，内容重复。</li>
+      <li>正文里有大量「初稿写错、此处已纠正」的修改痕迹，对下游是噪声，建议挪到决策日志。</li>
+      <li>引用的原始材料（需求梳理、两份调研、memlog）不在仓库里，BUG-/OPS-/APP- 这类编号没法对照原文。</li>
+      <li>按邮箱搜订单、导出订单都属于个人信息检索，需要法务给口径。</li>
+      <li>部分引用已过期：权限数写 53，实际是 72；deferred-work 里没有 PRD 说的 banner 可行性分析。</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>各维度判断</h2><p>按 BMAD PRD 质量量表打分。</p></div>
+  <div class="dims">
+    <div class="dim"><span class="n">能否据此做决策</span><span class="v ok">基本可以</span></div>
+    <div class="dim"><span class="n">内容是否实在</span><span class="v ok">基本可以</span></div>
+    <div class="dim"><span class="n">目标与取舍是否自洽</span><span class="v ok">基本可以</span></div>
+    <div class="dim"><span class="n">「怎样算做完」是否写清</span><span class="v thin">偏薄</span></div>
+    <div class="dim"><span class="n">范围是否诚实</span><span class="v ok">基本可以</span></div>
+    <div class="dim"><span class="n">下游能否直接用</span><span class="v thin">偏薄</span></div>
+    <div class="dim"><span class="n">文档结构</span><span class="v strong">好</span></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><h2>做得好的地方</h2></div>
+  <div class="good">
+    <div>砍需求的标准清楚，而且真用上了：营销组、评价页、猫砂、订阅都砍得有理有据。</div>
+    <div>每个痛点都去系统里找了依据。74 条事实核查中，51 条完全属实，12 条基本属实。</div>
+    <div>对退款套利、批量改价误操作、个人信息这几个高风险点，都有明确警觉。</div>
+    <div>主动识别并收敛了 WhatsApp 工作台这个最大的排期风险。</div>
+  </div>
+</section>
+
+<details class="sources">
+  <summary>评审来源与技术细节</summary>
+  <p style="margin-top:10px">4 位评审员并行评审，逐条技术证据见同目录下的文件：</p>
+  <ul>
+    <li><span class="mono">review-rubric.md</span>：按 PRD 质量量表逐维度评审</li>
+    <li><span class="mono">review-adversarial-general.md</span>：对抗式评审</li>
+    <li><span class="mono">review-code-facts.md</span>：PRD 中 74 条系统事实逐条核查</li>
+    <li><span class="mono">review-cross-doc-consistency.md</span>：与 v1.4.0 文档、决策日志及同版本其他主题的一致性检查</li>
+  </ul>
+  <p style="margin-top:10px" class="mono">PRD：_bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-shop-v2.md</p>
+</details>
+
+</div>

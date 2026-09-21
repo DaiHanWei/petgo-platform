@@ -140,7 +140,7 @@ void main() {
       final withItems = OrderSummary.fromJson(const {
         'orderType': 'ECOMMERCE',
         'orderToken': 't',
-        'displayNo': 'TOKO-20260818-000001',
+        'displayNo': 'TOKO-20260818-7M4KQ2',
         'statusCode': 'PENDING_PAYMENT',
         'statusColor': 'WARN',
         'thumbnailUrl': 'https://cdn/x.jpg',
@@ -174,7 +174,7 @@ OrderSummary _order({
     OrderSummary(
       orderType: type,
       orderToken: 'tok-1',
-      displayNo: 'TOKO-20260818-000001',
+      displayNo: 'TOKO-20260818-7M4KQ2',
       statusCode: statusCode,
       statusColor: OrderStatusColor.warn,
       amount: 370000,

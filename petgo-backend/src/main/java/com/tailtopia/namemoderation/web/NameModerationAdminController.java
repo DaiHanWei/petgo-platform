@@ -27,9 +27,12 @@ public class NameModerationAdminController {
     private static final String DECIDE_AUTH = "hasRole('SUPER_ADMIN') or hasAuthority('content.takedown')";
 
     private final NameModerationService service;
+    /** V1.3.0 Story 2.4：工作台 htmx 分支的处置 fragment 装配。 */
+    private final com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService workbench;
 
-    public NameModerationAdminController(NameModerationService service) {
+    public NameModerationAdminController(NameModerationService service, com.tailtopia.admin.moderation.service.ManualReviewWorkbenchService workbench) {
         this.service = service;
+        this.workbench = workbench;
     }
 
     /**
@@ -39,16 +42,26 @@ public class NameModerationAdminController {
      */
     @PostMapping("/admin/name-moderation/{recordId}/decide")
     @PreAuthorize(DECIDE_AUTH)
-    @ResponseBody
-    public ResponseEntity<String> decide(@AuthenticationPrincipal AdminUserDetails admin,
+    public Object decide(@AuthenticationPrincipal AdminUserDetails admin,
             @PathVariable long recordId,
             @RequestParam("decision") String decision,
             @RequestParam(value = "category", required = false) String category,
             @RequestParam(value = "note", required = false) String note,
-            @RequestParam(value = "reason", required = false) String reason) {
+            @RequestParam(value = "reason", required = false) String reason,
+            com.tailtopia.admin.shared.web.HxRequest hx, org.springframework.ui.Model model,
+            jakarta.servlet.http.HttpServletResponse response) {
         NameDecision parsed = parseDecision(decision);
         String cat = category != null && !category.isBlank() ? category : reason;
         service.decide(recordId, parsed, admin.getAdminAccountId(), new ModerationDecision(cat, note));
+        if (hx.isHtmx()) {
+            // V1.3.0 Story 2.4 AC5：工作台 → 处置 fragment（data-next-id + oob）；非 htmx 维持纯文本回显。
+            model.addAttribute("done", workbench.afterDispose(hx.currentUrl(),
+                    com.tailtopia.admin.moderation.dto.ReviewTab.NAME, recordId));
+            model.addAttribute("messageKey", parsed == NameDecision.VIOLATION
+                    ? "admin.flash.review.nameViolation" : "admin.flash.review.namePass");
+            com.tailtopia.admin.shared.web.AdminFragmentResponses.triggerBadgeRefresh(response);
+            return "admin/fragments/review-done :: done";
+        }
         return ResponseEntity.ok(parsed == NameDecision.VIOLATION
                 ? "已判违规：名称已重置为系统默认编码名并通知用户"
                 : "已判通过：名称保留");

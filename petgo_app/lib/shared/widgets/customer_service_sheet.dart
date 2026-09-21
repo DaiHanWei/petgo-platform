@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'app_toast.dart';
 import 'package:flutter/services.dart';
@@ -7,10 +8,15 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/typography.dart';
 import '../../l10n/app_localizations.dart';
+import '../config/support_contact.dart';
+import '../config/support_contact_repository.dart';
 
-/// 客服联系方式（固定联系数据，非可翻译文案）。
-const String _kCsWhatsappNumber = '081290906953';
-const String _kCsEmail = 'cs@tailtopia.id';
+/// 🔴 V1.3.0 Story 3-1：号码不再是本文件的私有常量。
+///
+/// 权威值由后端 `GET /api/v1/support/contact` 下发（运营改后台配置即生效，不需发版）；
+/// 读不到时回退 `kFallbackSupportContact` —— 那是全 App **唯一**的号码字面量，
+/// Story 3-3 的 WhatsApp 深链读的也是它。**别在这里再放一份副本**，
+/// 放了就又变回「换号要改两处」。
 
 // 客服抽屉视觉 token（对齐原型 cs-contact-sheet.html）。
 const Color _kCsWaTint = Color(0xFFE7F8EF); // WhatsApp 图标绿底
@@ -32,7 +38,17 @@ Future<void> showCustomerServiceSheet(BuildContext context) {
     // 内容套滚动容器：非 isScrollControlled 的 modal sheet 高度上限=屏高×9/16，
     // 英文/大字号下副标题折两行会把固定 Column 顶破上限（720 宽真机溢出 23px、Tutup 被截）。
     // 可滚动后内容不超高时视觉零变化，超高时自动可滚，任何屏幕/字号都安全。
-    builder: (ctx) => SafeArea(
+    // 🔴 用 Consumer 就地取 provider，**不改 showCustomerServiceSheet 的签名** ——
+    //    改成要 WidgetRef 就得动三个调用点（「我」页 + 兽医登录页两处），
+    //    而那三处与本 story 无关。
+    builder: (ctx) => Consumer(builder: (ctx, ref, _) {
+      // provider 内部已吞掉所有异常、永不进 error 态；这里再用 maybeWhen 兜一次
+      // loading 那一帧 —— 弹窗**永不出现空值或占位符**（AC7）。
+      final contact = ref.watch(supportContactProvider).maybeWhen(
+            data: (c) => c,
+            orElse: () => kFallbackSupportContact,
+          );
+      return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
         child: Column(
@@ -64,18 +80,18 @@ Future<void> showCustomerServiceSheet(BuildContext context) {
                 colorFilter: const ColorFilter.mode(_kCsWaGreen, BlendMode.srcIn),
               ),
               iconBg: _kCsWaTint,
-              value: _kCsWhatsappNumber,
+              value: contact.whatsappNumber,
               sub: '${l10n.csWhatsappLabel} · ${l10n.csWhatsappNote}',
-              copyText: _kCsWhatsappNumber,
+              copyText: contact.whatsappNumber,
             ),
             const Divider(height: 1, thickness: 1, color: AppColors.line2),
             // 邮箱：紫底紫标，地址可复制。
             _CsContactRow(
               glyph: const Icon(Icons.mail_outline, size: 22, color: AppColors.mint),
               iconBg: AppColors.mintTint2,
-              value: _kCsEmail,
+              value: contact.email,
               sub: '${l10n.csEmailLabel} · ${l10n.csEmailNote}',
-              copyText: _kCsEmail,
+              copyText: contact.email,
             ),
             const Divider(height: 1, thickness: 1, color: AppColors.line2),
             // 站内工单行（0718 新增，原两个按钮合并成一行）：→ 工单列表（提交+追踪 hub）。
@@ -111,7 +127,8 @@ Future<void> showCustomerServiceSheet(BuildContext context) {
           ],
         ),
       ),
-    ),
+      );
+    }),
   );
 }
 

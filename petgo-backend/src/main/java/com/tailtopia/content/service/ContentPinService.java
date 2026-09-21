@@ -73,10 +73,22 @@ public class ContentPinService {
     private void requireNoOverlap(String slot, Instant startsAt, Instant endsAt, Long excludeId) {
         List<ContentPin> conflicts = pins.findOverlapping(slot, startsAt, endsAt, excludeId);
         if (!conflicts.isEmpty()) {
-            throw AppException.validation("该坑位在此时间段已有顶置排期，请调整时间窗")
-                    .code("admin.err.pins.overlap");
+            // 🔴 把**冲突项**写进报错（V1.3.0 Story 7.3 · AC6）：只说「已有排期」等于让运营
+            //    回列表自己一条条比时间窗 —— 而排期多起来之后这活儿基本没法干。
+            //    时间按 WIB 呈现（后台全站口径），与列表上看到的字面一致。
+            String detail = conflicts.stream()
+                    .map(c -> "#" + c.getId() + " " + WIB_WINDOW.format(c.getStartsAt())
+                            + "–" + WIB_WINDOW.format(c.getEndsAt()))
+                    .collect(java.util.stream.Collectors.joining("、"));
+            throw AppException.validation("该坑位在此时间段已有顶置排期：" + detail)
+                    .code("admin.err.pins.overlap", detail);
         }
     }
+
+    /** 冲突项的时间窗按 WIB 呈现（与后台列表上看到的字面一致）。 */
+    private static final java.time.format.DateTimeFormatter WIB_WINDOW =
+            java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm")
+                    .withZone(java.time.ZoneId.of("Asia/Jakarta"));
 
     /**
      * 修改一条既有排期的时间窗 / 对象（Story 11.1 · AB-10A）。
@@ -121,6 +133,16 @@ public class ContentPinService {
     @Transactional(readOnly = true)
     public List<ContentPin> listBySlot(String slot) {
         return pins.findBySlotOrderByStartsAtDesc(slot);
+    }
+
+    /**
+     * 按 id 取一条排期（V1.3.0 Story 7.3 抽屉用）；不存在返回 empty。
+     *
+     * <p>admin 侧经本 service 读，不直连 {@code ContentPinRepository} —— 与本类其它方法同一条边界。
+     */
+    @Transactional(readOnly = true)
+    public Optional<ContentPin> byId(long id) {
+        return pins.findById(id);
     }
 
     /** 某坑位当前生效中的排期；无则空。 */

@@ -55,9 +55,17 @@ class AdminCommentModerationIntegrationTest extends ApiIntegrationTest {
                 .isEqualTo(CommentModerationStatus.VISIBLE);
     }
 
+    /** V1.3.0 Story 7.2：列表从「最近 200 条」改为筛选 + 分页；按帖子 ID 筛能定位到这一条。 */
     @Test
-    void recentListsComment() {
+    void searchListsCommentByPost() {
         long cid = seedComment();
-        assertThat(service.recent()).extracting("id").contains(cid);
+        long postId = comments.findById(cid).orElseThrow().getPostId();
+
+        var found = service.search(null, postId, null, 0);
+
+        assertThat(found.rows()).extracting("id").contains(cid);
+        assertThat(found.total()).isPositive();
+        // 行上带所属帖子与作者的展示字段（整页一次批量取）
+        assertThat(found.rows().get(0).postId()).isEqualTo(postId);
     }
 }

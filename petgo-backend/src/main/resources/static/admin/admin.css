@@ -478,3 +478,460 @@ dialog.lightbox img { display: block; max-width: 92vw; max-height: 92vh; object-
 .seed-thumb .err { font-size: 11px; margin: 4px 0 0; line-height: 1.35; }
 .seed-url-fallback { margin: 10px 0; }
 .seed-url-fallback > summary { cursor: pointer; font-size: 13px; }
+
+/* ===== V1.3.0 Story 1.5/1.6：权限矩阵（角色配置页 + 账号页共用 fragments/perm-matrix.html） ===== */
+.matrix th, .matrix td { vertical-align: top; }
+.matrix th { white-space: nowrap; }
+.matrix .group-row td { background: #F0F1F5; font-weight: 600; }
+.matrix label { display: block; white-space: nowrap; font-size: var(--fs-xs); margin: 0; }
+.matrix .shared { color: var(--muted); font-size: var(--fs-xs); }
+.matrix .route { color: var(--muted); font-size: 11px; }
+.perm-panel .matrix { max-width: 760px; }
+.role-tag.role-ROLE_TEMPLATE { border-style: dashed; }
+
+/* ===== V1.3.0 Story 2.2：G0 全局壳（顶栏账号菜单 / STAG 角标 / 待办角标 / 登录页） ===== */
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.stag-badge { background: #FFF3C4; color: #7A5A00; border: 1px solid #F2D77B; border-radius: var(--radius-sm);
+  padding: 3px 10px; font-size: var(--fs-xs); font-weight: 700; letter-spacing: .02em; }
+.account-menu { position: relative; }
+.account-menu summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  font-size: var(--fs-sm); color: var(--ink); padding: 4px 8px; border-radius: var(--radius-sm); }
+.account-menu summary::-webkit-details-marker { display: none; }
+.account-menu summary:hover { background: rgba(31, 35, 48, .05); }
+.account-menu .avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--brand); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: var(--fs-xs); }
+.account-menu .caret { color: var(--muted); font-size: 10px; }
+.account-menu-panel { position: absolute; right: 0; top: calc(100% + 6px); min-width: 240px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: 0 8px 24px rgba(0, 0, 0, .08);
+  padding: 12px 14px; z-index: 30; font-size: var(--fs-sm); }
+.account-menu-panel .name { font-weight: 700; margin-bottom: 2px; }
+.account-menu-panel form { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+nav .nav-badge { float: right; background: var(--danger); color: #fff; min-width: 18px; text-align: center;
+  padding: 0 6px; line-height: 18px; font-size: 11px; }
+nav .nav-badge.is-empty { display: none; }
+nav a.legacy { opacity: .85; }
+.login-v130 { max-width: 380px; }
+.login-v130 .login-brand { text-align: center; font-size: 34px; margin: 4px 0 6px; }
+.login-v130 h1 { text-align: center; }
+.login-v130 .login-sub { text-align: center; margin: -8px 0 16px; }
+.login-v130 .lark { display: block; text-align: center; text-decoration: none; margin: 10px 0 16px; }
+.login-v130 .emergency summary { cursor: pointer; color: var(--muted); font-size: var(--fs-sm); text-align: center; }
+
+/* ===== V1.3.0 模板壳（Story 2.3b · AD-11）——令牌不改，只追加组件类 ===== */
+/* 层级（UI 稿 9-4）：页面 < 遮罩 40 < 抽屉 50 < dialog 60 < toast 70 */
+.drawer-mask { position: fixed; inset: 0; background: rgba(31, 35, 48, .35); opacity: 0; transition: opacity .15s ease; z-index: 40; }
+.drawer-mask.is-open { opacity: 1; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 480px; max-width: 100vw; background: var(--surface);
+  border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0, 0, 0, .08); transform: translateX(100%);
+  transition: transform .2s ease; z-index: 50; display: flex; flex-direction: column; outline: none; }
+.drawer.is-open { transform: translateX(0); }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.drawer-title { font-weight: 700; font-size: var(--fs); }
+.drawer-close { background: none; border: 0; font-size: 16px; cursor: pointer; color: var(--muted); padding: 4px 6px; }
+.drawer-body { padding: 16px 18px; overflow: auto; flex: 1; }
+dialog { z-index: 60; }
+.toast { z-index: 70; }
+/* 摘要条 */
+.sum { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 12px 0 16px; }
+.sum .sum-item { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; }
+.sum .sum-label { color: var(--muted); font-size: var(--fs-xs); }
+.sum .sum-value { font-size: 20px; font-weight: 700; color: var(--ink); }
+.drawer .sum, .sum--grid2 { grid-template-columns: 1fr 1fr; }
+/* 模板 A 工作台 */
+.wb-head { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.wb-body { display: flex; gap: 16px; align-items: stretch; min-height: 520px; }
+.wb-queue { flex: 0 0 360px; width: 360px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: auto; }
+.wb-detail { flex: 1 1 auto; min-width: 720px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  display: flex; flex-direction: column; }
+.wb-detail-body { flex: 1 1 auto; padding: 16px 18px; overflow: auto; }
+.wb-actions { border-top: 1px solid var(--line); padding: 12px 18px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.q-list { list-style: none; margin: 0; padding: 0; }
+.q-row { height: 56px; box-sizing: border-box; padding: 8px 12px 8px 14px; border-bottom: 1px solid var(--line); border-left: 3px solid transparent;
+  display: flex; flex-direction: column; justify-content: center; gap: 2px; cursor: pointer; font-size: var(--fs-sm); }
+.q-row:hover { background: var(--brand-tint); }
+.q-row.on { background: var(--brand-tint); border-left-color: var(--brand); }
+.q-row .q-title { font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.q-row .q-meta { color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.dot--todo { background: var(--info); }
+.dot--wait { background: var(--warn); }
+.dot--hot { background: var(--danger); }
+.dot--done { background: #B8BCC6; }
+.wb-inline-error:empty, .lst-inline-error:empty, .stp-inline-error:empty { display: none; }
+@media (max-width: 1023px) {
+  .wb-body { display: block; }
+  .wb-queue, .wb-detail { width: auto; min-width: 0; }
+  .wb--narrow[data-active-pane="queue"] .wb-detail { display: none; }
+  .wb--narrow[data-active-pane="detail"] .wb-queue { display: none; }
+}
+/* 页签（UI 稿 9-6）：选中品牌色下划线 + 加粗 + 紫计数 */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.tab { padding: 8px 12px; border-bottom: 2px solid transparent; color: var(--ink-2); text-decoration: none; font-size: var(--fs-sm); }
+.tab.tab--on, .tab.active { border-bottom-color: var(--brand); color: var(--brand-strong); font-weight: 700; }
+.tab .tab-count { color: var(--brand); font-weight: 700; margin-left: 4px; }
+/* 空态三件套（9-5） */
+.empty { text-align: center; color: var(--muted); padding: 40px 12px; }
+.empty .empty-emoji { font-size: 28px; display: block; margin-bottom: 6px; }
+/* 模板 B 列表 */
+.lst-table table tr { height: 48px; }
+.lst-table tr[data-drawer-url] { cursor: pointer; }
+.lst-table tr[data-drawer-url]:hover { background: var(--brand-tint); }
+.lst-table tr.is-selected { background: var(--brand-tint); box-shadow: inset 3px 0 0 var(--brand); }
+/* 模板 C 报表 */
+.rpt-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.card-kpi { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
+.card-kpi .kpi-value { font-size: 24px; font-weight: 700; }
+.card-kpi .kpi-label { color: var(--muted); font-size: var(--fs-xs); }
+/* 模板 D 配置卡 */
+.cfg-card { max-width: 720px; }
+.cfg-head { display: flex; align-items: center; justify-content: space-between; }
+.cfg-title { font-size: 15px; margin: 0 0 8px; }
+.cfg-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; }
+.cfg-foot .inline-error-slot:empty { display: none; }
+.tag-dirty { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bg); }
+/* 模板 E 分步 */
+.step-bar { display: flex; list-style: none; padding: 0; margin: 0 0 16px; gap: 0; counter-reset: step; }
+.step-bar .step { flex: 1; text-align: center; color: var(--muted); font-size: var(--fs-sm); padding: 8px 0; border-bottom: 3px solid var(--line); }
+.step-bar .step--on { color: var(--brand-strong); font-weight: 700; border-bottom-color: var(--brand); }
+.step-bar .step--done { color: var(--ok); border-bottom-color: var(--ok); }
+.stp-body { padding-bottom: 72px; }
+.sticky-footer { position: sticky; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); padding: 10px 16px;
+  display: flex; justify-content: flex-end; gap: 10px; z-index: 20; }
+/* 按钮加载中（9-1 / 9-7 第 7 条） */
+.btn.is-loading { position: relative; color: transparent !important; pointer-events: none; }
+.btn.is-loading::after { content: ''; position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px;
+  border: 2px solid rgba(255, 255, 255, .6); border-top-color: #fff; border-radius: 50%; animation: admin-spin .7s linear infinite; }
+.btn-neutral.is-loading::after { border-color: rgba(31, 35, 48, .3); border-top-color: var(--ink); }
+@keyframes admin-spin { to { transform: rotate(360deg); } }
+/* UX-DR11 组件底座修正 */
+.sel, .inp { display: inline-block; box-sizing: border-box; }
+.sel { position: relative; }
+.sel::after { content: '▾'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--muted); }
+/* UX-DR12 三语占位 */
+.field label, label.field { display: block; }
+.btn { min-width: 88px; white-space: nowrap; }
+.btn-sm { min-width: 0; }
+th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ===== A1 统一复核工作台（Story 2.4） ===== */
+.wb-title-row { display: flex; align-items: center; justify-content: space-between; }
+.review-gear summary { font-size: 18px; }
+.review-filters { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: flex-end; }
+.q-row.row-overdue .q-title, .q-row.row-overdue .q-meta { color: var(--danger); }
+.q-thumb { width: 28px; height: 28px; object-fit: cover; border-radius: 4px; vertical-align: middle; margin-right: 6px; }
+.q-link { margin-left: 6px; font-size: var(--fs-xs); }
+.q-meta .badge { padding: 0 6px; }
+.rv-card { margin-bottom: 12px; }
+.rv-text { white-space: pre-wrap; }
+.rv-images { display: flex; flex-wrap: wrap; gap: 8px; }
+.rv-img { width: 120px; height: 120px; object-fit: cover; border-radius: var(--radius-sm); cursor: zoom-in; }
+.rv-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.rv-big { display: block; font-size: 22px; }
+.rv-avatar { width: 96px; height: 96px; object-fit: cover; border-radius: 50%; }
+.rv-avatar--big { width: 160px; height: 160px; }
+.rv-comment { border-left: 3px solid var(--brand-line); padding: 6px 10px; margin: 8px 0; background: var(--brand-tint); }
+.rv-entries { list-style: none; padding: 0; margin: 0; font-size: var(--fs-sm); }
+.rv-entries li { padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.rv-action-group { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.rv-small { font-size: var(--fs-sm); }
+
+/* ===== V1.3.0 Story 2.5 · A2 被举报用户工作台 ===== */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: var(--fs-sm); cursor: pointer; }
+.chip:hover:not([disabled]) { border-color: var(--primary); }
+.chip.chip--on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.chip.chip-danger.chip--on { background: var(--danger); border-color: var(--danger); }
+.chip[disabled] { opacity: .5; cursor: not-allowed; }
+.chip input[type="radio"] { margin: 0; }
+.chip.chip--static { cursor: default; }
+.tk-panel { margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.tk-panel textarea { width: 100%; box-sizing: border-box; }
+.tk-lift { display: flex; gap: 8px; align-items: center; }
+.tk-account-head { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+.tk-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }
+.tk-history ul { list-style: none; padding: 0; margin: 6px 0 0; font-size: var(--fs-sm); }
+.tk-history li { padding: 3px 0; }
+.tk-sample-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.tk-sample { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px; font-size: var(--fs-xs); }
+.tk-sample img { width: 100%; height: 100px; object-fit: cover; border-radius: 4px; cursor: zoom-in; }
+.tk-sample.is-deleted { opacity: .55; }
+.tk-sample-text { margin: 6px 0; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.q-check { margin-right: 6px; display: inline-flex; }
+.batch-bar { position: sticky; top: 0; z-index: 30; display: flex; gap: 10px; align-items: center; padding: 8px 12px; margin-bottom: 8px; background: var(--surface); border: 1px solid var(--primary); border-radius: var(--radius-sm); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.batch-bar[hidden] { display: none; }
+.wb--collapsed .tk-card:not(.tk-account) { display: none; }
+.wb--collapsed .tk-actions { display: none; }
+.tk-filters { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+
+/* ===== V1.3.0 Story 2.6 · A4 问诊异常工单工作台 ===== */
+.an-timeline { list-style: none; padding: 0; margin: 0 0 10px; font-size: var(--fs-sm); }
+.an-timeline li { padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.an-timeline li .muted { margin-right: 6px; }
+.an-note-form { display: flex; gap: 8px; align-items: center; }
+.an-note-form .inp { flex: 1; }
+
+/* ===== V1.3.0 Story 2.7 · A5 客服工单工作台 ===== */
+.sp-link-form, .sp-reject-form { display: inline-flex; gap: 8px; align-items: center; margin-top: 8px; }
+.sp-link-form .inp, .sp-reject-form .inp { min-width: 240px; }
+
+/* ===== V1.3.0 Story 2.8 · A6 退款三段流工作台 ===== */
+.rf-flow { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.rf-flow li { padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); font-size: var(--fs-sm); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.rf-flow li strong { width: 100%; }
+.rf-flow li.is-current { border-color: var(--primary); box-shadow: inset 3px 0 0 var(--primary); }
+.rf-flow li.is-done { opacity: .85; }
+.rf-net-hint { background: #fff7e0; border: 1px solid #f0d58c; border-radius: var(--radius-sm); padding: 8px 10px; margin-top: 8px; }
+.rf-payout-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* ===== V1.3.0 Story 3.4 · 内容运营数据看板（模板 C + Chart.js 五卡）===== */
+.dashboard-charts { position: relative; }
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; margin-bottom: 16px; }
+.chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; min-width: 0; }
+.chart-card.is-failed .chart-body canvas { visibility: hidden; }
+.chart-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.chart-head h2 { margin: 0; font-size: var(--fs-md, 15px); }
+.chart-tabs .chip, [data-range-switch] .chip { cursor: pointer; }
+.chart-tabs .chip.chip--on, [data-range-switch] .chip.chip--on { background: var(--brand); color: #fff; border-color: var(--brand); }
+.chart-metrics { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font-size: var(--fs-xs); }
+.chart-metrics .hint-icon { cursor: help; margin-left: 2px; color: var(--brand); }
+.chart-body { position: relative; height: 260px; margin-top: 8px; }
+.chart-body canvas { width: 100% !important; height: 100% !important; }
+.chart-skeleton { display: none; position: absolute; inset: 0; border-radius: var(--radius-sm); background: linear-gradient(90deg, var(--line) 25%, var(--surface-2, #f3f4f6) 37%, var(--line) 63%); background-size: 400% 100%; animation: chart-shimmer 1.2s ease infinite; }
+#dashboard-charts.htmx-request .chart-skeleton { display: block; }
+#dashboard-charts.htmx-request .chart-body canvas { visibility: hidden; }
+@keyframes chart-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+.chart-failed[hidden] { display: none; } /* 作者样式的 display:flex 会盖过 UA 的 [hidden]（同 .perm-groups[hidden] 的坑） */
+.chart-empty, .chart-failed { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--muted); background: var(--surface); }
+.chart-empty .empty-emoji { font-size: 26px; }
+.chart-foot { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: var(--fs-xs); }
+.chart-foot .chart-missing { color: var(--warn); font-weight: 700; }
+.summary-row .summary-list { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.summary-row .summary-list li { display: flex; flex-direction: column; font-size: var(--fs-xs); color: var(--muted); }
+.summary-row .summary-list li b { font-size: var(--fs-md, 15px); color: var(--ink); }
+.retention-note { margin-top: 10px; }
+@media (max-width: 1024px) { .chart-grid { grid-template-columns: 1fr; } .chart-body { height: 220px; } }
+
+/* ===== A9 暖贴回复跟进（V1.3.0 Story 4.4）===== */
+.wr-card { margin-bottom: 10px; }
+.wr-thread-list { list-style: none; padding: 0; margin: 0; font-size: var(--fs-sm); }
+.wr-comment { display: grid; grid-template-columns: 1fr; gap: 2px; padding: 8px 10px; border-bottom: 1px dashed var(--line); border-left: 3px solid transparent; }
+.wr-comment--reply { margin-left: 18px; }
+.wr-comment.wr-fresh { background: var(--brand-tint); border-left-color: var(--brand); }
+.wr-author { font-weight: 600; }
+.wr-body { white-space: pre-wrap; word-break: break-word; }
+.wr-identity { margin: 0 0 6px; font-weight: 600; }
+.wr-form textarea { width: 100%; box-sizing: border-box; }
+.wr-buttons { display: flex; gap: 8px; align-items: center; margin: 6px 0 10px; }
+.wr-deleted { padding: 8px 10px; border: 1px dashed var(--line); border-radius: var(--radius-sm); }
+
+/* ===== B6 场所管理（V1.3.0 Story 5.2）===== */
+.dot--ok { background: var(--ok, #2E9E5B); }
+.badge-muted { background: var(--surface-2, #F1F2F5); color: var(--muted); }
+/* badge-neutral：十余个既有模板（manual-review / drawer-users / tickets-queue …）一直在用这个类名，
+   但它从来没有被定义过 —— 落地效果是「一个没有底色的徽标」，与旁边有底色的 ok / danger 摆在一起
+   会被读成「这一格没加载出来」。补上定义（V1.3.0 Story 8.5 顺手），语义 = 中性待办，不是异常。 */
+.badge-neutral { background: var(--surface-2, #F1F2F5); color: var(--ink-2); }
+/* 抽屉里的头像块（V1.3.0 Story 9.1a）：当前头像与上传表单同一行，窄屏换行不挤。 */
+.ud-avatar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.ud-avatar form { display: flex; align-items: center; gap: 6px; }
+.row-muted td { color: var(--muted); }
+.nowrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.places-table .places-address { max-width: 260px; }
+.places-table .tag { margin-right: 4px; }
+.pl-card { margin-bottom: 10px; }
+.pl-info { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.pl-desc { white-space: pre-wrap; word-break: break-word; }
+.pl-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.pl-photo { margin: 0; }
+.pl-photo img { width: 100%; height: 100px; object-fit: cover; border-radius: 4px; cursor: zoom-in; }
+.pl-photo-missing { height: 100px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--line); border-radius: 4px; color: var(--muted); font-size: var(--fs-xs); }
+.pl-comment-list { list-style: none; padding: 0; margin: 0; font-size: var(--fs-sm); }
+.pl-comment-list li { padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.pl-comment-body { margin: 4px 0 0; white-space: pre-wrap; word-break: break-word; }
+.pl-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 0; }
+.banner.warn { background: var(--warn-bg); color: var(--warn); }
+.pl-inline > summary { list-style: none; display: inline-flex; }
+.pl-inline > summary::-webkit-details-marker { display: none; }
+.pl-edit-form, .pl-merge { margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); flex-basis: 100%; }
+.pl-edit-form .field { margin-bottom: 8px; }
+.pl-merge-list ul { list-style: none; padding: 0; margin: 8px 0 0; }
+.pl-merge-list li { padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.pl-photo figcaption form { margin-left: 6px; }
+
+/* V1.3.0 Story 6.2：档位卡「＋ 新建档位」内联表单落到标题行下一行；已停用表灰底 */
+.wb-title-row { flex-wrap: wrap; }
+.wb-title-row > details.pl-inline[open] { flex-basis: 100%; }
+.wb-title-row > details.pl-inline > form { margin-top: 8px; }
+.tiers-disabled { background: var(--surface-muted, #f5f5f7); border-radius: var(--radius); padding: 8px 12px; margin-top: 8px; }
+.tiers-disabled h3 { margin: 4px 0 8px; font-size: 14px; }
+
+/* V1.3.0 Story 6.3：模板 D 配置卡——422 字段红边 / 只读注释 / PawCoin 卡与档位区块成组 / 复选行 */
+.cfg-card .inp.is-invalid, .cfg-card input.is-invalid { border-color: var(--danger); outline: 1px solid var(--danger); }
+.cfg-foot .cfg-readonly { color: var(--muted); font-size: var(--fs-sm); margin-right: auto; }
+.cfg-group { display: flex; flex-direction: column; gap: 12px; }
+.cfg-tiers .cfg-head { flex-wrap: wrap; }
+.cfg-tiers .cfg-head > details.pl-inline[open] { flex-basis: 100%; }
+.cfg-inline-form { margin-top: 8px; }
+.field-check { display: flex; align-items: center; gap: 8px; }
+.cfg-card + .cfg-card, .cfg-card + .cfg-group, .cfg-group + .cfg-card { margin-top: 12px; }
+
+/* V1.3.0 Story 6.4：算法参数卡 14 项两栏排布；变更记录抽屉 */
+.cfg-grid-2 { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; row-gap: 4px; }
+.cfg-grid-2 > .field { margin: 0; }
+.cfg-grid-2 > .cfg-grid-full { grid-column: 1 / -1; margin: 4px 0; }
+.cfg-grid-2 > .cfg-grid-right { grid-column: 2; margin: 4px 0; align-self: end; }
+.algo-changes .filter-bar { margin-bottom: 8px; }
+@media (max-width: 720px) { .cfg-grid-2 { grid-template-columns: 1fr; } }
+
+/* V1.3.0 Story 6.5：B23 只读页标识 / B24 抽屉动作卡 */
+.lst-readonly-badge { align-self: center; }
+.ac-drawer .card { margin-bottom: 10px; }
+.ac-drawer details.pl-inline > form { margin-top: 8px; }
+/* ===== B1 内容管理（V1.3.0 Story 7.1，模板 B + 480px 抽屉）===== */
+.content-table td { vertical-align: middle; }
+.content-table .sort-arrow { color: var(--muted); margin-left: 2px; }
+.ct-card { margin-bottom: 10px; }
+.ct-card h3 { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.ct-throttle-form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 6px; }
+.ct-takedown-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ct-comment { padding: 10px 0; border-bottom: 1px dashed var(--line); }
+.ct-comment:last-child { border-bottom: none; }
+.ct-comment-head { margin: 0 0 4px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ct-reply { margin: 8px 0 0 20px; padding-left: 10px; border-left: 2px solid var(--line); }
+
+/* ===== B2 评论巡查（V1.3.0 Story 7.2，模板 B + 480px 抽屉）===== */
+.comments-table td { vertical-align: middle; }
+.comments-table .cm-body { max-width: 320px; word-break: break-word; }
+.cm-post-link { display: inline-flex; gap: 6px; align-items: center; color: var(--brand-strong); text-decoration: none; }
+.cm-post-link:hover { text-decoration: underline; }
+.cm-post-thumb { width: 32px; height: 32px; object-fit: cover; border-radius: 4px; }
+.cm-card { margin-bottom: 10px; }
+.cm-card h3 { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.cm-post-card { display: flex; gap: 10px; align-items: flex-start; }
+.cm-takedown-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cm-drawer .sticky-footer { bottom: 0; }
+
+/* ===== B3 顶置管理（V1.3.0 Story 7.3，模板 B + 480px 抽屉）===== */
+.pins-table td { vertical-align: middle; }
+.pin-card { margin-bottom: 10px; }
+.pin-card h3 { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.pin-preview { display: flex; gap: 10px; align-items: flex-start; }
+.pin-window-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pin-create fieldset { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; margin: 10px 0; }
+.pin-create legend { color: var(--muted); font-size: var(--fs-xs); padding: 0 4px; }
+.pin-drawer .sticky-footer { bottom: 0; }
+/* bug 20260828 的同一件事，但发生在抽屉里：原生日期弹层在 position:fixed 的抽屉里同样会被裁，
+   而给 main 加底部留白对固定定位的抽屉毫无作用（V1.3.0 Story 7.3 复审 P2）。 */
+/* ⚠️ 排除 B4：那页的时间输入在收起的 <details> 里也留在 DOM 中，:has 按存在判会让
+   分配记录页签底部恒空一大片（V1.3.0 Story 7.4 复审 P3）——B4 改由 details[open] 自己留白。 */
+.drawer-body:has(input[type="datetime-local"]):not(:has(.tag-assign-details)) { padding-bottom: 340px; }
+
+/* ===== B4 内容标签（V1.3.0 Story 7.4，模板 B + 480px 抽屉）===== */
+.tags-table td { vertical-align: middle; }
+.tags-table td:nth-child(4) { max-width: 280px; word-break: break-word; }
+.tag-card { margin-bottom: 10px; }
+.tag-card h2 { margin: 0 0 6px; font-size: var(--fs-sm); font-weight: 600; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.tag-tabs { margin: 0 0 10px; }
+/* 抽屉窄（480px），分配记录六列容易挤成一团：字号小一档 + 允许摘要换行 */
+.tag-assign-table { font-size: var(--fs-xs); }
+.tag-assign-table td { vertical-align: middle; }
+.tag-assign-table td:first-child { max-width: 200px; word-break: break-word; }
+.tag-assign-details > summary { cursor: pointer; color: var(--brand-strong); font-weight: 600; padding: 6px 0; }
+.tag-assign-details fieldset { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; margin: 10px 0; }
+.tag-assign-details legend { color: var(--muted); font-size: var(--fs-xs); padding: 0 4px; }
+.tag-drawer .sticky-footer { bottom: 0; }
+/* 展开「＋添加内容」时才留出原生日期弹层的空间（收起时那两个输入框虽在 DOM 里却看不见） */
+.tag-assign-details[open] { padding-bottom: 340px; }
+
+/* ===== B5 排期发布页签（V1.3.0 Story 7.5，模板 B + 480px 抽屉）===== */
+.batches-tabs { margin: 0 0 12px; }
+.schedules-table td { vertical-align: middle; }
+.schedules-table td:first-child { max-width: 280px; word-break: break-word; }
+/* 失败原因**在服务端就截断**（#strings.abbreviate），完整原文在 title 里悬浮看全。
+   ⚠️ 这里不用 max-width + ellipsis 那一套：表格不是 table-layout:fixed 时 max-width 对单元格几乎无效，
+      写了会以为已经限住宽度，实际没有（V1.3.0 Story 7.5 复审 P7）。 */
+.sched-error { color: var(--danger); }
+/* 行内编辑态：<details> 展开即当场编辑，不弹层（UI 稿 2-23 注记 2026-09-02） */
+.sched-edit > summary { cursor: pointer; color: var(--brand-strong); font-weight: 600; padding: 4px 0; }
+.sched-edit-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 6px 0; }
+.sched-card { margin-bottom: 10px; }
+.sched-card h3 { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.sched-images { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.sched-drawer .sticky-footer { bottom: 0; }
+
+/* ===== E1 单发 / E2 批量工作台（V1.3.0 Story 7.6，模板 E）===== */
+/* 吸底条里横排的按钮与表单 */
+.stp-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.stp-actions form.inline { display: flex; gap: 8px; align-items: center; }
+.batch-naming > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+/* 行卡片 = 行内编辑态：展开时紫底高亮，一眼看得出「我正在改这一行」 */
+.seed-row-card { padding: 0; }
+.seed-row-card .row-edit > summary { cursor: pointer; padding: 10px 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.seed-row-card .row-edit[open] { background: var(--brand-tint); border-left: 3px solid var(--brand); }
+.seed-row-card .row-edit[open] > summary { font-weight: 600; }
+.seed-row-card form { padding: 0 12px 12px; }
+.row-edit-actions { display: flex; gap: 8px; margin-top: 8px; }
+/* 校验没过的行整行标红：只把右侧那一列写红字，在 8 列宽的表里很容易漏看 */
+.preview-table tr.row-bad td { background: var(--danger-bg); }
+.preview-table tr[data-drawer-url] { cursor: pointer; }
+.bt-card { margin-bottom: 10px; }
+.bt-images { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+.bt-images figure { margin: 0; }
+.bt-images img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; }
+.bt-body { white-space: pre-wrap; word-break: break-word; }
+.bt-drawer .sticky-footer { bottom: 0; }
+
+/* ===== B7 用户列表 + 五页签抽屉（V1.3.0 Story 8.1）===== */
+.users-table td { vertical-align: middle; }
+.ud-head h2 { margin: 0 0 8px; font-size: var(--fs-md); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+/* 🔴 nowrap：切 ID 之后这五个词会变长，换行会把抽屉顶出两行 */
+.ud-tabs { margin: 0 0 10px; flex-wrap: nowrap; overflow-x: auto; }
+.ud-tabs .tab { white-space: nowrap; }
+.ud-card { margin-bottom: 10px; }
+.ud-card h3 { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
+.ud-table { font-size: var(--fs-xs); }
+.ud-table td { vertical-align: middle; }
+/* 一宠一卡 */
+.ud-pets { display: grid; gap: 8px; }
+.ud-pet { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px 10px; }
+.ud-pet-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--brand-tint); display: flex; align-items: center; justify-content: center; }
+.ud-pet-name { margin: 0 0 2px; display: flex; gap: 6px; align-items: center; }
+.ud-danger { border-color: var(--danger); }
+.user-drawer .sticky-footer { bottom: 0; }
+
+/* ===== V1.3.0 Story 10.1：A7 Toko 退货审核 / A8 Toko 异常订单（模板 A 右栏） ===== */
+/* 五步进度条：复用 A6 的 .rf-flow，只把三列改成五列（窄屏塞不下就两列） */
+.rf-flow--5 { grid-template-columns: repeat(5, 1fr); }
+@media (max-width: 1279px) { .rf-flow--5 { grid-template-columns: repeat(2, 1fr); } }
+.rf-flow li.is-skip { opacity: .5; border-style: dashed; }
+/* 驳回步：必须与「完成」视觉上分得开——否则被驳回的单子读起来像「已批准，等寄回」 */
+.rf-flow li.is-rejected { border-color: var(--danger); box-shadow: inset 3px 0 0 var(--danger); }
+.sr-card, .se-card { margin-bottom: 12px; }
+.sr-card table, .se-card table { width: 100%; }
+.sr-grand th, .sr-grand td { border-top: 2px solid var(--line); font-weight: 700; }
+.sr-evidence { display: flex; flex-wrap: wrap; gap: 4px; }
+.sr-actions, .se-actions { display: flex; flex-direction: column; gap: 12px; }
+/* 质检两张表单视觉分离（D-15：原先四个输入框挤在一张卡里，运营看不出哪个框属于哪个操作） */
+.sr-inspect-form { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; }
+.sr-inspect-form h3 { margin: 0 0 6px; font-size: var(--fs-sm); }
+.sr-inspect-form .inp { width: 100%; box-sizing: border-box; }
+/* 已全额取消的订单行置灰（AC3：已部分取消行不可再取消） */
+tr.is-muted td { opacity: .55; }
+
+/* ===== V1.3.0 Story 10.2：B15 订单抽屉 / C1 对账四卡 ===== */
+.so-card { margin-bottom: 12px; }
+.so-card table { width: 100%; }
+/* 四节点时间轴：复用 A6 的 .rf-flow，列数改 4（窄抽屉里塞不下就两列） */
+.so-flow { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 1279px) { .so-flow { grid-template-columns: repeat(2, 1fr); } }
+.so-actions { display: flex; flex-direction: column; gap: 10px; }
+.so-ship-form { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; }
+.so-ship-form .inp, .so-ship-form .sel { width: 100%; box-sizing: border-box; }
+/* 标记缺货（A8 入口）：与发货表单同框，红框提示这是一条「发不出货」的路径 */
+.so-shortage-form { border: 1px solid var(--danger); border-radius: var(--radius-sm); padding: 10px 12px; }
+.so-shortage-form .inp { width: 100%; box-sizing: border-box; }
+.recon-card table { width: 100%; }
+.recon-card .recon-check th, .recon-card .recon-check td { border-top: 2px solid var(--line); font-weight: 700; }
+/* 🔴 校验行不平 → 整卡红框：现状只有一行文字变色，一屏数字里根本注意不到 */
+.card-alert { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }

@@ -26,5 +26,18 @@ public record SupportTicketView(
         String csatComment,
         Instant createdAt,
         Instant updatedAt,
-        Instant resolvedAt) {
+        Instant resolvedAt,
+        /**
+         * 关联电商订单的**展示号**（Story 3-3）。非电商工单为 {@code null}。
+         *
+         * <p>🔴 <b>它不是对 {@code related_order_id} / {@code related_order_type} 禁令的放宽</b>：
+         * 那两个是内部标识（自增主键可枚举、且跨表撞号；枚举是内部实现细节），
+         * 而这个是**用户在自己订单列表里天天看见的订单号**。
+         *
+         * <p>它同时解决两件事：非空即「本工单关联的是电商单」（App 据此决定显不显示
+         * WhatsApp 入口），值即深链预填内容（省一次请求）。
+         *
+         * <p>🔒 只在关联单确实属于请求者时下发。
+         */
+        String relatedShopOrderNo) {
 }

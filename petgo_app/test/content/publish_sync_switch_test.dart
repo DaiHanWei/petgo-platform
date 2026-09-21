@@ -26,6 +26,7 @@ class _RecordingRepo implements ContentRepository {
     DateTime? eventDate,
     required String idempotencyKey,
     bool syncToMoment = true,
+    List<int> mentionedUserIds = const [],
   }) async {
     lastType = type;
     lastSync = syncToMoment;

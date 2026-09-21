@@ -57,6 +57,21 @@ class AdminPermissionWiringTest {
     private static final Set<String> NON_GATE_FILES = Set.of(
             "AdminPermissions.java", "AdminRole.java");
 
+    /**
+     * 待接线的预留码（V1.3.0 Story 1.4 AC5 先登记、端点在后续 story 才建）。<b>显式、有限、自清理</b>：
+     * 只允许这两个码；一旦某码在源码里出现了 hasAuthority 落点，本测试会红并要求把它从这里删掉，
+     * comment.virtual_post 已由 Story 4.1 接线并移出名单。
+     */
+    // comment.virtual_post 已由 V1.3.0 Story 4.1（分布页签 VIEW_AUTH / 「去评论」）接线，从预留名单移除。
+    private static final Set<String> PENDING_WIRING = Set.of(); // place.manage 已在 Story 5.2 接线（AdminPlaceController）
+
+    /**
+     * V1.3.0 页面退役后暂留矩阵的码（Story 2.4 AC7：{@code GET /admin/reports} 删除，{@code content.view_reports}
+     * 「仍在矩阵」；入口 {@code QUEUE_AUTH} 按 story 不变）。去留由 Story 11.4「权限矩阵与导航一致性收口」拍板，
+     * 届时要么接线要么摘除并从这里删掉。
+     */
+    private static final Set<String> RETIRED_KEPT = Set.of(AdminPermissions.CONTENT_VIEW_REPORTS);
+
     @Test
     void everyReferencedAuthorityIsRegisteredAndEveryCodeIsWired() throws IOException {
         Path main = Path.of("src", "main");
@@ -111,9 +126,13 @@ class AdminPermissionWiringTest {
                 .as("源码中 hasAuthority 引用了不在 AdminPermissions.ALL 的码（拼错或忘登记）")
                 .allSatisfy(code -> assertThat(AdminPermissions.ALL).contains(code));
 
-        // ②：在册的码都有落点（防「勾了也没用」的死码回潮）。
-        assertThat(AdminPermissions.ALL)
+        // ②：在册的码都有落点（防「勾了也没用」的死码回潮）——PENDING_WIRING 里的预留码暂免。
+        assertThat(AdminPermissions.ALL.stream().filter(c -> !PENDING_WIRING.contains(c) && !RETIRED_KEPT.contains(c)).toList())
                 .as("AdminPermissions.ALL 存在无任何 hasAuthority 落点的死码（要么接线要么摘除）")
                 .allSatisfy(code -> assertThat(referenced).contains(code));
+        // 自清理：预留码一旦接线，必须从 PENDING_WIRING 移除（否则名单会退化成永久豁免）。
+        assertThat(PENDING_WIRING)
+                .as("预留码已有 hasAuthority 落点，请把它从 PENDING_WIRING 删掉")
+                .allSatisfy(code -> assertThat(referenced).doesNotContain(code));
     }
 }

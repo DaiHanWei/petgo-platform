@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  B21 未成功请求的摘要条 / 表格（V1.3.0 Story 9.2，模板 B）。
+    sumbar(oob) — 三格：本页签条数 · SYSTEM_FAILURE 数 · 已跟进数（随页签联动）
+    rows(oob)   — 表格 + 空态；oob=true 时摘要条随片段一并换
+  🔴 SYSTEM_FAILURE 行强提示：掉单里只有系统故障那部分是我们自己的问题，
+     它混在「用户自己取消」中间会被一起划过去。
+*/-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="failed-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.failed.summary.total}">本页条数</div>
+        <div class="sum-value" data-sum="total" th:text="${summary.total}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.failed.summary.systemFailure}">系统故障</div>
+        <div class="sum-value" data-sum="systemFailure" th:text="${summary.systemFailure}">0</div>
+        <div class="hint" th:text="#{admin.v130.failed.summary.systemFailureNote}">未跟进不可归档</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.failed.summary.followedUp}">已跟进</div>
+        <div class="sum-value" data-sum="followedUp" th:text="${summary.followedUp}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/failed-requests-list :: sumbar(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(items)}" class="tags-table">
+        <thead>
+        <tr>
+            <th class="nowrap" th:text="#{admin.failed.col.token}">请求</th>
+            <th class="nowrap" th:text="#{admin.failed.col.user}">用户</th>
+            <th class="nowrap" th:text="#{admin.failed.col.submitted}">提交</th>
+            <th class="nowrap" th:text="#{admin.failed.col.cancelled}">取消</th>
+            <th th:text="#{admin.failed.col.reason}">原因</th>
+            <th class="nowrap" th:text="#{admin.failed.col.online}">在线兽医</th>
+            <th th:text="#{admin.failed.col.followed}">跟进</th>
+            <th th:text="#{admin.failed.col.note}">备注</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="r : ${items}"><tr th:replace="~{admin/fragments/failed-requests-list :: row(${r})}"></tr></th:block>
+        </tbody>
+    </table>
+
+    <div class="empty" th:if="${#lists.isEmpty(items)}">
+        <span class="empty-emoji">📭</span>
+        <p th:text="#{admin.failed.empty}">暂无记录</p>
+    </div>
+</th:block>
+
+<!--/* 单行。三个动作都搬进抽屉，这里只读。
+       ⚠️ 没有 oob 变体：归档会把这一行从「活动」移走 —— 原位换行会留下一张骗人的表
+          （行还在活动页签里，只是状态变了）。处置成功一律整表按当前页签重拉。 */-->
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(r)" th:id="'failed-row-' + ${r.id}"
+        th:classappend="${r.systemFailure} ? 'row-alert'"
+        th:data-id="${r.id}" th:data-drawer-url="@{/admin/failed-requests/{id}/drawer(id=${r.id})}"
+        tabindex="0">
+        <td class="mono nowrap" th:text="${#strings.abbreviate(r.requestToken, 10)}"
+            th:title="${r.requestToken}">tok</td>
+        <td class="nowrap muted" th:text="${r.userId}">1</td>
+        <td class="nowrap" th:text="${@adminTime.wib(r.submittedAt)}">-</td>
+        <td class="nowrap" th:text="${@adminTime.wib(r.cancelledAt)}">-</td>
+        <td class="nowrap">
+            <!--/* 🔴 系统故障用 danger、其余用 info：这一列是本页唯一能一眼分出
+                   「我们的问题」与「用户改主意了」的地方。 */-->
+            <span class="badge" th:classappend="${r.systemFailure} ? 'badge-danger' : 'badge-info'"
+                  th:text="#{'admin.failed.reason.' + ${r.cancelReason.name()}}">原因</span>
+        </td>
+        <td class="nowrap" th:text="${r.onlineVetCount}">0</td>
+        <td class="nowrap">
+            <span class="badge" th:classappend="${r.followedUp} ? 'badge-ok' : 'badge-neutral'"
+                  th:text="${r.followedUp} ? #{admin.failed.yes} : #{admin.failed.no}">否</span>
+        </td>
+        <td class="cell-wide" th:text="${#strings.abbreviate(r.note, 40)} ?: '—'">—</td>
+    </tr>
+</tbody></table>
+</body>
+</html>

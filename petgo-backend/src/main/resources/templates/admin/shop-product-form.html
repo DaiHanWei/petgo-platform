@@ -1,9 +1,17 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
-<!-- 商品创建/编辑 + SKU 维护（V1.4.0 Story 1.3，AB-10A / AB-10B）。
+<!-- B16 商品创建/编辑 + SKU 维护（V1.4.0 Story 1.3 AB-10A / AB-10B；V1.3.0 Story 10.3 AC2 套模板 D 的行为）。
      🔒 进货价字段仅在 canViewCost / canEditCost 为真时才由控制器放进 model —— 服务端门控，非前端隐藏。
-     版式：电商后台改版（2026-08-19）。原 <fieldset><legend> 换成卡片 + 标签列，
-     并把「保存」提到底部固定条 —— 这一页有 20 多个字段，原来要滚到最底才找得到保存按钮。 -->
+
+     🔴 **AC2 的「四张分组卡各自独立保存钮」在这里降级为「两个 form 各自保存 + 四个视觉分组」**：
+        模板 D 的 configCard 本身就是一个 <form>，四卡 = 四个 form；而卡 1–3（基本信息 / 图片与详情 / 喂量）
+        对应的写端点**只有一个**（POST products/{id}，@ModelAttribute ShopProductForm）——
+        单独提交卡 1 时，卡 2、卡 3 的字段作为缺席请求参数被绑成 null，service.update() 会把商品详情、
+        保质期说明、图片 key、喂量表**全部清空**。按卡拆保存必须先按卡拆端点 ＝ 后端功能改动。
+        所以：卡 1–3 仍在同一个 <form> 里（视觉上三张卡），SKU 一个 <form>，两张都挂 data-config-card
+        拿到模板 D 的核心行为：**未修改 → 保存钮禁用；改了才激活并亮「已修改」**（AC2 第一句）。
+        AC 偏差已记 story 的 Completion Notes，待拍板。
+     🔴 **不合并成页尾统一保存**（2026-09-07 回滚）：SKU 的提交绝不塞进商品 form。 -->
 <head>
     <meta charset="UTF-8"/>
     <title th:text="#{admin.shop.form.title}">商品编辑 · TailTopia 运营后台</title>
@@ -37,12 +45,17 @@
             此商品为 Makanan 但未填写每日建议喂量。
         </p>
 
-        <form method="post"
+        <form method="post" data-config-card
               th:action="${productId} == null ? @{/admin/shop/products} : @{'/admin/shop/products/' + ${productId}}"
               th:object="${form}">
 
             <div class="s-card">
-                <div class="s-card-head"><h2 th:text="#{admin.shop.form.section.basic}">基本信息</h2></div>
+                <div class="s-card-head cfg-head">
+                    <h2 th:text="#{admin.shop.form.section.basic}">基本信息</h2>
+                    <!-- 「已修改」标：本 form 覆盖基本信息 / 图片与详情 / 喂量三张卡，标只出现一次 -->
+                    <span class="tag tag-dirty" hidden data-dirty-flag
+                          th:text="#{admin.v130.tpl.dirty}">已修改</span>
+                </div>
                 <div class="s-card-body">
                     <div class="s-form-row">
                         <label class="s-label s-req" for="f-name" th:text="#{admin.shop.col.name}">商品名</label>
@@ -56,7 +69,8 @@
                         <label class="s-label s-req" for="f-category" th:text="#{admin.shop.col.category}">品类</label>
                         <div class="s-ctl">
                             <select id="f-category" th:field="*{category}" required>
-                                <option th:each="c : ${categories}" th:value="${c}" th:text="${c}">MAKANAN</option>
+                                <option th:each="c : ${categories}" th:value="${c}"
+                                        th:text="#{'admin.v130.shopProducts.category.' + ${c}}">MAKANAN</option>
                             </select>
                         </div>
                     </div>
@@ -64,7 +78,8 @@
                         <label class="s-label s-req" for="f-species" th:text="#{admin.shop.col.species}">适用物种</label>
                         <div class="s-ctl">
                             <select id="f-species" th:field="*{species}" required>
-                                <option th:each="s : ${speciesList}" th:value="${s}" th:text="${s}">DOG</option>
+                                <option th:each="s : ${speciesList}" th:value="${s}"
+                                        th:text="#{'admin.v130.shopProducts.species.' + ${s}}">DOG</option>
                             </select>
                         </div>
                     </div>
@@ -73,7 +88,8 @@
                         <div class="s-ctl">
                             <select id="f-bodySize" th:field="*{bodySize}">
                                 <option value="" th:text="#{admin.common.none}">不限</option>
-                                <option th:each="b : ${bodySizes}" th:value="${b}" th:text="${b}">MEDIUM</option>
+                                <option th:each="b : ${bodySizes}" th:value="${b}"
+                                        th:text="#{'admin.v130.shopProducts.bodySize.' + ${b}}">MEDIUM</option>
                             </select>
                         </div>
                     </div>
@@ -82,7 +98,8 @@
                         <div class="s-ctl">
                             <select id="f-ageStage" th:field="*{ageStage}">
                                 <option value="" th:text="#{admin.common.none}">不限</option>
-                                <option th:each="a : ${ageStages}" th:value="${a}" th:text="${a}">ADULT</option>
+                                <option th:each="a : ${ageStages}" th:value="${a}"
+                                        th:text="#{'admin.v130.shopProducts.ageStage.' + ${a}}">ADULT</option>
                             </select>
                         </div>
                     </div>
@@ -90,7 +107,8 @@
                         <label class="s-label s-req" for="f-returnPolicy" th:text="#{admin.shop.col.returnPolicy}">退货规则</label>
                         <div class="s-ctl">
                             <select id="f-returnPolicy" th:field="*{returnPolicy}" required>
-                                <option th:each="r : ${returnPolicies}" th:value="${r}" th:text="${r}">NO_RETURN_AFTER_OPEN</option>
+                                <option th:each="r : ${returnPolicies}" th:value="${r}"
+                                        th:text="#{'admin.v130.shopOrders.returnPolicy.' + ${r}}">NO_RETURN_AFTER_OPEN</option>
                             </select>
                             <p class="hint" th:text="#{admin.shop.form.hint.returnPolicy}">默认「开封不退」——宠物食品与保健品取安全侧默认值，由运营主动改为宽松。本版本不提供换货，三值中无「可退可换」。</p>
                         </div>
@@ -210,10 +228,12 @@
                 </div>
             </div>
 
-            <!-- 底部固定条：这一页 20+ 个字段，保存按钮不该藏在最底 -->
+            <!-- 底部固定条：这一页 20+ 个字段，保存按钮不该藏在最底。
+                 ⚠️ 新建态也从 disabled 起步 —— 一张空表单本来就不该能提交，填了字段自然就激活了。 -->
             <div class="s-actionbar">
                 <a th:href="@{/admin/shop/products}" class="btn btn-neutral" th:text="#{admin.common.back}">返回列表</a>
-                <button type="submit" class="btn btn-primary" th:text="#{admin.common.save}">保存</button>
+                <button type="submit" class="btn btn-primary" disabled data-save
+                        th:text="#{admin.common.save}">保存</button>
             </div>
         </form>
 
@@ -234,11 +254,12 @@
                     <tbody>
                     <tr th:each="s : ${skus}">
                         <td th:text="${s.specName}">3 kg</td>
-                        <td class="s-col-num" th:text="${s.price}">285000</td>
+                        <td class="s-col-num" th:text="${#numbers.formatInteger(s.price, 0, 'COMMA')}">285.000</td>
                         <td class="s-col-num" th:text="${s.netWeightG} ?: '—'">3000</td>
-                        <td th:text="${s.returnPolicy} ?: #{admin.shop.sku.inherit}">继承商品级</td>
+                        <td th:text="${s.returnPolicy} != null ? #{'admin.v130.shopOrders.returnPolicy.' + ${s.returnPolicy}} : #{admin.shop.sku.inherit}">继承商品级</td>
                         <td class="s-col-num" th:text="${availableBySku[s.id]} ?: 0">0</td>
-                        <td th:if="${canViewCost}" class="s-col-num" th:text="${costBySku[s.id]} ?: '—'">—</td>
+                        <td th:if="${canViewCost}" class="s-col-num"
+                        th:text="${costBySku[s.id]} != null ? ${#numbers.formatInteger(costBySku[s.id], 0, 'COMMA')} : '—'">—</td>
                     </tr>
                     </tbody>
                 </table>
@@ -247,9 +268,16 @@
                 </div>
             </div>
 
-            <form method="post" th:action="@{'/admin/shop/products/' + ${productId} + '/skus'}">
+            <!-- 🔴 SKU 是**第二个独立 form**（AC2 明确「两个 form 结构不动」）：
+                 它的写端点是 POST products/{productId}/skus，与商品主体完全无关。 -->
+            <form method="post" data-config-card
+                  th:action="@{'/admin/shop/products/' + ${productId} + '/skus'}">
                 <div class="s-card">
-                    <div class="s-card-head"><h3 th:text="#{admin.shop.sku.addTitle}">新增/编辑规格</h3></div>
+                    <div class="s-card-head cfg-head">
+                        <h3 th:text="#{admin.shop.sku.addTitle}">新增/编辑规格</h3>
+                        <span class="tag tag-dirty" hidden data-dirty-flag
+                              th:text="#{admin.v130.tpl.dirty}">已修改</span>
+                    </div>
                     <div class="s-card-body">
                         <input type="hidden" name="id"/>
                         <div class="s-form-row">
@@ -272,7 +300,8 @@
                             <div class="s-ctl">
                                 <select id="sku-rp" name="returnPolicy">
                                     <option value="" th:text="#{admin.shop.sku.inherit}">继承商品级</option>
-                                    <option th:each="r : ${returnPolicies}" th:value="${r}" th:text="${r}">RETURNABLE</option>
+                                    <option th:each="r : ${returnPolicies}" th:value="${r}"
+                                            th:text="#{'admin.v130.shopOrders.returnPolicy.' + ${r}}">RETURNABLE</option>
                                 </select>
                             </div>
                         </div>
@@ -283,7 +312,8 @@
                         </div>
                     </div>
                     <div class="s-card-foot">
-                        <button type="submit" class="btn btn-primary" th:text="#{admin.common.save}">保存规格</button>
+                        <button type="submit" class="btn btn-primary" disabled data-save
+                                th:text="#{admin.common.save}">保存规格</button>
                     </div>
                 </div>
             </form>

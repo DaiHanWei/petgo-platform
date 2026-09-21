@@ -8,6 +8,23 @@ package com.tailtopia.admin.audit.service;
  */
 public final class AuditActions {
 
+    /** V1.3.0 Story 4.2：运营以虚拟身份发暖评（target COMMENT/&lt;commentId&gt;；summary 只记正文前 50 字）。 */
+    public static final String COMMENT_VIRTUAL_POST = "COMMENT_VIRTUAL_POST";
+    /** V1.3.0 Story 4.4：暖贴跟进项「标记已读（不回复）」（target WARM_REPLY_FOLLOWUP/&lt;id&gt;）。 */
+    public static final String WARM_REPLY_READ = "WARM_REPLY_READ";
+    /** V1.3.0 Story 5.3：场所处置（target PLACE/&lt;id&gt;；summary 不记坐标值 / 地址全文 / 评论正文）。 */
+    public static final String PLACE_EDITED = "PLACE_EDITED";
+    public static final String PLACE_DELISTED = "PLACE_DELISTED";
+    public static final String PLACE_RESTORED = "PLACE_RESTORED";
+    public static final String PLACE_PHOTO_REMOVED = "PLACE_PHOTO_REMOVED";
+    public static final String PLACE_COMMENT_REMOVED = "PLACE_COMMENT_REMOVED";
+    public static final String PLACE_MERGED = "PLACE_MERGED";
+    /** V1.3.0 Story 5.4：运营预置录入场所（summary 记场所名，不记坐标）/ 场所举报整批驳回。 */
+    public static final String PLACE_CREATED = "PLACE_CREATED";
+    public static final String PLACE_REPORTS_DISMISSED = "PLACE_REPORTS_DISMISSED";
+    /** V1.3.0 Story 6.2：新建 PawCoin 充值档位（target config/tier:&lt;key&gt;；启停仍走 CONFIG_UPDATE_TOPUP_TIER）。 */
+    public static final String TIER_CREATED = "TIER_CREATED";
+
     /** 紧急账密（formLogin）登录成功（Story 1.3，AC7）。 */
     public static final String EMERGENCY_LOGIN_SUCCEEDED = "EMERGENCY_LOGIN_SUCCEEDED";
 
@@ -20,6 +37,16 @@ public final class AuditActions {
     public static final String ACCOUNT_DEACTIVATED = "ACCOUNT_DEACTIVATED";
     /** 重新激活后台账号（Story 1.5）。 */
     public static final String ACCOUNT_REACTIVATED = "ACCOUNT_REACTIVATED";
+    /** 改后台账号显示名（V1.3.0 Story 1.2）。detail 记 旧名 → 新名（邮箱）；不 bump 安全版本号。 */
+    public static final String ACCOUNT_RENAMED = "ACCOUNT_RENAMED";
+    /** 换绑后台账号 Lark 邮箱（V1.3.0 Story 1.3）。detail 记 旧邮箱 → 新邮箱；同事务 bump 安全版本号 + 超管告警。 */
+    public static final String ACCOUNT_EMAIL_REBOUND = "ACCOUNT_EMAIL_REBOUND";
+    /** 新建自定义角色（V1.3.0 Story 1.5）。 */
+    public static final String ROLE_CREATED = "ROLE_CREATED";
+    /** 角色改名 / 改权限（V1.3.0 Story 1.5）。summary 记 code + 增删码列表（≤500 截断）。 */
+    public static final String ROLE_UPDATED = "ROLE_UPDATED";
+    /** 删除自定义角色（V1.3.0 Story 1.5）。 */
+    public static final String ROLE_DELETED = "ROLE_DELETED";
     /** 授予模块权限。 */
     public static final String PERMISSION_GRANTED = "PERMISSION_GRANTED";
     /** 撤销模块权限（Story 1.5）。 */
@@ -183,6 +210,8 @@ public final class AuditActions {
     public static final String SHOP_ORDER_SEARCHED_BY_PHONE = "SHOP_ORDER_SEARCHED_BY_PHONE";
     /** 异常订单处置：整单取消并退款 / 部分取消 / 联系用户后继续（Story 4.4，AB-11D）。 */
     public static final String SHOP_ORDER_EXCEPTION_HANDLED = "SHOP_ORDER_EXCEPTION_HANDLED";
+    /** 运营标记缺货，订单进入异常订单工作台（A8 判据，V20260918_2243）。 */
+    public static final String SHOP_ORDER_SHORTAGE_FLAGGED = "SHOP_ORDER_SHORTAGE_FLAGGED";
 
     // ===== 退货与退款（V1.4.0 Story 5.3 / 5.4 / 5.5 / 5.6，模块 12）=====
     /** 退货申请审核（批准 / 驳回）。摘要记类型、整单退与两处运费归属 —— 它们直接决定退款金额。 */

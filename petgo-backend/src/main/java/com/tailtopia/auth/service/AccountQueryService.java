@@ -62,6 +62,27 @@ public class AccountQueryService {
                 .orElse(false);
     }
 
+    /**
+     * {@link #isActive} 的**批量**版：这批 id 里哪些账号对外有效（未注销 + 未封号）。
+     *
+     * <h2>🔴 判据与 {@link #isActive} 逐字相同，不许各写一遍</h2>
+     * V1.3.0 batch-b1 Story 4.1 的推荐池要判一页十几个 owner，逐个 {@code isActive} 就是
+     * 十几次往返（AD-6）。而只判「注销」不判「封号」的表现是
+     * <b>「推荐位里那只宠物点进去 404」</b>—— 落地页的可见性判据用的正是 {@code isActive}
+     * （code-review 2026-09-15 抓到过一次）。
+     *
+     * <p>⚠️ 同 {@code isActive}：这是**对外可见性**判据，不是「能否登录」判据。
+     *
+     * @return 有效账号的 id 集合（入参里缺失的 id 不出现）
+     */
+    @Transactional(readOnly = true)
+    public java.util.Set<Long> activeIdsAmong(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return new java.util.HashSet<>(users.findActiveIds(userIds));
+    }
+
     /** 取用户语言偏好（bug 20260625-105）：'en' 或 'id'（默认/未设=id）。供系统推送文案本地化。 */
     @Transactional(readOnly = true)
     public java.util.Locale localeOf(long userId) {
@@ -95,14 +116,34 @@ public class AccountQueryService {
      */
     @Transactional(readOnly = true)
     public Map<Long, AuthorView> findAuthorViews(Collection<Long> userIds) {
+        return attachTags(basicViews(userIds));
+    }
+
+    /**
+     * 同 {@link #findAuthorViews}，但<b>不查运营标签</b>（V1.3.0 batch-b1 Story 3.1）。
+     *
+     * <h2>⚠️ 只给"确定不展示标签"的调用方</h2>
+     * 目前唯一的调用方是 <b>@ 候选集</b>：那是一个打字时弹出的选择列表，一行只有头像 + 昵称，
+     * 一次要取 50 个人 —— 为它多查一次 {@code user_tag_assignments} 纯属白跑
+     * （查完即丢，code-review 2026-09-15）。
+     *
+     * <p>🔴 <b>要展示标签就必须用 {@link #findAuthorViews}</b>：本方法回的投影里
+     * {@code tags} 恒为空表，误用的表现是「标签在某一处悄悄消失」，而<b>不会有任何报错</b>。
+     * 加新调用方之前先问一句：那个位置要不要显示标签？
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, AuthorView> findAuthorViewsWithoutTags(Collection<Long> userIds) {
+        return basicViews(userIds);
+    }
+
+    /** 身份三件套（id / 昵称 / 头像 + 是否注销）。缺失的 id 按匿名化补齐，调用方按 id 取必有值。 */
+    private Map<Long, AuthorView> basicViews(Collection<Long> userIds) {
         Map<Long, AuthorView> found = users.findAllById(userIds).stream()
                 .map(AccountQueryService::toAuthorView)
                 .collect(Collectors.toMap(AuthorView::userId, Function.identity()));
-        // 缺失的（不存在）也按匿名化补齐，调用方按 id 取必有值。
-        Map<Long, AuthorView> views = userIds.stream().distinct()
+        return userIds.stream().distinct()
                 .collect(Collectors.toMap(Function.identity(),
                         id -> found.getOrDefault(id, AuthorView.anonymized(id))));
-        return attachTags(views);
     }
 
     /**
@@ -139,12 +180,6 @@ public class AccountQueryService {
     @Transactional(readOnly = true)
     public Optional<User> findUserByEmail(String email) {
         return users.findByEmailAndRole(email, Role.USER);
-    }
-
-    /** bug 20260701-164：后台用户管理分页列出全部普通用户（role=USER），供列表浏览。 */
-    @Transactional(readOnly = true)
-    public Page<User> listUsers(Pageable pageable) {
-        return users.findByRole(Role.USER, pageable);
     }
 
     /**

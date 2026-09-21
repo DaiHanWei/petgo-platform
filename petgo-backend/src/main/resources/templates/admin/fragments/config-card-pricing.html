@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  D2 运营配置 · 卡一「问诊定价」（V1.3.0 Story 6.3，模板 D）。端点 / 参数逐字不变：POST /admin/config/pricing
+  （vetConsultPrice / vetShareRate / aiUnlockPrice / monthlyFreeQuota）。模型：pricing、errorFields（AdminConfigController.ERROR_FIELDS）。
+  card = 整页 + htmx 成功返回（Controller 以 HX-Retarget #cfg-pricing + HX-Reswap outerHTML 原位替换）；saved = card + toast oob。
+  只读态（config.view 无 config.edit）：输入禁用、保存钮固定禁用、注明所缺权限（AC4）。
+-->
+<body>
+<th:block th:fragment="card"
+          th:with="action=@{/admin/config/pricing},hxPost=@{/admin/config/pricing},cardId='cfg-pricing',confirmDiff=true,
+                   errorFields=${errorFields?.get('pricing')},
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.config.edit})}">
+    <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::pricing-title}, ~{::pricing-form}, #{admin.config.btn.savePricing})}">
+        <h2 class="cfg-title" th:fragment="pricing-title" th:text="#{admin.config.pricing}">问诊定价</h2>
+        <div th:fragment="pricing-form">
+            <label class="field"><span th:text="#{admin.config.vetConsultPrice}">兽医单次咨询价（IDR）</span>
+                <input class="inp field-full" type="number" name="vetConsultPrice" min="0" step="1" th:value="${pricing.vetConsultPrice}" th:disabled="${!canEdit}"/>
+            </label>
+            <label class="field"><span th:text="#{admin.config.vetShareRate}">兽医分成（%，0–100）</span>
+                <input class="inp field-full" type="number" name="vetShareRate" min="0" max="100" step="1" th:value="${pricing.vetShareRate}" th:disabled="${!canEdit}"/>
+            </label>
+            <label class="field"><span th:text="#{admin.config.aiUnlockPrice}">AI 详情解锁价（IDR）</span>
+                <input class="inp field-full" type="number" name="aiUnlockPrice" min="0" step="1" th:value="${pricing.aiUnlockPrice}" th:disabled="${!canEdit}"/>
+            </label>
+            <label class="field"><span th:text="#{admin.config.monthlyFreeQuota}">每月AI问诊免费额度（0–35）</span>
+                <input class="inp field-full" type="number" name="monthlyFreeQuota" min="0" max="35" step="1" th:value="${pricing.monthlyFreeQuota}" th:disabled="${!canEdit}"/>
+            </label>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="saved">
+    <th:block th:replace="~{admin/fragments/config-card-pricing :: card}"></th:block>
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+</th:block>
+</body>
+</html>

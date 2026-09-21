@@ -20,8 +20,7 @@ import '../../features/shop/presentation/shop_search_page.dart';
 import '../../features/shop/presentation/cart_page_v2.dart';
 import '../../features/shop/presentation/checkout_page_v2.dart';
 import '../../features/shop/presentation/product_detail_page_v2.dart';
-import '../../features/shop/presentation/refund_method_page_v2.dart';
-import '../../features/shop/presentation/return_request_page_v2.dart';
+import '../../features/shop/presentation/shop_return_unavailable_page.dart';
 import '../../features/shop/presentation/shop_order_detail_page_v2.dart';
 import '../../features/shop/presentation/toko_page_v2.dart';
 import '../../features/auth/presentation/nickname_page.dart';
@@ -36,8 +35,13 @@ import '../../features/me/presentation/delete_account_page.dart';
 import '../../features/me/presentation/language_settings_page.dart';
 import '../../features/me/presentation/me_page.dart';
 import '../../features/me/presentation/settings_page.dart';
+import '../../features/profile/domain/archive_scope.dart';
+import '../../features/profile/presentation/pet_recommendation_list_page.dart';
+import '../../features/profile/presentation/visitor_archive_view.dart';
+import '../../features/social/domain/account_action_entry.dart';
 import '../../features/social/presentation/blocked_users_page.dart';
 import '../../features/support/presentation/my_tickets_page.dart';
+import '../../features/user_profile/presentation/public_profile_page.dart';
 import '../../features/support/presentation/ticket_compose_page.dart';
 import '../../features/support/presentation/ticket_detail_page.dart';
 import '../../features/support/presentation/csat_page.dart';
@@ -55,6 +59,8 @@ import '../../features/profile/presentation/health_list_page.dart';
 import '../../features/profile/presentation/id_card_create_page.dart';
 import '../../features/profile/presentation/id_card_detail_page.dart';
 import '../../features/profile/presentation/id_card_page.dart';
+import '../../features/profile/presentation/age_card_page.dart';
+import '../../features/profile/presentation/pet_insights_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
 import '../../features/onboarding/presentation/splash_page.dart';
@@ -72,6 +78,9 @@ import '../../features/consult/presentation/vet_timed_pay_page.dart';
 import '../../features/consult/presentation/vet_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
+import '../../features/place/presentation/place_detail_page.dart';
+import '../../features/place/presentation/place_list_page.dart';
+import '../../features/place/presentation/place_mark_page.dart';
 import '../../features/profile/presentation/pet_card_page.dart';
 import '../../features/vet/domain/vet_workbench_lists.dart';
 import '../../features/vet/presentation/vet_conversation_page.dart';
@@ -523,6 +532,33 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/login', builder: (c, s) => const LoginPage()),
 
+      // ===== 宠物友好场所（V1.3.0 batch-b1 Story 1.1，FR-112）=====
+      // 🔒 游客可直接进入：靠【不在 _controlledLocations 白名单里】达成，零安全规则改动。
+      //    后端 GET /api/v1/places 已对游客放行，页面本身不发任何 /me 请求。
+      //    ⚠️ **不要**把它加进 _controlledLocations（Story 1.1 Dev Notes 明写「场所列表游客可看」）。
+      // ⚠️ **不是 Tab 分支根**：入口是 Sosial 顶部那一行（PlaceEntryRow），走 push 进来，
+      //    保留返回栈与底部导航；做成 Tab 分支会动 AppTab 枚举与底部 Tab 结构（AC7 明令不改）。
+      GoRoute(
+        path: PlaceListPage.routePath,
+        builder: (c, s) => const PlaceListPage(),
+      ),
+      // 标记场所表单（Story 1.3）。🔒 **需登录**：写端点要 JWT，而门控在入口处
+      //    （列表页的入口按钮对游客走登录引导），不靠 redirect —— 把游客从表单页甩回 /home
+      //    等于告诉他「这里没有这个功能」，而真相是「登录后就有」（同购物车的既定处理）。
+      // ⚠️ 路径挂在 /places 下但**不是** PlaceListPage 的子路由：它是独立一页、
+      //    从列表页 push 进来，返回即回列表。
+      GoRoute(
+        path: PlaceMarkPage.routePath,
+        builder: (c, s) => const PlaceMarkPage(),
+      ),
+      // 场所详情（Story 1.5）。🔒 GET 对游客放行，所以同样**不进 _controlledLocations**。
+      // ⚠️ 必须注册在 /places/new 之后：go_router 按声明顺序匹配，
+      //    反过来的话 `/places/new` 会被 `:token` 吃掉、把 "new" 当成一个场所 token 去查。
+      GoRoute(
+        path: PlaceDetailPage.routePattern,
+        builder: (c, s) => PlaceDetailPage(token: s.pathParameters['token']!),
+      ),
+
       // ===== Toko（V1.4.0 Story 1.6，FR-93 / FR-93A）=====
       // 🔒 游客可直接进入：靠【不在 _controlledLocations 白名单里】达成，零安全规则改动。
       //    这与 V1.1.2 FR-78「未登录点击非落地 Tab 触发登录引导」有意不同——商品浏览是
@@ -578,18 +614,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // （UX-DR3）而不是 redirect —— 用户需要知道「已在处理中」，而不是被弹走。
       GoRoute(
         path: '/shop/orders/:token/return',
-        builder: (c, s) {
-          final token = s.pathParameters['token']!;
-          return ReturnRequestPageV2(orderToken: token);
-        },
+        // 🔴 V1.3.0 · SD-5：path 逐字不变，builder 换成说明页。
+        //    删路由会让老深链落到 errorBuilder（＝「链接坏了」），而我们要告诉用户的是
+        //    「这条路现在走不通，找谁能解决」。下一版恢复只需把这两行 builder 改回去，
+        //    ReturnRequestPageV2 / RefundMethodPageV2 与那 20 条测试一个字都不用动。
+        builder: (c, s) => const ShopReturnUnavailablePage(),
       ),
       // 退款方式选择页（Story 5.8）。token 寻址（退货申请的不可枚举 token）。
       GoRoute(
         path: '/shop/returns/:token/refund-method',
-        builder: (c, s) {
-          final token = s.pathParameters['token']!;
-          return RefundMethodPageV2(returnToken: token);
-        },
+        // 同上（SD-5）：path 不动，builder 换说明页。
+        builder: (c, s) => const ShopReturnUnavailablePage(),
       ),
       // ⏳ 退货进度页（Story 5.9）路由暂不挂载：UX-DR5 视觉稿未交付，
       //    AC 写死「实现前不得自行发挥」。后端与数据层已就绪，补稿后只差这一页。
@@ -671,8 +706,27 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // 宠物档案编辑（Story 2.8）。两入口（档案 Tab 信息卡 /「我的」Tab）复用同一页。
       GoRoute(path: '/profile/edit', builder: (c, s) => const PetProfileEditPage()),
-      // 宠物身份证详情（Story 6.2 · FR-49B）。受控（/profile/ 前缀，游客被门控）。
-      GoRoute(path: '/profile/id-card', builder: (c, s) => const IdCardPage()),
+      // 「Know Your Pet」聚合页（V1.3.0 Story 5.1 · FR-65 · AD-A17）。
+      //
+      // 🔴 **落在 /profile/ 前缀下，自动继承游客门控**（AD-A17.5）。
+      // 它与下面的 /profile/pet-insights/* 子页**一律不得进 _controlledExactExceptions**
+      // —— 那等于为放行一个子页把安全默认反转，踩「安全规则层只升不降不可绕过」这条红线。
+      GoRoute(path: PetInsightsRoutes.hub, builder: (c, s) => const PetInsightsPage()),
+      // 宠物年龄卡（V1.3.0 Story 5.2 · FR-65）。狗先选体型档，猫直接进预览。
+      // 同样落在 /profile/ 前缀下自动受控，**不得进例外集合**。
+      GoRoute(path: PetInsightsRoutes.ageCard, builder: (c, s) => const AgeCardPage()),
+      // 宠物身份证详情（Story 6.2 · FR-49B）。V1.3.0 Story 5.1 整体平移到聚合页之下，
+      // 页面逻辑一字未改。
+      GoRoute(path: PetInsightsRoutes.idCard, builder: (c, s) => const IdCardPage()),
+      // 🔴 旧路径**保留为重定向，不得删除**（AD-A17.2）：站内两处跳转 + 潜在的历史通知深链，
+      // 断链是硬失败。
+      //
+      // ⚠️ 重定向发生在**门控之后**：顶层 redirect 先跑，游客在那里就被送回 /home，
+      // 根本走不到这条路由级 redirect —— 它因此不构成绕过门控的旁路（AD-A17.6）。
+      //
+      // ⚠️ 下面两条 `/profile/id-cards/...`（多卡子路由）**不受本次迁移影响**，
+      // 与本条只差一个字母。改动时**逐条改，禁止做前缀字符串替换**（AD-A17.7）。
+      GoRoute(path: '/profile/id-card', redirect: (c, s) => PetInsightsRoutes.idCard),
       // Story 6-7 多卡：建卡器（字面量在前，避免被 :id 吞）+ 单卡详情。
       GoRoute(path: '/profile/id-cards/create', builder: (c, s) => const IdCardCreatePage()),
       GoRoute(
@@ -741,7 +795,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/consult/case', builder: (c, s) => const ConsultCaseFormPage()),
       // 客服工单（Story 4.2，/me 受控前缀）。/new 必须在 /:token 之前注册，否则 token 段会吞 'new'。
       GoRoute(path: '/me/support-tickets', builder: (c, s) => const MyTicketsPage()),
-      GoRoute(path: '/me/support-tickets/new', builder: (c, s) => const TicketComposePage()),
+      // Story 3-3：路径不变，多接一个可选 `?orderToken=` 用来预选关联订单（可改可清空）。
+      // 无参数进入（「我」页那条路）时行为与今天一致。
+      GoRoute(
+        path: '/me/support-tickets/new',
+        builder: (c, s) =>
+            TicketComposePage(presetOrderToken: s.uri.queryParameters['orderToken']),
+      ),
       GoRoute(
         path: '/me/support-tickets/:token',
         builder: (c, s) => TicketDetailPage(token: s.pathParameters['token']!),
@@ -877,6 +937,46 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
           focusComments: s.uri.queryParameters['focus'] == 'comments',
         ),
       ),
+      // 用户公开主页（V1.3.0 batch-b1 Story 2.1 · FR-118）。shell 外顶层 push（隐藏 Tab Bar）。
+      //
+      // 🛡 **游客可进**：点头像看这人是谁本来就不需要登录（与迷你卡端点同一口径，
+      // 页面内的举报 / 拉黑各自走 FR-0C 登录门控）。因此**不要挪到受控前缀之下**。
+      //
+      // `?entry=` 只喂埋点（从 Feed / 详情页 / 评论区哪儿点进来的），**不影响任何行为**；
+      // 缺省或写错 → 回落 `mini_profile`，页面照常。
+      // 宠物访客视图的**站内入口**（V1.3.0 batch-b1 Story 2.3 · AD-4）。
+      //
+      // 🔴 与分享链接落点 `/pet/{token}`（单数）**是两条路由，刻意不合并**：
+      //    那条按不可枚举 token、**对未登录开放**（同一个链接在浏览器里不用登录就能看完，
+      //    App 内要求登录只会把人推回浏览器）；这条按 petId、**必须登录**（AD-4 Rule 1）。
+      // ⚠️ 本路由**故意不进** `_controlledLocations` —— 登录门控在**进入前**由宠物卡
+      //    的 `requireLogin` 做（FR-0C 的既有惯例），真正的边界在服务端那条不放行的规则上。
+      GoRoute(
+        path: VisitorArchiveView.inAppRoutePattern,
+        builder: (c, s) => VisitorArchiveView(
+          scope: ArchiveScope.inAppVisitor(int.parse(s.pathParameters['petId']!)),
+          // `?from=` 只喂埋点（Story 4.1 AC7 的 diary_visitor_viewed）；缺省 → 不报。
+          analyticsFrom: s.uri.queryParameters['from'],
+        ),
+      ),
+      // 全屏推荐集合页（V1.3.0 batch-b1 Story 4.3）。
+      //
+      // 🔴 路径是 `/pet-recommendations`，**不是** `/pets/recommendations` ——
+      //    后者会被上面那条 `/pets/:petId` 抢先匹配成 petId='recommendations'。
+      // ⚠️ 本路由**故意不进** `_controlledLocations`：Story 4.4 会从**首页**加入口，
+      //    而首页游客也能进。塞进受控前缀的话那个入口对游客就是 redirect 回 /home
+      //    的一条死路。登录门控在宠物卡的 `requireLogin` 与服务端那条规则上。
+      GoRoute(
+        path: PetRecommendationListPage.routePath,
+        builder: (c, s) => const PetRecommendationListPage(),
+      ),
+      GoRoute(
+        path: PublicProfilePage.routePattern,
+        builder: (c, s) => PublicProfilePage(
+          userId: int.parse(s.pathParameters['userId']!),
+          entry: accountActionEntryFromWire(s.uri.queryParameters['entry']),
+        ),
+      ),
       // ===== V1.1.6 Story 2.3：App 内访客只读视图（AD-2 Rule 6）=====
       //
       // 🛡 **带 token 的独立路由，刻意不复用 `/profile`**：后者对未登录会落游客示例页，
@@ -969,7 +1069,15 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       // 里程碑列表页（壳）（Story 6.1 · FR-42）：MILESTONE_NODE 深链承接；本体属里程碑 mini-epic。受控（/profile/ 前缀）。
-      GoRoute(path: '/profile/milestones', builder: (c, s) => const MilestoneListPage()),
+      // extra 可选携带「刚庆祝过的 code 集合」（V1.3.0 Story 1.5 · AD-A2.3c）：
+      // 「去发布」路径弹完庆祝就跳这里，而庆祝回报是异步的 —— 不带这份集合的话，
+      // 列表页会在回报落库前读到 celebratedAt == null，两秒内连弹两次同一条。
+      GoRoute(
+        path: '/profile/milestones',
+        builder: (c, s) => MilestoneListPage(
+          justCelebrated: s.extra is Set<String> ? s.extra! as Set<String> : const {},
+        ),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) => AppShell(navigationShell: navigationShell),
         // 分支顺序 **按 AppTab.values 循环生成**（Story 1.1 · AD-3 AC2/AC3⑤）：

@@ -6,6 +6,8 @@ import '../../core/theme/typography.dart';
 import '../../features/content/domain/feed_image_layout.dart';
 import '../../features/content/domain/feed_item.dart';
 import '../../features/content/presentation/like_button.dart';
+import '../../features/mention/domain/mention_context.dart';
+import '../../features/mention/presentation/mention_text.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_image.dart';
 import 'content_tag_chip.dart';
@@ -43,6 +45,7 @@ class MasonryCard extends StatelessWidget {
     this.decorTag,
     this.feedTab,
     this.rankMode,
+    this.onTapMention,
   });
 
   final FeedItem item;
@@ -66,6 +69,12 @@ class MasonryCard extends StatelessWidget {
 
   /// 作者行右侧「···」（V1.1.6 Story 3.2）。Feed 此前只有长按举报，没有显式入口。
   final VoidCallback? onMore;
+
+  /// 点正文里的 @ → 去那个人的公开主页（V1.3.0 batch-b1 Story 3.3 · AC2）。
+  ///
+  /// 🛡 为空则正文里的 @ 只高亮不可点 —— 本组件是共享件，没有跳转语义的调用方
+  /// 不该凭空多一个能点的片段。
+  final void Function(int userId)? onTapMention;
 
   /// 图片区高度上限（V1.1.6 Story 3.3 的高度护栏）。
   ///
@@ -267,10 +276,25 @@ class MasonryCard extends StatelessWidget {
                         AppSpacing.screenEdge, item.hasImage ? 10 : 0,
                         AppSpacing.screenEdge, 0),
                     // ⚠️ 不加作者名前缀（FR-93 明确要求）。
-                    child: Text(item.body!,
-                        style: AppTypography.body,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
+                    //
+                    // V1.3.0 batch-b1 Story 3.3：正文里的 @ 高亮可点（AC1/AC2）。
+                    // 🔴 点 @ 与「整块进详情」是**两个手势**，靠手势竞技场分开 ——
+                    //    TextSpan 上的 recognizer 命中更深，同一次点击只会有一个赢家，
+                    //    所以点 @ 不会顺带把详情页也推出来（有测试钉着这一条）。
+                    child: onTapMention == null
+                        ? Text(item.body!,
+                            style: AppTypography.body,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis)
+                        : MentionText(
+                            text: item.body!,
+                            mentions: item.mentions,
+                            onTapUser: onTapMention!,
+                            mentionContext: MentionContext.post,
+                            style: AppTypography.body,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                   ),
               ],
             ),

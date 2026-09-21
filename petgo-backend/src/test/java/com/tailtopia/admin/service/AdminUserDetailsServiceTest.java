@@ -41,7 +41,10 @@ class AdminUserDetailsServiceTest {
         users = mock(UserRepository.class);
         permissions = mock(AdminAccountPermissionRepository.class);
         when(permissions.findByAccountId(anyLong())).thenReturn(List.of());
-        service = new AdminUserDetailsService(adminAccounts, users, permissions);
+        service = new AdminUserDetailsService(adminAccounts, users,
+                new com.tailtopia.admin.roles.service.RolePermissionResolver(permissions,
+                        mock(com.tailtopia.admin.roles.repository.AdminRoleRepository.class),
+                        mock(com.tailtopia.admin.roles.repository.AdminRolePermissionRepository.class)));
     }
 
     /**
@@ -70,7 +73,7 @@ class AdminUserDetailsServiceTest {
 
     @Test
     void loadsActiveSuperAdminWithPasswordAndResolvesOperatorUserId() {
-        when(adminAccounts.findByLarkEmail("ops@tailtopia.id")).thenReturn(Optional.of(
+        when(adminAccounts.findByLarkEmailIgnoreCaseAndStatus("ops@tailtopia.id", AdminAccountStatus.ACTIVE)).thenReturn(Optional.of(
                 account(7L, "ops@tailtopia.id", AdminAccountStatus.ACTIVE, "{bcrypt}h", AdminAccountType.SUPER_ADMIN)));
         User official = mock(User.class);
         when(official.getId()).thenReturn(99L);
@@ -89,7 +92,7 @@ class AdminUserDetailsServiceTest {
 
     @Test
     void staffHasOnlyRoleAdminNotSuperAdmin() {
-        when(adminAccounts.findByLarkEmail("staff@tailtopia.id")).thenReturn(Optional.of(
+        when(adminAccounts.findByLarkEmailIgnoreCaseAndStatus("staff@tailtopia.id", AdminAccountStatus.ACTIVE)).thenReturn(Optional.of(
                 account(8L, "staff@tailtopia.id", AdminAccountStatus.ACTIVE, "{bcrypt}s", AdminAccountType.STAFF)));
         when(users.findByEmailAndRole("staff@tailtopia.id", Role.ADMIN)).thenReturn(Optional.empty());
 
@@ -101,7 +104,7 @@ class AdminUserDetailsServiceTest {
 
     @Test
     void staffLoadsModulePermissionAuthorities() {
-        when(adminAccounts.findByLarkEmail("staff@tailtopia.id")).thenReturn(Optional.of(
+        when(adminAccounts.findByLarkEmailIgnoreCaseAndStatus("staff@tailtopia.id", AdminAccountStatus.ACTIVE)).thenReturn(Optional.of(
                 account(8L, "staff@tailtopia.id", AdminAccountStatus.ACTIVE, "{bcrypt}s", AdminAccountType.STAFF)));
         when(users.findByEmailAndRole("staff@tailtopia.id", Role.ADMIN)).thenReturn(Optional.empty());
         when(permissions.findByAccountId(8L)).thenReturn(List.of(
@@ -116,7 +119,7 @@ class AdminUserDetailsServiceTest {
 
     @Test
     void superAdminDoesNotLoadPermissionTableImplicitFullAccess() {
-        when(adminAccounts.findByLarkEmail("ops@tailtopia.id")).thenReturn(Optional.of(
+        when(adminAccounts.findByLarkEmailIgnoreCaseAndStatus("ops@tailtopia.id", AdminAccountStatus.ACTIVE)).thenReturn(Optional.of(
                 account(7L, "ops@tailtopia.id", AdminAccountStatus.ACTIVE, "{bcrypt}h", AdminAccountType.SUPER_ADMIN)));
         when(users.findByEmailAndRole("ops@tailtopia.id", Role.ADMIN)).thenReturn(Optional.empty());
 
@@ -129,6 +132,9 @@ class AdminUserDetailsServiceTest {
 
     @Test
     void rejectsDisabledAccount() {
+        // V1.3.0 Story 1.3：白名单查询按 ACTIVE 口径下推到仓库（D-21 后同邮箱可有多行），停用账号根本查不到。
+        when(adminAccounts.findByLarkEmailIgnoreCaseAndStatus("x@tailtopia.id", AdminAccountStatus.ACTIVE))
+                .thenReturn(Optional.empty());
         when(adminAccounts.findByLarkEmail("x@tailtopia.id")).thenReturn(Optional.of(
                 account(9L, "x@tailtopia.id", AdminAccountStatus.DISABLED, "{bcrypt}h", AdminAccountType.SUPER_ADMIN)));
         assertThatThrownBy(() -> service.loadUserByUsername("x@tailtopia.id"))
@@ -137,7 +143,7 @@ class AdminUserDetailsServiceTest {
 
     @Test
     void rejectsAccountWithoutPassword() {
-        when(adminAccounts.findByLarkEmail("oauth@tailtopia.id")).thenReturn(Optional.of(
+        when(adminAccounts.findByLarkEmailIgnoreCaseAndStatus("oauth@tailtopia.id", AdminAccountStatus.ACTIVE)).thenReturn(Optional.of(
                 account(10L, "oauth@tailtopia.id", AdminAccountStatus.ACTIVE, null, AdminAccountType.STAFF)));
         assertThatThrownBy(() -> service.loadUserByUsername("oauth@tailtopia.id"))
                 .isInstanceOf(UsernameNotFoundException.class);
@@ -145,7 +151,7 @@ class AdminUserDetailsServiceTest {
 
     @Test
     void rejectsUnknownAccount() {
-        when(adminAccounts.findByLarkEmail("nope@tailtopia.id")).thenReturn(Optional.empty());
+        when(adminAccounts.findByLarkEmailIgnoreCaseAndStatus("nope@tailtopia.id", AdminAccountStatus.ACTIVE)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.loadUserByUsername("nope@tailtopia.id"))
                 .isInstanceOf(UsernameNotFoundException.class);
     }

@@ -1,5 +1,6 @@
 package com.tailtopia.profile.service;
 
+import com.tailtopia.profile.domain.HealthMilestones;
 import com.tailtopia.profile.dto.TimelineItemResponse;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -36,7 +37,7 @@ import java.util.Set;
  * <p><b>抑制范围只限健康类里程碑</b>（本 Story 的实现判断，记录在案）：PRD 原文是「**由这些记录触发完成的**
  * 里程碑不再单独生成时间线条目」。若把「当天有健康记录」无差别地用于所有里程碑，那么某天正好录了疫苗，
  * 当天的「100 天纪念」banner 会被一起吃掉 —— 明显不是意图。因此仅对**健康类**里程碑
- * （见 {@link #HEALTH_MILESTONE_SUFFIXES}）做「当天有健康条目即让胶囊承载」的抑制。
+ * （见 {@link #HEALTH_MILESTONE_CODES}）做「当天有健康条目即让胶囊承载」的抑制。
  */
 public final class TimelineClassifier {
 
@@ -44,12 +45,36 @@ public final class TimelineClassifier {
     }
 
     /**
-     * 健康类里程碑的 code 后缀（含猫 C / 狗 D / 通用 G 三系）：
-     * M3 疫苗 · M4 驱虫 · M5 第一次看兽医 · M9 绝育 · S4 第一次保存兽医问诊结论。
+     * 「第一次保存兽医问诊结论」三系 code —— 本集合相对 {@link HealthMilestones#CODES} 多出来的那部分。
      *
-     * <p>只有这五类会被「当天已有健康条目」抑制（由类④ 胶囊承载）；其余里程碑照常出 banner。
+     * <p>它属健康类是**展示规则**（当天有健康条目就由胶囊承载），不是功能规则（S4 从来可以打卡），
+     * 所以进不了集合 ①。见下方 {@link #HEALTH_MILESTONE_CODES} 的说明。
      */
-    static final Set<String> HEALTH_MILESTONE_SUFFIXES = Set.of("M3", "M4", "M5", "M9", "S4");
+    private static final Set<String> ARCHIVE_MILESTONE_CODES = Set.of("C-S4", "D-S4", "G-S4");
+
+    /**
+     * 健康类里程碑的**完整 code**（V1.3.0 Story 1.1 · AD-A4.5 改：原为后缀集合）。
+     *
+     * <p>只有这些会被「当天已有健康条目」抑制（由类④ 胶囊承载）；其余里程碑照常出 banner。
+     *
+     * <p>🔴 <b>为什么必须按完整 code 而不是后缀</b>：后缀 {@code M3}/{@code M4} 在猫狗清单上是
+     * 疫苗 / 驱虫（确为健康类），在**通用清单**上却是 <b>G-M3「陪伴满 30 天」</b>与
+     * <b>G-M4「记录满 10 条」</b>——跟健康毫无关系。按后缀判，通用宠物在录了健康记录的当天，
+     * 「陪伴满 30 天」和「记录满 10 条」的 banner 会被静默吞掉。
+     *
+     * <p><b>本集合 = 集合 ①（{@link HealthMilestones#CODES}）+ 三条 S4</b>（AD-A4.6：③ 与 ① 对齐、
+     * 额外含 S4）。刻意**派生**而不是手抄一份：两份手维护的名单正是本次一连串错误的来源。
+     * 派生也保住了两者的用途区分 —— ① 管「禁止打卡」，本集合管「时间线展示抑制」，
+     * 差集永远只有 S4 这一项，一眼看得出来。
+     */
+    static final Set<String> HEALTH_MILESTONE_CODES = union(
+            HealthMilestones.CODES, ARCHIVE_MILESTONE_CODES);
+
+    private static Set<String> union(Set<String> a, Set<String> b) {
+        Set<String> out = new HashSet<>(a);
+        out.addAll(b);
+        return Set.copyOf(out);
+    }
 
     /**
      * 分类并归并成一份条目列表（未排序，排序由调用方按全局序统一处理）。
@@ -126,14 +151,9 @@ public final class TimelineClassifier {
         return out;
     }
 
-    /** code 形如 {@code C-M3} / {@code D-S4} / {@code G-M9}：取「-」后的后缀判定是否健康类。 */
+    /** 是否健康类里程碑：按**完整 code** 查表，不做任何前缀/后缀拆解（AD-A4）。 */
     static boolean isHealthMilestone(String code) {
-        if (code == null) {
-            return false;
-        }
-        int dash = code.lastIndexOf('-');
-        String suffix = dash >= 0 ? code.substring(dash + 1) : code;
-        return HEALTH_MILESTONE_SUFFIXES.contains(suffix);
+        return code != null && HEALTH_MILESTONE_CODES.contains(code);
     }
 
     /**

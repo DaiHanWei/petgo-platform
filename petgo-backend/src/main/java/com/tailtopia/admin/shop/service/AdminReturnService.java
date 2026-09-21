@@ -53,11 +53,16 @@ public class AdminReturnService {
     private final AdminAuditService audit;
     private final NotificationService notifications;
 
+    /** V1.3.0 Story 10.1：五步进度条「批准」一步要显示操作人名（实体只存 {@code reviewed_by} 这个 id）。 */
+    private final com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts;
+
     public AdminReturnService(ReturnRequestRepository returns, ReturnRequestService requests,
             RefundExecutionService refunds, ShopOrderRepository orders,
             ShopOrderLineRepository orderLines, InventoryMovementService movements,
             OpenedPrecedentRepository precedents, AdminAuditService audit,
-            NotificationService notifications) {
+            NotificationService notifications,
+            com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts) {
+        this.adminAccounts = adminAccounts;
         this.returns = returns;
         this.requests = requests;
         this.refunds = refunds;
@@ -79,9 +84,211 @@ public class AdminReturnService {
                 : returns.findByStatusOrderByCreatedAtAscIdAsc(status, page);
     }
 
+    // ---------- V1.3.0 Story 10.1：A7 工作台（模板 A）的只读派生查询 ----------
+
+    /**
+     * A7 五页签（Story 10.1 AC1）。一个页签对应<b>一组</b>状态，所以不能用只收单个状态的
+     * {@link #queue(ReturnStatus, int)}。
+     *
+     * <p>🔴 状态映射取自 {@link ReturnStatus} 的<b>全集</b>：九个状态每一个都必须落在某个页签里，
+     * 否则那条申请在界面上彻底消失（列表页时代有个「全部」兜底，工作台没有）。
+     * {@link #ALL_TABBED} 在 {@link #of(ReturnStatus)} 里按页签顺序查找，漏一个就会回落到
+     * {@code PENDING}，而不是静默丢弃。
+     */
+    public enum Tab {
+        PENDING("pending", ReturnStatus.PENDING_REVIEW),
+        SHIPBACK("shipback", ReturnStatus.AWAIT_SHIPBACK),
+        INSPECT("inspect", ReturnStatus.INSPECTING),
+        REFUND("refund", ReturnStatus.REFUNDING, ReturnStatus.REFUND_FAILED),
+        CLOSED("closed", ReturnStatus.REFUNDED, ReturnStatus.CLOSED, ReturnStatus.REJECTED,
+                ReturnStatus.WITHDRAWN);
+
+        private final String param;
+        private final List<ReturnStatus> statuses;
+
+        Tab(String param, ReturnStatus... statuses) {
+            this.param = param;
+            this.statuses = List.of(statuses);
+        }
+
+        public String param() {
+            return param;
+        }
+
+        public List<ReturnStatus> statuses() {
+            return statuses;
+        }
+
+        /** 宽松解析：值不对（有人手改 URL）当作默认页签，不为此让整页 500。 */
+        public static Tab of(String raw) {
+            if (raw != null) {
+                for (Tab t : values()) {
+                    if (t.param.equalsIgnoreCase(raw.trim())) {
+                        return t;
+                    }
+                }
+            }
+            return PENDING;
+        }
+
+        /** 深链未指明页签时按该申请当前状态落页签 —— 否则行不在左栏，右栏开了也选不中。 */
+        public static Tab of(ReturnStatus status) {
+            for (Tab t : values()) {
+                if (t.statuses.contains(status)) {
+                    return t;
+                }
+            }
+            return PENDING;
+        }
+    }
+
+    /** 九个状态必须被五个页签**恰好覆盖一次**（{@code AdminReturnTabsTest} 断言）。 */
+    public static final List<ReturnStatus> ALL_TABBED = java.util.Arrays.stream(Tab.values())
+            .flatMap(t -> t.statuses().stream()).toList();
+
+    /**
+     * 一页队列（先进先出：{@code created_at ASC, id ASC}，AC1）。
+     *
+     * <p>筛选：退货类型 / 整单退，两者都可为空 = 不筛。空值不进谓词（不是绑一个 null 参数）。
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<ReturnRequest> page(Tab tab, ReturnType type,
+            Boolean fullReturn, int page, int size) {
+        var sort = org.springframework.data.domain.Sort.by(
+                org.springframework.data.domain.Sort.Order.asc("createdAt"),
+                org.springframework.data.domain.Sort.Order.asc("id"));
+        return returns.findAll(spec(tab, type, fullReturn),
+                PageRequest.of(Math.max(page, 0), Math.max(1, size), sort));
+    }
+
+    /**
+     * 五个页签的计数（AC1「各带计数」）。
+     *
+     * <p>🔴 计数<b>跟着筛选走</b>：筛了「质量问题」却显示未筛的总数，会出现「待质检 5」配一张空队列
+     * —— 运营只会当成加载失败。代价是每次开页多四次 count，队列表本来就小。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Long> counts(ReturnType type, Boolean fullReturn) {
+        java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+        for (Tab t : Tab.values()) {
+            out.put(t.param(), returns.count(spec(t, type, fullReturn)));
+        }
+        return out;
+    }
+
+    /**
+     * 同页签里「下一条」的 token（处置成功后自动选中，AC2）。
+     *
+     * <p>处置完那条<b>已经离开本页签</b>（状态变了），所以这里取的就是新的队首；
+     * 仍然命中自己（幂等重放 / 状态没变）时跳过它，避免原地打转。
+     */
+    @Transactional(readOnly = true)
+    public String nextToken(Tab tab, ReturnType type, Boolean fullReturn, String excludeToken) {
+        for (ReturnRequest r : page(tab, type, fullReturn, 0, 2).getContent()) {
+            if (!r.getPublicToken().equals(excludeToken)) {
+                return r.getPublicToken();
+            }
+        }
+        return null;
+    }
+
+    private static org.springframework.data.jpa.domain.Specification<ReturnRequest> spec(
+            Tab tab, ReturnType type, Boolean fullReturn) {
+        return (root, cq, cb) -> {
+            List<jakarta.persistence.criteria.Predicate> ps = new java.util.ArrayList<>();
+            ps.add(root.get("status").in(tab.statuses()));
+            if (type != null) {
+                ps.add(cb.equal(root.get("returnType"), type));
+            }
+            if (fullReturn != null) {
+                ps.add(cb.equal(root.get("fullReturn"), fullReturn));
+            }
+            return cb.and(ps.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+    }
+
+    /**
+     * 右栏①「五步进度条」的一步（AC1）。
+     *
+     * @param key   i18n 后缀（submit / approve / shipback / inspect / refund）
+     * @param state {@code done} / {@code current} / {@code todo} / {@code skip} / {@code rejected}
+     * @param actor 操作人显示名；🔴 实体上<b>只有「批准」这一步存了操作人</b>（{@code reviewed_by}），
+     *              寄回 / 质检 / 退款三步的操作人只在审计日志里 —— 本 story「零后端功能改动」，不为此加列
+     * @param at    完成时刻（未完成为 null）
+     */
+    public record Step(String key, String state, String actor, java.time.Instant at) {
+    }
+
+    /**
+     * 五步进度（申请 → 批准 → 寄回 → 质检 → 退款）。
+     *
+     * <p>🔴 拒收 / 发货前取消<b>跳过寄回与质检</b>（见 {@link #approve}）——
+     * 这两步必须显式标 {@code skip}，否则界面上会永远停在「待寄回」而实际早已进入退款执行。
+     *
+     * <p>🔴 <b>{@code REJECTED} 有两个来源，且都不能画成「已批准」</b>：
+     * 审核驳回（{@link #reject}）与质检不通过（{@link #failInspection}）——
+     * 两者都把状态置成 {@code REJECTED}，也都写 {@code reviewed_by/reviewed_at}。
+     * 如果只按「不是 PENDING_REVIEW 就算 done」分，被驳回的单子会渲染成
+     * 「批准 · 某某 · 某时」并带完成样式 —— 读起来就是「已批准，等用户寄回」，
+     * 而它其实是终态被拒。用 {@code inspectionPassed} 区分是哪一段拒的：
+     * 质检走过就一定非 null（通过 = TRUE，不通过 = FALSE）。
+     *
+     * <p>同理 {@code WITHDRAWN}（用户自己撤回，可能从没人审过）：{@code reviewedAt} 为空就是没审过，
+     * 标 {@code skip} 而不是 {@code done} —— AC1 说「完成步带操作人 + 时间」，
+     * 把没发生过的步标成完成是审计口径上的错误陈述，不只是样式问题。
+     */
+    @Transactional(readOnly = true)
+    public List<Step> steps(ReturnRequest r) {
+        ReturnStatus s = r.getStatus();
+        boolean skipPhysical = r.getReturnType() != null && r.getReturnType().isUndelivered();
+        boolean inspected = r.getInspectionPassed() != null;
+        boolean failedInspection = Boolean.FALSE.equals(r.getInspectionPassed());
+        String reviewer = r.getReviewedBy() == null ? null
+                : adminAccounts.findById(r.getReviewedBy())
+                        .map(a -> a.getDisplayName()).orElse(null);
+
+        String approveState;
+        if (s == ReturnStatus.PENDING_REVIEW) {
+            approveState = "current";
+        } else if (r.getReviewedAt() == null) {
+            approveState = "skip";              // 从没人审过（用户撤回）
+        } else if (s == ReturnStatus.REJECTED && !inspected) {
+            approveState = "rejected";          // 审核这一步就驳回了
+        } else {
+            approveState = "done";
+        }
+
+        List<Step> out = new java.util.ArrayList<>();
+        out.add(new Step("submit", "done", null, r.getCreatedAt()));
+        out.add(new Step("approve", approveState, reviewer, r.getReviewedAt()));
+        out.add(new Step("shipback", skipPhysical ? "skip"
+                : "current".equals(approveState) || "skip".equals(approveState)
+                        || "rejected".equals(approveState) ? "todo"
+                : s == ReturnStatus.AWAIT_SHIPBACK ? "current"
+                : r.getShipbackTrackingNo() != null ? "done" : "todo",
+                null, null));
+        out.add(new Step("inspect", skipPhysical ? "skip"
+                : s == ReturnStatus.INSPECTING ? "current"
+                : failedInspection ? "rejected"
+                : inspected ? "done" : "todo",
+                null, null));
+        out.add(new Step("refund",
+                s == ReturnStatus.REFUNDED ? "done"
+                        : (s == ReturnStatus.REFUNDING || s == ReturnStatus.REFUND_FAILED)
+                                ? "current" : "todo",
+                null, r.getRefundedAt()));
+        return List.copyOf(out);
+    }
+
     @Transactional(readOnly = true)
     public ReturnRequest require(String returnToken) {
         return returns.findByPublicToken(returnToken)
+                .orElseThrow(() -> AppException.notFound("退货申请不存在").code("admin.err.return.notFound"));
+    }
+
+    /** 写路径入口：行锁读取（并发处置同一张单串行化，见仓储方法注释）。须在写事务内调用。 */
+    private ReturnRequest lockForWrite(String returnToken) {
+        return returns.findForUpdateByPublicToken(returnToken)
                 .orElseThrow(() -> AppException.notFound("退货申请不存在").code("admin.err.return.notFound"));
     }
 
@@ -93,7 +300,7 @@ public class AdminReturnService {
      */
     @Transactional
     public ReturnRequest approve(String returnToken, long adminId) {
-        ReturnRequest r = require(returnToken);
+        ReturnRequest r = lockForWrite(returnToken);
         r.approve(adminId);
         returns.save(r);
         audit.record(adminId, AuditActions.SHOP_RETURN_REVIEWED, "SHOP_RETURN", returnToken,
@@ -107,7 +314,7 @@ public class AdminReturnService {
     /** 驳回。🔴 理由必填并回告用户（复用 FR-52A）；订单回到申请前状态（SPEC-6 ②）。 */
     @Transactional
     public ReturnRequest reject(String returnToken, String reason, long adminId) {
-        ReturnRequest r = require(returnToken);
+        ReturnRequest r = lockForWrite(returnToken);
         r.reject(adminId, reason);
         returns.save(r);
         requests.restoreOrderStatus(r);
@@ -140,7 +347,7 @@ public class AdminReturnService {
     @Transactional
     public ReturnRequest registerShipback(String returnToken, String carrier, String trackingNo,
             Long fee, long adminId) {
-        ReturnRequest r = require(returnToken);
+        ReturnRequest r = lockForWrite(returnToken);
         r.registerShipback(carrier, trackingNo, fee);
         returns.save(r);
         // 🔒 运单号非 PII 可记；用户地址/电话不进摘要
@@ -160,7 +367,7 @@ public class AdminReturnService {
     @Transactional
     public ReturnRequest passInspection(String returnToken, String note, String photoKeys,
             long adminId) {
-        ReturnRequest r = require(returnToken);
+        ReturnRequest r = lockForWrite(returnToken);
         ShopOrder order = orders.findById(r.getShopOrderId()).orElseThrow();
         r.passInspection(note, photoKeys);
         returns.save(r);
@@ -188,7 +395,7 @@ public class AdminReturnService {
     @Transactional
     public ReturnRequest failInspection(String returnToken, String note, String photoKeys,
             RejectDisposal disposal, String shipBackTrackingNo, long adminId) {
-        ReturnRequest r = require(returnToken);
+        ReturnRequest r = lockForWrite(returnToken);
         if (disposal == RejectDisposal.RETURN_TO_USER
                 && (shipBackTrackingNo == null || shipBackTrackingNo.isBlank())) {
             throw AppException.validation("选择「退回用户」时必须填写回寄单号").code("admin.err.return.trackingRequired");
@@ -206,7 +413,7 @@ public class AdminReturnService {
 
     @Transactional
     public RefundExecutionService.Outcome executeRefund(String returnToken, long adminId) {
-        ReturnRequest before = require(returnToken);
+        ReturnRequest before = lockForWrite(returnToken);
         boolean firstExecution = before.getStatus() == ReturnStatus.REFUNDING;
         var out = refunds.execute(returnToken);
         // 🔴 发货前取消：货从未出库，但付款时已 commit 扣了实际库存 —— 退款执行的同时按原订单号

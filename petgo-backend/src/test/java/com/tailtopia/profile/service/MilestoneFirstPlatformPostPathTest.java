@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import com.tailtopia.content.domain.ContentType;
 import com.tailtopia.content.domain.ContentVisibility;
 import com.tailtopia.content.event.ContentPublishedEvent;
+import com.tailtopia.profile.domain.MilestoneAutoEvent;
 import com.tailtopia.profile.domain.MilestoneCompletionSource;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,8 @@ class MilestoneFirstPlatformPostPathTest {
     void publicDiaryEntryCompletesS5AndStillCountsGrowthMoment() {
         listener.onContentPublished(event(ContentType.GROWTH_MOMENT, ContentVisibility.PUBLIC));
 
-        verify(completion).completeForOwner(7L, "S5", MilestoneCompletionSource.SYSTEM_AUTO);
+        verify(completion).completeForOwner(7L, MilestoneAutoEvent.PLATFORM_POST,
+                MilestoneCompletionSource.SYSTEM_AUTO);
         // 原有 S2 / M10 / L5 计数路径不受影响（不得为了修 S5 把计数判定挤掉）。
         verify(completion).onGrowthMomentCount(7L, 1L);
         verify(completion).completeDateGatedLNodesOnPublish(7L);
@@ -49,7 +51,8 @@ class MilestoneFirstPlatformPostPathTest {
     void privateDiaryEntryDoesNotCompleteS5ButStillCounts() {
         listener.onContentPublished(event(ContentType.GROWTH_MOMENT, ContentVisibility.PRIVATE));
 
-        verify(completion, never()).completeForOwner(anyLong(), eq("S5"), any());
+        verify(completion, never()).completeForOwner(
+                anyLong(), eq(MilestoneAutoEvent.PLATFORM_POST), any());
         verify(completion).onGrowthMomentCount(7L, 1L);
     }
 
@@ -58,7 +61,8 @@ class MilestoneFirstPlatformPostPathTest {
     void momentPostCompletesS5() {
         listener.onContentPublished(event(ContentType.DAILY, ContentVisibility.PUBLIC));
 
-        verify(completion).completeForOwner(7L, "S5", MilestoneCompletionSource.SYSTEM_AUTO);
+        verify(completion).completeForOwner(7L, MilestoneAutoEvent.PLATFORM_POST,
+                MilestoneCompletionSource.SYSTEM_AUTO);
         // 非成长时刻不进计数类判定。
         verify(completion, never()).onGrowthMomentCount(anyLong(), anyLong());
     }
@@ -68,7 +72,8 @@ class MilestoneFirstPlatformPostPathTest {
     void publicKnowledgePostCompletesS5WithoutGrowthCount() {
         listener.onContentPublished(event(ContentType.KNOWLEDGE, ContentVisibility.PUBLIC));
 
-        verify(completion).completeForOwner(7L, "S5", MilestoneCompletionSource.SYSTEM_AUTO);
+        verify(completion).completeForOwner(7L, MilestoneAutoEvent.PLATFORM_POST,
+                MilestoneCompletionSource.SYSTEM_AUTO);
         verify(completion, never()).onGrowthMomentCount(anyLong(), anyLong());
     }
 }

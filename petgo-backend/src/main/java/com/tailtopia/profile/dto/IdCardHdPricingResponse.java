@@ -5,6 +5,10 @@ package com.tailtopia.profile.dto;
  *
  * <p>{@code price} 为单次解锁价（IDR 整数），实时读 {@code pricing_config.id_hd_download_price}
  * （Story 9.2 后台可配），与 {@code IdCardHdService} 扣费口径同源——前端展示价与实际扣费价由此一致。
+ *
+ * <p>V1.3.0 Story 6.1（契约 X-4，FR-120 护照样式）：新增 {@code passportPageUnlockPrice}（护照·护照内页）与
+ * {@code passportBoardingUnlockPrice}（护照·登机牌）两个一次性解锁价，同样实时读 {@code pricing_config}；旧字段 {@code price} 不变。
+ * 改价只影响新发起的解锁，已解锁记录不受影响。
  */
-public record IdCardHdPricingResponse(long price) {
+public record IdCardHdPricingResponse(long price, long passportPageUnlockPrice, long passportBoardingUnlockPrice) {
 }

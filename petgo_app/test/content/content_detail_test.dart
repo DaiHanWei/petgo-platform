@@ -74,13 +74,23 @@ class _FakeDetailRepo implements DetailRepository {
       const CommentPage(items: [], nextCursor: null, hasMore: false);
 
   @override
-  Future<Comment> postComment(int postId, String body) async => _top(999);
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds = const []}) async => _top(999);
 
   @override
-  Future<Comment> postReply(int parentId, String body) async => _reply(999);
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds = const []}) async => _reply(999);
 
   @override
   Future<void> deleteComment(int commentId) async {}
+
+  /// V1.3.0 Story 2.4 新增的点赞通道；本类不验它，记下调用即可。
+  final List<int> likedComments = <int>[];
+  final List<int> unlikedComments = <int>[];
+
+  @override
+  Future<void> likeComment(int commentId) async => likedComments.add(commentId);
+
+  @override
+  Future<void> unlikeComment(int commentId) async => unlikedComments.add(commentId);
 
   @override
   Future<void> deleteContent(int postId) async {

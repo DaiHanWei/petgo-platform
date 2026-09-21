@@ -19,8 +19,16 @@ import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.dto.AdminAccountView;
 import com.tailtopia.admin.account.repository.AdminAccountPermissionRepository;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
+import com.tailtopia.admin.audit.service.AdminAlertService;
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.admin.roles.AdminRoleSeedSnapshot;
+import com.tailtopia.admin.roles.domain.AdminRoleEntity;
+import com.tailtopia.admin.roles.dto.RoleSelection;
+import com.tailtopia.admin.roles.domain.AdminRolePermission;
+import com.tailtopia.admin.roles.repository.AdminRolePermissionRepository;
+import com.tailtopia.admin.roles.repository.AdminRoleRepository;
+import com.tailtopia.admin.roles.service.RolePermissionResolver;
 import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +43,9 @@ class AdminAccountRoleServiceTest {
     private AdminAccountRepository accounts;
     private AdminAccountPermissionRepository permissions;
     private AdminAuditService auditService;
+    private AdminAlertService alertService;
+    private AdminRoleRepository roles;
+    private AdminRolePermissionRepository rolePermissions;
     private AdminAccountService service;
 
     @BeforeEach
@@ -42,8 +53,21 @@ class AdminAccountRoleServiceTest {
         accounts = mock(AdminAccountRepository.class);
         permissions = mock(AdminAccountPermissionRepository.class);
         auditService = mock(AdminAuditService.class);
-        service = new AdminAccountService(accounts, permissions, auditService);
-        when(accounts.findByLarkEmail(any())).thenReturn(Optional.empty());
+        alertService = mock(AdminAlertService.class);
+        roles = mock(AdminRoleRepository.class);
+        rolePermissions = mock(AdminRolePermissionRepository.class);
+        // Story 1.4：四个已迁移岗位的角色表行与权限码（mock 数据源 = 迁移前快照）。
+        for (var e : AdminRoleSeedSnapshot.MIGRATED.entrySet()) {
+            long id = AdminRoleSeedSnapshot.mockRoleId(e.getKey());
+            AdminRoleEntity row = AdminRoleEntity.newCustom(e.getKey().name(), e.getKey().name(), null);
+            ReflectionTestUtils.setField(row, "id", id);
+            when(roles.findByCode(e.getKey().name())).thenReturn(Optional.of(row));
+            when(rolePermissions.findByRoleId(id)).thenReturn(
+                    e.getValue().stream().map(c -> new AdminRolePermission(id, c)).toList());
+        }
+        service = new AdminAccountService(accounts, permissions, auditService, alertService,
+                new RolePermissionResolver(permissions, roles, rolePermissions), roles, "boot@x");
+        when(accounts.findByLarkEmailIgnoreCaseAndStatus(any(), any())).thenReturn(Optional.empty());
         when(accounts.save(any(AdminAccount.class))).thenAnswer(inv -> {
             AdminAccount a = inv.getArgument(0);
             if (a.getId() == null) {
@@ -57,6 +81,9 @@ class AdminAccountRoleServiceTest {
     private AdminAccount account(long id, AdminRole role) {
         AdminAccount a = AdminAccount.create("x@y", "X", role, 1L);
         ReflectionTestUtils.setField(a, "id", id);
+        if (role.isTableBacked()) {
+            a.setRoleId(AdminRoleSeedSnapshot.mockRoleId(role)); // Story 1.4：表驱动岗位带 role_id
+        }
         when(accounts.findById(id)).thenReturn(Optional.of(a));
         return a;
     }
@@ -98,7 +125,7 @@ class AdminAccountRoleServiceTest {
 
     @Test
     void createRejectsNullRole() {
-        assertThatThrownBy(() -> service.createAccount("x@y", "X", null, List.of(), 1L))
+        assertThatThrownBy(() -> service.createAccount("x@y", "X", (AdminRole) null, List.of(), 1L))
                 .isInstanceOf(AppException.class);
     }
 
@@ -147,7 +174,7 @@ class AdminAccountRoleServiceTest {
         ArgumentCaptor<List<AdminAccountPermission>> rows = ArgumentCaptor.forClass(List.class);
         verify(permissions).saveAll(rows.capture());
         assertThat(rows.getValue()).extracting(AdminAccountPermission::getPermissionCode)
-                .containsExactlyInAnyOrderElementsOf(AdminRole.FULFILLMENT.permissionCodes());
+                .containsExactlyInAnyOrderElementsOf(AdminRoleSeedSnapshot.FULFILLMENT);
     }
 
     @Test
@@ -203,6 +230,7 @@ class AdminAccountRoleServiceTest {
     void listShowsEffectivePermissionsForTemplatedRoles() {
         AdminAccount ops = AdminAccount.create("a@x", "A", AdminRole.OPERATIONS, 1L);
         ReflectionTestUtils.setField(ops, "id", 1L);
+        ops.setRoleId(AdminRoleSeedSnapshot.mockRoleId(AdminRole.OPERATIONS));
         AdminAccount custom = AdminAccount.create("b@x", "B", AdminRole.CUSTOM, 1L);
         ReflectionTestUtils.setField(custom, "id", 2L);
         when(accounts.findAll()).thenReturn(List.of(ops, custom));
@@ -214,8 +242,147 @@ class AdminAccountRoleServiceTest {
         assertThat(views.get(0).role()).isEqualTo(AdminRole.OPERATIONS);
         assertThat(views.get(0).templated()).isTrue();
         assertThat(views.get(0).permissionCodes())
-                .containsExactlyInAnyOrderElementsOf(AdminRole.OPERATIONS.permissionCodes());
+                .containsExactlyInAnyOrderElementsOf(AdminRoleSeedSnapshot.OPERATIONS);
         assertThat(views.get(1).templated()).isFalse();
         assertThat(views.get(1).permissionCodes()).containsExactly(AdminPermissions.USER_VIEW);
+    }
+
+    // ---------- Story 1.4：role_id 随角色设 / 清 ----------
+
+    @Test
+    void changeRoleSetsRoleIdForMigratedRolesAndClearsOtherwise() {
+        AdminAccount a = account(7L, AdminRole.CUSTOM);
+        assertThat(a.getRoleId()).isNull();
+
+        service.changeRole(7L, AdminRole.FINANCE, 1L);
+        assertThat(a.getRoleId()).isEqualTo(AdminRoleSeedSnapshot.mockRoleId(AdminRole.FINANCE));
+
+        service.changeRole(7L, AdminRole.OPS_MANAGER, 1L);
+        assertThat(a.getRoleId()).isNull();
+
+        service.changeRole(7L, AdminRole.SUPPORT, 1L);
+        assertThat(a.getRoleId()).isEqualTo(AdminRoleSeedSnapshot.mockRoleId(AdminRole.SUPPORT));
+
+        service.changeRole(7L, AdminRole.CUSTOM, 1L);
+        assertThat(a.getRoleId()).isNull();
+    }
+
+    @Test
+    void createSetsRoleIdOnlyForMigratedRoles() {
+        service.createAccount("ops@x", "运营", AdminRole.OPERATIONS, List.of(), 1L);
+        service.createAccount("mgr@x", "主管", AdminRole.OPS_MANAGER, List.of(), 1L);
+        ArgumentCaptor<AdminAccount> saved = ArgumentCaptor.forClass(AdminAccount.class);
+        verify(accounts, org.mockito.Mockito.times(2)).save(saved.capture());
+        assertThat(saved.getAllValues().get(0).getRoleId())
+                .isEqualTo(AdminRoleSeedSnapshot.mockRoleId(AdminRole.OPERATIONS));
+        assertThat(saved.getAllValues().get(1).getRoleId()).isNull();
+    }
+
+    // ---------- Story 1.6：RoleSelection（role + role_id 成对） ----------
+
+    private AdminRoleEntity customRoleRow(long id, String name) {
+        AdminRoleEntity row = AdminRoleEntity.newCustom("role-" + id, name, 1L);
+        ReflectionTestUtils.setField(row, "id", id);
+        when(roles.findById(id)).thenReturn(Optional.of(row));
+        when(rolePermissions.findByRoleId(id)).thenReturn(List.of(
+                new AdminRolePermission(id, AdminPermissions.VET_VIEW),
+                new AdminRolePermission(id, AdminPermissions.RATING_VIEW)));
+        return row;
+    }
+
+    @Test
+    void changeRoleToTableRoleSetsRoleIdAndTemplateEnum() {
+        AdminAccount a = account(7L, AdminRole.OPERATIONS);
+        customRoleRow(55L, "兽医管理员");
+        service.changeRole(7L, new RoleSelection(AdminRole.ROLE_TEMPLATE, 55L, "兽医管理员(role-55)"), 1L);
+        assertThat(a.getRole()).isEqualTo(AdminRole.ROLE_TEMPLATE);
+        assertThat(a.getRoleId()).isEqualTo(55L);
+        assertThat(a.getAccountType()).isEqualTo(AdminAccountType.STAFF);
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+        verify(permissions).deleteByAccountId(7L);
+        verify(permissions, never()).saveAll(any());
+        verify(auditService).record(eq(1L), eq(AuditActions.ACCOUNT_ROLE_CHANGED), any(), eq("7"),
+                org.mockito.ArgumentMatchers.contains("兽医管理员(role-55)"));
+    }
+
+    @Test
+    void changeRoleToMigratedEnumAlsoSetsRoleId() {
+        AdminAccount a = account(7L, AdminRole.CUSTOM);
+        service.changeRole(7L, AdminRole.SUPPORT, 1L); // 旧签名：自动补表 id
+        assertThat(a.getRole()).isEqualTo(AdminRole.SUPPORT);
+        assertThat(a.getRoleId()).isEqualTo(AdminRoleSeedSnapshot.mockRoleId(AdminRole.SUPPORT));
+    }
+
+    @Test
+    void changeRoleBackToCustomClearsRoleIdAndCarriesPermissions() {
+        AdminAccount a = account(7L, AdminRole.CUSTOM);
+        customRoleRow(55L, "兽医管理员");
+        service.changeRole(7L, new RoleSelection(AdminRole.ROLE_TEMPLATE, 55L, "x"), 1L);
+        org.mockito.Mockito.reset(permissions);
+        when(permissions.findByAccountId(anyLong())).thenReturn(List.of());
+
+        service.changeRole(7L, AdminRole.CUSTOM, 1L);
+
+        assertThat(a.getRole()).isEqualTo(AdminRole.CUSTOM);
+        assertThat(a.getRoleId()).isNull();
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<AdminAccountPermission>> rows = ArgumentCaptor.forClass(List.class);
+        verify(permissions).saveAll(rows.capture());
+        assertThat(rows.getValue()).extracting(AdminAccountPermission::getPermissionCode)
+                .containsExactlyInAnyOrder(AdminPermissions.VET_VIEW, AdminPermissions.RATING_VIEW);
+    }
+
+    @Test
+    void idempotentWhenSameRoleAndRoleIdButNotWhenRoleIdDiffers() {
+        AdminAccount a = account(7L, AdminRole.CUSTOM);
+        customRoleRow(55L, "A");
+        customRoleRow(56L, "B");
+        service.changeRole(7L, new RoleSelection(AdminRole.ROLE_TEMPLATE, 55L, "A"), 1L);
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+        service.changeRole(7L, new RoleSelection(AdminRole.ROLE_TEMPLATE, 55L, "A"), 1L); // 幂等
+        assertThat(a.getSecurityVersion()).isEqualTo(1);
+        service.changeRole(7L, new RoleSelection(AdminRole.ROLE_TEMPLATE, 56L, "B"), 1L); // 同枚举不同 role_id → 真变
+        assertThat(a.getRoleId()).isEqualTo(56L);
+        assertThat(a.getSecurityVersion()).isEqualTo(2);
+    }
+
+    @Test
+    void roleTemplateWithoutRoleIdRejectedOnCreateAndChange() {
+        assertThatThrownBy(() -> service.createAccount("t@x", "T",
+                new RoleSelection(AdminRole.ROLE_TEMPLATE, null, "?"), List.of(), 1L)).isInstanceOf(AppException.class);
+        account(7L, AdminRole.CUSTOM);
+        assertThatThrownBy(() -> service.changeRole(7L, new RoleSelection(AdminRole.ROLE_TEMPLATE, null, "?"), 1L))
+                .isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void createWithCustomRoleWritesRoleTemplateAndRoleId() {
+        customRoleRow(55L, "兽医管理员");
+        service.createAccount("t@x", "T", new RoleSelection(AdminRole.ROLE_TEMPLATE, 55L, "兽医管理员(role-55)"),
+                List.of(AdminPermissions.USER_VIEW), 1L);
+        ArgumentCaptor<AdminAccount> saved = ArgumentCaptor.forClass(AdminAccount.class);
+        verify(accounts).save(saved.capture());
+        assertThat(saved.getValue().getRole()).isEqualTo(AdminRole.ROLE_TEMPLATE);
+        assertThat(saved.getValue().getRoleId()).isEqualTo(55L);
+        verify(permissions, never()).saveAll(any()); // 模板角色忽略勾选
+        verify(auditService).record(eq(1L), eq(AuditActions.ACCOUNT_CREATED), any(), any(),
+                org.mockito.ArgumentMatchers.contains("2 项（按角色）"));
+    }
+
+    @Test
+    void listShowsCustomRoleNameAndSelectedValue() {
+        AdminAccount t = AdminAccount.create("t@x", "T", AdminRole.CUSTOM, 1L);
+        ReflectionTestUtils.setField(t, "id", 3L);
+        t.assignRole(AdminRole.ROLE_TEMPLATE, 55L);
+        AdminRoleEntity row = customRoleRow(55L, "兽医管理员");
+        when(roles.findAllById(any())).thenReturn(List.of(row));
+        when(accounts.findAll()).thenReturn(List.of(t));
+
+        AdminAccountView v = service.list().get(0);
+        assertThat(v.roleCustom()).isTrue();
+        assertThat(v.roleName()).isEqualTo("兽医管理员");
+        assertThat(v.selectedValue()).isEqualTo("tpl:55");
+        assertThat(v.templated()).isTrue();
+        assertThat(v.permissionCodes()).containsExactlyInAnyOrder(AdminPermissions.VET_VIEW, AdminPermissions.RATING_VIEW);
     }
 }

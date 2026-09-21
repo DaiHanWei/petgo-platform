@@ -15,6 +15,8 @@ class RepurchaseCard {
     required this.productToken,
     required this.productName,
     required this.daysLeft,
+    this.skuToken,
+    this.price,
     this.petName,
     this.dailyGrams,
     this.remainingGrams,
@@ -26,12 +28,28 @@ class RepurchaseCard {
   /// ⚠️ 本版本只会是 `FOOD_LOW`：驱虫/疫苗（FR-108）已挪 1.2.0（C-11）。
   /// 原型画的驱虫卡按 UX-DR1 已删。
   final String triggerType;
+
+  /// 触发 SKU 的不可枚举标识。
+  ///
+  /// ⚠️ 服务端一直在下发它，Dart 侧此前**丢着没读**。Story 4-4 补上 ——
+  /// 本版没有任何渲染用到它（CTA 仍跳商品页），只是别再丢数据。
+  final String? skuToken;
+
   final String productToken;
   final String productName;
   final String? petName;
 
   /// 距预估耗尽还有几天。**可能为负** = 已过预估耗尽日。
   final int daysLeft;
+
+  /// 触发 SKU 的价格（最小币种单位，IDR 无小数；Story 4-4 · SHOP-FR-03）。
+  ///
+  /// 🔴 是**用户当初买的那一档**的价，不是商品最低价 —— 本卡的 CTA 是
+  /// 「Beli Lagi（再买一次）」，他要再买的就是他买过的那一档。
+  ///
+  /// ⚠️ 多规格商品上，点进详情页**落地**时显示的是 `minPrice`（详情页不自动选规格，
+  /// FR-94A），两个数可能不同。这不是 bug，也不能靠自动选中规格去「修」。
+  final int? price;
 
   // ---- 推算依据（V1.4.0 · 设计文档 03 屏 1）----
   // 🔴 设计稿把「日均用量 · 剩余量 · 购买日期」列为**缺一不可** ——
@@ -54,6 +72,13 @@ class RepurchaseCard {
 
   bool get isOverdue => daysLeft < 0;
 
+  /// 🔴 有没有一个**可显示**的价格。
+  ///
+  /// null 与 0 都算没有：0 元不是一个可信的复购价，宁可整行不画，
+  /// 沿用本卡一贯的「不编造、不显示 0」口径。
+  /// 判断收在这里而不是散在 widget 里 —— 散开就迟早有一处漏判。
+  bool get hasPrice => price != null && price! > 0;
+
   factory RepurchaseCard.fromJson(Map<String, dynamic> j) => RepurchaseCard(
         triggerId: (j['triggerId'] as num?)?.toInt() ?? 0,
         triggerType: j['triggerType']?.toString() ?? '',
@@ -61,6 +86,10 @@ class RepurchaseCard {
         productName: j['productName']?.toString() ?? '',
         petName: j['petName']?.toString(),
         daysLeft: (j['daysLeft'] as num?)?.toInt() ?? 0,
+        skuToken: j['skuToken']?.toString(),
+        // 缺键与 null 同样得到 null（后端 NON_NULL 下 price=null 是整键消失）——
+        // 两端在此对齐，hasPrice 随之为 false、整行不画。
+        price: (j['price'] as num?)?.toInt(),
         dailyGrams: (j['dailyGrams'] as num?)?.toInt(),
         remainingGrams: (j['remainingGrams'] as num?)?.toInt(),
         purchasedOn: DateTime.tryParse(j['purchasedOn']?.toString() ?? ''),

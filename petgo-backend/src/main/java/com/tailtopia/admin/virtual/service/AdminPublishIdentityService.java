@@ -63,6 +63,27 @@ public class AdminPublishIdentityService {
         this.audit = audit;
     }
 
+    /**
+     * 本次操作者能否**以运营真实账号身份**发布（V1.1.6 Story 12.1 · AC5 ②）。
+     *
+     * <p>🔴 与 {@code AdminPublishIdentityController.REAL_AUTH} 同一口径：
+     * 超管隐式全权，其余看有没有 {@code seed.publish_as_real}。
+     * 选虚拟账号发布不受它影响 —— 那条常用路径的门仍是 {@code virtual_account.manage}。
+     *
+     * <p>⚠️ <b>单条发布与批量四步流共用这一份</b>，刻意不各写一遍：
+     * 两处口径分叉的表现是「批量能发、单条发不了」（或反过来），而那种不一致很难被想到去查。
+     *
+     * <p>📌 V1.3.0 Story 7.6：原先它挂在 {@code admin.virtual.web.AdminSeedBatchController} 上，
+     * 那个轻量批量控制器随本 story 删除（能力已由 {@code /admin/seed-batches/**} 四步流承载），
+     * 方法迁到这里 —— 它本来就是发布身份的判定，放在身份服务上比放在一个页面控制器上更该在。
+     */
+    public static boolean mayPublishAsReal(com.tailtopia.admin.service.AdminUserDetails admin) {
+        return admin.getAuthorities().stream().anyMatch(a ->
+                "ROLE_SUPER_ADMIN".equals(a.getAuthority())
+                        || com.tailtopia.admin.account.domain.AdminPermissions.SEED_PUBLISH_AS_REAL
+                                .equals(a.getAuthority()));
+    }
+
     // ————————————————————— 读 —————————————————————
 
     /** 池内生效的真实账号，新纳入的在前。 */

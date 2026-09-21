@@ -24,10 +24,19 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 public class AdminUploadLimitAdvice {
 
     private final DataSize maxFileSize;
+    private final DataSize maxRequestSize;
 
     public AdminUploadLimitAdvice(
-            @Value("${spring.servlet.multipart.max-file-size:1MB}") DataSize maxFileSize) {
+            @Value("${spring.servlet.multipart.max-file-size:1MB}") DataSize maxFileSize,
+            @Value("${spring.servlet.multipart.max-request-size:10MB}") DataSize maxRequestSize) {
         this.maxFileSize = maxFileSize;
+        this.maxRequestSize = maxRequestSize;
+    }
+
+    /** 整个 multipart 请求的字节上限：多文件一次提交的表单（V1.3.0 Story 5.4 新建场所）让 JS 先算合计，超限根本不发出去。 */
+    @ModelAttribute("uploadMaxRequestBytes")
+    public long uploadMaxRequestBytes() {
+        return maxRequestSize.toBytes();
     }
 
     /** 字节数：给 JS 与 {@code file.size} 直接比。 */

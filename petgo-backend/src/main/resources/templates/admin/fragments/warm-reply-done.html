@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  A9 处置成功 fragment（V1.3.0 Story 4.4 AC4 / AC5，AD-9）：
+  · 有下一条：根元素 data-next-id → admin-workbench.js 自动选中下一条（右栏随之换成它的详情）；
+  · 没有下一条：不带 data-next-id / data-done（JS 不接管），右栏留在刚处置完的项（已跟进只读视图，运营刚发的回复标「审核中」），
+    并 oob 把左栏整体换成清空态「队列已清空 🎉」+ 其他队列去向；
+  · oob：被处置行删除（warm-replies-row-<id>）、两态计数替换、toast 到 #admin-toast-host。HX-Trigger: admin:badge-refresh 由 Controller 写。
+-->
+<body>
+<div th:fragment="done" class="wr-done" th:attr="data-next-id=${#strings.isEmpty(nextId)} ? null : ${nextId}">
+    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${message}">已提交</div>
+    <div th:replace="~{admin/fragments/warm-reply-detail :: detail}"></div>
+    <li th:id="'warm-replies-row-' + ${removedId}" hx-swap-oob="delete"></li>
+    <th:block th:if="${#strings.isEmpty(nextId)}">
+        <!-- innerHTML 整体替换：清掉别的运营已处理、本页未刷新的残留行，只留清空态 -->
+        <li class="q-empty" hx-swap-oob="innerHTML:#warm-replies-queue">
+            <div th:replace="~{admin/fragments/tpl-a-empty :: queueEmpty('warm-replies', null)}"></div>
+        </li>
+    </th:block>
+    <span id="warm-replies-tab-count-pending" class="tab-count" hx-swap-oob="true" th:text="${counts.get('pending')}">0</span>
+    <span id="warm-replies-tab-count-handled" class="tab-count" hx-swap-oob="true" th:text="${counts.get('handled')}">0</span>
+</div>
+</body>
+</html>

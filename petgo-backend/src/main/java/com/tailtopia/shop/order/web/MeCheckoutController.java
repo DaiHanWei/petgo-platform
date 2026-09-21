@@ -57,7 +57,8 @@ public class MeCheckoutController {
         var lines = payments.linesOf(order);
         return ShopOrderDetailView.of(order, lines, fulfillment.shipmentsOf(order.getId()),
                 lineImages.mainImageUrlBySkuId(lines.stream()
-                        .map(com.tailtopia.shop.order.domain.ShopOrderLine::getSkuId).toList()));
+                        .map(com.tailtopia.shop.order.domain.ShopOrderLine::getSkuId).toList()),
+                payments.intentOf(order).orElse(null));
     }
 
     /**

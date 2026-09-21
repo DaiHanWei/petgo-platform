@@ -1,0 +1,346 @@
+# generated: 2026-09-15
+# last_updated: 2026-09-15  # 24 条 story 文件全部生成
+# project: TailTopia V1.3.0 · 主题 batch-b1（场所发现与社交基建包）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.3.0
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.3.0/epics-v1.3.0-batch-b1.md (4 Epic / 24 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.3.0/architecture-v1.3.0-batch-b1-delta.md (AD-1~AD-10)
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.3.0/PRD-v1.3.0-batch-b1-places-social.md
+# 决策日志: {project-root}/_bmad-output/planning-artifacts/v1.3.0/决策日志-batch-b1.md (B1-D1~D13)
+# 代码核对报告: {project-root}/_bmad-output/planning-artifacts/v1.3.0/代码核对报告-batch-b1.md
+# ui: {project-root}/_bmad-output/planning-artifacts/v1.3.0/ui-v1.3.0-batch-b1-places-social.html (24 屏 / 5 泳道)
+#
+# 🔴 口径优先级：决策日志 > PRD > UI 稿。
+#    PRD 有两处已被推翻 —— 地图选型（B1-D9：OSM → Google，且只做显示+打自己的点）、
+#    Diary 推荐覆盖人群（B1-D2：扩到「声明未养宠/计划养宠」态）。
+#    UI 稿 2026-09-11 已按代码核对结论修订 4 处，稿内首屏有修订说明表。
+#
+# NOTE: 同一版本目录下 admin / batch-a / batch-b1 三个主题**各自独立成域**，
+#       Epic 号段可以重复。技能按本文件里的**完整 key** 取 story，不按 `<epic>-<n>` 前缀通配。
+#       **口头引用 story 必须带主题**（如「batch-b1 的 1-1」）。
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+# Retrospective: optional <-> done
+#
+# WORKFLOW NOTES:
+# ===============
+# - 2026-09-15：24 条 story 文件**已全部生成**，状态 ready-for-dev，可直接 bmad-dev-story
+# - Epic 首个 story 创建(create-story)时自动 -> in-progress
+# - 每 story 三段推进：后端 -> 前端 -> 联调（CLAUDE.md 纪律）
+# - 每条 AC 已标 L0(静态) / L1(集成) / L2(端到端) 层级
+# - ⚠️ 本批次 AC 里 **L2 占比近六成**（四个 epic 全是界面）。云端 headless 只跑到 L0 绿灯，
+#   L1/L2 留本地并在 Completion Notes 标注「待本地验收」。
+#   **建议分批回本地验收，不要等 24 条全跑完一次性看** —— 否则验收会堆成一座山。
+# - Dev 完成后转 review，再跑 code-review（建议新开 context）
+#
+# ===== Epic 依赖链（全后向，无环） =====
+# 零依赖、可立刻开工：Epic 1 · Epic 2（两者之间无硬依赖，可并行）
+# Epic 2 -> Epic 3        # @ 的点击落点是 2-1 交付的公开主页
+# Epic 2 -> Epic 4        # 宠物卡点击复用 2-3 交付的「宠物档案访客视图（站内入口）」，不新建通道
+# Epic 1 -> Epic 4        # 4-4 的宠物横滑行加在 1-1 已落地的场所入口行**之下**
+#                         #   （布局已在 UI 稿统一设计，不存在返工；这是顺序约束不是功能依赖）
+#
+# ===== 跨主题依赖（唯一一条，硬阻塞） =====
+# 后台 AB-17A「场所内容管理」—— 归 **admin 主题**，不在本文件的 story 序列里。
+#   ✅ 2026-09-14 已确认后台侧在做。
+#   ⚠️ 它是 App 端场所功能**上线**的硬依赖：没有它，场所上线后没人能下架违规场所、
+#      没人能合并重复条目；而本版**用户不可编辑场所**（2026-09-15 拍板），纠错只能走后台。
+#      不阻塞开发，阻塞发版 —— 见发版检查单 RC-4。
+#
+# ===== 发版检查单（RC-1~RC-4）不在本文件 =====
+# 定位权限商店合规 / 地图服务账号 / 冷启动数据 / 后台 AB-17A 四项**零代码零测试、验证全是 L2**，
+# 已从 story 序列摘出，放在 epics 文件末尾的「发版检查单」一节，归发版负责人。
+# 🔴 **不要**把它们加回本文件 —— 混进 sprint 的唯一后果是有人标成 done 而实际没人去点过那个表单。
+
+development_status:
+
+  # ===== Epic 1: 宠物友好场所发现 · FR-112（①~⑦⑨，不含⑧打卡）=====
+  # 零依赖起点。全新模块 place，前后端从零建（全仓现无任何场所/venue 实现）。
+  # 引入本批次唯一一处 App 新依赖：地图 SDK（使用边界见 AD-3，越界即计费）。
+  epic-1: in-progress
+  1-1-场所列表与场所本体建模: review                     # 建表(AD-1) + 列表接口 + 列表页 + 空态 + **首页场所入口**。入口与页面必须同条交付，否则页面不可达、无法验收
+                                                        # 2026-09-15 云端 L0 全绿 → review；迁移 V20260915_0409__init_places.sql；L1/L2 待本地验收（清单见 story Completion Notes）
+  1-2-按距离排序与定位权限: review                       # AD-2：经纬度范围粗筛 + 直线距离 + 两列索引；禁装地理扩展、禁接三方 LBS；「按距离」与「按最新」是两条独立查询分支
+                                                        # 2026-09-15 云端 L0 全绿 → review；迁移 V20260915_0458__add_places_geo_index.sql；新增依赖 geolocator
+                                                        # ⚠️ code-review 修掉一条 NFR-4 违反：坐标经 query string 进了落盘 access log（已按键打码）
+                                                        # L1/L2 待本地验收（含「贴 EXPLAIN 确认走索引」，清单见 story Completion Notes）
+  1-3-标记一个场所: review                               # 表单全集（7 类型 + 6 标签，UI 稿是示意省略）；必填未满时保存灰色禁用；**提交前告知不可修改**，服务端硬拒编辑接口
+                                                        # 2026-09-15 云端 L0 全绿 → review；无新迁移；AC5 用反射测试钉住「没有写端点」
+                                                        # ⚠️ code-review 修掉 9 条：内联错误死代码 / 兽医 token 能创建场所（已限 hasRole USER）/ 创建无幂等键（已接 Idempotency-Key）
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes）
+  1-4-地图选点: review                                   # 引入地图 SDK。🔴 只做「显示 + 打自己的点」，禁调搜索/地址解析/路线；地图只出现在选点弹层与详情页小地图两处
+                                                        # 2026-09-15 云端 L0 全绿 → review；无新迁移；新增依赖 google_maps_flutter
+                                                        # AC1/AC2/AC5 用 test/place/map_usage_boundary_test.dart 扫源码机械守（越界即计费，靠人看守不住）
+                                                        # ⚠️ 密钥两套走 env / gitignored 文件注入，仓库内零明文；RC-2（绑卡+申请密钥）未闭合但**不阻塞本 story**
+                                                        # L2 待本地验收（需真实密钥；清单见 story Completion Notes）
+  1-5-场所详情页: review                                  # 照片流/地址复制/小地图/举报。标记人本条内走**现有迷你卡**（Epic 2 退役时统一改），故不依赖 Epic 2
+                                                        # 2026-09-15 云端 L0 全绿 → review；新迁移 V20260915_0656__init_place_reports.sql（AD-8 独立表，不用多态外键）
+                                                        # 🔴 下架/不存在同一个 404（刻意不可区分）；AC6 的"没有"由 PlaceDetailResponseContractTest 反向钉死
+                                                        # 小地图是地图允许出现的**第二处也是最后一处**（全手势关闭 + liteMode），已进 map_usage_boundary_test 白名单
+                                                        # ⚠️ code-review 修掉 4 条：举报并发撞唯一约束 500 / 安卓缺 geo: 包可见性声明（在地图中打开永远只开网页）/ 详情族键把已渲染页面顶掉 / launchUrl 返回值被丢弃
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes）
+  1-6-灯箱抽成公共组件并接入场所照片: review             # 抽既有私有灯箱成公共件，内容详情页行为一字不变。**不等批次 A**（B1-D4）
+                                                        # 2026-09-15 云端 L0 全绿 → review；无迁移、不碰后端
+                                                        # 抽成 shared/widgets/photo_lightbox.dart；两条历史 bug（20260727-372 单图翻页 / 20260701-192 点图关闭）各钉一例测试
+                                                        # 🔴 刻意不与 case_image_viewer.dart 合并（那是兽医/IM/病例/商品四处在用的另一套）——统一属批次 A FR-115
+                                                        # AC3 后续动作以 photo_lightbox.dart 里的 TODO(批次A/FR-115) 记录
+                                                        # ⚠️ code-review 修掉 5 条：thumbWidth 死参数 / "原图"注释不实（服务端只发 1080 px，真原图会带 GPS）/ 死链一屏全黑 / 夹取没下沉进组件 / 测试吞掉全部异常
+                                                        # L2 待本地验收（清单见 story Completion Notes）
+  1-7-场所评论与二元态度: review                         # AD-8 独立建表 place_comments，不改既有 comments、不用多态外键；一级评论 only；**用户可自删自己的评论**（校验本人）
+                                                        # 2026-09-15 云端 L0 全绿 → review；新迁移 V20260915_0813__init_place_comments.sql
+                                                        # 🔴 表里没有 parent_id = 「只有一级」是结构性保证（实体/DTO/端点三层同样没有回复的位置）
+                                                        # 拉黑只做 R1（按查看者），**刻意没有 R2 影子评论**：场所没有主人，标记人连场所本身都改不了
+                                                        # 评论数接真值（viewer 维度、批量取）；两个态度计数仍为 0 → Story 1.8
+                                                        # ⚠️ code-review 修掉 4 条：兽医 token 被当成 users.id 读到未过审评论（安全）/ 注销级联漏了 place_comments（D1/D2）/ 两个零调用的状态迁移 / 发评论后详情计数不刷
+                                                        # 🔴 待 admin 主题：降级/高危评论目前一直挂 UNDER_REVIEW —— 入运营队列需扩 ReviewContentType（塞进现有 COMMENT 会让运营放行 comments 表里同号的别人评论）
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes）
+  1-8-推荐不推荐计数: review                             # AD-9 Redis 计数器 + DB 回算自愈。三个触发点：创建 / 用户自删 / 运营删下架。本版只展示不参与排序
+                                                        # 2026-09-15 云端 L0 全绿 → review；无新迁移
+                                                        # 🔴 计数只认 VISIBLE：先发后审之下「创建」那一刻评论还没过审，自增落在转可见那一刻（与 DB 回算口径逐字一致）
+                                                        # 触发点实际是四个：转可见 / 用户自删 / 运营下架 / 作者注销；删未过审的不减
+                                                        # 整页 MGET 一次取回（AC6）；AC2/AC4 用扫源码的机械检查守（不缓存整页、不参与排序降权警示）
+                                                        # ⚠️ code-review 修掉 4 条「丢一次增量就永久偏差」：写失败永不自愈→加 TTL 10min / 事务提交前改计数→afterCommit / 回算写回无条件覆盖→setIfAbsent / 负值被洗成 0→当缺失回算
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；自愈与 TTL 必须真 Redis 验）
+  1-9-他人为场所补充照片: review                         # 标注上传者；走既有上传链路 + 公开桶 + EXIF 剥离兜底
+                                                        # 2026-09-15 云端 L0 全绿 → review；新迁移 V20260915_0927__init_place_photos.sql
+                                                        # 🔴 **动了 Story 1.1 的结构**：照片从 places.photo_urls(JSONB 数组) 搬到独立表 place_photos，**并删掉了那一列**（单一事实源）
+                                                        #    理由：数组装不下「每张的上传者 + 每张自己的审核态 + 单张删除」——后两样在数组上做是读改写整个数组，两张同时过审必丢一条
+                                                        # ⚠️ 契约变更：详情的 photoUrls(字符串数组) → photos(带上传者的对象数组)，客户端已同步
+                                                        # 审核判定三分：PASS→可见 / 确定性违规→REJECTED 终态 / 三方降级→保持挂起（与评论那条有意不同：图审能把「确定」和「不知道」分开）
+                                                        # ⚠️ code-review 修掉 8 条：选图数写死 9 导致公开桶孤儿对象 / 上限把不可见行算进去（场所永远加不进新图）/ 被判死的照片一直标「审核中」/ 删除入口点不到 / 无上传中保护 / 可以把照片删到零张（场所不可编辑，删光就回不去了）/ 注销豁免判据按人判且 N+1 → 改 is_original 列 / 注入未用的依赖
+                                                        # 🔴 同 1-7 的待办：降级挂起的照片需 admin 主题扩 ReviewContentType 才能进运营队列
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes）
+  1-10-场所分享到站外: review                             # H5 直出 /place/{随机码} + OG + 唤起链 + 安卓深链声明。🔒 **审核通过前不下发 og:image**（预览图会被平台缓存，不随下架消失）
+                                                        # 2026-09-15 云端 L0 全绿 → review；无新迁移（只给 place_photos 加了一列 og_eligible，那个迁移尚未合入 main）
+                                                        # /place/{不可枚举 token} 服务端直出；下架/不存在统一 card_gone + 404 + noindex（不可区分）
+                                                        # 🔴 OG 预览图是对名片/里程碑「不放图」边界的**有意例外**（场所照片不含个人与宠物隐私）——理由写进代码且有测试钉着（AC4 原文要求）
+                                                        # 🔴 AC5 的门控判据是 og_eligible 而非 VISIBLE：标记时那批在三方 RISKY/DEGRADED 下照样对外展示（1.3 口径），但不给 og——预览卡会被平台缓存、下架也撤不回来
+                                                        # ⚠️ 新写的 deeplink_manifest_test 当场抓到存量漏网：tailtopia://post（V1.1.6 Story 9.3）从来没进过安卓清单，那条深链在安卓上一直不工作，已补
+                                                        # ⚠️ code-review 修掉 4 条：/place/ 没进 H5 错误页白名单（异常回 JSON 给站外访客，/c/ 同样漏了一并补）/ og 门控只判 VISIBLE 挡不住 RISKY-DEGRADED / 品牌图裂图（抄了 App 才有的文件名）/ 跨仓守门测试放在 App 仓但读后端文件，纯后端 PR 上根本不会跑
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes）
+
+  # ===== Epic 2: 用户公开主页 · FR-118 =====
+  # 零依赖。被 Epic 3（@ 落点）与 Epic 4（访客通道）依赖 —— 是本批次的关键路径，建议优先。
+  epic-2: in-progress
+  2-1-公开主页他人视角与迷你卡退役: review               # ⚠️ **刻意不拆小**：迷你卡上挂着举报/拉黑两个入口，先切入口后做抽屉会出现用户找不到举报拉黑的功能回退期
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3255 例真实失败 0 / 前端 analyze 0 issue、1675 例）
+                                                        # 新端点 GET /api/v1/users/{id}/profile；**无数据库迁移**（加入时间取既有 users.created_at；发帖总数复用既有统计）
+                                                        # 🔴 入口是**五处不是三处**：Dev Notes 那三处是 Epic 1 落地之前数的，本批次 1-5/1-7 又添了「场所详情标记人」「场所评论头像」两处（当时主页还不存在，先接的迷你卡）。五处一并收口，有守门测试钉 lib/ 零引用
+                                                        # 迷你卡组件与后端 /mini-profile 端点**保留但零引用**（AC2 原文是"不再被任何入口引用"而非删除；两者各挂着一批既有回归用例）。组件头部已标注"已退役"
+                                                        # 🔴 「id 不存在」与「已注销」改为**刻意不可区分**（同一个 200 + 空投影）：原先照抄迷你卡的"查不到→404"是**不可达分支**（findAuthorViews 会补齐匿名投影），其单测 stub 了线上到不了的状态属假绿。可区分 = 给了一个按 id 遍历确认谁注册过的枚举口子
+                                                        # ⚠️ code-review 修掉 3 条：publicProfileProvider 漏 isAutoDispose（Riverpod 3 family 默认 keep-alive → 同设备换账号 B 读到 A 的 self/reported，与 bug 20260730-421/446 同型）/ 上面那条不可达 404 + 假绿单测 / 自动重试没关（错误态自己横跳，用户点不到重试）
+                                                        # 埋点 entry 的 wire 值**仍是 mini_profile**（改版前后是同一条时间序列，换字面量会把曲线断成两截）
+                                                        # 内容网格/获赞总数(2-2)、宠物卡(2-3)、编辑资料(2-4)均未做；身份区下**刻意不摆空网格占位**
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes）
+  2-2-主页内容区与聚合计数: review                        # PUBLIC 混排 + 发帖总数（**已有可复用**）+ 获赞总数（本批次新补）；非 PUBLIC 服务端就不下发
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3271 例真实失败 0 / 前端 analyze 0 issue、1689 例）
+                                                        # 新端点 GET /api/v1/users/{id}/posts（游标分页）；**无数据库迁移、无冗余计数列**（AD-6：获赞总数是一条实时 SQL）
+                                                        # 🔴 顺带改掉一条既有口径：发帖总数原先没带 visibility，把私密内容也数了进去 —— 而它的两个出口（迷你卡 / 公开主页）都是他人视角，差值即"这人有几篇私密内容"。迷你卡端点一并跟上；作者自视（我的发布）一行未动
+                                                        # 网格从 me_page 的私有 _MyPostCard 抽成 shared/widgets/post_grid_tile.dart，两页共用（widget key myPost_* → postGridTile_*）
+                                                        # ⚠️ code-review 修掉 3 条：网格漏了 Feed 一直带着的两条隐藏排除（举报过的那一条 / 隐藏过的那个人）→ 举报过某人账号后进他主页，整片网格点进去全是 404；抽组件后留下的孤儿文档注释；注释里写错的测试文件名
+                                                        # 🔸 **一条自行判定的口径，建议本地确认**：上面那条隐藏排除只作用于网格、不作用于两个计数（计数说"这个人发了多少"，网格说"你能看到哪些"；访客知道自己隐藏过谁，所以不泄漏也不困惑）。story AC 与决策日志都没写到它
+                                                        # 宠物卡(2-3)、编辑资料(2-4)、被拉黑/注销空态(2-5) 均未做
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes）
+  2-3-宠物档案访客视图站内入口: review                    # 🔴 **共用件，Epic 4 复用**。AD-4：新建 petId 入口 + 复用 v1.1.6 那层只读投影；不下发对方宠物的分享 token；⚠️ 访客视图**没有日历**，别照旧稿补回去
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3285 例真实失败 0 / 前端 analyze 0 issue、1701 例）
+                                                        # 新端点 GET /api/v1/pets/{petId}/visitor/{profile,stats,timeline}（仅登录，靠"不写 permitAll"实现，没改安全配置）+ GET /api/v1/users/{id}/pet（宠物卡，游客可读，无档案回 204）
+                                                        # **无数据库迁移**。站内入口与分享入口落到同一层 VisitorProjectionService（AD-4 Rule 2），新增的只有一句 findVisibleProfileById
+                                                        # 🔴 拉黑守卫在主页/内容区/宠物卡/站内入口**各拦一次** —— 站内入口按 petId 直达，只拦主页等于留绕过口
+                                                        # ⚠️ 站内入口**根本没有 calendar/day 端点**，页面也没有切换行（测试断言映射恰好三条）
+                                                        # ⚠️ code-review 修掉 4 条：三个访客 provider 漏 isAutoDispose（换账号吃旧缓存 → 服务端拉黑守卫根本不被调用，与 bug 20260730-421/446 同型）/ return null 出去是 200 不是 204 / 为一个 Diary 数算了五条查询含两次健康表计数 / token ?? "" 把 fail-fast 变成畸形 URL
+                                                        # 🔸 **一条待产品确认的口径（本 story 按 AD-4 原样保留、未改）**：访客视图的 Diary 时间线含作者设为私密的条目（PRD §2.9 §② 的既有拍板，前提是"作者自己按下分享键"）。站内入口没有这个前提，而 ContentVisibility 把"他人主页"归在按 PUBLIC 过滤那一档 —— 两处口径在这个新入口上第一次撞上。缓解现状：私密条目点不开（openableByVisitor=false），但卡片文字与图片是渲染出来的
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes）
+  2-4-自己视角的主页: review                             # 同页两视角；「编辑资料」在身份行内与头像同行，不塞 AppBar；「我的」Tab 一行不改
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（前端 analyze 0 issue、1709 例；后端未动、3285 例真实失败 0）
+                                                        # **纯前端、无迁移**：self 字段 Story 2.1 就在下发了
+                                                        # 🔴 AC3 的「跳既有抽屉、不重画」靠**抽取**实现：资料编辑抽屉与 _InitialAvatar 从 me_page.dart 逐行抽成 me/presentation/profile_edit_sheet.dart 与 shared/widgets/initial_avatar.dart（复制一份的话两处细节会各改各的，且没有任何测试会红）。两条 L0 测试钉住「两处调同一个函数」「me_page 里不再有抽屉本体」
+                                                        # ⚠️ code-review 修掉 3 条 ref-after-await：主页 invalidate 缺 mounted 守卫（riverpod 3 真抛 StateError，release 也抛）/ 保存成功却不更新本地也不提示（异常被 catch(_) 吞）/ 换头像上传完 PATCH 根本没发。三条在「我的」Tab 上都碰不到（那个 Tab 常驻），但公开主页是可 pop 的路由，从此真实可达
+                                                        # 🔸 **一条既有缺陷，按 AC5「行为一字不改」有意保留**：抽屉里昵称清空时整表当 no-op，用户同时改的签名一并丢弃，且无校验提示、保存按钮不置灰。源码已标注，留给产品决定
+                                                        # L2 待本地验收（清单见 story Completion Notes；本 story 无 L1 项）
+  2-5-被拉黑者视角与已注销用户的主页: review             # 🔴 模糊空态**必须与「真的没有公开内容」复用同一组件同一文案**，否则一对比就能推断出被拉黑；判定在服务端
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3295 例真实失败 0 / 前端 analyze 0 issue、1715 例）。**无迁移**
+                                                        # 四条读路径加反向判据（isBlocked 参数掉过来，不新写查询）：/profile 两个计数归零 · /posts 空信封 · /users/{id}/pet 204 · /pets/{petId}/visitor/* 404+同一句 GONE_DETAIL（⚠️ 不是 403，403 等于明说"你被拉黑了"）
+                                                        # 🔴 AC2：服务端两种情况**逐字段相等**（测试直接 assertThat(blocked).isEqualTo(empty)），客户端压根没有"被拉黑"这个概念；空态文案按 UI 稿 C4 统一，三条守门测试钉住"不许分第二句"
+                                                        # AC6 的例外声明已写进 story Completion Notes：**对 V1.1.4 FR-94「被拉黑方完全无感」的有意例外、仅主页维度；1.1.4 文档不回改**
+                                                        # ⚠️ code-review 修掉 4 条：自己视角的空态在说胡话（共用那句"对方的隐私设置"）/ 畸形游标成了问答口（普通访客 422、被拉黑者 200 空页）/ /mini-profile 还在报真实 postCount（与 /profile 打架）/ 被删掉的文案守卫没补回来
+                                                        # 🔸 **一条固有限制，记录在案未自行改动**：三个主页端点都是 permitAll（2.1~2.3 的既定口径），去掉 Authorization 头就能看到真实计数与内容。但这不是本 story 新开的口子，也不是最容易那条路 —— AC4 明写 Feed 与评论区不屏蔽，被拉黑者本来就会在自己 Feed 里刷到对方的帖。要堵死得把主页整体改成登录可见（与 2.1~2.3 冲突），属产品取舍
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes）
+
+  # ===== Epic 3: @ 提及 · FR-119 =====
+  # 依赖 Epic 2（3-3 的跳转落点是 2-1 的公开主页）。
+  epic-3: in-progress
+  3-1-at候选集: review                                   # AD-10 独立建表。**维护逻辑是本条主体**：写入时机 / 裁剪策略 / 防无界增长，三者必须在 AC 里定死
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3316 例真实失败 0 / 前端 analyze 0 issue、1715 例）。**纯后端**
+                                                        # 迁移 V20260915_1402__init_mention_candidates.sql；新模块 com.tailtopia.mention
+                                                        # 🔴 AC2 两条口径定死：**写入**=随互动 @Async（消费既有 ContentLikedEvent/ContentCommentedEvent，content 侧零改动、AFTER_COMMIT）；**裁剪**=写入时顺手淘汰、每人留 50。表上界因此是硬的（用户数 × 50，与互动量无关），**没引任何调度中间件、连 @Scheduled 都没用**
+                                                        # ⚠️ 方向不是一律双向：评论双向 / 二级回复再多一对（「与我互相回复对话过」唯一落点）/ **点赞单向**（只有"赞过我的"，没有"我赞过的"）
+                                                        # 留 50 给 30 是刻意的冗余 —— 拉黑排除在查询时做，正好存 30 的话排掉 3 个就只剩 27
+                                                        # AC3 的双向拉黑排除走**既有统一出口**：在 UserHideRelationReader 上加了批量方法 hiddenEitherWay，没在 mention 模块自己写查询（AD-7）
+                                                        # AC4：一次取数**恰好三条查询**，与候选人数无关；AC5：端点没有任何查询参数（反射测试钉住），**没有全局用户搜索**
+                                                        # 注销级联（D1/D2）已接入 AccountDeletionService，**两个方向都物理删**
+                                                        # ⚠️ code-review 修掉 4 条：@Async 乱序到达让排序键倒退（→ GREATEST）/ 二级回复两对关系共用一个容错块，第一对失败会把"对话过"那一对整个跳过 / 为不展示的运营标签多查一次库（→ 新增 findAuthorViewsWithoutTags）/ SecurityConfig 漏 hasRole("USER")，兽医拿到 401 被客户端当成 token 过期强制登出
+                                                        # ⚠️ 存量互动**不回溯建表**：新表从上线起积累，再互动一次就有了
+                                                        # L1 待本地验收（清单见 story Completion Notes；本 story 无 L2 项）
+  3-2-at选择器与插入: review                             # 全新叠加层；仅在候选集内过滤（**不是搜索框**）；上限 5 人；🔴 **存 userId 不存昵称**
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3337 例真实失败 0 / 前端 analyze 0 issue、1763 例）
+                                                        # 迁移 V20260915_1429__add_mentioned_user_ids.sql：content_posts + comments 各加一列 mentioned_user_ids JSONB
+                                                        # 🔴 **刻意不建 mentions 表**：v1.1.6 AD-10 的先例是「不用多态外键」，而 mentions(target_type,target_id) 正是那个形状；
+                                                        #    要守住它就得建两张表、每张只装 ≤5 行 bigint。这份数据从不被独立查询（3.3 渲染 / 3.4 发通知都是那一行在手时才用），上限硬定 5
+                                                        # 存量一律 NULL、零回填（AD-10 Rule 6）；读取侧统一归一成空表，永不返回 null
+                                                        # 🔴 AD-10 Rule 3「@ 不到没打过交道的陌生人」做成**服务端闸门**：MentionSanitizer 与 mention_candidates 求交集。
+                                                        #    判据是「在不在这张表里」而不是「在下发的那 30 个里」（30 是展示口径、表里留 50；拿 30 卡会假拒 —— 选中瞬间被两个人顶到第 31）
+                                                        # 四类过滤只有「超过 5 人」报 422（产品规则该给反馈），其余（陌生人/自己/已注销/任一方向拉黑）**一律静默剔除** ——
+                                                        #    报错等于把「这个 id 存不存在 / 他有没有拉黑我 / 跟我互动过吗」做成逐个试探的问答口（同 2-5 口径）
+                                                        # 取数恰好三条批量查询、与人数无关（AD-6）；拉黑走 UserHideRelationReader 统一出口（AD-7）
+                                                        # 运营内容源 publishTrusted（Lark 定时发帖）**刻意不写 @ 名单**：@ 会发通知，运营账号批量发出去就是骚扰，且那条路径本就免审
+                                                        # 🔴 **给 3-4 的两条硬约束（已写进源码注释，别照记忆抄）**：① 非 PUBLIC 内容不得发 @ 通知 ——
+                                                        #    PRIVATE Diary 照样落名单（作者自视那条时间线要能高亮能点，3.3），但可见范围创建后不可改（FR-83 AC7），被 @ 的人永远打不开；
+                                                        #    判据用 visibility==PUBLIC，别用「有没有 mentionedUserIds」。② 挂起帖/挂起评论的通知落在「转可见那一刻」（同 approveComment 既有口径）
+                                                        # 前端 @ 数据层是**纯 Dart 类**（mention_draft.dart，不依赖 Flutter/Riverpod）：触发规则 / 上限 / 「删字之后还算不算」全在 L0 钉住
+                                                        #    触发要求 @ 在词首 —— 少了这条 user@mail.com 打到一半就弹人名；@ 绑定住在 PublishController 上（与正文同生同死），不在页面 State
+                                                        # AC2/AC3「不是搜索框」有机械守卫：打字不发任何网络请求 / 占位是「Cari nama…」非「搜索用户」/ 无放大镜 /
+                                                        #    筛不到说「没有匹配的名字」非「用户不存在」/ 候选为空不渲染过滤框 / 取数失败与无候选走同一个空态
+                                                        # ⚠️ code-review 修掉 4 条：插入绕过 maxLength（两处都中 → 200 字评论插长昵称成 218 字，服务端必拒而 toast 只说「发送失败请重试」，重试永远不成功）/
+                                                        #    服务端没与候选集求交（for 循环遍历 userId = 对任意陌生人的定向推送口）/ userIdsIn 裸 contains（@「An」删掉后写「@Ana」会给 An 发一条他不在其中的通知）/
+                                                        #    PRIVATE 内容的 @ 会被 3-4 通知出去（不改行为，把约束写进 javadoc 与调用点）
+                                                        # 🔸 **一条残留的已知不精确**：候选集里两人昵称一模一样时，一处 @同名 会把两个 id 都发出去（两人各收一条通知）。
+                                                        #    要分清得在文本里埋不可见标记或逐键维护区段偏移，代价远大于这点误差；已写进 userIdsIn 注释
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；L1 最重要的一条是「候选交集真的拦得住」+ JSONB 往返）
+  3-3-at的展示与跳转: review                             # 依赖 Epic 2。昵称按 userId 实时查（对方改名自动跟着变）；拉黑关系不高亮
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3350 例真实失败 0 / 前端 analyze 0 issue、1787 例）。**无迁移**（@ 名单 3-2 就已落库，本条只加读侧投影）
+                                                        # 🔴 可点与否**全在服务端判**（story Dev Notes）：新增 MentionView(userId, nickname, tappable) + MentionViewService；客户端没有任何 `if 被拉黑` 的分支
+                                                        #    不可点时**刻意不下发昵称** —— 给一个已拉黑他的人下发当前昵称等于把「对方改名了」告诉他；注销后按匿名化口径也不该再给身份
+                                                        #    但**仍然下发那一条（只留 id）**而不是整条省略：L0 能直接断言 tappable=false，而「省略」与「后端忘了算」长得一模一样
+                                                        # AC1 的「改名自动跟着变」靠每次实时查投影层，零缓存（护栏禁通用缓存层）
+                                                        # 取数形态：整页一次并集 resolveAll + 每条 pick，两条批量查询（昵称 + 双向拉黑），**游客只发一条**；评论区把内嵌二级回复一并并进那一次（逐条判是 80 次查询）
+                                                        # 三个出口都接上了：FeedItemResponse / ContentDetailResponse / CommentResponse。Feed 那个 DTO 有**四个**组装点（assemble / 顶置坑位 / 公开主页内容区 /「我的发布」）
+                                                        #    ⚠️ **刻意没有「不带 mentions」的窄重载** —— 留个短签名，下一个出口按自动补全挑了它就会让那一屏的 @ 全变纯文字，且无编译错误无测试兜底
+                                                        #    ⚠️ H5 分享页（SharedPostResponse）**不接**：站外访客没有 viewer 也无从判拉黑，且站外没有主页可跳
+                                                        # 前端 MentionText：没有可点片段时**退化成纯 Text**（顺带保住既有 find.text(comment.body) 的回归用例）；接入 Feed 卡片正文 / 详情页正文 / 评论正文三处
+                                                        #    点 @ 与「整块进详情 / 点整条评论=回复」靠**手势竞技场**分开（span 上的 recognizer 命中更深）—— 这是唯一一句靠框架行为的断言，单独一个文件钉着
+                                                        #    MasonryCard 的 onTapMention 为空则只渲染纯文字（共享件不给没有跳转语义的调用方凭空多一个可点片段）
+                                                        # AccountActionEntry 新增 mention（**只新增不改既有值**）；⚠️ mention_tapped 埋点属 **3-5 T2**，本条零上报
+                                                        # 拉黑收尾一律按**被 @ 的那个 userId**（通常不是卡片/评论作者，共用 onAuthorTap 会清错人）；详情页那处额外 bump 评论刷新信号，但**刻意不传 popContext**
+                                                        # ⚠️ code-review 修掉 7 条：① 渲染侧 @昵称 定位漏了词尾边界（写入侧有）→ @「An」后写「@Ana」被切成 @An + 孤零零的 a，点进去是错的人；两处判定已抽成同一份 MentionToken
+                                                        #    ② recognizer 在 build 里建又在 build 里 dispose → dispose 会 resolve(rejected)，按下到抬起之间任何无关重建都会让手势判负、**外层反而赢**（间歇性，点 @ 变成进详情）
+                                                        #    ③ 两人昵称一模一样时会把读者送进**确定错误**的主页 → 那一处一律不高亮 ④ 四个死重载会静默把 mentions 写成 null → 删除
+                                                        #    ⑤ 详情页 @ 拉黑后不刷新本页（那处 @ 仍可点、他的评论还挂着）⑥ 不可解析的 {@link} ⑦ 悬空 javadoc 把「要加字段就加在这里」顶掉了
+                                                        # 🔸 **一条已知取舍，建议本地/产品确认**：对方改名后历史 @ 退化成普通文字（不高亮、点不动，内容照常显示）——
+                                                        #    正文里存的是写入那一刻的「@旧昵称」，后端下发的是当前昵称，渲染侧定位不到那一段。数据层没问题（id 仍指对的人，3-4 通知不受影响），
+                                                        #    退化后的样子与 3-5「存量不回溯解析」完全一致。要彻底解决得在正文里埋可解析标记（AD-10 Rule 4 允许的另一种形态），
+                                                        #    那意味着改掉 3-2 已落库的正文格式并连带审核/搜索/H5分享/通知预览等所有拿 body 当纯文本的地方 —— 未自行改动
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；L1 最重要的是「改名后昵称跟着变」与「整页恰好两条查询」）
+  3-4-被at的通知: review                                 # 🔴 新增通知类型必须 **DROP + ADD 重列 CHECK 全集**，取值以代码枚举为唯一权威 + 复查并行分支。**此处已出过四次事故，是验收条件不是提醒**
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3381 例真实失败 0 / 前端 analyze 0 issue、1798 例）
+                                                        # 迁移 V20260915_1614__rebuild_ck_notifications_type_with_mention.sql（第五次重建，31 值全集）
+                                                        # 🔴 AC1 三步都做了：① 逐个照抄 NotificationType.java（30+1=31）② 远端只有 main 与本分支，main 的枚举与本树逐字节相同、迁移集合是本树真子集 → 无并行分支新类型
+                                                        #    ③ DROP + ADD 重列，不打补丁、不照抄上一份清单
+                                                        # 🔴 **并且把这条 AC 做成了 L0 机械检查**（MentionNotifyTest）：迁移清单与枚举**双向相等** + 数量相等；
+                                                        #    判据是「**版本序最后那一条**重建该约束的迁移」而非写死文件名（谁排最后谁说了算 —— 这正是四次事故的机理）；
+                                                        #    还断言那条迁移确实是 DROP IF EXISTS + ADD ... CHECK（「在旧清单上打补丁」是四次事故的共同形状）。
+                                                        #    **下一个人加类型忘了重列，L0 就红**，不用等 staging 起不来
+                                                        # 🔴 一个类型 + targetRef variant（AD-10 Rule 5「新增一个通知类型」）：POST:{postId} / COMMENT:{postId}，沿用 NAME_RESET / LIFECYCLE_* 范式
+                                                        #    ⚠️ targetRef 里是 **postId 不是 commentId**（要跳帖子详情，评论区靠锚点）；深链锚点判定**不走 commentAnchor 参数**（那个只为 CONTENT_COMMENTED 而设），
+                                                        #    自己从前缀读 → 列表点击与系统推送两条路径同口径；🛡 认不出前缀/缺 ref/id 非数字一律落通知中心，绝不拼 /content/POST:12
+                                                        # AC3：推送走 sendWithCopy（send 只认 notify.<TYPE>.body 一句静态话，一个 type 就只能有一句）；四份 properties 各补 4 条；
+                                                        #    条目由 App 按 type + variant 本地化（en/id 双表），**不读后端下发的 title/body**；有测试逐键断言印尼语串里没有任何中文
+                                                        # 🔴 发布时机 = **变成别人看得见的那一刻**（三个落点：publish 正常分支 / approveReview / publishCommented）——
+                                                        #    挂起分支刻意不发（点进去 404）；**非 PUBLIC 一律不发**（两条路径都判；PRIVATE 照样落名单是 3-3 高亮的前提）；运营免审发布不带名单故天然不发
+                                                        # 🔴 AC5 三条判据：① actor↔收件人**任一方向**（批量走 hiddenEitherWay）② 内容作者拉黑 actor（R2，提到循环外只判一次）
+                                                        #    ③ 收件人拉黑内容作者（那条内容对他 404）。正文提及里 ③ 与 ① 同义故显式跳过不白查；抑制写在 listener，**绝不写进 NotificationService.send**（12 个调用点的系统通知会被一起掐）
+                                                        # AC6：图标 alternate_email_rounded + (mint, cream2)，与兽医回复同色系
+                                                        # ⚠️ code-review 修掉 4 条：收件人拉黑帖主时仍会发（点进去 404，拉黑等于漏了）/ 评论里的 @ 没判帖子可见范围（与 publishMentioned 那条不变式打架）/
+                                                        #    AC5 只判了单向（挂起帖过审可能几小时后，这中间 actor 可以拉黑对方）/ 新加的私有辅助把路由映射契约那段文档顶成了悬空注释
+                                                        # 🔸 **本 story 零埋点上报**：mention_inserted / mention_tapped 属 **3-5 T2**
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；L1 最重要的两条是「迁移应用后服务起得来」与「写一条 CONTENT_MENTIONED 不报 23514」）
+  3-5-at的存量与删除后边界: review                        # 存量不回溯；删除后通知不撤回 → 「内容已删除」统一空态；埋点属性禁含自由文本
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（前端 analyze 0 issue、1812 例；**纯前端、无迁移、后端一行未动**）
+                                                        # AC4：mention_inserted / mention_tapped，属性**只有一个 context**（post / comment）。被 5 人上限或字数上限拦住的那次**不报**（漏斗分母是曝光不是点击）
+                                                        #    mention_tapped 由 MentionText **自己发**，不交给三个调用点 —— 交出去的话下一个接入点忘了发就是看板少一截，而没有任何东西会报错
+                                                        #    埋点守卫已同步注册：新模块前缀 mention_（横跨五处界面，挂任何单页前缀都会误导，同 phone_/push_/login_ 的入表理由）+ 新动作后缀 _inserted
+                                                        #    ⚠️ _inserted 刻意不用 _selected：选中但没插进去也叫 selected，这里要数的是**结果**
+                                                        # AC1 三道机械守卫：客户端绝不自己扫文本找 @（存量文本整段纯文字、零 recognizer、点了不报事件）/ 没有任何迁移回填 mentioned_user_ids / 后端存量读出来是空表（3-2 已钉）
+                                                        # AC3：机械判据 —— ContentModerationService / ManualReviewGate 源码里不许出现任何 mention 字样（塞进审核入参就红）
+                                                        # AC2：**复用既有统一空态，不为 @ 另开一个**。深链 → /content/{postId} → 404 → detailGoneTitle（既有用例一直钉着）；
+                                                        #    本 story 加的是反向守卫：失效态仍只有三种、_errorBody 里无 mention、ContentLoadErrorKind 没多取值
+                                                        # 🔸 **一条对 AC2 字面读法的说明，建议本地/产品确认**：帖子被删 → 统一空态 ✅；**只删评论**（帖子还在）→ 落该帖评论区、**没有**额外空态 ——
+                                                        #    那条帖子是可达的，说「内容已删除」是错的。要给「那条评论没了」得让客户端知道 commentId 并能查它存不存在，
+                                                        #    而 targetRef 刻意只带 postId（3-4 的口径）。未自行扩大改动；若产品要的是前者，属 targetRef 契约 + 新端点的独立决策
+                                                        # ⚠️ code-review 修掉 2 条：① 两个事件用**常量**写 → 对所有埋点守卫隐身（v112 命名检查与 v140 的 NFR-5 全局 PII 体检都是正则扫源码字面量），
+                                                        #    且 mention_ / _inserted 从未注册进白名单 —— 改回字面量 + 正式注册 + 加一条「调用点必须是字面量」的用例
+                                                        #    ② context 是自由 String（插值一个昵称进来既编译得过也过得了脱敏，因为 context 不在任何黑名单上）→ 换成枚举 MentionContext，类型系统就是那道红线
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；L1 必须在**真 PostHog 后台**看属性 —— 「属性被脱敏层整键丢掉」在端上是静默的）
+
+  # ===== Epic 4: 逛别人家的毛孩子 · FR-121 + FR-112.4（顶部统一区另一半）=====
+  # 依赖 Epic 2（复用 2-3 的访客视图入口，不新建通道）；4-4 需 1-1 的场所入口行已落地。
+  epic-4: in-progress
+  4-1-推荐规则与宠物卡: review                            # 近 14 天公开 Diary 帖 + 有头像 + 公开记录≥3；**不复用 FR-95 打分**。⚠️ 实时 SQL（不许加缓存）→ 必须给索引方案并贴执行计划；降级只许 @Scheduled 落表
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3405 例真实失败 0 / 前端 analyze 0 issue、1835 例）
+                                                        # 迁移 V20260915_1727__add_pet_recommendation_index.sql（两条**部分索引**，谓词已下推 → 索引里只剩 (pet_id, created_at)）
+                                                        # 候选查询是 CTE 形态：candidates（GROUP BY + HAVING 两个门槛）LEFT JOIN 预聚合的 liked（点赞数）；排序 date(last_at) DESC, interactions DESC, ...
+                                                        #    「同日」按日期截断分桶 —— 不截断的话同一天先发的永远排后面、互动量那一半永远用不上
+                                                        # AC3 六条边界各一条 L0 用例：没头像 / 已注销 / **被封号** / 任一方向拉黑 / 自己的宠物 / 档案已删 —— 拉黑走 hiddenEitherWay（AD-7 单一出口，双向）
+                                                        # AC4：大图（最近一张公开照片）与小圆头像（PetProfile.avatarUrl）是**两个字段两个来源**（UX-DR15）；AC5 落 /pets/{petId} 复用 2-3 站内入口，**不下发 cardToken**（AD-4）
+                                                        # AC6：推荐区追加在既有引导之下，「+ 建档」「Ubah status」原样保留；取不到 / 池子为空 → **整块不渲染且版面不变**
+                                                        # ⚠️ code-review 修掉 6 条：① 卡片在 360/375/390dp 溢出（「一起 238 天」被裁）→ 大图 AspectRatio(1) 改 Expanded，新增三宽度用例（旧版面下必红，已反向验证）
+                                                        #    ② owner 过滤只判注销漏了**封号**，而落地页用的是 isActive → 推荐位里那只宠物**点进去 404**；新增 AccountQueryService.activeIdsAmong（批量版 isActive，判据逐字相同）
+                                                        #    ③ 互动量子查询只按 pet_id 数点赞 → 私密/已删/DAILY 帖的点赞在影响**公开**推荐位排序（高赞帖改私密后仍稳坐第一）；现在与候选同一套谓词并有源码级守卫
+                                                        #    ④ 相关子查询=每候选执行一次 → 改预聚合 CTE + hash join，并用 IN (SELECT pet_id FROM candidates) 把范围收在候选集内
+                                                        #    ⑤ 大图没有 errorBuilder（图挂了一块白 + 抛 NetworkImageLoadException）→ 落回爪印占位 ⑥ _EmptyProfileView 无条件换版面，与旁边「引导一字未改」自相矛盾 → 只在真有卡时换
+                                                        # ⚠️ code-review 第二轮（复审，审查者起临时 postgres 真跑了迁移与 SQL）再修 3 条 + 升 1 条为 L1 决策：
+                                                        #    ⑦ date(c.last_at) 的「同日」吃**会话时区**（生产是 UTC）→ 雅加达 00:00–07:00 的帖算进前一天、AC1 的「同日按互动量」静默失效（实测 1 赞排到 3 赞前）→ 改 AT TIME ZONE 'Asia/Jakarta'（与 ScheduleWindow.WIB 同口径）
+                                                        #    ⑧ 封面索引谓词的 jsonb_array_length 对非数组 jsonb **抛错**：库里一旦有一行非数组，这类行再也插不进去、CREATE INDEX 也失败 → **迁移中断 → 启动即拒**；查询与索引两处都加 jsonb_typeof='array' 且必须在取长度之前
+                                                        #    ⑨ petRecommendationsProvider 常驻（Riverpod 3 legacy 默认不 autoDispose）且从不 invalidate → AC3 的拉黑/封号过滤只在本进程第一次取数时生效（拉黑完回 Diary 卡还在、点进去 403）→ autoDispose + onAuthorHidden 里 invalidate
+                                                        #    🔴 ⑩ **未修，升为 L1 决策项**：liked 段是主要成本（实测 EXPLAIN ANALYZE ~205ms，其中 ~200ms 是 content_posts 17.5 万行 + content_likes 10 万行两次 Seq Scan），且排序键含 interactions、LIMIT 在排序之后 → 必须先算每个候选的互动量，没有捷径。
+                                                        #       本轮只做不改口径的优化（idx_content_posts_pet_recommend 加第三列 id，让点赞归并走 index-only scan）。AC2 允许的降级只有 @Scheduled 落表，而「扛不住」须以真库实测为判据 → **未自行降级、未自行改口径**
+                                                        # 🔸 **一条建议埋点/产品确认**：pet_card_tapped 由 AC7 与架构 §4.2 明写，但与 FR-92 H5 名片那组 pet_card_* **共用前缀**；按 AC 原样落地、未擅自改名（改名只动调用点一行 + 两条用例）
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；**L1 最重要的是 AC2 的 EXPLAIN** —— 云端无 postgres，两条部分索引是否真被选中只能对真库验；扛不住时允许的降级只有 @Scheduled 落表）
+  4-2-diary声明未养宠态也看到推荐: review                  # B1-D2 对 PRD 原文的扩展：代码里有**两种**无档案状态，PRD 只写了未建档那一种。游客态不动
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（前端 analyze 0 issue、1848 例；**纯前端、无迁移、后端一行未动**）
+                                                        # _NonOwnerView 改 ConsumerWidget，在既有引导之下追加 4.1 的 PetRecommendationGrid —— 组件/接口/卡片全部复用，零新增接口
+                                                        # PLANNING / ENTHUSIAST 各一条用例：两者折叠到同一个 DiaryUserState.nonOwner 分支（AD-15 单一判定），但 AC1 说的是两种人，用例按人写
+                                                        # 🛡 版面只在**真有卡**时才换（与 4.1 同一条纪律）：池子空 / 取不到 / 加载中 → 整块不渲染且这一屏与改动前逐像素相同；真有卡才换滚动容器（否则「Ubah status」被网格挤出可视区）
+                                                        # AC2 游客态：DiaryGuestPage 一行未改，除 widget 用例外另加**源码级**守卫（diary_guest_page.dart 里不许出现 PetRecommendationGrid / RecommendedPet / pet_card_tapped）
+                                                        # AC3：新常量 kPetRecommendFromDiaryNonOwner='diary_non_owner'，与 4.1 的 diary_empty **是两个值**（有用例直接断言两者不等）；事件名与属性形状不变，不加新属性
+                                                        # code-review：本 story 改动无 CONFIRMED finding；同一轮对 4.1 提的 4 条见 4-1 那一节（其中 provider autoDispose + 拉黑收尾 invalidate 对本屏同样生效，两屏共用同一个 provider）
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；另依赖 4.1 的 AC2 EXPLAIN —— 同一个接口）
+  4-3-全屏推荐集合页: review                              # 2 列网格 + 分页 + 空态；**「查看全部」入口由本条一并加上**（它的落点是本条才交付的页面，放 4-1 会成前向依赖）
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（后端 3420 例真实失败 0 / 前端 analyze 0 issue、1871 例）；**无新增迁移**
+                                                        # 🔴 Dev Notes 写「推荐接口加分页参数即可」，实际不是加个参数：AC1 的排序是 (WIB 日期桶, 互动量, 最后发帖时刻, petId) 四层，游标必须是**整个排序键**
+                                                        #    只带 petId 等于假设按 id 排序 → 第二页从与排序无关的位置开始（重复 + 另一批永远刷不到，即 KeysetCursor 注释里记的那类事故）
+                                                        #    → 新增 PetRecommendCursor（base64url 三元组，对外不可枚举、客户端原样回传）+ 候选查询的行比较 WHERE (桶,互动量,时刻,petId) < (…) + Page 信封加 nextCursor/hasMore
+                                                        # hasMore **两条判据**：这一页装满了 或 候选池给满了（只看前者的表现是「一页里被过滤掉几个就再也翻不动」）；游标取自最后**看过**的候选（越过必然被过滤的行）
+                                                        # AC1：「查看全部」加在 PetRecommendationGrid 的网格**下面**（UX-DR14「页面最下面」）→ 4.1 与 4.2 两屏同时有了它（共用组件）；池子为空整块不渲染 → 也就没有这个入口
+                                                        # AC2：路由 /pet-recommendations（**不是** /pets/recommendations —— 那会被 /pets/:petId 抢成 petId='recommendations'）；卡片是 4.1 那个组件**本体**
+                                                        #    ⚠️ 按 Dev Notes **没有**塞进 _controlledLocations（4.4 要从首页加入口、首页游客也能进；塞进去对游客就是 redirect 回 /home 的死路）——有 L0 用例钉着
+                                                        # AC3 三种形态各自不同：第一页失败=整屏错误态+重试 / **翻页失败=已加载的一只不动+底部重试**（F13）/ 池子为空=空态（不是错误态）
+                                                        # ⚠️ code-review 修掉 4 条（全在前端，都是「客户端没按后端契约来」）：
+                                                        #    ① items.isEmpty 就摆空态、没看 hasMore → 服务端「一页全被过滤掉」时回的正是空 items+游标+hasMore=true，于是永久停在「还没有宠物」，而空态里没网格没滚动、**没有任何东西能触发下一页**
+                                                        #    ② loadMore 只挂滚动回调 → 「1 只 + hasMore」时 maxScrollExtent 只有十几像素（实测 15.8px），用户滚不动、回调一次不发，池子后面永远刷不出来 → 改成每帧渲染完回头看一眼，判据与触底逐字相同
+                                                        #    ③ 底部重试没走 setState + 重复失败时新旧 AsyncData **值相等**（Riverpod 跳过通知）→ 重试不转圈、再失败毫无反馈；三处触发改走同一个出口
+                                                        #    ④ 新路由被插在 VisitorArchiveView 的注释块与它描述的 GoRoute 之间 → 两段互相矛盾的登录门控说明
+                                                        #    🛡 两条自动续抓路径都**有上限**（maxChainedFetches / maxAutoEmptyRounds）：没有上限就是用户什么都没做却不停发请求的死循环；额度用完仍为空 → 按空态处理，不留永远转不完的圈
+                                                        # 🔸 **一条建议埋点确认**：AC5 的 explore_grid 按原文照抄，但这一屏是从 Diary 进的全屏集合页，与 4.4 的探索 Tab 横滑行是两个位置；若看板上 explore_* 专指探索 Tab，请给这一屏另一个值
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；**L1 最重要的是「第二页真的接着第一页」与带 cursor 的查询是否仍走 idx_content_posts_pet_recommend** —— 与 4-1 的 EXPLAIN 一起做）
+  4-4-探索tab顶部宠物横滑行: review                        # 加在 1-1 已落地的场所入口行**之下**；两模块分层清晰不叠一堆；推荐池为空时整行不渲染
+                                                        # 2026-09-15 云端 dev-story 完成，L0 全绿（前端 analyze 0 issue、1886 例；**纯前端、无迁移、后端一行未动**）
+                                                        # 🔴 **游客态是本 story 定的**（Dev Notes 要求写进 Completion Notes）：整行不渲染，且**一个请求都不发** ——
+                                                        #    推荐接口在 /me 下仅登录可用，游客发过去拿 401，而 401 会弹**全局强登录窗**（= 游客一开首页就被登录弹窗糊脸，V1.1.6 Story 2.4 立过这条）
+                                                        #    ⚠️ 判空必须写在 ref.watch 之前；有用例专钉「游客 calls == 0」，不是只钉「看不见」
+                                                        #    🛡 4.3 的集合页路由本身对游客开放（当时为本条留的余地），但本版游客走不到那个入口；将来要给游客看推荐，需要的是**一个对游客放行的接口**，不是删掉这里的判空
+                                                        # AC1/AC2：插在 _BerandaTop 的场所入口行之下、chips 之上（用例按 y 坐标钉顺序）；卡片是 4.1 那个组件**本体**，宽 150（露出半张=可滑的暗示）；「查看全部」落 4.3
+                                                        # AC3：游客 / 池子空 / 取不到 / 加载中 → 整行不渲染，不留空占位不摆错误态；AC4：from=explore_strip，与另三处两两不同
+                                                        # ⚠️ code-review 修掉 4 条：
+                                                        #    ① 下拉刷新漏了推荐行 → 那条 provider 关了自动重试又被**常驻首页**钉着不回收，**断网启动**那次失败会让整行永久消失、只能杀进程（实测）→ 下拉一并 invalidate
+                                                        #    ② 常驻首页无条件 watch 使 **autoDispose 形同失效**（4.1 那条保障作废）：从场所详情/评论区拉黑（**不走** author_moderation_callbacks）后他家宠物卡留到重启、点进去 403 →
+                                                        #       抽出单一出口 invalidatePetRecommendations，挂在**每一处真正调 block() 的地方**（迷你卡/公开主页/举报后隐藏收尾），并有源码级守卫钉这三处
+                                                        #    ③ 「查看全部」热区实测 131.8×**22.0**，违反 UX-DR16（≥44×44；同屏两个同类入口都做到 ≈48）→ ConstrainedBox(min 44×44)，用例量**实际尺寸**（按 key 点击钉不出这条）
+                                                        #    ④ story 文件与本表未更新（Dev Notes 明确要求把游客态决策写进 Completion Notes）→ 本次补上
+                                                        # 🔴 **L1 性能（与 4-1 的 EXPLAIN 合并做）**：本条把那条不可缓存的实时聚合从「Diary 未建档用户偶发」变成「**每个登录用户每次启动首页**」，负载画像变了，必须按新口径在 staging 重看执行计划
+                                                        #    ⚠️ 横滑行与 Diary 两处**共用同一个 provider**，一次启动只一个请求；取 DEFAULT_LIMIT=10（在 AC1 的 6~10 内）
+                                                        #    🔸 扛不住时**先**给横滑行显式 limit=6（后端 MIN_CANDIDATE_POOL 注释本就按「4-4 只要 6 张」写的），再考虑 AC2 允许的 @Scheduled 落表降级 —— 两者都属产品/架构决策，云端未自行做
+                                                        # L1/L2 待本地验收（清单见 story Completion Notes；L2 含 T4 回归：通知铃角标 / 分类切换 / 游客态「Masuk」）

@@ -40,6 +40,20 @@ public class ShopCartItem {
     @Column(name = "trigger_type", length = 32)
     private String triggerType;
 
+    /**
+     * 是否勾选结算（Story 4-1，SHOP-FR-04 / AD-S6）。
+     *
+     * <p>🔴 <b>默认 {@code true} 是老版本兼容的依据</b>（SHOP-NFR-04）：线上老版本 App
+     * 从不调选择端点，它必须看到每一行都是选中态，整个结算链路与本次改动前逐项一致。
+     * 列是 {@code BOOLEAN NOT NULL}，所以字段用基本类型 {@code boolean}（不是 {@code Boolean}）
+     * —— {@code ddl-auto=validate} 会在这上面较真。
+     *
+     * <p>🔴 <b>勾选与「能不能买」是两件事</b>：勾一个已售罄的行不报错，
+     * 它只是不会被计入选中合计（失效判定读时进行、不落库，见 {@code CartService.view}）。
+     */
+    @Column(name = "selected", nullable = false)
+    private boolean selected = true;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -62,6 +76,9 @@ public class ShopCartItem {
         i.qty = qty;
         i.entrySource = entrySource;
         i.triggerType = triggerType;
+        // 🔴 新加购的行默认选中 —— 用户刚点了「加入购物车」，他当然是想买它。
+        //    两个 of(...) 工厂都走这里，不存在「只改了一个重载」的漏网路径。
+        i.selected = true;
         i.createdAt = Instant.now();
         i.updatedAt = i.createdAt;
         return i;
@@ -92,6 +109,15 @@ public class ShopCartItem {
 
     public void setQty(int qty) {
         this.qty = qty;
+        this.updatedAt = Instant.now();
+    }
+
+    public boolean isSelected() {
+        return selected;
+    }
+
+    public void setSelected(boolean selected) {
+        this.selected = selected;
         this.updatedAt = Instant.now();
     }
 

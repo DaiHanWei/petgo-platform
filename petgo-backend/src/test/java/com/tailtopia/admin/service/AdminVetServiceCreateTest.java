@@ -17,6 +17,7 @@ import com.tailtopia.shared.im.TencentImClient;
 import com.tailtopia.vet.domain.VetAccount;
 import com.tailtopia.vet.service.VetAccountService;
 import com.tailtopia.vet.service.VetPresenceService;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -29,18 +30,23 @@ class AdminVetServiceCreateTest {
     private VetQualificationService vetQual;
     private AdminAuditService audit;
     private AdminVetService service;
+    /** V1.3.0 Story 9.1b：列表的均分 / 已评 / 总量改由评分总览一次给出（原来是每行一次 forVet）。 */
+    private com.tailtopia.admin.rating.service.AdminRatingService ratingService;
 
     @BeforeEach
     void setUp() {
         vetAccounts = mock(VetAccountService.class);
         vetQual = mock(VetQualificationService.class);
         audit = mock(AdminAuditService.class);
+        ratingService = mock(com.tailtopia.admin.rating.service.AdminRatingService.class);
+        when(ratingService.overview(any(), any(), any())).thenReturn(List.of());
         service = new AdminVetService(vetAccounts, mock(ConsultRatingQueryService.class),
                 mock(VetPresenceService.class), mock(ConsultInterruptService.class),
                 mock(TencentImClient.class), vetQual, audit,
                 mock(com.tailtopia.consult.service.ConsultQualityQueryService.class),
                 mock(com.tailtopia.shared.media.AliyunOssClient.class),
-                mock(com.tailtopia.shared.media.MediaProperties.class));
+                mock(com.tailtopia.shared.media.MediaProperties.class),
+                ratingService);
     }
 
     @Test

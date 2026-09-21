@@ -343,7 +343,6 @@ class AdminShareRewardConfigIntegrationTest extends ApiIntegrationTest {
                         .param("vetConsultPrice", "1")
                         .param("vetShareRate", "1")
                         .param("aiUnlockPrice", "1")
-                        .param("idHdDownloadPrice", "1")
                         .param("monthlyFreeQuota", "1"))
                 .andExpect(status().isForbidden());
     }

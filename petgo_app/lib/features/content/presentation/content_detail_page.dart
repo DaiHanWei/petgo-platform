@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
+import '../../../shared/media/image_lightbox.dart';
+import '../../../shared/utils/date_format.dart';
+import '../../mention/domain/mention_context.dart';
+import '../../mention/presentation/mention_text.dart';
+import '../../social/domain/account_action_entry.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/user_tag_row.dart';
 import '../../../shared/widgets/content_tag_chip.dart';
 import '../domain/content_tag.dart';
+import '../domain/detail_bottom_bar.dart';
+import '../domain/detail_image_layout.dart';
+import '../domain/feed_image_layout.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/colors.dart';
@@ -16,7 +24,7 @@ import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/app_image.dart';
 import '../../../shared/widgets/letter_avatar.dart';
-import '../../../shared/widgets/mini_profile_sheet.dart';
+import '../../user_profile/presentation/public_profile_page.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../data/detail_repository.dart';
 import '../domain/content_detail.dart';
@@ -27,7 +35,6 @@ import 'comment_section.dart';
 import 'detail_providers.dart';
 import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
-import 'like_button.dart';
 import 'report_sheet.dart';
 import 'share_card/open_share_card.dart';
 
@@ -129,80 +136,143 @@ class _DetailScaffold extends ConsumerWidget {
           children: [
             Expanded(
               // 点空白 / 滚动 → 收起评论键盘（仅返回键收回的体验问题修复）。
-              child: GestureDetector(
+              // 🔴 图片区的高度护栏要「滚动视口的实际高度」。在这里量最准：
+              // AppBar 与常驻底栏（CommentComposer）都已被外层扣掉，护栏里不必再减一次
+              // —— 重复扣就是 Feed 那次实机复核抓到的同类错误（AD-A11 / Story 2.2 · AC3）。
+              child: LayoutBuilder(
+                builder: (context, viewport) => GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onTap: () => FocusScope.of(context).unfocus(),
                 child: SingleChildScrollView(
                   keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.all(AppSpacing.screenEdge),
+                  // 🔴 横向 padding 从这里撤到各子块上：图片要**通栏全宽出血**（AC2），
+                  // 留在这里会让图片两侧各缩进一个 screenEdge —— 那正是本 story 要消灭的「两侧留边」。
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.screenEdge),
                   child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _authorRow(context, ref, l10n),
-                    const SizedBox(height: AppSpacing.md),
-                    if (detail.body != null && detail.body!.isNotEmpty)
-                      Text(detail.body!, style: AppTypography.body),
-                    // V1.1.6 Story 5.2：装饰标签的位置**按有无配图切换**（FR-75）。
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
+                      child: _authorRow(context, ref, l10n),
+                    ),
+                    // V1.3.0 Story 2.2 · AC1：元素顺序为 作者行 → **图片** → 文字 → 互动栏 → 评论区。
+                    // 图片前置的理由：详情页是「看图」的页面，正文在图上面会把图挤到首屏之外。
                     if (detail.imageUrls.isNotEmpty) ...[
                       const SizedBox(height: AppSpacing.md),
-                      // 有图 → 叠在首图角落。
+                      // V1.1.6 Story 5.2：装饰标签叠在首图角落（有图时的位置，FR-75）。
+                      // ⚠️ 刻意**不**包 Padding —— 通栏出血就是靠这一层缺席实现的。
                       _ImageCarousel(
                         urls: detail.imageUrls,
+                        sizes: detail.imageSizes,
+                        viewportHeight: viewport.maxHeight,
                         decorationTags: detail.decorationTags,
-                      ),
-                    ] else if (detail.decorationTags.isNotEmpty) ...[
-                      // 无图 → 正文下方**单独一行**小胶囊。
-                      const SizedBox(height: AppSpacing.sm),
-                      Wrap(
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        children: [
-                          for (final t in detail.decorationTags) ContentTagChip.inline(tag: t, position: 'detail'),
-                        ],
+                        // 前缀带上帖子 id：同一屏里不会有第二个同 tag 的 Hero。
+                        heroTagPrefix: 'content_detail_${detail.id}',
                       ),
                     ],
-                    const SizedBox(height: AppSpacing.md),
-                    _interactionBar(ref),
-                    const Divider(height: AppSpacing.xl, color: AppColors.divider),
-                    // KOMENTAR (n) 计数标题（detail.html）。带 ?focus=comments 进来时滚到这里。
-                    _ScrollIntoViewOnMount(
-                      enabled: focusComments,
-                      child: Text(
-                          '${l10n.detailCommentsTitle.toUpperCase()} (${detail.commentCount})',
-                          key: const ValueKey('detailCommentsTitle'),
-                          style: AppTypography.caption.copyWith(
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                              color: AppColors.ink2)),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    CommentSection(
-                      postId: postId,
-                      currentUserId: currentUserId,
-                      postAuthorId: detail.authorId,
-                      isContentAuthor: detail.isAuthor,
+                    if (detail.body != null && detail.body!.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
+                        // V1.3.0 batch-b1 Story 3.3：正文里的 @ 高亮可点（AC1/AC2）。
+                        // 🔴 高亮与可点的判定**全在后端**（拉黑 AC3 / 注销 AC4），这里只照做。
+                        // （合并注：位置随批次 A Story 2.2 的新顺序 —— 作者行 → 图片 → 正文。）
+                        child: MentionText(
+                          text: detail.body!,
+                          mentions: detail.mentions,
+                          mentionContext: MentionContext.post,
+                          style: AppTypography.body,
+                          onTapUser: (userId) => openUserProfile(
+                            context,
+                            ref,
+                            userId,
+                            entry: AccountActionEntry.mention,
+                            // ⚠️ 与作者入口那处**刻意不同**：不传 popContext。
+                            //    被 @ 的人通常不是帖主，拉黑他之后**这条帖依然可见**，
+                            //    把用户踢回列表反而莫名其妙。只清列表里他自己的卡片。
+                            // 🔴 但**必须就地刷新本页**：不刷的话 detail.mentions 里那条
+                            //    还是 tappable=true，回到详情页可以立刻再点进刚拉黑那个人的
+                            //    主页（违反 AC3），他的评论也还挂着。bump 评论刷新信号会
+                            //    连带 invalidate detailProvider（见本页 ref.listen），
+                            //    一条就够 —— 与评论区那条路径同一套（code-review 2026-09-15）。
+                            onBlocked: _hideMentionedUser(ref, userId),
+                            onReported: _hideMentionedUser(ref, userId),
+                          ),
+                        ),
+                      ),
+                    ],
+                    // 无图 → 装饰标签落在正文下方**单独一行**小胶囊（AC5 回归保护）。
+                    if (detail.imageUrls.isEmpty && detail.decorationTags.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
+                        child: Wrap(
+                          spacing: AppSpacing.xs,
+                          runSpacing: AppSpacing.xs,
+                          children: [
+                            for (final t in detail.decorationTags) ContentTagChip.inline(tag: t, position: 'detail'),
+                          ],
+                        ),
+                      ),
+                    ],
+                    // 图片之下的所有内容仍按原来的横向留白排版，与改版前一致。
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // V1.3.0 Story 2.3：互动栏已迁到固定底栏（与评论输入框合并）。
+                          // 正文下方**不再单独存在互动栏** —— 点赞 / 分享始终悬浮可点，
+                          // 用户不必为了点个赞把页面滚回图片下方。
+                          const SizedBox(height: AppSpacing.md),
+                          const Divider(height: AppSpacing.xl, color: AppColors.divider),
+                          // KOMENTAR (n) 计数标题（detail.html）。带 ?focus=comments 进来时滚到这里。
+                          _ScrollIntoViewOnMount(
+                            enabled: focusComments,
+                            child: Text(
+                                '${l10n.detailCommentsTitle.toUpperCase()} (${detail.commentCount})',
+                                key: const ValueKey('detailCommentsTitle'),
+                                style: AppTypography.caption.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.5,
+                                    color: AppColors.ink2)),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          CommentSection(
+                            postId: postId,
+                            currentUserId: currentUserId,
+                            postAuthorId: detail.authorId,
+                            isContentAuthor: detail.isAuthor,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
                 ),
+                ),
               ),
             ),
-            CommentComposer(postId: postId),
+            // 固定底栏 = 评论输入框 + 互动栏（Story 2.3 · AC1）。
+            // detail 传进去是为了底栏右侧的点赞 / 分享两个动作。
+            CommentComposer(postId: postId, detail: detail),
           ],
         ),
       ),
     );
   }
 
-  /// 发布相对时间（双语 l10n）：<1分→刚刚 / <1时→N分钟前 / <1天→N小时前 / 否则 N天前。
-  static String _relativeTime(AppLocalizations l10n, DateTime t) {
-    final d = DateTime.now().difference(t);
-    if (d.inMinutes < 1) return l10n.timeJustNow;
-    if (d.inHours < 1) return l10n.timeMinutesAgo(d.inMinutes);
-    if (d.inDays < 1) return l10n.timeHoursAgo(d.inHours);
-    return l10n.timeDaysAgo(d.inDays);
-  }
+  // 发布时间的规则已抽到 shared/utils/date_format.dart 的 formatPublishTime（V1.3.0 Story 2.5 · AC1）：
+  // 详情页与评论区显示的是同一类东西，**必须共用同一个函数**，各写一份迟早分叉。
 
+  /// 在本页拉黑 / 举报了**被 @ 的那个人**之后的收尾（Story 3.3）。
+  ///
+  /// 两件事：清列表里他的卡片（与其它入口同一套）+ 就地刷新本页
+  /// （让那处 @ 变成不可点、他的评论消失）。
+  VoidCallback _hideMentionedUser(WidgetRef ref, int userId) => () {
+        onAuthorHidden(ref, userId)();
+        ref.read(commentsRefreshProvider.notifier).bump();
+      };
 
   Widget _authorRow(BuildContext context, WidgetRef ref, AppLocalizations l10n) {
     final name = detail.authorDeleted ? l10n.feedDeletedUser : (detail.authorNickname ?? l10n.feedDeletedUser);
@@ -229,7 +299,7 @@ class _DetailScaffold extends ConsumerWidget {
                 nameStyle: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
                 tags: detail.authorDeleted ? const [] : detail.authorTags,
               ),
-              Text(_relativeTime(l10n, detail.createdAt),
+              Text(formatPublishTime(context, l10n, detail.createdAt),
                   style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
             ],
           ),
@@ -244,11 +314,12 @@ class _DetailScaffold extends ConsumerWidget {
         ),
       ],
     );
-    // 作者点击触发迷你卡（Story 3.8）：注销作者不可点（NFR-8）。
+    // 作者点击 → **完整主页**（V1.3.0 batch-b1 Story 2.1 · FR-118.1，此前是迷你卡）：
+    // 注销作者不可点（NFR-8）。
     if (detail.authorDeleted) return row;
     return GestureDetector(
       key: const ValueKey('detailAuthorRow'),
-      onTap: () => showMiniProfile(
+      onTap: () => openUserProfile(
         context,
         ref,
         detail.authorId,
@@ -258,42 +329,6 @@ class _DetailScaffold extends ConsumerWidget {
         onReported: onAuthorHidden(ref, detail.authorId, popContext: context),
       ),
       child: row,
-    );
-  }
-
-  Widget _interactionBar(WidgetRef ref) {
-    // 点赞按钮（Story 3.4，乐观更新）+ 评论数。⚠️ V1.1.6 Story 3.2 起**首页卡片也展示**这两项。
-    return Row(
-      children: [
-        LikeButton(
-          postId: detail.id,
-          initialLiked: detail.liked,
-          initialCount: detail.likeCount,
-          // 🛡 两个挂载点都必须传来源，否则「首页点赞是净增还是前移」这个对比失效。
-          source: 'detail',
-        ),
-        const SizedBox(width: AppSpacing.lg),
-        // 点评论图标/计数 → 聚焦底部评论框弹键盘（游客转登录引导）。
-        GestureDetector(
-          key: const ValueKey('detailCommentIcon'),
-          behavior: HitTestBehavior.opaque,
-          onTap: () => ref.read(commentFocusProvider.notifier).requestFocus(),
-          child: Row(
-            children: [
-              const Icon(Icons.mode_comment_outlined, size: 20, color: AppColors.textSecondary),
-              const SizedBox(width: AppSpacing.xs),
-              Text('${detail.commentCount}', style: AppTypography.caption),
-            ],
-          ),
-        ),
-        const SizedBox(width: AppSpacing.lg),
-        // 分享卡入口（V1.1.6 Story 9.3 · FR-73）。
-        //
-        // 🔴 **刻意放在这里，不放顶栏** —— UI 稿 SH1 画的是顶栏右上角，但那么做会把顶栏的
-        // 「···」挤掉，而「···」是**举报入口**（合规入口，不能变难找）。
-        // 2026-08-14 产品决定：分享让位，顶栏保持现状。照 SH1 实现就是把合规入口做掉。
-        _ShareCardButton(detail: detail),
-      ],
     );
   }
 
@@ -414,9 +449,25 @@ class _DetailScaffold extends ConsumerWidget {
 
 /// 多图左右滑 + 角标 x/y（UX-DR12）；点击全屏 lightbox。
 class _ImageCarousel extends StatefulWidget {
-  const _ImageCarousel({required this.urls, this.decorationTags = const []});
+  const _ImageCarousel({
+    required this.urls,
+    required this.sizes,
+    required this.viewportHeight,
+    required this.heroTagPrefix,
+    this.decorationTags = const [],
+  });
 
   final List<String> urls;
+
+  /// 传给共享灯箱的 Hero tag 前缀（Story 3.1 · AD-A14.2b）。**由调用方给**，
+  /// 不从 URL 推导 —— 同一张图在一页里出现两次时，URL 相同会让两个 Hero 撞 tag 抛异常。
+  final String heroTagPrefix;
+
+  /// 与 [urls] 同序等长的原始宽高；测不出来 / 存量内容为 null（走占位兜底）。
+  final List<ImageSize?> sizes;
+
+  /// 滚动视口实际高度，喂给高度护栏（由详情页的 `LayoutBuilder` 量得）。
+  final double viewportHeight;
 
   /// V1.1.6 Story 5.2：装饰标签叠在**首图角落**（有图时的位置）。
   final List<ContentTag> decorationTags;
@@ -435,37 +486,65 @@ class _ImageCarouselState extends State<_ImageCarousel> {
     super.dispose();
   }
 
-  void _openLightbox(int index) {
-    // bug 20260727-372：灯箱可左右翻页（此前单图 InteractiveViewer 进灯箱后无法滑动看其余图）。
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => _Lightbox(urls: widget.urls, initialIndex: index),
-    ));
+  Future<void> _openLightbox(int index) async {
+    // V1.3.0 Story 3.1：灯箱已上提为共享组件（`shared/media/image_lightbox.dart`），
+    // 详情页只负责把「哪些图 + 从第几张开始 + tag 前缀 + 埋点来源」交出去。
+    // 组件不认识「内容帖」这回事 —— 那正是批次 B1 的场所照片能直接接入的原因。
+    final int? landedOn = await ImageLightbox.open(
+      context,
+      urls: widget.urls,
+      initialIndex: index,
+      heroTagPrefix: widget.heroTagPrefix,
+      source: 'content_detail',
+    );
+    // Story 3.3 · AC1：用户在灯箱里滑到第几张，轮播就同步到第几张 ——
+    // 否则「关闭时缩回原缩略图位置」会缩回**打开时**那一张的位置，看上去像飞错了地方。
+    if (!mounted || landedOn == null || landedOn == _current) return;
+    if (!_controller.hasClients) return;
+    _controller.jumpToPage(landedOn);
   }
 
   @override
   Widget build(BuildContext context) {
+    // 🔴 容器高度按**首图**锁定（AC4）：PageView 的每一页共用一个 AspectRatio，
+    // 左右滑动时高度不变。按当前页算会让容器随翻页忽高忽低，正文跟着上下跳。
+    final width = MediaQuery.sizeOf(context).width;
+    final aspect = resolveDetailImageAspect(
+      size: widget.sizes.isNotEmpty ? widget.sizes.first : null,
+      width: width,
+      viewportHeight: widget.viewportHeight,
+    );
     return Stack(
       children: [
-        ClipRRect(
-          borderRadius: AppRounded.phoneRadius,
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: PageView.builder(
+        // 通栏出血：**不再 ClipRRect 圆角**，图片两侧贴屏幕边（AC2）。
+        // 圆角是「卡片」的语言，详情页的图不是卡片。
+        AspectRatio(
+          // ① 实际比例 → ② clamp 0.75~1.34 闭区间 → ③ 高度护栏，
+          // 三步全在 resolveFeedImageAspect 里，与 Feed **同一个出口函数**（AC2）。
+          // 详情页只负责把自己的护栏口径喂进去（见 detail_image_layout.dart）。
+          aspectRatio: aspect,
+          child: PageView.builder(
               controller: _controller,
               itemCount: widget.urls.length,
               onPageChanged: (i) => setState(() => _current = i),
               itemBuilder: (context, i) => GestureDetector(
                 onTap: () => _openLightbox(i),
-                child: AppImage.widget(
-                  widget.urls[i],
-                  fit: BoxFit.cover,
-                  thumbWidth: 1080, // 详情方图：按手机全宽取缩略图（全屏放大走原图）
-                  errorBuilder: (context, error, stack) =>
-                      Container(color: AppColors.border),
+                // Story 3.3 · AC1/AC2：缩略图这一侧的 Hero。tag 与灯箱那侧**同一个函数**算出
+                // （前缀由本页给，绝不从 URL 推导 —— 同图两处同屏会直接抛异常）。
+                child: Hero(
+                  tag: lightboxHeroTag(widget.heroTagPrefix, i),
+                  child: AppImage.widget(
+                    widget.urls[i],
+                    // 容器比例已按原图算好，cover 在比例相符时不裁切；
+                    // 仅当某张与首图比例不同（多图混排）才裁，这是容器锁首图的必然代价。
+                    fit: BoxFit.cover,
+                    thumbWidth: 1080, // 按手机全宽取缩略图（全屏放大走原图）
+                    errorBuilder: (context, error, stack) =>
+                        Container(color: AppColors.border),
+                  ),
                 ),
               ),
             ),
-          ),
         ),
         // 装饰标签：左下角，与右上角的页码角标分处两角、互不遮挡。
         if (widget.decorationTags.isNotEmpty)
@@ -495,58 +574,6 @@ class _ImageCarouselState extends State<_ImageCarousel> {
             ),
           ),
       ],
-    );
-  }
-}
-
-/// 全屏灯箱（bug 20260727-372）：PageView 承载多图左右翻页，每页可捏合缩放；
-/// 顶栏显示页码，初始页为点击的那张。
-class _Lightbox extends StatefulWidget {
-  const _Lightbox({required this.urls, required this.initialIndex});
-
-  final List<String> urls;
-  final int initialIndex;
-
-  @override
-  State<_Lightbox> createState() => _LightboxState();
-}
-
-class _LightboxState extends State<_Lightbox> {
-  late final PageController _controller = PageController(initialPage: widget.initialIndex);
-  late int _current = widget.initialIndex;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: widget.urls.length > 1
-            ? Text('${_current + 1}/${widget.urls.length}',
-                style: AppTypography.body.copyWith(color: Colors.white))
-            : null,
-        centerTitle: true,
-      ),
-      body: PageView.builder(
-        controller: _controller,
-        itemCount: widget.urls.length,
-        onPageChanged: (i) => setState(() => _current = i),
-        // 点击图片（或黑边）关闭大图（bug 20260701-192，对齐主流看图 App 交互；与翻页/缩放手势不冲突）。
-        itemBuilder: (context, i) => GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => Navigator.of(context).pop(),
-          child: Center(
-            child: InteractiveViewer(child: AppImage.widget(widget.urls[i], fit: BoxFit.contain)),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -594,17 +621,19 @@ class _ScrollIntoViewOnMountState extends State<_ScrollIntoViewOnMount> {
 /// 点击 → 取该条内容的对外分享链接（后端幂等，重复分享复用同一 token）
 /// → 进预览页（9-2 的两套模板）→ 出图 → 系统分享菜单。
 ///
-/// 🛡 **顶栏的「···」不受影响** —— 那是举报入口，见 `_interactionBar` 里的说明。
-class _ShareCardButton extends ConsumerStatefulWidget {
-  const _ShareCardButton({required this.detail});
+/// 🛡 **顶栏的「···」不受影响** —— 那是举报入口（合规入口，不能变难找）。
+/// UI 稿 SH1 画的是顶栏右上角放分享，但那会把「···」挤掉；2026-08-14 产品决定分享让位。
+/// V1.3.0 Story 2.3 把分享从正文下方的互动栏挪进**固定底栏**，顶栏仍然保持现状。
+class DetailShareCardButton extends ConsumerStatefulWidget {
+  const DetailShareCardButton({super.key, required this.detail});
 
   final ContentDetail detail;
 
   @override
-  ConsumerState<_ShareCardButton> createState() => _ShareCardButtonState();
+  ConsumerState<DetailShareCardButton> createState() => _ShareCardButtonState();
 }
 
-class _ShareCardButtonState extends ConsumerState<_ShareCardButton> {
+class _ShareCardButtonState extends ConsumerState<DetailShareCardButton> {
   bool _busy = false;
 
   /// 打开分享卡预览。
@@ -630,7 +659,7 @@ class _ShareCardButtonState extends ConsumerState<_ShareCardButton> {
       onTap: _busy ? null : _open,
       child: Icon(
         Icons.ios_share_rounded,
-        size: 20,
+        size: DetailBarMetrics.iconSize,
         color: _busy ? AppColors.muted : AppColors.textSecondary,
       ),
     );

@@ -66,6 +66,28 @@ public class ContentPost {
     @Column(name = "image_sizes")
     private List<ImageSize> imageSizes;
 
+    /**
+     * 正文里 @ 到的人（V1.3.0 batch-b1 Story 3.2 · AC4 / AD-10 Rule 4）。
+     *
+     * <h2>🔴 存 userId，不存昵称</h2>
+     * 正文 {@link #text} 里留的是给人读的「@昵称」，可点、可判拉黑的那一份身份在这里。
+     * 存昵称的话对方改名后历史 @ 全部失效、点不动（渲染时按 id 实时查昵称 —— Story 3.3）。
+     *
+     * <p>⚠️ 存量内容**永远为 null**（AD-10 Rule 6：存量文本不回溯解析）。读取侧一律
+     * 经 {@link #getMentionedUserIds()} 归一成空表，别在调用点各写各的 null 判断。
+     *
+     * <p>⚠️ 上限 5 人由 {@code MentionSanitizer} 在写入前把关，**不是**数据库约束 ——
+     * JSONB 列上加长度 CHECK 只会在某天规则放宽时变成一次迁移事故。
+     *
+     * <p>🔴 <b>非 PUBLIC 的帖子也会有值</b>（同步开关关掉的 PRIVATE Diary）：作者自己那条
+     * 时间线上的「@昵称」要能高亮能点（Story 3.3）。但被 @ 的人永远打不开 PRIVATE 内容
+     * （可见范围创建后不可改，FR-83 AC7）—— 所以 <b>Story 3.4 发通知前必须先判
+     * {@link #getVisibility()}</b>，别把「有没有 @ 名单」当成「该不该发通知」。
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "mentioned_user_ids")
+    private List<Long> mentionedUserIds;
+
     @Column(name = "danger_level", length = 8)
     private String dangerLevel;
 
@@ -289,6 +311,26 @@ public class ContentPost {
 
     public List<String> getImageUrls() {
         return imageUrls;
+    }
+
+    /**
+     * 正文里 @ 到的 userId（Story 3.2 AC4）。存量内容与没 @ 人的内容<b>都返回空表</b>，
+     * 永不返回 null —— 渲染（3.3）与通知（3.4）两处都会遍历它。
+     */
+    public List<Long> getMentionedUserIds() {
+        return mentionedUserIds == null ? List.of() : mentionedUserIds;
+    }
+
+    /**
+     * 写入 @ 名单（Story 3.2 AC4）。
+     *
+     * <p>🛡 调用方<b>必须</b>传 {@code MentionSanitizer.sanitize(...)} 的输出，不能直接把
+     * 请求体里那串原样塞进来 —— 客户端的候选集是 UI，不是权限。
+     */
+    public void setMentionedUserIds(List<Long> mentionedUserIds) {
+        this.mentionedUserIds = mentionedUserIds == null || mentionedUserIds.isEmpty()
+                ? null // 空表落 null：与存量行同形，省掉一整列 '[]'。
+                : List.copyOf(mentionedUserIds);
     }
 
     public ContentVisibility getVisibility() {

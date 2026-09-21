@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../profile/data/pet_recommendation_repository.dart';
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
@@ -310,6 +311,9 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
       onConfirm: () async {
         try {
           await ref.read(blockedUsersRepositoryProvider).unblock(b.userId);
+          // 推荐位按拉黑关系过滤：首页横滑行常驻不回收，不主动失效的话对方的宠物回不来
+          //（与拉黑成功处同一出口，batch-b1 复审）。
+          invalidatePetRecommendations(ref);
           // 解除只解除**主动拉黑**那一层（举报隐藏没有解除入口），故 origin 恒为 BLOCK。
           Analytics.capture('social_user_unhide_submitted', {
             'origin': 'BLOCK',

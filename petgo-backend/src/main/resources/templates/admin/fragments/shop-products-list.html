@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  B16 商品列表片段（V1.3.0 Story 10.3 AC1）。
+  sumbar(oob) — 摘要条三格：上架商品数 · 下架 · SKU 总数
+  rows(oob)   — 表格 + 翻页（htmx 换 #shop-product-rows 的 innerHTML，摘要条以 oob 跟上）
+  ⚠️ 操作列是「编辑」不是「详情」：2026-09-07 回滚的原文（AC1 点名），跳独立表单页而不是抽屉
+     —— 这一页字段量太大，塞不进 480px 抽屉。
+  模型：products / summary / skuCount / minPrice / canEdit / filterCategory / filterActive / page / hasNext。
+-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="shop-product-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.shopProducts.summary.active}">上架商品</div>
+        <div class="sum-value" th:text="${summary.activeCount()}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.shopProducts.summary.inactive}">未上架</div>
+        <div class="sum-value" th:text="${summary.inactiveCount()}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.shopProducts.summary.skus}">SKU 总数</div>
+        <div class="sum-value" th:text="${summary.skuCount()}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/shop-products-list :: sumbar(true)}"></div></th:block>
+    <!-- 🔴 SKU 上限告警条。2026-08-19 起默认不设上限（petgo.shop.sku-cap=0），配置回正数即恢复：
+         达上限时本条出现，且阻止继续上架。 -->
+    <p th:if="${skuCapReached}" class="banner err">
+        <span th:text="#{admin.shop.skuCap.warn}">在售 SKU 已达上限</span>
+        <span th:text="'(' + ${activeSkuCount} + '/' + ${skuCap} + ')'">(30/30)</span>
+    </p>
+    <table th:if="${!#lists.isEmpty(products)}">
+        <thead>
+        <tr>
+            <th th:text="#{admin.shop.col.name}">商品名</th>
+            <th th:text="#{admin.shop.col.brand}">品牌</th>
+            <th th:text="#{admin.shop.col.category}">品类</th>
+            <th th:text="#{admin.shop.col.active}">上架</th>
+            <th class="s-col-num" th:text="#{admin.shop.col.skuCount}">规格数</th>
+            <th class="s-col-num" th:text="#{admin.shop.col.minPrice}">最低价</th>
+            <th class="s-col-num" th:text="#{admin.shop.col.sortWeight}">排序权重</th>
+            <th class="s-col-act" th:text="#{admin.common.action}">操作</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="p : ${products}" th:id="'shop-product-row-' + ${p.id}">
+            <td>
+                <div class="s-p-name" th:text="${p.name}">Royal Canin</div>
+                <div class="s-p-sub s-mono" th:text="${p.publicToken}">demo-mkn-01</div>
+            </td>
+            <td th:text="${p.brand}">Royal Canin</td>
+            <td th:text="#{'admin.v130.shopProducts.category.' + ${p.category}}">MAKANAN</td>
+            <!-- 上架态用徽章而不是纯文字：这一列是运营扫得最快的一列 -->
+            <td>
+                <span th:if="${p.active}" class="badge badge-ok" th:text="#{admin.shop.active.yes}">已上架</span>
+                <span th:unless="${p.active}" class="badge badge-muted" th:text="#{admin.shop.active.no}">未上架</span>
+            </td>
+            <td class="s-col-num" th:text="${skuCount[p.id]}">0</td>
+            <td class="s-col-num" th:text="${minPrice[p.id]} != null ? ${#numbers.formatInteger(minPrice[p.id], 0, 'COMMA')} : '—'">—</td>
+            <td class="s-col-num" th:text="${p.sortWeight}">0</td>
+            <td class="s-col-act">
+                <!-- ⚠️ 「编辑」不是「详情」：AC1 点名的 2026-09-07 回滚（i18n admin.shop.form.titleEdit）。
+                     运营在这一页做的是改价、换图、调权重，那是编辑不是查看。 -->
+                <a th:href="@{/admin/shop/products/{id}(id=${p.id})}"
+                   th:text="#{admin.shop.form.titleEdit}">商品编辑</a>
+                <form th:if="${canEdit and not p.active}" method="post" class="inline"
+                      th:action="@{/admin/shop/products/{id}/list(id=${p.id})}">
+                    <button type="submit" class="btn btn-sm" th:text="#{admin.shop.btn.list}">上架</button>
+                </form>
+                <!-- 下架要确认：它立刻把商品从 App 所有列表与推荐里拿掉 -->
+                <form th:if="${canEdit and p.active}" method="post" class="inline"
+                      th:action="@{/admin/shop/products/{id}/delist(id=${p.id})}"
+                      th:attr="data-confirm=#{admin.v130.shopProducts.confirm.delist(${p.name})}">
+                    <button type="submit" class="btn btn-sm" th:text="#{admin.shop.btn.delist}">下架</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <div class="empty" th:if="${#lists.isEmpty(products)}">
+        <span class="empty-emoji">🔍</span>
+        <p th:text="#{admin.shop.products.empty}">暂无商品</p>
+    </div>
+    <div class="pager" th:if="${!#lists.isEmpty(products)}" th:attr="data-page=${page}">
+        <a th:if="${page > 0}" href="#" th:text="#{admin.v130.places.pager.prev}"
+           th:attr="hx-get=@{/admin/shop/products(category=${filterCategory},active=${filterActive},page=${page - 1})}"
+           hx-target="#shop-product-rows" hx-swap="innerHTML" hx-push-url="true">上一页</a>
+        <a th:if="${hasNext}" href="#" th:text="#{admin.v130.places.pager.next}"
+           th:attr="hx-get=@{/admin/shop/products(category=${filterCategory},active=${filterActive},page=${page + 1})}"
+           hx-target="#shop-product-rows" hx-swap="innerHTML" hx-push-url="true">下一页</a>
+    </div>
+</th:block>
+</body>
+</html>

@@ -1,0 +1,5 @@
+# 团队覆盖：版本目录解析（2026-09-09）。规则正文在 _bmad-output/project-context.md「版本解析规则」。
+[workflow]
+activation_steps_prepend = [
+  "读取 _bmad-output/project-context.md 的「版本解析规则」：从用户提示词或当前 git 分支名解析 <ver> 与主题 <theme>（主题看提示词或版本 README 登记表的分支映射），把 {planning_artifacts}/{implementation_artifacts}/sprint_status/epics_file/architecture_file/prd_file 全部重定向到 <ver> 子目录（文件名带主题后缀：sprint-status-<ver>-<theme>.yaml / epics-<ver>-<theme>.md / architecture-<ver>-<theme>-delta.md）。解析不出版本时必须停下询问用户，禁止回退根目录默认路径。向用户回显解析结果：「版本 <ver>，story 目录 …/implementation-artifacts/<ver>」。",
+]

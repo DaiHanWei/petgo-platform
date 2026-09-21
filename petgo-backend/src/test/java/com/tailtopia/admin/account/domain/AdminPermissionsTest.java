@@ -122,7 +122,10 @@ class AdminPermissionsTest {
         //     从未被评估过的账号静默发一项新能力。详见 AdminPermissions 里那段注释。
         // 2026-08-31：支付记录导出新增一码 payment.list_export（与 content.list_export
         //     同口径：导出与查看分权限、记审计）⇒ 71 + 1 = 72。
+        // 2026-09-09（V1.3.0 Story 1.4 AC5）：场所管理 place.manage、暖贴虚拟身份评论
+        //     comment.virtual_post 预先登记进 edit 组（端点分别在 Epic 5 / Epic 4 接线，
+        //     期间列在 AdminPermissionWiringTest.PENDING_WIRING）⇒ 72 + 2 = 74。
         List<String> all = AdminPermissions.ALL;
-        assertThat(all).hasSize(72);
+        assertThat(all).hasSize(74);
     }
 }

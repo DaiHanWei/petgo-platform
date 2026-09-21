@@ -37,46 +37,126 @@ public class AdminContentTagService {
 
     private static final int SUMMARY_MAX = 40;
 
+    /** 分配记录每页条数（V1.3.0 Story 7.4 · AC3，抽屉页签二）。 */
+    public static final int ASSIGNMENT_PAGE_SIZE = 20;
+
     private final ContentTagRepository tags;
     private final ContentTagAssignmentRepository assignments;
     private final ContentTagQueryService tagService;
     private final ContentPostRepository posts;
     private final AdminAuditService audit;
+    /** 分配记录的「操作人」：分配表没有这一列，取自审计里那条 CONTENT_TAG_ASSIGN（Story 7.4 · AC3）。 */
+    private final com.tailtopia.admin.audit.repository.AdminAuditLogRepository auditLogs;
+    private final com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts;
 
     public AdminContentTagService(ContentTagRepository tags,
             ContentTagAssignmentRepository assignments, ContentTagQueryService tagService,
-            ContentPostRepository posts, AdminAuditService audit) {
+            ContentPostRepository posts, AdminAuditService audit,
+            com.tailtopia.admin.audit.repository.AdminAuditLogRepository auditLogs,
+            com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts) {
         this.tags = tags;
         this.assignments = assignments;
         this.tagService = tagService;
         this.posts = posts;
         this.audit = audit;
+        this.auditLogs = auditLogs;
+        this.adminAccounts = adminAccounts;
+    }
+
+    /**
+     * 摘要条（Story 7.4 · AC1）：在线标签数 · 生效中分配数。
+     *
+     * <p>⚠️ **纯函数**，接收已经算好的列表行：列表页两样都要，自己再查一遍就是把
+     * 同一批查询跑两遍，而且两次各取一次 {@code now}、跨秒时还能给出对不上的两个数。
+     */
+    public com.tailtopia.admin.contenttag.dto.TagSummary summary(List<TagRow> rows) {
+        return new com.tailtopia.admin.contenttag.dto.TagSummary(
+                rows.stream().filter(t -> !t.retired()).count(),
+                rows.stream().mapToLong(TagRow::activeAssignments).sum());
+    }
+
+    /** 一页分配记录 + 有无下一页。 */
+    public record AssignmentPage(List<AssignmentRow> rows, boolean hasNext, int page, long total) {
+    }
+
+    /**
+     * 抽屉页签二（Story 7.4 · AC3）：该标签的分配记录，**含已到期**，打标时间倒序 + 分页。
+     *
+     * <p>⚠️ 与旧的 {@code assignmentsByTag} 不同，这里<b>不只看生效中的</b> ——
+     * AC3 要的正是「生效中 / 已到期」两态并列，只列生效中的话运营看不出「上周那次打标到期了没」。
+     */
+    @Transactional(readOnly = true)
+    public AssignmentPage assignmentPage(long tagId, Instant now, int page) {
+        var sort = org.springframework.data.domain.Sort.by(
+                org.springframework.data.domain.Sort.Direction.DESC, "createdAt", "id");
+        int wanted = Math.max(page, 0);
+        var found = assignments.findByTagId(tagId,
+                PageRequest.of(wanted, ASSIGNMENT_PAGE_SIZE, sort));
+        // 页码越界（处置掉最后一页最后一条后按原页码重拉，或有人手改 URL）→ 回退到最后一页，
+        // 并把**实际**页码带给分页器；不是 500、也不是一张让人以为「记录没了」的空表。
+        long total = found.getTotalElements();
+        int lastPage = total == 0 ? 0 : (int) ((total - 1) / ASSIGNMENT_PAGE_SIZE);
+        if (wanted > lastPage) {
+            wanted = lastPage;
+            found = assignments.findByTagId(tagId, PageRequest.of(wanted, ASSIGNMENT_PAGE_SIZE, sort));
+        }
+        return new AssignmentPage(decorate(found.getContent(), now), wanted < lastPage, wanted, total);
     }
 
     // ——————————————————— 标签本体 ———————————————————
 
     @Transactional(readOnly = true)
     public List<TagRow> listTags(Instant now) {
+        Map<Long, Long> counts = activeCounts(now);
         return tags.findAllByOrderByIdDesc().stream()
-                .map(t -> new TagRow(t.getId(), t.getCode(), t.getName(), t.getIcon(),
-                        t.getDescription(), t.getBadgeStyle(), t.getRetiredAt(),
-                        assignments.findActiveByTag(t.getId(), now).size()))
+                .map(t -> row(t, counts.getOrDefault(t.getId(), 0L)))
                 .toList();
     }
 
-    /** 打标下拉：仅在线标签（已下线的不可再分配）。 */
+    /** 抽屉头（Story 7.4 · AC2）：单个标签，口径与列表行同一处生成。 */
     @Transactional(readOnly = true)
-    public List<ContentTag> assignableTags() {
-        return tags.findByRetiredAtIsNullOrderByIdDesc();
+    public TagRow tag(long id, Instant now) {
+        ContentTag t = tags.findById(id)
+                .orElseThrow(() -> AppException.notFound("标签不存在")
+                        .code("admin.err.contentTag.notFound"));
+        return row(t, assignments.findActiveByTag(id, now).size());
+    }
+
+    /** 标签 id → 生效中分配条数，整页一条聚合取（逐个标签查一次就是 N+1）。 */
+    private Map<Long, Long> activeCounts(Instant now) {
+        Map<Long, Long> out = new java.util.HashMap<>();
+        for (Object[] row : assignments.countActiveByTag(now)) {
+            out.put(((Number) row[0]).longValue(), ((Number) row[1]).longValue());
+        }
+        return out;
+    }
+
+    private TagRow row(ContentTag t, long activeAssignments) {
+        return new TagRow(t.getId(), t.getCode(), t.getName(), t.getIcon(),
+                t.getDescription(), t.getBadgeStyle(), t.getRetiredAt(), activeAssignments);
+    }
+
+    /**
+     * 取消打标后要回到哪个标签的抽屉（Story 7.4）。
+     *
+     * <p>⚠️ 必须在删除**之前**读 —— 删完就查不到了；而给
+     * {@code POST /assignments/{id}/remove} 加一个 {@code tagId} 参数会破坏「5 个 POST 端点零变更」。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<Long> tagIdOfAssignment(long assignmentId) {
+        return assignments.findById(assignmentId).map(ContentTagAssignment::getTagId);
     }
 
     /**
      * 新建标签。标签码<b>系统自动生成</b>（{@code ct-<自增id>}，2026-09-02）：
      * 原先由运营手填，多个运营会填出同一个码互相顶掉；码只进埋点与操作日志、
      * 用户看不到，没有任何理由让人来起名。
+     *
+     * @return 新标签 id（Story 7.4 · AC4：建完要立刻打开它的抽屉并停在「分配记录」页签；
+     *         既有整页调用方忽略返回值，行为不变）
      */
     @Transactional
-    public void createTag(long adminId, String name, String icon, String description,
+    public long createTag(long adminId, String name, String icon, String description,
             String badgeStyle) {
         if (name == null || name.isBlank()
                 || icon == null || icon.isBlank() || description == null || description.isBlank()) {
@@ -95,6 +175,7 @@ public class AdminContentTagService {
         saved.assignGeneratedCode(code);
         audit.record(adminId, "CONTENT_TAG_CREATE", "content_tag", String.valueOf(saved.getId()),
                 "code=" + code + " name=" + name + " style=" + style);
+        return saved.getId();
     }
 
     @Transactional
@@ -156,19 +237,6 @@ public class AdminContentTagService {
         return removed;
     }
 
-    /** 按标签维度：该标签当前生效中的分配。 */
-    @Transactional(readOnly = true)
-    public List<AssignmentRow> assignmentsByTag(long tagId, Instant now) {
-        List<ContentTagAssignment> rows = assignments.findActiveByTag(tagId, now);
-        return decorate(rows);
-    }
-
-    /** 按内容维度：该内容的全部分配（含已失效的历史）。 */
-    @Transactional(readOnly = true)
-    public List<AssignmentRow> assignmentsByPost(long postId) {
-        return decorate(assignments.findByPostIdOrderByStartsAtDesc(postId));
-    }
-
     /** 打标内容选择器：复用顶置那条「只返回可公开展示内容」的分页查询，不另写一份。 */
     @Transactional(readOnly = true)
     public List<com.tailtopia.admin.pin.dto.PinnableContentRow> pickable(String keyword, int page) {
@@ -182,7 +250,7 @@ public class AdminContentTagService {
                 .toList();
     }
 
-    private List<AssignmentRow> decorate(List<ContentTagAssignment> rows) {
+    private List<AssignmentRow> decorate(List<ContentTagAssignment> rows, Instant now) {
         if (rows.isEmpty()) {
             return List.of();
         }
@@ -192,14 +260,51 @@ public class AdminContentTagService {
         Map<Long, ContentTag> tagById = tags.findAllById(
                         rows.stream().map(ContentTagAssignment::getTagId).distinct().toList()).stream()
                 .collect(Collectors.toMap(ContentTag::getId, Function.identity()));
+        Map<Long, String> actorByAssignment = actorNames(rows);
         return rows.stream().map(a -> {
             ContentPost p = postById.get(a.getPostId());
             ContentTag t = tagById.get(a.getTagId());
+            // 生效判定与查询侧同一口径：[starts_at, ends_at)，ends_at 空 = 永久。
+            boolean pending = a.getStartsAt().isAfter(now);
+            boolean active = !pending && (a.getEndsAt() == null || a.getEndsAt().isAfter(now));
             return new AssignmentRow(a.getId(), a.getPostId(),
                     p == null ? null : truncate(p.getText()),
                     a.getTagId(), t == null ? null : t.getName(),
-                    a.getStartsAt(), a.getEndsAt());
+                    a.getStartsAt(), a.getEndsAt(), a.getCreatedAt(),
+                    actorByAssignment.get(a.getId()), active, pending);
         }).toList();
+    }
+
+    /**
+     * 分配 id → 操作人显示名，整页一次取（逐行查审计就是 N+1）。
+     *
+     * <p>⚠️ 取不到是**正常情况**：分配表没有操作人列，这里靠审计里那条 {@code CONTENT_TAG_ASSIGN}
+     * 反查；经其它路径落库的历史记录没有对应审计行，界面上显示「—」。
+     */
+    private Map<Long, String> actorNames(List<ContentTagAssignment> rows) {
+        List<String> ids = rows.stream().map(a -> String.valueOf(a.getId())).toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        var logs = auditLogs.findByActionTypeAndTargetIdIn("CONTENT_TAG_ASSIGN", ids);
+        if (logs.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> nameByAccount = new java.util.HashMap<>();
+        adminAccounts.findAllById(logs.stream().map(l -> l.getActorAccountId())
+                        .filter(java.util.Objects::nonNull).distinct().toList())
+                .forEach(acc -> nameByAccount.put(acc.getId(), acc.getDisplayName()));
+        Map<Long, String> out = new java.util.HashMap<>();
+        for (var log : logs) {
+            try {
+                out.putIfAbsent(Long.parseLong(log.getTargetId()),
+                        nameByAccount.getOrDefault(log.getActorAccountId(),
+                                log.getActorAccountId() == null ? null : "#" + log.getActorAccountId()));
+            } catch (NumberFormatException ignored) {
+                // 目标不是数字 id（不该出现）：跳过，不因为一条脏审计毁掉整页
+            }
+        }
+        return out;
     }
 
     private static String truncate(String text) {

@@ -47,3 +47,7 @@ CODEBUDDY.md
 # git worktrees
 .worktrees/
 petgo_app/android/build/
+
+# Python 字节码缓存（scripts/bug-system 等脚本运行时自动生成）
+__pycache__/
+*.py[cod]

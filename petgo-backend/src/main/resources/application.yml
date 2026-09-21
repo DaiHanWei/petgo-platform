@@ -14,6 +14,12 @@ petgo:
     apple:
       # Apple Sign-In client id（aud 校验，通常 = iOS bundle id）。env 注入；留空时跳过 aud 严格校验（仅 dev/L0）。
       client-id: ${APPLE_CLIENT_ID:}
+  # 运营后台数据看板跑批（V1.3.0 Story 3.3，AD-3 自愈跑批）：每天 WIB 01:00 把缺失的日子物化到「昨天」，
+  # 上线首日同一循环完成 D-15 全量回填（起点 2026-07-17 = 参考 SQL 创建日）。cron 按 Asia/Jakarta 解释。
+  admin:
+    dashboard:
+      cron: ${ADMIN_DASHBOARD_CRON:0 0 1 * * *}
+      backfill-from: ${ADMIN_DASHBOARD_BACKFILL_FROM:2026-07-17}
   # 生命周期推送（留存运营作战手册 · 抓手 1）：D1 / D3 / D7 / 7 天未回召回，打 D1 留存 9.6% → 20%。
   # 🔴 enabled 默认 false：迁移把存量用户 last_active_at 回填成 updated_at 后，一大批老用户会立刻
   #    满足「7 天未回」。随部署自动生效 = 第一次日扫给几百人同时推召回。手册要的是「按 SOP 放量、
@@ -125,10 +131,40 @@ petgo:
     row-limit: ${LARK_CONTENT_ROW_LIMIT:500}
 
   # 精选自营电商（V1.4.0）
+  # 场所（V1.3.0）。default-city：App 标记的场所没有城市字段（不接第三方地理服务、不反查地址），
+  # 由服务端填这个值；后台录入表单的默认值也读它（2026-09-18 场所表对齐 D2，为多城市预留：
+  # 将来开新城市只换 PlaceCityResolver 的实现，别在代码里写死城市名）。
+  places:
+    default-city: Jakarta
   shop:
     # 低库存提示阈值（FR-95）：可售 ≤ 此值时详情页展示「Sisa {n}」。
     # {n} 取真实剩余数——制造合理紧迫感但不虚构数字。
     low-stock-threshold: ${SHOP_LOW_STOCK_THRESHOLD:5}
+    # 新订单 Lark 提醒（V1.3.0 shop-v2 Story 3-4 · SHOP-FR-24 · 主线 C）。
+    # 运营接单原本靠「人工打开后台页面盯着」，零通知 —— 发货时效取决于有没有人想起来刷。
+    # 🔴 mode=off（默认）或 receive-id 为空 ⇒ 扫描器静默跳过、**零出网**，队列行保持 PENDING。
+    # 🔴 收件人一律从这里读，**代码里不出现任何具体 id**（OD-5「发给谁」尚未拍板）。
+    # 凭证 env 注入，绝不入库、绝不落日志；.env.example 只放占位。
+    order-notify:
+      mode: ${SHOP_ORDER_NOTIFY_MODE:off}
+      app-id: ${SHOP_ORDER_NOTIFY_APP_ID:}
+      app-secret: ${SHOP_ORDER_NOTIFY_APP_SECRET:}
+      base-url: ${SHOP_ORDER_NOTIFY_BASE_URL:https://open.larksuite.com}
+      # 群 chat_id 或个人 open_id。空 = 不发（视同 off）。
+      receive-id: ${SHOP_ORDER_NOTIFY_RECEIVE_ID:}
+      receive-id-type: ${SHOP_ORDER_NOTIFY_RECEIVE_ID_TYPE:chat_id}
+      # 汇总窗口（分钟）。同窗口内的订单合成一条消息 —— 每单一条会在促销时段把运营刷屏，
+      # 而被刷屏的通知等于没有通知。默认 10 与 SHOP-NFR-03「10 分钟内送达」对齐。
+      window-minutes: ${SHOP_ORDER_NOTIFY_WINDOW_MINUTES:10}
+      max-orders-per-message: ${SHOP_ORDER_NOTIFY_MAX_ORDERS:50}
+      max-retries: ${SHOP_ORDER_NOTIFY_MAX_RETRIES:3}
+      timeout-seconds: ${SHOP_ORDER_NOTIFY_TIMEOUT_SECONDS:10}
+      # 扫描周期必须短于窗口，否则时延会顶穿 NFR-03。
+      cron: ${SHOP_ORDER_NOTIFY_CRON:0 */5 * * * *}
+      # 夜间静默（WIB）。🔴 默认关闭 —— OD-5 定值前不启用。
+      quiet-hours-enabled: ${SHOP_ORDER_NOTIFY_QUIET_ENABLED:false}
+      quiet-start-hour: ${SHOP_ORDER_NOTIFY_QUIET_START:22}
+      quiet-end-hour: ${SHOP_ORDER_NOTIFY_QUIET_END:8}
 
 # 退款收款账户 PII 加密（Story 4.3，A-1/FR-NFR-4）。AES-256-GCM 密钥（base64 的 32 字节）。
 # 凭证 env 注入红线，绝不入库；缺失时加/解密抛异常（不静默存明文）。dev/test 用 application-dev.yml 的占位密钥。
@@ -304,6 +340,13 @@ logging:
 # key 留空 = 整个上报静默关闭（本地 / 测试默认状态，不产生任何出网请求）。
 # host 必须与客户端同一个 PostHog project，否则前后端事件落在两个项目里、漏斗拼不起来。
 analytics:
+  # 🔴 环境标记（V1.3.0 shop-v2 Story 1-2）。取值只认 prod / stag / dev，其余回退 dev。
+  #    **绝不能从 spring profile 推导**：staging 与生产同跑 SPRING_PROFILES_ACTIVE=prod
+  #    （见 docs/runbooks/runbook-staging.md），按 profile 判断会把 staging 的事件稳定标成
+  #    prod，staging 的测试数据直接混进生产漏斗，而且事后分不开。
+  #    ⚠️ 部署侧必须显式设：~/.env.petgo 加 APP_ENV=prod、~/.env.petgo-stag 加 APP_ENV=stag，
+  #      且 docker restart 不重读 env 文件 —— 必须重建容器才生效。
+  app-env: ${APP_ENV:dev}
   posthog:
     key: ${POSTHOG_SERVER_KEY:}
     # 留空（含空串）→ 客户端回退到 https://eu.i.posthog.com，见 PostHogAnalyticsClient#resolveHost

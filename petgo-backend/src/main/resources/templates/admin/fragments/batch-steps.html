@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  批量内容工作台的步骤条（V1.3.0 Story 7.6 · AC3，模板 E）。
+  工作台（step 0/1/2）与校验预览页（step 3）**共用这一份** —— 各写一份的话，
+  加一步或改个名字就会出现「两边步骤不一样」，而运营正是靠它判断自己走到哪了。
+  已完成的步可点回（骨架本来就允许来回改，不是向导式锁步）。
+*/-->
+<body>
+<ol th:fragment="bar(batchId, current)" class="step-bar">
+    <li class="step" th:each="i : ${#numbers.sequence(0, 3)}"
+        th:classappend="${i == current} ? 'step--on' : (${i < current} ? 'step--done' : '')">
+        <!--/* data-step-next：工作台上「有未保存的编辑行」的守卫按它识别离场链接（复审 C4）。
+               预览页也用这份步骤条，那边没有行卡片，守卫查不到 dirty 行、自然不弹。 */-->
+        <a th:if="${i < 3}" data-step-next th:href="@{/admin/seed-batches/{id}(id=${batchId},step=${i})}"
+           th:text="#{'admin.v130.batch.step.' + ${i}}">批次设置</a>
+        <a th:if="${i == 3}" data-step-next th:href="@{/admin/seed-batches/{id}/preview(id=${batchId})}"
+           th:text="#{admin.v130.batch.step.3}">预览确认</a>
+    </li>
+</ol>
+</body>
+</html>

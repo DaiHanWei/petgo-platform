@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  模板 A 公共空态（V1.3.0 Story 2.9 AC3）：插画 + 文案 + 「其他队列还有 N 条 →」去向链接。
+  queueEmpty(queueKey, message)：queueKey = 当前页在 AdminPageCatalog 的 key；message 为空 = 待处理页签清空
+  → 「队列已清空 🎉」+ 去向（NavBadgeService.otherQueues 只在此时才查，与角标同一口径、只含登录者可见且待处理 > 0 的其他队列）；
+  message 非空 = 已处理 / 已结案页签为空，只显示文案。
+-->
+<body>
+<div th:fragment="queueEmpty(queueKey, message)" class="empty empty--queue">
+    <span class="empty-emoji" th:if="${message == null}">🎉</span>
+    <p th:text="${message} ?: #{admin.v130.empty.queue}">队列已清空</p>
+    <th:block th:if="${message == null}" th:with="others=${@navBadgeService.otherQueues(queueKey)}">
+        <p class="muted empty-elsewhere" th:if="${!#lists.isEmpty(others)}">
+            <a th:each="q : ${others}" th:href="@{${q.route}}"
+               th:text="#{admin.v130.review.empty.elsewhere(#{${q.navKey}}, ${q.count})}">「xx」还有 N 条 →</a>
+        </p>
+    </th:block>
+</div>
+</body>
+</html>

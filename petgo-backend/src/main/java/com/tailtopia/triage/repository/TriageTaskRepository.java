@@ -36,4 +36,18 @@ public interface TriageTaskRepository extends JpaRepository<TriageTask, Long> {
             + "group by t.userId order by count(t) desc")
     java.util.List<RedCountProjection> redCountsByUser();
 
+    /**
+     * 某用户的 RED 分诊历史（V1.3.0 Story 8.5 · AC4：红色超额抽屉），近的在前。
+     *
+     * <p>⚠️ 上层只取 id / 状态 / 时间 —— 症状文本与解析结果是**健康数据**，不进后台展示
+     * （见 {@code RedOverageRow} 与 {@code RedTaskRow} 的说明）。这里返回实体是因为
+     * 投影再加一个接口不划算，但**取字段时必须克制**。
+     */
+    @Query("select t from TriageTask t "
+            + "where t.userId = :userId "
+            + "and t.dangerLevel = com.tailtopia.triage.domain.DangerLevel.RED "
+            + "order by t.createdAt desc, t.id desc")
+    java.util.List<com.tailtopia.triage.domain.TriageTask> findRedByUser(
+            @org.springframework.data.repository.query.Param("userId") long userId);
+
 }

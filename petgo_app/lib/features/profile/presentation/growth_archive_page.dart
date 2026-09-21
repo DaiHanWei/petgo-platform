@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,16 +18,24 @@ import '../../auth/domain/auth_state.dart';
 import '../../auth/domain/user_state.dart';
 import '../../content/domain/home_refresh_provider.dart';
 import '../data/milestone_repository.dart';
+import '../data/pet_recommendation_repository.dart';
 import '../data/profile_repository.dart';
 import '../data/timeline_repository.dart';
 import '../domain/card_link.dart';
+import '../data/onboarding_mark_repository.dart';
 import '../domain/pet_profile.dart';
+import 'pet_insights_page.dart';
+import '../../../shared/widgets/coachmark_overlay.dart';
 import '../domain/share_service.dart';
+import '../domain/archive_scope.dart';
 import '../domain/timeline_item.dart';
 import 'diary_guest_page.dart';
 import 'visitor_archive_view.dart';
 import 'widgets/archive_calendar.dart';
 import 'widgets/diary_header.dart';
+import 'widgets/pet_recommendation_grid.dart';
+import 'widgets/recommended_pet_card.dart'
+    show kPetRecommendFromDiaryEmpty, kPetRecommendFromDiaryNonOwner;
 import 'widgets/share_fab.dart';
 import 'widgets/timeline_item_tile.dart';
 import '../../shop/presentation/widgets/repurchase_zones_v2.dart';
@@ -158,7 +168,8 @@ class GrowthArchivePage extends ConsumerWidget {
       DiaryUserState.guest => const DiaryGuestPage(),
       DiaryUserState.nonOwner =>
         _NonOwnerView(onChangeStatus: () => _openStatusEditor(context, ref)),
-      DiaryUserState.visitor => VisitorArchiveView(token: visitorToken!),
+      DiaryUserState.visitor =>
+        VisitorArchiveView(scope: ArchiveScope.visitor(visitorToken!)),
       DiaryUserState.ownerWithoutProfile ||
       DiaryUserState.ownerWithProfile =>
         _ownerBranch(context, ref, profileAsync!, state),
@@ -193,6 +204,8 @@ class GrowthArchivePage extends ConsumerWidget {
           return _EmptyProfileView(
             onCreate: () => context.push('/profile/create'),
             onChangeStatus: () => _openStatusEditor(context, ref),
+            // Story 4.1 AC6：只有**养宠但尚未建档**这一态追加推荐集合。
+            showRecommendations: true,
           );
         },
       ),
@@ -292,14 +305,77 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
   /// 提前 400px 预取：等真正到底再转圈，用户会先看到一段空白。
   static const double _kPrefetchExtent = 400;
 
+  /// 综合入口卡的位置锚点，供迁移引导蒙层量高亮框（V1.3.0 Story 5.4）。
+  final GlobalKey _insightsEntryAnchor = GlobalKey();
+
+  /// 蒙层当前挂着的 OverlayEntry。非空 = 正在展示。
+  OverlayEntry? _coachmark;
+
+  /// 本次页面生命周期内是否已经尝试过 —— 防止 build 多次就弹多次。
+  bool _coachmarkTried = false;
+
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_maybeLoadMore);
+    // 首帧之后再问「弹不弹」：initState 里没有布局，量不到入口卡的位置。
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowMigrationCoachmark());
+  }
+
+  /// 迁移引导（V1.3.0 Story 5.4 · AD-A21.4）：**首次进入成长档案页**时弹一次，
+  /// 指着新入口条说明「身份证挪进这里了」。看过即置位，之后不再弹。
+  ///
+  /// 🛡 只在**本人态**走到这里 —— 本方法挂在 `_ArchiveBodyState` 上，
+  /// 而这个 State 只在「已登录 + 有档案」那一支被构建（游客态与访客态是另外两支）。
+  /// 因此**没有第二处态判断**（AD-A24.4）。
+  ///
+  /// 🛡 标记读不到一律按「未看过」处理（AC4）：离线首启、接口失败都走这条 ——
+  /// 多弹一次是已接受的代价，而"读失败就当看过"会让引导对一批人**永远不出现**。
+  Future<void> _maybeShowMigrationCoachmark() async {
+    if (_coachmarkTried || _coachmark != null) return;
+    _coachmarkTried = true;
+
+    final marks = await ref.read(onboardingMarksProvider.future);
+    if (!mounted || marks.contains(kOnboardingMarkKtpMoved)) return;
+
+    // 等布局完成再量位置：入口卡在页头里，首帧时还没有 RenderBox。
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    final box = _insightsEntryAnchor.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return; // 量不到就不弹，不画一个错位的框
+    final rect = box.localToGlobal(Offset.zero) & box.size;
+
+    final l10n = AppLocalizations.of(context);
+    final entry = OverlayEntry(
+      builder: (_) => CoachmarkOverlay(
+        spotlight: rect,
+        text: l10n.ktpMovedCoachmark,
+        confirmLabel: l10n.commonGotIt,
+        onDismiss: _dismissCoachmark,
+      ),
+    );
+    _coachmark = entry;
+    Overlay.of(context).insert(entry);
+  }
+
+  /// 关闭并置位。
+  ///
+  /// 🔴 **先关再置位**：置位是一次网络往返，等它回来再关会让「知道了」点下去顿一下；
+  /// 而置位失败的代价只是下次再弹一次（与离线首启同一档，已接受）。
+  void _dismissCoachmark() {
+    _coachmark?.remove();
+    _coachmark = null;
+    unawaited(ref
+        .read(onboardingMarksProvider.notifier)
+        .mark(kOnboardingMarkKtpMoved)
+        .catchError((_) {}));
   }
 
   @override
   void dispose() {
+    // 蒙层挂在 Overlay 上，不随本页的 widget 树一起拆 —— 不显式移除会留一层黑幕。
+    _coachmark?.remove();
+    _coachmark = null;
     _scroll.removeListener(_maybeLoadMore);
     _scroll.dispose();
     _loadMoreTick.dispose();
@@ -363,9 +439,16 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             milestoneCompleted: stats?.milestoneCompleted,
             milestoneTotal: stats?.milestoneTotal,
             healthRecordCount: stats?.healthRecordCount,
+            // 未庆祝角标（V1.3.0 Story 1.5）：搭 stats 这一次请求，不为它多发一次。
+            milestoneUncelebrated: stats?.milestoneUncelebrated ?? 0,
             titleAction: _shareButton(),
+            // 迁移引导蒙层的高亮框位置从这里量（Story 5.4）。只量位置，不改行为。
+            insightsEntryAnchor: _insightsEntryAnchor,
             onEditProfile: widget.onEditProfile,
-            onOpenIdCard: () => context.push('/profile/id-card'),
+            // V1.3.0 Story 5.1：入口卡指向聚合页（身份证是其中一张卡）。
+            // ⚠️ 逐条改，**不做前缀字符串替换** —— `/profile/id-cards/*` 多卡子路由
+            // 与它只差一个字母，替换会误伤（AD-A17.7）。
+            onOpenIdCard: () => context.push(PetInsightsRoutes.hub),
             onOpenHealth: () => context.push('/profile/health'),
             onOpenMilestones: () => context.push('/profile/milestones'),
           ),
@@ -703,7 +786,9 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
       case TimelineItemType.idCardIssued:
         return () {
           report();
-          context.push('/profile/id-card');
+          // 时间线上的这一条说的是「发了一张身份证」，所以**直达身份证页**，
+          // 不绕聚合页 —— 点一条具体记录却落在一个功能列表上是走回头路。
+          context.push(PetInsightsRoutes.idCard);
         };
     }
   }
@@ -923,8 +1008,18 @@ class _FirstMomentGuideCard extends StatelessWidget {
 ///
 /// 与状态 B/C（[_NonOwnerView]）是两种完全不同的人：对 A 催建档是对的（他说了有宠物、只是没填），
 /// 对 B/C 催建档等于无视他刚在 onboarding 里给出的回答（UX-DR6）。
-class _EmptyProfileView extends StatelessWidget {
-  const _EmptyProfileView({required this.onCreate, this.onChangeStatus});
+class _EmptyProfileView extends ConsumerWidget {
+  const _EmptyProfileView({
+    required this.onCreate,
+    this.onChangeStatus,
+    this.showRecommendations = false,
+  });
+
+  /// 是否追加「逛别人家的毛孩子」推荐集合（Story 4.1 · AC6）。
+  ///
+  /// ⚠️ **档案加载失败态不给**（那条分支也复用本组件）：那时连「这人有没有宠物」
+  /// 都不确定，先把失败这件事说清楚比推荐别人家的宠物重要。
+  final bool showRecommendations;
 
   final VoidCallback onCreate;
 
@@ -933,62 +1028,132 @@ class _EmptyProfileView extends StatelessWidget {
   final VoidCallback? onChangeStatus;
 
   @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Center(
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 🔴 **推荐位真的有卡**时才改版面（code-review 2026-09-15）。
+    // 网格铺满当前页后一屏放不下，Center 会把下面那两个操作挤出可视区 ——
+    // 而它们才是这一屏的主体，所以那时必须换成可滚动容器。
+    // 但「池子为空 / 取不到 / 还在加载」远比有卡常见（新站几乎必然为空），
+    // 那些情形下**这一屏必须与改动前逐像素相同** —— 否则就是拿一个常态换一个边角态。
+    // ⚠️ 与 PetRecommendationGrid 的「整块不渲染」是同一条纪律的两半：
+    //    它不渲染网格，这里不改版面。
+    final hasRecommendations = showRecommendations &&
+        (ref.watch(petRecommendationsProvider).value?.isNotEmpty ?? false);
+    if (!hasRecommendations) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: _guidance(context),
+        ),
+      );
+    }
+    // V1.3.0 batch-b1 Story 4.1 · AC6：推荐集合**追加在现有引导之下**，
+    // 原有「+ 建档」与「Ubah status」两个操作**原样保留、一个不删**。
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.screenEdge, vertical: AppSpacing.lg),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // A2 稿：🐾 + 标题 + 一句副文案（说明「为什么先建档」），再往下才是 CTA。
-          EmptyState(
-            title: l10n.growthArchiveEmptyTitle,
-            message: l10n.growthArchiveEmptyBody,
+          ..._guidance(context),
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xl),
+            child: PetRecommendationGrid(from: kPetRecommendFromDiaryEmpty),
           ),
-          FilledButton(
-            key: const ValueKey('growthCreateButton'),
-            onPressed: onCreate,
-            child: Text(l10n.growthArchiveEmptyCreate),
-          ),
-          if (onChangeStatus != null)
-            TextButton(
-              key: const ValueKey('growthChangeStatusButton'),
-              onPressed: onChangeStatus,
-              child: Text(l10n.growthArchiveChangeStatus),
-            ),
         ],
       ),
     );
   }
+
+  /// 建档引导那一段（EmptyState + 两个操作）—— **两个版面共用同一份**。
+  ///
+  /// 🔴 抽出来是为了让「引导内容一字未改」可被机械保证：两个分支渲染的是同一个
+  /// children 列表，连 key 都不可能在某一支里漂掉。
+  List<Widget> _guidance(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return [
+      // A2 稿：🐾 + 标题 + 一句副文案（说明「为什么先建档」），再往下才是 CTA。
+      EmptyState(
+        title: l10n.growthArchiveEmptyTitle,
+        message: l10n.growthArchiveEmptyBody,
+      ),
+      FilledButton(
+        key: const ValueKey('growthCreateButton'),
+        onPressed: onCreate,
+        child: Text(l10n.growthArchiveEmptyCreate),
+      ),
+      if (onChangeStatus != null)
+        // 🔴 AC6：「Ubah status」会改变宠物拥有状态 → **刻意弱化、与主按钮拉开距离**，
+        //    避免手滑误触。视觉上仍是既有的 TextButton（不重画），只多一段间距。
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.lg),
+          child: TextButton(
+            key: const ValueKey('growthChangeStatusButton'),
+            onPressed: onChangeStatus,
+            child: Text(l10n.growthArchiveChangeStatus),
+          ),
+        ),
+    ];
+  }
 }
 
-class _NonOwnerView extends StatelessWidget {
+/// 状态 B / C（PLANNING / ENTHUSIAST）：「声明未养宠 / 计划养宠」那一屏。
+///
+/// <h3>🔴 V1.3.0 batch-b1 Story 4.2：这一屏**也**给推荐集合（B1-D2）</h3>
+/// PRD §2.4 只写了「未建档态」，但代码里登录用户其实有**两种**无档案状态，
+/// 而「从没养过宠物、只是想先看看」的这批人恰恰最该被引去逛别人家的宠物 ——
+/// 看到一句「你还没有宠物」就退出去是这一屏改版前的真实结局。
+///
+/// ⚠️ 与未建档态（[_EmptyProfileView]）是**两批完全不同的人**，所以埋点的 `from` 也分开
+/// （AC3：`diary_non_owner` vs `diary_empty`），好分别看两批人的转化。
+/// 🛡 原有引导内容（标题 + 「Ubah status」）**原样保留、一个不删**（AC1）。
+class _NonOwnerView extends ConsumerWidget {
   const _NonOwnerView({required this.onChangeStatus});
 
   final VoidCallback onChangeStatus;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    // 🔴 同 _EmptyProfileView：**推荐位真的有卡**时才换版面。
+    // 池子为空 / 取不到 / 还在加载都远比有卡常见，那些情形下这一屏必须与改动前逐像素相同。
+    final hasRecommendations =
+        ref.watch(petRecommendationsProvider).value?.isNotEmpty ?? false;
+    final guidance = [
+      Text(l10n.growthArchiveNonOwnerTitle, textAlign: TextAlign.center),
+      const SizedBox(height: AppSpacing.lg),
+      FilledButton(
+        key: const ValueKey('changeStatusButton'),
+        onPressed: onChangeStatus,
+        child: Text(l10n.growthArchiveChangeStatus),
+      ),
+    ];
     return Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(title: Text(l10n.tabProfile), backgroundColor: AppColors.base),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(l10n.growthArchiveNonOwnerTitle, textAlign: TextAlign.center),
-              const SizedBox(height: AppSpacing.lg),
-              FilledButton(
-                key: const ValueKey('changeStatusButton'),
-                onPressed: onChangeStatus,
-                child: Text(l10n.growthArchiveChangeStatus),
+      body: hasRecommendations
+          ? SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ...guidance,
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xl),
+                    child:
+                        PetRecommendationGrid(from: kPetRecommendFromDiaryNonOwner),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-      ),
+            )
+          : Center(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: guidance,
+                ),
+              ),
+            ),
     );
   }
 }
