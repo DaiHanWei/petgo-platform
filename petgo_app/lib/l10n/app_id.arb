@@ -2172,7 +2172,7 @@
   "supportWhatsappOpenFailed": "Tidak bisa membuka WhatsApp.",
   "supportWhatsappCopyNumber": "Salin nomor",
   "supportWhatsappNumberCopied": "Nomor layanan pelanggan disalin",
-  "ticketRelatedOrderLabel": "Pesanan terkait",
+  "ticketRelatedOrderLabel": "PESANAN TERKAIT (OPSIONAL)",
   "ticketRelatedOrderNone": "Tidak terkait pesanan",
   "ticketRelatedOrderPick": "Pilih pesanan",
   "ticketRelatedOrderPreset": "Pesanan terpilih",

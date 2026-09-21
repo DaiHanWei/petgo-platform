@@ -362,7 +362,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                 emoji: '💬',
                 label: l10n.detailReply,
                 onTap: () => ref
-                    .read(replyTargetProvider.notifier)
+                    .read(replyTargetProvider(widget.postId).notifier)
                     .set(ReplyTarget(parentId: c.id, toName: name)),
               ),
               if (canDelete)
@@ -477,6 +477,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     final l10n = AppLocalizations.of(context);
     // 发表/回复/删除后重拉（Story 3.5）。
     ref.listen<int>(commentsRefreshProvider, (prev, next) => _reload());
+    // 回复态是按帖 autoDispose 的：评论区在，回复目标就得在（不依赖同页一定挂着输入框）。
+    ref.listen<ReplyTarget?>(replyTargetProvider(widget.postId), (_, _) {});
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.all(AppSpacing.lg),
@@ -589,7 +591,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       takenDownLabel: c.isTakenDownForAuthor ? l10n.commentTakenDownSelfOnly : null,
       canDelete: _canDelete(c),
       onReply: () =>
-          ref.read(replyTargetProvider.notifier).set(ReplyTarget(parentId: c.id, toName: name)),
+          ref.read(replyTargetProvider(widget.postId).notifier).set(ReplyTarget(parentId: c.id, toName: name)),
       // V1.3.0 batch-b1 Story 3.3：点评论里的 @ → 那个人的公开主页（AC2）。
       // ⚠️ 与 onAuthorTap 分开：被 @ 的人通常**不是**这条评论的作者，
       //    共用回调会把错的人从列表里清掉。

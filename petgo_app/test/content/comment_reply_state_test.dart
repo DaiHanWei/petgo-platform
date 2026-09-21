@@ -141,7 +141,7 @@ void main() {
     testWidgets('回复态：胶囊出现，占位换成「回复 @昵称…」', (tester) async {
       final container = await mountComposer(tester, _Repo());
       container
-          .read(replyTargetProvider.notifier)
+          .read(replyTargetProvider(5).notifier)
           .set(const ReplyTarget(parentId: 86, toName: 'Rina'));
       await tester.pumpAndSettle();
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
@@ -155,18 +155,71 @@ void main() {
     });
   });
 
+  // 2026-09-21 stag 验收：在帖 A 点了回复、没发也没点 ✕ 就离开，
+  // 进帖 B 输入框仍挂着「正在回复 @某人」—— 发出去的 parentId 是帖 A 的评论。
+  group('回复态按帖隔离', () {
+    testWidgets('帖 5 的回复目标不会出现在帖 6 的输入框', (tester) async {
+      final container = await mountComposer(tester, _Repo());
+      container
+          .read(replyTargetProvider(5).notifier)
+          .set(const ReplyTarget(parentId: 86, toName: 'Rina'));
+      await tester.pumpAndSettle();
+      expect(pill(), findsOneWidget);
+
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: Locale('en'),
+          home: Scaffold(body: CommentComposer(postId: 6)),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(pill(), findsNothing);
+      expect(container.read(replyTargetProvider(6)), isNull);
+    });
+
+    testWidgets('离开帖子后回来，回复态已清空', (tester) async {
+      final container = await mountComposer(tester, _Repo());
+      container
+          .read(replyTargetProvider(5).notifier)
+          .set(const ReplyTarget(parentId: 86, toName: 'Rina'));
+      await tester.pumpAndSettle();
+
+      // 只拆输入框、ProviderScope 留着 —— 与真实 App 里「pop 掉详情页」一致。
+      Widget app(Widget body) => UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              locale: const Locale('en'),
+              home: Scaffold(body: body),
+            ),
+          );
+      await tester.pumpWidget(app(const SizedBox()));
+      await tester.pumpAndSettle();
+      expect(container.exists(replyTargetProvider(5)), isFalse);
+
+      await tester.pumpWidget(app(const CommentComposer(postId: 5)));
+      await tester.pumpAndSettle();
+      expect(pill(), findsNothing);
+    });
+  });
+
   group('AC3 两种退出方式', () {
     testWidgets('点 ✕ → 退出，占位恢复通用文案', (tester) async {
       final container = await mountComposer(tester, _Repo());
       container
-          .read(replyTargetProvider.notifier)
+          .read(replyTargetProvider(5).notifier)
           .set(const ReplyTarget(parentId: 86, toName: 'Rina'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const ValueKey('cancelReply')));
       await tester.pumpAndSettle();
 
-      expect(container.read(replyTargetProvider), isNull);
+      expect(container.read(replyTargetProvider(5)), isNull);
       expect(pill(), findsNothing);
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
       expect(find.text(l10n.detailCommentHint), findsOneWidget);
@@ -175,18 +228,18 @@ void main() {
     testWidgets('打过字又清空 → 同样退出（改前只有 ✕ 一条路）', (tester) async {
       final container = await mountComposer(tester, _Repo());
       container
-          .read(replyTargetProvider.notifier)
+          .read(replyTargetProvider(5).notifier)
           .set(const ReplyTarget(parentId: 86, toName: 'Rina'));
       await tester.pumpAndSettle();
 
       await tester.enterText(input(), 'halo');
       await tester.pump();
-      expect(container.read(replyTargetProvider), isNotNull, reason: '打字中还在回复态');
+      expect(container.read(replyTargetProvider(5)), isNotNull, reason: '打字中还在回复态');
 
       await tester.enterText(input(), '');
       await tester.pumpAndSettle();
 
-      expect(container.read(replyTargetProvider), isNull);
+      expect(container.read(replyTargetProvider(5)), isNull);
       expect(pill(), findsNothing);
     });
 
@@ -196,11 +249,11 @@ void main() {
     testWidgets('刚进回复态（输入框本来就空）不会自己退出', (tester) async {
       final container = await mountComposer(tester, _Repo());
       container
-          .read(replyTargetProvider.notifier)
+          .read(replyTargetProvider(5).notifier)
           .set(const ReplyTarget(parentId: 86, toName: 'Rina'));
       await tester.pumpAndSettle();
 
-      expect(container.read(replyTargetProvider), isNotNull);
+      expect(container.read(replyTargetProvider(5)), isNotNull);
       expect(pill(), findsOneWidget);
     });
 
@@ -208,7 +261,7 @@ void main() {
     testWidgets('只敲空格再删掉，回复态不受影响', (tester) async {
       final container = await mountComposer(tester, _Repo());
       container
-          .read(replyTargetProvider.notifier)
+          .read(replyTargetProvider(5).notifier)
           .set(const ReplyTarget(parentId: 86, toName: 'Rina'));
       await tester.pumpAndSettle();
 
@@ -217,7 +270,7 @@ void main() {
       await tester.enterText(input(), '');
       await tester.pumpAndSettle();
 
-      expect(container.read(replyTargetProvider), isNotNull);
+      expect(container.read(replyTargetProvider(5)), isNotNull);
     });
   });
 
@@ -243,7 +296,7 @@ void main() {
       final repo = _Repo();
       final container = await mountComposer(tester, repo);
       container
-          .read(replyTargetProvider.notifier)
+          .read(replyTargetProvider(5).notifier)
           .set(const ReplyTarget(parentId: 86, toName: 'Rina'));
       await tester.pumpAndSettle();
 
@@ -256,7 +309,7 @@ void main() {
       expect(container.read(replyLandingProvider)?.parentId, 86);
       // 🔴 落点带着**新回复的 id**：回复区不止一页时，评论区靠它知道翻到哪儿才算到位。
       expect(container.read(replyLandingProvider)?.replyId, repo.newReplyId);
-      expect(container.read(replyTargetProvider), isNull);
+      expect(container.read(replyTargetProvider(5)), isNull);
     });
 
     /// 🔴 连着回同一条父评论两次，必须**两次都定位**。
@@ -264,7 +317,7 @@ void main() {
     testWidgets('连回同一条两次 → seq 递增（否则第二次不会触发定位）', (tester) async {
       final repo = _Repo();
       final container = await mountComposer(tester, repo);
-      final notifier = container.read(replyTargetProvider.notifier);
+      final notifier = container.read(replyTargetProvider(5).notifier);
 
       Future<void> replyOnce(String text) async {
         notifier.set(const ReplyTarget(parentId: 86, toName: 'Rina'));

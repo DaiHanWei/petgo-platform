@@ -345,6 +345,8 @@ void main() {
 
       final btn = tester.widget<ShopButton>(find.byKey(const ValueKey('cartCheckoutV2')));
       expect(btn.onTap, isNull, reason: '禁用态不能靠后端 422 来告诉用户');
+      // 光 onTap 为 null 不够：ShopButton 的配色只看 variant，不切的话按钮照样实心紫（2026-09-21 stag 验收）。
+      expect(btn.variant, ShopButtonVariant.disabled, reason: '禁用态必须看得出来');
       expect(find.text('Pilih minimal satu produk untuk checkout'), findsOneWidget);
       expect(find.text('Rp 0'), findsOneWidget);
 

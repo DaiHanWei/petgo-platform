@@ -272,7 +272,8 @@ class _CartPageV2State extends ConsumerState<CartPageV2> {
       action: ShopButton(
         key: const ValueKey('cartCheckoutV2'),
         label: l10n.cartCheckout,
-        variant: ShopButtonVariant.pay,
+        // ShopButton 的配色只看 variant —— 光把 onTap 置 null，按钮仍是实心紫、点了没反应（2026-09-21 stag 验收）。
+        variant: nothingSelected ? ShopButtonVariant.disabled : ShopButtonVariant.pay,
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
         onTap: nothingSelected ? null : () => context.push('/shop/checkout'),
       ),
