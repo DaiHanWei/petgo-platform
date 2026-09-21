@@ -94,6 +94,18 @@ const int _petId = 42;
 void main() {
   /// V1.3.0 batch-b1 Story 2.3 · AC4/AC5：同一屏的两种来源。
   group('站内入口（AD-4 Rule 5）', () {
+    /// 2026-09-21 stag 验收：空时间线曾沿用主人态「Record Mochi's first diary entry」——
+    /// 访客看的是别人的宠物，不能邀请他去写。
+    testWidgets('时间线为空 → 访客文案，不出现主人态「去写第一篇」', (tester) async {
+      await tester.pumpWidget(_wrapInApp());
+      await tester.pumpAndSettle();
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+      expect(find.byKey(const ValueKey('visitorTimelineEmpty')), findsOneWidget);
+      expect(find.text(l10n.growthArchiveVisitorTimelineEmpty('Mochi')), findsOneWidget);
+      expect(find.text(l10n.growthArchiveTimelineEmpty('Mochi')), findsNothing);
+    });
+
     /// 🔴 **站内进入不渲染来源横幅**：从别人主页点宠物卡进来时，
     /// 「谁分享的」这个前提根本不成立。从分享链接进来时照旧显示（上面那组用例守着）。
     testWidgets('站内进入 → 没有「由 XX 分享」横幅，其余一字不变', (tester) async {

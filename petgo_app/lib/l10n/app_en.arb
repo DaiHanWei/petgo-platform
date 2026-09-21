@@ -217,6 +217,8 @@
   "growthArchiveNonOwnerTitle": "The diary is for pet owners. Change your pet status to unlock it.",
   "growthArchiveChangeStatus": "Change status",
   "growthArchiveTimelineEmpty": "Record {name}'s first diary entry",
+  "growthArchiveVisitorTimelineEmpty": "{name} has no public diary entries yet",
+  "@growthArchiveVisitorTimelineEmpty": {"description": "Pet archive, VISITOR view: empty timeline. Must not invite the visitor to write - it is someone else's pet.", "placeholders": {"name": {"type": "String"}}},
   "@growthArchiveTimelineEmpty": {
     "description": "Diary timeline: first-entry guide card title",
     "placeholders": {
@@ -488,7 +490,7 @@
   "contentDeleteConfirm": "Deleted content is permanently removed and cannot be restored.",
   "contentDeleteFailed": "Could not delete, please try again",
   "reportTitle": "Report this content",
-  "reportReasonIllegal": "illegal or against the rules",
+  "reportReasonIllegal": "Illegal or against the rules",
   "reportReasonMisinfo": "False information",
   "reportReasonInappropriate": "Inappropriate content",
   "reportReasonHarassment": "Harassment",
