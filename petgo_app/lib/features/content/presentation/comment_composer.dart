@@ -92,7 +92,7 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       // 🔴 只在 true → false 这一跳上退出，不是「只要为空就退出」：
       // 刚点回复时输入框本来就是空的，那时退出会让回复态当场自毁。
       if (!has) {
-        ref.read(replyTargetProvider.notifier).clear();
+        ref.read(replyTargetProvider(widget.postId).notifier).clear();
       }
       setState(() => _hasText = has);
     }
@@ -182,7 +182,7 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
       _mentionQuery = null;
       _limitToasted = false;
       FocusScope.of(context).unfocus();
-      ref.read(replyTargetProvider.notifier).clear();
+      ref.read(replyTargetProvider(widget.postId).notifier).clear();
       ref.read(commentsRefreshProvider.notifier).bump();
     } catch (e) {
       if (!mounted) return;
@@ -194,7 +194,7 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
         _controller.clear();
         _mentions.clear(); // 输入被清空，@ 绑定跟着作废（留着会跟下一条评论串味）
         _mentionQuery = null;
-        ref.read(replyTargetProvider.notifier).clear(); // 退出回复态（父已不存在，重试无意义）
+        ref.read(replyTargetProvider(widget.postId).notifier).clear(); // 退出回复态（父已不存在，重试无意义）
         ref.read(commentsRefreshProvider.notifier).bump(); // 刷新评论区，让已删除的父评论从列表消失
         showAppToast(context, l10n.commentReplyTargetDeleted);
       } else if (problem?.typeSlug == 'comment-blocked') {
@@ -214,10 +214,10 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final isGuest = ref.watch(authControllerProvider).status == AuthStatus.guest;
-    final replyTarget = ref.watch(replyTargetProvider);
+    final replyTarget = ref.watch(replyTargetProvider(widget.postId));
 
     // 点「回复」设置回复目标 → 自动弹键盘（游客无回复入口，无需判 guest）。
-    ref.listen<ReplyTarget?>(replyTargetProvider, (prev, next) {
+    ref.listen<ReplyTarget?>(replyTargetProvider(widget.postId), (prev, next) {
       if (next != null) _focusNode.requestFocus();
     });
     // 点互动栏评论图标 → 弹键盘；游客转登录引导（FR-0C）。
@@ -290,7 +290,7 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
                       GestureDetector(
                         key: const ValueKey('cancelReply'),
                         behavior: HitTestBehavior.opaque,
-                        onTap: () => ref.read(replyTargetProvider.notifier).clear(),
+                        onTap: () => ref.read(replyTargetProvider(widget.postId).notifier).clear(),
                         child: const Padding(
                           padding: EdgeInsets.all(AppSpacing.xs),
                           child: Icon(Icons.close_rounded,

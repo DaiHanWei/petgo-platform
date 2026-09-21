@@ -219,10 +219,10 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(container.read(replyTargetProvider), isNull); // 前置：无回复态
+    expect(container.read(replyTargetProvider(5)), isNull); // 前置：无回复态
     await tester.tap(find.byKey(const ValueKey('commentItem_11')));
     await tester.pumpAndSettle();
-    final rt = container.read(replyTargetProvider);
+    final rt = container.read(replyTargetProvider(5));
     expect(rt, isNotNull);
     expect(rt!.parentId, 11); // 回复该评论（二级由后端归并到一级父，不产生三级）
     expect(rt.toName, 'U2');

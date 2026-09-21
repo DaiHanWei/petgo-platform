@@ -2297,7 +2297,7 @@
   },
   "ageCardPreviewTitle": "Pet Age Card",
   "@ageCardPreviewTitle": { "description": "年龄卡预览页标题" },
-  "ageCardHumanYears": "≈ {years} human years",
+  "ageCardHumanYears": "{years, plural, =1{≈ 1 human year} other{≈ {years} human years}}",
   "@ageCardHumanYears": {
     "description": "卡面主视觉：人类年龄当量。「≈」不可省——这是个估算，写成等号会被当成精确结论",
     "placeholders": { "years": { "type": "int" } }
@@ -2307,7 +2307,7 @@
     "description": "卡面上的实际年龄",
     "placeholders": { "years": { "type": "int" }, "months": { "type": "int" } }
   },
-  "ageCardRealAgeMonths": "{months} months",
+  "ageCardRealAgeMonths": "{months, plural, =1{1 month} other{{months} months}}",
   "@ageCardRealAgeMonths": {
     "description": "未满 1 岁时的实际年龄",
     "placeholders": { "months": { "type": "int" } }
@@ -2884,7 +2884,7 @@
   "@cartReasonOutOfStock": {"description": "Cart line badge: this variant is sold out — temporary, the user can wait. Must stay distinct from the delisted wording or users make the wrong call"},
   "cartReasonUnavailable": "Unavailable",
   "@cartReasonUnavailable": {"description": "Cart line badge: fallback for an unknown invalidReason from a newer backend. Promises nothing about permanence"},
-  "cartTotalLabel": "Total ({count} items)",
+  "cartTotalLabel": "Total ({count, plural, =1{1 item} other{{count} items}})",
   "@cartTotalLabel": {"description": "Cart page: bottom bar total label. count is the number of ITEMS, not distinct products", "placeholders": {"count": {"type": "int"}}},
   "cartCheckout": "Checkout",
   "@cartCheckout": {"description": "Cart page: checkout button"},
@@ -3307,7 +3307,7 @@
   "@supportWhatsappCopyNumber": {"description": "Story 3-3: fallback action when the deep link will not open. Copies the display form (08...), not the E.164 form"},
   "supportWhatsappNumberCopied": "Customer service number copied",
   "@supportWhatsappNumberCopied": {"description": "Story 3-3: confirmation toast after copying the customer service number"},
-  "ticketRelatedOrderLabel": "Related order",
+  "ticketRelatedOrderLabel": "RELATED ORDER (OPTIONAL)",
   "@ticketRelatedOrderLabel": {"description": "Story 3-3: ticket compose page, the order picker field label"},
   "ticketRelatedOrderNone": "Not linked to an order",
   "@ticketRelatedOrderNone": {"description": "Story 3-3: ticket compose page, the option that clears the related-order selection"},
@@ -3612,7 +3612,7 @@
   "@profileNotFound": {"description": "Public profile: the account is deactivated, or the id does not exist. Deliberately the SAME wording for both - which one it is must not leak."},
   "profileBlockedEmpty": "You've blocked this user",
   "@profileBlockedEmpty": {"description": "Public profile: you blocked this person, so their profile can no longer be opened. Distinct from a network failure - retrying will never work."},
-  "profileCounts": "{postCount} posts · {likeCount} likes",
+  "profileCounts": "{postCount, plural, =1{1 post} other{{postCount} posts}} · {likeCount, plural, =1{1 like} other{{likeCount} likes}}",
   "@profileCounts": {"description": "Public profile: the two aggregate numbers under the identity block. Both count PUBLIC content only - the grid below shows exactly those posts.", "placeholders": {"postCount": {"type": "int"}, "likeCount": {"type": "int"}}},
   "profilePostsTitle": "Posts",
   "@profilePostsTitle": {"description": "Public profile: heading above the 2-column content grid. Someone else's posts, so NOT the \"My posts\" wording."},

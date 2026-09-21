@@ -40,8 +40,14 @@ class ReplyTargetNotifier extends Notifier<ReplyTarget?> {
   void clear() => state = null;
 }
 
-final NotifierProvider<ReplyTargetNotifier, ReplyTarget?> replyTargetProvider =
-    NotifierProvider<ReplyTargetNotifier, ReplyTarget?>(ReplyTargetNotifier.new);
+/// 🔴 **按帖子 id 隔离 + autoDispose**：改前是全局单例 —— 在帖 A 点了「回复」没发也没点 ✕
+/// 就离开，进帖 B 输入框仍挂着「正在回复 @某人」，发出去的 parentId 是帖 A 的评论。
+/// 2-6 把回复态显式化后这条泄漏才被看见（2026-09-21 stag 验收）。
+final replyTargetProvider =
+    NotifierProvider.family<ReplyTargetNotifier, ReplyTarget?, int>(
+  (_) => ReplyTargetNotifier(),
+  isAutoDispose: true,
+);
 
 /// 🔴 回复发表成功后的**落点**（V1.3.0 Story 2.6 · AC5）。
 ///

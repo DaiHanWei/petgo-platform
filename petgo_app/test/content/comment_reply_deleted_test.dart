@@ -82,7 +82,7 @@ void main() {
     addTearDown(container.dispose);
     container.read(authControllerProvider.notifier).applyLogin(_user(1));
     // 进入回复态（回复评论 86）。
-    container.read(replyTargetProvider.notifier).set(const ReplyTarget(parentId: 86, toName: 'U2'));
+    container.read(replyTargetProvider(5).notifier).set(const ReplyTarget(parentId: 86, toName: 'U2'));
 
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
@@ -105,7 +105,7 @@ void main() {
     expect(repo.postReplyCalls, 1);
     expect(find.text(l10n.commentReplyTargetDeleted), findsOneWidget);
     expect(find.text(l10n.commentSendFailed), findsNothing); // 不再是通用失败提示
-    expect(container.read(replyTargetProvider), isNull); // 已退出回复态
+    expect(container.read(replyTargetProvider(5)), isNull); // 已退出回复态
     await tester.pump(const Duration(seconds: 3)); // 走完 toast 定时器
   });
 }
