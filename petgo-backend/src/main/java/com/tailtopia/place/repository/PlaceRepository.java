@@ -73,6 +73,50 @@ public interface PlaceRepository extends JpaRepository<Place, Long> {
         return java.math.BigDecimal.valueOf(v);
     }
 
+    // ===== Story 1.11：带筛选的两条分支（原生查询） =====
+    //
+    // 🔴 为什么是原生：标签是 JSONB 数组，JPQL 表达不了「包含」。无筛选时调用方**继续走上面两条 JPQL**
+    //    （零回归），只有带了 type / tag 才走这里。两条仍是**各自独立**的分支（AD-2 Rule 5），
+    //    只是 WHERE 里各多了同样的两项筛选；deleted_at IS NULL 与 status 条件一个都不能丢。
+    //
+    // 绑定约定（由 PlaceListFilter 生成，只含已校验的枚举名，绝不含用户原始输入）：
+    //   :types    逗号拼接的 PlaceType 名；'' = 不筛类型（类型之间「或」）
+    //   :tagsJson JSON 数组；'[]' = 不筛标签（tags @> '[]' 恒真；数组内多个值 = 「且」）
+    // V1 场所百级，不加 GIN 索引（AC6）。
+
+    /** 「按最新」分支 + 筛选（Story 1.11 AC2/AC3）。排序、上限与 {@link #findByStatusOrderByCreatedAtDescIdDesc} 相同。 */
+    @Query(value = "SELECT p.* FROM places p "
+            + "WHERE p.status = :status AND p.deleted_at IS NULL "
+            + "AND (CAST(:types AS text) = '' OR p.place_type = ANY(string_to_array(CAST(:types AS text), ','))) "
+            + "AND p.tags @> CAST(:tagsJson AS jsonb) "
+            + "ORDER BY p.created_at DESC, p.id DESC "
+            + "LIMIT :limit", nativeQuery = true)
+    List<Place> findRecentFiltered(@Param("status") String status, @Param("types") String types,
+            @Param("tagsJson") String tagsJson, @Param("limit") int limit);
+
+    /** 「按距离」粗筛 + 筛选（Story 1.11 AC3）。矩形条件与代理距离排序与 {@link #findActiveWithinBox} 相同。 */
+    @Query(value = "SELECT p.* FROM places p "
+            + "WHERE p.status = :status AND p.deleted_at IS NULL "
+            + "AND p.lat BETWEEN :minLat AND :maxLat "
+            + "AND p.lng BETWEEN :minLng AND :maxLng "
+            + "AND (CAST(:types AS text) = '' OR p.place_type = ANY(string_to_array(CAST(:types AS text), ','))) "
+            + "AND p.tags @> CAST(:tagsJson AS jsonb) "
+            + "ORDER BY abs(p.lat - :lat) + abs(p.lng - :lng) ASC, p.id DESC "
+            + "LIMIT :limit", nativeQuery = true)
+    List<Place> findWithinBoxFiltered(@Param("status") String status,
+            @Param("lat") java.math.BigDecimal lat, @Param("lng") java.math.BigDecimal lng,
+            @Param("minLat") java.math.BigDecimal minLat, @Param("maxLat") java.math.BigDecimal maxLat,
+            @Param("minLng") java.math.BigDecimal minLng, @Param("maxLng") java.math.BigDecimal maxLng,
+            @Param("types") String types, @Param("tagsJson") String tagsJson, @Param("limit") int limit);
+
+    /** double 入参的便捷重载。 */
+    default List<Place> findWithinBoxFiltered(PlaceStatus status, double lat, double lng,
+            double minLat, double maxLat, double minLng, double maxLng,
+            String types, String tagsJson, int limit) {
+        return findWithinBoxFiltered(status.name(), bd(lat), bd(lng), bd(minLat), bd(maxLat), bd(minLng), bd(maxLng),
+                types, tagsJson, limit);
+    }
+
     /** 按不可枚举 token 取在架场所（详情 / H5）。未知 token → 空，调用方回 404 防枚举探测。 */
     /**
      * 按 token 取（D4 解析的底层）：**不看状态**（MERGED 要转去保留场所），但软删的不算。

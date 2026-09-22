@@ -1722,6 +1722,14 @@
   "@timelineIdCardTapToView": {
     "description": "Diary timeline: ID card unlocked card subtitle"
   },
+  "idCardEntrySub": "Yuk, buat KTP Kerajaan Hewan!",
+  "@idCardEntrySub": {
+    "description": "Know Your Pet hub: KTP (pet ID card) entry card subtitle (bug 504)"
+  },
+  "ageCardEntrySub": "Berapa umur hewanmu versi manusia?",
+  "@ageCardEntrySub": {
+    "description": "Know Your Pet hub: age calculator entry card subtitle when enabled (bug 503)"
+  },
   "diaryDemoChip": "Contoh",
   "@diaryDemoChip": {
     "description": "Diary guest state: chip marking the timeline as a sample, not real data"
@@ -2345,6 +2353,12 @@
   "ageCardSizeContinue": "Lanjutkan",
   "ktpMovedCoachmarkTitle": "Kartu Identitas pindah ke sini!",
   "placeSortRecent": "Terbaru",
+  "placeFilterType": "Jenis",
+  "placeFilterTag": "Tag",
+  "placeFilterApply": "Terapkan",
+  "placeFilterReset": "Atur ulang",
+  "placeFilterEmptyTitle": "Tidak ada tempat yang cocok",
+  "placeFilterClearAll": "Hapus filter",
   "petRecommendListTitle": "Hewan Peliharaan Lain",
   "placeMarkLocationLabel": "Lokasi"
 }

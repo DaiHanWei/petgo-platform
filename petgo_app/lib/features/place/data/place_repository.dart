@@ -5,6 +5,7 @@ import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/place_comment.dart';
 import '../domain/place_detail.dart';
+import '../domain/place_list_filter.dart';
 import '../domain/place_summary.dart';
 
 /// 场所数据层（V1.3.0 batch-b1 Story 1.1，消费 `GET /api/v1/places`）。
@@ -32,14 +33,29 @@ class PlaceRepository {
   /// App 侧 `api_log_interceptor.dart` 的 `_redactQueryKeys`（debug 控制台），
   /// 服务端侧 `ApiAccessLoggingFilter.redactQuery`（prod INFO 落盘、留 14 天，这条更要紧）。
   /// 加新的位置类参数时两处都要加。
-  Future<PlaceListResult> fetchPlaces({double? lat, double? lng}) async {
+  ///
+  /// 筛选（Story 1.11）：[filter] 非空时追加**可重复**的 `type` / `tag` 参数
+  /// （`?type=CAFE&type=PARK&tag=PET_MENU`，dio 的 [ListFormat.multi]）。
+  /// 语义在服务端：类型间「或」、标签间「且」；非法值服务端回 422（客户端只送枚举字面量，不会触发）。
+  /// 🔴 [filter] 为空时**一个参数都不加** —— 与 1.11 之前的请求一字不差（AC1「不传 = 不筛」）。
+  Future<PlaceListResult> fetchPlaces({
+    double? lat,
+    double? lng,
+    PlaceListFilter filter = PlaceListFilter.none,
+  }) async {
     final withCoords = lat != null && lng != null;
+    final types = filter.typeParams;
+    final tags = filter.tagParams;
     final resp = await dio.get<Map<String, dynamic>>(
       ApiPaths.places,
       queryParameters: {
         'lat': ?(withCoords ? lat : null),
         'lng': ?(withCoords ? lng : null),
+        if (types.isNotEmpty) 'type': types,
+        if (tags.isNotEmpty) 'tag': tags,
       },
+      // 显式钉 multi：不依赖 BaseOptions 的默认值（改成 csv 的话服务端会把 "CAFE,PARK" 当成一个非法值回 422）。
+      options: filter.isEmpty ? null : Options(listFormat: ListFormat.multi),
     );
     final data = resp.data;
     if (data == null) {
@@ -190,15 +206,18 @@ class PlaceRepository {
 final placeRepositoryProvider =
     Provider<PlaceRepository>((ref) => PlaceRepository(dio: ref.read(dioProvider)));
 
-/// 列表的族键：一对可空坐标（都为 null = 按最新）。
+/// 列表的族键：一对可空坐标（都为 null = 按最新）+ 筛选条件（Story 1.11 · AC10）。
 ///
 /// 🔴 用 **record** 而不是自定义类：record 天生结构相等，family 的缓存/去重直接就对了；
 /// 换成普通类就得手写 `==`/`hashCode`，漏一个就会每次重建都当成新族键、无限重拉
 /// （同 `shop_repository.dart` 的 `ShopProductsQuery`）。
-typedef PlaceListQuery = ({double? lat, double? lng});
+/// ⚠️ `filter` 字段是 [PlaceListFilter]（自带无序集合的结构相等）—— **别换成裸 Set/List**，
+/// 那两者的 `==` 是身份相等，会让 record 的结构相等失效。
+typedef PlaceListQuery = ({double? lat, double? lng, PlaceListFilter filter});
 
-/// 按最新（无坐标）的族键常量 —— 省得各处重复写字面量。
-const PlaceListQuery placeListRecentQuery = (lat: null, lng: null);
+/// 按最新（无坐标、无筛选）的族键常量 —— 省得各处重复写字面量。
+const PlaceListQuery placeListRecentQuery =
+    (lat: null, lng: null, filter: PlaceListFilter.none);
 
 /// 族键里坐标保留的小数位（3 位 ≈ 110 m）。
 ///
@@ -210,10 +229,11 @@ const PlaceListQuery placeListRecentQuery = (lat: null, lng: null);
 /// 顺带少往服务端送几位精度。
 const int _queryCoordinatePrecision = 3;
 
-/// 从一对坐标构造族键（null 坐标 → [placeListRecentQuery]）。
-PlaceListQuery placeListQueryFor(double? lat, double? lng) {
-  if (lat == null || lng == null) return placeListRecentQuery;
-  return (lat: _round(lat), lng: _round(lng));
+/// 从一对坐标 + 筛选构造族键（null 坐标 → 按最新；无筛选时即 [placeListRecentQuery]）。
+PlaceListQuery placeListQueryFor(double? lat, double? lng,
+    {PlaceListFilter filter = PlaceListFilter.none}) {
+  if (lat == null || lng == null) return (lat: null, lng: null, filter: filter);
+  return (lat: _round(lat), lng: _round(lng), filter: filter);
 }
 
 double _round(double v) {
@@ -222,13 +242,15 @@ double _round(double v) {
   return (v * f).roundToDouble() / f;
 }
 
-/// 场所列表，按坐标分族。
+/// 场所列表，按坐标 + 筛选分族（改筛选 = 新请求；同一组筛选命中缓存，AC10）。
 ///
 /// `autoDispose`：场所列表是从首页入口推进来的一次性页面，退出后没必要留着；
 /// 而且坐标每次定位都可能微变 —— 不自动回收的话这些一次性族键会一直挂着。
 final placeListProvider = FutureProvider.autoDispose
     .family<PlaceListResult, PlaceListQuery>((ref, q) async {
-  return ref.read(placeRepositoryProvider).fetchPlaces(lat: q.lat, lng: q.lng);
+  return ref
+      .read(placeRepositoryProvider)
+      .fetchPlaces(lat: q.lat, lng: q.lng, filter: q.filter);
 });
 
 /// 场所详情（按 token + 可选坐标分族）。

@@ -6,12 +6,14 @@ import com.tailtopia.place.dto.PlaceCreateRequest;
 import com.tailtopia.place.dto.PlaceCreatedResponse;
 import com.tailtopia.place.dto.PlaceDetailResponse;
 import com.tailtopia.place.dto.PlaceListResponse;
+import com.tailtopia.place.service.PlaceListFilter;
 import com.tailtopia.place.service.PlaceQueryService;
 import com.tailtopia.place.service.PlaceService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import jakarta.validation.Valid;
 import java.time.Duration;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -65,6 +67,9 @@ public class PlaceController {
      * 场所列表（Story 1.1 AC2 / Story 1.2 AC1）。
      *
      * <p>带 {@code lat}+{@code lng} → 按直线距离升序；不带 → 按创建时间倒序。
+     *
+     * <p>筛选（Story 1.11）：{@code type}（{@code PlaceType} 名，可重复，彼此「或」）、
+     * {@code tag}（{@code PlaceTag} 名，可重复，彼此「且」），两维度之间「且」。都不传 = 不筛。
      * 「按最新」是**默认路径而不是降级路径** —— 无定位权限是 PRD ② 明定的正常态。
      *
      * <p>🔴 <b>坐标只能同时给或同时不给</b>，且必须落在合法区间（纬度 ±90 / 经度 ±180）：
@@ -78,15 +83,19 @@ public class PlaceController {
     @GetMapping
     public PlaceListResponse list(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) Double lat,
-            @RequestParam(required = false) Double lng) {
+            @RequestParam(required = false) Double lng,
+            @RequestParam(name = "type", required = false) List<String> type,
+            @RequestParam(name = "tag", required = false) List<String> tag) {
         if ((lat == null) != (lng == null)) {
             throw AppException.validation("经纬度必须同时提供");
         }
         if (lat != null && !GeoBox.isValidCoordinate(lat, lng)) {
             throw AppException.validation("坐标超出合法范围");
         }
+        // Story 1.11：type / tag 可重复、可选；非法值或超次数 → 422（PlaceListFilter.parse）。
+        PlaceListFilter filter = PlaceListFilter.parse(type, tag);
         // viewer 维度：评论数要按拉黑关系过滤（Story 1.7）。游客为 null，**不抛 401**。
-        return query.list(lat, lng, optionalUserId(jwt));
+        return query.list(lat, lng, optionalUserId(jwt), filter);
     }
 
     /**

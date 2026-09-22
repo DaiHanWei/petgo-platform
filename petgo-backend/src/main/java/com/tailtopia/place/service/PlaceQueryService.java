@@ -150,10 +150,20 @@ public class PlaceQueryService {
      */
     @Transactional(readOnly = true)
     public PlaceListResponse list(Double lat, Double lng, Long viewerId) {
+        return list(lat, lng, viewerId, PlaceListFilter.NONE);
+    }
+
+    /**
+     * 带筛选的列表（Story 1.11）。筛选在 SQL WHERE 里、截断之前生效（AC3），两条分支各自带上，
+     * 距离分支回落的「按最新」也带同一组筛选（AC5）。{@code filter} 为空 = 走原 JPQL，与旧行为一字不差。
+     */
+    @Transactional(readOnly = true)
+    public PlaceListResponse list(Double lat, Double lng, Long viewerId, PlaceListFilter filter) {
+        PlaceListFilter f = filter == null ? PlaceListFilter.NONE : filter;
         if (lat == null || lng == null) {
-            return listRecent(viewerId);
+            return listRecent(viewerId, f);
         }
-        return listByDistance(lat, lng, viewerId);
+        return listByDistance(lat, lng, viewerId, f);
     }
 
     /**
@@ -165,13 +175,19 @@ public class PlaceQueryService {
      * <p>粗筛一个都没捞到（用户在雅加达以外）→ <b>回落按最新</b>，`sortMode` 如实回 {@code recent}。
      * 给一个空列表在技术上"正确"，但用户看到的是「这个功能什么都没有」。
      */
-    private PlaceListResponse listByDistance(double lat, double lng, Long viewerId) {
+    private PlaceListResponse listByDistance(double lat, double lng, Long viewerId, PlaceListFilter filter) {
         GeoBox box = GeoBox.around(lat, lng, SEARCH_RADIUS_METERS);
-        List<Place> rows = places.findActiveWithinBox(PlaceStatus.ACTIVE, lat, lng,
-                box.minLatitude(), box.maxLatitude(), box.minLongitude(), box.maxLongitude(),
-                Limit.of(MAX_LIST_SIZE));
+        // Story 1.11：带筛选走原生查询（JSONB 包含），无筛选继续走原 JPQL（零回归）。
+        List<Place> rows = filter.isEmpty()
+                ? places.findActiveWithinBox(PlaceStatus.ACTIVE, lat, lng,
+                        box.minLatitude(), box.maxLatitude(), box.minLongitude(), box.maxLongitude(),
+                        Limit.of(MAX_LIST_SIZE))
+                : places.findWithinBoxFiltered(PlaceStatus.ACTIVE, lat, lng,
+                        box.minLatitude(), box.maxLatitude(), box.minLongitude(), box.maxLongitude(),
+                        filter.typesParam(), filter.tagsJsonParam(), MAX_LIST_SIZE);
         if (rows.isEmpty()) {
-            return listRecent(viewerId);
+            // AC5：回落的「按最新」带同一组筛选。
+            return listRecent(viewerId, filter);
         }
         // 先算好距离再排序（一次 map + 一次 sort），不要在比较器里反复算 haversine。
         //
@@ -187,8 +203,8 @@ public class PlaceQueryService {
             }
         }
         if (scored.isEmpty()) {
-            // 框里有行但全在半径外（用户在两个城市之间）→ 与「框里一个都没有」同一处理。
-            return listRecent(viewerId);
+            // 框里有行但全在半径外（用户在两个城市之间）→ 与「框里一个都没有」同一处理（带筛选回落）。
+            return listRecent(viewerId, filter);
         }
         // 距离相同时按 id 倒序兜底，保证同一请求顺序稳定（否则刷新一次顺序就变了）。
         // nullsLast：已落库实体的 id 不会为空，但比较器不该因为一个未持久化实体就抛 NPE。
@@ -248,8 +264,17 @@ public class PlaceQueryService {
      */
     @Transactional(readOnly = true)
     public PlaceListResponse listRecent(Long viewerId) {
-        List<Place> rows = places.findByStatusOrderByCreatedAtDescIdDesc(
-                PlaceStatus.ACTIVE, Limit.of(MAX_LIST_SIZE));
+        return listRecent(viewerId, PlaceListFilter.NONE);
+    }
+
+    /** 「按最新」分支 + 筛选（Story 1.11）。筛选空 = 原 JPQL。 */
+    @Transactional(readOnly = true)
+    public PlaceListResponse listRecent(Long viewerId, PlaceListFilter filter) {
+        PlaceListFilter f = filter == null ? PlaceListFilter.NONE : filter;
+        List<Place> rows = f.isEmpty()
+                ? places.findByStatusOrderByCreatedAtDescIdDesc(PlaceStatus.ACTIVE, Limit.of(MAX_LIST_SIZE))
+                : places.findRecentFiltered(PlaceStatus.ACTIVE.name(), f.typesParam(), f.tagsJsonParam(),
+                        MAX_LIST_SIZE);
         if (rows.isEmpty()) {
             // 空列表让客户端走空态（引导「标记一个场所」），不是错误路径。
             return PlaceListResponse.recent(List.of());

@@ -136,10 +136,21 @@ class PlaceDetailPage extends ConsumerWidget {
               ),
           ],
         ),
-        body: body,
-        // 吸底输入条（UI 稿 A4）。⚠️ 用 bottomNavigationBar 而不是 Stack：
-        // 前者会自动把 body 的底部内边距让出来，评论区最后一条不会被输入条盖住。
-        bottomNavigationBar: composer,
+        // 🔴 吸底输入条（UI 稿 A4）放进 **body 的 Column 底部**，不挂 `bottomNavigationBar`
+        // （bug 512）：Scaffold 的 `resizeToAvoidBottomInset` 只压缩 body，
+        // `bottomNavigationBar` 恒贴屏幕底 —— 键盘一弹就把输入框整条盖住。
+        // 按 CLAUDE.md 键盘避让标准「底部贴附输入栏」：宿主 Scaffold 保持
+        // `resizeToAvoidBottomInset: true`（默认），body 内 Column 底栏随键盘自动上移。
+        // 列表在 `Expanded` 里，评论区最后一条同样不会被输入条盖住（原先选 bottomNavigationBar 的理由仍成立）。
+        // ⚠️ 别再加 `KeyboardInset`：body 已被扣掉键盘高度，再补 viewInsets 就是双算。
+        body: composer == null
+            ? body
+            : Column(
+                children: [
+                  Expanded(child: body),
+                  composer,
+                ],
+              ),
       );
 
   Widget _errorBody(BuildContext context, WidgetRef ref, AppLocalizations l10n,

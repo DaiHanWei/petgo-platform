@@ -12,6 +12,7 @@ import '../../../shared/widgets/empty_state.dart';
 import '../../auth/domain/auth_guard.dart';
 import '../data/location_service.dart';
 import '../data/place_repository.dart';
+import '../domain/place_list_filter.dart';
 import '../domain/place_summary.dart';
 import 'place_detail_page.dart';
 import 'place_distance_format.dart';
@@ -26,12 +27,32 @@ import 'place_mark_page.dart';
 ///
 /// <h2>本 story 的范围边界（别顺手加）</h2>
 /// <ul>
-///   <li>**类型 / 标签筛选 chips**（UI 稿 A1 顶部那两个 `Jenis ▾ / Tag ▾`）不在 1.1/1.2 的任何 AC 里；</li>
+///   <li>**类型 / 标签筛选**（UI 稿 A1 顶部 `Jenis ▾ / Tag ▾`）由 Story 1.11 补上（决策 B1-D14）：
+///       筛选在**服务端 SQL** 里做（截断 200 之前），客户端只送可重复的 `type` / `tag` 参数；
+///       筛选只活在本次页面生命周期（[placeListFilterProvider] 是 autoDispose），**不持久化**。
+///       稿里没有的排序切换、搜索框、按城市筛**不做**；</li>
 ///   <li>**AppBar 的「+ 标记场所」与空态的 CTA 按钮**归 Story 1.3（表单页还不存在）。
 ///       空态这里只给引导**文案**：挂一个点了跳不到任何地方的按钮比没有按钮更糟。</li>
 ///   <li>**点列表项进详情**（Story 1.5）已接上 —— `context.push` 到 `/places/{token}`。
 ///       🔴 用 `push` 而不是 `go`：详情是压在列表上的一层，要能返回列表（同 `_pushMarkForm` 的理由）。</li>
 /// </ul>
+/// 列表筛选的页面级状态（Story 1.11 · AC10）。
+///
+/// 🔴 `autoDispose`：退出列表页即清空（AC10「只在本次页面生命周期有效，不持久化」）。
+/// 从列表 push 进详情时列表页仍挂着、仍在 watch，所以返回列表筛选还在 —— 这是期望行为。
+class PlaceListFilterController extends Notifier<PlaceListFilter> {
+  @override
+  PlaceListFilter build() => PlaceListFilter.none;
+
+  void setTypes(Set<PlaceType> v) => state = state.withTypes(v);
+  void setTags(Set<PlaceTag> v) => state = state.withTags(v);
+  void clear() => state = PlaceListFilter.none;
+}
+
+final placeListFilterProvider =
+    NotifierProvider.autoDispose<PlaceListFilterController, PlaceListFilter>(
+        PlaceListFilterController.new);
+
 class PlaceListPage extends ConsumerWidget {
   const PlaceListPage({super.key});
 
@@ -54,8 +75,10 @@ class PlaceListPage extends ConsumerWidget {
         const PlaceLocationState(permission: LocationPermissionOutcome.denied);
 
     final coords = location.coordinates;
+    final filter = ref.watch(placeListFilterProvider);
     // 坐标按 ~110 m 归一后才做族键：GPS 米级抖动不该把页面打回 loading（见 placeListQueryFor）。
-    final query = placeListQueryFor(coords?.latitude, coords?.longitude);
+    // 筛选也进族键（Story 1.11 · AC10）：改筛选 = 新请求，同一组筛选命中缓存。
+    final query = placeListQueryFor(coords?.latitude, coords?.longitude, filter: filter);
     final listAsync = ref.watch(placeListProvider(query));
 
     return _scaffold(
@@ -71,6 +94,14 @@ class PlaceListPage extends ConsumerWidget {
               _LocationBanner(
                 onEnable: () => _onEnableLocation(context, ref, location),
               ),
+            // Story 1.11 · AC7：筛选条在「开启定位」提示条**之下**，有无定位两态都显示。
+            _FilterBar(
+              filter: filter,
+              onTapType: () => _openTypeSheet(context, ref, filter),
+              onTapTag: () => _openTagSheet(context, ref, filter),
+            ),
+            // 通栏分隔线（与列表分隔线同色，UI 稿 A1）。
+            const Divider(height: 1, thickness: 1, color: AppColors.line),
             Expanded(child: _body(context, ref, l10n, query, listAsync)),
           ],
         ),
@@ -88,10 +119,13 @@ class PlaceListPage extends ConsumerWidget {
   /// 所以这里先把定位结果拿到手，再算出新族键去刷它。
   Future<void> _refresh(WidgetRef ref) async {
     ref.invalidate(placeLocationProvider);
-    PlaceListQuery next = placeListRecentQuery;
+    // 筛选跟着族键走（Story 1.11）：刷新的是**当前筛选下**的那个族键，不是无筛选的。
+    final filter = ref.read(placeListFilterProvider);
+    PlaceListQuery next = placeListQueryFor(null, null, filter: filter);
     try {
       final loc = await ref.read(placeLocationProvider.future);
-      next = placeListQueryFor(loc.coordinates?.latitude, loc.coordinates?.longitude);
+      next = placeListQueryFor(loc.coordinates?.latitude, loc.coordinates?.longitude,
+          filter: filter);
     } catch (_) {
       // 定位链路失败不该让下拉刷新整个失败 —— 退回按最新照样刷。
     }
@@ -134,23 +168,22 @@ class PlaceListPage extends ConsumerWidget {
       // 🔴 **用 onResume（命令式 push）而不是 location（声明式 go）**：
       // `RouteIntent.location` 走的是 `context.go`，而 `/places/new` 是 shell 之外的顶层路由 ——
       // `go` 会把整个栈换成它：没有返回按钮、没有底部导航、安卓返回键直接退出 App，
-      // 表单里那句 `pop(true)` 弹掉的还是唯一一页（code-review 2026-09-15 抓到，
+      // 表单成功后的 `pushReplacement` 替换掉的也是唯一一页（code-review 2026-09-15 抓到，
       // 与 V1.1.6 Story 2.4 名片深链踩过的是同一个坑）。
       pendingAction: RouteIntent(onResume: () {
         if (!context.mounted) return;
-        _pushMarkForm(context, ref);
+        _pushMarkForm(context);
       }),
-      onAllowed: () => _pushMarkForm(context, ref),
+      onAllowed: () => _pushMarkForm(context),
     );
   }
 
-  Future<void> _pushMarkForm(BuildContext context, WidgetRef ref) async {
-    final created = await context.push<bool>(PlaceMarkPage.routePath);
-    // 表单成功返回后列表要把新场所显示出来（表单侧已 invalidate 列表，这里补刷定位：
-    // 用户可能在表单页停留期间移动过，回来时族键已变）。
-    if (created == true) {
-      ref.invalidate(placeLocationProvider);
-    }
+  /// 🔴 **不等返回值**（bug 514）：表单提交成功后是 `pushReplacement` 到新场所详情页，
+  /// 这里 push 的 future 永远不会完成（go_router 不完成被替换页的 completer）。
+  /// 列表 / 定位的刷新由表单页在成功那一刻 invalidate（列表页仍挂在栈底，会立即重拉），
+  /// 用户从详情返回时看到的就是最新列表。
+  void _pushMarkForm(BuildContext context) {
+    context.push(PlaceMarkPage.routePath);
   }
 
   /// 「开启定位」（AC5）。
@@ -184,7 +217,7 @@ class PlaceListPage extends ConsumerWidget {
     final previous = async.value;
     if (async.hasError && previous != null) {
       _toastRefreshFailure(context, l10n);
-      return _list(previous, sortedByRecent: query == placeListRecentQuery);
+      return _list(previous, sortedByRecent: query.lat == null);
     }
     if (async.hasError) {
       // 首次加载就失败（没有任何旧数据）：明确文案 + 重试入口，不是一个空白页。
@@ -198,6 +231,17 @@ class PlaceListPage extends ConsumerWidget {
     }
     if (previous == null) {
       return const Center(child: CircularProgressIndicator());
+    }
+    if (previous.items.isEmpty && query.filter.isNotEmpty) {
+      // Story 1.11 · AC11：**有筛选且为空** ≠ 「一个场所都没有」。
+      // 🔴 不显示「标记一个场所」引导（那是全库为空的语义），给「清空筛选」出口。
+      return _scrollable(EmptyState(
+        key: const ValueKey('placeFilterEmpty'),
+        title: l10n.placeFilterEmptyTitle,
+        icon: Icons.filter_alt_off_outlined,
+        actionLabel: l10n.placeFilterClearAll,
+        onAction: () => ref.read(placeListFilterProvider.notifier).clear(),
+      ));
     }
     if (previous.items.isEmpty) {
       // Story 1.1 AC6 空态：复用既有 EmptyState，文案引导「标记一个场所」。
@@ -224,7 +268,7 @@ class PlaceListPage extends ConsumerWidget {
         ),
       ));
     }
-    return _list(previous, sortedByRecent: query == placeListRecentQuery);
+    return _list(previous, sortedByRecent: query.lat == null);
   }
 
   /// [sortedByRecent]：本次是按最新排序（无坐标）—— 行副标题的距离位改写「最新」（UI 稿 A2）。
@@ -244,6 +288,38 @@ class PlaceListPage extends ConsumerWidget {
           );
         },
       );
+
+  /// 类型筛选弹层（Story 1.11 · AC8）。全部 7 类，多选。
+  Future<void> _openTypeSheet(
+      BuildContext context, WidgetRef ref, PlaceListFilter current) async {
+    final l10n = AppLocalizations.of(context);
+    final picked = await _showFilterSheet<PlaceType>(
+      context,
+      sheetKey: const ValueKey('placeFilterTypeSheet'),
+      title: l10n.placeFilterType,
+      options: PlaceType.values,
+      labelOf: (t) => t.label(l10n),
+      initial: current.types,
+    );
+    if (picked == null) return; // 下拉 / 点遮罩关掉 = 不改
+    ref.read(placeListFilterProvider.notifier).setTypes(picked);
+  }
+
+  /// 标签筛选弹层（Story 1.11 · AC8）。全部 6 个，多选（服务端按「且」筛）。
+  Future<void> _openTagSheet(
+      BuildContext context, WidgetRef ref, PlaceListFilter current) async {
+    final l10n = AppLocalizations.of(context);
+    final picked = await _showFilterSheet<PlaceTag>(
+      context,
+      sheetKey: const ValueKey('placeFilterTagSheet'),
+      title: l10n.placeFilterTag,
+      options: PlaceTag.values,
+      labelOf: (t) => t.label(l10n),
+      initial: current.tags,
+    );
+    if (picked == null) return;
+    ref.read(placeListFilterProvider.notifier).setTags(picked);
+  }
 
   /// 把不满屏的空态 / 错误态变成可滚动内容 —— 否则 [RefreshIndicator] 收不到下拉手势。
   Widget _scrollable(Widget child) => LayoutBuilder(
@@ -265,6 +341,232 @@ class PlaceListPage extends ConsumerWidget {
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(l10n.placeErrorTitle)));
     });
+  }
+}
+
+/// 筛选条（Story 1.11 · AC7/AC9 · UI 稿 A1）：`Jenis ▾` + `Tag ▾` 两个 chip。
+class _FilterBar extends StatelessWidget {
+  const _FilterBar(
+      {required this.filter, required this.onTapType, required this.onTapTag});
+
+  final PlaceListFilter filter;
+  final VoidCallback onTapType;
+  final VoidCallback onTapTag;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.sm),
+      child: Row(
+        children: [
+          _FilterChip(
+            key: const ValueKey('placeFilterTypeChip'),
+            label: l10n.placeFilterType,
+            count: filter.types.length,
+            onTap: onTapType,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          _FilterChip(
+            key: const ValueKey('placeFilterTagChip'),
+            label: l10n.placeFilterTag,
+            count: filter.tags.length,
+            onTap: onTapTag,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 单个筛选 chip（AC9）：未选 = 白底 + line 描边 + 次级字色；
+/// 已选 = mintTint 底 + 品牌紫字 + 数量（`Jenis · 2 ▾`）。
+class _FilterChip extends StatelessWidget {
+  const _FilterChip(
+      {super.key, required this.label, required this.count, required this.onTap});
+
+  final String label;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = count > 0;
+    final color = selected ? AppColors.mint700 : AppColors.textSecondary;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: ConstrainedBox(
+          // 44 高热区（UX-DR16）。
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Center(
+            widthFactor: 1,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md, vertical: 6),
+              decoration: BoxDecoration(
+                color: selected ? AppColors.mintTint : AppColors.surface,
+                border: Border.all(color: selected ? AppColors.mint : AppColors.line),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(selected ? '$label · $count' : label,
+                      style: AppTypography.caption.copyWith(
+                          color: color,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w400)),
+                  const SizedBox(width: 2),
+                  Icon(Icons.arrow_drop_down_rounded, size: 18, color: color),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 筛选底部弹层（AC8）：多选勾选 + 底部「Reset」「Terapkan」。
+///
+/// 返回值：`null` = 用户下拉 / 点遮罩关掉（不改筛选）；否则为新选择（Reset 返回空集）。
+/// 🔴 「Reset」**清空该维度并立即应用**（关弹层）—— 只清勾选不应用的话，用户还得再点一次
+/// 「Terapkan」，而「清空」这个意图本身已经很明确。
+/// 样式对齐现有 `showModalBottomSheet` 用法（顶部圆角 24 + 手柄）。无输入框，不涉及键盘避让。
+Future<Set<T>?> _showFilterSheet<T>(
+  BuildContext context, {
+  required Key sheetKey,
+  required String title,
+  required List<T> options,
+  required String Function(T) labelOf,
+  required Set<T> initial,
+}) {
+  return showModalBottomSheet<Set<T>>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AppColors.surface,
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+    builder: (ctx) => _FilterSheet<T>(
+      key: sheetKey,
+      title: title,
+      options: options,
+      labelOf: labelOf,
+      initial: initial,
+    ),
+  );
+}
+
+class _FilterSheet<T> extends StatefulWidget {
+  const _FilterSheet({
+    super.key,
+    required this.title,
+    required this.options,
+    required this.labelOf,
+    required this.initial,
+  });
+
+  final String title;
+  final List<T> options;
+  final String Function(T) labelOf;
+  final Set<T> initial;
+
+  @override
+  State<_FilterSheet<T>> createState() => _FilterSheetState<T>();
+}
+
+class _FilterSheetState<T> extends State<_FilterSheet<T>> {
+  late final Set<T> _selected = {...widget.initial};
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SafeArea(
+      top: false,
+      child: ConstrainedBox(
+        // 选项不多（≤7），但给个上限防小屏 + 大字号溢出。
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.line,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(widget.title,
+                style: AppTypography.body.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: AppSpacing.sm),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final o in widget.options)
+                    CheckboxListTile(
+                      key: ValueKey('placeFilterOption-$o'),
+                      value: _selected.contains(o),
+                      onChanged: (v) => setState(() {
+                        if (v == true) {
+                          _selected.add(o);
+                        } else {
+                          _selected.remove(o);
+                        }
+                      }),
+                      title: Text(widget.labelOf(o), style: AppTypography.body),
+                      activeColor: AppColors.mint,
+                      controlAffinity: ListTileControlAffinity.trailing,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, AppSpacing.md),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      key: const ValueKey('placeFilterReset'),
+                      onPressed: () => Navigator.of(context).pop(<T>{}),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(44),
+                        foregroundColor: AppColors.textSecondary,
+                        side: const BorderSide(color: AppColors.line),
+                      ),
+                      child: Text(l10n.placeFilterReset),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: FilledButton(
+                      key: const ValueKey('placeFilterApply'),
+                      onPressed: () => Navigator.of(context).pop({..._selected}),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(44),
+                        backgroundColor: AppColors.mint,
+                      ),
+                      child: Text(l10n.placeFilterApply),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

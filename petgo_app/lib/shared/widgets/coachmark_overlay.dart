@@ -17,18 +17,30 @@ import '../../core/theme/colors.dart';
 /// UI 稿里 `display:flex` 容器内的文字与按钮被同容器内 `position:absolute` 的兄弟挡住。
 /// 这里的对应做法是：说明卡与四块遮罩**同为 Stack 的兄弟**，且说明卡排在**最后**
 /// （Stack 后来者在上）—— 不把它塞进任何一块遮罩里。
-class CoachmarkOverlay extends StatelessWidget {
+class CoachmarkOverlay extends StatefulWidget {
   const CoachmarkOverlay({
     super.key,
     required this.spotlight,
+    this.anchorKey,
+    this.padding = defaultPadding,
     this.title,
     required this.text,
     required this.confirmLabel,
     required this.onDismiss,
   });
 
-  /// 要高亮的那块区域（全局坐标）。
+  /// 要高亮的那块区域（全局坐标）。给了 [anchorKey] 时它只是首帧的兜底值。
   final Rect spotlight;
+
+  /// 高亮目标的锚点（bug 501）。给了就**每帧跟着它重新量**：目标在蒙层弹出后
+  /// 还可能改变尺寸（例：档案页入口卡等统计数据回来才变矮），只量一次会留下一个
+  /// 比卡片大的亮块。量不到（已卸载 / 未布局）时沿用上一次的矩形。
+  final GlobalKey? anchorKey;
+
+  /// 高亮框相对目标向外扩的距离。默认 [defaultPadding]；要亮块与目标严丝合缝时传 0。
+  final double padding;
+
+  static const double defaultPadding = 6;
 
   /// 标题行（UI 稿 P7：白色粗体一句话点明「什么东西搬家了」）。null = 只有正文。
   final String? title;
@@ -39,8 +51,6 @@ class CoachmarkOverlay extends StatelessWidget {
   /// 「知道了」与点遮罩都走它。**点哪儿都能关** —— 一次性告知不该把人困住。
   final VoidCallback onDismiss;
 
-  /// 高亮框四周多留一点，免得描边贴着内容。
-  static const double _pad = 6;
   static const double _scrimAlpha = 0.72;
 
   /// 说明卡挂在高亮区的下方；下方放不下时挂到上方。
@@ -51,13 +61,55 @@ class CoachmarkOverlay extends StatelessWidget {
   static const double _cardBottomFraction = 0.14;
 
   @override
+  State<CoachmarkOverlay> createState() => _CoachmarkOverlayState();
+}
+
+class _CoachmarkOverlayState extends State<CoachmarkOverlay> {
+  late Rect _spotlight = widget.spotlight;
+
+  static const double _scrimAlpha = CoachmarkOverlay._scrimAlpha;
+  static const double _cardGap = CoachmarkOverlay._cardGap;
+  static const double _cardEstimatedHeight = CoachmarkOverlay._cardEstimatedHeight;
+  static const double _cardBottomFraction = CoachmarkOverlay._cardBottomFraction;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.anchorKey != null) _scheduleMeasure();
+  }
+
+  /// 每帧之后量一次锚点；变了才 setState。postFrameCallback 本身不催帧 ——
+  /// 页面不动就不会有下一帧，所以这里不是忙循环。
+  void _scheduleMeasure() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final ro = widget.anchorKey?.currentContext?.findRenderObject();
+      if (ro is RenderBox && ro.attached && ro.hasSize) {
+        final Rect r = ro.localToGlobal(Offset.zero) & ro.size;
+        if (r != _spotlight) setState(() => _spotlight = r);
+      }
+      _scheduleMeasure();
+    });
+  }
+
+  @override
+  void didUpdateWidget(CoachmarkOverlay old) {
+    super.didUpdateWidget(old);
+    if (widget.anchorKey == null && widget.spotlight != old.spotlight) {
+      _spotlight = widget.spotlight;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
+    final spotlight = _spotlight;
+    final double pad = widget.padding;
     final hole = Rect.fromLTRB(
-      (spotlight.left - _pad).clamp(0.0, size.width),
-      (spotlight.top - _pad).clamp(0.0, size.height),
-      (spotlight.right + _pad).clamp(0.0, size.width),
-      (spotlight.bottom + _pad).clamp(0.0, size.height),
+      (spotlight.left - pad).clamp(0.0, size.width),
+      (spotlight.top - pad).clamp(0.0, size.height),
+      (spotlight.right + pad).clamp(0.0, size.width),
+      (spotlight.bottom + pad).clamp(0.0, size.height),
     );
     final bool below = hole.bottom + _cardGap + _cardEstimatedHeight <= size.height;
 
@@ -125,7 +177,7 @@ class CoachmarkOverlay extends StatelessWidget {
           // 测试要的是「一共四块、互不重叠、都不盖住聚光区」。
           key: const ValueKey('coachmarkScrim'),
           behavior: HitTestBehavior.opaque,
-          onTap: onDismiss,
+          onTap: widget.onDismiss,
           // UI 稿 P7：深紫黑（品牌 splashInk），不是纯黑 —— 纯黑压在淡紫页面上发脏。
           child: ColoredBox(color: AppColors.splashInk.withValues(alpha: _scrimAlpha)),
         ),
@@ -138,9 +190,9 @@ class CoachmarkOverlay extends StatelessWidget {
         key: const ValueKey('coachmarkCard'),
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (title != null) ...[
+          if (widget.title != null) ...[
             Text(
-              title!,
+              widget.title!,
               key: const ValueKey('coachmarkTitle'),
               textAlign: TextAlign.center,
               style: const TextStyle(
@@ -149,14 +201,14 @@ class CoachmarkOverlay extends StatelessWidget {
             const SizedBox(height: 8),
           ],
           Text(
-            text,
+            widget.text,
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 12, height: 1.6, color: AppColors.lineViolet),
           ),
           const SizedBox(height: 20),
           FilledButton(
             key: const ValueKey('coachmarkGotIt'),
-            onPressed: onDismiss,
+            onPressed: widget.onDismiss,
             style: FilledButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: AppColors.ink,
@@ -164,7 +216,7 @@ class CoachmarkOverlay extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 11),
               textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             ),
-            child: Text(confirmLabel),
+            child: Text(widget.confirmLabel),
           ),
         ],
       );

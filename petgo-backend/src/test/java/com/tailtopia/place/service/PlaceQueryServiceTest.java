@@ -337,4 +337,98 @@ class PlaceQueryServiceTest {
         verify(places).findByStatusOrderByCreatedAtDescIdDesc(PlaceStatus.ACTIVE,
                 Limit.of(PlaceQueryService.MAX_LIST_SIZE));
     }
+    // ===== Story 1.11：筛选进 SQL、两分支 + 回落都带上 =====
+
+    private static final PlaceListFilter CAFE_PARK_OUTDOOR = PlaceListFilter.parse(
+            List.of("PARK", "CAFE"), List.of("OUTDOOR_SEATING", "PET_MENU"));
+
+    @Test
+    void filteredRecentBranchUsesTheFilteredQueryWithSqlBindValues() {
+        when(places.findRecentFiltered(any(), any(), any(), Mockito.anyInt()))
+                .thenReturn(List.of(place("a", JKT_LAT, JKT_LNG)));
+
+        PlaceListResponse resp = service.list(null, null, null, CAFE_PARK_OUTDOOR);
+
+        assertThat(resp.sortMode()).isEqualTo(PlaceListResponse.SORT_MODE_RECENT);
+        assertThat(resp.items()).hasSize(1);
+        // 绑定值只由枚举名组成、顺序稳定；上限与无筛选分支同一个。
+        verify(places).findRecentFiltered("ACTIVE", "CAFE,PARK", "[\"OUTDOOR_SEATING\",\"PET_MENU\"]",
+                PlaceQueryService.MAX_LIST_SIZE);
+        verify(places, never()).findByStatusOrderByCreatedAtDescIdDesc(any(), any(Limit.class));
+    }
+
+    @Test
+    void filteredDistanceBranchUsesTheFilteredBoxQuery() {
+        when(places.findWithinBoxFiltered(eq(PlaceStatus.ACTIVE), anyDouble(), anyDouble(), anyDouble(),
+                anyDouble(), anyDouble(), anyDouble(), any(), any(), Mockito.anyInt()))
+                .thenReturn(List.of(place("a", JKT_LAT, JKT_LNG)));
+
+        PlaceListResponse resp = service.list(JKT_LAT, JKT_LNG, null, CAFE_PARK_OUTDOOR);
+
+        assertThat(resp.sortMode()).isEqualTo(PlaceListResponse.SORT_MODE_DISTANCE);
+        verify(places).findWithinBoxFiltered(eq(PlaceStatus.ACTIVE), eq(JKT_LAT), eq(JKT_LNG), anyDouble(),
+                anyDouble(), anyDouble(), anyDouble(), eq("CAFE,PARK"),
+                eq("[\"OUTDOOR_SEATING\",\"PET_MENU\"]"), eq(PlaceQueryService.MAX_LIST_SIZE));
+        verify(places, never()).findActiveWithinBox(any(), anyDouble(), anyDouble(), anyDouble(),
+                anyDouble(), anyDouble(), anyDouble(), any(Limit.class));
+        verify(places, never()).findRecentFiltered(any(), any(), any(), Mockito.anyInt());
+    }
+
+    /** AC5：距离粗筛为空 → 回落按最新，**回落也带同一组筛选**，sortMode 如实 recent。 */
+    @Test
+    void filteredDistanceFallbackKeepsTheFilter() {
+        when(places.findWithinBoxFiltered(any(PlaceStatus.class), anyDouble(), anyDouble(), anyDouble(),
+                anyDouble(), anyDouble(), anyDouble(), any(), any(), Mockito.anyInt()))
+                .thenReturn(List.of());
+        when(places.findRecentFiltered(any(), any(), any(), Mockito.anyInt()))
+                .thenReturn(List.of(place("jakarta", JKT_LAT, JKT_LNG)));
+
+        PlaceListResponse resp = service.list(-7.2575, 112.7521, null, CAFE_PARK_OUTDOOR);
+
+        assertThat(resp.sortMode()).isEqualTo(PlaceListResponse.SORT_MODE_RECENT);
+        verify(places).findRecentFiltered("ACTIVE", "CAFE,PARK", "[\"OUTDOOR_SEATING\",\"PET_MENU\"]",
+                PlaceQueryService.MAX_LIST_SIZE);
+        // 🔴 回落不得退回不带筛选的 JPQL —— 那会把不匹配的场所塞给正在筛选的用户。
+        verify(places, never()).findByStatusOrderByCreatedAtDescIdDesc(any(), any(Limit.class));
+    }
+
+    /** 半径复筛后为空的回落同样带筛选。 */
+    @Test
+    void filteredAllOutsideRadiusFallbackKeepsTheFilter() {
+        Place corner = place("corner", JKT_LAT + 0.44, JKT_LNG + 0.44);
+        when(places.findWithinBoxFiltered(any(PlaceStatus.class), anyDouble(), anyDouble(), anyDouble(),
+                anyDouble(), anyDouble(), anyDouble(), any(), any(), Mockito.anyInt()))
+                .thenReturn(List.of(corner));
+        when(places.findRecentFiltered(any(), any(), any(), Mockito.anyInt())).thenReturn(List.of());
+
+        PlaceListResponse resp = service.list(JKT_LAT, JKT_LNG, null, CAFE_PARK_OUTDOOR);
+
+        assertThat(resp.sortMode()).isEqualTo(PlaceListResponse.SORT_MODE_RECENT);
+        verify(places).findRecentFiltered(any(), eq("CAFE,PARK"), any(), Mockito.anyInt());
+    }
+
+    /** 不带筛选：两条分支继续走原 JPQL，一次都不碰原生查询（零回归）。 */
+    @Test
+    void noFilterNeverTouchesTheNativeQueries() {
+        when(places.findByStatusOrderByCreatedAtDescIdDesc(any(), any(Limit.class))).thenReturn(List.of());
+        when(places.findActiveWithinBox(any(), anyDouble(), anyDouble(), anyDouble(), anyDouble(),
+                anyDouble(), anyDouble(), any(Limit.class))).thenReturn(List.of());
+
+        service.list(null, null, null, PlaceListFilter.NONE);
+        service.list(JKT_LAT, JKT_LNG, null, null);
+
+        verify(places, never()).findRecentFiltered(any(), any(), any(), Mockito.anyInt());
+        verify(places, never()).findWithinBoxFiltered(any(PlaceStatus.class), anyDouble(), anyDouble(),
+                anyDouble(), anyDouble(), anyDouble(), anyDouble(), any(), any(), Mockito.anyInt());
+    }
+
+    /** 只筛标签：类型绑定为空串（SQL 侧短路不筛类型）。 */
+    @Test
+    void tagOnlyFilterBindsEmptyTypes() {
+        when(places.findRecentFiltered(any(), any(), any(), Mockito.anyInt())).thenReturn(List.of());
+
+        service.list(null, null, null, PlaceListFilter.parse(null, List.of("PET_MENU")));
+
+        verify(places).findRecentFiltered("ACTIVE", "", "[\"PET_MENU\"]", PlaceQueryService.MAX_LIST_SIZE);
+    }
 }

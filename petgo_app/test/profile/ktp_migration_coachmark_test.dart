@@ -103,6 +103,50 @@ void main() {
     });
   });
 
+  group('bug 501 亮块跟随锚点、与目标等大', () {
+    testWidgets('目标弹出后变矮 → 亮块重新量并跟着变矮；padding 0 时与目标等大', (tester) async {
+      final anchor = GlobalKey();
+      final height = ValueNotifier<double>(100);
+      addTearDown(height.dispose);
+      await tester.pumpWidget(MaterialApp(
+        home: Stack(children: [
+          Positioned(
+            left: 40,
+            top: 120,
+            width: 150,
+            child: ValueListenableBuilder<double>(
+              valueListenable: height,
+              builder: (_, h, _) => SizedBox(key: anchor, height: h),
+            ),
+          ),
+          CoachmarkOverlay(
+            spotlight: const Rect.fromLTWH(40, 120, 150, 100),
+            anchorKey: anchor,
+            padding: 0,
+            text: 't',
+            confirmLabel: 'ok',
+            onDismiss: () {},
+          ),
+        ]),
+      ));
+      await tester.pump();
+      final spot = find.byKey(const ValueKey('coachmarkSpotlight'));
+      expect(tester.getRect(spot), const Rect.fromLTWH(40, 120, 150, 100));
+
+      height.value = 60; // 统计数据回来，卡片变矮
+      await tester.pump(); // 布局变化那一帧
+      await tester.pump(); // 蒙层重量后的那一帧
+      expect(tester.getRect(spot), const Rect.fromLTWH(40, 120, 150, 60));
+    });
+
+    test('成长档案页的蒙层挂了锚点且不外扩', () {
+      final page =
+          File('lib/features/profile/presentation/growth_archive_page.dart').readAsStringSync();
+      expect(page, contains('anchorKey: _insightsEntryAnchor'));
+      expect(page, contains('padding: 0'));
+    });
+  });
+
   group('AC4/AC6 标记：离线降级与键的隔离', () {
     /// 🔴 **读不到一律按「未看过」处理**（AC4）：离线首启、接口失败都走这条。
     /// 多弹一次是已接受的代价；而"读失败就当看过"会让引导对一批人**永远不出现**。
