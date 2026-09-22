@@ -14,7 +14,7 @@
     <li th:if="${queue.isEmpty() and filters.page == 0}" class="q-empty">
         <!-- 公共空态（Story 2.9 T2）：其他队列去向来自 otherQueues（与角标同源）；本页内其他页签的去向另列 -->
         <div th:replace="~{admin/fragments/tpl-a-empty :: queueEmpty('manual-review', ${filters.handled} ? #{admin.v130.review.empty.handled} : null)}"></div>
-        <p class="muted" th:unless="${filters.handled}">
+        <p class="muted empty-elsewhere" th:unless="${filters.handled}">
             <th:block th:each="t : ${tabs}" th:if="${t != filters.tab and counts.get(t) > 0}">
                 <a th:href="@{/admin/manual-review(tab=${t.slug()})}"
                    th:text="#{admin.v130.review.empty.elsewhere(#{${t.titleKey()}}, ${counts.get(t)})}">其他页签还有 N 条</a>

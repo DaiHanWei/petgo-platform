@@ -572,6 +572,11 @@ dialog { z-index: 60; }
 /* 空态三件套（9-5） */
 .empty { text-align: center; color: var(--muted); padding: 40px 12px; }
 .empty .empty-emoji { font-size: 28px; display: block; margin-bottom: 6px; }
+/* 空态下「其他队列 / 其他页签还有 N 条 →」去向：一个模块一行（bug 20260921-499，原先行内 <a> 挤成一行） */
+.empty-elsewhere { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 8px 0 0; text-align: center; }
+.empty-elsewhere > a { display: block; }
+/* 人工审核页：本页其他页签的去向紧跟在公共空态下方，视觉上接成同一列（抵掉 .empty 的底部留白） */
+.empty--queue + .empty-elsewhere { margin-top: -32px; padding-bottom: 40px; }
 /* 模板 B 列表 */
 .lst-table table tr { height: 48px; }
 .lst-table tr[data-drawer-url] { cursor: pointer; }
