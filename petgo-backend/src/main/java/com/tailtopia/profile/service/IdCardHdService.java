@@ -17,6 +17,7 @@ import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.pay.ChargeRequest;
 import com.tailtopia.shared.pay.ChargeResult;
+import com.tailtopia.shared.pay.PayException;
 import com.tailtopia.shared.pay.PaymentGateway;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -74,7 +75,9 @@ public class IdCardHdService {
      * 购买某卡 HD（决策①按卡）。已解锁 → 短路 granted。PawCoin 同步扣费+置卡解锁+记 attempt；
      * QRIS 建 60min 窗意图 + attempt 行（存 cardId+intentId 供回调反查），返回支付信息。非本人卡 → 404。
      */
-    @Transactional
+    // noRollbackFor：GemPay 下单失败时 failChargeAttempt 已把意图置 FAILED，这一行必须随事务提交留档
+    // （request_id 可对账、重试走新单）；整笔回滚正是 2026-09-21 超时事故里 request_id 全丢的原因。
+    @Transactional(noRollbackFor = PayException.class)
     public HdPurchaseResponse purchaseCard(long userId, long cardId, PayChannel channel) {
         IdCard card = idCards.findByIdAndUserId(cardId, userId)
                 .orElseThrow(() -> AppException.notFound("身份证卡不存在"));
@@ -175,7 +178,9 @@ public class IdCardHdService {
      * 发起高清图购买。已购买 → 入口短路返回 UNLOCKED（不扣费不建行）。PawCoin 同步扣费+建购买行；
      * QRIS 建意图返回支付信息（到账由 {@link #completePurchase} 建行）。无档案 → 404。
      */
-    @Transactional
+    // noRollbackFor：GemPay 下单失败时 failChargeAttempt 已把意图置 FAILED，这一行必须随事务提交留档
+    // （request_id 可对账、重试走新单）；整笔回滚正是 2026-09-21 超时事故里 request_id 全丢的原因。
+    @Transactional(noRollbackFor = PayException.class)
     public HdPurchaseResponse purchase(long userId, PayChannel channel) {
         PetProfile pet = profiles.findByOwnerId(userId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
@@ -214,8 +219,15 @@ public class IdCardHdService {
         PaymentIntent entity = paymentIntents.findByToken(intent.token())
                 .orElseThrow(() -> AppException.notFound("支付意图不存在"));
         if (entity.getGatewayRef() == null) {
-            ChargeResult charge = gateway.createCharge(new ChargeRequest(
-                    entity.getPublicToken(), price, CURRENCY, channel.name(), purpose.name()));
+            ChargeResult charge;
+            try {
+                charge = gateway.createCharge(new ChargeRequest(
+                        entity.getPublicToken(), price, CURRENCY, channel.name(), purpose.name()));
+            } catch (RuntimeException e) {
+                // 下单失败：意图置 FAILED 留档（request_id 可对账），下次发起走新意图、新 request_id。
+                paymentIntents.failChargeAttempt(entity.getPublicToken());
+                throw e;
+            }
             Map<String, Object> meta = new LinkedHashMap<>();
             if (charge.rawMeta() != null) {
                 meta.putAll(charge.rawMeta());

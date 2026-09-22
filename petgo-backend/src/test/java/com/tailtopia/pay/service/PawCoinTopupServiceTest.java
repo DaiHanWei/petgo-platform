@@ -22,6 +22,7 @@ import com.tailtopia.pay.dto.TopupResponse;
 import com.tailtopia.pay.dto.TopupTierDto;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.pay.ChargeResult;
+import com.tailtopia.shared.pay.PayException;
 import com.tailtopia.shared.pay.PaymentGateway;
 import java.util.List;
 import java.util.Map;
@@ -149,5 +150,23 @@ class PawCoinTopupServiceTest {
         assertThat(o.tiers().get(0).id()).isEqualTo("10k");
         assertThat(o.tiers().get(0).amount()).isEqualTo(10_000L);
         assertThat(o.tiers().get(0).coins()).isEqualTo(10_000L);
+    }
+
+    /** 2026-09-21 事故：网关下单失败 → 意图置 FAILED 留档（request_id 可对账），异常照抛，不回填。 */
+    @Test
+    void gatewayFailureMarksIntentFailedAndRethrows() {
+        when(tierProvider.byId("10k")).thenReturn(TIER_10K);
+        when(paymentIntentService.createIntent(anyLong(), any(), any(), anyLong(), anyString(), anyString(), any()))
+                .thenReturn(intentResp("tok-1"));
+        PaymentIntent fresh = PaymentIntent.create(1L, PaymentPurpose.PAWCOIN_TOPUP, PayChannel.QRIS,
+                10_000L, "IDR", "tok-1");
+        when(paymentIntentService.findByToken("tok-1")).thenReturn(Optional.of(fresh));
+        when(gateway.createCharge(any())).thenThrow(new PayException("支付网关收款失败"));
+
+        assertThatThrownBy(() -> service().create(1L, new CreateTopupRequest("10k", "QRIS"), "k"))
+                .isInstanceOf(PayException.class);
+
+        verify(paymentIntentService).failChargeAttempt("tok-1");
+        verify(paymentIntentService, never()).attachCharge(anyString(), anyString(), any());
     }
 }

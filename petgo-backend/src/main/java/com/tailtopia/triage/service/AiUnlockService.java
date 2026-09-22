@@ -11,6 +11,7 @@ import com.tailtopia.profile.service.CardTokenGenerator;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.pay.ChargeRequest;
 import com.tailtopia.shared.pay.ChargeResult;
+import com.tailtopia.shared.pay.PayException;
 import com.tailtopia.shared.pay.PaymentGateway;
 import com.tailtopia.triage.domain.AiConsultOrder;
 import com.tailtopia.triage.domain.AiConsultOrderStatus;
@@ -86,7 +87,9 @@ public class AiUnlockService {
      * 解锁 AI 详建。同步路径（FREE_QUOTA/PAWCOIN）在本 {@code @Transactional} 内原子完成；现金路径建意图+订单后返回支付信息。
      * 仅本人（非 owner/不存在统一 403 防枚举）+ 仅 DONE（否则 409）。
      */
-    @Transactional
+    // noRollbackFor：GemPay 下单失败时 failChargeAttempt 已把意图置 FAILED，这一行必须随事务提交留档
+    // （request_id 可对账、重试走新单）；整笔回滚正是 2026-09-21 超时事故里 request_id 全丢的原因。
+    @Transactional(noRollbackFor = PayException.class)
     public UnlockResponse unlock(long userId, long triageId, UnlockMethod method) {
         TriageTask task = tasks.findById(triageId).orElse(null);
         if (task == null || task.getUserId() != userId) {
@@ -155,8 +158,15 @@ public class AiUnlockService {
         PaymentIntent entity = paymentIntents.findByToken(intent.token())
                 .orElseThrow(() -> AppException.notFound("支付意图不存在"));
         if (entity.getGatewayRef() == null) {
-            ChargeResult charge = gateway.createCharge(new ChargeRequest(
-                    entity.getPublicToken(), price, CURRENCY, channel.name(), purpose.name()));
+            ChargeResult charge;
+            try {
+                charge = gateway.createCharge(new ChargeRequest(
+                        entity.getPublicToken(), price, CURRENCY, channel.name(), purpose.name()));
+            } catch (RuntimeException e) {
+                // 下单失败：意图置 FAILED 留档（request_id 可对账），下次发起走新意图、新 request_id。
+                paymentIntents.failChargeAttempt(entity.getPublicToken());
+                throw e;
+            }
             Map<String, Object> meta = new LinkedHashMap<>();
             if (charge.rawMeta() != null) {
                 meta.putAll(charge.rawMeta());

@@ -9,11 +9,13 @@ import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 /**
  * GemPay 收款网关（{@code petgo.pay.mode=live} + {@code provider=gempay}）。取代 {@link MidtransGateway}
@@ -23,7 +25,8 @@ import org.springframework.web.client.RestClient;
  * <p>护栏（照 {@link MidtransGateway}）：
  * <ul>
  *   <li>{@code merchant_secret} 只进 md5，绝不作为独立字段上送、绝不入库/落日志。</li>
- *   <li>异常仅记<b>异常类名 / error_code</b>，绝不打印 body / 凭证 / 签名 → 抛 {@link PayException}。</li>
+ *   <li>失败日志记 <b>request_id + 异常根因 / error_code + error_desc</b>（供向网关对账），
+ *       绝不打印 body / 凭证 / 签名 → 抛 {@link PayException}。</li>
  *   <li>回调验签用纯 JDK md5 + 常量时间比对（{@link MessageDigest#isEqual}）。</li>
  *   <li>{@code signature} / {@code merchant_secret} 在快照落库前一律剔除。</li>
  * </ul>
@@ -82,21 +85,26 @@ public class GemPayGateway implements PaymentGateway {
                     .retrieve()
                     .body(Map.class);
         } catch (RuntimeException e) {
-            // 仅记异常类名，绝不外泄 body/凭证/签名/堆栈。
-            log.warn("GemPay 收款调用失败: {}", e.getClass().getSimpleName());
-            throw new PayException("支付网关收款失败");
+            // request_id + 根因（如 SocketTimeoutException: Read timed out），供事后找网关对账；
+            // 绝不外泄 body/凭证/签名。2026-09-21 超时事故时只记了类名，连不上还是没回都分不清。
+            log.warn("GemPay 收款调用失败: request_id={} amount={} channel={} cause={}",
+                    request.orderId(), request.amount(), channelCode, describe(e));
+            throw payFailure("支付网关收款失败", e);
         }
-        return toChargeResult(response);
+        return toChargeResult(request.orderId(), response);
     }
 
-    private ChargeResult toChargeResult(Map<String, Object> response) {
+    private ChargeResult toChargeResult(String requestId, Map<String, Object> response) {
         if (response == null) {
+            log.warn("GemPay 收款响应为空: request_id={}", requestId);
             throw new PayException("支付网关收款响应为空");
         }
         String errorCode = str(response.get("error_code"));
         if (!"P00".equals(errorCode)) {
-            // 只 log 错误码（P01 参数不全 / P02 request_id 重复 / P03 鉴权失败 …），绝不 log body。
-            log.warn("GemPay 收款被拒: error_code={}", errorCode);
+            // 记 error_code + error_desc（网关给的原因原文，如 P12 "bank partner temporarily unavailable"），
+            // 二者是网关的固定报错文案、不含凭证/PII；其余 body 字段仍一律不记。
+            log.warn("GemPay 收款被拒: request_id={} error_code={} error_desc={}",
+                    requestId, errorCode, str(response.get("error_desc")));
             throw new PayException("支付网关收款失败");
         }
         String gatewayRef = str(response.get("ref_id"));
@@ -144,8 +152,8 @@ public class GemPayGateway implements PaymentGateway {
                     .retrieve()
                     .body(Map.class);
         } catch (RuntimeException e) {
-            log.warn("GemPay 交易查询失败: {}", e.getClass().getSimpleName());
-            throw new PayException("支付网关交易查询失败");
+            log.warn("GemPay 交易查询失败: ref_id={} cause={}", gatewayRef, describe(e));
+            throw payFailure("支付网关交易查询失败", e);
         }
         return toQueryResult(response);
     }
@@ -158,7 +166,7 @@ public class GemPayGateway implements PaymentGateway {
         String errorCode = str(response.get("error_code"));
         if (!"00".equals(errorCode)) {
             // 00 成功；04 data not found 等 → 查无结果（只 log 错误码，不 log body）。
-            log.warn("GemPay 交易查询无结果: error_code={}", errorCode);
+            log.warn("GemPay 交易查询无结果: error_code={} error_desc={}", errorCode, str(response.get("error_desc")));
             return Optional.empty();
         }
         Object data = response.get("data");
@@ -236,6 +244,30 @@ public class GemPayGateway implements PaymentGateway {
             // 未来放开：DANA_EWALLET(需 redirect_url) / BNI_VA / Mandiri_VA / Permata_VA / BRI_VA / CIMB_VA
             default -> throw new PayException("不支持的支付渠道");
         };
+    }
+
+    /**
+     * 调用异常的可记录描述：异常类名 + 最深根因的类名与消息（如 {@code SocketTimeoutException: Connect timed out}）。
+     * 网关回了 HTTP 错误码时只记状态码——{@link RestClientResponseException} 的消息里带响应 body，不记。
+     */
+    static String describe(RuntimeException e) {
+        if (e instanceof RestClientResponseException r) {
+            return e.getClass().getSimpleName() + " http=" + r.getStatusCode().value();
+        }
+        Throwable root = NestedExceptionUtils.getMostSpecificCause(e);
+        return root == e
+                ? e.getClass().getSimpleName() + ": " + e.getMessage()
+                : e.getClass().getSimpleName() + " <- " + root.getClass().getSimpleName() + ": " + root.getMessage();
+    }
+
+    /**
+     * 包成 {@link PayException}，I/O 类异常保留 cause（全局异常日志的堆栈里才有 {@code Caused by}）；
+     * {@link RestClientResponseException} 不挂 cause——它的消息带响应 body，会随堆栈进日志。
+     */
+    private static PayException payFailure(String message, RuntimeException e) {
+        return e instanceof RestClientResponseException
+                ? new PayException(message)
+                : new PayException(message, e);
     }
 
     /** 用途 → 安全订单描述（无 PII、无特殊字符，避免被 WAF 拦）。 */

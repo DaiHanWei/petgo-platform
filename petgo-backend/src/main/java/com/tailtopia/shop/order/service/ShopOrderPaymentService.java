@@ -153,9 +153,16 @@ public class ShopOrderPaymentService {
             // 🔴 网关只收【现金段】：Coin 段是站内余额，不经网关。
             //    而意图的 amount 是订单总额（库级不变式 coin + cash = amount 要求如此）——
             //    两者不同不是笔误，混同会让用户被真收走本该用币抵掉的那部分。
-            ChargeResult charge = gateway.createCharge(new ChargeRequest(
-                    intent.getPublicToken(), cash, CURRENCY, PayChannel.QRIS.name(),
-                    PaymentPurpose.SHOP_ORDER.name()));
+            ChargeResult charge;
+            try {
+                charge = gateway.createCharge(new ChargeRequest(
+                        intent.getPublicToken(), cash, CURRENCY, PayChannel.QRIS.name(),
+                        PaymentPurpose.SHOP_ORDER.name()));
+            } catch (RuntimeException e) {
+                // 下单失败：意图置 FAILED 留档（request_id 可对账），下次发起走新意图、新 request_id。
+                paymentIntents.failChargeAttempt(intent.getPublicToken());
+                throw e;
+            }
             Map<String, Object> meta = new LinkedHashMap<>();
             if (charge.rawMeta() != null) {
                 meta.putAll(charge.rawMeta());

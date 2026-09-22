@@ -21,6 +21,7 @@ import com.tailtopia.shared.im.ImAccountMapper;
 import com.tailtopia.shared.im.TencentImClient;
 import com.tailtopia.shared.pay.ChargeRequest;
 import com.tailtopia.shared.pay.ChargeResult;
+import com.tailtopia.shared.pay.PayException;
 import com.tailtopia.shared.pay.PaymentGateway;
 import com.tailtopia.vet.service.VetPresenceService;
 import java.time.Duration;
@@ -95,7 +96,9 @@ public class ConsultPayService {
      * 限时支付入口（AC2）。守卫：本人 + {@code ACCEPTED_AWAIT_PAY} + 未暂停 + 支付窗未过期（服务端权威）。
      * 归属/状态不符统一 409 防枚举。按渠道分派同步（PawCoin）/ 异步（现金）。
      */
-    @Transactional
+    // noRollbackFor：GemPay 下单失败时 failChargeAttempt 已把意图置 FAILED，这一行必须随事务提交留档
+    // （request_id 可对账、重试走新单）；整笔回滚正是 2026-09-21 超时事故里 request_id 全丢的原因。
+    @Transactional(noRollbackFor = PayException.class)
     public ConsultPayResponse pay(long userId, String requestToken, PayChannel channel) {
         ConsultRequest req = requests.findByRequestToken(requestToken)
                 .orElseThrow(() -> AppException.conflict("该请求不存在或已处理"));
@@ -153,8 +156,15 @@ public class ConsultPayService {
         String payload;
         if (entity.getGatewayRef() == null) {
             // 首次下单：向网关发起收款，回填订单号 + 二维码载荷（QRIS EMVCo 串）。
-            ChargeResult charge = gateway.createCharge(new ChargeRequest(
-                    entity.getPublicToken(), price, CURRENCY, channel.name(), PaymentPurpose.VET_CONSULT.name()));
+            ChargeResult charge;
+            try {
+                charge = gateway.createCharge(new ChargeRequest(
+                        entity.getPublicToken(), price, CURRENCY, channel.name(), PaymentPurpose.VET_CONSULT.name()));
+            } catch (RuntimeException e) {
+                // 下单失败：意图置 FAILED 留档（request_id 可对账），下次发起走新意图、新 request_id。
+                paymentIntents.failChargeAttempt(entity.getPublicToken());
+                throw e;
+            }
             Map<String, Object> meta = new LinkedHashMap<>();
             if (charge.rawMeta() != null) {
                 meta.putAll(charge.rawMeta());

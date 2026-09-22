@@ -15,6 +15,8 @@ import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
+import com.tailtopia.pay.domain.PaymentFailureCategory;
+import com.tailtopia.pay.event.PaymentIntentFailedEvent;
 import com.tailtopia.pay.event.PaymentIntentPaidEvent;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.pay.repository.PaymentIntentRepository;
@@ -182,5 +184,92 @@ class PaymentIntentServiceTest {
         service().failPending(7L, PaymentPurpose.VET_CONSULT);
 
         verify(intents, never()).saveAndFlush(any());
+    }
+
+    // ===== 网关下单失败收口（2026-09-21 GemPay 超时事故）=====
+
+    @Test
+    void failChargeAttemptMarksRefLessPendingFailedAndPublishesDeclined() {
+        PaymentIntent pending = persisted(60L, PaymentPurpose.SHOP_ORDER, "tok-fail");
+        when(intents.findByPublicToken("tok-fail")).thenReturn(Optional.of(pending));
+
+        service().failChargeAttempt("tok-fail");
+
+        assertThat(pending.getStatus()).isEqualTo(com.tailtopia.pay.domain.PaymentStatus.FAILED);
+        assertThat(pending.getGatewayMeta()).containsEntry("reason", "GATEWAY_CHARGE_FAILED");
+        verify(intents).saveAndFlush(pending);
+        org.mockito.ArgumentCaptor<Object> ev = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(events).publishEvent(ev.capture());
+        assertThat(ev.getValue()).isInstanceOfSatisfying(PaymentIntentFailedEvent.class, e ->
+                assertThat(e.failureCategory()).isEqualTo(PaymentFailureCategory.GATEWAY_DECLINED));
+    }
+
+    @Test
+    void failChargeAttemptIsNoopWhenAlreadyChargedOrTerminal() {
+        PaymentIntent charged = persisted(61L, PaymentPurpose.SHOP_ORDER, "tok-charged");
+        charged.attachGatewayRef("gw-1", Map.of("payload", "qr"));  // 并发的另一请求已下单成功
+        when(intents.findByPublicToken("tok-charged")).thenReturn(Optional.of(charged));
+        PaymentIntent paid = persisted(62L, PaymentPurpose.SHOP_ORDER, "tok-paid");
+        paid.markFailed(Map.of("reason", "CANCELLED"));
+        when(intents.findByPublicToken("tok-paid")).thenReturn(Optional.of(paid));
+
+        service().failChargeAttempt("tok-charged");
+        service().failChargeAttempt("tok-paid");
+
+        assertThat(charged.getStatus()).isEqualTo(com.tailtopia.pay.domain.PaymentStatus.PENDING);
+        verify(intents, never()).saveAndFlush(any());
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    void createIntentMintsNewTokenAfterChargeFailure() {
+        PaymentIntent failed = persisted(63L, PaymentPurpose.ID_HD, "tok-old");
+        failed.markFailed(Map.of("reason", "GATEWAY_CHARGE_FAILED"));
+        when(idempotency.findResourceId("id-hd:1")).thenReturn(Optional.of(63L));
+        when(intents.findById(63L)).thenReturn(Optional.of(failed));
+        when(tokenGenerator.generate()).thenReturn("tok-new");
+        when(intents.save(any(PaymentIntent.class))).thenAnswer(inv -> {
+            PaymentIntent p = inv.getArgument(0);
+            ReflectionTestUtils.setField(p, "id", 64L);
+            return p;
+        });
+
+        PaymentIntentResponse resp = service().createIntent(
+                7L, PaymentPurpose.ID_HD, PayChannel.QRIS, 1000L, "IDR", "id-hd:1");
+
+        // 新 request_id：不拿失败单的旧号去撞网关的重复单号（P02）。
+        assertThat(resp.token()).isEqualTo("tok-new");
+        verify(idempotency).store("id-hd:1", 64L);
+    }
+
+    @Test
+    void createIntentTreatsDanglingIdempotencyMappingAsMiss() {
+        // Redis 映射还在、库里那行已随事务回滚 → 以前 404，现在新建。
+        when(idempotency.findResourceId("key-dangling")).thenReturn(Optional.of(404L));
+        when(intents.findById(404L)).thenReturn(Optional.empty());
+        when(tokenGenerator.generate()).thenReturn("tok-fresh");
+        when(intents.save(any(PaymentIntent.class))).thenAnswer(inv -> {
+            PaymentIntent p = inv.getArgument(0);
+            ReflectionTestUtils.setField(p, "id", 65L);
+            return p;
+        });
+
+        PaymentIntentResponse resp = service().createIntent(
+                7L, PaymentPurpose.ID_HD, PayChannel.QRIS, 1000L, "IDR", "key-dangling");
+
+        assertThat(resp.token()).isEqualTo("tok-fresh");
+        verify(idempotency).store("key-dangling", 65L);
+    }
+
+    @Test
+    void findReusablePendingSkipsIntentWithoutGatewayRef() {
+        PaymentIntent refLess = PaymentIntent.create(7L, PaymentPurpose.PAWCOIN_TOPUP, PayChannel.QRIS,
+                10000L, "IDR", "tok-noref", java.time.Instant.now().plusSeconds(3600));
+        when(intents.findFirstByUserIdAndPurposeAndChannelAndAmountAndStatusOrderByCreatedAtDesc(
+                7L, PaymentPurpose.PAWCOIN_TOPUP, PayChannel.QRIS, 10000L,
+                com.tailtopia.pay.domain.PaymentStatus.PENDING)).thenReturn(Optional.of(refLess));
+
+        assertThat(service().findReusablePending(7L, PaymentPurpose.PAWCOIN_TOPUP, PayChannel.QRIS, 10000L))
+                .isEmpty();
     }
 }

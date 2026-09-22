@@ -157,4 +157,34 @@ class GemPayGatewayTest {
         assertThatThrownBy(() -> GemPayGateway.toGemPayChannel(null))
                 .isInstanceOf(PayException.class);
     }
+
+    // ===== 失败日志描述（2026-09-21 超时事故：只记类名，分不清连不上还是没回）=====
+
+    @Test
+    void describeKeepsRootCauseOfIoFailure() {
+        var e = new org.springframework.web.client.ResourceAccessException("I/O error",
+                new java.net.SocketTimeoutException("Read timed out"));
+        assertThat(GemPayGateway.describe(e))
+                .isEqualTo("ResourceAccessException <- SocketTimeoutException: Read timed out");
+    }
+
+    @Test
+    void describeOmitsResponseBodyOfHttpError() {
+        var e = org.springframework.web.client.HttpServerErrorException.create(
+                org.springframework.http.HttpStatus.BAD_GATEWAY, "Bad Gateway", null,
+                "{\"secret\":\"leak\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8), null);
+        assertThat(GemPayGateway.describe(e)).endsWith(" http=502").doesNotContain("leak");
+    }
+
+    @Test
+    void createChargeIoFailureKeepsCauseForStackTrace() {
+        PayProperties p = props("KMB0000", "s3cret");
+        p.getGempay().setBaseUrl("http://127.0.0.1:1"); // 必然连不上：本地 1 号端口
+        p.setTimeoutSeconds(2);
+        GemPayGateway gw = new GemPayGateway(p);
+
+        assertThatThrownBy(() -> gw.createCharge(new ChargeRequest("REQ1", 1000L, "IDR", "QRIS", "ID_HD")))
+                .isInstanceOf(PayException.class)
+                .hasCauseInstanceOf(org.springframework.web.client.ResourceAccessException.class);
+    }
 }
