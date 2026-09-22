@@ -84,8 +84,15 @@ public class PawCoinTopupService {
         String payload;
         if (entity.getGatewayRef() == null) {
             // 首次下单：向网关发起收款，回填订单号 + 载荷。
-            ChargeResult charge = gateway.createCharge(new ChargeRequest(
-                    entity.getPublicToken(), amount, CURRENCY, channel.name(), PaymentPurpose.PAWCOIN_TOPUP.name()));
+            ChargeResult charge;
+            try {
+                charge = gateway.createCharge(new ChargeRequest(
+                        entity.getPublicToken(), amount, CURRENCY, channel.name(), PaymentPurpose.PAWCOIN_TOPUP.name()));
+            } catch (RuntimeException e) {
+                // 下单失败：意图置 FAILED 留档（request_id 可对账），下次发起走新意图、新 request_id。
+                paymentIntentService.failChargeAttempt(entity.getPublicToken());
+                throw e;
+            }
             Map<String, Object> meta = new LinkedHashMap<>();
             if (charge.rawMeta() != null) {
                 meta.putAll(charge.rawMeta());
