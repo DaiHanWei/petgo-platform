@@ -2545,6 +2545,14 @@
   "@timelineIdCardTapToView": {
     "description": "Diary timeline: ID card unlocked card subtitle"
   },
+  "idCardEntrySub": "Create your Pet Kingdom KTP!",
+  "@idCardEntrySub": {
+    "description": "Know Your Pet hub: KTP (pet ID card) entry card subtitle (bug 504)"
+  },
+  "ageCardEntrySub": "How old is your pet in human years?",
+  "@ageCardEntrySub": {
+    "description": "Know Your Pet hub: age calculator entry card subtitle when enabled (bug 503)"
+  },
   "diaryDemoChip": "Example",
   "@diaryDemoChip": {
     "description": "Diary guest state: chip marking the timeline as a sample, not real data"
@@ -3632,6 +3640,18 @@
   "@ktpMovedCoachmarkTitle": {"description": "One-time coachmark title pointing at the Know Your Pet entry (UI P7)."},
   "placeSortRecent": "Latest",
   "@placeSortRecent": {"description": "Places list: shown instead of distance when location is off and the list is sorted by newest (UI A2)."},
+  "placeFilterType": "Type",
+  "@placeFilterType": {"description": "Places list filter chip + sheet title: filter by place type (Story 1.11, UI A1 'Jenis')."},
+  "placeFilterTag": "Tags",
+  "@placeFilterTag": {"description": "Places list filter chip + sheet title: filter by pet-friendly tags (Story 1.11, UI A1 'Tag')."},
+  "placeFilterApply": "Apply",
+  "@placeFilterApply": {"description": "Places filter sheet: apply the selection (Story 1.11). Drafted, pending product sign-off."},
+  "placeFilterReset": "Reset",
+  "@placeFilterReset": {"description": "Places filter sheet: clear this dimension's selection (Story 1.11). Drafted, pending product sign-off."},
+  "placeFilterEmptyTitle": "No places match your filters",
+  "@placeFilterEmptyTitle": {"description": "Places list: empty state when filters are active and nothing matches (distinct from 'no places at all') (Story 1.11 AC11). Drafted."},
+  "placeFilterClearAll": "Clear filters",
+  "@placeFilterClearAll": {"description": "Places list filtered-empty state: button that clears all filters (Story 1.11 AC11). Drafted."},
   "petRecommendListTitle": "Other pets",
   "@petRecommendListTitle": {"description": "Full-screen pet recommendation list: app bar title (UI E2)."},
   "placeMarkLocationLabel": "Location",

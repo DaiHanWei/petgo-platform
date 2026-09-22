@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/media/media_scope.dart';
 import '../../../core/network/problem_detail.dart';
@@ -16,6 +17,7 @@ import '../data/location_service.dart';
 import '../data/place_repository.dart';
 import '../domain/place_form.dart';
 import '../domain/place_summary.dart';
+import 'place_detail_page.dart';
 import 'place_labels.dart';
 import 'place_location_controller.dart';
 import 'place_map_picker_sheet.dart';
@@ -482,10 +484,11 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
       return;
     }
     final l10n = AppLocalizations.of(context);
-    final navigator = Navigator.of(context);
+    // 在 await 之前取好 router（提交可能要几秒，期间 context 可能已失效）。
+    final router = GoRouter.of(context);
     setState(() => _submitting = true);
     try {
-      await ref.read(placeRepositoryProvider).createPlace(
+      final token = await ref.read(placeRepositoryProvider).createPlace(
             name: _draft.name.trim(),
             type: _draft.type!,
             tags: _draft.tags.toList(growable: false),
@@ -500,10 +503,18 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
       if (!mounted) return;
       // 列表要把新场所显示出来 —— 不 invalidate 的话用户返回后看到的还是旧列表，
       // 会以为标记没成功。
+      // 🔴 **列表的刷新由这里负责，不靠返回值**（bug 514）：成功后本页被详情页替换，
+      // 列表页 `context.push` 的那个 future 永远不会完成（go_router 的 pushReplacement
+      // 不完成被替换页的 completer），所以列表页不能再等 `pop(true)` 才刷新。
+      // 列表页此刻仍挂在栈底，invalidate 会立即重拉 —— 用户从详情返回时看到的就是最新的。
+      // 定位一并重读：用户可能在表单页停留期间移动过，回列表时族键应随之更新。
       ref.invalidate(placeListProvider);
+      ref.invalidate(placeLocationProvider);
       showAppToast(context, l10n.placeMarkSuccess);
-      // AC6：返回列表（详情页是 Story 1.5，那时可改成 replace 到详情）。
-      navigator.pop(true);
+      // AC6 · UI 稿（bug 514）：提交成功后**进入新场所详情页**，底部 toast「Tempat berhasil ditandai」。
+      // 🔴 用 pushReplacement 而不是 push：表单页从栈里拿掉，详情页返回即回列表 ——
+      // 否则返回会落回一张已经提交过的表单，再点一次「保存」就是重复标记（幂等键兜得住，但 UX 是错的）。
+      router.pushReplacement(PlaceDetailPage.routeFor(token));
     } on DioException catch (e) {
       if (!mounted) return;
       // 🔴 **确定性失败不能报「请重试」**（code-review 2026-09-15）：审核硬拦截与限流

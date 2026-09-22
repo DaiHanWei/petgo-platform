@@ -78,8 +78,11 @@ class InsightEntryCard extends StatelessWidget {
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.ink)),
                         const SizedBox(height: 3),
+                        // bug 503/504：聚合页两卡的专属召唤语（Poppins 10.5）在半屏宽下
+                        // 印尼语需 3 行（实测 360~412dp 两行都会截断），放宽到 3 行；
+                        // 短文案不受影响（只在需要时长高，两卡由外层 IntrinsicHeight 等高）。
                         Text(sub,
-                            maxLines: 2,
+                            maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                                 fontSize: 10.5, height: 1.3, color: AppColors.textTertiary)),

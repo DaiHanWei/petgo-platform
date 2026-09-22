@@ -88,7 +88,8 @@ class LightboxDismissMetrics {
 /// 窗口比系统默认短一截，手感更利落；再短就会把稍慢的双击误判成关闭。
 const Duration kLightboxSingleTapDelay = Duration(milliseconds: 220);
 
-/// 关闭方式（Story 3.3 · AC5 · AD-A26.1）。**值域定死四值，不多不少。**
+/// 关闭方式（Story 3.3 · AC5 · AD-A26.1）。**值域定死，不多不少**
+/// （原四值；bug 506 增补 [pinch] 为第五值）。
 ///
 /// 🔴 定成枚举而不是到处写字符串：`swipe_down` / `swipeDown` / `drag` 三种写法指同一件事，
 /// 是 AD-A26 明文要防的看板事故。线上值只在 [wire] 这一处拼出来。
@@ -106,8 +107,11 @@ enum LightboxDismissGesture {
   ///
   /// ⚠️ **这条路径此前没人管**：它一直能退出灯箱却从不上报，
   /// 于是「关闭方式的分布」这份数据从来就是错的。默认值取它 ——
-  /// 凡是没被前三条显式认领的退出，都是从系统那边走掉的。
-  systemBack('system_back');
+  /// 凡是没被其余几条显式认领的退出，都是从系统那边走掉的。
+  systemBack('system_back'),
+
+  /// 正常尺寸下两指收缩退出（bug 506 新增的第五个值；看板需同步认这个值）。
+  pinch('pinch');
 
   const LightboxDismissGesture(this.wire);
 

@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/place/data/place_repository.dart';
+import 'package:tailtopia/features/place/domain/place_list_filter.dart';
+import 'package:tailtopia/features/place/domain/place_summary.dart';
 
 /// V1.3.0 batch-b1 Story 1.2 · L0：列表族键的构造。
 ///
@@ -28,7 +30,8 @@ void main() {
   });
 
   test('归一保留 3 位小数', () {
-    expect(placeListQueryFor(-6.2354999, 106.8104999), (lat: -6.235, lng: 106.810));
+    expect(placeListQueryFor(-6.2354999, 106.8104999),
+        (lat: -6.235, lng: 106.810, filter: PlaceListFilter.none));
   });
 
   test('族键是 record，结构相等可直接比较（family 的缓存依赖这一点）', () {
@@ -62,6 +65,42 @@ void main() {
     test('不同 token 不共用族键', () {
       expect(placeDetailQueryFor('a', -6.235, 106.81),
           isNot(placeDetailQueryFor('b', -6.235, 106.81)));
+    });
+  });
+
+  /// Story 1.11 · AC10：筛选进族键。
+  group('筛选族键（Story 1.11）', () {
+    test('勾选顺序不同、内容相同 → 同一族键（命中缓存）', () {
+      final a = placeListQueryFor(-6.235, 106.81,
+          filter: const PlaceListFilter(
+              types: {PlaceType.cafe, PlaceType.park}, tags: {PlaceTag.petMenu}));
+      final b = placeListQueryFor(-6.235, 106.81,
+          filter: const PlaceListFilter(
+              types: {PlaceType.park, PlaceType.cafe}, tags: {PlaceTag.petMenu}));
+      expect(a, b);
+      expect(a.hashCode, b.hashCode);
+    });
+
+    test('改筛选 → 新族键（新请求）', () {
+      final a = placeListQueryFor(null, null,
+          filter: const PlaceListFilter(types: {PlaceType.cafe}));
+      final b = placeListQueryFor(null, null,
+          filter: const PlaceListFilter(types: {PlaceType.cafe, PlaceType.park}));
+      expect(a, isNot(b));
+      expect(a, isNot(placeListRecentQuery));
+    });
+
+    test('空筛选 + 无坐标 == placeListRecentQuery', () {
+      expect(placeListQueryFor(null, null, filter: const PlaceListFilter()),
+          placeListRecentQuery);
+    });
+
+    test('送往服务端的参数按枚举声明顺序、用后端字面量', () {
+      const f = PlaceListFilter(
+          types: {PlaceType.park, PlaceType.cafe},
+          tags: {PlaceTag.petMenu, PlaceTag.outdoorSeating});
+      expect(f.typeParams, ['CAFE', 'PARK']);
+      expect(f.tagParams, ['OUTDOOR_SEATING', 'PET_MENU']);
     });
   });
 }

@@ -71,8 +71,9 @@ class PetInsightsPage extends ConsumerWidget {
                     inkKey: const ValueKey('insightIdCard'),
                     icon: Icons.badge_outlined,
                     title: l10n.idCardTitle,
-                    // 副文案沿用现成 key，不新写（AC1）。
-                    sub: l10n.timelineIdCardTapToView,
+                    // bug 504：KTP 创建入口专属召唤语（原复用 timelineIdCardTapToView，
+                    // 该键 4 处共用、不能改值，故新建键）。
+                    sub: l10n.idCardEntrySub,
                     onTap: () => context.push(PetInsightsRoutes.idCard),
                   ),
                 ),
@@ -85,7 +86,7 @@ class PetInsightsPage extends ConsumerWidget {
                     // 置灰态换掉召唤语：用**正面陈述适用范围**，不用否定式
                     // （「不支持」听起来像故障），也禁用「即将推出」——这批明确不做。
                     sub: ageCardEnabled
-                        ? l10n.timelineIdCardTapToView
+                        ? l10n.ageCardEntrySub // bug 503：年龄卡专属副文案
                         : l10n.ageCardUnavailableForSpecies,
                     // 🔴 置灰即**彻底不可点**：onTap 为 null，连水波纹都不会有。
                     onTap: ageCardEnabled ? () => context.push(PetInsightsRoutes.ageCard) : null,

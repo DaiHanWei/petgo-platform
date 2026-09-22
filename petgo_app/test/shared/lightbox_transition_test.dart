@@ -131,12 +131,12 @@ void main() {
     Map<String, Object>? dismissed(List<MapEntry<String, Map<String, Object>?>> seen) =>
         seen.lastWhere((e) => e.key == 'lightbox_dismissed').value;
 
-    /// 🔴 值域定死四值。`swipe_down` / `swipeDown` / `drag` 三种写法指同一件事，
-    /// 正是 AD-A26 要防的看板事故 —— 所以线上值只从枚举的 wire 出来。
-    test('dismiss_gesture 的值域恰好是这四个', () {
+    /// 🔴 值域定死（原四值，bug 506 增补 pinch）。`swipe_down` / `swipeDown` / `drag`
+    /// 三种写法指同一件事，正是 AD-A26 要防的看板事故 —— 所以线上值只从枚举的 wire 出来。
+    test('dismiss_gesture 的值域恰好是这五个', () {
       expect(
         LightboxDismissGesture.values.map((g) => g.wire).toList(),
-        ['close_button', 'tap', 'swipe_down', 'system_back'],
+        ['close_button', 'tap', 'swipe_down', 'system_back', 'pinch'],
       );
     });
 

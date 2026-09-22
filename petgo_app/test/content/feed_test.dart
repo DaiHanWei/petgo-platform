@@ -139,8 +139,17 @@ void main() {
     ));
     await tester.pump();
     expect(find.text('All'), findsOneWidget);
+    // bug 510：Diary(GROWTH_MOMENT) 加回首页，4 个 Tab 按枚举顺序 All · Daily · Growth · Tips。
+    final xs = ['All', 'Daily', 'Growth', 'Tips']
+        .map((t) => tester.getTopLeft(find.text(t)).dx)
+        .toList();
+    for (var i = 1; i < xs.length; i++) {
+      expect(xs[i] > xs[i - 1], isTrue);
+    }
     await tester.tap(find.text('Daily'));
     expect(tapped, FeedCategory.daily);
+    await tester.tap(find.text('Growth'));
+    expect(tapped, FeedCategory.growthMoment);
   });
 
   testWidgets('AC2: Feed 有内容 → 渲染瀑布卡片', (tester) async {

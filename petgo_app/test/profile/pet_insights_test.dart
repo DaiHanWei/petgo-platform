@@ -134,6 +134,10 @@ void main() {
       final card = tester.widget<InkWell>(find.byKey(const ValueKey('insightAgeCard')));
       expect(card.onTap, isNotNull);
       expect(find.text(l10n.ageCardUnavailableForSpecies), findsNothing);
+      // bug 503/504：两卡各有专属副文案，不再复用共享键 timelineIdCardTapToView。
+      expect(find.text(l10n.ageCardEntrySub), findsOneWidget);
+      expect(find.text(l10n.idCardEntrySub), findsOneWidget);
+      expect(find.text(l10n.timelineIdCardTapToView), findsNothing);
     });
 
     testWidgets('狗 → 同样可点', (tester) async {

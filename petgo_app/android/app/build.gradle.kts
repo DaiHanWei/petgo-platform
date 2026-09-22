@@ -35,6 +35,10 @@ val googleMapsApiKey: String =
     System.getenv("GOOGLE_MAPS_API_KEY_ANDROID")
         ?: (mapsProperties["MAPS_API_KEY"] as String?)
         ?: ""
+// 没配密钥照样出包，但地图是灰块（bug 20260921-508/513：stag 包静默缺密钥）—— 至少在构建日志里喊一声。
+if (googleMapsApiKey.isBlank()) {
+    logger.warn("⚠️ GOOGLE_MAPS_API_KEY_ANDROID / android/maps.properties 均未配置：本包地图将无法加载")
+}
 
 android {
     namespace = "com.tailtopia.app"

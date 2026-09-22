@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tailtopia/features/profile/data/health_record_repository.dart';
 import 'package:tailtopia/features/profile/domain/health_list_item.dart';
 import 'package:tailtopia/features/profile/presentation/health_list_page.dart';
@@ -97,17 +98,36 @@ void main() {
     expect(find.byKey(const ValueKey('healthTypeDropdown')), findsNothing); // 未弹表单
   });
 
-  testWidgets('bug 428: 点问诊分类卡弹来源说明 toast（不再无响应）', (tester) async {
-    await _pump(tester, mixed);
+  testWidgets('bug 497: 点问诊分类卡直接跳 /triage（取代 bug 428 的来源说明 toast）', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final router = GoRouter(
+      initialLocation: '/health',
+      routes: [
+        GoRoute(path: '/health', builder: (_, _) => const HealthListPage()),
+        GoRoute(
+            path: '/triage',
+            builder: (_, _) => const Scaffold(body: Text('TRIAGE_STUB'))),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [healthRecordRepositoryProvider.overrideWithValue(_FakeHealthRepo(mixed))],
+      child: MaterialApp.router(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        routerConfig: router,
+      ),
+    ));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('healthCat_CONSULT')));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(find.text('TRIAGE_STUB'), findsOneWidget); // 已跳问诊
+    expect(find.byKey(const ValueKey('healthTypeDropdown')), findsNothing); // 不弹添加表单
     expect(
         find.text(
             'Consultation records are added automatically when you archive a consultation result'),
-        findsOneWidget);
-    expect(find.byKey(const ValueKey('healthTypeDropdown')), findsNothing); // 不弹添加表单
-    // toast 自动消退靠 Timer（2600ms）而非帧调度，显式推进时钟消费掉，避免残留 timer 判失败。
-    await tester.pump(const Duration(milliseconds: 2700));
-    await tester.pumpAndSettle();
+        findsNothing); // 不再弹 toast
   });
 }

@@ -350,6 +350,12 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
     final entry = OverlayEntry(
       builder: (_) => CoachmarkOverlay(
         spotlight: rect,
+        // bug 501：蒙层跟着锚点每帧重量 —— 首帧时统计数据（archiveStats / 健康记录数）
+        // 还没回来，健康卡副文案长、折两行把两张入口卡（IntrinsicHeight 等高）一起撑高；
+        // 数据回来后卡变矮，只量一次的亮块就比卡片大一截。
+        anchorKey: _insightsEntryAnchor,
+        // 亮块与入口卡严丝合缝（描边 r14 与卡片同半径），不再外扩 6px。
+        padding: 0,
         title: l10n.ktpMovedCoachmarkTitle,
         text: l10n.ktpMovedCoachmark,
         confirmLabel: l10n.commonGotIt,

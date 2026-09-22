@@ -65,6 +65,9 @@ class ProductDetailPageV2 extends ConsumerStatefulWidget {
   ConsumerState<ProductDetailPageV2> createState() => _ProductDetailPageV2State();
 }
 
+/// 商品详情底栏进行中的动作（bug 516）。
+enum _PdpAction { add, buy }
+
 class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
   /// 🔴 初值 null 且**不在任何地方被自动赋值** —— 多规格必须由用户显式选择（FR-94A）。
   String? _selectedSkuToken;
@@ -72,7 +75,11 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
   /// 图集当前页（页码指示器用）。
   int _galleryIndex = 0;
 
-  bool _adding = false;
+  /// 进行中的底栏动作（bug 516）：null = 空闲；区分由哪个按钮发起，
+  /// 只让发起方转圈，另一个按钮仅不可点（保持原底色，不像售罄）。
+  _PdpAction? _pendingAction;
+
+  bool get _adding => _pendingAction != null;
 
   @override
   void initState() {
@@ -546,7 +553,7 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
         // 文案恒定；不可点由 variant 表达（原因写在规格区的提示行里）。
         label: l10n.tokoAddToCartShort,
         variant: purchasable ? ShopButtonVariant.ink : ShopButtonVariant.disabled,
-        loading: _adding,
+        loading: _pendingAction == _PdpAction.add,
         onTap: canBuy ? () => _onAddTapped(l10n, sku) : null,
       ),
       primary: ShopButton(
@@ -555,7 +562,7 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
         // 副文案 = 售价 − 可抵扣 PawCoin，未含运费。当前无「可抵扣额」接口，
         // 🔴 **宁可不显示也不显示一个算错的数** —— 这一行直接影响用户对要付多少钱的预期。
         variant: purchasable ? ShopButtonVariant.pay : ShopButtonVariant.disabled,
-        loading: _adding,
+        loading: _pendingAction == _PdpAction.buy,
         onTap: canBuy ? () => _onBuyNowTapped(l10n, sku) : null,
       ),
     );
@@ -609,7 +616,7 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
   Future<void> _performAdd(AppLocalizations l10n, ShopSku sku,
       {bool thenCheckout = false}) async {
     if (_adding) return;
-    setState(() => _adding = true);
+    setState(() => _pendingAction = thenCheckout ? _PdpAction.buy : _PdpAction.add);
     try {
       await ref.read(cartProvider.notifier).add(sku.token, entrySource: widget.entrySource);
       if (!mounted) return;
@@ -624,7 +631,7 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
             context, e == CartMutationError.stock ? l10n.cartStockError : l10n.cartGenericError);
       }
     } finally {
-      if (mounted) setState(() => _adding = false);
+      if (mounted) setState(() => _pendingAction = null);
     }
   }
 

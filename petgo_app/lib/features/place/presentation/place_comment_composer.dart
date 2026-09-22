@@ -235,6 +235,10 @@ class _PlaceCommentComposerState extends ConsumerState<PlaceCommentComposer> {
     setState(() => _attitude = _attitude == v ? null : v);
   }
 
+  /// ⚠️ 本条**不自己处理 viewInsets**：键盘避让由宿主负责（`place_detail_page.dart` 把它放在
+  /// body 的 Column 底部，靠 Scaffold `resizeToAvoidBottomInset` 上移，bug 512）。
+  /// 这里再补 `viewInsets.bottom` 会与宿主双算，输入条会飘到键盘上方一整个键盘高。
+  /// `SafeArea(top: false)` 在键盘弹起时底部内边距自动归 0（padding = viewPadding − viewInsets）。
   Widget _bottomBar({required Widget child}) {
     return SafeArea(
       top: false,

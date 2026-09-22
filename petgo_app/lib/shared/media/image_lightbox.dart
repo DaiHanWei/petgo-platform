@@ -75,6 +75,24 @@ class ImageLightbox extends StatefulWidget {
     required String source,
   }) {
     if (urls.isEmpty) return Future<int?>.value();
+    // 🔴 bug 507：键盘弹着（评论框在输入）时点图，这一下只负责**收键盘**，不开大图 ——
+    // 用户的意图多半是「我不打了」，直接盖一个全屏灯箱上去像误触。再点一次才开。
+    // ⚠️ 用 View 的 viewInsets，不用 MediaQuery.viewInsetsOf(context)：调用点在
+    //    Scaffold body 里，resizeToAvoidBottomInset 会把 body 的 viewInsets.bottom 抹成 0。
+    // 放在这个统一入口里，帖子详情与场所详情两个调用方一起覆盖。
+    final FocusNode? focus = FocusManager.instance.primaryFocus;
+    final bool keyboardUp = View.of(context).viewInsets.bottom > 0;
+    final BuildContext? focusCtx = focus?.context;
+    final bool editing = focusCtx != null &&
+        (focusCtx.widget is EditableText ||
+            focusCtx.findAncestorWidgetOfExactType<EditableText>() != null);
+    if (keyboardUp || editing) {
+      focus?.unfocus();
+      // 键盘已收起、只是焦点还留在输入框（如 Android 返回键收了键盘）时照常打开：
+      // 先 unfocus 清掉所在 scope 的焦点记录，灯箱关闭 pop 回来时就不会把
+      // 焦点还给评论框、把键盘又顶起来。
+      if (keyboardUp) return Future<int?>.value();
+    }
     return Navigator.of(context).push(PageRouteBuilder<int>(
       // 🔴 `opaque: false` 是 Story 3.2 下滑关闭（AC1「背景随拖拽渐透明」）的**前提**：
       // 不透明路由之下的那一页根本不参与绘制，把黑底调淡只会露出一片虚空，
@@ -154,6 +172,70 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
   Timer? _singleTapTimer;
 
   static const double _maxScale = 4;
+
+  /// 正常尺寸下两指收缩退出（bug 506）。
+  ///
+  /// ⚠️ 不靠 InteractiveViewer 的 minScale 缩到 1 以下：它的有效下限还受 boundary 约束
+  /// （boundaryMargin 为 0 时 = 视口 / child = 1，调 minScale 无效），而放开 boundary
+  /// 又会破坏放大态「贴边才翻页」的平移范围。所以改为读手势自身的相对倍数
+  /// （[ScaleUpdateDetails.scale]），在外层 Transform 上把图跟手缩小；
+  /// 松手时低于 [_pinchCloseScale] 即关闭，否则弹回 1。
+  static const double _pinchMinScale = 0.6;
+  static const double _pinchCloseScale = 0.9;
+
+  /// 双指收缩的跟手倍数（仅从正常尺寸开始的收缩才会 < 1）。
+  double _pinchScale = 1;
+  bool _pinching = false;
+
+  /// 屏上按下的指针（bug 506）。≥2 指 = 双指缩放，**优先于**翻页与下滑关闭：
+  /// 这两个拖拽识别器与 InteractiveViewer 的缩放抢同一手势，不让位的话拖拽先赢，
+  /// 双指根本缩放不了。
+  final Set<int> _pointers = {};
+  bool _multiTouch = false;
+
+  /// 本次缩放交互开始时的倍数：只有从「正常尺寸」开始的双指收缩才算关闭手势，
+  /// 从放大态缩回来不能顺手把灯箱关掉。
+  double _interactionStartScale = 1;
+
+  void _onPointerDown(PointerDownEvent e) {
+    _pointers.add(e.pointer);
+    if (_pointers.length >= 2 && !_multiTouch) setState(() => _multiTouch = true);
+  }
+
+  void _onPointerGone(PointerEvent e) {
+    _pointers.remove(e.pointer);
+    if (_pointers.isEmpty && _multiTouch) setState(() => _multiTouch = false);
+  }
+
+  void _onInteractionStart(ScaleStartDetails d) {
+    _interactionStartScale = _transformOf(_current).value.getMaxScaleOnAxis();
+  }
+
+  void _onInteractionUpdate(ScaleUpdateDetails d) {
+    // 只认「从正常尺寸开始」的双指收缩；从放大态缩回来是 InteractiveViewer 自己的事。
+    if (d.pointerCount < 2 || _interactionStartScale > 1.01) return;
+    final double next = d.scale.clamp(_pinchMinScale, 1.0);
+    if (next != _pinchScale || !_pinching) {
+      setState(() {
+        _pinching = true;
+        _pinchScale = next;
+      });
+    }
+  }
+
+  void _onInteractionEnd(ScaleEndDetails d) {
+    if (!_pinching) return;
+    if (_pinchScale < _pinchCloseScale) {
+      // 保持缩小态直接关：Hero 从缩小后的位置飞回缩略图。
+      _close(LightboxDismissGesture.pinch);
+      return;
+    }
+    // 没到阈值：弹回正常尺寸（外层 AnimatedScale 负责过渡）。
+    setState(() {
+      _pinching = false;
+      _pinchScale = 1;
+    });
+  }
   static const double _doubleTapScale = 2.5;
 
   /// 本次会话用到的**最大放大倍数**（埋点 `max_zoom_used`，Story 3.3 · AC5）。
@@ -251,7 +333,7 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
     super.dispose();
   }
 
-  /// 统一的关闭出口：记下**是怎么关的**（埋点值域四选一），并把停留页带回给调用方
+  /// 统一的关闭出口：记下**是怎么关的**（埋点值域见 LightboxDismissGesture），并把停留页带回给调用方
   /// （调用方据此把缩略图轮播同步过去，Hero 才飞得回正确那一格）。
   void _close(LightboxDismissGesture gesture) {
     _dismissGesture = gesture;
@@ -316,6 +398,7 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
   /// 未放大时，纵向拖拽归「关闭」；已放大时这几个回调**一律不挂**，
   /// 拖拽因此落回 InteractiveViewer 的图内平移 —— 这就是优先级第 1 条的接线方式。
   bool get _dismissEnabled =>
+      !_multiTouch &&
       resolveLightboxGesture(
         zoomed: _zoomed,
         horizontal: false,
@@ -325,6 +408,7 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
 
   /// 横向：未放大直接翻页；已放大则要先贴边（优先级第 2 条）。
   bool get _pageScrollAllowed =>
+      !_multiTouch &&
       resolveLightboxGesture(
         zoomed: _zoomed,
         horizontal: true,
@@ -375,7 +459,19 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
               offset: Offset(0, _dragDy),
               child: Transform.scale(
                 scale: 1 - _dragShrink * progress,
-                child: _pager(progress),
+                // bug 506：数按下的指针，≥2 指时撤掉翻页与下滑关闭（见 _multiTouch）；
+                // 正常尺寸下两指收缩时整页跟手缩小（松手弹回走 120ms 过渡）。
+                child: Listener(
+                  behavior: HitTestBehavior.translucent,
+                  onPointerDown: _onPointerDown,
+                  onPointerUp: _onPointerGone,
+                  onPointerCancel: _onPointerGone,
+                  child: AnimatedScale(
+                    scale: _pinchScale,
+                    duration: _pinching ? Duration.zero : const Duration(milliseconds: 120),
+                    child: _pager(progress),
+                  ),
+                ),
               ),
             ),
           ),
@@ -449,6 +545,10 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
             // 未放大时不许平移：否则它会和"下滑关闭"抢同一个手势。
             panEnabled: _zoomed,
             maxScale: _maxScale,
+            // bug 506：正常尺寸下两指收缩退出（见 _onInteractionUpdate）。
+            onInteractionStart: _onInteractionStart,
+            onInteractionUpdate: _onInteractionUpdate,
+            onInteractionEnd: _onInteractionEnd,
             child: SizedBox.expand(
               child: Center(
                 // AC1/AC2：Hero 包住这一页的图。tag 由**调用方前缀 + 下标**算出，
