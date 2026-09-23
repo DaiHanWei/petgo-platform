@@ -34,6 +34,8 @@
                           th:text="#{admin.v130.consultOrders.unitPriceNote}">成交时点值，与当前配置价不同属正常</span>
                 </td></tr>
             <tr><th th:text="#{admin.consultOrderDetail.rebroadcast}">重播次数</th><td th:text="${order.rebroadcastCount}">0</td></tr>
+            <!-- bug 20260720-304：订单信息补「创建时间」（下单即落，未付款的单 paidAt 为空时这是唯一时间锚点）。 -->
+            <tr><th th:text="#{admin.common.createdAt}">创建时间</th><td class="nowrap" th:text="${@adminTime.wib(order.createdAt)}">—</td></tr>
             <tr><th th:text="#{admin.common.paidAt}">成交时间</th><td class="nowrap" th:text="${@adminTime.wib(order.paidAt)}">—</td></tr>
             <tr><th th:text="#{admin.consultOrderDetail.sessionStart}">会话起</th><td class="nowrap" th:text="${@adminTime.wib(order.sessionStartedAt)}">—</td></tr>
             <tr><th th:text="#{admin.consultOrderDetail.sessionEnd}">会话止</th><td class="nowrap" th:text="${@adminTime.wib(order.sessionEndedAt)}">—</td></tr>

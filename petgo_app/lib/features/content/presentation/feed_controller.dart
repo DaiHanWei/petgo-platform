@@ -145,6 +145,28 @@ class FeedController extends AsyncNotifier<FeedState> {
     state = AsyncData(current.copyWith(items: filtered));
   }
 
+  /// 按 postId 回写互动计数（bug 20260923-538）：详情页发评论 / 点赞后，Feed 快照不会自己变，
+  /// 返回 Social 仍显示旧数（下拉刷新才对）。详情页拿到新值后调这里就地改那一张卡。
+  /// 不在当前列表 / 值没变 → 无操作（不触发重建）。
+  void syncCounts(int postId, {int? commentCount, int? likeCount, bool? liked}) {
+    final current = state.value;
+    if (current == null) return;
+    var changed = false;
+    final items = current.items.map((i) {
+      if (i.id != postId) return i;
+      final next = i.copyWith(
+          commentCount: commentCount, likeCount: likeCount, liked: liked);
+      if (next.commentCount != i.commentCount ||
+          next.likeCount != i.likeCount ||
+          next.liked != i.liked) {
+        changed = true;
+      }
+      return next;
+    }).toList();
+    if (!changed) return;
+    state = AsyncData(current.copyWith(items: items));
+  }
+
   /// 下拉刷新：重建首屏（重置游标）。
   Future<void> refresh() async {
     ref.invalidateSelf();
@@ -154,6 +176,19 @@ class FeedController extends AsyncNotifier<FeedState> {
 
 final AsyncNotifierProvider<FeedController, FeedState> feedProvider =
     AsyncNotifierProvider<FeedController, FeedState>(FeedController.new);
+
+/// 详情页 → Feed 计数回写入口（bug 20260923-538）。
+///
+/// 🔴 先判 [Ref.exists]：从通知深链直接进详情时 Feed 可能还没建，`ref.read(feedProvider.notifier)`
+/// 会顺手把它建出来并发一次首屏请求 —— 为了回写一个数去拉整页 Feed 不值当，没建就不写。
+/// ⚠️ 只覆盖 [feedProvider]（Social 全部 Tab 共用这一个实例，切 Tab 是同一实例重建）。
+/// 顶置卡（pinnedSlotProvider）是独立快照，不在此回写。
+void syncFeedCounts(WidgetRef ref, int postId,
+    {int? commentCount, int? likeCount, bool? liked}) {
+  if (!ref.exists(feedProvider)) return;
+  ref.read(feedProvider.notifier).syncCounts(postId,
+      commentCount: commentCount, likeCount: likeCount, liked: liked);
+}
 
 
 /// 顶置坑位（V1.1.6 Story 4.2 · FR-68）。

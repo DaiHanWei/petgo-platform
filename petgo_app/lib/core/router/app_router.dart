@@ -63,6 +63,8 @@ import '../../features/profile/presentation/age_card_page.dart';
 import '../../features/profile/presentation/pet_insights_page.dart';
 import '../../features/profile/presentation/milestone_list_page.dart';
 import '../../features/profile/domain/pet_profile.dart';
+import '../../features/profile/domain/profile_created_flow.dart';
+import '../../features/profile/data/milestone_celebration_reporter.dart';
 import '../../features/onboarding/presentation/splash_page.dart';
 import '../../features/profile/presentation/pet_profile_create_page.dart';
 import '../../features/profile/presentation/day_detail_page.dart';
@@ -556,7 +558,11 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       //    反过来的话 `/places/new` 会被 `:token` 吃掉、把 "new" 当成一个场所 token 去查。
       GoRoute(
         path: PlaceDetailPage.routePattern,
-        builder: (c, s) => PlaceDetailPage(token: s.pathParameters['token']!),
+        // `?from=` 只喂埋点（E-5 place_detail_viewed 的入口来源，bug 20260922-528）。
+        builder: (c, s) => PlaceDetailPage(
+          token: s.pathParameters['token']!,
+          analyticsFrom: s.uri.queryParameters['from'],
+        ),
       ),
 
       // ===== Toko（V1.4.0 Story 1.6，FR-93 / FR-93A）=====
@@ -680,6 +686,7 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
             );
             return const SizedBox.shrink();
           }
+          final s1Code = profileCreatedMilestoneCode(created.petType);
           return ProfileCreatedCelebrationPage(
             petName: created.name,
             avatarUrl: created.avatarUrl,
@@ -699,6 +706,13 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
               // 🔴 主 CTA 改为**直接拉起内容发布**（产品同批）。原先它 go 到 /home ——
               //    而按钮上写的是「记录第一个瞬间 📸」，点完却落在首页信息流，
               //    文案承诺的事一件没发生。/publish 着陆页首帧即开发布弹层，正是这句文案的落点。
+              // 🔴 回报 S1 已庆祝（bug 20260921-505）：本页的「第一个里程碑已解锁」卡就是 S1 的庆祝展示，
+              //    不回报的话首次进里程碑列表页会把 S1 当「未庆祝」再补弹一次。点 CTA 时才报：
+              //    S1 由后端 AFTER_COMMIT 异步完成，进页瞬间报可能早于完成行落库而被静默忽略。
+              //    best-effort 不 await（AD-A3.1）；本地集合同时挡住本会话内的补弹。
+              ref
+                  .read(locallyCelebratedMilestonesProvider.notifier)
+                  .report([s1Code]);
               if (c.mounted) c.go('/publish');
             },
           );

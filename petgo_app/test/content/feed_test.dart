@@ -306,4 +306,42 @@ void main() {
     await tester.pump();
     expect(loaded, isFalse); // 闸门：滚动不触发 loadMore
   });
+
+  // ===== bug 20260923-538：按 postId 回写互动计数 =====
+
+  test('bug 538: syncCounts 只改目标卡的计数，其余卡原样', () async {
+    final container = ProviderContainer(overrides: [
+      feedRepositoryProvider.overrideWithValue(
+          _FakeFeedRepo([_item(id: 1), _item(id: 2)])),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(feedProvider.future);
+    final before = container.read(feedProvider).value!.items;
+
+    container
+        .read(feedProvider.notifier)
+        .syncCounts(2, commentCount: 4, likeCount: 9, liked: true);
+
+    final after = container.read(feedProvider).value!.items;
+    expect(identical(after[0], before[0]), isTrue);
+    expect(after[1].commentCount, 4);
+    expect(after[1].likeCount, 9);
+    expect(after[1].liked, isTrue);
+    expect(after[1].body, before[1].body); // 内容字段不动
+  });
+
+  test('bug 538: syncCounts 值没变 / 不在列表 → 不发新状态', () async {
+    final container = ProviderContainer(overrides: [
+      feedRepositoryProvider.overrideWithValue(_FakeFeedRepo([_item(id: 1)])),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(feedProvider.future);
+    var notified = 0;
+    container.listen(feedProvider, (_, _) => notified++);
+
+    container.read(feedProvider.notifier).syncCounts(1, commentCount: 0);
+    container.read(feedProvider.notifier).syncCounts(99, commentCount: 5);
+
+    expect(notified, 0);
+  });
 }

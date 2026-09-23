@@ -135,11 +135,32 @@ public class FeedbackTicket {
     }
 
     /**
-     * 客服结案（Story 4.7，「已联系+已解决」单动作）：{@code contacted_customer=true} + {@code RESOLVED} +
-     * {@code resolved_at}(now) + {@code handled_by} + {@code csat_deadline}（+7d，CSAT 窗口）。
+     * 客服标记「已联系」（bug 20260922-524，与结案拆开）：只置 {@code contacted_customer=true}，
+     * {@code OPEN} 顺势进 {@code IN_PROGRESS}（客服已接手；仍属「待处理」页签，只是离开「待联系」）。
+     * 不动结案字段。调用方负责只在未结案时调用。
+     *
+     * @return 本次是否真的改了（已联系过再点返回 false —— 调用方据此不重复记审计）
+     */
+    public boolean markContacted(long handledBy) {
+        if (this.contactedCustomer) {
+            return false;
+        }
+        this.contactedCustomer = true;
+        this.handledBy = handledBy;
+        if (this.status == TicketStatus.OPEN) {
+            this.status = TicketStatus.IN_PROGRESS;
+        }
+        return true;
+    }
+
+    /**
+     * 客服结案（Story 4.7）：{@code RESOLVED} + {@code resolved_at}(now) + {@code handled_by} +
+     * {@code csat_deadline}（+7d，CSAT 窗口）。
+     *
+     * <p>bug 20260922-524：<b>不再顺带写 {@code contacted_customer=true}</b> —— 「已联系」拆成独立动作，
+     * 结案不要求先联系（有的单无需联系就能解决），联系与否以客服实际标记为准。
      */
     public void markResolved(long handledBy, Instant csatDeadline) {
-        this.contactedCustomer = true;
         this.status = TicketStatus.RESOLVED;
         this.resolvedAt = Instant.now();
         this.handledBy = handledBy;
@@ -151,6 +172,16 @@ public class FeedbackTicket {
         this.csatScore = score;
         this.csatComment = comment;
         this.status = TicketStatus.CLOSED;
+    }
+
+    /**
+     * 客服「忽略」（bug 20260922-524，方案 B：复用 {@code CLOSED}，不新增状态、不加迁移）。
+     * 无效 / 重复 / 骚扰类工单直接关闭：不写 {@code resolved_at}、不设 {@code csat_deadline}
+     * （因此不会进 CSAT 窗口，也不在 7 天自动关闭扫描集里）。调用方负责只在未结案时调用。
+     */
+    public void markIgnored(long handledBy) {
+        this.status = TicketStatus.CLOSED;
+        this.handledBy = handledBy;
     }
 
     /** 7 天未评自动关闭（Story 4.7 scanner）：{@code RESOLVED→CLOSED}（无 CSAT，静默）。 */

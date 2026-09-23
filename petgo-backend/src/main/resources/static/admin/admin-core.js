@@ -814,6 +814,14 @@ function adminUploadError(root, text, selectors) {
                 + mb(s.usedBytes) + ' / ' + mb(s.maxBytes) + ' MB';
     }
 
+    /** bug 20260922-523：多张上传时给出「上传中 n/N…」进度，写在同一个状态位上；全部回来后 paint() 复原用量。 */
+    function progress(root, done, total) {
+        var live = root.querySelector('[data-batch-live]');
+        var tpl = root.getAttribute('data-msg-uploading');
+        if (!live || !tpl) { return; }
+        live.textContent = tpl.replace('{0}', done).replace('{1}', total);
+    }
+
     function reject(root, name, msg) {
         adminUploadError(root, name + '：' + msg,
                 ['[data-batch-errors]', '[data-seed-thumbs]']);
@@ -854,7 +862,6 @@ function adminUploadError(root, text, selectors) {
                 // 用服务端回的权威用量校准本地计数（别自己累加 —— 会和真相慢慢分叉）。
                 root.setAttribute('data-used-count', res.body.usedCount);
                 root.setAttribute('data-used-bytes', res.body.usedBytes);
-                paint(root);
             }
             onDone();
         }).catch(function () {
@@ -900,13 +907,20 @@ function adminUploadError(root, text, selectors) {
             accepted.push(f);
         });
 
-        var left = accepted.length;
+        var total = accepted.length;
+        var left = total;
         if (left === 0) { return; }
+        progress(root, 0, total);
         accepted.forEach(function (f) {
             send(root, f, function () {
                 left--;
+                progress(root, total - left, total);
                 // 全部回来了再刷墙一次 —— 每张都刷会让缩略图墙闪十几下。
-                if (left === 0) { refreshWall(root); }
+                // 刷墙只替换 #seedAssetWall（outerHTML），页面停留在素材步骤不跳走。
+                if (left === 0) {
+                    paint(root);
+                    refreshWall(root);
+                }
             });
         });
     });

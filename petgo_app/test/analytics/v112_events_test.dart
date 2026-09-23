@@ -288,6 +288,12 @@ void main() {
         // 名字由架构 delta §4.2 定为 mention_inserted / mention_tapped。
         // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
         'mention_',
+        // 宠物友好场所（V1.3.0 batch-b1 FR-112 · E-4/5/6/15，bug 20260922-528）。模块是「场所」——
+        // 列表、标记表单、详情、评论输入条四处界面都在报，挂到任何单页前缀下都会误导。
+        // 名字由 PRD §3 / 架构 delta §4.2 定死（place_created / place_detail_viewed /
+        // place_comment_posted / place_photo_added / place_shared）。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
+        'place_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -351,6 +357,12 @@ void main() {
         // ⚠️ 与内容分享卡的 `post_share_card_sent` 用词不同，是因为**事件名由 PRD §4 定死**
         //    （AD-A23：实现不得自行改名）。两者语义同档：都只在系统面板回调成功后才报。
         '_shared',
+        // 场所供给三件事（V1.3.0 batch-b1 E-4/E-6，bug 20260922-528）：名字由 PRD §3 定死，
+        // 扩表、不改名。三者都只在**服务端接住之后**才报 —— 描述的是结果，不是点击：
+        // `_created` = 新场所建成；`_posted` = 评论已发出；`_added` = 补充照片已提交。
+        '_created',
+        '_posted',
+        '_added',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

@@ -49,8 +49,8 @@ class VisitorArchiveView extends ConsumerStatefulWidget {
 
   /// 从哪个推荐位点进来的（V1.3.0 batch-b1 Story 4.1 · AC7 的 `from`）。
   ///
-  /// 非空 → 首帧上报一次 `diary_visitor_viewed`。为空（分享链接落地 / 公开主页的宠物卡
-  /// 等既有入口）→ **一条都不报**，本 story 不给既有入口补埋点。
+  /// 非空 → 首帧上报一次 `diary_visitor_viewed`。为空（分享链接落地）→ **一条都不报**。
+  /// 公开主页的宠物卡带 `from=profile`（E-17 取值之一，bug 20260922-534 补上）。
   /// ⚠️ 只喂埋点，不影响任何行为。
   final String? analyticsFrom;
 

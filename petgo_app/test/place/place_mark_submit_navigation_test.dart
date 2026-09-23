@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/media/media_scope.dart';
 import 'package:tailtopia/features/media/data/oss_uploader.dart';
 import 'package:tailtopia/features/media/domain/media_upload_use_case.dart';
@@ -73,6 +74,11 @@ class _Media implements MediaUploadUseCase {
 void main() {
   testWidgets('🔴 提交成功 → pushReplacement 到新场所详情页；返回回到列表', (tester) async {
     final repo = _Repo();
+    // bug 20260922-528：E-4 place_created + 详情入口 from=created。
+    final captured = <(String, Map<String, Object>?)>[];
+    Analytics.debugCaptureSink = (e, p) => captured.add((e, p));
+    addTearDown(() => Analytics.debugCaptureSink = null);
+    String? detailFrom;
     final router = GoRouter(
       initialLocation: '/places',
       routes: [
@@ -91,10 +97,13 @@ void main() {
         // 详情页用桩：本用例只关心「落到了哪个 token」，不关心详情渲染。
         GoRoute(
           path: PlaceDetailPage.routePattern,
-          builder: (c, s) => Scaffold(
-            appBar: AppBar(),
-            body: Text('DETAIL ${s.pathParameters['token']}'),
-          ),
+          builder: (c, s) {
+            detailFrom = s.uri.queryParameters['from'];
+            return Scaffold(
+              appBar: AppBar(),
+              body: Text('DETAIL ${s.pathParameters['token']}'),
+            );
+          },
         ),
       ],
     );
@@ -149,6 +158,11 @@ void main() {
     expect(repo.creates, 1);
     expect(find.text('DETAIL newTok'), findsOneWidget, reason: '🔴 成功后应进入新场所详情页');
     expect(find.byType(PlaceMarkPage), findsNothing, reason: '表单页应被替换掉');
+    expect(detailFrom, kPlaceDetailFromCreated, reason: '详情页的 place_detail_viewed 靠它区分入口');
+    // 🔴 只有类型与数量 —— 场所名 / 地址 / 坐标一律不进埋点。
+    expect(captured.where((e) => e.$1 == 'place_created').map((e) => e.$2), [
+      {'type': PlaceType.cafe.api, 'tag_count': 1, 'photo_count': 1},
+    ]);
 
     // 返回 → 回到列表，而不是回到已提交的表单。
     router.pop();

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/media/media_scope.dart';
 import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
@@ -500,6 +501,14 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
                 _draft.description.trim().isEmpty ? null : _draft.description.trim(),
             idempotencyKey: _idempotencyKey,
           );
+      // E-4（bug 20260922-528）：服务端建成才报，放在 mounted 判断之前 ——
+      // 提交成功后用户已离开这页，这条供给数据也不该丢。
+      // ⚠️ 只报类型与数量：场所名 / 地址 / 坐标一律不进埋点（architecture-b1 §4.2）。
+      Analytics.capture('place_created', {
+        'type': _draft.type!.api,
+        'tag_count': _draft.tags.length,
+        'photo_count': _draft.photoUrls.length,
+      });
       if (!mounted) return;
       // 列表要把新场所显示出来 —— 不 invalidate 的话用户返回后看到的还是旧列表，
       // 会以为标记没成功。
@@ -514,7 +523,8 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
       // AC6 · UI 稿（bug 514）：提交成功后**进入新场所详情页**，底部 toast「Tempat berhasil ditandai」。
       // 🔴 用 pushReplacement 而不是 push：表单页从栈里拿掉，详情页返回即回列表 ——
       // 否则返回会落回一张已经提交过的表单，再点一次「保存」就是重复标记（幂等键兜得住，但 UX 是错的）。
-      router.pushReplacement(PlaceDetailPage.routeFor(token));
+      router.pushReplacement(
+          PlaceDetailPage.routeFor(token, from: kPlaceDetailFromCreated));
     } on DioException catch (e) {
       if (!mounted) return;
       // 🔴 **确定性失败不能报「请重试」**（code-review 2026-09-15）：审核硬拦截与限流

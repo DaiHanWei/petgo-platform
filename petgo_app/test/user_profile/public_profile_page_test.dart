@@ -155,6 +155,7 @@ Future<_Probe> _pump(
   AccountReportRepository? reportRepo,
   PublicUserPostsRepository? postsRepo,
   AccountActionEntry entry = AccountActionEntry.miniProfile,
+  ProfileViewFrom? viewFrom,
 }) async {
   final probe = _Probe();
   final router = GoRouter(
@@ -171,6 +172,7 @@ Future<_Probe> _pump(
                   ref,
                   _kTargetId,
                   entry: entry,
+                  viewFrom: viewFrom,
                   onBlocked: () => probe.blocked++,
                   onReported: () => probe.reported++,
                 ),
@@ -454,6 +456,36 @@ void main() {
       Analytics.debugCaptureSink = (name, props) => events.add(MapEntry(name, props));
     });
     tearDown(() => Analytics.debugCaptureSink = null);
+
+    Iterable<Map<String, Object>?> viewed() =>
+        events.where((e) => e.key == 'user_profile_viewed').map((e) => e.value);
+
+    /// E-12（bug 20260922-536）：`from` ∈ avatar / mention / place（PRD b1 §3）。
+    testWidgets('user_profile_viewed：缺省入口 → from=avatar', (tester) async {
+      await _pump(tester, repo: _FakeProfileRepo(_target()));
+      expect(viewed(), [
+        {'target_user_id': _kTargetId, 'from': 'avatar'},
+      ]);
+    });
+
+    testWidgets('user_profile_viewed：评论作者入口也算 avatar（entry 维度不串进 from）',
+        (tester) async {
+      await _pump(tester,
+          repo: _FakeProfileRepo(_target()), entry: AccountActionEntry.comment);
+      expect(viewed().single!['from'], 'avatar');
+    });
+
+    testWidgets('user_profile_viewed：@ 入口 → from=mention', (tester) async {
+      await _pump(tester,
+          repo: _FakeProfileRepo(_target()), entry: AccountActionEntry.mention);
+      expect(viewed().single!['from'], 'mention');
+    });
+
+    testWidgets('user_profile_viewed：场所入口显式传 → from=place', (tester) async {
+      await _pump(tester,
+          repo: _FakeProfileRepo(_target()), viewFrom: ProfileViewFrom.place);
+      expect(viewed().single!['from'], 'place');
+    });
 
     /// 🔴 `entry` 经路由的 `?entry=` 往返一圈后必须还是原来那个值。
     ///

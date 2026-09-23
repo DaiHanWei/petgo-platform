@@ -60,6 +60,14 @@ class ContentDetailPage extends ConsumerWidget {
     final detailAsync = ref.watch(detailProvider(postId));
     // 评论发表/删除后重拉详情（更新 commentCount）。
     ref.listen<int>(commentsRefreshProvider, (prev, next) => ref.invalidate(detailProvider(postId)));
+    // bug 20260923-538：详情每次拉到新值（首次进入 / 发评论后重拉）→ 把评论数与点赞态写回 Feed 快照，
+    // 否则返回 Social 仍是进来前的旧数。不用 fireImmediately：build 期间改别的 provider 会抛。
+    ref.listen<AsyncValue<ContentDetail>>(detailProvider(postId), (prev, next) {
+      final d = next.asData?.value;
+      if (d == null) return;
+      syncFeedCounts(ref, d.id,
+          commentCount: d.commentCount, likeCount: d.likeCount, liked: d.liked);
+    });
 
     return detailAsync.when(
       loading: () => _shell(context, body: const Center(

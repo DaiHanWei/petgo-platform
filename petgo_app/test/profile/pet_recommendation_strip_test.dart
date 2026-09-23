@@ -14,6 +14,7 @@ import 'package:tailtopia/features/content/presentation/feed_tab_row.dart';
 import 'package:tailtopia/features/content/presentation/home_page.dart';
 import 'package:tailtopia/features/place/presentation/place_entry_row.dart';
 import 'package:tailtopia/features/profile/data/pet_recommendation_repository.dart';
+import 'package:tailtopia/features/profile/presentation/widgets/pet_recommendation_strip.dart';
 import 'package:tailtopia/features/profile/presentation/widgets/recommended_pet_card.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -120,7 +121,8 @@ void main() {
 
     testWidgets('横着滑的一行（6~10 张），是 UI 稿 B1 的紧凑小卡（不是网格大卡）', (tester) async {
       // 🔁 2026-09-21 还原度修正（B1）：原先直接塞 4.1 的网格卡（宽 150 / 三行字 / 行高 216），
-      //    在首页最显眼的位置顶出一整堵墙。现在是 72×72 方图 + 一行「名字 · 天数」的小卡；
+      //    在首页最显眼的位置顶出一整堵墙。现在是 65×65 方图（bug 20260922-522 由 72 缩 10%）
+      //    + 一行「名字 · 天数」的小卡；
       //    **点击行为**仍与网格卡同源（openRecommendedPet），由下面 AC4 的埋点用例钉住。
       await pumpHome(tester, _FakeRepo([for (int i = 1; i <= 8; i++) _pet(i)]));
       final strip = find.byKey(const ValueKey('petRecommendationStrip'));
@@ -130,14 +132,31 @@ void main() {
       expect(find.descendant(of: strip, matching: find.byKey(const ValueKey('recommendedPet_1'))),
           findsOneWidget);
       expect(find.descendant(of: strip, matching: find.byType(RecommendedPetCard)), findsNothing);
-      // 行高 ≈100（稿），不再是网格卡那 216。
-      expect(tester.getSize(list).height, lessThanOrEqualTo(100));
+      // 行高 92（bug 20260922-522 由 100 缩 10%），不再是网格卡那 216。
+      expect(tester.getSize(list).height, PetRecommendationStrip.rowHeight);
+      expect(PetRecommendationStrip.rowHeight, lessThanOrEqualTo(92));
+      // 卡片尺寸（bug 20260922-522）：方图 65×65。
+      expect(
+          tester.getSize(find.descendant(
+              of: strip, matching: find.byKey(const ValueKey('recommendedPet_1')))).width,
+          PetRecommendationStrip.cardWidth);
+      expect(PetRecommendationStrip.cardWidth, 65);
+      expect(PetRecommendationStrip.cardGap, 8);
       // 一行「名字 · 陪伴天数」，天数复用名片页的「N hari」出口。
       expect(find.text('Mochi1 · 12 hari'), findsOneWidget);
       // 大图与小圆头像仍是两个字段、两个来源（UX-DR15）：头像在，大图空 → 占位，不拿头像顶。
       expect(find.byKey(const ValueKey('recommendedPetAvatar_1')), findsOneWidget);
       expect(find.byKey(const ValueKey('recommendedPetCoverPlaceholder_1')), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('bug 20260922-522: 缩到 65/92 后 1.3 倍字号也不溢出', (tester) async {
+      // 行高按 65 + 8 + 11×1.3×1.3 ≈ 91.6 算的，这里用字号上限钉住「92 够放」。
+      tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await pumpHome(tester, _FakeRepo([for (int i = 1; i <= 8; i++) _pet(i)]));
+      expect(find.text('Mochi1 · 12 hari'), findsOneWidget);
+      expect(tester.takeException(), isNull); // RenderFlex overflow 会在这里抛出
     });
 
     testWidgets('AC2 既有顶部区域一处不改（场所入口行 + 分类 chips 都还在）', (tester) async {

@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!--/*
   B7 用户列表的摘要条 / 表格 / 单行（V1.3.0 Story 8.1，模板 B）。
     sumbar(oob) — 四格：总用户数 · 今日新增（WIB）· 已停用 · 已删除（单条 COUNT(*) FILTER 聚合，随筛选联动）
     rows(oob)   — 表格 + 空态 + 分页；oob=true 时摘要条随片段一并换
   ⚠️ 四格各带 data-sum="<字段名>"：这是「摘要条随筛选联动」唯一可被测试钉住的锚点 ——
      只断言「摘要条在」的话，一个完全不筛的实现照样绿。
+    exportCtl(oob) — 筛选栏里的「导出召回名单」区；oob=true 时随 rows 一并换（bug 20260922-526）
     row(u, oob) — 单行；抽屉里处置成功后以 oob=true 原位替换（停用不会让行换位置，所以只换这一行）
   🛡 列表**只显示「手机号填了没填」，不显示号码本身** —— 少一处出现 PII 就少一个泄漏面。
 */-->
@@ -29,8 +30,49 @@
     </div>
 </div>
 
+<!--/* 导出召回名单区（bug 20260922-526 从 users.html 筛选表单里抽出）。
+       外层 id 固定，htmx 筛选时经 rows(oob=true) 按 id 带回 —— 此前它只在首屏渲染，
+       htmx 筛选后 canExport 永远停在首屏那次的值（置灰）。
+       display:contents：不改变筛选栏 flex 布局，子元素照旧直接参与排布。
+       canExport 三态（可用链接 / 置灰钮 / 提示语）共用这一个判据，只写这一份 ——
+       bug 20260901-469 的成因正是「屏幕一份、文件一份」。 */-->
+<span th:fragment="exportCtl(oob)" id="users-export" style="display:contents"
+      th:attr="hx-swap-oob=${oob} ? 'true' : null"
+      th:with="canExport=${!searched and (phone == 'filled' or phone == 'empty')
+                           and (status == null or status == '')}">
+    <!-- 🔴 导出是独立权限：把 PII 批量带出系统，风险高一档 -->
+    <!-- bug 20260901-469：按钮只在明确选了 已填写/未填写 时可用，phone 原样透传 ——
+         原先「没选就当未填写」的回落，配上翻页丢参，导出的正好是相反的那份名单。 -->
+    <!-- ⚠️ 搜索态（q 非空）不给导出：屏幕上是**关键词命中且封顶 50 条**的那批，
+         而导出端点按 AC3 只认 phone、导的是全量 —— 又是「屏幕一份、文件一份」。 -->
+    <!-- ⚠️ 状态筛选（Story 8.1）生效时同理不给导出：导出端点按 AC3 **只认 phone 一个参数**
+         （路径/参数逐字不变），它导的是全部状态的人；屏幕上只剩「已停用」而文件里是全量，
+         正是同一类错位。要按状态导，得先把状态切回「全部」。 -->
+    <!-- bug 20260901-475：不可用时**置灰而不是消失** —— 整个按钮不见会被读成「功能没了」。 -->
+    <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
+       th:if="${canExport}"
+       class="btn btn-sm" data-no-drawer data-export-recall
+       th:href="@{/admin/users/phone-recall.xlsx(phone=${phone})}"
+       th:text="#{admin.users.exportRecall}">导出召回名单</a>
+    <button sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
+            th:unless="${canExport}"
+            type="button" class="btn btn-sm" disabled data-export-recall
+            th:title="#{admin.users.exportNeedsFilter}"
+            th:text="#{admin.users.exportRecall}">导出召回名单</button>
+    <span sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
+          th:unless="${canExport}"
+          class="hint" th:text="#{admin.users.exportNeedsFilter}">
+        选择「已填写 / 未填写」后可导出召回名单
+    </span>
+    <span class="hint" th:text="#{admin.users.exportNote}"
+          sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')">
+        名单含已封号账号并标注状态，由运营自行判断。
+    </span>
+</span>
+
 <th:block th:fragment="rows(oob)">
     <th:block th:if="${oob}"><div th:replace="~{admin/fragments/users-list :: sumbar(true)}"></div></th:block>
+    <th:block th:if="${oob}"><span th:replace="~{admin/fragments/users-list :: exportCtl(true)}"></span></th:block>
     <table th:if="${!#lists.isEmpty(results)}" class="users-table">
         <thead>
         <tr>

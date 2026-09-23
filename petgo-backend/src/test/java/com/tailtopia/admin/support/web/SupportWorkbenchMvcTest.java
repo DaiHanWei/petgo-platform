@@ -130,4 +130,66 @@ class SupportWorkbenchMvcTest extends ApiIntegrationTest {
                 .andExpect(status().isForbidden()).andReturn().getResponse().getContentAsString();
         assertThat(forbidden).contains("forbidden");
     }
+
+    /**
+     * bug 20260922-524：已联系 / 结案 / 忽略 三钮拆开。
+     * 已联系：停留本条（非待联系页签）+ oob 刷新行与计数，工单仍未结案；在待联系页签则删行走「下一条」。
+     * 忽略：done 片段，置 CLOSED；已结案再忽略 409；只有查看权 → 403。
+     */
+    @Test
+    void contactedResolveIgnoreAreSeparateActions() throws Exception {
+        long seq = SEQ.incrementAndGet();
+        long actor = 981000L + seq;
+        makeRoomForSuperAdmin();
+        accountService.createAccount("sp3-super-" + seq + "@tailtopia.test", "超管", AdminRole.SUPER_ADMIN, List.of(), actor);
+        AdminUserDetails superAdmin = userDetailsService.loadByEmail("sp3-super-" + seq + "@tailtopia.test", false);
+        accountService.createAccount("sp3-view-" + seq + "@tailtopia.test", "只看", AdminRole.CUSTOM,
+                List.of(AdminPermissions.SUPPORT_VIEW), actor);
+        AdminUserDetails viewer = userDetailsService.loadByEmail("sp3-view-" + seq + "@tailtopia.test", false);
+
+        long userId = newUser().getId();
+        String a = support.createTicket(userId, "联系 " + seq, "正文", "EMAIL", "c" + seq + "@b.com", true, null, List.of(), List.of());
+        String b = support.createTicket(userId, "忽略 " + seq, "正文", "EMAIL", "c" + seq + "@b.com", true, null, List.of(), List.of());
+        String c = support.createTicket(userId, "待联系页签 " + seq, "正文", "EMAIL", "c" + seq + "@b.com", true, null, List.of(), List.of());
+
+        // 详情：三个独立按钮各自一个 hx-post
+        String detail = mvc.perform(get("/admin/support-tickets/" + a + "/detail").with(user(superAdmin)).header("HX-Request", "true"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(detail).contains("hx-post=\"/admin/support-tickets/" + a + "/contacted\"")
+                .contains("hx-post=\"/admin/support-tickets/" + a + "/resolve\"")
+                .contains("hx-post=\"/admin/support-tickets/" + a + "/ignore\"");
+
+        // 已联系（待处理页签）：停留本条 + oob 行 + 计数；工单仍未结案，且离开「待联系」
+        String contacted = mvc.perform(post("/admin/support-tickets/" + a + "/contacted").with(user(superAdmin)).with(csrf())
+                        .header("HX-Request", "true").header("HX-Current-URL", "http://localhost/admin/support-tickets?state=pending"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(contacted).contains("id=\"support-row-" + a + "\"").contains("id=\"support-tab-count-contact\"")
+                .contains("hx-post=\"/admin/support-tickets/" + a + "/resolve\"");
+        String contactTab = mvc.perform(get("/admin/support-tickets").param("state", "contact").with(user(superAdmin)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(contactTab).doesNotContain("id=\"support-row-" + a + "\"").contains("id=\"support-row-" + c + "\"");
+        String pendingTab = mvc.perform(get("/admin/support-tickets").with(user(superAdmin)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(pendingTab).contains("id=\"support-row-" + a + "\"");
+
+        // 已联系（待联系页签）：该单离开此页签 → done 片段删行
+        String contactedDone = mvc.perform(post("/admin/support-tickets/" + c + "/contacted").with(user(superAdmin)).with(csrf())
+                        .header("HX-Request", "true").header("HX-Current-URL", "http://localhost/admin/support-tickets?state=contact"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(contactedDone).contains("data-next-id=\"").contains("hx-swap-oob=\"delete\"");
+
+        // 忽略：done 片段；已结案（含已忽略）再忽略 → 409
+        String ignored = mvc.perform(post("/admin/support-tickets/" + b + "/ignore").with(user(superAdmin)).with(csrf()).header("HX-Request", "true"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(ignored).contains("id=\"support-row-" + b + "\"").contains("hx-swap-oob=\"delete\"");
+        mvc.perform(post("/admin/support-tickets/" + b + "/ignore").with(user(superAdmin)).with(csrf()).header("HX-Request", "true"))
+                .andExpect(status().isConflict());
+
+        // 只有查看权：三钮禁用、写端点 403
+        String viewerDetail = mvc.perform(get("/admin/support-tickets/" + a + "/detail").with(user(viewer)).header("HX-Request", "true"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(viewerDetail).doesNotContain("/contacted\"").doesNotContain("/ignore\"");
+        mvc.perform(post("/admin/support-tickets/" + a + "/ignore").with(user(viewer)).with(csrf()).header("HX-Request", "true"))
+                .andExpect(status().isForbidden());
+    }
 }

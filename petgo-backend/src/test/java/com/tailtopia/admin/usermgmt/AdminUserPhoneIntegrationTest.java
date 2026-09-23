@@ -138,6 +138,41 @@ class AdminUserPhoneIntegrationTest extends ApiIntegrationTest {
         assertThat(filled).doesNotContain(">" + emptyPhone.getId() + "<");
     }
 
+    /**
+     * bug 20260922-526：htmx 筛选（只回 rows(oob=true)）时导出区也要按 id oob 带回，
+     * 否则导出按钮停在首屏那次的置灰态。判据只有 exportCtl 片段里一份。
+     */
+    @Test
+    void htmxFilterSwapsExportControlOutOfBand() throws Exception {
+        userWithPhone();
+        String filled = mvc.perform(get("/admin/users").param("phone", "filled")
+                        .header("HX-Request", "true")
+                        .with(authentication(auth(AdminAccountType.SUPER_ADMIN))).param("lang", "zh_CN"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(filled).contains("id=\"users-export\"").contains("hx-swap-oob=\"true\"")
+                .contains("/admin/users/phone-recall.xlsx?phone=filled");
+        // 翻页链接仍带 phone（bug 469 前车之鉴）—— 有分页条时断言
+        if (filled.contains("class=\"pager\"") && filled.contains("page=1")) {
+            assertThat(filled).contains("phone=filled");
+        }
+
+        String any = mvc.perform(get("/admin/users")
+                        .header("HX-Request", "true")
+                        .with(authentication(auth(AdminAccountType.SUPER_ADMIN))).param("lang", "zh_CN"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(any).as("未选手机号筛选 → oob 回来的是置灰钮")
+                .contains("id=\"users-export\"").doesNotContain("phone-recall.xlsx");
+
+        String noPerm = mvc.perform(get("/admin/users").param("phone", "filled")
+                        .header("HX-Request", "true")
+                        .with(authentication(auth(AdminAccountType.STAFF, "user.view"))).param("lang", "zh_CN"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(noPerm).as("🛡 无导出权限时 oob 片段里也不能出现导出链接").doesNotContain("phone-recall.xlsx");
+    }
+
     /** 🛡 列表页只显示"填了 / 没填"，不显示号码本身。 */
     @Test
     void listNeverShowsTheNumberItself() throws Exception {

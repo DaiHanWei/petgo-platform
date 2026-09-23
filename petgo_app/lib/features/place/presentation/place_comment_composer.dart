@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/rounded.dart';
@@ -83,6 +84,9 @@ class _PlaceCommentComposerState extends ConsumerState<PlaceCommentComposer> {
       await ref
           .read(placeRepositoryProvider)
           .createComment(widget.token, text, attitude: _attitude);
+      // E-6（bug 20260922-528）：服务端接住才报；放在 mounted 之前，发完即走的也算。
+      // ⚠️ 只有 token —— 评论正文 / 态度都不进埋点。
+      Analytics.capture('place_comment_posted', {'place_id': widget.token});
       if (!mounted) return;
       // 仅成功后清空 + 收键盘 + 复位态度 + 重拉评论区。
       _controller.clear();

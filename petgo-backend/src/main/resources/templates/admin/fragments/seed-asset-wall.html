@@ -7,7 +7,10 @@
      裁切量的算法只有一份（服务端 ImageRatioAdvisor），这里只按宽高判断"要不要打标"。
 -->
 <body>
-<div th:fragment="wall" id="seedAssetWall" th:remove="tag">
+<!--/* bug 20260922-523：外层 div 必须保留（不能 th:remove="tag"）——
+       admin-core.js 的 refreshWall() 以 #seedAssetWall 为 htmx 目标做 outerHTML 替换，
+       去掉它 htmx 找不到目标就回退成 document.body，整页被换成这面缩略图墙。 */-->
+<div th:fragment="wall" id="seedAssetWall">
     <!-- 🔴 实时用量（AC2）。服务端权威值 —— 页面上那个即时计数器只是体验。 -->
     <p class="hint">
         <span th:text="#{admin.batch.asset.usage(${usage.count}, ${usage.maxCount},

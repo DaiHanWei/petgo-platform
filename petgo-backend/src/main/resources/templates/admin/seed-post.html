@@ -111,8 +111,11 @@
                     </details>
 
                     <label class="field" for="petId" th:text="#{admin.seed.pet}">绑定宠物</label>
-                    <!-- HTMX：切换发布账号 → 换掉这一块（AC4）。 -->
-                    <div th:replace="~{admin/fragments/seed-pet-select :: options}"></div>
+                    <!-- HTMX：切换发布账号 → 换掉这一块（AC4）。
+                         ⚠️ 外层容器必须留在这里、用 th:insert：片段自身 th:remove="tag"（端点只回内容），
+                         之前用 th:replace 把带 id 的外层一起去掉了 → 页面上没有 #seedPetSelect，
+                         htmx 找不到目标、切账号后宠物下拉静默不刷新（与 bug 20260922-523 同类）。 -->
+                    <div id="seedPetSelect" th:insert="~{admin/fragments/seed-pet-select :: options}"></div>
 
                 </form>
             </div>

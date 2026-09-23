@@ -61,7 +61,7 @@ void main() {
     test('card / post / place 各自落到自己的页面，互不串门', () {
       expect(deepLinkToLocation(Uri.parse('tailtopia://card/abc')), '/pet/abc');
       expect(deepLinkToLocation(Uri.parse('tailtopia://post/abc')), '/shared-post/abc');
-      expect(deepLinkToLocation(Uri.parse('tailtopia://place/abc')), '/places/abc');
+      expect(deepLinkToLocation(Uri.parse('tailtopia://place/abc')), '/places/abc?from=share');
     });
 
     /// 🔴 没有 token 时**不能**落到别人的东西上 —— V1.1.6 Story 2.4 修过的那个 bug

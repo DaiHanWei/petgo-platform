@@ -150,7 +150,8 @@
                       data-used-bytes=${usage.bytes},
                       data-msg-over-count=#{admin.batch.asset.tooManyClient},
                       data-msg-over-bytes=#{admin.batch.asset.tooLargeClient},
-                      data-msg-dup=#{admin.batch.asset.duplicateClient}">
+                      data-msg-dup=#{admin.batch.asset.duplicateClient}"
+             th:data-msg-uploading="#{admin.batch.asset.uploading('{0}', '{1}')}">
             <input type="file" data-batch-file multiple
                    accept="image/jpeg,image/png,image/webp"/>
             <p class="hint" data-batch-live></p>

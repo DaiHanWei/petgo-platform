@@ -449,8 +449,9 @@ void main() {
           [{'from': 'diary_empty'}]);
     });
 
-    testWidgetsWithImages('既有入口（分享链接 / 公开主页宠物卡）不带 from → 一条都不报', (tester) async {
-      // 本 story 不给既有入口补埋点 —— 补了会让那条曲线从今天起凭空多出一截。
+    testWidgetsWithImages('分享链接落地不带 from → 一条都不报', (tester) async {
+      // 分享链接落地不算站内访客浏览。⚠️ 公开主页宠物卡已于 bug 20260922-534 补上
+      // from=profile（E-17 取值之一），不再属于「不报」的这一类。
       await pumpVisitorView(tester);
       await tester.pump();
       expect(captured.where((e) => e.$1 == 'diary_visitor_viewed'), isEmpty);

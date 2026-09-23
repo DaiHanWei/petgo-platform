@@ -172,8 +172,9 @@ class AdminTemplateStructureTest {
      */
     @Test
     void templatesNeverPrintRawContentTypeEnum() throws IOException {
+        // bug 20260810-456：原先只认 ${x.type}，漏了批次预览表的 ${c.row.contentType}（两级属性 + contentType）。
         Pattern rawTypeText = Pattern.compile(
-                "th:text=\"\\$\\{[A-Za-z]+\\.?type(\\(\\))?}\"");
+                "th:text=\"\\$\\{([A-Za-z]+\\.)+(type|contentType)(\\(\\))?}\"");
         List<String> offenders = new ArrayList<>();
         for (Path f : templates()) {
             String html = Files.readString(f, StandardCharsets.UTF_8)
@@ -807,6 +808,26 @@ class AdminTemplateStructureTest {
             }
         }
         return tag.toString();
+    }
+
+    /**
+     * 🔴 批量工作台素材墙必须保留带 id 的外层（bug 20260922-523 / 20260907-483 / 20260907-484）。
+     *
+     * <p>admin-core.js 的 refreshWall() 以 {@code #seedAssetWall} 为 htmx 目标做 outerHTML 替换。
+     * 片段若 {@code th:remove="tag"}，页面上就没有这个 id —— htmx 回退成 {@code document.body}，
+     * 上传一完成整页被换成一面光秃秃的缩略图墙：重复 / 比例警告一闪而过、页面像跳进了"没用的详情页"、
+     * 浏览器左箭头回到批次列表而不是工作台（URL 没变，工作台其实已被原地换掉）。
+     */
+    @Test
+    void seedAssetWallKeepsItsHtmxTargetId() throws IOException {
+        String wall = Files.readString(DIR.resolve("fragments/seed-asset-wall.html"), StandardCharsets.UTF_8)
+                .replaceAll("(?s)<!--.*?-->", "");
+        Matcher m = Pattern.compile("<div[^>]*th:fragment=\"wall\"[^>]*>").matcher(wall);
+        assertThat(m.find()).as("素材墙片段 wall 不见了").isTrue();
+        assertThat(m.group())
+                .as("🔴 wall 片段外层必须带 id=seedAssetWall 且不能 th:remove —— 否则 htmx 刷墙整页被替换")
+                .contains("id=\"seedAssetWall\"")
+                .doesNotContain("th:remove");
     }
 
     private List<Path> templates() throws IOException {

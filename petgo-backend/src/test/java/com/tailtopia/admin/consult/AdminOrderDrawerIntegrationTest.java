@@ -156,7 +156,9 @@ class AdminOrderDrawerIntegrationTest extends ApiIntegrationTest {
         assertThat(html).as("① 成交快照：字段全集不能少")
                 .contains("成交快照").contains(o.getOrderToken())
                 .contains("兽医 ID").contains("宠物档案 ID").contains("分成比例")
-                .contains("单价快照").contains("重播次数").contains("会话起").contains("会话止");
+                .contains("单价快照").contains("重播次数").contains("会话起").contains("会话止")
+                // bug 20260720-304：订单信息须带创建时间
+                .contains("创建时间");
         assertThat(html).as("🔴 单价快照旁必须注明「成交时点值」，否则会被当成计价错误来报")
                 .contains("data-notice=\"unit-price-note\"");
         assertThat(html).as("② 阶段时间线（这单还没有事件 → 空态文案）")

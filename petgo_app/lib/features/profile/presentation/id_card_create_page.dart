@@ -64,6 +64,8 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
         _petType = p.petType;
         _breed = p.breed ?? '';
         _birthday = p.birthday;
+        // 性别也按档案预填（bug 20260803-448）；档案未填 → 维持「未知」。仅建卡初值，建后仍是快照不联动。
+        _gender = idCardGenderFromPetSex(p.sex);
         _intro = p.intro ?? '';
         _avatarUrl = p.avatarUrl;
         _prefilled = true;

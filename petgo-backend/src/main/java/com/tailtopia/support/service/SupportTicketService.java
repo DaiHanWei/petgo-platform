@@ -150,9 +150,50 @@ public class SupportTicketService {
     }
 
     /**
-     * 客服结案（Story 4.7，「已联系+已解决」，{@code support.handle} 权限在控制器门控）。仅 OPEN/IN_PROGRESS 可
+     * 客服标记「已联系」（bug 20260922-524，与结案拆开；{@code support.handle} 在控制器门控）。
+     * 仅未结案（OPEN/IN_PROGRESS）可，已结案 → 409。只置 contacted（OPEN→IN_PROGRESS），<b>不结案、不发通知</b>。
+     * 幂等：已联系过再点不改任何东西、不重复记审计，返回 false 供控制器给友好提示。
+     *
+     * @return true = 本次标记生效（已记审计）；false = 早已标记过
+     */
+    @Transactional
+    public boolean markContacted(String ticketToken, long adminId) {
+        FeedbackTicket ticket = openTicket(ticketToken);
+        if (!ticket.markContacted(adminId)) {
+            return false;
+        }
+        audit.record(adminId, AuditActions.TICKET_CONTACTED, "feedback_ticket", ticketToken,
+                "客服工单标记已联系（未结案，不发通知）");
+        return true;
+    }
+
+    /**
+     * 客服「忽略」工单（bug 20260922-524，方案 B：复用 CLOSED）。仅未结案（OPEN/IN_PROGRESS）可，
+     * 已 RESOLVED/CLOSED → 409。置 CLOSED，<b>不发任何通知、不开 CSAT</b>，记审计。
+     */
+    @Transactional
+    public void ignoreTicket(String ticketToken, long adminId) {
+        FeedbackTicket ticket = openTicket(ticketToken);
+        ticket.markIgnored(adminId);
+        audit.record(adminId, AuditActions.TICKET_IGNORED, "feedback_ticket", ticketToken,
+                "客服工单忽略（置 CLOSED，不发通知、不开 CSAT）");
+    }
+
+    /** 取未结案工单：不存在 → 404；已 RESOLVED/CLOSED → 409。 */
+    private FeedbackTicket openTicket(String ticketToken) {
+        FeedbackTicket ticket = tickets.findByTicketToken(ticketToken)
+                .orElseThrow(() -> AppException.notFound("工单不存在").code("admin.err.ticket.notFound"));
+        if (ticket.getStatus() != TicketStatus.OPEN && ticket.getStatus() != TicketStatus.IN_PROGRESS) {
+            throw AppException.conflict("工单已结案，无法操作").code("admin.err.ticket.alreadyResolved");
+        }
+        return ticket;
+    }
+
+    /**
+     * 客服结案（Story 4.7，{@code support.handle} 权限在控制器门控）。仅 OPEN/IN_PROGRESS 可
      * （已 RESOLVED/CLOSED → 409）。置 RESOLVED + csat_deadline(+N天) + 发 {@code TICKET_RESOLVED}（结案）+
      * {@code CSAT_SURVEY}（邀评）通知（deep link 工单详情，targetRef=ticketToken，非随机）+ 审计。
+     * bug 20260922-524：结案不再隐含「已联系」，联系与否走独立的 {@link #markContacted}。
      */
     @Transactional
     public void resolveTicket(String ticketToken, long adminId) {
@@ -172,7 +213,7 @@ public class SupportTicketService {
                 "为本次服务打分", "花几秒评价客服服务，帮助我们做得更好。",
                 NotificationType.CSAT_SURVEY.name(), ticketToken);
         audit.record(adminId, AuditActions.TICKET_RESOLVED, "feedback_ticket", ticketToken,
-                "客服工单结案（已联系+已解决，已发结案/CSAT 通知）");
+                "客服工单结案（已发结案/CSAT 通知）");
     }
 
     /**

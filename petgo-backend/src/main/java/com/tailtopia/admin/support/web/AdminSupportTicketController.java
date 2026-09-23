@@ -116,7 +116,10 @@ public class AdminSupportTicketController {
         return false;
     }
 
-    /** 结案（客服勾「已联系+已解决」）→ RESOLVED + 发结案/CSAT 通知。htmx → 处置 fragment（下一条）。 */
+    /**
+     * 结案 → RESOLVED + 发结案/CSAT 通知。htmx → 处置 fragment（下一条）。
+     * bug 20260922-524：不再隐含「已联系」（联系走 {@code /contacted}），结案不要求先联系。
+     */
     @PostMapping("/admin/support-tickets/{ticketToken}/resolve")
     @PreAuthorize(HANDLE_AUTH)
     public String resolve(@AuthenticationPrincipal AdminUserDetails admin,
@@ -124,13 +127,7 @@ public class AdminSupportTicketController {
             RedirectAttributes flash) {
         if (hx.isHtmx()) {
             ticketService.resolveTicket(ticketToken, admin.getAdminAccountId());
-            model.addAttribute("removedToken", ticketToken);
-            // 「下一条」按当前页签取（待联系页签结案后不能指到不在左栏的单）
-            model.addAttribute("nextId", query.nextPendingToken(State.of(stateParam(hx.currentUrl()))));
-            model.addAttribute("counts", query.counts());
-            model.addAttribute("message", msg.get("admin.flash.ticket.resolved"));
-            AdminFragmentResponses.triggerBadgeRefresh(response);
-            return "admin/fragments/support-done :: done";
+            return done(ticketToken, "admin.flash.ticket.resolved", hx, model, response);
         }
         try {
             ticketService.resolveTicket(ticketToken, admin.getAdminAccountId());
@@ -139,6 +136,72 @@ public class AdminSupportTicketController {
             flash.addFlashAttribute("error", msg.resolve(e));
         }
         return "redirect:/admin/support-tickets";
+    }
+
+    /**
+     * 标记「已联系」（bug 20260922-524，与结案拆开）：只置 contacted，不结案、不发通知，记审计。
+     * 已联系过再点 → 不重复记审计，给「已标记过」提示。htmx：
+     * 当前在「待联系」页签 → 该单离开此页签，走处置 fragment（删行 + 下一条）；
+     * 其他页签 → 停留本条，并 oob 刷新左栏这一行与三态计数。
+     */
+    @PostMapping("/admin/support-tickets/{ticketToken}/contacted")
+    @PreAuthorize(HANDLE_AUTH)
+    public String contacted(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable String ticketToken, HxRequest hx, Model model, Authentication auth,
+            HttpServletResponse response, RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            boolean changed = ticketService.markContacted(ticketToken, admin.getAdminAccountId());
+            String key = changed ? "admin.flash.ticket.contacted" : "admin.flash.ticket.alreadyContacted";
+            if (State.of(stateParam(hx.currentUrl())) == State.CONTACT) {
+                return done(ticketToken, key, hx, model, response);
+            }
+            AdminFragmentResponses.triggerBadgeRefresh(response);
+            model.addAttribute("rowOob", true);
+            model.addAttribute("counts", query.counts());
+            return stay(ticketToken, msg.get(key), model, auth);
+        }
+        try {
+            boolean changed = ticketService.markContacted(ticketToken, admin.getAdminAccountId());
+            flash.addFlashAttribute("notice",
+                    msg.get(changed ? "admin.flash.ticket.contacted" : "admin.flash.ticket.alreadyContacted"));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/support-tickets";
+    }
+
+    /**
+     * 忽略（bug 20260922-524，方案 B：置 CLOSED）：<b>不发任何通知、不开 CSAT</b>，记审计。
+     * 仅未结案工单可忽略（已 RESOLVED/CLOSED → 409）。htmx → 处置 fragment（下一条）。
+     */
+    @PostMapping("/admin/support-tickets/{ticketToken}/ignore")
+    @PreAuthorize(HANDLE_AUTH)
+    public String ignore(@AuthenticationPrincipal AdminUserDetails admin,
+            @PathVariable String ticketToken, HxRequest hx, Model model, HttpServletResponse response,
+            RedirectAttributes flash) {
+        if (hx.isHtmx()) {
+            ticketService.ignoreTicket(ticketToken, admin.getAdminAccountId());
+            return done(ticketToken, "admin.flash.ticket.ignored", hx, model, response);
+        }
+        try {
+            ticketService.ignoreTicket(ticketToken, admin.getAdminAccountId());
+            flash.addFlashAttribute("notice", msg.get("admin.flash.ticket.ignored"));
+        } catch (AppException e) {
+            flash.addFlashAttribute("error", msg.resolve(e));
+        }
+        return "redirect:/admin/support-tickets";
+    }
+
+    /** 处置成功（该单离开当前页签）：删左栏行 + 三态计数 + 「下一条」+ toast。 */
+    private String done(String ticketToken, String messageKey, HxRequest hx, Model model,
+            HttpServletResponse response) {
+        model.addAttribute("removedToken", ticketToken);
+        // 「下一条」按当前页签取（待联系页签结案后不能指到不在左栏的单）
+        model.addAttribute("nextId", query.nextPendingToken(State.of(stateParam(hx.currentUrl()))));
+        model.addAttribute("counts", query.counts());
+        model.addAttribute("message", msg.get(messageKey));
+        AdminFragmentResponses.triggerBadgeRefresh(response);
+        return "admin/fragments/support-done :: done";
     }
 
     // ===== AB-5B 退款判定（bug 20260728-384/388）=====

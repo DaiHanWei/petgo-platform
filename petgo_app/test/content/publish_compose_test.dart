@@ -512,4 +512,75 @@ void main() {
     expect(find.byKey(const ValueKey('publishSyncSwitch')), findsNothing); // Moment 不渲染开关
     expect(find.text(l10n.publishPublicNotice), findsOneWidget);
   });
+
+  // ===== bug 20260922-520：里程碑「去发布」✕ 放弃后白屏 =====
+  //
+  // 回归的缺陷：/publish 着陆页只在无 milestoneCode 时 go('/home')；带 milestoneCode 且用户 ✕ 放弃，
+  // 没人导航 → 空白着陆页留在栈顶。修后：放弃即回到发起页（里程碑列表）；冷启无前驱时兜底去里程碑列表。
+  GoRouter milestonePublishRouter(String initial) => GoRouter(
+        initialLocation: initial,
+        routes: [
+          GoRoute(
+              path: '/profile/milestones',
+              builder: (c, s) => Scaffold(
+                    body: TextButton(
+                      onPressed: () => c.push(
+                          '/publish?preset=growth-calendar&milestoneCode=C-S1'),
+                      child: const Text('milestones'),
+                    ),
+                  )),
+          GoRoute(
+              path: '/publish',
+              builder: (c, s) => PublishLandingPage(
+                    preset: ContentType.growthMoment,
+                    milestoneCode: s.uri.queryParameters['milestoneCode'],
+                  )),
+          GoRoute(path: '/home', builder: (c, s) => const Scaffold(body: Text('home'))),
+        ],
+      );
+
+  ProviderContainer milestoneContainer() => ProviderContainer(overrides: [
+        publishControllerProvider.overrideWithValue(_controller(_OkRepo())),
+        profileRepositoryProvider.overrideWithValue(_FakeProfileRepo()),
+        authControllerProvider.overrideWith(() => _WithArchiveAuth()),
+      ]);
+
+  testWidgets('bug 520: 里程碑去发布 → ✕ 放弃 → 回里程碑列表（不留白屏）', (tester) async {
+    _tallView(tester);
+    final container = milestoneContainer();
+    addTearDown(container.dispose);
+    final router = milestonePublishRouter('/profile/milestones');
+
+    await tester.pumpWidget(routerApp(container, router));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('milestones'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PublishComposePage), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('publishClose')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PublishComposePage), findsNothing);
+    expect(find.byType(PublishLandingPage), findsNothing); // 空白着陆页已出栈
+    expect(find.text('milestones'), findsOneWidget);
+    expect(router.routerDelegate.currentConfiguration.uri.path, '/profile/milestones');
+  });
+
+  testWidgets('bug 520: 冷启深链（无前驱）✕ 放弃 → 兜底去里程碑列表', (tester) async {
+    _tallView(tester);
+    final container = milestoneContainer();
+    addTearDown(container.dispose);
+    final router = milestonePublishRouter(
+        '/publish?preset=growth-calendar&milestoneCode=C-S1');
+
+    await tester.pumpWidget(routerApp(container, router));
+    await tester.pumpAndSettle();
+    expect(find.byType(PublishComposePage), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('publishClose')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PublishLandingPage), findsNothing);
+    expect(find.text('milestones'), findsOneWidget);
+  });
 }

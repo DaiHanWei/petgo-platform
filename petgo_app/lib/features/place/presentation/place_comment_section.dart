@@ -70,6 +70,7 @@ class PlaceCommentSection extends ConsumerWidget {
               comment: c,
               onAuthorTap: c.authorTappable
                   ? () => openUserProfile(context, ref, c.authorId,
+                      viewFrom: ProfileViewFrom.place,
                       // 主页里拉黑 / 举报成功后回到这里：服务端已隐藏此人的评论，
                       // 不重拉的话他的评论还挂着、点进去落在「你已屏蔽此人」页（同帖子评论区）。
                       onBlocked: () => _onAuthorHidden(ref),

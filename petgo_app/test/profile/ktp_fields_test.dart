@@ -147,4 +147,14 @@ void main() {
       expect(f.statusPerkawinan, KtpDefaults.statusPerkawinan);
     });
   });
+
+  // bug 20260803-448：建卡表单性别按档案预填（档案两值 → 卡三值），未填回落未知。
+  test('idCardGenderFromPetSex：档案性别预填建卡表单', () {
+    expect(idCardGenderFromPetSex('MALE'), 'MALE');
+    expect(idCardGenderFromPetSex('FEMALE'), 'FEMALE');
+    expect(idCardGenderFromPetSex(null), 'UNKNOWN');
+    expect(idCardGenderFromPetSex('weird'), 'UNKNOWN');
+    // 预填 MALE 后 KTP 卡面 JANTAN（与表单选择联动的既有映射）。
+    expect(KtpDefaults.jenisKelaminFor(idCardGenderFromPetSex('MALE')), 'JANTAN');
+  });
 }

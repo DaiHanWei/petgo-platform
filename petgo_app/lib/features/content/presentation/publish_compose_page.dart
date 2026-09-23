@@ -416,7 +416,10 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         //    抑制必须落在客户端、**不依赖回报是否已落库**；也不得把回报改成同步来绕开
         //    （那会让发布流程卡在一个可失败的写上）。
         // push 而非 go：保留发布前页作前驱，里程碑页 canPop→iOS 边缘侧滑可返回（修 20260701-190）。
-        router?.push(DeepLinkRoutes.milestoneList, extra: <String>{done.code});
+        // pushReplacement：本 sheet 开在 /publish 空白着陆页之上，普通 push 会把着陆页压在
+        // 里程碑列表下面，返回时再白屏一次（bug 20260922-520）。替换掉着陆页，前驱仍是发布前页。
+        router?.pushReplacement(DeepLinkRoutes.milestoneList,
+            extra: <String>{done.code});
         return;
       }
       Navigator.of(context).pop(); // 关闭发布 sheet
