@@ -110,9 +110,12 @@
             window.addEventListener('pagehide', function () { clearTimeout(t); }, { once: true });
             return t;
         }
-        // Play 网页地址换成 market:// —— 装了 Play 的机器直接开商店 App，少一跳。
-        function toMarket(webUrl) {
-            return webUrl.replace('https://play.google.com/store/apps/details', 'market://details');
+        // 安卓唤起用 intent://，由系统决定"唤起还是兜底"，不靠页面自己掐表。
+        // fallback 必须是 http(s)（Chrome 的硬性要求），所以给 Play 网页地址而不是 market://。
+        function toIntent(deep, fallbackWeb) {
+            var rest = deep.replace(/^tailtopia:\/\//, '');
+            return 'intent://' + rest + '#Intent;scheme=tailtopia;package=com.tailtopia.app;'
+                 + 'S.browser_fallback_url=' + encodeURIComponent(fallbackWeb) + ';end';
         }
 
         el.addEventListener('click', function (e) {
@@ -127,14 +130,21 @@
             }
             e.preventDefault();
 
+            // 🔴 安卓走 intent:// 而不是直接 go(deep)（2026-09-11）。
+            //
+            // `tailtopia://post` 的 intent-filter 是**本次**才加进 AndroidManifest 的 ——
+            // 已装老版本 App 的人系统根本不认这个 scheme。而分享链接在印尼大量是从
+            // WhatsApp / Instagram 的内置 WebView 点开的，那些 WebView 遇到未知 scheme
+            // 会直接跳 ERR_UNKNOWN_URL_SCHEME 错误页：**页面一被替换，下面的兜底定时器
+            // 跟着死**，用户停在报错页 —— 比修复前"一律去商店"更糟。
+            //
+            // intent:// 把这件事交给 Android 系统：装了新版→唤起；老版本或没装→走
+            // browser_fallback_url。所以这一支**不需要**自己的定时器，也不该有。
             if (isAndroid) {
-                guard(function () {
-                    guard(function () { go(androidWeb); }, 700);
-                    go(toMarket(androidWeb));
-                }, 900);
-            } else {
-                guard(function () { go(ios); }, 900);
+                go(toIntent(deep, androidWeb));
+                return;
             }
+            guard(function () { go(ios); }, 900);
             go(deep);
         });
     })();

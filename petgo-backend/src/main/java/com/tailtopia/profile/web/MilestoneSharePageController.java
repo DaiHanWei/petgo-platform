@@ -88,7 +88,8 @@ public class MilestoneSharePageController {
         model.addAttribute("collectionLevels", levels);
         model.addAttribute("collectionHeading", collectionHeading(share.getPetName(), levels.length(), isId));
 
-        // 下载 CTA：直接跳应用商店下载（iOS App Store / Android Google Play；桌面落下载页）——不再尝试深链。
+        // 下载 CTA 的兜底地址（iOS App Store / Android Google Play；桌面落下载页）。
+        // ⚠️ 这是**唤起失败后**的落点——模板会先试下面那条深链，唤起不成才走这里。
         model.addAttribute("downloadUrl", downloadUrl);
         model.addAttribute("iosUrl", iosUrl);
         model.addAttribute("androidUrl", androidUrl);
