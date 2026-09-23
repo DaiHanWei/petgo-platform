@@ -99,6 +99,14 @@ class KtpDefaults {
   }
 }
 
+/// 档案性别（两值 MALE/FEMALE，null=未填）→ 建卡表单性别初值（三值）。未填/未知值 → `UNKNOWN`。
+/// 仅用于建卡预填（bug 20260803-448）；卡建成后是快照，与档案不联动。
+String idCardGenderFromPetSex(String? sex) => switch (sex) {
+      'MALE' => 'MALE',
+      'FEMALE' => 'FEMALE',
+      _ => 'UNKNOWN',
+    };
+
 /// petType → 新编码规则物种段 SP（狗 01 / 猫 02 / 其他与未选 00）。
 String speciesCodeFor(String? petType) => switch (petType) {
       'DOG' => '01',

@@ -185,13 +185,55 @@ void main() {
       expect(apply.center.dx, closeTo(screen.center.dx, 1), reason: '底部主按钮通栏居中');
     });
 
-    /// 🛡 只有两档，**刻意不给横图档**。谁想"顺手补个 16:9"，这条会红。
-    testWidgets('只有 1:1 与 4:5 两档', (tester) async {
+    /// 🛡 只有方/竖三档（bug 20260922-535 加 3:4），**刻意不给横图档**。谁想"顺手补个 16:9"，这条会红。
+    testWidgets('只有 1:1 / 4:5 / 3:4 三档，按竖向程度排列', (tester) async {
       await pump(tester);
       expect(find.byKey(const ValueKey('cropPreset_1:1')), findsOneWidget);
       expect(find.byKey(const ValueKey('cropPreset_4:5')), findsOneWidget);
-      expect(CropPreset.values, hasLength(2));
+      expect(find.byKey(const ValueKey('cropPreset_3:4')), findsOneWidget);
+      expect(CropPreset.values,
+          [CropPreset.square, CropPreset.portrait, CropPreset.tallPortrait]);
       expect(find.byKey(const ValueKey('cropPreset_16:9')), findsNothing);
+      expect(tester.takeException(), isNull); // 三个档位一行排得下
+    });
+
+    /// bug 20260922-535：3:4 = kFeedRatioMin，闭区间含端点 → 裁完不会被判"还要裁"、展示端不二次裁。
+    test('3:4 档：埋点值 3x4，比例恰为下界且落在免裁区间内', () {
+      expect(CropPreset.tallPortrait.analyticsValue, '3x4');
+      expect(CropPreset.tallPortrait.aspect, kFeedRatioMin);
+      expect(needsCrop(750, 1000), isFalse);
+      expect(clampFeedRatio(CropPreset.tallPortrait.aspect), CropPreset.tallPortrait.aspect);
+      // 超长竖图裁 3:4：宽铺满、上下裁，结果正好 3:4、不再需要裁。
+      final r = computeCropRect(
+          width: 1200, height: 3000, targetAspect: CropPreset.tallPortrait.aspect);
+      expect((r.width, r.height), (1200, 1600));
+      expect(needsCrop(r.width, r.height), isFalse);
+    });
+
+    testWidgets('选 3:4 档 → 应用返回 3:4', (tester) async {
+      CropChoice? got;
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Builder(
+          builder: (ctx) => ElevatedButton(
+            onPressed: () async {
+              got = await Navigator.of(ctx).push<CropChoice>(MaterialPageRoute<CropChoice>(
+                builder: (_) => PublishCropPage(
+                    bytes: _wide, size: const ImageSize(1920, 1080)),
+              ));
+            },
+            child: const Text('open'),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('cropPreset_3:4')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('cropApply')));
+      await tester.pumpAndSettle();
+      expect(got!.preset, CropPreset.tallPortrait);
     });
 
     /// 档位已锁定时不该再让用户换档。

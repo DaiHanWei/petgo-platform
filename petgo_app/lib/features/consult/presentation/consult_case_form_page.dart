@@ -23,7 +23,7 @@ import 'vet_request_confirm_page.dart' show formatVetConsultIdr;
 ///
 /// 与 AI 分诊上传页同形(症状 + 最多 3 张照片 → 私密桶直传)，但**无任何 AI 提示**(不是 AI 分诊，
 /// 是直接发给真人兽医的病例)。提交才发起 DIRECT 会话(携带 symptomText + 私密图 key) → 等待页。
-/// 症状选填(允许空发起，保持原直连可空语义)，照片可选最多 3 张。
+/// 症状必填（bug 20260805-449：空病例让兽医零上下文，空/纯空白拦截提交 + 红框 + 提示），照片可选最多 3 张。
 class ConsultCaseFormPage extends ConsumerStatefulWidget {
   const ConsultCaseFormPage({super.key});
 
@@ -45,6 +45,7 @@ class _ConsultCaseFormPageState extends ConsumerState<ConsultCaseFormPage> {
   final List<_PickedPhoto> _photos = [];
   bool _uploading = false;
   bool _submitting = false;
+  bool _symptomError = false; // 提交时症状为空 → 红框 + 提示；一输入即清
 
   @override
   void dispose() {
@@ -105,6 +106,10 @@ class _ConsultCaseFormPageState extends ConsumerState<ConsultCaseFormPage> {
   /// 兽医接单后用户才付款（本步不扣费），故本页 CTA 只显单价告知、不收款。
   Future<void> _submit() async {
     if (_submitting) return;
+    if (_symptom.text.trim().isEmpty) {
+      setState(() => _symptomError = true);
+      return;
+    }
     setState(() => _submitting = true);
     final l10n = AppLocalizations.of(context);
     try {
@@ -154,14 +159,18 @@ class _ConsultCaseFormPageState extends ConsumerState<ConsultCaseFormPage> {
                     decoration: BoxDecoration(
                       color: AppColors.surface,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(
+                          color: _symptomError ? AppColors.danger : AppColors.border,
+                          width: _symptomError ? 1.5 : 1),
                     ),
                     child: TextField(
                       key: const ValueKey('consultCaseSymptom'),
                       controller: _symptom,
                       maxLines: 5,
                       maxLength: _maxSymptomChars,
-                      onChanged: (_) => setState(() {}),
+                      onChanged: (v) => setState(() {
+                        if (v.trim().isNotEmpty) _symptomError = false;
+                      }),
                       decoration: InputDecoration(
                         hintText: l10n.triageSymptomHint,
                         hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.6),
@@ -170,10 +179,18 @@ class _ConsultCaseFormPageState extends ConsumerState<ConsultCaseFormPage> {
                       ),
                     ),
                   ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text('${_symptom.text.length} / $_maxSymptomChars',
-                        style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _symptomError
+                            ? Text(l10n.consultCaseSymptomRequired,
+                                key: const ValueKey('consultCaseSymptomError'),
+                                style: AppTypography.micro.copyWith(color: AppColors.danger))
+                            : const SizedBox.shrink(),
+                      ),
+                      Text('${_symptom.text.length} / $_maxSymptomChars',
+                          style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
+                    ],
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Text(l10n.consultCasePhotosLabel,

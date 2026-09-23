@@ -21,6 +21,7 @@ import '../../mention/presentation/mention_picker.dart';
 import '../data/detail_repository.dart';
 import 'content_detail_page.dart';
 import 'detail_providers.dart';
+import 'feed_controller.dart';
 import 'like_button.dart';
 
 /// 详情页**固定底栏**（Story 3.5 起为评论框；V1.3.0 Story 2.3 起合并互动栏，FR-114 · AD-A13）。
@@ -456,6 +457,9 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
             initialCount: detail.likeCount,
             // 🛡 两个挂载点都必须传来源，否则「首页点赞是净增还是前移」这个对比失效。
             source: 'detail',
+            // bug 20260923-538：详情页点赞后回写 Feed 快照，返回 Social 不再是旧的点赞态/数。
+            onSettled: (liked, count) =>
+                syncFeedCounts(ref, detail.id, liked: liked, likeCount: count),
           ),
         ),
         // iconGap 是**可见**间距：两个 44 热区各自已带 (44-19)/2 的透明边，

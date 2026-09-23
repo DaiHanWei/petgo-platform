@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/profile/domain/archive_scope.dart';
@@ -66,6 +67,7 @@ PublicProfilePet _pet({int diaryCount = 42}) => PublicProfilePet(
 /// 记录站内访客视图被推到了哪个 petId。
 class _Nav {
   int? visitedPetId;
+  String? visitedFrom;
 }
 
 Future<_Nav> _pump(
@@ -86,6 +88,7 @@ Future<_Nav> _pump(
         path: VisitorArchiveView.inAppRoutePattern,
         builder: (_, state) {
           nav.visitedPetId = int.parse(state.pathParameters['petId']!);
+          nav.visitedFrom = state.uri.queryParameters['from'];
           return const Scaffold(body: Center(child: Text('visitor')));
         },
       ),
@@ -170,6 +173,38 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(nav.visitedPetId, isNull);
+    });
+  });
+
+  /// E-17（bug 20260922-534）：主页宠物卡是 PRD 列出的 `from=profile` 那个入口。
+  group('埋点：主页宠物卡 → pet_card_tapped / diary_visitor_viewed 的 from=profile', () {
+    final events = <(String, Map<String, Object>?)>[];
+    setUp(() {
+      events.clear();
+      Analytics.debugCaptureSink = (e, p) => events.add((e, p));
+    });
+    tearDown(() => Analytics.debugCaptureSink = null);
+
+    testWidgets('点卡片报 pet_card_tapped，跳转带 ?from=profile', (tester) async {
+      final nav = await _pump(tester, pet: _pet());
+
+      await tester.tap(find.byKey(const ValueKey('profilePetCard')));
+      await tester.pumpAndSettle();
+
+      expect(events.where((e) => e.$1 == 'pet_card_tapped').map((e) => e.$2), [
+        {'from': 'profile'},
+      ]);
+      // 访客视图凭这个 from 报 diary_visitor_viewed（路由 → analyticsFrom）。
+      expect(nav.visitedFrom, 'profile');
+    });
+
+    testWidgets('游客被登录门控拦下也报点击（上报在 requireLogin 之前）', (tester) async {
+      await _pump(tester, pet: _pet(), loggedIn: false);
+
+      await tester.tap(find.byKey(const ValueKey('profilePetCard')));
+      await tester.pumpAndSettle();
+
+      expect(events.where((e) => e.$1 == 'pet_card_tapped'), hasLength(1));
     });
   });
 

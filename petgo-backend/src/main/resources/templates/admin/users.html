@@ -23,11 +23,8 @@
             <!--/* 筛选栏。⚠️ 关键词走**显式「查询」钮**（模板 B 通用规格）：原先是即输即查，
                    每敲一个字发一次请求，删字时还会把刚看到的结果换掉。
                    手机号下拉保留 data-autosubmit（选项就那三个，选完即查是对的）。 */-->
-            <!--/* canExport 提成一个变量：三态（可用链接 / 置灰钮 / 提示语）用的是同一个判据，
-                   写三遍迟早漂移成两套 —— bug 20260901-469 的成因正是「屏幕一份、文件一份」。 */-->
+            <!--/* 导出区的 canExport 判据在 users-list :: exportCtl 里只写一份（bug 20260922-526）。 */-->
             <form th:fragment="user-filters" class="filter-bar" data-autosubmit
-                  th:with="canExport=${!searched and (phone == 'filled' or phone == 'empty')
-                                       and (status == null or status == '')}"
                   th:action="@{/admin/users}" method="get"
                   th:attr="hx-get=@{/admin/users}" hx-target="#users-rows" hx-swap="innerHTML" hx-push-url="true">
                 <label class="field">
@@ -64,34 +61,10 @@
                 </label>
                 <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.users.search}">查询</button>
 
-                <!-- 🔴 导出是独立权限：把 PII 批量带出系统，风险高一档 -->
-                <!-- bug 20260901-469：按钮只在明确选了 已填写/未填写 时可用，phone 原样透传 ——
-                     原先「没选就当未填写」的回落，配上翻页丢参，导出的正好是相反的那份名单。 -->
-                <!-- ⚠️ 搜索态（q 非空）不给导出：屏幕上是**关键词命中且封顶 50 条**的那批，
-                     而导出端点按 AC3 只认 phone、导的是全量 —— 又是「屏幕一份、文件一份」。 -->
-                <!-- ⚠️ 状态筛选（Story 8.1）生效时同理不给导出：导出端点按 AC3 **只认 phone 一个参数**
-                     （路径/参数逐字不变），它导的是全部状态的人；屏幕上只剩「已停用」而文件里是全量，
-                     正是同一类错位。要按状态导，得先把状态切回「全部」。 -->
-                <!-- bug 20260901-475：不可用时**置灰而不是消失** —— 整个按钮不见会被读成「功能没了」。 -->
-                <a sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
-                   th:if="${canExport}"
-                   class="btn btn-sm" data-no-drawer
-                   th:href="@{/admin/users/phone-recall.xlsx(phone=${phone})}"
-                   th:text="#{admin.users.exportRecall}">导出召回名单</a>
-                <button sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
-                        th:unless="${canExport}"
-                        type="button" class="btn btn-sm" disabled
-                        th:title="#{admin.users.exportNeedsFilter}"
-                        th:text="#{admin.users.exportRecall}">导出召回名单</button>
-                <span sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')"
-                      th:unless="${canExport}"
-                      class="hint" th:text="#{admin.users.exportNeedsFilter}">
-                    选择「已填写 / 未填写」后可导出召回名单
-                </span>
-                <span class="hint" th:text="#{admin.users.exportNote}"
-                      sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('user.phone_export')">
-                    名单含已封号账号并标注状态，由运营自行判断。
-                </span>
+                <!--/* 导出区抽成片段（bug 20260922-526）：htmx 筛选只回 rows(oob=true)，
+                       导出按钮若留在这里只在首屏渲染一次 —— 选了「已填写」按钮还是灰的。
+                       现在 rows(oob=true) 会把它按 id 一起带回。 */-->
+                <span th:replace="~{admin/fragments/users-list :: exportCtl(false)}"></span>
             </form>
 
             <div th:fragment="user-summary" th:replace="~{admin/fragments/users-list :: sumbar(false)}"></div>

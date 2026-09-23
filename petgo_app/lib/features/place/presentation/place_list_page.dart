@@ -284,7 +284,8 @@ class PlaceListPage extends ConsumerWidget {
             place: place,
             sortedByRecent: sortedByRecent,
             // 🔒 **详情对游客开放**（后端 GET 已放行）→ 这里不套 requireLogin。
-            onTap: () => context.push(PlaceDetailPage.routeFor(place.token)),
+            onTap: () => context.push(
+                PlaceDetailPage.routeFor(place.token, from: kPlaceDetailFromList)),
           );
         },
       );

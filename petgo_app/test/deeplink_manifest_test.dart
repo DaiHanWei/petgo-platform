@@ -64,7 +64,7 @@ void main() {
     test('card / post / place 各自落到自己的页面，互不串门', () {
       expect(deepLinkToLocation(Uri.parse('tailtopia://card/abc')), '/pet/abc');
       expect(deepLinkToLocation(Uri.parse('tailtopia://post/abc')), '/shared-post/abc');
-      expect(deepLinkToLocation(Uri.parse('tailtopia://place/abc')), '/places/abc');
+      expect(deepLinkToLocation(Uri.parse('tailtopia://place/abc')), '/places/abc?from=share');
       // 里程碑刻意不接 token：带不带都落自己的列表
       expect(deepLinkToLocation(Uri.parse('tailtopia://milestone')), '/profile/milestones');
       expect(deepLinkToLocation(Uri.parse('tailtopia://milestone/abc')), '/profile/milestones');

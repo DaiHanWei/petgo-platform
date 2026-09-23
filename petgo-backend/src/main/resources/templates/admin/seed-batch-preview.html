@@ -59,7 +59,8 @@
                                  style="width:40px;height:40px;object-fit:cover;border-radius:4px;margin-right:4px"/>
                         </td>
                         <td th:text="${c.row.authorUserId} == 0 ? '—' : ${c.row.authorUserId}">—</td>
-                        <td th:text="${c.row.contentType}">DAILY</td>
+                        <!-- bug 20260810-456：类型列按 App 称呼显示（Moment / Knowledge & Tips），不打印枚举名；空值=继承批次默认。 -->
+                        <td th:text="${c.row.contentType != null} ? #{'admin.contentType.' + ${c.row.contentType.name()}} : #{admin.batch.inherit}">Moment</td>
                         <td th:text="${c.row.species} ?: '—'">—</td>
                         <!-- bug 20260901-473：改 WIB 展示 —— 原来直接打印 Instant 是 UTC 原始串，
                              与后台"一律雅加达时间"的约定相悖，运营会按自己的表读错 7 小时。 -->

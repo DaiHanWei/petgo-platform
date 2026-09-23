@@ -99,8 +99,12 @@ public final class AuditActions {
     public static final String CONTENT_REVIEW_REJECTED = "CONTENT_REVIEW_REJECTED";
     /** 人工审核超时自动丢弃（Story 4.3）。 */
     public static final String CONTENT_REVIEW_TIMED_OUT = "CONTENT_REVIEW_TIMED_OUT";
-    /** 客服工单结案（Story 4.7，「已联系+已解决」→ RESOLVED + 发结案/CSAT 通知）。 */
+    /** 客服工单结案（Story 4.7 → RESOLVED + 发结案/CSAT 通知；bug 20260922-524 起不再隐含「已联系」）。 */
     public static final String TICKET_RESOLVED = "TICKET_RESOLVED";
+    /** 客服工单标记已联系（bug 20260922-524，与结案拆开；不结案、不发通知）。 */
+    public static final String TICKET_CONTACTED = "TICKET_CONTACTED";
+    /** 客服工单忽略（bug 20260922-524，方案 B：置 CLOSED，不发通知、不开 CSAT）。 */
+    public static final String TICKET_IGNORED = "TICKET_IGNORED";
     /** 客服为工单补挂关联订单（AB-5B 退款判定前置，bug 20260728-384）。 */
     public static final String TICKET_ORDER_LINKED = "TICKET_ORDER_LINKED";
     /** 异常工单加内部备注（Story 5.1）。 */

@@ -86,7 +86,8 @@ String? deepLinkToLocation(Uri uri) {
     final token = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
     // 没 token 就没有可展示的那一个 —— 落**场所列表**（而不是首页）：
     // 用户点的是一条场所链接，给他场所列表至少还在同一个功能里。
-    return token.isEmpty ? '/places' : '/places/$token';
+    // `?from=share` 只喂埋点（E-5 place_detail_viewed，bug 20260922-528）。
+    return token.isEmpty ? '/places' : '/places/$token?from=share';
   }
   if (uri.scheme == 'tailtopia' && uri.host == 'open') {
     // 🔧 DEBUG ONLY：`tailtopia://open/<路径>` 直达任意路由，供本地验收导航用。

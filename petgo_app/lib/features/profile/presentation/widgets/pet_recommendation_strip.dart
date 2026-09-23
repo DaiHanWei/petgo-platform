@@ -39,18 +39,19 @@ import 'recommended_pet_card.dart';
 class PetRecommendationStrip extends ConsumerWidget {
   const PetRecommendationStrip({super.key});
 
-  /// 小卡宽度 = 方图边长（UI 稿 B1 的 72×72）。一屏露出四张多 ——
-  /// 露出「半张」是横滑行可滑的唯一视觉暗示。
-  static const double cardWidth = 72;
+  /// 小卡宽度 = 方图边长。UI 稿 B1 原为 72×72，bug 20260922-522 整体缩小 10% → 65×65。
+  /// 一屏露出四张多 —— 露出「半张」是横滑行可滑的唯一视觉暗示。
+  static const double cardWidth = 65;
 
-  /// 行高 ≈ 方图 72 + 头像探出的一截 + 一行 micro 文字（按 1.3 倍字号上限留足）。
+  /// 行高 = 方图 65 + 间距 8 + 一行 micro 文字（11 × 行高 1.3 × 字号上限 1.3 ≈ 18.6）≈ 91.6 → 92。
+  /// 头像探出方图的 6px 落在那 8px 间距里，不额外占高（bug 20260922-522 由 100 缩到 92）。
   ///
   /// ⚠️ 这一行在首页**最显眼的位置**、feed 之上：早先直接塞网格卡（宽 150、三行字、
   /// 行高 216）把 feed 顶到了屏幕下半截，稿子要的是一条「顺手瞄一眼」的窄带。
-  static const double rowHeight = 100;
+  static const double rowHeight = 92;
 
-  /// 小卡间距（UI 稿 B1）。
-  static const double cardGap = 9;
+  /// 小卡间距（UI 稿 B1 为 9，bug 20260922-522 随卡片缩 10% → 8）。
+  static const double cardGap = 8;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -183,7 +184,7 @@ class _StripPetTile extends ConsumerWidget {
                         key: ValueKey('recommendedPetAvatar_${pet.petId}'),
                         avatarUrl: pet.avatarUrl,
                         nickname: pet.name,
-                        radius: 10, // 20 + 2×2 白边 = 24
+                        radius: 9, // 18 + 2×2 白边 = 22（bug 20260922-522：原 10 缩 10%）
                       ),
                     ),
                   ),

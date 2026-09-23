@@ -21,6 +21,14 @@ void main() {
     });
   });
 
+  // bug 20260921-505：庆祝页离开时回报 S1 已庆祝，code 须与后端 MilestoneCatalog 的 S1 号位一致。
+  test('profileCreatedMilestoneCode：按物种取 S1 code（未知/缺省 → 通用 G-S1）', () {
+    expect(profileCreatedMilestoneCode('CAT'), 'C-S1');
+    expect(profileCreatedMilestoneCode('DOG'), 'D-S1');
+    expect(profileCreatedMilestoneCode('OTHER'), 'G-S1');
+    expect(profileCreatedMilestoneCode(null), 'G-S1');
+  });
+
   Future<void> pumpCelebration(
     WidgetTester tester, {
     required Future<void> Function() onStartExplore,

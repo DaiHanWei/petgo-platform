@@ -1060,21 +1060,31 @@ class _EmptyProfileView extends ConsumerWidget {
     // 原有「+ 建档」与「Ubah status」两个操作**原样保留、一个不删**。
     // UI 稿 E1：有推荐时引导压成一条**紧凑横条**（图标 + 标题/副文案一行），
     // 把首屏让给下面的 2 列网格；引导与推荐区之间一条分隔线。
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.screenEdge, vertical: AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ..._compactGuidance(context),
-          // UI 稿 E1：分隔线上方留 xl，下方收紧到 md（让标题贴近网格）。
-          const Padding(
-            padding: EdgeInsets.only(top: AppSpacing.xl, bottom: AppSpacing.md),
-            child: Divider(height: 1, thickness: 1, color: AppColors.divider),
+    // bug 20260922-530：外层 Scaffold 没有 AppBar，这一版面又是顶对齐的滚动容器 ——
+    // 内容直接顶进状态栏。补上 E1 顶部的「Diary」标题栏（AppBar 自带状态栏让位）。
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _DiaryTitleBar(title: AppLocalizations.of(context).tabProfile),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+                AppSpacing.screenEdge, AppSpacing.sm, AppSpacing.screenEdge, AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ..._compactGuidance(context),
+                // UI 稿 E1：分隔线上下各约 12（「Ubah status」行自带一点下边距）。
+                const Padding(
+                  padding: EdgeInsets.only(top: AppSpacing.lg, bottom: AppSpacing.md),
+                  child: Divider(height: 1, thickness: 1, color: AppColors.divider),
+                ),
+                PetRecommendationGrid(from: kPetRecommendFromDiaryEmpty),
+              ],
+            ),
           ),
-          PetRecommendationGrid(from: kPetRecommendFromDiaryEmpty),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1111,7 +1121,8 @@ class _EmptyProfileView extends ConsumerWidget {
     return [
       Row(
         children: [
-          const Icon(Icons.pets_rounded, size: 32, color: AppColors.ink),
+          // UI 稿 E1：引导图标是 30px 的 🐾 emoji，不是 Material 爪印。
+          const Text('🐾', style: TextStyle(fontSize: 30, height: 1)),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -1131,35 +1142,78 @@ class _EmptyProfileView extends ConsumerWidget {
         ],
       ),
       const SizedBox(height: AppSpacing.lg),
-      _createButton(l10n),
+      _createButton(l10n, withPlus: true),
       if (onChangeStatus != null)
         // 🔴 AC6：与主按钮**拉开距离、单独一行、再弱化一档**（小字号 + 下划线），
         //    它会改变宠物拥有状态，不能长得像第二个 CTA。
         Padding(
-          padding: const EdgeInsets.only(top: AppSpacing.md),
+          padding: const EdgeInsets.only(top: AppSpacing.sm),
           child: Center(child: _changeStatusButton(l10n, subdued: true)),
         ),
     ];
   }
 
-  Widget _createButton(AppLocalizations l10n) => FilledButton(
-        key: const ValueKey('growthCreateButton'),
-        onPressed: onCreate,
-        child: Text(l10n.growthArchiveEmptyCreate),
-      );
+  /// [withPlus]：UI 稿 E1 紧凑版主按钮带「+」（「+ Buat Profil Sekarang」）；
+  /// 无推荐的原版面不动。
+  Widget _createButton(AppLocalizations l10n, {bool withPlus = false}) => withPlus
+      ? FilledButton.icon(
+          key: const ValueKey('growthCreateButton'),
+          onPressed: onCreate,
+          icon: const Icon(Icons.add_rounded, size: 20),
+          label: Text(l10n.growthArchiveEmptyCreate),
+        )
+      : FilledButton(
+          key: const ValueKey('growthCreateButton'),
+          onPressed: onCreate,
+          child: Text(l10n.growthArchiveEmptyCreate),
+        );
 
-  /// [subdued]：紧凑版里再弱化一档（caption 字号 + 下划线，UI 稿 E1）。
+  /// [subdued]：紧凑版里再弱化一档（micro 字号 + 紫色下划线，UI 稿 E1）。
+  /// bug 20260922-530：TextButton 默认 48 高的热区 + 上下内边距让它和主按钮、分隔线
+  /// 之间各空出一大截；紧凑版收成 36 高（仍够点），与稿里的紧贴排布一致。
   Widget _changeStatusButton(AppLocalizations l10n, {bool subdued = false}) => TextButton(
         key: const ValueKey('growthChangeStatusButton'),
         onPressed: onChangeStatus,
+        style: subdued
+            ? TextButton.styleFrom(
+                minimumSize: const Size(64, 36),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              )
+            : null,
         child: Text(
           l10n.growthArchiveChangeStatus,
           style: subdued
-              ? AppTypography.caption.copyWith(
-                  color: AppColors.mint600, decoration: TextDecoration.underline)
+              ? AppTypography.micro.copyWith(
+                  color: AppColors.mint, decoration: TextDecoration.underline,
+                  decorationColor: AppColors.mint)
               : null,
         ),
       );
+}
+
+/// UI 稿 E1 顶部「Diary」标题栏（tab 根页，无返回键；稿 `.appbar-title` 19/w700）。
+///
+/// 用 AppBar 而不是自绘文字：它按 MediaQuery 自动给状态栏让位（bug 20260922-530
+/// 就是内容顶进状态栏）。底色透明，跟随页面底色。
+class _DiaryTitleBar extends StatelessWidget {
+  const _DiaryTitleBar({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppBar(
+      automaticallyImplyLeading: false,
+      backgroundColor: Colors.transparent,
+      titleSpacing: AppSpacing.screenEdge,
+      title: Text(
+        title,
+        style: const TextStyle(
+            fontFamily: 'Poppins', fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink),
+      ),
+    );
+  }
 }
 
 /// 状态 B / C（PLANNING / ENTHUSIAST）：「声明未养宠 / 计划养宠」那一屏。

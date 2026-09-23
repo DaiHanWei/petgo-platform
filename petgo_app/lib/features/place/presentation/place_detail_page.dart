@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
@@ -73,18 +74,41 @@ final _photoUploadingProvider =
   isAutoDispose: true,
 );
 
+/// `place_detail_viewed` 的 `from` 取值（E-5，bug 20260922-528）。
+///
+/// PRD 只定了属性名没列取值，这里按**实际存在的入口**定：列表页 / 标记成功后跳转 / 分享深链。
+/// 认不出来（缺省、手敲的 debug 深链）一律记 [kPlaceDetailFromOther]，不丢这次浏览。
+const String kPlaceDetailFromList = 'list';
+const String kPlaceDetailFromCreated = 'created';
+const String kPlaceDetailFromShare = 'share';
+const String kPlaceDetailFromOther = 'other';
+
 class PlaceDetailPage extends ConsumerWidget {
-  const PlaceDetailPage({super.key, required this.token});
+  const PlaceDetailPage({super.key, required this.token, this.analyticsFrom});
 
   final String token;
+
+  /// 从哪个入口进来的（路由 `?from=`），只喂 `place_detail_viewed`，不影响任何行为。
+  final String? analyticsFrom;
 
   /// 路由路径模板。⚠️ 与 `app_router.dart` 的注册值同源。
   static const String routePattern = '/places/:token';
 
-  static String routeFor(String token) => '/places/$token';
+  static String routeFor(String token, {String? from}) =>
+      from == null ? '/places/$token' : '/places/$token?from=$from';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 🔴 埋点包一层有状态壳：本页是 ConsumerWidget，build 会随定位 / 详情数据到达重跑好几次，
+    // 直接在 build 里报等于一次浏览报三四条。壳子始终在同一位置，initState 只走一次。
+    return _PlaceDetailViewedOnce(
+      token: token,
+      from: analyticsFrom,
+      child: _buildPage(context, ref),
+    );
+  }
+
+  Widget _buildPage(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final locationAsync = ref.watch(placeLocationProvider);
 
@@ -238,7 +262,8 @@ class PlaceDetailPage extends ConsumerWidget {
                 // 点标记人 → 完整主页（UI 稿 A4 的「点标记人 → 跳 C1」）。
                 // ⚠️ Story 1.5 落地时主页还不存在，先接的迷你卡；Story 2.1 统一收口时改到这里。
                 onTap: p.markedBy.tappable
-                    ? () => openUserProfile(context, ref, p.markedBy.userId)
+                    ? () => openUserProfile(context, ref, p.markedBy.userId,
+                        viewFrom: ProfileViewFrom.place)
                     : null,
               ),
               const SizedBox(height: AppSpacing.md),
@@ -319,6 +344,9 @@ class PlaceDetailPage extends ConsumerWidget {
       // iPad 会崩、iPhone 会「点了没反应」**（bug 20260707 踩过）。别绕过它直接调 Share.share。
       await ref.read(shareServiceProvider)('${p.name}\n${placeShareUrl(p.token)}',
           sharePositionOrigin: origin);
+      // E-15（bug 20260922-528）：系统面板已调起才报；调起失败走下面的 catch，不报。
+      // ⚠️ 只有 token —— 场所名 / 地址 / 坐标一律不进埋点（architecture-b1 §4.2）。
+      Analytics.capture('place_shared', {'place_id': p.token});
     } catch (_) {
       if (context.mounted) showAppToast(context, l10n.placeDetailShareFailed);
     }
@@ -395,6 +423,8 @@ class PlaceDetailPage extends ConsumerWidget {
       }
       if (urls.isNotEmpty) {
         await repo.contributePhotos(token, urls);
+        // E-6（bug 20260922-528）：服务端接住了这批照片才报，一次补充报一条。
+        Analytics.capture('place_photo_added', {'place_id': token});
         invalidatePlaceDetailIn(container, token);
       }
       if (!context.mounted) return;
@@ -462,6 +492,40 @@ class PlaceDetailPage extends ConsumerWidget {
       },
     );
   }
+}
+
+/// `place_detail_viewed`（E-5，bug 20260922-528）的「只报一次」壳子。见 [PlaceDetailPage.build]。
+class _PlaceDetailViewedOnce extends StatefulWidget {
+  const _PlaceDetailViewedOnce(
+      {required this.token, required this.from, required this.child});
+
+  final String token;
+  final String? from;
+  final Widget child;
+
+  @override
+  State<_PlaceDetailViewedOnce> createState() => _PlaceDetailViewedOnceState();
+}
+
+class _PlaceDetailViewedOnceState extends State<_PlaceDetailViewedOnce> {
+  static const Set<String> _knownFrom = {
+    kPlaceDetailFromList,
+    kPlaceDetailFromCreated,
+    kPlaceDetailFromShare,
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    final from = widget.from;
+    Analytics.capture('place_detail_viewed', {
+      'place_id': widget.token,
+      'from': _knownFrom.contains(from) ? from! : kPlaceDetailFromOther,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// 照片横滑流（AC1）+ 点开全屏灯箱（Story 1.6 · AC2）。

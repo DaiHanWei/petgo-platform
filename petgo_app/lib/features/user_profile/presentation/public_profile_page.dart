@@ -40,6 +40,25 @@ enum ProfileActionOutcome {
   reported,
 }
 
+/// `user_profile_viewed` 的 `from`（E-12，PRD 定死三值：avatar / mention / place）。
+///
+/// ⚠️ 与 [AccountActionEntry] 是**两个维度**：那个是拉黑 / 举报的发起入口（既有时间序列，
+/// 枚举值不许动），这个只描述「主页是怎么被打开的」。故独立一个参数，不往那边加值。
+enum ProfileViewFrom {
+  /// 点头像 / 作者行 / 评论作者（缺省）。
+  avatar('avatar'),
+
+  /// 点正文或评论里的 @。
+  mention('mention'),
+
+  /// 场所详情里的标记人 / 场所评论作者。
+  place('place');
+
+  const ProfileViewFrom(this.wire);
+
+  final String wire;
+}
+
 /// 进入某人的公开主页（V1.3.0 batch-b1 Story 2.1 · FR-118.1）。
 ///
 /// 🔴 **这是 `showMiniProfile` 的替代品**：本 story 之后，App 里所有「点头像看这人是谁」
@@ -50,6 +69,11 @@ enum ProfileActionOutcome {
 /// 两者收尾动作一般相同，调用方通常传同一个回调。
 ///
 /// [entry]：从哪儿点进来的，只用于埋点，不影响任何行为。
+///
+/// [viewFrom]：`user_profile_viewed` 的 `from`（E-12，bug 20260922-536）。缺省时由 [entry]
+/// 推：`mention` → mention，其余 → avatar；场所两处入口显式传 [ProfileViewFrom.place]。
+/// 🔴 本函数对「看自己」不分流（同一套页面，由服务端 `self` 切视角），所以自己点自己也照报 ——
+/// 看板要排除时按 `target_user_id == distinct_id` 过滤。
 Future<void> openUserProfile(
   BuildContext context,
   WidgetRef ref,
@@ -57,7 +81,17 @@ Future<void> openUserProfile(
   VoidCallback? onBlocked,
   VoidCallback? onReported,
   AccountActionEntry entry = AccountActionEntry.miniProfile,
+  ProfileViewFrom? viewFrom,
 }) async {
+  final from = viewFrom ??
+      (entry == AccountActionEntry.mention
+          ? ProfileViewFrom.mention
+          : ProfileViewFrom.avatar);
+  // user_id 明文在 PostHog 豁免范围内（同 identifyUser）。
+  Analytics.capture('user_profile_viewed', {
+    'target_user_id': userId,
+    'from': from.wire,
+  });
   final outcome = await context.push<ProfileActionOutcome>(
     '${PublicProfilePage.routeBase}/$userId?entry=${entry.wire}',
   );
@@ -713,9 +747,14 @@ class _PetSection extends ConsumerWidget {
   }
 
   /// FR-0C：游客点进访客视图 → 强登录引导，**不发请求**（站内访客接口仅登录可用）。
+  ///
+  /// E-17（bug 20260922-534）：`pet_card_tapped` 报在门控**之前**（点击就是点击，游客被拦也算），
+  /// 跳转带 `?from=profile`，访客视图据此报 `diary_visitor_viewed`。
   void _open(BuildContext context, WidgetRef ref, PublicProfilePet pet) {
+    Analytics.capture('pet_card_tapped', {'from': 'profile'});
     requireLogin(ref, context,
-        onAllowed: () => context.push('${VisitorArchiveView.inAppRouteBase}/${pet.petId}'));
+        onAllowed: () => context.push(
+            '${VisitorArchiveView.inAppRouteBase}/${pet.petId}?from=profile'));
   }
 }
 

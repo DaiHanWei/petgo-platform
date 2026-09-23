@@ -28,3 +28,14 @@ BuildOrigin buildOriginFromName(String? name) {
       return BuildOrigin.onboarding;
   }
 }
+
+/// 建档即自动完成的那条里程碑「档案创建完成」（S1）的 code：猫 `C-S1` / 狗 `D-S1` / 其他与未选 `G-S1`
+/// （与后端 `MilestoneCatalog` 的 S1 号位一致，三清单 S1 同义）。
+///
+/// 用途（bug 20260921-505）：建档庆祝页的「第一个里程碑已解锁」卡**就是**这条的庆祝展示，
+/// 离开庆祝页时须按 AD-A3.1 回报 `celebrated_at`；不报的话首次进里程碑列表页会把它当「未庆祝」再补弹一次。
+String profileCreatedMilestoneCode(String? petType) => switch (petType) {
+      'CAT' => 'C-S1',
+      'DOG' => 'D-S1',
+      _ => 'G-S1',
+    };

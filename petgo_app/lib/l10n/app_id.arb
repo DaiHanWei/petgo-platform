@@ -698,6 +698,7 @@
   "consultCaseTitle": "Konsultasi Dokter Hewan",
   "consultCaseDesc": "Ceritakan gejalanya dan tambahkan foto agar dokter memahami kondisi sebelum chat dimulai.",
   "consultCaseSymptomLabel": "GEJALA",
+  "consultCaseSymptomRequired": "Ceritakan dulu gejala anabulmu agar dokter hewan tahu kondisinya.",
   "consultCasePhotosLabel": "FOTO (OPSIONAL, MAKS. 3)",
   "consultCaseSubmit": "Mulai Konsultasi",
   "vetEndSession": "Akhiri sesi",

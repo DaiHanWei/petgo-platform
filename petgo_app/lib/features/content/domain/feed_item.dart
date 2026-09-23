@@ -184,6 +184,30 @@ class FeedItem {
   /// 首图尺寸；无图 / 存量 / 那一张测不出来 → null（渲染侧按占位比例预留）。
   ImageSize? get firstImageSize => imageSizes.isEmpty ? null : imageSizes.first;
 
+  /// 互动计数回写用的拷贝（bug 20260923-538）：详情页评论/点赞后把新值写回 Feed 快照。
+  ///
+  /// ⚠️ 只开放点赞态、点赞数、评论数三项 —— 其余字段是内容本身，列表里没有就地改它们的场景。
+  FeedItem copyWith({int? likeCount, bool? liked, int? commentCount}) => FeedItem(
+        id: id,
+        authorId: authorId,
+        authorDeleted: authorDeleted,
+        type: type,
+        authorNickname: authorNickname,
+        authorAvatarUrl: authorAvatarUrl,
+        body: body,
+        firstImageUrl: firstImageUrl,
+        createdAt: createdAt,
+        visibility: visibility,
+        likeCount: likeCount ?? this.likeCount,
+        liked: liked ?? this.liked,
+        commentCount: commentCount ?? this.commentCount,
+        imageSizes: imageSizes,
+        imageUrls: imageUrls,
+        authorTags: authorTags,
+        decorationTags: decorationTags,
+        mentions: mentions,
+      );
+
   factory FeedItem.fromJson(Map<String, dynamic> json) => FeedItem(
         id: json['id'] as int,
         authorId: json['authorId'] as int,

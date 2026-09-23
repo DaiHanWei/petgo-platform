@@ -917,6 +917,7 @@
   "consultCaseTitle": "Vet Consultation",
   "consultCaseDesc": "Describe the symptoms and add photos so the vet understands the case before the chat starts.",
   "consultCaseSymptomLabel": "SYMPTOMS",
+  "consultCaseSymptomRequired": "Please describe your pet's symptoms so the vet knows what's going on.",
   "consultCasePhotosLabel": "PHOTOS (OPTIONAL, MAX 3)",
   "consultCaseSubmit": "Start Consultation",
   "vetEndSession": "End session",

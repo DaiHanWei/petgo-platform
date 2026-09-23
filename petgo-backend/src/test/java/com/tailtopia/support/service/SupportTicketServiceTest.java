@@ -176,4 +176,107 @@ class SupportTicketServiceTest {
             Mockito.verifyNoInteractions(orders, shopOrders);
         }
     }
+
+    /**
+     * bug 20260922-524：「已联系 / 结案 / 忽略」拆成三个独立动作。
+     * 🔴 已联系不结案、不发通知；忽略置 CLOSED、不发任何通知；已结案不可再忽略；每个生效的动作都留审计。
+     */
+    @Nested
+    @DisplayName("工单处置拆分（bug 20260922-524）")
+    class TicketDisposition {
+
+        private static final long ADMIN = 900L;
+
+        private FeedbackTicket ticket(String token, com.tailtopia.support.domain.TicketStatus status) {
+            FeedbackTicket t = FeedbackTicket.create(7L, token, "主题", "正文",
+                    com.tailtopia.support.domain.ContactType.EMAIL, "a@b.com", true, null);
+            ReflectionTestUtils.setField(t, "status", status);
+            Mockito.when(tickets.findByTicketToken(token)).thenReturn(java.util.Optional.of(t));
+            return t;
+        }
+
+        @Test
+        void contacted_marksContactedOnly_noResolve_noNotify_audited() {
+            FeedbackTicket t = ticket("tok-c", com.tailtopia.support.domain.TicketStatus.OPEN);
+
+            assertThat(service.markContacted("tok-c", ADMIN)).isTrue();
+
+            assertThat(t.isContactedCustomer()).isTrue();
+            // 离开「待联系」但仍在「待处理」：OPEN → IN_PROGRESS，绝不是 RESOLVED/CLOSED
+            assertThat(t.getStatus()).isEqualTo(com.tailtopia.support.domain.TicketStatus.IN_PROGRESS);
+            assertThat(t.getResolvedAt()).isNull();
+            assertThat(t.getCsatDeadline()).isNull();
+            verifyNoInteractions(notifications);
+            Mockito.verify(audit).record(Mockito.eq(ADMIN),
+                    Mockito.eq(com.tailtopia.admin.audit.service.AuditActions.TICKET_CONTACTED),
+                    Mockito.eq("feedback_ticket"), Mockito.eq("tok-c"), Mockito.anyString());
+        }
+
+        @Test
+        void contacted_twice_isIdempotent_auditedOnce() {
+            ticket("tok-c2", com.tailtopia.support.domain.TicketStatus.OPEN);
+
+            assertThat(service.markContacted("tok-c2", ADMIN)).isTrue();
+            assertThat(service.markContacted("tok-c2", ADMIN)).as("再点返回 false 供控制器给友好提示").isFalse();
+
+            Mockito.verify(audit, Mockito.times(1)).record(Mockito.anyLong(), Mockito.anyString(),
+                    Mockito.anyString(), Mockito.anyString(), Mockito.anyString());
+        }
+
+        @Test
+        void contacted_onResolvedTicket_conflict() {
+            ticket("tok-c3", com.tailtopia.support.domain.TicketStatus.RESOLVED);
+            assertThatThrownBy(() -> service.markContacted("tok-c3", ADMIN))
+                    .isInstanceOfSatisfying(AppException.class,
+                            e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT));
+            verifyNoInteractions(audit);
+        }
+
+        @Test
+        void ignore_closesWithoutAnyNotification_audited() {
+            FeedbackTicket t = ticket("tok-i", com.tailtopia.support.domain.TicketStatus.IN_PROGRESS);
+
+            service.ignoreTicket("tok-i", ADMIN);
+
+            assertThat(t.getStatus()).isEqualTo(com.tailtopia.support.domain.TicketStatus.CLOSED);
+            assertThat(t.getHandledBy()).isEqualTo(ADMIN);
+            // 不开 CSAT 窗口（也就不会进 7 天自动关闭扫描集）
+            assertThat(t.getCsatDeadline()).isNull();
+            assertThat(t.getResolvedAt()).isNull();
+            verifyNoInteractions(notifications);
+            Mockito.verify(audit).record(Mockito.eq(ADMIN),
+                    Mockito.eq(com.tailtopia.admin.audit.service.AuditActions.TICKET_IGNORED),
+                    Mockito.eq("feedback_ticket"), Mockito.eq("tok-i"), Mockito.anyString());
+        }
+
+        @Test
+        void ignore_resolvedOrClosedTicket_conflict_noAudit() {
+            ticket("tok-r", com.tailtopia.support.domain.TicketStatus.RESOLVED);
+            ticket("tok-x", com.tailtopia.support.domain.TicketStatus.CLOSED);
+
+            for (String tok : List.of("tok-r", "tok-x")) {
+                assertThatThrownBy(() -> service.ignoreTicket(tok, ADMIN))
+                        .isInstanceOfSatisfying(AppException.class,
+                                e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.CONFLICT));
+            }
+            verifyNoInteractions(notifications, audit);
+        }
+
+        @Test
+        void resolve_noLongerForcesContacted_stillNotifiesAndAudits() {
+            FeedbackTicket t = ticket("tok-v", com.tailtopia.support.domain.TicketStatus.OPEN);
+            ReflectionTestUtils.setField(service, "csatWindowDays", 7);
+
+            service.resolveTicket("tok-v", ADMIN);
+
+            assertThat(t.getStatus()).isEqualTo(com.tailtopia.support.domain.TicketStatus.RESOLVED);
+            assertThat(t.isContactedCustomer()).as("结案不再隐含已联系").isFalse();
+            assertThat(t.getCsatDeadline()).isNotNull();
+            Mockito.verify(notifications, Mockito.times(2)).send(Mockito.anyLong(), Mockito.any(),
+                    Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString());
+            Mockito.verify(audit).record(Mockito.eq(ADMIN),
+                    Mockito.eq(com.tailtopia.admin.audit.service.AuditActions.TICKET_RESOLVED),
+                    Mockito.eq("feedback_ticket"), Mockito.eq("tok-v"), Mockito.anyString());
+        }
+    }
 }

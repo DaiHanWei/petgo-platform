@@ -2,13 +2,20 @@
 <html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!--
   A5 右栏五区（V1.3.0 Story 2.7 AC2/AC4/AC5）：① 正文 + 附件（点开大图）② 联系卡 ③ 关联订单（已关联 → 订单摘要卡 + 「改绑订单」；
-  未关联 → 订单号搜索框 + 「关联」）④ 退款需求判定（批准 confirm 复述订单 / 驳回原因必填 D-36；未关联订单禁用，防呆 F7-4）⑤ 结案。
+  未关联 → 订单号搜索框 + 「关联」）④ 退款需求判定（批准 confirm 复述订单 / 驳回原因必填 D-36；未关联订单禁用，防呆 F7-4）⑤ 处置（已联系 / 结案 / 忽略，bug 20260922-524）。
   结案后只读 + CSAT 回填展示。有 support.view 无 support.handle → 关联 / 结案禁用；无 refund.submit → 判定两钮禁用；均注明所缺权限。
   关联 / 判定 htmx 成功回本 fragment（停留本条，toast oob）；结案回 support-done。联系方式原文仅 handle/SUPER_ADMIN（PII 最小可见面）。
 -->
 <body>
 <div th:fragment="detail" class="sp-detail" th:attr="data-ticket-token=${ticket.ticketToken}">
     <div class="toast" role="status" th:if="${toast}" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">toast</div>
+    <!--/* bug 20260922-524：「已联系」停留本条时，左栏这一行（去掉「需联系」标）与三态计数一并 oob 刷新。 */-->
+    <th:block th:if="${rowOob != null and rowOob}">
+        <li th:replace="~{admin/fragments/support-queue :: row(${ticket}, true)}"></li>
+        <span id="support-tab-count-pending" class="tab-count" hx-swap-oob="true" th:text="${counts.get('pending')}">0</span>
+        <span id="support-tab-count-contact" class="tab-count" hx-swap-oob="true" th:text="${counts.get('contact')}">0</span>
+        <span id="support-tab-count-closed" class="tab-count" hx-swap-oob="true" th:text="${counts.get('closed')}">0</span>
+    </th:block>
 
     <!-- ① 正文 + 附件 -->
     <section class="card card-full sp-card sp-body">
@@ -121,16 +128,32 @@
         </th:block>
     </section>
 
-    <!-- ⑤ 结案 -->
+    <!-- ⑤ 处置（bug 20260922-524：已联系 / 结案 / 忽略 拆成三个独立动作，各自二次确认、各自留审计） -->
     <section class="wb-actions sp-actions">
         <th:block th:if="${ticket.open()}">
-            <form th:attr="hx-post=@{/admin/support-tickets/{t}/resolve(t=${ticket.ticketToken})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline"
-                  sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')">
-                <button type="submit" class="btn btn-primary" data-confirm-button th:attr="data-confirm=#{admin.v130.support.confirm.resolve}"
-                        th:text="#{admin.ticket.btn.resolve}">已联系 + 已解决（结案）</button>
-            </form>
+            <div class="inline" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('support.handle')">
+                <!-- 已联系：只标记联系，不结案、不通知用户；已标记过则置灰 -->
+                <form th:attr="hx-post=@{/admin/support-tickets/{t}/contacted(t=${ticket.ticketToken})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-inline-error>
+                    <button type="submit" class="btn btn-neutral" data-confirm-button th:disabled="${ticket.contacted}"
+                            th:attr="data-confirm=#{admin.v130.support.confirm.contacted}"
+                            th:title="${ticket.contacted} ? #{admin.ticket.contactedAlready} : null"
+                            th:text="#{admin.ticket.btn.contacted}">已联系</button>
+                </form>
+                <!-- 结案：RESOLVED + 通知用户 + 邀请 CSAT -->
+                <form th:attr="hx-post=@{/admin/support-tickets/{t}/resolve(t=${ticket.ticketToken})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-inline-error>
+                    <button type="submit" class="btn btn-primary" data-confirm-button th:attr="data-confirm=#{admin.v130.support.confirm.resolve}"
+                            th:text="#{admin.ticket.btn.resolve}">结案</button>
+                </form>
+                <!-- 忽略：置 CLOSED，不发任何通知、不开 CSAT -->
+                <form th:attr="hx-post=@{/admin/support-tickets/{t}/ignore(t=${ticket.ticketToken})}" hx-target=".wb-detail-body" hx-swap="innerHTML" class="inline" data-inline-error>
+                    <button type="submit" class="btn btn-danger" data-confirm-button th:attr="data-confirm=#{admin.v130.support.confirm.ignore}"
+                            th:text="#{admin.ticket.btn.ignore}">忽略</button>
+                </form>
+            </div>
             <p class="muted" sec:authorize="!(hasRole('SUPER_ADMIN') or hasAuthority('support.handle'))">
+                <button type="button" class="btn btn-neutral" disabled th:title="#{admin.v130.err.forbidden(#{perm.support.handle})}" th:text="#{admin.ticket.btn.contacted}">已联系</button>
                 <button type="button" class="btn btn-primary" disabled th:title="#{admin.v130.err.forbidden(#{perm.support.handle})}" th:text="#{admin.ticket.btn.resolve}">结案</button>
+                <button type="button" class="btn btn-danger" disabled th:title="#{admin.v130.err.forbidden(#{perm.support.handle})}" th:text="#{admin.ticket.btn.ignore}">忽略</button>
                 <span th:text="#{admin.v130.err.forbidden(#{perm.support.handle})}">需要权限</span>
             </p>
         </th:block>

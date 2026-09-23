@@ -65,6 +65,6 @@ void main() {
   /// 只认 `petgo_app/**` —— 纯后端 PR 改掉那个 host 时，这条测试**根本不会跑**，
   /// 绿灯合入而安卓唤起静默失效。两侧各钉同一个字面量，谁改谁红。
   test('App 侧认得 tailtopia://place/{token}', () {
-    expect(deepLinkToLocation(Uri.parse('tailtopia://place/abc')), '/places/abc');
+    expect(deepLinkToLocation(Uri.parse('tailtopia://place/abc')), '/places/abc?from=share');
   });
 }
