@@ -81,6 +81,20 @@ class AppColors {
   /// 品牌重塑紫（新 logo 实底；splash / 登录页头同色，原型 preview-new-splash-auth-0622）。
   static const Color brandViolet = Color(0xFF7D45F6);
 
+  // —— 宠物年龄卡（V1.3.0 Story 5.2 设计稿实测值）——
+  //
+  // ⚠️ 这三个值**只服务年龄卡卡面**（一张会被发到 Stories 的图），不是 App 主题的一部分：
+  // 卡面是设计单独出的一套配色（品牌紫之外还有洋红主数字 + 深紫墨底），
+  // 与 App 内的 violet 体系刻意不同。业务页面请勿引用。
+  /// 卡面底色（设计稿 `BACKGROUD.png` 实测 #F7F5FF）。
+  static const Color ageCardBg = Color(0xFFF7F5FF);
+
+  /// 主数字与「TAHUN MANUSIA」徽标底的洋红。
+  static const Color ageCardMagenta = Color(0xFFD601A6);
+
+  /// 底部渐变与趣味文案文字用的深紫墨（设计稿 `Card Info.png` 实测 #3D2E51）。
+  static const Color ageCardInk = Color(0xFF3D2E51);
+
   // —— Status ——
   static const Color danger = Color(0xFFE5604D);
 

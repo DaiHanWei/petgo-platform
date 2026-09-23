@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -13,6 +12,7 @@ import '../../../shared/card_render/card_canvas.dart';
 import '../../../shared/card_render/card_export.dart';
 import '../../../shared/card_render/card_frame.dart';
 import '../../../shared/card_render/card_render_pipeline.dart';
+import '../../auth/domain/auth_state.dart';
 import '../data/age_card_reward_repository.dart';
 import '../data/profile_repository.dart';
 import '../domain/age_card_quips.dart';
@@ -47,6 +47,13 @@ class AgeCardPage extends ConsumerWidget {
           );
         }
         final isDog = profile.petType == 'DOG';
+        // 角色切图按物种分三套。入口虽然只放猫狗进来，档案的 petType 本来就是三值 ——
+        // 兜底落 other 而不是硬当成猫，免得将来放开入口时卡面默默画错物种。
+        final species = switch (profile.petType) {
+          'DOG' => AgeCardSpecies.dog,
+          'CAT' => AgeCardSpecies.cat,
+          _ => AgeCardSpecies.other,
+        };
         if (isDog) {
           return _SizePickerPage(
             petName: profile.name,
@@ -56,6 +63,7 @@ class AgeCardPage extends ConsumerWidget {
                 avatarUrl: profile.avatarUrl,
                 birthday: birthday,
                 isDog: true,
+                species: species,
                 size: size,
               ),
             )),
@@ -66,6 +74,7 @@ class AgeCardPage extends ConsumerWidget {
           avatarUrl: profile.avatarUrl,
           birthday: birthday,
           isDog: false,
+          species: species,
         );
       },
     );
@@ -251,10 +260,11 @@ class AgeCardPreviewPage extends ConsumerStatefulWidget {
     required this.petName,
     required this.birthday,
     required this.isDog,
+    this.species,
     this.avatarUrl,
     this.size,
     this.today,
-    this.quipRandom,
+    this.initialCanvas = CardCanvas.story,
   });
 
   final String petName;
@@ -262,14 +272,20 @@ class AgeCardPreviewPage extends ConsumerStatefulWidget {
   final DateTime birthday;
   final bool isDog;
 
+  /// 角色切图与信息胶囊用的物种。不传 ⇒ 按 [isDog] 退化成猫/狗两值
+  /// （老调用点与测试不必逐个改）。
+  final AgeCardSpecies? species;
+
   /// 狗的体型档；猫为 null。
   final DogSizeClass? size;
 
   /// 测试缝：固定「当日」。生产路径不传 → 取设备本地时区的今天（AD-A28.1）。
   final DateTime? today;
 
-  /// 测试缝：固定随机源，让「取了哪一条文案」可断言。
-  final Random? quipRandom;
+  /// 初始画布。**画布切换器已按 2026-09-23 拍板隐藏**（设计稿只出了 9:16），
+  /// 1:1 的模板、导出管线、埋点值域 `square` 一律保留 —— 见下方 build 里的说明。
+  /// 生产路径不传 → 9:16；1:1 目前只有测试会显式传进来。
+  final CardCanvas initialCanvas;
 
   /// 出图测试缝（同分享卡那屏）：`toImage` 是真实引擎异步操作，
   /// 在 widget test 的 fake-async 时钟里永远不会完成。
@@ -284,7 +300,11 @@ class _AgeCardPreviewPageState extends ConsumerState<AgeCardPreviewPage> {
   final GlobalKey _boundaryKey = GlobalKey();
 
   /// 默认 9:16（Instagram Stories 是这个功能的主场景）。
-  CardCanvas _canvas = CardCanvas.story;
+  ///
+  /// 切换器藏起来后这个字段在本类里不再被重新赋值，但**不要改成 final** ——
+  /// 1:1 稿到位、切换器放开时它就要恢复可变（见 build 里注释掉的 SegmentedButton）。
+  // ignore: prefer_final_fields
+  late CardCanvas _canvas = widget.initialCanvas;
   bool _busy = false;
 
   late final HumanAgeResult _age = resolveHumanAge(
@@ -297,9 +317,7 @@ class _AgeCardPreviewPageState extends ConsumerState<AgeCardPreviewPage> {
     size: widget.size,
   );
 
-  /// 🔴 **每次进页面取一次，之后不再变**：放进 build 的话每帧都换一句，
-  /// 用户还没看完就跳字了。"每次生成随机" 指的是每次**打开**，不是每一帧。
-  late final AgeCardQuip _quip = pickQuip(_age.stage, random: widget.quipRandom);
+  /// 趣味文案：一段一句、与该段角色图配对（2026-09-23 产品拍板取消随机池，见 quipFor）。
 
   /// 分享成功后试着领奖（Story 5.3）。
   ///
@@ -325,6 +343,19 @@ class _AgeCardPreviewPageState extends ConsumerState<AgeCardPreviewPage> {
   /// 是否都发由服务端的日上限说了算，不该被客户端的键顶掉。
   /// 一次分享动作一个幂等键（见 [_shareIt]）。
   String _shareIdempotencyKey = '';
+
+  /// 卡面上的 Pawrent 名 = 当前登录用户昵称。
+  ///
+  /// 🔴 **拿不到就返回 null，卡上整行不显示** —— 不兜底成邮箱（PII，这张图会发给陌生人）、
+  /// 也不填「Pawrent」这类占位（用户会以为自己的名字没存上）。
+  /// 游客态走不到这一屏（受控前缀），但 profile 仍可能为空（冷启动恢复未完成）。
+  String? get _pawrentName {
+    final profile = ref.watch(authControllerProvider).profile;
+    final name = profile?.nickname?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    final display = profile?.displayName?.trim();
+    return display == null || display.isEmpty ? null : display;
+  }
 
   /// 埋点公共属性（AD-A26.4 值域）。
   Map<String, Object> _eventProps() => {
@@ -381,18 +412,22 @@ class _AgeCardPreviewPageState extends ConsumerState<AgeCardPreviewPage> {
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: SegmentedButton<CardCanvas>(
-                key: const ValueKey('ageCardRatioToggle'),
-                segments: const [
-                  ButtonSegment(value: CardCanvas.story, label: Text('9:16')),
-                  ButtonSegment(value: CardCanvas.square, label: Text('1:1')),
-                ],
-                selected: {_canvas},
-                onSelectionChanged: (s) => setState(() => _canvas = s.first),
-              ),
-            ),
+            // 🔴 画布切换器**只是藏起来，基建一概不动**（2026-09-23 拍板）：设计稿这一版
+            // 只出了 9:16 的角色与背景素材，1:1 没有稿、硬缩会把角色裁掉。
+            // 保留的东西：[CardCanvas.square]、`AgeCardTemplate` 的等比排版、导出管线、
+            // 埋点 `canvas` 的 `square` 值域（AD-A26.4）、story 5-2 AC4/AC7 的两档断言。
+            // ⚠️ 设计补上 1:1 稿后，**把这段注释换回下面这个 SegmentedButton 即可**，
+            //    不要因为「界面上看不见」就去删 square 那一路代码。
+            // SegmentedButton<CardCanvas>(
+            //   key: const ValueKey('ageCardRatioToggle'),
+            //   segments: const [
+            //     ButtonSegment(value: CardCanvas.story, label: Text('9:16')),
+            //     ButtonSegment(value: CardCanvas.square, label: Text('1:1')),
+            //   ],
+            //   selected: {_canvas},
+            //   onSelectionChanged: (s) => setState(() => _canvas = s.first),
+            // ),
+            const SizedBox(height: AppSpacing.md),
             Expanded(
               child: Center(
                 child: Padding(
@@ -408,11 +443,16 @@ class _AgeCardPreviewPageState extends ConsumerState<AgeCardPreviewPage> {
                       petName: widget.petName,
                       avatarUrl: widget.avatarUrl,
                       age: _age,
-                      quip: _quip(l10n, widget.petName),
+                      quip: quipFor(l10n, _age.stage),
+                      species: widget.species ??
+                          (widget.isDog ? AgeCardSpecies.dog : AgeCardSpecies.cat),
+                      // 胶囊上只印**体重区间**（设计稿：`Anjing · 2 thn 3 bln · 9–23 kg`），
+                      // 不印档位名 —— 档位名（Sedang/Besar）在选择页已经问过一次，
+                      // 印在要发出去的卡上既占宽度又没有信息量。
                       sizeLabel: widget.size == null
                           ? null
-                          : '${dogSizeLabel(l10n, widget.size!)} · '
-                              '${dogSizeRange(l10n, widget.size!)}',
+                          : dogSizeRange(l10n, widget.size!),
+                      pawrentName: _pawrentName,
                     ),
                   ),
                 ),
