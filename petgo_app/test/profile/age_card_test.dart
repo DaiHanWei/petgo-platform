@@ -3,12 +3,16 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/config/app_download_url.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/profile/domain/age_card_quips.dart';
 import 'package:tailtopia/features/profile/domain/human_age.dart';
 import 'package:tailtopia/features/profile/presentation/age_card_page.dart';
+import 'package:tailtopia/features/profile/presentation/widgets/age_card_template.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/card_render/card_canvas.dart';
 import 'package:tailtopia/shared/card_render/card_qr.dart';
@@ -178,40 +182,25 @@ void main() {
       expect(cat8.stage, PetAgeStage.middle);
     });
 
-    test('每段恰好 5 条候选，随机取其中之一', () async {
-      for (final stage in PetAgeStage.values) {
-        expect(quipsFor(stage), hasLength(5));
-      }
-      // 固定随机源 → 结果可复现（同一个种子两次取到同一条）。
+    test('一段一句、与该段角色图配对（2026-09-23 取消随机池）', () async {
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-      final a = pickQuip(PetAgeStage.young, random: Random(7))(l10n, 'Mochi');
-      final b = pickQuip(PetAgeStage.young, random: Random(7))(l10n, 'Mochi');
-      expect(a, b);
-      // 取到的必是本段五条之一 —— 按**文本**比，不按闭包身份比
-      // （quipsFor 每次都新建闭包，身份比一定不相等）。
-      expect(quipsFor(PetAgeStage.young).map((q) => q(l10n, 'Mochi')), contains(a));
+      // 同一段取两次必是同一句 —— 随机会让文案与角色图对不上。
+      expect(quipFor(l10n, PetAgeStage.young), quipFor(l10n, PetAgeStage.young));
+      // 四段四句，互不相同（否则等于没分段）。
+      final all = [
+        for (final stage in PetAgeStage.values) quipFor(l10n, stage),
+      ];
+      expect(all.toSet(), hasLength(PetAgeStage.values.length));
     });
 
-    testWidgets('文案带宠物名的那几条会把名字填进去', (tester) async {
-      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-      final withName =
-          quipsFor(PetAgeStage.senior).map((q) => q(l10n, 'Mochi')).toList();
-      expect(withName.where((s) => s.contains('Mochi')), isNotEmpty);
+    test('四段 × 两语的全部 8 条都 ≤ 60 字符', () async {
       // ⚠️ 这段文字印在图片上，会被发到 Stories 给陌生人看 —— 长度要严。
-      for (final s in withName) {
-        expect(s.length, lessThanOrEqualTo(60), reason: '超 60 字符会在 9:16 卡上折三行：$s');
-      }
-    });
-
-    test('四段 × 两语的全部 20 条都 ≤ 60 字符', () async {
       for (final locale in const [Locale('en'), Locale('id')]) {
         final l10n = await AppLocalizations.delegate.load(locale);
         for (final stage in PetAgeStage.values) {
-          for (final q in quipsFor(stage)) {
-            final s = q(l10n, 'Mochi');
-            expect(s.length, lessThanOrEqualTo(60),
-                reason: '[${locale.languageCode}] $s');
-          }
+          final s = quipFor(l10n, stage);
+          expect(s.length, lessThanOrEqualTo(60),
+              reason: '[${locale.languageCode}] $s');
         }
       }
     });
@@ -270,11 +259,17 @@ void main() {
     });
 
     /// 导出边长 ≥ 140px。`CardQr` 有构造期 assert —— 这里验的是**调用方没把它压下去**。
-    test('二维码边长在两种画布上都 ≥ 140px', () {
+    ///
+    /// 🔴 换皮后卡面按 1080×1920 设计坐标排、再整体 contain 缩到画布，所以码的**设计坐标边长**
+    /// 必须按那个缩放比反算：1:1 上缩到 0.5625，写死 160 的话出图只有 90px（扫不出来）。
+    test('二维码在两种画布上「缩放之后」都 ≥ 140px', () {
       for (final canvas in [CardCanvas.story, CardCanvas.square]) {
-        final u = canvas.width * (canvas.height / CardCanvas.story.height).clamp(0.72, 1.0);
-        expect(max(CardQr.minExportSide, u * 0.229),
-            greaterThanOrEqualTo(CardQr.minExportSide));
+        final t = _template(canvas: canvas);
+        final scale = min(canvas.width / AgeCardTemplate.designWidth,
+            canvas.height / AgeCardTemplate.designHeight);
+        expect(t.qrSide, greaterThanOrEqualTo(CardQr.minExportSide));
+        expect(t.qrSide * scale, greaterThanOrEqualTo(CardQr.minExportSide - 0.001),
+            reason: '缩放后的实际导出边长才是可扫底线');
       }
     });
 
@@ -290,17 +285,47 @@ void main() {
   });
 
   group('AC5/AC10 卡面字段与不扩散', () {
-    testWidgets('猫卡：当量是主视觉，没有体型带', (tester) async {
+    testWidgets('猫卡：当量是主视觉，信息胶囊里没有体重段', (tester) async {
       await _pumpCard(tester, isDog: false);
       expect(find.byKey(const ValueKey('ageCardHumanYears')), findsOneWidget);
       expect(find.byKey(const ValueKey('ageCardQuip')), findsOneWidget);
-      expect(find.byKey(const ValueKey('ageCardSizeBand')), findsNothing);
-      expect(find.byKey(const ValueKey('ageCardBrandBand')), findsOneWidget);
+      expect(find.byKey(const ValueKey('ageCardHumanYearsBadge')), findsOneWidget);
+      // 🔴 2026-09-23 产品拍板：体重区间**只有狗显示**，猫 / other 整段省略
+      //（不是显示成空，也不是留一个孤零零的「 · 」）。
+      expect(_capsuleText(tester), contains('Cat'));
+      expect(_capsuleText(tester), isNot(contains('kg')));
+      expect(_capsuleText(tester), isNot(contains('· ·')));
     });
 
-    testWidgets('狗卡：多一条体型带', (tester) async {
+    testWidgets('狗卡：信息胶囊多一段体重区间', (tester) async {
       await _pumpCard(tester, isDog: true, size: DogSizeClass.medium);
-      expect(find.byKey(const ValueKey('ageCardSizeBand')), findsOneWidget);
+      expect(_capsuleText(tester), contains('Dog'));
+      expect(_capsuleText(tester), contains('9–23 kg'));
+    });
+
+    testWidgets('other 物种也走「无体重段」那一支', (tester) async {
+      await _pumpCard(tester, isDog: false, species: AgeCardSpecies.other);
+      expect(_capsuleText(tester), contains('Other'));
+      expect(_capsuleText(tester), isNot(contains('kg')));
+    });
+
+    /// 实际年龄仍由 [HumanAgeResult] 来 —— 卡面不另算一遍（档案页与卡面必须同一个数）。
+    testWidgets('胶囊里的实际年龄就是 HumanAgeResult 算出来的那个', (tester) async {
+      await _pumpCard(tester, isDog: false);
+      // 生日 2023-03-01、今天 2026-09-11 ⇒ 3 岁 6 个月。
+      expect(_capsuleText(tester), contains('3y 6m'));
+    });
+
+    testWidgets('Pawrent 名取当前登录用户昵称', (tester) async {
+      await _pumpCard(tester, nickname: 'Dai');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('ageCardPawrent'))).data, 'Dai');
+    });
+
+    /// 🔴 拿不到昵称就**整行不显示**：不兜底成邮箱（PII，这张图会发给陌生人），
+    /// 也不填「Pawrent」这类占位（用户会以为自己的名字没存上）。
+    testWidgets('拿不到昵称时 Pawrent 整行不显示', (tester) async {
+      await _pumpCard(tester, nickname: null);
+      expect(find.byKey(const ValueKey('ageCardPawrent')), findsNothing);
     });
 
     /// 🔴 **不加水印**：水印只属 KTP / 护照那类付费保护场景。
@@ -336,6 +361,44 @@ void main() {
           reason: '领奖调用不得携带卡面内容（AC6）',
         );
       }
+    });
+  });
+
+  /// 2026-09-23 设计稿换皮：卡面换成「浅底 + 巨幅当量数字 + 手绘角色 + 底部压暗信息带」。
+  /// 这一组钉住换皮里唯一有判定逻辑的部分 —— **取哪张角色图**。
+  group('换皮：四档角色按 PetAgeStage 取图', () {
+    /// 🔴 判据是 [PetAgeStage]（由当量 N 决定），**不是素材文件名里的数字、更不是月龄**。
+    /// `_25` 只是设计稿给这一档起的编号，不代表「25 人岁」。
+    const slug = {
+      PetAgeStage.puppy: '10',
+      PetAgeStage.young: '25',
+      PetAgeStage.middle: '75',
+      PetAgeStage.senior: '100',
+    };
+
+    test('三个物种 × 四段 = 12 张图，命名对得上且都在仓库里', () {
+      for (final species in AgeCardSpecies.values) {
+        for (final entry in slug.entries) {
+          final t = _template(stage: entry.key, species: species);
+          expect(t.characterAsset, 'assets/age_card/${species.name}_${entry.value}.webp');
+          expect(File(t.characterAsset).existsSync(), isTrue,
+              reason: '素材缺失：${t.characterAsset}');
+        }
+      }
+    });
+
+    /// 素材只放进仓库不算数 —— 没登记进 pubspec 就打不进包，真机上是一张空白卡。
+    test('素材目录登记在 pubspec 的 assets 里', () {
+      final pubspec = File('pubspec.yaml').readAsStringSync();
+      expect(pubspec, contains('- assets/age_card/'));
+    });
+
+    testWidgets('卡面真的挂上了这一档的角色图', (tester) async {
+      // 生日 2023-03-01、今天 2026-09-11 ⇒ 42 个月；中型犬当量 32 ⇒ young ⇒ `_25`。
+      await _pumpCard(tester, isDog: true, size: DogSizeClass.medium);
+      final img =
+          tester.widget<Image>(find.byKey(const ValueKey('ageCardCharacter')));
+      expect((img.image as AssetImage).assetName, 'assets/age_card/dog_25.webp');
     });
   });
 
@@ -397,34 +460,71 @@ void main() {
   });
 }
 
+/// 造一个纯卡面模板（不进页面），用来断言与渲染无关的纯计算：选图、二维码边长。
+AgeCardTemplate _template({
+  CardCanvas canvas = CardCanvas.story,
+  PetAgeStage stage = PetAgeStage.young,
+  AgeCardSpecies species = AgeCardSpecies.cat,
+}) =>
+    AgeCardTemplate(
+      canvas: canvas,
+      petName: 'Mochi',
+      age: HumanAgeResult(months: 42, humanAge: 30, stage: stage),
+      quip: 'quip',
+      species: species,
+    );
+
+/// 信息胶囊上的整行文字（`物种 · 实际年龄[ · 体重区间]`）。
+String _capsuleText(WidgetTester tester) =>
+    tester.widget<Text>(find.byKey(const ValueKey('ageCardInfoCapsule'))).textSpan!.toPlainText();
+
 /// 挂一张年龄卡预览页。
 Future<void> _pumpCard(
   WidgetTester tester, {
   bool isDog = false,
   DogSizeClass? size,
+  AgeCardSpecies? species,
   CardCanvas canvas = CardCanvas.story,
+  String? nickname = 'Dai',
 }) async {
   tester.view.physicalSize = const Size(1200, 2400);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 
-  await tester.pumpWidget(MaterialApp(
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
-    supportedLocales: AppLocalizations.supportedLocales,
-    locale: const Locale('en'),
-    home: AgeCardPreviewPage(
-      petName: 'Mochi',
-      birthday: DateTime(2023, 3, 1),
-      isDog: isDog,
-      size: size,
-      today: DateTime(2026, 9, 11),
-      quipRandom: Random(0),
+  await tester.pumpWidget(ProviderScope(
+    // 卡面上的 Pawrent 名取自登录态。这里桩掉整个 AuthController ——
+    // 真实的 build() 会去恢复会话（secure storage + 网络），widget test 里两样都没有。
+    overrides: [authControllerProvider.overrideWith(() => _StubAuth(nickname))],
+    child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('en'),
+      home: AgeCardPreviewPage(
+        petName: 'Mochi',
+        birthday: DateTime(2023, 3, 1),
+        isDog: isDog,
+        species: species,
+        size: size,
+        today: DateTime(2026, 9, 11),
+          // 画布切换器已按 2026-09-23 拍板隐藏（设计稿只出 9:16），1:1 这一路基建仍在 ——
+        // 测试改从入参进 square，继续钉住两档都能渲染（AC4）与码边长（AC7）。
+        initialCanvas: canvas,
+      ),
     ),
   ));
   await tester.pump();
-  if (canvas == CardCanvas.square) {
-    await tester.tap(find.text('1:1'));
-    await tester.pump();
-  }
+}
+
+class _StubAuth extends AuthController {
+  _StubAuth(this._nickname);
+
+  final String? _nickname;
+
+  @override
+  AuthState build() => AuthState(
+        status: AuthStatus.authenticated,
+        role: 'USER',
+        profile: UserProfile(nickname: _nickname),
+      );
 }

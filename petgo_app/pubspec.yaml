@@ -163,6 +163,10 @@ flutter:
     - assets/ktp/
     - assets/passport/
     - assets/student/
+    # 年龄卡角色切图（V1.3.0 Story 5.2 换皮）：`{cat,dog,other}_{10,25,75,100}.webp`，
+    # 透明底、宽 ~1080。四档按 `PetAgeStage`（puppy/young/middle/senior）依次取，
+    # **文件名里的数字不是判据** —— 它只是设计稿的档位编号。
+    - assets/age_card/
     # 字体许可证。**必须打进包里**（code-review 2026-08-04）：OFL-1.1 §2 要求
     # 「每份分发副本须含版权声明与本许可证」，而 `fonts:` 段只会打包 ttf 本身 ——
     # 改前 OFL.txt 只存在于 git 仓库、从不随 app 分发，pubspec 注释却宣称已合规。
