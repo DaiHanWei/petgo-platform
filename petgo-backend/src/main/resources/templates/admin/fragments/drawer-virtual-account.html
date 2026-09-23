@@ -98,7 +98,7 @@
         </details>
 
         <!--/* 🔴 账号物种定位必填：它补偿的是「虚拟号没有宠物档案」，留空等于让该号全部内容落进 GENERAL。 */-->
-        <label class="field field-full">
+        <label class="field field-full req-in-text">
             <span th:text="#{admin.species.accountLabel}">账号物种定位（必填）</span>
             <select name="accountSpecies" class="sel" required>
                 <option value="" disabled selected th:text="#{admin.v130.publishIdentity.speciesPick}">请选择</option>

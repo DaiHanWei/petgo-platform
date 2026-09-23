@@ -1068,8 +1068,9 @@ class _EmptyProfileView extends ConsumerWidget {
         _DiaryTitleBar(title: AppLocalizations.of(context).tabProfile),
         Expanded(
           child: SingleChildScrollView(
+            // UI 稿 E1：页边距 20（比全局 screenEdge 16 宽一档）。
             padding: const EdgeInsets.fromLTRB(
-                AppSpacing.screenEdge, AppSpacing.sm, AppSpacing.screenEdge, AppSpacing.lg),
+                _kE1Edge, AppSpacing.sm, _kE1Edge, AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -1135,14 +1136,27 @@ class _EmptyProfileView extends ConsumerWidget {
                       .copyWith(fontWeight: FontWeight.w700, color: AppColors.ink),
                 ),
                 const SizedBox(height: AppSpacing.xxs),
-                Text(l10n.growthArchiveEmptyBody, style: AppTypography.micro),
+                // UI 稿 E1：紧凑横条用一行短副文案；无推荐的原版面仍用 A2 长文案。
+                Text(l10n.growthArchiveEmptyBodyShort, style: AppTypography.micro),
               ],
             ),
           ),
         ],
       ),
       const SizedBox(height: AppSpacing.lg),
-      _createButton(l10n, withPlus: true),
+      // UI 稿 E1 `.btn-primary`：主按钮下方一圈紫色柔光投影。
+      DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+                color: AppColors.mint.withValues(alpha: 0.28),
+                blurRadius: 18,
+                offset: const Offset(0, 6)),
+          ],
+        ),
+        child: _createButton(l10n, withPlus: true),
+      ),
       if (onChangeStatus != null)
         // 🔴 AC6：与主按钮**拉开距离、单独一行、再弱化一档**（小字号 + 下划线），
         //    它会改变宠物拥有状态，不能长得像第二个 CTA。
@@ -1192,6 +1206,9 @@ class _EmptyProfileView extends ConsumerWidget {
       );
 }
 
+/// UI 稿 E1 的页边距（`.appbar` / 内容区 `padding: 0 20px`）。
+const double _kE1Edge = 20;
+
 /// UI 稿 E1 顶部「Diary」标题栏（tab 根页，无返回键；稿 `.appbar-title` 19/w700）。
 ///
 /// 用 AppBar 而不是自绘文字：它按 MediaQuery 自动给状态栏让位（bug 20260922-530
@@ -1206,7 +1223,7 @@ class _DiaryTitleBar extends StatelessWidget {
     return AppBar(
       automaticallyImplyLeading: false,
       backgroundColor: Colors.transparent,
-      titleSpacing: AppSpacing.screenEdge,
+      titleSpacing: _kE1Edge,
       title: Text(
         title,
         style: const TextStyle(

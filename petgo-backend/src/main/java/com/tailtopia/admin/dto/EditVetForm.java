@@ -7,16 +7,16 @@ import jakarta.validation.constraints.Size;
 /** 编辑兽医资料表单（Story 2.4）。不含密码（重置走独立端点）。 */
 public class EditVetForm {
 
-    @NotBlank(message = "兽医昵称不能为空")
-    @Size(max = 64)
+    @NotBlank(message = "{admin.vets.validation.displayNameRequired}")
+    @Size(max = 64, message = "{admin.vets.validation.displayNameTooLong}")
     private String displayName;
 
-    @NotBlank(message = "登录邮箱不能为空")
-    @Email(message = "登录邮箱格式不正确")
-    @Size(max = 64)
+    @NotBlank(message = "{admin.vets.validation.usernameRequired}")
+    @Email(message = "{admin.vets.validation.usernameInvalid}")
+    @Size(max = 64, message = "{admin.vets.validation.usernameTooLong}")
     private String username;
 
-    @Size(max = 32, message = "联系手机号过长")
+    @Size(max = 32, message = "{admin.vets.validation.contactPhoneTooLong}")
     private String contactPhone;
 
     public String getDisplayName() {

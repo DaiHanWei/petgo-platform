@@ -614,7 +614,7 @@ public class AdminContentManageService {
         // bug 20260630-155：内容管理主动下架时同步关闭该帖 PENDING 举报单，避免残留在举报待处理队列。
         reportService.resolvePendingForPost(postId, actorAccountId);
         auditService.record(actorAccountId, AuditActions.CONTENT_TAKEN_DOWN, "CONTENT_POST",
-                String.valueOf(postId), "主动下架内容（原因：" + reason.trim() + "）");
+                String.valueOf(postId), "reason=" + reason.trim()); // bug 548：语言中立 key=value；原因是运营手填，原样保留
         // story 9 §5.1：后台巡查下架 = 人工判定违规 → 同事务累加 POST 计数（仅真实下架，幂等）。
         if (postAuthorId != null && firstTakedown) {
             violationCountService.record(postAuthorId, ViolationType.POST);
@@ -626,7 +626,7 @@ public class AdminContentManageService {
     public void restore(long postId, long actorAccountId) {
         contentService.restore(postId);
         auditService.record(actorAccountId, AuditActions.CONTENT_RESTORED, "CONTENT_POST",
-                String.valueOf(postId), "恢复已下架内容");
+                String.valueOf(postId), "postId=" + postId); // bug 548：动作说明由审计页按 action code 本地化
     }
 
     private ContentType parseType(String type) {

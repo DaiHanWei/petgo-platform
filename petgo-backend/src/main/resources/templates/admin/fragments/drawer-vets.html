@@ -416,26 +416,27 @@
        运营看到的是「填错了，然后表单没了」。 */-->
 <div th:fragment="profile-form" id="vet-profile-form"
      th:with="canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''vet.edit'') or hasAuthority(''vet.create'')')}">
-    <form th:if="${canEdit}" th:object="${editVetForm}"
+    <!--/* 9-7 第 2 条（bug 20260923-543）：接模板 D 配置卡机制 —— 未修改时保存钮禁用；422 / 成功回来的是整个片段，htmx:load 重新记初值。 */-->
+    <form th:if="${canEdit}" th:object="${editVetForm}" data-config-card
           th:attr="hx-post=@{/admin/vets/{id}(id=${vetId})}"
           hx-target="#vet-profile-form" hx-swap="outerHTML">
         <p class="err" th:each="e : ${#fields.globalErrors()}" th:text="${e}">错误</p>
         <label class="field field-full">
             <span th:text="#{admin.vets.displayName}">兽医昵称</span>
-            <input type="text" th:field="*{displayName}" class="inp field-full"/>
+            <input type="text" th:field="*{displayName}" class="inp field-full" maxlength="64" required/>
         </label>
         <p class="err" th:if="${#fields.hasErrors('displayName')}" th:errors="*{displayName}">昵称错误</p>
         <label class="field field-full">
             <span th:text="#{admin.vets.loginEmail}">登录邮箱</span>
-            <input type="email" th:field="*{username}" class="inp field-full"/>
+            <input type="email" th:field="*{username}" class="inp field-full" maxlength="64" required/>
         </label>
         <p class="err" th:if="${#fields.hasErrors('username')}" th:errors="*{username}">邮箱错误</p>
         <label class="field field-full">
             <span th:text="#{admin.vets.contactPhone}">联系手机号</span>
-            <input type="text" th:field="*{contactPhone}" class="inp field-full"/>
+            <input type="text" th:field="*{contactPhone}" class="inp field-full" maxlength="32"/>
         </label>
         <p class="err" th:if="${#fields.hasErrors('contactPhone')}" th:errors="*{contactPhone}">手机号错误</p>
-        <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.vets.save}">保存</button>
+        <button type="submit" class="btn btn-primary btn-sm" data-save disabled th:text="#{admin.vets.save}">保存</button>
     </form>
     <th:block th:unless="${canEdit}">
         <table class="ud-table">

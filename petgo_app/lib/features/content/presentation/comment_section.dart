@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../mention/domain/mention_context.dart';
 import '../../mention/presentation/mention_text.dart';
 import '../../../core/theme/colors.dart';
@@ -18,8 +19,8 @@ import '../data/detail_repository.dart';
 import '../domain/comment.dart';
 import 'author_moderation_callbacks.dart';
 import 'detail_providers.dart';
-import 'report_sheet.dart';
 import '../../../shared/widgets/user_tag_row.dart';
+import '../../social/presentation/account_report_sheet.dart';
 import '../../auth/domain/auth_guard.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
 
@@ -276,10 +277,19 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   ///
   /// 失败**回滚**并静默：点赞不是关键路径，为它弹一个错误提示比点不上还烦人。
   /// 服务端本身幂等（重复点赞不产生第二行、没赞过取消也成功），所以不必先查状态。
-  Future<void> _toggleLike(Comment c) async {
+  ///
+  /// [isReply]：这条是不是挂在某条父评论下的二级回复（由渲染处按父子结构给出）。
+  Future<void> _toggleLike(Comment c, {required bool isReply}) async {
     // 门控：游客不做乐观翻转、不发请求，直接走登录引导（与帖子 LikeButton 同一入口）。
     if (!requireLogin(ref, context)) return;
     final wasLiked = c.liked;
+    // bug 20260923-544（PRD E-8）：评论点赞专用事件，点赞 / 取消都报，在乐观翻转**之前**。
+    // 🔴 不复用 post_like_tapped —— 那会把评论赞混进帖子赞的口径。
+    // comment_level：1 = 一级评论，2 = 回复。属性只有这两个（产品拍板不带 comment_id）。
+    Analytics.capture('comment_like_tapped', {
+      'liked': !wasLiked,
+      'comment_level': isReply ? 2 : 1,
+    });
     setState(() => _replaceComment(c.id, (x) => x.toggleLikedLocally()));
     try {
       if (wasLiked) {
@@ -334,10 +344,11 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   /// （把手 + 左对齐行 + 底分隔线 + Batal），不另造一套视觉。
   ///
   /// - 自己的评论：复制文字 / 回复 / **删除**（红字）
-  /// - 他人的评论：复制文字 / 回复 / **举报**（红字）
+  /// - 他人的评论：复制文字 / 回复 / **举报**（红字）；帖主看他人评论时再加 **删除**
+  ///   （bug 20260923-545：两项可并存）
   ///
   /// 🔴 **权限一点没放宽**（AC4）：删除项的可见性沿用既有 `_canDelete`，
-  /// 点下去仍走既有 `_confirmDelete` 的二次确认；举报走既有 `openReport` 流程。
+  /// 点下去仍走既有 `_confirmDelete` 的二次确认；举报走既有账号举报 `openAccountReport`。
   /// 这个菜单只是**多一个入口**，不是多一条权限路径。
   void _showCommentActions(
     BuildContext context,
@@ -346,6 +357,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     String name,
   ) {
     final canDelete = _canDelete(c);
+    final canReport = _canReport(c);
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.surface,
@@ -389,6 +401,19 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                     .read(replyTargetProvider(widget.postId).notifier)
                     .set(ReplyTarget(parentId: c.id, toName: name)),
               ),
+              // bug 20260923-545：举报与删除**不再互斥**。帖主长按他人评论时两项都要有 ——
+              // 能删不等于不需要举报（删只是把这条清掉，骚扰者本人毫发无损）。
+              if (canReport)
+                _actionRow(
+                  sheetCtx,
+                  key: const ValueKey('commentActionReport'),
+                  emoji: '🚩',
+                  label: l10n.commentActionReport,
+                  danger: true,
+                  // bug 20260923-545：举报对象改为**评论作者**（既有账号举报 openAccountReport，
+                  // 与点作者 → 主页 → 举报同一条链路），不再调 openReport(postId) 举报整条帖子。
+                  onTap: () => _reportCommentAuthor(c),
+                ),
               if (canDelete)
                 _actionRow(
                   sheetCtx,
@@ -398,19 +423,6 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
                   danger: true,
                   // 既有二次确认，一步不省。
                   onTap: () => _confirmDelete(c.id),
-                )
-              else
-                _actionRow(
-                  sheetCtx,
-                  key: const ValueKey('commentActionReport'),
-                  emoji: '🚩',
-                  label: l10n.commentActionReport,
-                  danger: true,
-                  // ⚠️ 举报走既有 openReport（AC4 明确要求沿用）——
-                  // 它举报的是**本帖**，后端目前没有「举报单条评论」的端点。
-                  // 评论区骚扰的既有处置路径是「点作者 → 迷你卡 → 举报/拉黑该用户」，
-                  // 那条路仍在（点昵称或头像）。此处的语义落差已写进 story 的 Completion Notes。
-                  onTap: () => openReport(context, ref, widget.postId),
                 ),
               Align(
                 alignment: Alignment.centerLeft,
@@ -488,6 +500,34 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     } catch (_) {
       // 后端权威（403 等）：保持现状。
     }
+  }
+
+  /// 举报项可见性（bug 20260923-545）：**不是自己的评论**就给。
+  ///
+  /// 游客（currentUserId 为 null）也给 —— 点下去由 [requireLogin] 走既有登录引导，
+  /// 与其它社区动作同一门控。已注销作者不给：账号已不存在，举报无对象（同 onAuthorTap 置 null 的口径）。
+  bool _canReport(Comment c) {
+    if (c.authorDeleted) return false;
+    return widget.currentUserId == null || c.authorId != widget.currentUserId;
+  }
+
+  /// 举报评论作者（bug 20260923-545）：复用既有账号举报抽屉（`/api/v1/account-reports`）。
+  ///
+  /// 成功收尾与「点作者 → 主页 → 举报」同一套 [_onCommentAuthorHidden]（清 Feed + 刷评论区；
+  /// 对象是帖主时退出详情页）。⚠️ **静默**：不给成功提示，提示会泄露「举报会隐藏内容」。
+  Future<void> _reportCommentAuthor(Comment c) async {
+    // FR-0C：游客点社区动作 → 强登录引导，不发请求（与主页 / 迷你卡入口同一门控）。
+    if (!requireLogin(ref, context, onAllowed: () {})) return;
+    final submitted = await openAccountReport(
+      context,
+      ref,
+      c.authorId,
+      // 评论里没有「已举报」标记位；重复举报由服务端幂等兜住。
+      alreadyReported: false,
+      entry: AccountActionEntry.comment,
+    );
+    if (!submitted || !mounted) return;
+    _onCommentAuthorHidden(c.authorId)();
   }
 
   bool _canDelete(Comment c) {
@@ -668,7 +708,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       ),
       onDelete: () => _confirmDelete(c.id),
       // V1.3.0 Story 2.4：评论点赞。一级、二级共用同一端点（层级与点赞无关）。
-      onToggleLike: () => _toggleLike(c),
+      onToggleLike: () => _toggleLike(c, isReply: isReply),
       // V1.3.0 Story 2.5 · AC3：长按操作菜单。
       onLongPress: () => _showCommentActions(context, l10n, c, name),
       // AC2：客户端比两个已有 id —— 服务端不下发任何标记位。

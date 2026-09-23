@@ -294,6 +294,14 @@ void main() {
         // place_comment_posted / place_photo_added / place_shared）。
         // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
         'place_',
+        // 内容详情页停留时长（V1.3.0 批次 A · PRD E-10，bug 20260923-539）。模块是「详情页」本身 ——
+        // 名字由 PRD §4 定死为 `detail_page_dwell`（AD-A23：实现不得改名），扩表、不改名。
+        // ⚠️ 新模块入表，不是为遗留事件放宽规则。
+        'detail_',
+        // 评论点赞（V1.3.0 批次 A · PRD E-8，bug 20260923-544）。模块是「评论」——
+        // 🔴 刻意不挂 `post_`：评论赞混进帖子赞的口径，正是这条 bug 要纠正的。
+        // 名字由 PRD §4 定死为 `comment_like_tapped`，扩表、不改名。
+        'comment_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -363,6 +371,10 @@ void main() {
         '_created',
         '_posted',
         '_added',
+        // 停留时长（V1.3.0 批次 A · PRD E-10 `detail_page_dwell`，bug 20260923-539）：
+        // `_dwell` = **离页时上报一次这段停留有多久**，价值全在 `duration_ms`。
+        // 🔴 刻意不用 `_viewed`：那是进页即报的曝光，分母口径完全不同；名字由 PRD 定死，扩表、不改名。
+        '_dwell',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

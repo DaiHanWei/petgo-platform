@@ -52,7 +52,7 @@ public class AdminAuditLogRepositoryImpl implements AdminAuditLogRepositoryCusto
 
     @Override
     public Optional<String> latestTakedownSummary(long postId, long reportId) {
-        // 优先内容级下架审计（含「原因：…」文本），回退工单级（仅「工单X/帖Y」）。
+        // 优先内容级下架审计（含原因：新行 reason=…，旧行「原因：…」），回退工单级（仅「工单X/帖Y」）。
         return latest("CONTENT_POST", String.valueOf(postId))
                 .or(() -> latest("CONTENT_REPORT", String.valueOf(reportId)));
     }

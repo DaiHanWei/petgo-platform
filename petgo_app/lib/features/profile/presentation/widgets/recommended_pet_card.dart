@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/analytics/analytics.dart';
 import '../../../../core/theme/colors.dart';
-import '../../../../core/theme/rounded.dart';
 import '../../../../core/theme/spacing.dart';
 import '../../../../core/theme/typography.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -67,10 +66,30 @@ class RecommendedPetCard extends ConsumerWidget {
 
   /// 小圆头像（含 2px 白边）的直径。UI 稿 E1/E2：头像**一半压在大图下沿之外**，
   /// 所以文字区要先让出半个头像的高度。
-  static const double _avatarDiameter = 28;
+  static const double _avatarDiameter = 32;
 
   /// UI 稿 E2：小圆头像略**探出大图左边缘**（负偏移，Stack 不裁剪）。
-  static const double _avatarLeft = -AppSpacing.xs;
+  static const double _avatarLeft = -6;
+
+  /// UI 稿 E1/E2 `.pthumb`：大图圆角 11 + 1px 淡描边（inset rgba(0,0,0,.08)）。
+  static const BorderRadius _coverRadius = BorderRadius.all(Radius.circular(11));
+
+  /// 网格里一格的高度：**格宽**（大图 1:1，UI 稿 `.pthumb` aspect-ratio:1）+ 下方文字区。
+  ///
+  /// bug 20260922-530 还原度对齐：此前用固定 `childAspectRatio: 0.76`，
+  /// 窄屏上大图被压扁、宽屏上被拉高，只有 375dp 附近接近 1:1。改为按实际格宽 + 文字行高
+  /// （随系统字号缩放）算出每格高度 —— 大图恒为正方形，文字行也不会被裁。
+  /// ⚠️ 与 [build] 里文字区的排法（半个头像 + 名字一行 + 天数一行）同源，改一边要改另一边。
+  static double gridCellExtent(BuildContext context, double cellWidth) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final textBlock = _avatarDiameter / 2 +
+        AppSpacing.xxs +
+        scaler.scale(AppTypography.body.fontSize!) * AppTypography.body.height! +
+        AppSpacing.xxs +
+        scaler.scale(AppTypography.micro.fontSize!) * AppTypography.micro.height!;
+    // +4：字体度量取整的余量，宁可多一线空白也不能裁掉天数那一行。
+    return cellWidth + textBlock + 4;
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -81,7 +100,7 @@ class RecommendedPetCard extends ConsumerWidget {
       type: MaterialType.transparency,
       child: InkWell(
         key: ValueKey('recommendedPet_${pet.petId}'),
-        borderRadius: AppRounded.lgRadius,
+        borderRadius: _coverRadius,
         onTap: () => openRecommendedPet(context, ref, pet: pet, from: from),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,7 +151,7 @@ class RecommendedPetCard extends ConsumerWidget {
       clipBehavior: Clip.none,
       children: [
         ClipRRect(
-          borderRadius: AppRounded.lgRadius,
+          borderRadius: _coverRadius,
           child: (pet.coverImageUrl != null && pet.coverImageUrl!.isNotEmpty)
               ? Image(
                   key: ValueKey('recommendedPetCover_${pet.petId}'),
@@ -145,6 +164,15 @@ class RecommendedPetCard extends ConsumerWidget {
                 )
               : _coverPlaceholder(),
         ),
+        // UI 稿 `.pthumb`：1px 淡描边压在大图上（浅色占位底与页面底色贴近时仍分得清卡片边界）。
+        const IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: _coverRadius,
+              border: Border.fromBorderSide(BorderSide(color: Color(0x14000000))),
+            ),
+          ),
+        ),
         Positioned(
           left: _avatarLeft,
           bottom: -_avatarDiameter / 2,
@@ -156,7 +184,7 @@ class RecommendedPetCard extends ConsumerWidget {
               key: ValueKey('recommendedPetAvatar_${pet.petId}'),
               avatarUrl: pet.avatarUrl,
               nickname: pet.name,
-              // 直径 28 = 2 × 12 + 2px 白边 × 2。
+              // 直径 32 = 2 × 14 + 2px 白边 × 2。
               radius: (_avatarDiameter - 4) / 2,
             ),
           ),

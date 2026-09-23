@@ -608,6 +608,12 @@ dialog { z-index: 60; }
 .btn.is-loading::after { content: ''; position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px;
   border: 2px solid rgba(255, 255, 255, .6); border-top-color: #fff; border-radius: 50%; animation: admin-spin .7s linear infinite; }
 .btn-neutral.is-loading::after { border-color: rgba(31, 35, 48, .3); border-top-color: var(--ink); }
+/* 必填星号（9-7 第 1 条，bug 20260923-540① / 541）：
+   · 包裹结构 label.field > span:first-child + 内含 :required 控件 → 自动加红 *（全后台统一，不逐页改）；
+   · 兄弟结构（<label class="field req"> 后跟 input，如兽医开户弹窗）→ 显式加 .req；
+   · 文案里已写「（必填）」的标签加 .req-in-text 排除，避免重复。 */
+label.field:not(.req-in-text):has(:required) > span:first-child::after,
+label.field.req::after { content: " *"; color: var(--danger); font-weight: 700; }
 @keyframes admin-spin { to { transform: rotate(360deg); } }
 /* UX-DR11 组件底座修正 */
 .sel, .inp { display: inline-block; box-sizing: border-box; }
@@ -760,6 +766,10 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pl-inline > summary::-webkit-details-marker { display: none; }
 .pl-edit-form, .pl-merge { margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); flex-basis: 100%; }
 .pl-edit-form .field { margin-bottom: 8px; }
+/* 场所标签勾选组（bug 20260923-540②：值域 = App PlaceTag 六枚举，代替逗号文本框） */
+.pl-tag-group { border: 0; padding: 0; margin: 12px 0 8px; min-width: 0; }
+.pl-tag-group > legend { padding: 0; margin-bottom: 4px; font-size: var(--fs-sm); color: var(--ink-2); }
+.pl-tag-opt { display: inline-flex; align-items: center; gap: 4px; margin: 0 14px 6px 0; font-size: var(--fs-sm); color: var(--ink); cursor: pointer; }
 .pl-merge-list ul { list-style: none; padding: 0; margin: 8px 0 0; }
 .pl-merge-list li { padding: 6px 0; border-bottom: 1px dashed var(--line); }
 .pl-photo figcaption form { margin-left: 6px; }

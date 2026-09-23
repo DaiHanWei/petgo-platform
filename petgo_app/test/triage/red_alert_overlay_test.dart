@@ -116,6 +116,50 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
+  // bug 20260715-290：整页一个滚动，红头随内容上滑收缩 —— 但红色警示绝不完全消失。
+  testWidgets('滚动后红色标题仍可见（紧凑红底栏 ⚠️ + 标题钉在顶部），「我已知晓」仍固定可见', (tester) async {
+    await _pump(tester,
+        onAcknowledge: () {},
+        emergencySteps: <String>[for (var i = 0; i < 12; i++) '步骤$i 很长的一段应急说明文字'],
+        emergencyAvoid: <String>[for (var i = 0; i < 6; i++) '切勿$i']);
+    // 初始：展开态，没有紧凑栏（同屏不出现两份标题）。
+    expect(find.byKey(const ValueKey('triageRedCompactBar')), findsNothing);
+    final headerTopBefore = tester.getTopLeft(find.byKey(const ValueKey('triageRedIcon'))).dy;
+    final ackRectBefore = tester.getRect(find.byKey(const ValueKey('triageRedAcknowledge')));
+
+    await tester.drag(find.byKey(const ValueKey('triageRedScroll')), const Offset(0, -3000));
+    await tester.pump();
+
+    // 收起后：紧凑红底栏 + ⚠️ + 完整标题文本在屏幕内。
+    final compactTitle = find.byKey(const ValueKey('triageRedCompactTitle'));
+    expect(compactTitle, findsOneWidget);
+    expect(tester.widget<Text>(compactTitle).data, '请立即带 Momo 去宠物医院就诊');
+    expect(find.byKey(const ValueKey('triageRedCompactIcon')), findsOneWidget);
+    final screen = Offset.zero & tester.view.physicalSize / tester.view.devicePixelRatio;
+    final titleRect = tester.getRect(compactTitle);
+    expect(screen.contains(titleRect.topLeft) && screen.contains(titleRect.bottomRight), isTrue);
+    expect(titleRect.top, lessThan(100), reason: '紧凑栏钉在顶部');
+    // 紧凑栏底色是红色（不是白卡盖住了它）。
+    final bar = tester.widget<Container>(find
+        .ancestor(of: find.byKey(const ValueKey('triageRedCompactBar')), matching: find.byType(Container))
+        .first);
+    expect(bar.color, AppColors.triageRed);
+    // 展开态已收掉；白卡内容确实滚上来了。
+    expect(find.byKey(const ValueKey('triageRedIcon')), findsNothing);
+    expect(headerTopBefore, greaterThanOrEqualTo(0));
+    // 「我已知晓」位置不随滚动变化（固定底部）。
+    expect(tester.getRect(find.byKey(const ValueKey('triageRedAcknowledge'))), ackRectBefore);
+
+    // 5s 锁定不受滚动影响：仍禁用；到点后解锁。
+    expect(
+        tester.widget<FilledButton>(find.byKey(const ValueKey('triageRedAcknowledge'))).onPressed,
+        isNull);
+    await tester.pump(const Duration(seconds: 5));
+    expect(
+        tester.widget<FilledButton>(find.byKey(const ValueKey('triageRedAcknowledge'))).onPressed,
+        isNotNull);
+  });
+
   testWidgets('对症应急：AI 步骤为空时回退通用步骤（修订后中性文案，无切勿区）', (tester) async {
     await _pump(tester, onAcknowledge: () {}); // emergencySteps/avoid 默认空
     // 回退到通用三步；修订后 step2 不再是有害的「裹暖布」

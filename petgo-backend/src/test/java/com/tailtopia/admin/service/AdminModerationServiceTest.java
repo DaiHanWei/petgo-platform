@@ -121,11 +121,11 @@ class AdminModerationServiceTest {
         when(contentService.findSummary(60L)).thenReturn(Optional.of(
                 new ContentService.PostSummary(60L, ContentType.DAILY, "preview", true, 77L)));
         when(auditService.takedownSummary(60L, 4L))
-                .thenReturn(Optional.of("主动下架内容（原因：Irrelevant content）"));
+                .thenReturn(Optional.of("reason=Irrelevant content"));
 
         List<ReportQueueItem> items = service.queue(ReportStatus.RESOLVED);
 
         assertThat(items).hasSize(1);
-        assertThat(items.get(0).getTakedownSummary()).isEqualTo("主动下架内容（原因：Irrelevant content）");
+        assertThat(items.get(0).getTakedownSummary()).isEqualTo("reason=Irrelevant content");
     }
 }
