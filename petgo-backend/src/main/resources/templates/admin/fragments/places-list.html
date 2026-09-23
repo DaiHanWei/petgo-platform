@@ -73,7 +73,7 @@
             <td class="nowrap" th:text="${r.name}" th:title="${r.name}">名称</td>
             <td class="nowrap" th:text="${r.typeName}">类型</td>
             <td>
-                <span class="tag" th:each="t : ${r.visibleTags()}" th:text="${t}">标签</span>
+                <span class="tag" th:each="t : ${r.visibleTags()}" th:text="${#lists.contains(T(com.tailtopia.admin.places.dto.PlaceEditForm).KNOWN_TAGS, t)} ? #{'admin.v130.places.tag.' + ${t}} : ${t}">标签</span>
                 <span class="muted" th:if="${r.hiddenTagCount() > 0}" th:text="'+' + ${r.hiddenTagCount()}">+N</span>
             </td>
             <td class="nowrap" th:text="${r.city}">城市</td>

@@ -182,27 +182,31 @@ class _PetRecommendationListPageState extends ConsumerState<PetRecommendationLis
         icon: Icons.pets_rounded,
       );
     }
-    return GridView.builder(
-      key: const ValueKey('petRecommendListGrid'),
-      controller: _scroll,
-      padding: const EdgeInsets.all(AppSpacing.screenEdge),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: AppSpacing.sm,
-        mainAxisSpacing: AppSpacing.sm,
-        // 与 E1 网格同一比例：卡下文字已压成两行，0.76 时大图约 1:1（UI 稿 E2）。
-        childAspectRatio: 0.76,
-      ),
-      // 末尾那一格是「底部状态」（加载中 / 重试 / 到底了），所以 +1。
-      itemCount: page.items.length + 1,
-      itemBuilder: (context, i) {
-        if (i == page.items.length) {
-          return _footer(l10n, controller);
-        }
-        return RecommendedPetCard(
-            pet: page.items[i], from: kPetRecommendFromExploreGrid);
-      },
-    );
+    return LayoutBuilder(builder: (context, constraints) {
+      // UI 稿 E2：`gap: 14px 12px`；大图 1:1，格高按格宽算（与 E1 网格同源，bug 20260922-530）。
+      const crossGap = AppSpacing.md;
+      final cellWidth = (constraints.maxWidth - AppSpacing.screenEdge * 2 - crossGap) / 2;
+      return GridView.builder(
+        key: const ValueKey('petRecommendListGrid'),
+        controller: _scroll,
+        padding: const EdgeInsets.all(AppSpacing.screenEdge),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: crossGap,
+          mainAxisSpacing: 14,
+          mainAxisExtent: RecommendedPetCard.gridCellExtent(context, cellWidth),
+        ),
+        // 末尾那一格是「底部状态」（加载中 / 重试 / 到底了），所以 +1。
+        itemCount: page.items.length + 1,
+        itemBuilder: (context, i) {
+          if (i == page.items.length) {
+            return _footer(l10n, controller);
+          }
+          return RecommendedPetCard(
+              pet: page.items[i], from: kPetRecommendFromExploreGrid);
+        },
+      );
+    });
   }
 
   /// 网格末尾那一格：翻页失败给重试、正在翻页给转圈、到底了什么都不给。

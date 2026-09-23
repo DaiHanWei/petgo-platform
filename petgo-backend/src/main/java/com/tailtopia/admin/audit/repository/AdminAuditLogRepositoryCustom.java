@@ -21,7 +21,7 @@ public interface AdminAuditLogRepositoryCustom {
 
     /**
      * 取某内容/工单最新一条「主动下架」审计的 summary（Bug 20260701-169，举报队列展示下架原因/摘要）。
-     * 优先按内容（{@code CONTENT_POST}/postId，内容管理页下架含「原因：…」文本），回退按工单
+     * 优先按内容（{@code CONTENT_POST}/postId，内容管理页下架含 reason=… 原因文本；2026-09-23 前的旧行是中文「原因：…」），回退按工单
      * （{@code CONTENT_REPORT}/reportId，举报队列下架仅「工单X/帖Y」无自由原因）。只读、不改审计链。
      */
     Optional<String> latestTakedownSummary(long postId, long reportId);

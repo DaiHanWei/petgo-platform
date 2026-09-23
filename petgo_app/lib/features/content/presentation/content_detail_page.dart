@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/analytics/analytics.dart';
 import '../../../shared/media/image_lightbox.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../mention/domain/mention_context.dart';
@@ -69,11 +70,16 @@ class ContentDetailPage extends ConsumerWidget {
           commentCount: d.commentCount, likeCount: d.likeCount, liked: d.liked);
     });
 
-    return detailAsync.when(
-      loading: () => _shell(context, body: const Center(
-          child: CircularProgressIndicator(color: AppColors.accentGrowth))),
-      error: (err, _) => _shell(context, body: _errorBody(context, ref, l10n, err)),
-      data: (d) => _DetailScaffold(postId: postId, detail: d, focusComments: focusComments),
+    // bug 20260923-539（PRD E-10）：停留时长埋点包在最外层 —— 加载 / 错误 / 数据三态切换
+    // 不会重建这层 State，计时从进页到离页连续不断。
+    return _DetailDwellTracker(
+      postId: postId,
+      child: detailAsync.when(
+        loading: () => _shell(context, body: const Center(
+            child: CircularProgressIndicator(color: AppColors.accentGrowth))),
+        error: (err, _) => _shell(context, body: _errorBody(context, ref, l10n, err)),
+        data: (d) => _DetailScaffold(postId: postId, detail: d, focusComments: focusComments),
+      ),
     );
   }
 
@@ -108,6 +114,69 @@ class ContentDetailPage extends ConsumerWidget {
       onAction: () => Navigator.of(context).maybePop(),
     );
   }
+}
+
+/// 详情页停留时长（bug 20260923-539 · PRD E-10 `detail_page_dwell`）。
+///
+/// 进页（initState）起计时、离页（dispose）上报一次，属性 `duration_ms` + `post_id`。
+/// 与场所详情的 `_PlaceDetailViewedOnce` 同一做法：包一层小有状态壳，不把整页改成有状态。
+///
+/// - App 退到后台**暂停**计时、回前台继续 —— 锁屏半小时不该算作「读了半小时」；
+///   只认 hidden/paused/detached，`inactive`（来电横幅、系统分享面板弹出）仍在看，照常计时。
+/// - **不设最短阈值**（产品拍板）：误点秒退也报，分布由看板侧自己切。
+/// 计时器工厂 —— 仅供测试替换。`Stopwatch` 走真实时钟，不受 widget 测试的假时间控制，
+/// 不换成可手动推进的实现就没法断言「后台那段没算进去」。
+@visibleForTesting
+Stopwatch Function() detailDwellStopwatchFactory = Stopwatch.new;
+
+class _DetailDwellTracker extends StatefulWidget {
+  const _DetailDwellTracker({required this.postId, required this.child});
+
+  final int postId;
+  final Widget child;
+
+  @override
+  State<_DetailDwellTracker> createState() => _DetailDwellTrackerState();
+}
+
+class _DetailDwellTrackerState extends State<_DetailDwellTracker>
+    with WidgetsBindingObserver {
+  final Stopwatch _watch = detailDwellStopwatchFactory();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _watch.start();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _watch.start();
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _watch.stop();
+      case AppLifecycleState.inactive:
+        break;
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _watch.stop();
+    Analytics.capture('detail_page_dwell', {
+      'duration_ms': _watch.elapsedMilliseconds,
+      'post_id': widget.postId,
+    });
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _DetailScaffold extends ConsumerWidget {

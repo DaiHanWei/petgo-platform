@@ -109,7 +109,8 @@ public class SecurityConfig {
                                 auditService.record(accountId,
                                         com.tailtopia.admin.audit.service.AuditActions.EMERGENCY_LOGIN_SUCCEEDED,
                                         "ADMIN_ACCOUNT", String.valueOf(accountId),
-                                        "紧急账密登录成功：" + admin.getUsername() + "（来源=EMERGENCY_PASSWORD）");
+                                        // bug 548：语言中立 key=value（动作说明由审计页按 action code 本地化）
+                                        "username=" + admin.getUsername() + " source=EMERGENCY_PASSWORD");
                                 alertService.alertSuperAdmins(
                                         com.tailtopia.admin.audit.service.AuditActions.EMERGENCY_LOGIN_SUCCEEDED,
                                         accountId);

@@ -1036,6 +1036,10 @@ document.addEventListener('change', function (e) {
     window.addEventListener('beforeunload', function (e) {
         if (document.querySelector('form[data-config-card].is-dirty')) { e.preventDefault(); e.returnValue = ''; }
     });
+    // 供提交防连点（本文件末尾）在请求结束后按配置卡规则重算保存钮，而不是一律放开
+    window.tailtopiaConfigCardRefresh = function (form) {
+        if (form && form.hasAttribute && form.hasAttribute('data-config-card')) { refresh(form); }
+    };
 })();
 
 // ===== 钮级二次确认 + 「必填未填 → 提交钮禁用」（Story 2.4 / 2.8 起用；V1.3.0 Story 10.2 从
@@ -1078,6 +1082,133 @@ document.addEventListener('change', function (e) {
         document.body.addEventListener('htmx:afterSwap', function (e) {
             var t = e.detail && e.detail.target;
             if (t && t.querySelectorAll) { t.querySelectorAll('form[data-requires-form]').forEach(sync); }
+        });
+    });
+})();
+
+// ===== 坐标整串粘贴自动拆分（bug 20260923-540④，新建 / 编辑场所）=====
+// Google Maps 复制出来是一行「-6.175392, 106.827153」。form 里带 input[data-coord="lat"] 与 input[data-coord="lng"]，
+// 往任一格粘贴「lat, lng」（逗号 / 全角逗号 / 空白分隔，可带括号）→ 拆开分别填入两格，并派发 input / change
+// 让配置卡（未修改禁用保存钮）等监听感知。只认两段合法数字；单个数字照常粘贴，不拦。
+// 小数统一截到 6 位：新建表单是 type=number step=0.000001，更长的小数会被浏览器判 step 不合法而拦提交。
+// ⚠️ 只是录入便利，范围 / 都会区判定仍在服务端（PlaceEditForm / PlaceCoordinateValidator）。
+(function () {
+    var PAIR = /^\s*\(?\s*(-?\d{1,3}(?:\.\d+)?)\s*(?:[,，;；]\s*|\s+)(-?\d{1,3}(?:\.\d+)?)\s*\)?\s*$/;
+    function norm(v) {
+        var n = parseFloat(v);
+        return isNaN(n) ? v : String(parseFloat(n.toFixed(6)));
+    }
+    function put(el, v) {
+        el.value = v;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    document.addEventListener('paste', function (e) {
+        var el = e.target;
+        if (!el || !el.getAttribute || !el.hasAttribute('data-coord')) { return; }
+        var text = (e.clipboardData || window.clipboardData);
+        text = text && text.getData ? text.getData('text') : '';
+        var m = PAIR.exec(text || '');
+        if (!m) { return; }
+        var scope = el.form || el.closest('form') || document;
+        var lat = scope.querySelector('input[data-coord="lat"]');
+        var lng = scope.querySelector('input[data-coord="lng"]');
+        if (!lat || !lng) { return; }
+        e.preventDefault();
+        put(lat, norm(m[1]));
+        put(lng, norm(m[2]));
+    });
+})();
+
+// ===== 提交防连点（9-7 第 7 条，bug 20260923-547，全局）=====
+// 慢请求（多图上传的新建场所等）期间连点提交会建出多条记录。统一处理，不逐页加属性：
+//   · htmx 表单（非 GET）：htmx:beforeRequest 时禁用该表单全部提交钮、触发钮加 .is-loading（admin.css 已有 spinner）；
+//     htmx:afterRequest（成功 / 4xx / 5xx / 网络错 / 超时 / 中断都会派发）恢复原禁用态 ——
+//     422 行内回填后按钮可以再次提交；配置卡表单恢复后按其规则重算（未改动仍禁用）。
+//     响应带 HX-Redirect / HX-Refresh（成功后整页跳转，如新建场所）则**不恢复**：跳转途中再点一次正是重复建档的来源。
+//   · 原生表单（非 GET）：submit 未被取消时，下一拍禁用提交钮（同步禁用会把 submitter 的 name/value 从表单数据里剔掉）；
+//     页面正常会整页跳转；兜底 15s 自动恢复（下载类响应不跳页）+ pageshow（浏览器后退缓存）恢复。
+//   · 二次确认（data-confirm / htmx:confirm）取消时请求根本没发，不会被禁用；捕获阶段的确认拦截先于这里（冒泡阶段）。
+//   · 例外：表单带 data-no-submit-guard 跳过。
+// ⚠️ 只是前端防呆，服务端幂等不在本处。
+(function () {
+    var SUBMITS = 'button[type="submit"], button:not([type]), input[type="submit"]';
+    function submitButtons(form) {
+        var list = [].slice.call(form.querySelectorAll(SUBMITS));
+        if (form.id) {
+            [].slice.call(document.querySelectorAll('[form="' + form.id + '"]')).forEach(function (b) {
+                if (b.matches && b.matches(SUBMITS) && list.indexOf(b) === -1) { list.push(b); }
+            });
+        }
+        return list;
+    }
+    function lock(form, submitter) {
+        var btns = submitButtons(form);
+        var state = btns.map(function (b) { return { b: b, disabled: b.disabled }; });
+        btns.forEach(function (b) { b.disabled = true; });
+        var main = submitter && btns.indexOf(submitter) !== -1 ? submitter : btns[0];
+        if (main && main.classList) { main.classList.add('is-loading'); }
+        form.setAttribute('aria-busy', 'true');
+        return state;
+    }
+    function unlock(form, state) {
+        (state || []).forEach(function (s) {
+            s.b.disabled = s.disabled;
+            if (s.b.classList) { s.b.classList.remove('is-loading'); }
+        });
+        form.removeAttribute('aria-busy');
+        if (window.tailtopiaConfigCardRefresh) { window.tailtopiaConfigCardRefresh(form); }
+    }
+    function guarded(form) {
+        return form && form.tagName === 'FORM' && !form.hasAttribute('data-no-submit-guard');
+    }
+
+    // htmx：以 xhr 为键记住本次锁住的按钮（afterRequest 时 elt 可能已被换出 DOM）
+    var pending = typeof WeakMap === 'function' ? new WeakMap() : null;
+    document.addEventListener('htmx:beforeRequest', function (e) {
+        var d = e.detail || {};
+        var form = d.elt;
+        if (e.defaultPrevented || !pending || !guarded(form) || !d.xhr) { return; }
+        var verb = d.requestConfig && d.requestConfig.verb ? String(d.requestConfig.verb).toLowerCase() : 'post';
+        if (verb === 'get') { return; }
+        var trig = d.requestConfig && d.requestConfig.triggeringEvent;
+        pending.set(d.xhr, { form: form, state: lock(form, trig && trig.submitter) });
+    });
+    document.addEventListener('htmx:afterRequest', function (e) {
+        var d = e.detail || {};
+        var rec = pending && d.xhr ? pending.get(d.xhr) : null;
+        if (!rec) { return; }
+        pending.delete(d.xhr);
+        var xhr = d.xhr;
+        var redirecting = false;
+        try { redirecting = !!(xhr.getResponseHeader('HX-Redirect') || xhr.getResponseHeader('HX-Refresh') === 'true'); } catch (ex) { redirecting = false; }
+        if (redirecting && xhr.status >= 200 && xhr.status < 400) { return; }
+        unlock(rec.form, rec.state);
+    });
+
+    // 原生表单
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (e.defaultPrevented || !guarded(form) || tailtopiaIsHxForm(form)) { return; }
+        if ((form.getAttribute('method') || 'get').toLowerCase() === 'get') { return; }
+        var t = form.getAttribute('target');
+        if (t && t !== '_self') { return; }
+        var submitter = e.submitter;
+        setTimeout(function () {
+            if (form.hasAttribute('aria-busy')) { return; }
+            var state = lock(form, submitter);
+            form._tailtopiaGuard = state;
+            setTimeout(function () {
+                if (form._tailtopiaGuard === state) { form._tailtopiaGuard = null; unlock(form, state); }
+            }, 15000);
+        }, 0);
+    });
+    window.addEventListener('pageshow', function (e) {
+        if (!e.persisted) { return; }
+        document.querySelectorAll('form[aria-busy="true"]').forEach(function (form) {
+            var state = form._tailtopiaGuard;
+            form._tailtopiaGuard = null;
+            unlock(form, state);
         });
     });
 })();

@@ -346,9 +346,9 @@ void main() {
       await tester.pumpWidget(_wrapDiaryEmptyProfile(_FakeRepo([_pet(7)])));
       await tester.pumpAndSettle();
       final l10n = AppLocalizations.of(tester.element(find.byType(Scaffold).first));
-      // 紧凑版不删字：标题与「为什么先建档」副文案都还在。
+      // 紧凑版：标题 + E1 稿的一行短副文案（bug 20260922-530 还原度对齐；无推荐的原版面仍是 A2 长文案）。
       expect(find.text(l10n.growthArchiveEmptyTitle), findsOneWidget);
-      expect(find.text(l10n.growthArchiveEmptyBody), findsOneWidget);
+      expect(find.text(l10n.growthArchiveEmptyBodyShort), findsOneWidget);
       expect(find.byType(EmptyState), findsNothing, reason: '有卡时不再是竖排大空态');
       expect(find.byType(Divider), findsOneWidget);
       final create = tester.getRect(find.byKey(const ValueKey('growthCreateButton')));

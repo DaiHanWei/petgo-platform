@@ -45,29 +45,32 @@ class PetRecommendationGrid extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          // UI 稿 E1：分区标题是 body w600 次级墨色 —— 这一屏的主体是上面的「去建档」，
+          padding: const EdgeInsets.only(bottom: 10),
+          // UI 稿 E1 `.t-cap` w700 次级色 —— 这一屏的主体是上面的「去建档」，
           // 推荐区是锦上添花，标题不该比建档引导还抢眼。
-          child: Text(l10n.petRecommendSectionTitle,
-              style: AppTypography.body
-                  .copyWith(fontWeight: FontWeight.w600, color: AppColors.ink2)),
+          child: Text(l10n.petRecommendGridTitle,
+              style: AppTypography.caption.copyWith(fontWeight: FontWeight.w700)),
         ),
-        GridView.builder(
-          // 外层是可滚动容器（Diary 未建档态那一屏），这里不再自己滚。
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: EdgeInsets.zero,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: AppSpacing.sm,
-            mainAxisSpacing: AppSpacing.sm,
-            // UI 稿 E1/E2：卡下文字压成两行（名字 + 「物种 · 天数」），约 54dp；
-            // 比例据此调到大图在常见宽度（360–390dp）上接近 1:1。
-            // 大图是 Expanded 吃剩余高度，字号放大时只会压扁大图、不会溢出。
-            childAspectRatio: 0.76,
-          ),
-          itemCount: pets.length,
-          itemBuilder: (context, i) => RecommendedPetCard(pet: pets[i], from: from),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // UI 稿 E1/E2：`gap: 14px 12px`（纵 14 / 横 12）；大图 1:1，格高按格宽算（bug 20260922-530）。
+            const crossGap = AppSpacing.md;
+            final cellWidth = (constraints.maxWidth - crossGap) / 2;
+            return GridView.builder(
+              // 外层是可滚动容器（Diary 未建档态那一屏），这里不再自己滚。
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.zero,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: crossGap,
+                mainAxisSpacing: 14,
+                mainAxisExtent: RecommendedPetCard.gridCellExtent(context, cellWidth),
+              ),
+              itemCount: pets.length,
+              itemBuilder: (context, i) => RecommendedPetCard(pet: pets[i], from: from),
+            );
+          },
         ),
         // AC1：「查看全部」放**页面最下面**（UX-DR14）。
         // ⚠️ 只在真有网格时才出现 —— 上面已经 return 掉了空池子，所以这里天然成立。
@@ -76,7 +79,10 @@ class PetRecommendationGrid extends ConsumerWidget {
           child: TextButton(
             key: const ValueKey('petRecommendSeeAll'),
             onPressed: () => context.push(PetRecommendationListPage.routePath),
-            child: Text(l10n.petRecommendSeeAll),
+            // UI 稿 E1：「Lihat semua hewan peliharaan lain ›」t-body 紫色 w600。
+            child: Text('${l10n.petRecommendSeeAllOthers} ›',
+                style: AppTypography.body
+                    .copyWith(color: AppColors.mint, fontWeight: FontWeight.w600)),
           ),
         ),
       ],

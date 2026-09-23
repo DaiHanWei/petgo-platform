@@ -184,7 +184,8 @@ public class AccountDisposalService {
         resolveTicket(reportId, actorAccountId);
         // ⚠️ summary 里严禁 PII / 内容原文 / 令牌；理由是运营自己写的处置依据，不是用户内容。
         auditService.record(actorAccountId, AuditActions.ACCOUNT_WARNED, "USER",
-                String.valueOf(targetUserId), "账号警告（工单 " + (reportId == null ? "-" : reportId) + "）理由："
+                // bug 548：语言中立 key=value；reason 是运营手填，原样保留（放最后，内容里有空格也不串字段）
+                String.valueOf(targetUserId), "ticket=" + (reportId == null ? "-" : reportId) + " reason="
                         + clampReason(reason));
         // ③ 通知必须排最后：send 是 REQUIRES_NEW（立即独立提交并推送、回滚不撤回），
         //    放在收档/审计之前的话，后两步一旦失败回滚，用户已经收到了一条「假处置」通知。
@@ -224,7 +225,7 @@ public class AccountDisposalService {
         authService.deactivateUser(targetUserId); // 置 DEACTIVATED + 撤销 refresh 句柄
         resolveTicket(reportId, actorAccountId);
         auditService.record(actorAccountId, AuditActions.ACCOUNT_SUSPENDED, "USER",
-                String.valueOf(targetUserId), "账号停用（工单 " + (reportId == null ? "-" : reportId) + "）");
+                String.valueOf(targetUserId), "ticket=" + (reportId == null ? "-" : reportId)); // bug 548
         // 通知必须排最后：send 是 REQUIRES_NEW（立即独立提交并推送、回滚不撤回），
         // 放在收档/审计之前的话，后两步一旦失败回滚停用，用户却已收到「账号已停用」的假通知。
         notificationService.send(targetUserId, NotificationType.ACCOUNT_SUSPENDED,
@@ -248,7 +249,7 @@ public class AccountDisposalService {
         report.handleBy(actorAccountId, AccountReportStatus.DISMISSED);
         reports.save(report);
         auditService.record(actorAccountId, AuditActions.ACCOUNT_REPORT_DISMISSED, "ACCOUNT_REPORT",
-                String.valueOf(reportId), "账号举报工单无需处置");
+                String.valueOf(reportId), "ticket=" + reportId); // bug 548：语言中立
         notifyReporters(reportId, boundary); // FR-51 回告：驳回与处置文案完全一致（模糊，不透露结果）
     }
 

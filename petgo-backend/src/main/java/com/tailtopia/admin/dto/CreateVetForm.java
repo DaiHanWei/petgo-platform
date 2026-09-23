@@ -9,23 +9,23 @@ import jakarta.validation.constraints.Size;
  */
 public class CreateVetForm {
 
-    @NotBlank(message = "兽医昵称不能为空")
-    @Size(max = 64)
+    @NotBlank(message = "{admin.vets.validation.displayNameRequired}")
+    @Size(max = 64, message = "{admin.vets.validation.displayNameTooLong}")
     private String displayName;
 
     /** 登录邮箱（沿用 username 列，不改名；2.3 起加邮箱格式校验）。 */
-    @NotBlank(message = "登录邮箱不能为空")
-    @Email(message = "登录邮箱格式不正确")
-    @Size(max = 64)
+    @NotBlank(message = "{admin.vets.validation.usernameRequired}")
+    @Email(message = "{admin.vets.validation.usernameInvalid}")
+    @Size(max = 64, message = "{admin.vets.validation.usernameTooLong}")
     private String username;
 
     /** 运营联系手机号（非登录凭证）。 */
-    @NotBlank(message = "联系手机号不能为空")
-    @Size(max = 32, message = "联系手机号过长")
+    @NotBlank(message = "{admin.vets.validation.contactPhoneRequired}")
+    @Size(max = 32, message = "{admin.vets.validation.contactPhoneTooLong}")
     private String contactPhone;
 
-    @NotBlank(message = "初始密码不能为空")
-    @Size(min = 8, max = 72, message = "密码至少 8 位")
+    @NotBlank(message = "{admin.vets.validation.passwordRequired}")
+    @Size(min = 8, max = 72, message = "{admin.vets.validation.passwordLength}")
     private String password;
 
     public String getDisplayName() {

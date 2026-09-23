@@ -32,7 +32,7 @@
             <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.drawer.lng}">经度</div><div class="sum-value rv-small" th:text="${d.lng}">0</div></div>
         </div>
         <p><span class="muted" th:text="#{admin.v130.places.col.address}">文字地址</span> <span th:text="${d.addressText}">地址</span></p>
-        <p th:if="${!#lists.isEmpty(d.tags)}"><span class="tag" th:each="t : ${d.tags}" th:text="${t}">标签</span></p>
+        <p th:if="${!#lists.isEmpty(d.tags)}"><span class="tag" th:each="t : ${d.tags}" th:text="${#lists.contains(T(com.tailtopia.admin.places.dto.PlaceEditForm).KNOWN_TAGS, t)} ? #{'admin.v130.places.tag.' + ${t}} : ${t}">标签</span></p>
         <p th:if="${!#strings.isEmpty(d.description)}" class="pl-desc" th:text="${d.description}">描述</p>
         <p class="muted rv-small" th:text="'#' + ${d.id} + ' · ' + ${d.publicToken}">#id · token</p>
     </section>
@@ -72,7 +72,8 @@
     <section class="pl-actions" data-place-actions th:if="${d.status.name() != 'MERGED'}">
         <details class="pl-inline" data-place-edit>
             <summary class="btn btn-neutral btn-sm" th:text="#{admin.v130.places.action.edit}">编辑</summary>
-            <form class="pl-edit-form" th:attr="hx-post=@{/admin/places/{id}/edit(id=${d.id})}" hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+            <!--/* 9-7 第 2 条（bug 20260923-543）：模板 D 配置卡机制 —— 未修改时保存钮禁用；标签勾选（540②）、坐标粘贴自动拆分（540④） */-->
+            <form class="pl-edit-form" data-config-card th:attr="hx-post=@{/admin/places/{id}/edit(id=${d.id})}" hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
                 <h3 th:text="#{admin.v130.places.edit.title}">编辑场所</h3>
                 <label class="field field-full"><span th:text="#{admin.v130.places.edit.name}">名称</span>
                     <input type="text" name="name" class="inp" maxlength="80" required th:value="${d.name}"/></label>
@@ -83,18 +84,21 @@
                     </select></label>
                 <label class="field"><span th:text="#{admin.v130.places.edit.city}">城市</span>
                     <input type="text" name="city" class="inp" maxlength="60" required th:value="${d.city}"/></label>
-                <label class="field field-full"><span th:text="#{admin.v130.places.edit.tags}">标签</span>
-                    <input type="text" name="tags" class="inp" th:value="${#strings.listJoin(d.tags, ', ')}"/></label>
+                <fieldset class="field field-full pl-tag-group">
+                    <legend th:text="#{admin.v130.places.edit.tags}">标签</legend>
+                    <label class="pl-tag-opt" th:each="t : ${T(com.tailtopia.admin.places.dto.PlaceEditForm).KNOWN_TAGS}">
+                        <input type="checkbox" name="tags" th:value="${t}" th:checked="${#lists.contains(d.tags, t)}"/> <span th:text="#{'admin.v130.places.tag.' + ${t}}">标签</span></label>
+                </fieldset>
                 <label class="field field-full"><span th:text="#{admin.v130.places.edit.address}">文字地址</span>
                     <input type="text" name="addressText" class="inp" maxlength="255" required th:value="${d.addressText}"/></label>
                 <label class="field"><span th:text="#{admin.v130.places.edit.lat}">纬度</span>
-                    <input type="text" name="lat" class="inp" inputmode="decimal" required th:value="${d.lat}"/></label>
+                    <input type="text" name="lat" class="inp" inputmode="decimal" required data-coord="lat" th:value="${d.lat}"/></label>
                 <label class="field"><span th:text="#{admin.v130.places.edit.lng}">经度</span>
-                    <input type="text" name="lng" class="inp" inputmode="decimal" required th:value="${d.lng}"/></label>
+                    <input type="text" name="lng" class="inp" inputmode="decimal" required data-coord="lng" th:value="${d.lng}"/></label>
                 <label class="field field-full"><span th:text="#{admin.v130.places.edit.description}">描述</span>
                     <textarea name="description" class="inp" rows="3" th:text="${d.description}"></textarea></label>
                 <p class="hint"><span th:text="#{admin.v130.places.col.marker}">标记人</span> <span th:text="${d.markerName}">标记人</span> · <span th:text="#{admin.v130.places.edit.markerLocked}">标记人不可修改</span></p>
-                <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.v130.places.edit.save}">保存</button>
+                <button type="submit" class="btn btn-primary btn-sm" data-save disabled th:text="#{admin.v130.places.edit.save}">保存</button>
             </form>
         </details>
         <form class="inline" th:if="${d.status.name() == 'ACTIVE'}" th:attr="hx-post=@{/admin/places/{id}/delist(id=${d.id})},data-confirm=#{admin.v130.places.confirm.delist},data-confirm-args=${d.name}"

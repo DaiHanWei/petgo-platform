@@ -124,7 +124,7 @@ class TicketsWorkbenchMvcTest extends ApiIntegrationTest {
                 .filter(a -> AuditActions.ACCOUNT_WARNED.equals(a.getActionType())
                         && String.valueOf(target1.getId()).equals(a.getTargetId()))
                 .reduce((a, b) -> b).orElseThrow();
-        assertThat(warned.getSummary()).contains("理由：多次发布广告引流内容");
+        assertThat(warned.getSummary()).contains("reason=多次发布广告引流内容"); // bug 548：语言中立 key=value
         Notification n = notifications.findAll().stream()
                 .filter(x -> Long.valueOf(target1.getId()).equals(x.getRecipientUserId())).findFirst().orElseThrow();
         assertThat(n.getTitle()).isEqualTo("账号警告");
