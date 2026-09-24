@@ -341,6 +341,23 @@ void main() {
       expect(find.byKey(const ValueKey('petRecommendationGrid')), findsOneWidget);
     });
 
+    testWidgetsWithImages('🔴 bug 20260922-530：有卡时顶部有「Diary」标题栏，且整页内容都在状态栏之下',
+        (tester) async {
+      // 真机上状态栏高度经 MediaQuery.padding.top 传下来（AppShell 的 Scaffold 无 appBar，不会吃掉它）。
+      // 改前：紧凑版是顶对齐的滚动容器、外层 Scaffold 又没有 AppBar → 引导标题直接压在时间栏上。
+      addTearDown(tester.view.reset);
+      tester.view.padding = const FakeViewPadding(top: 120); // 物理像素；dpr=3 → 40dp
+      tester.view.devicePixelRatio = 3.0;
+      await tester.pumpWidget(_wrapDiaryEmptyProfile(_FakeRepo([_pet(7)])));
+      await tester.pumpAndSettle();
+      final l10n = AppLocalizations.of(tester.element(find.byType(Scaffold).first));
+      final title = find.text(l10n.tabProfile);
+      expect(title, findsOneWidget, reason: '缺「Diary」标题栏');
+      expect(tester.getRect(title).top, greaterThanOrEqualTo(40), reason: '标题压进了状态栏');
+      final guide = tester.getRect(find.text(l10n.growthArchiveEmptyTitle));
+      expect(guide.top, greaterThan(tester.getRect(title).bottom), reason: '引导内容应在标题栏之下');
+    });
+
     testWidgetsWithImages('UI 稿 E1：有卡时引导压成紧凑横条 + 分隔线，主按钮在「Ubah status」之上',
         (tester) async {
       await tester.pumpWidget(_wrapDiaryEmptyProfile(_FakeRepo([_pet(7)])));

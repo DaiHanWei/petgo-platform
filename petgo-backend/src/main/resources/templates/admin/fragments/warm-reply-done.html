@@ -9,7 +9,9 @@
 -->
 <body>
 <div th:fragment="done" class="wr-done" th:attr="data-next-id=${#strings.isEmpty(nextId)} ? null : ${nextId}">
-    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${message}">已提交</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${message}">已提交</div>
+    </div>
     <div th:replace="~{admin/fragments/warm-reply-detail :: detail}"></div>
     <li th:id="'warm-replies-row-' + ${removedId}" hx-swap-oob="delete"></li>
     <th:block th:if="${#strings.isEmpty(nextId)}">

@@ -552,6 +552,12 @@ dialog { z-index: 60; }
 .q-row.on { background: var(--brand-tint); border-left-color: var(--brand); }
 .q-row .q-title { font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .q-row .q-meta { color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 标题行可带结果徽标（bug 20260923-553）：只让文字那一段（.q-text）省略，徽标 / 链接 / 色点不被挤掉。 */
+.q-row .q-title.q-title--flex { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.q-title--flex > * { flex-shrink: 0; }
+.q-title--flex > .q-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-title--flex > .q-link { margin-left: 2px; }
+.q-title--flex .q-result { font-weight: 500; padding: 0 6px; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .dot--todo { background: var(--info); }
 .dot--wait { background: var(--warn); }
@@ -595,6 +601,8 @@ dialog { z-index: 60; }
 .cfg-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; }
 .cfg-foot .inline-error-slot:empty { display: none; }
 .tag-dirty { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bg); }
+/* .tag 自带 display:inline-block，会盖掉 UA 的 [hidden]{display:none} —— 不补这条，「已修改」在未改动时也常亮（跨页 bug）。 */
+.tag-dirty[hidden], .tag[hidden] { display: none; }
 /* 模板 E 分步 */
 .step-bar { display: flex; list-style: none; padding: 0; margin: 0 0 16px; gap: 0; counter-reset: step; }
 .step-bar .step { flex: 1; text-align: center; color: var(--muted); font-size: var(--fs-sm); padding: 8px 0; border-bottom: 3px solid var(--line); }

@@ -115,7 +115,7 @@ class AdminShopReportsEndpointIntegrationTest extends ApiIntegrationTest {
 
     /** AC1：C2 的四个区块字段一个都不能少（它是裁决 A-16 的唯一依据）。 */
     @Test
-    @DisplayName("C2 四区块字段现状原样，且 DEP-6 / OQ-42 两条口径提示都在")
+    @DisplayName("C2 四区块字段现状原样，且「缺喂量数据」/「判据未拍板」两条口径提示都在（bug 551：不再露内部编号）")
     void repurchaseDashboardKeepsEveryBlock() throws Exception {
         var result = mvc.perform(get("/admin/shop/repurchase-dashboard").with(authentication(staffWith(AdminPermissions.ORDER_VIEW))))
                 .andExpect(status().isOk()).andReturn();
@@ -130,11 +130,13 @@ class AdminShopReportsEndpointIntegrationTest extends ApiIntegrationTest {
         //    而这一页会被当成「可以据此砍掉复购引擎」的依据 —— 它现在还不是。
         // OQ-42 常驻；DEP-6 是条件提示（「覆盖率为 0 且有人买过粮」才亮）—— 共享库里别的测试造了触发记录就不该亮，
         // 所以按页面自己的判定断言：亮 / 不亮都要与 looksLikeMissingFeedingData() 一致
-        assertThat(html).contains("OQ-42");
+        assertThat(html).contains("尚未拍板");
+        // bug 20260923-551：内部编号（Story / FR / DEP / OQ / A-）不得出现在运营界面上
+        assertThat(html).doesNotContain("OQ-42").doesNotContain("DEP-6").doesNotContain("FR-10").doesNotContain("Story 9.2");
         if (snapshot.looksLikeMissingFeedingData()) {
-            assertThat(html).contains("DEP-6");
+            assertThat(html).contains("每日建议喂量还没录入");
         } else {
-            assertThat(html).doesNotContain("DEP-6");
+            assertThat(html).doesNotContain("每日建议喂量还没录入");
         }
     }
 
@@ -147,7 +149,7 @@ class AdminShopReportsEndpointIntegrationTest extends ApiIntegrationTest {
         assertThat(html).as("枚举常量名不该出现在页面上（切 ID 后连英文都不是）")
                 .doesNotContain(">MAKANAN<").doesNotContain(">OBAT_VITAMIN<");
         // 🔴 SPEC-22 的四行是假设 A-19 的直接读数 —— 删掉就没有地方能发现那个假设不成立了
-        assertThat(html).contains("A-19");
+        assertThat(html).contains("运费净额").doesNotContain("A-19");
     }
 
     @Test

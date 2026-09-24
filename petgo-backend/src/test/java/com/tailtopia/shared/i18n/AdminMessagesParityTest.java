@@ -241,6 +241,36 @@ class AdminMessagesParityTest {
     }
 
     /**
+     * 🔴 后台文案不得露出<b>内部追踪编号</b>（bug 20260923-551）。
+     *
+     * <p>复购看板的区块标题写着「（Story 9.2）」、列头写着「FR-109 触发覆盖率」—— 那是需求文档里的编号，
+     * 运营看不懂、也不该看到（外部审计视角下还会被当成「开发没做完」）。
+     * 注释里写编号照旧没问题；这里只管 {@code admin.*} 的<b>值</b>。
+     */
+    @Test
+    void adminValuesCarryNoInternalTrackingIds() throws Exception {
+        java.util.regex.Pattern ids = java.util.regex.Pattern.compile(
+                "\\bStory ?\\d|\\bN?FR-\\d|\\bDEP-\\d|\\bOQ-\\d|\\bAB-\\d|\\bAD-\\d|\\bA-\\d+\\b|\\bD-\\d+\\b"
+                        + "|\\bSPEC-\\d|\\bUX-DR");
+        Map<String, String> all = new LinkedHashMap<>(LOCALES);
+        all.put("baseline", BASELINE);
+        for (Map.Entry<String, String> e : all.entrySet()) {
+            Properties p = load(e.getValue());
+            Set<String> offenders = new TreeSet<>();
+            for (String k : p.stringPropertyNames()) {
+                if (!k.startsWith("admin.")) {
+                    continue;
+                }
+                java.util.regex.Matcher m = ids.matcher(p.getProperty(k));
+                if (m.find()) {
+                    offenders.add(k + " => " + m.group());
+                }
+            }
+            assertThat(offenders).as(e.getKey() + " 后台文案里露出了内部编号（Story / FR / DEP / OQ / A- …）").isEmpty();
+        }
+    }
+
+    /**
      * 🔴 模板里用 {@code th:text}（转义）引用的键，文案<b>不得含标记</b>。
      *
      * <h2>这条守的是一个真实事故（2026-08-26 实机截图发现）</h2>

@@ -8,7 +8,9 @@
 -->
 <body>
 <div th:fragment="detail" class="sp-detail" th:attr="data-ticket-token=${ticket.ticketToken}">
-    <div class="toast" role="status" th:if="${toast}" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">toast</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host" th:if="${toast}">
+        <div class="toast" role="status" th:text="${toast}">toast</div>
+    </div>
     <!--/* bug 20260922-524：「已联系」停留本条时，左栏这一行（去掉「需联系」标）与三态计数一并 oob 刷新。 */-->
     <th:block th:if="${rowOob != null and rowOob}">
         <li th:replace="~{admin/fragments/support-queue :: row(${ticket}, true)}"></li>
@@ -63,7 +65,11 @@
             <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.support.order.amount}">金额</div>
                 <div class="sum-value" th:text="${ticket.orderAmount != null} ? ${#numbers.formatInteger(ticket.orderAmount, 0, 'COMMA')} : '—'">0</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.common.status}">状态</div>
-                <div class="sum-value rv-small" th:text="${ticket.orderStatus ?: '—'}">COMPLETED</div></div>
+                <!--/* 电商单状态走 admin.v130.shopOrders.status.*（bug 557）；问诊单维持原样 */-->
+                <div class="sum-value rv-small" th:if="${ticket.relatedOrderType == 'SHOP' and ticket.orderStatus != null}"
+                     th:text="${#messages.msgOrNull('admin.v130.shopOrders.status.' + ticket.orderStatus) ?: ticket.orderStatus}">SHIPPED</div>
+                <div class="sum-value rv-small" th:unless="${ticket.relatedOrderType == 'SHOP' and ticket.orderStatus != null}"
+                     th:text="${ticket.orderStatus ?: '—'}">COMPLETED</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.support.order.paidAt}">支付时间</div>
                 <div class="sum-value rv-small" th:text="${ticket.orderPaidAt != null} ? ${@adminTime.wib(ticket.orderPaidAt)} : '—'">-</div></div>
         </div>
@@ -91,6 +97,16 @@
                 <span th:text="#{admin.v130.err.forbidden(#{perm.support.handle})}">需要权限</span>
             </p>
         </th:block>
+    </section>
+
+    <!--/* ④' 电商单：不开放工单退款（A-1 资金安全，bug 20260923-557 拍板），只给一行去向提示，免得客服以为按钮丢了。
+           电商退款统一走退货审核（两段审批 + 打款），工单这边没有任何退款端点接电商单。 */-->
+    <section class="card card-full sp-card sp-refund-shop" th:if="${ticket.relatedOrderType == 'SHOP' and ticket.relatedOrderToken != null}">
+        <h2 th:text="#{admin.ticket.section.refundDecision}">退款需求判定</h2>
+        <p class="muted">
+            <span th:text="#{admin.v130.support.shopRefundHint}">电商订单的退款请到「退货审核」处理</span>
+            <a target="_blank" th:href="@{/admin/shop/returns}" th:text="#{admin.v130.support.shopRefundHint.go}">去退货审核 ↗</a>
+        </p>
     </section>
 
     <!-- ④ 退款需求判定。电商单本版不进退款审批链路（shop-v2 Story 3-2）→ 整块不渲染。 -->

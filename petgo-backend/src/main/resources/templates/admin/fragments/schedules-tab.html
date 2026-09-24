@@ -205,7 +205,9 @@
 <!--/* 处置成功：只回一个 toast。表由 HX-Trigger admin:schedule-list-refresh 按当前筛选整表重拉 ——
        改时间会改变行在表里的位置（按计划时间升序），取消会让这一行离开本表，两种情况原位换行都会骗人。 */-->
 <th:block th:fragment="afterAction">
-    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
 </th:block>
 </body>
 </html>

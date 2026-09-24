@@ -34,6 +34,22 @@ public class NavBadgeService {
     public static final List<String> QUEUES = List.of(
             "manual-review", "tickets", "anomalies", "support-tickets", "refunds", "warm-replies");
 
+    /**
+     * 空态去向的<b>关联组</b>（bug 20260923-554）：空态只推荐与当前页同一职责的队列，不再把全部队列混着列。
+     * <ul>
+     * <li>内容治理：人工复核 ↔ 被举报用户；</li>
+     * <li>问诊 / 客服 / 退款：问诊异常 ↔ 客服工单 ↔ 退款；</li>
+     * <li>暖贴跟进：单独一组；</li>
+     * <li>商城售后：退货审核 ↔ 异常订单（二者目前都不在角标队列里，故空态不带去向）。</li>
+     * </ul>
+     * ⚠️ 只影响空态去向；侧栏角标 {@link #counts} 不受分组影响。不在任何组里的 key 保持原行为（列出全部其他队列）。
+     */
+    static final List<Set<String>> RELATED_GROUPS = List.of(
+            Set.of("manual-review", "tickets"),
+            Set.of("anomalies", "support-tickets", "refunds"),
+            Set.of("warm-replies"),
+            Set.of("shop-returns", "shop-order-exceptions"));
+
     /** 空态「其他队列还有 N 条」的去向链接（Story 2.9 AC3）。 */
     public record QueueLink(String key, String route, String navKey, long count) {
     }
@@ -75,7 +91,8 @@ public class NavBadgeService {
     }
 
     /**
-     * 当前登录者可见的<b>其他</b>队列去向（待处理 &gt; 0），供五页空态「其他队列还有 N 条 →」（AC3，与角标同一口径）。
+     * 当前登录者可见的<b>其他</b>队列去向（待处理 &gt; 0），供五页空态「其他队列还有 N 条 →」（AC3，与角标同一口径）；
+     * 只列与当前页同一关联组（{@link #RELATED_GROUPS}）的队列。
      * 登录态从 {@link SecurityContextHolder} 取；由空态片段 {@code tpl-a-empty} 按需调用（只在页签清空时才查，Controller 不预算）。
      */
     @Transactional(readOnly = true)
@@ -83,10 +100,14 @@ public class NavBadgeService {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         Set<String> authorities = auth == null ? Set.of()
                 : auth.getAuthorities().stream().map(GrantedAuthority::getAuthority).collect(Collectors.toSet());
+        Set<String> related = RELATED_GROUPS.stream().filter(g -> g.contains(currentKey)).findFirst().orElse(null);
         List<QueueLink> out = new ArrayList<>();
         counts(authorities).forEach((key, n) -> {
             if ("total".equals(key) || key.equals(currentKey) || n <= 0) {
                 return;
+            }
+            if (related != null && !related.contains(key)) {
+                return; // bug 554：不同职责的队列不进本页空态
             }
             AdminPageCatalog.Page page = pageOf(key);
             if (page != null) {

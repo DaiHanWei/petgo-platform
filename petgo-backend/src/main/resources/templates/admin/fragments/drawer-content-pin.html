@@ -218,7 +218,9 @@
     <div id="pin-drawer-body-oob" hx-swap-oob="innerHTML:#pin-drawer .drawer-body">
         <div th:replace="~{admin/fragments/drawer-content-pin :: drawer}"></div>
     </div>
-    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
 </th:block>
 </body>
 </html>

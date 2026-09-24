@@ -6,7 +6,9 @@ import com.tailtopia.consult.repository.ConsultOrderRepository;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.support.domain.RelatedOrderType;
+import com.tailtopia.pay.domain.PaymentStatus;
 import com.tailtopia.pay.refund.domain.RefundRequest;
+import com.tailtopia.pay.repository.PaymentIntentRepository;
 import com.tailtopia.pay.refund.repository.RefundRequestRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.media.SignedUrlService;
@@ -46,11 +48,13 @@ public class AdminSupportTicketQueryService {
     private final ShopOrderRepository shopOrders;
     private final RefundRequestRepository refunds;
     private final SignedUrlService signedUrls;
+    /** bug 20260923-557：电商单支付时间 —— shop_orders 没有 paid_at 列，取其（最后一次）支付意图到账时刻。 */
+    private final PaymentIntentRepository paymentIntents;
 
     public AdminSupportTicketQueryService(FeedbackTicketRepository tickets, TicketLabelRepository labels,
             TicketAttachmentRepository attachments, ConsultOrderRepository orders,
             ShopOrderRepository shopOrders,
-            RefundRequestRepository refunds, SignedUrlService signedUrls) {
+            RefundRequestRepository refunds, SignedUrlService signedUrls, PaymentIntentRepository paymentIntents) {
         this.tickets = tickets;
         this.labels = labels;
         this.attachments = attachments;
@@ -58,6 +62,7 @@ public class AdminSupportTicketQueryService {
         this.shopOrders = shopOrders;
         this.refunds = refunds;
         this.signedUrls = signedUrls;
+        this.paymentIntents = paymentIntents;
     }
 
     /** 列表页轻量视图：只填列表实际渲染的字段，不发标签/附件/订单/退款查询（finding #7）。 */
@@ -202,9 +207,24 @@ public class AdminSupportTicketQueryService {
             } else {
                 // 🔴 Story 4-3 已切换：读库列 display_no，不再用旧算法算。
                 //   运营在工单上看到的号，必须与用户报出来的、与订单中心显示的是同一个。
-                relatedOrderToken = shopOrders.findById(t.getRelatedOrderId())
-                        .map(ShopOrder::getDisplayNo)
-                        .orElse(null);
+                ShopOrder shop = shopOrders.findById(t.getRelatedOrderId()).orElse(null);
+                if (shop != null) {
+                    relatedOrderToken = shop.getDisplayNo();
+                    // bug 20260923-557：补齐订单摘要（金额 / 状态 / 支付时间），与问诊单同一组字段。
+                    //    状态给枚举名，模板按 admin.v130.shopOrders.status.* 本地化。
+                    orderAmount = shop.getTotalAmount();
+                    orderStatus = shop.getStatus() == null ? null : shop.getStatus().name();
+                    // 支付时间：shop_orders 无 paid_at 列；QRIS / 混合支付取所挂支付意图的到账时刻
+                    //    （PAID 是意图终态，到账后不再更新，updatedAt 即到账时刻）。纯 PawCoin 单没有支付意图 → 「—」。
+                    if (shop.getPaymentIntentToken() != null) {
+                        orderPaidAt = paymentIntents.findByPublicToken(shop.getPaymentIntentToken())
+                                .filter(pi -> pi.getStatus() == PaymentStatus.PAID)
+                                .map(com.tailtopia.pay.domain.PaymentIntent::getUpdatedAt)
+                                .orElse(null);
+                    }
+                }
+                // 🔴 电商单不进工单退款链路（A-1 资金安全）：refundToken / refundNeedDecision 恒为 null，
+                //    面板改为提示「到退货审核处理」。
             }
         }
         String contactValue = includeContactPii ? t.getContactValue() : maskContact(t.getContactValue());

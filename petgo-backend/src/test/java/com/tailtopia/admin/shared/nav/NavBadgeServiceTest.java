@@ -73,18 +73,64 @@ class NavBadgeServiceTest {
         verify(refunds, never()).pendingCount();
     }
 
-    @Test
-    void otherQueuesExcludeCurrentAndEmptyOnes() {
-        stubAll();
-        when(anomalies.count(AnomalyStatus.OPEN)).thenReturn(0L);
+    private void loginAsSuperAdmin() {
         var t = new TestingAuthenticationToken("a", "n/a", List.of(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN")));
         t.setAuthenticated(true);
         SecurityContextHolder.getContext().setAuthentication(t);
+    }
+
+    /** bug 20260923-554：被举报用户页空态只推荐同组（内容治理）的人工复核，不混入问诊异常 / 客服工单等。 */
+    @Test
+    void otherQueuesExcludeCurrentAndEmptyOnes() {
+        stubAll();
+        loginAsSuperAdmin();
         List<NavBadgeService.QueueLink> links = service.otherQueues("tickets");
-        assertThat(links).extracting(NavBadgeService.QueueLink::key)
-                .containsExactly("manual-review", "support-tickets", "refunds", "warm-replies");
+        assertThat(links).extracting(NavBadgeService.QueueLink::key).containsExactly("manual-review");
         assertThat(links.get(0).route()).isEqualTo("/admin/manual-review");
         assertThat(links.get(0).navKey()).isEqualTo("admin.nav.review");
         assertThat(links.get(0).count()).isEqualTo(12L);
+    }
+
+    @Test
+    void manualReviewEmptyStateOnlyLinksToReportedUsers() {
+        stubAll();
+        loginAsSuperAdmin();
+        assertThat(service.otherQueues("manual-review")).extracting(NavBadgeService.QueueLink::key)
+                .containsExactly("tickets");
+    }
+
+    @Test
+    void serviceGroupLinksOnlyWithinAnomaliesSupportAndRefunds() {
+        stubAll();
+        when(anomalies.count(AnomalyStatus.OPEN)).thenReturn(0L);
+        loginAsSuperAdmin();
+        assertThat(service.otherQueues("support-tickets")).extracting(NavBadgeService.QueueLink::key)
+                .as("同组里待处理为 0 的（anomalies）照旧不列").containsExactly("refunds");
+        assertThat(service.otherQueues("anomalies")).extracting(NavBadgeService.QueueLink::key)
+                .containsExactly("support-tickets", "refunds");
+    }
+
+    @Test
+    void warmRepliesAndShopPagesHaveNoCrossGroupLinks() {
+        stubAll();
+        loginAsSuperAdmin();
+        assertThat(service.otherQueues("warm-replies")).isEmpty();
+        assertThat(service.otherQueues("shop-returns")).isEmpty();
+        assertThat(service.otherQueues("shop-order-exceptions")).isEmpty();
+    }
+
+    @Test
+    void ungroupedKeyKeepsTheOriginalAllQueuesBehaviour() {
+        stubAll();
+        loginAsSuperAdmin();
+        assertThat(service.otherQueues("some-future-page")).extracting(NavBadgeService.QueueLink::key)
+                .containsExactly("manual-review", "tickets", "anomalies", "support-tickets", "refunds", "warm-replies");
+    }
+
+    @Test
+    void sidebarCountsAreNotAffectedByGrouping() {
+        stubAll();
+        assertThat(service.counts(Set.of("ROLE_SUPER_ADMIN"))).containsOnlyKeys(
+                "manual-review", "tickets", "anomalies", "support-tickets", "refunds", "warm-replies", "total");
     }
 }

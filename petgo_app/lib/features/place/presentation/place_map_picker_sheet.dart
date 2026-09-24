@@ -31,10 +31,16 @@ import '../data/location_service.dart';
 /// 1.3 交付时位置来源是「当前定位」。本 story **替换**那条路径为选点弹层，
 /// 但**保留「默认落当前位置」** —— 打开地图时针就在你所在处，不动它直接确认 = 与 1.3 等价。
 class PlaceMapPickerSheet extends StatefulWidget {
-  const PlaceMapPickerSheet({super.key, this.initial});
+  const PlaceMapPickerSheet({super.key, this.initial, this.onEnableLocation});
 
   /// 打开时大头针落在哪。null = 没有定位权限 / 没拿到定点 → 落 [jakartaCenter]。
   final DeviceCoordinates? initial;
+
+  /// 未授权定位时由调用方给出（bug 20260921-508）：弹层顶部出「开启定位」提示条，
+  /// 点了走调用方那条唯一的权限路径（系统弹窗 / 永久拒绝跳设置），返回拿到的坐标（拿不到为 null）。
+  /// null = 已授权或调用方不需要 → 不出提示条。
+  /// 🔴 提示条只是**建议**：不开定位照样能拖针手动选点（Story 1.4 AC4「无权限也能选点」）。
+  final Future<DeviceCoordinates?> Function()? onEnableLocation;
 
   /// 无定位兜底落点：雅加达市中心（Monas 一带）。
   ///
@@ -44,7 +50,8 @@ class PlaceMapPickerSheet extends StatefulWidget {
 
   /// 打开弹层，返回用户确认的坐标；取消返回 null。
   static Future<DeviceCoordinates?> open(
-      BuildContext context, DeviceCoordinates? initial) {
+      BuildContext context, DeviceCoordinates? initial,
+      {Future<DeviceCoordinates?> Function()? onEnableLocation}) {
     return showModalBottomSheet<DeviceCoordinates>(
       context: context,
       isScrollControlled: true,
@@ -53,7 +60,8 @@ class PlaceMapPickerSheet extends StatefulWidget {
       // 里赢过地图 —— 用户想竖向平移地图或拖那个针，结果是把弹层拖走了，`onDragEnd` 永远不触发。
       // 关闭走右上角的 ✕（已给 44×44 热区）。
       enableDrag: false,
-      builder: (_) => PlaceMapPickerSheet(initial: initial),
+      builder: (_) =>
+          PlaceMapPickerSheet(initial: initial, onEnableLocation: onEnableLocation),
     );
   }
 
@@ -74,7 +82,42 @@ class _PlaceMapPickerSheetState extends State<PlaceMapPickerSheet> {
   /// 有定位时预置点就是用户所在处，直接确认是有意义的（= 与 Story 1.3 等价），所以那时不设门槛。
   bool _moved = false;
 
-  bool get _canConfirm => widget.initial != null || _moved;
+  bool get _canConfirm => widget.initial != null || _moved || _gotFix;
+
+  /// 在弹层里点「开启定位」后真的拿到了定点（针已移到用户所在处）→ 与「打开时就有定位」等价。
+  bool _gotFix = false;
+
+  bool _enabling = false;
+
+  GoogleMapController? _map;
+
+  bool get _showLocationBanner =>
+      widget.onEnableLocation != null && widget.initial == null && !_gotFix;
+
+  Future<void> _enableLocation() async {
+    setState(() => _enabling = true);
+    final coords = await widget.onEnableLocation!();
+    if (!mounted) return;
+    setState(() {
+      _enabling = false;
+      if (coords != null && !_moved) {
+        // 用户还没自己选过点 → 针跳到他所在处；已经手动选过就不覆盖他的选择。
+        _picked = LatLng(coords.latitude, coords.longitude);
+        _gotFix = true;
+      } else if (coords != null) {
+        _gotFix = true;
+      }
+    });
+    if (coords != null && !_moved) {
+      await _map?.animateCamera(CameraUpdate.newLatLngZoom(_picked, 16));
+    }
+  }
+
+  @override
+  void dispose() {
+    _map?.dispose();
+    super.dispose();
+  }
 
   /// 选点标记的 id。固定一个 —— 弹层里**只会有一个针**（这是选点而不是浏览）。
   static const MarkerId _pinId = MarkerId('placePickerPin');
@@ -98,6 +141,11 @@ class _PlaceMapPickerSheetState extends State<PlaceMapPickerSheet> {
       child: Column(
         children: [
           _SheetHeader(title: l10n.placeMapPickerTitle),
+          if (_showLocationBanner)
+            _PickerLocationBanner(
+              busy: _enabling,
+              onEnable: _enabling ? null : _enableLocation,
+            ),
           // 🔴 **确认栏不叠在地图上**（UI 稿 A6 · Google 署名合规）：原先确认栏
           // Positioned 在 Stack 里，正好盖住左下角的 Google logo —— 地图 SDK 条款要求
           // 署名不得遮挡。改成地图下方独立的白色底栏，地图本身完整可见。
@@ -105,6 +153,7 @@ class _PlaceMapPickerSheetState extends State<PlaceMapPickerSheet> {
             child: GoogleMap(
               initialCameraPosition:
                   CameraPosition(target: _picked, zoom: _initialZoom),
+              onMapCreated: (c) => _map = c,
               // 🔴 **地图必须在手势竞技场里抢到手势**：外面是个 BottomSheet，
               // 不给 EagerGestureRecognizer 的话竖向平移与拖针都会被弹层的拖拽手势吃掉。
               gestureRecognizers: {
@@ -146,6 +195,57 @@ class _PlaceMapPickerSheetState extends State<PlaceMapPickerSheet> {
                     )
                 : null,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 未授权定位时的提示条（bug 20260921-508）。样式与场所列表页「开启定位」提示条同一套。
+class _PickerLocationBanner extends StatelessWidget {
+  const _PickerLocationBanner({required this.busy, required this.onEnable});
+
+  final bool busy;
+  final VoidCallback? onEnable;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      key: const ValueKey('placeMapPickerLocationBanner'),
+      margin: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.xs, AppSpacing.lg, AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: AppColors.goldTint,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.my_location_rounded, size: 16, color: AppColors.tipsBadgeText),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(l10n.placeMapPickerLocationHint,
+                style: AppTypography.caption.copyWith(color: AppColors.tipsBadgeText)),
+          ),
+          // 44×44 热区（UX-DR16）。
+          if (busy)
+            const Padding(
+              padding: EdgeInsets.all(AppSpacing.md),
+              child: SizedBox(
+                  width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else
+            TextButton(
+              key: const ValueKey('placeMapPickerEnableLocation'),
+              onPressed: onEnable,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(44, 44),
+                foregroundColor: AppColors.tipsBadgeText,
+              ),
+              child: Text(l10n.placeLocationEnable,
+                  style: AppTypography.caption.copyWith(
+                      color: AppColors.tipsBadgeText, fontWeight: FontWeight.w700)),
+            ),
         ],
       ),
     );

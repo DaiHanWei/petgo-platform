@@ -830,6 +830,103 @@ class AdminTemplateStructureTest {
                 .doesNotContain("th:remove");
     }
 
+    /**
+     * 🔴 经 layout 渲染的页面模板：{@code <body>} 的直接子元素只能是那个
+     * {@code th:replace="~{admin/layout :: page(...)}"} 本身，或 {@code th:remove="all"} 包住的片段仓库
+     * （bug 20260923-556）。
+     *
+     * <h2>这条守的是一个真实事故</h2>
+     * 「服务范围与运费」页把三张卡与三个 {@code savedXxx} 片段定义写在了 layout 那个 div 的<b>后面</b>、
+     * 没包 {@code th:remove="all"}。布局内用 {@code th:replace} 取了一次，整页渲染时它们又在布局后面原样
+     * 渲一遍，{@code savedXxx} 里再各嵌一张 —— 页面上同一组字段<b>出现三次</b>。
+     * 服务端 200、渲染冒烟绿、片段结构检查也绿（它们确实都「在某个片段里」）。
+     *
+     * <p>控制器按 {@code 模板 :: 片段名} 取片段不受 {@code th:remove="all"} 影响（选择器在处理前就定位到元素），
+     * 所以片段仓库一律包一层 {@code th:remove="all"}（写法见 {@code _kitchen-sink.html}）。
+     */
+    @Test
+    void pageTemplatesRenderNothingOutsideTheLayout() throws IOException {
+        Pattern tag = Pattern.compile("<(/?)([a-zA-Z][a-zA-Z0-9:._-]*)((?:[^>\"']|\"[^\"]*\"|'[^']*')*?)(/?)>",
+                Pattern.DOTALL);
+        Set<String> voidTags = Set.of("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
+                "source", "track", "wbr");
+        List<String> offenders = new ArrayList<>();
+        int pages = 0;
+        for (Path f : templates()) {
+            String html = Files.readString(f, StandardCharsets.UTF_8).replaceAll("(?s)<!--.*?-->", "");
+            if (!html.contains("layout :: page(") || fileName(f).equals("layout.html")) {
+                continue;
+            }
+            int b = html.indexOf("<body");
+            int e = html.lastIndexOf("</body>");
+            if (b < 0 || e < 0) {
+                continue;
+            }
+            pages++;
+            String body = html.substring(html.indexOf('>', b) + 1, e);
+            int depth = 0;
+            String openTag = null;
+            Matcher m = tag.matcher(body);
+            while (m.find()) {
+                boolean close = !m.group(1).isEmpty();
+                String name = m.group(2).toLowerCase(java.util.Locale.ROOT);
+                if (close) {
+                    depth--;
+                    if (depth == 0 && openTag != null && !openTag.contains("layout :: page(")
+                            && !openTag.contains("th:remove=\"all\"")) {
+                        offenders.add(fileName(f) + "  " + openTag.replaceAll("\\s+", " ")
+                                .substring(0, Math.min(120, openTag.replaceAll("\\s+", " ").length())));
+                    }
+                    continue;
+                }
+                if (voidTags.contains(name) || !m.group(4).isEmpty()) {
+                    if (depth == 0) {
+                        offenders.add(fileName(f) + "  " + m.group());
+                    }
+                    continue;
+                }
+                if (depth == 0) {
+                    openTag = m.group();
+                }
+                depth++;
+            }
+        }
+        assertThat(pages).as("一个经 layout 渲染的页面都没扫到 —— 判据坏了，这条此刻毫无意义").isGreaterThan(10);
+        assertThat(offenders)
+                .as("🔴 这些元素写在 layout 之外、又没有 th:remove=\"all\" —— 整页渲染时会跟在布局后面"
+                        + "原样再渲一遍（bug 556：「服务范围与运费」字段重复三次）。片段仓库请包 th:remove=\"all\"")
+                .isEmpty();
+    }
+
+    /**
+     * 🔴 toast 的 {@code beforeend:} oob 必须<b>外包一层</b>（跨页 bug，2026-09-23）。
+     *
+     * <p>htmx 1.9 对非 outerHTML 的 oob 策略搬的是 oob 元素的<b>子节点</b>：
+     * {@code <div class="toast" hx-swap-oob="beforeend:#admin-toast-host">已保存</div>} 落进宿主的只有
+     * 「已保存」这几个字 —— 没有 .toast 样式、admin-core.js 的计时消失也认不出它，裸文本堆在页角。
+     * 正确写法：{@code <div hx-swap-oob="beforeend:#admin-toast-host"><div class="toast">…</div></div>}。
+     */
+    @Test
+    void toastIsNeverItsOwnBeforeendOobElement() throws IOException {
+        Pattern openTag = Pattern.compile("<[a-zA-Z][^>]*>", Pattern.DOTALL);
+        Pattern toastClass = Pattern.compile("\\bclass=\"[^\"]*\\btoast\\b[^\"]*\"");
+        List<String> offenders = new ArrayList<>();
+        for (Path f : templates()) {
+            String html = Files.readString(f, StandardCharsets.UTF_8).replaceAll("(?s)<!--.*?-->", "");
+            Matcher m = openTag.matcher(html);
+            while (m.find()) {
+                String t = m.group();
+                if (toastClass.matcher(t).find() && t.contains("hx-swap-oob=\"beforeend")) {
+                    offenders.add(fileName(f) + "  " + t.replaceAll("\\s+", " "));
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 .toast 自身带 hx-swap-oob=\"beforeend:…\" —— htmx 只搬子节点，宿主里落下的是裸文本。"
+                        + "外面包一层 <div hx-swap-oob=\"beforeend:#admin-toast-host\">")
+                .isEmpty();
+    }
+
     private List<Path> templates() throws IOException {
         try (Stream<Path> files = Files.walk(DIR)) {
             return files.filter(p -> p.toString().endsWith(".html")).sorted().toList();

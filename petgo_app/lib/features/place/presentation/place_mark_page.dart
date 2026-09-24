@@ -411,7 +411,23 @@ class _PlaceMarkPageState extends ConsumerState<PlaceMarkPage> {
       }
       if (!mounted) return;
     }
-    final picked = await PlaceMapPickerSheet.open(context, current);
+    // bug 20260921-508：未授权定位时弹层顶部给「开启定位」提示条（仍可手动选点）。
+    final needsPermission =
+        ref.read(placeLocationProvider).value?.needsPermissionBanner ?? true;
+    final picked = await PlaceMapPickerSheet.open(
+      context,
+      current,
+      onEnableLocation: needsPermission
+          ? () async {
+              await _onEnableLocation();
+              try {
+                return (await ref.read(placeLocationProvider.future)).coordinates;
+              } catch (_) {
+                return null;
+              }
+            }
+          : null,
+    );
     if (!mounted || picked == null) return;
     setState(() {
       _touch(_Field.location);

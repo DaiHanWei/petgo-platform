@@ -6,7 +6,9 @@
 -->
 <body>
 <div th:fragment="done" class="sp-done" data-done th:data-next-id="${nextId}">
-    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${message}">已结案</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${message}">已结案</div>
+    </div>
     <!-- th:replace 优先级高于 th:if，条件必须放在外层 th:block 上 -->
     <th:block th:if="${#strings.isEmpty(nextId)}"><div th:replace="~{admin/fragments/tpl-a-empty :: queueEmpty('support-tickets', null)}"></div></th:block>
     <li th:id="'support-row-' + ${removedToken}" hx-swap-oob="delete"></li>

@@ -16,10 +16,10 @@
     <!--/* 🔴 DEP-6 未到位的显式提示：不写这句，运营会把「数据没填」读成「机制无效」——
            而这块看板是裁决 A-16（复购引擎是否成立）的唯一依据，读反了会砍掉一条没被验证过的机制。 */-->
     <p th:if="${s.looksLikeMissingFeedingData()}" class="banner err card-full"
-       th:text="#{admin.shop.repurchase.depSixWarning}">触发覆盖率为 0，但已有用户买过粮——这几乎可以肯定是商品的每日建议喂量还没录入（DEP-6），而不是复购机制无效。</p>
+       th:text="#{admin.shop.repurchase.depSixWarning}">触发覆盖率为 0，但已有用户买过粮——这几乎可以肯定是商品的每日建议喂量还没录入，而不是复购机制无效。</p>
 
     <!-- ① 触发 -->
-    <section class="card card-kpi">
+    <section class="card card-kpi repurchase-kpi">
         <h2 th:text="#{admin.shop.repurchase.section.triggers}">触发</h2>
         <table>
             <tr><th th:text="#{admin.shop.repurchase.col.byType}">按类型</th>
@@ -40,14 +40,14 @@
             <tr><th th:text="#{admin.shop.repurchase.col.conversionRate}">触发卡转化率</th>
                 <td th:text="${#numbers.formatPercent(s.triggerConversionRate(), 1, 2)}">0%</td></tr>
             <!--/* 🔴 DEP-6 是否到位的直接读数：分母是买过粮的人，分子是收到过触发的人。 */-->
-            <tr><th th:text="#{admin.shop.repurchase.col.coverage}">FR-109 触发覆盖率</th>
+            <tr><th th:text="#{admin.shop.repurchase.col.coverage}">触发覆盖率</th>
                 <td><span th:text="${#numbers.formatPercent(s.triggerCoverage(), 1, 2)}">0%</span>
                     <span class="hint" th:text="' ' + ${s.usersWithTrigger()} + ' / ' + ${s.usersWithFoodPurchase()}"></span></td></tr>
         </table>
     </section>
 
     <!-- ② 归因（服务端权威口径） -->
-    <section class="card card-kpi">
+    <section class="card card-kpi repurchase-kpi">
         <h2 th:text="#{admin.shop.repurchase.section.attribution}">归因（服务端权威口径）</h2>
         <p class="hint" th:text="#{admin.shop.repurchase.attributionNote}">下面的占比直接读订单行上的 entry_source / trigger_type——用户真的从那个入口买了，而不是「曝光过」。</p>
         <table>
@@ -63,7 +63,7 @@
     </section>
 
     <!-- ③ 复购率 -->
-    <section class="card card-kpi">
+    <section class="card card-kpi repurchase-kpi">
         <h2 th:text="#{admin.shop.repurchase.section.repurchase}">复购率</h2>
         <table>
             <tr th:each="e : ${s.repurchaseRates()}">
@@ -74,7 +74,7 @@
     </section>
 
     <!-- ④ 粮量预估准确度 -->
-    <section class="card card-kpi">
+    <section class="card card-kpi repurchase-kpi">
         <h2 th:text="#{admin.shop.repurchase.section.accuracy}">粮量预估准确度</h2>
         <!--/* 🔴 偏差的正负号含义必须写出来：读反了会把「预估偏早」当成「预估偏晚」，
                而这两者的处置（调喂量系数的方向）正好相反。 */-->
@@ -113,7 +113,7 @@
     </table>
     <!--/* ⚠️ OQ-42 未拍板：kill criteria 的目标值与观察窗口。
            不写这句，这一页会被当成「可以据此砍掉复购引擎」的依据 —— 而它现在还不是。 */-->
-    <p class="hint" th:text="#{admin.shop.repurchase.oq42}">⚠️ A-16 的判据「显著」目前无数值、无窗口、无处置（OQ-42 未拍板）。</p>
+    <p class="hint" th:text="#{admin.shop.repurchase.oq42}">⚠️ 复购机制的判据「显著」目前无数值、无窗口、无处置（尚未拍板）。</p>
 </div>
 
 <!--/* 期间切换的响应：主 swap 换卡区，明细表走 oob —— 它也随期间变，

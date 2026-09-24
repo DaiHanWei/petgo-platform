@@ -66,7 +66,9 @@
 </section>
 
 <section th:fragment="composer" id="vc-composer" class="vc-composer">
-    <div class="toast" role="status" th:if="${toast}" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">toast</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host" th:if="${toast}">
+        <div class="toast" role="status" th:text="${toast}">toast</div>
+    </div>
     <div class="banner err vc-many" th:if="${d.manyVirtual()}" th:text="#{admin.v130.comments.virtual.manyVirtualWarn(${d.virtualCount})}">本帖虚拟评论已 N 条</div>
     <div sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('comment.virtual_post')">
         <form th:attr="hx-post=@{/admin/comments/virtual},data-recent-ids=${#strings.listJoin(d.recentIdentityIds, ',')}"
