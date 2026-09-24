@@ -78,6 +78,11 @@
 				</array>
 			</dict>
 		</array>
+		<!-- 关闭 Flutter 引擎自动深链（bug 20260910-487）：与安卓清单 flutter_deeplinking_enabled=false 一致，
+		     深链只走 app_links（deepLinkToLocation 转站内路径）。不关的话引擎会把原始 tailtopia://… 交给
+		     go_router → 「Page Not Found / no routes for location」。 -->
+		<key>FlutterDeepLinkingEnabled</key>
+		<false/>
 		<key>UIApplicationSceneManifest</key>
 		<dict>
 			<key>UIApplicationSupportsMultipleScenes</key>

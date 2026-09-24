@@ -3,7 +3,7 @@
       xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.seed.title}">种子内容发布 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.seed}">种子内容发布 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <!-- 🔴 上传走 fetch，而 /admin/** 那条过滤链**保留 CSRF** —— 少了这两个 meta
          就是 403，且会被误读成"权限不够"。表单提交有 Thymeleaf 自动带的隐藏域，
@@ -17,7 +17,7 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.seed.title}">发布种子内容</h1>
+        <h1 th:text="#{admin.nav.seed}">发布种子内容</h1>
         <p class="ok" th:if="${publishedId}">
             <span th:text="#{admin.seed.published.prefix}">已发布，内容 ID：</span><span th:text="${publishedId}">0</span><span th:text="#{admin.seed.published.suffix}">（与用户内容混排，无特殊标记）。</span>
         </p>

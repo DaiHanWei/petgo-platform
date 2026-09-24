@@ -276,7 +276,7 @@
                   th:action="@{/admin/seed-batches/{b}/rows/{r}(b=${batchId},r=${r.id})}"
                   th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
                 <!-- 校验/导入错误就贴在这一行上 —— 贴在整页顶部运营找不到是哪行。 -->
-                <p class="err" th:if="${r.errorMessage}" th:text="${r.errorMessage}">错误</p>
+                <p class="err" th:each="line : ${@seedErr.lines(r.errorMessage)}" th:text="${line}">错误</p>
 
                 <label class="field" th:text="#{admin.batch.row.body}">正文</label>
                 <textarea name="body" rows="3" th:text="${r.body}"></textarea>

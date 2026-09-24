@@ -81,7 +81,7 @@
                                  界面只显示一个跳过条数，运营根本不知道哪一条被吞了。 -->
                             <span class="err" th:if="${c.warns()}"
                                   th:text="#{admin.batch.preview.duplicate}">⚠️ 该账号已发过相同内容</span>
-                            <p class="err" th:each="e : ${c.errors}" th:text="${e}">错误</p>
+                            <p class="err" th:each="e : ${c.errors}" th:text="${@seedErr.text(e)}">错误</p>
                         </td>
                     </tr>
                     <tr th:if="${checks.isEmpty()}"><td colspan="8"

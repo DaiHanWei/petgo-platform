@@ -9,7 +9,7 @@
 -->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.shop.products.title}">商品管理 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.shopProducts}">商品管理 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
@@ -18,7 +18,7 @@
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag" th:with="noDrawer=true">
         <div class="wb-title-row">
-            <h1 th:text="#{admin.shop.products.title}">商品管理</h1>
+            <h1 th:text="#{admin.nav.shopProducts}">商品管理</h1>
             <a th:if="${canEdit}" th:href="@{/admin/shop/products/new}" class="btn btn-primary btn-sm"
                th:text="#{admin.shop.products.btn.new}">新建商品</a>
         </div>

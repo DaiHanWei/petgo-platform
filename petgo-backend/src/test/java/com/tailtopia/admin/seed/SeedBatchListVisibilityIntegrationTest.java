@@ -72,7 +72,8 @@ class SeedBatchListVisibilityIntegrationTest extends ApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         assertThat(html).as("🔴 本页没有通往排期的入口 —— 运营仍要换页才知道发布情况")
                 .contains("tab=schedules").contains("排期发布");
-        assertThat(html).as("这仍应是批次列表页本身").contains("批次列表");
+        // bug 20260924-563：页头改与侧栏同名（admin.nav.seedBatches = 批量内容）
+        assertThat(html).as("这仍应是批次列表页本身").contains("<h1>批量内容</h1>");
         assertThat(html).as("独立排期页已退役，页面上不该再出现它的地址")
                 .doesNotContain("/admin/content-schedules\"");
 

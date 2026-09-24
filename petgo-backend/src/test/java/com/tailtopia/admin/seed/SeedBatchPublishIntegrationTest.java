@@ -394,7 +394,8 @@ class SeedBatchPublishIntegrationTest extends ApiIntegrationTest {
 
         assertThat(checks).singleElement().satisfies(c -> {
             assertThat(c.passes()).isFalse();
-            assertThat(String.join(" ", c.errors())).contains("单条发布");
+            assertThat(c.errors()).extracting(com.tailtopia.admin.seed.dto.RowError::key)
+                    .contains("admin.err.seedBatch.row.growthMoment");
         });
     }
 
@@ -411,7 +412,8 @@ class SeedBatchPublishIntegrationTest extends ApiIntegrationTest {
 
         assertThat(checks.get(0).passes()).isTrue();
         assertThat(checks.get(1).passes()).isFalse();
-        assertThat(String.join(" ", checks.get(1).errors())).contains("身份池");
+        assertThat(checks.get(1).errors()).extracting(com.tailtopia.admin.seed.dto.RowError::key)
+                .contains("admin.err.seedBatch.row.authorNotInPool");
     }
 
     /**
@@ -434,7 +436,8 @@ class SeedBatchPublishIntegrationTest extends ApiIntegrationTest {
         List<RowValidation> checks = publishing.preview(batchId);
 
         assertThat(checks).singleElement().satisfies(c ->
-                assertThat(String.join(" ", c.errors())).contains("素材"));
+                assertThat(c.errors()).extracting(com.tailtopia.admin.seed.dto.RowError::key)
+                        .contains("admin.err.seedBatch.row.assetGone"));
     }
 
     /** 预览页能打开、且列出行（AC1）。 */

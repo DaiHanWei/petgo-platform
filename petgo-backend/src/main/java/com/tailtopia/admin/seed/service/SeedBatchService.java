@@ -229,7 +229,9 @@ public class SeedBatchService {
         try {
             r.transitionTo(target);
         } catch (IllegalStateException e) {
-            throw AppException.validation(e.getMessage());
+            // 原文（非法流转明细）留给日志；界面按后台语言显示一句可操作的说明（bug 20260924-565）。
+            throw AppException.validation(e.getMessage())
+                    .code("admin.err.seedBatch.illegalTransition");
         }
     }
 }

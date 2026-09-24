@@ -65,7 +65,7 @@
             <span class="muted" th:if="${r.scheduledAt != null}">WIB</span>
         </p>
         <!--/* 校验没过的原因写全 —— 表格里那一列宽度有限，长原因会被挤 */-->
-        <p class="err" th:each="e : ${c.errors}" th:text="${e}">错误</p>
+        <p class="err" th:each="e : ${c.errors}" th:text="${@seedErr.text(e)}">错误</p>
     </section>
 
     <!--/* 翻行。⚠️ 目标是抽屉体本身（outerHTML 换整块），不是列表 */-->

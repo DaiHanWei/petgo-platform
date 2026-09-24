@@ -10,7 +10,7 @@
 */-->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.sessions.title}">问诊会话查询 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.sessions}">问诊会话查询 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
     <script defer th:src="@{/admin/admin-drawer.js}"></script>
@@ -20,7 +20,7 @@
     <!--/* ⚠️ res 设在这一层，不能写在下面那个带 th:replace 的 div 上（优先级 100 vs 600，
            同标签时 th:with 被静默丢弃 —— 见 AdminTemplateStructureTest 的守门）。 */-->
     <div th:fragment="content" th:remove="tag" th:with="res='session',noDrawer=false">
-        <h1 th:text="#{admin.sessions.title}">问诊会话查询</h1>
+        <h1 th:text="#{admin.nav.sessions}">问诊会话查询</h1>
         <!--/* 🔴 这句常驻：它解释了「为什么这里查不到聊天内容」。删掉之后，
                每一个第一次用这页的人都会以为功能没做完。 */-->
         <p class="hint" data-notice="sessions-nfr5" th:text="#{admin.sessions.note}">

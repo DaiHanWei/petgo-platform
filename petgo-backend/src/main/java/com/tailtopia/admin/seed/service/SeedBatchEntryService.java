@@ -3,6 +3,7 @@ package com.tailtopia.admin.seed.service;
 import com.tailtopia.admin.seed.domain.SeedBatch;
 import com.tailtopia.admin.seed.domain.SeedBatchAsset;
 import com.tailtopia.admin.seed.domain.SeedBatchRow;
+import com.tailtopia.admin.seed.dto.RowError;
 import com.tailtopia.admin.seed.repository.SeedBatchAssetRepository;
 import com.tailtopia.admin.seed.repository.SeedBatchRepository;
 import com.tailtopia.admin.seed.repository.SeedBatchRowRepository;
@@ -147,19 +148,20 @@ public class SeedBatchEntryService {
 
             // 🛡 缺账号 / 缺类型**不阻止入库** —— 它们是**校验错误**，属 13-4 的预览要展示的东西。
             //    在这里抛错会把整批粘贴一起挡掉，而运营的本意只是先把文案贴进来。
-            List<String> problems = new ArrayList<>();
+            //    bug 20260924-565：存文案码不存中文，展示端按后台语言渲染（与 SeedBatchValidator 同码）。
+            List<RowError> problems = new ArrayList<>();
             if (authorId == null) {
-                problems.add("未指定发布账号，且批次未设默认");
+                problems.add(new RowError("admin.err.seedBatch.row.authorUnset"));
             }
             if (type == null) {
-                problems.add("未指定内容类型，且批次未设默认");
+                problems.add(new RowError("admin.err.seedBatch.row.typeUnset"));
             }
             List<String> urls = new ArrayList<>();
             for (String name : raw.assetFileNames()) {
                 SeedBatchAsset a = byName.get(name);
                 if (a == null) {
                     // ⚠️ 报的是**文件名**而不是内部 id：运营认的是文件名。
-                    problems.add("素材「" + name + "」不在本批素材里");
+                    problems.add(new RowError("admin.err.seedBatch.row.assetNameMissing", name));
                 } else {
                     urls.add(a.getUrl());
                 }
@@ -174,7 +176,7 @@ public class SeedBatchEntryService {
                 row.setScheduledAt(at);
             }
             if (!problems.isEmpty()) {
-                row.setErrorMessage(String.join("；", problems));
+                row.setErrorMessage(SeedRowErrors.encode(problems));
             }
             saved.add(rows.save(row));
         }
@@ -197,11 +199,12 @@ public class SeedBatchEntryService {
         }
         Map<String, SeedBatchAsset> byName = assetsByName(row.getBatchId());
         List<String> urls = new ArrayList<>();
-        List<String> missing = new ArrayList<>();
+        List<RowError> missing = new ArrayList<>();
         for (String name : assetFileNames) {
             SeedBatchAsset a = byName.get(name);
             if (a == null) {
-                missing.add(name);
+                // 与录入时同一个码，一个文件名一条（运营对着文件名逐个找）。
+                missing.add(new RowError("admin.err.seedBatch.row.assetNameMissing", name));
             } else {
                 urls.add(a.getUrl());
             }
@@ -214,8 +217,7 @@ public class SeedBatchEntryService {
         }
         row.setSpecies(SeedRowDefaults.species(species, author, accountSpecies));
         row.setScheduledAt(SeedRowDefaults.scheduledAt(scheduledAt, batch));
-        row.setErrorMessage(missing.isEmpty() ? null
-                : "素材不在本批素材里：" + String.join("、", missing));
+        row.setErrorMessage(SeedRowErrors.encode(missing));
         rows.save(row);
     }
 

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
 
+import '../../app.dart' show deepLinkToLocation;
 import '../analytics/analytics.dart';
 import 'deep_link_routes.dart';
 import '../theme/app_theme.dart';
@@ -216,6 +217,19 @@ bool redirectWouldRewrite(AuthState auth, String location) {
   return !auth.isLoggedIn && controlled;
 }
 
+/// 原始 `tailtopia://…` URI 落进 go_router 时的改写目标；非本 App scheme 返回 null（不干预）。
+///
+/// 🐛 bug 20260910-487：iOS Info.plist 漏了 `FlutterDeepLinkingEnabled=false`，Flutter 引擎把
+/// 唤起 URL 原样交给 go_router → 「Page Not Found / no routes for location: tailtopia://card/…」。
+/// 根治在 Info.plist（与安卓清单一致，深链只走 app_links）；这里是兜底：万一原始 URI 再漏进来
+/// （引擎行为变更 / 别的插件转发），按同一张 [deepLinkToLocation] 映射改写，认不出的 host 落首页，
+/// 绝不再落 404 页。改写后的落点会被 go_router **重新过一遍顶层 redirect** ——
+/// 受控前缀门控照常生效（如游客的 `/profile/milestones` 仍被弹回 `/home`），安全规则只升不降。
+String? rawDeepLinkRedirect(Uri uri) {
+  if (uri.scheme != 'tailtopia') return null;
+  return deepLinkToLocation(uri) ?? '/home';
+}
+
 /// 热启动落深链（app 已活、被深链唤起）。
 ///
 /// 🔴 **V1.1.6 Story 2.4 起必须走这里，不能再直接 `go`。**
@@ -425,6 +439,10 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: authRefresh,
     initialLocation: kDebugMode && _devRoute.isNotEmpty ? _devRoute : '/splash',
     redirect: (context, state) {
+      // 先把原始 `tailtopia://` URI 转成站内路径（bug 20260910-487 兜底）；改写后的落点
+      // 会重新进本 redirect，下面的角色守卫 / 受控前缀门控照常生效。
+      final rawDeepLink = rawDeepLinkRedirect(state.uri);
+      if (rawDeepLink != null) return rawDeepLink;
       final auth = ref.read(authControllerProvider);
       final loc = state.matchedLocation;
       // 启动屏（P-01）：先显示品牌过场，由 SplashPage 完成时按角色直达（vet→工作台 / 其余→home）。

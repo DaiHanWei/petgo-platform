@@ -7,7 +7,7 @@
 */-->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.aiOrders.title}">AI 问诊订单 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.aiOrders}">AI 问诊订单 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
     <script defer th:src="@{/admin/admin-drawer.js}"></script>
@@ -16,7 +16,7 @@
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag" th:with="res='ai-order'">
         <div class="wb-title-row">
-            <h1 th:text="#{admin.aiOrders.title}">AI 问诊收入 · 订单</h1>
+            <h1 th:text="#{admin.nav.aiOrders}">AI 问诊收入 · 订单</h1>
             <!--/* 🔴 同 B10：这个端点不接收筛选参数，永远导出全表。 */-->
             <a class="btn btn-neutral btn-sm" data-no-drawer
                th:href="@{/admin/ai-orders/export}"

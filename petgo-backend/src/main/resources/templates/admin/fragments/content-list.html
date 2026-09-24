@@ -145,8 +145,8 @@
             <span th:if="${th != null}" class="muted rv-small"
                   th:text="${th.permanent()} ? #{admin.throttle.permanent} : ${@adminTime.wib(th.expiresAt())}">永久</span>
         </td>
-        <td th:text="${sp} == null ? '—' : ${sp.speciesLabel()}">—</td>
-        <td class="muted" th:text="${sp} == null ? '—' : ${sp.source()}">—</td>
+        <td th:text="${sp} == null ? '—' : (${#messages.msgOrNull('admin.v130.comments.distribution.species.' + sp.speciesLabel())} ?: ${sp.speciesLabel()})">—</td>
+        <td class="muted" th:text="${sp} == null ? '—' : (${#messages.msgOrNull('admin.species.source.' + sp.source())} ?: ${sp.source()})">—</td>
     </tr>
 </tbody></table>
 </body>

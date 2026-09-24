@@ -89,7 +89,7 @@ public class AdminSeedBatchWorkspaceController {
             @RequestParam(value = "page", required = false, defaultValue = "0") int page,
             @RequestParam(value = "open", required = false) Long open,
             com.tailtopia.admin.shared.web.HxRequest hx, Model model) {
-        model.addAttribute("active", "seed");
+        model.addAttribute("active", "seed-batches");
         model.addAttribute("batches", batches.recentBatches());
         boolean schedulesTab = "schedules".equals(tab);
         model.addAttribute("tab", schedulesTab ? "schedules" : "batches");
@@ -131,7 +131,7 @@ public class AdminSeedBatchWorkspaceController {
             return "redirect:/admin/seed-batches?tab=schedules"
                     + (authorId == null ? "" : "&authorId=" + authorId);
         }
-        model.addAttribute("active", "seed");
+        model.addAttribute("active", "seed-batches");
         model.addAttribute("tab", "schedules");
         populateSchedules(authorId, status, date, page, model);
         return "admin/fragments/schedules-tab :: rows(oob=true)";
@@ -187,7 +187,7 @@ public class AdminSeedBatchWorkspaceController {
     public String workspace(@PathVariable long batchId,
             @RequestParam(value = "step", required = false) String step,
             @RequestParam(value = "edit", required = false) Long edit, Model model) {
-        model.addAttribute("active", "seed");
+        model.addAttribute("active", "seed-batches");
         model.addAttribute("batchId", batchId);
         // ⚠️ 手改 URL 的 step 一律夹回 [0,2]；非数字也当第 0 步 ——
         //    声明成 int 的话 `?step=abc` 是一个 400 错误页，而它对运营毫无意义。
@@ -417,9 +417,9 @@ public class AdminSeedBatchWorkspaceController {
                     "usedCount", used.count(),
                     "usedBytes", used.bytes()));
         } catch (AppException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(Map.of("error", i18n.resolve(e)));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "素材上传失败，请重试"));
+            return ResponseEntity.badRequest().body(Map.of("error", i18n.get("admin.err.seedBatch.assetUploadFailed")));
         }
     }
 
@@ -441,7 +441,7 @@ public class AdminSeedBatchWorkspaceController {
     @PreAuthorize(AUTH)
     public String preview(@PathVariable long batchId,
             @RequestParam(value = "open", required = false) Long open, Model model) {
-        model.addAttribute("active", "seed");
+        model.addAttribute("active", "seed-batches");
         model.addAttribute("batchId", batchId);
         model.addAttribute("open", open);
         var checks = publishing.preview(batchId);

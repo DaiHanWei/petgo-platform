@@ -88,16 +88,16 @@
     <section class="card card-full ct-card" data-section="content-species">
         <h3 th:text="#{admin.species.col.value}">物种</h3>
         <p>
-            <span class="badge badge-muted" th:text="${sp.speciesLabel()}">CAT</span>
+            <span class="badge badge-muted" th:text="${#messages.msgOrNull('admin.v130.comments.distribution.species.' + sp.speciesLabel()) ?: sp.speciesLabel()}">CAT</span>
             <span class="muted rv-small"><span th:text="#{admin.species.col.source}">推导来源</span>
-                <span th:text="${sp.source()}">NONE</span></span>
+                <span th:text="${#messages.msgOrNull('admin.species.source.' + sp.source()) ?: sp.source()}">NONE</span></span>
         </p>
         <form th:if="${sp.editable() and canTakedown}" data-autosubmit th:attr="hx-post=@{/admin/content/species}"
               hx-target="#content-drawer-err" hx-swap="innerHTML">
             <input type="hidden" name="postId" th:value="${d.post().id()}"/>
             <select name="species" class="sel">
                 <option value="" th:text="#{admin.species.clear}">（清除覆写）</option>
-                <option th:each="opt : ${speciesOptions}" th:value="${opt}" th:text="${opt}"
+                <option th:each="opt : ${speciesOptions}" th:value="${opt}" th:text="${#messages.msgOrNull('admin.v130.comments.distribution.species.' + opt) ?: opt}"
                         th:selected="${d.post().speciesOverride() == opt}">GENERAL</option>
             </select>
         </form>

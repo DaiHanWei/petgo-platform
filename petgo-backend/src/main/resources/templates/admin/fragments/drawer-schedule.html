@@ -56,7 +56,7 @@
         </p>
         <!--/* 🛡 失败原因**完整展示**（表里只放得下截断的一段）：账号被移出、审核拦下、宠物档案删了，
                处置方式完全不同，看不到全文就无从下手 */-->
-        <p class="err" th:if="${r.errorMessage != null}" th:text="${r.errorMessage}">失败原因</p>
+        <p class="err" th:each="line : ${@seedErr.lines(r.errorMessage)}" th:text="${line}">失败原因</p>
         <p class="hint" th:if="${failed}" th:text="#{admin.v130.schedules.failedFixFirst}">
             失败行请回工作台修好再重新提交。</p>
         <p class="hint">

@@ -7,7 +7,7 @@
 */-->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.users.title}">用户搜索 · TailTopia 运营</title>
+    <title th:text="#{admin.nav.users}">用户搜索 · TailTopia 运营</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
     <script defer th:src="@{/admin/admin-drawer.js}"></script>
@@ -15,7 +15,7 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag" th:with="res='user'">
-        <h1 th:text="#{admin.users.title}">用户搜索</h1>
+        <h1 th:text="#{admin.nav.users}">用户搜索</h1>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 

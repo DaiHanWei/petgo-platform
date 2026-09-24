@@ -9,7 +9,7 @@
 */-->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.failed.title}">未成功请求 · TailTopia 运营</title>
+    <title th:text="#{admin.nav.failedRequests}">未成功请求 · TailTopia 运营</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
     <script defer th:src="@{/admin/admin-drawer.js}"></script>
@@ -19,7 +19,7 @@
     <!--/* ⚠️ res 设在这一层，不能写在下面那个带 th:replace 的 div 上（优先级 100 vs 600，
            同标签时 th:with 被静默丢弃 —— 见 AdminTemplateStructureTest 的守门）。 */-->
     <div th:fragment="content" th:remove="tag" th:with="res='failed'">
-        <h1 th:text="#{admin.failed.title}">问诊请求未成功队列</h1>
+        <h1 th:text="#{admin.nav.failedRequests}">问诊请求未成功队列</h1>
         <p class="hint" th:text="#{admin.v130.failed.hint}">
             掉单巡查：只有「系统故障」那部分是我们自己的问题，它必须先标记跟进才能归档。</p>
 

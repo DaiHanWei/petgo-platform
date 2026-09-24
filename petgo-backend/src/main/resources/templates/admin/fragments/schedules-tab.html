@@ -161,8 +161,8 @@
         </td>
         <!--/* 🛡 失败原因要写清"我该怎么办"：账号被移出、审核拦下、宠物档案删了，处置方式完全不同。
                列宽有限 → 截断显示，title 里给完整原文（悬浮看全）。 */-->
-        <td class="err sched-error" th:title="${r.errorMessage}"
-            th:text="${#strings.abbreviate(r.errorMessage ?: '—', 30)}">—</td>
+        <td class="err sched-error" th:with="errText=${@seedErr.render(r.errorMessage)}" th:title="${errText}"
+            th:text="${#strings.abbreviate(errText ?: '—', 30)}">—</td>
         <td>
             <!--/* AC3 行内编辑态：点「改时间」当场展开日期时间输入 + 保存 / 取消，**不弹层**。
                    用原生 <details>：无 JS 也能开合，htmx swap 进来也不需要重新绑定。

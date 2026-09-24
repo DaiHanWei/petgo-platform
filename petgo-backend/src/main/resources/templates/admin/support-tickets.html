@@ -8,7 +8,7 @@
 -->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.support.title}">客服工单 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.supportTickets}">客服工单 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
     <script defer th:src="@{/admin/admin-workbench.js}"></script>
@@ -16,7 +16,7 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <div class="wb-title-row"><h1 th:text="#{admin.support.title}">客服工单</h1></div>
+        <div class="wb-title-row"><h1 th:text="#{admin.nav.supportTickets}">客服工单</h1></div>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
 
