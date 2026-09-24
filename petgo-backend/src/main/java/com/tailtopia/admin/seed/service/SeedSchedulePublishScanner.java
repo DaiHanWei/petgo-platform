@@ -137,8 +137,8 @@ public class SeedSchedulePublishScanner {
      * 一条没有原因的失败等于让运营自己猜。
      */
     private static String reasonOf(RuntimeException e) {
-        String m = e.getMessage();
-        return m == null || m.isBlank() ? "到点发布失败（原因未记录，请查看服务日志）" : m;
+        // bug 20260924-565：挂了文案码的异常存码（按后台语言渲染），否则存原文，都没有给兜底码。
+        return SeedRowErrors.fromException(e, "admin.err.seedBatch.row.scheduledPublishFailed");
     }
 
     /** 供排期列表页显示"下一轮大约什么时候扫" —— 运营最常问的就是这个。 */

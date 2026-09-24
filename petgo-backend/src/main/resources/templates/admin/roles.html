@@ -8,7 +8,7 @@
 */-->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.roles.title}">角色配置 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.roles}">角色配置 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
 </head>
@@ -16,7 +16,7 @@
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag" th:with="res='roles',noDrawer=true">
         <div class="wb-title-row">
-            <h1 th:text="#{admin.roles.title}">角色配置</h1>
+            <h1 th:text="#{admin.nav.roles}">角色配置</h1>
             <a class="btn btn-primary btn-sm" th:href="@{/admin/roles/new}" th:text="#{admin.roles.create}">＋ 新建角色</a>
         </div>
         <p class="muted" th:text="#{admin.roles.subtitle}">四个预置岗位角色的权限可在此编辑；也可新建自定义角色。变更对该角色下账号重新登录后生效。</p>

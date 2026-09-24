@@ -10,7 +10,7 @@
 -->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.shop.inventory.title}">库存管理 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.shopInventory}">库存管理 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
@@ -20,7 +20,7 @@
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag" th:with="res='shop-inventory'">
         <div class="wb-title-row">
-            <h1 th:text="#{admin.shop.inventory.title}">库存管理</h1>
+            <h1 th:text="#{admin.nav.shopInventory}">库存管理</h1>
         </div>
         <p class="muted" th:text="#{admin.shop.inventory.hint}">库存增减只能通过入库单、报损与盘点调整产生，不提供直接编辑库存数字的入口——直接改数会使库存与采购成本脱钩，令毛利核算失真。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>

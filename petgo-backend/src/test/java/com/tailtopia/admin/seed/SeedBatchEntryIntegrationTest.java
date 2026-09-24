@@ -260,7 +260,8 @@ class SeedBatchEntryIntegrationTest extends ApiIntegrationTest {
                 .andExpect(status().is3xxRedirection());
 
         SeedBatchRow row = batchService.rowsOf(batchId).get(0);
-        assertThat(row.getErrorMessage()).contains("发布账号");
+        // bug 20260924-565：存文案码（按后台语言渲染），不存中文
+        assertThat(row.getErrorMessage()).contains("i18n:admin.err.seedBatch.row.authorUnset");
     }
 
     /**

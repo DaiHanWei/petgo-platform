@@ -8,7 +8,7 @@
 -->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.anomalies.title}">问诊异常工单 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.anomalies}">问诊异常工单 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
     <script defer th:src="@{/admin/admin-workbench.js}"></script>
@@ -16,7 +16,7 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <div class="wb-title-row"><h1 th:text="#{admin.anomalies.title}">问诊异常工单</h1></div>
+        <div class="wb-title-row"><h1 th:text="#{admin.nav.anomalies}">问诊异常工单</h1></div>
         <p class="muted" th:text="#{admin.anomalies.note}">兽医被封禁自动生成；仅系统内会话元数据，不触达第三方消息正文。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>

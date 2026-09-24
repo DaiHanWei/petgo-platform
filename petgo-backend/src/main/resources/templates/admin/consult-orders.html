@@ -8,7 +8,7 @@
 */-->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.consultOrders.title}">兽医咨询订单 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.consultOrders}">兽医咨询订单 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
     <script defer th:src="@{/admin/admin-drawer.js}"></script>
@@ -19,7 +19,7 @@
            同标签时 th:with 被静默丢弃 —— 见 AdminTemplateStructureTest 的守门）。 */-->
     <div th:fragment="content" th:remove="tag" th:with="res='order'">
         <div class="wb-title-row">
-            <h1 th:text="#{admin.consultOrders.title}">兽医咨询订单</h1>
+            <h1 th:text="#{admin.nav.consultOrders}">兽医咨询订单</h1>
             <!--/* 🔴 文案是「导出全部」不是「导出」：这个端点**不接收任何筛选参数**，永远导出全表。
                    写「导出」会被读成「导出我现在看到的这些」—— 支付记录页（8.5）的导出才是那个语义。 */-->
             <a class="btn btn-neutral btn-sm" data-no-drawer

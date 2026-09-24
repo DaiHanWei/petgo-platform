@@ -10,7 +10,7 @@
 -->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.shop.orders.title}">电商订单 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.shopOrders}">电商订单 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
@@ -19,7 +19,7 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag" th:with="res='shop-order'">
-        <div class="wb-title-row"><h1 th:text="#{admin.shop.orders.title}">电商订单</h1></div>
+        <div class="wb-title-row"><h1 th:text="#{admin.nav.shopOrders}">电商订单</h1></div>
         <p class="muted" th:text="#{admin.shop.orders.hint}">列表不显示收件人信息。要查看收件地址请打开订单抽屉。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>

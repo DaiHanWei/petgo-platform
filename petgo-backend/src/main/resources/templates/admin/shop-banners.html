@@ -10,7 +10,7 @@
 -->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.shop.banners.title}">Toko 顶部 Banner · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.shopBanners}">Toko 顶部 Banner · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
@@ -24,7 +24,7 @@
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag" th:with="res='shop-banner'">
         <div class="wb-title-row">
-            <h1 th:text="#{admin.shop.banners.title}">Toko 顶部 Banner</h1>
+            <h1 th:text="#{admin.nav.shopBanners}">Toko 顶部 Banner</h1>
             <!-- AC3：「＋新增 Banner」移到筛选栏（本页没有筛选项，就落在标题行右侧的同一位置） -->
             <button th:if="${canEdit}" type="button" class="btn btn-primary btn-sm" data-drawer-res="shop-banner"
                     th:attr="data-drawer-open=@{/admin/shop/banners(create=1)},data-drawer-autoopen=${openCreate} ? 'true' : null"

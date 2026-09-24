@@ -9,7 +9,7 @@
 */-->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.payments.title}">支付记录查询 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.payments}">支付记录查询 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
     <script defer th:src="@{/admin/admin-drawer.js}"></script>
@@ -20,7 +20,7 @@
            同标签时 th:with 被静默丢弃 —— 见 AdminTemplateStructureTest 的守门）。 */-->
     <div th:fragment="content" th:remove="tag" th:with="res='payment'">
         <div class="wb-title-row">
-            <h1 th:text="#{admin.payments.title}">支付记录查询</h1>
+            <h1 th:text="#{admin.nav.payments}">支付记录查询</h1>
             <!--/* 🔴 文案是「导出当前结果」：这个端点接收与列表**同一套**筛选参数，
                    导出的就是屏幕上正在看的那一份（与兽医订单页的「导出全部」刻意不同）。
                    ⚠️ sec:authorize 与控制器的 EXPORT_AUTH 逐字一致，否则按钮在、点了 403。 */-->

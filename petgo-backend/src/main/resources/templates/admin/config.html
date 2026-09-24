@@ -9,7 +9,7 @@
 */-->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.config.title}">运营配置 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.config}">运营配置 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <!--/* 配置卡 dirty / diff 确认 / htmx（CSRF 头、toast 计时、422 放行）由 admin-core.js 统一处理 */-->
     <script defer th:src="@{/admin/admin-core.js}"></script>
@@ -17,7 +17,7 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag">
-        <h1 th:text="#{admin.config.title}">运营配置</h1>
+        <h1 th:text="#{admin.nav.config}">运营配置</h1>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
         <p class="hint" th:text="#{admin.config.hint}">改动仅影响后续新成交；历史订单按成交快照不变。每次修改记入变更日志与审计哈希链。</p>

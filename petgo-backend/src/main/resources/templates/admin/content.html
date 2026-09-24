@@ -9,7 +9,7 @@
 */-->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.content.title}">内容管理 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.content}">内容管理 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
     <script defer th:src="@{/admin/admin-drawer.js}"></script>
@@ -17,7 +17,7 @@
 <body>
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag" th:with="res='content'">
-        <h1 th:text="#{admin.content.title}">内容管理</h1>
+        <h1 th:text="#{admin.nav.content}">内容管理</h1>
         <p class="muted" th:text="#{admin.content.note}">无举报时也可主动处置违规内容；下架/恢复均留审计。</p>
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>
@@ -67,13 +67,13 @@
                 <label>
                     <select name="species">
                         <option value="" th:text="#{admin.species.all}">全部物种</option>
-                        <option th:each="opt : ${speciesOptions}" th:value="${opt}" th:text="${opt}" th:selected="${species == opt}">GENERAL</option>
+                        <option th:each="opt : ${speciesOptions}" th:value="${opt}" th:text="${#messages.msgOrNull('admin.v130.comments.distribution.species.' + opt) ?: opt}" th:selected="${species == opt}">GENERAL</option>
                     </select>
                 </label>
                 <label>
                     <select name="speciesSource">
                         <option value="" th:text="#{admin.species.allSources}">全部来源</option>
-                        <option th:each="src : ${speciesSources}" th:value="${src}" th:text="${src}" th:selected="${speciesSource == src.name()}">NONE</option>
+                        <option th:each="src : ${speciesSources}" th:value="${src}" th:text="${#messages.msgOrNull('admin.species.source.' + src) ?: src}" th:selected="${speciesSource == src.name()}">NONE</option>
                     </select>
                 </label>
                 <!--/* 表头点击排序把值写进这里再提交表单（保留筛选条件） */-->

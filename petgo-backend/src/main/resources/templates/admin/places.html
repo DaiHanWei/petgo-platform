@@ -8,7 +8,7 @@
 -->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.v130.places.title}">场所管理 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.places}">场所管理 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
     <script defer th:src="@{/admin/admin-drawer.js}"></script>
@@ -17,7 +17,7 @@
 <div th:replace="~{admin/layout :: page(~{::content})}">
     <div th:fragment="content" th:remove="tag" th:with="res='places'">
         <div class="wb-title-row">
-            <h1 th:text="#{admin.v130.places.title}">场所管理</h1>
+            <h1 th:text="#{admin.nav.places}">场所管理</h1>
             <!-- Story 5.4：「＋ 新建场所」→ 同一抽屉装新建表单（admin-drawer.js 的 [data-drawer-open]；?create=1 深链自动开） -->
             <button type="button" class="btn btn-primary btn-sm" th:attr="data-drawer-open=@{/admin/places/new/drawer},data-drawer-autoopen=${openCreate} ? 'true' : null"
                     data-drawer-res="places" th:text="#{admin.v130.places.create.button}">＋ 新建场所</button>

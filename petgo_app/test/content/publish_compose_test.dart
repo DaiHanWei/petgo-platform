@@ -100,6 +100,13 @@ class _FakeProfileRepo implements ProfileRepository {
       PetProfile(id: 1, name: name ?? 'x', cardToken: 'T');
 }
 
+/// 有宠物档案的档案仓库：成长日历发布必带 pet_id（bug 564 成功路径用）。
+class _WithPetProfileRepo extends _FakeProfileRepo {
+  @override
+  Future<PetProfile?> getMyProfile() async =>
+      const PetProfile(id: 1, name: 'Oyen', cardToken: 'T');
+}
+
 PublishController _controller(ContentRepository repo) =>
     PublishController(repository: repo, uploadOne: (b) async => 'https://cdn/x.jpg');
 
@@ -582,5 +589,106 @@ void main() {
 
     expect(find.byType(PublishLandingPage), findsNothing);
     expect(find.text('milestones'), findsOneWidget);
+  });
+  // ===== bug 20260924-564：Diary 日历「+」进发布、放弃后被送到 Social =====
+  //
+  // 回归的缺陷：/publish 着陆页在无 milestoneCode 时无条件 go('/home') 清栈 ——
+  // 从日历进来 ✕ 放弃，落到 Social 而不是回日历；发布成功时 compose 刚 push 的成功页也被一并冲掉。
+  // 修后：所有入口统一「本页重新成为栈顶才离开」，能 pop 回上一页，无上一页才兜底 /home。
+  GoRouter calendarPublishRouter(String initial) => GoRouter(
+        initialLocation: initial,
+        routes: [
+          GoRoute(
+              path: '/profile',
+              builder: (c, s) => Scaffold(
+                    body: TextButton(
+                      onPressed: () => c.push(
+                          '/publish?preset=growth-calendar&date=2026-09-01'),
+                      child: const Text('diary-calendar'),
+                    ),
+                  )),
+          GoRoute(
+              path: '/publish',
+              builder: (c, s) => PublishLandingPage(
+                    preset: ContentType.growthMoment,
+                    presetEventDate:
+                        DateTime.tryParse(s.uri.queryParameters['date'] ?? ''),
+                  )),
+          GoRoute(
+              path: '/publish/done',
+              builder: (c, s) => PublishDonePage(args: s.extra as PublishResultArgs)),
+          GoRoute(path: '/home', builder: (c, s) => const Scaffold(body: Text('home'))),
+        ],
+      );
+
+  testWidgets('bug 564: 日历入口 → ✕ 放弃 → 回 Diary 日历（不去 Social）', (tester) async {
+    _tallView(tester);
+    final container = milestoneContainer();
+    addTearDown(container.dispose);
+    final router = calendarPublishRouter('/profile');
+
+    await tester.pumpWidget(routerApp(container, router));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('diary-calendar'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PublishComposePage), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('publishClose')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PublishComposePage), findsNothing);
+    expect(find.byType(PublishLandingPage), findsNothing); // 空白着陆页已出栈
+    expect(find.text('diary-calendar'), findsOneWidget);
+    expect(find.text('home'), findsNothing);
+    expect(router.routerDelegate.currentConfiguration.uri.path, '/profile');
+  });
+
+  testWidgets('bug 564: 冷启 / go 进来（无上一页）✕ 放弃 → 兜底 /home', (tester) async {
+    _tallView(tester);
+    final container = milestoneContainer();
+    addTearDown(container.dispose);
+    final router = calendarPublishRouter('/publish?preset=growth-calendar');
+
+    await tester.pumpWidget(routerApp(container, router));
+    await tester.pumpAndSettle();
+    expect(find.byType(PublishComposePage), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('publishClose')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PublishLandingPage), findsNothing);
+    expect(find.text('home'), findsOneWidget);
+  });
+
+  testWidgets('bug 564: 日历入口发布成功 → 成功页不被冲掉；从成功页返回 → 回日历', (tester) async {
+    _tallView(tester);
+    final container = ProviderContainer(overrides: [
+      publishControllerProvider
+          .overrideWithValue(_controller(_OkRepo())..setText('Oyen sehat hari ini')),
+      profileRepositoryProvider.overrideWithValue(_WithPetProfileRepo()),
+      authControllerProvider.overrideWith(() => _WithArchiveAuth()),
+    ]);
+    addTearDown(container.dispose);
+    final router = calendarPublishRouter('/profile');
+
+    await tester.pumpWidget(routerApp(container, router));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('diary-calendar'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('publishSubmit')));
+    await pumpThroughReviewing(tester);
+    await tester.pumpAndSettle();
+
+    final l10n = await _en();
+    expect(find.byType(PublishDonePage), findsOneWidget); // 成功页还在
+    expect(find.text(l10n.publishDoneViewFeed), findsOneWidget);
+
+    // 系统返回：成功页出栈 → 着陆页重新露出 → 自己再出栈 → 回日历。
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(PublishLandingPage), findsNothing);
+    expect(find.text('diary-calendar'), findsOneWidget);
+    expect(router.routerDelegate.currentConfiguration.uri.path, '/profile');
   });
 }

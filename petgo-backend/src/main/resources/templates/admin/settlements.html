@@ -8,7 +8,7 @@
 */-->
 <head>
     <meta charset="UTF-8"/>
-    <title th:text="#{admin.settlements.title}">兽医月结对账 · TailTopia 运营后台</title>
+    <title th:text="#{admin.nav.settlements}">兽医月结对账 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <script defer th:src="@{/admin/admin-core.js}"></script>
     <script defer th:src="@{/admin/admin-drawer.js}"></script>
@@ -18,7 +18,7 @@
     <!--/* ⚠️ res 设在这一层，不能写在下面那个带 th:replace 的 div 上（优先级 100 vs 600，
            同标签时 th:with 被静默丢弃 —— 见 AdminTemplateStructureTest 的守门）。 */-->
     <div th:fragment="content" th:remove="tag" th:with="res='settlement'">
-        <h1 th:text="#{admin.settlements.title}">兽医分成月结对账</h1>
+        <h1 th:text="#{admin.nav.settlements}">兽医分成月结对账</h1>
         <p class="hint" th:text="#{admin.settlements.hint}">每月 1 日生成上月月结（待财务打款）。确认打款请回填凭证；打款后可归档。到手 = Σ 兽医分成快照。</p>
 
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
