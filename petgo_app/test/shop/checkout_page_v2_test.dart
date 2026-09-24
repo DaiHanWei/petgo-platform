@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/theme/shop_tokens.dart';
 import 'package:tailtopia/features/shop/address/data/address_repository.dart';
 import 'package:tailtopia/features/shop/address/domain/shipping_address.dart';
@@ -25,10 +26,23 @@ void main() {
     RegionTree? regions,
     Size size = const Size(411, 891),
     double textScale = 1,
+    bool noAddress = false,
+    List<String?>? requestedTokens,
+    GoRouter? router,
   }) {
+    final page = MediaQuery(
+      data: MediaQueryData(size: size, textScaler: TextScaler.linear(textScale)),
+      child: const CheckoutPageV2(),
+    );
+    const delegates = [
+      AppLocalizations.delegate,
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ];
     return ProviderScope(
       overrides: [
-        addressListProvider.overrideWith((ref) async => [
+        addressListProvider.overrideWith((ref) async => noAddress ? const [] : [
               const ShippingAddress(
                 token: 'addr1',
                 receiverName: 'Budi',
@@ -42,7 +56,10 @@ void main() {
                 isDefault: true,
               ),
             ]),
-        checkoutPreviewProvider.overrideWith((ref, token) async => preview),
+        checkoutPreviewProvider.overrideWith((ref, token) async {
+          requestedTokens?.add(token);
+          return preview;
+        }),
         regionTreeProvider.overrideWith((ref) async =>
             regions ??
             const RegionTree([
@@ -53,20 +70,19 @@ void main() {
               RegionProvinsi('Jawa Barat', [RegionKota('Bandung', [])]),
             ])),
       ],
-      child: MaterialApp(
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: AppLocalizations.supportedLocales,
-        locale: const Locale('id'),
-        home: MediaQuery(
-          data: MediaQueryData(size: size, textScaler: TextScaler.linear(textScale)),
-          child: const CheckoutPageV2(),
-        ),
-      ),
+      child: router != null
+          ? MaterialApp.router(
+              localizationsDelegates: delegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              locale: const Locale('id'),
+              routerConfig: router,
+            )
+          : MaterialApp(
+              localizationsDelegates: delegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              locale: const Locale('id'),
+              home: page,
+            ),
     );
   }
 
@@ -89,9 +105,10 @@ void main() {
     int coinBalance = 80000,
     int maxCoinPerOrder = 50000,
     int? shippingDiscount,
+    bool hasAddress = true,
   }) =>
       CheckoutPreview(
-        addressToken: 'addr1',
+        addressToken: hasAddress ? 'addr1' : null,
         receiverName: 'Budi',
         receiverPhone: '08123456789',
         addressText: 'Jl. Test No. 1, Kebayoran, Jakarta Selatan',
@@ -109,6 +126,65 @@ void main() {
         coinCapped: coinCapped,
         strictestReturnPolicy: ReturnPolicy.noReturnAfterOpen,
       );
+
+  /// 2026-09-24：点购买先进预览，没地址只是不让下单；地址块点了才进地址列表。
+  group('无地址预览', () {
+    // 服务端无地址预览的形状：金额位全 null、serviceable=true（CheckoutService#preview）
+    CheckoutPreview noAddr() => CheckoutPreview(
+          receiverName: '',
+          receiverPhone: '',
+          addressText: '',
+          serviceable: true,
+          lines: [line()],
+          unavailableLines: const [],
+          goodsSubtotal: 185000,
+          coinBalance: 0,
+          maxCoinPerOrder: 50000,
+          coinCapped: false,
+          strictestReturnPolicy: ReturnPolicy.noReturnAfterOpen,
+        );
+
+    testWidgets('没有地址也出预览：商品与小计照常，请求不带地址 token', (tester) async {
+      final tokens = <String?>[];
+      await tester.pumpWidget(host(noAddr(), noAddress: true, requestedTokens: tokens));
+      await tester.pumpAndSettle();
+
+      expect(tokens, [null]);
+      expect(find.text('Royal Canin Adult Dog'), findsOneWidget);
+      expect(find.byKey(const ValueKey('checkoutAddAddressV2')), findsOneWidget);
+      expect(find.text('Tambah alamat pengiriman'), findsOneWidget);
+    });
+
+    testWidgets('🔴 没有地址不让下单，金额位不编数字', (tester) async {
+      await tester.pumpWidget(host(noAddr(), noAddress: true));
+      await tester.pumpAndSettle();
+
+      final submit = tester.widget<ShopButton>(find.byKey(const ValueKey('checkoutSubmitV2')));
+      expect(submit.onTap, isNull);
+      expect(submit.variant, ShopButtonVariant.disabled);
+      final bar = tester.widget<ShopBottomBarWithTotal>(find.byType(ShopBottomBarWithTotal));
+      expect(bar.amount, 'Belum tersedia');
+      expect(bar.amountColor, ShopColors.text4);
+      expect(find.text('Rp 0'), findsNothing, reason: 'QRIS 行算不出就给「—」，Rp 0 会被读成免费');
+    });
+
+    testWidgets('点地址块才进地址列表（选择器模式）', (tester) async {
+      final router = GoRouter(routes: [
+        GoRoute(path: '/', builder: (c, s) => const CheckoutPageV2()),
+        GoRoute(
+            path: '/me/addresses',
+            builder: (c, s) => Text('LIST select=${s.uri.queryParameters['select']}')),
+      ]);
+      await tester.pumpWidget(host(noAddr(), noAddress: true, router: router));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('LIST'), findsNothing, reason: '进结算页不得自动跳地址页');
+
+      await tester.tap(find.byKey(const ValueKey('checkoutAddAddressV2')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('LIST select=1'), findsOneWidget);
+    });
+  });
 
   group('🔴 FR-100A：两段金额必须同时展示', () {
     testWidgets('PawCoin 段与 QRIS 段都在，且金额分别显示', (tester) async {

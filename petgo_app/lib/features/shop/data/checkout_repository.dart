@@ -14,10 +14,12 @@ class CheckoutRepository {
 
   final Dio dio;
 
-  Future<CheckoutPreview> preview(String addressToken) async {
+  /// [addressToken] 为 null = 无地址预览（用户还没有地址）：服务端照常下发商品清单，
+  /// 运费与应付金额为空。⚠️ 需后端同批部署 —— 旧后端不带该参数会回 400。
+  Future<CheckoutPreview> preview(String? addressToken) async {
     final resp = await dio.get<Map<String, dynamic>>(
       ApiPaths.meCheckout,
-      queryParameters: {'addressToken': addressToken},
+      queryParameters: {'addressToken': ?addressToken},
     );
     return CheckoutPreview.fromJson(resp.data!);
   }
@@ -95,8 +97,8 @@ enum CheckoutFailureKind { unavailableLines, notPlaceable, generic }
 final Provider<CheckoutRepository> checkoutRepositoryProvider =
     Provider<CheckoutRepository>((ref) => CheckoutRepository(dio: ref.read(dioProvider)));
 
-/// 结算试算（按地址 token）。地址一换就重算 —— 运费与拆分都依赖它。
+/// 结算试算（按地址 token；null = 无地址预览）。地址一换就重算 —— 运费与拆分都依赖它。
 final checkoutPreviewProvider = FutureProvider.autoDispose
-    .family<CheckoutPreview, String>((ref, addressToken) async {
+    .family<CheckoutPreview, String?>((ref, addressToken) async {
   return ref.read(checkoutRepositoryProvider).preview(addressToken);
 });

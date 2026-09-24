@@ -67,7 +67,8 @@ public class MeCheckoutController {
      */
     @GetMapping("/checkout")
     public CheckoutPreviewView preview(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam String addressToken) {
+            // 可缺省（2026-09-24）：没有地址也要能看订单预览，只是不能下单。
+            @RequestParam(required = false) String addressToken) {
         return CheckoutPreviewView.of(checkout.preview(currentUserId(jwt), addressToken));
     }
 
