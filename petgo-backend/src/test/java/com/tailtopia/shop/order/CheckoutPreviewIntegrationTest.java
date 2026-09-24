@@ -227,6 +227,41 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
         assertThat(v.goodsSubtotal()).isEqualTo(285_000L);
     }
 
+    // ---------- 无地址预览（2026-09-24）：先看预览，没地址只是不让下单 ----------
+
+    @Test
+    @DisplayName("不传地址 → 商品清单照常下发，address 与金额位为 null，不算超范围")
+    void previewWithoutAddress() {
+        long uid = seedUser();
+        rules.update(true, true, 1_000_000L, ACTOR);
+        carts.add(uid, seedSku(10, 285_000L, "NO_RETURN_AFTER_OPEN"), 1);
+
+        var v = preview(uid, null);
+
+        assertThat(v.address()).isNull();
+        assertThat(v.serviceable()).as("没地址不等于超范围").isTrue();
+        assertThat(v.lines()).hasSize(1);
+        assertThat(v.goodsSubtotal()).isEqualTo(285_000L);
+        assertThat(v.shippingFee()).as("没地址算不出运费，不许填 0").isNull();
+        assertThat(v.payableTotal()).isNull();
+        assertThat(v.strictestReturnPolicy()).isEqualTo("NO_RETURN_AFTER_OPEN");
+    }
+
+    @Test
+    @DisplayName("GET /me/checkout 不带 addressToken → 200 无地址预览（不再 400）")
+    void previewWithoutAddressOverHttp() throws Exception {
+        var u = newUser();
+        long uid = u.getId();
+        carts.add(uid, seedSku(10, 120_000L, "RETURNABLE"), 2);
+
+        mvc.perform(get("/api/v1/me/checkout").header("Authorization", userBearer(uid)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.address").doesNotExist())
+                .andExpect(jsonPath("$.goodsSubtotal").value(240_000))
+                .andExpect(jsonPath("$.payableTotal").doesNotExist())
+                .andExpect(jsonPath("$.serviceable").value(true));
+    }
+
     // ---------- 🔴 FR-104 / S-6：多 SKU 取最严 ----------
 
     @Test

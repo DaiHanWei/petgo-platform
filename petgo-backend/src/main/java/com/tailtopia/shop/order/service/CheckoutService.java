@@ -102,6 +102,14 @@ public class CheckoutService {
     @Transactional(readOnly = true)
     public CheckoutPreview preview(long userId, String addressToken) {
         CartView cart = carts.view(userId);
+        if (addressToken == null || addressToken.isBlank()) {
+            // 🔴 无地址预览（2026-09-24 产品拍板：点购买先进预览，没地址只是不让下单）。
+            //    运费要按 Kecamatan 算，没地址就算不出 ⇒ quote / split 为 null、应付总额不下发，
+            //    与「一件都没选」那支同一降级姿态。serviceable 给 true：没地址不等于超范围，
+            //    给 false 会让前端弹「该区域暂不配送」。下单路径仍强制要地址，阻断能力不变。
+            return new CheckoutPreview(cart, null, null, null, wallet.balanceOf(userId),
+                    maxCoinPerOrder(), false, true, policiesOf(cart));
+        }
         ShippingAddress addr = addresses.require(userId, addressToken);
         if (!quotes.isServiceable(addr.getKecamatan())) {
             return new CheckoutPreview(cart, addr, null, null, wallet.balanceOf(userId),
@@ -410,6 +418,7 @@ public class CheckoutService {
     /**
      * 结算页试算结果。
      *
+     * @param address  未传地址时为 {@code null}（无地址预览，此时 shipping / split 也为 null）
      * @param shipping 超服务范围时为 {@code null}（此时 {@code serviceable=false}）
      * @param split    同上
      * @param coinCapped PawCoin 段被单笔上限截断（UX-DR14 要求多出一行提示）

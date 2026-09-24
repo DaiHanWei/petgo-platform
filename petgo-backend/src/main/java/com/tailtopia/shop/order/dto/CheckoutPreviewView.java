@@ -92,7 +92,8 @@ public record CheckoutPreviewView(
             }
         }
         return new CheckoutPreviewView(
-                ShippingAddressView.of(p.address()),
+                // 无地址预览时 address 为 null（CheckoutService#preview），前端据此显示「添加地址」
+                p.address() == null ? null : ShippingAddressView.of(p.address()),
                 p.serviceable(),
                 lines,
                 unavailable,
