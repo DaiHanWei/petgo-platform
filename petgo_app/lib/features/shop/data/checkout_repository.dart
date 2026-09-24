@@ -14,8 +14,8 @@ class CheckoutRepository {
 
   final Dio dio;
 
-  /// [addressToken] 为 null = 无地址预览（用户还没有地址）：服务端照常下发商品清单，
-  /// 运费与应付金额为空。⚠️ 需后端同批部署 —— 旧后端不带该参数会回 400。
+  /// [addressToken] 为 null = 无地址预览（用户还没有地址）：服务端照常下发商品清单与金额
+  /// （运费按开通区域估算，各区同价时即准确值），只是 address 为空、不能下单。⚠️ 需后端同批部署 —— 旧后端不带该参数会回 400。
   Future<CheckoutPreview> preview(String? addressToken) async {
     final resp = await dio.get<Map<String, dynamic>>(
       ApiPaths.meCheckout,
