@@ -10,6 +10,7 @@ import 'package:tailtopia/features/shop/domain/shop_product_detail.dart';
 import 'package:tailtopia/features/shop/domain/shop_review.dart';
 import 'package:tailtopia/features/shop/presentation/product_detail_page_v2.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_buttons.dart';
+import 'package:tailtopia/features/shop/presentation/widgets/shop_controls.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_decor.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -18,7 +19,7 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 /// v1 版式的用例在 `product_detail_page_test.dart`，两套互不影响。
 ///
 /// 本类重点看三件**写错会造成真实损失**的事，它们与版式无关、从 v1 原样继承：
-/// 多规格不默认选中（买错规格的退货成本平台承担）、库存数不虚构、开封不退必须明示。
+/// 多规格默认选中规则（有货 > 低价 > 后台顺序）、库存数不虚构、开封不退必须明示。
 void main() {
   Widget host(
     ShopProductDetail detail, {
@@ -154,23 +155,96 @@ void main() {
     });
   });
 
-  group('🔴 FR-94A：多规格不得默认选中', () {
-    testWidgets('两个规格时无选中态，主按钮禁用并提示先选规格', (tester) async {
-      await tester.pumpWidget(host(detail(skus: [sku('s1'), sku('s2', spec: '7.5 kg')])));
+  /// 🔴 2026-09-24 产品拍板推翻 FR-94A：多规格默认选中，优先级 **有货 > 低价 > 后台顺序**。
+  group('多规格默认选中（有货 > 低价 > 后台顺序）', () {
+    bool chipSelected(WidgetTester tester, String token) =>
+        tester.widget<ShopChip>(find.byKey(ValueKey('skuChip_$token'))).selected;
+
+    testWidgets('都有货 → 选最低价，按钮直接可用', (tester) async {
+      await tester.pumpWidget(host(detail(skus: [
+        sku('s1', spec: '7.5 kg', price: 400000),
+        sku('s2', spec: '1.5 kg', price: 110000),
+        sku('s3', spec: '3 kg', price: 185000),
+      ])));
       await tester.pumpAndSettle();
 
-      // 提示文案出现 = 尚未选中任何规格
-      expect(find.byKey(const ValueKey('pdpChooseVariantHint')), findsOneWidget,
-          reason: '默认选中会让人在没意识到时买错规格 —— 1.5kg 与 7.5kg 差价近 4 倍');
-
-      final buy = tester.widget<ShopButton>(find.byKey(const ValueKey('pdpBuyNow')));
-      expect(buy.onTap, isNull, reason: '未选规格时不得可点');
-      expect(buy.variant, ShopButtonVariant.disabled);
-
+      expect(chipSelected(tester, 's2'), isTrue);
+      expect(chipSelected(tester, 's1'), isFalse);
+      expect(find.byKey(const ValueKey('pdpChooseVariantHint')), findsNothing);
       final add = tester.widget<ShopButton>(find.byKey(const ValueKey('pdpAddToCart')));
-      expect(add.onTap, isNull);
+      expect(add.onTap, isNotNull, reason: '默认选中后不得再置灰');
+      final buy = tester.widget<ShopButton>(find.byKey(const ValueKey('pdpBuyNow')));
+      expect(buy.onTap, isNotNull);
       // 🔴 按钮文案必须恒定 —— 把「先选规格」塞进按钮会在 411dp 上挤成两行（真机实测）。
       expect(add.label, '+ Keranjang');
+    });
+
+    testWidgets('最低价售罄 → 跳过，选有货里的次低价', (tester) async {
+      await tester.pumpWidget(host(detail(skus: [
+        sku('s1', price: 50000, stock: StockStatus.outOfStock),
+        sku('s2', price: 80000),
+        sku('s3', price: 60000),
+      ])));
+      await tester.pumpAndSettle();
+
+      expect(chipSelected(tester, 's3'), isTrue);
+      expect(chipSelected(tester, 's1'), isFalse, reason: '售罄规格再便宜也不默认选');
+    });
+
+    testWidgets('库存紧张也算有货，不比剩余数量', (tester) async {
+      await tester.pumpWidget(host(detail(skus: [
+        sku('s1', price: 90000, remaining: 500),
+        sku('s2', price: 70000, stock: StockStatus.lowStock, remaining: 2),
+      ])));
+      await tester.pumpAndSettle();
+
+      expect(chipSelected(tester, 's2'), isTrue);
+    });
+
+    testWidgets('同价 → 取后台顺序靠前的', (tester) async {
+      await tester.pumpWidget(host(detail(skus: [
+        sku('s1', price: 90000),
+        sku('s2', price: 60000),
+        sku('s3', price: 60000),
+      ])));
+      await tester.pumpAndSettle();
+
+      expect(chipSelected(tester, 's2'), isTrue);
+      expect(chipSelected(tester, 's3'), isFalse);
+    });
+
+    testWidgets('全部售罄 → 不默认选中，按钮不可点', (tester) async {
+      await tester.pumpWidget(host(detail(skus: [
+        sku('s1', stock: StockStatus.outOfStock),
+        sku('s2', spec: '7.5 kg', stock: StockStatus.outOfStock),
+      ])));
+      await tester.pumpAndSettle();
+
+      expect(chipSelected(tester, 's1'), isFalse);
+      expect(chipSelected(tester, 's2'), isFalse);
+      // 全售罄走整品售罄底栏（见「售罄态」组）；这里只保证没有任何可点的购买入口。
+      for (final key in const ['pdpAddToCart', 'pdpBuyNow']) {
+        for (final b in tester.widgetList<ShopButton>(find.byKey(ValueKey(key)))) {
+          expect(b.onTap, isNull, reason: '$key 在全售罄时不得可点');
+        }
+      }
+    });
+
+    testWidgets('手动切换规格后以用户选择为准', (tester) async {
+      await tester.pumpWidget(host(detail(skus: [
+        sku('s1', price: 60000),
+        sku('s2', spec: '7.5 kg', price: 90000),
+      ])));
+      await tester.pumpAndSettle();
+      expect(chipSelected(tester, 's1'), isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('skuChip_s2')));
+      await tester.pumpAndSettle();
+
+      expect(chipSelected(tester, 's2'), isTrue);
+      expect(chipSelected(tester, 's1'), isFalse);
+      final add = tester.widget<ShopButton>(find.byKey(const ValueKey('pdpAddToCart')));
+      expect(add.onTap, isNotNull);
     });
 
     testWidgets('单一规格直通，主按钮可用', (tester) async {
@@ -180,18 +254,6 @@ void main() {
       expect(find.byKey(const ValueKey('pdpChooseVariantHint')), findsNothing);
       expect(find.text('+ Keranjang'), findsOneWidget);
       expect(find.text('Beli Sekarang'), findsOneWidget);
-    });
-
-    testWidgets('选中某个规格后按钮解禁', (tester) async {
-      await tester.pumpWidget(host(detail(skus: [sku('s1'), sku('s2', spec: '7.5 kg')])));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(const ValueKey('skuChip_s2')));
-      await tester.pumpAndSettle();
-
-      expect(find.byKey(const ValueKey('pdpChooseVariantHint')), findsNothing);
-      final add = tester.widget<ShopButton>(find.byKey(const ValueKey('pdpAddToCart')));
-      expect(add.onTap, isNotNull, reason: '选中规格后必须解禁');
     });
   });
 

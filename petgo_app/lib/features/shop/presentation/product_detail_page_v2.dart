@@ -69,7 +69,9 @@ class ProductDetailPageV2 extends ConsumerStatefulWidget {
 enum _PdpAction { add, buy }
 
 class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
-  /// 🔴 初值 null 且**不在任何地方被自动赋值** —— 多规格必须由用户显式选择（FR-94A）。
+  /// 用户**手动**选中的规格。null = 还没点过，此时由 [_defaultSku] 兜底。
+  /// 🔴 2026-09-24 产品拍板推翻 FR-94A「多规格不默认选中」：不选时加购 / 购买全置灰，
+  ///    用户以为买不了。自动值只在读取时推导、不回写这里 —— 详情刷新后库存变了，默认规格跟着变。
   String? _selectedSkuToken;
 
   /// 图集当前页（页码指示器用）。
@@ -89,11 +91,26 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
 
   ShopSku? _effectiveSku(ShopProductDetail d) {
     if (d.isSingleSku) return d.skus.first;
-    if (_selectedSkuToken == null) return null;
+    if (_selectedSkuToken == null) return _defaultSku(d);
     for (final s in d.skus) {
       if (s.token == _selectedSkuToken) return s;
     }
-    return null;
+    return _defaultSku(d);
+  }
+
+  /// 默认规格（2026-09-24 产品拍板）：**有货 > 低价 > 后台顺序**。
+  ///
+  /// - 有货只看能不能买（LOW_STOCK 也算有货），不比剩余数量；
+  /// - 有货里取最低价，同价取 [ShopProductDetail.skus] 里靠前的（= 后台配置顺序）；
+  /// - 🔴 全部售罄返回 null：不默认选中售罄规格，页面走整品售罄态（[_isSoldOut] 的 allOut 分支）。
+  static ShopSku? _defaultSku(ShopProductDetail d) {
+    ShopSku? best;
+    for (final s in d.skus) {
+      if (!s.stockStatus.purchasable) continue;
+      // 严格小于：同价不替换，保住靠前的那个
+      if (best == null || s.price < best.price) best = s;
+    }
+    return best;
   }
 
   /// 售罄判定：**已选中的 SKU 售罄**，或**所有 SKU 都售罄**。
@@ -431,8 +448,10 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
 
   // ---------------------------------------------------------------- 规格
 
-  /// 规格选择。🔴 **不默认选中**（FR-94A）。
-  Widget _variantBlock(AppLocalizations l10n, ShopProductDetail d) => ShopSection(
+  /// 规格选择。高亮的是**生效中的规格**（用户手选 > [_defaultSku]），不是只看手选。
+  Widget _variantBlock(AppLocalizations l10n, ShopProductDetail d) {
+    final selectedToken = _effectiveSku(d)?.token;
+    return ShopSection(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -448,7 +467,7 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
                     label: s.stockStatus == StockStatus.outOfStock
                         ? '${s.specName} · ${l10n.tokoOutOfStock}'
                         : s.specName,
-                    selected: _selectedSkuToken == s.token,
+                    selected: selectedToken == s.token,
                     // 售罄规格**仍可选中** —— 选中后整页切售罄态，用户才看得到
                     // 「这个规格买不到、别的可能可以」。禁用它等于让用户点不动又不知为何。
                     onTap: () => setState(() => _selectedSkuToken = s.token),
@@ -458,7 +477,7 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
             // 🔴 「先选规格」的提示放在**这里**而不是按钮上。
             //    按钮文案必须稳定：把长句塞进底部条会把按钮挤成两行（真机上实测），
             //    而且用户读到「请选规格」时眼睛在屏幕底部、要选的东西却在中间。
-            if (_selectedSkuToken == null) ...[
+            if (selectedToken == null) ...[
               const SizedBox(height: 8),
               Text(l10n.tokoChooseVariantFirst,
                   key: const ValueKey('pdpChooseVariantHint'),
@@ -467,6 +486,7 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
           ],
         ),
       );
+  }
 
   // ---------------------------------------------------------------- 开封不退
 
