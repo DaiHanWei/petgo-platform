@@ -128,8 +128,8 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => _retry(l10n, () => ref.invalidate(addressListProvider)),
         data: (list) {
-          // 🔴 token 为 null（没有地址）也照常出预览（2026-09-24）：商品与退货规则都看得到，
-          //    只是算不出运费、不能提交。地址入口在地址块里，点了才去地址列表。
+          // 🔴 token 为 null（没有地址）也照常出预览（2026-09-24）：商品、金额、退货规则都看得到，
+          //    只是不能提交。地址入口在地址块里，点了才去地址列表。
           final token = _effectiveAddressToken(list);
           return ref.watch(checkoutPreviewProvider(token)).when(
                 loading: () => const Center(child: CircularProgressIndicator()),

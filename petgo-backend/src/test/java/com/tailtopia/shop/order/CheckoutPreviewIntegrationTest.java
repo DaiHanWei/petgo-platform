@@ -229,22 +229,50 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
 
     // ---------- 无地址预览（2026-09-24）：先看预览，没地址只是不让下单 ----------
 
+    private long maxActiveFee() {
+        return jdbc.queryForObject("SELECT MAX(fee) FROM shipping_zones WHERE active", Long.class);
+    }
+
     @Test
-    @DisplayName("不传地址 → 商品清单照常下发，address 与金额位为 null，不算超范围")
+    @DisplayName("不传地址 → 金额照常算：运费取开通区域最高运费，address 为 null，不算超范围")
     void previewWithoutAddress() {
         long uid = seedUser();
+        zones.setFreeShippingThreshold(0, ACTOR);
         rules.update(true, true, 1_000_000L, ACTOR);
+        seedAddress(seedUser(), 20_000L);   // 保证至少有一个开通区域（地址挂在别人名下）
         carts.add(uid, seedSku(10, 285_000L, "NO_RETURN_AFTER_OPEN"), 1);
 
         var v = preview(uid, null);
+        long fee = maxActiveFee();
 
         assertThat(v.address()).isNull();
         assertThat(v.serviceable()).as("没地址不等于超范围").isTrue();
         assertThat(v.lines()).hasSize(1);
         assertThat(v.goodsSubtotal()).isEqualTo(285_000L);
-        assertThat(v.shippingFee()).as("没地址算不出运费，不许填 0").isNull();
-        assertThat(v.payableTotal()).isNull();
+        assertThat(v.shippingFee()).isEqualTo(fee);
+        assertThat(v.payableTotal()).isEqualTo(285_000L + fee);
+        assertThat(v.cashAmount()).isEqualTo(285_000L + fee);
         assertThat(v.strictestReturnPolicy()).isEqualTo("NO_RETURN_AFTER_OPEN");
+    }
+
+    @Test
+    @DisplayName("不传地址也照常判免运门槛与 PawCoin 抵扣")
+    void previewWithoutAddressAppliesFreeShippingAndCoin() {
+        long uid = seedUser();
+        zones.setFreeShippingThreshold(100_000L, ACTOR);
+        rules.update(true, true, 1_000_000L, ACTOR);
+        seedAddress(seedUser(), 20_000L);
+        carts.add(uid, seedSku(10, 285_000L, "RETURNABLE"), 1);
+        topUp(uid, 50_000L);
+
+        var v = preview(uid, null);
+        long fee = maxActiveFee();
+
+        assertThat(v.shippingFee()).isEqualTo(fee);
+        assertThat(v.shippingDiscount()).as("达门槛 → 一条负数免运行").isEqualTo(-fee);
+        assertThat(v.payableTotal()).isEqualTo(285_000L);
+        assertThat(v.coinAmount()).isEqualTo(50_000L);
+        assertThat(v.cashAmount()).isEqualTo(235_000L);
     }
 
     @Test
@@ -252,13 +280,18 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
     void previewWithoutAddressOverHttp() throws Exception {
         var u = newUser();
         long uid = u.getId();
+        zones.setFreeShippingThreshold(0, ACTOR);
+        rules.update(true, true, 1_000_000L, ACTOR);
+        seedAddress(seedUser(), 20_000L);
         carts.add(uid, seedSku(10, 120_000L, "RETURNABLE"), 2);
+        long fee = maxActiveFee();
 
         mvc.perform(get("/api/v1/me/checkout").header("Authorization", userBearer(uid)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.address").doesNotExist())
                 .andExpect(jsonPath("$.goodsSubtotal").value(240_000))
-                .andExpect(jsonPath("$.payableTotal").doesNotExist())
+                .andExpect(jsonPath("$.shippingFee").value(fee))
+                .andExpect(jsonPath("$.payableTotal").value(240_000 + fee))
                 .andExpect(jsonPath("$.serviceable").value(true));
     }
 

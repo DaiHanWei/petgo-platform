@@ -102,16 +102,12 @@ public class CheckoutService {
     @Transactional(readOnly = true)
     public CheckoutPreview preview(long userId, String addressToken) {
         CartView cart = carts.view(userId);
-        if (addressToken == null || addressToken.isBlank()) {
-            // 🔴 无地址预览（2026-09-24 产品拍板：点购买先进预览，没地址只是不让下单）。
-            //    运费要按 Kecamatan 算，没地址就算不出 ⇒ quote / split 为 null、应付总额不下发，
-            //    与「一件都没选」那支同一降级姿态。serviceable 给 true：没地址不等于超范围，
-            //    给 false 会让前端弹「该区域暂不配送」。下单路径仍强制要地址，阻断能力不变。
-            return new CheckoutPreview(cart, null, null, null, wallet.balanceOf(userId),
-                    maxCoinPerOrder(), false, true, policiesOf(cart));
-        }
-        ShippingAddress addr = addresses.require(userId, addressToken);
-        if (!quotes.isServiceable(addr.getKecamatan())) {
+        // 🔴 无地址预览（2026-09-24 产品拍板：点购买先进预览，没地址只是不让下单）。
+        //    金额照常算：运费用 ShippingQuoteService#estimateWithoutAddress 估（各区同价时即准确值），
+        //    address 为 null、serviceable 给 true（没地址不等于超范围）。下单路径仍强制要地址。
+        boolean noAddress = addressToken == null || addressToken.isBlank();
+        ShippingAddress addr = noAddress ? null : addresses.require(userId, addressToken);
+        if (addr != null && !quotes.isServiceable(addr.getKecamatan())) {
             return new CheckoutPreview(cart, addr, null, null, wallet.balanceOf(userId),
                     maxCoinPerOrder(), false, false, policiesOf(cart));
         }
@@ -130,7 +126,14 @@ public class CheckoutService {
             return new CheckoutPreview(cart, addr, null, null, wallet.balanceOf(userId),
                     maxCoinPerOrder(), false, true, policiesOf(cart));
         }
-        ShippingQuote quote = quotes.quote(addr.getKecamatan(), goodsSubtotal);
+        ShippingQuote quote = addr == null
+                ? quotes.estimateWithoutAddress(goodsSubtotal)
+                : quotes.quote(addr.getKecamatan(), goodsSubtotal);
+        if (quote == null) {
+            // 无地址且一个开通区域都没有：运费确实算不出，金额位不下发（不编 0）
+            return new CheckoutPreview(cart, null, null, null, wallet.balanceOf(userId),
+                    maxCoinPerOrder(), false, true, policiesOf(cart));
+        }
         PaymentSplit split = splitFor(userId, goodsSubtotal, quote);
         return new CheckoutPreview(cart, addr, quote, split, wallet.balanceOf(userId),
                 maxCoinPerOrder(), coinCapped(userId, goodsSubtotal, quote, split), true,
@@ -418,7 +421,7 @@ public class CheckoutService {
     /**
      * 结算页试算结果。
      *
-     * @param address  未传地址时为 {@code null}（无地址预览，此时 shipping / split 也为 null）
+     * @param address  未传地址时为 {@code null}（无地址预览：金额按估算运费照常给出）
      * @param shipping 超服务范围时为 {@code null}（此时 {@code serviceable=false}）
      * @param split    同上
      * @param coinCapped PawCoin 段被单笔上限截断（UX-DR14 要求多出一行提示）

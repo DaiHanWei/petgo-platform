@@ -52,6 +52,26 @@ public class ShippingQuoteService {
         return ShippingQuote.of(zone.getKecamatan(), zone.getFee(), free);
     }
 
+    /**
+     * 无地址时的运费估算（2026-09-24，结算页无地址预览用）。
+     *
+     * <p>取<b>开通区域里的最高运费</b>：各区同价时（生产现状）就是准确值；
+     * 不同价时是上限 —— 用户选完地址后运费只会持平或变低，不会出现「选了地址反而变贵」。
+     * 免运门槛照常判定。<b>只用于展示</b>，下单一律按真实地址走 {@link #quote}。
+     *
+     * @return 一个开通区域都没有时为 null（此时确实算不出）
+     */
+    @Transactional(readOnly = true)
+    public ShippingQuote estimateWithoutAddress(long goodsSubtotal) {
+        Long fee = zones.findMaxActiveFee();
+        if (fee == null) {
+            return null;
+        }
+        long threshold = threshold();
+        boolean free = threshold > 0 && goodsSubtotal >= threshold;
+        return ShippingQuote.of(null, fee, free);
+    }
+
     /** 该 Kecamatan 当前是否可配送。供 UI 提示用；下单阻断仍走 {@link #quote}。 */
     @Transactional(readOnly = true)
     public boolean isServiceable(String kecamatan) {

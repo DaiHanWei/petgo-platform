@@ -88,7 +88,7 @@ class CheckoutPreview {
     this.cashAmount,
   });
 
-  /// null = 用户还没有收货地址（无地址预览）：商品照常展示，金额位为空，禁止提交。
+  /// null = 用户还没有收货地址（无地址预览）：商品与金额照常展示，禁止提交。
   final String? addressToken;
   final String receiverName;
   final String receiverPhone;

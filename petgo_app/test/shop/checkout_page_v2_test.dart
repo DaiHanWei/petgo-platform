@@ -155,7 +155,21 @@ void main() {
       expect(find.text('Tambah alamat pengiriman'), findsOneWidget);
     });
 
-    testWidgets('🔴 没有地址不让下单，金额位不编数字', (tester) async {
+    testWidgets('🔴 没有地址时金额照常显示（服务端按估算运费下发），但不让下单', (tester) async {
+      await tester.pumpWidget(host(preview(hasAddress: false, coinAmount: 0, cashAmount: 200000),
+          noAddress: true));
+      await tester.pumpAndSettle();
+
+      final bar = tester.widget<ShopBottomBarWithTotal>(find.byType(ShopBottomBarWithTotal));
+      expect(bar.amount, 'Rp 200.000');
+      expect(find.text('Rp 15.000'), findsWidgets, reason: '运费行显示数字');
+      expect(find.text('Belum tersedia'), findsNothing);
+      final submit = tester.widget<ShopButton>(find.byKey(const ValueKey('checkoutSubmitV2')));
+      expect(submit.onTap, isNull, reason: '有金额也不能在没地址时下单');
+      expect(find.byKey(const ValueKey('checkoutAddAddressV2')), findsOneWidget);
+    });
+
+    testWidgets('🔴 金额算不出（无开通区域）时不编数字，也不让下单', (tester) async {
       await tester.pumpWidget(host(noAddr(), noAddress: true));
       await tester.pumpAndSettle();
 
