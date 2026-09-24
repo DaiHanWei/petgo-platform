@@ -51,6 +51,9 @@ petgo:
     # live REST 域名——必须与 SDKAppID 所在数据中心一致（本应用=新加坡；配错回 60026 且曾静默失败）。
     rest-base-url: ${IM_REST_BASE_URL:https://adminapisgp.im.qcloud.com}
     admin-identifier: ${IM_ADMIN_IDENTIFIER:administrator}
+    # IM 账号环境前缀（bug 519/521）：stag 与生产共用 SDKAppID，stag 设 stg_ 隔离账号；生产必须留空（与改前逐字一致）。
+    # 只允许 [a-z0-9_]{0,8}，非法启动即失败。
+    account-prefix: ${IM_ACCOUNT_PREFIX:}
   # 支付网关（Story 1.1，V1.1 资金地基）：Midtrans 收款 + 幂等 + 回调/轮询双通道去重。
   # mode=stub（默认）走桩网关，无凭证即可启动并验意图状态机/去重（L0/L1）；mode=live 才打真实 Midtrans（L2）。
   # server-key / callback-token 全部 env 注入，绝不入库 / 不落日志（.env.example 仅占位）。

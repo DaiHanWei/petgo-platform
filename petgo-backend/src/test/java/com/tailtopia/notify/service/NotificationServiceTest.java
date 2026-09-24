@@ -102,4 +102,23 @@ class NotificationServiceTest {
         // ③ 但**一条推送都不发**
         org.mockito.Mockito.verifyNoInteractions(pusher);
     }
+
+    /**
+     * 虚拟号（VIRTUAL）没有 IM 账号，推过去腾讯回 90001 —— 落库 + 角标照常，但跳过推送（bug 519/521 附带）。
+     */
+    @Test
+    void virtualRecipientGetsRowAndBadgeButNoPush() {
+        when(repo.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(accountQuery.isVirtual(7L)).thenReturn(true);
+        // 不走 service()：推送文案/语言根本用不到（严格 stub 下即为"没推送"的旁证）。
+        NotificationService svc = new NotificationService(repo, redis, pusher, messageSource, accountQuery);
+
+        svc.send(7L, NotificationType.CONTENT_LIKED, "a", "b", "X", "r");
+        svc.sendWithCopy(7L, NotificationType.CONTENT_LIKED, "K", null, "a", "b", "r");
+
+        verify(repo, org.mockito.Mockito.times(2)).save(any(Notification.class));
+        verify(valueOps, org.mockito.Mockito.times(2)).increment(NotificationService.UNREAD_KEY_PREFIX + "7");
+        org.mockito.Mockito.verifyNoInteractions(pusher);
+    }
 }

@@ -39,12 +39,12 @@ class ConsultSessionContractTest {
                 7L, "IN_PROGRESS", "DIRECT", 9L, 12L, false, true,
                 "im-conv-1", "RATED", "VET_BANNED", true,
                 java.time.Instant.parse("2026-07-13T10:15:00Z"),
-                "drh. Test Satu (vettest1)", "https://cdn/v9.jpg", true);
+                "drh. Test Satu (vettest1)", "https://cdn/v9.jpg", true, "v_9");
 
         assertThat(wire(full).keySet()).isEqualTo(Set.of(
                 "id", "status", "source", "vetId", "waitingElapsedSeconds", "timedOut",
                 "alreadyActive", "imConversationId", "closedReason", "interruptedReason", "rated",
-                "suspendDeadlineAt", "vetDisplayName", "vetAvatarUrl", "vetOnline"));
+                "suspendDeadlineAt", "vetDisplayName", "vetAvatarUrl", "vetOnline", "vetImUserId"));
     }
 
     @Test
@@ -53,7 +53,7 @@ class ConsultSessionContractTest {
         // rated 为原始 boolean（false 不省略），故仍在键集内。
         ConsultSessionResponse waiting = new ConsultSessionResponse(
                 7L, "WAITING", "DIRECT", null, 0L, false, false, null, null, null, false, null,
-                null, null, null);
+                null, null, null, null);
 
         assertThat(wire(waiting).keySet()).isEqualTo(Set.of(
                 "id", "status", "source", "waitingElapsedSeconds", "timedOut", "alreadyActive", "rated"));
@@ -76,7 +76,7 @@ class ConsultSessionContractTest {
 
         ConsultSessionResponse degraded = new ConsultSessionResponse(
                 7L, "IN_PROGRESS", "DIRECT", 9L, 12L, false, false, "im-conv-1", null, null,
-                false, null, unknown.displayName(), unknown.avatarUrl(), unknown.online());
+                false, null, unknown.displayName(), unknown.avatarUrl(), unknown.online(), "v_9");
 
         assertThat(wire(degraded)).doesNotContainKeys("vetDisplayName", "vetAvatarUrl", "vetOnline");
     }
@@ -86,7 +86,7 @@ class ConsultSessionContractTest {
         for (String state : SIX_STATES) {
             ConsultSessionResponse r = new ConsultSessionResponse(
                     1L, state, "DIRECT", null, 0L, false, false, null, null, null, false, null,
-                    null, null, null);
+                    null, null, null, null);
             assertThat(wire(r).get("status")).isEqualTo(state);
         }
     }

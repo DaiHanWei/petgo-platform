@@ -202,7 +202,7 @@ class _VetConversationPageState extends ConsumerState<VetConversationPage> {
               // 消息区 + 输入栏（已对齐原型；气泡/发送色随兽医薄荷主题）。Expanded 贴底。
               ImChatPlaceholder(
                 imConversationId: d.session.imConversationId,
-                peerId: d.session.userId != null ? 'u_${d.session.userId}' : null,
+                peerId: d.session.imPeerId, // 后端下发带环境前缀的对端账号（bug 519/521）
                 sessionId: '${d.session.id}', // 用户点推送深链回 /consult/conversation/<id>
 
                 accent: AppColors.vetPrimary, // 兽医侧气泡/发送钮薄荷 #5BCBBB（非 M3 偏移色）

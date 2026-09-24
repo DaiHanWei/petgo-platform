@@ -18,6 +18,9 @@ public class ImConfig {
 
     @Bean
     public TencentImClient tencentImClient(ImProperties props) {
+        // 先定账号前缀再装客户端：所有 IM 调用方都依赖本 bean，保证首次拼账号前前缀已就位；
+        // 非法前缀在此抛出 → 上下文启动失败（fail-fast）。
+        ImAccountMapper.configure(props.getAccountPrefix());
         if ("live".equalsIgnoreCase(props.getMode())) {
             return new LiveTencentImClient(props);
         }

@@ -102,6 +102,9 @@ public class NotificationService {
         }
         // 离线推送异步投递（失败不阻塞）。push 文案按收件人语言渲染（bug 20260625-105）；
         // 站内通知中心不用这里的文本（App 端按 type 自行本地化），故落库 title/body 保持不变。
+        if (skipPushForVirtual(recipientUserId)) {
+            return saved;
+        }
         java.util.Locale locale = accountQuery.localeOf(recipientUserId);
         pusher.pushToUser(recipientUserId,
                 pushText(type, "title", locale, title), pushText(type, "body", locale, body),
@@ -165,12 +168,27 @@ public class NotificationService {
         Notification saved = repo.save(Notification.of(
                 recipientUserId, type, fallbackTitle, fallbackBody, type.name(), token, targetRef));
         bumpUnreadBadge(recipientUserId);
+        if (skipPushForVirtual(recipientUserId)) {
+            return saved;
+        }
         java.util.Locale locale = accountQuery.localeOf(recipientUserId);
         pusher.pushToUser(recipientUserId,
                 formatCopy(copyKey, "title", args, locale, fallbackTitle),
                 formatCopy(copyKey, "body", args, locale, fallbackBody),
                 type.name(), token, targetRef);
         return saved;
+    }
+
+    /**
+     * 虚拟号（VIRTUAL）没有 IM 账号，推过去必回 90001——直接跳过推送（通知中心照常落库 + 角标）。
+     * 与 {@code localeOf} 同在本方法的 REQUIRES_NEW 事务里，findById 命中一级缓存，不多打一次库。
+     */
+    private boolean skipPushForVirtual(long recipientUserId) {
+        if (accountQuery.isVirtual(recipientUserId)) {
+            log.debug("跳过离线推送：收件人为虚拟号 recipientUserId={}", recipientUserId);
+            return true;
+        }
+        return false;
     }
 
     /** 按 {@code notify.<copyKey>.<suffix>} 取串并注入 {@code args}；缺键回退 {@code fallback}。 */
