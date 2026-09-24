@@ -15,6 +15,7 @@ class ConsultSession {
     this.vetDisplayName,
     this.vetAvatarUrl,
     this.vetOnline,
+    this.vetImUserId,
   });
 
   final int id;
@@ -43,6 +44,10 @@ class ConsultSession {
   final String? vetDisplayName;
   final String? vetAvatarUrl;
   final bool? vetOnline;
+
+  // 对端兽医 IM 账号（后端带环境前缀下发：生产 v_<id>，stag stg_v_<id>；bug 519/521）。
+  // C2C 对端一律用它，**不自拼 v_**；老后端未下发时才回落旧格式（老后端必为无前缀环境）。
+  final String? vetImUserId;
 
   /// 顶栏头像的首字母兜底。无名字 → `?`（不再写死 `D`）。
   String get vetInitial => initialOf(vetDisplayName);
@@ -86,6 +91,7 @@ class ConsultSession {
         vetDisplayName: _blankToNull(json['vetDisplayName'] as String?),
         vetAvatarUrl: _blankToNull(json['vetAvatarUrl'] as String?),
         vetOnline: json['vetOnline'] as bool?,
+        vetImUserId: _blankToNull(json['vetImUserId'] as String?),
       );
 
   static String? _blankToNull(String? v) =>

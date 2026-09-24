@@ -5,7 +5,8 @@ package com.tailtopia.consult.dto;
  *
  * <p><b>不含 {@code unread}/{@code lastMessage}</b>——这两项是腾讯 IM 侧状态，后端 V1 不入库；
  * 客户端直接读 IM SDK 取未读数与最近一条消息。后端仅提供会话身份与宠物名供卡片渲染。
- * 客户端按 {@code userId} 拼对端 IM 账号（{@code u_<userId>}）回查 IM 会话未读数，合并进卡片。
+ * 客户端按 {@code userImUserId}（后端经 ImAccountMapper 带环境前缀下发，bug 519/521）回查 IM 会话未读数，
+ * 合并进卡片——<b>不再自拼</b> {@code u_<userId>}。
  *
  * <p>Story B：补机主身份 {@code ownerName}（昵称）/ {@code ownerAvatarUrl}（头像，可空），
  * 供 Active 卡显示「人」的名字与头像（注销/未设则为 null，前端优雅降级到宠物名/首字母）。
@@ -16,5 +17,6 @@ public record VetActiveItem(
         String source,
         String petName,
         String ownerName,
-        String ownerAvatarUrl) {
+        String ownerAvatarUrl,
+        String userImUserId) {
 }

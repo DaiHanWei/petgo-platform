@@ -111,7 +111,8 @@ public class VetConsultService {
         Identities ids = resolveIdentities(sessions);
         return sessions.stream()
                 .map(s -> new VetActiveItem(s.getId(), s.getUserId(), s.getSource().name(),
-                        ids.pet(s.getUserId()).name(), ids.handle(s.getUserId()), ids.avatar(s.getUserId())))
+                        ids.pet(s.getUserId()).name(), ids.handle(s.getUserId()), ids.avatar(s.getUserId()),
+                        com.tailtopia.shared.im.ImAccountMapper.userImId(s.getUserId())))
                 .toList();
     }
 

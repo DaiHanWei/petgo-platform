@@ -93,6 +93,18 @@ public class AccountQueryService {
 
     private static final java.util.Locale INDONESIAN = java.util.Locale.forLanguageTag("id");
 
+    /**
+     * 是否虚拟号（{@code account_type = VIRTUAL}，运营马甲/种子号）。虚拟号从不登录 App、没有 IM 账号，
+     * 给它发离线推送腾讯回 90001（To_Account are invalid）——推送入口据此跳过（bug 519/521 附带清理）。
+     * 不存在的用户按 false 处理（保持原推送行为）。
+     */
+    @Transactional(readOnly = true)
+    public boolean isVirtual(long userId) {
+        return users.findById(userId)
+                .map(u -> u.getAccountType() == AccountType.VIRTUAL)
+                .orElse(false);
+    }
+
     /** Story 3.2：取用户宠物状态（A/B/C），供 Feed 硬过滤；不存在/未设返回 empty。 */
     @Transactional(readOnly = true)
     public Optional<String> petStatusOf(long userId) {

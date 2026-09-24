@@ -105,6 +105,7 @@ git push origin stag                 # ← 需明确同意
 - [x] **A1 · Profile** = `prod`（真 Google 登录、安全规则同生产，保真最高）。
 - [x] **A2 · 代码来源** = 新建 `stag` 分支，staging 镜像从 `stag` 构建。
 - [x] **A3 · 第三方隔离** = OSS **同桶 + key 前缀命名区分**（不建新桶）· Gemini **复用生产 live key** · 腾讯 IM **复用生产 SDKAppID**。
+  - IM 账号用 `IM_ACCOUNT_PREFIX=stg_` 与生产隔离（2026-09-24，bug 519/521）：stag 账号为 `stg_u_<id>` / `stg_v_<id>`，设在服务器 `~/.env.petgo-stag`（不入 git）；生产留空。设后 stag 旧 IM 会话历史不可见，且必须用新版 App（旧包自拼 `u_`/`v_` 对端账号）。
 - [x] **A4 · Admin** = 走 **Lark 登录**（需 `ops-stag` 域名 + 注册 `LARK_REDIRECT_URI`；管理员账号随数据克隆带入，无需 bootstrap）。
 - [x] **A5 · 数据** = 从生产 `petgo` 完整克隆 DB（OSS 同桶不需同步对象）。
 

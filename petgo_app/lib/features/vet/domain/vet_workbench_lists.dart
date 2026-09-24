@@ -10,12 +10,13 @@ class VetActiveItem {
     required this.source,
     this.ownerName,
     this.ownerAvatarUrl,
+    this.userImUserId,
     this.lastMessage = '',
     this.unread = 0,
   });
 
   final int sessionId;
-  final int userId; // 机主 userId：客户端按此拼 IM 对端账号 u_<userId> 回查未读
+  final int userId; // 机主 userId
   final String petName;
   final String source; // DIRECT | AI_UPGRADE
 
@@ -28,8 +29,11 @@ class VetActiveItem {
   final String lastMessage;
   final int unread;
 
-  /// IM C2C 对端账号（机主侧固定前缀 u_）。供拼会话查询 / 标已读。
-  String get imPeerId => 'u_$userId';
+  // 机主 IM 账号（后端带环境前缀下发，bug 519/521）。回查未读 / 标已读一律用它，不自拼 u_。
+  final String? userImUserId;
+
+  /// IM C2C 对端账号：优先后端下发；老后端未下发时回落旧格式（老后端必为无前缀环境）。
+  String get imPeerId => userImUserId ?? 'u_$userId';
 
   VetActiveItem copyWith({String? lastMessage, int? unread}) => VetActiveItem(
         sessionId: sessionId,
@@ -38,6 +42,7 @@ class VetActiveItem {
         source: source,
         ownerName: ownerName,
         ownerAvatarUrl: ownerAvatarUrl,
+        userImUserId: userImUserId,
         lastMessage: lastMessage ?? this.lastMessage,
         unread: unread ?? this.unread,
       );
@@ -49,6 +54,7 @@ class VetActiveItem {
         source: (json['source'] ?? 'DIRECT') as String,
         ownerName: json['ownerName'] as String?,
         ownerAvatarUrl: json['ownerAvatarUrl'] as String?,
+        userImUserId: json['userImUserId'] as String?,
         lastMessage: (json['lastMessage'] ?? '') as String,
         unread: (json['unread'] as num?)?.toInt() ?? 0,
       );

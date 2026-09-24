@@ -34,6 +34,12 @@ public class ImProperties {
      * 用其 UserSig 作为 REST 鉴权身份；不计 MAU（仅服务端用）。
      */
     private String adminIdentifier = "administrator";
+    /**
+     * IM 账号环境前缀（2026-09-24，bug 519/521）：stag 与生产共用 SDKAppID，靠前缀隔离账号空间。
+     * <b>生产留空</b>（账号 {@code u_<id>}/{@code v_<id>} 与改前逐字一致）；stag 设 {@code stg_}。
+     * 只允许 {@code [a-z0-9_]{0,8}}，非法启动即失败（见 {@link ImAccountMapper#configure}）。
+     */
+    private String accountPrefix = "";
 
     public String getMode() {
         return mode;
@@ -89,5 +95,13 @@ public class ImProperties {
 
     public void setAdminIdentifier(String adminIdentifier) {
         this.adminIdentifier = adminIdentifier;
+    }
+
+    public String getAccountPrefix() {
+        return accountPrefix;
+    }
+
+    public void setAccountPrefix(String accountPrefix) {
+        this.accountPrefix = accountPrefix;
     }
 }
