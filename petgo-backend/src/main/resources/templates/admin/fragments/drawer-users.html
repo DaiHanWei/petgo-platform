@@ -301,7 +301,9 @@
     <table hidden><tbody>
         <tr th:replace="~{admin/fragments/users-list :: row(${row}, true)}"></tr>
     </tbody></table>
-    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已完成</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已完成</div>
+    </div>
 </th:block>
 </body>
 </html>

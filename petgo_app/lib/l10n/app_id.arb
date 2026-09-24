@@ -2296,6 +2296,7 @@
   "placeMarkRateLimited": "Terlalu banyak tempat ditandai. Tunggu sebentar ya.",
   "placeMarkPickOnMap": "Pilih di peta",
   "placeMapPickerTitle": "Pilih lokasi",
+  "placeMapPickerLocationHint": "Aktifkan lokasi untuk langsung ke posisimu \u2014 atau geser pin sendiri",
   "placeMapPickerHint": "Geser pin atau ketuk peta untuk memindahkannya",
   "placeMapPickerConfirm": "Konfirmasi lokasi",
   "placeMapPickerNeedsPick": "Ketuk peta untuk menandai lokasi tempatnya",

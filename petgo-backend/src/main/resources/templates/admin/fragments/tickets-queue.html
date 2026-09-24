@@ -20,7 +20,7 @@
         th:attr="hx-get=@{/admin/tickets/{id}/detail(id=${r.row.sourceId()})}"
         hx-trigger="click[!target.closest('.q-check')]"
         hx-target=".wb-detail-body" hx-swap="innerHTML" tabindex="0">
-        <span class="q-title">
+        <span class="q-title q-title--flex">
             <!-- 批量勾选：value = 类型:id 复合串（批量端点契约不变）；data-label 供批量封号弹窗逐条列出 -->
             <label class="q-check" th:if="${r.pending()}"
                    sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.dispose_account')">
@@ -28,10 +28,14 @@
                        th:attr="data-type=${r.row.type()},data-label=${(r.row.targetNickname() != null ? r.row.targetNickname() : '#' + r.row.targetUserId()) + ' · ' + r.row.reportCount() + ' '} + #{admin.v130.tickets.unit.times}"/>
             </label>
             <span class="dot" th:classappend="'dot--' + ${r.dot()}"></span>
-            <span th:text="${r.row.targetNickname() ?: #messages.msg('admin.review.subject.deactivated')}" th:classappend="${r.row.targetDeleted()} ? 'muted'">昵称</span>
+            <span class="q-text" th:text="${r.row.targetNickname() ?: #messages.msg('admin.review.subject.deactivated')}" th:classappend="${r.row.targetDeleted()} ? 'muted'">昵称</span>
             <span class="muted" th:if="${r.row.targetUserId() != null}" th:text="'#' + ${r.row.targetUserId()}">#id</span>
             <span class="badge badge-warn" th:if="${r.throttled}" sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.throttle_view')"
                   th:text="#{admin.throttle.badge.account}">账号限流中</span>
+            <!--/* bug 20260923-553：已处置结果徽标放标题行（原在第二行末尾被省略号截断）；缺 key 回退原值。 */-->
+            <span class="badge q-result" th:if="${r.result != null}"
+                  th:classappend="${r.result == 'SUSPEND'} ? 'badge-danger' : (${r.result == 'WARNING'} ? 'badge-warn' : 'badge-ok')"
+                  th:text="${#messages.msgOrNull('admin.v130.tickets.result.' + r.result) ?: r.result}">结果</span>
         </span>
         <span class="q-meta">
             <span class="badge badge-neutral" th:text="#{admin.tickets.type.ACCOUNT_REPORT}">用户举报</span>
@@ -40,8 +44,6 @@
             <span th:text="'⚑ ' + ${r.row.score()}">⚑ 0</span>
             <span th:text="${@adminTime.wib(r.row.earliestAt())}">时间</span>
             <th:block th:if="${r.result != null}">
-                <span class="badge" th:classappend="${r.result == 'SUSPEND'} ? 'badge-danger' : (${r.result == 'WARNING'} ? 'badge-warn' : 'badge-ok')"
-                      th:text="#{'admin.v130.tickets.result.' + ${r.result}}">结果</span>
                 <span class="muted" th:if="${r.handledBy != null}" th:text="${r.handledBy}">操作人</span>
                 <span class="muted" th:if="${r.handledAt != null}" th:text="${@adminTime.wib(r.handledAt)}">时间</span>
             </th:block>

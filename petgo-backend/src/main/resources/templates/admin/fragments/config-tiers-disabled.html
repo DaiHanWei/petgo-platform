@@ -43,7 +43,9 @@
         <div th:replace="~{admin/fragments/config-tiers-disabled :: disabled-table}"></div>
     </th:block>
     <div th:unless="${expanded}" id="tiers-disabled" hx-swap-oob="true"></div>
-    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
 </th:block>
 </body>
 </html>

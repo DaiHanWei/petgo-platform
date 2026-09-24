@@ -37,6 +37,10 @@
     </div>
 </div>
 
+<!--/* th:remove="all"（bug 556）：以下片段只给本页布局内的 th:replace 与控制器的
+       `shop-shipping :: savedXxx` 按片段选取。不包这一层，整页渲染时它们也会跟在布局后面原样再渲一遍
+       （三张卡 ×3 = 页面上字段重复三次）。 */-->
+<th:block th:remove="all">
 <!--
   ===== 卡① 可配送区域（AC1）=====
   🔴 **每行一个 form，不是整卡一个 form**。三条约束把形状定死了：
@@ -225,6 +229,7 @@
     <div hx-swap-oob="beforeend:#admin-toast-host">
         <div class="toast" role="status" th:text="${toast}">已保存</div>
     </div>
+</th:block>
 </th:block>
 </body>
 </html>

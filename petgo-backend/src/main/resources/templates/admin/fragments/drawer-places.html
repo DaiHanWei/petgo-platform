@@ -59,10 +59,10 @@
     <!-- ③ 评论（分页 20） -->
     <section class="card card-full pl-card" th:replace="~{admin/fragments/drawer-places :: comments}"></section>
 
-    <!-- ④ 打卡计数 -->
+    <!-- ④ 打卡计数（打卡在 B2 上线前隐藏，bug 552）+ 推荐态度 -->
     <section class="card card-full pl-card">
         <div class="sum pl-info">
-            <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.checkins}">打卡</div><div class="sum-value" th:text="${d.checkinCount}">0</div></div>
+            <div class="sum-item" th:if="${placesCheckinVisible}"><div class="sum-label" th:text="#{admin.v130.places.col.checkins}">打卡</div><div class="sum-value" th:text="${d.checkinCount}">0</div></div>
             <div class="sum-item"><div class="sum-label" th:text="#{admin.v130.places.col.attitude}">推荐 · 不推荐</div>
                 <div class="sum-value"><span th:text="${d.recommendCount}">0</span> · <span th:text="${d.notRecommendCount}">0</span></div></div>
         </div>
@@ -140,7 +140,9 @@
 
 <!-- 处置成功响应：抽屉重渲染 + oob 列表该行 + toast（黄条 warn 由 drawer 内渲染） -->
 <th:block th:fragment="afterAction">
-    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
     <!-- htmx 1.9.12 默认用 DOMParser（body 上下文）解析响应：裸 <tr> 会被丢掉、单元格内容泄进抽屉（复审 #1）→ 包进隐藏 table，oob 后只剩空壳 -->
     <table hidden th:if="${row != null}"><tbody><tr th:replace="~{admin/fragments/places-list :: row(${row}, true)}"></tr></tbody></table>
     <div th:replace="~{admin/fragments/drawer-places :: drawer}"></div>

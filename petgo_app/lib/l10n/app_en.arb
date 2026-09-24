@@ -3515,6 +3515,8 @@
   "placeMarkPickOnMap": "Pick on map",
   "@placeMarkPickOnMap": {"description": "Mark-a-place form: opens the map picker (Story 1.4). Always tappable, with or without location permission \u2014 marking a place you are not standing in is the whole point of the picker."},
   "placeMapPickerTitle": "Pick the location",
+  "placeMapPickerLocationHint": "Turn on location to jump to where you are \u2014 or drag the pin yourself",
+  "@placeMapPickerLocationHint": {"description": "Map picker banner shown when location permission is off (bug 20260921-508); picking manually still works"},
   "@placeMapPickerTitle": {"description": "Map picker sheet title (Story 1.4)"},
   "placeMapPickerHint": "Drag the pin or tap the map to move it",
   "@placeMapPickerHint": {"description": "Map picker sheet hint. The coordinates themselves are never shown."},

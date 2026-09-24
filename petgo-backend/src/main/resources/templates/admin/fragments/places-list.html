@@ -23,7 +23,8 @@
             <a th:href="@{/admin/manual-review(type='PLACE_REPORT')}" th:text="${summary.pendingReports}" th:title="#{admin.v130.places.summary.pendingReports.go}">0</a>
         </div>
     </div>
-    <div class="sum-item">
+    <!--/* 打卡归 B2，B2 上线前隐藏（bug 20260923-552；开关 admin.places.checkin-visible，AdminPlaceController 下发） */-->
+    <div class="sum-item" th:if="${placesCheckinVisible}">
         <div class="sum-label" th:text="#{admin.v130.places.summary.checkins}">累计打卡</div>
         <div class="sum-value" th:text="${summary.checkins}">0</div>
     </div>
@@ -43,7 +44,7 @@
             <th th:text="#{admin.v130.places.col.marker}">标记人</th>
             <th th:text="#{admin.v130.places.col.photos}">照片</th>
             <th th:text="#{admin.v130.places.col.comments}">评论</th>
-            <th th:text="#{admin.v130.places.col.checkins}">打卡</th>
+            <th th:if="${placesCheckinVisible}" th:text="#{admin.v130.places.col.checkins}">打卡</th>
             <th th:text="#{admin.v130.places.col.attitude}">推荐 · 不推荐</th>
             <th th:text="#{admin.v130.places.col.status}">状态</th>
             <th th:text="#{admin.v130.places.col.createdAt}">创建时间</th>
@@ -83,7 +84,7 @@
             </td>
             <td th:text="${r.photoCount}">0</td>
             <td th:text="${r.commentCount}">0</td>
-            <td th:text="${r.checkinCount}">0</td>
+            <td th:if="${placesCheckinVisible}" th:text="${r.checkinCount}">0</td>
             <td class="nowrap"><span th:text="${r.recommendCount}">0</span> · <span th:text="${r.notRecommendCount}">0</span></td>
             <td class="nowrap">
                 <span class="dot" th:classappend="${r.status.name() == 'ACTIVE'} ? 'dot--ok' : (${r.status.name() == 'DELISTED'} ? 'dot--wait' : 'dot--done')"></span>

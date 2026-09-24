@@ -57,26 +57,45 @@
                 <a class="btn btn-neutral" data-step-next th:if="${step > 0}"
                    th:href="@{/admin/seed-batches/{id}(id=${batchId},step=${step - 1})}"
                    th:text="#{admin.v130.batch.prevStep}">← 上一步</a>
+                <!--/* bug 20260923-550：第 1 步一张素材都没有 / 第 2 步一行都没有时，「下一步」软提示一次（不硬拦）。
+                       计数在点击时从 DOM 现数：素材是 fetch 上传 + 局部刷墙，服务端首屏的数早就过期了。 */-->
                 <a class="btn btn-primary" data-step-next th:if="${step < 2}"
                    th:href="@{/admin/seed-batches/{id}(id=${batchId},step=${step + 1})}"
+                   th:attr="data-empty-guard=${step == 1} ? 'assets' : null,
+                            data-empty-msg=${step == 1} ? #{admin.v130.batch.noAssetsConfirm} : null"
                    th:text="#{admin.v130.batch.nextStep}">下一步 →</a>
                 <!--/* 第 2 步的「下一步」就是去校验预览（第 3 步是另一个页面） */-->
-                <a class="btn btn-primary" data-step-next th:if="${step == 2}"
+                <a class="btn btn-primary" data-step-next th:if="${step == 2}" data-empty-guard="rows"
                    th:href="@{/admin/seed-batches/{id}/preview(id=${batchId})}"
+                   th:attr="data-empty-msg=#{admin.v130.batch.noRowsConfirm}"
                    th:text="#{admin.batch.toPreview}">下一步：校验预览</a>
             </div>
         </div>
 
-        <!--/* 🔴 有未保存的编辑行时拦一下「下一步」：行卡片是**逐行保存**的，改完不点保存就翻页，
-               那几行的改动直接丢 —— 而界面上没有任何东西提示它没保存过。
-               ⚠️ 只提示、不阻断（确认后照走）：真要放弃这几行改动是运营的选择。 */-->
+        <!--/* 🔴 有未保存的改动时拦一下离场（上一步 / 下一步 / 步骤条 / 返回列表）：
+               ① 第 2 步行卡片是**逐行保存**的，改完不点保存就翻页，那几行的改动直接丢；
+               ② 第 0 步批次设置同理（bug 20260923-550：原先没有任何提示，运营不知道到底存没存）。
+               ⚠️ 只提示、不阻断（确认后照走）：真要放弃这些改动是运营的选择。
+               关页 / 刷新走 beforeunload（配置卡那份由 admin-core.js 负责，行卡片的在这里补）。 */-->
         <script th:inline="javascript">
             /*<![CDATA[*/
             (function () {
-                var MSG = /*[[#{admin.v130.batch.unsavedRows}]]*/ '';
-                document.addEventListener('input', function (e) {
-                    var f = e.target && e.target.closest && e.target.closest('form[data-row-form]');
-                    if (f) { f.setAttribute('data-dirty', 'true'); }
+                var MSG_ROWS = /*[[#{admin.v130.batch.unsavedRows}]]*/ '';
+                var MSG_SETTINGS = /*[[#{admin.v130.batch.unsavedSettings}]]*/ '';
+                var leaving = false;
+                function setRowDirty(f, dirty) {
+                    if (dirty) { f.setAttribute('data-dirty', 'true'); } else { f.removeAttribute('data-dirty'); }
+                    var card = f.closest('.seed-row-card');
+                    var flag = card && card.querySelector('[data-unsaved-flag]');
+                    if (flag) { flag.hidden = !dirty; }
+                }
+                function dirtyRows() { return !!document.querySelector('form[data-row-form][data-dirty]'); }
+                function dirtySettings() { return !!document.querySelector('form[data-batch-settings].is-dirty'); }
+                ['input', 'change'].forEach(function (evt) {
+                    document.addEventListener(evt, function (e) {
+                        var f = e.target && e.target.closest && e.target.closest('form[data-row-form]');
+                        if (f) { setRowDirty(f, true); }
+                    });
                 });
                 // 「取消」收起这一行 = 放弃这一行的改动：dirty 标记要一起清掉，
                 // 否则接下来点「下一步」还会弹一次「有未保存的行」，把这条提示的可信度稀释掉。
@@ -85,13 +104,37 @@
                     if (!btn) { return; }
                     var d = btn.closest('details');
                     var f = d && d.querySelector('form[data-row-form]');
-                    if (f) { f.removeAttribute('data-dirty'); }
+                    if (f) { setRowDirty(f, false); }
+                });
+                // 保存这一行 = 整页 PRG 重渲染：提交出去的那一行不算未保存，别让 beforeunload 再拦一次
+                document.addEventListener('submit', function (e) {
+                    var f = e.target;
+                    if (f && f.hasAttribute && f.hasAttribute('data-row-form') && !e.defaultPrevented) {
+                        setRowDirty(f, false);
+                    }
                 });
                 document.addEventListener('click', function (e) {
                     var next = e.target && e.target.closest && e.target.closest('[data-step-next]');
                     if (!next) { return; }
-                    if (!document.querySelector('form[data-row-form][data-dirty]')) { return; }
-                    if (!window.confirm(MSG)) { e.preventDefault(); }
+                    var msg = dirtySettings() ? MSG_SETTINGS : (dirtyRows() ? MSG_ROWS : null);
+                    if (msg) {
+                        if (!window.confirm(msg)) { e.preventDefault(); return; }
+                        // 已确认放弃：清掉脏标，免得紧接着的 beforeunload 再问第二遍
+                        leaving = true;
+                        document.querySelectorAll('form[data-batch-settings].is-dirty')
+                                .forEach(function (f) { f.classList.remove('is-dirty'); });
+                        return;
+                    }
+                    // 空步软提示（只向前的「下一步」挂 data-empty-guard）：素材 / 内容行为 0 时问一次，确认照走
+                    var guard = next.getAttribute('data-empty-guard');
+                    if (!guard) { return; }
+                    var n = guard === 'assets'
+                            ? document.querySelectorAll('#seedAssetWall .seed-thumb').length
+                            : document.querySelectorAll('.seed-row-card').length;
+                    if (n === 0 && !window.confirm(next.getAttribute('data-empty-msg') || '')) { e.preventDefault(); }
+                });
+                window.addEventListener('beforeunload', function (e) {
+                    if (!leaving && dirtyRows()) { e.preventDefault(); e.returnValue = ''; }
                 });
             })();
             /*]]>*/
@@ -102,7 +145,10 @@
            🔴 **全页只有这一处**批次级设置。此前在线录入与 Excel 导入各带一个一模一样的账号下拉，
               同一页面出现两次（AC1 要消除的正是它）。 */-->
     <div th:fragment="step0" th:remove="tag">
-        <form method="post" th:action="@{/admin/seed-batches/{id}/settings(id=${batchId})}"
+        <!--/* bug 20260923-550：挂模板 D 配置卡机制（admin-core.js）——改过没存时显示「已修改」、关页 / 刷新提示一次，
+               离开这一步由上面的脚本拦。⚠️ 保存钮**不挂 data-save**：从没保存过的批次，原样点「保存设置」
+               本身就有意义（保存后才进批次列表），不能因为「没改动」把它禁掉。 */-->
+        <form method="post" data-config-card data-batch-settings th:action="@{/admin/seed-batches/{id}/settings(id=${batchId})}"
               th:attr="data-real-identity-confirm=#{admin.publishIdentity.realConfirm}">
             <!-- bug 20260901-468：回显已存的默认发布账号（存过才回显，首次仍不预选）。 -->
             <div th:replace="~{admin/fragments/publish-identity-select :: identity-select(${publishIdentities}, 'batchDefaultAuthor', 'defaultAuthorUserId', null, null, ${batch?.defaultAuthorUserId})}"></div>
@@ -119,7 +165,10 @@
                  运营下次改别的字段保存时，空输入框会把已存的时间**静默清空**。 -->
             <input id="batchDefaultAt" type="datetime-local" name="defaultScheduledAt" class="field-full"
                    th:value="${@adminTime.wibForInput(batch?.defaultScheduledAt)}"/>
-            <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.batch.saveSettings}">保存设置</button>
+            <span class="row-edit-actions">
+                <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.batch.saveSettings}">保存设置</button>
+                <span class="tag tag-dirty" hidden data-dirty-flag th:text="#{admin.v130.tpl.dirty}">已修改</span>
+            </span>
         </form>
         <p class="hint" th:text="#{admin.batch.inheritHint}">
             行内留空即继承以上默认值。四个字段的心智一致：填了就用你填的，留空就继承默认。</p>
@@ -218,6 +267,9 @@
                 <!--/* 引用的素材被废弃 / 校验没过的行，收起时也要看得见 —— 展开才知道就等于藏起来 */-->
                 <span class="badge badge-danger" th:if="${r.errorMessage}"
                       th:text="#{admin.v130.batch.rowHasError}">这一行有问题</span>
+                <!--/* bug 20260923-550：改过没存的行收起时也要看得出来（随 data-dirty 显隐，脚本见页面底部） */-->
+                <span class="badge badge-warn" hidden data-unsaved-flag
+                      th:text="#{admin.v130.batch.rowUnsaved}">未保存</span>
             </summary>
 
             <form method="post" data-row-form

@@ -339,7 +339,9 @@
 <!--/* 新建成功：抽屉体不在这里换 —— HX-Trigger admin:drawer-open 会带着新标签的抽屉 URL
        让 admin-drawer.js 走正常的 open 流程（这样地址栏的 ?open= 与「当前对象」才对得上）。 */-->
 <th:block th:fragment="created">
-    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
 </th:block>
 
 <!--/* 处置成功：抽屉体 oob + toast；列表由 HX-Trigger admin:user-tag-list-refresh 整表重拉
@@ -348,7 +350,9 @@
     <div id="utag-drawer-body-oob" hx-swap-oob="innerHTML:#utag-drawer .drawer-body">
         <div th:replace="~{admin/fragments/drawer-user-tag :: drawer}"></div>
     </div>
-    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
 </th:block>
 </body>
 </html>

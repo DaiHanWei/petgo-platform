@@ -27,7 +27,9 @@
 
 <th:block th:fragment="saved">
     <th:block th:replace="~{admin/fragments/config-card-pawcoin :: card}"></th:block>
-    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
 </th:block>
 
 <!--/* 充值档位区块（AB-6B → Story 6.2 AB-22A / D-24 / D-25）：主表只列启用中（≤4）；「查看已停用（N）」htmx 折叠表；「＋ 新建档位」内联表单。

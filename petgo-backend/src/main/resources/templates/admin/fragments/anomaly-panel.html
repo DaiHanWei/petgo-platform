@@ -68,7 +68,9 @@
 
 <!-- 备注时间线 + 追加框（独立 fragment；加备注成功后服务端只回这一节，hx-target 指向它） -->
 <section th:fragment="notes" class="card card-full an-card an-notes" id="anomaly-notes">
-    <div class="toast" role="status" th:if="${toast}" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">toast</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host" th:if="${toast}">
+        <div class="toast" role="status" th:text="${toast}">toast</div>
+    </div>
     <h2 th:text="#{admin.anomalies.internalNote}">内部备注</h2>
     <p class="muted" th:if="${#lists.isEmpty(notes)}" th:text="#{admin.v130.anomalies.notes.empty}">暂无备注</p>
     <ul class="an-timeline" th:if="${!#lists.isEmpty(notes)}">

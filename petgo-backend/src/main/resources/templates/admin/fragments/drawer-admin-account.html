@@ -111,7 +111,9 @@
     <table hidden><tbody><tr th:replace="~{admin/admin-accounts :: row(${a}, true)}"></tr></tbody></table>
     <!--/* 停用 / 重新激活会改「启用中 · 已停用 · 超管数」——摘要条不一起换就会停在旧值直到整页刷新 */-->
     <div th:replace="~{admin/admin-accounts :: sumbar(true)}"></div>
-    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
 </th:block>
 
 <!--/* htmx 建号成功的占位响应体：HX-Redirect 已带出，htmx 直接跳转、本体不会被 swap（与 drawer-places-create :: created 同一范式） */-->

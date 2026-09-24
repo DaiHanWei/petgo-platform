@@ -7,7 +7,9 @@
 <body>
 <div th:fragment="done" class="rv-done" data-done th:data-next-id="${done.nextId}">
     <!-- toast oob 到 layout 的 #admin-toast-host（留在右栏会被下一条 detail 立刻冲掉，复审 #6） -->
-    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${message} ?: #{${messageKey}}">已处理</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${message} ?: #{${messageKey}}">已处理</div>
+    </div>
     <th:block th:if="${#strings.isEmpty(done.nextId)}">
         <div th:replace="~{admin/fragments/tpl-a-empty :: queueEmpty('manual-review', null)}"></div>
         <p class="muted" th:if="${done.otherPending > 0}" th:text="#{admin.v130.review.empty.other(${done.otherPending})}">其他页签还有 N 条</p>

@@ -7,7 +7,9 @@
 -->
 <body>
 <div th:fragment="detail" class="rv-detail" th:attr="data-tab=${d.tab.slug()},data-source-id=${d.sourceId}">
-    <div class="toast" role="status" th:if="${toast}" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">toast</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host" th:if="${toast}">
+        <div class="toast" role="status" th:text="${toast}">toast</div>
+    </div>
 
     <!-- ① 对象快照卡 -->
     <section class="card card-full rv-card rv-snapshot">

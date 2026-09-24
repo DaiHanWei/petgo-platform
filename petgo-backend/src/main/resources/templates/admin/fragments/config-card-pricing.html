@@ -34,7 +34,9 @@
 
 <th:block th:fragment="saved">
     <th:block th:replace="~{admin/fragments/config-card-pricing :: card}"></th:block>
-    <div class="toast" role="status" hx-swap-oob="beforeend:#admin-toast-host" th:text="${toast}">已保存</div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
 </th:block>
 </body>
 </html>
