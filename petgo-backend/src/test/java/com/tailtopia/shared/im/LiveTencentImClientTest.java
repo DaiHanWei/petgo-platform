@@ -166,4 +166,32 @@ class LiveTencentImClientTest {
         assertThat(push.get("Title")).isEqualTo("");
         assertThat(push.get("Desc")).isEqualTo("");
     }
+
+    // ===== 环境前缀隔离（bug 519/521）：系统消息只发给本环境账号 =====
+
+    @Test
+    void localC2cPartiesAcceptsLegacyFormatWithEmptyPrefix() {
+        ImAccountMapper.configure("");
+        assertThat(LiveTencentImClient.localC2cParties("c2c-u_75-v_1")).containsExactly("u_75", "v_1");
+        assertThat(LiveTencentImClient.localC2cParties("stub-conv-x")).isNull();
+        assertThat(LiveTencentImClient.localC2cParties(null)).isNull();
+    }
+
+    @Test
+    void localC2cPartiesRejectsPreviousEnvironmentConversationWhenPrefixed() {
+        try {
+            ImAccountMapper.configure("stg_");
+            // 设前缀前建的旧会话指向生产同号账号 → 必须跳过，不发系统消息。
+            assertThat(LiveTencentImClient.localC2cParties("c2c-u_75-v_1")).isNull();
+            assertThat(LiveTencentImClient.localC2cParties("c2c-stg_u_75-v_1")).isNull();
+            assertThat(LiveTencentImClient.localC2cParties("c2c-stg_u_75-stg_v_1"))
+                    .containsExactly("stg_u_75", "stg_v_1");
+            // createConversation 与解析互逆。
+            assertThat(LiveTencentImClient.localC2cParties(client().createConversation(
+                    ImAccountMapper.userImId(75), ImAccountMapper.vetImId(1))))
+                    .containsExactly("stg_u_75", "stg_v_1");
+        } finally {
+            ImAccountMapper.configure("");
+        }
+    }
 }

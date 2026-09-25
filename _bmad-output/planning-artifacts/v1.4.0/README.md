@@ -31,7 +31,7 @@
 
 | 被覆盖对象 | 位置 | 覆盖内容 |
 |---|---|---|
-| 基线 PRD 的电商排除条款 | `../PRD.md:54` / `:1336` / `:1398` | 三处均写明"不做电商 / 自营电商排除"。本版本由 C-1 拍板转为**精选自营**，直接覆盖。**基线 `PRD.md` 不改写**（v1.1 / v1.1.2 均为此先例），以本条登记为准 |
+| 基线 PRD 的电商排除条款 | `../v1.0.0/PRD.md:54` / `:1336` / `:1398` | 三处均写明"不做电商 / 自营电商排除"。本版本由 C-1 拍板转为**精选自营**，直接覆盖。**基线 `PRD.md` 不改写**（v1.1 / v1.1.2 均为此先例），以本条登记为准 |
 | Roadmap 电商两阶段路线 | 源工作区 `1.项目总述/Roadmap.md` 1.4.0 / 2.1.0 | Phase A（导流跳转 Tokopedia/Shopee）与 Phase B（商家自行履约）**两条作废**（C-2）。改写建议见 `Roadmap-电商改动建议.md`，由 Dai 合入源工作区 |
 
 ---
@@ -71,7 +71,7 @@
 > | ⑤ Tab 无预留位 | **L-12** + **DEP-1** | `decision-log.md` §三 · PRD §8A · §3.1 已统一表述 |
 >
 > validate 另发现 **L-13**（AB-6C 的浮存论证方向与 L-7 自纠相反，是 L-7 传导时唯一漏改的一处），以及 CODE-4 处使用了本仓不存在的编号格式 `FR-1.2.0`。
-> 完整评审见 `../prds/prd-petgo-platform-2026-08-14/validation-report.md`（128 条 findings）。
+> 完整评审见 `./validation-2026-08-14/validation-report.md`（128 条 findings）。
 
 以下为 2026-08-14 落库时逐条核对源码得出的原始记录，按阻塞程度排序。
 
@@ -190,10 +190,10 @@
 
 ## 8. 下游产物命名（沿用 V1.1 / V1.1.2 的 delta 模式，并存不覆盖）
 
-- ✅ `planning-artifacts/architecture-v1.4.0-delta.md` —— **2026-08-15 已起草**（AD-1~AD-13 · §4 Flyway 号段规划 V101–V139）
+- ✅ `planning-artifacts/v1.4.0/architecture-v1.4.0-delta.md` —— **2026-08-15 已起草**（AD-1~AD-13 · §4 Flyway 号段规划 V101–V139）
 - ✅ `implementation-artifacts/v1.4.0/PARALLEL-DEV-CONTRACT.md` —— **2026-08-15 已起草，待三人签字**
-- ⏳ `planning-artifacts/epics-v1.4.0.md`
-- ⏳ `implementation-artifacts/sprint-status-v1.4.0.yaml`
+- ⏳ `planning-artifacts/v1.4.0/epics-v1.4.0.md`
+- ⏳ `implementation-artifacts/v1.4.0/sprint-status-v1.4.0.yaml`
 - story 文件放 `implementation-artifacts/v1.4.0/`（避免与前三版的 `1-1` / `2-1` 编号撞名）
 
 ## 9. 版本上下文

@@ -5,7 +5,7 @@
 # 入口：claude.ai/code 顶部「云图标（当前环境名）」→ 环境选择器 → Add environment / 齿轮 → Setup script。
 #
 # 装什么：
-#   - Flutter 3.44.x（前端 petgo_app：analyze / test）
+#   - Flutter 固定 tag（FLUTTER_REF，与本机基线一致；前端 petgo_app：analyze / test）
 #   - Java 21：用云端【自带的 openjdk-21】，不下载、不改 JAVA_HOME。
 #       原因：① 后端基线已是 Java 21；② 系统 openjdk-21 的信任库与系统 CA 同步（含云代理的 MITM CA），
 #             避免 mvnw 连 Maven Central 时的 PKIX/证书报错（自己下的 Temurin 信任库不含代理 CA 会失败）。
@@ -17,6 +17,7 @@
 set -euo pipefail
 
 FLUTTER_DIR="/opt/flutter"
+FLUTTER_REF="3.44.1"   # 与本机基线一致的 tag；升级本机后同步改这里并重贴 setup script
 JAVA21_DIR="/usr/lib/jvm/java-21-openjdk-amd64"
 
 echo "==> [1/3] 基础工具（apt 尽力补齐，失败不致命）"
@@ -38,7 +39,7 @@ java -version 2>&1 | head -1 || true
 
 echo "==> [3/3] Flutter"
 if [ ! -d "$FLUTTER_DIR" ]; then
-  git clone --depth 1 -b stable https://github.com/flutter/flutter.git "$FLUTTER_DIR"
+  git clone --depth 1 -b "$FLUTTER_REF" https://github.com/flutter/flutter.git "$FLUTTER_DIR"
 fi
 git config --global --add safe.directory "$FLUTTER_DIR"
 ln -sf "$FLUTTER_DIR/bin/flutter" /usr/local/bin/flutter

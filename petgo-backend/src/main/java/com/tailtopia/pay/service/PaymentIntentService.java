@@ -1,10 +1,12 @@
 package com.tailtopia.pay.service;
 
 import com.tailtopia.pay.domain.PayChannel;
+import com.tailtopia.pay.domain.PaymentFailureCategory;
 import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.domain.PaymentStatus;
 import com.tailtopia.pay.dto.PaymentIntentResponse;
+import com.tailtopia.pay.event.PaymentIntentFailedEvent;
 import com.tailtopia.pay.event.PaymentIntentPaidEvent;
 import com.tailtopia.pay.repository.PaymentIntentRepository;
 import com.tailtopia.profile.service.CardTokenGenerator;
@@ -81,10 +83,12 @@ public class PaymentIntentService {
             long amount, String currency, String idempotencyKey, Duration ttl) {
         rateLimiter.check("rl:pay:create:" + userId, 20, Duration.ofMinutes(1));
 
-        Optional<Long> existing = idempotency.findResourceId(idempotencyKey);
+        // 映射可能指向一行不存在的意图：建意图的事务在映射写入 Redis 之后回滚了（Redis 不随库回滚）。
+        // 此时当作没有既有意图、下方新建并覆盖映射；以前这里直接 404，用户重试会一直卡住。
+        Optional<PaymentIntent> existing = idempotency.findResourceId(idempotencyKey)
+                .flatMap(intents::findById);
         if (existing.isPresent()) {
-            PaymentIntent ex = intents.findById(existing.get())
-                    .orElseThrow(() -> AppException.notFound("支付意图不存在"));
+            PaymentIntent ex = existing.get();
             // 仅【PAID】(已付幂等) 或【PENDING 且未过窗】(复用同一 QR) 才返回既有意图；
             // 其余（已 EXPIRED / PENDING 已过窗 / 失败）→ 落到下方新建，出新码（bug：超付款窗后重开应出新码非旧码）。
             // 末尾 idempotency.store 覆盖映射到新意图（Redis SET 覆盖，非 NX）。
@@ -121,10 +125,12 @@ public class PaymentIntentService {
             String idempotencyKey, Duration ttl) {
         rateLimiter.check("rl:pay:create:" + userId, 20, Duration.ofMinutes(1));
 
-        Optional<Long> existing = idempotency.findResourceId(idempotencyKey);
+        // 映射可能指向一行不存在的意图：建意图的事务在映射写入 Redis 之后回滚了（Redis 不随库回滚）。
+        // 此时当作没有既有意图、下方新建并覆盖映射；以前这里直接 404，用户重试会一直卡住。
+        Optional<PaymentIntent> existing = idempotency.findResourceId(idempotencyKey)
+                .flatMap(intents::findById);
         if (existing.isPresent()) {
-            PaymentIntent ex = intents.findById(existing.get())
-                    .orElseThrow(() -> AppException.notFound("支付意图不存在"));
+            PaymentIntent ex = existing.get();
             boolean reusable = ex.getUserId() != null && ex.getUserId() == userId
                     && (ex.getStatus() == PaymentStatus.PAID
                     || (ex.getStatus() == PaymentStatus.PENDING && !ex.isExpiredAt(Instant.now())));
@@ -162,6 +168,42 @@ public class PaymentIntentService {
             }
             intent.markFailed(java.util.Map.of("reason", reason == null ? "CANCELLED" : reason));
             intents.saveAndFlush(intent);
+            // 🔴 只在真的写了 FAILED 时发 —— 上面 terminal 短路那支是 no-op，发事件会灌水。
+            publishFailed(intent);
+        });
+    }
+
+    /** {@link #failChargeAttempt} 写入 meta 的 reason；{@link PaymentFailureCategory} 归入网关拒付。 */
+    public static final String REASON_GATEWAY_CHARGE_FAILED = "GATEWAY_CHARGE_FAILED";
+
+    /**
+     * 向网关下单失败（超时 / 被拒 / 响应异常）后收口：该意图置 {@code FAILED}（reason
+     * {@value #REASON_GATEWAY_CHARGE_FAILED}）并<b>保留这一行</b>。
+     *
+     * <p>🔴 为什么不能让它留在 {@code PENDING} 或整笔回滚（2026-09-21 生产 GemPay 超时事故）：
+     * <ul>
+     *   <li><b>回滚</b>：发给网关的 {@code request_id} 就是本意图的 {@code public_token}，行没了就再也
+     *       对不上账——请求可能已经到了网关、建了单，我们这边却一无所知；</li>
+     *   <li><b>留 PENDING</b>：各业务的幂等键 / 复用查询会把这张「没有二维码」的意图原样还给下一次重试，
+     *       要么返回空载荷（App 没码可扫），要么拿<b>同一个 request_id</b> 再去下单——若首单其实已在网关
+     *       落地，就会被当成重复单号（GemPay {@code P02}）永久拒掉。</li>
+     * </ul>
+     * 置 FAILED 后，下一次发起一律新建意图、新 {@code request_id}。
+     *
+     * <p>发 {@link PaymentIntentFailedEvent}（类别 {@code GATEWAY_DECLINED}）：这是用户实际看到的一次付款失败，
+     * 不发的话电商漏斗要等 60 分钟后被扫描器记成「超时」，口径就错了。
+     *
+     * <p>已终态 / 已拿到网关单号（并发的另一请求已下单成功）→ no-op。
+     */
+    @Transactional
+    public void failChargeAttempt(String publicToken) {
+        intents.findByPublicToken(publicToken).ifPresent(intent -> {
+            if (intent.getStatus().isTerminal() || intent.getGatewayRef() != null) {
+                return;
+            }
+            intent.markFailed(java.util.Map.of("reason", REASON_GATEWAY_CHARGE_FAILED));
+            intents.saveAndFlush(intent);
+            publishFailed(intent);
         });
     }
 
@@ -184,6 +226,11 @@ public class PaymentIntentService {
             intents.saveAndFlush(intent);
             return Optional.empty();
         }
+        if (intent.getGatewayRef() == null) {
+            // 还没拿到网关单号 = 没有二维码可给（下单失败已由 failChargeAttempt 置 FAILED，走到这里只剩
+            // 另一请求正在下单或进程中途退出）。复用它只会把空载荷还给 App → 不复用，新建一张。
+            return Optional.empty();
+        }
         return Optional.of(intent);
     }
 
@@ -201,9 +248,42 @@ public class PaymentIntentService {
             }
             intent.markExpired(null);
             intents.save(intent);
+            publishFailed(intent);
             expired++;
         }
         return expired;
+    }
+
+    /**
+     * 发布 {@link PaymentIntentFailedEvent}（Story 1-2 AC8）。
+     *
+     * <p>🔴 <b>必须在 save 之后调</b>：{@link PaymentFailureCategory#of} 读的是意图的 status 与 meta，
+     * 两者都要先定下来才算得对。
+     *
+     * <p>⚠️ <b>本类共有 10 个置终态的写入点，只有下面 5 个发事件</b>（Story 1-2 AC8 划定的范围，
+     * 2026-09-22 加入 {@link #failChargeAttempt}）：
+     * {@link #applyCallback} 的 {@code FAILED} / {@code EXPIRED} 两支、{@link #failByToken}、
+     * {@link #expireOverduePending}、{@link #failChargeAttempt}。**不发**的另外几处及其理由：
+     * <ul>
+     *   <li>{@code createIntent} / {@code createMixedIntent} 的复用分支懒过期 —— 电商侧进不来
+     *       （{@code requirePayable} 会先挡下过窗订单），且 {@code expireOverduePending}
+     *       每 60 秒扫一遍会补上；</li>
+     *   <li>{@link #findReusablePending} 的懒过期 —— 只服务 PAWCOIN_TOPUP 的复用查询；</li>
+     *   <li>{@link #failPending} —— 唯一调用方是问诊线，非电商；</li>
+     *   <li>🔴 {@link #statusOf} 的懒过期 —— <b>这一处的事件是永久丢失的</b>，与上面几处不同：
+     *       {@link #expireOverduePending} 只扫 {@code status = PENDING}，补不回来；
+     *       {@link #failByToken} 又因「已终态即 no-op」写不进去。今天不影响电商是因为
+     *       App 轮询的是订单详情而不是意图状态端点。<b>谁要做充值 / 问诊的支付漏斗，
+     *       第一件事就是补上这里</b>。</li>
+     * </ul>
+     * 所以电商漏斗今天不缺口径。但<b>这不是一条「所有失败都发事件」的不变式</b>——
+     * 下一个要订阅本事件的业务线必须先自己核一遍这几处，别照着方法名想当然。
+     */
+    private void publishFailed(PaymentIntent intent) {
+        events.publishEvent(new PaymentIntentFailedEvent(
+                intent.getId(), intent.getPublicToken(), intent.getUserId(),
+                intent.getPurpose(), intent.getChannel(), intent.getAmount(), intent.getCurrency(),
+                PaymentFailureCategory.of(intent)));
     }
 
     /**
@@ -251,10 +331,12 @@ public class PaymentIntentService {
             case FAILED -> {
                 intent.markFailed(cb.rawMeta());
                 intents.saveAndFlush(intent);
+                publishFailed(intent);
             }
             case EXPIRED -> {
                 intent.markExpired(cb.rawMeta());
                 intents.saveAndFlush(intent);
+                publishFailed(intent);
             }
             default -> { /* PENDING 已在入口挡下，不可达 */ }
         }
@@ -295,6 +377,16 @@ public class PaymentIntentService {
                 .orElseThrow(() -> AppException.notFound("支付意图不存在"));
         if (intent.getGatewayRef() != null) {
             return; // 已下单，幂等短路
+        }
+        // 🔴 已终态（FAILED / EXPIRED / PAID）的意图绝不回填、调用方也拿不到二维码（2026-09-25 code review #1）。
+        //    并发竞态：两个请求拿到同一张无网关单号的意图 —— 快的那个被网关判重复单号拒掉、经 failChargeAttempt
+        //    置 FAILED；慢的那个随后拿到二维码。若照样回填并把码交给用户，用户扫码付了钱，到账回调却因
+        //    「已终态」被丢弃，订单停在待支付直到超时取消 —— 收了钱不履约。
+        //    这里抛出后调用方不会下发 payload；用户重试走新意图、新 request_id。网关侧那张单无人扫码，自然过期。
+        //    与 failChargeAttempt 的并发写由 @Version 乐观锁裁决，只有一方落库。
+        if (intent.getStatus().isTerminal()) {
+            log.warn("attachCharge 拒绝：意图已终态 token={} status={}", publicToken, intent.getStatus());
+            throw AppException.conflict("支付单已失效，请重新发起支付");
         }
         intent.attachGatewayRef(gatewayRef, meta);
         intents.saveAndFlush(intent);

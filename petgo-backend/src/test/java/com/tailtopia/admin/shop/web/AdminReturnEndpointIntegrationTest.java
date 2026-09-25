@@ -13,6 +13,7 @@ import com.tailtopia.admin.account.domain.AdminAccountType;
 import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.admin.shop.service.AdminReturnService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.pay.domain.PawCoinTxnType;
 import com.tailtopia.pay.service.PawCoinWalletService;
@@ -92,6 +93,9 @@ class AdminReturnEndpointIntegrationTest extends ApiIntegrationTest {
     private InventoryMovementService movements;
     @Autowired
     private AdminAccountRepository adminAccounts;
+    /** V1.3.0 Story 10.1：页签计数与页签归属直接问服务层（不受左栏第一页只放 20 条影响）。 */
+    @Autowired
+    private AdminReturnService adminReturnService;
     @Autowired
     private JdbcTemplate jdbc;
 
@@ -379,6 +383,153 @@ class AdminReturnEndpointIntegrationTest extends ApiIntegrationTest {
                 .andExpect(flash().attributeExists("error"));
     }
 
+    // ---------- V1.3.0 Story 10.1：A7 模板 A 工作台（AC1 / AC2 / AC5 / AC6） ----------
+
+    @Test
+    @DisplayName("工作台整页 200：五页签 + 左栏队列都在一页里（不再有独立详情页）")
+    void workbenchPageRendersTabsAndQueue() throws Exception {
+        Ctx c = deliveredOrder();
+        ReturnRequest r = submitReturn(c, ReturnType.NON_QUALITY_ISSUE);
+
+        String html = mvc.perform(get("/admin/shop/returns")
+                        .with(authentication(staffWith(AdminPermissions.REFUND_VIEW))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).contains("data-workbench").contains("wb-detail-body");
+        // 五个页签的紫计数 id 必须都在 —— 处置 fragment 靠同 id oob 替换它们
+        for (String tab : java.util.List.of("pending", "shipback", "inspect", "refund", "closed")) {
+            assertThat(html).as("缺页签计数 " + tab).contains("shop-return-tab-count-" + tab);
+        }
+        // ⚠️ **不断言「这一条出现在 HTML 里」**：队列是先进先出的第一页（20 条），而
+        //    ApiIntegrationTest 不回滚，共享库里积压的待审核申请会把新造的这条挤到后面几页 ——
+        //    那种断言单跑绿、全量跑随机红，是本仓库最误导人的一类失败。落在哪个页签问服务层。
+        assertThat(adminReturnService.page(AdminReturnService.Tab.PENDING, null, null, 0, 1000)
+                .getContent().stream().map(ReturnRequest::getPublicToken))
+                .as("刚提交的申请应落在「待审核」页签").contains(r.getPublicToken());
+    }
+
+    @Test
+    @DisplayName("HX-Request 下队列返的是行片段，不是整页（否则整页会被塞进左栏）")
+    void queueUnderHtmxReturnsRowsFragment() throws Exception {
+        Ctx c = deliveredOrder();
+        submitReturn(c, ReturnType.NON_QUALITY_ISSUE);
+
+        String body = mvc.perform(get("/admin/shop/returns").header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.REFUND_VIEW))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("<html").doesNotContain("data-workbench");
+        assertThat(body).contains("q-row");
+    }
+
+    /**
+     * 🔴 AC5：整页详情退役，<b>旧地址 404、不做跳转</b>（D-23）。
+     *
+     * <p>这条路径上的 mapping 按设计保留（T1「零新端点」：htmx 请求返右栏片段），
+     * 所以 {@code AdminRetiredRoutesTest} 那种「不该有 GET 映射」的判据在这里不适用 ——
+     * 「直达返 404」只能在这里钉。302 同样不行：留个跳转壳，旧地址就永远删不掉。
+     */
+    @Test
+    @DisplayName("🔴 旧详情地址直达 → 404（不是 302，不是 200）；带 HX-Request 才返右栏五区片段")
+    void oldDetailPageIsRetiredButTheSamePathServesTheRightPaneFragment() throws Exception {
+        Ctx c = deliveredOrder();
+        ReturnRequest r = submitReturn(c, ReturnType.NON_QUALITY_ISSUE);
+        Authentication staff = staffWith(AdminPermissions.REFUND_VIEW);
+
+        mvc.perform(get("/admin/shop/returns/{t}", r.getPublicToken()).with(authentication(staff)))
+                .andExpect(status().isNotFound());
+
+        String panel = mvc.perform(get("/admin/shop/returns/{t}", r.getPublicToken())
+                        .header("HX-Request", "true").with(authentication(staff)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(panel).doesNotContain("<html");
+        // 五区里最不能丢的两样：五步进度条、8 行退款试算卡的合计行（AC1 ③ 加粗「总退回（含补偿）」）
+        assertThat(panel).contains("rf-flow--5");
+        assertThat(panel).contains("sr-grand");
+    }
+
+    @Test
+    @DisplayName("htmx 处置成功 → 右栏 done 片段：data-next-id + oob 删行 + 五页签计数（AC2）")
+    void htmxApproveReturnsDoneFragmentWithNextIdAndOobCounts() throws Exception {
+        Ctx c = deliveredOrder();
+        ReturnRequest r = submitReturn(c, ReturnType.NON_QUALITY_ISSUE);
+
+        String body = mvc.perform(post("/admin/shop/returns/{t}/approve", r.getPublicToken())
+                        .header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.REFUND_APPROVE)))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        // data-next-id 为空时 Thymeleaf 整个去掉该属性 —— 所以 data-done 才是「这是处置结果」的可靠标记
+        assertThat(body).contains("data-done");
+        assertThat(body).contains("hx-swap-oob=\"delete\"").contains("shop-return-row-" + r.getPublicToken());
+        assertThat(body).contains("shop-return-tab-count-pending");
+        assertThat(returns.findByPublicToken(r.getPublicToken()).orElseThrow().getStatus())
+                .isEqualTo(ReturnStatus.AWAIT_SHIPBACK);
+    }
+
+    @Test
+    @DisplayName("🔒 htmx 下越权处置 → 403 + forbidden 片段（点名所缺权限），不是整页 denied")
+    void htmxForbiddenReturnsTheInlineForbiddenFragment() throws Exception {
+        Ctx c = deliveredOrder();
+        ReturnRequest r = submitReturn(c, ReturnType.NON_QUALITY_ISSUE);
+
+        var res = mvc.perform(post("/admin/shop/returns/{t}/approve", r.getPublicToken())
+                        .header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.REFUND_VIEW)))
+                        .with(csrf()))
+                .andExpect(status().isForbidden())
+                .andReturn().getResponse();
+
+        assertThat(res.getHeader("HX-Reswap")).isEqualTo("innerHTML");
+        assertThat(res.getContentAsString()).doesNotContain("<html");
+        assertThat(returns.findByPublicToken(r.getPublicToken()).orElseThrow().getStatus())
+                .isEqualTo(ReturnStatus.PENDING_REVIEW);
+    }
+
+    @Test
+    @DisplayName("htmx 下业务失败 → 422 行内错误片段（驳回没填理由），单据状态不动")
+    void htmxValidationFailureReturnsInlineError() throws Exception {
+        Ctx c = deliveredOrder();
+        ReturnRequest r = submitReturn(c, ReturnType.NON_QUALITY_ISSUE);
+
+        var res = mvc.perform(post("/admin/shop/returns/{t}/reject", r.getPublicToken())
+                        .header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.REFUND_APPROVE)))
+                        .with(csrf()).param("reason", " "))
+                .andExpect(status().isUnprocessableEntity())
+                .andReturn().getResponse();
+
+        assertThat(res.getHeader("HX-Reswap")).isEqualTo("innerHTML");
+        assertThat(returns.findByPublicToken(r.getPublicToken()).orElseThrow().getStatus())
+                .isEqualTo(ReturnStatus.PENDING_REVIEW);
+    }
+
+    /**
+     * 页签计数与队列**同源**（AC4）：筛掉了的那些不能还算在计数里。
+     *
+     * <p>两处各算各的，界面上就会出现「待审核 3」配一张空队列 —— 运营只会当成加载失败。
+     */
+    @Test
+    void tabCountsFollowTheSameFilterAsTheQueue() throws Exception {
+        Ctx c = deliveredOrder();
+        submitReturn(c, ReturnType.NON_QUALITY_ISSUE);
+
+        java.util.Map<String, Long> unfiltered = adminReturnService.counts(null, null);
+        java.util.Map<String, Long> filtered =
+                adminReturnService.counts(ReturnType.QUALITY_ISSUE, null);
+
+        assertThat(unfiltered.get("pending")).isPositive();
+        assertThat(filtered.get("pending"))
+                .as("筛了「质量问题」，刚造的这条是「非质量问题」，不该还被数进去")
+                .isLessThan(unfiltered.get("pending"));
+    }
+
     // ---------- 辅助 ----------
 
     private Ctx shippedOrder() {
@@ -397,5 +548,101 @@ class AdminReturnEndpointIntegrationTest extends ApiIntegrationTest {
         payments.pay(uid, o.getPublicToken(), null);
         fulfillment.ship(o.getPublicToken(), Carrier.JNE, "JP" + SEQ.incrementAndGet(), 0L);
         return new Ctx(uid, sku, orders.findByPublicToken(o.getPublicToken()).orElseThrow());
+    }
+
+    // ==================== V1.3.0 Story 10.4：B19 模板 B + 抽屉（AC4）====================
+
+    @Test
+    @DisplayName("B19 整页：常驻业务定位提示 + 抽屉壳；HX-Request 返行片段")
+    void precedentsPageRendersHintAndDrawerShell() throws Exception {
+        Authentication staff = staffWith(AdminPermissions.REFUND_APPROVE);
+
+        String html = mvc.perform(get("/admin/shop/return-precedents").with(authentication(staff)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        // 🔴 这句是 AC 的一部分不是装饰（SPEC-24）：删掉它，客服会把「查过判例」当成「查过风险」
+        assertThat(html).as("页头的业务定位提示必须常驻").contains("一致性工具");
+        assertThat(html).contains("shop-precedent-drawer-body").contains("shop-precedent-rows");
+        assertThat(html).as("沉淀表单已收进抽屉，整页上不该再有页尾那张常驻表单卡")
+                .doesNotContain("name=\"evidenceKeys\"");
+
+        String rows = mvc.perform(get("/admin/shop/return-precedents").header("HX-Request", "true")
+                        .with(authentication(staff)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(rows).doesNotContain("<html").doesNotContain("shop-precedent-drawer-body");
+    }
+
+    /** AC4：抽屉表单走 {@code ?create=1} 复用同一条 mapping —— 零新端点。 */
+    @Test
+    @DisplayName("B19 抽屉表单走 ?create=1（零新端点）")
+    void precedentDrawerComesFromTheListMapping() throws Exception {
+        String form = mvc.perform(get("/admin/shop/return-precedents").param("create", "1")
+                        .header("HX-Request", "true")
+                        .with(authentication(staffWith(AdminPermissions.REFUND_APPROVE))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(form).doesNotContain("<html").contains("f-situation").contains("f-judged");
+        assertThat(form).as("提交打到既有端点").contains("/admin/shop/return-precedents");
+    }
+
+    /**
+     * AC4：抽屉里沉淀成功 → oob 整表 + toast + 关抽屉。
+     *
+     * <p>🔴 重拉的是<b>不带检索词</b>的全量：刚沉淀的那条多半不匹配运营此刻的检索词，
+     * 按 q 重拉会得到「保存成功了但列表里找不到它」—— 最像失败的一种成功。
+     */
+    @Test
+    @DisplayName("B19 抽屉沉淀成功：oob 整表（含新沉淀那条）+ toast + HX-Trigger 关抽屉")
+    void precedentAddedFromDrawerRefreshesTheWholeTable() throws Exception {
+        var res = mvc.perform(post("/admin/shop/return-precedents")
+                        .header("HX-Request", "true").header("HX-Target", "shop-precedent-drawer-body")
+                        .with(authentication(staffWith(AdminPermissions.REFUND_APPROVE))).with(csrf())
+                        .param("situation", "抽屉沉淀的判例 A")
+                        .param("judgedOpened", "false")
+                        .param("rationale", "内袋密封完好"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String body = res.getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("<html");
+        assertThat(body).contains("hx-swap-oob").contains("id=\"shop-precedent-rows\"");
+        assertThat(body).as("新沉淀的那条要出现在重拉回来的整表里").contains("抽屉沉淀的判例 A");
+        assertThat(res.getResponse().getHeader("HX-Trigger"))
+                .as("不关抽屉的话，保存成功后表单还盖在表格上，运营会以为没生效")
+                .contains("admin:drawer-close");
+    }
+
+    @Test
+    @DisplayName("B19 抽屉提交理由为空 → 4xx 且 HX-Retarget 落抽屉体（不是整表被红字换掉）")
+    void precedentValidationErrorIsRetargetedToTheDrawer() throws Exception {
+        var res = mvc.perform(post("/admin/shop/return-precedents")
+                        .header("HX-Request", "true").header("HX-Target", "shop-precedent-drawer-body")
+                        .with(authentication(staffWith(AdminPermissions.REFUND_APPROVE))).with(csrf())
+                        .param("situation", "x").param("judgedOpened", "true").param("rationale", " "))
+                .andReturn();
+
+        assertThat(res.getResponse().getStatus()).isBetween(400, 499);
+        assertThat(res.getResponse().getHeader("HX-Retarget")).isEqualTo("#shop-precedent-drawer-body");
+        assertThat(res.getResponse().getContentAsString()).doesNotContain("hx-swap-oob");
+    }
+
+    /** 🔒 AC4：只读账号（{@code refund.view}）看得到判例，但沉淀入口不渲染、提交也被服务端拒。 */
+    @Test
+    @DisplayName("🔒 B19 只读账号：能看、没有沉淀入口、htmx 提交 → 403")
+    void precedentWritesRequireRefundApprove() throws Exception {
+        Authentication viewer = staffWith(AdminPermissions.REFUND_VIEW);
+
+        String html = mvc.perform(get("/admin/shop/return-precedents").with(authentication(viewer)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(html).as("🔒 没有这道门，只读账号能打开抽屉、填完提交才收到 403 —— 那是一次白填")
+                .doesNotContain("data-drawer-res=\"shop-precedent\"");
+
+        mvc.perform(post("/admin/shop/return-precedents")
+                        .header("HX-Request", "true").header("HX-Target", "shop-precedent-drawer-body")
+                        .with(authentication(viewer)).with(csrf())
+                        .param("situation", "x").param("judgedOpened", "true").param("rationale", "y"))
+                .andExpect(status().isForbidden());
     }
 }

@@ -155,13 +155,13 @@ public class LiveTencentImClient implements TencentImClient {
     @Override
     public void sendSystemMessage(String conversationId, String text) {
         // 从 C2C 会话 id（c2c-<user>-<vet>）解析收发双方：系统消息以兽医身份发给用户，落进双方 C2C 会话。
-        String[] parts = conversationId == null ? new String[0] : conversationId.split("-");
-        if (parts.length != 3 || !"c2c".equals(parts[0])) {
-            log.warn("[IM-live] 跳过系统消息：会话 id 非 C2C 约定格式");
+        String[] parties = localC2cParties(conversationId);
+        if (parties == null) {
+            log.warn("[IM-live] 跳过系统消息：会话 id 非 C2C 约定格式或账号不属于本环境（前缀不匹配）");
             return;
         }
-        String userImId = parts[1];
-        String vetImId = parts[2];
+        String userImId = parties[0];
+        String vetImId = parties[1];
         Map<String, Object> body = Map.of(
                 "SyncOtherMachine", 2, // 不同步到发送方（系统消息）
                 "From_Account", vetImId,
@@ -179,6 +179,25 @@ public class LiveTencentImClient implements TencentImClient {
                         "Desc", "Ada pembaruan konsultasi",
                         "Ext", "{\"type\":\"VET_REPLY\"}"));
         postRest("/v4/openim/sendmsg", body, "sendSystemMessage");
+    }
+
+    /**
+     * 解析 C2C 会话 id {@code c2c-<userImId>-<vetImId>} → {@code [userImId, vetImId]}；格式不符或任一方
+     * <b>不是本环境账号</b>时返回 null（包可见：L0 单测）。
+     *
+     * <p>环境前缀隔离（bug 519/521）：会话 id 落库时带的是当时的账号。stag 设前缀前建的旧会话
+     * （{@code c2c-u_75-v_1}）指向的是<b>生产同号账号</b>——绝不能按它发，否则系统消息投进生产用户的会话。
+     * 前缀字符集不含 {@code -}，按 {@code -} 切分安全。
+     */
+    static String[] localC2cParties(String conversationId) {
+        String[] parts = conversationId == null ? new String[0] : conversationId.split("-");
+        if (parts.length != 3 || !"c2c".equals(parts[0])) {
+            return null;
+        }
+        if (ImAccountMapper.parseUserId(parts[1]).isEmpty() || ImAccountMapper.parseVetId(parts[2]).isEmpty()) {
+            return null;
+        }
+        return new String[] {parts[1], parts[2]};
     }
 
     @Override

@@ -19,6 +19,14 @@ abstract class MilestoneRepository {
   /// 用户打卡（Story 8.4）：把一条成长日历内容关联到该里程碑并完成。返回完成后的项（供庆祝 8.5）。
   Future<MilestoneItem> checkIn(String code, int contentId);
 
+  /// 庆祝回报（V1.3.0 Story 1.5 · FR-111 · AD-A3.1）：把**本次庆祝实际展示覆盖的**
+  /// code 列表回传，服务端按列表幂等置位 `celebrated_at`。
+  ///
+  /// ⚠️ **best-effort**：调用方**异步发、失败静默、不重试到用户可感知**，也**不得**
+  /// 让庆祝页或发布流程等它。失败的代价只是下次进列表页再补弹一次，可接受；
+  /// 把它改成同步阻塞，反而会让发布流程卡在一个可失败的写上。
+  Future<void> reportCelebrations(List<String> codes);
+
   /// P-35 庆祝对外分享：创建 / 刷新该已完成里程碑的分享，返回不可枚举 shareToken。
   /// [title]/[body] 为客户端已本地化好的庆祝文案，[locale] 仅 id/en，
   /// [collectionLevels] 为「已解锁合集」级别串（每字符 S/M/L，按合集顺序），供 H5 复刻 KOLEKSI 区。
@@ -60,6 +68,15 @@ class DioMilestoneRepository implements MilestoneRepository {
       data: {'contentId': contentId},
     );
     return MilestoneItem.fromJson(resp.data!);
+  }
+
+  @override
+  Future<void> reportCelebrations(List<String> codes) async {
+    if (codes.isEmpty) return; // 空列表没有回报的意义，省一次请求
+    await dio.post<void>(
+      ApiPaths.petProfileMilestoneCelebrations,
+      data: {'codes': codes},
+    );
   }
 
   @override

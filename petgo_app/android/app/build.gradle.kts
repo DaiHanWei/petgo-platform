@@ -17,6 +17,29 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Google 地图 Android 密钥（V1.3.0 batch-b1 Story 1.4 · AD-3 Rule 4）。
+// 🔴 **env 注入、绝不入库**（CLAUDE.md 护栏）。两条来源，按优先级：
+//   ① 环境变量 GOOGLE_MAPS_API_KEY_ANDROID（CI / 出包脚本）
+//   ② android/maps.properties 的 MAPS_API_KEY（本机开发，gitignored；模板 maps.properties.example）
+// 两者都没有 → 空串：**能编译、能装，只是地图是灰的**。刻意不让构建失败 ——
+// 绝大多数开发与 CI 任务（analyze / test / 其它页面联调）与地图无关，
+// 为一个没配密钥就整包编不出来，代价远大于收益（同 release 签名缺失回退 debug 的取舍）。
+// ⚠️ 密钥三套（iOS / Android / 后台 Web）**不要混用**；每把都要加平台限制 + 每日配额上限。
+// ⚠️ Google Cloud 项目**未开通结算**时密钥在正式包里不工作 —— 属发版检查单 RC-2，不是代码能解决的。
+val mapsProperties = Properties()
+val mapsPropertiesFile = rootProject.file("maps.properties")
+if (mapsPropertiesFile.exists()) {
+    mapsProperties.load(FileInputStream(mapsPropertiesFile))
+}
+val googleMapsApiKey: String =
+    System.getenv("GOOGLE_MAPS_API_KEY_ANDROID")
+        ?: (mapsProperties["MAPS_API_KEY"] as String?)
+        ?: ""
+// 没配密钥照样出包，但地图是灰块（bug 20260921-508/513：stag 包静默缺密钥）—— 至少在构建日志里喊一声。
+if (googleMapsApiKey.isBlank()) {
+    logger.warn("⚠️ GOOGLE_MAPS_API_KEY_ANDROID / android/maps.properties 均未配置：本包地图将无法加载")
+}
+
 android {
     namespace = "com.tailtopia.app"
     // posthog_flutter 4.11.0 连带的 androidx（fragment 1.7.1 / activity 1.8.1 / lifecycle 2.7.0 等）
@@ -38,6 +61,8 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // 地图密钥经 manifest 占位符注入（AndroidManifest 里是 ${googleMapsApiKey}，不是明文）。
+        manifestPlaceholders["googleMapsApiKey"] = googleMapsApiKey
     }
 
     signingConfigs {

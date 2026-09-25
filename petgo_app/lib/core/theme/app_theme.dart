@@ -43,6 +43,44 @@ class AppTheme {
         bodySmall: AppTypography.caption,
         labelSmall: AppTypography.micro,
       ),
+      // 子页标题栏全 App 统一跟 UI 稿（决策 UI-2，2026-09-21 选 batch-a `tt-appbar` 样式）：
+      // 44 高 · 纯图标「‹」返回 · 标题 16/w700 紧跟返回键左对齐 · 底色同页面 · 滚动不被 M3 染灰。
+      // 个别页面显式 centerTitle / leadingWidth（表单页「Batal | 标题 | Simpan」等）照旧由页面覆盖。
+      appBarTheme: const AppBarTheme(
+        toolbarHeight: 44,
+        backgroundColor: AppColors.base,
+        foregroundColor: AppColors.ink,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        centerTitle: false,
+        // 返回键区 44 宽 + 标题间距 2 ≈ 稿里「14 内边距 + 22 图标 + 10 间距」后的标题起点。
+        leadingWidth: 44,
+        titleSpacing: 2,
+        iconTheme: IconThemeData(color: AppColors.ink, size: 22),
+        titleTextStyle: TextStyle(
+          fontFamily: 'Poppins',
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          color: AppColors.ink,
+        ),
+      ),
+      actionIconTheme: ActionIconThemeData(
+        backButtonIconBuilder: (_) => const Icon(Icons.chevron_left_rounded, size: 28),
+      ),
+      // 主按钮全 App 统一跟 UI 稿（决策 UI-2，batch-a `tt-btn-primary`）：46 高 · 圆角 12 · 14.5/w700。
+      // 页面 styleFrom 显式写了的属性仍优先（主题只提供默认值）。
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(64, 46),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: const TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 14.5,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
     );
   }
 }

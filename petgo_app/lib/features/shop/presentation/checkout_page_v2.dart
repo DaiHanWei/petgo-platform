@@ -96,11 +96,13 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
   /// **本来就写好了**，缺的只是没有任何地方给它赋值。
   Future<void> _pickAddress() async {
     final picked = await context.push<String>('/me/addresses?select=1');
-    if (picked == null || !mounted) return;
-    setState(() => _selectedAddressToken = picked);
+    if (!mounted) return;
     // 地址一换，运费与 PawCoin 抵扣都要重算 —— 族键换了 provider 会自己重取，
     // 这里只需确保列表是新的（用户可能在选择器里顺手编辑过）。
+    // 🔴 没选就返回（picked == null）也要刷新：无地址用户在列表页新建完地址直接按返回，
+    //    不刷新的话本页还停在「添加地址」，而默认地址其实已经有了。
     ref.invalidate(addressListProvider);
+    if (picked != null) setState(() => _selectedAddressToken = picked);
   }
 
   String? _effectiveAddressToken(List<ShippingAddress> list) {
@@ -126,8 +128,9 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => _retry(l10n, () => ref.invalidate(addressListProvider)),
         data: (list) {
+          // 🔴 token 为 null（没有地址）也照常出预览（2026-09-24）：商品、金额、退货规则都看得到，
+          //    只是不能提交。地址入口在地址块里，点了才去地址列表。
           final token = _effectiveAddressToken(list);
-          if (token == null) return _noAddressState(l10n);
           return ref.watch(checkoutPreviewProvider(token)).when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (_, _) =>
@@ -139,7 +142,6 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
       bottomNavigationBar: addresses.maybeWhen(
         data: (list) {
           final token = _effectiveAddressToken(list);
-          if (token == null) return null;
           return ref.watch(checkoutPreviewProvider(token)).maybeWhen(
                 data: (p) => _bottomBar(l10n, p),
                 orElse: () => null,
@@ -188,7 +190,9 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
 
   // ---------------------------------------------------------------- 地址
 
-  Widget _addressBlock(AppLocalizations l10n, CheckoutPreview p) => ShopSection(
+  Widget _addressBlock(AppLocalizations l10n, CheckoutPreview p) {
+    if (!p.hasAddress) return _addAddressBlock(l10n);
+    return ShopSection(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -237,6 +241,26 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
               ),
             ],
           ],
+        ),
+      );
+  }
+
+  /// 无地址时的地址块：整块可点 → 地址列表（选择器模式，列表页里可新建）。
+  Widget _addAddressBlock(AppLocalizations l10n) => ShopSection(
+        child: ShopPressable(
+          key: const ValueKey('checkoutAddAddressV2'),
+          onTap: () => _pickAddress(),
+          child: Row(
+            children: [
+              const Icon(Icons.add_location_alt_outlined, size: 20, color: ShopColors.purple),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(l10n.checkoutAddAddress,
+                    style: ShopText.cardTitle.copyWith(fontSize: 12)),
+              ),
+              Text('›', style: ShopText.badge.copyWith(fontSize: 13, color: ShopColors.purple)),
+            ],
+          ),
         ),
       );
 
@@ -389,7 +413,8 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
   Widget _paymentBlock(AppLocalizations l10n, CheckoutPreview p) {
     final coin = p.coinAmount ?? 0;
     final cash = p.cashAmount ?? 0;
-    final muted = !p.serviceable;
+    // 金额没算出来（超范围 / 无地址）时整块降权，现金位给「—」而不是 Rp 0。
+    final muted = !p.serviceable || p.cashAmount == null;
     return ShopSection(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,7 +447,7 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
             purple: false,
             title: l10n.checkoutQris,
             subtitle: l10n.checkoutQrisRemainder,
-            amount: p.serviceable ? formatIdr(cash) : '—',
+            amount: muted ? '—' : formatIdr(cash),
             amountColor: ShopColors.ink,
           ),
           // 🔴 防套现提示必须在**支付前**可见、不可折叠（合规位点）。
@@ -584,7 +609,7 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
       amount: due == null
           ? l10n.checkoutShippingUnavailable
           : formatIdr(due),
-      amountColor: p.serviceable ? ShopColors.accent : ShopColors.text4,
+      amountColor: p.serviceable && due != null ? ShopColors.accent : ShopColors.text4,
       action: ShopButton(
         key: const ValueKey('checkoutSubmitV2'),
         label: l10n.checkoutSubmit,
@@ -602,7 +627,8 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
     Analytics.capture('toko_checkout_submit_tapped');
     setState(() => _submitting = true);
     try {
-      final order = await ref.read(checkoutRepositoryProvider).placeOrder(p.addressToken,
+      // canSubmit 已保证有地址（无地址时提交按钮不可点）
+      final order = await ref.read(checkoutRepositoryProvider).placeOrder(p.addressToken!,
           idempotencyKey: 'shop-order-${DateTime.now().microsecondsSinceEpoch}');
       // 🔴 单已落库，之后任何失败都不能把页面退回「可再次提交」：此前这里 await 购物车
       //    刷新，一次网络抖动就落进 finally 把按钮放开，再点 = 新幂等键 = 同车重复下第二单。
@@ -684,26 +710,6 @@ class _CheckoutPageV2State extends ConsumerState<CheckoutPageV2> {
   }
 
   // ---------------------------------------------------------------- 杂项
-
-  Widget _noAddressState(AppLocalizations l10n) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(l10n.checkoutAddAddress,
-                  textAlign: TextAlign.center, style: ShopText.sectionTitle),
-              const SizedBox(height: 14),
-              ShopButton(
-                key: const ValueKey('checkoutAddAddressV2'),
-                label: l10n.checkoutChooseAddress,
-                variant: ShopButtonVariant.purple,
-                onTap: () => context.push('/me/addresses/new'),
-              ),
-            ],
-          ),
-        ),
-      );
 
   Widget _retry(AppLocalizations l10n, VoidCallback onRetry) => ShopRetryState(
         message: l10n.checkoutLoadFailed,

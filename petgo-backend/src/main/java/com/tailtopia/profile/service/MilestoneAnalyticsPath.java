@@ -16,7 +16,7 @@ import java.util.Objects;
  * <ol>
  *   <li>USER_CHECKIN → {@code checkin}</li>
  *   <li>PUBLISH → {@code publish}</li>
- *   <li>SYSTEM_AUTO + 健康类 code：M5（第一次看兽医）→ {@code consult}；
+ *   <li>SYSTEM_AUTO + 问诊点亮的 code（C-M5 / D-M5 / G-M1，第一次看兽医）→ {@code consult}；
  *       其余健康类（M3 疫苗 / M4 驱虫 / M9 绝育）→ {@code health_record}</li>
  *   <li>其它 SYSTEM_AUTO → {@code system_auto}</li>
  * </ol>
@@ -28,8 +28,19 @@ import java.util.Objects;
  */
 public final class MilestoneAnalyticsPath {
 
-    /** 与 {@link HealthMilestones#SUFFIXES} 同源：M5 是唯一由兽医问诊触发的那条。 */
-    private static final String CONSULT_SUFFIX = "M5";
+    /**
+     * 由**真人兽医问诊结束**点亮的节点，按**完整 code** 显式列举（V1.3.0 Story 1.1 · AD-A4）。
+     *
+     * <p>🔴 原实现按后缀 {@code M5} 判。猫狗清单上「第一次看兽医」确实是 M5，但**通用清单把它放在
+     * G-M1** —— 按后缀判，G-M1 永远命中不了 consult 分支；等它进了健康类集合（Story 1.2），
+     * 就会落进 else 被标成 {@code health_record}，而它根本不是由健康记录点亮的。埋点口径一错，
+     * AD-A4 那条「健康类 + checkin 即护栏失效」的告警也跟着失真。
+     *
+     * <p>G-M1 现在就写进来：它此刻还是打卡类、走不到 SYSTEM_AUTO 分支，写在这里不改变任何当下行为，
+     * 但 Story 1.2 接上触发源的那一刻口径就是对的，不依赖后来人记得回头补这一处。
+     */
+    private static final java.util.Set<String> CONSULT_CODES =
+            java.util.Set.of("C-M5", "D-M5", "G-M1");
 
     private MilestoneAnalyticsPath() {
     }
@@ -51,16 +62,17 @@ public final class MilestoneAnalyticsPath {
         };
     }
 
-    /** SYSTEM_AUTO 再按 code 细分：健康类看是问诊还是健康记录，其余就是纯系统自动。 */
+    /**
+     * SYSTEM_AUTO 再按 code 细分：问诊点亮的 → {@code consult}；其余健康类 → {@code health_record}；
+     * 都不是 → 纯系统自动。
+     *
+     * <p>⚠️ 顺序不可调换：先认 {@link #CONSULT_CODES} 再看健康类。反过来会让「既是健康类、又由问诊
+     * 点亮」的节点（C-M5 / D-M5，以及 Story 1.2 之后的 G-M1）被吞进 {@code health_record}。
+     */
     private static String systemAutoPathOf(String code) {
-        if (HealthMilestones.isHealthMilestone(code)) {
-            return suffixOf(code).equals(CONSULT_SUFFIX) ? "consult" : "health_record";
+        if (CONSULT_CODES.contains(code)) {
+            return "consult";
         }
-        return "system_auto";
-    }
-
-    private static String suffixOf(String code) {
-        int dash = code == null ? -1 : code.lastIndexOf('-');
-        return dash >= 0 ? code.substring(dash + 1) : String.valueOf(code);
+        return HealthMilestones.isHealthMilestone(code) ? "health_record" : "system_auto";
     }
 }

@@ -21,6 +21,26 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
 
     Optional<ShopOrder> findByPublicToken(String publicToken);
 
+    /**
+     * 展示号查重（Story 4-3）。
+     *
+     * <p>🔴 <b>「先查后插」是重试机制的一半</b>：唯一索引冲突会把当前事务打成 aborted，
+     * 同一事务内接着重试每次都会撞在「事务已中止」而不是撞在号上。
+     * 索引是兜底报错（防并发穿越），这个查询才是重试的依据。
+     */
+    boolean existsByDisplayNo(String displayNo);
+
+    /** 后台按用户报出来的新号搜单（Story 4-3 AC4）。 */
+    Optional<ShopOrder> findByDisplayNo(String displayNo);
+
+    /**
+     * 后台按<b>旧号</b>搜单（Story 4-3 AC4）。
+     *
+     * <p>用户手里那张 {@code TOKO-yyyyMMdd-000673} 是早就发出去的，
+     * 搜不到就等于让客服对着一个「系统里不存在的订单号」跟用户解释。
+     */
+    Optional<ShopOrder> findByLegacyDisplayNo(String legacyDisplayNo);
+
     List<ShopOrder> findByUserIdOrderByCreatedAtDescIdDesc(long userId);
 
     /**
@@ -76,6 +96,13 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
     List<ShopOrder> findByStatusOrderByCreatedAtDescIdDesc(ShopOrderStatus status,
             Pageable pageable);
 
+    /** 先进先出（V1.3.0 Story 10.1：A8 异常订单工作台左栏，积压最久的排最前）。 */
+    List<ShopOrder> findByStatusOrderByCreatedAtAscIdAsc(ShopOrderStatus status, Pageable pageable);
+
+    /** 异常订单工作台（A8）：待发货 ∧ 运营已标记缺货，先进先出。 */
+    List<ShopOrder> findByStatusAndShortageFlaggedAtIsNotNullOrderByCreatedAtAscIdAsc(ShopOrderStatus status,
+            Pageable pageable);
+
     /**
      * 后台组合筛选（Story 4.3，AB-11A）：状态 + 时间范围，任一为 null 即不参与筛选。
      *
@@ -90,6 +117,34 @@ public interface ShopOrderRepository extends JpaRepository<ShopOrder, Long> {
             ORDER BY o.createdAt DESC, o.id DESC
             """)
     List<ShopOrder> search(@Param("status") ShopOrderStatus status, @Param("from") Instant from,
+            @Param("to") Instant to, Pageable pageable);
+
+    /**
+     * 同一筛选的**分页**版（V1.3.0 Story 10.2 AC1：B15 列表每页 20）。
+     *
+     * <p>🔴 <b>不能用「多取一条判 hasNext」来省掉这个 count</b>：{@code PageRequest} 的偏移量是
+     * {@code pageNumber × pageSize}，把 pageSize 写成 {@code size + 1} 会让第 1 页从第 21 条开始 ——
+     * 全局第 21 条（第 0 页只显示前 20 条）<b>永远不会出现在任何一页</b>，而且越翻漏得越多。
+     * {@code Page.hasNext()} 是仓库里其它列表页的一致做法，代价是一次 count。
+     *
+     * <p>{@code countQuery} 显式给出：派生的 count 会把 {@code ORDER BY} 也带上，
+     * 有的方言下会报错；写清楚比赌它推得对稳。
+     */
+    @Query(value = """
+            SELECT o FROM ShopOrder o
+            WHERE (:status IS NULL OR o.status = :status)
+              AND (CAST(:from AS timestamp) IS NULL OR o.createdAt >= :from)
+              AND (CAST(:to AS timestamp) IS NULL OR o.createdAt < :to)
+            ORDER BY o.createdAt DESC, o.id DESC
+            """,
+            countQuery = """
+            SELECT count(o) FROM ShopOrder o
+            WHERE (:status IS NULL OR o.status = :status)
+              AND (CAST(:from AS timestamp) IS NULL OR o.createdAt >= :from)
+              AND (CAST(:to AS timestamp) IS NULL OR o.createdAt < :to)
+            """)
+    org.springframework.data.domain.Page<ShopOrder> searchPage(
+            @Param("status") ShopOrderStatus status, @Param("from") Instant from,
             @Param("to") Instant to, Pageable pageable);
 
     /**

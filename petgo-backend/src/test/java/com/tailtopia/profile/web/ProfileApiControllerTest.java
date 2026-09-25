@@ -37,9 +37,12 @@ class ProfileApiControllerTest {
     /** Story 18.2：本类不验分享奖励（有 IdCardShareRewardIntegrationTest），给个哑桩。 */
     private final com.tailtopia.share.service.IdCardShareRewardService idCardShareRewards =
             mock(com.tailtopia.share.service.IdCardShareRewardService.class);
+    /** V1.3.0 Story 5.3：同上，本类不验年龄卡分享奖励（见 AgeCardShareRewardTest）。 */
+    private final com.tailtopia.share.service.AgeCardShareRewardService ageCardShareRewards =
+            mock(com.tailtopia.share.service.AgeCardShareRewardService.class);
     private final ProfileApiController controller = new ProfileApiController(
             service, timelineService, cardRerenderService, idCardService, idCardHdService,
-            rateLimiter, idCardShareRewards);
+            rateLimiter, idCardShareRewards, ageCardShareRewards);
 
     private static Jwt jwt(String sub) {
         return Jwt.withTokenValue("t").header("alg", "HS256").subject(sub).claim("x", "y").build();

@@ -461,6 +461,15 @@ public class ReturnRequest {
         return rejectReason;
     }
 
+    /** 审核人（V1.3.0 Story 10.1：五步进度条「批准」一步显示操作人；字段自 Story 5.3 起就有，只是从未读出来过）。 */
+    public Long getReviewedBy() {
+        return reviewedBy;
+    }
+
+    public Instant getReviewedAt() {
+        return reviewedAt;
+    }
+
     public Instant getShipbackDeadline() {
         return shipbackDeadline;
     }

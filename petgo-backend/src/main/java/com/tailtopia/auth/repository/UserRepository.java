@@ -18,37 +18,59 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByGoogleSub(String googleSub);
 
+    /**
+     * 这批 id 里哪些是**仍然可见**的账号（V1.3.0 batch-b1 Story 4.1）。
+     *
+     * <p>判据与 {@code AccountQueryService.isActive} 逐字相同（未软删 + status=ACTIVE）——
+     * 那个是单个查，这里是**批量**版（AD-6：推荐池一页十几只宠物，逐个查就是十几次往返）。
+     * ⚠️ 两处判据必须一致：不一致的表现是「推荐位里那只宠物点进去 404」。
+     */
+    @Query("SELECT u.id FROM User u WHERE u.id IN :ids AND u.deletedAt IS NULL "
+            + "AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE")
+    java.util.List<Long> findActiveIds(@Param("ids") java.util.Collection<Long> ids);
+
     /** FR-44：Apple 登录按 apple_sub 取号（首登未命中则建号）。 */
     Optional<User> findByAppleSub(String appleSub);
 
     /** Story 3.1：ADMIN 账密登录按 email + role 精确匹配。 */
     Optional<User> findByEmailAndRole(String email, Role role);
 
-    /** bug 20260701-164：后台用户管理按角色分页列举（只列普通用户 USER）。 */
-    Page<User> findByRole(Role role, Pageable pageable);
-
     /**
-     * 后台按**手机号是否已填写**筛选用户（V1.1.6 Story 11.4 · AB-11A）。
+     * 后台用户列表的浏览态筛选（V1.1.6 Story 11.4 的手机号筛选 × V1.3.0 Story 8.1 的账号状态筛选），
+     * id 倒序分页。
      *
-     * <p>🔴 「未填写」的判据是 <b>{@code phone IS NULL OR phone = ''}</b> —— 两种空都要算。
+     * <p>🔴 手机号「未填写」的判据是 <b>{@code phone IS NULL OR phone = ''}</b> —— 两种空都要算。
      * FR-70 允许用户**留空保存以撤回号码**（保存时写 null），
      * 而历史上也可能存在空串；只判 NULL 会把撤回过的人错分到"已填写"，
      * 于是运营的催填名单里就永远少了这批人。
      *
      * <p>⚠️ 字段名一律用 {@code phone}：日志脱敏按字段名匹配，
      * 换个别名转手该值就会绕过脱敏、让真实号码落盘（见该列的迁移注释）。
+     *
+     * <p>⚠️ 两个可选条件一律用**哨兵字符串**（{@code 'any'} / {@code 'all'}）而不是绑 null ——
+     * 绑 null 的话「不筛」这条最常走的路会去比较 NULL，判定恒为 unknown，
+     * 列表直接变成空页（而首次打开页面走的正是这条路）。
+     *
+     * <p>🔴 状态三态与 {@code AdminUserRow} 的展示逐条对齐：
+     * {@code deleted}=已注销（{@code deletedAt} 非空，与 {@code status} 正交，优先级最高）、
+     * {@code deactivated}=运营停用且未注销、{@code active}=未注销且未停用。
      */
     @Query("""
             SELECT u FROM User u
              WHERE u.role = :role
-               AND (:filled = true
-                    AND u.phone IS NOT NULL AND u.phone <> ''
-                    OR :filled = false
-                    AND (u.phone IS NULL OR u.phone = ''))
+               AND (:phoneMode = 'any'
+                    OR :phoneMode = 'filled' AND u.phone IS NOT NULL AND u.phone <> ''
+                    OR :phoneMode = 'empty' AND (u.phone IS NULL OR u.phone = ''))
+               AND (:status = 'all'
+                    OR :status = 'deleted' AND u.deletedAt IS NOT NULL
+                    OR :status = 'deactivated' AND u.deletedAt IS NULL AND u.status = :deactivated
+                    OR :status = 'active' AND u.deletedAt IS NULL AND u.status <> :deactivated)
              ORDER BY u.id DESC
             """)
-    Page<User> findByRoleAndPhoneFilled(@Param("role") Role role,
-            @Param("filled") boolean filled, Pageable pageable);
+    Page<User> findAdminUsers(@Param("role") Role role, @Param("phoneMode") String phoneMode,
+            @Param("status") String status,
+            @Param("deactivated") com.tailtopia.auth.domain.UserStatus deactivated,
+            Pageable pageable);
 
     /** 召回名单导出（Story 11.4）：同一筛选口径、不分页、id 倒序。 */
     @Query("""
@@ -133,6 +155,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
             + "where u.id = :userId and (u.lastActiveAt is null or u.lastActiveAt < :dayStart)")
     int touchLastActiveAt(@Param("userId") long userId, @Param("now") Instant now,
             @Param("dayStart") Instant dayStart);
+
+    /**
+     * 记一笔「某人某个 WIB 自然日来过」（日报 DAU 口径，见 V20260925_1330）。
+     * 同日重复调用命中主键冲突即跳过 —— 只是一次索引查找，不产生写。
+     */
+    @Modifying
+    @Query(value = "INSERT INTO user_active_days (user_id, active_date) VALUES (:userId, :day) "
+            + "ON CONFLICT DO NOTHING", nativeQuery = true)
+    int recordActiveDay(@Param("userId") long userId, @Param("day") java.time.LocalDate day);
 
     /**
      * 用户标签选择器的候选（bug 20260828）：**未注销**的普通用户，按 id 或昵称模糊匹配。

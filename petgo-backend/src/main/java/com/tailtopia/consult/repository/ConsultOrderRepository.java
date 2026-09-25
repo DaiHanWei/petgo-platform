@@ -144,6 +144,22 @@ public interface ConsultOrderRepository extends JpaRepository<ConsultOrder, Long
             @Param("end") Instant end);
 
     /**
+     * 某兽医某月结窗口内的**订单明细**（V1.3.0 Story 8.5 · AC3：月结抽屉的「订单构成」）。
+     *
+     * <p>🔴 口径必须与 {@link #aggregateCompletedForVet} <b>逐字一致</b>：仅 COMPLETED、
+     * 按 {@code sessionEndedAt} 归月、窗口 {@code [start, end)}。差一点点，抽屉里列出的单数
+     * 就与台账那一列对不上，而运营会以为账错了 —— 而这两处本来就是同一笔钱的两种呈现。
+     */
+    @Query("""
+            select o from ConsultOrder o
+            where o.vetId = :vetId
+              and o.status = com.tailtopia.consult.domain.ConsultOrderStatus.COMPLETED
+              and o.sessionEndedAt >= :start and o.sessionEndedAt < :end
+            order by o.sessionEndedAt asc, o.id asc""")
+    List<ConsultOrder> findCompletedForVetInWindow(@Param("vetId") long vetId,
+            @Param("start") Instant start, @Param("end") Instant end);
+
+    /**
      * 单兽医区间到手聚合（Story 3.7，收入页「当月待结算」实时聚合）：某兽医 {@code [start, end)} 内 COMPLETED
      * 订单聚合，无则 empty（调用方兜底零值）。
      */

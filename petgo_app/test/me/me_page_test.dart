@@ -125,9 +125,9 @@ void main() {
       ],
     );
     // 2 列网格 row-major 保持后端顺序：30 左上、20 右上（同行），10 换到次行左（在 30 下方）。
-    final t30 = tester.getTopLeft(find.byKey(const ValueKey('myPost_30')));
-    final t20 = tester.getTopLeft(find.byKey(const ValueKey('myPost_20')));
-    final t10 = tester.getTopLeft(find.byKey(const ValueKey('myPost_10')));
+    final t30 = tester.getTopLeft(find.byKey(const ValueKey('postGridTile_30')));
+    final t20 = tester.getTopLeft(find.byKey(const ValueKey('postGridTile_20')));
+    final t10 = tester.getTopLeft(find.byKey(const ValueKey('postGridTile_10')));
     expect(t30.dx, lessThan(t20.dx)); // 同行：左→右
     expect(t30.dy, closeTo(t20.dy, 1)); // 30/20 同一行
     expect(t10.dy, greaterThan(t30.dy)); // 第三条换行到下一行

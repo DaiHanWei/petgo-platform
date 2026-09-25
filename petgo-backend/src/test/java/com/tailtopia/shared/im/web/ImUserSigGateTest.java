@@ -76,4 +76,47 @@ class ImUserSigGateTest {
                 .isInstanceOf(AppException.class)
                 .satisfies(e -> assertThat(((AppException) e).getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED));
     }
+
+    // ===== 签发前幂等导入（bug 519/521：带前缀账号在腾讯侧尚不存在） =====
+
+    @Test
+    void ensuresAccountBeforeSigningOncePerProcess() {
+        when(imClient.signUserSig("u_7")).thenReturn(new UserSig("u_7", "s", "20043419", 86400));
+
+        controller.userSig(jwt("7", "USER"));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(imClient);
+        order.verify(imClient).ensureAccount("u_7", null);
+        order.verify(imClient).signUserSig("u_7");
+
+        controller.userSig(jwt("7", "USER"));
+        // 进程内去重：第二次签发不再导入。
+        verify(imClient, org.mockito.Mockito.times(1)).ensureAccount("u_7", null);
+    }
+
+    @Test
+    void ensureFailureDoesNotBlockSigningAndIsRetried() {
+        org.mockito.Mockito.doThrow(new IllegalStateException("boom"))
+                .doNothing()
+                .when(imClient).ensureAccount("v_3", null);
+        when(imClient.signUserSig("v_3")).thenReturn(new UserSig("v_3", "s", "20043419", 86400));
+
+        assertThat(controller.userSig(jwt("3", "VET")).imUserId()).isEqualTo("v_3");
+        controller.userSig(jwt("3", "VET"));
+
+        verify(imClient, org.mockito.Mockito.times(2)).ensureAccount("v_3", null);
+    }
+
+    @Test
+    void signsPrefixedAccountWhenPrefixConfigured() {
+        try {
+            com.tailtopia.shared.im.ImAccountMapper.configure("stg_");
+            when(imClient.signUserSig("stg_u_7")).thenReturn(new UserSig("stg_u_7", "s", "20043419", 86400));
+
+            assertThat(controller.userSig(jwt("7", "USER")).imUserId()).isEqualTo("stg_u_7");
+            verify(imClient).ensureAccount("stg_u_7", null);
+        } finally {
+            com.tailtopia.shared.im.ImAccountMapper.configure("");
+        }
+    }
 }

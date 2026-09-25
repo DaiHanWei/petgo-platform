@@ -33,7 +33,7 @@ class ShopOrderFulfillmentStateMachineTest {
 
     /** 已付款待发货的订单。 */
     private static ShopOrder paidOrder() {
-        ShopOrder o = ShopOrder.place("tok", 1L, 285_000L, 20_000L, 0L, addr());
+        ShopOrder o = ShopOrder.place("tok", "TOKO-20260916-ABC123", Instant.now(), 1L, 285_000L, 20_000L, 0L, addr());
         o.transitionTo(ShopOrderStatus.PENDING_SHIPMENT);
         return o;
     }

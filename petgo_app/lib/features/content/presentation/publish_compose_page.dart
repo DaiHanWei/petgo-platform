@@ -22,12 +22,17 @@ import '../../profile/domain/milestone.dart';
 import '../../profile/domain/milestone_share.dart';
 import '../../profile/domain/milestone_titles.dart';
 import '../../profile/domain/pet_profile.dart';
+import '../../profile/data/milestone_celebration_reporter.dart';
 import '../../profile/presentation/widgets/milestone_celebration.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/dashed_rect.dart';
 import '../../../shared/widgets/keyboard_safe_area.dart';
 import '../../../shared/utils/media_permission.dart';
 import '../../me/data/my_posts_repository.dart';
+import '../../mention/data/mention_candidate_repository.dart';
+import '../../mention/domain/mention_context.dart';
+import '../../mention/domain/mention_draft.dart';
+import '../../mention/presentation/mention_picker.dart';
 import '../data/content_repository.dart';
 import '../domain/content_type.dart';
 import '../domain/feed_image_layout.dart';
@@ -155,6 +160,67 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   /// 选图/处理中（拍照返回 → 解码压缩剥 EXIF）：网格显占位 loading，避免「拍完没反应」。
   bool _addingImage = false;
+
+  /// 拖拽重排的**仅 UI 层**预览态（V1.3.0 Story 4.1 · U2「其余格实时让位」）。
+  ///
+  /// 🔴 这里只放「正在拖哪张、悬在第几位」两个下标，**不是第二份顺序**：
+  /// 预览顺序每次 build 由 controller.items + 这两个下标现算，松手才调
+  /// `reorderImage` 写回 controller —— 顺序的唯一事实源仍是 controller（AC3）。
+  int? _dragFrom;
+  int? _hoverIndex;
+
+  /// 网格的锚点：拖拽途中把指针的全局坐标换算成「悬在第几格」。
+  final GlobalKey _gridKey = GlobalKey();
+
+  /// 光标前正在打的那个 `@查询词`；非 null 即 @ 浮层可见
+  /// （V1.3.0 batch-b1 Story 3.2 · AC1）。
+  ///
+  /// ⚠️ 只有"现在该不该弹"这一个瞬时状态放在页面上；**已插入的 @ 绑定住在
+  /// `PublishController.mentions`**（与正文同生同死，见那里的注释）。
+  MentionQuery? _mentionQuery;
+
+  /// 每次输入重算 @ 触发态（AC1：输入「@」即弹）。
+  void _syncMentionQuery() {
+    final next = MentionDraft.queryAt(_textController.text, _textController.selection.baseOffset);
+    if (next?.start != _mentionQuery?.start || next?.keyword != _mentionQuery?.keyword) {
+      setState(() => _mentionQuery = next);
+    }
+  }
+
+  /// 选中候选人：正文里插 `@昵称`，控制器里记 userId（AC4）。
+  void _onMentionSelected(PublishController controller, MentionCandidate candidate) {
+    final query = _mentionQuery;
+    if (query == null) return;
+    final l10n = AppLocalizations.of(context);
+    // 🔴 插入是直接写 controller.value，**绕过 maxLength 的格式化器** ——
+    // 不先自己拦一次，1000 字的正文插一个长昵称就超了上限，而这一页的表现是
+    // 「发布按钮悄悄变灰」，用户完全不知道为什么。
+    if (MentionDraft.textAfterInsert(_textController.text, query, candidate.nickname)
+            .characters
+            .length >
+        kMaxPostTextLength) {
+      showAppToast(context, l10n.publishTextLimitReached);
+      setState(() => _mentionQuery = null);
+      return;
+    }
+    final inserted = controller.mentions
+        .insert(_textController.text, query, candidate.userId, candidate.nickname);
+    if (inserted == null) {
+      // AC5：达上限不能再插入，并给出提示。
+      showAppToast(context, l10n.mentionLimitReached);
+      setState(() => _mentionQuery = null);
+      return;
+    }
+    _textController.value = TextEditingValue(
+      text: inserted.text,
+      selection: TextSelection.collapsed(offset: inserted.cursor),
+    );
+    controller.setText(inserted.text);
+    // Story 3.5 AC4：**真的插进去了**才报（被上限 / 字数拦住的那两条 return 都在上面）。
+    // ⚠️ 字面量写法是给埋点守卫看的，见 MentionContext 的类注释。
+    Analytics.capture('mention_inserted', {'context': MentionContext.post.wire});
+    setState(() => _mentionQuery = null);
+  }
 
   @override
   void dispose() {
@@ -321,10 +387,13 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           localizedMilestoneTitle(done.code, locale),
         );
         final router = GoRouter.maybeOf(context);
+        // 弹出前先记本地：下面那个列表页可能在庆祝期间被重拉并自行补弹。
+        markMilestonesCelebrating(ref, [done.code]);
         await showMilestoneCelebration(
           context,
           done,
           petName: petName,
+          path: MilestoneCelebrationPath.instant,
           collection: collection,
           onShare: () => shareMilestoneWithLink(
             ref,
@@ -336,11 +405,21 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           ),
           // onSeeAll 省略：庆祝关闭后统一在下方先关 sheet 再跳列表（否则 sheet 挡住跳转）。
         );
+        // 回报本次庆祝（best-effort，不 await）——「去发布」也是一次真实庆祝，不报的话
+        // 这条会在下面跳到的列表页被当成"未庆祝"再弹一遍。
+        reportMilestoneCelebrated(ref, [done.code]);
         if (!mounted) return;
         // 里程碑路径：庆祝即成功反馈 → 关闭发布 sheet → 跳回里程碑列表（不叠加通用「发布成功」页）。
         Navigator.of(context).pop();
+        // 🔴 把「刚庆祝过」的 code 随导航带过去（AD-A2.3c）。上面那次回报是**异步**的，
+        //    列表页极可能在它落库前就读到 celebratedAt == null → 两秒内连弹两次同一条。
+        //    抑制必须落在客户端、**不依赖回报是否已落库**；也不得把回报改成同步来绕开
+        //    （那会让发布流程卡在一个可失败的写上）。
         // push 而非 go：保留发布前页作前驱，里程碑页 canPop→iOS 边缘侧滑可返回（修 20260701-190）。
-        router?.push(DeepLinkRoutes.milestoneList);
+        // pushReplacement：本 sheet 开在 /publish 空白着陆页之上，普通 push 会把着陆页压在
+        // 里程碑列表下面，返回时再白屏一次（bug 20260922-520）。替换掉着陆页，前驱仍是发布前页。
+        router?.pushReplacement(DeepLinkRoutes.milestoneList,
+            extra: <String>{done.code});
         return;
       }
       Navigator.of(context).pop(); // 关闭发布 sheet
@@ -560,7 +639,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                         minLines: 3,
                         maxLines: 6,
                         maxLength: kMaxPostTextLength,
-                        onChanged: controller.setText,
+                        onChanged: (v) {
+                          controller.setText(v);
+                          // Story 3.2 AC1：输入「@」弹出用户选择器浮层。
+                          _syncMentionQuery();
+                        },
                         style: const TextStyle(
                           fontSize: 14,
                           color: AppColors.ink,
@@ -578,6 +661,14 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                           counterText: '', // 隐藏默认计数器，改放容器内右下
                         ),
                       ),
+                      // AC1：输入「@」弹出用户选择器浮层，紧贴正文框下沿展开。
+                      if (_mentionQuery != null) ...[
+                        const SizedBox(height: 7),
+                        MentionPicker(
+                          keyword: _mentionQuery!.keyword,
+                          onSelected: (c) => _onMentionSelected(controller, c),
+                        ),
+                      ],
                       const SizedBox(height: 7),
                       // 原型 charcount：框内右下「已用 / 总数」，弱色 11px。
                       Text(
@@ -597,14 +688,30 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                 ],
                 if (controller.hasFailed) ...[
                   const SizedBox(height: 12),
-                  TextButton.icon(
-                    key: const ValueKey('publishRetry'),
-                    icon: const Icon(Icons.refresh, color: AppColors.mint700),
-                    label: Text(
-                      l10n.publishRetry,
-                      style: const TextStyle(color: AppColors.mint700),
-                    ),
-                    onPressed: () => controller.retryFailed(),
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        key: const ValueKey('publishRetry'),
+                        icon: const Icon(Icons.refresh, color: AppColors.mint700),
+                        label: Text(
+                          l10n.publishRetry,
+                          style: const TextStyle(color: AppColors.mint700),
+                        ),
+                        onPressed: () => controller.retryFailed(),
+                      ),
+                      // V1.3.0 Story 4.1 · AC5：重试沿用同一份顺序，**不重新读表单状态** ——
+                      // 想改顺序就得从这里整体取消回到可编辑态。
+                      // 没有这个出口的话，一次部分失败会把顺序永久锁死。
+                      if (!controller.canReorder)
+                        TextButton(
+                          key: const ValueKey('publishCancelUpload'),
+                          onPressed: controller.cancelUploadSession,
+                          child: Text(
+                            l10n.publishCancelUpload,
+                            style: const TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
                 const SizedBox(height: 16),
@@ -963,20 +1070,121 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
           ),
         ),
         const SizedBox(height: 8),
-        GridView.count(
-          crossAxisCount: 3,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 5,
-          crossAxisSpacing: 5,
-          children: [
-            if (showAdd) _addCell(controller, l10n),
-            if (_addingImage) _processingCell(),
-            for (int i = 0; i < items.length; i++) _thumb(controller, i),
-          ],
+        // 用 LayoutBuilder 量一格多宽：拖起来那张要按真实格子尺寸放大显示，
+        // 写死一个数会在不同屏宽上飘。
+        LayoutBuilder(
+          builder: (context, box) {
+            const double gap = 5;
+            final double cell = (box.maxWidth - gap * 2) / 3;
+            // 缩略图前面的固定格（添加格 / 处理中占位格）数：缩略图从这之后排。
+            final int lead = (showAdd ? 1 : 0) + (_addingImage ? 1 : 0);
+            final int slots = lead + items.length;
+            final int rows = (slots + 2) ~/ 3;
+            final double height = rows == 0 ? 0 : rows * cell + (rows - 1) * gap;
+            Offset slotAt(int slot) =>
+                Offset((slot % 3) * (cell + gap), (slot ~/ 3) * (cell + gap));
+            final List<int> preview = _previewOrder(controller);
+            // 不用 GridView：GridView 换序是瞬移，做不出「其余格滑过去让位」。
+            // 手排 Stack + AnimatedPositioned，按 item 身份打 key，位置一变就补间过去。
+            final grid = SizedBox(
+              key: _gridKey,
+              height: height,
+              child: Stack(
+                children: [
+                  if (showAdd)
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      width: cell,
+                      height: cell,
+                      child: _addCell(controller, l10n),
+                    ),
+                  if (_addingImage)
+                    Positioned(
+                      left: slotAt(showAdd ? 1 : 0).dx,
+                      top: slotAt(showAdd ? 1 : 0).dy,
+                      width: cell,
+                      height: cell,
+                      child: _processingCell(),
+                    ),
+                  for (int p = 0; p < preview.length; p++)
+                    AnimatedPositioned(
+                      key: ObjectKey(items[preview[p]]),
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      left: slotAt(lead + p).dx,
+                      top: slotAt(lead + p).dy,
+                      width: cell,
+                      height: cell,
+                      child: _thumb(controller, preview[p], l10n, cell),
+                    ),
+                ],
+              ),
+            );
+            if (!controller.canReorder) return grid;
+            // 整个网格一个 DragTarget：悬停位置按指针坐标算，不靠「悬在哪一格上」——
+            // 格子在让位动画里会从指针下滑走，按格子判定会来回抖。
+            return DragTarget<int>(
+              // 🔴 无条件接：Draggable 构造拖影时就做了第一次命中判定，那时 onDragStarted
+              // 还没回调、_dragFrom 仍是 null —— 在这里判它，整次拖拽都会被拒收、松手不落。
+              onWillAcceptWithDetails: (_) => true,
+              onMove: (d) => _updateHover(d.offset, lead, cell, gap, items.length),
+              // 拖出网格：预览复原（空位回到原处），此时松手也不落 controller。
+              onLeave: (_) {
+                if (_hoverIndex != null) setState(() => _hoverIndex = null);
+              },
+              onAcceptWithDetails: (d) {
+                final int? to = _hoverIndex;
+                _clearDragPreview();
+                // 🔴 松手这一刻才写 controller —— 顺序的唯一事实源（AC3）。
+                if (to != null) controller.reorderImage(d.data, to);
+              },
+              builder: (context, candidate, rejected) => grid,
+            );
+          },
         ),
       ],
     );
+  }
+
+  /// 当前是否处于有效拖拽中。拖拽途中若因上传开始而失去重排资格，Draggable 会被整个撤掉、
+  /// 其 onDragEnd 不再回调 —— 所以这里现场判一次，不信任残留的下标。
+  bool _dragActive(PublishController controller) {
+    final int? from = _dragFrom;
+    return from != null && controller.canReorder && from < controller.items.length;
+  }
+
+  /// 预览顺序：controller 的原下标序列，按「把 _dragFrom 挪到 _hoverIndex」现算。
+  /// 🔴 只是投影，不回写、不缓存。
+  List<int> _previewOrder(PublishController controller) {
+    final int n = controller.items.length;
+    final order = List<int>.generate(n, (i) => i);
+    final int? from = _dragFrom;
+    final int? to = _hoverIndex;
+    if (!_dragActive(controller) || from == null || to == null || to == from) return order;
+    order.removeAt(from);
+    order.insert(to.clamp(0, n - 1), from);
+    return order;
+  }
+
+  /// 指针（pointerDragAnchorStrategy 下 details.offset 即指针全局坐标）→ 悬停位。
+  void _updateHover(Offset global, int lead, double cell, double gap, int count) {
+    final box = _gridKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize || count == 0) return;
+    final Offset local = box.globalToLocal(global);
+    final int col = (local.dx / (cell + gap)).floor().clamp(0, 2);
+    final int row = (local.dy / (cell + gap)).floor().clamp(0, 99);
+    // 落在添加格上就当第 0 位，落在末尾空白处就当最后一位。
+    final int pos = (row * 3 + col - lead).clamp(0, count - 1);
+    if (pos != _hoverIndex) setState(() => _hoverIndex = pos);
+  }
+
+  void _clearDragPreview() {
+    if (_dragFrom == null && _hoverIndex == null) return;
+    setState(() {
+      _dragFrom = null;
+      _hoverIndex = null;
+    });
   }
 
   /// 选图/处理中的占位格：拍照返回后到缩略图出现前显示，给「正在加图」的即时反馈。
@@ -1000,44 +1208,114 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
 
   /// 虚线添加格（pcell-add）：2px 虚线紫描边 + 「＋」+ Tambah。
   Widget _addCell(PublishController controller, AppLocalizations l10n) {
-    return GestureDetector(
-      key: const ValueKey('publishAddImage'),
-      // 处理中禁用，避免连点触发多次 _addImage 提前撤占位/闪烁。
-      onTap: _addingImage ? null : () => _pickImageSource(controller, l10n),
-      child: CustomPaint(
-        painter: DashedRRectPainter(
-          color: AppColors.dashedViolet,
-          radius: 9,
-          dash: 5,
-          gap: 4,
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            color: AppColors.cream2,
-            borderRadius: BorderRadius.circular(9),
+    // U2：拖动途中只留虚线格，藏起「＋」与文字 —— 手指正在排序，它此刻不是可点的入口。
+    final bool dragging = _dragActive(controller);
+    // a11y：自成一个按钮节点。不包的话空网格时「Tambah」会和上方字段标题合并成一个节点。
+    return Semantics(
+      button: true,
+      container: true,
+      label: l10n.tabAdd,
+      excludeSemantics: true,
+      child: GestureDetector(
+        key: const ValueKey('publishAddImage'),
+        // 处理中禁用，避免连点触发多次 _addImage 提前撤占位/闪烁。
+        onTap: _addingImage ? null : () => _pickImageSource(controller, l10n),
+        child: CustomPaint(
+          painter: DashedRRectPainter(
+            color: AppColors.dashedViolet,
+            radius: 9,
+            dash: 5,
+            gap: 4,
           ),
-          alignment: Alignment.center,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.add_rounded, size: 22, color: AppColors.mint),
-              const SizedBox(height: 3),
-              Text(
-                l10n.tabAdd,
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.mint,
-                ),
-              ),
-            ],
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.cream2,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            alignment: Alignment.center,
+            child: dragging
+                ? null
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.add_rounded, size: 22, color: AppColors.mint),
+                      const SizedBox(height: 3),
+                      Text(
+                        l10n.tabAdd,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.mint,
+                        ),
+                      ),
+                    ],
+                  ),
           ),
         ),
       ),
     );
   }
 
-  Widget _thumb(PublishController controller, int index) {
+  /// 一格照片。V1.3.0 Story 4.1 起可长按拖拽重排（AC1），首格常驻「封面」角标（AC2）。
+  Widget _thumb(
+      PublishController controller, int index, AppLocalizations l10n, double cell) {
+    // 拖动途中所有格都藏起 ✕：手指正在排序，误触到删除就是丢图。
+    final cellContent = _thumbContent(controller, index, l10n,
+        showRemove: !_dragActive(controller));
+    // 🔴 AC4：上传会话里**整个拖拽入口不挂**（不是挂上去再判空）——
+    // 挂着的话手指还是能把那张图抬起来，只是放下没反应，看着像卡了。
+    if (!controller.canReorder) return cellContent;
+
+    return LongPressDraggable<int>(
+      data: index,
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      onDragStarted: () => setState(() {
+        _dragFrom = index;
+        _hoverIndex = index;
+      }),
+      // 放下（DragTarget 已先行处理）/ 拖出网格取消，都在这里把预览清掉。
+      onDragEnd: (_) => _clearDragPreview(),
+      // 抬起：放大 1.08 + 微倾 + 阴影（AC1 · U2）。内容复用格子本身 —— 首图带「封面」角标，
+      // 看得出「我正拖着封面」—— 只是不带 ✕。
+      // Material 包一层，免得 Overlay 里没有默认文字样式。
+      feedback: Material(
+        color: Colors.transparent,
+        child: Transform.translate(
+          offset: Offset(-cell / 2, -cell / 2),
+          child: Transform.rotate(
+            angle: -0.035,
+            child: Transform.scale(
+              scale: 1.08,
+              child: Container(
+                width: cell,
+                height: cell,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: [
+                    // 稿值（U2）：0 10px 24px rgba(30,20,60,.35)。
+                    const BoxShadow(
+                      color: Color(0x591E143C),
+                      blurRadius: 24,
+                      offset: Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: _thumbContent(controller, index, l10n, showRemove: false),
+              ),
+            ),
+          ),
+        ),
+      ),
+      // 原位是**空位**而不是淡影：其余格已按预览顺序让开，
+      // 这个空位本身就是「松手会落在这里」的提示。
+      childWhenDragging: const SizedBox.expand(),
+      child: cellContent,
+    );
+  }
+
+  Widget _thumbContent(
+      PublishController controller, int index, AppLocalizations l10n,
+      {bool showRemove = true}) {
     final item = controller.items[index];
     return Stack(
       fit: StackFit.expand,
@@ -1074,20 +1352,47 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
             top: 4,
             child: Icon(Icons.error, color: Colors.red, size: 18),
           ),
-        Positioned(
-          right: 3,
-          top: 3,
-          child: GestureDetector(
-            onTap: () => controller.removeImage(index),
+        // AC2：首格常驻「封面」角标。它只是顺序的**投影** ——
+        // 不另设「哪张是封面」的字段，否则迟早出现「界面第一张是 A、封面却是 B」。
+        // 重排后角标自然跟着新的第一张走，因为它本来就只认下标 0。
+        if (index == 0)
+          // 稿值（U1）：top/left 4、padding 1×6、圆角 5、9px/700、rgba(0,0,0,.5)。
+          Positioned(
+            left: 4,
+            top: 4,
             child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.black54,
-                shape: BoxShape.circle,
+              key: const ValueKey('publishCoverBadge'),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(5),
               ),
-              child: const Icon(Icons.close, size: 16, color: Colors.white),
+              child: Text(
+                l10n.publishCoverBadge,
+                style: const TextStyle(
+                    fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white),
+              ),
             ),
           ),
-        ),
+        // 稿值（U1）：16 圆、rgba(0,0,0,.4)、✕ 图标 10。
+        if (showRemove)
+          Positioned(
+            right: 3,
+            top: 3,
+            child: GestureDetector(
+              onTap: () => controller.removeImage(index),
+              child: Container(
+                width: 16,
+                height: 16,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: Colors.black38,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.close, size: 10, color: Colors.white),
+              ),
+            ),
+          ),
       ],
     );
   }

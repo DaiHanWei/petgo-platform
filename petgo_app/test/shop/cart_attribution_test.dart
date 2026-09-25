@@ -16,6 +16,7 @@ import 'package:tailtopia/features/shop/presentation/product_detail_page_v2.dart
 import 'package:tailtopia/features/shop/presentation/toko_page_v2.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/shop_buttons.dart';
+import 'fake_shop_products.dart';
 
 // v2 详情页加购按钮的印尼语文案（AppLocalizationsId.tokoAddToCartShort）。
 // ⚠️ 两个测试都固定跑 Locale('id')，故直接用字面量；文案改了这里会红，正是想要的信号。
@@ -51,6 +52,14 @@ void main() {
 
       expect(adapter.lastQuery?.containsKey('entrySource'), isFalse);
       expect(adapter.lastQuery?.containsKey('triggerType'), isFalse);
+    });
+
+    test('🔴 立即购买带 buyNow=true（code review #4：只结这一件）；普通加购不带', () async {
+      await repo.add('sku-1', buyNow: true);
+      expect(adapter.lastQuery?['buyNow'], true);
+
+      await repo.add('sku-1');
+      expect(adapter.lastQuery?.containsKey('buyNow'), isFalse, reason: '普通加购不带，旧后端行为不变');
     });
 
     test('triggerType 同样按需带（Epic 6 复购触发会用到）', () async {
@@ -109,10 +118,10 @@ void main() {
         overrides: [
           // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
           shopBannerProvider.overrideWith((ref) async => null),
-          shopProductsProvider.overrideWith((ref, category) async => const [
-                ShopProductSummary(
-                    token: 'p1', name: 'Produk', brand: 'B', minPrice: 285000),
-              ]),
+          fakeShopProducts(const [
+            ShopProductSummary(
+                token: 'p1', name: 'Produk', brand: 'B', minPrice: 285000),
+          ]),
         ],
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -193,7 +202,7 @@ class _RecordingCartRepo implements CartRepository {
 
   @override
   Future<CartView> add(String skuToken,
-      {int qty = 1, String? entrySource, String? triggerType}) async {
+      {int qty = 1, String? entrySource, String? triggerType, bool buyNow = false}) async {
     lastEntrySource = entrySource;
     return CartView.empty;
   }
@@ -206,4 +215,11 @@ class _RecordingCartRepo implements CartRepository {
 
   @override
   Future<CartView> clearInvalid() async => CartView.empty;
+
+  // Story 4-2：行选择。本类只关心归因，选择端点不参与断言。
+  @override
+  Future<CartView> setSelected(String skuToken, bool selected) async => CartView.empty;
+
+  @override
+  Future<CartView> setAllSelected(bool selected) async => CartView.empty;
 }

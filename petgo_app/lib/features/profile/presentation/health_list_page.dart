@@ -13,7 +13,6 @@ import '../../../core/theme/colors.dart';
 import '../../../shared/boundary/triage_category_jump.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
-import '../../../shared/widgets/app_toast.dart';
 import '../data/health_record_repository.dart';
 import '../data/milestone_repository.dart';
 import '../data/timeline_repository.dart';
@@ -23,6 +22,7 @@ import '../domain/health_milestones.dart';
 import '../domain/milestone.dart';
 import '../domain/milestone_share.dart';
 import '../domain/milestone_titles.dart';
+import '../data/milestone_celebration_reporter.dart';
 import 'widgets/milestone_celebration.dart';
 
 /// 健康记录列表页 `p-health-list`（Story 7.2 · FR-45B/45C · UX-DR10）。结构化记录（可编辑）+ 问诊存档
@@ -276,9 +276,10 @@ class _HealthListPageState extends ConsumerState<HealthListPage> {
         key: ValueKey('healthCat_${c.type}'),
         borderRadius: BorderRadius.circular(14),
         // FR-45C：点分类卡预选类型直接呼出添加弹层。问诊类不可手动添加——
-        // 点卡弹 toast 说明来源（bug 20260730-428：无响应会被当成死控件）。
+        // 点卡直接去发起问诊（bug 497 产品拍板，取代 bug 428 的来源说明 toast；
+        // 与 AppBar 问诊图标同一入口，push 保留返回栈）。
         onTap: c.consult
-            ? () => showAppToast(context, l10n.healthConsultAutoHint)
+            ? () => context.push('/triage')
             : () => _openForm(context, ref, presetType: c.type),
         child: Container(
           decoration: BoxDecoration(
@@ -714,10 +715,14 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
         ? const <MilestoneItem>[]
         : [for (final g in listData.groups) ...g.items];
     final shareText = l10n.milestoneShareText(localizedMilestoneTitle(done.code, locale));
+    // 弹出前先记本地：短轮询已把「未庆祝」写进列表缓存，回报又要等弹窗关掉才发。
+    markMilestonesCelebrating(ref, [done.code]);
     await showMilestoneCelebration(
       context,
       done,
       petName: petName,
+      // 存健康记录后 500/800/1200ms 三次短轮询拉到的即时庆祝（既有路径，本 story 保留不动）。
+      path: MilestoneCelebrationPath.instant,
       collection: collection,
       onShare: () => shareMilestoneWithLink(
         ref,
@@ -728,6 +733,8 @@ class _HealthRecordFormState extends ConsumerState<_HealthRecordForm> {
         collection: collection,
       ),
     );
+    // 即时庆祝同样要回报，否则这条会在下次进里程碑列表页时被当成"未庆祝"再弹一遍（AD-A3.1）。
+    reportMilestoneCelebrated(ref, [done.code]);
   }
 
   Future<void> _delete() async {

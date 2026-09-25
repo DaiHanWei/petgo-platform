@@ -56,7 +56,16 @@ class CommentServiceTest {
         events = mock(ApplicationEventPublisher.class);
         moderation = mock(ContentModerationService.class);
         reviewGate = mock(ManualReviewGate.class);
-        service = new CommentService(comments, posts, accounts, events, moderation, reviewGate);
+        // V1.3.0 batch-b1 Story 3.2：@ 名单过滤器。本类用例都不带 @ 名单，
+        // sanitize(null) 在碰任何依赖之前就返回空表，所以下面那两个 mock 都无需 stub。
+        // 过滤逻辑本身由 MentionSanitizerTest 覆盖。
+        service = new CommentService(comments, posts, accounts, events, moderation, reviewGate,
+                new com.tailtopia.mention.service.MentionSanitizer(accounts,
+                        mock(com.tailtopia.social.read.UserHideRelationReader.class),
+                        mock(com.tailtopia.mention.repository.MentionCandidateRepository.class)),
+                // Story 3.3：@ 渲染投影。同上，没 @ 就不碰依赖。
+                new com.tailtopia.mention.service.MentionViewService(accounts,
+                        mock(com.tailtopia.social.read.UserHideRelationReader.class)));
         // 默认审核放行（PASS）——现网正常路径；各审核态在专项测试内覆写。
         when(moderation.moderateComment(anyString())).thenReturn(CommentVerdict.PASS);
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
@@ -248,6 +257,123 @@ class CommentServiceTest {
         ArgumentCaptor<ContentCommentedEvent> ev = ArgumentCaptor.forClass(ContentCommentedEvent.class);
         verify(events).publishEvent(ev.capture()); // G4：转可见此刻才发新评论通知
         assertThat(ev.getValue().contentAuthorId()).isEqualTo(7L);
+    }
+
+    // ===== V1.3.0 batch-b1 Story 3.4：评论里的 @ 通知 =====
+
+    @Test
+    void 评论转可见那一刻才发at事件() {
+        // 🔴 提交那一刻发的话，审核没过的评论会让被 @ 的人点进去看不到任何东西。
+        Comment c = underReview(80L, null, 9L, 1L);
+        setField(c, Comment.class, "mentionedUserIds", java.util.List.of(42L));
+        when(comments.findById(80L)).thenReturn(Optional.of(c));
+        postBy(1L, 7L);
+
+        service.approveComment(80L);
+
+        assertThat(mentionEvents()).singleElement().satisfies(e -> {
+            assertThat(e.commentId()).isEqualTo(80L);
+            assertThat(e.isComment()).isTrue();          // 评论提及（文案与深链据此分流）
+            assertThat(e.postId()).isEqualTo(1L);
+            assertThat(e.contentAuthorId()).isEqualTo(7L);
+            assertThat(e.mentionedUserIds()).containsExactly(42L);
+        });
+    }
+
+    @Test
+    void 没at人的评论不发at事件() {
+        Comment c = underReview(81L, null, 9L, 1L);
+        when(comments.findById(81L)).thenReturn(Optional.of(c));
+        postBy(1L, 7L);
+        service.approveComment(81L);
+        assertThat(mentionEvents()).isEmpty();
+    }
+
+    @Test
+    void 私密帖子的评论里的at也不发事件() {
+        // 🔴 与 ContentService.publishMentioned **同一条不变式**：非 PUBLIC 不发。
+        //    PRIVATE 内容只有作者看得见，通知一个第三方「你在某条内容的评论里被提到了」
+        //    还顺带告诉了他那条内容存在（code-review 2026-09-15）。
+        Comment c = underReview(82L, null, 9L, 1L);
+        setField(c, Comment.class, "mentionedUserIds", java.util.List.of(42L));
+        when(comments.findById(82L)).thenReturn(Optional.of(c));
+        privatePostBy(1L, 7L);
+
+        service.approveComment(82L);
+
+        assertThat(mentionEvents()).isEmpty();
+        // 「新评论」通知照发（它的口径与可见范围无关，本 story 一行未动）。
+        verify(events).publishEvent(any(ContentCommentedEvent.class));
+    }
+
+    @Test
+    void 帖子查不到时不发at事件() {
+        // 宁可少一条通知，不要一条点进去 404 的。
+        Comment c = underReview(83L, null, 9L, 1L);
+        setField(c, Comment.class, "mentionedUserIds", java.util.List.of(42L));
+        when(comments.findById(83L)).thenReturn(Optional.of(c));
+        when(posts.findById(1L)).thenReturn(Optional.empty());
+        service.approveComment(83L);
+        assertThat(mentionEvents()).isEmpty();
+    }
+
+    private java.util.List<com.tailtopia.content.event.ContentMentionedEvent> mentionEvents() {
+        ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
+        verify(events, org.mockito.Mockito.atLeast(0)).publishEvent(captor.capture());
+        return captor.getAllValues().stream()
+                .filter(com.tailtopia.content.event.ContentMentionedEvent.class::isInstance)
+                .map(com.tailtopia.content.event.ContentMentionedEvent.class::cast)
+                .toList();
+    }
+
+    /** 私密帖（同步开关关掉的 Diary）。 */
+    private void privatePostBy(long postId, long authorId) {
+        ContentPost p = ContentPost.publish(authorId, ContentType.DAILY, null, "x", null);
+        p.setVisibility(com.tailtopia.content.domain.ContentVisibility.PRIVATE);
+        setField(p, ContentPost.class, "id", postId);
+        setField(p, ContentPost.class, "createdAt", Instant.now());
+        when(posts.findById(postId)).thenReturn(Optional.of(p));
+    }
+
+    @Test
+    void approveReplyCarriesTopLevelParentAuthorAndIdEvenForVirtualSecondLevel() {
+        // V1.3.0 Story 4.3 AC4（D-35）：回复挂在一级 10（作者 3）下——即便运营想回的是虚拟二级 20（作者 4），createReply 已归并到 10，
+        // 转可见时事件的 parentAuthorId / parentCommentId 都是一级的（3 / 10），暖贴入队据此识别不出「虚拟二级被回复」→ 不入队
+        when(comments.findById(20L)).thenReturn(Optional.of(existingComment(20L, 10L, 4L, 1L)));
+        when(comments.findById(10L)).thenReturn(Optional.of(existingComment(10L, null, 3L, 1L)));
+        postBy(1L, 7L);
+        service.createReply(20L, 9L, "reply");
+        ArgumentCaptor<Comment> cap = ArgumentCaptor.forClass(Comment.class);
+        verify(comments).save(cap.capture());
+        Comment reply = cap.getValue();
+        assertThat(reply.getParentId()).isEqualTo(10L);
+        when(comments.findById(500L)).thenReturn(Optional.of(reply));
+        service.approveComment(500L);
+        ArgumentCaptor<ContentCommentedEvent> ev = ArgumentCaptor.forClass(ContentCommentedEvent.class);
+        verify(events).publishEvent(ev.capture());
+        assertThat(ev.getValue().parentAuthorId()).isEqualTo(3L);
+        assertThat(ev.getValue().parentCommentId()).isEqualTo(10L);
+        assertThat(ev.getValue().commenterId()).isEqualTo(9L);
+    }
+
+    @Test
+    void deleteVisibleReplyPublishesRemovedEventButUnderReviewDoesNot() {
+        // V1.3.0 Story 4.3 AC3（D-19）：删前可见 → CommentRemovedEvent(parentId, authorId)；审核中的从未入队 → 不发
+        when(comments.findById(30L)).thenReturn(Optional.of(existingComment(30L, 10L, 9L, 1L)));
+        postBy(1L, 7L);
+        service.delete(30L, 9L);
+        ArgumentCaptor<Object> ev = ArgumentCaptor.forClass(Object.class);
+        verify(events).publishEvent(ev.capture());
+        com.tailtopia.content.event.CommentRemovedEvent removed = (com.tailtopia.content.event.CommentRemovedEvent) ev.getValue();
+        assertThat(removed.commentId()).isEqualTo(30L);
+        assertThat(removed.parentId()).isEqualTo(10L);
+        assertThat(removed.authorId()).isEqualTo(9L);
+        assertThat(removed.reason()).isEqualTo(com.tailtopia.content.event.CommentRemovedReason.AUTHOR_DELETE);
+
+        org.mockito.Mockito.reset(events);
+        when(comments.findById(31L)).thenReturn(Optional.of(underReview(31L, 10L, 9L, 1L)));
+        service.delete(31L, 9L);
+        verify(events, never()).publishEvent(any());
     }
 
     @Test

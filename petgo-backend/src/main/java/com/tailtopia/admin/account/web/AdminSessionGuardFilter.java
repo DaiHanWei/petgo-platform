@@ -4,6 +4,7 @@ import com.tailtopia.admin.account.domain.AdminAccount;
 import com.tailtopia.admin.account.domain.AdminAccountStatus;
 import com.tailtopia.admin.account.repository.AdminAccountRepository;
 import com.tailtopia.admin.service.AdminUserDetails;
+import com.tailtopia.admin.shared.web.HxRequest;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -43,18 +44,46 @@ public class AdminSessionGuardFilter extends OncePerRequestFilter {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.isAuthenticated()
                 && auth.getPrincipal() instanceof AdminUserDetails admin) {
+            // 同一次查库：先判 ACTIVE（既有 ?expired 语义不变），再比对安全版本号（AD-1，零新增查询）。
             Optional<AdminAccount> current = adminAccounts.findById(admin.getAdminAccountId());
             boolean active = current.map(a -> a.getStatus() == AdminAccountStatus.ACTIVE).orElse(false);
             if (!active) {
-                HttpSession session = request.getSession(false);
-                if (session != null) {
-                    session.invalidate();
-                }
-                SecurityContextHolder.clearContext();
-                response.sendRedirect(request.getContextPath() + "/admin/login?expired");
+                kick(request, response, "expired");
+                return;
+            }
+            // 停用/改角色/改权限/换绑邮箱等已让库里版本号 +1，而会话仍持登录时刻快照 → 踢重登（D-2：不重算权限）。
+            if (current.get().getSecurityVersion() != admin.getSecurityVersion()) {
+                kick(request, response, "relogin");
                 return;
             }
         }
         chain.doFilter(request, response);
+    }
+
+    /** 失效会话 + 清 SecurityContext + 跳登录页（{@code ?expired} / {@code ?relogin}）。 */
+    private void kick(HttpServletRequest request, HttpServletResponse response, String reason)
+            throws IOException {
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
+        SecurityContextHolder.clearContext();
+        redirectToLogin(request, response, reason);
+    }
+
+    /**
+     * 跳登录页，区分 htmx：普通请求 302；htmx 请求改回 {@code HX-Redirect} 头让浏览器整页跳转。
+     * 不能对 htmx 发 302 —— XHR 会透明跟随到 200 的登录页，htmx 把整页登录 HTML 当片段 swap 进
+     * 抽屉 / 工作台右栏。{@code SecurityConfig} 的未认证入口（会话自然过期）复用同一出口。
+     */
+    public static void redirectToLogin(HttpServletRequest request, HttpServletResponse response, String reason)
+            throws IOException {
+        String target = request.getContextPath() + "/admin/login?" + reason;
+        if (HxRequest.of(request).isHtmx()) {
+            response.setStatus(HttpServletResponse.SC_OK);
+            response.setHeader("HX-Redirect", target);
+            return;
+        }
+        response.sendRedirect(target);
     }
 }

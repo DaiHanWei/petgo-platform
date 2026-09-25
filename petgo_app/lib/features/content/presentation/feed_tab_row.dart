@@ -28,10 +28,9 @@ class FeedTabRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
       child: Row(
         children: [
-          // 首页隐藏「Growth」(GROWTH_MOMENT)筛选——成长内容入口走成长档案 Tab，
-          // feed 仅留 All · Moment · Knowledge & Tips。该分类仍用于内容分类/深链，仅不在此露出。
-          for (final category
-              in FeedCategory.values.where((c) => c != FeedCategory.growthMoment)) ...[
+          // bug 510（产品新决策）：首页加回 Diary(GROWTH_MOMENT) 筛选，按枚举顺序
+          // Semua · Momen · Diary · Edukasi & Tips。
+          for (final category in FeedCategory.values) ...[
             _Tab(
               label: labels[category] ?? category.wire,
               active: category == selected,

@@ -3,6 +3,7 @@ package com.tailtopia.admin.seed.service;
 import com.tailtopia.admin.seed.domain.SeedBatch;
 import com.tailtopia.admin.seed.domain.SeedBatchAsset;
 import com.tailtopia.admin.seed.domain.SeedBatchRow;
+import com.tailtopia.admin.seed.dto.RowError;
 import com.tailtopia.admin.seed.dto.RowValidation;
 import com.tailtopia.admin.seed.repository.SeedBatchAssetRepository;
 import com.tailtopia.admin.virtual.repository.SeedContentHashRepository;
@@ -67,13 +68,12 @@ public class SeedBatchValidator {
     }
 
     private RowValidation validateRow(SeedBatchRow row, Set<String> liveAssetUrls) {
-        List<String> errors = new ArrayList<>();
+        List<RowError> errors = new ArrayList<>();
 
         // ① 录入阶段已经记下的问题（缺账号 / 缺类型 / 素材名对不上）原样带出来 ——
         //    🛡 在这里重算一遍会和录入时的措辞分叉，而运营看到两种说法会以为是两个问题。
-        if (row.getErrorMessage() != null && !row.getErrorMessage().isBlank()) {
-            errors.add(row.getErrorMessage());
-        }
+        //    bug 20260924-565：库里存的是文案码（i18n:…），解回 RowError；历史中文原样带出。
+        errors.addAll(SeedRowErrors.decode(row.getErrorMessage()));
 
         // ② 发布账号：不在身份池内 / 已禁用 / 已移出。
         Optional<User> author = row.getAuthorUserId() == 0
@@ -81,34 +81,37 @@ public class SeedBatchValidator {
                 : users.findById(row.getAuthorUserId());
         if (row.getAuthorUserId() == 0) {
             if (errors.isEmpty()) {
-                errors.add("未指定发布账号，且批次未设默认");
+                // 🛡 与录入阶段（SeedBatchEntryService#appendRows）同一个码 —— 同一问题一种说法。
+                errors.add(new RowError("admin.err.seedBatch.row.authorUnset"));
             }
         } else if (author.isEmpty()) {
-            errors.add("发布账号 id=" + row.getAuthorUserId() + " 不存在");
+            errors.add(new RowError("admin.err.seedBatch.row.authorNotFound",
+                    String.valueOf(row.getAuthorUserId())));
         } else if (!identities.isInPool(author.get())) {
             // ⚠️ "已移出身份池"与"从来不在池里"在运营看来是同一件事，报同一句话即可 ——
             //    区分它们要额外查授权历史，而对"我该怎么办"没有影响。
-            errors.add("发布账号「" + author.get().getNickname() + "」不在运营发布身份池内");
+            errors.add(new RowError("admin.err.seedBatch.row.authorNotInPool", author.get().getNickname()));
         } else if (!author.get().isEnabled()) {
-            errors.add("发布账号「" + author.get().getNickname() + "」已停用");
+            errors.add(new RowError("admin.err.seedBatch.authorDisabled", author.get().getNickname()));
         }
 
         // ③ 内容类型：🔴 GROWTH_MOMENT 单独给一句话，指向单条发布。
         //    只说"类型不合法"会让运营以为是填错字，而实际是"这条得换个入口发"。
         if (row.getContentType() == ContentType.GROWTH_MOMENT) {
-            errors.add("批量发布不支持「成长日历」，请用单条发布（合法取值："
-                    + SeedBatchExcelService.BATCH_TYPES.stream().map(Enum::name).toList() + "）");
+            errors.add(new RowError("admin.err.seedBatch.row.growthMoment",
+                    SeedBatchExcelService.BATCH_TYPES.stream().map(Enum::name).toList().toString()));
         } else if (row.getContentType() != null
                 && !SeedBatchExcelService.BATCH_TYPES.contains(row.getContentType())) {
-            errors.add("内容类型「" + row.getContentType() + "」不可用于批量发布（合法取值："
-                    + SeedBatchExcelService.BATCH_TYPES.stream().map(Enum::name).toList() + "）");
+            // 与 Excel 导入（SeedBatchExcelService#parseType）同一个码。
+            errors.add(new RowError("admin.err.seedBatch.typeNotAllowed", row.getContentType().name(),
+                    SeedBatchExcelService.BATCH_TYPES.stream().map(Enum::name).toList().toString()));
         }
 
         // ④ 关联物种：不在枚举内 ⇒ 注明合法取值。
         if (row.getSpecies() != null && !row.getSpecies().isBlank()
                 && !SeedBatchExcelService.SPECIES_OPTIONS.contains(row.getSpecies())) {
-            errors.add("关联物种「" + row.getSpecies() + "」不合法（合法取值："
-                    + SeedBatchExcelService.SPECIES_OPTIONS + "）");
+            errors.add(new RowError("admin.err.seedBatch.row.speciesInvalid", row.getSpecies(),
+                    SeedBatchExcelService.SPECIES_OPTIONS.toString()));
         }
 
         // ⑤ 素材是否还在本批里。
@@ -117,7 +120,7 @@ public class SeedBatchValidator {
         if (row.getImageUrls() != null) {
             for (String url : row.getImageUrls()) {
                 if (!liveAssetUrls.contains(url)) {
-                    errors.add("引用的素材已不在本批素材里");
+                    errors.add(new RowError("admin.err.seedBatch.row.assetGone"));
                     break;
                 }
             }
@@ -127,7 +130,7 @@ public class SeedBatchValidator {
         boolean noBody = row.getBody() == null || row.getBody().isBlank();
         boolean noImages = row.getImageUrls() == null || row.getImageUrls().isEmpty();
         if (noBody && noImages) {
-            errors.add("正文与图片都是空的");
+            errors.add(new RowError("admin.err.seedBatch.row.empty"));
         }
 
         // ⑦ 去重：🔴 只是提示，不是错误。判据含**作者维度**（同一文案不同账号各自独立）。

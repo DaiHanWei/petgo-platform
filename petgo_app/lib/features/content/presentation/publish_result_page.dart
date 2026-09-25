@@ -367,21 +367,16 @@ class PublishRejectedPage extends StatelessWidget {
         .toList();
     return Scaffold(
       backgroundColor: AppColors.base,
+      // 标题栏跟随全局主题（决策 UI-2）。
+      appBar: AppBar(
+        leading: _backBtn(context),
+        title: Text(l10n.publishRejectedTitle),
+      ),
       body: SafeArea(
+        top: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(22, 4, 22, 28),
+          padding: const EdgeInsets.fromLTRB(22, 12, 22, 28),
           children: [
-            // 顶栏：返回 + 标题。
-            Row(
-              children: [
-                _backBtn(context),
-                const SizedBox(width: 12),
-                Text(l10n.publishRejectedTitle,
-                    style: const TextStyle(
-                        fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink)),
-              ],
-            ),
-            const SizedBox(height: 20),
             Column(
               children: [
                 Container(
@@ -499,19 +494,11 @@ class PublishRejectedPage extends StatelessWidget {
         ),
       );
 
-  Widget _backBtn(BuildContext context) => Material(
-        color: const Color(0xFFEFEDF3),
-        borderRadius: BorderRadius.circular(11),
-        child: InkWell(
-          key: const ValueKey('publishRejectedBack'),
-          borderRadius: BorderRadius.circular(11),
-          onTap: () => context.canPop() ? context.pop() : context.go('/home'),
-          child: const SizedBox(
-            width: 36,
-            height: 36,
-            child: Icon(Icons.arrow_back, size: 18, color: AppColors.ink2),
-          ),
-        ),
+  Widget _backBtn(BuildContext context) => IconButton(
+        key: const ValueKey('publishRejectedBack'),
+        icon: const Icon(Icons.chevron_left_rounded, size: 28),
+        tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+        onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
       );
 }
 

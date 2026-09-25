@@ -46,6 +46,31 @@ public class AdminShopProductService {
         this.audit = audit;
     }
 
+    // ---------- V1.3.0 Story 10.3：B16 列表分页与摘要条（AC1） ----------
+
+    /**
+     * 一页商品（每页 20，权重降序 + id 降序）。
+     *
+     * <p>⚠️ 重构前控制器是 {@code products.findAll()} 拉回内存再过滤排序 —— 那不是分页，
+     * 翻页器也没法从它身上长出来。筛选与排序现在都落在查询层。
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<ShopProduct> page(ProductCategory category,
+            Boolean active, int page, int size) {
+        return products.adminSearch(category, active,
+                org.springframework.data.domain.PageRequest.of(Math.max(page, 0), Math.max(1, size)));
+    }
+
+    /** 摘要条三格：上架商品数 · 下架商品数 · SKU 总数（AC1）。 */
+    @Transactional(readOnly = true)
+    public Summary summary() {
+        return new Summary(products.countByActive(true), products.countByActive(false), skus.count());
+    }
+
+    /** 摘要条三格。 */
+    public record Summary(long activeCount, long inactiveCount, long skuCount) {
+    }
+
     // ---------- 商品 ----------
 
     @Transactional
@@ -193,16 +218,14 @@ public class AdminShopProductService {
     }
 
     /**
-     * Makanan 品类未填喂量时的警告文案（AC2）。返回 null 表示无需警告。
+     * Makanan 品类未填喂量时是否要显著警告（AC2）。
      *
      * <p>🔴 这句话必须出现在页面上——它是 FR-109 能否成立的唯一提醒点。
+     * 文案走 i18n（{@code admin.shop.form.feedingWarning}）：此前在这里写死中文，
+     * 英文 / 印尼语后台也只显示中文（bug 20260924-568）。服务层只判断要不要提示。
      */
-    public String feedingGuideWarning(ProductCategory category, List<FeedingGuideEntry> guide) {
-        if (category == ProductCategory.MAKANAN && (guide == null || guide.isEmpty())) {
-            return "此商品为 Makanan 但未填写每日建议喂量。该字段是粮量见底预估（复购提醒）的"
-                    + "唯一计算依据，留空将导致该商品永远不会触发补货提醒。";
-        }
-        return null;
+    public boolean needsFeedingGuideWarning(ProductCategory category, List<FeedingGuideEntry> guide) {
+        return category == ProductCategory.MAKANAN && (guide == null || guide.isEmpty());
     }
 
     void validateSku(ShopSkuForm f) {

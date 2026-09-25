@@ -1,6 +1,7 @@
 package com.tailtopia.content.repository;
 
 import com.tailtopia.content.domain.Comment;
+import com.tailtopia.content.domain.CommentModerationStatus;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -41,7 +42,8 @@ import org.springframework.data.repository.query.Param;
  * <p><b>跨模块引用说明</b>：子查询里写的是 {@code social} 的实体名 {@code UserHideRelation}，Java 侧不 import 其仓储 ——
  * 与 {@code findFeed} 在 JPQL 里引用 {@code moderation} 的 {@code ContentReport} 是同一既定破例（AD-5 优先于 AD-8 的字面）。
  */
-public interface CommentRepository extends JpaRepository<Comment, Long> {
+public interface CommentRepository extends JpaRepository<Comment, Long>,
+        org.springframework.data.jpa.repository.JpaSpecificationExecutor<Comment> {
 
     /** 某帖未删评论总数（含一级+二级）。<b>已弃用于 detail commentCount</b>，改用 viewer 维度计数。 */
     long countByPostIdAndDeletedAtIsNull(long postId);
@@ -171,6 +173,59 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
             Pageable pageable);
 
     /**
+     * 一级评论**热度序**游标分页（V1.3.0 批次 A · Story 2.4 · AD-A8）。
+     *
+     * <p>排序 {@code 点赞数 DESC, createdAt ASC, id ASC}。第二元用 ASC 而不是 DESC：
+     * 同样赞数时，先发的那条排前面 —— 「同样多人认可，谁先说的谁在上」比「谁刚发的谁在上」更合理。
+     *
+     * <h2>🔴 排序键第一元是跨表聚合值，**建不了索引**</h2>
+     * 这是「不加冗余计数列」（AD-A7.3）的直接后果，已明确接受：**每页对该帖一级评论做一次聚合**。
+     * 索引只支撑聚合与过滤两侧（{@code comment_likes(comment_id)} 与
+     * {@code comments(post_id, parent_id, deleted_at, created_at)}）。
+     *
+     * <p><b>该方案成立的唯一前提：单帖一级评论量级为几十到几百。</b>
+     * 若某帖评论数进入万级，本方案退化 —— 届时是**推翻 AD-A7.3**、须走正式变更，
+     * 不得就地加一个计数列了事。
+     *
+     * <h2>软删与可见性口径</h2>
+     * 与 {@link #findTopLevel} <b>逐字相同</b>：软删不返回、非 VISIBLE 仅作者本人可见、
+     * R1/R2 隐藏关系照旧。点赞行**不随软删物理删除**，但软删评论根本不在结果里，
+     * 所以它的赞数也不会出现在任何地方（AC9）。
+     *
+     * <p>游标语义（三元组 keyset，降序元在前）：取「排在游标之后」的那些 ——
+     * 赞数更少，或赞数相同但更晚发，或两者都相同但 id 更大。
+     */
+    @Query("""
+            SELECT c FROM Comment c
+            LEFT JOIN CommentLike l ON l.commentId = c.id
+            WHERE c.postId = :postId AND c.parentId IS NULL AND c.deletedAt IS NULL
+              AND (c.moderationStatus = com.tailtopia.content.domain.CommentModerationStatus.VISIBLE
+                   OR (:viewerId IS NOT NULL AND c.authorId = :viewerId))
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
+                                  WHERE h.holderId = :viewerId AND h.targetId = c.authorId))
+              AND ((:hasViewer = true AND c.authorId = :viewerId)
+                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h2
+                                  WHERE h2.holderId = :postAuthorId AND h2.targetId = c.authorId))
+            GROUP BY c
+            HAVING (:hasCursor = false
+                    OR COUNT(l) < :cursorLikes
+                    OR (COUNT(l) = :cursorLikes AND c.createdAt > :cursorTs)
+                    OR (COUNT(l) = :cursorLikes AND c.createdAt = :cursorTs AND c.id > :cursorId))
+            ORDER BY COUNT(l) DESC, c.createdAt ASC, c.id ASC
+            """)
+    List<Comment> findTopLevelByHot(
+            @Param("postId") long postId,
+            @Param("hasCursor") boolean hasCursor,
+            @Param("cursorLikes") long cursorLikes,
+            @Param("cursorTs") Instant cursorTs,
+            @Param("cursorId") Long cursorId,
+            @Param("hasViewer") boolean hasViewer,
+            @Param("viewerId") Long viewerId,
+            @Param("postAuthorId") long postAuthorId,
+            Pageable pageable);
+
+    /**
      * 某一级评论的二级回复时间正序游标分页（展开「查看全部 X 条回复」用），viewer 可见性过滤。
      *
      * <p><b>「父被隐藏 → 整串不展示」（AC4）不在本查询里</b>：本方法只按<b>回复自身作者</b>过滤。
@@ -254,15 +309,34 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
             """)
     int deactivateByAuthor(@Param("authorId") long authorId, @Param("now") Instant now);
 
-    /** 后台内容管理近评论列表（Story 9.9，含已删软删项）。 */
-    java.util.List<Comment> findTop200ByOrderByIdDesc();
-
     /**
      * 后台内容详情（2026-09-02）：某帖一级评论分页，**含已删与全部审核状态**（运营全量视角），
      * 时间正序（与 App 一致）。排序由 Pageable 携带（createdAt asc, id asc）。
      */
     org.springframework.data.domain.Page<Comment> findByPostIdAndParentIdIsNull(
             long postId, Pageable pageable);
+
+    // ===== V1.3.0 Story 4.2 暖评抽屉只读查询（平台口径，不套 R1/R2）=====
+
+    /** 一批作者在 [from, to) 内发出的评论数（含审核中，排软删）：「今日已评 N 条」，区间由调用方按 WIB 自然日算。 */
+    @org.springframework.data.jpa.repository.Query("select c.authorId, count(c) from Comment c where c.authorId in :authorIds"
+            + " and c.deletedAt is null and c.createdAt >= :from and c.createdAt < :to group by c.authorId")
+    java.util.List<Object[]> countByAuthorsBetween(@Param("authorIds") java.util.Collection<Long> authorIds,
+            @Param("from") Instant from, @Param("to") Instant to);
+
+    /** 某帖自 since 起评过的作者 id（含审核中，排软删）：10 分钟内连发软提示。 */
+    @org.springframework.data.jpa.repository.Query("select distinct c.authorId from Comment c where c.postId = :postId"
+            + " and c.deletedAt is null and c.createdAt >= :since")
+    java.util.List<Long> findRecentAuthorIdsOnPost(@Param("postId") long postId, @Param("since") Instant since);
+
+    /** 某帖上虚拟账号发的评论数（可见 + 审核中，排软删）：≥3 条黄条提示。 */
+    @org.springframework.data.jpa.repository.Query("select count(c) from Comment c join User u on u.id = c.authorId"
+            + " where c.postId = :postId and u.accountType = :virtual and c.deletedAt is null and c.moderationStatus in :statuses")
+    long countByPostAndAuthorType(@Param("postId") long postId, @Param("virtual") com.tailtopia.auth.domain.AccountType virtual,
+            @Param("statuses") java.util.Collection<CommentModerationStatus> statuses);
+
+    /** 某帖可见评论数（一级 + 二级，排软删）：抽屉预览。 */
+    long countByPostIdAndDeletedAtIsNullAndModerationStatus(long postId, CommentModerationStatus status);
 
     /** 后台内容详情：一批一级评论的全部二级回复（含已删），时间正序；service 端裁「收起前 3 条」。 */
     java.util.List<Comment> findByParentIdInOrderByCreatedAtAscIdAsc(

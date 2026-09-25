@@ -109,7 +109,8 @@ public class SecurityConfig {
                                 auditService.record(accountId,
                                         com.tailtopia.admin.audit.service.AuditActions.EMERGENCY_LOGIN_SUCCEEDED,
                                         "ADMIN_ACCOUNT", String.valueOf(accountId),
-                                        "紧急账密登录成功：" + admin.getUsername() + "（来源=EMERGENCY_PASSWORD）");
+                                        // bug 548：语言中立 key=value（动作说明由审计页按 action code 本地化）
+                                        "username=" + admin.getUsername() + " source=EMERGENCY_PASSWORD");
                                 alertService.alertSuperAdmins(
                                         com.tailtopia.admin.audit.service.AuditActions.EMERGENCY_LOGIN_SUCCEEDED,
                                         accountId);
@@ -122,7 +123,10 @@ public class SecurityConfig {
                         .logoutSuccessUrl("/admin/login?logout"))
                 // 权限不足（URL 级门控 + @PreAuthorize 方法级拒绝，经 GlobalExceptionHandler 重抛回到本链）：
                 // 403 + forward 到「权限不足」提示页，而非裸 Whitelabel/500。
-                .exceptionHandling(ex -> ex.accessDeniedHandler(adminAccessDeniedHandler()));
+                .exceptionHandling(ex -> ex.accessDeniedHandler(adminAccessDeniedHandler())
+                        // 未认证入口显式装配（不要改回 defaultAuthenticationEntryPointFor 追加，原因见类注释）：
+                        // htmx 请求 HX-Redirect 整页跳转，其余照旧 302 登录页。
+                        .authenticationEntryPoint(new com.tailtopia.admin.account.web.AdminLoginEntryPoint()));
         // CSRF 保持开启（表单链默认即开）；会话按需创建（表单登录态）。
         return http.build();
     }
@@ -151,7 +155,11 @@ public class SecurityConfig {
                         // ⚠️ 三个前缀是**三种不同的分享类型**，各自落地页不同（Story 9.3 · AD-15 Rule 5）——
                         // 不可合并成一个通配。
                         .requestMatchers("/actuator/**", "/v3/api-docs/**", "/swagger-ui/**",
-                                "/swagger-ui.html", "/p/**", "/m/**", "/c/**").permitAll()
+                                "/swagger-ui.html", "/p/**", "/m/**", "/c/**",
+                                // 场所对外 H5（V1.3.0 batch-b1 Story 1.10 · AD-5）：
+                                // 与前三页同性质 —— 服务端直出、公开无鉴权、noindex，
+                                // 下架/不存在统一落 card_gone + 404（防枚举）。
+                                "/place/**").permitAll()
                         // 品牌静态资源（H5 名片/分享页左上角 wordmark，bug 20260701-182）公开放行。
                         .requestMatchers(HttpMethod.GET, "/brand/**").permitAll()
                         // 法律政策 H5（隐私 / 条款 / Mitra 条款 / 账号删除 / 儿童安全 / 支持）+ 下载引导落地页公开放行（商店上架 + App WebView 引用）
@@ -168,6 +176,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/im/usersig").authenticated()
                         // App 版本信息（Story 6.5，游客可读，App 内更新提醒用）
                         .requestMatchers(HttpMethod.GET, "/api/v1/app-version").permitAll()
+                        // 客服联系方式（V1.3.0 Story 3-1）：客服弹窗在**登录前**也会出现
+                        // （兽医登录页就有一个），登录墙会让「登不进去的人找客服」这条路直接断掉。
+                        // 🔴 **必须精确匹配，不得写成 /api/v1/support/**** —— 下面那条
+                        //    /api/v1/support-tickets/** 是 USER 角色专属，通配会给未来任何
+                        //    /api/v1/support/* 子路径开天窗。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/support/contact").permitAll()
                         // 游客只读放行锚点（Story 1.5 细化具体业务 GET）
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
                         // Feed 只读对游客可见（Story 3.2，FR-0A/17）：GET 内容流放行（写仍需 JWT）
@@ -177,6 +191,19 @@ public class SecurityConfig {
                                 "/api/v1/comments/**").permitAll()
                         // 他人迷你主页只读对游客可见（Story 3.8，FR-26 无登录要求）
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/mini-profile").permitAll()
+                        // 公开主页（V1.3.0 batch-b1 Story 2.1 · FR-118）：与迷你卡同一口径 ——
+                        // 点头像即看，无登录要求。登录者可识别（viewer 用于 isBlocked / isReported），
+                        // 但**只认 role=USER**（判定在 controller，兽医 token 的 sub 是 vetId）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/*/profile").permitAll()
+                        // 公开主页的内容区（Story 2.2 · FR-118.2）：同上，游客可读。
+                        // ⚠️ 可见范围**不靠这条放行**把关 —— 非 PUBLIC 的内容在 SQL 层就查不出来（NFR-2）；
+                        // 拉黑守卫在 controller 里与 /profile **各拦一次**（只拦主页会留个绕过口）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/*/posts").permitAll()
+                        // 主页宠物卡（Story 2.3 · AC3）：看这人养了只什么，同样不需要登录。
+                        // ⚠️ **点进去**的宠物访客视图（`/api/v1/pets/*/visitor/**`）**刻意不在这里放行** ——
+                        // AC1 明写"仅对登录用户开放"，它靠落进默认的 authenticated 规则实现，
+                        // 而不是再写一条规则（少动一次安全配置就少一次出错机会）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/*/pet").permitAll()
                         // Toko 商品只读对游客可见（V1.4.0 Story 1.1，FR-93A）：GET 商品列表/详情放行。
                         // 与 FR-78「未登录点击非落地 Tab 触发登录引导」有意不同——商品浏览是转化漏斗
                         // 最上层，登录墙会直接杀掉转化；登录引导推迟到「加入购物车」（Story 3.6）。
@@ -190,6 +217,52 @@ public class SecurityConfig {
                         // 行政区划树（Story 2.4）：区划与是否可配送都不敏感，
                         // 且用户在注册前就该能看到「你们送不送我这儿」。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/regions").permitAll()
+                        // 宠物友好场所只读对游客可见（V1.3.0 batch-b1 Story 1.1，FR-112.2）：
+                        // 场所列表是「这个功能里已经攒了些什么地方」的展示面，用登录墙拦它没有意义
+                        // ——同 Toko 商品列表的既定取舍。App 侧对应地**不把 /places 放进
+                        // _controlledLocations**（Story 1.1 Dev Notes 明写「场所列表游客可看」）。
+                        // 🔴 只放 GET：标记场所（Story 1.3）与场所评论（1.7）仍需 JWT；
+                        //    且服务端**永远不提供场所编辑端点**（2026-09-15 拍板，纠错走后台 AB-17A）。
+                        // 🔴 **只放这一个精确路径，不写 `/places/**` 通配**：通配等于替
+                        //    还不存在的端点预先授权。1.7/1.8 一旦加 `/places/{token}/my-reaction`
+                        //    这类「按调用者」的读接口，它会默认匿名可达 —— 而 controller 里
+                        //    盲取的 currentUserId 是空 principal，结果是 500 而不是 401，
+                        //    且这次放行在安全配置里看不见。子路径（详情 1.5 / H5 1.10）
+                        //    各自在本文件显式加一行，这样每一次放开都留痕。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/places").permitAll()
+                        // 标记场所（V1.3.0 batch-b1 Story 1.3）：**仅 role=USER**。
+                        // 🔴 必须显式限定 —— PlaceController 把 jwt.sub 当 users.id 用，而兽医
+                        // token 的 sub 是 vetId，与 users.id 是两个会大量碰撞的命名空间。落到
+                        // anyRequest().authenticated() 的话，兽医能以一个无关用户的名义创建场所，
+                        // 而 places.created_by 没有外键、会被静默写进去（同拉黑/举报端点的理由）。
+                        // ⚠️ 用户不可编辑/删除场所，所以这条错写出去的归属**没有自助纠正途径**。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/places").hasRole("USER")
+                        // 场所详情（Story 1.5）：同列表，GET 对游客放行。
+                        // 🔴 仍然**不写 `/places/**` 通配** —— 只列出真实存在的路径形状，
+                        //    每一次放开都留痕（评论列表 1.7 落地时在这里再加一行）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/places/*").permitAll()
+                        // 举报场所（Story 1.5）：**仅 role=USER**，与标记场所同一理由
+                        // （controller 把 jwt.sub 当 users.id 用，兽医 token 的 sub 是 vetId）。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/places/*/reports").hasRole("USER")
+                        // 场所评论列表（Story 1.7）：同详情，GET 对游客放行。
+                        // ⚠️ 这条**必须写在** `GET /api/v1/places/*` 之后也无妨（两者路径形状不同，
+                        //    `/*` 只匹配一段），但绝不能省 —— 省了它游客拉评论会 401，
+                        //    而详情页本身对游客开着，评论区就成了一块登录墙。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/places/*/comments").permitAll()
+                        // 发表场所评论（Story 1.7）：**仅 role=USER**，与标记/举报同一理由
+                        // （controller 把 jwt.sub 当 users.id 用，兽医 token 的 sub 是 vetId ——
+                        // 落到 authenticated() 的话，兽医会以一个无关用户的名义发评论，
+                        // 而 author_id 没有外键、会被静默写进去，且评论**只有作者本人能删**，
+                        // 那个"作者"根本不是他 → 谁都删不掉）。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/places/*/comments").hasRole("USER")
+                        // 删除自己的场所评论（Story 1.7 AC7）：仅 role=USER；
+                        // 「是不是本人」在 service 里硬校验，不靠这一行。
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/place-comments/*").hasRole("USER")
+                        // 为场所补充照片（Story 1.9）：**仅 role=USER**，同标记/评论的理由
+                        // （controller 把 jwt.sub 当 users.id 用；而且照片要"标注上传者"，
+                        // 兽医 token 写进去的那个 uploader_id 根本不是他，他自己也删不掉）。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/places/*/photos").hasRole("USER")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/place-photos/*").hasRole("USER")
                         // 兽医工作台端点（Story 5.1+）：仅 role=VET 可达；user/guest → 403（双向门控）
                         .requestMatchers("/api/v1/vet/**").hasRole("VET")
                         // 用户侧问诊端点（Story 5.2+ / 计费流 3-2~3-4）：仅 role=USER 可达（vet/guest → 403）
@@ -204,11 +277,28 @@ public class SecurityConfig {
                         // 兽医以无关用户名义写入不可撤销的举报隐藏行（安全评审三轮 #1）。
                         .requestMatchers("/api/v1/me/blocked-users", "/api/v1/me/blocked-users/**",
                                 "/api/v1/account-reports", "/api/v1/account-reports/**").hasRole("USER")
+                        // @ 候选集（V1.3.0 batch-b1 Story 3.1）：同上，仅 role=USER。
+                        // ⚠️ 落到 anyRequest().authenticated() 的话，兽医 token 会进到 controller
+                        // 再被那里的角色校验打成 401 —— 而同类 /me 端点给的是 403，
+                        // 客户端把 401 当成"token 过期"会直接强制登出（code-review 2026-09-15）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/me/mention-candidates").hasRole("USER")
                         // 用户端退款方式选择/填收款（Story 4.5）：列表 + PawCoin 即时退 + QRIS 填账户，仅 role=USER
                         .requestMatchers("/api/v1/me/refund-requests",
                                 "/api/v1/refund-requests/**").hasRole("USER")
                         // 订单中心聚合读接口（Story 5.1 列表 / 5.3 详情）：泛化 3 类订单，仅 role=USER
                         .requestMatchers(HttpMethod.GET, "/api/v1/orders", "/api/v1/orders/**").hasRole("USER")
+                        // 电商用户侧全族（v1.3.0 shop-v2 复审 #1）：与上面 blocked-users 完全同一个坑 ——
+                        // 这些 controller 的 currentUserId 同样盲取 jwt.sub 当 users.id，而兽医 token 的
+                        // sub=vetId 与 users.id 是独立命名空间且大量碰撞。此前它们一直落在
+                        // anyRequest().authenticated()，等于兽医 token 可读同号用户的收货地址（姓名/电话/详址）、
+                        // 改其购物车、以其名义下单。⚠️ 新增任何 /api/v1/me 下的电商端点必须同步加进本表。
+                        .requestMatchers("/api/v1/me/cart", "/api/v1/me/cart/**",
+                                "/api/v1/me/checkout",
+                                "/api/v1/me/shop-orders", "/api/v1/me/shop-orders/**",
+                                "/api/v1/me/shipping-addresses", "/api/v1/me/shipping-addresses/**",
+                                "/api/v1/me/shop-reviews", "/api/v1/me/shop-reviews/**",
+                                "/api/v1/me/shop-returns", "/api/v1/me/shop-returns/**",
+                                "/api/v1/me/shop/**").hasRole("USER")
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

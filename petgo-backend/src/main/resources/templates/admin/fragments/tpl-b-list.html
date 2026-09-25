@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  模板 B · 列表 + 抽屉壳（V1.3.0 Story 2.3b，AD-11；首个消费者 Epic 5.2 B6 / 7.1 B1）。
+  槽位契约 list(filters, summary, table, drawer)：
+    filters — 筛选栏 form[data-autosubmit]
+    summary — 摘要条 .sum 3~5 格（抽屉内自动 2×2）
+    table   — 表格（行 48px；<tr data-id data-drawer-url> 点击开抽屉，admin-drawer.js）
+    drawer  — 抽屉头部标题槽（可空）；抽屉体由 hx-get 填充 .drawer-body
+  抽屉容器 id 由调用方以 th:with="res='xxx'" 传入（默认 res='item'）→ <aside id="xxx-drawer" class="drawer" hidden>。
+  关闭三途径（✕ / 点遮罩 / Esc）后焦点回触发行；抽屉内操作成功**不自动关**（UI 稿 10-6），对象消失类动作由服务端
+  HX-Trigger: admin:drawer-close。
+  调用方 th:replace="~{admin/fragments/tpl-b-list :: list(~{::filters}, ~{::summary}, ~{::table}, ~{::drawer})}"
+-->
+<body>
+<div class="lst" th:fragment="list(filtersSlot, summarySlot, tableSlot, drawerSlot)" th:with="res=${res} ?: 'item',noDrawer=${noDrawer} ?: false" data-list>
+    <div class="lst-filters" th:replace="${filtersSlot} ?: ~{}"></div>
+    <div class="sum" th:replace="${summarySlot} ?: ~{}"></div>
+    <div class="lst-table">
+        <div th:replace="${tableSlot} ?: ~{admin/fragments/tpl-a-workbench :: search-empty}"></div>
+    </div>
+    <p id="admin-inline-error" class="lst-inline-error" aria-live="polite"></p>
+    <!--/* 只读列表页（B23 审计 / D6 角色）不引 admin-drawer.js、行上也没有 data-drawer-url：
+           调用方 th:with="noDrawer=true" 即不输出抽屉壳与遮罩，免得页面上留一段永远打不开的死标记。 */-->
+    <th:block th:unless="${noDrawer}">
+        <aside th:id="${res} + '-drawer'" class="drawer" hidden th:attr="data-res=${res}" role="dialog" aria-modal="true" tabindex="-1">
+            <header class="drawer-head">
+                <div class="drawer-title" th:replace="${drawerSlot} ?: ~{}"></div>
+                <button type="button" class="drawer-close" data-drawer-close th:title="#{admin.v130.drawer.close}" aria-label="close">✕</button>
+            </header>
+            <!--/* 🔴 抽屉体必须**带 id**（V1.3.0 Story 9.2 复审 M2）：htmx 只在目标元素有 id 时才发
+                   HX-Target 头，而 AdminBusinessExceptionAdvice 正是按这个头回填错误槽。没有 id 时
+                   抽屉体拉取失败（?open=<不存在的 id> 深链最常见）会被退回到表格下面的
+                   #admin-inline-error —— 那时它正被遮罩盖着，运营看到的是一扇空白的 480px 抽屉。 */-->
+            <div th:id="${res} + '-drawer-body'" class="drawer-body"></div>
+        </aside>
+        <div class="drawer-mask" hidden data-drawer-mask></div>
+    </th:block>
+</div>
+</body>
+</html>

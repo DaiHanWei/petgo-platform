@@ -138,12 +138,12 @@ class AdminShopProductServiceTest {
     @Test
     @DisplayName("🔴 但 Makanan 留空必须给出显著警告 —— FR-109 能否成立的唯一提醒点")
     void makananWithoutGuideWarns() {
-        String w = service.feedingGuideWarning(ProductCategory.MAKANAN, List.of());
-        assertThat(w).isNotNull().contains("唯一计算依据");
+        assertThat(service.needsFeedingGuideWarning(ProductCategory.MAKANAN, List.of())).isTrue();
+        assertThat(service.needsFeedingGuideWarning(ProductCategory.MAKANAN, null)).isTrue();
         // 非 Makanan 或已填 → 无警告
-        assertThat(service.feedingGuideWarning(ProductCategory.CAMILAN, List.of())).isNull();
-        assertThat(service.feedingGuideWarning(ProductCategory.MAKANAN,
-                List.of(new FeedingGuideEntry(1, 5, 60)))).isNull();
+        assertThat(service.needsFeedingGuideWarning(ProductCategory.CAMILAN, List.of())).isFalse();
+        assertThat(service.needsFeedingGuideWarning(ProductCategory.MAKANAN,
+                List.of(new FeedingGuideEntry(1, 5, 60)))).isFalse();
     }
 
     @Test

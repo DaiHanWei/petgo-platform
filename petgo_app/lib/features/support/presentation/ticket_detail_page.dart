@@ -8,6 +8,7 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../data/support_repository.dart';
 import '../domain/support_ticket.dart';
+import 'support_whatsapp_button.dart';
 import 'support_l10n.dart';
 import 'widgets/ticket_status_badge.dart';
 
@@ -94,6 +95,14 @@ class TicketDetailPage extends ConsumerWidget {
                 style: AppTypography.caption.copyWith(color: AppColors.momenBadgeText)),
           ),
         _csatSection(context, l10n, t),
+        // Story 3-3：**仅当工单关联的是电商订单时**才给 WhatsApp 入口。
+        // 关联问诊单与未关联的工单不显示 —— 问诊工单的客服路径不变。
+        // 🔴 不加 bottomNavigationBar：那会改变整页的滚动行为。
+        if (t.relatedShopOrderNo != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          SupportWhatsAppButton(
+              orderNo: t.relatedShopOrderNo!, screen: 'support_ticket_detail'),
+        ],
       ],
     );
   }

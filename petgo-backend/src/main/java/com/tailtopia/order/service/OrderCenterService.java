@@ -370,8 +370,12 @@ public class OrderCenterService {
         // 取首图/首个商品名的三表串查封装在 shop 模块（ShopOrderCardService），
         // 这里只多一个依赖 —— 275 行的共享聚合器每多注入一个仓储就多一次撞车机会。
         ShopOrderCardService.CardInfo card = shopCards.of(o.getId());
+        // 🔴 Story 4-3：读库列，不再算。旧算法的序号段是自增主键零填充，可枚举。
+        //    ⚠️ 只有电商这两处改（mapShop / shopDetail）。问诊 / AI / 充值三类本版不改 ——
+        //    本文件其余 7 处调用点、两个 admin service 里的 2 处、以及 OrderDisplayNo
+        //    本体，一个字符都不动。
         return new OrderSummaryView(OrderType.ECOMMERCE.name(), o.getPublicToken(),
-                OrderDisplayNo.of(OrderDisplayNo.ECOMMERCE, o.getId(), o.getCreatedAt()),
+                o.getDisplayNo(),
                 o.getStatus().name(), shopStatusColor(o.getStatus()).name(), o.getTotalAmount(),
                 o.getPayChannel() == null ? null : o.getPayChannel().name(), o.getCreatedAt(),
                 card.thumbnailUrl(), card.itemTitle(), card.itemCount());
@@ -380,8 +384,9 @@ public class OrderCenterService {
     private OrderDetailView shopDetail(ShopOrder o) {
         // 电商订单的完整详情（行、地址、倒计时）走 Story 3.8 的专用页面；
         // 这里只补齐订单中心统一契约需要的那几项，形状与既有三个 detail 一致。
+        // 🔴 Story 4-3：同 mapShop，读库列。列表与详情必须是同一个字符串。
         return new OrderDetailView(OrderType.ECOMMERCE.name(), o.getPublicToken(),
-                OrderDisplayNo.of(OrderDisplayNo.ECOMMERCE, o.getId(), o.getCreatedAt()),
+                o.getDisplayNo(),
                 o.getStatus().name(), shopStatusColor(o.getStatus()).name(), o.getTotalAmount(),
                 o.getPayChannel() == null ? null : o.getPayChannel().name(),
                 o.getCreatedAt(), null,

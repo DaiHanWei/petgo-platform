@@ -17,7 +17,7 @@ class _ReplyDeletedRepo implements DetailRepository {
   int postReplyCalls = 0;
 
   @override
-  Future<Comment> postReply(int parentId, String body) async {
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds = const []}) async {
     postReplyCalls++;
     throw DioException(
       requestOptions: RequestOptions(path: '/comments/$parentId/replies'),
@@ -35,7 +35,7 @@ class _ReplyDeletedRepo implements DetailRepository {
   }
 
   @override
-  Future<Comment> postComment(int postId, String body) => throw UnimplementedError();
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds = const []}) => throw UnimplementedError();
   @override
   Future<ContentDetail> getDetail(int id) => throw UnimplementedError();
   @override
@@ -48,6 +48,16 @@ class _ReplyDeletedRepo implements DetailRepository {
       const CommentPage(items: [], nextCursor: null, hasMore: false);
   @override
   Future<void> deleteComment(int commentId) async {}
+
+  /// V1.3.0 Story 2.4 新增的点赞通道；本类不验它，记下调用即可。
+  final List<int> likedComments = <int>[];
+  final List<int> unlikedComments = <int>[];
+
+  @override
+  Future<void> likeComment(int commentId) async => likedComments.add(commentId);
+
+  @override
+  Future<void> unlikeComment(int commentId) async => unlikedComments.add(commentId);
   @override
   Future<void> deleteContent(int postId) async {}
   @override
@@ -72,7 +82,7 @@ void main() {
     addTearDown(container.dispose);
     container.read(authControllerProvider.notifier).applyLogin(_user(1));
     // 进入回复态（回复评论 86）。
-    container.read(replyTargetProvider.notifier).set(const ReplyTarget(parentId: 86, toName: 'U2'));
+    container.read(replyTargetProvider(5).notifier).set(const ReplyTarget(parentId: 86, toName: 'U2'));
 
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,
@@ -86,6 +96,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'reply to ghost');
+    // V1.3.0 Story 2.3：底栏右侧两态互斥——有输入后发送键才出现，需要一帧让它挂上来。
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('detailCommentSend')));
     await tester.pumpAndSettle();
 
@@ -93,7 +105,7 @@ void main() {
     expect(repo.postReplyCalls, 1);
     expect(find.text(l10n.commentReplyTargetDeleted), findsOneWidget);
     expect(find.text(l10n.commentSendFailed), findsNothing); // 不再是通用失败提示
-    expect(container.read(replyTargetProvider), isNull); // 已退出回复态
+    expect(container.read(replyTargetProvider(5)), isNull); // 已退出回复态
     await tester.pump(const Duration(seconds: 3)); // 走完 toast 定时器
   });
 }

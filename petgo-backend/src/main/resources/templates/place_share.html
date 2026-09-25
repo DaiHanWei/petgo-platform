@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="id" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+    <!-- 分享页对外但不进搜索引擎索引（与名片 /p、里程碑 /m、单条内容 /c 同范式，强制 noindex）。 -->
+    <meta name="robots" content="noindex,nofollow"/>
+    <title th:text="${ogTitle}">TailTopia</title>
+
+    <!--/* 🔴 Open Graph：本页**有** og:image —— 这是对名片页 /p 与里程碑页 /m
+           「不放预览图」那条边界的**有意例外**（Story 1.10 · AC4 · AD-5）。
+
+           那两页的图是**宠物与主人的私人照片**，交给第三方平台抓取并长期缓存不合适。
+           场所照片不同：它拍的是一家店的门口、座位区、菜单 —— 不含个人与宠物隐私，
+           而这页的全部意义就是"发到 WhatsApp 群里让朋友一眼看到这地方长什么样"。
+           没有预览图，那条链接在群里就是一行蓝字。
+
+           ⚠️ **这不是漏做，不要"顺手统一"成不放图。** 要改回去先回 AD-5 改口径。
+
+           🔴 但是：`ogImage` 只在**有已过审的照片**时才有值（AC5，2026-09-15 拍板）。
+           社交平台会主动抓取并**缓存**预览图 —— 审核放行前就给图，等于任何人都能造个场所、
+           传张违规图、把链接甩进群；等运营下架时，预览卡已经躺在几百个聊天记录里，
+           而且不随下架消失。**H5 页面会变，预览卡不会，这是两个东西。**
+           判定在 PlaceSharePageController：取的是 **og_eligible** 的照片，
+           那比"对外可见"更严 —— 三方 RISKY / DEGRADED 的图照样在 App 里展示（先发后审），
+           但拿不到 og 资格。展示是一回事，交给社交平台永久缓存是另一回事。 */-->
+    <meta property="og:type" content="place"/>
+    <meta property="og:title" th:content="${ogTitle}"/>
+    <meta property="og:description" th:content="${ogDescription}"/>
+    <meta property="og:image" th:if="${hasOgImage}" th:content="${ogImage}"/>
+    <meta name="twitter:card" th:content="${hasOgImage} ? 'summary_large_image' : 'summary'"/>
+    <meta name="twitter:title" th:content="${ogTitle}"/>
+    <meta name="twitter:description" th:content="${ogDescription}"/>
+    <meta name="twitter:image" th:if="${hasOgImage}" th:content="${ogImage}"/>
+
+    <style>
+        :root { --ink: #2E2A45; --ink2: #544864; --muted: #9690A6; --violet: #845EC9;
+                --tint: #F5F0FF; --line: #E7E1F0; }
+        * { box-sizing: border-box; }
+        html, body { margin: 0; min-height: 100%; }
+        body {
+            font-family: -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+            background: #fff; color: var(--ink); -webkit-font-smoothing: antialiased;
+        }
+        .page { width: 100%; max-width: 480px; margin: 0 auto; background: #fff; min-height: 100vh; min-height: 100dvh; }
+
+        /*  UI A9: full-bleed photo hero + dark fade; name / address sit on the photo. */
+        /*  Hero is capped so the store buttons + brand footer stay above the fold. */
+        .hero { position: relative; height: 36vh; min-height: 260px; max-height: 340px; overflow: hidden;
+                background: linear-gradient(160deg, #B79AE6 0%, #845EC9 55%, #4B3380 100%); }
+        .hero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+        .heroph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+                  font-size: 72px; opacity: .55; padding-bottom: 80px; }
+        .shade { position: absolute; left: 0; right: 0; bottom: 0; height: 62%;
+                 background: linear-gradient(180deg, transparent 0%, rgba(20,16,32,.85) 100%); }
+        .chips { position: absolute; left: 20px; right: 20px; top: calc(16px + env(safe-area-inset-top, 0px));
+                 display: flex; flex-wrap: wrap; gap: 8px; }
+        .chip { font-size: 12.5px; font-weight: 600; color: #fff; padding: 7px 13px; border-radius: 999px;
+                background: rgba(255,255,255,.22); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+                border: 1px solid rgba(255,255,255,.28); text-shadow: 0 1px 2px rgba(0,0,0,.18); }
+        .herotext { position: absolute; left: 20px; right: 20px; bottom: 44px; color: #fff; }
+        .name { font-size: 28px; font-weight: 800; line-height: 1.2; letter-spacing: -.01em;
+                word-break: break-word; text-shadow: 0 2px 10px rgba(0,0,0,.25); }
+        .addr { display: flex; gap: 6px; align-items: flex-start; margin-top: 8px; font-size: 13.5px;
+                color: rgba(255,255,255,.88); }
+        .addrtext { flex: 1; word-break: break-word; }
+        .copy { font-size: 12px; font-weight: 700; color: #fff; background: rgba(255,255,255,.18);
+                border: 1px solid rgba(255,255,255,.3); border-radius: 999px; padding: 3px 10px;
+                cursor: pointer; flex: none; }
+
+        /*  White sheet overlapping the hero (negative margin + top radius 24). */
+        .sheet { position: relative; margin-top: -24px; background: #fff; border-radius: 24px 24px 0 0;
+                 padding: 22px 18px calc(28px + env(safe-area-inset-bottom, 0px)); }
+        .invite { display: flex; align-items: center; gap: 10px; background: var(--tint); border-radius: 14px;
+                  padding: 14px; font-size: 14px; font-weight: 700; color: var(--ink); }
+        .invite .paw { font-size: 18px; flex: none; }
+        .desc { font-size: 14.5px; line-height: 1.6; margin-top: 16px; white-space: pre-wrap;
+                word-break: break-word; color: var(--ink2); }
+        .proof { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 16px; font-size: 13px; color: var(--ink2); }
+        .proof span { white-space: nowrap; }
+        .thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 16px; }
+        .thumb { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: #EFE9F8; }
+        .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .thumb .more { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+                       background: rgba(20,16,32,.45); color: #fff; font-size: 17px; font-weight: 800; }
+        .btn { display: block; text-align: center; text-decoration: none; margin-top: 22px;
+               background: var(--violet); color: #fff; font-size: 15.5px; font-weight: 700;
+               padding: 16px 18px; border-radius: 16px;
+               box-shadow: 0 8px 22px rgba(132,94,201,.30); }
+        .stores { display: flex; justify-content: center; gap: 10px; margin-top: 12px; }
+        .store { display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+                 font-size: 13px; font-weight: 600; color: var(--ink2); background: #fff;
+                 border: 1px solid var(--line); border-radius: 12px; padding: 8px 14px; }
+        .tail { font-size: 11.5px; color: #B9B3C7; text-align: center; margin-top: 22px; }
+    </style>
+</head>
+<body>
+<!--/* 🛡 页面上**没有**通往标记人主页 / 评论区 / 其它场所的任何链接：
+       这是一条分享出去的地点信息，不是一个可浏览的入口。唯一的出口是 CTA 与两个商店按钮。
+       ⚠️ 本页会原样发给访客：中文说明一律写成 Thymeleaf 解析器级注释，CSS 注释只写英文。 */-->
+<div class="page">
+    <!--/* UI 稿 A9：全屏照片 hero。无照片 → 紫色渐变 + 🐾 兜底；图加载失败 → onerror 移除 img，
+         露出同一个渐变底，不出现破图。 */-->
+    <div class="hero">
+        <div class="heroph" th:unless="${hasImages}">🐾</div>
+        <img th:if="${hasImages}" th:src="${images[0]}" alt="" onerror="this.remove()"/>
+        <div class="shade"></div>
+        <div class="chips">
+            <span class="chip" th:if="${typeLabel}" th:text="${typeEmoji + ' ' + typeLabel}">☕ Kafe</span>
+            <span class="chip" th:if="${hasTags}" th:each="t : ${tagLabels}" th:text="${t}">—</span>
+        </div>
+        <div class="herotext">
+            <div class="name" th:text="${placeName}">—</div>
+            <!--/* 文字地址可复制（AC3）。⚠️ 平台不做地理编码 —— 它是一行纯展示的字符串（AD-1 Rule 5）。 */-->
+            <div class="addr">
+                <span>📍</span>
+                <span class="addrtext" id="addrText" th:text="${addressText}">—</span>
+                <button class="copy" id="copyAddr" type="button">Salin</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="sheet">
+        <div class="invite"><span class="paw">🐾</span><span>Temanmu mengajak kamu nongkrong di sini!</span></div>
+
+        <div class="desc" th:if="${hasDescription}" th:text="${description}">—</div>
+
+        <!--/* 社交佐证（A9）：数字与 App 详情页同源，评论只数对外可见的。 */-->
+        <div class="proof">
+            <span>👍 <b th:text="${recommendCount}">0</b> rekomen</span>
+            <span>📷 <b th:text="${photoCount}">0</b> foto</span>
+            <span>💬 <b th:text="${commentCount}">0</b> komentar</span>
+        </div>
+
+        <!--/* 缩略图：前 4 张；照片多于 4 张时末格叠「+N」（morePhotos，控制器算好）。 */-->
+        <div class="thumbs" th:if="${hasThumbs}">
+            <div class="thumb" th:each="img, s : ${thumbs}">
+                <img th:src="${img}" alt="" onerror="this.remove()"/>
+                <div class="more" th:if="${s.last and morePhotos > 0}" th:text="${'+' + morePhotos}">+3</div>
+            </div>
+        </div>
+
+        <a class="btn" id="ctaPrimary" th:href="${downloadUrl}"
+           th:attr="data-ios=${iosUrl},data-android=${androidUrl},data-deeplink=${deeplink}"
+           th:text="${downloadCta}">Buka di TailTopia</a>
+        <!--/* 双 CTA（AC3）：商店按钮直接落唤起脚本里那两个回落地址（iosUrl / androidUrl），不另配 URL。 */-->
+        <div class="stores">
+            <a class="store" th:href="${iosUrl}">🍎 App Store</a>
+            <a class="store" th:href="${androidUrl}">▶ Google Play</a>
+        </div>
+
+        <div class="tail">🐾 TailTopia · Temukan tempat ramah hewan</div>
+    </div>
+</div>
+
+<script th:inline="none">
+  // 地址一键复制（AC3）。降级：不支持 clipboard API 就选中文本，让用户自己长按复制。
+  (function () {
+    var btn = document.getElementById('copyAddr');
+    var txt = document.getElementById('addrText');
+    if (!btn || !txt) { return; }
+    btn.addEventListener('click', function () {
+      var value = txt.textContent || '';
+      function done() { btn.textContent = 'Tersalin'; setTimeout(function () { btn.textContent = 'Salin'; }, 1600); }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(value).then(done, function () { select(); });
+      } else { select(); }
+      function select() {
+        var r = document.createRange();
+        r.selectNodeContents(txt);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+      }
+    });
+  })();
+
+  // 唤起链（AC6）—— **逐条照抄 card.html 的那套**，不要另发明一个计时方案：
+  //   Android: (1) 深链 -> (2) market:// -> (3) Play 网页
+  //   iOS:     (1) 深链 -> (2) App Store
+  //   桌面:     直接下载页
+  // 判"唤起成功"靠 pagehide：页面在守卫计时器触发前被隐藏 = App 接管了。
+  // ⚠️ 安卓侧还要 AndroidManifest 里有 `tailtopia://place` 的 intent-filter，
+  //    少那一条 **唤起必失败，而所有测试照样绿**（深链是系统行为）。
+  //    仓库里 `test/deeplink_manifest_test.dart` 就是为这件事写的。
+  (function () {
+    var ua = navigator.userAgent || '';
+    var isAndroid = /Android/i.test(ua);
+    var isIOS = /iPhone|iPad|iPod/i.test(ua);
+
+    function toMarket(webUrl) {
+      return webUrl.replace('https://play.google.com/store/apps/details', 'market://details');
+    }
+    function go(url) { window.location.href = url; }
+    function guard(fn, ms) {
+      var t = setTimeout(fn, ms);
+      window.addEventListener('pagehide', function () { clearTimeout(t); }, { once: true });
+      return t;
+    }
+
+    var el = document.getElementById('ctaPrimary');
+    if (!el) { return; }
+    el.addEventListener('click', function (e) {
+      e.preventDefault();
+      var deep = el.dataset.deeplink;
+      var androidWeb = el.dataset.android;
+      var ios = el.dataset.ios;
+
+      if (isAndroid || isIOS) {
+        if (isAndroid) {
+          guard(function () {
+            guard(function () { go(androidWeb); }, 700);
+            go(toMarket(androidWeb));
+          }, 900);
+        } else {
+          guard(function () { go(ios); }, 900);
+        }
+        go(deep);
+      } else {
+        go(el.href);
+      }
+    });
+  })();
+</script>
+</body>
+</html>

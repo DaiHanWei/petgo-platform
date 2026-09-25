@@ -95,18 +95,6 @@ public class UserTagQueryService {
     }
 
     /**
-     * 某用户当前生效中的分配**数量**（后台"第 4 个"提示用）。
-     *
-     * <p>⚠️ 与 {@link #findVisibleTags} 是两个不同的问题：这问「有几个在生效」，
-     * 那问「会展示哪几个」。后台需要"会展示哪 3 个"时**必须调 findVisibleTags**，
-     * 不要用本方法的数字自己再排一遍序。
-     */
-    @Transactional(readOnly = true)
-    public long countActive(long userId, Instant now) {
-        return assignments.countActiveByUser(userId, now);
-    }
-
-    /**
      * 一批用户各自当前生效中的标签，**每人最多 {@link #MAX_VISIBLE} 个**（按分配时间倒序取最近的）。
      *
      * <p>空集合直接短路，不发这次查询 —— Feed 每页都要调一次，纯文字页没必要白跑。

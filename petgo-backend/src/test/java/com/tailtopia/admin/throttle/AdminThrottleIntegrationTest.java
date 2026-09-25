@@ -218,7 +218,10 @@ class AdminThrottleIntegrationTest extends ApiIntegrationTest {
      */
     @Test
     void contentPageCarriesBothMandatoryNotices() throws Exception {
-        String html = mvc.perform(get("/admin/content").with(authentication(superAdmin())))
+        // Story 7.1 起限流操作区在 B1 内容抽屉里（drawer-content.html），列表页不再有
+        ContentPost p = publish(newUser().getId());
+        String html = mvc.perform(get("/admin/content/" + p.getId() + "/drawer").header("HX-Request", "true")
+                        .with(authentication(superAdmin())))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
@@ -238,8 +241,9 @@ class AdminThrottleIntegrationTest extends ApiIntegrationTest {
         throttleService.throttlePost(p.getId(), ThrottleDuration.DAYS_7, Instant.now(), 1L, null,
                 "试");
 
-        String html = mvc.perform(get("/admin/content").with(authentication(superAdmin()))
-                        .param("authorId", String.valueOf(author.getId())))
+        // Story 7.1 起「解除」入口在 B1 内容抽屉里
+        String html = mvc.perform(get("/admin/content/" + p.getId() + "/drawer").header("HX-Request", "true")
+                        .with(authentication(superAdmin())))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 

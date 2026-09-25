@@ -248,11 +248,10 @@ class _PetProfileCreatePageState extends ConsumerState<PetProfileCreatePage> {
         backgroundColor: AppColors.base,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.ink),
+          icon: const Icon(Icons.chevron_left_rounded, size: 28, color: AppColors.ink),
           onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
         ),
-        title: Text(l10n.petProfileCreateTitle,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        title: Text(l10n.petProfileCreateTitle),
       ),
       body: SafeArea(
         child: ListView(

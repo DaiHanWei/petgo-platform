@@ -7,6 +7,7 @@ import com.tailtopia.content.event.ContentLikedEvent;
 import com.tailtopia.content.event.ContentPublishedEvent;
 import com.tailtopia.consult.event.ConsultClosedEvent;
 import com.tailtopia.profile.domain.HealthRecordType;
+import com.tailtopia.profile.domain.MilestoneAutoEvent;
 import com.tailtopia.profile.domain.MilestoneCompletionSource;
 import com.tailtopia.profile.event.CardSharedEvent;
 import com.tailtopia.profile.event.HealthArchivedEvent;
@@ -22,17 +23,21 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * 幂等标记完成（不重复、不可撤销）——**禁 MQ/Quartz/缓存/新中间件**。所有完成经
  * {@link MilestoneCompletionService}（唯一约束保幂等）。
  *
- * <p>覆盖系统自动类节点：
+ * <p>覆盖系统自动类节点（一律以 {@link MilestoneAutoEvent} 表达「发生了什么」，
+ * 由 {@link com.tailtopia.profile.domain.MilestoneAutoCompleteMap} 按物种查出完整 code）：
  * <ul>
- *   <li>{@link ProfileCreatedEvent} → S1 档案创建完成。</li>
- *   <li>{@link ContentPublishedEvent} → S2 首张成长日历照片 + 计数 M10/L5；S5 首条**对外可见**帖子。</li>
- *   <li>{@link CardSharedEvent} → S3 首次分享名片。</li>
- *   <li>{@link HealthArchivedEvent} → S4 首次保存问诊结论。</li>
- *   <li>{@link ContentCommentedEvent} → S14 首次被评论（排除自评）。</li>
- *   <li>{@link ContentLikedEvent} → S15 首次收到点赞（自赞 content 侧已不发事件）。</li>
+ *   <li>{@link ProfileCreatedEvent} → 档案创建完成。</li>
+ *   <li>{@link ContentPublishedEvent} → 首张成长日历照片 + 计数满 10 / 满 30；首条**对外可见**帖子。</li>
+ *   <li>{@link CardSharedEvent} → 首次分享名片。</li>
+ *   <li>{@link HealthArchivedEvent} → 首次保存问诊结论。</li>
+ *   <li>{@link ContentCommentedEvent} → 首次被评论（排除自评）。</li>
+ *   <li>{@link ContentLikedEvent} → 首次收到点赞（自赞 content 侧已不发事件）。</li>
  * </ul>
  * 组合依赖 C-L4/D-L4（健康全完成）与计数阈值由 {@link MilestoneCompletionService} 内部处理；
- * 陪伴满 30 天 M8 走 {@link MilestoneScheduledCompleter}（@Scheduled）。
+ * 陪伴满 30 天走 {@link MilestoneScheduledCompleter}（@Scheduled）。
+ *
+ * <p>⚠️ <b>本类不得再出现里程碑后缀字符串</b>（V1.3.0 Story 1.1 · AD-A4）：拼后缀寻址默认三张清单
+ * 同号位含义相同，通用清单只有 16 项、猫狗各 31 项，曾一次造出五处线上错误。
  */
 @Component
 public class MilestoneAutoCompleteListener {
@@ -46,11 +51,12 @@ public class MilestoneAutoCompleteListener {
     @Async
     @TransactionalEventListener
     public void onProfileCreated(ProfileCreatedEvent e) {
-        completion.completeForOwner(e.ownerId(), "S1", MilestoneCompletionSource.SYSTEM_AUTO);
+        completion.completeForOwner(e.ownerId(), MilestoneAutoEvent.PROFILE_CREATED,
+                MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     /**
-     * 内容发布 → S2 / 计数类 / S5。
+     * 内容发布 → 首张成长日历照片 / 计数类 / 首条平台帖子。
      *
      * <p><b>S5「首条平台帖子」的判定口径（2026-08-05 修）</b>：按**是否对外可见**判，不按内容类型判。
      * 原实现只认 {@code DAILY}，但 V1.1.2 把 Diary（{@code GROWTH_MOMENT}）设成了有宠用户的**默认**
@@ -65,14 +71,15 @@ public class MilestoneAutoCompleteListener {
     @TransactionalEventListener
     public void onContentPublished(ContentPublishedEvent e) {
         if (e.type() == ContentType.GROWTH_MOMENT) {
-            // 计数类：首张 S2（≥1）/ 满 10 M10 / 满 30 L5（含 S2，统一走计数判定）。
+            // 计数类：首张（≥1）/ 满 10 / 满 30，统一走计数判定（按物种查表，通用宠物满 10 是 G-M4）。
             completion.onGrowthMomentCount(e.authorId(), e.authorGrowthMomentCount());
             // 「系统推送 + 当天发布」L 级节点回填：第一个生日 L1 / 满 100 天 L2 / 满 365 天 L3（8.6）。
             completion.completeDateGatedLNodesOnPublish(e.authorId());
         }
-        // S5：DAILY 恒算；GROWTH_MOMENT / KNOWLEDGE 需 PUBLIC（对外可见）才算。幂等，与上面互不影响。
+        // 首条平台帖子：DAILY 恒算；GROWTH_MOMENT / KNOWLEDGE 需 PUBLIC（对外可见）才算。幂等，与上面互不影响。
         if (isPlatformPost(e)) {
-            completion.completeForOwner(e.authorId(), "S5", MilestoneCompletionSource.SYSTEM_AUTO);
+            completion.completeForOwner(e.authorId(), MilestoneAutoEvent.PLATFORM_POST,
+                    MilestoneCompletionSource.SYSTEM_AUTO);
         }
     }
 
@@ -84,62 +91,76 @@ public class MilestoneAutoCompleteListener {
     @Async
     @TransactionalEventListener
     public void onCardShared(CardSharedEvent e) {
-        completion.completeForOwner(e.ownerId(), "S3", MilestoneCompletionSource.SYSTEM_AUTO);
+        completion.completeForOwner(e.ownerId(), MilestoneAutoEvent.CARD_SHARED,
+                MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     @Async
     @TransactionalEventListener
     public void onHealthArchived(HealthArchivedEvent e) {
-        completion.completeForOwner(e.ownerId(), "S4", MilestoneCompletionSource.SYSTEM_AUTO);
+        completion.completeForOwner(e.ownerId(), MilestoneAutoEvent.CONSULT_ARCHIVED,
+                MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     /**
      * 里程碑第四触发路径（Story 7.2，FR-45C）：结构化健康记录创建 → 自动完成对应里程碑。
-     * VACCINE→M3（疫苗）/ DEWORM→M4（驱虫）；其它类型无对应节点，忽略。幂等（唯一约束），与打卡路径互不冲突。
+     * 幂等（唯一约束），与打卡路径互不冲突。
+     *
+     * <p>🔴 <b>V1.3.0 Story 1.1 修正</b>：这条路径原先拼后缀 {@code M3}/{@code M4}，对通用宠物
+     * （OTHER）直接指错了节点 —— 录疫苗点亮 <b>G-M3「陪伴满 30 天」</b>、录驱虫点亮
+     * <b>G-M4「记录满 10 条」</b>，两处都是用户看得见的错点亮。现改为按物种查表：通用宠物
+     * 录疫苗 → <b>G-M2</b>「第一次健康检查 / 疫苗」（决策 A-1），驱虫 / 绝育在通用清单
+     * <b>没有对应节点</b>，不点亮任何条目。
      */
     @Async
     @TransactionalEventListener
     public void onHealthRecordCreated(HealthRecordCreatedEvent e) {
-        String suffix = suffixFor(e.type());
-        if (suffix != null) {
-            completion.completeForOwner(e.ownerId(), suffix, MilestoneCompletionSource.SYSTEM_AUTO);
+        MilestoneAutoEvent event = eventFor(e.type());
+        if (event != null) {
+            completion.completeForOwner(e.ownerId(), event, MilestoneCompletionSource.SYSTEM_AUTO);
         }
         // Lulus Pemula 新手任务⑥（录入健康记录，任一 type）：可能是最后一块 → 尝试聚合解锁（7.3）。
         completion.maybeUnlockLulusPemulaForOwner(e.ownerId());
     }
 
     /**
-     * 健康记录类型 → 里程碑后缀（FR-86 映射表，Story 5.1 补全 NEUTER）。
+     * 健康记录类型 → 自动事件（FR-86 映射表，Story 5.1 补全 NEUTER）。
      *
      * <p>⚠️ 月经 / 自定义**刻意不映射任何里程碑**（PRD 明确：无对应节点），别顺手补上去。
-     * M5「第一次看兽医」不在此表 —— 它由**兽医咨询结束**触发（见 {@link #onConsultClosed}），
+     * 「第一次看兽医」不在此表 —— 它由**兽医咨询结束**触发（见 {@link #onConsultClosed}），
      * 不是录健康记录触发。
+     *
+     * <p>本表只回答「发生了什么」；「哪个物种点亮哪一条」在
+     * {@link com.tailtopia.profile.domain.MilestoneAutoCompleteMap}，**不要把 code 搬回这里**。
      */
-    private static String suffixFor(HealthRecordType type) {
+    private static MilestoneAutoEvent eventFor(HealthRecordType type) {
         return switch (type) {
-            case VACCINE -> "M3";
-            case DEWORM -> "M4";
-            case NEUTER -> "M9"; // Story 5.1 新增（2026-07-29 产品确认）
+            case VACCINE -> MilestoneAutoEvent.HEALTH_RECORD_VACCINE;
+            case DEWORM -> MilestoneAutoEvent.HEALTH_RECORD_DEWORM;
+            case NEUTER -> MilestoneAutoEvent.HEALTH_RECORD_NEUTER; // Story 5.1 新增（2026-07-29 产品确认）
             case MENSTRUATION, CUSTOM -> null;
         };
     }
 
     /**
-     * M5「第一次看兽医」：**真人兽医咨询结束**即自动完成（Story 5.1 · AC2）。
+     * 「第一次看兽医」：**真人兽医咨询结束**即自动完成（Story 5.1 · AC2）。猫狗 = C/D-M5；
+     * 通用清单的对应节点是 G-M1，但它当前仍是打卡类，接入属 Story 1.2 —— 本 story 只改寻址、
+     * 不改触发源，故通用宠物此路径维持不点亮（映射表已把这一点显式写死，不是漏写）。
      *
      * <p>⚠️ <b>不需要、也不要加「排除 AI 问诊」的条件</b>：{@code ConsultClosedEvent} 只由
      * consult 模块的**真人兽医会话**发布，AI 分诊走 triage 模块、不发这个事件 —— 模块隔离已经
-     * 天然满足「AI 问诊不解锁 M5」（OQ-17）。加一层 AI 判断只是冗余分支，反而让人以为可能漏。
+     * 天然满足「AI 问诊不解锁该节点」（OQ-17）。加一层 AI 判断只是冗余分支，反而让人以为可能漏。
      *
      * <p>与 S4「第一次保存兽医问诊结论」**分属两个独立订阅，不合并**：S4 订 {@code HealthArchivedEvent}
-     * （用户可跳过存档），M5 订本事件（只要看过兽医就算）。合并会让「跳过存档」把 M5 一起吃掉。
+     * （用户可跳过存档），本节点订本事件（只要看过兽医就算）。合并会让「跳过存档」把它一起吃掉。
      *
      * <p>幂等：{@code completeForOwner} 依赖 {@code milestone_completions} 的唯一约束，重复关闭安全。
      */
     @Async
     @TransactionalEventListener
     public void onConsultClosed(ConsultClosedEvent e) {
-        completion.completeForOwner(e.userId(), "M5", MilestoneCompletionSource.SYSTEM_AUTO);
+        completion.completeForOwner(e.userId(), MilestoneAutoEvent.CONSULT_CLOSED,
+                MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     @Async
@@ -148,13 +169,15 @@ public class MilestoneAutoCompleteListener {
         if (e.commenterId() == e.contentAuthorId()) {
             return; // 自评不计「第一次被评论」。
         }
-        completion.completeForOwner(e.contentAuthorId(), "S14", MilestoneCompletionSource.SYSTEM_AUTO);
+        completion.completeForOwner(e.contentAuthorId(), MilestoneAutoEvent.FIRST_COMMENT,
+                MilestoneCompletionSource.SYSTEM_AUTO);
     }
 
     @Async
     @TransactionalEventListener
     public void onContentLiked(ContentLikedEvent e) {
         // 自赞 content 侧已不发事件（无需再排除）。
-        completion.completeForOwner(e.authorId(), "S15", MilestoneCompletionSource.SYSTEM_AUTO);
+        completion.completeForOwner(e.authorId(), MilestoneAutoEvent.FIRST_LIKE,
+                MilestoneCompletionSource.SYSTEM_AUTO);
     }
 }

@@ -1,0 +1,576 @@
+import 'dart:io';
+
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/shared/media/image_lightbox.dart';
+import 'package:tailtopia/shared/media/lightbox_gestures.dart';
+
+/// V1.3.0 批次 A · Story 3.2（L0）：灯箱四个手势（FR-115 · AD-A15.2/.3/.4 · AD-A22）。
+///
+/// 「顺不顺手」是这条 story 的全部价值，而那件事 L0 看不见 —— **主要验收在真机**。
+/// 这里只钉住三件 L0 能钉死的：
+/// 1. **优先级顺序**（AC5 明文要求「有测试或注释明确钉住这一顺序」）；
+/// 2. 下滑关闭的量化口径（阈值 / 回弹 / 只认下拖）；
+/// 3. 单击与双击的仲裁 —— 它是 AC6 那条回归保护的实现基础；
+/// 4. 没引任何新包（AC7）。
+
+/// 灯箱里原图没解码完时叠着一个常转的 spinner（L5 加载态），而测试环境里图片解码
+/// 可能迟迟不完成 —— `pumpAndSettle` 会因此永远等不到安静而超时。
+/// 改为推进一段足以覆盖 Hero 飞行（260ms）/ 回弹（180ms）/ 淡入（220ms）/
+/// 单击判定窗（220ms）的固定时长；断言本身不变。
+extension _LightboxSettle on WidgetTester {
+  Future<void> settleLightbox() async {
+    for (var i = 0; i < 60; i++) {
+      await pump(const Duration(milliseconds: 16));
+    }
+  }
+}
+
+void main() {
+  group('AC5 🔴 手势优先级：已放大→平移 > 到边缘续拖→翻页 > 未放大下拖→关闭', () {
+    /// 真值表把三条规则的**全部输入组合**列完。顺序一旦被调换，
+    /// 下面必定有一行变红 —— 这就是 AC5 要的「钉住」。
+    ///
+    /// | zoomed | horizontal | atEdge | 期望 |
+    /// 顺序的理由见 `resolveLightboxGesture` 的文档。
+    const cases = <({bool zoomed, bool horizontal, bool atEdge, LightboxGesture want})>[
+      // —— 第 1 条：已放大 → 图内平移。压住第 3 条（AC2：放大后下拖不是关闭）。
+      (zoomed: true, horizontal: false, atEdge: false, want: LightboxGesture.panInsideImage),
+      (zoomed: true, horizontal: false, atEdge: true, want: LightboxGesture.panInsideImage),
+      (zoomed: true, horizontal: true, atEdge: false, want: LightboxGesture.panInsideImage),
+      // —— 第 2 条：已放大 + 横向 + 已贴边 → 翻页。第 1 条唯一的出口（AC4）。
+      (zoomed: true, horizontal: true, atEdge: true, want: LightboxGesture.changePage),
+      // —— 第 3 条：未放大才轮得到；横滑翻页、纵拖关闭（AC1）。
+      (zoomed: false, horizontal: true, atEdge: false, want: LightboxGesture.changePage),
+      (zoomed: false, horizontal: true, atEdge: true, want: LightboxGesture.changePage),
+      (zoomed: false, horizontal: false, atEdge: false, want: LightboxGesture.dismiss),
+      (zoomed: false, horizontal: false, atEdge: true, want: LightboxGesture.dismiss),
+    ];
+
+    for (final c in cases) {
+      test('zoomed=${c.zoomed} horizontal=${c.horizontal} atEdge=${c.atEdge} → ${c.want.name}', () {
+        expect(
+          resolveLightboxGesture(
+            zoomed: c.zoomed,
+            horizontal: c.horizontal,
+            atEdgeInDragDirection: c.atEdge,
+          ),
+          c.want,
+        );
+      });
+    }
+
+    /// 🔴 三条「常见错法」的反向断言。它们各自对应 story Dev Notes 里点名的一种写法：
+    test('放大后下拖绝不关闭（错法①：下滑关闭挂最外层）', () {
+      expect(
+        resolveLightboxGesture(zoomed: true, horizontal: false, atEdgeInDragDirection: true),
+        isNot(LightboxGesture.dismiss),
+      );
+    });
+
+    test('放大态横滑先平移，没贴边不翻页（错法③：翻页与平移各自判定）', () {
+      expect(
+        resolveLightboxGesture(zoomed: true, horizontal: true, atEdgeInDragDirection: false),
+        LightboxGesture.panInsideImage,
+      );
+    });
+
+    test('未放大时贴边与否都不影响判定（边缘只是放大态的概念）', () {
+      for (final horizontal in [true, false]) {
+        expect(
+          resolveLightboxGesture(zoomed: false, horizontal: horizontal, atEdgeInDragDirection: true),
+          resolveLightboxGesture(
+              zoomed: false, horizontal: horizontal, atEdgeInDragDirection: false),
+        );
+      }
+    });
+  });
+
+  group('AC1 下滑关闭的量化口径', () {
+    const double h = 800; // 视口高
+
+    test('超过阈值 → 关闭', () {
+      expect(
+        LightboxDismissMetrics.shouldDismiss(dy: h * 0.2, velocity: 0, viewportHeight: h),
+        isTrue,
+      );
+    });
+
+    test('未过阈值 → 回弹（不关）', () {
+      expect(
+        LightboxDismissMetrics.shouldDismiss(dy: h * 0.05, velocity: 0, viewportHeight: h),
+        isFalse,
+      );
+    });
+
+    /// 没到位移阈值但甩得够快也要关 —— 否则用户「啪」地一甩反而关不掉，只能慢慢拖。
+    test('快速下甩 → 关闭', () {
+      expect(
+        LightboxDismissMetrics.shouldDismiss(dy: 20, velocity: 1800, viewportHeight: h),
+        isTrue,
+      );
+    });
+
+    /// 🔴 只认**下**拖。上拖再远、再快都不关 —— 那是另一个方向的手势，
+    /// 按绝对值判定会让「往上甩一下」也把图关掉。
+    test('上拖一律不关闭，甩得再快也不关', () {
+      expect(LightboxDismissMetrics.shouldDismiss(dy: -300, velocity: 0, viewportHeight: h), isFalse);
+      expect(
+          LightboxDismissMetrics.shouldDismiss(dy: -10, velocity: -3000, viewportHeight: h), isFalse);
+    });
+
+    test('背景渐透明：0 → 阈值处封顶，且不会全透', () {
+      expect(LightboxDismissMetrics.progress(dy: 0, viewportHeight: h), 0);
+      expect(LightboxDismissMetrics.progress(dy: h, viewportHeight: h), 1, reason: '超过阈值封顶在 1');
+      expect(LightboxDismissMetrics.progress(dy: -50, viewportHeight: h), 0, reason: '上拖不算进度');
+      final mid = LightboxDismissMetrics.progress(
+          dy: h * LightboxDismissMetrics.travelRatio / 2, viewportHeight: h);
+      expect(mid, closeTo(0.5, 0.01));
+      // 全透的话正在拖的图会飘在详情页上，很怪。
+      expect(LightboxDismissMetrics.maxFade, lessThan(1));
+    });
+  });
+
+  group('AC6 单击关闭不被双击拖慢', () {
+    /// 🔴 窗口必须**短于系统的双击判定**（300ms）。等满 300ms 才关，
+    /// 就是 story 里点名的错法②「单击关闭延迟 300ms，手感变钝」。
+    test('仲裁窗口短于 kDoubleTapTimeout', () {
+      expect(kLightboxSingleTapDelay, lessThan(kDoubleTapTimeout));
+      // 也不能短到把稍慢一点的双击误判成关闭。
+      expect(kLightboxSingleTapDelay.inMilliseconds, greaterThanOrEqualTo(180));
+    });
+
+    Future<void> openLightbox(WidgetTester tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              key: const ValueKey('openIt'),
+              onPressed: () => ImageLightbox.open(
+                context,
+                urls: const [
+                  'asset:assets/demo_diary/demo_diary_night.jpg',
+                  'asset:assets/demo_diary/demo_diary_balcony.jpg',
+                ],
+                initialIndex: 0,
+                heroTagPrefix: 'content_detail_42',
+                source: 'content_detail',
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.byKey(const ValueKey('openIt')));
+      await tester.settleLightbox();
+      expect(find.byType(ImageLightbox), findsOneWidget);
+    }
+
+    testWidgets('单击 → 过了窗口就关闭', (tester) async {
+      await openLightbox(tester);
+
+      await tester.tap(find.byKey(const ValueKey('lightboxPager')));
+      await tester.pump(kLightboxSingleTapDelay + const Duration(milliseconds: 40));
+      await tester.settleLightbox();
+
+      expect(find.byType(ImageLightbox), findsNothing);
+    });
+
+    /// 🔴 双击**不能**顺带把页面关掉 —— 第一下点击的关闭必须被第二下撤销。
+    testWidgets('快速双击 → 缩放，且不关闭', (tester) async {
+      await openLightbox(tester);
+
+      final pager = find.byKey(const ValueKey('lightboxPager'));
+      await tester.tap(pager);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tap(pager);
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.settleLightbox();
+
+      expect(find.byType(ImageLightbox), findsOneWidget, reason: '双击的第一下不该把灯箱关掉');
+      // 放大后 InteractiveViewer 的矩阵不再是单位阵。
+      final viewer = tester.widget<InteractiveViewer>(find.byType(InteractiveViewer).first);
+      expect(viewer.transformationController!.value, isNot(Matrix4.identity()));
+    });
+
+    /// 再双击一次回到适应屏幕（AC3 的「两档切换」）。
+    testWidgets('再双击一次 → 回到适应屏幕', (tester) async {
+      await openLightbox(tester);
+      final pager = find.byKey(const ValueKey('lightboxPager'));
+
+      Future<void> doubleTap() async {
+        await tester.tap(pager);
+        await tester.pump(const Duration(milliseconds: 60));
+        await tester.tap(pager);
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+
+      await doubleTap();
+      await doubleTap();
+      await tester.settleLightbox();
+
+      final viewer = tester.widget<InteractiveViewer>(find.byType(InteractiveViewer).first);
+      expect(viewer.transformationController!.value, Matrix4.identity());
+      expect(find.byType(ImageLightbox), findsOneWidget);
+    });
+
+    /// 未放大时 InteractiveViewer 的平移**必须关掉**，否则它会和下滑关闭抢同一个手势
+    /// （错法①的另一半）。
+    testWidgets('未放大时 panEnabled=false，放大后才打开', (tester) async {
+      await openLightbox(tester);
+      InteractiveViewer viewer() =>
+          tester.widget<InteractiveViewer>(find.byType(InteractiveViewer).first);
+
+      expect(viewer().panEnabled, isFalse);
+      // L3：关闭钮未放大时全不透明、放大后退到 .5。
+      double closeOpacity() => tester
+          .widget<Opacity>(find
+              .ancestor(of: find.byKey(const ValueKey('lightboxClose')), matching: find.byType(Opacity))
+              .first)
+          .opacity;
+      expect(closeOpacity(), 1);
+
+      final pager = find.byKey(const ValueKey('lightboxPager'));
+      await tester.tap(pager);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tap(pager);
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.settleLightbox();
+
+      expect(viewer().panEnabled, isTrue);
+      expect(closeOpacity(), 0.5);
+    });
+
+    /// AC4 的接线：放大且没贴边时 PageView 不可滑；未放大时照常可翻页。
+    testWidgets('放大且未贴边 → 翻页被禁；未放大 → 可翻页', (tester) async {
+      await openLightbox(tester);
+      PageView pager() => tester.widget<PageView>(find.byKey(const ValueKey('lightboxPager')));
+
+      expect(pager().physics, isA<PageScrollPhysics>());
+
+      // 双击放大：落点在**图片内**偏左处（不在黑边上），放大后左右都没贴边 → 翻页应被禁。
+      // ⚠️ 落点必须在 InteractiveViewer 内：点在黑边上会被夹到图片边缘，放大后正好贴边。
+      final rect = tester.getRect(find.byType(InteractiveViewer).first);
+      final at = Offset(rect.left + rect.width * 0.25, rect.center.dy);
+      await tester.tapAt(at);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tapAt(at);
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.settleLightbox();
+
+      expect(pager().physics, isA<NeverScrollableScrollPhysics>());
+    });
+
+    /// 🔴 双击点必须换算进 InteractiveViewer 的坐标系。L3 起 viewer 撑满整页（放大后铺满全屏），
+    /// 图片在其内居中；落点仍以图片内一点为中心放大，屏幕位置不动。
+    testWidgets('双击点按图片坐标换算：以图片内落点为中心，屏幕位置不动', (tester) async {
+      await openLightbox(tester);
+      final finder = find.byType(InteractiveViewer).first;
+      final rect = tester.getRect(finder);
+      // L3：viewer 撑满整页 —— 改前它被收成图片大小，放大后图被裁在那个框里。
+      expect(rect.size, tester.getSize(find.byKey(const ValueKey('lightboxPager'))));
+      // 图片比页面小才有黑边可言；否则这条测不出东西。
+      final img = tester.getRect(find.byType(Hero).first);
+      expect(img.size, isNot(rect.size));
+
+      final at = Offset(img.left + img.width * 0.25, img.top + img.height * 0.75);
+      await tester.tapAt(at);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tapAt(at);
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.settleLightbox();
+
+      final m = tester.widget<InteractiveViewer>(finder).transformationController!.value;
+      final local = at - rect.topLeft;
+      // 落点在缩放前后应映射到同一处：m · local == local。
+      final mapped = MatrixUtils.transformPoint(m, local);
+      expect(mapped.dx, moreOrLessEquals(local.dx, epsilon: 0.5));
+      expect(mapped.dy, moreOrLessEquals(local.dy, epsilon: 0.5));
+    });
+
+    testWidgets('双击落在黑边上 → 夹到图片边缘，平移量不越界', (tester) async {
+      await openLightbox(tester);
+      final finder = find.byType(InteractiveViewer).first;
+      final rect = tester.getRect(finder);
+      final img = tester.getRect(find.byType(Hero).first);
+
+      // 图片左侧的黑边，纵向取中（避开左上角的关闭按钮）。
+      expect(img.left - rect.left, greaterThan(20), reason: '要有左黑边才测得出');
+      final at = Offset((rect.left + img.left) / 2, img.center.dy);
+      await tester.tapAt(at);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.tapAt(at);
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.settleLightbox();
+
+      final t = tester.widget<InteractiveViewer>(finder).transformationController!.value
+          .getTranslation();
+      // 横向夹到图片左边（viewer 坐标 = img.left - rect.left）→ 以图片左缘为中心放大，
+      // 平移量落在 [-width*(s-1), 0] 内，不越出视口。
+      final double edgeX = img.left - rect.left;
+      expect(t.x, moreOrLessEquals(-edgeX * 1.5, epsilon: 0.5));
+      expect(t.x, lessThanOrEqualTo(0));
+      expect(t.x, greaterThanOrEqualTo(-rect.width * 1.5));
+      expect(t.y, moreOrLessEquals(-(img.center.dy - rect.top) * 1.5, epsilon: 0.5));
+    });
+  });
+
+  group('AC1/AC2 下滑关闭的接线', () {
+    Future<void> openLightbox(WidgetTester tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              key: const ValueKey('openIt'),
+              onPressed: () => ImageLightbox.open(
+                context,
+                urls: const ['asset:assets/demo_diary/demo_diary_night.jpg'],
+                initialIndex: 0,
+                heroTagPrefix: 'p',
+                source: 'content_detail',
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.byKey(const ValueKey('openIt')));
+      await tester.settleLightbox();
+    }
+
+    testWidgets('下拖超过阈值 → 关闭', (tester) async {
+      await openLightbox(tester);
+
+      await tester.drag(find.byKey(const ValueKey('lightboxPager')), const Offset(0, 400));
+      await tester.settleLightbox();
+
+      expect(find.byType(ImageLightbox), findsNothing);
+    });
+
+    testWidgets('下拖没过阈值 → 回弹复位，不关闭', (tester) async {
+      await openLightbox(tester);
+
+      await tester.drag(find.byKey(const ValueKey('lightboxPager')), const Offset(0, 20));
+      await tester.settleLightbox();
+
+      expect(find.byType(ImageLightbox), findsOneWidget);
+      // 回弹结束后位移归零：图必须回到原位，不能停在半路。
+      final shifted = tester.widget<Transform>(find
+          .ancestor(
+            of: find.byKey(const ValueKey('lightboxPager')),
+            matching: find.byType(Transform),
+          )
+          .first);
+      expect(shifted.transform.getTranslation().y, closeTo(0, 0.01));
+    });
+
+    /// 🔴 AC1 的「背景渐透明」要求路由本身是透明的 ——
+    /// 不透明路由之下的那一页根本不参与绘制，把黑底调淡只会露出一片虚空。
+    testWidgets('路由非不透明（否则渐透明后面是虚空）', (tester) async {
+      await openLightbox(tester);
+      final route = ModalRoute.of(tester.element(find.byType(ImageLightbox)))!;
+      expect(route.opaque, isFalse);
+    });
+  });
+
+  group('bug 506 🔴 双指优先：缩放压住翻页与下滑关闭', () {
+    Future<void> openLightbox(WidgetTester tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              key: const ValueKey('openIt'),
+              onPressed: () => ImageLightbox.open(
+                context,
+                urls: const [
+                  'asset:assets/demo_diary/demo_diary_night.jpg',
+                  'asset:assets/demo_diary/demo_diary_balcony.jpg',
+                ],
+                initialIndex: 0,
+                heroTagPrefix: 'p',
+                source: 'content_detail',
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.byKey(const ValueKey('openIt')));
+      await tester.settleLightbox();
+    }
+
+    PageView pager(WidgetTester t) => t.widget<PageView>(find.byKey(const ValueKey('lightboxPager')));
+
+    GestureDetector pageDetector(WidgetTester t) => t
+        .widgetList<GestureDetector>(find.descendant(
+            of: find.byKey(const ValueKey('lightboxPager')),
+            matching: find.byType(GestureDetector)))
+        .firstWhere((g) => g.onTapUp != null);
+
+    double scaleOf(WidgetTester t) => t
+        .widget<InteractiveViewer>(find.byType(InteractiveViewer).first)
+        .transformationController!
+        .value
+        .getMaxScaleOnAxis();
+
+    testWidgets('两指按下 → 翻页与下滑关闭让位；全抬起 → 恢复', (tester) async {
+      await openLightbox(tester);
+      final c = tester.getCenter(find.byKey(const ValueKey('lightboxPager')));
+      expect(pager(tester).physics, isA<PageScrollPhysics>());
+      expect(pageDetector(tester).onVerticalDragUpdate, isNotNull);
+
+      final g1 = await tester.startGesture(c - const Offset(0, 50));
+      final g2 = await tester.startGesture(c + const Offset(0, 50), pointer: 7);
+      await tester.pump();
+      expect(pager(tester).physics, isA<NeverScrollableScrollPhysics>());
+      expect(pageDetector(tester).onVerticalDragUpdate, isNull, reason: '双指时下滑关闭不得抢手势');
+
+      // 纵向两指张开：改前这一下会被「下滑关闭」接走，现在必须是缩放。
+      for (var i = 0; i < 10; i++) {
+        await g1.moveBy(const Offset(0, -10));
+        await g2.moveBy(const Offset(0, 10));
+        await tester.pump();
+      }
+      expect(scaleOf(tester), greaterThan(1.2), reason: '双指张开应放大');
+      await g1.up();
+      await g2.up();
+      await tester.settleLightbox();
+      expect(find.byType(ImageLightbox), findsOneWidget, reason: '放大不能被当成下滑关闭');
+      expect(pager(tester).controller!.page, 0, reason: '双指不能翻页');
+      expect(pageDetector(tester).onTapUp, isNotNull);
+    });
+
+    testWidgets('正常尺寸下两指收缩 → 退出灯箱', (tester) async {
+      await openLightbox(tester);
+      final c = tester.getCenter(find.byKey(const ValueKey('lightboxPager')));
+      final g1 = await tester.startGesture(c - const Offset(150, 0));
+      final g2 = await tester.startGesture(c + const Offset(150, 0), pointer: 7);
+      await tester.pump();
+      for (var i = 0; i < 11; i++) {
+        await g1.moveBy(const Offset(10, 0));
+        await g2.moveBy(const Offset(-10, 0));
+        await tester.pump();
+      }
+      await g1.up();
+      await g2.up();
+      await tester.settleLightbox();
+      expect(find.byType(ImageLightbox), findsNothing);
+    });
+
+    testWidgets('轻微收缩没过阈值 → 回弹到 1，不关闭', (tester) async {
+      await openLightbox(tester);
+      final c = tester.getCenter(find.byKey(const ValueKey('lightboxPager')));
+      final g1 = await tester.startGesture(c - const Offset(150, 0));
+      final g2 = await tester.startGesture(c + const Offset(150, 0), pointer: 7);
+      await tester.pump();
+      for (var i = 0; i < 5; i++) {
+        await g1.moveBy(const Offset(2, 0));
+        await g2.moveBy(const Offset(-2, 0));
+        await tester.pump();
+      }
+      await g1.up();
+      await g2.up();
+      await tester.settleLightbox();
+      expect(find.byType(ImageLightbox), findsOneWidget);
+      expect(scaleOf(tester), moreOrLessEquals(1, epsilon: 0.001));
+      expect(tester.widget<AnimatedScale>(find.byType(AnimatedScale)).scale, 1,
+          reason: '收缩跟手的外层缩放须弹回 1');
+    });
+
+    test('关闭方式新增 pinch', () {
+      expect(LightboxDismissGesture.pinch.wire, 'pinch');
+    });
+  });
+
+  group('bug 507 键盘弹起时点图：先收键盘，不开大图', () {
+    Future<void> pumpHost(WidgetTester tester, FocusNode node) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Column(children: [
+              TextButton(
+                key: const ValueKey('openIt'),
+                onPressed: () => ImageLightbox.open(
+                  context,
+                  urls: const ['asset:assets/demo_diary/demo_diary_night.jpg'],
+                  initialIndex: 0,
+                  heroTagPrefix: 'p',
+                  source: 'content_detail',
+                ),
+                child: const Text('open'),
+              ),
+              TextField(key: const ValueKey('comment'), focusNode: node),
+            ]),
+          ),
+        ),
+      ));
+    }
+
+    testWidgets('键盘弹着 → 第一下只收键盘；第二下才打开', (tester) async {
+      final node = FocusNode();
+      addTearDown(node.dispose);
+      await pumpHost(tester, node);
+      await tester.tap(find.byKey(const ValueKey('comment')));
+      await tester.pump();
+      expect(node.hasFocus, isTrue);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('openIt')));
+      await tester.settleLightbox();
+      expect(find.byType(ImageLightbox), findsNothing, reason: '这一下只收键盘');
+      expect(node.hasFocus, isFalse);
+
+      tester.view.viewInsets = FakeViewPadding.zero; // 键盘收起
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('openIt')));
+      await tester.settleLightbox();
+      expect(find.byType(ImageLightbox), findsOneWidget);
+    });
+
+    testWidgets('焦点残留但键盘已收 → 照常打开，关闭后不把焦点还给评论框', (tester) async {
+      final node = FocusNode();
+      addTearDown(node.dispose);
+      await pumpHost(tester, node);
+      await tester.tap(find.byKey(const ValueKey('comment')));
+      await tester.pump();
+      expect(node.hasFocus, isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('openIt')));
+      await tester.settleLightbox();
+      expect(find.byType(ImageLightbox), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('lightboxClose')));
+      await tester.settleLightbox();
+      expect(find.byType(ImageLightbox), findsNothing);
+      expect(node.hasFocus, isFalse, reason: '否则 pop 回来键盘又被顶起');
+    });
+  });
+
+  group('AC7/AC8 不引包、不扩散', () {
+    /// AD-A22：本批次**不新增任何第三方依赖**，Flutter 侧也一样。
+    /// 四个手势用 SDK 自带能力实现 —— 一旦有人为了省事引了图片查看器包，这条会红。
+    test('pubspec 没有图片查看器 / 手势 / 重排类第三方包', () {
+      final pubspec = File('pubspec.yaml').readAsStringSync().toLowerCase();
+      for (final banned in [
+        'photo_view',
+        'easy_image_viewer',
+        'image_viewer',
+        'dismissible_page',
+        'zoom',
+        'reorderable',
+      ]) {
+        expect(pubspec, isNot(contains(banned)), reason: '$banned 属于 AD-A22 禁止的新依赖');
+      }
+    });
+
+    /// 判定逻辑是**纯函数**、不依赖 widget —— 这正是它能被上面那张真值表逐格验的原因。
+    test('判定文件不 import 任何 widget 层', () {
+      final src = File('lib/shared/media/lightbox_gestures.dart').readAsStringSync();
+      expect(src, isNot(contains("import 'package:flutter/material.dart'")));
+      expect(src, isNot(contains('features/')));
+    });
+  });
+}

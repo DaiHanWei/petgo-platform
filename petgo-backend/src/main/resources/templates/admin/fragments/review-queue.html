@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  工作台左栏队列（V1.3.0 Story 2.4 AC2）。list = 整个 <ul>（切页签 / 两态时替换）；rows = 行 + 翻页哨兵（滚动到底 htmx 追加）。
+  行 56px 两行式：① 对象标识 + 状态色点；② 类别标签 + 优先级分 + 最早时间（WIB）。overdue 整行红 + 挂起标签。
+  已处理态：结果徽标 + 操作人 + 时间 + 理由（只读回看）。
+-->
+<body>
+<ul th:fragment="list" class="q-list" id="review-queue" th:attr="data-tab=${filters.tab.slug()}">
+    <th:block th:replace="~{admin/fragments/review-queue :: rows}"></th:block>
+</ul>
+
+<th:block th:fragment="rows">
+    <li th:if="${queue.isEmpty() and filters.page == 0}" class="q-empty">
+        <!-- 公共空态（Story 2.9 T2）：其他队列去向来自 otherQueues（与角标同源）；本页内其他页签的去向另列 -->
+        <div th:replace="~{admin/fragments/tpl-a-empty :: queueEmpty('manual-review', ${filters.handled} ? #{admin.v130.review.empty.handled} : null)}"></div>
+        <p class="muted empty-elsewhere" th:unless="${filters.handled}">
+            <th:block th:each="t : ${tabs}" th:if="${t != filters.tab and counts.get(t) > 0}">
+                <a th:href="@{/admin/manual-review(tab=${t.slug()})}"
+                   th:text="#{admin.v130.review.empty.elsewhere(#{${t.titleKey()}}, ${counts.get(t)})}">其他页签还有 N 条</a>
+            </th:block>
+        </p>
+    </li>
+    <th:block th:each="r : ${queue.content}"><li th:replace="~{admin/fragments/review-queue :: row(${r}, false)}"></li></th:block>
+    <!-- 滚动到底加载下一页（每页 20） -->
+    <li th:if="${queue.hasNext()}" class="q-more" hx-swap="outerHTML" hx-trigger="revealed"
+        th:attr="hx-get=@{/admin/manual-review/queue(tab=${filters.tab.slug()},state=${filters.state()},subType=${filters.subType},priority=${filters.priority},category=${filters.category},q=${filters.q},page=${filters.page + 1})}">
+        <span class="muted" th:text="#{admin.v130.review.more}">加载更多…</span>
+    </li>
+</th:block>
+
+<!-- 单行（供列表循环与处置后 oob 重渲染共用；oob=true 时带 hx-swap-oob） -->
+<ul th:remove="tag">
+    <li th:fragment="row(r, oob)" class="q-row" th:classappend="${r.row.overdue()} ? 'row-overdue'"
+        th:hx-swap-oob="${oob} ? 'true' : null"
+        th:id="'review-row-' + ${r.tab.slug()} + '-' + ${r.row.sourceId()}"
+        th:data-id="${r.row.sourceId()}"
+        th:data-detail-url="@{/admin/manual-review/{id}/detail(id=${r.row.sourceId()},tab=${r.tab.slug()})}"
+        th:attr="hx-get=@{/admin/manual-review/{id}/detail(id=${r.row.sourceId()},tab=${r.tab.slug()})}"
+        hx-target=".wb-detail-body" hx-swap="innerHTML" tabindex="0">
+        <span class="q-title q-title--flex">
+            <span class="dot" th:classappend="'dot--' + ${r.dot()}"></span>
+            <img th:if="${r.isAvatar()}" th:src="${r.row.preview()}" alt="" loading="lazy" class="q-thumb"/>
+            <span class="q-text" th:if="${r.tab.name() == 'AVATAR'}" th:text="${r.row.targetNickname() ?: #messages.msg('admin.review.subject.deactivated')}">昵称</span>
+            <!--/* 场所举报（5.4）：preview = 场所名（MERGED 场所带 [MERGED] 后缀 → 「已并入」徽标；解析级注释，不进 HTML） */-->
+            <th:block th:if="${r.tab.name() == 'PLACE'}" th:with="merged=${r.row.preview() != null and #strings.endsWith(r.row.preview(), '[MERGED]')}">
+                <span class="q-text" th:text="${merged} ? ${#strings.substringBefore(r.row.preview(), ' [MERGED]')} : ${r.row.preview()}">场所名</span>
+                <span class="badge badge-muted" th:if="${merged}" th:text="#{admin.v130.places.status.MERGED}">已并入</span>
+            </th:block>
+            <span class="q-text" th:unless="${r.tab.name() == 'AVATAR' or r.tab.name() == 'PLACE'}" th:text="${r.row.preview() ?: (r.row.targetNickname() ?: '')}">摘要</span>
+            <!-- bug 480：内容类工单直达内容详情（用帖 id）；权限与 AdminContentManageController.DETAIL_AUTH 一致 -->
+            <a th:if="${r.row.contentRefId() != null and r.tab.name() != 'PLACE'}" class="q-link" target="_blank"
+               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('content.view') or hasAuthority('content.proactive_takedown') or hasAuthority('content.takedown') or hasAuthority('content.manual_review')"
+               th:href="@{/admin/content(open=${r.row.contentRefId()})}" th:text="#{admin.review.viewContent}" data-no-drawer>查看内容</a>
+            <!--/* 场所举报：content_ref = place_id，直达 B6 场所管理（复审 #1：不能链到同号帖子）；门控 = AdminPlaceController.VIEW_AUTH */-->
+            <a th:if="${r.tab.name() == 'PLACE'}" class="q-link" target="_blank"
+               sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('place.manage')"
+               th:href="@{/admin/places(open=${r.row.contentRefId()})}" th:text="#{admin.v130.review.place.open}" data-no-drawer>去场所管理 ↗</a>
+            <!--/* bug 20260923-553：已处理态结果徽标放在标题行（「查看内容」旁）——原先挂在第二行末尾，
+                   被前面的类别 / 分数 / 时间挤到省略号里看不全。走 admin.review.result.<值>，缺 key 回退原值。 */-->
+            <span class="badge q-result" th:if="${r.result != null}"
+                  th:classappend="${r.result == 'APPROVED' or r.result == 'PASS' or r.result == 'AUTO_PASSED'} ? 'badge-ok' : 'badge-danger'"
+                  th:text="${#messages.msgOrNull('admin.review.result.' + r.result) ?: r.result}">结果</span>
+            <!--/* bug 20260924-566：待处理条目同一位置给「待审核」状态标签 —— 结果徽标只有已处理才有，
+                   Pending 筛选下标题行空空如也，运营读成「状态标签不见了」。任何状态下标题行都有一枚状态标。 */-->
+            <span class="badge badge-warn q-result" th:if="${r.result == null}"
+                  th:text="#{admin.review.result.PENDING_REVIEW}">待审核</span>
+        </span>
+        <span class="q-meta">
+            <span class="badge badge-neutral" th:if="${r.row.subType() != null}" th:text="${r.row.subType()}">SUB</span>
+            <span th:if="${r.tab.name() == 'PLACE'}" th:text="#{admin.v130.review.place.reporters(${r.row.reporterCount()}, ${r.row.reportCount()})}">N 人 / M 次</span>
+            <span th:text="'⚑ ' + ${r.row.score()}">⚑ 0</span>
+            <span th:text="${@adminTime.wib(r.row.earliestAt())}">时间</span>
+            <span class="badge badge-danger" th:if="${r.row.overdue()}" th:text="#{admin.review.overdue}">超 24h</span>
+            <th:block th:if="${r.result != null}">
+                <span class="muted" th:if="${r.handledBy != null}" th:text="${r.handledBy}">操作人</span>
+                <span class="muted" th:if="${r.handledAt != null}" th:text="${@adminTime.wib(r.handledAt)}">时间</span>
+                <span class="muted" th:if="${r.reason != null}" th:text="${r.reason}">理由</span>
+            </th:block>
+        </span>
+    </li>
+</ul>
+</body>
+</html>

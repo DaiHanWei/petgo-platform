@@ -5,6 +5,7 @@ import com.tailtopia.shop.domain.ProductCategory;
 import com.tailtopia.shop.domain.ShopProduct;
 import com.tailtopia.shop.domain.ShopSku;
 import com.tailtopia.shop.dto.ShopProductDetailView;
+import com.tailtopia.shop.dto.ShopProductPageResponse;
 import com.tailtopia.shop.dto.ShopProductSummaryView;
 import com.tailtopia.shop.dto.ShopSkuView;
 import com.tailtopia.shop.domain.StockStatus;
@@ -13,6 +14,8 @@ import com.tailtopia.shop.repository.ShopSkuRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,6 +79,16 @@ public class ShopProductQueryService {
                     ? products.searchActive(pattern)
                     : products.searchActiveByCategory(pattern, category);
         }
+        return toViews(rows);
+    }
+
+    /**
+     * 行 → 视图（含最低价批量查，避免 N+1）。
+     *
+     * <p>🔴 <b>全量与分页共用这一处组装</b>：两处各拼一遍，迟早出现「不翻页时有图、
+     * 翻页后没图」这种只在某一条路径上出现的差异。
+     */
+    private List<ShopProductSummaryView> toViews(List<ShopProduct> rows) {
         if (rows.isEmpty()) {
             return List.of();
         }
@@ -95,6 +108,68 @@ public class ShopProductQueryService {
                     minPriceByProduct.get(p.getId())));
         }
         return out;
+    }
+
+    /** 每页默认条数（SHOP-NFR-03）。 */
+    public static final int DEFAULT_PAGE_SIZE = 20;
+
+    /** 页长上限 —— 客户端传个 10000 就等于退化成全量查询，那正是本 story 要消除的东西。 */
+    static final int MAX_PAGE_SIZE = 100;
+
+    /**
+     * 商品列表 · 游标分页（Story 4-5，SHOP-FR-13 / SHOP-NFR-03）。
+     *
+     * <p>🔴 <b>{@code category} 与 {@code query} 的语义与两个全量重载逐字相同</b>：
+     * 空白 {@code query} 等同不传、与 {@code category} 是与关系。
+     * 这里<b>复用同一个 {@link #likePattern} 与同一套排序</b> ——
+     * 分页另起一套过滤或排序，就会出现「不翻页看到的列表」和「翻页看到的列表」不是同一个。
+     *
+     * <p>🔴 <b>keyset 而非 OFFSET</b>：运营在用户翻页期间调了权重，OFFSET 会让同一件商品
+     * 在两页里出现两次，或者一次都不出现。
+     *
+     * @param cursor 上一页末条的游标；null / 空白 = 从头开始（{@link ShopProductCursor#START}）
+     * @param size   页长；null 或非正取默认 20，上限 {@value #MAX_PAGE_SIZE}
+     */
+    @Transactional(readOnly = true)
+    public ShopProductPageResponse page(ProductCategory category, String query, String cursor,
+            Integer size) {
+        int limit = normalizeSize(size);
+        ShopProductCursor from = ShopProductCursor.decode(cursor);
+        String pattern = likePattern(query);
+
+        // 多取一条用来判断 hasMore —— 比再打一次 count 查询便宜，且不会因为两次查询
+        // 之间有商品上下架而自相矛盾。
+        Pageable probe = PageRequest.of(0, limit + 1);
+        List<ShopProduct> rows;
+        if (pattern == null) {
+            rows = category == null
+                    ? products.pageActive(from.sortWeight(), from.id(), probe)
+                    : products.pageActiveByCategory(category, from.sortWeight(), from.id(), probe);
+        } else {
+            rows = category == null
+                    ? products.pageSearchActive(pattern, from.sortWeight(), from.id(), probe)
+                    : products.pageSearchActiveByCategory(pattern, category, from.sortWeight(),
+                            from.id(), probe);
+        }
+
+        boolean hasMore = rows.size() > limit;
+        List<ShopProduct> page = hasMore ? rows.subList(0, limit) : rows;
+        // 🔴 无结果 → 空 items，不是 404：「这个品类下暂时没有商品」是一个正常答案。
+        if (page.isEmpty()) {
+            return new ShopProductPageResponse(List.of(), null, false);
+        }
+        ShopProduct last = page.get(page.size() - 1);
+        return new ShopProductPageResponse(toViews(page),
+                // 末页 nextCursor 为 null → NON_NULL 下整键省略（与 Feed 信封同款）
+                hasMore ? new ShopProductCursor(last.getSortWeight(), last.getId()).encode() : null,
+                hasMore);
+    }
+
+    private static int normalizeSize(Integer size) {
+        if (size == null || size <= 0) {
+            return DEFAULT_PAGE_SIZE;
+        }
+        return Math.min(size, MAX_PAGE_SIZE);
     }
 
     /**

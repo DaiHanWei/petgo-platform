@@ -113,6 +113,9 @@ class ApiPaths {
   /// App 版本信息（Story 6.5，公开可读，App 内更新提醒）。
   static const String appVersion = '$base/app-version';
 
+  /// 客服联系方式（V1.3.0 Story 3-1）。🔓 免鉴权 —— 客服弹窗在登录前也会出现。
+  static const String supportContact = '$base/support/contact';
+
   /// 通知中心（Story 6.6）。列表 / 未读角标 / 标记已读。
   static const String notifications = '$base/notifications';
   static const String notificationsUnreadCount = '$base/notifications/unread-count';
@@ -172,6 +175,16 @@ class ApiPaths {
   static const String meIdCardShareReward =
       '$base/pet-profiles/me/id-cards/share-reward';
 
+  /// 一次性引导标记（V1.3.0 Story 5.4）。GET 取已置位的键；POST `{key}` 置位（幂等）。
+  /// 🔴 按**账号**存，所以挂在 /me 下（决策 C1：当前用户主体统一走 /me）。
+  static const String meOnboardingMarks = '$base/me/onboarding-marks';
+
+  /// 年龄卡分享成功上报 → 试发分享奖励（V1.3.0 Story 5.3）。
+  /// 🔴 请求体**只有幂等键**：不带卡面内容、不上传图片。年龄卡本身纯客户端出图、
+  /// 不落服务端；领奖是已澄清的唯一例外，而这个例外只包含「谁、哪次分享」。
+  static const String meAgeCardShareRewards =
+      '$base/pet-profiles/me/age-cards/share-rewards';
+
   /// 单卡快照详情（Story 6.7）。非本人 404。
   static String meIdCard(int cardId) => '$base/pet-profiles/me/id-cards/$cardId';
 
@@ -203,6 +216,26 @@ class ApiPaths {
 
   static String sharedPetDay(String token) => '$base/public/shared-pets/$token/day';
 
+  // ===== 宠物访客视图的**站内入口**（V1.3.0 batch-b1 Story 2.3 · AD-4）=====
+  //
+  // 🔴 与上面那组 `/public/shared-pets/{token}/*` **落到同一层服务端投影**，差的只是鉴权边界：
+  //    那组游客可读、按不可枚举分享 token；这组**仅登录可用**、按 petId。
+  // 🛡 站内入口**拿不到也不需要**对方的分享 token —— 那是一条可转发到站外的永久公开链接
+  //    （B1-D1 否掉的方案）。站内可见 ≠ 可对外分发。
+  // ⚠️ **没有 calendar / day**：访客视图没有日历（两次拍板不做），不是漏写。
+
+  /// 站内访客：宠物档案。
+  static String inAppPetProfile(int petId) => '$base/pets/$petId/visitor/profile';
+
+  /// 站内访客：统计条三列。
+  static String inAppPetStats(int petId) => '$base/pets/$petId/visitor/stats';
+
+  /// 站内访客：时间线（不分页，`?limit=`）。
+  static String inAppPetTimeline(int petId) => '$base/pets/$petId/visitor/timeline';
+
+  /// 他人公开主页的**宠物卡**（Story 2.3 · AC3）。游客可读；没有档案时 204。
+  static String userPublicPet(int userId) => '$base/users/$userId/pet';
+
   /// 里程碑列表/进度（Story 8.1/8.2 · FR-42）。
   static const String petProfileMilestones = '$base/pet-profiles/me/milestones';
 
@@ -214,6 +247,11 @@ class ApiPaths {
       '$base/pet-profiles/me/milestones/checkin-candidates';
   static String petProfileMilestoneCheckIn(String code) =>
       '$base/pet-profiles/me/milestones/$code/check-in';
+
+  /// 庆祝回报（V1.3.0 Story 1.5 · FR-111）：POST `{codes: [...]}`，服务端按列表幂等置位
+  /// `celebrated_at`。best-effort —— 失败静默，代价只是下次进列表页再补弹一次。
+  static const String petProfileMilestoneCelebrations =
+      '$base/pet-profiles/me/milestones/celebrations';
 
   /// P-35 里程碑庆祝对外分享：创建 / 刷新分享，返回不可枚举 shareToken（H5 `GET /m/{token}`）。
   static String petProfileMilestoneShares(String code) =>
@@ -245,7 +283,19 @@ class ApiPaths {
   static String publicSharedPost(String shareToken) => '$base/public/shared-posts/$shareToken';
 
   /// 他人迷你主页投影（Story 3.8）。
+  ///
+  /// ⚠️ **V1.3.0 batch-b1 Story 2.1 起 App 侧已无入口调用**（点头像一律进完整主页，
+  /// 见 [userPublicProfile]）。端点与这条常量一并保留：迷你卡组件与其回归用例还在，
+  /// 删接口属另一次清理。
   static String userMiniProfile(int userId) => '$base/users/$userId/mini-profile';
+
+  /// 用户**公开主页**投影（V1.3.0 batch-b1 Story 2.1 · FR-118）。
+  /// 游客可读；比迷你卡多「加入时间」与「是否本人视角」两个字段。
+  static String userPublicProfile(int userId) => '$base/users/$userId/profile';
+
+  /// 公开主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2）：
+  /// 该用户全部 PUBLIC 内容，三类混排、时间倒序、`?cursor=` 游标分页。游客可读。
+  static String userPublicPosts(int userId) => '$base/users/$userId/posts';
 
   /// 账号举报（V1.1.4 Story 2.1/2.2，FR-58）。POST body `{targetUserId, reason, detail?}` → 204。
   static const String accountReports = '$base/account-reports';
@@ -290,6 +340,14 @@ class ApiPaths {
   static String meCartItem(String skuToken) => '$meCart/items/$skuToken';
   /// 一键清空全部失效行（已下架 / 已售罄）。
   static const String meCartInvalidItems = '$meCart/invalid-items';
+  /// 勾选 / 取消勾选单行（`?selected=true|false`，Story 4-1 后端 · 4-2 前端）。
+  ///
+  /// 🔴 三段路径，与两段的 [meCartItem] 不冲突。**这不是删除** ——
+  /// 取消勾选只是「这次不买」，商品仍留在车里。
+  static String meCartItemSelected(String skuToken) =>
+      '$meCart/items/$skuToken/selected';
+  /// 全选 / 全不选（`?selected=true|false`）。作用于车内全部行，含失效行。
+  static const String meCartSelection = '$meCart/selection';
 
   /// 🔒 结算试算（Story 3.7）。`?addressToken=`；超服务范围回 `serviceable=false` 而非报错。
   static const String meCheckout = '$base/me/checkout';
@@ -323,4 +381,36 @@ class ApiPaths {
 
   /// 🔒 提交 / 重提评价（Story 7.1；供 Story 7.2 评价页调用，该页待 UX-DR4 补稿）。
   static const String meShopReviews = '$base/me/shop-reviews';
+
+  // ===== 宠物友好场所（V1.3.0 batch-b1 Story 1.1，FR-112）=====
+  /// 场所列表。🔒 **对游客开放**（后端 SecurityConfig 已放行 GET）——
+  /// 场所列表是「这个功能里已经攒了些什么地方」的展示面，用登录墙拦它没有意义。
+  /// ⚠️ Story 1.2 会加 `?lat=&lng=` 走距离分支；排序路径由服务端下发的 `sortMode` 说明。
+  static const String places = '$base/places';
+
+  /// 场所评论的删除端点（Story 1.7 AC7）。
+  ///
+  /// ⚠️ 不挂在 `/places/{token}/comments/{id}` 下：删除只认评论 id，
+  /// 而那条路径会让人以为"换个 token 也能删同一条"。服务端亦然。
+  static const String placeComments = '$base/place-comments';
+
+  /// 场所照片的删除端点（Story 1.9）。同评论：只认照片 id。
+  static const String placePhotos = '$base/place-photos';
+
+  // ===== @ 提及（V1.3.0 batch-b1 Epic 3，FR-119）=====
+  /// 🔒 @ 候选集：最近互动过的最多 30 人（Story 3.1 · AD-10）。
+  ///
+  /// 🔴 **没有任何查询参数，也不接受关键词** —— 这不是用户搜索接口
+  /// （全局搜索留在 1.6.0，未前移）。昵称过滤由客户端在这批人之内做（Story 3.2 AC2）。
+  /// ⚠️ 别"顺手"给它拼上 `?q=`，那一刻它就变成了全局用户搜索。
+  static const String meMentionCandidates = '$base/me/mention-candidates';
+
+  // ===== 逛别人家的毛孩子（V1.3.0 batch-b1 Epic 4，FR-121）=====
+  /// 🔒 宠物推荐池（Story 4.1）。**在 `/me` 下是刻意的**：结果按查看者算
+  /// （互相拉黑的双方不互推），同一时刻给两个人的不一样 —— 挂成 `/pet-recommendations`
+  /// 会让它看着像一份全站公共列表。先例是 `meShopRecommendations`。
+  ///
+  /// ⚠️ 游客不展示该区（story Dev Notes「游客态不动」），所以后端也不放行未登录。
+  /// 可选 `?limit=`；全屏集合页的游标分页属 Story 4.3，现在不先摆一个没人用的参数。
+  static const String mePetRecommendations = '$base/me/pet-recommendations';
 }

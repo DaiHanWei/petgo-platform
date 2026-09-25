@@ -69,7 +69,7 @@ class CheckoutLine {
 /// 结算试算。
 class CheckoutPreview {
   const CheckoutPreview({
-    required this.addressToken,
+    this.addressToken,
     required this.receiverName,
     required this.receiverPhone,
     required this.addressText,
@@ -88,7 +88,8 @@ class CheckoutPreview {
     this.cashAmount,
   });
 
-  final String addressToken;
+  /// null = 用户还没有收货地址（无地址预览）：商品与金额照常展示，禁止提交。
+  final String? addressToken;
   final String receiverName;
   final String receiverPhone;
 
@@ -129,13 +130,16 @@ class CheckoutPreview {
   /// 两段都有 → 底栏展示 `PawCoin x + QRIS y`。
   bool get isMixed => (coinAmount ?? 0) > 0 && (cashAmount ?? 0) > 0;
 
-  bool get canSubmit => serviceable && lines.isNotEmpty;
+  bool get hasAddress => addressToken != null;
+
+  bool get canSubmit => hasAddress && serviceable && lines.isNotEmpty;
 
   factory CheckoutPreview.fromJson(Map<String, dynamic> json) {
     final addr = json['address'];
     final a = addr is Map<String, dynamic> ? addr : const <String, dynamic>{};
     return CheckoutPreview(
-      addressToken: a['token']?.toString() ?? '',
+      // 🔴 无地址预览时服务端不下发 address（non_null 序列化）→ null，不能落成 ''
+      addressToken: _blank(a['token']?.toString()),
       receiverName: a['receiverName']?.toString() ?? '',
       receiverPhone: a['receiverPhone']?.toString() ?? '',
       addressText: [
@@ -166,6 +170,8 @@ class CheckoutPreview {
       : const [];
 
   static int? _int(Object? v) => v is num ? v.toInt() : null;
+
+  static String? _blank(String? s) => (s == null || s.isEmpty) ? null : s;
 }
 
 /// 下单被挡住的一行（后端 409 的 `unavailableLines` 扩展成员，FR-95）。

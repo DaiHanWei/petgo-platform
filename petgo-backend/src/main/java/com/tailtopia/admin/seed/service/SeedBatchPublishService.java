@@ -140,7 +140,8 @@ public class SeedBatchPublishService {
             }
             if (!callerMayPublishAsReal && identities.isRealPublishIdentity(row.getAuthorUserId())) {
                 try {
-                    stateMachine.markValidationFailed(row.getId(), "无权以真实账号身份发布");
+                    stateMachine.markValidationFailed(row.getId(),
+                            SeedRowErrors.encode("admin.err.seedBatch.row.noRealIdentityGrant"));
                 } catch (RuntimeException ignored) {
                     log.warn("记录无权发布原因失败 rowId={}", row.getId());
                 }
@@ -161,7 +162,8 @@ public class SeedBatchPublishService {
                 //    ⚠️ 这里刻意捕获 RuntimeException 而不是 AppException ——
                 //    对象存储抖动之类会抛别的类型，而"一行挂了整批回滚"是最糟的结果。
                 log.warn("批量发布单行失败 rowId={} : {}", row.getId(), e.toString());
-                safelyFail(row.getId(), e.getMessage());
+                // bug 20260924-565：存异常的文案码 + 实参（按后台语言渲染），而不是中文原文。
+                safelyFail(row.getId(), SeedRowErrors.fromException(e, "admin.err.seedBatch.row.publishFailed"));
                 failed++;
             }
         }
@@ -234,13 +236,16 @@ public class SeedBatchPublishService {
     /**
      * 记失败。
      *
+     * @param reason 已编码的错误串（{@link SeedRowErrors}）；null ⇒ 兜底文案码
+     *
      * <p>⚠️ 用 {@code REQUIRES_NEW}：外层事务可能已经因为那次异常被标记回滚，
      * 在同一个事务里写"失败原因"会连带丢掉 —— 于是运营看到的是一行没有任何说明的失败。
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public void safelyFail(long rowId, String reason) {
         try {
-            stateMachine.markFailed(rowId, reason == null ? "发布失败" : reason);
+            stateMachine.markFailed(rowId, reason == null
+                    ? SeedRowErrors.encode("admin.err.seedBatch.row.publishFailed") : reason);
         } catch (RuntimeException ignored) {
             // 连失败都记不下就只留日志 —— 绝不让它把整批拖垮。
             log.warn("记录发布失败原因时又失败了 rowId={}", rowId);

@@ -46,7 +46,14 @@ class AdminAccountAccessControlTest {
 
         @Bean
         AdminAccountAdminController adminAccountAdminController(AdminAccountService s) {
-            return new AdminAccountAdminController(s, TestMessages.real());
+            // Story 1.6：角色下拉 / 矩阵来自 AdminRoleService（mock 空列表）。
+            com.tailtopia.admin.roles.service.AdminRoleService roleService =
+                    mock(com.tailtopia.admin.roles.service.AdminRoleService.class);
+            when(roleService.options(org.mockito.ArgumentMatchers.any())).thenReturn(List.of());
+            when(roleService.matrix(org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(new com.tailtopia.admin.roles.dto.PermissionMatrixView(List.of(), java.util.Set.of()));
+            return new AdminAccountAdminController(s, roleService,
+                    mock(com.tailtopia.admin.roles.service.RolePermissionResolver.class), TestMessages.real());
         }
     }
 
@@ -79,11 +86,21 @@ class AdminAccountAccessControlTest {
     }
 
     private void viewList() {
-        controller.accounts(new ConcurrentModel());
+        controller.accounts(principal(), null, new ConcurrentModel());
     }
 
     private void deactivate() {
-        controller.deactivate(principal(), 5L, new RedirectAttributesModelMap());
+        controller.deactivate(principal(), 5L, com.tailtopia.admin.shared.web.HxRequest.NONE,
+                new RedirectAttributesModelMap(), new org.springframework.mock.web.MockHttpServletResponse(),
+                new ConcurrentModel());
+    }
+
+    private void rebind() {
+        controller.rebindEmail(principal(), 5L, "new@x", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), new RedirectAttributesModelMap());
+    }
+
+    private void rename() {
+        controller.rename(principal(), 5L, "新名", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), new RedirectAttributesModelMap());
     }
 
     @Test
@@ -114,5 +131,42 @@ class AdminAccountAccessControlTest {
     void deactivateAuthorityAllowed() {
         authenticateWith("ROLE_ADMIN", "admin.deactivate");
         assertThatCode(this::deactivate).doesNotThrowAnyException();
+    }
+
+    // ---- V1.3.0 Story 1.2：改名与建号同门槛（CREATE_AUTH） ----
+
+    @Test
+    void renameNeedsCreateAccountAuthority() {
+        authenticateWith("ROLE_ADMIN", "admin.deactivate"); // 有停用权但无建号权
+        assertThatThrownBy(this::rename).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void renameAllowedForCreateAccountAuthorityAndSuperAdmin() {
+        authenticateWith("ROLE_ADMIN", "admin.create_account");
+        assertThatCode(this::rename).doesNotThrowAnyException();
+        authenticateWith("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+        assertThatCode(this::rename).doesNotThrowAnyException();
+    }
+
+    // ---- V1.3.0 Story 1.3：换绑邮箱仅超管 ----
+
+    @Test
+    void rebindNeedsSuperAdmin() {
+        authenticateWith("ROLE_ADMIN", "admin.create_account", "admin.deactivate");
+        assertThatThrownBy(this::rebind).isInstanceOf(AccessDeniedException.class);
+        authenticateWith("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+        assertThatCode(this::rebind).doesNotThrowAnyException();
+    }
+
+    @Test
+    void rebindConcurrentUniqueViolationBecomesFlashErrorNot500() {
+        authenticateWith("ROLE_ADMIN", "ROLE_SUPER_ADMIN");
+        AdminAccountService svc = ctx.getBean(AdminAccountService.class);
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("uq"))
+                .when(svc).rebindEmail(5L, "dup@x", 1L);
+        var flash = new RedirectAttributesModelMap();
+        assertThatCode(() -> controller.rebindEmail(principal(), 5L, "dup@x", com.tailtopia.admin.shared.web.HxRequest.NONE, new ConcurrentModel(), flash)).doesNotThrowAnyException();
+        org.assertj.core.api.Assertions.assertThat(flash.getFlashAttributes()).containsKey("error");
     }
 }

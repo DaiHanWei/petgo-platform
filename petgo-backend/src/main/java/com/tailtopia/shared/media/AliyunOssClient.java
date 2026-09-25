@@ -87,6 +87,38 @@ public class AliyunOssClient {
     }
 
     /**
+     * 公开 URL → 对象 key（{@link #publicUrl} 的逆运算）。不是本平台公开桶 CDN 前缀下的地址 → empty。
+     *
+     * <p>🔒 用途：客户端直传后回报的是**完整 URL**，落库前必须证明它确实是我们桶里的对象 ——
+     * 否则客户端可以塞任意外部链接进来，而那个链接会被当成「平台的图」对所有人分发
+     * （2026-09-18 场所表对齐 D5：场所照片改存 object_key 时顺带堵上）。
+     * 查询串（如 {@code ?x-oss-process=}）一律剥掉；含 {@code ..} 或为空的 key 拒绝。
+     */
+    public java.util.Optional<String> objectKeyOfPublicUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String base = props.getOss().getCdnBaseUrl();
+        if (base == null || base.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String prefix = base.endsWith("/") ? base : base + "/";
+        String u = url.strip();
+        int q = u.indexOf('?');
+        if (q >= 0) {
+            u = u.substring(0, q);
+        }
+        if (!u.startsWith(prefix)) {
+            return java.util.Optional.empty();
+        }
+        String key = u.substring(prefix.length());
+        if (key.isEmpty() || key.contains("..") || key.startsWith("/")) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(key);
+    }
+
+    /**
      * （E4 服务端 EXIF 兜底）公开桶对外图片附 {@code x-oss-process} 去元数据样式：
      * 即便客户端绕过了客户端剥离，对外分发（尤其 H5 名片）经此 URL 取回的图也已重编码、无 GPS。
      */
@@ -104,6 +136,37 @@ public class AliyunOssClient {
         }
         String sep = publicUrl.contains("?") ? "&" : "?";
         return publicUrl + sep + "x-oss-process=" + EXIF_STRIP_PROCESS;
+    }
+
+    /**
+     * （E4 兜底 + 列表省流量）给已有公开 URL 附「缩放 + 去 EXIF」一体的 {@code x-oss-process}
+     * （V1.3.0 batch-b1 Story 1.3）。
+     *
+     * <p><b>为什么要有这个而不是直接用 {@link #exifStrippedDeliveryUrl}：</b>
+     * 客户端的缩略图逻辑（{@code AppImage.ossResized}）遇到<b>已带 {@code x-oss-process} 的 URL
+     * 会原样放过</b>（它无法安全地往别人的 process 串里塞参数）。于是「服务端去 EXIF」与
+     * 「客户端取缩略图」变成二选一 —— 而列表里 20 张原图会把首屏拖垮。
+     * 一条 process 串里同时写 resize 与 format，两件事就都成立了。
+     *
+     * <p>⚠️ {@code width} 是**物理像素**，由调用方按该出口的展示尺寸定（列表缩略图远小于详情大图）。
+     * 去 EXIF 靠的是 {@code format,jpg} 的重编码，不是 resize —— 所以 {@code width≤0} 时
+     * 退回 {@link #exifStrippedDeliveryUrl}，绝不会退成"什么都不加"。
+     */
+    public static String exifStrippedThumbUrl(String publicUrl, int width) {
+        if (publicUrl == null || publicUrl.isBlank()) {
+            return publicUrl;
+        }
+        // 🔴 已经带 x-oss-process 的原样返回：再追加一个的话 URL 上会有**两个同名参数**，
+        // OSS 只认其中一个 —— 结果是缩放或去 EXIF 里的某一件被静默丢掉，而 URL 看起来两样都有。
+        // （客户端 `AppImage.ossResized` 遇到同样情形也是原样放过，同一条判据。）
+        if (publicUrl.contains("x-oss-process")) {
+            return publicUrl;
+        }
+        if (width <= 0) {
+            return exifStrippedDeliveryUrl(publicUrl);
+        }
+        String sep = publicUrl.contains("?") ? "&" : "?";
+        return publicUrl + sep + "x-oss-process=image/resize,w_" + width + "/format,jpg";
     }
 
     /**

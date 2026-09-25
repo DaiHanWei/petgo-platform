@@ -72,10 +72,15 @@ void main() {
   }
 
   group('AC1 · 入口在底部互动栏，顶栏一个字不动', () {
-    testWidgets('互动栏三个图标：点赞 | 评论 | 分享', (tester) async {
+    /// V1.3.0 Story 2.3 起互动栏并入**固定底栏**，且右侧两态互斥：
+    /// 默认态是「点赞 + 分享」两个图标，**没有评论图标**——
+    /// 评论输入框本身就常驻底栏，再放一个「跳到评论框」的图标是多余的；
+    /// 评论数也只在评论区标题出现一次（AC3）。
+    testWidgets('底栏默认态两个图标：点赞 | 分享（评论图标已随互动栏合并去掉）', (tester) async {
       await pumpDetail(tester, _FakeDetailRepo(detail: detail()));
-      expect(find.byKey(const ValueKey('detailCommentIcon')), findsOneWidget);
       expect(find.byKey(const ValueKey('detailShareCardIcon')), findsOneWidget);
+      expect(find.byKey(const ValueKey('detailBottomActions')), findsOneWidget);
+      expect(find.byKey(const ValueKey('detailCommentIcon')), findsNothing);
     });
 
     /// 🛡 **这条是合规护栏**：UI 稿 SH1 把顶栏「···」整个画没了。
@@ -340,11 +345,21 @@ class _FakeDetailRepo implements DetailRepository {
   Future<CommentPage> getReplies(int parentId, {String? cursor}) async =>
       const CommentPage(items: [], nextCursor: null, hasMore: false);
   @override
-  Future<Comment> postComment(int postId, String body) => throw UnimplementedError();
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds = const []}) => throw UnimplementedError();
   @override
-  Future<Comment> postReply(int parentId, String body) => throw UnimplementedError();
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds = const []}) => throw UnimplementedError();
   @override
   Future<void> deleteComment(int commentId) async {}
+
+  /// V1.3.0 Story 2.4 新增的点赞通道；本类不验它，记下调用即可。
+  final List<int> likedComments = <int>[];
+  final List<int> unlikedComments = <int>[];
+
+  @override
+  Future<void> likeComment(int commentId) async => likedComments.add(commentId);
+
+  @override
+  Future<void> unlikeComment(int commentId) async => unlikedComments.add(commentId);
   @override
   Future<void> deleteContent(int postId) async {}
   @override

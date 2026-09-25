@@ -27,7 +27,7 @@ class AuditLogAdminControllerTest {
     @BeforeEach
     void setUp() {
         auditService = mock(AdminAuditService.class);
-        controller = new AuditLogAdminController(auditService);
+        controller = new AuditLogAdminController(auditService, mock(com.tailtopia.admin.audit.service.AuditChainVerifier.class));
         when(auditService.search(any(), any(), any(), any(), any(Pageable.class)))
                 .thenReturn(Page.<AdminAuditLog>empty());
     }

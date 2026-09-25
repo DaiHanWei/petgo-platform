@@ -53,6 +53,22 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
     }
 
+    /**
+     * 渲染到页面上出现 {@code expected} 为止（最多约 5 秒）。
+     *
+     * <p>🔴 建档那条里程碑由 {@code MilestoneAutoCompleteListener} 在 AFTER_COMMIT 后 <b>@Async</b> 完成 ——
+     * 建完档立刻渲染，异步任务可能还没跑完，页面是「0 / 31」。CI 机器稍慢就撞上（2026-09-25 PR #39 实际红过一次，
+     * 同一提交的另一次运行是绿的）。等异步落定再断言，而不是赌时序。
+     */
+    private String renderUntil(String token, String expected) throws Exception {
+        String html = render(token);
+        for (int i = 0; i < 50 && !html.contains(expected); i++) {
+            Thread.sleep(100);
+            html = render(token);
+        }
+        return html;
+    }
+
     // ===== AC3：整页不得出现中文 =====
 
     /**
@@ -186,7 +202,8 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
      */
     @Test
     void freshProfileShowsOneCompletedAndCatalogTotal() throws Exception {
-        String html = render(createProfileAndGetToken(newUser()));
+        // 等异步的建档里程碑落定（见 renderUntil）
+        String html = renderUntil(createProfileAndGetToken(newUser()), "1 / 31");
 
         assertThat(html)
                 .as("里程碑总数应取常量目录的 31（猫），不是视觉稿示意的 30")

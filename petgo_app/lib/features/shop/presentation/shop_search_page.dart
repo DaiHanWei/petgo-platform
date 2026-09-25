@@ -107,18 +107,63 @@ class _ShopSearchPageState extends ConsumerState<ShopSearchPage> {
                   onRetry: () => ref.invalidate(
                       shopProductsProvider((category: null, keyword: kw))),
                 ),
-                data: (items) => items.isEmpty
+                data: (feed) => feed.items.isEmpty
                     ? _noResult(l10n, kw)
-                    : ListView(
-                        padding: const EdgeInsets.only(bottom: kShopGutter),
-                        children: [
-                          ShopProductMasonry(
-                            items: items,
-                            // 行级归因：服务端加购时把它记在购物车行上，
-                            // 之后能回答「搜出来的商品到底转化如何」。
-                            entrySource: 'TOKO_SEARCH',
-                          ),
-                        ],
+                    // 🔴 Story 4-5：搜索结果同样分页。触底预加载 600px ——
+                    //    等真滚到底再请求，用户必然先看到一段空白。
+                    : NotificationListener<ScrollNotification>(
+                        onNotification: (n) {
+                          // 🔴 与 Toko 首页同一条纪律（2026-09-18 复审 #7）：
+                          //    先认领通知再看距离。结果卡片里的任何嵌套滚动
+                          //    （横滑规格条、将来的图片轮播）冒泡上来时，
+                          //    它们几十像素的 maxScrollExtent 会让距离判据恒成立，
+                          //    用户横划几下就把整份搜索结果拉完。
+                          if (n.depth != 0 ||
+                              n.metrics.axis != Axis.vertical) {
+                            return false;
+                          }
+                          if (n.metrics.pixels >=
+                              n.metrics.maxScrollExtent - 600) {
+                            ref
+                                .read(shopProductsProvider(
+                                        (category: null, keyword: kw))
+                                    .notifier)
+                                .loadMore();
+                          }
+                          return false;
+                        },
+                        child: ListView(
+                          padding: const EdgeInsets.only(bottom: kShopGutter),
+                          children: [
+                            ShopProductMasonry(
+                              items: feed.items,
+                              // 行级归因：服务端加购时把它记在购物车行上，
+                              // 之后能回答「搜出来的商品到底转化如何」。
+                              entrySource: 'TOKO_SEARCH',
+                            ),
+                            if (feed.loadingMore)
+                              const Padding(
+                                key: ValueKey('searchLoadingMore'),
+                                padding: EdgeInsets.symmetric(vertical: 18),
+                                child: Center(
+                                    child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2))),
+                              )
+                            else if (!feed.hasMore)
+                              Padding(
+                                key: const ValueKey('searchNoMore'),
+                                padding: const EdgeInsets.symmetric(vertical: 18),
+                                child: Center(
+                                  child: Text(l10n.tokoNoMore,
+                                      style: ShopText.meta
+                                          .copyWith(color: ShopColors.text4)),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
               ),
     );

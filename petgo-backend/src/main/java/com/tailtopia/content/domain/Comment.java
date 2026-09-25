@@ -11,6 +11,9 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.List;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 内容评论（Story 3.3 建表 + 只读；Story 3.5 写入）。两级结构：{@code parentId} 为 null 是一级评论，
@@ -36,6 +39,20 @@ public class Comment {
     @Column(name = "body", nullable = false, length = 1000)
     private String body;
 
+    /**
+     * 评论里 @ 到的人（V1.3.0 batch-b1 Story 3.2 · AC4 / AD-10 Rule 4）。
+     *
+     * <h2>🔴 存 userId，不存昵称</h2>
+     * {@link #body} 里留的是给人读的「@昵称」，可点、可判拉黑的那一份身份在这里。
+     * 存昵称的话对方改名后历史 @ 全部失效、点不动（渲染时按 id 实时查 —— Story 3.3）。
+     *
+     * <p>⚠️ 存量评论**永远为 null**（AD-10 Rule 6：存量文本不回溯解析）；
+     * 读取一律经 {@link #getMentionedUserIds()} 归一成空表。
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "mentioned_user_ids")
+    private List<Long> mentionedUserIds;
+
     /** 审核可见性态（story 3）。默认 VISIBLE（存量 grandfather、正常 PASS 路径）。 */
     @Enumerated(EnumType.STRING)
     @Column(name = "moderation_status", nullable = false, length = 16)
@@ -47,6 +64,13 @@ public class Comment {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    /**
+     * V1.3.0 预留（D-35 / X-2）：二级回复所回复的目标评论 id。本版只映射列、不写值（暖评只发一级评论；
+     * {@code createReply} 仍按两级归并写 {@code parent_id}），App 分支合入「回复某条评论」后启用。
+     */
+    @Column(name = "reply_to_comment_id")
+    private Long replyToCommentId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -167,12 +191,37 @@ public class Comment {
         return body;
     }
 
+    /**
+     * 评论里 @ 到的 userId（Story 3.2 AC4）。存量评论与没 @ 人的评论<b>都返回空表</b>，
+     * 永不返回 null —— 渲染（3.3）与通知（3.4）两处都会遍历它。
+     */
+    public List<Long> getMentionedUserIds() {
+        return mentionedUserIds == null ? List.of() : mentionedUserIds;
+    }
+
+    /**
+     * 写入 @ 名单（Story 3.2 AC4）。
+     *
+     * <p>🛡 调用方<b>必须</b>传 {@code MentionSanitizer.sanitize(...)} 的输出 ——
+     * 客户端提交的候选集是 UI，不是权限。
+     */
+    public void setMentionedUserIds(List<Long> mentionedUserIds) {
+        this.mentionedUserIds = mentionedUserIds == null || mentionedUserIds.isEmpty()
+                ? null // 空表落 null：与存量行同形，省掉一整列 '[]'。
+                : List.copyOf(mentionedUserIds);
+    }
+
     public CommentModerationStatus getModerationStatus() {
         return moderationStatus;
     }
 
     public int getContentVersion() {
         return contentVersion;
+    }
+
+    /** 预留字段（D-35 / X-2），本版恒为 null。 */
+    public Long getReplyToCommentId() {
+        return replyToCommentId;
     }
 
     public Instant getDeletedAt() {

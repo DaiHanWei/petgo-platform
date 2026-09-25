@@ -3,11 +3,17 @@ package com.tailtopia.admin.support.service;
 import com.tailtopia.admin.support.dto.AdminTicketView;
 import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.repository.ConsultOrderRepository;
+import com.tailtopia.shop.order.domain.ShopOrder;
+import com.tailtopia.shop.order.repository.ShopOrderRepository;
+import com.tailtopia.support.domain.RelatedOrderType;
+import com.tailtopia.pay.domain.PaymentStatus;
 import com.tailtopia.pay.refund.domain.RefundRequest;
+import com.tailtopia.pay.repository.PaymentIntentRepository;
 import com.tailtopia.pay.refund.repository.RefundRequestRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.media.SignedUrlService;
 import com.tailtopia.support.domain.FeedbackTicket;
+import com.tailtopia.support.domain.TicketStatus;
 import com.tailtopia.support.domain.TicketAttachment;
 import com.tailtopia.support.domain.TicketLabel;
 import com.tailtopia.support.repository.FeedbackTicketRepository;
@@ -38,18 +44,25 @@ public class AdminSupportTicketQueryService {
     private final TicketLabelRepository labels;
     private final TicketAttachmentRepository attachments;
     private final ConsultOrderRepository orders;
+    /** Story 3-2：电商工单的订单号从这里取（只读）。 */
+    private final ShopOrderRepository shopOrders;
     private final RefundRequestRepository refunds;
     private final SignedUrlService signedUrls;
+    /** bug 20260923-557：电商单支付时间 —— shop_orders 没有 paid_at 列，取其（最后一次）支付意图到账时刻。 */
+    private final PaymentIntentRepository paymentIntents;
 
     public AdminSupportTicketQueryService(FeedbackTicketRepository tickets, TicketLabelRepository labels,
             TicketAttachmentRepository attachments, ConsultOrderRepository orders,
-            RefundRequestRepository refunds, SignedUrlService signedUrls) {
+            ShopOrderRepository shopOrders,
+            RefundRequestRepository refunds, SignedUrlService signedUrls, PaymentIntentRepository paymentIntents) {
         this.tickets = tickets;
         this.labels = labels;
         this.attachments = attachments;
         this.orders = orders;
+        this.shopOrders = shopOrders;
         this.refunds = refunds;
         this.signedUrls = signedUrls;
+        this.paymentIntents = paymentIntents;
     }
 
     /** 列表页轻量视图：只填列表实际渲染的字段，不发标签/附件/订单/退款查询（finding #7）。 */
@@ -59,8 +72,88 @@ public class AdminSupportTicketQueryService {
                 t.getTicketToken(), t.getSubject(), null,
                 t.getContactType().name(), null,
                 t.isNeedContactCustomer(), t.isContactedCustomer(), t.getStatus().name(),
-                List.of(), 0, List.of(), null, null, null,
-                t.getCsatScore(), null, t.getCreatedAt(), t.getResolvedAt()));
+                // 列表 / 工作台左栏不渲染订单/退款，这些位置照旧留空（finding #7：不为列表发额外查询）。
+                List.of(), 0, List.of(), null, null, null, null,
+                t.getCsatScore(), null, t.getCreatedAt(), t.getResolvedAt(), null, null, null, null));
+    }
+
+    /** A5 工作台三态（V1.3.0 Story 2.7 AC1）：待处理 / 待联系（需联系且未联系）/ 已结案。 */
+    public enum State {
+        PENDING, CONTACT, CLOSED;
+
+        public static State of(String raw) {
+            if (raw == null || raw.isBlank()) {
+                return PENDING;
+            }
+            try {
+                return valueOf(raw.trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                return PENDING;
+            }
+        }
+
+        public String param() {
+            return name().toLowerCase();
+        }
+    }
+
+    private static final java.util.Set<TicketStatus> OPEN_STATUSES =
+            java.util.EnumSet.of(TicketStatus.OPEN, TicketStatus.IN_PROGRESS);
+    private static final java.util.Set<TicketStatus> CLOSED_STATUSES =
+            java.util.EnumSet.of(TicketStatus.RESOLVED, TicketStatus.CLOSED);
+
+    /** 工作台左栏一页（轻量视图，时间倒序）。 */
+    @Transactional(readOnly = true)
+    public Page<AdminTicketView> page(State state, Pageable pageable) {
+        Page<FeedbackTicket> page = switch (state) {
+            case CONTACT -> tickets.findByStatusInAndNeedContactCustomerTrueAndContactedCustomerFalseOrderByCreatedAtDesc(
+                    OPEN_STATUSES, pageable);
+            case CLOSED -> tickets.findByStatusInOrderByCreatedAtDesc(CLOSED_STATUSES, pageable);
+            default -> tickets.findByStatusInOrderByCreatedAtDesc(OPEN_STATUSES, pageable);
+        };
+        return page.map(t -> new AdminTicketView(
+                t.getTicketToken(), t.getSubject(), null,
+                t.getContactType().name(), null,
+                t.isNeedContactCustomer(), t.isContactedCustomer(), t.getStatus().name(),
+                // 列表 / 工作台左栏不渲染订单/退款，这些位置照旧留空（finding #7：不为列表发额外查询）。
+                List.of(), 0, List.of(), null, null, null, null,
+                t.getCsatScore(), null, t.getCreatedAt(), t.getResolvedAt(), null, null, null, null));
+    }
+
+    /** 三态计数。 */
+    @Transactional(readOnly = true)
+    public java.util.Map<String, Long> counts() {
+        java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+        out.put("pending", tickets.countByStatusIn(OPEN_STATUSES));
+        out.put("contact", tickets.countByStatusInAndNeedContactCustomerTrueAndContactedCustomerFalse(OPEN_STATUSES));
+        out.put("closed", tickets.countByStatusIn(CLOSED_STATUSES));
+        return out;
+    }
+
+    /** 待处理数 = {@code counts().get("pending")} 同一查询，供侧栏角标（Story 2.9 AC1）。 */
+    @Transactional(readOnly = true)
+    public long pendingCount() {
+        return tickets.countByStatusIn(OPEN_STATUSES);
+    }
+
+    /** 结案后「下一条」= 当前页签最新一条 token（待联系页签只在需联系未联系单里取；已结案页签无下一条）；无则空串。 */
+    @Transactional(readOnly = true)
+    public String nextPendingToken(State state) {
+        return switch (state == null ? State.PENDING : state) {
+            case CONTACT -> tickets.findFirstByStatusInAndNeedContactCustomerTrueAndContactedCustomerFalseOrderByCreatedAtDesc(OPEN_STATUSES)
+                    .map(FeedbackTicket::getTicketToken).orElse("");
+            case CLOSED -> "";
+            default -> tickets.findFirstByStatusInOrderByCreatedAtDesc(OPEN_STATUSES)
+                    .map(FeedbackTicket::getTicketToken).orElse("");
+        };
+    }
+
+    /** 一张工单当前所属页签（`?open=` 深链落页签用）。 */
+    public State stateOf(AdminTicketView t) {
+        if (!t.open()) {
+            return State.CLOSED;
+        }
+        return t.needContact() && !t.contacted() ? State.CONTACT : State.PENDING;
     }
 
     /**
@@ -88,13 +181,50 @@ public class AdminSupportTicketQueryService {
         String relatedOrderToken = null;
         String refundToken = null;
         String refundNeedDecision = null;
+        Long orderAmount = null;
+        String orderStatus = null;
+        java.time.Instant orderPaidAt = null;
+        String refundRejectReason = null;
+        String relatedOrderType = t.getRelatedOrderType().name();
         if (t.getRelatedOrderId() != null) {
-            relatedOrderToken = orders.findById(t.getRelatedOrderId())
-                    .map(ConsultOrder::getOrderToken).orElse(null);
-            RefundRequest refund = refunds.findByOrderId(t.getRelatedOrderId()).orElse(null);
-            if (refund != null) {
-                refundToken = refund.getRefundToken();
-                refundNeedDecision = refund.getNeedDecision().name();
+            // 🔴 **必须按类型分流**（shop-v2 Story 3-2）：两类订单 id 数值空间完全重叠，无条件当问诊单查
+            //    会给电商工单展示一条不相干的问诊单号（串单的可见形态）。
+            if (t.getRelatedOrderType() == RelatedOrderType.CONSULT) {
+                ConsultOrder order = orders.findById(t.getRelatedOrderId()).orElse(null);
+                if (order != null) {
+                    relatedOrderToken = order.getOrderToken();
+                    orderAmount = order.getAmount();
+                    orderStatus = order.getStatus() == null ? null : order.getStatus().name();
+                    orderPaidAt = order.getPaidAt();
+                }
+                // 退款单只对问诊单存在 —— 拿电商单 id 去查会命中同号问诊单的退款请求。
+                RefundRequest refund = refunds.findByOrderId(t.getRelatedOrderId()).orElse(null);
+                if (refund != null) {
+                    refundToken = refund.getRefundToken();
+                    refundNeedDecision = refund.getNeedDecision().name();
+                    refundRejectReason = refund.getRejectReason();
+                }
+            } else {
+                // 🔴 Story 4-3 已切换：读库列 display_no，不再用旧算法算。
+                //   运营在工单上看到的号，必须与用户报出来的、与订单中心显示的是同一个。
+                ShopOrder shop = shopOrders.findById(t.getRelatedOrderId()).orElse(null);
+                if (shop != null) {
+                    relatedOrderToken = shop.getDisplayNo();
+                    // bug 20260923-557：补齐订单摘要（金额 / 状态 / 支付时间），与问诊单同一组字段。
+                    //    状态给枚举名，模板按 admin.v130.shopOrders.status.* 本地化。
+                    orderAmount = shop.getTotalAmount();
+                    orderStatus = shop.getStatus() == null ? null : shop.getStatus().name();
+                    // 支付时间：shop_orders 无 paid_at 列；QRIS / 混合支付取所挂支付意图的到账时刻
+                    //    （PAID 是意图终态，到账后不再更新，updatedAt 即到账时刻）。纯 PawCoin 单没有支付意图 → 「—」。
+                    if (shop.getPaymentIntentToken() != null) {
+                        orderPaidAt = paymentIntents.findByPublicToken(shop.getPaymentIntentToken())
+                                .filter(pi -> pi.getStatus() == PaymentStatus.PAID)
+                                .map(com.tailtopia.pay.domain.PaymentIntent::getUpdatedAt)
+                                .orElse(null);
+                    }
+                }
+                // 🔴 电商单不进工单退款链路（A-1 资金安全）：refundToken / refundNeedDecision 恒为 null，
+                //    面板改为提示「到退货审核处理」。
             }
         }
         String contactValue = includeContactPii ? t.getContactValue() : maskContact(t.getContactValue());
@@ -103,9 +233,9 @@ public class AdminSupportTicketQueryService {
                 t.getContactType().name(), contactValue,
                 t.isNeedContactCustomer(), t.isContactedCustomer(), t.getStatus().name(),
                 labelNames, atts.size(), attachmentUrls,
-                relatedOrderToken, refundToken, refundNeedDecision,
+                relatedOrderToken, relatedOrderType, refundToken, refundNeedDecision,
                 t.getCsatScore(), t.getCsatComment(),
-                t.getCreatedAt(), t.getResolvedAt());
+                t.getCreatedAt(), t.getResolvedAt(), orderAmount, orderStatus, orderPaidAt, refundRejectReason);
     }
 
     /** 联系方式脱敏：首 2 + 末 2 可见（长度不足 5 全遮）。EMAIL/WHATSAPP 通用，够客服核对不够外泄。 */

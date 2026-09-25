@@ -1,0 +1,2 @@
+- 三语 message key 三包同批；Story 2.2 建好 scripts/ci/check-i18n-keys.sh 后每条 story 都跑它。
+- 涉及前端资源的页面只做模板与静态文件，不起容器。

@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--/*
+  B20 兽医抽屉（V1.3.0 Story 9.1a · AC2/AC3，480px 抽屉体 res=vet，UI 稿 6-2 / 6-4 / 6-7）。
+  四页签：资料 ｜ 资质 ｜ 评分 ｜ 账号。资质 / 评分本 story 只放占位（9.1b 填充，壳不再动）。
+  整页 vet-edit.html 与 vet-online.html 的内容在这里合并（AC5 / D-11 / D-23）。
+  ⚠️ 四个写端点 POST {id} / {id}/avatar / {id}/password / {id}/status 的路径 / 参数 / 权限逐字不变。
+  ⚠️ hx-target 一律指**带 id 的** #vet-drawer-err：htmx 只在目标带 id 时才发 HX-Target 头，
+     而 AdminBusinessExceptionAdvice 按这个头 HX-Retarget。
+  🔴 密码明文**只此一屏**：随本次响应渲染，不进 session / flash / 审计 / 日志。
+*/-->
+<body>
+<!--/* 🔴 tab：处置成功后抽屉是整体重渲染的，页签状态**必须由服务端带回来** ——
+       写死「资料」在 on 态的话，重置密码的明文（渲染在「账号」页签里）会落进一个
+       hidden 的 section：DOM 里有、屏幕上看不见，而那是唯一的获取窗口。 */-->
+<div th:fragment="drawer" id="vet-drawer-panel" class="tag-drawer" th:attr="data-vet-id=${vet.id()}"
+     th:with="tab=${activeTab} ?: 'profile',
+              canQualView=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''vet.qualify_view'') or hasAuthority(''vet.qualify'')')},
+              canRatingView=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''rating.view'')')},
+              canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''vet.edit'') or hasAuthority(''vet.create'')')},
+              canResetPwd=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''vet.reset_password'')')},
+              canBan=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''vet.ban'')')}">
+
+    <header class="ud-head">
+        <h2>
+            <span th:text="${vet.displayName()}">兽医</span>
+            <span class="muted">#<span th:text="${vet.id()}">1</span></span>
+            <span class="badge" th:classappend="${vet.status() == 'ACTIVE'} ? 'badge-ok' : 'badge-danger'"
+                  th:text="${vet.status() == 'ACTIVE'} ? #{admin.v130.vets.status.active} : #{admin.v130.vets.status.banned}">正常</span>
+        </h2>
+    </header>
+
+    <!--/* 页签条。纯前端切 hidden，不再请求。 */-->
+    <div class="tabs ud-tabs" role="tablist" data-vet-tabs>
+        <button type="button" class="tab" role="tab" data-vtab="profile"
+                th:classappend="${tab == 'profile'} ? 'tab--on'"
+                th:text="#{admin.v130.vets.tab.profile}">资料</button>
+        <!--/* 缺权限的页签**置灰**（AC2 的原话是「渲染为禁用并注明所缺权限」）：
+               可点但点开只有一句「你没权限」，等于让人白点一次。 */-->
+        <button type="button" class="tab" role="tab" data-vtab="qual"
+                th:classappend="${tab == 'qual'} ? 'tab--on'"
+                th:disabled="${!canQualView}"
+                th:title="${canQualView} ? null : #{admin.v130.err.forbidden(#{perm.vet.qualify_view})}"
+                th:text="#{admin.v130.vets.tab.qual}">资质</button>
+        <button type="button" class="tab" role="tab" data-vtab="rating"
+                th:classappend="${tab == 'rating'} ? 'tab--on'"
+                th:disabled="${!canRatingView}"
+                th:title="${canRatingView} ? null : #{admin.v130.err.forbidden(#{perm.rating.view})}"
+                th:text="#{admin.v130.vets.tab.rating}">评分</button>
+        <button type="button" class="tab" role="tab" data-vtab="account"
+                th:classappend="${tab == 'account'} ? 'tab--on'"
+                th:text="#{admin.v130.vets.tab.account}">账号</button>
+    </div>
+
+    <!--/* ① 资料页签：昵称 / 邮箱 / 手机 / 头像 + 在线态与最后在线。 */-->
+    <section class="card card-full tag-card" data-vtab-panel="profile" th:attr="hidden=${tab != 'profile'} ? true : null">
+        <div th:replace="~{admin/fragments/drawer-vets :: profile-form}"></div>
+
+        <!--/* 🔴 在线态是**兽医自己选的持久态**，没有 TTL 兜底（memory: vet-presence-explicit-only）：
+               这里不能顺手加「多久没心跳就算离线」的判断 —— 那会与兽医端看到的状态对不上。
+               离线时没有 lastSeen（下线即移出在线集合），显示「—」= 当前不在线，不是数据缺失。 */-->
+        <table class="ud-table" data-section="vet-presence">
+            <tr><th th:text="#{admin.vets.col.online}">在线</th>
+                <td><span class="badge"
+                          th:classappend="${presence.status() == 'ONLINE'} ? 'badge-ok'
+                              : (${presence.status() == 'BUSY'} ? 'badge-warn' : 'badge-info')"
+                          th:text="#{'admin.vets.presence.' + ${presence.status()}}">在线</span></td></tr>
+            <tr><th th:text="#{admin.v130.vets.lastSeen}">最后在线</th>
+                <td class="nowrap" th:text="${@adminTime.wib(presence.lastSeenAt())}">—</td></tr>
+        </table>
+        <p class="hint" data-notice="vet-presence-explicit"
+           th:text="#{admin.v130.vets.presenceNote}">在线态由兽医自己切换，后台只读不改。</p>
+    </section>
+
+    <!--/* ② 资质页签（V1.3.0 Story 9.1b · AC1）。
+           🔴 **懒加载**：证件图的预签名 URL 只在真的切过去时才签 —— 每开一次抽屉就签六个短 TTL URL，
+              是白白扩大暴露面。`click from:[data-vtab='qual'] once` 只拉一次。
+           🛡 无 vet.qualify_view / vet.qualify 时**不挂 hx-get**：页签渲染成禁用说明，
+              而不是让它去撞一个 403（AC2 的原话是「不 403 整个抽屉」）。 */-->
+    <!--/* 🔴 target 必须**带 id**：htmx 只在目标带 id 时才发 HX-Target 头，而
+           AdminBusinessExceptionAdvice 按那个头 retarget —— 没有它，4xx 会飘到
+           `#admin-inline-error`（表格下方，抽屉打开时根本看不见）。本文件表头立的规矩。
+       🔴 **不加 `once`**：加了之后失败一次就再也不会重试（`triggeredOnce` 置位），
+           页签永远停在「正在加载资质…」而错误落在看不见的地方。每次点页签重拉还有个好处：
+           证件图的预签名 URL 是短 TTL 的，看久了再点一下就重签。 */-->
+    <section id="vet-qual-slot" class="card card-full tag-card" data-vtab-panel="qual"
+             th:attr="hidden=${tab != 'qual'} ? true : null,
+                      hx-get=${canQualView} ? @{/admin/vets/{id}/qualification(id=${vet.id()})} : null"
+             hx-trigger="click from:[data-vtab='qual']" hx-target="this" hx-swap="innerHTML">
+        <p class="hint" th:if="${canQualView}" data-notice="vet-qual-loading"
+           th:text="#{admin.v130.vets.qual.loading}">正在加载资质…</p>
+        <p class="hint" th:unless="${canQualView}" data-notice="vet-qual-forbidden"
+           th:text="#{admin.v130.err.forbidden(#{perm.vet.qualify_view})}">需要「查看兽医资质」权限</p>
+    </section>
+
+    <!--/* ③ 评分页签（AC2）。同样懒加载；无 rating.view 时页签禁用而不是整个抽屉 403。 */-->
+    <section id="vet-rating-slot" class="card card-full tag-card" data-vtab-panel="rating"
+             th:attr="hidden=${tab != 'rating'} ? true : null,
+                      hx-get=${canRatingView} ? @{/admin/vets/{id}/ratings(id=${vet.id()})} : null"
+             hx-trigger="click from:[data-vtab='rating']" hx-target="this" hx-swap="innerHTML">
+        <p class="hint" th:if="${canRatingView}" data-notice="vet-rating-loading"
+           th:text="#{admin.v130.vets.rating.loading}">正在加载评分…</p>
+        <p class="hint" th:unless="${canRatingView}" data-notice="vet-rating-forbidden"
+           th:text="#{admin.v130.err.forbidden(#{perm.rating.view})}">需要「查看评分」权限</p>
+    </section>
+
+    <!--/* ④ 账号页签：重置密码 + 封禁 / 解封。 */-->
+    <section class="card card-full tag-card" data-vtab-panel="account" th:attr="hidden=${tab != 'account'} ? true : null">
+        <h3 th:text="#{admin.v130.vets.password.title}">重置密码</h3>
+
+        <!--/* 🔴 明文只此一屏：这一段只在本次响应里存在，刷新即消失。
+               关闭文案强调「已记录」——运营没抄下来就再没有第二次机会（后端不存明文）。 */-->
+        <div class="banner ok" th:if="${issuedPassword}" data-notice="vet-issued-password">
+            <p th:text="#{admin.v130.vets.password.issued}">新密码（仅本次可见，请立即记录并线下交付）：</p>
+            <code id="vet-issued-password" th:text="${issuedPassword}">xxxxxxxx</code>
+            <button type="button" class="btn btn-neutral btn-sm"
+                    data-copy-target="#vet-issued-password"
+                    th:text="#{admin.v130.vets.password.copy}">复制</button>
+            <p class="hint" th:text="#{admin.v130.vets.password.recorded}">关闭后无法再次查看（后端不保存明文）。</p>
+            <!--/* 🔴 关闭钮的文案是「我已记录」而不是「关闭」：这一步不可逆（后端不存明文），
+                   一个中性的「关闭」会被顺手点掉。 */-->
+            <button type="button" class="btn btn-neutral btn-sm" data-dismiss-secret
+                    th:text="#{admin.v130.vets.password.close}">我已记录</button>
+        </div>
+
+        <form th:if="${canResetPwd}"
+              th:attr="hx-post=@{/admin/vets/{id}/password(id=${vet.id()})}"
+              hx-target="#vet-drawer-err" hx-swap="innerHTML"
+              th:data-confirm="#{admin.v130.vets.password.confirm(${vet.displayName()})}">
+            <label class="field field-full">
+                <span th:text="#{admin.vets.newPassword}">新密码（≥8 位）</span>
+                <input type="text" name="newPassword" class="inp field-full" minlength="8" required
+                       th:placeholder="#{admin.vets.newPassword}"/>
+            </label>
+            <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.vets.reset}">重置</button>
+        </form>
+        <th:block th:unless="${canResetPwd}">
+            <button type="button" class="btn btn-neutral btn-sm" disabled
+                    th:title="#{admin.v130.err.forbidden(#{perm.vet.reset_password})}"
+                    th:text="#{admin.vets.reset}">重置</button>
+            <p class="hint" th:text="#{admin.v130.err.forbidden(#{perm.vet.reset_password})}">需要「重置兽医密码」权限</p>
+        </th:block>
+
+        <hr class="section-line"/>
+        <h3 th:text="#{admin.v130.vets.ban.title}">封禁 / 解封</h3>
+        <!--/* 🔴 这句不可删：封禁会中断进行中会话，但**不影响历史订单与结算** ——
+               不写的话运营会以为封一个人会把他这个月的钱也一起停掉，于是不敢用。 */-->
+        <p class="hint" data-notice="vet-ban-scope" th:text="#{admin.v130.vets.ban.note}">
+            封禁会立即下线并中断进行中会话；不影响历史订单与结算。</p>
+
+        <!--/* 解封是**同一位置的按钮态切换**（AC3），不是另一个入口：
+               两个按钮并排会让人不确定当前处于哪个状态。 */-->
+        <form th:if="${canBan}"
+              th:attr="hx-post=@{/admin/vets/{id}/status(id=${vet.id()})}"
+              hx-target="#vet-drawer-err" hx-swap="innerHTML"
+              th:data-confirm="${vet.status() == 'ACTIVE'}
+                               ? #{admin.v130.vets.ban.confirm(${vet.displayName()})}
+                               : #{admin.v130.vets.unban.confirm(${vet.displayName()})}">
+            <input type="hidden" name="banned" th:value="${vet.status() == 'ACTIVE'}"/>
+            <button type="submit" class="btn btn-sm"
+                    th:classappend="${vet.status() == 'ACTIVE'} ? 'btn-danger' : 'btn-neutral'"
+                    th:text="${vet.status() == 'ACTIVE'} ? #{admin.vets.ban} : #{admin.vets.unban}">封禁</button>
+        </form>
+        <th:block th:unless="${canBan}">
+            <button type="button" class="btn btn-sm" disabled
+                    th:title="#{admin.v130.err.forbidden(#{perm.vet.ban})}"
+                    th:text="${vet.status() == 'ACTIVE'} ? #{admin.vets.ban} : #{admin.vets.unban}">封禁</button>
+            <p class="hint" th:text="#{admin.v130.err.forbidden(#{perm.vet.ban})}">需要「封禁兽医」权限</p>
+        </th:block>
+    </section>
+
+    <div id="vet-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+
+    <!--/* 页签切换：纯前端切 hidden，不再请求（四块数据是一次取出来的）。
+           htmx 每次 swap 进来都会重新执行，不需要额外的 re-init 钩子。 */-->
+    <script>
+        (function () {
+            var root = document.querySelector('[data-vet-tabs]');
+            if (!root) { return; }
+            root.addEventListener('click', function (e) {
+                var btn = e.target.closest('[data-vtab]');
+                if (!btn) { return; }
+                var name = btn.getAttribute('data-vtab');
+                root.querySelectorAll('[data-vtab]').forEach(function (b) {
+                    var on = b === btn;
+                    b.classList.toggle('tab--on', on);
+                    b.setAttribute('aria-selected', String(on));
+                });
+                document.querySelectorAll('[data-vtab-panel]').forEach(function (p) {
+                    p.hidden = p.getAttribute('data-vtab-panel') !== name;
+                });
+            });
+            // ⚠️ 复制 / 「我已记录」两个钮走 admin-core.js 的全局委托（document 上的 click），
+            //    不在这里各写一份：开户成功的那份明文在**整页**上，抽屉的内联脚本够不着它。
+        })();
+    </script>
+</div>
+
+<!--/* ===== 资质页签内容（V1.3.0 Story 9.1b · AC1，整页 vet-qualification.html 平移）=====
+       ⚠️ 三个写端点 POST {id}/qualification（mode=record|renew）/ approve / reject
+          的路径与参数逐字不变；i18n 继续用既有的 admin.qualpage.* 一个都没改名。
+       🔴 证件 key / 签名 URL / 证件号绝不落日志与审计（审计在 service 层做，只记动作不记内容）。 */-->
+<!--/* ⚠️ canQualify 在这一层**自己算一遍**：这个片段会被单独返回（懒加载与处置成功两条路都不经
+       drawer），靠外层 th:with 的话变量在那两条路上根本不存在，表单会静默退化成只读态。 */-->
+<div th:fragment="qual-panel" id="vet-qual-panel"
+     th:with="canQualify=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''vet.qualify'')')}">
+    <!--/* ① 当前资质。 */-->
+    <th:block th:if="${qual != null}">
+        <p>
+            <span th:text="#{admin.qualpage.current}">当前状态</span>:
+            <span class="badge"
+                  th:classappend="${qual.status.name() == 'CERTIFIED'} ? 'badge-ok'
+                      : (${qual.status.name() == 'EXPIRING_SOON'} ? 'badge-warn'
+                      : ((${qual.status.name() == 'EXPIRED'} or ${qual.status.name() == 'REJECTED'}) ? 'badge-danger' : 'badge-info'))"
+                  th:text="#{'admin.qual.' + ${qual.status.name()}}">状态</span>
+        </p>
+        <p th:if="${qual.rejectReason != null}">
+            <span th:text="#{admin.qualpage.rejectReason}">驳回原因</span>:
+            <span th:text="${qual.rejectReason}">…</span>
+        </p>
+        <!--/* 证件图：短 TTL 预签名 URL，点开新窗口。头像内嵌缩略图 + 无图占位（bug 20260701-158）。 */-->
+        <p data-section="vet-qual-photos">
+            <a th:if="${ktpUrl}" th:href="${ktpUrl}" target="_blank" rel="noopener" data-no-drawer
+               th:text="#{admin.qualpage.ktpPhoto} + ' · ' + #{admin.qualpage.viewPhoto}">KTP</a><br/>
+            <a th:if="${sipdhUrl}" th:href="${sipdhUrl}" target="_blank" rel="noopener" data-no-drawer
+               th:text="#{admin.qualpage.sipdhPhoto} + ' · ' + #{admin.qualpage.viewPhoto}">SIPDH</a><br/>
+            <a th:if="${strvUrl}" th:href="${strvUrl}" target="_blank" rel="noopener" data-no-drawer
+               th:text="#{admin.qualpage.strvPhoto} + ' · ' + #{admin.qualpage.viewPhoto}">STRV</a><br/>
+            <a th:if="${degreeUrl}" th:href="${degreeUrl}" target="_blank" rel="noopener" data-no-drawer
+               th:text="#{admin.qualpage.degreePhoto} + ' · ' + #{admin.qualpage.viewPhoto}">Degree</a><br/>
+            <span th:text="#{admin.qualpage.profilePhoto}">Profile</span>:
+            <a th:if="${profileUrl}" th:href="${profileUrl}" target="_blank" rel="noopener" data-no-drawer>
+                <img th:src="${profileUrl}" alt="profile"
+                     style="height:64px;width:64px;object-fit:cover;border-radius:50%;vertical-align:middle;border:1px solid #ddd;"/>
+            </a>
+            <span th:unless="${profileUrl}" class="muted" th:text="#{admin.qualpage.noPhoto}">No photo</span><br/>
+            <a th:if="${pdhiUrl}" th:href="${pdhiUrl}" target="_blank" rel="noopener" data-no-drawer
+               th:text="#{admin.qualpage.pdhiPhoto} + ' · ' + #{admin.qualpage.viewPhoto}">PDHI</a>
+        </p>
+    </th:block>
+    <p class="muted" th:if="${qual == null}" th:text="#{admin.qualpage.noQual}">尚无资质记录</p>
+
+    <!--/* ② 审核：只在 UNDER_REVIEW 时出现（现状如此，不改）。 */-->
+    <th:block th:if="${qual != null and qual.status.name() == 'UNDER_REVIEW'}">
+        <hr class="section-line"/>
+        <h3 th:text="#{admin.qualpage.reviewActions}">审核操作</h3>
+        <th:block th:if="${canQualify}">
+            <form class="inline" th:attr="hx-post=@{/admin/vets/{id}/qualification/approve(id=${vetId})}"
+                  hx-target="#vet-qual-err" hx-swap="innerHTML"
+                  th:data-confirm="#{admin.v130.vets.qual.approveConfirm(${vet.displayName()})}">
+                <button type="submit" class="btn btn-primary btn-sm" th:text="#{admin.qualpage.approve}">通过</button>
+            </form>
+            <!--/* 🔴 驳回理由必填：驳回后兽医收到的就是这句话，空理由等于让他猜哪里不对。 */-->
+            <form class="inline" th:attr="hx-post=@{/admin/vets/{id}/qualification/reject(id=${vetId})}"
+                  hx-target="#vet-qual-err" hx-swap="innerHTML"
+                  th:data-confirm="#{admin.v130.vets.qual.rejectConfirm(${vet.displayName()})}">
+                <input type="text" name="reason" class="inp" required
+                       th:placeholder="#{admin.qualpage.reasonPlaceholder}"/>
+                <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.qualpage.reject}">驳回</button>
+            </form>
+        </th:block>
+        <th:block th:unless="${canQualify}">
+            <button type="button" class="btn btn-primary btn-sm" disabled
+                    th:title="#{admin.v130.err.forbidden(#{perm.vet.qualify})}"
+                    th:text="#{admin.qualpage.approve}">通过</button>
+            <p class="hint" th:text="#{admin.v130.err.forbidden(#{perm.vet.qualify})}">需要「审核兽医资质」权限</p>
+        </th:block>
+    </th:block>
+
+    <!--/* ③ 直录。⚠️ 有效期**不设必填**：生产上曾把某个兽医的 sipdh_expiry 置空以免被到期扫描
+           扫回 EXPIRED，加必填会把那条路堵死（Dev Notes 🔴）。 */-->
+    <th:block th:if="${canQualify}">
+        <hr class="section-line"/>
+        <h3 th:text="#{admin.qualpage.recordTitle}">直录资质</h3>
+        <form th:object="${qualificationForm}"
+              th:attr="hx-post=@{/admin/vets/{id}/qualification(id=${vetId})}"
+              hx-target="#vet-qual-err" hx-swap="innerHTML">
+            <input type="hidden" name="mode" value="record"/>
+            <label class="field" th:text="#{admin.qualpage.ktpNo}">KTP 编号</label>
+            <input type="text" th:field="*{ktpNo}" class="inp field-full"/>
+            <label class="field" th:text="#{admin.qualpage.ktpPhoto}">KTP 图 key</label>
+            <input type="text" th:field="*{ktpPhotoKey}" class="inp field-full"/>
+            <label class="field" th:text="#{admin.qualpage.sipdhNo}">SIPDH 编号</label>
+            <input type="text" th:field="*{sipdhNo}" class="inp field-full"/>
+            <label class="field" th:text="#{admin.qualpage.sipdhIssuer}">SIPDH 机构</label>
+            <input type="text" th:field="*{sipdhIssuer}" class="inp field-full"/>
+            <label class="field" th:text="#{admin.qualpage.sipdhExpiry}">SIPDH 有效期</label>
+            <input type="date" th:field="*{sipdhExpiry}" class="inp"/>
+            <label class="field" th:text="#{admin.qualpage.sipdhPhoto}">SIPDH 图 key</label>
+            <input type="text" th:field="*{sipdhPhotoKey}" class="inp field-full"/>
+            <label class="field" th:text="#{admin.qualpage.strvNo}">STRV 编号</label>
+            <input type="text" th:field="*{strvNo}" class="inp field-full"/>
+            <label class="field" th:text="#{admin.qualpage.strvIssuer}">STRV 机构</label>
+            <input type="text" th:field="*{strvIssuer}" class="inp field-full"/>
+            <label class="field" th:text="#{admin.qualpage.strvExpiry}">STRV 有效期</label>
+            <input type="date" th:field="*{strvExpiry}" class="inp"/>
+            <label class="field" th:text="#{admin.qualpage.strvPhoto}">STRV 图 key</label>
+            <input type="text" th:field="*{strvPhotoKey}" class="inp field-full"/>
+            <label class="field" th:text="#{admin.qualpage.degreePhoto}">学位证图 key</label>
+            <input type="text" th:field="*{degreePhotoKey}" class="inp field-full"/>
+            <label class="field" th:text="#{admin.qualpage.profilePhoto}">头像图 key</label>
+            <input type="text" th:field="*{profilePhotoKey}" class="inp field-full"/>
+            <label class="field" th:text="#{admin.qualpage.pdhiPhoto}">PDHI 图 key</label>
+            <input type="text" th:field="*{pdhiPhotoKey}" class="inp field-full"/>
+            <label class="field" th:text="#{admin.qualpage.specialties}">专长</label>
+            <input type="text" th:field="*{specialtiesRaw}" class="inp field-full"/>
+            <p><button type="submit" class="btn btn-primary btn-sm"
+                       th:text="#{admin.qualpage.submitRecord}">提交直录</button></p>
+        </form>
+
+        <!--/* ④ 续期：只更新证件与有效期，**不重置认证状态**（mode=renew → service.renew）。
+               🔴 与直录分成两个提交钮而不是一个下拉：选错的代价是把一个已认证的兽医打回待审。 */-->
+        <th:block th:if="${qual != null and (qual.status.name() == 'CERTIFIED'
+                          or qual.status.name() == 'EXPIRING_SOON' or qual.status.name() == 'EXPIRED')}">
+            <hr class="section-line"/>
+            <h3 th:text="#{admin.qualpage.renewTitle}">续期</h3>
+            <p class="hint" data-notice="vet-qual-renew-scope"
+               th:text="#{admin.v130.vets.qual.renewNote}">续期只更新证件与有效期，不会把认证状态打回待审。</p>
+            <form th:attr="hx-post=@{/admin/vets/{id}/qualification(id=${vetId})}"
+                  hx-target="#vet-qual-err" hx-swap="innerHTML">
+                <input type="hidden" name="mode" value="renew"/>
+                <label class="field" th:text="#{admin.qualpage.sipdhExpiry}">新有效期</label>
+                <input type="date" name="sipdhExpiry" class="inp"/>
+                <label class="field" th:text="#{admin.qualpage.sipdhPhoto}">新 SIPDH 图 key</label>
+                <input type="text" name="sipdhPhotoKey" class="inp field-full"/>
+                <p><button type="submit" class="btn btn-neutral btn-sm"
+                           th:text="#{admin.qualpage.submitRenew}">提交续期</button></p>
+            </form>
+        </th:block>
+    </th:block>
+    <p class="hint" th:unless="${canQualify}" th:text="#{admin.v130.err.forbidden(#{perm.vet.qualify})}">
+        需要「审核兽医资质」权限</p>
+
+    <div id="vet-qual-err" class="lst-inline-error" aria-live="polite"></div>
+</div>
+
+<!--/* 资质处置成功：**只换资质页签这一块** + toast。
+       ⚠️ 不重渲染整个抽屉：资质与评分两个页签是懒加载的，整体重渲染会把它们打回未加载态，
+          运营刚看的证件图与评分明细全没了。列表由 HX-Trigger 的 admin:vet-list-refresh 重拉。 */-->
+<th:block th:fragment="qual-after">
+    <div id="vet-qual-panel-oob" hx-swap-oob="innerHTML:[data-vtab-panel='qual']">
+        <div th:replace="~{admin/fragments/drawer-vets :: qual-panel}"></div>
+    </div>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+
+<!--/* ===== 评分页签内容（AC2，整页 vet-ratings.html 平移）=====
+       🔴 「未成功请求」维度的评价**不并入**（UI 稿 6-6：低频取证场景，留在 B21 独立页）。 */-->
+<div th:fragment="rating-panel" id="vet-rating-panel">
+    <div class="sum">
+        <div class="sum-item">
+            <div class="sum-label" th:text="#{admin.ratings.avg}">平均分</div>
+            <div class="sum-value" data-sum="avg" th:text="${ratings.average()} + ' ★'">0.0 ★</div>
+        </div>
+        <div class="sum-item">
+            <div class="sum-label" th:text="#{admin.v130.vets.rating.rated}">已评</div>
+            <div class="sum-value" data-sum="rated" th:text="${ratings.count()}">0</div>
+        </div>
+        <div class="sum-item">
+            <div class="sum-label" th:text="#{admin.v130.vets.rating.unrated}">未评</div>
+            <div class="sum-value" data-sum="unrated" th:text="${#lists.size(unrated)}">0</div>
+        </div>
+    </div>
+    <!--/* 🔴 这里**没有「总问诊量」那一格**，尽管一眼看去「已评 + 未评」就是它。
+           两个数的口径与列表那一列不一样：抽屉的「已评」是该兽医**全部**评分行（不分会话状态、
+           不带时间窗），「未评」含 INTERRUPTED；而列表的总量只数 CLOSED、且受问诊时间段约束。
+           把两者相加摆出来，就会出现「列表写 12、抽屉写 15」这种没人解释得清的组合 ——
+           所以宁可不给这个数，也不给一个会跟旁边打架的数。 */-->
+    <p class="hint" data-notice="vet-rating-scope" th:text="#{admin.v130.vets.rating.scopeNote}">
+        本页统计为该兽医全时段数据；「未评」含被中断的会话。列表的评分列按问诊时间段统计，两者口径不同。</p>
+
+    <table th:if="${!#lists.isEmpty(ratings.items())}" class="ud-table">
+        <thead><tr>
+            <th class="nowrap" th:text="#{admin.ratings.col.stars}">星级</th>
+            <th th:text="#{admin.ratings.col.comment}">评价</th>
+            <th class="nowrap" th:text="#{admin.ratings.col.time}">时间</th>
+        </tr></thead>
+        <tbody>
+        <tr th:each="r : ${ratings.items()}">
+            <td class="nowrap" th:text="${r.stars()} + ' ★'">5 ★</td>
+            <td th:text="${r.comment()}">很专业</td>
+            <td class="nowrap" th:text="${@adminTime.wib(r.createdAt())}">2026-06-02</td>
+        </tr>
+        </tbody>
+    </table>
+    <p class="hint" th:if="${#lists.isEmpty(ratings.items())}" th:text="#{admin.ratings.empty}">暂无评分</p>
+
+    <!--/* 未评问诊（Story 6.2）：纯只读，无写控件。 */-->
+    <hr class="section-line"/>
+    <h3 th:text="#{admin.ratings.unrated.title}">未评问诊</h3>
+    <table th:if="${!#lists.isEmpty(unrated)}" class="ud-table" data-section="vet-unrated">
+        <thead><tr>
+            <th class="nowrap" th:text="#{admin.ratings.unrated.col.session}">会话</th>
+            <th class="nowrap" th:text="#{admin.ratings.unrated.col.time}">时间</th>
+            <th th:text="#{admin.ratings.unrated.col.reason}">原因</th>
+        </tr></thead>
+        <tbody>
+        <tr th:each="u : ${unrated}">
+            <td class="nowrap">#<span th:text="${u.sessionId()}">0</span></td>
+            <td class="nowrap" th:text="${@adminTime.wib(u.terminalAt())}">-</td>
+            <td th:text="${u.reason().name() == 'INTERRUPTED'}
+                         ? #{admin.ratings.unrated.reason.interrupted}
+                         : #{admin.ratings.unrated.reason.timeout}">—</td>
+        </tr>
+        </tbody>
+    </table>
+    <p class="hint" th:if="${#lists.isEmpty(unrated)}" th:text="#{admin.ratings.unrated.empty}">暂无未评问诊</p>
+</div>
+
+<!--/* 资料表单单独成片段：校验失败时**连着表单一起回显**（只回一句错误的话，
+       运营刚填的内容会被换掉，得从头再填一遍）。 */-->
+<!--/* ⚠️ canEdit 在这一层**自己算一遍**：422 时控制器直接回这个片段（不经 drawer），
+       靠外层 th:with 的话变量在那条路上根本不存在 —— 表单会静默退化成只读态，
+       运营看到的是「填错了，然后表单没了」。 */-->
+<div th:fragment="profile-form" id="vet-profile-form"
+     th:with="canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''vet.edit'') or hasAuthority(''vet.create'')')}">
+    <!--/* 9-7 第 2 条（bug 20260923-543）：接模板 D 配置卡机制 —— 未修改时保存钮禁用；422 / 成功回来的是整个片段，htmx:load 重新记初值。 */-->
+    <form th:if="${canEdit}" th:object="${editVetForm}" data-config-card
+          th:attr="hx-post=@{/admin/vets/{id}(id=${vetId})}"
+          hx-target="#vet-profile-form" hx-swap="outerHTML">
+        <p class="err" th:each="e : ${#fields.globalErrors()}" th:text="${e}">错误</p>
+        <label class="field field-full">
+            <span th:text="#{admin.vets.displayName}">兽医昵称</span>
+            <input type="text" th:field="*{displayName}" class="inp field-full" maxlength="64" required/>
+        </label>
+        <p class="err" th:if="${#fields.hasErrors('displayName')}" th:errors="*{displayName}">昵称错误</p>
+        <label class="field field-full">
+            <span th:text="#{admin.vets.loginEmail}">登录邮箱</span>
+            <input type="email" th:field="*{username}" class="inp field-full" maxlength="64" required/>
+        </label>
+        <p class="err" th:if="${#fields.hasErrors('username')}" th:errors="*{username}">邮箱错误</p>
+        <label class="field field-full">
+            <span th:text="#{admin.vets.contactPhone}">联系手机号</span>
+            <input type="text" th:field="*{contactPhone}" class="inp field-full" maxlength="32"/>
+        </label>
+        <p class="err" th:if="${#fields.hasErrors('contactPhone')}" th:errors="*{contactPhone}">手机号错误</p>
+        <button type="submit" class="btn btn-primary btn-sm" data-save disabled th:text="#{admin.vets.save}">保存</button>
+    </form>
+    <th:block th:unless="${canEdit}">
+        <table class="ud-table">
+            <tr><th th:text="#{admin.vets.displayName}">兽医昵称</th><td th:text="${vet.displayName()}">名</td></tr>
+            <tr><th th:text="#{admin.vets.loginEmail}">登录邮箱</th><td th:text="${vet.username()}">a@x</td></tr>
+        </table>
+        <p class="hint" th:text="#{admin.v130.err.forbidden(#{perm.vet.edit})}">需要「编辑兽医」权限</p>
+    </th:block>
+
+    <!--/* 头像：multipart 表单，独立端点（参数名 avatar 逐字不变）。 */-->
+    <div class="ud-avatar">
+        <img th:if="${currentAvatarUrl != null and #strings.startsWith(currentAvatarUrl, 'http')}"
+             th:src="${currentAvatarUrl}" alt=""
+             style="height:48px;width:48px;border-radius:50%;object-fit:cover;vertical-align:middle"/>
+        <span th:unless="${currentAvatarUrl != null and #strings.startsWith(currentAvatarUrl, 'http')}"
+              class="muted">—</span>
+        <form th:if="${canEdit}" class="inline" enctype="multipart/form-data"
+              th:attr="hx-post=@{/admin/vets/{id}/avatar(id=${vetId})}, hx-encoding='multipart/form-data'"
+              hx-target="#vet-drawer-err" hx-swap="innerHTML">
+            <input type="file" name="avatar" accept="image/*" required/>
+            <button type="submit" class="btn btn-neutral btn-sm"
+                    th:text="#{admin.vets.avatar.upload}">上传头像</button>
+        </form>
+    </div>
+</div>
+
+<!--/* 处置成功：抽屉体 oob + toast；列表由 HX-Trigger 的 admin:vet-list-refresh
+       **带着当前筛选表单**整表重拉（刷新槽在 vets.html）。
+       🔴 不在这里做单行 oob + 摘要条 oob：这几个 POST 身上没有筛选参数，服务端只能按全库算，
+          而屏幕上的表格是筛选后的 —— 筛「ACTIVE」时摘要条会跳成全库的总数与已封禁数，
+          运营会读成统计坏了。跨页深链时更明显：行 oob 因为找不到 #vet-row-<id> 被静默丢弃，
+          只有摘要条跳变。 */-->
+<th:block th:fragment="afterAction">
+    <div id="vet-drawer-body-oob" hx-swap-oob="innerHTML:#vet-drawer .drawer-body">
+        <div th:replace="~{admin/fragments/drawer-vets :: drawer}"></div>
+    </div>
+    <!--/* 🔴 toast 多包一层：htmx 的 `beforeend:` oob 搬的是**子节点**，直接写在 .toast 上
+           落进宿主的只有裸文本（无样式、armToast 找不到元素 → 永不消失）。外层这个 div 会被丢掉。 */-->
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>

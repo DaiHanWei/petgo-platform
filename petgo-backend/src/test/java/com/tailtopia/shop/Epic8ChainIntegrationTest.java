@@ -1,6 +1,7 @@
 package com.tailtopia.shop;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -292,7 +293,83 @@ class Epic8ChainIntegrationTest extends ApiIntegrationTest {
                 .findFirst().orElseThrow();
         // 5 件 × 60 000 进货价
         assertThat(((Number) row.get("stock_value")).longValue()).isEqualTo(300_000L);
-        assertThat(finance.outOfStockSkuCount()).isGreaterThanOrEqualTo(0L);
+    }
+
+    /**
+     * L1：售罄计数的新口径（Story 5-3 · SHOP-FR-28 · AD-S12）。
+     *
+     * <p>🔴 <b>这是口径正确性的唯一实证。</b>L0 那条（{@code ShopFinanceDashboardSqlTest}）
+     * 只断言 SQL 文本，证明不了结果对 —— {@code COALESCE} 与 LEFT JOIN 在 NULL 上的行为
+     * 不能靠 mock 复现。
+     *
+     * <p>🔴 <b>断 delta 不断绝对值</b>：本测试类与库里其它用例共享数据，
+     * 断绝对值必然 flaky。
+     *
+     * <p>旧口径只数 A；新口径 A/B/C 全数，D 不数。
+     */
+    @Test
+    @DisplayName("🔴 售罄数覆盖「未上架」与「从未进过货」的规格（旧口径只数第一类）")
+    void outOfStockCountCoversUnlistedAndInventoryLessSkus() {
+        long before = finance.outOfStockSkuCount();
+
+        // A：已上架 + 有库存行 + 可售 0 —— 旧口径唯一数得到的一类
+        seedOutOfStockSku(true, true);
+        // B：**未上架** + 有库存行 + 可售 0。
+        //    shop_products.is_active 建列时 DEFAULT FALSE，旧写法把这类全排除了 ——
+        //    而未上架商品的规格断货，运营照样要知道，否则上架当天就是空的。
+        seedOutOfStockSku(false, true);
+        // C：**完全没有 sku_inventory 行**。旧写法从 sku_inventory 内连接出发，
+        //    这类一条都数不到 —— 而「从来没进过货」恰恰是最极端的售罄。
+        seedOutOfStockSku(true, false);
+        // D（对照）：有货，不该被数进去。
+        seedSku(5, 100_000L, 60_000L);
+
+        assertThat(finance.outOfStockSkuCount() - before)
+                .as("A/B/C 三类都要计入，D 不计入；旧口径只会 +1")
+                .isEqualTo(3L);
+    }
+
+    /**
+     * L1：{@code actual - locked} 为负时同样算售罄（防御性）。
+     *
+     * <p>理论上被库级约束挡着，但读数侧按 {@code <= 0} 判 —— 真出现负数时它同样是
+     * 「卖不了」，漏掉才是错的。
+     */
+    @Test
+    @DisplayName("🔴 可售为负在库级就插不进去（ck_sku_inventory_locked_le_actual）")
+    void negativeAvailableCountsAsOutOfStock() {
+        long skuId = seedSkuId(true);
+        // 原用例绕过服务层构造负可售，并注明「若库级约束不允许，改成断言插不进去」——
+        // 约束 locked <= actual 已上线（V20260817_1220），负可售在结构上不存在；读数侧的 <= 0 防御仍保留。
+        assertThatThrownBy(() -> jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 1, 5)", skuId))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class)
+                .hasMessageContaining("ck_sku_inventory_locked_le_actual");
+    }
+
+    /** 造一个「可售为 0」的规格。{@code withInventoryRow=false} 时连库存行都不建（C 类）。 */
+    private void seedOutOfStockSku(boolean listed, boolean withInventoryRow) {
+        long sid = seedSkuId(listed);
+        if (withInventoryRow) {
+            jdbc.update("INSERT INTO sku_inventory (sku_id, actual, locked) VALUES (?, 0, 0)", sid);
+        }
+    }
+
+    /** 造商品 + 规格，返回 sku id。不建库存行。 */
+    private long seedSkuId(boolean listed) {
+        String pToken = "e8o" + SEQ.incrementAndGet();
+        jdbc.update("""
+                INSERT INTO shop_products (public_token, name, brand, category, main_image_key,
+                        species, detail_html, shelf_life_note, return_policy, is_active)
+                VALUES (?, 'Produk', 'B', 'MAKANAN', 'k', 'DOG', '<p/>', 'n', 'RETURNABLE', ?)
+                """, pToken, listed);
+        Long pid = jdbc.queryForObject(
+                "SELECT id FROM shop_products WHERE public_token = ?", Long.class, pToken);
+        String sToken = "e8t" + SEQ.incrementAndGet();
+        jdbc.update("""
+                INSERT INTO shop_skus (public_token, product_id, spec_name, price, cost_price)
+                VALUES (?, ?, '3 kg', 100000, 60000)""", sToken, pid);
+        return jdbc.queryForObject(
+                "SELECT id FROM shop_skus WHERE public_token = ?", Long.class, sToken);
     }
 
     @Test

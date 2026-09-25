@@ -1,4 +1,5 @@
 import '../../auth/domain/user_tag.dart';
+import '../../mention/domain/mention_view.dart';
 /// 评论（对应后端 `CommentResponse`）。两级：一级含 [replyCount] + 内嵌前 3 条 [replies]；
 /// 二级回复 [replyCount]/[replies] 为 null。
 class Comment {
@@ -14,6 +15,9 @@ class Comment {
     this.replyCount,
     this.replies,
     this.moderationStatus = 'VISIBLE',
+    this.likeCount = 0,
+    this.liked = false,
+    this.mentions = const [],
   });
 
   final int id;
@@ -41,6 +45,46 @@ class Comment {
   /// 缺省 VISIBLE（旧后端不下发此字段时向后兼容）。
   final String moderationStatus;
 
+  /// 点赞数（V1.3.0 Story 2.4）。**后端实时聚合，库里没有计数列** ——
+  /// 所以这个数每次拉取都是当下的真值，不存在「对不上账」的历史包袱。
+  final int likeCount;
+
+  /// 当前查看者是否已赞（游客恒 false）。
+  final bool liked;
+
+  /// 乐观更新用：本地翻转点赞态，不等服务端回包。
+  ///
+  /// 服务端点赞端点**不返回赞数**（那是聚合值，回来时可能已经变了），所以本地
+  /// ±1 是唯一能让按钮立刻有反馈的办法。下次拉列表时以服务端为准。
+  Comment toggleLikedLocally() => copyWith(
+        liked: !liked,
+        likeCount: liked ? (likeCount - 1).clamp(0, 1 << 30) : likeCount + 1,
+      );
+
+  Comment copyWith({int? likeCount, bool? liked, List<Comment>? replies}) => Comment(
+        id: id,
+        authorId: authorId,
+        authorDeleted: authorDeleted,
+        body: body,
+        createdAt: createdAt,
+        authorNickname: authorNickname,
+        authorTags: authorTags,
+        authorAvatarUrl: authorAvatarUrl,
+        replyCount: replyCount,
+        replies: replies ?? this.replies,
+        moderationStatus: moderationStatus,
+        likeCount: likeCount ?? this.likeCount,
+        liked: liked ?? this.liked,
+        // 🔴 合并注：@ 投影必须带过去 —— 漏了的话点一下赞，这条评论里的 @ 就变成不可点的纯文字。
+        mentions: mentions,
+      );
+
+  /// 这条评论里的 @（V1.3.0 batch-b1 Story 3.3）。
+  ///
+  /// 🔴 每一项的「能不能点、显示什么昵称」都是**后端算好的**（拉黑 AC3 / 注销 AC4）——
+  /// 渲染侧只照做，不自己判。空表 = 这段文字里没有可点的 @。
+  final List<MentionView> mentions;
+
   bool get isTopLevel => replyCount != null;
 
   /// 仅作者可见的「已被下架/移除」态（读路径已按 viewer 过滤，他人根本收不到该行）。
@@ -63,6 +107,9 @@ class Comment {
           ? rawReplies.map((e) => Comment.fromJson((e as Map).cast<String, dynamic>())).toList()
           : null,
       moderationStatus: (json['moderationStatus'] as String?) ?? 'VISIBLE',
+      likeCount: (json['likeCount'] ?? 0) as int,
+      liked: (json['liked'] ?? false) as bool,
+      mentions: MentionView.listFromJson(json['mentions']),
     );
   }
 }

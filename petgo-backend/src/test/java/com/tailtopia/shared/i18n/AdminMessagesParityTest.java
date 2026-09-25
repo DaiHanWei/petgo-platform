@@ -157,8 +157,8 @@ class AdminMessagesParityTest {
     /**
      * 🛡 AC2：文案值里出现的**权限码必须逐字保留**，不许被翻译。
      *
-     * <p>当前有一处真实占用：{@code admin.config.pricingReadonly} 的文案里写着
-     * 「需 {@code config.edit} 权限修改」——那是**故意**告诉运营该找谁要权限的。
+     * <p>曾有一处真实占用：{@code admin.config.pricingReadonly} 的文案里写着「需 {@code config.edit} 权限修改」——那是**故意**
+     * 告诉运营该找谁要权限的（V1.3.0 Story 6.3 起该注释改为 {@code admin.v130.config.readonly} 按 {@code perm.*} 显示名传参，文案值里不再有裸码）。
      * 权限码一旦落地就**冻结**，译过的码对不上任何真实权限，运营拿着它去申请会被驳回。
      *
      * <p>比对基准取自 {@link com.tailtopia.admin.account.domain.AdminPermissions} 的常量，
@@ -190,8 +190,9 @@ class AdminMessagesParityTest {
                 expected.put(k, found);
             }
         }
-        // 断言基数：真有这么一处，否则下面的循环是空跑。
-        assertThat(expected).as("zh 侧文案里嵌了权限码的键").isNotEmpty();
+        // V1.3.0 Story 6.3 之前 admin.config.pricingReadonly 真嵌着 config.edit；6.3 起只读注释改按 {0} 传权限显示名（perm.* key），
+        // 新不变量：文案值里**不再允许**裸权限码（显示名三语各译，码不需要也不该出现在文案里）。下面的四包逐字比对保留作历史参考。
+        assertThat(expected).as("文案值不得再嵌裸权限码——所缺权限一律走 perm.* 显示名传参（D-37）").isEmpty();
 
         Map<String, String> all = new LinkedHashMap<>(LOCALES);
         all.put("baseline", BASELINE);
@@ -240,6 +241,36 @@ class AdminMessagesParityTest {
     }
 
     /**
+     * 🔴 后台文案不得露出<b>内部追踪编号</b>（bug 20260923-551）。
+     *
+     * <p>复购看板的区块标题写着「（Story 9.2）」、列头写着「FR-109 触发覆盖率」—— 那是需求文档里的编号，
+     * 运营看不懂、也不该看到（外部审计视角下还会被当成「开发没做完」）。
+     * 注释里写编号照旧没问题；这里只管 {@code admin.*} 的<b>值</b>。
+     */
+    @Test
+    void adminValuesCarryNoInternalTrackingIds() throws Exception {
+        java.util.regex.Pattern ids = java.util.regex.Pattern.compile(
+                "\\bStory ?\\d|\\bN?FR-\\d|\\bDEP-\\d|\\bOQ-\\d|\\bAB-\\d|\\bAD-\\d|\\bA-\\d+\\b|\\bD-\\d+\\b"
+                        + "|\\bSPEC-\\d|\\bUX-DR");
+        Map<String, String> all = new LinkedHashMap<>(LOCALES);
+        all.put("baseline", BASELINE);
+        for (Map.Entry<String, String> e : all.entrySet()) {
+            Properties p = load(e.getValue());
+            Set<String> offenders = new TreeSet<>();
+            for (String k : p.stringPropertyNames()) {
+                if (!k.startsWith("admin.")) {
+                    continue;
+                }
+                java.util.regex.Matcher m = ids.matcher(p.getProperty(k));
+                if (m.find()) {
+                    offenders.add(k + " => " + m.group());
+                }
+            }
+            assertThat(offenders).as(e.getKey() + " 后台文案里露出了内部编号（Story / FR / DEP / OQ / A- …）").isEmpty();
+        }
+    }
+
+    /**
      * 🔴 模板里用 {@code th:text}（转义）引用的键，文案<b>不得含标记</b>。
      *
      * <h2>这条守的是一个真实事故（2026-08-26 实机截图发现）</h2>
@@ -272,6 +303,43 @@ class AdminMessagesParityTest {
         assertThat(offenders)
                 .as("🔴 这些键的文案里有标记，却用 th:text 转义渲染 —— 标记会原样显示在页面上。"
                         + "要么改用 th:utext，要么把标记从文案里去掉")
+                .isEmpty();
+    }
+
+    /**
+     * 🔴 带 {@code {n}} 占位符的文案里，单引号必须写成 {@code ''}。
+     *
+     * <p>Spring 只在**传了参数**时才走 {@code MessageFormat}，而 MessageFormat 把单引号当
+     * <b>引用起始符</b>：{@code drawer's assignment tab; user {0} ...} 里那个撇号一出现，
+     * 后面直到下一个单引号（这里没有）全部变成字面量 —— 占位符不再替换，撇号本身还被吞掉。
+     * 界面上得到的是一句半截话加一个原样的 <code>{0}</code>。
+     *
+     * <p>⚠️ 这条**只能**在带占位符的键上判：不带参数的文案根本不过 MessageFormat，
+     * 那里的单引号是正常字符，一起判会把一大批正常文案判成违规。
+     *
+     * <p>（2026-09-10 实际踩到：`admin.v130.utags.legacyUserView` 与两条 Story 1.3 的账号文案。）
+     */
+    @Test
+    void messagesWithPlaceholdersEscapeTheirSingleQuotes() throws Exception {
+        Set<String> offenders = new TreeSet<>();
+        java.util.List<String> all = new java.util.ArrayList<>(LOCALES.values());
+        all.add(BASELINE);
+        for (String path : all) {
+            Properties p = load(path);
+            for (String key : p.stringPropertyNames()) {
+                String v = p.getProperty(key);
+                if (placeholders(v).isEmpty()) {
+                    continue;
+                }
+                // 把成对的 '' 去掉之后还剩单引号 = 未转义。
+                if (v.replace("''", "").indexOf('\'') >= 0) {
+                    offenders.add(path + " → " + key);
+                }
+            }
+        }
+        assertThat(offenders)
+                .as("🔴 这些文案带占位符却有未转义的单引号 —— MessageFormat 会把它当引用起始符，"
+                        + "占位符不再替换、撇号被吞掉。写成 '' 即可")
                 .isEmpty();
     }
 

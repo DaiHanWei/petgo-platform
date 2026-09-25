@@ -72,6 +72,21 @@ public class CartService {
     @Transactional
     public CartView add(long userId, String skuToken, int qty, String entrySource,
             String triggerType) {
+        return add(userId, skuToken, qty, entrySource, triggerType, false);
+    }
+
+    /**
+     * 加购，可选「立即购买」语义（2026-09-25 code review #4）。
+     *
+     * <p>🔴 <b>再次加购一律重新勾上这一行</b>：用户取消勾选过 B、再在 B 的详情页加购，意思就是要买它。
+     * 原先只加数量不动勾选 —— 「Beli Sekarang」（加购后进结算）结算的是车里别的已勾选商品，
+     * 车里没有别的勾选项时直接报「请至少选择一件商品」。
+     *
+     * @param buyNow true = 立即购买：只勾这一行、车内其它行取消勾选，结算页只结这一件
+     */
+    @Transactional
+    public CartView add(long userId, String skuToken, int qty, String entrySource,
+            String triggerType, boolean buyNow) {
         requirePositive(qty);
         ShopSku sku = requireSku(skuToken);
         ShopCart cart = cartOf(userId);
@@ -84,11 +99,17 @@ public class CartService {
         items.findByCartIdAndSkuId(cart.getId(), sku.getId())
                 .ifPresentOrElse(i -> {
                     i.setQty(target);
+                    i.setSelected(true);
                     // 首次来源优先：第二次加购通常发生在已决定要买之后，那不是转化发生的地方
                     i.attributeIfAbsent(entrySource, triggerType);
                     items.save(i);
                 }, () -> items.save(ShopCartItem.of(cart.getId(), sku.getId(), target,
                         entrySource, triggerType)));
+        if (buyNow) {
+            items.flush();
+            items.updateAllSelected(cart.getId(), false);
+            items.updateSelected(cart.getId(), sku.getId(), true);
+        }
         cart.touch();
         return view(userId);
     }
@@ -114,6 +135,44 @@ public class CartService {
     @Transactional
     public CartView remove(long userId, String skuToken) {
         return setQty(userId, skuToken, 0);
+    }
+
+    /**
+     * 勾选 / 取消勾选单行（Story 4-1，SHOP-FR-04 / AD-S6）。
+     *
+     * <p>🔴 <b>不校验库存</b>：{@code requireWithinStock} 只管加购与改数量。
+     * 勾一个已售罄的行不是错误 —— 它只是不会被计入 {@code selectedSubtotal}，
+     * 也不会进下单集。在这里报 409 会让「补货后我想买它」这件事变得没法表达。
+     *
+     * @throws AppException 404 —— 该 SKU 不在本人车里（与 {@code setQty} / {@code remove} 同口径）
+     */
+    @Transactional
+    public CartView setSelected(long userId, String skuToken, boolean selected) {
+        ShopSku sku = requireSku(skuToken);
+        ShopCart cart = cartOf(userId);
+        if (items.updateSelected(cart.getId(), sku.getId(), selected) == 0) {
+            throw AppException.notFound("购物车中没有该商品");
+        }
+        cart.touch();
+        return view(userId);
+    }
+
+    /**
+     * 全选 / 全不选（Story 4-1 AC2）。
+     *
+     * <p>🔴 <b>作用于车内全部行，含失效行</b>：失效行的 {@code selected} 照实下发，
+     * 只是永不计入选中合计。把失效行排除在「全选」之外，会让用户在商品补货后
+     * 发现自己明明点过全选、那一行却没被选上。
+     *
+     * <p>空车时是无操作（0 行受影响），返回空视图而不是 404 —— 「全不选一辆空车」
+     * 不是一个错误，它只是什么都没发生。
+     */
+    @Transactional
+    public CartView setAllSelected(long userId, boolean selected) {
+        ShopCart cart = cartOf(userId);
+        items.updateAllSelected(cart.getId(), selected);
+        cart.touch();
+        return view(userId);
     }
 
     /** 清空全部失效商品（已下架 / 已售罄）。 */
@@ -147,7 +206,7 @@ public class CartService {
         ShopCart cart = cartOf(userId);
         List<ShopCartItem> rows = items.findByCartIdOrderByIdAsc(cart.getId());
         if (rows.isEmpty()) {
-            return new CartView(List.of(), List.of(), 0L, 0);
+            return new CartView(List.of(), List.of(), 0L, 0L, 0, 0);
         }
 
         List<Long> skuIds = rows.stream().map(ShopCartItem::getSkuId).toList();
@@ -162,6 +221,11 @@ public class CartService {
         List<CartView.CartLine> invalid = new ArrayList<>();
         long subtotal = 0L;
         int count = 0;
+        // 🔴 选中口径与上面两个**并行累加，不是替换**：subtotal / itemCount 的算法一个字符不改。
+        //    线上老版本 App 的底栏读的就是 subtotal，它没有勾选框可点 ——
+        //    把 subtotal 改成选中合计，老用户会看到一个自己无法解释也无法纠正的金额（AD-S6）。
+        long selectedSubtotal = 0L;
+        int selectedCount = 0;
 
         for (ShopCartItem row : rows) {
             ShopSku sku = skuById.get(row.getSkuId());
@@ -192,17 +256,25 @@ public class CartService {
                     reason,
                     // 归因随行带出，供下单时抄到订单行（不下发给客户端，见 CartLine 注释）
                     row.getEntrySource(),
-                    row.getTriggerType());
+                    row.getTriggerType(),
+                    row.isSelected());
 
             if (reason == null) {
                 valid.add(line);
                 subtotal += sku.getPrice() * row.getQty();
                 count += row.getQty();      // 🔴 件数，不是种类数
+                if (row.isSelected()) {
+                    // 🔴 过滤条件是「selected && reason == null」——写成「没下架 && 没售罄」
+                    //    到 Epic 6 追加第三种失效原因（停用品类，SHOP-FR-19）时会漏。
+                    selectedSubtotal += sku.getPrice() * row.getQty();
+                    selectedCount += row.getQty();   // 与 itemCount 同为件数口径
+                }
             } else {
                 invalid.add(line);          // 🔴 不参与合计、不计入角标，但也不消失
+                // 失效行的 selected 照实下发（不强行改写成 false），但永不计入选中合计。
             }
         }
-        return new CartView(valid, invalid, subtotal, count);
+        return new CartView(valid, invalid, subtotal, selectedSubtotal, count, selectedCount);
     }
 
     // ---------- 内部 ----------

@@ -48,14 +48,14 @@ class _RecordingRepo implements DetailRepository {
       const CommentPage(items: [], nextCursor: null, hasMore: false);
 
   @override
-  Future<Comment> postComment(int postId, String body) async {
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds = const []}) async {
     postCommentCalls++;
     if (failPost) throw Exception('boom');
     return _c(999, 1);
   }
 
   @override
-  Future<Comment> postReply(int parentId, String body) async {
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds = const []}) async {
     postReplyCalls++;
     if (failPost) throw Exception('boom');
     return _c(999, 1);
@@ -65,6 +65,16 @@ class _RecordingRepo implements DetailRepository {
   Future<void> deleteComment(int commentId) async {
     deleteCalls++;
   }
+
+  /// V1.3.0 Story 2.4 新增的点赞通道；本类不验它，记下调用即可。
+  final List<int> likedComments = <int>[];
+  final List<int> unlikedComments = <int>[];
+
+  @override
+  Future<void> likeComment(int commentId) async => likedComments.add(commentId);
+
+  @override
+  Future<void> unlikeComment(int commentId) async => unlikedComments.add(commentId);
 
   @override
   Future<void> deleteContent(int postId) async {}
@@ -100,6 +110,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'hello pets');
+    // V1.3.0 Story 2.3：底栏右侧两态互斥——有输入后发送键才出现，需要一帧让它挂上来。
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('detailCommentSend')));
     await tester.pumpAndSettle();
     expect(repo.postCommentCalls, 1);
@@ -122,6 +134,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const ValueKey('detailCommentInput')), 'keep me');
+    // V1.3.0 Story 2.3：底栏右侧两态互斥——有输入后发送键才出现，需要一帧让它挂上来。
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('detailCommentSend')));
     await tester.pumpAndSettle();
 
@@ -205,10 +219,10 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(container.read(replyTargetProvider), isNull); // 前置：无回复态
+    expect(container.read(replyTargetProvider(5)), isNull); // 前置：无回复态
     await tester.tap(find.byKey(const ValueKey('commentItem_11')));
     await tester.pumpAndSettle();
-    final rt = container.read(replyTargetProvider);
+    final rt = container.read(replyTargetProvider(5));
     expect(rt, isNotNull);
     expect(rt!.parentId, 11); // 回复该评论（二级由后端归并到一级父，不产生三级）
     expect(rt.toName, 'U2');

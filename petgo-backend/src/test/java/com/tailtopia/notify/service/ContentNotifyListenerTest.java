@@ -51,14 +51,14 @@ class ContentNotifyListenerTest {
 
     @Test
     void commentNotifiesContentAuthor() {
-        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, null, Instant.now()));
+        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, null, Instant.now(), null));
         verify(notificationService).send(eq(9L), eq(NotificationType.CONTENT_COMMENTED),
                 anyString(), anyString(), eq(NotificationType.CONTENT_COMMENTED.name()), eq("55"));
     }
 
     @Test
     void selfCommentNotPushed() {
-        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 9L, 9L, null, Instant.now()));
+        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 9L, 9L, null, Instant.now(), null));
         verify(notificationService, never()).send(anyLongArg(), any(), anyString(), anyString(), anyString(), anyString());
     }
 
@@ -66,7 +66,7 @@ class ContentNotifyListenerTest {
     @Test
     void replyNotifiesBothContentAuthorAndParentAuthor() {
         // post 作者 9；评论者 2 回复了 5 的一级评论。
-        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, 5L, Instant.now()));
+        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, 5L, Instant.now(), null));
         verify(notificationService).send(eq(9L), eq(NotificationType.CONTENT_COMMENTED),
                 anyString(), anyString(), eq(NotificationType.CONTENT_COMMENTED.name()), eq("55"));
         verify(notificationService).send(eq(5L), eq(NotificationType.CONTENT_COMMENTED),
@@ -76,7 +76,7 @@ class ContentNotifyListenerTest {
     @Test
     void replyToOwnCommentDoesNotNotifySelf() {
         // 评论者 5 回复自己的一级评论；内容作者 9。仅通知作者 9，不给自己(5)发。
-        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 5L, 9L, 5L, Instant.now()));
+        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 5L, 9L, 5L, Instant.now(), null));
         verify(notificationService).send(eq(9L), eq(NotificationType.CONTENT_COMMENTED),
                 anyString(), anyString(), anyString(), eq("55"));
         verify(notificationService, never()).send(eq(5L), any(), anyString(), anyString(), anyString(), anyString());
@@ -85,7 +85,7 @@ class ContentNotifyListenerTest {
     @Test
     void replyWhereParentIsContentAuthorNotifiedOnce() {
         // 被回复人 9 恰是内容作者：只推一条（去重，不双推）。
-        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, 9L, Instant.now()));
+        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, 9L, Instant.now(), null));
         verify(notificationService, org.mockito.Mockito.times(1)).send(eq(9L), any(),
                 anyString(), anyString(), anyString(), anyString());
     }
@@ -120,7 +120,7 @@ class ContentNotifyListenerTest {
     @Test
     void commentFromHiddenUserIsSuppressedForContentAuthor() {
         when(hideRelations.isHidden(9L, 2L)).thenReturn(true);
-        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, null, Instant.now()));
+        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, null, Instant.now(), null));
         verify(notificationService, never()).send(anyLongArg(), any(), anyString(), anyString(),
                 anyString(), anyString());
     }
@@ -139,7 +139,7 @@ class ContentNotifyListenerTest {
         when(hideRelations.isHidden(9L, 2L)).thenReturn(true); // A(9) 隐藏了 B(2)
         // C(5) 什么都没做：isHidden(5, 2) 默认 false
 
-        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, 5L, Instant.now()));
+        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, 5L, Instant.now(), null));
 
         verify(notificationService, never()).send(eq(9L), any(), anyString(), anyString(),
                 anyString(), anyString()); // A 收不到
@@ -153,7 +153,7 @@ class ContentNotifyListenerTest {
         when(hideRelations.isHidden(9L, 2L)).thenReturn(false); // A(9) 没拉黑谁
         when(hideRelations.isHidden(5L, 2L)).thenReturn(true);  // C(5) 隐藏了 B(2)
 
-        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, 5L, Instant.now()));
+        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, 5L, Instant.now(), null));
 
         verify(notificationService).send(eq(9L), eq(NotificationType.CONTENT_COMMENTED),
                 anyString(), anyString(), anyString(), eq("55")); // 内容作者照常收到

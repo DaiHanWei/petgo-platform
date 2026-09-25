@@ -43,6 +43,9 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-petgo}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # 埋点环境标记（Story 1-2）。prod / stag / dev 三选一，其余回退 dev。
+      # 🔴 不可由 SPRING_PROFILES_ACTIVE 推导 —— staging 也跑 prod profile。
+      APP_ENV: ${APP_ENV:-dev}
     ports:
       - "${SERVER_PORT:-8080}:8080"
 

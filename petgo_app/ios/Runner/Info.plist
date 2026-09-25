@@ -32,6 +32,19 @@
 		<string>TailTopia needs photo library access so you can choose pet photos for profiles, posts, and AI triage.</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>TailTopia needs permission to save your pet's ID card image to your photo library.</string>
+		<!-- 定位（V1.3.0 batch-b1 Story 1.2 AC6）：场所列表按距离排序。
+		     🔴 **本条文案按 AC6 要求用印尼语**（上面几条是英文，这里有意不同）：
+		        它是给印尼终端用户看的授权弹窗正文，必须说清用途 = 按距离排序附近的宠物友好场所。
+		     🛡 **只有 WhenInUse，没有 Always**：按距离排序只需要用户正在看列表的那一刻；
+		        声明 Always 会在 App Store 审核里被要求解释一个我们并不存在的后台场景。 -->
+		<key>NSLocationWhenInUseUsageDescription</key>
+		<string>TailTopia memakai lokasimu untuk mengurutkan tempat ramah hewan terdekat berdasarkan jarak.</string>
+		<!-- Google 地图 iOS 密钥（V1.3.0 batch-b1 Story 1.4 · AD-3 Rule 4）。
+		     🔴 这里**只有构建变量引用**，真实值来自 gitignored 的 ios/Flutter/Maps.xcconfig
+		        （模板 Maps.xcconfig.example）—— 密钥绝不入库。
+		     没配时解析成空串：地图是灰的，但包能编能装。AppDelegate 读这个键去初始化 SDK。 -->
+		<key>GMSApiKey</key>
+		<string>$(GOOGLE_MAPS_API_KEY)</string>
 		<!-- ATT（iOS 14.5+，AppsFlyer 归因拿 IDFA 用）。⚠️ 提审前文案须与合规确认定稿并做
 		     中/英/印尼三语本地化（InfoPlist.strings），与 App Store 隐私标签一致——交付文档 §3.5。 -->
 		<key>NSUserTrackingUsageDescription</key>
@@ -65,6 +78,11 @@
 				</array>
 			</dict>
 		</array>
+		<!-- 关闭 Flutter 引擎自动深链（bug 20260910-487）：与安卓清单 flutter_deeplinking_enabled=false 一致，
+		     深链只走 app_links（deepLinkToLocation 转站内路径）。不关的话引擎会把原始 tailtopia://… 交给
+		     go_router → 「Page Not Found / no routes for location」。 -->
+		<key>FlutterDeepLinkingEnabled</key>
+		<false/>
 		<key>UIApplicationSceneManifest</key>
 		<dict>
 			<key>UIApplicationSupportsMultipleScenes</key>

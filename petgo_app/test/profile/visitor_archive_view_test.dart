@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
+import 'package:tailtopia/features/profile/domain/archive_scope.dart';
+import 'package:tailtopia/features/profile/presentation/visitor_archive_view.dart';
 import 'package:tailtopia/features/profile/domain/archive_stats.dart';
 import 'package:tailtopia/features/profile/domain/timeline_item.dart';
 import 'package:tailtopia/features/profile/domain/visitor_profile.dart';
@@ -54,10 +56,10 @@ Widget _wrap({
   return ProviderScope(
     overrides: [
       authControllerProvider.overrideWith(() => _TestAuthController(auth)),
-      visitorProfileProvider(_token).overrideWith((ref) async => profile),
-      visitorStatsProvider(_token).overrideWith((ref) async => const ArchiveStats(
+      visitorProfileProvider(const ArchiveScope.visitor(_token)).overrideWith((ref) async => profile),
+      visitorStatsProvider(const ArchiveScope.visitor(_token)).overrideWith((ref) async => const ArchiveStats(
           happyMomentCount: 24, consultCount: 3, milestoneCompleted: 7, milestoneTotal: 30)),
-      visitorTimelineProvider(_token).overrideWith((ref) async => TimelinePage(items: items)),
+      visitorTimelineProvider(const ArchiveScope.visitor(_token)).overrideWith((ref) async => TimelinePage(items: items)),
     ],
     child: const MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -67,7 +69,78 @@ Widget _wrap({
   );
 }
 
+/// 站内入口（V1.3.0 batch-b1 Story 2.3）：按 petId、仅登录可用、**不渲染来源横幅**。
+Widget _wrapInApp({List<TimelineItem> items = const []}) {
+  const scope = ArchiveScope.inAppVisitor(_petId);
+  return ProviderScope(
+    overrides: [
+      authControllerProvider.overrideWith(() => _TestAuthController(
+          const AuthState(status: AuthStatus.authenticated, role: 'USER'))),
+      visitorProfileProvider(scope).overrideWith((ref) async => _profile),
+      visitorStatsProvider(scope).overrideWith((ref) async => const ArchiveStats(
+          happyMomentCount: 24, consultCount: 3, milestoneCompleted: 7, milestoneTotal: 30)),
+      visitorTimelineProvider(scope).overrideWith((ref) async => TimelinePage(items: items)),
+    ],
+    child: const MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: VisitorArchiveView(scope: scope),
+    ),
+  );
+}
+
+const int _petId = 42;
+
 void main() {
+  /// V1.3.0 batch-b1 Story 2.3 · AC4/AC5：同一屏的两种来源。
+  group('站内入口（AD-4 Rule 5）', () {
+    /// 2026-09-21 stag 验收：空时间线曾沿用主人态「Record Mochi's first diary entry」——
+    /// 访客看的是别人的宠物，不能邀请他去写。
+    testWidgets('时间线为空 → 访客文案，不出现主人态「去写第一篇」', (tester) async {
+      await tester.pumpWidget(_wrapInApp());
+      await tester.pumpAndSettle();
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+      expect(find.byKey(const ValueKey('visitorTimelineEmpty')), findsOneWidget);
+      expect(find.text(l10n.growthArchiveVisitorTimelineEmpty('Mochi')), findsOneWidget);
+      expect(find.text(l10n.growthArchiveTimelineEmpty('Mochi')), findsNothing);
+    });
+
+    /// 🔴 **站内进入不渲染来源横幅**：从别人主页点宠物卡进来时，
+    /// 「谁分享的」这个前提根本不成立。从分享链接进来时照旧显示（上面那组用例守着）。
+    testWidgets('站内进入 → 没有「由 XX 分享」横幅，其余一字不变', (tester) async {
+      await tester.pumpWidget(_wrapInApp());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('visitorSharedBanner')), findsNothing);
+      // 其余照旧：宠物信息卡 / 里程碑进度 / 统计数字都在。
+      expect(find.byKey(const ValueKey('petInfoCard')), findsOneWidget);
+      expect(find.byKey(const ValueKey('archiveMilestoneBar')), findsOneWidget);
+      expect(find.text('24'), findsOneWidget);
+    });
+
+    /// ⚠️ AC5：**没有日历、没有视图切换行**（2026-08-18 / 08-28 两次拍板不做）。
+    /// UI 旧稿画着那两个按钮，已于 2026-09-11 修订。**别照旧稿补回去。**
+    testWidgets('站内进入同样没有日历与视图切换行', (tester) async {
+      await tester.pumpWidget(_wrapInApp());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('visitorViewTimeline')), findsNothing);
+      expect(find.byKey(const ValueKey('visitorViewCalendar')), findsNothing);
+    });
+
+    /// 作者专属入口在站内态同样一个都不能有（减法口径与分享态逐条一致）。
+    testWidgets('站内进入也不渲染编辑 / 健康 / 身份证 / 分享', (tester) async {
+      await tester.pumpWidget(_wrapInApp());
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('editProfileButton')), findsNothing);
+      expect(find.byKey(const ValueKey('diaryHealthEntry')), findsNothing);
+      expect(find.byKey(const ValueKey('diaryIdCardButton')), findsNothing);
+      expect(find.byKey(const ValueKey('shareFab')), findsNothing);
+    });
+  });
+
   group('AC2 减法：作者专属入口一个都不能留', () {
     /// 🛡 本组最要紧的一条。
     ///

@@ -16,7 +16,7 @@ import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
 
 import '../support/fake_feed_repository.dart';
 import 'package:tailtopia/features/shop/data/shop_repository.dart';
-import 'package:tailtopia/features/shop/domain/shop_product.dart';
+import '../shop/fake_shop_products.dart';
 
 /// 底栏标签精确定位：页面正文里也可能出现同名文字（如游客态页头的统计列 "Diary"），
 /// 直接 `find.text('Diary')` 会命中多个。
@@ -38,7 +38,7 @@ Future<ProviderContainer> _pumpGuestApp(WidgetTester tester) async {
   // 测试环境无后端 → 挂在 30s receiveTimeout 上（表现为 pumpAndSettle 不收敛 / pending timer）。
       // banner 同样必须 override —— 真 provider 会发请求并留下未完成 Timer。
       shopBannerProvider.overrideWith((ref) async => null),
-      shopProductsProvider.overrideWith((ref, category) async => <ShopProductSummary>[]),
+      fakeShopProducts(const []),
     ],
   );
   addTearDown(container.dispose);

@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,8 +53,23 @@ public class PostHogAnalyticsClient implements AnalyticsClient {
     /** host 缺失或为空串时的回退值。 */
     static final String DEFAULT_HOST = "https://eu.i.posthog.com";
 
+    /** {@code app_env} 的合法取值。其余一律回退 {@link #DEFAULT_APP_ENV}。 */
+    static final Set<String> ALLOWED_APP_ENVS = Set.of("prod", "stag", "dev");
+
+    static final String DEFAULT_APP_ENV = "dev";
+
     private final String apiKey;
     private final RestClient rest;
+    private final AnalyticsEventGuard guard;
+
+    /**
+     * 环境标记（Story 1-2 AC4）。
+     *
+     * <p>🔴 <b>不能从 spring profile 推导</b>：staging 与生产同跑
+     * {@code SPRING_PROFILES_ACTIVE=prod}（{@code docs/runbooks/runbook-staging.md:156}），
+     * 按 profile 判断会把 staging 的事件稳定标成 prod，污染生产漏斗。
+     */
+    private final String appEnv;
 
     // 有两个构造器（另一个是下面的测试注入点），必须显式告诉容器用哪个 —— 否则
     // 「No default constructor found」，整个 ApplicationContext 起不来。
@@ -61,23 +77,42 @@ public class PostHogAnalyticsClient implements AnalyticsClient {
     public PostHogAnalyticsClient(
             @Value("${analytics.posthog.key:}") String apiKey,
             @Value("${analytics.posthog.host:}") String host,
-            @Value("${analytics.posthog.timeout-seconds:3}") long timeoutSeconds) {
-        this(apiKey, builderFor(resolveHost(host), timeoutSeconds));
+            @Value("${analytics.posthog.timeout-seconds:3}") long timeoutSeconds,
+            @Value("${analytics.app-env:dev}") String appEnv,
+            AnalyticsEventGuard guard) {
+        this(apiKey, builderFor(resolveHost(host), timeoutSeconds), appEnv, guard);
+        if (!ALLOWED_APP_ENVS.contains(appEnv == null ? "" : appEnv.trim())) {
+            // 只 warn 一次（构造器只跑一次）。标错环境不会让服务起不来，但会让整批数据进错漏斗。
+            log.warn("APP_ENV 取值非法，已回退 dev：raw={}（合法值 prod/stag/dev）", appEnv);
+        }
         // 启动时把状态说清楚（不打 key）：「以为在报其实没报」只能靠这一行在日志里被发现。
-        log.info("server-side analytics enabled={} host={}", isEnabled(), resolveHost(host));
+        log.info("server-side analytics enabled={} host={} appEnv={}",
+                isEnabled(), resolveHost(host), this.appEnv);
     }
 
     /**
      * 测试注入点（同包可见）：允许绑定 {@code MockRestServiceServer} 的 builder，
      * 从而真正验证 HTTP 线路形态（端点 / 字段名 / 关闭时不发请求）。
      */
-    PostHogAnalyticsClient(String apiKey, RestClient.Builder builder) {
+    PostHogAnalyticsClient(String apiKey, RestClient.Builder builder, String appEnv,
+            AnalyticsEventGuard guard) {
         this.apiKey = apiKey;
         this.rest = builder.build();
+        this.appEnv = resolveAppEnv(appEnv);
+        this.guard = guard;
     }
 
     static String resolveHost(String host) {
         return host == null || host.isBlank() ? DEFAULT_HOST : host;
+    }
+
+    /** {@code prod} / {@code stag} / {@code dev} 之外一律回 {@code dev}（含 null 与空串）。 */
+    static String resolveAppEnv(String raw) {
+        if (raw == null) {
+            return DEFAULT_APP_ENV;
+        }
+        String v = raw.trim();
+        return ALLOWED_APP_ENVS.contains(v) ? v : DEFAULT_APP_ENV;
     }
 
     private static RestClient.Builder builderFor(String host, long timeoutSeconds) {
@@ -99,9 +134,16 @@ public class PostHogAnalyticsClient implements AnalyticsClient {
         if (!isEnabled()) {
             return;
         }
+        // 🔴 护栏在早退之后、组装 body 之前：被拒的事件一个出网请求都不发（Story 1-2 AC3）。
+        if (!guard.allowsEvent(event)) {
+            return;
+        }
         try {
-            Map<String, Object> props = new HashMap<>(properties == null ? Map.of() : properties);
+            // filterProperties 返回新 map（可变），入参不被就地修改。
+            Map<String, Object> props = new HashMap<>(guard.filterProperties(properties));
+            // distinct_id 与 app_env 是【框架注入】的键，在护栏之后加入，不受属性白名单约束。
             props.put("distinct_id", distinctId);
+            props.put("app_env", appEnv);
             rest.post()
                     .uri("/i/v0/e/")
                     .contentType(MediaType.APPLICATION_JSON)

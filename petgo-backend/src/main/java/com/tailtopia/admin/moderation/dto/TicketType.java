@@ -1,7 +1,7 @@
 package com.tailtopia.admin.moderation.dto;
 
 /**
- * 统一工单的三个业务类别（Story 3.1 AC3）。
+ * 统一工单的业务类别（Story 3.1 AC3；2026-08-19 加内容送审；V1.3.0 Story 5.4 加场所举报）。
  *
  * <p>⚠️ <b>只有三类，不保留「评论举报」</b> —— 该能力至今未上线，留一个永远没数据的筛选项
  * 只会让运营以为自己漏看了什么。
@@ -28,5 +28,11 @@ public enum TicketType {
      * <p>⚠️ 该分支受「人工审核」总闸控制（默认**关**＝机器判完直接发布、此队列恒空）。
      * 那个开关**不影响本列表其余三类**，它管的是内容发布链路要不要走这道关。
      */
-    CONTENT_SUBMISSION
+    CONTENT_SUBMISSION,
+
+    /**
+     * 场所举报（V1.3.0 Story 5.4，D-5）—— 源表 {@code place_reports}，**按场所聚合**（多人举报同一场所 = 一条工单）。
+     * 处置对象是场所条目本身：下架（全部 PENDING → ACTIONED）/ 驳回（全部 PENDING → DISMISSED），权限 {@code place.manage}。
+     */
+    PLACE_REPORT
 }

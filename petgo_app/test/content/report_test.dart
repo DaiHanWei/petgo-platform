@@ -30,11 +30,21 @@ class _ReportRepo implements DetailRepository {
   @override
   Future<CommentPage> getReplies(int parentId, {String? cursor}) => throw UnimplementedError();
   @override
-  Future<Comment> postComment(int postId, String body) => throw UnimplementedError();
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds = const []}) => throw UnimplementedError();
   @override
-  Future<Comment> postReply(int parentId, String body) => throw UnimplementedError();
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds = const []}) => throw UnimplementedError();
   @override
   Future<void> deleteComment(int commentId) async {}
+
+  /// V1.3.0 Story 2.4 新增的点赞通道；本类不验它，记下调用即可。
+  final List<int> likedComments = <int>[];
+  final List<int> unlikedComments = <int>[];
+
+  @override
+  Future<void> likeComment(int commentId) async => likedComments.add(commentId);
+
+  @override
+  Future<void> unlikeComment(int commentId) async => unlikedComments.add(commentId);
   @override
   Future<void> deleteContent(int postId) async {}
 }

@@ -307,7 +307,6 @@ class _NotificationCenterPageState
       appBar: AppBar(
         backgroundColor: AppColors.base,
         scrolledUnderElevation: 0,
-        titleSpacing: 20,
         // 🐛 2026-08-07：**永远给一个出口**。
         //
         // `AppBar` 只在 `Navigator.canPop()` 为真时才自动生成返回箭头。冷启动点推送落到这里时
@@ -320,18 +319,14 @@ class _NotificationCenterPageState
             ? null // 有上一页 → 交给 AppBar 的默认返回键（保留系统返回语义与左滑手势）
             : IconButton(
                 key: const ValueKey('notificationCenterHome'),
-                icon: const Icon(Icons.arrow_back),
+                // 与全局返回键同形（主题 backButtonIconBuilder：‹），兜底出口不该长得不一样。
+                icon: const Icon(Icons.chevron_left_rounded, size: 28),
                 color: AppColors.ink,
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
                 onPressed: () => context.go('/home'),
               ),
         title: Text(
           l10n.notificationCenterTitle,
-          style: const TextStyle(
-            fontSize: 19,
-            fontWeight: FontWeight.w700,
-            color: AppColors.ink,
-          ),
         ),
         // 「全部已读」（2026-08-19 加，产品定：右上角、**不做二次确认**）。
         // 仅在已加载到至少一条未读时露出 —— 没有未读时这个按钮没有意义，露出来只是噪音。
@@ -742,6 +737,13 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.gold,
       AppColors.goldTint,
     ),
+    // 被 @ 提及（Story 3.4 · AC6）：@ 符号图标；配色**与兽医回复同色系**
+    // （mint + cream2 —— AC6 原文要求"紫色图标块与兽医回复同色系"）。
+    'CONTENT_MENTIONED' => (
+      Icons.alternate_email_rounded,
+      AppColors.mint,
+      AppColors.cream2,
+    ),
     _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
   };
 
@@ -775,6 +777,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     'LIFECYCLE_D3' => l10n.notifyTypeLifecycleD3,
     'LIFECYCLE_D7' => l10n.notifyTypeLifecycleD7,
     'LIFECYCLE_WINBACK' => l10n.notifyTypeLifecycleWinback,
+    // 被 @ 提及（V1.3.0 batch-b1 Story 3.4）：标题两种文案共用一句，正文才分帖子 / 评论。
+    'CONTENT_MENTIONED' => l10n.notifyTypeContentMentioned,
     // 未知类型兜底：中性「系统通知」，不再复用页面标题（bug 20260729-391 的「克隆卡」观感来源）。
     _ => l10n.notifyTypeSystem,
   };
@@ -821,9 +825,21 @@ class _NotificationTileState extends State<_NotificationTile> {
       // CREATE_PROFILE 与未知 variant 一律落建档引导（与深链落点同口径）。
       _ => l10n.notifyBodyLifecycleCreateProfile,
     },
+    // 被 @ 提及（Story 3.4 · AC3）：**文案区分「帖子提及」与「评论提及」两种**。
+    // 走 targetRef 的 variant 前缀，与深链落点同一个判据（认不出来按帖子说，
+    // 与 DeepLinkRoutes 那边"认不出前缀落通知中心"配合：话说得通、点得动）。
+    'CONTENT_MENTIONED' => _isCommentMention
+        ? l10n.notifyBodyContentMentionedComment
+        : l10n.notifyBodyContentMentionedPost,
     // 未知类型兜底：中性正文，不再复用空态提示串（那本身就是个 bug）。
     _ => l10n.notifyBodySystem,
   };
+
+  /// 这条 @ 通知指的是评论提及还是正文提及（Story 3.4）。
+  ///
+  /// ⚠️ 判据是 targetRef 的前缀，**与深链落点同一处口径** —— 两边分叉的表现是
+  /// 「正文里说在评论里提到你，点进去却没锚到评论区」。
+  bool get _isCommentMention => (widget.item.targetRef ?? '').startsWith('COMMENT:');
 
   /// 相对时间，随 App 语言本地化（今天：刚刚 / N 分钟前 / N 小时前；更早：本地化日期）。
   String _relativeTime(AppLocalizations l10n, String locale) {

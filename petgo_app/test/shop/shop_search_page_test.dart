@@ -6,6 +6,7 @@ import 'package:tailtopia/features/shop/data/shop_repository.dart';
 import 'package:tailtopia/features/shop/domain/shop_product.dart';
 import 'package:tailtopia/features/shop/presentation/shop_search_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+import 'fake_shop_products.dart';
 
 /// 商品搜索页（2026-09-02 产品定形）。
 ///
@@ -19,13 +20,22 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 /// `ShopProductQueryServiceTest` 守（q 与 category 在服务层仍是与关系，
 /// 日后要加页内筛选不用改接口）。
 void main() {
-  Widget host(List<ShopProductSummary> products, {List<ShopProductsQuery>? seen}) {
+  Widget host(
+    List<ShopProductSummary> products, {
+    List<ShopProductsQuery>? seen,
+    bool hasMore = false,
+    List<ShopProductSummary> nextPageItems = const [],
+    List<ShopProductsQuery>? loadMoreCalls,
+  }) {
     return ProviderScope(
       overrides: [
-        shopProductsProvider.overrideWith((ref, query) async {
-          seen?.add(query);
-          return products;
-        }),
+        fakeShopProducts(
+          products,
+          seen: seen,
+          hasMore: hasMore,
+          nextPageItems: nextPageItems,
+          loadMoreCalls: loadMoreCalls,
+        ),
       ],
       child: MaterialApp(
         localizationsDelegates: const [
@@ -150,6 +160,35 @@ void main() {
           reason: '目录空态是另一句话，混用会让用户以为整个店没货');
       expect(find.text(l10n.tokoSearchNoResultHint), findsOneWidget,
           reason: '只说「没找到」是个死胡同，要给下一步');
+    });
+  });
+
+  /// 🔴 触底预加载（Story 4-5）。搜索页与 Toko 首页共用同一条纪律
+  /// （2026-09-18 复审 #7）：`NotificationListener` 先认领通知（`depth == 0` +
+  /// 竖向）再看距离。本页今天还没有嵌套的横滑组件，所以这里守的是**另一半**——
+  /// 加判定时别把自家列表的通知一起挡掉（那种回归在「横划不触发」用例里是绿的）。
+  group('🔴 触底预加载', () {
+    testWidgets('🎯 结果列表竖向滚到接近底部 → 取下一页', (tester) async {
+      final calls = <ShopProductsQuery>[];
+      await tester.pumpWidget(host(
+        [for (var i = 0; i < 10; i++) p('t$i', price: 100000 + i, name: 'Produk $i')],
+        hasMore: true,
+        nextPageItems: [p('next', price: 9000, name: 'Halaman Dua')],
+        loadMoreCalls: calls,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField), 'royal');
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(calls, isEmpty, reason: '还没滚呢');
+
+      await tester.drag(find.byType(ListView), const Offset(0, -5000));
+      await tester.pumpAndSettle();
+
+      expect(calls, isNotEmpty, reason: '滚动接线断了：用户滑到底只会看到空白');
+      expect(find.text('Halaman Dua'), findsOneWidget);
     });
   });
 }

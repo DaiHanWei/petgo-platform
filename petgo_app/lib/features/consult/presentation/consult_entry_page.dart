@@ -150,18 +150,21 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: AppColors.base,
+      // 标题栏跟随全局主题（决策 UI-2）。
+      appBar: AppBar(
+        leading: IconButton(
+          key: const ValueKey('consultEntryBack'),
+          icon: const Icon(Icons.chevron_left_rounded, size: 28),
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
+        ),
+        title: Text(l10n.consultEntryTitle),
+      ),
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _backHeader(l10n),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.sm, AppSpacing.xl, AppSpacing.xl),
-                child: _body(l10n),
-              ),
-            ),
-          ],
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.md, AppSpacing.xl, AppSpacing.xl),
+          child: _body(l10n),
         ),
       ),
     );
@@ -177,35 +180,6 @@ class _ConsultEntryPageState extends ConsumerState<ConsultEntryPage> {
     // 进页查到无兽医 → 直接离线引导；否则就绪态（步骤 + 发起按钮）。
     if (_noVetOnline) return _offline(l10n);
     return _ready(l10n);
-  }
-
-  /// 自定义返回 header（原型 konsultasi-home.html）：圆角灰底返回钮 + 17px 粗标题。
-  Widget _backHeader(AppLocalizations l10n) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Row(
-        children: [
-          InkWell(
-            key: const ValueKey('consultEntryBack'),
-            onTap: () => context.canPop() ? context.pop() : context.go('/home'),
-            borderRadius: BorderRadius.circular(11),
-            child: Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFEDF3),
-                borderRadius: BorderRadius.circular(11),
-              ),
-              child: const Icon(Icons.arrow_back, size: 18, color: AppColors.ink2),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(l10n.consultEntryTitle,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink)),
-        ],
-      ),
-    );
   }
 
   Widget _ongoing(AppLocalizations l10n) {

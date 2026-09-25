@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -55,6 +57,9 @@ void main() {
             builder: (c, s) => ProductDetailPageV2(token: s.pathParameters['token']!),
           ),
           GoRoute(path: '/shop/cart', builder: (c, s) => const Scaffold(body: Text('CART PAGE'))),
+          GoRoute(
+              path: '/shop/checkout',
+              builder: (c, s) => const Scaffold(body: Text('CHECKOUT PAGE'))),
           GoRoute(path: '/login', builder: (c, s) => const Scaffold(body: Text('LOGIN PAGE'))),
           GoRoute(path: '/home', builder: (c, s) => const Scaffold(body: Text('HOME PAGE'))),
           GoRoute(
@@ -191,6 +196,44 @@ void main() {
     await t.pump(const Duration(seconds: 3));
     await t.pumpAndSettle();
   });
+
+  testWidgets('bug 516: 点 Beli Sekarang 只有它转圈；+Keranjang 不转圈但同样不可点', (t) async {
+    await open(t, loggedIn: true);
+    repo.gate = Completer<void>();
+
+    await t.tap(find.byKey(const ValueKey('pdpBuyNow')));
+    await t.pump();
+
+    final buy = t.widget<ShopButton>(find.byKey(const ValueKey('pdpBuyNow')));
+    final add = t.widget<ShopButton>(find.byKey(const ValueKey('pdpAddToCart')));
+    expect(buy.loading, isTrue, reason: '发起方转圈');
+    expect(add.loading, isFalse, reason: '另一个按钮不该跟着转圈');
+    expect(add.onTap, isNull, reason: '请求中两按钮互斥');
+    expect(buy.onTap, isNull);
+    expect(add.variant, ShopButtonVariant.ink, reason: '保持原底色，不能看起来像售罄');
+
+    repo.gate!.complete();
+    await t.pumpAndSettle();
+    expect(find.text('CHECKOUT PAGE'), findsOneWidget, reason: '加购成功后进结算');
+  });
+
+  testWidgets('bug 516: 点 +Keranjang 只有它转圈', (t) async {
+    await open(t, loggedIn: true);
+    repo.gate = Completer<void>();
+
+    await t.tap(addButton());
+    await t.pump();
+
+    expect(t.widget<ShopButton>(find.byKey(const ValueKey('pdpAddToCart'))).loading, isTrue);
+    final buy = t.widget<ShopButton>(find.byKey(const ValueKey('pdpBuyNow')));
+    expect(buy.loading, isFalse);
+    expect(buy.onTap, isNull);
+
+    repo.gate!.complete();
+    await t.pumpAndSettle();
+    await t.pump(const Duration(seconds: 3)); // toast
+    await t.pumpAndSettle();
+  });
 }
 
 class _TestAuthController extends AuthController {
@@ -205,6 +248,7 @@ class _TestAuthController extends AuthController {
 class _FakeCartRepo implements CartRepository {
   CartView next = CartView.empty;
   Object? error;
+  Completer<void>? gate; // 非 null 时写操作挂起到 complete（模拟请求进行中）
   final List<String> calls = [];
 
   @override
@@ -218,7 +262,7 @@ class _FakeCartRepo implements CartRepository {
 
   @override
   Future<CartView> add(String skuToken,
-          {int qty = 1, String? entrySource, String? triggerType}) async =>
+          {int qty = 1, String? entrySource, String? triggerType, bool buyNow = false}) async =>
       _write('add:$skuToken:$qty${entrySource == null ? '' : ':$entrySource'}');
 
   @override
@@ -227,11 +271,21 @@ class _FakeCartRepo implements CartRepository {
   @override
   Future<CartView> remove(String skuToken) async => _write('remove:$skuToken');
 
+  // Story 4-2：行选择。同样记进 calls，便于断言「取消勾选没走 remove」。
+  @override
+  Future<CartView> setSelected(String skuToken, bool selected) async =>
+      _write('setSelected:$skuToken:$selected');
+
+  @override
+  Future<CartView> setAllSelected(bool selected) async =>
+      _write('setAllSelected:$selected');
+
   @override
   Future<CartView> clearInvalid() async => _write('clearInvalid');
 
   Future<CartView> _write(String call) async {
     calls.add(call);
+    if (gate != null) await gate!.future;
     final e = error;
     if (e != null) {
       error = null;

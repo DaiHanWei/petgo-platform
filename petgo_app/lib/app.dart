@@ -12,6 +12,7 @@ import 'package:tailtopia/core/router/app_router.dart';
 import 'package:tailtopia/core/theme/app_theme.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/consult/presentation/consult_refresh.dart';
+import 'package:tailtopia/features/mention/data/mention_candidate_repository.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/me/presentation/phone_edit_sheet.dart';
@@ -22,7 +23,10 @@ import 'package:tailtopia/features/order/presentation/order_list_controller.dart
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/features/profile/data/health_record_repository.dart';
 import 'package:tailtopia/features/profile/data/id_card_repository.dart';
+import 'package:tailtopia/features/profile/data/milestone_celebration_reporter.dart';
+import 'package:tailtopia/features/profile/data/onboarding_mark_repository.dart';
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
+import 'package:tailtopia/features/profile/data/pet_recommendation_repository.dart';
 import 'package:tailtopia/features/profile/data/newbie_task_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
@@ -74,6 +78,16 @@ String? deepLinkToLocation(Uri uri) {
   // 这是对的 —— 那是「自己的」列表，没有登录态就没有"自己"。安全规则只升不降，不为深链开例外。
   if (uri.scheme == 'tailtopia' && uri.host == 'milestone') {
     return '/profile/milestones';
+  }
+  // 场所对外分享页（V1.3.0 batch-b1 Story 1.10）。
+  // H5 的 `/place/{token}` 与深链 `tailtopia://place/{token}` 是同一个 token ——
+  // 那是**不可枚举**的 public_token，不是场所名也不是自增 id（AD-1 Rule 3 / NFR-1）。
+  if (uri.scheme == 'tailtopia' && uri.host == 'place') {
+    final token = uri.pathSegments.isEmpty ? '' : uri.pathSegments.first;
+    // 没 token 就没有可展示的那一个 —— 落**场所列表**（而不是首页）：
+    // 用户点的是一条场所链接，给他场所列表至少还在同一个功能里。
+    // `?from=share` 只喂埋点（E-5 place_detail_viewed，bug 20260922-528）。
+    return token.isEmpty ? '/places' : '/places/$token?from=share';
   }
   if (uri.scheme == 'tailtopia' && uri.host == 'open') {
     // 🔧 DEBUG ONLY：`tailtopia://open/<路径>` 直达任意路由，供本地验收导航用。
@@ -306,6 +320,7 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(timelineFirstPageProvider); // 成长档案：时间线首页
   ref.invalidate(archiveStatsProvider); // 成长档案 / 我的：统计栏
   ref.invalidate(milestoneListProvider); // 成长档案：里程碑
+  ref.invalidate(locallyCelebratedMilestonesProvider); // 里程碑：本机已庆祝（补弹抑制）
   // bug 20260730-421 同类隐患：健康记录/日历/日详情是宠物维度缓存（非 autoDispose），
   // 不登记则同设备换账号会看到上一用户的健康数据（隐私）。
   ref.invalidate(healthListProvider); // 健康记录页
@@ -313,9 +328,7 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(dayDetailProvider); // 成长日记：日详情（按日 family 整族失效）
   ref.invalidate(myPostsProvider); // 我的：我的发布
   ref.invalidate(feedProvider); // 首页 Feed（按新用户宠物状态重过滤）
-  ref.invalidate(
-    unreadCountProvider,
-  ); // 通知铃铛未读角标（bug 20260625-088：换账号防显示上个用户角标）
+  ref.invalidate(unreadCountProvider); // 通知铃铛未读角标（bug 20260625-088：换账号防显示上个用户角标）
   // bug 20260731-446：宠物身份证是用户维度缓存（列表/单卡/详情 family），不登记则同设备
   // 换账号会看到上一账号（含已删档案）的历史卡片（隐私泄漏，同 421/上面健康记录同型）。
   ref.invalidate(idCardProvider); // 身份证：单卡（旧版入口）
@@ -323,8 +336,10 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(idCardDetailProvider); // 身份证：卡详情（按 cardId family 整族失效）
   ref.invalidate(newbieTasksProvider); // 新手任务进度（同型隐患：换账号防串任务状态）
   ref.invalidate(pawCoinProvider); // PawCoin 余额（同型隐患：换账号防显示上个账号余额）
-  ref.invalidate(
-    orderListProvider,
-  ); // 订单中心（keep-alive 且不 watch 登录态：换账号会看到上个账号的订单）
+  ref.invalidate(onboardingMarksProvider); // 一次性引导标记（按账号存：换账号不得沿用上个账号的）
+  ref.invalidate(orderListProvider); // 订单中心（keep-alive 且不 watch 登录态：换账号会看到上个账号的订单）
+  // batch-b1 复审：以下两项都是按当前用户算的（排除自己 / 互相拉黑的人 / 最近互动的人）。
+  ref.invalidate(petRecommendationsProvider); // 宠物推荐（首页横滑行常驻 watch，autoDispose 不会回收）
+  ref.invalidate(mentionCandidatesProvider); // @ 候选集（最近互动的人：不清 = 隐私泄漏）
   ref.read(consultRefreshProvider.notifier).bump(); // 问诊页 _active/_history 重拉
 }

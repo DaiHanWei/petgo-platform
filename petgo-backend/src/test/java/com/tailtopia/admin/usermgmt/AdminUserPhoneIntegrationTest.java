@@ -81,7 +81,9 @@ class AdminUserPhoneIntegrationTest extends ApiIntegrationTest {
     @Test
     void withPhoneViewPermissionTheNumberIsRendered() throws Exception {
         User u = userWithPhone();
-        String html = mvc.perform(get("/admin/users/" + u.getId())
+        // V1.3.0 Story 8.1：整页详情退役，手机号现在渲染在抽屉里（同一份服务端判定）。
+        String html = mvc.perform(get("/admin/users/" + u.getId() + "/drawer")
+                        .header("HX-Request", "true")
                         .with(authentication(auth(AdminAccountType.STAFF, "user.view", "user.phone_view")))
                         .param("lang", "zh_CN"))
                 .andExpect(status().isOk())
@@ -99,7 +101,8 @@ class AdminUserPhoneIntegrationTest extends ApiIntegrationTest {
     void withoutPhoneViewPermissionTheNumberNeverReachesTheResponse() throws Exception {
         User u = userWithPhone();
         String phone = u.getPhone();
-        String html = mvc.perform(get("/admin/users/" + u.getId())
+        String html = mvc.perform(get("/admin/users/" + u.getId() + "/drawer")
+                        .header("HX-Request", "true")
                         .with(authentication(auth(AdminAccountType.STAFF, "user.view")))
                         .param("lang", "zh_CN"))
                 .andExpect(status().isOk())
@@ -133,6 +136,41 @@ class AdminUserPhoneIntegrationTest extends ApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         assertThat(filled).contains(">" + withPhone.getId() + "<");
         assertThat(filled).doesNotContain(">" + emptyPhone.getId() + "<");
+    }
+
+    /**
+     * bug 20260922-526：htmx 筛选（只回 rows(oob=true)）时导出区也要按 id oob 带回，
+     * 否则导出按钮停在首屏那次的置灰态。判据只有 exportCtl 片段里一份。
+     */
+    @Test
+    void htmxFilterSwapsExportControlOutOfBand() throws Exception {
+        userWithPhone();
+        String filled = mvc.perform(get("/admin/users").param("phone", "filled")
+                        .header("HX-Request", "true")
+                        .with(authentication(auth(AdminAccountType.SUPER_ADMIN))).param("lang", "zh_CN"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(filled).contains("id=\"users-export\"").contains("hx-swap-oob=\"true\"")
+                .contains("/admin/users/phone-recall.xlsx?phone=filled");
+        // 翻页链接仍带 phone（bug 469 前车之鉴）—— 有分页条时断言
+        if (filled.contains("class=\"pager\"") && filled.contains("page=1")) {
+            assertThat(filled).contains("phone=filled");
+        }
+
+        String any = mvc.perform(get("/admin/users")
+                        .header("HX-Request", "true")
+                        .with(authentication(auth(AdminAccountType.SUPER_ADMIN))).param("lang", "zh_CN"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(any).as("未选手机号筛选 → oob 回来的是置灰钮")
+                .contains("id=\"users-export\"").doesNotContain("phone-recall.xlsx");
+
+        String noPerm = mvc.perform(get("/admin/users").param("phone", "filled")
+                        .header("HX-Request", "true")
+                        .with(authentication(auth(AdminAccountType.STAFF, "user.view"))).param("lang", "zh_CN"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(noPerm).as("🛡 无导出权限时 oob 片段里也不能出现导出链接").doesNotContain("phone-recall.xlsx");
     }
 
     /** 🛡 列表页只显示"填了 / 没填"，不显示号码本身。 */
@@ -185,18 +223,19 @@ class AdminUserPhoneIntegrationTest extends ApiIntegrationTest {
         banned.deactivate();
         userRepo.save(banned);
 
-        byte[] xlsx = mvc.perform(get("/admin/users/phone-recall.xlsx").param("phone", "filled")
+        byte[] xlsx = mvc.perform(get("/admin/users/phone-recall.xlsx").param("phone", "filled").param("lang", "zh_CN")
                         .with(authentication(auth(AdminAccountType.SUPER_ADMIN))))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray();
 
+        // V1.3.0 起表头 / 状态按后台语言本地化（admin.v130.users.export.* / admin.users.status.*），不再是字段名 / 枚举名
         String sheetText = sheetAsText(xlsx);
         assertThat(sheetText).as("首行是表头")
-                .contains("user_id").contains("display_name").contains("phone").contains("account_status");
+                .contains("用户 ID").contains("昵称").contains("手机号").contains("账号状态");
         assertThat(sheetText).as("🛡 已封号账号不得被自动剔除").contains(String.valueOf(banned.getId()));
         assertThat(sheetText).as("必须标注状态，否则运营会在不知情下给封号用户发召回")
-                .contains("DEACTIVATED");
-        assertThat(sheetText).contains(String.valueOf(active.getId())).contains("ACTIVE");
+                .contains("已停用");
+        assertThat(sheetText).contains(String.valueOf(active.getId())).contains("正常");
     }
 
     /** 昵称里的逗号在 xlsx 里天然独占单元格，不会把列错开（原 CSV 转义测试的替代）。 */

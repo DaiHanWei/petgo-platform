@@ -39,24 +39,42 @@ public record ContentPostCreateRequest(
          * <p>🛡 <b>长度对不上就整组作废</b>（见 {@code ContentService} 里的校验）——
          * 错位的后果是图文不符，比没有尺寸严重得多。省略 / 为 null 时全部走服务端兜底测量。
          */
-        @Size(max = 9, message = "最多 9 张图片") List<ImageSize> imageSizes) {
+        @Size(max = 9, message = "最多 9 张图片") List<ImageSize> imageSizes,
+        /**
+         * 正文里 @ 到的 userId（V1.3.0 batch-b1 Story 3.2 · AC4/AC5），最多 5 人。
+         *
+         * <p>🔴 <b>存 userId 不存昵称</b>（AD-10 Rule 4）：{@link #text()} 里那串「@昵称」
+         * 只是给人读的文本，可点、可判拉黑的那一份身份在这里。存昵称的话对方改名后
+         * 历史 @ 全部失效、点不动。
+         *
+         * <p>省略 / null = 没 @ 人（老客户端与后台补发行为不变）。
+         * ⚠️ 这里只是入口校验，权威过滤在 {@code MentionSanitizer}。
+         */
+        @Size(max = 5, message = "最多只能提及 5 人") List<Long> mentionedUserIds) {
 
     /** 兼容无事件日期的发布（日常/科普 / 后台补发）：eventDate 省为 null，可见范围默认公开。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls) {
-        this(type, petId, text, imageUrls, null, null, null);
+        this(type, petId, text, imageUrls, null, null, null, null);
     }
 
     /** 兼容不带可见范围的调用（老客户端 / 既有测试）：默认公开。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls, LocalDate eventDate) {
-        this(type, petId, text, imageUrls, eventDate, null, null);
+        this(type, petId, text, imageUrls, eventDate, null, null, null);
     }
 
     /** 兼容不带图片尺寸的调用（老客户端 / 既有测试 / 后台种子发布）：一律走服务端兜底测量。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility) {
-        this(type, petId, text, imageUrls, eventDate, visibility, null);
+        this(type, petId, text, imageUrls, eventDate, visibility, null, null);
+    }
+
+    /** 兼容不带 @ 名单的调用（老客户端 / 既有测试 / 运营发帖）：视为没 @ 任何人。 */
+    public ContentPostCreateRequest(ContentType type, Long petId, String text,
+            List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility,
+            List<ImageSize> imageSizes) {
+        this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, null);
     }
 
     /** 省略即公开（NFR-6：私密只由用户主动关开关产生）。 */

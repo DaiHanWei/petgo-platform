@@ -70,7 +70,7 @@ public class UnifiedTicketQueryService {
     static final int FREQUENT_REPORTER_THRESHOLD = 5;
 
     /**
-     * 六表联合的 CTE（① 内容举报 ② 用户举报 ③ 名称 ④ 头像 ⑤ 内容送审）。
+     * 七表联合的 CTE（① 内容举报 ② 用户举报 ③ 名称 ④ 头像 ⑤ 内容送审 ⑥ 场所举报）。
      *
      * <p>⚠️ 账号标识字段两表<b>只收 MANUAL_PENDING 与两个终态</b>：
      * {@code SCORING / QUEUED / AUTO_PASSED / SUPERSEDED / FAILED_TO_QUEUE} 一律不进运营队列
@@ -121,7 +121,10 @@ public class UnifiedTicketQueryService {
                        -- 取任意一条 PENDING 即可；全部已处理时为 NULL（也不再需要动作按钮）。
                        MIN(cr.id) FILTER (WHERE cr.status = 'PENDING') AS action_ref,
                        -- 内容详情页链接用的**帖 id**（bug 20260902-480）。
-                       cr.post_id                                 AS content_ref
+                       cr.post_id                                 AS content_ref,
+                       -- 处理时刻（bug 20260921-498，「已处理」页签按它倒序）：取该帖**最近一次**处置。
+                       -- 仍有 PENDING 单的帖不会进已处理页签，故 MAX 只在终态行上有意义。
+                       MAX(cr.handled_at)                         AS handled_at
                   FROM content_reports cr
                   JOIN content_posts cp ON cp.id = cr.post_id
                  GROUP BY cr.post_id, cp.author_id, cp.text
@@ -143,7 +146,8 @@ public class UnifiedTicketQueryService {
                        COALESCE(agg.earliest_at, ar.first_reported_at),
                        NULL::text,
                        NULL::bigint,
-                       NULL::bigint
+                       NULL::bigint,
+                       ar.handled_at
                   FROM account_reports ar
                   LEFT JOIN account_agg agg ON agg.report_id = ar.id
 
@@ -171,7 +175,9 @@ public class UnifiedTicketQueryService {
                        nmr.submitted_at,
                        nmr.submitted_value,
                        NULL::bigint,
-                       NULL::bigint
+                       NULL::bigint,
+                       -- 人工裁决时刻；对象已不存在的孤儿行（NO_ACTION 但未裁决）为 NULL → 已处理页签沉底。
+                       nmr.decided_at
                   FROM name_moderation_records nmr
                   LEFT JOIN pet_profiles pp
                          ON nmr.target_type = 'PET_NAME' AND pp.id = nmr.target_ref_id
@@ -200,7 +206,10 @@ public class UnifiedTicketQueryService {
                        avr.created_at,
                        avr.avatar_url,
                        NULL::bigint,
-                       NULL::bigint
+                       NULL::bigint,
+                       -- ⚠️ avatar_reviews 没有裁决时间列（V51）：RESOLVED 取 updated_at（实体 @PreUpdate 维护，
+                       -- 裁决是它进 RESOLVED 的最后一次写）作近似；其余（孤儿 NO_ACTION）为 NULL → 沉底。
+                       CASE WHEN avr.status = 'RESOLVED' THEN avr.updated_at END
                   FROM avatar_reviews avr
                   LEFT JOIN pet_profiles pp2
                          ON avr.subject_type = 'PET_AVATAR' AND pp2.id = avr.subject_id
@@ -234,12 +243,41 @@ public class UnifiedTicketQueryService {
                        -- 🔴 内容详情页链接用的**帖 id**（bug 20260902-480）：送审工单的 source_id
                        -- 是队列号 mrq.id，与帖 id 是两套编号 —— 拿它当帖 id 连详情页会打开一条
                        -- 毫不相干的内容。帖送审取帖本身，评论送审取**评论所在的帖**（看上下文）。
-                       COALESCE(cp2.id, cmt.post_id)              AS content_ref
+                       COALESCE(cp2.id, cmt.post_id)              AS content_ref,
+                       -- 放行 / 拒绝 / 超时的裁决时刻；缺失时回落 updated_at（终态必有一次状态写）。
+                       CASE WHEN mrq.status <> 'PENDING' THEN COALESCE(mrq.decided_at, mrq.updated_at) END
                   FROM manual_review_queue mrq
                   LEFT JOIN content_posts cp2
                          ON mrq.content_type = 'CONTENT_POST' AND cp2.id = mrq.content_id
                   LEFT JOIN comments cmt
                          ON mrq.content_type = 'COMMENT' AND cmt.id = mrq.content_id
+
+                UNION ALL
+
+                -- ⑥ 场所举报（V1.3.0 Story 5.4，D-5）：**按场所聚合**（与①同理：运营处置的是场所条目，不是某一条举报）。
+                --    place_reports 唯一键 (place_id, reporter_user_id) ⇒ 次数恒等于人数、高频恒为 0，分数 = 举报人数。
+                --    status_bucket：任一 PENDING → PENDING；有 ACTIONED → RESOLVED；否则 NO_ACTION（全部驳回）。
+                --    preview = 场所名（MERGED 场所追加 [MERGED] 标记，页面渲染为「已并入」徽标）；action_ref = 任一 PENDING 举报 id；content_ref = place_id。
+                SELECT 'PLACE_REPORT'::text,
+                       pr.place_id,
+                       string_agg(DISTINCT pr.reason_type, ' / '),
+                       pl.marked_by_user_id,
+                       CASE WHEN bool_or(pr.status = 'PENDING')  THEN 'PENDING'
+                            WHEN bool_or(pr.status = 'ACTIONED') THEN 'RESOLVED'
+                            ELSE 'NO_ACTION' END,
+                       COUNT(DISTINCT pr.reporter_user_id)::bigint,
+                       COUNT(*)::bigint,
+                       0::bigint,
+                       COUNT(DISTINCT pr.reporter_user_id)::bigint,
+                       MIN(pr.created_at),
+                       pl.name || CASE WHEN pl.status = 'MERGED' THEN ' [MERGED]' ELSE '' END,
+                       MIN(pr.id) FILTER (WHERE pr.status = 'PENDING'),
+                       pr.place_id,
+                       -- 同①：该场所最近一次举报处置时刻。
+                       MAX(pr.handled_at)
+                  FROM place_reports pr
+                  JOIN places pl ON pl.id = pr.place_id
+                 GROUP BY pr.place_id, pl.marked_by_user_id, pl.name, pl.status
             )
             """.formatted(FREQUENT_REPORTER_THRESHOLD,
             IDENTITY_SCORE_HIGH, IDENTITY_SCORE_NORMAL,
@@ -285,8 +323,38 @@ public class UnifiedTicketQueryService {
     @Transactional(readOnly = true)
     public Page<UnifiedTicketRow> search(java.util.Set<TicketType> scope, TicketType type,
             TicketStatusBucket status, String search, Pageable pageable) {
+        return search(scope, type, status, search, Extra.NONE, pageable);
+    }
+
+    /**
+     * 追加过滤（V1.3.0 Story 2.4 工作台页签 / 筛选；不改 CTE 语义，只在外层 WHERE 加条件）。
+     *
+     * @param subTypesIn  {@code u.sub_type IN (...)}（名称 / 头像页签按 NICKNAME/PET_NAME、USER_AVATAR/PET_AVATAR 切分）
+     * @param subTypeLike {@code u.sub_type ILIKE %x%}（内容举报按违规类别、内容送审按优先级前缀）
+     * @param handledOnly {@code true} = 只要终态（已处理 / 无需处置，「已处理」两态视图）；{@code false} = 不加条件
+     * @param accountReason 用户举报按举报类型筛（Story 2.5 AC1）：{@code EXISTS account_report_entries.reason = ?}；非法值忽略
+     */
+    public record Extra(java.util.Set<String> subTypesIn, String subTypeLike, boolean handledOnly, Long sourceId,
+            String accountReason) {
+        public static final Extra NONE = new Extra(null, null, false, null, null);
+
+        public Extra(java.util.Set<String> subTypesIn, String subTypeLike, boolean handledOnly, Long sourceId) {
+            this(subTypesIn, subTypeLike, handledOnly, sourceId, null);
+        }
+
+        public Extra(java.util.Set<String> subTypesIn, String subTypeLike, boolean handledOnly) {
+            this(subTypesIn, subTypeLike, handledOnly, null);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<UnifiedTicketRow> search(java.util.Set<TicketType> scope, TicketType type,
+            TicketStatusBucket status, String search, Extra extra, Pageable pageable) {
         if (scope == null || scope.isEmpty()) {
             throw new IllegalArgumentException("工单作用域不能为空");
+        }
+        if (extra == null) {
+            extra = Extra.NONE;
         }
         List<Object> args = new ArrayList<>();
         StringBuilder where = new StringBuilder(" WHERE 1 = 1");
@@ -304,6 +372,34 @@ public class UnifiedTicketQueryService {
         if (status != null) {
             where.append(" AND u.status_bucket = ?");
             args.add(status.name());
+        }
+        if (extra.handledOnly()) {
+            where.append(" AND u.status_bucket <> 'PENDING'");
+        }
+        if (extra.sourceId() != null) {
+            where.append(" AND u.source_id = ?");
+            args.add(extra.sourceId());
+        }
+        if (extra.subTypesIn() != null && !extra.subTypesIn().isEmpty()) {
+            where.append(" AND u.sub_type IN (")
+                    .append(String.join(",", java.util.Collections.nCopies(extra.subTypesIn().size(), "?")))
+                    .append(')');
+            args.addAll(extra.subTypesIn());
+        }
+        if (extra.subTypeLike() != null && !extra.subTypeLike().isBlank()) {
+            where.append(" AND u.sub_type ILIKE ? ESCAPE '\\'");
+            args.add("%" + escapeLike(extra.subTypeLike().trim()) + "%");
+        }
+        if (extra.accountReason() != null && !extra.accountReason().isBlank()) {
+            try {
+                String reason = com.tailtopia.moderation.domain.AccountReportReason
+                        .valueOf(extra.accountReason().trim().toUpperCase()).name();
+                where.append(" AND u.ticket_type = 'ACCOUNT_REPORT' AND EXISTS (SELECT 1 FROM account_report_entries e"
+                        + " WHERE e.report_id = u.source_id AND e.reason = ?)");
+                args.add(reason);
+            } catch (IllegalArgumentException ignore) {
+                // 非法举报类型当「不筛选」，不给运营一个 500
+            }
         }
         String keyword = search == null ? null : search.trim();
         if (keyword != null && !keyword.isEmpty()) {
@@ -353,11 +449,27 @@ public class UnifiedTicketQueryService {
                         // 待处理的前面 —— 运营开页第一屏看到的是已经处理完的东西，真正要干的活被挤下去，
                         // 得先自己去点一次状态筛选。待办列表的第一屏就该是待办。
                         // 终态（已处理 / 无需处置）一律沉到后面，彼此不再细分，组内同样按②③排。
-                        + " ORDER BY CASE u.status_bucket WHEN 'PENDING' THEN 0 ELSE 1 END,"
-                        + "          u.score DESC, u.earliest_at ASC LIMIT ? OFFSET ?",
+                        + orderBy(extra) + " LIMIT ? OFFSET ?",
                 ROW_MAPPER, pageArgs.toArray());
 
         return new PageImpl<>(rows, pageable, total == null ? 0 : total);
+    }
+
+    /**
+     * 排序子句。
+     *
+     * <p>待办视图：未处理优先 → 分倒序 → 同分最早优先（见上方注释）。
+     *
+     * <p>「已处理」视图（{@code handledOnly}，bug 20260921-498）：<b>最近处理的在最前</b>。
+     * 原先沿用待办排序，已处理项按分 / 提交时间排，运营刚处理完的那条沉到后几页，回头核对找不到。
+     * 缺处理时间的（孤儿记录等）{@code NULLS LAST}；同一时刻再按分倒序、source_id 倒序保证分页稳定。
+     */
+    static String orderBy(Extra extra) {
+        if (extra != null && extra.handledOnly()) {
+            return " ORDER BY u.handled_at DESC NULLS LAST, u.score DESC, u.source_id DESC";
+        }
+        return " ORDER BY CASE u.status_bucket WHEN 'PENDING' THEN 0 ELSE 1 END,"
+                + "          u.score DESC, u.earliest_at ASC";
     }
 
     private static final RowMapper<UnifiedTicketRow> ROW_MAPPER = (ResultSet rs, int i) -> {

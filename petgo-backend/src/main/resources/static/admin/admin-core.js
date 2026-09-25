@@ -1,0 +1,1214 @@
+// ===== htmx 全局钩子（V1.3.0 Story 2.2 · AD-9）=====
+// 本文件由 admin.js 整体改名而来（能力一行不丢；拆 admin-workbench.js / admin-drawer.js / admin-charts.js 是 2.3b / 3.4 的事）。
+// htmx 1.9.12（D-31 不升级）由 layout.html 的 page 片段末尾统一引入，先于本 defer 脚本初始化。
+// ① 422（校验错）/ 403（禁用态 fragment）允许 swap：1.9 默认 4xx 不 swap，放行是 2.3a 校验错误 / 禁用态 fragment 能渲染的唯一前提；
+//    其余 4xx/5xx 不动（仍不 swap）。
+// ② 统一注入 CSRF 头：取 <meta name="_csrf"> / <meta name="_csrf_header">（fetch 上传页自带），
+//    否则取 layout page 片段里的 <span data-csrf>。
+// ③ admin:badge-refresh：2.3a 的 HX-Trigger 响应头会带出该事件，侧栏待办角标监听它重新 hx-get；
+//    这里提供一个显式入口 window.tailtopiaBadgeRefresh() 供无 htmx 上下文的脚本调用。
+document.addEventListener('DOMContentLoaded', function () {
+    document.body.addEventListener('htmx:beforeSwap', function (e) {
+        var s = e.detail && e.detail.xhr && e.detail.xhr.status;
+        // 404 也放行：AdminBusinessExceptionAdvice 对 404 同样回行内 err fragment（Story 5.2 抽屉「不存在 / 已删」）
+        if (s === 422 || s === 403 || s === 404) { e.detail.shouldSwap = true; e.detail.isError = false; }
+    });
+    document.body.addEventListener('htmx:configRequest', function (e) {
+        var t = document.querySelector('meta[name="_csrf"]');
+        var h = document.querySelector('meta[name="_csrf_header"]');
+        var token = t && t.getAttribute('content');
+        var header = h && h.getAttribute('content');
+        if (!token || !header) {
+            var span = document.querySelector('[data-csrf]');
+            token = span && span.getAttribute('data-csrf-token');
+            header = span && span.getAttribute('data-csrf-header');
+        }
+        if (token && header) { e.detail.headers[header] = token; }
+    });
+});
+window.tailtopiaBadgeRefresh = function () {
+    if (typeof htmx !== 'undefined') { htmx.trigger(document.body, 'admin:badge-refresh'); }
+};
+
+// TailTopia 运营后台轻量交互（Story 1.6）。本地静态托管，无第三方依赖。
+// 危险操作二次确认：表单带 data-confirm="提示文案" 时，提交前弹 confirm，取消则阻止提交。
+// 用 data-* + 监听（而非 th:onsubmit 内联字符串）以兼容 i18n 文案并规避 Thymeleaf 事件属性限制。
+// V1.3.0 Story 1.3 / 1.5：文案可含 {0} {1} {2}… 占位。
+//   · data-confirm-args="a|b|c" 按 | 拆分依次填 {0} {1} {2}；
+//   · {1} 未由 args 提供时，取表单内 input[name=newEmail]（或 data-confirm-input 指定字段）的当前值（1.3 换绑）；
+//   · 表单带 data-role-matrix（1.5 角色矩阵）：先按 data-initial（逗号分隔的初始勾选）与当前勾选算出
+//     新增 / 移除条数，填 {0} {1}，{2} = data-confirm-args（受影响账号数）。
+// 通用能力，Story 2.2 拆 admin-core.js 时原样搬迁。
+function tailtopiaConfirmArgs(form) {
+    var raw = form.getAttribute('data-confirm-args');
+    var args = raw === null ? [] : raw.split('|');
+    if (form.hasAttribute('data-role-matrix')) {
+        var initial = (form.getAttribute('data-initial') || '').split(',').filter(Boolean);
+        var current = Array.prototype.map.call(
+            form.querySelectorAll('input[name="permissionCodes"]:checked'), function (i) { return i.value; });
+        var added = current.filter(function (c) { return initial.indexOf(c) === -1; }).length;
+        var removed = initial.filter(function (c) { return current.indexOf(c) === -1; }).length;
+        args = [String(added), String(removed), raw === null ? '' : raw];
+    }
+    if (args.length < 2) {
+        var inputName = form.getAttribute('data-confirm-input') || 'newEmail';
+        var input = form.querySelector('[name="' + inputName + '"]');
+        args[1] = input ? (input.value || '').trim() : '';
+    }
+    return args;
+}
+// V1.3.0 Story 8.1：删除用户是本后台唯一不可回退的动作 —— 第一层复述「真要删吗」，
+// 第二层（data-confirm-2）再问一次不可撤销。⚠️ 两层都过才放行；任一层取消即中止。
+function tailtopiaSecondConfirmPassed(form) {
+    var second = form.getAttribute && form.getAttribute('data-confirm-2');
+    return !second || window.confirm(second);
+}
+function tailtopiaConfirmMessage(form) {
+    var msg = form.getAttribute && form.getAttribute('data-confirm');
+    if (!msg) { return null; }
+    if (msg.indexOf('{') !== -1) {
+        var args = tailtopiaConfirmArgs(form);
+        for (var i = 0; i < Math.max(args.length, 3); i++) {
+            msg = msg.split('{' + i + '}').join(args[i] === undefined ? '' : args[i]);
+        }
+    }
+    return msg;
+}
+// V1.3.0 Story 6.3：配置卡高危确认复述每个改动字段「标签：旧值 → 新值」（form[data-confirm-diff]；初值由配置卡 init 记在 data-initial-value）。
+function tailtopiaConfirmDiffMessage(form) {
+    if (!form.getAttribute || !form.hasAttribute('data-confirm-diff')) { return null; }
+    var line = form.getAttribute('data-confirm-diff-line') || '{0}: {1} → {2}';
+    var on = form.getAttribute('data-confirm-diff-on') || 'on', off = form.getAttribute('data-confirm-diff-off') || 'off';
+    var lines = [];
+    form.querySelectorAll('input[name], select[name], textarea[name]').forEach(function (el) {
+        if (el.type === 'hidden' || el.disabled) { return; }
+        var isCheck = el.type === 'checkbox' || el.type === 'radio';
+        var cur = isCheck ? (el.checked ? '1' : '0') : el.value;
+        var was = el.dataset.initialValue === undefined ? cur : el.dataset.initialValue;
+        if (cur === was) { return; }
+        var labelEl = el.closest('label'); var span = labelEl && labelEl.querySelector('span');
+        var label = span ? span.textContent.trim() : el.name;
+        var fmt = function (v) { return isCheck ? (v === '1' ? on : off) : (v === '' ? '—' : v); };
+        lines.push(line.split('{0}').join(label).split('{1}').join(fmt(was)).split('{2}').join(fmt(cur)));
+    });
+    if (!lines.length) { return form.getAttribute('data-confirm-diff-title') || null; } // 无逐字段差异也不静默放行（复审 #3）
+    return (form.getAttribute('data-confirm-diff-title') || '') + '\n\n' + lines.join('\n');
+}
+function tailtopiaIsHxForm(form) {
+    return !!(form.getAttribute && (form.hasAttribute('hx-post') || form.hasAttribute('hx-get') || form.hasAttribute('hx-put') || form.hasAttribute('hx-delete')));
+}
+// 原生表单：submit 事件 preventDefault 即拦截。
+// ⚠️ htmx 表单（hx-post 等）不看 defaultPrevented，submit 里 preventDefault 拦不住请求（V1.3.0 Story 5.3 复审 #2）——
+//   它们改走下面的 htmx:confirm（htmx 在发请求前派发；preventDefault 后只有 issueRequest(true) 才真正发），这里跳过以免弹两次。
+document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form.getAttribute || tailtopiaIsHxForm(form)) { return; }
+    var msg = form.getAttribute('data-confirm') ? tailtopiaConfirmMessage(form) : tailtopiaConfirmDiffMessage(form);
+    if (msg && (!window.confirm(msg) || !tailtopiaSecondConfirmPassed(form))) {
+        e.preventDefault();
+    }
+}, true);
+document.addEventListener('DOMContentLoaded', function () {
+    // 多文件一次提交的表单（V1.3.0 Story 5.4 新建场所照片）：张数 / 单张 / 合计字节先在浏览器端拦（复审 #8）。
+    //   超 max-request-size 的请求 Tomcat 在 multipart 解析阶段直接重置连接，htmx 收不到任何响应、行内 err 空白——所以超限的根本不发。
+    //   ⚠️ 体验护栏不是安全边界：判定点仍在服务端。没有 data-max-files 的老 input 不受影响。
+    document.addEventListener('change', function (e) {
+        var input = e.target;
+        if (!input || input.type !== 'file' || !input.hasAttribute('data-max-files')) { return; }
+        var files = input.files || [];
+        var maxFiles = parseInt(input.getAttribute('data-max-files') || '0', 10);
+        var maxBytes = parseInt(input.getAttribute('data-max-bytes') || '0', 10);
+        var maxTotal = parseInt(input.getAttribute('data-max-total-bytes') || '0', 10);
+        var total = 0, bad = false;
+        for (var i = 0; i < files.length; i++) { total += files[i].size; if (maxBytes > 0 && files[i].size > maxBytes) { bad = true; } }
+        if ((maxFiles > 0 && files.length > maxFiles) || (maxTotal > 0 && total > maxTotal) || bad) {
+            window.alert(input.getAttribute('data-msg-limit') || 'too many / too large');
+            input.value = '';
+        }
+    });
+
+    document.body.addEventListener('htmx:confirm', function (e) {
+        var elt = e.detail && e.detail.elt;
+        var form = elt && elt.closest ? elt.closest('form[data-confirm], form[data-confirm-diff]') : null;
+        if (!form || !tailtopiaIsHxForm(form)) { return; }
+        // 钮级 data-confirm（data-confirm-button，见本文件末尾）自己在 click 阶段确认过，这里不重复
+        if (e.detail.triggeringEvent && e.detail.triggeringEvent.submitter
+                && e.detail.triggeringEvent.submitter.hasAttribute && e.detail.triggeringEvent.submitter.hasAttribute('data-confirm-button')) { return; }
+        var msg = form.getAttribute('data-confirm') ? tailtopiaConfirmMessage(form) : tailtopiaConfirmDiffMessage(form);
+        if (!msg) { return; } // 配置卡无改动（理论上保存钮已禁用）：不弹、照常发
+        e.preventDefault();
+        if (window.confirm(msg) && tailtopiaSecondConfirmPassed(form)) { e.detail.issueRequest(true); }
+    });
+});
+
+// V1.3.0 Story 1.5：角色矩阵「至少勾 1 项」——0 勾选时禁用保存钮（服务层另有校验，双保险）。
+document.addEventListener('change', function (e) {
+    var form = e.target && e.target.closest && e.target.closest('form[data-role-matrix]');
+    if (!form) { return; }
+    var btn = form.querySelector('[data-role-submit]');
+    if (btn) { btn.disabled = form.querySelectorAll('input[name="permissionCodes"]:checked').length === 0; }
+});
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.querySelector('form[data-role-matrix]');
+    if (!form) { return; }
+    var btn = form.querySelector('[data-role-submit]');
+    if (btn) { btn.disabled = form.querySelectorAll('input[name="permissionCodes"]:checked').length === 0; }
+});
+
+// 原生 <dialog> 弹窗开关（兽医开户等）。data-* 委托，无内联 JS：
+//   [data-open-dialog="<id>"] 点击 → 打开该弹窗；[data-close-dialog] → 关闭所在弹窗；
+//   点击 backdrop（弹窗自身留白区）关闭；<dialog data-autoopen="true"> 载入即打开（服务端校验失败回显场景）。
+document.addEventListener('click', function (e) {
+    var opener = e.target.closest && e.target.closest('[data-open-dialog]');
+    if (opener) {
+        var dlg = document.getElementById(opener.getAttribute('data-open-dialog'));
+        if (dlg && typeof dlg.showModal === 'function') dlg.showModal();
+        return;
+    }
+    var closer = e.target.closest && e.target.closest('[data-close-dialog]');
+    if (closer) {
+        var host = closer.closest('dialog');
+        if (host) host.close();
+        return;
+    }
+    // 点击 dialog 元素本身（而非其内容）= 点在 backdrop 上 → 关闭。
+    if (e.target.tagName === 'DIALOG' && typeof e.target.close === 'function') {
+        e.target.close();
+    }
+});
+
+// 筛选栏下拉选完即刷新（bug 20260820：人工复核页选了状态还得再点一次「筛选」，多一步且容易忘）。
+// form[data-autosubmit] 内的 <select> 一变就提交所在表单。
+//   ⚠️ 只管 <select>，**不碰文本框** —— 文本输入的 change 在失焦时才触发，
+//      打字中途点别处就会莫名刷新一次，比多点一下按钮更糟。文本框仍走「筛选」按钮。
+//   ⚠️ 用 requestSubmit() 而非 submit()：前者会派发 submit 事件，本文件顶部的
+//      data-confirm 二次确认、以及表单上的 hx-get（HTMX 监听 submit）才不会被绕过。
+//      老浏览器无此方法时回退 submit()（HTMX 页会退化成整页 GET，结果一样）。
+//   「筛选」按钮保留：无 JS 时仍可用，也是文本框的提交入口。
+document.addEventListener('change', function (e) {
+    var el = e.target;
+    if (!el || el.tagName !== 'SELECT') { return; }
+    var form = el.closest && el.closest('form[data-autosubmit]');
+    if (!form) { return; }
+    if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+    } else {
+        form.submit();
+    }
+});
+
+// 行内编辑态的「取消」（V1.3.0 Story 7.5 排期页签）：收起最近的 <details>。
+//   ⚠️ 事件委托在 document —— htmx 换过表格之后照常生效，不需要重新绑定。
+//   无 JS / 被 CSP 拦时退化成「点标题栏自己收起」，不会卡住任何操作。
+document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest && e.target.closest('[data-details-close]');
+    if (!btn) { return; }
+    var d = btn.closest('details');
+    if (d) { d.open = false; }
+});
+
+// 图片灯箱（内容管理等）：点带 data-lightbox 的缩略图 → 原生 <dialog> 全屏看大图（非下载）。
+// 惰性建一个通用 dialog，全后台复用；点任意处关闭。HTMX 换行后仍生效（事件委托在 document）。
+document.addEventListener('click', function (e) {
+    var thumb = e.target.closest && e.target.closest('img[data-lightbox]');
+    if (!thumb) return;
+    var dlg = document.getElementById('admin-lightbox');
+    if (!dlg) {
+        dlg = document.createElement('dialog');
+        dlg.id = 'admin-lightbox';
+        dlg.className = 'lightbox';
+        dlg.innerHTML = '<img alt=""/>';
+        dlg.addEventListener('click', function () { dlg.close(); });
+        document.body.appendChild(dlg);
+    }
+    dlg.querySelector('img').src = thumb.src;
+    if (typeof dlg.showModal === 'function') dlg.showModal();
+});
+
+function openAutoDialogs(root) {
+    if (!root || !root.querySelectorAll) { return; }
+    root.querySelectorAll('dialog[data-autoopen="true"]').forEach(function (d) {
+        if (typeof d.showModal === 'function' && !d.open) { d.showModal(); }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    openAutoDialogs(document);
+    // V1.3.0 Story 8.3：htmx **换进来**的确认弹层也要自动打开。
+    //   ⚠️ 原来只在 DOMContentLoaded 扫一次 —— 那是为「服务端校验失败、整页回显」写的；
+    //      确认弹层是点按钮时才 hx-get 拉进来的，不补这一条它会静静躺在宿主里不显示。
+    document.body.addEventListener('htmx:afterSwap', function (e) {
+        openAutoDialogs(e.detail && e.detail.target);
+    });
+    // 处置成功后由服务端发 admin:confirm-close 收掉弹层并清空宿主。
+    //   🔴 为什么不让响应把宿主换空：确认表单的 hx-target 必须指向**弹层内部**的错误槽，
+    //      否则 422 / 403 一回来就把整个弹层换掉，运营看到的是弹层凭空消失、
+    //      而不是「为什么没成功」。成功路径因此只能靠这个事件。
+    document.body.addEventListener('admin:confirm-close', function () {
+        document.querySelectorAll('dialog.modal[open]').forEach(function (d) {
+            if (typeof d.close === 'function') { d.close(); }
+        });
+        var host = document.getElementById('confirm-host');
+        if (host) { host.innerHTML = ''; }
+    });
+    // Toast 自动消失（bug 346）：3s 淡出、3.4s 移除。
+    document.querySelectorAll('.toast').forEach(armToast);
+    // V1.3.0 Story 2.4 复审 #6：htmx swap / oob 进来的 toast 同样计时（处置 fragment 把 toast oob 到 #admin-toast-host）。
+    document.body.addEventListener('htmx:afterSwap', function (e) {
+        var t = e.detail && e.detail.target;
+        if (!t || !t.querySelectorAll) { return; }
+        t.querySelectorAll('.toast').forEach(armToast);
+    });
+    document.body.addEventListener('htmx:oobAfterSwap', function (e) {
+        var t = e.detail && e.detail.target;
+        if (!t || !t.querySelectorAll) { return; }
+        t.querySelectorAll('.toast').forEach(armToast);
+        if (t.classList && t.classList.contains('toast')) { armToast(t); }
+    });
+});
+
+function armToast(t) {
+    if (!t || t.getAttribute('data-toast-armed')) { return; }
+    t.setAttribute('data-toast-armed', '1');
+    setTimeout(function () { t.classList.add('hide'); }, 3000);
+    setTimeout(function () { t.remove(); }, 3400);
+}
+
+// ===== 一次性密钥：复制 + 「我已记录」（V1.3.0 Story 9.1a）=====
+// 🔴 全局委托而不是各页内联：兽医开户的初始密码在**整页**上（PRG 重渲染），
+//    重置密码的明文在**抽屉**里（htmx swap 进来）—— 两处形态不同，
+//    写在抽屉片段里的脚本够不着整页那一份，那个复制钮会是个死钮。
+// ⚠️ navigator.clipboard 在非 https 或旧浏览器上不存在：退回 execCommand，
+//    再不行就 select 让人自己按 Ctrl+C —— 绝不能静默什么都不做（这是唯一的获取窗口）。
+document.addEventListener('click', function (e) {
+    var copyBtn = e.target.closest('[data-copy-target]');
+    if (copyBtn) {
+        var el = document.querySelector(copyBtn.getAttribute('data-copy-target'));
+        if (!el) { return; }
+        var text = el.textContent.trim();
+        var done = function () {
+            var old = copyBtn.getAttribute('data-copied-label') || copyBtn.textContent;
+            copyBtn.setAttribute('data-copied', '1');
+            copyBtn.textContent = old;
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, function () { selectText(el); });
+        } else {
+            selectText(el);
+            try { document.execCommand('copy'); done(); } catch (err) { /* 让人手动复制 */ }
+        }
+        return;
+    }
+    // 「我已记录」：只移除这一块，不动抽屉其余部分。
+    var dismiss = e.target.closest('[data-dismiss-secret]');
+    if (dismiss) {
+        var host = dismiss.closest('[data-notice="vet-issued-password"], [data-notice="vet-created"]');
+        if (host) { host.remove(); }
+    }
+});
+
+function selectText(el) {
+    try {
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+    } catch (err) { /* 选不中就算了，文本仍在屏幕上 */ }
+}
+
+// ===== 工单批量勾选（V1.1.4 Story 3.3）=====
+// ⚠️ 本文件是**全后台共享**的，所以这一段全部用 [data-batch-scope] 限定作用域，
+//    事件委托在 document 上但先判断是否落在该作用域内——别让它影响到其他页面的表格。
+//
+// 三件事：① 全选 ② 选中计数 + 上限 ③ 跨类型置灰。
+// ⚠️ 这三条**前端只是体验**，服务端各自还有一遍硬校验：勾选框在浏览器里可以被随便改，
+//    上限与跨类型是「一次别封掉几百个人」的安全边界，不能只靠前端。
+(function () {
+    var MAX = 50;
+
+    function scopeOf(el) {
+        return el && el.closest ? el.closest('[data-batch-scope]') : null;
+    }
+
+    function boxes(scope) {
+        return Array.prototype.slice.call(scope.querySelectorAll('input[data-batch-item]'));
+    }
+
+    function refresh(scope) {
+        var all = boxes(scope);
+        var checked = all.filter(function (b) { return b.checked; });
+        // 跨类型置灰：选中第一条之后，其余类型一律不可选。
+        // 不同类型工单的处置对象含义不同——内容举报处置的是**内容**，账号举报处置的是**人**，
+        // 混在一批里执行同一个动作没有意义。
+        var lockedType = checked.length ? checked[0].getAttribute('data-type') : null;
+        all.forEach(function (b) {
+            if (b.checked) { return; }
+            var wrongType = lockedType !== null && b.getAttribute('data-type') !== lockedType;
+            var atLimit = checked.length >= MAX;
+            b.disabled = wrongType || atLimit;
+        });
+        var counter = scope.querySelector('[data-batch-count]');
+        if (counter) {
+            counter.textContent = checked.length + ' / ' + MAX;
+            counter.classList.toggle('muted', checked.length === 0);
+        }
+        // 没选任何东西时，批量按钮不可点（免得点了才发现什么都没选）。
+        scope.querySelectorAll('[data-batch-action]').forEach(function (btn) {
+            btn.disabled = checked.length === 0;
+        });
+        // 批量封号的二次确认弹窗：把「将被封的账号」逐条列出来。
+        // 只给一句「确认封 N 个账号？」等于让运营对着一个数字点确认——手滑全选的后果正是要防的。
+        var list = scope.querySelector('[data-batch-suspend-list]');
+        if (list) {
+            list.innerHTML = '';
+            checked.forEach(function (b) {
+                var li = document.createElement('li');
+                li.textContent = b.getAttribute('data-label') || b.value;
+                list.appendChild(li);
+            });
+        }
+    }
+
+    document.addEventListener('change', function (e) {
+        var scope = scopeOf(e.target);
+        if (!scope) { return; }
+        if (e.target.hasAttribute('data-batch-all')) {
+            var checked = boxes(scope).filter(function (b) { return b.checked; });
+            var lockedType = checked.length ? checked[0].getAttribute('data-type') : null;
+            var picked = 0;
+            boxes(scope).forEach(function (b) {
+                if (!e.target.checked) { b.checked = false; return; }
+                // 全选也受两条边界约束：只选同一类型、且最多 50 条。
+                var sameType = lockedType === null || b.getAttribute('data-type') === lockedType;
+                if (sameType && picked < MAX) { b.checked = true; picked++; }
+                if (lockedType === null && b.checked) { lockedType = b.getAttribute('data-type'); }
+            });
+        }
+        refresh(scope);
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-batch-scope]').forEach(refresh);
+    });
+})();
+
+// 后台账号页 · 岗位角色（V165）。建号表单里做三件显隐：
+//   1) 只显示当前选中角色的职责说明；
+//   2) 只显示当前角色的权限预览（模板已把每个角色的预览都渲染好了）；
+//   3) 权限勾选区仅「自定义」角色显示 —— 其余角色的权限由角色定义决定，服务端会忽略勾选，
+//      留着它只会让人以为「我勾了就生效」。
+// 纯体验层：授权在服务端按角色解析，禁用 JS 也授不出多余权限（页面只是全部展开而已）。
+// V1.3.0 Story 6.5：建号表单进了抽屉，会被 htmx 整块换掉（422 回 createForm / GET new/drawer）——
+//   换回来的是**全新的 <select>**，只在 DOMContentLoaded 绑一次的话，新表单既没有 change 监听、
+//   也没跑过首次 sync()：所有角色说明与权限预览全部展开、勾选区不再随「自定义」显隐。
+//   故抽成可重入的 init，并在 htmx:load 上重跑（已绑过的用 data 标记跳过，不会叠监听）。
+document.addEventListener('DOMContentLoaded', function () {
+    function initCreateRole() {
+        var roleSelect = document.getElementById('create-role');
+        if (!roleSelect || roleSelect.dataset.roleSyncBound === '1') return;
+        roleSelect.dataset.roleSyncBound = '1';
+        var permGroups = document.getElementById('create-perm-groups');
+        var permNote = permGroups && permGroups.previousElementSibling;
+
+        function sync() {
+            var role = roleSelect.value;
+            document.querySelectorAll('.role-desc').forEach(function (p) {
+                p.hidden = p.getAttribute('data-role') !== role;
+            });
+            document.querySelectorAll('.role-perm-preview').forEach(function (d) {
+                d.hidden = d.getAttribute('data-role') !== role;
+            });
+            // V1.3.0 Story 1.6：选项值编码 enum:<NAME> / tpl:<id>，「自定义勾选」= enum:CUSTOM。
+            var custom = role === 'enum:CUSTOM' || role === 'CUSTOM';
+            if (permGroups) permGroups.hidden = !custom;
+            if (permNote) permNote.hidden = !custom;
+        }
+        roleSelect.addEventListener('change', sync);
+        sync();
+    }
+    initCreateRole();
+    document.body.addEventListener('htmx:load', initCreateRole);
+});
+// 🔴 上面这个 `});` 曾在 merge b391bea59（2026-08-26，hex/v1.1.6-rebased 合入 dev_1.1.6）中丢失。
+//    后果不是"角色显隐失效"这么局部 —— 少了它，下面每一个 addEventListener 都被吞进
+//    DOMContentLoaded 的回调里层层嵌套，解析到文件末尾仍未闭合 ⇒
+//    **整个 admin.js 抛 SyntaxError、一行都不执行**。layout.html 引它，所以是全后台 JS 全灭：
+//    HTMX 增强、标签页切换、图片上传、拖拽排序、灯箱、二次确认，全部静默失效。
+//    ⚠️ 静默是这个 bug 最坏的地方：页面照常渲染、按钮照常在，只是点了没反应。
+//    污染范围：origin/dev/dev_1.1.6 与 origin/stag 都已带上（Shawn 8-21 的原始提交是好的）。
+
+// ===== 「以运营真实账号发布」的二次确认（V1.1.6 Story 12.1 · AC6）=====
+// 顶部那个 data-confirm 是**静态**文案、每次提交都弹；这里要的是**只在选中真实账号时**弹
+//   —— 虚拟账号是常用路径，每次都拦会让运营养成"不看就点确定"的习惯，
+//      那时真正危险的那一次也会被闭着眼点过去。
+//
+// 判据是选项上的 data-real="true"（由 admin/fragments/publish-identity-select 渲染）。
+// 以运营真实账号误发不可撤回：内容会出现在那个真人的个人主页并推送给他的粉丝。
+//
+// ⚠️ 与顶部 data-confirm 一样用 capture 阶段：要在 HTMX 的 submit 处理之前拦住。
+// 🛡 这只是体验层 —— 服务端还有一道 seed.publish_as_real 硬校验，勾选框在浏览器里改得动。
+document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form || !form.getAttribute) { return; }
+    var msg = form.getAttribute('data-real-identity-confirm');
+    if (!msg) { return; }
+    // 🔴 按 option[data-real] 判，而不是认死某个 name（V1.3.0 Story 7.6 复审 P3）：
+    //    这个钩子原先只找 select[name="virtualUserId"]，而种子发布链路里的下拉分别叫
+    //    authorUserId（单发 / 行级）与 defaultAuthorUserId（批次默认）——
+    //    唯一还叫 virtualUserId 的那两张表单正是 7.6 删掉的旧轻量批量区块。
+    //    也就是说这条「选了运营真实账号才二次确认」的防呆在 E1/E2 上一直是**死的**。
+    //    共用片段渲染出的 option 一律带 data-real，按它判就不再依赖字段名。
+    var opt = null;
+    var selects = form.querySelectorAll('select');
+    for (var i = 0; i < selects.length && !opt; i++) {
+        var sel = selects[i];
+        var chosen = sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+        if (chosen && chosen.hasAttribute('data-real')) { opt = chosen; }
+    }
+    if (opt && opt.getAttribute('data-real') === 'true' && !window.confirm(msg)) {
+        e.preventDefault();
+    }
+}, true);
+
+// ===== 上传错误的落点：**保证有声**（2026-09-02 stag 电商测试 D-8 第 3 条）=====
+// 两个上传控件各写各的容器：单条发布 / 商品 / banner 写 [data-seed-thumbs]，
+// 批次素材写 [data-batch-errors]。此前两边都**认死一个容器**，且失败方式还不一样：
+//   - reject() 首行 `if (!box) { return; }` —— 容器不在就**静默吞掉**全部错误；
+//   - showError() 直接 .appendChild —— 容器不在就**抛异常**，而它是在 fetch 的
+//     .then/.catch 里被调的，抛出去只变成一条 unhandled rejection。
+// 两种写法表现不同，后果一模一样：**界面上一个字都没有**，运营只会以为是自己没点对。
+// D-8 就是这么从"少两行 meta"拖成"完全不可用且查不出原因"的。
+//
+// 🔴 所以落点改成**逐级回退**，最后一级必定 console.error ——
+//    宁可只有 F12 里看得到，也绝不能一声不吭。
+function adminUploadError(root, text, selectors) {
+    var box = null;
+    for (var i = 0; i < selectors.length && !box; i++) {
+        box = root && root.querySelector(selectors[i]);
+    }
+    if (!box) {
+        // 页面漏放容器 / 改版删掉了 —— 到这一步说明前端结构和 JS 已经走散，
+        // 但**用户的那次上传确实失败了**，这条必须留下痕迹。
+        console.error('[admin upload] ' + text);
+        return;
+    }
+    var p = document.createElement('p');
+    p.className = 'err';
+    p.textContent = text;
+    box.appendChild(p);
+}
+
+// ===== 单条发布的图片上传控件（V1.1.6 Story 12.2 · AC2/AC3）=====
+// 此前后台只能填图片 URL：运营为了发一条内容得先去别处传图、拿链接、再粘回来。
+//
+// 四件事：多图上传 · 拖拽排序（第一张即封面）· 单张删除 · 粘贴上传。
+// 提交给服务端的是两个隐藏 textarea：URL 与「宽x高」**同序等长**。
+//
+// 🔴 一次一张请求，不是一次一批：批量里有一张被拒（HEIC / 超 10MB），
+//    要么整批失败（运营重传全部），要么回一个"部分成功"（界面复杂度远超收益）。
+//    一张一个请求 ⇒ 失败那张单独标红、其余照常。
+//
+// 🛡 裁切警告文案由**服务端**给（算法只有一份，见 ImageRatioAdvisor），前端只负责显示。
+(function () {
+    var MAX = 9;
+
+    function fieldOf(id) { return document.getElementById(id); }
+
+    /** 把当前缩略图顺序写回两个隐藏字段 —— **顺序就是首图顺序**。 */
+    /**
+     * 🔴 把值写进隐藏字段后**必须补发一个 input 事件**（V1.3.0 Story 10.3 复审 P0）。
+     *
+     * 本控件是靠 `el.value = …` 回填那几个真正提交的隐藏字段的，而**赋值不触发任何事件** ——
+     * 于是所有走事件委托的表单状态机都看不见这次改动：
+     *   · form[data-requires-form]（「必填未填 → 提交钮禁用」）⇒ 图传完了按钮还是灰的、点不动；
+     *   · form[data-config-card]（「未修改 → 保存钮禁用」）⇒ 只换图的编辑保存不了，
+     *     连 beforeunload 都不提示（form 不 dirty），离开即丢。
+     * 两条都是「界面上图已经在了，按钮却是灰的」——运营看不出是 bug 还是自己漏填了。
+     * bubbles:true 才能冒泡到 document 上的委托监听。
+     */
+    function setAndNotify(el, value) {
+        if (!el || el.value === value) { return; }
+        el.value = value;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function sync(root) {
+        var thumbs = [].slice.call(root.querySelectorAll('[data-seed-thumb]'));
+        var urls = [], sizes = [];
+        thumbs.forEach(function (t) {
+            urls.push(t.getAttribute('data-url'));
+            // 测不出尺寸的图也要占一行，否则两个字段会错位 —— 服务端对长度不符是**整组作废**。
+            sizes.push((t.getAttribute('data-w') || '0') + 'x' + (t.getAttribute('data-h') || '0'));
+        });
+        // ── 模式二：objectKey（商品图，2026-08-27）──
+        // 商品图**入库存的是 objectKey 不是 URL**（ShopProductSummaryView 的契约写明这点），
+        // 且拆成「主图 + 图集」两个字段 —— 与内容侧「URL + 尺寸两个同序等长数组」的结构完全不同，
+        // 所以在这里分叉，而不是让两边共用一套字段名。
+        // 🔴 第一张即主图：拖拽换序会直接改变哪张是主图，这正是运营要的操作方式。
+        if (root.getAttribute('data-mode') === 'objectkey') {
+            var keys = thumbs.map(function (t) {
+                return t.getAttribute('data-key') || '';
+            }).filter(function (k) { return k; });
+            // 🔴 平铺模式（D-15，2026-09-02）：**一个字段收全部 key**，不分主图/图集。
+            //    质检照片没有"封面"这回事 —— 它们是一组等价的验货照，
+            //    服务端也只有一个 photoKeys 字段（逗号分隔，见 AdminReturnController.splitKeys）。
+            //    给了 data-field-keys 就走这一支，主图/图集那套完全不参与。
+            var flatEl = fieldOf(root.getAttribute('data-field-keys'));
+            if (flatEl) {
+                setAndNotify(flatEl, keys.join(','));
+                // 🔴 平铺模式**不打「封面」角标**：这一组图里没有"第一张更重要"这回事
+                //    （质检照片是一组等价的验货照）。留着角标会让运营以为顺序有含义、
+                //    去纠结该把哪张拖到最前面。
+                thumbs.forEach(function (t) {
+                    var badge = t.querySelector('[data-seed-cover]');
+                    if (badge) { badge.hidden = true; }
+                });
+                return;
+            }
+            var mainEl = fieldOf(root.getAttribute('data-field-main'));
+            var galEl = fieldOf(root.getAttribute('data-field-gallery'));
+            if (mainEl) { setAndNotify(mainEl, keys.length ? keys[0] : ''); }
+            if (galEl) { setAndNotify(galEl, keys.slice(1).join('\n')); }
+            // 主图尺寸随主图一起写回（2026-08-27）：App 端瀑布流用它预置卡片高度。
+            // 🔴 必须跟着**第一张**走 —— 拖拽换序会换主图，尺寸不跟着换就会按旧比例预置，
+            //    表现为卡片高度与图对不上。
+            var wEl = fieldOf(root.getAttribute('data-field-w'));
+            var hEl = fieldOf(root.getAttribute('data-field-h'));
+            var first = thumbs.length ? thumbs[0] : null;
+            if (wEl) { setAndNotify(wEl, first ? (first.getAttribute('data-w') || '') : ''); }
+            if (hEl) { setAndNotify(hEl, first ? (first.getAttribute('data-h') || '') : ''); }
+            markCover(root, thumbs);
+            return;
+        }
+
+        // 兜底 URL 追加在上传图之后：它们没有尺寸，写 0x0（服务端会因长度虽等但值不合理而走异步兜底）。
+        var fallback = root.parentNode.querySelector('[data-seed-url-fallback]');
+        if (fallback && fallback.value.trim()) {
+            fallback.value.split(/\r?\n/).forEach(function (line) {
+                var u = line.trim();
+                if (u) { urls.push(u); sizes.push('0x0'); }
+            });
+        }
+        // 模式一（URL 模式，内容侧）同样要补发事件 —— 理由见 setAndNotify 的注释
+        setAndNotify(fieldOf('imageUrlsRaw'), urls.join('\n'));
+        setAndNotify(fieldOf('imageSizesRaw'), sizes.join('\n'));
+
+        markCover(root, thumbs);
+    }
+
+    /** 第一张打「封面」角标；>1 张时提示首图决定整帖容器高度（AC3 最后一条）。两种模式共用。 */
+    function markCover(root, thumbs) {
+        thumbs.forEach(function (t, i) {
+            var badge = t.querySelector('[data-seed-cover]');
+            if (badge) { badge.hidden = i !== 0; }
+        });
+        var note = root.querySelector('[data-seed-first-note]');
+        if (note) { note.hidden = thumbs.length < 2; }
+    }
+
+    function addThumb(root, data) {
+        var box = root.querySelector('[data-seed-thumbs]');
+        var el = document.createElement('div');
+        el.className = 'seed-thumb';
+        el.setAttribute('data-seed-thumb', '');
+        el.setAttribute('draggable', 'true');
+        el.setAttribute('data-url', data.url);
+        // objectKey 模式要用它写回 mainImageKey / galleryKeysRaw（url 只用于当场显示）。
+        el.setAttribute('data-key', data.objectKey || '');
+        el.setAttribute('data-w', data.w || 0);
+        el.setAttribute('data-h', data.h || 0);
+        var img = document.createElement('img');
+        img.src = data.url;
+        img.alt = '';
+        el.appendChild(img);
+        var cover = document.createElement('span');
+        cover.className = 'seed-cover';
+        cover.setAttribute('data-seed-cover', '');
+        cover.textContent = root.getAttribute('data-msg-cover') || 'cover';
+        el.appendChild(cover);
+        var del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'seed-thumb-del';
+        del.setAttribute('data-seed-del', '');
+        del.textContent = '×';
+        del.title = root.getAttribute('data-msg-remove') || 'remove';
+        el.appendChild(del);
+        if (data.warning) {
+            var warn = document.createElement('p');
+            warn.className = 'err';
+            warn.textContent = data.warning;
+            el.appendChild(warn);
+        }
+        box.appendChild(el);
+        sync(root);
+    }
+
+    function upload(root, file) {
+        var thumbs = root.querySelectorAll('[data-seed-thumb]').length;
+        if (thumbs >= MAX) {
+            window.alert(root.getAttribute('data-msg-limit') || 'max 9 images');
+            return;
+        }
+        // 🔴 超限的图**根本不发出去**（2026-09-03 stag 回归 P1）。
+        //    Tomcat 是在 multipart 解析阶段拒的：那一刻请求体还没发完，连接随即被重置，
+        //    fetch 既不 resolve 也不 reject —— 界面永远停在「正在上传…」，运营只会一直等。
+        //    ⚠️ 这是体验护栏不是安全边界：判定点仍在服务端（见 AdminUploadLimitAdvice）。
+        //    没有 data-max-bytes 的老模板自动跳过本检查，行为与改动前一致。
+        var maxBytes = parseInt(root.getAttribute('data-max-bytes') || '0', 10);
+        if (maxBytes > 0 && file.size > maxBytes) {
+            showError(root, file, root.getAttribute('data-msg-too-large') || failedText(root));
+            return;
+        }
+        var status = root.querySelector('[data-seed-status]');
+        if (status) { status.textContent = root.getAttribute('data-msg-uploading') || '...'; }
+        var body = new FormData();
+        body.append('file', file);
+        // ⚠️ /admin/** 那条过滤链**保留 CSRF** —— 少了这个头是 403，而不是"权限不够"。
+        var headers = {};
+        var token = document.querySelector('meta[name="_csrf"]');
+        var header = document.querySelector('meta[name="_csrf_header"]');
+        if (token && header) { headers[header.content] = token.content; }
+        fetch(root.getAttribute('data-upload-url'), {
+            method: 'POST', body: body, headers: headers, credentials: 'same-origin'
+        }).then(function (r) {
+            // 🔴 会话过期要**单独认出来**：后台会话 8h 过期，过期后这个 POST 会被重定向到
+            //    /admin/login，而 fetch 默认跟随重定向 ⇒ 拿到的是 **200 + 登录页 HTML**。
+            //    不认它就会报成"上传失败，请重试" —— 而重试一万次也不会成功，
+            //    真正要做的是重新登录。判据用 r.redirected + 落点，不猜响应体。
+            if (r.redirected && r.url && r.url.indexOf('/admin/login') >= 0) {
+                return { ok: false, status: r.status, body: null, expired: true };
+            }
+            // 🔴 不能直接 r.json()：失败响应**未必是 JSON**。
+            //    403（缺 CSRF 头）回的是 Security 的错误页，5xx 回的是 RFC 9457 信封。
+            //    早先在这里直接解析，非 JSON 一律抛进下面的 catch，而 catch 只清了状态字
+            //    —— 界面上一个字都不显示，表现为"选了图没反应"，排障时毫无线索。
+            return r.text().then(function (t) {
+                var parsed = null;
+                try { parsed = t ? JSON.parse(t) : null; } catch (e) { parsed = null; }
+                return { ok: r.ok, status: r.status, body: parsed };
+            });
+        }).then(function (res) {
+            if (status) { status.textContent = ''; }
+            if (res.expired) {
+                showError(root, file, root.getAttribute('data-msg-expired') || 'session expired');
+                return;
+            }
+            if (!res.ok) {
+                // 被拒的那张单独报错，不影响其余（HEIC / 超限都是**预期内**的输入）。
+                // error 是本链路自定义的字段；detail 是 RFC 9457 的；两者都没有才回落通用文案，
+                // 并**带上状态码** —— 否则 403 与 500 在界面上长得一模一样，没法分诊。
+                var text = (res.body && (res.body.error || res.body.detail))
+                        || failedText(root) + '（HTTP ' + res.status + '）';
+                showError(root, file, text);
+                return;
+            }
+            if (!res.body || !res.body.url) {
+                // 200 却拿不到可用信封 —— 宁可报错，也不能让 addThumb 拿 null 崩在 then 里
+                // （那会掉进 catch，错因被抹平成一句通用文案）。
+                showError(root, file, failedText(root));
+                return;
+            }
+            addThumb(root, res.body);
+        }).catch(function () {
+            // 网络层就没走通（断网 / 被扩展拦掉）。同样必须出声。
+            if (status) { status.textContent = ''; }
+            showError(root, file, failedText(root));
+        });
+    }
+
+    function failedText(root) {
+        return root.getAttribute('data-msg-failed') || 'upload failed';
+    }
+
+    function showError(root, file, text) {
+        adminUploadError(root, (file.name || '') + '：' + text,
+                ['[data-seed-thumbs]', '[data-batch-errors]']);
+    }
+
+    function eachRoot(fn) {
+        [].slice.call(document.querySelectorAll('[data-seed-uploader]')).forEach(fn);
+    }
+
+    document.addEventListener('change', function (e) {
+        if (!e.target.hasAttribute || !e.target.hasAttribute('data-seed-file')) { return; }
+        var root = e.target.closest('[data-seed-uploader]');
+        [].slice.call(e.target.files).forEach(function (f) { upload(root, f); });
+        e.target.value = ''; // 清空以便重选同一张
+    });
+
+    document.addEventListener('click', function (e) {
+        var del = e.target.closest && e.target.closest('[data-seed-del]');
+        if (!del) { return; }
+        var root = del.closest('[data-seed-uploader]');
+        del.closest('[data-seed-thumb]').remove();
+        sync(root);
+    });
+
+    // 粘贴上传：剪贴板里有图就直接传（AC2）。
+    document.addEventListener('paste', function (e) {
+        eachRoot(function (root) {
+            var items = (e.clipboardData && e.clipboardData.items) || [];
+            [].slice.call(items).forEach(function (it) {
+                if (it.kind === 'file' && it.type.indexOf('image/') === 0) {
+                    upload(root, it.getAsFile());
+                }
+            });
+        });
+    });
+
+    // 拖拽排序。用最朴素的做法：拖起来记住是谁，落在谁身上就插到它前面。
+    var dragging = null;
+    document.addEventListener('dragstart', function (e) {
+        var t = e.target.closest && e.target.closest('[data-seed-thumb]');
+        if (t) { dragging = t; e.dataTransfer.effectAllowed = 'move'; }
+    });
+    document.addEventListener('dragover', function (e) {
+        var over = e.target.closest && e.target.closest('[data-seed-thumb]');
+        if (dragging && over) { e.preventDefault(); }
+    });
+    document.addEventListener('drop', function (e) {
+        var over = e.target.closest && e.target.closest('[data-seed-thumb]');
+        if (!dragging || !over || over === dragging) { return; }
+        e.preventDefault();
+        over.parentNode.insertBefore(dragging, over);
+        sync(dragging.closest('[data-seed-uploader]'));
+        dragging = null;
+    });
+
+    // 兜底 URL 框改动也要同步进隐藏字段。
+    document.addEventListener('input', function (e) {
+        if (!e.target.hasAttribute || !e.target.hasAttribute('data-seed-url-fallback')) { return; }
+        var form = e.target.closest('[data-seed-form]');
+        var root = form && form.querySelector('[data-seed-uploader]');
+        if (root) { sync(root); }
+    });
+
+    document.addEventListener('DOMContentLoaded', function () { eachRoot(sync); });
+})();
+
+// ===== 批次素材上传：选择时即拦截 + 实时计数（V1.1.6 Story 13.2 · AC2/AC3）=====
+//
+// 🔴 **不能等全部传完才报错**：运营已经等了几分钟，而且"部分成功部分失败"的中间状态
+//    很难处置（哪几张进去了？重传要跳过哪几张？）。所以在**发请求之前**就把超出的挡掉。
+//
+// 三条判据全在客户端先过一遍：累计张数 / 累计字节 / 同批文件名重复。
+// 🛡 这一层**只是省时间**，不是安全边界 —— 服务端各自还有一遍权威校验
+//    （勾选框和 JS 在浏览器里都改得动）。
+(function () {
+    function state(root) {
+        return {
+            maxCount: parseInt(root.getAttribute('data-max-count'), 10),
+            maxBytes: parseInt(root.getAttribute('data-max-bytes'), 10),
+            usedCount: parseInt(root.getAttribute('data-used-count'), 10) || 0,
+            usedBytes: parseInt(root.getAttribute('data-used-bytes'), 10) || 0
+        };
+    }
+
+    function paint(root) {
+        var s = state(root);
+        var live = root.querySelector('[data-batch-live]');
+        if (!live) { return; }
+        var mb = function (b) { return Math.round(b / 1024 / 1024); };
+        live.textContent = s.usedCount + ' / ' + s.maxCount + '，'
+                + mb(s.usedBytes) + ' / ' + mb(s.maxBytes) + ' MB';
+    }
+
+    /** bug 20260922-523：多张上传时给出「上传中 n/N…」进度，写在同一个状态位上；全部回来后 paint() 复原用量。 */
+    function progress(root, done, total) {
+        var live = root.querySelector('[data-batch-live]');
+        var tpl = root.getAttribute('data-msg-uploading');
+        if (!live || !tpl) { return; }
+        live.textContent = tpl.replace('{0}', done).replace('{1}', total);
+    }
+
+    function reject(root, name, msg) {
+        adminUploadError(root, name + '：' + msg,
+                ['[data-batch-errors]', '[data-seed-thumbs]']);
+    }
+
+    /** 墙上已有的文件名 —— 分次追加时最容易撞的就是这个（"先拖猫的、再拖狗的"）。 */
+    function existingNames() {
+        var wall = document.getElementById('seedAssetWall');
+        if (!wall) { return []; }
+        return [].slice.call(wall.querySelectorAll('.seed-thumb .hint'))
+                .map(function (el) { return el.textContent.trim(); });
+    }
+
+    function refreshWall(root) {
+        var url = root.getAttribute('data-wall-url');
+        if (!url || typeof htmx === 'undefined') { return; }
+        htmx.ajax('GET', url, { target: '#seedAssetWall', swap: 'outerHTML' });
+    }
+
+    function send(root, file, onDone) {
+        var body = new FormData();
+        body.append('file', file);
+        var headers = {};
+        var token = document.querySelector('meta[name="_csrf"]');
+        var header = document.querySelector('meta[name="_csrf_header"]');
+        if (token && header) { headers[header.content] = token.content; }
+        fetch(root.getAttribute('data-upload-url'), {
+            method: 'POST', body: body, headers: headers, credentials: 'same-origin'
+        }).then(function (r) {
+            return r.json().then(function (j) { return { ok: r.ok, body: j }; });
+        }).then(function (res) {
+            if (!res.ok) {
+                // 🔴 兜底文案走 failedText(root)（data-msg-failed），不要在这里再写一句英文：
+                //    服务端不回 error 时，写死的那句是**唯一**会显示给运营的文字，
+                //    而它永远是英文 —— 印尼同事看到的就是一句看不懂的话（11.2 复审 C6）。
+                reject(root, file.name, res.body.error || failedText(root));
+            } else {
+                // 用服务端回的权威用量校准本地计数（别自己累加 —— 会和真相慢慢分叉）。
+                root.setAttribute('data-used-count', res.body.usedCount);
+                root.setAttribute('data-used-bytes', res.body.usedBytes);
+            }
+            onDone();
+        }).catch(function () {
+            reject(root, file.name, 'upload failed');
+            onDone();
+        });
+    }
+
+    document.addEventListener('change', function (e) {
+        if (!e.target.hasAttribute || !e.target.hasAttribute('data-batch-file')) { return; }
+        var root = e.target.closest('[data-batch-uploader]');
+        var files = [].slice.call(e.target.files);
+        e.target.value = '';
+        // ⚠️ 容器缺失时不能让这一行抛出 —— 它在 change 处理器最前面，
+        //    一抛后面**整段选文件的逻辑都不会执行**，表现又是"选了图没反应"。
+        var errBox = root.querySelector('[data-batch-errors]');
+        if (errBox) { errBox.innerHTML = ''; }
+
+        var s = state(root);
+        var names = existingNames();
+        var accepted = [];
+        var plannedCount = s.usedCount;
+        var plannedBytes = s.usedBytes;
+        files.forEach(function (f) {
+            // ① 同名（含与墙上已有的、以及本次选中里自己重复的）
+            if (names.indexOf(f.name) >= 0) {
+                reject(root, f.name, root.getAttribute('data-msg-dup'));
+                return;
+            }
+            // ② 累计张数 —— 🛡 按累计算，否则分三次拖就能绕过限制
+            if (plannedCount + 1 > s.maxCount) {
+                reject(root, f.name, root.getAttribute('data-msg-over-count'));
+                return;
+            }
+            // ③ 累计字节
+            if (plannedBytes + f.size > s.maxBytes) {
+                reject(root, f.name, root.getAttribute('data-msg-over-bytes'));
+                return;
+            }
+            names.push(f.name);
+            plannedCount++;
+            plannedBytes += f.size;
+            accepted.push(f);
+        });
+
+        var total = accepted.length;
+        var left = total;
+        if (left === 0) { return; }
+        progress(root, 0, total);
+        accepted.forEach(function (f) {
+            send(root, f, function () {
+                left--;
+                progress(root, total - left, total);
+                // 全部回来了再刷墙一次 —— 每张都刷会让缩略图墙闪十几下。
+                // 刷墙只替换 #seedAssetWall（outerHTML），页面停留在素材步骤不跳走。
+                if (left === 0) {
+                    paint(root);
+                    refreshWall(root);
+                }
+            });
+        });
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        [].slice.call(document.querySelectorAll('[data-batch-uploader]')).forEach(paint);
+    });
+})();
+
+// ===== 「关联物种」跟随所选发布账号（V1.1.6 Story 14.1 · AC4）=====
+//
+// 默认跟随该账号的「账号物种定位」；🛡 **运营手动改过之后就不再自动跟随** ——
+// 切个账号把他刚选的值冲掉，是最容易让人发错的那种"贴心"。
+//
+// 🔴 选的是运营真实账号时默认**留空**（它没有账号物种定位，物种由作者宠物档案推导）。
+document.addEventListener('change', function (e) {
+    var el = e.target;
+    if (!el || el.tagName !== 'SELECT') { return; }
+
+    // ① 运营自己动了物种下拉 ⇒ 打上"已手动"标记，此后不再被跟随覆盖。
+    if (el.hasAttribute('data-species-follow')) {
+        el.setAttribute('data-touched', 'true');
+        return;
+    }
+
+    // ② 换了发布账号 ⇒ 若物种没被手动改过，跟随更新。
+    if (el.name !== 'authorUserId') { return; }
+    var form = el.closest('form');
+    var species = form && form.querySelector('[data-species-follow]');
+    if (!species || species.getAttribute('data-touched') === 'true') { return; }
+    var opt = el.selectedIndex >= 0 ? el.options[el.selectedIndex] : null;
+    // data-species 为空（运营真实账号）⇒ 留空。
+    species.value = (opt && opt.getAttribute('data-species')) || '';
+});
+
+// ===== 模板 D 配置卡：未修改禁用保存钮 / 已修改标 / 离开拦一次（V1.3.0 Story 2.3b）=====
+// form[data-config-card]：DOMContentLoaded 记初始 FormData 序列化；input/change 时比对 → 有差异启用 [data-save] 并显示
+// [data-dirty-flag]；提交后视为已保存。存在 dirty 卡时 beforeunload 提示一次（UI 稿 9-7 第 6 条）。
+(function () {
+    function serialize(form) {
+        try { return new URLSearchParams(new FormData(form)).toString(); } catch (e) { return ''; }
+    }
+    function refresh(form) {
+        var dirty = serialize(form) !== form.dataset.initial;
+        form.classList.toggle('is-dirty', dirty);
+        var save = form.querySelector('[data-save]');
+        // 422 之后（data-invalid）保存钮禁用到再次修改（Story 6.3 AC3），dirty 基线不动：改回原值仍算干净、离开页面照提示
+        if (save) { save.disabled = !dirty || form.dataset.invalid === '1'; }
+        var flag = form.querySelector('[data-dirty-flag]');
+        if (flag) { flag.hidden = !dirty; }
+    }
+    function init(form) {
+        form.dataset.initial = serialize(form);
+        // V1.3.0 Story 6.3：记每个输入的初值，供高危确认复述「旧值 → 新值」（data-confirm-diff）
+        form.querySelectorAll('input[name], select[name], textarea[name]').forEach(function (el) {
+            el.dataset.initialValue = el.type === 'checkbox' || el.type === 'radio' ? (el.checked ? '1' : '0') : el.value;
+        });
+        refresh(form);
+    }
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('form[data-config-card]').forEach(init);
+        // htmx 原位替换回来的卡（Story 6.3 保存成功 → outerHTML 换整张卡）重新记初值：「已修改」标自然消退
+        document.body.addEventListener('htmx:load', function (e) {
+            var el = e.detail && e.detail.elt;
+            if (!el || !el.querySelectorAll) { return; }
+            if (el.matches && el.matches('form[data-config-card]')) { init(el); }
+            el.querySelectorAll('form[data-config-card]').forEach(init);
+        });
+        // 422 行内 err 落到卡的 err 槽后：按 data-error-fields 给对应输入红边，保存钮禁用到再次修改（Story 6.3 AC3）
+        document.body.addEventListener('htmx:afterSwap', function (e) {
+            var t = e.detail && e.detail.target;
+            if (!t || !t.classList || !t.classList.contains('inline-error-slot')) { return; }
+            var form = t.closest('form[data-config-card]');
+            var err = t.querySelector('.inline-error[data-code]');
+            if (!form) { return; }
+            form.querySelectorAll('.is-invalid').forEach(function (el) { el.classList.remove('is-invalid'); });
+            if (err) {
+                var map = {};
+                try { map = JSON.parse(form.getAttribute('data-error-fields') || '{}'); } catch (ex) { map = {}; }
+                (map[err.getAttribute('data-code')] || '').split(',').forEach(function (name) {
+                    var el = name && form.querySelector('[name="' + name + '"]');
+                    if (el) { el.classList.add('is-invalid'); }
+                });
+                form.dataset.invalid = '1'; // 复审 #3：不动 dirty / diff 基线，只用独立标志禁用保存钮
+                refresh(form);
+            }
+        });
+    });
+    // 输入变化即清红边与「无效」标志（错误文案保留到下次提交）
+    ['input', 'change'].forEach(function (evt) {
+        document.addEventListener(evt, function (e) {
+            var el = e.target;
+            if (el && el.classList && el.classList.contains('is-invalid')) { el.classList.remove('is-invalid'); }
+            var form = el && el.closest ? el.closest('form[data-config-card]') : null;
+            if (form && form.dataset.invalid === '1') { delete form.dataset.invalid; refresh(form); }
+        });
+    });
+    ['input', 'change'].forEach(function (evt) {
+        document.addEventListener(evt, function (e) {
+            var form = e.target && e.target.closest ? e.target.closest('form[data-config-card]') : null;
+            if (form) { refresh(form); }
+        });
+    });
+    // 原生表单提交后视为已保存（整页 PRG 会重渲染）；htmx 表单不在这里动基线——成功路径由 outerHTML + htmx:load 重新 init，
+    // 失败 / 确认弹层取消时卡必须仍是「已修改」（复审 #2）。被 preventDefault（确认取消）的提交同样跳过。
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form || !form.hasAttribute || !form.hasAttribute('data-config-card')) { return; }
+        if (e.defaultPrevented || tailtopiaIsHxForm(form)) { return; }
+        form.dataset.initial = serialize(form);
+        refresh(form);
+    });
+    window.addEventListener('beforeunload', function (e) {
+        if (document.querySelector('form[data-config-card].is-dirty')) { e.preventDefault(); e.returnValue = ''; }
+    });
+    // 供提交防连点（本文件末尾）在请求结束后按配置卡规则重算保存钮，而不是一律放开
+    window.tailtopiaConfigCardRefresh = function (form) {
+        if (form && form.hasAttribute && form.hasAttribute('data-config-card')) { refresh(form); }
+    };
+})();
+
+// ===== 钮级二次确认 + 「必填未填 → 提交钮禁用」（Story 2.4 / 2.8 起用；V1.3.0 Story 10.2 从
+//       admin-workbench.js 移到这里）=====
+//
+// 🔴 **为什么不能留在 admin-workbench.js**：那个文件只有模板 A 的页面引。
+//    模板 B 的抽屉里同样有这两种需求（B15 的发货表单三项必填、「标记整单已送达」要二次确认），
+//    而模板 B 页按惯例只引 admin-core.js + admin-drawer.js —— 属性照写、行为没有，
+//    表现是**按钮永远是灰的**、确认框**永远不弹**，且页面渲染与所有测试都正常（Story 10.2 复审实测）。
+//    两个处理器都是纯委托、只认自己的属性，放在 core 里对其它页面完全惰性。
+(function () {
+    // 钮级确认：同一表单里有多个提交钮、只有其中一个要确认时用它（form[data-confirm] 走 htmx:confirm）。
+    // capture 阶段先于 htmx 的 submit 处理。
+    document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('button[data-confirm-button]') : null;
+        if (btn && btn.getAttribute('data-confirm') && !window.confirm(btn.getAttribute('data-confirm'))) {
+            e.preventDefault(); e.stopPropagation();
+        }
+    }, true);
+
+    // form[data-requires-form] 里所有 [data-requires-text]（文本 / 下拉）都非空、
+    // 所有 [data-requires-file] 都选了文件，才放开 [data-requires-target]。
+    // 🔴 **必须在 htmx:afterSwap 里重扫**：右栏 / 抽屉是整块换进来的，只在 DOMContentLoaded 绑一次的话，
+    //    换进来的新表单永远停在 disabled —— 运营填完了按钮还是灰的。
+    function sync(form) {
+        var btn = form.querySelector('[data-requires-target]');
+        if (!btn) { return; }
+        var ok = true;
+        form.querySelectorAll('[data-requires-text]').forEach(function (i) { ok = ok && !!i.value.trim(); });
+        form.querySelectorAll('[data-requires-file]').forEach(function (i) { ok = ok && !!(i.files && i.files.length); });
+        btn.disabled = !ok;
+    }
+    ['input', 'change'].forEach(function (ev) {
+        document.addEventListener(ev, function (e) {
+            var f = e.target && e.target.closest ? e.target.closest('form[data-requires-form]') : null;
+            if (f) { sync(f); }
+        });
+    });
+    document.addEventListener('DOMContentLoaded', function () {
+        document.body.addEventListener('htmx:afterSwap', function (e) {
+            var t = e.detail && e.detail.target;
+            if (t && t.querySelectorAll) { t.querySelectorAll('form[data-requires-form]').forEach(sync); }
+        });
+    });
+})();
+
+// ===== 坐标整串粘贴自动拆分（bug 20260923-540④，新建 / 编辑场所）=====
+// Google Maps 复制出来是一行「-6.175392, 106.827153」。form 里带 input[data-coord="lat"] 与 input[data-coord="lng"]，
+// 往任一格粘贴「lat, lng」（逗号 / 全角逗号 / 空白分隔，可带括号）→ 拆开分别填入两格，并派发 input / change
+// 让配置卡（未修改禁用保存钮）等监听感知。只认两段合法数字；单个数字照常粘贴，不拦。
+// 小数统一截到 6 位：新建表单是 type=number step=0.000001，更长的小数会被浏览器判 step 不合法而拦提交。
+// ⚠️ 只是录入便利，范围 / 都会区判定仍在服务端（PlaceEditForm / PlaceCoordinateValidator）。
+(function () {
+    var PAIR = /^\s*\(?\s*(-?\d{1,3}(?:\.\d+)?)\s*(?:[,，;；]\s*|\s+)(-?\d{1,3}(?:\.\d+)?)\s*\)?\s*$/;
+    function norm(v) {
+        var n = parseFloat(v);
+        return isNaN(n) ? v : String(parseFloat(n.toFixed(6)));
+    }
+    function put(el, v) {
+        el.value = v;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    document.addEventListener('paste', function (e) {
+        var el = e.target;
+        if (!el || !el.getAttribute || !el.hasAttribute('data-coord')) { return; }
+        var text = (e.clipboardData || window.clipboardData);
+        text = text && text.getData ? text.getData('text') : '';
+        var m = PAIR.exec(text || '');
+        if (!m) { return; }
+        var scope = el.form || el.closest('form') || document;
+        var lat = scope.querySelector('input[data-coord="lat"]');
+        var lng = scope.querySelector('input[data-coord="lng"]');
+        if (!lat || !lng) { return; }
+        e.preventDefault();
+        put(lat, norm(m[1]));
+        put(lng, norm(m[2]));
+    });
+})();
+
+// ===== 提交防连点（9-7 第 7 条，bug 20260923-547，全局）=====
+// 慢请求（多图上传的新建场所等）期间连点提交会建出多条记录。统一处理，不逐页加属性：
+//   · htmx 表单（非 GET）：htmx:beforeRequest 时禁用该表单全部提交钮、触发钮加 .is-loading（admin.css 已有 spinner）；
+//     htmx:afterRequest（成功 / 4xx / 5xx / 网络错 / 超时 / 中断都会派发）恢复原禁用态 ——
+//     422 行内回填后按钮可以再次提交；配置卡表单恢复后按其规则重算（未改动仍禁用）。
+//     响应带 HX-Redirect / HX-Refresh（成功后整页跳转，如新建场所）则**不恢复**：跳转途中再点一次正是重复建档的来源。
+//   · 原生表单（非 GET）：submit 未被取消时，下一拍禁用提交钮（同步禁用会把 submitter 的 name/value 从表单数据里剔掉）；
+//     页面正常会整页跳转；兜底 15s 自动恢复（下载类响应不跳页）+ pageshow（浏览器后退缓存）恢复。
+//   · 二次确认（data-confirm / htmx:confirm）取消时请求根本没发，不会被禁用；捕获阶段的确认拦截先于这里（冒泡阶段）。
+//   · 例外：表单带 data-no-submit-guard 跳过。
+// ⚠️ 只是前端防呆，服务端幂等不在本处。
+(function () {
+    var SUBMITS = 'button[type="submit"], button:not([type]), input[type="submit"]';
+    function submitButtons(form) {
+        var list = [].slice.call(form.querySelectorAll(SUBMITS));
+        if (form.id) {
+            [].slice.call(document.querySelectorAll('[form="' + form.id + '"]')).forEach(function (b) {
+                if (b.matches && b.matches(SUBMITS) && list.indexOf(b) === -1) { list.push(b); }
+            });
+        }
+        return list;
+    }
+    function lock(form, submitter) {
+        var btns = submitButtons(form);
+        var state = btns.map(function (b) { return { b: b, disabled: b.disabled }; });
+        btns.forEach(function (b) { b.disabled = true; });
+        var main = submitter && btns.indexOf(submitter) !== -1 ? submitter : btns[0];
+        if (main && main.classList) { main.classList.add('is-loading'); }
+        form.setAttribute('aria-busy', 'true');
+        return state;
+    }
+    function unlock(form, state) {
+        (state || []).forEach(function (s) {
+            s.b.disabled = s.disabled;
+            if (s.b.classList) { s.b.classList.remove('is-loading'); }
+        });
+        form.removeAttribute('aria-busy');
+        if (window.tailtopiaConfigCardRefresh) { window.tailtopiaConfigCardRefresh(form); }
+    }
+    function guarded(form) {
+        return form && form.tagName === 'FORM' && !form.hasAttribute('data-no-submit-guard');
+    }
+
+    // htmx：以 xhr 为键记住本次锁住的按钮（afterRequest 时 elt 可能已被换出 DOM）
+    var pending = typeof WeakMap === 'function' ? new WeakMap() : null;
+    document.addEventListener('htmx:beforeRequest', function (e) {
+        var d = e.detail || {};
+        var form = d.elt;
+        if (e.defaultPrevented || !pending || !guarded(form) || !d.xhr) { return; }
+        var verb = d.requestConfig && d.requestConfig.verb ? String(d.requestConfig.verb).toLowerCase() : 'post';
+        if (verb === 'get') { return; }
+        var trig = d.requestConfig && d.requestConfig.triggeringEvent;
+        pending.set(d.xhr, { form: form, state: lock(form, trig && trig.submitter) });
+    });
+    document.addEventListener('htmx:afterRequest', function (e) {
+        var d = e.detail || {};
+        var rec = pending && d.xhr ? pending.get(d.xhr) : null;
+        if (!rec) { return; }
+        pending.delete(d.xhr);
+        var xhr = d.xhr;
+        var redirecting = false;
+        try { redirecting = !!(xhr.getResponseHeader('HX-Redirect') || xhr.getResponseHeader('HX-Refresh') === 'true'); } catch (ex) { redirecting = false; }
+        if (redirecting && xhr.status >= 200 && xhr.status < 400) { return; }
+        unlock(rec.form, rec.state);
+    });
+
+    // 原生表单
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (e.defaultPrevented || !guarded(form) || tailtopiaIsHxForm(form)) { return; }
+        if ((form.getAttribute('method') || 'get').toLowerCase() === 'get') { return; }
+        var t = form.getAttribute('target');
+        if (t && t !== '_self') { return; }
+        var submitter = e.submitter;
+        setTimeout(function () {
+            if (form.hasAttribute('aria-busy')) { return; }
+            var state = lock(form, submitter);
+            form._tailtopiaGuard = state;
+            setTimeout(function () {
+                if (form._tailtopiaGuard === state) { form._tailtopiaGuard = null; unlock(form, state); }
+            }, 15000);
+        }, 0);
+    });
+    window.addEventListener('pageshow', function (e) {
+        if (!e.persisted) { return; }
+        document.querySelectorAll('form[aria-busy="true"]').forEach(function (form) {
+            var state = form._tailtopiaGuard;
+            form._tailtopiaGuard = null;
+            unlock(form, state);
+        });
+    });
+})();

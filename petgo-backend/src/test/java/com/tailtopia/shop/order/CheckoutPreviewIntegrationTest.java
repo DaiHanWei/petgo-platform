@@ -227,6 +227,74 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
         assertThat(v.goodsSubtotal()).isEqualTo(285_000L);
     }
 
+    // ---------- 无地址预览（2026-09-24）：先看预览，没地址只是不让下单 ----------
+
+    private long maxActiveFee() {
+        return jdbc.queryForObject("SELECT MAX(fee) FROM shipping_zones WHERE active", Long.class);
+    }
+
+    @Test
+    @DisplayName("不传地址 → 金额照常算：运费取开通区域最高运费，address 为 null，不算超范围")
+    void previewWithoutAddress() {
+        long uid = seedUser();
+        zones.setFreeShippingThreshold(0, ACTOR);
+        rules.update(true, true, 1_000_000L, ACTOR);
+        seedAddress(seedUser(), 20_000L);   // 保证至少有一个开通区域（地址挂在别人名下）
+        carts.add(uid, seedSku(10, 285_000L, "NO_RETURN_AFTER_OPEN"), 1);
+
+        var v = preview(uid, null);
+        long fee = maxActiveFee();
+
+        assertThat(v.address()).isNull();
+        assertThat(v.serviceable()).as("没地址不等于超范围").isTrue();
+        assertThat(v.lines()).hasSize(1);
+        assertThat(v.goodsSubtotal()).isEqualTo(285_000L);
+        assertThat(v.shippingFee()).isEqualTo(fee);
+        assertThat(v.payableTotal()).isEqualTo(285_000L + fee);
+        assertThat(v.cashAmount()).isEqualTo(285_000L + fee);
+        assertThat(v.strictestReturnPolicy()).isEqualTo("NO_RETURN_AFTER_OPEN");
+    }
+
+    @Test
+    @DisplayName("不传地址也照常判免运门槛与 PawCoin 抵扣")
+    void previewWithoutAddressAppliesFreeShippingAndCoin() {
+        long uid = seedUser();
+        zones.setFreeShippingThreshold(100_000L, ACTOR);
+        rules.update(true, true, 1_000_000L, ACTOR);
+        seedAddress(seedUser(), 20_000L);
+        carts.add(uid, seedSku(10, 285_000L, "RETURNABLE"), 1);
+        topUp(uid, 50_000L);
+
+        var v = preview(uid, null);
+        long fee = maxActiveFee();
+
+        assertThat(v.shippingFee()).isEqualTo(fee);
+        assertThat(v.shippingDiscount()).as("达门槛 → 一条负数免运行").isEqualTo(-fee);
+        assertThat(v.payableTotal()).isEqualTo(285_000L);
+        assertThat(v.coinAmount()).isEqualTo(50_000L);
+        assertThat(v.cashAmount()).isEqualTo(235_000L);
+    }
+
+    @Test
+    @DisplayName("GET /me/checkout 不带 addressToken → 200 无地址预览（不再 400）")
+    void previewWithoutAddressOverHttp() throws Exception {
+        var u = newUser();
+        long uid = u.getId();
+        zones.setFreeShippingThreshold(0, ACTOR);
+        rules.update(true, true, 1_000_000L, ACTOR);
+        seedAddress(seedUser(), 20_000L);
+        carts.add(uid, seedSku(10, 120_000L, "RETURNABLE"), 2);
+        long fee = maxActiveFee();
+
+        mvc.perform(get("/api/v1/me/checkout").header("Authorization", userBearer(uid)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.address").doesNotExist())
+                .andExpect(jsonPath("$.goodsSubtotal").value(240_000))
+                .andExpect(jsonPath("$.shippingFee").value(fee))
+                .andExpect(jsonPath("$.payableTotal").value(240_000 + fee))
+                .andExpect(jsonPath("$.serviceable").value(true));
+    }
+
     // ---------- 🔴 FR-104 / S-6：多 SKU 取最严 ----------
 
     @Test
@@ -383,5 +451,119 @@ class CheckoutPreviewIntegrationTest extends ApiIntegrationTest {
                         .content("{}"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.detail").value("请选择收货地址"));
+    }
+
+    // ---------- Story 4-1：三个计算点全按选中集（AC6） ----------
+
+    @Test
+    @DisplayName("🔴 AC6：全车过免运门槛、选中集不过 → 不免运")
+    void freeShippingFollowsSelectionNotWholeCart() {
+        long uid = seedUser();
+        String a = seedSku(10, 100_000L, "RETURNABLE");
+        String b = seedSku(10, 100_000L, "RETURNABLE");
+        String addr = seedAddress(uid, 20_000L);
+        // 门槛 150.000：全车 200.000 过线，只选一件 100.000 不过线。
+        zones.setFreeShippingThreshold(150_000L, ACTOR);
+        carts.add(uid, a, 1);
+        carts.add(uid, b, 1);
+
+        carts.setSelected(uid, b, false);
+        CheckoutPreviewView v = preview(uid, addr);
+
+        assertThat(v.goodsSubtotal())
+                .as("结算页展示的必须是选中集 —— 展示与下单不同批就是能造成资损的谎")
+                .isEqualTo(100_000L);
+        assertThat(v.shippingDiscount())
+                .as("免运是负数折扣行；选中集不过线就不该有这一行")
+                .isZero();
+        assertThat(v.shippingFee()).isEqualTo(20_000L);
+    }
+
+    @Test
+    @DisplayName("AC6 反向：选中集自己就过门槛 → 照常免运")
+    void selectionOverThresholdStillGetsFreeShipping() {
+        long uid = seedUser();
+        String a = seedSku(10, 200_000L, "RETURNABLE");
+        String b = seedSku(10, 100_000L, "RETURNABLE");
+        String addr = seedAddress(uid, 20_000L);
+        zones.setFreeShippingThreshold(150_000L, ACTOR);
+        carts.add(uid, a, 1);
+        carts.add(uid, b, 1);
+
+        carts.setSelected(uid, b, false);
+        CheckoutPreviewView v = preview(uid, addr);
+
+        assertThat(v.goodsSubtotal()).isEqualTo(200_000L);
+        assertThat(v.shippingDiscount()).isEqualTo(-20_000L);
+    }
+
+    @Test
+    @DisplayName("🔴 AC6：PawCoin 抵扣按「选中商品合计 + 运费」算")
+    void pawcoinDeductionFollowsSelection() {
+        long uid = seedUser();
+        String a = seedSku(10, 100_000L, "RETURNABLE");
+        String b = seedSku(10, 900_000L, "RETURNABLE");
+        String addr = seedAddress(uid, 0L);
+        zones.setFreeShippingThreshold(0, ACTOR);
+        rules.update(true, true, 1_000_000L, ACTOR);
+        topUp(uid, 1_000_000L);
+        carts.add(uid, a, 1);
+        carts.add(uid, b, 1);   // 不买这件贵的
+
+        carts.setSelected(uid, b, false);
+        CheckoutPreviewView v = preview(uid, addr);
+
+        assertThat(v.goodsSubtotal()).isEqualTo(100_000L);
+        assertThat(v.coinAmount())
+                .as("余额足够整车，但本单只买 100.000 —— 抵扣不能按全车算")
+                .isEqualTo(100_000L);
+        assertThat(v.cashAmount()).isZero();
+    }
+
+    @Test
+    @DisplayName("🔴 AC6：coinCapped 标志同步按选中集判定")
+    void coinCappedFollowsSelection() {
+        long uid = seedUser();
+        String cheap = seedSku(10, 50_000L, "RETURNABLE");
+        String pricey = seedSku(10, 900_000L, "RETURNABLE");
+        String addr = seedAddress(uid, 0L);
+        zones.setFreeShippingThreshold(0, ACTOR);
+        rules.update(true, true, 100_000L, ACTOR);   // 单笔上限 100.000
+        topUp(uid, 1_000_000L);
+        carts.add(uid, cheap, 1);
+        carts.add(uid, pricey, 1);
+
+        // 全车 950.000 会被上限截断；只选 50.000 那件则用不满上限，不算截断。
+        carts.setSelected(uid, pricey, false);
+        CheckoutPreviewView v = preview(uid, addr);
+
+        assertThat(v.coinAmount()).isEqualTo(50_000L);
+        assertThat(v.coinCapped())
+                .as("本单根本没用满上限，多一行「本单最多可用…」只会让用户困惑")
+                .isFalse();
+
+        // 反过来把贵的选上：这时才是真被截断。
+        carts.setAllSelected(uid, true);
+        CheckoutPreviewView full = preview(uid, addr);
+        assertThat(full.coinAmount()).isEqualTo(100_000L);
+        assertThat(full.coinCapped()).isTrue();
+    }
+
+    @Test
+    @DisplayName("AC4：预览的商品行只含选中的那些")
+    void previewLinesOnlyContainSelected() {
+        long uid = seedUser();
+        String a = seedSku(10, 100_000L, "RETURNABLE");
+        String b = seedSku(10, 50_000L, "RETURNABLE");
+        String addr = seedAddress(uid, 0L);
+        zones.setFreeShippingThreshold(0, ACTOR);
+        carts.add(uid, a, 1);
+        carts.add(uid, b, 2);
+
+        carts.setSelected(uid, b, false);
+        CheckoutPreviewView v = preview(uid, addr);
+
+        assertThat(v.lines()).hasSize(1);
+        assertThat(v.lines().getFirst().skuToken()).isEqualTo(a);
     }
 }

@@ -1,19 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics.dart';
+import '../../mention/domain/mention_context.dart';
+import '../../mention/presentation/mention_text.dart';
 import '../../../core/theme/colors.dart';
+import '../../../core/theme/motion.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/date_format.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/letter_avatar.dart';
-import '../../../shared/widgets/mini_profile_sheet.dart';
 import '../../social/domain/account_action_entry.dart';
 import '../data/detail_repository.dart';
 import '../domain/comment.dart';
 import 'author_moderation_callbacks.dart';
 import 'detail_providers.dart';
 import '../../../shared/widgets/user_tag_row.dart';
+import '../../social/presentation/account_report_sheet.dart';
+import '../../auth/domain/auth_guard.dart';
+import '../../user_profile/presentation/public_profile_page.dart';
 
 /// 评论区（Story 3.3 只读 + Story 3.5 回复/删除入口）。一级时间正序首 10 + 「查看更多评论」；
 /// 二级默认内嵌 3 条 + 「查看全部 X 条回复」展开。非自身滚动（嵌入详情页滚动）。
@@ -59,10 +68,52 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
 
   DetailRepository get _repo => ref.read(detailRepositoryProvider);
 
+  /// AC6 的置顶集合入口。**在 initState 就取好存下来** ——
+  /// `dispose()` 里不能碰 `ref`（那时 BuildContext 已失效，Riverpod 会直接抛
+  /// 「Using "ref" when a widget is about to or has been unmounted is unsafe」）。
+  late final SessionPinnedCommentsNotifier _pinnedNotifier;
+
+  /// Story 2.6 · AC5 的落点入口。与 [_pinnedNotifier] 同样在 initState 取好（dispose 里不能碰 ref）。
+  late final ReplyLandingNotifier _landingNotifier;
+
+  /// 各父评论回复区的锚点（parentId → key），滚动定位用。
+  final Map<int, GlobalKey> _replyAnchors = {};
+
   @override
   void initState() {
     super.initState();
+    _pinnedNotifier = ref.read(sessionPinnedCommentsProvider(widget.postId).notifier);
+    _landingNotifier = ref.read(replyLandingProvider(widget.postId).notifier);
     _loadInitial();
+  }
+
+  @override
+  void dispose() {
+    // AC6：置顶只在本次会话有效 —— 离开详情页立刻失效，免得它变成「永久置顶自己的评论」。
+    // 排到下一帧：dispose 期间直接改 provider 会在 widget 树拆解中通知监听者。
+    Future.microtask(_pinnedNotifier.clear);
+    // 落点同理：没消费掉的落点留着，会让下一个详情页莫名其妙自己展开一条评论。
+    Future.microtask(_landingNotifier.clear);
+    super.dispose();
+  }
+
+  /// 渲染用的一级评论顺序：**本会话新发的排最前**，其余保持服务端的热度序。
+  ///
+  /// 🔴 这里只动**展示顺序**，`_nextCursor` 仍然来自服务端返回的那一页的最后一条
+  /// —— 置顶项不参与游标计算，否则会制造重复/漏条（AC6）。
+  List<Comment> get _orderedTopLevel {
+    final pinned = ref.watch(sessionPinnedCommentsProvider(widget.postId));
+    if (pinned.isEmpty) return _topLevel;
+
+    final byId = {for (final c in _topLevel) c.id: c};
+    // 服务端那份优先（赞数、审核态都更新）；服务端这一页没返回它时用本地存下的那份
+    // —— 热度序下 0 赞的新评论很可能压根不在第一页，这一步才是「始终可见」的保证。
+    final mine = [for (final id in pinned.keys) byId[id] ?? pinned[id]!];
+    final rest = [
+      for (final c in _topLevel)
+        if (!pinned.containsKey(c.id)) c,
+    ];
+    return [...mine, ...rest];
   }
 
   Future<void> _loadInitial() async {
@@ -103,11 +154,18 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     final existing = _expanded[parentId];
     if (existing != null && !existing.hasMore) return;
     try {
-      final page = await _repo.getReplies(parentId, cursor: existing?.nextCursor);
+      final page = await _repo.getReplies(
+        parentId,
+        cursor: existing?.nextCursor,
+      );
       if (!mounted) return;
       setState(() {
         if (existing == null) {
-          _expanded[parentId] = _ExpandedReplies(page.items, page.nextCursor, page.hasMore);
+          _expanded[parentId] = _ExpandedReplies(
+            page.items,
+            page.nextCursor,
+            page.hasMore,
+          );
         } else {
           existing.items.addAll(page.items);
           existing.nextCursor = page.nextCursor;
@@ -132,9 +190,63 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
         _hasMore = page.hasMore;
         _expanded.clear();
       });
+      // 🔴 落点必须在**重拉之后**消费：上一行刚把 _expanded 清空，
+      // 先展开再刷新等于白展开（Story 2.6 · AC5）。
+      await _landOnPendingReply();
     } catch (_) {
       // 保持现状。
     }
+  }
+
+  /// 为定位新回复而额外翻页的上限（AC5）。回复区分页取数，新回复在最后一页 ——
+  /// 但「为了定位而无限翻页」会把一条有几百条回复的评论整块拉下来，那是另一种伤害。
+  static const int _replyPagingGuard = 5;
+
+  Iterable<int> _loadedReplyIds(int parentId) =>
+      (_expanded[parentId]?.items ?? const <Comment>[]).map((r) => r.id);
+
+  /// 回复发表成功后：展开该父评论的回复区并滚动定位过去（Story 2.6 · AC5）。
+  ///
+  /// 兜底口径与 AC6 一致 —— **父评论已不在列表里就什么都不做**：不报错、不跳、不留悬挂状态。
+  /// （父被删时 composer 那边已经给过专属提示并退出了回复态。）
+  Future<void> _landOnPendingReply() async {
+    final landing = ref.read(replyLandingProvider(widget.postId));
+    if (landing == null) return;
+    // 先清：无论后面能不能定位，这个落点都已经用过了，留着会在下次刷新时重放。
+    _landingNotifier.clear();
+    // 父评论可能只存在于本会话置顶集合里（热度序下 0 赞的新评论通常不在第一页）——那也算「在列表里」。
+    if (!_topLevel.any((c) => c.id == landing.parentId) &&
+        !ref
+            .read(sessionPinnedCommentsProvider(widget.postId))
+            .containsKey(landing.parentId)) {
+      return;
+    }
+
+    await _expandReplies(landing.parentId);
+    // 🔴 新回复不一定在第一页：二级按时间正序，回复多的评论里**新的那条在最后一页**。
+    // 一路翻到它出现为止 —— 但设上限，免得某条有几百条回复的评论把整棵子树都拉下来
+    // （翻不到就停在已加载的末尾，也比停在第一页强）。
+    var guard = 0;
+    while (mounted &&
+        guard++ < _replyPagingGuard &&
+        !_loadedReplyIds(landing.parentId).contains(landing.replyId) &&
+        (_expanded[landing.parentId]?.hasMore ?? false)) {
+      await _expandReplies(landing.parentId);
+    }
+    if (!mounted) return;
+    // 展开后的那几行要先 layout 出来才量得到位置，所以滚动排到下一帧。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _replyAnchors[landing.parentId]?.currentContext;
+      if (ctx == null) return;
+      // alignment: 1.0 = 把回复区**底部**对齐到视口底部。二级回复是时间正序，
+      // 新回复永远是最后一条 —— 对齐底部才是「定位到新回复处」。
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 1.0,
+        duration: AppMotion.sheet,
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   /// 评论区迷你卡拉黑/举报成功后的收尾（修复清单 #7）：
@@ -144,14 +256,227 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   ///    「KOMENTAR (N)」计数失效。只调 _reload 的话列表变短、计数不动，正是 AD-13 要消灭的
   ///    「标 5 条只数得出 3 条」拉黑泄底破绽。
   VoidCallback _onCommentAuthorHidden(int authorId) {
-    final bool isPostAuthor = widget.postAuthorId != null && authorId == widget.postAuthorId;
+    final bool isPostAuthor =
+        widget.postAuthorId != null && authorId == widget.postAuthorId;
     return () {
-      onAuthorHidden(ref, authorId, popContext: isPostAuthor ? context : null)();
+      onAuthorHidden(
+        ref,
+        authorId,
+        popContext: isPostAuthor ? context : null,
+      )();
       if (!isPostAuthor) {
         ref.read(commentsRefreshProvider.notifier).bump();
       }
     };
   }
+
+  /// 评论点赞 / 取消（V1.3.0 Story 2.4 · AC3）。
+  ///
+  /// **乐观更新**：先本地翻转再发请求 —— 服务端端点不返回赞数（那是实时聚合值，
+  /// 回来时可能已经变了），所以本地 ±1 是唯一能让按钮立刻有反馈的办法。
+  ///
+  /// 失败**回滚**并静默：点赞不是关键路径，为它弹一个错误提示比点不上还烦人。
+  /// 服务端本身幂等（重复点赞不产生第二行、没赞过取消也成功），所以不必先查状态。
+  ///
+  /// [isReply]：这条是不是挂在某条父评论下的二级回复（由渲染处按父子结构给出）。
+  Future<void> _toggleLike(Comment c, {required bool isReply}) async {
+    // 门控：游客不做乐观翻转、不发请求，直接走登录引导（与帖子 LikeButton 同一入口）。
+    if (!requireLogin(ref, context)) return;
+    final wasLiked = c.liked;
+    // bug 20260923-544（PRD E-8）：评论点赞专用事件，点赞 / 取消都报，在乐观翻转**之前**。
+    // 🔴 不复用 post_like_tapped —— 那会把评论赞混进帖子赞的口径。
+    // comment_level：1 = 一级评论，2 = 回复。属性只有这两个（产品拍板不带 comment_id）。
+    Analytics.capture('comment_like_tapped', {
+      'liked': !wasLiked,
+      'comment_level': isReply ? 2 : 1,
+    });
+    setState(() => _replaceComment(c.id, (x) => x.toggleLikedLocally()));
+    try {
+      if (wasLiked) {
+        await _repo.unlikeComment(c.id);
+      } else {
+        await _repo.likeComment(c.id);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _replaceComment(c.id, (x) => x.toggleLikedLocally()));
+    }
+  }
+
+  /// 就地替换一条评论（可能在一级列表、内嵌回复、或已展开的回复里）。
+  ///
+  /// 三处都要找：同一条评论在不同位置是**同一个对象的不同副本**，只改一处会让
+  /// 「收起再展开」时点赞态跳回去。
+  void _replaceComment(int id, Comment Function(Comment) update) {
+    for (var i = 0; i < _topLevel.length; i++) {
+      _topLevel[i] = _replaceIn(_topLevel[i], id, update);
+    }
+    // 第四处：本会话置顶的本地副本。它不在服务端那一页时，界面渲染的就是这份。
+    for (final pinnedId in ref.read(sessionPinnedCommentsProvider(widget.postId)).keys) {
+      _pinnedNotifier.update(pinnedId, (top) => _replaceIn(top, id, update));
+    }
+    for (final exp in _expanded.values) {
+      for (var i = 0; i < exp.items.length; i++) {
+        if (exp.items[i].id == id) {
+          exp.items[i] = update(exp.items[i]);
+          break;
+        }
+      }
+    }
+  }
+
+  /// 在一条一级评论（含它的内嵌回复）里找 [id] 并替换；找不到原样返回。
+  Comment _replaceIn(Comment top, int id, Comment Function(Comment) update) {
+    if (top.id == id) return update(top);
+    final inline = top.replies;
+    if (inline == null) return top;
+    for (var j = 0; j < inline.length; j++) {
+      if (inline[j].id == id) {
+        return top.copyWith(
+          replies: List<Comment>.of(inline)..[j] = update(inline[j]),
+        );
+      }
+    }
+    return top;
+  }
+
+  /// 长按评论的操作菜单（AC3）。样式参照详情页 `_showMoreSheet` 的列表行
+  /// （把手 + 左对齐行 + 底分隔线 + Batal），不另造一套视觉。
+  ///
+  /// - 自己的评论：复制文字 / 回复 / **删除**（红字）
+  /// - 他人的评论：复制文字 / 回复 / **举报**（红字）；帖主看他人评论时再加 **删除**
+  ///   （bug 20260923-545：两项可并存）
+  ///
+  /// 🔴 **权限一点没放宽**（AC4）：删除项的可见性沿用既有 `_canDelete`，
+  /// 点下去仍走既有 `_confirmDelete` 的二次确认；举报走既有账号举报 `openAccountReport`。
+  /// 这个菜单只是**多一个入口**，不是多一条权限路径。
+  void _showCommentActions(
+    BuildContext context,
+    AppLocalizations l10n,
+    Comment c,
+    String name,
+  ) {
+    final canDelete = _canDelete(c);
+    final canReport = _canReport(c);
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: AppColors.line,
+                    borderRadius: BorderRadius.circular(9999),
+                  ),
+                ),
+              ),
+              _actionRow(
+                sheetCtx,
+                key: const ValueKey('commentActionCopy'),
+                emoji: '📋',
+                label: l10n.commentActionCopy,
+                onTap: () async {
+                  await Clipboard.setData(ClipboardData(text: c.body));
+                  if (context.mounted) showAppToast(context, l10n.commonCopied);
+                },
+              ),
+              _actionRow(
+                sheetCtx,
+                key: const ValueKey('commentActionReply'),
+                emoji: '💬',
+                label: l10n.detailReply,
+                onTap: () => ref
+                    .read(replyTargetProvider(widget.postId).notifier)
+                    .set(ReplyTarget(parentId: c.id, toName: name)),
+              ),
+              // bug 20260923-545：举报与删除**不再互斥**。帖主长按他人评论时两项都要有 ——
+              // 能删不等于不需要举报（删只是把这条清掉，骚扰者本人毫发无损）。
+              if (canReport)
+                _actionRow(
+                  sheetCtx,
+                  key: const ValueKey('commentActionReport'),
+                  emoji: '🚩',
+                  label: l10n.commentActionReport,
+                  danger: true,
+                  // bug 20260923-545：举报对象改为**评论作者**（既有账号举报 openAccountReport，
+                  // 与点作者 → 主页 → 举报同一条链路），不再调 openReport(postId) 举报整条帖子。
+                  onTap: () => _reportCommentAuthor(c),
+                ),
+              if (canDelete)
+                _actionRow(
+                  sheetCtx,
+                  key: const ValueKey('commentActionDelete'),
+                  emoji: '🗑',
+                  label: l10n.detailMenuDelete,
+                  danger: true,
+                  // 既有二次确认，一步不省。
+                  onTap: () => _confirmDelete(c.id),
+                ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => Navigator.of(sheetCtx).pop(),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.textSecondary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: Text(l10n.commonCancel),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 菜单里的一行。先关 sheet 再执行 —— 否则确认弹层会被 sheet 压在下面。
+  Widget _actionRow(
+    BuildContext sheetCtx, {
+    required Key key,
+    required String emoji,
+    required String label,
+    required VoidCallback onTap,
+    bool danger = false,
+  }) => InkWell(
+    key: key,
+    onTap: () {
+      Navigator.of(sheetCtx).pop();
+      onTap();
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.line2)),
+      ),
+      child: Row(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 16)),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: danger ? AppColors.popRed : AppColors.ink,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 
   Future<void> _confirmDelete(int commentId) async {
     final l10n = AppLocalizations.of(context);
@@ -167,12 +492,42 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     if (!ok) return;
     try {
       await _repo.deleteComment(commentId);
+      // 先摘置顶：服务端已无此条，不摘的话 _orderedTopLevel 会用本地副本把它补回顶部。
+      _pinnedNotifier.remove(commentId);
       await _reload();
       // 详情计数随之变化：触发刷新信号（详情页可据此重拉）。
       ref.read(commentsRefreshProvider.notifier).bump();
     } catch (_) {
       // 后端权威（403 等）：保持现状。
     }
+  }
+
+  /// 举报项可见性（bug 20260923-545）：**不是自己的评论**就给。
+  ///
+  /// 游客（currentUserId 为 null）也给 —— 点下去由 [requireLogin] 走既有登录引导，
+  /// 与其它社区动作同一门控。已注销作者不给：账号已不存在，举报无对象（同 onAuthorTap 置 null 的口径）。
+  bool _canReport(Comment c) {
+    if (c.authorDeleted) return false;
+    return widget.currentUserId == null || c.authorId != widget.currentUserId;
+  }
+
+  /// 举报评论作者（bug 20260923-545）：复用既有账号举报抽屉（`/api/v1/account-reports`）。
+  ///
+  /// 成功收尾与「点作者 → 主页 → 举报」同一套 [_onCommentAuthorHidden]（清 Feed + 刷评论区；
+  /// 对象是帖主时退出详情页）。⚠️ **静默**：不给成功提示，提示会泄露「举报会隐藏内容」。
+  Future<void> _reportCommentAuthor(Comment c) async {
+    // FR-0C：游客点社区动作 → 强登录引导，不发请求（与主页 / 迷你卡入口同一门控）。
+    if (!requireLogin(ref, context, onAllowed: () {})) return;
+    final submitted = await openAccountReport(
+      context,
+      ref,
+      c.authorId,
+      // 评论里没有「已举报」标记位；重复举报由服务端幂等兜住。
+      alreadyReported: false,
+      entry: AccountActionEntry.comment,
+    );
+    if (!submitted || !mounted) return;
+    _onCommentAuthorHidden(c.authorId)();
   }
 
   bool _canDelete(Comment c) {
@@ -187,22 +542,49 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     final l10n = AppLocalizations.of(context);
     // 发表/回复/删除后重拉（Story 3.5）。
     ref.listen<int>(commentsRefreshProvider, (prev, next) => _reload());
+    // 回复态是按帖 autoDispose 的：评论区在，回复目标就得在（不依赖同页一定挂着输入框）。
+    ref.listen<ReplyTarget?>(replyTargetProvider(widget.postId), (_, _) {});
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.all(AppSpacing.lg),
-        child: Center(child: CircularProgressIndicator(color: AppColors.accentGrowth)),
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.accentGrowth),
+        ),
       );
     }
     if (_topLevel.isEmpty) {
+      // AC5 空态：一枚 emoji + 引导语（改前只有一行纯文字）。
+      // 底部固定输入框不受影响 —— 它在详情页的 Column 里，与本区域同级。
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
-        child: Center(child: Text(l10n.detailNoComments, style: AppTypography.caption)),
+        child: Center(
+          key: const ValueKey('commentEmptyState'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('💬', style: TextStyle(fontSize: 34)),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                l10n.detailNoComments,
+                textAlign: TextAlign.center,
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.textTertiary,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final c in _topLevel) _buildTopLevel(context, l10n, c),
+        // UI 稿 C1：一级评论之间一条细分隔线。
+        for (final (i, c) in _orderedTopLevel.indexed) ...[
+          if (i > 0)
+            const Divider(height: 1, thickness: 1, color: AppColors.line2),
+          _buildTopLevel(context, l10n, c),
+        ],
         if (_hasMore)
           TextButton(
             key: const ValueKey('viewMoreComments'),
@@ -213,12 +595,18 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     );
   }
 
-  Widget _buildTopLevel(BuildContext context, AppLocalizations l10n, Comment c) {
+  Widget _buildTopLevel(
+    BuildContext context,
+    AppLocalizations l10n,
+    Comment c,
+  ) {
     final expanded = _expanded[c.id];
-    final List<Comment> shownReplies = expanded?.items ?? (c.replies ?? const []);
+    final List<Comment> shownReplies =
+        expanded?.items ?? (c.replies ?? const []);
     final int replyCount = c.replyCount ?? 0;
     // 未展开且总数 > 内嵌数 → 显示「查看全部 X 条回复」。
-    final bool showViewAll = expanded == null && replyCount > shownReplies.length;
+    final bool showViewAll =
+        expanded == null && replyCount > shownReplies.length;
     // 已展开但仍有下一页 → 继续加载。
     final bool showLoadMoreReplies = expanded != null && expanded.hasMore;
 
@@ -230,10 +618,26 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
           _tile(l10n, c),
           if (shownReplies.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(left: AppSpacing.xl, top: AppSpacing.xs),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [for (final r in shownReplies) _tile(l10n, r)],
+              // AC5 的滚动锚点：回复区整块。定位时按底部对齐（新回复在最后一条）。
+              key: _replyAnchors.putIfAbsent(c.id, GlobalKey.new),
+              padding: const EdgeInsets.only(
+                left: AppSpacing.xl,
+                top: AppSpacing.xs,
+              ),
+              // UI 稿 C1：二级回复左侧一条竖线，与一级在视觉上分层。
+              child: Container(
+                padding: const EdgeInsets.only(left: AppSpacing.sm),
+                decoration: const BoxDecoration(
+                  border: Border(
+                    left: BorderSide(color: AppColors.line, width: 2),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final r in shownReplies) _tile(l10n, r, isReply: true),
+                  ],
+                ),
               ),
             ),
           if (showViewAll || showLoadMoreReplies)
@@ -250,37 +654,67 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
     );
   }
 
-  Widget _tile(AppLocalizations l10n, Comment c) {
-    final name = c.authorDeleted ? l10n.feedDeletedUser : (c.authorNickname ?? l10n.feedDeletedUser);
+  Widget _tile(AppLocalizations l10n, Comment c, {bool isReply = false}) {
+    final name = c.authorDeleted
+        ? l10n.feedDeletedUser
+        : (c.authorNickname ?? l10n.feedDeletedUser);
     return _CommentTile(
       comment: c,
       name: name,
       replyLabel: l10n.detailReply,
-      // V1.1.4 Story 1.6：点评论作者 → 迷你卡（举报 / 拉黑的入口）。
+      // V1.1.4 Story 1.6：点评论作者 → 举报 / 拉黑的入口。
+      // V1.3.0 batch-b1 Story 2.1 起该入口从迷你卡换成**完整主页**（FR-118.1），
+      // 收尾回调语义一字未变（仅成功路径触发）。
       //
       // ⚠️ 这是本版本最大的闭环缺口：影子评论 / R1 / R2 / 通知抑制**全是为评论区骚扰设计的**，
-      // 而在此之前 `showMiniProfile` 全 App 只有 Feed 卡片作者与详情页作者两个触发点——
+      // 而在此之前这个入口全 App 只有 Feed 卡片作者与详情页作者两个触发点——
       // 一个只在评论区骚扰、从不发帖的账号，用户既举报不了也拉黑不了。
       //
       // ⚠️ 已注销 → 传 null，整体去掉点击手势（NFR-8，与首页/详情两处一致），且**不给任何 Toast**。
-      // `showMiniProfile` 内部虽有第二道防线（isDeactivated 直接 return），但那要先走一次网络往返，
-      // 用户看到的是「点了没反应」——与网络失败无法区分。
+      // 主页内部虽有第二道防线（注销 → 通用空态），但那要先走一次网络往返，
+      // 用户看到的是「进去一片空白」——与网络失败无法区分。
       onAuthorTap: c.authorDeleted
           ? null
-          : () => showMiniProfile(context, ref, c.authorId,
+          : () => openUserProfile(
+              context,
+              ref,
+              c.authorId,
               // 修复清单 #7：与首页/详情入口同一套收尾（onAuthorHidden = 乐观清 Feed 该作者
               // 全部卡片；对象是帖主时顺带退出本详情页），再刷本帖评论。只接 _reload 的话，
               // 用户回到首页会看见「我明明处理了，他的东西还在」。
               onBlocked: _onCommentAuthorHidden(c.authorId),
               onReported: _onCommentAuthorHidden(c.authorId),
               // 评论区这个入口的量单独可查（本版本的主场景就是评论区骚扰）。
-              entry: AccountActionEntry.comment),
+              entry: AccountActionEntry.comment,
+            ),
       // story 3：仅作者会收到 TAKEN_DOWN/REJECTED 行 → 渲染「仅你可见」灰标签（VISIBLE/UNDER_REVIEW 无标签，D-CM2）。
-      takenDownLabel: c.isTakenDownForAuthor ? l10n.commentTakenDownSelfOnly : null,
+      takenDownLabel: c.isTakenDownForAuthor
+          ? l10n.commentTakenDownSelfOnly
+          : null,
       canDelete: _canDelete(c),
-      onReply: () =>
-          ref.read(replyTargetProvider.notifier).set(ReplyTarget(parentId: c.id, toName: name)),
+      onReply: () => ref
+          .read(replyTargetProvider(widget.postId).notifier)
+          .set(ReplyTarget(parentId: c.id, toName: name)),
+      // V1.3.0 batch-b1 Story 3.3：点评论里的 @ → 那个人的公开主页（AC2）。
+      // ⚠️ 与 onAuthorTap 分开：被 @ 的人通常**不是**这条评论的作者，
+      //    共用回调会把错的人从列表里清掉。
+      onTapMention: (userId) => openUserProfile(
+        context,
+        ref,
+        userId,
+        onBlocked: _onCommentAuthorHidden(userId),
+        onReported: _onCommentAuthorHidden(userId),
+        entry: AccountActionEntry.mention,
+      ),
       onDelete: () => _confirmDelete(c.id),
+      // V1.3.0 Story 2.4：评论点赞。一级、二级共用同一端点（层级与点赞无关）。
+      onToggleLike: () => _toggleLike(c, isReply: isReply),
+      // V1.3.0 Story 2.5 · AC3：长按操作菜单。
+      onLongPress: () => _showCommentActions(context, l10n, c, name),
+      // AC2：客户端比两个已有 id —— 服务端不下发任何标记位。
+      isPostAuthor:
+          widget.postAuthorId != null && c.authorId == widget.postAuthorId,
+      isReply: isReply,
     );
   }
 }
@@ -294,8 +728,28 @@ class _CommentTile extends StatelessWidget {
     required this.onReply,
     required this.onDelete,
     required this.onAuthorTap,
+    required this.onToggleLike,
+    required this.onLongPress,
+    required this.isPostAuthor,
+    required this.onTapMention,
     this.takenDownLabel,
+    this.isReply = false,
   });
+
+  /// 二级回复：头像缩小一号（UI 稿 C1）。
+  final bool isReply;
+
+  /// 长按弹操作菜单（AC3）。
+  final VoidCallback onLongPress;
+
+  /// 该评论的作者**就是本帖作者** → 昵称旁显示「作者 / Penulis」标签（AC2）。
+  ///
+  /// 🔴 判定在**客户端**完成：评论作者 id 与帖子作者 id **两个值详情页响应里都已经有了**，
+  /// 直接比即可。服务端不下发额外字段、不加标记位 —— 为一个纯展示标签扩接口不值当。
+  final bool isPostAuthor;
+
+  /// 点赞 / 取消（V1.3.0 Story 2.4）。**乐观更新**：调用方先本地翻转再发请求。
+  final VoidCallback onToggleLike;
 
   final Comment comment;
   final String name;
@@ -308,6 +762,9 @@ class _CommentTile extends StatelessWidget {
   /// 整行只剩「点了回复」的既有行为。
   final VoidCallback? onAuthorTap;
 
+  /// 点评论里的 @ → 那个人的公开主页（V1.3.0 batch-b1 Story 3.3 · AC2）。
+  final void Function(int userId) onTapMention;
+
   /// 非空 = 该评论被下架/移除、仅作者可见 → 渲染灰态提示标签（story 3）。
   final String? takenDownLabel;
 
@@ -319,6 +776,9 @@ class _CommentTile extends StatelessWidget {
       key: ValueKey('commentItem_${comment.id}'),
       behavior: HitTestBehavior.opaque,
       onTap: onReply,
+      // AC3：长按弹操作菜单。与单击的「回复」并存 —— 长按不会误触发回复
+      // （Flutter 的手势竞技场里 long-press 胜出后 tap 不再触发）。
+      onLongPress: onLongPress,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
         // 头像 + 右侧文字块（UI 稿 A6）。头像是 2026-08-16 才补的：在此之前评论行只有
@@ -335,7 +795,7 @@ class _CommentTile extends StatelessWidget {
                 url: comment.authorDeleted ? null : comment.authorAvatarUrl,
                 name: name,
                 deleted: comment.authorDeleted,
-                size: 30,
+                size: isReply ? 24 : 30,
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -345,46 +805,162 @@ class _CommentTile extends StatelessWidget {
                 children: [
                   // 作者名单独可点：外层整行的 onTap 是「回复」，内层这个 GestureDetector 命中优先，
                   // 所以点名字/头像弹卡、点正文回复，两者不会打架。
-                  GestureDetector(
-                    key: ValueKey('commentAuthor_${comment.id}'),
-                    onTap: onAuthorTap,
-                    // V1.1.6 Story 5.1：评论区昵称旁挂运营标签（四处展示位之一）。
-                    // ⚠️ 一页评论可达数十条 —— 标签是随作者投影**整批**取回来的，这里没有任何逐条查询。
-                    child: UserTagRow(
-                      position: 'comment',
-                      name: name,
-                      nameStyle: AppTypography.caption.copyWith(fontWeight: FontWeight.w600),
-                      tags: comment.authorDeleted ? const [] : comment.authorTags,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // 昵称 + 作者标签整体吃掉剩余宽度，时间才真正贴右 ——
+                      // 原来 Flexible 与 Spacer 各占一份 flex，把空白对半分，时间停在中间偏右
+                      //（2026-09-21 对稿复审发现）。
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: GestureDetector(
+                                key: ValueKey('commentAuthor_${comment.id}'),
+                                onTap: onAuthorTap,
+                                // V1.1.6 Story 5.1：评论区昵称旁挂运营标签（四处展示位之一）。
+                                // ⚠️ 一页评论可达数十条 —— 标签是随作者投影**整批**取回来的，这里没有任何逐条查询。
+                                child: UserTagRow(
+                                  position: 'comment',
+                                  name: name,
+                                  nameStyle: AppTypography.caption.copyWith(
+                                    color: AppColors.ink,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  tags: comment.authorDeleted
+                                      ? const []
+                                      : comment.authorTags,
+                                ),
+                              ),
+                            ),
+                            // AC2「作者 / Penulis」标签：**零接口变更**，客户端比两个已有 id 得出。
+                            // 注销作者不挂（与 NFR-8 一致：不给注销账号任何身份线索）。
+                            if (isPostAuthor && !comment.authorDeleted) ...[
+                              const SizedBox(width: AppSpacing.xs),
+                              Container(
+                                key: ValueKey(
+                                  'commentAuthorBadge_${comment.id}',
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.cream2,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  AppLocalizations.of(
+                                    context,
+                                  ).commentAuthorBadge,
+                                  style: AppTypography.micro.copyWith(
+                                    color: AppColors.mint,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      // UI 稿 C1：时间与昵称同一行、靠右（原先单独占一行）。
+                      // 时间走**与详情页同一个** formatPublishTime（批次 A · AC1）：7 天内相对、超 7 天绝对日期。
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        formatPublishTime(
+                          context,
+                          AppLocalizations.of(context),
+                          comment.createdAt,
+                        ),
+                        key: ValueKey('commentTime_${comment.id}'),
+                        style: AppTypography.micro.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: AppSpacing.xxs),
-                  Text(comment.body, style: AppTypography.body),
+                  // V1.3.0 batch-b1 Story 3.3：评论里的 @ 高亮可点（AC1/AC2）。
+                  // 🔴 高亮与可点的判定**全在后端**（拉黑 AC3 / 注销 AC4），这里只照做。
+                  // ⚠️ 点 @ 与「点整条评论 = 回复」是两个手势，靠手势竞技场分开
+                  //    （同上面作者名那处的既有做法），有测试钉着。
+                  MentionText(
+                    text: comment.body,
+                    mentions: comment.mentions,
+                    onTapUser: onTapMention,
+                    mentionContext: MentionContext.comment,
+                    style: AppTypography.body,
+                  ),
                   if (takenDownLabel != null)
                     Padding(
                       padding: const EdgeInsets.only(top: AppSpacing.xxs),
                       child: Text(
                         takenDownLabel!,
                         key: ValueKey('commentTakenDown_${comment.id}'),
-                        style: AppTypography.micro.copyWith(color: AppColors.textTertiary),
+                        style: AppTypography.micro.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
                       ),
                     ),
-                  Row(
-                    children: [
-                      GestureDetector(
-                        key: ValueKey('replyComment_${comment.id}'),
-                        onTap: onReply,
-                        child: Text(replyLabel, style: AppTypography.micro),
-                      ),
-                      if (canDelete) ...[
+                  // UI 稿 C1：操作行左对齐「♡12  Balas」—— 点赞在前、紧挨回复（原先点赞被 Spacer 推到最右）。
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xxs),
+                    child: Row(
+                      children: [
+                        // 点赞：心 + 数字。0 赞时**不显示数字**（一排「0」会把评论区弄得很吵）。
+                        // 数字与心形同步变色，与帖子点赞（FR-93）同一规则 ——
+                        // 只有图标变红、数字仍是灰的，看上去像"没点上"。
+                        GestureDetector(
+                          key: ValueKey('likeComment_${comment.id}'),
+                          behavior: HitTestBehavior.opaque,
+                          onTap: onToggleLike,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                comment.liked
+                                    ? Icons.favorite_rounded
+                                    : Icons.favorite_border_rounded,
+                                size: 14,
+                                color: comment.liked
+                                    ? AppColors.likeHeart
+                                    : AppColors.textTertiary,
+                              ),
+                              if (comment.likeCount > 0) ...[
+                                const SizedBox(width: AppSpacing.xxs),
+                                Text(
+                                  '${comment.likeCount}',
+                                  key: ValueKey('likeCount_${comment.id}'),
+                                  style: AppTypography.micro.copyWith(
+                                    color: comment.liked
+                                        ? AppColors.likeHeart
+                                        : AppColors.textTertiary,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                         const SizedBox(width: AppSpacing.md),
                         GestureDetector(
-                          key: ValueKey('deleteComment_${comment.id}'),
-                          onTap: onDelete,
-                          child: Icon(Icons.delete_outline_rounded,
-                              size: 14, color: AppColors.textTertiary),
+                          key: ValueKey('replyComment_${comment.id}'),
+                          onTap: onReply,
+                          child: Text(replyLabel, style: AppTypography.micro),
                         ),
+                        if (canDelete) ...[
+                          const SizedBox(width: AppSpacing.md),
+                          GestureDetector(
+                            key: ValueKey('deleteComment_${comment.id}'),
+                            onTap: onDelete,
+                            child: Icon(
+                              Icons.delete_outline_rounded,
+                              size: 14,
+                              color: AppColors.textTertiary,
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ],
               ),

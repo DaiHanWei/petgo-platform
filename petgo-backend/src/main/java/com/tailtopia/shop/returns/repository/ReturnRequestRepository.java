@@ -7,16 +7,38 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-/** 退货申请仓储（Story 5.1）。 */
-public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Long> {
+/**
+ * 退货申请仓储（Story 5.1）。
+ *
+ * <p>V1.3.0 Story 10.1：A7 工作台的五页签要按<b>状态集合</b>取一页（「待退款」对 2 个状态、
+ * 「已完结·已驳回」对 4 个），还要叠退货类型 / 整单退两个可选筛选。既有
+ * {@link #findByStatusOrderByCreatedAtAscIdAsc} 只接受<b>单个</b>状态且不分页，派生方法要穷举
+ * 「状态集 × 类型有无 × 整单退有无」四种组合各两份（列表 + 计数）。所以这里挂
+ * {@code JpaSpecificationExecutor}，条件在 {@code AdminReturnService} 里按「非空才加谓词」拼 ——
+ * 🔴 <b>同时绕开本仓库踩过的「{@code :param IS NULL OR …} 里无类型 null 参数 Postgres 推断不出类型」</b>
+ * （见 {@code AdminAuditLogRepositoryCustom} 类注释）：Specification 压根不绑定 null 参数。
+ * 纯读，不新增写口。
+ */
+public interface ReturnRequestRepository extends JpaRepository<ReturnRequest, Long>,
+        org.springframework.data.jpa.repository.JpaSpecificationExecutor<ReturnRequest> {
 
     /** 🔴 越权与不存在同为 404（与订单同口径）：双条件查。 */
     Optional<ReturnRequest> findByPublicTokenAndUserId(String publicToken, long userId);
 
     Optional<ReturnRequest> findByPublicToken(String publicToken);
+
+    /**
+     * 后台写路径行锁读取（V1.3.0 A7 工作台）：两名客服同时处理同一张单 / 同一按钮连点两次时串行化，
+     * 后到的事务读到的是前者提交后的状态 —— 否则两边都过了「当前状态可批准 / 首次执行」判断，
+     * 发货前取消的退款执行会把库存回补两遍。须在事务内。
+     */
+    @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select r from ReturnRequest r where r.publicToken = :token")
+    Optional<ReturnRequest> findForUpdateByPublicToken(@Param("token") String publicToken);
 
     List<ReturnRequest> findByShopOrderIdOrderByIdDesc(long shopOrderId);
 

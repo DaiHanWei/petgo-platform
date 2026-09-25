@@ -4,12 +4,16 @@ import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.consult.domain.ConsultOrder;
 import com.tailtopia.consult.repository.ConsultOrderRepository;
+import com.tailtopia.shop.order.domain.ShopOrder;
+import com.tailtopia.shop.order.repository.ShopOrderRepository;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.service.NotificationService;
 import com.tailtopia.profile.service.CardTokenGenerator;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.support.domain.ContactType;
 import com.tailtopia.support.domain.FeedbackTicket;
+import com.tailtopia.support.domain.FeedbackTicket.ResolvedOrder;
+import com.tailtopia.support.domain.RelatedOrderType;
 import com.tailtopia.support.domain.TicketAttachment;
 import com.tailtopia.support.domain.TicketInternalNote;
 import com.tailtopia.support.domain.TicketLabel;
@@ -52,6 +56,8 @@ public class SupportTicketService {
     private final TicketInternalNoteRepository internalNotes;
     private final CardTokenGenerator tokenGenerator;
     private final ConsultOrderRepository orders;
+    /** Story 3-2：电商订单也能挂到工单上。只读，只用来解析 token → (id, type)。 */
+    private final ShopOrderRepository shopOrders;
     private final NotificationService notifications;
     private final AdminAuditService audit;
 
@@ -62,12 +68,14 @@ public class SupportTicketService {
     public SupportTicketService(FeedbackTicketRepository tickets, TicketAttachmentRepository attachments,
             TicketLabelRepository labels, TicketInternalNoteRepository internalNotes,
             CardTokenGenerator tokenGenerator, ConsultOrderRepository orders,
+            ShopOrderRepository shopOrders,
             NotificationService notifications, AdminAuditService audit) {
         this.tickets = tickets;
         this.attachments = attachments;
         this.labels = labels;
         this.internalNotes = internalNotes;
         this.tokenGenerator = tokenGenerator;
+        this.shopOrders = shopOrders;
         this.orders = orders;
         this.notifications = notifications;
         this.audit = audit;
@@ -89,12 +97,13 @@ public class SupportTicketService {
 
         ContactType contactType = parseContactType(contactTypeRaw);
         LinkedHashSet<TicketLabelType> dedupedLabels = parseLabels(labelsRaw);
-        Long relatedOrderId = resolveRelatedOrder(userId, relatedOrderToken);
+        ResolvedOrder relatedOrder = resolveRelatedOrder(userId, relatedOrderToken);
         boolean needContactCustomer = needContact == null || needContact;
 
         String token = tokenGenerator.generate();
         FeedbackTicket ticket = tickets.save(FeedbackTicket.create(
-                userId, token, subject, body, contactType, contactValue, needContactCustomer, relatedOrderId));
+                userId, token, subject, body, contactType, contactValue, needContactCustomer,
+                relatedOrder));
 
         for (String key : keys) {
             attachments.save(TicketAttachment.of(ticket.getId(), key));
@@ -141,9 +150,50 @@ public class SupportTicketService {
     }
 
     /**
-     * 客服结案（Story 4.7，「已联系+已解决」，{@code support.handle} 权限在控制器门控）。仅 OPEN/IN_PROGRESS 可
+     * 客服标记「已联系」（bug 20260922-524，与结案拆开；{@code support.handle} 在控制器门控）。
+     * 仅未结案（OPEN/IN_PROGRESS）可，已结案 → 409。只置 contacted（OPEN→IN_PROGRESS），<b>不结案、不发通知</b>。
+     * 幂等：已联系过再点不改任何东西、不重复记审计，返回 false 供控制器给友好提示。
+     *
+     * @return true = 本次标记生效（已记审计）；false = 早已标记过
+     */
+    @Transactional
+    public boolean markContacted(String ticketToken, long adminId) {
+        FeedbackTicket ticket = openTicket(ticketToken);
+        if (!ticket.markContacted(adminId)) {
+            return false;
+        }
+        audit.record(adminId, AuditActions.TICKET_CONTACTED, "feedback_ticket", ticketToken,
+                "客服工单标记已联系（未结案，不发通知）");
+        return true;
+    }
+
+    /**
+     * 客服「忽略」工单（bug 20260922-524，方案 B：复用 CLOSED）。仅未结案（OPEN/IN_PROGRESS）可，
+     * 已 RESOLVED/CLOSED → 409。置 CLOSED，<b>不发任何通知、不开 CSAT</b>，记审计。
+     */
+    @Transactional
+    public void ignoreTicket(String ticketToken, long adminId) {
+        FeedbackTicket ticket = openTicket(ticketToken);
+        ticket.markIgnored(adminId);
+        audit.record(adminId, AuditActions.TICKET_IGNORED, "feedback_ticket", ticketToken,
+                "客服工单忽略（置 CLOSED，不发通知、不开 CSAT）");
+    }
+
+    /** 取未结案工单：不存在 → 404；已 RESOLVED/CLOSED → 409。 */
+    private FeedbackTicket openTicket(String ticketToken) {
+        FeedbackTicket ticket = tickets.findByTicketToken(ticketToken)
+                .orElseThrow(() -> AppException.notFound("工单不存在").code("admin.err.ticket.notFound"));
+        if (ticket.getStatus() != TicketStatus.OPEN && ticket.getStatus() != TicketStatus.IN_PROGRESS) {
+            throw AppException.conflict("工单已结案，无法操作").code("admin.err.ticket.alreadyResolved");
+        }
+        return ticket;
+    }
+
+    /**
+     * 客服结案（Story 4.7，{@code support.handle} 权限在控制器门控）。仅 OPEN/IN_PROGRESS 可
      * （已 RESOLVED/CLOSED → 409）。置 RESOLVED + csat_deadline(+N天) + 发 {@code TICKET_RESOLVED}（结案）+
      * {@code CSAT_SURVEY}（邀评）通知（deep link 工单详情，targetRef=ticketToken，非随机）+ 审计。
+     * bug 20260922-524：结案不再隐含「已联系」，联系与否走独立的 {@link #markContacted}。
      */
     @Transactional
     public void resolveTicket(String ticketToken, long adminId) {
@@ -163,7 +213,7 @@ public class SupportTicketService {
                 "为本次服务打分", "花几秒评价客服服务，帮助我们做得更好。",
                 NotificationType.CSAT_SURVEY.name(), ticketToken);
         audit.record(adminId, AuditActions.TICKET_RESOLVED, "feedback_ticket", ticketToken,
-                "客服工单结案（已联系+已解决，已发结案/CSAT 通知）");
+                "客服工单结案（已发结案/CSAT 通知）");
     }
 
     /**
@@ -207,18 +257,29 @@ public class SupportTicketService {
     }
 
     /**
-     * 解析 relatedOrderToken → related_order_id：校验订单属本人；不符或不存在则**忽略存 null**
-     * （OPEN-1 宽松，用户可能误传；退款工单 4-3 才严格绑单）。
+     * 解析 relatedOrderToken → {@code (related_order_id, related_order_type)}：校验订单属本人；
+     * 不符或不存在则**忽略存 null**（OPEN-1 宽松，用户可能误传；退款工单 4-3 才严格绑单）。
+     *
+     * <p>🔴 <b>顺序固定为「先问诊单、再电商单」</b>（Story 3-2 / AD-S7）：先查问诊单保证
+     * <b>任何现有 token 的解释结果一个字都不变</b>，回归风险归零；电商单只在问诊查不到时才试。
+     * 两类 token 都是 32 位随机串，跨表重复可以忽略，但顺序固定能让行为可预测、可测试。
+     *
+     * <p>🔴 <b>任何情况都不抛异常</b>：App 误传一个 token 不能把建单整个打挂 ——
+     * 用户是来求助的，把他的求助拒之门外是最糟的处置。
      */
-    private Long resolveRelatedOrder(long userId, String relatedOrderToken) {
+    private ResolvedOrder resolveRelatedOrder(long userId, String relatedOrderToken) {
         if (!StringUtils.hasText(relatedOrderToken)) {
             return null;
         }
-        Optional<ConsultOrder> order = orders.findByOrderToken(relatedOrderToken);
-        if (order.isPresent() && order.get().getUserId() == userId) {
-            return order.get().getId();
+        String token = relatedOrderToken.trim();
+        Optional<ConsultOrder> consult = orders.findByOrderToken(token);
+        if (consult.isPresent() && consult.get().getUserId() == userId) {
+            return new ResolvedOrder(consult.get().getId(), RelatedOrderType.CONSULT);
         }
-        return null;
+        // 一次查询即带归属校验，比「先查后比」少一个能写错的地方。
+        return shopOrders.findByPublicTokenAndUserId(token, userId)
+                .map(o -> new ResolvedOrder(o.getId(), RelatedOrderType.SHOP))
+                .orElse(null);
     }
 
     private SupportTicketView toView(FeedbackTicket t) {
@@ -247,6 +308,27 @@ public class SupportTicketService {
                 t.getCsatComment(),
                 t.getCreatedAt(),
                 t.getUpdatedAt(),
-                t.getResolvedAt());
+                t.getResolvedAt(),
+                relatedShopOrderNo(t));
+    }
+
+    /**
+     * 关联电商订单的展示号（Story 3-3 AC5）。非电商工单 / 查不到 → {@code null}。
+     *
+     * <p>🔒 <b>仍然比对一次 userId</b>：按构造它必然属于本人（3-2 的解析与后台补挂都做了
+     * 归属校验），但这里是**下发给用户的出口**，不依赖上游是最便宜的保险 ——
+     * 上游哪天多一条写入路径忘了校验，泄的就是别人的订单号。
+     */
+    private String relatedShopOrderNo(FeedbackTicket t) {
+        if (t.getRelatedOrderId() == null || t.getRelatedOrderType() != RelatedOrderType.SHOP) {
+            return null;
+        }
+        return shopOrders.findById(t.getRelatedOrderId())
+                .filter(o -> o.getUserId().equals(t.getUserId()))
+                // 🔴 Story 4-3 已切换：读库列 display_no。
+                //   这个值会被 App 填进 WhatsApp 预填文案发给客服 ——
+                //   它必须和用户在订单中心看到的号一模一样，否则客服照样搜不到。
+                .map(ShopOrder::getDisplayNo)
+                .orElse(null);
     }
 }

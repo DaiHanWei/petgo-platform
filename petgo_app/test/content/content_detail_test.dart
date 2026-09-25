@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/content/data/detail_repository.dart';
+import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/domain/comment.dart';
 import 'package:tailtopia/features/content/domain/content_detail.dart';
+import 'package:tailtopia/features/content/domain/feed_item.dart';
+import 'package:tailtopia/features/content/domain/pinned_slot.dart';
 import 'package:tailtopia/features/content/presentation/content_detail_page.dart';
+import 'package:tailtopia/features/content/presentation/feed_controller.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/empty_state.dart';
 import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
@@ -74,13 +78,23 @@ class _FakeDetailRepo implements DetailRepository {
       const CommentPage(items: [], nextCursor: null, hasMore: false);
 
   @override
-  Future<Comment> postComment(int postId, String body) async => _top(999);
+  Future<Comment> postComment(int postId, String body, {List<int> mentionedUserIds = const []}) async => _top(999);
 
   @override
-  Future<Comment> postReply(int parentId, String body) async => _reply(999);
+  Future<Comment> postReply(int parentId, String body, {List<int> mentionedUserIds = const []}) async => _reply(999);
 
   @override
   Future<void> deleteComment(int commentId) async {}
+
+  /// V1.3.0 Story 2.4 新增的点赞通道；本类不验它，记下调用即可。
+  final List<int> likedComments = <int>[];
+  final List<int> unlikedComments = <int>[];
+
+  @override
+  Future<void> likeComment(int commentId) async => likedComments.add(commentId);
+
+  @override
+  Future<void> unlikeComment(int commentId) async => unlikedComments.add(commentId);
 
   @override
   Future<void> deleteContent(int postId) async {
@@ -89,6 +103,32 @@ class _FakeDetailRepo implements DetailRepository {
 
   @override
   Future<void> submitReport(int postId, String reasonType) async {}
+}
+
+/// bug 20260923-538：Feed 里那条（id=5）进详情前的旧快照 —— 评论 0 / 赞 0。
+class _StaleFeedRepo implements FeedRepository {
+  int getFeedCalls = 0;
+
+  @override
+  Future<FeedPage> getFeed({
+    FeedCategory category = FeedCategory.all,
+    String? cursor,
+    int limit = 20,
+  }) async {
+    getFeedCalls++;
+    return FeedPage(items: [
+      FeedItem(
+        id: 5,
+        authorId: 7,
+        authorDeleted: false,
+        type: 'DAILY',
+        createdAt: DateTime.utc(2026, 6, 2),
+      ),
+    ]);
+  }
+
+  @override
+  Future<PinnedSlot?> getPinnedSlot() async => null;
 }
 
 Future<void> _pump(WidgetTester tester, _FakeDetailRepo repo) async {
@@ -181,5 +221,56 @@ void main() {
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     expect(find.text(l10n.detailMoreReportContent), findsOneWidget);
     expect(find.text(l10n.detailMoreDeleteContent), findsNothing);
+  });
+
+  // ===== bug 20260923-538：详情页新计数回写 Feed 快照 =====
+
+  testWidgets('bug 538: 进详情拿到新评论数/点赞 → 回写 Feed 快照（返回 Social 不是旧数）',
+      (tester) async {
+    final feedRepo = _StaleFeedRepo();
+    final container = ProviderContainer(overrides: [
+      detailRepositoryProvider.overrideWithValue(_FakeDetailRepo(detail: _detail())),
+      feedRepositoryProvider.overrideWithValue(feedRepo),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(feedProvider.future); // Social 已加载过（旧快照）
+    expect(container.read(feedProvider).value!.items.single.commentCount, 0);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ContentDetailPage(postId: 5),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final item = container.read(feedProvider).value!.items.single;
+    expect(item.commentCount, 2); // 详情 commentCount=2
+    expect(item.likeCount, 3);
+    expect(feedRepo.getFeedCalls, 1); // 就地改，不重拉整页
+  });
+
+  testWidgets('bug 538: Feed 未建（通知深链直进详情）→ 不为回写去建 Feed / 拉首屏', (tester) async {
+    final feedRepo = _StaleFeedRepo();
+    final container = ProviderContainer(overrides: [
+      detailRepositoryProvider.overrideWithValue(_FakeDetailRepo(detail: _detail())),
+      feedRepositoryProvider.overrideWithValue(feedRepo),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ContentDetailPage(postId: 5),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(container.exists(feedProvider), isFalse);
+    expect(feedRepo.getFeedCalls, 0);
   });
 }

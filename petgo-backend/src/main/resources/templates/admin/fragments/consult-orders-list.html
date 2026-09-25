@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  B10 兽医订单的摘要条 / 表格 / 单行（V1.3.0 Story 8.4，模板 B）。
+    sumbar(oob) — 三格：本期成交额 · 单数 · 待核查数
+    rows(oob)   — 表格 + 空态；oob=true 时摘要条随片段一并换
+    row(o, oob) — 单行；抽屉里标记成功后以 oob=true 原位替换（标记不会让行换位置，所以只换这一行）
+  🔴 「本期」= **当前筛选集**；本页现状没有任何筛选参数，所以它暂时等于全量 ——
+     这句话必须写在页面上，否则运营会把它读成「本月」。
+*/-->
+<body>
+<div th:fragment="sumbar(oob)" class="sum" id="orders-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.consultOrders.summary.gross}">本期成交额</div>
+        <div class="sum-value" data-sum="gross" th:text="${#numbers.formatInteger(summary.gross, 1, 'COMMA')}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.consultOrders.summary.count}">单数</div>
+        <div class="sum-value" data-sum="count" th:text="${summary.count}">0</div>
+    </div>
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.v130.consultOrders.summary.toVerify}">待核查数</div>
+        <div class="sum-value" data-sum="toVerify" th:text="${summary.toVerify}">0</div>
+    </div>
+</div>
+
+<th:block th:fragment="rows(oob)">
+    <th:block th:if="${oob}"><div th:replace="~{admin/fragments/consult-orders-list :: sumbar(true)}"></div></th:block>
+    <table th:if="${!#lists.isEmpty(orders)}" class="tags-table">
+        <thead>
+        <tr>
+            <th th:text="#{admin.common.order}">订单</th>
+            <th th:text="#{admin.common.user}">用户</th>
+            <th th:text="#{admin.consultOrders.col.vet}">兽医</th>
+            <th class="nowrap" th:text="#{admin.common.amount}">金额</th>
+            <th class="nowrap" th:text="#{admin.consultOrders.col.payout}">分成</th>
+            <th th:text="#{admin.common.status}">状态</th>
+            <th class="nowrap" th:text="#{admin.consultOrders.col.rebroadcast}">重播</th>
+            <th th:text="#{admin.consultOrders.col.verify}">待核查</th>
+            <th class="nowrap" th:text="#{admin.common.paidAt}">成交时间</th>
+        </tr>
+        </thead>
+        <tbody>
+        <th:block th:each="o : ${orders}"><tr th:replace="~{admin/fragments/consult-orders-list :: row(${o}, false)}"></tr></th:block>
+        </tbody>
+    </table>
+
+    <div class="empty" th:if="${#lists.isEmpty(orders)}">
+        <span class="empty-emoji">🧾</span>
+        <p th:text="#{admin.consultOrders.empty}">暂无兽医咨询订单</p>
+    </div>
+</th:block>
+
+<!--/* 单行。点行开抽屉（「操作」列已删）。 */-->
+<table th:remove="tag"><tbody th:remove="tag">
+    <tr th:fragment="row(o, oob)" th:id="'order-row-' + ${o.orderToken}" th:hx-swap-oob="${oob} ? 'true' : null"
+        th:data-id="${o.orderToken}" th:data-drawer-url="@{/admin/consult-orders/{t}/drawer(t=${o.orderToken})}"
+        tabindex="0">
+        <td class="nowrap" th:text="${o.displayNo}">no</td>
+        <td class="nowrap muted" th:text="${o.userId}">0</td>
+        <td class="nowrap muted" th:text="${o.vetId}">0</td>
+        <td class="nowrap" th:text="${#numbers.formatInteger(o.amount, 1, 'COMMA')}">0</td>
+        <td class="nowrap" th:text="${o.vetPayout == null} ? '—' : ${#numbers.formatInteger(o.vetPayout, 1, 'COMMA')}">—</td>
+        <td class="nowrap"><code th:text="${o.statusCode}">IN_PROGRESS</code></td>
+        <td class="nowrap" th:text="${o.rebroadcastCount}">0</td>
+        <!--/* 待核查是**人工注记**，不是订单业务状态：用中性徽标，别用会被读成「订单出问题了」的红色。 */-->
+        <td class="nowrap">
+            <span th:if="${o.verifyStatus == ''}" class="muted">—</span>
+            <span th:unless="${o.verifyStatus == ''}" class="badge"
+                  th:classappend="${o.verifyStatus == 'TO_VERIFY'} ? 'badge-neutral' : 'badge-ok'"
+                  th:text="${o.verifyStatus == 'TO_VERIFY'}
+                           ? #{admin.consultOrderDetail.opt.toVerify} : #{admin.consultOrderDetail.opt.verified}">待核查</span>
+        </td>
+        <td class="nowrap" th:text="${@adminTime.wib(o.paidAt)}">—</td>
+    </tr>
+</tbody></table>
+</body>
+</html>

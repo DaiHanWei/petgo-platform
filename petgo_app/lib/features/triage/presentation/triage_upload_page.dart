@@ -142,10 +142,7 @@ class _TriageUploadPageState extends ConsumerState<TriageUploadPage> {
           ? null
           : AppBar(
               backgroundColor: AppColors.base,
-              centerTitle: true,
-              title: Text(l10n.triageUploadTitle,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
+              title: Text(l10n.triageUploadTitle),
             ),
       body: switch (phase) {
         TriagePhase.submitting || TriagePhase.polling => _WaitingView(message: l10n.triageAnalyzing),

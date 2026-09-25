@@ -15,5 +15,8 @@ public interface AccountDisposalRepository extends JpaRepository<AccountDisposal
     /** 某账号的历史处置，最近的在前（工单详情展示用）。 */
     List<AccountDisposal> findByTargetUserIdOrderByCreatedAtDesc(long targetUserId);
 
+    /** A2 已处置态整页一次取（V1.3.0 Story 2.5，免逐行 N+1）：一批工单的处置记录，新的在前。 */
+    List<AccountDisposal> findByReportIdInOrderByCreatedAtDesc(java.util.Collection<Long> reportIds);
+
     long countByTargetUserId(long targetUserId);
 }

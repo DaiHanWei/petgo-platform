@@ -1,5 +1,6 @@
 package com.tailtopia.admin.payment.service;
 
+import com.tailtopia.admin.payment.dto.AdminPaymentDetail;
 import com.tailtopia.admin.payment.dto.AdminPaymentRow;
 import com.tailtopia.admin.payment.dto.AdminPaymentSummary;
 import com.tailtopia.pay.domain.PayChannel;
@@ -45,6 +46,21 @@ public class AdminPaymentQueryService {
     public List<AdminPaymentRow> byUser(long userId) {
         return intents.findByUserIdOrderByCreatedAtDesc(userId).stream()
                 .map(AdminPaymentQueryService::toRow).toList();
+    }
+
+    /**
+     * 单条支付意图只读全字段（Story 8.5 · AC1 抽屉）。按**对外 token** 查，不用自增 id
+     * （架构 §Enforcement：对外暴露标识一律不可枚举）。不存在 → 404。
+     */
+    @Transactional(readOnly = true)
+    public AdminPaymentDetail detail(String publicToken) {
+        PaymentIntent p = intents.findByPublicToken(publicToken)
+                .orElseThrow(() -> com.tailtopia.shared.error.AppException.notFound("支付记录不存在")
+                        .code("admin.err.payments.notFound"));
+        return new AdminPaymentDetail(p.getUserId(), p.getPublicToken(), PaymentDisplayNo.of(p),
+                p.getPurpose().name(), p.getChannel().name(), p.getAmount(), p.getCurrency(),
+                p.getStatus().name(), p.getGatewayRef(), p.getCoinAmount(), p.getCashAmount(),
+                p.getExpiresAt(), p.getCreatedAt(), p.getUpdatedAt());
     }
 
     /** 默认视图：全部支付意图按 created_at 倒序分页（跨用户跨类型）。 */

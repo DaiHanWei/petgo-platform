@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/shop/data/shop_repurchase_repository.dart';
+import 'package:tailtopia/features/shop/domain/shop_product.dart' show formatIdr;
 import 'package:tailtopia/features/shop/domain/shop_repurchase.dart';
 import 'package:tailtopia/features/shop/presentation/widgets/repurchase_zones_v2.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -57,9 +58,14 @@ void main() {
     //    `purchasedOn ?? 默认值` 会让显式传 null 落回默认值，
     //    那条「缺购买日期 → 整卡不渲染」的断言就变成空的了（本类第一版就是这么假绿的）。
     bool noPurchaseDate = false,
+    // Story 4-4：价格。同样用「显式值」而不是 `price ?? 默认值` ——
+    // 传 null 就是要测「没有价格」，落回默认值会让那条断言变成空的
+    // （本类第一版在 purchasedOn 上正是这么假绿过的）。
+    int? price = 189000,
   }) =>
       RepurchaseCard(
         triggerId: id,
+        price: price,
         triggerType: 'FOOD_LOW',
         productToken: 'prod1',
         productName: 'Royal Canin Adult Dog 2kg',
@@ -287,6 +293,73 @@ void main() {
       ));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('🔴 Story 4-4：复购卡价格（SHOP-FR-03）', () {
+    testWidgets('有价 → 渲染价格行，文本等于 formatIdr(price)', (tester) async {
+      await tester.pumpWidget(
+          host(const RepurchaseTriggerCardV2(), cards: [card(price: 189000)]));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('recoTriggerPrice_1')), findsOneWidget);
+      final t = tester.widget<Text>(find.byKey(const ValueKey('recoTriggerPrice_1')));
+      expect(t.data, formatIdr(189000));
+    });
+
+    testWidgets('🔴 price == null → 整行不画（不编造）', (tester) async {
+      await tester.pumpWidget(
+          host(const RepurchaseTriggerCardV2(), cards: [card(price: null)]));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('recoTriggerPrice_1')), findsNothing,
+          reason: '没有价格就不显示价格 —— 补一个占位数字比不显示更糟');
+      // 但卡片本身还在：缺价格不该让整卡消失（缺的是推算依据才会）。
+      expect(find.byKey(const ValueKey('recoBasis_1')), findsOneWidget);
+    });
+
+    testWidgets('🔴 price == 0 → 同样不画（0 元不是可信的复购价）', (tester) async {
+      await tester.pumpWidget(
+          host(const RepurchaseTriggerCardV2(), cards: [card(price: 0)]));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('recoTriggerPrice_1')), findsNothing);
+    });
+
+    test('hasPrice 把 null 与 0 都判成「没有价格」', () {
+      expect(card(price: 189000).hasPrice, isTrue);
+      expect(card(price: null).hasPrice, isFalse);
+      expect(card(price: 0).hasPrice, isFalse);
+      // 负价格不该出现，但真出现了也不画 —— 判断收在 model 里，widget 无从漏判。
+      expect(card(price: -1).hasPrice, isFalse);
+    });
+
+    test('fromJson 读 price 与 skuToken；缺键即 null', () {
+      final full = RepurchaseCard.fromJson(const {
+        'triggerId': 7,
+        'triggerType': 'FOOD_LOW',
+        'skuToken': 'sku-tok-1',
+        'productToken': 'prd-tok-1',
+        'productName': 'Royal Canin',
+        'daysLeft': 9,
+        'price': 189000,
+      });
+      expect(full.price, 189000);
+      expect(full.skuToken, 'sku-tok-1');
+      expect(full.hasPrice, isTrue);
+
+      // 🔴 后端 NON_NULL 下 price=null 是**整键消失** —— 缺键必须读成 null，
+      //    而不是 0（读成 0 会让 hasPrice 仍为 false，但语义已经错了）。
+      final noPrice = RepurchaseCard.fromJson(const {
+        'triggerId': 7,
+        'triggerType': 'FOOD_LOW',
+        'productToken': 'prd-tok-1',
+        'productName': 'Royal Canin',
+        'daysLeft': 9,
+      });
+      expect(noPrice.price, isNull);
+      expect(noPrice.skuToken, isNull);
+      expect(noPrice.hasPrice, isFalse);
     });
   });
 }

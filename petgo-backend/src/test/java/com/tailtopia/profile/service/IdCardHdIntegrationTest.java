@@ -120,4 +120,26 @@ class IdCardHdIntegrationTest extends ApiIntegrationTest {
         User u = newUser();
         purchase(u.getId(), "PAWCOIN").andExpect(status().isNotFound());
     }
+
+    /**
+     * 🔴 2026-09-25 code review #3：按卡 QRIS 的<b>未付 / 网关失败</b> attempt 行不得被当成「已购买」。
+     *
+     * <p>attempt 行在出码前就写了；旧口径 {@code existsByUserId} 只看「有没有行」，
+     * 于是没付钱的用户在旧单卡端点上被判成已解锁。
+     */
+    @Test
+    void unpaidCardAttemptRowIsNotAPurchase() {
+        User u = newUser();
+        var intent = paymentIntents.createIntent(u.getId(), com.tailtopia.pay.domain.PaymentPurpose.ID_HD,
+                com.tailtopia.pay.domain.PayChannel.QRIS, PRICE, "IDR", "id-hd-card-test:" + SEQ.incrementAndGet());
+        long intentId = paymentIntents.findByToken(intent.token()).orElseThrow().getId();
+        purchases.save(com.tailtopia.profile.domain.IdCardHdPurchase.of(
+                u.getId(), null, null, com.tailtopia.pay.domain.PayChannel.QRIS, intentId));
+
+        assertThat(purchases.existsByUserId(u.getId())).as("有 attempt 行").isTrue();
+        assertThat(purchases.existsPaidByUserId(u.getId())).as("🔴 但没付钱，不算已购买").isFalse();
+
+        paymentIntents.failChargeAttempt(intent.token());   // 网关下单失败
+        assertThat(purchases.existsPaidByUserId(u.getId())).isFalse();
+    }
 }

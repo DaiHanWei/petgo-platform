@@ -207,6 +207,39 @@ class UnifiedTicketQueryIntegrationTest extends ApiIntegrationTest {
         assertThat(rows.get(1).score()).isEqualTo(3);
     }
 
+    /**
+     * 🔴 bug 20260921-498：「已处理」视图按<b>处理时间倒序</b>，最近处理的在最前。
+     *
+     * <p>造数让处理时间序与分数序、首报时间序都<b>相反</b>：先处理的那条分更高、报得更早 ——
+     * 沿用待办排序（分倒序 + 最早优先）会把它排第一，这条就会红。
+     * 另造一条处理时间为 NULL 的终态行，断言它沉底（NULLS LAST）。
+     */
+    @Test
+    void handledViewSortsByHandledAtDesc() {
+        String tag = "hd" + Long.toString(SEQ.incrementAndGet(), 36);
+        User older = renamed(newUser(), tag + "-old");   // 3 分、先报、先处理
+        User recent = renamed(newUser(), tag + "-new");  // 1 分、后报、后处理
+        User noTime = renamed(newUser(), tag + "-nil");  // 1 分、终态但缺处理时间
+
+        for (int i = 0; i < 3; i++) {
+            reportTimes(newUser().getId(), older.getId(), 1);
+        }
+        reportTimes(newUser().getId(), recent.getId(), 1);
+        reportTimes(newUser().getId(), noTime.getId(), 1);
+        jdbc.update("UPDATE account_reports SET status = 'RESOLVED', handled_at = now() - interval '2 hour' "
+                + "WHERE target_user_id = ?", older.getId());
+        jdbc.update("UPDATE account_reports SET status = 'DISMISSED', handled_at = now() - interval '1 minute' "
+                + "WHERE target_user_id = ?", recent.getId());
+        jdbc.update("UPDATE account_reports SET status = 'RESOLVED', handled_at = NULL "
+                + "WHERE target_user_id = ?", noTime.getId());
+
+        List<Long> ids = query.search(java.util.EnumSet.of(TicketType.ACCOUNT_REPORT), null, null, tag,
+                        new UnifiedTicketQueryService.Extra(null, null, true), PageRequest.of(0, 20))
+                .getContent().stream().map(UnifiedTicketRow::targetUserId).toList();
+
+        assertThat(ids).containsExactly(recent.getId(), older.getId(), noTime.getId());
+    }
+
     private User renamed(User u, String nickname) {
         u.setNickname(nickname);
         return users.save(u);

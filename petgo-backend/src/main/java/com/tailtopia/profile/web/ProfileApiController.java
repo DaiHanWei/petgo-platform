@@ -59,18 +59,21 @@ public class ProfileApiController {
     private final IdCardService idCardService;
     private final IdCardHdService idCardHdService;
     private final com.tailtopia.share.service.IdCardShareRewardService idCardShareRewards;
+    private final com.tailtopia.share.service.AgeCardShareRewardService ageCardShareRewards;
     private final RedisRateLimiter rateLimiter;
 
     public ProfileApiController(ProfileService profileService, TimelineService timelineService,
             CardRerenderService cardRerenderService, IdCardService idCardService,
             IdCardHdService idCardHdService, RedisRateLimiter rateLimiter,
-            com.tailtopia.share.service.IdCardShareRewardService idCardShareRewards) {
+            com.tailtopia.share.service.IdCardShareRewardService idCardShareRewards,
+            com.tailtopia.share.service.AgeCardShareRewardService ageCardShareRewards) {
         this.profileService = profileService;
         this.timelineService = timelineService;
         this.cardRerenderService = cardRerenderService;
         this.idCardService = idCardService;
         this.idCardHdService = idCardHdService;
         this.idCardShareRewards = idCardShareRewards;
+        this.ageCardShareRewards = ageCardShareRewards;
         this.rateLimiter = rateLimiter;
     }
 
@@ -205,10 +208,11 @@ public class ProfileApiController {
     /**
      * HD 下载当前定价（与扣费同源实时读 pricing_config，Story 9.2 后台可配）。
      * 前端付费抽屉展示用——此前展示价硬编码 5000，后台改价后与实际扣费脱钩（417 同类）。
+     * V1.3.0 Story 6.1（契约 X-4）：同一响应追加护照·护照内页 / 护照·登机牌两个解锁价（camelCase），旧字段 {@code price} 不变。
      */
     @GetMapping("/me/id-cards/pricing")
     public com.tailtopia.profile.dto.IdCardHdPricingResponse hdPricing() {
-        return new com.tailtopia.profile.dto.IdCardHdPricingResponse(idCardHdService.currentHdPrice());
+        return idCardHdService.currentPricing();
     }
 
     /** 单卡详情（归属校验，非本人 404 防枚举）。 */
@@ -244,6 +248,29 @@ public class ProfileApiController {
         rateLimiter.check("rl:profile:idshare:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
         return com.tailtopia.share.dto.IdCardShareRewardResponse.of(
                 idCardShareRewards.rewardAfterShare(ownerId, cardId,
+                        java.time.Instant.now()));
+    }
+
+    /**
+     * 年龄卡分享成功上报 → 试发分享奖励（V1.3.0 批次 A · Story 5.3）。
+     *
+     * <p>⚠️ App 只在系统分享面板回调成功之后调本接口 —— 用户取消面板就不调，
+     * 所以「取消不发币」是在**客户端**成立的，服务端无从判断。
+     *
+     * <p>🔴 AC6：请求体**只有幂等键**，没有卡面内容、没有图片。
+     * 年龄卡本身是纯客户端出图、不落服务端；领奖是已澄清的唯一例外，
+     * 而这个例外只包含「谁、哪次分享」。
+     *
+     * <p>🛡 返回 {@code coins}：真的发了多少枚，{@code 0} = 没发。刻意不返回原因。
+     */
+    @PostMapping("/me/age-cards/share-rewards")
+    public com.tailtopia.share.dto.AgeCardShareRewardResponse rewardAgeCardShare(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody com.tailtopia.share.dto.AgeCardShareRewardRequest req) {
+        long ownerId = currentUserId(jwt);
+        rateLimiter.check("rl:profile:agecardshare:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
+        return com.tailtopia.share.dto.AgeCardShareRewardResponse.of(
+                ageCardShareRewards.rewardAfterShare(ownerId, req.idempotencyKey(),
                         java.time.Instant.now()));
     }
 

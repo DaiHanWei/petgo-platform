@@ -32,6 +32,10 @@ class _FakeTimelineRepo implements TimelineRepository {
   Future<VisitorProfile> getVisitorProfile(String token) async =>
       throw UnimplementedError('作者态测试不该走访客接口');
 
+  @override
+  Future<VisitorProfile> getInAppVisitorProfile(int petId) async =>
+      throw UnimplementedError('作者态测试不该走访客接口');
+
   _FakeTimelineRepo(this.nextPage);
 
   final TimelinePage nextPage;

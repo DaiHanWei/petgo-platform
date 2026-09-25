@@ -53,12 +53,55 @@ class SupportTicketResolveCsatIntegrationTest extends ApiIntegrationTest {
 
         FeedbackTicket t = tickets.findByTicketToken(token).orElseThrow();
         assertThat(t.getStatus()).isEqualTo(TicketStatus.RESOLVED);
-        assertThat(t.isContactedCustomer()).isTrue();
+        // bug 20260922-524：结案不再隐含「已联系」（联系是独立动作）
+        assertThat(t.isContactedCustomer()).isFalse();
         assertThat(t.getResolvedAt()).isNotNull();
         assertThat(t.getCsatDeadline()).isNotNull();
         assertThat(t.getHandledBy()).isEqualTo(700L);
         assertThat(notifCount(userId, "TICKET_RESOLVED")).isEqualTo(1);
         assertThat(notifCount(userId, "CSAT_SURVEY")).isEqualTo(1);
+    }
+
+    /** bug 20260922-524：已联系只标联系，不结案、不发通知。 */
+    @Test
+    void contacted_keepsTicketOpen_noNotification() {
+        long userId = newUser().getId();
+        String token = newTicket(userId);
+
+        assertThat(support.markContacted(token, 700L)).isTrue();
+        assertThat(support.markContacted(token, 700L)).isFalse();
+
+        FeedbackTicket t = tickets.findByTicketToken(token).orElseThrow();
+        assertThat(t.isContactedCustomer()).isTrue();
+        assertThat(t.getStatus()).isEqualTo(TicketStatus.IN_PROGRESS);
+        assertThat(notifCount(userId, "TICKET_RESOLVED")).isZero();
+        assertThat(notifCount(userId, "CSAT_SURVEY")).isZero();
+        Long audits = jdbc.queryForObject("SELECT count(*) FROM admin_audit_logs WHERE action_type=? AND target_id=?",
+                Long.class, "TICKET_CONTACTED", token);
+        assertThat(audits).as("重复点只记一次审计").isEqualTo(1L);
+    }
+
+    /** bug 20260922-524：忽略置 CLOSED，不发任何通知；已结案不可忽略；scanner 不受影响。 */
+    @Test
+    void ignore_closesSilently_andResolvedCannotBeIgnored() {
+        long userId = newUser().getId();
+        String token = newTicket(userId);
+
+        support.ignoreTicket(token, 700L);
+
+        FeedbackTicket t = tickets.findByTicketToken(token).orElseThrow();
+        assertThat(t.getStatus()).isEqualTo(TicketStatus.CLOSED);
+        assertThat(t.getCsatDeadline()).isNull();
+        assertThat(notifCount(userId, "TICKET_RESOLVED")).isZero();
+        assertThat(notifCount(userId, "CSAT_SURVEY")).isZero();
+        assertThatThrownBy(() -> support.ignoreTicket(token, 700L)).isInstanceOf(AppException.class);
+
+        String resolved = newTicket(userId);
+        support.resolveTicket(resolved, 700L);
+        assertThatThrownBy(() -> support.ignoreTicket(resolved, 700L)).isInstanceOf(AppException.class);
+
+        scanner.closeExpiredResolved();
+        assertThat(tickets.findByTicketToken(token).orElseThrow().getStatus()).isEqualTo(TicketStatus.CLOSED);
     }
 
     @Test

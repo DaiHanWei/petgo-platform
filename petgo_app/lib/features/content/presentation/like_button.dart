@@ -23,6 +23,7 @@ class LikeButton extends ConsumerStatefulWidget {
     required this.source,
     this.feedTab,
     this.rankMode,
+    this.onSettled,
   });
 
   final int postId;
@@ -44,6 +45,10 @@ class LikeButton extends ConsumerStatefulWidget {
   /// 🛡 两个都做成可选：详情页的点赞没有"哪个 Tab、哪条排序路径"这回事，
   /// 硬填一个值会在看板上造出不存在的 Feed 会话。
   final String? rankMode;
+
+  /// 点赞/取消以后端真值落定后的回调（bug 20260923-538）：详情页据此把点赞态写回 Feed 快照。
+  /// 失败回滚不回调（UI 回到原值，快照本就没变）。
+  final void Function(bool liked, int likeCount)? onSettled;
 
   @override
   ConsumerState<LikeButton> createState() => _LikeButtonState();
@@ -115,6 +120,7 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
         _count = result.likeCount;
         _inFlight = false;
       });
+      widget.onSettled?.call(result.liked, result.likeCount);
     } catch (_) {
       if (!mounted) return;
       // 失败回滚。

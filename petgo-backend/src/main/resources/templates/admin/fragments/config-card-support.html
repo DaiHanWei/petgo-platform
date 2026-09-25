@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<!--
+  D2 运营配置 · 客服联系方式卡（shop-v2 Story 3-1 / AD-S8，合入 ops 模板 D）。端点 / 参数逐字不变：
+  POST /admin/config/support-contact（whatsappNumber / email）。改完即生效，不需发版、不需重启；
+  号码由 App 客服弹窗、登录被拒提示、WhatsApp 深链三处共同消费。
+  supportContact 为 null（缺行）时整卡不渲染 —— 消费方有内置回退值，这里不画一个空表单。
+-->
+<body>
+<th:block th:fragment="card" th:if="${supportContact != null}"
+          th:with="action=@{/admin/config/support-contact},hxPost=@{/admin/config/support-contact},cardId='cfg-support',confirmDiff=true,
+                   errorFields=${errorFields?.get('support')},
+                   canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   readonlyNote=#{admin.v130.config.readonly(#{perm.config.edit})}">
+    <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::support-title}, ~{::support-form}, #{admin.config.btn.saveSupportContact})}">
+        <h2 class="cfg-title" th:fragment="support-title" th:text="#{admin.config.supportContact}">客服联系方式</h2>
+        <div th:fragment="support-form">
+            <p class="hint" th:text="#{admin.config.supportContactHint}">填印尼手机号（08 开头或 +62 开头都行，系统会自行归一化）。改完立即对全部用户生效。</p>
+            <label class="field"><span th:text="#{admin.config.supportWhatsapp}">客服 WhatsApp 号</span>
+                <input class="inp field-full" type="text" name="whatsappNumber" maxlength="20" required
+                       th:value="${supportContact.whatsappNumber}" th:disabled="${!canEdit}"/>
+            </label>
+            <label class="field"><span th:text="#{admin.config.supportEmail}">客服邮箱</span>
+                <input class="inp field-full" type="email" name="email" maxlength="64" required
+                       th:value="${supportContact.email}" th:disabled="${!canEdit}"/>
+            </label>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="saved">
+    <th:block th:replace="~{admin/fragments/config-card-support :: card}"></th:block>
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${toast}">已保存</div>
+    </div>
+</th:block>
+</body>
+</html>

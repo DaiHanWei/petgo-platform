@@ -36,6 +36,30 @@ public class ShopOrder {
     @Column(name = "seq_no", insertable = false, updatable = false)
     private Long seqNo;
 
+    /**
+     * 对外展示号 {@code TOKO-yyyyMMdd-XXXXXX}（Story 4-3 · SHOP-FR-29/30 · AD-S3）。
+     *
+     * <p>🔴 <b>随机段是 SecureRandom，不是 id。</b>它取代的旧算法把自增主键零填充 6 位直接外露，
+     * 任何用户拿自己的号就能推断平台当日单量、还能顺着序号试探别人的单。
+     * 生成见 {@code ShopOrderDisplayNoGenerator}。
+     *
+     * <p>🔴 <b>一单只有这一个号</b>：App 的四个出口（订单中心列表 / 订单中心详情 /
+     * 电商订单详情 / 客服与工单）全部展示它。此前电商详情页展示的是 22 位 {@code publicToken}，
+     * 与订单中心显示的号对不上 —— 用户报给客服的号，客服在后台搜不到。
+     */
+    @Column(name = "display_no", nullable = false, updatable = false, length = 32)
+    private String displayNo;
+
+    /**
+     * 旧算法算出来的号（仅存量订单有值，新订单为 {@code null}）。
+     *
+     * <p>🔴 <b>留着它只为一件事：用户手里那张旧号还能在后台搜到。</b>
+     * 旧号早已发到用户手里、印在他们的聊天记录里，后台搜不到就等于让客服对着
+     * 一个「系统里不存在的订单号」跟用户解释。它<b>不对外展示</b>，只作搜索命中用。
+     */
+    @Column(name = "legacy_display_no", updatable = false, length = 32)
+    private String legacyDisplayNo;
+
     @Column(name = "user_id", nullable = false, updatable = false)
     private Long userId;
 
@@ -122,6 +146,17 @@ public class ShopOrder {
     private CompletionSource completionSource;
 
     /**
+     * 运营手工标记缺货（异常订单 A8 的唯一判据，V20260918_2243）。三列同生同灭：未标记 = 全空。
+     * 库存不变式 {@code locked <= actual} 让「账面缺货」不可能出现，真实缺货只在拣货时被人发现。
+     */
+    @Column(name = "shortage_flagged_at")
+    private Instant shortageFlaggedAt;
+    @Column(name = "shortage_flagged_by")
+    private Long shortageFlaggedBy;
+    @Column(name = "shortage_note", length = 200)
+    private String shortageNote;
+
+    /**
      * 🔴 乐观锁（照 {@code PaymentIntent} 同款）：支付回调与取消/懒过期两个事务同时读到
      * {@code PENDING_PAYMENT} 时，后提交者在同一行上撞版本号整体回滚 ——
      * 这是「{@code inventory.commit} 与 {@code inventory.release} 不会双双落库」的库级裁决。
@@ -138,10 +173,20 @@ public class ShopOrder {
     protected ShopOrder() {
     }
 
-    public static ShopOrder place(String publicToken, long userId, long goodsSubtotal,
-            long shippingFee, long shippingDiscount, AddressSnapshot ship) {
+    /**
+     * 建单。
+     *
+     * <p>🔴 <b>{@code displayNo} 与 {@code now} 都由调用方传入，本方法不再自己取
+     * {@code Instant.now()}</b>（Story 4-3）。理由只有一条：展示号里的日期段与
+     * {@code created_at} 必须来自<b>同一个时刻</b>。各取各的 {@code Instant.now()}，
+     * 在 WIB 跨午夜的那一瞬就会产出「号上写着昨天、建单时间是今天」的单 ——
+     * 客服按日期对账时无解，而这种单一天只可能出现几笔、谁也复现不了。
+     */
+    public static ShopOrder place(String publicToken, String displayNo, Instant now, long userId,
+            long goodsSubtotal, long shippingFee, long shippingDiscount, AddressSnapshot ship) {
         ShopOrder o = new ShopOrder();
         o.publicToken = publicToken;
+        o.displayNo = displayNo;
         o.userId = userId;
         o.status = ShopOrderStatus.PENDING_PAYMENT;
         o.goodsSubtotal = goodsSubtotal;
@@ -155,8 +200,8 @@ public class ShopOrder {
         o.shipKecamatan = ship.kecamatan();
         o.shipAddressLine = ship.addressLine();
         o.shipKodePos = ship.kodePos();
-        o.createdAt = Instant.now();
-        o.updatedAt = o.createdAt;
+        o.createdAt = now;
+        o.updatedAt = now;
         // 🔴 AD-8：60 分钟支付窗。窗到即取消并释放库存 —— 锁着别人买不到的库存等一个
         //    可能永远不会来的付款，是自营模式下最贵的一种沉默损失。
         o.expiresAt = o.createdAt.plus(PAYMENT_WINDOW);
@@ -336,6 +381,14 @@ public class ShopOrder {
     }
 
     /** 🔴 对账用，绝不下发给用户。 */
+    public String getDisplayNo() {
+        return displayNo;
+    }
+
+    public String getLegacyDisplayNo() {
+        return legacyDisplayNo;
+    }
+
     public Long getSeqNo() {
         return seqNo;
     }
@@ -390,6 +443,48 @@ public class ShopOrder {
         this.refundedTotal += total;
         this.refundedCoin += coin;
         this.updatedAt = Instant.now();
+    }
+
+    /**
+     * 标记缺货（进入异常订单工作台）。只允许待发货单 —— 已发货的出口是退货，不是缺货处置。
+     * 重复标记报冲突而不是覆盖：覆盖会抹掉第一个人写的原因，而那往往是最接近现场的描述。
+     */
+    public void flagShortage(Long adminAccountId, String note, Instant now) {
+        if (this.status != ShopOrderStatus.PENDING_SHIPMENT) {
+            throw AppException.conflict("只有待发货订单可标记缺货，当前状态：" + this.status)
+                    .code("admin.err.orderException.flagOnlyPending", this.status);
+        }
+        if (this.shortageFlaggedAt != null) {
+            throw AppException.conflict("该订单已标记缺货").code("admin.err.orderException.alreadyFlagged");
+        }
+        this.shortageFlaggedAt = now;
+        this.shortageFlaggedBy = adminAccountId;
+        this.shortageNote = note;
+        this.updatedAt = now;
+    }
+
+    /** 清除缺货标记（整单取消 / 联系用户后继续履约 = 这一单的缺货已处置完）。 */
+    public void clearShortageFlag() {
+        this.shortageFlaggedAt = null;
+        this.shortageFlaggedBy = null;
+        this.shortageNote = null;
+        this.updatedAt = Instant.now();
+    }
+
+    public boolean isShortageFlagged() {
+        return shortageFlaggedAt != null;
+    }
+
+    public Instant getShortageFlaggedAt() {
+        return shortageFlaggedAt;
+    }
+
+    public Long getShortageFlaggedBy() {
+        return shortageFlaggedBy;
+    }
+
+    public String getShortageNote() {
+        return shortageNote;
     }
 
     public long getRefundedTotal() {

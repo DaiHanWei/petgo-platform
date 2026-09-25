@@ -48,8 +48,10 @@ public class MeCartController {
     public CartView add(@AuthenticationPrincipal Jwt jwt,
             @RequestParam String skuToken, @RequestParam(defaultValue = "1") int qty,
             @RequestParam(required = false) String entrySource,
-            @RequestParam(required = false) String triggerType) {
-        return cart.add(currentUserId(jwt), skuToken, qty, entrySource, triggerType);
+            @RequestParam(required = false) String triggerType,
+            // 立即购买（code review #4）：只勾这一件、车内其它取消勾选。可选，旧版 App 不传 = 普通加购
+            @RequestParam(defaultValue = "false") boolean buyNow) {
+        return cart.add(currentUserId(jwt), skuToken, qty, entrySource, triggerType, buyNow);
     }
 
     @PutMapping("/items/{skuToken}")
@@ -61,6 +63,34 @@ public class MeCartController {
     @DeleteMapping("/items/{skuToken}")
     public CartView remove(@AuthenticationPrincipal Jwt jwt, @PathVariable String skuToken) {
         return cart.remove(currentUserId(jwt), skuToken);
+    }
+
+    /**
+     * 勾选 / 取消勾选单行（Story 4-1，SHOP-FR-04）。
+     *
+     * <p>🔴 <b>沿用本 Controller 零请求体的风格</b>（AD-S6 明写「沿用」）：
+     * 五个既有端点全是 query param + PathVariable，没有一个 {@code @RequestBody}。
+     * 为一个布尔值新建 {@code CartSelectionRequest} 会让这里成为唯一的例外，
+     * 而例外本身就是下一个人照着抄错的起点。
+     *
+     * <p>路由与 {@code PUT /items/{skuToken}} 不冲突：那个是两段，这个是三段。
+     */
+    @PutMapping("/items/{skuToken}/selected")
+    public CartView setSelected(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable String skuToken, @RequestParam boolean selected) {
+        return cart.setSelected(currentUserId(jwt), skuToken, selected);
+    }
+
+    /**
+     * 全选 / 全不选（Story 4-1，SHOP-FR-04）。
+     *
+     * <p>作用于本人车内<b>全部</b>行（含失效行）—— 失效行的 {@code selected} 照实下发，
+     * 只是永不计入 {@code selectedSubtotal}。
+     */
+    @PutMapping("/selection")
+    public CartView setAllSelected(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam boolean selected) {
+        return cart.setAllSelected(currentUserId(jwt), selected);
     }
 
     /** 清空全部失效商品（已下架 / 已售罄）。 */

@@ -62,7 +62,13 @@ class ContentServiceTest {
                 new ContentModerationService(), events, manualReviewGate,
                 new ImageSizeResolver(), Mockito.mock(ImageSizeBackfillService.class),
                 // V1.1.6 Story 4.1：顶置联动。本类不验联动，给 mock；联动本身由 L1 覆盖。
-                Mockito.mock(ContentPinService.class));
+                Mockito.mock(ContentPinService.class),
+                // V1.3.0 batch-b1 Story 3.2：@ 名单过滤器用真实实现 —— 本类用例都不带 @ 名单，
+                // sanitize(null) 在碰任何依赖之前就返回空表，所以三个 mock 依赖都无需 stub。
+                new com.tailtopia.mention.service.MentionSanitizer(
+                        Mockito.mock(com.tailtopia.auth.service.AccountQueryService.class),
+                        Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class),
+                        Mockito.mock(com.tailtopia.mention.repository.MentionCandidateRepository.class)));
     }
 
     private static void setId(ContentPost p, long id) {

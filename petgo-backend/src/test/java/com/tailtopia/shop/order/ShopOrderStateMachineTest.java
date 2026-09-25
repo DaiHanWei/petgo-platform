@@ -11,6 +11,7 @@ import com.tailtopia.shop.service.ShopTokenGenerator;
 import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -24,7 +25,7 @@ class ShopOrderStateMachineTest {
     }
 
     private static ShopOrder order() {
-        return ShopOrder.place("tok", 1L, 285_000L, 20_000L, 0L, addr());
+        return ShopOrder.place("tok", "TOKO-20260916-ABC123", Instant.now(), 1L, 285_000L, 20_000L, 0L, addr());
     }
 
     // ---------- 🔒 订单号不可枚举（FR-102 / AD-7） ----------
@@ -152,10 +153,10 @@ class ShopOrderStateMachineTest {
     @Test
     @DisplayName("总额 = 商品小计 + 运费 + 免运抵扣（抵扣为负）")
     void totalIsSumOfLines() {
-        ShopOrder free = ShopOrder.place("t", 1L, 285_000L, 20_000L, -20_000L, addr());
+        ShopOrder free = ShopOrder.place("t", "TOKO-20260916-ABC123", Instant.now(), 1L, 285_000L, 20_000L, -20_000L, addr());
         assertThat(free.getTotalAmount()).isEqualTo(285_000L);
 
-        ShopOrder paid = ShopOrder.place("t", 1L, 285_000L, 20_000L, 0L, addr());
+        ShopOrder paid = ShopOrder.place("t", "TOKO-20260916-ABC123", Instant.now(), 1L, 285_000L, 20_000L, 0L, addr());
         assertThat(paid.getTotalAmount()).isEqualTo(305_000L);
     }
 }

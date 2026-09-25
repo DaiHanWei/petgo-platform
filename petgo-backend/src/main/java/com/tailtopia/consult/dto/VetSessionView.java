@@ -1,12 +1,15 @@
 package com.tailtopia.consult.dto;
 
 import com.tailtopia.consult.domain.ConsultSession;
+import com.tailtopia.shared.im.ImAccountMapper;
 
 /**
  * 兽医侧会话视图（Story 5.5，进行中会话）。含 IM 会话标识供客户端 SDK 加载对话。
  *
  * <p>宠物身份（{@code petName}/{@code petSpecies}/{@code petAgeMonths}/{@code ownerHandle}）经 service
  * 跨模块只读端口富化（顶栏展示）。<b>不含性别</b>，前端兜底隐藏（Jackson NON_NULL 省略 null）。
+ *
+ * <p>{@code userImUserId}（bug 519/521）：对端机主 IM 账号（带环境前缀），App 用它作 C2C 对端，不自拼 {@code u_}。
  */
 public record VetSessionView(
         long id,
@@ -18,7 +21,8 @@ public record VetSessionView(
         String petName,
         String petSpecies,
         Integer petAgeMonths,
-        String ownerHandle) {
+        String ownerHandle,
+        String userImUserId) {
 
     /**
      * 基础视图（无宠物身份）。写路径（接单/结束/退单）专用：写事务已提交，响应不挂跨模块身份富化，
@@ -32,6 +36,7 @@ public record VetSessionView(
             Integer petAgeMonths, String ownerHandle) {
         return new VetSessionView(s.getId(), s.getStatus().name(), s.getSource().name(),
                 s.getUserId(), s.getImConversationId(), s.hasAiContext(),
-                petName, petSpecies, petAgeMonths, ownerHandle);
+                petName, petSpecies, petAgeMonths, ownerHandle,
+                s.getUserId() == null ? null : ImAccountMapper.userImId(s.getUserId()));
     }
 }

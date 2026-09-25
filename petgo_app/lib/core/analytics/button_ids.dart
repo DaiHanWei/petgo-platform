@@ -11,4 +11,10 @@ abstract final class ButtonId {
   static const milestoneShare = 'milestone.share';
   static const vetAcceptQueue = 'vet.accept_queue';
   static const vetAdviceTemplate = 'vet.advice_template';
+
+  /// 客服 WhatsApp 深链入口（V1.3.0 Story 3-3，§5 指标「WhatsApp 深链点击数（按周）」）。
+  /// 🔴 加了这行还**必须**同步加进 `Analytics._allowedButtonIds` —— 只加常量的话
+  /// `buttonTapped` 会在 release 下被 `isRegisteredButtonId` **静默丢弃**，
+  /// 表现是「开发机上有数据、线上永远零」，发版后才发现，还要等下一个版本才能修。
+  static const supportWhatsapp = 'support.whatsapp';
 }

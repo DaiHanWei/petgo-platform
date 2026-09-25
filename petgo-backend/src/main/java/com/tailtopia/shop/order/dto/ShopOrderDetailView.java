@@ -1,5 +1,7 @@
 package com.tailtopia.shop.order.dto;
 
+import com.tailtopia.pay.domain.PaymentFailureCategory;
+import com.tailtopia.pay.domain.PaymentIntent;
 import com.tailtopia.shop.order.domain.Shipment;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.domain.ShopOrderLine;
@@ -21,6 +23,15 @@ import java.util.Map;
  */
 public record ShopOrderDetailView(
         String orderToken,
+        /**
+         * 对外展示号 {@code TOKO-yyyyMMdd-XXXXXX}（Story 4-3 · SHOP-FR-29）。
+         *
+         * <p>🔴 <b>{@code orderToken} 不删</b>：它仍是 App 路由与 API 的查询键。
+         * 变的是<b>给人看的那一个</b> —— 此前本页展示的就是 22 位 {@code orderToken}，
+         * 而订单中心列表/详情展示的是 {@code TOKO-…}，同一张单两个字符串，
+         * 用户报给客服的号后台还搜不到。
+         */
+        String displayNo,
         String status,
         long goodsSubtotal,
         long shippingFee,
@@ -53,7 +64,20 @@ public record ShopOrderDetailView(
          *
          * <p>取值见 {@link #attributionSourceOf(List)}。
          */
-        String attributionSource) {
+        String attributionSource,
+        // ---------- Story 1-1 支付可感知（AD-S9(a)） ----------
+        /**
+         * 支付意图状态（{@code PENDING/PAID/FAILED/EXPIRED} 的 UPPER_SNAKE 字面量）。
+         * 无支付单（纯 PawCoin 单）为 null。
+         */
+        String paymentStatus,
+        /**
+         * 支付失败类别（{@link PaymentFailureCategory} 的 UPPER_SNAKE 字面量）。未失败为 null。
+         *
+         * <p>🔒 分类落在后端一处，<b>不让 App 解析 {@code gateway_meta}</b>——meta 是网关回调原文，
+         * 随时可能含 PII。它一个字节都不进本 DTO。
+         */
+        String paymentFailureCategory) {
 
     /**
      * 包裹（S-2）。
@@ -83,7 +107,7 @@ public record ShopOrderDetailView(
 
     public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines,
             Map<Long, String> imageUrlBySkuId) {
-        return of(o, lines, List.of(), imageUrlBySkuId);
+        return of(o, lines, List.of(), imageUrlBySkuId, null);
     }
 
     /**
@@ -94,9 +118,25 @@ public record ShopOrderDetailView(
      */
     public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines,
             List<Shipment> shipments, Map<Long, String> imageUrlBySkuId) {
+        return of(o, lines, shipments, imageUrlBySkuId, null);
+    }
+
+    /**
+     * Story 1-1：带支付意图的重载，多下发 {@code paymentStatus} / {@code paymentFailureCategory}。
+     *
+     * <p>🔴 <b>上面两个旧重载刻意保留</b>（委托本方法并传 {@code intent = null}）：它们在测试里被直接
+     * 调用 5 次，改签名等于把无关的 5 处一起拖下水。
+     *
+     * @param intent 该订单的支付意图；纯 PawCoin 单（无 {@code payment_intent_token}）传 {@code null}，
+     *     两个新字段随之为 null
+     */
+    public static ShopOrderDetailView of(ShopOrder o, List<ShopOrderLine> lines,
+            List<Shipment> shipments, Map<Long, String> imageUrlBySkuId, PaymentIntent intent) {
         var ship = o.shipTo();
+        PaymentFailureCategory failureCategory = PaymentFailureCategory.of(intent);
         return new ShopOrderDetailView(
                 o.getPublicToken(),
+                o.getDisplayNo(),
                 o.getStatus().name(),
                 o.getGoodsSubtotal(),
                 o.getShippingFee(),
@@ -126,7 +166,9 @@ public record ShopOrderDetailView(
                                 s.getTrackingNo(), s.getCarrier().trackingUrl(),
                                 s.getStatus().name(), s.getShippedAt(), s.getDeliveredAt()))
                         .toList(),
-                attributionSourceOf(lines));
+                attributionSourceOf(lines),
+                intent == null || intent.getStatus() == null ? null : intent.getStatus().name(),
+                failureCategory == null ? null : failureCategory.name());
     }
 
     /**

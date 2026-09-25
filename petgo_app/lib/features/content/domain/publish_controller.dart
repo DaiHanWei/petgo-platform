@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../mention/domain/mention_draft.dart';
 import '../data/content_repository.dart';
 import 'content_type.dart';
 import 'feed_image_layout.dart';
@@ -56,6 +57,14 @@ class PublishController extends ChangeNotifier {
   /// ⚠️ 发布后不可更改（FR-83 AC7），所以这里只影响创建，不存在事后切换入口。
   bool syncToMoment = true;
   String text = '';
+
+  /// 正文里 @ 了谁（V1.3.0 batch-b1 Story 3.2 · AC4）。
+  ///
+  /// 🔴 住在控制器上而不是页面 State 上：正文与 @ 绑定必须同生同死 ——
+  /// 控制器随 sheet dispose 即清空（无持久草稿，NFR-10），@ 绑定也跟着没了。
+  /// 放在页面 State 上的话，重建一次就会出现「正文里还写着 @阿花、id 已经丢了」。
+  final MentionDraft mentions = MentionDraft();
+
   final List<ImageUploadItem> items = <ImageUploadItem>[];
   bool publishing = false;
 
@@ -117,11 +126,56 @@ class PublishController extends ChangeNotifier {
     return true;
   }
 
+  /// 🔴 **顺序的唯一住所就是 [items] 本身**（V1.3.0 Story 4.1 · AD-A27.1）。
+  ///
+  /// 界面顺序与上传顺序是**同一份数据**，不存在"界面一份、上传状态机一份"——
+  /// 那必然出现「界面第一张是 A、封面却是 B」。封面角标同理，只是这份顺序的**投影**，
+  /// 不落任何「哪张是封面」的字段（AD-A16.3）。
+  ///
+  /// 锁定期（[canReorder] 为假）一律不响应，见 [canReorder] 的说明。
+  void reorderImage(int oldIndex, int newIndex) {
+    if (!canReorder) return; // AC4：上传会话里不许动顺序
+    if (oldIndex == newIndex) return;
+    if (oldIndex < 0 || oldIndex >= items.length) return;
+    if (newIndex < 0 || newIndex >= items.length) return;
+    final item = items.removeAt(oldIndex);
+    items.insert(newIndex, item);
+    notifyListeners();
+  }
+
+  /// 🔴 上传会话锁（AC4 · AD-A27.2）。
+  ///
+  /// 「上传中还能拖」必然产生两份顺序：界面一份、正在上传的那一份。
+  /// 收口方式不是"再存一份快照"（那恰恰造出了第二份数据，违反 AC3），
+  /// 而是**把 [items] 本身冻住** —— 快照与表单状态因此永远是同一个东西。
+  bool _orderLocked = false;
+
+  /// 能否重排：① 没有图正在传（即选即传期间）② 没有发布在途 ③ 不在上传会话锁里。
+  bool get canReorder => !isUploading && !publishing && !_orderLocked;
+
+  /// 整体取消，回到可编辑态（AC5）。
+  ///
+  /// 一次发布尝试里若有图片传失败，会话**保持锁定**等用户重试 ——
+  /// 重试沿用同一份顺序，不重新读表单状态。用户想改顺序，就得先走这里整体取消。
+  void cancelUploadSession() {
+    if (!_orderLocked) return;
+    _orderLocked = false;
+    notifyListeners();
+  }
+
   void removeImage(int index) {
     if (index >= 0 && index < items.length) {
       items.removeAt(index);
+      _releaseLockIfResolved();
       notifyListeners();
     }
+  }
+
+  /// 锁的唯一理由是「还有失败件等重试、重试要沿用同一份顺序」。
+  /// 失败件没了（重试成功 / 被用户删掉），理由就不在了，锁必须跟着放掉 ——
+  /// 否则「整体取消」按钮随 hasFailed 一起消失，顺序被永久锁死。
+  void _releaseLockIfResolved() {
+    if (_orderLocked && !publishing && !hasFailed) _orderLocked = false;
   }
 
   /// 上传所有待传/失败项。
@@ -144,6 +198,8 @@ class PublishController extends ChangeNotifier {
       }
       notifyListeners();
     }
+    _releaseLockIfResolved();
+    notifyListeners();
   }
 
   /// 发布：先确保图片全部上传成功；有失败件返回 null（调用方提示重试）。
@@ -151,19 +207,26 @@ class PublishController extends ChangeNotifier {
   Future<int?> publish({required String idempotencyKey, int? petId}) async {
     if (!canPublish) return null;
     publishing = true;
+    // AC4：状态机从这一刻起接管顺序 —— 重排入口即刻停响应，直到发布成功或整体取消。
+    _orderLocked = true;
     notifyListeners();
     try {
       await uploadAll();
-      if (!allUploaded) return null; // 仍有失败件 → 让用户重试，不提交
+      // 仍有失败件 → 让用户重试，不提交。**锁不解除**：重试要沿用同一份顺序（AC5）。
+      if (!allUploaded) return null;
       final urls = items.map((i) => i.url!).toList();
       // 🛡 **与图片同序等长**：后端对长度不符的处理是**整组作废**（不做部分采信），
       // 所以量不出来的位置也要占一个 null，绝不能"跳过不放"。
       final sizes = items.map((i) => i.size).toList();
       final growth = type == ContentType.growthMoment;
+      final trimmed = text.trim();
       return await repository.publish(
         type: type,
         petId: growth ? petId : null,
-        text: text.trim().isEmpty ? null : text.trim(),
+        text: trimmed.isEmpty ? null : trimmed,
+        // 🔴 只发正文里还留着 `@昵称` 的那些 id（插完又删掉的不算，否则对方会收到
+        //    一条点进去正文里根本没有他的通知）。服务端还会再洗一遍。
+        mentionedUserIds: mentions.userIdsIn(trimmed),
         imageUrls: urls,
         imageSizes: sizes,
         eventDate: growth ? (eventDate ?? DateTime.now()) : null,
@@ -173,6 +236,9 @@ class PublishController extends ChangeNotifier {
       );
     } finally {
       publishing = false;
+      // 走到这里只有两种情形：发布成功，或抛了异常。两者都不该继续锁着 ——
+      // 仍有失败件的那条路在上面 `return null` 时就出去了，锁留给它。
+      if (allUploaded) _orderLocked = false;
       notifyListeners();
     }
   }

@@ -679,3 +679,40 @@ main > h2:first-child { margin-top: 0; }
 /* 大区之间的断点（如「商品表单」→「SKU 维护」）。
    .s-card 默认的 margin-bottom:14px 是同一区内相邻卡片的节奏，跨区需要更明显的间隔。 */
 .s-section { margin-top: 20px; }
+
+/* ===== B18 库存（V1.3.0 Story 10.4）===== */
+/* 🔴 售罄行整行红底（AC1）：状态徽标一个人在第六列，运营扫表时看的是行本身。 */
+tr.row-danger td { background: var(--danger-bg); }
+/* 抽屉：上半流水摘要是一张窄表，下半四个操作页签。 */
+.inv-drawer .drawer-sub { margin: 0 0 10px; font-size: var(--fs-md); }
+.inv-drawer .inv-movements { margin-top: 14px; }
+.inv-drawer .inv-mini { width: 100%; font-size: var(--fs-xs); }
+.inv-drawer .inv-mini td, .inv-drawer .inv-mini th { padding: 4px 6px; }
+.inv-drawer .inv-tabs { margin-top: 14px; }
+.inv-drawer .inv-tab-panel { padding-top: 10px; }
+.inv-drawer .inv-tab-panel label { display: block; margin-bottom: 8px; }
+.inv-drawer .inv-tab-panel label > span { display: block; color: var(--muted); font-size: var(--fs-xs); }
+.inv-drawer .inv-tab-panel .inp { width: 100%; box-sizing: border-box; }
+
+/* ===== D1 服务范围与运费（V1.3.0 Story 10.6）===== */
+/* 🔴 区域是 div 网格不是 <table>：每行自己是一个 <form>（一行一次 upsert），
+   而 <form> 不能直接包 <tr> —— 用表格的话浏览器会把 form 提到表外，行里的输入全部脱离它。 */
+.ship-zones { display: grid; gap: 6px; }
+.ship-zone-head, .ship-zone-form {
+    display: grid; grid-template-columns: 1.2fr 1.2fr 1.2fr .8fr auto; gap: 8px; align-items: center;
+}
+.ship-zone-head { color: var(--muted); font-size: var(--fs-xs); padding: 0 2px; }
+.ship-zone-row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+/* 区域表 5 列 + 保存钮，比 .cfg-card 默认的 720px 宽 —— 挤在 720px 里每个输入只剩 ~100px。 */
+#cfg-ship-zones { max-width: 980px; }
+.ship-zone-row .inline-error-slot { grid-column: 1 / -1; margin: 0; }
+.ship-zone-row.is-off .ship-zone-form .inp { opacity: .6; }
+.ship-zone-save { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
+.ship-zones-new { margin-top: 14px; }
+.ship-zones-new h3 { font-size: var(--fs-sm); margin: 0 0 6px; }
+
+/* C2 复购引擎卡（bug 20260923-551）：印尼语表头长，全局 `th { nowrap }` + grid 子项默认 min-width:auto
+   会把卡撑出白框。只作用于本页四张卡（.repurchase-kpi），不影响其它页的 card-kpi 观感。 */
+.card-kpi.repurchase-kpi { min-width: 0; overflow-x: auto; }
+.card-kpi.repurchase-kpi th,
+.card-kpi.repurchase-kpi td { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; }

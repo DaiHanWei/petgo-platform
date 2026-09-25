@@ -77,7 +77,19 @@ public class ShopFinanceDashboardService {
                 SELECT COALESCE(SUM(COALESCE(r.payout_channel_fee, 0)), 0) FROM return_requests r
                 WHERE r.refunded_at >= ? AND r.refunded_at < ?
                 """, f, t);
-        // 售后成本：补偿溢价 + 激励溢价 + 平台承担的回程运费
+        // 售后成本（Story 5-3 口径标注 · SHOP-FR-28）。
+        //
+        // 口径 = 平台责任补偿溢价 + 转币激励溢价 + 平台承担的回程运费，
+        //        按 return_requests.refunded_at 落期。
+        //
+        // 🔴 **已知缺口**：后台「订单异常处置 · 整单取消」发的补偿溢价走
+        //    AdminShopOrderExceptionService.payCompensationPremium —— 它**只落
+        //    pawcoin_transactions 的 BONUS，不建 return_requests 行**，
+        //    因此**这条路的补偿从来不计入本口径**。
+        //    本版两项补偿比例都是 0（Story 2-2），数字上无差别；
+        //    标注在这里是为了**下一版恢复退货时不被这个盲区骗**。
+        //
+        // ⚠️ 页面上的口径标注（让运营看得见这条缺口）属后台页面改动，见 Story 9-5。
         long afterSalesCost = scalar("""
                 SELECT COALESCE(SUM(r.compensation_premium + r.incentive_premium
                                     + r.shipback_reimbursed), 0)
@@ -151,18 +163,79 @@ public class ShopFinanceDashboardService {
                 """, staleDays);
     }
 
-    /** 当前售罄 SKU 数（缺货损失的服务端近似读数）。 */
+    /**
+     * 当前售罄 SKU 数 —— <b>所有未删除规格中可售库存为 0 的数量</b>
+     * （Story 5-3 · SHOP-FR-28 · AD-S12）。
+     *
+     * <p>⚠️ <b>缺货损失只给服务端可得的近似</b>：AC 写的是 {@code out_of_stock_viewed}
+     * 事件量，那是<b>客户端事件</b>、在 PostHog 里。这里给的是服务端侧的替代读数，
+     * 两者不是一回事 —— 把它当成「缺货损失」本身是误导。
+     *
+     * <p>🔴 <b>旧口径让这个数长期偏小，运营会因此漏掉断货</b>。两处原因都已修掉：
+     * <ul>
+     *   <li><b>驱动表换成 {@code shop_skus} + {@code LEFT JOIN}</b>：旧写法从
+     *       {@code sku_inventory} 内连接出发，<b>从未建过库存行的规格一条都不计</b> ——
+     *       而「从来没进过货」恰恰是最极端的售罄。
+     *       ⚠️ 方向不能反：{@code FROM sku_inventory LEFT JOIN shop_skus} 等于说
+     *       「库存行可以没有 SKU」，照样漏。</li>
+     *   <li><b>去掉 {@code p.is_active = true}</b>：{@code shop_products.is_active}
+     *       建列时 {@code DEFAULT FALSE}，于是「新建但未上架」的商品其规格全被排除。
+     *       售罄数服务的是「要不要补货」这个决定 —— 未上架商品的规格库存为 0，
+     *       运营照样需要知道，否则上架当天就是空的。
+     *       （上架/未上架的<b>拆分展示</b>是页面层的事，见 Story 9-5。）</li>
+     * </ul>
+     *
+     * <p>🔴 <b>两个 {@code COALESCE} 都不能省</b>（本方法最容易写错的一行）：
+     * LEFT JOIN 无匹配时 {@code actual} 与 {@code locked} <b>都是 NULL</b>，
+     * 而 {@code NULL - NULL <= 0} 在 SQL 里求值为 NULL（不是 true），整行会被
+     * {@code WHERE} 过滤掉 —— 那就等于什么都没修。
+     *
+     * <p>🔴 <b>「未删除」在当前 schema 下 = 全表</b>：{@code shop_skus} 没有任何软删除列
+     * （无 {@code deleted_at}、无 {@code is_active}），且 {@code admin/shop/} 下没有
+     * 删除 SKU 的服务方法或端点。<b>将来若给 SKU 引入软删除，这里必须同步加过滤条件</b>，
+     * 否则口径会静默漂移回「偏大」的那一侧。
+     */
     @Transactional(readOnly = true)
     public long outOfStockSkuCount() {
-        return scalar("""
-                SELECT COUNT(*) FROM sku_inventory i
-                JOIN shop_skus s ON s.id = i.sku_id
-                JOIN shop_products p ON p.id = s.product_id
-                WHERE p.is_active = true AND (i.actual - i.locked) <= 0
-                """);
+        return scalar(OUT_OF_STOCK_SKU_COUNT_SQL);
     }
 
+    /**
+     * 售罄数的 SQL。抽成常量供 L0 护栏测试读取
+     * （{@code ShopFinanceDashboardSqlTest}）。
+     *
+     * <p>⚠️ SQL 文本断言是<b>弱护栏</b>：它证明不了结果对，只证明「没人把老写法抄回来」。
+     * 正确性由 L1 的真库计数保证（A/B/C/D 四类规格）。<b>两条都要，别用一条顶替另一条。</b>
+     */
+    static final String OUT_OF_STOCK_SKU_COUNT_SQL = """
+            SELECT COUNT(*) FROM shop_skus s
+            LEFT JOIN sku_inventory i ON i.sku_id = s.id
+            WHERE COALESCE(i.actual, 0) - COALESCE(i.locked, 0) <= 0
+            """;
+
     // ---------- 8.3 对账（AB-13D） ----------
+
+    /*
+     * 🔴 PawCoin「可用 / 冻结中」的口径定义（Story 5-3 · SHOP-FR-28）。
+     * ⚠️ **本 story 只写定义，不实现查询、不加字段、不加方法** —— 这两个数的查询与展示
+     *    随 Story 9-5 落地（它的前置是 admin 主题 Epic 10，页面还没重构完，
+     *    现在加一个没人调用的死方法只会让下一个人猜它为什么在这儿）。
+     *
+     * 定义：
+     *   · **冻结中** ＝ 已被**待支付订单**占用、尚未扣减的部分
+     *                ＝ SUM(shop_orders.coin_amount) WHERE status = 'PENDING_PAYMENT'
+     *                  （且支付窗未过期）
+     *   · **可用**   ＝ pawcoin_wallets.balance − 冻结中
+     *
+     * 为什么要现算、而不是读一个列：
+     *   · PawCoinWallet **只有一个 balance 列，没有冻结列**；
+     *   · PawCoin 是在**支付时刻**才扣的 —— CheckoutService.settlePawCoinSegment
+     *     走 PawCoinTxnType.SPEND，**不是下单时扣**。于是「下单了但还没付」这段时间里，
+     *     币还在 balance 里躺着，却已经被一笔订单占住了。
+     *   · 当前后台展示的是那个**不分可用/冻结中的单一数字**
+     *     （AdminUserDetailView.pawcoinBalance → templates/admin/user-detail.html）——
+     *     运营看到的余额会比用户实际能花的多，这正是 9-5 要修的。
+     */
 
     /**
      * 对账。

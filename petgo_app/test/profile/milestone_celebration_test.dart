@@ -17,7 +17,10 @@ Widget _host(MilestoneItem item, {String petName = 'Momo', void Function()? onSh
           builder: (context) => Center(
             child: ElevatedButton(
               onPressed: () =>
-                  showMilestoneCelebration(context, item, petName: petName, onShare: onShare),
+                  showMilestoneCelebration(context, item,
+                      petName: petName,
+                      path: MilestoneCelebrationPath.instant,
+                      onShare: onShare),
               child: const Text('go'),
             ),
           ),

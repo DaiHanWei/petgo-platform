@@ -57,4 +57,20 @@ public interface UserHideRelationReader {
      * 本方法只认 REPORT（「已举报」标记）。
      */
     boolean isReported(long holderId, long targetId);
+
+    /**
+     * 这批人里，哪些与 {@code userId} <b>任一方向</b>存在隐藏关系（V1.3.0 batch-b1 Story 3.1）。
+     *
+     * <p>🔴 <b>批量版，一次查询</b>。加在这个端口上而不是让调用方自己写查询 ——
+     * AD-7 的原话是「四处共用同一个出口，禁各写各的」，而 @ 候选集一次要判 50 个人，
+     * 逐个调 {@link #isHidden} 就是 50 条查询（Story 3.1 AC4 明确要求无 N+1）。
+     *
+     * <p>⚠️ <b>不分来源</b>，与 {@link #isHidden} 同口径：拉黑与举报隐藏都算。
+     * <p>⚠️ <b>双向</b>：任一方向存在关系，双方就互不出现。只判单向的表现是
+     * 「我拉黑了他，他还能 @ 到我」。
+     *
+     * @param others 待判定的一批人（空表直接返回空集，不发查询）
+     * @return {@code others} 里命中的那些 id
+     */
+    java.util.Set<Long> hiddenEitherWay(long userId, java.util.Collection<Long> others);
 }

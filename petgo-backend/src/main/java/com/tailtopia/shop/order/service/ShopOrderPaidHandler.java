@@ -35,6 +35,8 @@ public class ShopOrderPaidHandler {
     private final ShopOrderPaymentService payments;
     private final CheckoutService checkout;
 
+    /** Story 3-4：新订单 Lark 提醒的待发登记。它的失败不得影响本事务（见 onPaid 末尾）。 */
+
     public ShopOrderPaidHandler(ShopOrderRepository orders, ShopOrderPaymentService payments,
             CheckoutService checkout) {
         this.orders = orders;
@@ -67,5 +69,12 @@ public class ShopOrderPaidHandler {
         }
         checkout.settlePawCoinSegment(order);
         log.info("电商订单支付到账 order={} intent={}", order.getPublicToken(), event.publicToken());
+        // 🔴 Story 3-4 的「登记待提醒」已于 v1.3.0 shop-v2 复审 #6 / #13 挪走：
+        //    改由 ShopOrderPaidNotifyListener 监听 ShopOrderPaidEvent（AFTER_COMMIT）完成。
+        //    ① #6：纯 PawCoin 单走 settlePureCoin，**根本不到这个方法**，挂在这里等于
+        //       整条纯币路径永不入队；挂在状态迁移发出的事件上才两条都覆盖。
+        //    ② #13：在本事务内 REQUIRES_NEW 抢先提交，外层一旦回滚就留下指向
+        //       「从未付款成功」订单的孤儿提醒行；AFTER_COMMIT 从机制上消除它。
+        //    **不要把它加回来。**
     }
 }

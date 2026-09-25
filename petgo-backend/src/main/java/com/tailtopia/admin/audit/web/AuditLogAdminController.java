@@ -3,6 +3,7 @@ package com.tailtopia.admin.audit.web;
 import com.tailtopia.admin.audit.domain.AdminAuditLog;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.audit.service.AdminAuditService;
+import com.tailtopia.admin.audit.service.AuditChainVerifier;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -44,8 +45,30 @@ public class AuditLogAdminController {
 
     private final AdminAuditService auditService;
 
-    public AuditLogAdminController(AdminAuditService auditService) {
+    /** 哈希链校验（V1.3.0 Story 6.5 AC1 页头徽标；既有 verifier，本 story 不改其算法）。 */
+    private final AuditChainVerifier chainVerifier;
+
+    public AuditLogAdminController(AdminAuditService auditService, AuditChainVerifier chainVerifier) {
         this.auditService = auditService;
+        this.chainVerifier = chainVerifier;
+    }
+
+    /** 徽标复算的窗口大小：审计表 append-only 永久保留，每开一次页全表重算哈希不是页面该干的事（story T1 给的退路）。 */
+    private static final int CHAIN_WINDOW = 500;
+
+    /**
+     * 哈希链状态徽标（Story 6.5）：页面载入后 htmx 异步取，只复算<b>最近 {@value #CHAIN_WINDOW} 行</b>
+     * （文案里如实写「已校验 N 行」）；全链结论走 {@code verifyAll()} 的运维核验路径。非 htmx 直达回整页。
+     * 查看权限与列表同码。
+     */
+    @GetMapping("/admin/audit-logs/chain-status")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('admin.view_logs')")
+    public String chainStatus(@RequestHeader(value = "HX-Request", required = false) String hxRequest, Model model) {
+        if (hxRequest == null) {
+            return "redirect:/admin/audit-logs";
+        }
+        model.addAttribute("chain", chainVerifier.verifyRecent(CHAIN_WINDOW));
+        return "admin/audit-logs :: chainStatus";
     }
 
     @GetMapping("/admin/audit-logs")
@@ -79,7 +102,8 @@ public class AuditLogAdminController {
         model.addAttribute("actor", actor);
         model.addAttribute("action", actionFilter);
 
-        // HTMX 局部刷新返结果片段；整页请求返完整视图。
+        // HTMX 局部刷新返结果片段（partial：摘要「匹配记录」随片段 oob）；整页请求返完整视图。
+        model.addAttribute("partial", hxRequest != null);
         return hxRequest != null ? "admin/audit-logs :: resultsFragment" : "admin/audit-logs";
     }
 }

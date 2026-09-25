@@ -34,6 +34,12 @@ abstract class TimelineRepository {
 
   /// 访客看到的宠物档案（**只有访客态有**：作者态走 `ProfileRepository.getMyProfile`）。
   Future<VisitorProfile> getVisitorProfile(String token);
+
+  /// 站内访客档案（V1.3.0 batch-b1 Story 2.3）：按 petId、仅登录可用。
+  ///
+  /// ⚠️ 回的是**同一个** [VisitorProfile] —— 服务端两条路径落到同一层投影（AD-4 Rule 2），
+  /// 客户端也就不该为它另起一个模型。
+  Future<VisitorProfile> getInAppVisitorProfile(int petId);
 }
 
 class DioTimelineRepository implements TimelineRepository {
@@ -51,7 +57,9 @@ class DioTimelineRepository implements TimelineRepository {
       // ⚠️ 访客侧**不分页**：服务端只给「最近 N 条」（访客是看一眼别人的宠物，
       // 不是翻完整个档案），故不传 cursor、恒当作没有下一页。
       final resp = await dio.get<Map<String, dynamic>>(
-        ApiPaths.sharedPetTimeline(scope.token!),
+        scope.isInApp
+            ? ApiPaths.inAppPetTimeline(scope.petId!)
+            : ApiPaths.sharedPetTimeline(scope.token!),
         queryParameters: {'limit': limit},
       );
       final items = (resp.data!['items'] as List<dynamic>? ?? const [])
@@ -72,6 +80,10 @@ class DioTimelineRepository implements TimelineRepository {
   Future<CalendarMonth> getCalendar(int year, int month,
       {ArchiveScope scope = const ArchiveScope.me()}) async {
     final resp = await dio.get<Map<String, dynamic>>(
+      // ⚠️ 站内访客态**没有**日历端点（访客视图没有日历，两次拍板不做）——
+      // 这里只可能是分享 token 态或作者态。`token!` 是**刻意的 fail-fast**：
+      // 真有人从站内态调到这儿，当场抛比拼一个 `//` 的畸形 URL（或者更糟，
+      // 悄悄回落到作者态看到自己的档案）都容易发现。
       scope.isVisitor ? ApiPaths.sharedPetCalendar(scope.token!) : ApiPaths.petProfileCalendar,
       queryParameters: {'year': year, 'month': month},
     );
@@ -84,6 +96,7 @@ class DioTimelineRepository implements TimelineRepository {
     final iso = '${date.year}-${date.month.toString().padLeft(2, '0')}'
         '-${date.day.toString().padLeft(2, '0')}';
     final resp = await dio.get<Map<String, dynamic>>(
+      // token! 同上：站内态没有某天详情，走到这儿就该当场炸。
       scope.isVisitor ? ApiPaths.sharedPetDay(scope.token!) : ApiPaths.petProfileDay,
       queryParameters: {'date': iso},
     );
@@ -93,7 +106,11 @@ class DioTimelineRepository implements TimelineRepository {
   @override
   Future<ArchiveStats> getStats({ArchiveScope scope = const ArchiveScope.me()}) async {
     final resp = await dio.get<Map<String, dynamic>>(
-      scope.isVisitor ? ApiPaths.sharedPetStats(scope.token!) : ApiPaths.petProfileArchiveStats,
+      scope.isInApp
+          ? ApiPaths.inAppPetStats(scope.petId!)
+          : scope.isVisitor
+              ? ApiPaths.sharedPetStats(scope.token!)
+              : ApiPaths.petProfileArchiveStats,
     );
     return ArchiveStats.fromJson(resp.data!);
   }
@@ -101,6 +118,12 @@ class DioTimelineRepository implements TimelineRepository {
   @override
   Future<VisitorProfile> getVisitorProfile(String token) async {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.sharedPetProfile(token));
+    return VisitorProfile.fromJson(resp.data!);
+  }
+
+  @override
+  Future<VisitorProfile> getInAppVisitorProfile(int petId) async {
+    final resp = await dio.get<Map<String, dynamic>>(ApiPaths.inAppPetProfile(petId));
     return VisitorProfile.fromJson(resp.data!);
   }
 }
@@ -136,21 +159,37 @@ final dayDetailProvider = FutureProvider.family<DayDetail, DateTime>(
 // 下面的 `xxxProviderFor(scope)` 选择器是**唯一的分叉点**，
 // 页面组件只认选择器，不自己判断作用域。
 
-/// 访客档案（family：分享 token）。
-final visitorProfileProvider = FutureProvider.family<VisitorProfile, String>(
-  (ref, token) => ref.read(timelineRepositoryProvider).getVisitorProfile(token),
+// ⚠️ 这三个 provider 的族键是 **[ArchiveScope] 本身**，不是分享 token。
+// V1.3.0 batch-b1 Story 2.3 起访客有**两种**来源（分享 token / 站内 petId），
+// 族键若还是 String，站内那条就只能靠 `scope.token!` 取值 —— 当场空指针。
+// 用作用域本身做键，两种来源天然分成两族，选择器也不必再拆分支。
+
+// 🔴 三个都是 `isAutoDispose: true`。Riverpod 3 的 family **默认 keep-alive**，
+// 而 V1.3.0 batch-b1 Story 2.3 之后这一族是**可反复进出的站内页**（从别人主页点宠物卡）——
+// 留着默认值有两个后果（code-review 2026-09-15）：
+// ① 同一只宠物再进来看到的是本次进程里第一次取到的数据，永远不刷新；
+// ② 换账号之后仍然吃上一个账号的缓存，于是**服务端那道拉黑守卫根本不会被调用**
+//    （与 bug 20260730-421 / 446 同型）。
+// ⚠️ 分享 token 那一支同样受益：那一屏也是 push 进来的一次性页面。
+
+/// 访客档案（family：作用域）。
+final visitorProfileProvider = FutureProvider.family<VisitorProfile, ArchiveScope>(
+  (ref, scope) => scope.isInApp
+      ? ref.read(timelineRepositoryProvider).getInAppVisitorProfile(scope.petId!)
+      : ref.read(timelineRepositoryProvider).getVisitorProfile(scope.token!),
+  isAutoDispose: true,
 );
 
-/// 访客统计栏（family：分享 token）。
-final visitorStatsProvider = FutureProvider.family<ArchiveStats, String>(
-  (ref, token) =>
-      ref.read(timelineRepositoryProvider).getStats(scope: ArchiveScope.visitor(token)),
+/// 访客统计栏（family：作用域）。
+final visitorStatsProvider = FutureProvider.family<ArchiveStats, ArchiveScope>(
+  (ref, scope) => ref.read(timelineRepositoryProvider).getStats(scope: scope),
+  isAutoDispose: true,
 );
 
-/// 访客时间线（family：分享 token）。服务端不分页，一次给最近 N 条。
-final visitorTimelineProvider = FutureProvider.family<TimelinePage, String>(
-  (ref, token) =>
-      ref.read(timelineRepositoryProvider).getTimeline(scope: ArchiveScope.visitor(token)),
+/// 访客时间线（family：作用域）。服务端不分页，一次给最近 N 条。
+final visitorTimelineProvider = FutureProvider.family<TimelinePage, ArchiveScope>(
+  (ref, scope) => ref.read(timelineRepositoryProvider).getTimeline(scope: scope),
+  isAutoDispose: true,
 );
 
 /// 访客日历月视图（family：token + 年月）。
@@ -178,16 +217,18 @@ final visitorDayDetailProvider =
 // 而不是散落在每个 `ref.watch` 旁边。
 
 FutureProvider<ArchiveStats> archiveStatsProviderFor(ArchiveScope scope) =>
-    scope.isVisitor ? visitorStatsProvider(scope.token!) : archiveStatsProvider;
+    scope.isVisitor ? visitorStatsProvider(scope) : archiveStatsProvider;
 
 FutureProvider<TimelinePage> timelineFirstPageProviderFor(ArchiveScope scope) =>
-    scope.isVisitor ? visitorTimelineProvider(scope.token!) : timelineFirstPageProvider;
+    scope.isVisitor ? visitorTimelineProvider(scope) : timelineFirstPageProvider;
 
 FutureProvider<CalendarMonth> calendarMonthProviderFor(
   ArchiveScope scope,
   int year,
   int month,
 ) =>
+    // ⚠️ 站内访客态没有日历（两次拍板不做）—— 真有人调到这儿会因 token 为 null 而崩，
+    // 那比悄悄回落到作者态（看到自己的档案）好。
     scope.isVisitor
         ? visitorCalendarProvider((token: scope.token!, year: year, month: month))
         : calendarMonthProvider((year: year, month: month));

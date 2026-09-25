@@ -48,3 +48,14 @@ String postShareUrl(String shareToken, {String baseUrl = kH5BaseUrl}) {
 /// 两份都带就又分不出来了。
 String postShareQrUrl(String shareToken, {String baseUrl = kH5BaseUrl}) =>
     '${postShareUrl(shareToken, baseUrl: baseUrl)}?src=qr';
+
+/// 由不可枚举 public token 拼出**场所**对外分享 URL（后端 `GET /place/{token}` 直出 H5）。
+///
+/// 🔴 **路径里绝不能是场所名或自增 id**（Story 1.10 · AC2 · AD-1 Rule 3 / NFR-1）：
+/// 用名字或序号拼链接，等于让任何人按名字 / 按序号把全站场所爬一遍。
+///
+/// 与名片 / 里程碑 / 单条内容三页同 H5 子域；非用户明确指令不得改默认值。
+String placeShareUrl(String publicToken, {String baseUrl = kH5BaseUrl}) {
+  final trimmed = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+  return '$trimmed/place/$publicToken';
+}

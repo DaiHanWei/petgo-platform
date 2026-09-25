@@ -49,7 +49,9 @@ class FeedResponseContractTest {
             // V1.1.6 Story 5.1（FR-74）：运营标签随作者下发。**空表不下发**（NON_NULL 省略）。
             "authorTags",
             // V1.1.6 Story 5.2（FR-75）：内容装饰标签。同样空表不下发。
-            "decorationTags");
+            "decorationTags",
+            // V1.3.0 batch-b1 Story 3.3：正文里的 @（能不能点是服务端算好的）。同样空表不下发。
+            "mentions");
 
     /** 游标分页信封字段集 —— 对应 App FeedPage.fromJson 的 {items, nextCursor, hasMore}。 */
     /** V1.1.6 Story 16.5 起信封多一个 {@code rankMode}（非 Feed 出口时省略）。 */
@@ -77,7 +79,9 @@ class FeedResponseContractTest {
                 // ⚠️ 用 Arrays.asList 而不是 List.of —— 后者不接受 null，
                 // 而尺寸列**恰恰要用 null 占位保持与图片列的下标对齐**（AD-5 Rule 2）。
                 Arrays.asList(new ImageSize(1200, 1600), null),
-                true, 5L);
+                true, 5L,
+                // V1.3.0 batch-b1 Story 3.3：@ 投影。
+                List.of(new com.tailtopia.mention.dto.MentionView(9L, "阿花", true)));
 
         Map<String, Object> m = wire(item);
         assertThat(m.keySet())
@@ -96,7 +100,7 @@ class FeedResponseContractTest {
                 42L, 7L, null, null, true, null, null,
                 ContentType.GROWTH_MOMENT, null, null, 0L,
                 Instant.parse("2026-06-05T00:00:00Z"), ContentVisibility.PRIVATE,
-                null, null, false, 0L);
+                null, null, false, 0L, null);
 
         Map<String, Object> m = wire(item);
         assertThat(m.keySet())
@@ -109,6 +113,8 @@ class FeedResponseContractTest {
         assertThat(m).doesNotContainKey("firstImageUrl");   // 纯文字卡，App hasImage=false
         assertThat(m).doesNotContainKey("imageUrls");        // 同上：无图即整列省略
         assertThat(m).doesNotContainKey("imageSizes");       // 存量内容亦然（零回填）
+        // Story 3.3：没 @ 人的内容整列省略（存量内容恒如此 —— 存量文本不回溯解析）。
+        assertThat(m).doesNotContainKey("mentions");
     }
 
     @Test

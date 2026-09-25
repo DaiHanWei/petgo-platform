@@ -32,7 +32,7 @@ public class FailedConsultRequest {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    /** 内部关联的会话 id（不外露；仅排查用）。 */
+    /** 内部关联的会话 id（**仅后台可见**：V1.3.0 Story 9.2 起抽屉用它拼 B22 深链；不进任何对客响应）。 */
     @Column(name = "session_id")
     private Long sessionId;
 
@@ -127,6 +127,16 @@ public class FailedConsultRequest {
 
     public Long getUserId() {
         return userId;
+    }
+
+    /**
+     * 关联会话 id（可空：请求在建会话之前就失败时没有）。
+     *
+     * <p>V1.3.0 Story 9.2 新增读取方：抽屉里的「去取证」要拿它拼 B22 的页内深链。
+     * 字段本来就在，只是一直没人读。
+     */
+    public Long getSessionId() {
+        return sessionId;
     }
 
     public Instant getSubmittedAt() {

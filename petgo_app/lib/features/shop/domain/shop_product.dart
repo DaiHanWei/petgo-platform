@@ -124,3 +124,37 @@ String formatIdr(int amount) {
   }
   return 'Rp ${amount < 0 ? '-' : ''}$buf';
 }
+
+/// 每页条数（Story 4-5 · SHOP-NFR-03）。与后端 `DEFAULT_PAGE_SIZE` 对齐。
+const int kShopPageSize = 20;
+
+/// 商品列表的一页（Story 4-5 · SHOP-FR-13）。
+///
+/// 对应后端 `{items, nextCursor, hasMore}` 信封，字段命名与 Feed / 评论的分页信封一致。
+///
+/// 🔴 [nextCursor] 在末页**整键省略**（后端 NON_NULL）—— 缺键与 null 同样读成 null，
+/// 而 [hasMore] 是布尔、恒下发。判「还有没有下一页」一律看 [hasMore]，
+/// 不要看 `nextCursor != null`：两者本该一致，但只认一个才不会出现「两个判据打架」。
+class ShopProductPage {
+  const ShopProductPage({
+    required this.items,
+    required this.hasMore,
+    this.nextCursor,
+  });
+
+  final List<ShopProductSummary> items;
+  final String? nextCursor;
+  final bool hasMore;
+
+  static const ShopProductPage empty =
+      ShopProductPage(items: [], hasMore: false);
+
+  factory ShopProductPage.fromJson(Map<String, dynamic> j) => ShopProductPage(
+        items: (j['items'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(ShopProductSummary.fromJson)
+            .toList(growable: false),
+        nextCursor: j['nextCursor']?.toString(),
+        hasMore: j['hasMore'] == true,
+      );
+}

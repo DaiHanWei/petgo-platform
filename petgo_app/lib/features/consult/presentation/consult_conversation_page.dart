@@ -143,7 +143,8 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
         _suspendDeadlineAt = s.suspendDeadlineAt; // Story 3.8：封禁挂起态（H-5）
         // 后端报已评分即锁死评分入口（含补评分后 closedReason 仍 UNRATED 的情形）。
         if (s.rated) _rated = true;
-        if (s.vetId != null) _peerId = 'v_${s.vetId}';
+        // 对端账号用后端下发（带环境前缀，bug 519/521）；老后端未下发才回落旧格式。
+        if (s.vetId != null) _peerId = s.vetImUserId ?? 'v_${s.vetId}';
         // 顶栏对端身份（2026-08-07）。**只在拿到非空值时覆盖**：后端这三个字段是 fail-soft 的
         // （兽医账号查询抖一下就返回 null），偶发降级不该让已经显示出来的名字突然变空白。
         if (s.vetDisplayName != null) _vetName = s.vetDisplayName;
@@ -670,15 +671,11 @@ class _ConsultConversationPageState extends ConsumerState<ConsultConversationPag
                 key: const ValueKey('consultLeave'),
                 onTap: _leave,
                 borderRadius: BorderRadius.circular(10),
-                child: Container(
+                // 纯「‹」无底块，与全局标题栏返回键同形（决策 UI-2）。
+                child: const SizedBox(
                   width: 34,
                   height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF3F3F3),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.arrow_back, size: 18, color: AppColors.ink2),
+                  child: Icon(Icons.chevron_left_rounded, size: 28, color: AppColors.ink),
                 ),
               ),
               const SizedBox(width: 11),

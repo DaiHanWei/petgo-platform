@@ -7,6 +7,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.tailtopia.profile.domain.MilestoneAutoEvent;
 import com.tailtopia.profile.domain.MilestoneCatalog;
 import com.tailtopia.profile.domain.MilestoneCompletion;
 import com.tailtopia.profile.domain.MilestoneCompletionSource;
@@ -25,7 +26,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 /**
- * L0（Story 8.3，FR-42）：自动完成幂等 + 前缀/后缀解析 + 计数阈值 + 健康组合依赖。纯 Mockito，无 DB。
+ * L0（Story 8.3，FR-42）：自动完成幂等 + 事件寻址 + 计数阈值 + 健康组合依赖。纯 Mockito，无 DB。
+ *
+ * <p>V1.3.0 Story 1.1 起寻址由「物种前缀 + 语义后缀」改为按物种显式列举完整 code，本类的入参
+ * 随之从后缀字符串改为 {@link MilestoneAutoEvent}；三物种 × 全部自动事件的映射矩阵在
+ * {@code MilestoneAutoCompleteMapTest}。
  */
 class MilestoneCompletionServiceTest {
 
@@ -64,11 +69,12 @@ class MilestoneCompletionServiceTest {
     }
 
     @Test
-    void completesByPrefixAndSuffix() {
+    void completesByExplicitCodeLookup() {
         when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.CAT, 10)));
         long m = stubRoster(10, "C-S1");
 
-        boolean done = service.completeForOwner(7L, "S1", MilestoneCompletionSource.SYSTEM_AUTO);
+        boolean done = service.completeForOwner(7L, MilestoneAutoEvent.PROFILE_CREATED,
+                MilestoneCompletionSource.SYSTEM_AUTO);
 
         assertThat(done).isTrue();
         ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
@@ -82,19 +88,35 @@ class MilestoneCompletionServiceTest {
         long m = stubRoster(10, "C-S1");
         when(completions.existsByPetMilestoneId(m)).thenReturn(true); // 已完成
 
-        boolean done = service.completeForOwner(7L, "S1", MilestoneCompletionSource.SYSTEM_AUTO);
+        boolean done = service.completeForOwner(7L, MilestoneAutoEvent.PROFILE_CREATED,
+                MilestoneCompletionSource.SYSTEM_AUTO);
 
         assertThat(done).isFalse();
         verify(completions, never()).save(any());
     }
 
     @Test
-    void noopWhenSuffixNotInThisPetCatalog() {
-        // OTHER 清单无 S6（第一次洗澡）。
+    void noopWhenSpeciesHasNoNodeForThisEvent() {
+        // 通用清单没有「记录满 30 条」这个节点 —— 映射表显式给出 null，连查 roster 都不该发生。
         when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.OTHER, 10)));
-        when(milestones.findByPetProfileIdAndCode(10, "G-S6")).thenReturn(Optional.empty());
 
-        boolean done = service.completeForOwner(7L, "S6", MilestoneCompletionSource.SYSTEM_AUTO);
+        boolean done = service.completeForOwner(7L, MilestoneAutoEvent.GROWTH_MOMENT_30,
+                MilestoneCompletionSource.SYSTEM_AUTO);
+
+        assertThat(done).isFalse();
+        verify(milestones, never()).findByPetProfileIdAndCode(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyString());
+        verify(completions, never()).save(any());
+    }
+
+    /** roster 里查不到 code（roster 与目录走散）也只是 no-op，不抛异常。 */
+    @Test
+    void noopWhenCodeMissingFromRoster() {
+        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(profile(PetType.OTHER, 10)));
+        when(milestones.findByPetProfileIdAndCode(10, "G-S1")).thenReturn(Optional.empty());
+
+        boolean done = service.completeForOwner(7L, MilestoneAutoEvent.PROFILE_CREATED,
+                MilestoneCompletionSource.SYSTEM_AUTO);
 
         assertThat(done).isFalse();
         verify(completions, never()).save(any());
@@ -161,7 +183,8 @@ class MilestoneCompletionServiceTest {
         when(completions.existsByPetMilestoneId(m4)).thenReturn(true);
         when(completions.existsByPetMilestoneId(m5)).thenReturn(false, true);
 
-        boolean done = service.completeForOwner(7L, "M5", MilestoneCompletionSource.USER_CHECKIN);
+        boolean done = service.completeCodeForOwner(7L, "C-M5",
+                MilestoneCompletionSource.USER_CHECKIN, null);
 
         assertThat(done).isTrue();
         // 既保存 M5 完成，也自动解锁 L4。
@@ -190,7 +213,8 @@ class MilestoneCompletionServiceTest {
         when(completions.existsByPetMilestoneId(s5)).thenReturn(false, true); // guard false → 本次存 → 复查 true
         when(healthRecords.existsByPetProfileId(10)).thenReturn(true);
 
-        boolean done = service.completeForOwner(7L, "S5", MilestoneCompletionSource.SYSTEM_AUTO);
+        boolean done = service.completeForOwner(7L, MilestoneAutoEvent.PLATFORM_POST,
+                MilestoneCompletionSource.SYSTEM_AUTO);
 
         assertThat(done).isTrue();
         ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
@@ -216,7 +240,8 @@ class MilestoneCompletionServiceTest {
         when(completions.existsByPetMilestoneId(s5)).thenReturn(false, true);
         when(healthRecords.existsByPetProfileId(10)).thenReturn(false); // 无健康记录
 
-        service.completeForOwner(7L, "S5", MilestoneCompletionSource.SYSTEM_AUTO);
+        service.completeForOwner(7L, MilestoneAutoEvent.PLATFORM_POST,
+                MilestoneCompletionSource.SYSTEM_AUTO);
 
         // 仅 S5 落库，C-S16 不解锁。
         verify(completions, times(1)).save(any());

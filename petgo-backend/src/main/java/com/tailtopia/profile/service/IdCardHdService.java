@@ -11,17 +11,20 @@ import com.tailtopia.profile.domain.IdCard;
 import com.tailtopia.profile.domain.IdCardHdPurchase;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.dto.HdPurchaseResponse;
+import com.tailtopia.profile.event.IdHdPawcoinUnlockedEvent;
 import com.tailtopia.profile.repository.IdCardHdPurchaseRepository;
 import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.pay.ChargeRequest;
 import com.tailtopia.shared.pay.ChargeResult;
+import com.tailtopia.shared.pay.PayException;
 import com.tailtopia.shared.pay.PaymentGateway;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,10 +52,13 @@ public class IdCardHdService {
     private final PaymentIntentService paymentIntents;
     private final com.tailtopia.config.service.PlatformConfigService platformConfig;
     private final PaymentGateway gateway;
+    private final ApplicationEventPublisher events;
 
     public IdCardHdService(PetProfileRepository profiles, IdCardHdPurchaseRepository purchases,
             IdCardRepository idCards, PawCoinWalletService wallet, PaymentIntentService paymentIntents,
-            com.tailtopia.config.service.PlatformConfigService platformConfig, PaymentGateway gateway) {
+            com.tailtopia.config.service.PlatformConfigService platformConfig, PaymentGateway gateway,
+            ApplicationEventPublisher events) {
+        this.events = events;
         this.profiles = profiles;
         this.purchases = purchases;
         this.idCards = idCards;
@@ -74,7 +80,9 @@ public class IdCardHdService {
      * 购买某卡 HD（决策①按卡）。已解锁 → 短路 granted。PawCoin 同步扣费+置卡解锁+记 attempt；
      * QRIS 建 60min 窗意图 + attempt 行（存 cardId+intentId 供回调反查），返回支付信息。非本人卡 → 404。
      */
-    @Transactional
+    // noRollbackFor：GemPay 下单失败时 failChargeAttempt 已把意图置 FAILED，这一行必须随事务提交留档
+    // （request_id 可对账、重试走新单）；整笔回滚正是 2026-09-21 超时事故里 request_id 全丢的原因。
+    @Transactional(noRollbackFor = PayException.class)
     public HdPurchaseResponse purchaseCard(long userId, long cardId, PayChannel channel) {
         IdCard card = idCards.findByIdAndUserId(cardId, userId)
                 .orElseThrow(() -> AppException.notFound("身份证卡不存在"));
@@ -89,6 +97,8 @@ public class IdCardHdService {
                 card.markHdUnlocked();
                 idCards.save(card);
                 purchases.save(IdCardHdPurchase.of(userId, null, cardId, PayChannel.PAWCOIN, null));
+                // KTP 付费埋点：AFTER_COMMIT 上报，扣款回滚则不报（KtpUnlockAnalyticsListener）
+                events.publishEvent(new IdHdPawcoinUnlockedEvent(userId, price));
                 yield HdPurchaseResponse.granted();
             }
             case QRIS -> {
@@ -148,25 +158,41 @@ public class IdCardHdService {
     /** 当前用户是否已购买高清图（=已永久解锁）。 */
     @Transactional(readOnly = true)
     public boolean isUnlocked(long userId) {
-        return purchases.existsByUserId(userId);
+        return purchases.existsPaidByUserId(userId);
     }
 
-    /** HD 下载当前定价（前端展示用，与扣费同源实时读 pricing_config，417 同类修复）。 */
+    /**
+     * HD 下载当前定价（与扣费同源实时读 pricing_config，417 同类修复）。V1.3.0 Story 6.1 起下发接口改走 {@link #currentPricing()}（三价），
+     * 本方法保留作扣费口径对照 / 旧调用方入口（story「必须保留」列）。
+     */
     @Transactional(readOnly = true)
     public long currentHdPrice() {
         return platformConfig.pricing().getIdHdDownloadPrice();
     }
 
     /**
+     * 下发给 App 的 KTP 模块三价（V1.3.0 Story 6.1，契约 X-4）：KTP 卡高清 + 护照·护照内页 + 护照·登机牌，一次读 {@code pricing_config}
+     * 单行（无缓存），改价即时生效、只影响新发起的解锁；已解锁记录不受影响（扣费逻辑不动）。
+     */
+    @Transactional(readOnly = true)
+    public com.tailtopia.profile.dto.IdCardHdPricingResponse currentPricing() {
+        var p = platformConfig.pricing();
+        return new com.tailtopia.profile.dto.IdCardHdPricingResponse(p.getIdHdDownloadPrice(), p.getPassportPageUnlockPrice(),
+                p.getPassportBoardingUnlockPrice());
+    }
+
+    /**
      * 发起高清图购买。已购买 → 入口短路返回 UNLOCKED（不扣费不建行）。PawCoin 同步扣费+建购买行；
      * QRIS 建意图返回支付信息（到账由 {@link #completePurchase} 建行）。无档案 → 404。
      */
-    @Transactional
+    // noRollbackFor：GemPay 下单失败时 failChargeAttempt 已把意图置 FAILED，这一行必须随事务提交留档
+    // （request_id 可对账、重试走新单）；整笔回滚正是 2026-09-21 超时事故里 request_id 全丢的原因。
+    @Transactional(noRollbackFor = PayException.class)
     public HdPurchaseResponse purchase(long userId, PayChannel channel) {
         PetProfile pet = profiles.findByOwnerId(userId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
         // 入口短路（任何扣费之前）：已购买 → 已解锁，绝不二次扣费/二次建行（AC1 幂等）。
-        if (purchases.existsByUserId(userId)) {
+        if (purchases.existsPaidByUserId(userId)) {
             return HdPurchaseResponse.granted();
         }
         long petProfileId = pet.getId();
@@ -178,6 +204,7 @@ public class IdCardHdService {
                 wallet.debit(userId, price, PawCoinTxnType.SPEND, REF_TYPE, petProfileId,
                         "id-hd:" + petProfileId);
                 purchases.save(IdCardHdPurchase.of(userId, petProfileId, null, PayChannel.PAWCOIN, null));
+                events.publishEvent(new IdHdPawcoinUnlockedEvent(userId, price));
                 yield HdPurchaseResponse.granted();
             }
             case QRIS -> {
@@ -200,8 +227,15 @@ public class IdCardHdService {
         PaymentIntent entity = paymentIntents.findByToken(intent.token())
                 .orElseThrow(() -> AppException.notFound("支付意图不存在"));
         if (entity.getGatewayRef() == null) {
-            ChargeResult charge = gateway.createCharge(new ChargeRequest(
-                    entity.getPublicToken(), price, CURRENCY, channel.name(), purpose.name()));
+            ChargeResult charge;
+            try {
+                charge = gateway.createCharge(new ChargeRequest(
+                        entity.getPublicToken(), price, CURRENCY, channel.name(), purpose.name()));
+            } catch (RuntimeException e) {
+                // 下单失败：意图置 FAILED 留档（request_id 可对账），下次发起走新意图、新 request_id。
+                paymentIntents.failChargeAttempt(entity.getPublicToken());
+                throw e;
+            }
             Map<String, Object> meta = new LinkedHashMap<>();
             if (charge.rawMeta() != null) {
                 meta.putAll(charge.rawMeta());
@@ -223,7 +257,7 @@ public class IdCardHdService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void completePurchase(long userId, PayChannel channel, long paymentIntentId) {
-        if (purchases.existsByUserId(userId)) {
+        if (purchases.existsPaidByUserId(userId)) {
             return; // 幂等：回调/轮询重放
         }
         Long petProfileId = profiles.findByOwnerId(userId).map(PetProfile::getId).orElse(null);

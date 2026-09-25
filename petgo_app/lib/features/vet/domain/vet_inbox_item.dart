@@ -56,6 +56,7 @@ class VetSession {
     this.petSpecies,
     this.petAgeMonths,
     this.ownerHandle,
+    this.userImUserId,
   });
 
   final int id;
@@ -72,6 +73,12 @@ class VetSession {
   final int? petAgeMonths;
   final String? ownerHandle; // 不含 @，渲染时前置
 
+  // 对端机主 IM 账号（后端带环境前缀下发，bug 519/521）。C2C 对端一律用它，不自拼 u_。
+  final String? userImUserId;
+
+  /// C2C 对端 IM 账号：优先后端下发；老后端未下发时回落旧格式（老后端必为无前缀环境）。
+  String? get imPeerId => userImUserId ?? (userId != null ? 'u_$userId' : null);
+
   factory VetSession.fromJson(Map<String, dynamic> json) => VetSession(
         id: (json['id'] as num).toInt(),
         status: (json['status'] ?? 'IN_PROGRESS') as String,
@@ -83,6 +90,7 @@ class VetSession {
         petSpecies: json['petSpecies'] as String?,
         petAgeMonths: (json['petAgeMonths'] as num?)?.toInt(),
         ownerHandle: json['ownerHandle'] as String?,
+        userImUserId: json['userImUserId'] as String?,
       );
 }
 

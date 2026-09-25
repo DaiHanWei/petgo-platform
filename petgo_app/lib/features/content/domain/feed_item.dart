@@ -1,4 +1,5 @@
 import '../../auth/domain/user_tag.dart';
+import '../../mention/domain/mention_view.dart';
 import 'content_tag.dart';
 import 'feed_image_layout.dart';
 
@@ -101,6 +102,7 @@ class FeedItem {
     this.imageUrls = const [],
     this.authorTags = const [],
     this.decorationTags = const [],
+    this.mentions = const [],
   });
 
   final int id;
@@ -116,6 +118,12 @@ class FeedItem {
 
   /// 内容装饰标签（V1.1.6 Story 5.2 · FR-75）。挂在图片区**左下角位**。
   final List<ContentTag> decorationTags;
+
+  /// 正文里的 @（V1.3.0 batch-b1 Story 3.3）。
+  ///
+  /// 🔴 每一项的「能不能点、显示什么昵称」都是**后端算好的**（拉黑 AC3 / 注销 AC4）——
+  /// 渲染侧只照做，不自己判。空表 = 这段文字里没有可点的 @。
+  final List<MentionView> mentions;
 
   /// 内容类型线格式（DAILY/GROWTH_MOMENT/KNOWLEDGE）。
   final String type;
@@ -176,6 +184,30 @@ class FeedItem {
   /// 首图尺寸；无图 / 存量 / 那一张测不出来 → null（渲染侧按占位比例预留）。
   ImageSize? get firstImageSize => imageSizes.isEmpty ? null : imageSizes.first;
 
+  /// 互动计数回写用的拷贝（bug 20260923-538）：详情页评论/点赞后把新值写回 Feed 快照。
+  ///
+  /// ⚠️ 只开放点赞态、点赞数、评论数三项 —— 其余字段是内容本身，列表里没有就地改它们的场景。
+  FeedItem copyWith({int? likeCount, bool? liked, int? commentCount}) => FeedItem(
+        id: id,
+        authorId: authorId,
+        authorDeleted: authorDeleted,
+        type: type,
+        authorNickname: authorNickname,
+        authorAvatarUrl: authorAvatarUrl,
+        body: body,
+        firstImageUrl: firstImageUrl,
+        createdAt: createdAt,
+        visibility: visibility,
+        likeCount: likeCount ?? this.likeCount,
+        liked: liked ?? this.liked,
+        commentCount: commentCount ?? this.commentCount,
+        imageSizes: imageSizes,
+        imageUrls: imageUrls,
+        authorTags: authorTags,
+        decorationTags: decorationTags,
+        mentions: mentions,
+      );
+
   factory FeedItem.fromJson(Map<String, dynamic> json) => FeedItem(
         id: json['id'] as int,
         authorId: json['authorId'] as int,
@@ -198,6 +230,7 @@ class FeedItem {
         decorationTags: ContentTag.listFromJson(json['decorationTags']),
         imageUrls: (json['imageUrls'] as List?)?.whereType<String>().toList(growable: false) ??
             const [],
+        mentions: MentionView.listFromJson(json['mentions']),
       );
 }
 

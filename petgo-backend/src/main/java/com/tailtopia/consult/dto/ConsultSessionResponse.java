@@ -3,6 +3,7 @@ package com.tailtopia.consult.dto;
 import com.tailtopia.consult.domain.ClosedReason;
 import com.tailtopia.consult.domain.ConsultSession;
 import com.tailtopia.consult.domain.RatingPromptState;
+import com.tailtopia.shared.im.ImAccountMapper;
 import java.time.Instant;
 
 /**
@@ -24,6 +25,10 @@ import java.time.Instant;
  * <p>三者均**可空**：WAITING（尚无兽医）为 null；富化失败也降级为 null 而非报错
  * （见 {@code ConsultSessionService#vetPeerOf}）。前端取不到时必须回落到**中性文案**，
  * 不得再填任何具体人名。
+ *
+ * <p><b>{@code vetImUserId}（2026-09-24，bug 519/521）</b>：对端兽医的 IM 账号，经 {@link ImAccountMapper}
+ * 带环境前缀下发（生产 {@code v_<vetId>}，stag {@code stg_v_<vetId>}）。App 必须用它作 C2C 对端，
+ * <b>不得自拼</b> {@code v_}；无兽医时为 null（NON_NULL 省略）。
  */
 public record ConsultSessionResponse(
         long id,
@@ -40,7 +45,8 @@ public record ConsultSessionResponse(
         Instant suspendDeadlineAt,
         String vetDisplayName,
         String vetAvatarUrl,
-        Boolean vetOnline) {
+        Boolean vetOnline,
+        String vetImUserId) {
 
     /** 不带兽医身份的基础视图（写路径 / 尚无兽医的 WAITING 用）。 */
     public static ConsultSessionResponse of(ConsultSession s, long timeoutSeconds, boolean alreadyActive) {
@@ -76,7 +82,8 @@ public record ConsultSessionResponse(
                 s.getSuspendDeadlineAt(), // Story 3.8：非空=封禁挂起中，前端显逃生入口 + 倒计时
                 peer.displayName(),
                 peer.avatarUrl(),
-                peer.online());
+                peer.online(),
+                s.getVetId() == null ? null : ImAccountMapper.vetImId(s.getVetId()));
     }
 
     /**
