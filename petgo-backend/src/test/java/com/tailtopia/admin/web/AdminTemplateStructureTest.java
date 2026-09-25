@@ -811,6 +811,50 @@ class AdminTemplateStructureTest {
     }
 
     /**
+     * 🔴 审核 / 被举报用户队列：标题行任何状态下都要有一枚状态标（bug 20260924-566）。
+     *
+     * <p>553 把结果徽标挪到标题行，但它只在已处理（result 非空）时渲染；Pending 筛选下标题行什么都没有，
+     * 运营读成「状态标签不见了」。待处理条目必须在同一位置给「待审核」。
+     */
+    @Test
+    void queueRowsAlwaysShowAStatusBadge() throws IOException {
+        for (String f : List.of("fragments/review-queue.html", "fragments/tickets-queue.html")) {
+            String html = Files.readString(DIR.resolve(f), StandardCharsets.UTF_8).replaceAll("(?s)<!--.*?-->", "");
+            assertThat(html).as(f + "：已处理结果徽标").contains("th:if=\"${r.result != null}\"");
+            assertThat(html).as("🔴 " + f + "：待处理（result 为空）也必须有状态标")
+                    .containsPattern("q-result\"\\s+th:if=\"\\$\\{r\\.result == null\\}\"")
+                    .contains("#{admin.review.result.PENDING_REVIEW}");
+        }
+    }
+
+    /**
+     * 🔴 整页模板用了 admin-core.js 驱动的行为，就必须自己引 admin-core.js（bug 20260924-567）。
+     *
+     * <p>layout 只统一引 htmx，业务脚本按约定由各页在自己的 {@code <head>} 引。商品表单页漏了这一行：
+     * 保存钮 {@code disabled} 起步、靠配置卡脏检查放开 —— 脚本不在，按钮永远是灰的；上传控件也跟着失效。
+     * 页面渲染与其它测试全部正常，只有真人点保存才发现。
+     */
+    @Test
+    void fullPagesUsingCoreBehaviorsLoadAdminCoreJs() throws IOException {
+        Pattern needsCore = Pattern.compile(
+                "data-config-card|data-seed-uploader|data-requires-form|data-confirm|hx-(get|post|put|delete)=");
+        List<String> missing = new ArrayList<>();
+        try (Stream<Path> s = Files.list(DIR)) {
+            for (Path p : s.filter(f -> f.toString().endsWith(".html")).toList()) {
+                String html = Files.readString(p, StandardCharsets.UTF_8).replaceAll("(?s)<!--.*?-->", "");
+                if (html.contains("admin/layout :: page") && needsCore.matcher(html).find()
+                        && !html.contains("/admin/admin-core.js")) {
+                    missing.add(p.getFileName().toString());
+                }
+            }
+        }
+        assertThat(missing)
+                .as("🔴 这些整页用了 admin-core.js 的行为（配置卡保存 / 上传 / 必填门控 / 二次确认 / htmx）却没引它 —— "
+                        + "在 <head> 加 <script defer th:src=\"@{/admin/admin-core.js}\"></script>")
+                .isEmpty();
+    }
+
+    /**
      * 🔴 批量工作台素材墙必须保留带 id 的外层（bug 20260922-523 / 20260907-483 / 20260907-484）。
      *
      * <p>admin-core.js 的 refreshWall() 以 {@code #seedAssetWall} 为 htmx 目标做 outerHTML 替换。

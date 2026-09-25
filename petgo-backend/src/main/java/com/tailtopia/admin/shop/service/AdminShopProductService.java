@@ -218,16 +218,14 @@ public class AdminShopProductService {
     }
 
     /**
-     * Makanan 品类未填喂量时的警告文案（AC2）。返回 null 表示无需警告。
+     * Makanan 品类未填喂量时是否要显著警告（AC2）。
      *
      * <p>🔴 这句话必须出现在页面上——它是 FR-109 能否成立的唯一提醒点。
+     * 文案走 i18n（{@code admin.shop.form.feedingWarning}）：此前在这里写死中文，
+     * 英文 / 印尼语后台也只显示中文（bug 20260924-568）。服务层只判断要不要提示。
      */
-    public String feedingGuideWarning(ProductCategory category, List<FeedingGuideEntry> guide) {
-        if (category == ProductCategory.MAKANAN && (guide == null || guide.isEmpty())) {
-            return "此商品为 Makanan 但未填写每日建议喂量。该字段是粮量见底预估（复购提醒）的"
-                    + "唯一计算依据，留空将导致该商品永远不会触发补货提醒。";
-        }
-        return null;
+    public boolean needsFeedingGuideWarning(ProductCategory category, List<FeedingGuideEntry> guide) {
+        return category == ProductCategory.MAKANAN && (guide == null || guide.isEmpty());
     }
 
     void validateSku(ShopSkuForm f) {

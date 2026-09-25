@@ -61,6 +61,10 @@
             <span class="badge q-result" th:if="${r.result != null}"
                   th:classappend="${r.result == 'APPROVED' or r.result == 'PASS' or r.result == 'AUTO_PASSED'} ? 'badge-ok' : 'badge-danger'"
                   th:text="${#messages.msgOrNull('admin.review.result.' + r.result) ?: r.result}">结果</span>
+            <!--/* bug 20260924-566：待处理条目同一位置给「待审核」状态标签 —— 结果徽标只有已处理才有，
+                   Pending 筛选下标题行空空如也，运营读成「状态标签不见了」。任何状态下标题行都有一枚状态标。 */-->
+            <span class="badge badge-warn q-result" th:if="${r.result == null}"
+                  th:text="#{admin.review.result.PENDING_REVIEW}">待审核</span>
         </span>
         <span class="q-meta">
             <span class="badge badge-neutral" th:if="${r.row.subType() != null}" th:text="${r.row.subType()}">SUB</span>

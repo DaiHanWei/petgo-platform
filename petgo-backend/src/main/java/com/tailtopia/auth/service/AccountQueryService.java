@@ -247,7 +247,12 @@ public class AccountQueryService {
     public void touchLastActive(long userId, Instant now) {
         users.touchLastActiveAt(userId, now, now.atZone(ZoneOffset.UTC).toLocalDate()
                 .atStartOfDay(ZoneOffset.UTC).toInstant());
+        // 日报「昨日日活」：按印尼自然日逐日记录（last_active_at 只存最后一次，算不了历史某天的日活）。
+        users.recordActiveDay(userId, now.atZone(WIB).toLocalDate());
     }
+
+    /** 日报切日时区（运营在雅加达）。 */
+    private static final java.time.ZoneId WIB = java.time.ZoneId.of("Asia/Jakarta");
 
     private static LocalDate toUtcDate(Instant instant) {
         return instant == null ? null : instant.atZone(ZoneOffset.UTC).toLocalDate();

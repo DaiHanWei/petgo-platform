@@ -17,6 +17,10 @@
     <title th:text="#{admin.shop.form.title}">商品编辑 · TailTopia 运营后台</title>
     <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
     <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+    <!-- 🔴 bug 20260924-567：本页此前没有任何 <script>。保存钮 disabled 起步、靠 admin-core.js 的配置卡脏检查放开，
+         上传控件（data-seed-uploader）也在 admin-core.js 里 —— 漏引 = 保存永远是灰的、只能手填 objectKey。
+         layout 只统一引 htmx，业务脚本按约定各页在自己的 <head> 引（AdminTemplateStructureTest 守着）。 -->
+    <script defer th:src="@{/admin/admin-core.js}"></script>
     <!-- 🔴 上传走 fetch，而 /admin/** 那条过滤链**保留 CSRF** —— 少了这两个 meta
          就是 403，且会被误读成"权限不够"。表单提交有 Thymeleaf 自动带的隐藏域，
          fetch 没有，必须自己从这里取。
@@ -41,7 +45,9 @@
         <p th:if="${flash}" class="flash" th:text="${flash}">已保存</p>
 
         <!-- 🔴 Makanan 未填喂量的显著警告：FR-109 能否成立的唯一提醒点 -->
-        <p th:if="${feedingWarning}" class="warn" th:text="${feedingWarning}">
+        <!--/* bug 20260924-568：文案走 i18n（原先服务层写死中文，任何语言都显示中文）；品类名按语言取 */-->
+        <p th:if="${feedingWarning}" class="warn"
+           th:text="#{admin.shop.form.feedingWarning(${#messages.msg('admin.v130.shopProducts.category.MAKANAN')})}">
             此商品为 Makanan 但未填写每日建议喂量。
         </p>
 
