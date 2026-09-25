@@ -11,6 +11,7 @@ import com.tailtopia.profile.domain.IdCard;
 import com.tailtopia.profile.domain.IdCardHdPurchase;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.dto.HdPurchaseResponse;
+import com.tailtopia.profile.event.IdHdPawcoinUnlockedEvent;
 import com.tailtopia.profile.repository.IdCardHdPurchaseRepository;
 import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
@@ -23,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,10 +52,13 @@ public class IdCardHdService {
     private final PaymentIntentService paymentIntents;
     private final com.tailtopia.config.service.PlatformConfigService platformConfig;
     private final PaymentGateway gateway;
+    private final ApplicationEventPublisher events;
 
     public IdCardHdService(PetProfileRepository profiles, IdCardHdPurchaseRepository purchases,
             IdCardRepository idCards, PawCoinWalletService wallet, PaymentIntentService paymentIntents,
-            com.tailtopia.config.service.PlatformConfigService platformConfig, PaymentGateway gateway) {
+            com.tailtopia.config.service.PlatformConfigService platformConfig, PaymentGateway gateway,
+            ApplicationEventPublisher events) {
+        this.events = events;
         this.profiles = profiles;
         this.purchases = purchases;
         this.idCards = idCards;
@@ -92,6 +97,8 @@ public class IdCardHdService {
                 card.markHdUnlocked();
                 idCards.save(card);
                 purchases.save(IdCardHdPurchase.of(userId, null, cardId, PayChannel.PAWCOIN, null));
+                // KTP 付费埋点：AFTER_COMMIT 上报，扣款回滚则不报（KtpUnlockAnalyticsListener）
+                events.publishEvent(new IdHdPawcoinUnlockedEvent(userId, price));
                 yield HdPurchaseResponse.granted();
             }
             case QRIS -> {
@@ -197,6 +204,7 @@ public class IdCardHdService {
                 wallet.debit(userId, price, PawCoinTxnType.SPEND, REF_TYPE, petProfileId,
                         "id-hd:" + petProfileId);
                 purchases.save(IdCardHdPurchase.of(userId, petProfileId, null, PayChannel.PAWCOIN, null));
+                events.publishEvent(new IdHdPawcoinUnlockedEvent(userId, price));
                 yield HdPurchaseResponse.granted();
             }
             case QRIS -> {

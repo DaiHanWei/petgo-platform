@@ -648,3 +648,40 @@ social_user_hide_submitted       {origin: REPORT, entry: report_flow}
 | `post_share_card_tapped` | **单条内容分享卡**（FR-73） |
 
 三者都是"分享"，但对象、落地页、付费边界完全不同。
+
+## 11. KTP（身份证高清图）付费漏斗（2026-09-25）
+
+此前 KTP 高清解锁是**有真实收入、但 PostHog 零付费事件**的功能（只有卡面分享 `id_card_share_*`）。
+
+### 11.1 事件清单
+
+| 事件 | 上报端 | 触发点 | 属性 |
+|---|---|---|---|
+| `ktp_unlock_paywall_shown` | App | 弹出 HD 付费弹窗 | `entry`（`create` 生成页 / `detail` 卡详情页）、`price_idr`（已拿到才带） |
+| `ktp_unlock_started` | App | 在弹窗里选定支付方式 | `entry`、`method`（`PAWCOIN` / `QRIS`）、`price_idr` |
+| `ktp_unlock_succeeded` | **服务端** | QRIS 到账回调 / PawCoin 扣款提交后 | `method`、`price_idr` |
+| `ktp_unlock_failed` | App + 服务端 | 见 11.2 | `method`、`price_idr`、`failure_reason`（App 端另带 `entry`） |
+
+代码：App 端 `petgo_app/lib/features/profile/presentation/id_card/ktp_unlock_analytics.dart`（两个入口共用）；
+服务端 `petgo-backend/.../profile/service/KtpUnlockAnalyticsListener.java`（AFTER_COMMIT，事件名与属性键已登记 `AnalyticsEventGuard` 白名单）。
+
+### 11.2 为什么「成功」只在服务端报、「失败」两端分工
+
+- 🔴 App 只在二维码弹窗开着时轮询到账。用户关掉弹窗后再去付款，钱到了 App 也不知道 —— 客户端报成功会**系统性少计收入**。到账回调是唯一可信的点。（同构的 `ai_unlock_succeeded` 仍是客户端报，有同样的低估，看数时注意。）
+- `failure_reason` 固定取值，按上报端分：
+
+| 取值 | 上报端 | 含义 |
+|---|---|---|
+| `EXPIRED` | 服务端 | 二维码 60 分钟窗口内没付 —— 「出码后放弃」主要落在这里 |
+| `GATEWAY_DECLINED` | 服务端 | GemPay 下单失败 / 拒付（含网关超时，2026-09-21~23 那批 22 次就属于这类） |
+| `USER_CANCELLED` | 服务端 | 取消 |
+| `INSUFFICIENT_BALANCE` | App | PawCoin 余额不足（接口 409，扣款整笔回滚，服务端无事件） |
+| `NETWORK_ERROR` | App | 请求没到服务端（服务端对此一无所知） |
+
+App 对 5xx **不报**：网关失败服务端已报 `GATEWAY_DECLINED`，再报就重复计数。
+
+### 11.3 看数注意
+
+- 漏斗：`paywall_shown → started → succeeded`，跨端靠 distinct_id（前后端同一 sha256 口径）与同名属性 `method` / `price_idr` 拼接。
+- 服务端事件依赖 `POSTHOG_SERVER_KEY`：staging 2026-09-25 起开启（`app_env=stag`），生产随下次发版重建容器生效（`app_env=prod`）。**生效前 `ktp_unlock_succeeded` 为零是配置原因，不是没人付费。**
+- 🚩 AppsFlyer 未改：目前只有充值记 `af_purchase`；KTP 的 QRIS 付款是否计入广告归因收入待产品拍板（PawCoin 付的不能计，否则与充值重复）。
