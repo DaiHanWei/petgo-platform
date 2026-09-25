@@ -1,5 +1,7 @@
 # Uncomment this line to define a global platform for your project
-# platform :ios, '13.0'
+# 🔴 最低 iOS 14.0（2026-09-25 发版前）：V1.3.0 引入的 google_maps_flutter_ios 要求 ≥ 14.0，
+#    停在 13.0 时 pod install 直接拒绝、iOS 包编不出来。iOS 13 末代机型都能升到 iOS 15，影响可忽略。
+platform :ios, '14.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
