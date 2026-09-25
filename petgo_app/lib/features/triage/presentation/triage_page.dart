@@ -413,9 +413,21 @@ class _HistoryTile extends StatelessWidget {
     final summary = isAi ? (item.symptomSummary ?? '') : _vetSubtitle(l10n);
 
     final List<Widget> meta = <Widget>[
-      if (isAi)
-        _SeverityChip(level: item.dangerLevel)
-      else
+      if (isAi) ...<Widget>[
+        _SeverityChip(level: item.dangerLevel),
+        // bug 20260721-340：已存入 diary 的 AI 分诊也标「已归档」（兽医项写在副标题里）。
+        if (item.archived == true) ...<Widget>[
+          const SizedBox(width: AppSpacing.xs),
+          // Flexible + 省略：窄屏上「标签 + Diarsipkan + 时间」一行放不下时先让这段让位，不溢出。
+          Flexible(
+            child: Text(l10n.historyArchived,
+                key: ValueKey('historyArchived_${item.triageId}'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
+          ),
+        ],
+      ] else
         Expanded(
           child: Text(item.vetDisplayName ?? l10n.historyTypeVet,
               style: AppTypography.body.copyWith(fontWeight: FontWeight.w600),

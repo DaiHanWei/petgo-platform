@@ -85,4 +85,28 @@ void main() {
     expect(find.textContaining('Not rated'), findsOneWidget); // 未评分
     expect(find.textContaining('Archived'), findsOneWidget); // 已存档标记
   });
+
+  // bug 20260721-340：AI 分诊存入 diary 后，历史卡片同样要有「已归档」标记。
+  testWidgets('AI 条目已存档 → 显示 Archived；未存档不显示', (tester) async {
+    await _pump(tester, [
+      ConsultHistoryItem(
+        type: 'AI',
+        date: DateTime(2026, 6, 2),
+        triageId: 1,
+        dangerLevel: 'YELLOW',
+        symptomSummary: '已存档',
+        archived: true,
+      ),
+      ConsultHistoryItem(
+        type: 'AI',
+        date: DateTime(2026, 6, 1),
+        triageId: 2,
+        dangerLevel: 'GREEN',
+        symptomSummary: '没存档',
+        archived: false,
+      ),
+    ]);
+    expect(find.byKey(const ValueKey('historyArchived_1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('historyArchived_2')), findsNothing);
+  });
 }

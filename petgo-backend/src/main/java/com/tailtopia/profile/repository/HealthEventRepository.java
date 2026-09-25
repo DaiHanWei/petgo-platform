@@ -20,6 +20,17 @@ public interface HealthEventRepository extends JpaRepository<HealthEvent, Long> 
 
     Optional<HealthEvent> findBySourceRef(String sourceRef);
 
+    /**
+     * 批量版 {@link #existsBySourceRefAndArchiveDecision}：给定 sourceRef 里<b>已存档</b>的那些。
+     * 问诊历史列表用（bug 20260721-340），一次查完免逐条 N+1。
+     */
+    @Query("""
+            SELECT e.sourceRef FROM HealthEvent e
+            WHERE e.sourceRef IN :refs AND e.archiveDecision = :decision
+            """)
+    List<String> findSourceRefsByDecision(@Param("refs") java.util.Collection<String> refs,
+            @Param("decision") ArchiveDecision decision);
+
     /** 时间线读：某宠物已存档的健康事件，createdAt 倒序游标分页（Story 2.5 → 2.4 聚合）。 */
     List<HealthEvent> findByPetIdAndArchiveDecisionAndCreatedAtLessThanOrderByCreatedAtDesc(
             long petId, ArchiveDecision decision, Instant before, Pageable pageable);
