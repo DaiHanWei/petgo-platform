@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -36,6 +37,8 @@ public class LarkWebhookClient {
     private final HttpClient http;
     private final Clock clock;
 
+    // 🔴 两个构造器必须标明 Spring 用哪个：漏了 @Autowired 会退回找无参构造 → 启动即崩（2026-09-25 stag 实际踩过）
+    @Autowired
     public LarkWebhookClient(DailyReportProperties props) {
         this(props, HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(props.getTimeoutSeconds())).build(), Clock.systemUTC());
