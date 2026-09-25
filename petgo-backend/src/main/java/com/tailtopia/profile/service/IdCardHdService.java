@@ -158,7 +158,7 @@ public class IdCardHdService {
     /** 当前用户是否已购买高清图（=已永久解锁）。 */
     @Transactional(readOnly = true)
     public boolean isUnlocked(long userId) {
-        return purchases.existsByUserId(userId);
+        return purchases.existsPaidByUserId(userId);
     }
 
     /**
@@ -192,7 +192,7 @@ public class IdCardHdService {
         PetProfile pet = profiles.findByOwnerId(userId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
         // 入口短路（任何扣费之前）：已购买 → 已解锁，绝不二次扣费/二次建行（AC1 幂等）。
-        if (purchases.existsByUserId(userId)) {
+        if (purchases.existsPaidByUserId(userId)) {
             return HdPurchaseResponse.granted();
         }
         long petProfileId = pet.getId();
@@ -257,7 +257,7 @@ public class IdCardHdService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void completePurchase(long userId, PayChannel channel, long paymentIntentId) {
-        if (purchases.existsByUserId(userId)) {
+        if (purchases.existsPaidByUserId(userId)) {
             return; // 幂等：回调/轮询重放
         }
         Long petProfileId = profiles.findByOwnerId(userId).map(PetProfile::getId).orElse(null);

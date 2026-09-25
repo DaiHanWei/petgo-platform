@@ -48,8 +48,10 @@ public class MeCartController {
     public CartView add(@AuthenticationPrincipal Jwt jwt,
             @RequestParam String skuToken, @RequestParam(defaultValue = "1") int qty,
             @RequestParam(required = false) String entrySource,
-            @RequestParam(required = false) String triggerType) {
-        return cart.add(currentUserId(jwt), skuToken, qty, entrySource, triggerType);
+            @RequestParam(required = false) String triggerType,
+            // 立即购买（code review #4）：只勾这一件、车内其它取消勾选。可选，旧版 App 不传 = 普通加购
+            @RequestParam(defaultValue = "false") boolean buyNow) {
+        return cart.add(currentUserId(jwt), skuToken, qty, entrySource, triggerType, buyNow);
     }
 
     @PutMapping("/items/{skuToken}")

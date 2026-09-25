@@ -147,18 +147,27 @@ public class PlaceAttitudeCounters {
      * 在事务里调用时推迟到提交之后（回滚了就不该丢）；Redis 不可用只记日志。
      */
     public void evictAfterCommit(long... placeIds) {
-        afterCommit(() -> {
-            try {
-                List<String> keys = new ArrayList<>(placeIds.length * 2);
-                for (long id : placeIds) {
-                    keys.add(RECOMMEND_KEY_PREFIX + id);
-                    keys.add(NOT_RECOMMEND_KEY_PREFIX + id);
-                }
-                redis.delete(keys);
-            } catch (RuntimeException e) {
-                log.warn("场所计数键清理失败（TTL 到期会自愈）：{}", e.getClass().getSimpleName());
+        afterCommit(() -> evictNow(placeIds));
+    }
+
+    /**
+     * 立即丢键（不挂提交后回调）。
+     *
+     * <p>🔴 给<b>已经处在 AFTER_COMMIT 阶段</b>的调用方用（如 {@link PlaceMergedCounterListener}）：
+     * 那时同步机制仍处于激活态，再调 {@link #evictAfterCommit} 会注册一个新的提交后回调 ——
+     * 而这次提交已经过去了，Spring 不会再执行它，删除被静默跳过（2026-09-25 code review #7）。
+     */
+    public void evictNow(long... placeIds) {
+        try {
+            List<String> keys = new ArrayList<>(placeIds.length * 2);
+            for (long id : placeIds) {
+                keys.add(RECOMMEND_KEY_PREFIX + id);
+                keys.add(NOT_RECOMMEND_KEY_PREFIX + id);
             }
-        });
+            redis.delete(keys);
+        } catch (RuntimeException e) {
+            log.warn("场所计数键清理失败（TTL 到期会自愈）：{}", e.getClass().getSimpleName());
+        }
     }
 
     public Counts countsOf(long placeId) {

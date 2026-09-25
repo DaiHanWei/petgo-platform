@@ -54,6 +54,14 @@ void main() {
       expect(adapter.lastQuery?.containsKey('triggerType'), isFalse);
     });
 
+    test('🔴 立即购买带 buyNow=true（code review #4：只结这一件）；普通加购不带', () async {
+      await repo.add('sku-1', buyNow: true);
+      expect(adapter.lastQuery?['buyNow'], true);
+
+      await repo.add('sku-1');
+      expect(adapter.lastQuery?.containsKey('buyNow'), isFalse, reason: '普通加购不带，旧后端行为不变');
+    });
+
     test('triggerType 同样按需带（Epic 6 复购触发会用到）', () async {
       await repo.add('sku-1', entrySource: 'PROFILE_RECOMMEND', triggerType: 'REFILL');
 
@@ -194,7 +202,7 @@ class _RecordingCartRepo implements CartRepository {
 
   @override
   Future<CartView> add(String skuToken,
-      {int qty = 1, String? entrySource, String? triggerType}) async {
+      {int qty = 1, String? entrySource, String? triggerType, bool buyNow = false}) async {
     lastEntrySource = entrySource;
     return CartView.empty;
   }

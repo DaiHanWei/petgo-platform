@@ -322,8 +322,28 @@ public class ManualReviewWorkbenchService {
             }
             default -> { }
         }
-        String byName = by == null ? null : adminAccounts.findById(by).map(AdminAccount::getDisplayName).orElse("#" + by);
+        String byName = by == null ? null
+                : tab == ReviewTab.REPORT ? reportHandlerName(by)
+                : adminAccounts.findById(by).map(AdminAccount::getDisplayName).orElse("#" + by);
         return new ReviewQueueRow(tab, r, result, byName, at, reason);
+    }
+
+    /**
+     * 内容举报的处理人显示名（2026-09-25 code review #5）。
+     *
+     * <p>🔴 {@code content_reports.handled_by} <b>优先存的是官方作者的 users.id</b>、缺了才存后台账号 id
+     * （{@code AdminModerationService#handlerId}）。原先一律当后台账号 id 去查 —— 超管后台 id=1、用户 id=3，
+     * 他处理的举报会显示成 3 号后台账号，审计口径上的操作人记错。
+     * 写入口径不改（历史数据已按它落库、别处也在读）；这里按写入顺序反解：
+     * 先看它是不是某个后台身份的 users.id（role=ADMIN，与后台账号同邮箱），不是再按后台账号 id 查。
+     */
+    String reportHandlerName(long by) {
+        return users.findById(by)
+                .filter(u -> u.getRole() == com.tailtopia.auth.domain.Role.ADMIN && u.getEmail() != null)
+                .flatMap(u -> adminAccounts.findByLarkEmail(u.getEmail()))
+                .or(() -> adminAccounts.findById(by))
+                .map(AdminAccount::getDisplayName)
+                .orElse("#" + by);
     }
 
     private Map<Long, String> nicknamesOf(List<Long> ids) {

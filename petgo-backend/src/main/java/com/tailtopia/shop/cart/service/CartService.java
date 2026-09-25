@@ -72,6 +72,21 @@ public class CartService {
     @Transactional
     public CartView add(long userId, String skuToken, int qty, String entrySource,
             String triggerType) {
+        return add(userId, skuToken, qty, entrySource, triggerType, false);
+    }
+
+    /**
+     * 加购，可选「立即购买」语义（2026-09-25 code review #4）。
+     *
+     * <p>🔴 <b>再次加购一律重新勾上这一行</b>：用户取消勾选过 B、再在 B 的详情页加购，意思就是要买它。
+     * 原先只加数量不动勾选 —— 「Beli Sekarang」（加购后进结算）结算的是车里别的已勾选商品，
+     * 车里没有别的勾选项时直接报「请至少选择一件商品」。
+     *
+     * @param buyNow true = 立即购买：只勾这一行、车内其它行取消勾选，结算页只结这一件
+     */
+    @Transactional
+    public CartView add(long userId, String skuToken, int qty, String entrySource,
+            String triggerType, boolean buyNow) {
         requirePositive(qty);
         ShopSku sku = requireSku(skuToken);
         ShopCart cart = cartOf(userId);
@@ -84,11 +99,17 @@ public class CartService {
         items.findByCartIdAndSkuId(cart.getId(), sku.getId())
                 .ifPresentOrElse(i -> {
                     i.setQty(target);
+                    i.setSelected(true);
                     // 首次来源优先：第二次加购通常发生在已决定要买之后，那不是转化发生的地方
                     i.attributeIfAbsent(entrySource, triggerType);
                     items.save(i);
                 }, () -> items.save(ShopCartItem.of(cart.getId(), sku.getId(), target,
                         entrySource, triggerType)));
+        if (buyNow) {
+            items.flush();
+            items.updateAllSelected(cart.getId(), false);
+            items.updateSelected(cart.getId(), sku.getId(), true);
+        }
         cart.touch();
         return view(userId);
     }

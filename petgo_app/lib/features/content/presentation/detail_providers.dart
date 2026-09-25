@@ -87,8 +87,10 @@ class ReplyLandingNotifier extends Notifier<ReplyLanding?> {
   void clear() => state = null;
 }
 
-final NotifierProvider<ReplyLandingNotifier, ReplyLanding?> replyLandingProvider =
-    NotifierProvider<ReplyLandingNotifier, ReplyLanding?>(ReplyLandingNotifier.new);
+/// 🔴 按帖子 id 分族（2026-09-25 code review #9）：原先是全局一份 —— 帖 A 详情 → 作者主页 → 帖 B 详情
+/// 叠着时，A 登记的落点会被 B 的评论区消费；B 关闭时清空，又把 A 的一并清掉。
+final replyLandingProvider =
+    NotifierProvider.family<ReplyLandingNotifier, ReplyLanding?, int>((_) => ReplyLandingNotifier());
 
 /// 评论框聚焦请求信号。点击互动栏评论图标时 [requestFocus]，CommentComposer 监听后弹出键盘。
 /// （回复按钮通过 [replyTargetProvider] 变更触发聚焦，无需经此信号。）
@@ -142,7 +144,8 @@ class SessionPinnedCommentsNotifier extends Notifier<Map<int, Comment>> {
   void clear() => state = const <int, Comment>{};
 }
 
-final NotifierProvider<SessionPinnedCommentsNotifier, Map<int, Comment>>
-    sessionPinnedCommentsProvider =
-    NotifierProvider<SessionPinnedCommentsNotifier, Map<int, Comment>>(
-        SessionPinnedCommentsNotifier.new);
+/// 🔴 按帖子 id 分族（2026-09-25 code review #9）：原先全局一份 —— 在帖 A 发的评论会出现在叠在上面的
+/// 帖 B 评论区顶部；从 B 返回时 B 的 dispose 清空整份集合，A 页自己刚发的置顶评论也跟着没了。
+final sessionPinnedCommentsProvider =
+    NotifierProvider.family<SessionPinnedCommentsNotifier, Map<int, Comment>, int>(
+        (_) => SessionPinnedCommentsNotifier());

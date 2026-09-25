@@ -144,7 +144,7 @@ class InAppVisitorEntryTest {
     void everyInAppEndpointGoesThroughTheSharedProjection() {
         when(visitors.findVisibleProfileById(PET_ID)).thenReturn(Optional.of(pet()));
         when(visitors.stats(any())).thenReturn(new VisitorStats(1L, 0L, 0L, 30));
-        when(visitors.timeline(any(), anyInt())).thenReturn(List.of());
+        when(visitors.timeline(any(), anyInt(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(List.of());
 
         inApp.profile(user(VIEWER), PET_ID);
         inApp.stats(user(VIEWER), PET_ID);
@@ -152,7 +152,7 @@ class InAppVisitorEntryTest {
 
         verify(visitors, org.mockito.Mockito.times(3)).findVisibleProfileById(PET_ID);
         verify(visitors).stats(any());
-        verify(visitors).timeline(any(), anyInt());
+        verify(visitors).timeline(any(), anyInt(), org.mockito.ArgumentMatchers.eq(false));
     }
 
     /**
@@ -174,13 +174,13 @@ class InAppVisitorEntryTest {
     @Test
     void theTimelineLimitIsClamped() {
         when(visitors.findVisibleProfileById(PET_ID)).thenReturn(Optional.of(pet()));
-        when(visitors.timeline(any(), anyInt())).thenReturn(List.of());
+        when(visitors.timeline(any(), anyInt(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(List.of());
 
         inApp.timeline(user(VIEWER), PET_ID, 100000);
-        verify(visitors).timeline(any(), eq(100));
+        verify(visitors).timeline(any(), eq(100), org.mockito.ArgumentMatchers.eq(false));
 
         inApp.timeline(user(VIEWER), PET_ID, 0);
-        verify(visitors).timeline(any(), eq(1));
+        verify(visitors).timeline(any(), eq(1), org.mockito.ArgumentMatchers.eq(false));
     }
 
     // ===== 拉黑守卫 =====

@@ -13,6 +13,7 @@ import '../../../shared/card_render/card_export.dart';
 import '../../../shared/card_render/card_frame.dart';
 import '../../../shared/card_render/card_render_pipeline.dart';
 import '../../auth/domain/auth_state.dart';
+import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../data/age_card_reward_repository.dart';
 import '../data/profile_repository.dart';
 import '../domain/age_card_quips.dart';
@@ -334,6 +335,8 @@ class _AgeCardPreviewPageState extends ConsumerState<AgeCardPreviewPage> {
       coins = 0;
     }
     if (!mounted || coins <= 0) return;
+    // 余额变了：失效 PawCoin 缓存，免得 Toko / 商品详情页仍显示旧余额（code review #10，与身份证高清购买后的做法一致）
+    ref.invalidate(pawCoinProvider);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(AppLocalizations.of(context).ageCardRewardToast(coins))),
     );

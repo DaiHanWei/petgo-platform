@@ -748,7 +748,7 @@ class _FakeCartController extends CartController {
 
   @override
   Future<void> add(String skuToken,
-      {int qty = 1, String? entrySource, String? triggerType}) async {
+      {int qty = 1, String? entrySource, String? triggerType, bool buyNow = false}) async {
     if (addFailsOnStock) throw CartMutationError.stock;
     added.add((sku: skuToken, qty: qty, entrySource: entrySource));
   }

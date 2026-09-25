@@ -31,8 +31,11 @@ class CartRepository {
   /// 只有此刻知道，服务端记在购物车行上、下单时抄到订单行，后台据此算触发卡转化率
   /// （AB-13B 判定 A-16）。**拿不到就不传** —— 写 null 是诚实的「未知」，
   /// 编一个值会污染看板且事后无法识别。
+  ///
+  /// [buyNow] = 立即购买：服务端只勾这一件、车内其它取消勾选，结算页只结它（code review #4）。
+  /// 旧后端不认这个参数会忽略它，退化为普通加购（已勾选），不报错。
   Future<CartView> add(String skuToken,
-      {int qty = 1, String? entrySource, String? triggerType}) async {
+      {int qty = 1, String? entrySource, String? triggerType, bool buyNow = false}) async {
     final resp = await dio.post<Map<String, dynamic>>(
       ApiPaths.meCartItems,
       queryParameters: {
@@ -40,6 +43,7 @@ class CartRepository {
         'qty': qty,
         'entrySource': ?entrySource,
         'triggerType': ?triggerType,
+        if (buyNow) 'buyNow': true,
       },
     );
     return CartView.fromJson(resp.data!);
@@ -132,9 +136,9 @@ class CartController extends AsyncNotifier<CartView> {
 
   /// 加购。失败抛 [CartMutationError] 给调用方（页面负责选文案）。
   Future<void> add(String skuToken,
-          {int qty = 1, String? entrySource, String? triggerType}) =>
+          {int qty = 1, String? entrySource, String? triggerType, bool buyNow = false}) =>
       _mutate((repo) => repo.add(skuToken,
-          qty: qty, entrySource: entrySource, triggerType: triggerType));
+          qty: qty, entrySource: entrySource, triggerType: triggerType, buyNow: buyNow));
 
   Future<void> setQty(String skuToken, int qty) =>
       _mutate((repo) => repo.setQty(skuToken, qty));

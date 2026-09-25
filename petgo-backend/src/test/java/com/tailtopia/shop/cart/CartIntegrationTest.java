@@ -211,6 +211,36 @@ class CartIntegrationTest extends ApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("🔴 code review #4：取消勾选过的商品再次加购 → 重新勾上")
+    void reAddingAnUnselectedLineSelectsItAgain() {
+        long uid = seedUser();
+        String b = seedSku(10, 50_000L);
+        cart.add(uid, b, 1);
+        cart.setSelected(uid, b, false);
+
+        CartView v = cart.add(uid, b, 1);
+
+        assertThat(v.selectedSubtotal()).as("再次加购 = 要买它；原先不勾，结算报「请至少选择一件」")
+                .isEqualTo(100_000L);
+    }
+
+    @Test
+    @DisplayName("🔴 code review #4：立即购买 → 只勾这一件，车内其它取消勾选（结算只结它）")
+    void buyNowSelectsOnlyThatLine() {
+        long uid = seedUser();
+        String a = seedSku(10, 100_000L);
+        String b = seedSku(10, 50_000L);
+        cart.add(uid, a, 1);
+        cart.add(uid, b, 1);
+        cart.setSelected(uid, b, false);
+
+        CartView v = cart.add(uid, b, 1, null, null, true);
+
+        assertThat(v.selectedSubtotal()).as("只结 B（2 件 × 50.000），A 不再被带进结算").isEqualTo(100_000L);
+        assertThat(v.subtotal()).as("取消勾选不是删除，A 仍在车里").isEqualTo(200_000L);
+    }
+
+    @Test
     @DisplayName("🔴 取消勾选一行：selectedSubtotal 变小，而 subtotal / itemCount 一分不动")
     void unselectingOneLineShrinksSelectedTotalsOnly() {
         long uid = seedUser();

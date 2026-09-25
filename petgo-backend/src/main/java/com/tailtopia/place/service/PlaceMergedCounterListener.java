@@ -23,6 +23,7 @@ public class PlaceMergedCounterListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onMerged(PlaceMergedEvent event) {
-        counters.evictAfterCommit(event.keepPlaceId(), event.mergedPlaceId());
+        // 🔴 本方法已在 AFTER_COMMIT 里：再挂 evictAfterCommit 的提交后回调不会被执行（code review #7），直接删。
+        counters.evictNow(event.keepPlaceId(), event.mergedPlaceId());
     }
 }

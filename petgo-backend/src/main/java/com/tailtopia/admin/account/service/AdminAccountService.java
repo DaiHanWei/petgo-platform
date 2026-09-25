@@ -438,6 +438,14 @@ public class AdminAccountService {
         if (a.getStatus() == AdminAccountStatus.ACTIVE) {
             return; // 幂等
         }
+        // 🔴 code review #6：邮箱只在在职账号之间唯一（D-21），停用期间它可能已被新账号复用。
+        //    不查重的话提交时撞部分唯一索引 → 未捕获的 DataIntegrityViolation → 500；
+        //    与 create / rebindEmail 同口径给「邮箱已存在」。
+        if (accounts.existsByLarkEmailIgnoreCaseAndStatusAndIdNot(
+                a.getLarkEmail(), AdminAccountStatus.ACTIVE, accountId)) {
+            throw AppException.conflict("该 Lark 邮箱已存在后台账号：" + a.getLarkEmail())
+                    .code("admin.err.account.emailExists", a.getLarkEmail());
+        }
         // 重新激活超管会回填名额，需复查上限。
         if (a.getAccountType() == AdminAccountType.SUPER_ADMIN) {
             assertSuperAdminCap();

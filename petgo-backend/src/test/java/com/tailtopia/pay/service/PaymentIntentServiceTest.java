@@ -272,4 +272,33 @@ class PaymentIntentServiceTest {
         assertThat(service().findReusablePending(7L, PaymentPurpose.PAWCOIN_TOPUP, PayChannel.QRIS, 10000L))
                 .isEmpty();
     }
+
+    // ---------- 2026-09-25 code review #1：付了钱不履约的并发竞态 ----------
+
+    @Test
+    void attachChargeRefusesTerminalIntentSoNoQrIsHandedOut() {
+        // 快请求被网关判重复单号 → failChargeAttempt 置 FAILED；慢请求随后拿到二维码来回填
+        PaymentIntent p = persisted(9L, PaymentPurpose.SHOP_ORDER, "tok-race");
+        p.markFailed(java.util.Map.of("reason", "GATEWAY_CHARGE_FAILED"));
+        when(intents.findByPublicToken("tok-race")).thenReturn(Optional.of(p));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service().attachCharge("tok-race", "gw-1",
+                        java.util.Map.of("payload", "QR")))
+                .isInstanceOf(com.tailtopia.shared.error.AppException.class);
+        assertThat(p.getGatewayRef()).as("终态意图不得回填网关单号").isNull();
+        org.mockito.Mockito.verify(intents, org.mockito.Mockito.never()).saveAndFlush(p);
+    }
+
+    @Test
+    void attachChargeStillWorksForPendingAndIsIdempotent() {
+        PaymentIntent p = persisted(9L, PaymentPurpose.SHOP_ORDER, "tok-ok");
+        when(intents.findByPublicToken("tok-ok")).thenReturn(Optional.of(p));
+
+        service().attachCharge("tok-ok", "gw-1", java.util.Map.of("payload", "QR"));
+        assertThat(p.getGatewayRef()).isEqualTo("gw-1");
+
+        // 已回填 → 幂等短路，不因之后的状态判断报错
+        service().attachCharge("tok-ok", "gw-2", java.util.Map.of());
+        assertThat(p.getGatewayRef()).isEqualTo("gw-1");
+    }
 }

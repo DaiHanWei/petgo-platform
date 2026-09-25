@@ -118,7 +118,7 @@ void main() {
     // 热门评论 10 占第一页；自己刚发的 99 只在置顶集合里。
     final repo = _Repo([_c(10, authorId: 2, likeCount: 5), _c(99)]);
     final container = await _pump(tester, repo);
-    container.read(sessionPinnedCommentsProvider.notifier).add(_c(99));
+    container.read(sessionPinnedCommentsProvider(5).notifier).add(_c(99));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('commentItem_99')), findsOneWidget);
 
@@ -131,21 +131,21 @@ void main() {
 
     expect(find.byKey(const ValueKey('commentItem_99')), findsNothing,
         reason: '服务端已删、本地副本也必须摘掉');
-    expect(container.read(sessionPinnedCommentsProvider).containsKey(99), isFalse);
+    expect(container.read(sessionPinnedCommentsProvider(5)).containsKey(99), isFalse);
   });
 
   testWidgets('只在置顶副本里的评论：点赞界面跟着变，再点能取消', (tester) async {
     // 服务端这一页**没有** 99（热度序下 0 赞新评论不在第一页）。
     final repo = _Repo([_c(10, authorId: 2, likeCount: 5)]);
     final container = await _pump(tester, repo);
-    container.read(sessionPinnedCommentsProvider.notifier).add(_c(99));
+    container.read(sessionPinnedCommentsProvider(5).notifier).add(_c(99));
     await tester.pumpAndSettle();
 
     final heart = find.byKey(const ValueKey('likeComment_99'));
     await tester.tap(heart);
     await tester.pumpAndSettle();
     expect(repo.liked, [99]);
-    expect(container.read(sessionPinnedCommentsProvider)[99]!.liked, isTrue,
+    expect(container.read(sessionPinnedCommentsProvider(5))[99]!.liked, isTrue,
         reason: '界面渲染的就是这份副本，不改它心形就不动');
     expect(
         find.descendant(of: heart, matching: find.byIcon(Icons.favorite_rounded)), findsOneWidget);
@@ -153,7 +153,7 @@ void main() {
     await tester.tap(heart);
     await tester.pumpAndSettle();
     expect(repo.unliked, [99], reason: '第二下必须是取消，而不是再发一次点赞');
-    expect(container.read(sessionPinnedCommentsProvider)[99]!.liked, isFalse);
+    expect(container.read(sessionPinnedCommentsProvider(5))[99]!.liked, isFalse);
   });
 
   testWidgets('游客点评论心形 → 登录引导，不翻转、不发请求', (tester) async {
