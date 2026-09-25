@@ -157,6 +157,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("dayStart") Instant dayStart);
 
     /**
+     * 记一笔「某人某个 WIB 自然日来过」（日报 DAU 口径，见 V20260925_1330）。
+     * 同日重复调用命中主键冲突即跳过 —— 只是一次索引查找，不产生写。
+     */
+    @Modifying
+    @Query(value = "INSERT INTO user_active_days (user_id, active_date) VALUES (:userId, :day) "
+            + "ON CONFLICT DO NOTHING", nativeQuery = true)
+    int recordActiveDay(@Param("userId") long userId, @Param("day") java.time.LocalDate day);
+
+    /**
      * 用户标签选择器的候选（bug 20260828）：**未注销**的普通用户，按 id 或昵称模糊匹配。
      *
      * <p>🔴 {@code deletedAt is null} 是这条查询存在的主要理由 —— 后台此前只有一个手填
