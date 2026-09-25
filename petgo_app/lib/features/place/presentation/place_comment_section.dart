@@ -5,6 +5,7 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../../shared/widgets/letter_avatar.dart';
@@ -179,6 +180,17 @@ class _CommentRow extends StatelessWidget {
                         child: Text(l10n.placeCommentOnlyVisibleToYou,
                             style: AppTypography.micro
                                 .copyWith(color: AppColors.textTertiary)),
+                      ),
+                    // bug 20260924-569：评论时间。与帖子评论同一个 formatPublishTime
+                    // （7 天内相对、超 7 天绝对日期），同在昵称行靠右。
+                    if (comment.createdAt != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: AppSpacing.sm),
+                        child: Text(
+                          formatPublishTime(context, l10n, comment.createdAt!.toLocal()),
+                          key: ValueKey('placeCommentTime-${comment.id}'),
+                          style: AppTypography.micro.copyWith(color: AppColors.textTertiary),
+                        ),
                       ),
                     if (onDelete != null)
                       GestureDetector(
