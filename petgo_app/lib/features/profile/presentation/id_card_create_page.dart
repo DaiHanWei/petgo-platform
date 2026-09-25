@@ -18,6 +18,7 @@ import 'id_card/hd_paywall_sheet.dart';
 import 'id_card/id_card_watermark.dart';
 import 'id_card/ktp_card.dart';
 import 'id_card/ktp_fields.dart';
+import 'id_card/ktp_unlock_analytics.dart';
 import 'id_card/passport_card.dart';
 import 'id_card/student_card.dart';
 import 'widgets/pet_form_fields.dart';
@@ -359,6 +360,10 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
       balance = (await ref.read(pawCoinProvider.future)).balance;
     } catch (_) {}
     if (!mounted) return;
+    // 弹窗期间保活定价 provider（autoDispose）：弹窗关掉后「开始付款」埋点还要读价格。
+    final priceSub = ref.listenManual(idCardHdPriceProvider, (_, _) {});
+    KtpUnlockAnalytics.paywallShown(
+        entry: KtpUnlockAnalytics.entryCreate, priceIdr: priceSub.read().value);
     final channel = await showModalBottomSheet<HdPayChannel>(
       context: context,
       backgroundColor: AppColors.card,
@@ -372,7 +377,11 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
           avatarUrl: card.avatarUrl,
           balance: balance),
     );
+    final priceIdr = priceSub.read().value;
+    priceSub.close();
     if (channel == null || !mounted) return;
+    KtpUnlockAnalytics.started(
+        entry: KtpUnlockAnalytics.entryCreate, method: channel, priceIdr: priceIdr);
     final l10n = AppLocalizations.of(context);
     try {
       final res = await ref.read(idCardRepositoryProvider).purchaseHdForCard(card.id, channel);
@@ -394,6 +403,8 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
         _toast(l10n.idCardHdQrisPending);
       }
     } on DioException catch (e) {
+      KtpUnlockAnalytics.failedFromError(
+          entry: KtpUnlockAnalytics.entryCreate, method: channel, error: e, priceIdr: priceIdr);
       _toast(e.response?.statusCode == 409
           ? l10n.idCardHdInsufficientBalance
           : l10n.idCardHdPurchaseError);

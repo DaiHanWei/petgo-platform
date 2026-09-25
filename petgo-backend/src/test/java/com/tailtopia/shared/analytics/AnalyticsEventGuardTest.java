@@ -51,6 +51,9 @@ class AnalyticsEventGuardTest {
         assertThat(guard.allowsEvent("shop_payment_declined")).isTrue();
         assertThat(guard.allowsEvent("shop_payment_expired")).isTrue();
         assertThat(guard.allowsEvent("shop_payment_user_cancelled")).isTrue();
+        // 2026-09-25 KTP 付费漏斗
+        assertThat(guard.allowsEvent("ktp_unlock_succeeded")).isTrue();
+        assertThat(guard.allowsEvent("ktp_unlock_failed")).isTrue();
     }
 
     @Test
@@ -83,8 +86,11 @@ class AnalyticsEventGuardTest {
         raw.put("failure_category", "GATEWAY_DECLINED");
         raw.put("pay_channel", "QRIS");
         raw.put("has_pawcoin", true);
+        raw.put("method", "QRIS");
+        raw.put("price_idr", 10_000L);
+        raw.put("failure_reason", "EXPIRED");
 
-        assertThat(guard.filterProperties(raw)).hasSize(12).containsAllEntriesOf(raw);
+        assertThat(guard.filterProperties(raw)).hasSize(15).containsAllEntriesOf(raw);
     }
 
     @Test

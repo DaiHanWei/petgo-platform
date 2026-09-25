@@ -17,6 +17,7 @@ import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../data/id_card_repository.dart';
 import '../domain/id_card.dart';
 import 'id_card/hd_paywall_sheet.dart';
+import 'id_card/ktp_unlock_analytics.dart';
 import 'id_card/id_card_watermark.dart';
 import 'id_card/ktp_card.dart';
 import 'id_card/ktp_fields.dart';
@@ -301,6 +302,10 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
       balance = 0;
     }
     if (!mounted) return;
+    // 弹窗期间保活定价 provider（autoDispose）：弹窗关掉后「开始付款」埋点还要读价格。
+    final priceSub = ref.listenManual(idCardHdPriceProvider, (_, _) {});
+    KtpUnlockAnalytics.paywallShown(
+        entry: KtpUnlockAnalytics.entryDetail, priceIdr: priceSub.read().value);
     final channel = await showModalBottomSheet<HdPayChannel>(
       context: context,
       backgroundColor: AppColors.card,
@@ -316,11 +321,15 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
         balance: balance,
       ),
     );
+    final priceIdr = priceSub.read().value;
+    priceSub.close();
     if (channel == null || !mounted) return;
-    await _purchaseHd(channel);
+    KtpUnlockAnalytics.started(
+        entry: KtpUnlockAnalytics.entryDetail, method: channel, priceIdr: priceIdr);
+    await _purchaseHd(channel, priceIdr: priceIdr);
   }
 
-  Future<void> _purchaseHd(HdPayChannel channel) async {
+  Future<void> _purchaseHd(HdPayChannel channel, {int? priceIdr}) async {
     setState(() => _hdBusy = true);
     final l10n = AppLocalizations.of(context);
     try {
@@ -352,6 +361,8 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
         _toast(l10n.idCardHdQrisPending);
       }
     } on DioException catch (e) {
+      KtpUnlockAnalytics.failedFromError(
+          entry: KtpUnlockAnalytics.entryDetail, method: channel, error: e, priceIdr: priceIdr);
       _toast(e.response?.statusCode == 409
           ? l10n.idCardHdInsufficientBalance
           : l10n.idCardHdPurchaseError);

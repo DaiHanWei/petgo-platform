@@ -57,7 +57,10 @@ public class AnalyticsEventGuard {
             "shop_payment_paid",
             "shop_payment_declined",
             "shop_payment_expired",
-            "shop_payment_user_cancelled");
+            "shop_payment_user_cancelled",
+            // ---- 2026-09-25 KTP 付费漏斗（成功 / 支付侧失败只在服务端报）----
+            com.tailtopia.profile.service.KtpUnlockAnalyticsListener.EVENT_SUCCEEDED,
+            com.tailtopia.profile.service.KtpUnlockAnalyticsListener.EVENT_FAILED);
 
     /**
      * 属性键白名单。
@@ -76,7 +79,11 @@ public class AnalyticsEventGuard {
             "order_amount",                     // long，订单总额
             "failure_category",                 // PaymentFailureCategory 名
             "pay_channel",                      // PayChannel 名
-            "has_pawcoin");                     // boolean
+            "has_pawcoin",                      // boolean
+            // ---- 2026-09-25 KTP 付费漏斗：与 App 端同名键，跨端漏斗才拼得起来 ----
+            "method",                           // PayChannel 名（PAWCOIN / QRIS）
+            "price_idr",                        // long，成交价
+            "failure_reason");                  // PaymentFailureCategory 名
 
     /**
      * 字符串属性值的长度上限。
