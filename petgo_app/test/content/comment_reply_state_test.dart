@@ -287,7 +287,7 @@ void main() {
       expect(repo.postCommentCalls, 1);
       expect(repo.postReplyCalls, 0);
       // 落点只属于回复：一级评论的「发完看得见」靠 Story 2.5 的会话置顶，是另一条路。
-      expect(container.read(replyLandingProvider), isNull);
+      expect(container.read(replyLandingProvider(5)), isNull);
     });
   });
 
@@ -306,9 +306,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repo.postReplyCalls, 1);
-      expect(container.read(replyLandingProvider)?.parentId, 86);
+      expect(container.read(replyLandingProvider(5))?.parentId, 86);
       // 🔴 落点带着**新回复的 id**：回复区不止一页时，评论区靠它知道翻到哪儿才算到位。
-      expect(container.read(replyLandingProvider)?.replyId, repo.newReplyId);
+      expect(container.read(replyLandingProvider(5))?.replyId, repo.newReplyId);
       expect(container.read(replyTargetProvider(5)), isNull);
     });
 
@@ -329,9 +329,9 @@ void main() {
       }
 
       await replyOnce('satu');
-      final first = container.read(replyLandingProvider)!;
+      final first = container.read(replyLandingProvider(5))!;
       await replyOnce('dua');
-      final second = container.read(replyLandingProvider)!;
+      final second = container.read(replyLandingProvider(5))!;
 
       expect(second.parentId, first.parentId);
       expect(second.seq, greaterThan(first.seq));
@@ -373,13 +373,13 @@ void main() {
       expect(repo.expandedParents, isEmpty, reason: '进页面时不该自己展开任何回复区');
 
       // composer 发完回复做的两件事：登记落点 + bump 刷新信号。
-      container.read(replyLandingProvider.notifier).request(parentId: 86, replyId: 999);
+      container.read(replyLandingProvider(5).notifier).request(parentId: 86, replyId: 999);
       container.read(commentsRefreshProvider.notifier).bump();
       await tester.pumpAndSettle();
 
       expect(repo.expandedParents, [86]);
       // 🔴 用完即清：留着的话下一次任何刷新都会把它重放一遍。
-      expect(container.read(replyLandingProvider), isNull);
+      expect(container.read(replyLandingProvider(5)), isNull);
     });
 
     /// 🔴 回复区分页：新回复按时间正序落在**最后一页**。
@@ -395,7 +395,7 @@ void main() {
       );
       final container = await mountSection(tester, repo);
 
-      container.read(replyLandingProvider.notifier).request(parentId: 86, replyId: 999);
+      container.read(replyLandingProvider(5).notifier).request(parentId: 86, replyId: 999);
       container.read(commentsRefreshProvider.notifier).bump();
       await tester.pumpAndSettle();
 
@@ -413,12 +413,12 @@ void main() {
       );
       final container = await mountSection(tester, repo);
 
-      container.read(replyLandingProvider.notifier).request(parentId: 86, replyId: 999);
+      container.read(replyLandingProvider(5).notifier).request(parentId: 86, replyId: 999);
       container.read(commentsRefreshProvider.notifier).bump();
       await tester.pumpAndSettle();
 
       expect(repo.expandedParents.length, lessThan(20));
-      expect(container.read(replyLandingProvider), isNull);
+      expect(container.read(replyLandingProvider(5)), isNull);
     });
 
     /// AC6 的兜底口径：父评论已不在列表里（比如回复途中被删）→ 什么都不做。
@@ -427,12 +427,12 @@ void main() {
       final repo = _Repo(comments: [_c(87, 3)]);
       final container = await mountSection(tester, repo);
 
-      container.read(replyLandingProvider.notifier).request(parentId: 86, replyId: 999);
+      container.read(replyLandingProvider(5).notifier).request(parentId: 86, replyId: 999);
       container.read(commentsRefreshProvider.notifier).bump();
       await tester.pumpAndSettle();
 
       expect(repo.expandedParents, isEmpty);
-      expect(container.read(replyLandingProvider), isNull);
+      expect(container.read(replyLandingProvider(5)), isNull);
     });
 
     /// 没有落点时刷新是纯刷新 —— 展开状态一律回到默认（折叠），

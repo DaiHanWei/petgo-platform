@@ -364,6 +364,16 @@ void main() {
     });
   });
 
+  /// 🔴 code review #10：领到 PawCoin 后必须失效余额缓存，否则 Toko / 商品详情页仍显示旧余额。
+  test('领奖成功（coins > 0）后 invalidate pawCoinProvider；没发则不动', () {
+    final src = File('lib/features/profile/presentation/age_card_page.dart').readAsStringSync();
+    final body = src.substring(src.indexOf('Future<void> _claimReward'), src.indexOf('Future<void> _shareIt'));
+    final guard = body.indexOf('coins <= 0) return;');
+    final inval = body.indexOf('ref.invalidate(pawCoinProvider)');
+    expect(guard, isNonNegative);
+    expect(inval, greaterThan(guard), reason: '只在真的发了币之后刷新（没发不必重拉）');
+  });
+
   /// 2026-09-23 设计稿换皮：卡面换成「浅底 + 巨幅当量数字 + 手绘角色 + 底部压暗信息带」。
   /// 这一组钉住换皮里唯一有判定逻辑的部分 —— **取哪张角色图**。
   group('换皮：四档角色按 PetAgeStage 取图', () {

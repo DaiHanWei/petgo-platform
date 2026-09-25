@@ -638,7 +638,9 @@ class _ProductDetailPageV2State extends ConsumerState<ProductDetailPageV2> {
     if (_adding) return;
     setState(() => _pendingAction = thenCheckout ? _PdpAction.buy : _PdpAction.add);
     try {
-      await ref.read(cartProvider.notifier).add(sku.token, entrySource: widget.entrySource);
+      // 立即购买带 buyNow：只结这一件（code review #4，原先会结到车里别的已勾选商品）
+      await ref.read(cartProvider.notifier)
+          .add(sku.token, entrySource: widget.entrySource, buyNow: thenCheckout);
       if (!mounted) return;
       if (thenCheckout) {
         context.push('/shop/checkout');

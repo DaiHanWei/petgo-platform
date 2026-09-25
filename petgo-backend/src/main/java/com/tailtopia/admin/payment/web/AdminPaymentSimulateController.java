@@ -1,18 +1,15 @@
 package com.tailtopia.admin.payment.web;
 
-import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.payment.service.AdminPaymentQueryService;
+import com.tailtopia.admin.payment.service.AdminPaymentSimulateService;
 import com.tailtopia.admin.service.AdminUserDetails;
 import com.tailtopia.admin.shared.StagOnly;
 import com.tailtopia.admin.shared.web.AdminFragmentResponses;
 import com.tailtopia.admin.shared.web.AdminHxEvents;
-import com.tailtopia.pay.service.PaymentIntentService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.i18n.Messages;
 import com.tailtopia.shared.pay.GatewayStatus;
-import com.tailtopia.shared.pay.PaymentCallback;
 import jakarta.servlet.http.HttpServletResponse;
-import java.util.Map;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -43,16 +40,14 @@ public class AdminPaymentSimulateController {
     /** 🔴 与 {@code drawer-payment.html} 里那句 {@code sec:authorize} 逐字一致。 */
     private static final String AUTH = "hasRole('SUPER_ADMIN')";
 
-    private final PaymentIntentService intents;
+    private final AdminPaymentSimulateService simulator;
     private final AdminPaymentQueryService query;
-    private final AdminAuditService audit;
     private final Messages msg;
 
-    public AdminPaymentSimulateController(PaymentIntentService intents,
-            AdminPaymentQueryService query, AdminAuditService audit, Messages msg) {
-        this.intents = intents;
+    public AdminPaymentSimulateController(AdminPaymentSimulateService simulator,
+            AdminPaymentQueryService query, Messages msg) {
+        this.simulator = simulator;
         this.query = query;
-        this.audit = audit;
         this.msg = msg;
     }
 
@@ -91,10 +86,8 @@ public class AdminPaymentSimulateController {
         //    而下过单、拿到过收款码的意图（也正是最值得模拟的那一批）早就被 attachCharge 写进了真实网关号。
         //    前缀仍然传，是为了「从没下过单的裸意图」那一类；但别拿它当判据。
         //    rawMeta 只放这一个标记，不伪造网关字段 —— 伪造出来的字段会被当成真回调读。
-        intents.applyCallback(new PaymentCallback(intentToken, "sim-" + intentToken, result,
-                Map.of("simulated", true)));
-        audit.record(admin.getAdminAccountId(), "PAYMENT_SIMULATE_CALLBACK", "payment_intent",
-                intentToken, "result=" + result.name());
+        // 回调 + 审计同一事务（code review #12）：审计写失败则整笔回滚，不留「已付却无审计」的模拟单
+        simulator.simulate(admin.getAdminAccountId(), intentToken, result);
 
         model.addAttribute("active", "payments");
         model.addAttribute("p", query.detail(intentToken));

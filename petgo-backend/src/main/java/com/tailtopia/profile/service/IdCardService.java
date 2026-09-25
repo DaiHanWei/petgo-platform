@@ -109,7 +109,7 @@ public class IdCardService {
     @Transactional(readOnly = true)
     public IdCardDataResponse getMyIdCard(long ownerId) {
         return profiles.findByOwnerId(ownerId)
-                .map(p -> IdCardDataResponse.from(p, hdPurchases.existsByUserId(ownerId)))
+                .map(p -> IdCardDataResponse.from(p, hdPurchases.existsPaidByUserId(ownerId)))
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
     }
 
@@ -125,6 +125,6 @@ public class IdCardService {
             pet.assignSerial(serial);
             profiles.save(pet);
         }
-        return IdCardDataResponse.from(pet, hdPurchases.existsByUserId(ownerId));
+        return IdCardDataResponse.from(pet, hdPurchases.existsPaidByUserId(ownerId));
     }
 }

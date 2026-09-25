@@ -82,8 +82,8 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   @override
   void initState() {
     super.initState();
-    _pinnedNotifier = ref.read(sessionPinnedCommentsProvider.notifier);
-    _landingNotifier = ref.read(replyLandingProvider.notifier);
+    _pinnedNotifier = ref.read(sessionPinnedCommentsProvider(widget.postId).notifier);
+    _landingNotifier = ref.read(replyLandingProvider(widget.postId).notifier);
     _loadInitial();
   }
 
@@ -102,7 +102,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   /// 🔴 这里只动**展示顺序**，`_nextCursor` 仍然来自服务端返回的那一页的最后一条
   /// —— 置顶项不参与游标计算，否则会制造重复/漏条（AC6）。
   List<Comment> get _orderedTopLevel {
-    final pinned = ref.watch(sessionPinnedCommentsProvider);
+    final pinned = ref.watch(sessionPinnedCommentsProvider(widget.postId));
     if (pinned.isEmpty) return _topLevel;
 
     final byId = {for (final c in _topLevel) c.id: c};
@@ -210,14 +210,14 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
   /// 兜底口径与 AC6 一致 —— **父评论已不在列表里就什么都不做**：不报错、不跳、不留悬挂状态。
   /// （父被删时 composer 那边已经给过专属提示并退出了回复态。）
   Future<void> _landOnPendingReply() async {
-    final landing = ref.read(replyLandingProvider);
+    final landing = ref.read(replyLandingProvider(widget.postId));
     if (landing == null) return;
     // 先清：无论后面能不能定位，这个落点都已经用过了，留着会在下次刷新时重放。
     _landingNotifier.clear();
     // 父评论可能只存在于本会话置顶集合里（热度序下 0 赞的新评论通常不在第一页）——那也算「在列表里」。
     if (!_topLevel.any((c) => c.id == landing.parentId) &&
         !ref
-            .read(sessionPinnedCommentsProvider)
+            .read(sessionPinnedCommentsProvider(widget.postId))
             .containsKey(landing.parentId)) {
       return;
     }
@@ -312,7 +312,7 @@ class _CommentSectionState extends ConsumerState<CommentSection> {
       _topLevel[i] = _replaceIn(_topLevel[i], id, update);
     }
     // 第四处：本会话置顶的本地副本。它不在服务端那一页时，界面渲染的就是这份。
-    for (final pinnedId in ref.read(sessionPinnedCommentsProvider).keys) {
+    for (final pinnedId in ref.read(sessionPinnedCommentsProvider(widget.postId)).keys) {
       _pinnedNotifier.update(pinnedId, (top) => _replaceIn(top, id, update));
     }
     for (final exp in _expanded.values) {

@@ -406,4 +406,22 @@ class AdminAccountServiceTest {
         long id = service.createAccount("released@x", "新人", AdminRole.CUSTOM, List.of(), 1L);
         assertThat(id).isEqualTo(42L);
     }
+
+    // ---------- 2026-09-25 code review #6 ----------
+
+    @Test
+    void reactivateRejectsWhenEmailIsTakenByAnActiveAccount() {
+        AdminAccount a = AdminAccount.create("reuse@x", "Old", AdminRole.CUSTOM, 1L);
+        org.springframework.test.util.ReflectionTestUtils.setField(a, "id", 21L);
+        a.setStatus(com.tailtopia.admin.account.domain.AdminAccountStatus.DISABLED);
+        when(accounts.findById(21L)).thenReturn(java.util.Optional.of(a));
+        when(accounts.existsByLarkEmailIgnoreCaseAndStatusAndIdNot("reuse@x",
+                com.tailtopia.admin.account.domain.AdminAccountStatus.ACTIVE, 21L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.reactivate(21L, 1L))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getStatus().value())
+                        .as("「邮箱已存在」409，而不是撞唯一索引的 500").isEqualTo(409));
+        assertThat(a.getStatus()).isEqualTo(com.tailtopia.admin.account.domain.AdminAccountStatus.DISABLED);
+    }
 }

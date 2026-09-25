@@ -77,6 +77,8 @@ class PetRecommendationListController extends AsyncNotifier<RecommendedPetPage> 
         final next = await ref
             .read(petRecommendationRepositoryProvider)
             .recommendations(limit: pageSize, cursor: cursor);
+        // 🔴 页面已关、provider 已回收（autoDispose）：await 回来再写 state 会抛（debug 红屏）。code review #8
+        if (!ref.mounted) return;
         acc = acc.append(next);
         cursor = next.hasMore ? next.nextCursor : null;
         if (next.items.isNotEmpty) {
@@ -88,6 +90,7 @@ class PetRecommendationListController extends AsyncNotifier<RecommendedPetPage> 
       _emptyRounds = acc.items.length > current.items.length ? 0 : _emptyRounds + 1;
       state = AsyncData(acc);
     } catch (_) {
+      if (!ref.mounted) return; // 同上：catch 里再写一次 state，抛出的异常没人接
       // 🛡 已加载的内容一个不动（F13）—— 连抓途中失败时，前面抓到的也留着；
       //    调用方据 loadMoreFailed 摆底部重试入口。
       loadMoreFailed = true;
@@ -102,8 +105,10 @@ class PetRecommendationListController extends AsyncNotifier<RecommendedPetPage> 
     loadMoreFailed = false;
     _emptyRounds = 0;
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
+    final result = await AsyncValue.guard(
         () => ref.read(petRecommendationRepositoryProvider).recommendations(limit: pageSize));
+    if (!ref.mounted) return; // code review #8：重试途中离开页面
+    state = result;
   }
 }
 

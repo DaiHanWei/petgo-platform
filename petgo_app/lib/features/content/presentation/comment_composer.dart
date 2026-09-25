@@ -184,7 +184,7 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
         // 带上新回复的 id：回复区不止一页时，评论区要靠它知道翻到哪儿才算到位。
         // 真正的展开/滚动在 CommentSection 里做（那边才知道刷新什么时候结束）。
         ref
-            .read(replyLandingProvider.notifier)
+            .read(replyLandingProvider(widget.postId).notifier)
             .request(parentId: parentId, replyId: created.id);
       } else {
         final created = await repo.postComment(
@@ -195,7 +195,7 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
         // 🔴 记下刚发的这条，让评论区把它置顶（Story 2.5 · AC6）。
         // 热度序下 0 赞的新评论会排到第一页之外 —— 不记的话用户发完找不到自己的评论。
         // 只对**一级**评论做：二级回复挂在父评论下，位置由父决定，不存在找不到的问题。
-        ref.read(sessionPinnedCommentsProvider.notifier).add(created);
+        ref.read(sessionPinnedCommentsProvider(widget.postId).notifier).add(created);
       }
       if (!mounted) return;
       // 仅成功后清空输入 + 收起键盘 + 退出回复态 + 刷新评论区（AC3）。

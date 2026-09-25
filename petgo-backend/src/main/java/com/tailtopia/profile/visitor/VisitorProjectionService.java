@@ -139,11 +139,28 @@ public class VisitorProjectionService {
      */
     @Transactional(readOnly = true)
     public List<VisitorTimelineItem> timeline(PetProfile profile, int limit) {
+        return timeline(profile, limit, true);
+    }
+
+    /**
+     * 时间线投影，可选是否含私密条目（2026-09-25 code review #2）。
+     *
+     * <p>🔴 「含私密」的授权来自<b>主人主动分享</b>（H5 分享链接，cardToken 不可枚举）——
+     * 站内访客入口按<b>自增 petId</b> 寻址、任何登录用户都能遍历，主人并没有分享过，
+     * 照搬「含私密」就是把所有人的私密 Diary 原文与原图地址发给任何登录用户。
+     * 站内入口传 {@code includePrivate=false}：私密条目<b>整条不下发</b>（App 端访客时间线复用作者态模型，
+     * 拿到什么就渲染什么，只下发 {@code openableByVisitor=false} 挡不住）。
+     */
+    @Transactional(readOnly = true)
+    public List<VisitorTimelineItem> timeline(PetProfile profile, int limit, boolean includePrivate) {
         List<GrowthMomentView> moments = contentService.findRecentGrowthMomentsByEventDate(
                 profile.getOwnerId(), profile.getId(), limit);
 
         List<VisitorTimelineItem> out = new ArrayList<>(moments.size());
         for (GrowthMomentView m : moments) {
+            if (!includePrivate && !m.openableByVisitor()) {
+                continue;
+            }
             out.add(toVisitorItem(m));
         }
         return out;

@@ -59,8 +59,12 @@ class PlaceCommentsController extends AsyncNotifier<PlaceCommentPage> {
   /// 而用户刚刚才发出一条评论 —— 那一下闪烁看起来像是"发失败了、列表没了"。
   /// 直接用新结果替换即可（失败时保留 AsyncError，由调用方提示）。
   Future<void> reload() async {
-    state = await AsyncValue.guard(
+    final result = await AsyncValue.guard(
         () => ref.read(placeRepositoryProvider).fetchComments(token));
+    // 🔴 等待期间页面走了（autoDispose）：再写 state 会抛出未处理异常 —— 拉黑 / 举报作者后
+    //    触发的那次 reload 是不等结果的，离开页面正好撞上（code review #11，同 _loadMore）。
+    if (!ref.mounted) return;
+    state = result;
   }
 }
 

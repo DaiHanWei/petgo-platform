@@ -93,8 +93,9 @@ public class InAppVisitorPetController {
             @PathVariable long petId,
             @RequestParam(name = "limit", defaultValue = "30") int limit) {
         int safe = Math.max(1, Math.min(limit, MAX_TIMELINE_LIMIT));
+        // 🔴 站内入口不含私密条目：petId 可枚举、主人未分享过（code review #2，见 VisitorProjectionService#timeline）
         return new VisitorPetController.TimelineItems(
-                visitors.timeline(requireVisible(jwt, petId), safe));
+                visitors.timeline(requireVisible(jwt, petId), safe, false));
     }
 
     /**

@@ -29,14 +29,14 @@ void main() {
 
   group('置顶集合的生命周期', () {
     test('初始为空 —— 没发过评论就不该有任何置顶', () {
-      expect(container().read(sessionPinnedCommentsProvider), isEmpty);
+      expect(container().read(sessionPinnedCommentsProvider(1)), isEmpty);
     });
 
     test('发一条 → 记下整条（不只是 id）', () {
       final c = container();
-      c.read(sessionPinnedCommentsProvider.notifier).add(comment(42));
+      c.read(sessionPinnedCommentsProvider(1).notifier).add(comment(42));
 
-      final pinned = c.read(sessionPinnedCommentsProvider);
+      final pinned = c.read(sessionPinnedCommentsProvider(1));
       expect(pinned.keys, [42]);
       // 🔴 存整条而不只是 id：热度序下 0 赞的新评论很可能**根本不在第一页**，
       // 只记 id 就只能"把已拿到的那条挪前面"，拿不到时依然看不见。
@@ -45,22 +45,42 @@ void main() {
 
     test('发多条 → 保持发出顺序', () {
       final c = container();
-      c.read(sessionPinnedCommentsProvider.notifier)
+      c.read(sessionPinnedCommentsProvider(1).notifier)
         ..add(comment(1))
         ..add(comment(2));
 
-      expect(c.read(sessionPinnedCommentsProvider).keys, [1, 2]);
+      expect(c.read(sessionPinnedCommentsProvider(1)).keys, [1, 2]);
+    });
+
+    /// 🔴 code review #9：两个帖子详情叠着（帖 A → 作者主页 → 帖 B）时各管各的。
+    test('按帖子隔离：A 的置顶不出现在 B；清 B 不影响 A', () {
+      final c = container();
+      c.read(sessionPinnedCommentsProvider(100).notifier).add(comment(7));
+
+      expect(c.read(sessionPinnedCommentsProvider(200)), isEmpty, reason: 'A 发的评论不得串到 B 顶部');
+
+      c.read(sessionPinnedCommentsProvider(200).notifier).clear(); // B 关闭
+      expect(c.read(sessionPinnedCommentsProvider(100)).keys, [7], reason: '清 B 不得把 A 的置顶一并清掉');
+    });
+
+    test('回复落点同样按帖子隔离', () {
+      final c = container();
+      c.read(replyLandingProvider(100).notifier).request(parentId: 3, replyId: 9);
+
+      expect(c.read(replyLandingProvider(200)), isNull);
+      c.read(replyLandingProvider(200).notifier).clear();
+      expect(c.read(replyLandingProvider(100))?.replyId, 9);
     });
 
     /// AC6：离开详情页后置顶失效 —— `CommentSection.dispose` 调的就是这个。
     /// 不清的话它会变成「永久置顶自己的评论」，那是另一个功能。
     test('clear → 置顶失效', () {
       final c = container();
-      c.read(sessionPinnedCommentsProvider.notifier)
+      c.read(sessionPinnedCommentsProvider(1).notifier)
         ..add(comment(1))
         ..clear();
 
-      expect(c.read(sessionPinnedCommentsProvider), isEmpty);
+      expect(c.read(sessionPinnedCommentsProvider(1)), isEmpty);
     });
   });
 

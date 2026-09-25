@@ -378,6 +378,16 @@ public class PaymentIntentService {
         if (intent.getGatewayRef() != null) {
             return; // 已下单，幂等短路
         }
+        // 🔴 已终态（FAILED / EXPIRED / PAID）的意图绝不回填、调用方也拿不到二维码（2026-09-25 code review #1）。
+        //    并发竞态：两个请求拿到同一张无网关单号的意图 —— 快的那个被网关判重复单号拒掉、经 failChargeAttempt
+        //    置 FAILED；慢的那个随后拿到二维码。若照样回填并把码交给用户，用户扫码付了钱，到账回调却因
+        //    「已终态」被丢弃，订单停在待支付直到超时取消 —— 收了钱不履约。
+        //    这里抛出后调用方不会下发 payload；用户重试走新意图、新 request_id。网关侧那张单无人扫码，自然过期。
+        //    与 failChargeAttempt 的并发写由 @Version 乐观锁裁决，只有一方落库。
+        if (intent.getStatus().isTerminal()) {
+            log.warn("attachCharge 拒绝：意图已终态 token={} status={}", publicToken, intent.getStatus());
+            throw AppException.conflict("支付单已失效，请重新发起支付");
+        }
         intent.attachGatewayRef(gatewayRef, meta);
         intents.saveAndFlush(intent);
     }
