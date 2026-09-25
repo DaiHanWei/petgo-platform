@@ -192,17 +192,6 @@ class _CommentRow extends StatelessWidget {
                           style: AppTypography.micro.copyWith(color: AppColors.textTertiary),
                         ),
                       ),
-                    if (onDelete != null)
-                      GestureDetector(
-                        key: ValueKey('placeCommentDelete-${comment.id}'),
-                        onTap: onDelete,
-                        // 44×44 热区（UX-DR16）：图标本身只有 16。
-                        child: const Padding(
-                          padding: EdgeInsets.all(14),
-                          child: Icon(Icons.delete_outline_rounded,
-                              size: 16, color: AppColors.textTertiary),
-                        ),
-                      ),
                   ],
                 ),
                 Text(comment.body, style: AppTypography.body),
@@ -213,6 +202,25 @@ class _CommentRow extends StatelessWidget {
               ],
             ),
           ),
+          // bug 20260924-571：删除钮挪出昵称行，放在整条评论最右侧。
+          // 原先它在昵称行里、四周 14 的内边距把那一行撑到 44 高 —— 只有本人的评论
+          // 昵称和正文之间多出一大段空，别人的评论紧凑，列表看起来参差不齐。
+          // 44×44 热区（UX-DR16）保留，图标贴顶与昵称同一行，但不再参与昵称行的高度。
+          if (onDelete != null)
+            GestureDetector(
+              key: ValueKey('placeCommentDelete-${comment.id}'),
+              behavior: HitTestBehavior.opaque,
+              onTap: onDelete,
+              child: const SizedBox(
+                width: 44,
+                height: 44,
+                child: Align(
+                  alignment: Alignment.topRight,
+                  child: Icon(Icons.delete_outline_rounded,
+                      size: 16, color: AppColors.textTertiary),
+                ),
+              ),
+            ),
         ],
       ),
     );

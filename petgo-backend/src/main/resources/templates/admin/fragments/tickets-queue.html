@@ -36,6 +36,9 @@
             <span class="badge q-result" th:if="${r.result != null}"
                   th:classappend="${r.result == 'SUSPEND'} ? 'badge-danger' : (${r.result == 'WARNING'} ? 'badge-warn' : 'badge-ok')"
                   th:text="${#messages.msgOrNull('admin.v130.tickets.result.' + r.result) ?: r.result}">结果</span>
+            <!--/* bug 20260924-566：与人工审核页同口径 —— 待处置条目给「待审核」状态标，标题行任何状态下都有状态标 */-->
+            <span class="badge badge-warn q-result" th:if="${r.result == null}"
+                  th:text="#{admin.review.result.PENDING_REVIEW}">待审核</span>
         </span>
         <span class="q-meta">
             <span class="badge badge-neutral" th:text="#{admin.tickets.type.ACCOUNT_REPORT}">用户举报</span>

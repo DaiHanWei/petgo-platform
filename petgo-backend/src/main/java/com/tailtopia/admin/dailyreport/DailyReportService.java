@@ -49,13 +49,15 @@ public class DailyReportService {
     /** 管理端手动触发：失败抛业务异常（含原因），供接口回显。 */
     public DailyReport pushNow() {
         if (!props.isEnabled()) {
-            throw AppException.serviceUnavailable("日报 webhook 未配置（LARK_DAILY_REPORT_WEBHOOK_URL）");
+            throw AppException.serviceUnavailable("日报 webhook 未配置（LARK_DAILY_REPORT_WEBHOOK_URL）")
+                    .code("admin.err.dailyReport.notConfigured");
         }
         DailyReport report = getDailyReport(LocalDate.now(clock.withZone(WIB)));
         try {
             lark.send(DailyReportCard.build(report));
         } catch (LarkWebhookClient.LarkWebhookException e) {
-            throw AppException.serviceUnavailable("日报推送失败：" + e.getMessage());
+            throw AppException.serviceUnavailable("日报推送失败：" + e.getMessage())
+                    .code("admin.err.dailyReport.pushFailed", e.getMessage());
         }
         log.info("daily report pushed (manual) date={}", report.date());
         return report;
