@@ -11,6 +11,8 @@ import com.tailtopia.consult.domain.ConsultSource;
 import com.tailtopia.consult.dto.ConsultHistoryPage;
 import com.tailtopia.consult.repository.ConsultRatingRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
+import com.tailtopia.profile.domain.ArchiveDecision;
+import com.tailtopia.profile.repository.HealthEventRepository;
 import com.tailtopia.triage.domain.DangerLevel;
 import com.tailtopia.triage.dto.TriageHistoryItem;
 import com.tailtopia.triage.service.TriageService;
@@ -26,7 +28,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * L0 单元测试：AI + 兽医两类历史混排倒序、兽医条目带评分/兽医名、历史独立于存档（archived=false）。
+ * L0 单元测试：AI + 兽医两类历史混排倒序、兽医条目带评分/兽医名；
+ * archived 取真实存档状态（bug 20260721-340，原先写死 false）。
  */
 @ExtendWith(MockitoExtension.class)
 class ConsultHistoryServiceTest {
@@ -39,9 +42,11 @@ class ConsultHistoryServiceTest {
     TriageService triageService;
     @Mock
     VetAccountService vetAccounts;
+    @Mock
+    HealthEventRepository healthEvents;
 
     private ConsultHistoryService service() {
-        return new ConsultHistoryService(sessions, ratings, triageService, vetAccounts);
+        return new ConsultHistoryService(sessions, ratings, triageService, vetAccounts, healthEvents);
     }
 
     private ConsultSession closedVetSession(long id, Instant created) {
@@ -75,10 +80,29 @@ class ConsultHistoryServiceTest {
         assertThat(page.items().get(0).type()).isEqualTo("VET");
         assertThat(page.items().get(0).userStars()).isEqualTo(5);
         assertThat(page.items().get(0).vetDisplayName()).isEqualTo("王医生");
-        assertThat(page.items().get(0).archived()).isFalse(); // 历史独立于存档
+        assertThat(page.items().get(0).archived()).isFalse(); // 没存档 → false（历史独立于存档）
         assertThat(page.items().get(1).type()).isEqualTo("AI");
         assertThat(page.items().get(1).dangerLevel()).isEqualTo("GREEN");
         assertThat(page.hasMore()).isFalse();
+    }
+
+    @Test
+    void archivedReflectsRealArchiveDecisionForBothVetAndAi() {
+        Instant t = Instant.parse("2026-06-02T00:00:00Z");
+        when(triageService.historyForUser(7L)).thenReturn(List.of(
+                new TriageHistoryItem(1L, "GREEN", "已存档的 AI", t.minusSeconds(10)),
+                new TriageHistoryItem(2L, "YELLOW", "没存档的 AI", t.minusSeconds(20))));
+        when(sessions.findByUserIdAndStatusInOrderByCreatedAtDesc(anyLong(), any()))
+                .thenReturn(List.of(closedVetSession(11L, t)));
+        when(vetAccounts.getById(3L)).thenReturn(VetAccount.create("王医生", "$2a$10$x", "王医生"));
+        // sourceRef 口径：兽医 consult:<sessionId>、AI triage:<triageId>
+        when(healthEvents.findSourceRefsByDecision(any(), org.mockito.ArgumentMatchers.eq(ArchiveDecision.ARCHIVED)))
+                .thenReturn(List.of("consult:11", "triage:1"));
+
+        ConsultHistoryPage page = service().history(7L, null, 20);
+
+        assertThat(page.items()).extracting(i -> i.type() + ":" + i.archived())
+                .containsExactly("VET:true", "AI:true", "AI:false");
     }
 
     @Test

@@ -7,12 +7,16 @@ import com.tailtopia.consult.dto.ConsultHistoryItem;
 import com.tailtopia.consult.dto.ConsultHistoryPage;
 import com.tailtopia.consult.repository.ConsultRatingRepository;
 import com.tailtopia.consult.repository.ConsultSessionRepository;
+import com.tailtopia.profile.domain.ArchiveDecision;
+import com.tailtopia.profile.repository.HealthEventRepository;
 import com.tailtopia.triage.dto.TriageHistoryItem;
 import com.tailtopia.triage.service.TriageService;
 import com.tailtopia.vet.service.VetAccountService;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,9 +31,13 @@ public class ConsultHistoryService {
     private final ConsultRatingRepository ratings;
     private final TriageService triageService;
     private final VetAccountService vetAccounts;
+    // 直接用仓储而不是 HealthEventService：后者挂着 profile 一串服务，consult→profile 服务层互引有循环风险
+    private final HealthEventRepository healthEvents;
 
     public ConsultHistoryService(ConsultSessionRepository sessions, ConsultRatingRepository ratings,
-            TriageService triageService, VetAccountService vetAccounts) {
+            TriageService triageService, VetAccountService vetAccounts,
+            HealthEventRepository healthEvents) {
+        this.healthEvents = healthEvents;
         this.sessions = sessions;
         this.ratings = ratings;
         this.triageService = triageService;
@@ -63,14 +71,27 @@ public class ConsultHistoryService {
     public ConsultHistoryPage history(long userId, String cursor, int limit) {
         List<ConsultHistoryItem> all = new ArrayList<>();
 
-        for (TriageHistoryItem t : triageService.historyForUser(userId)) {
-            all.add(ConsultHistoryItem.ai(t.triageId(), t.dangerLevel(), t.symptomSummary(), t.date()));
-        }
+        List<TriageHistoryItem> triages = triageService.historyForUser(userId);
         // PENDING_CLOSE(兽医已结束、30min 续聊窗口) 也归入历史,带 terminalState=PENDING_CLOSE 标记——
         // 不再算「进行中」(见 SessionStatus.ACTIVE);用户从历史进入仍可在窗口内续聊。
-        for (ConsultSession s : sessions.findByUserIdAndStatusInOrderByCreatedAtDesc(userId,
-                List.of(SessionStatus.PENDING_CLOSE, SessionStatus.CLOSED, SessionStatus.INTERRUPTED))) {
-            all.add(toVetItem(s));
+        List<ConsultSession> vetSessions = sessions.findByUserIdAndStatusInOrderByCreatedAtDesc(userId,
+                List.of(SessionStatus.PENDING_CLOSE, SessionStatus.CLOSED, SessionStatus.INTERRUPTED));
+
+        // 🔴 bug 20260721-340：archived 取真实存档状态（原先写死 false，卡片上的「已归档」永远不出现）。
+        //    sourceRef 口径与存档写入端一致：兽医 consult:<sessionId>、AI triage:<triageId>
+        //    （同 ConsultSessionController 结果页的 isArchived 判定）。一次批量查。
+        Set<String> refs = new HashSet<>();
+        triages.forEach(t -> refs.add(TRIAGE_REF + t.triageId()));
+        vetSessions.forEach(s -> refs.add(CONSULT_REF + s.getId()));
+        Set<String> archived = refs.isEmpty() ? Set.of()
+                : new HashSet<>(healthEvents.findSourceRefsByDecision(refs, ArchiveDecision.ARCHIVED));
+
+        for (TriageHistoryItem t : triages) {
+            all.add(ConsultHistoryItem.ai(t.triageId(), t.dangerLevel(), t.symptomSummary(),
+                    archived.contains(TRIAGE_REF + t.triageId()), t.date()));
+        }
+        for (ConsultSession s : vetSessions) {
+            all.add(toVetItem(s, archived.contains(CONSULT_REF + s.getId())));
         }
 
         // 倒序混排
@@ -90,15 +111,17 @@ public class ConsultHistoryService {
         return new ConsultHistoryPage(page, nextCursor, hasMore);
     }
 
-    private ConsultHistoryItem toVetItem(ConsultSession s) {
+    private static final String CONSULT_REF = "consult:";
+    private static final String TRIAGE_REF = "triage:";
+
+    private ConsultHistoryItem toVetItem(ConsultSession s, boolean archived) {
         String vetName = s.getVetId() == null ? null
                 : safeVetName(s.getVetId());
         Integer stars = ratings.findBySessionId(s.getId()).map(ConsultRating::getStars).orElse(null);
         String summary = s.getAiSymptomText(); // V1：用 AI 上下文症状作摘要（DIRECT 无则 null）
         String closedReason = s.getClosedReason() == null ? null : s.getClosedReason().name();
         String interruptedReason = s.getInterruptedReason() == null ? null : s.getInterruptedReason().name();
-        // archived 标记位：FR-16 存档落地在 Epic 2 profile，本故事暂为 false（历史独立于存档）。
-        return ConsultHistoryItem.vet(s.getId(), vetName, summary, stars, false,
+        return ConsultHistoryItem.vet(s.getId(), vetName, summary, stars, archived,
                 s.getStatus().name(), closedReason, interruptedReason, s.terminalAt());
     }
 
