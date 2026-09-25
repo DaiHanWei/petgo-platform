@@ -177,4 +177,11 @@ void main() {
       expect(find.text('404'), findsNothing);
     });
   });
+
+  // 合并 main（PR #38 那版本测试）带来的一条：iOS 的 scheme 注册是 host 通吃，只需保证 scheme 在。
+  test('iOS 注册了 tailtopia scheme（host 通吃，无需逐个声明）', () {
+    final plist = File('ios/Runner/Info.plist').readAsStringSync();
+    expect(plist.contains('<string>tailtopia</string>'), isTrue,
+        reason: 'Info.plist 的 CFBundleURLSchemes 里没有 tailtopia，iOS 侧唤起会全线失效');
+  });
 }

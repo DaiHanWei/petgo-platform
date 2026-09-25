@@ -17,27 +17,32 @@ class ImageRatioAdvisorTest {
 
     @Test
     void ratiosInsideTheFeedRangeAreNotWarnedAbout() {
-        // 1:1、4:5（0.8）、4:3（1.333）都在 0.75~1.34 内 —— 后两个正是区间的两个边界附近。
+        // 1:1、4:5（0.8）、4:3（1.333）都在 0.75~1.78 内。
+        // 🔁 2026-09-11 放宽上界后新进区间的两张：KTP 导出图（≈1.657）与 16:9（≈1.778）。
         for (ImageSize s : new ImageSize[] {
-                new ImageSize(1000, 1000), new ImageSize(800, 1000), new ImageSize(1332, 1000)}) {
+                new ImageSize(1000, 1000), new ImageSize(800, 1000), new ImageSize(1332, 1000),
+                new ImageSize(1988, 1200), new ImageSize(1920, 1080)}) {
             assertThat(ImageRatioAdvisor.advise(s).warns()).as("%s 应不警告", s).isFalse();
         }
     }
 
     /**
-     * 🔴 <b>16:9 的正确结论是「共裁约 25%、每侧约 12%」。</b>
+     * 🔴 <b>共裁量与每侧裁量是两个数，差一倍。</b>
      *
      * <p>story 里的示例文案写的是「左右**各**裁切约 25%」—— 那个说法会让运营以为要裁掉一半。
-     * 正确算法：容器比例被 clamp 到 1.34，按高对齐 ⇒ 可见宽度占 1.34/1.78 ≈ 75.3%，
-     * 即共裁 ≈ 24.7%，每侧 ≈ 12.3%。所以文案里**两个数都给**，只给一个必然被读错。
+     * 所以文案里**两个数都给**，只给一个必然被读错。
+     *
+     * <p>🔁 2026-09-11 上界放宽到 1.78 后，原来的 16:9 示例<b>不再被裁</b>（已挪进上一条用例），
+     * 这里换成真正越界的 3:1 全景：容器比例 clamp 到 1.78，按高对齐 ⇒
+     * 可见宽度占 1.78/3 ≈ 59.3%，即共裁 ≈ 40.7%、每侧 ≈ 20.3%。
      */
     @Test
-    void sixteenByNineCropsAboutAQuarterInTotalNotPerSide() {
-        ImageRatioAdvisor.Advice a = ImageRatioAdvisor.advise(new ImageSize(1920, 1080));
+    void ultraWidePanoramaCropsSidesAndReportsBothNumbers() {
+        ImageRatioAdvisor.Advice a = ImageRatioAdvisor.advise(new ImageSize(3000, 1000));
 
         assertThat(a.crop()).isEqualTo(Crop.SIDES);
-        assertThat(a.totalPercent()).isEqualTo(25);
-        assertThat(a.perSidePercent()).isEqualTo(12);
+        assertThat(a.totalPercent()).isEqualTo(41);
+        assertThat(a.perSidePercent()).isEqualTo(20);
         // ⚠️ **不能**断言 perSide == round(total / 2)：两个数各自从同一个小数四舍五入
         //    （24.7% → 25 与 12.36% → 12），而 round(25/2) = 13。
         //    先写成那样红了一次 —— 那是断言错，不是实现错。
@@ -58,7 +63,7 @@ class ImageRatioAdvisorTest {
     /** 刚好落在边界上不算超出（闭区间）。 */
     @Test
     void theRangeIsInclusiveOnBothEnds() {
-        assertThat(ImageRatioAdvisor.advise(new ImageSize(134, 100)).warns()).isFalse();
+        assertThat(ImageRatioAdvisor.advise(new ImageSize(178, 100)).warns()).isFalse();
         assertThat(ImageRatioAdvisor.advise(new ImageSize(75, 100)).warns()).isFalse();
     }
 

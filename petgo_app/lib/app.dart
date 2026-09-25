@@ -123,7 +123,8 @@ class TailTopiaApp extends ConsumerStatefulWidget {
   ConsumerState<TailTopiaApp> createState() => _TailTopiaAppState();
 }
 
-class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBindingObserver {
+class _TailTopiaAppState extends ConsumerState<TailTopiaApp>
+    with WidgetsBindingObserver {
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSub;
 
@@ -144,7 +145,8 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
     // ⚠️ 绝不在别处另写一套「同时命中谁先谁后」的判定，那正是 Rule 7 要消除的不确定性。
     PhoneSoftPrompt.register(
       prefs: AppPrefs.create,
-      registeredAt: () async => ref.read(authControllerProvider).profile?.createdAt,
+      registeredAt: () async =>
+          ref.read(authControllerProvider).profile?.createdAt,
       hasPhone: () async {
         final phone = ref.read(authControllerProvider).profile?.phone;
         return phone != null && phone.isNotEmpty;
@@ -160,6 +162,17 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     ref.read(pushServiceProvider).onAppLifecycleChanged(state);
+    // 🔴 回到前台重新拉未读角标（Bug 20260911-495）。
+    //
+    // 未读计数此前**只在启动与切账号时拉一次**，之后的失效点全是"变少"那一侧
+    // （点开通知、在通知中心标已读）。于是别人给你点赞/评论、服务端计数涨了，
+    // 客户端从不重新拉 —— 铃铛上永远是你启动那一刻的数字。
+    // 最典型的场景正是"退到后台 → 收到通知 → 回来看"，所以刷新挂在 resumed 上。
+    //
+    // ⚠️ 不做轮询：只在"用户回到 App"这个明确时点拉一次，不为角标烧流量和电。
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(unreadCountProvider);
+    }
   }
 
   Future<void> _initDeepLinks() async {
@@ -189,7 +202,6 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
     super.dispose();
   }
 
-
   @override
   Widget build(BuildContext context) {
     // 分析身份绑定：登录(含待引导新用户,有 id)→ identify(哈希 distinctId)；登出 → reset。
@@ -215,7 +227,9 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
       // 只在「变为某个非游客用户」时失效；退出登录（转 guest）**不**在此失效——游客态无 token，
       // 失效会立即触发 /me 等重拉 → 401 → 强制登录弹窗。清除靠受控 Tab 对游客不可见 + 下次登录重拉达成。
       // 兽医登录 profile=null（nextId=null）自动跳过，不误刷用户维度缓存。
-      if (next.status != AuthStatus.guest && nextId != null && nextId != prevId) {
+      if (next.status != AuthStatus.guest &&
+          nextId != null &&
+          nextId != prevId) {
         resetUserScopedCaches(ref);
       }
 
@@ -228,8 +242,10 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
       //    B 的设备持续收 A 的推送（跨用户隐私泄漏，与 IM 漏登出同型）。
       // fire-and-forget：注册失败静默，推送是增强能力。
       final becameAuthed =
-          next.status == AuthStatus.authenticated && prev?.status != AuthStatus.authenticated;
-      final switchedUser = next.status != AuthStatus.guest &&
+          next.status == AuthStatus.authenticated &&
+          prev?.status != AuthStatus.authenticated;
+      final switchedUser =
+          next.status != AuthStatus.guest &&
           nextId != null &&
           prevId != null &&
           nextId != prevId;
@@ -243,8 +259,10 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
             .unregister()
             .timeout(const Duration(seconds: 5))
             .catchError((_) {})
-            .whenComplete(() =>
-                im.logout(ifGeneration: logoutGeneration).catchError((_) {}))
+            .whenComplete(
+              () =>
+                  im.logout(ifGeneration: logoutGeneration).catchError((_) {}),
+            )
             .whenComplete(() => push.syncRegistration(isVet: next.isVet));
       } else if (becameAuthed) {
         ref.read(pushServiceProvider).syncRegistration(isVet: next.isVet);
@@ -272,7 +290,11 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp> with WidgetsBinding
       builder: (context, child) {
         final mq = MediaQuery.of(context);
         return MediaQuery(
-          data: mq.copyWith(textScaler: mq.textScaler.clamp(maxScaleFactor: TailTopiaApp.maxTextScale)),
+          data: mq.copyWith(
+            textScaler: mq.textScaler.clamp(
+              maxScaleFactor: TailTopiaApp.maxTextScale,
+            ),
+          ),
           // 全局「点非输入区收起键盘」：translucent 使按钮/输入框仍在手势竞技场胜出正常响应，
           // 仅点到非交互空白处才触发 unfocus 收起软键盘（键盘避让标准的补充，见 CLAUDE.md）。
           // 埋点治理 P0（2026-07-27）：已移除全局 AnalyticsAutocapture——从 semantics 树反推

@@ -70,7 +70,7 @@ void main() {
       expect(aspect, isNot(closeTo(4 / 3, 0.01)), reason: '不得再回到写死的 4:3');
     });
 
-    testWidgets('超出上界的全景图夹到 1.34', (tester) async {
+    testWidgets('超出上界的全景图夹到 1.78', (tester) async {
       final aspect = await _pumpAspect(
           tester, _item(sizes: const [ImageSize(3000, 1000)]),
           maxImageHeight: 900);

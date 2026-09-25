@@ -50,7 +50,8 @@ class PromoPinnedCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 图片走与普通卡**同一条**三段口径：比例收敛 + 高度护栏 + 加载期占位。
-          // ⚠️ 因此 16:9 的横幅进首页会被左右各裁约四分之一 —— 运营做素材时就该按 0.75~1.34 出图。
+          // ⚠️ 因此运营素材要按 0.75~1.78 出图；越界的（如 4:1 长横幅）进首页仍会被左右裁。
+          // 🔁 2026-09-11 上界放宽到 1.78 后，16:9 横幅已能原样展示，不再被裁。
           FeedImage(
             urls: [promo.imageUrl],
             type: 'DAILY',
