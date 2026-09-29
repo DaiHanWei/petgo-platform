@@ -7,7 +7,7 @@
 
 | 主题 | 功能分支 | Epic 号段 | Story | 状态 |
 |---|---|---|---|---|
-| **batch-a** · 插画依赖包（App + 后端 + 后台） | `feat/1.3.2-batch-a-app-feature` | 待拆 | 待拆 | PRD / 后台 PRD / 内容设计 / UI 稿 / 决策日志 / 代码核对报告已入库（2026-09-28）；开工前 14 项拍板 + 13 项冲突裁定已定 —— **可拆 epics** |
+| **batch-a** · 插画依赖包（App + 后端 + 后台） | `feat/1.3.2-batch-a-app-feature` | Epic 1–5 | 26 | PRD / 后台 PRD / 内容设计 / UI 稿 / 决策日志 / 代码核对报告已入库（2026-09-28）；架构 delta（AD-1~AD-20）+ epics（26 story）已定稿（2026-09-29）—— **待 sprint planning 与逐条建 story 文件** |
 
 ## 产物文件（batch-a）
 
@@ -22,7 +22,7 @@
 | **决策日志** | `决策日志-batch-a.md` | **冲突时以此为准** |
 | **代码核对报告** | `代码核对报告-batch-a.md` | 文档「现状如此」对代码的核实 + 会被打破的既有测试，拆 epics 前必读 |
 | 架构 delta | `architecture-v1.3.2-batch-a-delta.md` | AD-1~AD-20，2026-09-29 定稿（经三路评审）；决策记录 `architecture-batch-a/.memlog.md` |
-| epics | `epics-v1.3.2-batch-a.md` | 待出 |
+| epics | `epics-v1.3.2-batch-a.md` | 5 个 Epic · 26 条 story，2026-09-29 定稿 |
 | sprint-status | `../../implementation-artifacts/v1.3.2/sprint-status-v1.3.2-batch-a.yaml` | 待出 |
 
 **权威顺序**：决策日志 > PRD（App / 后台）> 内容设计 > UI 稿。
