@@ -21,7 +21,7 @@
 | 编码规则 | `宠物身份码护照编码规则.md` | 护照号规则（外部原文，笔误见决策日志 C-13） |
 | **决策日志** | `决策日志-batch-a.md` | **冲突时以此为准** |
 | **代码核对报告** | `代码核对报告-batch-a.md` | 文档「现状如此」对代码的核实 + 会被打破的既有测试，拆 epics 前必读 |
-| 架构 delta | `architecture-v1.3.2-batch-a-delta.md` | 待出 |
+| 架构 delta | `architecture-v1.3.2-batch-a-delta.md` | AD-1~AD-20，2026-09-29 定稿（经三路评审）；决策记录 `architecture-batch-a/.memlog.md` |
 | epics | `epics-v1.3.2-batch-a.md` | 待出 |
 | sprint-status | `../../implementation-artifacts/v1.3.2/sprint-status-v1.3.2-batch-a.yaml` | 待出 |
 
