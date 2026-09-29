@@ -92,7 +92,9 @@ class AdminPlaceIntegrationTest extends ApiIntegrationTest {
         assertThat(page).contains("id=\"places-rows\"").contains("id=\"places-summary\"").contains("id=\"places-drawer\"")
                 .contains("data-id=\"" + active.getId() + "\"").contains("data-id=\"" + delisted.getId() + "\"").contains("data-id=\"" + merged.getId() + "\"")
                 .contains("Kopi " + tag).contains("咖啡店").contains("公园").contains("已下架").contains("已合并").contains("上架")
-                .contains("PETS_ALLOWED_INSIDE").contains("+1") // 标签最多 3 个 + N
+                // 已知标签按语言显示（0923 批次起，places-list.html 走 admin.v130.places.tag.*），不再露原始码
+                .contains("允许入内").doesNotContain(">PETS_ALLOWED_INSIDE<")
+                .contains("+1") // 标签最多 3 个 + N
                 .contains("Jakarta").contains("Bandung").contains("/admin/places\"").contains("场所管理")
                 .contains("/admin/manual-review?type=PLACE_REPORT");
         // 摘要条随筛选联动：上架 1（active）、待处理举报 1、累计打卡 1（实时统计）

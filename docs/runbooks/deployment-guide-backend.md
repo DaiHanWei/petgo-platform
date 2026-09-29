@@ -20,6 +20,10 @@ cd /Users/dai/work/petgo-platform
 ```bash
 ssh dai@62.146.239.156 'curl -s http://127.0.0.1:8084/actuator/health'
 # 期望: {"status":"UP",...}
+
+# 服务端埋点是否真的开着（key 缺失时上报静默关闭、不报错，只能靠这行发现）
+ssh dai@62.146.239.156 'docker logs petgo-server 2>&1 | grep "server-side analytics" | tail -1'
+# 期望: server-side analytics enabled=true host=https://eu.i.posthog.com appEnv=prod
 ```
 
 第一次部署 / 换机器 / 清盘 → 先做 **§2 一次性初始化**。
@@ -119,6 +123,15 @@ IM_MODE=stub
 TENCENT_IM_SDK_APP_ID=
 TENCENT_IM_SECRET_KEY=
 TENCENT_IM_CALLBACK_TOKEN=
+
+# === 服务端 PostHog 埋点（key 留空 = 上报静默关闭）===
+# 与 App 用同一个 project 的 write-only key（phc_…，见 petgo_app/lib/core/analytics/analytics.dart），
+# 前后端事件才能在同一个项目里拼漏斗。
+POSTHOG_SERVER_KEY=
+POSTHOG_HOST=https://eu.i.posthog.com
+# 环境标记，只认 prod / stag / dev。生产写 prod，staging（~/.env.petgo-stag）写 stag ——
+# 两边共用一个 PostHog 项目，靠 app_env 区分；不写会被标成 dev，staging 数据混进生产漏斗。
+APP_ENV=prod
 EOF
 chmod 600 ~/.env.petgo
 ```
@@ -239,6 +252,8 @@ ssh dai@62.146.239.156 \
 - [ ] `DB_PASSWORD` 强密码且与 petgo-postgres 一致
 - [ ] `REDIS_DB=2`（隔离共享 redis）
 - [ ] 需要的 live 凭证已填（Gemini / OSS / Google）；不填则对应功能 stub/降级
+- [ ] `~/.env.petgo` 有 `POSTHOG_SERVER_KEY`（与 App 同一 phc_ key）、`POSTHOG_HOST`、`APP_ENV=prod`（2026-09-25 已写入）
+- [ ] 部署后启动日志出现 `server-side analytics enabled=true … appEnv=prod`（见 §0）。⚠️ 改 env 必须**重建容器**才生效，`docker restart` 不重读 env 文件
 - [ ] Cloudflare Tunnel 路由已配并验证公网 `/actuator/health`
 - [ ] 改 schema 前已 `pg_dump` 备份
 - [ ] ⚠️ 共享 redis：任何运维**禁止** `FLUSHALL`（会清掉 logistic/jbp 的数据）

@@ -91,8 +91,16 @@ class Epic5ChainIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
-    private static final long ACTOR = 1L;
-    private static final long ADMIN = 1L;
+    // 🔴 操作人必须是真实存在的后台账号：inventory_movements.operator_account_id 对 admin_accounts 有 FK，
+    //    写死 1L 只在别的测试类先建过 1 号时才成立（全量 L1 里本类排在前面就撞外键）。同 Epic1ChainIntegrationTest。
+    private long ACTOR;
+    private long ADMIN;
+
+    @org.junit.jupiter.api.BeforeEach
+    void resolveActors() {
+        ACTOR = adminActorId();
+        ADMIN = ACTOR;
+    }
 
     /** 🔴 单行 pawcoin_config 是共享态，测完必须还原。 */
     @AfterEach

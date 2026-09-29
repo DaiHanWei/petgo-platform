@@ -26,6 +26,10 @@
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
+		<!-- 出口合规（2026-09-25）：只用系统 HTTPS/TLS 等标准加密 → 属豁免，声明 false 后上传 App Store Connect
+		     不再每次弹「出口合规」问答。若将来引入自研 / 非标准加密，须改为 true 并补合规文件。 -->
+		<key>ITSAppUsesNonExemptEncryption</key>
+		<false/>
 		<key>NSCameraUsageDescription</key>
 		<string>TailTopia needs camera access so you can take photos of your pet for profiles, posts, and AI triage.</string>
 		<key>NSPhotoLibraryUsageDescription</key>
