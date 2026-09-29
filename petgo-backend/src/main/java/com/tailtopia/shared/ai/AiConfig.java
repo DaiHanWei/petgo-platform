@@ -23,4 +23,13 @@ public class AiConfig {
         }
         return new StubGeminiClient();
     }
+
+    /** 看图写评论（自动评论定时任务）。同一个 {@code mode} 开关：live → Gemini，否则 stub（任务会整轮跳过）。 */
+    @Bean
+    public PetCommentGenerator petCommentGenerator(GeminiProperties props) {
+        if ("live".equalsIgnoreCase(props.getMode())) {
+            return new GeminiPetCommentGenerator(props);
+        }
+        return new StubPetCommentGenerator();
+    }
 }
