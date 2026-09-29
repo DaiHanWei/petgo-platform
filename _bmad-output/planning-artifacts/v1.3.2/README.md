@@ -23,6 +23,6 @@
 | **代码核对报告** | `代码核对报告-batch-a.md` | 文档「现状如此」对代码的核实 + 会被打破的既有测试，拆 epics 前必读 |
 | 架构 delta | `architecture-v1.3.2-batch-a-delta.md` | AD-1~AD-20，2026-09-29 定稿（经三路评审）；决策记录 `architecture-batch-a/.memlog.md` |
 | epics | `epics-v1.3.2-batch-a.md` | 5 个 Epic · 26 条 story，2026-09-29 定稿 |
-| sprint-status | `../../implementation-artifacts/v1.3.2/sprint-status-v1.3.2-batch-a.yaml` | 待出 |
+| sprint-status | `../../implementation-artifacts/v1.3.2/sprint-status-v1.3.2-batch-a.yaml` | 2026-09-29 生成，26 story 全部 backlog |
 
 **权威顺序**：决策日志 > PRD（App / 后台）> 内容设计 > UI 稿。

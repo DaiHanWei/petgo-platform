@@ -117,7 +117,7 @@ flowchart LR
 - **Prevents**：只靠客户端判距；合并场所后唯一约束冲突或当天多打一次；删档后遗留行挡住新宠物；给别人的宠物打卡。
 - **Rule**：
   - `POST /api/v1/places/{token}/checkins`，body 带**精确坐标**与 `petIds`。服务端校验 `petIds` 全部属于本人（本版本即唯一宠物），按 haversine（复用 `GeoBox`）判 **≤500m**。**坐标只用于本次判定，不落库、不进日志、不进埋点**。
-  - 失败统一 ProblemDetail，`type` 区分：距离不足（**不返回距离值**）、今日已打卡、场所不可用（DELISTED / MERGED / 删除）。
+  - 失败统一 ProblemDetail，`type` 区分：距离不足（**不返回距离值**）、今日已打卡、宠物不属于本人、无宠物档案。场所经既有 `resolveForView` 解析：MERGED 记到保留方；DELISTED / 删除 / 不存在沿用既有 404（刻意不可区分）。
   - `place_checkins` 扩列：`public_token`、`origin_place_id`（打卡当时的场所，永不改）、`visit_date`（**WIB 自然日**）；**存量行先回填**（`origin_place_id = place_id`、`visit_date` 取 `checked_at` 的 WIB 日期、随机 token）再加 NOT NULL。
   - `place_checkin_pets(checkin_id, pet_profile_id, origin_place_id, visit_date)`，**UNIQUE(pet_profile_id, origin_place_id, visit_date)**（冗余两列只为约束）。合并场所只改 `place_checkins.place_id`，约束不受影响。
   - 「今日已打卡」服务端判定：该宠物在**当前 `place_id`**（含已合并进来的原场所）同一 WIB 日已有打卡即拒；DB 约束兜底并发。
