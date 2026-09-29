@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  【stag 专用，只在 stag 分支】评论管理页「立即自动评论（stag）」的结果片段。
+  模型：result = StagAutoCommentTool.Result（aiLive / total / posted / skipped / failed / skippedByStatus / items / tookMs）。
+-->
+<body>
+<div th:fragment="result" class="auto-comment-stag-result">
+    <div class="banner err" th:unless="${result.aiLive}"
+         th:text="#{admin.stag.autoComment.notLive}">AI 不是 live 模式，未执行</div>
+
+    <th:block th:if="${result.aiLive}">
+        <p th:if="${result.total == 0}" class="hint"
+           th:text="#{admin.stag.autoComment.none}">没有符合条件的帖子</p>
+
+        <th:block th:if="${result.total > 0}">
+            <p>
+                <strong th:text="#{admin.stag.autoComment.summary(${result.total}, ${result.posted}, ${result.skipped}, ${result.failed}, ${result.tookMs / 1000})}">
+                    处理 10 条：成功 6 · 跳过 3 · 失败 1（用时 58 秒）</strong>
+            </p>
+            <ul th:if="${!result.skippedByStatus.isEmpty()}">
+                <li th:each="e : ${result.skippedByStatus}"
+                    th:text="${#messages.msg('admin.stag.autoComment.status.' + e.key) + ' × ' + e.value}">AI 跳过 × 2</li>
+            </ul>
+            <table class="ud-table">
+                <thead>
+                <tr>
+                    <th th:text="#{admin.stag.autoComment.col.post}">帖子</th>
+                    <th th:text="#{admin.stag.autoComment.col.status}">结果</th>
+                    <th th:text="#{admin.stag.autoComment.col.account}">虚拟账号</th>
+                    <th th:text="#{admin.stag.autoComment.col.detail}">评论 / 原因</th>
+                    <th th:text="#{admin.stag.autoComment.col.latency}">AI 耗时</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="i : ${result.items}">
+                    <td th:text="${i.postId}">4762</td>
+                    <td><span class="badge"
+                              th:classappend="${i.status == 'POSTED'} ? 'badge-ok' : (${i.status == 'FAILED'} ? 'badge-danger' : '')"
+                              th:text="${#messages.msg('admin.stag.autoComment.status.' + i.status)}">已发出</span></td>
+                    <td th:text="${i.virtualNickname ?: '—'}">Budi</td>
+                    <td th:text="${i.comment != null ? i.comment : (i.reason ?: '—')}">Lucu banget! Namanya siapa?</td>
+                    <td th:text="${i.latencyMs != null ? i.latencyMs + ' ms' : '—'}">5200 ms</td>
+                </tr>
+                </tbody>
+            </table>
+            <p class="hint" th:text="#{admin.stag.autoComment.reviewNote}">评论仍走审核，通过后才对 App 可见</p>
+        </th:block>
+    </th:block>
+</div>
+</body>
+</html>
