@@ -30,6 +30,18 @@ petgo:
     winback-after-days: ${LIFECYCLE_PUSH_WINBACK_AFTER_DAYS:7}
     # 12:00 UTC = 19:00 WIB，晚间黄金时段。别照抄 Story 6.7 的 01:00 UTC（=08:00 WIB 通勤路上）。
     cron: ${LIFECYCLE_PUSH_CRON:0 0 12 * * *}
+  # 自动评论（2026-09-29）：每天 09:30 / 20:00（WIB）给发帖满 2 小时、零评论、已过审的公开帖，
+  # 用 AI（Gemini，复用下方 ai.gemini 配置）读首图写一句评论，以虚拟账号直接发出，每帖留档 auto_comment_logs。
+  # 🔴 enabled 默认 false：部署层开关，按环境在 env 打开（stag 先验、生产再开）。GEMINI_MODE 非 live 时整轮跳过。
+  # stag 想立刻验证：把 AUTO_COMMENT_MORNING_CRON 临时设成 "0 */10 * * * *"（每 10 分钟）。
+  auto-comment:
+    enabled: ${AUTO_COMMENT_ENABLED:false}
+    morning-cron: ${AUTO_COMMENT_MORNING_CRON:0 30 9 * * *}
+    evening-cron: ${AUTO_COMMENT_EVENING_CRON:0 0 20 * * *}
+    start-date: ${AUTO_COMMENT_START_DATE:2026-09-29}
+    min-post-age: ${AUTO_COMMENT_MIN_POST_AGE:2h}
+    max-per-run: ${AUTO_COMMENT_MAX_PER_RUN:200}
+    max-attempts: ${AUTO_COMMENT_MAX_ATTEMPTS:2}
   # AI 智能分诊（Story 4.1）：Gemini Developer API（gemini-2.5-flash，签名 URL 直拉私密图）。
   # mode=stub（默认）走打桩客户端，无凭证即可启动并验状态机；mode=live 才打真实 Gemini（L2，需 key）。
   ai:
