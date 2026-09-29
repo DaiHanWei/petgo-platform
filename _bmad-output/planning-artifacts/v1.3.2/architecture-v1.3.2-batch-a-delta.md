@@ -106,7 +106,7 @@ flowchart LR
 - **Prevents**：小标显示未解锁结果、佩戴被新解锁静默替换、并发自动佩戴撞主键、配型两端各算一套。
 - **Rule**：
   - `tailsonality_results(public_token, pet_profile_id, user_id, question_set, answers JSONB, type_code CHAR(4), energy CHAR(1), content_version, unlocked_at NULL, created_at)`。结果 DTO 下发 `resultIndex`（同宠物按 `created_at` 的序号，现算不落库）与完整代号 `ENTJ-H`。
-  - 佩戴 `tailsonality_badges(pet_profile_id PK, result_id)`，只能指向已解锁结果。**首次解锁自动佩戴**：`grant` 内 `INSERT … ON CONFLICT DO NOTHING`，此后解锁不替换。
+  - 佩戴 `tailsonality_badges(pet_profile_id PK, result_id)`，只能指向已解锁结果。**该宠物第一次解锁时自动佩戴**（`grant` 内 `INSERT … ON CONFLICT DO NOTHING`，且仅当已解锁结果恰 1 条），此后解锁不替换。**可卸下**（删佩戴行；卸下后再解锁不自动戴回，D-16）。
   - 主人类型 `tailsonality_owner_types(user_id PK, type_code)`；配型（相同字母数 → 5 档 + 差异句）**纯客户端计算**，不落库。
   - 小标字段 `tailsonalityBadge`（4 字母代号）在**本人宠物档案与公开主页宠物 DTO** 同一规则下发：佩戴行存在且所指结果已解锁，否则 null。字段与实现标识符避开 FR-118.7 反向测试禁词（milestone / passport / checkin / share / follow / visitor / bio）。
   - 挽留弹窗「同一次结果只弹一次」：**客户端本地按结果 `public_token` 记录**（换设备再弹一次，接受）。
@@ -214,7 +214,7 @@ flowchart LR
 ### AD-16 入口与引导
 - **Binds**：聚合页五卡排布与第二次引导。
 - **Prevents**：改动既有入口卡组件；第二次引导弹给新账号或重复弹。
-- **Rule**：聚合页五卡按 C-8 顺序，一行两张共三行，**不改 `InsightEntryCard`**；年龄卡置灰规则不变。`OnboardingMarkKey` 追加 `TAILSONALITY_ENTRY`（wire `tailsonality_entry`），**仅对已有 `ktp_moved` 标记的账号**显示，按账号记一次。
+- **Rule**：聚合页五卡按 C-8 顺序，一行两张共三行，**不改 `InsightEntryCard`**；年龄卡置灰规则不变。`OnboardingMarkKey` 追加 `TAILSONALITY_ENTRY`（wire `tailsonality_entry`），**老账号与本版本新账号都显示**（D-17），同一会话不与第一次引导连弹，按账号记一次。
 
 ### AD-17 注销与删档（安全攸关 D1/D2）
 - **Binds**：本批次全部新表在注销与删档时的处理。
@@ -267,6 +267,5 @@ flowchart LR
 - 服务端存储文案 / 运营可改文案（`content_version` 已留口）。
 - 打卡防定位伪造——接受风险。
 - 删档重建后分享奖励可再领一次（与 KTP 既有渠道同洞）——接受。
-- 新用户首次引导是否一并讲 Tailsonality。
-- 配型档位名以设计图还是文档为准、配型卡是否出猫版（只影响素材与文案表）。
+- 配型卡是否出猫版；配型总评 / 总结句 / 卡面标语文案定稿（D-18，只影响文案表）；能量段正文（D-19）。
 - 旧里程碑 H5 分享回填 code。

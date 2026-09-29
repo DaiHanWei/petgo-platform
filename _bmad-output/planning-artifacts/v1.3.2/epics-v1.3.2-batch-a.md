@@ -582,10 +582,10 @@ So that 我不会错过这个新功能。
 **Acceptance Criteria:**
 
 **Given** `OnboardingMarkKey` 追加 `TAILSONALITY_ENTRY`（wire `tailsonality_entry`）
-**When** 账号**已有** `ktp_moved` 标记、且无 `tailsonality_entry` 标记，进入聚合页
+**When** 账号无 `tailsonality_entry` 标记（老账号，以及本版本新账号——D-17），进入聚合页，且本会话未刚弹过第一次引导
 **Then** 盖一层蒙层，挖空高亮 Tailsonality 卡，文案「Tes kepribadian anabulmu ada di sini / Ketuk buat mulai」+「Oke, ngerti」`[L2]`
 **And** 关闭后记 `tailsonality_entry`，按账号只弹一次；两次引导互不影响 `[L1]`
-**And** 无 `ktp_moved` 的账号不弹 `[L1]`
+**And** 本会话刚看完第一次引导的新账号，本次不弹、下次冷启动再弹（不连弹两层）`[L1]`
 **And** `OnboardingMarkTest` 中「只有 1 个 key」「`tailsonality_intro` 必须被拒」两条断言按新规则更新 `[L0]`
 
 ## Epic 3: 付费解锁
@@ -679,7 +679,7 @@ So that 来看主页的人都能看到，我也能回顾。
 **Given** 新表 `tailsonality_badges(pet_profile_id PK, result_id)`
 **When** 某宠物**首次**有结果解锁
 **Then** `grant` 内 `INSERT … ON CONFLICT DO NOTHING` 自动佩戴；之后再解锁**不替换** `[L1]`
-**And** 只能佩戴已解锁结果（接口校验）`[L1]`
+**And** 只能佩戴已解锁结果（接口校验）；可卸下，卸下后再解锁不自动戴回（D-16）`[L1]`
 
 **Given** 结果列表页
 **When** 渲染

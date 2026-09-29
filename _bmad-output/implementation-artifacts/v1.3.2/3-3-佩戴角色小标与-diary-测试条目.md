@@ -12,7 +12,7 @@ so that 来看主页的人都能看到，我也能回顾。
 
 **AC1 — 佩戴表与首次自动佩戴** `[L0]` `[L1]`
 1. 新迁移（时间戳号，如 `V20260929_HHmm__init_tailsonality_badges.sql`）：`tailsonality_badges(pet_profile_id BIGINT PRIMARY KEY REFERENCES pet_profiles(id) ON DELETE CASCADE, result_id BIGINT NOT NULL REFERENCES tailsonality_results(id) ON DELETE CASCADE, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())` + 表 / 列 COMMENT（「一宠一行；只能指向已解锁结果，由服务层保证」）。实体 `com.tailtopia.tailsonality.domain.TailsonalityBadge`（NEW）。
-2. 在 3-2 的 `TailsonalityKeepsakeGranter.grant` 内、**仅当结果为 `GRANTED` 时**，同一事务执行 `INSERT INTO tailsonality_badges(pet_profile_id, result_id) SELECT pet_profile_id, id FROM tailsonality_results WHERE id = :refId ON CONFLICT (pet_profile_id) DO NOTHING` —— 首次解锁自动佩戴，此后再解锁**不替换**；并发两笔同宠物解锁不撞主键。仍不得抛异常（包在 grant 既有 try 内）。
+2. 在 3-2 的 `TailsonalityKeepsakeGranter.grant` 内、**仅当结果为 `GRANTED` 时**，同一事务执行 `INSERT INTO tailsonality_badges(pet_profile_id, result_id) SELECT pet_profile_id, id FROM tailsonality_results WHERE id = :refId AND (SELECT count(*) FROM tailsonality_results r WHERE r.pet_profile_id = tailsonality_results.pet_profile_id AND r.unlocked_at IS NOT NULL) = 1 ON CONFLICT (pet_profile_id) DO NOTHING` —— 仅该宠物**第一次**解锁时自动佩戴（D-16：卸下后再解锁不自动戴回），此后再解锁**不替换**；并发两笔同宠物解锁不撞主键。仍不得抛异常（包在 grant 既有 try 内）。
 3. 集成测试：首次解锁 A → 佩戴 A；再解锁 B → 仍佩戴 A；两笔并发到账（两个不同结果）→ 恰一行、无异常；`ALREADY_UNLOCKED` / `REF_MISSING` 路径不写佩戴。
 
 **AC2 — 切换佩戴接口** `[L1]`
@@ -20,7 +20,7 @@ so that 来看主页的人都能看到，我也能回顾。
 1. 结果非本人 / 不存在 → 404；结果未解锁 → 422，新 type `tailsonality-badge-locked`（`ErrorTypes` + `AppException` 工厂）；
 2. 通过 → `INSERT … ON CONFLICT (pet_profile_id) DO UPDATE SET result_id = EXCLUDED.result_id, updated_at = now()`；返回 `204`。
 3. `SecurityConfig` 精确 matcher `PUT /api/v1/pet-profiles/me/tailsonality/badge` → `hasRole("USER")`；限流 `rl:tailsonality:badge:{userId}` 20 次 / 分钟。
-4. 本版本**不提供卸下**（UI 只有「Pakai ini」切换；见 Dev Notes「未决」）。
+4. **可卸下**（2026-09-29 决策 D-16）：`DELETE /api/v1/pet-profiles/me/tailsonality/badge`（`SecurityConfig` 精确 matcher `hasRole("USER")`，幂等：无佩戴也 204）；结果列表中正在佩戴的行「Dipakai」可点 → 确认弹窗「Lepas badge? / Badge {pet} nggak akan tampil di profil.」+「Batal」「Lepas」→ 卸下后所有行显示「Pakai ini」，宠物档案与公开主页不再显示小标。「首次解锁自动佩戴」的判据改为：**本次解锁后该宠物的已解锁结果恰好 1 条**（即这是它第一次解锁）才自动佩戴；因此用户卸下后再解锁新结果，**不会**被自动戴回。
 5. 2-1 的 `TailsonalityResultResponse`（列表与单条）追加 `equipped: boolean`（= 佩戴行 `result_id` 等于本结果 id）；四处同步：后端 record、`TailsonalityResultResponseContractTest` 的 `FULL_FIELDS`、App `TailsonalityResult.fromJson`、`test/tailsonality/tailsonality_result_wire_contract_test.dart` fixture。
 
 **AC3 — 结果列表页行内切换** `[L2]` `[L0]`
@@ -120,7 +120,7 @@ so that 来看主页的人都能看到，我也能回顾。
 - **自动佩戴只发生在 grant 的 GRANTED 分支**：放在同一事务里，避免「解锁了但没佩戴」的中间态；`ON CONFLICT DO NOTHING` 同时解决并发与「之后不替换」。
 - **有效日期 = `unlocked_at`**（AD-9）：测试日期只是显示字段——付费那天才进 Diary，不会把条目插回过去某天打乱已读。
 - **标识符避词**：`tailsonalityBadge`、`TailsonalityBadgeChip` 均不含禁词；**不要**起 `shareBadge` / `bioTag` 之类的名字。
-- **未决（不阻塞）**：PRD / 内容设计说「可选择是否佩戴」，UI 稿与 epics 只有切换、没有卸下。本 story 按 UI 与 epics 只做切换；若产品要「卸下」，另开小改（接口加 DELETE、列表「Dipakai」可点）。
+- **卸下（D-16 已定）**：见 AC 第 4 条。l10n 追加 `tailsonalityBadgeRemoveTitle`「Lepas badge? / Remove badge?」、`tailsonalityBadgeRemoveBody`「Badge {pet} nggak akan tampil di profil. / {pet}'s badge won't show on the profile.」、`tailsonalityBadgeRemoveConfirm`「Lepas / Remove」。
 
 ### l10n 新 key（en + id）
 

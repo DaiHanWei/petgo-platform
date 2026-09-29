@@ -26,7 +26,7 @@ so that 测试不像机翻、愿意做完并分享。
    - 花括号占位只出现 `{pet}`；
    - 题目：键集合恰为 `{CAT,DOG,GENERAL} × {Q1..Q15,P1..P3}` 共 54 个，每题恰 4 个选项；`P1..P3` 带 `imageGroup`，`Q*` 不带；
    - 角色 16 个、键为 16 个四字母代号；维度键 `E I N S T F J P`；能量键 `H L`；档位键 `0..4`；差异句 8 键、逐轴详解 16 键（键方案见 Dev Notes）；
-   - AC1.3 / AC1.4 的逐字条目用断言钉几条代表值（如 `kTsMatchTiers[4]!.name.id == 'Kembar Banget'`、`kTsEnergy['L']!.label.en == 'Low energy'`）。
+   - AC1.3 / AC1.4 的逐字条目用断言钉几条代表值（如 `kTsMatchTiers[4]!.name.id == 'Literally Twins'`、`kTsEnergy['L']!.label.en == 'Low energy'`）。
 
 **AC3 — 跨库一致性测试** `[L0]`
 后端新测试 `petgo-backend/src/test/java/com/tailtopia/tailsonality/TailsonalityContentParityTest.java`（照 `profile/domain/MilestoneCatalogI18nTest.java`：后端读 `../petgo_app/...` 的 Dart 源码，**找不到文件明确失败，绝不静默跳过**）：
@@ -127,7 +127,7 @@ const Map<String, TsText> kTsAxisDetails   = { 'EE','EI','IE','II','NN','NS','SN
 | 9 | 角色专属深读 | §5.5 | 16 | **翻译** |
 | 10 | 能量标签 | §4.2 | 2 | 照搬 EN/ID |
 | 11 | 能量段正文 | §4.2「一句话」列（见下方矛盾说明） | 2 | **翻译** |
-| 12 | 5 档名 + 总评 | §4.3「5 档总评」 | 5 + 5 | 照搬 EN/ID |
+| 12 | 5 档名 + 总评 | 档名按设计图（D-18）；总评 §4.3 占位 | 5 + 5 | 档名照搬、总评占位待定稿 |
 | 13 | 5 档总结句 | §4.3「5 档免费总结句」 | 5 | 照搬 EN/ID |
 | 14 | 5 档 slogan | 设计资产清单 §3 | 5 | 照搬，不翻译 |
 | 15 | 8 条差异句 | §4.3「8 条轴差异句」 | 8 | 照搬 EN/ID |
@@ -159,9 +159,9 @@ const Map<String, TsText> kTsAxisDetails   = { 'EE','EI','IE','II','NN','NS','SN
 ### 已知文档矛盾（本 story 的处理）
 
 - **UI 稿 A4 / A5 的题目与内容设计不符**：A4 第 3 题「Kalau ada suara aneh di luar」、A5 第 4 题「Ketemu kucing/anjing lain」、第 5 题逗猫棒（内容设计里是 Q12）、第 6 题图片选项「Di kasur / Di jendela / Di dalam kotak / Di bawah sofa」（内容设计 P1 是「门口 / 客厅正中 / 角落 / 藏身处」）。**以内容设计为准**（口径优先级），UI 稿只借句式。
-- **能量段正文缺源**：内容设计 §5.1 说「能量后缀段 2，见 §3.2」，但 §3.2 没有这两段；唯一的能量文案是 §4.2「一句话」列（电量永远满格，睡醒就是开跑 / 能躺着绝不坐着，能明天绝不今天）。本 story 把这两句作为 `kTsEnergy[*].line` 翻译落地（UI 稿 A9 的 ID 示意「Baterai selalu penuh — bangun tidur langsung ngacir.」可直接采用）；若产品后续补长版，替换即可。
+- **能量段正文缺源**：内容设计 §5.1 说「能量后缀段 2，见 §3.2」，但 §3.2 没有这两段；唯一的能量文案是 §4.2「一句话」列（电量永远满格，睡醒就是开跑 / 能躺着绝不坐着，能明天绝不今天）。本 story 把这两句作为 `kTsEnergy[*].line` 翻译落地（UI 稿 A9 的 ID 示意「Baterai selalu penuh — bangun tidur langsung ngacir.」可直接采用）；**2026-09-29 决策 D-19：正文由产品后续提供**——先用这两句占位，内容表该块加注释 `// PENDING D-19: 能量段正文待提供`。
 - **重测确认正文**：epics 2.4 AC 引用的是 UI 稿短版（「Hasil barunya perlu di-unlock lagi. Yang udah kamu unlock tetap tersimpan.」），内容设计 §2.6 有完整版。**以内容设计完整版为准**。
-- **配型档位名**：设计图（L1–L5）上烤的名字与文档不同（决策日志「设计素材状态」未决项）。**文案表以文档为准**（Literally Twins / Almost Twins / Half & Half / Opposites Attract / Total Opposite；ID 用 §4.3 的 Kembar Banget / Beda Tipis / Setengah-Setengah / Saling Melengkapi / Kebalikan Total）。
+- **配型档位名（2026-09-29 决策 D-18：以设计图为准）**：4/4→0/4 依次为 **Literally Twins / Twin Flames / Backs Together / Counterweight / Magnetic Poles**，EN / ID 同名（专名不译）。档位总评、总结句、卡面标语**具体文案仍在讨论、后续会改**：本 story 先落内容设计 §4.3 的现有总评 / 总结句作占位，并在内容表该块加注释 `// PENDING D-18: 文案待定稿`，定稿后只改这一块。
 
 ### 验证层级
 
