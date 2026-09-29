@@ -7,6 +7,7 @@ import com.tailtopia.social.read.UserHideRelationReader;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.IntUnaryOperator;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -24,6 +25,8 @@ public class VirtualIdentityPicker {
     private final UserHideRelationReader hides;
     private final IntUnaryOperator random;
 
+    /** 🔴 双构造器必须标 {@code @Autowired}，否则 Spring 选不出构造器、启动即崩（stag 2026-09-29 踩过）。 */
+    @Autowired
     public VirtualIdentityPicker(UserHideRelationReader hides) {
         this(hides, bound -> ThreadLocalRandom.current().nextInt(bound));
     }
