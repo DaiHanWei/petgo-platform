@@ -10,7 +10,7 @@ package com.tailtopia.shared.ai;
 public interface PetCommentGenerator {
 
     /** 当前用的提示词版本。改提示词时递增，留档里据此对比效果。 */
-    String PROMPT_VERSION = "v1";
+    String PROMPT_VERSION = "v2";
 
     /**
      * 读帖子首图 + 文字，生成一句评论，或判定不宜评论。
