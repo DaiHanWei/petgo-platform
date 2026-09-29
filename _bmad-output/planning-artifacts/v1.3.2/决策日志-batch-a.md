@@ -52,6 +52,7 @@
 | D-18 | 配型 5 档名以哪套为准 | **以设计图为准**：Literally Twins / Twin Flames / Backs Together / Counterweight / Magnetic Poles（EN / ID 同名）。总评、总结句、卡面标语**文案仍在讨论，后续会改**，先用内容设计 §4.3 占位 | 2-2、2-5、4-2 |
 | D-19 | 能量段正文缺失 | **后续由产品提供**；先用内容设计 §4.2「一句话」占位 | 2-2、3-2 |
 | D-20 | 旧里程碑 H5 链接大徽章随素材变成专属图 | **接受**（旧链接变好看是好事）；KOLEKSI 圆点仍保持原样（C-10） | 5-2 |
+| D-21 | 设计素材何时入库 / 云端怎么跑 | 设计图非最终版，**暂不入库**；云端开发一律代码绘制占位、按约定路径与文件名引用，素材到货后只放文件不改代码。云端**按块（Epic）跑**，每块跑完本地验收再放下一块 | 全部带素材的 story；`cloud-rules-batch-a.md` |
 
 **写 story 时发现的线上问题（不属本版本，待操作者安排）**：KTP 高清购买 `IdCardHdService.purchaseCard` 的 QRIS 与 PawCoin 两条路共用幂等键 `id-hd-card:{cardId}`；先建 QRIS 单再在 24h 内改用 PawCoin，`PawCoinWalletService.debit` 会把它判为重放而**不扣币、仍解锁**。已在代码中核实（`PaymentIntentService` L111 `idempotency.store` + `PawCoinWalletService` L83 `isReplay`）。本版本三类新付费在 3-1 按渠道加后缀规避。
 
