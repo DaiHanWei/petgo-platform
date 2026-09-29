@@ -35,9 +35,9 @@ petgo:
   # 🔴 enabled 默认 false：部署层开关，按环境在 env 打开（stag 先验、生产再开）。GEMINI_MODE 非 live 时整轮跳过。
   # stag 想立刻验证：把 AUTO_COMMENT_MORNING_CRON 临时设成 "0 */10 * * * *"（每 10 分钟）。
   auto-comment:
-    enabled: ${AUTO_COMMENT_ENABLED:false}
-    morning-cron: ${AUTO_COMMENT_MORNING_CRON:0 30 9 * * *}
-    evening-cron: ${AUTO_COMMENT_EVENING_CRON:0 0 20 * * *}
+    enabled: ${AUTO_COMMENT_ENABLED:true}
+    morning-cron: ${AUTO_COMMENT_MORNING_CRON:0 30 10 * * *}
+    evening-cron: ${AUTO_COMMENT_EVENING_CRON:0 30 20 * * *}
     start-date: ${AUTO_COMMENT_START_DATE:2026-09-29}
     min-post-age: ${AUTO_COMMENT_MIN_POST_AGE:2h}
     max-per-run: ${AUTO_COMMENT_MAX_PER_RUN:200}
