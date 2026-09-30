@@ -98,8 +98,11 @@ function tailtopiaConfirmDiffMessage(form) {
         var fmt = function (v) { return isCheck ? (v === '1' ? on : off) : (v === '' ? '—' : v); };
         lines.push(line.split('{0}').join(label).split('{1}').join(fmt(was)).split('{2}').join(fmt(cur)));
     });
-    if (!lines.length) { return form.getAttribute('data-confirm-diff-title') || null; } // 无逐字段差异也不静默放行（复审 #3）
-    return (form.getAttribute('data-confirm-diff-title') || '') + '\n\n' + lines.join('\n');
+    // V1.3.2 Story 3.1：可选追加一句提醒（form[data-confirm-diff-note]）；属性缺省时输出与之前逐字一致。
+    var note = form.getAttribute('data-confirm-diff-note');
+    var tail = note ? '\n\n' + note : '';
+    if (!lines.length) { var t = form.getAttribute('data-confirm-diff-title'); return t ? t + tail : null; } // 无逐字段差异也不静默放行（复审 #3）
+    return (form.getAttribute('data-confirm-diff-title') || '') + '\n\n' + lines.join('\n') + tail;
 }
 function tailtopiaIsHxForm(form) {
     return !!(form.getAttribute && (form.hasAttribute('hx-post') || form.hasAttribute('hx-get') || form.hasAttribute('hx-put') || form.hasAttribute('hx-delete')));

@@ -10,5 +10,6 @@ package com.tailtopia.profile.dto;
  * {@code passportBoardingUnlockPrice}（护照·登机牌）两个一次性解锁价，同样实时读 {@code pricing_config}；旧字段 {@code price} 不变。
  * 改价只影响新发起的解锁，已解锁记录不受影响。
  */
-public record IdCardHdPricingResponse(long price, long passportPageUnlockPrice, long passportBoardingUnlockPrice) {
+public record IdCardHdPricingResponse(long price, long passportPageUnlockPrice, long passportBoardingUnlockPrice,
+        long tailsonalityUnlockPrice) {
 }

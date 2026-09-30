@@ -263,7 +263,8 @@ public class AdminConfigController {
     }
 
     /**
-     * 「KTP 模块高清图解锁定价」三行（V1.3.0 Story 6.1 · AB-18A）：KTP 卡高清下载 / 护照·护照内页 / 护照·登机牌。
+     * 「一次性解锁定价」四行（V1.3.0 Story 6.1 · AB-18A；V1.3.2 Story 3.1 加第四行）：KTP 卡高清下载 / 护照·护照内页（每次快照）
+     * / 护照·登机牌（每张）/ Tailsonality·结果解锁。端点路径与前三个参数名逐字不变。
      * 与定价卡同码（{@code config.edit} 改、{@code config.view} 看，不新增权限）；PRG + toast；校验失败 flash error 回显
      * （htmx 422 fragment 随 Story 6.3 套模板 D 一起接）。
      */
@@ -271,14 +272,16 @@ public class AdminConfigController {
     @PreAuthorize(EDIT_AUTH)
     public String updateKtpPricing(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam long idHdDownloadPrice, @RequestParam long passportPagePrice,
-            @RequestParam long passportBoardingPrice, HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+            @RequestParam long passportBoardingPrice, @RequestParam long tailsonalityUnlockPrice,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        KtpPricingForm form = new KtpPricingForm(idHdDownloadPrice, passportPagePrice, passportBoardingPrice,
+                tailsonalityUnlockPrice);
         if (hx.isHtmx()) {
-            write.updateKtpPricing(new KtpPricingForm(idHdDownloadPrice, passportPagePrice, passportBoardingPrice), admin.getAdminAccountId());
+            write.updateKtpPricing(form, admin.getAdminAccountId());
             return savedCard("cfg-ktp", "config-card-ktp", "admin.flash.config.ktpPricingSaved", model, response);
         }
         try {
-            write.updateKtpPricing(new KtpPricingForm(idHdDownloadPrice, passportPagePrice, passportBoardingPrice),
-                    admin.getAdminAccountId());
+            write.updateKtpPricing(form, admin.getAdminAccountId());
             flash.addFlashAttribute("toast", msg.get("admin.flash.config.ktpPricingSaved"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));

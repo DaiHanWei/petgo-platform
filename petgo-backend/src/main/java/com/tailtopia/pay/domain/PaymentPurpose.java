@@ -15,5 +15,12 @@ public enum PaymentPurpose {
      *
      * <p>这是唯一可能取 {@code MIXED} 渠道的用途：虚拟商品三处均显式拒绝混合支付（AD-3）。
      */
-    SHOP_ORDER
+    SHOP_ORDER,
+    /**
+     * V1.3.2 batch-a Story 3.1（AD-1）：三类一次性解锁，与 {@code keepsake_purchases.sku} 同名。
+     * 🔴 同样只在末尾追加；DB 侧 CHECK 全量重建见 V20260930_2152。到账唯一消费者 = {@code KeepsakePaidHandler}。
+     */
+    TAILSONALITY,
+    PASSPORT_SNAP,
+    BOARDING_PASS
 }

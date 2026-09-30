@@ -57,6 +57,9 @@ public final class ErrorTypes {
     /** V1.3.2 Story 1.5：发帖关联的打卡不存在或不是本人的（422）。 */
     public static final URI POST_CHECKIN_INVALID = URI.create(BASE + "post-checkin-invalid");
 
+    /** V1.3.2 Story 3.1：一次性解锁对象已解锁 / 已付款，无需（不能）再次购买（409）。 */
+    public static final URI KEEPSAKE_ALREADY_UNLOCKED = URI.create(BASE + "keepsake-already-unlocked");
+
     private ErrorTypes() {
     }
 }

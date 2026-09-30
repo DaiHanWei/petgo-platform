@@ -7,7 +7,7 @@ import java.time.format.DateTimeFormatter;
 /**
  * 人类可读支付号（bug 20260721-326 增补，照 299 订单号 {@code OrderDisplayNo} 范式）。计算式，不落库。
  *
- * <p>格式 {@code PAY<用途>-yyyyMMdd-NNNNNN}：前缀标用途（PAYVET / PAYAI / PAYHD / PAYTOPUP），
+ * <p>格式 {@code PAY<用途>-yyyyMMdd-NNNNNN}：前缀标用途（PAYVET / PAYAI / PAYHD / PAYTOPUP / PAYSHOP / PAYTS / PAYPASS / PAYBP），
  * 日期为建意图当天（WIB），序号取 {@code payment_intents} 自增主键 id（同表唯一且单调）。
  * 前缀与订单号（CONSVET/CONSAI/TOPUP）刻意不同名——支付号只出现在支付页与后台支付列表，
  * 防客服拿支付号去订单列表误查到同序号的别家记录。
@@ -35,6 +35,10 @@ public final class PaymentDisplayNo {
             // 电商订单（V1.4.0 Story 3.8）。🔴 与订单号 `TOKO-…` 刻意不同名 ——
             // 支付号只出现在支付页与后台支付列表，同名会让客服拿支付号去订单列表误查。
             case SHOP_ORDER -> "PAYSHOP";
+            // V1.3.2 Story 3.1：三类一次性解锁。
+            case TAILSONALITY -> "PAYTS";
+            case PASSPORT_SNAP -> "PAYPASS";
+            case BOARDING_PASS -> "PAYBP";
         };
         return prefix + "-" + p.getCreatedAt().atZone(WIB).format(YMD)
                 + "-" + String.format("%06d", p.getId());

@@ -6,11 +6,11 @@
   admin-core.js 按 FormData 序列化比对）；高危确认由调用方在 form 上加 data-confirm（静态文案）或 data-confirm-diff（复述每个改动字段旧值 → 新值，Story 6.3）。
   调用方须在外层 th:with 提供：action=@{...}（必填，壳不写 @{}，便于纯模板引擎渲染单测）；可选 cardId（form id，也是行内 err 槽 <id>-err 的前缀）、
   hxPost（htmx 提交：成功回卡 fragment，失败 422 行内 err 到 #<cardId>-err）、confirmDiff（true = 提交前复述改动）、errorFields（422 错误码 → 字段名 JSON，红边）、
-  readonly（true = 保存钮固定禁用并显示 readonlyNote）。
+  readonly（true = 保存钮固定禁用并显示 readonlyNote）、confirmDiffNote（可选：确认弹层末尾追加的一句提醒，V1.3.2 Story 3.1；缺省 = 行为不变）。
 -->
 <body>
 <form class="cfg-card card" th:fragment="configCard(titleSlot, formSlot, saveLabelSlot)" method="post" data-config-card
-      th:attr="action=${action},id=${cardId},hx-post=${hxPost},hx-target=${hxPost != null and cardId != null} ? ('#' + ${cardId} + '-err') : null,hx-swap=${hxPost != null} ? 'innerHTML' : null,data-confirm-diff=${confirmDiff} ? 'true' : null,data-error-fields=${errorFields},data-readonly=${readonly} ? 'true' : null,data-confirm-diff-title=${confirmDiff} ? #{admin.v130.config.confirm.title} : null,data-confirm-diff-line=${confirmDiff} ? #{admin.v130.config.confirm.diff} : null,data-confirm-diff-on=${confirmDiff} ? #{admin.v130.config.confirm.on} : null,data-confirm-diff-off=${confirmDiff} ? #{admin.v130.config.confirm.off} : null">
+      th:attr="action=${action},id=${cardId},hx-post=${hxPost},hx-target=${hxPost != null and cardId != null} ? ('#' + ${cardId} + '-err') : null,hx-swap=${hxPost != null} ? 'innerHTML' : null,data-confirm-diff=${confirmDiff} ? 'true' : null,data-error-fields=${errorFields},data-readonly=${readonly} ? 'true' : null,data-confirm-diff-title=${confirmDiff} ? #{admin.v130.config.confirm.title} : null,data-confirm-diff-line=${confirmDiff} ? #{admin.v130.config.confirm.diff} : null,data-confirm-diff-on=${confirmDiff} ? #{admin.v130.config.confirm.on} : null,data-confirm-diff-off=${confirmDiff} ? #{admin.v130.config.confirm.off} : null,data-confirm-diff-note=${confirmDiffNote != null and confirmDiff == true} ? ${confirmDiffNote} : null">
     <div class="cfg-head">
         <h2 class="cfg-title" th:replace="${titleSlot} ?: ~{}"></h2>
         <span class="tag tag-dirty" hidden data-dirty-flag th:text="#{admin.v130.tpl.dirty}">已修改</span>

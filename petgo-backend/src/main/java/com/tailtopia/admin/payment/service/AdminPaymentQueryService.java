@@ -27,7 +27,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 后台支付记录通用查询（Story 9.6，AB-8E）。按用户跨类型（VET_CONSULT/PAWCOIN_TOPUP/AI_UNLOCK/ID_HD）
+ * 后台支付记录通用查询（Story 9.6，AB-8E）。按用户跨类型（VET_CONSULT/PAWCOIN_TOPUP/AI_UNLOCK/ID_HD/SHOP_ORDER，
+ * V1.3.2 起含 TAILSONALITY/PASSPORT_SNAP/BOARDING_PASS；逻辑按 purpose 泛化、无分支）
  * 只读查 {@code payment_intents}。无敏感 PII（gateway_meta 已脱敏，本查询不返 meta）。
  */
 @Service

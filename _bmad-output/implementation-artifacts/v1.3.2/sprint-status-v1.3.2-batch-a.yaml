@@ -57,8 +57,8 @@ development_status:
   2-7-老账号的第二次入口引导: review
   epic-2-retrospective: optional
   # ===== Epic 3：付费解锁 =====
-  epic-3: backlog
-  3-1-一次性解锁的购买链路与后台定价: ready-for-dev
+  epic-3: in-progress
+  3-1-一次性解锁的购买链路与后台定价: review
   3-2-tailsonality-结果解锁与挽留弹窗: ready-for-dev
   3-3-佩戴角色小标与-diary-测试条目: ready-for-dev
   3-4-护照快照解锁与已购版本: ready-for-dev

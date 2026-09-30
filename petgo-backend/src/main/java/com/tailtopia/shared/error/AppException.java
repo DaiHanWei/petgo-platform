@@ -159,4 +159,9 @@ public class AppException extends RuntimeException {
     public static AppException checkinPetForbidden(String detail) {
         return new AppException(HttpStatus.FORBIDDEN, ErrorTypes.CHECKIN_PET_FORBIDDEN, detail);
     }
+
+    /** V1.3.2 Story 3.1：一次性解锁对象已解锁 / 已付款（409 {@code keepsake-already-unlocked}）。 */
+    public static AppException keepsakeAlreadyUnlocked(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.KEEPSAKE_ALREADY_UNLOCKED, detail);
+    }
 }
