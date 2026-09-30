@@ -42,7 +42,10 @@ class PetPassportSqlShapeTest {
         assertThat(s).contains("JOIN places p ON p.id = c.place_id")
                 .contains("MIN(c.visit_date)")
                 .contains("ORDER BY first_visit ASC, first_id ASC")
-                .contains("COUNT(DISTINCT c.place_id)");
+                .contains("COUNT(DISTINCT c.place_id)")
+                // Story 1.3：地址取出后只对 ACTIVE 保留。
+                .contains("p.address_text")
+                .contains("availability == PlaceAvailability.ACTIVE ? rs.getString(\"address_text\") : null");
     }
 
     @Test

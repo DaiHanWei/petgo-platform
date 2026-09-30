@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
+import '../../pet_passport/domain/new_stamp_args.dart';
 import '../../profile/presentation/pet_insights_page.dart';
 import '../domain/place_checkin_result.dart';
 import 'widgets/place_stamp_view.dart';
@@ -24,7 +25,7 @@ class PlaceCheckinSuccessArgs {
 /// - 再访（C2b）：同骨架，章角标「×{n}」跳动一次 +「Cap {place} sekarang {n}×」；**不播整页落章**。
 ///
 /// 底部按钮行（`bottomNavigationBar` 的一行 `Row`；成功页没有评论输入条，可吸底）：
-/// - 「Lihat Paspor」（Story 1.2）：**仅新章（C2）**出，次级样式 → 护照页停在新章；C2b 不出；
+/// - 「Lihat Paspor」（Story 1.2 / 1.3）：**仅新章（C2）**出，次级样式 → B4 整页落章 → 护照页停在新章；C2b 不出；
 /// - 「Rekam Momen Ini」主 CTA 由 Story 1.5 在同一行追加并排（D-14）。
 /// 动效有静态兜底：动画结束态就是可读的章面 + 文案。
 class PlaceCheckinSuccessPage extends StatelessWidget {
@@ -60,8 +61,17 @@ class PlaceCheckinSuccessPage extends StatelessWidget {
                         foregroundColor: AppColors.mint,
                         side: const BorderSide(color: AppColors.mint),
                       ),
-                      onPressed: () =>
-                          context.push(PetInsightsRoutes.passportFor(focus: r.placeToken)),
+                      // Story 1.3：先进 B4 整页落章（只在 isNewStamp 分支构造 NewStampArgs），
+                      // B4 的「Lihat Paspor」再 pushReplacement 到护照页停在新章。
+                      onPressed: () => context.push(
+                        PetInsightsRoutes.passportNewStamp,
+                        extra: NewStampArgs(
+                          placeToken: r.placeToken,
+                          placeName: r.placeName,
+                          placeType: r.placeType,
+                          stampCount: r.stampCount ?? 1,
+                        ),
+                      ),
                       child: Text(l10n.placeCheckinViewPassport),
                     ),
                   ),

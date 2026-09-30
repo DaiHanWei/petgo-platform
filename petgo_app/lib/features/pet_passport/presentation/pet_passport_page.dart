@@ -4,12 +4,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../place/presentation/place_list_page.dart';
 import '../../place/presentation/widgets/place_stamp_view.dart';
+import '../../profile/presentation/pet_insights_page.dart';
 import '../data/pet_passport_repository.dart';
 import '../domain/pet_passport.dart';
+import 'passport_page_face.dart';
 
 /// 宠物护照页（V1.3.2 batch-a Story 1.2 · AC5 · UI 稿 B1 / B2 / B2b）。
 ///
@@ -18,7 +19,7 @@ import '../domain/pet_passport.dart';
 /// - **B2 单章页**（有章时默认）：`PageView` 一页一枚章；页脚「Cap i / 总章数」（分母 = 已集章数，不是上限）。
 /// - **B2b 纵览**：3 列 × 4 行一页、横向分页；空格**不画**未到访占位、不写总数上限；点章回 B2 停在那一页。
 ///
-/// 🔴 本 story **不显示**：付费按钮（3.4）、吸底「Bagikan」（4.3）、章详情跳转（1.3）；AppBar **无 ⋯**。
+/// 🔴 **不显示**：付费按钮（3.4）、吸底「Bagikan」（4.3）；AppBar **无 ⋯**。B2 章本体 → B5 章详情（1.3）。
 /// 这些不是「占位」—— 不要留 `enabled:false` 的按钮。
 class PetPassportPage extends ConsumerStatefulWidget {
   const PetPassportPage({super.key, this.focus});
@@ -179,7 +180,13 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
           controller: _single,
           itemCount: total,
           onPageChanged: (i) => setState(() => _index = i),
-          itemBuilder: (context, i) => _SingleStamp(stamp: p.stamps[i]),
+          // Story 1.3：章本体可点 → B5 章详情（B2b 纵览点章仍是回 B2，1.2 规则不变）。
+          itemBuilder: (context, i) => PassportPageFace(
+            stamp: p.stamps[i],
+            pageIndex: i,
+            onTapStamp: () =>
+                context.push(PetInsightsRoutes.passportStampFor(p.stamps[i].placeToken)),
+          ),
         ),
       ),
     );
@@ -334,67 +341,6 @@ class _Header extends StatelessWidget {
                 color: AppColors.ink2,
                 fontFeatures: [FontFeature.tabularFigures()])),
       ],
-    );
-  }
-}
-
-/// B2 的一页：章面 + 场所名 +「{首次日期} · {n} kunjungan」；×N 仅 N≥2。
-class _SingleStamp extends StatelessWidget {
-  const _SingleStamp({required this.stamp});
-
-  final PassportStamp stamp;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final date = stamp.firstVisitDate == null ? '' : formatDayMonthYear(context, stamp.firstVisitDate!);
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 150,
-            height: 140,
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                PlaceStampView(placeType: stamp.placeType, imageUrl: stamp.stampImageUrl, size: 128),
-                if (stamp.visitCount >= 2)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      key: const ValueKey('passportVisitBadge'),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.popRed,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text('×${stamp.visitCount}',
-                          style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                              fontFeatures: [FontFeature.tabularFigures()])),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(stamp.placeName,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink)),
-          const SizedBox(height: 6),
-          Text(l10n.passportStampMeta(date, stamp.visitCount),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: AppColors.ink2)),
-        ],
-      ),
     );
   }
 }

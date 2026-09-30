@@ -1,0 +1,144 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/theme/colors.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../../shared/utils/date_format.dart';
+import '../../../shared/widgets/empty_state.dart';
+import '../../place/presentation/place_detail_page.dart';
+import '../../place/presentation/widgets/place_stamp_view.dart';
+import '../data/pet_passport_repository.dart';
+import '../domain/pet_passport.dart';
+import 'passport_page_face.dart';
+
+/// B5 章详情 / B6 场所不可用变体（V1.3.2 batch-a Story 1.3 · AC3 / AC4）。**独立页，非抽屉**。
+///
+/// 数据直接取护照接口已加载的 [petPassportProvider]（不新增接口），按 [placeToken] 找章；
+/// 找不到（数据变了）→「Tempat tidak ditemukan」空态，不崩。
+///
+/// B6（`available == false`）：章面、首次日期、次数、内页局部**照常**；只把地址行与「Lihat tempat」
+/// 换成灰色信息块「Tempat tidak ditemukan / Tempat ini sudah tidak terdaftar」（无按钮）；**不做整页空态**。
+class PetPassportStampPage extends ConsumerWidget {
+  const PetPassportStampPage({super.key, required this.placeToken});
+
+  final String placeToken;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final async = ref.watch(petPassportProvider);
+    return Scaffold(
+      backgroundColor: AppColors.cream,
+      appBar: AppBar(
+        backgroundColor: AppColors.cream,
+        scrolledUnderElevation: 0,
+        title: Text(l10n.passportPageTitle),
+      ),
+      body: switch (async) {
+        AsyncData(:final value) => _body(context, l10n, value),
+        AsyncError() => EmptyState(
+            title: l10n.passportLoadFailed,
+            icon: Icons.cloud_off_rounded,
+            actionLabel: l10n.placeRetry,
+            onAction: () => ref.invalidate(petPassportProvider),
+          ),
+        _ => const Center(child: CircularProgressIndicator()),
+      },
+    );
+  }
+
+  Widget _body(BuildContext context, AppLocalizations l10n, PetPassport p) {
+    final index = p.stamps.indexWhere((s) => s.placeToken == placeToken);
+    if (index < 0) {
+      return EmptyState(
+        key: const ValueKey('passportStampMissing'),
+        title: l10n.placeUnavailableTitle,
+        icon: Icons.place_outlined,
+        actionLabel: MaterialLocalizations.of(context).backButtonTooltip,
+        onAction: () => context.pop(),
+      );
+    }
+    final s = p.stamps[index];
+    final date = s.firstVisitDate == null ? '' : formatDayMonthYear(context, s.firstVisitDate!);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+      children: [
+        Center(
+          child: SizedBox(
+            width: 180,
+            height: 170,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                // 与格子**同一张图等比放大**，不是另一套资产。
+                PlaceStampView(placeType: s.placeType, imageUrl: s.stampImageUrl, size: 160),
+                if (s.visitCount >= 2)
+                  Positioned(right: 0, top: 0, child: PassportVisitBadge(count: s.visitCount)),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(s.placeName,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.ink)),
+        const SizedBox(height: 8),
+        Text(l10n.passportStampFirstVisit(date),
+            textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: AppColors.ink2)),
+        const SizedBox(height: 2),
+        Text(l10n.passportStampVisits(s.visitCount),
+            textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: AppColors.ink2)),
+        const SizedBox(height: 20),
+        // 所在内页局部：与 B2 同一版心的缩略页 +「Halaman {i}」。
+        Center(child: PassportPageFace(stamp: s, pageIndex: index, compact: true)),
+        const SizedBox(height: 20),
+        if (s.available) ...[
+          if (s.addressText != null)
+            Row(
+              key: const ValueKey('passportStampAddress'),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.place_outlined, size: 18, color: AppColors.muted),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(s.addressText!,
+                      style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink2)),
+                ),
+              ],
+            ),
+          const SizedBox(height: 16),
+          FilledButton(
+            key: const ValueKey('passportSeePlace'),
+            style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(48), backgroundColor: AppColors.mint),
+            onPressed: () => context.push(
+                PlaceDetailPage.routeFor(s.placeToken, from: kPlaceDetailFromPassport)),
+            child: Text(l10n.passportSeePlace),
+          ),
+        ] else
+          Container(
+            key: const ValueKey('passportStampUnavailable'),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.line2,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                Text(l10n.placeUnavailableTitle,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.ink2)),
+                const SizedBox(height: 4),
+                Text(l10n.placeUnavailableBody,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}

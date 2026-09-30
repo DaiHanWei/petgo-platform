@@ -85,6 +85,9 @@ final _photoUploadingProvider =
 const String kPlaceDetailFromList = 'list';
 const String kPlaceDetailFromCreated = 'created';
 const String kPlaceDetailFromShare = 'share';
+
+/// 护照章详情「Lihat tempat」进来的（V1.3.2 Story 1.3 · AC5）。
+const String kPlaceDetailFromPassport = 'passport';
 const String kPlaceDetailFromOther = 'other';
 
 class PlaceDetailPage extends ConsumerWidget {
@@ -520,6 +523,7 @@ class _PlaceDetailViewedOnceState extends State<_PlaceDetailViewedOnce> {
     kPlaceDetailFromList,
     kPlaceDetailFromCreated,
     kPlaceDetailFromShare,
+    kPlaceDetailFromPassport,
   };
 
   @override

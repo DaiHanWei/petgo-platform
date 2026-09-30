@@ -2388,5 +2388,18 @@
   "passportViewAll": "Lihat semua cap",
   "passportViewSingle": "Lihat per cap",
   "passportLoadFailed": "Paspor belum bisa dibuka, coba lagi",
-  "placeCheckinViewPassport": "Lihat Paspor"
+  "placeCheckinViewPassport": "Lihat Paspor",
+  "passportNewStampTitle": "Cap baru! {place}",
+  "@passportNewStampTitle": {"placeholders": {"place": {"type": "String"}}},
+  "passportStampsCollected": "{count} cap terkumpul",
+  "@passportStampsCollected": {"placeholders": {"count": {"type": "int"}}},
+  "passportStampFirstVisit": "Pertama {date}",
+  "@passportStampFirstVisit": {"placeholders": {"date": {"type": "String"}}},
+  "passportStampVisits": "{count} kunjungan",
+  "@passportStampVisits": {"placeholders": {"count": {"type": "int"}}},
+  "passportPageLabel": "Halaman {page}",
+  "@passportPageLabel": {"placeholders": {"page": {"type": "int"}}},
+  "passportSeePlace": "Lihat tempat",
+  "placeUnavailableTitle": "Tempat tidak ditemukan",
+  "placeUnavailableBody": "Tempat ini sudah tidak terdaftar"
 }

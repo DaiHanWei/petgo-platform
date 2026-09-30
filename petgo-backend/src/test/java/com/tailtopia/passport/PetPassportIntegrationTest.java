@@ -122,7 +122,10 @@ class PetPassportIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.stampCount").value(2))
                 .andExpect(jsonPath("$.stamps[0].placeToken").value(a.getPublicToken()))
                 .andExpect(jsonPath("$.stamps[0].visitCount").value(2))
-                .andExpect(jsonPath("$.stamps[1].placeStatus").value("UNAVAILABLE"));
+                .andExpect(jsonPath("$.stamps[0].addressText").value("Jl. Test"))
+                .andExpect(jsonPath("$.stamps[1].placeStatus").value("UNAVAILABLE"))
+                // Story 1.3 · AC2：下架场所的章不带地址。
+                .andExpect(jsonPath("$.stamps[1].addressText").doesNotExist());
     }
 
     @Test

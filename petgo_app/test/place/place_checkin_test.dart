@@ -15,6 +15,7 @@ import 'package:tailtopia/features/place/domain/place_comment.dart';
 import 'package:tailtopia/features/place/domain/place_detail.dart';
 import 'package:tailtopia/features/place/domain/place_summary.dart';
 import 'package:tailtopia/features/place/presentation/place_checkin_success_page.dart';
+import 'package:tailtopia/features/pet_passport/domain/new_stamp_args.dart';
 import 'package:tailtopia/features/place/presentation/place_detail_page.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
@@ -185,8 +186,8 @@ void main() {
   });
 
   group('成功页（AC5）', () {
-    testWidgets('Story 1.2 · AC6：点「Lihat Paspor」→ 护照页并停在该章', (tester) async {
-      String? pushed;
+    testWidgets('Story 1.2 / 1.3：点「Lihat Paspor」→ 先进 B4 整页落章（带新章参数）', (tester) async {
+      NewStampArgs? got;
       final router = GoRouter(routes: [
         GoRoute(
           path: '/',
@@ -201,15 +202,16 @@ void main() {
                 visitDate: DateTime(2026, 9, 30),
                 isNewStamp: true,
                 visitCount: 1,
+                stampCount: 5,
               ),
             ),
           ),
         ),
         GoRoute(
-          path: '/profile/pet-insights/passport',
+          path: '/profile/pet-insights/passport/new-stamp',
           builder: (c, s) {
-            pushed = s.uri.toString();
-            return const Scaffold(body: Text('passport'));
+            got = s.extra as NewStampArgs?;
+            return const Scaffold(body: Text('b4'));
           },
         ),
       ]);
@@ -223,7 +225,10 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('placeCheckinViewPassport')));
       await tester.pumpAndSettle();
-      expect(pushed, '/profile/pet-insights/passport?focus=${'p' * 32}');
+      expect(find.text('b4'), findsOneWidget);
+      expect(got?.placeToken, 'p' * 32);
+      expect(got?.stampCount, 5);
+      expect(got?.placeType, PlaceType.cafe);
     });
 
     testWidgets('新章（C2）：章面 + 「{pet} dapat cap baru」+「Lihat Paspor」（Story 1.2）', (tester) async {

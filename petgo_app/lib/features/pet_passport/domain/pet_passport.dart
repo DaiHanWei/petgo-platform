@@ -55,6 +55,7 @@ class PassportStamp {
     this.placeType,
     this.stampImageUrl,
     this.firstVisitDate,
+    this.addressText,
   });
 
   final String placeToken;
@@ -72,6 +73,9 @@ class PassportStamp {
   final DateTime? firstVisitDate;
   final int visitCount;
 
+  /// 文字地址（Story 1.3）。🔴 服务端只对 ACTIVE 场所下发；UNAVAILABLE 时为 null（B6 不显示地址）。
+  final String? addressText;
+
   factory PassportStamp.fromJson(Map<String, dynamic> json) {
     final count = json['visitCount'];
     final url = json['stampImageUrl']?.toString();
@@ -83,6 +87,9 @@ class PassportStamp {
       stampImageUrl: (url == null || url.isEmpty) ? null : url,
       firstVisitDate: DateTime.tryParse(json['firstVisitDate']?.toString() ?? ''),
       visitCount: count is num && count > 0 ? count.toInt() : 1,
+      addressText: _blankToNull(json['addressText']?.toString()),
     );
   }
+
+  static String? _blankToNull(String? s) => (s == null || s.isEmpty) ? null : s;
 }

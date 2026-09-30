@@ -36,6 +36,15 @@ class PetInsightsRoutes {
   /// 护照页并停在某一枚章（打卡成功「Lihat Paspor」/ 章详情回跳用）。token 找不到则停第 1 页。
   static String passportFor({String? focus}) =>
       focus == null || focus.isEmpty ? passport : '$passport?focus=${Uri.encodeQueryComponent(focus)}';
+
+  /// B4 整页落章（V1.3.2 Story 1.3）。入参经 `extra`（`NewStampArgs`），只从打卡成功页 C2 进。
+  static const String passportNewStamp = '$passport/new-stamp';
+
+  /// B5 / B6 章详情（V1.3.2 Story 1.3）。路由模板。
+  static const String passportStamp = '$passport/stamps/:placeToken';
+
+  static String passportStampFor(String placeToken) =>
+      '$passport/stamps/${Uri.encodeComponent(placeToken)}';
 }
 
 /// 聚合页卡片排布（V1.3.2 Story 1.2 · C-8 / UX-DR1 的 2+2+1 规则）：

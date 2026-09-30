@@ -16,6 +16,7 @@ void main() {
         'placeStatus': 'ACTIVE',
         'firstVisitDate': '2026-09-01',
         'visitCount': 3,
+        'addressText': 'Jl. Kopi 1',
       },
       {
         'placeToken': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
@@ -41,6 +42,9 @@ void main() {
     expect(s.visitCount, 3);
     expect(s.stampImageUrl, isNull, reason: '本 story 恒省略该键');
     expect(p.stamps[1].available, isFalse);
+    // Story 1.3：地址只对 ACTIVE 下发。
+    expect(s.addressText, 'Jl. Kopi 1');
+    expect(p.stamps[1].addressText, isNull);
   });
 
   test('🔴 placeStatus 缺键 / 未知值 → 不可用（fail-closed）', () {

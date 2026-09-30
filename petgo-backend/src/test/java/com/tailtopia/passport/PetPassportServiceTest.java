@@ -159,9 +159,9 @@ class PetPassportServiceTest {
         when(repo.findByPetProfileId(PET)).thenReturn(Optional.of(row("TT02P2600001", PassportSource.ISSUED)));
         when(stamps.stampsOf(PET)).thenReturn(List.of(
                 new PlaceStamp("a".repeat(32), "Kopi", PlaceType.CAFE, PlaceAvailability.ACTIVE,
-                        LocalDate.of(2026, 9, 1), 3),
+                        LocalDate.of(2026, 9, 1), 3, "Jl. Kopi 1"),
                 new PlaceStamp("b".repeat(32), "Taman", PlaceType.PARK, PlaceAvailability.UNAVAILABLE,
-                        LocalDate.of(2026, 9, 20), 1)));
+                        LocalDate.of(2026, 9, 20), 1, "Jl. Taman 2")));
 
         var page = service.pageFor(USER);
 
@@ -171,5 +171,8 @@ class PetPassportServiceTest {
         assertThat(page.stamps()).extracting(s -> s.placeName()).containsExactly("Kopi", "Taman");
         assertThat(page.stamps().get(1).placeStatus()).isEqualTo(PlaceAvailability.UNAVAILABLE);
         assertThat(page.stamps()).allMatch(s -> s.stampImageUrl() == null);
+        // Story 1.3：地址只对 ACTIVE 下发（即便上游误带了，DTO 层也再兜一次）。
+        assertThat(page.stamps().get(0).addressText()).isEqualTo("Jl. Kopi 1");
+        assertThat(page.stamps().get(1).addressText()).isNull();
     }
 }

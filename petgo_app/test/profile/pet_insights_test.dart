@@ -56,6 +56,9 @@ void main() {
       expect(PetInsightsRoutes.passport, startsWith('/profile/'));
       expect(redirectWouldRewrite(guest, PetInsightsRoutes.passport), isTrue);
       expect(redirectWouldRewrite(guest, PetInsightsRoutes.passportFor(focus: 'abc')), isTrue);
+      // V1.3.2 Story 1.3：落章页与章详情页同样受控。
+      expect(redirectWouldRewrite(guest, PetInsightsRoutes.passportNewStamp), isTrue);
+      expect(redirectWouldRewrite(guest, PetInsightsRoutes.passportStampFor('abc')), isTrue);
       // 旧路径同样受控 —— 重定向不能变成绕过门控的旁路（AC4 / AD-A17.6）。
       expect(redirectWouldRewrite(guest, '/profile/id-card'), isTrue);
     });

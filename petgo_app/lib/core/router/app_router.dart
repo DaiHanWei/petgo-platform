@@ -84,6 +84,9 @@ import '../../features/gath/presentation/gath_page.dart';
 import '../../features/place/presentation/place_detail_page.dart';
 import '../../features/place/presentation/place_checkin_success_page.dart';
 import '../../features/pet_passport/presentation/pet_passport_page.dart';
+import '../../features/pet_passport/domain/new_stamp_args.dart';
+import '../../features/pet_passport/presentation/pet_passport_new_stamp_page.dart';
+import '../../features/pet_passport/presentation/pet_passport_stamp_page.dart';
 import '../../features/place/presentation/place_list_page.dart';
 import '../../features/place/presentation/place_mark_page.dart';
 import '../../features/profile/presentation/pet_card_page.dart';
@@ -767,6 +770,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: PetInsightsRoutes.passport,
         builder: (c, s) => PetPassportPage(focus: s.uri.queryParameters['focus']),
+      ),
+      // B4 整页落章（V1.3.2 Story 1.3）：只从打卡成功页 C2 进，入参经 extra；缺失 / 类型不符 → 回护照页。
+      GoRoute(
+        path: PetInsightsRoutes.passportNewStamp,
+        redirect: (c, s) => s.extra is NewStampArgs ? null : PetInsightsRoutes.passport,
+        builder: (c, s) => PetPassportNewStampPage(args: s.extra! as NewStampArgs),
+      ),
+      // B5 / B6 章详情（V1.3.2 Story 1.3）。字面量路径 new-stamp 在前，stamps/:placeToken 在后。
+      GoRoute(
+        path: PetInsightsRoutes.passportStamp,
+        builder: (c, s) => PetPassportStampPage(placeToken: s.pathParameters['placeToken']!),
       ),
       // 🔴 旧路径**保留为重定向，不得删除**（AD-A17.2）：站内两处跳转 + 潜在的历史通知深链，
       // 断链是硬失败。

@@ -3690,5 +3690,21 @@
   "passportLoadFailed": "Couldn't open the passport, try again",
   "@passportLoadFailed": {"description": "Pet passport page: load error with retry."},
   "placeCheckinViewPassport": "View Passport",
-  "@placeCheckinViewPassport": {"description": "Check-in success page (new stamp only): secondary button to the passport, focused on the new stamp."}
+  "@placeCheckinViewPassport": {"description": "Check-in success page (new stamp only): secondary button to the passport, focused on the new stamp."},
+  "passportNewStampTitle": "New stamp! {place}",
+  "@passportNewStampTitle": {"description": "Full-page new stamp (B4): headline with the place name (V1.3.2 Story 1.3).", "placeholders": {"place": {"type": "String"}}},
+  "passportStampsCollected": "{count, plural, =1{1 stamp collected} other{{count} stamps collected}}",
+  "@passportStampsCollected": {"description": "B4: stamps collected so far — never a denominator.", "placeholders": {"count": {"type": "int"}}},
+  "passportStampFirstVisit": "First visit {date}",
+  "@passportStampFirstVisit": {"description": "Stamp detail (B5): first visit date.", "placeholders": {"date": {"type": "String"}}},
+  "passportStampVisits": "{count, plural, =1{1 visit} other{{count} visits}}",
+  "@passportStampVisits": {"description": "Stamp detail (B5): visit count.", "placeholders": {"count": {"type": "int"}}},
+  "passportPageLabel": "Page {page}",
+  "@passportPageLabel": {"description": "Stamp detail (B5): which passport page this stamp is on.", "placeholders": {"page": {"type": "int"}}},
+  "passportSeePlace": "See place",
+  "@passportSeePlace": {"description": "Stamp detail (B5): primary button to the place detail page."},
+  "placeUnavailableTitle": "Place not found",
+  "@placeUnavailableTitle": {"description": "Shared (Stories 1.3 / 1.5 / 1.6): the place was delisted or removed (UI B6 / C9)."},
+  "placeUnavailableBody": "This place is no longer listed",
+  "@placeUnavailableBody": {"description": "Shared: explanation under placeUnavailableTitle."}
 }

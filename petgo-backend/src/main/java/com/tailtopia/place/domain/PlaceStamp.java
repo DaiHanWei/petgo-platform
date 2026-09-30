@@ -12,7 +12,9 @@ import java.time.LocalDate;
  * @param availability   ACTIVE / UNAVAILABLE（下架 / 软删 / 异常 MERGED）
  * @param firstVisitDate 首次到访（WIB 日）= min(visit_date)
  * @param visitCount     到访次数 = count
+ * @param addressText    文字地址（Story 1.3）；<b>仅 ACTIVE 时有值</b>，UNAVAILABLE 置 null ——
+ *                       服务端不给已下架场所的地址，比客户端藏更稳
  */
 public record PlaceStamp(String placeToken, String placeName, PlaceType placeType,
-        PlaceAvailability availability, LocalDate firstVisitDate, long visitCount) {
+        PlaceAvailability availability, LocalDate firstVisitDate, long visitCount, String addressText) {
 }

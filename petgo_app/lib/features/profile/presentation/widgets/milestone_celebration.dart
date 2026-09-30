@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../../core/analytics/analytics.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/utils/haptics.dart';
 import '../../domain/milestone.dart';
 import '../../domain/milestone_celebration_copy.dart';
 
@@ -16,19 +16,6 @@ import '../../domain/milestone_celebration_copy.dart';
 /// - **L（大）**：Duolingo 开宝箱式交互（宝箱→爆发→奖杯），结束自动衔接分享卡（8.6 通过 [onShare] 注入）。
 ///
 /// 云端 headless 验不了视觉/计时观感（L2 待本地）；本组件保证构建/计时/自动消失逻辑 L0 可测。
-/// 庆祝振动通道：原生直接驱动 `Vibrator`，绕过系统「触感反馈」开关（见 android MainActivity.kt）。
-const MethodChannel _hapticsChannel = MethodChannel('petgo/haptics');
-
-/// 触发一次短振动；无原生实现（iOS 等）回退系统 HapticFeedback。
-Future<void> _celebrationVibrate() async {
-  try {
-    await _hapticsChannel.invokeMethod<void>('vibrate', {'ms': 45});
-  } catch (_) {
-    try {
-      await HapticFeedback.vibrate();
-    } catch (_) {}
-  }
-}
 
 /// 一次庆祝展示是由什么路径触发的（V1.3.0 Story 1.5 · AC6 · AD-A26.5）。
 ///
@@ -109,7 +96,7 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
       duration: const Duration(milliseconds: 700),
     )..forward();
     // 解锁瞬间一次振动反馈（弹框一打开即触发，方便测）。
-    _celebrationVibrate();
+    celebrationVibrate();
   }
 
   @override
