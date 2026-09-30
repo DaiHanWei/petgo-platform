@@ -80,8 +80,9 @@ class ProfileApiControllerTest {
     @Test
     void timelineDelegatesWithJwtUserAndParams() {
         TimelinePageResponse stub = new TimelinePageResponse(List.of(), null, false);
-        when(timelineService.getTimeline(77L, "CUR", 20)).thenReturn(stub);
-        TimelinePageResponse resp = controller.timeline(jwt("77"), "CUR", 20);
+        when(timelineService.getTimeline(77L, "CUR", 20,
+                com.tailtopia.profile.service.TimelineCapabilities.none())).thenReturn(stub);
+        TimelinePageResponse resp = controller.timeline(jwt("77"), "CUR", 20, null);
         assertThat(resp.hasMore()).isFalse();
     }
 

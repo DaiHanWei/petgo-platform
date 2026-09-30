@@ -51,6 +51,10 @@ const HealthRecordIcon kHealthRecordGenericIcon =
 const HealthRecordIcon kDiaryGenericIcon =
     HealthRecordIcon(icon: Icons.edit_note_outlined, color: AppColors.mint);
 
+/// 日历「只有地点打卡」的整格标记（V1.3.2 Story 1.6 · AC3.3）：线性定位图标 + 打卡条目专属色。
+const HealthRecordIcon kPlaceCheckinCalendarIcon =
+    HealthRecordIcon(icon: Icons.place_outlined, color: AppColors.checkinIcon);
+
 /// 按类型取图标；未知类型（后端新增了前端还不认识的类型）回退到「自定义」，**绝不回退到问诊 🏥**
 /// ——错显医院图标是 FR-84 点名要修的现网缺陷类型。
 HealthRecordIcon healthRecordIconFor(String? type) =>

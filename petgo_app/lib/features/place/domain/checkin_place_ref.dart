@@ -22,4 +22,10 @@ class CheckinPlaceRef {
       available: raw['status'] == 'ACTIVE',
     );
   }
+
+  /// 时间线打卡条目的 `checkinPlace`（Story 1.6）：wire 键是 `placeToken`，与帖子详情的 `token` 不同，各按各自契约解析。
+  static CheckinPlaceRef? fromTimelineJson(Object? raw) {
+    if (raw is! Map) return null;
+    return fromJson({'token': raw['placeToken'], 'name': raw['name'], 'status': raw['status']});
+  }
 }

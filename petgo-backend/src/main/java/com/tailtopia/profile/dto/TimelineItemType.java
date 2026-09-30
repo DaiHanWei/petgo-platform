@@ -31,5 +31,11 @@ public enum TimelineItemType {
     HEALTH_RECORD,
 
     /** 类⑤ 身份证解锁：证件卡（首次生成）。 */
-    ID_CARD_ISSUED
+    ID_CARD_ISSUED,
+
+    /**
+     * V1.3.2 Story 1.6 · AD-9：场所打卡通栏（查询时拼装、不落库）。
+     * 🔴 只在客户端声明 {@code supports=place_checkin} 时下发（老 App 会把未知类型渲染成照片卡）。
+     */
+    PLACE_CHECKIN_BANNER
 }

@@ -404,6 +404,21 @@ public class ContentService {
         return count;
     }
 
+    /**
+     * Diary 打卡条目去重读口（V1.3.2 Story 1.6 · AD-9）：{@code checkinIds} 里有一条 GROWTH_MOMENT 关联帖、
+     * 且该帖会出现在作者自看时间线（同一过滤口径）的那些打卡 id。<b>一批查一次</b>，空集合短路。
+     * Moment / Edukasi 关联帖不抑制打卡条目（它们不进 Diary）。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Set<Long> findCheckinIdsWithTimelinePost(long authorId, long petId,
+            java.util.Collection<Long> checkinIds) {
+        if (checkinIds == null || checkinIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return java.util.Set.copyOf(posts.findCheckinIdsWithTimelinePost(
+                authorId, petId, ContentType.GROWTH_MOMENT, checkinIds));
+    }
+
     @Transactional
     public ContentPostResponse publish(long authorId, ContentPostCreateRequest req, String idempotencyKey) {
         // 幂等重放：同 key 已落一条则取回，不重复创建。

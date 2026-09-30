@@ -133,8 +133,11 @@ public class ProfileApiController {
     @GetMapping("/me/timeline")
     public TimelinePageResponse timeline(@AuthenticationPrincipal Jwt jwt,
             @RequestParam(value = "cursor", required = false) String cursor,
-            @RequestParam(value = "limit", defaultValue = "20") int limit) {
-        return timelineService.getTimeline(currentUserId(jwt), cursor, limit);
+            @RequestParam(value = "limit", defaultValue = "20") int limit,
+            // V1.3.2 Story 1.6 · AD-9：客户端能力；未声明的新类型不下发（老 App 会把未知类型渲染成照片卡）。
+            @RequestParam(value = "supports", required = false) java.util.List<String> supports) {
+        return timelineService.getTimeline(currentUserId(jwt), cursor, limit,
+                com.tailtopia.profile.service.TimelineCapabilities.parse(supports));
     }
 
     /**
@@ -144,8 +147,10 @@ public class ProfileApiController {
     @GetMapping("/me/calendar")
     public CalendarMonthResponse calendar(@AuthenticationPrincipal Jwt jwt,
             @RequestParam("year") int year,
-            @RequestParam("month") int month) {
-        return timelineService.getCalendarMonth(currentUserId(jwt), year, month);
+            @RequestParam("month") int month,
+            @RequestParam(value = "supports", required = false) java.util.List<String> supports) {
+        return timelineService.getCalendarMonth(currentUserId(jwt), year, month,
+                com.tailtopia.profile.service.TimelineCapabilities.parse(supports));
     }
 
     /**
@@ -153,8 +158,10 @@ public class ProfileApiController {
      */
     @GetMapping("/me/day")
     public DayDetailResponse day(@AuthenticationPrincipal Jwt jwt,
-            @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        return timelineService.getDayDetail(currentUserId(jwt), date);
+            @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(value = "supports", required = false) java.util.List<String> supports) {
+        return timelineService.getDayDetail(currentUserId(jwt), date,
+                com.tailtopia.profile.service.TimelineCapabilities.parse(supports));
     }
 
     /**

@@ -233,7 +233,8 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
   ///
   /// ② 有 diary 但全无图（纯文字日记）→ 通用 diary 标记；
   /// ③ 无 diary 有问诊 → `local_hospital_outlined`；
-  /// ④ 只有结构化健康记录 → 单条用类型图标、**多条用通用医疗箱**。
+  /// ④ 只有结构化健康记录 → 单条用类型图标、**多条用通用医疗箱**；
+  /// ④′ 只有地点打卡（V1.3.2 Story 1.6）→ 线性定位图标。
   ///
   /// ⚠️ **与时间线的优先级方向相反，且刻意不对齐**（AD-16）：时间线逐条分类（同一天既有带图日记
   /// 又有疫苗记录 → 出两条），日历整天取一个代表标记（→ 只显日记首图）。粒度不同所以规则不同，
@@ -255,6 +256,10 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
       return _markerBox(cell.healthRecordCount > 1
           ? kHealthRecordGenericIcon
           : healthRecordIconFor(cell.healthRecordType));
+    }
+    // V1.3.2 Story 1.6：只有地点打卡 → 线性定位图标（插在 ④ 之后、⑤ 无记录之前）
+    if (cell.hasPlaceCheckin) {
+      return _markerBox(kPlaceCheckinCalendarIcon);
     }
     // 防御：后端返回了记录日但三类信号皆空 → 用 diary 通用标记兜底，**不回退问诊图标**。
     return _markerBox(kDiaryGenericIcon);

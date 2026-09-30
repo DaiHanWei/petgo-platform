@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/place/domain/checkin_place_ref.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/features/profile/domain/archive_stats.dart';
@@ -70,6 +71,10 @@ Widget _wrapRouted(TimelinePage page) {
       GoRoute(
           path: PetInsightsRoutes.idCard, builder: (_, _) => const Text('id-card')),
       GoRoute(path: '/triage/result/:id', builder: (_, s) => Text('triage:${s.pathParameters['id']}')),
+      GoRoute(
+          path: '/places/:token',
+          builder: (_, s) =>
+              Text('place:${s.pathParameters['token']}:${s.uri.queryParameters['from']}')),
     ],
   );
   return ProviderScope(
@@ -127,7 +132,11 @@ void main() {
       await _pump(tester, page);
 
       // 五类各自的 tile 形态都出现了，且与游客侧是同一批 key（同一组件产出）
-      expect(demoTypes, containsAll(TimelineItemType.values));
+      // V1.3.2 Story 1.6：打卡条目（placeCheckinBanner）**不进**游客示例——示例以 UI 稿 A1 的 9 条为权威，
+      // A1 没有打卡条目；组件复用已由同一个 TimelineItemTile 保证（见下方「打卡条目」组）。
+      expect(demoTypes,
+          containsAll(TimelineItemType.values.where((t) => t != TimelineItemType.placeCheckinBanner)));
+      expect(demoTypes, isNot(contains(TimelineItemType.placeCheckinBanner)));
       expect(find.byKey(const ValueKey('timelineMilestoneBanner')), findsOneWidget);
       expect(find.byKey(const ValueKey('timelineIdCard')), findsOneWidget);
       expect(find.byKey(const ValueKey('timelineMilestoneStamp')), findsOneWidget);
@@ -250,6 +259,41 @@ void main() {
       expect(find.byKey(const ValueKey('petInfoCard')), findsOneWidget);
       expect(find.byKey(const ValueKey('timelineError')), findsOneWidget);
       expect(find.byKey(const ValueKey('timelineRetry')), findsOneWidget);
+    });
+  });
+
+  group('V1.3.2 Story 1.6 打卡条目', () {
+    TimelineItem checkin({required bool available}) => TimelineItem(
+          kind: TimelineKind.placeCheckin,
+          itemType: TimelineItemType.placeCheckinBanner,
+          date: DateTime.utc(2026, 5, 20, 9),
+          eventDate: DateTime.utc(2026, 5, 20),
+          checkinPlace: CheckinPlaceRef(token: 'p' * 32, name: 'Kopi Kucing', available: available),
+        );
+
+    testWidgets('ACTIVE：通栏 + 场所名 + 定位图标（非 emoji）；点击 → 场所详情 from=diary', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(tester, TimelinePage(items: [checkin(available: true)]));
+      expect(find.byKey(const ValueKey('timelineCheckinBanner')), findsOneWidget);
+      expect(find.text('Kopi Kucing'), findsOneWidget);
+      expect(find.byIcon(Icons.place_outlined), findsOneWidget);
+      expect(find.text('📍'), findsNothing);
+      expect(find.byKey(const ValueKey('timelineHappyCard')), findsNothing, reason: '不得回落照片卡');
+      expect(find.bySemanticsLabel(RegExp('Check-in di Kopi Kucing')), findsOneWidget);
+      semantics.dispose();
+
+      await tester.tap(find.byKey(const ValueKey('timelineCheckinBanner')));
+      await tester.pumpAndSettle();
+      expect(find.text('place:${'p' * 32}:diary'), findsOneWidget);
+    });
+
+    testWidgets('UNAVAILABLE：点击只提示 Tempat tidak ditemukan、不跳转', (tester) async {
+      await _pump(tester, TimelinePage(items: [checkin(available: false)]));
+      await tester.tap(find.byKey(const ValueKey('timelineCheckinBanner')));
+      await tester.pump();
+      expect(find.text('Tempat tidak ditemukan'), findsOneWidget);
+      expect(find.textContaining('place:'), findsNothing);
+      await tester.pumpAndSettle(const Duration(seconds: 5));
     });
   });
 }

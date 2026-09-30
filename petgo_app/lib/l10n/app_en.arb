@@ -3710,5 +3710,7 @@
   "placeCheckinRecordMoment": "Capture This Moment",
   "@placeCheckinRecordMoment": {"description": "Check-in success page: primary CTA to post about this visit (V1.3.2 Story 1.5, D-14)."},
   "publishCheckinPlaceLabel": "At {place}",
-  "@publishCheckinPlaceLabel": {"description": "Compose / post detail: accessibility label of the check-in place strip.", "placeholders": {"place": {"type": "String"}}}
+  "@publishCheckinPlaceLabel": {"description": "Compose / post detail: accessibility label of the check-in place strip.", "placeholders": {"place": {"type": "String"}}},
+  "timelineCheckinSemantics": "Checked in at {place}",
+  "@timelineCheckinSemantics": {"description": "Diary: screen-reader label of a place check-in entry (V1.3.2 Story 1.6).", "placeholders": {"place": {"type": "String"}}}
 }

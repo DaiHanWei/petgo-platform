@@ -37,7 +37,9 @@ class TimelineItemResponseContractTest {
     private static final Set<String> ALL_FIELDS = Set.of(
             "kind", "itemType", "date", "eventDate", "postId", "imageUrls", "text",
             "aiLevel", "symptomSummary", "sourceType", "sourceRef",
-            "milestoneCode", "milestoneLevel", "healthRecordType", "healthRecordId", "idCardSerial");
+            "milestoneCode", "milestoneLevel", "healthRecordType", "healthRecordId", "idCardSerial",
+            // V1.3.2 Story 1.6：打卡条目的场所引用。
+            "checkinPlace");
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> wire(Object dto) {
@@ -53,7 +55,9 @@ class TimelineItemResponseContractTest {
                         "HAPPY_MOMENT_MILESTONE",
                         "MILESTONE_BANNER",
                         "HEALTH_RECORD",
-                        "ID_CARD_ISSUED");
+                        "ID_CARD_ISSUED",
+                        // V1.3.2 Story 1.6（AD-9）：末尾追加，前五值顺序不变。
+                        "PLACE_CHECKIN_BANNER");
     }
 
     @Test
@@ -75,7 +79,9 @@ class TimelineItemResponseContractTest {
                 TimelineItemResponse.healthRecord(7L, Instant.parse("2026-05-20T09:00:00Z"),
                         LocalDate.of(2026, 5, 20), "VACCINE", "第一针"),
                 TimelineItemResponse.milestoneBanner(Instant.parse("2026-05-20T09:00:00Z"), "C-L2", "L"),
-                TimelineItemResponse.idCardIssued(Instant.parse("2026-05-20T09:00:00Z"), "#00842"));
+                TimelineItemResponse.idCardIssued(Instant.parse("2026-05-20T09:00:00Z"), "#00842"),
+                TimelineItemResponse.placeCheckinBanner(Instant.parse("2026-05-20T09:00:00Z"),
+                        "p".repeat(32), "Kopi Kucing", "ACTIVE"));
 
         for (TimelineItemResponse s : samples) {
             assertThat(wire(s).keySet()).isSubsetOf(ALL_FIELDS);
@@ -113,5 +119,23 @@ class TimelineItemResponseContractTest {
         assertThat(w).containsEntry("sourceType", "VET_CONSULT");
         assertThat(w).containsEntry("sourceRef", "consult:9");
         assertThat(w).containsEntry("healthRecordType", "CONSULT");
+    }
+
+    /** V1.3.2 Story 1.6：打卡条目只有场所引用 + 日期，不含 postId / 图片 / 坐标 / 打卡 id / visit_date。 */
+    @Test
+    @SuppressWarnings("unchecked")
+    void placeCheckinBannerExposesOnlyThePlaceReference() {
+        Map<String, Object> w = wire(TimelineItemResponse.placeCheckinBanner(
+                Instant.parse("2026-09-30T23:00:00Z"), "p".repeat(32), "Kopi Kucing", "UNAVAILABLE"));
+        assertThat(w.keySet()).isEqualTo(Set.of("kind", "itemType", "date", "eventDate", "checkinPlace"));
+        assertThat(w).containsEntry("itemType", "PLACE_CHECKIN_BANNER").containsEntry("kind", "PLACE_CHECKIN");
+        // 有效日期 = checked_at 的 UTC 日（不是 WIB 的 visit_date）。
+        assertThat(w).containsEntry("eventDate", "2026-09-30");
+        Map<String, Object> place = (Map<String, Object>) w.get("checkinPlace");
+        assertThat(place.keySet()).isEqualTo(Set.of("placeToken", "name", "status"));
+        for (String banned : List.of("postId", "imageUrls", "latitude", "longitude", "checkinId", "visitDate")) {
+            assertThat(w).doesNotContainKey(banned);
+            assertThat(place).doesNotContainKey(banned);
+        }
     }
 }

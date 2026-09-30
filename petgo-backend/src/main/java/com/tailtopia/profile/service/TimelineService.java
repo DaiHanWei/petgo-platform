@@ -74,14 +74,18 @@ public class TimelineService {
     private final HealthRecordRepository healthRecords;
     private final MilestoneCompletionRepository milestoneCompletions;
     private final IdCardRepository idCards;
+    /** V1.3.2 Story 1.6：源⑥ 场所打卡（place 只读口，profile 不直接 join place 表）。 */
+    private final com.tailtopia.place.service.PlaceCheckinTimelineQuery placeCheckins;
 
     public TimelineService(ProfileService profileService, ContentService contentService,
             ObjectProvider<HealthEventTimelineSource> healthSource,
             MilestoneService milestoneService, MilestoneCelebrationService celebrationService,
             HealthRecordRepository healthRecords,
             MilestoneCompletionRepository milestoneCompletions, IdCardRepository idCards,
-            com.tailtopia.content.service.ContentTagQueryService contentTags) {
+            com.tailtopia.content.service.ContentTagQueryService contentTags,
+            com.tailtopia.place.service.PlaceCheckinTimelineQuery placeCheckins) {
         this.profileService = profileService;
+        this.placeCheckins = placeCheckins;
         this.contentTags = contentTags;
         this.contentService = contentService;
         this.healthSource = healthSource;
@@ -105,6 +109,12 @@ public class TimelineService {
      */
     @Transactional(readOnly = true)
     public TimelinePageResponse getTimeline(long ownerId, String cursor, int limit) {
+        return getTimeline(ownerId, cursor, limit, TimelineCapabilities.none());
+    }
+
+    /** 带客户端能力的时间线（V1.3.2 Story 1.6 · AD-9）：未声明的新类型不下发。 */
+    @Transactional(readOnly = true)
+    public TimelinePageResponse getTimeline(long ownerId, String cursor, int limit, TimelineCapabilities caps) {
         // 需有档案；无则 404（前端据此渲染空态）。取 petId 供成长帖按当前宠物过滤（bug 271）。
         PetProfile profile = requireProfile(ownerId);
         int pageSize = Math.min(Math.max(limit, 1), MAX_LIMIT);
@@ -115,7 +125,7 @@ public class TimelineService {
         Batch batch;
         Cut cut;
         while (true) {
-            batch = fetchMerged(ownerId, profile.getId(), anchor, fetch);
+            batch = fetchMerged(ownerId, profile.getId(), anchor, fetch, caps);
             cut = cutOnDayBoundary(batch, pageSize);
             if (cut.complete() || fetch >= MAX_FETCH) {
                 break;
@@ -195,7 +205,8 @@ public class TimelineService {
      * 此时以「取满的源中**最新的那条末尾**」为地板——只有比该地板更新的条目，才能断言本批已是完整集合。
      * 不做这层区分，会把「批次边界」误判成「当天结束」，同日条目仍会被拆到两页（AC3 破）。
      */
-    private Batch fetchMerged(long ownerId, long petId, TimelineAnchor anchor, int fetch) {
+    private Batch fetchMerged(long ownerId, long petId, TimelineAnchor anchor, int fetch,
+            TimelineCapabilities caps) {
         boolean allKnown = true;
         TimelineAnchor floor = null;
 
@@ -293,6 +304,22 @@ public class TimelineService {
         // 未进入可信前缀的那几天可能分类不完整，但它们同样不会进入本页（见 cutOnDayBoundary），不影响正确性。
         List<TimelineItemResponse> merged =
                 new ArrayList<>(TimelineClassifier.classify(contents, healthItems, milestones, idCardIssues));
+
+        // ===== 源⑥ 场所打卡（V1.3.2 Story 1.6 · AD-9；只在客户端声明 place_checkin 时取）=====
+        // 单键上界（打卡没有独立事件日期，有效日期 = checked_at 的 UTC 日），写法同源④。
+        // 不进 classify（签名四参不改）：在分类之后、排序之前追加。
+        if (caps.placeCheckin()) {
+            List<com.tailtopia.place.dto.PlaceCheckinTimelineView> checkins =
+                    placeCheckins.findForPetBefore(petId, anchor.createdAtUpperBound(), fetch);
+            if (checkins.size() >= fetch) {
+                allKnown = false;
+                // 🔴 地板用**去重前**的原始列表末条：去重只影响输出，不影响「这个源可能还有更早的条目」这一事实。
+                var last = checkins.get(checkins.size() - 1);
+                floor = newestFloor(floor, new TimelineAnchor(
+                        last.checkedAt().atZone(ZoneOffset.UTC).toLocalDate(), last.checkedAt()));
+            }
+            merged.addAll(checkinBanners(ownerId, petId, checkins));
+        }
 
         merged.sort(TIMELINE_ORDER);
         return new Batch(merged, allKnown, floor);
@@ -393,6 +420,15 @@ public class TimelineService {
      */
     @Transactional(readOnly = true)
     public CalendarMonthResponse getCalendarMonth(long ownerId, int year, int month) {
+        return getCalendarMonth(ownerId, year, month, TimelineCapabilities.none());
+    }
+
+    /**
+     * 带客户端能力的日历（V1.3.2 Story 1.6）：声明 place_checkin 时，当月有**未被去重**打卡（UTC 日）的格子
+     * 带 {@code hasPlaceCheckin=true}，只有打卡的日子新建格子；未声明时该字段 null（省略）且不新建格子。
+     */
+    @Transactional(readOnly = true)
+    public CalendarMonthResponse getCalendarMonth(long ownerId, int year, int month, TimelineCapabilities caps) {
         PetProfile profile = requireProfile(ownerId);
         YearMonth ym = YearMonth.of(year, month);
         LocalDate from = ym.atDay(1);
@@ -453,6 +489,19 @@ public class TimelineService {
             }
         }
 
+        // V1.3.2 Story 1.6：打卡维**最后**并入（前面各维的重建用六参构造，会丢掉第七维）。
+        if (caps.placeCheckin()) {
+            for (TimelineItemResponse b : checkinBanners(ownerId, profile.getId(),
+                    placeCheckins.findForPetInUtcRange(profile.getId(), from, to.plusDays(1)))) {
+                int day = b.effectiveDate().getDayOfMonth();
+                CalendarMonthResponse.DayCell c = byDay.get(day);
+                byDay.put(day, c == null
+                        ? new CalendarMonthResponse.DayCell(day, null, false, false, null, 0, true)
+                        : new CalendarMonthResponse.DayCell(day, c.firstImageUrl(), c.hasHappyMoment(),
+                                c.hasHealthEvent(), c.healthRecordType(), c.healthRecordCount(), true));
+            }
+        }
+
         return new CalendarMonthResponse(year, month, List.copyOf(byDay.values()));
     }
 
@@ -465,6 +514,12 @@ public class TimelineService {
      */
     @Transactional(readOnly = true)
     public DayDetailResponse getDayDetail(long ownerId, LocalDate date) {
+        return getDayDetail(ownerId, date, TimelineCapabilities.none());
+    }
+
+    /** 带客户端能力的当天详情（V1.3.2 Story 1.6）：声明 place_checkin 时追加当天（UTC 日）打卡，排在健康记录之后。 */
+    @Transactional(readOnly = true)
+    public DayDetailResponse getDayDetail(long ownerId, LocalDate date, TimelineCapabilities caps) {
         PetProfile profile = requireProfile(ownerId);
         List<TimelineItemResponse> items = new ArrayList<>();
         for (GrowthMomentView g : contentService.findGrowthMomentsOnDate(ownerId, profile.getId(), date)) {
@@ -485,7 +540,11 @@ public class TimelineService {
             items.add(TimelineItemResponse.healthRecord(r.getId(), r.getCreatedAt(), r.getEventDate(),
                     r.getType() == null ? null : r.getType().name(), r.getNote()));
         }
-        // 大类优先级：diary(0) > 问诊(1) > 健康记录(2)；类内按时间正序。
+        if (caps.placeCheckin()) {
+            items.addAll(checkinBanners(ownerId, profile.getId(),
+                    placeCheckins.findForPetOnUtcDate(profile.getId(), date)));
+        }
+        // 大类优先级：diary(0) > 问诊(1) > 健康记录(2) > 打卡(3)；类内按时间正序。
         items.sort(Comparator.comparingInt(TimelineService::dayDetailCategory)
                 .thenComparing(TimelineItemResponse::date));
         return new DayDetailResponse(date, attachDecorationTags(items));
@@ -513,7 +572,7 @@ public class TimelineService {
                 healthRecordCount, uncelebrated);
     }
 
-    /** 当天详情的大类序号（AD-10）：diary=0 &gt; 问诊=1 &gt; 结构化健康记录=2。 */
+    /** 当天详情的大类序号（AD-10）：diary=0 &gt; 问诊=1 &gt; 结构化健康记录=2 &gt; 场所打卡=3（V1.3.2）。 */
     private static int dayDetailCategory(TimelineItemResponse item) {
         if (TimelineItemResponse.HEALTH_EVENT.equals(item.kind())) {
             return 1;
@@ -521,7 +580,31 @@ public class TimelineService {
         if (TimelineItemResponse.HEALTH_RECORD.equals(item.kind())) {
             return 2;
         }
+        if (TimelineItemResponse.PLACE_CHECKIN.equals(item.kind())) {
+            return 3; // V1.3.2 Story 1.6：排在健康记录之后
+        }
         return 0; // 快乐时刻（含类②）
+    }
+
+    /**
+     * 打卡 → 通栏条目，按「二选一」去重（V1.3.2 Story 1.6 · AD-9）：有一条会出现在作者自看时间线的
+     * GROWTH_MOMENT 关联帖的打卡**不出**条目（只出帖子）。一批查一次，与分页无关；关联帖删 / 断开后实时恢复。
+     */
+    private List<TimelineItemResponse> checkinBanners(long ownerId, long petId,
+            List<com.tailtopia.place.dto.PlaceCheckinTimelineView> checkins) {
+        if (checkins.isEmpty()) {
+            return List.of();
+        }
+        java.util.Set<Long> withPost = contentService.findCheckinIdsWithTimelinePost(ownerId, petId,
+                checkins.stream().map(com.tailtopia.place.dto.PlaceCheckinTimelineView::checkinId).toList());
+        List<TimelineItemResponse> out = new ArrayList<>(checkins.size());
+        for (var c : checkins) {
+            if (!withPost.contains(c.checkinId())) {
+                out.add(TimelineItemResponse.placeCheckinBanner(c.checkedAt(), c.placeToken(), c.placeName(),
+                        c.placeStatus()));
+            }
+        }
+        return out;
     }
 
     private PetProfile requireProfile(long ownerId) {

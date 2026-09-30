@@ -42,6 +42,12 @@ abstract class TimelineRepository {
   Future<VisitorProfile> getInAppVisitorProfile(int petId);
 }
 
+/// Diary 客户端能力声明（V1.3.2 Story 1.6 · AD-9）：作者态时间线 / 日历 / 日详情请求带 `supports`。
+///
+/// 后端对未声明的新条目类型一律不下发（老 App 会把未知类型回落成照片卡）。
+/// Story 3.3 往这里追加 `tailsonality`；**访客态请求不带**（访客层不出打卡）。
+const List<String> kTimelineSupports = ['place_checkin'];
+
 class DioTimelineRepository implements TimelineRepository {
   DioTimelineRepository(this.dio);
 
@@ -67,7 +73,7 @@ class DioTimelineRepository implements TimelineRepository {
           .toList();
       return TimelinePage(items: items, nextCursor: null, hasMore: false);
     }
-    final query = <String, dynamic>{'limit': limit};
+    final query = <String, dynamic>{'limit': limit, 'supports': kTimelineSupports};
     if (cursor != null) query['cursor'] = cursor;
     final resp = await dio.get<Map<String, dynamic>>(
       ApiPaths.petProfileTimeline,
@@ -85,7 +91,11 @@ class DioTimelineRepository implements TimelineRepository {
       // 真有人从站内态调到这儿，当场抛比拼一个 `//` 的畸形 URL（或者更糟，
       // 悄悄回落到作者态看到自己的档案）都容易发现。
       scope.isVisitor ? ApiPaths.sharedPetCalendar(scope.token!) : ApiPaths.petProfileCalendar,
-      queryParameters: {'year': year, 'month': month},
+      queryParameters: {
+        'year': year,
+        'month': month,
+        if (!scope.isVisitor) 'supports': kTimelineSupports,
+      },
     );
     return CalendarMonth.fromJson(resp.data!);
   }
@@ -98,7 +108,7 @@ class DioTimelineRepository implements TimelineRepository {
     final resp = await dio.get<Map<String, dynamic>>(
       // token! 同上：站内态没有某天详情，走到这儿就该当场炸。
       scope.isVisitor ? ApiPaths.sharedPetDay(scope.token!) : ApiPaths.petProfileDay,
-      queryParameters: {'date': iso},
+      queryParameters: {'date': iso, if (!scope.isVisitor) 'supports': kTimelineSupports},
     );
     return DayDetail.fromJson(resp.data!);
   }

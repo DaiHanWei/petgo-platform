@@ -9,6 +9,8 @@ import '../../../l10n/app_localizations.dart';
 import '../data/timeline_repository.dart';
 import '../domain/archive_scope.dart';
 import '../domain/timeline_item.dart';
+import 'widgets/place_checkin_tap.dart';
+import 'widgets/timeline_item_tile.dart';
 import 'widgets/timeline_tiles.dart';
 
 /// 当天详情页（Story 2.4 AC6 · F9）。某事件日期当天快乐时刻 + 健康事件，created_at 正序。
@@ -56,6 +58,15 @@ class DayDetailPage extends ConsumerWidget {
   }
 
   Widget _tile(BuildContext context, TimelineItem item, AppLocalizations l10n) {
+    // V1.3.2 Story 1.6 · AC4.4：打卡条目必须先判——下面按 kind 二分会把它当成 postId 为空的照片卡。
+    // 访客接口不下发打卡（AD-9）；万一出现也不给点击（fail-closed）。
+    if (item.resolvedType == TimelineItemType.placeCheckinBanner) {
+      return TimelineItemTile(
+        key: const ValueKey('dayItem_placeCheckin'),
+        item: item,
+        onTap: token == null ? placeCheckinTapFor(context, item) : null,
+      );
+    }
     if (item.kind == TimelineKind.healthEvent) {
       return HealthEventTile(item: item); // 健康事件当天不可点
     }

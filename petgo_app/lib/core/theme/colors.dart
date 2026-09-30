@@ -53,6 +53,10 @@ class AppColors {
   static const Color menstruationRed = Color(0xFFB03060);
   static const Color healthEventText = Color(0xFFC4263C); // 健康事件深红文字（原型 hentry #C4263C）
   static const Color goldTint = Color(0xFFFEF3DE); // 黄浅底（badge tips）
+  // V1.3.2 Story 1.6 · Diary 打卡条目专属底色（青蓝，与里程碑 S/M/L 金紫、身份证紫区分）
+  static const Color checkinTint = Color(0xFFE6F5F7);
+  static const Color checkinBorder = Color(0xFFB7DFE5);
+  static const Color checkinIcon = Color(0xFF1B7F8C);
 
   /// 装饰标签胶囊的渐变终点（UI 稿 `.deco-badge`：135° 从 [gold] 到此色）。
   ///

@@ -2404,5 +2404,7 @@
   "placeUnavailableBody": "Tempat ini sudah tidak terdaftar",
   "placeCheckinRecordMoment": "Rekam Momen Ini",
   "publishCheckinPlaceLabel": "Di {place}",
-  "@publishCheckinPlaceLabel": {"placeholders": {"place": {"type": "String"}}}
+  "@publishCheckinPlaceLabel": {"placeholders": {"place": {"type": "String"}}},
+  "timelineCheckinSemantics": "Check-in di {place}",
+  "@timelineCheckinSemantics": {"placeholders": {"place": {"type": "String"}}}
 }

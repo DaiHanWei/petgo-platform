@@ -1,6 +1,6 @@
 # Story 1.6: Diary 打卡条目
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -47,27 +47,27 @@ so that 成长时间线里也记着一起出门的日子。
 
 ## Tasks / Subtasks
 
-- [ ] **T1 后端：能力参数**（AC1）
-  - [ ] `TimelineCapabilities` + `ProfileApiController` 三端点加参（L133-161）
-  - [ ] `TimelineService` 三方法重载；`TimelineItemType` 追加枚举值
-- [ ] **T2 后端：place 只读口**（AC2.1、AC3）
-  - [ ] NEW `place/service/PlaceCheckinTimelineQuery`：`findForPetBefore(petId, upperBound, limit)`、`findForPetOnUtcDate(petId, date)`、`findForPetInUtcRange(petId, fromInclusive, toExclusive)`；返回 `PlaceCheckinTimelineView(checkinId, checkedAt, placeToken, placeName, placeStatus)`（NEW record，`place/dto`；`checkinId` 只在后端内部用于去重，不外露）
-  - [ ] 原生 SQL：`place_checkin_pets cp ⋈ place_checkins c ⋈ places p ON p.id = c.place_id`（当前场所，合并后是保留方）；UTC 日界用 `checked_at >= :dayStartUtc AND checked_at < :nextDayStartUtc`（不要在 SQL 里做时区敏感的 date 转换，`ContentService` L640-645 注释同一理由）
-- [ ] **T3 后端：content 去重读口**（AC2.3）
-  - [ ] `ContentPostRepository` JPQL：`select distinct p.placeCheckinId from ContentPost p where p.authorId = :a and p.petId = :pet and p.type = GROWTH_MOMENT and p.deletedAt is null and p.placeCheckinId in :ids`
-  - [ ] `ContentService.findCheckinIdsWithTimelinePost`（空集合短路返回）
-- [ ] **T4 后端：三处拼装**（AC2、AC3）
-  - [ ] `fetchMerged` 源⑥ + floor；`getDayDetail`；`getCalendarMonth` + `DayCell.hasPlaceCheckin`（record 末尾追加，所有 `new DayCell(...)` 调用点补参——`getCalendarMonth` 内 5 处）
-  - [ ] `TimelineItemResponse` 新字段 / 工厂 / 常量；`withDecorationTags` 透传
-  - [ ] 测试：`TimelineServiceTest`（构造器 L59 注入新依赖；新增：无 supports 不出、有 supports 出、GROWTH_MOMENT 关联帖去重、Moment 关联帖不去重、删帖恢复、跨页不重不漏——打卡与帖子分处两页时仍只出现一次、同日多源排序）；`TimelineItemResponseContractTest`（AC2.6）
-- [ ] **T5 后端：访客守卫**（AC5）+ 多宠落点（AC6）集成测试
-- [ ] **T6 App：模型 + 仓库**（AC4.1、AC4.6）
-  - [ ] 枚举 / 字段 / `fromJson`；`CalendarDayCell.hasPlaceCheckin`（`bool`，缺键 false）
-  - [ ] `kTimelineSupports` + 三个作者态请求带参；`test/profile/timeline_pagination_test.dart` 若断言 query 参数，按新参数更新
-- [ ] **T7 App：组件与点击**（AC4.2-4.5、AC3.3）
-  - [ ] `_placeCheckinBanner` + 颜色 token；`_realTapFor` 分支；`day_detail_page` `_tile` 分支；日历标记
-  - [ ] 更新 `timeline_five_class_render_test.dart` L130；新增渲染 / 点击测试（ACTIVE 跳场所详情、UNAVAILABLE toast 不跳）
-- [ ] **T8 l10n**（见下表）
+- [x] **T1 后端：能力参数**（AC1）
+  - [x] `TimelineCapabilities` + `ProfileApiController` 三端点加参（L133-161）
+  - [x] `TimelineService` 三方法重载；`TimelineItemType` 追加枚举值
+- [x] **T2 后端：place 只读口**（AC2.1、AC3）
+  - [x] NEW `place/service/PlaceCheckinTimelineQuery`：`findForPetBefore(petId, upperBound, limit)`、`findForPetOnUtcDate(petId, date)`、`findForPetInUtcRange(petId, fromInclusive, toExclusive)`；返回 `PlaceCheckinTimelineView(checkinId, checkedAt, placeToken, placeName, placeStatus)`（NEW record，`place/dto`；`checkinId` 只在后端内部用于去重，不外露）
+  - [x] 原生 SQL：`place_checkin_pets cp ⋈ place_checkins c ⋈ places p ON p.id = c.place_id`（当前场所，合并后是保留方）；UTC 日界用 `checked_at >= :dayStartUtc AND checked_at < :nextDayStartUtc`（不要在 SQL 里做时区敏感的 date 转换，`ContentService` L640-645 注释同一理由）
+- [x] **T3 后端：content 去重读口**（AC2.3）
+  - [x] `ContentPostRepository` JPQL：`select distinct p.placeCheckinId from ContentPost p where p.authorId = :a and p.petId = :pet and p.type = GROWTH_MOMENT and p.deletedAt is null and p.placeCheckinId in :ids`
+  - [x] `ContentService.findCheckinIdsWithTimelinePost`（空集合短路返回）
+- [x] **T4 后端：三处拼装**（AC2、AC3）
+  - [x] `fetchMerged` 源⑥ + floor；`getDayDetail`；`getCalendarMonth` + `DayCell.hasPlaceCheckin`（record 末尾追加，所有 `new DayCell(...)` 调用点补参——`getCalendarMonth` 内 5 处）
+  - [x] `TimelineItemResponse` 新字段 / 工厂 / 常量；`withDecorationTags` 透传
+  - [x] 测试：`TimelineServiceTest`（构造器 L59 注入新依赖；新增：无 supports 不出、有 supports 出、GROWTH_MOMENT 关联帖去重、Moment 关联帖不去重、删帖恢复、跨页不重不漏——打卡与帖子分处两页时仍只出现一次、同日多源排序）；`TimelineItemResponseContractTest`（AC2.6）
+- [x] **T5 后端：访客守卫**（AC5）+ 多宠落点（AC6）集成测试
+- [x] **T6 App：模型 + 仓库**（AC4.1、AC4.6）
+  - [x] 枚举 / 字段 / `fromJson`；`CalendarDayCell.hasPlaceCheckin`（`bool`，缺键 false）
+  - [x] `kTimelineSupports` + 三个作者态请求带参；`test/profile/timeline_pagination_test.dart` 若断言 query 参数，按新参数更新
+- [x] **T7 App：组件与点击**（AC4.2-4.5、AC3.3）
+  - [x] `_placeCheckinBanner` + 颜色 token；`_realTapFor` 分支；`day_detail_page` `_tile` 分支；日历标记
+  - [x] 更新 `timeline_five_class_render_test.dart` L130；新增渲染 / 点击测试（ACTIVE 跳场所详情、UNAVAILABLE toast 不跳）
+- [x] **T8 l10n**（见下表）
 - [ ] **T9 联调**（L1 / L2：只打卡 → Diary 出条目；顺手发帖 → 只出帖子；删帖 → 条目回来；下架场所 → 点击提示；老版本 App 验 RC-6）
 
 ## Dev Notes
@@ -147,10 +147,60 @@ L0：AC1.4 / AC2.6 契约测试、AC4 widget 与渲染测试、AC5.2 源码守�
 
 ### Agent Model Used
 
+Claude Code 云端 session（headless，环境 tailtopia-L0）
+
 ### Debug Log References
+
+- 后端 L0（`clean package -DskipTests` + 排除 L1 单测，`LC_ALL=C.UTF-8`）：**2720 例，0 失败 0 错误**；新增 L1 类 `profile/TimelinePlaceCheckinIntegrationTest` 进排除清单。
+- 前端：`flutter analyze` 零问题；`flutter test` 全绿。
+- `check-flyway-versions.sh origin/main` → OK（本 story **无新迁移**）。
 
 ### Completion Notes List
 
-- Ultimate context engine analysis completed - comprehensive developer guide created
+- **L1/L2 待本地验收**：AC1.3 基线一致（不带 `supports` 时三端点响应无 `PLACE_CHECKIN*` / `checkinPlace` / `hasPlaceCheckin`）、AC2.1–2.4（真库：只打卡 → 有条目；GROWTH_MOMENT 关联帖 → 无条目；删帖 → 条目回来；Moment 关联帖不抑制）、AC3.1–3.2 日详情 / 日历真库、AC5.1 访客四入口（分享时间线 / 日详情 / 日历、站内访客时间线）、AC6 删档重建不继承 —— 均由 `TimelinePlaceCheckinIntegrationTest` 覆盖，待本地 Docker 跑；AC4 视觉与点击（通栏配色、定位图标、场所详情跳转、下架场所 toast）、日历定位图标、RC-6 老版本 App 回归（L2）。
+- **开工核对**：story 引用的 1.1–1.5 名字（`place_checkin_pets.pet_profile_id` / `place_checkins.checked_at`、`PlaceAvailability`、`ContentPost.placeCheckinId`、`CheckinPlaceRef`、`placeUnavailableTitle`、`kPlaceDetailFromPassport` / `kPlaceDetailFromPost`）与已提交代码一致，story 文件无需改名。
+- **实现要点**：
+  - `TimelineCapabilities.parse` 兼容 `supports=a&supports=b` 与 `supports=a,b`，未知值忽略；空 → `none()` 单例。
+  - 源⑥ 在 `classify` 之后、排序之前追加；取满 `fetch` 时按源④写法更新 `allKnown` / `floor`（地板用去重前原始列表末条）。
+  - 去重经 `ContentService.findCheckinIdsWithTimelinePost` 一批一次，过滤口径与 `findGrowthMomentsBeforeAnchor` 作者自视一致（不加 visibility）。
+  - `PlaceCheckinTimelineQuery` 原生 SQL，UTC 日界用 `>= / <` 两个 Instant，不在 SQL 里做时区转换；`status` = 场所 ACTIVE 且未软删 → `ACTIVE`，否则 `UNAVAILABLE`。
+  - App：打卡点击语义抽到 `widgets/place_checkin_tap.dart`，时间线与某天详情共用；某天详情访客态即便出现打卡条目也不给点击（fail-closed）。颜色 token `checkinTint / checkinBorder / checkinIcon`（青蓝，与里程碑金紫、身份证紫区分）；日历标记常量 `kPlaceCheckinCalendarIcon` 放在 `health_record_icons.dart` 与其它格子标记同处。
+- **偏差（保守取舍，已记录）**：
+  - AC1.2「既有调用点与测试零改动」：`ProfileApiController` 三端点改为调用带能力的重载，因此 `ProfileApiControllerTest` 的一处 stub 改成 4 参（`TimelineCapabilities.none()`）；`TimelineServiceTest` 等 3 个手工构造 `TimelineService` 的测试按 T4 要求补新依赖 mock。其余调用点零改动。
+  - `CalendarMonthResponse.DayCell` 末尾追加 `hasPlaceCheckin`，另留 6 参兼容构造器，既有 `new DayCell(...)` 调用点不动。
+  - App `TimelineKind` 追加 `placeCheckin`（story 说「不认也无妨」；认了便于测试断言，全仓无对 `kind` 的穷举 switch）。
+  - 某天详情页原本对任何条目都不上报 `_reportItemTap`（该方法是时间线页私有），打卡条目沿用，不新增埋点。
+- **复审（code-review）**：无 CONFIRMED 缺陷；一条观感问题已修——新 JPQL 方法插进了 `findGrowthMomentsBeforeAnchor` 的 javadoc 与方法之间，已挪到该 javadoc 之前。
+- 被按设计打破的既有测试（已更新断言、未删）：`diary_guest_state_test.dart` 词表「恰好五个取值」→ 五值 + `PLACE_CHECKIN_BANNER`；`timeline_five_class_render_test.dart` L130 `containsAll(values)` → 除 `placeCheckinBanner` 外全覆盖并写明原因；后端 `TimelineItemResponseContractTest` 词表 / 字段集 / 工厂样本按 AC2.6 更新。
+- **待确认**：AD-9「同一次时间线结果」按 story 关键设计点解释为「会出现在这只宠物时间线的某一页」（与分页解耦）实现；如 SM 另有裁定需调整 `checkinBanners` 去重口径。
 
 ### File List
+
+后端（新增）
+- `petgo-backend/src/main/java/com/tailtopia/profile/service/TimelineCapabilities.java`
+- `petgo-backend/src/main/java/com/tailtopia/place/service/PlaceCheckinTimelineQuery.java`
+- `petgo-backend/src/main/java/com/tailtopia/place/dto/PlaceCheckinTimelineView.java`
+- 测试：`profile/service/TimelinePlaceCheckinTest`、`profile/visitor/VisitorNoPlaceCheckinGuardTest`（L0 源码守卫）、`profile/TimelinePlaceCheckinIntegrationTest`（L1）
+
+后端（修改）
+- `profile/service/TimelineService.java`（源⑥ / 日详情 / 日历 / 重载）、`profile/web/ProfileApiController.java`（`supports`）
+- `profile/dto/TimelineItemType.java`、`TimelineItemResponse.java`（`checkinPlace` / 工厂 / 常量）、`CalendarMonthResponse.java`（`hasPlaceCheckin`）
+- `content/repository/ContentPostRepository.java`、`content/service/ContentService.java`（去重读口）
+- 测试：`TimelineItemResponseContractTest`、`TimelineServiceTest`、`TimelineCursorMergeTest`、`CalendarAndDayDetailStory34Test`、`ProfileApiControllerTest`
+
+App（新增）
+- `petgo_app/lib/features/profile/presentation/widgets/place_checkin_tap.dart`
+- `petgo_app/test/profile/timeline_place_checkin_test.dart`
+
+App（修改）
+- `petgo_app/lib/features/profile/domain/timeline_item.dart`、`calendar_month.dart`、`health_record_icons.dart`
+- `petgo_app/lib/features/profile/data/timeline_repository.dart`（`kTimelineSupports`）
+- `petgo_app/lib/features/profile/presentation/widgets/timeline_item_tile.dart`、`widgets/archive_calendar.dart`、`growth_archive_page.dart`、`day_detail_page.dart`
+- `petgo_app/lib/features/place/domain/checkin_place_ref.dart`（`fromTimelineJson`）、`place/presentation/place_detail_page.dart`（`kPlaceDetailFromDiary`）
+- `petgo_app/lib/core/theme/colors.dart`（3 个 token）
+- `petgo_app/lib/l10n/app_en.arb`、`app_id.arb`（`timelineCheckinSemantics`）
+- 测试：`timeline_five_class_render_test.dart`、`calendar_cell_priority_test.dart`、`diary_guest_state_test.dart`
+
+### Change Log
+
+- 2026-09-30：Story 1.6 实现（`supports` 能力参数、时间线 / 日详情 / 日历打卡条目与去重、访客守卫 + App 模型 / 通栏组件 / 点击 / 日历标记 / l10n）；复审一条观感问题已修；L0 双绿，置 review。

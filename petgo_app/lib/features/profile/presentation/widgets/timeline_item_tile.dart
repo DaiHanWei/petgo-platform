@@ -63,6 +63,7 @@ class TimelineItemTile extends StatelessWidget {
       TimelineItemType.healthRecord =>
         item.isConsultRecord ? _consultRow(l10n) : _healthCapsule(context, l10n),
       TimelineItemType.idCardIssued => _idCard(l10n),
+      TimelineItemType.placeCheckinBanner => _placeCheckinBanner(l10n),
     };
     final tappable = onTap == null
         ? tile
@@ -239,6 +240,52 @@ class TimelineItemTile extends StatelessWidget {
     final code = item.milestoneCode;
     if (code == null || code.isEmpty) return AppLocalizations.of(context).timelineMilestoneGeneric;
     return localizedMilestoneTitle(code, Localizations.localeOf(context));
+  }
+
+  // ===== V1.3.2 Story 1.6 · 地点打卡通栏（沿用类 ③ banner 的圆角 / 内边距，专属青蓝底） =====
+
+  Widget _placeCheckinBanner(AppLocalizations l10n) {
+    // 正文就是场所名（用户数据，不进 ARB）；读屏走 timelineCheckinSemantics。
+    final name = item.checkinPlace?.name ?? '';
+    return Semantics(
+      label: l10n.timelineCheckinSemantics(name),
+      excludeSemantics: true,
+      child: Container(
+        key: const ValueKey('timelineCheckinBanner'),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: AppColors.checkinTint,
+          border: Border.all(color: AppColors.checkinBorder),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(11),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x14000000), offset: Offset(0, 2), blurRadius: 6),
+                ],
+              ),
+              // 线性定位图标（UI 稿图标规则：不用 📍 emoji）。
+              child: const Icon(Icons.place_outlined, size: 22, color: AppColors.checkinIcon),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Text(name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ===== 类 ③ 系统自动型里程碑通栏 banner（A6 `tl-ms`，按 S/M/L 配色） =====

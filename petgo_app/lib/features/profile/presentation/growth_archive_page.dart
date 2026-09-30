@@ -37,6 +37,7 @@ import 'widgets/diary_header.dart';
 import 'widgets/pet_recommendation_grid.dart';
 import 'widgets/recommended_pet_card.dart'
     show kPetRecommendFromDiaryEmpty, kPetRecommendFromDiaryNonOwner;
+import 'widgets/place_checkin_tap.dart';
 import 'widgets/share_fab.dart';
 import 'widgets/timeline_item_tile.dart';
 import '../../shop/presentation/widgets/repurchase_zones_v2.dart';
@@ -800,6 +801,8 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
           // 不绕聚合页 —— 点一条具体记录却落在一个功能列表上是走回头路。
           context.push(PetInsightsRoutes.idCard);
         };
+      case TimelineItemType.placeCheckinBanner:
+        return placeCheckinTapFor(context, item, report: report);
     }
   }
 
