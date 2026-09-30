@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
+import 'package:tailtopia/features/tailsonality/data/tailsonality_owner_type_repository.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_providers.dart';
 import 'package:tailtopia/features/tailsonality/domain/tailsonality_result.dart';
 import 'package:tailtopia/features/tailsonality/presentation/tailsonality_result_page.dart';
@@ -34,7 +35,11 @@ void main() {
       );
 
   Widget wrap(Widget child,
-          {List overrides = const [], bool reduceMotion = false, bool scaffold = true, bool petFails = false}) =>
+          {List overrides = const [],
+          bool reduceMotion = false,
+          bool scaffold = true,
+          bool petFails = false,
+          String? ownerType}) =>
       ProviderScope(
         retry: (_, _) => null,
         overrides: [
@@ -42,6 +47,7 @@ void main() {
             if (petFails) throw Exception('profile');
             return const PetProfile(id: 1, name: 'Momo', cardToken: 't', petType: 'CAT', breed: 'Anggora');
           }),
+          tailsonalityOwnerTypeRepositoryProvider.overrideWithValue(_OwnerRepo(ownerType)),
           ...overrides,
         ],
         child: MaterialApp(
@@ -132,7 +138,7 @@ void main() {
     tearDown(() => Analytics.debugCaptureSink = null);
 
     Future<void> pumpPage(WidgetTester tester,
-        {Object? error, TailsonalityResult? r, TailsonalityResult? initial, bool petFails = false}) async {
+        {Object? error, TailsonalityResult? r, TailsonalityResult? initial, bool petFails = false, String? ownerType}) async {
       tester.view.physicalSize = const Size(420, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -140,6 +146,7 @@ void main() {
         TailsonalityResultPage(token: 'abc', initial: initial),
         scaffold: false,
         petFails: petFails,
+        ownerType: ownerType,
         overrides: [
           tailsonalityResultProvider('abc').overrideWith((ref) async {
             if (error != null) throw error;
@@ -202,6 +209,15 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 5));
     });
 
+    testWidgets('Story 2.5 · AC7：主人类型已设 → 引流模块显示对照 + 档位标签，可点', (tester) async {
+      await pumpPage(tester, r: result(letters: 'ENTJ', energy: 'H'), ownerType: 'ESTJ');
+      expect(find.byKey(const ValueKey('tsMatchTeaserOwner')), findsOneWidget);
+      expect(find.text('ESTJ'), findsOneWidget);
+      expect(find.text('Twin Flames'), findsOneWidget);
+      expect(find.byKey(const ValueKey('tsMatchTeaserUnknown')), findsNothing);
+      expect(find.descendant(of: find.byType(TsMatchTeaser), matching: find.byType(InkWell)), findsOneWidget);
+    });
+
     testWidgets('已解锁分支不崩、不渲染锁态区', (tester) async {
       await pumpPage(tester, r: result(unlocked: true));
       expect(find.byType(TsLockedAnalysis), findsNothing);
@@ -262,4 +278,16 @@ void main() {
       expect(v(4), '100%');
     });
   });
+}
+
+class _OwnerRepo implements TailsonalityOwnerTypeRepository {
+  _OwnerRepo(this.value);
+
+  final String? value;
+
+  @override
+  Future<String?> fetch() async => value;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

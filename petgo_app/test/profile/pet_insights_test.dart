@@ -68,6 +68,9 @@ void main() {
       expect(TailsonalityRoutes.result('abc'), startsWith('/profile/'));
       expect(redirectWouldRewrite(guest, TailsonalityRoutes.quiz), isTrue);
       expect(redirectWouldRewrite(guest, TailsonalityRoutes.result('abc')), isTrue);
+      // V1.3.2 Story 2.5：主人配型页同样受控。
+      expect(TailsonalityRoutes.match('abc'), startsWith('/profile/'));
+      expect(redirectWouldRewrite(guest, TailsonalityRoutes.match('abc')), isTrue);
       // 旧路径同样受控 —— 重定向不能变成绕过门控的旁路（AC4 / AD-A17.6）。
       expect(redirectWouldRewrite(guest, '/profile/id-card'), isTrue);
     });

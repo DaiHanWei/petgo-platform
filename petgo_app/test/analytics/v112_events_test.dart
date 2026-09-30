@@ -395,6 +395,12 @@ void main() {
         // 确认抽屉里**点了确认**，与 `_tapped`（点了入口）分开 —— 这条的价值正在于「看到代价说明后仍然要做」。
         // 取消不报。名字由 PRD §4 定死，扩表、不改名。
         '_confirmed',
+        // 进入一个独立流程页（V1.3.2 batch-a PRD E-11C `tailsonality_match_entered`）：`_entered` = 用户**主动点进**
+        // 配型页（入口在结果页引流卡），与被动曝光的 `_viewed` 分开 —— 这条是配型漏斗的第一格。名字由 PRD §4 定死。
+        '_entered',
+        // 用户设定了一个账号级取值（V1.3.2 batch-a PRD E-11C `tailsonality_owner_type_set`）：`_set` = **保存成功**
+        // 之后才报（失败不报），描述结果而非点击。名字由 PRD §4 定死，扩表、不改名。
+        '_set',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

@@ -3768,5 +3768,21 @@
   "tailsonalityLockedDimensions": "Four dimensions",
   "@tailsonalityLockedDimensions": {"description": "Locked area section: four dimension readings."},
   "tailsonalityLockedEnergy": "Energy level · {energy}",
-  "@tailsonalityLockedEnergy": {"description": "Locked area section: energy (label such as High energy).", "placeholders": {"energy": {"type": "String"}}}
+  "@tailsonalityLockedEnergy": {"description": "Locked area section: energy (label such as High energy).", "placeholders": {"energy": {"type": "String"}}},
+  "tailsonalityMatchTitle": "Tailsonality × You",
+  "@tailsonalityMatchTitle": {"description": "Owner match page title (V1.3.2 Story 2.5)."},
+  "tailsonalityOwnerTypeQuestion": "What's your 4-letter type?",
+  "@tailsonalityOwnerTypeQuestion": {"description": "Owner type selector title."},
+  "tailsonalityOwnerTypeHint": "Pick your type to see how well you two match.",
+  "@tailsonalityOwnerTypeHint": {"description": "Owner type selector hint."},
+  "tailsonalityOwnerTypeConfirm": "See result",
+  "@tailsonalityOwnerTypeConfirm": {"description": "Owner type selector confirm button."},
+  "tailsonalityOwnerTypeSaveFailed": "Couldn't save your type, try again.",
+  "@tailsonalityOwnerTypeSaveFailed": {"description": "Owner type save failed toast."},
+  "tailsonalityMatchYou": "You",
+  "@tailsonalityMatchYou": {"description": "Letter compare row label for the owner."},
+  "tailsonalityMatchDetailTitle": "Dimension by dimension",
+  "@tailsonalityMatchDetailTitle": {"description": "Match page detail section title."},
+  "tailsonalityMatchChangeType": "Change type",
+  "@tailsonalityMatchChangeType": {"description": "Match page: change owner type."}
 }

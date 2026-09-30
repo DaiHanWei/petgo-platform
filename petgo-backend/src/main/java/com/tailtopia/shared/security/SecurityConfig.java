@@ -305,6 +305,8 @@ public class SecurityConfig {
                         // 宠物护照（V1.3.2 Story 1.2）：GET 里会签发（写）且 controller 把 jwt.sub 当 users.id 用 ——
                         // 兽医 token 落到 anyRequest().authenticated() 会以同号用户名义签发 / 读取护照。精确路径，不写通配。
                         .requestMatchers(HttpMethod.GET, "/api/v1/pet-profiles/me/passport").hasRole("USER")
+                        // Tailsonality 主人类型（V1.3.2 Story 2.5）：账号级 /me 端点，同上面 /api/v1/me/* 的理由（sub 当 users.id 用）。
+                        .requestMatchers("/api/v1/me/tailsonality/**").hasRole("USER")
                         // Tailsonality 结果（V1.3.2 Story 2.1）：controller 把 jwt.sub 当 users.id 用，兽医 token 的 sub
                         // 与 users.id 撞号 —— 落 anyRequest().authenticated() 会以同号用户名义提交 / 读取。不写 pet-profiles 通配。
                         .requestMatchers("/api/v1/pet-profiles/me/tailsonality",

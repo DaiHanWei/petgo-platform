@@ -168,6 +168,9 @@ class ApiPaths {
   /// 单条 Tailsonality 结果；token 不存在或非本人宠物 → 404。
   static String petTailsonalityResult(String token) => '$petTailsonalityResults/$token';
 
+  /// Tailsonality 主人四字母类型（V1.3.2 Story 2.5）：账号级 GET / PUT；未设置 → `{}`。仅 role=USER。
+  static const String meTailsonalityOwnerType = '$base/me/tailsonality/owner-type';
+
   /// 身份证高清图付费下载（Story 6.3）。POST 一次性永久解锁（QRIS/PawCoin）；幂等不重复扣费。
   static const String petProfileIdCardHdDownload = '$base/pet-profiles/me/id-card/hd-download';
 

@@ -2440,5 +2440,13 @@
   "@tailsonalityLockedDeepRead": {"placeholders": {"code": {"type": "String"}}},
   "tailsonalityLockedDimensions": "Empat dimensi",
   "tailsonalityLockedEnergy": "Level energi · {energy}",
-  "@tailsonalityLockedEnergy": {"placeholders": {"energy": {"type": "String"}}}
+  "@tailsonalityLockedEnergy": {"placeholders": {"energy": {"type": "String"}}},
+  "tailsonalityMatchTitle": "Tailsonality × Kamu",
+  "tailsonalityOwnerTypeQuestion": "Tipe 4 huruf kamu?",
+  "tailsonalityOwnerTypeHint": "Pilih tipe kamu buat lihat seberapa cocok kalian.",
+  "tailsonalityOwnerTypeConfirm": "Lihat Hasil",
+  "tailsonalityOwnerTypeSaveFailed": "Tipe kamu belum kesimpan, coba lagi ya.",
+  "tailsonalityMatchYou": "Kamu",
+  "tailsonalityMatchDetailTitle": "Detail per dimensi",
+  "tailsonalityMatchChangeType": "Ganti tipe"
 }

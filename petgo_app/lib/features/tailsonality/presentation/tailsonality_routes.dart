@@ -19,4 +19,9 @@ class TailsonalityRoutes {
   static const String resultPattern = '$results/:token';
 
   static String result(String token) => '$results/${Uri.encodeComponent(token)}';
+
+  /// 主人配型页（Story 2.5），挂在某次结果下。
+  static const String matchPattern = '$resultPattern/match';
+
+  static String match(String token) => '${result(token)}/match';
 }

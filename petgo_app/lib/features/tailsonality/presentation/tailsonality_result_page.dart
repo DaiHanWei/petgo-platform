@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
@@ -9,11 +10,14 @@ import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/domain/pet_profile.dart';
+import '../data/tailsonality_owner_type_repository.dart';
 import '../data/tailsonality_providers.dart';
 import '../domain/content/ts_dialog_copy.dart';
 import '../domain/content/ts_roles.dart';
 import '../domain/content/ts_text.dart';
 import '../domain/tailsonality_result.dart';
+import '../domain/ts_match.dart';
+import 'tailsonality_routes.dart';
 import 'widgets/tailsonality_intro_sheet.dart';
 import 'widgets/ts_locked_analysis.dart';
 import 'widgets/ts_match_teaser.dart';
@@ -148,8 +152,17 @@ class _Body extends StatelessWidget {
             style: const TextStyle(fontSize: 15, height: 1.55, color: AppColors.ink),
           ),
         const SizedBox(height: 16),
-        // 配型引流放在锁态区之前（它免费，放在墙后等于没有）。本 story 静态、不可点；Story 2.5 接上。
-        TsMatchTeaser(petLetters: result.letters),
+        // 配型引流放在锁态区之前（它免费，放在墙后等于没有）。
+        Consumer(builder: (context, ref, _) {
+          // 主人类型已设 → 对照缩略 + 档位标签；未设（或读失败）→ `?` 形态。改类型后回来随 provider 立即更新。
+          final owner = ref.watch(tailsonalityOwnerTypeProvider).asData?.value;
+          return TsMatchTeaser(
+            petLetters: result.letters,
+            ownerLetters: owner,
+            sameCount: owner == null ? null : computeTsMatch(owner, result.letters).sameCount,
+            onTap: () => context.push(TailsonalityRoutes.match(result.token)),
+          );
+        }),
         const SizedBox(height: 16),
         if (!result.unlocked)
           TsLockedAnalysis(

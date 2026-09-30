@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/dashed_rect.dart';
+import '../../domain/content/ts_match_copy.dart';
+import '../../domain/content/ts_text.dart';
 
 /// 结果页的配型引流模块（V1.3.2 Story 2.4 · AC4 · 内容设计 §4.3「展示形态 ①」）。
 ///
@@ -55,7 +57,12 @@ class TsMatchTeaser extends StatelessWidget {
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.ink, letterSpacing: 1.5)),
           const SizedBox(width: 14),
           Expanded(
-            child: Text(l10n.tailsonalityMatchTeaserPrompt,
+            // 已配型：显示档位标签（Story 2.5 · AC7）；未配型：引导文案。
+            child: Text(
+                owner != null && sameCount != null && kTsMatchTiers[sameCount] != null
+                    ? kTsMatchTiers[sameCount]!.name.of(Localizations.localeOf(context))
+                    : l10n.tailsonalityMatchTeaserPrompt,
+                key: const ValueKey('tsMatchTeaserLabel'),
                 style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.ink2)),
           ),
           if (onTap != null) const Icon(Icons.chevron_right, color: AppColors.muted),
