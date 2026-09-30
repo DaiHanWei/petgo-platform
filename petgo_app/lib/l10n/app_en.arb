@@ -3752,5 +3752,21 @@
   "tailsonalityAxisEnergy": "Energy level",
   "@tailsonalityAxisEnergy": {"description": "Generating view: energy suffix label."},
   "tailsonalitySubmitFailed": "Couldn't get your result. Your answers are still here — try again.",
-  "@tailsonalitySubmitFailed": {"description": "Quiz: submit failed, answers kept in memory."}
+  "@tailsonalitySubmitFailed": {"description": "Quiz: submit failed, answers kept in memory."},
+  "tailsonalityMoreActions": "More options",
+  "@tailsonalityMoreActions": {"description": "Result page: ⋯ menu button semantics label (V1.3.2 Story 2.4)."},
+  "tailsonalityMenuRetake": "Retake test",
+  "@tailsonalityMenuRetake": {"description": "Result page menu: retake."},
+  "tailsonalityResultNotFound": "We couldn't find this result",
+  "@tailsonalityResultNotFound": {"description": "Result page: 404 empty state."},
+  "tailsonalityMatchTeaserPrompt": "How alike are you two?",
+  "@tailsonalityMatchTeaserPrompt": {"description": "Result page: owner match teaser prompt."},
+  "tailsonalityLockedTitle": "Full analysis",
+  "@tailsonalityLockedTitle": {"description": "Result page locked area title."},
+  "tailsonalityLockedDeepRead": "Just for {code}",
+  "@tailsonalityLockedDeepRead": {"description": "Locked area section: role deep read.", "placeholders": {"code": {"type": "String"}}},
+  "tailsonalityLockedDimensions": "Four dimensions",
+  "@tailsonalityLockedDimensions": {"description": "Locked area section: four dimension readings."},
+  "tailsonalityLockedEnergy": "Energy level · {energy}",
+  "@tailsonalityLockedEnergy": {"description": "Locked area section: energy (label such as High energy).", "placeholders": {"energy": {"type": "String"}}}
 }

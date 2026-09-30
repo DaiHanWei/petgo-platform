@@ -95,7 +95,7 @@ class _TailsonalityQuizPageState extends ConsumerState<TailsonalityQuizPage> {
       Analytics.capture('tailsonality_completed', {'role_code': result.typeCode});
       ref.invalidate(tailsonalityResultsProvider);
       if (!mounted) return;
-      context.pushReplacement(TailsonalityRoutes.result(result.token));
+      context.pushReplacement(TailsonalityRoutes.result(result.token), extra: result);
     } catch (_) {
       if (!mounted) return;
       setState(() => _phase = _Phase.failed);

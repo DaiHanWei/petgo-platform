@@ -391,6 +391,10 @@ void main() {
         // 🔴 刻意不用 `_dismissed`：那是用户自己放弃（没有结局）；也不用 `_blocked`：那是门控拦截。
         //    App 端只报余额不足 / 网络两类，二维码超时与网关失败由服务端报同名事件。
         '_failed',
+        // 二次确认后才生效（V1.3.2 batch-a PRD E-11D `tailsonality_retake_confirmed`）：`_confirmed` = 用户在
+        // 确认抽屉里**点了确认**，与 `_tapped`（点了入口）分开 —— 这条的价值正在于「看到代价说明后仍然要做」。
+        // 取消不报。名字由 PRD §4 定死，扩表、不改名。
+        '_confirmed',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

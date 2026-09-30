@@ -2430,5 +2430,15 @@
   "tailsonalityAxisTF": "T / F · Reaksi emosi",
   "tailsonalityAxisJP": "J / P · Gaya hidup",
   "tailsonalityAxisEnergy": "Tingkat energi",
-  "tailsonalitySubmitFailed": "Hasilnya belum kebentuk. Jawabanmu masih aman, coba lagi ya."
+  "tailsonalitySubmitFailed": "Hasilnya belum kebentuk. Jawabanmu masih aman, coba lagi ya.",
+  "tailsonalityMoreActions": "Opsi lainnya",
+  "tailsonalityMenuRetake": "Tes Ulang",
+  "tailsonalityResultNotFound": "Hasil tes ini nggak ketemu",
+  "tailsonalityMatchTeaserPrompt": "Seberapa mirip kalian?",
+  "tailsonalityLockedTitle": "Analisis lengkap",
+  "tailsonalityLockedDeepRead": "Khusus buat {code}",
+  "@tailsonalityLockedDeepRead": {"placeholders": {"code": {"type": "String"}}},
+  "tailsonalityLockedDimensions": "Empat dimensi",
+  "tailsonalityLockedEnergy": "Level energi · {energy}",
+  "@tailsonalityLockedEnergy": {"placeholders": {"energy": {"type": "String"}}}
 }

@@ -87,6 +87,7 @@ import '../../features/pet_passport/presentation/pet_passport_page.dart';
 import '../../features/pet_passport/domain/new_stamp_args.dart';
 import '../../features/pet_passport/presentation/pet_passport_new_stamp_page.dart';
 import '../../features/pet_passport/presentation/pet_passport_stamp_page.dart';
+import '../../features/tailsonality/domain/tailsonality_result.dart';
 import '../../features/tailsonality/presentation/tailsonality_quiz_page.dart';
 import '../../features/tailsonality/presentation/tailsonality_result_page.dart';
 import '../../features/tailsonality/presentation/tailsonality_routes.dart';
@@ -789,7 +790,10 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: TailsonalityRoutes.quiz, builder: (c, s) => const TailsonalityQuizPage()),
       GoRoute(
         path: TailsonalityRoutes.resultPattern,
-        builder: (c, s) => TailsonalityResultPage(token: s.pathParameters['token']!),
+        builder: (c, s) => TailsonalityResultPage(
+          token: s.pathParameters['token']!,
+          initial: s.extra is TailsonalityResult ? s.extra! as TailsonalityResult : null,
+        ),
       ),
       // 🔴 旧路径**保留为重定向，不得删除**（AD-A17.2）：站内两处跳转 + 潜在的历史通知深链，
       // 断链是硬失败。
