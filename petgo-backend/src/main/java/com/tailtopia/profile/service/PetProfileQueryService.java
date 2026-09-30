@@ -69,6 +69,16 @@ public class PetProfileQueryService {
         return petProfiles.findByOwnerId(ownerId).map(PetProfile::getId);
     }
 
+    /**
+     * 账号名下宠物的 id + 物种（V1.3.2 Story 2.1：Tailsonality 按物种选题套）。单账号单宠物 → 至多一个。
+     * tailsonality 包据此取宠物，不直接注入 {@code PetProfileRepository}。
+     */
+    @Transactional(readOnly = true)
+    public Optional<com.tailtopia.profile.dto.OwnedPetRef> findOwnedPet(long ownerId) {
+        return petProfiles.findByOwnerId(ownerId)
+                .map(p -> new com.tailtopia.profile.dto.OwnedPetRef(p.getId(), p.getPetType()));
+    }
+
     /** 护照签发用的宠物摘要（V1.3.2 Story 1.2 · AD-6）。单账号单宠物 → 至多一条。 */
     @Transactional(readOnly = true)
     public Optional<PetPassportSubject> findPassportSubject(long ownerId) {

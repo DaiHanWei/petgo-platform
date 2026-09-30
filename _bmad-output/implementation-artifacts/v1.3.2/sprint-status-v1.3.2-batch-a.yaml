@@ -47,8 +47,8 @@ development_status:
   1-6-diary-打卡条目: review
   epic-1-retrospective: optional
   # ===== Epic 2：Tailsonality 性格测试（免费部分） =====
-  epic-2: backlog
-  2-1-题库常量-计分与结果落库: ready-for-dev
+  epic-2: in-progress
+  2-1-题库常量-计分与结果落库: review
   2-2-测试内容表-en-id与合规扫描: ready-for-dev
   2-3-入口-说明抽屉与答题: ready-for-dev
   2-4-结果页-免费态与重测: ready-for-dev

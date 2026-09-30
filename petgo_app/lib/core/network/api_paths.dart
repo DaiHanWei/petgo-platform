@@ -162,6 +162,12 @@ class ApiPaths {
   /// 宠物护照（V1.3.2 Story 1.2）：GET 里服务端会首次签发（幂等）。仅 role=USER。
   static const String petPassport = '$base/pet-profiles/me/passport';
 
+  /// Tailsonality 结果（V1.3.2 Story 2.1）：POST 提交 18 题答案 / GET 列表（新 → 旧）。仅 role=USER。
+  static const String petTailsonalityResults = '$base/pet-profiles/me/tailsonality/results';
+
+  /// 单条 Tailsonality 结果；token 不存在或非本人宠物 → 404。
+  static String petTailsonalityResult(String token) => '$petTailsonalityResults/$token';
+
   /// 身份证高清图付费下载（Story 6.3）。POST 一次性永久解锁（QRIS/PawCoin）；幂等不重复扣费。
   static const String petProfileIdCardHdDownload = '$base/pet-profiles/me/id-card/hd-download';
 
