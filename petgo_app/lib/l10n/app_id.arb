@@ -2354,5 +2354,21 @@
   "placeFilterEmptyTitle": "Tidak ada tempat yang cocok",
   "placeFilterClearAll": "Hapus filter",
   "petRecommendListTitle": "Hewan Peliharaan Lain",
-  "placeMarkLocationLabel": "Lokasi"
+  "placeMarkLocationLabel": "Lokasi",
+  "placeCheckinButton": "Check-in",
+  "placeCheckinDoneToday": "Sudah check-in hari ini",
+  "placeCheckinTooFar": "Kamu harus berada di lokasi untuk check-in",
+  "placeCheckinLocationTitle": "Izinkan lokasi",
+  "placeCheckinLocationBody": "Buat check-in, TailTopia perlu tahu kamu ada di lokasi.",
+  "placeCheckinLocationLater": "Nanti",
+  "placeCheckinLocationUnavailable": "Lokasi belum ketemu, coba lagi",
+  "placeCheckinNoPet": "Buat profil anabulmu dulu buat check-in",
+  "placeCheckinFailed": "Check-in gagal, coba lagi",
+  "placeCheckinSuccessTitle": "Check-in berhasil!",
+  "placeCheckinSuccessPlaceDate": "{place} · {date}",
+  "@placeCheckinSuccessPlaceDate": {"placeholders": {"place": {"type": "String"}, "date": {"type": "String"}}},
+  "placeCheckinNewStamp": "{pet} dapat cap baru",
+  "@placeCheckinNewStamp": {"placeholders": {"pet": {"type": "String"}}},
+  "placeCheckinRepeatStamp": "Cap {place} sekarang {count}×",
+  "@placeCheckinRepeatStamp": {"placeholders": {"place": {"type": "String"}, "count": {"type": "int"}}}
 }

@@ -82,6 +82,7 @@ import '../../features/consult/presentation/vet_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
 import '../../features/place/presentation/place_detail_page.dart';
+import '../../features/place/presentation/place_checkin_success_page.dart';
 import '../../features/place/presentation/place_list_page.dart';
 import '../../features/place/presentation/place_mark_page.dart';
 import '../../features/profile/presentation/pet_card_page.dart';
@@ -581,6 +582,16 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
           token: s.pathParameters['token']!,
           analyticsFrom: s.uri.queryParameters['from'],
         ),
+      ),
+      // 打卡成功页（V1.3.2 Story 1.1 · AC5）。结果经 `extra` 传入（照 /me/refunds/pawcoin-success）。
+      // 🔴 `extra` 缺失（冷启动恢复 / 手敲深链）→ 回场所详情，不崩、不渲染一个空结果页。
+      //    游客同理不进受控名单：成功页只会从登录后的打卡流程 push 进来。
+      GoRoute(
+        path: PlaceCheckinSuccessPage.routePattern,
+        redirect: (c, s) => s.extra is PlaceCheckinSuccessArgs
+            ? null
+            : PlaceDetailPage.routeFor(s.pathParameters['token']!),
+        builder: (c, s) => PlaceCheckinSuccessPage(args: s.extra! as PlaceCheckinSuccessArgs),
       ),
 
       // ===== Toko（V1.4.0 Story 1.6，FR-93 / FR-93A）=====

@@ -67,10 +67,15 @@ public class PlaceQueryService {
     /** 照片 key → 公开 URL（对齐决策 D5）。 */
     private final PlacePhotoService photoService;
 
+    /** 详情「今日已打卡」（V1.3.2 Story 1.1 AC3）：与打卡判定同一个 WIB 日界。 */
+    private final PlaceCheckinService checkins;
+
     public PlaceQueryService(PlaceRepository places, AccountQueryService accounts,
             PlaceCommentQueryService placeComments, PlaceAttitudeCounters attitudeCounters,
-            PlacePhotoRepository photos, PlacePhotoService photoService) {
+            PlacePhotoRepository photos, PlacePhotoService photoService,
+            PlaceCheckinService checkins) {
         this.places = places;
+        this.checkins = checkins;
         this.photoService = photoService;
         this.accounts = accounts;
         this.placeComments = placeComments;
@@ -119,8 +124,10 @@ public class PlaceQueryService {
         // 剩余名额与补充照片时的上限判定**同一条查询**（countOccupyingSlots），两处不会走歧。
         int slotsRemaining = (int) (PlacePhotoService.MAX_PHOTOS_PER_PLACE
                 - photos.countOccupyingSlots(p.getId()));
+        // V1.3.2 Story 1.1 AC3：登录用户才查「今日已打卡」；游客为 null → 省略该键（不查打卡表）。
+        Boolean checkedInToday = viewerId == null ? null : checkins.checkedInToday(viewerId, p.getId());
         return PlaceDetailResponse.of(p, markedBy, photoViews, distance, commentCount,
-                attitudes.recommend(), attitudes.notRecommend(), slotsRemaining);
+                attitudes.recommend(), attitudes.notRecommend(), slotsRemaining, checkedInToday);
     }
 
     /**

@@ -57,6 +57,15 @@ public class PetProfileQueryService {
     }
 
     /**
+     * 账号名下的宠物 id（V1.3.2 Story 1.1 场所打卡用的跨模块读口）。单账号单宠物 → 至多一个。
+     * place 包据此校验 {@code petIds} 全部属于本人，不直接注入 {@code PetProfileRepository}。
+     */
+    @Transactional(readOnly = true)
+    public Optional<Long> findPetIdByOwner(long ownerId) {
+        return petProfiles.findByOwnerId(ownerId).map(PetProfile::getId);
+    }
+
+    /**
      * 批量取多账号宠物身份（兽医工作台列表富化，避免逐条 N+1）。返回 {@code ownerId → 身份}，
      * 缺档/null 账号不入 map（调用方按 key 缺失兜底）。
      */

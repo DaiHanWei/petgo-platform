@@ -14,7 +14,6 @@ import com.tailtopia.admin.audit.repository.AdminAuditLogRepository;
 import com.tailtopia.admin.audit.service.AuditActions;
 import com.tailtopia.admin.places.domain.Place;
 import com.tailtopia.admin.places.domain.PlaceAttitude;
-import com.tailtopia.admin.places.domain.PlaceCheckin;
 import com.tailtopia.admin.places.domain.PlaceComment;
 import com.tailtopia.admin.places.domain.PlacePhoto;
 import com.tailtopia.admin.places.domain.PlaceReport;
@@ -59,6 +58,9 @@ class AdminPlaceActionsIntegrationTest extends ApiIntegrationTest {
     private PlaceCommentRepository comments;
     @Autowired
     private PlaceCheckinRepository checkins;
+    /** V1.3.2：打卡行只由 App 侧实体插入（三列 NOT NULL 后台实体未映射）。 */
+    @Autowired
+    private com.tailtopia.place.repository.PlaceVisitRepository appCheckins;
     @Autowired
     private PlaceReportRepository reports;
     @Autowired
@@ -177,7 +179,9 @@ class AdminPlaceActionsIntegrationTest extends ApiIntegrationTest {
         Place dup = place(newUser(), "Dup " + UUID.randomUUID());
         photos.save(PlacePhoto.create(dup.getId(), "places/d.jpg", visitor.getId()));
         comments.save(PlaceComment.create(dup.getId(), visitor.getId(), "dup 评论", PlaceAttitude.RECOMMEND));
-        checkins.save(PlaceCheckin.create(dup.getId(), visitor.getId()));
+        appCheckins.save(com.tailtopia.place.domain.PlaceCheckin.create(
+                java.util.UUID.randomUUID().toString().replace("-", ""), dup.getId(), visitor.getId(),
+                java.time.Instant.now(), java.time.LocalDate.now(java.time.ZoneId.of("Asia/Jakarta"))));
         comments.save(PlaceComment.create(keep.getId(), visitor.getId(), "keep 评论", PlaceAttitude.NOT_RECOMMEND));
         PlaceReport report = reports.save(PlaceReport.create(dup.getId(), visitor.getId(), PlaceReportReason.DUPLICATE));
 

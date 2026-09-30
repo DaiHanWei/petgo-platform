@@ -30,7 +30,7 @@
 # 见 epics 文件末尾「发版检查单」：prod 护照两价改 2000 / 1000、打开 admin.places.checkin-visible、分享奖励额配置、素材替换。
 
 generated: 2026-09-29
-last_updated: 2026-09-29
+last_updated: 2026-09-30
 project: TailTopia V1.3.2 batch-a
 project_key: NOKEY
 tracking_system: file-system
@@ -39,7 +39,7 @@ story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.3.2"
 development_status:
   # ===== Epic 1：场所打卡与护照集章 =====
   epic-1: in-progress
-  1-1-场所详情页打卡与到场校验: ready-for-dev
+  1-1-场所详情页打卡与到场校验: review
   1-2-护照签发与集章页: ready-for-dev
   1-3-整页落章与章详情页: ready-for-dev
   1-4-场所专属章与新建场所必带照片-后台: ready-for-dev

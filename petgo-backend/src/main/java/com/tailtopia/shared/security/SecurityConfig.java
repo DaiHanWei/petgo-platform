@@ -244,6 +244,9 @@ public class SecurityConfig {
                         // 举报场所（Story 1.5）：**仅 role=USER**，与标记场所同一理由
                         // （controller 把 jwt.sub 当 users.id 用，兽医 token 的 sub 是 vetId）。
                         .requestMatchers(HttpMethod.POST, "/api/v1/places/*/reports").hasRole("USER")
+                        // 场所打卡（V1.3.2 Story 1.1）：**仅 role=USER**，同举报的理由（controller 把 jwt.sub
+                        // 当 users.id 用）。仍然精确路径，不写 `/places/**` 通配。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/places/*/checkins").hasRole("USER")
                         // 场所评论列表（Story 1.7）：同详情，GET 对游客放行。
                         // ⚠️ 这条**必须写在** `GET /api/v1/places/*` 之后也无妨（两者路径形状不同，
                         //    `/*` 只匹配一段），但绝不能省 —— 省了它游客拉评论会 401，

@@ -189,7 +189,20 @@ void main() {
   ///
   /// 后端 `PlaceDetailResponseContractTest` 已经断言了响应里没有这些键；这里守住另一半 ——
   /// 客户端域模型也不能悄悄长出这些概念（长出来就意味着有人在准备做收藏 / 打星 / 打卡）。
-  group('🔴 AC6：详情模型里没有收藏 / 评分 / 营业时间 / 打卡 / 可编辑', () {
+  group('V1.3.2 Story 1.1 · checkedInToday', () {
+    test('登录响应带 true / false 原样解析', () {
+      expect(PlaceDetail.fromJson({...wire, 'checkedInToday': true}.cast<String, dynamic>())
+          .checkedInToday, isTrue);
+      expect(PlaceDetail.fromJson({...wire, 'checkedInToday': false}.cast<String, dynamic>())
+          .checkedInToday, isFalse);
+    });
+
+    test('🔴 游客响应省略该键 → null（不是 false）', () {
+      expect(PlaceDetail.fromJson(Map<String, dynamic>.from(wire)).checkedInToday, isNull);
+    });
+  });
+
+  group('🔴 AC6：详情模型里没有收藏 / 评分 / 营业时间 / 打卡次数 / 可编辑', () {
     test('即使服务端多下发了这些键，客户端也不认（解析不报错、不产生任何状态）', () {
       final p = PlaceDetail.fromJson({
         ...wire,
@@ -213,14 +226,18 @@ void main() {
           .split('\n')
           .where((l) => !l.trimLeft().startsWith('//'))
           .join('\n');
+      // V1.3.2 Story 1.1：打卡只加了 `checkedInToday` 一个字段 —— 用整词匹配，
+      // 仍然禁止裸的 `checkedIn` 与打卡次数 / 能否打卡类字段。
       for (final banned in [
         'favorited',
         'rating',
         'openingHours',
         'checkedIn',
+        'checkinCount',
+        'canCheckIn',
         'editable',
       ]) {
-        expect(codeLines.contains(banned), isFalse,
+        expect(RegExp('\\b$banned\\b').hasMatch(codeLines), isFalse,
             reason: '🔴 "$banned" 是 FR-112.6 明确不做的（不是"还没做"）——'
                 '要加先回 PRD ⑥ / 决策日志改口径');
       }

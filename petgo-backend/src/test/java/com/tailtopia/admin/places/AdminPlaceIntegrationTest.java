@@ -10,7 +10,6 @@ import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.service.AdminAccountService;
 import com.tailtopia.admin.places.domain.Place;
 import com.tailtopia.admin.places.domain.PlaceAttitude;
-import com.tailtopia.admin.places.domain.PlaceCheckin;
 import com.tailtopia.admin.places.domain.PlaceComment;
 import com.tailtopia.admin.places.domain.PlacePhoto;
 import com.tailtopia.admin.places.domain.PlaceReport;
@@ -46,6 +45,9 @@ class AdminPlaceIntegrationTest extends ApiIntegrationTest {
     private PlaceCommentRepository comments;
     @Autowired
     private PlaceCheckinRepository checkins;
+    /** V1.3.2：打卡行只由 App 侧实体插入（三列 NOT NULL 后台实体未映射）。 */
+    @Autowired
+    private com.tailtopia.place.repository.PlaceVisitRepository appCheckins;
     @Autowired
     private PlaceReportRepository reports;
     @Autowired
@@ -82,7 +84,9 @@ class AdminPlaceIntegrationTest extends ApiIntegrationTest {
         places.save(merged);
         photos.save(PlacePhoto.create(active.getId(), "places/" + active.getId() + "/a.jpg", visitor.getId()));
         comments.save(PlaceComment.create(active.getId(), visitor.getId(), "很友好 " + tag, PlaceAttitude.RECOMMEND));
-        checkins.save(PlaceCheckin.create(active.getId(), visitor.getId()));
+        appCheckins.save(com.tailtopia.place.domain.PlaceCheckin.create(
+                java.util.UUID.randomUUID().toString().replace("-", ""), active.getId(), visitor.getId(),
+                java.time.Instant.now(), java.time.LocalDate.now(java.time.ZoneId.of("Asia/Jakarta"))));
         reports.save(PlaceReport.create(active.getId(), visitor.getId(), PlaceReportReason.DUPLICATE));
         // 计数实时统计（场所表对齐 D3）：上面真实落了 1 照片 / 1 评论 / 1 打卡，无需手工 recount。
 

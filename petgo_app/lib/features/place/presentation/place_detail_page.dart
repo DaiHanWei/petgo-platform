@@ -27,6 +27,7 @@ import '../../profile/domain/share_service.dart';
 import '../data/place_repository.dart';
 import '../domain/place_comment.dart';
 import '../domain/place_detail.dart';
+import 'place_checkin_button.dart';
 import 'place_comment_composer.dart';
 import 'place_comments_controller.dart';
 import 'place_comment_section.dart';
@@ -38,9 +39,12 @@ import 'place_mini_map.dart';
 /// 场所详情页（V1.3.0 batch-b1 Story 1.5 · UI 稿 A4）。
 ///
 /// <h2>🔴 反向验收：本页**没有**这些东西（FR-112.6 / AC6）</h2>
-/// 没有收藏、没有评分打星、没有营业时间/电话等商户字段、**没有打卡按钮**（⑧ 在批次 B2）、
+/// 没有收藏、没有评分打星、没有营业时间/电话等商户字段、
 /// **没有「编辑场所」入口**（本版用户不可编辑，2026-09-15 拍板；纠错走后台 AB-17A）。
 /// 这不是「还没做」，是明确不做 —— 后端 DTO 里连字段都没有（那侧有契约测试钉着）。
+///
+/// **打卡按钮**（V1.3.2 Story 1.1）在距离行之后、描述之前（`PlaceCheckinButton`，整宽、不吸底）；
+/// 当日已打卡为禁用态，不隐藏。
 ///
 /// <h2>范围边界（别顺手加）</h2>
 /// <ul>
@@ -239,6 +243,10 @@ class PlaceDetailPage extends ConsumerWidget {
                 Text(formatPlaceDistance(l10n, p.distanceMeters!),
                     style: AppTypography.caption),
               ],
+              // V1.3.2 Story 1.1 AC4：打卡按钮 —— 距离行之后、描述之前；无定位（距离行省略）时
+              // 照常紧跟名称 / 标签区。🔴 不吸底：吸底位是评论输入条（body Column 底部）。
+              const SizedBox(height: AppSpacing.md),
+              PlaceCheckinButton(token: token, checkedInToday: p.checkedInToday),
               if (p.description != null) ...[
                 const SizedBox(height: AppSpacing.md),
                 Text(p.description!, style: AppTypography.body),
