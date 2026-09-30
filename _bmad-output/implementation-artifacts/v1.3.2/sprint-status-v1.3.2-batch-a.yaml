@@ -54,7 +54,7 @@ development_status:
   2-4-结果页-免费态与重测: review
   2-5-主人配型页: review
   2-6-结果列表页: review
-  2-7-老账号的第二次入口引导: ready-for-dev
+  2-7-老账号的第二次入口引导: review
   epic-2-retrospective: optional
   # ===== Epic 3：付费解锁 =====
   epic-3: backlog

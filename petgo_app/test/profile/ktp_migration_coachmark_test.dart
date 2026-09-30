@@ -162,10 +162,11 @@ void main() {
       expect(marks.contains(kOnboardingMarkKtpMoved), isFalse);
     });
 
-    /// 🔴 本批次只有一个键。批次 C 的性格测试引导**必须另起一个键** ——
+    /// 🔴 一个引导一个键：V1.3.2 Story 2.7 的性格测试引导**另起了一个键** ——
     /// 共用会让看过第一次的人再也收不到第二次（PRD 明确那是两次独立触发）。
-    test('客户端侧的键与服务端登记的一致，且只有这一个', () {
+    test('客户端侧的键与服务端登记的一致，恰为这两个', () {
       expect(kOnboardingMarkKtpMoved, 'ktp_moved');
+      expect(kOnboardingMarkTailsonalityEntry, 'tailsonality_entry');
 
       final repoSrc =
           File('lib/features/profile/data/onboarding_mark_repository.dart').readAsStringSync();
@@ -173,7 +174,7 @@ void main() {
           .allMatches(repoSrc)
           .map((m) => m.group(1))
           .toList();
-      expect(keys, ['ktp_moved'], reason: '批次 C 加键时这条会红 —— 那是有意的');
+      expect(keys, ['ktp_moved', 'tailsonality_entry'], reason: '以后再加键时这条会红 —— 那是有意的：加的必须是新键');
     });
 
     /// 服务端的键登记表（枚举）与客户端常量必须是同一个字符串 ——
@@ -183,6 +184,7 @@ void main() {
               'domain/OnboardingMarkKey.java')
           .readAsStringSync();
       expect(backend, contains('KTP_MOVED("$kOnboardingMarkKtpMoved")'));
+      expect(backend, contains('TAILSONALITY_ENTRY("$kOnboardingMarkTailsonalityEntry")'));
     });
   });
 

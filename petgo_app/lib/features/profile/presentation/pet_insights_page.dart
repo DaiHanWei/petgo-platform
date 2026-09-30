@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +11,8 @@ import '../../tailsonality/domain/tailsonality_result.dart';
 import '../../tailsonality/presentation/tailsonality_retake.dart';
 import '../../tailsonality/presentation/tailsonality_routes.dart';
 import '../../tailsonality/presentation/widgets/tailsonality_intro_sheet.dart';
+import '../../../shared/widgets/coachmark_overlay.dart';
+import '../data/onboarding_mark_repository.dart';
 import '../data/profile_repository.dart';
 import '../domain/pet_profile.dart';
 import 'widgets/insight_entry_card.dart';
@@ -89,11 +93,102 @@ List<Widget> insightRows(List<Widget> cards, {double gap = 10}) {
 /// 年龄换算只有猫狗有公认的换算标准（AD-A18）。其余物种**把年龄卡就地置灰 + 换副文案**，
 /// 点击无任何反应 —— 不跳转、不弹层、不新开「不支持」页，与站内既有
 /// 「功能对当前项不适用」的做法一致（AD-A17.4）。身份证对全物种可用。
-class PetInsightsPage extends ConsumerWidget {
+class PetInsightsPage extends ConsumerStatefulWidget {
   const PetInsightsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PetInsightsPage> createState() => _PetInsightsPageState();
+}
+
+class _PetInsightsPageState extends ConsumerState<PetInsightsPage> {
+  /// Tailsonality 卡的位置锚点，供第二次入口引导量高亮框（V1.3.2 Story 2.7）。
+  final GlobalKey _tailsonalityAnchor = GlobalKey();
+
+  /// 蒙层当前挂着的 OverlayEntry。非空 = 正在展示。
+  OverlayEntry? _coachmark;
+
+  /// 本次页面生命周期内是否已经尝试过 —— 防止 build 多次就弹多次。
+  bool _coachmarkTried = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 首帧之后再问「弹不弹」：initState 里没有布局，量不到卡的位置。
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowTailsonalityCoachmark());
+  }
+
+  /// 第二次入口引导（V1.3.2 Story 2.7 · AD-16 · D-17）：指着 Tailsonality 卡说「性格测试在这里」。
+  ///
+  /// 弹的条件（全部成立）：
+  /// 1. 标记**读取成功**（读失败不弹 —— 与第一次引导「读失败按未看过」相反：本引导不求多弹，下次再试）；
+  /// 2. 当前集合不含 `tailsonality_entry`；
+  /// 3. 本会话**没有刚看完第一次**：服务端快照无 `ktp_moved`、当前集合却有 = 刚在成长档案页看完 → 本次不弹，
+  ///    免得连弹两层；下次冷启动再弹。老账号（快照有）与新账号（两边都没有）都会弹。
+  Future<void> _maybeShowTailsonalityCoachmark() async {
+    if (_coachmarkTried || _coachmark != null) return;
+    _coachmarkTried = true;
+
+    final marks = await ref.read(onboardingMarksProvider.future);
+    if (!mounted) return;
+    final notifier = ref.read(onboardingMarksProvider.notifier);
+    if (!notifier.fetchSucceeded) return;
+    if (marks.contains(kOnboardingMarkTailsonalityEntry)) return;
+    if (!notifier.serverHad(kOnboardingMarkKtpMoved) && marks.contains(kOnboardingMarkKtpMoved)) return;
+
+    // 等布局完成再量位置。
+    await WidgetsBinding.instance.endOfFrame;
+    // 等待期间用户可能已点开别的卡：本页不在最前就不弹（否则蒙层画在别的页面上、高亮一张看不见的卡）。
+    if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return;
+    final box = _tailsonalityAnchor.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return; // 量不到就不弹，不画一个错位的框
+    final rect = box.localToGlobal(Offset.zero) & box.size;
+
+    final l10n = AppLocalizations.of(context);
+    final entry = OverlayEntry(
+      builder: (_) => CoachmarkOverlay(
+        spotlight: rect,
+        // 蒙层跟着锚点每帧重量（卡高随档案数据回来会变）。
+        anchorKey: _tailsonalityAnchor,
+        // 亮块与卡严丝合缝（描边 r14 与卡片同半径）。
+        padding: 0,
+        title: l10n.tailsonalityCoachmarkTitle,
+        text: l10n.tailsonalityCoachmarkText,
+        confirmLabel: l10n.commonGotIt,
+        onDismiss: _dismissCoachmark,
+      ),
+    );
+    _coachmark = entry;
+    // rootOverlay：插到**根** Overlay，遮罩才盖得住底部 Tab 栏（同第一次引导的 2026-09-21 复审结论）。
+    Overlay.of(context, rootOverlay: true).insert(entry);
+  }
+
+  /// 关闭并置位。🔴 **先关再置位**：置位失败的代价只是下次再弹一次。只置本引导自己的键，不碰 `ktp_moved`。
+  void _dismissCoachmark() {
+    _coachmark?.remove();
+    _coachmark = null;
+    unawaited(ref
+        .read(onboardingMarksProvider.notifier)
+        .mark(kOnboardingMarkTailsonalityEntry)
+        .catchError((_) {}));
+  }
+
+  /// 聚光区是镂空的，点击会穿透到卡上：蒙层在时先按关闭处理（置位），再执行卡的正常点击 ——
+  /// 不能出现「抽屉弹出来了、蒙层还盖在上面」。
+  void _onTailsonalityTap() {
+    if (_coachmark != null) _dismissCoachmark();
+    openTailsonality(context, ref);
+  }
+
+  @override
+  void dispose() {
+    // 蒙层挂在 Overlay 上，不随本页的 widget 树一起拆 —— 不显式移除会留一层黑幕。
+    _coachmark?.remove();
+    _coachmark = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     // 物种只用来决定年龄卡灰不灰。取不到档案（加载中/失败）时按「不是猫狗」保守处理 ——
     // 让一个算不出结果的入口可点，比它暂时灰着更糟。
@@ -142,12 +237,15 @@ class PetInsightsPage extends ConsumerWidget {
                 onTap: () => context.push(PetInsightsRoutes.passport),
               ),
               // V1.3.2 Story 2.3：Tailsonality，全物种可点（OTHER 走通用题套）；2+2 排布。
-              InsightEntryCard(
-                inkKey: const ValueKey('insightTailsonality'),
-                icon: Icons.psychology_alt_outlined,
-                title: l10n.tailsonalityTitle,
-                sub: l10n.tailsonalityEntrySub,
-                onTap: () => openTailsonality(context, ref),
+              KeyedSubtree(
+                key: _tailsonalityAnchor,
+                child: InsightEntryCard(
+                  inkKey: const ValueKey('insightTailsonality'),
+                  icon: Icons.psychology_alt_outlined,
+                  title: l10n.tailsonalityTitle,
+                  sub: l10n.tailsonalityEntrySub,
+                  onTap: _onTailsonalityTap,
+                ),
               ),
             ]),
           ),

@@ -47,14 +47,29 @@ final onboardingMarksProvider =
     AsyncNotifierProvider<OnboardingMarks, Set<String>>(OnboardingMarks.new);
 
 class OnboardingMarks extends AsyncNotifier<Set<String>> {
+  /// 本次 build 从服务端拉回的快照（V1.3.2 Story 2.7）；拉取失败为 null。
+  ///
+  /// 与 [state] 分开存：[mark] 会先改本地 state，而第二次引导要区分「上次会话之前就看过第一次」
+  /// 与「本会话刚看完第一次」（后者本次不弹，避免连弹两层）。
+  Set<String>? _fetched;
+
   @override
   Future<Set<String>> build() async {
+    _fetched = null;
     try {
-      return await ref.read(onboardingMarkRepositoryProvider).fetchMarks();
+      final marks = await ref.read(onboardingMarkRepositoryProvider).fetchMarks();
+      _fetched = Set.unmodifiable(marks);
+      return marks;
     } catch (_) {
       return const <String>{};
     }
   }
+
+  /// 本次拉取是否成功。第二次引导「读失败不弹」靠它（第一次引导照旧按「未看过」处理，不看这里）。
+  bool get fetchSucceeded => _fetched != null;
+
+  /// 服务端快照里是否已有该键（拉取失败 → false）。
+  bool serverHad(String key) => _fetched?.contains(key) ?? false;
 
   /// 置位：**先**改本地缓存（本会话不再弹），再打服务端。
   /// 服务端失败的代价只是下次冷启动再弹一次（与离线首启同一档，已接受）。
@@ -65,6 +80,10 @@ class OnboardingMarks extends AsyncNotifier<Set<String>> {
   }
 }
 
-/// 本批次唯一的键（AC6）。批次 C 的性格测试引导**必须另起一个键**，禁止共用 ——
-/// 共用会让看过第一次的人再也收不到第二次。
+/// 一个引导一个键，禁止共用（AC6）—— 共用会让看过第一次的人再也收不到第二次。
+///
+/// 第一次引导：「身份证挪进 Know Your Pet 了」（V1.3.0 Story 5.4，成长档案页）。
 const String kOnboardingMarkKtpMoved = 'ktp_moved';
+
+/// 第二次引导：「性格测试也在这里」（V1.3.2 Story 2.7，聚合页）。与后端 `OnboardingMarkKey.TAILSONALITY_ENTRY` 同值。
+const String kOnboardingMarkTailsonalityEntry = 'tailsonality_entry';

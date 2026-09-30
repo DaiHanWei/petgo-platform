@@ -459,7 +459,12 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             // V1.3.0 Story 5.1：入口卡指向聚合页（身份证是其中一张卡）。
             // ⚠️ 逐条改，**不做前缀字符串替换** —— `/profile/id-cards/*` 多卡子路由
             // 与它只差一个字母，替换会误伤（AD-A17.7）。
-            onOpenIdCard: () => context.push(PetInsightsRoutes.hub),
+            // V1.3.2 Story 2.7 复审：聚光区可点穿 —— 蒙层在时点入口卡先按关闭处理（置位），
+            // 否则进了聚合页第一层蒙层还挂在根 Overlay 上，与第二次引导叠成两层。
+            onOpenIdCard: () {
+              if (_coachmark != null) _dismissCoachmark();
+              context.push(PetInsightsRoutes.hub);
+            },
             onOpenHealth: () => context.push('/profile/health'),
             onOpenMilestones: () => context.push('/profile/milestones'),
           ),

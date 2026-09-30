@@ -3790,5 +3790,9 @@
   "tailsonalityResultLocked": "Not unlocked yet",
   "@tailsonalityResultLocked": {"description": "Result list row: greyed status for a locked result."},
   "tailsonalityHistoryEmpty": "No test results yet",
-  "@tailsonalityHistoryEmpty": {"description": "Result list empty state title."}
+  "@tailsonalityHistoryEmpty": {"description": "Result list empty state title."},
+  "tailsonalityCoachmarkTitle": "Your pet's personality test is here",
+  "@tailsonalityCoachmarkTitle": {"description": "Know Your Pet hub: second onboarding coachmark title pointing at the Tailsonality card (V1.3.2 Story 2.7)."},
+  "tailsonalityCoachmarkText": "Tap to get started",
+  "@tailsonalityCoachmarkText": {"description": "Second onboarding coachmark body."}
 }
