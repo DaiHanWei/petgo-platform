@@ -1,6 +1,6 @@
 # Story 2.2: 测试内容表（EN / ID）与合规扫描
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -45,18 +45,18 @@ so that 测试不像机翻、愿意做完并分享。
 
 ## Tasks / Subtasks
 
-- [ ] **T1 内容表骨架**（AC1）
-  - [ ] `content/ts_text.dart`：`typedef TsText = ({String en, String id});` + `extension on TsText { String of(Locale l) }`（`languageCode == 'id'` 取 id，其余取 en）+ `String tsFillPet(String s, String petName)`
-  - [ ] `content/ts_questions.dart`：`TsQuestion` 类 + `kTsQuestions`（54 键）；三道图片题定义为 `_kP1/_kP2/_kP3` 三个常量，三套各自以 `'CAT.P1': _kP1,` 引用（题干与选项三套共用，内容设计 §6.5）
-  - [ ] `content/ts_roles.dart`：`TsRole` + `kTsRoles`（16 键）
-  - [ ] `content/ts_readings.dart`：`kTsDimensionReadings`（8 键）、`kTsEnergy`（H / L，各含 `label` 与 `line`）
-  - [ ] `content/ts_match_copy.dart`：`TsMatchTier` + `kTsMatchTiers`（键 = 相同字母数 4..0）、`kTsAxisDiffLines`（8 键）、`kTsAxisDetails`（16 键）
-  - [ ] `content/ts_dialog_copy.dart`：`kTsRetentionDialog`、`kTsRetakeDialog`（各含 title / body / confirm / cancel 四个 `TsText`）
-- [ ] **T2 翻译落地**（AC1、AC2）：按「翻译清单」逐块填；先填逐字照搬块，再翻其余块；每块翻完跑一次 T4 的机检
-- [ ] **T3 跨库测试**（AC3）：`TailsonalityContentParityTest`（依赖 Story 2.1 的 `TailsonalityCatalog`）
-- [ ] **T4 App 机检测试**（AC2.4）：`test/tailsonality/content_tables_test.dart`
-- [ ] **T5 商标词 / 别名扫描**（AC4）：App `test/tailsonality/trademark_scan_test.dart`、后端 `src/test/java/com/tailtopia/tailsonality/TrademarkScanTest.java`
-- [ ] **T6** `flutter analyze` + `flutter test test/tailsonality/` + `./mvnw -B test -Dtest='Tailsonality*,Trademark*'` 全绿
+- [x] **T1 内容表骨架**（AC1）
+  - [x] `content/ts_text.dart`：`typedef TsText = ({String en, String id});` + `extension on TsText { String of(Locale l) }`（`languageCode == 'id'` 取 id，其余取 en）+ `String tsFillPet(String s, String petName)`
+  - [x] `content/ts_questions.dart`：`TsQuestion` 类 + `kTsQuestions`（54 键）；三道图片题定义为 `_kP1/_kP2/_kP3` 三个常量，三套各自以 `'CAT.P1': _kP1,` 引用（题干与选项三套共用，内容设计 §6.5）
+  - [x] `content/ts_roles.dart`：`TsRole` + `kTsRoles`（16 键）
+  - [x] `content/ts_readings.dart`：`kTsDimensionReadings`（8 键）、`kTsEnergy`（H / L，各含 `label` 与 `line`）
+  - [x] `content/ts_match_copy.dart`：`TsMatchTier` + `kTsMatchTiers`（键 = 相同字母数 4..0）、`kTsAxisDiffLines`（8 键）、`kTsAxisDetails`（16 键）
+  - [x] `content/ts_dialog_copy.dart`：`kTsRetentionDialog`、`kTsRetakeDialog`（各含 title / body / confirm / cancel 四个 `TsText`）
+- [x] **T2 翻译落地**（AC1、AC2）：按「翻译清单」逐块填；先填逐字照搬块，再翻其余块；每块翻完跑一次 T4 的机检
+- [x] **T3 跨库测试**（AC3）：`TailsonalityContentParityTest`（依赖 Story 2.1 的 `TailsonalityCatalog`）
+- [x] **T4 App 机检测试**（AC2.4）：`test/tailsonality/content_tables_test.dart`
+- [x] **T5 商标词 / 别名扫描**（AC4）：App `test/tailsonality/trademark_scan_test.dart`、后端 `src/test/java/com/tailtopia/tailsonality/TrademarkScanTest.java`
+- [x] **T6** `flutter analyze` + `flutter test test/tailsonality/` + `./mvnw -B test -Dtest='Tailsonality*,Trademark*'` 全绿
 
 ## Dev Notes
 
@@ -187,10 +187,47 @@ L0：AC1–AC4 全部（纯静态：`flutter test`、`./mvnw -B test` 的非 DB 
 
 ### Agent Model Used
 
+Claude Code 云端 session（headless，环境 tailtopia-L0）
+
 ### Debug Log References
+
+- 后端 L0（`clean package -DskipTests` + 排除 L1 单测，`LC_ALL=C.UTF-8`）：**2770 例，0 失败 0 错误**（新增 `TailsonalityContentParityTest`、`TrademarkScanTest`，均 L0）。
+- 前端：`flutter analyze` 零问题；`flutter test` 全绿（`test/tailsonality/` 新增 23 例）。
+- 本 story 无迁移；`check-flyway-versions.sh origin/main` → OK。
 
 ### Completion Notes List
 
-- Ultimate context engine analysis completed - comprehensive developer guide created
+- **L1/L2 待本地验收**：本 story 全部 L0，无 L1 / L2；**语感复核**属发版检查单 RC-5（印尼语母语同事过一遍全部 ID 译文，重点：题干 / 选项口语度、深读长段）。
+- **开工核对**：Story 2.1 实际命名与本文件一致（`TailsonalityCatalog.QUESTION_IDS` / `TYPE_CODES` / `WEIGHTS`、`TailsonalityQuestionSet { CAT, DOG, GENERAL }`），AC3 正则按 Dev Notes 建议写法直接可用，story 文件无需改名。
+- **实现要点**：
+  - 内容表 6 个文件放 `lib/features/tailsonality/domain/content/`；字符串一律双引号（译文多撇号），键仍为单引号字面量、一行起头，后端正则可抽。
+  - 翻译清单 18 块全部落地：54 题（含 3 道图片题共用 `_kP1/_kP2/_kP3`，三套以 `identical` 钉住共用）、16 角色（名 / slogan 照搬，slogan 去掉斜体星号）、16 摘要、8 维度、16 深读、能量 2 × 2、5 档（档名按 D-18、总评 / 总结句照搬 §4.3、slogan 取自设计资产清单 §3）、8 差异句、16 逐轴详解、两个弹窗。
+  - 逐字照搬块与原文逐条核对（复审也核过一遍）；口吻样例里给出的 EN / ID（`CAT.Q1`、`ENTJ` 摘要、维度 `T`、详解 `EI`）照用并按原文补全 `…` 部分。
+  - `// PENDING D-18`（档位总评 / 总结句 / slogan）、`// PENDING D-19`（能量段正文，暂用 §4.2「一句话」）已加。
+- **偏差（保守取舍，已记录）**：
+  - AC2.4「可翻译字段 `en != id`」对两类条目豁免并在测试里写明原因：配型档位名（D-18：专名不译，EN / ID 同名）、挽留弹窗确认按钮「Unlock」（内容设计 §2.3 原文两语同词）。
+  - 图片题文字标签按 ≤ ~20 字符收短（如「Middle of the living room」→「Center of the room」、「深夜 / 凌晨」→「Late night / Tengah malam」），语义与计分梯度不变。
+  - 别名扫描 ID 列表在 story 所列 14 个之外补了 `Mediator`、`Virtuoso`（推测站点印尼语版对这两个不译）；云端未能对照 16personalities.com/id 核实实际译名。
+- **复审（code-review）CONFIRMED 三条，均已修**：① INTJ 深读 EN 把「它不亲人，但它亲你」译成「it is your pet」，改为「It isn't cuddly with people, but it's close to you」；② ISTP 深读 ID 把「淡定、随性」译成「santai, santuy」（同义重复），随性改为「ngalir aja」；③ 中日韩检测正则漏假名 / 谚文 / 扩展区汉字，改为 `\p{Script=…}` 并加自检用例。
+- 无被按设计打破的既有测试。
+- **待确认**：① 16personalities 印尼语站点的实际别名译名（本地联网后核一遍，如有新词补进 `trademark_scan_test.dart`）；② 图片题标签收短的措辞；③ 全部 ID 译文语感（RC-5）。
 
 ### File List
+
+App（新增）
+- `petgo_app/lib/features/tailsonality/domain/content/ts_text.dart`
+- `petgo_app/lib/features/tailsonality/domain/content/ts_questions.dart`
+- `petgo_app/lib/features/tailsonality/domain/content/ts_roles.dart`
+- `petgo_app/lib/features/tailsonality/domain/content/ts_readings.dart`
+- `petgo_app/lib/features/tailsonality/domain/content/ts_match_copy.dart`
+- `petgo_app/lib/features/tailsonality/domain/content/ts_dialog_copy.dart`
+- `petgo_app/test/tailsonality/content_tables_test.dart`
+- `petgo_app/test/tailsonality/trademark_scan_test.dart`
+
+后端（新增）
+- `petgo-backend/src/test/java/com/tailtopia/tailsonality/TailsonalityContentParityTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/tailsonality/TrademarkScanTest.java`
+
+### Change Log
+
+- 2026-09-30：Story 2.2 实现（Tailsonality 内容表 EN / ID 全量 + 跨库一致性 + 商标词 / 别名扫描）；复审三条已修；L0 双绿，置 review。
