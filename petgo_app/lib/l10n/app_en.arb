@@ -3706,5 +3706,9 @@
   "placeUnavailableTitle": "Place not found",
   "@placeUnavailableTitle": {"description": "Shared (Stories 1.3 / 1.5 / 1.6): the place was delisted or removed (UI B6 / C9)."},
   "placeUnavailableBody": "This place is no longer listed",
-  "@placeUnavailableBody": {"description": "Shared: explanation under placeUnavailableTitle."}
+  "@placeUnavailableBody": {"description": "Shared: explanation under placeUnavailableTitle."},
+  "placeCheckinRecordMoment": "Capture This Moment",
+  "@placeCheckinRecordMoment": {"description": "Check-in success page: primary CTA to post about this visit (V1.3.2 Story 1.5, D-14)."},
+  "publishCheckinPlaceLabel": "At {place}",
+  "@publishCheckinPlaceLabel": {"description": "Compose / post detail: accessibility label of the check-in place strip.", "placeholders": {"place": {"type": "String"}}}
 }

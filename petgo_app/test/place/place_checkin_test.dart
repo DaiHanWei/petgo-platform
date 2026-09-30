@@ -245,9 +245,36 @@ void main() {
       expect(find.text('Check-in berhasil!'), findsOneWidget);
       expect(find.text('Momo dapat cap baru'), findsOneWidget);
       expect(find.byKey(const ValueKey('placeCheckinVisitBadge')), findsNothing);
-      // Story 1.2 · AC6：仅新章出「Lihat Paspor」；「Rekam Momen Ini」属 Story 1.5。
+      // Story 1.2 · AC6：仅新章出「Lihat Paspor」；Story 1.5 起同一行并排主 CTA「Rekam Momen Ini」。
       expect(find.text('Lihat Paspor'), findsOneWidget);
-      expect(find.text('Rekam Momen Ini'), findsNothing);
+      expect(find.text('Rekam Momen Ini'), findsOneWidget);
+    });
+
+    testWidgets('Story 1.5 · D-14：C2 两个按钮同一 Row、主 CTA 更宽；C2b 只有主 CTA 整宽', (tester) async {
+      await _pumpSuccess(tester, isNew: true, count: 1);
+      final row = find.byKey(const ValueKey('placeCheckinActions'));
+      final ghost = find.byKey(const ValueKey('placeCheckinViewPassport'));
+      final primary = find.byKey(const ValueKey('placeCheckinRecordMoment'));
+      expect(find.descendant(of: row, matching: ghost), findsOneWidget);
+      expect(find.descendant(of: row, matching: primary), findsOneWidget);
+      expect(tester.getSize(primary).width, greaterThan(tester.getSize(ghost).width));
+      expect(tester.getSize(primary).height, tester.getSize(ghost).height);
+      expect(tester.getSize(primary).height, greaterThanOrEqualTo(44));
+      expect(find.text('Rekam Momen Ini'), findsOneWidget);
+      expect(find.byIcon(Icons.photo_camera_outlined), findsOneWidget);
+
+      await _pumpSuccess(tester, isNew: false, count: 2);
+      expect(find.byKey(const ValueKey('placeCheckinViewPassport')), findsNothing);
+      final solo = tester.getSize(find.byKey(const ValueKey('placeCheckinRecordMoment')));
+      expect(solo.width, greaterThan(tester.getSize(find.byKey(const ValueKey('placeCheckinActions'))).width - 2));
+    });
+
+    test('源码：主 CTA 打开发帖页 = Diary 预选 + 打卡 token', () {
+      final src = File('lib/features/place/presentation/place_checkin_success_page.dart').readAsStringSync();
+      final at = src.indexOf('PublishComposePage.open(');
+      final block = src.substring(at, src.indexOf('Icons.photo_camera_outlined', at));
+      expect(block, contains('preset: ContentType.growthMoment'));
+      expect(block, contains('placeCheckinToken: r.checkinToken'));
     });
 
     testWidgets('再访（C2b）：角标 ×n +「Cap … sekarang n×」；无「Lihat Paspor」', (tester) async {

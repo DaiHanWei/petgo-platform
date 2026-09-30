@@ -88,6 +88,9 @@ const String kPlaceDetailFromShare = 'share';
 
 /// 护照章详情「Lihat tempat」进来的（V1.3.2 Story 1.3 · AC5）。
 const String kPlaceDetailFromPassport = 'passport';
+
+/// 帖子详情的打卡场所条进来的（V1.3.2 Story 1.5 · AC5.5）。
+const String kPlaceDetailFromPost = 'post';
 const String kPlaceDetailFromOther = 'other';
 
 class PlaceDetailPage extends ConsumerWidget {
@@ -524,6 +527,7 @@ class _PlaceDetailViewedOnceState extends State<_PlaceDetailViewedOnce> {
     kPlaceDetailFromCreated,
     kPlaceDetailFromShare,
     kPlaceDetailFromPassport,
+    kPlaceDetailFromPost,
   };
 
   @override

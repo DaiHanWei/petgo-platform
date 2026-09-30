@@ -129,8 +129,9 @@ void main() {
 
     test('🔴 源码：NewStampArgs / passportNewStamp 只在成功页 isNewStamp 分支里', () {
       final src = File('lib/features/place/presentation/place_checkin_success_page.dart').readAsStringSync();
-      final branch = src.indexOf('bottomNavigationBar: r.isNewStamp');
-      final elseNull = src.indexOf(': null,', branch);
+      // Story 1.5 起底部是一行 Row：「Lihat Paspor」只在 `if (r.isNewStamp) ...[ … ]` 分支里。
+      final branch = src.indexOf('if (r.isNewStamp) ...[');
+      final elseNull = src.indexOf('const SizedBox(width: 10),', branch);
       expect(branch, greaterThan(0));
       for (final needle in ['passportNewStamp', 'NewStampArgs(']) {
         final at = src.indexOf(needle);

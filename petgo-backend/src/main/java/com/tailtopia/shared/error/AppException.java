@@ -135,6 +135,11 @@ public class AppException extends RuntimeException {
         return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.COMMENT_BLOCKED, detail);
     }
 
+    /** V1.3.2 Story 1.5：发帖关联的打卡不存在或不是本人的（422）。 */
+    public static AppException postCheckinInvalid(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.POST_CHECKIN_INVALID, detail);
+    }
+
     /** V1.3.2 Story 1.1：不在场所 500m 内（422）。🔴 调用方只传固定文案，绝不拼距离值。 */
     public static AppException checkinTooFar(String detail) {
         return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.CHECKIN_TOO_FAR, detail);

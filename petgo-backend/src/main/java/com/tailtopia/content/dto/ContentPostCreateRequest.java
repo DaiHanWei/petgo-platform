@@ -50,31 +50,45 @@ public record ContentPostCreateRequest(
          * <p>省略 / null = 没 @ 人（老客户端与后台补发行为不变）。
          * ⚠️ 这里只是入口校验，权威过滤在 {@code MentionSanitizer}。
          */
-        @Size(max = 5, message = "最多只能提及 5 人") List<Long> mentionedUserIds) {
+        @Size(max = 5, message = "最多只能提及 5 人") List<Long> mentionedUserIds,
+        /**
+         * 打卡后顺手发帖关联的打卡 token（V1.3.2 Story 1.5 · AD-10）。省略 / null = 普通发帖。
+         *
+         * <p>服务端校验为<b>本人</b>打卡后写入 {@code content_posts.place_checkin_id}；不存在或非本人 → 422
+         * {@code post-checkin-invalid}。任何帖子类型均可。后台 / 种子发布（{@code publishTrusted}）不接收。
+         */
+        @Size(max = 32, message = "打卡标识无效") String placeCheckinToken) {
 
     /** 兼容无事件日期的发布（日常/科普 / 后台补发）：eventDate 省为 null，可见范围默认公开。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls) {
-        this(type, petId, text, imageUrls, null, null, null, null);
+        this(type, petId, text, imageUrls, null, null, null, null, null);
     }
 
     /** 兼容不带可见范围的调用（老客户端 / 既有测试）：默认公开。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls, LocalDate eventDate) {
-        this(type, petId, text, imageUrls, eventDate, null, null, null);
+        this(type, petId, text, imageUrls, eventDate, null, null, null, null);
     }
 
     /** 兼容不带图片尺寸的调用（老客户端 / 既有测试 / 后台种子发布）：一律走服务端兜底测量。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility) {
-        this(type, petId, text, imageUrls, eventDate, visibility, null, null);
+        this(type, petId, text, imageUrls, eventDate, visibility, null, null, null);
     }
 
     /** 兼容不带 @ 名单的调用（老客户端 / 既有测试 / 运营发帖）：视为没 @ 任何人。 */
     public ContentPostCreateRequest(ContentType type, Long petId, String text,
             List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility,
             List<ImageSize> imageSizes) {
-        this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, null);
+        this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, null, null);
+    }
+
+    /** 兼容不带打卡关联的调用（V1.3.2 前的 8 参形态：老客户端 / 既有测试 / 运营发帖）：普通发帖。 */
+    public ContentPostCreateRequest(ContentType type, Long petId, String text,
+            List<String> imageUrls, LocalDate eventDate, ContentVisibility visibility,
+            List<ImageSize> imageSizes, List<Long> mentionedUserIds) {
+        this(type, petId, text, imageUrls, eventDate, visibility, imageSizes, mentionedUserIds, null);
     }
 
     /** 省略即公开（NFR-6：私密只由用户主动关开关产生）。 */

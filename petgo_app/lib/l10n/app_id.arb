@@ -2401,5 +2401,8 @@
   "@passportPageLabel": {"placeholders": {"page": {"type": "int"}}},
   "passportSeePlace": "Lihat tempat",
   "placeUnavailableTitle": "Tempat tidak ditemukan",
-  "placeUnavailableBody": "Tempat ini sudah tidak terdaftar"
+  "placeUnavailableBody": "Tempat ini sudah tidak terdaftar",
+  "placeCheckinRecordMoment": "Rekam Momen Ini",
+  "publishCheckinPlaceLabel": "Di {place}",
+  "@publishCheckinPlaceLabel": {"placeholders": {"place": {"type": "String"}}}
 }

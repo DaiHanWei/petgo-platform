@@ -3,6 +3,7 @@ package com.tailtopia.place.repository;
 import com.tailtopia.place.domain.PlaceCheckin;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -18,6 +19,9 @@ import org.springframework.data.repository.query.Param;
  * <p>「章」相关的计数一律按<b>当前</b> {@code place_id} 查（合并进来的原场所历史也算，AD-5）。
  */
 public interface PlaceVisitRepository extends JpaRepository<PlaceCheckin, Long> {
+
+    /** 发帖关联（Story 1.5）：按 token 取本人的打卡，非本人 → empty。 */
+    Optional<PlaceCheckin> findByPublicTokenAndUserId(String publicToken, Long userId);
 
     /** 该宠物在当前场所某个 WIB 日是否已打卡（「每天限一次」的业务判定，AC2.5）。 */
     @Query("select count(cp) > 0 from PlaceCheckinPet cp, PlaceCheckin c "

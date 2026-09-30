@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
+import '../../content/domain/content_type.dart';
+import '../../content/domain/publish_checkin_place.dart';
+import '../../content/presentation/publish_compose_page.dart';
 import '../../pet_passport/domain/new_stamp_args.dart';
 import '../../profile/presentation/pet_insights_page.dart';
 import '../domain/place_checkin_result.dart';
@@ -24,9 +27,9 @@ class PlaceCheckinSuccessArgs {
 /// - 新章（C2）：小尺寸章面 + 落章轻反馈（缩放 + 淡入，一次，≤400ms）+「{pet} dapat cap baru」。
 /// - 再访（C2b）：同骨架，章角标「×{n}」跳动一次 +「Cap {place} sekarang {n}×」；**不播整页落章**。
 ///
-/// 底部按钮行（`bottomNavigationBar` 的一行 `Row`；成功页没有评论输入条，可吸底）：
+/// 底部按钮行（`bottomNavigationBar` 的一行 `Row`；成功页没有评论输入条，可吸底，D-14）：
 /// - 「Lihat Paspor」（Story 1.2 / 1.3）：**仅新章（C2）**出，次级样式 → B4 整页落章 → 护照页停在新章；C2b 不出；
-/// - 「Rekam Momen Ini」主 CTA 由 Story 1.5 在同一行追加并排（D-14）。
+/// - 「Rekam Momen Ini」（Story 1.5）：主 CTA，C2 更宽（flex 2:1）、C2b 整宽 → 发帖页（Diary 预选 + 打卡关联）。
 /// 动效有静态兜底：动画结束态就是可读的章面 + 文案。
 class PlaceCheckinSuccessPage extends StatelessWidget {
   const PlaceCheckinSuccessPage({super.key, required this.args});
@@ -48,38 +51,67 @@ class PlaceCheckinSuccessPage extends StatelessWidget {
     final date = r.visitDate == null ? null : formatDayMonthYear(context, r.visitDate!);
     return Scaffold(
       backgroundColor: AppColors.cream,
-      bottomNavigationBar: r.isNewStamp
-          ? SafeArea(
-              minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      key: const ValueKey('placeCheckinViewPassport'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                        foregroundColor: AppColors.mint,
-                        side: const BorderSide(color: AppColors.mint),
+      // D-14：底部一行（成功页无评论输入条，可吸底）。C2 = 左次级「Lihat Paspor」+ 右主 CTA「Rekam Momen Ini」
+      // （flex 1 : 2，主 CTA 更宽实心）；C2b = 只有主 CTA，整宽。两按钮同高、热区 ≥44、按压 0.96。
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Row(
+          key: const ValueKey('placeCheckinActions'),
+          children: [
+            if (r.isNewStamp) ...[
+              Expanded(
+                child: _Pressable(
+                  child: OutlinedButton(
+                    key: const ValueKey('placeCheckinViewPassport'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      foregroundColor: AppColors.mint,
+                      side: const BorderSide(color: AppColors.mint),
+                    ),
+                    // Story 1.3：先进 B4 整页落章（只在 isNewStamp 分支构造 NewStampArgs），
+                    // B4 的「Lihat Paspor」再 pushReplacement 到护照页停在新章。
+                    onPressed: () => context.push(
+                      PetInsightsRoutes.passportNewStamp,
+                      extra: NewStampArgs(
+                        placeToken: r.placeToken,
+                        placeName: r.placeName,
+                        placeType: r.placeType,
+                        stampImageUrl: r.stampImageUrl,
+                        stampCount: r.stampCount ?? 1,
                       ),
-                      // Story 1.3：先进 B4 整页落章（只在 isNewStamp 分支构造 NewStampArgs），
-                      // B4 的「Lihat Paspor」再 pushReplacement 到护照页停在新章。
-                      onPressed: () => context.push(
-                        PetInsightsRoutes.passportNewStamp,
-                        extra: NewStampArgs(
-                          placeToken: r.placeToken,
-                          placeName: r.placeName,
-                          placeType: r.placeType,
-                          stampImageUrl: r.stampImageUrl,
-                          stampCount: r.stampCount ?? 1,
-                        ),
-                      ),
-                      child: Text(l10n.placeCheckinViewPassport),
+                    ),
+                    child: Text(l10n.placeCheckinViewPassport, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              flex: 2,
+              child: _Pressable(
+                child: FilledButton.icon(
+                  key: const ValueKey('placeCheckinRecordMoment'),
+                  style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48), backgroundColor: AppColors.mint),
+                  // Story 1.5：Diary 预选 + 打卡关联随发布请求一次写入（AD-10 / AD-11）。
+                  onPressed: () => PublishComposePage.open(
+                    context,
+                    preset: ContentType.growthMoment,
+                    placeCheckinToken: r.checkinToken,
+                    placeCheckinPlace: PublishCheckinPlace(
+                      placeToken: r.placeToken,
+                      placeName: r.placeName,
+                      placeType: r.placeType,
                     ),
                   ),
-                ],
+                  icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                  label: Text(l10n.placeCheckinRecordMoment, maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
               ),
-            )
-          : null,
+            ),
+          ],
+        ),
+      ),
       appBar: AppBar(
         backgroundColor: AppColors.cream,
         scrolledUnderElevation: 0,
@@ -185,6 +217,34 @@ class _RepeatStamp extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 按压反馈（scale 0.96，项目无公共 press 组件）。只包视觉，点击仍由内部按钮处理。
+class _Pressable extends StatefulWidget {
+  const _Pressable({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<_Pressable> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (_) => setState(() => _down = true),
+      onPointerUp: (_) => setState(() => _down = false),
+      onPointerCancel: (_) => setState(() => _down = false),
+      child: AnimatedScale(
+        scale: _down ? 0.96 : 1,
+        duration: const Duration(milliseconds: 90),
+        child: widget.child,
       ),
     );
   }

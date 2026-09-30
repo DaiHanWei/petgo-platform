@@ -54,6 +54,9 @@ public final class ErrorTypes {
     /** V1.3.2 Story 1.1：场所打卡——petIds 含非本人宠物（403）。 */
     public static final URI CHECKIN_PET_FORBIDDEN = URI.create(BASE + "checkin-pet-forbidden");
 
+    /** V1.3.2 Story 1.5：发帖关联的打卡不存在或不是本人的（422）。 */
+    public static final URI POST_CHECKIN_INVALID = URI.create(BASE + "post-checkin-invalid");
+
     private ErrorTypes() {
     }
 }

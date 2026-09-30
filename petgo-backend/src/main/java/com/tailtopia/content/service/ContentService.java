@@ -69,12 +69,16 @@ public class ContentService {
      */
     private final MentionSanitizer mentions;
 
+    /** V1.3.2 Story 1.5：发帖关联打卡的只读口（place 包，不直接 join 打卡表）。 */
+    private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins;
+
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, ProfileService profileService,
             IdempotencyService idempotency, ContentModerationService moderation,
             ApplicationEventPublisher events, ManualReviewGate manualReviewGate,
             ImageSizeResolver imageSizes, ImageSizeBackfillService sizeBackfill,
-            ContentPinService pins, MentionSanitizer mentions) {
+            ContentPinService pins, MentionSanitizer mentions,
+            com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -87,6 +91,7 @@ public class ContentService {
         this.sizeBackfill = sizeBackfill;
         this.pins = pins;
         this.mentions = mentions;
+        this.placeCheckins = placeCheckins;
     }
 
     /**
@@ -428,6 +433,14 @@ public class ContentService {
         //    没理由先花一次三方审核的往返再拒。
         List<Long> mentionedUserIds = mentions.sanitize(authorId, req.mentionedUserIds());
 
+        // V1.3.2 Story 1.5（AD-10）：打卡关联。同样放在**三方审核之前**：不存在 / 非本人的 token 本地即可判死，
+        // 不落库、不审核。两种情况刻意同一个 422（不泄漏 token 是否存在）。
+        Long placeCheckinId = null;
+        if (req.placeCheckinToken() != null && !req.placeCheckinToken().isBlank()) {
+            placeCheckinId = placeCheckins.findOwnedCheckinId(authorId, req.placeCheckinToken())
+                    .orElseThrow(() -> AppException.postCheckinInvalid("打卡关联无效"));
+        }
+
         Long petId = req.petId();
         LocalDate eventDate = null;
         if (req.type() == ContentType.GROWTH_MOMENT) {
@@ -492,6 +505,9 @@ public class ContentService {
                 // ⚠️ 挂起帖此刻**不发任何事件**，所以 @ 通知也天然不会在这里发出去；
                 //    Story 3.4 的落点应是「转可见那一刻」（同评论 approveComment 的口径）。
                 pendingPost.setMentionedUserIds(mentionedUserIds);
+                // V1.3.2 Story 1.5：🔴 挂起分支**同样要写打卡关联**（与尺寸 / @ 名单同一个坑）——
+                // 只写正常分支的话，审核挂起的帖过审后 Diary 会把同一件事拆成「打卡条目 + 帖子」两条。
+                pendingPost.setPlaceCheckinId(placeCheckinId);
                 ContentPost pending = posts.save(pendingPost);
                 scheduleSizeBackfill(pending, pendingSizes);
                 idempotency.store(idempotencyKey, pending.getId());
@@ -520,6 +536,7 @@ public class ContentService {
         // 所以被 @ 的人**永远打不开它**：通知发出去就是一条点进去是空态的骚扰。
         // ⚠️ 判据是 saved.getVisibility() == PUBLIC，别用「有没有 mentionedUserIds」。
         post.setMentionedUserIds(mentionedUserIds);
+        post.setPlaceCheckinId(placeCheckinId); // V1.3.2 Story 1.5（AD-10）
         ContentPost saved = posts.save(post);
         scheduleSizeBackfill(saved, sizes);
 
