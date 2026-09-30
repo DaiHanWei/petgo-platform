@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class DailyReportCardTest {
 
     private static DailyReport.Metrics m(Long dau, long comments, long newUsers, long paid) {
-        return new DailyReport.Metrics(newUsers, dau, 10, comments, 40, 3, 2, paid, 5, 1_234_000);
+        return new DailyReport.Metrics(newUsers, dau, 10, comments, 7, 40, 3, 2, paid, 5, 1_234_000);
     }
 
     @Test
@@ -77,5 +77,29 @@ class DailyReportCardTest {
         String json = new ObjectMapper().writeValueAsString(DailyReportCard.build(r));
 
         assertThat(json).contains("**昨日日活**\\n—").contains("**评论活跃率**\\n—").contains("**like 活跃率**\\n—");
+    }
+
+    @Test
+    @DisplayName("自动评论成功数：紧跟在「评论数」后面，只显示当日数，不带环比")
+    @SuppressWarnings("unchecked")
+    void autoCommentsRightAfterCommentsWithoutChange() {
+        DailyReport r = new DailyReport(LocalDate.of(2026, 9, 29), m(50L, 20, 12, 0), m(40L, 10, 10, 0));
+        Map<String, Object> card = (Map<String, Object>) DailyReportCard.build(r).get("card");
+        List<Map<String, Object>> els = (List<Map<String, Object>>) card.get("elements");
+
+        List<String> community = els.stream()
+                .filter(e -> e.containsKey("fields"))
+                .map(e -> (List<Map<String, Object>>) e.get("fields"))
+                .filter(fs -> fs.stream().anyMatch(f -> content(f).startsWith("**评论数**")))
+                .findFirst().orElseThrow()
+                .stream().map(DailyReportCardTest::content).toList();
+
+        int comments = community.indexOf(community.stream().filter(c -> c.startsWith("**评论数**")).findFirst().orElseThrow());
+        assertThat(community.get(comments + 1)).isEqualTo("**自动评论成功数**\n7");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String content(Map<String, Object> field) {
+        return (String) ((Map<String, Object>) field.get("text")).get("content");
     }
 }

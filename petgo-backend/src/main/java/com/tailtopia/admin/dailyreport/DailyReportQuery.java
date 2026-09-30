@@ -45,6 +45,13 @@ public class DailyReportQuery {
             "SELECT count(*) FROM comments c JOIN users u ON u.id = c.author_id AND " + REAL
                     + " WHERE " + day("c.created_at") + " = ? AND " + VALID_COMMENT_WHERE;
 
+    /**
+     * 当日自动评论发出条数（2026-09-30 产品要：只看成功数、不做环比）。
+     * POSTED 行的 {@code updated_at} 就是发出时刻，发出后不再更新。虚拟账号发的，不走 {@link #REAL} 过滤。
+     */
+    static final String SQL_AUTO_COMMENTS =
+            "SELECT count(*) FROM auto_comment_logs l WHERE l.status = 'POSTED' AND " + day("l.updated_at") + " = ?";
+
     static final String SQL_LIKES =
             "SELECT (SELECT count(*) FROM content_likes l JOIN users u ON u.id = l.user_id AND " + REAL
                     + " WHERE " + day("l.created_at") + " = ?)"
@@ -77,6 +84,7 @@ public class DailyReportQuery {
                 dauOf(d),
                 count(SQL_NEW_POSTS, d),
                 count(SQL_COMMENTS, d),
+                count(SQL_AUTO_COMMENTS, d),
                 count(SQL_LIKES, d, d),
                 num(pay.get("orders")),
                 num(pay.get("users")),

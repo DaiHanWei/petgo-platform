@@ -14,13 +14,15 @@ public record DailyReport(LocalDate date, Metrics current, Metrics previous) {
     /**
      * 某一天的指标。金额单位 IDR（整数）。
      *
-     * @param dau 日活；该日尚无逐日活跃记录（上线前 / 上线当天不完整）时为 null —— 不编数字
+     * @param dau          日活；该日尚无逐日活跃记录（上线前 / 上线当天不完整）时为 null —— 不编数字
+     * @param autoComments 当日自动评论发出条数（虚拟账号发的，<b>不</b>计入 comments 与活跃率；只展示、不做环比）
      */
     public record Metrics(
             long newUsers,
             Long dau,
             long newPosts,
             long comments,
+            long autoComments,
             long likes,
             long paidOrders,
             long payingUsers,
