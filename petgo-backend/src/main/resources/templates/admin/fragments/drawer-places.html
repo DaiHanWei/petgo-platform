@@ -37,6 +37,34 @@
         <p class="muted rv-small" th:text="'#' + ${d.id} + ' · ' + ${d.publicToken}">#id · token</p>
     </section>
 
+    <!-- ①b 专属章（V1.3.2 Story 1.4 · AB-18B · D-10）：中性信息样式 —— 未上传不是错误态（绝大多数场所一直用默认章）。
+         预览按原图原色（棋盘格底看透明区，object-fit: contain，不做圆形裁切、不加滤色）。MERGED 只读、不出上传 / 替换 / 移除。 -->
+    <section class="card card-full pl-card pl-stamp" id="places-drawer-stamp">
+        <h2 th:text="#{admin.v132.places.stamp.title}">专属章</h2>
+        <div class="pl-stamp-body">
+            <div class="pl-stamp-preview" th:if="${d.stampUrl != null}">
+                <img th:src="${d.stampUrl}" alt="" data-lightbox loading="lazy"/>
+            </div>
+            <p class="muted" th:if="${d.stampUrl == null}" th:text="#{admin.v132.places.stamp.default(${d.typeName})}">使用默认章（类型）</p>
+            <p class="hint" th:text="#{admin.v132.places.stamp.spec}">透明底 PNG · 512×512 · ≤300KB</p>
+        </div>
+        <div class="pl-stamp-actions" th:if="${d.status.name() != 'MERGED'}">
+            <!--/* data-reset-file：请求结束清空文件框（admin-core.js），否则 422 后用同名文件重选不触发 change */-->
+            <form class="inline" th:attr="hx-post=@{/admin/places/{id}/stamp(id=${d.id})}" hx-encoding="multipart/form-data"
+                  hx-target="#places-drawer .drawer-body" hx-swap="innerHTML" hx-trigger="change" data-reset-file>
+                <label class="btn btn-neutral btn-sm">
+                    <span th:text="${d.stampUrl == null} ? #{admin.v132.places.stamp.upload} : #{admin.v132.places.stamp.replace}">上传专属章</span>
+                    <input type="file" name="file" accept="image/png" hidden/>
+                </label>
+            </form>
+            <form class="inline" th:if="${d.stampUrl != null}"
+                  th:attr="hx-post=@{/admin/places/{id}/stamp/remove(id=${d.id})},data-confirm=#{admin.v132.places.stamp.confirmRemove},data-confirm-args=${d.name}"
+                  hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+                <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.v132.places.stamp.remove}">移除</button>
+            </form>
+        </div>
+    </section>
+
     <!-- ② 照片墙 -->
     <section class="card card-full pl-card">
         <h2><span th:text="#{admin.v130.places.drawer.photos}">照片</span> <span class="muted" th:text="${d.photoCount}">0</span></h2>

@@ -13,6 +13,13 @@ document.addEventListener('DOMContentLoaded', function () {
         // 404 也放行：AdminBusinessExceptionAdvice 对 404 同样回行内 err fragment（Story 5.2 抽屉「不存在 / 已删」）
         if (s === 422 || s === 403 || s === 404) { e.detail.shouldSwap = true; e.detail.isError = false; }
     });
+    // V1.3.2 Story 1.4：「选完文件即上传」的表单（data-reset-file，如场所专属章）每次请求结束后清空文件框 ——
+    //   422 后抽屉不重渲染，文件框里还是那张被拒的图；运营修好后用同一文件名重选时浏览器不发 change，点了没反应。
+    document.body.addEventListener('htmx:afterRequest', function (e) {
+        var form = e.detail && e.detail.elt;
+        if (!form || !form.matches || !form.matches('form[data-reset-file]')) { return; }
+        form.querySelectorAll('input[type=file]').forEach(function (i) { i.value = ''; });
+    });
     document.body.addEventListener('htmx:configRequest', function (e) {
         var t = document.querySelector('meta[name="_csrf"]');
         var h = document.querySelector('meta[name="_csrf_header"]');

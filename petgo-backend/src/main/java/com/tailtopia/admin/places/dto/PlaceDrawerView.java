@@ -14,7 +14,9 @@ public record PlaceDrawerView(long id, String publicToken, String name, String p
         String description, String city, String addressText, BigDecimal lat, BigDecimal lng, String markerName, boolean markerDeleted,
         PlaceStatus status, Long mergedIntoId, String mergedIntoName, Instant createdAt, Instant updatedAt,
         int photoCount, int commentCount, int checkinCount, int recommendCount, int notRecommendCount,
-        List<PhotoView> photos, CommentsPage comments) {
+        List<PhotoView> photos, CommentsPage comments,
+        /** V1.3.2 Story 1.4：专属章公开 CDN URL（章在公开桶、对象级 public-read，不需签名）；null = 用默认章。 */
+        String stampUrl) {
 
     /** 照片：{@code url} 为短时效签名 URL（模板一次性使用，禁止记日志）；签名不可用时为 null → 占位图。 */
     /** {@code moderationStatus}：App 侧的审核态（VISIBLE 以外在抽屉里打标，2026-09-18 场所表对齐）。 */

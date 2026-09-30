@@ -148,7 +148,7 @@ public class PlaceCheckinService {
                 isNewStamp, stampCount));
         return new PlaceCheckinResponse(saved.getPublicToken(), place.getPublicToken(),
                 place.getName(), place.getType(), today, isNewStamp, visitCount,
-                passport.getPassportNo(), stampCount);
+                passport.getPassportNo(), stampCount, stamps.stampUrlOf(place.getStampObjectKey()));
     }
 
     /**

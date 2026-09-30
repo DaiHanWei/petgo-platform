@@ -14,7 +14,7 @@ import '../../domain/place_summary.dart';
 /// 🔴 **原色展示**：不着色、不做圆形裁切（D-10：章不一定是圆的）。本文件不得出现
 /// `ClipOval` / `ColorFiltered` / `colorBlendMode`（Story 1.4 有源码扫描测试）。
 /// Story 1.1 实现第 3 级；Story 1.2 接第 2 级（素材缺失时 `errorBuilder` 回落第 3 级）；
-/// [imageUrl] 第 1 级由 Story 1.4 接入。
+/// Story 1.4 接第 1 级：专属章网络图加载中 / 失败都回落第 2 → 3 级。
 class PlaceStampView extends StatelessWidget {
   const PlaceStampView({
     super.key,
@@ -34,22 +34,38 @@ class PlaceStampView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final placeholder = PlaceStampPlaceholder(placeType: placeType, size: size);
-    final asset = defaultStampAssetFor(placeType);
+    final fallback = _defaultOrPlaceholder();
+    final url = imageUrl;
     return SizedBox.square(
       dimension: size,
-      child: asset == null
-          ? placeholder
-          : Image.asset(
-              asset,
+      child: (url == null || url.isEmpty)
+          ? fallback
+          : Image.network(
+              url,
               width: size,
               height: size,
+              // 🔴 原色、按原图比例完整展示：不着色、不圆形裁切（D-10）。
               fit: BoxFit.contain,
-              // 加载中与缺文件都显示占位章：素材未到货时这里就是常态（D-21），不是错误。
               frameBuilder: (context, child, frame, sync) =>
-                  (frame == null && !sync) ? placeholder : child,
-              errorBuilder: (context, error, stack) => placeholder,
+                  (frame == null && !sync) ? fallback : child,
+              errorBuilder: (context, error, stack) => fallback,
             ),
+    );
+  }
+
+  /// 第 2 级默认章 → 第 3 级占位章。
+  Widget _defaultOrPlaceholder() {
+    final placeholder = PlaceStampPlaceholder(placeType: placeType, size: size);
+    final asset = defaultStampAssetFor(placeType);
+    if (asset == null) return placeholder;
+    return Image.asset(
+      asset,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      // 加载中与缺文件都显示占位章：素材未到货时这里就是常态（D-21），不是错误。
+      frameBuilder: (context, child, frame, sync) => (frame == null && !sync) ? placeholder : child,
+      errorBuilder: (context, error, stack) => placeholder,
     );
   }
 }

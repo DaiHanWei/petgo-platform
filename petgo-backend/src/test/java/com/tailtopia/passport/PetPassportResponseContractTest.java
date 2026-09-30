@@ -32,7 +32,7 @@ class PetPassportResponseContractTest {
 
     private static PetPassportResponse sample() {
         PassportStampView v = PassportStampView.of(new PlaceStamp("a".repeat(32), "Kopi", PlaceType.CAFE,
-                PlaceAvailability.ACTIVE, LocalDate.of(2026, 9, 22), 2, "Jl. Senopati 75"));
+                PlaceAvailability.ACTIVE, LocalDate.of(2026, 9, 22), 2, "Jl. Senopati 75", null));
         return new PetPassportResponse("Momo", "TT02P2600128", 1, List.of(v));
     }
 
@@ -42,7 +42,7 @@ class PetPassportResponseContractTest {
         Map<String, Object> m = wire(sample());
         assertThat(m.keySet()).isEqualTo(Set.of("petName", "passportNo", "stampCount", "stamps"));
         Map<String, Object> stamp = ((List<Map<String, Object>>) m.get("stamps")).get(0);
-        // stampImageUrl 本 story 恒 null → NON_NULL 省略。
+        // 无专属章 → stampImageUrl 为 null → NON_NULL 省略（有章时见 stampImageUrlIsPlainCdnUrl）。
         assertThat(stamp.keySet()).isEqualTo(Set.of("placeToken", "placeName", "placeType", "placeStatus",
                 "firstVisitDate", "visitCount", "addressText"));
         assertThat(stamp.get("addressText")).isEqualTo("Jl. Senopati 75");
@@ -56,10 +56,27 @@ class PetPassportResponseContractTest {
     @SuppressWarnings("unchecked")
     void unavailableStampOmitsAddress() {
         PassportStampView v = PassportStampView.of(new PlaceStamp("b".repeat(32), "Taman", PlaceType.PARK,
-                PlaceAvailability.UNAVAILABLE, LocalDate.of(2026, 9, 22), 1, "Jl. Rahasia 9"));
+                PlaceAvailability.UNAVAILABLE, LocalDate.of(2026, 9, 22), 1, "Jl. Rahasia 9", null));
         Map<String, Object> m = wire(v);
         assertThat(m).doesNotContainKey("addressText");
         assertThat(m.get("placeStatus")).isEqualTo("UNAVAILABLE");
+    }
+
+    /** Story 1.4 · AC4.1：有专属章 → 下发纯 CDN URL（不拼 x-oss-process，否则透明 PNG 会被重编码成 JPG）。 */
+    @Test
+    @SuppressWarnings("unchecked")
+    void stampImageUrlIsPlainCdnUrl() {
+        com.tailtopia.shared.media.MediaProperties props = new com.tailtopia.shared.media.MediaProperties();
+        props.getOss().setCdnBaseUrl("https://cdn");
+        com.tailtopia.place.service.PlaceStampQueryService q = new com.tailtopia.place.service.PlaceStampQueryService(
+                null, new com.tailtopia.shared.media.AliyunOssClient(props));
+        String url = q.stampUrlOf("public/place-stamps/9/abc.png");
+        assertThat(url).isEqualTo("https://cdn/public/place-stamps/9/abc.png").doesNotContain("x-oss-process");
+        assertThat(q.stampUrlOf(null)).isNull();
+
+        Map<String, Object> stamp = wire(PassportStampView.of(new PlaceStamp("a".repeat(32), "Kopi", PlaceType.CAFE,
+                PlaceAvailability.ACTIVE, LocalDate.of(2026, 9, 22), 1, "Jl. A", url)));
+        assertThat(stamp.get("stampImageUrl")).isEqualTo(url);
     }
 
     /** 🔴 AC3.3：不下发任何总数分母。 */

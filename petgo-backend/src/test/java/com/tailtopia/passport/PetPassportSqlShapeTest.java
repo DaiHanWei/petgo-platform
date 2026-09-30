@@ -45,6 +45,9 @@ class PetPassportSqlShapeTest {
                 .contains("COUNT(DISTINCT c.place_id)")
                 // Story 1.3：地址取出后只对 ACTIVE 保留。
                 .contains("p.address_text")
+                // Story 1.4：专属章 key 读取时现算 URL（换章对已盖出的章立即生效）。
+                .contains("p.stamp_object_key")
+                .contains("stampUrlOf(rs.getString(\"stamp_object_key\"))")
                 .contains("availability == PlaceAvailability.ACTIVE ? rs.getString(\"address_text\") : null");
     }
 

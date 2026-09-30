@@ -45,6 +45,12 @@ void main() {
       expect(r.visitCount, 1);
     });
 
+    test('Story 1.4：stampImageUrl 有值原样、缺键 → null', () {
+      expect(PlaceCheckinResult.fromJson({...wire, 'stampImageUrl': 'https://cdn/s.png'}).stampImageUrl,
+          'https://cdn/s.png');
+      expect(PlaceCheckinResult.fromJson(Map<String, dynamic>.from(wire)).stampImageUrl, isNull);
+    });
+
     test('Story 1.2：passportNo / stampCount；老后端缺键 → null', () {
       final r = PlaceCheckinResult.fromJson(
           {...wire, 'passportNo': 'TT02P2600128', 'stampCount': 4});

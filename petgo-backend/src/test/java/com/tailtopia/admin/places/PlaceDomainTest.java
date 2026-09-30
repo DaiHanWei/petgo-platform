@@ -71,4 +71,38 @@ class PlaceDomainTest {
         assertThat(r.getHandledAt()).isNotNull();
         assertThatThrownBy(() -> r.handleBy(5L, PlaceReportStatus.DISMISSED)).isInstanceOf(IllegalStateException.class);
     }
+
+    // ===== V1.3.2 Story 1.4：专属章字段只由 setStamp / clearStamp 改（AD-18）=====
+
+    @Test
+    void stampSetReplaceAndClear() {
+        Place p = place();
+        assertThat(p.getStampObjectKey()).isNull();
+        assertThat(p.setStamp("public/place-stamps/1/a.png")).as("首次上传不是替换").isFalse();
+        assertThat(p.setStamp("public/place-stamps/1/b.png")).as("再传 = 替换").isTrue();
+        assertThat(p.getStampObjectKey()).isEqualTo("public/place-stamps/1/b.png");
+        assertThat(p.clearStamp()).isTrue();
+        assertThat(p.getStampObjectKey()).isNull();
+        assertThat(p.clearStamp()).as("无章再移除 = no-op").isFalse();
+    }
+
+    @Test
+    void delistRestoreMergeAndSoftDeleteNeverTouchTheStamp() {
+        Place delisted = place();
+        delisted.setStamp("k1");
+        delisted.delist();
+        assertThat(delisted.getStampObjectKey()).isEqualTo("k1");
+        delisted.restore();
+        assertThat(delisted.getStampObjectKey()).isEqualTo("k1");
+
+        Place merged = place();
+        merged.setStamp("k2");
+        merged.markMerged(999L);
+        assertThat(merged.getStampObjectKey()).isEqualTo("k2");
+
+        Place deleted = place();
+        deleted.setStamp("k3");
+        deleted.softDelete();
+        assertThat(deleted.getStampObjectKey()).isEqualTo("k3");
+    }
 }

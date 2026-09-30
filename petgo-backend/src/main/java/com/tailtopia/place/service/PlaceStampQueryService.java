@@ -3,6 +3,7 @@ package com.tailtopia.place.service;
 import com.tailtopia.place.domain.PlaceAvailability;
 import com.tailtopia.place.domain.PlaceStamp;
 import com.tailtopia.place.domain.PlaceType;
+import com.tailtopia.shared.media.AliyunOssClient;
 import java.sql.Timestamp;
 import java.util.List;
 import java.util.Map;
@@ -24,13 +25,14 @@ public class PlaceStampQueryService {
     /** 按当前 place_id 分组；排序 = 首次日期升序、首条打卡 id 升序（新章恒在最后）。 */
     static final String STAMPS_SQL = """
             SELECT p.public_token AS place_token, p.name AS place_name, p.place_type,
-                   p.status, p.deleted_at, p.address_text,
+                   p.status, p.deleted_at, p.address_text, p.stamp_object_key,
                    MIN(c.visit_date) AS first_visit, COUNT(*) AS visits, MIN(c.id) AS first_id
               FROM place_checkin_pets cp
               JOIN place_checkins c ON c.id = cp.checkin_id
               JOIN places p ON p.id = c.place_id
              WHERE cp.pet_profile_id = :petId
-             GROUP BY p.id, p.public_token, p.name, p.place_type, p.status, p.deleted_at, p.address_text
+             GROUP BY p.id, p.public_token, p.name, p.place_type, p.status, p.deleted_at, p.address_text,
+                      p.stamp_object_key
              ORDER BY first_visit ASC, first_id ASC""";
 
     static final String STAMP_COUNT_SQL = """
@@ -40,9 +42,22 @@ public class PlaceStampQueryService {
              WHERE cp.pet_profile_id = :petId""";
 
     private final NamedParameterJdbcTemplate jdbc;
+    /** Story 1.4：专属章 key → 公开 CDN URL。 */
+    private final AliyunOssClient oss;
 
-    public PlaceStampQueryService(NamedParameterJdbcTemplate jdbc) {
+    public PlaceStampQueryService(NamedParameterJdbcTemplate jdbc, AliyunOssClient oss) {
         this.jdbc = jdbc;
+        this.oss = oss;
+    }
+
+    /**
+     * 专属章 objectKey → 公开 URL（Story 1.4 · AC4.1）。
+     *
+     * <p>🔴 <b>纯 CDN 地址，不拼 {@code x-oss-process}</b>：场所照片那条 {@code resize/format,jpg} 会把 PNG 重编码成 JPG、
+     * 丢掉透明通道。专属章是运营素材、不含用户 EXIF，直接给原图。
+     */
+    public String stampUrlOf(String objectKey) {
+        return objectKey == null || objectKey.isBlank() ? null : oss.publicUrl(objectKey);
     }
 
     /** 该宠物的全部章（可能为空表）。 */
@@ -60,7 +75,8 @@ public class PlaceStampQueryService {
                     rs.getDate("first_visit").toLocalDate(),
                     rs.getLong("visits"),
                     // Story 1.3：地址只对 ACTIVE 下发（B6：不向客户端泄漏已下架场所的位置）。
-                    availability == PlaceAvailability.ACTIVE ? rs.getString("address_text") : null);
+                    availability == PlaceAvailability.ACTIVE ? rs.getString("address_text") : null,
+                    stampUrlOf(rs.getString("stamp_object_key")));
         });
     }
 

@@ -69,6 +69,7 @@ class PlaceCheckinSuccessPage extends StatelessWidget {
                           placeToken: r.placeToken,
                           placeName: r.placeName,
                           placeType: r.placeType,
+                          stampImageUrl: r.stampImageUrl,
                           stampCount: r.stampCount ?? 1,
                         ),
                       ),
@@ -140,7 +141,7 @@ class _NewStamp extends StatelessWidget {
         opacity: t.clamp(0.0, 1.0),
         child: Transform.scale(scale: 1.25 - 0.25 * t, child: child),
       ),
-      child: PlaceStampView(placeType: result.placeType, size: 112),
+      child: PlaceStampView(placeType: result.placeType, imageUrl: result.stampImageUrl, size: 112),
     );
   }
 }
@@ -160,7 +161,7 @@ class _RepeatStamp extends StatelessWidget {
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
-          PlaceStampView(placeType: result.placeType, size: 112),
+          PlaceStampView(placeType: result.placeType, imageUrl: result.stampImageUrl, size: 112),
           Positioned(
             right: 0,
             top: 0,

@@ -17,6 +17,7 @@ void main() {
         'firstVisitDate': '2026-09-01',
         'visitCount': 3,
         'addressText': 'Jl. Kopi 1',
+        'stampImageUrl': 'https://cdn/public/place-stamps/1/a.png',
       },
       {
         'placeToken': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
@@ -40,7 +41,9 @@ void main() {
     expect(s.available, isTrue);
     expect(s.firstVisitDate, DateTime(2026, 9, 1));
     expect(s.visitCount, 3);
-    expect(s.stampImageUrl, isNull, reason: '本 story 恒省略该键');
+    // Story 1.4：有专属章 → 原样；无章的第二枚省略该键 → null。
+    expect(s.stampImageUrl, 'https://cdn/public/place-stamps/1/a.png');
+    expect(p.stamps[1].stampImageUrl, isNull);
     expect(p.stamps[1].available, isFalse);
     // Story 1.3：地址只对 ACTIVE 下发。
     expect(s.addressText, 'Jl. Kopi 1');

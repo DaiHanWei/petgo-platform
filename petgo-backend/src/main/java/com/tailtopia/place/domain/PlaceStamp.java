@@ -14,7 +14,10 @@ import java.time.LocalDate;
  * @param visitCount     到访次数 = count
  * @param addressText    文字地址（Story 1.3）；<b>仅 ACTIVE 时有值</b>，UNAVAILABLE 置 null ——
  *                       服务端不给已下架场所的地址，比客户端藏更稳
+ * @param stampImageUrl  场所专属章公开 URL（Story 1.4）；null = 客户端按类型用默认章。
+ *                       读取时按当前 {@code places.stamp_object_key} 现算 → 换章对已盖出的章立即生效
  */
 public record PlaceStamp(String placeToken, String placeName, PlaceType placeType,
-        PlaceAvailability availability, LocalDate firstVisitDate, long visitCount, String addressText) {
+        PlaceAvailability availability, LocalDate firstVisitDate, long visitCount, String addressText,
+        String stampImageUrl) {
 }

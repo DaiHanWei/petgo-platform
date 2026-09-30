@@ -134,6 +134,29 @@ void main() {
       expect(File('pubspec.yaml').readAsStringSync(), contains('- assets/place_stamp/'));
     });
 
+    test('Story 1.4：章面组件不着色、不圆形裁切（源码扫描）', () {
+      final src = File('lib/features/place/presentation/widgets/place_stamp_view.dart')
+          .readAsLinesSync()
+          .where((l) => !l.trimLeft().startsWith('///') && !l.trimLeft().startsWith('//'))
+          .join('\n');
+      for (final banned in ['ClipOval', 'ColorFiltered', 'colorBlendMode']) {
+        expect(src.contains(banned), isFalse, reason: '$banned 违反 D-10（原色、不裁圆）');
+      }
+      expect(RegExp(r'Image\.(network|asset)\([^;]*\bcolor:').hasMatch(src), isFalse,
+          reason: 'Image(color:) 会给章面着色');
+    });
+
+    testWidgets('Story 1.4：专属章网络图加载失败 → 回落默认章 → 占位章，不崩', (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+        home: Center(
+            child: PlaceStampView(
+                placeType: PlaceType.cafe, imageUrl: 'https://cdn.invalid/stamp.png', size: 96)),
+      ));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('placeStampPlaceholder')), findsOneWidget);
+    });
+
     testWidgets('文件缺失时不崩、显示代码绘制的占位章', (tester) async {
       await tester.pumpWidget(const MaterialApp(
         home: Center(child: PlaceStampView(placeType: PlaceType.park, size: 96)),

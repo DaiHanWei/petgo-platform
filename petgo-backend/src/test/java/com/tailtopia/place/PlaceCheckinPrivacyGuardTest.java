@@ -93,7 +93,7 @@ class PlaceCheckinPrivacyGuardTest {
                 .build();
         @SuppressWarnings("unchecked")
         Map<String, Object> m = json.convertValue(new PlaceCheckinResponse("c".repeat(32), "p".repeat(32),
-                "Kopi Kucing", PlaceType.CAFE, LocalDate.of(2026, 9, 30), true, 1L, "TT02P2600128", 1), Map.class);
+                "Kopi Kucing", PlaceType.CAFE, LocalDate.of(2026, 9, 30), true, 1L, "TT02P2600128", 1, null), Map.class);
 
         assertThat(m.keySet()).isEqualTo(Set.of("checkinToken", "placeToken", "placeName", "placeType",
                 "visitDate", "isNewStamp", "visitCount",
@@ -102,5 +102,11 @@ class PlaceCheckinPrivacyGuardTest {
         assertThat(m.get("isNewStamp")).isEqualTo(true);
         assertThat(m.get("placeType")).isEqualTo("CAFE");
         assertThat(m.get("visitDate")).isEqualTo("2026-09-30");
+        // Story 1.4：有专属章时带 stampImageUrl（无章 → NON_NULL 省略，键集如上）。
+        @SuppressWarnings("unchecked")
+        Map<String, Object> withStamp = json.convertValue(new PlaceCheckinResponse("c".repeat(32), "p".repeat(32),
+                "Kopi Kucing", PlaceType.CAFE, LocalDate.of(2026, 9, 30), true, 1L, "TT02P2600128", 1,
+                "https://cdn/place-stamps/1/a.png"), Map.class);
+        assertThat(withStamp.get("stampImageUrl")).isEqualTo("https://cdn/place-stamps/1/a.png");
     }
 }

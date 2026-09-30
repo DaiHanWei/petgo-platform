@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 场所合并（V1.3.0 Story 5.3 AC4，本版本唯一不可逆的场所操作，<b>单事务</b>）：
  * ① 三张子表 {@code place_id} 从 B（merged）改指 A（keep）② B {@code status=MERGED, merged_into_id=A} ③ A 五个计数列全量重算
- * ④ 发布 {@link PlaceMergedEvent}（事务内发布；App 分支 AFTER_COMMIT + REQUIRES_NEW 监听归并护照章）⑤ 审计 {@code PLACE_MERGED}「B(name) → A(name)」。
+ * ④ 发布 {@link PlaceMergedEvent}（事务内发布；护照章是打卡的聚合，打卡改挂后自动并章，无需监听器——V1.3.2 AD-5；登机牌改挂由 Story 3.5 在本事务内同步调用；专属章 stamp_object_key 不清空，AD-18）⑤ 审计 {@code PLACE_MERGED}「B(name) → A(name)」。
  * {@code place_reports} <b>不迁移</b>（举报针对 B 这个条目本身）。校验：A ≠ B；A ACTIVE 且未软删；B ACTIVE / DELISTED（已 MERGED 不可再合并）。
  * 任一步失败整体回滚（半成功比失败更糟）。
  */

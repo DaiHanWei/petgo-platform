@@ -214,6 +214,34 @@ public class AdminPlaceController {
         return afterAction(id, changed ? "admin.flash.places.commentRemoved" : "admin.flash.places.noChange", model, response);
     }
 
+    /**
+     * 上传 / 替换场所专属章（V1.3.2 Story 1.4 · AB-18B）：multipart {@code file}。校验只做四项（PNG / 512×512 /
+     * ≤300KB / 透明通道），不过 → 422 行内错误；成功走 {@link #afterAction}。同「场所管理」权限码，不新增权限。
+     */
+    @PostMapping(ROUTE + "/{id:\\d+}/stamp")
+    @PreAuthorize(VIEW_AUTH)
+    public String uploadStamp(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
+            @RequestParam(value = "file", required = false) MultipartFile file, HxRequest hx, Model model,
+            HttpServletResponse response) {
+        if (!hx.isHtmx()) {
+            return "redirect:" + ROUTE + "?open=" + id;
+        }
+        placeService.uploadStamp(id, file, admin.getAdminAccountId());
+        return afterAction(id, "admin.flash.places.stampUploaded", model, response);
+    }
+
+    /** 移除专属章（回到默认章）。模板走 {@code data-confirm} 二次确认。 */
+    @PostMapping(ROUTE + "/{id:\\d+}/stamp/remove")
+    @PreAuthorize(VIEW_AUTH)
+    public String removeStamp(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id, HxRequest hx,
+            Model model, HttpServletResponse response) {
+        if (!hx.isHtmx()) {
+            return "redirect:" + ROUTE + "?open=" + id;
+        }
+        boolean changed = placeService.removeStamp(id, admin.getAdminAccountId());
+        return afterAction(id, changed ? "admin.flash.places.stampRemoved" : "admin.flash.places.noChange", model, response);
+    }
+
     /** 合并：{@code {id}} = 被并入的 B，body {@code keepId} = 保留的 A（AC4）；成功后抽屉停在 B（已并入 → A）。 */
     @PostMapping(ROUTE + "/{id:\\d+}/merge")
     @PreAuthorize(VIEW_AUTH)

@@ -117,6 +117,10 @@ public class Place {
     @Column(name = "deleted_at", insertable = false, updatable = false)
     private Instant deletedAt;
 
+    /** 场所专属章 objectKey（V1.3.2 Story 1.4）。🔴 只读：唯一写入方是后台（AdminPlace）。 */
+    @Column(name = "stamp_object_key", insertable = false, updatable = false)
+    private String stampObjectKey;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -234,5 +238,9 @@ public class Place {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public String getStampObjectKey() {
+        return stampObjectKey;
     }
 }
