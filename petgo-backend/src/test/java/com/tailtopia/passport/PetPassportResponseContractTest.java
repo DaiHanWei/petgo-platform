@@ -33,14 +33,16 @@ class PetPassportResponseContractTest {
     private static PetPassportResponse sample() {
         PassportStampView v = PassportStampView.of(new PlaceStamp("a".repeat(32), "Kopi", PlaceType.CAFE,
                 PlaceAvailability.ACTIVE, LocalDate.of(2026, 9, 22), 2, "Jl. Senopati 75", null));
-        return new PetPassportResponse("Momo", "TT02P2600128", 1, List.of(v));
+        return new PetPassportResponse("Momo", "TT02P2600128", 1, List.of(v), false, 0);
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void exactContractKeys() {
         Map<String, Object> m = wire(sample());
-        assertThat(m.keySet()).isEqualTo(Set.of("petName", "passportNo", "stampCount", "stamps"));
+        // V1.3.2 Story 3.4：版本状态两字段（仍无任何总数分母）。
+        assertThat(m.keySet()).isEqualTo(Set.of("petName", "passportNo", "stampCount", "stamps",
+                "currentVersionUnlocked", "purchasedVersionCount"));
         Map<String, Object> stamp = ((List<Map<String, Object>>) m.get("stamps")).get(0);
         // 无专属章 → stampImageUrl 为 null → NON_NULL 省略（有章时见 stampImageUrlIsPlainCdnUrl）。
         assertThat(stamp.keySet()).isEqualTo(Set.of("placeToken", "placeName", "placeType", "placeStatus",

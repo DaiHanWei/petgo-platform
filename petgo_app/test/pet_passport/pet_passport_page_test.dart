@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tailtopia/features/keepsake/data/keepsake_repository.dart';
+import 'package:tailtopia/features/keepsake/domain/keepsake_pricing.dart';
 import 'package:tailtopia/features/pet_passport/data/pet_passport_repository.dart';
 import 'package:tailtopia/features/pet_passport/domain/pet_passport.dart';
 import 'package:tailtopia/features/pet_passport/presentation/default_stamp_assets.dart';
@@ -36,7 +38,12 @@ void main() {
     ]);
     addTearDown(router.dispose);
     await tester.pumpWidget(ProviderScope(
-      overrides: [petPassportProvider.overrideWith((ref) async => p)],
+      overrides: [
+        petPassportProvider.overrideWith((ref) async => p),
+        // V1.3.2 Story 3.4：纵览吸底读价（不打真网络）。
+        keepsakePricingProvider.overrideWith((ref) async => const KeepsakePricing(
+            ktpHd: 10000, passportSnapshot: 2000, boardingPass: 1000, tailsonality: 5000)),
+      ],
       child: MaterialApp.router(
         routerConfig: router,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -113,7 +120,8 @@ void main() {
     expect(find.text('Cap 12 / 12'), findsOneWidget);
   });
 
-  testWidgets('无 ⋯、无付费、无 Bagikan', (tester) async {
+  // Story 3.4 按新规则：付费入口只在 B2b 纵览吸底（见 passport_snapshot_test）；**B2 单章页**仍无任何付费按钮。
+  testWidgets('B2 单章页：无 ⋯、无付费、无 Bagikan', (tester) async {
     await pump(tester, passport([stamp(0)]));
     expect(find.byIcon(Icons.more_horiz), findsNothing);
     expect(find.byIcon(Icons.more_vert), findsNothing);

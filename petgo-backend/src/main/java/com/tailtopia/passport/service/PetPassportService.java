@@ -8,6 +8,7 @@ import com.tailtopia.passport.event.PassportIssuedEvent;
 import com.tailtopia.passport.repository.PetPassportRepository;
 import com.tailtopia.profile.dto.PetPassportSubject;
 import com.tailtopia.profile.service.CardNumberService;
+import com.tailtopia.place.domain.PlaceStampRef;
 import com.tailtopia.place.service.PlaceStampQueryService;
 import com.tailtopia.profile.service.PetProfileQueryService;
 import com.tailtopia.shared.error.AppException;
@@ -36,17 +37,21 @@ public class PetPassportService {
     private final CardNumberService numbers;
     private final ApplicationEventPublisher events;
     private final PlaceStampQueryService stamps;
+    /** V1.3.2 Story 3.4：版本状态（与发起购买同一套判定）。 */
+    private final PassportVersionQuery versions;
     private final Clock clock;
 
     @Autowired
     public PetPassportService(PetPassportRepository passports, PetProfileQueryService pets,
-            CardNumberService numbers, ApplicationEventPublisher events, PlaceStampQueryService stamps) {
-        this(passports, pets, numbers, events, stamps, Clock.systemUTC());
+            CardNumberService numbers, ApplicationEventPublisher events, PlaceStampQueryService stamps,
+            PassportVersionQuery versions) {
+        this(passports, pets, numbers, events, stamps, versions, Clock.systemUTC());
     }
 
     PetPassportService(PetPassportRepository passports, PetProfileQueryService pets,
             CardNumberService numbers, ApplicationEventPublisher events, PlaceStampQueryService stamps,
-            Clock clock) {
+            PassportVersionQuery versions, Clock clock) {
+        this.versions = versions;
         this.passports = passports;
         this.pets = pets;
         this.numbers = numbers;
@@ -64,10 +69,13 @@ public class PetPassportService {
     public PetPassportResponse pageFor(long ownerId) {
         IssuedPassport issued = ensureIssuedForOwner(ownerId)
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
-        List<PassportStampView> views = stamps.stampsOf(issued.subject().petId()).stream()
-                .map(PassportStampView::of).toList();
+        long petId = issued.subject().petId();
+        // 同一次聚合同时出章列表与版本判定用的 placeId（不另写一条 SQL）。
+        List<PlaceStampRef> refs = stamps.stampRefsOf(petId);
+        List<PassportStampView> views = refs.stream().map(r -> PassportStampView.of(r.stamp())).toList();
+        PassportVersionQuery.VersionState v = versions.stateOf(petId, refs);
         return new PetPassportResponse(issued.subject().name(), issued.passport().getPassportNo(),
-                views.size(), views);
+                views.size(), views, v.currentVersionUnlocked(), v.purchasedVersionCount());
     }
 
     /**

@@ -10,6 +10,8 @@ class PetPassport {
     required this.petName,
     required this.passportNo,
     required this.stamps,
+    this.currentVersionUnlocked = false,
+    this.purchasedVersionCount = 0,
   });
 
   final String petName;
@@ -21,6 +23,12 @@ class PetPassport {
   final List<PassportStamp> stamps;
 
   int get stampCount => stamps.length;
+
+  /// 当前章集合的版本已买（V1.3.2 Story 3.4）。🔴 缺键 / 非 bool → false（fail-closed：内页照叠水印）。
+  final bool currentVersionUnlocked;
+
+  /// 已买版本数；&gt; 0 时 AppBar 出「已购版本」入口。
+  final int purchasedVersionCount;
 
   /// `focus` 定位：该 token 在 [stamps] 里的下标；找不到 → 0（停第 1 页）。
   int indexOfToken(String? token) {
@@ -41,6 +49,8 @@ class PetPassport {
               .map((e) => PassportStamp.fromJson(Map<String, dynamic>.from(e)))
               .where((s) => s.placeToken.isNotEmpty)
               .toList(growable: false),
+      currentVersionUnlocked: json['currentVersionUnlocked'] == true,
+      purchasedVersionCount: (json['purchasedVersionCount'] as num?)?.toInt() ?? 0,
     );
   }
 }

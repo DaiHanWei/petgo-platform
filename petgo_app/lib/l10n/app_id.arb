@@ -2473,5 +2473,22 @@
   "@tailsonalityBadgeRemoveBody": {"placeholders": {"pet": {"type": "String"}}},
   "tailsonalityBadgeRemoveConfirm": "Lepas",
   "timelineTailsonalityTestedOn": "Dites {date}",
-  "@timelineTailsonalityTestedOn": {"placeholders": {"date": {"type": "String"}}}
+  "@timelineTailsonalityTestedOn": {"placeholders": {"date": {"type": "String"}}},
+  "passportSnapshotCta": "Buka versi ini · Rp{price}",
+  "@passportSnapshotCta": {"placeholders": {"price": {"type": "String"}}},
+  "passportSnapshotOwned": "Versi ini sudah kebuka",
+  "passportSnapshotSheetTitle": "Buka paspor versi ini",
+  "passportSnapshotSheetSub": "{count} cap sekarang · Rp{price}",
+  "@passportSnapshotSheetSub": {"placeholders": {"count": {"type": "int"}, "price": {"type": "String"}}},
+  "passportSnapshotSheetNote": "Nanti dapat cap baru? Versi barunya dibuka terpisah.",
+  "passportSnapshotSheetLater": "Nanti",
+  "passportSnapshotSheetBuy": "Buka",
+  "passportSnapshotPayBody": "Paspor tanpa watermark, persis seperti sekarang ({count} cap).",
+  "@passportSnapshotPayBody": {"placeholders": {"count": {"type": "int"}}},
+  "passportSnapshotUnlockedToast": "Versi ini sudah kebuka!",
+  "passportPurchasedVersions": "Versi yang dibeli",
+  "passportPurchasedRow": "{date} · {count} cap",
+  "@passportPurchasedRow": {"placeholders": {"date": {"type": "String"}, "count": {"type": "int"}}},
+  "keepsakePayConfirm": "Bayar Rp{price}",
+  "@keepsakePayConfirm": {"placeholders": {"price": {"type": "String"}}}
 }

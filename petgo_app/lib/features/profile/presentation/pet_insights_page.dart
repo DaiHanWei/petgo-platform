@@ -55,6 +55,12 @@ class PetInsightsRoutes {
 
   static String passportStampFor(String placeToken) =>
       '$passport/stamps/${Uri.encodeComponent(placeToken)}';
+
+  /// 已买护照版本列表 / 回看（V1.3.2 Story 3.4）。同在 `/profile/` 下 → 继承游客门控。
+  static const String passportVersions = '$passport/versions';
+  static const String passportVersion = '$passport/versions/:token';
+
+  static String passportVersionFor(String token) => '$passport/versions/${Uri.encodeComponent(token)}';
 }
 
 /// 聚合页卡片排布（V1.3.2 Story 1.2 · C-8 / UX-DR1 的 2+2+1 规则）：

@@ -2,6 +2,7 @@ package com.tailtopia.place.service;
 
 import com.tailtopia.place.domain.PlaceAvailability;
 import com.tailtopia.place.domain.PlaceStamp;
+import com.tailtopia.place.domain.PlaceStampRef;
 import com.tailtopia.place.domain.PlaceType;
 import com.tailtopia.shared.media.AliyunOssClient;
 import java.sql.Timestamp;
@@ -24,7 +25,7 @@ public class PlaceStampQueryService {
 
     /** 按当前 place_id 分组；排序 = 首次日期升序、首条打卡 id 升序（新章恒在最后）。 */
     static final String STAMPS_SQL = """
-            SELECT p.public_token AS place_token, p.name AS place_name, p.place_type,
+            SELECT p.id AS place_id, p.public_token AS place_token, p.name AS place_name, p.place_type,
                    p.status, p.deleted_at, p.address_text, p.stamp_object_key,
                    MIN(c.visit_date) AS first_visit, COUNT(*) AS visits, MIN(c.id) AS first_id
               FROM place_checkin_pets cp
@@ -63,21 +64,33 @@ public class PlaceStampQueryService {
     /** 该宠物的全部章（可能为空表）。 */
     @Transactional(readOnly = true)
     public List<PlaceStamp> stampsOf(long petId) {
-        return jdbc.query(STAMPS_SQL, Map.of("petId", petId), (rs, i) -> {
-            Timestamp deletedAt = rs.getTimestamp("deleted_at");
-            PlaceAvailability availability = PlaceAvailability.of(rs.getString("status"),
-                    deletedAt == null ? null : deletedAt.toInstant());
-            return new PlaceStamp(
-                    rs.getString("place_token"),
-                    rs.getString("place_name"),
-                    typeOf(rs.getString("place_type")),
-                    availability,
-                    rs.getDate("first_visit").toLocalDate(),
-                    rs.getLong("visits"),
-                    // Story 1.3：地址只对 ACTIVE 下发（B6：不向客户端泄漏已下架场所的位置）。
-                    availability == PlaceAvailability.ACTIVE ? rs.getString("address_text") : null,
-                    stampUrlOf(rs.getString("stamp_object_key")));
-        });
+        return stampRefsOf(petId).stream().map(PlaceStampRef::stamp).toList();
+    }
+
+    /**
+     * 同一条聚合 SQL 的只读投影，带内部 {@code placeId}（V1.3.2 Story 3.4：护照快照冻结 + 现算章集合 hash）。
+     * 🔴 placeId 不得进任何对外 DTO。
+     */
+    @Transactional(readOnly = true)
+    public List<PlaceStampRef> stampRefsOf(long petId) {
+        return jdbc.query(STAMPS_SQL, Map.of("petId", petId), (rs, i) -> new PlaceStampRef(rs.getLong("place_id"),
+                stampOf(rs)));
+    }
+
+    private PlaceStamp stampOf(java.sql.ResultSet rs) throws java.sql.SQLException {
+        Timestamp deletedAt = rs.getTimestamp("deleted_at");
+        PlaceAvailability availability = PlaceAvailability.of(rs.getString("status"),
+                deletedAt == null ? null : deletedAt.toInstant());
+        return new PlaceStamp(
+                rs.getString("place_token"),
+                rs.getString("place_name"),
+                typeOf(rs.getString("place_type")),
+                availability,
+                rs.getDate("first_visit").toLocalDate(),
+                rs.getLong("visits"),
+                // Story 1.3：地址只对 ACTIVE 下发（B6：不向客户端泄漏已下架场所的位置）。
+                availability == PlaceAvailability.ACTIVE ? rs.getString("address_text") : null,
+                stampUrlOf(rs.getString("stamp_object_key")));
     }
 
     /** 章数 = 该宠物打过卡的不同当前 place_id 数（无分母，AC3.3）。 */

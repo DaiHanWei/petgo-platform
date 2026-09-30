@@ -3,11 +3,10 @@ package com.tailtopia.tailsonality.service;
 import com.tailtopia.purchase.domain.GrantOutcome;
 import com.tailtopia.purchase.domain.KeepsakeGranter;
 import com.tailtopia.purchase.domain.KeepsakeSku;
-import java.sql.Savepoint;
+import com.tailtopia.purchase.service.GrantSavepoint;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -56,21 +55,7 @@ public class TailsonalityKeepsakeGranter implements KeepsakeGranter {
     @Override
     public GrantOutcome grant(long refId, long purchaseId) {
         try {
-            return jdbc.getJdbcTemplate().execute((ConnectionCallback<GrantOutcome>) con -> {
-                Savepoint sp = con.getAutoCommit() ? null : con.setSavepoint();
-                try {
-                    GrantOutcome outcome = unlock(refId);
-                    if (sp != null) {
-                        con.releaseSavepoint(sp);
-                    }
-                    return outcome;
-                } catch (RuntimeException e) {
-                    if (sp != null) {
-                        con.rollback(sp);
-                    }
-                    throw e;
-                }
-            });
+            return GrantSavepoint.run(jdbc.getJdbcTemplate(), () -> unlock(refId));
         } catch (RuntimeException e) {
             // 只记 refId（AD-19：不记用户 / 宠物信息）。
             log.error("tailsonality grant failed refId={}", refId, e);

@@ -3814,5 +3814,22 @@
   "@tailsonalityBadgeRemoveBody": {"placeholders": {"pet": {"type": "String"}}},
   "tailsonalityBadgeRemoveConfirm": "Remove",
   "timelineTailsonalityTestedOn": "Tested {date}",
-  "@timelineTailsonalityTestedOn": {"placeholders": {"date": {"type": "String"}}}
+  "@timelineTailsonalityTestedOn": {"placeholders": {"date": {"type": "String"}}},
+  "passportSnapshotCta": "Unlock this version · Rp{price}",
+  "@passportSnapshotCta": {"placeholders": {"price": {"type": "String"}}},
+  "passportSnapshotOwned": "This version is unlocked",
+  "passportSnapshotSheetTitle": "Unlock this passport version",
+  "passportSnapshotSheetSub": "{count, plural, =1{1 stamp} other{{count} stamps}} now · Rp{price}",
+  "@passportSnapshotSheetSub": {"placeholders": {"count": {"type": "int"}, "price": {"type": "String"}}},
+  "passportSnapshotSheetNote": "Got new stamps later? The new version unlocks separately.",
+  "passportSnapshotSheetLater": "Not now",
+  "passportSnapshotSheetBuy": "Unlock",
+  "passportSnapshotPayBody": "The passport without watermark, exactly as it is now ({count, plural, =1{1 stamp} other{{count} stamps}}).",
+  "@passportSnapshotPayBody": {"placeholders": {"count": {"type": "int"}}},
+  "passportSnapshotUnlockedToast": "This version is unlocked!",
+  "passportPurchasedVersions": "Purchased versions",
+  "passportPurchasedRow": "{date} · {count, plural, =1{1 stamp} other{{count} stamps}}",
+  "@passportPurchasedRow": {"placeholders": {"date": {"type": "String"}, "count": {"type": "int"}}},
+  "keepsakePayConfirm": "Pay Rp{price}",
+  "@keepsakePayConfirm": {"placeholders": {"price": {"type": "String"}}}
 }

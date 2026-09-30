@@ -83,6 +83,7 @@ import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
 import '../../features/place/presentation/place_detail_page.dart';
 import '../../features/place/presentation/place_checkin_success_page.dart';
+import '../../features/pet_passport/presentation/passport_versions_page.dart';
 import '../../features/pet_passport/presentation/pet_passport_page.dart';
 import '../../features/pet_passport/domain/new_stamp_args.dart';
 import '../../features/pet_passport/presentation/pet_passport_new_stamp_page.dart';
@@ -787,6 +788,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: PetInsightsRoutes.passportStamp,
         builder: (c, s) => PetPassportStampPage(placeToken: s.pathParameters['placeToken']!),
+      ),
+      // 已买护照版本列表 / 回看（V1.3.2 Story 3.4）：同在 /profile/ 下 → 自动继承游客门控。
+      GoRoute(path: PetInsightsRoutes.passportVersions, builder: (c, s) => const PassportVersionsPage()),
+      GoRoute(
+        path: PetInsightsRoutes.passportVersion,
+        builder: (c, s) => PassportVersionPage(token: s.pathParameters['token']!),
       ),
       // Tailsonality（V1.3.2 Story 2.3）：答题页 + 结果页，落在 /profile/ 下 → 自动受控，**不进**例外集合。
       GoRoute(path: TailsonalityRoutes.quiz, builder: (c, s) => const TailsonalityQuizPage()),

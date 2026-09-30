@@ -15,6 +15,7 @@ import com.tailtopia.passport.domain.PassportSource;
 import com.tailtopia.passport.domain.PetPassport;
 import com.tailtopia.passport.event.PassportIssuedEvent;
 import com.tailtopia.passport.repository.PetPassportRepository;
+import com.tailtopia.passport.service.PassportVersionQuery;
 import com.tailtopia.passport.service.PetPassportService;
 import com.tailtopia.place.domain.PlaceAvailability;
 import com.tailtopia.place.domain.PlaceStamp;
@@ -50,8 +51,9 @@ class PetPassportServiceTest {
     private final CardNumberService numbers = mock(CardNumberService.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final PlaceStampQueryService stamps = mock(PlaceStampQueryService.class);
+    private final PassportVersionQuery versions = mock(PassportVersionQuery.class);
     private final PetPassportService service =
-            new PetPassportService(repo, pets, numbers, events, stamps);
+            new PetPassportService(repo, pets, numbers, events, stamps, versions);
 
     private static PetPassport row(String no, PassportSource source) {
         PetPassport p = org.springframework.beans.BeanUtils.instantiateClass(PetPassport.class);
@@ -157,13 +159,21 @@ class PetPassportServiceTest {
     @Test
     void pageComposesStampsInOrderWithCount() {
         when(repo.findByPetProfileId(PET)).thenReturn(Optional.of(row("TT02P2600001", PassportSource.ISSUED)));
-        when(stamps.stampsOf(PET)).thenReturn(List.of(
-                new PlaceStamp("a".repeat(32), "Kopi", PlaceType.CAFE, PlaceAvailability.ACTIVE,
-                        LocalDate.of(2026, 9, 1), 3, "Jl. Kopi 1", "https://cdn/place-stamps/1/s.png"),
-                new PlaceStamp("b".repeat(32), "Taman", PlaceType.PARK, PlaceAvailability.UNAVAILABLE,
-                        LocalDate.of(2026, 9, 20), 1, "Jl. Taman 2", null)));
+        // V1.3.2 Story 3.4：章与版本判定同一次聚合（stampRefsOf）。
+        var refs = List.of(
+                new com.tailtopia.place.domain.PlaceStampRef(11L, new PlaceStamp("a".repeat(32), "Kopi",
+                        PlaceType.CAFE, PlaceAvailability.ACTIVE, LocalDate.of(2026, 9, 1), 3, "Jl. Kopi 1",
+                        "https://cdn/place-stamps/1/s.png")),
+                new com.tailtopia.place.domain.PlaceStampRef(12L, new PlaceStamp("b".repeat(32), "Taman",
+                        PlaceType.PARK, PlaceAvailability.UNAVAILABLE, LocalDate.of(2026, 9, 20), 1, "Jl. Taman 2",
+                        null)));
+        when(stamps.stampRefsOf(PET)).thenReturn(refs);
+        when(versions.stateOf(PET, refs)).thenReturn(new PassportVersionQuery.VersionState(true, 2));
 
         var page = service.pageFor(USER);
+
+        assertThat(page.currentVersionUnlocked()).isTrue();
+        assertThat(page.purchasedVersionCount()).isEqualTo(2);
 
         assertThat(page.petName()).isEqualTo("Momo");
         assertThat(page.passportNo()).isEqualTo("TT02P2600001");

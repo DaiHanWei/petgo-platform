@@ -5,11 +5,17 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../keepsake/data/keepsake_repository.dart';
+import '../../keepsake/presentation/keepsake_pay_flow.dart';
+import '../../../shared/widgets/pay_channel_picker.dart';
+import '../../../shared/widgets/price_load_retry.dart';
 import '../../place/presentation/place_list_page.dart';
 import '../../place/presentation/widgets/place_stamp_view.dart';
 import '../../profile/presentation/pet_insights_page.dart';
 import '../data/pet_passport_repository.dart';
 import '../domain/pet_passport.dart';
+import 'passport_layout.dart';
+import 'widgets/passport_snapshot_sheet.dart';
 import 'passport_page_face.dart';
 
 /// 宠物护照页（V1.3.2 batch-a Story 1.2 · AC5 · UI 稿 B1 / B2 / B2b）。
@@ -19,8 +25,10 @@ import 'passport_page_face.dart';
 /// - **B2 单章页**（有章时默认）：`PageView` 一页一枚章；页脚「Cap i / 总章数」（分母 = 已集章数，不是上限）。
 /// - **B2b 纵览**：3 列 × 4 行一页、横向分页；空格**不画**未到访占位、不写总数上限；点章回 B2 停在那一页。
 ///
-/// 🔴 **不显示**：付费按钮（3.4）、吸底「Bagikan」（4.3）；AppBar **无 ⋯**。B2 章本体 → B5 章详情（1.3）。
-/// 这些不是「占位」—— 不要留 `enabled:false` 的按钮。
+/// V1.3.2 Story 3.4：**只有 B2b 纵览**吸底出「Buka versi ini · Rp{价}」（当前版本未买）/ 禁用态「Versi ini sudah kebuka」
+/// （已买）；B2 单章页不出任何付费按钮。内页按 `currentVersionUnlocked` 叠水印；AppBar 在有已买版本时多一个「已购版本」入口。
+///
+/// 🔴 **不显示**：吸底「Bagikan」（4.3）；AppBar **无 ⋯**。B2 章本体 → B5 章详情（1.3）。
 class PetPassportPage extends ConsumerStatefulWidget {
   const PetPassportPage({super.key, this.focus});
 
@@ -41,6 +49,40 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
   int _index = 0;
   int _gridPage = 0;
   bool _focusApplied = false;
+  bool _buying = false;
+
+  /// B7 → 选渠道 → 发起 → PawCoin 即得 / QRIS 轮询（Story 3.4 · AC6.3）。
+  Future<void> _buy(PetPassport p) async {
+    if (_buying) return;
+    final l10n = AppLocalizations.of(context);
+    final price = ref.read(keepsakePricingProvider).value?.passportSnapshot;
+    if (price == null) return;
+    final go = await showPassportSnapshotSheet(context, stampCount: p.stampCount, price: price);
+    if (go != true || !mounted) return;
+    setState(() => _buying = true);
+    try {
+      final outcome = await runKeepsakePurchase(
+        context: context,
+        ref: ref,
+        sheet: (balance) => PassportSnapshotPayPicker(passport: p, balance: balance),
+        start: (channel) => ref.read(petPassportRepositoryProvider).startSnapshot(channel),
+        // 🔴 不能只看 currentVersionUnlocked：买的是发起时冻结的版本（D-4），付款窗内又盖了新章时当前版本仍锁，
+        // 那样付了钱面板却永远不认。已买版本数增加 = 这笔已发放（复审 #1）。
+        pollPaid: () async {
+          final now = await ref.refresh(petPassportProvider.future);
+          return now.currentVersionUnlocked || now.purchasedVersionCount > p.purchasedVersionCount;
+        },
+      );
+      if (!mounted || outcome == KeepsakeFlowOutcome.notCompleted) return;
+      ref.invalidate(petPassportProvider);
+      ref.invalidate(passportSnapshotsProvider);
+      if (outcome == KeepsakeFlowOutcome.unlocked) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.passportSnapshotUnlockedToast)));
+      }
+    } finally {
+      if (mounted) setState(() => _buying = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -89,6 +131,13 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
         title: Text(l10n.passportPageTitle),
         // 🔴 AppBar 无 ⋯：只有 B2 / B2b 之间的切换。
         actions: [
+          if (passport != null && passport.purchasedVersionCount > 0)
+            IconButton(
+              key: const ValueKey('passportPurchasedVersions'),
+              tooltip: l10n.passportPurchasedVersions,
+              icon: const Icon(Icons.collections_bookmark_outlined),
+              onPressed: () => context.push(PetInsightsRoutes.passportVersions),
+            ),
           if (hasStamps)
             _grid
                 ? IconButton(
@@ -105,7 +154,9 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
                   ),
         ],
       ),
-      bottomNavigationBar: (passport != null && passport.stamps.isEmpty)
+      bottomNavigationBar: (passport != null && passport.stamps.isNotEmpty && _grid)
+          ? _SnapshotBar(passport: passport, busy: _buying, onBuy: () => _buy(passport))
+          : (passport != null && passport.stamps.isEmpty)
           ? SafeArea(
               minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: FilledButton(
@@ -126,18 +177,18 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
             onAction: () => ref.invalidate(petPassportProvider),
           ),
         // 骨架与 B1 同版心，避免加载完跳动。
-        _ => _Frame(header: const SizedBox(height: 44), child: const _PageBlock(child: SizedBox())),
+        _ => PassportFrame(header: const SizedBox(height: 44), child: const PassportPageBlock(child: SizedBox())),
       },
     );
   }
 
   Widget _content(BuildContext context, AppLocalizations l10n, PetPassport p) {
-    final header = _Header(petName: p.petName, passportNo: p.passportNo);
+    final header = PassportHeader(petName: p.petName, passportNo: p.passportNo);
     if (p.stamps.isEmpty) {
-      return _Frame(
+      return PassportFrame(
         header: header,
         footer: Text(l10n.passportStampCount(0), style: _footerStyle),
-        child: _PageBlock(
+        child: PassportPageBlock(
           key: const ValueKey('passportEmpty'),
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -164,7 +215,7 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
 
   Widget _singleView(BuildContext context, AppLocalizations l10n, PetPassport p, Widget header) {
     final total = p.stamps.length;
-    return _Frame(
+    return PassportFrame(
       header: header,
       footer: _Pager(
         label: l10n.passportPageFooter(_index + 1, total),
@@ -174,7 +225,8 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
         onPrev: () => _single?.previousPage(duration: _flip, curve: Curves.easeOut),
         onNext: () => _single?.nextPage(duration: _flip, curve: Curves.easeOut),
       ),
-      child: _PageBlock(
+      child: PassportPageBlock(
+        watermarked: !p.currentVersionUnlocked,
         child: PageView.builder(
           key: const ValueKey('passportSinglePager'),
           controller: _single,
@@ -194,7 +246,7 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
 
   Widget _gridView(BuildContext context, AppLocalizations l10n, PetPassport p, Widget header) {
     final pages = (p.stamps.length + kPassportGridPageSize - 1) ~/ kPassportGridPageSize;
-    return _Frame(
+    return PassportFrame(
       header: header,
       footer: _Pager(
         label: l10n.passportGridFooter(p.stamps.length, _gridPage + 1),
@@ -204,7 +256,8 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
         onPrev: () => _gridPages?.previousPage(duration: _flip, curve: Curves.easeOut),
         onNext: () => _gridPages?.nextPage(duration: _flip, curve: Curves.easeOut),
       ),
-      child: _PageBlock(
+      child: PassportPageBlock(
+        watermarked: !p.currentVersionUnlocked,
         child: PageView.builder(
           key: const ValueKey('passportGridPager'),
           controller: _gridPages,
@@ -266,85 +319,6 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
       fontFeatures: [FontFeature.tabularFigures()]);
 }
 
-/// 页眉 + 内页块 + 页脚的统一版心（B1 / B2 / B2b / 骨架同尺寸）。
-class _Frame extends StatelessWidget {
-  const _Frame({required this.header, required this.child, this.footer});
-
-  final Widget header;
-  final Widget child;
-  final Widget? footer;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            header,
-            const SizedBox(height: 16),
-            child,
-            const SizedBox(height: 12),
-            if (footer != null) Center(child: footer!),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 护照内页块（纸面，3:4）。
-class _PageBlock extends StatelessWidget {
-  const _PageBlock({super.key, required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 3 / 4,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: AppColors.cream2,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.lineViolet),
-        ),
-        child: child,
-      ),
-    );
-  }
-}
-
-/// 页眉：宠物名 + 完整 12 位护照号（单独一行、等宽数字、不截断）。
-class _Header extends StatelessWidget {
-  const _Header({required this.petName, required this.passportNo});
-
-  final String petName;
-  final String passportNo;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(petName,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
-        const SizedBox(height: 2),
-        Text(passportNo,
-            key: const ValueKey('passportNo'),
-            softWrap: false,
-            overflow: TextOverflow.visible,
-            style: const TextStyle(
-                fontSize: 14,
-                letterSpacing: 1.2,
-                color: AppColors.ink2,
-                fontFeatures: [FontFeature.tabularFigures()])),
-      ],
-    );
-  }
-}
-
 /// 页脚：翻页箭头 + 文案（B1 空态不用它 —— 空态无箭头）。
 class _Pager extends StatelessWidget {
   const _Pager({
@@ -381,5 +355,53 @@ class _Pager extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// B2b 吸底（Story 3.4 · AC6.1）：未买 → 主按钮「Buka versi ini · Rp{价}」；已买 → 禁用态「Versi ini sudah kebuka」。
+/// 价格只从服务端读（`keepsakePricingProvider.passportSnapshot`），取价中「…」禁用，失败显示重试。
+class _SnapshotBar extends ConsumerWidget {
+  const _SnapshotBar({required this.passport, required this.busy, required this.onBuy});
+
+  final PetPassport passport;
+  final bool busy;
+  final VoidCallback onBuy;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    Widget button;
+    if (passport.currentVersionUnlocked) {
+      button = FilledButton(
+        key: const ValueKey('passportSnapshotOwned'),
+        onPressed: null,
+        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+        child: Text(l10n.passportSnapshotOwned),
+      );
+    } else {
+      final price = ref.watch(keepsakePricingProvider);
+      if (price.hasError && !price.isLoading) {
+        button = Center(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: PriceLoadRetry(
+                key: const ValueKey('passportSnapshotPriceRetry'),
+                onRetry: () => ref.invalidate(keepsakePricingProvider)),
+          ),
+        );
+      } else {
+        final p = price.value?.passportSnapshot;
+        button = FilledButton(
+          key: const ValueKey('passportSnapshotCta'),
+          onPressed: p == null || busy ? null : onBuy,
+          style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+              backgroundColor: AppColors.mint,
+              foregroundColor: AppColors.onAccent),
+          child: Text(p == null ? '…' : l10n.passportSnapshotCta(formatIdrAmount(p))),
+        );
+      }
+    }
+    return SafeArea(minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12), child: button);
   }
 }

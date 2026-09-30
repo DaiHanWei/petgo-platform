@@ -162,6 +162,12 @@ class ApiPaths {
   /// 宠物护照（V1.3.2 Story 1.2）：GET 里服务端会首次签发（幂等）。仅 role=USER。
   static const String petPassport = '$base/pet-profiles/me/passport';
 
+  /// 护照快照（V1.3.2 Story 3.4）：POST `{channel}` 发起「当前版本」购买 / GET 已买版本列表。仅 role=USER。
+  static const String petPassportSnapshots = '$petPassport/snapshots';
+
+  /// 已买版本回看；非本人 / 未付 / 不存在 → 404。
+  static String petPassportSnapshot(String token) => '$petPassportSnapshots/$token';
+
   /// Tailsonality 结果（V1.3.2 Story 2.1）：POST 提交 18 题答案 / GET 列表（新 → 旧）。仅 role=USER。
   static const String petTailsonalityResults = '$base/pet-profiles/me/tailsonality/results';
 

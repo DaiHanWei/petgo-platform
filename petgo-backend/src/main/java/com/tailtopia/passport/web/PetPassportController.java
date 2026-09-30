@@ -1,11 +1,22 @@
 package com.tailtopia.passport.web;
 
+import com.tailtopia.passport.dto.PassportSnapshotDetailResponse;
+import com.tailtopia.passport.dto.PassportSnapshotListResponse;
+import com.tailtopia.passport.dto.PassportSnapshotPurchaseResponse;
 import com.tailtopia.passport.dto.PetPassportResponse;
+import com.tailtopia.passport.service.PassportSnapshotService;
 import com.tailtopia.passport.service.PetPassportService;
+import com.tailtopia.purchase.dto.KeepsakePayRequest;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.shared.ratelimit.RedisRateLimiter;
+import jakarta.validation.Valid;
+import java.time.Duration;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -14,10 +25,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class PetPassportController {
 
-    private final PetPassportService passports;
+    private static final String SNAPSHOTS = "/api/v1/pet-profiles/me/passport/snapshots";
+    /** 快照发起限流（Story 3.4 · AC3.6）：10 次 / 分钟 / 用户。 */
+    private static final int SNAPSHOT_LIMIT = 10;
+    private static final Duration SNAPSHOT_WINDOW = Duration.ofMinutes(1);
 
-    public PetPassportController(PetPassportService passports) {
+    private final PetPassportService passports;
+    private final PassportSnapshotService snapshots;
+    private final RedisRateLimiter rateLimiter;
+
+    public PetPassportController(PetPassportService passports, PassportSnapshotService snapshots,
+            RedisRateLimiter rateLimiter) {
         this.passports = passports;
+        this.snapshots = snapshots;
+        this.rateLimiter = rateLimiter;
     }
 
     /**
@@ -32,6 +53,27 @@ public class PetPassportController {
     @GetMapping("/api/v1/pet-profiles/me/passport")
     public PetPassportResponse passport(@AuthenticationPrincipal Jwt jwt) {
         return passports.pageFor(currentUserId(jwt));
+    }
+
+    /** 发起「当前版本」快照购买（Story 3.4 · AC3）：无章 422、已买 409；响应带 {@code snapshotToken}。 */
+    @PostMapping(SNAPSHOTS)
+    public PassportSnapshotPurchaseResponse startSnapshot(@AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody KeepsakePayRequest req) {
+        long userId = currentUserId(jwt);
+        rateLimiter.check("rl:passport:snapshot:" + userId, SNAPSHOT_LIMIT, SNAPSHOT_WINDOW);
+        return snapshots.start(userId, req.channel());
+    }
+
+    /** 已购版本（Story 3.4 · AC7.1）：只列已付，按 paidAt 倒序。 */
+    @GetMapping(SNAPSHOTS)
+    public PassportSnapshotListResponse listSnapshots(@AuthenticationPrincipal Jwt jwt) {
+        return snapshots.list(currentUserId(jwt));
+    }
+
+    /** 回看（Story 3.4 · AC7.2）：非本人 / 未付 / 不存在 → 404。 */
+    @GetMapping(SNAPSHOTS + "/{token}")
+    public PassportSnapshotDetailResponse snapshot(@AuthenticationPrincipal Jwt jwt, @PathVariable String token) {
+        return snapshots.get(currentUserId(jwt), token);
     }
 
     private static long currentUserId(Jwt jwt) {

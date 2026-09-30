@@ -1,9 +1,11 @@
 package com.tailtopia.passport.repository;
 
 import com.tailtopia.passport.domain.PetPassport;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,6 +14,11 @@ import org.springframework.data.repository.query.Param;
 public interface PetPassportRepository extends JpaRepository<PetPassport, Long> {
 
     Optional<PetPassport> findByPetProfileId(Long petProfileId);
+
+    /** 快照发起串行化（V1.3.2 Story 3.4 · AC3.5）：锁该宠物的护照行，同宠并发发起只产生一个未付快照。 */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from PetPassport p where p.petProfileId = :petId")
+    Optional<PetPassport> findForUpdateByPetProfileId(@Param("petId") long petId);
 
     /**
      * 幂等签发：并发两次只产生一行（AC1.4）。
