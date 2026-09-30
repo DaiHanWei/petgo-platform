@@ -6,6 +6,9 @@ import com.tailtopia.place.domain.PlaceCheckin;
 import com.tailtopia.place.domain.PlaceCheckinPet;
 import com.tailtopia.place.dto.PlaceCheckinRequest;
 import com.tailtopia.place.dto.PlaceCheckinResponse;
+import com.tailtopia.place.event.PlaceCheckedInEvent;
+import com.tailtopia.passport.domain.PetPassport;
+import com.tailtopia.passport.service.PetPassportService;
 import com.tailtopia.place.repository.PlaceCheckinPetRepository;
 import com.tailtopia.place.repository.PlaceRepository;
 import com.tailtopia.place.repository.PlaceVisitRepository;
@@ -20,6 +23,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,23 +57,31 @@ public class PlaceCheckinService {
     private final PlaceCheckinPetRepository checkinPets;
     private final PetProfileQueryService pets;
     private final PlaceTokenGenerator tokens;
+    private final PetPassportService passports;
+    private final PlaceStampQueryService stamps;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     @Autowired
     public PlaceCheckinService(PlaceRepository places, PlaceVisitRepository checkins,
             PlaceCheckinPetRepository checkinPets, PetProfileQueryService pets,
-            PlaceTokenGenerator tokens) {
-        this(places, checkins, checkinPets, pets, tokens, Clock.systemUTC());
+            PlaceTokenGenerator tokens, PetPassportService passports, PlaceStampQueryService stamps,
+            ApplicationEventPublisher events) {
+        this(places, checkins, checkinPets, pets, tokens, passports, stamps, events, Clock.systemUTC());
     }
 
     PlaceCheckinService(PlaceRepository places, PlaceVisitRepository checkins,
             PlaceCheckinPetRepository checkinPets, PetProfileQueryService pets,
-            PlaceTokenGenerator tokens, Clock clock) {
+            PlaceTokenGenerator tokens, PetPassportService passports, PlaceStampQueryService stamps,
+            ApplicationEventPublisher events, Clock clock) {
         this.places = places;
         this.checkins = checkins;
         this.checkinPets = checkinPets;
         this.pets = pets;
         this.tokens = tokens;
+        this.passports = passports;
+        this.stamps = stamps;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -129,8 +141,14 @@ public class PlaceCheckinService {
             throw e;
         }
         long visitCount = checkins.countForPetAtPlace(primaryPet, placeId);
+        // Story 1.2：首次打卡同一事务内签发护照（幂等）；章数 = 不同当前 place_id 数。
+        PetPassport passport = passports.ensureIssued(primaryPet, userId);
+        int stampCount = stamps.stampCountOf(primaryPet);
+        events.publishEvent(new PlaceCheckedInEvent(userId, place.getPublicToken(), place.getType(),
+                isNewStamp, stampCount));
         return new PlaceCheckinResponse(saved.getPublicToken(), place.getPublicToken(),
-                place.getName(), place.getType(), today, isNewStamp, visitCount);
+                place.getName(), place.getType(), today, isNewStamp, visitCount,
+                passport.getPassportNo(), stampCount);
     }
 
     /**

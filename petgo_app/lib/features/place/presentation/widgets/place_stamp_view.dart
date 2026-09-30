@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/colors.dart';
+import '../../../pet_passport/presentation/default_stamp_assets.dart';
 import '../../domain/place_summary.dart';
 
 /// 场所章面（V1.3.2 batch-a Story 1.1 新建；Story 1.2 护照格子 / 1.3 章详情 / 1.4 专属章复用）。
 ///
 /// 回落链（AD-5 / D-10 / D-12）：
 /// 1. [imageUrl] 非空 → 场所专属章（Story 1.4 接入）；
-/// 2. 否则按 [placeType] 的包内默认章（Story 1.2 `defaultStampAssetFor` 接入，素材未到时返回 null）；
+/// 2. 否则按 [placeType] 的包内默认章（Story 1.2 `defaultStampAssetFor`，素材未到货时文件缺失 → 走第 3 级）；
 /// 3. 都没有 → **代码绘制的占位章**：浅色底 + 圆形描边 + 类型图标。
 ///
 /// 🔴 **原色展示**：不着色、不做圆形裁切（D-10：章不一定是圆的）。本文件不得出现
 /// `ClipOval` / `ColorFiltered` / `colorBlendMode`（Story 1.4 有源码扫描测试）。
-/// 本 story 只实现第 3 级；[imageUrl] 形参先占位，恒按 null 处理由调用方保证。
+/// Story 1.1 实现第 3 级；Story 1.2 接第 2 级（素材缺失时 `errorBuilder` 回落第 3 级）；
+/// [imageUrl] 第 1 级由 Story 1.4 接入。
 class PlaceStampView extends StatelessWidget {
   const PlaceStampView({
     super.key,
@@ -32,9 +34,22 @@ class PlaceStampView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final placeholder = PlaceStampPlaceholder(placeType: placeType, size: size);
+    final asset = defaultStampAssetFor(placeType);
     return SizedBox.square(
       dimension: size,
-      child: PlaceStampPlaceholder(placeType: placeType, size: size),
+      child: asset == null
+          ? placeholder
+          : Image.asset(
+              asset,
+              width: size,
+              height: size,
+              fit: BoxFit.contain,
+              // 加载中与缺文件都显示占位章：素材未到货时这里就是常态（D-21），不是错误。
+              frameBuilder: (context, child, frame, sync) =>
+                  (frame == null && !sync) ? placeholder : child,
+              errorBuilder: (context, error, stack) => placeholder,
+            ),
     );
   }
 }

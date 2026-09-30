@@ -83,6 +83,7 @@ import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
 import '../../features/place/presentation/place_detail_page.dart';
 import '../../features/place/presentation/place_checkin_success_page.dart';
+import '../../features/pet_passport/presentation/pet_passport_page.dart';
 import '../../features/place/presentation/place_list_page.dart';
 import '../../features/place/presentation/place_mark_page.dart';
 import '../../features/profile/presentation/pet_card_page.dart';
@@ -761,6 +762,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 宠物身份证详情（Story 6.2 · FR-49B）。V1.3.0 Story 5.1 整体平移到聚合页之下，
       // 页面逻辑一字未改。
       GoRoute(path: PetInsightsRoutes.idCard, builder: (c, s) => const IdCardPage()),
+      // 宠物护照（V1.3.2 Story 1.2）。落在 /profile/ 下 → 自动继承游客门控，**不进**例外集合。
+      // `?focus=<placeToken>` 进入时停在该章（打卡成功「Lihat Paspor」）。
+      GoRoute(
+        path: PetInsightsRoutes.passport,
+        builder: (c, s) => PetPassportPage(focus: s.uri.queryParameters['focus']),
+      ),
       // 🔴 旧路径**保留为重定向，不得删除**（AD-A17.2）：站内两处跳转 + 潜在的历史通知深链，
       // 断链是硬失败。
       //

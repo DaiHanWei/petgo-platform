@@ -26,7 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>坐标只用于本次到场判定：<b>不落库、不进日志、不进响应</b>。这里把能静态钉住的全部钉住：
  * 两张表的迁移没有经纬度列、两个实体没有经纬度字段、打卡服务与控制器源码里没有带坐标的 log 调用、
- * 响应只有契约里的 7 个键（没有 distance / latitude / longitude）。
+ * 响应只有契约里的 9 个键（Story 1.2 加 passportNo / stampCount）（没有 distance / latitude / longitude）。
  */
 class PlaceCheckinPrivacyGuardTest {
 
@@ -93,10 +93,12 @@ class PlaceCheckinPrivacyGuardTest {
                 .build();
         @SuppressWarnings("unchecked")
         Map<String, Object> m = json.convertValue(new PlaceCheckinResponse("c".repeat(32), "p".repeat(32),
-                "Kopi Kucing", PlaceType.CAFE, LocalDate.of(2026, 9, 30), true, 1L), Map.class);
+                "Kopi Kucing", PlaceType.CAFE, LocalDate.of(2026, 9, 30), true, 1L, "TT02P2600128", 1), Map.class);
 
         assertThat(m.keySet()).isEqualTo(Set.of("checkinToken", "placeToken", "placeName", "placeType",
-                "visitDate", "isNewStamp", "visitCount"));
+                "visitDate", "isNewStamp", "visitCount",
+                // Story 1.2
+                "passportNo", "stampCount"));
         assertThat(m.get("isNewStamp")).isEqualTo(true);
         assertThat(m.get("placeType")).isEqualTo("CAFE");
         assertThat(m.get("visitDate")).isEqualTo("2026-09-30");

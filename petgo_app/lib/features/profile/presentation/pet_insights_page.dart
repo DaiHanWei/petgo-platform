@@ -29,14 +29,46 @@ class PetInsightsRoutes {
 
   /// 年龄换算卡。页面本身属 **Story 5.2**，本 story 只负责把入口指过去。
   static const String ageCard = '$hub/age-card';
+
+  /// 宠物护照（V1.3.2 Story 1.2 · FR-120）。同样落在 `/profile/` 下 → 自动继承游客门控。
+  static const String passport = '$hub/passport';
+
+  /// 护照页并停在某一枚章（打卡成功「Lihat Paspor」/ 章详情回跳用）。token 找不到则停第 1 页。
+  static String passportFor({String? focus}) =>
+      focus == null || focus.isEmpty ? passport : '$passport?focus=${Uri.encodeQueryComponent(focus)}';
+}
+
+/// 聚合页卡片排布（V1.3.2 Story 1.2 · C-8 / UX-DR1 的 2+2+1 规则）：
+/// 按顺序每两张一行（`IntrinsicHeight > Row(stretch) > 2×Expanded`，两卡等高），
+/// 最后落单的一张**整宽**独占一行。后续 story 只往卡片列表里加一项，不必再动布局。
+List<Widget> insightRows(List<Widget> cards, {double gap = 10}) {
+  final rows = <Widget>[];
+  for (var i = 0; i < cards.length; i += 2) {
+    if (rows.isNotEmpty) rows.add(SizedBox(height: gap));
+    if (i + 1 < cards.length) {
+      rows.add(IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: cards[i]),
+            SizedBox(width: gap),
+            Expanded(child: cards[i + 1]),
+          ],
+        ),
+      ));
+    } else {
+      rows.add(SizedBox(width: double.infinity, child: cards[i]));
+    }
+  }
+  return rows;
 }
 
 /// 「Know Your Pet / Kenali Hewanmu」聚合页（FR-65 · AD-A17）。
 ///
-/// ## 🔴 本批次只有两张卡，不预埋任何第三张
-/// 护照（FR-120）与 Tailsonality（FR-117）**不占位、不置灰、不出现**。
-/// 批次 C 上线时它们是**新增卡**，不是"解锁已有占位" —— 所以这里连一个隐藏卡位、
-/// 一个 `enabled: false` 的常量都不许留。一个灰着的「即将推出」就是一句不兑现的承诺。
+/// ## 卡片列表 → 每两张一行、落单整宽（[insightRows]）
+/// V1.3.2 起按 C-8 顺序 KTP / 年龄卡 / 护照 / Tailsonality / 登机牌逐个**新增**；
+/// 尚未上线的卡**不占位、不置灰、不出现** —— 连一个隐藏卡位、一个 `enabled: false` 的常量都不许留。
+/// 一个灰着的「即将推出」就是一句不兑现的承诺。
 ///
 /// ## 非猫狗：原地置灰，不新开页
 /// 年龄换算只有猫狗有公认的换算标准（AD-A18）。其余物种**把年龄卡就地置灰 + 换副文案**，
@@ -58,42 +90,43 @@ class PetInsightsPage extends ConsumerWidget {
       // 页面标题与入口卡标题**同源**（同一个 key），改名时不会只改一处（AC2）。
       appBar: AppBar(title: Text(l10n.petInsightsTitle)),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          // UI 稿 P2：两张**横向**矮卡并排（AC1「与档案页入口卡同一样式」），
-          // 不是竖排高卡的网格。IntrinsicHeight 让两卡等高（文案两语长度不同）。
-          child: IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: InsightEntryCard(
-                    inkKey: const ValueKey('insightIdCard'),
-                    icon: Icons.badge_outlined,
-                    title: l10n.idCardTitle,
-                    // bug 504：KTP 创建入口专属召唤语（原复用 timelineIdCardTapToView，
-                    // 该键 4 处共用、不能改值，故新建键）。
-                    sub: l10n.idCardEntrySub,
-                    onTap: () => context.push(PetInsightsRoutes.idCard),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: InsightEntryCard(
-                    inkKey: const ValueKey('insightAgeCard'),
-                    icon: Icons.calendar_month_outlined,
-                    title: l10n.ageCardTitle,
-                    // 置灰态换掉召唤语：用**正面陈述适用范围**，不用否定式
-                    // （「不支持」听起来像故障），也禁用「即将推出」——这批明确不做。
-                    sub: ageCardEnabled
-                        ? l10n.ageCardEntrySub // bug 503：年龄卡专属副文案
-                        : l10n.ageCardUnavailableForSpecies,
-                    // 🔴 置灰即**彻底不可点**：onTap 为 null，连水波纹都不会有。
-                    onTap: ageCardEnabled ? () => context.push(PetInsightsRoutes.ageCard) : null,
-                  ),
-                ),
-              ],
-            ),
+          // UI 稿 P2：**横向**矮卡两两并排（AC1「与档案页入口卡同一样式」），
+          // 不是竖排高卡的网格。IntrinsicHeight 让同行两卡等高（文案两语长度不同）。
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: insightRows([
+              InsightEntryCard(
+                inkKey: const ValueKey('insightIdCard'),
+                icon: Icons.badge_outlined,
+                title: l10n.idCardTitle,
+                // bug 504：KTP 创建入口专属召唤语（原复用 timelineIdCardTapToView，
+                // 该键 4 处共用、不能改值，故新建键）。
+                sub: l10n.idCardEntrySub,
+                onTap: () => context.push(PetInsightsRoutes.idCard),
+              ),
+              InsightEntryCard(
+                inkKey: const ValueKey('insightAgeCard'),
+                icon: Icons.calendar_month_outlined,
+                title: l10n.ageCardTitle,
+                // 置灰态换掉召唤语：用**正面陈述适用范围**，不用否定式
+                // （「不支持」听起来像故障），也禁用「即将推出」——这批明确不做。
+                sub: ageCardEnabled
+                    ? l10n.ageCardEntrySub // bug 503：年龄卡专属副文案
+                    : l10n.ageCardUnavailableForSpecies,
+                // 🔴 置灰即**彻底不可点**：onTap 为 null，连水波纹都不会有。
+                onTap: ageCardEnabled ? () => context.push(PetInsightsRoutes.ageCard) : null,
+              ),
+              // V1.3.2 Story 1.2：宠物护照，全物种可点（第 2 行落单 → 整宽）。
+              InsightEntryCard(
+                inkKey: const ValueKey('insightPassport'),
+                icon: Icons.menu_book_outlined,
+                title: l10n.passportEntryTitle,
+                sub: l10n.passportEntrySub,
+                onTap: () => context.push(PetInsightsRoutes.passport),
+              ),
+            ]),
           ),
         ),
       ),

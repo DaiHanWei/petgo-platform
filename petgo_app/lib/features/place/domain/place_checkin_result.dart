@@ -14,6 +14,8 @@ class PlaceCheckinResult {
     required this.visitCount,
     this.placeType,
     this.visitDate,
+    this.passportNo,
+    this.stampCount,
   });
 
   /// 本次打卡的不可枚举标识（Story 1.5 顺手发帖时关联用）。
@@ -35,6 +37,12 @@ class PlaceCheckinResult {
   /// 写入后该宠物在这里的打卡总数（= 章的次数）。
   final int visitCount;
 
+  /// 宠物护照号（Story 1.2：首次打卡同一事务内签发）。老后端不下发 → null。
+  final String? passportNo;
+
+  /// 写入后该宠物的章数（Story 1.2；无分母）。老后端不下发 → null。
+  final int? stampCount;
+
   factory PlaceCheckinResult.fromJson(Map<String, dynamic> json) {
     final count = json['visitCount'];
     return PlaceCheckinResult(
@@ -45,6 +53,10 @@ class PlaceCheckinResult {
       visitDate: DateTime.tryParse(json['visitDate']?.toString() ?? ''),
       isNewStamp: json['isNewStamp'] == true,
       visitCount: count is num && count > 0 ? count.toInt() : 1,
+      passportNo: _blankToNull(json['passportNo']?.toString()),
+      stampCount: json['stampCount'] is num ? (json['stampCount'] as num).toInt() : null,
     );
   }
+
+  static String? _blankToNull(String? s) => (s == null || s.isEmpty) ? null : s;
 }

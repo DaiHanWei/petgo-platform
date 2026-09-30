@@ -9,6 +9,7 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../auth/domain/auth_guard.dart';
+import '../../pet_passport/data/pet_passport_repository.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/location_service.dart';
 import '../data/place_repository.dart';
@@ -121,6 +122,9 @@ class _PlaceCheckinButtonState extends ConsumerState<PlaceCheckinButton> {
       );
       _doneLocally = true;
       invalidatePlaceDetailIn(container, widget.token);
+      // Story 1.2 复审：栈里可能已有一个护照页（空态「Cari Tempat」→ 列表 → 打卡），
+      // 不失效的话「Lihat Paspor」拿到的是缓存的旧护照，看不到新章、也定位不到它。
+      container.invalidate(petPassportProvider);
       if (!mounted) return;
       context.push(
         PlaceCheckinSuccessPage.routeFor(result.placeToken.isEmpty ? widget.token : result.placeToken),

@@ -60,7 +60,11 @@ public class AnalyticsEventGuard {
             "shop_payment_user_cancelled",
             // ---- 2026-09-25 KTP 付费漏斗（成功 / 支付侧失败只在服务端报）----
             com.tailtopia.profile.service.KtpUnlockAnalyticsListener.EVENT_SUCCEEDED,
-            com.tailtopia.profile.service.KtpUnlockAnalyticsListener.EVENT_FAILED);
+            com.tailtopia.profile.service.KtpUnlockAnalyticsListener.EVENT_FAILED,
+            // ---- V1.3.2 Story 1.2：场所打卡 / 护照（服务端发，AD-19）----
+            com.tailtopia.passport.service.PassportAnalyticsListener.EVENT_PLACE_CHECKIN,
+            com.tailtopia.passport.service.PassportAnalyticsListener.EVENT_PASSPORT_ISSUED,
+            com.tailtopia.passport.service.PassportAnalyticsListener.EVENT_PASSPORT_STAMPED);
 
     /**
      * 属性键白名单。
@@ -83,7 +87,13 @@ public class AnalyticsEventGuard {
             // ---- 2026-09-25 KTP 付费漏斗：与 App 端同名键，跨端漏斗才拼得起来 ----
             "method",                           // PayChannel 名（PAWCOIN / QRIS）
             "price_idr",                        // long，成交价
-            "failure_reason");                  // PaymentFailureCategory 名
+            "failure_reason",                   // PaymentFailureCategory 名
+            // ---- V1.3.2 Story 1.2：场所打卡 / 护照。🛡 不带宠物名 / 护照号 / 坐标 ----
+            "place_id",                         // 值 = 场所 **token**（不是自增 id），与 App 端同名键
+            "place_type",                       // PlaceType 名
+            "is_new_stamp",                     // boolean
+            "passport_source",                  // KTP / ISSUED
+            "stamp_count");                     // int，已集章数（无分母）
 
     /**
      * 字符串属性值的长度上限。

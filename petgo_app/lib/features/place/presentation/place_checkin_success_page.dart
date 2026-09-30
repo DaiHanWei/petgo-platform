@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
+import '../../profile/presentation/pet_insights_page.dart';
 import '../domain/place_checkin_result.dart';
 import 'widgets/place_stamp_view.dart';
 
@@ -21,8 +23,10 @@ class PlaceCheckinSuccessArgs {
 /// - 新章（C2）：小尺寸章面 + 落章轻反馈（缩放 + 淡入，一次，≤400ms）+「{pet} dapat cap baru」。
 /// - 再访（C2b）：同骨架，章角标「×{n}」跳动一次 +「Cap {place} sekarang {n}×」；**不播整页落章**。
 ///
-/// 底部两个按钮「Lihat Paspor」（Story 1.2）/「Rekam Momen Ini」（Story 1.5）**本 story 不显示**，
-/// 页面只留返回。动效有静态兜底：动画结束态就是可读的章面 + 文案。
+/// 底部按钮行（`bottomNavigationBar` 的一行 `Row`；成功页没有评论输入条，可吸底）：
+/// - 「Lihat Paspor」（Story 1.2）：**仅新章（C2）**出，次级样式 → 护照页停在新章；C2b 不出；
+/// - 「Rekam Momen Ini」主 CTA 由 Story 1.5 在同一行追加并排（D-14）。
+/// 动效有静态兜底：动画结束态就是可读的章面 + 文案。
 class PlaceCheckinSuccessPage extends StatelessWidget {
   const PlaceCheckinSuccessPage({super.key, required this.args});
 
@@ -43,6 +47,28 @@ class PlaceCheckinSuccessPage extends StatelessWidget {
     final date = r.visitDate == null ? null : formatDayMonthYear(context, r.visitDate!);
     return Scaffold(
       backgroundColor: AppColors.cream,
+      bottomNavigationBar: r.isNewStamp
+          ? SafeArea(
+              minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      key: const ValueKey('placeCheckinViewPassport'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        foregroundColor: AppColors.mint,
+                        side: const BorderSide(color: AppColors.mint),
+                      ),
+                      onPressed: () =>
+                          context.push(PetInsightsRoutes.passportFor(focus: r.placeToken)),
+                      child: Text(l10n.placeCheckinViewPassport),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : null,
       appBar: AppBar(
         backgroundColor: AppColors.cream,
         scrolledUnderElevation: 0,

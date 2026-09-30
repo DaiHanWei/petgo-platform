@@ -103,6 +103,14 @@ public class CardNumberService {
         return 0;
     }
 
+    /**
+     * 物种 SP 码的公开转发（V1.3.2 Story 1.2）：宠物护照号源按物种段比对 KTP 卡的护照号。
+     * 规则本身仍在 {@link #speciesCode}，不复制。
+     */
+    public static String speciesCodeOf(String petType) {
+        return speciesCode(petType);
+    }
+
     /** 物种 SP 码：狗 01 / 猫 02 / 其他或未选 00。 */
     static String speciesCode(String petType) {
         if ("DOG".equals(petType)) {

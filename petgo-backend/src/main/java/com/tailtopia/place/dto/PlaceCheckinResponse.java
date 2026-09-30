@@ -16,6 +16,8 @@ import java.time.LocalDate;
  * @param visitDate    打卡的 WIB 自然日
  * @param isNewStamp   本次写入前该宠物在该场所（当前 place_id）无任何打卡 → 新章（C2）；否则 C2b
  * @param visitCount   写入后该宠物在该场所的打卡总数（= 章的次数）
+ * @param passportNo   宠物护照号（Story 1.2：首次打卡时同一事务内签发）
+ * @param stampCount   写入后该宠物的章数 = 不同当前 place_id 数（Story 1.2；无分母）
  */
 public record PlaceCheckinResponse(
         String checkinToken,
@@ -25,5 +27,7 @@ public record PlaceCheckinResponse(
         LocalDate visitDate,
         // 显式钉键名：record 的 boolean 访问器叫 isNewStamp()，不钉的话序列化器可能把它当 bean 属性 newStamp。
         @JsonProperty("isNewStamp") boolean isNewStamp,
-        long visitCount) {
+        long visitCount,
+        String passportNo,
+        int stampCount) {
 }

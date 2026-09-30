@@ -44,6 +44,16 @@ void main() {
       expect(r.visitCount, 1);
     });
 
+    test('Story 1.2：passportNo / stampCount；老后端缺键 → null', () {
+      final r = PlaceCheckinResult.fromJson(
+          {...wire, 'passportNo': 'TT02P2600128', 'stampCount': 4});
+      expect(r.passportNo, 'TT02P2600128');
+      expect(r.stampCount, 4);
+      final old = PlaceCheckinResult.fromJson(Map<String, dynamic>.from(wire));
+      expect(old.passportNo, isNull);
+      expect(old.stampCount, isNull);
+    });
+
     test('再访：isNewStamp=false + 次数', () {
       final r = PlaceCheckinResult.fromJson({...wire, 'isNewStamp': false, 'visitCount': 3});
       expect(r.isNewStamp, isFalse);
@@ -157,6 +167,11 @@ void main() {
       expect(gw.statusReads, 0, reason: '先过登录闸门，定位查询留到登录之后');
     });
 
+    test('复审：打卡成功后失效护照缓存（栈里的护照页能看到新章）', () {
+      final src = File('lib/features/place/presentation/place_checkin_button.dart').readAsStringSync();
+      expect(src.contains('container.invalidate(petPassportProvider)'), isTrue);
+    });
+
     test('🔴 源码：按钮在距离行之后、描述之前；页面仍不挂 bottomNavigationBar', () {
       final src = File('lib/features/place/presentation/place_detail_page.dart').readAsStringSync();
       final distance = src.indexOf('formatPlaceDistance(l10n, p.distanceMeters!)');
@@ -170,7 +185,48 @@ void main() {
   });
 
   group('成功页（AC5）', () {
-    testWidgets('新章（C2）：章面 + 「{pet} dapat cap baru」；无「Lihat Paspor」', (tester) async {
+    testWidgets('Story 1.2 · AC6：点「Lihat Paspor」→ 护照页并停在该章', (tester) async {
+      String? pushed;
+      final router = GoRouter(routes: [
+        GoRoute(
+          path: '/',
+          builder: (c, s) => PlaceCheckinSuccessPage(
+            args: PlaceCheckinSuccessArgs(
+              petName: 'Momo',
+              result: PlaceCheckinResult(
+                checkinToken: 'c' * 32,
+                placeToken: 'p' * 32,
+                placeName: 'Kopi Kucing',
+                placeType: PlaceType.cafe,
+                visitDate: DateTime(2026, 9, 30),
+                isNewStamp: true,
+                visitCount: 1,
+              ),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/profile/pet-insights/passport',
+          builder: (c, s) {
+            pushed = s.uri.toString();
+            return const Scaffold(body: Text('passport'));
+          },
+        ),
+      ]);
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(
+        routerConfig: router,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('id'),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('placeCheckinViewPassport')));
+      await tester.pumpAndSettle();
+      expect(pushed, '/profile/pet-insights/passport?focus=${'p' * 32}');
+    });
+
+    testWidgets('新章（C2）：章面 + 「{pet} dapat cap baru」+「Lihat Paspor」（Story 1.2）', (tester) async {
       await _pumpSuccess(tester, isNew: true, count: 1);
 
       expect(find.byKey(const ValueKey('placeStampPlaceholder')), findsOneWidget,
@@ -178,7 +234,8 @@ void main() {
       expect(find.text('Check-in berhasil!'), findsOneWidget);
       expect(find.text('Momo dapat cap baru'), findsOneWidget);
       expect(find.byKey(const ValueKey('placeCheckinVisitBadge')), findsNothing);
-      expect(find.text('Lihat Paspor'), findsNothing);
+      // Story 1.2 · AC6：仅新章出「Lihat Paspor」；「Rekam Momen Ini」属 Story 1.5。
+      expect(find.text('Lihat Paspor'), findsOneWidget);
       expect(find.text('Rekam Momen Ini'), findsNothing);
     });
 

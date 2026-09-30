@@ -54,6 +54,11 @@ class PlaceCheckinServiceTest {
     private final PlaceCheckinPetRepository checkinPets = mock(PlaceCheckinPetRepository.class);
     private final PetProfileQueryService pets = mock(PetProfileQueryService.class);
     private final PlaceTokenGenerator tokens = new PlaceTokenGenerator();
+    private final com.tailtopia.passport.service.PetPassportService passports =
+            mock(com.tailtopia.passport.service.PetPassportService.class);
+    private final PlaceStampQueryService stamps = mock(PlaceStampQueryService.class);
+    private final org.springframework.context.ApplicationEventPublisher events =
+            mock(org.springframework.context.ApplicationEventPublisher.class);
 
     private Place place;
 
@@ -61,8 +66,8 @@ class PlaceCheckinServiceTest {
     private static final Instant NOON_WIB = Instant.parse("2026-09-30T03:00:00Z");
 
     private PlaceCheckinService serviceAt(Instant now) {
-        return new PlaceCheckinService(places, checkins, checkinPets, pets, tokens,
-                Clock.fixed(now, ZoneOffset.UTC));
+        return new PlaceCheckinService(places, checkins, checkinPets, pets, tokens, passports, stamps,
+                events, Clock.fixed(now, ZoneOffset.UTC));
     }
 
     @BeforeEach
@@ -72,6 +77,11 @@ class PlaceCheckinServiceTest {
         ReflectionTestUtils.setField(place, "id", PLACE_ID);
         when(places.resolveForView(anyString())).thenReturn(Optional.of(place));
         when(pets.findPetIdByOwner(USER)).thenReturn(Optional.of(PET));
+        com.tailtopia.passport.domain.PetPassport pp = org.mockito.Mockito.mock(
+                com.tailtopia.passport.domain.PetPassport.class);
+        when(pp.getPassportNo()).thenReturn("TT02P2600128");
+        when(passports.ensureIssued(PET, USER)).thenReturn(pp);
+        when(stamps.stampCountOf(PET)).thenReturn(4);
         when(checkins.saveAndFlush(any(PlaceCheckin.class))).thenAnswer(inv -> {
             PlaceCheckin c = inv.getArgument(0);
             ReflectionTestUtils.setField(c, "id", 9001L);
@@ -229,6 +239,30 @@ class PlaceCheckinServiceTest {
         PlaceCheckinResponse again = serviceAt(NOON_WIB).checkIn("t", USER, at(LAT));
         assertThat(again.isNewStamp()).isFalse();
         assertThat(again.visitCount()).isEqualTo(3);
+    }
+
+    /** Story 1.2 · AC2：同一事务内签发护照 + 章数；发打卡事件（埋点在 AFTER_COMMIT 消费）。 */
+    @Test
+    void responseCarriesPassportAndStampCountAndPublishesEvent() {
+        when(checkins.countForPetAtPlace(PET, PLACE_ID)).thenReturn(0L, 1L);
+
+        PlaceCheckinResponse r = serviceAt(NOON_WIB).checkIn("t", USER, at(LAT));
+
+        assertThat(r.passportNo()).isEqualTo("TT02P2600128");
+        assertThat(r.stampCount()).isEqualTo(4);
+        verify(passports).ensureIssued(PET, USER);
+        org.mockito.ArgumentCaptor<Object> ev = org.mockito.ArgumentCaptor.forClass(Object.class);
+        verify(events).publishEvent(ev.capture());
+        assertThat(ev.getValue()).isEqualTo(new com.tailtopia.place.event.PlaceCheckedInEvent(
+                USER, place.getPublicToken(), PlaceType.CAFE, true, 4));
+    }
+
+    /** 被拒绝的打卡不签发护照、不发事件。 */
+    @Test
+    void rejectedCheckinDoesNotIssuePassport() {
+        assertThatThrownBy(() -> serviceAt(NOON_WIB).checkIn("t", USER, at(latNorth(501))));
+        verify(passports, never()).ensureIssued(anyLong(), anyLong());
+        verify(events, never()).publishEvent(any(Object.class));
     }
 
     @Test

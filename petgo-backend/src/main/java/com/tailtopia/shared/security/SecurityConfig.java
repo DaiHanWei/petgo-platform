@@ -302,6 +302,9 @@ public class SecurityConfig {
                                 "/api/v1/me/shop-reviews", "/api/v1/me/shop-reviews/**",
                                 "/api/v1/me/shop-returns", "/api/v1/me/shop-returns/**",
                                 "/api/v1/me/shop/**").hasRole("USER")
+                        // 宠物护照（V1.3.2 Story 1.2）：GET 里会签发（写）且 controller 把 jwt.sub 当 users.id 用 ——
+                        // 兽医 token 落到 anyRequest().authenticated() 会以同号用户名义签发 / 读取护照。精确路径，不写通配。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pet-profiles/me/passport").hasRole("USER")
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

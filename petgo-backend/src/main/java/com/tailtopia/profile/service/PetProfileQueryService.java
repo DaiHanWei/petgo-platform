@@ -2,7 +2,9 @@ package com.tailtopia.profile.service;
 
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.dto.PetIdentityView;
+import com.tailtopia.profile.dto.PetPassportSubject;
 import com.tailtopia.profile.dto.PetProfileSnapshot;
+import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -23,9 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class PetProfileQueryService {
 
     private final PetProfileRepository petProfiles;
+    private final IdCardRepository idCards;
 
-    public PetProfileQueryService(PetProfileRepository petProfiles) {
+    public PetProfileQueryService(PetProfileRepository petProfiles, IdCardRepository idCards) {
         this.petProfiles = petProfiles;
+        this.idCards = idCards;
     }
 
     /**
@@ -63,6 +67,24 @@ public class PetProfileQueryService {
     @Transactional(readOnly = true)
     public Optional<Long> findPetIdByOwner(long ownerId) {
         return petProfiles.findByOwnerId(ownerId).map(PetProfile::getId);
+    }
+
+    /** 护照签发用的宠物摘要（V1.3.2 Story 1.2 · AD-6）。单账号单宠物 → 至多一条。 */
+    @Transactional(readOnly = true)
+    public Optional<PetPassportSubject> findPassportSubject(long ownerId) {
+        return petProfiles.findByOwnerId(ownerId).map(p -> new PetPassportSubject(
+                p.getId(), p.getName(), p.getPetType().name(), p.getCreatedAt()));
+    }
+
+    /**
+     * 可沿用的 KTP 护照号（V1.3.2 Story 1.2 · D-6）：条件全在 SQL 里（见
+     * {@link IdCardRepository#findReusableKtpPassportNo}）。<b>只读</b>，不回写 {@code id_cards}。
+     * 在调用方（签发）事务内执行。
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> findReusableKtpPassportNo(long userId, java.time.Instant petCreatedAt,
+            String petType) {
+        return idCards.findReusableKtpPassportNo(userId, petCreatedAt, CardNumberService.speciesCodeOf(petType));
     }
 
     /**

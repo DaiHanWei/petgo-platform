@@ -52,6 +52,10 @@ void main() {
       expect(redirectWouldRewrite(guest, PetInsightsRoutes.hub), isTrue);
       expect(redirectWouldRewrite(guest, PetInsightsRoutes.idCard), isTrue);
       expect(redirectWouldRewrite(guest, PetInsightsRoutes.ageCard), isTrue);
+      // V1.3.2 Story 1.2：护照页同样落在 /profile/ 下、自动受控。
+      expect(PetInsightsRoutes.passport, startsWith('/profile/'));
+      expect(redirectWouldRewrite(guest, PetInsightsRoutes.passport), isTrue);
+      expect(redirectWouldRewrite(guest, PetInsightsRoutes.passportFor(focus: 'abc')), isTrue);
       // 旧路径同样受控 —— 重定向不能变成绕过门控的旁路（AC4 / AD-A17.6）。
       expect(redirectWouldRewrite(guest, '/profile/id-card'), isTrue);
     });
@@ -87,13 +91,14 @@ void main() {
     });
   });
 
-  group('AC2 🔴 只有两张卡，不预埋第三张', () {
+  group('AC2 🔴 KTP / 年龄卡 / 护照三张卡，不预埋尚未上线的卡（V1.3.2 Story 1.2 更新）', () {
     final String pageSrc =
         File('lib/features/profile/presentation/pet_insights_page.dart').readAsStringSync();
 
-    /// 护照与性格测试**不占位、不置灰、不出现**。批次 C 是「新增卡」，
+    /// 性格测试（Story 2.3）**不占位、不置灰、不出现**：它上线时是「新增卡」，
     /// 不是「解锁占位」—— 所以连一个隐藏卡位、一个 enabled:false 的常量都不许留。
-    test('源码里没有护照 / 性格测试的任何痕迹', () {
+    /// 护照已在 V1.3.2 Story 1.2 上线，从禁词里移除。
+    test('源码里没有性格测试 / 即将推出的任何痕迹', () {
       // 只看真正的代码：文档注释里**本来就会**提到这两样（那段话正是在写"为什么不占位"），
       // 扫全文会被自己的解释性注释弄红。
       final code = pageSrc
@@ -101,22 +106,38 @@ void main() {
           .where((l) => !l.trimLeft().startsWith('///') && !l.trimLeft().startsWith('//'))
           .join('\n');
       for (final banned in [
-        'passport',
-        'Passport',
         'tailsonality',
         'Tailsonality',
         'comingSoon',
         'coming_soon',
       ]) {
-        expect(code, isNot(contains(banned)), reason: '$banned 属批次 C，本批次不占位');
+        expect(code, isNot(contains(banned)), reason: '$banned 尚未上线，不占位');
       }
     });
 
-    testWidgets('聚合页就是两张卡', (tester) async {
+    testWidgets('聚合页就是三张卡', (tester) async {
       await _pumpHub(tester, petType: 'CAT');
       expect(find.byKey(const ValueKey('insightIdCard')), findsOneWidget);
       expect(find.byKey(const ValueKey('insightAgeCard')), findsOneWidget);
-      expect(find.byType(InkWell), findsNWidgets(2));
+      expect(find.byKey(const ValueKey('insightPassport')), findsOneWidget);
+      expect(find.byType(InkWell), findsNWidgets(3));
+    });
+
+    /// V1.3.2 Story 1.2 · AC4：2+1 排布 —— 护照整宽独占第二行；全物种可点。
+    testWidgets('护照卡整宽独占第二行、全物种可点', (tester) async {
+      await _pumpHub(tester, petType: 'OTHER');
+      final ktp = tester.getRect(find.byKey(const ValueKey('insightIdCard')));
+      final age = tester.getRect(find.byKey(const ValueKey('insightAgeCard')));
+      final pass = tester.getRect(find.byKey(const ValueKey('insightPassport')));
+      expect(ktp.top, age.top, reason: '第一行两张并排');
+      expect(pass.top, greaterThan(ktp.bottom), reason: '护照在第二行');
+      expect(pass.width, greaterThan(ktp.width * 1.8), reason: '落单整宽');
+      final card = tester.widget<InkWell>(find.byKey(const ValueKey('insightPassport')));
+      expect(card.onTap, isNotNull);
+
+      await tester.tap(find.byKey(const ValueKey('insightPassport')));
+      await tester.pumpAndSettle();
+      expect(find.text('passport'), findsOneWidget);
     });
 
     testWidgets('页面标题与入口卡标题同源', (tester) async {
@@ -222,6 +243,9 @@ Future<void> _pumpHub(
       GoRoute(
           path: PetInsightsRoutes.ageCard,
           builder: (c, s) => const Scaffold(body: Text('age'))),
+      GoRoute(
+          path: PetInsightsRoutes.passport,
+          builder: (c, s) => const Scaffold(body: Text('passport'))),
     ],
   );
   addTearDown(router.dispose);

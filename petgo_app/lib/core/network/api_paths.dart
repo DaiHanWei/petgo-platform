@@ -159,6 +159,9 @@ class ApiPaths {
   /// 宠物身份证数据 / 生成（Story 6.1 后端 · 6.2 前端）。GET 取数据+generated 标志；POST 生成分配流水号（幂等）。
   static const String petProfileIdCard = '$base/pet-profiles/me/id-card';
 
+  /// 宠物护照（V1.3.2 Story 1.2）：GET 里服务端会首次签发（幂等）。仅 role=USER。
+  static const String petPassport = '$base/pet-profiles/me/passport';
+
   /// 身份证高清图付费下载（Story 6.3）。POST 一次性永久解锁（QRIS/PawCoin）；幂等不重复扣费。
   static const String petProfileIdCardHdDownload = '$base/pet-profiles/me/id-card/hd-download';
 
