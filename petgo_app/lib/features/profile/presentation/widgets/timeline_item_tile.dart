@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../tailsonality/domain/content/ts_roles.dart';
+import '../../../tailsonality/presentation/widgets/ts_result_card.dart' show tsRoleArtAsset;
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/utils/date_format.dart';
@@ -64,6 +66,7 @@ class TimelineItemTile extends StatelessWidget {
         item.isConsultRecord ? _consultRow(l10n) : _healthCapsule(context, l10n),
       TimelineItemType.idCardIssued => _idCard(l10n),
       TimelineItemType.placeCheckinBanner => _placeCheckinBanner(l10n),
+      TimelineItemType.tailsonalityBanner => _tailsonalityBanner(context, l10n),
     };
     final tappable = onTap == null
         ? tile
@@ -281,6 +284,70 @@ class TimelineItemTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                       fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===== V1.3.2 Story 3.3 · Tailsonality 解锁通栏（沿用类 ③ banner 结构，专属浅紫底） =====
+
+  Widget _tailsonalityBanner(BuildContext context, AppLocalizations l10n) {
+    final code = item.tailsonalityCode ?? '';
+    final letters = code.split('-').first;
+    final roleName = kTsRoles[letters]?.name;
+    final title = roleName == null ? code : '$code · $roleName';
+    final tested = item.tailsonalityTestedOn;
+    return Semantics(
+      label: title,
+      container: true,
+      child: Container(
+        key: const ValueKey('timelineTailsonalityBanner'),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.tailsonalityBannerBg,
+          border: Border.all(color: AppColors.violet100),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(9),
+              child: SizedBox(
+                width: 40,
+                height: 53, // 3:4 缩略
+                // 包内角色图（2-4 已接入的约定路径）；缺失回落占位，不崩（D-21：设计资产不入库）。
+                child: Image.asset(
+                  tsRoleArtAsset(letters),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Container(
+                    key: const ValueKey('timelineTailsonalityThumbPlaceholder'),
+                    color: AppColors.card,
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.psychology_alt_outlined, size: 22, color: AppColors.mint),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title,
+                      key: const ValueKey('timelineTailsonalityTitle'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                  if (tested != null) ...[
+                    const SizedBox(height: 2),
+                    Text(l10n.timelineTailsonalityTestedOn(formatDayMonth(context, tested)),
+                        style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+                  ],
+                ],
+              ),
             ),
           ],
         ),

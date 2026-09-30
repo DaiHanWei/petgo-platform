@@ -52,6 +52,8 @@ class TailsonalityKeepsakeGranterTest {
         assertThat(granter.grant(5L, 9L)).isEqualTo(GrantOutcome.GRANTED);
         verify(con).releaseSavepoint(sp);
         verify(con, never()).rollback(sp);
+        // Story 3.3 · AC1.2：GRANTED 分支内首次自动佩戴（同一保存点）。
+        verify(jdbc).update(eq(TailsonalityKeepsakeGranter.AUTO_EQUIP), anyMap());
     }
 
     @Test
@@ -59,6 +61,7 @@ class TailsonalityKeepsakeGranterTest {
         when(jdbc.update(startsWith("UPDATE"), anyMap())).thenReturn(0);
         when(jdbc.queryForObject(startsWith("SELECT count"), anyMap(), eq(Integer.class))).thenReturn(1);
         assertThat(granter.grant(5L, 9L)).isEqualTo(GrantOutcome.ALREADY_UNLOCKED);
+        verify(jdbc, never()).update(eq(TailsonalityKeepsakeGranter.AUTO_EQUIP), anyMap());
     }
 
     @Test
@@ -66,6 +69,15 @@ class TailsonalityKeepsakeGranterTest {
         when(jdbc.update(startsWith("UPDATE"), anyMap())).thenReturn(0);
         when(jdbc.queryForObject(startsWith("SELECT count"), anyMap(), eq(Integer.class))).thenReturn(0);
         assertThat(granter.grant(5L, 9L)).isEqualTo(GrantOutcome.REF_MISSING);
+        verify(jdbc, never()).update(eq(TailsonalityKeepsakeGranter.AUTO_EQUIP), anyMap());
+    }
+
+    /** 自动佩戴 SQL 的三条规则写在语句里（真库行为见 L1 IT）：仅首次解锁、不替换、并发不撞主键。 */
+    @Test
+    void autoEquipSqlEncodesFirstUnlockOnlyAndNeverReplaces() {
+        String sql = TailsonalityKeepsakeGranter.AUTO_EQUIP;
+        assertThat(sql).contains("unlocked_at IS NOT NULL) = 1").contains("ON CONFLICT (pet_profile_id) DO NOTHING")
+                .doesNotContain("DO UPDATE");
     }
 
     @Test

@@ -2464,5 +2464,14 @@
   "tailsonalityUnlockedToast": "Hasil sudah kebuka!",
   "tailsonalityEnergyTitle": "Level energi",
   "tailsonalityEnergyHigh": "High",
-  "tailsonalityEnergyLow": "Low"
+  "tailsonalityEnergyLow": "Low",
+  "tailsonalityBadgeEquipped": "Dipakai",
+  "tailsonalityBadgeEquip": "Pakai ini",
+  "tailsonalityBadgeEquipFailed": "Gagal pasang badge, coba lagi",
+  "tailsonalityBadgeRemoveTitle": "Lepas badge?",
+  "tailsonalityBadgeRemoveBody": "Badge {pet} nggak akan tampil di profil.",
+  "@tailsonalityBadgeRemoveBody": {"placeholders": {"pet": {"type": "String"}}},
+  "tailsonalityBadgeRemoveConfirm": "Lepas",
+  "timelineTailsonalityTestedOn": "Dites {date}",
+  "@timelineTailsonalityTestedOn": {"placeholders": {"date": {"type": "String"}}}
 }

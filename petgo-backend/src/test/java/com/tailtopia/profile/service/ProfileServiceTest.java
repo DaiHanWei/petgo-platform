@@ -26,6 +26,8 @@ class ProfileServiceTest {
     private com.tailtopia.shared.media.MediaDeletionService mediaDeletion;
     private ProfileService service;
 
+    private com.tailtopia.tailsonality.service.TailsonalityBadgeQuery tailsonalityBadges;
+
     @BeforeEach
     void setUp() {
         profiles = Mockito.mock(PetProfileRepository.class);
@@ -34,8 +36,11 @@ class ProfileServiceTest {
         profileDeletion = Mockito.mock(ProfileDeletionService.class);
         mediaDeletion = Mockito.mock(com.tailtopia.shared.media.MediaDeletionService.class);
         when(tokenGenerator.generate()).thenReturn("TOKEN_ABC");
+        tailsonalityBadges = Mockito.mock(com.tailtopia.tailsonality.service.TailsonalityBadgeQuery.class);
+        when(tailsonalityBadges.badgeOf(org.mockito.ArgumentMatchers.anyLong())).thenReturn(java.util.Optional.empty());
         service = new ProfileService(profiles, tokenGenerator, milestoneService, profileDeletion,
-                mediaDeletion, Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
+                mediaDeletion, Mockito.mock(org.springframework.context.ApplicationEventPublisher.class),
+                tailsonalityBadges);
     }
 
     private PetProfileCreateRequest req() {

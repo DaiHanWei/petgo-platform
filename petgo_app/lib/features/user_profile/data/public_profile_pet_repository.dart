@@ -11,8 +11,8 @@ import '../../../core/network/dio_client.dart';
 /// B1-D1 否掉了「由主页下发对方宠物的分享链接码」：那是一条**永久公开、可转发到站外**
 /// 的链接。**站内可见 ≠ 可对外分发。** 站内入口按 [petId] 走另一条仅登录可用的地址。
 ///
-/// ## ⚠️ 没有 Tailsonality 角色小标
-/// FR-117 在批次 B2，本批次这个位置是**天然空状态**，**不做占位设计**（AC3 原文）。
+/// ## Tailsonality 角色小标（V1.3.2 Story 3.3）
+/// 佩戴 + 已解锁时服务端下发 4 字母 [tailsonalityBadge]，否则缺键 → null，卡上**不渲染任何占位**。
 class PublicProfilePet {
   const PublicProfilePet({
     required this.petId,
@@ -21,6 +21,7 @@ class PublicProfilePet {
     this.avatarUrl,
     this.petType,
     this.birthday,
+    this.tailsonalityBadge,
   });
 
   /// 拿它进站内访客视图（AD-4 Rule 1 明写按 petId 寻址）。
@@ -39,6 +40,9 @@ class PublicProfilePet {
   /// 该宠物的 Diary 条数。与点进去之后统计条上那个数**同一个实现**。
   final int diaryCount;
 
+  /// 角色小标 4 字母；缺键（老后端 / 未佩戴 / 未解锁）→ null。
+  final String? tailsonalityBadge;
+
   factory PublicProfilePet.fromJson(Map<String, dynamic> json) => PublicProfilePet(
         petId: (json['petId'] as num).toInt(),
         name: (json['name'] ?? '') as String,
@@ -46,6 +50,7 @@ class PublicProfilePet {
         petType: json['petType'] as String?,
         birthday: DateTime.tryParse((json['birthday'] ?? '') as String? ?? ''),
         diaryCount: (json['diaryCount'] ?? 0) as int,
+        tailsonalityBadge: json['tailsonalityBadge'] as String?,
       );
 }
 

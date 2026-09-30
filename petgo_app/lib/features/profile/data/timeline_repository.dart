@@ -45,8 +45,8 @@ abstract class TimelineRepository {
 /// Diary 客户端能力声明（V1.3.2 Story 1.6 · AD-9）：作者态时间线 / 日历 / 日详情请求带 `supports`。
 ///
 /// 后端对未声明的新条目类型一律不下发（老 App 会把未知类型回落成照片卡）。
-/// Story 3.3 往这里追加 `tailsonality`；**访客态请求不带**（访客层不出打卡）。
-const List<String> kTimelineSupports = ['place_checkin'];
+/// V1.3.2 Story 3.3 追加 `tailsonality`；**访客态请求不带**（访客层不出打卡 / Tailsonality 条目）。
+const List<String> kTimelineSupports = ['place_checkin', 'tailsonality'];
 
 class DioTimelineRepository implements TimelineRepository {
   DioTimelineRepository(this.dio);

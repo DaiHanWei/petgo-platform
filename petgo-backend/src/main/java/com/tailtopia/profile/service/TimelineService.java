@@ -76,6 +76,8 @@ public class TimelineService {
     private final IdCardRepository idCards;
     /** V1.3.2 Story 1.6：源⑥ 场所打卡（place 只读口，profile 不直接 join place 表）。 */
     private final com.tailtopia.place.service.PlaceCheckinTimelineQuery placeCheckins;
+    /** V1.3.2 Story 3.3：源⑦ Tailsonality 解锁（tailsonality 只读口，profile 不直接注入其仓库）。 */
+    private final com.tailtopia.tailsonality.service.TailsonalityTimelineQuery tailsonalityUnlocks;
 
     public TimelineService(ProfileService profileService, ContentService contentService,
             ObjectProvider<HealthEventTimelineSource> healthSource,
@@ -83,7 +85,9 @@ public class TimelineService {
             HealthRecordRepository healthRecords,
             MilestoneCompletionRepository milestoneCompletions, IdCardRepository idCards,
             com.tailtopia.content.service.ContentTagQueryService contentTags,
-            com.tailtopia.place.service.PlaceCheckinTimelineQuery placeCheckins) {
+            com.tailtopia.place.service.PlaceCheckinTimelineQuery placeCheckins,
+            com.tailtopia.tailsonality.service.TailsonalityTimelineQuery tailsonalityUnlocks) {
+        this.tailsonalityUnlocks = tailsonalityUnlocks;
         this.profileService = profileService;
         this.placeCheckins = placeCheckins;
         this.contentTags = contentTags;
@@ -321,6 +325,20 @@ public class TimelineService {
             merged.addAll(checkinBanners(ownerId, petId, checkins));
         }
 
+        // ===== 源⑦ Tailsonality 解锁（V1.3.2 Story 3.3 · AD-9；只在客户端声明 tailsonality 时取）=====
+        // 单键上界：有效日期 = unlocked_at 的 UTC 日，写法同源④ / 源⑥。
+        if (caps.tailsonality()) {
+            List<com.tailtopia.tailsonality.dto.TailsonalityTimelineView> unlocks =
+                    tailsonalityUnlocks.findForPetBefore(petId, anchor.createdAtUpperBound(), fetch);
+            if (unlocks.size() >= fetch) {
+                allKnown = false;
+                var last = unlocks.get(unlocks.size() - 1);
+                floor = newestFloor(floor, new TimelineAnchor(
+                        last.unlockedAt().atZone(ZoneOffset.UTC).toLocalDate(), last.unlockedAt()));
+            }
+            merged.addAll(tailsonalityBanners(unlocks));
+        }
+
         merged.sort(TIMELINE_ORDER);
         return new Batch(merged, allKnown, floor);
     }
@@ -502,6 +520,19 @@ public class TimelineService {
             }
         }
 
+        // V1.3.2 Story 3.3：Tailsonality 维在打卡维之后并入（前面的七参重建会丢掉第八维）；只有它的日子新建格子。
+        if (caps.tailsonality()) {
+            for (var t : tailsonalityUnlocks.findForPetInUtcRange(profile.getId(), from, to.plusDays(1))) {
+                int day = t.unlockedAt().atZone(ZoneOffset.UTC).getDayOfMonth();
+                CalendarMonthResponse.DayCell c = byDay.get(day);
+                byDay.put(day, c == null
+                        ? new CalendarMonthResponse.DayCell(day, null, false, false, null, 0, null, true)
+                        : new CalendarMonthResponse.DayCell(day, c.firstImageUrl(), c.hasHappyMoment(),
+                                c.hasHealthEvent(), c.healthRecordType(), c.healthRecordCount(),
+                                c.hasPlaceCheckin(), true));
+            }
+        }
+
         return new CalendarMonthResponse(year, month, List.copyOf(byDay.values()));
     }
 
@@ -544,7 +575,10 @@ public class TimelineService {
             items.addAll(checkinBanners(ownerId, profile.getId(),
                     placeCheckins.findForPetOnUtcDate(profile.getId(), date)));
         }
-        // 大类优先级：diary(0) > 问诊(1) > 健康记录(2) > 打卡(3)；类内按时间正序。
+        if (caps.tailsonality()) {
+            items.addAll(tailsonalityBanners(tailsonalityUnlocks.findForPetOnUtcDate(profile.getId(), date)));
+        }
+        // 大类优先级：diary(0) > 问诊(1) > 健康记录(2) > 打卡(3) > Tailsonality(4)；类内按时间正序。
         items.sort(Comparator.comparingInt(TimelineService::dayDetailCategory)
                 .thenComparing(TimelineItemResponse::date));
         return new DayDetailResponse(date, attachDecorationTags(items));
@@ -583,6 +617,9 @@ public class TimelineService {
         if (TimelineItemResponse.PLACE_CHECKIN.equals(item.kind())) {
             return 3; // V1.3.2 Story 1.6：排在健康记录之后
         }
+        if (TimelineItemResponse.TAILSONALITY.equals(item.kind())) {
+            return 4; // V1.3.2 Story 3.3：排在打卡之后
+        }
         return 0; // 快乐时刻（含类②）
     }
 
@@ -603,6 +640,16 @@ public class TimelineService {
                 out.add(TimelineItemResponse.placeCheckinBanner(c.checkedAt(), c.placeToken(), c.placeName(),
                         c.placeStatus()));
             }
+        }
+        return out;
+    }
+
+    /** Tailsonality 解锁 → 通栏条目（V1.3.2 Story 3.3）。无去重规则：多次解锁多条并存。 */
+    private static List<TimelineItemResponse> tailsonalityBanners(
+            List<com.tailtopia.tailsonality.dto.TailsonalityTimelineView> unlocks) {
+        List<TimelineItemResponse> out = new ArrayList<>(unlocks.size());
+        for (var t : unlocks) {
+            out.add(TimelineItemResponse.tailsonalityBanner(t.unlockedAt(), t.resultToken(), t.code(), t.testedOn()));
         }
         return out;
     }

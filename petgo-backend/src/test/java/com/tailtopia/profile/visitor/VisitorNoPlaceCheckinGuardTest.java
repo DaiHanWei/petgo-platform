@@ -26,7 +26,10 @@ class VisitorNoPlaceCheckinGuardTest {
                     .filter(l -> !l.trim().startsWith("*") && !l.trim().startsWith("//") && !l.trim().startsWith("/*"))
                     .reduce("", (a, b) -> a + "\n" + b);
             assertThat(code).as(f).doesNotContain("PLACE_CHECKIN").doesNotContain("PlaceCheckinTimelineQuery")
-                    .doesNotContain("supports").doesNotContain("TimelineCapabilities").doesNotContain("checkinPlace");
+                    .doesNotContain("supports").doesNotContain("TimelineCapabilities").doesNotContain("checkinPlace")
+                    // V1.3.2 Story 3.3 · AC6.5：Tailsonality 条目同样不进访客态。
+                    .doesNotContain("TAILSONALITY_BANNER").doesNotContain("TailsonalityTimelineQuery")
+                    .doesNotContain("tailsonalityResultToken");
         }
     }
 }

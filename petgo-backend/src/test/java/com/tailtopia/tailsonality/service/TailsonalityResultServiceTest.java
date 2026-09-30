@@ -42,6 +42,7 @@ class TailsonalityResultServiceTest {
     private PetProfileQueryService pets;
     private TailsonalityTokenGenerator tokens;
     private TailsonalityResultService service;
+    private com.tailtopia.tailsonality.repository.TailsonalityBadgeRepository badges;
     private final List<TailsonalityResult> stored = new ArrayList<>();
 
     @BeforeEach
@@ -58,7 +59,9 @@ class TailsonalityResultServiceTest {
             return r;
         });
         when(repo.findByPetProfileIdOrderByCreatedAtDescIdDesc(PET)).thenAnswer(inv -> List.copyOf(stored));
-        service = new TailsonalityResultService(repo, pets, tokens,
+        badges = mock(com.tailtopia.tailsonality.repository.TailsonalityBadgeRepository.class);
+        when(badges.findResultIdByPetProfileId(PET)).thenReturn(Optional.empty());
+        service = new TailsonalityResultService(repo, pets, tokens, badges,
                 Clock.fixed(Instant.parse("2026-09-30T08:00:00Z"), ZoneOffset.UTC));
     }
 
@@ -188,5 +191,19 @@ class TailsonalityResultServiceTest {
         TailsonalityResult r = TailsonalityResult.create("x", 1, 2, TailsonalityQuestionSet.DOG,
                 Map.of("Q1", 0), new TailsonalityCode("ISTP", "L"), 1, Instant.EPOCH);
         assertThat(r.code().full()).isEqualTo("ISTP-L");
+    }
+
+    /** V1.3.2 Story 3.3 · AC2.5：列表与单条的 equipped = 佩戴行 result_id 等于本结果 id。 */
+    @Test
+    void equippedFlagFollowsBadgeRow() {
+        service.submit(USER, body(0));
+        service.submit(USER, body(1));
+        long firstId = stored.get(1).getId();
+        when(badges.findResultIdByPetProfileId(PET)).thenReturn(Optional.of(firstId));
+        var items = service.list(USER).items();
+        assertThat(items.get(0).equipped()).isFalse();
+        assertThat(items.get(1).equipped()).isTrue();
+        when(repo.findByPublicTokenAndPetProfileId("x", PET)).thenReturn(Optional.of(stored.get(1)));
+        assertThat(service.get(USER, "x").equipped()).isTrue();
     }
 }

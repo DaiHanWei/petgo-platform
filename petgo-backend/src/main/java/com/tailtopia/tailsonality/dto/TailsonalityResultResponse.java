@@ -12,6 +12,7 @@ import java.time.Instant;
  * @param letters     四字母 {@code ENTJ}
  * @param resultIndex 同宠物按 {@code created_at} 升序的 1 起序号，现算不落库
  * @param unlockedAt  null 时按全局 {@code non_null} 省略
+ * @param equipped    当前宠物佩戴的就是本结果（Story 3.3 · AC2.5；佩戴行 {@code result_id} = 本结果 id）
  */
 public record TailsonalityResultResponse(
         String token,
@@ -23,9 +24,10 @@ public record TailsonalityResultResponse(
         boolean unlocked,
         Instant unlockedAt,
         int contentVersion,
-        Instant createdAt) {
+        Instant createdAt,
+        boolean equipped) {
 
-    public static TailsonalityResultResponse of(TailsonalityResult r, int resultIndex) {
+    public static TailsonalityResultResponse of(TailsonalityResult r, int resultIndex, boolean equipped) {
         return new TailsonalityResultResponse(
                 r.getPublicToken(),
                 r.code().full(),
@@ -36,6 +38,7 @@ public record TailsonalityResultResponse(
                 r.getUnlockedAt() != null,
                 r.getUnlockedAt(),
                 r.getContentVersion(),
-                r.getCreatedAt());
+                r.getCreatedAt(),
+                equipped);
     }
 }

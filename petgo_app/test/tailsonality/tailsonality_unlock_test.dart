@@ -40,8 +40,10 @@ void main() {
   const pricing = KeepsakePricing(ktpHd: 10000, passportSnapshot: 2000, boardingPass: 1000, tailsonality: 5000);
 
   late List<(String, Map<String, Object>?)> events;
+  var petLoads = 0;
   setUp(() {
     events = [];
+    petLoads = 0;
     Analytics.debugCaptureSink = (e, p) => events.add((e, p));
     SharedPreferences.setMockInitialValues({});
   });
@@ -62,8 +64,10 @@ void main() {
     await tester.pumpWidget(ProviderScope(
       retry: (_, _) => null,
       overrides: [
-        petProfileProvider.overrideWith((ref) async =>
-            const PetProfile(id: 1, name: 'Momo', cardToken: 't', petType: 'CAT', breed: 'Anggora')),
+        petProfileProvider.overrideWith((ref) async {
+          petLoads++;
+          return const PetProfile(id: 1, name: 'Momo', cardToken: 't', petType: 'CAT', breed: 'Anggora');
+        }),
         tailsonalityOwnerTypeRepositoryProvider.overrideWithValue(_OwnerRepo()),
         tailsonalityRepositoryProvider.overrideWithValue(r),
         keepsakePricingProvider.overrideWith((ref) => (price ?? () async => pricing)()),
@@ -128,6 +132,7 @@ void main() {
 
       expect(repo.unlockCalls, [HdPayChannel.pawcoin]);
       expect(find.text('Hasil sudah kebuka!'), findsOneWidget);
+      expect(petLoads, greaterThanOrEqualTo(2), reason: 'Story 3.3：解锁后重取档案（自动佩戴的小标）');
       expect(find.byType(TsLockedAnalysis), findsNothing);
       expect(find.byType(TsUnlockedAnalysis), findsOneWidget);
       expect(find.byType(CardWatermark), findsNothing);

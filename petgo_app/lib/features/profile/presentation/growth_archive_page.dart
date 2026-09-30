@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../tailsonality/presentation/tailsonality_routes.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -808,6 +809,15 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
         };
       case TimelineItemType.placeCheckinBanner:
         return placeCheckinTapFor(context, item, report: report);
+      case TimelineItemType.tailsonalityBanner:
+        // V1.3.2 Story 3.3：进该次结果页（作者态才有此条目；token 缺失则不可点）。
+        final token = item.tailsonalityResultToken;
+        return token == null
+            ? null
+            : () {
+                report();
+                context.push(TailsonalityRoutes.result(token));
+              };
     }
   }
 

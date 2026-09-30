@@ -72,7 +72,7 @@ void main() {
   group('AC3 itemType 词表（前后端契约，Story 3.2 后端须采纳）', () {
     // V1.3.2 Story 1.6：词表末尾同名追加 PLACE_CHECKIN_BANNER（与后端 TimelineItemType 末尾一致，AD-9）。
     // 既有五值的顺序与字面量不变。
-    test('五类原值 + 打卡条目，线格式为约定的 UPPER_SNAKE 字面量', () {
+    test('五类原值 + 打卡 / Tailsonality 条目，线格式为约定的 UPPER_SNAKE 字面量', () {
       expect(TimelineItemType.values.map((t) => t.wire).toList(), <String>[
         'HAPPY_MOMENT',
         'HAPPY_MOMENT_MILESTONE',
@@ -80,6 +80,8 @@ void main() {
         'HEALTH_RECORD',
         'ID_CARD_ISSUED',
         'PLACE_CHECKIN_BANNER',
+        // V1.3.2 Story 3.3：末尾同名追加（与后端一致）。
+        'TAILSONALITY_BANNER',
       ]);
     });
 

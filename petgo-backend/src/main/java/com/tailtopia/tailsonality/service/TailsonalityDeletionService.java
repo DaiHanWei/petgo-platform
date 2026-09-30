@@ -1,5 +1,6 @@
 package com.tailtopia.tailsonality.service;
 
+import com.tailtopia.tailsonality.repository.TailsonalityBadgeRepository;
 import com.tailtopia.tailsonality.repository.TailsonalityOwnerTypeRepository;
 import com.tailtopia.tailsonality.repository.TailsonalityResultRepository;
 import org.springframework.stereotype.Service;
@@ -20,15 +21,19 @@ public class TailsonalityDeletionService {
 
     private final TailsonalityResultRepository results;
     private final TailsonalityOwnerTypeRepository ownerTypes;
+    private final TailsonalityBadgeRepository badges;
 
     public TailsonalityDeletionService(TailsonalityResultRepository results,
-            TailsonalityOwnerTypeRepository ownerTypes) {
+            TailsonalityOwnerTypeRepository ownerTypes, TailsonalityBadgeRepository badges) {
         this.results = results;
         this.ownerTypes = ownerTypes;
+        this.badges = badges;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void deleteForPet(long petId) {
+        // Story 3.3 · AC8：佩戴先于结果删（FK 虽 ON DELETE CASCADE，显式删更清晰）。
+        badges.deleteByPetProfileId(petId);
         results.deleteByPetProfileId(petId);
     }
 

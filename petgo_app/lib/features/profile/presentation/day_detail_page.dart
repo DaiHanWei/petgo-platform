@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../tailsonality/presentation/tailsonality_routes.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../shared/widgets/app_toast.dart';
@@ -65,6 +66,17 @@ class DayDetailPage extends ConsumerWidget {
         key: const ValueKey('dayItem_placeCheckin'),
         item: item,
         onTap: token == null ? placeCheckinTapFor(context, item) : null,
+      );
+    }
+    // V1.3.2 Story 3.3：Tailsonality 条目同理先判；访客态不下发，万一出现也不给点击。
+    if (item.resolvedType == TimelineItemType.tailsonalityBanner) {
+      final resultToken = item.tailsonalityResultToken;
+      return TimelineItemTile(
+        key: const ValueKey('dayItem_tailsonality'),
+        item: item,
+        onTap: token == null && resultToken != null
+            ? () => context.push(TailsonalityRoutes.result(resultToken))
+            : null,
       );
     }
     if (item.kind == TimelineKind.healthEvent) {

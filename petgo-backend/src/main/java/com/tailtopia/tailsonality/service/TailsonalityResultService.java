@@ -10,6 +10,7 @@ import com.tailtopia.tailsonality.domain.TailsonalityResult;
 import com.tailtopia.tailsonality.domain.TailsonalityScorer;
 import com.tailtopia.tailsonality.dto.TailsonalityResultListResponse;
 import com.tailtopia.tailsonality.dto.TailsonalityResultResponse;
+import com.tailtopia.tailsonality.repository.TailsonalityBadgeRepository;
 import com.tailtopia.tailsonality.repository.TailsonalityResultRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -38,19 +39,21 @@ public class TailsonalityResultService {
     private final TailsonalityResultRepository results;
     private final PetProfileQueryService pets;
     private final TailsonalityTokenGenerator tokens;
+    private final TailsonalityBadgeRepository badges;
     private final Clock clock;
 
     @Autowired
     public TailsonalityResultService(TailsonalityResultRepository results, PetProfileQueryService pets,
-            TailsonalityTokenGenerator tokens) {
-        this(results, pets, tokens, Clock.systemUTC());
+            TailsonalityTokenGenerator tokens, TailsonalityBadgeRepository badges) {
+        this(results, pets, tokens, badges, Clock.systemUTC());
     }
 
     TailsonalityResultService(TailsonalityResultRepository results, PetProfileQueryService pets,
-            TailsonalityTokenGenerator tokens, Clock clock) {
+            TailsonalityTokenGenerator tokens, TailsonalityBadgeRepository badges, Clock clock) {
         this.results = results;
         this.pets = pets;
         this.tokens = tokens;
+        this.badges = badges;
         this.clock = clock;
     }
 
@@ -64,17 +67,20 @@ public class TailsonalityResultService {
                 set, answers, code, CONTENT_VERSION, Instant.now(clock)));
         // resultIndex 按新行在 (created_at, id) 序里的位置算，不用「总条数」：并发提交（双击重试 / 两台设备）时
         // 总条数可能已含对方的行，提交响应会与之后列表 / 单条读到的序号不一致。
-        return TailsonalityResultResponse.of(saved, indexOf(pet.petId(), saved.getId()));
+        // 新结果恒为锁态，不可能正被佩戴。
+        return TailsonalityResultResponse.of(saved, indexOf(pet.petId(), saved.getId()), false);
     }
 
     @Transactional(readOnly = true)
     public TailsonalityResultListResponse list(long userId) {
         OwnedPetRef pet = requirePet(userId);
         List<TailsonalityResult> rows = results.findByPetProfileIdOrderByCreatedAtDescIdDesc(pet.petId());
+        Long equippedId = badges.findResultIdByPetProfileId(pet.petId()).orElse(null);
         List<TailsonalityResultResponse> items = new ArrayList<>(rows.size());
         for (int i = 0; i < rows.size(); i++) {
             // 新 → 旧排列；最旧一条序号 1。
-            items.add(TailsonalityResultResponse.of(rows.get(i), rows.size() - i));
+            TailsonalityResult r = rows.get(i);
+            items.add(TailsonalityResultResponse.of(r, rows.size() - i, r.getId().equals(equippedId)));
         }
         return new TailsonalityResultListResponse(items);
     }
@@ -85,7 +91,8 @@ public class TailsonalityResultService {
         OwnedPetRef pet = requirePet(userId);
         TailsonalityResult row = results.findByPublicTokenAndPetProfileId(token, pet.petId())
                 .orElseThrow(() -> AppException.notFound("结果不存在"));
-        return TailsonalityResultResponse.of(row, indexOf(pet.petId(), row.getId()));
+        boolean equipped = badges.findResultIdByPetProfileId(pet.petId()).map(row.getId()::equals).orElse(false);
+        return TailsonalityResultResponse.of(row, indexOf(pet.petId(), row.getId()), equipped);
     }
 
     /** 1 起序号：该宠物结果按 created_at 升序（同刻按 id）中本行的位置；与 {@link #list} 同一排序口径。 */

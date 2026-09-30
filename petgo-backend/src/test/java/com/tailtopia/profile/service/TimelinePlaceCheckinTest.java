@@ -36,6 +36,9 @@ import org.springframework.beans.factory.ObjectProvider;
  */
 class TimelinePlaceCheckinTest {
 
+    private final com.tailtopia.tailsonality.service.TailsonalityTimelineQuery tailsonalityTimeline =
+            Mockito.mock(com.tailtopia.tailsonality.service.TailsonalityTimelineQuery.class);
+
     private static final long OWNER = 1L;
     private static final long PET = 1L;
     private static final TimelineCapabilities CHECKIN =
@@ -67,7 +70,9 @@ class TimelinePlaceCheckinTest {
         service = new TimelineService(profileService, contentService, healthProvider,
                 Mockito.mock(MilestoneService.class), Mockito.mock(MilestoneCelebrationService.class),
                 healthRecords, completions, idCards,
-                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class), checkins);
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class), checkins,
+                // V1.3.2 Story 3.3：源⑦ Tailsonality 解锁（不声明能力时根本不调）。
+                tailsonalityTimeline);
     }
 
     private static PlaceCheckinTimelineView checkin(long id, String iso, String status) {

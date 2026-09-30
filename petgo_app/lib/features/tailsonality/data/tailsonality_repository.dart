@@ -42,6 +42,16 @@ class TailsonalityRepository {
         data: {'channel': channel.wire});
     return KeepsakePurchaseResult.fromJson(resp.data ?? const {});
   }
+
+  /// 佩戴某个已解锁结果（Story 3.3）；未解锁 422 `tailsonality-badge-locked`。
+  Future<void> equipBadge(String resultToken) async {
+    await dio.put<void>(ApiPaths.tailsonalityBadge, data: {'resultToken': resultToken});
+  }
+
+  /// 卸下（D-16）：幂等。
+  Future<void> unequipBadge() async {
+    await dio.delete<void>(ApiPaths.tailsonalityBadge);
+  }
 }
 
 final tailsonalityRepositoryProvider =

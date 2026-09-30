@@ -59,6 +59,8 @@ public final class ErrorTypes {
 
     /** V1.3.2 Story 3.1：一次性解锁对象已解锁 / 已付款，无需（不能）再次购买（409）。 */
     public static final URI KEEPSAKE_ALREADY_UNLOCKED = URI.create(BASE + "keepsake-already-unlocked");
+    /** V1.3.2 Story 3.3：佩戴未解锁的 Tailsonality 结果（422）。 */
+    public static final URI TAILSONALITY_BADGE_LOCKED = URI.create(BASE + "tailsonality-badge-locked");
 
     private ErrorTypes() {
     }

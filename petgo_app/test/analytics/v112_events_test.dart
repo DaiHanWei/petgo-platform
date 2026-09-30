@@ -399,6 +399,9 @@ void main() {
         // 配型页（入口在结果页引流卡），与被动曝光的 `_viewed` 分开 —— 这条是配型漏斗的第一格。名字由 PRD §4 定死。
         // 用户在付费抽屉里选定渠道并确认（V1.3.2 batch-a Story 3.2 `tailsonality_unlock_initiated`）：
         // `_initiated` = 发起付款（尚未成交；成交只由服务端报 `_unlocked`），与 `_started`（流程开头）区分。
+        // 用户把一个已解锁结果设为展示中的角色小标（V1.3.2 batch-a Story 3.3 `tailsonality_badge_equipped`）：
+        // `_equipped` = **服务端确认成功后**才报，与 `_selected`（界面上选中）区分。
+        '_equipped',
         '_initiated',
         // 用户在挽留弹窗里明确放弃（V1.3.2 batch-a Story 3.2 `tailsonality_paywall_abandoned`）：
         // `_abandoned` = 看过付费墙后主动离开，与 `_dismissed`（关掉提示）语义不同。

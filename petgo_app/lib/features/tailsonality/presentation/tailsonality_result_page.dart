@@ -194,6 +194,8 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
       // 已解锁判定只看服务端：刷新结果（与列表），由服务端的 `unlocked` 切换页面。
       ref.invalidate(tailsonalityResultProvider(r.token));
       ref.invalidate(tailsonalityResultsProvider);
+      // Story 3.3：首次解锁服务端会自动佩戴 → 档案卡小标要重取（全局 keep-alive provider，不刷就一直是旧的）。
+      ref.invalidate(petProfileProvider);
       if (outcome == KeepsakeFlowOutcome.unlocked) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.tailsonalityUnlockedToast)));
       }

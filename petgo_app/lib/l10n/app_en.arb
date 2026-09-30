@@ -3805,5 +3805,14 @@
   "tailsonalityUnlockedToast": "Result unlocked!",
   "tailsonalityEnergyTitle": "Energy level",
   "tailsonalityEnergyHigh": "High",
-  "tailsonalityEnergyLow": "Low"
+  "tailsonalityEnergyLow": "Low",
+  "tailsonalityBadgeEquipped": "Wearing",
+  "tailsonalityBadgeEquip": "Wear this",
+  "tailsonalityBadgeEquipFailed": "Couldn't set the badge, try again",
+  "tailsonalityBadgeRemoveTitle": "Remove badge?",
+  "tailsonalityBadgeRemoveBody": "{pet}'s badge won't show on the profile.",
+  "@tailsonalityBadgeRemoveBody": {"placeholders": {"pet": {"type": "String"}}},
+  "tailsonalityBadgeRemoveConfirm": "Remove",
+  "timelineTailsonalityTestedOn": "Tested {date}",
+  "@timelineTailsonalityTestedOn": {"placeholders": {"date": {"type": "String"}}}
 }

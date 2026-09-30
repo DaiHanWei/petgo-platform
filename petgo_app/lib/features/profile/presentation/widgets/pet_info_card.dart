@@ -5,6 +5,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_image.dart';
 import '../../domain/pet_age.dart';
 import '../../domain/pet_header_info.dart';
+import '../../../tailsonality/presentation/widgets/tailsonality_badge_chip.dart';
 
 /// 宠物护照卡（Story 2.4 · paspor.html 1:1 还原）。
 ///
@@ -106,9 +107,23 @@ class PetInfoCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(profile.name,
-                        style: const TextStyle(
-                            fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(profile.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                        ),
+                        // V1.3.2 Story 3.3：佩戴 + 已解锁才有；null 不渲染任何占位。
+                        if (profile.tailsonalityBadge != null) ...[
+                          const SizedBox(width: 6),
+                          TailsonalityBadgeChip(
+                              key: const ValueKey('petInfoTailsonality'), letters: profile.tailsonalityBadge),
+                        ],
+                      ],
+                    ),
                     if (sub.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(sub,

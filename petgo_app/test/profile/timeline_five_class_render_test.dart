@@ -134,9 +134,12 @@ void main() {
       // 五类各自的 tile 形态都出现了，且与游客侧是同一批 key（同一组件产出）
       // V1.3.2 Story 1.6：打卡条目（placeCheckinBanner）**不进**游客示例——示例以 UI 稿 A1 的 9 条为权威，
       // A1 没有打卡条目；组件复用已由同一个 TimelineItemTile 保证（见下方「打卡条目」组）。
-      expect(demoTypes,
-          containsAll(TimelineItemType.values.where((t) => t != TimelineItemType.placeCheckinBanner)));
-      expect(demoTypes, isNot(contains(TimelineItemType.placeCheckinBanner)));
+      // V1.3.2 Story 3.3：Tailsonality 条目同理不进游客示例（本 story 不新增示例数据）。
+      const notInDemo = {TimelineItemType.placeCheckinBanner, TimelineItemType.tailsonalityBanner};
+      expect(demoTypes, containsAll(TimelineItemType.values.where((t) => !notInDemo.contains(t))));
+      for (final t in notInDemo) {
+        expect(demoTypes, isNot(contains(t)));
+      }
       expect(find.byKey(const ValueKey('timelineMilestoneBanner')), findsOneWidget);
       expect(find.byKey(const ValueKey('timelineIdCard')), findsOneWidget);
       expect(find.byKey(const ValueKey('timelineMilestoneStamp')), findsOneWidget);

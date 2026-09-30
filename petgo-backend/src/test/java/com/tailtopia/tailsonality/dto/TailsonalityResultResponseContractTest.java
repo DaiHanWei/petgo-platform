@@ -23,7 +23,9 @@ class TailsonalityResultResponseContractTest {
 
     static final Set<String> FULL_FIELDS = Set.of(
             "token", "typeCode", "letters", "energy", "questionSet", "resultIndex",
-            "unlocked", "unlockedAt", "contentVersion", "createdAt");
+            "unlocked", "unlockedAt", "contentVersion", "createdAt",
+            // V1.3.2 Story 3.3：是否正被佩戴。
+            "equipped");
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> wire(Object dto) {
@@ -33,17 +35,18 @@ class TailsonalityResultResponseContractTest {
     @Test
     void unlockedResultHasExactlyContractFields() {
         var dto = new TailsonalityResultResponse("t".repeat(32), "ENTJ-H", "ENTJ", "H", "CAT", 2, true,
-                Instant.parse("2026-09-30T09:00:00Z"), 1, Instant.parse("2026-09-30T08:00:00Z"));
+                Instant.parse("2026-09-30T09:00:00Z"), 1, Instant.parse("2026-09-30T08:00:00Z"), true);
         Map<String, Object> m = wire(dto);
         assertThat(m.keySet()).isEqualTo(FULL_FIELDS);
         assertThat(m.get("typeCode")).isEqualTo("ENTJ-H");
         assertThat(m.get("resultIndex")).isEqualTo(2);
+        assertThat(m.get("equipped")).isEqualTo(true);
     }
 
     @Test
     void lockedResultOmitsUnlockedAtAndNeverCarriesAnswersOrScores() {
         var dto = new TailsonalityResultResponse("t".repeat(32), "ISTP-L", "ISTP", "L", "GENERAL", 1, false,
-                null, 1, Instant.parse("2026-09-30T08:00:00Z"));
+                null, 1, Instant.parse("2026-09-30T08:00:00Z"), false);
         Map<String, Object> m = wire(dto);
         assertThat(m).doesNotContainKey("unlockedAt");
         assertThat(m.get("unlocked")).isEqualTo(false);

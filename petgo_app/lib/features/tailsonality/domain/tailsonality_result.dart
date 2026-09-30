@@ -14,6 +14,7 @@ class TailsonalityResult {
     this.unlockedAt,
     required this.contentVersion,
     required this.createdAt,
+    this.equipped = false,
   });
 
   /// 不可枚举对外标识（32 位）。
@@ -43,6 +44,9 @@ class TailsonalityResult {
   final int contentVersion;
   final DateTime createdAt;
 
+  /// 当前宠物佩戴的就是本结果（V1.3.2 Story 3.3）。缺键 / 非 bool → false。
+  final bool equipped;
+
   factory TailsonalityResult.fromJson(Map<String, dynamic> json) {
     final rawUnlockedAt = json['unlockedAt'];
     return TailsonalityResult(
@@ -56,6 +60,7 @@ class TailsonalityResult {
       unlockedAt: rawUnlockedAt is String ? DateTime.parse(rawUnlockedAt) : null,
       contentVersion: (json['contentVersion'] as num?)?.toInt() ?? 1,
       createdAt: DateTime.parse(json['createdAt'] as String),
+      equipped: json['equipped'] == true,
     );
   }
 }

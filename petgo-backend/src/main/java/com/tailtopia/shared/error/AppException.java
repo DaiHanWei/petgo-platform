@@ -164,4 +164,9 @@ public class AppException extends RuntimeException {
     public static AppException keepsakeAlreadyUnlocked(String detail) {
         return new AppException(HttpStatus.CONFLICT, ErrorTypes.KEEPSAKE_ALREADY_UNLOCKED, detail);
     }
+
+    /** V1.3.2 Story 3.3：佩戴未解锁结果 → 422 {@code tailsonality-badge-locked}。 */
+    public static AppException tailsonalityBadgeLocked(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.TAILSONALITY_BADGE_LOCKED, detail);
+    }
 }

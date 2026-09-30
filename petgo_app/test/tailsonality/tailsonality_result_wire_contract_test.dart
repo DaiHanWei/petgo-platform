@@ -11,6 +11,8 @@ void main() {
   const fullFields = {
     'token', 'typeCode', 'letters', 'energy', 'questionSet', 'resultIndex',
     'unlocked', 'unlockedAt', 'contentVersion', 'createdAt',
+    // V1.3.2 Story 3.3
+    'equipped',
   };
 
   Map<String, dynamic> fixture() => {
@@ -24,6 +26,7 @@ void main() {
         'unlockedAt': '2026-09-30T09:00:00Z',
         'contentVersion': 1,
         'createdAt': '2026-09-30T08:00:00Z',
+        'equipped': true,
       };
 
   test('fixture 与后端 FULL_FIELDS 同集，全字段解析', () {
@@ -39,6 +42,8 @@ void main() {
     expect(r.unlockedAt, DateTime.parse('2026-09-30T09:00:00Z'));
     expect(r.contentVersion, 1);
     expect(r.createdAt, DateTime.parse('2026-09-30T08:00:00Z'));
+    expect(r.equipped, isTrue);
+    expect(TailsonalityResult.fromJson(fixture()..remove('equipped')).equipped, isFalse);
   });
 
   test('缺 unlockedAt → null', () {

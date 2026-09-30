@@ -51,7 +51,7 @@ class ProfileApiControllerTest {
     @Test
     void createUsesOwnerFromJwtAndRateLimits() {
         PetProfileResponse stub = new PetProfileResponse(
-                5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now());
+                5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now(), null);
         when(service.create(eq(77L), org.mockito.ArgumentMatchers.any())).thenReturn(stub);
 
         PetProfileResponse resp = controller.create(
@@ -72,7 +72,7 @@ class ProfileApiControllerTest {
     @Test
     void myProfileDelegatesWithJwtUser() {
         PetProfileResponse stub = new PetProfileResponse(
-                5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now());
+                5L, null, "CAT", "Momo", null, null, null, null, "TOK", false, null, null, Instant.now(), null);
         when(service.getMyProfile(77L)).thenReturn(stub);
         assertThat(controller.myProfile(jwt("77")).cardToken()).isEqualTo("TOK");
     }
@@ -90,7 +90,7 @@ class ProfileApiControllerTest {
     void updateUsesJwtOwnerAndTriggersRerender() {
         // 参数序：id, avatarUrl, petType, name, breed, birthday, sex, intro, cardToken, isSystemDefaultName, createdAt
         PetProfileResponse updated = new PetProfileResponse(
-                5L, null, "CAT", "Momo2", null, null, null, null, "TOK", false, null, null, Instant.now());
+                5L, null, "CAT", "Momo2", null, null, null, null, "TOK", false, null, null, Instant.now(), null);
         when(service.update(eq(77L), ArgumentMatchers.any())).thenReturn(updated);
 
         // 参数序：avatarUrl, name, breed, birthday, sex, intro, weightKg, neuterStatus

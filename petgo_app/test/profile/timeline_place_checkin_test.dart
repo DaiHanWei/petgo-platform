@@ -71,7 +71,8 @@ void main() {
       for (final o in sent) {
         expect(o.queryParameters['supports'], kTimelineSupports, reason: o.path);
       }
-      expect(kTimelineSupports, ['place_checkin']);
+      // V1.3.2 Story 3.3 追加 tailsonality。
+      expect(kTimelineSupports, ['place_checkin', 'tailsonality']);
     });
 
     test('🔴 访客态（分享 token / 站内）一律不带 supports', () async {

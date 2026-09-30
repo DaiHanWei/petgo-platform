@@ -6,6 +6,8 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import com.tailtopia.tailsonality.dto.TailsonalityResultListResponse;
 import com.tailtopia.tailsonality.dto.TailsonalityResultResponse;
+import com.tailtopia.tailsonality.dto.BadgeEquipRequest;
+import com.tailtopia.tailsonality.service.TailsonalityBadgeService;
 import com.tailtopia.tailsonality.service.TailsonalityResultService;
 import com.tailtopia.tailsonality.service.TailsonalityUnlockService;
 import jakarta.validation.Valid;
@@ -14,9 +16,11 @@ import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -38,14 +42,20 @@ public class TailsonalityController {
     private static final int UNLOCK_LIMIT = 10;
     private static final Duration UNLOCK_WINDOW = Duration.ofMinutes(1);
 
+    /** 佩戴切换 / 卸下限流（Story 3.3 · AC2.3）：20 次 / 分钟 / 用户（两动作共用一个桶）。 */
+    private static final int BADGE_LIMIT = 20;
+    private static final Duration BADGE_WINDOW = Duration.ofMinutes(1);
+
     private final TailsonalityResultService service;
     private final TailsonalityUnlockService unlockService;
+    private final TailsonalityBadgeService badgeService;
     private final RedisRateLimiter rateLimiter;
 
     public TailsonalityController(TailsonalityResultService service, TailsonalityUnlockService unlockService,
-            RedisRateLimiter rateLimiter) {
+            TailsonalityBadgeService badgeService, RedisRateLimiter rateLimiter) {
         this.service = service;
         this.unlockService = unlockService;
+        this.badgeService = badgeService;
         this.rateLimiter = rateLimiter;
     }
 
@@ -75,6 +85,24 @@ public class TailsonalityController {
         long userId = currentUserId(jwt);
         rateLimiter.check("rl:tailsonality:unlock:" + userId, UNLOCK_LIMIT, UNLOCK_WINDOW);
         return unlockService.unlock(userId, token, req.channel());
+    }
+
+    /** 佩戴某个已解锁结果（Story 3.3 · AC2）：未解锁 422 {@code tailsonality-badge-locked}；成功 204。 */
+    @PutMapping("/badge")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void equipBadge(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody BadgeEquipRequest req) {
+        long userId = currentUserId(jwt);
+        rateLimiter.check("rl:tailsonality:badge:" + userId, BADGE_LIMIT, BADGE_WINDOW);
+        badgeService.equip(userId, req.resultToken());
+    }
+
+    /** 卸下（D-16）：幂等，无佩戴也 204。 */
+    @DeleteMapping("/badge")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void unequipBadge(@AuthenticationPrincipal Jwt jwt) {
+        long userId = currentUserId(jwt);
+        rateLimiter.check("rl:tailsonality:badge:" + userId, BADGE_LIMIT, BADGE_WINDOW);
+        badgeService.unequip(userId);
     }
 
     private static long currentUserId(Jwt jwt) {

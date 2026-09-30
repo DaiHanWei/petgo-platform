@@ -23,6 +23,8 @@ class AppColors {
   static const Color mintTint = Color(0xFFF8F2FF); // violet-50 柔填充
   static const Color mintTint2 = Color(0xFFF8F6FF);
   static const Color violet100 = Color(0xFFEFE6FF); // violet-100 场所入口条
+  // V1.3.2 Story 3.3：Tailsonality 专属浅紫底（Diary 条目 / 角色小标），与里程碑 banner 配色区分。
+  static const Color tailsonalityBannerBg = Color(0xFFF1EAFB);
 
   // —— Canvas: 纯白（原型 QA：画布纯白无紫调）——
   static const Color cream = Color(0xFFFFFFFF); // app 画布

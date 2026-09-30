@@ -41,7 +41,8 @@ class TailsonalityOwnerTypeServiceTest {
     @Test
     void accountDeletionRemovesOwnerType() {
         TailsonalityDeletionService deletion =
-                new TailsonalityDeletionService(mock(TailsonalityResultRepository.class), repo);
+                new TailsonalityDeletionService(mock(TailsonalityResultRepository.class), repo,
+                        mock(com.tailtopia.tailsonality.repository.TailsonalityBadgeRepository.class));
         deletion.deleteOwnerTypeByUserId(7L);
         verify(repo).deleteByUserId(7L);
     }

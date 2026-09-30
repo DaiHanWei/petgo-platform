@@ -36,14 +36,23 @@ public record CalendarMonthResponse(int year, int month, List<DayCell> days) {
      *                          多于一条时前端用通用医疗箱图标，具体各条进当天详情看
      * @param hasPlaceCheckin   当日有未被去重的场所打卡（V1.3.2 Story 1.6）；🔴 只在客户端声明
      *                          {@code supports=place_checkin} 时为 true，否则 null（NON_NULL 省略，老 App 逐字段不变）
+     * @param hasTailsonality   当日（UTC）有 Tailsonality 解锁（V1.3.2 Story 3.3）；只在客户端声明
+     *                          {@code supports=tailsonality} 时为 true，否则 null（省略）
      */
     public record DayCell(int day, String firstImageUrl, boolean hasHappyMoment, boolean hasHealthEvent,
-            String healthRecordType, int healthRecordCount, Boolean hasPlaceCheckin) {
+            String healthRecordType, int healthRecordCount, Boolean hasPlaceCheckin, Boolean hasTailsonality) {
+
+        /** V1.3.2 Story 1.6 的七维形态：不带 Tailsonality 维（null → 省略）。 */
+        public DayCell(int day, String firstImageUrl, boolean hasHappyMoment, boolean hasHealthEvent,
+                String healthRecordType, int healthRecordCount, Boolean hasPlaceCheckin) {
+            this(day, firstImageUrl, hasHappyMoment, hasHealthEvent, healthRecordType, healthRecordCount,
+                    hasPlaceCheckin, null);
+        }
 
         /** V1.3.2 前的六维形态：不带打卡维（null → 省略）。 */
         public DayCell(int day, String firstImageUrl, boolean hasHappyMoment, boolean hasHealthEvent,
                 String healthRecordType, int healthRecordCount) {
-            this(day, firstImageUrl, hasHappyMoment, hasHealthEvent, healthRecordType, healthRecordCount, null);
+            this(day, firstImageUrl, hasHappyMoment, hasHealthEvent, healthRecordType, healthRecordCount, null, null);
         }
     }
 }

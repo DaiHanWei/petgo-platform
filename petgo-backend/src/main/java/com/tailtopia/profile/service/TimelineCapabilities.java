@@ -16,7 +16,9 @@ public final class TimelineCapabilities {
 
     /** 能力值（wire = 小写，大小写敏感比对）。 */
     public enum Capability {
-        PLACE_CHECKIN("place_checkin");
+        PLACE_CHECKIN("place_checkin"),
+        /** V1.3.2 Story 3.3：Tailsonality 解锁条目（{@code TAILSONALITY_BANNER}）。 */
+        TAILSONALITY("tailsonality");
 
         private final String wire;
 
@@ -78,5 +80,9 @@ public final class TimelineCapabilities {
 
     public boolean placeCheckin() {
         return has(Capability.PLACE_CHECKIN);
+    }
+
+    public boolean tailsonality() {
+        return has(Capability.TAILSONALITY);
     }
 }

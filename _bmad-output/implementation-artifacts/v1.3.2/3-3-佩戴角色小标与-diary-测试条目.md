@@ -1,6 +1,6 @@
 # Story 3.3: 佩戴角色小标与 Diary 测试条目
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -11,7 +11,7 @@ so that 来看主页的人都能看到，我也能回顾。
 ## Acceptance Criteria
 
 **AC1 — 佩戴表与首次自动佩戴** `[L0]` `[L1]`
-1. 新迁移（时间戳号，如 `V20260929_HHmm__init_tailsonality_badges.sql`）：`tailsonality_badges(pet_profile_id BIGINT PRIMARY KEY REFERENCES pet_profiles(id) ON DELETE CASCADE, result_id BIGINT NOT NULL REFERENCES tailsonality_results(id) ON DELETE CASCADE, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())` + 表 / 列 COMMENT（「一宠一行；只能指向已解锁结果，由服务层保证」）。实体 `com.tailtopia.tailsonality.domain.TailsonalityBadge`（NEW）。
+1. 新迁移（时间戳号；实际 `V20260930_2315__init_tailsonality_badges.sql`）：`tailsonality_badges(pet_profile_id BIGINT PRIMARY KEY REFERENCES pet_profiles(id) ON DELETE CASCADE, result_id BIGINT NOT NULL REFERENCES tailsonality_results(id) ON DELETE CASCADE, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())` + 表 / 列 COMMENT（「一宠一行；只能指向已解锁结果，由服务层保证」）。实体 `com.tailtopia.tailsonality.domain.TailsonalityBadge`（NEW）。
 2. 在 3-2 的 `TailsonalityKeepsakeGranter.grant` 内、**仅当结果为 `GRANTED` 时**，同一事务执行 `INSERT INTO tailsonality_badges(pet_profile_id, result_id) SELECT pet_profile_id, id FROM tailsonality_results WHERE id = :refId AND (SELECT count(*) FROM tailsonality_results r WHERE r.pet_profile_id = tailsonality_results.pet_profile_id AND r.unlocked_at IS NOT NULL) = 1 ON CONFLICT (pet_profile_id) DO NOTHING` —— 仅该宠物**第一次**解锁时自动佩戴（D-16：卸下后再解锁不自动戴回），此后再解锁**不替换**；并发两笔同宠物解锁不撞主键。仍不得抛异常（包在 grant 既有 try 内）。
 3. 集成测试：首次解锁 A → 佩戴 A；再解锁 B → 仍佩戴 A；两笔并发到账（两个不同结果）→ 恰一行、无异常；`ALREADY_UNLOCKED` / `REF_MISSING` 路径不写佩戴。
 
@@ -48,7 +48,7 @@ so that 来看主页的人都能看到，我也能回顾。
 **AC6 — Diary Tailsonality 条目** `[L1]` `[L0]`
 1. 前后端 `TimelineItemType` **末尾同名追加** `TAILSONALITY_BANNER`（后端 `profile/dto/TimelineItemType.java`；App `features/profile/domain/timeline_item.dart` L17-34，wire `'TAILSONALITY_BANNER'`）；查询时拼装、**不落库**。
 2. `TimelineItemResponse` 追加字段（照 1-6 追加 `checkinPlace` 的方式：record 末尾追加、`withDecorationTags` 透传；并更新 `TimelineItemResponseContractTest` 的 `itemTypeVocabulary` / `ALL_FIELDS` / 工厂样本）：`tailsonalityResultToken`、`tailsonalityCode`（完整代号 `ENTJ-H` = `type_code` + `-` + `energy`）、`tailsonalityTestedOn`（`created_at` 的 UTC 日期，仅显示用）；新工厂 `tailsonalityBanner(...)`，`kind` 新常量 `TAILSONALITY`。`withDecorationTags` 等复制构造同步。
-3. `TimelineService.fetchMerged` 增加源⑥（照源④里程碑的「按 `createdAtUpperBound` 取 fetch 条 + 满批设地板锚点」写法）：该宠物 `unlocked_at IS NOT NULL` 的结果，按 `unlocked_at` 倒序；**`date` 与 `eventDate`（有效日期）都取 `unlocked_at`**（`eventDate` = `unlocked_at` 的 UTC 日期）——与其它源的「UTC 日期」口径一致。多次解锁多条并存。
+3. `TimelineService.fetchMerged` 增加源⑦（1-6 已占用源⑥ = 场所打卡）（照源④里程碑的「按 `createdAtUpperBound` 取 fetch 条 + 满批设地板锚点」写法）：该宠物 `unlocked_at IS NOT NULL` 的结果，按 `unlocked_at` 倒序；**`date` 与 `eventDate`（有效日期）都取 `unlocked_at`**（`eventDate` = `unlocked_at` 的 UTC 日期）——与其它源的「UTC 日期」口径一致。多次解锁多条并存。
 4. **能力闸**：仅当请求 `supports` 含 `tailsonality` 时下发（`supports` 由 1-6 交付于 `ProfileApiController` 的 `/me/timeline`、`/me/day`、`/me/calendar` 三端点，取值小写 wire；本 story 在三处都接上 `tailsonality`，日历按 1-6 的口径决定是否因本类条目产生格子）；未声明 → 三处都不下发（有测试，照 1-6「带与不带 supports 对比基线」的写法）。
 5. 访客态（`VisitorProjectionService` 的访客时间线）**不下发**，有测试钉住；1-6 的源码守卫测试（`VisitorProjectionService.java` 不出现 `supports` 等）继续通过，并追加禁词 `TAILSONALITY_BANNER`。
 6. 集成测试：未解锁结果不出条目；解锁后出一条且落在解锁日；解锁两次两条；老 App（不带 `supports`）响应与改动前逐字一致；跨页游标不漏不重（同日多条 + 翻页边界）。
@@ -65,20 +65,20 @@ so that 来看主页的人都能看到，我也能回顾。
 
 ## Tasks / Subtasks
 
-- [ ] **T0 核对前置**：2-1（结果表 / 实体 / 仓库 / 删档方法）、2-6（列表页 widget）、3-2（granter）、1-6（`supports` 解析、`TimelineItemResponse` 扩字段方式、三处接口签名）实际代码
-- [ ] **T1 后端：表 + 自动佩戴**（AC1）
-- [ ] **T2 后端：切换接口 + DTO equipped**（AC2）
-- [ ] **T3 后端：小标下发**（AC4）
-  - [ ] `TailsonalityBadgeQuery`；`PetProfileResponse` 新重载；`ProfileService.getMyProfile`
-  - [ ] `PublicProfilePetResponse` / `PublicProfilePetController`；更新 `InAppVisitorEntryTest` 的构造（多一个依赖）
-- [ ] **T4 后端：时间线源⑥**（AC6）
-  - [ ] `TimelineItemType` 追加；`TimelineItemResponse` 字段 + 工厂；`TimelineService` 源⑥ + 三处能力闸
-  - [ ] 访客态不下发测试
-- [ ] **T5 后端：删档**（AC8）
-- [ ] **T6 App：列表页切换**（AC3）
-- [ ] **T7 App：小标显示**（AC5）+ 两个测试文件更新
-- [ ] **T8 App：时间线条目**（AC7）
-- [ ] **T9 l10n**：en + id（见下表）；`flutter gen-l10n`
+- [x] **T0 核对前置**：2-1（结果表 / 实体 / 仓库 / 删档方法）、2-6（列表页 widget）、3-2（granter）、1-6（`supports` 解析、`TimelineItemResponse` 扩字段方式、三处接口签名）实际代码
+- [x] **T1 后端：表 + 自动佩戴**（AC1）
+- [x] **T2 后端：切换接口 + DTO equipped**（AC2）
+- [x] **T3 后端：小标下发**（AC4）
+  - [x] `TailsonalityBadgeQuery`；`PetProfileResponse` 新重载；`ProfileService.getMyProfile`
+  - [x] `PublicProfilePetResponse` / `PublicProfilePetController`；更新 `InAppVisitorEntryTest` 的构造（多一个依赖）
+- [x] **T4 后端：时间线源⑥**（AC6）
+  - [x] `TimelineItemType` 追加；`TimelineItemResponse` 字段 + 工厂；`TimelineService` 源⑥ + 三处能力闸
+  - [x] 访客态不下发测试
+- [x] **T5 后端：删档**（AC8）
+- [x] **T6 App：列表页切换**（AC3）
+- [x] **T7 App：小标显示**（AC5）+ 两个测试文件更新
+- [x] **T8 App：时间线条目**（AC7）
+- [x] **T9 l10n**：en + id（见下表）；`flutter gen-l10n`
 - [ ] **T10 联调**（L1 本地 / L2 模拟器看档案页、公开主页、Diary）
 
 ## Dev Notes
@@ -155,10 +155,65 @@ L0：AC1 实体、AC3 / AC5 / AC7 widget 测试、两个公开主页测试 · L1
 
 ### Agent Model Used
 
+Claude Code 云端 session（headless，环境 tailtopia-L0）
+
 ### Debug Log References
+
+- 后端 L0：**2836 例，0 失败**；新增 L1 类 `tailsonality/TailsonalityBadgeIntegrationTest` 进排除清单。
+- App L0：`flutter analyze` 无问题；`flutter test` **2553 例全绿**。
+- `check-flyway-versions.sh origin/main` → OK（新迁移 `V20260930_2315__init_tailsonality_badges.sql`）。
 
 ### Completion Notes List
 
-- Ultimate context engine analysis completed - comprehensive developer guide created
+- **T0 核对（与本文件出入，已改本文件 / 按实际代码）**：
+  - 1-6 已把时间线「源⑥」用给场所打卡，本 story 的 Tailsonality 为**源⑦**（AC6.3 已改）；能力闸沿用 1-6 的 `TimelineCapabilities`（枚举追加 `TAILSONALITY("tailsonality")` + `tailsonality()`），`ProfileApiController` 三端点已是通用解析，无需改。
+  - `SecurityConfig` 已由 2-1 覆盖 `/api/v1/pet-profiles/me/tailsonality/**` → USER，PUT / DELETE `…/badge` 不再单加 matcher（AC2.3 / AC2.4 的 matcher 要求已满足）。
+  - 日历「按 1-6 的口径决定是否因本类条目产生格子」：照打卡维加 `DayCell.hasTailsonality`（第八维，未声明能力时 null 省略；只有解锁的日子新建格子），App 日历在「只有打卡」之后加性格图标标记 `kTailsonalityCalendarIcon`。
+  - 时间线源经 tailsonality 包只读口 `TailsonalityTimelineQuery`（照 `PlaceCheckinTimelineQuery` 的 JDBC 写法），profile 不注入 tailsonality 仓库；`TailsonalityBadgeQuery` 只依赖自己的仓库，无构造器循环。
+  - 编辑档案（PATCH）响应也带小标（`ProfileService.update` 同改）：App 用编辑响应覆盖本地档案，不带会闪掉。
+- **L1/L2 待本地验收**：
+  - `TailsonalityBadgeIntegrationTest`（真库 + Redis）：首次解锁自动佩戴 / 再解锁不替换 / 切换；未解锁 422 `tailsonality-badge-locked`；卸下幂等且再解锁不自动戴回（D-16）；两笔并发发放（不同结果）→ 至多一行、无异常；本人档案 / 公开卡小标（游客可见）；Diary 条目只在 `supports=tailsonality` 时下发；删档后结果与佩戴无残留、`keepsake_purchases.pet_profile_id` 置空、重建宠物小标为 null。
+  - 🔴 同 3-1 / 3-2：真实 Spring 上下文要等 3.4 / 3.5 的发放口落地才能起（IT 用 `@MockitoBean` 顶掉注册表）。
+  - 迁移真跑 + `ddl-auto=validate`（`tailsonality_badges` 实体）。
+  - L2：列表页三态控件 / 卸下弹窗、档案页与公开主页小标胶囊、Diary 条目与日历标记视觉。
+- **偏差 / 取舍**：
+  - AC3.1 写「Dipakai 不可点」，与同 AC 组的 AC2.4（D-16，2026-09-29 定）「Dipakai 可点 → 确认卸下」冲突：按决策日志优先，**Dipakai 可点并弹确认**。
+  - 未解锁行不放控件：行内已有 2-6 的「Belum dibuka」灰字（本身不可点、无水波纹）；整行点击进结果页是 2-6 的既有行为，保留。
+  - `TsResultRow` 重排：行尾控件移到点击区之外（按下缩放只作用于左侧点击区），保证控件吃掉点击、不冒泡到行（AC3.3）。
+  - 并发自动佩戴：两笔并发时各自看不到对方未提交的解锁，可能都判「恰好 1 条」→ `ON CONFLICT DO NOTHING` 保证只落一行（先到者）；也可能都判不到 1 条（两者都提交后已解锁 2 条）→ 0 行。IT 断言「至多一行、无异常」，0 行是极端并发下的可接受结果（用户可手动佩戴）。**待确认**。
+  - 自动佩戴 SQL 与解锁在同一保存点：自动佩戴失败会连带解锁一起回滚 → 发放记 REF_MISSING（QRIS 到账交人工 / PawCoin 整笔回滚重试）。`ON CONFLICT` 已排除主键冲突，实际只剩 DB 故障。
+  - l10n 另加卸下三 key（本文件关键设计点列出）：`tailsonalityBadgeRemoveTitle` / `Body` / `Confirm`；「Batal」复用 `commonCancel`。
+  - 埋点后缀表加 `_equipped`（`v112_events_test`，带语义注释）。
+- **复审（code-review）**：1 条，已修：首次解锁（服务端自动佩戴）后 App 未刷新 `petProfileProvider`（全局 keep-alive），档案卡一直不显示小标 → 解锁成功路径加 invalidate，补测试断言。
+- 被按设计打破的既有测试（已更新断言、未删）：`public_profile_pet_test`「卡上没有 Tailsonality 占位」→ 两例（无小标 findsNothing / 有小标 ENTJ findsOneWidget 且仍无「Tailsonality」字样）；`timeline_five_class_render_test`（游客示例不含 Tailsonality 条目）；`diary_guest_state_test` 与后端 `TimelineItemResponseContractTest` 的词表末尾追加；`timeline_place_checkin_test` 的 `kTimelineSupports`；`TailsonalityResultResponseContractTest` / App wire 契约加 `equipped`；`VisitorNoPlaceCheckinGuardTest` 追加禁词（`TAILSONALITY_BANNER` / `TailsonalityTimelineQuery` / `tailsonalityResultToken`）；`public_profile_posts_test` 反向清单**原样通过**。构造器变更同步：`ProfileServiceTest`、`InAppVisitorEntryTest`、`BlockedViewerProfileTest`、四个 `TimelineService` 单测、`ProfileApiControllerTest`、`TailsonalityOwnerTypeServiceTest`、`TailsonalityResultServiceTest`。
+- **待确认**：① Dipakai 可点卸下（按 D-16）；② 极端并发下首次自动佩戴可能 0 行；③ 日历新增 `hasTailsonality` 维与性格图标标记。
 
 ### File List
+
+后端（新增）
+- `petgo-backend/src/main/resources/db/migration/V20260930_2315__init_tailsonality_badges.sql`
+- `tailsonality/domain/TailsonalityBadge.java`、`repository/TailsonalityBadgeRepository.java`、`dto/BadgeEquipRequest.java`、`dto/TailsonalityTimelineView.java`
+- `tailsonality/service/TailsonalityBadgeQuery.java`、`TailsonalityBadgeService.java`、`TailsonalityTimelineQuery.java`
+- 测试：`tailsonality/service/TailsonalityBadgeServiceTest`、`profile/service/TimelineTailsonalityTest`、`profile/visitor/PublicProfilePetBadgeTest`、`tailsonality/TailsonalityBadgeIntegrationTest`（L1）
+
+后端（修改）
+- `tailsonality/service/TailsonalityKeepsakeGranter.java`（GRANTED 分支自动佩戴）、`TailsonalityDeletionService.java`、`TailsonalityResultService.java`、`dto/TailsonalityResultResponse.java`（`equipped`）、`web/TailsonalityController.java`（PUT / DELETE badge）
+- `shared/error/ErrorTypes.java`、`AppException.java`（`tailsonality-badge-locked`）
+- `profile/dto/PetProfileResponse.java`、`profile/service/ProfileService.java`、`profile/visitor/PublicProfilePetResponse.java`、`PublicProfilePetController.java`
+- `profile/dto/TimelineItemType.java`、`TimelineItemResponse.java`、`CalendarMonthResponse.java`、`profile/service/TimelineCapabilities.java`、`TimelineService.java`
+- 测试：见上「构造器变更同步」与契约 / 守卫测试
+
+App（新增）
+- `lib/features/tailsonality/presentation/widgets/tailsonality_badge_chip.dart`
+- 测试：`test/tailsonality/tailsonality_badge_test.dart`
+
+App（修改）
+- `lib/features/tailsonality/domain/tailsonality_result.dart`、`data/tailsonality_repository.dart`、`presentation/tailsonality_results_page.dart`、`widgets/ts_result_row.dart`、`presentation/tailsonality_result_page.dart`
+- `lib/features/profile/domain/pet_profile.dart`、`pet_header_info.dart`、`timeline_item.dart`、`calendar_month.dart`、`health_record_icons.dart`；`data/timeline_repository.dart`；`presentation/widgets/pet_info_card.dart`、`timeline_item_tile.dart`、`archive_calendar.dart`；`presentation/growth_archive_page.dart`、`day_detail_page.dart`
+- `lib/features/user_profile/data/public_profile_pet_repository.dart`、`presentation/public_profile_page.dart`
+- `lib/core/theme/colors.dart`、`lib/core/network/api_paths.dart`、`lib/l10n/app_en.arb`、`app_id.arb`
+- 测试：`test/user_profile/public_profile_pet_test.dart`、`test/profile/timeline_five_class_render_test.dart`、`diary_guest_state_test.dart`、`timeline_place_checkin_test.dart`、`test/tailsonality/tailsonality_result_wire_contract_test.dart`、`tailsonality_unlock_test.dart`、`test/analytics/v112_events_test.dart`
+
+### Change Log
+
+- 2026-09-30：Story 3.3 实现（佩戴表 + 首次解锁自动佩戴 + 切换 / 卸下接口 + 结果 DTO `equipped`；档案与公开卡小标；Diary 源⑦ + 日历维 + 日详情；App 列表行内切换、小标胶囊、Diary 条目）；复审 1 条已修；L0 绿，置 review。
