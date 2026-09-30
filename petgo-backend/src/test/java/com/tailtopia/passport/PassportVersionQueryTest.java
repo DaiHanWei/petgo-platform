@@ -50,7 +50,7 @@ class PassportVersionQueryTest {
 
     static PlaceStampRef ref(long placeId, long visits, PlaceAvailability availability) {
         return new PlaceStampRef(placeId, new PlaceStamp("t" + placeId, "P" + placeId, PlaceType.CAFE, availability,
-                LocalDate.of(2026, 9, 1), visits, null, null));
+                LocalDate.of(2026, 9, 1), visits, null, null), LocalDate.of(2026, 9, 1));
     }
 
     static PassportSnapshot paid(long... placeIds) {

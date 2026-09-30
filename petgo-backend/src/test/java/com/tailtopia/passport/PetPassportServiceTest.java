@@ -163,10 +163,10 @@ class PetPassportServiceTest {
         var refs = List.of(
                 new com.tailtopia.place.domain.PlaceStampRef(11L, new PlaceStamp("a".repeat(32), "Kopi",
                         PlaceType.CAFE, PlaceAvailability.ACTIVE, LocalDate.of(2026, 9, 1), 3, "Jl. Kopi 1",
-                        "https://cdn/place-stamps/1/s.png")),
+                        "https://cdn/place-stamps/1/s.png"), LocalDate.of(2026, 9, 1)),
                 new com.tailtopia.place.domain.PlaceStampRef(12L, new PlaceStamp("b".repeat(32), "Taman",
                         PlaceType.PARK, PlaceAvailability.UNAVAILABLE, LocalDate.of(2026, 9, 20), 1, "Jl. Taman 2",
-                        null)));
+                        null), LocalDate.of(2026, 9, 20)));
         when(stamps.stampRefsOf(PET)).thenReturn(refs);
         when(versions.stateOf(PET, refs)).thenReturn(new PassportVersionQuery.VersionState(true, 2));
 

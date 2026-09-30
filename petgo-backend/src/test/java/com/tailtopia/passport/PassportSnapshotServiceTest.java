@@ -16,7 +16,7 @@ import com.tailtopia.passport.domain.PetPassport;
 import com.tailtopia.passport.repository.PassportSnapshotRepository;
 import com.tailtopia.passport.repository.PetPassportRepository;
 import com.tailtopia.passport.service.PassportSnapshotService;
-import com.tailtopia.passport.service.PassportSnapshotTokenGenerator;
+import com.tailtopia.passport.service.PassportTokenGenerator;
 import com.tailtopia.passport.service.PetPassportService;
 import com.tailtopia.passport.service.PlaceSetHash;
 import com.tailtopia.pay.domain.PayChannel;
@@ -55,7 +55,7 @@ class PassportSnapshotServiceTest {
     private final PlaceIdentityQuery places = mock(PlaceIdentityQuery.class);
     private final PetProfileQueryService pets = mock(PetProfileQueryService.class);
     private final KeepsakePurchaseService purchases = mock(KeepsakePurchaseService.class);
-    private final PassportSnapshotTokenGenerator tokens = mock(PassportSnapshotTokenGenerator.class);
+    private final PassportTokenGenerator tokens = mock(PassportTokenGenerator.class);
     private final PassportSnapshotService service = new PassportSnapshotService(passports, passportRows, snapshots,
             stamps, places, new PlaceSetHash(places), pets, purchases, tokens);
 

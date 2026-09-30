@@ -45,21 +45,21 @@ public class PassportSnapshotService {
     private final PlaceSetHash hash;
     private final PetProfileQueryService pets;
     private final KeepsakePurchaseService purchases;
-    private final PassportSnapshotTokenGenerator tokens;
+    private final PassportTokenGenerator tokens;
     private final Clock clock;
 
     @Autowired
     public PassportSnapshotService(PetPassportService passports, PetPassportRepository passportRows,
             PassportSnapshotRepository snapshots, PlaceStampQueryService stamps, PlaceIdentityQuery places,
             PlaceSetHash hash, PetProfileQueryService pets, KeepsakePurchaseService purchases,
-            PassportSnapshotTokenGenerator tokens) {
+            PassportTokenGenerator tokens) {
         this(passports, passportRows, snapshots, stamps, places, hash, pets, purchases, tokens, Clock.systemUTC());
     }
 
     PassportSnapshotService(PetPassportService passports, PetPassportRepository passportRows,
             PassportSnapshotRepository snapshots, PlaceStampQueryService stamps, PlaceIdentityQuery places,
             PlaceSetHash hash, PetProfileQueryService pets, KeepsakePurchaseService purchases,
-            PassportSnapshotTokenGenerator tokens, Clock clock) {
+            PassportTokenGenerator tokens, Clock clock) {
         this.passports = passports;
         this.passportRows = passportRows;
         this.snapshots = snapshots;

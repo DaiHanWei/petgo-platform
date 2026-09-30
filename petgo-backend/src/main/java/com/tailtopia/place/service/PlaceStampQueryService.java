@@ -27,7 +27,8 @@ public class PlaceStampQueryService {
     static final String STAMPS_SQL = """
             SELECT p.id AS place_id, p.public_token AS place_token, p.name AS place_name, p.place_type,
                    p.status, p.deleted_at, p.address_text, p.stamp_object_key,
-                   MIN(c.visit_date) AS first_visit, COUNT(*) AS visits, MIN(c.id) AS first_id
+                   MIN(c.visit_date) AS first_visit, MAX(c.visit_date) AS last_visit, COUNT(*) AS visits,
+                   MIN(c.id) AS first_id
               FROM place_checkin_pets cp
               JOIN place_checkins c ON c.id = cp.checkin_id
               JOIN places p ON p.id = c.place_id
@@ -74,7 +75,7 @@ public class PlaceStampQueryService {
     @Transactional(readOnly = true)
     public List<PlaceStampRef> stampRefsOf(long petId) {
         return jdbc.query(STAMPS_SQL, Map.of("petId", petId), (rs, i) -> new PlaceStampRef(rs.getLong("place_id"),
-                stampOf(rs)));
+                stampOf(rs), rs.getDate("last_visit").toLocalDate()));
     }
 
     private PlaceStamp stampOf(java.sql.ResultSet rs) throws java.sql.SQLException {

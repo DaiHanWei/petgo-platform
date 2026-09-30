@@ -56,6 +56,12 @@ class PetInsightsRoutes {
   static String passportStampFor(String placeToken) =>
       '$passport/stamps/${Uri.encodeComponent(placeToken)}';
 
+  /// 登机牌列表 / 详情（V1.3.2 Story 3.5）。同在 `/profile/` 下 → 继承游客门控，**不进**门控例外集合。
+  static const String boardingPass = '$hub/boarding-pass';
+  static const String boardingPassDetail = '$boardingPass/:placeToken';
+
+  static String boardingPassFor(String placeToken) => '$boardingPass/${Uri.encodeComponent(placeToken)}';
+
   /// 已买护照版本列表 / 回看（V1.3.2 Story 3.4）。同在 `/profile/` 下 → 继承游客门控。
   static const String passportVersions = '$passport/versions';
   static const String passportVersion = '$passport/versions/:token';
@@ -252,6 +258,14 @@ class _PetInsightsPageState extends ConsumerState<PetInsightsPage> {
                   sub: l10n.tailsonalityEntrySub,
                   onTap: _onTailsonalityTap,
                 ),
+              ),
+              // V1.3.2 Story 3.5：登机牌，第三行整宽（C-8 的 2+2+1）；全物种可点。
+              InsightEntryCard(
+                inkKey: const ValueKey('insightBoardingPass'),
+                icon: Icons.airplane_ticket_outlined,
+                title: l10n.boardingPassEntryTitle,
+                sub: l10n.boardingPassEntrySub,
+                onTap: () => context.push(PetInsightsRoutes.boardingPass),
               ),
             ]),
           ),

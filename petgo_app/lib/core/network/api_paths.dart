@@ -165,6 +165,13 @@ class ApiPaths {
   /// 护照快照（V1.3.2 Story 3.4）：POST `{channel}` 发起「当前版本」购买 / GET 已买版本列表。仅 role=USER。
   static const String petPassportSnapshots = '$petPassport/snapshots';
 
+  /// 登机牌（V1.3.2 Story 3.5）：GET 列表 / GET 详情 / POST unlock。仅 role=USER。
+  static const String petBoardingPasses = '$base/pet-profiles/me/boarding-passes';
+
+  static String petBoardingPass(String placeToken) => '$petBoardingPasses/${Uri.encodeComponent(placeToken)}';
+
+  static String petBoardingPassUnlock(String placeToken) => '${petBoardingPass(placeToken)}/unlock';
+
   /// 已买版本回看；非本人 / 未付 / 不存在 → 404。
   static String petPassportSnapshot(String token) => '$petPassportSnapshots/$token';
 

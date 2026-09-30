@@ -124,6 +124,10 @@ const _sameInBothLocales = {
   'tailsonality',
   // V1.3.2 Story 3.2：能量档位 High / Low 与代号后缀 H / L 对应，story l10n 表规定两语同写（「Level energi High」）。
   'high', 'low',
+  // V1.3.2 Story 3.5：「Boarding Pass」功能名两语同写（story l10n 表如此；印尼语直接借用，与机票版式一致）。
+  'boarding', 'pass',
+  // 币种符号 Rp（印尼盾）：两语写法相同，不是待翻译的词（V1.3.2 Story 3.2 l10n 说明）。
+  'rp',
   // 印尼语直接借用的英文词
   'checkout', 'online', 'offline', 'normal', 'rating', 'refund', 'bonus',
   'edit', 'bug', 'email', 'whatsapp', 'label', 'diary', 'milestone', 'health',

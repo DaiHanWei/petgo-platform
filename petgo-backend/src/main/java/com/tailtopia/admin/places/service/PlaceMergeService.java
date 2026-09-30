@@ -9,6 +9,7 @@ import com.tailtopia.admin.places.repository.PlaceCheckinRepository;
 import com.tailtopia.admin.places.repository.PlaceCommentRepository;
 import com.tailtopia.admin.places.repository.PlacePhotoRepository;
 import com.tailtopia.admin.places.repository.PlaceRepository;
+import com.tailtopia.passport.service.BoardingPassMergeService;
 import com.tailtopia.shared.error.AppException;
 import java.time.Instant;
 import org.slf4j.Logger;
@@ -20,7 +21,10 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 场所合并（V1.3.0 Story 5.3 AC4，本版本唯一不可逆的场所操作，<b>单事务</b>）：
  * ① 三张子表 {@code place_id} 从 B（merged）改指 A（keep）② B {@code status=MERGED, merged_into_id=A} ③ A 五个计数列全量重算
- * ④ 发布 {@link PlaceMergedEvent}（事务内发布；护照章是打卡的聚合，打卡改挂后自动并章，无需监听器——V1.3.2 AD-5；登机牌改挂由 Story 3.5 在本事务内同步调用；专属章 stamp_object_key 不清空，AD-18）⑤ 审计 {@code PLACE_MERGED}「B(name) → A(name)」。
+ * ④ 登机牌解锁行改挂（V1.3.2 Story 3.5 · AD-7）：打卡改挂之后、{@code markMerged} 之前<b>同事务同步调用</b>
+ * {@link BoardingPassMergeService#reassignForMerge}（不走事件监听：提交到监听之间用户可对保留方重复购买）
+ * ⑤ 发布 {@link PlaceMergedEvent}（事务内发布；护照章是打卡的聚合，打卡改挂后自动并章，无需监听器——V1.3.2 AD-5；
+ * 专属章 stamp_object_key 不清空，AD-18）⑥ 审计 {@code PLACE_MERGED}「B(name) → A(name)」。
  * {@code place_reports} <b>不迁移</b>（举报针对 B 这个条目本身）。校验：A ≠ B；A ACTIVE 且未软删；B ACTIVE / DELISTED（已 MERGED 不可再合并）。
  * 任一步失败整体回滚（半成功比失败更糟）。
  */
@@ -35,9 +39,13 @@ public class PlaceMergeService {
     private final PlaceCheckinRepository checkins;
     private final AdminAuditService audit;
     private final ApplicationEventPublisher events;
+    /** V1.3.2 Story 3.5：登机牌改挂（同事务）。 */
+    private final BoardingPassMergeService boardingPasses;
 
     public PlaceMergeService(PlaceRepository places, PlacePhotoRepository photos, PlaceCommentRepository comments,
-            PlaceCheckinRepository checkins, AdminAuditService audit, ApplicationEventPublisher events) {
+            PlaceCheckinRepository checkins, AdminAuditService audit, ApplicationEventPublisher events,
+            BoardingPassMergeService boardingPasses) {
+        this.boardingPasses = boardingPasses;
         this.places = places;
         this.photos = photos;
         this.comments = comments;
@@ -71,13 +79,16 @@ public class PlaceMergeService {
         int movedPhotos = photos.reassignPlace(mergedId, keepId);
         int movedComments = comments.reassignPlace(mergedId, keepId);
         int movedCheckins = checkins.reassignPlace(mergedId, keepId);
+        // 登机牌解锁行改挂（Story 3.5 · AC7）：抛出即整笔合并回滚（照片 / 评论 / 打卡都不改挂）。
+        int movedBoardingPasses = boardingPasses.reassignForMerge(mergedId, keepId);
         // 被并方自己也曾是别人的保留方时，把那些历史指向一并改到新的最终保留方，保持 merged_into_id 恒为单跳
         int repointed = places.repointMergedInto(mergedId, keepId, Instant.now());
         merged.markMerged(keepId);
         places.saveAndFlush(merged);
         audit.record(actorAdminAccountId, AuditActions.PLACE_MERGED, "PLACE", String.valueOf(mergedId),
                 merged.getName() + " → " + keep.getName() + " (keepId=" + keepId + ", photos=" + movedPhotos + ", comments=" + movedComments
-                        + ", checkins=" + movedCheckins + ", repointed=" + repointed + ")");
+                        + ", checkins=" + movedCheckins + ", boardingPasses=" + movedBoardingPasses
+                        + ", repointed=" + repointed + ")");
         events.publishEvent(new PlaceMergedEvent(keepId, mergedId, Instant.now(), actorAdminAccountId));
         log.info("place merged mergedId={} keepId={} photos={} comments={} checkins={}", mergedId, keepId, movedPhotos, movedComments, movedCheckins);
         return places.findById(keepId).orElseThrow();

@@ -4,11 +4,11 @@ import java.security.SecureRandom;
 import org.springframework.stereotype.Component;
 
 /**
- * 护照快照不可枚举对外标识（32 位 base62 + {@link SecureRandom}，形态同 {@code PlaceTokenGenerator}）。
- * 类名刻意不同，避免撞 bean 名。
+ * passport 包的不可枚举对外标识（护照快照 Story 3.4 / 登机牌解锁行 Story 3.5）：32 位 base62 + {@link SecureRandom}，
+ * 形态同 {@code PlaceTokenGenerator}。类名刻意不同，避免撞 bean 名。
  */
 @Component
-public class PassportSnapshotTokenGenerator {
+public class PassportTokenGenerator {
 
     private static final char[] BASE62 =
             "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray();

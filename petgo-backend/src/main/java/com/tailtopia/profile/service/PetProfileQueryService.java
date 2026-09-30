@@ -79,6 +79,12 @@ public class PetProfileQueryService {
                 .map(p -> new com.tailtopia.profile.dto.OwnedPetRef(p.getId(), p.getPetType()));
     }
 
+    /** 宠物品种原文（V1.3.2 Story 3.5 登机牌 BREED），可空。无宠物 → empty。 */
+    @Transactional(readOnly = true)
+    public Optional<String> findBreed(long ownerId) {
+        return petProfiles.findByOwnerId(ownerId).map(p -> p.getBreed());
+    }
+
     /** 护照签发用的宠物摘要（V1.3.2 Story 1.2 · AD-6）。单账号单宠物 → 至多一条。 */
     @Transactional(readOnly = true)
     public Optional<PetPassportSubject> findPassportSubject(long ownerId) {

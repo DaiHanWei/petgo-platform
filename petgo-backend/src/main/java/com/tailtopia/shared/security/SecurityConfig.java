@@ -308,6 +308,9 @@ public class SecurityConfig {
                         // 护照快照（V1.3.2 Story 3.4）：发起购买 / 已购列表 / 回看，同上理由（sub 当 users.id 用）。
                         .requestMatchers("/api/v1/pet-profiles/me/passport/snapshots",
                                 "/api/v1/pet-profiles/me/passport/snapshots/**").hasRole("USER")
+                        // 登机牌（V1.3.2 Story 3.5）：GET 列表 / 详情 + POST unlock，同上理由。
+                        .requestMatchers("/api/v1/pet-profiles/me/boarding-passes",
+                                "/api/v1/pet-profiles/me/boarding-passes/**").hasRole("USER")
                         // Tailsonality 主人类型（V1.3.2 Story 2.5）：账号级 /me 端点，同上面 /api/v1/me/* 的理由（sub 当 users.id 用）。
                         .requestMatchers("/api/v1/me/tailsonality/**").hasRole("USER")
                         // Tailsonality 结果（V1.3.2 Story 2.1）：controller 把 jwt.sub 当 users.id 用，兽医 token 的 sub

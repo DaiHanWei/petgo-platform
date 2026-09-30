@@ -62,6 +62,8 @@ class AnalyticsEventGuardTest {
         assertThat(guard.allowsEvent("tailsonality_unlocked")).isTrue();
         // V1.3.2 Story 3.4：护照快照解锁成功（服务端发，事件名暂定）
         assertThat(guard.allowsEvent("passport_snapshot_unlocked")).isTrue();
+        // V1.3.2 Story 3.5：登机牌单张解锁成功（服务端发，事件名暂定）
+        assertThat(guard.allowsEvent("boarding_pass_unlocked")).isTrue();
     }
 
     @Test

@@ -68,7 +68,9 @@ public class AnalyticsEventGuard {
             // ---- V1.3.2 Story 3.2：Tailsonality 解锁成功（只在服务端报）----
             com.tailtopia.tailsonality.service.TailsonalityUnlockAnalyticsListener.EVENT_UNLOCKED,
             // ---- V1.3.2 Story 3.4：护照快照解锁成功（事件名暂定，待产品确认）----
-            com.tailtopia.passport.service.PassportSnapshotAnalyticsListener.EVENT_UNLOCKED);
+            com.tailtopia.passport.service.PassportSnapshotAnalyticsListener.EVENT_UNLOCKED,
+            // ---- V1.3.2 Story 3.5：登机牌单张解锁成功（事件名暂定，待产品确认）----
+            com.tailtopia.passport.service.BoardingPassAnalyticsListener.EVENT_UNLOCKED);
 
     /**
      * 属性键白名单。

@@ -83,6 +83,8 @@ import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
 import '../../features/place/presentation/place_detail_page.dart';
 import '../../features/place/presentation/place_checkin_success_page.dart';
+import '../../features/boarding_pass/presentation/boarding_pass_detail_page.dart';
+import '../../features/boarding_pass/presentation/boarding_pass_list_page.dart';
 import '../../features/pet_passport/presentation/passport_versions_page.dart';
 import '../../features/pet_passport/presentation/pet_passport_page.dart';
 import '../../features/pet_passport/domain/new_stamp_args.dart';
@@ -788,6 +790,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: PetInsightsRoutes.passportStamp,
         builder: (c, s) => PetPassportStampPage(placeToken: s.pathParameters['placeToken']!),
+      ),
+      // 登机牌列表 / 详情（V1.3.2 Story 3.5）：同在 /profile/ 下 → 自动继承游客门控，**不进**例外集合。
+      GoRoute(path: PetInsightsRoutes.boardingPass, builder: (c, s) => const BoardingPassListPage()),
+      GoRoute(
+        path: PetInsightsRoutes.boardingPassDetail,
+        builder: (c, s) => BoardingPassDetailPage(placeToken: s.pathParameters['placeToken']!),
       ),
       // 已买护照版本列表 / 回看（V1.3.2 Story 3.4）：同在 /profile/ 下 → 自动继承游客门控。
       GoRoute(path: PetInsightsRoutes.passportVersions, builder: (c, s) => const PassportVersionsPage()),

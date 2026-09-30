@@ -1,5 +1,6 @@
 package com.tailtopia.passport.service;
 
+import com.tailtopia.passport.repository.BoardingPassUnlockRepository;
 import com.tailtopia.passport.repository.PassportSnapshotRepository;
 import com.tailtopia.passport.repository.PetPassportRepository;
 import org.springframework.stereotype.Service;
@@ -17,16 +18,21 @@ public class PetPassportDeletionService {
 
     private final PetPassportRepository passports;
     private final PassportSnapshotRepository snapshots;
+    private final BoardingPassUnlockRepository boardingPasses;
 
-    public PetPassportDeletionService(PetPassportRepository passports, PassportSnapshotRepository snapshots) {
+    public PetPassportDeletionService(PetPassportRepository passports, PassportSnapshotRepository snapshots,
+            BoardingPassUnlockRepository boardingPasses) {
         this.passports = passports;
         this.snapshots = snapshots;
+        this.boardingPasses = boardingPasses;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void deleteForPet(long petId) {
         // V1.3.2 Story 3.4 · AC9：快照物理删除（FK ON DELETE CASCADE 兜底）；对应 keepsake_purchases 保留、pet_profile_id 置空。
         snapshots.deleteByPetProfileId(petId);
+        // V1.3.2 Story 3.5 · AC11：登机牌解锁行物理删除（FK CASCADE 兜底）；购买记录保留、pet_profile_id 置空。
+        boardingPasses.deleteByPetProfileId(petId);
         passports.deleteByPetProfileId(petId);
     }
 }

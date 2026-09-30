@@ -110,14 +110,13 @@ void main() {
     });
   });
 
-  group('AC2 🔴 KTP / 年龄卡 / 护照 / Tailsonality 四张卡，不预埋尚未上线的卡（V1.3.2 Story 2.3 更新）', () {
+  group('AC2 🔴 KTP / 年龄卡 / 护照 / Tailsonality / 登机牌五张卡，不预埋尚未上线的卡（V1.3.2 Story 3.5 更新）', () {
     final String pageSrc =
         File('lib/features/profile/presentation/pet_insights_page.dart').readAsStringSync();
 
-    /// 登机牌（Story 3.5）**不占位、不置灰、不出现**：它上线时是「新增卡」，
-    /// 不是「解锁占位」—— 所以连一个隐藏卡位、一个 enabled:false 的常量都不许留。
-    /// 护照（Story 1.2）与 Tailsonality（Story 2.3）已上线，从禁词里移除；新增登机牌禁词守住「不占第 5 张」。
-    test('源码里没有登机牌 / 即将推出的任何痕迹', () {
+    /// 「即将推出」式占位一律不许留。护照（1.2）/ Tailsonality（2.3）/ 登机牌（3.5）已上线，从禁词里移除
+    /// （Story 3.5 按新规则更新：登机牌不再是禁词）；「即将推出」禁词原样保留。
+    test('源码里没有「即将推出」的任何痕迹', () {
       // 只看真正的代码：文档注释里**本来就会**提到这两样（那段话正是在写"为什么不占位"），
       // 扫全文会被自己的解释性注释弄红。
       final code = pageSrc
@@ -127,20 +126,18 @@ void main() {
       for (final banned in [
         'comingSoon',
         'coming_soon',
-        'boardingPass',
-        'boarding_pass',
       ]) {
-        expect(code, isNot(contains(banned)), reason: '$banned 尚未上线，不占位');
+        expect(code, isNot(contains(banned)), reason: '$banned：不占位');
       }
     });
 
-    testWidgets('聚合页就是四张卡，按 C-8 顺序', (tester) async {
+    testWidgets('聚合页就是五张卡，按 C-8 顺序', (tester) async {
       await _pumpHub(tester, petType: 'CAT');
-      const order = ['insightIdCard', 'insightAgeCard', 'insightPassport', 'insightTailsonality'];
+      const order = ['insightIdCard', 'insightAgeCard', 'insightPassport', 'insightTailsonality', 'insightBoardingPass'];
       for (final k in order) {
         expect(find.byKey(ValueKey(k)), findsOneWidget, reason: k);
       }
-      expect(find.byType(InkWell), findsNWidgets(4));
+      expect(find.byType(InkWell), findsNWidgets(5));
       final rects = [for (final k in order) tester.getRect(find.byKey(ValueKey(k)))];
       // 阅读顺序：同行左→右、行间上→下。
       for (var i = 1; i < rects.length; i++) {
@@ -167,6 +164,24 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('insightPassport')));
       await tester.pumpAndSettle();
       expect(find.text('passport'), findsOneWidget);
+    });
+
+    /// V1.3.2 Story 3.5：第三行整宽登机牌卡（2+2+1）；全物种可点 → 登机牌列表。
+    testWidgets('第三行登机牌整宽、可点进列表', (tester) async {
+      await _pumpHub(tester, petType: 'OTHER');
+      final ts = tester.getRect(find.byKey(const ValueKey('insightTailsonality')));
+      final ktp = tester.getRect(find.byKey(const ValueKey('insightIdCard')));
+      final bp = tester.getRect(find.byKey(const ValueKey('insightBoardingPass')));
+      expect(bp.top, greaterThan(ts.bottom), reason: '第三行');
+      expect(bp.width, greaterThan(ktp.width * 1.8), reason: '整宽');
+      await tester.tap(find.byKey(const ValueKey('insightBoardingPass')));
+      await tester.pumpAndSettle();
+      expect(find.text('boarding-pass'), findsOneWidget);
+    });
+
+    test('登机牌路由落在 /profile/ 下（继承游客门控）', () {
+      expect(PetInsightsRoutes.boardingPass, startsWith('/profile/'));
+      expect(PetInsightsRoutes.boardingPassFor('a b'), '${PetInsightsRoutes.boardingPass}/a%20b');
     });
 
     testWidgets('页面标题与入口卡标题同源', (tester) async {
@@ -324,6 +339,9 @@ Future<void> _pumpHub(
       GoRoute(
           path: PetInsightsRoutes.ageCard,
           builder: (c, s) => const Scaffold(body: Text('age'))),
+      GoRoute(
+          path: PetInsightsRoutes.boardingPass,
+          builder: (c, s) => const Scaffold(body: Text('boarding-pass'))),
       GoRoute(
           path: PetInsightsRoutes.passport,
           builder: (c, s) => const Scaffold(body: Text('passport'))),
