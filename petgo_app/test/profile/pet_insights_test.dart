@@ -9,6 +9,9 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/presentation/pet_insights_page.dart';
+import 'package:tailtopia/features/tailsonality/data/tailsonality_repository.dart';
+import 'package:tailtopia/features/tailsonality/domain/tailsonality_result.dart';
+import 'package:tailtopia/features/tailsonality/presentation/tailsonality_routes.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// V1.3.0 批次 A · Story 5.1（L0）：综合入口聚合页与 KTP 平移（FR-65 · AD-A17 / AD-A24）。
@@ -35,6 +38,7 @@ void main() {
       expect(block.trim(), "'/profile'");
       expect(block, isNot(contains('pet-insights')));
       expect(block, isNot(contains('age-card')));
+      expect(block, isNot(contains('tailsonality')));
     });
 
     /// 受控前缀集合本身也不该被动（比如有人把 /profile 挪出去"顺便"放行子页）。
@@ -59,6 +63,11 @@ void main() {
       // V1.3.2 Story 1.3：落章页与章详情页同样受控。
       expect(redirectWouldRewrite(guest, PetInsightsRoutes.passportNewStamp), isTrue);
       expect(redirectWouldRewrite(guest, PetInsightsRoutes.passportStampFor('abc')), isTrue);
+      // V1.3.2 Story 2.3：Tailsonality 答题页与结果页同样落在 /profile/ 下、自动受控。
+      expect(TailsonalityRoutes.quiz, startsWith('/profile/'));
+      expect(TailsonalityRoutes.result('abc'), startsWith('/profile/'));
+      expect(redirectWouldRewrite(guest, TailsonalityRoutes.quiz), isTrue);
+      expect(redirectWouldRewrite(guest, TailsonalityRoutes.result('abc')), isTrue);
       // 旧路径同样受控 —— 重定向不能变成绕过门控的旁路（AC4 / AD-A17.6）。
       expect(redirectWouldRewrite(guest, '/profile/id-card'), isTrue);
     });
@@ -67,6 +76,7 @@ void main() {
       const user = AuthState(status: AuthStatus.authenticated, role: 'USER');
       expect(redirectWouldRewrite(user, PetInsightsRoutes.hub), isFalse);
       expect(redirectWouldRewrite(user, PetInsightsRoutes.idCard), isFalse);
+      expect(redirectWouldRewrite(user, TailsonalityRoutes.quiz), isFalse);
     });
   });
 
@@ -94,14 +104,14 @@ void main() {
     });
   });
 
-  group('AC2 🔴 KTP / 年龄卡 / 护照三张卡，不预埋尚未上线的卡（V1.3.2 Story 1.2 更新）', () {
+  group('AC2 🔴 KTP / 年龄卡 / 护照 / Tailsonality 四张卡，不预埋尚未上线的卡（V1.3.2 Story 2.3 更新）', () {
     final String pageSrc =
         File('lib/features/profile/presentation/pet_insights_page.dart').readAsStringSync();
 
-    /// 性格测试（Story 2.3）**不占位、不置灰、不出现**：它上线时是「新增卡」，
+    /// 登机牌（Story 3.5）**不占位、不置灰、不出现**：它上线时是「新增卡」，
     /// 不是「解锁占位」—— 所以连一个隐藏卡位、一个 enabled:false 的常量都不许留。
-    /// 护照已在 V1.3.2 Story 1.2 上线，从禁词里移除。
-    test('源码里没有性格测试 / 即将推出的任何痕迹', () {
+    /// 护照（Story 1.2）与 Tailsonality（Story 2.3）已上线，从禁词里移除；新增登机牌禁词守住「不占第 5 张」。
+    test('源码里没有登机牌 / 即将推出的任何痕迹', () {
       // 只看真正的代码：文档注释里**本来就会**提到这两样（那段话正是在写"为什么不占位"），
       // 扫全文会被自己的解释性注释弄红。
       final code = pageSrc
@@ -109,32 +119,42 @@ void main() {
           .where((l) => !l.trimLeft().startsWith('///') && !l.trimLeft().startsWith('//'))
           .join('\n');
       for (final banned in [
-        'tailsonality',
-        'Tailsonality',
         'comingSoon',
         'coming_soon',
+        'boardingPass',
+        'boarding_pass',
       ]) {
         expect(code, isNot(contains(banned)), reason: '$banned 尚未上线，不占位');
       }
     });
 
-    testWidgets('聚合页就是三张卡', (tester) async {
+    testWidgets('聚合页就是四张卡，按 C-8 顺序', (tester) async {
       await _pumpHub(tester, petType: 'CAT');
-      expect(find.byKey(const ValueKey('insightIdCard')), findsOneWidget);
-      expect(find.byKey(const ValueKey('insightAgeCard')), findsOneWidget);
-      expect(find.byKey(const ValueKey('insightPassport')), findsOneWidget);
-      expect(find.byType(InkWell), findsNWidgets(3));
+      const order = ['insightIdCard', 'insightAgeCard', 'insightPassport', 'insightTailsonality'];
+      for (final k in order) {
+        expect(find.byKey(ValueKey(k)), findsOneWidget, reason: k);
+      }
+      expect(find.byType(InkWell), findsNWidgets(4));
+      final rects = [for (final k in order) tester.getRect(find.byKey(ValueKey(k)))];
+      // 阅读顺序：同行左→右、行间上→下。
+      for (var i = 1; i < rects.length; i++) {
+        final prev = rects[i - 1], cur = rects[i];
+        expect(cur.top > prev.top || (cur.top == prev.top && cur.left > prev.left), isTrue, reason: order[i]);
+      }
     });
 
-    /// V1.3.2 Story 1.2 · AC4：2+1 排布 —— 护照整宽独占第二行；全物种可点。
-    testWidgets('护照卡整宽独占第二行、全物种可点', (tester) async {
+    /// V1.3.2 Story 2.3：2+2 排布 —— 护照从整宽变回半宽（预期），与 Tailsonality 并排第二行；全物种可点。
+    testWidgets('第二行护照 + Tailsonality 并排、全物种可点', (tester) async {
       await _pumpHub(tester, petType: 'OTHER');
       final ktp = tester.getRect(find.byKey(const ValueKey('insightIdCard')));
       final age = tester.getRect(find.byKey(const ValueKey('insightAgeCard')));
       final pass = tester.getRect(find.byKey(const ValueKey('insightPassport')));
+      final ts = tester.getRect(find.byKey(const ValueKey('insightTailsonality')));
       expect(ktp.top, age.top, reason: '第一行两张并排');
       expect(pass.top, greaterThan(ktp.bottom), reason: '护照在第二行');
-      expect(pass.width, greaterThan(ktp.width * 1.8), reason: '落单整宽');
+      expect(ts.top, pass.top, reason: 'Tailsonality 与护照同一行');
+      expect(pass.width, closeTo(ktp.width, 1), reason: '2+2：护照回到半宽');
+      expect(tester.widget<InkWell>(find.byKey(const ValueKey('insightTailsonality'))).onTap, isNotNull);
       final card = tester.widget<InkWell>(find.byKey(const ValueKey('insightPassport')));
       expect(card.onTap, isNotNull);
 
@@ -147,6 +167,48 @@ void main() {
       await _pumpHub(tester, petType: 'CAT');
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
       expect(find.text(l10n.petInsightsTitle), findsOneWidget);
+    });
+  });
+
+  group('V1.3.2 Story 2.3 · AC1.3 Tailsonality 卡分流', () {
+    testWidgets('无结果 → 弹说明抽屉', (tester) async {
+      await _pumpHub(tester, petType: 'CAT', tsResults: const []);
+      await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('tsIntroSheet')), findsOneWidget);
+    });
+
+    testWidgets('有结果 → 进最近一次结果页', (tester) async {
+      await _pumpHub(tester, petType: 'CAT', tsResults: [_tsResult('newest'), _tsResult('older')]);
+      await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
+      await tester.pumpAndSettle();
+      expect(find.text('result:newest'), findsOneWidget);
+    });
+
+    testWidgets('读列表期间双击只走一次', (tester) async {
+      final repo = _FakeTsRepo([_tsResult('newest')], delay: const Duration(milliseconds: 200));
+      await _pumpHub(tester, petType: 'CAT', repo: repo);
+      await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
+      await tester.pumpAndSettle();
+      expect(repo.calls, 1);
+      expect(find.text('result:newest'), findsOneWidget);
+    });
+
+    testWidgets('档案取失败且无结果 → 不抛未处理异常、不弹抽屉', (tester) async {
+      await _pumpHub(tester, petType: null, profileFails: true);
+      await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('tsIntroSheet')), findsNothing);
+    });
+
+    testWidgets('列表读取失败 → 仍弹说明抽屉', (tester) async {
+      await _pumpHub(tester, petType: 'OTHER', tsFails: true);
+      await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('tsIntroSheet')), findsOneWidget);
     });
   });
 
@@ -229,10 +291,18 @@ Future<void> _pumpHub(
   WidgetTester tester, {
   required String? petType,
   bool noProfile = false,
+  List<TailsonalityResult> tsResults = const [],
+  bool tsFails = false,
+  bool profileFails = false,
+  _FakeTsRepo? repo,
 }) async {
-  final container = ProviderContainer(overrides: [
-    petProfileProvider.overrideWith((ref) async =>
-        noProfile ? null : PetProfile(id: 1, name: 'Mochi', cardToken: 'tok', petType: petType)),
+  // retry 关掉：Riverpod 3 默认对失败 provider 定时重试，测试结束时会留下挂起的 Timer。
+  final container = ProviderContainer(retry: (_, _) => null, overrides: [
+    petProfileProvider.overrideWith((ref) async {
+      if (profileFails) throw Exception('profile');
+      return noProfile ? null : PetProfile(id: 1, name: 'Mochi', cardToken: 'tok', petType: petType);
+    }),
+    tailsonalityRepositoryProvider.overrideWithValue(repo ?? _FakeTsRepo(tsResults, fails: tsFails)),
   ]);
   addTearDown(container.dispose);
 
@@ -249,6 +319,12 @@ Future<void> _pumpHub(
       GoRoute(
           path: PetInsightsRoutes.passport,
           builder: (c, s) => const Scaffold(body: Text('passport'))),
+      GoRoute(
+          path: TailsonalityRoutes.quiz,
+          builder: (c, s) => const Scaffold(body: Text('quiz'))),
+      GoRoute(
+          path: TailsonalityRoutes.resultPattern,
+          builder: (c, s) => Scaffold(body: Text('result:${s.pathParameters['token']}'))),
     ],
   );
   addTearDown(router.dispose);
@@ -263,4 +339,36 @@ Future<void> _pumpHub(
     ),
   ));
   await tester.pumpAndSettle();
+}
+
+TailsonalityResult _tsResult(String token) => TailsonalityResult(
+      token: token,
+      typeCode: 'ENTJ-H',
+      letters: 'ENTJ',
+      energy: 'H',
+      questionSet: 'CAT',
+      resultIndex: 1,
+      unlocked: false,
+      contentVersion: 1,
+      createdAt: DateTime.utc(2026, 9, 30),
+    );
+
+class _FakeTsRepo implements TailsonalityRepository {
+  _FakeTsRepo(this.results, {this.fails = false, this.delay = Duration.zero});
+
+  final List<TailsonalityResult> results;
+  final bool fails;
+  final Duration delay;
+  int calls = 0;
+
+  @override
+  Future<List<TailsonalityResult>> fetchResults() async {
+    calls++;
+    if (delay > Duration.zero) await Future<void>.delayed(delay);
+    if (fails) throw Exception('network');
+    return results;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

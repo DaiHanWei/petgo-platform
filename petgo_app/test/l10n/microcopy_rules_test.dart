@@ -120,6 +120,8 @@ List<String> _alphaWords(String v) => v
 const _sameInBothLocales = {
   // 品牌与产品专名
   'tailtopia', 'pawcoin', 'qris', 'gopay', 'ovo', 'ktp', 'hd',
+  // V1.3.2 Story 2.3：性格测试产品名，三语同形。
+  'tailsonality',
   // 印尼语直接借用的英文词
   'checkout', 'online', 'offline', 'normal', 'rating', 'refund', 'bonus',
   'edit', 'bug', 'email', 'whatsapp', 'label', 'diary', 'milestone', 'health',

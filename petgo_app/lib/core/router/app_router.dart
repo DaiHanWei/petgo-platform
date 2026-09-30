@@ -87,6 +87,9 @@ import '../../features/pet_passport/presentation/pet_passport_page.dart';
 import '../../features/pet_passport/domain/new_stamp_args.dart';
 import '../../features/pet_passport/presentation/pet_passport_new_stamp_page.dart';
 import '../../features/pet_passport/presentation/pet_passport_stamp_page.dart';
+import '../../features/tailsonality/presentation/tailsonality_quiz_page.dart';
+import '../../features/tailsonality/presentation/tailsonality_result_page.dart';
+import '../../features/tailsonality/presentation/tailsonality_routes.dart';
 import '../../features/place/presentation/place_list_page.dart';
 import '../../features/place/presentation/place_mark_page.dart';
 import '../../features/profile/presentation/pet_card_page.dart';
@@ -781,6 +784,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: PetInsightsRoutes.passportStamp,
         builder: (c, s) => PetPassportStampPage(placeToken: s.pathParameters['placeToken']!),
+      ),
+      // Tailsonality（V1.3.2 Story 2.3）：答题页 + 结果页，落在 /profile/ 下 → 自动受控，**不进**例外集合。
+      GoRoute(path: TailsonalityRoutes.quiz, builder: (c, s) => const TailsonalityQuizPage()),
+      GoRoute(
+        path: TailsonalityRoutes.resultPattern,
+        builder: (c, s) => TailsonalityResultPage(token: s.pathParameters['token']!),
       ),
       // 🔴 旧路径**保留为重定向，不得删除**（AD-A17.2）：站内两处跳转 + 潜在的历史通知深链，
       // 断链是硬失败。

@@ -4,7 +4,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../tailsonality/data/tailsonality_repository.dart';
+import '../../tailsonality/domain/tailsonality_result.dart';
+import '../../tailsonality/presentation/tailsonality_routes.dart';
+import '../../tailsonality/presentation/widgets/tailsonality_intro_sheet.dart';
 import '../data/profile_repository.dart';
+import '../domain/pet_profile.dart';
 import 'widgets/insight_entry_card.dart';
 
 /// 「Know Your Pet」聚合页的路由路径（V1.3.0 批次 A · Story 5.1 · AD-A17）。
@@ -135,6 +140,14 @@ class PetInsightsPage extends ConsumerWidget {
                 sub: l10n.passportEntrySub,
                 onTap: () => context.push(PetInsightsRoutes.passport),
               ),
+              // V1.3.2 Story 2.3：Tailsonality，全物种可点（OTHER 走通用题套）；2+2 排布。
+              InsightEntryCard(
+                inkKey: const ValueKey('insightTailsonality'),
+                icon: Icons.psychology_alt_outlined,
+                title: l10n.tailsonalityTitle,
+                sub: l10n.tailsonalityEntrySub,
+                onTap: () => openTailsonality(context, ref),
+              ),
             ]),
           ),
         ),
@@ -142,3 +155,47 @@ class PetInsightsPage extends ConsumerWidget {
     );
   }
 }
+
+/// Tailsonality 卡的分流（V1.3.2 Story 2.3 · AC1.3）：无结果 → 说明抽屉；有结果 → 最近一次结果页；
+/// 列表读取失败 → 仍弹说明抽屉（不因读失败挡住入口；重测免费，误进新测试无代价）。
+///
+/// 读列表期间再点一次直接忽略（慢网下双击会叠两层抽屉 / 推两次结果页）。
+Future<void> openTailsonality(BuildContext context, WidgetRef ref) async {
+  if (_tailsonalityOpening) return;
+  _tailsonalityOpening = true;
+  List<TailsonalityResult> results = const [];
+  PetProfile? pet;
+  try {
+    try {
+      results = await ref.read(tailsonalityRepositoryProvider).fetchResults();
+    } catch (_) {
+      results = const [];
+    }
+    if (results.isEmpty) {
+      // 档案取不到：抽屉无从确认「测的是谁」，本次点击不响应（返回重进即可重试）。
+      // ⚠️ 不能直接 await `.future`：Riverpod 3 对失败的 provider 自动重试，future 会一直挂着。
+      final state = ref.read(petProfileProvider);
+      if (state.hasValue) {
+        pet = state.value;
+      } else if (!state.hasError) {
+        try {
+          pet = await ref.read(petProfileProvider.future).timeout(const Duration(seconds: 10));
+        } catch (_) {
+          pet = null;
+        }
+      }
+    }
+  } finally {
+    // 抽屉 / 跳转之前就放开：抽屉的 Future 可能随页面销毁永不完成，不能让闸门跟着卡死。
+    _tailsonalityOpening = false;
+  }
+  if (!context.mounted) return;
+  if (results.isNotEmpty) {
+    context.push(TailsonalityRoutes.result(results.first.token));
+    return;
+  }
+  if (pet == null) return;
+  await showTailsonalityIntroSheet(context, pet);
+}
+
+bool _tailsonalityOpening = false;

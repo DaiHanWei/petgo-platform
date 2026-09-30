@@ -170,6 +170,9 @@ flutter:
     # V1.3.2 Story 1.2：场所默认章（7 款类型兜底）。素材未入库（D-21），目录里只有 README；
     # 到货后同名放入即生效，缺失时 App 画代码占位章。
     - assets/place_stamp/
+    # V1.3.2 Story 2.3：Tailsonality 素材（扁平存放 intro_poster / quiz_* / role_* / match_tier*）。
+    # 素材未入库（D-21），目录里只有 README；到货后同名放入即生效，缺失时 App 画代码占位。
+    - assets/tailsonality/
     # 字体许可证。**必须打进包里**（code-review 2026-08-04）：OFL-1.1 §2 要求
     # 「每份分发副本须含版权声明与本许可证」，而 `fonts:` 段只会打包 ttf 本身 ——
     # 改前 OFL.txt 只存在于 git 仓库、从不随 app 分发，pubspec 注释却宣称已合规。
