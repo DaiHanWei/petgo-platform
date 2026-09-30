@@ -3794,5 +3794,16 @@
   "tailsonalityCoachmarkTitle": "Your pet's personality test is here",
   "@tailsonalityCoachmarkTitle": {"description": "Know Your Pet hub: second onboarding coachmark title pointing at the Tailsonality card (V1.3.2 Story 2.7)."},
   "tailsonalityCoachmarkText": "Tap to get started",
-  "@tailsonalityCoachmarkText": {"description": "Second onboarding coachmark body."}
+  "@tailsonalityCoachmarkText": {"description": "Second onboarding coachmark body."},
+  "tailsonalityUnlockCta": "Unlock Rp{price}",
+  "@tailsonalityUnlockCta": {"placeholders": {"price": {"type": "String"}}},
+  "tailsonalityPaywallTitle": "Unlock the full reading",
+  "tailsonalityPaywallBody": "A deep dive just for {pet}: 4 dimensions, energy level, plus the card without watermark.",
+  "@tailsonalityPaywallBody": {"placeholders": {"pet": {"type": "String"}}},
+  "tailsonalityPayConfirm": "Pay Rp{price}",
+  "@tailsonalityPayConfirm": {"placeholders": {"price": {"type": "String"}}},
+  "tailsonalityUnlockedToast": "Result unlocked!",
+  "tailsonalityEnergyTitle": "Energy level",
+  "tailsonalityEnergyHigh": "High",
+  "tailsonalityEnergyLow": "Low"
 }

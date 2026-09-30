@@ -58,6 +58,8 @@ class AnalyticsEventGuardTest {
         assertThat(guard.allowsEvent("place_checkin")).isTrue();
         assertThat(guard.allowsEvent("passport_issued")).isTrue();
         assertThat(guard.allowsEvent("passport_stamped")).isTrue();
+        // V1.3.2 Story 3.2：Tailsonality 解锁成功（服务端发）
+        assertThat(guard.allowsEvent("tailsonality_unlocked")).isTrue();
     }
 
     @Test
@@ -99,8 +101,12 @@ class AnalyticsEventGuardTest {
         raw.put("is_new_stamp", true);
         raw.put("passport_source", "KTP");
         raw.put("stamp_count", 3);
+        // V1.3.2 Story 3.2
+        raw.put("role_code", "ENTJ-H");
+        raw.put("price", 5_000L);
+        raw.put("result_index", 2);
 
-        assertThat(guard.filterProperties(raw)).hasSize(20).containsAllEntriesOf(raw);
+        assertThat(guard.filterProperties(raw)).hasSize(23).containsAllEntriesOf(raw);
     }
 
     @Test

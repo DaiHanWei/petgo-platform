@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
+import '../../keepsake/domain/keepsake_purchase_result.dart';
+import '../../profile/domain/id_card.dart';
 import '../domain/tailsonality_result.dart';
 
 /// Tailsonality 数据层（V1.3.2 Story 2.1）。
@@ -32,6 +34,13 @@ class TailsonalityRepository {
   Future<TailsonalityResult> fetchResult(String token) async {
     final resp = await dio.get<Map<String, dynamic>>(ApiPaths.petTailsonalityResult(token));
     return TailsonalityResult.fromJson(resp.data!);
+  }
+
+  /// 一次性解锁（Story 3.2）：已解锁 409 `keepsake-already-unlocked`、余额不足 409 `pawcoin-insufficient`。
+  Future<KeepsakePurchaseResult> unlock(String token, HdPayChannel channel) async {
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.tailsonalityResultUnlock(token),
+        data: {'channel': channel.wire});
+    return KeepsakePurchaseResult.fromJson(resp.data ?? const {});
   }
 }
 

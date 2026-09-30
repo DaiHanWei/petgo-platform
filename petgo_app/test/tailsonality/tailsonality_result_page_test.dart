@@ -4,7 +4,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
+import 'package:tailtopia/features/keepsake/data/keepsake_repository.dart';
+import 'package:tailtopia/features/keepsake/domain/keepsake_pricing.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_owner_type_repository.dart';
@@ -110,7 +113,8 @@ void main() {
   });
 
   group('锁态区（AC5）', () {
-    testWidgets('三段标题可见、正文在模糊 + ExcludeSemantics 下；无购买按钮、无 Rp', (tester) async {
+    // Story 3.2 起购买按钮由结果页经 `footer` 插进来；组件本身（无 footer）仍不带按钮、不带价格。
+    testWidgets('三段标题可见、正文在模糊 + ExcludeSemantics 下；无 footer 时无购买按钮、无 Rp', (tester) async {
       await tester.pumpWidget(wrap(const SingleChildScrollView(
           child: TsLockedAnalysis(typeCode: 'ENTJ-H', letters: 'ENTJ', energy: 'H', petName: 'Momo'))));
       expect(find.text('Analisis lengkap'), findsOneWidget);
@@ -134,6 +138,7 @@ void main() {
     setUp(() {
       events = [];
       Analytics.debugCaptureSink = (e, p) => events.add((e, p));
+      SharedPreferences.setMockInitialValues({});
     });
     tearDown(() => Analytics.debugCaptureSink = null);
 
@@ -148,6 +153,8 @@ void main() {
         petFails: petFails,
         ownerType: ownerType,
         overrides: [
+          keepsakePricingProvider.overrideWith((ref) async => const KeepsakePricing(
+              ktpHd: 10000, passportSnapshot: 2000, boardingPass: 1000, tailsonality: 5000)),
           tailsonalityResultProvider('abc').overrideWith((ref) async {
             if (error != null) throw error;
             return r ?? result();
@@ -157,7 +164,8 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('顺序：卡 → 摘要（{pet} 已替换）→ 引流 → 锁态区；底部无主 CTA、无次数文案', (tester) async {
+    // Story 3.2 按新规则更新：未解锁态锁态区内有唯一购买按钮「Buka Rp{价}」（价来自服务端）；已解锁态不显示（见下）。
+    testWidgets('顺序：卡 → 摘要（{pet} 已替换）→ 引流 → 锁态区（含购买按钮）；无次数文案', (tester) async {
       await pumpPage(tester);
       final card = tester.getTopLeft(find.byType(TsResultCard)).dy;
       final summary = tester.getTopLeft(find.byKey(const ValueKey('tsResultSummary'))).dy;
@@ -166,9 +174,11 @@ void main() {
       expect(card < summary && summary < teaser && teaser < locked, isTrue);
       expect(find.textContaining('Sistem keamanan rumah'), findsOneWidget);
       expect(find.textContaining('{pet}'), findsNothing);
-      expect(find.byType(FilledButton), findsNothing);
-      // 重测免费、无次数提示：不得出现「N kali / sisa / gratis / kuota」或价格。
-      for (final w in [RegExp(r'\d+\s*kali\b'), RegExp(r'\bsisa\b'), RegExp(r'\bgratis\b'), RegExp(r'\bkuota\b'), 'Rp']) {
+      expect(find.byType(FilledButton), findsOneWidget);
+      expect(find.descendant(of: find.byType(TsLockedAnalysis), matching: find.text('Buka Rp5.000')), findsOneWidget);
+      // 重测免费、无次数提示：不得出现「N kali / sisa / gratis / kuota」；价格只出现在购买按钮上。
+      expect(find.textContaining('Rp'), findsOneWidget);
+      for (final w in [RegExp(r'\d+\s*kali\b'), RegExp(r'\bsisa\b'), RegExp(r'\bgratis\b'), RegExp(r'\bkuota\b')]) {
         expect(find.textContaining(w), findsNothing, reason: '$w');
       }
       expect(find.byTooltip('Opsi lainnya'), findsOneWidget);
@@ -218,10 +228,12 @@ void main() {
       expect(find.descendant(of: find.byType(TsMatchTeaser), matching: find.byType(InkWell)), findsOneWidget);
     });
 
-    testWidgets('已解锁分支不崩、不渲染锁态区', (tester) async {
+    testWidgets('已解锁分支不崩、不渲染锁态区、不显示购买按钮', (tester) async {
       await pumpPage(tester, r: result(unlocked: true));
       expect(find.byType(TsLockedAnalysis), findsNothing);
       expect(find.byType(CardWatermark), findsNothing);
+      expect(find.byKey(const ValueKey('tsUnlockCta')), findsNothing);
+      expect(find.byType(FilledButton), findsNothing);
     });
 
     testWidgets('⋯ 菜单仅一项；重测确认后发埋点并弹说明抽屉；取消无埋点', (tester) async {

@@ -2453,5 +2453,16 @@
   "tailsonalityResultLocked": "Belum dibuka",
   "tailsonalityHistoryEmpty": "Belum ada hasil tes",
   "tailsonalityCoachmarkTitle": "Tes kepribadian anabulmu ada di sini",
-  "tailsonalityCoachmarkText": "Ketuk buat mulai"
+  "tailsonalityCoachmarkText": "Ketuk buat mulai",
+  "tailsonalityUnlockCta": "Buka Rp{price}",
+  "@tailsonalityUnlockCta": {"placeholders": {"price": {"type": "String"}}},
+  "tailsonalityPaywallTitle": "Buka analisis lengkap",
+  "tailsonalityPaywallBody": "Deep dive khusus {pet}, 4 dimensi, level energi, plus kartu tanpa watermark.",
+  "@tailsonalityPaywallBody": {"placeholders": {"pet": {"type": "String"}}},
+  "tailsonalityPayConfirm": "Bayar Rp{price}",
+  "@tailsonalityPayConfirm": {"placeholders": {"price": {"type": "String"}}},
+  "tailsonalityUnlockedToast": "Hasil sudah kebuka!",
+  "tailsonalityEnergyTitle": "Level energi",
+  "tailsonalityEnergyHigh": "High",
+  "tailsonalityEnergyLow": "Low"
 }

@@ -1,81 +1,137 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/storage/prefs.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/pay_channel_picker.dart';
+import '../../../shared/widgets/price_load_retry.dart';
+import '../../keepsake/data/keepsake_repository.dart';
+import '../../keepsake/presentation/keepsake_pay_flow.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/tailsonality_owner_type_repository.dart';
 import '../data/tailsonality_providers.dart';
+import '../data/tailsonality_repository.dart';
+import '../domain/content/ts_dialog_copy.dart';
 import '../domain/content/ts_roles.dart';
 import '../domain/content/ts_text.dart';
 import '../domain/tailsonality_result.dart';
 import '../domain/ts_match.dart';
 import 'tailsonality_retake.dart';
 import 'tailsonality_routes.dart';
+import 'tailsonality_unlock_analytics.dart';
 import 'widgets/ts_locked_analysis.dart';
 import 'widgets/ts_match_teaser.dart';
 import 'widgets/ts_result_card.dart';
 import 'widgets/ts_result_menu.dart';
 import 'widgets/ts_rich_text.dart';
+import 'widgets/ts_unlocked_analysis.dart';
 
-/// Tailsonality 结果页（V1.3.2 Story 2.4 · 免费态 · UX-DR6）。
+/// Tailsonality 结果页（V1.3.2 Story 2.4 免费态 · Story 3.2 解锁 / 已解锁态 / 挽留 · UX-DR6）。
 ///
-/// 自上而下：结果卡（3:4，带水印）→ 免费摘要 → 配型引流 → 锁态区；底部**无**主 CTA（「Bagikan」属 Epic 4）。
-/// 路由 `extra` 带 [TailsonalityResult] 时先用它首帧渲染；深链无 `extra` 照常按 token 取数。
-class TailsonalityResultPage extends ConsumerWidget {
+/// 自上而下：结果卡（3:4；未解锁带水印）→ 免费摘要 → 配型引流 → 锁态区（底部「Buka Rp{价}」）/ 已解锁付费区。
+/// 底部**无**主 CTA（「Bagikan」属 Epic 4）。路由 `extra` 带 [TailsonalityResult] 时先用它首帧渲染；
+/// 深链无 `extra` 照常按 token 取数。
+///
+/// 未解锁态点返回（系统 / AppBar）→ 本机对该结果 token 首次时弹挽留（A10），弹出即记。
+class TailsonalityResultPage extends ConsumerStatefulWidget {
   const TailsonalityResultPage({super.key, required this.token, this.initial});
 
   final String token;
   final TailsonalityResult? initial;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TailsonalityResultPage> createState() => _TailsonalityResultPageState();
+}
+
+class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage> {
+  final GlobalKey _lockedKey = GlobalKey();
+  bool _viewedReported = false;
+  bool _buying = false;
+
+  /// 本页实例已处理过挽留（弹过 / 本机早已弹过）→ 再点返回直接走。
+  bool _retentionDone = false;
+  bool _retentionBusy = false;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final async = ref.watch(tailsonalityResultProvider(token));
+    final async = ref.watch(tailsonalityResultProvider(widget.token));
     final petName = ref.watch(petProfileProvider).asData?.value?.name ?? '';
     // 答题页带过来的结果一直有效（刚由服务端创建）：后续取数失败 / 重试中都继续显示它，不被重试页顶掉。
-    final shown = async.asData?.value ?? initial;
-    return Scaffold(
-      backgroundColor: AppColors.cream,
-      appBar: AppBar(
+    // 用 `value`（刷新中保留上一份）而不是 `asData`：解锁后刷新期间不能闪回 `initial` 的锁态。
+    final shown = async.value ?? widget.initial;
+    final locked = shown != null && !shown.unlocked;
+    if (locked) {
+      // viewed 带价格：价格到位（或失败）后再判一次可视，避免首帧就报出一条缺价的事件。
+      ref.listen(keepsakePricingProvider, (_, next) {
+        if (!next.isLoading) _scheduleViewedCheck();
+      });
+      _scheduleViewedCheck();
+    }
+    return PopScope(
+      // 购买流程进行中（读余额 / 请求在途、尚无弹层）不拦返回：用户此时想走就让走，流程随页面卸载自然作废。
+      canPop: !locked || _retentionDone || _buying,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && shown != null) _onBlockedPop(shown, petName);
+      },
+      child: Scaffold(
         backgroundColor: AppColors.cream,
-        title: Text(l10n.tailsonalityTitle),
-        actions: [
-          IconButton(
-            key: const ValueKey('tsResultMore'),
-            tooltip: l10n.tailsonalityMoreActions,
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-            icon: const Icon(Icons.more_horiz),
-            onPressed: shown == null ? null : () => _openMenu(context, ref),
-          ),
-        ],
-      ),
-      body: shown != null
-          ? _Body(result: shown, petName: petName)
-          : async.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => _isNotFound(e)
-                  ? Center(
-                      key: const ValueKey('tsResultNotFound'),
-                      child: Text(l10n.tailsonalityResultNotFound, style: const TextStyle(color: AppColors.muted)),
-                    )
-                  : Center(
-                      child: TextButton(
-                        key: const ValueKey('tsResultRetry'),
-                        onPressed: () => ref.invalidate(tailsonalityResultProvider(token)),
-                        child: Text(l10n.commonRetry),
-                      ),
-                    ),
-              data: (_) => const SizedBox.shrink(),
+        appBar: AppBar(
+          backgroundColor: AppColors.cream,
+          title: Text(l10n.tailsonalityTitle),
+          actions: [
+            IconButton(
+              key: const ValueKey('tsResultMore'),
+              tooltip: l10n.tailsonalityMoreActions,
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              icon: const Icon(Icons.more_horiz),
+              onPressed: shown == null ? null : () => _openMenu(context),
             ),
+          ],
+        ),
+        body: shown != null
+            ? NotificationListener<ScrollNotification>(
+                onNotification: (_) {
+                  if (locked) _checkViewed(shown);
+                  return false;
+                },
+                child: _Body(
+                  result: shown,
+                  petName: petName,
+                  lockedKey: _lockedKey,
+                  footer: locked
+                      ? _UnlockCta(busy: _buying, onTap: () => _startUnlock(shown, petName))
+                      : null,
+                ),
+              )
+            : async.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => _isNotFound(e)
+                    ? Center(
+                        key: const ValueKey('tsResultNotFound'),
+                        child: Text(l10n.tailsonalityResultNotFound, style: const TextStyle(color: AppColors.muted)),
+                      )
+                    : Center(
+                        child: TextButton(
+                          key: const ValueKey('tsResultRetry'),
+                          onPressed: () => ref.invalidate(tailsonalityResultProvider(widget.token)),
+                          child: Text(l10n.commonRetry),
+                        ),
+                      ),
+                data: (_) => const SizedBox.shrink(),
+              ),
+      ),
     );
   }
 
   static bool _isNotFound(Object e) => e is DioException && e.response?.statusCode == 404;
 
-  void _openMenu(BuildContext context, WidgetRef ref) {
+  void _openMenu(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     showTsResultMenu(context, [
       (
@@ -86,13 +142,141 @@ class TailsonalityResultPage extends ConsumerWidget {
       ),
     ]);
   }
+
+  // ---------- AC8：锁态区首次进入可视区域 ----------
+
+  void _scheduleViewedCheck() {
+    if (_viewedReported) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final r = ref.read(tailsonalityResultProvider(widget.token)).value ?? widget.initial;
+      if (r != null && !r.unlocked) _checkViewed(r);
+    });
+  }
+
+  void _checkViewed(TailsonalityResult r) {
+    if (_viewedReported) return;
+    final price = ref.read(keepsakePricingProvider);
+    if (price.isLoading && !price.hasValue) return; // 等价格（失败则不带 price 照报）
+    final box = _lockedKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) return;
+    final top = box.localToGlobal(Offset.zero).dy;
+    if (top >= MediaQuery.sizeOf(context).height) return;
+    _viewedReported = true;
+    TailsonalityUnlockAnalytics.viewed(
+        roleCode: r.typeCode,
+        resultIndex: r.resultIndex,
+        price: price.value?.tailsonality);
+  }
+
+  // ---------- AC4 / AC6：购买 ----------
+
+  Future<void> _startUnlock(TailsonalityResult r, String petName) async {
+    if (_buying) return;
+    setState(() => _buying = true);
+    // 抽屉期间保活定价 provider（autoDispose）：确认埋点要读价格。
+    final priceSub = ref.listenManual(keepsakePricingProvider, (_, _) {});
+    final l10n = AppLocalizations.of(context);
+    try {
+      final outcome = await runKeepsakePurchase(
+        context: context,
+        ref: ref,
+        sheet: (balance) => _TsPaywallSheet(result: r, petName: petName, balance: balance),
+        start: (channel) => ref.read(tailsonalityRepositoryProvider).unlock(r.token, channel),
+        pollPaid: () async => (await ref.refresh(tailsonalityResultProvider(r.token).future)).unlocked,
+        onChannelConfirmed: (channel) => TailsonalityUnlockAnalytics.initiated(
+            roleCode: r.typeCode,
+            resultIndex: r.resultIndex,
+            method: channel,
+            price: priceSub.read().value?.tailsonality),
+      );
+      if (!mounted || outcome == KeepsakeFlowOutcome.notCompleted) return;
+      // 已解锁判定只看服务端：刷新结果（与列表），由服务端的 `unlocked` 切换页面。
+      ref.invalidate(tailsonalityResultProvider(r.token));
+      ref.invalidate(tailsonalityResultsProvider);
+      if (outcome == KeepsakeFlowOutcome.unlocked) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.tailsonalityUnlockedToast)));
+      }
+    } finally {
+      priceSub.close();
+      if (mounted) setState(() => _buying = false);
+    }
+  }
+
+  // ---------- AC7：挽留 ----------
+
+  Future<void> _onBlockedPop(TailsonalityResult r, String petName) async {
+    if (_retentionBusy || _buying) return;
+    _retentionBusy = true;
+    try {
+      AppPrefs? prefs;
+      try {
+        prefs = await AppPrefs.create();
+      } catch (_) {
+        prefs = null; // 读不到本地标记：照弹（最多多弹一次），不能卡住返回。
+      }
+      if (!mounted) return;
+      if (prefs?.tailsonalityRetentionShown(r.token) ?? false) {
+        setState(() => _retentionDone = true);
+        Navigator.of(context).pop();
+        return;
+      }
+      // 弹出即记（不论点哪个按钮）。
+      unawaited(prefs?.markTailsonalityRetentionShown(r.token));
+      setState(() => _retentionDone = true);
+      final unlock = await _showRetentionDialog(petName);
+      if (!mounted) return;
+      if (unlock == true) {
+        await _startUnlock(r, petName);
+      } else if (unlock == false) {
+        TailsonalityUnlockAnalytics.abandoned(resultIndex: r.resultIndex);
+        Navigator.of(context).pop();
+      }
+      // null = 点弹窗外 / 系统返回关掉弹窗：留在页面；下次返回直接走。
+    } finally {
+      _retentionBusy = false;
+    }
+  }
+
+  Future<bool?> _showRetentionDialog(String petName) {
+    final locale = Localizations.localeOf(context);
+    const c = kTsRetentionDialog;
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('tsRetentionDialog'),
+        title: Text(c.title.of(locale)),
+        content: Text(tsFillPet(c.body.of(locale), petName)),
+        actions: [
+          TextButton(
+            key: const ValueKey('tsRetainLater'),
+            style: TextButton.styleFrom(minimumSize: const Size(64, 44)),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(c.cancel.of(locale)),
+          ),
+          FilledButton(
+            key: const ValueKey('tsRetainUnlock'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(64, 44),
+              backgroundColor: AppColors.mint,
+              foregroundColor: AppColors.onAccent,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(c.confirm.of(locale)),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Body extends StatelessWidget {
-  const _Body({required this.result, required this.petName});
+  const _Body({required this.result, required this.petName, required this.lockedKey, this.footer});
 
   final TailsonalityResult result;
   final String petName;
+  final GlobalKey lockedKey;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -130,13 +314,100 @@ class _Body extends StatelessWidget {
         const SizedBox(height: 16),
         if (!result.unlocked)
           TsLockedAnalysis(
+            key: lockedKey,
+            typeCode: result.typeCode,
+            letters: result.letters,
+            energy: result.energy,
+            petName: petName,
+            footer: footer,
+          )
+        else
+          TsUnlockedAnalysis(
             typeCode: result.typeCode,
             letters: result.letters,
             energy: result.energy,
             petName: petName,
           ),
-        // TODO(3.2): 已解锁 → 完整解读（专属深读 → 四段维度 → 能量段）。
       ],
+    );
+  }
+}
+
+/// 锁态区底部购买按钮：价格只从服务端读（D-2），取价中「…」禁用，失败显示重试。
+class _UnlockCta extends ConsumerWidget {
+  const _UnlockCta({required this.busy, required this.onTap});
+
+  final bool busy;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final price = ref.watch(keepsakePricingProvider);
+    if (price.hasError && !price.isLoading) {
+      return Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: PriceLoadRetry(
+              key: const ValueKey('tsUnlockPriceRetry'), onRetry: () => ref.invalidate(keepsakePricingProvider)),
+        ),
+      );
+    }
+    final p = price.value?.tailsonality;
+    return FilledButton(
+      key: const ValueKey('tsUnlockCta'),
+      onPressed: p == null || busy ? null : onTap,
+      style: FilledButton.styleFrom(
+        backgroundColor: AppColors.mint,
+        foregroundColor: AppColors.onAccent,
+        minimumSize: const Size.fromHeight(48),
+      ),
+      child: Text(p == null ? '…' : l10n.tailsonalityUnlockCta(formatIdrAmount(p)),
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+    );
+  }
+}
+
+/// Tailsonality 选渠道抽屉：通用 [PayChannelPicker] + 结果卡缩略（带水印）+ 代号 + 角色名。
+class _TsPaywallSheet extends ConsumerWidget {
+  const _TsPaywallSheet({required this.result, required this.petName, required this.balance});
+
+  final TailsonalityResult result;
+  final String petName;
+  final int balance;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final role = kTsRoles[result.letters];
+    return PayChannelPicker(
+      price: ref.watch(keepsakePricingProvider).whenData((p) => p.tailsonality),
+      onRetryPrice: () => ref.invalidate(keepsakePricingProvider),
+      balance: balance,
+      title: l10n.tailsonalityPaywallTitle,
+      body: l10n.tailsonalityPaywallBody(petName),
+      confirmLabel: (p) => l10n.tailsonalityPayConfirm(p == null ? '…' : formatIdrAmount(p)),
+      confirmKey: const ValueKey('tsPayConfirm'),
+      retryKey: const ValueKey('tsPayPriceRetry'),
+      header: Row(
+        children: [
+          SizedBox(width: 72, child: TsResultCard(result: result, watermarked: true)),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(result.typeCode,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                if (role != null) ...[
+                  const SizedBox(height: 4),
+                  Text(role.name, style: const TextStyle(fontSize: 14, color: AppColors.ink2)),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

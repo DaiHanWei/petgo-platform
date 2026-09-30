@@ -168,6 +168,9 @@ class ApiPaths {
   /// 单条 Tailsonality 结果；token 不存在或非本人宠物 → 404。
   static String petTailsonalityResult(String token) => '$petTailsonalityResults/$token';
 
+  /// 一次性解锁该结果（V1.3.2 Story 3.2）：POST `{channel}` → `KeepsakePurchaseResponse`。仅 role=USER。
+  static String tailsonalityResultUnlock(String token) => '$petTailsonalityResults/$token/unlock';
+
   /// Tailsonality 主人四字母类型（V1.3.2 Story 2.5）：账号级 GET / PUT；未设置 → `{}`。仅 role=USER。
   static const String meTailsonalityOwnerType = '$base/me/tailsonality/owner-type';
 

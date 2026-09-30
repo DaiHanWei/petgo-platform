@@ -122,6 +122,8 @@ const _sameInBothLocales = {
   'tailtopia', 'pawcoin', 'qris', 'gopay', 'ovo', 'ktp', 'hd',
   // V1.3.2 Story 2.3：性格测试产品名，三语同形。
   'tailsonality',
+  // V1.3.2 Story 3.2：能量档位 High / Low 与代号后缀 H / L 对应，story l10n 表规定两语同写（「Level energi High」）。
+  'high', 'low',
   // 印尼语直接借用的英文词
   'checkout', 'online', 'offline', 'normal', 'rating', 'refund', 'bonus',
   'edit', 'bug', 'email', 'whatsapp', 'label', 'diary', 'milestone', 'health',

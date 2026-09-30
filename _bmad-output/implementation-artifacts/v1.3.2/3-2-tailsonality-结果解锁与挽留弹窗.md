@@ -1,6 +1,6 @@
 # Story 3.2: Tailsonality 结果解锁与挽留弹窗
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -67,26 +67,26 @@ tailsonality 包新建 `TailsonalityKeepsakeGranter implements KeepsakeGranter`�
 
 ## Tasks / Subtasks
 
-- [ ] **T0 核对前置**：2-1（结果表 / DTO / 仓库名）、2-2（内容表寻址 API）、2-4（结果页文件名、锁态区 widget、水印开关）、2-6（结果列表 provider）实际代码；3-1 的 `KeepsakePurchaseService` / `KeepsakeRef` / `KeepsakeGranter` 实际签名
-- [ ] **T1 后端：解锁接口**（AC1）
-  - [ ] tailsonality 控制器加端点 + 限流常量；结果仓库加 `findForUpdateByPublicTokenAndUserId`
-  - [ ] `SecurityConfig` 精确 matcher
-  - [ ] 集成测试：本人未解锁 PawCoin → 200 unlocked=true、结果行 `unlocked_at` 非空、钱包扣 5000；QRIS → payload 非空、购买行 PENDING；非本人 404；已解锁 409；MIXED 422
-- [ ] **T2 后端：granter**（AC2）
-  - [ ] `TailsonalityKeepsakeGranter` + 单测（三种 outcome、异常不外抛）
-  - [ ] 集成测试：模拟 QRIS 到账（`applyCallback` PAID）→ 结果行解锁；重测后新结果锁态、旧结果仍解锁
-- [ ] **T3 后端：埋点**（AC3）
-- [ ] **T4 App：keepsake 公共层**（AC6.1、AC6.3）
-  - [ ] 抽 `pay_channel_picker.dart`；`HdPaywallSheet` 改薄包装；跑 KTP 既有测试
-  - [ ] `lib/features/keepsake/` 三个文件 + 契约测试（pricing 缺字段 / 0 值抛错）
-  - [ ] `ApiPaths` 加 `tailsonalityResultUnlock(token)`
-- [ ] **T5 App：结果页接入**（AC4、AC5、AC6.2）
-  - [ ] 锁态区按钮 + 购买流程；已解锁态付费区拼装；去水印
-  - [ ] 更新 2-4 的「不显示购买按钮」断言
-  - [ ] widget 测试：锁态显示价格按钮（mock 价格 5000 → 「Buka Rp5.000」）；价格失败显示重试；PawCoin 成功切已解锁态且付费区三段顺序正确；409 `keepsake-already-unlocked` 不提示余额不足
-- [ ] **T6 App：挽留弹窗**（AC7）+ `AppPrefs` 新键
-- [ ] **T7 App：埋点**（AC8）
-- [ ] **T8 l10n**：en + id 同 key（见下表），`flutter gen-l10n`；`microcopy_rules_test` 通过
+- [x] **T0 核对前置**：2-1（结果表 / DTO / 仓库名）、2-2（内容表寻址 API）、2-4（结果页文件名、锁态区 widget、水印开关）、2-6（结果列表 provider）实际代码；3-1 的 `KeepsakePurchaseService` / `KeepsakeRef` / `KeepsakeGranter` 实际签名
+- [x] **T1 后端：解锁接口**（AC1）
+  - [x] tailsonality 控制器加端点 + 限流常量；结果仓库加 `findForUpdateByPublicTokenAndPetProfileId`（与 AC1.1 同名；按宠物查才与 2-1 的 404 口径一致）
+  - [x] `SecurityConfig` 精确 matcher
+  - [x] 集成测试：本人未解锁 PawCoin → 200 unlocked=true、结果行 `unlocked_at` 非空、钱包扣 5000；QRIS → payload 非空、购买行 PENDING；非本人 404；已解锁 409；MIXED 422
+- [x] **T2 后端：granter**（AC2）
+  - [x] `TailsonalityKeepsakeGranter` + 单测（三种 outcome、异常不外抛）
+  - [x] 集成测试：模拟 QRIS 到账（`applyCallback` PAID）→ 结果行解锁；重测后新结果锁态、旧结果仍解锁
+- [x] **T3 后端：埋点**（AC3）
+- [x] **T4 App：keepsake 公共层**（AC6.1、AC6.3）
+  - [x] 抽 `pay_channel_picker.dart`；`HdPaywallSheet` 改薄包装；跑 KTP 既有测试
+  - [x] `lib/features/keepsake/` 三个文件 + 契约测试（pricing 缺字段 / 0 值抛错）
+  - [x] `ApiPaths` 加 `tailsonalityResultUnlock(token)`
+- [x] **T5 App：结果页接入**（AC4、AC5、AC6.2）
+  - [x] 锁态区按钮 + 购买流程；已解锁态付费区拼装；去水印
+  - [x] 更新 2-4 的「不显示购买按钮」断言
+  - [x] widget 测试：锁态显示价格按钮（mock 价格 5000 → 「Buka Rp5.000」）；价格失败显示重试；PawCoin 成功切已解锁态且付费区三段顺序正确；409 `keepsake-already-unlocked` 不提示余额不足
+- [x] **T6 App：挽留弹窗**（AC7）+ `AppPrefs` 新键
+- [x] **T7 App：埋点**（AC8）
+- [x] **T8 l10n**：en + id 同 key（见下表），`flutter gen-l10n`；`microcopy_rules_test` 通过
 - [ ] **T9 联调**（L1 本地 / L2 stag 测试渠道真实 QRIS）
 
 ## Dev Notes
@@ -175,10 +175,67 @@ L0：AC3 白名单测试、AC6 契约与 KTP 回归、AC7 widget 测试、AC8 ·
 
 ### Agent Model Used
 
+Claude Code 云端 session（headless，环境 tailtopia-L0）
+
 ### Debug Log References
+
+- 后端 L0：**2815 例，0 失败**；新增 L1 类 `tailsonality/TailsonalityUnlockIntegrationTest` 进排除清单。
+- App L0：`flutter analyze` 无问题；`flutter test` **2541 例全绿**。
+- 无新迁移。
 
 ### Completion Notes List
 
-- Ultimate context engine analysis completed - comprehensive developer guide created
+- **T0 核对（与预期名的出入，已改本文件 / 按实际代码实现）**：
+  - 仓库方法名 T1 写的是 `…AndUserId`，AC1.1 写的是 `…AndPetProfileId`：取后者（2-1 的 `get` 按当前宠物查，这样「宠物已删 / 非本人」才是同一个 404），T1 已改。
+  - `SecurityConfig` 已由 2-1 加了 `/api/v1/pet-profiles/me/tailsonality/**` → `hasRole("USER")`，覆盖本端点；AC1.5 的精确 matcher **无需再加**，未改该文件。
+  - 请求体新建 `purchase/dto/KeepsakePayRequest`（与 `HdPurchaseRequest` 同形；放 purchase 包供 3.4 / 3.5 复用，tailsonality 不依赖 profile 的 DTO）。
+  - 2-2 的内容表已有挽留弹窗文案 `kTsRetentionDialog`（内容设计 §2.3 逐字），本 story 直接取它，**未**新增 `tailsonalityRetain*` 四个 ARB key（避免同一文案两份）；深读 / 四维度标题复用 2-4 已有的 `tailsonalityLockedDeepRead` / `tailsonalityLockedDimensions`（文字与本表相同），未新增 `tailsonalityDeepDiveTitle` / `tailsonalityDimensionsTitle`。新增 8 个 key：`tailsonalityUnlockCta` / `PaywallTitle` / `PaywallBody` / `PayConfirm` / `UnlockedToast` / `EnergyTitle` / `EnergyHigh` / `EnergyLow`。
+  - `microcopy_rules_test` 的同形词表加 `high` / `low`（本文件 l10n 表规定 id 也写 High / Low）。
+  - `v112_events_test` 的动作后缀表加 `_initiated`、`_abandoned`（带语义注释）。
+- **L1/L2 待本地验收**：
+  - `TailsonalityUnlockIntegrationTest`（真库 + Redis）：PawCoin 200 unlocked + `unlocked_at` 非空 + 扣价；二次 409 `keepsake-already-unlocked` 不再扣；QRIS 购买行 PENDING → `applyCallback` PAID 后结果解锁；重测新结果锁态、旧结果仍解锁；非本人 / 不存在 404；MIXED 422。注册表用 `@MockitoBean` 顶掉，TAILSONALITY 指向**真实**发放口。
+  - 🔴 同 3-1：真实 Spring 上下文要等 3.4 / 3.5 的发放口落地才能起（注册表缺 SKU 即启动失败）。
+  - 发放口保存点在真 PostgreSQL 上的行为（失败回滚到保存点后 `ORPHAN_PAID` 能正常落库）——单测只验了调用顺序。
+  - 服务端埋点 `tailsonality_unlocked` 在到账后发出（L1）。
+  - L2：A8 锁态按钮 / A9 已解锁态（去水印、三段、两极高亮）/ A10 挽留弹窗视觉；stag 测试渠道真实 QRIS（T9）。
+- **实现要点**：
+  - 后端：`TailsonalityUnlockService.unlock`（`noRollbackFor = PayException`，与 `start` 一致，否则网关下单失败的留档会被外层回滚）；`TailsonalityKeepsakeGranter`（JDBC + 保存点，GRANTED 分支是 3.3 自动佩戴的追加点）；`TailsonalityUnlockAnalyticsListener`（AFTER_COMMIT，全程 try/catch，AFTER_COMMIT 里抛出会冒到提交方）；控制器端点 + 限流 `rl:tailsonality:unlock:{userId}` 10 / 分钟；白名单 +1 事件 +3 键（引常量）。`TailsonalityResultService.indexOf` 改为包内可见供埋点复用（同一算法）。
+  - App：`shared/widgets/pay_channel_picker.dart`（`PayChannelPicker` + `formatIdrAmount`），`HdPaywallSheet` 改为薄包装（头部渐变卡、文案、`hdPayConfirm` / `hdPriceRetry`、PawCoin 默认选中规则不变，补 KTP 回归测试——此前仓内没有该抽屉的 widget 测试）；`features/keepsake/`（`KeepsakePricing` 四价无兜底、`KeepsakePurchaseResult`、`keepsakePricingProvider`、`runKeepsakePurchase`）；结果页改 `ConsumerStatefulWidget`：锁态区 footer 购买按钮、已解锁 `TsUnlockedAnalysis`、`PopScope` 挽留、锁态区可视埋点；`AppPrefs` 新键 `petgo.tailsonality_retention_shown`（最近 50 个）。
+  - 结果页取数由 `asData` 改为 `value`：解锁后刷新期间保留上一份数据，不闪回路由带来的锁态 `initial`。
+- **偏差**：
+  - `runKeepsakePurchase` 返回 `KeepsakeFlowOutcome { unlocked, alreadyUnlocked, notCompleted }` 而非 `bool`：AC4.3 要求 `keepsake-already-unlocked` 静默刷新、成功则 toast，布尔值区分不了这两种。
+  - 挽留弹窗被点外部 / 系统返回关掉（既非「Nanti aja」也非「Unlock」）→ 留在页面、不报 abandoned；因「弹出即记」，下次返回直接退出。
+  - 购买流程进行中（读余额 / 请求在途、尚无弹层）点返回 → 直接退出、不弹挽留（复审 #2）。
+  - `tailsonality_unlock_viewed` 等价格到位（或失败）后再判可视再报，避免首帧报出缺 `price` 的事件；价格失败则不带 `price`。
+- **复审（code-review）**：2 条，均已修：① PostgreSQL 上事务内语句失败会中止整个事务，发放口仅 catch 不够（QRIS 到账路径随后记 `ORPHAN_PAID` 也会失败）→ 改为 JDBC 保存点包裹，失败回滚到保存点（`PROPAGATION_NESTED` 在 JPA 事务管理器下不可用，故手动），并在 `KeepsakeGranter` javadoc 写明范式供 3.4 / 3.5 照做；② 读余额期间 `PopScope` 拦住返回、`_onBlockedPop` 又因 `_buying` 早退 → 页面卡住 → 购买进行中不拦返回，补 widget 测试。
+- 被按设计打破的既有测试（已更新断言、未删）：`tailsonality_result_page_test`（「底部无主 CTA / 无 Rp」→「未解锁态锁态区内唯一购买按钮 Buka Rp5.000、已解锁态无按钮」；`TsLockedAnalysis` 组件本身无 footer 时仍无按钮）、`AnalyticsEventGuardTest`（白名单新事件与三键）。
+- **待确认**：① 挽留弹窗文案直接用内容表 `kTsRetentionDialog`、不另建 ARB key；② High / Low 两语同写（本文件 l10n 表如此）。
 
 ### File List
+
+后端（新增）
+- `petgo-backend/src/main/java/com/tailtopia/purchase/dto/KeepsakePayRequest.java`
+- `tailsonality/service/TailsonalityUnlockService.java`、`TailsonalityKeepsakeGranter.java`、`TailsonalityUnlockAnalyticsListener.java`
+- 测试：`tailsonality/service/TailsonalityUnlockServiceTest`、`TailsonalityKeepsakeGranterTest`、`TailsonalityUnlockAnalyticsListenerTest`；`tailsonality/TailsonalityUnlockIntegrationTest`（L1）
+
+后端（修改）
+- `tailsonality/web/TailsonalityController.java`、`tailsonality/repository/TailsonalityResultRepository.java`、`tailsonality/service/TailsonalityResultService.java`（`indexOf` 可见性）
+- `shared/analytics/AnalyticsEventGuard.java`、`purchase/domain/KeepsakeGranter.java`（javadoc）
+- 测试：`shared/analytics/AnalyticsEventGuardTest.java`
+
+App（新增）
+- `petgo_app/lib/shared/widgets/pay_channel_picker.dart`
+- `lib/features/keepsake/domain/keepsake_pricing.dart`、`domain/keepsake_purchase_result.dart`、`data/keepsake_repository.dart`、`presentation/keepsake_pay_flow.dart`
+- `lib/features/tailsonality/presentation/tailsonality_unlock_analytics.dart`、`widgets/ts_unlocked_analysis.dart`
+- 测试：`test/keepsake/keepsake_contract_test.dart`、`test/tailsonality/tailsonality_unlock_test.dart`
+
+App（修改）
+- `lib/features/profile/presentation/id_card/hd_paywall_sheet.dart`（薄包装）
+- `lib/features/tailsonality/presentation/tailsonality_result_page.dart`、`data/tailsonality_repository.dart`
+- `lib/core/network/api_paths.dart`、`lib/core/storage/prefs.dart`
+- `lib/l10n/app_en.arb`、`app_id.arb`（+ 生成文件）
+- 测试：`test/tailsonality/tailsonality_result_page_test.dart`、`test/analytics/v112_events_test.dart`、`test/l10n/microcopy_rules_test.dart`
+
+### Change Log
+
+- 2026-09-30：Story 3.2 实现（解锁端点 + 发放口 + 服务端埋点；App 通用选渠道组件与 keepsake 公共层、结果页购买入口 / 已解锁态 / 挽留弹窗 / 埋点）；复审 2 条已修；L0 绿，置 review。

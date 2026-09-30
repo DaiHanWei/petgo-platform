@@ -89,7 +89,7 @@ public class TailsonalityResultService {
     }
 
     /** 1 起序号：该宠物结果按 created_at 升序（同刻按 id）中本行的位置；与 {@link #list} 同一排序口径。 */
-    private int indexOf(long petId, long resultId) {
+    int indexOf(long petId, long resultId) {
         List<TailsonalityResult> rows = results.findByPetProfileIdOrderByCreatedAtDescIdDesc(petId);
         for (int i = 0; i < rows.size(); i++) {
             if (rows.get(i).getId() == resultId) {

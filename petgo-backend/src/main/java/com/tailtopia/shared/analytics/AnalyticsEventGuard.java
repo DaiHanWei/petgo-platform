@@ -64,7 +64,9 @@ public class AnalyticsEventGuard {
             // ---- V1.3.2 Story 1.2：场所打卡 / 护照（服务端发，AD-19）----
             com.tailtopia.passport.service.PassportAnalyticsListener.EVENT_PLACE_CHECKIN,
             com.tailtopia.passport.service.PassportAnalyticsListener.EVENT_PASSPORT_ISSUED,
-            com.tailtopia.passport.service.PassportAnalyticsListener.EVENT_PASSPORT_STAMPED);
+            com.tailtopia.passport.service.PassportAnalyticsListener.EVENT_PASSPORT_STAMPED,
+            // ---- V1.3.2 Story 3.2：Tailsonality 解锁成功（只在服务端报）----
+            com.tailtopia.tailsonality.service.TailsonalityUnlockAnalyticsListener.EVENT_UNLOCKED);
 
     /**
      * 属性键白名单。
@@ -93,7 +95,11 @@ public class AnalyticsEventGuard {
             "place_type",                       // PlaceType 名
             "is_new_stamp",                     // boolean
             "passport_source",                  // KTP / ISSUED
-            "stamp_count");                     // int，已集章数（无分母）
+            "stamp_count",                      // int，已集章数（无分母）
+            // ---- V1.3.2 Story 3.2：Tailsonality 解锁。🛡 不带宠物名 / 品种 / token ----
+            "role_code",                        // 完整代号，如 ENTJ-H
+            "price",                            // long，成交价
+            "result_index");                    // int，该宠物第几次测试
 
     /**
      * 字符串属性值的长度上限。

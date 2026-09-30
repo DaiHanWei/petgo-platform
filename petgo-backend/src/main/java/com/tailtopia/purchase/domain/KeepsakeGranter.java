@@ -7,6 +7,8 @@ package com.tailtopia.purchase.domain;
  *
  * <p>🔴 契约：{@link #grant} <b>不得抛异常</b>，在调用方的事务里同步执行（到账时即 {@code applyCallback} 的事务）。
  * 实现<b>不要</b>用会在抛出时把外层事务标成 rollback-only 的写法 —— 那会连带回滚 {@code markPaid}。
+ * PostgreSQL 上语句失败还会中止整个事务：写库部分须包在 JDBC 保存点里、失败回滚到保存点
+ * （范式见 {@code TailsonalityKeepsakeGranter}，Story 3.2 复审）。
  */
 public interface KeepsakeGranter {
 

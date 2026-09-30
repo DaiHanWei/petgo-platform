@@ -397,6 +397,12 @@ void main() {
         '_confirmed',
         // 进入一个独立流程页（V1.3.2 batch-a PRD E-11C `tailsonality_match_entered`）：`_entered` = 用户**主动点进**
         // 配型页（入口在结果页引流卡），与被动曝光的 `_viewed` 分开 —— 这条是配型漏斗的第一格。名字由 PRD §4 定死。
+        // 用户在付费抽屉里选定渠道并确认（V1.3.2 batch-a Story 3.2 `tailsonality_unlock_initiated`）：
+        // `_initiated` = 发起付款（尚未成交；成交只由服务端报 `_unlocked`），与 `_started`（流程开头）区分。
+        '_initiated',
+        // 用户在挽留弹窗里明确放弃（V1.3.2 batch-a Story 3.2 `tailsonality_paywall_abandoned`）：
+        // `_abandoned` = 看过付费墙后主动离开，与 `_dismissed`（关掉提示）语义不同。
+        '_abandoned',
         '_entered',
         // 用户设定了一个账号级取值（V1.3.2 batch-a PRD E-11C `tailsonality_owner_type_set`）：`_set` = **保存成功**
         // 之后才报（失败不报），描述结果而非点击。名字由 PRD §4 定死，扩表、不改名。

@@ -1,10 +1,14 @@
 package com.tailtopia.tailsonality.web;
 
+import com.tailtopia.purchase.dto.KeepsakePayRequest;
+import com.tailtopia.purchase.dto.KeepsakePurchaseResponse;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import com.tailtopia.tailsonality.dto.TailsonalityResultListResponse;
 import com.tailtopia.tailsonality.dto.TailsonalityResultResponse;
 import com.tailtopia.tailsonality.service.TailsonalityResultService;
+import com.tailtopia.tailsonality.service.TailsonalityUnlockService;
+import jakarta.validation.Valid;
 import java.time.Duration;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -30,12 +34,18 @@ public class TailsonalityController {
     /** 提交限流：10 次 / 分钟 / 用户。 */
     private static final int SUBMIT_LIMIT = 10;
     private static final Duration SUBMIT_WINDOW = Duration.ofMinutes(1);
+    /** 解锁发起限流（Story 3.2 · AC1.5）：10 次 / 分钟 / 用户。 */
+    private static final int UNLOCK_LIMIT = 10;
+    private static final Duration UNLOCK_WINDOW = Duration.ofMinutes(1);
 
     private final TailsonalityResultService service;
+    private final TailsonalityUnlockService unlockService;
     private final RedisRateLimiter rateLimiter;
 
-    public TailsonalityController(TailsonalityResultService service, RedisRateLimiter rateLimiter) {
+    public TailsonalityController(TailsonalityResultService service, TailsonalityUnlockService unlockService,
+            RedisRateLimiter rateLimiter) {
         this.service = service;
+        this.unlockService = unlockService;
         this.rateLimiter = rateLimiter;
     }
 
@@ -56,6 +66,15 @@ public class TailsonalityController {
     @GetMapping("/results/{token}")
     public TailsonalityResultResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable String token) {
         return service.get(currentUserId(jwt), token);
+    }
+
+    /** 一次性解锁（Story 3.2）：PawCoin 当场成交 / QRIS 返回二维码；响应形状见 {@link KeepsakePurchaseResponse}。 */
+    @PostMapping("/results/{token}/unlock")
+    public KeepsakePurchaseResponse unlock(@AuthenticationPrincipal Jwt jwt, @PathVariable String token,
+            @Valid @RequestBody KeepsakePayRequest req) {
+        long userId = currentUserId(jwt);
+        rateLimiter.check("rl:tailsonality:unlock:" + userId, UNLOCK_LIMIT, UNLOCK_WINDOW);
+        return unlockService.unlock(userId, token, req.channel());
     }
 
     private static long currentUserId(Jwt jwt) {
