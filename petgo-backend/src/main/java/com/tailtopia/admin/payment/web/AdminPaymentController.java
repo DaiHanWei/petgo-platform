@@ -33,11 +33,39 @@ public class AdminPaymentController {
 
     private final AdminPaymentQueryService service;
     private final com.tailtopia.admin.payment.service.AdminPaymentExportService exportService;
+    /** V1.3.2 Story 3.6：一次性解锁异常子页。 */
+    private final com.tailtopia.admin.payment.service.AdminKeepsakeExceptionQueryService keepsakeExceptions;
 
     public AdminPaymentController(AdminPaymentQueryService service,
-            com.tailtopia.admin.payment.service.AdminPaymentExportService exportService) {
+            com.tailtopia.admin.payment.service.AdminPaymentExportService exportService,
+            com.tailtopia.admin.payment.service.AdminKeepsakeExceptionQueryService keepsakeExceptions) {
         this.service = service;
         this.exportService = exportService;
+        this.keepsakeExceptions = keepsakeExceptions;
+    }
+
+    /**
+     * 一次性解锁异常（V1.3.2 Story 3.6 · AC5）：<b>与支付页同一个权限码</b>，入口只在支付页顶部页内链接（不进侧栏）。
+     * 两个分区各自分页：{@code pp} = 异常购买页码，{@code bp} = 登机牌重复解锁页码。只读。
+     */
+    @GetMapping("/admin/payments/keepsake-exceptions")
+    @PreAuthorize(VIEW_AUTH)
+    public String keepsakeExceptions(@RequestParam(defaultValue = "0") int pp,
+            @RequestParam(defaultValue = "0") int bp, Model model) {
+        model.addAttribute("active", "payments");
+        var purchases = keepsakeExceptions.exceptionPurchases(Math.max(pp, 0), PAGE_SIZE);
+        var boarding = keepsakeExceptions.duplicateBoardingPasses(Math.max(bp, 0), PAGE_SIZE);
+        model.addAttribute("purchases", purchases.getContent());
+        model.addAttribute("pp", purchases.getNumber());
+        model.addAttribute("ppTotal", purchases.getTotalPages());
+        model.addAttribute("ppHasPrev", purchases.hasPrevious());
+        model.addAttribute("ppHasNext", purchases.hasNext());
+        model.addAttribute("boarding", boarding.getContent());
+        model.addAttribute("bp", boarding.getNumber());
+        model.addAttribute("bpTotal", boarding.getTotalPages());
+        model.addAttribute("bpHasPrev", boarding.hasPrevious());
+        model.addAttribute("bpHasNext", boarding.hasNext());
+        return "admin/payments-keepsake-exceptions";
     }
 
     @GetMapping("/admin/payments")

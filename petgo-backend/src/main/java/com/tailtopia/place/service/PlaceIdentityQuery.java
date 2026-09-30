@@ -59,6 +59,14 @@ public class PlaceIdentityQuery {
         return !rows.isEmpty() && rows.get(0).get("merged_into_id") == null;
     }
 
+    /** 场所对外 token（Story 3.6 订单中心跳登机牌详情）。未知 id → empty。 */
+    @Transactional(readOnly = true)
+    public Optional<String> tokenOf(long placeId) {
+        List<String> t = jdbc.queryForList("SELECT public_token FROM places WHERE id = :id", Map.of("id", placeId),
+                String.class);
+        return t.isEmpty() ? Optional.empty() : Optional.ofNullable(t.get(0));
+    }
+
     /** 场所卡面信息（Story 3.5 登机牌详情）：token、城市、首张可见照片 URL（无 → null）。 */
     @Transactional(readOnly = true)
     public Optional<PlaceCardInfo> cardInfoOf(long placeId) {

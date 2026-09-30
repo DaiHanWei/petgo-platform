@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!--/*
+  一次性解锁异常（V1.3.2 Story 3.6 · AC5）。与支付记录页同一权限码 payment.view；入口只在支付页顶部（不进侧栏）。
+  只读：不提供退款按钮，运营按既有人工退款流程处理。不显示宠物名等 PII（用户 id 足够定位）。
+*/-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.payments.keepsake.title}">一次性解锁异常</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.payments.keepsake.title}">一次性解锁异常</h1>
+            <a class="btn btn-neutral btn-sm" th:href="@{/admin/payments}" th:text="#{admin.nav.payments}">支付记录查询</a>
+        </div>
+        <p class="hint" th:text="#{admin.payments.keepsake.hint}">说明</p>
+
+        <h2 th:text="#{admin.payments.keepsake.section.purchases}">异常购买</h2>
+        <table th:if="${!#lists.isEmpty(purchases)}" class="tags-table" id="keepsake-exception-purchases">
+            <thead>
+            <tr>
+                <th th:text="#{admin.payments.keepsake.col.no}">购买号</th>
+                <th th:text="#{admin.payments.keepsake.col.user}">用户</th>
+                <th th:text="#{admin.payments.keepsake.col.sku}">类型</th>
+                <th th:text="#{admin.payments.keepsake.col.channel}">渠道</th>
+                <th class="nowrap" th:text="#{admin.payments.keepsake.col.amount}">金额</th>
+                <th th:text="#{admin.payments.keepsake.col.status}">状态</th>
+                <th class="nowrap" th:text="#{admin.payments.keepsake.col.paidAt}">到账时间</th>
+                <th th:text="#{admin.payments.keepsake.col.intent}">支付号</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${purchases}">
+                <td class="nowrap" th:text="${r.orderNo()}">TSL-</td>
+                <td class="nowrap" th:text="${r.userId()}">1</td>
+                <td class="nowrap" th:text="#{'admin.payments.purpose.' + ${r.sku()}}">TAILSONALITY</td>
+                <td class="nowrap" th:text="${r.channel()}">QRIS</td>
+                <td class="nowrap" th:text="${#numbers.formatInteger(r.amount(), 1, 'COMMA')}">0</td>
+                <td class="nowrap"><span class="badge badge-muted"
+                        th:text="#{'admin.payments.keepsake.status.' + ${r.status()}}">重复付款</span></td>
+                <td class="nowrap" th:text="${r.paidAtLabel()}">t</td>
+                <td class="nowrap">
+                    <a th:if="${r.intentToken() != null}" data-no-drawer
+                       th:href="@{/admin/payments/{t}/drawer(t=${r.intentToken()})}"
+                       th:text="${r.intentDisplayNo()}">PAYTS-</a>
+                    <span th:if="${r.intentToken() == null}">—</span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+        <div class="empty" th:if="${#lists.isEmpty(purchases)}">
+            <p th:text="#{admin.payments.keepsake.empty}">暂无记录</p>
+        </div>
+        <div class="pager" th:if="${ppTotal > 1}">
+            <a th:if="${ppHasPrev}" class="btn btn-sm" th:text="#{admin.audit.prev}"
+               th:href="@{/admin/payments/keepsake-exceptions(pp=${pp - 1},bp=${bp})}">上一页</a>
+            <a th:if="${ppHasNext}" class="btn btn-sm" th:text="#{admin.audit.next}"
+               th:href="@{/admin/payments/keepsake-exceptions(pp=${pp + 1},bp=${bp})}">下一页</a>
+        </div>
+
+        <h2 th:text="#{admin.payments.keepsake.section.boarding}">登机牌重复解锁</h2>
+        <table th:if="${!#lists.isEmpty(boarding)}" class="tags-table" id="keepsake-duplicate-boarding">
+            <thead>
+            <tr>
+                <th th:text="#{admin.payments.keepsake.col.user}">用户</th>
+                <th th:text="#{admin.payments.keepsake.col.fromPlace}">原场所</th>
+                <th th:text="#{admin.payments.keepsake.col.toPlace}">保留场所</th>
+                <th class="nowrap" th:text="#{admin.payments.keepsake.col.unlockedAt}">解锁时间</th>
+                <th class="nowrap" th:text="#{admin.payments.keepsake.col.supersededAt}">合并时间</th>
+                <th th:text="#{admin.payments.keepsake.col.no}">购买号</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${boarding}">
+                <td class="nowrap" th:text="${r.userId()}">1</td>
+                <td th:text="${r.fromPlace()}">A</td>
+                <td th:text="${r.toPlace() != null ? r.toPlace() : '—'}">B</td>
+                <td class="nowrap" th:text="${r.unlockedAtLabel()}">t</td>
+                <td class="nowrap" th:text="${r.supersededAtLabel()}">t</td>
+                <td class="nowrap" th:text="${r.purchaseNo() != null ? r.purchaseNo() : '—'}">BPASS-</td>
+            </tr>
+            </tbody>
+        </table>
+        <div class="empty" th:if="${#lists.isEmpty(boarding)}">
+            <p th:text="#{admin.payments.keepsake.empty}">暂无记录</p>
+        </div>
+        <div class="pager" th:if="${bpTotal > 1}">
+            <a th:if="${bpHasPrev}" class="btn btn-sm" th:text="#{admin.audit.prev}"
+               th:href="@{/admin/payments/keepsake-exceptions(pp=${pp},bp=${bp - 1})}">上一页</a>
+            <a th:if="${bpHasNext}" class="btn btn-sm" th:text="#{admin.audit.next}"
+               th:href="@{/admin/payments/keepsake-exceptions(pp=${pp},bp=${bp + 1})}">下一页</a>
+        </div>
+    </div>
+</div>
+</body>
+</html>

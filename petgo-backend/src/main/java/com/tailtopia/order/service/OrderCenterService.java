@@ -20,6 +20,11 @@ import com.tailtopia.pay.repository.PaymentIntentRepository;
 import com.tailtopia.pay.service.PawCoinWalletService;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import com.tailtopia.purchase.domain.KeepsakePurchase;
+import com.tailtopia.purchase.domain.KeepsakePurchaseStatus;
+import com.tailtopia.purchase.domain.KeepsakeSku;
+import com.tailtopia.purchase.domain.KeepsakeTargetResolver;
+import com.tailtopia.purchase.repository.KeepsakePurchaseRepository;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shop.order.domain.ShopOrder;
 import com.tailtopia.shop.order.domain.ShopOrderStatus;
@@ -31,8 +36,12 @@ import com.tailtopia.triage.repository.AiConsultOrderRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,11 +69,21 @@ public class OrderCenterService {
     // ── Story 3.9 追加的第 4 个数据源（电商）。既有 6 个依赖一行未动。
     private final ShopOrderRepository shopOrders;
     private final ShopOrderCardService shopCards;
+    // ── V1.3.2 Story 3.6 追加的第 5 个数据源（一次性解锁，唯一新源 keepsake_purchases · AD-8）。既有 8 个依赖一行未动。
+    private final KeepsakePurchaseRepository keepsakes;
+    private final Map<KeepsakeSku, KeepsakeTargetResolver> keepsakeTargets;
 
     public OrderCenterService(ConsultOrderRepository consultOrders, AiConsultOrderRepository aiOrders,
             PaymentIntentRepository intents, PawCoinWalletService wallet,
             RefundRequestRepository refunds, PetProfileRepository pets,
-            ShopOrderRepository shopOrders, ShopOrderCardService shopCards) {
+            ShopOrderRepository shopOrders, ShopOrderCardService shopCards,
+            KeepsakePurchaseRepository keepsakes, List<KeepsakeTargetResolver> keepsakeTargets) {
+        this.keepsakes = keepsakes;
+        Map<KeepsakeSku, KeepsakeTargetResolver> m = new EnumMap<>(KeepsakeSku.class);
+        for (KeepsakeTargetResolver r : keepsakeTargets) {
+            m.put(r.sku(), r);
+        }
+        this.keepsakeTargets = m;
         this.consultOrders = consultOrders;
         this.aiOrders = aiOrders;
         this.intents = intents;
@@ -99,6 +118,16 @@ public class OrderCenterService {
     @Transactional(readOnly = true)
     public OrderPage listOrders(long userId, String type, String cursor, int limit,
             boolean includeEcommerce) {
+        return listOrders(userId, type, cursor, limit, includeEcommerce, false);
+    }
+
+    /**
+     * 同上 + V1.3.2 Story 3.6 的 {@code includeKeepsake} 闸门：默认聚合只有新 App 显式传 true 才混入一次性解锁三类；
+     * {@code type} 直接指定三类之一（老 App 没有这些值）不受闸门约束。老 App 不传 → 结果与改动前逐字一致。
+     */
+    @Transactional(readOnly = true)
+    public OrderPage listOrders(long userId, String type, String cursor, int limit,
+            boolean includeEcommerce, boolean includeKeepsake) {
         OrderType filter = parseType(type);
         OrderCenterCursor at = parseCursor(cursor);
         // 首页上界用 now+60s 而不是 now：库里的 created_at 是 Postgres 的 now()，
@@ -144,6 +173,17 @@ public class OrderCenterService {
                 merged.add(new Row(mapShop(o), RANK_SHOP, o.getId()));
             }
         }
+        // 🔴 V1.3.2 Story 3.6：第 5 个分支【追加在 if 链末尾】，既有分支与映射器一行未改（照 3.9）。
+        //    唯一新源 keepsake_purchases（AD-8）；只收「钱已到账」三态，PENDING / CANCELED / EXPIRED 不入（A-5）。
+        //    三类同表同 rank（id 全局唯一）；筛选按 sku 过滤。默认聚合过 includeKeepsake 闸门。
+        Set<KeepsakeSku> skus = keepsakeSkusFor(filter, includeKeepsake);
+        if (!skus.isEmpty()) {
+            long bound = idBound(at, RANK_KEEPSAKE);
+            for (KeepsakePurchase k : keepsakes.findOrderCenterPageBefore(userId, KEEPSAKE_ORDER_STATUSES, skus,
+                    before, bound, page)) {
+                merged.add(new Row(mapKeepsake(k), RANK_KEEPSAKE, k.getId()));
+            }
+        }
         // ID_HD：无源，Epic 6 接入（filter==ID_HD → merged 为空）。
 
         merged.sort(ORDER);
@@ -173,6 +213,8 @@ public class OrderCenterService {
     private static final int RANK_AI = 1;
     private static final int RANK_TOPUP = 2;
     private static final int RANK_SHOP = 3;
+    /** V1.3.2 Story 3.6：一次性解锁三类共用（同一张表）。 */
+    private static final int RANK_KEEPSAKE = 4;
 
     /**
      * 订单中心的<b>唯一</b>全序：{@code createdAt DESC, sourceRank ASC, id DESC}。
@@ -237,6 +279,12 @@ public class OrderCenterService {
         Optional<ShopOrder> shop = shopOrders.findByPublicToken(orderToken);
         if (shop.isPresent() && shop.get().getUserId() == userId) {
             return shopDetail(shop.get());
+        }
+        // 🔴 V1.3.2 Story 3.6 追加：同形（先按 token，再校验 owner 与「钱已到账」），越权 / 不存在同为 404。
+        Optional<KeepsakePurchase> keep = keepsakes.findByPublicToken(orderToken);
+        if (keep.isPresent() && keep.get().getUserId() == userId
+                && KEEPSAKE_ORDER_STATUSES.contains(keep.get().getStatus())) {
+            return keepsakeDetail(keep.get());
         }
         throw AppException.notFound("订单不存在");
     }
@@ -406,6 +454,72 @@ public class OrderCenterService {
             case PENDING_SHIPMENT, SHIPPED, DELIVERED, REFUNDING -> OrderStatusColor.INFO;
             case COMPLETED, CANCELLED, REFUNDED -> OrderStatusColor.SUCCESS;
         };
+    }
+
+    // ---- V1.3.2 Story 3.6 一次性解锁（独立映射方法，不与既有映射器纠缠）----
+
+    /** 入订单中心的购买状态：钱已到账三态（D-15：后两态对用户显示「Sedang dicek」）。 */
+    private static final Set<KeepsakePurchaseStatus> KEEPSAKE_ORDER_STATUSES = EnumSet.of(
+            KeepsakePurchaseStatus.PAID, KeepsakePurchaseStatus.DUPLICATE_PAID, KeepsakePurchaseStatus.ORPHAN_PAID);
+
+    /** 本次要查的 sku：闸门规则照电商 ——（聚合且显式要）或（筛选值就是三类之一）。 */
+    private static Set<KeepsakeSku> keepsakeSkusFor(OrderType filter, boolean includeKeepsake) {
+        if (filter == null) {
+            return includeKeepsake ? EnumSet.allOf(KeepsakeSku.class) : EnumSet.noneOf(KeepsakeSku.class);
+        }
+        return switch (filter) {
+            case TAILSONALITY -> EnumSet.of(KeepsakeSku.TAILSONALITY);
+            case PASSPORT_SNAP -> EnumSet.of(KeepsakeSku.PASSPORT_SNAP);
+            case BOARDING_PASS -> EnumSet.of(KeepsakeSku.BOARDING_PASS);
+            default -> EnumSet.noneOf(KeepsakeSku.class);
+        };
+    }
+
+    private static OrderType orderTypeOf(KeepsakeSku sku) {
+        return switch (sku) {
+            case TAILSONALITY -> OrderType.TAILSONALITY;
+            case PASSPORT_SNAP -> OrderType.PASSPORT_SNAP;
+            case BOARDING_PASS -> OrderType.BOARDING_PASS;
+        };
+    }
+
+    private static String displayPrefixOf(KeepsakeSku sku) {
+        return OrderDisplayNo.keepsakePrefix(sku);
+    }
+
+    /** PAID → PAID / SUCCESS；重复 / 孤儿付款 → UNDER_REVIEW / INFO（钱已收、待客服人工处理，蓝非红 UX-DR2）。 */
+    private static String keepsakeStatusCode(KeepsakePurchase k) {
+        return k.getStatus() == KeepsakePurchaseStatus.PAID ? "PAID" : "UNDER_REVIEW";
+    }
+
+    private static OrderStatusColor keepsakeStatusColor(KeepsakePurchase k) {
+        return k.getStatus() == KeepsakePurchaseStatus.PAID ? OrderStatusColor.SUCCESS : OrderStatusColor.INFO;
+    }
+
+    /** 卡片：金额只读 {@code price_idr}（成交价以购买记录为准，NFR-2）。 */
+    private OrderSummaryView mapKeepsake(KeepsakePurchase k) {
+        return new OrderSummaryView(orderTypeOf(k.getSku()).name(), k.getPublicToken(),
+                OrderDisplayNo.of(displayPrefixOf(k.getSku()), k.getId(), k.getCreatedAt()), keepsakeStatusCode(k),
+                keepsakeStatusColor(k).name(), k.getPriceIdr(),
+                k.getPayChannel() == null ? null : k.getPayChannel().name(), k.getCreatedAt());
+    }
+
+    private OrderDetailView keepsakeDetail(KeepsakePurchase k) {
+        // 宠物：pet_profile_id 为 null（删档置空）或档案已删 → petDeleted 占位（照 vetDetail 的 FR-54D 口径）。
+        PetProfile pet = k.getPetProfileId() == null ? null : pets.findById(k.getPetProfileId()).orElse(null);
+        boolean petDeleted = pet == null;
+        KeepsakeTargetResolver resolver = keepsakeTargets.get(k.getSku());
+        String targetToken = resolver == null ? null : resolver.targetToken(k.getRefId()).orElse(null);
+        return new OrderDetailView(orderTypeOf(k.getSku()).name(), k.getPublicToken(),
+                OrderDisplayNo.of(displayPrefixOf(k.getSku()), k.getId(), k.getCreatedAt()), keepsakeStatusCode(k),
+                keepsakeStatusColor(k).name(), k.getPriceIdr(),
+                k.getPayChannel() == null ? null : k.getPayChannel().name(),
+                k.getCreatedAt(), k.getPaidAt(),
+                petDeleted ? null : pet.getName(),
+                petDeleted || pet.getPetType() == null ? null : pet.getPetType().name(),
+                petDeleted ? null : pet.getAvatarUrl(),
+                petDeleted, null, null, null, null, null, null, null,
+                resolver == null ? null : resolver.targetKind(), targetToken);
     }
 
     private static OrderType parseType(String type) {

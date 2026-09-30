@@ -2512,5 +2512,13 @@
   "boardingPassSheetBuy": "Buka",
   "boardingPassPayBody": "Kartu {place} tanpa watermark. Kunjungan berikutnya ke sini gratis update.",
   "@boardingPassPayBody": {"placeholders": {"place": {"type": "String"}}},
-  "boardingPassUnlockedToast": "Boarding pass kebuka!"
+  "boardingPassUnlockedToast": "Boarding pass kebuka!",
+  "orderTypeTailsonality": "Buka Tailsonality",
+  "orderTypePassportSnap": "Paspor · versi",
+  "orderTypeBoardingPass": "Boarding Pass",
+  "orderStatusUnderReview": "Sedang dicek",
+  "orderUnderReviewNote": "Tim kami lagi cek pembayaran ini. Kalau dobel, dana dikembalikan.",
+  "orderViewTailsonality": "Lihat hasil tes",
+  "orderViewPassportSnap": "Lihat versi paspor",
+  "orderViewBoardingPass": "Lihat boarding pass"
 }

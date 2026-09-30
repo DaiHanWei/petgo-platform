@@ -63,7 +63,7 @@ development_status:
   3-3-佩戴角色小标与-diary-测试条目: review
   3-4-护照快照解锁与已购版本: review
   3-5-登机牌列表-详情与单张解锁: review
-  3-6-我的订单与后台支付查询接入: ready-for-dev
+  3-6-我的订单与后台支付查询接入: review
   epic-3-retrospective: optional
   # ===== Epic 4：分享与发帖回流 =====
   epic-4: backlog

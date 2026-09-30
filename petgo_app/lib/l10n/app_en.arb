@@ -3853,5 +3853,13 @@
   "boardingPassSheetBuy": "Unlock",
   "boardingPassPayBody": "{place}'s card without watermark. Future visits here update it for free.",
   "@boardingPassPayBody": {"placeholders": {"place": {"type": "String"}}},
-  "boardingPassUnlockedToast": "Boarding pass unlocked!"
+  "boardingPassUnlockedToast": "Boarding pass unlocked!",
+  "orderTypeTailsonality": "Tailsonality unlock",
+  "orderTypePassportSnap": "Passport · version",
+  "orderTypeBoardingPass": "Boarding Pass",
+  "orderStatusUnderReview": "Under review",
+  "orderUnderReviewNote": "Our team is checking this payment. If it was charged twice, you'll get a refund.",
+  "orderViewTailsonality": "View test result",
+  "orderViewPassportSnap": "View passport version",
+  "orderViewBoardingPass": "View boarding pass"
 }

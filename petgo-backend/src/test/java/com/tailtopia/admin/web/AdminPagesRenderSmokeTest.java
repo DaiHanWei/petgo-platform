@@ -279,7 +279,9 @@ class AdminPagesRenderSmokeTest extends ApiIntegrationTest {
                 // V1.1.6 Story 13.5 的排期页已于 V1.3.0 Story 7.5 退役（并入 /admin/seed-batches 第二页签）。
                 // V1.1.6 Story 15.1：内容互动积分榜。
             // 2026-08-26：算法参数独立成页，须一并纳入逐页双语扫描
-            "/admin/algo-params");
+            "/admin/algo-params",
+            // V1.3.2 Story 3.6：一次性解锁异常子页（支付页内入口）。
+            "/admin/payments/keepsake-exceptions");
 
     /**
      * 🔴 <b>自动发现的双语扫描</b>：凡是「无路径参数的后台 GET」，一律真跑一遍并施加与

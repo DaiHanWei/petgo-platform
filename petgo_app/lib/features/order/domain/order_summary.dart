@@ -13,6 +13,11 @@ enum OrderType {
   /// 精选自营电商（V1.4.0 Story 3.9，FR-101 —— FR-54 的第 5 类卡片）。
   /// 🔴 只在末尾追加（并行契约 O-1）。
   ecommerce,
+
+  /// V1.3.2 Story 3.6：一次性解锁三类（唯一数据源 `keepsake_purchases`）。🔴 同样只在 ecommerce 之后、unknown 之前追加。
+  tailsonality,
+  passportSnap,
+  boardingPass,
   unknown;
 
   static OrderType fromCode(String? code) => switch (code) {
@@ -21,6 +26,9 @@ enum OrderType {
         'PAWCOIN_TOPUP' => OrderType.pawcoinTopup,
         'ID_HD' => OrderType.idHd,
         'ECOMMERCE' => OrderType.ecommerce,
+        'TAILSONALITY' => OrderType.tailsonality,
+        'PASSPORT_SNAP' => OrderType.passportSnap,
+        'BOARDING_PASS' => OrderType.boardingPass,
         _ => OrderType.unknown,
       };
 
@@ -31,6 +39,9 @@ enum OrderType {
         OrderType.pawcoinTopup => 'PAWCOIN_TOPUP',
         OrderType.idHd => 'ID_HD',
         OrderType.ecommerce => 'ECOMMERCE',
+        OrderType.tailsonality => 'TAILSONALITY',
+        OrderType.passportSnap => 'PASSPORT_SNAP',
+        OrderType.boardingPass => 'BOARDING_PASS',
         OrderType.unknown => null,
       };
 }
@@ -45,7 +56,8 @@ enum OrderStatusGroup {
 
   static OrderStatusGroup fromStatus(String statusCode) => switch (statusCode) {
         // PENDING = 待支付充值（bug 20260720-313），归「进行中」组（可继续支付）。
-        'IN_PROGRESS' || 'REFUNDING' || 'PENDING' => OrderStatusGroup.ongoing,
+        // UNDER_REVIEW = 一次性解锁重复 / 孤儿付款、待客服处理（V1.3.2 Story 3.6 · D-15）。
+        'IN_PROGRESS' || 'REFUNDING' || 'PENDING' || 'UNDER_REVIEW' => OrderStatusGroup.ongoing,
         _ => OrderStatusGroup.done,
       };
 }
