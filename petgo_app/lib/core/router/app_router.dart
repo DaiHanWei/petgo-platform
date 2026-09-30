@@ -91,6 +91,7 @@ import '../../features/tailsonality/domain/tailsonality_result.dart';
 import '../../features/tailsonality/presentation/tailsonality_match_page.dart';
 import '../../features/tailsonality/presentation/tailsonality_quiz_page.dart';
 import '../../features/tailsonality/presentation/tailsonality_result_page.dart';
+import '../../features/tailsonality/presentation/tailsonality_results_page.dart';
 import '../../features/tailsonality/presentation/tailsonality_routes.dart';
 import '../../features/place/presentation/place_list_page.dart';
 import '../../features/place/presentation/place_mark_page.dart';
@@ -789,6 +790,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       // Tailsonality（V1.3.2 Story 2.3）：答题页 + 结果页，落在 /profile/ 下 → 自动受控，**不进**例外集合。
       GoRoute(path: TailsonalityRoutes.quiz, builder: (c, s) => const TailsonalityQuizPage()),
+      // 结果列表（Story 2.6）：`/results` 与 `/results/:token` 段数不同，不会互相吞。
+      GoRoute(path: TailsonalityRoutes.results, builder: (c, s) => const TailsonalityResultsPage()),
       GoRoute(
         path: TailsonalityRoutes.resultPattern,
         builder: (c, s) => TailsonalityResultPage(

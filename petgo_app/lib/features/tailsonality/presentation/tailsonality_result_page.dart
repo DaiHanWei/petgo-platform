@@ -3,22 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/widgets/app_toast.dart';
-import '../../../shared/widgets/confirm_sheet.dart';
 import '../../profile/data/profile_repository.dart';
-import '../../profile/domain/pet_profile.dart';
 import '../data/tailsonality_owner_type_repository.dart';
 import '../data/tailsonality_providers.dart';
-import '../domain/content/ts_dialog_copy.dart';
 import '../domain/content/ts_roles.dart';
 import '../domain/content/ts_text.dart';
 import '../domain/tailsonality_result.dart';
 import '../domain/ts_match.dart';
+import 'tailsonality_retake.dart';
 import 'tailsonality_routes.dart';
-import 'widgets/tailsonality_intro_sheet.dart';
 import 'widgets/ts_locked_analysis.dart';
 import 'widgets/ts_match_teaser.dart';
 import 'widgets/ts_result_card.dart';
@@ -87,40 +82,9 @@ class TailsonalityResultPage extends ConsumerWidget {
         key: const ValueKey('tsMenuRetake'),
         icon: Icons.refresh_rounded,
         label: l10n.tailsonalityMenuRetake,
-        onTap: () => _confirmRetake(context, ref),
+        onTap: () => startTailsonalityRetake(context, ref),
       ),
     ]);
-  }
-
-  /// 重测：免费、不限次、无任何次数提示（PRD §3.2）；确认文案取内容表 `kTsRetakeDialog`（内容设计 §2.6）。
-  Future<void> _confirmRetake(BuildContext context, WidgetRef ref) async {
-    final locale = Localizations.localeOf(context);
-    final d = kTsRetakeDialog;
-    final ok = await showConfirmSheet(
-      context,
-      title: d.title.of(locale),
-      message: tsPlainText(d.body.of(locale)),
-      confirmLabel: d.confirm.of(locale),
-      cancelLabel: d.cancel.of(locale),
-      icon: Icons.refresh_rounded,
-    );
-    if (!ok || !context.mounted) return;
-    // 先拿到宠物再报埋点：档案取不到时抽屉开不了，这次重测并没有发生。
-    PetProfile? pet = ref.read(petProfileProvider).asData?.value;
-    if (pet == null && !ref.read(petProfileProvider).hasError) {
-      try {
-        pet = await ref.read(petProfileProvider.future).timeout(const Duration(seconds: 10));
-      } catch (_) {
-        pet = null;
-      }
-    }
-    if (!context.mounted) return;
-    if (pet == null) {
-      showAppToast(context, AppLocalizations.of(context).growthLoadFailed);
-      return;
-    }
-    Analytics.capture('tailsonality_retake_confirmed');
-    await showTailsonalityIntroSheet(context, pet);
   }
 }
 

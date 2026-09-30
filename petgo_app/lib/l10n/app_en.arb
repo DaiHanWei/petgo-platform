@@ -3784,5 +3784,11 @@
   "tailsonalityMatchDetailTitle": "Dimension by dimension",
   "@tailsonalityMatchDetailTitle": {"description": "Match page detail section title."},
   "tailsonalityMatchChangeType": "Change type",
-  "@tailsonalityMatchChangeType": {"description": "Match page: change owner type."}
+  "@tailsonalityMatchChangeType": {"description": "Match page: change owner type."},
+  "tailsonalityHistoryTitle": "Tailsonality history",
+  "@tailsonalityHistoryTitle": {"description": "Tailsonality result list page title (V1.3.2 Story 2.6)."},
+  "tailsonalityResultLocked": "Not unlocked yet",
+  "@tailsonalityResultLocked": {"description": "Result list row: greyed status for a locked result."},
+  "tailsonalityHistoryEmpty": "No test results yet",
+  "@tailsonalityHistoryEmpty": {"description": "Result list empty state title."}
 }

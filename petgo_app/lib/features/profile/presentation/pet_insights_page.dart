@@ -6,6 +6,7 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../tailsonality/data/tailsonality_repository.dart';
 import '../../tailsonality/domain/tailsonality_result.dart';
+import '../../tailsonality/presentation/tailsonality_retake.dart';
 import '../../tailsonality/presentation/tailsonality_routes.dart';
 import '../../tailsonality/presentation/widgets/tailsonality_intro_sheet.dart';
 import '../data/profile_repository.dart';
@@ -156,7 +157,7 @@ class PetInsightsPage extends ConsumerWidget {
   }
 }
 
-/// Tailsonality 卡的分流（V1.3.2 Story 2.3 · AC1.3）：无结果 → 说明抽屉；有结果 → 最近一次结果页；
+/// Tailsonality 卡的分流（V1.3.2 Story 2.3 · AC1.3 / Story 2.6 · AC4）：无结果 → 说明抽屉；有结果 → 结果列表页；
 /// 列表读取失败 → 仍弹说明抽屉（不因读失败挡住入口；重测免费，误进新测试无代价）。
 ///
 /// 读列表期间再点一次直接忽略（慢网下双击会叠两层抽屉 / 推两次结果页）。
@@ -173,17 +174,7 @@ Future<void> openTailsonality(BuildContext context, WidgetRef ref) async {
     }
     if (results.isEmpty) {
       // 档案取不到：抽屉无从确认「测的是谁」，本次点击不响应（返回重进即可重试）。
-      // ⚠️ 不能直接 await `.future`：Riverpod 3 对失败的 provider 自动重试，future 会一直挂着。
-      final state = ref.read(petProfileProvider);
-      if (state.hasValue) {
-        pet = state.value;
-      } else if (!state.hasError) {
-        try {
-          pet = await ref.read(petProfileProvider.future).timeout(const Duration(seconds: 10));
-        } catch (_) {
-          pet = null;
-        }
-      }
+      pet = await readPetForTailsonality(ref);
     }
   } finally {
     // 抽屉 / 跳转之前就放开：抽屉的 Future 可能随页面销毁永不完成，不能让闸门跟着卡死。
@@ -191,7 +182,8 @@ Future<void> openTailsonality(BuildContext context, WidgetRef ref) async {
   }
   if (!context.mounted) return;
   if (results.isNotEmpty) {
-    context.push(TailsonalityRoutes.result(results.first.token));
+    // Story 2.6：有结果 → 结果列表页（替换 2.3 的「进最近一次结果页」临时去向）。
+    context.push(TailsonalityRoutes.results);
     return;
   }
   if (pet == null) return;

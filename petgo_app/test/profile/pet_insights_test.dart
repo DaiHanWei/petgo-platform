@@ -71,6 +71,9 @@ void main() {
       // V1.3.2 Story 2.5：主人配型页同样受控。
       expect(TailsonalityRoutes.match('abc'), startsWith('/profile/'));
       expect(redirectWouldRewrite(guest, TailsonalityRoutes.match('abc')), isTrue);
+      // V1.3.2 Story 2.6：结果列表页同样受控。
+      expect(TailsonalityRoutes.results, startsWith('/profile/'));
+      expect(redirectWouldRewrite(guest, TailsonalityRoutes.results), isTrue);
       // 旧路径同样受控 —— 重定向不能变成绕过门控的旁路（AC4 / AD-A17.6）。
       expect(redirectWouldRewrite(guest, '/profile/id-card'), isTrue);
     });
@@ -181,11 +184,13 @@ void main() {
       expect(find.byKey(const ValueKey('tsIntroSheet')), findsOneWidget);
     });
 
-    testWidgets('有结果 → 进最近一次结果页', (tester) async {
+    // V1.3.2 Story 2.6 · AC4：有结果的去向由「最近一次结果页」改为结果列表页。
+    testWidgets('有结果 → 进结果列表页', (tester) async {
       await _pumpHub(tester, petType: 'CAT', tsResults: [_tsResult('newest'), _tsResult('older')]);
       await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
       await tester.pumpAndSettle();
-      expect(find.text('result:newest'), findsOneWidget);
+      expect(find.text('results-list'), findsOneWidget);
+      expect(find.text('result:newest'), findsNothing);
     });
 
     testWidgets('读列表期间双击只走一次', (tester) async {
@@ -196,7 +201,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
       await tester.pumpAndSettle();
       expect(repo.calls, 1);
-      expect(find.text('result:newest'), findsOneWidget);
+      expect(find.text('results-list'), findsOneWidget);
     });
 
     testWidgets('档案取失败且无结果 → 不抛未处理异常、不弹抽屉', (tester) async {
@@ -325,6 +330,9 @@ Future<void> _pumpHub(
       GoRoute(
           path: TailsonalityRoutes.quiz,
           builder: (c, s) => const Scaffold(body: Text('quiz'))),
+      GoRoute(
+          path: TailsonalityRoutes.results,
+          builder: (c, s) => const Scaffold(body: Text('results-list'))),
       GoRoute(
           path: TailsonalityRoutes.resultPattern,
           builder: (c, s) => Scaffold(body: Text('result:${s.pathParameters['token']}'))),
