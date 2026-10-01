@@ -12,6 +12,7 @@ import '../../../core/analytics/analytics.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../profile/domain/milestone_celebration_copy.dart';
 import '../../profile/domain/milestone_titles.dart';
+import '../../profile/presentation/widgets/milestone_badge.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/notification_repository.dart';
 import '../domain/notification_deep_link.dart';
@@ -857,6 +858,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     return l10n.notifyTimeHoursAgo(diff.inHours);
   }
 
+  bool get _isMilestone => widget.item.type == 'MILESTONE_NODE' || widget.item.type == 'MILESTONE_SM_NODE';
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -887,7 +890,15 @@ class _NotificationTileState extends State<_NotificationTile> {
                     color: bg,
                     borderRadius: BorderRadius.circular(11),
                   ),
-                  child: Icon(icon, size: 20, color: fg),
+                  // V1.3.2 Story 5.1：两类里程碑通知显示该枚徽章（targetRef 即里程碑 code）；
+                  // 素材没到 / targetRef 不是合法 code（如生日节点）时回落原图标。
+                  child: _isMilestone
+                      ? MilestoneBadge(
+                          code: widget.item.targetRef ?? '',
+                          size: 32,
+                          fallback: (_) => Icon(icon, size: 20, color: fg),
+                        )
+                      : Icon(icon, size: 20, color: fg),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

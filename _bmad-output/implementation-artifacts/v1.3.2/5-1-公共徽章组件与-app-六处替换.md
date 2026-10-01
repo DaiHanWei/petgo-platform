@@ -1,6 +1,6 @@
 # Story 5.1: 公共徽章组件与 App 六处替换
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -57,20 +57,23 @@ so that 每一次解锁都有辨识度、值得收藏。
 
 ## Tasks / Subtasks
 
-- [ ] **T1 映射表**（AC1）+ App 单测 + 后端跨库测试 `MilestoneBadgeMappingTest`
-- [ ] **T2 组件**（AC2）：`MilestoneBadge` + `MilestoneBadgeAssets`（manifest 缓存）+ widget 测试
-- [ ] **T3 六处替换**（AC3）——一次改一处、每处改完跑该处既有测试
-  - [ ] 庆祝页大徽章 + KOLEKSI
-  - [ ] 列表墙 + 底抽屉
-  - [ ] Diary banner + 角标
-  - [ ] 通知中心两型
-- [ ] **T4 素材目录**（AC5）：pubspec、`.gitkeep`、孤儿文件测试
-- [ ] **T5 回归**（AC4）：`flutter analyze` / `flutter test` 全绿；`mvn -B clean package`（跑跨库测试）
-- [ ] **T6 L2（本地）**：放一枚测试素材看六处；看 14px 角标与 120px 大徽章两端可读性
+- [x] **T1 映射表**（AC1）+ App 单测 + 后端跨库测试 `MilestoneBadgeMappingTest`
+- [x] **T2 组件**（AC2）：`MilestoneBadge` + `MilestoneBadgeAssets`（manifest 缓存）+ widget 测试
+- [x] **T3 六处替换**（AC3）——一次改一处、每处改完跑该处既有测试
+  - [x] 庆祝页大徽章 + KOLEKSI
+  - [x] 列表墙 + 底抽屉
+  - [x] Diary banner + 角标
+  - [x] 通知中心两型
+- [x] **T4 素材目录**（AC5）：pubspec、`.gitkeep`、孤儿文件测试
+- [x] **T5 回归**（AC4）：`flutter analyze` / `flutter test` 全绿；`mvn -B clean package`（跑跨库测试）
+- [ ] **T6 L2（本地，待本地验收）**：放一枚测试素材看六处；看 14px 角标与 120px 大徽章两端可读性
 
 ## Dev Notes
 
 ⚠️ 前置 story 尚未实现：开工前先对照其实际代码核对本文件引用的类名/接口/字段，有出入先改本文件。（本 story 与 Epic 1~4 无依赖，但排在最后；开工前确认六处文件在前序 story 中没有被改动行号。）
+
+> 核对结论（5.1 开工时）：六处文件在 Epic 1~4 中有改动，行号已漂移，但结构与本文件描述一致（`_badge(120)`、`_collectionCircle`、`_Badge` 64 圆、底抽屉 76 圆、`_milestoneStamp` / `_milestoneBanner`、通知中心 40×40 图标块）。
+> 映射表 78 条 / 40 键与 App `kMilestoneTitles` 逐条核过：共用同一语义键的 code，印尼语标题完全相同。
 
 ### 必读：会被本 story 改到的现有代码
 
@@ -197,10 +200,44 @@ L0：AC1（映射单测 + 后端跨库测试）、AC2（组件 widget 测试）�
 
 ### Agent Model Used
 
+Claude（云端 dev agent）
+
 ### Debug Log References
+
+- 前端 L0：`flutter analyze`（No issues）/ `flutter test` 全量 2665 例全绿（review 修复后 profile 目录复跑 481 例全绿）。
+- 后端 L0：`./mvnw -B clean package` + 单测 2889 例 0 失败（含新跨库测试 `MilestoneBadgeMappingTest` 3 例）。
+- `flutter build apk --debug`：云端无 Android SDK，未能执行（`No Android SDK found`）→ 列入本地验收。
 
 ### Completion Notes List
 
-- Ultimate context engine analysis completed - comprehensive developer guide created
+- **L1/L2 待本地验收**：① `flutter build apk --debug` 确认 `assets/milestone/` 只有 README 时不报 asset 缺失（AC5.1，云端无 Android SDK）；② AC5.3 本地放一枚测试素材（如 `first_treat.webp`）看六处同时换新图、拿掉后回落；③ 14px 角标与 120px 大徽章两端可读性（看不清则把角标改 18~20）。
+- **映射表**：`milestone_badge_assets.dart` 78 code → 40 语义键（按本文件表一次写全）+ `kMilestoneBadgeLockedKey = 'locked'`；`milestoneBadgeKeyOf` 只做精确查表；`milestoneBadgeAssetPath` 是全仓库唯一出现 `assets/milestone/` 的地方（源码扫描测试钉住）。
+- **组件**：`MilestoneBadge(code, size, locked, level, fallback, lockedFallback)` + `MilestoneBadgeAssets`（`AssetManifest` 读一次缓存，未读完按无素材回落、读完后 `ValueListenable` 自动刷新；`debugOverride` 测试缝；`hasArtFor(code)`）。锁定态永不读该枚真图。
+- **与本文件的差异**：组件多一个可选参数 `lockedFallback`（列表墙 / 底抽屉的锁定外观尺寸各不相同：锁图标 26 / 36，默认 `size * 0.4` 会有 1~6px 偏差），用于保证素材未到时**零视觉变化**；列表墙、底抽屉、KOLEKSI 也传了 `fallback` 复刻原外观（原外观带辉光 / 渐变，组件默认回落是纯色圆）。
+- **六处**：庆祝页大徽章（fallback = 原紫渐变奖杯）、KOLEKSI（fallback = 原级别色圆，`+N` 逻辑不变）、列表墙 64 / 底抽屉 76（`locked: !completed`，key 与点击分流不变）、Diary banner（有 code 时 34，fallback = 原 emoji）与角标（**有素材才换成行内 14px 徽章 + 名称，无素材保持原单个「🏆 名称」文本** —— code-review 低优先项修复）、通知中心两型（32，fallback = 原图标；`targetRef` 非合法 code 自然回落）。庆祝页顶部「三级动效」过期注释改为「统一全屏页（D-11）」，行为不变。
+- **素材目录**：`assets/milestone/` 放 README.md（命名规则 / 规格 / 回落说明），不放 `.gitkeep`、不造占位图 —— 与 `assets/place_stamp/`、`assets/tailsonality/` 同一先例；`pubspec.yaml` 已声明。孤儿文件测试只检查 `.webp`。
+- **AC4**：保留清单内既有测试全部未改断言、全绿。
+- **code-review**：1 条低优先（角标 Row 化后无素材时宽度差约 1px）已修。
+- **待确认**：见汇总文件 Epic 5 小节（`lockedFallback` 新增参数、README 代替 `.gitkeep`、映射 40 键 vs 设计资产清单 38~39 枚的合并口径）。
 
 ### File List
+
+App（新增）
+- `lib/features/profile/domain/milestone_badge_assets.dart`
+- `lib/features/profile/presentation/widgets/milestone_badge.dart`
+- `assets/milestone/README.md`
+- 测试：`test/profile/milestone_badge_test.dart`
+
+App（修改）
+- `lib/features/profile/presentation/widgets/milestone_celebration.dart`
+- `lib/features/profile/presentation/milestone_list_page.dart`
+- `lib/features/profile/presentation/widgets/timeline_item_tile.dart`
+- `lib/features/notify/presentation/notification_center_page.dart`
+- `pubspec.yaml`
+
+后端（新增）
+- 测试：`src/test/java/com/tailtopia/profile/domain/MilestoneBadgeMappingTest.java`
+
+### Change Log
+
+- 2026-10-01：Story 5.1 实现（徽章映射表 + 公共组件 + 六处替换 + 素材目录 + 跨库测试）；复审 1 条低优先已修；L0 绿，置 review。

@@ -11,6 +11,7 @@ import '../../domain/milestone_celebration_copy.dart';
 import '../../domain/milestone_titles.dart';
 import '../../domain/timeline_item.dart';
 import '../../../../shared/widgets/content_tag_chip.dart';
+import 'milestone_badge.dart';
 
 /// Diary 时间线**五类条目的唯一渲染组件**（V1.1.2 Story 2.2 · FR-80/82 · NFR-7 · AD-13 Rule 4）。
 ///
@@ -223,11 +224,7 @@ class TimelineItemTile extends StatelessWidget {
         border: Border.all(color: AppColors.gold, width: 1.3),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text('🏆 $label',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-              fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF9A6800))),
+      child: _stampContent(label),
     );
     if (onBadgeTap == null) return chip;
     return GestureDetector(
@@ -357,6 +354,32 @@ class TimelineItemTile extends StatelessWidget {
 
   // ===== 类 ③ 系统自动型里程碑通栏 banner（A6 `tl-ms`，按 S/M/L 配色） =====
 
+  static const TextStyle _stampStyle =
+      TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF9A6800));
+
+  /// 角标内容：该 code 的徽章素材已入包 → 行内 [MilestoneBadge] + 名称（V1.3.2 Story 5.1）；
+  /// 否则保持原来的单个「🏆 名称」文本（素材没到时零视觉变化）。素材清单读完后自动切换。
+  Widget _stampContent(String label) {
+    final original = Text('🏆 $label', maxLines: 1, overflow: TextOverflow.ellipsis, style: _stampStyle);
+    final code = item.milestoneCode;
+    if (code == null || code.isEmpty) return original;
+    MilestoneBadgeAssets.ensureLoaded();
+    return ValueListenableBuilder<Set<String>?>(
+      valueListenable: MilestoneBadgeAssets.listenable,
+      builder: (context, _, _) {
+        if (!MilestoneBadgeAssets.hasArtFor(code)) return original;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            MilestoneBadge(code: code, size: 14, fallback: (_) => const Text('🏆', style: _stampStyle)),
+            const SizedBox(width: 3),
+            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _stampStyle)),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _milestoneBanner(BuildContext context, AppLocalizations l10n) {
     final level = (item.milestoneLevel ?? 'S').toUpperCase();
     final (Color from, Color to, Color border, Color chip) = switch (level) {
@@ -407,7 +430,14 @@ class TimelineItemTile extends StatelessWidget {
                 BoxShadow(color: Color(0x14000000), offset: Offset(0, 2), blurRadius: 6),
               ],
             ),
-            child: Text(emoji, style: const TextStyle(fontSize: 21)),
+            // V1.3.2 Story 5.1：有 code 时显示该枚徽章，素材没到回落 emoji；无 code 保持 emoji。
+            child: code == null || code.isEmpty
+                ? Text(emoji, style: const TextStyle(fontSize: 21))
+                : MilestoneBadge(
+                    code: code,
+                    size: 34,
+                    fallback: (_) => Text(emoji, style: const TextStyle(fontSize: 21)),
+                  ),
           ),
           const SizedBox(width: 11),
           Expanded(
