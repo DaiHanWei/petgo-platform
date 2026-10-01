@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/storage/prefs.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/card_render/card_render_pipeline.dart';
+import '../../../shared/media/image_lightbox.dart';
 import '../../../shared/widgets/pay_channel_picker.dart';
 import '../../../shared/widgets/price_load_retry.dart';
 import '../../keepsake/data/keepsake_repository.dart';
@@ -21,6 +24,7 @@ import '../domain/content/ts_roles.dart';
 import '../domain/content/ts_text.dart';
 import '../domain/tailsonality_result.dart';
 import '../domain/ts_match.dart';
+import 'share/result_share_card.dart';
 import 'tailsonality_retake.dart';
 import 'tailsonality_routes.dart';
 import 'tailsonality_unlock_analytics.dart';
@@ -34,7 +38,7 @@ import 'widgets/ts_unlocked_analysis.dart';
 /// Tailsonality 结果页（V1.3.2 Story 2.4 免费态 · Story 3.2 解锁 / 已解锁态 / 挽留 · UX-DR6）。
 ///
 /// 自上而下：结果卡（3:4；未解锁带水印）→ 免费摘要 → 配型引流 → 锁态区（底部「Buka Rp{价}」）/ 已解锁付费区。
-/// 底部**无**主 CTA（「Bagikan」属 Epic 4）。路由 `extra` 带 [TailsonalityResult] 时先用它首帧渲染；
+/// 已解锁态底部主 CTA「Bagikan」（Story 4.1）→ 结果卡预览，与 ⋯「Bagikan」同一入口；点 3:4 卡图开大图。路由 `extra` 带 [TailsonalityResult] 时先用它首帧渲染；
 /// 深链无 `extra` 照常按 token 取数。
 ///
 /// 未解锁态点返回（系统 / AppBar）→ 本机对该结果 token 首次时弹挽留（A10），弹出即记。
@@ -44,12 +48,22 @@ class TailsonalityResultPage extends ConsumerStatefulWidget {
   final String token;
   final TailsonalityResult? initial;
 
+  /// 卡图出图测试缝（Story 4.1 · AC5）：`toImage` 在 widget test 的 fake-async 里不会完成。
+  /// 参数是本次要截的 boundary（未解锁 = 含水印的外层；已解锁 = 内层），测试据此断言截的是哪一层。
+  @visibleForTesting
+  static Future<Uint8List?> Function(GlobalKey boundary)? captureForTest;
+
   @override
   ConsumerState<TailsonalityResultPage> createState() => _TailsonalityResultPageState();
 }
 
 class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage> {
   final GlobalKey _lockedKey = GlobalKey();
+
+  /// 结果卡两层截图边界（Story 4.1 · AC5）：内层只含卡面；外层把水印一并框进来（仅未解锁时挂上）。
+  final GlobalKey _cardKey = GlobalKey();
+  final GlobalKey _cardWatermarkedKey = GlobalKey();
+  bool _opening = false;
   bool _viewedReported = false;
   bool _buying = false;
 
@@ -104,6 +118,10 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
                   result: shown,
                   petName: petName,
                   lockedKey: _lockedKey,
+                  cardKey: _cardKey,
+                  cardWatermarkedKey: _cardWatermarkedKey,
+                  onCardTap: () => _openCardLightbox(shown),
+                  onShare: () => openResultSharePreview(context, ref, shown),
                   footer: locked
                       ? _UnlockCta(busy: _buying, onTap: () => _startUnlock(shown, petName))
                       : null,
@@ -133,7 +151,17 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
 
   void _openMenu(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 顺序固定（C-7）：Bagikan /（Pamer di postingan，Story 4.4）/ Tes Ulang。
     showTsResultMenu(context, [
+      (
+        key: const ValueKey('tsMenuShare'),
+        icon: Icons.ios_share_rounded,
+        label: l10n.tailsonalityMenuShare,
+        onTap: () {
+          final r = ref.read(tailsonalityResultProvider(widget.token)).value ?? widget.initial;
+          if (r != null) openResultSharePreview(context, ref, r);
+        },
+      ),
       (
         key: const ValueKey('tsMenuRetake'),
         icon: Icons.refresh_rounded,
@@ -141,6 +169,31 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
         onTap: () => startTailsonalityRetake(context, ref),
       ),
     ]);
+  }
+
+  // ---------- Story 4.1 · AC5：点卡图看大图 ----------
+
+  /// 截当前卡面 → 内存图灯箱。🔴 未解锁截**含水印**的外层（大图也得带水印），已解锁截内层。
+  Future<void> _openCardLightbox(TailsonalityResult r) async {
+    if (_opening) return;
+    _opening = true;
+    try {
+      final boundary = r.unlocked ? _cardKey : _cardWatermarkedKey;
+      final capture = TailsonalityResultPage.captureForTest;
+      final bytes = capture != null
+          ? await capture(boundary)
+          : await CardRenderPipeline.capture(boundaryKey: boundary, canvas: kTsCardCanvas);
+      if (!mounted || bytes == null) return;
+      await ImageLightbox.openMemory(
+        context,
+        images: [bytes],
+        initialIndex: 0,
+        heroTagPrefix: _heroPrefix(r),
+        source: 'tailsonality_result',
+      );
+    } finally {
+      _opening = false;
+    }
   }
 
   // ---------- AC8：锁态区首次进入可视区域 ----------
@@ -272,12 +325,27 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
   }
 }
 
+String _heroPrefix(TailsonalityResult r) => 'tailsonality_result_${r.token}';
+
 class _Body extends StatelessWidget {
-  const _Body({required this.result, required this.petName, required this.lockedKey, this.footer});
+  const _Body({
+    required this.result,
+    required this.petName,
+    required this.lockedKey,
+    required this.cardKey,
+    required this.cardWatermarkedKey,
+    required this.onCardTap,
+    required this.onShare,
+    this.footer,
+  });
 
   final TailsonalityResult result;
   final String petName;
   final GlobalKey lockedKey;
+  final GlobalKey cardKey;
+  final GlobalKey cardWatermarkedKey;
+  final VoidCallback onCardTap;
+  final VoidCallback onShare;
   final Widget? footer;
 
   @override
@@ -291,7 +359,19 @@ class _Body extends StatelessWidget {
         Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 360),
-            child: TsResultCard(result: result, watermarked: !result.unlocked),
+            child: GestureDetector(
+              key: const ValueKey('tsResultCardTap'),
+              onTap: onCardTap,
+              child: Hero(
+                tag: lightboxHeroTag(_heroPrefix(result), 0),
+                child: TsResultCard(
+                  result: result,
+                  watermarked: !result.unlocked,
+                  boundaryKey: cardKey,
+                  watermarkedBoundaryKey: cardWatermarkedKey,
+                ),
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 18),
@@ -330,6 +410,21 @@ class _Body extends StatelessWidget {
             energy: result.energy,
             petName: petName,
           ),
+        if (result.unlocked) ...[
+          const SizedBox(height: 20),
+          // 已解锁态底部主 CTA（Story 4.1 · AC4.5）：与 ⋯「Bagikan」同一个预览入口。
+          FilledButton(
+            key: const ValueKey('tsResultShareCta'),
+            onPressed: onShare,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.mint,
+              foregroundColor: AppColors.onAccent,
+              minimumSize: const Size.fromHeight(48),
+            ),
+            child: Text(AppLocalizations.of(context).tailsonalityMenuShare,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          ),
+        ],
       ],
     );
   }

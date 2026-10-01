@@ -3757,6 +3757,8 @@
   "@tailsonalityMoreActions": {"description": "Result page: ⋯ menu button semantics label (V1.3.2 Story 2.4)."},
   "tailsonalityMenuRetake": "Retake test",
   "@tailsonalityMenuRetake": {"description": "Result page menu: retake."},
+  "tailsonalityMenuShare": "Share",
+  "@tailsonalityMenuShare": {"description": "Result page menu and unlocked bottom CTA: open the share-card preview."},
   "tailsonalityResultNotFound": "We couldn't find this result",
   "@tailsonalityResultNotFound": {"description": "Result page: 404 empty state."},
   "tailsonalityMatchTeaserPrompt": "How alike are you two?",

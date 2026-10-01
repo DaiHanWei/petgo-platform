@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/shared/media/image_lightbox.dart';
 
 /// V1.3.0 批次 A · Story 3.1（L0）：灯箱上提为共享组件并全屏化（FR-115 · AD-A14 / AD-A15.1）。
@@ -98,9 +99,13 @@ void main() {
 
     /// AC5 第二条既有修复（bug 20260727-372）：**单图进灯箱后也能左右翻页**。
     /// 单图直接塞 InteractiveViewer 是它当初坏掉的写法 —— 必须仍走 PageView。
+    ///
+    /// V1.3.2 Story 4.1 起条目数统一取 `_count`（内存图优先，否则 URL）——
+    /// 断言改为钉「PageView 的 itemCount 取自统一条目数」，单图仍由 PageView 承载。
     test('保留「单图也可翻页」：仍由 PageView 承载', () {
       expect(src, contains('PageView.builder'));
-      expect(src, contains('itemCount: widget.urls.length'));
+      expect(src, contains('itemCount: _count'));
+      expect(src, contains('int get _count => widget.images?.length ?? widget.urls.length'));
     });
 
     /// AC7：病例图查看器是另一套，本 story 不动它，也不让它依赖新组件。
@@ -254,6 +259,81 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('openIt')));
       await tester.settleLightbox();
 
+      expect(find.byType(ImageLightbox), findsNothing);
+    });
+  });
+
+  /// V1.3.2 Story 4.1 · AC5：内存图来源（本地渲染的卡片截图没有 URL）。
+  group('openMemory 内存图', () {
+    // 1×1 透明 PNG。
+    final png = Uint8List.fromList(const [
+      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+      0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+      0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+      0x42, 0x60, 0x82,
+    ]);
+
+    List<MethodCall> tapPlatformChannel(WidgetTester tester) {
+      final calls = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        calls.add(call);
+        return null;
+      });
+      addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+      return calls;
+    }
+
+    Future<void> pumpOpener(WidgetTester tester, List<Uint8List> images) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              key: const ValueKey('openIt'),
+              onPressed: () => ImageLightbox.openMemory(context,
+                  images: images, initialIndex: 0, heroTagPrefix: 'mem_1', source: 'tailsonality_result'),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.byKey(const ValueKey('openIt')));
+      await tester.settleLightbox();
+    }
+
+    testWidgets('打开显示 1 张内存图、无页码胶囊、报 lightbox_opened{source}', (tester) async {
+      final events = <(String, Map<String, Object>)>[];
+      Analytics.debugCaptureSink = (name, props) => events.add((name, props ?? const {}));
+      addTearDown(() => Analytics.debugCaptureSink = null);
+      await pumpOpener(tester, [png]);
+
+      expect(find.byType(ImageLightbox), findsOneWidget);
+      final img = tester.widget<Image>(find.descendant(of: find.byKey(const ValueKey('lightboxPager')), matching: find.byType(Image)));
+      expect(img.image, isA<MemoryImage>());
+      expect(img.gaplessPlayback, isTrue);
+      expect(find.byKey(const ValueKey('lightboxCounter')), findsNothing);
+      expect(find.byKey(const ValueKey('lightboxRetry_0')), findsNothing);
+      expect(events.where((e) => e.$1 == 'lightbox_opened').single.$2['source'], 'tailsonality_result');
+    });
+
+    testWidgets('单击关闭 + 系统栏恢复', (tester) async {
+      final calls = tapPlatformChannel(tester);
+      await pumpOpener(tester, [png]);
+      calls.clear();
+
+      await tester.tap(find.byKey(const ValueKey('lightboxPager')));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.settleLightbox();
+
+      expect(find.byType(ImageLightbox), findsNothing);
+      expect(
+          calls.any((c) =>
+              c.method == 'SystemChrome.setEnabledSystemUIOverlays' && '${c.arguments}'.contains('SystemUiOverlay.top')),
+          isTrue);
+    });
+
+    testWidgets('空列表不打开', (tester) async {
+      await pumpOpener(tester, const []);
       expect(find.byType(ImageLightbox), findsNothing);
     });
   });

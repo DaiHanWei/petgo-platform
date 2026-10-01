@@ -27,6 +27,7 @@ class TsResultCard extends StatefulWidget {
     required this.watermarked,
     this.showTextOverlay,
     this.boundaryKey,
+    this.watermarkedBoundaryKey,
   });
 
   final TailsonalityResult result;
@@ -37,6 +38,12 @@ class TsResultCard extends StatefulWidget {
 
   /// 截图边界 key。由调用方持有（Story 4.1 要在外层再包一层带水印的边界），不传则组件内自建。
   final GlobalKey? boundaryKey;
+
+  /// 「含水印」的外层截图边界 key（V1.3.2 Story 4.1，照 KTP 的 `idCardWatermarkedBoundaryKey`）。
+  ///
+  /// `CardFrame` 把水印挂在内层 boundary **外面**，截内层永远是干净图；未解锁的大图 /
+  /// 分享图要带水印，就得截把水印一并框进来的这一层。仅 [watermarked] 时挂上。
+  final GlobalKey? watermarkedBoundaryKey;
 
   @override
   State<TsResultCard> createState() => _TsResultCardState();
@@ -49,51 +56,73 @@ class _TsResultCardState extends State<TsResultCard> {
   Widget build(BuildContext context) {
     final r = widget.result;
     final role = kTsRoles[r.letters];
-    final overlay = widget.showTextOverlay ?? !kTsRoleArtHasBakedText;
-    final spaced = r.typeCode.split('').join(' ');
+    final frame = CardFrame(
+      boundaryKey: widget.boundaryKey ?? _ownKey,
+      canvas: kTsCardCanvas,
+      watermark: widget.watermarked ? const CardWatermark(canvas: kTsCardCanvas) : null,
+      child: TsResultCardFace(result: r, showTextOverlay: widget.showTextOverlay),
+    );
+    final outerKey = widget.watermarkedBoundaryKey;
     return Semantics(
       container: true,
       label: '${r.typeCode} · ${role?.name ?? ''} · ${role?.slogan ?? ''}',
       excludeSemantics: true,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: CardFrame(
-          boundaryKey: widget.boundaryKey ?? _ownKey,
-          canvas: kTsCardCanvas,
-          watermark: widget.watermarked ? const CardWatermark(canvas: kTsCardCanvas) : null,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Image.asset(
-                tsRoleArtAsset(r.letters),
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => _Placeholder(typeCode: r.typeCode, name: role?.name ?? ''),
-              ),
-              if (overlay)
-                Positioned(
-                  key: const ValueKey('tsResultCardText'),
-                  left: 72,
-                  right: 72,
-                  bottom: 96,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(spaced,
-                          style: const TextStyle(
-                              fontSize: 56, fontWeight: FontWeight.w800, color: AppColors.onAccent, letterSpacing: 6)),
-                      const SizedBox(height: 12),
-                      Text(role?.name ?? '',
-                          style: const TextStyle(fontSize: 92, fontWeight: FontWeight.w900, color: AppColors.onAccent)),
-                      const SizedBox(height: 16),
-                      Text(role?.slogan ?? '',
-                          style: const TextStyle(fontSize: 44, fontWeight: FontWeight.w600, color: AppColors.onAccent)),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
+        child: widget.watermarked && outerKey != null ? RepaintBoundary(key: outerKey, child: frame) : frame,
       ),
+    );
+  }
+}
+
+/// 结果卡**卡面**（插画 + 代号 + 角色名 + slogan），按 [kTsCardCanvas] 坐标排版（1080×1440）。
+///
+/// V1.3.2 Story 4.1 从 [TsResultCard] 抽出：结果分享卡（9:16）的主体段直接复用它（cover 铺满），
+/// 不另画一套 —— 纯插画版素材到货后只改这里，分享卡自动跟随。
+class TsResultCardFace extends StatelessWidget {
+  const TsResultCardFace({super.key, required this.result, this.showTextOverlay});
+
+  final TailsonalityResult result;
+
+  /// 是否叠文字层；缺省取 [kTsRoleArtHasBakedText] 的反面。
+  final bool? showTextOverlay;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = result;
+    final role = kTsRoles[r.letters];
+    final overlay = showTextOverlay ?? !kTsRoleArtHasBakedText;
+    final spaced = r.typeCode.split('').join(' ');
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset(
+          tsRoleArtAsset(r.letters),
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => _Placeholder(typeCode: r.typeCode, name: role?.name ?? ''),
+        ),
+        if (overlay)
+          Positioned(
+            key: const ValueKey('tsResultCardText'),
+            left: 72,
+            right: 72,
+            bottom: 96,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(spaced,
+                    style: const TextStyle(
+                        fontSize: 56, fontWeight: FontWeight.w800, color: AppColors.onAccent, letterSpacing: 6)),
+                const SizedBox(height: 12),
+                Text(role?.name ?? '',
+                    style: const TextStyle(fontSize: 92, fontWeight: FontWeight.w900, color: AppColors.onAccent)),
+                const SizedBox(height: 16),
+                Text(role?.slogan ?? '',
+                    style: const TextStyle(fontSize: 44, fontWeight: FontWeight.w600, color: AppColors.onAccent)),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

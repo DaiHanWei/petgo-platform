@@ -13,9 +13,18 @@ String petCardShareUrl(String cardToken, {String baseUrl = kH5BaseUrl}) {
   return '$trimmed/p/$cardToken';
 }
 
-// 下载引导落地页（后端直出 `GET /get`，扫码平台判断跳商店/唤起 app）**仍在线**，外部渠道可直接用；
-// 但 App 内已无引用点——它原本只被 KTP 背面二维码调用，背面于 2026-07-17 按用户决策取消。
-// 若日后 App 内再需要拉新二维码/链接，在此重建 petDownloadUrl 即可。
+/// 下载引导落地页（后端直出 `GET /get`，扫码按平台跳商店 / 唤起 App）。
+///
+/// v1.3.2 Story 4.1 重建：本批次**四类分享卡**（Tailsonality 结果卡 / 配型卡 /
+/// 护照卡 / 登机牌卡）的品牌段二维码一律印它 —— 看到卡的人多半还没装 App，
+/// 码的唯一任务是把人带去下载。
+///
+/// ⚠️ 码内**不加** `?src=qr`：`/get` 是静态页、没有埋点消费方（与帖子卡的
+/// [postShareQrUrl] 不同）。与其余几页同 H5 子域；非用户明确指令不得改默认值。
+String petDownloadUrl({String baseUrl = kH5BaseUrl}) {
+  final trimmed = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+  return '$trimmed/get';
+}
 
 /// 由不可枚举 shareToken 拼出 P-35 里程碑庆祝对外分享 URL（后端 `GET /m/{shareToken}` 直出 H5）。
 /// 与 [petCardShareUrl] 同 H5 子域；非用户明确指令不得改默认值。

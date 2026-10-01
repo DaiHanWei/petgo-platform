@@ -66,8 +66,8 @@ development_status:
   3-6-我的订单与后台支付查询接入: review
   epic-3-retrospective: optional
   # ===== Epic 4：分享与发帖回流 =====
-  epic-4: backlog
-  4-1-通用分享卡骨架与结果卡分享: ready-for-dev
+  epic-4: in-progress
+  4-1-通用分享卡骨架与结果卡分享: review
   4-2-配型卡分享: ready-for-dev
   4-3-护照卡与登机牌卡分享: ready-for-dev
   4-4-一键发帖炫耀: ready-for-dev

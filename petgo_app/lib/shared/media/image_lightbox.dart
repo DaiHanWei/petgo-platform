@@ -35,6 +35,11 @@ import 'lightbox_gestures.dart';
 /// - **不为场所场景做任何特化**（B1 工程师在其基础上接入）；
 /// - 病例图查看器（`shared/widgets/case_image_viewer.dart`）与分享卡预览**不动**。
 ///
+/// ## 内存图来源（V1.3.2 Story 4.1）
+/// 本地渲染出来的卡片（如测试结果卡）没有 URL，只有 PNG 字节 —— 走 [openMemory]。
+/// 扩展的仍是**图片来源的形状**（`Uint8List`），不是某个业务实体参数；
+/// 两种来源共用同一套手势、Hero、沉浸态与埋点，条目数统一取 `_count`。
+///
 /// ## 明确不做（AC6 · AD-A15.7）
 /// **长按保存到相册**。盗用顾虑 + 相册权限 + 与分享卡定位冲突：要保存只能走带水印的分享卡。
 class ImageLightbox extends StatefulWidget {
@@ -44,6 +49,7 @@ class ImageLightbox extends StatefulWidget {
     required this.initialIndex,
     required this.heroTagPrefix,
     required this.source,
+    this.images,
   });
 
   /// 要展示的**原图** URL（不是缩略图 —— 「看清楚」正是打开它的唯一理由）。
@@ -57,6 +63,11 @@ class ImageLightbox extends StatefulWidget {
 
   /// 埋点来源。本批次值域只有 `content_detail`，B1 接入时增补（AD-A26.3）。
   final String source;
+
+  /// 内存图（PNG / JPEG 字节）。非空时**以它为准**、忽略 [urls]（见 [openMemory]）。
+  ///
+  /// ⚠️ 不是 required：URL 用法（帖子 / 场所两个调用点）一行不改。
+  final List<Uint8List>? images;
 
   /// 打开查看器。调用方一律走这个入口，不要自己 push ——
   /// 路由形态（是否透明、是否全屏）是本组件的事，Story 3.3 还会改它。
@@ -75,11 +86,51 @@ class ImageLightbox extends StatefulWidget {
     required String source,
   }) {
     if (urls.isEmpty) return Future<int?>.value();
-    // 🔴 bug 507：键盘弹着（评论框在输入）时点图，这一下只负责**收键盘**，不开大图 ——
-    // 用户的意图多半是「我不打了」，直接盖一个全屏灯箱上去像误触。再点一次才开。
-    // ⚠️ 用 View 的 viewInsets，不用 MediaQuery.viewInsetsOf(context)：调用点在
-    //    Scaffold body 里，resizeToAvoidBottomInset 会把 body 的 viewInsets.bottom 抹成 0。
-    // 放在这个统一入口里，帖子详情与场所详情两个调用方一起覆盖。
+    if (_keyboardSwallowsTap(context)) return Future<int?>.value();
+    return _push(
+      context,
+      ImageLightbox(
+        urls: urls,
+        initialIndex: initialIndex,
+        heroTagPrefix: heroTagPrefix,
+        source: source,
+      ),
+    );
+  }
+
+  /// 打开**内存图**查看器（V1.3.2 Story 4.1）：本地渲染的卡片截图等没有 URL 的图。
+  ///
+  /// 手势 / Hero / 沉浸态 / `lightbox_opened` 埋点与 [open] 完全一致；
+  /// 内存图不会网络失败，所以**不做**模糊缩略图打底与失败重试。空列表不打开。
+  static Future<int?> openMemory(
+    BuildContext context, {
+    required List<Uint8List> images,
+    required int initialIndex,
+    required String heroTagPrefix,
+    required String source,
+  }) {
+    if (images.isEmpty) return Future<int?>.value();
+    if (_keyboardSwallowsTap(context)) return Future<int?>.value();
+    return _push(
+      context,
+      ImageLightbox(
+        urls: const [],
+        images: images,
+        initialIndex: initialIndex,
+        heroTagPrefix: heroTagPrefix,
+        source: source,
+      ),
+    );
+  }
+
+  /// 键盘弹着时这一下只收键盘、不开灯箱。返回 true = 本次点击已被「收键盘」吃掉。
+  ///
+  /// 🔴 bug 507：键盘弹着（评论框在输入）时点图，这一下只负责**收键盘**，不开大图 ——
+  /// 用户的意图多半是「我不打了」，直接盖一个全屏灯箱上去像误触。再点一次才开。
+  /// ⚠️ 用 View 的 viewInsets，不用 MediaQuery.viewInsetsOf(context)：调用点在
+  ///    Scaffold body 里，resizeToAvoidBottomInset 会把 body 的 viewInsets.bottom 抹成 0。
+  /// 放在统一入口里（[open] / [openMemory] 共用），所有调用方一起覆盖。
+  static bool _keyboardSwallowsTap(BuildContext context) {
     final FocusNode? focus = FocusManager.instance.primaryFocus;
     final bool keyboardUp = View.of(context).viewInsets.bottom > 0;
     final BuildContext? focusCtx = focus?.context;
@@ -91,8 +142,12 @@ class ImageLightbox extends StatefulWidget {
       // 键盘已收起、只是焦点还留在输入框（如 Android 返回键收了键盘）时照常打开：
       // 先 unfocus 清掉所在 scope 的焦点记录，灯箱关闭 pop 回来时就不会把
       // 焦点还给评论框、把键盘又顶起来。
-      if (keyboardUp) return Future<int?>.value();
+      if (keyboardUp) return true;
     }
+    return false;
+  }
+
+  static Future<int?> _push(BuildContext context, ImageLightbox lightbox) {
     return Navigator.of(context).push(PageRouteBuilder<int>(
       // 🔴 `opaque: false` 是 Story 3.2 下滑关闭（AC1「背景随拖拽渐透明」）的**前提**：
       // 不透明路由之下的那一页根本不参与绘制，把黑底调淡只会露出一片虚空，
@@ -103,12 +158,7 @@ class ImageLightbox extends StatefulWidget {
       // 否则「从缩略图原位放大飞入 / 关闭时缩回原位」两头都没有时间发生。
       transitionDuration: _flight,
       reverseTransitionDuration: _flight,
-      pageBuilder: (_, _, _) => ImageLightbox(
-        urls: urls,
-        initialIndex: initialIndex,
-        heroTagPrefix: heroTagPrefix,
-        source: source,
-      ),
+      pageBuilder: (_, _, _) => lightbox,
     ));
   }
 
@@ -253,8 +303,10 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
   /// 模糊图还垫在下面的话，提示文字压在一团色块上，既难读又像「其实加载出来了」。
   final Set<int> _failed = {};
 
-  int get _safeInitialIndex =>
-      widget.urls.isEmpty ? 0 : widget.initialIndex.clamp(0, widget.urls.length - 1);
+  /// 条目数：内存图优先，否则 URL。PageView / 页码胶囊 / 下标夹取**统一**取它。
+  int get _count => widget.images?.length ?? widget.urls.length;
+
+  int get _safeInitialIndex => _count == 0 ? 0 : widget.initialIndex.clamp(0, _count - 1);
 
   TransformationController _transformOf(int index) =>
       _transforms.putIfAbsent(index, () {
@@ -488,7 +540,7 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
                     left: 0,
                     child: Opacity(opacity: _zoomed ? 0.5 : 1, child: _closeButton()),
                   ),
-                  if (widget.urls.length > 1)
+                  if (_count > 1)
                     Positioned(top: 0, left: 0, right: 0, child: Center(child: _counterPill())),
                 ],
               ),
@@ -516,7 +568,7 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
             : const NeverScrollableScrollPhysics(),
         // 🔴 **单图也用 PageView**（bug 20260727-372）：改前单图直接塞 InteractiveViewer，
         // 进灯箱后翻不到同一条内容的其余图。itemCount 是 1 时它退化成不可翻页，行为一致。
-        itemCount: widget.urls.length,
+        itemCount: _count,
         onPageChanged: (i) {
           // 离开的那一页复位，免得回头翻回来时它还停在某个奇怪的放大位置上。
           _transforms[_current]?.value = Matrix4.identity();
@@ -557,8 +609,9 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
                   key: _imageKeys.putIfAbsent(i, GlobalKey.new),
                   tag: lightboxHeroTag(widget.heroTagPrefix, i),
                   // 飞行途中用一张静态图，避免把加载态/重试按钮一起拖着飞。
-                  flightShuttleBuilder: (_, _, _, _, _) =>
-                      AppImage.widget(widget.urls[i], fit: BoxFit.contain, thumbWidth: _thumbWidth),
+                  flightShuttleBuilder: (_, _, _, _, _) => widget.images != null
+                      ? _memoryImage(i)
+                      : AppImage.widget(widget.urls[i], fit: BoxFit.contain, thumbWidth: _thumbWidth),
                   // 只有正在拖的那一页带圆角与阴影；其余页不在屏上，套了也是白算。
                   child: i == _current ? _dragDecor(_page(i), progress) : _page(i),
                 ),
@@ -595,6 +648,8 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
 
   /// 一页的内容：缩略图打底（模糊）→ 原图淡入（AC3）；加载失败给重试（AC4）。
   Widget _page(int i) {
+    // 内存图：直接画，不打底不重试（不会网络失败）。
+    if (widget.images != null) return _memoryImage(i);
     final String url = widget.urls[i];
     final int tick = _retryTicks[i] ?? 0;
     return Stack(
@@ -663,6 +718,9 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
       ],
     );
   }
+
+  Widget _memoryImage(int i) =>
+      Image.memory(widget.images![i], fit: BoxFit.contain, gaplessPlayback: true);
 
   /// AC4：失败提示 + 重试按钮。改前这里只有一个灰色方块 —— 用户既不知道发生了什么，
   /// 也没有任何补救动作可做。
@@ -737,7 +795,7 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
-          '${_current + 1}/${widget.urls.length}',
+          '${_current + 1}/$_count',
           style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
         ),
       );

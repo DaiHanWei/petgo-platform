@@ -228,19 +228,28 @@ void main() {
       expect(find.descendant(of: find.byType(TsMatchTeaser), matching: find.byType(InkWell)), findsOneWidget);
     });
 
+    // Story 4.1 按新规则更新：已解锁态底部唯一主 CTA 是「Bagikan」（不是购买按钮）。
     testWidgets('已解锁分支不崩、不渲染锁态区、不显示购买按钮', (tester) async {
       await pumpPage(tester, r: result(unlocked: true));
       expect(find.byType(TsLockedAnalysis), findsNothing);
       expect(find.byType(CardWatermark), findsNothing);
       expect(find.byKey(const ValueKey('tsUnlockCta')), findsNothing);
-      expect(find.byType(FilledButton), findsNothing);
+      // 底部 CTA 在长列表末尾（ListView 懒构建）：先滚到底再数。
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('tsResultShareCta')), 400,
+          scrollable: find.descendant(of: find.byKey(const ValueKey('tsResultBody')), matching: find.byType(Scrollable)));
+      expect(find.byType(FilledButton), findsOneWidget);
+      expect(find.byKey(const ValueKey('tsResultShareCta')), findsOneWidget);
     });
 
-    testWidgets('⋯ 菜单仅一项；重测确认后发埋点并弹说明抽屉；取消无埋点', (tester) async {
+    // Story 4.1 按新规则更新：⋯ 菜单两项、顺序固定 Bagikan → Tes Ulang（Pamer di postingan 由 4.4 插在中间）。
+    testWidgets('⋯ 菜单两项（Bagikan、Tes Ulang）；重测确认后发埋点并弹说明抽屉；取消无埋点', (tester) async {
       await pumpPage(tester);
       await tester.tap(find.byKey(const ValueKey('tsResultMore')));
       await tester.pumpAndSettle();
-      expect(find.byType(ListTile), findsOneWidget);
+      expect(find.byType(ListTile), findsNWidgets(2));
+      expect(tester.getTopLeft(find.byKey(const ValueKey('tsMenuShare'))).dy,
+          lessThan(tester.getTopLeft(find.byKey(const ValueKey('tsMenuRetake'))).dy));
+      expect(find.text('Bagikan'), findsOneWidget);
       expect(find.byKey(const ValueKey('tsMenuRetake')), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('tsMenuRetake')));

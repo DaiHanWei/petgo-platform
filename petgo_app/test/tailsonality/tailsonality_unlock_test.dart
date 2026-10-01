@@ -148,8 +148,12 @@ void main() {
       expect(find.byKey(const ValueKey('tsPole_I')), findsOneWidget);
       expect(find.text('High'), findsOneWidget);
       expect(find.textContaining('{pet}'), findsNothing);
-      // 已解锁页底部不放任何主 CTA。
-      expect(find.byType(FilledButton), findsNothing);
+      // 已解锁页底部唯一主 CTA 是「Bagikan」（Story 4.1 按新规则更新；不再有购买按钮）。
+      // 底部 CTA 在长列表末尾（ListView 懒构建）：先滚到底再数。
+      await tester.scrollUntilVisible(find.byKey(const ValueKey('tsResultShareCta')), 400,
+          scrollable: find.descendant(of: find.byKey(const ValueKey('tsResultBody')), matching: find.byType(Scrollable)));
+      expect(find.byType(FilledButton), findsOneWidget);
+      expect(find.byKey(const ValueKey('tsResultShareCta')), findsOneWidget);
 
       final initiated = events.where((e) => e.$1 == 'tailsonality_unlock_initiated').single.$2!;
       expect(initiated, {'role_code': 'ENTJ-H', 'price': 5000, 'result_index': 2, 'method': 'PAWCOIN'});

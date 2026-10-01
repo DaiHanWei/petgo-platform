@@ -10,6 +10,7 @@ import '../../../../shared/card_render/card_canvas.dart';
 import '../../../../shared/card_render/card_export.dart';
 import '../../../../shared/card_render/card_frame.dart';
 import '../../../../shared/card_render/card_render_pipeline.dart';
+import '../../../../shared/card_render/card_watermark.dart';
 import '../../domain/share_card_data.dart';
 import 'share_card_template.dart';
 
@@ -23,10 +24,58 @@ import 'share_card_template.dart';
 ///
 /// 尺寸切换（9:16 / 1:1）是**研发加的开关**：UI 稿只写了"双规格"没画切换控件，
 /// 而两种尺寸都做了就得有地方选。若产品另有想法，改这一处即可。
+///
+/// v1.3.2 Story 4.1 · AD-14：新增 [ShareCardPreviewPage.custom] 形态，供结果卡 /
+/// 配型卡 / 护照卡 / 登机牌卡复用这一屏。**帖子形态（默认构造）行为逐项不变**。
 class ShareCardPreviewPage extends StatefulWidget {
-  const ShareCardPreviewPage({super.key, required this.data});
+  const ShareCardPreviewPage({super.key, required ShareCardData this.data})
+    : cardBuilder = null,
+      watermarked = false,
+      exportName = 'tailtopia_card',
+      onGenerated = null,
+      onShared = null,
+      primaryAction = null;
 
-  final ShareCardData data;
+  /// 通用卡形态（v1.3.2 Story 4.1 · C-11）。
+  ///
+  /// - **固定 9:16、不渲染尺寸切换**（`shareCardRatioToggle`）；
+  /// - [watermarked] 为 true 时预览**与导出图**都带水印（见 [_watermarkedKey]）；
+  /// - 埋点 / 领奖由调用方经 [onGenerated] / [onShared] 决定，本页不认识任何业务事件名；
+  /// - [primaryAction] 非空时它占主按钮、「Bagikan ke Story」降为次按钮；
+  ///   为空时「Bagikan ke Story」是唯一的主按钮。
+  const ShareCardPreviewPage.custom({
+    super.key,
+    required Widget Function(CardCanvas canvas) builder,
+    required this.watermarked,
+    required this.exportName,
+    this.onGenerated,
+    this.onShared,
+    this.primaryAction,
+  }) : data = null,
+       cardBuilder = builder;
+
+  /// 帖子形态的卡片数据；custom 形态为 null。
+  final ShareCardData? data;
+
+  /// custom 形态：按画布构卡。
+  final Widget Function(CardCanvas canvas)? cardBuilder;
+
+  /// custom 形态：预览与导出是否带水印（帖子形态恒 false，产品 2026-08-26 决定）。
+  final bool watermarked;
+
+  /// 导出文件名（不含扩展名）。
+  final String exportName;
+
+  /// custom 形态：出图成功（参数为出图耗时 ms）。
+  final void Function(int durationMs)? onGenerated;
+
+  /// custom 形态：系统分享面板回调成功（参数为归一化渠道）。取消不触发。
+  final void Function(String channel)? onShared;
+
+  /// custom 形态：可选主操作（供 4.2 / 4.4 用）。
+  final ShareCardPreviewAction? primaryAction;
+
+  bool get _isCustom => cardBuilder != null;
 
   /// 出图测试缝。
   ///
@@ -46,6 +95,12 @@ class ShareCardPreviewPage extends StatefulWidget {
 class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
   final GlobalKey _boundaryKey = GlobalKey();
 
+  /// 🔴 **水印导出**（v1.3.2 Story 4.1，照 KTP 的 `idCardWatermarkedBoundaryKey`）：
+  /// `CardFrame` 把水印挂在截图区**外面**，截内层 boundary 拿到的永远是干净图 ——
+  /// 所以「未解锁分享出去的图带水印」不能靠给 `CardFrame` 传水印实现。
+  /// 外面再包一层 boundary 把水印一并框进来，带水印时截这一层。
+  /// 外层与 `CardFrame` 的 `AspectRatio` 同尺寸，管线的倍率反算照样成立。
+  final GlobalKey _watermarkedKey = GlobalKey();
 
   /// 默认 9:16（Instagram Stories 是这个功能的主场景）。
   CardCanvas _canvas = CardCanvas.story;
@@ -59,14 +114,33 @@ class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
       final startedAt = DateTime.now();
       final bytes = capture != null
           ? await capture(_canvas)
-          : await CardRenderPipeline.capture(boundaryKey: _boundaryKey, canvas: _canvas);
+          : await CardRenderPipeline.capture(
+              boundaryKey: widget.watermarked ? _watermarkedKey : _boundaryKey,
+              canvas: _canvas,
+            );
       final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
       if (!mounted) return;
       if (bytes == null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(l10n.shareCardExportError)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.shareCardExportError)));
         return;
       }
+
+      if (widget._isCustom) {
+        widget.onGenerated?.call(elapsedMs);
+        final box = context.findRenderObject() as RenderBox?;
+        final origin = box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+        await CardExport.showSheet(
+          context,
+          bytes: bytes,
+          name: widget.exportName,
+          shareOrigin: origin,
+          onShared: widget.onShared,
+        );
+        return;
+      }
+      final data = widget.data!;
 
       // ===== 埋点：出图与分享是**两个**事件，别再合成一个（Story 10.1 订正）=====
       //
@@ -84,7 +158,7 @@ class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
       // E-12：出图成功。`duration_ms` 是**生成基建的性能**，也是这条的加粗属性。
       // ⚠️ 用 unawaited 语义：埋点不该挡住分享面板弹出。
       Analytics.capture('post_share_card_generated', {
-        'template': widget.data.hasImage ? 'image' : 'text_only',
+        'template': data.hasImage ? 'image' : 'text_only',
         'size': _canvas == CardCanvas.square ? '1x1' : '9x16',
         'duration_ms': elapsedMs,
       });
@@ -97,8 +171,7 @@ class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
         name: 'tailtopia_card',
         shareOrigin: origin,
         // E-13：**系统面板回调分享成功之后**才报，取消不报。
-        onShared: (channel) =>
-            Analytics.capture('post_share_card_sent', {'channel': channel}),
+        onShared: (channel) => Analytics.capture('post_share_card_sent', {'channel': channel}),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -114,50 +187,79 @@ class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: SegmentedButton<CardCanvas>(
-                key: const ValueKey('shareCardRatioToggle'),
-                segments: const [
-                  ButtonSegment(value: CardCanvas.story, label: Text('9:16')),
-                  ButtonSegment(value: CardCanvas.square, label: Text('1:1')),
-                ],
-                selected: {_canvas},
-                onSelectionChanged: (s) => setState(() => _canvas = s.first),
+            // custom 形态固定 9:16、不给切换（C-11）。
+            if (!widget._isCustom)
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: SegmentedButton<CardCanvas>(
+                  key: const ValueKey('shareCardRatioToggle'),
+                  segments: const [
+                    ButtonSegment(value: CardCanvas.story, label: Text('9:16')),
+                    ButtonSegment(value: CardCanvas.square, label: Text('1:1')),
+                  ],
+                  selected: {_canvas},
+                  onSelectionChanged: (s) => setState(() => _canvas = s.first),
+                ),
               ),
-            ),
             Expanded(
               child: Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 48),
-                  child: CardFrame(
-                    // key 随画布变：换尺寸时强制重建，别让 State 复用旧画布的布局。
-                    key: ValueKey(_canvas),
-                    boundaryKey: _boundaryKey,
-                    canvas: _canvas,
-                    // 🔴 **内容分享卡不加水印**（产品 2026-08-26 决定）。
-                    //
-                    // 水印这套是从身份证卡那边继承来的，在那里有明确用途：高清无水印图
-                    // 是**付费**的，预览带水印才防得住「截屏白嫖」。而内容分享卡本身
-                    // 就是免费出图、且**越多人转发越好** —— 给它加水印既没有要保护的收入，
-                    // 又让预览满屏花纹、脏得看不清卡面本身（实机反馈）。
-                    //
-                    // ⚠️ 正式导出**本来就没有**水印（水印挂在截图区之外，见 CardFrame），
-                    //    所以这次去掉只影响预览这一屏，不改变任何已导出图片的样子。
-                    child: ShareCardTemplate(data: widget.data, canvas: _canvas),
-                  ),
+                  child: widget._isCustom
+                      ? _customFrame()
+                      : CardFrame(
+                          // key 随画布变：换尺寸时强制重建，别让 State 复用旧画布的布局。
+                          key: ValueKey(_canvas),
+                          boundaryKey: _boundaryKey,
+                          canvas: _canvas,
+                          // 🔴 **内容分享卡不加水印**（产品 2026-08-26 决定）。
+                          //
+                          // 水印这套是从身份证卡那边继承来的，在那里有明确用途：高清无水印图
+                          // 是**付费**的，预览带水印才防得住「截屏白嫖」。而内容分享卡本身
+                          // 就是免费出图、且**越多人转发越好** —— 给它加水印既没有要保护的收入，
+                          // 又让预览满屏花纹、脏得看不清卡面本身（实机反馈）。
+                          //
+                          // ⚠️ 正式导出**本来就没有**水印（水印挂在截图区之外，见 CardFrame），
+                          //    所以这次去掉只影响预览这一屏，不改变任何已导出图片的样子。
+                          child: ShareCardTemplate(data: widget.data!, canvas: _canvas),
+                        ),
                 ),
               ),
             ),
             Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  key: const ValueKey('shareCardShareCta'),
-                  onPressed: _busy ? null : _shareIt,
-                  child: Text(l10n.shareCardShareCta),
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (widget.primaryAction case final action?) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        key: action.key,
+                        onPressed: _busy ? null : action.onPressed,
+                        child: Text(action.label),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    // 有主操作时「Bagikan ke Story」降为次按钮。
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        key: const ValueKey('shareCardShareCta'),
+                        onPressed: _busy ? null : _shareIt,
+                        child: Text(l10n.shareCardShareCta),
+                      ),
+                    ),
+                  ] else
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        key: const ValueKey('shareCardShareCta'),
+                        onPressed: _busy ? null : _shareIt,
+                        child: Text(l10n.shareCardShareCta),
+                      ),
+                    ),
+                ],
               ),
             ),
           ],
@@ -165,4 +267,26 @@ class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
       ),
     );
   }
+
+  /// custom 形态的卡框：带水印时外包一层 boundary（见 [_watermarkedKey]）。
+  Widget _customFrame() {
+    final frame = CardFrame(
+      boundaryKey: _boundaryKey,
+      canvas: _canvas,
+      watermark: widget.watermarked ? CardWatermark(canvas: _canvas) : null,
+      child: widget.cardBuilder!(_canvas),
+    );
+    if (!widget.watermarked) return frame;
+    return RepaintBoundary(key: _watermarkedKey, child: frame);
+  }
+}
+
+/// 预览页可选主操作（v1.3.2 Story 4.1；4.2 / 4.4 接「Pamer di postingan」）。
+@immutable
+class ShareCardPreviewAction {
+  const ShareCardPreviewAction({required this.label, required this.onPressed, this.key});
+
+  final String label;
+  final VoidCallback onPressed;
+  final Key? key;
 }
