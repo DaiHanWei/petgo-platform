@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,10 +7,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/card_render/card_canvas.dart';
+import '../../../shared/card_render/card_render_pipeline.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../../shared/widgets/pay_channel_picker.dart';
 import '../../../shared/widgets/price_load_retry.dart';
+import '../../content/presentation/brag_post_entry.dart';
 import '../../keepsake/data/keepsake_repository.dart';
 import '../../keepsake/presentation/keepsake_pay_flow.dart';
 import '../../place/presentation/place_detail_page.dart';
@@ -22,7 +27,7 @@ import 'widgets/boarding_pass_unlock_sheet.dart';
 ///
 /// 自上而下：一张完整登机牌卡（未解锁叠水印）→ 卡外场所名 → 地址条（ACTIVE 可点进场所详情；
 /// 下架 / 解析不到 →「Tempat tidak ditemukan」）→「Pertama · Terakhir」。
-/// 未解锁吸底「Buka Rp{价}」→ B7b → 选渠道；已解锁**不放**吸底 CTA（发帖属 4.4）。
+/// 未解锁吸底「Buka Rp{价}」→ B7b → 选渠道；已解锁（B3c）吸底「Pamer di postingan」（Story 4.4）。
 ///
 /// V1.3.2 Story 4.3：顶栏右上分享按钮（两态都有）→ 登机牌卡预览；水印按**该张**解锁态。
 /// 放顶栏是因为两态底部都已被占（B3b 解锁 CTA / B3c 留给 Pamer di postingan），而 PRD 要求未解锁也可出卡（带水印）。
@@ -31,12 +36,40 @@ class BoardingPassDetailPage extends ConsumerStatefulWidget {
 
   final String placeToken;
 
+  /// 登机牌卡出图测试缝（`toImage` 在 widget test 的 fake-async 里不会完成）。
+  @visibleForTesting
+  static Future<Uint8List?> Function()? captureForTest;
+
   @override
   ConsumerState<BoardingPassDetailPage> createState() => _BoardingPassDetailPageState();
 }
 
+/// 登机牌卡的发帖出图画布：管线只用画布**宽**反算倍率（1080 宽 = 高清），高按卡片 300:460 版式。
+const CardCanvas _kBoardingPassExportCanvas = CardCanvas(size: Size(1080, 1656), radius: 64);
+
 class _BoardingPassDetailPageState extends ConsumerState<BoardingPassDetailPage> {
   bool _buying = false;
+  bool _bragging = false;
+
+  /// 详情页上那张登机牌卡的截图边界（B3c 发帖截它；已解锁 = 无水印）。
+  final GlobalKey _cardKey = GlobalKey();
+
+  /// B3c「Pamer di postingan」：截详情页上的登机牌卡 → 发帖页（比例在区间外时由入口补边，不裁字段）。
+  Future<void> _brag(BoardingPassDetail d) async {
+    if (_bragging) return;
+    setState(() => _bragging = true);
+    try {
+      final capture = BoardingPassDetailPage.captureForTest;
+      final bytes = capture != null
+          ? await capture()
+          : await CardRenderPipeline.capture(boundaryKey: _cardKey, canvas: _kBoardingPassExportCanvas);
+      if (!mounted || bytes == null) return;
+      await BragPostEntry.open(context,
+          cardPng: bytes, text: AppLocalizations.of(context).boardingPassBragText(d.passenger, d.placeName));
+    } finally {
+      if (mounted) setState(() => _bragging = false);
+    }
+  }
 
   Future<void> _buy(BoardingPassDetail d) async {
     if (_buying) return;
@@ -86,9 +119,24 @@ class _BoardingPassDetailPageState extends ConsumerState<BoardingPassDetailPage>
             ),
         ],
       ),
-      bottomNavigationBar: d == null || d.unlocked ? null : _UnlockBar(busy: _buying, onTap: () => _buy(d)),
+      bottomNavigationBar: d == null
+          ? null
+          : d.unlocked
+          ? SafeArea(
+              minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: FilledButton(
+                key: const ValueKey('boardingPassBragCta'),
+                onPressed: _bragging ? null : () => _brag(d),
+                style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    backgroundColor: AppColors.mint,
+                    foregroundColor: AppColors.onAccent),
+                child: Text(l10n.bragPostButton),
+              ),
+            )
+          : _UnlockBar(busy: _buying, onTap: () => _buy(d)),
       body: d != null
-          ? _Body(pass: d)
+          ? _Body(pass: d, cardKey: _cardKey)
           : async.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => EmptyState(
@@ -106,9 +154,10 @@ class _BoardingPassDetailPageState extends ConsumerState<BoardingPassDetailPage>
 }
 
 class _Body extends StatelessWidget {
-  const _Body({required this.pass});
+  const _Body({required this.pass, required this.cardKey});
 
   final BoardingPassDetail pass;
+  final GlobalKey cardKey;
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +169,7 @@ class _Body extends StatelessWidget {
       key: const ValueKey('boardingPassDetail'),
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       children: [
-        BoardingPassCard(pass: pass, watermarked: !pass.unlocked),
+        RepaintBoundary(key: cardKey, child: BoardingPassCard(pass: pass, watermarked: !pass.unlocked)),
         const SizedBox(height: 18),
         Text(pass.placeName,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),

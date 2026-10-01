@@ -155,8 +155,13 @@ void main() {
     setUp(() {
       events = [];
       Analytics.debugCaptureSink = (e, p) => events.add((e, p));
+      // Story 4.4 起点卡先截 3:4 再进预览：截不到（null）时预览不出主操作 —— 正是 4.2 的「无主操作」形态。
+      TailsonalityMatchPage.captureForTest = () async => null;
     });
-    tearDown(() => Analytics.debugCaptureSink = null);
+    tearDown(() {
+      Analytics.debugCaptureSink = null;
+      TailsonalityMatchPage.captureForTest = null;
+    });
 
     Future<void> pumpMatch(WidgetTester tester, {required bool unlocked}) async {
       tester.view.physicalSize = const Size(420, 2600);

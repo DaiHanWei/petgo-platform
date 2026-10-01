@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -72,6 +73,8 @@ class PublishComposePage extends ConsumerStatefulWidget {
     this.milestoneCode,
     this.placeCheckinToken,
     this.placeCheckinPlace,
+    this.initialText,
+    this.initialImages,
   });
 
   /// 预选发布类型（如生日深链预选成长日历，Story 6.1 FR-40 / 灰选建档返回，AC7）；为空时默认 daily。
@@ -90,6 +93,13 @@ class PublishComposePage extends ConsumerStatefulWidget {
   /// 场所条展示用（名 / 类型 / token 供埋点）；**不进请求体**。
   final PublishCheckinPlace? placeCheckinPlace;
 
+  /// 预填正文（V1.3.2 Story 4.4「Pamer di postingan」）：超 [kMaxPostTextLength] 截断。
+  final String? initialText;
+
+  /// 预填图片（已是 JPEG 字节；V1.3.2 Story 4.4）：**不经相册、不申请权限**，直接入图片区并开始上传。
+  /// 超 [kMaxImages] 丢弃。关闭发帖页即随 autoDispose 清空（无草稿，NFR-10）。
+  final List<Uint8List>? initialImages;
+
   /// 以全屏 bottom sheet 形式打开（供「＋」入口 / 深链着陆页 / 灰选建档返回 / 里程碑去发布调用）。
   static Future<void> open(
     BuildContext context, {
@@ -98,6 +108,8 @@ class PublishComposePage extends ConsumerStatefulWidget {
     String? milestoneCode,
     String? placeCheckinToken,
     PublishCheckinPlace? placeCheckinPlace,
+    String? initialText,
+    List<Uint8List>? initialImages,
   }) {
     // AC2 的第 5 个底栏位（code-review 2026-08-04 决策 D1）：发布页是 modal sheet 而非
     // `PageRoute`，PostHog 的 `defaultPostHogRouteFilter` 只跟踪 `PageRoute` → observer 收不到，
@@ -120,6 +132,8 @@ class PublishComposePage extends ConsumerStatefulWidget {
           milestoneCode: milestoneCode,
           placeCheckinToken: placeCheckinToken,
           placeCheckinPlace: placeCheckinPlace,
+          initialText: initialText,
+          initialImages: initialImages,
         ),
       ),
     );
@@ -162,7 +176,26 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         c.setEventDate(widget.presetEventDate ?? DateTime.now()); // F9 默认事件日期
         _ensurePetLoaded();
       }
+      _applyPrefill(c);
     });
+  }
+
+  /// 预填（V1.3.2 Story 4.4）：**在定好类型之后**做。文字框与 controller 必须同步写，
+  /// 否则字数计与发布内容会分叉；图片直接入图片区并走既有上传进度（不 await）。
+  void _applyPrefill(PublishController c) {
+    final text = widget.initialText;
+    if (text != null && text.isNotEmpty) {
+      final clipped = text.characters.take(kMaxPostTextLength).toString();
+      _textController.text = clipped;
+      c.setText(clipped);
+    }
+    final images = widget.initialImages;
+    if (images != null && images.isNotEmpty) {
+      for (final bytes in images) {
+        if (!c.addImage(bytes)) break; // 超 kMaxImages 丢弃
+      }
+      unawaited(c.uploadAll());
+    }
   }
 
   /// 成长日历绑定的宠物档案（V1 单账号单宠物）。选「成长日历」时拉取，发布时带其 id。

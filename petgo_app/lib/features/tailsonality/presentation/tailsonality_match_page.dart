@@ -1,10 +1,14 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/card_render/card_render_pipeline.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../content/presentation/brag_post_entry.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/tailsonality_owner_type_repository.dart';
 import '../data/tailsonality_providers.dart';
@@ -14,16 +18,22 @@ import '../domain/ts_match.dart';
 import 'share/match_share_card.dart';
 import 'widgets/ts_letter_compare.dart';
 import 'widgets/ts_match_card.dart';
+import 'widgets/ts_result_card.dart';
 import 'widgets/ts_rich_text.dart';
 import 'widgets/ts_type_selector.dart';
 
 /// 主人配型页（V1.3.2 Story 2.5 · UX-DR9）。挂在某次结果 token 下：宠物侧用**这次结果**的四字母。
 ///
-/// 配型**全免费**：无锁态、无水印、无任何付费要素；换类型不收费。页首 3:4 配型卡可点 → 配型卡分享预览（Story 4.2）。
+/// 配型**全免费**：无锁态、无水印、无任何付费要素；换类型不收费。页首 3:4 配型卡可点 → 配型卡分享预览（Story 4.2）；
+/// 结果视图底部主按钮「Pamer di postingan」（Story 4.4）。
 class TailsonalityMatchPage extends ConsumerStatefulWidget {
   const TailsonalityMatchPage({super.key, required this.token});
 
   final String token;
+
+  /// 3:4 配型卡出图测试缝（`toImage` 在 widget test 的 fake-async 里不会完成）。
+  @visibleForTesting
+  static Future<Uint8List?> Function()? captureForTest;
 
   @override
   ConsumerState<TailsonalityMatchPage> createState() => _TailsonalityMatchPageState();
@@ -34,6 +44,63 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
   String? _selected;
   bool _saving = false;
   bool _entered = false;
+
+  /// 页首 3:4 配型卡的截图边界（发帖 / 预览主操作都截它；永不带水印）。
+  final GlobalKey _cardKey = GlobalKey();
+  bool _capturing = false;
+
+  /// 结果视图的滚动控制：底部「Pamer」常驻，卡在列表首项 —— 截图前先滚回顶部（见 [_brag]）。
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<Uint8List?> _captureCard() {
+    final capture = TailsonalityMatchPage.captureForTest;
+    return capture != null ? capture() : CardRenderPipeline.capture(boundaryKey: _cardKey, canvas: kTsCardCanvas);
+  }
+
+  /// 底部「Pamer di postingan」：截 3:4 配型卡 → 发帖页。
+  ///
+  /// 🔴 按钮吸底常驻，卡在列表首项：滚到详解处时卡已被懒列表回收（截到空）或不在屏上（不绘制）。
+  /// 先滚回顶部、等一帧再截；仍截不到给轻提示，不静默失败。
+  Future<void> _brag() async {
+    if (_capturing) return;
+    setState(() => _capturing = true);
+    try {
+      if (_scroll.hasClients && _scroll.offset > 0) {
+        _scroll.jumpTo(0);
+        await WidgetsBinding.instance.endOfFrame;
+      }
+      if (!mounted) return;
+      final bytes = await _captureCard();
+      if (!mounted) return;
+      if (bytes == null) {
+        showAppToast(context, AppLocalizations.of(context).shareCardExportError);
+        return;
+      }
+      await BragPostEntry.open(context, cardPng: bytes, text: AppLocalizations.of(context).tailsonalityBragMatchText);
+    } finally {
+      if (mounted) setState(() => _capturing = false);
+    }
+  }
+
+  /// 点 3:4 卡 → 配型卡预览。🔴 预览页上画的是 9:16 卡，截不到 3:4 —— 所以**先在本页截好**再传给预览页的主操作。
+  Future<void> _openPreview(String petName, String petCode, String owner4) async {
+    if (_capturing) return;
+    setState(() => _capturing = true);
+    Uint8List? bytes;
+    try {
+      bytes = await _captureCard();
+    } finally {
+      if (mounted) setState(() => _capturing = false);
+    }
+    if (!mounted) return;
+    await openMatchSharePreview(context, ref, petName: petName, petCode: petCode, ownerType: owner4, cardPng: bytes);
+  }
 
   void _reportEntered(String pet4) {
     if (_entered) return;
@@ -95,6 +162,7 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
         bottom = _confirmBar(l10n, pet4);
       } else {
         body = _result(context, l10n, owner, pet4, petCode!, petName);
+        bottom = _bragBar(l10n);
       }
     }
     return Scaffold(
@@ -137,6 +205,24 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
         ),
       );
 
+  Widget _bragBar(AppLocalizations l10n) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: FilledButton(
+            key: const ValueKey('tsMatchBragCta'),
+            onPressed: _capturing ? null : _brag,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.mint,
+              foregroundColor: AppColors.onAccent,
+              minimumSize: const Size.fromHeight(48),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            child: Text(l10n.bragPostButton, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+          ),
+        ),
+      );
+
   Widget _result(
       BuildContext context, AppLocalizations l10n, String owner4, String pet4, String petCode, String petName) {
     final locale = Localizations.localeOf(context);
@@ -146,6 +232,7 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
     String fill(TsText t) => tsFillPet(t.of(locale), petName);
     return ListView(
       key: const ValueKey('tsMatchResultView'),
+      controller: _scroll,
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       children: [
         Center(
@@ -153,8 +240,8 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
             constraints: const BoxConstraints(maxWidth: 360),
             child: GestureDetector(
               key: const ValueKey('tsMatchCardTap'),
-              onTap: () => openMatchSharePreview(context, ref, petName: petName, petCode: petCode, ownerType: owner4),
-              child: TsMatchCard(tier: m.tier),
+              onTap: () => _openPreview(petName, petCode, owner4),
+              child: TsMatchCard(tier: m.tier, boundaryKey: _cardKey),
             ),
           ),
         ),

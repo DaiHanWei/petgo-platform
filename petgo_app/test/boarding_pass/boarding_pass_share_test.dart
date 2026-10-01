@@ -3,6 +3,14 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
+import 'package:tailtopia/core/media/media_scope.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/content/data/content_repository.dart';
+import 'package:tailtopia/features/content/presentation/brag_post_entry.dart';
+import 'package:tailtopia/features/content/presentation/publish_compose_page.dart';
+import 'package:tailtopia/features/media/data/oss_uploader.dart';
+import 'package:tailtopia/features/media/domain/media_upload_use_case.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/boarding_pass/data/boarding_pass_repository.dart';
 import 'package:tailtopia/features/boarding_pass/domain/boarding_pass.dart';
@@ -52,6 +60,9 @@ void main() {
             _Repo(BoardingPassDetail.fromJson(detailJson(unlocked: unlocked, status: status)))),
         keepsakePricingProvider.overrideWith((ref) async =>
             const KeepsakePricing(ktpHd: 10000, passportSnapshot: 2000, boardingPass: 1000, tailsonality: 5000)),
+        authControllerProvider.overrideWith(_Auth.new),
+        mediaUploadUseCaseProvider.overrideWithValue(_Media()),
+        contentRepositoryProvider.overrideWithValue(_ContentRepo()),
       ],
       child: MaterialApp(
         locale: const Locale('id'),
@@ -128,6 +139,59 @@ void main() {
     tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage)).onShared!('other');
     expect(events.where((e) => e.$1 == 'passport_card_shared').single.$2, {'stamp_count': 2});
   });
+
+  group('Story 4.4 · B3c「Pamer di postingan」', () {
+    tearDown(() {
+      BoardingPassDetailPage.captureForTest = null;
+      BragPostEntry.prepareForTest = null;
+    });
+
+    testWidgets('未解锁 B3b 不出；已解锁 B3c 吸底出 → 截卡 → 发帖页（带宠物名与场所名）', (tester) async {
+      await pumpDetail(tester);
+      expect(find.byKey(const ValueKey('boardingPassBragCta')), findsNothing);
+
+      final png = Uint8List.fromList(img.encodePng(img.Image(width: 30, height: 46)));
+      Uint8List? prepared;
+      BoardingPassDetailPage.captureForTest = () async => png;
+      BragPostEntry.prepareForTest = (p) async {
+        prepared = p;
+        return Uint8List.fromList(img.encodeJpg(img.Image(width: 30, height: 46)));
+      };
+      await tester.pumpWidget(const SizedBox());
+      await pumpDetail(tester, unlocked: true);
+      expect(find.byKey(const ValueKey('boardingPassBragCta')), findsOneWidget);
+      expect(find.byKey(const ValueKey('boardingPassUnlockCta')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('boardingPassBragCta')));
+      await tester.pumpAndSettle();
+      expect(prepared, png);
+      expect(find.byType(PublishComposePage), findsOneWidget);
+      expect(tester.widget<TextField>(find.byKey(const ValueKey('publishText'))).controller!.text,
+          'Momo udah sampai di Taman Menteng! Ini boarding pass-nya ✈️');
+    });
+  });
+
+}
+
+class _Auth extends AuthController {
+  @override
+  AuthState build() => const AuthState(status: AuthStatus.authenticated, role: 'USER');
+
+  @override
+  Future<void> ensureRestored() => Future<void>.value();
+}
+
+class _Media implements MediaUploadUseCase {
+  @override
+  Future<OssUploadResult> uploadBytes({required MediaScope scope, required Uint8List bytes}) async =>
+      const OssUploadResult(objectKey: 'k', publicUrl: 'https://cdn/x.jpg');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _ContentRepo implements ContentRepository {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _Repo implements BoardingPassRepository {

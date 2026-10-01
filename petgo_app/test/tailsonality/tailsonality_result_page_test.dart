@@ -241,15 +241,18 @@ void main() {
       expect(find.byKey(const ValueKey('tsResultShareCta')), findsOneWidget);
     });
 
-    // Story 4.1 按新规则更新：⋯ 菜单两项、顺序固定 Bagikan → Tes Ulang（Pamer di postingan 由 4.4 插在中间）。
-    testWidgets('⋯ 菜单两项（Bagikan、Tes Ulang）；重测确认后发埋点并弹说明抽屉；取消无埋点', (tester) async {
+    // Story 4.4 按新规则更新：⋯ 菜单三项、顺序固定 Bagikan → Pamer di postingan → Tes Ulang（C-7）。
+    testWidgets('⋯ 菜单三项（Bagikan、Pamer di postingan、Tes Ulang）；重测确认后发埋点并弹说明抽屉；取消无埋点', (tester) async {
       await pumpPage(tester);
       await tester.tap(find.byKey(const ValueKey('tsResultMore')));
       await tester.pumpAndSettle();
-      expect(find.byType(ListTile), findsNWidgets(2));
-      expect(tester.getTopLeft(find.byKey(const ValueKey('tsMenuShare'))).dy,
-          lessThan(tester.getTopLeft(find.byKey(const ValueKey('tsMenuRetake'))).dy));
+      expect(find.byType(ListTile), findsNWidgets(3));
+      final share = tester.getTopLeft(find.byKey(const ValueKey('tsMenuShare'))).dy;
+      final brag = tester.getTopLeft(find.byKey(const ValueKey('tsMenuBrag'))).dy;
+      final retake = tester.getTopLeft(find.byKey(const ValueKey('tsMenuRetake'))).dy;
+      expect(share < brag && brag < retake, isTrue);
       expect(find.text('Bagikan'), findsOneWidget);
+      expect(find.text('Pamer di postingan'), findsOneWidget);
       expect(find.byKey(const ValueKey('tsMenuRetake')), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('tsMenuRetake')));

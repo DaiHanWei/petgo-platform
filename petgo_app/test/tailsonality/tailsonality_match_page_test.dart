@@ -116,7 +116,8 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 5));
   });
 
-  testWidgets('已设类型：结果视图顺序、无水印、无分享 / 发帖；逐轴四段；Ganti tipe 预选当前', (tester) async {
+  // Story 4.4 按新规则更新：结果视图底部唯一主按钮是「Pamer di postingan」（发帖）；仍无「Bagikan」文字按钮、无价格。
+  testWidgets('已设类型：结果视图顺序、无水印；底部唯一按钮 Pamer di postingan；逐轴四段；Ganti tipe 预选当前', (tester) async {
     await pump(tester, owner: 'INFP');
     expect(find.byKey(const ValueKey('tsMatchResultView')), findsOneWidget);
     expect(find.descendant(of: find.byType(TsMatchCard), matching: find.byType(CardWatermark)), findsNothing);
@@ -132,9 +133,10 @@ void main() {
     }
     expect(find.text('E / I · Orientasi sosial'), findsOneWidget);
     expect(find.textContaining('{pet}'), findsNothing);
-    expect(find.textContaining('Pamer'), findsNothing);
+    expect(find.text('Pamer di postingan'), findsOneWidget);
     expect(find.textContaining('Bagikan'), findsNothing);
-    expect(find.byType(FilledButton), findsNothing, reason: '结果视图无吸底按钮');
+    expect(find.byType(FilledButton), findsOneWidget, reason: '结果视图吸底只有发帖主按钮');
+    expect(tester.widget<FilledButton>(find.byType(FilledButton)).key, const ValueKey('tsMatchBragCta'));
     expect(find.textContaining('Rp'), findsNothing);
     // 对照：第 2 位 N 相同 → ✓，其余 ✗。
     expect(tester.widget<Icon>(find.byKey(const ValueKey('tsCompareMark_1'))).icon, Icons.check_rounded);

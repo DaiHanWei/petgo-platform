@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,6 +7,7 @@ import '../../../../core/analytics/analytics.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/card_render/card_canvas.dart';
+import '../../../content/presentation/brag_post_entry.dart';
 import '../../../content/presentation/share_card/share_card_preview_page.dart';
 import '../../../content/presentation/share_card/share_card_skeleton.dart';
 import '../../../profile/domain/card_link.dart';
@@ -129,12 +132,16 @@ class _Lines extends StatelessWidget {
 ///
 /// 🔴 一律不带水印，**不看结果是否已付费**（本入口不接收、不读取任何付费状态字段；源码扫描测试钉住）。
 /// 埋点 `tailsonality_match_card_shared` 只在系统分享面板回调成功后上报，不带宠物名 / 昵称 / token。
+///
+/// [cardPng]（Story 4.4）：配型页 push 前截好的 **3:4** 配型卡。非空时预览页出主操作「Pamer di postingan」
+/// （发帖用 3:4，不用 9:16：0.5625 会被信息流二次裁切），「Bagikan ke Story」自动降为次按钮。
 Future<void> openMatchSharePreview(
   BuildContext context,
   WidgetRef ref, {
   required String petName,
   required String petCode,
   required String ownerType,
+  Uint8List? cardPng,
 }) {
   final data = MatchShareCardData.from(
     petName: petName,
@@ -144,9 +151,17 @@ Future<void> openMatchSharePreview(
     locale: Localizations.localeOf(context),
   );
   return Navigator.of(context).push(MaterialPageRoute<void>(
-    builder: (_) => ShareCardPreviewPage.custom(
+    builder: (routeCtx) => ShareCardPreviewPage.custom(
       watermarked: false,
       exportName: 'tailtopia_tailsonality_match',
+      primaryAction: cardPng == null
+          ? null
+          : ShareCardPreviewAction(
+              key: const ValueKey('matchPreviewBrag'),
+              label: AppLocalizations.of(routeCtx).bragPostButton,
+              onPressed: () => BragPostEntry.open(routeCtx,
+                  cardPng: cardPng, text: AppLocalizations.of(routeCtx).tailsonalityBragMatchText),
+            ),
       builder: (canvas) => MatchShareCard(data: data, canvas: canvas),
       onShared: (_) => Analytics.capture('tailsonality_match_card_shared', {
         'owner_type': data.ownerType,

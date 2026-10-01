@@ -11,8 +11,10 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/card_render/card_render_pipeline.dart';
 import '../../../shared/media/image_lightbox.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/pay_channel_picker.dart';
 import '../../../shared/widgets/price_load_retry.dart';
+import '../../content/presentation/brag_post_entry.dart';
 import '../../keepsake/data/keepsake_repository.dart';
 import '../../keepsake/presentation/keepsake_pay_flow.dart';
 import '../../profile/data/profile_repository.dart';
@@ -64,6 +66,15 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
   final GlobalKey _cardKey = GlobalKey();
   final GlobalKey _cardWatermarkedKey = GlobalKey();
   bool _opening = false;
+
+  /// 结果页列表的滚动控制：⋯「Pamer」截图前先滚回顶部（卡在列表首项，滚远了会被懒列表回收、截不到）。
+  final ScrollController _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
   bool _viewedReported = false;
   bool _buying = false;
 
@@ -118,6 +129,7 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
                   result: shown,
                   petName: petName,
                   lockedKey: _lockedKey,
+                  scrollController: _scroll,
                   cardKey: _cardKey,
                   cardWatermarkedKey: _cardWatermarkedKey,
                   onCardTap: () => _openCardLightbox(shown),
@@ -151,7 +163,7 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
 
   void _openMenu(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // 顺序固定（C-7）：Bagikan /（Pamer di postingan，Story 4.4）/ Tes Ulang。
+    // 顺序固定（C-7）：Bagikan / Pamer di postingan（Story 4.4）/ Tes Ulang。
     showTsResultMenu(context, [
       (
         key: const ValueKey('tsMenuShare'),
@@ -160,6 +172,15 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
         onTap: () {
           final r = ref.read(tailsonalityResultProvider(widget.token)).value ?? widget.initial;
           if (r != null) openResultSharePreview(context, ref, r);
+        },
+      ),
+      (
+        key: const ValueKey('tsMenuBrag'),
+        icon: Icons.edit_note_rounded,
+        label: l10n.bragPostButton,
+        onTap: () {
+          final r = ref.read(tailsonalityResultProvider(widget.token)).value ?? widget.initial;
+          if (r != null) _brag(r);
         },
       ),
       (
@@ -173,16 +194,46 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
 
   // ---------- Story 4.1 · AC5：点卡图看大图 ----------
 
-  /// 截当前卡面 → 内存图灯箱。🔴 未解锁截**含水印**的外层（大图也得带水印），已解锁截内层。
+  /// 截当前 3:4 卡面。🔴 未解锁截**含水印**的外层（大图 / 发帖图也得带水印），已解锁截内层。
+  Future<Uint8List?> _captureCard(TailsonalityResult r) {
+    final boundary = r.unlocked ? _cardKey : _cardWatermarkedKey;
+    final capture = TailsonalityResultPage.captureForTest;
+    return capture != null
+        ? capture(boundary)
+        : CardRenderPipeline.capture(boundaryKey: boundary, canvas: kTsCardCanvas);
+  }
+
+  /// ⋯「Pamer di postingan」（Story 4.4）：截 3:4 卡（与分享图同一水印规则）→ 带图带字进发帖页。
+  ///
+  /// 🔴 ⋯ 在任意滚动位置都能点，而卡在列表首项：滚远了它会被懒列表回收（截到空）或不在屏上（不绘制）。
+  /// 所以先滚回顶部、等一帧再截；仍截不到给轻提示，不静默失败。
+  Future<void> _brag(TailsonalityResult r) async {
+    if (_opening) return;
+    _opening = true;
+    try {
+      if (_scroll.hasClients && _scroll.offset > 0) {
+        _scroll.jumpTo(0);
+        await WidgetsBinding.instance.endOfFrame;
+      }
+      if (!mounted) return;
+      final bytes = await _captureCard(r);
+      if (!mounted) return;
+      if (bytes == null) {
+        showAppToast(context, AppLocalizations.of(context).shareCardExportError);
+        return;
+      }
+      await BragPostEntry.open(context, cardPng: bytes, text: AppLocalizations.of(context).tailsonalityBragResultText);
+    } finally {
+      _opening = false;
+    }
+  }
+
+  /// 截当前卡面 → 内存图灯箱。
   Future<void> _openCardLightbox(TailsonalityResult r) async {
     if (_opening) return;
     _opening = true;
     try {
-      final boundary = r.unlocked ? _cardKey : _cardWatermarkedKey;
-      final capture = TailsonalityResultPage.captureForTest;
-      final bytes = capture != null
-          ? await capture(boundary)
-          : await CardRenderPipeline.capture(boundaryKey: boundary, canvas: kTsCardCanvas);
+      final bytes = await _captureCard(r);
       if (!mounted || bytes == null) return;
       await ImageLightbox.openMemory(
         context,
@@ -332,6 +383,7 @@ class _Body extends StatelessWidget {
     required this.result,
     required this.petName,
     required this.lockedKey,
+    required this.scrollController,
     required this.cardKey,
     required this.cardWatermarkedKey,
     required this.onCardTap,
@@ -342,6 +394,7 @@ class _Body extends StatelessWidget {
   final TailsonalityResult result;
   final String petName;
   final GlobalKey lockedKey;
+  final ScrollController scrollController;
   final GlobalKey cardKey;
   final GlobalKey cardWatermarkedKey;
   final VoidCallback onCardTap;
@@ -354,6 +407,7 @@ class _Body extends StatelessWidget {
     final role = kTsRoles[result.letters];
     return ListView(
       key: const ValueKey('tsResultBody'),
+      controller: scrollController,
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       children: [
         Center(
