@@ -14,6 +14,7 @@ import '../../keepsake/presentation/keepsake_pay_flow.dart';
 import '../../place/presentation/place_detail_page.dart';
 import '../data/boarding_pass_repository.dart';
 import '../domain/boarding_pass.dart';
+import 'share/boarding_pass_share_card.dart';
 import 'widgets/boarding_pass_card.dart';
 import 'widgets/boarding_pass_unlock_sheet.dart';
 
@@ -21,7 +22,10 @@ import 'widgets/boarding_pass_unlock_sheet.dart';
 ///
 /// 自上而下：一张完整登机牌卡（未解锁叠水印）→ 卡外场所名 → 地址条（ACTIVE 可点进场所详情；
 /// 下架 / 解析不到 →「Tempat tidak ditemukan」）→「Pertama · Terakhir」。
-/// 未解锁吸底「Buka Rp{价}」→ B7b → 选渠道；已解锁**不放**吸底 CTA（分享 / 发帖属 Epic 4）。
+/// 未解锁吸底「Buka Rp{价}」→ B7b → 选渠道；已解锁**不放**吸底 CTA（发帖属 4.4）。
+///
+/// V1.3.2 Story 4.3：顶栏右上分享按钮（两态都有）→ 登机牌卡预览；水印按**该张**解锁态。
+/// 放顶栏是因为两态底部都已被占（B3b 解锁 CTA / B3c 留给 Pamer di postingan），而 PRD 要求未解锁也可出卡（带水印）。
 class BoardingPassDetailPage extends ConsumerStatefulWidget {
   const BoardingPassDetailPage({super.key, required this.placeToken});
 
@@ -68,7 +72,20 @@ class _BoardingPassDetailPageState extends ConsumerState<BoardingPassDetailPage>
     final d = async.value;
     return Scaffold(
       backgroundColor: AppColors.cream,
-      appBar: AppBar(backgroundColor: AppColors.cream, title: Text(l10n.boardingPassListTitle)),
+      appBar: AppBar(
+        backgroundColor: AppColors.cream,
+        title: Text(l10n.boardingPassListTitle),
+        actions: [
+          if (d != null)
+            IconButton(
+              key: const ValueKey('boardingPassShare'),
+              tooltip: l10n.boardingPassShareTooltip,
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              icon: const Icon(Icons.ios_share_rounded),
+              onPressed: () => openBoardingPassSharePreview(context, ref, d),
+            ),
+        ],
+      ),
       bottomNavigationBar: d == null || d.unlocked ? null : _UnlockBar(busy: _buying, onTap: () => _buy(d)),
       body: d != null
           ? _Body(pass: d)

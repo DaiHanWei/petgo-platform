@@ -303,6 +303,10 @@ void main() {
         // 名字由 PRD §4 定死（tailsonality_started / tailsonality_completed …），扩表、不改名。
         // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
         'tailsonality_',
+        // 宠物护照 / 登机牌分享卡（V1.3.2 batch-a Story 4.3 · PRD §4 E-16 `passport_card_shared`）。
+        // 1.2 的 passport_issued / passport_stamped 是服务端事件、不经过这张表，所以 App 侧此前没有这个前缀。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
+        'passport_',
         // KTP（身份证高清图）付费漏斗（2026-09-25，运营按截图需求定名 ktp_unlock_*）。
         // 🔴 与 `id_card_` 刻意分开：那一组是卡面**分享**（传播指标），这一组是**付费转化**
         //    （收入指标），成功 / 支付侧失败还由服务端报。混在一个前缀下，看板上分享数与付费数

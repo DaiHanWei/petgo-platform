@@ -101,6 +101,33 @@ class PassportPageFace extends StatelessWidget {
   }
 }
 
+/// 纵览（B2b）的章 cell：章面 + 场所名一行（V1.3.2 Story 4.3 从纵览网格抽出，护照分享卡的章格复用它）。
+///
+/// 章面走 [PlaceStampView]：专属章 → 包内默认章 → 占位；**原色、不着色、不圆形裁切**（AD-5 / D-10）。
+/// [labelFontSize] 缺省 11（纵览页原值）；分享卡按画布坐标传更大的字号。
+class PassportStampCell extends StatelessWidget {
+  const PassportStampCell({super.key, required this.stamp, required this.stampSize, this.labelFontSize = 11});
+
+  final PassportStamp stamp;
+  final double stampSize;
+  final double labelFontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        PlaceStampView(placeType: stamp.placeType, imageUrl: stamp.stampImageUrl, size: stampSize),
+        SizedBox(height: labelFontSize * 4 / 11),
+        Text(stamp.placeName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: labelFontSize, color: AppColors.ink2)),
+      ],
+    );
+  }
+}
+
 /// 重复到访角标「×N」（N≥2 才由调用方挂出；纯数字 + 符号，不进 ARB）。
 class PassportVisitBadge extends StatelessWidget {
   const PassportVisitBadge({super.key, required this.count});

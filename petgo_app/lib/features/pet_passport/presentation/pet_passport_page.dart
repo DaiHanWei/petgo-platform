@@ -10,11 +10,11 @@ import '../../keepsake/presentation/keepsake_pay_flow.dart';
 import '../../../shared/widgets/pay_channel_picker.dart';
 import '../../../shared/widgets/price_load_retry.dart';
 import '../../place/presentation/place_list_page.dart';
-import '../../place/presentation/widgets/place_stamp_view.dart';
 import '../../profile/presentation/pet_insights_page.dart';
 import '../data/pet_passport_repository.dart';
 import '../domain/pet_passport.dart';
 import 'passport_layout.dart';
+import 'share/passport_share_card.dart';
 import 'widgets/passport_snapshot_sheet.dart';
 import 'passport_page_face.dart';
 
@@ -28,7 +28,10 @@ import 'passport_page_face.dart';
 /// V1.3.2 Story 3.4：**只有 B2b 纵览**吸底出「Buka versi ini · Rp{价}」（当前版本未买）/ 禁用态「Versi ini sudah kebuka」
 /// （已买）；B2 单章页不出任何付费按钮。内页按 `currentVersionUnlocked` 叠水印；AppBar 在有已买版本时多一个「已购版本」入口。
 ///
-/// 🔴 **不显示**：吸底「Bagikan」（4.3）；AppBar **无 ⋯**。B2 章本体 → B5 章详情（1.3）。
+/// V1.3.2 Story 4.3：**B2 单章页**吸底「Bagikan」→ 护照卡预览（水印同内页：当前版本未买则带）；
+/// B2b 吸底仍是快照 CTA、B1 空态不出（没有章可晒）。
+///
+/// 🔴 AppBar **无 ⋯**。B2 章本体 → B5 章详情（1.3）。
 class PetPassportPage extends ConsumerStatefulWidget {
   const PetPassportPage({super.key, this.focus});
 
@@ -156,6 +159,21 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
       ),
       bottomNavigationBar: (passport != null && passport.stamps.isNotEmpty && _grid)
           ? _SnapshotBar(passport: passport, busy: _buying, onBuy: () => _buy(passport))
+          : (passport != null && passport.stamps.isNotEmpty)
+          ? SafeArea(
+              minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: FilledButton(
+                key: const ValueKey('passportShareCta'),
+                style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    backgroundColor: AppColors.mint,
+                    foregroundColor: AppColors.onAccent),
+                onPressed: () => openPassportSharePreview(context,
+                    data: PassportShareData.fromPassport(passport),
+                    watermarked: !passport.currentVersionUnlocked),
+                child: Text(l10n.cardShareImage),
+              ),
+            )
           : (passport != null && passport.stamps.isEmpty)
           ? SafeArea(
               minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
@@ -290,18 +308,7 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
                   return InkWell(
                     key: ValueKey('passportGridCell_$i'),
                     onTap: () => _showSingle(i),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        PlaceStampView(
-                            placeType: s.placeType, imageUrl: s.stampImageUrl, size: stampSize),
-                        const SizedBox(height: 4),
-                        Text(s.placeName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 11, color: AppColors.ink2)),
-                      ],
-                    ),
+                    child: PassportStampCell(stamp: s, stampSize: stampSize),
                   );
                 },
               );

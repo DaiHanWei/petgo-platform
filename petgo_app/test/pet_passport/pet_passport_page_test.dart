@@ -121,11 +121,13 @@ void main() {
   });
 
   // Story 3.4 按新规则：付费入口只在 B2b 纵览吸底（见 passport_snapshot_test）；**B2 单章页**仍无任何付费按钮。
-  testWidgets('B2 单章页：无 ⋯、无付费、无 Bagikan', (tester) async {
+  // Story 4.3 按新规则更新：B2 单章页吸底出「Bagikan」（分享），仍无 ⋯、无付费。
+  testWidgets('B2 单章页：无 ⋯、无付费；吸底唯一按钮是 Bagikan', (tester) async {
     await pump(tester, passport([stamp(0)]));
     expect(find.byIcon(Icons.more_horiz), findsNothing);
     expect(find.byIcon(Icons.more_vert), findsNothing);
-    expect(find.text('Bagikan'), findsNothing);
+    expect(find.text('Bagikan'), findsOneWidget);
+    expect(find.byKey(const ValueKey('passportShareCta')), findsOneWidget);
     expect(find.textContaining('Rp'), findsNothing);
   });
 

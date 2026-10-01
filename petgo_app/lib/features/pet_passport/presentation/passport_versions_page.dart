@@ -11,9 +11,10 @@ import '../data/pet_passport_repository.dart';
 import '../domain/passport_snapshot.dart';
 import 'passport_layout.dart';
 import 'passport_page_face.dart';
+import 'share/passport_share_card.dart';
 
 /// 已买护照版本列表「Versi yang dibeli」（V1.3.2 Story 3.4 · AC7.3）：每行「{日期} · {N} cap」→ 回看页。
-/// 只列已付（服务端过滤）。「重新导出」属 Epic 4，本 story 不加。
+/// 只列已付（服务端过滤）。重新导出在回看页（Story 4.3）。
 class PassportVersionsPage extends ConsumerWidget {
   const PassportVersionsPage({super.key});
 
@@ -83,6 +84,8 @@ class _Row extends StatelessWidget {
 
 /// 已买版本回看（V1.3.2 Story 3.4 · AC7.3）：同护照内页版式、**无水印**、只读 ——
 /// 只读快照接口，不调实时护照接口；不可翻到实时数据、不出购买按钮、章本体不可点。
+///
+/// V1.3.2 Story 4.3：吸底「Bagikan」→ 护照卡预览，卡面**按该快照**渲染、恒无水印（已付版本）。
 class PassportVersionPage extends ConsumerStatefulWidget {
   const PassportVersionPage({super.key, required this.token});
 
@@ -106,9 +109,25 @@ class _PassportVersionPageState extends ConsumerState<PassportVersionPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final async = ref.watch(passportSnapshotProvider(widget.token));
+    final snapshot = async.value;
     return Scaffold(
       backgroundColor: AppColors.cream,
       appBar: AppBar(backgroundColor: AppColors.cream, title: Text(l10n.passportPageTitle)),
+      bottomNavigationBar: snapshot == null || snapshot.stamps.isEmpty
+          ? null
+          : SafeArea(
+              minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: FilledButton(
+                key: const ValueKey('passportVersionShareCta'),
+                style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    backgroundColor: AppColors.mint,
+                    foregroundColor: AppColors.onAccent),
+                onPressed: () => openPassportSharePreview(context,
+                    data: PassportShareData.fromSnapshot(snapshot), watermarked: false),
+                child: Text(l10n.cardShareImage),
+              ),
+            ),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => EmptyState(
