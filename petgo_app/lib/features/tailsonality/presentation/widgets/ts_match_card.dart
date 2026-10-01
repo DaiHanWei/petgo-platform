@@ -30,25 +30,40 @@ class _TsMatchCardState extends State<TsMatchCard> {
         boundaryKey: widget.boundaryKey ?? _ownKey,
         canvas: kTsCardCanvas,
         watermark: null,
-        child: Image.asset(
-          tsMatchArtAsset(widget.tier),
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => Container(
-            key: const ValueKey('tsMatchCardPlaceholder'),
-            decoration: BoxDecoration(
-              color: AppColors.violet100,
-              border: Border.all(color: AppColors.lineViolet, width: 6),
-            ),
-            alignment: Alignment.center,
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.person_outline, size: 220, color: AppColors.mint),
-                SizedBox(width: 40),
-                Icon(Icons.pets, size: 200, color: AppColors.mint),
-              ],
-            ),
-          ),
+        child: TsMatchCardFace(tier: widget.tier),
+      ),
+    );
+  }
+}
+
+/// 配型卡**卡面**：按档位取双人插画，缺失时画代码占位（按 [kTsCardCanvas] 坐标排版）。
+///
+/// V1.3.2 Story 4.2 从 [TsMatchCard] 抽出：配型分享卡（9:16）的主体段复用它（cover 铺满），
+/// 取图映射只此一处（[tsMatchArtAsset]）。
+class TsMatchCardFace extends StatelessWidget {
+  const TsMatchCardFace({super.key, required this.tier});
+
+  final int tier;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      tsMatchArtAsset(tier),
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => Container(
+        key: const ValueKey('tsMatchCardPlaceholder'),
+        decoration: BoxDecoration(
+          color: AppColors.violet100,
+          border: Border.all(color: AppColors.lineViolet, width: 6),
+        ),
+        alignment: Alignment.center,
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.person_outline, size: 220, color: AppColors.mint),
+            SizedBox(width: 40),
+            Icon(Icons.pets, size: 200, color: AppColors.mint),
+          ],
         ),
       ),
     );

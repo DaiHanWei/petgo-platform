@@ -11,6 +11,7 @@ import '../data/tailsonality_providers.dart';
 import '../domain/content/ts_match_copy.dart';
 import '../domain/content/ts_text.dart';
 import '../domain/ts_match.dart';
+import 'share/match_share_card.dart';
 import 'widgets/ts_letter_compare.dart';
 import 'widgets/ts_match_card.dart';
 import 'widgets/ts_rich_text.dart';
@@ -18,7 +19,7 @@ import 'widgets/ts_type_selector.dart';
 
 /// 主人配型页（V1.3.2 Story 2.5 · UX-DR9）。挂在某次结果 token 下：宠物侧用**这次结果**的四字母。
 ///
-/// 配型**全免费**：无锁态、无水印、无任何付费要素；换类型不收费。本 story 不含分享 / 发帖（Epic 4）。
+/// 配型**全免费**：无锁态、无水印、无任何付费要素；换类型不收费。页首 3:4 配型卡可点 → 配型卡分享预览（Story 4.2）。
 class TailsonalityMatchPage extends ConsumerStatefulWidget {
   const TailsonalityMatchPage({super.key, required this.token});
 
@@ -71,6 +72,7 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
     final ownerAsync = ref.watch(tailsonalityOwnerTypeProvider);
     final petName = ref.watch(petProfileProvider).asData?.value?.name ?? '';
     final pet4 = resultAsync.asData?.value.letters;
+    final petCode = resultAsync.asData?.value.typeCode;
     if (pet4 != null) _reportEntered(pet4);
 
     final Widget body;
@@ -92,7 +94,7 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
         body = _selector(l10n);
         bottom = _confirmBar(l10n, pet4);
       } else {
-        body = _result(context, l10n, owner, pet4, petName);
+        body = _result(context, l10n, owner, pet4, petCode!, petName);
       }
     }
     return Scaffold(
@@ -135,7 +137,8 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
         ),
       );
 
-  Widget _result(BuildContext context, AppLocalizations l10n, String owner4, String pet4, String petName) {
+  Widget _result(
+      BuildContext context, AppLocalizations l10n, String owner4, String pet4, String petCode, String petName) {
     final locale = Localizations.localeOf(context);
     final m = computeTsMatch(owner4, pet4);
     final tier = kTsMatchTiers[m.sameCount]!;
@@ -148,7 +151,11 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
         Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 360),
-            child: TsMatchCard(tier: m.tier),
+            child: GestureDetector(
+              key: const ValueKey('tsMatchCardTap'),
+              onTap: () => openMatchSharePreview(context, ref, petName: petName, petCode: petCode, ownerType: owner4),
+              child: TsMatchCard(tier: m.tier),
+            ),
           ),
         ),
         const SizedBox(height: 16),

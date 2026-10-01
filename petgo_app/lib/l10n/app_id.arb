@@ -2434,6 +2434,8 @@
   "tailsonalityMoreActions": "Opsi lainnya",
   "tailsonalityMenuRetake": "Tes Ulang",
   "tailsonalityMenuShare": "Bagikan",
+  "tailsonalityMatchCardPair": "{pet} × {owner}",
+  "@tailsonalityMatchCardPair": {"placeholders": {"pet": {"type": "String"}, "owner": {"type": "String"}}},
   "tailsonalityResultNotFound": "Hasil tes ini nggak ketemu",
   "tailsonalityMatchTeaserPrompt": "Seberapa mirip kalian?",
   "tailsonalityLockedTitle": "Analisis lengkap",

@@ -3759,6 +3759,8 @@
   "@tailsonalityMenuRetake": {"description": "Result page menu: retake."},
   "tailsonalityMenuShare": "Share",
   "@tailsonalityMenuShare": {"description": "Result page menu and unlocked bottom CTA: open the share-card preview."},
+  "tailsonalityMatchCardPair": "{pet} × {owner}",
+  "@tailsonalityMatchCardPair": {"description": "Match share card name line: pet name × owner nickname (same form in both locales on purpose; kept as a key to allow reordering).", "placeholders": {"pet": {"type": "String"}, "owner": {"type": "String"}}},
   "tailsonalityResultNotFound": "We couldn't find this result",
   "@tailsonalityResultNotFound": {"description": "Result page: 404 empty state."},
   "tailsonalityMatchTeaserPrompt": "How alike are you two?",

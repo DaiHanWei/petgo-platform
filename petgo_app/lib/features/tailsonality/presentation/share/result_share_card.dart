@@ -4,13 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/analytics/analytics.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../shared/card_render/card_canvas.dart';
-import '../../../auth/domain/auth_state.dart';
 import '../../../content/presentation/share_card/share_card_preview_page.dart';
 import '../../../content/presentation/share_card/share_card_skeleton.dart';
 import '../../../profile/data/profile_repository.dart';
 import '../../../profile/domain/card_link.dart';
 import '../../domain/tailsonality_result.dart';
 import '../widgets/ts_result_card.dart';
+import 'ts_share_owner_name.dart';
 
 /// Tailsonality 结果分享卡（V1.3.2 Story 4.1 · AC4 · UI 稿 A14）：通用骨架的一种用法。
 ///
@@ -65,13 +65,15 @@ class ResultShareCard extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              petName,
-              key: const ValueKey('resultShareCardPetName'),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: u * 0.066, fontWeight: FontWeight.w800, color: AppColors.ink),
-            ),
+            // 宠物名取不到（档案未加载）时不画一行空白粗体。
+            if (petName.trim().isNotEmpty)
+              Text(
+                petName,
+                key: const ValueKey('resultShareCardPetName'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: u * 0.066, fontWeight: FontWeight.w800, color: AppColors.ink),
+              ),
             if (ownerName != null) ...[
               SizedBox(height: u * 0.012),
               Text(
@@ -90,18 +92,6 @@ class ResultShareCard extends StatelessWidget {
   }
 }
 
-/// 卡面上的主人名 = 当前登录用户昵称（取法照 `age_card_page.dart` 的 `_pawrentName`）。
-///
-/// 🔴 **拿不到就返回 null，卡上整行不显示** —— 不兜底成邮箱（PII，这张图会发给陌生人）、
-/// 也不填「Kamu」这类占位（用户会以为自己的名字没存上）。
-String? resultShareOwnerName(WidgetRef ref) {
-  final profile = ref.read(authControllerProvider).profile;
-  final name = profile?.nickname?.trim();
-  if (name != null && name.isNotEmpty) return name;
-  final display = profile?.displayName?.trim();
-  return display == null || display.isEmpty ? null : display;
-}
-
 /// 结果卡预览入口：结果页 ⋯「Bagikan」与已解锁底部「Bagikan」**共用**这一个。
 ///
 /// 水印按**服务端解锁态**（`result.unlocked`）：false → 预览与导出都带水印。
@@ -109,7 +99,7 @@ String? resultShareOwnerName(WidgetRef ref) {
 /// 不带宠物名 / 主人名 / token。
 Future<void> openResultSharePreview(BuildContext context, WidgetRef ref, TailsonalityResult result) {
   final petName = ref.read(petProfileProvider).value?.name ?? '';
-  final ownerName = resultShareOwnerName(ref);
+  final ownerName = tsShareOwnerName(ref);
   return Navigator.of(context).push(MaterialPageRoute<void>(
     builder: (_) => ShareCardPreviewPage.custom(
       watermarked: !result.unlocked,
