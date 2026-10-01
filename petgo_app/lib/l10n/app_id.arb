@@ -2438,6 +2438,8 @@
   "tailsonalityMenuRetake": "Tes Ulang",
   "tailsonalityMenuShare": "Bagikan",
   "bragPostButton": "Pamer di postingan",
+  "keepsakeShareRewardToast": "+{coins} PawCoin 🎉",
+  "@keepsakeShareRewardToast": {"placeholders": {"coins": {"type": "int"}}},
   "tailsonalityBragResultText": "Aku baru tes kepribadian anabulku, yuk lihat Tailsonality-nya apa!",
   "tailsonalityBragMatchText": "Aku tes kecocokan aku sama anabulku, lihat kartu hasilnya!",
   "boardingPassBragText": "{pet} udah sampai di {place}! Ini boarding pass-nya ✈️",

@@ -9,6 +9,8 @@ import '../../../../shared/card_render/card_canvas.dart';
 import '../../../../shared/utils/date_format.dart';
 import '../../../content/presentation/share_card/share_card_preview_page.dart';
 import '../../../content/presentation/share_card/share_card_skeleton.dart';
+import '../../../keepsake/presentation/keepsake_share_reward.dart';
+import '../../../pet_passport/data/passport_share_reward_repository.dart';
 import '../../../profile/domain/card_link.dart';
 import '../../data/boarding_pass_repository.dart';
 import '../../domain/boarding_pass.dart';
@@ -93,11 +95,16 @@ Future<void> openBoardingPassSharePreview(BuildContext context, WidgetRef ref, B
     unawaited(_fetchStampCount(ref).then((n) => stampCount = n));
   }
   return Navigator.of(context).push(MaterialPageRoute<void>(
-    builder: (_) => ShareCardPreviewPage.custom(
+    builder: (routeCtx) => ShareCardPreviewPage.custom(
       watermarked: !pass.unlocked,
       exportName: 'tailtopia_boarding_pass',
       builder: (canvas) => BoardingPassShareCard(pass: pass, canvas: canvas),
-      onShared: (_) => Analytics.capture('passport_card_shared', {'stamp_count': ?stampCount}),
+      onShared: (_) {
+        Analytics.capture('passport_card_shared', {'stamp_count': ?stampCount});
+        // Story 4.5：同一时机上报领奖（BOARDING，整体一个类型、不带场所 token），失败当 0、没发静默。
+        unawaited(claimKeepsakeShareReward(routeCtx, ref,
+            () => ref.read(passportShareRewardRepositoryProvider).reportShareForReward(PassportShareRewardRepository.boarding)));
+      },
     ),
   ));
 }

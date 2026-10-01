@@ -60,13 +60,17 @@ public class ProfileApiController {
     private final IdCardHdService idCardHdService;
     private final com.tailtopia.share.service.IdCardShareRewardService idCardShareRewards;
     private final com.tailtopia.share.service.AgeCardShareRewardService ageCardShareRewards;
+    private final com.tailtopia.share.service.TailsonalityShareRewardService tailsonalityShareRewards;
+    private final com.tailtopia.share.service.PassportShareRewardService passportShareRewards;
     private final RedisRateLimiter rateLimiter;
 
     public ProfileApiController(ProfileService profileService, TimelineService timelineService,
             CardRerenderService cardRerenderService, IdCardService idCardService,
             IdCardHdService idCardHdService, RedisRateLimiter rateLimiter,
             com.tailtopia.share.service.IdCardShareRewardService idCardShareRewards,
-            com.tailtopia.share.service.AgeCardShareRewardService ageCardShareRewards) {
+            com.tailtopia.share.service.AgeCardShareRewardService ageCardShareRewards,
+            com.tailtopia.share.service.TailsonalityShareRewardService tailsonalityShareRewards,
+            com.tailtopia.share.service.PassportShareRewardService passportShareRewards) {
         this.profileService = profileService;
         this.timelineService = timelineService;
         this.cardRerenderService = cardRerenderService;
@@ -74,6 +78,8 @@ public class ProfileApiController {
         this.idCardHdService = idCardHdService;
         this.idCardShareRewards = idCardShareRewards;
         this.ageCardShareRewards = ageCardShareRewards;
+        this.tailsonalityShareRewards = tailsonalityShareRewards;
+        this.passportShareRewards = passportShareRewards;
         this.rateLimiter = rateLimiter;
     }
 
@@ -278,6 +284,41 @@ public class ProfileApiController {
         rateLimiter.check("rl:profile:agecardshare:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
         return com.tailtopia.share.dto.AgeCardShareRewardResponse.of(
                 ageCardShareRewards.rewardAfterShare(ownerId, req.idempotencyKey(),
+                        java.time.Instant.now()));
+    }
+
+    /**
+     * Tailsonality 结果卡 / 配型卡分享成功上报 → 试发分享奖励（V1.3.2 Story 4.5 · AC3.1）。
+     *
+     * <p>⚠️ App 只在系统分享面板回调成功之后调 —— 取消不调，「取消不发币」在客户端成立。
+     * 🛡 只收卡类型（去重 = 宠物 × 卡类型）；返回 {@code coins}，刻意不返回原因；发放失败服务层消化，这里永远 200。
+     */
+    @PostMapping("/me/tailsonality/share-rewards")
+    public com.tailtopia.share.dto.PetCardShareRewardResponse rewardTailsonalityShare(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody com.tailtopia.share.dto.TailsonalityShareRewardRequest req) {
+        long ownerId = currentUserId(jwt);
+        rateLimiter.check("rl:profile:tsshare:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
+        return com.tailtopia.share.dto.PetCardShareRewardResponse.of(
+                tailsonalityShareRewards.rewardAfterShare(ownerId,
+                        com.tailtopia.share.service.TailsonalityShareRewardService.CardType.valueOf(req.cardType()),
+                        java.time.Instant.now()));
+    }
+
+    /**
+     * 护照卡 / 登机牌卡分享成功上报 → 试发分享奖励（V1.3.2 Story 4.5 · AC3.1）。
+     *
+     * <p>🛡 只收卡类型（登机牌整体一个类型，不收场所 token）；其余口径同上。
+     */
+    @PostMapping("/me/passport/share-rewards")
+    public com.tailtopia.share.dto.PetCardShareRewardResponse rewardPassportShare(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody com.tailtopia.share.dto.PassportShareRewardRequest req) {
+        long ownerId = currentUserId(jwt);
+        rateLimiter.check("rl:profile:ppshare:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
+        return com.tailtopia.share.dto.PetCardShareRewardResponse.of(
+                passportShareRewards.rewardAfterShare(ownerId,
+                        com.tailtopia.share.service.PassportShareRewardService.CardType.valueOf(req.cardType()),
                         java.time.Instant.now()));
     }
 

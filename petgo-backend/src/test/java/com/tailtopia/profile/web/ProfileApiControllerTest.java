@@ -40,9 +40,36 @@ class ProfileApiControllerTest {
     /** V1.3.0 Story 5.3：同上，本类不验年龄卡分享奖励（见 AgeCardShareRewardTest）。 */
     private final com.tailtopia.share.service.AgeCardShareRewardService ageCardShareRewards =
             mock(com.tailtopia.share.service.AgeCardShareRewardService.class);
+    /** V1.3.2 Story 4.5：两个新渠道（发放规则见 PetCardShareRewardIntegrationTest），这里只验委派与限流。 */
+    private final com.tailtopia.share.service.TailsonalityShareRewardService tailsonalityShareRewards =
+            mock(com.tailtopia.share.service.TailsonalityShareRewardService.class);
+    private final com.tailtopia.share.service.PassportShareRewardService passportShareRewards =
+            mock(com.tailtopia.share.service.PassportShareRewardService.class);
     private final ProfileApiController controller = new ProfileApiController(
             service, timelineService, cardRerenderService, idCardService, idCardHdService,
-            rateLimiter, idCardShareRewards, ageCardShareRewards);
+            rateLimiter, idCardShareRewards, ageCardShareRewards, tailsonalityShareRewards, passportShareRewards);
+
+    @Test
+    void tailsonalityShareRewardDelegatesWithJwtUserAndRateLimits() {
+        when(tailsonalityShareRewards.rewardAfterShare(eq(77L),
+                eq(com.tailtopia.share.service.TailsonalityShareRewardService.CardType.MATCH),
+                ArgumentMatchers.any())).thenReturn(15L);
+        var resp = controller.rewardTailsonalityShare(jwt("77"),
+                new com.tailtopia.share.dto.TailsonalityShareRewardRequest("MATCH"));
+        assertThat(resp.coins()).isEqualTo(15L);
+        verify(rateLimiter).check(eq("rl:profile:tsshare:77"), anyInt(), ArgumentMatchers.any());
+    }
+
+    @Test
+    void passportShareRewardDelegatesWithJwtUserAndRateLimits() {
+        when(passportShareRewards.rewardAfterShare(eq(77L),
+                eq(com.tailtopia.share.service.PassportShareRewardService.CardType.BOARDING),
+                ArgumentMatchers.any())).thenReturn(0L);
+        var resp = controller.rewardPassportShare(jwt("77"),
+                new com.tailtopia.share.dto.PassportShareRewardRequest("BOARDING"));
+        assertThat(resp.coins()).isZero();
+        verify(rateLimiter).check(eq("rl:profile:ppshare:77"), anyInt(), ArgumentMatchers.any());
+    }
 
     private static Jwt jwt(String sub) {
         return Jwt.withTokenValue("t").header("alg", "HS256").subject(sub).claim("x", "y").build();

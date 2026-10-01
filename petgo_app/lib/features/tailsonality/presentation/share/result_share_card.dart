@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,8 +8,10 @@ import '../../../../core/theme/colors.dart';
 import '../../../../shared/card_render/card_canvas.dart';
 import '../../../content/presentation/share_card/share_card_preview_page.dart';
 import '../../../content/presentation/share_card/share_card_skeleton.dart';
+import '../../../keepsake/presentation/keepsake_share_reward.dart';
 import '../../../profile/data/profile_repository.dart';
 import '../../../profile/domain/card_link.dart';
+import '../../data/tailsonality_share_reward_repository.dart';
 import '../../domain/tailsonality_result.dart';
 import '../widgets/ts_result_card.dart';
 import 'ts_share_owner_name.dart';
@@ -96,12 +100,12 @@ class ResultShareCard extends StatelessWidget {
 ///
 /// 水印按**服务端解锁态**（`result.unlocked`）：false → 预览与导出都带水印。
 /// 埋点 `tailsonality_card_shared` 只在系统分享面板回调成功后报（取消不报），
-/// 不带宠物名 / 主人名 / token。
+/// 不带宠物名 / 主人名 / token。同一时机上报领奖（Story 4.5，RESULT），失败当 0、没发静默。
 Future<void> openResultSharePreview(BuildContext context, WidgetRef ref, TailsonalityResult result) {
   final petName = ref.read(petProfileProvider).value?.name ?? '';
   final ownerName = tsShareOwnerName(ref);
   return Navigator.of(context).push(MaterialPageRoute<void>(
-    builder: (_) => ShareCardPreviewPage.custom(
+    builder: (routeCtx) => ShareCardPreviewPage.custom(
       watermarked: !result.unlocked,
       exportName: 'tailtopia_tailsonality',
       builder: (canvas) => ResultShareCard(
@@ -110,10 +114,14 @@ Future<void> openResultSharePreview(BuildContext context, WidgetRef ref, Tailson
         petName: petName,
         ownerName: ownerName,
       ),
-      onShared: (_) => Analytics.capture('tailsonality_card_shared', {
-        'role_code': result.typeCode,
-        'is_unlocked': result.unlocked,
-      }),
+      onShared: (_) {
+        Analytics.capture('tailsonality_card_shared', {
+          'role_code': result.typeCode,
+          'is_unlocked': result.unlocked,
+        });
+        unawaited(claimKeepsakeShareReward(routeCtx, ref,
+            () => ref.read(tailsonalityShareRewardRepositoryProvider).reportShareForReward(TailsonalityShareRewardRepository.result)));
+      },
     ),
   ));
 }

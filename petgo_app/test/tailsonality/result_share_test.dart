@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/tailsonality/data/tailsonality_share_reward_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
@@ -25,9 +26,15 @@ import 'package:tailtopia/shared/card_render/card_canvas.dart';
 import 'package:tailtopia/shared/card_render/card_qr.dart';
 import 'package:tailtopia/shared/card_render/card_watermark.dart';
 import 'package:tailtopia/shared/media/image_lightbox.dart';
+import '../keepsake/fake_share_reward_repos.dart';
 
 /// V1.3.2 Story 4.1 · AC4 / AC5 / AC6：结果卡分享与大图（L0 部分）。
+
+// V1.3.2 Story 4.5：领奖上报替身（每个用例重置）。
+late FakeTailsonalityShareReward shareReward;
+
 void main() {
+  setUp(() => shareReward = FakeTailsonalityShareReward());
   TailsonalityResult result({bool unlocked = false}) => TailsonalityResult(
         token: 'abc',
         typeCode: 'ENTJ-H',
@@ -58,6 +65,7 @@ void main() {
     await tester.pumpWidget(ProviderScope(
       retry: (_, _) => null,
       overrides: [
+        tailsonalityShareRewardRepositoryProvider.overrideWithValue(shareReward),
         authControllerProvider.overrideWith(() => _FakeAuth(profile)),
         petProfileProvider.overrideWith(
             (ref) async => const PetProfile(id: 1, name: 'Momo', cardToken: 't', petType: 'CAT', breed: 'Anggora')),
@@ -149,9 +157,45 @@ void main() {
       expect(events.where((e) => e.$1 == 'tailsonality_card_shared'), isEmpty);
 
       // 系统面板成功回调（CardExport 只在 success 时调 onShared）。
-      tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage)).onShared!('whatsapp');
+      // Story 4.5：面板未回调成功（如取消）之前不上报领奖。
+    expect(shareReward.calls, isEmpty);
+    tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage)).onShared!('whatsapp');
+    await tester.pump();
+    expect(shareReward.calls, ['RESULT'], reason: '分享成功回调后上报一次，卡类型正确');
       final shared = events.where((e) => e.$1 == 'tailsonality_card_shared').single.$2!;
       expect(shared, {'role_code': 'ENTJ-H', 'is_unlocked': false});
+    });
+  });
+
+  group('Story 4.5 领奖提示', () {
+    Future<void> shareOnce(WidgetTester tester) async {
+      await pumpPage(tester);
+      await openViaMenu(tester);
+      tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage)).onShared!('whatsapp');
+      await tester.pump();
+      await tester.pump();
+    }
+
+    testWidgets('返回 >0 → 提示「+N PawCoin」', (tester) async {
+      shareReward.coins = 25;
+      await shareOnce(tester);
+      expect(find.text('+25 PawCoin 🎉'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('返回 0 → 静默（不告知原因）', (tester) async {
+      shareReward.coins = 0;
+      await shareOnce(tester);
+      expect(find.textContaining('PawCoin'), findsNothing);
+      expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('上报失败 → 当 0、不报错给用户', (tester) async {
+      shareReward.fail = true;
+      await shareOnce(tester);
+      expect(shareReward.calls, ['RESULT']);
+      expect(find.byType(SnackBar), findsNothing);
+      expect(tester.takeException(), isNull);
     });
   });
 

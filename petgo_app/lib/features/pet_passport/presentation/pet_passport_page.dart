@@ -168,7 +168,7 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
                     minimumSize: const Size.fromHeight(48),
                     backgroundColor: AppColors.mint,
                     foregroundColor: AppColors.onAccent),
-                onPressed: () => openPassportSharePreview(context,
+                onPressed: () => openPassportSharePreview(context, ref,
                     data: PassportShareData.fromPassport(passport),
                     watermarked: !passport.currentVersionUnlocked),
                 child: Text(l10n.cardShareImage),

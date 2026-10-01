@@ -190,6 +190,19 @@ public class AdminConfigService {
                 "admin.err.config.ageCardShareDailyCapNegative");
         require(form.ageCardShareReward() <= 10_000, "年龄卡分享每次发放枚数须 ≤ 10000",
                 "admin.err.config.ageCardShareRewardTooLarge");
+        // Tailsonality / 护照两渠道（V1.3.2 Story 4.5）：与年龄卡同一组校验，逐条对齐。
+        require(form.tailsonalityShareReward() >= 0, "Tailsonality 分享每次发放枚数须 ≥ 0（0 = 不发）",
+                "admin.err.config.tailsonalityShareRewardNegative");
+        require(form.tailsonalityShareDailyCap() >= 0, "Tailsonality 分享每日次数上限须 ≥ 0（0 = 不发）",
+                "admin.err.config.tailsonalityShareDailyCapNegative");
+        require(form.tailsonalityShareReward() <= 10_000, "Tailsonality 分享每次发放枚数须 ≤ 10000",
+                "admin.err.config.tailsonalityShareRewardTooLarge");
+        require(form.passportShareReward() >= 0, "护照 / 登机牌分享每次发放枚数须 ≥ 0（0 = 不发）",
+                "admin.err.config.passportShareRewardNegative");
+        require(form.passportShareDailyCap() >= 0, "护照 / 登机牌分享每日次数上限须 ≥ 0（0 = 不发）",
+                "admin.err.config.passportShareDailyCapNegative");
+        require(form.passportShareReward() <= 10_000, "护照 / 登机牌分享每次发放枚数须 ≤ 10000",
+                "admin.err.config.passportShareRewardTooLarge");
         require(form.shareRewardMonthlyCap() <= 10_000_000, "分享奖励月度上限须 ≤ 10000000",
                 "admin.err.config.shareRewardCapTooLarge");
         // 🔴 月度上限要装得下至少一次发放，否则卡面宣传「首次分享得 N」但永远发不出（AC6）。
@@ -201,6 +214,14 @@ public class AdminConfigService {
                 || form.shareRewardMonthlyCap() >= form.ageCardShareReward(),
                 "分享奖励月度上限须 ≥ 年龄卡分享每次发放枚数",
                 "admin.err.config.shareRewardCapBelowAgeCardReward");
+        require(form.tailsonalityShareReward() == 0 || form.shareRewardMonthlyCap() == 0
+                || form.shareRewardMonthlyCap() >= form.tailsonalityShareReward(),
+                "分享奖励月度上限须 ≥ Tailsonality 分享每次发放枚数",
+                "admin.err.config.shareRewardCapBelowTailsonalityReward");
+        require(form.passportShareReward() == 0 || form.shareRewardMonthlyCap() == 0
+                || form.shareRewardMonthlyCap() >= form.passportShareReward(),
+                "分享奖励月度上限须 ≥ 护照 / 登机牌分享每次发放枚数",
+                "admin.err.config.shareRewardCapBelowPassportReward");
 
         PawCoinConfig c = pawcoinRepo.findById(PawCoinConfig.SINGLETON_ID)
                 .orElseThrow(() -> new IllegalStateException("pawcoin_config 缺失"));
@@ -218,6 +239,14 @@ public class AdminConfigService {
                 form.ageCardShareReward(), adminId);
         diff(logs, t, "age_card_share_daily_cap", c.getAgeCardShareDailyCap(),
                 form.ageCardShareDailyCap(), adminId);
+        diff(logs, t, "tailsonality_share_reward", c.getTailsonalityShareReward(),
+                form.tailsonalityShareReward(), adminId);
+        diff(logs, t, "tailsonality_share_daily_cap", c.getTailsonalityShareDailyCap(),
+                form.tailsonalityShareDailyCap(), adminId);
+        diff(logs, t, "passport_share_reward", c.getPassportShareReward(),
+                form.passportShareReward(), adminId);
+        diff(logs, t, "passport_share_daily_cap", c.getPassportShareDailyCap(),
+                form.passportShareDailyCap(), adminId);
         if (logs.isEmpty()) {
             return; // 无变更 → 不写、不记日志、不审计（沿用本类既有口径）
         }
@@ -227,6 +256,10 @@ public class AdminConfigService {
         c.setIdCardShareDailyCap(form.idCardShareDailyCap());
         c.setAgeCardShareReward(form.ageCardShareReward());
         c.setAgeCardShareDailyCap(form.ageCardShareDailyCap());
+        c.setTailsonalityShareReward(form.tailsonalityShareReward());
+        c.setTailsonalityShareDailyCap(form.tailsonalityShareDailyCap());
+        c.setPassportShareReward(form.passportShareReward());
+        c.setPassportShareDailyCap(form.passportShareDailyCap());
         pawcoinRepo.save(c);
         commit(logs, adminId, "PAWCOIN", "pawcoin_config");
     }

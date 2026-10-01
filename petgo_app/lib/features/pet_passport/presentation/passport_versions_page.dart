@@ -123,7 +123,7 @@ class _PassportVersionPageState extends ConsumerState<PassportVersionPage> {
                     minimumSize: const Size.fromHeight(48),
                     backgroundColor: AppColors.mint,
                     foregroundColor: AppColors.onAccent),
-                onPressed: () => openPassportSharePreview(context,
+                onPressed: () => openPassportSharePreview(context, ref,
                     data: PassportShareData.fromSnapshot(snapshot), watermarked: false),
                 child: Text(l10n.cardShareImage),
               ),

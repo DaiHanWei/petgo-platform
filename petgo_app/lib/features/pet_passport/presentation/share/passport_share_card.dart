@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/analytics/analytics.dart';
 import '../../../../core/theme/colors.dart';
@@ -6,7 +9,9 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/card_render/card_canvas.dart';
 import '../../../content/presentation/share_card/share_card_preview_page.dart';
 import '../../../content/presentation/share_card/share_card_skeleton.dart';
+import '../../../keepsake/presentation/keepsake_share_reward.dart';
 import '../../../profile/domain/card_link.dart';
+import '../../data/passport_share_reward_repository.dart';
 import '../../domain/passport_share_grid.dart';
 import '../../domain/passport_snapshot.dart';
 import '../../domain/pet_passport.dart';
@@ -192,14 +197,19 @@ class _StampGrid extends StatelessWidget {
 ///
 /// 🔴 水印**只读服务端字段**（实时 = `currentVersionUnlocked`；快照 = 已付版本，恒 false），客户端不算 hash（AD-7 / AD-14）。
 /// 埋点 `passport_card_shared {stamp_count}` 只在系统分享面板回调成功后上报；不带护照号 / 场所名 / token / 宠物名。
-Future<void> openPassportSharePreview(BuildContext context,
+/// 同一时机上报领奖（Story 4.5，PAGE；已购版本重新导出同样计），失败当 0、没发静默。
+Future<void> openPassportSharePreview(BuildContext context, WidgetRef ref,
     {required PassportShareData data, required bool watermarked}) {
   return Navigator.of(context).push(MaterialPageRoute<void>(
-    builder: (_) => ShareCardPreviewPage.custom(
+    builder: (routeCtx) => ShareCardPreviewPage.custom(
       watermarked: watermarked,
       exportName: 'tailtopia_passport',
       builder: (canvas) => PassportShareCard(data: data, canvas: canvas),
-      onShared: (_) => Analytics.capture('passport_card_shared', {'stamp_count': data.stampCount}),
+      onShared: (_) {
+        Analytics.capture('passport_card_shared', {'stamp_count': data.stampCount});
+        unawaited(claimKeepsakeShareReward(routeCtx, ref,
+            () => ref.read(passportShareRewardRepositoryProvider).reportShareForReward(PassportShareRewardRepository.page)));
+      },
     ),
   ));
 }

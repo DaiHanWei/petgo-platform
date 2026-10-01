@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/pet_passport/data/passport_share_reward_repository.dart';
 import 'package:image/image.dart' as img;
 import 'package:tailtopia/core/media/media_scope.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
@@ -24,9 +25,15 @@ import 'package:tailtopia/features/profile/domain/card_link.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/card_render/card_qr.dart';
 import 'package:tailtopia/shared/card_render/card_watermark.dart';
+import '../keepsake/fake_share_reward_repos.dart';
 
 /// V1.3.2 Story 4.3：登机牌卡分享（L0 部分）。
+
+// V1.3.2 Story 4.5：领奖上报替身（每个用例重置）。
+late FakePassportShareReward shareReward;
+
 void main() {
+  setUp(() => shareReward = FakePassportShareReward());
   Map<String, dynamic> detailJson({bool unlocked = false, String status = 'ACTIVE'}) => {
         'placeToken': 'p' * 32,
         'passenger': 'Momo',
@@ -56,6 +63,7 @@ void main() {
     await tester.pumpWidget(ProviderScope(
       retry: (_, _) => null,
       overrides: [
+        passportShareRewardRepositoryProvider.overrideWithValue(shareReward),
         boardingPassRepositoryProvider.overrideWithValue(
             _Repo(BoardingPassDetail.fromJson(detailJson(unlocked: unlocked, status: status)))),
         keepsakePricingProvider.overrideWith((ref) async =>
@@ -136,7 +144,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(events.where((e) => e.$1 == 'passport_card_shared'), isEmpty);
 
+    // Story 4.5：面板未回调成功（如取消）之前不上报领奖。
+    expect(shareReward.calls, isEmpty);
     tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage)).onShared!('other');
+    await tester.pump();
+    expect(shareReward.calls, ['BOARDING'], reason: '分享成功回调后上报一次，卡类型正确');
     expect(events.where((e) => e.$1 == 'passport_card_shared').single.$2, {'stamp_count': 2});
   });
 

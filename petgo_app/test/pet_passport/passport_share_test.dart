@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/pet_passport/data/passport_share_reward_repository.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/content/presentation/share_card/share_card_preview_page.dart';
 import 'package:tailtopia/features/keepsake/data/keepsake_repository.dart';
@@ -21,9 +22,15 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/card_render/card_canvas.dart';
 import 'package:tailtopia/shared/card_render/card_qr.dart';
 import 'package:tailtopia/shared/card_render/card_watermark.dart';
+import '../keepsake/fake_share_reward_repos.dart';
 
 /// V1.3.2 Story 4.3：护照卡分享（L0 部分）。
+
+// V1.3.2 Story 4.5：领奖上报替身（每个用例重置）。
+late FakePassportShareReward shareReward;
+
 void main() {
+  setUp(() => shareReward = FakePassportShareReward());
   PassportStamp stamp(int i) => PassportStamp(
         placeToken: 't$i'.padRight(32, '0'),
         placeName: 'Tempat $i',
@@ -120,6 +127,7 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         retry: (_, _) => null,
         overrides: [
+        passportShareRewardRepositoryProvider.overrideWithValue(shareReward),
           petPassportProvider.overrideWith((ref) async => p),
           keepsakePricingProvider.overrideWith((ref) async =>
               const KeepsakePricing(ktpHd: 10000, passportSnapshot: 2000, boardingPass: 1000, tailsonality: 5000)),
@@ -184,6 +192,7 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         retry: (_, _) => null,
         overrides: [
+        passportShareRewardRepositoryProvider.overrideWithValue(shareReward),
           // 实时护照有 5 枚、且当前版本未买 —— 回看分享不得读它。
           petPassportProvider.overrideWith((ref) async => live(unlocked: false, n: 5)),
           passportSnapshotProvider('s' * 32).overrideWith((ref) async => snap),
@@ -216,7 +225,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(events.where((e) => e.$1 == 'passport_card_shared'), isEmpty);
 
-      tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage)).onShared!('other');
+      // Story 4.5：面板未回调成功（如取消）之前不上报领奖。
+    expect(shareReward.calls, isEmpty);
+    tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage)).onShared!('other');
+    await tester.pump();
+    expect(shareReward.calls, ['PAGE'], reason: '分享成功回调后上报一次，卡类型正确');
       expect(events.where((e) => e.$1 == 'passport_card_shared').single.$2, {'stamp_count': 3});
     });
   });

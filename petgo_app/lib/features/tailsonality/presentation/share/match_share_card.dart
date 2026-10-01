@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -10,7 +11,9 @@ import '../../../../shared/card_render/card_canvas.dart';
 import '../../../content/presentation/brag_post_entry.dart';
 import '../../../content/presentation/share_card/share_card_preview_page.dart';
 import '../../../content/presentation/share_card/share_card_skeleton.dart';
+import '../../../keepsake/presentation/keepsake_share_reward.dart';
 import '../../../profile/domain/card_link.dart';
+import '../../data/tailsonality_share_reward_repository.dart';
 import '../../domain/ts_match_share_data.dart';
 import '../widgets/ts_match_card.dart';
 import '../widgets/ts_result_card.dart';
@@ -163,11 +166,16 @@ Future<void> openMatchSharePreview(
                   cardPng: cardPng, text: AppLocalizations.of(routeCtx).tailsonalityBragMatchText),
             ),
       builder: (canvas) => MatchShareCard(data: data, canvas: canvas),
-      onShared: (_) => Analytics.capture('tailsonality_match_card_shared', {
-        'owner_type': data.ownerType,
-        'pet_type': data.petType,
-        'match_level': data.sameCount,
-      }),
+      onShared: (_) {
+        Analytics.capture('tailsonality_match_card_shared', {
+          'owner_type': data.ownerType,
+          'pet_type': data.petType,
+          'match_level': data.sameCount,
+        });
+        // Story 4.5：同一时机上报领奖（MATCH），失败当 0、没发静默。
+        unawaited(claimKeepsakeShareReward(routeCtx, ref,
+            () => ref.read(tailsonalityShareRewardRepositoryProvider).reportShareForReward(TailsonalityShareRewardRepository.match)));
+      },
     ),
   ));
 }

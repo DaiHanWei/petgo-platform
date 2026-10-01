@@ -216,6 +216,16 @@ class ApiPaths {
   static const String meAgeCardShareRewards =
       '$base/pet-profiles/me/age-cards/share-rewards';
 
+  /// Tailsonality 结果卡 / 配型卡分享成功上报 → 试发奖励（V1.3.2 Story 4.5）。
+  /// 🔴 请求体**只有 `cardType`**（RESULT / MATCH）：去重 = 宠物 × 卡类型，不带结果 token、不带水印态。
+  static const String meTailsonalityShareRewards =
+      '$base/pet-profiles/me/tailsonality/share-rewards';
+
+  /// 护照卡 / 登机牌卡分享成功上报 → 试发奖励（V1.3.2 Story 4.5）。
+  /// 🔴 请求体**只有 `cardType`**（PAGE / BOARDING）：登机牌整体一个类型，不带场所 token。
+  static const String mePassportShareRewards =
+      '$base/pet-profiles/me/passport/share-rewards';
+
   /// 单卡快照详情（Story 6.7）。非本人 404。
   static String meIdCard(int cardId) => '$base/pet-profiles/me/id-cards/$cardId';
 

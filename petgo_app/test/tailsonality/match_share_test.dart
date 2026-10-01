@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/tailsonality/data/tailsonality_share_reward_repository.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
@@ -26,9 +27,15 @@ import 'package:tailtopia/shared/card_render/card_frame.dart';
 import 'package:tailtopia/shared/card_render/card_qr.dart';
 import 'package:tailtopia/shared/card_render/card_render_pipeline.dart';
 import 'package:tailtopia/shared/card_render/card_watermark.dart';
+import '../keepsake/fake_share_reward_repos.dart';
 
 /// V1.3.2 Story 4.2：配型卡分享（L0 部分）。
+
+// V1.3.2 Story 4.5：领奖上报替身（每个用例重置）。
+late FakeTailsonalityShareReward shareReward;
+
 void main() {
+  setUp(() => shareReward = FakeTailsonalityShareReward());
   const en = Locale('en');
 
   group('AC1.2 信息段数据拼装（MatchShareCardData.from）', () {
@@ -170,6 +177,7 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         retry: (_, _) => null,
         overrides: [
+        tailsonalityShareRewardRepositoryProvider.overrideWithValue(shareReward),
           authControllerProvider.overrideWith(() => _FakeAuth(const UserProfile(nickname: 'Aurel'))),
           petProfileProvider.overrideWith((ref) async => const PetProfile(id: 1, name: 'Momo', cardToken: 't')),
           tailsonalityOwnerTypeRepositoryProvider.overrideWithValue(_OwnerRepo('INFP')),
@@ -240,7 +248,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(events.where((e) => e.$1 == 'tailsonality_match_card_shared'), isEmpty);
 
-      tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage)).onShared!('instagram');
+      // Story 4.5：面板未回调成功（如取消）之前不上报领奖。
+    expect(shareReward.calls, isEmpty);
+    tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage)).onShared!('instagram');
+    await tester.pump();
+    expect(shareReward.calls, ['MATCH'], reason: '分享成功回调后上报一次，卡类型正确');
       expect(events.where((e) => e.$1 == 'tailsonality_match_card_shared').single.$2,
           {'owner_type': 'INFP', 'pet_type': 'ENTJ', 'match_level': 1});
     });

@@ -83,16 +83,29 @@ public class AdminConfigController {
                     "admin.err.config.supportEmailBlank", "email",
                     "admin.err.config.supportEmailInvalid", "email",
                     "admin.err.config.supportEmailTooLong", "email")),
-            "shareReward", json(Map.of(
-                    "admin.err.config.shareRewardCapNegative", "shareRewardMonthlyCap",
-                    "admin.err.config.shareRewardCapTooLarge", "shareRewardMonthlyCap",
-                    "admin.err.config.shareRewardCapBelowReward", "shareRewardMonthlyCap,idCardShareReward",
-                    "admin.err.config.idCardShareRewardNegative", "idCardShareReward",
-                    "admin.err.config.idCardShareRewardTooLarge", "idCardShareReward",
-                    "admin.err.config.idCardShareDailyCapNegative", "idCardShareDailyCap",
-                    "admin.err.config.ageCardShareRewardNegative", "ageCardShareReward",
-                    "admin.err.config.ageCardShareRewardTooLarge", "ageCardShareReward",
-                    "admin.err.config.ageCardShareDailyCapNegative", "ageCardShareDailyCap")));
+            // ⚠️ Map.ofEntries：Map.of 最多 10 对，V1.3.2 Story 4.5 加两渠道后超了。
+            "shareReward", json(Map.ofEntries(
+                    Map.entry("admin.err.config.shareRewardCapNegative", "shareRewardMonthlyCap"),
+                    Map.entry("admin.err.config.shareRewardCapTooLarge", "shareRewardMonthlyCap"),
+                    Map.entry("admin.err.config.shareRewardCapBelowReward", "shareRewardMonthlyCap,idCardShareReward"),
+                    Map.entry("admin.err.config.idCardShareRewardNegative", "idCardShareReward"),
+                    Map.entry("admin.err.config.idCardShareRewardTooLarge", "idCardShareReward"),
+                    Map.entry("admin.err.config.idCardShareDailyCapNegative", "idCardShareDailyCap"),
+                    Map.entry("admin.err.config.ageCardShareRewardNegative", "ageCardShareReward"),
+                    Map.entry("admin.err.config.ageCardShareRewardTooLarge", "ageCardShareReward"),
+                    Map.entry("admin.err.config.ageCardShareDailyCapNegative", "ageCardShareDailyCap"),
+                    Map.entry("admin.err.config.shareRewardCapBelowAgeCardReward",
+                            "shareRewardMonthlyCap,ageCardShareReward"),
+                    Map.entry("admin.err.config.tailsonalityShareRewardNegative", "tailsonalityShareReward"),
+                    Map.entry("admin.err.config.tailsonalityShareRewardTooLarge", "tailsonalityShareReward"),
+                    Map.entry("admin.err.config.tailsonalityShareDailyCapNegative", "tailsonalityShareDailyCap"),
+                    Map.entry("admin.err.config.shareRewardCapBelowTailsonalityReward",
+                            "shareRewardMonthlyCap,tailsonalityShareReward"),
+                    Map.entry("admin.err.config.passportShareRewardNegative", "passportShareReward"),
+                    Map.entry("admin.err.config.passportShareRewardTooLarge", "passportShareReward"),
+                    Map.entry("admin.err.config.passportShareDailyCapNegative", "passportShareDailyCap"),
+                    Map.entry("admin.err.config.shareRewardCapBelowPassportReward",
+                            "shareRewardMonthlyCap,passportShareReward"))));
 
     private static String json(Map<String, String> m) {
         StringBuilder sb = new StringBuilder("{");
@@ -177,17 +190,23 @@ public class AdminConfigController {
             @RequestParam(defaultValue = "0") int idCardShareDailyCap,
             @RequestParam(defaultValue = "0") long ageCardShareReward,
             @RequestParam(defaultValue = "0") int ageCardShareDailyCap,
+            @RequestParam(defaultValue = "0") long tailsonalityShareReward,
+            @RequestParam(defaultValue = "0") int tailsonalityShareDailyCap,
+            @RequestParam(defaultValue = "0") long passportShareReward,
+            @RequestParam(defaultValue = "0") int passportShareDailyCap,
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         if (hx.isHtmx()) {
             write.updateShareReward(new com.tailtopia.admin.config.dto.ShareRewardForm(
                     shareRewardEnabled, shareRewardMonthlyCap, idCardShareReward, idCardShareDailyCap,
-                    ageCardShareReward, ageCardShareDailyCap), admin.getAdminAccountId());
+                    ageCardShareReward, ageCardShareDailyCap, tailsonalityShareReward, tailsonalityShareDailyCap,
+                    passportShareReward, passportShareDailyCap), admin.getAdminAccountId());
             return savedCard("cfg-share-reward", "config-card-share-reward", "admin.flash.config.shareRewardSaved", model, response);
         }
         try {
             write.updateShareReward(new com.tailtopia.admin.config.dto.ShareRewardForm(
                     shareRewardEnabled, shareRewardMonthlyCap, idCardShareReward,
-                    idCardShareDailyCap, ageCardShareReward, ageCardShareDailyCap),
+                    idCardShareDailyCap, ageCardShareReward, ageCardShareDailyCap,
+                    tailsonalityShareReward, tailsonalityShareDailyCap, passportShareReward, passportShareDailyCap),
                     admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.config.shareRewardSaved"));
         } catch (AppException e) {

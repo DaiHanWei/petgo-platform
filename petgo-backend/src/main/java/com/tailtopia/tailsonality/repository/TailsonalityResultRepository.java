@@ -14,6 +14,9 @@ public interface TailsonalityResultRepository extends JpaRepository<Tailsonality
 
     List<TailsonalityResult> findByPetProfileIdOrderByCreatedAtDescIdDesc(long petProfileId);
 
+    /** 该宠物有没有任何一条结果（V1.3.2 Story 4.5 分享奖励资格）。 */
+    boolean existsByPetProfileId(long petProfileId);
+
     Optional<TailsonalityResult> findByPublicTokenAndPetProfileId(String publicToken, long petProfileId);
 
     /** 解锁发起（Story 3.2 · AC1.2）：{@code SELECT … FOR UPDATE}，同一结果的并发发起串行化。 */
