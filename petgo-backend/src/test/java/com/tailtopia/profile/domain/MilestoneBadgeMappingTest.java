@@ -78,4 +78,14 @@ class MilestoneBadgeMappingTest {
         }
         assertThat(m.get("G-S8")).isNotEqualTo(m.get("C-S8"));
     }
+
+    /** V1.3.2 Story 5.2：后端 {@link MilestoneBadgeKeys} 与 App 表逐条一致（H5 与 App 同一枚徽章）。 */
+    @Test
+    void javaTableEqualsDartTable() throws IOException {
+        assertThat(MilestoneBadgeKeys.KEYS).isEqualTo(appMapping());
+        assertThat(MilestoneBadgeKeys.keyOf("G-S6")).contains("first_treat");
+        assertThat(MilestoneBadgeKeys.keyOf("G-S8")).contains("first_like");
+        assertThat(MilestoneBadgeKeys.keyOf("X-S8")).isEmpty();
+        assertThat(MilestoneBadgeKeys.keyOf(null)).isEmpty();
+    }
 }

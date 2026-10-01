@@ -89,7 +89,9 @@ class MilestoneShareServiceTest {
         MilestoneShareResponse resp = service.createOrRefresh(OWNER, CODE, req());
 
         assertThat(resp.shareToken()).isEqualTo("OLDTOK");
-        verify(existing).refresh(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+        // V1.3.2 Story 5.2：refresh 多一个 collectionCodes 参数（老客户端不传 → null）。
+        verify(existing).refresh(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.isNull());
         verify(tokenGenerator, never()).generate();
         verify(shares, never()).save(any());
     }
@@ -109,5 +111,60 @@ class MilestoneShareServiceTest {
 
         assertThatThrownBy(() -> service.createOrRefresh(OWNER, CODE, req()))
                 .isInstanceOf(AppException.class);
+    }
+
+    // ===== V1.3.2 Story 5.2：collection_codes =====
+
+    private MilestoneShareRequest reqWithCodes(java.util.List<String> codes) {
+        return new MilestoneShareRequest("Postingan pertama live! ✨", "Cerita Momo live.", "id", "SM", codes);
+    }
+
+    @Test
+    void newShareWithCodesStoresCommaJoined() {
+        when(shares.findByPetProfileIdAndCode(PET_ID, CODE)).thenReturn(Optional.empty());
+        when(tokenGenerator.generate()).thenReturn("TOK123");
+        var captor = org.mockito.ArgumentCaptor.forClass(MilestoneShare.class);
+
+        service.createOrRefresh(OWNER, CODE, reqWithCodes(java.util.List.of("C-S5", "G-M1")));
+
+        verify(shares).save(captor.capture());
+        assertThat(captor.getValue().getCollectionCodes()).isEqualTo("C-S5,G-M1");
+    }
+
+    @Test
+    void refreshWithCodesWritesThemAndOldClientClearsToNull() {
+        MilestoneShare existing = Mockito.mock(MilestoneShare.class);
+        when(existing.getShareToken()).thenReturn("OLDTOK");
+        when(shares.findByPetProfileIdAndCode(PET_ID, CODE)).thenReturn(Optional.of(existing));
+
+        service.createOrRefresh(OWNER, CODE, reqWithCodes(java.util.List.of("C-S5")));
+        verify(existing).refresh(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.eq("C-S5"));
+
+        service.createOrRefresh(OWNER, CODE, req()); // 老客户端不传
+        verify(existing).refresh(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                org.mockito.ArgumentMatchers.isNull());
+    }
+
+    @Test
+    void missingOrEmptyCodesStoreNull() {
+        when(shares.findByPetProfileIdAndCode(PET_ID, CODE)).thenReturn(Optional.empty());
+        when(tokenGenerator.generate()).thenReturn("T1", "T2");
+        var captor = org.mockito.ArgumentCaptor.forClass(MilestoneShare.class);
+
+        service.createOrRefresh(OWNER, CODE, req());
+        service.createOrRefresh(OWNER, CODE, reqWithCodes(java.util.List.of()));
+
+        verify(shares, Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).allSatisfy(sh -> assertThat(sh.getCollectionCodes()).isNull());
+    }
+
+    @Test
+    void unknownCodeIsRejectedWith422() {
+        when(shares.findByPetProfileIdAndCode(PET_ID, CODE)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.createOrRefresh(OWNER, CODE, reqWithCodes(java.util.List.of("C-S99"))))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getStatus().value()).isEqualTo(422));
+        verify(shares, never()).save(any());
     }
 }

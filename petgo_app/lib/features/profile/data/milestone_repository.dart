@@ -29,12 +29,14 @@ abstract class MilestoneRepository {
 
   /// P-35 庆祝对外分享：创建 / 刷新该已完成里程碑的分享，返回不可枚举 shareToken。
   /// [title]/[body] 为客户端已本地化好的庆祝文案，[locale] 仅 id/en，
-  /// [collectionLevels] 为「已解锁合集」级别串（每字符 S/M/L，按合集顺序），供 H5 复刻 KOLEKSI 区。
+  /// [collectionLevels] 为「已解锁合集」级别串（每字符 S/M/L，按合集顺序），供 H5 复刻 KOLEKSI 区；
+  /// [collectionCodes] 为同序同长的完整 code 列表（V1.3.2 Story 5.2），H5 据此出专属徽章。
   Future<String> createShare(String code,
       {required String title,
       required String body,
       required String locale,
-      required String collectionLevels});
+      required String collectionLevels,
+      required List<String> collectionCodes});
 }
 
 class DioMilestoneRepository implements MilestoneRepository {
@@ -84,10 +86,17 @@ class DioMilestoneRepository implements MilestoneRepository {
       {required String title,
       required String body,
       required String locale,
-      required String collectionLevels}) async {
+      required String collectionLevels,
+      required List<String> collectionCodes}) async {
     final resp = await dio.post<Map<String, dynamic>>(
       ApiPaths.petProfileMilestoneShares(code),
-      data: {'title': title, 'body': body, 'locale': locale, 'collectionLevels': collectionLevels},
+      data: {
+        'title': title,
+        'body': body,
+        'locale': locale,
+        'collectionLevels': collectionLevels,
+        'collectionCodes': collectionCodes,
+      },
     );
     return resp.data!['shareToken'] as String;
   }

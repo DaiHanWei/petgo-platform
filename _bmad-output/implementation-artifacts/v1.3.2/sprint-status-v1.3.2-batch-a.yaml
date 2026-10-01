@@ -76,5 +76,5 @@ development_status:
   # ===== Epic 5：里程碑徽章焕新 =====
   epic-5: in-progress
   5-1-公共徽章组件与-app-六处替换: review
-  5-2-h5-分享页徽章: ready-for-dev
+  5-2-h5-分享页徽章: review
   epic-5-retrospective: optional
