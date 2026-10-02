@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../../tailsonality/data/tailsonality_repository.dart';
 import '../../tailsonality/domain/tailsonality_result.dart';
 import '../../tailsonality/presentation/tailsonality_retake.dart';
@@ -291,7 +292,7 @@ Future<void> openTailsonality(BuildContext context, WidgetRef ref) async {
       results = const [];
     }
     if (results.isEmpty) {
-      // 档案取不到：抽屉无从确认「测的是谁」，本次点击不响应（返回重进即可重试）。
+      // 档案取不到：抽屉无从确认「测的是谁」，不开抽屉、给轻提示（待确认 2.5，2026-10-02：静默像 bug）。
       pet = await readPetForTailsonality(ref);
     }
   } finally {
@@ -304,7 +305,11 @@ Future<void> openTailsonality(BuildContext context, WidgetRef ref) async {
     context.push(TailsonalityRoutes.results);
     return;
   }
-  if (pet == null) return;
+  if (pet == null) {
+    // 与结果列表页 / 重测入口同一提示（再点一次即重试）。
+    showAppToast(context, AppLocalizations.of(context).detailNetworkError);
+    return;
+  }
   await showTailsonalityIntroSheet(context, pet);
 }
 

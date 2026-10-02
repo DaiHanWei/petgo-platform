@@ -46,6 +46,9 @@ void main() {
     // ID
     'Arsitek', 'Ahli Logika', 'Komandan', 'Pendebat', 'Advokat', 'Mediator', 'Protagonis', 'Juru Kampanye',
     'Ahli Logistik', 'Pembela', 'Eksekutif', 'Konsul', 'Virtuoso', 'Petualang', 'Pengusaha', 'Penghibur',
+    // 待确认 2.2（2026-10-02）：印尼语媒体实际流通的变体译名（INTP「Logikus」、ENFP「Sang Penggerak」；
+    // ENTP 也常直接写英文「Debater」，已在 EN 列）。官网 16personalities.com/id 云端出口被拦，未直接核对。
+    'Logikus', 'Penggerak',
   ];
   final aliasPattern = RegExp('\\b(${aliases.map(RegExp.escape).join('|')})\\b', caseSensitive: false);
 

@@ -33,7 +33,7 @@ Future<void> startTailsonalityRetake(BuildContext context, WidgetRef ref) async 
   final pet = await readPetForTailsonality(ref);
   if (!context.mounted) return;
   if (pet == null) {
-    showAppToast(context, AppLocalizations.of(context).growthLoadFailed);
+    showAppToast(context, AppLocalizations.of(context).detailNetworkError);
     return;
   }
   Analytics.capture('tailsonality_retake_confirmed');

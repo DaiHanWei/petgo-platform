@@ -18,8 +18,8 @@ import 'place_comments_controller.dart';
 
 /// 场所详情页的整宽「Check-in」按钮（V1.3.2 batch-a Story 1.1 · AC4）。
 ///
-/// 流程：`requireLogin` → 读定位权限（不弹窗）→ `denied` 才 `request()`；`permanentlyDenied` 弹
-/// 「去设置」对话框 → 取一次坐标（null = GPS 关 / 超时 → 轻提示）→ 以**原始精度**提交。
+/// 流程：`requireLogin` → 读定位权限（不弹窗）→ `denied` 才 `request()`；`permanentlyDenied`（含本次
+/// `request()` 后刚变成永久拒绝，即安卓「不再询问」）弹「去设置」对话框 → 取一次坐标（null = GPS 关 / 超时 → 轻提示）→ 以**原始精度**提交。
 ///
 /// 三态：可点 / 提交中（loading、防重复点击）/ 今日已打卡（**禁用，不隐藏**）。
 ///
@@ -97,6 +97,11 @@ class _PlaceCheckinButtonState extends ConsumerState<PlaceCheckinButton> {
     }
     if (permission == LocationPermissionOutcome.denied) {
       permission = await gateway.request();
+      // 本次拒绝时勾了「不再询问」→ 系统框以后再也不会弹，当场引导去设置（待确认 1.2，产品 2026-10-02 定）。
+      if (permission == LocationPermissionOutcome.permanentlyDenied) {
+        if (mounted) await showLocationForCheckinDialog(context, gateway);
+        return;
+      }
       // 仍拒绝 → 不打卡，按钮保持可点（AC4.2）。
       if (permission != LocationPermissionOutcome.granted) return;
     }

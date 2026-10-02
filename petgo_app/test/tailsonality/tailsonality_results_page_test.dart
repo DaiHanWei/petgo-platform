@@ -116,7 +116,7 @@ void main() {
     await pump(tester, fails: true);
     expect(find.byKey(const ValueKey('tsResultsRetry')), findsOneWidget);
     final l10n = await AppLocalizations.delegate.load(const Locale('id'));
-    expect(find.text(l10n.growthLoadFailed), findsOneWidget);
+    expect(find.text(l10n.detailNetworkError), findsOneWidget);
   });
 
   testWidgets('空态 Mulai Tes：档案取不到 → 提示、不开抽屉', (tester) async {
@@ -125,7 +125,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     final l10n = await AppLocalizations.delegate.load(const Locale('id'));
-    expect(find.text(l10n.growthLoadFailed), findsOneWidget);
+    expect(find.text(l10n.detailNetworkError), findsOneWidget);
     expect(find.byKey(const ValueKey('tsIntroSheet')), findsNothing);
     await tester.pumpAndSettle(const Duration(seconds: 5));
   });

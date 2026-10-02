@@ -121,6 +121,20 @@ void main() {
       expect(_button(tester).onPressed, isNotNull);
     });
 
+    // 待确认 1.2（2026-10-02）：本次拒绝并勾「不再询问」→ 当场弹去设置，不等下一次点击。
+    testWidgets('本次拒绝变成永久拒绝 → 当场弹「Izinkan lokasi」、不打卡', (tester) async {
+      final repo = _Repo();
+      final gw = _Gateway(LocationPermissionOutcome.denied,
+          afterRequest: LocationPermissionOutcome.permanentlyDenied);
+      await _pumpDetail(tester, repo: repo, gateway: gw);
+
+      await tester.tap(find.byKey(const ValueKey('placeCheckinButton')));
+      await tester.pumpAndSettle();
+      expect(gw.requested, 1);
+      expect(find.byKey(const ValueKey('placeCheckinLocationDialog')), findsOneWidget);
+      expect(repo.checkInCalls, 0);
+    });
+
     testWidgets('GPS 取不到 → 轻提示「Lokasi belum ketemu」', (tester) async {
       final gw = _Gateway(LocationPermissionOutcome.granted, coords: null);
       await _pumpDetail(tester, repo: _Repo(), gateway: gw);
@@ -293,9 +307,13 @@ void main() {
 // ===== fakes & harness =====
 
 class _Gateway implements LocationGateway {
-  _Gateway(this.outcome, {this.coords = const DeviceCoordinates(latitude: -6.2123456, longitude: 106.8123456)});
+  _Gateway(this.outcome,
+      {this.coords = const DeviceCoordinates(latitude: -6.2123456, longitude: 106.8123456), this.afterRequest});
 
   final LocationPermissionOutcome outcome;
+
+  /// `request()` 的返回（null = 与 [outcome] 相同）。
+  final LocationPermissionOutcome? afterRequest;
   final DeviceCoordinates? coords;
   int requested = 0;
   int settingsOpened = 0;
@@ -310,7 +328,7 @@ class _Gateway implements LocationGateway {
   @override
   Future<LocationPermissionOutcome> request() async {
     requested++;
-    return outcome;
+    return afterRequest ?? outcome;
   }
 
   @override

@@ -121,7 +121,7 @@ class _TailsonalityResultsPageState extends ConsumerState<TailsonalityResultsPag
     _opening = false;
     if (!mounted) return;
     if (pet == null) {
-      showAppToast(context, AppLocalizations.of(context).growthLoadFailed);
+      showAppToast(context, AppLocalizations.of(context).detailNetworkError);
       return;
     }
     await showTailsonalityIntroSheet(context, pet);
@@ -143,7 +143,7 @@ class _TailsonalityResultsPageState extends ConsumerState<TailsonalityResultsPag
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(l10n.growthLoadFailed, style: const TextStyle(color: AppColors.muted)),
+              Text(l10n.detailNetworkError, style: const TextStyle(color: AppColors.muted)),
               const SizedBox(height: 8),
               TextButton(
                 key: const ValueKey('tsResultsRetry'),

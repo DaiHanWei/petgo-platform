@@ -219,12 +219,17 @@ void main() {
       expect(find.text('results-list'), findsOneWidget);
     });
 
-    testWidgets('档案取失败且无结果 → 不抛未处理异常、不弹抽屉', (tester) async {
+    // 待确认 2.5（2026-10-02）按新规则更新：不再静默，给「加载失败，再试一次」轻提示。
+    testWidgets('档案取失败且无结果 → 不抛未处理异常、不弹抽屉、给轻提示', (tester) async {
       await _pumpHub(tester, petType: null, profileFails: true);
       await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump();
       expect(tester.takeException(), isNull);
       expect(find.byKey(const ValueKey('tsIntroSheet')), findsNothing);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text(l10n.detailNetworkError), findsOneWidget);
+      await tester.pumpAndSettle(const Duration(seconds: 5));
     });
 
     testWidgets('列表读取失败 → 仍弹说明抽屉', (tester) async {
