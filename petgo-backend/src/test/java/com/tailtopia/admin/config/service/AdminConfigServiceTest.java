@@ -109,20 +109,27 @@ class AdminConfigServiceTest {
         verify(audit, times(1)).record(eq(7L), anyString(), anyString(), anyString(), anyString());
     }
 
-    // ── V1.3.0 Story 6.1 → V1.3.2 Story 3.1：一次性解锁定价四行（D-3 / D-7 四价一律 ≥1）──────────
+    // ── V1.3.0 Story 6.1 → V1.3.2 Story 3.1：一次性解锁定价四行（后台 PRD 2026-10-02：四价一律 ≥100）──────────
     @Test
-    void ktpPricingRejectsZeroOrNegativeOnAnyOfTheFour() {
+    void ktpPricingRejectsBelowHundredOnAnyOfTheFour() {
         seedPricing();
         assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(0, 5000, 5000, 5000), 7L))
-                .isInstanceOf(AppException.class).hasMessageContaining("≥1");
+                .isInstanceOf(AppException.class).hasMessageContaining("≥100");
         assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, -1, 5000, 5000), 7L))
                 .isInstanceOf(AppException.class);
-        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 0, 5000), 7L))
-                .isInstanceOf(AppException.class);
-        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 0), 7L))
-                .isInstanceOf(AppException.class).hasMessageContaining("≥1");
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 99, 5000), 7L))
+                .as("Rp99 正是要防的漏零值").isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 1), 7L))
+                .as("旧下限 1 已不合法").isInstanceOf(AppException.class).hasMessageContaining("≥100");
         verify(changeLogs, never()).saveAll(anyList());
         verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void ktpPricingAcceptsExactlyHundred() {
+        seedPricing();
+        svc.updateKtpPricing(new KtpPricingForm(100, 100, 100, 100), 7L);
+        verify(changeLogs).saveAll(anyList());
     }
 
     @Test

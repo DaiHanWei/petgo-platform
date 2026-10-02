@@ -78,30 +78,34 @@ class PlaceDomainTest {
     void stampSetReplaceAndClear() {
         Place p = place();
         assertThat(p.getStampObjectKey()).isNull();
-        assertThat(p.setStamp("public/place-stamps/1/a.png")).as("首次上传不是替换").isFalse();
-        assertThat(p.setStamp("public/place-stamps/1/b.png")).as("再传 = 替换").isTrue();
+        assertThat(p.setStamp("public/place-stamps/1/a.png", 7L, java.time.Instant.EPOCH)).as("首次上传不是替换").isFalse();
+        assertThat(p.setStamp("public/place-stamps/1/b.png", 7L, java.time.Instant.EPOCH)).as("再传 = 替换").isTrue();
         assertThat(p.getStampObjectKey()).isEqualTo("public/place-stamps/1/b.png");
+        assertThat(p.getStampUploadedBy()).isEqualTo(7L);
+        assertThat(p.getStampUploadedAt()).isEqualTo(java.time.Instant.EPOCH);
         assertThat(p.clearStamp()).isTrue();
         assertThat(p.getStampObjectKey()).isNull();
+        assertThat(p.getStampUploadedBy()).as("上传人与章同生同灭").isNull();
+        assertThat(p.getStampUploadedAt()).isNull();
         assertThat(p.clearStamp()).as("无章再移除 = no-op").isFalse();
     }
 
     @Test
     void delistRestoreMergeAndSoftDeleteNeverTouchTheStamp() {
         Place delisted = place();
-        delisted.setStamp("k1");
+        delisted.setStamp("k1", 7L, java.time.Instant.EPOCH);
         delisted.delist();
         assertThat(delisted.getStampObjectKey()).isEqualTo("k1");
         delisted.restore();
         assertThat(delisted.getStampObjectKey()).isEqualTo("k1");
 
         Place merged = place();
-        merged.setStamp("k2");
+        merged.setStamp("k2", 7L, java.time.Instant.EPOCH);
         merged.markMerged(999L);
         assertThat(merged.getStampObjectKey()).isEqualTo("k2");
 
         Place deleted = place();
-        deleted.setStamp("k3");
+        deleted.setStamp("k3", 7L, java.time.Instant.EPOCH);
         deleted.softDelete();
         assertThat(deleted.getStampObjectKey()).isEqualTo("k3");
     }

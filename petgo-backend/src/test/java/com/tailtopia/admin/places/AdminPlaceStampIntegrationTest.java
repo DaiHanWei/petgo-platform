@@ -121,11 +121,15 @@ class AdminPlaceStampIntegrationTest extends ApiIntegrationTest {
         String drawer = mvc.perform(get("/admin/places/" + p.getId() + "/drawer").param("lang", "zh_CN")
                         .with(user(ops)).header("HX-Request", "true"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(drawer).contains("专属章").contains("使用默认章").contains("512×512").contains("accept=\"image/png\"")
+        assertThat(drawer).contains("专属章").contains("当前使用「").contains("」默认章").contains("这是正常状态").contains("512×512").contains("accept=\"image/png\"")
                 .contains("data-reset-file"); // 复审：422 后同名文件重选也能再触发上传
 
         String html = upload(ops, p.getId(), rgba512(), 200);
         assertThat(html).contains("专属章已更新").contains("pl-stamp-preview");
+        // 后台 PRD 2026-10-02（D-28）：上传人 / 时间入库并显示；换章影响已盖出章的提示常驻
+        assertThat(html).contains("已设置专属章").contains("上传").contains("换章对已经盖出去的章同样生效");
+        assertThat(places.findById(p.getId()).orElseThrow().getStampUploadedBy()).isEqualTo(ops.getAdminAccountId());
+        assertThat(places.findById(p.getId()).orElseThrow().getStampUploadedAt()).isNotNull();
         String first = places.findById(p.getId()).orElseThrow().getStampObjectKey();
         assertThat(first).startsWith("public/place-stamps/" + p.getId() + "/");
         assertThat(audited(AuditActions.PLACE_STAMP_UPLOADED, p.getId())).isTrue();
@@ -141,6 +145,8 @@ class AdminPlaceStampIntegrationTest extends ApiIntegrationTest {
                         .with(user(ops)).with(csrf()).header("HX-Request", "true"))
                 .andExpect(status().isOk());
         assertThat(places.findById(p.getId()).orElseThrow().getStampObjectKey()).isNull();
+        assertThat(places.findById(p.getId()).orElseThrow().getStampUploadedBy()).as("上传人与章同生同灭").isNull();
+        assertThat(places.findById(p.getId()).orElseThrow().getStampUploadedAt()).isNull();
         assertThat(audited(AuditActions.PLACE_STAMP_REMOVED, p.getId())).isTrue();
     }
 
@@ -186,8 +192,14 @@ class AdminPlaceStampIntegrationTest extends ApiIntegrationTest {
         assertThat(places.findById(b.getId()).orElseThrow().getStampObjectKey()).isEqualTo(bKey);
         assertThat(places.findById(a.getId()).orElseThrow().getStampObjectKey()).isEqualTo(aKey);
         assertThat(places.findById(c.getId()).orElseThrow().getStampObjectKey()).isEqualTo(cKey);
-        // MERGED 场所不出上传入口、上传被拒
+        // MERGED 场所不出上传入口、上传被拒；章区只读说明素材已随场所归档（UI 稿 C7）
         assertThat(upload(ops, b.getId(), rgba512(), 422)).contains("已合并");
+        String mergedDrawer = mvc.perform(get("/admin/places/" + b.getId() + "/drawer").param("lang", "zh_CN")
+                        .with(user(ops)).header("HX-Request", "true"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String stampSection = mergedDrawer.substring(mergedDrawer.indexOf("id=\"places-drawer-stamp\""));
+        stampSection = stampSection.substring(0, stampSection.indexOf("</section>"));
+        assertThat(stampSection).contains("素材已随场所归档").doesNotContain("<form").doesNotContain("type=\"file\"");
     }
 
     /** AC4.3：换章对已盖出的章立即生效 —— 打卡 → 上传 → 护照返回 URL → 替换 → 新 URL → 移除 → null。 */

@@ -111,7 +111,7 @@ public class AdminPaymentExportService {
         }
         audit.record(actorAccountId, "PAYMENT_LIST_EXPORT", "payment_intent", "-",
                 "rows=" + rows.size() + " truncated=" + truncated
-                        + " userId=" + f.userId() + " purpose=" + f.purpose()
+                        + " userId=" + f.userId() + " purposes=" + f.purposes()
                         + " status=" + f.status() + " from=" + f.from() + " to=" + f.to());
         return body;
     }

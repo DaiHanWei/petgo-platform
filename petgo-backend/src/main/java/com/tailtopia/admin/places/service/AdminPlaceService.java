@@ -208,7 +208,7 @@ public class AdminPlaceService {
         }
         PlaceStampImageValidator.validate(bytes, file.getSize());
         UploadedImage up = images.upload(file, "place-stamps/" + p.getId());
-        boolean replaced = p.setStamp(up.objectKey());
+        boolean replaced = p.setStamp(up.objectKey(), actorAdminAccountId, java.time.Instant.now());
         audit.record(actorAdminAccountId, AuditActions.PLACE_STAMP_UPLOADED, "PLACE", String.valueOf(p.getId()),
                 "name=" + p.getName() + ", replaced=" + replaced);
         return replaced;
