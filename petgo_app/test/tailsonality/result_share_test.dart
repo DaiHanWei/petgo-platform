@@ -99,6 +99,8 @@ void main() {
       final page = tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage));
       expect(page.watermarked, isTrue);
       expect(find.byType(CardWatermark), findsOneWidget);
+      // 待确认 4.1（2026-10-02）：付费保护卡水印 0.45（与 KTP 一致）。
+      expect(tester.widget<CardWatermark>(find.byType(CardWatermark)).opacity, 0.45);
       expect(find.byKey(const ValueKey('shareCardRatioToggle')), findsNothing);
       expect(find.byType(ResultShareCard), findsOneWidget);
       expect(find.byType(TsResultCardFace), findsOneWidget, reason: '主体段复用 2.4 的卡面，不另画');

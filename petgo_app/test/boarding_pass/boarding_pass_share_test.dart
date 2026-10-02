@@ -135,7 +135,8 @@ void main() {
     expect(find.text('Momo · Taman Menteng'), findsOneWidget);
   });
 
-  testWidgets('passport_card_shared：分享成功回调才报；stamp_count = 当前总章数（登机牌列表条目数）', (tester) async {
+  // 待确认 4.6 / 4.7（2026-10-02）按新规则更新：带 card_type=boarding、不再带 stamp_count；出图报 keepsake_card_generated。
+  testWidgets('passport_card_shared：分享成功回调才报；card_type=boarding、不带 stamp_count', (tester) async {
     ShareCardPreviewPage.captureForTest = (_) async => Uint8List.fromList(const [1, 2, 3]);
     addTearDown(() => ShareCardPreviewPage.captureForTest = null);
     await pumpDetail(tester);
@@ -149,7 +150,8 @@ void main() {
     tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage)).onShared!('other');
     await tester.pump();
     expect(shareReward.calls, ['BOARDING'], reason: '分享成功回调后上报一次，卡类型正确');
-    expect(events.where((e) => e.$1 == 'passport_card_shared').single.$2, {'stamp_count': 2});
+    expect(events.where((e) => e.$1 == 'passport_card_shared').single.$2, {'card_type': 'boarding'});
+    expect(events.where((e) => e.$1 == 'keepsake_card_generated').single.$2!['card_type'], 'boarding');
   });
 
   group('Story 4.4 · B3c「Pamer di postingan」', () {

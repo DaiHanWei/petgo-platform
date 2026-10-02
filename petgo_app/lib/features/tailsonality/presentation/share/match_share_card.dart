@@ -18,6 +18,7 @@ import '../../domain/ts_match_share_data.dart';
 import '../widgets/ts_match_card.dart';
 import '../widgets/ts_result_card.dart';
 import 'ts_share_owner_name.dart';
+import '../../../keepsake/presentation/keepsake_card_style.dart';
 
 /// 配型分享卡（V1.3.2 Story 4.2 · UI 稿 A16）：通用骨架的一种用法。
 ///
@@ -157,13 +158,17 @@ Future<void> openMatchSharePreview(
     builder: (routeCtx) => ShareCardPreviewPage.custom(
       watermarked: false,
       exportName: 'tailtopia_tailsonality_match',
+      onGenerated: (ms) => Analytics.capture(kKeepsakeCardGeneratedEvent, {'card_type': 'match', 'duration_ms': ms}),
       primaryAction: cardPng == null
           ? null
           : ShareCardPreviewAction(
               key: const ValueKey('matchPreviewBrag'),
               label: AppLocalizations.of(routeCtx).bragPostButton,
-              onPressed: () => BragPostEntry.open(routeCtx,
-                  cardPng: cardPng, text: AppLocalizations.of(routeCtx).tailsonalityBragMatchText),
+              onPressed: () {
+                BragPostEntry.reportTap(BragPostSource.matchPreview);
+                BragPostEntry.open(routeCtx,
+                    cardPng: cardPng, text: AppLocalizations.of(routeCtx).tailsonalityBragMatchText);
+              },
             ),
       builder: (canvas) => MatchShareCard(data: data, canvas: canvas),
       onShared: (_) {

@@ -8,6 +8,7 @@ import '../../../../shared/widgets/app_image.dart';
 import '../../../place/domain/place_summary.dart';
 import '../../../place/presentation/widgets/place_stamp_view.dart';
 import '../../domain/boarding_pass.dart';
+import '../../../keepsake/presentation/keepsake_card_style.dart';
 
 /// 卡面字段标签：机票版式的固定英文，**不进 ARB**（两语同形，与航空登机牌一致；翻成印尼语反而不像机票）。
 abstract final class BoardingPassLabels {
@@ -95,7 +96,8 @@ class BoardingPassCard extends StatelessWidget {
             ),
           ),
           if (watermarked)
-            const CardWatermark(key: ValueKey('boardingPassWatermark'), canvas: kBoardingPassCanvas),
+            const CardWatermark(
+                key: ValueKey('boardingPassWatermark'), canvas: kBoardingPassCanvas, opacity: kKeepsakeWatermarkOpacity),
         ],
       ),
     );

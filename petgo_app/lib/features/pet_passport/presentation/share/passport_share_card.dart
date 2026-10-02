@@ -16,6 +16,7 @@ import '../../domain/passport_share_grid.dart';
 import '../../domain/passport_snapshot.dart';
 import '../../domain/pet_passport.dart';
 import '../passport_page_face.dart';
+import '../../../keepsake/presentation/keepsake_card_style.dart';
 
 /// 护照分享卡的纯数据（V1.3.2 Story 4.3）：实时护照与已购快照两种来源都转成它，卡面不直接依赖接口 DTO。
 class PassportShareData {
@@ -196,17 +197,20 @@ class _StampGrid extends StatelessWidget {
 /// 护照卡预览入口：B2 单章页「Bagikan」（实时，水印看当前版本是否已买）与已购版本回看页「Bagikan」（快照，恒无水印）共用。
 ///
 /// 🔴 水印**只读服务端字段**（实时 = `currentVersionUnlocked`；快照 = 已付版本，恒 false），客户端不算 hash（AD-7 / AD-14）。
-/// 埋点 `passport_card_shared {stamp_count}` 只在系统分享面板回调成功后上报；不带护照号 / 场所名 / token / 宠物名。
+/// 埋点 `passport_card_shared {card_type: page, stamp_count}` 只在系统分享面板回调成功后上报；不带护照号 / 场所名 / token / 宠物名。
 /// 同一时机上报领奖（Story 4.5，PAGE；已购版本重新导出同样计），失败当 0、没发静默。
 Future<void> openPassportSharePreview(BuildContext context, WidgetRef ref,
     {required PassportShareData data, required bool watermarked}) {
   return Navigator.of(context).push(MaterialPageRoute<void>(
     builder: (routeCtx) => ShareCardPreviewPage.custom(
       watermarked: watermarked,
+      watermarkOpacity: kKeepsakeWatermarkOpacity,
       exportName: 'tailtopia_passport',
+      onGenerated: (ms) => Analytics.capture(kKeepsakeCardGeneratedEvent, {'card_type': 'page', 'duration_ms': ms}),
       builder: (canvas) => PassportShareCard(data: data, canvas: canvas),
       onShared: (_) {
-        Analytics.capture('passport_card_shared', {'stamp_count': data.stampCount});
+        // 待确认 4.6（2026-10-02）：加 card_type 区分护照卡 / 登机牌卡。
+        Analytics.capture('passport_card_shared', {'card_type': 'page', 'stamp_count': data.stampCount});
         unawaited(claimKeepsakeShareReward(routeCtx, ref,
             () => ref.read(passportShareRewardRepositoryProvider).reportShareForReward(PassportShareRewardRepository.page)));
       },

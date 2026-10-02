@@ -15,6 +15,7 @@ import '../../data/tailsonality_share_reward_repository.dart';
 import '../../domain/tailsonality_result.dart';
 import '../widgets/ts_result_card.dart';
 import 'ts_share_owner_name.dart';
+import '../../../keepsake/presentation/keepsake_card_style.dart';
 
 /// Tailsonality 结果分享卡（V1.3.2 Story 4.1 · AC4 · UI 稿 A14）：通用骨架的一种用法。
 ///
@@ -107,7 +108,9 @@ Future<void> openResultSharePreview(BuildContext context, WidgetRef ref, Tailson
   return Navigator.of(context).push(MaterialPageRoute<void>(
     builder: (routeCtx) => ShareCardPreviewPage.custom(
       watermarked: !result.unlocked,
+      watermarkOpacity: kKeepsakeWatermarkOpacity,
       exportName: 'tailtopia_tailsonality',
+      onGenerated: (ms) => Analytics.capture(kKeepsakeCardGeneratedEvent, {'card_type': 'result', 'duration_ms': ms}),
       builder: (canvas) => ResultShareCard(
         result: result,
         canvas: canvas,

@@ -209,6 +209,7 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
   /// 所以先滚回顶部、等一帧再截；仍截不到给轻提示，不静默失败。
   Future<void> _brag(TailsonalityResult r) async {
     if (_opening) return;
+    BragPostEntry.reportTap(BragPostSource.tailsonalityResult);
     _opening = true;
     try {
       if (_scroll.hasClients && _scroll.offset > 0) {

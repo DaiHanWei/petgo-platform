@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../domain/brag_post_image.dart';
@@ -12,8 +13,24 @@ import 'publish_compose_page.dart';
 ///
 /// 结果页 ⋯ / 配型页 / 配型卡预览 / 登机牌 B3c 四处都走这里，**不自建发布流程**。
 /// 命名避开 `share`：这是「发到站内」，与出站的分享卡预览 / 存相册分开，埋点口径也不混。
+/// 「Pamer di postingan」入口来源（埋点 `brag_post_tapped.source` 值域）。
+enum BragPostSource {
+  tailsonalityResult('tailsonality_result'),
+  tailsonalityMatch('tailsonality_match'),
+  matchPreview('match_preview'),
+  boardingPass('boarding_pass');
+
+  const BragPostSource(this.wire);
+  final String wire;
+}
+
 class BragPostEntry {
   BragPostEntry._();
+
+  /// 入口点击埋点（待确认 4.12，2026-10-02）：**点击那一刻**报（截图 / 转码失败也算一次点击），
+  /// 看四个入口各自的使用量。不带卡面内容 / token。
+  static void reportTap(BragPostSource source) =>
+      Analytics.capture('brag_post_tapped', {'source': source.wire});
 
   /// 图像处理测试缝：`compute` 起真 isolate，widget test 的假时钟里不会完成。
   @visibleForTesting

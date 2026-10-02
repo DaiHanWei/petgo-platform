@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/media/media_scope.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
@@ -124,12 +125,17 @@ void main() {
     expect(find.byType(PublishComposePage), findsOneWidget);
   });
 
-  testWidgets('配型页底部主按钮 → 发帖页（配型文案）', (tester) async {
+  testWidgets('配型页底部主按钮 → 发帖页（配型文案）；点击即报 brag_post_tapped', (tester) async {
+    final events = <(String, Map<String, Object>?)>[];
+    Analytics.debugCaptureSink = (e, p) => events.add((e, p));
+    addTearDown(() => Analytics.debugCaptureSink = null);
     TailsonalityMatchPage.captureForTest = () async => cardPng;
     await pump(tester, const TailsonalityMatchPage(token: 'abc'));
     await tester.tap(find.byKey(const ValueKey('tsMatchBragCta')));
     await tester.pumpAndSettle();
     expectCompose(tester, 'Aku tes kecocokan aku sama anabulku, lihat kartu hasilnya!');
+    // 待确认 4.12（2026-10-02）。
+    expect(events.where((e) => e.$1 == 'brag_post_tapped').single.$2, {'source': 'tailsonality_match'});
   });
 
   testWidgets('配型卡预览：有 3:4 卡图 → 主操作 Pamer（FilledButton）+ 分享降为次按钮；点主操作进发帖页', (tester) async {

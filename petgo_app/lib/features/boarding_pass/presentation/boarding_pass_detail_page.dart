@@ -57,6 +57,7 @@ class _BoardingPassDetailPageState extends ConsumerState<BoardingPassDetailPage>
   /// B3c「Pamer di postingan」：截详情页上的登机牌卡 → 发帖页（比例在区间外时由入口补边，不裁字段）。
   Future<void> _brag(BoardingPassDetail d) async {
     if (_bragging) return;
+    BragPostEntry.reportTap(BragPostSource.boardingPass);
     setState(() => _bragging = true);
     try {
       final capture = BoardingPassDetailPage.captureForTest;

@@ -52,22 +52,22 @@
 
 | # | 来源 | 待确认 | 当前实现（保守做法） | 归属 | 状态 |
 |---|---|---|---|---|---|
-| 4.1 | 4-1 | 结果卡水印强度 | 沿用 `CardWatermark` 0.25；L2 若看不出未解锁 / 解锁差别需产品定（调用方传 `opacity:` 即可） | 产品 | 待决 |
-| 4.2 | 4-1 | `lightbox_opened` 的 `source` 新值 `tailsonality_result` | 需登记进埋点词表（AD-A26.3） | 埋点 | 待决 |
-| 4.3 | 4-1 | 结果卡分享出图事件（E-12 同类的 generated） | 未报（AC6 只要求 `_shared`） | 埋点 | 待决 |
-| 4.4 | 4-2 | 配型卡差异句「Kamu pengen keluar, dia pengen pulang.」等第二人称口吻上卡（卡是给别人看的） | 按内容设计原文上卡 | 产品 | 待决 |
-| 4.5 | 4-2 | UI 稿 A16 的「3 DARI 4 COCOK」「Beda satu huruf aja」「Tes kecocokan di TailTopia」 | 不在 PRD / 内容设计中，未做 | 产品 | 待决 |
-| 4.6 | 4-3 | `passport_card_shared` 是否补 `card_type: page|boarding` | 未加（不加则分不出护照卡 / 登机牌卡；惯例先改清单再改代码） | 埋点 | 待决 |
-| 4.7 | 4-3 | 登机牌卡 `stamp_count` 口径 | 用该宠物当前总章数（登机牌列表条目数），取不到不带 | 埋点 | 待决 |
-| 4.8 | 4-3 | B8 / B9 稿吸底文字「Bagikan」 | 统一为 `shareCardShareCta`「Bagikan ke Story」（四类卡同一预览页） | 产品 | 待决 |
-| 4.9 | 4-3 | 护照卡信息段「Paspor {pet} · {N} cap · {护照号}」 | 护照号另起一行（同一行必截断，与 C-13「12 位单独一行」冲突） | 产品 | 待决 |
+| 4.1 | 4-1 | 结果卡水印强度 | 沿用 `CardWatermark` 0.25；L2 若看不出未解锁 / 解锁差别需产品定（调用方传 `opacity:` 即可） | 产品 | 已决：改 —— 结果 / 护照 / 登机牌三类付费保护卡水印统一 0.45（页内卡、大图、发帖图、分享预览与导出）（2026-10-02） |
+| 4.2 | 4-1 | `lightbox_opened` 的 `source` 新值 `tailsonality_result` | 需登记进埋点词表（AD-A26.3） | 埋点 | 已决：保留 source=tailsonality_result，需补进埋点清单（2026-10-02） |
+| 4.3 | 4-1 | 结果卡分享出图事件（E-12 同类的 generated） | 未报（AC6 只要求 `_shared`） | 埋点 | 已决：改 —— 新增 keepsake_card_generated {card_type: result|match|page|boarding, duration_ms}，需补进埋点清单（2026-10-02） |
+| 4.4 | 4-2 | 配型卡差异句「Kamu pengen keluar, dia pengen pulang.」等第二人称口吻上卡（卡是给别人看的） | 按内容设计原文上卡 | 产品 | 已决：保持内容设计原文（2026-10-02） |
+| 4.5 | 4-2 | UI 稿 A16 的「3 DARI 4 COCOK」「Beda satu huruf aja」「Tes kecocokan di TailTopia」 | 不在 PRD / 内容设计中，未做 | 产品 | 已决：不加（2026-10-02） |
+| 4.6 | 4-3 | `passport_card_shared` 是否补 `card_type: page|boarding` | 未加（不加则分不出护照卡 / 登机牌卡；惯例先改清单再改代码） | 埋点 | 已决：改 —— passport_card_shared 加 card_type: page|boarding，需同步埋点清单（2026-10-02） |
+| 4.7 | 4-3 | 登机牌卡 `stamp_count` 口径 | 用该宠物当前总章数（登机牌列表条目数），取不到不带 | 埋点 | 已决：改 —— 登机牌卡不再带 stamp_count（2026-10-02） |
+| 4.8 | 4-3 | B8 / B9 稿吸底文字「Bagikan」 | 统一为 `shareCardShareCta`「Bagikan ke Story」（四类卡同一预览页） | 产品 | 已决：保持现状（2026-10-02） |
+| 4.9 | 4-3 | 护照卡信息段「Paspor {pet} · {N} cap · {护照号}」 | 护照号另起一行（同一行必截断，与 C-13「12 位单独一行」冲突） | 产品 | 已决：保持现状（2026-10-02） |
 | 4.10 | 4-4 | `boardingPassBragText` 文案 | dev 提议文案（D-8），列入 RC-5 母语复核 | 产品 | 转 RC-5 母语复核（2026-10-02） |
-| 4.11 | 4-4 | 登机牌发帖预选类型 | 同样预选 Momen（PRD 未单独规定） | 产品 | 待决 |
-| 4.12 | 4-4 | 「Pamer di postingan」入口埋点 | 未加（AC 未要求） | 埋点 | 待决 |
-| 4.13 | 4-5 | 新分享奖励账本注销口径 | 删档置空、注销物理删除（同既有同胞表），与 AD-17「资金流水保留」字面有出入 | 架构 | 待决 |
-| 4.14 | 4-5 | KTP 渠道 `id_card_share_rewards` 删档不置空（悬空 pet id）的历史问题 | 未改（超范围） | 架构 | 待决 |
-| 4.15 | 4-5 | 登机牌卡奖励资格「至少 1 条场所打卡」 | 用章数 ≥1 判定（章 = 打过卡的当前场所，等价） | 架构 | 待决 |
-| 4.16 | 4-5 | 后台分享奖励错误映射原本漏了 `shareRewardCapBelowAgeCardReward` | 顺手补上（行为改进，非需求内） | 架构 | 待决 |
+| 4.11 | 4-4 | 登机牌发帖预选类型 | 同样预选 Momen（PRD 未单独规定） | 产品 | 已决：保持现状（2026-10-02） |
+| 4.12 | 4-4 | 「Pamer di postingan」入口埋点 | 未加（AC 未要求） | 埋点 | 已决：改 —— 新增 brag_post_tapped {source: tailsonality_result|tailsonality_match|match_preview|boarding_pass}，点击即报，需补进埋点清单（2026-10-02） |
+| 4.13 | 4-5 | 新分享奖励账本注销口径 | 删档置空、注销物理删除（同既有同胞表），与 AD-17「资金流水保留」字面有出入 | 架构 | 已决：保持现状（2026-10-02） |
+| 4.14 | 4-5 | KTP 渠道 `id_card_share_rewards` 删档不置空（悬空 pet id）的历史问题 | 未改（超范围） | 架构 | 已决：不处理（无用户可见影响）（2026-10-02） |
+| 4.15 | 4-5 | 登机牌卡奖励资格「至少 1 条场所打卡」 | 用章数 ≥1 判定（章 = 打过卡的当前场所，等价） | 架构 | 已决：保持现状（2026-10-02） |
+| 4.16 | 4-5 | 后台分享奖励错误映射原本漏了 `shareRewardCapBelowAgeCardReward` | 顺手补上（行为改进，非需求内） | 架构 | 已决：保持现状（2026-10-02） |
 
 ## Epic 5 · 公共徽章
 

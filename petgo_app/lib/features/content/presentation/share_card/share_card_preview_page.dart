@@ -34,7 +34,8 @@ class ShareCardPreviewPage extends StatefulWidget {
       exportName = 'tailtopia_card',
       onGenerated = null,
       onShared = null,
-      primaryAction = null;
+      primaryAction = null,
+      watermarkOpacity = CardWatermark.defaultOpacity;
 
   /// 通用卡形态（v1.3.2 Story 4.1 · C-11）。
   ///
@@ -51,6 +52,7 @@ class ShareCardPreviewPage extends StatefulWidget {
     this.onGenerated,
     this.onShared,
     this.primaryAction,
+    this.watermarkOpacity = CardWatermark.defaultOpacity,
   }) : data = null,
        cardBuilder = builder;
 
@@ -74,6 +76,9 @@ class ShareCardPreviewPage extends StatefulWidget {
 
   /// custom 形态：可选主操作（供 4.2 / 4.4 用）。
   final ShareCardPreviewAction? primaryAction;
+
+  /// custom 形态：水印浓度（付费保护卡由调用方传 0.45，见待确认 4.1）。
+  final double watermarkOpacity;
 
   bool get _isCustom => cardBuilder != null;
 
@@ -273,7 +278,7 @@ class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
     final frame = CardFrame(
       boundaryKey: _boundaryKey,
       canvas: _canvas,
-      watermark: widget.watermarked ? CardWatermark(canvas: _canvas) : null,
+      watermark: widget.watermarked ? CardWatermark(canvas: _canvas, opacity: widget.watermarkOpacity) : null,
       child: widget.cardBuilder!(_canvas),
     );
     if (!widget.watermarked) return frame;

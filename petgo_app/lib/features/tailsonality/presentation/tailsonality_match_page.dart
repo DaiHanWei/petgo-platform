@@ -69,6 +69,7 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
   /// 先滚回顶部、等一帧再截；仍截不到给轻提示，不静默失败。
   Future<void> _brag() async {
     if (_capturing) return;
+    BragPostEntry.reportTap(BragPostSource.tailsonalityMatch);
     setState(() => _capturing = true);
     try {
       if (_scroll.hasClients && _scroll.offset > 0) {

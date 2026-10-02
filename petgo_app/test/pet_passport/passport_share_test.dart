@@ -215,7 +215,8 @@ void main() {
       expect(find.text('Tempat 0'), findsNothing);
     });
 
-    testWidgets('passport_card_shared 只在分享成功回调时报，只带 stamp_count', (tester) async {
+    // 待确认 4.6（2026-10-02）按新规则更新：多带 card_type=page；出图报 keepsake_card_generated。
+    testWidgets('passport_card_shared 只在分享成功回调时报，带 card_type=page 与 stamp_count', (tester) async {
       ShareCardPreviewPage.captureForTest = (_) async => Uint8List.fromList(const [1, 2, 3]);
       addTearDown(() => ShareCardPreviewPage.captureForTest = null);
       await pumpPassport(tester, live(unlocked: true));
@@ -230,7 +231,10 @@ void main() {
     tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage)).onShared!('other');
     await tester.pump();
     expect(shareReward.calls, ['PAGE'], reason: '分享成功回调后上报一次，卡类型正确');
-      expect(events.where((e) => e.$1 == 'passport_card_shared').single.$2, {'stamp_count': 3});
+      expect(events.where((e) => e.$1 == 'passport_card_shared').single.$2, {'card_type': 'page', 'stamp_count': 3});
+      final gen = events.where((e) => e.$1 == 'keepsake_card_generated').single.$2!;
+      expect(gen['card_type'], 'page');
+      expect(gen['duration_ms'], isA<int>());
     });
   });
 }

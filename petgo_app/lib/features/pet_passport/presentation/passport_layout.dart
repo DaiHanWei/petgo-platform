@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/colors.dart';
 import '../../../shared/card_render/card_canvas.dart';
 import '../../../shared/card_render/card_watermark.dart';
+import '../../keepsake/presentation/keepsake_card_style.dart';
 
 /// 页眉 + 内页块 + 页脚的统一版心（B1 / B2 / B2b / 骨架同尺寸）。
 class PassportFrame extends StatelessWidget {
@@ -58,7 +59,8 @@ class PassportPageBlock extends StatelessWidget {
               child: child,
             ),
           ),
-          if (watermarked) const CardWatermark(key: ValueKey('passportWatermark'), canvas: kPetPassportPageCanvas),
+          if (watermarked) const CardWatermark(
+              key: ValueKey('passportWatermark'), canvas: kPetPassportPageCanvas, opacity: kKeepsakeWatermarkOpacity),
         ],
       ),
     );

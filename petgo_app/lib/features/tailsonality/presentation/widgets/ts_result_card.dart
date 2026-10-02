@@ -6,6 +6,7 @@ import '../../../../shared/card_render/card_frame.dart';
 import '../../../../shared/card_render/card_watermark.dart';
 import '../../domain/content/ts_roles.dart';
 import '../../domain/tailsonality_result.dart';
+import '../../../keepsake/presentation/keepsake_card_style.dart';
 
 /// Tailsonality 结果卡画布：3:4（1080×1440）。定义在 feature 内，**不改** `shared/card_render/card_canvas.dart`。
 const CardCanvas kTsCardCanvas = CardCanvas(size: Size(1080, 1440), radius: 48);
@@ -59,7 +60,7 @@ class _TsResultCardState extends State<TsResultCard> {
     final frame = CardFrame(
       boundaryKey: widget.boundaryKey ?? _ownKey,
       canvas: kTsCardCanvas,
-      watermark: widget.watermarked ? const CardWatermark(canvas: kTsCardCanvas) : null,
+      watermark: widget.watermarked ? const CardWatermark(canvas: kTsCardCanvas, opacity: kKeepsakeWatermarkOpacity) : null,
       child: TsResultCardFace(result: r, showTextOverlay: widget.showTextOverlay),
     );
     final outerKey = widget.watermarkedBoundaryKey;

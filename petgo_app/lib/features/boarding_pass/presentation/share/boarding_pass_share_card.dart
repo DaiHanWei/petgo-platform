@@ -12,9 +12,9 @@ import '../../../content/presentation/share_card/share_card_skeleton.dart';
 import '../../../keepsake/presentation/keepsake_share_reward.dart';
 import '../../../pet_passport/data/passport_share_reward_repository.dart';
 import '../../../profile/domain/card_link.dart';
-import '../../data/boarding_pass_repository.dart';
 import '../../domain/boarding_pass.dart';
 import '../widgets/boarding_pass_card.dart';
+import '../../../keepsake/presentation/keepsake_card_style.dart';
 
 /// 登机牌分享卡（V1.3.2 Story 4.3 · UI 稿 B9）：通用骨架的一种用法。
 ///
@@ -86,34 +86,22 @@ class BoardingPassShareCard extends StatelessWidget {
 /// 登机牌卡预览入口（详情页顶栏分享按钮，B3b / B3c 两态都有）。
 ///
 /// 🔴 水印按**该张**登机牌的服务端解锁态（详情 DTO `unlocked`）：false 带、true 无；与护照快照判定无关。
-/// 埋点 `passport_card_shared {stamp_count}`：stamp_count = 该宠物当前总章数（取登机牌列表条目数 =
-/// 打过卡的场所数）。预览**立即打开**，章数在后台取（从订单详情等处进来时列表未加载）；
-/// 分享成功那一刻仍未取到则不带该属性。不带护照号 / 场所名 / token / 宠物名。
+/// 埋点 `passport_card_shared {card_type: boarding}`：待确认 4.6 / 4.7（2026-10-02）—— 用 card_type 与护照卡区分，
+/// 登机牌卡只代表一个场所，**不带** stamp_count（总章数会误导）。不带护照号 / 场所名 / token / 宠物名。
 Future<void> openBoardingPassSharePreview(BuildContext context, WidgetRef ref, BoardingPassDetail pass) {
-  int? stampCount = ref.read(boardingPassListProvider).value?.items.length;
-  if (stampCount == null) {
-    unawaited(_fetchStampCount(ref).then((n) => stampCount = n));
-  }
   return Navigator.of(context).push(MaterialPageRoute<void>(
     builder: (routeCtx) => ShareCardPreviewPage.custom(
       watermarked: !pass.unlocked,
+      watermarkOpacity: kKeepsakeWatermarkOpacity,
       exportName: 'tailtopia_boarding_pass',
+      onGenerated: (ms) => Analytics.capture(kKeepsakeCardGeneratedEvent, {'card_type': 'boarding', 'duration_ms': ms}),
       builder: (canvas) => BoardingPassShareCard(pass: pass, canvas: canvas),
       onShared: (_) {
-        Analytics.capture('passport_card_shared', {'stamp_count': ?stampCount});
+        Analytics.capture('passport_card_shared', {'card_type': 'boarding'});
         // Story 4.5：同一时机上报领奖（BOARDING，整体一个类型、不带场所 token），失败当 0、没发静默。
         unawaited(claimKeepsakeShareReward(routeCtx, ref,
             () => ref.read(passportShareRewardRepositoryProvider).reportShareForReward(PassportShareRewardRepository.boarding)));
       },
     ),
   ));
-}
-
-Future<int?> _fetchStampCount(WidgetRef ref) async {
-  try {
-    final list = await ref.read(boardingPassListProvider.future).timeout(const Duration(seconds: 10));
-    return list.items.length;
-  } catch (_) {
-    return null;
-  }
 }
