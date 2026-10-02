@@ -18,7 +18,10 @@ import org.junit.jupiter.api.Test;
  *
  * <p>App {@code assets/milestone/} 是源，后端 {@code static/milestone/} 同批拷入。两边 {@code *.webp}
  * 文件名集合必须完全一致，且逐个 SHA-256 相同（同名不同图也算不一致）——「App 换了新图、网页还是旧图」直接红。
- * 非 {@code .webp}（README / .gitkeep）忽略。找不到目录即失败，不跳过。
+ * 非 {@code .webp}（README）忽略。App 目录找不到即失败，不跳过。
+ *
+ * <p>待确认 5.7（2026-10-02）：后端 {@code static/milestone/} 是公开静态目录，**不放占位文件**，素材到货时随首批
+ * {@code .webp} 一起建 —— 目录不存在按「零枚素材」比对（App 侧有素材而后端没目录照样红）。
  */
 class MilestoneBadgeAssetSyncTest {
 
@@ -26,8 +29,11 @@ class MilestoneBadgeAssetSyncTest {
     private static final Path BACKEND_DIR = Path.of("src", "main", "resources", "static", "milestone");
 
     private static Map<String, String> webpHashes(Path dir) throws IOException {
-        assertThat(Files.isDirectory(dir)).as("找不到素材目录 %s（跨库测试不允许跳过）", dir).isTrue();
         Map<String, String> out = new TreeMap<>();
+        if (dir.equals(BACKEND_DIR) && !Files.exists(dir)) {
+            return out;
+        }
+        assertThat(Files.isDirectory(dir)).as("找不到素材目录 %s（跨库测试不允许跳过）", dir).isTrue();
         try (Stream<Path> files = Files.list(dir)) {
             for (Path f : files.filter(p -> p.getFileName().toString().endsWith(".webp")).toList()) {
                 out.put(f.getFileName().toString(), sha256(Files.readAllBytes(f)));
