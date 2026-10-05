@@ -21,6 +21,7 @@ import com.tailtopia.purchase.service.KeepsakeGranterRegistry;
 import com.tailtopia.shared.pay.GatewayStatus;
 import com.tailtopia.shared.pay.PaymentCallback;
 import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.support.VetTestSupport;
 import com.tailtopia.tailsonality.domain.TailsonalityCatalog;
 import com.tailtopia.tailsonality.service.TailsonalityKeepsakeGranter;
 import java.util.Map;
@@ -38,6 +39,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * <p>注册表用 {@link MockitoBean} 顶掉（3.4 / 3.5 的发放口未交付前上下文起不来），TAILSONALITY 指向<b>真实</b>发放口。
  */
 class TailsonalityUnlockIntegrationTest extends ApiIntegrationTest {
+
+    @Autowired
+    private VetTestSupport vets;
 
     private static final String BASE = "/api/v1/pet-profiles/me/tailsonality/results";
 
@@ -140,5 +144,14 @@ class TailsonalityUnlockIntegrationTest extends ApiIntegrationTest {
         unlock(stranger, token, "PAWCOIN").andExpect(status().isNotFound());
         unlock(owner, token, "MIXED").andExpect(status().isUnprocessableEntity());
         unlock(owner, "nope", "PAWCOIN").andExpect(status().isNotFound());
+    }
+
+    /** AC1.5（L1 本地验收 2026-10-05 补）：真实 ACTIVE 兽医 token 打解锁端点 → 403（精确 matcher，不落 anyRequest().authenticated()）。 */
+    @Test
+    void vetTokenIsForbidden() throws Exception {
+        long vetId = vets.newActiveVet("ts-unlock-it").getId();
+        mvc.perform(post(BASE + "/someToken/unlock").header("Authorization", vetBearer(vetId))
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"channel\":\"PAWCOIN\"}"))
+                .andExpect(status().isForbidden());
     }
 }
