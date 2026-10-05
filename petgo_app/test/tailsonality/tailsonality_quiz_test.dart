@@ -11,6 +11,7 @@ import 'package:tailtopia/features/tailsonality/data/tailsonality_repository.dar
 import 'package:tailtopia/features/tailsonality/domain/tailsonality_quiz_layout.dart';
 import 'package:tailtopia/features/tailsonality/domain/tailsonality_result.dart';
 import 'package:tailtopia/features/tailsonality/presentation/tailsonality_quiz_page.dart';
+import 'package:tailtopia/features/tailsonality/presentation/widgets/ts_image_option_grid.dart';
 import 'package:tailtopia/features/tailsonality/presentation/tailsonality_routes.dart';
 import 'package:tailtopia/features/tailsonality/presentation/widgets/tailsonality_intro_sheet.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -145,7 +146,7 @@ void main() {
       }
     }
 
-    testWidgets('第 1 页题号 1–6、{pet} 已替换、进度 1 / 3；未答满禁用；图片题缺图回落占位且标签在', (tester) async {
+    testWidgets('第 1 页题号 1–6、{pet} 已替换、进度 1 / 3；未答满禁用；图片题出图且标签在', (tester) async {
       await pumpQuiz(tester);
       expect(events.map((e) => e.$1), contains('tailsonality_started'));
       expect(find.text('1 / 3'), findsOneWidget);
@@ -153,7 +154,14 @@ void main() {
       expect(find.textContaining('{pet}'), findsNothing);
       expect(find.byKey(const ValueKey('tsQuestionStem_P1')), findsOneWidget);
       expect(find.textContaining('6. '), findsOneWidget);
-      expect(find.byKey(const ValueKey('tsImagePlaceholder_p1_0')), findsOneWidget);
+      // 素材已入库（2026-10-05）：显示真图、不出占位。
+      expect(find.byKey(const ValueKey('tsImagePlaceholder_p1_0')), findsNothing);
+      expect(
+          find.byWidgetPredicate((w) =>
+              w is Image &&
+              w.image is AssetImage &&
+              (w.image as AssetImage).assetName == 'assets/tailsonality/quiz_p1_0.webp'),
+          findsOneWidget);
       expect(find.text('Jagain pintu depan'), findsOneWidget);
       expect(primary(tester).onPressed, isNull);
 
@@ -294,6 +302,15 @@ void main() {
       expect(repo.bodies[0], repo.bodies[1]);
       expect(find.text('result:tok-2'), findsOneWidget);
     });
+  });
+
+  test('图片题 3 组 × 4 张素材都在包里（防改名漏同步）', () {
+    for (final g in ['p1', 'p2', 'p3']) {
+      for (var i = 0; i < 4; i++) {
+        final path = TsImageOptionGrid.assetFor(g, i);
+        expect(File(path).existsSync(), isTrue, reason: '$path 缺文件');
+      }
+    }
   });
 
   test('🔴 C-5 源码扫描：答题页与分页常量不引用本地存储 / 进度字样', () {

@@ -15,7 +15,7 @@ class TsQuestion {
   /// 恰 4 个；下标 = 原始选项序号（0 = +2 … 3 = −2）。图片题时是图下的文字标签（与图同一语义）。
   final List<TsText> options;
 
-  /// 仅 P1..P3：`p1` | `p2` | `p3` → `assets/tailsonality/quiz_<group>_<i>.webp`（素材未到，Story 2.3 渲染占位）。
+  /// 仅 P1..P3：`p1` | `p2` | `p3` → `assets/tailsonality/quiz_<group>_<i>.webp`（已入库，缺失时 Story 2.3 回落占位）。
   final String? imageGroup;
 }
 

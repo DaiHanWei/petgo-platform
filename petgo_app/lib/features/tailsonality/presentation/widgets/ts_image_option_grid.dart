@@ -4,8 +4,8 @@ import '../../../../core/theme/colors.dart';
 
 /// 图片题 2×2 网格（V1.3.2 Story 2.3 · AC3.5）：**每格 = 图（4:3）+ 下方文字标签**，同一可点区域（PRD §3.2）。
 ///
-/// 图路径 `assets/tailsonality/quiz_<group>_<i>.webp`。**素材未入库**（D-21）：图缺失时回落代码绘制的占位
-/// （浅紫底 + 该组图标），文字标签照常显示，答题不受影响；素材到货同名放入即生效，不改代码。
+/// 图路径 `assets/tailsonality/quiz_<group>_<i>.webp`（12 张已入库，2026-10-05）。图缺失时仍回落代码绘制的占位
+/// （浅紫底 + 该组图标），文字标签照常显示，答题不受影响；换图同名覆盖即生效，不改代码。
 class TsImageOptionGrid extends StatelessWidget {
   const TsImageOptionGrid({
     super.key,
