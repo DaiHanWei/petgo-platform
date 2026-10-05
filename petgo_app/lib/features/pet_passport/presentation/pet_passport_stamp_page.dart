@@ -7,9 +7,9 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../place/presentation/place_detail_page.dart';
-import '../../place/presentation/widgets/place_stamp_view.dart';
 import '../data/pet_passport_repository.dart';
 import '../domain/pet_passport.dart';
+import 'passport_layout.dart';
 import 'passport_page_face.dart';
 
 /// B5 章详情 / B6 场所不可用变体（V1.3.2 batch-a Story 1.3 · AC3 / AC4）。**独立页，非抽屉**。
@@ -62,25 +62,18 @@ class PetPassportStampPage extends ConsumerWidget {
     final s = p.stamps[index];
     final date = s.firstVisitDate == null ? '' : formatDayMonthYear(context, s.firstVisitDate!);
     return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
       children: [
-        Center(
-          child: SizedBox(
-            width: 180,
-            height: 170,
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                // 与格子**同一张图等比放大**，不是另一套资产。
-                PlaceStampView(placeType: s.placeType, imageUrl: s.stampImageUrl, size: 160),
-                if (s.visitCount >= 2)
-                  Positioned(right: 0, top: 0, child: PassportVisitBadge(count: s.visitCount)),
-              ],
-            ),
-          ),
+        // 2026-10-06 产品：上半部分与护照单章页同一张护照本（B2 的脸），页脚「Halaman i」；水印规则同护照页。
+        PassportBook(
+          key: const ValueKey('passportStampBook'),
+          petName: p.petName,
+          passportNo: p.passportNo,
+          watermarked: !p.currentVersionUnlocked,
+          footer: PassportBookFooter(label: l10n.passportPageLabel(index + 1), bold: false, showArrows: false),
+          content: PassportPageFace(stamp: s, pageIndex: index),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         Text(s.placeName,
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.ink)),
@@ -90,9 +83,6 @@ class PetPassportStampPage extends ConsumerWidget {
         const SizedBox(height: 2),
         Text(l10n.passportStampVisits(s.visitCount),
             textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: AppColors.ink2)),
-        const SizedBox(height: 20),
-        // 所在内页局部：与 B2 同一版心的缩略页 +「Halaman {i}」。
-        Center(child: PassportPageFace(stamp: s, pageIndex: index, compact: true)),
         const SizedBox(height: 20),
         if (s.available) ...[
           if (s.addressText != null)

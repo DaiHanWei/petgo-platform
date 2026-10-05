@@ -155,7 +155,7 @@ void main() {
 
       expect(find.text('Jl. A 1'), findsOneWidget);
       expect(find.text('Halaman 1'), findsOneWidget);
-      expect(find.byKey(const ValueKey('passportPageFaceCompact')), findsOneWidget);
+      expect(find.byKey(const ValueKey('passportStampBook')), findsOneWidget);
       expect(find.byKey(const ValueKey('passportStampUnavailable')), findsNothing);
 
       await tester.tap(find.byKey(const ValueKey('passportSeePlace')));

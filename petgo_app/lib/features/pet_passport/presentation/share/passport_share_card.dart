@@ -15,6 +15,7 @@ import '../../data/passport_share_reward_repository.dart';
 import '../../domain/passport_share_grid.dart';
 import '../../domain/passport_snapshot.dart';
 import '../../domain/pet_passport.dart';
+import '../passport_layout.dart';
 import '../passport_page_face.dart';
 import '../../../keepsake/presentation/keepsake_card_style.dart';
 
@@ -59,14 +60,17 @@ class PassportShareCard extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final m = ShareCardMetrics(canvas);
     final u = m.u;
+    // 2026-10-06 产品：整张卡底色用护照本纸色，主体段铺护照本纸纹（与护照页 / 九宫格同一张底图）。
     return ShareCardSkeleton(
       canvas: canvas,
-      color: Colors.white,
+      color: PassportInk.paper,
       qrData: petDownloadUrl(),
       mainAreaKey: const ValueKey('passportShareCardMain'),
       infoAreaKey: const ValueKey('passportShareCardInfo'),
-      main: ColoredBox(
-        color: AppColors.cream2,
+      main: DecoratedBox(
+        decoration: const BoxDecoration(
+          image: DecorationImage(image: AssetImage('assets/passport_book/book_bg.webp'), fit: BoxFit.cover),
+        ),
         child: Padding(
           padding: EdgeInsets.fromLTRB(m.pad, m.pad, m.pad, m.pad * 0.6),
           child: Column(
@@ -75,7 +79,7 @@ class PassportShareCard extends StatelessWidget {
               Text(data.petName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: u * 0.06, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                  style: passportRubik(u * 0.06, FontWeight.w700, PassportInk.dark)),
               SizedBox(height: u * 0.008),
               // 12 位护照号：单独一行、等宽数字；放不下时整体缩小而不是截断。
               Align(
@@ -85,11 +89,8 @@ class PassportShareCard extends StatelessWidget {
                   child: Text(data.passportNo,
                       key: const ValueKey('passportShareCardNo'),
                       softWrap: false,
-                      style: TextStyle(
-                          fontSize: u * 0.045,
-                          letterSpacing: u * 0.004,
-                          color: AppColors.ink2,
-                          fontFeatures: const [FontFeature.tabularFigures()])),
+                      style: passportRubik(u * 0.045, FontWeight.w400, PassportInk.dark).copyWith(
+                          letterSpacing: u * 0.004, fontFeatures: const [FontFeature.tabularFigures()])),
                 ),
               ),
               SizedBox(height: m.pad * 0.6),
@@ -109,7 +110,7 @@ class PassportShareCard extends StatelessWidget {
               key: const ValueKey('passportShareCardInfoTitle'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: u * 0.058, fontWeight: FontWeight.w800, color: AppColors.ink),
+              style: passportRubik(u * 0.058, FontWeight.w700, PassportInk.dark),
             ),
             SizedBox(height: u * 0.01),
             FittedBox(
@@ -117,11 +118,8 @@ class PassportShareCard extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(data.passportNo,
                   softWrap: false,
-                  style: TextStyle(
-                      fontSize: u * 0.044,
-                      letterSpacing: u * 0.003,
-                      color: AppColors.ink2,
-                      fontFeatures: const [FontFeature.tabularFigures()])),
+                  style: passportRubik(u * 0.044, FontWeight.w400, PassportInk.footer).copyWith(
+                      letterSpacing: u * 0.003, fontFeatures: const [FontFeature.tabularFigures()])),
             ),
           ],
         ),
