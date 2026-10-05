@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../shared/card_render/card_canvas.dart';
 import '../../../shared/card_render/card_watermark.dart';
 import '../../keepsake/presentation/keepsake_card_style.dart';
+import '../../place/domain/place_summary.dart';
+import 'default_stamp_assets.dart';
 
 /// 护照本页面版式（2026-10-06 按设计稿 `stamp-place` 重做：B1 空态 / B2 单章 / B2b 纵览三种状态共用）。
 ///
@@ -19,6 +21,20 @@ const Rect kPassportBookContentRect = Rect.fromLTWH(0, 150, 828, 1110);
 
 /// 护照本的水印画布（与画布同尺寸、圆角与底图一致；水印层按它裁剪）。
 const CardCanvas kPetPassportPageCanvas = CardCanvas(size: kPassportBookSize, radius: 40);
+
+/// 护照本底图路径（58KB WebP，解码要几百毫秒）。
+const String kPassportBookBg = 'assets/passport_book/book_bg.webp';
+
+/// 提前把护照本底图解码进图片缓存（2026-10-06 动效验收：不预热时内容先出在白底上，底图约 0.7s 后才「啪」地出现）。
+/// 在可能马上进护照本的页面调用（场所详情 → 打卡成功页、Know Your Pet → 宠物足迹）；重复调用无副作用。
+void precachePassportBook(BuildContext context) {
+  precacheImage(const AssetImage(kPassportBookBg), context, onError: (_, _) {});
+  // 7 款按类型的默认章也一起预热：否则章面先闪一下占位图标、约 0.3s 后才换成真章图。
+  for (final t in PlaceType.values) {
+    final asset = defaultStampAssetFor(t);
+    if (asset != null) precacheImage(AssetImage(asset), context, onError: (_, _) {});
+  }
+}
 
 /// 设计稿字色：正文深棕 / 页脚棕 / 日期浅棕。
 abstract final class PassportInk {
@@ -93,7 +109,7 @@ class PassportBook extends StatelessWidget {
           height: kPassportBookSize.height,
           child: Stack(
             children: [
-              Positioned.fill(child: Image.asset('assets/passport_book/book_bg.webp', fit: BoxFit.fill)),
+              Positioned.fill(child: Image.asset(kPassportBookBg, fit: BoxFit.fill, gaplessPlayback: true)),
               // ---- 页眉 ----
               Positioned(
                 left: 68,

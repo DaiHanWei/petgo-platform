@@ -10,6 +10,7 @@ import '../../content/domain/publish_checkin_place.dart';
 import '../../content/presentation/publish_compose_page.dart';
 import '../../pet_passport/data/pet_passport_repository.dart';
 import '../../pet_passport/domain/new_stamp_args.dart';
+import '../../pet_passport/presentation/passport_layout.dart';
 import '../../pet_passport/presentation/pet_passport_stamp_page.dart';
 import '../../profile/presentation/pet_insights_page.dart';
 import '../domain/place_checkin_result.dart';
@@ -55,6 +56,12 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
   PlaceCheckinSuccessArgs get args => widget.args;
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    precachePassportBook(context);
+  }
+
+  @override
   void initState() {
     super.initState();
     // 刚盖的章要出现在护照里：进页即重取护照（章详情块读它；取到前 / 取不到用简版章面兜底）。
@@ -67,8 +74,12 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final r = args.result;
-    final passport = ref.watch(petPassportProvider).asData?.value;
+    final passportAsync = ref.watch(petPassportProvider);
+    final passport = passportAsync.asData?.value;
     final stampIndex = passport?.stamps.indexWhere((s) => s.placeToken == r.placeToken) ?? -1;
+    // 护照还在取（进页即重取）→ 先放空白护照本占位；只有真的取不到 / 找不到这枚章才退到简版章面。
+    // （2026-10-06 动效验收：原先加载期间先闪约 0.8s 简版章面再换成护照本。）
+    final passportPending = stampIndex < 0 && (passportAsync.isLoading || passportAsync.isRefreshing);
     final date = r.visitDate == null ? null : formatDayMonthYear(context, r.visitDate!);
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -168,18 +179,30 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.mint),
             ),
             const SizedBox(height: 16),
-            if (passport != null && stampIndex >= 0)
-              TweenAnimationBuilder<double>(
-                key: const ValueKey('placeCheckinStampDetail'),
-                tween: Tween(begin: 0, end: 1),
+            if ((passport != null && stampIndex >= 0) || passportPending)
+              // 空白护照本 → 有内容的那页：底图不动，只让新内容淡入（旧的占位不淡出，避免中间整页发白一帧）。
+              AnimatedSwitcher(
                 duration: PlaceCheckinSuccessPage.stampAnimation,
-                curve: Curves.easeOut,
-                builder: (context, t, child) => Opacity(
-                  opacity: t,
-                  child: Transform.scale(scale: 0.96 + 0.04 * t, child: child),
+                switchInCurve: Curves.easeOut,
+                layoutBuilder: (current, previous) => Stack(
+                  alignment: Alignment.topCenter,
+                  children: [...previous, ?current],
                 ),
-                // 单章页不叠水印（2026-10-06 产品：水印只在纵览）。
-                child: PassportStampDetail(passport: passport, index: stampIndex, showSeePlace: false),
+                transitionBuilder: (child, anim) => child.key == const ValueKey('placeCheckinStampDetail')
+                    ? FadeTransition(opacity: anim, child: child)
+                    : child,
+                child: (passport != null && stampIndex >= 0)
+                    ? KeyedSubtree(
+                        key: const ValueKey('placeCheckinStampDetail'),
+                        // 单章页不叠水印（2026-10-06 产品：水印只在纵览）。
+                        child: PassportStampDetail(passport: passport, index: stampIndex, showSeePlace: false),
+                      )
+                    : PassportBook(
+                        key: const ValueKey('placeCheckinBookPlaceholder'),
+                        petName: args.petName,
+                        passportNo: r.passportNo ?? '',
+                        content: const SizedBox.shrink(),
+                      ),
               )
             else ...[
               const SizedBox(height: 12),

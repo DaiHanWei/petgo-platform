@@ -25,6 +25,7 @@ import '../../media/domain/media_upload_use_case.dart';
 import '../../profile/domain/card_link.dart';
 import '../../profile/domain/share_service.dart';
 import '../data/place_repository.dart';
+import '../../pet_passport/presentation/passport_layout.dart';
 import '../domain/place_comment.dart';
 import '../domain/place_detail.dart';
 import 'place_checkin_button.dart';
@@ -112,6 +113,8 @@ class PlaceDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 打卡成功页正文是护照本：在场所详情就把底图解码好，成功页入场时不再白底闪一下。
+    precachePassportBook(context);
     // 🔴 埋点包一层有状态壳：本页是 ConsumerWidget，build 会随定位 / 详情数据到达重跑好几次，
     // 直接在 build 里报等于一次浏览报三四条。壳子始终在同一位置，initState 只走一次。
     return _PlaceDetailViewedOnce(

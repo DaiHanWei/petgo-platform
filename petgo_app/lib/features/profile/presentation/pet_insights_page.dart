@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:go_router/go_router.dart';
 
+import '../../pet_passport/presentation/passport_layout.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/app_toast.dart';
@@ -203,6 +205,7 @@ class _PetInsightsPageState extends ConsumerState<PetInsightsPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    precachePassportBook(context); // 进宠物足迹时底图已就绪
     // 物种只用来决定年龄卡灰不灰。取不到档案（加载中/失败）时按「不是猫狗」保守处理 ——
     // 让一个算不出结果的入口可点，比它暂时灰着更糟。
     final petType = ref.watch(petProfileProvider).asData?.value?.petType;
