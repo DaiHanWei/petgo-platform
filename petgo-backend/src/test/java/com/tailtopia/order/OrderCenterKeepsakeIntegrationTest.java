@@ -42,8 +42,15 @@ class OrderCenterKeepsakeIntegrationTest extends ApiIntegrationTest {
                                                 created_at, paid_at)
                 VALUES (?, ?, ?, ?, 5000, 'PAWCOIN', ?, ?::timestamptz,
                         CASE WHEN ? IN ('PAID','DUPLICATE_PAID','ORPHAN_PAID') THEN ?::timestamptz END)""",
-                "kp" + SEQ.incrementAndGet() + "x".repeat(20), sku, 900000L + SEQ.incrementAndGet(), userId, status,
+                // SEQ 以 nanoTime 起步（十几位），补齐到列宽 32 而不是固定拼 20 位
+                ("kp" + SEQ.incrementAndGet() + "x".repeat(32)).substring(0, 32), sku, 900000L + SEQ.incrementAndGet(), userId, status,
                 createdAt, status, createdAt);
+    }
+
+    private String displayNoOf(long userId, String sku, String prefix) {
+        return jdbc.queryForObject("SELECT id, created_at FROM keepsake_purchases WHERE user_id = ? AND sku = ?",
+                (rs, i) -> com.tailtopia.order.dto.OrderDisplayNo.of(prefix, rs.getLong("id"),
+                        rs.getTimestamp("created_at").toInstant()), userId, sku);
     }
 
     @Test
@@ -102,15 +109,22 @@ class OrderCenterKeepsakeIntegrationTest extends ApiIntegrationTest {
 
     @Test
     void adminExceptionPageNeedsPaymentViewAndListsOnlyExceptions() throws Exception {
+        // 两个账号都带 ROLE_ADMIN（后台链路门槛），403 才是由权限码本身决定的
+        // 共享库里可能有别的用例留下的异常行：只断言本例两行，且时刻取「此刻」保证落在第一页（按到账时间倒序）
         User u = newUser();
-        purchase(u.getId(), "BOARDING_PASS", "ORPHAN_PAID", "2026-09-30T08:00:00Z");
-        purchase(u.getId(), "TAILSONALITY", "PAID", "2026-09-30T08:00:00Z");
+        String at = java.time.Instant.now().toString();
+        purchase(u.getId(), "BOARDING_PASS", "ORPHAN_PAID", at);
+        purchase(u.getId(), "TAILSONALITY", "PAID", at);
+        String orphanNo = displayNoOf(u.getId(), "BOARDING_PASS", com.tailtopia.order.dto.OrderDisplayNo.BOARDING_PASS);
+        String paidNo = displayNoOf(u.getId(), "TAILSONALITY", com.tailtopia.order.dto.OrderDisplayNo.TAILSONALITY);
         mvc.perform(get("/admin/payments/keepsake-exceptions").with(user("ops").authorities(
+                        new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"),
                         new org.springframework.security.core.authority.SimpleGrantedAuthority("payment.view"))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("BPASS-")))
-                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("TSL-"))));
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(orphanNo)))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(paidNo))));
         mvc.perform(get("/admin/payments/keepsake-exceptions").with(user("nobody").authorities(
+                        new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"),
                         new org.springframework.security.core.authority.SimpleGrantedAuthority("content.view"))))
                 .andExpect(status().isForbidden());
     }
