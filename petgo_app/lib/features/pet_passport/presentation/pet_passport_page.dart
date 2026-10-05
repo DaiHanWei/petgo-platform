@@ -23,8 +23,9 @@ import 'passport_page_face.dart';
 ///
 /// - **B1 空态**：与 B2 同尺寸同版心的内页块 +「Belum ada cap」；页脚「0 cap」；无 ⊞、无翻页箭头；
 ///   吸底「Cari Tempat」。
-/// - **B2 单章页**（有章时默认）：`PageView` 一页一枚章；页脚「Cap i / 总章数」（分母 = 已集章数，不是上限）。
-/// - **B2b 纵览**：3 列 × 4 行一页、横向分页；空格**不画**未到访占位、不写总数上限；点章回 B2 停在那一页。
+/// - **B2 单章页**（带 focus 进入时默认；否则从纵览点章进入）：`PageView` 一页一枚章；页脚「Cap i / 总章数」（分母 = 已集章数，不是上限）。
+/// - **B2b 纵览**（有章时默认，2026-10-06）：3 列 × 3 行一页、横向分页；空格画空虚线框（设计稿），不写总数上限、
+///   不暗示未到访场所；点章回 B2 停在那一页。
 ///
 /// V1.3.2 Story 3.4：**只有 B2b 纵览**吸底出「Buka versi ini · Rp{价}」（当前版本未买）/ 禁用态「Versi ini sudah kebuka」
 /// （已买）；B2 单章页不出任何付费按钮。内页按 `currentVersionUnlocked` 叠水印；AppBar 在有已买版本时多一个「已购版本」入口。
@@ -47,7 +48,8 @@ class PetPassportPage extends ConsumerStatefulWidget {
 const int kPassportGridPageSize = 9;
 
 class _PetPassportPageState extends ConsumerState<PetPassportPage> {
-  bool _grid = false;
+  /// 默认先看纵览（2026-10-06 产品）；带 [PetPassportPage.focus]（如落章页「Lihat Paspor」）时直接停在那枚章的单章页。
+  late bool _grid = widget.focus == null;
   PageController? _single;
   PageController? _gridPages;
   int _index = 0;
@@ -101,6 +103,10 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
       _index = p.indexOfToken(widget.focus);
     }
     _single ??= PageController(initialPage: _index);
+    if (_grid && _gridPages == null) {
+      _gridPage = _index ~/ kPassportGridPageSize;
+      _gridPages = PageController(initialPage: _gridPage);
+    }
   }
 
   void _showGrid() {

@@ -28,7 +28,8 @@ void main() {
   PetPassport passport(List<PassportStamp> stamps) =>
       PetPassport(petName: 'Momo', passportNo: 'TT02P2600128', stamps: stamps);
 
-  Future<void> pump(WidgetTester tester, PetPassport p, {String? focus}) async {
+  /// 原样打开护照页（不改默认视图）。
+  Future<void> pumpRaw(WidgetTester tester, PetPassport p, {String? focus}) async {
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = const Size(400, 1000);
     addTearDown(tester.view.reset);
@@ -52,6 +53,16 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
+  }
+
+  Future<void> pump(WidgetTester tester, PetPassport p, {String? focus}) async {
+    await pumpRaw(tester, p, focus: focus);
+    // 2026-10-06 起有章时默认纵览：沿用原用例口径，先切到单章页（纵览相关用例再自行切回）。
+    final toSingle = find.byKey(const ValueKey('passportToggleSingle'));
+    if (toSingle.evaluate().isNotEmpty) {
+      await tester.tap(toSingle);
+      await tester.pumpAndSettle();
+    }
   }
 
   testWidgets('B1 空态：无 ⊞、无翻页箭头、「0 Cap」、吸底「Cari Tempat」→ /places', (tester) async {
@@ -91,6 +102,17 @@ void main() {
   testWidgets('focus 找不到 → 第 1 页', (tester) async {
     await pump(tester, passport([stamp(0), stamp(1)]), focus: 'nope');
     expect(find.text('Cap 1/2'), findsOneWidget);
+  });
+
+  testWidgets('2026-10-06：有章时默认进纵览；带 focus（落章页「Lihat Paspor」）进入则停在该章单章页', (tester) async {
+    final p = passport([for (var i = 0; i < 3; i++) stamp(i)]);
+    await pumpRaw(tester, p);
+    expect(find.byKey(const ValueKey('passportGridPager')), findsOneWidget, reason: '默认纵览');
+    expect(find.byKey(const ValueKey('passportSinglePager')), findsNothing);
+
+    await pumpRaw(tester, p, focus: p.stamps[2].placeToken);
+    expect(find.byKey(const ValueKey('passportSinglePager')), findsOneWidget, reason: '带 focus → 单章');
+    expect(find.text('Cap 3/3'), findsOneWidget);
   });
 
   testWidgets('B2b 纵览（2026-10-06 设计稿）：顶部「N Cap」、3×3 九格一页、页脚「Halaman i」；点章回单章并停在那一页', (tester) async {

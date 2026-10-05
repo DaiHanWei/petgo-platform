@@ -140,6 +140,12 @@ void main() {
         ),
       ));
       await tester.pumpAndSettle();
+      // 2026-10-06 起有章时默认纵览：沿用原用例口径，先切到单章页（纵览相关用例再自行切回）。
+      final toSingle = find.byKey(const ValueKey('passportToggleSingle'));
+      if (toSingle.evaluate().isNotEmpty) {
+        await tester.tap(toSingle);
+        await tester.pumpAndSettle();
+      }
     }
 
     PetPassport live({required bool unlocked, int n = 3}) => PetPassport(

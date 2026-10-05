@@ -88,6 +88,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('go')));
     await tester.pumpAndSettle();
+    // 2026-10-06 起有章时默认纵览：沿用原用例口径，先切到单章页（纵览相关用例再自行切回）。
+    final toSingle = find.byKey(const ValueKey('passportToggleSingle'));
+    if (toSingle.evaluate().isNotEmpty) {
+      await tester.tap(toSingle);
+      await tester.pumpAndSettle();
+    }
     return router;
   }
 
