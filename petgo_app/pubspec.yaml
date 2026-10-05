@@ -175,8 +175,8 @@ flutter:
     # V1.3.2 Story 2.3：Tailsonality 素材（扁平存放 intro_poster / quiz_* / role_* / match_tier*）。
     # 已入库图片题 quiz_p*（12 张）；其余未到，到货后同名放入即生效，缺失时 App 画代码占位。
     - assets/tailsonality/
-    # V1.3.2 Story 5.1：里程碑徽章 `<语义键>.webp`（40 枚 + 全局 `locked`）。已入库 39 枚 + locked，仍缺 `first_health_check`；
-    # 缺失的那枚回落原外观（奖杯 / emoji / 图标），到货后同名放入即生效。
+    # V1.3.2 Story 5.1：里程碑徽章 `<语义键>.webp`（40 枚 + 全局 `locked`）。已入库 40 枚 + locked（齐）；
+    # 文件缺失时各处回落原外观（奖杯 / emoji / 图标），同名覆盖即换图。
     - assets/milestone/
     # 字体许可证。**必须打进包里**（code-review 2026-08-04）：OFL-1.1 §2 要求
     # 「每份分发副本须含版权声明与本许可证」，而 `fonts:` 段只会打包 ttf 本身 ——
