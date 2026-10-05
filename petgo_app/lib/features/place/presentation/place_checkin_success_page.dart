@@ -65,6 +65,9 @@ class PlaceCheckinSuccessPage extends StatelessWidget {
                     key: const ValueKey('placeCheckinViewPassport'),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size.fromHeight(48),
+                      // 1:2 分栏下本按钮只有 ~106dp 宽（360dp 屏），默认左右各 24 的内边距只剩 ~58 放字，
+                      // 「View Passport」被截成「View Pas…」（L2 验收 2026-10-05）。收窄内边距 + 字放不下时等比缩小，不截断。
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
                       foregroundColor: AppColors.mint,
                       side: const BorderSide(color: AppColors.mint),
                     ),
@@ -80,7 +83,10 @@ class PlaceCheckinSuccessPage extends StatelessWidget {
                         stampCount: r.stampCount ?? 1,
                       ),
                     ),
-                    child: Text(l10n.placeCheckinViewPassport, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(l10n.placeCheckinViewPassport, maxLines: 1),
+                    ),
                   ),
                 ),
               ),
@@ -105,7 +111,11 @@ class PlaceCheckinSuccessPage extends StatelessWidget {
                     ),
                   ),
                   icon: const Icon(Icons.photo_camera_outlined, size: 18),
-                  label: Text(l10n.placeCheckinRecordMoment, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  // 同理：窄屏放不下时等比缩小，不截断。
+                  label: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(l10n.placeCheckinRecordMoment, maxLines: 1),
+                  ),
                 ),
               ),
             ),

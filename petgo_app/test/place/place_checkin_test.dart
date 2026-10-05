@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -119,6 +120,31 @@ void main() {
       expect(gw.requested, 1);
       expect(repo.checkInCalls, 0);
       expect(_button(tester).onPressed, isNotNull);
+    });
+
+    // L2 验收 2026-10-05：打卡时经系统框刚授权，详情页的定位态（只在进页时读一次）没更新 → 距离行一直不出现。
+    testWidgets('本次拒绝 → request 授权 → 打卡成功，流程结束后页面重读定位态', (tester) async {
+      final repo = _Repo();
+      final gw = _Gateway(LocationPermissionOutcome.denied, afterRequest: LocationPermissionOutcome.granted);
+      await _pumpDetail(tester, repo: repo, gateway: gw);
+
+      await tester.tap(find.byKey(const ValueKey('placeCheckinButton')));
+      await tester.pumpAndSettle();
+      expect(gw.requested, 1);
+      expect(repo.checkInCalls, 1);
+      // 打卡流程自己读 1 次；页面定位态失效重建再读 1 次。
+      expect(gw.statusReads, 2);
+    });
+
+    testWidgets('已授权直接打卡 → 不额外重读定位态（只在本次刚授权时才失效）', (tester) async {
+      final repo = _Repo();
+      final gw = _Gateway(LocationPermissionOutcome.granted);
+      await _pumpDetail(tester, repo: repo, gateway: gw);
+
+      await tester.tap(find.byKey(const ValueKey('placeCheckinButton')));
+      await tester.pumpAndSettle();
+      expect(repo.checkInCalls, 1);
+      expect(gw.statusReads, 1);
     });
 
     // 待确认 1.2（2026-10-02）：本次拒绝并勾「不再询问」→ 当场弹去设置，不等下一次点击。
@@ -250,6 +276,27 @@ void main() {
       expect(got?.stampCount, 5);
       expect(got?.placeType, PlaceType.cafe);
     });
+
+    // L2 验收 2026-10-05：360dp 屏上英文「View Passport」被截成「View Pas…」。两个按钮的字都必须完整排出（放不下就缩小）。
+    for (final locale in const [Locale('en'), Locale('id')]) {
+      testWidgets('新章底部两按钮：360dp 宽下文字不截断（${locale.languageCode}）', (tester) async {
+        tester.view.physicalSize = const Size(1080, 2400);
+        tester.view.devicePixelRatio = 3;
+        addTearDown(tester.view.reset);
+        await _pumpSuccess(tester, isNew: true, count: 1, locale: locale);
+        for (final key in ['placeCheckinViewPassport', 'placeCheckinRecordMoment']) {
+          final text = find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(Text));
+          final paragraph = tester.renderObject<RenderParagraph>(
+              find.descendant(of: text, matching: find.byType(RichText)));
+          expect(paragraph.didExceedMaxLines, isFalse, reason: '$key 文字被截断');
+          final button = tester.getRect(find.byKey(ValueKey(key)));
+          final label = tester.getRect(text);
+          expect(button.contains(label.topLeft) && button.contains(label.bottomRight - const Offset(0.1, 0.1)), isTrue,
+              reason: '$key 文字超出按钮');
+        }
+        expect(tester.takeException(), isNull);
+      });
+    }
 
     testWidgets('新章（C2）：章面 + 「{pet} dapat cap baru」+「Lihat Paspor」（Story 1.2）', (tester) async {
       await _pumpSuccess(tester, isNew: true, count: 1);
@@ -476,11 +523,12 @@ Future<void> _pumpDetail(
   gateway.statusReads = 0;
 }
 
-Future<void> _pumpSuccess(WidgetTester tester, {required bool isNew, required int count}) async {
+Future<void> _pumpSuccess(WidgetTester tester,
+    {required bool isNew, required int count, Locale locale = const Locale('id')}) async {
   await tester.pumpWidget(MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
-    locale: const Locale('id'),
+    locale: locale,
     home: PlaceCheckinSuccessPage(
       args: PlaceCheckinSuccessArgs(
         petName: 'Momo',

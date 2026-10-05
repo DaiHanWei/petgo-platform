@@ -15,6 +15,7 @@ import '../data/location_service.dart';
 import '../data/place_repository.dart';
 import 'place_checkin_success_page.dart';
 import 'place_comments_controller.dart';
+import 'place_location_controller.dart';
 
 /// 场所详情页的整宽「Check-in」按钮（V1.3.2 batch-a Story 1.1 · AC4）。
 ///
@@ -89,21 +90,27 @@ class _PlaceCheckinButtonState extends ConsumerState<PlaceCheckinButton> {
     final locate = ref.read(checkinCoordinatesProvider);
     final repo = ref.read(placeRepositoryProvider);
     final container = ProviderScope.containerOf(context, listen: false);
+    // 去设置走页面定位态的控制器：它会在回到 App 时重读权限，详情页的距离行随之出现（L2 验收 2026-10-05）。
+    Future<void> openSettings() => container.read(placeLocationProvider.notifier).openSettings();
     // 权限判定与引导弹窗**不进 loading 态**：弹窗开着时按钮转圈，关掉后又得复位，徒增一个中间态。
     var permission = await gateway.status();
     if (permission == LocationPermissionOutcome.permanentlyDenied) {
-      if (mounted) await showLocationForCheckinDialog(context, gateway);
+      if (mounted) await showLocationForCheckinDialog(context, openSettings: openSettings);
       return;
     }
+    // 本次经系统框刚授权：页面定位态还是「未授权」（只在进页时读一次），距离行不会出现。
+    // 打卡流程结束后再失效它 —— 流程中失效会让详情页重建、本按钮被卸载，成功页就推不出去了。
+    var grantedNow = false;
     if (permission == LocationPermissionOutcome.denied) {
       permission = await gateway.request();
       // 本次拒绝时勾了「不再询问」→ 系统框以后再也不会弹，当场引导去设置（待确认 1.2，产品 2026-10-02 定）。
       if (permission == LocationPermissionOutcome.permanentlyDenied) {
-        if (mounted) await showLocationForCheckinDialog(context, gateway);
+        if (mounted) await showLocationForCheckinDialog(context, openSettings: openSettings);
         return;
       }
       // 仍拒绝 → 不打卡，按钮保持可点（AC4.2）。
       if (permission != LocationPermissionOutcome.granted) return;
+      grantedNow = true;
     }
     if (!mounted || _submitting) return;
     setState(() => _submitting = true);
@@ -141,6 +148,7 @@ class _PlaceCheckinButtonState extends ConsumerState<PlaceCheckinButton> {
       if (mounted) showAppToast(context, l10n.placeCheckinFailed);
     } finally {
       if (mounted) setState(() => _submitting = false);
+      if (grantedNow) container.invalidate(placeLocationProvider);
     }
   }
 
@@ -168,8 +176,10 @@ class _PlaceCheckinButtonState extends ConsumerState<PlaceCheckinButton> {
 
 /// 定位被永久拒绝时的引导对话框（AC4.2，样式照 `showMediaPermissionDeniedDialog`）。
 ///
-/// 「Nanti」关闭；「Buka Pengaturan」走 [LocationGateway.openSettings]（复用 `mediaOpenSettings` 文案）。
-Future<void> showLocationForCheckinDialog(BuildContext context, LocationGateway gateway) async {
+/// 「Nanti」关闭；「Buka Pengaturan」走 [openSettings]（复用 `mediaOpenSettings` 文案）——
+/// 调用方传页面定位态控制器的 `openSettings`，回到 App 时会重读权限。
+Future<void> showLocationForCheckinDialog(BuildContext context,
+    {required Future<void> Function() openSettings}) async {
   final l10n = AppLocalizations.of(context);
   await showDialog<void>(
     context: context,
@@ -186,7 +196,7 @@ Future<void> showLocationForCheckinDialog(BuildContext context, LocationGateway 
           key: const ValueKey('placeCheckinOpenSettings'),
           onPressed: () {
             Navigator.of(ctx).pop();
-            gateway.openSettings();
+            openSettings();
           },
           child: Text(l10n.mediaOpenSettings),
         ),
