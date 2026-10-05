@@ -59,10 +59,32 @@ class PetPassportStampPage extends ConsumerWidget {
         onAction: () => context.pop(),
       );
     }
-    final s = p.stamps[index];
-    final date = s.firstVisitDate == null ? '' : formatDayMonthYear(context, s.firstVisitDate!);
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+      children: [PassportStampDetail(passport: p, index: index)],
+    );
+  }
+}
+
+/// 章详情的内容块（V1.3.2 Story 1.3 · 2026-10-06 按产品要求改版）：上半与护照单章页同一张护照本，
+/// 下方地点名 / 首次到访 / 到访次数，再下地址 +「See place」（场所不可用时为灰色说明块）。
+///
+/// B5 章详情页与打卡成功页（Story 1.1，[showSeePlace] = false：成功页本就从场所页进来）共用。
+class PassportStampDetail extends StatelessWidget {
+  const PassportStampDetail({super.key, required this.passport, required this.index, this.showSeePlace = true});
+
+  final PetPassport passport;
+  final int index;
+  final bool showSeePlace;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final p = passport;
+    final s = p.stamps[index];
+    final date = s.firstVisitDate == null ? '' : formatDayMonthYear(context, s.firstVisitDate!);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // 2026-10-06 产品：上半部分与护照单章页同一张护照本（B2 的脸），页脚「Halaman i」；水印规则同护照页。
         PassportBook(
@@ -98,6 +120,7 @@ class PetPassportStampPage extends ConsumerWidget {
                 ),
               ],
             ),
+          if (showSeePlace) ...[
           const SizedBox(height: 16),
           FilledButton(
             key: const ValueKey('passportSeePlace'),
@@ -107,6 +130,7 @@ class PetPassportStampPage extends ConsumerWidget {
                 PlaceDetailPage.routeFor(s.placeToken, from: kPlaceDetailFromPassport)),
             child: Text(l10n.passportSeePlace),
           ),
+          ],
         ] else
           Container(
             key: const ValueKey('passportStampUnavailable'),
@@ -128,7 +152,7 @@ class PetPassportStampPage extends ConsumerWidget {
               ],
             ),
           ),
-      ],
+            ],
     );
   }
 }

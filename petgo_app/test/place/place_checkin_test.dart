@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/pet_passport/domain/pet_passport.dart';
+import 'package:tailtopia/features/pet_passport/data/pet_passport_repository.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/router/route_intent.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
@@ -232,6 +234,32 @@ void main() {
   });
 
   group('成功页（AC5）', () {
+    testWidgets('2026-10-06：护照里有这枚章 → 正文为 1.3 章详情（护照本 + 地点信息），不出「See place」', (tester) async {
+      final passport = PetPassport.fromJson({
+        'petName': 'Momo',
+        'passportNo': 'TT02P2600128',
+        'currentVersionUnlocked': true,
+        'stamps': [
+          {
+            'placeToken': 'p' * 32,
+            'placeName': 'Kopi Kucing',
+            'placeType': 'CAFE',
+            'placeStatus': 'ACTIVE',
+            'visitCount': 1,
+            'firstVisitDate': '2026-09-30',
+            'addressText': 'Jl. Kemang 1',
+          },
+        ],
+      });
+      await _pumpSuccess(tester, isNew: true, count: 1, passport: passport);
+      expect(find.byKey(const ValueKey('placeCheckinSuccessTitle')), findsOneWidget);
+      expect(find.byKey(const ValueKey('passportStampBook')), findsOneWidget);
+      expect(find.byKey(const ValueKey('passportStampAddress')), findsOneWidget);
+      expect(find.byKey(const ValueKey('passportSeePlace')), findsNothing, reason: '成功页本就从场所页进来');
+      expect(find.byKey(const ValueKey('placeCheckinNewStamp')), findsNothing, reason: '简版章面只做兜底');
+      expect(find.byKey(const ValueKey('placeCheckinViewPassport')), findsOneWidget);
+    });
+
     testWidgets('Story 1.2 / 1.3：点「Lihat Paspor」→ 先进 B4 整页落章（带新章参数）', (tester) async {
       NewStampArgs? got;
       final router = GoRouter(routes: [
@@ -262,11 +290,14 @@ void main() {
         ),
       ]);
       addTearDown(router.dispose);
-      await tester.pumpWidget(MaterialApp.router(
-        routerConfig: router,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        locale: const Locale('id'),
+      await tester.pumpWidget(ProviderScope(
+        overrides: [petPassportProvider.overrideWith((ref) async => throw StateError('offline'))],
+        child: MaterialApp.router(
+          routerConfig: router,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('id'),
+        ),
       ));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('placeCheckinViewPassport')));
@@ -523,9 +554,15 @@ Future<void> _pumpDetail(
   gateway.statusReads = 0;
 }
 
+/// [passport] 为 null：护照取不到 → 成功页走简版章面兜底（C2 / C2b 原样）；非 null：正文为 1.3 章详情块。
 Future<void> _pumpSuccess(WidgetTester tester,
-    {required bool isNew, required int count, Locale locale = const Locale('id')}) async {
-  await tester.pumpWidget(MaterialApp(
+    {required bool isNew, required int count, Locale locale = const Locale('id'), PetPassport? passport}) async {
+  await tester.pumpWidget(ProviderScope(
+    overrides: [
+      petPassportProvider.overrideWith(
+          (ref) async => passport ?? (throw StateError('offline'))),
+    ],
+    child: MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     locale: locale,
@@ -542,6 +579,7 @@ Future<void> _pumpSuccess(WidgetTester tester,
           visitCount: count,
         ),
       ),
+    ),
     ),
   ));
   await tester.pumpAndSettle();

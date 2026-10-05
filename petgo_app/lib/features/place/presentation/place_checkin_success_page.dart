@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
@@ -7,7 +8,9 @@ import '../../../shared/utils/date_format.dart';
 import '../../content/domain/content_type.dart';
 import '../../content/domain/publish_checkin_place.dart';
 import '../../content/presentation/publish_compose_page.dart';
+import '../../pet_passport/data/pet_passport_repository.dart';
 import '../../pet_passport/domain/new_stamp_args.dart';
+import '../../pet_passport/presentation/pet_passport_stamp_page.dart';
 import '../../profile/presentation/pet_insights_page.dart';
 import '../domain/place_checkin_result.dart';
 import 'widgets/place_stamp_view.dart';
@@ -31,7 +34,7 @@ class PlaceCheckinSuccessArgs {
 /// - 「Lihat Paspor」（Story 1.2 / 1.3）：**仅新章（C2）**出，次级样式 → B4 整页落章 → 护照页停在新章；C2b 不出；
 /// - 「Rekam Momen Ini」（Story 1.5）：主 CTA，C2 更宽（flex 2:1）、C2b 整宽 → 发帖页（Diary 预选 + 打卡关联）。
 /// 动效有静态兜底：动画结束态就是可读的章面 + 文案。
-class PlaceCheckinSuccessPage extends StatelessWidget {
+class PlaceCheckinSuccessPage extends ConsumerStatefulWidget {
   const PlaceCheckinSuccessPage({super.key, required this.args});
 
   final PlaceCheckinSuccessArgs args;
@@ -45,9 +48,27 @@ class PlaceCheckinSuccessPage extends StatelessWidget {
   static const Duration stampAnimation = Duration(milliseconds: 360);
 
   @override
+  ConsumerState<PlaceCheckinSuccessPage> createState() => _PlaceCheckinSuccessPageState();
+}
+
+class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPage> {
+  PlaceCheckinSuccessArgs get args => widget.args;
+
+  @override
+  void initState() {
+    super.initState();
+    // 刚盖的章要出现在护照里：进页即重取护照（章详情块读它；取到前 / 取不到用简版章面兜底）。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.invalidate(petPassportProvider);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final r = args.result;
+    final passport = ref.watch(petPassportProvider).asData?.value;
+    final stampIndex = passport?.stamps.indexWhere((s) => s.placeToken == r.placeToken) ?? -1;
     final date = r.visitDate == null ? null : formatDayMonthYear(context, r.visitDate!);
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -127,39 +148,47 @@ class PlaceCheckinSuccessPage extends StatelessWidget {
         scrolledUnderElevation: 0,
         title: Text(l10n.placeCheckinButton),
       ),
+      // 2026-10-06 产品：成功页正文 = 1.3 的章详情（护照本单章页 + 地点信息 + 地址），顶部保留成功提示；
+      // 「See place」不出（本页就是从场所页进来的）。护照还没取到 / 找不到这枚章 → 简版章面兜底（C2 / C2b 原样）。
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(28, 24, 28, 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                r.isNewStamp
-                    ? _NewStamp(result: r)
-                    : _RepeatStamp(result: r),
-                const SizedBox(height: 22),
-                Text(l10n.placeCheckinSuccessTitle,
-                    key: const ValueKey('placeCheckinSuccessTitle'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 21, fontWeight: FontWeight.w700, color: AppColors.ink, height: 1.3)),
-                const SizedBox(height: 8),
-                Text(date == null ? r.placeName : l10n.placeCheckinSuccessPlaceDate(r.placeName, date),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.ink2)),
-                const SizedBox(height: 4),
-                Text(
-                  r.isNewStamp
-                      ? l10n.placeCheckinNewStamp(args.petName)
-                      : l10n.placeCheckinRepeatStamp(r.placeName, r.visitCount),
-                  key: const ValueKey('placeCheckinStampLine'),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.mint),
-                ),
-              ],
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+          children: [
+            Text(l10n.placeCheckinSuccessTitle,
+                key: const ValueKey('placeCheckinSuccessTitle'),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: AppColors.ink, height: 1.3)),
+            const SizedBox(height: 4),
+            Text(
+              r.isNewStamp
+                  ? l10n.placeCheckinNewStamp(args.petName)
+                  : l10n.placeCheckinRepeatStamp(r.placeName, r.visitCount),
+              key: const ValueKey('placeCheckinStampLine'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.mint),
             ),
-          ),
+            const SizedBox(height: 16),
+            if (passport != null && stampIndex >= 0)
+              TweenAnimationBuilder<double>(
+                key: const ValueKey('placeCheckinStampDetail'),
+                tween: Tween(begin: 0, end: 1),
+                duration: PlaceCheckinSuccessPage.stampAnimation,
+                curve: Curves.easeOut,
+                builder: (context, t, child) => Opacity(
+                  opacity: t,
+                  child: Transform.scale(scale: 0.96 + 0.04 * t, child: child),
+                ),
+                child: PassportStampDetail(passport: passport, index: stampIndex, showSeePlace: false),
+              )
+            else ...[
+              const SizedBox(height: 12),
+              Center(child: r.isNewStamp ? _NewStamp(result: r) : _RepeatStamp(result: r)),
+              const SizedBox(height: 16),
+              Text(date == null ? r.placeName : l10n.placeCheckinSuccessPlaceDate(r.placeName, date),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13, height: 1.6, color: AppColors.ink2)),
+            ],
+          ],
         ),
       ),
     );
