@@ -184,7 +184,7 @@ public class AdminPlaceService {
     /**
      * 上传 / 替换场所专属章（V1.3.2 Story 1.4 · AB-18B · AD-18）。
      *
-     * <p>🔴 <b>先校验再上传</b>（{@link PlaceStampImageValidator}：PNG / 512×512 / ≤300KB / 透明通道，只这四项）——
+     * <p>🔴 <b>先校验再上传</b>（{@link PlaceStampImageValidator}：PNG / 512×512 / ≤200KB / 透明通道，只这四项）——
      * 不合规的文件不产生 OSS 对象。通过后复用 {@code images.upload(file, "place-stamps/<id>")}（对象级 public-read），
      * 只存 objectKey。替换 = 覆盖字段；旧 OSS 对象不删（App 可能仍缓存旧 URL，孤儿对象可接受）。
      * MERGED 场所 422（与「已合并的场所不可编辑」同口径）；DELISTED 照常可操作。

@@ -153,9 +153,9 @@ class AdminPlaceStampIntegrationTest extends ApiIntegrationTest {
         assertThat(upload(ops, p.getId(), "not a png".getBytes(), 422)).contains("只支持 PNG");
         assertThat(upload(ops, p.getId(), rgb(511, 512), 422)).contains("511×512");
         assertThat(upload(ops, p.getId(), rgb(512, 512), 422)).contains("透明");
-        byte[] big = new byte[301 * 1024];
+        byte[] big = new byte[201 * 1024];
         System.arraycopy(rgba512(), 0, big, 0, 8);
-        assertThat(upload(ops, p.getId(), big, 422)).contains("300KB");
+        assertThat(upload(ops, p.getId(), big, 422)).contains("200KB");
         verify(images, never()).upload(any(), anyString());
         assertThat(places.findById(p.getId()).orElseThrow().getStampObjectKey()).isNull();
     }

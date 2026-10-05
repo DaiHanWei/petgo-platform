@@ -302,8 +302,9 @@ class TimelineItemTile extends StatelessWidget {
       container: true,
       child: Container(
         key: const ValueKey('timelineTailsonalityBanner'),
-        // 2026-10-06 产品：整条高度收 10%（79 → 71：上下内边距 12 → 11，缩略 40×53 → 35×47，仍约 3:4）。
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        // 2026-10-06 产品：整条高度收 10%（79 → 71），且内容（缩略 + 文字）在卡内占比要大：
+        // 上下内边距 12 → 6，缩略 40×53 → 43×57（≈3:4），标题 13 → 15、副行 11.5 → 13；总高仍 71。
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
           color: AppColors.tailsonalityBannerBg,
           border: Border.all(color: AppColors.violet100),
@@ -314,8 +315,8 @@ class TimelineItemTile extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(9),
               child: SizedBox(
-                width: 35,
-                height: 47, // ≈3:4 缩略
+                width: 43,
+                height: 57, // ≈3:4 缩略
                 // 角色卡按需下载（不打包，见 TsRemoteArt）；下载中 / 取不到回落占位，不崩。
                 child: TsRemoteArtImage(
                   name: TsRemoteArt.role(letters),
@@ -328,7 +329,7 @@ class TimelineItemTile extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 11),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -338,11 +339,11 @@ class TimelineItemTile extends StatelessWidget {
                       key: const ValueKey('timelineTailsonalityTitle'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink)),
                   if (tested != null) ...[
                     const SizedBox(height: 2),
                     Text(l10n.timelineTailsonalityTestedOn(formatDayMonth(context, tested)),
-                        style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+                        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                   ],
                 ],
               ),

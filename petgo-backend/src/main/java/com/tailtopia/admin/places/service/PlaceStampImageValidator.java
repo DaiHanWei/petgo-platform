@@ -7,7 +7,7 @@ import java.nio.charset.StandardCharsets;
 /**
  * 场所专属章上传校验（V1.3.2 Story 1.4 · AB-18B · 决策 D-10 · AD-18）。纯函数，不碰网络。
  *
- * <p>🔴 <b>只做四项</b>：PNG（文件头魔数）/ 512×512 / ≤300KB / 带透明通道。任一不过 → 422，文案给出具体原因与实测值。
+ * <p>🔴 <b>只做四项</b>：PNG（文件头魔数）/ 512×512 / ≤200KB / 带透明通道。任一不过 → 422，文案给出具体原因与实测值。
  * <b>不校验颜色、不校验形状 / 圆形安全区</b>：D-10 作废了 PRD §3.3 与后台 AB-18B 的「单色 + 客户端着色 + 圆形安全区」——
  * 章按原图原色展示，章不一定是圆的。测试里专门放了一张彩色非圆形 RGBA 图证明它能过。
  *
@@ -19,7 +19,7 @@ public final class PlaceStampImageValidator {
     /** 规格：正方形边长。 */
     public static final int SIDE_PX = 512;
     /** 规格：单文件上限（字节）。 */
-    public static final long MAX_BYTES = 300L * 1024;
+    public static final long MAX_BYTES = 200L * 1024;
 
     private static final byte[] PNG_MAGIC = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
 
@@ -37,7 +37,7 @@ public final class PlaceStampImageValidator {
         long actual = Math.max(size, bytes.length);
         if (actual > MAX_BYTES) {
             long kb = (actual + 1023) / 1024;
-            throw AppException.validation("单个文件须 ≤300KB，当前 " + kb + "KB")
+            throw AppException.validation("单个文件须 ≤200KB，当前 " + kb + "KB")
                     .code("admin.err.places.stampTooLarge", kb);
         }
         com.tailtopia.content.domain.ImageSize dim = ImageBytesMeasurer.measure(bytes);

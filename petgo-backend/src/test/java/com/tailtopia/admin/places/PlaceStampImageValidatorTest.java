@@ -16,7 +16,7 @@ import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 
 /**
- * V1.3.2 Story 1.4 · L0：专属章校验只做四项（PNG / 512×512 / ≤300KB / 透明通道），
+ * V1.3.2 Story 1.4 · L0：专属章校验只做四项（PNG / 512×512 / ≤200KB / 透明通道），
  * <b>不校验颜色、不校验形状</b>（D-10）。
  */
 class PlaceStampImageValidatorTest {
@@ -83,10 +83,16 @@ class PlaceStampImageValidatorTest {
     }
 
     @Test
-    void over300KbIsRejected() {
-        byte[] big = png(512, 512, 6, false, 301 * 1024);
+    void over200KbIsRejected() {
+        byte[] big = png(512, 512, 6, false, 201 * 1024);
         rejected(big, "admin.err.places.stampTooLarge");
         assertThatThrownBy(() -> PlaceStampImageValidator.validate(big, big.length)).hasMessageContaining("KB");
+    }
+
+    @Test
+    void exactly200KbPasses() {
+        byte[] edge = png(512, 512, 6, false, 200 * 1024 - 2048);
+        PlaceStampImageValidator.validate(edge, 200L * 1024);
     }
 
     @Test

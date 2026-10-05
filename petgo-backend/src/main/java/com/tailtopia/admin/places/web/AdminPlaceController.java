@@ -216,7 +216,7 @@ public class AdminPlaceController {
 
     /**
      * 上传 / 替换场所专属章（V1.3.2 Story 1.4 · AB-18B）：multipart {@code file}。校验只做四项（PNG / 512×512 /
-     * ≤300KB / 透明通道），不过 → 422 行内错误；成功走 {@link #afterAction}。同「场所管理」权限码，不新增权限。
+     * ≤200KB / 透明通道），不过 → 422 行内错误；成功走 {@link #afterAction}。同「场所管理」权限码，不新增权限。
      */
     @PostMapping(ROUTE + "/{id:\\d+}/stamp")
     @PreAuthorize(VIEW_AUTH)

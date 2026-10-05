@@ -50,7 +50,7 @@
                 <img th:src="${d.stampUrl}" alt="" data-lightbox loading="lazy"/>
             </div>
             <p class="muted" th:if="${d.stampUrl == null}" th:text="#{admin.v132.places.stamp.default(${d.typeName})}">使用默认章（类型）</p>
-            <p class="hint" th:text="#{admin.v132.places.stamp.spec}">透明底 PNG · 512×512 · ≤300KB</p>
+            <p class="hint" th:text="#{admin.v132.places.stamp.spec}">透明底 PNG · 512×512 · ≤200KB</p>
         </div>
         <div id="places-drawer-stamp-err" class="lst-inline-error" aria-live="polite"></div>
         <div class="pl-stamp-actions" th:if="${d.status.name() != 'MERGED'}">
