@@ -16,9 +16,12 @@ import '../../../l10n/app_localizations.dart';
 ///
 /// ⚠️ **未使用任何字面 emoji**：emoji 无法着色，且老安卓会渲染成豆腐块。
 class HealthRecordIcon {
-  const HealthRecordIcon({required this.icon, required this.color});
+  const HealthRecordIcon({required this.icon, required this.color, this.svgAsset});
 
   final IconData icon;
+
+  /// 专属矢量图标（单色、按 [color] 着色）；非空时日历格子优先用它，[icon] 作为其余场景与兜底。
+  final String? svgAsset;
 
   /// 主色（图标着色 + 浅底 tint 的取色依据）。
   final Color color;
@@ -56,8 +59,11 @@ const HealthRecordIcon kPlaceCheckinCalendarIcon =
     HealthRecordIcon(icon: Icons.place_outlined, color: AppColors.checkinIcon);
 
 /// 日历「只有 Tailsonality 解锁」的整格标记（V1.3.2 Story 3.3）：线性性格图标 + 品牌紫。
-const HealthRecordIcon kTailsonalityCalendarIcon =
-    HealthRecordIcon(icon: Icons.psychology_alt_outlined, color: AppColors.mint600);
+/// 2026-10-06 产品要求重画：倾斜的性格卡 + 卡内爪印 + 右上闪光（呼应角色卡），单色 SVG。
+const HealthRecordIcon kTailsonalityCalendarIcon = HealthRecordIcon(
+    icon: Icons.psychology_alt_outlined,
+    color: AppColors.mint600,
+    svgAsset: 'assets/icons/tailsonality_calendar.svg');
 
 /// 按类型取图标；未知类型（后端新增了前端还不认识的类型）回退到「自定义」，**绝不回退到问诊 🏥**
 /// ——错显医院图标是 FR-84 点名要修的现网缺陷类型。

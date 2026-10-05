@@ -64,12 +64,12 @@ void main() {
     expect(find.text('place /places/pppp?from=post'), findsOneWidget);
   });
 
-  testWidgets('UNAVAILABLE：点击只出「Tempat tidak ditemukan」、不跳转', (tester) async {
+  testWidgets('UNAVAILABLE：点击只出「Tempat yang kamu pilih sudah dihapus」、不跳转', (tester) async {
     await pump(tester, detail(const CheckinPlaceRef(token: 'pppp', name: 'Kopi Kucing', available: false)));
     await tester.tap(find.byKey(const ValueKey('detailCheckinPlaceStrip')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
-    expect(find.text('Tempat tidak ditemukan'), findsOneWidget);
+    expect(find.text('Tempat yang kamu pilih sudah dihapus'), findsOneWidget);
     expect(find.textContaining('place /places'), findsNothing);
     await tester.pumpAndSettle(const Duration(seconds: 5));
   });

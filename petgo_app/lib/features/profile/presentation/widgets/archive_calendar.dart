@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -274,7 +275,10 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
   Widget _markerBox(HealthRecordIcon marker) => Container(
         color: marker.color.withValues(alpha: 0.12),
         alignment: Alignment.center,
-        child: Icon(marker.icon, size: 16, color: marker.color),
+        child: marker.svgAsset == null
+            ? Icon(marker.icon, size: 16, color: marker.color)
+            : SvgPicture.asset(marker.svgAsset!,
+                width: 18, height: 18, colorFilter: ColorFilter.mode(marker.color, BlendMode.srcIn)),
       );
 }
 

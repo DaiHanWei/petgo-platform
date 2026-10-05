@@ -30,6 +30,7 @@ import 'share/result_share_card.dart';
 import 'tailsonality_retake.dart';
 import 'tailsonality_routes.dart';
 import 'tailsonality_unlock_analytics.dart';
+import 'widgets/tailsonality_badge_chip.dart';
 import 'widgets/ts_locked_analysis.dart';
 import 'widgets/ts_match_teaser.dart';
 import 'widgets/ts_result_card.dart';
@@ -331,7 +332,7 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
       // 弹出即记（不论点哪个按钮）。
       unawaited(prefs?.markTailsonalityRetentionShown(r.token));
       setState(() => _retentionDone = true);
-      final unlock = await _showRetentionDialog(petName);
+      final unlock = await _showRetentionSheet(r, petName);
       if (!mounted) return;
       if (unlock == true) {
         await _startUnlock(r, petName);
@@ -345,36 +346,114 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
     }
   }
 
-  Future<bool?> _showRetentionDialog(String petName) {
+  /// 挽留抽屉：贴底、顶部圆角，样式照 B7「买这一版」等付费抽屉（拖拽条 + 标题 + 说明 + 并排双按钮）；
+  /// 头部用「卡缩略 + 宠物名旁的小标预览」直观说明解锁后得到什么。
+  /// 返回 true = 去解锁，false = 再看看（离开），null = 点外部 / 下滑关掉（留在页面）。
+  Future<bool?> _showRetentionSheet(TailsonalityResult r, String petName) {
     final locale = Localizations.localeOf(context);
     const c = kTsRetentionDialog;
-    return showDialog<bool>(
+    final role = kTsRoles[r.letters];
+    return showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        key: const ValueKey('tsRetentionDialog'),
-        title: Text(c.title.of(locale)),
-        content: Text(tsFillPet(c.body.of(locale), petName)),
-        actions: [
-          TextButton(
-            key: const ValueKey('tsRetainLater'),
-            style: TextButton.styleFrom(minimumSize: const Size(64, 44)),
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(c.cancel.of(locale)),
+      backgroundColor: AppColors.card,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          key: const ValueKey('tsRetentionDialog'),
+          padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(9999)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.tailsonalityBannerBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.violet100),
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(width: 56, child: TsResultCard(result: r, watermarked: true)),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(petName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                              ),
+                              const SizedBox(width: 6),
+                              TailsonalityBadgeChip(
+                                  key: const ValueKey('tsRetentionBadgePreview'), letters: r.letters),
+                            ],
+                          ),
+                          if (role != null) ...[
+                            const SizedBox(height: 4),
+                            Text(role.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 13, color: AppColors.ink2)),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(c.title.of(locale),
+                  style: const TextStyle(color: AppColors.ink, fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Text(tsFillPet(c.body.of(locale), petName),
+                  style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.5)),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      key: const ValueKey('tsRetainLater'),
+                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: Text(c.cancel.of(locale)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      key: const ValueKey('tsRetainUnlock'),
+                      style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          backgroundColor: AppColors.mint,
+                          foregroundColor: AppColors.onAccent),
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      child: Text(c.confirm.of(locale)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          FilledButton(
-            key: const ValueKey('tsRetainUnlock'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(64, 44),
-              backgroundColor: AppColors.mint,
-              foregroundColor: AppColors.onAccent,
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(c.confirm.of(locale)),
-          ),
-        ],
+        ),
       ),
     );
   }
+
 }
 
 String _heroPrefix(TailsonalityResult r) => 'tailsonality_result_${r.token}';

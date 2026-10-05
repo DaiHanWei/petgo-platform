@@ -18,7 +18,7 @@ VoidCallback placeCheckinTapFor(BuildContext context, TimelineItem item, {VoidCa
     if (place != null && place.available) {
       context.push(PlaceDetailPage.routeFor(place.token, from: kPlaceDetailFromDiary));
     } else {
-      showAppToast(context, AppLocalizations.of(context).placeUnavailableTitle);
+      showAppToast(context, AppLocalizations.of(context).placeDeletedToast);
     }
   };
 }

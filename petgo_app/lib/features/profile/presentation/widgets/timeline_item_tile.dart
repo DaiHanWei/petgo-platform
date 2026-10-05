@@ -302,7 +302,8 @@ class TimelineItemTile extends StatelessWidget {
       container: true,
       child: Container(
         key: const ValueKey('timelineTailsonalityBanner'),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        // 2026-10-06 产品：整条高度收 10%（79 → 71：上下内边距 12 → 11，缩略 40×53 → 35×47，仍约 3:4）。
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
           color: AppColors.tailsonalityBannerBg,
           border: Border.all(color: AppColors.violet100),
@@ -313,8 +314,8 @@ class TimelineItemTile extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(9),
               child: SizedBox(
-                width: 40,
-                height: 53, // 3:4 缩略
+                width: 35,
+                height: 47, // ≈3:4 缩略
                 // 角色卡按需下载（不打包，见 TsRemoteArt）；下载中 / 取不到回落占位，不崩。
                 child: TsRemoteArtImage(
                   name: TsRemoteArt.role(letters),

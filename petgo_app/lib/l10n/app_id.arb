@@ -2534,5 +2534,7 @@
   "orderUnderReviewNote": "Tim kami lagi cek pembayaran ini. Kalau dobel, dana dikembalikan.",
   "orderViewTailsonality": "Lihat hasil tes",
   "orderViewPassportSnap": "Lihat versi paspor",
-  "orderViewBoardingPass": "Lihat boarding pass"
+  "orderViewBoardingPass": "Lihat boarding pass",
+  "keepsakeShareCta": "Bagikan ke Diary",
+  "placeDeletedToast": "Tempat yang kamu pilih sudah dihapus"
 }

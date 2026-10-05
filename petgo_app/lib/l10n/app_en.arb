@@ -3881,5 +3881,9 @@
   "orderUnderReviewNote": "Our team is checking this payment. If it was charged twice, you'll get a refund.",
   "orderViewTailsonality": "View test result",
   "orderViewPassportSnap": "View passport version",
-  "orderViewBoardingPass": "View boarding pass"
+  "orderViewBoardingPass": "View boarding pass",
+  "keepsakeShareCta": "Share to Diary",
+  "@keepsakeShareCta": {"description": "Keepsake card preview (Tailsonality / match / passport / boarding pass) bottom export button. 2026-10-06 product: renamed from 'Share to Story'; post share card keeps shareCardShareCta."},
+  "placeDeletedToast": "The place you selected has been deleted",
+  "@placeDeletedToast": {"description": "Toast when tapping a place chip / check-in entry whose place was delisted or removed (2026-10-06 product copy)."}
 }

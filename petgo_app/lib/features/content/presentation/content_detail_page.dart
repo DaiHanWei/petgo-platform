@@ -768,7 +768,7 @@ class _DetailCheckinPlaceStrip extends StatelessWidget {
       if (place.available) {
         context.push(PlaceDetailPage.routeFor(place.token, from: kPlaceDetailFromPost));
       } else {
-        showAppToast(context, l10n.placeUnavailableTitle);
+        showAppToast(context, l10n.placeDeletedToast);
       }
     }
 

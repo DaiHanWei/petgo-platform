@@ -290,11 +290,11 @@ void main() {
       expect(find.text('place:${'p' * 32}:diary'), findsOneWidget);
     });
 
-    testWidgets('UNAVAILABLE：点击只提示 Tempat tidak ditemukan、不跳转', (tester) async {
+    testWidgets('UNAVAILABLE：点击只提示 Tempat yang kamu pilih sudah dihapus、不跳转', (tester) async {
       await _pump(tester, TimelinePage(items: [checkin(available: false)]));
       await tester.tap(find.byKey(const ValueKey('timelineCheckinBanner')));
       await tester.pump();
-      expect(find.text('Tempat tidak ditemukan'), findsOneWidget);
+      expect(find.text('Tempat yang kamu pilih sudah dihapus'), findsOneWidget);
       expect(find.textContaining('place:'), findsNothing);
       await tester.pumpAndSettle(const Duration(seconds: 5));
     });
