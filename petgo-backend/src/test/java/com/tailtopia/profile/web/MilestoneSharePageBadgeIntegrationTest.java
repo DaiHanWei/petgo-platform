@@ -49,7 +49,8 @@ class MilestoneSharePageBadgeIntegrationTest extends ApiIntegrationTest {
     @Test
     void oldShareKeepsLevelStringPathAndNoMilestoneAssets() throws Exception {
         String page = html(share("C-S1", "S", "SML", null));
-        assertThat(page).contains("data-levels=\"SML\"").doesNotContain("data-items")
+        // 查属性写法（带 =）：模板脚本注释里同时提到 data-items / data-levels 两个词，光查词会被注释误伤。
+        assertThat(page).contains("data-levels=\"SML\"").doesNotContain("data-items=")
                 .doesNotContain("/milestone/");
         assertThat(page).contains("🏆");
     }
@@ -57,7 +58,7 @@ class MilestoneSharePageBadgeIntegrationTest extends ApiIntegrationTest {
     @Test
     void newShareWithMissingAssetsFallsBackToTrophy() throws Exception {
         String page = html(share("C-S1", "S", "SS", "C-S1,C-S2"));
-        assertThat(page).contains("data-items").doesNotContain("data-levels")
+        assertThat(page).contains("data-items=").doesNotContain("data-levels=")
                 .doesNotContain("/milestone/");
         assertThat(page).contains("<div class=\"badge\">🏆</div>");
     }
