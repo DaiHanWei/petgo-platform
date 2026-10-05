@@ -217,3 +217,4 @@ App（修改）
 ### Change Log
 
 - 2026-09-30：Story 3.3 实现（佩戴表 + 首次解锁自动佩戴 + 切换 / 卸下接口 + 结果 DTO `equipped`；档案与公开卡小标；Diary 源⑦ + 日历维 + 日详情；App 列表行内切换、小标胶囊、Diary 条目）；复审 1 条已修；L0 绿，置 review。
+- 2026-10-05：**L1 / L2 本地验收**（库 `petgo_v132a`，模拟器 `petgo_verify`）。L1：`TailsonalityBadge*` / `TimelineTailsonalityTest` / `PublicProfilePetBadgeTest` / 访客投影与禁词扫描 / DTO 契约共 61 例绿（含首次解锁自动佩戴、再解锁不替换、切换、未解锁 422、卸下幂等且不自动戴回、并发至多一行、删档级联）。真接口：未解锁结果佩戴 → 422 `tailsonality-badge-locked`；`/pet-profiles/me` 与游客 `/users/1/pet` 同为 `ENFJ`，访客视图不带该字段（AC4.4）；时间线 / 日历不带 `supports=tailsonality` 无条目与 `hasTailsonality`，带上才有；DELETE 连调两次均 204、小标消失；PawCoin 再解锁第二条（ENFP-L）后小标仍为 ENFJ（不自动替换）。L2：档案卡与公开主页名字旁小标胶囊；Diary 条目（卡图缩略 + 代号角色名 + Tested 日期）点开进结果页；同日条目按时间正序排在当日末尾（既定规则）；日历在有打卡的日子显示打卡图标（优先级），临时把解锁时间挪到无打卡的 10/2 后显示性格图标、日详情含该条目（已改回）；列表「Wearing」→ 卸下弹窗「Remove badge?」→ 全部变「Wear this」、档案卡与公开卡小标消失；再点「Wear this」切到 ENFP，档案卡与公开卡同步变 ENFP。未解锁行为「Not unlocked yet」文字、无按钮。证据截图见本机 `~/Downloads/设计图/L1L2验收/3-3-佩戴小标与Diary条目/`。
