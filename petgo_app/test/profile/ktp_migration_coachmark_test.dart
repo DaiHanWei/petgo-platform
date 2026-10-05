@@ -46,6 +46,23 @@ void main() {
       }
     });
 
+    /// 2026-10-05 本地 L2 验收：四块遮罩只能拼直角孔，卡与描边是 r14 → 孔角露白。
+    /// 现在压暗由一层圆角孔画完，四块只拦点击（透明）。
+    testWidgets('压暗层的孔是 r14 圆角、与高亮描边同框；四块遮罩自身不着色', (tester) async {
+      await _pumpOverlay(tester, const Rect.fromLTWH(100, 200, 120, 60));
+
+      final paint = tester.widget<CustomPaint>(find.byKey(const ValueKey('coachmarkScrimPaint')));
+      final painter = paint.painter! as CoachmarkScrimPainter;
+      expect(painter.radius, CoachmarkOverlay.spotlightRadius);
+      expect(CoachmarkOverlay.spotlightRadius, 14);
+      expect(painter.hole, tester.getRect(find.byKey(const ValueKey('coachmarkSpotlight'))),
+          reason: '孔与描边必须同一个矩形');
+
+      final scrims = find.byKey(const ValueKey('coachmarkScrim'));
+      expect(find.descendant(of: scrims, matching: find.byType(ColoredBox)), findsNothing,
+          reason: '四块再着色就会和压暗层双重叠加');
+    });
+
     /// 🔴 四块之间也**互不重叠** —— 重叠处会比别处更暗，正是"双重叠加"的另一种形态。
     testWidgets('四块遮罩两两不重叠', (tester) async {
       await _pumpOverlay(tester, const Rect.fromLTWH(100, 200, 120, 60));
