@@ -94,10 +94,10 @@ class MatchShareCard extends StatelessWidget {
                             ),
                           const Spacer(),
                           // 字标资产本身是纯白（紫底专用），这里正好是深紫底，不上色。
-                          // 2026-10-05 产品定：字标宽 240px，导出图上字标最底一行像素在 y=1400
-                          // （栏底内边距 40 让盒底落在 1400，字形底再下压 1px 对齐）。改这里先导出量一次。
+                          // 2026-10-05 产品定：字标宽 240px，导出图上字标最底一行像素在 y=1375
+                          // （栏底内边距 40 让盒底落在 1400；字形底与盒底差 1px，故上提 24 = 落在 1375）。改这里先导出量一次。
                           Transform.translate(
-                            offset: const Offset(0, 1),
+                            offset: const Offset(0, -24),
                             child: SvgPicture.asset('assets/brand/wordmark_brand.svg', width: 240),
                           ),
                         ],
