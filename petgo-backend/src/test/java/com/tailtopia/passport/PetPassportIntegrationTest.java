@@ -18,6 +18,7 @@ import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.profile.service.ProfileDeletionService;
 import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.support.VetTestSupport;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -29,6 +30,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * V1.3.2 batch-a Story 1.2 · L1（需 postgres + redis）：护照签发 / 章聚合 / 删档（AC1 / AC2 / AC3.4 / AC7.1）。
  */
 class PetPassportIntegrationTest extends ApiIntegrationTest {
+
+    @Autowired
+    private VetTestSupport vets;
 
     private static final double LAT = -6.2351;
     private static final double LNG = 106.8101;
@@ -133,7 +137,10 @@ class PetPassportIntegrationTest extends ApiIntegrationTest {
         User u = newUser();
         mvc.perform(get("/api/v1/pet-profiles/me/passport").header("Authorization", userBearer(u.getId())))
                 .andExpect(status().isNotFound());
-        mvc.perform(get("/api/v1/pet-profiles/me/passport").header("Authorization", vetBearer(u.getId())))
+        // 兽医 token 须对应 DB 里真实 ACTIVE 的兽医行：BannedVetFilter 对查无此兽医的 token 回 401，
+        // 拿普通用户 id 冒充兽医 id 测不到「角色不对 → 403」这条（L1 本地验收 2026-10-05 发现）。
+        long vetId = vets.newActiveVet("passport-it").getId();
+        mvc.perform(get("/api/v1/pet-profiles/me/passport").header("Authorization", vetBearer(vetId)))
                 .andExpect(status().isForbidden());
     }
 
