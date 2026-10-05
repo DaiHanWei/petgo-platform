@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/place/presentation/widgets/place_stamp_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/router/app_router.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
@@ -116,7 +117,9 @@ void main() {
       await pumpApp(tester,
           initial: PetInsightsRoutes.passportNewStamp, extra: newStamp, disableAnimations: true);
       expect(find.byKey(const ValueKey('newStampAnimation')), findsNothing);
-      expect(find.byKey(const ValueKey('placeStampPlaceholder')), findsOneWidget);
+      // 章面在首帧就在：可能是占位图，也可能是已入缓存的默认章图（同一测试进程里前面的用例读过素材时）——
+      // 只认「有一枚章面」，不认具体是哪种（原先只认占位图，随用例执行顺序时好时坏）。
+      expect(find.byType(PlaceStampView), findsOneWidget);
       expect(find.byKey(const ValueKey('newStampTitle')), findsOneWidget);
       expect(find.byKey(const ValueKey('newStampCount')), findsOneWidget);
     });

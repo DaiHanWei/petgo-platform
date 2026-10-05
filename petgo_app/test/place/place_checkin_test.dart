@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/shared/card_render/card_watermark.dart';
 import 'package:tailtopia/features/pet_passport/domain/pet_passport.dart';
 import 'package:tailtopia/features/pet_passport/data/pet_passport_repository.dart';
 import 'package:go_router/go_router.dart';
@@ -238,7 +239,7 @@ void main() {
       final passport = PetPassport.fromJson({
         'petName': 'Momo',
         'passportNo': 'TT02P2600128',
-        'currentVersionUnlocked': true,
+        'currentVersionUnlocked': false,
         'stamps': [
           {
             'placeToken': 'p' * 32,
@@ -258,6 +259,7 @@ void main() {
       expect(find.byKey(const ValueKey('passportSeePlace')), findsNothing, reason: '成功页本就从场所页进来');
       expect(find.byKey(const ValueKey('placeCheckinNewStamp')), findsNothing, reason: '简版章面只做兜底');
       expect(find.byKey(const ValueKey('placeCheckinViewPassport')), findsOneWidget);
+      expect(find.byType(CardWatermark), findsNothing, reason: '打卡成功页不叠水印（即使当前版本未买）');
     });
 
     testWidgets('Story 1.2 / 1.3：点「Lihat Paspor」→ 先进 B4 整页落章（带新章参数）', (tester) async {

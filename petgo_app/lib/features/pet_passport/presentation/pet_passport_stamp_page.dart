@@ -71,11 +71,20 @@ class PetPassportStampPage extends ConsumerWidget {
 ///
 /// B5 章详情页与打卡成功页（Story 1.1，[showSeePlace] = false：成功页本就从场所页进来）共用。
 class PassportStampDetail extends StatelessWidget {
-  const PassportStampDetail({super.key, required this.passport, required this.index, this.showSeePlace = true});
+  const PassportStampDetail({
+    super.key,
+    required this.passport,
+    required this.index,
+    this.showSeePlace = true,
+    this.showWatermark = true,
+  });
 
   final PetPassport passport;
   final int index;
   final bool showSeePlace;
+
+  /// 章详情页按「当前版本是否已买」叠水印（同护照页）；打卡成功页不叠（2026-10-06 产品）。
+  final bool showWatermark;
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +100,7 @@ class PassportStampDetail extends StatelessWidget {
           key: const ValueKey('passportStampBook'),
           petName: p.petName,
           passportNo: p.passportNo,
-          watermarked: !p.currentVersionUnlocked,
+          watermarked: showWatermark && !p.currentVersionUnlocked,
           footer: PassportBookFooter(label: l10n.passportPageLabel(index + 1), bold: false, showArrows: false),
           content: PassportPageFace(stamp: s, pageIndex: index),
         ),
