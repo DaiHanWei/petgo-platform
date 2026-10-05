@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.UUID;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
@@ -157,6 +158,42 @@ class AdminPlaceStampIntegrationTest extends ApiIntegrationTest {
         assertThat(upload(ops, p.getId(), big, 422)).contains("300KB");
         verify(images, never()).upload(any(), anyString());
         assertThat(places.findById(p.getId()).orElseThrow().getStampObjectKey()).isNull();
+    }
+
+    /**
+     * 🛡 2026-10-05 本地 L2 验收：抽屉表单原先 hx-target 指抽屉体（#places-drawer-body 带 id → htmx 发 HX-Target），
+     * AdminBusinessExceptionAdvice 按它 retarget，一条「只支持 PNG」把整个抽屉换成一行红字。
+     * 现在：所有 hx-post 表单指带 id 的报错槽；422 落进槽；成功响应把抽屉体走 oob 重渲。
+     */
+    @Test
+    void validationErrorStaysInlineAndSuccessReRendersDrawerOutOfBand() throws Exception {
+        AdminUserDetails ops = admin(AdminPermissions.PLACE_MANAGE);
+        Place p = place(newUser(), "Kopi " + UUID.randomUUID());
+        stubUpload();
+
+        String drawer = mvc.perform(get("/admin/places/" + p.getId() + "/drawer").param("lang", "zh_CN")
+                        .with(user(ops)).header("HX-Request", "true"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(drawer).contains("id=\"places-drawer-stamp-err\"").contains("id=\"places-drawer-err\"");
+        java.util.regex.Matcher forms = java.util.regex.Pattern.compile("<form[^>]*hx-post=[^>]*>").matcher(drawer);
+        int n = 0;
+        while (forms.find()) {
+            n++;
+            assertThat(forms.group()).as("抽屉处置表单不得以抽屉体为主目标：%s", forms.group())
+                    .doesNotContain("drawer-body").containsPattern("hx-target=\"#places-drawer(-stamp)?-err\"");
+        }
+        assertThat(n).isGreaterThanOrEqualTo(3);
+
+        MvcResult bad = mvc.perform(multipart("/admin/places/" + p.getId() + "/stamp")
+                        .file(new MockMultipartFile("file", "stamp.png", "image/png", "not a png".getBytes()))
+                        .param("lang", "zh_CN").with(user(ops)).with(csrf())
+                        .header("HX-Request", "true").header("HX-Target", "places-drawer-stamp-err"))
+                .andExpect(status().isUnprocessableEntity()).andReturn();
+        assertThat(bad.getResponse().getHeader("HX-Retarget")).isEqualTo("#places-drawer-stamp-err");
+        assertThat(bad.getResponse().getContentAsString()).contains("只支持 PNG").doesNotContain("pl-drawer");
+
+        String ok = upload(ops, p.getId(), rgba512(), 200);
+        assertThat(ok).contains("hx-swap-oob=\"innerHTML:#places-drawer .drawer-body\"").contains("pl-stamp-preview");
     }
 
     @Test

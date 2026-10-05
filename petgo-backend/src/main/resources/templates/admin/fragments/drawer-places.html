@@ -5,6 +5,10 @@
   五区：① 基本信息（2×2 弹性网格 UX-DR11；MERGED 显示「已并入 → 保留场所名」可点跳其抽屉 ?open=）② 照片墙（签名 URL 现签，不落库）
   ③ 评论列表（分页 20，comments fragment 局部翻页；每条「删除」）④ 打卡计数 ⑤ 操作条（Story 5.3：编辑行内表单 / 下架·恢复 / 合并弹层；
   照片墙每张「删除」）；afterAction = 处置成功响应（抽屉 + oob 列表行 + toast）；mergeCandidates = 合并候选。
+  ⚠️ 处置表单的 hx-target 一律指**带 id 的报错槽**（#places-drawer-stamp-err / #places-drawer-err），不指抽屉体：
+     AdminBusinessExceptionAdvice 按 HX-Target 头把 422 retarget 到主目标 —— 主目标若是抽屉体（#places-drawer-body），
+     一条「只支持 PNG」会把整个抽屉换成一行红字，运营得关掉重开（2026-10-05 本地 L2 验收发现）。
+     成功响应因此把抽屉体走 oob 整体重渲（afterAction），主目标（报错槽）随之被清空；照 drawer-comment 的同一范式。
 -->
 <body>
 <div th:fragment="drawer" class="pl-drawer" th:attr="data-place-id=${d.id}">
@@ -48,10 +52,11 @@
             <p class="muted" th:if="${d.stampUrl == null}" th:text="#{admin.v132.places.stamp.default(${d.typeName})}">使用默认章（类型）</p>
             <p class="hint" th:text="#{admin.v132.places.stamp.spec}">透明底 PNG · 512×512 · ≤300KB</p>
         </div>
+        <div id="places-drawer-stamp-err" class="lst-inline-error" aria-live="polite"></div>
         <div class="pl-stamp-actions" th:if="${d.status.name() != 'MERGED'}">
             <!--/* data-reset-file：请求结束清空文件框（admin-core.js），否则 422 后用同名文件重选不触发 change */-->
             <form class="inline" th:attr="hx-post=@{/admin/places/{id}/stamp(id=${d.id})}" hx-encoding="multipart/form-data"
-                  hx-target="#places-drawer .drawer-body" hx-swap="innerHTML" hx-trigger="change" data-reset-file>
+                  hx-target="#places-drawer-stamp-err" hx-swap="innerHTML" hx-trigger="change" data-reset-file>
                 <label class="btn btn-neutral btn-sm">
                     <span th:text="${d.stampUrl == null} ? #{admin.v132.places.stamp.upload} : #{admin.v132.places.stamp.replace}">上传专属章</span>
                     <input type="file" name="file" accept="image/png" hidden/>
@@ -59,7 +64,7 @@
             </form>
             <form class="inline" th:if="${d.stampUrl != null}"
                   th:attr="hx-post=@{/admin/places/{id}/stamp/remove(id=${d.id})},data-confirm=#{admin.v132.places.stamp.confirmRemove},data-confirm-args=${d.name}"
-                  hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+                  hx-target="#places-drawer-stamp-err" hx-swap="innerHTML">
                 <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.v132.places.stamp.remove}">移除</button>
             </form>
         </div>
@@ -77,7 +82,7 @@
                       th:text="#{'admin.v130.places.moderation.' + ${ph.moderationStatus}}">审核中</span>
                 <figcaption class="muted rv-small"><span th:text="${ph.uploaderName}">上传者</span>
                     <form class="inline" th:if="${d.status.name() != 'MERGED'}" th:attr="hx-post=@{/admin/places/{id}/photos/{pid}/remove(id=${d.id},pid=${ph.id})}"
-                          hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+                          hx-target="#places-drawer-err" hx-swap="innerHTML">
                         <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.v130.places.action.removePhoto}">删除</button>
                     </form></figcaption>
             </figure>
@@ -96,12 +101,15 @@
         </div>
     </section>
 
+    <!--/* 处置报错槽：放在操作条正上方（编辑 / 下架 / 合并都在这一区，提交时它就在视口里） */-->
+    <div id="places-drawer-err" class="lst-inline-error" aria-live="polite"></div>
+
     <!-- ⑤ 操作条（Story 5.3）：编辑（行内表单展开）/ 下架·恢复（data-confirm 复述场所名）/ 合并（弹层：搜索 + 候选 + 确认）；MERGED 只读 -->
     <section class="pl-actions" data-place-actions th:if="${d.status.name() != 'MERGED'}">
         <details class="pl-inline" data-place-edit>
             <summary class="btn btn-neutral btn-sm" th:text="#{admin.v130.places.action.edit}">编辑</summary>
             <!--/* 9-7 第 2 条（bug 20260923-543）：模板 D 配置卡机制 —— 未修改时保存钮禁用；标签勾选（540②）、坐标粘贴自动拆分（540④） */-->
-            <form class="pl-edit-form" data-config-card th:attr="hx-post=@{/admin/places/{id}/edit(id=${d.id})}" hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+            <form class="pl-edit-form" data-config-card th:attr="hx-post=@{/admin/places/{id}/edit(id=${d.id})}" hx-target="#places-drawer-err" hx-swap="innerHTML">
                 <h3 th:text="#{admin.v130.places.edit.title}">编辑场所</h3>
                 <label class="field field-full"><span th:text="#{admin.v130.places.edit.name}">名称</span>
                     <input type="text" name="name" class="inp" maxlength="80" required th:value="${d.name}"/></label>
@@ -130,11 +138,11 @@
             </form>
         </details>
         <form class="inline" th:if="${d.status.name() == 'ACTIVE'}" th:attr="hx-post=@{/admin/places/{id}/delist(id=${d.id})},data-confirm=#{admin.v130.places.confirm.delist},data-confirm-args=${d.name}"
-              hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+              hx-target="#places-drawer-err" hx-swap="innerHTML">
             <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.v130.places.action.delist}">下架</button>
         </form>
         <form class="inline" th:if="${d.status.name() == 'DELISTED'}" th:attr="hx-post=@{/admin/places/{id}/restore(id=${d.id})}"
-              hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+              hx-target="#places-drawer-err" hx-swap="innerHTML">
             <button type="submit" class="btn btn-neutral btn-sm" th:text="#{admin.v130.places.action.restore}">恢复</button>
         </form>
         <details class="pl-inline" data-place-merge>
@@ -157,7 +165,7 @@
     <ul th:if="${!#lists.isEmpty(candidates)}">
         <li th:each="c : ${candidates}">
             <form class="inline" th:attr="hx-post=@{/admin/places/{id}/merge(id=${mergedId})},data-confirm=#{admin.v130.places.confirm.merge},data-confirm-args=${c.name} + '|' + ${mergedName}"
-                  hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+                  hx-target="#places-drawer-err" hx-swap="innerHTML">
                 <input type="hidden" name="keepId" th:value="${c.id}"/>
                 <span th:text="${c.name}">名称</span> <span class="muted rv-small" th:text="${c.city} + ' · ' + ${c.addressText}">地址</span>
                 <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.v130.places.merge.keep}">保留此场所</button>
@@ -166,14 +174,17 @@
     </ul>
 </div>
 
-<!-- 处置成功响应：抽屉重渲染 + oob 列表该行 + toast（黄条 warn 由 drawer 内渲染） -->
+<!-- 处置成功响应：oob 抽屉体 + oob 列表该行 + toast（黄条 warn 由 drawer 内渲染） -->
 <th:block th:fragment="afterAction">
     <div hx-swap-oob="beforeend:#admin-toast-host">
         <div class="toast" role="status" th:text="${toast}">已保存</div>
     </div>
     <!-- htmx 1.9.12 默认用 DOMParser（body 上下文）解析响应：裸 <tr> 会被丢掉、单元格内容泄进抽屉（复审 #1）→ 包进隐藏 table，oob 后只剩空壳 -->
     <table hidden th:if="${row != null}"><tbody><tr th:replace="~{admin/fragments/places-list :: row(${row}, true)}"></tr></tbody></table>
-    <div th:replace="~{admin/fragments/drawer-places :: drawer}"></div>
+    <!--/* 抽屉体走 oob 整体重渲；主目标是报错槽，被这次成功响应清空 = 上次的报错自动消失 */-->
+    <div id="places-drawer-body-oob" hx-swap-oob="innerHTML:#places-drawer .drawer-body">
+        <div th:replace="~{admin/fragments/drawer-places :: drawer}"></div>
+    </div>
 </th:block>
 
 <!-- 评论列表片段：翻页只换本节（hx-get …/drawer?part=comments&commentPage=n） -->
@@ -190,7 +201,7 @@
             <span th:text="${c.authorName}" th:classappend="${c.authorDeleted} ? 'muted'">作者</span>
             <span class="muted rv-small" th:text="${@adminTime.wib(c.createdAt)}">时间</span>
             <form class="inline" th:if="${d.status.name() != 'MERGED'}" th:attr="hx-post=@{/admin/places/{id}/comments/{cid}/remove(id=${d.id},cid=${c.id})}"
-                  hx-target="#places-drawer .drawer-body" hx-swap="innerHTML">
+                  hx-target="#places-drawer-err" hx-swap="innerHTML">
                 <button type="submit" class="btn btn-danger btn-sm" th:text="#{admin.v130.places.action.removeComment}">删除</button>
             </form>
             <p class="pl-comment-body" th:text="${c.body}">正文</p>
