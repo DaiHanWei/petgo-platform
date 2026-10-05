@@ -696,10 +696,11 @@ App 对 5xx **不报**：网关失败服务端已报 `GATEWAY_DECLINED`，再报
 
 | 事件 | 上报端 | 触发点 | 属性 |
 |---|---|---|---|
-| `keepsake_card_generated` | App | 分享预览页点「Bagikan ke Story」→ 卡片图导出成功、弹系统分享面板前；导出失败不报 | `card_type`：`result`（Tailsonality 结果卡）/ `match`（配型卡）/ `page`（护照卡）/ `boarding`（登机牌卡）；`duration_ms`（点击到出图耗时） |
+| `keepsake_card_generated` | App | 分享预览页点「Bagikan ke Diary」（原「Bagikan ke Story」，2026-10-06 改名）→ 卡片图导出成功、弹系统分享面板前；导出失败不报 | `card_type`：`result`（Tailsonality 结果卡）/ `match`（配型卡）/ `page`（护照卡）/ `boarding`（登机牌卡）；`duration_ms`（点击到出图耗时） |
 | `brag_post_tapped` | App | 点「Pamer di postingan」的那一刻（后续截图 / 转码失败也已计一次） | `source`：`tailsonality_result` / `tailsonality_match` / `match_preview`（配型卡分享预览页）/ `boarding_pass`（登机牌详情页） |
 | `passport_snapshot_unlocked` | **服务端** | 护照快照解锁成功、事务提交后（AFTER_COMMIT） | `stamp_count`、`price`（IDR） |
 | `boarding_pass_unlocked` | **服务端** | 登机牌解锁成功、事务提交后（AFTER_COMMIT） | `place_type`（取不到不带）、`price`（IDR） |
+| `diary_only_toggled` | App | Diary 宠物卡右上「Diary only」开关被拨动（2026-10-06 产品要求新增） | `on`（bool：拨到开 = true） |
 
 模块前缀 `keepsake_`（四类付费 / 纪念卡共用）与 `brag_` 为本版本新增，已加入
 `petgo_app/test/analytics/v112_events_test.dart` 的允许前缀名单。服务端两个事件名与属性键已登记 `AnalyticsEventGuard` 白名单。

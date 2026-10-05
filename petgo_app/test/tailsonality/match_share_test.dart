@@ -199,7 +199,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('结果未解锁时打开：无水印、无尺寸切换、单个主按钮（Bagikan ke Story）', (tester) async {
+    testWidgets('结果未解锁时打开：无水印、无尺寸切换、单个主按钮（Bagikan ke Diary）', (tester) async {
       await pumpMatch(tester, unlocked: false);
       expect(find.byType(MatchShareCard), findsOneWidget);
       expect(tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage)).customCanvas, kTsMatchShareCanvas);

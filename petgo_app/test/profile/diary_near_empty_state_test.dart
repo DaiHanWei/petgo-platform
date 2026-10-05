@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/profile/domain/archive_scope.dart';
 import 'package:tailtopia/features/profile/domain/visitor_profile.dart';
 import 'package:go_router/go_router.dart';
@@ -160,6 +161,19 @@ void main() {
       final banners = find.byKey(const ValueKey('timelineMilestoneBanner'));
       expect(banners, findsWidgets);
       expect(tester.getTopLeft(card).dy, lessThan(tester.getTopLeft(banners.first).dy));
+    });
+
+    testWidgets('2026-10-06：宠物卡右上「Diary only」开关，拨动上报 diary_only_toggled', (tester) async {
+      final seen = <(String, Map<String, Object>?)>[];
+      Analytics.debugCaptureSink = (e, p) => seen.add((e, p));
+      addTearDown(() => Analytics.debugCaptureSink = null);
+      await _pump(tester, firstPage: TimelinePage(items: [_profileCreatedBanner], hasMore: false));
+
+      final sw = find.byKey(const ValueKey('diaryOnlySwitch'));
+      expect(sw, findsOneWidget);
+      await tester.tap(sw);
+      await tester.pumpAndSettle();
+      expect(seen.where((e) => e.$1 == 'diary_only_toggled').map((e) => e.$2?['on']), [true]);
     });
 
     testWidgets('时间线彻底为空 → 也是同一张卡（不再走另一套裸文案）', (tester) async {

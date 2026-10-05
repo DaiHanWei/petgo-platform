@@ -587,6 +587,8 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             activeTrackColor: AppColors.mint,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             onChanged: (v) {
+              // 2026-10-06 产品：看有多少人用「只看 Diary」、开还是关（docs/reference/analytics-posthog-tracking.md §12.1）。
+              Analytics.capture('diary_only_toggled', {'on': v});
               ref.read(diaryOnlyProvider.notifier).set(v);
               if (_view != _ArchiveView.timeline) _switchView(_ArchiveView.timeline);
             },

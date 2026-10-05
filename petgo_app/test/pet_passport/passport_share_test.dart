@@ -95,7 +95,7 @@ void main() {
           PassportShareData(petName: 'Momo', passportNo: 'TT02P2600128', stamps: [for (var i = 0; i < 9; i++) stamp(i)]));
       expect(tester.widget<Text>(find.byKey(const ValueKey('passportShareCardNo'))).data, 'TT02P2600128');
       expect(find.byType(PassportStampCell), findsNWidgets(9));
-      expect(find.text('Paspor Momo · 9 Cap'), findsOneWidget);
+      expect(find.text('Jejak Momo · 9 Cap'), findsOneWidget);
       expect(tester.widget<CardQr>(find.byType(CardQr)).data, petDownloadUrl());
       expect(find.textContaining('/'), findsNothing, reason: '不出现「x / 12」之类的总数分母');
       expect(find.byKey(const ValueKey('passportShareCardOverflow')), findsNothing);
@@ -108,7 +108,7 @@ void main() {
       expect(find.byKey(const ValueKey('passportShareCardOverflow')), findsOneWidget);
       final shown = find.byType(PassportStampCell).evaluate().length;
       expect(find.text('+${40 - shown}'), findsOneWidget);
-      expect(find.text('Paspor Momo · 40 Cap'), findsOneWidget, reason: '信息段是卡面代表的章数');
+      expect(find.text('Jejak Momo · 40 Cap'), findsOneWidget, reason: '信息段是卡面代表的章数');
     });
   });
 
@@ -215,7 +215,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(CardWatermark), findsNothing);
-      expect(find.text('Paspor Momo · 2 Cap'), findsOneWidget);
+      expect(find.text('Jejak Momo · 2 Cap'), findsOneWidget);
       expect(find.text('Tempat 7'), findsOneWidget);
       expect(find.text('Tempat 8'), findsOneWidget);
       expect(find.text('Tempat 0'), findsNothing);

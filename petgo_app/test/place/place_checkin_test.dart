@@ -345,7 +345,7 @@ void main() {
       expect(find.text('Momo dapat cap baru'), findsOneWidget);
       expect(find.byKey(const ValueKey('placeCheckinVisitBadge')), findsNothing);
       // Story 1.2 · AC6：仅新章出「Lihat Paspor」；Story 1.5 起同一行并排主 CTA「Rekam Momen Ini」。
-      expect(find.text('Lihat Paspor'), findsOneWidget);
+      expect(find.text('Lihat Jejak'), findsOneWidget);
       expect(find.text('Rekam Momen Ini'), findsOneWidget);
     });
 
@@ -384,7 +384,7 @@ void main() {
       expect(find.text('Cap Kopi Kucing sekarang 3×'), findsOneWidget);
       expect(find.byKey(const ValueKey('placeCheckinNewStamp')), findsNothing,
           reason: 'C2b 不播落章');
-      expect(find.text('Lihat Paspor'), findsNothing);
+      expect(find.text('Lihat Jejak'), findsNothing);
     });
   });
 }

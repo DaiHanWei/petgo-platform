@@ -253,13 +253,13 @@ class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    // 有主操作时导出按钮降为次按钮。纪念卡（custom）文案「Share to Diary」，帖子卡仍「Share to Story」（2026-10-06）。
+                    // 有主操作时导出按钮降为次按钮。导出按钮文案一律「Share to Diary」（2026-10-06 产品：帖子卡与纪念卡统一）。
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton(
                         key: const ValueKey('shareCardShareCta'),
                         onPressed: _busy ? null : _shareIt,
-                        child: Text(widget._isCustom ? l10n.keepsakeShareCta : l10n.shareCardShareCta),
+                        child: Text(l10n.shareCardShareCta),
                       ),
                     ),
                   ] else
@@ -268,7 +268,7 @@ class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
                       child: FilledButton(
                         key: const ValueKey('shareCardShareCta'),
                         onPressed: _busy ? null : _shareIt,
-                        child: Text(widget._isCustom ? l10n.keepsakeShareCta : l10n.shareCardShareCta),
+                        child: Text(l10n.shareCardShareCta),
                       ),
                     ),
                 ],

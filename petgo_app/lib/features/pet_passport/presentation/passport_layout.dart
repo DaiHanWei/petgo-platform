@@ -132,10 +132,12 @@ class PassportBook extends StatelessWidget {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(kPetPassportPageCanvas.radius),
                     child: Stack(children: const [
+                      // 竖向平铺：护照本竖长，cover 会让平铺图自带的上下空白边落到底部字标那一条（2026-10-06 修）。
                       CardWatermark(
                           key: ValueKey('passportWatermark'),
                           canvas: kPetPassportPageCanvas,
-                          opacity: kKeepsakeWatermarkOpacity),
+                          opacity: kKeepsakeWatermarkOpacity,
+                          tileVertically: true),
                     ]),
                   ),
                 ),

@@ -64,12 +64,13 @@ public class AdminPlaceController {
     }
 
     /**
-     * 「打卡」三处（摘要 / 列表列 / 抽屉计数）是否展示（bug 20260923-552）：打卡归 B2，B2 上线前默认隐藏。
+     * 「打卡」三处（摘要 / 列表列 / 抽屉计数）是否展示（bug 20260923-552）：打卡归 B2，B2 上线前隐藏；
+     * V1.3.2 batch-a 打卡上线，2026-10-06 起默认展示（application.yml 同步改为 true）。
      * 本控制器所有视图（整页 / htmx 列表 / 抽屉 / 处置后 oob 行）都经这里拿到同一个开关 —— 只藏展示，不动数据与查询。
      */
     @org.springframework.web.bind.annotation.ModelAttribute("placesCheckinVisible")
     boolean placesCheckinVisible(
-            @org.springframework.beans.factory.annotation.Value("${admin.places.checkin-visible:false}") boolean visible) {
+            @org.springframework.beans.factory.annotation.Value("${admin.places.checkin-visible:true}") boolean visible) {
         return visible;
     }
 

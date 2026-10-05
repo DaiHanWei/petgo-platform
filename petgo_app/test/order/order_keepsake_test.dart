@@ -33,7 +33,7 @@ void main() {
 
   test('标题与图标；UNDER_REVIEW 非字面量且归「进行中」', () {
     expect(orderTypeLabel(l10n, OrderType.tailsonality), 'Buka Tailsonality');
-    expect(orderTypeLabel(l10n, OrderType.passportSnap), 'Paspor · versi');
+    expect(orderTypeLabel(l10n, OrderType.passportSnap), 'Jejak · versi');
     expect(orderTypeLabel(l10n, OrderType.boardingPass), 'Boarding Pass');
     expect(orderTypeIcon(OrderType.tailsonality), Icons.psychology_outlined);
     expect(orderTypeIcon(OrderType.passportSnap), Icons.menu_book_outlined);

@@ -119,7 +119,7 @@ void main() {
     await toGrid(tester);
     await tester.tap(find.byKey(const ValueKey('passportSnapshotCta')));
     await tester.pumpAndSettle();
-    expect(find.text('Buka paspor versi ini'), findsOneWidget);
+    expect(find.text('Buka Jejak Anabul versi ini'), findsOneWidget);
     expect(find.text('2 cap sekarang · Rp2.000'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('passportSnapshotLater')));
     await tester.pumpAndSettle();
@@ -130,7 +130,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('passportSnapshotBuy')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Paspor tanpa watermark'), findsOneWidget);
+    expect(find.textContaining('Jejak Anabul tanpa watermark'), findsOneWidget);
     expect(find.text('TT02P2600128'), findsWidgets);
     await tester.tap(find.byKey(const ValueKey('passportSnapshotPayConfirm')));
     await tester.pumpAndSettle();
