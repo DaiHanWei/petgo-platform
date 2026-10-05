@@ -140,21 +140,29 @@ void main() {
   group('详情 B3b / B3c（AC9）', () {
     String route() => PetInsightsRoutes.boardingPassFor('p' * 32);
 
-    testWidgets('窄屏 360：PASSPORT 独占一行、12 位不截断；未解锁有水印 + 吸底「Buka Rp1.000」；无图走占位', (tester) async {
+    testWidgets('窄屏 360：按 2026-10-06 设计稿的横版票面，详情页顺时针转 90° 竖放；字段取值正确；未解锁有水印 + 吸底「Buka Rp1.000」；无图走占位', (tester) async {
       await pump(tester, _Repo(BoardingPassDetail.fromJson(detailJson())), initial: route(), width: 360);
-      final no = find.byKey(const ValueKey('boardingPassPassportNo'));
-      expect(tester.widget<Text>(no).data, 'TT02P2600128');
-      final noRect = tester.getRect(no);
-      final card = tester.getRect(find.byKey(const ValueKey('boardingPassCard')));
-      expect(noRect.right, lessThanOrEqualTo(card.right), reason: '12 位完整落在卡内');
-      final date = tester.getRect(find.text('DATE'));
-      expect(date.top, greaterThan(noRect.bottom), reason: 'PASSPORT 单独一行，三栏在其下');
+      expect(tester.widget<RotatedBox>(find.byKey(const ValueKey('boardingPassRotated'))).quarterTurns, 1);
+      final card = tester.getRect(find.byKey(const ValueKey('boardingPassRotated')));
+      expect(card.width, lessThanOrEqualTo(360), reason: '竖放后宽度不超出屏幕');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('boardingPassPassportNo'))).data, 'TT02P2600128');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('boardingPassPassenger'))).data, 'Momo');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('boardingPassTo'))).data, 'Taman Menteng');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('boardingPassDate'))).data, '28 SEP 2026',
+          reason: 'Date = 最近一次打卡日，大写月');
+      expect(tester.widget<Text>(find.byKey(const ValueKey('boardingPassVisits'))).data, endsWith('x'));
       expect(find.byType(CardWatermark), findsOneWidget);
       expect(find.text('Buka Rp1.000'), findsOneWidget);
       expect(find.byKey(const ValueKey('boardingPassImagePlaceholder')), findsOneWidget);
       expect(find.text(BoardingPassLabels.header), findsOneWidget);
       expect(find.text('Pertama 1 Sep 2026 · Terakhir 28 Sep 2026'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('没有护照号 → 卡面 Passport 显示「——」', (tester) async {
+      final j = detailJson()..remove('passportNo');
+      await pump(tester, _Repo(BoardingPassDetail.fromJson(j)), initial: route());
+      expect(tester.widget<Text>(find.byKey(const ValueKey('boardingPassPassportNo'))).data, '——');
     });
 
     testWidgets('已解锁：无水印、无吸底；ACTIVE 地址条可点进场所详情', (tester) async {

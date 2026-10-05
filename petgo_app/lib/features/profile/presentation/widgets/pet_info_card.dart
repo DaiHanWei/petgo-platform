@@ -18,9 +18,13 @@ class PetInfoCard extends StatelessWidget {
     this.happyCount,
     this.consultCount,
     this.milestoneCount,
+    this.topRight,
   });
 
   final PetHeaderInfo profile;
+
+  /// 卡片右上角（头像行最右）的附加控件——作者态放「只看 Diary」开关（2026-10-06 产品）；访客态不传。
+  final Widget? topRight;
 
   /// 统计三列（archiveStatsProvider 未就绪时传 null，显占位「·」）。
   final int? happyCount;
@@ -142,6 +146,10 @@ class PetInfoCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (topRight != null) ...[
+                const SizedBox(width: 8),
+                Align(alignment: Alignment.topRight, child: topRight!),
+              ],
             ],
           ),
           const SizedBox(height: 14),

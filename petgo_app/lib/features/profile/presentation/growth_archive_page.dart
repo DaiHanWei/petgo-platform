@@ -454,6 +454,8 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             // 未庆祝角标（V1.3.0 Story 1.5）：搭 stats 这一次请求，不为它多发一次。
             milestoneUncelebrated: stats?.milestoneUncelebrated ?? 0,
             titleAction: _shareButton(),
+            // 「只看 Diary」开关放宠物卡右上空白处（2026-10-06 产品）。
+            petCardAction: _diaryOnlyToggle(l10n),
             // 迁移引导蒙层的高亮框位置从这里量（Story 5.4）。只量位置，不改行为。
             insightsEntryAnchor: _insightsEntryAnchor,
             onEditProfile: widget.onEditProfile,
@@ -487,8 +489,7 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           //    那是预期的，不是埋点坏了。
           // ⚠️ 「管理推荐」的关闭入口长在该组件内部，随组件留在 Toko —— 用户仍关得掉。
           _viewToggleRow(l10n),
-          // 「只看 Diary」开关（2026-10-06 产品）：只在时间线视图出现，日历不受影响。
-          if (_view == _ArchiveView.timeline) _diaryOnlyRow(l10n) else const SizedBox(height: 10),
+          const SizedBox(height: 10),
           // 时间线**始终挂载**、只在切到日历时 offstage（code-review 2026-08-04）：
           // 原先是条件构建，切一次日历就把 _TimelineView 的 State 连同已翻的页、游标一起 dispose，
           // 切回来列表退回 20 条、滚动位置还被 clamp 得跳一下。offstage 保住状态，
@@ -568,31 +569,32 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
     );
   }
 
-  /// 「只看 Diary」开关行：右对齐「标签 + 开关」。开 = 只看自己发的帖子（服务端筛，见 diaryOnlyProvider）；
-  /// 关 = 各类 banner + 帖子全部。
-  Widget _diaryOnlyRow(AppLocalizations l10n) {
+  /// 「只看 Diary」开关（宠物卡右上角，竖排「开关 / 标签」）。开 = 只看自己发的帖子（服务端筛，见
+  /// diaryOnlyProvider）；关 = 各类 banner + 帖子全部。开关只作用于时间线：在日历视图拨动时顺带切回时间线。
+  Widget _diaryOnlyToggle(AppLocalizations l10n) {
     final on = ref.watch(diaryOnlyProvider);
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          Text(l10n.diaryOnlyToggle,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink2)),
-          const SizedBox(width: 4),
-          Transform.scale(
-            scale: 0.8,
-            child: Switch(
-              key: const ValueKey('diaryOnlySwitch'),
-              value: on,
-              activeThumbColor: AppColors.onAccent,
-              activeTrackColor: AppColors.mint,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              onChanged: (v) => ref.read(diaryOnlyProvider.notifier).set(v),
-            ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Transform.scale(
+          scale: 0.75,
+          alignment: Alignment.centerRight,
+          child: Switch(
+            key: const ValueKey('diaryOnlySwitch'),
+            value: on,
+            activeThumbColor: AppColors.onAccent,
+            activeTrackColor: AppColors.mint,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            onChanged: (v) {
+              ref.read(diaryOnlyProvider.notifier).set(v);
+              if (_view != _ArchiveView.timeline) _switchView(_ArchiveView.timeline);
+            },
           ),
-        ],
-      ),
+        ),
+        Text(l10n.diaryOnlyToggle,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink2)),
+      ],
     );
   }
 

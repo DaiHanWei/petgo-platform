@@ -170,7 +170,26 @@ class _Body extends StatelessWidget {
       key: const ValueKey('boardingPassDetail'),
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       children: [
-        RepaintBoundary(key: cardKey, child: BoardingPassCard(pass: pass, watermarked: !pass.unlocked)),
+        // 横版票面**顺时针转 90° 竖放**（2026-10-06 产品）：用户把手机横过来就能看到整张大票。
+        // 高度以「一屏放得下」为上限（扣掉顶栏与吸底按钮），宽度不超过内容区。
+        // RepaintBoundary 在 RotatedBox **里面** —— 炫耀发帖截的仍是正向横版图。
+        LayoutBuilder(builder: (context, c) {
+          final mq = MediaQuery.of(context);
+          final maxLong = mq.size.height - mq.padding.vertical - kToolbarHeight - 120;
+          final long = (c.maxWidth * kBoardingPassCanvas.aspectRatio).clamp(0.0, maxLong);
+          return Center(
+            child: RotatedBox(
+              key: const ValueKey('boardingPassRotated'),
+              quarterTurns: 1,
+              child: SizedBox(
+                width: long,
+                height: long / kBoardingPassCanvas.aspectRatio,
+                child: RepaintBoundary(
+                    key: cardKey, child: BoardingPassCard(pass: pass, watermarked: !pass.unlocked)),
+              ),
+            ),
+          );
+        }),
         const SizedBox(height: 18),
         Text(pass.placeName,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),

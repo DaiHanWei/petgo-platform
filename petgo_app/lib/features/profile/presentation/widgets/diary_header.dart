@@ -38,6 +38,7 @@ class DiaryHeader extends StatelessWidget {
     this.milestoneUncelebrated = 0,
     this.healthRecordCount,
     this.titleAction,
+    this.petCardAction,
     this.onEditProfile,
     this.onOpenIdCard,
     this.onOpenHealth,
@@ -86,6 +87,9 @@ class DiaryHeader extends StatelessWidget {
   /// 2026-08-04 用户要求把分享从右下悬浮 FAB 挪到这里 —— FAB 会盖住时间线 / 日历的内容。
   final Widget? titleAction;
 
+  /// 宠物卡右上角控件（作者态「只看 Diary」开关，2026-10-06）。
+  final Widget? petCardAction;
+
   final VoidCallback? onEditProfile;
   final VoidCallback? onOpenIdCard;
   final VoidCallback? onOpenHealth;
@@ -130,6 +134,7 @@ class DiaryHeader extends StatelessWidget {
           happyCount: happyCount,
           consultCount: consultCount,
           milestoneCount: milestoneCompleted,
+          topRight: petCardAction,
         ),
         // 🛡 入口网格（健康记录 / 身份证）整块移除，不是「留个锁」——
         // 健康记录不对访客开放；身份证入口跳的是当前登录用户自己的卡，点进去必然出错。

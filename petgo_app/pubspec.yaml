@@ -172,6 +172,8 @@ flutter:
     # V1.3.2 Story 1.2：场所默认章（7 款类型兜底）。素材已入库（7 款齐）；
     # 同名覆盖即换图，缺失时 App 画代码占位章。
     - assets/place_stamp/
+    # V1.3.2 登机牌卡面（2026-10-06 设计稿：票面底 1754×780 / 邮票相框 / 字标）。
+    - assets/boarding_pass/
     # V1.3.2 Story 2.3：Tailsonality 素材（扁平存放 intro_poster / quiz_* / role_* / match_tier*）。
     # 已入库图片题 quiz_p*（12 张）+ 说明抽屉海报 intro_poster；角色卡 / 配型卡在服务器按需下载，不打包；其余未到，到货后同名放入即生效，缺失时 App 画代码占位。
     - assets/tailsonality/
