@@ -21,6 +21,8 @@ import org.springframework.beans.factory.annotation.Autowired;
  * {@code /milestone/**} 公开放行；补上的 {@code /brand/wordmark_brand.svg}。
  *
  * <p>测试 classpath 只有一张 {@code static/milestone/first_treat.webp}（test resources），对应 C-S8 / D-S8 / G-S6。
+ * 素材入库（2026-10-05）后 main 也有整套 {@code static/milestone/}，但 {@code classpath:}（非 {@code classpath*:}）
+ * 只取第一个命中的目录，而 surefire 把 test-classes 排在 classes 前 —— 测试里看到的仍只有这一张，用例口径不变。
  */
 class MilestoneSharePageBadgeIntegrationTest extends ApiIntegrationTest {
 

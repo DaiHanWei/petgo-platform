@@ -12,6 +12,8 @@ import org.springframework.core.io.support.ResourcePatternResolver;
  * L0（V1.3.2 Story 5.2 · AC2.3）：code → {@code /milestone/<键>.webp}，按完整 code 查表、素材不在包里 → empty。
  *
  * <p>测试 classpath 里只放了一张 {@code static/milestone/first_treat.webp}（**只在 test resources**）。
+ * 素材入库（2026-10-05）后 main 也有整套 {@code static/milestone/}，但 {@code classpath:}（非 {@code classpath*:}）
+ * 只取第一个命中的目录，而 surefire 把 test-classes 排在 classes 前 —— 测试里看到的仍只有这一张，用例口径不变。
  */
 class MilestoneBadgeResolverTest {
 
