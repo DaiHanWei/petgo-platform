@@ -41,7 +41,7 @@ class _FakeTimelineRepo implements TimelineRepository {
   final TimelinePage nextPage;
 
   @override
-  Future<TimelinePage> getTimeline({String? cursor, int limit = 20, ArchiveScope scope = const ArchiveScope.me()}) async => nextPage;
+  Future<TimelinePage> getTimeline({String? cursor, int limit = 20, ArchiveScope scope = const ArchiveScope.me(), bool diaryOnly = false}) async => nextPage;
 
   @override
   Future<CalendarMonth> getCalendar(int year, int month, {ArchiveScope scope = const ArchiveScope.me()}) async =>
@@ -86,6 +86,8 @@ Future<void> _pump(
   DateTime? birthday,
   int healthRecordCount = 0,
   String locale = 'en',
+  // 统计栏「Diary」数，须与时间线一致（2026-10-06 起它为 0 即把引导卡置顶）。
+  int happyCount = 0,
 }) async {
   await tester.binding.setSurfaceSize(const Size(500, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -116,7 +118,7 @@ Future<void> _pump(
           .overrideWithValue(_FakeTimelineRepo(nextPage ?? const TimelinePage(items: []))),
       timelineFirstPageProvider.overrideWith((ref) async => firstPage),
       archiveStatsProvider.overrideWith((ref) async => ArchiveStats(
-            happyMomentCount: 0,
+            happyMomentCount: happyCount,
             consultCount: 0,
             milestoneCompleted: 1,
             milestoneTotal: 31,
@@ -148,6 +150,18 @@ void main() {
           reason: 'A4 稿的标题带宠物名；Diary 内一律用 diary entry，不再说 moment');
     });
 
+    testWidgets('还没发过内容 → 引导卡在所有 banner 最上面（2026-10-06 产品）', (tester) async {
+      await _pump(tester,
+          firstPage: TimelinePage(items: [_profileCreatedBanner], nextCursor: 'C-1', hasMore: true),
+          nextPage: TimelinePage(items: [_profileCreatedBanner], nextCursor: 'C-2', hasMore: true));
+
+      final card = find.byKey(const ValueKey('timelineFirstMomentCard'));
+      expect(card, findsOneWidget, reason: '统计栏已说 0 条，不必等翻到底');
+      final banners = find.byKey(const ValueKey('timelineMilestoneBanner'));
+      expect(banners, findsWidgets);
+      expect(tester.getTopLeft(card).dy, lessThan(tester.getTopLeft(banners.first).dy));
+    });
+
     testWidgets('时间线彻底为空 → 也是同一张卡（不再走另一套裸文案）', (tester) async {
       await _pump(tester, firstPage: const TimelinePage(items: [], hasMore: false));
 
@@ -157,7 +171,8 @@ void main() {
     testWidgets('已经有快乐时刻 → 不再催发第一条', (tester) async {
       await _pump(tester,
           firstPage:
-              TimelinePage(items: [_profileCreatedBanner, _happyMoment()], hasMore: false));
+              TimelinePage(items: [_profileCreatedBanner, _happyMoment()], hasMore: false),
+          happyCount: 1);
 
       expect(find.byKey(const ValueKey('timelineFirstMomentCard')), findsNothing);
     });
@@ -173,6 +188,7 @@ void main() {
             TimelinePage(items: [_profileCreatedBanner], nextCursor: 'C-1', hasMore: true),
         nextPage:
             TimelinePage(items: [_profileCreatedBanner], nextCursor: 'C-2', hasMore: true),
+        happyCount: 3, // 旧照片在后面几页：统计栏知道有，就不催
       );
 
       expect(find.byKey(const ValueKey('timelineFirstMomentCard')), findsNothing,

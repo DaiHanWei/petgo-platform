@@ -141,9 +141,11 @@ public class ProfileApiController {
             @RequestParam(value = "cursor", required = false) String cursor,
             @RequestParam(value = "limit", defaultValue = "20") int limit,
             // V1.3.2 Story 1.6 · AD-9：客户端能力；未声明的新类型不下发（老 App 会把未知类型渲染成照片卡）。
-            @RequestParam(value = "supports", required = false) java.util.List<String> supports) {
+            @RequestParam(value = "supports", required = false) java.util.List<String> supports,
+            // 2026-10-06「只看 Diary」开关：只下发主人自己发的内容（老 App 不传 = false，行为不变）。
+            @RequestParam(value = "diaryOnly", defaultValue = "false") boolean diaryOnly) {
         return timelineService.getTimeline(currentUserId(jwt), cursor, limit,
-                com.tailtopia.profile.service.TimelineCapabilities.parse(supports));
+                com.tailtopia.profile.service.TimelineCapabilities.parse(supports), diaryOnly);
     }
 
     /**

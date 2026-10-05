@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.tailtopia.content.service.ContentService;
@@ -119,6 +121,26 @@ class TimelineTailsonalityTest {
 
         assertThat(items).extracting(TimelineItemResponse::kind).containsExactly(
                 TimelineItemResponse.TAILSONALITY, TimelineItemResponse.HAPPY_MOMENT, TimelineItemResponse.TAILSONALITY);
+    }
+
+    /** 2026-10-06「只看 Diary」：只剩主人自己发的内容；Tailsonality / 健康 / 身份证源连查都不查。 */
+    @Test
+    void diaryOnlyKeepsOwnPostsAndSkipsOtherSources() {
+        when(contentService.findGrowthMomentsBeforeAnchor(anyLong(), anyLong(), any(), any(), any(), anyInt()))
+                .thenReturn(List.of(new GrowthMomentView(1L, Instant.parse("2026-09-30T12:00:00Z"),
+                        LocalDate.of(2026, 9, 30), List.of(), "m",
+                        com.tailtopia.content.domain.ContentVisibility.PUBLIC,
+                        com.tailtopia.content.domain.PostStatus.PUBLISHED)));
+        when(unlocks.findForPetBefore(eq(PET), any(), anyInt())).thenReturn(List.of(
+                unlock(6, "2026-09-30T09:00:00Z", "2026-09-30")));
+
+        List<TimelineItemResponse> items = service.getTimeline(OWNER, null, 20, TS, true).items();
+
+        assertThat(items).extracting(TimelineItemResponse::kind).containsExactly(TimelineItemResponse.HAPPY_MOMENT);
+        verify(unlocks, never()).findForPetBefore(anyLong(), any(), anyInt());
+        verify(idCards, never()).findByUserIdOrderByCreatedAtDesc(anyLong());
+        // 不传 = false：同样数据照旧两条（老 App 行为不变）。
+        assertThat(service.getTimeline(OWNER, null, 20, TS).items()).hasSize(2);
     }
 
     /** 取满时降地板：两页拼起来恰好是全集、不重不漏（同日多条不被拆开）。 */

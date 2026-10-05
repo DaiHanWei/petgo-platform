@@ -8,6 +8,7 @@ import com.tailtopia.profile.dto.ArchiveStatsResponse;
 import com.tailtopia.profile.dto.CalendarMonthResponse;
 import com.tailtopia.profile.dto.DayDetailResponse;
 import com.tailtopia.profile.dto.TimelineItemResponse;
+import com.tailtopia.profile.dto.TimelineItemType;
 import com.tailtopia.profile.dto.TimelinePageResponse;
 import com.tailtopia.profile.domain.IdCard;
 import com.tailtopia.profile.repository.HealthRecordRepository;
@@ -119,6 +120,20 @@ public class TimelineService {
     /** 带客户端能力的时间线（V1.3.2 Story 1.6 · AD-9）：未声明的新类型不下发。 */
     @Transactional(readOnly = true)
     public TimelinePageResponse getTimeline(long ownerId, String cursor, int limit, TimelineCapabilities caps) {
+        return getTimeline(ownerId, cursor, limit, caps, false);
+    }
+
+    /**
+     * 「只看 Diary」开关（2026-10-06 产品）：{@code diaryOnly=true} 时只下发主人自己发的内容（类① / 类②），
+     * 各类 banner、健康条目、身份证、打卡、Tailsonality 一律不出。
+     *
+     * <p>🔴 <b>为什么在服务端筛而不是 App 端过滤</b>：时间线按游标分页，App 端过滤会出现「整页全是 banner、
+     * 过滤后空页」——用户看到空白、自动续页又有上限，旧帖子可能永远翻不出来。服务端连其他源都不取，
+     * 分页边界只由内容源（与判类② 所需的里程碑源）决定。
+     */
+    @Transactional(readOnly = true)
+    public TimelinePageResponse getTimeline(long ownerId, String cursor, int limit, TimelineCapabilities caps,
+            boolean diaryOnly) {
         // 需有档案；无则 404（前端据此渲染空态）。取 petId 供成长帖按当前宠物过滤（bug 271）。
         PetProfile profile = requireProfile(ownerId);
         int pageSize = Math.min(Math.max(limit, 1), MAX_LIMIT);
@@ -129,7 +144,7 @@ public class TimelineService {
         Batch batch;
         Cut cut;
         while (true) {
-            batch = fetchMerged(ownerId, profile.getId(), anchor, fetch, caps);
+            batch = fetchMerged(ownerId, profile.getId(), anchor, fetch, caps, diaryOnly);
             cut = cutOnDayBoundary(batch, pageSize);
             if (cut.complete() || fetch >= MAX_FETCH) {
                 break;
@@ -210,7 +225,7 @@ public class TimelineService {
      * 不做这层区分，会把「批次边界」误判成「当天结束」，同日条目仍会被拆到两页（AC3 破）。
      */
     private Batch fetchMerged(long ownerId, long petId, TimelineAnchor anchor, int fetch,
-            TimelineCapabilities caps) {
+            TimelineCapabilities caps, boolean diaryOnly) {
         boolean allKnown = true;
         TimelineAnchor floor = null;
 
@@ -233,7 +248,7 @@ public class TimelineService {
 
         // ===== 源② 问诊存档（类④，V1.0.0 既有源）=====
         List<TimelineItemResponse> healthItems = new ArrayList<>();
-        HealthEventTimelineSource health = healthSource.getIfAvailable();
+        HealthEventTimelineSource health = diaryOnly ? null : healthSource.getIfAvailable();
         if (health != null) {
             // V1.1.6 修正：按**复合锚点**（就诊日期 + 同日归档时刻）取，不再退化为单键上界 ——
             // 问诊存档有独立的就诊日期，排序按它、取数按归档时刻就是「两把尺子」。
@@ -254,7 +269,8 @@ public class TimelineService {
         }
 
         // ===== 源③ 结构化健康记录（类④，Story 3.2 新增；只读镜像，不提供编辑入口）=====
-        List<HealthRecord> records = healthRecords.findBeforeAnchor(
+        // 只看 Diary：健康记录不影响内容条目的分类（类④ 只吃健康源自身），直接不取。
+        List<HealthRecord> records = diaryOnly ? List.of() : healthRecords.findBeforeAnchor(
                 petId, anchor.eventDate(), anchor.sameDayKey(), PageRequest.ofSize(fetch));
         for (HealthRecord r : records) {
             healthItems.add(TimelineItemResponse.healthRecord(r.getId(), r.getCreatedAt(),
@@ -267,6 +283,7 @@ public class TimelineService {
         }
 
         // ===== 源④ 里程碑完成（类②/③，Story 3.2 新增；经域内只读视图取数）=====
+        // 只看 Diary 也要取：判「这条内容是不是打卡了里程碑的类②」需要它；产出的类③ banner 最后统一滤掉。
         List<MilestoneTimelineView> milestones = milestoneCompletions.findTimelineViewsBefore(
                 petId, anchor.createdAtUpperBound(), PageRequest.ofSize(fetch));
         if (milestones.size() >= fetch) {
@@ -290,7 +307,7 @@ public class TimelineService {
         // 保的是用户已经花过的钱）；而时间线讲的是「这只宠物的成长事件」，
         // 一张属于别的宠物的卡不该占这只宠物的时间线位置，付没付费都一样。
         List<TimelineItemResponse> idCardIssues = new ArrayList<>();
-        List<IdCard> cards = idCards.findByUserIdOrderByCreatedAtDesc(ownerId).stream()
+        List<IdCard> cards = diaryOnly ? List.<IdCard>of() : idCards.findByUserIdOrderByCreatedAtDesc(ownerId).stream()
                 .filter(c -> c.getProfileDeletedAt() == null)
                 .toList();
         if (!cards.isEmpty()) {
@@ -312,7 +329,7 @@ public class TimelineService {
         // ===== 源⑥ 场所打卡（V1.3.2 Story 1.6 · AD-9；只在客户端声明 place_checkin 时取）=====
         // 单键上界（打卡没有独立事件日期，有效日期 = checked_at 的 UTC 日），写法同源④。
         // 不进 classify（签名四参不改）：在分类之后、排序之前追加。
-        if (caps.placeCheckin()) {
+        if (caps.placeCheckin() && !diaryOnly) {
             List<com.tailtopia.place.dto.PlaceCheckinTimelineView> checkins =
                     placeCheckins.findForPetBefore(petId, anchor.createdAtUpperBound(), fetch);
             if (checkins.size() >= fetch) {
@@ -327,7 +344,7 @@ public class TimelineService {
 
         // ===== 源⑦ Tailsonality 解锁（V1.3.2 Story 3.3 · AD-9；只在客户端声明 tailsonality 时取）=====
         // 单键上界：有效日期 = unlocked_at 的 UTC 日，写法同源④ / 源⑥。
-        if (caps.tailsonality()) {
+        if (caps.tailsonality() && !diaryOnly) {
             List<com.tailtopia.tailsonality.dto.TailsonalityTimelineView> unlocks =
                     tailsonalityUnlocks.findForPetBefore(petId, anchor.createdAtUpperBound(), fetch);
             if (unlocks.size() >= fetch) {
@@ -339,6 +356,10 @@ public class TimelineService {
             merged.addAll(tailsonalityBanners(unlocks));
         }
 
+        if (diaryOnly) {
+            merged.removeIf(i -> i.itemType() != TimelineItemType.HAPPY_MOMENT
+                    && i.itemType() != TimelineItemType.HAPPY_MOMENT_MILESTONE);
+        }
         merged.sort(TIMELINE_ORDER);
         return new Batch(merged, allKnown, floor);
     }

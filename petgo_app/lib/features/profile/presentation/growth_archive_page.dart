@@ -487,7 +487,8 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
           //    那是预期的，不是埋点坏了。
           // ⚠️ 「管理推荐」的关闭入口长在该组件内部，随组件留在 Toko —— 用户仍关得掉。
           _viewToggleRow(l10n),
-          const SizedBox(height: 10),
+          // 「只看 Diary」开关（2026-10-06 产品）：只在时间线视图出现，日历不受影响。
+          if (_view == _ArchiveView.timeline) _diaryOnlyRow(l10n) else const SizedBox(height: 10),
           // 时间线**始终挂载**、只在切到日历时 offstage（code-review 2026-08-04）：
           // 原先是条件构建，切一次日历就把 _TimelineView 的 State 连同已翻的页、游标一起 dispose，
           // 切回来列表退回 20 条、滚动位置还被 clamp 得跳一下。offstage 保住状态，
@@ -564,6 +565,34 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
         Expanded(child: _toggleBtn('📅 ${l10n.growthArchiveViewCalendar}', _view == _ArchiveView.calendar,
             () => _switchView(_ArchiveView.calendar), const ValueKey('archiveViewCalendar'))),
       ],
+    );
+  }
+
+  /// 「只看 Diary」开关行：右对齐「标签 + 开关」。开 = 只看自己发的帖子（服务端筛，见 diaryOnlyProvider）；
+  /// 关 = 各类 banner + 帖子全部。
+  Widget _diaryOnlyRow(AppLocalizations l10n) {
+    final on = ref.watch(diaryOnlyProvider);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Text(l10n.diaryOnlyToggle,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.ink2)),
+          const SizedBox(width: 4),
+          Transform.scale(
+            scale: 0.8,
+            child: Switch(
+              key: const ValueKey('diaryOnlySwitch'),
+              value: on,
+              activeThumbColor: AppColors.onAccent,
+              activeTrackColor: AppColors.mint,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              onChanged: (v) => ref.read(diaryOnlyProvider.notifier).set(v),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -715,7 +744,9 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
       _loadMoreFailed = false;
     });
     try {
-      final page = await ref.read(timelineRepositoryProvider).getTimeline(cursor: _cursor);
+      final page = await ref
+          .read(timelineRepositoryProvider)
+          .getTimeline(cursor: _cursor, diaryOnly: ref.read(diaryOnlyProvider));
       if (!mounted) return;
       // 期间第一页被 invalidate 过 → 这份响应是**旧快照**的下一页。接上去会漏掉刷新边界那条日记，
       // 覆盖游标还会让它再也翻不回来。整份丢弃，一个字段都不改。
@@ -885,6 +916,10 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
         }
         // 按月分组：月份变化插入 "Juni 2026" 区标题。
         final tiles = <Widget>[];
+        // 引导卡「记下第一条 Diary」放在**所有条目最上面**（2026-10-06 产品：主人还没发过内容时，
+        // 它是这一页最该被看到的东西，压在一串 banner 底下等于没有）。
+        // 判据：统计栏的内容数为 0（不必翻到底），或已翻到底且确实没有快乐时刻。
+        final noPosts = ref.watch(archiveStatsProvider).asData?.value.happyMomentCount == 0;
         String? lastMonthKey;
         for (var i = 0; i < items.length; i++) {
           final item = items[i];
@@ -924,11 +959,13 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
         // 永远进不去，引导卡在真机上从未出现过，banner 下方是一大片空白。
         // 判定改为「还没有任何快乐时刻」：banner 照常显示，引导卡追加在它下面。
         // `!_hasMore` 保证只在确实翻到底时才断言「没有」，否则旧照片可能还在后面几页。
-        if (!_hasMore && debutHappy < 0) {
-          tiles.add(Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: _FirstMomentGuideCard(petName: widget.petName),
-          ));
+        if (noPosts || (!_hasMore && debutHappy < 0)) {
+          tiles.insert(
+              0,
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: _FirstMomentGuideCard(petName: widget.petName),
+              ));
         }
         // 底部翻页页脚：加载中转圈 / 失败给重试 / 没有更多则什么都不加。
         if (_loadMoreFailed) {

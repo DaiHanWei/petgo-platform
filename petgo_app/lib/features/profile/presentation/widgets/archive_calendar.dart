@@ -272,13 +272,17 @@ class _ArchiveCalendarState extends ConsumerState<ArchiveCalendar> {
   }
 
   /// 单一标记格：类型主色的浅底 + 描边图标（全表统一，无字面 emoji）。
+  /// 图标边长 = 格子短边的 70%（2026-10-06 产品：原固定 16 在格子里占比太小）。
   Widget _markerBox(HealthRecordIcon marker) => Container(
         color: marker.color.withValues(alpha: 0.12),
         alignment: Alignment.center,
-        child: marker.svgAsset == null
-            ? Icon(marker.icon, size: 16, color: marker.color)
-            : SvgPicture.asset(marker.svgAsset!,
-                width: 18, height: 18, colorFilter: ColorFilter.mode(marker.color, BlendMode.srcIn)),
+        child: LayoutBuilder(builder: (context, c) {
+          final side = (c.biggest.shortestSide.isFinite ? c.biggest.shortestSide : 24.0) * 0.7;
+          return marker.svgAsset == null
+              ? Icon(marker.icon, size: side, color: marker.color)
+              : SvgPicture.asset(marker.svgAsset!,
+                  width: side, height: side, colorFilter: ColorFilter.mode(marker.color, BlendMode.srcIn));
+        }),
       );
 }
 

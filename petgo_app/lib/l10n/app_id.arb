@@ -2536,5 +2536,6 @@
   "orderViewPassportSnap": "Lihat versi paspor",
   "orderViewBoardingPass": "Lihat boarding pass",
   "keepsakeShareCta": "Bagikan ke Diary",
-  "placeDeletedToast": "Tempat yang kamu pilih sudah dihapus"
+  "placeDeletedToast": "Tempat yang kamu pilih sudah dihapus",
+  "diaryOnlyToggle": "Diary saja"
 }
