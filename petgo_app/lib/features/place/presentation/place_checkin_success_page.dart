@@ -178,9 +178,8 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
                   opacity: t,
                   child: Transform.scale(scale: 0.96 + 0.04 * t, child: child),
                 ),
-                // 打卡成功页不叠水印（2026-10-06 产品）；护照页 / 章详情页的水印规则不变。
-                child: PassportStampDetail(
-                    passport: passport, index: stampIndex, showSeePlace: false, showWatermark: false),
+                // 单章页不叠水印（2026-10-06 产品：水印只在纵览）。
+                child: PassportStampDetail(passport: passport, index: stampIndex, showSeePlace: false),
               )
             else ...[
               const SizedBox(height: 12),

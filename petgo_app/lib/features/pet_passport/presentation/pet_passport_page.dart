@@ -255,7 +255,7 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
     return PassportBook(
       petName: p.petName,
       passportNo: p.passportNo,
-      watermarked: !p.currentVersionUnlocked,
+      watermarked: false, // 单章页不叠水印（2026-10-06 产品）；水印只在纵览（B2b）
       footer: PassportBookFooter(
         label: l10n.passportPageFooter(_index + 1, total),
         labelKey: const ValueKey('passportPageFooter'),

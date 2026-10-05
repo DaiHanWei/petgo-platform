@@ -87,11 +87,12 @@ void main() {
     expect(q.purchasedVersionCount, 2);
   });
 
-  testWidgets('未买：B2 单章页无付费、内页带水印；B2b 吸底「Buka versi ini · Rp2.000」', (tester) async {
+  testWidgets('未买：B2 单章页无付费、无水印；B2b 纵览带水印 + 吸底「Buka versi ini · Rp2.000」', (tester) async {
     await pump(tester, _Repo(passport()));
     expect(find.textContaining('Rp'), findsNothing);
-    expect(find.byType(CardWatermark), findsOneWidget);
+    expect(find.byType(CardWatermark), findsNothing, reason: '2026-10-06：单章页不叠水印，水印只在纵览');
     await toGrid(tester);
+    expect(find.byType(CardWatermark), findsOneWidget);
     expect(find.text('Buka versi ini · Rp2.000'), findsOneWidget);
     expect(tester.widget<FilledButton>(find.byKey(const ValueKey('passportSnapshotCta'))).onPressed, isNotNull);
   });

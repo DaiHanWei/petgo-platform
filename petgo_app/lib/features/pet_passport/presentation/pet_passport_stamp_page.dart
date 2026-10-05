@@ -76,14 +76,14 @@ class PassportStampDetail extends StatelessWidget {
     required this.passport,
     required this.index,
     this.showSeePlace = true,
-    this.showWatermark = true,
+    this.showWatermark = false,
   });
 
   final PetPassport passport;
   final int index;
   final bool showSeePlace;
 
-  /// 章详情页按「当前版本是否已买」叠水印（同护照页）；打卡成功页不叠（2026-10-06 产品）。
+  /// 是否按「当前版本是否已买」叠水印。缺省不叠：单章页一律无水印，水印只在纵览（2026-10-06 产品）。
   final bool showWatermark;
 
   @override
