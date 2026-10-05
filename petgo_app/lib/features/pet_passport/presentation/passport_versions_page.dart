@@ -136,14 +136,21 @@ class _PassportVersionPageState extends ConsumerState<PassportVersionPage> {
           actionLabel: l10n.placeRetry,
           onAction: () => ref.invalidate(passportSnapshotProvider(widget.token)),
         ),
+        // 与实时护照同一本护照版式（2026-10-06 设计稿）；回看恒无水印、只读，页脚带翻页箭头。
         data: (d) => PassportFrame(
-          header: PassportHeader(petName: d.petName, passportNo: d.passportNo),
-          footer: Text(l10n.passportPageFooter(_index + 1, d.stamps.length),
-              key: const ValueKey('passportVersionFooter'),
-              style: const TextStyle(fontSize: 13, color: AppColors.ink2, fontFeatures: [FontFeature.tabularFigures()])),
-          child: PassportPageBlock(
+          child: PassportBook(
             key: const ValueKey('passportVersionBlock'),
-            child: PageView.builder(
+            petName: d.petName,
+            passportNo: d.passportNo,
+            footer: PassportBookFooter(
+              label: l10n.passportPageFooter(_index + 1, d.stamps.length),
+              labelKey: const ValueKey('passportVersionFooter'),
+              canPrev: _index > 0,
+              canNext: _index < d.stamps.length - 1,
+              onPrev: () => _pages.previousPage(duration: const Duration(milliseconds: 260), curve: Curves.easeOut),
+              onNext: () => _pages.nextPage(duration: const Duration(milliseconds: 260), curve: Curves.easeOut),
+            ),
+            content: PageView.builder(
               controller: _pages,
               itemCount: d.stamps.length,
               onPageChanged: (i) => setState(() => _index = i),

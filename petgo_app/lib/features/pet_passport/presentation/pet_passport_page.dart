@@ -14,6 +14,7 @@ import '../../profile/presentation/pet_insights_page.dart';
 import '../data/pet_passport_repository.dart';
 import '../domain/pet_passport.dart';
 import 'passport_layout.dart';
+import '../../place/presentation/widgets/place_stamp_view.dart';
 import 'share/passport_share_card.dart';
 import 'widgets/passport_snapshot_sheet.dart';
 import 'passport_page_face.dart';
@@ -42,8 +43,8 @@ class PetPassportPage extends ConsumerStatefulWidget {
   ConsumerState<PetPassportPage> createState() => _PetPassportPageState();
 }
 
-/// 纵览每页格数（3 列 × 4 行）。
-const int kPassportGridPageSize = 12;
+/// 纵览每页格数（3 列 × 3 行，2026-10-06 设计稿 Artboard 3）。
+const int kPassportGridPageSize = 9;
 
 class _PetPassportPageState extends ConsumerState<PetPassportPage> {
   bool _grid = false;
@@ -195,47 +196,61 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
             onAction: () => ref.invalidate(petPassportProvider),
           ),
         // 骨架与 B1 同版心，避免加载完跳动。
-        _ => PassportFrame(header: const SizedBox(height: 44), child: const PassportPageBlock(child: SizedBox())),
+        _ => const PassportFrame(child: PassportBook(petName: '', passportNo: '', content: SizedBox())),
       },
     );
   }
 
   Widget _content(BuildContext context, AppLocalizations l10n, PetPassport p) {
-    final header = PassportHeader(petName: p.petName, passportNo: p.passportNo);
-    if (p.stamps.isEmpty) {
-      return PassportFrame(
-        header: header,
-        footer: Text(l10n.passportStampCount(0), style: _footerStyle),
-        child: PassportPageBlock(
-          key: const ValueKey('passportEmpty'),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(l10n.passportEmptyTitle,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.ink)),
-                const SizedBox(height: 8),
-                Text(l10n.passportEmptyBody,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.ink2)),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
+    if (p.stamps.isEmpty) return PassportFrame(child: _emptyBook(l10n, p));
     _ensureControllers(p);
-    return _grid ? _gridView(context, l10n, p, header) : _singleView(context, l10n, p, header);
+    return PassportFrame(child: _grid ? _gridBook(context, l10n, p) : _singleBook(context, l10n, p));
   }
 
-  Widget _singleView(BuildContext context, AppLocalizations l10n, PetPassport p, Widget header) {
+  /// B1 空态（设计稿 Artboard 1）：虚线圆章位 +「Belum ada cap」+ 说明；页脚「0 Cap」、无箭头。
+  Widget _emptyBook(AppLocalizations l10n, PetPassport p) {
+    return PassportBook(
+      key: const ValueKey('passportEmpty'),
+      petName: p.petName,
+      passportNo: p.passportNo,
+      footer: PassportBookFooter(label: l10n.passportStampCount(0), showArrows: false),
+      content: Stack(
+        children: [
+          Positioned(
+            left: 208,
+            top: 301,
+            width: 413,
+            height: 413,
+            child: Image.asset('assets/passport_book/stamp_slot.png', fit: BoxFit.contain),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 801,
+            child: Text(l10n.passportEmptyTitle,
+                textAlign: TextAlign.center, style: passportRubik(38, FontWeight.w700, PassportInk.dark)),
+          ),
+          Positioned(
+            left: 134,
+            width: 560,
+            top: 855,
+            child: Text(l10n.passportEmptyBody,
+                textAlign: TextAlign.center,
+                style: passportRubik(30, FontWeight.w400, PassportInk.dark, height: 1.25)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// B2 单章页（设计稿 Artboard 2）：一页一枚章；页脚「Cap i/总章数」（分母 = 已集章数，不是上限）+ 翻页箭头。
+  Widget _singleBook(BuildContext context, AppLocalizations l10n, PetPassport p) {
     final total = p.stamps.length;
-    return PassportFrame(
-      header: header,
-      footer: _Pager(
+    return PassportBook(
+      petName: p.petName,
+      passportNo: p.passportNo,
+      watermarked: !p.currentVersionUnlocked,
+      footer: PassportBookFooter(
         label: l10n.passportPageFooter(_index + 1, total),
         labelKey: const ValueKey('passportPageFooter'),
         canPrev: _index > 0,
@@ -243,126 +258,139 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
         onPrev: () => _single?.previousPage(duration: _flip, curve: Curves.easeOut),
         onNext: () => _single?.nextPage(duration: _flip, curve: Curves.easeOut),
       ),
-      child: PassportPageBlock(
-        watermarked: !p.currentVersionUnlocked,
-        child: PageView.builder(
-          key: const ValueKey('passportSinglePager'),
-          controller: _single,
-          itemCount: total,
-          onPageChanged: (i) => setState(() => _index = i),
-          // Story 1.3：章本体可点 → B5 章详情（B2b 纵览点章仍是回 B2，1.2 规则不变）。
-          itemBuilder: (context, i) => PassportPageFace(
-            stamp: p.stamps[i],
-            pageIndex: i,
-            onTapStamp: () =>
-                context.push(PetInsightsRoutes.passportStampFor(p.stamps[i].placeToken)),
-          ),
+      content: PageView.builder(
+        key: const ValueKey('passportSinglePager'),
+        controller: _single,
+        itemCount: total,
+        onPageChanged: (i) => setState(() => _index = i),
+        // Story 1.3：章本体可点 → B5 章详情（B2b 纵览点章仍是回 B2，1.2 规则不变）。
+        itemBuilder: (context, i) => PassportPageFace(
+          stamp: p.stamps[i],
+          pageIndex: i,
+          onTapStamp: () => context.push(PetInsightsRoutes.passportStampFor(p.stamps[i].placeToken)),
         ),
       ),
     );
   }
 
-  Widget _gridView(BuildContext context, AppLocalizations l10n, PetPassport p, Widget header) {
+  /// B2b 纵览（设计稿 Artboard 3）：顶部「N Cap」；3 列 × 3 行虚线格一页、横向分页（空格画空虚线格，
+  /// 不写总数上限、不暗示未到访场所）；页脚「Halaman i」+ 翻页箭头。点章回 B2 停在那一页。
+  Widget _gridBook(BuildContext context, AppLocalizations l10n, PetPassport p) {
     final pages = (p.stamps.length + kPassportGridPageSize - 1) ~/ kPassportGridPageSize;
-    return PassportFrame(
-      header: header,
-      footer: _Pager(
-        label: l10n.passportGridFooter(p.stamps.length, _gridPage + 1),
+    return PassportBook(
+      petName: p.petName,
+      passportNo: p.passportNo,
+      watermarked: !p.currentVersionUnlocked,
+      footer: PassportBookFooter(
+        label: l10n.passportPageLabel(_gridPage + 1),
         labelKey: const ValueKey('passportGridFooter'),
+        bold: false,
         canPrev: _gridPage > 0,
         canNext: _gridPage < pages - 1,
         onPrev: () => _gridPages?.previousPage(duration: _flip, curve: Curves.easeOut),
         onNext: () => _gridPages?.nextPage(duration: _flip, curve: Curves.easeOut),
       ),
-      child: PassportPageBlock(
-        watermarked: !p.currentVersionUnlocked,
-        child: PageView.builder(
-          key: const ValueKey('passportGridPager'),
-          controller: _gridPages,
-          itemCount: pages,
-          onPageChanged: (i) => setState(() => _gridPage = i),
-          itemBuilder: (context, page) {
-            final start = page * kPassportGridPageSize;
-            final end = (start + kPassportGridPageSize).clamp(0, p.stamps.length);
-            // 🔴 格子比例按内页块的**实际可用高度**算：3 列 × 4 行正好铺满（复审：固定比例时第 4 行被裁掉）。
-            return LayoutBuilder(builder: (context, box) {
-              const pad = 12.0;
-              const gap = 6.0;
-              final cellW = (box.maxWidth - pad * 2 - gap * 2) / 3;
-              final cellH = (box.maxHeight - pad * 2 - gap * 3) / 4;
-              final stampSize = (cellH - 22).clamp(24.0, 62.0);
-              return GridView.builder(
-                padding: const EdgeInsets.all(pad),
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  childAspectRatio: cellW / cellH,
-                  mainAxisSpacing: gap,
-                  crossAxisSpacing: gap,
-                ),
-                // 🔴 只画已集的章：空格不画「未到访」占位、不暗示上限。
-                itemCount: end - start,
-                itemBuilder: (context, j) {
-                  final i = start + j;
-                  final s = p.stamps[i];
-                  return InkWell(
-                    key: ValueKey('passportGridCell_$i'),
-                    onTap: () => _showSingle(i),
-                    child: PassportStampCell(stamp: s, stampSize: stampSize),
-                  );
-                },
-              );
-            });
-          },
-        ),
+      content: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 24,
+            child: Text(l10n.passportStampCount(p.stamps.length),
+                key: const ValueKey('passportGridCount'),
+                textAlign: TextAlign.center,
+                style: passportRubik(40, FontWeight.w700, PassportInk.footer)),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 87,
+            bottom: 0,
+            child: PageView.builder(
+              key: const ValueKey('passportGridPager'),
+              controller: _gridPages,
+              itemCount: pages,
+              onPageChanged: (i) => setState(() => _gridPage = i),
+              itemBuilder: (context, page) => Stack(
+                children: [
+                  for (var j = 0; j < kPassportGridPageSize; j++)
+                    Positioned(
+                      left: const [65.0, 304.0, 542.0][j % 3],
+                      top: (j ~/ 3) * 324.0,
+                      width: 220,
+                      height: 294,
+                      child: _gridCell(p, page * kPassportGridPageSize + j),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 一格：虚线圆角框；有章 → 章面 150 + 场所名（Rubik Medium，两行）+ 右上 xN；无章 → 空框。
+  Widget _gridCell(PetPassport p, int i) {
+    final has = i < p.stamps.length;
+    final frame = CustomPaint(painter: const _DashedCellPainter(), child: const SizedBox.expand());
+    if (!has) return frame;
+    final s = p.stamps[i];
+    return GestureDetector(
+      key: ValueKey('passportGridCell_$i'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _showSingle(i),
+      child: Stack(
+        children: [
+          Positioned.fill(child: frame),
+          Positioned(
+            left: 35,
+            top: 45,
+            width: 150,
+            height: 150,
+            child: PlaceStampView(placeType: s.placeType, imageUrl: s.stampImageUrl, size: 150),
+          ),
+          Positioned(
+            left: 10,
+            right: 10,
+            top: 221,
+            child: Text(s.placeName,
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: passportRubik(19, FontWeight.w500, PassportInk.dark, height: 1.16)),
+          ),
+          if (s.visitCount >= 2) Positioned(left: 163, top: 9, child: PassportVisitBadge(count: s.visitCount)),
+        ],
       ),
     );
   }
 
   static const Duration _flip = Duration(milliseconds: 260);
-  static const TextStyle _footerStyle = TextStyle(
-      fontSize: 13,
-      color: AppColors.ink2,
-      fontFeatures: [FontFeature.tabularFigures()]);
 }
 
-/// 页脚：翻页箭头 + 文案（B1 空态不用它 —— 空态无箭头）。
-class _Pager extends StatelessWidget {
-  const _Pager({
-    required this.label,
-    required this.labelKey,
-    required this.canPrev,
-    required this.canNext,
-    required this.onPrev,
-    required this.onNext,
-  });
-
-  final String label;
-  final Key labelKey;
-  final bool canPrev;
-  final bool canNext;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
+/// 纵览格的虚线圆角框（设计稿：棕色细虚线、圆角约 18）。
+class _DashedCellPainter extends CustomPainter {
+  const _DashedCellPainter();
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          key: const ValueKey('passportPrev'),
-          onPressed: canPrev ? onPrev : null,
-          icon: const Icon(Icons.chevron_left_rounded),
-        ),
-        Text(label, key: labelKey, style: _PetPassportPageState._footerStyle),
-        IconButton(
-          key: const ValueKey('passportNext'),
-          onPressed: canNext ? onNext : null,
-          icon: const Icon(Icons.chevron_right_rounded),
-        ),
-      ],
-    );
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = PassportInk.cellBorder
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final path = Path()..addRRect(RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(18)));
+    for (final metric in path.computeMetrics()) {
+      var d = 0.0;
+      while (d < metric.length) {
+        canvas.drawPath(metric.extractPath(d, d + 10), paint);
+        d += 16;
+      }
+    }
   }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 /// B2b 吸底（Story 3.4 · AC6.1）：未买 → 主按钮「Buka versi ini · Rp{价}」；已买 → 禁用态「Versi ini sudah kebuka」。

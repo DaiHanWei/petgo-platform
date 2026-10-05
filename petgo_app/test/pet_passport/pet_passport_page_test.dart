@@ -54,12 +54,12 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('B1 空态：无 ⊞、无翻页箭头、「0 cap」、吸底「Cari Tempat」→ /places', (tester) async {
+  testWidgets('B1 空态：无 ⊞、无翻页箭头、「0 Cap」、吸底「Cari Tempat」→ /places', (tester) async {
     await pump(tester, passport(const []));
 
     expect(find.byKey(const ValueKey('passportEmpty')), findsOneWidget);
     expect(find.text('Belum ada cap'), findsOneWidget);
-    expect(find.text('0 cap'), findsOneWidget);
+    expect(find.text('0 Cap'), findsOneWidget);
     expect(find.byKey(const ValueKey('passportToggleGrid')), findsNothing);
     expect(find.byKey(const ValueKey('passportPrev')), findsNothing);
     expect(find.byKey(const ValueKey('passportNext')), findsNothing);
@@ -73,51 +73,52 @@ void main() {
   testWidgets('B2 单章：页脚分母 = 已集章数；×N 仅 N≥2', (tester) async {
     await pump(tester, passport([stamp(0), stamp(1, visits: 3), stamp(2)]));
 
-    expect(find.text('Cap 1 / 3'), findsOneWidget);
+    expect(find.text('Cap 1/3'), findsOneWidget);
     expect(find.byKey(const ValueKey('passportVisitBadge')), findsNothing, reason: '第 1 枚只到访 1 次');
 
     await tester.tap(find.byKey(const ValueKey('passportNext')));
     await tester.pumpAndSettle();
-    expect(find.text('Cap 2 / 3'), findsOneWidget);
-    expect(find.text('×3'), findsOneWidget);
+    expect(find.text('Cap 2/3'), findsOneWidget);
+    expect(find.text('x3'), findsOneWidget);
   });
 
   testWidgets('focus：停在该章；找不到停第 1 页', (tester) async {
     await pump(tester, passport([stamp(0), stamp(1), stamp(2)]), focus: stamp(2).placeToken);
-    expect(find.text('Cap 3 / 3'), findsOneWidget);
+    expect(find.text('Cap 3/3'), findsOneWidget);
     expect(find.text('Tempat 2'), findsOneWidget);
   });
 
   testWidgets('focus 找不到 → 第 1 页', (tester) async {
     await pump(tester, passport([stamp(0), stamp(1)]), focus: 'nope');
-    expect(find.text('Cap 1 / 2'), findsOneWidget);
+    expect(find.text('Cap 1/2'), findsOneWidget);
   });
 
-  testWidgets('B2b 纵览：12 格一页、点章回单章并停在那一页', (tester) async {
+  testWidgets('B2b 纵览（2026-10-06 设计稿）：顶部「N Cap」、3×3 九格一页、页脚「Halaman i」；点章回单章并停在那一页', (tester) async {
     await pump(tester, passport([for (var i = 0; i < 14; i++) stamp(i)]));
 
     await tester.tap(find.byKey(const ValueKey('passportToggleGrid')));
     await tester.pumpAndSettle();
-    expect(find.text('14 cap · Halaman 1'), findsOneWidget);
-    expect(find.byKey(const ValueKey('passportGridCell_11')), findsOneWidget);
-    expect(find.byKey(const ValueKey('passportGridCell_12')), findsNothing, reason: '第 13 枚在第 2 页');
+    expect(find.text('14 Cap'), findsOneWidget);
+    expect(find.text('Halaman 1'), findsOneWidget);
+    expect(find.byKey(const ValueKey('passportGridCell_8')), findsOneWidget);
+    expect(find.byKey(const ValueKey('passportGridCell_9')), findsNothing, reason: '第 10 枚在第 2 页');
 
     await tester.tap(find.byKey(const ValueKey('passportGridCell_4')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('passportToggleGrid')), findsOneWidget, reason: '回到单章');
-    expect(find.text('Cap 5 / 14'), findsOneWidget);
+    expect(find.text('Cap 5/14'), findsOneWidget);
   });
 
-  testWidgets('复审：纵览第 4 行完整落在内页块内（不被裁切、可点）', (tester) async {
-    await pump(tester, passport([for (var i = 0; i < 12; i++) stamp(i)]));
+  testWidgets('复审：纵览第 3 行完整落在内容区内（不被裁切、可点）', (tester) async {
+    await pump(tester, passport([for (var i = 0; i < 9; i++) stamp(i)]));
     await tester.tap(find.byKey(const ValueKey('passportToggleGrid')));
     await tester.pumpAndSettle();
     final pager = tester.getRect(find.byKey(const ValueKey('passportGridPager')));
-    final last = tester.getRect(find.byKey(const ValueKey('passportGridCell_11')));
+    final last = tester.getRect(find.byKey(const ValueKey('passportGridCell_8')));
     expect(last.bottom, lessThanOrEqualTo(pager.bottom + 0.5));
-    await tester.tap(find.byKey(const ValueKey('passportGridCell_11')));
+    await tester.tap(find.byKey(const ValueKey('passportGridCell_8')));
     await tester.pumpAndSettle();
-    expect(find.text('Cap 12 / 12'), findsOneWidget);
+    expect(find.text('Cap 9/9'), findsOneWidget);
   });
 
   // Story 3.4 按新规则：付费入口只在 B2b 纵览吸底（见 passport_snapshot_test）；**B2 单章页**仍无任何付费按钮。

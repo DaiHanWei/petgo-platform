@@ -2377,9 +2377,9 @@
   "passportEmptyTitle": "Belum ada cap",
   "passportEmptyBody": "Datangi tempat pet-friendly buat dapat cap pertama",
   "passportFindPlaces": "Cari Tempat",
-  "passportStampCount": "{count} cap",
+  "passportStampCount": "{count} Cap",
   "@passportStampCount": {"placeholders": {"count": {"type": "int"}}},
-  "passportPageFooter": "Cap {index} / {total}",
+  "passportPageFooter": "Cap {index}/{total}",
   "passportShareInfoTitle": "Paspor {pet}",
   "@passportShareInfoTitle": {"placeholders": {"pet": {"type": "String"}}},
   "boardingPassShareTooltip": "Bagikan boarding pass",
@@ -2537,5 +2537,7 @@
   "orderViewBoardingPass": "Lihat boarding pass",
   "keepsakeShareCta": "Bagikan ke Diary",
   "placeDeletedToast": "Tempat yang kamu pilih sudah dihapus",
-  "diaryOnlyToggle": "Diary saja"
+  "diaryOnlyToggle": "Diary saja",
+  "passportVisitCount": "{count} Kunjungan",
+  "@passportVisitCount": {"placeholders": {"count": {"type": "int"}}}
 }

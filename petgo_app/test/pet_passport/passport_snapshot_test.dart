@@ -163,7 +163,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('passportVersionBlock')), findsOneWidget);
     expect(find.text('Kopi Lama'), findsOneWidget);
-    expect(find.text('Cap 1 / 1'), findsOneWidget);
+    expect(find.text('Cap 1/1'), findsOneWidget);
     expect(find.byType(CardWatermark), findsNothing);
     expect(find.textContaining('Rp'), findsNothing);
     expect(repo.fetches, fetchesBefore, reason: '回看不读实时护照');

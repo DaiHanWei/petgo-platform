@@ -3677,7 +3677,7 @@
   "@passportFindPlaces": {"description": "Pet passport empty state: bottom CTA to the places list."},
   "passportStampCount": "{count, plural, =1{1 stamp} other{{count} stamps}}",
   "@passportStampCount": {"description": "Pet passport footer: number of collected stamps (no denominator).", "placeholders": {"count": {"type": "int"}}},
-  "passportPageFooter": "Stamp {index} / {total}",
+  "passportPageFooter": "Stamp {index}/{total}",
   "passportShareInfoTitle": "{pet}'s Passport",
   "@passportShareInfoTitle": {"description": "Passport share card info line: pet name + passport (followed by ' · {count} stamps').", "placeholders": {"pet": {"type": "String"}}},
   "boardingPassShareTooltip": "Share boarding pass",
@@ -3887,5 +3887,7 @@
   "placeDeletedToast": "The place you selected has been deleted",
   "@placeDeletedToast": {"description": "Toast when tapping a place chip / check-in entry whose place was delisted or removed (2026-10-06 product copy)."},
   "diaryOnlyToggle": "Diary only",
-  "@diaryOnlyToggle": {"description": "Diary timeline switch: on = only the owner's own posts, off = all banners + posts (2026-10-06)."}
+  "@diaryOnlyToggle": {"description": "Diary timeline switch: on = only the owner's own posts, off = all banners + posts (2026-10-06)."},
+  "passportVisitCount": "{count, plural, =1{1 visit} other{{count} visits}}",
+  "@passportVisitCount": {"description": "Pet passport single-stamp page (2026-10-06 design): visit count line under the first-visit date.", "placeholders": {"count": {"type": "int"}}}
 }

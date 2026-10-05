@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../place/presentation/widgets/place_stamp_view.dart';
 import '../domain/pet_passport.dart';
+import 'passport_layout.dart';
 
 /// 护照内页的「一页」（V1.3.2 Story 1.3：由 1.2 的 B2 单章页抽出，B2 与 B5「所在内页局部」共用一个版心）。
 ///
-/// - 常规（B2）：章面 128 + 场所名 +「{首次日期} · {n} kunjungan」；×N 仅 N≥2；[onTapStamp] 非空时章本体可点
-///   （热区 ≥44×44，按压 scale 0.96）。
-/// - [compact]（B5）：同一张脸等比缩小成缩略页 +「Halaman {i}」，不可点。设计稿到位后只改这一处。
+/// 2026-10-06 按设计稿 `stamp-place` Artboard 2 重做：在护照本内容区（828×1110 画布）里自上而下
+/// 「首次到访日期（浅棕）/ {n} Kunjungan（粗）/ 大章 390 + 次数框 ×N（N≥2）/ 定位图标 / 场所名（两行）」。
+/// - 常规（B2）：[onTapStamp] 非空时章本体可点（按压 scale 0.96）。
+/// - [compact]（B5）：同一张脸等比缩小成缩略页 +「Halaman {i}」，不可点。
 class PassportPageFace extends StatelessWidget {
   const PassportPageFace({
     super.key,
@@ -31,6 +32,7 @@ class PassportPageFace extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!compact) return _face(context);
     final l10n = AppLocalizations.of(context);
+    final r = kPassportBookContentRect;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -38,73 +40,96 @@ class PassportPageFace extends StatelessWidget {
           key: const ValueKey('passportPageFaceCompact'),
           width: 120,
           child: AspectRatio(
-            aspectRatio: 3 / 4,
+            aspectRatio: r.width / r.height,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: AppColors.cream2,
+                color: PassportInk.paper,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.lineViolet),
+                border: Border.all(color: PassportInk.cellBorder),
               ),
               // 同一张脸等比缩小（不是另一套资产）。
-              child: FittedBox(
-                fit: BoxFit.contain,
-                child: SizedBox(width: 300, height: 400, child: _face(context)),
-              ),
+              child: _face(context),
             ),
           ),
         ),
         const SizedBox(height: 6),
         Text(l10n.passportPageLabel(pageIndex + 1),
             style: const TextStyle(
-                fontSize: 12, color: AppColors.ink2, fontFeatures: [FontFeature.tabularFigures()])),
+                fontSize: 12, color: PassportInk.footer, fontFeatures: [FontFeature.tabularFigures()])),
       ],
     );
   }
 
   Widget _face(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final date = stamp.firstVisitDate == null ? '' : formatDayMonthYear(context, stamp.firstVisitDate!);
-    return Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _PressableStamp(
-            onTap: compact ? null : onTapStamp,
-            child: SizedBox(
-              width: 150,
-              height: 140,
-              child: Stack(
-                clipBehavior: Clip.none,
-                alignment: Alignment.center,
-                children: [
-                  PlaceStampView(placeType: stamp.placeType, imageUrl: stamp.stampImageUrl, size: 128),
-                  if (stamp.visitCount >= 2)
-                    Positioned(right: 0, top: 0, child: PassportVisitBadge(count: stamp.visitCount)),
-                ],
+    final r = kPassportBookContentRect;
+    final date = stamp.firstVisitDate == null ? null : formatDayMonthYear(context, stamp.firstVisitDate!);
+    return FittedBox(
+      fit: BoxFit.contain,
+      child: SizedBox(
+        width: r.width,
+        height: r.height,
+        child: Stack(
+          children: [
+            if (date != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 172,
+                child: Text(date,
+                    key: const ValueKey('passportStampDate'),
+                    textAlign: TextAlign.center,
+                    style: passportRubik(37, FontWeight.w400, PassportInk.light)),
+              ),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 225,
+              child: Text(l10n.passportVisitCount(stamp.visitCount),
+                  key: const ValueKey('passportStampVisits'),
+                  textAlign: TextAlign.center,
+                  style: passportRubik(40, FontWeight.w700, PassportInk.dark)),
+            ),
+            Positioned(
+              left: 219,
+              top: 311,
+              width: 390,
+              height: 390,
+              child: _PressableStamp(
+                onTap: compact ? null : onTapStamp,
+                child: PlaceStampView(placeType: stamp.placeType, imageUrl: stamp.stampImageUrl, size: 390),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Text(stamp.placeName,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink)),
-          const SizedBox(height: 6),
-          Text(l10n.passportStampMeta(date, stamp.visitCount),
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13, color: AppColors.ink2)),
-        ],
+            if (stamp.visitCount >= 2)
+              Positioned(left: 516, top: 597, child: PassportVisitBadge(count: stamp.visitCount, size: 136)),
+            Positioned(
+              left: 381,
+              top: 769,
+              width: 66,
+              height: 75,
+              child: Image.asset('assets/passport_book/location.png', fit: BoxFit.contain),
+            ),
+            Positioned(
+              left: 94,
+              width: 640,
+              top: 864,
+              child: Text(stamp.placeName,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: passportRubik(40, FontWeight.w500, PassportInk.dark, height: 1.25)),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// 纵览（B2b）的章 cell：章面 + 场所名一行（V1.3.2 Story 4.3 从纵览网格抽出，护照分享卡的章格复用它）。
+/// 纵览（B2b）的章 cell：章面 + 场所名（V1.3.2 Story 4.3 从纵览网格抽出，护照分享卡的章格复用它）。
 ///
 /// 章面走 [PlaceStampView]：专属章 → 包内默认章 → 占位；**原色、不着色、不圆形裁切**（AD-5 / D-10）。
-/// [labelFontSize] 缺省 11（纵览页原值）；分享卡按画布坐标传更大的字号。
+/// 场所名按设计稿用 Rubik Medium 深棕、最多两行。[labelFontSize] 缺省 11（纵览页原值）；分享卡按画布坐标传更大的字号。
 class PassportStampCell extends StatelessWidget {
   const PassportStampCell({super.key, required this.stamp, required this.stampSize, this.labelFontSize = 11});
 
@@ -120,32 +145,44 @@ class PassportStampCell extends StatelessWidget {
         PlaceStampView(placeType: stamp.placeType, imageUrl: stamp.stampImageUrl, size: stampSize),
         SizedBox(height: labelFontSize * 4 / 11),
         Text(stamp.placeName,
-            maxLines: 1,
+            maxLines: 2,
+            textAlign: TextAlign.center,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: labelFontSize, color: AppColors.ink2)),
+            style: passportRubik(labelFontSize, FontWeight.w500, PassportInk.dark, height: 1.16)),
       ],
     );
   }
 }
 
-/// 重复到访角标「×N」（N≥2 才由调用方挂出；纯数字 + 符号，不进 ARB）。
+/// 重复到访角标「xN」（N≥2 才由调用方挂出；纯数字 + 符号，不进 ARB）。
+/// 设计稿：紫色圆 + 白虚线边（`count_frame.png`）+ 白色粗体字；[size] 为圆的边长（画布坐标）。
 class PassportVisitBadge extends StatelessWidget {
-  const PassportVisitBadge({super.key, required this.count});
+  const PassportVisitBadge({super.key, required this.count, this.size = 50});
 
   final int count;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       key: const ValueKey('passportVisitBadge'),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: AppColors.popRed, borderRadius: BorderRadius.circular(12)),
-      child: Text('×$count',
-          style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-              fontFeatures: [FontFeature.tabularFigures()])),
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Image.asset('assets/passport_book/count_frame.png', width: size, height: size),
+          Padding(
+            padding: EdgeInsets.all(size * 0.14),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text('x$count',
+                  style: passportRubik(size * 0.42, FontWeight.w700, Colors.white)
+                      .copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

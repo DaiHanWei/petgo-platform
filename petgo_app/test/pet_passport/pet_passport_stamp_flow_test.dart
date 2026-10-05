@@ -102,7 +102,7 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('newStampViewPassport')));
       await tester.pumpAndSettle();
       expect(find.byType(PetPassportPage), findsOneWidget);
-      expect(find.text('Cap 3 / 3'), findsOneWidget, reason: '停在新章（第 3 枚）');
+      expect(find.text('Cap 3/3'), findsOneWidget, reason: '停在新章（第 3 枚）');
 
       // 返回：回到进入 B4 之前那页，不再看一次落章。
       final nav = tester.state<NavigatorState>(find.byType(Navigator).first);
@@ -171,7 +171,7 @@ void main() {
       expect(find.text('Tempat tidak ditemukan'), findsOneWidget);
       expect(find.text('Tempat ini sudah tidak terdaftar'), findsOneWidget);
       expect(find.text('Halaman 2'), findsOneWidget);
-      expect(find.text('×3'), findsWidgets);
+      expect(find.text('x3'), findsWidgets);
       expect(find.text('3 kunjungan'), findsOneWidget);
     });
 
