@@ -109,6 +109,8 @@ void main() {
     expect(find.descendant(of: find.byType(BoardingPassShareCard), matching: find.byType(CardWatermark)), findsNothing);
     expect(find.descendant(of: find.byType(BoardingPassShareCard), matching: find.byType(BoardingPassCard)),
         findsOneWidget);
+    // 分享图里票面顺时针转 90° 竖放（2026-10-06 产品）。
+    expect(tester.widget<RotatedBox>(find.byKey(const ValueKey('boardingPassShareRotated'))).quarterTurns, 1);
     expect(find.text('Momo · Taman Menteng'), findsOneWidget);
     expect(tester.widget<Text>(find.byKey(const ValueKey('boardingPassShareCardMeta'))).data, endsWith(' · 3×'));
     expect(tester.widget<CardQr>(find.byType(CardQr)).data, petDownloadUrl());

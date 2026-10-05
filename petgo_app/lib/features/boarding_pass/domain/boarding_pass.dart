@@ -84,6 +84,7 @@ class BoardingPassDetail {
     this.addressText,
     this.city,
     this.unlockToken,
+    this.petType,
   });
 
   /// 解析后的场所 token（MERGED → 保留方）；地址条跳场所详情用它。
@@ -107,6 +108,9 @@ class BoardingPassDetail {
   final bool unlocked;
   final String? unlockToken;
 
+  /// 宠物物种 wire 值（CAT / DOG / OTHER；老后端不下发 → null）。卡面 Breed 栏拼「物种 + 品种」用。
+  final String? petType;
+
   factory BoardingPassDetail.fromJson(Map<String, dynamic> json) {
     final count = json['visitCount'];
     return BoardingPassDetail(
@@ -127,6 +131,7 @@ class BoardingPassDetail {
       city: _blankToNull(json['city']?.toString()),
       unlocked: json['unlocked'] == true,
       unlockToken: _blankToNull(json['unlockToken']?.toString()),
+      petType: _blankToNull(json['petType']?.toString()),
     );
   }
 }

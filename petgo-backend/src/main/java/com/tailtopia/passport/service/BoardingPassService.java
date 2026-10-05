@@ -88,7 +88,7 @@ public class BoardingPassService {
                 BoardingPassSeat.of(pet.petId(), card.placeId()), s.placeType(), s.availability(),
                 info == null ? null : info.firstPhotoUrl(), s.stampImageUrl(),
                 active ? s.addressText() : null, active && info != null ? info.city() : null,
-                row != null && row.isUnlocked(), row == null ? null : row.getPublicToken());
+                row != null && row.isUnlocked(), row == null ? null : row.getPublicToken(), pet.petType());
     }
 
     /**

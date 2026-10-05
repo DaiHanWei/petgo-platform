@@ -129,6 +129,7 @@ class BoardingPassIntegrationTest extends ApiIntegrationTest {
         mvc.perform(get(BASE + "/" + a.getPublicToken()).header("Authorization", userBearer(o.user().getId())))
                 .andExpect(jsonPath("$.passenger").value("Momo"))
                 .andExpect(jsonPath("$.breed").value("Anggora"))
+                .andExpect(jsonPath("$.petType").value("CAT"))
                 .andExpect(jsonPath("$.seat").isNotEmpty())
                 .andExpect(jsonPath("$.city").value("Jakarta"))
                 .andExpect(jsonPath("$.unlockToken").doesNotExist());

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/card_render/card_canvas.dart';
 import '../../../../shared/card_render/card_watermark.dart';
 import '../../../../shared/widgets/app_image.dart';
@@ -123,7 +124,7 @@ class BoardingPassCard extends StatelessWidget {
               Positioned(left: 575, top: _topFor(171, _labelSize), child: text(BoardingPassLabels.passenger, label)),
               Positioned(
                 left: 575,
-                width: 420,
+                width: 360,
                 top: _topFor(214, _valueSize),
                 child: text(p.passenger, value, key: const ValueKey('boardingPassPassenger')),
               ),
@@ -132,11 +133,18 @@ class BoardingPassCard extends StatelessWidget {
                 top: _topFor(171, _labelSize),
                 child: text(BoardingPassLabels.breed, label, align: TextAlign.right),
               ),
+              // 「物种 + 品种」可能较长：放不下时整行等比缩小（不截断），右对齐。
               Positioned(
                 right: 1754 - 1328,
-                width: 330,
+                width: 380,
                 top: _topFor(214, _valueSize),
-                child: text(p.breed ?? '—', value, align: TextAlign.right),
+                height: _valueSize,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Text(_breedLine(context, p),
+                      key: const ValueKey('boardingPassBreed'), maxLines: 1, softWrap: false, style: value),
+                ),
               ),
               Positioned(left: 575, top: _topFor(299, _labelSize), child: text(BoardingPassLabels.to, label)),
               Positioned(
@@ -208,6 +216,19 @@ class BoardingPassCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Breed 栏 =「物种 + 品种」（设计稿「Kucing Domestic」；物种按界面语言本地化）。缺哪段省哪段，都缺 → 「—」。
+  static String _breedLine(BuildContext context, BoardingPassDetail p) {
+    final l10n = AppLocalizations.of(context);
+    final species = switch (p.petType) {
+      'CAT' => l10n.petTypeCat,
+      'DOG' => l10n.petTypeDog,
+      'OTHER' => l10n.petTypeOther,
+      _ => null,
+    };
+    final parts = [?species, ?p.breed];
+    return parts.isEmpty ? '—' : parts.join(' ');
   }
 
   /// 邮票框里的场所照：场所首图 → 包内默认场所图 → 代码占位（类型图标 + 浅紫底）。

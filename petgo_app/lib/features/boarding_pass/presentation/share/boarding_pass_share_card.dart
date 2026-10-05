@@ -18,7 +18,7 @@ import '../../../keepsake/presentation/keepsake_card_style.dart';
 
 /// 登机牌分享卡（V1.3.2 Story 4.3 · UI 稿 B9）：通用骨架的一种用法。
 ///
-/// - 主体段：3.5 的整张登机牌卡（[BoardingPassCard]，场所图带 + 机票字段，PASSPORT 单独一行），
+/// - 主体段：整张登机牌卡（[BoardingPassCard]，2026-10-06 横版票面）**顺时针转 90° 竖放**、
 ///   **contain 居中**（不 cover —— 会裁掉 SEAT / 护照号）；留白为卡外底色。
 ///   卡内不叠水印：水印由预览页按该张解锁态挂在整张 9:16 卡外层（导出同样带）。
 /// - 信息段：「{pet} · {场所名}」/「{日期} · {次数}×」（日期与卡上 DATE 同一取值 `lastVisitDate`、同一格式）。
@@ -31,8 +31,8 @@ class BoardingPassShareCard extends StatelessWidget {
   final BoardingPassDetail pass;
   final CardCanvas canvas;
 
-  /// 登机牌卡的排版宽度（逻辑单位；与详情页里卡的常见宽度同档，contain 时整体放大）。
-  static const double _passWidth = 340;
+  /// 横版票面的排版尺寸（与详情页同一画布比例；contain 时整体缩放）。
+  static const double _passLong = 900;
 
   @override
   Widget build(BuildContext context) {
@@ -49,9 +49,18 @@ class BoardingPassShareCard extends StatelessWidget {
         color: AppColors.cream2,
         child: Padding(
           padding: EdgeInsets.all(m.pad),
+          // 横版票顺时针转 90° 竖放，铺满竖长的主体段（2026-10-06 产品；与详情页同向）。
           child: FittedBox(
             fit: BoxFit.contain,
-            child: SizedBox(width: _passWidth, child: BoardingPassCard(pass: pass, watermarked: false)),
+            child: RotatedBox(
+              key: const ValueKey('boardingPassShareRotated'),
+              quarterTurns: 1,
+              child: SizedBox(
+                width: _passLong,
+                height: _passLong / kBoardingPassCanvas.aspectRatio,
+                child: BoardingPassCard(pass: pass, watermarked: false),
+              ),
+            ),
           ),
         ),
       ),

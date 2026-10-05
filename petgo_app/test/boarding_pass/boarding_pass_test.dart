@@ -23,6 +23,7 @@ void main() {
         'placeToken': 'p' * 32,
         'passenger': 'Momo',
         'breed': 'Anggora',
+        'petType': 'CAT',
         'placeName': 'Taman Menteng',
         'passportNo': 'TT02P2600128',
         'lastVisitDate': '2026-09-28',
@@ -151,6 +152,8 @@ void main() {
       expect(tester.widget<Text>(find.byKey(const ValueKey('boardingPassDate'))).data, '28 SEP 2026',
           reason: 'Date = 最近一次打卡日，大写月');
       expect(tester.widget<Text>(find.byKey(const ValueKey('boardingPassVisits'))).data, endsWith('x'));
+      expect(tester.widget<Text>(find.byKey(const ValueKey('boardingPassBreed'))).data, 'Kucing Anggora',
+          reason: 'Breed 栏 = 物种（按界面语言）+ 品种');
       expect(find.byType(CardWatermark), findsOneWidget);
       expect(find.text('Buka Rp1.000'), findsOneWidget);
       expect(find.byKey(const ValueKey('boardingPassImagePlaceholder')), findsOneWidget);
