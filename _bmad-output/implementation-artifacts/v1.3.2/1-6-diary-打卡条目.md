@@ -204,3 +204,4 @@ App（修改）
 ### Change Log
 
 - 2026-09-30：Story 1.6 实现（`supports` 能力参数、时间线 / 日详情 / 日历打卡条目与去重、访客守卫 + App 模型 / 通栏组件 / 点击 / 日历标记 / l10n）；复审一条观感问题已修；L0 双绿，置 review。
+- 2026-10-05：**L1 / L2 本地验收**（库 `petgo_v132a`，模拟器 `petgo_phone`）。L1：`TimelinePlaceCheckinIntegrationTest` 5 例（不带 supports 基线不变 / 带时出条目、GROWTH_MOMENT 关联帖抑制至删帖、Moment 关联帖不抑制、访客四入口不含、删档重建不继承）+ 契约 / 时间线 / 访客相关共 84 例绿；真接口对测试账号三端点各比一次：不带 `supports` 时间线仅 2 条里程碑、日历 `days=[]`、日详情空，带 `place_checkin` 时 11 条 `PLACE_CHECKIN_BANNER`（带 checkinPlace）、日历 10/4、10/5 `hasPlaceCheckin=true`、10/4 日详情出 Kopi Kalyan。L2：通栏专属浅青底 + 线性定位图标 + 单行省略；点条目 → 场所详情（`place_detail_viewed.from=diary`、`diary_timeline_item_tapped.item_type=PLACE_CHECKIN_BANNER`）；场所临时下架 → 点击提示「Place not found」不跳转（已恢复）；日历两天整格定位图标；日详情页渲染同一通栏（非照片卡）且点击同样跳场所。同日内按时间正序是既有 AC5 规则（`withinDayAscending`），非本 story 引入。未验：RC-6 老版本 App 回归（需装旧包）。无新问题。
