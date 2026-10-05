@@ -94,9 +94,12 @@ class MatchShareCard extends StatelessWidget {
                             ),
                           const Spacer(),
                           // 字标资产本身是纯白（紫底专用），这里正好是深紫底，不上色。
-                          // 2026-10-05 产品两轮微调：每轮放大 10%、上移 5px —— 170 → 187 → 206，底下垫 5 → 10。
-                          SvgPicture.asset('assets/brand/wordmark_brand.svg', width: 206),
-                          const SizedBox(height: 10),
+                          // 2026-10-05 产品定：字标宽 240px，导出图上字标最底一行像素在 y=1400
+                          // （栏底内边距 40 让盒底落在 1400，字形底再下压 1px 对齐）。改这里先导出量一次。
+                          Transform.translate(
+                            offset: const Offset(0, 1),
+                            child: SvgPicture.asset('assets/brand/wordmark_brand.svg', width: 240),
+                          ),
                         ],
                       ),
                     ),
