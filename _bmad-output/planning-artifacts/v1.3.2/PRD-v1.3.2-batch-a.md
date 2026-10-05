@@ -365,7 +365,11 @@ updated: 2026-09-18
 | E-11C | `tailsonality_match_entered` / `tailsonality_owner_type_set` / `tailsonality_match_card_shared` | `owner_type`、`pet_type`、`match_level`（0~4 相同字母数） | FR-117 配型页完成率与配型卡传播（配型已全免费，无解锁事件） |
 | E-11D | `tailsonality_retake_confirmed` / `tailsonality_paywall_abandoned` / `tailsonality_badge_equipped` | `result_index`（佩戴时） | FR-117 重测意愿、挽留弹窗效果、佩戴率 |
 | E-14 | `place_checkin` / `place_checkin_post_created` | `place_id`、`place_type` | 场所打卡量与「顺手发帖」转化 |
-| E-16 | `passport_issued` / `passport_stamped` / `passport_card_shared` | `stamp_count`（分享时） | FR-120 收集深度与晒护照裂变 |
+| E-16 | `passport_issued` / `passport_stamped` / `passport_card_shared` | `stamp_count`（护照卡分享时）；`passport_card_shared` 另带 `card_type`：`page`（护照卡）/ `boarding`（登机牌卡，**不带** `stamp_count`）`[2026-10-02 待确认 4.6/4.7]` | FR-120 收集深度与晒护照裂变 |
+| E-16B | `passport_snapshot_unlocked` / `boarding_pass_unlocked`（**服务端**，解锁成功、事务提交后） | 快照：`stamp_count`、`price`；登机牌：`place_type`（取不到不带）、`price` `[2026-10-02 待确认 3.9]` | FR-120 护照快照 / 登机牌付费转化 |
+| E-17 | `keepsake_card_generated`（分享预览页导出成功、弹系统分享面板前；失败不报） | `card_type`：`result` / `match` / `page` / `boarding`；`duration_ms` `[2026-10-02 待确认 4.3]` | 四类分享卡出图量与耗时（分享率分母） |
+| E-18 | `brag_post_tapped`（点「Pamer di postingan」即报，后续截图 / 转码失败也已计一次） | `source`：`tailsonality_result` / `tailsonality_match` / `match_preview` / `boarding_pass` `[2026-10-02 待确认 4.12]` | 一键发帖炫耀入口点击量 |
+| E-9（沿用 V1.3.0） | `lightbox_opened` / `lightbox_dismissed` | `source` 新增取值 `tailsonality_result`（结果页点开大图）`[2026-10-02 待确认 4.2]` | FR-115 灯箱来源区分 |
 
 ---
 

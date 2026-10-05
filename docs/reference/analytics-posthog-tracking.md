@@ -685,3 +685,38 @@ App 对 5xx **不报**：网关失败服务端已报 `GATEWAY_DECLINED`，再报
 - 漏斗：`paywall_shown → started → succeeded`，跨端靠 distinct_id（前后端同一 sha256 口径）与同名属性 `method` / `price_idr` 拼接。
 - 服务端事件依赖 `POSTHOG_SERVER_KEY`：staging 2026-09-25 起开启（`app_env=stag`），生产随下次发版重建容器生效（`app_env=prod`）。**生效前 `ktp_unlock_succeeded` 为零是配置原因，不是没人付费。**
 - 🚩 AppsFlyer 未改：目前只有充值记 `af_purchase`；KTP 的 QRIS 付款是否计入广告归因收入待产品拍板（PawCoin 付的不能计，否则与充值重复）。
+
+## 12. V1.3.2 batch-a 埋点增改（待确认处理 · 2026-10-02 定 / 2026-10-05 回写）
+
+> V1.3.2 batch-a 的完整事件表以 `_bmad-output/planning-artifacts/v1.3.2/PRD-v1.3.2-batch-a.md` §4 为准；
+> 本节只记开发阶段定下的**新增事件 / 新属性 / 新取值**（来源：`_bmad-output/implementation-artifacts/v1.3.2/待确认汇总-batch-a.md`
+> 3.9 / 4.2 / 4.3 / 4.6 / 4.7 / 4.12）。所有事件都**不带**宠物名、主人昵称、护照号、场所名、token。
+
+### 12.1 新增事件
+
+| 事件 | 上报端 | 触发点 | 属性 |
+|---|---|---|---|
+| `keepsake_card_generated` | App | 分享预览页点「Bagikan ke Story」→ 卡片图导出成功、弹系统分享面板前；导出失败不报 | `card_type`：`result`（Tailsonality 结果卡）/ `match`（配型卡）/ `page`（护照卡）/ `boarding`（登机牌卡）；`duration_ms`（点击到出图耗时） |
+| `brag_post_tapped` | App | 点「Pamer di postingan」的那一刻（后续截图 / 转码失败也已计一次） | `source`：`tailsonality_result` / `tailsonality_match` / `match_preview`（配型卡分享预览页）/ `boarding_pass`（登机牌详情页） |
+| `passport_snapshot_unlocked` | **服务端** | 护照快照解锁成功、事务提交后（AFTER_COMMIT） | `stamp_count`、`price`（IDR） |
+| `boarding_pass_unlocked` | **服务端** | 登机牌解锁成功、事务提交后（AFTER_COMMIT） | `place_type`（取不到不带）、`price`（IDR） |
+
+模块前缀 `keepsake_`（四类付费 / 纪念卡共用）与 `brag_` 为本版本新增，已加入
+`petgo_app/test/analytics/v112_events_test.dart` 的允许前缀名单。服务端两个事件名与属性键已登记 `AnalyticsEventGuard` 白名单。
+代码：`petgo_app/lib/features/keepsake/presentation/keepsake_card_style.dart`（事件名常量）、
+`petgo_app/lib/features/content/presentation/brag_post_entry.dart`（`BragPostSource`）、
+`petgo-backend/.../passport/service/PassportSnapshotAnalyticsListener.java` / `BoardingPassAnalyticsListener.java`。
+
+### 12.2 已有事件变更
+
+| 事件 | 变更 |
+|---|---|
+| `passport_card_shared` | 新增 `card_type`：`page`（护照卡，仍带 `stamp_count`）/ `boarding`（登机牌卡，**不再带** `stamp_count`）。触发时机不变：系统分享面板回调成功才报 |
+| `lightbox_opened` / `lightbox_dismissed` | `source` 新增取值 `tailsonality_result`（Tailsonality 结果页点开大图）；原有 `place_detail` / `content_detail` 不变 |
+
+### 12.3 看数注意
+
+- `passport_card_shared` 区分护照卡 / 登机牌卡**一律按 `card_type`**，不要用「有没有 `stamp_count`」判断。
+- 分享率可用 `*_card_shared ÷ keepsake_card_generated`（同 `card_type`）；出图后取消分享不计 `_shared`。
+- 服务端两个 `*_unlocked` 依赖 `POSTHOG_SERVER_KEY`（同 §11.3）。
+- staging 数据按 App Version 带 `-stag` 后缀筛除 / 筛选。
