@@ -233,8 +233,9 @@ class BoardingPassIntegrationTest extends ApiIntegrationTest {
         Place a = newPlace();
         Place b = newPlace();
         checkIn(o, b);
-        org.mockito.Mockito.doThrow(new IllegalStateException("boom")).when(boardingMerge)
-                .reassignForMerge(b.getId(), a.getId());
+        // 打桩调用同样经过事务代理，而 reassignForMerge 是 MANDATORY —— 不在事务里打桩会先被拦下
+        new TransactionTemplate(txManager).executeWithoutResult(s -> org.mockito.Mockito
+                .doThrow(new IllegalStateException("boom")).when(boardingMerge).reassignForMerge(b.getId(), a.getId()));
         assertThatThrownBy(() -> mergeService.merge(b.getId(), a.getId(), admin)).isInstanceOf(IllegalStateException.class);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM place_checkins WHERE place_id = ?", Long.class, b.getId()))
                 .as("打卡未改挂").isEqualTo(1);
