@@ -63,11 +63,15 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('名字 · 品种；海报缺失回落占位不崩；点开始进答题页', (tester) async {
+    testWidgets('名字 · 品种；海报出图；点开始进答题页', (tester) async {
       await pumpSheet(tester, const PetProfile(id: 1, name: 'Momo', cardToken: 't', petType: 'CAT', breed: 'Anggora'));
       expect(find.text('Tes kepribadian Momo · Anggora'), findsOneWidget);
       expect(find.text('18 pertanyaan · ± 3 menit'), findsOneWidget);
-      expect(find.byKey(const ValueKey('tsIntroPosterPlaceholder')), findsOneWidget, reason: '素材未入库 → 占位');
+      // 海报已入库（2026-10-05）：出真图、不出占位。
+      expect(find.byKey(const ValueKey('tsIntroPosterPlaceholder')), findsNothing);
+      expect(find.byWidgetPredicate((w) => w is Image && w.image is AssetImage && (w.image as AssetImage).assetName == kTsIntroPosterAsset),
+          findsOneWidget);
+      expect(File('assets/tailsonality/intro_poster.webp').existsSync(), isTrue);
       await tester.tap(find.byKey(const ValueKey('tsIntroStart')));
       await tester.pumpAndSettle();
       expect(find.text('quiz-page'), findsOneWidget);
