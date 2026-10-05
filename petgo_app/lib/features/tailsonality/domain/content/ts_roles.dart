@@ -4,6 +4,8 @@ import 'ts_text.dart';
 ///
 /// **键写成单引号字面量 + `TsRole(` 一行起头**：后端 `TailsonalityContentParityTest` 据此抽取，与 `TailsonalityCatalog.TYPE_CODES` 比对。
 /// 角色名与 slogan 是 Jaksel 原文，三语共用、**不翻译**（不带内容设计里的斜体星号）。
+/// 🔴 **角色名与 slogan 以角色卡图为准**（卡面烤着这两行字，2026-10-05 产品定）：ESTJ / ESTP / ISTP 的名、
+/// ESTP / ISTP / ENFP 的 slogan 已按图改。换图或改字时两边一起改，否则结果卡与列表 / Diary / 小标显示两个名字。
 /// 🔴 任何文案不得借用外部人格测试的角色别名（`trademark_scan_test.dart` 整词扫描）。
 class TsRole {
   const TsRole({required this.name, required this.slogan, required this.summary, required this.deepRead});
@@ -60,7 +62,7 @@ const Map<String, TsRole> kTsRoles = {
   ),
   'ENFP': TsRole(
     name: "Gabut Tapi Heboh",
-    slogan: "Gabut is a lifestyle.",
+    slogan: "Quiet house? Not on my watch.",
     summary: (
       en: "{pet}'s day is made of seventeen half-finished things — and it was totally into every one of them.",
       id: "Harinya {pet} isinya tujuh belas hal yang nggak pernah kelar — dan pas lagi dikerjain, semuanya serius banget.",
@@ -71,7 +73,7 @@ const Map<String, TsRole> kTsRoles = {
     ),
   ),
   'ESTJ': TsRole(
-    name: "Bos Rumah Tangga",
+    name: "Ministry of House Affairs",
     slogan: "Rules are rules, bestie.",
     summary: (
       en: "You think you're raising {pet}. Actually, it's running the house.",
@@ -83,8 +85,8 @@ const Map<String, TsRole> kTsRoles = {
     ),
   ),
   'ESTP': TsRole(
-    name: "Santuy No Effort",
-    slogan: "Effort? Sounds fake.",
+    name: "Gas First, Think Later",
+    slogan: "Plan? I'm already there!",
     summary: (
       en: "Everyone's welcome — but {pet} won't get up for anyone.",
       id: "Siapa pun yang dateng disambut — tapi {pet} nggak bakal bangun buat siapa-siapa.",
@@ -179,8 +181,8 @@ const Map<String, TsRole> kTsRoles = {
     ),
   ),
   'ISTP': TsRole(
-    name: "Mager Sejati",
-    slogan: "Mager mode: permanent.",
+    name: "Lowbat on Purpose",
+    slogan: "Wake me when the treat bag opens.",
     summary: (
       en: "Food, a comfy spot, nobody bothering it. That's enough.",
       id: "Ada makan, ada tempat nyaman, nggak ada yang ganggu. Udah, cukup.",

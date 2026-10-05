@@ -244,8 +244,8 @@ MBTI 原本的 N/S（抽象 vs 实感）与 T/F（逻辑 vs 价值）是**认知
 | 2 | **ENTP** | Party Animal Beneran | 真·派对动物 | 谁都是朋友，什么都想玩一下，但不执着于任何一样 |
 | 3 | **ENFJ** | Main Character Energy | 主角光环 | 热情、黏人、有明确目标，还很在意你的反应 |
 | 4 | **ENFP** | Gabut Tapi Heboh | 闲得慌但很闹 | 好奇心爆棚，情绪来得快去得也快，三分钟热度 |
-| 5 | **ESTJ** | Bos Rumah Tangga | 家里的老板 | 社交但守规矩，作息与地盘都不容更改 |
-| 6 | **ESTP** | Santuy No Effort | 佛系零努力 | 欢迎所有人，只关心眼前的吃喝玩，绝不多费一分力 |
+| 5 | **ESTJ** | Ministry of House Affairs | 家务部（原名 Bos Rumah Tangga，2026-10-05 按角色卡图改） | 社交但守规矩，作息与地盘都不容更改 |
+| 6 | **ESTP** | Gas First, Think Later | 先冲再说（原名 Santuy No Effort，2026-10-05 按角色卡图改） | 欢迎所有人，只关心眼前的吃喝玩，绝不多费一分力 |
 | 7 | **ESFJ** | Bucin Garis Keras | 硬核黏人精 | 人生目标就是贴着你，一离开就开始碎碎念 |
 | 8 | **ESFP** | Drama Tapi Gemoy | 戏多但可爱 | 情绪全写在脸上，随时在表演，但你就是拿它没办法 |
 | 9 | **INTJ** | Lone Wolf Mode | 独狼模式 | 自己的事自己研究，不需要观众，也不需要安慰 |
@@ -253,7 +253,7 @@ MBTI 原本的 N/S（抽象 vs 实感）与 T/F（逻辑 vs 价值）是**认知
 | 11 | **INFJ** | Quiet Luxury | 静奢风 | 安静、有品味、心里有数，认定的事不会变 |
 | 12 | **INFP** | Overthinker Elite | 精英级想太多 | 敏感内秀，每一步都想过，也每一步都纠结过 |
 | 13 | **ISTJ** | Jadwal Is Everything | 时间表就是一切 | 到点吃饭到点睡，规律得像上了发条，不喜欢任何变动 |
-| 14 | **ISTP** | Mager Sejati | 真·懒神 | 万物皆可明天再说 |
+| 14 | **ISTP** | Lowbat on Purpose | 故意没电（原名 Mager Sejati，2026-10-05 按角色卡图改） | 万物皆可明天再说 |
 | 15 | **ISFJ** | Shy Bestie | 害羞的挚友 | 对外全是防备，对你全是依赖 |
 | 16 | **ISFP** | Sus Radar 24/7 | 全天候可疑雷达 | 对一切保持怀疑，风吹草动都要确认一遍 |
 
@@ -465,9 +465,9 @@ MBTI 原本的 N/S（抽象 vs 实感）与 T/F（逻辑 vs 价值）是**认知
 | ENTJ | Literally CEO Banget | *CEO of this house, literally.* |
 | ENTP | Party Animal Beneran | *New friend? Yes. Commitment? No.* |
 | ENFJ | Main Character Energy | *Main character, always.* |
-| ENFP | Gabut Tapi Heboh | *Gabut is a lifestyle.* |
-| ESTJ | Bos Rumah Tangga | *Rules are rules, bestie.* |
-| ESTP | Santuy No Effort | *Effort? Sounds fake.* |
+| ENFP | Gabut Tapi Heboh | *Quiet house? Not on my watch.*（2026-10-05 按图改，原 *Gabut is a lifestyle.*） |
+| ESTJ | Ministry of House Affairs | *Rules are rules, bestie.* |
+| ESTP | Gas First, Think Later | *Plan? I'm already there!*（2026-10-05 按图改，原 *Effort? Sounds fake.*） |
 | ESFJ | Bucin Garis Keras | *Kamu ke mana, aku ke situ.* |
 | ESFP | Drama Tapi Gemoy | *Drama, but make it cute.* |
 | INTJ | Lone Wolf Mode | *Busy. Don't watch.* |
@@ -475,7 +475,7 @@ MBTI 原本的 N/S（抽象 vs 实感）与 T/F（逻辑 vs 价值）是**认知
 | INFJ | Quiet Luxury | *Says nothing. Knows everything.* |
 | INFP | Overthinker Elite | *Overthinking, currently.* |
 | ISTJ | Jadwal Is Everything | *Jam makan is jam makan.* |
-| ISTP | Mager Sejati | *Mager mode: permanent.* |
+| ISTP | Lowbat on Purpose | *Wake me when the treat bag opens.*（2026-10-05 按图改，原 *Mager mode: permanent.*） |
 | ISFJ | Shy Bestie | *Shy to them, clingy to you.* |
 | ISFP | Sus Radar 24/7 | *Sus. Everything sus.* |
 
