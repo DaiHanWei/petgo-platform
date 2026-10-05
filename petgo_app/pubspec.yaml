@@ -167,8 +167,8 @@ flutter:
     # 透明底、宽 ~1080。四档按 `PetAgeStage`（puppy/young/middle/senior）依次取，
     # **文件名里的数字不是判据** —— 它只是设计稿的档位编号。
     - assets/age_card/
-    # V1.3.2 Story 1.2：场所默认章（7 款类型兜底）。素材未入库（D-21），目录里只有 README；
-    # 到货后同名放入即生效，缺失时 App 画代码占位章。
+    # V1.3.2 Story 1.2：场所默认章（7 款类型兜底）。素材已入库（7 款齐）；
+    # 同名覆盖即换图，缺失时 App 画代码占位章。
     - assets/place_stamp/
     # V1.3.2 Story 2.3：Tailsonality 素材（扁平存放 intro_poster / quiz_* / role_* / match_tier*）。
     # 素材未入库（D-21），目录里只有 README；到货后同名放入即生效，缺失时 App 画代码占位。

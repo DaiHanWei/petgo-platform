@@ -131,7 +131,7 @@ void main() {
     expect(find.textContaining('Rp'), findsNothing);
   });
 
-  group('默认章素材（D-21：不入库、缺文件回落占位）', () {
+  group('默认章素材（7 款已入库；缺文件 / 未知类型回落占位）', () {
     test('7 类都映射到约定路径（穷举）', () {
       for (final t in PlaceType.values) {
         expect(defaultStampAssetFor(t), startsWith('assets/place_stamp/'));
@@ -142,6 +142,13 @@ void main() {
     test('素材目录存在 README 且在 pubspec 声明', () {
       expect(File('assets/place_stamp/README.md').existsSync(), isTrue);
       expect(File('pubspec.yaml').readAsStringSync(), contains('- assets/place_stamp/'));
+    });
+
+    test('7 类映射路径的素材文件都在包里（防改名漏同步）', () {
+      for (final t in PlaceType.values) {
+        final path = defaultStampAssetFor(t)!;
+        expect(File(path).existsSync(), isTrue, reason: '$t → $path 缺文件');
+      }
     });
 
     test('Story 1.4：章面组件不着色、不圆形裁切（源码扫描）', () {
@@ -156,7 +163,7 @@ void main() {
           reason: 'Image(color:) 会给章面着色');
     });
 
-    testWidgets('Story 1.4：专属章网络图加载失败 → 回落默认章 → 占位章，不崩', (tester) async {
+    testWidgets('Story 1.4：专属章网络图加载失败 → 回落该类型默认章，不崩', (tester) async {
       await tester.pumpWidget(const MaterialApp(
         home: Center(
             child: PlaceStampView(
@@ -164,12 +171,18 @@ void main() {
       ));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.byKey(const ValueKey('placeStampPlaceholder')), findsOneWidget);
+      expect(find.byKey(const ValueKey('placeStampPlaceholder')), findsNothing);
+      expect(
+          find.byWidgetPredicate((w) =>
+              w is Image &&
+              w.image is AssetImage &&
+              (w.image as AssetImage).assetName == 'assets/place_stamp/cafe.png'),
+          findsOneWidget);
     });
 
-    testWidgets('文件缺失时不崩、显示代码绘制的占位章', (tester) async {
+    testWidgets('未知类型（无默认章）→ 不崩、显示代码绘制的占位章', (tester) async {
       await tester.pumpWidget(const MaterialApp(
-        home: Center(child: PlaceStampView(placeType: PlaceType.park, size: 96)),
+        home: Center(child: PlaceStampView(placeType: null, size: 96)),
       ));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);

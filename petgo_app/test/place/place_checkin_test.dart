@@ -254,8 +254,13 @@ void main() {
     testWidgets('新章（C2）：章面 + 「{pet} dapat cap baru」+「Lihat Paspor」（Story 1.2）', (tester) async {
       await _pumpSuccess(tester, isNew: true, count: 1);
 
-      expect(find.byKey(const ValueKey('placeStampPlaceholder')), findsOneWidget,
-          reason: '素材未到：代码绘制的占位章');
+      expect(
+          find.byWidgetPredicate((w) =>
+              w is Image &&
+              w.image is AssetImage &&
+              (w.image as AssetImage).assetName == 'assets/place_stamp/cafe.png'),
+          findsOneWidget,
+          reason: '无专属章：按场所类型显示包内默认章');
       expect(find.text('Check-in berhasil!'), findsOneWidget);
       expect(find.text('Momo dapat cap baru'), findsOneWidget);
       expect(find.byKey(const ValueKey('placeCheckinVisitBadge')), findsNothing);
