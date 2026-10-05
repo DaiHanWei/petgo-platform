@@ -241,3 +241,4 @@ App（修改）
 ### Change Log
 
 - 2026-10-01：Story 5.1 实现（徽章映射表 + 公共组件 + 六处替换 + 素材目录 + 跨库测试）；复审 1 条低优先已修；L0 绿，置 review。
+- 2026-10-06：**L1 / L2 本地验收**（模拟器 `petgo_verify`）。L0 复跑：里程碑 / 徽章 / 时间线五类 / 游客态 / 通知中心相关 App 测试 124 例绿；后端 `MilestoneBadgeMappingTest`（读 App 源码，78 code ↔ 40 语义键）+ `MilestoneCatalogI18nTest` 绿。素材已正式入库（`assets/milestone/` 40 枚 + `locked` + `first_health_check`，2026-10-05 上传），故 AC5.3「放一张 / 拿掉」改为直接看真图：① 徽章墙 64 圆——已完成「Profile created」「First daily post」显示真图，其余 29 枚统一显示 `locked` 图（不暴露是哪一枚）；② 点已完成徽章 → 庆祝页（重温）120 大徽章 + S·SMALL 小标 + KOLEKSI 两枚真图；③ 点锁定徽章 → 底抽屉 76 圆为 `locked` 图；④ Diary 时间线系统里程碑横幅左侧为真徽章；⑤ 通知中心两条里程碑通知的图标块为真徽章。⑥ 照片卡里程碑角标：测试账号无「打卡里程碑」的 Diary 帖，未在真机看到，由 `timeline_five_class_render_test` 覆盖。证据截图见本机 `~/Downloads/设计图/L1L2验收/5-1-徽章组件六处/`。
