@@ -128,6 +128,8 @@ const _sameInBothLocales = {
   'boarding', 'pass',
   // 币种符号 Rp（印尼盾）：两语写法相同，不是待翻译的词（V1.3.2 Story 3.2 l10n 说明）。
   'rp',
+  // 配对连接符「{宠物} x {主人}」（V1.3.2 · 2026-10-05 分享卡设计稿）：小写 x 当「×」用，两语同写，不是词。
+  'x',
   // 印尼语直接借用的英文词
   'checkout', 'online', 'offline', 'normal', 'rating', 'refund', 'bonus',
   'edit', 'bug', 'email', 'whatsapp', 'label', 'diary', 'milestone', 'health',

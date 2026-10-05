@@ -7,7 +7,8 @@ import '../../../../shared/card_render/card_watermark.dart';
 import '../../domain/content/ts_roles.dart';
 import '../../domain/tailsonality_result.dart';
 import '../../../keepsake/presentation/keepsake_card_style.dart';
-import 'ts_role_art_image.dart';
+import '../../data/ts_remote_art.dart';
+import 'ts_remote_art_image.dart';
 
 /// Tailsonality 结果卡画布：3:4（1080×1440）。定义在 feature 内，**不改** `shared/card_render/card_canvas.dart`。
 const CardCanvas kTsCardCanvas = CardCanvas(size: Size(1080, 1440), radius: 48);
@@ -95,9 +96,9 @@ class TsResultCardFace extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // 角色卡按需下载（不打包，见 TsRoleArt）；下载中 / 取不到画代码占位。
-        TsRoleArtImage(
-          letters: r.letters,
+        // 角色卡按需下载（不打包，见 TsRemoteArt）；下载中 / 取不到画代码占位。
+        TsRemoteArtImage(
+          name: TsRemoteArt.role(r.letters),
           placeholder: (_) => _Placeholder(typeCode: r.typeCode, name: role?.name ?? ''),
         ),
         if (overlay)

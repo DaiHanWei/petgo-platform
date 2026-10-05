@@ -16,7 +16,7 @@ import 'package:tailtopia/features/profile/domain/card_link.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_owner_type_repository.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_providers.dart';
-import 'package:tailtopia/features/tailsonality/data/ts_role_art.dart';
+import 'package:tailtopia/features/tailsonality/data/ts_remote_art.dart';
 import 'package:tailtopia/features/tailsonality/domain/tailsonality_result.dart';
 import 'package:tailtopia/features/tailsonality/presentation/share/result_share_card.dart';
 import 'package:tailtopia/features/tailsonality/presentation/tailsonality_result_page.dart';
@@ -52,13 +52,13 @@ void main() {
     Analytics.debugCaptureSink = (e, p) => events.add((e, p));
     SharedPreferences.setMockInitialValues({});
     // 角色卡按需下载：默认装成「下到了」，个别用例改成取不到。
-    TsRoleArt.debugLoader = (_) async => _png;
+    TsRemoteArt.debugLoader = (_) async => _png;
   });
   tearDown(() {
     Analytics.debugCaptureSink = null;
     TailsonalityResultPage.captureForTest = null;
-    TsRoleArt.debugReset();
-    TsRoleArt.debugLoader = (_) async => null;
+    TsRemoteArt.debugReset();
+    TsRemoteArt.debugLoader = (_) async => null;
   });
 
   Future<void> pumpPage(WidgetTester tester, {bool unlocked = false, UserProfile? profile}) async {
@@ -108,7 +108,7 @@ void main() {
       expect(page.customCanvas, kTsShareCanvas);
       expect(find.byType(ResultShareCard), findsOneWidget);
       expect(find.byType(TsResultCardFace), findsOneWidget, reason: '左侧复用 2.4 的卡面，不另画');
-      expect(find.byKey(const ValueKey('tsRoleArt_ENTJ')), findsOneWidget, reason: '已下载的角色卡');
+      expect(find.byKey(const ValueKey('tsRemoteArt_role_ENTJ')), findsOneWidget, reason: '已下载的角色卡');
       expect(tester.widget<CardQr>(find.byType(CardQr)).data, petDownloadUrl());
       expect(find.text('Pratinjau Kartu'), findsOneWidget);
     });
@@ -141,8 +141,8 @@ void main() {
 
     testWidgets('角色卡下载不到 → 提示重试、不进预览（不分享占位卡）', (tester) async {
       await pumpPage(tester);
-      TsRoleArt.debugReset();
-      TsRoleArt.debugLoader = (_) async => null;
+      TsRemoteArt.debugReset();
+      TsRemoteArt.debugLoader = (_) async => null;
       await openViaMenu(tester);
       expect(find.byType(ShareCardPreviewPage), findsNothing);
       expect(find.text('Gagal memuat, silakan coba lagi'), findsOneWidget);

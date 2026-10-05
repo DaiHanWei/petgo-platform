@@ -15,6 +15,7 @@ import 'package:tailtopia/features/profile/domain/card_link.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_owner_type_repository.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_providers.dart';
+import 'package:tailtopia/features/tailsonality/data/ts_remote_art.dart';
 import 'package:tailtopia/features/tailsonality/domain/content/ts_match_copy.dart';
 import 'package:tailtopia/features/tailsonality/domain/tailsonality_result.dart';
 import 'package:tailtopia/features/tailsonality/domain/ts_match_share_data.dart';
@@ -22,7 +23,6 @@ import 'package:tailtopia/features/tailsonality/presentation/share/match_share_c
 import 'package:tailtopia/features/tailsonality/presentation/tailsonality_match_page.dart';
 import 'package:tailtopia/features/tailsonality/presentation/widgets/ts_match_card.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
-import 'package:tailtopia/shared/card_render/card_canvas.dart';
 import 'package:tailtopia/shared/card_render/card_frame.dart';
 import 'package:tailtopia/shared/card_render/card_qr.dart';
 import 'package:tailtopia/shared/card_render/card_render_pipeline.dart';
@@ -89,71 +89,61 @@ void main() {
     });
   });
 
-  group('AC1 卡面', () {
+  group('AC1 卡面（2026-10-05 设计稿：上 1:1 配型卡、下深紫信息栏）', () {
     Future<void> pumpCard(WidgetTester tester, MatchShareCardData data) async {
-      tester.view.physicalSize = const Size(1080, 1920);
+      tester.view.physicalSize = kTsMatchShareCanvas.size;
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(MaterialApp(
         locale: const Locale('id'),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: SizedBox(width: 1080, height: 1920, child: MatchShareCard(data: data, canvas: CardCanvas.story)),
+        home: SizedBox.fromSize(size: kTsMatchShareCanvas.size, child: MatchShareCard(data: data)),
       ));
       await tester.pumpAndSettle();
     }
 
-    testWidgets('名字行 / 代号行（宠物在前）/ 档名 / 差异句；码指向 /get', (tester) async {
-      await pumpCard(
-          tester,
-          MatchShareCardData.from(
-              petName: 'Momo', ownerName: 'Aurel', petCode: 'ENTJ-H', ownerType: 'INFP', locale: const Locale('id')));
-      expect(find.text('Momo × Aurel'), findsOneWidget);
-      expect(find.text('ENTJ-H × INFP'), findsOneWidget);
-      expect(find.text('Counterweight'), findsOneWidget);
-      expect(find.byKey(const ValueKey('matchShareCardLines')), findsOneWidget);
-      expect(find.byType(TsMatchCardFace), findsOneWidget, reason: '主体段复用 2.5 的卡面，不另写映射');
-      expect(tester.widget<CardQr>(find.byType(CardQr)).data, petDownloadUrl());
-      expect(find.textContaining('Kamu ×'), findsNothing);
+    MatchShareCardData data({String petName = 'Momo', String? ownerName = 'Aurel'}) => MatchShareCardData.from(
+        petName: petName, ownerName: ownerName, petCode: 'ENTJ-H', ownerType: 'INFP', locale: const Locale('id'));
+
+    testWidgets('上配型卡 1:1 铺满宽、下栏「宠物 x 昵称」+ 码（指向 /get）+ Download page', (tester) async {
+      await pumpCard(tester, data());
+      final main = tester.getRect(find.byKey(const ValueKey('matchShareCardMain')));
+      final info = tester.getRect(find.byKey(const ValueKey('matchShareCardInfo')));
+      expect(main.topLeft, Offset.zero);
+      expect(main.size, kTsMatchCanvas.size);
+      expect(info.top, greaterThan(main.bottom));
+      expect(info.bottom, kTsMatchShareCanvas.height);
+      expect(find.byType(TsMatchCardFace), findsOneWidget, reason: '上半段复用 2.5 的卡面，不另写映射');
+      expect(find.text('Momo x Aurel'), findsOneWidget);
+      expect(find.text('Halaman unduh'), findsOneWidget);
+      final qr = tester.widget<CardQr>(find.byType(CardQr));
+      expect(qr.data, petDownloadUrl());
+      expect(qr.side, greaterThanOrEqualTo(CardQr.minExportSide));
+      expect(tester.getRect(find.byType(CardQr)).top, greaterThan(main.bottom));
+      // 档名 / 文案 / 刻度条都画在配型卡图里，卡面不再叠字。
+      expect(find.text('ENTJ-H × INFP'), findsNothing);
+      expect(find.text('Counterweight'), findsNothing);
+      expect(find.textContaining('Kamu'), findsNothing);
     });
 
-    testWidgets('昵称取不到：名字行只显示宠物名', (tester) async {
-      await pumpCard(
-          tester,
-          MatchShareCardData.from(
-              petName: 'Momo', ownerName: null, petCode: 'ENTJ-H', ownerType: 'INFP', locale: const Locale('id')));
+    testWidgets('昵称取不到：名字行只显示宠物名（不写 x）', (tester) async {
+      await pumpCard(tester, data(ownerName: null));
       expect(find.text('Momo'), findsOneWidget);
-      expect(find.textContaining('×'), findsOneWidget, reason: '只剩代号行的 ×');
+      expect(find.textContaining(' x '), findsNothing);
     });
 
-    testWidgets('宠物名为空（档案未加载）：不拼出「 × 昵称」，只显示昵称', (tester) async {
-      await pumpCard(
-          tester,
-          MatchShareCardData.from(
-              petName: '', ownerName: 'Aurel', petCode: 'ENTJ-H', ownerType: 'INFP', locale: const Locale('id')));
+    testWidgets('宠物名为空（档案未加载）：不拼出「 x 昵称」，只显示昵称', (tester) async {
+      await pumpCard(tester, data(petName: ''));
       expect(find.text('Aurel'), findsOneWidget);
-      expect(find.textContaining(' × Aurel'), findsNothing);
+      expect(find.textContaining(' x Aurel'), findsNothing);
     });
 
-    /// AC1.4：最长档名 + 两条最长差异句 + 20 字宠物名 / 30 字昵称 —— 不溢出（溢出在 widget test 里直接报错）。
-    testWidgets('长文案不溢出', (tester) async {
-      String longest(Iterable<String> xs) => xs.reduce((a, b) => a.length >= b.length ? a : b);
-      final lines = kTsAxisDiffLines.values.map((t) => t.id).toList()..sort((a, b) => b.length.compareTo(a.length));
-      await pumpCard(
-        tester,
-        MatchShareCardData(
-          petName: 'M' * 20,
-          ownerName: 'W' * 30,
-          petCode: 'ENTJ-H',
-          ownerType: 'ISFP',
-          sameCount: 0,
-          tier: 5,
-          tierName: longest(kTsMatchTiers.values.map((t) => t.name.id)),
-          lines: lines.take(2).toList(),
-        ),
-      );
+    /// AC1.4：20 字宠物名 / 30 字昵称 —— 不溢出（溢出在 widget test 里直接报错）。
+    testWidgets('长名字不溢出', (tester) async {
+      await pumpCard(tester, data(petName: 'M' * 20, ownerName: 'W' * 30));
       expect(tester.takeException(), isNull);
-      expect(find.byKey(const ValueKey('matchShareCardLines')), findsOneWidget);
+      expect(find.byKey(const ValueKey('matchShareCardPair')), findsOneWidget);
     });
   });
 
@@ -162,12 +152,16 @@ void main() {
     setUp(() {
       events = [];
       Analytics.debugCaptureSink = (e, p) => events.add((e, p));
-      // Story 4.4 起点卡先截 3:4 再进预览：截不到（null）时预览不出主操作 —— 正是 4.2 的「无主操作」形态。
+      // Story 4.4 起点卡先截 1:1 再进预览：截不到（null）时预览不出主操作 —— 正是 4.2 的「无主操作」形态。
       TailsonalityMatchPage.captureForTest = () async => null;
+      // 配型卡按需下载：默认装成「下到了」（字节解不出图 → 卡面回落占位，不影响本组断言）。
+      TsRemoteArt.debugLoader = (_) async => Uint8List.fromList(const [1, 2, 3]);
     });
     tearDown(() {
       Analytics.debugCaptureSink = null;
       TailsonalityMatchPage.captureForTest = null;
+      TsRemoteArt.debugReset();
+      TsRemoteArt.debugLoader = (_) async => null;
     });
 
     Future<void> pumpMatch(WidgetTester tester, {required bool unlocked}) async {
@@ -208,6 +202,7 @@ void main() {
     testWidgets('结果未解锁时打开：无水印、无尺寸切换、单个主按钮（Bagikan ke Story）', (tester) async {
       await pumpMatch(tester, unlocked: false);
       expect(find.byType(MatchShareCard), findsOneWidget);
+      expect(tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage)).customCanvas, kTsMatchShareCanvas);
       expect(find.text('Pratinjau Kartu'), findsOneWidget);
       expect(tester.widget<ShareCardPreviewPage>(find.byType(ShareCardPreviewPage)).watermarked, isFalse);
       expect(find.byType(CardWatermark), findsNothing);
@@ -227,7 +222,7 @@ void main() {
         final key = tester.widget<RepaintBoundary>(boundary).key! as GlobalKey;
         Uint8List? out;
         await tester.runAsync(() async {
-          final png = await CardRenderPipeline.capture(boundaryKey: key, canvas: CardCanvas.story);
+          final png = await CardRenderPipeline.capture(boundaryKey: key, canvas: kTsMatchShareCanvas);
           final img = (await (await ui.instantiateImageCodec(png!)).getNextFrame()).image;
           out = (await img.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
           img.dispose();
@@ -256,6 +251,39 @@ void main() {
       expect(events.where((e) => e.$1 == 'tailsonality_match_card_shared').single.$2,
           {'owner_type': 'INFP', 'pet_type': 'ENTJ', 'match_level': 1});
     });
+  });
+
+  testWidgets('配型卡下载不到 → 提示重试、不进预览（不分享占位卡）', (tester) async {
+    TsRemoteArt.debugLoader = (_) async => null;
+    tester.view.physicalSize = const Size(420, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    TailsonalityMatchPage.captureForTest = () async => null;
+    addTearDown(() => TailsonalityMatchPage.captureForTest = null);
+    await tester.pumpWidget(ProviderScope(
+      retry: (_, _) => null,
+      overrides: [
+        authControllerProvider.overrideWith(() => _FakeAuth(const UserProfile(nickname: 'Aurel'))),
+        petProfileProvider.overrideWith((ref) async => const PetProfile(id: 1, name: 'Momo', cardToken: 't')),
+        tailsonalityOwnerTypeRepositoryProvider.overrideWithValue(_OwnerRepo('INFP')),
+        tailsonalityResultProvider('abc').overrideWith((ref) async => TailsonalityResult(
+              token: 'abc', typeCode: 'ENTJ-H', letters: 'ENTJ', energy: 'H', questionSet: 'DOG',
+              resultIndex: 1, unlocked: false, contentVersion: 1, createdAt: DateTime.utc(2026, 9, 30))),
+      ],
+      child: MaterialApp(
+        locale: const Locale('id'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const TailsonalityMatchPage(token: 'abc'),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('tsMatchCardPlaceholder')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('tsMatchCardTap')));
+    await tester.pumpAndSettle();
+    expect(find.byType(ShareCardPreviewPage), findsNothing);
+    expect(find.text('Gagal memuat, silakan coba lagi'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
   });
 
   /// AC2.2：配型卡入口代码不读结果解锁字段。

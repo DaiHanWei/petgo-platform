@@ -21,6 +21,7 @@ import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_owner_type_repository.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_providers.dart';
+import 'package:tailtopia/features/tailsonality/data/ts_remote_art.dart';
 import 'package:tailtopia/features/tailsonality/domain/tailsonality_result.dart';
 import 'package:tailtopia/features/tailsonality/presentation/tailsonality_match_page.dart';
 import 'package:tailtopia/features/tailsonality/presentation/tailsonality_result_page.dart';
@@ -53,8 +54,12 @@ void main() {
       prepared = png;
       return jpeg;
     };
+    // 配型卡按需下载：装成「下到了」，预览才会打开。
+    TsRemoteArt.debugLoader = (_) async => Uint8List.fromList(const [1, 2, 3]);
   });
   tearDown(() {
+    TsRemoteArt.debugReset();
+    TsRemoteArt.debugLoader = (_) async => null;
     BragPostEntry.prepareForTest = null;
     TailsonalityResultPage.captureForTest = null;
     TailsonalityMatchPage.captureForTest = null;
@@ -138,7 +143,7 @@ void main() {
     expect(events.where((e) => e.$1 == 'brag_post_tapped').single.$2, {'source': 'tailsonality_match'});
   });
 
-  testWidgets('配型卡预览：有 3:4 卡图 → 主操作 Pamer（FilledButton）+ 分享降为次按钮；点主操作进发帖页', (tester) async {
+  testWidgets('配型卡预览：有 1:1 卡图 → 主操作 Pamer（FilledButton）+ 分享降为次按钮；点主操作进发帖页', (tester) async {
     TailsonalityMatchPage.captureForTest = () async => cardPng;
     await pump(tester, const TailsonalityMatchPage(token: 'abc'));
     await tester.tap(find.byKey(const ValueKey('tsMatchCardTap')));

@@ -2445,7 +2445,7 @@
   "tailsonalityBragMatchText": "Aku tes kecocokan aku sama anabulku, lihat kartu hasilnya!",
   "boardingPassBragText": "{pet} udah sampai di {place}! Ini boarding pass-nya ✈️",
   "@boardingPassBragText": {"placeholders": {"pet": {"type": "String"}, "place": {"type": "String"}}},
-  "tailsonalityMatchCardPair": "{pet} × {owner}",
+  "tailsonalityMatchCardPair": "{pet} x {owner}",
   "@tailsonalityMatchCardPair": {"placeholders": {"pet": {"type": "String"}, "owner": {"type": "String"}}},
   "tailsonalityResultNotFound": "Hasil tes ini nggak ketemu",
   "tailsonalityMatchTeaserPrompt": "Seberapa mirip kalian?",

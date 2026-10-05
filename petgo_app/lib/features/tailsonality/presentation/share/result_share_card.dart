@@ -14,7 +14,7 @@ import '../../../keepsake/presentation/keepsake_share_reward.dart';
 import '../../../profile/data/profile_repository.dart';
 import '../../../profile/domain/card_link.dart';
 import '../../data/tailsonality_share_reward_repository.dart';
-import '../../data/ts_role_art.dart';
+import '../../data/ts_remote_art.dart';
 import '../../domain/tailsonality_result.dart';
 import '../widgets/ts_result_card.dart';
 import 'ts_share_owner_name.dart';
@@ -152,7 +152,7 @@ class ResultShareCard extends StatelessWidget {
 Future<void> openResultSharePreview(BuildContext context, WidgetRef ref, TailsonalityResult result) async {
   final petName = ref.read(petProfileProvider).value?.name ?? '';
   final ownerName = tsShareOwnerName(ref);
-  final art = await TsRoleArt.load(result.letters);
+  final art = await TsRemoteArt.load(TsRemoteArt.role(result.letters));
   if (!context.mounted) return;
   if (art == null) {
     showAppToast(context, AppLocalizations.of(context).detailNetworkError);

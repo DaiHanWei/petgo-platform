@@ -12,26 +12,26 @@ import '../../content/presentation/brag_post_entry.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/tailsonality_owner_type_repository.dart';
 import '../data/tailsonality_providers.dart';
+import '../data/ts_remote_art.dart';
 import '../domain/content/ts_match_copy.dart';
 import '../domain/content/ts_text.dart';
 import '../domain/ts_match.dart';
 import 'share/match_share_card.dart';
 import 'widgets/ts_letter_compare.dart';
 import 'widgets/ts_match_card.dart';
-import 'widgets/ts_result_card.dart';
 import 'widgets/ts_rich_text.dart';
 import 'widgets/ts_type_selector.dart';
 
 /// 主人配型页（V1.3.2 Story 2.5 · UX-DR9）。挂在某次结果 token 下：宠物侧用**这次结果**的四字母。
 ///
-/// 配型**全免费**：无锁态、无水印、无任何付费要素；换类型不收费。页首 3:4 配型卡可点 → 配型卡分享预览（Story 4.2）；
+/// 配型**全免费**：无锁态、无水印、无任何付费要素；换类型不收费。页首 1:1 配型卡可点 → 配型卡分享预览（Story 4.2）；
 /// 结果视图底部主按钮「Pamer di postingan」（Story 4.4）。
 class TailsonalityMatchPage extends ConsumerStatefulWidget {
   const TailsonalityMatchPage({super.key, required this.token});
 
   final String token;
 
-  /// 3:4 配型卡出图测试缝（`toImage` 在 widget test 的 fake-async 里不会完成）。
+  /// 1:1 配型卡出图测试缝（`toImage` 在 widget test 的 fake-async 里不会完成）。
   @visibleForTesting
   static Future<Uint8List?> Function()? captureForTest;
 
@@ -45,7 +45,7 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
   bool _saving = false;
   bool _entered = false;
 
-  /// 页首 3:4 配型卡的截图边界（发帖 / 预览主操作都截它；永不带水印）。
+  /// 页首 1:1 配型卡的截图边界（发帖 / 预览主操作都截它；永不带水印）。
   final GlobalKey _cardKey = GlobalKey();
   bool _capturing = false;
 
@@ -58,12 +58,19 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
     super.dispose();
   }
 
-  Future<Uint8List?> _captureCard() {
+  /// 当前页首卡的档号（build 时记下，截图前判断配型卡图到没到手）。
+  int? _shownTier;
+
+  Future<Uint8List?> _captureCard() async {
     final capture = TailsonalityMatchPage.captureForTest;
-    return capture != null ? capture() : CardRenderPipeline.capture(boundaryKey: _cardKey, canvas: kTsCardCanvas);
+    if (capture != null) return capture();
+    // 配型卡按需下载（TsRemoteArt）：图还没到手时卡上画的是占位，不截（调用方按「出图失败」提示）。
+    final tier = _shownTier;
+    if (tier == null || TsRemoteArt.peek(TsRemoteArt.match(tier)) == null) return null;
+    return CardRenderPipeline.capture(boundaryKey: _cardKey, canvas: kTsMatchCanvas);
   }
 
-  /// 底部「Pamer di postingan」：截 3:4 配型卡 → 发帖页。
+  /// 底部「Pamer di postingan」：截 1:1 配型卡 → 发帖页。
   ///
   /// 🔴 按钮吸底常驻，卡在列表首项：滚到详解处时卡已被懒列表回收（截到空）或不在屏上（不绘制）。
   /// 先滚回顶部、等一帧再截；仍截不到给轻提示，不静默失败。
@@ -89,7 +96,7 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
     }
   }
 
-  /// 点 3:4 卡 → 配型卡预览。🔴 预览页上画的是 9:16 卡，截不到 3:4 —— 所以**先在本页截好**再传给预览页的主操作。
+  /// 点 1:1 卡 → 配型卡预览。🔴 预览页上画的是带信息栏的分享卡，截不到纯 1:1 卡 —— 所以**先在本页截好**再传给预览页的主操作。
   Future<void> _openPreview(String petName, String petCode, String owner4) async {
     if (_capturing) return;
     setState(() => _capturing = true);
@@ -228,6 +235,7 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
       BuildContext context, AppLocalizations l10n, String owner4, String pet4, String petCode, String petName) {
     final locale = Localizations.localeOf(context);
     final m = computeTsMatch(owner4, pet4);
+    _shownTier = m.tier;
     final tier = kTsMatchTiers[m.sameCount]!;
     final axisTitles = [l10n.tailsonalityAxisEI, l10n.tailsonalityAxisNS, l10n.tailsonalityAxisTF, l10n.tailsonalityAxisJP];
     String fill(TsText t) => tsFillPet(t.of(locale), petName);

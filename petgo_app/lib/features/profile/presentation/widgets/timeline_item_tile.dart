@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../tailsonality/domain/content/ts_roles.dart';
-import '../../../tailsonality/presentation/widgets/ts_role_art_image.dart';
+import '../../../tailsonality/data/ts_remote_art.dart';
+import '../../../tailsonality/presentation/widgets/ts_remote_art_image.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/utils/date_format.dart';
@@ -314,9 +315,9 @@ class TimelineItemTile extends StatelessWidget {
               child: SizedBox(
                 width: 40,
                 height: 53, // 3:4 缩略
-                // 角色卡按需下载（不打包，见 TsRoleArt）；下载中 / 取不到回落占位，不崩。
-                child: TsRoleArtImage(
-                  letters: letters,
+                // 角色卡按需下载（不打包，见 TsRemoteArt）；下载中 / 取不到回落占位，不崩。
+                child: TsRemoteArtImage(
+                  name: TsRemoteArt.role(letters),
                   placeholder: (_) => Container(
                     key: const ValueKey('timelineTailsonalityThumbPlaceholder'),
                     color: AppColors.card,
