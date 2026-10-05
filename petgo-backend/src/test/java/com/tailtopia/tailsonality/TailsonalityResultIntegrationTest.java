@@ -6,12 +6,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.tailtopia.account.domain.AccountDeletion;
+import com.tailtopia.account.repository.AccountDeletionRepository;
+import com.tailtopia.account.service.AccountDeletionService;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.domain.PetType;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.profile.service.ProfileDeletionService;
 import com.tailtopia.support.ApiIntegrationTest;
+import com.tailtopia.support.VetTestSupport;
 import com.tailtopia.tailsonality.domain.TailsonalityCatalog;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -32,6 +36,12 @@ class TailsonalityResultIntegrationTest extends ApiIntegrationTest {
     private ProfileDeletionService profileDeletion;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private VetTestSupport vets;
+    @Autowired
+    private AccountDeletionRepository deletions;
+    @Autowired
+    private AccountDeletionService accountDeletion;
 
     private static String body(int idx) {
         return TailsonalityCatalog.QUESTION_IDS.stream().map(q -> "\"" + q + "\":" + idx)
@@ -103,5 +113,26 @@ class TailsonalityResultIntegrationTest extends ApiIntegrationTest {
         pet(u, PetType.CAT);
         String again = submit(u, body(0), 201);
         assertThat(json.readTree(again).get("resultIndex").asInt()).isEqualTo(1);
+    }
+
+    /** AC5.3（L1 本地验收 2026-10-05 补）：真实 ACTIVE 兽医的 token 访问列表 / 单条均 403（不能落 anyRequest().authenticated()）。 */
+    @Test
+    void vetTokenIsForbiddenOnBothPaths() throws Exception {
+        long vetId = vets.newActiveVet("tailsonality-it").getId();
+        mvc.perform(get(BASE).header("Authorization", vetBearer(vetId))).andExpect(status().isForbidden());
+        mvc.perform(get(BASE + "/someToken").header("Authorization", vetBearer(vetId))).andExpect(status().isForbidden());
+    }
+
+    /** AC7.3（L1 本地验收 2026-10-05 补）：注销全链路 AccountDeletionService.execute 后该用户无结果行。 */
+    @Test
+    void accountDeletionRemovesResults() throws Exception {
+        User u = newUser();
+        pet(u, PetType.DOG);
+        submit(u, body(0), 201);
+        submit(u, body(3), 201);
+        AccountDeletion d = deletions.save(AccountDeletion.request(u.getId()));
+        accountDeletion.execute(d.getId());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM tailsonality_results WHERE user_id = ?",
+                Long.class, u.getId())).isZero();
     }
 }
