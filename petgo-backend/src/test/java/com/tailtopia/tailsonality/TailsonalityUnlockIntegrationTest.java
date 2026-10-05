@@ -154,4 +154,80 @@ class TailsonalityUnlockIntegrationTest extends ApiIntegrationTest {
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"channel\":\"PAWCOIN\"}"))
                 .andExpect(status().isForbidden());
     }
+
+    /**
+     * 在真 PostgreSQL 上让「解锁这条结果」的 UPDATE 必定报错（临时触发器，只针对该行），模拟发放时的库级失败。
+     * 返回清理动作（finally 里调用）。
+     */
+    private Runnable failGrantFor(String token) {
+        long id = jdbc.queryForObject("SELECT id FROM tailsonality_results WHERE public_token = ?", Long.class, token);
+        String fn = "it_fail_grant_" + id;
+        jdbc.execute("CREATE FUNCTION " + fn + "() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN "
+                + "IF NEW.id = " + id + " THEN RAISE EXCEPTION 'it: simulated grant failure'; END IF; RETURN NEW; END $$");
+        jdbc.execute("CREATE TRIGGER " + fn + " BEFORE UPDATE ON tailsonality_results FOR EACH ROW EXECUTE FUNCTION " + fn + "()");
+        return () -> {
+            jdbc.execute("DROP TRIGGER IF EXISTS " + fn + " ON tailsonality_results");
+            jdbc.execute("DROP FUNCTION IF EXISTS " + fn + "()");
+        };
+    }
+
+    /**
+     * 本地 L1 验收 2026-10-05：QRIS 到账后发放口在真 PG 上抛库级异常 —— 保存点回滚后外层事务必须还能继续：
+     * 意图保持 PAID（到账不丢）、购买行落 ORPHAN_PAID（交人工）、结果仍锁、未自动佩戴。
+     */
+    @Test
+    void qrisPaidButGrantFailsOnRealPostgresIsOrphanPaidAndPaymentKept() throws Exception {
+        User u = userWithPet();
+        String token = submit(u);
+        String res = unlock(u, token, "QRIS").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String intent = json.readTree(res).path("payment").path("token").asText();
+
+        Runnable cleanup = failGrantFor(token);
+        try {
+            paymentIntents.applyCallback(new PaymentCallback(intent, "gw-" + SEQ.incrementAndGet(), GatewayStatus.PAID,
+                    Map.of()));
+        } finally {
+            cleanup.run();
+        }
+
+        assertThat(jdbc.queryForObject("SELECT status FROM payment_intents WHERE public_token = ?", String.class, intent))
+                .as("到账不能被发放失败连带回滚").isEqualTo("PAID");
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT status, paid_at, price_idr FROM keepsake_purchases WHERE sku = 'TAILSONALITY' AND user_id = ?",
+                u.getId());
+        assertThat(row.get("status")).isEqualTo("ORPHAN_PAID");
+        assertThat(row.get("paid_at")).isNotNull();
+        assertThat(((Number) row.get("price_idr")).longValue()).isPositive();
+        assertThat(unlockedInDb(token)).as("发放失败 → 结果仍锁").isFalse();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM tailsonality_badges b JOIN tailsonality_results r "
+                + "ON r.id = b.result_id WHERE r.public_token = ?", Integer.class, token)).isZero();
+    }
+
+    /**
+     * 本地 L1 验收 2026-10-05：PawCoin 同步发放在真 PG 上失败 —— 按 3-1 记录的保守取舍整笔回滚：
+     * 不扣币、不留购买行、结果仍锁、回 409（App 不会显示「已解锁」）。
+     */
+    @Test
+    void pawcoinGrantFailsOnRealPostgresRollsBackWithoutCharging() throws Exception {
+        User u = userWithPet();
+        wallet.credit(u.getId(), 50_000L, PawCoinTxnType.TOPUP, "TEST", null, "ts-topup:" + SEQ.incrementAndGet());
+        long before = wallet.balanceOf(u.getId());
+        String token = submit(u);
+
+        Runnable cleanup = failGrantFor(token);
+        try {
+            unlock(u, token, "PAWCOIN").andExpect(status().isConflict());
+        } finally {
+            cleanup.run();
+        }
+
+        assertThat(wallet.balanceOf(u.getId())).as("发放失败不得扣币").isEqualTo(before);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM keepsake_purchases WHERE user_id = ?", Integer.class,
+                u.getId())).isZero();
+        assertThat(unlockedInDb(token)).isFalse();
+
+        // 触发器撤掉后同一结果可正常再买（幂等键没有被失败的那次占住）
+        unlock(u, token, "PAWCOIN").andExpect(status().isOk()).andExpect(jsonPath("$.unlocked").value(true));
+        assertThat(unlockedInDb(token)).isTrue();
+    }
 }
