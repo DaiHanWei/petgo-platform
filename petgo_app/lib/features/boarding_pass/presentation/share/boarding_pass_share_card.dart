@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/analytics/analytics.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../shared/card_render/card_canvas.dart';
-import '../../../../shared/utils/date_format.dart';
 import '../../../content/presentation/share_card/share_card_preview_page.dart';
 import '../../../content/presentation/share_card/share_card_skeleton.dart';
 import '../../../keepsake/presentation/keepsake_share_reward.dart';
@@ -21,7 +20,7 @@ import '../../../keepsake/presentation/keepsake_card_style.dart';
 /// - 主体段：整张登机牌卡（[BoardingPassCard]，2026-10-06 横版票面）**顺时针转 90° 竖放**、
 ///   **contain 居中**（不 cover —— 会裁掉 SEAT / 护照号）；留白为卡外底色。
 ///   卡内不叠水印：水印由预览页按该张解锁态挂在整张 9:16 卡外层（导出同样带）。
-/// - 信息段：「{pet} · {场所名}」/「{日期} · {次数}×」（日期与卡上 DATE 同一取值 `lastVisitDate`、同一格式）。
+/// - 2026-10-06：只放票身（去掉票根）、去掉信息段，非品牌区整块给票。
 /// - 品牌段：骨架自带。
 ///
 /// 场所已下架照样可分享、场所名照常显示（下架只影响详情页地址与跳转，AD-5）。
@@ -34,62 +33,52 @@ class BoardingPassShareCard extends StatelessWidget {
   /// 横版票面的排版尺寸（与详情页同一画布比例；contain 时整体缩放）。
   static const double _passLong = 900;
 
+  /// 票身占整张票的宽度比例：撕线在画布 x=1412（共 1754），右侧票根不进分享图。
+  static const double _bodyFraction = 1412 / 1754;
+
   @override
   Widget build(BuildContext context) {
     final m = ShareCardMetrics(canvas);
-    final u = m.u;
-    final date = pass.lastVisitDate == null ? '—' : formatDayMonthYear(context, pass.lastVisitDate!);
-    return ShareCardSkeleton(
+    final bodyW = _passLong * _bodyFraction;
+    final h = _passLong / kBoardingPassCanvas.aspectRatio;
+    // 2026-10-06 产品：分享图只放**票身**（撕线左侧，去掉 SEAT / 场所章票根），
+    // 也去掉「{pet} · {场所} / {日期} · {n}×」信息段——非品牌区整块给票，票竖放后尽量大。
+    return ShareCardSkeleton.block(
       canvas: canvas,
       color: Colors.white,
       qrData: petDownloadUrl(),
-      mainAreaKey: const ValueKey('boardingPassShareCardMain'),
-      infoAreaKey: const ValueKey('boardingPassShareCardInfo'),
-      main: ColoredBox(
+      block: ColoredBox(
+        key: const ValueKey('boardingPassShareCardMain'),
         color: AppColors.cream2,
         child: Padding(
           padding: EdgeInsets.all(m.pad),
-          // 横版票顺时针转 90° 竖放，铺满竖长的主体段（2026-10-06 产品；与详情页同向）。
           child: FittedBox(
             fit: BoxFit.contain,
+            // 横版票顺时针转 90° 竖放（与详情页同向）。
             child: RotatedBox(
               key: const ValueKey('boardingPassShareRotated'),
               quarterTurns: 1,
               child: SizedBox(
-                width: _passLong,
-                height: _passLong / kBoardingPassCanvas.aspectRatio,
-                child: BoardingPassCard(pass: pass, watermarked: false),
+                width: bodyW,
+                height: h,
+                child: ClipRect(
+                  child: OverflowBox(
+                    alignment: Alignment.centerLeft,
+                    minWidth: _passLong,
+                    maxWidth: _passLong,
+                    minHeight: h,
+                    maxHeight: h,
+                    child: BoardingPassCard(pass: pass, watermarked: false),
+                  ),
+                ),
               ),
             ),
           ),
         ),
       ),
-      info: Padding(
-        padding: EdgeInsets.fromLTRB(m.pad, m.pad * 0.55, m.pad, m.pad * 0.4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${pass.passenger} · ${pass.placeName}',
-                key: const ValueKey('boardingPassShareCardTitle'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: u * 0.058, fontWeight: FontWeight.w800, color: AppColors.ink)),
-            SizedBox(height: u * 0.01),
-            Text('$date · ${pass.visitCount}×',
-                key: const ValueKey('boardingPassShareCardMeta'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: u * 0.046,
-                    color: AppColors.ink2,
-                    fontFeatures: const [FontFeature.tabularFigures()])),
-          ],
-        ),
-      ),
-      infoMinOfRest: 0.12,
     );
   }
+
 }
 
 /// 登机牌卡预览入口（详情页顶栏分享按钮，B3b / B3c 两态都有）。

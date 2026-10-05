@@ -111,8 +111,10 @@ void main() {
         findsOneWidget);
     // 分享图里票面顺时针转 90° 竖放（2026-10-06 产品）。
     expect(tester.widget<RotatedBox>(find.byKey(const ValueKey('boardingPassShareRotated'))).quarterTurns, 1);
-    expect(find.text('Momo · Taman Menteng'), findsOneWidget);
-    expect(tester.widget<Text>(find.byKey(const ValueKey('boardingPassShareCardMeta'))).data, endsWith(' · 3×'));
+    // 2026-10-06：只放票身（去掉 SEAT 票根）、无信息段；票面字段照常在。
+    expect(find.byKey(const ValueKey('boardingPassShareCardMeta')), findsNothing);
+    expect(find.byKey(const ValueKey('boardingPassShareCardTitle')), findsNothing);
+    expect(tester.widget<Text>(find.byKey(const ValueKey('boardingPassTo'))).data, 'Taman Menteng');
     expect(tester.widget<CardQr>(find.byType(CardQr)).data, petDownloadUrl());
     expect(find.byKey(const ValueKey('shareCardRatioToggle')), findsNothing);
     // PASSPORT 12 位在卡面上完整。
@@ -131,10 +133,15 @@ void main() {
     expect(find.byType(CardWatermark), findsNothing);
   });
 
-  testWidgets('场所已下架：照常可分享、场所名照常显示', (tester) async {
+  testWidgets('场所已下架：照常可分享、票面场所名照常显示', (tester) async {
     await pumpDetail(tester, unlocked: true, status: 'UNAVAILABLE');
     await openShare(tester);
-    expect(find.text('Momo · Taman Menteng'), findsOneWidget);
+    expect(
+        tester
+            .widget<Text>(find.descendant(
+                of: find.byType(BoardingPassShareCard), matching: find.byKey(const ValueKey('boardingPassTo'))))
+            .data,
+        'Taman Menteng');
   });
 
   // 待确认 4.6 / 4.7（2026-10-02）按新规则更新：带 card_type=boarding、不再带 stamp_count；出图报 keepsake_card_generated。

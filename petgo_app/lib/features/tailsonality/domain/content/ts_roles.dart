@@ -87,13 +87,14 @@ const Map<String, TsRole> kTsRoles = {
   'ESTP': TsRole(
     name: "Gas First, Think Later",
     slogan: "Plan? I'm already there!",
+    // 2026-10-06 产品定稿：摘要与深度解读按新名「先冲再说」重写（原文为旧名 Santuy No Effort 的「躺平」意思）。
     summary: (
-      en: "Everyone's welcome — but {pet} won't get up for anyone.",
-      id: "Siapa pun yang dateng disambut — tapi {pet} nggak bakal bangun buat siapa-siapa.",
+      en: "The doorbell's still ringing and {pet} is already at the door — thinking can wait till after.",
+      id: "Bel pintu belum selesai bunyi, {pet} udah nongol di depan pintu — mikirnya nanti aja abis nyampe.",
     ),
     deepRead: (
-      en: "Everyone's welcome, but it won't get up for anyone. {pet} invests all its energy in whatever it can enjoy right now — food, a sunny spot, a hand that happens to pass by. Not curious, not anxious, not persistent: almost nothing bothers it. It's the lowest-maintenance combo, and the hardest to motivate. There's only one way to get it to do something — make it worth its while.",
-      id: "Siapa pun yang dateng disambut, tapi dia nggak bakal bangun buat siapa-siapa. {pet} ngabisin semua energinya buat hal yang bisa dinikmatin saat itu juga — makanan, spot yang kena matahari, tangan yang kebetulan lewat. Nggak kepo, nggak cemas, nggak ngotot: hampir nggak ada yang bisa ganggu dia. Ini kombinasi paling nggak ribet, sekaligus paling susah dimotivasi. Cuma ada satu cara biar dia mau ngapa-ngapain — bikin dia ngerasa worth it.",
+      en: "Outgoing + practical + unflappable + in-the-moment, and together they spell \"gas first, think later.\" {pet} reacts to whatever's happening right now faster than anyone: the doorbell, the rustle of the treat bag, the second you pick up your keys — it's always first on the scene. It isn't chasing novelty; it cares about the thing it can eat, play with or get close to right this second. And it isn't reckless — loud noises and strangers rarely faze it, which is exactly why it dares to rush in. That makes it easy to live with and almost worry-free, but it also means rules only count in the moment: one second you say \"no,\" the next it's already there. The trick is to stay half a step ahead — put temptations away early, and make the place you want it to go the place where good things happen first.",
+      id: "Ekstrover + praktis + santai + hidup di momen ini, kalau digabung hasilnya: gas dulu, mikir belakangan. {pet} paling cepet nanggepin apa pun yang lagi kejadian: bel pintu, bunyi kantong camilan, detik kamu ambil kunci — dia selalu yang pertama nyampe. Dia bukan ngejar hal baru; yang dia peduliin itu yang bisa dimakan, dimainin, atau dideketin detik itu juga. Dia juga bukan nekat — suara keras sama orang asing jarang bikin dia kaget, makanya dia berani langsung nyerbu. Ini bikin dia gampang diurus dan hampir nggak punya beban pikiran, tapi artinya aturan cuma berlaku buat dia di saat itu: barusan kamu bilang \"jangan\", detik berikutnya dia udah di situ. Triknya: selalu setengah langkah lebih cepet dari dia — simpen godaan duluan, terus bikin tempat yang kamu mau dia datengin jadi tempat yang paling duluan ada hal seru.",
     ),
   ),
   'ESFJ': TsRole(
