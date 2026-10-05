@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../tailsonality/domain/content/ts_roles.dart';
-import '../../../tailsonality/presentation/widgets/ts_result_card.dart' show tsRoleArtAsset;
+import '../../../tailsonality/presentation/widgets/ts_role_art_image.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/utils/date_format.dart';
@@ -314,11 +314,10 @@ class TimelineItemTile extends StatelessWidget {
               child: SizedBox(
                 width: 40,
                 height: 53, // 3:4 缩略
-                // 包内角色图（2-4 已接入的约定路径）；缺失回落占位，不崩（D-21：设计资产不入库）。
-                child: Image.asset(
-                  tsRoleArtAsset(letters),
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Container(
+                // 角色卡按需下载（不打包，见 TsRoleArt）；下载中 / 取不到回落占位，不崩。
+                child: TsRoleArtImage(
+                  letters: letters,
+                  placeholder: (_) => Container(
                     key: const ValueKey('timelineTailsonalityThumbPlaceholder'),
                     color: AppColors.card,
                     alignment: Alignment.center,

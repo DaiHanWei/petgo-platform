@@ -9,7 +9,6 @@ import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/content/presentation/share_card/share_card_preview_page.dart';
-import 'package:tailtopia/features/content/presentation/share_card/share_card_skeleton.dart';
 import 'package:tailtopia/features/keepsake/data/keepsake_repository.dart';
 import 'package:tailtopia/features/keepsake/domain/keepsake_pricing.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
@@ -17,12 +16,12 @@ import 'package:tailtopia/features/profile/domain/card_link.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_owner_type_repository.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_providers.dart';
+import 'package:tailtopia/features/tailsonality/data/ts_role_art.dart';
 import 'package:tailtopia/features/tailsonality/domain/tailsonality_result.dart';
 import 'package:tailtopia/features/tailsonality/presentation/share/result_share_card.dart';
 import 'package:tailtopia/features/tailsonality/presentation/tailsonality_result_page.dart';
 import 'package:tailtopia/features/tailsonality/presentation/widgets/ts_result_card.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
-import 'package:tailtopia/shared/card_render/card_canvas.dart';
 import 'package:tailtopia/shared/card_render/card_qr.dart';
 import 'package:tailtopia/shared/card_render/card_watermark.dart';
 import 'package:tailtopia/shared/media/image_lightbox.dart';
@@ -52,10 +51,14 @@ void main() {
     events = [];
     Analytics.debugCaptureSink = (e, p) => events.add((e, p));
     SharedPreferences.setMockInitialValues({});
+    // 角色卡按需下载：默认装成「下到了」，个别用例改成取不到。
+    TsRoleArt.debugLoader = (_) async => _png;
   });
   tearDown(() {
     Analytics.debugCaptureSink = null;
     TailsonalityResultPage.captureForTest = null;
+    TsRoleArt.debugReset();
+    TsRoleArt.debugLoader = (_) async => null;
   });
 
   Future<void> pumpPage(WidgetTester tester, {bool unlocked = false, UserProfile? profile}) async {
@@ -92,7 +95,7 @@ void main() {
   }
 
   group('AC4 结果卡预览', () {
-    testWidgets('未解锁：⋯「Bagikan」→ 预览带水印、固定 9:16 无切换、码指向 /get', (tester) async {
+    testWidgets('未解锁：⋯「Bagikan」→ 预览带水印、固定横版画布无切换、码指向 /get', (tester) async {
       await pumpPage(tester);
       await openViaMenu(tester);
 
@@ -102,8 +105,10 @@ void main() {
       // 待确认 4.1（2026-10-02）：付费保护卡水印 0.45（与 KTP 一致）。
       expect(tester.widget<CardWatermark>(find.byType(CardWatermark)).opacity, 0.45);
       expect(find.byKey(const ValueKey('shareCardRatioToggle')), findsNothing);
+      expect(page.customCanvas, kTsShareCanvas);
       expect(find.byType(ResultShareCard), findsOneWidget);
-      expect(find.byType(TsResultCardFace), findsOneWidget, reason: '主体段复用 2.4 的卡面，不另画');
+      expect(find.byType(TsResultCardFace), findsOneWidget, reason: '左侧复用 2.4 的卡面，不另画');
+      expect(find.byKey(const ValueKey('tsRoleArt_ENTJ')), findsOneWidget, reason: '已下载的角色卡');
       expect(tester.widget<CardQr>(find.byType(CardQr)).data, petDownloadUrl());
       expect(find.text('Pratinjau Kartu'), findsOneWidget);
     });
@@ -120,11 +125,28 @@ void main() {
       expect(find.byType(CardWatermark), findsNothing);
     });
 
-    testWidgets('信息段：宠物名 + 主人昵称', (tester) async {
+    testWidgets('右栏：宠物名 / x / 主人昵称 + 「Download page」', (tester) async {
       await pumpPage(tester, profile: const UserProfile(nickname: 'Aurel', email: 'a@x.id'));
       await openViaMenu(tester);
       expect(find.text('Momo'), findsOneWidget);
+      expect(find.byKey(const ValueKey('resultShareCardCross')), findsOneWidget);
       expect(find.text('Aurel'), findsOneWidget);
+      expect(find.text('Halaman unduh'), findsOneWidget);
+      final pet = tester.getRect(find.text('Momo'));
+      final owner = tester.getRect(find.text('Aurel'));
+      final qr = tester.getRect(find.byType(CardQr));
+      expect(pet.bottom, lessThanOrEqualTo(owner.top + 0.5));
+      expect(owner.bottom, lessThan(qr.top));
+    });
+
+    testWidgets('角色卡下载不到 → 提示重试、不进预览（不分享占位卡）', (tester) async {
+      await pumpPage(tester);
+      TsRoleArt.debugReset();
+      TsRoleArt.debugLoader = (_) async => null;
+      await openViaMenu(tester);
+      expect(find.byType(ShareCardPreviewPage), findsNothing);
+      expect(find.text('Gagal memuat, silakan coba lagi'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
     });
 
     testWidgets('信息段：取不到昵称时整行不显示（不兜底邮箱、不写 Kamu）', (tester) async {
@@ -132,17 +154,11 @@ void main() {
       await openViaMenu(tester);
       expect(find.text('Momo'), findsOneWidget);
       expect(find.byKey(const ValueKey('resultShareCardOwner')), findsNothing);
+      expect(find.byKey(const ValueKey('resultShareCardCross')), findsNothing, reason: '只有一个名字时不写 x');
       expect(find.textContaining('a@x.id'), findsNothing);
       expect(find.textContaining('Kamu'), findsNothing);
     });
 
-    testWidgets('品牌段与帖子卡同高（骨架 15%）', (tester) async {
-      await pumpPage(tester);
-      await openViaMenu(tester);
-      final card = tester.getRect(find.byType(ResultShareCard));
-      final brand = tester.getRect(find.byKey(const ValueKey(ShareCardSkeleton.brandAreaKey)));
-      expect(brand.height / card.height, closeTo(ShareCardMetrics.brandShare, 0.005));
-    });
   });
 
   group('AC6 埋点', () {
@@ -236,27 +252,31 @@ void main() {
     });
   });
 
-  testWidgets('ResultShareCard 按 9:16 画布出卡：主体段在上、品牌段贴底', (tester) async {
-    tester.view.physicalSize = const Size(1080, 1920);
+  testWidgets('ResultShareCard 按横版画布出卡：左 3:4 角色卡、右信息栏（码 ≥ 可扫底线）', (tester) async {
+    tester.view.physicalSize = kTsShareCanvas.size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Center(
-        child: SizedBox(
-          width: 1080,
-          height: 1920,
-          child: ResultShareCard(result: result(), canvas: CardCanvas.story, petName: 'Momo'),
+        child: SizedBox.fromSize(
+          size: kTsShareCanvas.size,
+          child: ResultShareCard(result: result(), petName: 'Momo'),
         ),
       ),
     ));
     await tester.pumpAndSettle();
     final main = tester.getRect(find.byKey(const ValueKey('resultShareCardMain')));
-    final brand = tester.getRect(find.byKey(const ValueKey(ShareCardSkeleton.brandAreaKey)));
-    expect(main.top, lessThan(brand.top));
-    expect(brand.height, closeTo(1920 * 0.15, 1));
+    final info = tester.getRect(find.byKey(const ValueKey('resultShareCardInfo')));
+    expect(main.left, 0);
+    expect(main.height, kTsShareCanvas.height);
+    expect(main.width / main.height, closeTo(3 / 4, 0.001), reason: '角色卡 3:4 不裁');
+    expect(info.left, greaterThan(main.right));
+    expect(info.right, kTsShareCanvas.width);
+    expect(tester.widget<CardQr>(find.byType(CardQr)).side, greaterThanOrEqualTo(CardQr.minExportSide));
     expect(find.byKey(const ValueKey('resultShareCardOwner')), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 }
 

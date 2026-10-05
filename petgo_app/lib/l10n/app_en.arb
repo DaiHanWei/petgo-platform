@@ -3763,6 +3763,8 @@
   "@tailsonalityMenuRetake": {"description": "Result page menu: retake."},
   "tailsonalityMenuShare": "Share",
   "@tailsonalityMenuShare": {"description": "Result page menu and unlocked bottom CTA: open the share-card preview."},
+  "tsShareDownloadHint": "Download page",
+  "@tsShareDownloadHint": {"description": "Result share card (landscape, 2026-10-05 design): caption under the app-download QR code on the purple side panel."},
   "bragPostButton": "Show off in a post",
   "keepsakeShareRewardToast": "+{coins} PawCoin 🎉",
   "@keepsakeShareRewardToast": {"description": "Toast after sharing a Tailsonality / match / passport / boarding pass card earned PawCoin (separate from ageCardRewardToast on purpose).", "placeholders": {"coins": {"type": "int"}}},

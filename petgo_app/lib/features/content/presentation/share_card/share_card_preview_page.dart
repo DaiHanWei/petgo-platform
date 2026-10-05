@@ -35,11 +35,13 @@ class ShareCardPreviewPage extends StatefulWidget {
       onGenerated = null,
       onShared = null,
       primaryAction = null,
-      watermarkOpacity = CardWatermark.defaultOpacity;
+      watermarkOpacity = CardWatermark.defaultOpacity,
+      customCanvas = CardCanvas.story;
 
   /// 通用卡形态（v1.3.2 Story 4.1 · C-11）。
   ///
-  /// - **固定 9:16、不渲染尺寸切换**（`shareCardRatioToggle`）；
+  /// - **固定一种画布、不渲染尺寸切换**（`shareCardRatioToggle`）：缺省 9:16，
+  ///   版式不是竖版的卡经 [canvas] 指定（结果卡横版，2026-10-05 设计稿）；
   /// - [watermarked] 为 true 时预览**与导出图**都带水印（见 [_watermarkedKey]）；
   /// - 埋点 / 领奖由调用方经 [onGenerated] / [onShared] 决定，本页不认识任何业务事件名；
   /// - [primaryAction] 非空时它占主按钮、「Bagikan ke Story」降为次按钮；
@@ -53,8 +55,10 @@ class ShareCardPreviewPage extends StatefulWidget {
     this.onShared,
     this.primaryAction,
     this.watermarkOpacity = CardWatermark.defaultOpacity,
+    CardCanvas canvas = CardCanvas.story,
   }) : data = null,
-       cardBuilder = builder;
+       cardBuilder = builder,
+       customCanvas = canvas;
 
   /// 帖子形态的卡片数据；custom 形态为 null。
   final ShareCardData? data;
@@ -79,6 +83,9 @@ class ShareCardPreviewPage extends StatefulWidget {
 
   /// custom 形态：水印浓度（付费保护卡由调用方传 0.45，见待确认 4.1）。
   final double watermarkOpacity;
+
+  /// custom 形态的固定画布（帖子形态恒 9:16 起步、可切换，不读它）。
+  final CardCanvas customCanvas;
 
   bool get _isCustom => cardBuilder != null;
 
@@ -107,8 +114,8 @@ class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
   /// 外层与 `CardFrame` 的 `AspectRatio` 同尺寸，管线的倍率反算照样成立。
   final GlobalKey _watermarkedKey = GlobalKey();
 
-  /// 默认 9:16（Instagram Stories 是这个功能的主场景）。
-  CardCanvas _canvas = CardCanvas.story;
+  /// 默认 9:16（Instagram Stories 是这个功能的主场景）；custom 形态取调用方指定的画布。
+  late CardCanvas _canvas = widget.customCanvas;
   bool _busy = false;
 
   Future<void> _shareIt() async {
@@ -192,7 +199,7 @@ class _ShareCardPreviewPageState extends State<ShareCardPreviewPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // custom 形态固定 9:16、不给切换（C-11）。
+            // custom 形态固定一种画布、不给切换（C-11）。
             if (!widget._isCustom)
               Padding(
                 padding: const EdgeInsets.all(AppSpacing.md),

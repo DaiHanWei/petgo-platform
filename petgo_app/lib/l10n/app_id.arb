@@ -2437,6 +2437,7 @@
   "tailsonalityMoreActions": "Opsi lainnya",
   "tailsonalityMenuRetake": "Tes Ulang",
   "tailsonalityMenuShare": "Bagikan",
+  "tsShareDownloadHint": "Halaman unduh",
   "bragPostButton": "Pamer di postingan",
   "keepsakeShareRewardToast": "+{coins} PawCoin 🎉",
   "@keepsakeShareRewardToast": {"placeholders": {"coins": {"type": "int"}}},

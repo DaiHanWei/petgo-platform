@@ -7,6 +7,7 @@ import '../../../../shared/card_render/card_watermark.dart';
 import '../../domain/content/ts_roles.dart';
 import '../../domain/tailsonality_result.dart';
 import '../../../keepsake/presentation/keepsake_card_style.dart';
+import 'ts_role_art_image.dart';
 
 /// Tailsonality 结果卡画布：3:4（1080×1440）。定义在 feature 内，**不改** `shared/card_render/card_canvas.dart`。
 const CardCanvas kTsCardCanvas = CardCanvas(size: Size(1080, 1440), radius: 48);
@@ -15,9 +16,6 @@ const CardCanvas kTsCardCanvas = CardCanvas(size: Size(1080, 1440), radius: 48);
 ///
 /// `true` ⇒ 卡面不叠文字层（否则会出现两遍）。纯插画无字版到货（发版检查单 RC-4）时改为 `false`，不改其它代码。
 const bool kTsRoleArtHasBakedText = true;
-
-/// 角色插画路径（按四字母取，16 张共用、不分物种）。**素材未入库**（D-21），缺失时画代码占位。
-String tsRoleArtAsset(String letters) => 'assets/tailsonality/role_$letters.webp';
 
 /// 结果卡（V1.3.2 Story 2.4 · AC2）：`CardFrame` 按画布坐标排版，Epic 4 的大图 / 分享出图从同一个
 /// `RepaintBoundary` 截图。本 epic 恒带水印（`!result.unlocked`，FR-117.6）。
@@ -97,10 +95,10 @@ class TsResultCardFace extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.asset(
-          tsRoleArtAsset(r.letters),
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => _Placeholder(typeCode: r.typeCode, name: role?.name ?? ''),
+        // 角色卡按需下载（不打包，见 TsRoleArt）；下载中 / 取不到画代码占位。
+        TsRoleArtImage(
+          letters: r.letters,
+          placeholder: (_) => _Placeholder(typeCode: r.typeCode, name: role?.name ?? ''),
         ),
         if (overlay)
           Positioned(
@@ -128,7 +126,7 @@ class TsResultCardFace extends StatelessWidget {
   }
 }
 
-/// 素材缺失时的代码绘制占位：浅紫底 + 代号大字（+ 角色名），尺寸比例与最终素材一致（3:4）。
+/// 角色卡未下载到时的代码绘制占位：浅紫底 + 代号大字（+ 角色名），尺寸比例与最终素材一致（3:4）。
 class _Placeholder extends StatelessWidget {
   const _Placeholder({required this.typeCode, required this.name});
 
