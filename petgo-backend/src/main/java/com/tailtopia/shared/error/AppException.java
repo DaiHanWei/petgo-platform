@@ -134,4 +134,39 @@ public class AppException extends RuntimeException {
     public static AppException commentBlocked(String detail) {
         return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.COMMENT_BLOCKED, detail);
     }
+
+    /** V1.3.2 Story 1.5：发帖关联的打卡不存在或不是本人的（422）。 */
+    public static AppException postCheckinInvalid(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.POST_CHECKIN_INVALID, detail);
+    }
+
+    /** V1.3.2 Story 1.1：不在场所 500m 内（422）。🔴 调用方只传固定文案，绝不拼距离值。 */
+    public static AppException checkinTooFar(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.CHECKIN_TOO_FAR, detail);
+    }
+
+    /** V1.3.2 Story 1.1：今天（WIB）已在该场所打过卡（409）。 */
+    public static AppException checkinAlreadyToday(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.CHECKIN_ALREADY_TODAY, detail);
+    }
+
+    /** V1.3.2 Story 1.1：账号无宠物档案（422）。 */
+    public static AppException checkinNoPet(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.CHECKIN_NO_PET, detail);
+    }
+
+    /** V1.3.2 Story 1.1：petIds 含非本人宠物（403）。 */
+    public static AppException checkinPetForbidden(String detail) {
+        return new AppException(HttpStatus.FORBIDDEN, ErrorTypes.CHECKIN_PET_FORBIDDEN, detail);
+    }
+
+    /** V1.3.2 Story 3.1：一次性解锁对象已解锁 / 已付款（409 {@code keepsake-already-unlocked}）。 */
+    public static AppException keepsakeAlreadyUnlocked(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.KEEPSAKE_ALREADY_UNLOCKED, detail);
+    }
+
+    /** V1.3.2 Story 3.3：佩戴未解锁结果 → 422 {@code tailsonality-badge-locked}。 */
+    public static AppException tailsonalityBadgeLocked(String detail) {
+        return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.TAILSONALITY_BADGE_LOCKED, detail);
+    }
 }

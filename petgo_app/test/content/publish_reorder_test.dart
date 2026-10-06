@@ -35,6 +35,7 @@ class _FakeRepo implements ContentRepository {
     required String idempotencyKey,
     bool syncToMoment = true,
     List<int> mentionedUserIds = const [],
+    String? placeCheckinToken,
   }) async {
     lastUrls = imageUrls;
     lastSizes = imageSizes;

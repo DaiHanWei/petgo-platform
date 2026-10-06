@@ -37,6 +37,9 @@ class ContentDetailServiceTest {
     private UserHideRelationReader hideRelations;
     private ContentDetailService service;
 
+    private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins =
+            mock(com.tailtopia.place.service.PlaceCheckinQueryService.class);
+
     @BeforeEach
     void setUp() {
         posts = mock(ContentPostRepository.class);
@@ -55,7 +58,9 @@ class ContentDetailServiceTest {
                 // （也因此**不会**多发查询 —— 批量聚合的用例计数不受影响）。
                 new com.tailtopia.mention.service.MentionViewService(
                         Mockito.mock(com.tailtopia.auth.service.AccountQueryService.class),
-                        Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class)));
+                        Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class)),
+                // V1.3.2 Story 1.5：打卡场所条只读口。
+                placeCheckins);
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyLong())).thenReturn(5L);
@@ -79,6 +84,24 @@ class ContentDetailServiceTest {
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    /** V1.3.2 Story 1.5 · AC5.2：关联了打卡 → 下发场所条；普通帖不查打卡、不下发。 */
+    @Test
+    void checkinPlaceStripOnlyForLinkedPosts() {
+        ContentPost linked = post(3L, 7L, null);
+        linked.setPlaceCheckinId(900L);
+        when(posts.findById(3L)).thenReturn(Optional.of(linked));
+        when(posts.findById(1L)).thenReturn(Optional.of(post(1L, 7L, null)));
+        when(accounts.findAuthorViews(anyList()))
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
+        var view = new com.tailtopia.place.dto.CheckinPlaceView("p".repeat(32), "Kopi",
+                com.tailtopia.place.domain.PlaceAvailability.UNAVAILABLE);
+        when(placeCheckins.findCheckinPlace(900L)).thenReturn(Optional.of(view));
+
+        assertThat(service.getDetail(3L, 7L).checkinPlace()).isEqualTo(view);
+        assertThat(service.getDetail(1L, 7L).checkinPlace()).isNull();
+        org.mockito.Mockito.verify(placeCheckins, org.mockito.Mockito.times(1)).findCheckinPlace(900L);
     }
 
     @Test

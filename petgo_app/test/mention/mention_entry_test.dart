@@ -109,6 +109,7 @@ class _RecordingContentRepo implements ContentRepository {
     required String idempotencyKey,
     bool syncToMoment = true,
     List<int> mentionedUserIds = const [],
+    String? placeCheckinToken,
   }) async {
     lastMentions = mentionedUserIds;
     lastText = text;

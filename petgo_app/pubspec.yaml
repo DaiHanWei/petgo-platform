@@ -58,6 +58,8 @@ dependencies:
   # Story 1.3：PawCoin 充值二维码本地生成。GemPay 返回 QRIS/EMVCo 串（qrcode），
   # 由本地生成二维码渲染（qrcode_url 是托管网页非图片，不能 Image.network）。
   qr_flutter: ^4.1.0
+  # Tailsonality 角色卡按需下载后落盘缓存（TsRoleArt）。原已是 share_plus 等的传递依赖，版本不变。
+  path_provider: ^2.1.5
   # Story 2.1：媒体基建（选图 / 权限 / 客户端压缩 + EXIF 剥离）。
   # 处理用纯 Dart 的 `image`（解码重编码即丢弃 EXIF/GPS，headless 可单测），
   # 选图/权限用原生插件（仅运行期路径）。
@@ -167,6 +169,19 @@ flutter:
     # 透明底、宽 ~1080。四档按 `PetAgeStage`（puppy/young/middle/senior）依次取，
     # **文件名里的数字不是判据** —— 它只是设计稿的档位编号。
     - assets/age_card/
+    # V1.3.2 Story 1.2：场所默认章（7 款类型兜底）。素材已入库（7 款齐）；
+    # 同名覆盖即换图，缺失时 App 画代码占位章。
+    - assets/place_stamp/
+    # V1.3.2 登机牌卡面（2026-10-06 设计稿：票面底 1754×780 / 邮票相框 / 字标）。
+    - assets/boarding_pass/
+    # V1.3.2 护照本页面（2026-10-06 设计稿 stamp-place：护照本底 828×1587 / 章位 / 次数框 / 翻页箭头 / 定位 / 字标）。
+    - assets/passport_book/
+    # V1.3.2 Story 2.3：Tailsonality 素材（扁平存放 intro_poster / quiz_* / role_* / match_tier*）。
+    # 已入库图片题 quiz_p*（12 张）+ 说明抽屉海报 intro_poster；角色卡 / 配型卡在服务器按需下载，不打包；其余未到，到货后同名放入即生效，缺失时 App 画代码占位。
+    - assets/tailsonality/
+    # V1.3.2 Story 5.1：里程碑徽章 `<语义键>.webp`（40 枚 + 全局 `locked`）。已入库 40 枚 + locked（齐）；
+    # 文件缺失时各处回落原外观（奖杯 / emoji / 图标），同名覆盖即换图。
+    - assets/milestone/
     # 字体许可证。**必须打进包里**（code-review 2026-08-04）：OFL-1.1 §2 要求
     # 「每份分发副本须含版权声明与本许可证」，而 `fonts:` 段只会打包 ttf 本身 ——
     # 改前 OFL.txt 只存在于 git 仓库、从不随 app 分发，pubspec 注释却宣称已合规。

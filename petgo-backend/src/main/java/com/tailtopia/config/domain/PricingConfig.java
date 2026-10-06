@@ -43,6 +43,10 @@ public class PricingConfig {
     @Column(name = "passport_boarding_unlock_price", nullable = false)
     private long passportBoardingUnlockPrice;
 
+    /** FR-117 Tailsonality · 结果解锁价（IDR，≥1；V1.3.2 Story 3.1）。 */
+    @Column(name = "tailsonality_unlock_price", nullable = false)
+    private long tailsonalityUnlockPrice;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -120,5 +124,13 @@ public class PricingConfig {
 
     public void setPassportBoardingUnlockPrice(long v) {
         this.passportBoardingUnlockPrice = v;
+    }
+
+    public long getTailsonalityUnlockPrice() {
+        return tailsonalityUnlockPrice;
+    }
+
+    public void setTailsonalityUnlockPrice(long v) {
+        this.tailsonalityUnlockPrice = v;
     }
 }

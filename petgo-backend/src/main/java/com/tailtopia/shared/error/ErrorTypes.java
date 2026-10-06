@@ -42,6 +42,26 @@ public final class ErrorTypes {
      * 不能混为一谈。响应体不含被拉黑者的任何展示字段。 */
     public static final URI BLOCKED_USER = URI.create(BASE + "blocked-user");
 
+    /** V1.3.2 Story 1.1：场所打卡——不在场所 500m 内（422）。🔴 detail / 扩展字段不得带距离值（防试探边界）。 */
+    public static final URI CHECKIN_TOO_FAR = URI.create(BASE + "checkin-too-far");
+
+    /** V1.3.2 Story 1.1：场所打卡——该宠物今天（WIB 自然日）已在该场所打过卡（409）。 */
+    public static final URI CHECKIN_ALREADY_TODAY = URI.create(BASE + "checkin-already-today");
+
+    /** V1.3.2 Story 1.1：场所打卡——账号还没有宠物档案（422）。 */
+    public static final URI CHECKIN_NO_PET = URI.create(BASE + "checkin-no-pet");
+
+    /** V1.3.2 Story 1.1：场所打卡——petIds 含非本人宠物（403）。 */
+    public static final URI CHECKIN_PET_FORBIDDEN = URI.create(BASE + "checkin-pet-forbidden");
+
+    /** V1.3.2 Story 1.5：发帖关联的打卡不存在或不是本人的（422）。 */
+    public static final URI POST_CHECKIN_INVALID = URI.create(BASE + "post-checkin-invalid");
+
+    /** V1.3.2 Story 3.1：一次性解锁对象已解锁 / 已付款，无需（不能）再次购买（409）。 */
+    public static final URI KEEPSAKE_ALREADY_UNLOCKED = URI.create(BASE + "keepsake-already-unlocked");
+    /** V1.3.2 Story 3.3：佩戴未解锁的 Tailsonality 结果（422）。 */
+    public static final URI TAILSONALITY_BADGE_LOCKED = URI.create(BASE + "tailsonality-badge-locked");
+
     private ErrorTypes() {
     }
 }

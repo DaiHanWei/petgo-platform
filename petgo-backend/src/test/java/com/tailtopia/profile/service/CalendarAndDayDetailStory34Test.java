@@ -38,6 +38,9 @@ import org.springframework.beans.factory.ObjectProvider;
  */
 class CalendarAndDayDetailStory34Test {
 
+    private final com.tailtopia.tailsonality.service.TailsonalityTimelineQuery tailsonalityTimeline =
+            Mockito.mock(com.tailtopia.tailsonality.service.TailsonalityTimelineQuery.class);
+
     private ProfileService profileService;
     private ContentService contentService;
     private HealthRecordRepository healthRecords;
@@ -47,6 +50,9 @@ class CalendarAndDayDetailStory34Test {
     private TimelineService service;
 
     private static final LocalDate DAY = LocalDate.parse("2026-06-02");
+
+    private final com.tailtopia.place.service.PlaceCheckinTimelineQuery placeCheckinQuery =
+            Mockito.mock(com.tailtopia.place.service.PlaceCheckinTimelineQuery.class);
 
     @BeforeEach
     void setUp() {
@@ -63,7 +69,11 @@ class CalendarAndDayDetailStory34Test {
                 Mockito.mock(MilestoneCelebrationService.class),
                 healthRecords, completions, idCards,
                 // V1.1.6 Story 5.2：装饰标签统一贴标点；本类不验它，给 mock（默认无标签）。
-                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class),
+                // V1.3.2 Story 1.6：源⑥ 场所打卡（本类按需 stub；不声明能力时根本不调）。
+                placeCheckinQuery,
+                // V1.3.2 Story 3.3：源⑦ Tailsonality 解锁（不声明能力时根本不调）。
+                tailsonalityTimeline);
 
         PetProfile profile = PetProfile.create(1L, PetType.CAT, "Momo", null, null, null, null, "tok");
         java.lang.reflect.Field id;

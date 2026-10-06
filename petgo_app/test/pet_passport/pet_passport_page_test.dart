@@ -1,0 +1,215 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:tailtopia/features/keepsake/data/keepsake_repository.dart';
+import 'package:tailtopia/features/keepsake/domain/keepsake_pricing.dart';
+import 'package:tailtopia/features/pet_passport/data/pet_passport_repository.dart';
+import 'package:tailtopia/features/pet_passport/domain/pet_passport.dart';
+import 'package:tailtopia/features/pet_passport/presentation/default_stamp_assets.dart';
+import 'package:tailtopia/features/pet_passport/presentation/pet_passport_page.dart';
+import 'package:tailtopia/features/place/domain/place_summary.dart';
+import 'package:tailtopia/features/place/presentation/widgets/place_stamp_view.dart';
+import 'package:tailtopia/l10n/app_localizations.dart';
+
+/// V1.3.2 Story 1.2 · L0：护照页三态（AC5）。
+void main() {
+  PassportStamp stamp(int i, {int visits = 1}) => PassportStamp(
+        placeToken: 't$i'.padRight(32, '0'),
+        placeName: 'Tempat $i',
+        placeType: PlaceType.values[i % PlaceType.values.length],
+        available: true,
+        visitCount: visits,
+        firstVisitDate: DateTime(2026, 9, 1 + i),
+      );
+
+  PetPassport passport(List<PassportStamp> stamps) =>
+      PetPassport(petName: 'Momo', passportNo: 'TT02P2600128', stamps: stamps);
+
+  /// 原样打开护照页（不改默认视图）。
+  Future<void> pumpRaw(WidgetTester tester, PetPassport p, {String? focus}) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(400, 1000);
+    addTearDown(tester.view.reset);
+    final router = GoRouter(routes: [
+      GoRoute(path: '/', builder: (c, s) => PetPassportPage(focus: focus)),
+      GoRoute(path: '/places', builder: (c, s) => const Scaffold(body: Text('places-list'))),
+    ]);
+    addTearDown(router.dispose);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        petPassportProvider.overrideWith((ref) async => p),
+        // V1.3.2 Story 3.4：纵览吸底读价（不打真网络）。
+        keepsakePricingProvider.overrideWith((ref) async => const KeepsakePricing(
+            ktpHd: 10000, passportSnapshot: 2000, boardingPass: 1000, tailsonality: 5000)),
+      ],
+      child: MaterialApp.router(
+        routerConfig: router,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('id'),
+      ),
+    ));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> pump(WidgetTester tester, PetPassport p, {String? focus}) async {
+    await pumpRaw(tester, p, focus: focus);
+    // 2026-10-06 起有章时默认纵览：沿用原用例口径，先切到单章页（纵览相关用例再自行切回）。
+    final toSingle = find.byKey(const ValueKey('passportToggleSingle'));
+    if (toSingle.evaluate().isNotEmpty) {
+      await tester.tap(toSingle);
+      await tester.pumpAndSettle();
+    }
+  }
+
+  testWidgets('B1 空态：无 ⊞、无翻页箭头、「0 Cap」、吸底「Cari Tempat」→ /places', (tester) async {
+    await pump(tester, passport(const []));
+
+    expect(find.byKey(const ValueKey('passportEmpty')), findsOneWidget);
+    expect(find.text('Belum ada cap'), findsOneWidget);
+    expect(find.text('0 Cap'), findsOneWidget);
+    expect(find.byKey(const ValueKey('passportToggleGrid')), findsNothing);
+    expect(find.byKey(const ValueKey('passportPrev')), findsNothing);
+    expect(find.byKey(const ValueKey('passportNext')), findsNothing);
+    expect(find.text('TT02P2600128'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('passportFindPlaces')));
+    await tester.pumpAndSettle();
+    expect(find.text('places-list'), findsOneWidget);
+  });
+
+  testWidgets('B2 单章：页脚分母 = 已集章数；×N 仅 N≥2', (tester) async {
+    await pump(tester, passport([stamp(0), stamp(1, visits: 3), stamp(2)]));
+
+    expect(find.text('Cap 1/3'), findsOneWidget);
+    expect(find.byKey(const ValueKey('passportVisitBadge')), findsNothing, reason: '第 1 枚只到访 1 次');
+
+    await tester.tap(find.byKey(const ValueKey('passportNext')));
+    await tester.pumpAndSettle();
+    expect(find.text('Cap 2/3'), findsOneWidget);
+    expect(find.text('x3'), findsOneWidget);
+  });
+
+  testWidgets('focus：停在该章；找不到停第 1 页', (tester) async {
+    await pump(tester, passport([stamp(0), stamp(1), stamp(2)]), focus: stamp(2).placeToken);
+    expect(find.text('Cap 3/3'), findsOneWidget);
+    expect(find.text('Tempat 2'), findsOneWidget);
+  });
+
+  testWidgets('focus 找不到 → 第 1 页', (tester) async {
+    await pump(tester, passport([stamp(0), stamp(1)]), focus: 'nope');
+    expect(find.text('Cap 1/2'), findsOneWidget);
+  });
+
+  testWidgets('2026-10-06：有章时默认进纵览；带 focus（落章页「Lihat Paspor」）进入则停在该章单章页', (tester) async {
+    final p = passport([for (var i = 0; i < 3; i++) stamp(i)]);
+    await pumpRaw(tester, p);
+    expect(find.byKey(const ValueKey('passportGridPager')), findsOneWidget, reason: '默认纵览');
+    expect(find.byKey(const ValueKey('passportSinglePager')), findsNothing);
+
+    await pumpRaw(tester, p, focus: p.stamps[2].placeToken);
+    expect(find.byKey(const ValueKey('passportSinglePager')), findsOneWidget, reason: '带 focus → 单章');
+    expect(find.text('Cap 3/3'), findsOneWidget);
+  });
+
+  testWidgets('B2b 纵览（2026-10-06 设计稿）：顶部「N Cap」、3×3 九格一页、页脚「Halaman i」；点章回单章并停在那一页', (tester) async {
+    await pump(tester, passport([for (var i = 0; i < 14; i++) stamp(i)]));
+
+    await tester.tap(find.byKey(const ValueKey('passportToggleGrid')));
+    await tester.pumpAndSettle();
+    expect(find.text('14 Cap'), findsOneWidget);
+    expect(find.text('Halaman 1'), findsOneWidget);
+    expect(find.byKey(const ValueKey('passportGridCell_8')), findsOneWidget);
+    expect(find.byKey(const ValueKey('passportGridCell_9')), findsNothing, reason: '第 10 枚在第 2 页');
+
+    await tester.tap(find.byKey(const ValueKey('passportGridCell_4')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('passportToggleGrid')), findsOneWidget, reason: '回到单章');
+    expect(find.text('Cap 5/14'), findsOneWidget);
+  });
+
+  testWidgets('复审：纵览第 3 行完整落在内容区内（不被裁切、可点）', (tester) async {
+    await pump(tester, passport([for (var i = 0; i < 9; i++) stamp(i)]));
+    await tester.tap(find.byKey(const ValueKey('passportToggleGrid')));
+    await tester.pumpAndSettle();
+    final pager = tester.getRect(find.byKey(const ValueKey('passportGridPager')));
+    final last = tester.getRect(find.byKey(const ValueKey('passportGridCell_8')));
+    expect(last.bottom, lessThanOrEqualTo(pager.bottom + 0.5));
+    await tester.tap(find.byKey(const ValueKey('passportGridCell_8')));
+    await tester.pumpAndSettle();
+    expect(find.text('Cap 9/9'), findsOneWidget);
+  });
+
+  // Story 3.4 按新规则：付费入口只在 B2b 纵览吸底（见 passport_snapshot_test）；**B2 单章页**仍无任何付费按钮。
+  // Story 4.3 按新规则更新：B2 单章页吸底出「Bagikan」（分享），仍无 ⋯、无付费。
+  testWidgets('B2 单章页：无 ⋯、无付费；吸底唯一按钮是 Bagikan', (tester) async {
+    await pump(tester, passport([stamp(0)]));
+    expect(find.byIcon(Icons.more_horiz), findsNothing);
+    expect(find.byIcon(Icons.more_vert), findsNothing);
+    expect(find.text('Bagikan'), findsOneWidget);
+    expect(find.byKey(const ValueKey('passportShareCta')), findsOneWidget);
+    expect(find.textContaining('Rp'), findsNothing);
+  });
+
+  group('默认章素材（7 款已入库；缺文件 / 未知类型回落占位）', () {
+    test('7 类都映射到约定路径（穷举）', () {
+      for (final t in PlaceType.values) {
+        expect(defaultStampAssetFor(t), startsWith('assets/place_stamp/'));
+      }
+      expect(defaultStampAssetFor(null), isNull);
+    });
+
+    test('素材目录存在 README 且在 pubspec 声明', () {
+      expect(File('assets/place_stamp/README.md').existsSync(), isTrue);
+      expect(File('pubspec.yaml').readAsStringSync(), contains('- assets/place_stamp/'));
+    });
+
+    test('7 类映射路径的素材文件都在包里（防改名漏同步）', () {
+      for (final t in PlaceType.values) {
+        final path = defaultStampAssetFor(t)!;
+        expect(File(path).existsSync(), isTrue, reason: '$t → $path 缺文件');
+      }
+    });
+
+    test('Story 1.4：章面组件不着色、不圆形裁切（源码扫描）', () {
+      final src = File('lib/features/place/presentation/widgets/place_stamp_view.dart')
+          .readAsLinesSync()
+          .where((l) => !l.trimLeft().startsWith('///') && !l.trimLeft().startsWith('//'))
+          .join('\n');
+      for (final banned in ['ClipOval', 'ColorFiltered', 'colorBlendMode']) {
+        expect(src.contains(banned), isFalse, reason: '$banned 违反 D-10（原色、不裁圆）');
+      }
+      expect(RegExp(r'Image\.(network|asset)\([^;]*\bcolor:').hasMatch(src), isFalse,
+          reason: 'Image(color:) 会给章面着色');
+    });
+
+    testWidgets('Story 1.4：专属章网络图加载失败 → 回落该类型默认章，不崩', (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+        home: Center(
+            child: PlaceStampView(
+                placeType: PlaceType.cafe, imageUrl: 'https://cdn.invalid/stamp.png', size: 96)),
+      ));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('placeStampPlaceholder')), findsNothing);
+      expect(
+          find.byWidgetPredicate((w) =>
+              w is Image &&
+              w.image is AssetImage &&
+              (w.image as AssetImage).assetName == 'assets/place_stamp/cafe.png'),
+          findsOneWidget);
+    });
+
+    testWidgets('未知类型（无默认章）→ 不崩、显示代码绘制的占位章', (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+        home: Center(child: PlaceStampView(placeType: null, size: 96)),
+      ));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('placeStampPlaceholder')), findsOneWidget);
+    });
+  });
+}

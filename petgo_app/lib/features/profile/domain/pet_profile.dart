@@ -18,6 +18,7 @@ class PetProfile {
     this.isSystemDefaultName = false,
     this.weightKg,
     this.neuterStatus,
+    this.tailsonalityBadge,
   });
 
   final int id;
@@ -48,6 +49,10 @@ class PetProfile {
   /// NEUTERED / INTACT / UNKNOWN。null = 没填过（与 UNKNOWN「说不知道」不是一回事）。
   final String? neuterStatus;
 
+  /// Tailsonality 角色小标（V1.3.2 Story 3.3）：佩戴 + 已解锁时为 4 字母（如 `ENTJ`），否则 null。
+  /// 服务端算好下发，客户端只展示；copyWith 不暴露（编辑档案改不了它）。
+  final String? tailsonalityBadge;
+
   /// 档案是否完整到能给出精准推荐（有生日 + 有体重）。
   bool get isCompleteForReco => birthday != null && weightKg != null;
   /// 页头视图模型（V1.1.6 Story 2.3）。页头只需要这几样，不需要 id / cardToken。
@@ -59,6 +64,7 @@ class PetProfile {
         birthday: birthday,
         sex: sex,
         intro: intro,
+        tailsonalityBadge: tailsonalityBadge,
       );
 
   factory PetProfile.fromJson(Map<String, dynamic> json) => PetProfile(
@@ -76,6 +82,7 @@ class PetProfile {
         isSystemDefaultName: (json['isSystemDefaultName'] ?? false) as bool,
         weightKg: (json['weightKg'] as num?)?.toDouble(),
         neuterStatus: json['neuterStatus'] as String?,
+        tailsonalityBadge: json['tailsonalityBadge'] as String?,
       );
 
   PetProfile copyWith({
@@ -103,6 +110,7 @@ class PetProfile {
         isSystemDefaultName: isSystemDefaultName ?? this.isSystemDefaultName,
         weightKg: weightKg ?? this.weightKg,
         neuterStatus: neuterStatus ?? this.neuterStatus,
+        tailsonalityBadge: tailsonalityBadge,
       );
 
   static DateTime? _parseDate(Object? raw) {

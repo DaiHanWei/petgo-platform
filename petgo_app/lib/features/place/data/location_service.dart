@@ -131,7 +131,53 @@ class GeolocatorLocationGateway implements LocationGateway {
 
   @override
   Future<bool> openSettings() => ph.openAppSettings();
+
+  /// 打卡专用的「新鲜」定点（V1.3.2 Story 1.1 复审）。
+  ///
+  /// 🔴 与 [currentCoordinates] 口径不同：那条给列表排序用，接受 10 分钟内的缓存点 + 中精度；
+  /// 打卡要判 500 m，10 分钟前的缓存点可能在几公里外（开车刚到就点）→ 被误判「不在场」。
+  /// 这里只接受 [_checkinMaxCacheAge] 内的缓存点，否则现取一次高精度定点。
+  Future<DeviceCoordinates?> freshCoordinates() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return null;
+      final cached = await Geolocator.getLastKnownPosition();
+      if (cached != null) {
+        final age = DateTime.now().difference(cached.timestamp);
+        if (!age.isNegative && age <= _checkinMaxCacheAge) {
+          return DeviceCoordinates(latitude: cached.latitude, longitude: cached.longitude);
+        }
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: _checkinFixTimeout,
+        ),
+      );
+      return DeviceCoordinates(latitude: pos.latitude, longitude: pos.longitude);
+    } catch (_) {
+      // 🔴 不记日志（异常里可能带坐标）。拿不到 → 调用方提示「Lokasi belum ketemu」。
+      return null;
+    }
+  }
+
+  /// 打卡可接受的缓存定点年龄：步行一分钟走不出 500 m。
+  static const Duration _checkinMaxCacheAge = Duration(minutes: 1);
+
+  /// 打卡取高精度定点的超时（用户点了按钮在等，比列表那条的 5 秒宽一些）。
+  static const Duration _checkinFixTimeout = Duration(seconds: 10);
 }
 
 final locationGatewayProvider =
     Provider<LocationGateway>((ref) => const GeolocatorLocationGateway());
+
+/// 打卡取坐标的入口（V1.3.2 Story 1.1）。
+///
+/// 真实实现走 [GeolocatorLocationGateway.freshCoordinates]（新鲜、高精度）；
+/// 测试注入的 fake gateway 回落到它的 [LocationGateway.currentCoordinates]。
+/// 不往 [LocationGateway] 接口上加方法：那会让既有的每个 fake 都得跟着改。
+final checkinCoordinatesProvider = Provider<Future<DeviceCoordinates?> Function()>((ref) {
+  final gateway = ref.watch(locationGatewayProvider);
+  return gateway is GeolocatorLocationGateway
+      ? gateway.freshCoordinates
+      : gateway.currentCoordinates;
+});

@@ -101,29 +101,31 @@ class OnboardingMarkTest {
     }
 
     @Nested
-    @DisplayName("AC6 🔴 键的隔离：本批次只落一个键")
+    @DisplayName("AC6 🔴 键的隔离：一个引导一个键（V1.3.2 起两个键）")
     class KeyIsolation {
 
         /**
-         * 🔴 本批次**只有 KTP 位置迁移这一个键**。
-         * 批次 C 的 Tailsonality 入口引导**必须另起一个键** —— PRD 明确那是两次独立触发，
+         * 🔴 现有**恰好两个键**：KTP 位置迁移（V1.3.0）与 Tailsonality 入口（V1.3.2 Story 2.7）。
+         * 第二次引导**另起了一个键**，没有复用第一个 —— PRD 明确那是两次独立触发，
          * 共用一个键会让看过第一次的人再也收不到第二次。
          *
-         * <p>⚠️ 这条会在批次 C 加键时变红，那是**有意的**：加键的人必须在这里
-         * 写下「我加的是第二个键，不是复用第一个」。
+         * <p>⚠️ 以后再加键时这条会变红，那是**有意的**：加键的人必须在这里写下「我加的是新键，不是复用旧键」。
          */
         @Test
-        void onlyOneKeyInThisBatch() {
-            assertThat(OnboardingMarkKey.values()).hasSize(1);
+        void exactlyTwoKeysEachOwningOneGuide() {
+            assertThat(OnboardingMarkKey.values())
+                    .containsExactly(OnboardingMarkKey.KTP_MOVED, OnboardingMarkKey.TAILSONALITY_ENTRY);
             assertThat(OnboardingMarkKey.KTP_MOVED.wire()).isEqualTo("ktp_moved");
+            assertThat(OnboardingMarkKey.TAILSONALITY_ENTRY.wire()).isEqualTo("tailsonality_entry");
         }
 
-        /** 键名要说清是哪个引导，不能是个万能筐 —— 万能筐就是"共用一个键"的入口。 */
+        /** 键名要说清是哪个引导，不能是个万能筐 —— 万能筐就是"共用一个键"的入口。对全部键逐个检查。 */
         @Test
         void keyIsNotAGenericCatchAll() {
-            String wire = OnboardingMarkKey.KTP_MOVED.wire();
-            for (String banned : List.of("onboarding", "intro", "tour", "coachmark")) {
-                assertThat(wire).doesNotContain(banned);
+            for (OnboardingMarkKey k : OnboardingMarkKey.values()) {
+                for (String banned : List.of("onboarding", "intro", "tour", "coachmark")) {
+                    assertThat(k.wire()).as(k.name()).doesNotContain(banned);
+                }
             }
         }
 
@@ -131,6 +133,8 @@ class OnboardingMarkTest {
         @Test
         void unknownWireIsRejected() {
             assertThat(OnboardingMarkKey.fromWire("ktp_moved")).contains(OnboardingMarkKey.KTP_MOVED);
+            assertThat(OnboardingMarkKey.fromWire("tailsonality_entry")).contains(OnboardingMarkKey.TAILSONALITY_ENTRY);
+            // 仍未登记（它不是现有任何一个引导的键），断言原样成立。
             assertThat(OnboardingMarkKey.fromWire("tailsonality_intro")).isEmpty();
             assertThat(OnboardingMarkKey.fromWire("")).isEmpty();
         }

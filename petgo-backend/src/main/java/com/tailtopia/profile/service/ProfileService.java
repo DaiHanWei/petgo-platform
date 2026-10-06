@@ -37,10 +37,14 @@ public class ProfileService {
     private final ProfileDeletionService profileDeletion;
     private final MediaDeletionService mediaDeletion;
     private final ApplicationEventPublisher events;
+    /** V1.3.2 Story 3.3：档案响应带角色小标（tailsonality 只读口，只依赖自己的仓库，无循环）。 */
+    private final com.tailtopia.tailsonality.service.TailsonalityBadgeQuery tailsonalityBadges;
 
     public ProfileService(PetProfileRepository profiles, CardTokenGenerator tokenGenerator,
             MilestoneService milestoneService, ProfileDeletionService profileDeletion,
-            MediaDeletionService mediaDeletion, ApplicationEventPublisher events) {
+            MediaDeletionService mediaDeletion, ApplicationEventPublisher events,
+            com.tailtopia.tailsonality.service.TailsonalityBadgeQuery tailsonalityBadges) {
+        this.tailsonalityBadges = tailsonalityBadges;
         this.profiles = profiles;
         this.tokenGenerator = tokenGenerator;
         this.milestoneService = milestoneService;
@@ -186,15 +190,20 @@ public class ProfileService {
             events.publishEvent(new AvatarReviewRequestedEvent(
                     AvatarSubjectType.PET_AVATAR, profile.getId(), newAvatar));
         }
-        return PetProfileResponse.from(profile);
+        // 编辑响应同样带小标：App 用它覆盖本地档案，缺了小标会闪掉。
+        return PetProfileResponse.from(profile, badgeOf(profile));
     }
 
     /** 当前用户档案（无则 404）。供「已有档案直达」与后续 Story 复用。 */
     @Transactional(readOnly = true)
     public PetProfileResponse getMyProfile(long ownerId) {
         return profiles.findByOwnerId(ownerId)
-                .map(PetProfileResponse::from)
+                .map(p -> PetProfileResponse.from(p, badgeOf(p)))
                 .orElseThrow(() -> AppException.notFound("尚未创建宠物档案"));
+    }
+
+    private String badgeOf(PetProfile p) {
+        return p.getId() == null ? null : tailsonalityBadges.badgeOf(p.getId()).orElse(null);
     }
 
     @Transactional(readOnly = true)

@@ -37,7 +37,11 @@ class TimelineItemResponseContractTest {
     private static final Set<String> ALL_FIELDS = Set.of(
             "kind", "itemType", "date", "eventDate", "postId", "imageUrls", "text",
             "aiLevel", "symptomSummary", "sourceType", "sourceRef",
-            "milestoneCode", "milestoneLevel", "healthRecordType", "healthRecordId", "idCardSerial");
+            "milestoneCode", "milestoneLevel", "healthRecordType", "healthRecordId", "idCardSerial",
+            // V1.3.2 Story 1.6：打卡条目的场所引用。
+            "checkinPlace",
+            // V1.3.2 Story 3.3：Tailsonality 解锁条目。
+            "tailsonalityResultToken", "tailsonalityCode", "tailsonalityTestedOn");
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> wire(Object dto) {
@@ -53,7 +57,11 @@ class TimelineItemResponseContractTest {
                         "HAPPY_MOMENT_MILESTONE",
                         "MILESTONE_BANNER",
                         "HEALTH_RECORD",
-                        "ID_CARD_ISSUED");
+                        "ID_CARD_ISSUED",
+                        // V1.3.2 Story 1.6（AD-9）：末尾追加，前五值顺序不变。
+                        "PLACE_CHECKIN_BANNER",
+                        // V1.3.2 Story 3.3：末尾追加。
+                        "TAILSONALITY_BANNER");
     }
 
     @Test
@@ -75,7 +83,11 @@ class TimelineItemResponseContractTest {
                 TimelineItemResponse.healthRecord(7L, Instant.parse("2026-05-20T09:00:00Z"),
                         LocalDate.of(2026, 5, 20), "VACCINE", "第一针"),
                 TimelineItemResponse.milestoneBanner(Instant.parse("2026-05-20T09:00:00Z"), "C-L2", "L"),
-                TimelineItemResponse.idCardIssued(Instant.parse("2026-05-20T09:00:00Z"), "#00842"));
+                TimelineItemResponse.idCardIssued(Instant.parse("2026-05-20T09:00:00Z"), "#00842"),
+                TimelineItemResponse.placeCheckinBanner(Instant.parse("2026-05-20T09:00:00Z"),
+                        "p".repeat(32), "Kopi Kucing", "ACTIVE"),
+                TimelineItemResponse.tailsonalityBanner(Instant.parse("2026-09-30T09:00:00Z"),
+                        "t".repeat(32), "ENTJ-H", LocalDate.of(2026, 9, 1)));
 
         for (TimelineItemResponse s : samples) {
             assertThat(wire(s).keySet()).isSubsetOf(ALL_FIELDS);
@@ -113,5 +125,43 @@ class TimelineItemResponseContractTest {
         assertThat(w).containsEntry("sourceType", "VET_CONSULT");
         assertThat(w).containsEntry("sourceRef", "consult:9");
         assertThat(w).containsEntry("healthRecordType", "CONSULT");
+    }
+
+    /** V1.3.2 Story 1.6：打卡条目只有场所引用 + 日期，不含 postId / 图片 / 坐标 / 打卡 id / visit_date。 */
+    @Test
+    @SuppressWarnings("unchecked")
+    void placeCheckinBannerExposesOnlyThePlaceReference() {
+        Map<String, Object> w = wire(TimelineItemResponse.placeCheckinBanner(
+                Instant.parse("2026-09-30T23:00:00Z"), "p".repeat(32), "Kopi Kucing", "UNAVAILABLE"));
+        assertThat(w.keySet()).isEqualTo(Set.of("kind", "itemType", "date", "eventDate", "checkinPlace"));
+        assertThat(w).containsEntry("itemType", "PLACE_CHECKIN_BANNER").containsEntry("kind", "PLACE_CHECKIN");
+        // 有效日期 = checked_at 的 UTC 日（不是 WIB 的 visit_date）。
+        assertThat(w).containsEntry("eventDate", "2026-09-30");
+        Map<String, Object> place = (Map<String, Object>) w.get("checkinPlace");
+        assertThat(place.keySet()).isEqualTo(Set.of("placeToken", "name", "status"));
+        for (String banned : List.of("postId", "imageUrls", "latitude", "longitude", "checkinId", "visitDate")) {
+            assertThat(w).doesNotContainKey(banned);
+            assertThat(place).doesNotContainKey(banned);
+        }
+    }
+
+    /** V1.3.2 Story 3.3：Tailsonality 条目只有结果 token / 完整代号 / 测试日 + 日期；有效日期 = 解锁日。 */
+    @Test
+    void tailsonalityBannerShape() {
+        Map<String, Object> w = wire(TimelineItemResponse.tailsonalityBanner(
+                Instant.parse("2026-09-30T23:00:00Z"), "t".repeat(32), "ENTJ-H", LocalDate.of(2026, 9, 1)));
+        assertThat(w.keySet()).isEqualTo(Set.of("kind", "itemType", "date", "eventDate",
+                "tailsonalityResultToken", "tailsonalityCode", "tailsonalityTestedOn"));
+        assertThat(w).containsEntry("itemType", "TAILSONALITY_BANNER").containsEntry("kind", "TAILSONALITY")
+                .containsEntry("eventDate", "2026-09-30").containsEntry("tailsonalityTestedOn", "2026-09-01")
+                .containsEntry("tailsonalityCode", "ENTJ-H");
+    }
+
+    /** 其它工厂不带 Tailsonality 三字段（NON_NULL 省略，老 App 逐字段不变）。 */
+    @Test
+    void otherItemsNeverCarryTailsonalityFields() {
+        Map<String, Object> w = wire(TimelineItemResponse.milestoneBanner(
+                Instant.parse("2026-05-20T09:00:00Z"), "C-L2", "L").withDecorationTags(null));
+        assertThat(w).doesNotContainKeys("tailsonalityResultToken", "tailsonalityCode", "tailsonalityTestedOn");
     }
 }

@@ -49,6 +49,8 @@ class AdminShareRewardConfigIntegrationTest extends ApiIntegrationTest {
     private Long savedReward;
     private Integer savedDaily;
     private Boolean savedEnabled;
+    /** V1.3.2 Story 4.5：两个新渠道四项。 */
+    private long[] savedNewChannels;
 
     private void snapshot() {
         if (savedCap != null) {
@@ -59,6 +61,8 @@ class AdminShareRewardConfigIntegrationTest extends ApiIntegrationTest {
         savedReward = c.getIdCardShareReward();
         savedDaily = c.getIdCardShareDailyCap();
         savedEnabled = c.isShareRewardEnabled();
+        savedNewChannels = new long[] {c.getTailsonalityShareReward(), c.getTailsonalityShareDailyCap(),
+            c.getPassportShareReward(), c.getPassportShareDailyCap()};
     }
 
     /** 🛡 单行配置表全局共享、测试库不回滚 —— 不还原会污染同一次 run 的其它测试类。 */
@@ -72,6 +76,10 @@ class AdminShareRewardConfigIntegrationTest extends ApiIntegrationTest {
         c.setIdCardShareReward(savedReward);
         c.setIdCardShareDailyCap(savedDaily);
         c.setShareRewardEnabled(savedEnabled);
+        c.setTailsonalityShareReward(savedNewChannels[0]);
+        c.setTailsonalityShareDailyCap((int) savedNewChannels[1]);
+        c.setPassportShareReward(savedNewChannels[2]);
+        c.setPassportShareDailyCap((int) savedNewChannels[3]);
         configs.saveAndFlush(c);
         savedCap = null;
     }
@@ -356,5 +364,82 @@ class AdminShareRewardConfigIntegrationTest extends ApiIntegrationTest {
                         .param("idCardShareReward", "0")
                         .param("idCardShareDailyCap", "0"))
                 .andExpect(status().isForbidden());
+    }
+
+    // ── V1.3.2 Story 4.5：Tailsonality / 护照两渠道 ─────────────────────
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Test
+    void newChannelsSaveAndWriteAudit() throws Exception {
+        snapshot();
+        mvc.perform(post("/admin/config/share-reward")
+                        .with(authentication(superAdmin())).with(csrf())
+                        .param("shareRewardEnabled", "true")
+                        .param("shareRewardMonthlyCap", "900")
+                        .param("idCardShareReward", "0")
+                        .param("idCardShareDailyCap", "0")
+                        .param("tailsonalityShareReward", "41")
+                        .param("tailsonalityShareDailyCap", "2")
+                        .param("passportShareReward", "43")
+                        .param("passportShareDailyCap", "3"))
+                .andExpect(status().is3xxRedirection());
+
+        PawCoinConfig c = configs.findById(PawCoinConfig.SINGLETON_ID).orElseThrow();
+        assertThat(c.getTailsonalityShareReward()).isEqualTo(41);
+        assertThat(c.getTailsonalityShareDailyCap()).isEqualTo(2);
+        assertThat(c.getPassportShareReward()).isEqualTo(43);
+        assertThat(c.getPassportShareDailyCap()).isEqualTo(3);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM config_change_logs"
+                + " WHERE field IN ('tailsonality_share_reward', 'tailsonality_share_daily_cap',"
+                + " 'passport_share_reward', 'passport_share_daily_cap') AND new_value IN ('41', '2', '43', '3')",
+                Long.class)).isGreaterThanOrEqualTo(4);
+    }
+
+    @Test
+    void newChannelsNegativeOrTooLargeAreRejectedAndNothingChanges() throws Exception {
+        snapshot();
+        PawCoinConfig before = configs.findById(PawCoinConfig.SINGLETON_ID).orElseThrow();
+        long ts = before.getTailsonalityShareReward();
+        long pp = before.getPassportShareReward();
+        for (String[] bad : new String[][] {{"tailsonalityShareReward", "-1"}, {"tailsonalityShareReward", "10001"},
+            {"tailsonalityShareDailyCap", "-1"}, {"passportShareReward", "-5"}, {"passportShareReward", "20000"},
+            {"passportShareDailyCap", "-2"}}) {
+            mvc.perform(post("/admin/config/share-reward")
+                            .with(authentication(superAdmin())).with(csrf())
+                            .param("shareRewardEnabled", "true")
+                            .param("shareRewardMonthlyCap", "100000")
+                            .param(bad[0], bad[1]))
+                    .andExpect(status().is3xxRedirection());
+        }
+        PawCoinConfig after = configs.findById(PawCoinConfig.SINGLETON_ID).orElseThrow();
+        assertThat(after.getTailsonalityShareReward()).isEqualTo(ts);
+        assertThat(after.getPassportShareReward()).isEqualTo(pp);
+    }
+
+    /** 缺省参数按 0 处理（卡上少了输入框就会把配置清零 —— 所以模板四个输入框缺一不可）。 */
+    @Test
+    void missingNewChannelParamsDefaultToZero() throws Exception {
+        snapshot();
+        mvc.perform(post("/admin/config/share-reward")
+                        .with(authentication(superAdmin())).with(csrf())
+                        .param("shareRewardEnabled", "true")
+                        .param("shareRewardMonthlyCap", "900")
+                        .param("tailsonalityShareReward", "10")
+                        .param("tailsonalityShareDailyCap", "1")
+                        .param("passportShareReward", "10")
+                        .param("passportShareDailyCap", "1"))
+                .andExpect(status().is3xxRedirection());
+        mvc.perform(post("/admin/config/share-reward")
+                        .with(authentication(superAdmin())).with(csrf())
+                        .param("shareRewardEnabled", "true")
+                        .param("shareRewardMonthlyCap", "900"))
+                .andExpect(status().is3xxRedirection());
+        PawCoinConfig c = configs.findById(PawCoinConfig.SINGLETON_ID).orElseThrow();
+        assertThat(c.getTailsonalityShareReward()).isZero();
+        assertThat(c.getTailsonalityShareDailyCap()).isZero();
+        assertThat(c.getPassportShareReward()).isZero();
+        assertThat(c.getPassportShareDailyCap()).isZero();
     }
 }

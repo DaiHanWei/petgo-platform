@@ -17,7 +17,7 @@ import 'card_canvas.dart';
 /// ⚠️ 素材沿用身份证那张品牌平铺图（路径里的 `ktp` 是历史目录名，
 /// 图本身是 TailTopia 通用水印，不是证件专用）。
 class CardWatermark extends StatelessWidget {
-  const CardWatermark({super.key, required this.canvas, this.opacity = defaultOpacity});
+  const CardWatermark({super.key, required this.canvas, this.opacity = defaultOpacity, this.tileVertically = false});
 
   final CardCanvas canvas;
 
@@ -25,6 +25,11 @@ class CardWatermark extends StatelessWidget {
   static const double defaultOpacity = 0.25;
 
   final double opacity;
+
+  /// 竖长画布用（2026-10-06：宠物足迹护照本 828×1587）：平铺图自带上下空白边，`BoxFit.cover` 铺满竖长画布后
+  /// 空白边正好落在顶 / 底一条，底部会露出没水印的一截。为 true 时改用**裁掉空白边**的同一张图，
+  /// 按画布宽度等比、自上而下竖向连续平铺，整块画布都有水印。缺省 false，其余卡面行为不变。
+  final bool tileVertically;
 
   @override
   Widget build(BuildContext context) {
@@ -37,11 +42,19 @@ class CardWatermark extends StatelessWidget {
                 BorderRadius.circular(canvas.radius * constraints.maxWidth / canvas.width),
             child: Opacity(
               opacity: opacity,
-              child: Image.asset(
-                'assets/ktp/watermark_tile.png',
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.medium,
-              ),
+              child: tileVertically
+                  ? Image.asset(
+                      'assets/passport_book/watermark_tile_v.png',
+                      fit: BoxFit.fitWidth,
+                      repeat: ImageRepeat.repeatY,
+                      alignment: Alignment.topCenter,
+                      filterQuality: FilterQuality.medium,
+                    )
+                  : Image.asset(
+                      'assets/ktp/watermark_tile.png',
+                      fit: BoxFit.cover,
+                      filterQuality: FilterQuality.medium,
+                    ),
             ),
           ),
         ),

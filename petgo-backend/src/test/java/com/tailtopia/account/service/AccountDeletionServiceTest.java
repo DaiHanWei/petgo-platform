@@ -56,6 +56,7 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.place.service.PlaceCommentService placeCommentService;
     @Mock com.tailtopia.place.service.PlacePhotoService placePhotoService;
     @Mock com.tailtopia.mention.service.MentionCandidateMaintenanceService mentionCandidateMaintenance;
+    @Mock com.tailtopia.tailsonality.service.TailsonalityDeletionService tailsonalityDeletion;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
@@ -63,7 +64,7 @@ class AccountDeletionServiceTest {
                 mediaDeletion, imClient, events,
                 contentService, reviewService, violationCountService,
                 shopDeletion, contentShareService, shareRewardDeletion, onboardingMarkDeletion,
-                placeCommentService, placePhotoService, mentionCandidateMaintenance);
+                placeCommentService, placePhotoService, mentionCandidateMaintenance, tailsonalityDeletion);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -98,6 +99,11 @@ class AccountDeletionServiceTest {
         // V1.3.0 Story 5.4 · AC7：引导标记也在级联里 —— 漏接的表会在注销后留着
         // 指向一个已不存在的人的行，而那不会有任何报错提醒。
         verify(onboardingMarkDeletion).deleteByUserId(7L);
+        // V1.3.2 Story 2.5：Tailsonality 主人类型（账号级）也在级联里，且在 user 行删除之前。
+        verify(tailsonalityDeletion).deleteOwnerTypeByUserId(7L);
+        org.mockito.InOrder beforeUserRow = org.mockito.Mockito.inOrder(tailsonalityDeletion, authDeletion);
+        beforeUserRow.verify(tailsonalityDeletion).deleteOwnerTypeByUserId(7L);
+        beforeUserRow.verify(authDeletion).deleteByUserId(7L);
         // V1.3.0 场所评论注销联动（NFR-8 / D1/D2）：独立表，content 那条级联碰不到它 ——
         // 漏了的话注销用户的场所评论会继续挂着身份对所有人可见。
         verify(placeCommentService).deactivateAuthorComments(7L);

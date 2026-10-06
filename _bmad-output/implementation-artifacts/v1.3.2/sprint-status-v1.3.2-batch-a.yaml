@@ -1,0 +1,80 @@
+# generated: 2026-09-29
+# last_updated: 2026-09-29  # 26 条 story 文件全部生成（ready-for-dev）
+# project: TailTopia V1.3.2 · 主题 batch-a（插画依赖包：打卡 / 护照 / Tailsonality / 徽章）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.3.2
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.3.2/epics-v1.3.2-batch-a.md (5 Epic / 26 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.3.2/architecture-v1.3.2-batch-a-delta.md (AD-1~AD-20)
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.3.2/PRD-v1.3.2-batch-a.md (+ PRD-v1.3.2-batch-a-admin.md)
+# 内容设计: {project-root}/_bmad-output/planning-artifacts/v1.3.2/tailsonality-内容设计.md
+# 决策日志: {project-root}/_bmad-output/planning-artifacts/v1.3.2/决策日志-batch-a.md (D-1~D-14, C-1~C-13)
+# 代码核对报告: {project-root}/_bmad-output/planning-artifacts/v1.3.2/代码核对报告-batch-a.md
+# ui: {project-root}/_bmad-output/planning-artifacts/v1.3.2/ui-v1.3.2-batch-a.html (52 屏)
+#
+# 🔴 口径优先级：决策日志 > PRD（App / 后台）> 内容设计 > UI 稿；技术口径以架构 delta 为准。
+#
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+# Retrospective: optional <-> done
+#
+# ===== Epic 依赖链（全后向，无环；按序推进，不跳序） =====
+# Epic 1 -> Epic 3        # 快照 / 登机牌依赖 1-2 的护照与章聚合；1-6 交付时间线 supports 能力参数，3-3 复用
+# Epic 2 -> Epic 3        # 结果解锁、佩戴依赖 2-1 的结果行与 2-6 的结果列表
+# Epic 3 -> Epic 4        # 分享卡水印按 Epic 3 的解锁态；4-4 发帖入口含 3-5 的已解锁登机牌
+# Epic 5 独立            # 与 1~4 无依赖，排最后以等待更多徽章素材
+#
+# ===== 发版检查单（不是 story，不进本文件） =====
+# 见 epics 文件末尾「发版检查单」：prod 护照两价改 2000 / 1000、打开 admin.places.checkin-visible、分享奖励额配置、素材替换。
+
+generated: 2026-09-29
+last_updated: 2026-09-30
+project: TailTopia V1.3.2 batch-a
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.3.2"
+
+development_status:
+  # ===== Epic 1：场所打卡与护照集章 =====
+  epic-1: in-progress
+  1-1-场所详情页打卡与到场校验: review
+  1-2-护照签发与集章页: review
+  1-3-整页落章与章详情页: review
+  1-4-场所专属章与新建场所必带照片-后台: review
+  1-5-打卡后顺手发帖: review
+  1-6-diary-打卡条目: review
+  epic-1-retrospective: optional
+  # ===== Epic 2：Tailsonality 性格测试（免费部分） =====
+  epic-2: in-progress
+  2-1-题库常量-计分与结果落库: review
+  2-2-测试内容表-en-id与合规扫描: review
+  2-3-入口-说明抽屉与答题: review
+  2-4-结果页-免费态与重测: review
+  2-5-主人配型页: review
+  2-6-结果列表页: review
+  2-7-老账号的第二次入口引导: review
+  epic-2-retrospective: optional
+  # ===== Epic 3：付费解锁 =====
+  epic-3: in-progress
+  3-1-一次性解锁的购买链路与后台定价: review
+  3-2-tailsonality-结果解锁与挽留弹窗: review
+  3-3-佩戴角色小标与-diary-测试条目: review
+  3-4-护照快照解锁与已购版本: review
+  3-5-登机牌列表-详情与单张解锁: review
+  3-6-我的订单与后台支付查询接入: review
+  epic-3-retrospective: optional
+  # ===== Epic 4：分享与发帖回流 =====
+  epic-4: in-progress
+  4-1-通用分享卡骨架与结果卡分享: review
+  4-2-配型卡分享: review
+  4-3-护照卡与登机牌卡分享: review
+  4-4-一键发帖炫耀: review
+  4-5-两个新渠道的分享奖励: review
+  epic-4-retrospective: optional
+  # ===== Epic 5：里程碑徽章焕新 =====
+  epic-5: in-progress
+  5-1-公共徽章组件与-app-六处替换: review
+  5-2-h5-分享页徽章: review
+  epic-5-retrospective: optional

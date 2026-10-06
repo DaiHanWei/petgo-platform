@@ -39,6 +39,8 @@ class PlaceQueryServiceTest {
     private PlaceAttitudeCounters attitudeCounters;
     private com.tailtopia.place.repository.PlacePhotoRepository photos;
     private PlaceQueryService service;
+    private final com.tailtopia.place.service.PlaceCheckinService checkins =
+            Mockito.mock(com.tailtopia.place.service.PlaceCheckinService.class);
 
     @BeforeEach
     void setUp() {
@@ -63,7 +65,21 @@ class PlaceQueryServiceTest {
         service = new PlaceQueryService(places, accounts, placeComments, attitudeCounters, photos,
                 // 照片 key → URL（对齐 D5）：真实实例，只用到 publicUrlOf。
                 new com.tailtopia.place.service.PlacePhotoService(places, photos, null,
-                        com.tailtopia.place.PlaceTestSupport.oss()));
+                        com.tailtopia.place.PlaceTestSupport.oss()),
+                // V1.3.2 Story 1.1：详情「今日已打卡」。
+                checkins);
+    }
+
+    /** 游客不查打卡表；登录用户按服务结果下发（V1.3.2 Story 1.1 AC3）。 */
+    @Test
+    void checkedInTodayOnlyForSignedInViewers() {
+        Place p = place("kopi", JKT_LAT, JKT_LNG);
+        when(places.resolveForView("kopi")).thenReturn(java.util.Optional.of(p));
+        when(checkins.checkedInToday(42L, p.getId())).thenReturn(true);
+
+        assertThat(service.detail("kopi", null, null, null).checkedInToday()).isNull();
+        Mockito.verifyNoInteractions(checkins);
+        assertThat(service.detail("kopi", null, null, 42L).checkedInToday()).isTrue();
     }
 
     /** 自增 id 的发号器 —— 只要不同就行（评论数 Map 按 id 取）。 */

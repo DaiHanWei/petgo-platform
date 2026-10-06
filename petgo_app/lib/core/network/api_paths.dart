@@ -159,6 +159,37 @@ class ApiPaths {
   /// 宠物身份证数据 / 生成（Story 6.1 后端 · 6.2 前端）。GET 取数据+generated 标志；POST 生成分配流水号（幂等）。
   static const String petProfileIdCard = '$base/pet-profiles/me/id-card';
 
+  /// 宠物护照（V1.3.2 Story 1.2）：GET 里服务端会首次签发（幂等）。仅 role=USER。
+  static const String petPassport = '$base/pet-profiles/me/passport';
+
+  /// 护照快照（V1.3.2 Story 3.4）：POST `{channel}` 发起「当前版本」购买 / GET 已买版本列表。仅 role=USER。
+  static const String petPassportSnapshots = '$petPassport/snapshots';
+
+  /// 登机牌（V1.3.2 Story 3.5）：GET 列表 / GET 详情 / POST unlock。仅 role=USER。
+  static const String petBoardingPasses = '$base/pet-profiles/me/boarding-passes';
+
+  static String petBoardingPass(String placeToken) => '$petBoardingPasses/${Uri.encodeComponent(placeToken)}';
+
+  static String petBoardingPassUnlock(String placeToken) => '${petBoardingPass(placeToken)}/unlock';
+
+  /// 已买版本回看；非本人 / 未付 / 不存在 → 404。
+  static String petPassportSnapshot(String token) => '$petPassportSnapshots/$token';
+
+  /// Tailsonality 结果（V1.3.2 Story 2.1）：POST 提交 18 题答案 / GET 列表（新 → 旧）。仅 role=USER。
+  static const String petTailsonalityResults = '$base/pet-profiles/me/tailsonality/results';
+
+  /// 单条 Tailsonality 结果；token 不存在或非本人宠物 → 404。
+  static String petTailsonalityResult(String token) => '$petTailsonalityResults/$token';
+
+  /// 一次性解锁该结果（V1.3.2 Story 3.2）：POST `{channel}` → `KeepsakePurchaseResponse`。仅 role=USER。
+  static String tailsonalityResultUnlock(String token) => '$petTailsonalityResults/$token/unlock';
+
+  /// 角色小标佩戴（V1.3.2 Story 3.3）：PUT `{resultToken}` 切换 / DELETE 卸下，均 204。仅 role=USER。
+  static const String tailsonalityBadge = '$base/pet-profiles/me/tailsonality/badge';
+
+  /// Tailsonality 主人四字母类型（V1.3.2 Story 2.5）：账号级 GET / PUT；未设置 → `{}`。仅 role=USER。
+  static const String meTailsonalityOwnerType = '$base/me/tailsonality/owner-type';
+
   /// 身份证高清图付费下载（Story 6.3）。POST 一次性永久解锁（QRIS/PawCoin）；幂等不重复扣费。
   static const String petProfileIdCardHdDownload = '$base/pet-profiles/me/id-card/hd-download';
 
@@ -184,6 +215,16 @@ class ApiPaths {
   /// 不落服务端；领奖是已澄清的唯一例外，而这个例外只包含「谁、哪次分享」。
   static const String meAgeCardShareRewards =
       '$base/pet-profiles/me/age-cards/share-rewards';
+
+  /// Tailsonality 结果卡 / 配型卡分享成功上报 → 试发奖励（V1.3.2 Story 4.5）。
+  /// 🔴 请求体**只有 `cardType`**（RESULT / MATCH）：去重 = 宠物 × 卡类型，不带结果 token、不带水印态。
+  static const String meTailsonalityShareRewards =
+      '$base/pet-profiles/me/tailsonality/share-rewards';
+
+  /// 护照卡 / 登机牌卡分享成功上报 → 试发奖励（V1.3.2 Story 4.5）。
+  /// 🔴 请求体**只有 `cardType`**（PAGE / BOARDING）：登机牌整体一个类型，不带场所 token。
+  static const String mePassportShareRewards =
+      '$base/pet-profiles/me/passport/share-rewards';
 
   /// 单卡快照详情（Story 6.7）。非本人 404。
   static String meIdCard(int cardId) => '$base/pet-profiles/me/id-cards/$cardId';

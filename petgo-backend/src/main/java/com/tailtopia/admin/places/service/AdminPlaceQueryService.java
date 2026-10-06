@@ -106,9 +106,13 @@ public class AdminPlaceQueryService {
     private final AccountQueryService accounts;
     private final SignedUrlService signedUrls;
     private final Messages msg;
+    /** V1.3.2 Story 1.4：专属章 key → 公开 CDN URL。 */
+    private final com.tailtopia.shared.media.AliyunOssClient oss;
 
     public AdminPlaceQueryService(NamedParameterJdbcTemplate jdbc, PlaceRepository places, PlacePhotoRepository photos,
-            PlaceCommentRepository comments, AccountQueryService accounts, SignedUrlService signedUrls, Messages msg) {
+            PlaceCommentRepository comments, AccountQueryService accounts, SignedUrlService signedUrls, Messages msg,
+            com.tailtopia.shared.media.AliyunOssClient oss) {
+        this.oss = oss;
         this.jdbc = jdbc;
         this.places = places;
         this.photos = photos;
@@ -228,7 +232,9 @@ public class AdminPlaceQueryService {
                 marker != null && marker.deleted(), pl.getStatus(), pl.getMergedIntoId(), mergedIntoName, pl.getCreatedAt(), pl.getUpdatedAt(),
                 counts.photos(), counts.comments(), counts.checkins(), counts.recommend(), counts.notRecommend(),
                 List.copyOf(photoViews), new CommentsPage(List.copyOf(commentViews), commentRows.getNumber(), commentRows.hasNext(),
-                        commentRows.getTotalElements()));
+                        commentRows.getTotalElements()),
+                // 纯 CDN 地址，不拼 x-oss-process（那会把透明 PNG 重编码成 JPG）。
+                pl.getStampObjectKey() == null ? null : oss.publicUrl(pl.getStampObjectKey()));
     }
 
     private List<String> signAllOrNulls(List<String> keys) {

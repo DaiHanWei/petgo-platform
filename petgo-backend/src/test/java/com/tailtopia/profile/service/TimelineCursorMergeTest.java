@@ -38,6 +38,9 @@ import org.springframework.beans.factory.ObjectProvider;
  */
 class TimelineCursorMergeTest {
 
+    private final com.tailtopia.tailsonality.service.TailsonalityTimelineQuery tailsonalityTimeline =
+            Mockito.mock(com.tailtopia.tailsonality.service.TailsonalityTimelineQuery.class);
+
     private ProfileService profileService;
     private ContentService contentService;
     private HealthEventTimelineSource health;
@@ -50,6 +53,9 @@ class TimelineCursorMergeTest {
     /** 内存假数据集：模拟 DB 的锚点取数语义（严格小于锚点、按全局序倒排、源内不截断到页大小）。 */
     private final List<GrowthMomentView> moments = new ArrayList<>();
     private final List<HealthEventView> healthEvents = new ArrayList<>();
+
+    private final com.tailtopia.place.service.PlaceCheckinTimelineQuery placeCheckinQuery =
+            Mockito.mock(com.tailtopia.place.service.PlaceCheckinTimelineQuery.class);
 
     @BeforeEach
     void setUp() {
@@ -113,7 +119,11 @@ class TimelineCursorMergeTest {
                 Mockito.mock(MilestoneCelebrationService.class),
                 healthRecords, milestoneCompletions, idCards,
                 // V1.1.6 Story 5.2：装饰标签统一贴标点；本类不验它，给 mock（默认无标签）。
-                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class),
+                // V1.3.2 Story 1.6：源⑥ 场所打卡（本类按需 stub；不声明能力时根本不调）。
+                placeCheckinQuery,
+                // V1.3.2 Story 3.3：源⑦ Tailsonality 解锁（不声明能力时根本不调）。
+                tailsonalityTimeline);
     }
 
     // ===== 锚点编解码（AC1） =====

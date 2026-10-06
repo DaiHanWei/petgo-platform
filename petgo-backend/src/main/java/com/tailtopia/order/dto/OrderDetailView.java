@@ -25,6 +25,9 @@ import java.time.Instant;
  * @param coins             到账 koin（充值 = amount；非充值→null）
  * @param triageTaskId      分诊任务 id（AI，深链预留，可空）
  * @param consultSessionId  兽医问诊会话 id（前端据此打开只读问诊确认单，bug 20260720-312；非兽医/无会话→null）
+ * @param targetKind        一次性解锁的「查看」目标类型（V1.3.2 Story 3.6：TAILSONALITY_RESULT / PASSPORT_SNAPSHOT /
+ *                          BOARDING_PASS）；其余订单 null
+ * @param targetToken       目标 token（结果 token / 快照 token / 最终场所 token）；解析不到 → null（App 不出入口）
  */
 public record OrderDetailView(
         String orderType,
@@ -46,5 +49,17 @@ public record OrderDetailView(
         Long refundNetAmount,
         Long coins,
         Long triageTaskId,
-        Long consultSessionId) {
+        Long consultSessionId,
+        String targetKind,
+        String targetToken) {
+
+    /** V1.3.2 前的 20 参形态（既有 5 个构造点不改）：无查看目标。 */
+    public OrderDetailView(String orderType, String orderToken, String displayNo, String statusCode,
+            String statusColor, Long amount, String payChannel, Instant createdAt, Instant paidAt, String petName,
+            String petType, String petAvatarUrl, boolean petDeleted, Instant sessionStartedAt, Instant sessionEndedAt,
+            String refundStage, Long refundNetAmount, Long coins, Long triageTaskId, Long consultSessionId) {
+        this(orderType, orderToken, displayNo, statusCode, statusColor, amount, payChannel, createdAt, paidAt, petName,
+                petType, petAvatarUrl, petDeleted, sessionStartedAt, sessionEndedAt, refundStage, refundNetAmount,
+                coins, triageTaskId, consultSessionId, null, null);
+    }
 }

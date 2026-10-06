@@ -22,6 +22,7 @@ import '../../me/presentation/profile_edit_sheet.dart';
 import '../../social/presentation/account_report_sheet.dart';
 import '../../profile/domain/pet_age.dart';
 import '../../profile/presentation/visitor_archive_view.dart';
+import '../../tailsonality/presentation/widgets/tailsonality_badge_chip.dart';
 import '../data/public_profile_pet_repository.dart';
 import '../data/public_profile_repository.dart';
 import 'public_user_posts_controller.dart';
@@ -656,8 +657,9 @@ class _PostGrid extends ConsumerWidget {
 /// 站内访客接口**仅对登录用户开放**（AD-4 Rule 1），所以跳转前走 FR-0C 登录门控；
 /// 而「看这人养了只什么」与「看这人是谁」同一档，不需要登录。两层边界不同是刻意的。
 ///
-/// ## ⚠️ Tailsonality 角色小标位是**天然空状态**
-/// FR-117 在批次 B2。这里**不做占位设计** —— 一个「敬请期待」的灰条比什么都没有更碍眼。
+/// ## Tailsonality 角色小标（V1.3.2 Story 3.3）
+/// 名字右侧：佩戴 + 已解锁时显示 4 字母胶囊；没有就**什么都不渲染**（不做占位 ——
+/// 一个「敬请期待」的灰条比什么都没有更碍眼）。
 class _PetSection extends ConsumerWidget {
   const _PetSection({required this.userId});
 
@@ -698,11 +700,25 @@ class _PetSection extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      pet.name,
-                      style: AppTypography.body.copyWith(fontWeight: FontWeight.w600),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            pet.name,
+                            style: AppTypography.body.copyWith(fontWeight: FontWeight.w600),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (pet.tailsonalityBadge != null) ...[
+                          const SizedBox(width: 6),
+                          TailsonalityBadgeChip(
+                            key: const ValueKey('profilePetTailsonality'),
+                            letters: pet.tailsonalityBadge,
+                            compact: true,
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(

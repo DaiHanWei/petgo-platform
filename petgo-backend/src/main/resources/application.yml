@@ -314,9 +314,9 @@ admin:
     redirect-uri: ${LARK_REDIRECT_URI:}
     tenant-key: ${LARK_TENANT_KEY:}
   # B6 场所管理的「打卡」三处展示（摘要 / 列表列 / 抽屉计数）。打卡功能归 B2，B2 上线前默认隐藏（bug 20260923-552）；
-  # 只管展示，数据与查询照旧。B2 上线时置 true（或 env ADMIN_PLACES_CHECKIN_VISIBLE=true）即恢复。
+  # 只管展示，数据与查询照旧。V1.3.2 batch-a 打卡上线，2026-10-06 产品定默认打开（env ADMIN_PLACES_CHECKIN_VISIBLE=false 可临时关）。
   places:
-    checkin-visible: ${ADMIN_PLACES_CHECKIN_VISIBLE:false}
+    checkin-visible: ${ADMIN_PLACES_CHECKIN_VISIBLE:true}
 
 # Actuator：仅暴露 health + info（/actuator/** 内网语义，prod 由 CF/防火墙限制）
 management:

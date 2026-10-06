@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -42,8 +44,17 @@ import org.springframework.web.client.RestClient;
  * （里程碑自动完成、达成通知、注销级联）<b>不共池</b>。该池队列有界且满时直接丢弃 ——
  * 埋点是可损数据，宁可丢事件，绝不能因为 PostHog 侧慢就把业务异步饿死。
  *
- * <p><b>失败即放弃，不重试</b>：埋点是可损数据。为它加重试/落库补偿会引入状态机与新表，
- * 代价远大于收益 —— 丢几条事件可以接受，拖慢里程碑落库不行。
+ * <p><b>只对网络类失败原地重试一次，其余失败即放弃</b>：埋点是可损数据。为它加重试队列/落库补偿会引入
+ * 状态机与新表，代价远大于收益 —— 丢几条事件可以接受，拖慢里程碑落库不行。
+ * 但「连不上 / 超时」（{@link ResourceAccessException}）有一个必现场景：<b>进程刚启动后的第一条</b>上报要做
+ * DNS + TLS 握手 + 类加载，常超过 3s 超时而丢（2026-10-05 本地 L1 验收实测丢了首条 {@code place_checkin}）——
+ * 每次部署都会丢。所以对这一类在同一异步线程里立刻再发一次（不进业务线程、不落库）；两次请求带<b>同一个
+ * {@code uuid}</b>，若第一次其实已被 PostHog 收下（读超时），PostHog 按 uuid 去重，不会算两条。
+ * 4xx / 5xx 等 HTTP 层失败不重试（重发也一样）。
+ *
+ * <p><b>不让 PostHog 按 IP 补地理位置</b>（{@code $geoip_disable}）：服务端事件的发送方是我们的服务器，
+ * PostHog 默认按请求 IP 补 {@code $geoip_*}（城市、经纬度）—— 那是机房位置不是用户位置，
+ * 进了分析数据只会误导（prod 全部显示德国）。
  */
 @Component
 public class PostHogAnalyticsClient implements AnalyticsClient {
@@ -141,24 +152,38 @@ public class PostHogAnalyticsClient implements AnalyticsClient {
         try {
             // filterProperties 返回新 map（可变），入参不被就地修改。
             Map<String, Object> props = new HashMap<>(guard.filterProperties(properties));
-            // distinct_id 与 app_env 是【框架注入】的键，在护栏之后加入，不受属性白名单约束。
+            // distinct_id / app_env / $geoip_disable 是【框架注入】的键，在护栏之后加入，不受属性白名单约束。
             props.put("distinct_id", distinctId);
             props.put("app_env", appEnv);
-            rest.post()
-                    .uri("/i/v0/e/")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of(
-                            "api_key", apiKey,
-                            "event", event,
-                            // 必须显式带时间：上报是「事务提交后异步」的，不带的话 PostHog 会用
-                            // 摄取时间当事件时间，跨天边界会把达成归到错误的日期上。
-                            "timestamp", Instant.now().toString(),
-                            "properties", props))
-                    .retrieve()
-                    .toBodilessEntity();
+            props.put("$geoip_disable", true);
+            Map<String, Object> body = Map.of(
+                    "api_key", apiKey,
+                    "event", event,
+                    // 重试时同一个 uuid：PostHog 按它去重（见类注释）。
+                    "uuid", UUID.randomUUID().toString(),
+                    // 必须显式带时间：上报是「事务提交后异步」的，不带的话 PostHog 会用
+                    // 摄取时间当事件时间，跨天边界会把达成归到错误的日期上。
+                    "timestamp", Instant.now().toString(),
+                    "properties", props);
+            try {
+                send(body);
+            } catch (ResourceAccessException connectOrTimeout) {
+                // 只有网络类失败才再发一次（见类注释）；第二次再失败落到外层 catch。
+                send(body);
+            }
         } catch (Exception e) {
             // 事件名可入日志（受控字面量）；properties 不入（虽已约定无 PII，仍不给意外留口子）。
             log.warn("analytics capture failed: event={} reason={}", event, e.getClass().getSimpleName());
         }
     }
+
+    private void send(Map<String, Object> body) {
+        rest.post()
+                .uri("/i/v0/e/")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
 }

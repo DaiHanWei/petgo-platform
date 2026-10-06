@@ -49,7 +49,9 @@ class IdCardHdPricingEndpointTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.price").value(originalPrice))
                 // V1.3.0 Story 6.1（契约 X-4）：护照两价同响应下发，camelCase 字段名固定
                 .andExpect(jsonPath("$.passportPageUnlockPrice").value(pc.getPassportPageUnlockPrice()))
-                .andExpect(jsonPath("$.passportBoardingUnlockPrice").value(pc.getPassportBoardingUnlockPrice()));
+                .andExpect(jsonPath("$.passportBoardingUnlockPrice").value(pc.getPassportBoardingUnlockPrice()))
+                // V1.3.2 Story 3.1：Tailsonality 解锁价同响应下发（与护照两价同命名风格）。
+                .andExpect(jsonPath("$.tailsonalityUnlockPrice").value(pc.getTailsonalityUnlockPrice()));
 
         // 后台改价 → 下一次查询即新价（无缓存，实时读 pricing_config）。
         pc.setIdHdDownloadPrice(originalPrice + 4900);

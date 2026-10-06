@@ -86,6 +86,10 @@ public class AdminPlaceService {
             throw AppException.validation("标记人须从运营发布身份池中选择").code("admin.err.places.markerNotInPool");
         }
         List<MultipartFile> files = photoFiles == null ? List.of() : photoFiles.stream().filter(f -> f != null && !f.isEmpty()).toList();
+        // V1.3.2 Story 1.4 · D-5：以后新建场所必须带照片（App 端早已必填）。放在坐标 / 标记人校验之后、落库之前。
+        if (files.isEmpty()) {
+            throw AppException.validation("至少上传一张照片").code("admin.err.places.photoRequired");
+        }
         if (files.size() > MAX_PHOTOS) {
             throw AppException.validation("照片最多 9 张").code("admin.err.places.tooManyPhotos");
         }
@@ -175,6 +179,54 @@ public class AdminPlaceService {
         p.edit(form.name(), form.placeType(), form.tags(), form.description(), form.city(), form.addressText(), form.lat(), form.lng());
         audit.record(actorAdminAccountId, AuditActions.PLACE_EDITED, "PLACE", String.valueOf(p.getId()), "fields=" + String.join(",", changed));
         return new EditResult(true, outside, List.copyOf(changed));
+    }
+
+    /**
+     * 上传 / 替换场所专属章（V1.3.2 Story 1.4 · AB-18B · AD-18）。
+     *
+     * <p>🔴 <b>先校验再上传</b>（{@link PlaceStampImageValidator}：PNG / 512×512 / ≤200KB / 透明通道，只这四项）——
+     * 不合规的文件不产生 OSS 对象。通过后复用 {@code images.upload(file, "place-stamps/<id>")}（对象级 public-read），
+     * 只存 objectKey。替换 = 覆盖字段；旧 OSS 对象不删（App 可能仍缓存旧 URL，孤儿对象可接受）。
+     * MERGED 场所 422（与「已合并的场所不可编辑」同口径）；DELISTED 照常可操作。
+     *
+     * @return 是否为替换（原先已有专属章）
+     */
+    @Transactional
+    public boolean uploadStamp(long id, MultipartFile file, long actorAdminAccountId) {
+        Place p = requirePlace(id);
+        if (p.getStatus() == PlaceStatus.MERGED) {
+            throw AppException.validation("已合并的场所不可编辑").code("admin.err.places.alreadyMerged");
+        }
+        if (file == null || file.isEmpty()) {
+            throw AppException.validation("只支持 PNG").code("admin.err.places.stampNotPng");
+        }
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (java.io.IOException e) {
+            throw AppException.validation("只支持 PNG").code("admin.err.places.stampNotPng");
+        }
+        PlaceStampImageValidator.validate(bytes, file.getSize());
+        UploadedImage up = images.upload(file, "place-stamps/" + p.getId());
+        boolean replaced = p.setStamp(up.objectKey());
+        audit.record(actorAdminAccountId, AuditActions.PLACE_STAMP_UPLOADED, "PLACE", String.valueOf(p.getId()),
+                "name=" + p.getName() + ", replaced=" + replaced);
+        return replaced;
+    }
+
+    /** 移除专属章 → 回到默认章（已盖出的章同步变回默认章）。无章 no-op 不写审计。MERGED 422。 */
+    @Transactional
+    public boolean removeStamp(long id, long actorAdminAccountId) {
+        Place p = requirePlace(id);
+        if (p.getStatus() == PlaceStatus.MERGED) {
+            throw AppException.validation("已合并的场所不可编辑").code("admin.err.places.alreadyMerged");
+        }
+        if (!p.clearStamp()) {
+            return false;
+        }
+        audit.record(actorAdminAccountId, AuditActions.PLACE_STAMP_REMOVED, "PLACE", String.valueOf(p.getId()),
+                "name=" + p.getName());
+        return true;
     }
 
     /** 下架（AC2）：ACTIVE → DELISTED；MERGED 422；已下架 no-op 不写审计。返回是否发生变化。 */

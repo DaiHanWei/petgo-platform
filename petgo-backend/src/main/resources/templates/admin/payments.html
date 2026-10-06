@@ -30,6 +30,13 @@
                th:text="#{admin.v130.payments.exportCurrent}">导出当前结果</a>
         </div>
         <p class="hint" th:text="#{admin.payments.hint.all}">按时间倒序分页展示全部支付记录；可按用途、状态、时间段、用户 ID 组合筛选。</p>
+        <!--/* V1.3.2 Story 3.6：一次性解锁异常子页入口（PawCoin 购买没有支付意图，本页查不到）。
+               不进侧栏；sec:authorize 与子页控制器的 VIEW_AUTH 逐字一致。 */-->
+        <p sec:authorize="hasRole('SUPER_ADMIN') or hasAuthority('payment.view')">
+            <a class="btn btn-neutral btn-sm" data-no-drawer id="keepsake-exceptions-link"
+               th:href="@{/admin/payments/keepsake-exceptions}"
+               th:text="#{admin.payments.keepsake.link}">查看一次性解锁异常</a>
+        </p>
 
         <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
         <div class="banner err" th:if="${error}" th:text="${error}">err</div>

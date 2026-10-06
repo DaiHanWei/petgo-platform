@@ -62,4 +62,15 @@ class CardNumberServiceTest {
         assertThat(CardNumberService.composePassportNo(null, 2026, 12345))
                 .isEqualTo("TT00P2612345");
     }
+
+    /** V1.3.2 Story 1.2 · AC1.5：宠物护照号三种物种码（12 位连写，C-13）+ 公开转发与包内规则一致。 */
+    @Test
+    void petPassportNumbersForThreeSpecies() {
+        assertThat(CardNumberService.composePassportNo("CAT", 2026, 128)).isEqualTo("TT02P2600128").hasSize(12);
+        assertThat(CardNumberService.composePassportNo("DOG", 2026, 1)).isEqualTo("TT01P2600001");
+        assertThat(CardNumberService.composePassportNo("OTHER", 2026, 99999)).isEqualTo("TT00P2699999");
+        for (String t : new String[] {"CAT", "DOG", "OTHER", null}) {
+            assertThat(CardNumberService.speciesCodeOf(t)).isEqualTo(CardNumberService.speciesCode(t));
+        }
+    }
 }

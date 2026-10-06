@@ -5,6 +5,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_image.dart';
 import '../../domain/pet_age.dart';
 import '../../domain/pet_header_info.dart';
+import '../../../tailsonality/presentation/widgets/tailsonality_badge_chip.dart';
 
 /// 宠物护照卡（Story 2.4 · paspor.html 1:1 还原）。
 ///
@@ -17,9 +18,13 @@ class PetInfoCard extends StatelessWidget {
     this.happyCount,
     this.consultCount,
     this.milestoneCount,
+    this.topRight,
   });
 
   final PetHeaderInfo profile;
+
+  /// 卡片右上角（头像行最右）的附加控件——作者态放「只看 Diary」开关（2026-10-06 产品）；访客态不传。
+  final Widget? topRight;
 
   /// 统计三列（archiveStatsProvider 未就绪时传 null，显占位「·」）。
   final int? happyCount;
@@ -106,9 +111,23 @@ class PetInfoCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(profile.name,
-                        style: const TextStyle(
-                            fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(profile.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 19, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                        ),
+                        // V1.3.2 Story 3.3：佩戴 + 已解锁才有；null 不渲染任何占位。
+                        if (profile.tailsonalityBadge != null) ...[
+                          const SizedBox(width: 6),
+                          TailsonalityBadgeChip(
+                              key: const ValueKey('petInfoTailsonality'), letters: profile.tailsonalityBadge),
+                        ],
+                      ],
+                    ),
                     if (sub.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(sub,
@@ -127,6 +146,10 @@ class PetInfoCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (topRight != null) ...[
+                const SizedBox(width: 8),
+                Align(alignment: Alignment.topRight, child: topRight!),
+              ],
             ],
           ),
           const SizedBox(height: 14),

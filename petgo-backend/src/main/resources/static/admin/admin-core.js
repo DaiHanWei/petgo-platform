@@ -13,6 +13,13 @@ document.addEventListener('DOMContentLoaded', function () {
         // 404 也放行：AdminBusinessExceptionAdvice 对 404 同样回行内 err fragment（Story 5.2 抽屉「不存在 / 已删」）
         if (s === 422 || s === 403 || s === 404) { e.detail.shouldSwap = true; e.detail.isError = false; }
     });
+    // V1.3.2 Story 1.4：「选完文件即上传」的表单（data-reset-file，如场所专属章）每次请求结束后清空文件框 ——
+    //   422 后抽屉不重渲染，文件框里还是那张被拒的图；运营修好后用同一文件名重选时浏览器不发 change，点了没反应。
+    document.body.addEventListener('htmx:afterRequest', function (e) {
+        var form = e.detail && e.detail.elt;
+        if (!form || !form.matches || !form.matches('form[data-reset-file]')) { return; }
+        form.querySelectorAll('input[type=file]').forEach(function (i) { i.value = ''; });
+    });
     document.body.addEventListener('htmx:configRequest', function (e) {
         var t = document.querySelector('meta[name="_csrf"]');
         var h = document.querySelector('meta[name="_csrf_header"]');
@@ -91,8 +98,11 @@ function tailtopiaConfirmDiffMessage(form) {
         var fmt = function (v) { return isCheck ? (v === '1' ? on : off) : (v === '' ? '—' : v); };
         lines.push(line.split('{0}').join(label).split('{1}').join(fmt(was)).split('{2}').join(fmt(cur)));
     });
-    if (!lines.length) { return form.getAttribute('data-confirm-diff-title') || null; } // 无逐字段差异也不静默放行（复审 #3）
-    return (form.getAttribute('data-confirm-diff-title') || '') + '\n\n' + lines.join('\n');
+    // V1.3.2 Story 3.1：可选追加一句提醒（form[data-confirm-diff-note]）；属性缺省时输出与之前逐字一致。
+    var note = form.getAttribute('data-confirm-diff-note');
+    var tail = note ? '\n\n' + note : '';
+    if (!lines.length) { var t = form.getAttribute('data-confirm-diff-title'); return t ? t + tail : null; } // 无逐字段差异也不静默放行（复审 #3）
+    return (form.getAttribute('data-confirm-diff-title') || '') + '\n\n' + lines.join('\n') + tail;
 }
 function tailtopiaIsHxForm(form) {
     return !!(form.getAttribute && (form.hasAttribute('hx-post') || form.hasAttribute('hx-get') || form.hasAttribute('hx-put') || form.hasAttribute('hx-delete')));

@@ -21,6 +21,7 @@ import '../domain/milestone_share.dart';
 import '../domain/milestone_titles.dart';
 import '../domain/newbie_task_labels.dart';
 import '../domain/newbie_tasks.dart';
+import 'widgets/milestone_badge.dart';
 import 'widgets/milestone_celebration.dart';
 
 /// 里程碑列表页（Story 8.2 · FR-42）。壳→真页：顶部宠物信息 + 总进度 + L/M/S 三级分区徽章
@@ -537,6 +538,24 @@ class _Badge extends ConsumerWidget {
 
   static const double _size = 64;
 
+  /// 无素材时的原外观。已解锁：级别彩色实心圆 + 同色辉光；未解锁：浅灰圆。
+  Widget _art(bool completed) => Container(
+        width: _size,
+        height: _size,
+        decoration: BoxDecoration(
+          color: completed ? levelColor : AppColors.line2,
+          shape: BoxShape.circle,
+          boxShadow: completed
+              ? [BoxShadow(color: levelColor.withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 3))]
+              : null,
+        ),
+        child: Icon(
+          completed ? Icons.emoji_events_rounded : Icons.lock_outline_rounded,
+          color: completed ? AppColors.onAccent : AppColors.muted,
+          size: 26,
+        ),
+      );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final completed = item.completed;
@@ -568,22 +587,14 @@ class _Badge extends ConsumerWidget {
         width: _size,
         child: Column(
           children: [
-            Container(
-              width: _size,
-              height: _size,
-              decoration: BoxDecoration(
-                // 已解锁：级别彩色实心圆 + 同色辉光；未解锁：浅灰圆。
-                color: completed ? levelColor : AppColors.line2,
-                shape: BoxShape.circle,
-                boxShadow: completed
-                    ? [BoxShadow(color: levelColor.withValues(alpha: 0.35), blurRadius: 10, offset: const Offset(0, 3))]
-                    : null,
-              ),
-              child: Icon(
-                completed ? Icons.emoji_events_rounded : Icons.lock_outline_rounded,
-                color: completed ? AppColors.onAccent : AppColors.muted,
-                size: 26,
-              ),
+            // V1.3.2 Story 5.1：素材到了显示该枚徽章（锁定态是全局锁定图）；没到回落原外观。
+            MilestoneBadge(
+              code: item.code,
+              size: _size,
+              level: item.level,
+              locked: !completed,
+              fallback: (_) => _art(true),
+              lockedFallback: (_) => _art(false),
             ),
             const SizedBox(height: 6),
             Text(
@@ -646,6 +657,30 @@ void _showBadgeSheet(BuildContext context, WidgetRef ref, MilestoneItem item) {
       final locale = Localizations.localeOf(sheetContext);
       final levelColor = _levelColor(item.level);
       final completed = item.completed;
+      // 无素材时的原外观（V1.3.2 Story 5.1：MilestoneBadge 回落用）。
+      Widget sheetArt(bool done) => Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: done
+                  ? LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [levelColor, Color.lerp(levelColor, Colors.white, 0.25)!],
+                    )
+                  : null,
+              color: done ? null : AppColors.line2,
+              boxShadow: done
+                  ? [BoxShadow(color: levelColor.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 8))]
+                  : null,
+            ),
+            child: Icon(
+              done ? Icons.emoji_events_rounded : Icons.lock_outline_rounded,
+              size: 36,
+              color: done ? AppColors.onAccent : AppColors.muted,
+            ),
+          );
       // FR-43 文案：打卡类→提问 Header + 描述 Body；系统/推送类→仅说明（header 空）。
       // 未配文案的 code（如生日 *-L1）→ body 空 → 回退到通用 hint。
       final copy = localizedMilestoneCheckinPrompt(item.code, locale, petName);
@@ -698,28 +733,13 @@ void _showBadgeSheet(BuildContext context, WidgetRef ref, MilestoneItem item) {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 76,
-                      height: 76,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: completed
-                            ? LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [levelColor, Color.lerp(levelColor, Colors.white, 0.25)!],
-                              )
-                            : null,
-                        color: completed ? null : AppColors.line2,
-                        boxShadow: completed
-                            ? [BoxShadow(color: levelColor.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 8))]
-                            : null,
-                      ),
-                      child: Icon(
-                        completed ? Icons.emoji_events_rounded : Icons.lock_outline_rounded,
-                        size: 36,
-                        color: completed ? AppColors.onAccent : AppColors.muted,
-                      ),
+                    MilestoneBadge(
+                      code: item.code,
+                      size: 76,
+                      level: item.level,
+                      locked: !completed,
+                      fallback: (_) => sheetArt(true),
+                      lockedFallback: (_) => sheetArt(false),
                     ),
                     const SizedBox(height: 12),
                     Text(

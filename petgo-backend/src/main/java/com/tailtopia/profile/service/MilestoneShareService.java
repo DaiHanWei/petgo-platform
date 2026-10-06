@@ -59,27 +59,45 @@ public class MilestoneShareService {
         String petName = pet.getName();
         String body = req.body() == null ? "" : req.body();
         String collectionLevels = req.collectionLevels() == null ? "" : req.collectionLevels();
+        String collectionCodes = collectionCodesOf(req);
 
         Optional<MilestoneShare> existing = shares.findByPetProfileIdAndCode(pet.getId(), code);
         if (existing.isPresent()) {
             MilestoneShare share = existing.get();
-            share.refresh(level, petName, req.title(), body, req.locale(), collectionLevels);
+            share.refresh(level, petName, req.title(), body, req.locale(), collectionLevels, collectionCodes);
             return new MilestoneShareResponse(share.getShareToken());
         }
 
         String token = tokenGenerator.generate();
         MilestoneShare share = MilestoneShare.create(token, pet.getId(), code, level, petName,
-                req.title(), body, req.locale(), collectionLevels, completion.getCompletedAt());
+                req.title(), body, req.locale(), collectionLevels, collectionCodes, completion.getCompletedAt());
         try {
             shares.save(share);
         } catch (DataIntegrityViolationException e) {
             // 并发双建窗：唯一约束 (pet_profile_id, code) 兜底 → 复用已落库的那条。
             MilestoneShare race = shares.findByPetProfileIdAndCode(pet.getId(), code)
                     .orElseThrow(() -> e);
-            race.refresh(level, petName, req.title(), body, req.locale(), collectionLevels);
+            race.refresh(level, petName, req.title(), body, req.locale(), collectionLevels, collectionCodes);
             return new MilestoneShareResponse(race.getShareToken());
         }
         return new MilestoneShareResponse(token);
+    }
+
+    /**
+     * 合集 code 列表 → 逗号拼接（V1.3.2 Story 5.2）。不传 / 空列表 → null（旧样式）；
+     * 任一 code 不在 {@link com.tailtopia.profile.domain.MilestoneCatalog} 里 → 422。
+     */
+    static String collectionCodesOf(MilestoneShareRequest req) {
+        java.util.List<String> codes = req.collectionCodes();
+        if (codes == null || codes.isEmpty()) {
+            return null;
+        }
+        for (String c : codes) {
+            if (c == null || com.tailtopia.profile.domain.MilestoneCatalog.byCode(c) == null) {
+                throw AppException.validation("合集里有未知的里程碑编码");
+            }
+        }
+        return String.join(",", codes);
     }
 
     /** 公开页按 token 取分享（不存在 → empty，由页面收敛到失效页）。 */

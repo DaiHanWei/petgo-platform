@@ -41,11 +41,16 @@ public class ContentDetailService {
     /** V1.3.0 batch-b1 Story 3.3：正文里 @ 的渲染投影（可点与否在服务端判）。 */
     private final com.tailtopia.mention.service.MentionViewService mentionViews;
 
+    /** V1.3.2 Story 1.5：帖子关联打卡的场所条（place 只读口）。 */
+    private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins;
+
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
             ReportService reportService, UserHideRelationReader hideRelations,
             ContentTagQueryService contentTags, ImageSizeResolver imageSizes,
-            com.tailtopia.mention.service.MentionViewService mentionViews) {
+            com.tailtopia.mention.service.MentionViewService mentionViews,
+            com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins) {
+        this.placeCheckins = placeCheckins;
         this.contentTags = contentTags;
         this.imageSizes = imageSizes;
         this.mentionViews = mentionViews;
@@ -112,7 +117,10 @@ public class ContentDetailService {
         var mentions = com.tailtopia.mention.service.MentionViewService.pick(
                 post.getMentionedUserIds(),
                 mentionViews.resolveAll(viewerId, post.getMentionedUserIds()));
+        // V1.3.2 Story 1.5（AC5.2）：关联打卡 → 场所条，按打卡**当前** place_id 取（合并后指向保留方）。
+        var checkinPlace = post.getPlaceCheckinId() == null ? null
+                : placeCheckins.findCheckinPlace(post.getPlaceCheckinId()).orElse(null);
         return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor,
-                decorations, sizes, mentions);
+                decorations, sizes, mentions, checkinPlace);
     }
 }

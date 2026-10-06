@@ -30,6 +30,8 @@ class CalendarDayCell {
     this.hasHealthEvent = false,
     this.healthRecordType,
     this.healthRecordCount = 0,
+    this.hasPlaceCheckin = false,
+    this.hasTailsonality = false,
   });
 
   final int day;
@@ -45,6 +47,12 @@ class CalendarDayCell {
   /// 当日结构化健康记录**条数**（Story 3.4 后端新增一维）：>1 时格子用通用医疗箱图标。
   final int healthRecordCount;
 
+  /// 当日有（未被 Diary 帖去重的）地点打卡（V1.3.2 Story 1.6）；缺键 → false（老后端 / 访客态）。
+  final bool hasPlaceCheckin;
+
+  /// 当日（UTC）有 Tailsonality 解锁（V1.3.2 Story 3.3）；缺键 → false（老后端 / 访客态）。
+  final bool hasTailsonality;
+
   factory CalendarDayCell.fromJson(Map<String, dynamic> json) => CalendarDayCell(
         day: json['day'] as int,
         firstImageUrl: json['firstImageUrl'] as String?,
@@ -52,5 +60,7 @@ class CalendarDayCell {
         hasHealthEvent: (json['hasHealthEvent'] ?? false) as bool,
         healthRecordType: json['healthRecordType'] as String?,
         healthRecordCount: (json['healthRecordCount'] as num?)?.toInt() ?? 0,
+        hasPlaceCheckin: json['hasPlaceCheckin'] == true,
+        hasTailsonality: json['hasTailsonality'] == true,
       );
 }

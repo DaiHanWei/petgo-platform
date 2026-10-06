@@ -45,7 +45,7 @@ class _FakeTimelineRepo implements TimelineRepository {
   String? lastCursor;
 
   @override
-  Future<TimelinePage> getTimeline({String? cursor, int limit = 20, ArchiveScope scope = const ArchiveScope.me()}) async {
+  Future<TimelinePage> getTimeline({String? cursor, int limit = 20, ArchiveScope scope = const ArchiveScope.me(), bool diaryOnly = false}) async {
     page2Calls++;
     lastCursor = cursor;
     if (failPage2) {

@@ -6,6 +6,8 @@ import '../../mention/domain/mention_context.dart';
 import '../../mention/presentation/mention_text.dart';
 import '../../social/domain/account_action_entry.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../place/domain/checkin_place_ref.dart';
+import '../../place/presentation/place_detail_page.dart';
 import '../../../shared/widgets/user_tag_row.dart';
 import '../../../shared/widgets/content_tag_chip.dart';
 import '../domain/content_tag.dart';
@@ -13,6 +15,7 @@ import '../domain/detail_bottom_bar.dart';
 import '../domain/detail_image_layout.dart';
 import '../domain/feed_image_layout.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/rounded.dart';
@@ -304,6 +307,11 @@ class _DetailScaffold extends ConsumerWidget {
                           // V1.3.0 Story 2.3：互动栏已迁到固定底栏（与评论输入框合并）。
                           // 正文下方**不再单独存在互动栏** —— 点赞 / 分享始终悬浮可点，
                           // 用户不必为了点个赞把页面滚回图片下方。
+                          // V1.3.2 Story 1.5 · AC5.4（UI 稿 C8）：打卡场所条 —— 正文 / 装饰标签之后、分隔线之前。
+                          if (detail.checkinPlace != null) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            _DetailCheckinPlaceStrip(place: detail.checkinPlace!),
+                          ],
                           const SizedBox(height: AppSpacing.md),
                           const Divider(height: AppSpacing.xl, color: AppColors.divider),
                           // KOMENTAR (n) 计数标题（detail.html）。带 ?focus=comments 进来时滚到这里。
@@ -741,6 +749,63 @@ class _ShareCardButtonState extends ConsumerState<DetailShareCardButton> {
         Icons.ios_share_rounded,
         size: DetailBarMetrics.iconSize,
         color: _busy ? AppColors.muted : AppColors.textSecondary,
+      ),
+    );
+  }
+}
+
+/// 帖子详情的打卡场所条（V1.3.2 Story 1.5 · UI 稿 C8 / C9）。线性定位图标 + 场所名，整条可点、热区 ≥44。
+/// ACTIVE → 场所详情（from=post）；UNAVAILABLE → 只出「Tempat tidak ditemukan」，不跳转。
+class _DetailCheckinPlaceStrip extends StatelessWidget {
+  const _DetailCheckinPlaceStrip({required this.place});
+
+  final CheckinPlaceRef place;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    void onTap() {
+      if (place.available) {
+        context.push(PlaceDetailPage.routeFor(place.token, from: kPlaceDetailFromPost));
+      } else {
+        showAppToast(context, l10n.placeDeletedToast);
+      }
+    }
+
+    // 复审：excludeSemantics 会吞掉 InkWell 的点按动作 —— 读屏器双击要能触发，onTap 挂在 Semantics 上。
+    return Semantics(
+      button: true,
+      label: l10n.publishCheckinPlaceLabel(place.name),
+      excludeSemantics: true,
+      onTap: onTap,
+      child: InkWell(
+        key: const ValueKey('detailCheckinPlaceStrip'),
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+            child: Row(
+              children: [
+                Icon(Icons.place_outlined,
+                    size: 18, color: place.available ? AppColors.mint : AppColors.textTertiary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(place.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: place.available ? AppColors.ink : AppColors.textTertiary)),
+                ),
+                if (place.available)
+                  const Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.textTertiary),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

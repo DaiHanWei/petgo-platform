@@ -204,7 +204,8 @@ class PublishController extends ChangeNotifier {
 
   /// 发布：先确保图片全部上传成功；有失败件返回 null（调用方提示重试）。
   /// 成功则提交 post，返回新 post id。[idempotencyKey] 客户端生成防重。
-  Future<int?> publish({required String idempotencyKey, int? petId}) async {
+  /// [placeCheckinToken]：打卡后顺手发帖（V1.3.2 Story 1.5）原样透传；任何类型都带（AD-10）。
+  Future<int?> publish({required String idempotencyKey, int? petId, String? placeCheckinToken}) async {
     if (!canPublish) return null;
     publishing = true;
     // AC4：状态机从这一刻起接管顺序 —— 重排入口即刻停响应，直到发布成功或整体取消。
@@ -233,6 +234,7 @@ class PublishController extends ChangeNotifier {
         idempotencyKey: idempotencyKey,
         // 非 Diary 恒公开；Diary 由开关决定。
         syncToMoment: growth ? syncToMoment : true,
+        placeCheckinToken: placeCheckinToken,
       );
     } finally {
       publishing = false;

@@ -15,14 +15,17 @@ class _FakeRepo implements MilestoneRepository {
   String? lastTitle;
   String? lastLocale;
   String? lastCollectionLevels;
+  List<String>? lastCollectionCodes;
 
   @override
   Future<String> createShare(String code,
       {required String title,
       required String body,
       required String locale,
-      required String collectionLevels}) async {
+      required String collectionLevels,
+      required List<String> collectionCodes}) async {
     lastCode = code;
+    lastCollectionCodes = collectionCodes;
     lastTitle = title;
     lastLocale = locale;
     lastCollectionLevels = collectionLevels;
@@ -110,6 +113,10 @@ void main() {
     expect(repo.lastLocale, 'id'); // 按 locale 出文案
     expect(repo.lastTitle, isNotEmpty); // 客户端已本地化的庆祝标题
     expect(repo.lastCollectionLevels, 'LS'); // 仅已完成项、按合集顺序，每字符 S/M/L
+    // V1.3.2 Story 5.2：code 列表与级别串同序同长（同一过滤）。
+    expect(repo.lastCollectionCodes, ['C-L1', 'C-S5']);
+    expect(repo.lastCollectionCodes, hasLength(repo.lastCollectionLevels!.length));
+    expect(repo.lastCollectionCodes, isNot(contains('C-S6')), reason: '未完成项不计入');
     expect(shared, 'SHARE_TEXT\nhttps://s.tailtopia.id/m/Ab3xK9');
   });
 

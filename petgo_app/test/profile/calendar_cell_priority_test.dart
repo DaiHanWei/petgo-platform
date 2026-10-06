@@ -62,6 +62,24 @@ void main() {
       expect(find.byIcon(kHealthRecordGenericIcon.icon), findsNothing);
     });
 
+    testWidgets('V1.3.2 Story 1.6 · 只有打卡 → 线性定位图标；有任何更高级别信号时不显', (tester) async {
+      await pump(tester, const [CalendarDayCell(day: 1, hasPlaceCheckin: true)]);
+      expect(find.byIcon(Icons.place_outlined), findsOneWidget);
+      expect(find.byIcon(kDiaryGenericIcon.icon), findsNothing);
+    });
+
+    testWidgets('V1.3.2 Story 1.6 · 打卡 + 结构化健康记录 → ④ 优先', (tester) async {
+      await pump(tester,
+          const [CalendarDayCell(day: 1, hasPlaceCheckin: true, healthRecordType: 'VACCINE', healthRecordCount: 1)]);
+      expect(find.byIcon(Icons.place_outlined), findsNothing, reason: '④ 结构化健康记录优先于打卡');
+      expect(find.byIcon(Icons.vaccines_outlined), findsOneWidget);
+    });
+
+    testWidgets('V1.3.2 Story 1.6 · 打卡 + 纯文字日记 → ② 优先', (tester) async {
+      await pump(tester, const [CalendarDayCell(day: 1, hasPlaceCheckin: true, hasHappyMoment: true)]);
+      expect(find.byIcon(Icons.place_outlined), findsNothing, reason: '② diary 优先于打卡');
+    });
+
     testWidgets('④ 多条 → 通用医疗箱（不可用 💊，驱虫已占用）', (tester) async {
       await pump(tester,
           const [CalendarDayCell(day: 1, healthRecordType: 'VACCINE', healthRecordCount: 3)]);

@@ -958,3 +958,19 @@ tr.is-muted td { opacity: .55; }
 .recon-card .recon-check th, .recon-card .recon-check td { border-top: 2px solid var(--line); font-weight: 700; }
 /* 🔴 校验行不平 → 整卡红框：现状只有一行文字变色，一屏数字里根本注意不到 */
 .card-alert { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
+
+/* V1.3.2 Story 1.4：场所专属章预览 —— 棋盘格底看透明区；按原图原色（object-fit: contain，不裁圆、不加滤色，D-10） */
+.pl-stamp-body { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.pl-stamp-preview { width: 96px; height: 96px; border: 1px solid var(--line, #e6e6e6); border-radius: 8px;
+  background-color: #fff;
+  background-image: linear-gradient(45deg, #ececec 25%, transparent 25%), linear-gradient(-45deg, #ececec 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ececec 75%), linear-gradient(-45deg, transparent 75%, #ececec 75%);
+  background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
+.pl-stamp-preview img { width: 100%; height: 100%; object-fit: contain; }
+.pl-stamp-actions { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+/* 「替换」是 <label class="btn">（包着隐藏的文件框）、「移除」是 <button class="btn">：label 会吃到
+   `.card label` 的上下外边距（12px / 4px）被推低，两种元素字体 / 基线也不同。清零外边距、统一同高 inline-flex，
+   并让 button 继承字体（2026-10-06 产品反馈：两个按钮不一样高）。 */
+.pl-stamp-actions form.inline { display: flex; }
+.pl-stamp-actions .btn { display: inline-flex; align-items: center; box-sizing: border-box; height: 30px; margin: 0;
+    font-family: inherit; line-height: 1; }
