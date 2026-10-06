@@ -8,19 +8,20 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 自动评论配置（2026-09-29）。前缀 {@code petgo.auto-comment}。
  *
  * <p>运营侧不设开关（产品拍板：规则稳定、直接发、只留档）。{@link #enabled} 是<b>部署层</b>开关：
- * 默认关，按环境在 env 里打开，stag 先验、生产确认后再开。
+ * 默认开（2026-09-29 产品定：部署即生效）；要停某个环境就在 env 里设 {@code AUTO_COMMENT_ENABLED=false}。
+ * 另有一道闸不受它影响：AI 是 stub（{@code GEMINI_MODE} 非 live）时整轮跳过，本地 / 无 key 环境不会乱发。
  */
 @ConfigurationProperties(prefix = "petgo.auto-comment")
 public class AutoCommentProperties {
 
-    /** 部署层开关，默认关。 */
-    private boolean enabled = false;
+    /** 部署层开关，默认开。 */
+    private boolean enabled = true;
 
-    /** 早场 cron（Asia/Jakarta）：09:30。 */
-    private String morningCron = "0 30 9 * * *";
+    /** 早场 cron（Asia/Jakarta）：10:30。 */
+    private String morningCron = "0 30 10 * * *";
 
-    /** 晚场 cron（Asia/Jakarta）：20:00。 */
-    private String eveningCron = "0 0 20 * * *";
+    /** 晚场 cron（Asia/Jakarta）：20:30。 */
+    private String eveningCron = "0 30 20 * * *";
 
     /** 只评这一天（WIB 零点）之后发的帖，老帖没有意义。 */
     private LocalDate startDate = LocalDate.of(2026, 9, 29);

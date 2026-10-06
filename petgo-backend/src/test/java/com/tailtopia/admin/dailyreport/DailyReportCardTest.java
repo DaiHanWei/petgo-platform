@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 class DailyReportCardTest {
 
     private static DailyReport.Metrics m(Long dau, long comments, long newUsers, long paid) {
-        return new DailyReport.Metrics(newUsers, dau, 10, comments, 40, 3, 2, paid, 5, 1_234_000);
+        return new DailyReport.Metrics(newUsers, dau, 10, comments, 7, 40, 3, 2, paid, 5, 1_234_000);
     }
 
     @Test
@@ -64,7 +64,7 @@ class DailyReportCardTest {
         List<Map<String, Object>> els = (List<Map<String, Object>>) card.get("elements");
         assertThat(els.stream().filter(e -> "hr".equals(e.get("tag"))).count()).isEqualTo(3);
         assertThat(els.getLast().get("tag")).isEqualTo("note");
-        assertThat(json).contains("昨日新增").contains("昨日日活").contains("评论活跃率").contains("like 活跃率")
+        assertThat(json).contains("昨日新增").contains("日活（含游客）").contains("登录用户日活").contains("评论活跃率").contains("like 活跃率")
                 .contains("付费订单数").contains("付费用户数").contains("付费金额").contains("电商订单数").contains("GMV");
         assertThat(json).contains("Rp 150.000").contains("↑ +50.0%");   // 付费金额 150k vs 100k
         assertThat(json).contains("Rp 1.234.000");                      // GMV
@@ -76,6 +76,52 @@ class DailyReportCardTest {
         DailyReport r = new DailyReport(LocalDate.of(2026, 9, 25), m(null, 20, 12, 0), m(null, 10, 10, 0));
         String json = new ObjectMapper().writeValueAsString(DailyReportCard.build(r));
 
-        assertThat(json).contains("**昨日日活**\\n—").contains("**评论活跃率**\\n—").contains("**like 活跃率**\\n—");
+        assertThat(json).contains("**登录用户日活**\\n—").contains("**评论活跃率**\\n—").contains("**like 活跃率**\\n—");
+    }
+
+    @Test
+    @DisplayName("日活（含游客）= GA4，带环比；登录用户日活 = 服务器口径；活跃率分母仍是登录用户日活")
+    void ga4DauAndLoginDau() throws Exception {
+        DailyReport r = new DailyReport(LocalDate.of(2026, 10, 5),
+                m(50L, 20, 12, 0), m(40L, 10, 10, 0), 1_200L, 1_000L);
+        String json = new ObjectMapper().writeValueAsString(DailyReportCard.build(r));
+
+        assertThat(json).contains("**日活（含游客）**\\n1.200").contains("↑ +20.0%");
+        assertThat(json).contains("**登录用户日活**\\n50");
+        assertThat(json).contains("**评论活跃率**\\n40.0%");   // 20 ÷ 50（登录用户日活），不是 ÷ 1200
+        assertThat(json.indexOf("日活（含游客）")).isLessThan(json.indexOf("登录用户日活"));
+    }
+
+    @Test
+    @DisplayName("GA4 未配置 / 取数失败 → 「日活（含游客）」显示「—」，其余照常")
+    void ga4DauMissing() throws Exception {
+        DailyReport r = new DailyReport(LocalDate.of(2026, 10, 5), m(50L, 20, 12, 0), m(40L, 10, 10, 0));
+        String json = new ObjectMapper().writeValueAsString(DailyReportCard.build(r));
+
+        assertThat(json).contains("**日活（含游客）**\\n—").contains("**登录用户日活**\\n50");
+    }
+
+    @Test
+    @DisplayName("自动评论成功数：紧跟在「评论数」后面，只显示当日数，不带环比")
+    @SuppressWarnings("unchecked")
+    void autoCommentsRightAfterCommentsWithoutChange() {
+        DailyReport r = new DailyReport(LocalDate.of(2026, 9, 29), m(50L, 20, 12, 0), m(40L, 10, 10, 0));
+        Map<String, Object> card = (Map<String, Object>) DailyReportCard.build(r).get("card");
+        List<Map<String, Object>> els = (List<Map<String, Object>>) card.get("elements");
+
+        List<String> community = els.stream()
+                .filter(e -> e.containsKey("fields"))
+                .map(e -> (List<Map<String, Object>>) e.get("fields"))
+                .filter(fs -> fs.stream().anyMatch(f -> content(f).startsWith("**评论数**")))
+                .findFirst().orElseThrow()
+                .stream().map(DailyReportCardTest::content).toList();
+
+        int comments = community.indexOf(community.stream().filter(c -> c.startsWith("**评论数**")).findFirst().orElseThrow());
+        assertThat(community.get(comments + 1)).isEqualTo("**自动评论成功数**\n7");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String content(Map<String, Object> field) {
+        return (String) ((Map<String, Object>) field.get("text")).get("content");
     }
 }

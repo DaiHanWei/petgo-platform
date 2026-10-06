@@ -24,15 +24,16 @@ class DailyReportServiceTest {
 
     private final DailyReportQuery query = mock(DailyReportQuery.class);
     private final LarkWebhookClient lark = mock(LarkWebhookClient.class);
+    private final Ga4ActiveUsersClient ga4 = mock(Ga4ActiveUsersClient.class);
     private final DailyReportProperties props = new DailyReportProperties();
 
     /** 2026-09-25 02:00 UTC = 09:00 WIB。 */
     private final Clock at9Wib = Clock.fixed(Instant.parse("2026-09-25T02:00:00Z"), ZoneOffset.UTC);
 
-    private static final DailyReport.Metrics ZERO = new DailyReport.Metrics(0, null, 0, 0, 0, 0, 0, 0, 0, 0);
+    private static final DailyReport.Metrics ZERO = new DailyReport.Metrics(0, null, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
     private DailyReportService service() {
-        return new DailyReportService(query, lark, props, at9Wib);
+        return new DailyReportService(query, lark, ga4, props, at9Wib);
     }
 
     @Test
@@ -48,13 +49,27 @@ class DailyReportServiceTest {
     }
 
     @Test
+    @DisplayName("GA4 日活：统计日与前一天各取一次，原样放进日报；取不到（null）不影响其余指标")
+    void ga4DauForDayAndDayBefore() {
+        when(query.metricsOf(any())).thenReturn(ZERO);
+        when(ga4.activeUsers(LocalDate.of(2026, 9, 24))).thenReturn(812L);
+        when(ga4.activeUsers(LocalDate.of(2026, 9, 23))).thenReturn(null);
+
+        DailyReport r = service().getDailyReport(LocalDate.of(2026, 9, 25));
+
+        assertThat(r.ga4Dau()).isEqualTo(812L);
+        assertThat(r.ga4DauPrevious()).isNull();
+        assertThat(r.current()).isEqualTo(ZERO);
+    }
+
+    @Test
     @DisplayName("🔴 发送日按 WIB 取：UTC 17:30 已是 WIB 次日 00:30 → 统计的是 WIB 的「昨天」")
     void todayIsWib() {
         props.setWebhookUrl("http://x");
         when(query.metricsOf(any())).thenReturn(ZERO);
         Clock lateUtc = Clock.fixed(Instant.parse("2026-09-24T17:30:00Z"), ZoneOffset.UTC);
 
-        DailyReport r = new DailyReportService(query, lark, props, lateUtc).pushNow();
+        DailyReport r = new DailyReportService(query, lark, ga4, props, lateUtc).pushNow();
 
         assertThat(r.date()).isEqualTo(LocalDate.of(2026, 9, 24));
     }
@@ -64,7 +79,7 @@ class DailyReportServiceTest {
     void scheduledSkipsWhenNotConfigured() {
         service().pushScheduled();
 
-        verifyNoInteractions(query, lark);
+        verifyNoInteractions(query, lark, ga4);
     }
 
     @Test

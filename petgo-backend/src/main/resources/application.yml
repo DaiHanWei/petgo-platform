@@ -35,9 +35,9 @@ petgo:
   # 🔴 enabled 默认 false：部署层开关，按环境在 env 打开（stag 先验、生产再开）。GEMINI_MODE 非 live 时整轮跳过。
   # stag 想立刻验证：把 AUTO_COMMENT_MORNING_CRON 临时设成 "0 */10 * * * *"（每 10 分钟）。
   auto-comment:
-    enabled: ${AUTO_COMMENT_ENABLED:false}
-    morning-cron: ${AUTO_COMMENT_MORNING_CRON:0 30 9 * * *}
-    evening-cron: ${AUTO_COMMENT_EVENING_CRON:0 0 20 * * *}
+    enabled: ${AUTO_COMMENT_ENABLED:true}
+    morning-cron: ${AUTO_COMMENT_MORNING_CRON:0 30 10 * * *}
+    evening-cron: ${AUTO_COMMENT_EVENING_CRON:0 30 20 * * *}
     start-date: ${AUTO_COMMENT_START_DATE:2026-09-29}
     min-post-age: ${AUTO_COMMENT_MIN_POST_AGE:2h}
     max-per-run: ${AUTO_COMMENT_MAX_PER_RUN:200}
@@ -129,13 +129,17 @@ petgo:
     android-url: ${CARD_ANDROID_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
     ios-url: ${CARD_IOS_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
     app-download-url: ${CARD_APP_DOWNLOAD_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
-  # 飞书群日报（每天 09:00 WIB 推昨日数据，admin/dailyreport）。webhook 留空 = 不推送（本地/测试天然关闭）。
+  # 飞书群日报（每天 13:00 WIB 推昨日数据，admin/dailyreport；13 点是为等 GA4 日数据定稿）。webhook 留空 = 不推送（本地/测试天然关闭）。
   # webhook 与签名密钥 env 注入，绝不入库、绝不落日志。
   daily-report:
     webhook-url: ${LARK_DAILY_REPORT_WEBHOOK_URL:}
     secret: ${LARK_DAILY_REPORT_SECRET:}
-    cron: ${LARK_DAILY_REPORT_CRON:0 0 9 * * *}
+    cron: ${LARK_DAILY_REPORT_CRON:0 0 13 * * *}
     timeout-seconds: ${LARK_DAILY_REPORT_TIMEOUT_SECONDS:10}
+    # 「日活（含游客）」= Firebase / GA4 activeUsers。任一为空 = 不查，日报该字段显示「—」。
+    ga4:
+      property-id: ${GA4_PROPERTY_ID:}
+      credentials-b64: ${GA4_SA_KEY_B64:}
   # Lark 定时发帖（spec-lark-scheduled-posts）：每小时从运营内容表格取一条经虚拟账号免审发布。
   # 凭证 env 注入绝不入库；mode=off（默认）任务静默，只有显式 live 才打 Lark API。
   lark-content:
