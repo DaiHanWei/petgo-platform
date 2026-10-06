@@ -69,7 +69,7 @@ public class PawCoinWalletService {
                 idempotencyKey);
         PawCoinTransaction txn = txns.save(
                 PawCoinTransaction.of(userId, coins, type, refType, refId, group));
-        idempotency.store(idempotencyKey, txn.getId());
+        idempotency.store(walletKey(idempotencyKey), txn.getId());
     }
 
     /**
@@ -94,7 +94,7 @@ public class PawCoinWalletService {
                 idempotencyKey);
         PawCoinTransaction txn = txns.save(
                 PawCoinTransaction.of(userId, -coins, type, refType, refId, group));
-        idempotency.store(idempotencyKey, txn.getId());
+        idempotency.store(walletKey(idempotencyKey), txn.getId());
     }
 
     /** 当前余额（无钱包记 0）。 */
@@ -138,8 +138,23 @@ public class PawCoinWalletService {
      * credit/debit 与其 {@code LedgerService.post} 共用同一 {@code idempotencyKey}，故 DB 侧查总账即权威。
      */
     private boolean isReplay(String idempotencyKey) {
-        return idempotency.findResourceId(idempotencyKey).isPresent()
+        return idempotency.findResourceId(walletKey(idempotencyKey)).isPresent()
                 || ledger.findFirstByIdempotencyKey(idempotencyKey).isPresent();
+    }
+
+    /**
+     * 钱包专属的 Redis 幂等命名空间（bug 20260929-578）。
+     *
+     * <p>🔴 {@code IdempotencyService} 是全局共享的 {@code idem:} 键空间，{@code PaymentIntentService.createIntent}
+     * 也往里写「业务键 → 意图 id」。各付费入口（KTP 高清 / AI 解锁 / 付费问诊）的 PawCoin 扣币与 QRIS 建意图
+     * 曾共用同一业务键 ⇒ 用户先开 QRIS 不付、再改 PawCoin，{@code debit} 读到意图写的映射就当「已扣过」短路
+     * —— 不扣币、调用方照常解锁。钱包的 Redis 映射只能由钱包自己写，故加前缀与意图隔离。
+     *
+     * <p>总账（{@code ledger_entries.idempotency_key}）仍用原键：它是跨 TTL 的权威兜底，且上线前已扣的
+     * 流水靠它继续识别重放（不会因换前缀而二次扣费）。意图从不写总账，不存在同类串键。
+     */
+    static String walletKey(String idempotencyKey) {
+        return idempotencyKey == null || idempotencyKey.isBlank() ? idempotencyKey : "wallet:" + idempotencyKey;
     }
 
     /**
