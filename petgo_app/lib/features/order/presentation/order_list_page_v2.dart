@@ -65,7 +65,21 @@ class OrderListPageV2 extends ConsumerWidget {
           onSelected: (f) => ref.read(orderListProvider.notifier).setFilter(f),
         ),
       ),
-      body: async.when(
+      body: Column(
+        children: [
+          // bug 20261006-582：PawCoin 页签只列**充值单**（订单中心收的是订单，不是钱包流水）。
+          // 分享奖励 / 新手任务 / 消费等入账出账在 PawCoin 明细页（/me/pawcoin），这里给一条明确的入口，
+          // 免得用户以为奖励没到账。
+          if (current == OrderType.pawcoinTopup) _PawcoinHistoryBanner(l10n: l10n),
+          Expanded(child: _body(context, ref, l10n, async)),
+        ],
+      ),
+    );
+  }
+
+  Widget _body(BuildContext context, WidgetRef ref, AppLocalizations l10n,
+          AsyncValue<OrderListState> async) =>
+      async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => _hint(l10n.orderLoadFailed),
         data: (state) => state.items.isEmpty
@@ -83,9 +97,7 @@ class OrderListPageV2 extends ConsumerWidget {
                   },
                 ),
               ),
-      ),
-    );
-  }
+      );
 
   Widget _loadMore(AppLocalizations l10n, WidgetRef ref, OrderListState state) => ShopSection(
         child: Center(
@@ -127,6 +139,35 @@ class OrderListPageV2 extends ConsumerWidget {
 }
 
 /// 顶栏之下的筛选 Tab 行（墨底，选中项 700 + 2px 玫红下边框）。
+/// PawCoin 页签顶部的「去看 PawCoin 明细」入口（bug 20261006-582）。
+class _PawcoinHistoryBanner extends StatelessWidget {
+  const _PawcoinHistoryBanner({required this.l10n});
+
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: ShopColors.surface,
+        child: InkWell(
+          key: const ValueKey('orderPawcoinHistoryLink'),
+          onTap: () => context.push('/me/pawcoin'),
+          child: ShopSection(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(l10n.orderPawcoinHistoryHint, style: ShopText.body),
+                ),
+                const SizedBox(width: 8),
+                Text(l10n.orderPawcoinHistoryLink,
+                    style: ShopText.body.copyWith(color: ShopColors.accent, fontWeight: FontWeight.w600)),
+                const Icon(Icons.chevron_right_rounded, size: 18, color: ShopColors.accent),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
 class _FilterTabs extends StatelessWidget implements PreferredSizeWidget {
   const _FilterTabs({
     required this.filters,
