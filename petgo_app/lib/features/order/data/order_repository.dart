@@ -22,6 +22,9 @@ class OrderRepository {
   /// 🔴 `includeEcommerce=true` 是电商行的**显式加入闸门**（Story 3.9 补丁）：
   /// 服务端默认聚合不返回电商订单 —— 线上 v1.1.4 老 App 不认识 ShopOrderStatus，
   /// 会把这些状态全兜进「已完成」并渲染英文枚举串。本版 App 能渲染电商卡片，故恒传 true。
+  ///
+  /// 🔴 `includeKeepsake=true`（V1.3.2 Story 3.6）同理：一次性解锁三类（Tailsonality / 护照快照 / 登机牌）
+  /// 老 App 不认识，服务端默认不下发；本版 App 能渲染，恒传 true。
   Future<OrderPage> fetchOrders({OrderType? type, String? cursor, int limit = 20}) async {
     final resp = await dio.get<Map<String, dynamic>>(
       ApiPaths.orders,
@@ -30,6 +33,7 @@ class OrderRepository {
         'cursor': ?cursor,
         'limit': limit,
         'includeEcommerce': true,
+        'includeKeepsake': true,
       },
     );
     return OrderPage.fromJson(resp.data!);

@@ -33,6 +33,7 @@ class _ThrowRepo implements ContentRepository {
     required String idempotencyKey,
     bool syncToMoment = true,
     List<int> mentionedUserIds = const [],
+    String? placeCheckinToken,
   }) async {
     final ro = RequestOptions(path: '/api/v1/content-posts');
     throw DioException(
@@ -60,6 +61,7 @@ class _OkRepo implements ContentRepository {
     required String idempotencyKey,
     bool syncToMoment = true,
     List<int> mentionedUserIds = const [],
+    String? placeCheckinToken,
   }) async =>
       1;
 }

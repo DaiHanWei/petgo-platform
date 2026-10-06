@@ -55,13 +55,14 @@ class _GuestAuth extends AuthController {
   AuthState build() => const AuthState(status: AuthStatus.guest);
 }
 
-PublicProfilePet _pet({int diaryCount = 42}) => PublicProfilePet(
+PublicProfilePet _pet({int diaryCount = 42, String? badge}) => PublicProfilePet(
       petId: _kPetId,
       name: 'Miu',
       avatarUrl: null,
       petType: 'CAT',
       birthday: DateTime.utc(2024, 6, 1),
       diaryCount: diaryCount,
+      tailsonalityBadge: badge,
     );
 
 /// 记录站内访客视图被推到了哪个 petId。
@@ -148,12 +149,29 @@ void main() {
       expect(find.byKey(const ValueKey('profilePetCard')), findsNothing);
     });
 
-    /// ⚠️ Tailsonality 角色小标位是**天然空状态**（FR-117 在批次 B2），**不做占位设计**。
-    testWidgets('卡上没有 Tailsonality 占位', (tester) async {
+    /// V1.3.2 Story 3.3 · AC5.4（按新规则改写，原「天然空状态」一例拆成两例）：
+    /// 没有小标 → 什么都不渲染（**不做占位**）。
+    testWidgets('无小标 → 卡上没有 Tailsonality 胶囊、没有占位', (tester) async {
       await _pump(tester, pet: _pet());
 
       expect(find.byKey(const ValueKey('profilePetTailsonality')), findsNothing);
       expect(find.textContaining('Tailsonality'), findsNothing);
+    });
+
+    /// 佩戴 + 已解锁 → 名字右侧 4 字母胶囊；界面上只显 4 字母，不出现产品名。
+    testWidgets('有小标 ENTJ → 显示胶囊且只显 4 字母', (tester) async {
+      await _pump(tester, pet: _pet(badge: 'ENTJ'));
+
+      expect(find.byKey(const ValueKey('profilePetTailsonality')), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('profilePetTailsonality')), matching: find.text('ENTJ')),
+          findsOneWidget);
+      expect(find.textContaining('Tailsonality'), findsNothing);
+    });
+
+    test('fromJson 容忍缺键；有键即解析', () {
+      final base = {'petId': 1, 'name': 'Miu', 'diaryCount': 0};
+      expect(PublicProfilePet.fromJson(base).tailsonalityBadge, isNull);
+      expect(PublicProfilePet.fromJson({...base, 'tailsonalityBadge': 'ENTJ'}).tailsonalityBadge, 'ENTJ');
     });
 
     testWidgets('点宠物卡 → 站内访客视图，按 petId', (tester) async {

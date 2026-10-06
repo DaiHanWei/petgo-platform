@@ -13,6 +13,12 @@ import '../../core/theme/colors.dart';
 /// - 聚光区是**原样的页面**，周围才被压暗 —— 对比是真实的，不是靠叠色凑的；
 /// - 任何一块遮罩都只画一次，不存在叠加区。
 ///
+/// ## 🔴 挖孔是圆角的（2026-10-05 本地 L2 验收）
+/// 四块遮罩只能拼出**直角**孔，而卡片与高亮描边都是 r14 —— 孔的四个角会露出页面白底（白色直角落在
+/// 紫色圆角描边外面）。所以**画**和**拦点击**分开：
+/// - 压暗由一层 [CoachmarkScrimPainter] 一次画完（整屏减去 r14 圆角孔，evenOdd 路径），仍只画一次、无叠加区；
+/// - 四块分块遮罩保留，但改为**透明**，只负责拦点击 / 点遮罩关闭（孔内照常穿透到下面的卡）。
+///
 /// ## ⚠️ 同一处踩到的第二个坑
 /// UI 稿里 `display:flex` 容器内的文字与按钮被同容器内 `position:absolute` 的兄弟挡住。
 /// 这里的对应做法是：说明卡与四块遮罩**同为 Stack 的兄弟**，且说明卡排在**最后**
@@ -52,6 +58,9 @@ class CoachmarkOverlay extends StatefulWidget {
   final VoidCallback onDismiss;
 
   static const double _scrimAlpha = 0.72;
+
+  /// 聚光孔与高亮描边的圆角 —— 与入口卡（`InsightEntryCard`）同 r14，孔与卡严丝合缝。
+  static const double spotlightRadius = 14;
 
   /// 说明卡挂在高亮区的下方；下方放不下时挂到上方。
   static const double _cardGap = 12;
@@ -117,7 +126,20 @@ class _CoachmarkOverlayState extends State<CoachmarkOverlay> {
       type: MaterialType.transparency,
       child: Stack(
         children: [
-          // —— 四块遮罩：挖孔那一格什么都不画，所以聚光区是**原样的页面** ——
+          // —— 压暗层：整屏减去圆角孔，一次画完；不拦点击 ——
+          Positioned.fill(
+            child: IgnorePointer(
+              child: CustomPaint(
+                key: const ValueKey('coachmarkScrimPaint'),
+                painter: CoachmarkScrimPainter(
+                  hole: hole,
+                  radius: CoachmarkOverlay.spotlightRadius,
+                  color: AppColors.splashInk.withValues(alpha: _scrimAlpha),
+                ),
+              ),
+            ),
+          ),
+          // —— 四块遮罩（透明）：只拦点击；挖孔那一格什么都没有，所以聚光区可点、是**原样的页面** ——
           _scrim(left: 0, top: 0, width: size.width, height: hole.top),
           _scrim(
               left: 0,
@@ -138,7 +160,7 @@ class _CoachmarkOverlayState extends State<CoachmarkOverlay> {
                 key: const ValueKey('coachmarkSpotlight'),
                 decoration: BoxDecoration(
                   border: Border.all(color: AppColors.mint, width: 2.5),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(CoachmarkOverlay.spotlightRadius),
                 ),
               ),
             ),
@@ -178,8 +200,8 @@ class _CoachmarkOverlayState extends State<CoachmarkOverlay> {
           key: const ValueKey('coachmarkScrim'),
           behavior: HitTestBehavior.opaque,
           onTap: widget.onDismiss,
-          // UI 稿 P7：深紫黑（品牌 splashInk），不是纯黑 —— 纯黑压在淡紫页面上发脏。
-          child: ColoredBox(color: AppColors.splashInk.withValues(alpha: _scrimAlpha)),
+          // 颜色由上面的压暗层画（圆角孔）；这里透明，只占位拦点击。
+          child: const SizedBox.expand(),
         ),
       );
 
@@ -220,4 +242,27 @@ class _CoachmarkOverlayState extends State<CoachmarkOverlay> {
           ),
         ],
       );
+}
+
+/// 压暗层：整屏减去圆角聚光孔（evenOdd），一次画完。
+/// UI 稿 P7：深紫黑（品牌 splashInk），不是纯黑 —— 纯黑压在淡紫页面上发脏。
+class CoachmarkScrimPainter extends CustomPainter {
+  const CoachmarkScrimPainter({required this.hole, required this.radius, required this.color});
+
+  final Rect hole;
+  final double radius;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect(Offset.zero & size)
+      ..addRRect(RRect.fromRectAndRadius(hole, Radius.circular(radius)));
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(CoachmarkScrimPainter old) =>
+      old.hole != hole || old.radius != radius || old.color != color;
 }

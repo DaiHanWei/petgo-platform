@@ -26,6 +26,8 @@ const _mustReset = <String>[
   // batch-b1
   'petRecommendationsProvider',
   'mentionCandidatesProvider',
+  // V1.3.2 batch-a
+  'tailsonalityOwnerTypeProvider',
 ];
 
 void main() {

@@ -18,7 +18,8 @@ import tools.jackson.databind.json.JsonMapper;
  * （V1.3.0 batch-b1 Story 1.5 · AC1/AC6）。
  *
  * <h2>🔴 这份测试有一半是在断言「没有什么」</h2>
- * FR-112.6 / AC6 的反向验收（没有收藏、没有评分、没有营业时间电话、没有打卡、没有编辑入口）
+ * FR-112.6 / AC6 的反向验收（没有收藏、没有评分、没有营业时间电话、没有编辑入口；打卡只有
+ * V1.3.2 Story 1.1 的一个 {@code checkedInToday}，其余打卡类字段仍然没有）
  * 在界面上是 L2，但**在契约上是 L0 可证伪的**：字段不存在，界面就不可能画出来。
  * 而"不小心加一个字段"比"不小心画一个按钮"容易得多 —— 那才是这组断言存在的理由。
  */
@@ -32,7 +33,9 @@ class PlaceDetailResponseContractTest {
     private static final Set<String> FULL_FIELDS = Set.of(
             "token", "name", "type", "tags", "photos", "addressText", "description",
             "latitude", "longitude", "distanceMeters", "markedBy",
-            "commentCount", "recommendCount", "notRecommendCount", "photoSlotsRemaining");
+            "commentCount", "recommendCount", "notRecommendCount", "photoSlotsRemaining",
+            // V1.3.2 Story 1.1：登录用户的「今日已打卡」（游客省略，见下方专例）。
+            "checkedInToday");
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> wire(Object dto) {
@@ -68,9 +71,10 @@ class PlaceDetailResponseContractTest {
     @Test
     void detailHasExactlyContractFields() {
         Map<String, Object> m =
-                wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L, 7));
+                wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L, 7, false));
 
         assertThat(m.keySet()).isEqualTo(FULL_FIELDS);
+        assertThat(m.get("checkedInToday")).isEqualTo(false);
         assertThat(m.get("type")).isEqualTo("CAFE");
         assertThat(m.get("distanceMeters")).isEqualTo(1200);
         assertThat(m.get("latitude")).isEqualTo(-6.235);
@@ -95,7 +99,7 @@ class PlaceDetailResponseContractTest {
      */
     @Test
     void detailHasNoneOfTheExplicitlyExcludedFields() {
-        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L, 7));
+        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L, 7, true));
 
         for (String excluded : List.of(
                 // 收藏
@@ -104,12 +108,22 @@ class PlaceDetailResponseContractTest {
                 "rating", "ratingAvg", "score", "stars",
                 // 营业时间 / 电话等商户字段
                 "openingHours", "businessHours", "phone", "phoneNumber", "website",
-                // ⑧ 打卡（批次 B2）
+                // 打卡：V1.3.2 只加了 checkedInToday 一个键，次数 / 能否打卡这类仍然不该有
                 "checkedIn", "checkinCount", "checkInCount", "canCheckIn",
                 // 用户不可编辑场所
                 "editable", "canEdit", "editUrl")) {
             assertThat(m).as("AC6 反向验收：不该有 %s", excluded).doesNotContainKey(excluded);
         }
+    }
+
+    /** V1.3.2 Story 1.1 AC3：游客响应**不含** checkedInToday（省略，不是 false）。 */
+    @Test
+    void guestDetailOmitsCheckedInToday() {
+        Map<String, Object> m = wire(PlaceDetailResponse.of(place(), marker(), TWO_PHOTOS, 1200, 3L, 11L, 2L, 7, null));
+
+        assertThat(m).doesNotContainKey("checkedInToday");
+        assertThat(m.keySet()).isEqualTo(
+                FULL_FIELDS.stream().filter(k -> !k.equals("checkedInToday")).collect(java.util.stream.Collectors.toSet()));
     }
 
     /** 「按最新」进来的详情没有距离 → 省略（不是 0）。 */

@@ -10,7 +10,6 @@ import com.tailtopia.admin.account.domain.AdminRole;
 import com.tailtopia.admin.account.service.AdminAccountService;
 import com.tailtopia.admin.places.domain.Place;
 import com.tailtopia.admin.places.domain.PlaceAttitude;
-import com.tailtopia.admin.places.domain.PlaceCheckin;
 import com.tailtopia.admin.places.domain.PlaceComment;
 import com.tailtopia.admin.places.domain.PlacePhoto;
 import com.tailtopia.admin.places.domain.PlaceReport;
@@ -46,6 +45,9 @@ class AdminPlaceIntegrationTest extends ApiIntegrationTest {
     private PlaceCommentRepository comments;
     @Autowired
     private PlaceCheckinRepository checkins;
+    /** V1.3.2：打卡行只由 App 侧实体插入（三列 NOT NULL 后台实体未映射）。 */
+    @Autowired
+    private com.tailtopia.place.repository.PlaceVisitRepository appCheckins;
     @Autowired
     private PlaceReportRepository reports;
     @Autowired
@@ -82,7 +84,9 @@ class AdminPlaceIntegrationTest extends ApiIntegrationTest {
         places.save(merged);
         photos.save(PlacePhoto.create(active.getId(), "places/" + active.getId() + "/a.jpg", visitor.getId()));
         comments.save(PlaceComment.create(active.getId(), visitor.getId(), "很友好 " + tag, PlaceAttitude.RECOMMEND));
-        checkins.save(PlaceCheckin.create(active.getId(), visitor.getId()));
+        appCheckins.save(com.tailtopia.place.domain.PlaceCheckin.create(
+                java.util.UUID.randomUUID().toString().replace("-", ""), active.getId(), visitor.getId(),
+                java.time.Instant.now(), java.time.LocalDate.now(java.time.ZoneId.of("Asia/Jakarta"))));
         reports.save(PlaceReport.create(active.getId(), visitor.getId(), PlaceReportReason.DUPLICATE));
         // 计数实时统计（场所表对齐 D3）：上面真实落了 1 照片 / 1 评论 / 1 打卡，无需手工 recount。
 
@@ -99,8 +103,8 @@ class AdminPlaceIntegrationTest extends ApiIntegrationTest {
                 .contains("/admin/manual-review?type=PLACE_REPORT");
         // 摘要条随筛选联动：上架 1（active）、待处理举报 1、累计打卡 1（实时统计）
         assertThat(page).containsPattern("上架场所</div>\\s*<div class=\"sum-value\">1<").containsPattern(">1</a>");
-        // bug 20260923-552：打卡归 B2，默认（admin.places.checkin-visible=false）摘要 / 列头都不出现
-        assertThat(page).doesNotContain("累计打卡").doesNotContain(">打卡</th>");
+        // 2026-10-06：打卡上线，默认（admin.places.checkin-visible=true）摘要「累计打卡」与列头「打卡」都展示
+        assertThat(page).contains("累计打卡").contains(">打卡</th>");
 
         // 筛选状态 → 只剩一行；关键词 ILIKE 地址；城市
         String only = mvc.perform(get("/admin/places").param("q", tag).param("status", "DELISTED").with(user(ops)).header("HX-Request", "true"))
@@ -124,7 +128,7 @@ class AdminPlaceIntegrationTest extends ApiIntegrationTest {
                 .contains("data-photo-id=") // 有 OSS 凭证 → data-lightbox 缩略图；无凭证（本地 / CI）→ 「图片暂不可用」占位，抽屉照常打开
                 .contains("id=\"places-drawer-comments\"").contains("Jakarta").contains("-6.208763")
                 .doesNotContain("<html"); // 5-2 的 disabled 占位按钮已在 5-3 换成真操作，不再断言
-        assertThat(drawer).as("bug 552：抽屉的打卡计数 B2 前隐藏").doesNotContain(">打卡</div>");
+        assertThat(drawer).as("2026-10-06 打卡上线：抽屉的打卡计数默认展示").contains(">打卡</div>");
         String mergedDrawer = mvc.perform(get("/admin/places/" + merged.getId() + "/drawer").param("lang", "zh_CN").with(user(ops)).header("HX-Request", "true"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         // 复审 #4：「已并入 →」直接换抽屉体（hx-get 保留场所的抽屉），不再走 ?open= 深链

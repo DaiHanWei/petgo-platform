@@ -52,9 +52,13 @@ public class PublicProfilePetController {
     private final VisitorProjectionService visitors;
     private final AccountQueryService accounts;
     private final UserHideRelationReader hideRelations;
+    /** V1.3.2 Story 3.3：角色小标（与本人档案同一个方法）。 */
+    private final com.tailtopia.tailsonality.service.TailsonalityBadgeQuery tailsonalityBadges;
 
     public PublicProfilePetController(ProfileService profiles, VisitorProjectionService visitors,
-            AccountQueryService accounts, UserHideRelationReader hideRelations) {
+            AccountQueryService accounts, UserHideRelationReader hideRelations,
+            com.tailtopia.tailsonality.service.TailsonalityBadgeQuery tailsonalityBadges) {
+        this.tailsonalityBadges = tailsonalityBadges;
         this.profiles = profiles;
         this.visitors = visitors;
         this.accounts = accounts;
@@ -92,8 +96,8 @@ public class PublicProfilePetController {
         // Diary 条数与点进去之后统计条上那个数**同一个实现**（否则用户第一眼就看出对不上）。
         // ⚠️ 走 `diaryCount` 而不是 `stats(...).happyMomentCount()`：后者会连带算问诊次数、
         //    里程碑进度与两次健康表计数 —— 五条查询换一个数，而这是个游客可达的端点。
-        return ResponseEntity.ok(
-                PublicProfilePetResponse.of(pet.get(), visitors.diaryCount(pet.get())));
+        return ResponseEntity.ok(PublicProfilePetResponse.of(pet.get(), visitors.diaryCount(pet.get()),
+                tailsonalityBadges.badgeOf(pet.get().getId()).orElse(null)));
     }
 
     /** 登录<b>用户</b> id（游客 / 非 USER 角色 → null）。兽医 {@code sub=vetId} 与 users.id 会碰撞。 */

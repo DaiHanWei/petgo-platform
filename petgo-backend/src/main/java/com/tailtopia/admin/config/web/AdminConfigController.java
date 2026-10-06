@@ -83,16 +83,29 @@ public class AdminConfigController {
                     "admin.err.config.supportEmailBlank", "email",
                     "admin.err.config.supportEmailInvalid", "email",
                     "admin.err.config.supportEmailTooLong", "email")),
-            "shareReward", json(Map.of(
-                    "admin.err.config.shareRewardCapNegative", "shareRewardMonthlyCap",
-                    "admin.err.config.shareRewardCapTooLarge", "shareRewardMonthlyCap",
-                    "admin.err.config.shareRewardCapBelowReward", "shareRewardMonthlyCap,idCardShareReward",
-                    "admin.err.config.idCardShareRewardNegative", "idCardShareReward",
-                    "admin.err.config.idCardShareRewardTooLarge", "idCardShareReward",
-                    "admin.err.config.idCardShareDailyCapNegative", "idCardShareDailyCap",
-                    "admin.err.config.ageCardShareRewardNegative", "ageCardShareReward",
-                    "admin.err.config.ageCardShareRewardTooLarge", "ageCardShareReward",
-                    "admin.err.config.ageCardShareDailyCapNegative", "ageCardShareDailyCap")));
+            // ⚠️ Map.ofEntries：Map.of 最多 10 对，V1.3.2 Story 4.5 加两渠道后超了。
+            "shareReward", json(Map.ofEntries(
+                    Map.entry("admin.err.config.shareRewardCapNegative", "shareRewardMonthlyCap"),
+                    Map.entry("admin.err.config.shareRewardCapTooLarge", "shareRewardMonthlyCap"),
+                    Map.entry("admin.err.config.shareRewardCapBelowReward", "shareRewardMonthlyCap,idCardShareReward"),
+                    Map.entry("admin.err.config.idCardShareRewardNegative", "idCardShareReward"),
+                    Map.entry("admin.err.config.idCardShareRewardTooLarge", "idCardShareReward"),
+                    Map.entry("admin.err.config.idCardShareDailyCapNegative", "idCardShareDailyCap"),
+                    Map.entry("admin.err.config.ageCardShareRewardNegative", "ageCardShareReward"),
+                    Map.entry("admin.err.config.ageCardShareRewardTooLarge", "ageCardShareReward"),
+                    Map.entry("admin.err.config.ageCardShareDailyCapNegative", "ageCardShareDailyCap"),
+                    Map.entry("admin.err.config.shareRewardCapBelowAgeCardReward",
+                            "shareRewardMonthlyCap,ageCardShareReward"),
+                    Map.entry("admin.err.config.tailsonalityShareRewardNegative", "tailsonalityShareReward"),
+                    Map.entry("admin.err.config.tailsonalityShareRewardTooLarge", "tailsonalityShareReward"),
+                    Map.entry("admin.err.config.tailsonalityShareDailyCapNegative", "tailsonalityShareDailyCap"),
+                    Map.entry("admin.err.config.shareRewardCapBelowTailsonalityReward",
+                            "shareRewardMonthlyCap,tailsonalityShareReward"),
+                    Map.entry("admin.err.config.passportShareRewardNegative", "passportShareReward"),
+                    Map.entry("admin.err.config.passportShareRewardTooLarge", "passportShareReward"),
+                    Map.entry("admin.err.config.passportShareDailyCapNegative", "passportShareDailyCap"),
+                    Map.entry("admin.err.config.shareRewardCapBelowPassportReward",
+                            "shareRewardMonthlyCap,passportShareReward"))));
 
     private static String json(Map<String, String> m) {
         StringBuilder sb = new StringBuilder("{");
@@ -177,17 +190,23 @@ public class AdminConfigController {
             @RequestParam(defaultValue = "0") int idCardShareDailyCap,
             @RequestParam(defaultValue = "0") long ageCardShareReward,
             @RequestParam(defaultValue = "0") int ageCardShareDailyCap,
+            @RequestParam(defaultValue = "0") long tailsonalityShareReward,
+            @RequestParam(defaultValue = "0") int tailsonalityShareDailyCap,
+            @RequestParam(defaultValue = "0") long passportShareReward,
+            @RequestParam(defaultValue = "0") int passportShareDailyCap,
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         if (hx.isHtmx()) {
             write.updateShareReward(new com.tailtopia.admin.config.dto.ShareRewardForm(
                     shareRewardEnabled, shareRewardMonthlyCap, idCardShareReward, idCardShareDailyCap,
-                    ageCardShareReward, ageCardShareDailyCap), admin.getAdminAccountId());
+                    ageCardShareReward, ageCardShareDailyCap, tailsonalityShareReward, tailsonalityShareDailyCap,
+                    passportShareReward, passportShareDailyCap), admin.getAdminAccountId());
             return savedCard("cfg-share-reward", "config-card-share-reward", "admin.flash.config.shareRewardSaved", model, response);
         }
         try {
             write.updateShareReward(new com.tailtopia.admin.config.dto.ShareRewardForm(
                     shareRewardEnabled, shareRewardMonthlyCap, idCardShareReward,
-                    idCardShareDailyCap, ageCardShareReward, ageCardShareDailyCap),
+                    idCardShareDailyCap, ageCardShareReward, ageCardShareDailyCap,
+                    tailsonalityShareReward, tailsonalityShareDailyCap, passportShareReward, passportShareDailyCap),
                     admin.getAdminAccountId());
             flash.addFlashAttribute("notice", msg.get("admin.flash.config.shareRewardSaved"));
         } catch (AppException e) {
@@ -263,7 +282,8 @@ public class AdminConfigController {
     }
 
     /**
-     * 「KTP 模块高清图解锁定价」三行（V1.3.0 Story 6.1 · AB-18A）：KTP 卡高清下载 / 护照·护照内页 / 护照·登机牌。
+     * 「一次性解锁定价」四行（V1.3.0 Story 6.1 · AB-18A；V1.3.2 Story 3.1 加第四行）：KTP 卡高清下载 / 护照·护照内页（每次快照）
+     * / 护照·登机牌（每张）/ Tailsonality·结果解锁。端点路径与前三个参数名逐字不变。
      * 与定价卡同码（{@code config.edit} 改、{@code config.view} 看，不新增权限）；PRG + toast；校验失败 flash error 回显
      * （htmx 422 fragment 随 Story 6.3 套模板 D 一起接）。
      */
@@ -271,14 +291,16 @@ public class AdminConfigController {
     @PreAuthorize(EDIT_AUTH)
     public String updateKtpPricing(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam long idHdDownloadPrice, @RequestParam long passportPagePrice,
-            @RequestParam long passportBoardingPrice, HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+            @RequestParam long passportBoardingPrice, @RequestParam long tailsonalityUnlockPrice,
+            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+        KtpPricingForm form = new KtpPricingForm(idHdDownloadPrice, passportPagePrice, passportBoardingPrice,
+                tailsonalityUnlockPrice);
         if (hx.isHtmx()) {
-            write.updateKtpPricing(new KtpPricingForm(idHdDownloadPrice, passportPagePrice, passportBoardingPrice), admin.getAdminAccountId());
+            write.updateKtpPricing(form, admin.getAdminAccountId());
             return savedCard("cfg-ktp", "config-card-ktp", "admin.flash.config.ktpPricingSaved", model, response);
         }
         try {
-            write.updateKtpPricing(new KtpPricingForm(idHdDownloadPrice, passportPagePrice, passportBoardingPrice),
-                    admin.getAdminAccountId());
+            write.updateKtpPricing(form, admin.getAdminAccountId());
             flash.addFlashAttribute("toast", msg.get("admin.flash.config.ktpPricingSaved"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));

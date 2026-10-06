@@ -171,14 +171,15 @@ public class IdCardHdService {
     }
 
     /**
-     * 下发给 App 的 KTP 模块三价（V1.3.0 Story 6.1，契约 X-4）：KTP 卡高清 + 护照·护照内页 + 护照·登机牌，一次读 {@code pricing_config}
+     * 下发给 App 的一次性解锁四价（V1.3.0 Story 6.1 契约 X-4；V1.3.2 Story 3.1 加 Tailsonality）：KTP 卡高清 + 护照·护照内页
+     * + 护照·登机牌 + Tailsonality 结果解锁，一次读 {@code pricing_config}
      * 单行（无缓存），改价即时生效、只影响新发起的解锁；已解锁记录不受影响（扣费逻辑不动）。
      */
     @Transactional(readOnly = true)
     public com.tailtopia.profile.dto.IdCardHdPricingResponse currentPricing() {
         var p = platformConfig.pricing();
         return new com.tailtopia.profile.dto.IdCardHdPricingResponse(p.getIdHdDownloadPrice(), p.getPassportPageUnlockPrice(),
-                p.getPassportBoardingUnlockPrice());
+                p.getPassportBoardingUnlockPrice(), p.getTailsonalityUnlockPrice());
     }
 
     /**

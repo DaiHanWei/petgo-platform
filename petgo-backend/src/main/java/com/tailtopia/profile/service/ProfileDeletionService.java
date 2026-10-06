@@ -8,6 +8,9 @@ import com.tailtopia.profile.repository.HealthRecordRepository;
 import com.tailtopia.profile.repository.MilestoneCompletionRepository;
 import com.tailtopia.profile.repository.MilestoneShareRepository;
 import com.tailtopia.content.repository.ContentPostRepository;
+import com.tailtopia.passport.service.PetPassportDeletionService;
+import com.tailtopia.place.service.PlaceCheckinDeletionService;
+import com.tailtopia.tailsonality.service.TailsonalityDeletionService;
 import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.profile.repository.PetMilestoneRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
@@ -36,12 +39,17 @@ public class ProfileDeletionService {
     private final ContentPostRepository contentPosts;
     private final SerialAllocationService serialAllocation;
     private final IdCardRepository idCards;
+    private final PlaceCheckinDeletionService placeCheckins;
+    private final PetPassportDeletionService petPassports;
+    private final TailsonalityDeletionService tailsonality;
 
     public ProfileDeletionService(PetProfileRepository petProfiles, HealthEventRepository healthEvents,
             HealthRecordRepository healthRecords, PetMilestoneRepository petMilestones,
             MilestoneCompletionRepository milestoneCompletions,
             MilestoneShareRepository milestoneShares, ContentPostRepository contentPosts,
-            SerialAllocationService serialAllocation, IdCardRepository idCards) {
+            SerialAllocationService serialAllocation, IdCardRepository idCards,
+            PlaceCheckinDeletionService placeCheckins, PetPassportDeletionService petPassports,
+            TailsonalityDeletionService tailsonality) {
         this.petProfiles = petProfiles;
         this.healthEvents = healthEvents;
         this.healthRecords = healthRecords;
@@ -51,6 +59,9 @@ public class ProfileDeletionService {
         this.contentPosts = contentPosts;
         this.serialAllocation = serialAllocation;
         this.idCards = idCards;
+        this.placeCheckins = placeCheckins;
+        this.petPassports = petPassports;
+        this.tailsonality = tailsonality;
     }
 
     @Transactional
@@ -92,6 +103,13 @@ public class ProfileDeletionService {
         // 引用它的 content_posts.pet_id 置 NULL，否则外键阻断（历史账号注销 deletionId=1 即栽在此）。
         // 帖子本体保留（UGC 保留），仅解除与已删宠物的绑定。
         contentPosts.detachPet(petId);
+        // 场所打卡（V1.3.2 Story 1.1 · AD-17）：删该宠物的打卡关联，再删该用户已无关联宠物的打卡行。
+        // 🔴 必须在 petProfiles.delete 之前：place_checkin_pets.pet_profile_id 对 pet_profiles 有 FK（无 ON DELETE）。
+        placeCheckins.deleteForPet(petId, userId);
+        // 宠物护照（V1.3.2 Story 1.2 · AD-17）：pet_passports.pet_profile_id 对 pet_profiles 有 FK，同样须先删。
+        petPassports.deleteForPet(petId);
+        // Tailsonality 结果（V1.3.2 Story 2.1 · AD-17）：tailsonality_results.pet_profile_id 对 pet_profiles 有 FK，同样须先删。
+        tailsonality.deleteForPet(petId);
 
         List<String> publicUrls = new ArrayList<>();
         if (pet.getAvatarUrl() != null) {

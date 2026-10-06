@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tailtopia.admin.places.domain.Place;
 import com.tailtopia.admin.places.domain.PlaceAttitude;
-import com.tailtopia.admin.places.domain.PlaceCheckin;
 import com.tailtopia.admin.places.domain.PlaceComment;
 import com.tailtopia.admin.places.domain.PlacePhoto;
 import com.tailtopia.admin.places.domain.PlaceReport;
@@ -42,6 +41,9 @@ class PlaceSchemaIntegrationTest extends ApiIntegrationTest {
     private PlaceCommentRepository comments;
     @Autowired
     private PlaceCheckinRepository checkins;
+    /** V1.3.2：打卡行只由 App 侧实体插入（三列 NOT NULL 后台实体未映射）。 */
+    @Autowired
+    private com.tailtopia.place.repository.PlaceVisitRepository appCheckins;
     @Autowired
     private PlaceReportRepository reports;
     @Autowired
@@ -68,7 +70,9 @@ class PlaceSchemaIntegrationTest extends ApiIntegrationTest {
 
         photos.save(PlacePhoto.create(p.getId(), "places/" + p.getId() + "/a.jpg", other.getId()));
         comments.save(PlaceComment.create(p.getId(), other.getId(), "很友好", PlaceAttitude.RECOMMEND));
-        checkins.save(PlaceCheckin.create(p.getId(), other.getId()));
+        appCheckins.save(com.tailtopia.place.domain.PlaceCheckin.create(
+                java.util.UUID.randomUUID().toString().replace("-", ""), p.getId(), other.getId(),
+                java.time.Instant.now(), java.time.LocalDate.now(java.time.ZoneId.of("Asia/Jakarta"))));
         PlaceReport r = reports.save(PlaceReport.create(p.getId(), other.getId(), PlaceReportReason.CLOSED));
         assertThat(photos.countByPlaceIdAndDeletedAtIsNull(p.getId())).isEqualTo(1);
         assertThat(comments.countByPlaceIdAndAttitudeAndDeletedAtIsNull(p.getId(), PlaceAttitude.RECOMMEND)).isEqualTo(1);

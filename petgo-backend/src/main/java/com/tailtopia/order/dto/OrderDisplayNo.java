@@ -21,11 +21,27 @@ public final class OrderDisplayNo {
      * 财务要能一眼区分自营实物与虚拟商品收入（后台 AB-13D 对账）。
      */
     public static final String ECOMMERCE = "TOKO";
+    /**
+     * V1.3.2 Story 3.6：一次性解锁三类的订单号前缀。🔴 与支付号 {@code PAYTS / PAYPASS / PAYBP} <b>刻意不同名</b>
+     * （同 {@code PaymentDisplayNo} 类注释：订单号与支付号是两张不同的凭证，客服不能混着念）。
+     */
+    public static final String TAILSONALITY = "TSL";
+    public static final String PASSPORT_SNAP = "PASPOR";
+    public static final String BOARDING_PASS = "BPASS";
 
     private static final ZoneId WIB = ZoneId.of("Asia/Jakarta");
     private static final DateTimeFormatter YMD = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     private OrderDisplayNo() {
+    }
+
+    /** 一次性解锁 sku → 订单号前缀（订单中心与后台异常页同一个出口）。 */
+    public static String keepsakePrefix(com.tailtopia.purchase.domain.KeepsakeSku sku) {
+        return switch (sku) {
+            case TAILSONALITY -> TAILSONALITY;
+            case PASSPORT_SNAP -> PASSPORT_SNAP;
+            case BOARDING_PASS -> BOARDING_PASS;
+        };
     }
 
     public static String of(String prefix, long id, Instant createdAt) {

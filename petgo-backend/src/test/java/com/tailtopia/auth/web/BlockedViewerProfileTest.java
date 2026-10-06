@@ -70,7 +70,8 @@ class BlockedViewerProfileTest {
 
         profiles = mock(ProfileService.class);
         visitors = mock(VisitorProjectionService.class);
-        petCard = new PublicProfilePetController(profiles, visitors, accounts, hideRelations);
+        petCard = new PublicProfilePetController(profiles, visitors, accounts, hideRelations,
+                mock(com.tailtopia.tailsonality.service.TailsonalityBadgeQuery.class));
 
         when(accounts.findAuthorViews(anyList())).thenReturn(
                 Map.of(OWNER, new AuthorView(OWNER, "Rani", "https://cdn/r.jpg", false, List.of())));

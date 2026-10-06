@@ -7,7 +7,8 @@ import 'place_summary.dart';
 /// 线上契约由 `test/place/place_detail_wire_contract_test.dart` 守着。
 ///
 /// <h2>🔴 这里**没有**的字段（FR-112.6 / AC6 反向验收）</h2>
-/// 没有收藏、没有评分打星、没有营业时间/电话、没有打卡、没有「可编辑」标记。
+/// 没有收藏、没有评分打星、没有营业时间/电话、没有「可编辑」标记。
+/// 打卡只有**一个**字段 [checkedInToday]（V1.3.2 Story 1.1）—— 没有打卡次数 / 能否打卡这类字段。
 /// 这不是「还没做」，是**明确不做** —— 后端 DTO 里也没有（那侧有契约测试钉着）。
 class PlaceDetail {
   const PlaceDetail({
@@ -26,6 +27,7 @@ class PlaceDetail {
     this.type,
     this.description,
     this.distanceMeters,
+    this.checkedInToday,
   });
 
   /// 不可枚举对外标识。
@@ -61,6 +63,12 @@ class PlaceDetail {
 
   final PlaceMarker markedBy;
 
+  /// 今日已打卡（V1.3.2 Story 1.1 AC3）：本人宠物今天（WIB）在此是否已打卡。
+  ///
+  /// 🔴 **`bool?` 而不是 `bool`**：游客响应**省略该键** → null；默认成 false 会把
+  /// 「服务端没说」吞成「还没打卡」（`?? 0` 兜底的老坑）。
+  final bool? checkedInToday;
+
   final int commentCount;
   final int recommendCount;
   final int notRecommendCount;
@@ -92,6 +100,7 @@ class PlaceDetail {
       commentCount: _nonNegInt(json['commentCount']),
       recommendCount: _nonNegInt(json['recommendCount']),
       notRecommendCount: _nonNegInt(json['notRecommendCount']),
+      checkedInToday: json['checkedInToday'] is bool ? json['checkedInToday'] as bool : null,
       photoSlotsRemaining: json.containsKey('photoSlotsRemaining')
           ? _nonNegInt(json['photoSlotsRemaining'])
           : _estimateSlots(_photos(json['photos'])),

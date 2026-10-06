@@ -9,7 +9,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * #17 付费人数·含 PawCoin 消费（V1.3.0 Story 3.2）：当日 问诊 {@code paid_at} ∪ AI 解锁（COMPLETED）{@code paid_at}
- * ∪ 身份证高清成交（PawCoin 行 {@code purchased_at} ∪ ID_HD 支付单 PAID 到账）∪ PawCoin 充值到账 的去重真实用户数；
+ * ∪ 身份证高清成交（PawCoin 行 {@code purchased_at} ∪ ID_HD 支付单 PAID 到账）∪ PawCoin 充值到账
+ * ∪ 一次性解锁成交（V1.3.2：{@code keepsake_purchases.paid_at}，两渠道同源）的去重真实用户数；
  * 已退款订单当日仍计（退款不追溯改写付款事实）。非双口径。
  */
 @Component
@@ -25,9 +26,9 @@ public class PayingUsersInclPawcoinMetricQuery extends AbstractMetricQuery {
     }
 
     /**
-     * 消费成交事件 CTE（参考 SQL {@code spend_events}，四段 UNION ALL，各段 JOIN 真实用户）：
+     * 消费成交事件 CTE（参考 SQL {@code spend_events}，六段 UNION ALL，各段 JOIN 真实用户）：
      * 问诊 paid_at ∪ AI 解锁 COMPLETED paid_at ∪ 身份证高清成交（PawCoin 行 purchased_at ∪ ID_HD 支付单 PAID 到账）∪ PawCoin 充值到账
-     * （payment_intents PAID + PAWCOIN_TOPUP）。不加 {@code co.status NOT IN ('REFUNDING','REFUNDED')}（已退款当日仍计）。#18 复用。
+     * （payment_intents PAID + PAWCOIN_TOPUP）∪ 一次性解锁（keepsake_purchases 已到账三态，V1.3.2）。不加 {@code co.status NOT IN ('REFUNDING','REFUNDED')}（已退款当日仍计）。#18 复用。
      */
     static String spendEventsCte() {
         return "spend_events AS ("
@@ -46,6 +47,13 @@ public class PayingUsersInclPawcoinMetricQuery extends AbstractMetricQuery {
                 + " WHERE pi.status = 'PAID' AND pi.purpose = 'ID_HD' AND " + day("pi.updated_at") + " = :d"
                 + " UNION ALL SELECT pi.user_id FROM payment_intents pi JOIN users u ON u.id = pi.user_id AND "
                 + SyntheticAccountSql.EXCLUDE_WHERE
-                + " WHERE pi.status = 'PAID' AND pi.purpose = 'PAWCOIN_TOPUP' AND " + day("pi.updated_at") + " = :d)";
+                + " WHERE pi.status = 'PAID' AND pi.purpose = 'PAWCOIN_TOPUP' AND " + day("pi.updated_at") + " = :d"
+                // V1.3.2 Story 3.1：三类一次性解锁 —— QRIS 与 PawCoin 两个渠道**都从购买记录取**（paid_at），
+                // 不再从 payment_intents 按三个新 purpose 取一遍（否则 QRIS 成交会被数两次，#18 按事件计数时就错了）。
+                // DUPLICATE_PAID / ORPHAN_PAID 也是真实付款（钱已到账，交人工处理），计入。
+                + " UNION ALL SELECT kp.user_id FROM keepsake_purchases kp JOIN users u ON u.id = kp.user_id AND "
+                + SyntheticAccountSql.EXCLUDE_WHERE
+                + " WHERE kp.status IN ('PAID', 'DUPLICATE_PAID', 'ORPHAN_PAID') AND kp.paid_at IS NOT NULL AND "
+                + day("kp.paid_at") + " = :d)";
     }
 }

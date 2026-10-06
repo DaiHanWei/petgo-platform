@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../tailsonality/domain/content/ts_roles.dart';
+import '../../../tailsonality/data/ts_remote_art.dart';
+import '../../../tailsonality/presentation/widgets/ts_remote_art_image.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/utils/date_format.dart';
@@ -9,6 +12,7 @@ import '../../domain/milestone_celebration_copy.dart';
 import '../../domain/milestone_titles.dart';
 import '../../domain/timeline_item.dart';
 import '../../../../shared/widgets/content_tag_chip.dart';
+import 'milestone_badge.dart';
 
 /// Diary 时间线**五类条目的唯一渲染组件**（V1.1.2 Story 2.2 · FR-80/82 · NFR-7 · AD-13 Rule 4）。
 ///
@@ -63,6 +67,8 @@ class TimelineItemTile extends StatelessWidget {
       TimelineItemType.healthRecord =>
         item.isConsultRecord ? _consultRow(l10n) : _healthCapsule(context, l10n),
       TimelineItemType.idCardIssued => _idCard(l10n),
+      TimelineItemType.placeCheckinBanner => _placeCheckinBanner(l10n),
+      TimelineItemType.tailsonalityBanner => _tailsonalityBanner(context, l10n),
     };
     final tappable = onTap == null
         ? tile
@@ -219,11 +225,7 @@ class TimelineItemTile extends StatelessWidget {
         border: Border.all(color: AppColors.gold, width: 1.3),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text('🏆 $label',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-              fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF9A6800))),
+      child: _stampContent(label),
     );
     if (onBadgeTap == null) return chip;
     return GestureDetector(
@@ -241,7 +243,144 @@ class TimelineItemTile extends StatelessWidget {
     return localizedMilestoneTitle(code, Localizations.localeOf(context));
   }
 
+  // ===== V1.3.2 Story 1.6 · 地点打卡通栏（沿用类 ③ banner 的圆角 / 内边距，专属青蓝底） =====
+
+  Widget _placeCheckinBanner(AppLocalizations l10n) {
+    // 正文就是场所名（用户数据，不进 ARB）；读屏走 timelineCheckinSemantics。
+    final name = item.checkinPlace?.name ?? '';
+    return Semantics(
+      label: l10n.timelineCheckinSemantics(name),
+      excludeSemantics: true,
+      child: Container(
+        key: const ValueKey('timelineCheckinBanner'),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: AppColors.checkinTint,
+          border: Border.all(color: AppColors.checkinBorder),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(11),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x14000000), offset: Offset(0, 2), blurRadius: 6),
+                ],
+              ),
+              // 线性定位图标（UI 稿图标规则：不用 📍 emoji）。
+              child: const Icon(Icons.place_outlined, size: 22, color: AppColors.checkinIcon),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Text(name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.ink)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===== V1.3.2 Story 3.3 · Tailsonality 解锁通栏（沿用类 ③ banner 结构，专属浅紫底） =====
+
+  Widget _tailsonalityBanner(BuildContext context, AppLocalizations l10n) {
+    final code = item.tailsonalityCode ?? '';
+    final letters = code.split('-').first;
+    final roleName = kTsRoles[letters]?.name;
+    final title = roleName == null ? code : '$code · $roleName';
+    final tested = item.tailsonalityTestedOn;
+    return Semantics(
+      label: title,
+      container: true,
+      child: Container(
+        key: const ValueKey('timelineTailsonalityBanner'),
+        // 2026-10-06 产品：整条高度收 10%（79 → 71），且内容（缩略 + 文字）在卡内占比要大：
+        // 上下内边距 12 → 6，缩略 40×53 → 43×57（≈3:4），标题 13 → 15、副行 11.5 → 13；总高仍 71。
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.tailsonalityBannerBg,
+          border: Border.all(color: AppColors.violet100),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(9),
+              child: SizedBox(
+                width: 43,
+                height: 57, // ≈3:4 缩略
+                // 角色卡按需下载（不打包，见 TsRemoteArt）；下载中 / 取不到回落占位，不崩。
+                child: TsRemoteArtImage(
+                  name: TsRemoteArt.role(letters),
+                  placeholder: (_) => Container(
+                    key: const ValueKey('timelineTailsonalityThumbPlaceholder'),
+                    color: AppColors.card,
+                    alignment: Alignment.center,
+                    child: const Icon(Icons.psychology_alt_outlined, size: 22, color: AppColors.mint),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title,
+                      key: const ValueKey('timelineTailsonalityTitle'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                  if (tested != null) ...[
+                    const SizedBox(height: 2),
+                    Text(l10n.timelineTailsonalityTestedOn(formatDayMonth(context, tested)),
+                        style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ===== 类 ③ 系统自动型里程碑通栏 banner（A6 `tl-ms`，按 S/M/L 配色） =====
+
+  static const TextStyle _stampStyle =
+      TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF9A6800));
+
+  /// 角标内容：该 code 的徽章素材已入包 → 行内 [MilestoneBadge] + 名称（V1.3.2 Story 5.1）；
+  /// 否则保持原来的单个「🏆 名称」文本（素材没到时零视觉变化）。素材清单读完后自动切换。
+  Widget _stampContent(String label) {
+    final original = Text('🏆 $label', maxLines: 1, overflow: TextOverflow.ellipsis, style: _stampStyle);
+    final code = item.milestoneCode;
+    if (code == null || code.isEmpty) return original;
+    MilestoneBadgeAssets.ensureLoaded();
+    return ValueListenableBuilder<Set<String>?>(
+      valueListenable: MilestoneBadgeAssets.listenable,
+      builder: (context, _, _) {
+        if (!MilestoneBadgeAssets.hasArtFor(code)) return original;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            MilestoneBadge(code: code, size: 14, fallback: (_) => const Text('🏆', style: _stampStyle)),
+            const SizedBox(width: 3),
+            Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: _stampStyle)),
+          ],
+        );
+      },
+    );
+  }
 
   Widget _milestoneBanner(BuildContext context, AppLocalizations l10n) {
     final level = (item.milestoneLevel ?? 'S').toUpperCase();
@@ -293,7 +432,14 @@ class TimelineItemTile extends StatelessWidget {
                 BoxShadow(color: Color(0x14000000), offset: Offset(0, 2), blurRadius: 6),
               ],
             ),
-            child: Text(emoji, style: const TextStyle(fontSize: 21)),
+            // V1.3.2 Story 5.1：有 code 时显示该枚徽章，素材没到回落 emoji；无 code 保持 emoji。
+            child: code == null || code.isEmpty
+                ? Text(emoji, style: const TextStyle(fontSize: 21))
+                : MilestoneBadge(
+                    code: code,
+                    size: 34,
+                    fallback: (_) => Text(emoji, style: const TextStyle(fontSize: 21)),
+                  ),
           ),
           const SizedBox(width: 11),
           Expanded(

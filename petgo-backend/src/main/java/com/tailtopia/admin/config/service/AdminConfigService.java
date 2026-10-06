@@ -99,22 +99,27 @@ public class AdminConfigService {
         commit(logs, adminId, "PRICING", "pricing_config");
     }
 
-    // ── KTP 模块高清图解锁定价三行（V1.3.0 Story 6.1 · AB-18A / AD-7）───────────
+    /** 一次性解锁四价下限（IDR）。页面输入框 min、行内校验、DB CHECK 三处同值。 */
+    public static final long MIN_UNLOCK_PRICE = 100;
+
+    // ── 一次性解锁定价四行（V1.3.0 Story 6.1 · AB-18A / AD-7；V1.3.2 Story 3.1 加 Tailsonality）──
     /**
-     * KTP 卡高清 / 护照·护照内页 / 护照·登机牌 三个一次性解锁价。
+     * KTP 卡高清 / 护照·护照内页（每次快照）/ 护照·登机牌（每张）/ Tailsonality·结果解锁 四个一次性解锁价。
      *
-     * <p>🔴 D-7：三价一律 ≥1（不做 0 元限免——账本 CHECK amount &gt; 0、收款渠道不接 0 元单），与迁移加的 DB CHECK 同口径，
-     * 这里先拦成人话 422 而不是让 CHECK 以 500 露出来。三价独立保存、不联动；只对真变化的字段写 {@code config_change_logs}
+     * <p>🔴 四价一律 ≥{@value #MIN_UNLOCK_PRICE}（后台 PRD 2026-10-02 §1.4 由 1 收紧：防运营漏个零把 Rp2,000 配成 Rp200；
+     * 0 元限免本就不做——账本 CHECK amount &gt; 0、收款渠道不接 0 元单），与迁移 V20261002_1817 的 DB CHECK 同口径，
+     * 这里先拦成人话 422 而不是让 CHECK 以 500 露出来。四价独立保存、不联动（「快照价 ≥ 登机牌价」只提示不强校验）；只对真变化的字段写 {@code config_change_logs}
      * （PRICING 类型，字段名 = 列名）+ 一条审计 {@code CONFIG_UPDATE_PRICING}；无变化不写不审计（本类既有口径）。
      * 改价即时生效、只影响新发起的解锁（{@code IdCardHdService} 扣费逻辑不动）。
      */
     @Transactional
     public void updateKtpPricing(KtpPricingForm form, long adminId) {
-        require(form.idHdDownloadPrice() >= 1 && form.passportPagePrice() >= 1 && form.passportBoardingPrice() >= 1,
-                "价格须为 ≥1 的整数（IDR），不做 0 元限免", "admin.err.config.ktpPriceMin");
+        require(form.idHdDownloadPrice() >= MIN_UNLOCK_PRICE && form.passportPagePrice() >= MIN_UNLOCK_PRICE
+                        && form.passportBoardingPrice() >= MIN_UNLOCK_PRICE && form.tailsonalityUnlockPrice() >= MIN_UNLOCK_PRICE,
+                "价格须为 ≥100 的整数（IDR）", "admin.err.config.ktpPriceMin");
         // 上限与充值档位同一把尺（复审 0914）：误填天文数字会让用户端解锁单无法支付（QRIS 单笔上限），且与同表其它金额护栏不一致
         require(form.idHdDownloadPrice() <= MAX_TIER_AMOUNT && form.passportPagePrice() <= MAX_TIER_AMOUNT
-                        && form.passportBoardingPrice() <= MAX_TIER_AMOUNT,
+                        && form.passportBoardingPrice() <= MAX_TIER_AMOUNT && form.tailsonalityUnlockPrice() <= MAX_TIER_AMOUNT,
                 "价格须 ≤ 100000000 IDR", "admin.err.config.ktpPriceMax");
 
         PricingConfig c = pricingRepo.findById(PricingConfig.SINGLETON_ID)
@@ -124,12 +129,15 @@ public class AdminConfigService {
         diff(logs, ConfigType.PRICING, "passport_page_unlock_price", c.getPassportPageUnlockPrice(), form.passportPagePrice(), adminId);
         diff(logs, ConfigType.PRICING, "passport_boarding_unlock_price", c.getPassportBoardingUnlockPrice(),
                 form.passportBoardingPrice(), adminId);
+        diff(logs, ConfigType.PRICING, "tailsonality_unlock_price", c.getTailsonalityUnlockPrice(),
+                form.tailsonalityUnlockPrice(), adminId);
         if (logs.isEmpty()) {
             return; // 无变更 → 不写、不审计。
         }
         c.setIdHdDownloadPrice(form.idHdDownloadPrice());
         c.setPassportPageUnlockPrice(form.passportPagePrice());
         c.setPassportBoardingUnlockPrice(form.passportBoardingPrice());
+        c.setTailsonalityUnlockPrice(form.tailsonalityUnlockPrice());
         pricingRepo.save(c);
         commit(logs, adminId, "PRICING", "pricing_config");
     }
@@ -186,6 +194,19 @@ public class AdminConfigService {
                 "admin.err.config.ageCardShareDailyCapNegative");
         require(form.ageCardShareReward() <= 10_000, "年龄卡分享每次发放枚数须 ≤ 10000",
                 "admin.err.config.ageCardShareRewardTooLarge");
+        // Tailsonality / 护照两渠道（V1.3.2 Story 4.5）：与年龄卡同一组校验，逐条对齐。
+        require(form.tailsonalityShareReward() >= 0, "Tailsonality 分享每次发放枚数须 ≥ 0（0 = 不发）",
+                "admin.err.config.tailsonalityShareRewardNegative");
+        require(form.tailsonalityShareDailyCap() >= 0, "Tailsonality 分享每日次数上限须 ≥ 0（0 = 不发）",
+                "admin.err.config.tailsonalityShareDailyCapNegative");
+        require(form.tailsonalityShareReward() <= 10_000, "Tailsonality 分享每次发放枚数须 ≤ 10000",
+                "admin.err.config.tailsonalityShareRewardTooLarge");
+        require(form.passportShareReward() >= 0, "护照 / 登机牌分享每次发放枚数须 ≥ 0（0 = 不发）",
+                "admin.err.config.passportShareRewardNegative");
+        require(form.passportShareDailyCap() >= 0, "护照 / 登机牌分享每日次数上限须 ≥ 0（0 = 不发）",
+                "admin.err.config.passportShareDailyCapNegative");
+        require(form.passportShareReward() <= 10_000, "护照 / 登机牌分享每次发放枚数须 ≤ 10000",
+                "admin.err.config.passportShareRewardTooLarge");
         require(form.shareRewardMonthlyCap() <= 10_000_000, "分享奖励月度上限须 ≤ 10000000",
                 "admin.err.config.shareRewardCapTooLarge");
         // 🔴 月度上限要装得下至少一次发放，否则卡面宣传「首次分享得 N」但永远发不出（AC6）。
@@ -197,6 +218,14 @@ public class AdminConfigService {
                 || form.shareRewardMonthlyCap() >= form.ageCardShareReward(),
                 "分享奖励月度上限须 ≥ 年龄卡分享每次发放枚数",
                 "admin.err.config.shareRewardCapBelowAgeCardReward");
+        require(form.tailsonalityShareReward() == 0 || form.shareRewardMonthlyCap() == 0
+                || form.shareRewardMonthlyCap() >= form.tailsonalityShareReward(),
+                "分享奖励月度上限须 ≥ Tailsonality 分享每次发放枚数",
+                "admin.err.config.shareRewardCapBelowTailsonalityReward");
+        require(form.passportShareReward() == 0 || form.shareRewardMonthlyCap() == 0
+                || form.shareRewardMonthlyCap() >= form.passportShareReward(),
+                "分享奖励月度上限须 ≥ 护照 / 登机牌分享每次发放枚数",
+                "admin.err.config.shareRewardCapBelowPassportReward");
 
         PawCoinConfig c = pawcoinRepo.findById(PawCoinConfig.SINGLETON_ID)
                 .orElseThrow(() -> new IllegalStateException("pawcoin_config 缺失"));
@@ -214,6 +243,14 @@ public class AdminConfigService {
                 form.ageCardShareReward(), adminId);
         diff(logs, t, "age_card_share_daily_cap", c.getAgeCardShareDailyCap(),
                 form.ageCardShareDailyCap(), adminId);
+        diff(logs, t, "tailsonality_share_reward", c.getTailsonalityShareReward(),
+                form.tailsonalityShareReward(), adminId);
+        diff(logs, t, "tailsonality_share_daily_cap", c.getTailsonalityShareDailyCap(),
+                form.tailsonalityShareDailyCap(), adminId);
+        diff(logs, t, "passport_share_reward", c.getPassportShareReward(),
+                form.passportShareReward(), adminId);
+        diff(logs, t, "passport_share_daily_cap", c.getPassportShareDailyCap(),
+                form.passportShareDailyCap(), adminId);
         if (logs.isEmpty()) {
             return; // 无变更 → 不写、不记日志、不审计（沿用本类既有口径）
         }
@@ -223,6 +260,10 @@ public class AdminConfigService {
         c.setIdCardShareDailyCap(form.idCardShareDailyCap());
         c.setAgeCardShareReward(form.ageCardShareReward());
         c.setAgeCardShareDailyCap(form.ageCardShareDailyCap());
+        c.setTailsonalityShareReward(form.tailsonalityShareReward());
+        c.setTailsonalityShareDailyCap(form.tailsonalityShareDailyCap());
+        c.setPassportShareReward(form.passportShareReward());
+        c.setPassportShareDailyCap(form.passportShareDailyCap());
         pawcoinRepo.save(c);
         commit(logs, adminId, "PAWCOIN", "pawcoin_config");
     }

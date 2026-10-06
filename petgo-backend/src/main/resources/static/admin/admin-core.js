@@ -13,6 +13,13 @@ document.addEventListener('DOMContentLoaded', function () {
         // 404 也放行：AdminBusinessExceptionAdvice 对 404 同样回行内 err fragment（Story 5.2 抽屉「不存在 / 已删」）
         if (s === 422 || s === 403 || s === 404) { e.detail.shouldSwap = true; e.detail.isError = false; }
     });
+    // V1.3.2 Story 1.4：「选完文件即上传」的表单（data-reset-file，如场所专属章）每次请求结束后清空文件框 ——
+    //   422 后抽屉不重渲染，文件框里还是那张被拒的图；运营修好后用同一文件名重选时浏览器不发 change，点了没反应。
+    document.body.addEventListener('htmx:afterRequest', function (e) {
+        var form = e.detail && e.detail.elt;
+        if (!form || !form.matches || !form.matches('form[data-reset-file]')) { return; }
+        form.querySelectorAll('input[type=file]').forEach(function (i) { i.value = ''; });
+    });
     document.body.addEventListener('htmx:configRequest', function (e) {
         var t = document.querySelector('meta[name="_csrf"]');
         var h = document.querySelector('meta[name="_csrf_header"]');
@@ -88,11 +95,20 @@ function tailtopiaConfirmDiffMessage(form) {
         if (cur === was) { return; }
         var labelEl = el.closest('label'); var span = labelEl && labelEl.querySelector('span');
         var label = span ? span.textContent.trim() : el.name;
-        var fmt = function (v) { return isCheck ? (v === '1' ? on : off) : (v === '' ? '—' : v); };
+        // 后台 PRD 2026-10-02（UI 稿 A3）：金额输入（data-money）复述成「Rp 2,000 → Rp 3,000」，与卡上 Rp 前缀同一读法
+        var money = el.hasAttribute('data-money');
+        var fmt = function (v) {
+            if (isCheck) { return v === '1' ? on : off; }
+            if (v === '') { return '—'; }
+            return money && /^\d+$/.test(v) ? 'Rp ' + Number(v).toLocaleString('en-US') : v;
+        };
         lines.push(line.split('{0}').join(label).split('{1}').join(fmt(was)).split('{2}').join(fmt(cur)));
     });
-    if (!lines.length) { return form.getAttribute('data-confirm-diff-title') || null; } // 无逐字段差异也不静默放行（复审 #3）
-    return (form.getAttribute('data-confirm-diff-title') || '') + '\n\n' + lines.join('\n');
+    // V1.3.2 Story 3.1：可选追加一句提醒（form[data-confirm-diff-note]）；属性缺省时输出与之前逐字一致。
+    var note = form.getAttribute('data-confirm-diff-note');
+    var tail = note ? '\n\n' + note : '';
+    if (!lines.length) { var t = form.getAttribute('data-confirm-diff-title'); return t ? t + tail : null; } // 无逐字段差异也不静默放行（复审 #3）
+    return (form.getAttribute('data-confirm-diff-title') || '') + '\n\n' + lines.join('\n') + tail;
 }
 function tailtopiaIsHxForm(form) {
     return !!(form.getAttribute && (form.hasAttribute('hx-post') || form.hasAttribute('hx-get') || form.hasAttribute('hx-put') || form.hasAttribute('hx-delete')));
@@ -963,12 +979,39 @@ document.addEventListener('change', function (e) {
     function serialize(form) {
         try { return new URLSearchParams(new FormData(form)).toString(); } catch (e) { return ''; }
     }
+    // 后台 PRD 2026-10-02（UI 稿 A6）：[data-price-row] 行内校验 —— 非整数 / < min / > max 时错误紧贴该行
+    // （[data-row-error] 带 role=alert，文案只在变化时写，避免每次按键重复播报），并禁用保存钮、自然不会弹确认层。
+    // 服务端 422 仍是兜底（落卡底 err 槽），这里只是让运营在点保存之前就看到是哪一行错。
+    function rowsInvalid(form) {
+        var bad = false;
+        form.querySelectorAll('[data-price-row]').forEach(function (row) {
+            var inp = row.querySelector('input[name]');
+            var err = row.querySelector('[data-row-error]');
+            if (!inp || !err || inp.disabled) { return; }
+            var v = (inp.value || '').trim();
+            var msg = null;
+            if (!/^\d+$/.test(v) || Number(v) < Number(inp.min)) { msg = err.getAttribute('data-msg-min'); }
+            else if (inp.max !== '' && Number(v) > Number(inp.max)) { msg = err.getAttribute('data-msg-max'); }
+            if (msg) {
+                var text = '⚠ ' + msg;
+                if (err.textContent !== text) { err.textContent = text; }
+                bad = true;
+            }
+            err.hidden = !msg;
+            // UI 稿 A2：改动的那一行品牌色描边（卡级「已修改」标 + 行级描边两级呼应）
+            row.classList.toggle('is-changed', inp.dataset.initialValue !== undefined && v !== inp.dataset.initialValue);
+            inp.classList.toggle('is-invalid', !!msg);
+            inp.setAttribute('aria-invalid', msg ? 'true' : 'false');
+        });
+        return bad;
+    }
     function refresh(form) {
         var dirty = serialize(form) !== form.dataset.initial;
         form.classList.toggle('is-dirty', dirty);
         var save = form.querySelector('[data-save]');
         // 422 之后（data-invalid）保存钮禁用到再次修改（Story 6.3 AC3），dirty 基线不动：改回原值仍算干净、离开页面照提示
-        if (save) { save.disabled = !dirty || form.dataset.invalid === '1'; }
+        var rowBad = rowsInvalid(form);
+        if (save) { save.disabled = !dirty || form.dataset.invalid === '1' || rowBad; }
         var flag = form.querySelector('[data-dirty-flag]');
         if (flag) { flag.hidden = !dirty; }
     }
@@ -1212,3 +1255,17 @@ document.addEventListener('change', function (e) {
         });
     });
 })();
+
+// ===== 多选下拉（后台 PRD 2026-09-30，支付记录「用途」）=====
+// details[data-multiselect]：[data-ms-clear] 取消勾选全部（= 不限），不提交；点面板外收起，避免挡住表格。
+document.addEventListener('click', function (e) {
+    var clear = e.target && e.target.closest ? e.target.closest('[data-ms-clear]') : null;
+    if (clear) {
+        var box = clear.closest('details[data-multiselect]');
+        if (box) { box.querySelectorAll('input[type="checkbox"]').forEach(function (c) { c.checked = false; }); }
+        return;
+    }
+    document.querySelectorAll('details[data-multiselect][open]').forEach(function (d) {
+        if (!d.contains(e.target)) { d.removeAttribute('open'); }
+    });
+});

@@ -1,6 +1,17 @@
 import '../../content/domain/content_tag.dart';
+import '../../place/domain/checkin_place_ref.dart';
 /// 成长时间线条目类型（数据来源维度，V1.0.0 既有契约）。
-enum TimelineKind { happyMoment, healthEvent, unknown }
+enum TimelineKind {
+  happyMoment,
+  healthEvent,
+
+  /// V1.3.2 Story 1.6：地点打卡（后端 `kind = PLACE_CHECKIN`）。
+  placeCheckin,
+
+  /// V1.3.2 Story 3.3：Tailsonality 解锁（后端 `kind = TAILSONALITY`）。
+  tailsonality,
+  unknown,
+}
 
 /// 时间线条目的**五类视觉分类**标识（V1.1.2 · FR-82 · AD-2）。
 ///
@@ -31,7 +42,15 @@ enum TimelineItemType {
   healthRecord('HEALTH_RECORD'),
 
   /// 类 ⑤ 身份证解锁 → 独立证件卡样式。
-  idCardIssued('ID_CARD_ISSUED');
+  idCardIssued('ID_CARD_ISSUED'),
+
+  /// V1.3.2 Story 1.6 · AD-9：地点打卡 → 通栏 banner（定位图标 + 场所名）。
+  /// 仅作者态、且请求声明了 `supports=place_checkin` 时后端才下发（[kTimelineSupports]）。
+  placeCheckinBanner('PLACE_CHECKIN_BANNER'),
+
+  /// V1.3.2 Story 3.3 · AD-9：Tailsonality 解锁 → 专属浅紫通栏（角色缩略 + 代号 · 角色名 + 测试日期）。
+  /// 仅作者态、且请求声明了 `supports=tailsonality` 时后端才下发；有效日期 = 解锁日。
+  tailsonalityBanner('TAILSONALITY_BANNER');
 
   const TimelineItemType(this.wire);
 
@@ -69,6 +88,10 @@ class TimelineItem {
     this.idCardSerial,
     this.openable,
     this.decorationTags = const [],
+    this.checkinPlace,
+    this.tailsonalityResultToken,
+    this.tailsonalityCode,
+    this.tailsonalityTestedOn,
   });
 
   final TimelineKind kind;
@@ -132,6 +155,15 @@ class TimelineItem {
   /// 前者是隐私事故，后者只是个能一眼看见的小毛病。
   final bool? openable;
 
+  /// 打卡条目引用的场所（V1.3.2 Story 1.6 · 仅 [TimelineItemType.placeCheckinBanner] 有值）。
+  final CheckinPlaceRef? checkinPlace;
+
+  /// Tailsonality 条目（V1.3.2 Story 3.3 · 仅 [TimelineItemType.tailsonalityBanner] 有值）：
+  /// 结果 token（点击进结果页）、完整代号（`ENTJ-H`）、测试日期（仅显示；有效日期是解锁日）。
+  final String? tailsonalityResultToken;
+  final String? tailsonalityCode;
+  final DateTime? tailsonalityTestedOn;
+
   /// 实际用于选样式的分类：优先后端下发的 [itemType]，缺失时按 [kind] 兜底。
   ///
   /// ⚠️ 兜底**不是** AD-2 禁止的「前端自行推断分类」，而是 Story 3.2 上线前的过渡：
@@ -188,6 +220,10 @@ class TimelineItem {
       healthRecordId: (json['healthRecordId'] as num?)?.toInt(),
       idCardSerial: json['idCardSerial'] as String?,
       openable: json['openable'] as bool?,
+      checkinPlace: CheckinPlaceRef.fromTimelineJson(json['checkinPlace']),
+      tailsonalityResultToken: json['tailsonalityResultToken'] as String?,
+      tailsonalityCode: json['tailsonalityCode'] as String?,
+      tailsonalityTestedOn: DateTime.tryParse((json['tailsonalityTestedOn'] as String?) ?? ''),
     );
   }
 
@@ -197,6 +233,10 @@ class TimelineItem {
         return TimelineKind.happyMoment;
       case 'HEALTH_EVENT':
         return TimelineKind.healthEvent;
+      case 'PLACE_CHECKIN':
+        return TimelineKind.placeCheckin;
+      case 'TAILSONALITY':
+        return TimelineKind.tailsonality;
       default:
         return TimelineKind.unknown;
     }

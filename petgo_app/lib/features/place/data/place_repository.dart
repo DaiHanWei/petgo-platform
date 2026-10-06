@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
+import '../domain/place_checkin_result.dart';
 import '../domain/place_comment.dart';
 import '../domain/place_detail.dart';
 import '../domain/place_list_filter.dart';
@@ -127,6 +128,27 @@ class PlaceRepository {
       },
     );
     return PlaceDetail.fromJson(resp.data ?? const {});
+  }
+
+  /// 场所打卡（V1.3.2 Story 1.1 · AC2 / AC4）。需登录（调用方先过 `requireLogin`）。
+  ///
+  /// 🔴 **坐标用原始精度**：**不要**先过 [placeDetailQueryFor] 的三位小数归一 ——
+  /// 那个 ~110 m 的归一是为详情查询的族键与隐私做的，打卡要拿它判 500 m，归一误差会让
+  /// 站在门口的人被判「不在场」。坐标只在这一个请求体里：不进日志、不进埋点。
+  ///
+  /// [petIds] 本版本 = 当前唯一宠物（界面不渲染宠物选择器）。
+  /// 失败（too-far / already-today / no-pet / 404）以 [DioException] 抛给页面，按 `typeSlug` 分流。
+  Future<PlaceCheckinResult> checkIn(
+    String token, {
+    required double latitude,
+    required double longitude,
+    required List<int> petIds,
+  }) async {
+    final resp = await dio.post<Map<String, dynamic>>(
+      '${ApiPaths.places}/$token/checkins',
+      data: {'latitude': latitude, 'longitude': longitude, 'petIds': petIds},
+    );
+    return PlaceCheckinResult.fromJson(resp.data ?? const {});
   }
 
   /// 场所评论列表（Story 1.7）。🔒 **游客可读**（后端 GET 放行）。

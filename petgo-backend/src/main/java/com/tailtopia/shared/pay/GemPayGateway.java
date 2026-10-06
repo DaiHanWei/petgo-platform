@@ -280,6 +280,10 @@ public class GemPayGateway implements PaymentGateway {
             case "VET_CONSULT" -> "Vet Consultation";
             case "AI_UNLOCK" -> "AI Unlock";
             case "ID_HD" -> "Pet ID HD";
+            // V1.3.2 Story 3.1：三类一次性解锁（纯 ASCII，避 WAF 拦）。
+            case "TAILSONALITY" -> "Tailsonality Unlock";
+            case "PASSPORT_SNAP" -> "Pet Passport";
+            case "BOARDING_PASS" -> "Boarding Pass";
             default -> "TailTopia Payment";
         };
     }

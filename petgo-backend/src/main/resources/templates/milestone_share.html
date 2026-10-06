@@ -43,6 +43,10 @@
             box-shadow: 0 8px 30px rgba(132, 94, 201, 0.45);
             display: flex; align-items: center; justify-content: center; font-size: 56px;
         }
+        /* V1.3.2 Story 5.2：有专属徽章素材时，圆内放图（透明底，contain 撑满 120 正方形），不再画渐变底 */
+        .badge-art { background: none; box-shadow: none; }
+        .badge-art img { width: 120px; height: 120px; object-fit: contain; display: block; }
+        .ch-cell img { width: 44px; height: 44px; object-fit: contain; display: block; }
         .level-chip {
             position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
             padding: 3px 12px; border-radius: 9999px; border: 2px solid var(--ink);
@@ -83,7 +87,8 @@
 <canvas id="confetti"></canvas>
 <div class="wrap">
     <div class="badge-box">
-        <div class="badge">🏆</div>
+        <div class="badge" th:if="${badgeUrl == null}">🏆</div>
+        <div class="badge badge-art" th:if="${badgeUrl != null}"><img th:src="${badgeUrl}" alt=""></div>
         <span class="level-chip" th:style="'background:' + ${levelColor}" th:text="${levelLabel}">M · MAJOR</span>
     </div>
     <div class="unlocked" th:text="${unlockedHeader}">MILESTONE UNLOCKED!</div>
@@ -97,7 +102,8 @@
     <!-- 「已解锁合集」预览（与 P-35 KOLEKSI 对齐；圆点 / 「+N」由下方 JS 复刻 2 排容量逻辑） -->
     <div class="collection" th:if="${hasCollection}">
         <div class="ch-head" th:text="${collectionHeading}">PET'S COLLECTION · 0</div>
-        <div class="ch-grid" id="chGrid" th:attr="data-levels=${collectionLevels}"></div>
+        <div class="ch-grid" id="chGrid" th:if="${collectionItems == null}" th:attr="data-levels=${collectionLevels}"></div>
+        <div class="ch-grid" id="chGrid" th:if="${collectionItems != null}" th:attr="data-items=${collectionItems}"></div>
     </div>
 
     <!-- 底部唯一差异：已装 App 先唤起（落自己的里程碑列表），未装再落应用商店 -->
@@ -161,7 +167,14 @@
   (function () {
     var grid = document.getElementById('chGrid');
     if (!grid) return;
-    var levels = (grid.dataset.levels || '').split('').filter(Boolean);
+    // V1.3.2 Story 5.2：新分享下发 data-items（[{level, url?}]，按 code 出专属图）；旧分享只有 data-levels（原样）。
+    var items = null;
+    if (grid.dataset.items) {
+      try { items = JSON.parse(grid.dataset.items); } catch (e) { items = null; }
+    }
+    var levels = items ? items.map(function (it) { return it.level; })
+                       : (grid.dataset.levels || '').split('').filter(Boolean);
+    var urls = items ? items.map(function (it) { return it.url || null; }) : [];
     if (!levels.length) return;
     var COLOR = { S: '#1F9E6A', M: '#845EC9', L: '#F6A609' };
     function lighten(hex) { // 向白混 25%，与 App _collectionCircle 渐变一致
@@ -169,8 +182,11 @@
       r = Math.round(r + (255 - r) * 0.25); g = Math.round(g + (255 - g) * 0.25); b = Math.round(b + (255 - b) * 0.25);
       return 'rgb(' + r + ',' + g + ',' + b + ')';
     }
-    function circle(color) {
+    function circle(color, url) {
       var d = document.createElement('div'); d.className = 'ch-cell';
+      if (url) { // 有专属徽章：圆内放图（不再写 🏆）
+        var img = document.createElement('img'); img.src = url; img.alt = ''; d.appendChild(img); return d;
+      }
       d.style.background = 'linear-gradient(135deg,' + color + ',' + lighten(color) + ')';
       d.style.boxShadow = '0 3px 8px ' + color + '66'; d.textContent = '🏆'; return d;
     }
@@ -181,10 +197,10 @@
     var perRow = Math.max(1, Math.floor((grid.clientWidth + gap) / (cell + gap)));
     var capacity = perRow * 2;
     if (levels.length <= capacity) {
-      levels.forEach(function (l) { grid.appendChild(circle(COLOR[l] || COLOR.S)); });
+      levels.forEach(function (l, i) { grid.appendChild(circle(COLOR[l] || COLOR.S, urls[i])); });
     } else {
       var showN = capacity - 1;
-      for (var i = 0; i < showN; i++) grid.appendChild(circle(COLOR[levels[i]] || COLOR.S));
+      for (var i = 0; i < showN; i++) grid.appendChild(circle(COLOR[levels[i]] || COLOR.S, urls[i]));
       grid.appendChild(more(levels.length - showN));
     }
   })();

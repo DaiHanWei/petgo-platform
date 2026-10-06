@@ -67,7 +67,12 @@ public record ContentDetailResponse(
          *
          * <p>🔴 <b>能不能点、显示什么昵称都是服务端算好的</b>（见 {@link com.tailtopia.mention.dto.MentionView}）。空表不下发。
          */
-        List<com.tailtopia.mention.dto.MentionView> mentions) {
+        List<com.tailtopia.mention.dto.MentionView> mentions,
+        /**
+         * 打卡场所条（V1.3.2 Story 1.5 · AC5 · AD-10）：帖子关联了打卡时下发 {@code {token, name, status}}；
+         * 普通帖为 null → NON_NULL 省略。{@code status} ∈ ACTIVE / UNAVAILABLE（点击是否能进场所详情）。
+         */
+        com.tailtopia.place.dto.CheckinPlaceView checkinPlace) {
 
     /**
      * @param imageSizes 已由 {@code ImageSizeResolver.alignForRead} 对齐到 {@code imageUrls} 长度的尺寸列；
@@ -79,12 +84,22 @@ public record ContentDetailResponse(
             List<ContentTagView> decorationTags,
             List<com.tailtopia.content.domain.ImageSize> imageSizes,
             List<com.tailtopia.mention.dto.MentionView> mentions) {
+        return of(p, author, likeCount, commentCount, liked, isAuthor, decorationTags, imageSizes, mentions, null);
+    }
+
+    /** 带打卡场所条的完整工厂（V1.3.2 Story 1.5）；{@code checkinPlace} 为 null = 普通帖（省略该键）。 */
+    public static ContentDetailResponse of(ContentPost p, AuthorView author, long likeCount,
+            long commentCount, boolean liked, boolean isAuthor,
+            List<ContentTagView> decorationTags,
+            List<com.tailtopia.content.domain.ImageSize> imageSizes,
+            List<com.tailtopia.mention.dto.MentionView> mentions,
+            com.tailtopia.place.dto.CheckinPlaceView checkinPlace) {
         return new ContentDetailResponse(
                 p.getId(), p.getAuthorId(), author.nickname(), author.avatarUrl(),
                 author.deleted(), author.tags().isEmpty() ? null : author.tags(),
                 (decorationTags == null || decorationTags.isEmpty()) ? null : decorationTags,
                 p.getType(), p.getText(), p.getImageUrls(), imageSizes,
                 likeCount, commentCount, liked, isAuthor, p.getVisibility(),
-                p.getCreatedAt(), mentions);
+                p.getCreatedAt(), mentions, checkinPlace);
     }
 }

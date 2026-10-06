@@ -29,7 +29,8 @@ class PlaceControllerListFilterTest {
     @BeforeEach
     void setUp() {
         query = mock(PlaceQueryService.class);
-        controller = new PlaceController(query, mock(PlaceService.class), mock(RedisRateLimiter.class));
+        controller = new PlaceController(query, mock(PlaceService.class),
+                mock(com.tailtopia.place.service.PlaceCheckinService.class), mock(RedisRateLimiter.class));
     }
 
     @Test

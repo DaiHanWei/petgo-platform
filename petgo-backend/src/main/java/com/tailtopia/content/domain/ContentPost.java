@@ -88,6 +88,13 @@ public class ContentPost {
     @Column(name = "mentioned_user_ids")
     private List<Long> mentionedUserIds;
 
+    /**
+     * 打卡后顺手发帖关联的打卡（V1.3.2 Story 1.5 · AD-10）；null = 普通帖。
+     * FK {@code ON DELETE SET NULL}：删档删打卡行时自动断开，帖子保留。
+     */
+    @Column(name = "place_checkin_id")
+    private Long placeCheckinId;
+
     @Column(name = "danger_level", length = 8)
     private String dangerLevel;
 
@@ -331,6 +338,15 @@ public class ContentPost {
         this.mentionedUserIds = mentionedUserIds == null || mentionedUserIds.isEmpty()
                 ? null // 空表落 null：与存量行同形，省掉一整列 '[]'。
                 : List.copyOf(mentionedUserIds);
+    }
+
+    /** 与 {@link #setMentionedUserIds} 同写法：工厂签名不改，发布链路按需补写（挂起 / 正常两个分支都要写）。 */
+    public void setPlaceCheckinId(Long placeCheckinId) {
+        this.placeCheckinId = placeCheckinId;
+    }
+
+    public Long getPlaceCheckinId() {
+        return placeCheckinId;
     }
 
     public ContentVisibility getVisibility() {

@@ -81,6 +81,21 @@ public class Place {
     @Column(name = "merged_into_id")
     private Long mergedIntoId;
 
+    /**
+     * 场所专属章 OSS objectKey（V1.3.2 Story 1.4 · AB-18B）；null = 默认章。
+     * 🔴 只由 {@link #setStamp} / {@link #clearStamp} 改：合并 / 下架 / 恢复 / 软删都**不碰**它（AD-18）。
+     */
+    @Column(name = "stamp_object_key", length = 255)
+    private String stampObjectKey;
+
+    /** 专属章最近一次上传 / 替换时刻（后台 PRD 2026-10-02）；与 {@link #stampObjectKey} 同生同灭。存量章为 null。 */
+    @Column(name = "stamp_uploaded_at")
+    private Instant stampUploadedAt;
+
+    /** 专属章最近一次上传 / 替换的后台账号 id；同上。 */
+    @Column(name = "stamp_uploaded_by")
+    private Long stampUploadedBy;
+
 
 
 
@@ -169,6 +184,38 @@ public class Place {
         }
         this.status = PlaceStatus.MERGED;
         this.mergedIntoId = keepId;
+    }
+
+    /** 上传 / 替换专属章（V1.3.2 Story 1.4）。旧 OSS 对象不删（App 可能仍缓存旧 URL）。返回是否为替换。 */
+    public boolean setStamp(String objectKey, long uploadedByAdminAccountId, Instant uploadedAt) {
+        boolean replaced = this.stampObjectKey != null;
+        this.stampObjectKey = Objects.requireNonNull(objectKey, "objectKey");
+        this.stampUploadedBy = uploadedByAdminAccountId;
+        this.stampUploadedAt = Objects.requireNonNull(uploadedAt, "uploadedAt");
+        return replaced;
+    }
+
+    /** 移除专属章 → 回到默认章。返回是否发生变化。 */
+    public boolean clearStamp() {
+        if (stampObjectKey == null) {
+            return false;
+        }
+        stampObjectKey = null;
+        stampUploadedAt = null;
+        stampUploadedBy = null;
+        return true;
+    }
+
+    public String getStampObjectKey() {
+        return stampObjectKey;
+    }
+
+    public Instant getStampUploadedAt() {
+        return stampUploadedAt;
+    }
+
+    public Long getStampUploadedBy() {
+        return stampUploadedBy;
     }
 
     /** 软删（deleted_at）；列表查询默认 {@code deleted_at IS NULL}。 */

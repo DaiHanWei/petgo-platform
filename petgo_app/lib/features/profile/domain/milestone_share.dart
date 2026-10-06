@@ -24,8 +24,10 @@ Future<void> shareMilestoneWithLink(
   var message = shareText;
   final lang = locale.languageCode == 'id' ? 'id' : 'en';
   // 「已解锁合集」快照：与 P-35 _collection 同序（按 collection 顺序取已完成项），级别串每字符 S/M/L。
-  final collectionLevels =
-      collection.where((m) => m.completed).map((m) => m.level.name.toUpperCase()).join();
+  final unlocked = collection.where((m) => m.completed).toList();
+  final collectionLevels = unlocked.map((m) => m.level.name.toUpperCase()).join();
+  // V1.3.2 Story 5.2：同序同过滤的完整 code 列表 —— H5 KOLEKSI 据此出专属徽章（级别串照旧提交，旧样式回落依赖它）。
+  final collectionCodes = unlocked.map((m) => m.code).toList();
   try {
     final copy = localizedMilestoneCelebration(item.code, locale, petName);
     final token = await ref.read(milestoneRepositoryProvider).createShare(
@@ -34,6 +36,7 @@ Future<void> shareMilestoneWithLink(
           body: copy.body,
           locale: lang,
           collectionLevels: collectionLevels,
+          collectionCodes: collectionCodes,
         );
     message = '$shareText\n${milestoneShareUrl(token)}';
     Analytics.capture('milestone_share_created', {'code': item.code, 'level': item.level.name});

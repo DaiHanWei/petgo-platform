@@ -13,6 +13,8 @@ import '../domain/order_detail.dart';
 import '../domain/order_summary.dart';
 import 'order_l10n.dart';
 import 'widgets/order_status_badge.dart';
+import '../../profile/presentation/pet_insights_page.dart';
+import '../../tailsonality/presentation/tailsonality_routes.dart';
 
 /// 订单详情页（Story 5.3，p-order-detail）。按 orderType 分支 + 退款进度 + 宠物已删失效占位（FR-54D）+ 加载/404 态。
 class OrderDetailPage extends ConsumerWidget {
@@ -106,12 +108,56 @@ class OrderDetailPage extends ConsumerWidget {
           _continueTopupEntry(context, l10n),
         ],
 
+        // V1.3.2 Story 3.6：一次性解锁 —— 重复 / 孤儿付款先给一行说明（钱已收、客服在查），再给「查看」入口。
+        if (d.statusCode == 'UNDER_REVIEW') ...[
+          const SizedBox(height: AppSpacing.md),
+          Text(l10n.orderUnderReviewNote,
+              key: const ValueKey('orderUnderReviewNote'),
+              style: AppTypography.caption.copyWith(color: AppColors.textSecondary)),
+        ],
+        if (keepsakeTargetRoute(d) != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          _keepsakeEntry(context, l10n, d),
+        ],
+
         // 退款进度
         if (d.refundStage != null) ...[
           const SizedBox(height: AppSpacing.md),
           _refundBlock(context, l10n, d),
         ],
       ],
+    );
+  }
+
+  /// 一次性解锁「查看」入口卡（V1.3.2 Story 3.6）：按 targetKind 跳结果页 / 已购护照版本 / 登机牌详情。
+  Widget _keepsakeEntry(BuildContext context, AppLocalizations l10n, OrderDetail d) {
+    final (IconData icon, String label) = switch (d.targetKind) {
+      'TAILSONALITY_RESULT' => (Icons.psychology_outlined, l10n.orderViewTailsonality),
+      'PASSPORT_SNAPSHOT' => (Icons.menu_book_outlined, l10n.orderViewPassportSnap),
+      _ => (Icons.airplane_ticket_outlined, l10n.orderViewBoardingPass),
+    };
+    return Material(
+      color: AppColors.mintTint,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        key: const ValueKey('orderKeepsakeEntry'),
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => context.push(keepsakeTargetRoute(d)!),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              Icon(icon, color: AppColors.mint600),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(label,
+                    style: AppTypography.body.copyWith(color: AppColors.mint600, fontWeight: FontWeight.w600)),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.mint600),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -324,4 +370,17 @@ class OrderDetailPage extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// 一次性解锁订单的「查看」路由（V1.3.2 Story 3.6 · AC4.5）；无目标 / 未知类型 → null（不出入口）。
+@visibleForTesting
+String? keepsakeTargetRoute(OrderDetail d) {
+  final token = d.targetToken;
+  if (token == null || token.isEmpty) return null;
+  return switch (d.targetKind) {
+    'TAILSONALITY_RESULT' => TailsonalityRoutes.result(token),
+    'PASSPORT_SNAPSHOT' => PetInsightsRoutes.passportVersionFor(token),
+    'BOARDING_PASS' => PetInsightsRoutes.boardingPassFor(token),
+    _ => null,
+  };
 }

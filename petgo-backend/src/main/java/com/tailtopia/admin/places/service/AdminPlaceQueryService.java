@@ -106,9 +106,16 @@ public class AdminPlaceQueryService {
     private final AccountQueryService accounts;
     private final SignedUrlService signedUrls;
     private final Messages msg;
+    /** V1.3.2 Story 1.4：专属章 key → 公开 CDN URL。 */
+    private final com.tailtopia.shared.media.AliyunOssClient oss;
+    private final com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts;
 
     public AdminPlaceQueryService(NamedParameterJdbcTemplate jdbc, PlaceRepository places, PlacePhotoRepository photos,
-            PlaceCommentRepository comments, AccountQueryService accounts, SignedUrlService signedUrls, Messages msg) {
+            PlaceCommentRepository comments, AccountQueryService accounts, SignedUrlService signedUrls, Messages msg,
+            com.tailtopia.shared.media.AliyunOssClient oss,
+            com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts) {
+        this.oss = oss;
+        this.adminAccounts = adminAccounts;
         this.jdbc = jdbc;
         this.places = places;
         this.photos = photos;
@@ -228,7 +235,22 @@ public class AdminPlaceQueryService {
                 marker != null && marker.deleted(), pl.getStatus(), pl.getMergedIntoId(), mergedIntoName, pl.getCreatedAt(), pl.getUpdatedAt(),
                 counts.photos(), counts.comments(), counts.checkins(), counts.recommend(), counts.notRecommend(),
                 List.copyOf(photoViews), new CommentsPage(List.copyOf(commentViews), commentRows.getNumber(), commentRows.hasNext(),
-                        commentRows.getTotalElements()));
+                        commentRows.getTotalElements()),
+                // 纯 CDN 地址，不拼 x-oss-process（那会把透明 PNG 重编码成 JPG）。
+                pl.getStampObjectKey() == null ? null : oss.publicUrl(pl.getStampObjectKey()),
+                pl.getStampObjectKey() == null ? null : pl.getStampUploadedAt(),
+                stampUploaderName(pl));
+    }
+
+    /**
+     * 专属章上传人显示名（后台 PRD 2026-10-02）。存量章（2026-10-02 前上传）/ 账号已删 → null，抽屉不显示「由谁上传」。
+     */
+    private String stampUploaderName(Place pl) {
+        if (pl.getStampObjectKey() == null || pl.getStampUploadedBy() == null) {
+            return null;
+        }
+        return adminAccounts.findById(pl.getStampUploadedBy())
+                .map(com.tailtopia.admin.account.domain.AdminAccount::getDisplayName).orElse(null);
     }
 
     private List<String> signAllOrNulls(List<String> keys) {

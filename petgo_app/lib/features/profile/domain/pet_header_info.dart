@@ -17,6 +17,7 @@ class PetHeaderInfo {
     this.birthday,
     this.sex,
     this.intro,
+    this.tailsonalityBadge,
   });
 
   final String name;
@@ -26,4 +27,8 @@ class PetHeaderInfo {
   final DateTime? birthday;
   final String? sex;
   final String? intro;
+
+  /// Tailsonality 角色小标 4 字母（V1.3.2 Story 3.3）。作者态由 `PetProfile` 带上；**访客态恒 null**
+  /// （访客视图不下发该字段 —— AD-3 只点名本人档案与公开主页宠物卡两处）。
+  final String? tailsonalityBadge;
 }

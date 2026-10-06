@@ -107,6 +107,30 @@ public class PawCoinConfig {
     @Column(name = "age_card_share_daily_cap", nullable = false)
     private int ageCardShareDailyCap;
 
+    /**
+     * Tailsonality 结果卡 / 配型卡分享一次发几枚（V1.3.2 Story 4.5 · 渠道层）。🔴 种子值 <b>0 = 不发币</b>。
+     *
+     * <p>去重 = 宠物 × 卡类型（RESULT / MATCH 各一次），日上限是冗余保险（同身份证渠道）。
+     */
+    @Column(name = "tailsonality_share_reward", nullable = false)
+    private long tailsonalityShareReward;
+
+    /** Tailsonality 分享的日上限次数（V1.3.2 Story 4.5）。🔴 种子值 <b>0 = 不发币</b>。 */
+    @Column(name = "tailsonality_share_daily_cap", nullable = false)
+    private int tailsonalityShareDailyCap;
+
+    /**
+     * 护照卡 / 登机牌卡分享一次发几枚（V1.3.2 Story 4.5 · 渠道层）。🔴 种子值 <b>0 = 不发币</b>。
+     *
+     * <p>去重 = 宠物 × 卡类型（PAGE / BOARDING 各一次；登机牌整体一个类型，不按张计）。
+     */
+    @Column(name = "passport_share_reward", nullable = false)
+    private long passportShareReward;
+
+    /** 护照 / 登机牌分享的日上限次数（V1.3.2 Story 4.5）。🔴 种子值 <b>0 = 不发币</b>。 */
+    @Column(name = "passport_share_daily_cap", nullable = false)
+    private int passportShareDailyCap;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -167,6 +191,38 @@ public class PawCoinConfig {
 
     public void setAgeCardShareDailyCap(int v) {
         this.ageCardShareDailyCap = v;
+    }
+
+    public long getTailsonalityShareReward() {
+        return tailsonalityShareReward;
+    }
+
+    public void setTailsonalityShareReward(long v) {
+        this.tailsonalityShareReward = v;
+    }
+
+    public int getTailsonalityShareDailyCap() {
+        return tailsonalityShareDailyCap;
+    }
+
+    public void setTailsonalityShareDailyCap(int v) {
+        this.tailsonalityShareDailyCap = v;
+    }
+
+    public long getPassportShareReward() {
+        return passportShareReward;
+    }
+
+    public void setPassportShareReward(long v) {
+        this.passportShareReward = v;
+    }
+
+    public int getPassportShareDailyCap() {
+        return passportShareDailyCap;
+    }
+
+    public void setPassportShareDailyCap(int v) {
+        this.passportShareDailyCap = v;
     }
 
     public Long getId() {

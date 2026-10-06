@@ -55,7 +55,8 @@ class _FakeRepo implements MilestoneRepository {
           {required String title,
           required String body,
           required String locale,
-          required String collectionLevels}) async =>
+          required String collectionLevels,
+          required List<String> collectionCodes}) async =>
       'token';
 }
 

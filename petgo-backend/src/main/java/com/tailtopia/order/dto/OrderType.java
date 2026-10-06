@@ -15,5 +15,12 @@ public enum OrderType {
      * <p>🔴 <b>只在末尾追加</b>（并行契约 O-1）。本枚举不落库（全仓无 {@code order_type} 列），
      * 故无需迁移；但它是前端筛选值与卡片分支的依据，中间插值会让另两条线的取值错位。
      */
-    ECOMMERCE
+    ECOMMERCE,
+    /**
+     * V1.3.2 Story 3.6：一次性解锁三类（唯一数据源 {@code keepsake_purchases}，AD-8）。🔴 同样只在末尾追加。
+     * 默认聚合过 {@code includeKeepsake} 闸门（老 App 不认识）。
+     */
+    TAILSONALITY,
+    PASSPORT_SNAP,
+    BOARDING_PASS
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -35,6 +36,7 @@ import '../../mention/domain/mention_draft.dart';
 import '../../mention/presentation/mention_picker.dart';
 import '../data/content_repository.dart';
 import '../domain/content_type.dart';
+import '../domain/publish_checkin_place.dart';
 import '../domain/feed_image_layout.dart';
 import '../domain/image_crop.dart';
 import '../domain/publish_controller.dart';
@@ -69,6 +71,10 @@ class PublishComposePage extends ConsumerStatefulWidget {
     this.preset,
     this.presetEventDate,
     this.milestoneCode,
+    this.placeCheckinToken,
+    this.placeCheckinPlace,
+    this.initialText,
+    this.initialImages,
   });
 
   /// 预选发布类型（如生日深链预选成长日历，Story 6.1 FR-40 / 灰选建档返回，AC7）；为空时默认 daily。
@@ -80,12 +86,30 @@ class PublishComposePage extends ConsumerStatefulWidget {
   /// 里程碑「去发布」来源 code（Story 8.4）：发布成功且仍为成长日历类型 → 以新内容 id 自动打卡完成。
   final String? milestoneCode;
 
+  /// 打卡后顺手发帖（V1.3.2 Story 1.5 · AD-10 / AD-11）：关联的打卡 token，随发布请求**一次写入**
+  /// （不是发布后回填 —— 丢关联会让 Diary 把同一件事拆成两条）。任何帖子类型都带。
+  final String? placeCheckinToken;
+
+  /// 场所条展示用（名 / 类型 / token 供埋点）；**不进请求体**。
+  final PublishCheckinPlace? placeCheckinPlace;
+
+  /// 预填正文（V1.3.2 Story 4.4「Pamer di postingan」）：超 [kMaxPostTextLength] 截断。
+  final String? initialText;
+
+  /// 预填图片（已是 JPEG 字节；V1.3.2 Story 4.4）：**不经相册、不申请权限**，直接入图片区并开始上传。
+  /// 超 [kMaxImages] 丢弃。关闭发帖页即随 autoDispose 清空（无草稿，NFR-10）。
+  final List<Uint8List>? initialImages;
+
   /// 以全屏 bottom sheet 形式打开（供「＋」入口 / 深链着陆页 / 灰选建档返回 / 里程碑去发布调用）。
   static Future<void> open(
     BuildContext context, {
     ContentType? preset,
     DateTime? presetEventDate,
     String? milestoneCode,
+    String? placeCheckinToken,
+    PublishCheckinPlace? placeCheckinPlace,
+    String? initialText,
+    List<Uint8List>? initialImages,
   }) {
     // AC2 的第 5 个底栏位（code-review 2026-08-04 决策 D1）：发布页是 modal sheet 而非
     // `PageRoute`，PostHog 的 `defaultPostHogRouteFilter` 只跟踪 `PageRoute` → observer 收不到，
@@ -106,6 +130,10 @@ class PublishComposePage extends ConsumerStatefulWidget {
           preset: preset,
           presetEventDate: presetEventDate,
           milestoneCode: milestoneCode,
+          placeCheckinToken: placeCheckinToken,
+          placeCheckinPlace: placeCheckinPlace,
+          initialText: initialText,
+          initialImages: initialImages,
         ),
       ),
     );
@@ -148,7 +176,26 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         c.setEventDate(widget.presetEventDate ?? DateTime.now()); // F9 默认事件日期
         _ensurePetLoaded();
       }
+      _applyPrefill(c);
     });
+  }
+
+  /// 预填（V1.3.2 Story 4.4）：**在定好类型之后**做。文字框与 controller 必须同步写，
+  /// 否则字数计与发布内容会分叉；图片直接入图片区并走既有上传进度（不 await）。
+  void _applyPrefill(PublishController c) {
+    final text = widget.initialText;
+    if (text != null && text.isNotEmpty) {
+      final clipped = text.characters.take(kMaxPostTextLength).toString();
+      _textController.text = clipped;
+      c.setText(clipped);
+    }
+    final images = widget.initialImages;
+    if (images != null && images.isNotEmpty) {
+      for (final bytes in images) {
+        if (!c.addImage(bytes)) break; // 超 kMaxImages 丢弃
+      }
+      unawaited(c.uploadAll());
+    }
   }
 
   /// 成长日历绑定的宠物档案（V1 单账号单宠物）。选「成长日历」时拉取，发布时带其 id。
@@ -335,7 +382,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     int? id;
     String? blockSlug; // content-text-blocked / content-image-blocked（F10 审核拦截）
     try {
-      id = await controller.publish(idempotencyKey: key, petId: petId);
+      id = await controller.publish(
+          idempotencyKey: key, petId: petId, placeCheckinToken: widget.placeCheckinToken);
     } on DioException catch (e) {
       final slug = ProblemDetail.fromDioException(e)?.typeSlug;
       if (slug == 'content-text-blocked' || slug == 'content-image-blocked') {
@@ -350,6 +398,15 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     if (!mounted) return;
 
     if (id != null) {
+      // V1.3.2 Story 1.5 · AC6：打卡后顺手发帖成功。place_id 键装 token 值（沿用 place_detail_viewed 约定）；
+      // 🛡 不带宠物名 / 正文 / 坐标。
+      final checkinPlace = widget.placeCheckinPlace;
+      if (widget.placeCheckinToken != null && checkinPlace != null) {
+        Analytics.capture('place_checkin_post_created', {
+          'place_id': checkinPlace.placeToken,
+          'place_type': ?checkinPlace.placeType?.api,
+        });
+      }
       ref.invalidate(feedProvider);
       ref.invalidate(myPostsProvider);
       // 成长日历发帖 → 同步刷新成长档案时间线与统计，避免需手动下拉刷新才显示（F9）。
@@ -682,6 +739,12 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
                     ],
                   ),
                 ),
+                // V1.3.2 Story 1.5 · AC3：打卡场所条（只读、不可删、不可点）—— 说明「这条帖子会挂在这次打卡上」。
+                // 切类型不影响（AD-10 任何类型均可）；普通入口不出。
+                if (widget.placeCheckinToken != null && widget.placeCheckinPlace != null) ...[
+                  const SizedBox(height: 12),
+                  _CheckinPlaceStrip(place: widget.placeCheckinPlace!),
+                ],
                 if (growthSelected) ...[
                   const SizedBox(height: 12),
                   _eventDateRow(controller, l10n),
@@ -1441,6 +1504,42 @@ class _TypeChip extends StatelessWidget {
               color: selected ? Colors.white : AppColors.ink2,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 发帖页的只读打卡场所条（V1.3.2 Story 1.5 · UI 稿 C6）。线性定位图标 + 场所名；不用 emoji 当图标。
+class _CheckinPlaceStrip extends StatelessWidget {
+  const _CheckinPlaceStrip({required this.place});
+
+  final PublishCheckinPlace place;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Semantics(
+      label: l10n.publishCheckinPlaceLabel(place.placeName),
+      excludeSemantics: true,
+      child: Container(
+        key: const ValueKey('publishCheckinPlaceStrip'),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.mintTint,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.place_outlined, size: 18, color: AppColors.mint),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(place.placeName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink)),
+            ),
+          ],
         ),
       ),
     );

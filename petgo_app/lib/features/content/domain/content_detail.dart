@@ -2,6 +2,7 @@ import '../../auth/domain/user_tag.dart';
 import '../../mention/domain/mention_view.dart';
 import 'content_tag.dart';
 import 'feed_image_layout.dart';
+import '../../place/domain/checkin_place_ref.dart';
 /// 内容详情（对应后端 `ContentDetailResponse`）。
 class ContentDetail {
   const ContentDetail({
@@ -23,6 +24,7 @@ class ContentDetail {
     this.imageSizes = const [],
     this.visibility = 'PUBLIC',
     this.mentions = const [],
+    this.checkinPlace,
   });
 
   final int id;
@@ -74,6 +76,9 @@ class ContentDetail {
   /// 渲染侧只照做，不自己判。空表 = 这段文字里没有可点的 @。
   final List<MentionView> mentions;
 
+  /// 打卡场所条（V1.3.2 Story 1.5 · AD-10）：帖子关联了打卡才有；普通帖 null。
+  final CheckinPlaceRef? checkinPlace;
+
   /// 是否「私密日记」（埋点 E-11 的加粗属性）。Diary = `GROWTH_MOMENT`。
   bool get isPrivateDiary => type == 'GROWTH_MOMENT' && visibility == 'PRIVATE';
 
@@ -98,6 +103,7 @@ class ContentDetail {
       imageSizes: ImageSize.listFromJson(json['imageSizes']),
       visibility: (json['visibility'] ?? 'PUBLIC') as String,
       mentions: MentionView.listFromJson(json['mentions']),
+      checkinPlace: CheckinPlaceRef.fromJson(json['checkinPlace']),
     );
   }
 }

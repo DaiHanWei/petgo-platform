@@ -46,6 +46,8 @@ class OrderDetail {
     this.coins,
     this.triageTaskId,
     this.consultSessionId,
+    this.targetKind,
+    this.targetToken,
   });
 
   final OrderType orderType;
@@ -78,6 +80,11 @@ class OrderDetail {
   // 兽医：问诊会话 id（打开只读问诊确认单，bug 20260720-312；无会话→null）
   final int? consultSessionId;
 
+  /// 一次性解锁的「查看」目标（V1.3.2 Story 3.6）：`TAILSONALITY_RESULT` / `PASSPORT_SNAPSHOT` / `BOARDING_PASS`；
+  /// [targetToken] 为空不出入口。
+  final String? targetKind;
+  final String? targetToken;
+
   static DateTime? _dt(dynamic v) => v == null ? null : DateTime.tryParse(v as String)?.toLocal();
 
   factory OrderDetail.fromJson(Map<String, dynamic> j) => OrderDetail(
@@ -101,5 +108,7 @@ class OrderDetail {
         coins: (j['coins'] as num?)?.toInt(),
         triageTaskId: (j['triageTaskId'] as num?)?.toInt(),
         consultSessionId: (j['consultSessionId'] as num?)?.toInt(),
+        targetKind: j['targetKind'] as String?,
+        targetToken: j['targetToken'] as String?,
       );
 }

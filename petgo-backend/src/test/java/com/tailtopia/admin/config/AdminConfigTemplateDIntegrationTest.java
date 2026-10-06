@@ -135,7 +135,8 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
         PricingConfig now = pricingRepo.findById(PricingConfig.SINGLETON_ID).orElseThrow();
         String ktp = mvc.perform(post("/admin/config/ktp-pricing").with(authentication(superAdmin())).with(csrf())
                         .param("idHdDownloadPrice", String.valueOf(now.getIdHdDownloadPrice())).param("passportPagePrice", String.valueOf(now.getPassportPageUnlockPrice()))
-                        .param("passportBoardingPrice", String.valueOf(now.getPassportBoardingUnlockPrice())).header("HX-Request", "true"))
+                        .param("passportBoardingPrice", String.valueOf(now.getPassportBoardingUnlockPrice()))
+                        .param("tailsonalityUnlockPrice", String.valueOf(now.getTailsonalityUnlockPrice())).header("HX-Request", "true"))
                 .andExpect(status().isOk()).andExpect(header().string("HX-Retarget", "#cfg-ktp")).andReturn().getResponse().getContentAsString();
         assertThat(ktp).contains("id=\"cfg-ktp\"").doesNotContain("id=\"cfg-pricing\"");
     }

@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>V1.3.2 管理后台 整合稿（定稿）</title>
+<style>
+:root{
+  --page-bg:#f4f2ee; --page-ink:#2a2733; --page-ink-2:#55505f; --page-muted:#8c8798;
+  --page-rule:#e3dfd7; --page-accent:#845EC9; --page-accent-soft:#efe9f9;
+  /* ↓ 后台真实令牌（照抄 admin.css，不改值） */
+  --brand:#845EC9; --brand-strong:#6C48AE; --brand-tint:#F8F2FF; --brand-line:#DCD2F7;
+  --bg:#F5F6F8; --surface:#fff; --sidebar:#FAF9F7; --sidebar-ink:#4A4658;
+  --sidebar-ink-soft:#6B6579; --sidebar-ink-strong:#1F2330; --sidebar-line:#EAE7E1;
+  --ink:#1F2330; --ink-2:#444A57; --muted:#6C717D; --line:#E6E8EC;
+  --ok:#1E7E45; --ok-bg:#E7F6EC; --warn:#936600; --warn-bg:#FBF1D9;
+  --danger:#C0392B; --danger-bg:#FDE8E8; --info:#2B68D7; --info-bg:#E8F0FE;
+}
+*{box-sizing:border-box} body{margin:0;background:var(--page-bg);color:var(--page-ink);
+  font:14px/1.7 -apple-system,"PingFang SC","Noto Sans SC",sans-serif;padding:34px 40px 80px;}
+.doc-header{max-width:1400px;margin:0 auto 30px;background:#fff;border:1px solid var(--page-rule);border-radius:14px;padding:22px 28px;}
+.doc-header h1{margin:0 0 8px;font-size:21px;}
+.doc-header p{margin:5px 0;font-size:13px;color:var(--page-ink-2);}
+.doc-header .step{display:inline-block;background:var(--page-accent);color:#fff;border-radius:8px;padding:2px 10px;font-size:12px;font-weight:700;margin-right:8px;}
+.lane{max-width:1400px;margin:0 auto 52px;}
+.lane>h2{font-size:17px;margin:0 0 4px;}
+.lane>p.desc{margin:0 0 14px;font-size:13px;color:var(--page-ink-2);}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:7px;font-size:12.5px;color:var(--page-ink-2);line-height:1.9;margin:0 0 22px;padding:12px 16px;background:#fff;border:1px solid var(--page-rule);border-radius:10px;}
+.flow s{text-decoration:none;font-weight:600;color:var(--page-accent);background:var(--page-accent-soft);border-radius:6px;padding:2px 8px;}
+.flow i{font-style:normal;color:var(--page-muted);}
+.flow em{font-style:normal;color:var(--page-ink);font-weight:600;}
+.flow .nl{flex-basis:100%;height:0;}
+.frames{display:grid;grid-template-columns:repeat(2,683px);gap:38px 34px;justify-content:start;padding:8px 4px 6px;}
+.frame{display:flex;flex-direction:column;}
+.frame-tag{font-size:12.5px;font-weight:700;margin:0 0 8px;color:var(--page-ink);}
+.frame-tag b{color:var(--page-accent);margin-right:6px;}
+.frame-cap{font-size:12px;color:var(--page-muted);margin:8px 2px 0;line-height:1.6;max-width:683px;}
+/* 桌面缩放壳：真实画布 1440×880，缩至 683 宽 */
+.desk-shell{cursor:zoom-in;width:683px;height:417px;background:#fff;border:1px solid #d8d3c9;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(42,39,51,.05);}
+.mk{width:1440px;height:880px;transform:scale(0.4743);transform-origin:top left;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.55;display:flex;}
+/* 规格框（F/H 泳道）：原尺寸排版，允许标注 */
+.spec-shell{width:683px;background:#fbfaf7;border:1.5px dashed #c9c2b4;border-radius:12px;padding:18px;font-size:13px;}
+.spec-shell h4{margin:0 0 10px;font-size:13px;color:var(--page-ink-2);}
+/* ===== 后台 mock 组件（值取自 admin.css） ===== */
+.nav{width:220px;min-width:220px;background:var(--sidebar);border-right:1px solid var(--sidebar-line);padding:14px 10px;display:flex;flex-direction:column;gap:2px;font-size:13.5px;color:var(--sidebar-ink);}
+.nav.icons{width:56px;min-width:56px;padding:14px 6px;}
+.nav .logo{font-weight:800;color:var(--brand);font-size:16px;padding:2px 10px 12px;letter-spacing:.3px;}
+.nav .grp{padding:7px 10px;border-radius:8px;font-weight:600;color:var(--sidebar-ink-strong);display:flex;align-items:center;gap:8px;cursor:default;}
+.nav .grp .n{margin-left:auto;background:var(--danger);color:#fff;border-radius:99px;font-size:11px;padding:0 7px;line-height:17px;font-weight:700;}
+.nav .grp .ar{margin-left:auto;color:var(--sidebar-ink-soft);font-size:11px;}
+.nav .it{padding:6px 10px 6px 30px;border-radius:8px;color:var(--sidebar-ink-soft);display:flex;align-items:center;}
+.nav .it .n{margin-left:auto;background:var(--danger);color:#fff;border-radius:99px;font-size:11px;padding:0 6px;line-height:16px;}
+.nav .it.on{background:var(--brand-tint);color:var(--brand-strong);font-weight:700;}
+.nav .sp{flex:1}
+.mainc{flex:1;display:flex;flex-direction:column;min-width:0;}
+.top{height:52px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 22px;gap:18px;}
+.top .ttl{font-weight:700;font-size:15px;color:var(--ink);}
+.top .sp{flex:1}
+.top .lang{color:var(--muted);font-size:13px;}
+.top .lang b{color:var(--brand);font-weight:700;}
+.top .acct{display:flex;align-items:center;gap:8px;background:var(--brand-tint);border:1px solid var(--brand-line);border-radius:99px;padding:4px 12px 4px 5px;font-size:13px;color:var(--ink);}
+.top .acct .av{width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;}
+.top .acct .role{background:var(--brand);color:#fff;border-radius:6px;font-size:11px;padding:0 6px;line-height:18px;}
+.top .stag{background:var(--warn-bg);color:var(--warn);border:1px solid #E8D5A0;border-radius:6px;font-size:12px;font-weight:800;padding:2px 10px;letter-spacing:1px;}
+.cont{flex:1;padding:20px 22px;overflow:hidden;}
+.h1{font-size:18px;font-weight:800;margin:0 0 4px;color:var(--ink);}
+.hint{color:var(--muted);font-size:13px;margin:0 0 14px;}
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin-bottom:14px;}
+.tabs .t{padding:8px 16px;font-size:13.5px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;display:flex;gap:7px;align-items:center;}
+.tabs .t.on{color:var(--brand-strong);font-weight:700;border-color:var(--brand);}
+.tabs .t .n{background:var(--bg);border:1px solid var(--line);color:var(--ink-2);border-radius:99px;font-size:11px;padding:0 7px;line-height:17px;font-weight:700;}
+.tabs .t.on .n{background:var(--brand-tint);border-color:var(--brand-line);color:var(--brand-strong);}
+.fbar{display:flex;gap:10px;margin-bottom:14px;align-items:center;flex-wrap:wrap;}
+.sel,.inp{display:inline-block;box-sizing:border-box;vertical-align:middle;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font-size:13px;color:var(--ink-2);}
+.sel{position:relative;padding-right:26px;}
+.sel::after{content:"▾";color:var(--muted);position:absolute;right:10px;top:50%;transform:translateY(-50%);}
+.sum{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap;}
+.drawer .sum{gap:8px;}
+.drawer .sum .s{min-width:0;flex:1 1 44%;padding:8px 10px;}
+.sum .s{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 18px;min-width:130px;}
+.sum .s .k{font-size:12px;color:var(--muted);}
+.sum .s .v{font-size:20px;font-weight:800;color:var(--ink);}
+.sum .s .v small{font-size:12px;color:var(--ok);font-weight:600;margin-left:4px;}
+table.mk-t{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:13px;}
+table.mk-t th{background:#FAFBFC;text-align:left;padding:9px 12px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--line);white-space:nowrap;}
+table.mk-t td{padding:9px 12px;border-bottom:1px solid var(--line);color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;}
+table.mk-t tr.hov td{background:#F7F5FB;}
+table.mk-t tr.sel td{background:var(--brand-tint);}
+.tag{display:inline-block;border-radius:6px;font-size:12px;padding:1px 8px;font-weight:600;}
+.tag.ok{background:var(--ok-bg);color:var(--ok);} .tag.warn{background:var(--warn-bg);color:var(--warn);}
+.tag.dg{background:var(--danger-bg);color:var(--danger);} .tag.info{background:var(--info-bg);color:var(--info);}
+.tag.br{background:var(--brand-tint);color:var(--brand-strong);}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;}
+.dot.b{background:var(--info);} .dot.y{background:var(--warn);} .dot.r{background:var(--danger);} .dot.g{background:#B8BDC7;}
+.btn{display:inline-block;background:var(--brand);color:#fff;border-radius:8px;padding:7px 16px;font-size:13px;font-weight:700;text-align:center;}
+.btn.gh{background:var(--surface);color:var(--ink-2);border:1px solid var(--line);font-weight:600;}
+.btn.dg{background:var(--danger);}
+.btn.dis{background:#E9EAEE;color:#A6AAB4;}
+.btn.sm{padding:4px 12px;font-size:12.5px;}
+/* 工作台双栏 */
+.wk{display:flex;gap:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;height:640px;}
+.wk .ql{width:360px;min-width:360px;border-right:1px solid var(--line);overflow:hidden;display:flex;flex-direction:column;}
+.wk .ql .qh{padding:10px 14px;border-bottom:1px solid var(--line);color:var(--muted);font-size:12.5px;display:flex;justify-content:space-between;}
+.qr{padding:9px 14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:2px;}
+.qr .l1{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--ink);font-size:13.5px;}
+.qr .l1 .st{margin-left:auto;}
+.qr .l2{display:flex;gap:8px;color:var(--muted);font-size:12px;}
+.qr .l2 .tm{margin-left:auto;}
+.qr.sel{background:var(--brand-tint);box-shadow:inset 3px 0 0 var(--brand);}
+.qr.ovr .l1,.qr.ovr .l2{color:var(--danger);}
+.wk .dt{flex:1;padding:18px 20px;overflow:hidden;display:flex;flex-direction:column;gap:12px;background:#FCFCFD;}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 16px;}
+.card .ch{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:8px;letter-spacing:.3px;}
+.imgs{display:flex;gap:8px;}
+.ph{background:linear-gradient(135deg,#E8E3F5,#D5CCEB);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#9C8FC0;font-size:11px;}
+.opbar{margin-top:auto;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 16px;display:flex;gap:10px;align-items:center;}
+.toast{position:absolute;right:18px;bottom:18px;background:var(--ink);color:#fff;border-radius:8px;padding:9px 16px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.25);}
+.mkwrap{position:relative;width:1440px;height:880px;}
+/* 抽屉 */
+.mask{position:absolute;inset:0;background:rgba(31,35,48,.35);}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:480px;background:var(--surface);box-shadow:-6px 0 24px rgba(0,0,0,.14);padding:18px 20px;display:flex;flex-direction:column;gap:12px;}
+.drawer .dh{display:flex;align-items:center;font-weight:800;font-size:15px;}
+.drawer .dh .x{margin-left:auto;color:var(--muted);font-size:16px;}
+.confirm{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:420px;background:var(--surface);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.2);padding:20px 22px;}
+.confirm h5{margin:0 0 8px;font-size:15px;}
+.confirm p{margin:0 0 16px;font-size:13px;color:var(--ink-2);}
+.skl{background:linear-gradient(90deg,#EEF0F3,#F7F8FA,#EEF0F3);border-radius:6px;}
+.stepbar{display:flex;gap:0;align-items:center;margin-bottom:16px;}
+.stepbar .st{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);}
+.stepbar .st .c{width:24px;height:24px;border-radius:50%;background:var(--bg);border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;}
+.stepbar .st.done .c{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);}
+.stepbar .st.on{color:var(--brand-strong);font-weight:700;}
+.stepbar .st.on .c{background:var(--brand);border-color:var(--brand);color:#fff;}
+.stepbar .ln{width:56px;height:1.5px;background:var(--line);margin:0 10px;}
+.savebar{position:absolute;left:220px;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:12px 22px;display:flex;gap:12px;align-items:center;box-shadow:0 -4px 14px rgba(0,0,0,.06);}
+.err{color:var(--danger);font-size:12.5px;}
+.chart{display:flex;align-items:flex-end;gap:6px;height:110px;padding:6px 4px 0;}
+.chart .b{flex:1;background:var(--brand-line);border-radius:3px 3px 0 0;}
+.chart .b.hi{background:var(--brand);}
+.gcards{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+/* 本稿追加 */
+.num{font-variant-numeric:tabular-nums;}
+table.mk-t td,table.mk-t th,.sum .v,.qr .tm{font-variant-numeric:tabular-nums;}
+/* 金额列右对齐：数字右边缘对齐才比得出位数 */
+table.mk-t td.amt,table.mk-t th.amt{text-align:right;}
+/* 专属章区 */
+.stamp-wrap{display:flex;gap:14px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:10px;background:#FCFCFD;}
+.stamp-prev{width:62px;height:62px;min-width:62px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;position:relative;}
+.stamp-prev.has{background:#F3EFFB;border:1.5px solid var(--brand-line);color:var(--brand-strong);font-weight:700;}
+.stamp-prev.none{background:#F4F5F7;border:1.5px dashed #D3D6DC;color:var(--muted);}
+.stamp-prev.bad{background:var(--danger-bg);border:1.5px solid #E8C4C0;color:var(--danger);}
+.stamp-note{font-size:12px;color:var(--warn);background:var(--warn-bg);border:1px solid #E8D5A0;border-radius:7px;padding:8px 11px;margin-top:9px;line-height:1.55;}
+.drawer.wide{width:600px;}
+/* 已购解锁分组 */
+.ug{margin-bottom:10px;}
+.ug .gh{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--ink);margin-bottom:6px;}
+.ug .gh .cnt{background:var(--bg);border:1px solid var(--line);border-radius:99px;font-size:11px;padding:0 7px;line-height:17px;color:var(--ink-2);font-weight:700;}
+.ug table.mk-t{font-size:12.5px;}
+.ug table.mk-t td,.ug table.mk-t th{padding:6px 10px;}
+.mk{-webkit-font-smoothing:antialiased;}
+/* 金额输入：Rp 前缀 + 右对齐等宽数字 */
+.money{display:inline-flex;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+.money .cur{padding:6px 9px;background:#F7F8FA;border-right:1px solid var(--line);color:var(--muted);font-size:12.5px;font-weight:600;}
+.money .val{padding:6px 12px;font-size:13px;color:var(--ink);text-align:right;flex:1;font-variant-numeric:tabular-nums;}
+.money.on{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-tint);}
+.money.bad{border-color:var(--danger);}
+.money.ro{background:#F1F2F5;}
+.money.ro .val{color:var(--muted);}
+/* 行内错误：紧贴出错字段 */
+.rowerr{display:flex;align-items:center;gap:6px;color:var(--danger);font-size:12px;margin-top:5px;}
+.rowerr b{font-weight:700;}
+/* 定价行之间的分隔，建立节奏 */
+.prow{display:grid;grid-template-columns:230px 1fr;gap:18px;align-items:start;padding:12px 0;border-bottom:1px solid #F0F1F4;}
+.prow:last-child{border-bottom:0;}
+.prow>.lbl{padding-top:7px;font-size:13.5px;color:var(--ink);}
+.prow .sub{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.55;max-width:560px;}
+.prow .ref{font-size:11.5px;color:#9aa0ab;margin-top:3px;white-space:nowrap;}
+.gcards.one{grid-template-columns:1fr;}
+.pend{background:var(--warn-bg);border:1px solid #e8d6a8;border-radius:10px;padding:12px 16px;margin:14px 0 0;font-size:13px;color:#6b4e00;}
+.doc-header ul{margin:8px 0 0;padding-left:20px;font-size:13px;color:var(--page-ink-2);}
+.doc-header li{margin:3px 0;}
+.spec-shell table{width:100%;border-collapse:collapse;font-size:12.5px;}
+.spec-shell th,.spec-shell td{border:1px solid var(--page-rule);padding:6px 9px;text-align:left;vertical-align:top;}
+.spec-shell th{background:#f4f1ea;font-weight:700;}
+.bar{height:15px;border-radius:3px;background:var(--brand);display:inline-block;vertical-align:middle;}
+.bar.over{background:var(--danger);}
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <h1><span class="step">定稿</span>TailTopia 管理后台 V1.3.2 整合稿</h1>
+  <p>对应 PRD：<code>v1-3-2后台prd.md</code>（AB-18A 一次性解锁定价 / AB-18B 场所专属章 / AB-23 已购解锁查询）</p>
+  <p>画布 1440×880 缩至 683 宽，一行 2 屏。侧栏按 <code>AdminPageCatalog</code> 真实的 8 组渲染，配色与组件取自 <code>admin.css</code> 既有令牌。</p>
+  <p><b>5 条泳道 20 帧</b>（A 7 · B 2 · C 7 · D 2 · E 2）。三个条目全部长在既有页面上：运营配置页既有卡扩行 / 场所详情抽屉加区 / 用户详情抽屉加页签——<b>不新增页面、不新增菜单项</b>。</p>
+  <div style="background:#fff;border:1px solid var(--page-rule);border-radius:10px;padding:14px 18px;margin:14px 0 0">
+    <b style="font-size:13.5px">◇ 落地前须知（研发重点）</b>
+    <ul style="margin:8px 0 0;padding-left:20px">
+      <li><b>用户详情抽屉须由 480px 加宽至 600px</b>——六个页签在中/英/印尼三种语言下都放不下 480px。场所等其余抽屉维持 480，后台由此存在两种抽屉宽度，<b>这是有意的、不是不一致</b>。</li>
+      <li><b>定价下限 100 IDR</b>，DB 四列 CHECK 须随迁移由 <code>&gt;= 1</code> 改为 <code>&gt;= 100</code>；配置页不得出现任何「0 = 限免」字样。</li>
+      <li><b>支付记录的用途筛选为多选</b>：<code>purpose</code> 由单值变多值后，分页链接、整表刷新、导出 xlsx 三处都要带完整多值参数，漏改任一处会在翻页或导出时静默丢掉筛选条件。</li>
+      <li><b>专属章的上传／替换／移除是三个独立动作</b>，不并入场所编辑表单（那是纯文本 htmx 表单，不是 multipart）；移除须二次确认并写明影响已盖出的章。</li>
+      <li><b>已购解锁页签只读</b>，不得出现退款／撤销／补发按钮；数据读各业务表而非支付表，PawCoin 付费的解锁也要能查到。</li>
+      <li>三语文案中，第六页签的 ID 文案与三个新 purpose 的三语 key 为拟稿，需随开发补进语言包。</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============ 泳道 A ============ -->
+<div class="lane">
+  <h2>泳道 A · ⚙️ 一次性解锁定价（AB-18A）</h2>
+  <p class="desc">落点：⚙️ 配置与安全 → 运营配置 <code>/admin/config</code>。既有配置卡（现名「KTP 模块高清图解锁定价」）<b>扩到四行、组名改为「一次性解锁定价」</b>。页面其余四张卡原样不动，各帧上下各露出一张半透明相邻卡以示位置。</p>
+  <div class="flow">
+    <em>主路径：</em><s>A1</s> 卡·默认态 <i>→ 改任一行 →</i> <s>A2</s> 卡·已修改态 <i>→ 点保存 →</i> <s>A3</s> 高危确认弹层 <i>→ 确认 →</i> <s>A4</s> 提交中 <i>→</i> <s>A5</s> 保存成功
+    <span class="nl"></span>
+    <em>失败分支：</em><s>A2</s> <i>→ 低于下限 100 或超上限 →</i> <s>A6</s> 行内校验错误（保存禁用、不弹确认层）
+    <span class="nl"></span>
+    <em>变体：</em><s>A7</s> 只读态（有 <code>config.view</code> 无 <code>config.edit</code>）——替代 A1
+  </div>
+  <div class="frames">
+
+    <div class="frame"><div class="frame-tag"><b>A1</b>定价卡 · 默认态（四行，未修改）</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▸</span></div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">💰 订单与资金 <span class="ar">▸</span></div><div class="grp">🛍 商城 <span class="ar">▸</span></div><div class="grp">🩺 兽医与问诊 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▾</span></div><div class="it on">运营配置</div><div class="it">算法参数</div><div class="it">操作审计</div><div class="it">后台账号</div><div class="it">角色配置</div><div class="sp"></div></div>
+        <div class="mainc">
+          <div class="top"><span class="ttl">运营配置</span><span class="sp"></span><span class="lang">语言 <b>中文</b> ▾</span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div>
+          <div class="cont">
+            <div class="card" style="opacity:.42;margin-bottom:14px"><div class="ch">问诊定价</div><div style="font-size:12.5px;color:var(--muted)">兽医单次咨询价 / 兽医分成 / AI 详情解锁价 / 每月免费额度</div></div>
+            <div class="card" style="padding:16px 20px"><div class="ch" style="font-size:13px;color:var(--ink);letter-spacing:0">一次性解锁定价</div>
+              <div style="font-size:12.5px;color:var(--muted);margin:-2px 0 6px;max-width:620px">本组管理全部一次性付费解锁项的售价。四价独立保存、不联动；改价只影响新发起的解锁，已解锁记录不受影响。<b style="color:var(--ink-2)">下限 100 IDR</b>。</div>
+              <div class="prow"><div class="lbl">KTP 卡高清下载</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">1,000</span></span></div></div><div class="prow"><div class="lbl">护照 · 护照内页（快照）</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">2,000</span></span><div class="sub">每次快照解锁；用户盖了新章后，想要含新章的版本需再次解锁。</div><div class="ref">参考：KTP 当前价 Rp 1,000</div></div></div><div class="prow"><div class="lbl">护照 · 登机牌（每张）</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">1,000</span></span><div class="sub">一个宠物在一个场所一张，每张单独解锁。</div><div class="ref">参考：KTP 当前价 Rp 1,000</div></div></div><div class="prow"><div class="lbl">Tailsonality · 结果解锁</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">5,000</span></span><div class="sub">每次测试结果；重测产生的新结果需重新解锁</div></div></div><div style="margin-top:14px;display:flex;gap:10px;align-items:center"><span class="btn dis">保存</span><span style="font-size:12.5px;color:var(--muted)">未修改时禁用</span></div>
+            </div>
+            <div class="card" style="opacity:.42;margin-top:14px"><div class="ch">PawCoin 充值档位</div><div style="font-size:12.5px;color:var(--muted)">退款转币溢价 / 充值暂停 / 档位表</div></div><div class="card" style="opacity:.42;margin-top:14px"><div class="ch">客服</div><div style="font-size:12.5px;color:var(--muted)">客服联系方式与工单配置</div></div><div class="card" style="opacity:.42;margin-top:14px"><div class="ch">分享奖励</div><div style="font-size:12.5px;color:var(--muted)">单次奖励 / 全局月度上限 / 渠道清单</div></div>
+          </div>
+        </div>
+        
+      </div></div></div>
+      <div class="frame-cap">四行标签须体现计价语义：护照内页标明<b>（快照）</b>、登机牌标明<b>（每张）</b>——旧标签「护照 · 登机牌解锁」会让运营按「一次买断整本」定价。金额输入带 <code>Rp</code> 前缀、数字右对齐并用等宽数字，四行数字右边缘对齐，位数差异一眼可见（裸数字左对齐时 1,000 与 10,000 要逐位数才分得清）。每行一条细分隔线，说明句归在该行名下。上下两张半透明卡表示它在页面里的位置（真实顺序：问诊定价 → <b>一次性解锁定价</b> → PawCoin+档位 → 客服 → 分享奖励）。</div></div>
+    <div class="frame"><div class="frame-tag"><b>A2</b>定价卡 · 已修改态</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▸</span></div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">💰 订单与资金 <span class="ar">▸</span></div><div class="grp">🛍 商城 <span class="ar">▸</span></div><div class="grp">🩺 兽医与问诊 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▾</span></div><div class="it on">运营配置</div><div class="it">算法参数</div><div class="it">操作审计</div><div class="it">后台账号</div><div class="it">角色配置</div><div class="sp"></div></div>
+        <div class="mainc">
+          <div class="top"><span class="ttl">运营配置</span><span class="sp"></span><span class="lang">语言 <b>中文</b> ▾</span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div>
+          <div class="cont">
+            <div class="card" style="opacity:.42;margin-bottom:14px"><div class="ch">问诊定价</div><div style="font-size:12.5px;color:var(--muted)">兽医单次咨询价 / 兽医分成 / AI 详情解锁价 / 每月免费额度</div></div>
+            <div class="card" style="padding:16px 20px"><div class="ch" style="font-size:13px;color:var(--ink);letter-spacing:0">一次性解锁定价 <span class="tag br" style="margin-left:8px">已修改</span></div>
+              <div style="font-size:12.5px;color:var(--muted);margin:-2px 0 6px;max-width:620px">本组管理全部一次性付费解锁项的售价。四价独立保存、不联动；改价只影响新发起的解锁，已解锁记录不受影响。<b style="color:var(--ink-2)">下限 100 IDR</b>。</div>
+              <div class="prow"><div class="lbl">KTP 卡高清下载</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">1,000</span></span></div></div><div class="prow"><div class="lbl">护照 · 护照内页（快照）</div><div><span class="money on"><span class="cur">Rp</span><span class="val" style="width:150px">3,000</span></span><div class="sub">每次快照解锁；用户盖了新章后，想要含新章的版本需再次解锁。</div><div class="ref">参考：KTP 当前价 Rp 1,000</div></div></div><div class="prow"><div class="lbl">护照 · 登机牌（每张）</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">1,000</span></span><div class="sub">一个宠物在一个场所一张，每张单独解锁。</div><div class="ref">参考：KTP 当前价 Rp 1,000</div></div></div><div class="prow"><div class="lbl">Tailsonality · 结果解锁</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">5,000</span></span><div class="sub">每次测试结果；重测产生的新结果需重新解锁</div></div></div><div style="margin-top:14px;display:flex;gap:10px;align-items:center"><span class="btn">保存</span><span style="font-size:12.5px;color:var(--muted)">改了 1 行 · 点保存后在确认层复述新旧值</span></div>
+            </div>
+            <div class="card" style="opacity:.42;margin-top:14px"><div class="ch">PawCoin 充值档位</div><div style="font-size:12.5px;color:var(--muted)">退款转币溢价 / 充值暂停 / 档位表</div></div><div class="card" style="opacity:.42;margin-top:14px"><div class="ch">客服</div><div style="font-size:12.5px;color:var(--muted)">客服联系方式与工单配置</div></div><div class="card" style="opacity:.42;margin-top:14px"><div class="ch">分享奖励</div><div style="font-size:12.5px;color:var(--muted)">单次奖励 / 全局月度上限 / 渠道清单</div></div>
+          </div>
+        </div>
+        
+      </div></div></div>
+      <div class="frame-cap">改动行用品牌色描边 + 2px 柔光（既有 <code>--brand-tint</code> 令牌），与卡头的「已修改」标形成两级呼应：卡级说明「这张卡有改动」，行级说明「改的是这一行」。<b>四行各自独立</b>，改一行不联动其他任何一行。</div></div>
+    <div class="frame"><div class="frame-tag"><b>A3</b>高危确认弹层（复述旧值 → 新值）</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▸</span></div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">💰 订单与资金 <span class="ar">▸</span></div><div class="grp">🛍 商城 <span class="ar">▸</span></div><div class="grp">🩺 兽医与问诊 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▾</span></div><div class="it on">运营配置</div><div class="it">算法参数</div><div class="it">操作审计</div><div class="it">后台账号</div><div class="it">角色配置</div><div class="sp"></div></div>
+        <div class="mainc">
+          <div class="top"><span class="ttl">运营配置</span><span class="sp"></span><span class="lang">语言 <b>中文</b> ▾</span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div>
+          <div class="cont">
+            <div class="card" style="opacity:.42;margin-bottom:14px"><div class="ch">问诊定价</div><div style="font-size:12.5px;color:var(--muted)">兽医单次咨询价 / 兽医分成 / AI 详情解锁价 / 每月免费额度</div></div>
+            <div class="card" style="padding:16px 20px"><div class="ch" style="font-size:13px;color:var(--ink);letter-spacing:0">一次性解锁定价 <span class="tag br" style="margin-left:8px">已修改</span></div>
+              <div style="font-size:12.5px;color:var(--muted);margin:-2px 0 6px;max-width:620px">本组管理全部一次性付费解锁项的售价。四价独立保存、不联动；改价只影响新发起的解锁，已解锁记录不受影响。<b style="color:var(--ink-2)">下限 100 IDR</b>。</div>
+              <div class="prow"><div class="lbl">KTP 卡高清下载</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">1,000</span></span></div></div><div class="prow"><div class="lbl">护照 · 护照内页（快照）</div><div><span class="money on"><span class="cur">Rp</span><span class="val" style="width:150px">3,000</span></span><div class="sub">每次快照解锁；用户盖了新章后，想要含新章的版本需再次解锁。</div><div class="ref">参考：KTP 当前价 Rp 1,000</div></div></div><div class="prow"><div class="lbl">护照 · 登机牌（每张）</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">1,000</span></span><div class="sub">一个宠物在一个场所一张，每张单独解锁。</div><div class="ref">参考：KTP 当前价 Rp 1,000</div></div></div><div class="prow"><div class="lbl">Tailsonality · 结果解锁</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">5,000</span></span><div class="sub">每次测试结果；重测产生的新结果需重新解锁</div></div></div><div style="margin-top:14px"><span class="btn">保存</span></div>
+            </div>
+            <div class="card" style="opacity:.42;margin-top:14px"><div class="ch">PawCoin 充值档位</div><div style="font-size:12.5px;color:var(--muted)">退款转币溢价 / 充值暂停 / 档位表</div></div><div class="card" style="opacity:.42;margin-top:14px"><div class="ch">客服</div><div style="font-size:12.5px;color:var(--muted)">客服联系方式与工单配置</div></div><div class="card" style="opacity:.42;margin-top:14px"><div class="ch">分享奖励</div><div style="font-size:12.5px;color:var(--muted)">单次奖励 / 全局月度上限 / 渠道清单</div></div>
+          </div>
+        </div>
+        <div class="mask"></div><div class="confirm" style="width:520px"><h5>确认修改解锁定价？</h5><div style="background:#FAFBFC;border:1px solid var(--line);border-radius:8px;padding:11px 14px;margin:0 0 14px"><div style="font-size:12px;color:var(--muted);margin-bottom:5px">护照 · 护照内页（快照）</div><div style="display:flex;align-items:center;gap:12px;font-size:15px"><span class="num" style="color:var(--muted);text-decoration:line-through">Rp 2,000</span><span style="color:var(--muted)">→</span><b class="num" style="color:var(--brand-strong)">Rp 3,000</b></div></div><p>改价即时生效，只影响<b>新发起</b>的解锁购买；已解锁用户不受影响。成交价以购买记录中的历史值为准。操作将记入审计。</p><div style="display:flex;gap:10px;justify-content:flex-end"><span class="btn gh">取消</span><span class="btn dg">确认修改</span></div></div>
+      </div></div></div>
+      <div class="frame-cap">既有 <code>data-confirm-diff</code> 机制，<b>只复述本次真正改动的行</b>，没改的三行不进弹层。新旧值用等宽数字左右对位，差异落在同一列，一眼能看出是涨是跌、涨了几位。</div></div>
+    <div class="frame"><div class="frame-tag"><b>A4</b>提交中</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▸</span></div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">💰 订单与资金 <span class="ar">▸</span></div><div class="grp">🛍 商城 <span class="ar">▸</span></div><div class="grp">🩺 兽医与问诊 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▾</span></div><div class="it on">运营配置</div><div class="it">算法参数</div><div class="it">操作审计</div><div class="it">后台账号</div><div class="it">角色配置</div><div class="sp"></div></div>
+        <div class="mainc">
+          <div class="top"><span class="ttl">运营配置</span><span class="sp"></span><span class="lang">语言 <b>中文</b> ▾</span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div>
+          <div class="cont">
+            <div class="card" style="opacity:.42;margin-bottom:14px"><div class="ch">问诊定价</div><div style="font-size:12.5px;color:var(--muted)">兽医单次咨询价 / 兽医分成 / AI 详情解锁价 / 每月免费额度</div></div>
+            <div class="card" style="padding:16px 20px"><div class="ch" style="font-size:13px;color:var(--ink);letter-spacing:0">一次性解锁定价 <span class="tag br" style="margin-left:8px">已修改</span></div>
+              <div style="font-size:12.5px;color:var(--muted);margin:-2px 0 6px;max-width:620px">本组管理全部一次性付费解锁项的售价。四价独立保存、不联动；改价只影响新发起的解锁，已解锁记录不受影响。<b style="color:var(--ink-2)">下限 100 IDR</b>。</div>
+              <div class="prow"><div class="lbl">KTP 卡高清下载</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">1,000</span></span></div></div><div class="prow"><div class="lbl">护照 · 护照内页（快照）</div><div><span class="money on"><span class="cur">Rp</span><span class="val" style="width:150px">3,000</span></span><div class="sub">每次快照解锁；用户盖了新章后，想要含新章的版本需再次解锁。</div><div class="ref">参考：KTP 当前价 Rp 1,000</div></div></div><div class="prow"><div class="lbl">护照 · 登机牌（每张）</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">1,000</span></span><div class="sub">一个宠物在一个场所一张，每张单独解锁。</div><div class="ref">参考：KTP 当前价 Rp 1,000</div></div></div><div class="prow"><div class="lbl">Tailsonality · 结果解锁</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">5,000</span></span><div class="sub">每次测试结果；重测产生的新结果需重新解锁</div></div></div><div style="margin-top:14px;display:flex;gap:10px;align-items:center"><span class="btn" style="background:#A991D4">提交中…</span><span style="font-size:12.5px;color:var(--muted)">按钮进 loading 并禁用，防重复提交</span></div>
+            </div>
+            <div class="card" style="opacity:.42;margin-top:14px"><div class="ch">PawCoin 充值档位</div><div style="font-size:12.5px;color:var(--muted)">退款转币溢价 / 充值暂停 / 档位表</div></div><div class="card" style="opacity:.42;margin-top:14px"><div class="ch">客服</div><div style="font-size:12.5px;color:var(--muted)">客服联系方式与工单配置</div></div><div class="card" style="opacity:.42;margin-top:14px"><div class="ch">分享奖励</div><div style="font-size:12.5px;color:var(--muted)">单次奖励 / 全局月度上限 / 渠道清单</div></div>
+          </div>
+        </div>
+        
+      </div></div></div>
+      <div class="frame-cap"><b>确认后保存按钮即进 loading 并禁用。</b>「提交后无反馈」会让人不确定点没点上而再点一次，而后台写操作走审计链，重复提交会多写一条审计记录。</div></div>
+    <div class="frame"><div class="frame-tag"><b>A5</b>保存成功（toast + 卡回默认态）</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▸</span></div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">💰 订单与资金 <span class="ar">▸</span></div><div class="grp">🛍 商城 <span class="ar">▸</span></div><div class="grp">🩺 兽医与问诊 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▾</span></div><div class="it on">运营配置</div><div class="it">算法参数</div><div class="it">操作审计</div><div class="it">后台账号</div><div class="it">角色配置</div><div class="sp"></div></div>
+        <div class="mainc">
+          <div class="top"><span class="ttl">运营配置</span><span class="sp"></span><span class="lang">语言 <b>中文</b> ▾</span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div>
+          <div class="cont">
+            <div class="card" style="opacity:.42;margin-bottom:14px"><div class="ch">问诊定价</div><div style="font-size:12.5px;color:var(--muted)">兽医单次咨询价 / 兽医分成 / AI 详情解锁价 / 每月免费额度</div></div>
+            <div class="card" style="padding:16px 20px"><div class="ch" style="font-size:13px;color:var(--ink);letter-spacing:0">一次性解锁定价</div>
+              <div style="font-size:12.5px;color:var(--muted);margin:-2px 0 6px;max-width:620px">本组管理全部一次性付费解锁项的售价。四价独立保存、不联动；改价只影响新发起的解锁，已解锁记录不受影响。<b style="color:var(--ink-2)">下限 100 IDR</b>。</div>
+              <div class="prow"><div class="lbl">KTP 卡高清下载</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">1,000</span></span></div></div><div class="prow"><div class="lbl">护照 · 护照内页（快照）</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">3,000</span></span><div class="sub">每次快照解锁；用户盖了新章后，想要含新章的版本需再次解锁。</div><div class="ref">参考：KTP 当前价 Rp 1,000</div></div></div><div class="prow"><div class="lbl">护照 · 登机牌（每张）</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">1,000</span></span><div class="sub">一个宠物在一个场所一张，每张单独解锁。</div><div class="ref">参考：KTP 当前价 Rp 1,000</div></div></div><div class="prow"><div class="lbl">Tailsonality · 结果解锁</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">5,000</span></span><div class="sub">每次测试结果；重测产生的新结果需重新解锁</div></div></div><div style="margin-top:14px;display:flex;gap:10px;align-items:center"><span class="btn dis">保存</span><span style="font-size:12.5px;color:var(--muted)">「已修改」标消退、保存钮回禁用</span></div>
+            </div>
+            <div class="card" style="opacity:.42;margin-top:14px"><div class="ch">PawCoin 充值档位</div><div style="font-size:12.5px;color:var(--muted)">退款转币溢价 / 充值暂停 / 档位表</div></div><div class="card" style="opacity:.42;margin-top:14px"><div class="ch">客服</div><div style="font-size:12.5px;color:var(--muted)">客服联系方式与工单配置</div></div><div class="card" style="opacity:.42;margin-top:14px"><div class="ch">分享奖励</div><div style="font-size:12.5px;color:var(--muted)">单次奖励 / 全局月度上限 / 渠道清单</div></div>
+          </div>
+        </div>
+        <div class="toast">已保存</div>
+      </div></div></div>
+      <div class="frame-cap">htmx 原位替换该卡 + toast oob（既有模式）。整页不刷新，其余四张卡不动；「已修改」标消退、保存钮回禁用。</div></div>
+    <div class="frame"><div class="frame-tag"><b>A6</b>校验错误态（低于下限 100 / 超上限）</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▸</span></div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">💰 订单与资金 <span class="ar">▸</span></div><div class="grp">🛍 商城 <span class="ar">▸</span></div><div class="grp">🩺 兽医与问诊 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▾</span></div><div class="it on">运营配置</div><div class="it">算法参数</div><div class="it">操作审计</div><div class="it">后台账号</div><div class="it">角色配置</div><div class="sp"></div></div>
+        <div class="mainc">
+          <div class="top"><span class="ttl">运营配置</span><span class="sp"></span><span class="lang">语言 <b>中文</b> ▾</span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div>
+          <div class="cont">
+            <div class="card" style="opacity:.42;margin-bottom:14px"><div class="ch">问诊定价</div><div style="font-size:12.5px;color:var(--muted)">兽医单次咨询价 / 兽医分成 / AI 详情解锁价 / 每月免费额度</div></div>
+            <div class="card" style="padding:16px 20px"><div class="ch" style="font-size:13px;color:var(--ink);letter-spacing:0">一次性解锁定价 <span class="tag br" style="margin-left:8px">已修改</span></div>
+              <div style="font-size:12.5px;color:var(--muted);margin:-2px 0 6px;max-width:620px">本组管理全部一次性付费解锁项的售价。四价独立保存、不联动；改价只影响新发起的解锁，已解锁记录不受影响。<b style="color:var(--ink-2)">下限 100 IDR</b>。</div>
+              <div class="prow"><div class="lbl">KTP 卡高清下载</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">1,000</span></span></div></div><div class="prow"><div class="lbl">护照 · 护照内页（快照）</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">2,000</span></span><div class="sub">每次快照解锁；用户盖了新章后，想要含新章的版本需再次解锁。</div><div class="ref">参考：KTP 当前价 Rp 1,000</div></div></div><div class="prow"><div class="lbl">护照 · 登机牌（每张）</div><div><span class="money bad"><span class="cur">Rp</span><span class="val" style="width:150px">50</span></span><div class="rowerr" role="alert">⚠ 价格须为 ≥100 的整数（IDR）</div><div class="sub">一个宠物在一个场所一张，每张单独解锁。</div><div class="ref">参考：KTP 当前价 Rp 1,000</div></div></div><div class="prow"><div class="lbl">Tailsonality · 结果解锁</div><div><span class="money "><span class="cur">Rp</span><span class="val" style="width:150px">5,000</span></span><div class="sub">每次测试结果；重测产生的新结果需重新解锁</div></div></div><div style="margin-top:14px;display:flex;gap:10px;align-items:center"><span class="btn dis">保存</span><span style="font-size:12.5px;color:var(--muted)">有校验错误 → 保存禁用，不弹确认层</span></div>
+            </div>
+            <div class="card" style="opacity:.42;margin-top:14px"><div class="ch">PawCoin 充值档位</div><div style="font-size:12.5px;color:var(--muted)">退款转币溢价 / 充值暂停 / 档位表</div></div><div class="card" style="opacity:.42;margin-top:14px"><div class="ch">客服</div><div style="font-size:12.5px;color:var(--muted)">客服联系方式与工单配置</div></div><div class="card" style="opacity:.42;margin-top:14px"><div class="ch">分享奖励</div><div style="font-size:12.5px;color:var(--muted)">单次奖励 / 全局月度上限 / 渠道清单</div></div>
+          </div>
+        </div>
+        
+      </div></div></div>
+      <div class="frame-cap"><b>价格下限 100 IDR</b>，0 与任何 &lt;100 的值都是非法值——抬下限是为了防运营漏个零把 Rp2,000 配成 Rp200，所以演示值是 50 而不是 0。<b>错误文案必须紧贴出错的那一行</b>，不放在卡片底部（四行共用一条底部错误时，运营得自己找是哪行错）。错误须带 <code>role="alert"</code> 可被读屏播报，<b>不能只靠红色描边</b>（对色觉障碍者等于没有提示）。有校验错误时保存禁用、不弹确认层。DB 四列 CHECK 须随迁移改为 <code>&gt;= 100</code>。</div></div>
+    <div class="frame"><div class="frame-tag"><b>A7</b>只读态 · 有 config.view 无 config.edit（变体，替代 A1）</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▸</span></div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">💰 订单与资金 <span class="ar">▸</span></div><div class="grp">🛍 商城 <span class="ar">▸</span></div><div class="grp">🩺 兽医与问诊 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▾</span></div><div class="it on">运营配置</div><div class="it">算法参数</div><div class="it">操作审计</div><div class="it">后台账号</div><div class="it">角色配置</div><div class="sp"></div></div>
+        <div class="mainc">
+          <div class="top"><span class="ttl">运营配置</span><span class="sp"></span><span class="lang">语言 <b>中文</b> ▾</span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div>
+          <div class="cont">
+            <div class="card" style="opacity:.42;margin-bottom:14px"><div class="ch">问诊定价</div><div style="font-size:12.5px;color:var(--muted)">兽医单次咨询价 / 兽医分成 / AI 详情解锁价 / 每月免费额度</div></div>
+            <div class="card" style="padding:16px 20px"><div class="ch" style="font-size:13px;color:var(--ink);letter-spacing:0">一次性解锁定价</div>
+              <div style="font-size:12.5px;color:var(--muted);margin:-2px 0 6px;max-width:620px">本组管理全部一次性付费解锁项的售价。四价独立保存、不联动；改价只影响新发起的解锁，已解锁记录不受影响。<b style="color:var(--ink-2)">下限 100 IDR</b>。</div>
+              <div class="prow"><div class="lbl">KTP 卡高清下载</div><div><span class="money ro"><span class="cur">Rp</span><span class="val" style="width:150px">1,000</span></span></div></div><div class="prow"><div class="lbl">护照 · 护照内页（快照）</div><div><span class="money ro"><span class="cur">Rp</span><span class="val" style="width:150px">2,000</span></span><div class="sub">每次快照解锁；用户盖了新章后，想要含新章的版本需再次解锁。</div><div class="ref">参考：KTP 当前价 Rp 1,000</div></div></div><div class="prow"><div class="lbl">护照 · 登机牌（每张）</div><div><span class="money ro"><span class="cur">Rp</span><span class="val" style="width:150px">1,000</span></span><div class="sub">一个宠物在一个场所一张，每张单独解锁。</div><div class="ref">参考：KTP 当前价 Rp 1,000</div></div></div><div class="prow"><div class="lbl">Tailsonality · 结果解锁</div><div><span class="money ro"><span class="cur">Rp</span><span class="val" style="width:150px">5,000</span></span><div class="sub">每次测试结果；重测产生的新结果需重新解锁</div></div></div><div style="margin-top:14px;display:flex;gap:10px;align-items:center"><span class="btn dis">保存</span><span style="font-size:12.5px;color:var(--muted)">只读：缺少「编辑运营配置」权限（config.edit）</span></div>
+            </div>
+            <div class="card" style="opacity:.42;margin-top:14px"><div class="ch">PawCoin 充值档位</div><div style="font-size:12.5px;color:var(--muted)">退款转币溢价 / 充值暂停 / 档位表</div></div><div class="card" style="opacity:.42;margin-top:14px"><div class="ch">客服</div><div style="font-size:12.5px;color:var(--muted)">客服联系方式与工单配置</div></div><div class="card" style="opacity:.42;margin-top:14px"><div class="ch">分享奖励</div><div style="font-size:12.5px;color:var(--muted)">单次奖励 / 全局月度上限 / 渠道清单</div></div>
+          </div>
+        </div>
+        
+      </div></div></div>
+      <div class="frame-cap">只读态用灰底 + 降低对比，<b>不要整块降透明度</b>——那会把说明文字一起压暗到读不清。既有 <code>canEdit</code> 判定：输入禁用 + 保存钮固定禁用 + 注明所缺权限。侧栏项也按该账号权限收窄。</div></div>
+  </div>
+</div>
+
+<!-- ============ 泳道 B ============ -->
+<div class="lane">
+  <h2>泳道 B · 💰 支付记录 · 用途筛选扩充（AB-18A 配套）</h2>
+  <p class="desc">落点：💰 订单与资金 → 支付记录 <code>/admin/payments</code>。本版本新增三个 <code>PaymentPurpose</code> 值，筛选项与表格「用途」列同步扩充；<b>用途筛选为多选</b>，摘要条新增「付费用户数」。页面列与结构不变。</p>
+  <div class="flow">
+    <em>主路径：</em><s>B1</s> 用途多选面板展开（5 项 → 8 项） <i>→ 勾若干项 + 应用 →</i> <s>B2</s> 多选结果列表（摘要条为所选用途合计；导出 xlsx 同步带多值）
+  </div>
+  <div class="frames">
+
+    <div class="frame"><div class="frame-tag"><b>B1</b>支付记录 · 用途多选面板展开</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▸</span></div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">💰 订单与资金 <span class="ar">▾</span></div><div class="it">兽医订单</div><div class="it">AI 订单</div><div class="it on">支付记录</div><div class="it">兽医月结</div><div class="it">红色超额</div><div class="grp">🛍 商城 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▸</span></div><div class="sp"></div></div>
+        <div class="mainc">
+          <div class="top"><span class="ttl">支付记录</span><span class="sp"></span><span class="lang">语言 <b>中文</b> ▾</span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div>
+          <div class="cont" style="position:relative">
+            <div class="fbar"><span class="inp" style="width:150px">用户 ID</span><span class="sel" style="width:230px;border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-tint)">用途：已选 3 项</span><span class="sel" style="width:150px">全部状态</span><span class="inp" style="width:140px">2026-09-01</span><span class="inp" style="width:140px">2026-09-30</span><span style="color:var(--muted);font-size:12px">WIB</span><span class="btn sm">查询</span><span class="btn gh sm">清空筛选</span><span class="sp" style="flex:1"></span><span class="btn gh sm">导出 xlsx</span></div><div style="position:absolute;left:180px;top:76px;width:286px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.14);padding:6px;font-size:13px;z-index:5"><div style="padding:7px 12px;color:var(--muted);font-size:12px">不勾 = 不限（全部用途）</div><div style="padding:6px 12px;display:flex;align-items:center;gap:9px"><span style="width:15px;height:15px;border:1.5px solid var(--line);border-radius:4px;display:inline-block"></span>兽医咨询</div><div style="padding:6px 12px;display:flex;align-items:center;gap:9px"><span style="width:15px;height:15px;border:1.5px solid var(--line);border-radius:4px;display:inline-block"></span>PawCoin 充值</div><div style="padding:6px 12px;display:flex;align-items:center;gap:9px"><span style="width:15px;height:15px;border:1.5px solid var(--line);border-radius:4px;display:inline-block"></span>AI 解锁</div><div style="padding:6px 12px;display:flex;align-items:center;gap:9px"><span style="width:15px;height:15px;border:1.5px solid var(--line);border-radius:4px;display:inline-block"></span>身份证高清图</div><div style="padding:6px 12px;display:flex;align-items:center;gap:9px"><span style="width:15px;height:15px;border:1.5px solid var(--line);border-radius:4px;display:inline-block"></span>商城订单</div><div style="height:1px;background:var(--line);margin:5px 10px"></div><div style="padding:6px 12px;display:flex;align-items:center;gap:9px;background:var(--brand-tint);border-radius:7px"><span style="width:15px;height:15px;background:var(--brand);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px">✓</span><b style="color:var(--brand-strong)">护照 · 快照</b></div><div style="padding:6px 12px;display:flex;align-items:center;gap:9px;background:var(--brand-tint);border-radius:7px"><span style="width:15px;height:15px;background:var(--brand);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px">✓</span><b style="color:var(--brand-strong)">护照 · 登机牌</b></div><div style="padding:6px 12px;display:flex;align-items:center;gap:9px;background:var(--brand-tint);border-radius:7px"><span style="width:15px;height:15px;background:var(--brand);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px">✓</span><b style="color:var(--brand-strong)">Tailsonality 结果</b></div><div style="height:1px;background:var(--line);margin:5px 10px"></div><div style="padding:7px 12px;display:flex;gap:10px"><span class="btn gh sm">清空</span><span class="btn sm">应用</span></div></div><div class="sum" style="margin-top:8px"><div class="s" style="border-color:var(--brand-line);background:var(--brand-tint)"><div class="k">付费用户数</div><div class="v">812</div><div style="font-size:11.5px;color:var(--muted)">去重 · 仅计已到账</div></div><div class="s"><div class="k">本期支付笔数</div><div class="v">1,284</div><div style="font-size:11.5px;color:var(--muted)">其中已支付 1,043 笔</div></div><div class="s"><div class="k">成功金额</div><div class="v">IDR 9,830,000</div></div><div class="s"><div class="k">未成交笔数</div><div class="v">241</div><div style="font-size:11.5px;color:var(--muted)">含待支付 / 失败 / 已过期</div></div></div>
+            <table class="mk-t"><tr><th>用户</th><th>支付号</th><th>用途</th><th>渠道</th><th class="amt">金额</th><th>币种</th><th>状态</th><th>时间</th></tr><tr><td>10231</td><td>P2609301142</td><td>身份证高清图</td><td>QRIS</td><td class="amt">1,000</td><td>IDR</td><td><span class="tag ok">已支付</span></td><td>09-30 11:42</td></tr><tr><td>10442</td><td>P2609301138</td><td>兽医咨询</td><td>QRIS</td><td class="amt">50,000</td><td>IDR</td><td><span class="tag ok">已支付</span></td><td>09-30 11:38</td></tr><tr><td>10188</td><td>P2609301120</td><td>PawCoin 充值</td><td>QRIS</td><td class="amt">50,000</td><td>IDR</td><td><span class="tag warn">待支付</span></td><td>09-30 11:20</td></tr></table>
+            <p style="font-size:12px;color:var(--muted);margin-top:8px">「成功金额」只计已支付、且经收款渠道真正到账的金额。「付费用户数」为去重人数，同一用户在区间内多次付费只算 1 人；<b style="color:var(--warn)">该数仅覆盖 QRIS 现金成交——用 PawCoin 余额购买的解锁不建支付单、不在本表，因此它不等于这些 SKU 的全部付费人数。</b></p>
+          </div>
+        </div>
+      </div></div></div>
+      <div class="frame-cap">用途筛选为<b>多选</b>，不勾 = 不限（等价于「全部用途」）。本版本新增的三项与既有五项之间以分隔线分组，便于辨认哪些是新解锁点。<br>⚠️ <b>工程注意：<code>purpose</code> 由单值变多值后，分页链接、整表刷新、导出 xlsx 三处都要带完整多值参数</b>——这三处现在都在透传单个 <code>purpose</code>，漏改任一处会在翻页或导出时静默丢掉筛选条件。三项用途文案需补三语 key。</div></div>
+
+    <div class="frame"><div class="frame-tag"><b>B2</b>多选三个解锁 SKU 后的列表</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▸</span></div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">💰 订单与资金 <span class="ar">▾</span></div><div class="it">兽医订单</div><div class="it">AI 订单</div><div class="it on">支付记录</div><div class="it">兽医月结</div><div class="it">红色超额</div><div class="grp">🛍 商城 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▸</span></div><div class="sp"></div></div>
+        <div class="mainc">
+          <div class="top"><span class="ttl">支付记录</span><span class="sp"></span><span class="lang">语言 <b>中文</b> ▾</span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div>
+          <div class="cont">
+            <div class="fbar"><span class="inp" style="width:150px">用户 ID</span><span class="sel" style="width:230px;border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-tint)">用途：已选 3 项</span><span class="sel" style="width:150px">全部状态</span><span class="inp" style="width:140px">2026-09-01</span><span class="inp" style="width:140px">2026-09-30</span><span style="color:var(--muted);font-size:12px">WIB</span><span class="btn sm">查询</span><span class="btn gh sm">清空筛选</span><span class="sp" style="flex:1"></span><span class="btn gh sm">导出 xlsx</span></div><div class="sum" style="margin-top:8px"><div class="s" style="border-color:var(--brand-line);background:var(--brand-tint)"><div class="k">付费用户数</div><div class="v">143</div><div style="font-size:11.5px;color:var(--muted)">去重 · 仅计已到账</div></div><div class="s"><div class="k">本期支付笔数</div><div class="v">214</div><div style="font-size:11.5px;color:var(--muted)">其中已支付 178 笔</div></div><div class="s"><div class="k">成功金额</div><div class="v">IDR 486,000</div></div><div class="s"><div class="k">未成交笔数</div><div class="v">36</div><div style="font-size:11.5px;color:var(--muted)">含待支付 / 失败 / 已过期</div></div></div>
+            <table class="mk-t"><tr><th>用户</th><th>支付号</th><th>用途</th><th>渠道</th><th class="amt">金额</th><th>币种</th><th>状态</th><th>时间</th></tr><tr><td>10231</td><td>P2609301142</td><td>护照 · 快照</td><td>QRIS</td><td class="amt">2,000</td><td>IDR</td><td><span class="tag ok">已支付</span></td><td>09-30 11:42</td></tr><tr><td>10442</td><td>P2609301108</td><td>Tailsonality 结果</td><td>QRIS</td><td class="amt">5,000</td><td>IDR</td><td><span class="tag ok">已支付</span></td><td>09-30 11:08</td></tr><tr><td>10188</td><td>P2609300955</td><td>护照 · 登机牌</td><td>QRIS</td><td class="amt">1,000</td><td>IDR</td><td><span class="tag warn">待支付</span></td><td>09-30 09:55</td></tr><tr><td>10077</td><td>P2609300902</td><td>护照 · 快照</td><td>QRIS</td><td class="amt">2,000</td><td>IDR</td><td><span class="tag ok">已支付</span></td><td>09-30 09:02</td></tr></table>
+            <p style="font-size:12px;color:var(--muted);margin-top:8px">「成功金额」只计已支付、且经收款渠道真正到账的金额。「付费用户数」为去重人数，同一用户在区间内多次付费只算 1 人；<b style="color:var(--warn)">该数仅覆盖 QRIS 现金成交——用 PawCoin 余额购买的解锁不建支付单、不在本表，因此它不等于这些 SKU 的全部付费人数。</b></p>
+            <div style="margin-top:10px;background:var(--warn-bg);border:1px solid #E8D5A0;border-radius:8px;padding:9px 14px;font-size:12.5px;color:var(--warn)">要查某个用户到底买过什么（含 PawCoin 付的），到「用户 → 已购解锁」页签。</div>
+          </div>
+        </div>
+      </div></div></div>
+      <div class="frame-cap">摘要条四格，<b>「付费用户数」为去重人数</b>，同一用户在区间内多次付费只算 1 人；筛了三个新解锁点即为三者合计，「143 人 / 214 笔」可直接读出人均购买 1.5 次。<br>⚠️ <b>该数仅覆盖 QRIS 现金成交</b>——用 PawCoin 余额购买的解锁不建支付单、不在本表，因此它不等于这些 SKU 的全部付费人数，口径说明须常驻。底部提示负责指路到「已购解锁」页签，否则运营会把「本表查不到」当成「这人没买过」。状态筛选维持单选。</div></div>
+
+  </div>
+</div>
+
+<!-- ============ 泳道 C ============ -->
+<div class="lane">
+  <h2>泳道 C · 📍 场所专属章素材（AB-18B）</h2>
+  <p class="desc">落点：✍️ 内容 → 场所管理 <code>/admin/places</code>，点行拉出的 480px 场所详情抽屉。抽屉现有五区：① 基本信息 ② 照片墙 ③ 评论 ④ 打卡计数 ⑤ 操作条。<b>专属章区插在 ② 与 ③ 之间</b>——它和照片一样是「这个场所的素材」，放在照片墙下方最顺；上传／替换／移除各自独立动作，<b>不并入 ⑤ 的编辑表单</b>（那是纯文本 htmx 表单，不是 multipart）。</p>
+  <div class="flow">
+    <em>主路径：</em><i>场所列表点行 →</i> <s>C1</s> 抽屉·专属章区空态 <i>→ 选文件 →</i> <s>C2</s> 上传中 <i>→</i> <s>C3</s> 已上传态
+    <span class="nl"></span>
+    <em>失败分支：</em><s>C2</s> <i>→ 类型/大小不合格 →</i> <s>C4</s> 上传失败（停留原态）
+    <span class="nl"></span>
+    <em>移除支路：</em><s>C3</s> <i>→ 点移除 →</i> <s>C5</s> 二次确认 <i>→ 确认 →</i> <s>C6</s> 回落默认章 + toast
+    <span class="nl"></span>
+    <em>变体：</em><s>C7</s> 已合并场所（MERGED）——替代 C1／C3，只读
+  </div>
+  <div class="frames">
+
+    <div class="frame"><div class="frame-tag"><b>C1</b>场所抽屉 · 专属章区 · 空态（未上传）</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▾</span></div><div class="it">内容管理</div><div class="it">评论管理</div><div class="it">顶置管理</div><div class="it">内容标签</div><div class="it">种子内容发布</div><div class="it on">场所管理</div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▸</span></div><div class="sp"></div></div>
+        <div class="mainc">
+          <div class="top"><span class="ttl">场所管理</span><span class="sp"></span><span class="lang">语言 <b>中文</b> ▾</span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div>
+          <div class="cont">
+            <div class="fbar"><span class="inp" style="width:220px">搜索名称或地址</span><span class="sel" style="width:130px">全部类型</span><span class="sel" style="width:130px">全部状态</span><span class="btn sm">查询</span><span class="sp" style="flex:1"></span><span class="btn sm">＋ 新建场所</span></div>
+            <table class="mk-t"><tr><th>名称</th><th>类型</th><th>文字地址</th><th>标记人</th><th>照片</th><th>评论</th><th>打卡</th><th>推荐/不推荐</th><th>状态</th><th>创建时间</th></tr>
+              <tr class="sel"><td>Kopi Kalyan</td><td>咖啡店</td><td>Jl. Senopati No.42</td><td>TailTopia Official</td><td>6</td><td>12</td><td>148</td><td>31 / 2</td><td><span class="tag ok">上架</span></td><td>09-12 14:20</td></tr>
+              <tr><td>Taman Suropati</td><td>公园</td><td>Jl. Taman Suropati</td><td>user_10231</td><td>3</td><td>5</td><td>92</td><td>18 / 0</td><td><span class="tag ok">上架</span></td><td>09-10 09:02</td></tr>
+            </table>
+          </div>
+        </div>
+        <div class="mask"></div>
+        <div class="drawer"><div class="dh">场所详情 <span class="x">✕</span></div>
+          <div class="card"><div class="ch">基本信息</div>
+            <div style="font-weight:700;font-size:14px;margin-bottom:6px">Kopi Kalyan <span class="tag ok" style="margin-left:6px">上架</span></div>
+            <div class="sum" style="margin:0"><div class="s"><div class="k">类型</div><div style="font-size:13px">咖啡店</div></div><div class="s"><div class="k">城市</div><div style="font-size:13px">Jakarta</div></div><div class="s"><div class="k">标记人</div><div style="font-size:13px">TailTopia Official</div></div><div class="s"><div class="k">创建时间</div><div style="font-size:13px">09-12 14:20</div></div></div>
+            <div style="font-size:12.5px;color:var(--ink-2);margin-top:8px">文字地址 Jl. Senopati No.42</div></div>
+          <div class="card"><div class="ch">照片 <span style="color:var(--muted);font-weight:400">6</span></div>
+            <div class="imgs"><div class="ph" style="width:64px;height:64px">图</div><div class="ph" style="width:64px;height:64px">图</div><div class="ph" style="width:64px;height:64px">图</div></div></div>
+          <div class="card" style="border-color:var(--brand-line);box-shadow:0 0 0 2px var(--brand-tint)"><div class="ch">专属章</div>
+            <div class="stamp-wrap">
+              <div class="stamp-prev none">默认章</div>
+              <div style="flex:1">
+                <div style="font-size:13px;color:var(--ink);font-weight:600">当前使用「咖啡店」默认章</div>
+                <div style="font-size:12px;color:var(--muted);margin-top:3px;line-height:1.55">未上传专属章的场所走按类型的默认章，这是正常状态。</div>
+              </div>
+              <span class="btn sm">上传专属章</span>
+            </div>
+            <div style="font-size:11.5px;color:var(--muted);margin-top:8px">PNG 透明图 · 1:1 · 建议 512×512 · 圆形单色</div></div>
+          <div class="card"><div class="ch">评论 <span style="color:var(--muted);font-weight:400">12</span></div><div style="font-size:12.5px;color:var(--ink-2)">「Tempatnya nyaman buat bawa anjing」— user_10231 <span class="tag ok">推荐</span></div></div>
+          <div class="card"><div class="ch">打卡</div><div style="font-size:20px;font-weight:800">148</div></div>
+          <div class="opbar" style="margin-top:0"><span class="btn gh sm">编辑</span><span class="btn gh sm">下架</span><span class="btn gh sm">合并</span></div>
+        </div>
+      </div></div></div>
+      <div class="frame-cap"><b>未上传是正常态不是错误态</b>：不标警告色、不阻断保存，直接说明当前走哪款默认章。素材规格提示放在区块下方（它是运营要遵守的输入规范）。专属章区位于照片墙与评论之间，上传／替换／移除<b>各自独立生效</b>，不并入编辑表单（那是纯文本 htmx 表单，不是 multipart）。</div></div>
+
+    <div class="frame"><div class="frame-tag"><b>C2</b>上传中</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▾</span></div><div class="it">内容管理</div><div class="it">评论管理</div><div class="it">顶置管理</div><div class="it">内容标签</div><div class="it">种子内容发布</div><div class="it on">场所管理</div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▸</span></div><div class="sp"></div></div>
+        <div class="mainc"><div class="top"><span class="ttl">场所管理</span><span class="sp"></span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div><div class="cont"><div class="fbar"><span class="inp" style="width:220px">搜索名称或地址</span><span class="sel" style="width:130px">全部类型</span><span class="sel" style="width:130px">全部状态</span><span class="btn sm">查询</span><span class="sp" style="flex:1"></span><span class="btn sm">＋ 新建场所</span></div>
+            <table class="mk-t"><tr><th>名称</th><th>类型</th><th>文字地址</th><th>标记人</th><th>照片</th><th>评论</th><th>打卡</th><th>推荐/不推荐</th><th>状态</th><th>创建时间</th></tr>
+              <tr class="sel"><td>Kopi Kalyan</td><td>咖啡店</td><td>Jl. Senopati No.42</td><td>TailTopia Official</td><td>6</td><td>12</td><td>148</td><td>31 / 2</td><td><span class="tag ok">上架</span></td><td>09-12 14:20</td></tr>
+              <tr><td>Taman Suropati</td><td>公园</td><td>Jl. Taman Suropati</td><td>user_10231</td><td>3</td><td>5</td><td>92</td><td>18 / 0</td><td><span class="tag ok">上架</span></td><td>09-10 09:02</td></tr>
+            </table></div></div>
+        <div class="mask"></div>
+        <div class="drawer"><div class="dh">场所详情 <span class="x">✕</span></div>
+          <div class="card"><div class="ch">基本信息</div><div style="font-weight:700;font-size:14px">Kopi Kalyan <span class="tag ok" style="margin-left:6px">上架</span></div></div>
+          <div class="card"><div class="ch">照片 <span style="color:var(--muted);font-weight:400">6</span></div><div class="imgs"><div class="ph" style="width:64px;height:64px">图</div><div class="ph" style="width:64px;height:64px">图</div></div></div>
+          <div class="card" style="border-color:var(--brand-line)"><div class="ch">专属章</div>
+            <div class="stamp-wrap">
+              <div class="stamp-prev skl" style="background:linear-gradient(90deg,#EEF0F3,#F7F8FA,#EEF0F3);border:1.5px solid var(--line)"></div>
+              <div style="flex:1"><div style="font-size:13px;color:var(--ink);font-weight:600">上传中…</div><div style="font-size:12px;color:var(--muted);margin-top:3px">kopi-kalyan-stamp.png</div></div>
+            </div></div>
+          <div class="card"><div class="ch">评论 <span style="color:var(--muted);font-weight:400">12</span></div></div>
+          <div class="card"><div class="ch">打卡</div><div style="font-size:20px;font-weight:800">148</div></div>
+          <div class="opbar" style="margin-top:0"><span class="btn gh sm">编辑</span><span class="btn gh sm">下架</span><span class="btn gh sm">合并</span></div>
+        </div>
+      </div></div></div>
+      <div class="frame-cap">局部态，<b>只有这个区块在 loading</b>，不遮整个抽屉、其余区块仍可读。沿用抽屉内既有的 htmx 局部替换。</div></div>
+
+    <div class="frame"><div class="frame-tag"><b>C3</b>已上传态（预览 + 替换 + 移除）</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▾</span></div><div class="it">内容管理</div><div class="it">评论管理</div><div class="it">顶置管理</div><div class="it">内容标签</div><div class="it">种子内容发布</div><div class="it on">场所管理</div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▸</span></div><div class="sp"></div></div>
+        <div class="mainc"><div class="top"><span class="ttl">场所管理</span><span class="sp"></span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div><div class="cont"><div class="fbar"><span class="inp" style="width:220px">搜索名称或地址</span><span class="sel" style="width:130px">全部类型</span><span class="sel" style="width:130px">全部状态</span><span class="btn sm">查询</span><span class="sp" style="flex:1"></span><span class="btn sm">＋ 新建场所</span></div>
+            <table class="mk-t"><tr><th>名称</th><th>类型</th><th>文字地址</th><th>标记人</th><th>照片</th><th>评论</th><th>打卡</th><th>推荐/不推荐</th><th>状态</th><th>创建时间</th></tr>
+              <tr class="sel"><td>Kopi Kalyan</td><td>咖啡店</td><td>Jl. Senopati No.42</td><td>TailTopia Official</td><td>6</td><td>12</td><td>148</td><td>31 / 2</td><td><span class="tag ok">上架</span></td><td>09-12 14:20</td></tr>
+              <tr><td>Taman Suropati</td><td>公园</td><td>Jl. Taman Suropati</td><td>user_10231</td><td>3</td><td>5</td><td>92</td><td>18 / 0</td><td><span class="tag ok">上架</span></td><td>09-10 09:02</td></tr>
+            </table></div></div>
+        <div class="mask"></div>
+        <div class="drawer"><div class="dh">场所详情 <span class="x">✕</span></div>
+          <div class="card"><div class="ch">基本信息</div><div style="font-weight:700;font-size:14px">Kopi Kalyan <span class="tag ok" style="margin-left:6px">上架</span></div></div>
+          <div class="card"><div class="ch">照片 <span style="color:var(--muted);font-weight:400">6</span></div><div class="imgs"><div class="ph" style="width:64px;height:64px">图</div><div class="ph" style="width:64px;height:64px">图</div></div></div>
+          <div class="card" style="border-color:var(--brand-line)"><div class="ch">专属章</div>
+            <div class="stamp-wrap">
+              <div class="stamp-prev has">章</div>
+              <div style="flex:1"><div style="font-size:13px;color:var(--ink);font-weight:600">已设置专属章</div><div style="font-size:12px;color:var(--muted);margin-top:3px" class="num">09-30 15:12 由 Hex 上传</div></div>
+              <div style="display:flex;gap:8px"><span class="btn gh sm">替换</span><span class="btn gh sm" style="color:var(--danger);border-color:#E8C4C0">移除</span></div>
+            </div>
+            <div class="stamp-note">换章对<b>已经盖出去的章</b>同样生效——同一场所所有用户看到的都会变，不只影响新打卡。</div></div>
+          <div class="card"><div class="ch">评论 <span style="color:var(--muted);font-weight:400">12</span></div></div>
+          <div class="card"><div class="ch">打卡</div><div style="font-size:20px;font-weight:800">148</div></div>
+          <div class="opbar" style="margin-top:0"><span class="btn gh sm">编辑</span><span class="btn gh sm">下架</span><span class="btn gh sm">合并</span></div>
+        </div>
+      </div></div></div>
+      <div class="frame-cap">那条黄色说明<b>常驻展示</b>，不是 hover 才出现：章是场所的属性而非打卡快照，换章对已经盖出去的章同样生效——这是运营最容易误解的一条。</div></div>
+
+    <div class="frame"><div class="frame-tag"><b>C4</b>上传失败</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▾</span></div><div class="it">内容管理</div><div class="it">评论管理</div><div class="it">顶置管理</div><div class="it">内容标签</div><div class="it">种子内容发布</div><div class="it on">场所管理</div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▸</span></div><div class="sp"></div></div>
+        <div class="mainc"><div class="top"><span class="ttl">场所管理</span><span class="sp"></span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div><div class="cont"><div class="fbar"><span class="inp" style="width:220px">搜索名称或地址</span><span class="sel" style="width:130px">全部类型</span><span class="sel" style="width:130px">全部状态</span><span class="btn sm">查询</span><span class="sp" style="flex:1"></span><span class="btn sm">＋ 新建场所</span></div>
+            <table class="mk-t"><tr><th>名称</th><th>类型</th><th>文字地址</th><th>标记人</th><th>照片</th><th>评论</th><th>打卡</th><th>推荐/不推荐</th><th>状态</th><th>创建时间</th></tr>
+              <tr class="sel"><td>Kopi Kalyan</td><td>咖啡店</td><td>Jl. Senopati No.42</td><td>TailTopia Official</td><td>6</td><td>12</td><td>148</td><td>31 / 2</td><td><span class="tag ok">上架</span></td><td>09-12 14:20</td></tr>
+              <tr><td>Taman Suropati</td><td>公园</td><td>Jl. Taman Suropati</td><td>user_10231</td><td>3</td><td>5</td><td>92</td><td>18 / 0</td><td><span class="tag ok">上架</span></td><td>09-10 09:02</td></tr>
+            </table></div></div>
+        <div class="mask"></div>
+        <div class="drawer"><div class="dh">场所详情 <span class="x">✕</span></div>
+          <div class="card"><div class="ch">基本信息</div><div style="font-weight:700;font-size:14px">Kopi Kalyan <span class="tag ok" style="margin-left:6px">上架</span></div></div>
+          <div class="card"><div class="ch">照片 <span style="color:var(--muted);font-weight:400">6</span></div><div class="imgs"><div class="ph" style="width:64px;height:64px">图</div></div></div>
+          <div class="card" style="border-color:var(--danger)"><div class="ch">专属章</div>
+            <div class="stamp-wrap" style="border-color:var(--danger);background:#FFFBFB">
+              <div class="stamp-prev bad">✕</div>
+              <div style="flex:1"><div style="font-size:13px;color:var(--danger);font-weight:700" role="alert">上传失败：文件格式不支持</div><div style="font-size:12px;color:var(--ink-2);margin-top:3px;line-height:1.55">stamp.jpg —— 章面必须是 <b>PNG 透明图</b>。JPEG 不支持透明通道，传上去会在护照页上变成一个白底方块。</div></div>
+              <span class="btn sm">重新选择</span>
+            </div></div>
+          <div class="card"><div class="ch">评论 <span style="color:var(--muted);font-weight:400">12</span></div></div>
+          <div class="card"><div class="ch">打卡</div><div style="font-size:20px;font-weight:800">148</div></div>
+          <div class="opbar" style="margin-top:0"><span class="btn gh sm">编辑</span><span class="btn gh sm">下架</span><span class="btn gh sm">合并</span></div>
+        </div>
+      </div></div></div>
+      <div class="frame-cap">后台<b>不做规格校验</b>（1:1／单色／圆形一律不拦），只有上传通道自带的类型与大小限制。错误文案必须写明<b>具体哪一项不合格 + 为什么</b>——照既有标签图标上传的教训：只说「格式不支持」，运营会换个格式再试一次。</div></div>
+
+    <div class="frame"><div class="frame-tag"><b>C5</b>移除 · 二次确认</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▾</span></div><div class="it">内容管理</div><div class="it">评论管理</div><div class="it">顶置管理</div><div class="it">内容标签</div><div class="it">种子内容发布</div><div class="it on">场所管理</div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▸</span></div><div class="sp"></div></div>
+        <div class="mainc"><div class="top"><span class="ttl">场所管理</span><span class="sp"></span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div><div class="cont"><div class="fbar"><span class="inp" style="width:220px">搜索名称或地址</span><span class="sel" style="width:130px">全部类型</span><span class="sel" style="width:130px">全部状态</span><span class="btn sm">查询</span><span class="sp" style="flex:1"></span><span class="btn sm">＋ 新建场所</span></div>
+            <table class="mk-t"><tr><th>名称</th><th>类型</th><th>文字地址</th><th>标记人</th><th>照片</th><th>评论</th><th>打卡</th><th>推荐/不推荐</th><th>状态</th><th>创建时间</th></tr>
+              <tr class="sel"><td>Kopi Kalyan</td><td>咖啡店</td><td>Jl. Senopati No.42</td><td>TailTopia Official</td><td>6</td><td>12</td><td>148</td><td>31 / 2</td><td><span class="tag ok">上架</span></td><td>09-12 14:20</td></tr>
+              <tr><td>Taman Suropati</td><td>公园</td><td>Jl. Taman Suropati</td><td>user_10231</td><td>3</td><td>5</td><td>92</td><td>18 / 0</td><td><span class="tag ok">上架</span></td><td>09-10 09:02</td></tr>
+            </table></div></div>
+        <div class="mask"></div>
+        <div class="drawer"><div class="dh">场所详情 <span class="x">✕</span></div>
+          <div class="card"><div class="ch">基本信息</div><div style="font-weight:700;font-size:14px">Kopi Kalyan <span class="tag ok" style="margin-left:6px">上架</span></div></div>
+          <div class="card"><div class="ch">专属章</div><div class="stamp-wrap"><div class="stamp-prev has">章</div><div style="flex:1"><div style="font-size:13px;font-weight:600">已设置专属章</div></div><div style="display:flex;gap:8px"><span class="btn gh sm">替换</span><span class="btn gh sm" style="color:var(--danger);border-color:#E8C4C0">移除</span></div></div></div>
+          <div class="card"><div class="ch">打卡</div><div style="font-size:20px;font-weight:800">148</div></div>
+        </div>
+        <div class="mask" style="background:rgba(31,35,48,.25)"></div>
+        <div class="confirm" style="width:480px"><h5>确认移除这枚专属章？</h5>
+          <p>移除后本场所回落到「<b>咖啡店</b>」默认章。<b style="color:var(--danger)">已经盖在用户护照上的 148 枚章会一并变成默认章</b>，不只影响之后的新打卡。素材移除后不可恢复，需要重新上传。</p>
+          <div style="display:flex;gap:10px;justify-content:flex-end"><span class="btn gh">取消</span><span class="btn dg">确认移除</span></div></div>
+      </div></div></div>
+      <div class="frame-cap">移除须二次确认，沿用既有 <code>data-confirm</code> 模式。<b>文案必须写明影响已盖出的章</b>——移除后该场所已盖在用户护照上的章会一并回落默认章，不只影响之后的新打卡。</div></div>
+
+    <div class="frame"><div class="frame-tag"><b>C6</b>移除成功（回落默认章 + toast）</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▾</span></div><div class="it">内容管理</div><div class="it">评论管理</div><div class="it">顶置管理</div><div class="it">内容标签</div><div class="it">种子内容发布</div><div class="it on">场所管理</div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▸</span></div><div class="sp"></div></div>
+        <div class="mainc"><div class="top"><span class="ttl">场所管理</span><span class="sp"></span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div><div class="cont"><div class="fbar"><span class="inp" style="width:220px">搜索名称或地址</span><span class="sel" style="width:130px">全部类型</span><span class="sel" style="width:130px">全部状态</span><span class="btn sm">查询</span><span class="sp" style="flex:1"></span><span class="btn sm">＋ 新建场所</span></div>
+            <table class="mk-t"><tr><th>名称</th><th>类型</th><th>文字地址</th><th>标记人</th><th>照片</th><th>评论</th><th>打卡</th><th>推荐/不推荐</th><th>状态</th><th>创建时间</th></tr>
+              <tr class="sel"><td>Kopi Kalyan</td><td>咖啡店</td><td>Jl. Senopati No.42</td><td>TailTopia Official</td><td>6</td><td>12</td><td>148</td><td>31 / 2</td><td><span class="tag ok">上架</span></td><td>09-12 14:20</td></tr>
+              <tr><td>Taman Suropati</td><td>公园</td><td>Jl. Taman Suropati</td><td>user_10231</td><td>3</td><td>5</td><td>92</td><td>18 / 0</td><td><span class="tag ok">上架</span></td><td>09-10 09:02</td></tr>
+            </table></div></div>
+        <div class="mask"></div>
+        <div class="drawer"><div class="dh">场所详情 <span class="x">✕</span></div>
+          <div class="card"><div class="ch">基本信息</div><div style="font-weight:700;font-size:14px">Kopi Kalyan <span class="tag ok" style="margin-left:6px">上架</span></div></div>
+          <div class="card"><div class="ch">照片 <span style="color:var(--muted);font-weight:400">6</span></div><div class="imgs"><div class="ph" style="width:64px;height:64px">图</div></div></div>
+          <div class="card"><div class="ch">专属章</div>
+            <div class="stamp-wrap"><div class="stamp-prev none">默认章</div><div style="flex:1"><div style="font-size:13px;color:var(--ink);font-weight:600">当前使用「咖啡店」默认章</div><div style="font-size:12px;color:var(--muted);margin-top:3px">未上传专属章的场所走按类型的默认章，这是正常状态。</div></div><span class="btn sm">上传专属章</span></div></div>
+          <div class="card"><div class="ch">评论 <span style="color:var(--muted);font-weight:400">12</span></div></div>
+          <div class="card"><div class="ch">打卡</div><div style="font-size:20px;font-weight:800">148</div></div>
+          <div class="opbar" style="margin-top:0"><span class="btn gh sm">编辑</span><span class="btn gh sm">下架</span><span class="btn gh sm">合并</span></div>
+        </div>
+        <div class="toast">专属章已移除，本场所回落默认章</div>
+      </div></div></div>
+      <div class="frame-cap">视觉上等于回到空态，单出一帧是为了定 toast 文案。审计动作码 <code>PLACE_STAMP_REMOVED</code>。</div></div>
+
+    <div class="frame"><div class="frame-tag"><b>C7</b>已合并场所（MERGED）· 变体</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▾</span></div><div class="it">内容管理</div><div class="it">评论管理</div><div class="it">顶置管理</div><div class="it">内容标签</div><div class="it">种子内容发布</div><div class="it on">场所管理</div><div class="grp">👥 用户 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▸</span></div><div class="sp"></div></div>
+        <div class="mainc"><div class="top"><span class="ttl">场所管理</span><span class="sp"></span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div><div class="cont"><div class="fbar"><span class="inp" style="width:220px">搜索名称或地址</span><span class="sel" style="width:130px">全部类型</span><span class="sel" style="width:130px">全部状态</span><span class="btn sm">查询</span><span class="sp" style="flex:1"></span><span class="btn sm">＋ 新建场所</span></div>
+            <table class="mk-t"><tr><th>名称</th><th>类型</th><th>文字地址</th><th>标记人</th><th>照片</th><th>评论</th><th>打卡</th><th>推荐/不推荐</th><th>状态</th><th>创建时间</th></tr>
+              <tr class="sel"><td>Kopi Kalyan（旧）</td><td>咖啡店</td><td>Jl. Senopati No.42</td><td>TailTopia Official</td><td>6</td><td>12</td><td>148</td><td>31 / 2</td><td><span class="tag" style="background:#EDEEF1;color:var(--muted)">已合并</span></td><td>09-12 14:20</td></tr>
+              <tr><td>Taman Suropati</td><td>公园</td><td>Jl. Taman Suropati</td><td>user_10231</td><td>3</td><td>5</td><td>92</td><td>18 / 0</td><td><span class="tag ok">上架</span></td><td>09-10 09:02</td></tr>
+            </table></div></div>
+        <div class="mask"></div>
+        <div class="drawer"><div class="dh">场所详情 <span class="x">✕</span></div>
+          <div class="card"><div class="ch">基本信息</div>
+            <div style="font-weight:700;font-size:14px">Kopi Kalyan（旧） <span class="tag" style="margin-left:6px;background:#EDEEF1;color:var(--muted)">已合并</span></div>
+            <div style="font-size:12.5px;margin-top:6px">已并入 → <span style="color:var(--brand);font-weight:600">Kopi Kalyan</span></div></div>
+          <div class="card" style="opacity:.62"><div class="ch">专属章</div>
+            <div class="stamp-wrap"><div class="stamp-prev has" style="filter:grayscale(1);opacity:.7">章</div><div style="flex:1"><div style="font-size:13px;color:var(--ink);font-weight:600">素材已随场所归档</div><div style="font-size:12px;color:var(--muted);margin-top:3px">合并后以保留方场所的专属章为准，本场所的章不再生效。</div></div></div></div>
+          <div class="card" style="opacity:.62"><div class="ch">评论 <span style="color:var(--muted);font-weight:400">12</span></div></div>
+          <div class="card" style="opacity:.62"><div class="ch">打卡</div><div style="font-size:20px;font-weight:800">148</div></div>
+        </div>
+      </div></div></div>
+      <div class="frame-cap">既有抽屉在 MERGED 下已隐藏全部处置动作（照片删除、编辑、下架都不显示），专属章区同口径<b>只读、无按钮</b>，并说明素材已随场所归档、以保留方场所的章为准。</div></div>
+
+  </div>
+</div>
+
+<!-- ============ 泳道 D ============ -->
+<div class="lane">
+  <h2>泳道 D · 👤 已购解锁查询（AB-23）</h2>
+  <p class="desc">落点：👥 用户 → 用户 <code>/admin/users</code>，点行拉出的用户详情抽屉（整页详情已退役）。<b>本条目须把该抽屉由 480px 加宽至 600px</b>——六个页签在三种语言下都放不下 480（见 E1）。场所等其余抽屉维持 480 不变。现有五页签之后<b>新增第六个页签「已购解锁」</b>。沿用该抽屉「页签一次性渲染、切页签不再请求」的既有模式。</p>
+  <div class="flow">
+    <em>主路径：</em><i>用户列表点行 → 用户详情抽屉 → 切到第六页签 →</i> <s>D1</s> 有数据态 <i>／</i> <s>D2</s> 空态
+  </div>
+  <div class="frames">
+
+    <div class="frame"><div class="frame-tag"><b>D1</b>用户详情抽屉 · 已购解锁页签（有数据）</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▸</span></div><div class="grp">👥 用户 <span class="ar">▾</span></div><div class="it on">用户</div><div class="it">用户标签</div><div class="it">虚拟账号</div><div class="grp">💰 订单与资金 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▸</span></div><div class="sp"></div></div>
+        <div class="mainc"><div class="top"><span class="ttl">用户</span><span class="sp"></span><span class="lang">语言 <b>中文</b> ▾</span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div><div class="cont"><div class="fbar"><span class="inp" style="width:220px">关键词（昵称 / 邮箱）</span><span class="inp" style="width:160px">手机号</span><span class="btn sm">查询</span></div><div class="sum"><div class="s"><div class="k">用户总数</div><div class="v">12,480</div></div><div class="s"><div class="k">本月新增</div><div class="v">1,032</div></div><div class="s"><div class="k">已建档</div><div class="v">7,215</div></div><div class="s"><div class="k">已注销</div><div class="v">86</div></div></div><table class="mk-t"><tr><th>ID</th><th>昵称</th><th>注册邮箱</th><th>注册时间</th><th>状态</th></tr><tr class="sel"><td>10231</td><td>Rina</td><td>rina@example.com</td><td>08-14 10:22</td><td><span class="tag ok">正常</span></td></tr><tr><td>10232</td><td>Budi</td><td>budi@example.com</td><td>08-14 11:05</td><td><span class="tag ok">正常</span></td></tr></table></div></div>
+        <div class="mask"></div>
+        <div class="drawer wide"><div class="dh">Rina <span style="color:var(--muted);font-weight:400;margin-left:6px">#10231</span> <span class="tag ok" style="margin-left:8px">正常</span><span class="x">✕</span></div>
+          <div class="tabs" style="margin-bottom:12px"><span class="t">基本信息</span><span class="t">宠物档案</span><span class="t">发布内容</span><span class="t">历史问诊</span><span class="t">处置</span><span class="t on">已购解锁</span></div><div class="ug"><div class="gh">KTP 卡高清<span class="cnt">1</span></div><table class="mk-t"><tr><th>卡</th><th>解锁时间</th></tr><tr><td>KTP #4821 · Mochi</td><td>09-12 14:33</td></tr></table></div><div class="ug"><div class="gh">护照 · 快照<span class="cnt">2</span></div><table class="mk-t"><tr><th>宠物</th><th>版本</th><th>章数</th><th>解锁时间</th></tr><tr><td>Mochi</td><td>v3</td><td>12 枚</td><td>09-28 20:14</td></tr><tr><td>Mochi</td><td>v1</td><td>5 枚</td><td>09-15 18:02</td></tr></table></div><div style="font-size:11.5px;color:var(--muted);margin:-4px 0 10px;line-height:1.55">快照是全 App 唯一会重复收费的 SKU——盖了新章后想要含新章的版本需再次解锁，旧版本永久保留可回看。</div><div class="ug"><div class="gh">护照 · 登机牌<span class="cnt">2</span></div><table class="mk-t"><tr><th>宠物</th><th>场所</th><th>解锁时间</th></tr><tr><td>Mochi</td><td>Kopi Kalyan</td><td>09-20 12:41</td></tr><tr><td>Mochi</td><td>Taman Suropati</td><td>09-22 09:18</td></tr></table></div><div class="ug"><div class="gh">Tailsonality 结果<span class="cnt">1</span></div><table class="mk-t"><tr><th>宠物</th><th>代号</th><th>解锁时间</th></tr><tr><td>Mochi</td><td>ENTJ-H</td><td>09-25 21:07</td></tr></table></div>
+        </div>
+      </div></div></div>
+      <div class="frame-cap"><b>本抽屉须由 480px 加宽至 600px</b>：六个页签在三种语言下都放不下 480（见 E1），加宽是唯一不牺牲既有五个页签可读性、也不把第六项藏进横向滚动的方案。四组按 SKU 分卡、各带计数徽标，时间与数量列用等宽数字上下对齐。<b>只读、无任何按钮</b>——撤销解锁／人工补发／退款都不在本版本。数据读业务表不读支付表，所以 PawCoin 付的也查得到。</div></div>
+
+    <div class="frame"><div class="frame-tag"><b>D2</b>已购解锁 · 空态</div>
+      <div class="desk-shell"><div class="mk"><div class="mkwrap" style="display:flex;width:1440px">
+        <div class="nav"><div class="logo">🐾 TailTopia 运营</div><div class="grp">📊 概览</div><div class="grp">📥 待办中心 <span class="n">12</span></div><div class="grp">✍️ 内容 <span class="ar">▸</span></div><div class="grp">👥 用户 <span class="ar">▾</span></div><div class="it on">用户</div><div class="it">用户标签</div><div class="it">虚拟账号</div><div class="grp">💰 订单与资金 <span class="ar">▸</span></div><div class="grp">⚙️ 配置与安全 <span class="ar">▸</span></div><div class="sp"></div></div>
+        <div class="mainc"><div class="top"><span class="ttl">用户</span><span class="sp"></span><span class="lang">语言 <b>中文</b> ▾</span><span class="acct"><span class="av">H</span>Hex <span class="role">超级管理员</span> ▾</span></div><div class="cont"><div class="fbar"><span class="inp" style="width:220px">关键词（昵称 / 邮箱）</span><span class="inp" style="width:160px">手机号</span><span class="btn sm">查询</span></div><div class="sum"><div class="s"><div class="k">用户总数</div><div class="v">12,480</div></div><div class="s"><div class="k">本月新增</div><div class="v">1,032</div></div><div class="s"><div class="k">已建档</div><div class="v">7,215</div></div><div class="s"><div class="k">已注销</div><div class="v">86</div></div></div><table class="mk-t"><tr><th>ID</th><th>昵称</th><th>注册邮箱</th><th>注册时间</th><th>状态</th></tr><tr><td>10231</td><td>Rina</td><td>rina@example.com</td><td>08-14 10:22</td><td><span class="tag ok">正常</span></td></tr><tr class="sel"><td>10232</td><td>Budi</td><td>budi@example.com</td><td>08-14 11:05</td><td><span class="tag ok">正常</span></td></tr></table></div></div>
+        <div class="mask"></div>
+        <div class="drawer wide"><div class="dh">Budi <span style="color:var(--muted);font-weight:400;margin-left:6px">#10232</span> <span class="tag ok" style="margin-left:8px">正常</span><span class="x">✕</span></div>
+          <div class="tabs" style="margin-bottom:12px"><span class="t">基本信息</span><span class="t">宠物档案</span><span class="t">发布内容</span><span class="t">历史问诊</span><span class="t">处置</span><span class="t on">已购解锁</span></div>
+          <div class="card card-full" style="text-align:center;padding:44px 20px;background:#FCFCFD">
+            <div style="font-size:13.5px;color:var(--ink);font-weight:600">该用户还没有任何已购解锁</div>
+            <div style="font-size:12.5px;color:var(--muted);margin-top:7px;line-height:1.6">KTP 高清、护照快照、登机牌、Tailsonality 结果均未购买。</div></div>
+        </div>
+      </div></div></div>
+      <div class="frame-cap"><b>绝大多数用户都是这个状态</b>，空态要读起来正常、不像出错或加载失败。<b>刻意不给「去购买」之类的行动按钮</b>——本页是客服查单的只读视图，加按钮既无对象也无权限。</div></div>
+
+  </div>
+</div>
+
+<!-- ============ 泳道 E ============ -->
+<div class="lane">
+  <h2>泳道 E · 📐 规格与说明（非页面）</h2>
+  <p class="desc">规格图与「不出屏」说明，供研发对照，不是要实现的界面。</p>
+  <div class="frames">
+
+    <div class="frame"><div class="frame-tag"><b>E1</b>三语占位校验 · 第六页签三语全部溢出 → <span style="color:var(--ok)">加宽至 600px</span></div>
+      <div class="spec-shell">
+        <h4>◇ 用户详情抽屉 · 页签条宽度（<b>加宽前</b>：抽屉 480px、内容区可用约 440px；页签 13.5px 字体 + 左右各 16px padding + 项间 4px）</h4>
+        <table>
+          <tr><th style="width:96px">页签</th><th>中文</th><th>English</th><th>Bahasa Indonesia</th></tr>
+          <tr><td>1</td><td>基本信息</td><td>Profile</td><td>Profil</td></tr>
+          <tr><td>2</td><td>宠物档案</td><td>Pets</td><td>Hewan</td></tr>
+          <tr><td>3</td><td>发布内容</td><td>Posts</td><td>Konten</td></tr>
+          <tr><td>4</td><td>历史问诊</td><td>Consults</td><td>Konsultasi</td></tr>
+          <tr><td>5</td><td>处置</td><td>Actions</td><td>Tindakan</td></tr>
+          <tr><td><b>6（新增）</b></td><td><b>已购解锁</b></td><td><b>Purchases</b></td><td><b>Pembelian</b>（待定）</td></tr>
+        </table>
+        <h4 style="margin-top:14px">◇ 实测总宽（Chrome 渲染实测）</h4>
+        <table>
+          <tr><th style="width:120px">语言</th><th>五页签（现状）</th><th>六页签（本版本）</th><th style="width:118px;white-space:nowrap">对 440px 的差</th></tr>
+          <tr><td>中文</td><td><span class="bar" style="width:186px"></span> 约 403px</td><td><span class="bar over" style="width:226px"></span> 约 <b>489px</b></td><td style="white-space:nowrap"><b style="color:var(--danger)">超出约 49px</b></td></tr>
+          <tr><td>English</td><td><span class="bar" style="width:174px"></span> 约 377px</td><td><span class="bar over" style="width:218px"></span> 约 <b>472px</b></td><td style="white-space:nowrap"><b style="color:var(--danger)">超出约 32px</b></td></tr>
+          <tr><td><b>Bahasa Indonesia</b></td><td><span class="bar" style="width:187px"></span> 约 405px</td><td><span class="bar over" style="width:231px"></span> 约 <b>500px</b></td><td style="white-space:nowrap"><b style="color:var(--danger)">超出约 60px</b></td></tr>
+        </table>
+        <div style="background:#E7F6EC;border:1px solid #B6E0C4;border-radius:8px;padding:10px 13px;margin-top:10px;font-size:12.5px;color:#15663A">
+          <b>✅ 处置：加宽用户详情抽屉 480 → 600px。</b><br>
+          未采用「换更短的三语文案」——中文也超，等于为第六项牺牲既有五项的可读性，且三语要同时缩、印尼语缩无可缩，影响面还超出本条目；<br>
+          未采用「页签条横向滚动」——第六项会默认落在视野外，而让客服看见这个入口正是 AB-23 的全部价值。<br>
+          取 600 而非刚好够的 560：600 可用约 560px，印尼语留约 60px 余量；560 只剩约 20px，等于把同样的问题推迟到下次加文案时再爆。<br>
+          <b>连带：后台将出现两种抽屉宽度</b>（用户详情 600 / 其余 480）。这是有意的取舍，不借本条目统一加宽全部抽屉。
+        </div>
+      </div>
+      <div class="frame-cap">ID 与 EN 文案取自 <code>messages_id.properties</code> / <code>messages_en.properties</code> 真实值；第六页签的三语为拟稿，需随开发补进语言包。宽度为 Chrome 实测渲染结果。</div></div>
+
+    <div class="frame"><div class="frame-tag"><b>E2</b>本版本<b>不出屏</b>的改动（纯后端 / 数据层）</div>
+      <div class="spec-shell">
+        <h4>◇ 以下三项属 PRD 范围，但不是 UI 改动，本稿不出页面</h4>
+        <table>
+          <tr><th style="width:190px">改动</th><th>为什么不出屏</th></tr>
+          <tr><td><b>首页看板付费口径扩充</b><br>（AB-15A 变更）</td><td>看板卡片的形态完全不变——仍是两口径 tab、人数/次数双序列。改的是 <code>spend_events</code> CTE 的取数范围（为三个新 SKU 各加两段）与配套取数 SQL。<b>画出来会和线上现状一模一样，只会让研发以为要改页面。</b></td></tr>
+          <tr><td><b>新增三个 PaymentPurpose 枚举值</b><br>与 <code>payment_intents</code> 的 CHECK</td><td>数据层。它在 UI 上的<b>唯一</b>体现是支付记录页下拉多三项，已由 B1 承载。</td></tr>
+          <tr><td><b>Tailsonality 定价列的迁移初始值</b></td><td>迁移脚本，无界面。四行的目标价由运营在 A1 那张卡上手改（上线前检查项）。</td></tr>
+        </table>
+        <h4 style="margin-top:14px">◇ 顺带记录：本版本明确不做、页面上不得出现的东西</h4>
+        <table>
+          <tr><th style="width:190px">不做</th><th>页面含义</th></tr>
+          <tr><td>0 = 限时免费解锁</td><td>定价卡<b>不得出现「配 0 = 限免」字样</b>（V1.3.0 旧稿有，已作废）；0 是校验错误，见 A6</td></tr>
+          <tr><td>虚拟商品退款通道</td><td>已购解锁页签<b>不得出现退款 / 撤销 / 补发按钮</b>，见 D1</td></tr>
+          <tr><td>独立的解锁记录页</td><td>不新增菜单项；跨用户查询由支付记录页的用途筛选承载</td></tr>
+          <tr><td>按 SKU 拆分的看板视图</td><td>概览页不加任何新卡片</td></tr>
+        </table>
+      </div>
+      <div class="frame-cap">本帧用于<b>防止研发按 PRD 逐条找对应页面时，把后端改动误判成缺了几屏设计</b>。</div></div>
+
+  </div>
+</div>
+
+</body>
+</html>

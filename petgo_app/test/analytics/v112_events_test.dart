@@ -298,6 +298,23 @@ void main() {
         // 名字由 PRD §4 定死为 `detail_page_dwell`（AD-A23：实现不得改名），扩表、不改名。
         // ⚠️ 新模块入表，不是为遗留事件放宽规则。
         'detail_',
+        // Tailsonality 性格测试（V1.3.2 batch-a FR-117 · PRD §4 E-11 · AD-19）。模块是「性格测试」——
+        // 入口在聚合页、答题 / 结果 / 配型 / 列表是独立页面组，挂到任何单页前缀下都会误导。
+        // 名字由 PRD §4 定死（tailsonality_started / tailsonality_completed …），扩表、不改名。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
+        'tailsonality_',
+        // 宠物护照 / 登机牌分享卡（V1.3.2 batch-a Story 4.3 · PRD §4 E-16 `passport_card_shared`）。
+        // 1.2 的 passport_issued / passport_stamped 是服务端事件、不经过这张表，所以 App 侧此前没有这个前缀。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
+        'passport_',
+        // 四类留念卡（结果 / 配型 / 护照 / 登机牌）共用的分享预览出图事件（待确认 4.3，2026-10-02）。
+        // 四类卡同一个预览页、同一个出图时机，按 card_type 分；挂任一业务前缀都会让另外三类无处可放。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
+        'keepsake_',
+        // 「Pamer di postingan」一键发帖入口（待确认 4.12，2026-10-02）：四个入口跨 Tailsonality / 登机牌两个模块，
+        // 按 source 分；`post_` 已被帖子分享卡占用，混进去会和帖子出站分享的漏斗搅在一起。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
+        'brag_',
         // KTP（身份证高清图）付费漏斗（2026-09-25，运营按截图需求定名 ktp_unlock_*）。
         // 🔴 与 `id_card_` 刻意分开：那一组是卡面**分享**（传播指标），这一组是**付费转化**
         //    （收入指标），成功 / 支付侧失败还由服务端报。混在一个前缀下，看板上分享数与付费数
@@ -386,6 +403,25 @@ void main() {
         // 🔴 刻意不用 `_dismissed`：那是用户自己放弃（没有结局）；也不用 `_blocked`：那是门控拦截。
         //    App 端只报余额不足 / 网络两类，二维码超时与网关失败由服务端报同名事件。
         '_failed',
+        // 二次确认后才生效（V1.3.2 batch-a PRD E-11D `tailsonality_retake_confirmed`）：`_confirmed` = 用户在
+        // 确认抽屉里**点了确认**，与 `_tapped`（点了入口）分开 —— 这条的价值正在于「看到代价说明后仍然要做」。
+        // 取消不报。名字由 PRD §4 定死，扩表、不改名。
+        '_confirmed',
+        // 进入一个独立流程页（V1.3.2 batch-a PRD E-11C `tailsonality_match_entered`）：`_entered` = 用户**主动点进**
+        // 配型页（入口在结果页引流卡），与被动曝光的 `_viewed` 分开 —— 这条是配型漏斗的第一格。名字由 PRD §4 定死。
+        // 用户在付费抽屉里选定渠道并确认（V1.3.2 batch-a Story 3.2 `tailsonality_unlock_initiated`）：
+        // `_initiated` = 发起付款（尚未成交；成交只由服务端报 `_unlocked`），与 `_started`（流程开头）区分。
+        // 用户把一个已解锁结果设为展示中的角色小标（V1.3.2 batch-a Story 3.3 `tailsonality_badge_equipped`）：
+        // `_equipped` = **服务端确认成功后**才报，与 `_selected`（界面上选中）区分。
+        '_equipped',
+        '_initiated',
+        // 用户在挽留弹窗里明确放弃（V1.3.2 batch-a Story 3.2 `tailsonality_paywall_abandoned`）：
+        // `_abandoned` = 看过付费墙后主动离开，与 `_dismissed`（关掉提示）语义不同。
+        '_abandoned',
+        '_entered',
+        // 用户设定了一个账号级取值（V1.3.2 batch-a PRD E-11C `tailsonality_owner_type_set`）：`_set` = **保存成功**
+        // 之后才报（失败不报），描述结果而非点击。名字由 PRD §4 定死，扩表、不改名。
+        '_set',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

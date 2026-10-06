@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../tailsonality/presentation/tailsonality_routes.dart';
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -37,6 +38,7 @@ import 'widgets/diary_header.dart';
 import 'widgets/pet_recommendation_grid.dart';
 import 'widgets/recommended_pet_card.dart'
     show kPetRecommendFromDiaryEmpty, kPetRecommendFromDiaryNonOwner;
+import 'widgets/place_checkin_tap.dart';
 import 'widgets/share_fab.dart';
 import 'widgets/timeline_item_tile.dart';
 import '../../shop/presentation/widgets/repurchase_zones_v2.dart';
@@ -452,13 +454,20 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
             // 未庆祝角标（V1.3.0 Story 1.5）：搭 stats 这一次请求，不为它多发一次。
             milestoneUncelebrated: stats?.milestoneUncelebrated ?? 0,
             titleAction: _shareButton(),
+            // 「只看 Diary」开关放宠物卡右上空白处（2026-10-06 产品）。
+            petCardAction: _diaryOnlyToggle(l10n),
             // 迁移引导蒙层的高亮框位置从这里量（Story 5.4）。只量位置，不改行为。
             insightsEntryAnchor: _insightsEntryAnchor,
             onEditProfile: widget.onEditProfile,
             // V1.3.0 Story 5.1：入口卡指向聚合页（身份证是其中一张卡）。
             // ⚠️ 逐条改，**不做前缀字符串替换** —— `/profile/id-cards/*` 多卡子路由
             // 与它只差一个字母，替换会误伤（AD-A17.7）。
-            onOpenIdCard: () => context.push(PetInsightsRoutes.hub),
+            // V1.3.2 Story 2.7 复审：聚光区可点穿 —— 蒙层在时点入口卡先按关闭处理（置位），
+            // 否则进了聚合页第一层蒙层还挂在根 Overlay 上，与第二次引导叠成两层。
+            onOpenIdCard: () {
+              if (_coachmark != null) _dismissCoachmark();
+              context.push(PetInsightsRoutes.hub);
+            },
             onOpenHealth: () => context.push('/profile/health'),
             onOpenMilestones: () => context.push('/profile/milestones'),
           ),
@@ -556,6 +565,37 @@ class _ArchiveBodyState extends ConsumerState<_ArchiveBody> {
         const SizedBox(width: 7),
         Expanded(child: _toggleBtn('📅 ${l10n.growthArchiveViewCalendar}', _view == _ArchiveView.calendar,
             () => _switchView(_ArchiveView.calendar), const ValueKey('archiveViewCalendar'))),
+      ],
+    );
+  }
+
+  /// 「只看 Diary」开关（宠物卡右上角，竖排「开关 / 标签」）。开 = 只看自己发的帖子（服务端筛，见
+  /// diaryOnlyProvider）；关 = 各类 banner + 帖子全部。开关只作用于时间线：在日历视图拨动时顺带切回时间线。
+  Widget _diaryOnlyToggle(AppLocalizations l10n) {
+    final on = ref.watch(diaryOnlyProvider);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Transform.scale(
+          scale: 0.75,
+          alignment: Alignment.centerRight,
+          child: Switch(
+            key: const ValueKey('diaryOnlySwitch'),
+            value: on,
+            activeThumbColor: AppColors.onAccent,
+            activeTrackColor: AppColors.mint,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            onChanged: (v) {
+              // 2026-10-06 产品：看有多少人用「只看 Diary」、开还是关（docs/reference/analytics-posthog-tracking.md §12.1）。
+              Analytics.capture('diary_only_toggled', {'on': v});
+              ref.read(diaryOnlyProvider.notifier).set(v);
+              if (_view != _ArchiveView.timeline) _switchView(_ArchiveView.timeline);
+            },
+          ),
+        ),
+        Text(l10n.diaryOnlyToggle,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.ink2)),
       ],
     );
   }
@@ -708,7 +748,9 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
       _loadMoreFailed = false;
     });
     try {
-      final page = await ref.read(timelineRepositoryProvider).getTimeline(cursor: _cursor);
+      final page = await ref
+          .read(timelineRepositoryProvider)
+          .getTimeline(cursor: _cursor, diaryOnly: ref.read(diaryOnlyProvider));
       if (!mounted) return;
       // 期间第一页被 invalidate 过 → 这份响应是**旧快照**的下一页。接上去会漏掉刷新边界那条日记，
       // 覆盖游标还会让它再也翻不回来。整份丢弃，一个字段都不改。
@@ -800,6 +842,17 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
           // 不绕聚合页 —— 点一条具体记录却落在一个功能列表上是走回头路。
           context.push(PetInsightsRoutes.idCard);
         };
+      case TimelineItemType.placeCheckinBanner:
+        return placeCheckinTapFor(context, item, report: report);
+      case TimelineItemType.tailsonalityBanner:
+        // V1.3.2 Story 3.3：进该次结果页（作者态才有此条目；token 缺失则不可点）。
+        final token = item.tailsonalityResultToken;
+        return token == null
+            ? null
+            : () {
+                report();
+                context.push(TailsonalityRoutes.result(token));
+              };
     }
   }
 
@@ -867,6 +920,10 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
         }
         // 按月分组：月份变化插入 "Juni 2026" 区标题。
         final tiles = <Widget>[];
+        // 引导卡「记下第一条 Diary」放在**所有条目最上面**（2026-10-06 产品：主人还没发过内容时，
+        // 它是这一页最该被看到的东西，压在一串 banner 底下等于没有）。
+        // 判据：统计栏的内容数为 0（不必翻到底），或已翻到底且确实没有快乐时刻。
+        final noPosts = ref.watch(archiveStatsProvider).asData?.value.happyMomentCount == 0;
         String? lastMonthKey;
         for (var i = 0; i < items.length; i++) {
           final item = items[i];
@@ -906,11 +963,13 @@ class _TimelineViewState extends ConsumerState<_TimelineView> {
         // 永远进不去，引导卡在真机上从未出现过，banner 下方是一大片空白。
         // 判定改为「还没有任何快乐时刻」：banner 照常显示，引导卡追加在它下面。
         // `!_hasMore` 保证只在确实翻到底时才断言「没有」，否则旧照片可能还在后面几页。
-        if (!_hasMore && debutHappy < 0) {
-          tiles.add(Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: _FirstMomentGuideCard(petName: widget.petName),
-          ));
+        if (noPosts || (!_hasMore && debutHappy < 0)) {
+          tiles.insert(
+              0,
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: _FirstMomentGuideCard(petName: widget.petName),
+              ));
         }
         // 底部翻页页脚：加载中转圈 / 失败给重试 / 没有更多则什么都不加。
         if (_loadMoreFailed) {

@@ -34,6 +34,8 @@ public class MilestoneSharePageController {
     private final String downloadUrl;
     private final String iosUrl;
     private final String androidUrl;
+    private final com.tailtopia.profile.service.MilestoneBadgeResolver badges;
+    private final tools.jackson.databind.ObjectMapper json;
 
     public MilestoneSharePageController(MilestoneShareService shareService,
             ProfileService profileService, AccountQueryService accountQueryService,
@@ -41,7 +43,11 @@ public class MilestoneSharePageController {
             @Value("${petgo.card.ios-url:https://apps.apple.com/app/petgo}") String iosUrl,
             @Value("${petgo.card.android-url:https://play.google.com/store/apps/details?id=com.tailtopia.app}")
                     String androidUrl,
-            com.tailtopia.profile.service.CardPageAnalytics analytics) {
+            com.tailtopia.profile.service.CardPageAnalytics analytics,
+            com.tailtopia.profile.service.MilestoneBadgeResolver badges,
+            tools.jackson.databind.ObjectMapper json) {
+        this.badges = badges;
+        this.json = json;
         this.shareService = shareService;
         this.profileService = profileService;
         this.accountQueryService = accountQueryService;
@@ -81,12 +87,26 @@ public class MilestoneSharePageController {
         model.addAttribute("levelColor", levelColor(share.getLevel()));
         model.addAttribute("downloadCta", isId ? "Buat arsip untuk hewanku" : "Create your pet's archive");
         model.addAttribute("ogTitle", share.getTitle());
+        // V1.3.2 Story 5.2：大徽章按 code 出专属图（素材在包里才有；没有 → 模板原样紫渐变 + 🏆）。
+        // D-20：旧链接的大徽章随素材到货变成专属图（code 旧分享本来就有），不冻结。
+        model.addAttribute("badgeUrl", badges.urlFor(share.getCode()).orElse(null));
 
         // 「已解锁合集」快照（与 P-35 KOLEKSI 区对齐）：级别串 + 本地化标头 + 总数；圆点/「+N」由模板 JS 复刻。
         String levels = share.getCollectionLevels() == null ? "" : share.getCollectionLevels();
-        model.addAttribute("hasCollection", !levels.isBlank());
-        model.addAttribute("collectionLevels", levels);
-        model.addAttribute("collectionHeading", collectionHeading(share.getPetName(), levels.length(), isId));
+        java.util.List<java.util.Map<String, String>> items = collectionItems(share.getCollectionCodes());
+        if (items == null) {
+            // 🔴 旧分享（collection_codes 为空）：完全沿用级别串旧样式（C-10：旧链接保持原样）。
+            model.addAttribute("hasCollection", !levels.isBlank());
+            model.addAttribute("collectionLevels", levels);
+            model.addAttribute("collectionItems", null);
+            model.addAttribute("collectionHeading", collectionHeading(share.getPetName(), levels.length(), isId));
+        } else {
+            // 新分享：按 code 下发 {level, url|null}；JSON 由 Jackson 序列化、经 th:attr 转义下发（不用 utext）。
+            model.addAttribute("hasCollection", !items.isEmpty());
+            model.addAttribute("collectionLevels", levels);
+            model.addAttribute("collectionItems", json.writeValueAsString(items));
+            model.addAttribute("collectionHeading", collectionHeading(share.getPetName(), items.size(), isId));
+        }
 
         // 下载 CTA 的兜底地址（iOS App Store / Android Google Play；桌面落下载页）。
         // ⚠️ 这是**唤起失败后**的落点——模板会先试下面那条深链，唤起不成才走这里。
@@ -101,6 +121,28 @@ public class MilestoneSharePageController {
         analytics.linkOpened(visitorId,
                 com.tailtopia.profile.service.CardPageAnalytics.STATE_FULL, request);
         return "milestone_share";
+    }
+
+    /**
+     * 新分享的 KOLEKSI 条目（V1.3.2 Story 5.2）：每项 {@code level}（取 MilestoneCatalog）+ {@code url}（素材在包里才有）。
+     * {@code codes} 为空 → null（旧分享，走级别串）。目录里查不到的 code 跳过（入库前已校验，这里只是防御）。
+     */
+    private java.util.List<java.util.Map<String, String>> collectionItems(String codes) {
+        if (codes == null || codes.isBlank()) {
+            return null;
+        }
+        java.util.List<java.util.Map<String, String>> out = new java.util.ArrayList<>();
+        for (String code : codes.split(",")) {
+            var def = com.tailtopia.profile.domain.MilestoneCatalog.byCode(code.trim());
+            if (def == null) {
+                continue;
+            }
+            java.util.Map<String, String> item = new java.util.LinkedHashMap<>();
+            item.put("level", def.level().name());
+            badges.urlFor(def.code()).ifPresent(u -> item.put("url", u));
+            out.add(item);
+        }
+        return out;
     }
 
     // 物种 emoji（按 code 前缀：C=猫 / D=狗 / 其余=通用），与 App milestone_celebration 一致。

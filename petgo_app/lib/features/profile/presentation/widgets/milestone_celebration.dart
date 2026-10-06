@@ -2,33 +2,19 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../../core/analytics/analytics.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../../../shared/utils/haptics.dart';
 import '../../domain/milestone.dart';
 import '../../domain/milestone_celebration_copy.dart';
+import 'milestone_badge.dart';
 
-/// 里程碑三级庆祝动效（Story 8.5 · FR-42）。完成后按级触发，mint 风格、无第三方动画包（手绘 implicit 动画）：
-/// - **S（小）**：半屏庆祝弹层，1-2 秒自动消失，含徽章展示。
-/// - **M（中）**：全屏动效约 3 秒 + 徽章解锁（锁→奖杯 burst）。
-/// - **L（大）**：Duolingo 开宝箱式交互（宝箱→爆发→奖杯），结束自动衔接分享卡（8.6 通过 [onShare] 注入）。
+/// 里程碑解锁庆祝（Story 8.5 · FR-42）：**统一全屏页**（不分级仪式，决策 D-11），mint 风格、无第三方动画包。
+/// 徽章走 [MilestoneBadge]（V1.3.2 Story 5.1：素材到了显示该枚专属徽章，没到回落紫渐变奖杯）。
 ///
 /// 云端 headless 验不了视觉/计时观感（L2 待本地）；本组件保证构建/计时/自动消失逻辑 L0 可测。
-/// 庆祝振动通道：原生直接驱动 `Vibrator`，绕过系统「触感反馈」开关（见 android MainActivity.kt）。
-const MethodChannel _hapticsChannel = MethodChannel('petgo/haptics');
-
-/// 触发一次短振动；无原生实现（iOS 等）回退系统 HapticFeedback。
-Future<void> _celebrationVibrate() async {
-  try {
-    await _hapticsChannel.invokeMethod<void>('vibrate', {'ms': 45});
-  } catch (_) {
-    try {
-      await HapticFeedback.vibrate();
-    } catch (_) {}
-  }
-}
 
 /// 一次庆祝展示是由什么路径触发的（V1.3.0 Story 1.5 · AC6 · AD-A26.5）。
 ///
@@ -109,7 +95,7 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
       duration: const Duration(milliseconds: 700),
     )..forward();
     // 解锁瞬间一次振动反馈（弹框一打开即触发，方便测）。
-    _celebrationVibrate();
+    celebrationVibrate();
   }
 
   @override
@@ -191,7 +177,12 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
                       alignment: Alignment.center,
                       clipBehavior: Clip.none,
                       children: [
-                        _badge(120),
+                        MilestoneBadge(
+                          code: widget.item.code,
+                          size: 120,
+                          level: widget.item.level,
+                          fallback: (_) => _badge(120),
+                        ),
                         // 级别小标签，叠在徽章下沿（原型 milestone-unlock）。
                         Positioned(bottom: -10, child: _levelChip(l10n)),
                       ],
@@ -383,11 +374,11 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
               final capacity = perRow * 2;
               final List<Widget> cells;
               if (unlocked.length <= capacity) {
-                cells = [for (final m in unlocked) _collectionCircle(color: _levelColor(m.level))];
+                cells = [for (final m in unlocked) _collectionBadge(m)];
               } else {
                 final showN = capacity - 1; // 留一格给「+N」
                 cells = [
-                  for (final m in unlocked.take(showN)) _collectionCircle(color: _levelColor(m.level)),
+                  for (final m in unlocked.take(showN)) _collectionBadge(m),
                   _collectionCircle(text: '+${unlocked.length - showN}'),
                 ];
               }
@@ -403,6 +394,14 @@ class _MilestoneCelebrationViewState extends State<_MilestoneCelebrationView>
       ),
     );
   }
+
+  /// KOLEKSI 一枚已解锁徽章：素材到了显示该枚，没到回落原级别色圆（V1.3.2 Story 5.1）。
+  Widget _collectionBadge(MilestoneItem m) => MilestoneBadge(
+        code: m.code,
+        size: 44,
+        level: m.level,
+        fallback: (_) => _collectionCircle(color: _levelColor(m.level)),
+      );
 
   Widget _collectionCircle({Color? color, String? text}) => Container(
         width: 44,

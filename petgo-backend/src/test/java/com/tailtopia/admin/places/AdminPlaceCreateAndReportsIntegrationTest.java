@@ -186,8 +186,9 @@ class AdminPlaceCreateAndReportsIntegrationTest extends ApiIntegrationTest {
         String page = mvc.perform(get("/admin/places").param("open", String.valueOf(id)).with(user(ops)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(page).contains("data-id=\"" + id + "\"").contains("/admin/places/" + id + "/drawer");
-        // 非 htmx 提交 → 302（PRG）
-        mvc.perform(createReq(false, ops, name + " 2", marker.getId(), "-6.2607", "106.8137"))
+        // 非 htmx 提交 → 302（PRG）。V1.3.2 Story 1.4：新建必带照片（D-5），补一张。
+        mvc.perform(createReq(false, ops, name + " 2", marker.getId(), "-6.2607", "106.8137",
+                        new MockMultipartFile("photos", "c.jpg", "image/jpeg", new byte[] {7})))
                 .andExpect(status().is3xxRedirection());
     }
 
@@ -238,8 +239,19 @@ class AdminPlaceCreateAndReportsIntegrationTest extends ApiIntegrationTest {
         assertThat(audits.findAllByOrderByIdAsc().size()).isEqualTo(before); // 全部失败分支不落库不审计
         assertThat(places.findAll().stream().filter(p -> "X".equals(p.getName()) && p.getMarkedByUserId().equals(marker.getId()))).isEmpty();
 
-        // 雅加达都会区外 → 创建成功 + HX-Redirect 带 warn；整页渲染黄条
-        String location = mvc.perform(createReq(ops, "Bandung Park " + UUID.randomUUID(), marker.getId(), "-6.917", "107.619"))
+        // V1.3.2 Story 1.4 · D-5：不带照片 → 422「至少上传一张照片」，不落库、不审计、不上传。
+        err = mvc.perform(createReq(ops, "X", marker.getId(), "-6.2", "106.8")).andExpect(status().isUnprocessableEntity())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(err).contains("至少上传一张照片");
+        org.mockito.Mockito.verify(images, org.mockito.Mockito.never()).upload(any(), anyString());
+        assertThat(audits.findAllByOrderByIdAsc().size()).isEqualTo(before);
+        assertThat(places.findAll().stream().filter(p -> "X".equals(p.getName()) && p.getMarkedByUserId().equals(marker.getId()))).isEmpty();
+
+        // 雅加达都会区外 → 创建成功 + HX-Redirect 带 warn；整页渲染黄条（Story 1.4 起须带照片，stub 上传）
+        when(images.upload(any(), anyString())).thenAnswer(inv -> new UploadedImage("https://cdn.test/x.jpg", 800, 600, null,
+                inv.getArgument(1, String.class) + "/" + UUID.randomUUID() + ".jpg", 1234L));
+        String location = mvc.perform(createReq(ops, "Bandung Park " + UUID.randomUUID(), marker.getId(), "-6.917", "107.619",
+                        new MockMultipartFile("photos", "bandung.jpg", "image/jpeg", new byte[] {1})))
                 .andExpect(status().isOk()).andReturn().getResponse().getHeader("HX-Redirect");
         assertThat(location).contains("&warn=outsideJakarta");
         String page = mvc.perform(get("/admin/places").param("warn", "outsideJakarta").param("lang", "zh_CN").with(user(ops)))
