@@ -29,7 +29,7 @@ class DailyReportServiceTest {
     /** 2026-09-25 02:00 UTC = 09:00 WIB。 */
     private final Clock at9Wib = Clock.fixed(Instant.parse("2026-09-25T02:00:00Z"), ZoneOffset.UTC);
 
-    private static final DailyReport.Metrics ZERO = new DailyReport.Metrics(0, null, 0, 0, 0, 0, 0, 0, 0, 0);
+    private static final DailyReport.Metrics ZERO = new DailyReport.Metrics(0, null, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
     private DailyReportService service() {
         return new DailyReportService(query, lark, props, at9Wib);
