@@ -212,4 +212,32 @@ void main() {
       expect(find.byKey(const ValueKey('placeStampPlaceholder')), findsOneWidget);
     });
   });
+
+  testWidgets('bug 20261006-583：断网（拉取抛错）→ 立刻显示「加载失败」，不停在空白护照本骨架上', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(400, 1000);
+    addTearDown(tester.view.reset);
+    final router = GoRouter(routes: [
+      GoRoute(path: '/', builder: (c, s) => const PetPassportPage()),
+    ]);
+    addTearDown(router.dispose);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        petPassportProvider.overrideWith((ref) async => throw const SocketException('offline')),
+        keepsakePricingProvider.overrideWith((ref) async => const KeepsakePricing(
+            ktpHd: 10000, passportSnapshot: 2000, boardingPass: 1000, tailsonality: 5000)),
+      ],
+      child: MaterialApp.router(
+        routerConfig: router,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('id'),
+      ),
+    ));
+    // 只推进 1 秒：开着 Riverpod 默认自动重试时，这段时间页面仍是加载骨架（错误态要 40s+ 才出现）。
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('Jejak Anabul belum bisa dibuka, coba lagi'), findsOneWidget);
+  });
 }
