@@ -17,7 +17,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,7 +34,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminContentPinService {
 
     /** 选择器每页条数。候选集接近全量内容，必须分页。 */
-    private static final int PICK_PAGE_SIZE = 20;
 
     /** 列表摘要截断长度。 */
     private static final int SUMMARY_MAX = 40;
@@ -48,13 +46,16 @@ public class AdminContentPinService {
     private final AdminAuditService audit;
     /** 抽屉里的作者昵称（Story 7.3 · AC3 顶置内容预览）。 */
     private final com.tailtopia.auth.service.AccountQueryService accountQuery;
+    private final PinnableContentPicker picker;
 
     public AdminContentPinService(ContentPinService pins, ContentPostRepository posts,
-            AdminAuditService audit, com.tailtopia.auth.service.AccountQueryService accountQuery) {
+            AdminAuditService audit, com.tailtopia.auth.service.AccountQueryService accountQuery,
+            PinnableContentPicker picker) {
         this.pins = pins;
         this.posts = posts;
         this.audit = audit;
         this.accountQuery = accountQuery;
+        this.picker = picker;
     }
 
     /** 一页排期 + 有无下一页（列表按生效时间倒序）。 */
@@ -183,14 +184,7 @@ public class AdminContentPinService {
     /** 内容选择器：只返回可公开展示的内容，分页。 */
     @Transactional(readOnly = true)
     public List<PinnableContentRow> pickable(String keyword, int page) {
-        // 🔴 绝不传 null：绑 null 时 Postgres 推不出类型（lower(bytea) does not exist），
-        //    而"不带关键词"正是页面首次加载的那一次。无关键词 → "%" 匹配全部。
-        String pattern = (keyword == null || keyword.isBlank())
-                ? "%" : "%" + keyword.trim().toLowerCase() + "%";
-        return posts.searchPinnable(pattern, PageRequest.of(Math.max(page, 0), PICK_PAGE_SIZE)).stream()
-                .map(p -> new PinnableContentRow(p.getId(), p.getType().name(),
-                        truncate(p.getText()), p.getCreatedAt()))
-                .toList();
+        return picker.page(keyword, page);
     }
 
     /** @return 新排期 id（Story 7.3：抽屉建完要立刻打开它） */

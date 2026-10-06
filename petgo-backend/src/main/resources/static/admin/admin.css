@@ -1019,3 +1019,21 @@ tr.is-muted td { opacity: .55; }
 .ms-opt { display: flex !important; align-items: center; gap: 8px; margin: 4px 0 !important; color: var(--ink); }
 .ms-sep { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
 .ms-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+
+/* bug 20260924-562：内容选择器（顶置 / 内容打标）候选卡片。定高可滚动，避免几十条候选把抽屉撑成长卷。
+   用户标签页的 .pick-row（候选是用户、不是内容）不在此列，样式不受影响。 */
+.pick-list { max-height: 420px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-sm, 6px);
+  padding: 4px; background: var(--surface); }
+.pick-card { display: grid !important; grid-template-columns: 18px 48px 1fr; gap: 10px; align-items: start;
+  margin: 0 !important; padding: 8px; border-radius: var(--radius-sm, 6px); cursor: pointer; }
+.pick-card + .pick-card { border-top: 1px solid var(--line); }
+.pick-card:hover { background: var(--bg); }
+.pick-card:has(input:checked) { background: var(--brand-tint); outline: 1px solid var(--brand); }
+.pick-card input[type=radio] { margin-top: 16px; }
+.pick-thumb { width: 48px; height: 48px; border-radius: 6px; overflow: hidden; background: var(--bg); display: block; }
+.pick-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pick-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pick-meta { font-size: var(--fs-xs, 12px); }
+.pick-summary { font-size: var(--fs-sm, 13px); color: var(--ink); overflow: hidden; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
+.pick-more { display: block; margin: 8px auto 4px; }

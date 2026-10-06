@@ -113,7 +113,9 @@ public class AdminContentPinController {
         model.addAttribute("active", "content-pins");
         model.addAttribute("slot", s);
         // 首屏候选：与原页尾表单一样，进来就有一批可选内容（不必先搜一次）。
-        model.addAttribute("candidates", service.pickable(null, 0));
+        var first = service.pickable(null, 0);
+        model.addAttribute("candidates", first);
+        model.addAttribute("hasMore", first.size() >= com.tailtopia.admin.pin.service.PinnableContentPicker.PAGE_SIZE);
         model.addAttribute("q", null);
         model.addAttribute("page", 0);
         return "admin/fragments/drawer-content-pin :: createForm";
@@ -146,7 +148,10 @@ public class AdminContentPinController {
     @PreAuthorize(VIEW)
     public String pick(@RequestParam(value = "q", required = false) String q,
             @RequestParam(value = "page", defaultValue = "0") int page, Model model) {
-        model.addAttribute("candidates", service.pickable(q, page));
+        var rows = service.pickable(q, page);
+        model.addAttribute("candidates", rows);
+        // 满页 = 可能还有下一页（bug 20260924-562：此前没有翻页控件，永远只能看到前 20 条）
+        model.addAttribute("hasMore", rows.size() >= com.tailtopia.admin.pin.service.PinnableContentPicker.PAGE_SIZE);
         model.addAttribute("q", q);
         model.addAttribute("page", page);
         return "admin/content-pins :: candidates";

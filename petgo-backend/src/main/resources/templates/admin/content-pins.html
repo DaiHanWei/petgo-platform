@@ -71,14 +71,28 @@
            🔴 2026-09-02：必须留在 content 片段**之外**（外层 th:replace 之内）——
            定义在 content 里的话，整页渲染时片段本体会在页面底部再游离渲染一遍。 */-->
     <div th:fragment="candidates" th:remove="tag">
-        <p class="muted" th:if="${#lists.isEmpty(candidates)}" th:text="#{admin.pins.pickEmpty}">没有可顶置的公开内容。</p>
-        <label th:each="c : ${candidates}" class="pick-row">
+        <p class="muted" th:if="${#lists.isEmpty(candidates) and (page == null or page == 0)}" th:text="#{admin.pins.pickEmpty}">没有可选的公开内容。</p>
+        <!--/* bug 20260924-562：每项一张卡片 —— 首图 / #ID · 类型 / 摘要两行 / 作者 · 时间（WIB）。
+               原先四个 span 行内连排、`.pick-row` 无样式，整页候选挤成一大段，运营分不清哪条是哪条。 */-->
+        <label th:each="c : ${candidates}" class="pick-card">
             <input type="radio" name="contentId" th:value="${c.id}"/>
-            <span th:text="${c.id}">1</span>
-            <span th:text="#{'admin.contentType.' + ${c.type}}">Moment</span>
-            <span th:text="${c.summary}">摘要</span>
-            <span class="muted" th:text="${#temporals.format(c.createdAt, 'yyyy-MM-dd', 'Asia/Jakarta')}">日期</span>
+            <span class="pick-thumb">
+                <img th:if="${c.thumbUrl != null}" th:src="${c.thumbUrl}" alt="" loading="lazy"/>
+            </span>
+            <span class="pick-body">
+                <span class="pick-meta"><b th:text="'#' + ${c.id}">#1</b> · <span th:text="#{'admin.contentType.' + ${c.type}}">Moment</span></span>
+                <span class="pick-summary" th:text="${c.summary}">摘要</span>
+                <span class="pick-meta muted">
+                    <span th:if="${c.authorDeleted}" th:text="#{admin.contentdetail.deletedUser}">已注销用户</span>
+                    <span th:unless="${c.authorDeleted}" th:text="${c.authorName != null} ? ${c.authorName} : (${c.authorId != null} ? '#' + ${c.authorId} : '—')">作者</span>
+                    · <span th:text="${#temporals.format(c.createdAt, 'yyyy-MM-dd HH:mm', 'Asia/Jakarta')}">时间</span>
+                </span>
+            </span>
         </label>
+        <!--/* 加载更多：取下一页，按钮自身被下一页（含新的按钮）原位替换；满页才给（末页恰好 20 条时多点一次空页，按钮随之消失） */-->
+        <button type="button" class="btn btn-neutral btn-sm pick-more" th:if="${hasMore != null and hasMore}"
+                th:attr="hx-get=@{/admin/content-pins/pick(q=${q},page=${(page == null ? 0 : page) + 1})}"
+                hx-target="this" hx-swap="outerHTML" th:text="#{admin.pins.pickLoadMore}">加载更多</button>
     </div>
 </div>
 </body>
