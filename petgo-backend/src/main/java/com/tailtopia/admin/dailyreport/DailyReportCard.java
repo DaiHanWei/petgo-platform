@@ -19,7 +19,9 @@ public final class DailyReportCard {
 
     static final String NOTE = "统计周期：昨日 00:00–24:00（WIB）｜环比对比前一天，分母为 0 显示「—」｜"
             + "已排除虚拟账号与管理员｜付费只计现金（QRIS 及混合支付现金段），不含 PawCoin｜"
-            + "电商订单 = 当日下单且已付款，GMV 含 PawCoin 抵扣｜活跃率 = 评论数或 like 数 ÷ 日活｜"
+            + "电商订单 = 当日下单且已付款，GMV 含 PawCoin 抵扣｜"
+            + "日活（含游客）来自 Firebase（GA4），按设备计、含未登录用户，24–48 小时内可能小幅修正｜"
+            + "登录用户日活为服务器口径｜活跃率 = 评论数或 like 数 ÷ 登录用户日活｜"
             + "自动评论 = 虚拟账号自动发出的条数，不计入评论数与活跃率，不做环比";
 
     private DailyReportCard() {
@@ -32,7 +34,9 @@ public final class DailyReportCard {
         List<Object> elements = new ArrayList<>();
         section(elements, "👥 用户", List.of(
                 field("昨日新增", count(c.newUsers()), DailyReport.changePct(c.newUsers(), p.newUsers())),
-                field("昨日日活", c.dau() == null ? "—" : count(c.dau()), DailyReport.changePct(c.dau(), p.dau()))));
+                field("日活（含游客）", r.ga4Dau() == null ? "—" : count(r.ga4Dau()),
+                        DailyReport.changePct(r.ga4Dau(), r.ga4DauPrevious())),
+                field("登录用户日活", c.dau() == null ? "—" : count(c.dau()), DailyReport.changePct(c.dau(), p.dau()))));
         elements.add(hr());
         section(elements, "💬 社区", List.of(
                 field("新增帖子", count(c.newPosts()), DailyReport.changePct(c.newPosts(), p.newPosts())),

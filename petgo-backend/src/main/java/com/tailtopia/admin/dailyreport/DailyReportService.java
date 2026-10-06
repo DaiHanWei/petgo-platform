@@ -25,17 +25,21 @@ public class DailyReportService {
 
     private final DailyReportQuery query;
     private final LarkWebhookClient lark;
+    private final Ga4ActiveUsersClient ga4;
     private final DailyReportProperties props;
     private final Clock clock;
 
     @Autowired
-    public DailyReportService(DailyReportQuery query, LarkWebhookClient lark, DailyReportProperties props) {
-        this(query, lark, props, Clock.systemUTC());
+    public DailyReportService(DailyReportQuery query, LarkWebhookClient lark, Ga4ActiveUsersClient ga4,
+            DailyReportProperties props) {
+        this(query, lark, ga4, props, Clock.systemUTC());
     }
 
-    DailyReportService(DailyReportQuery query, LarkWebhookClient lark, DailyReportProperties props, Clock clock) {
+    DailyReportService(DailyReportQuery query, LarkWebhookClient lark, Ga4ActiveUsersClient ga4,
+            DailyReportProperties props, Clock clock) {
         this.query = query;
         this.lark = lark;
+        this.ga4 = ga4;
         this.props = props;
         this.clock = clock;
     }
@@ -43,7 +47,9 @@ public class DailyReportService {
     /** 以 {@code today}（WIB）为发送日：统计「昨天」，环比「前天」。 */
     public DailyReport getDailyReport(LocalDate today) {
         LocalDate day = today.minusDays(1);
-        return new DailyReport(day, query.metricsOf(day), query.metricsOf(day.minusDays(1)));
+        // GA4 取数失败一律 null（客户端内部吞掉），不影响其余指标
+        return new DailyReport(day, query.metricsOf(day), query.metricsOf(day.minusDays(1)),
+                ga4.activeUsers(day), ga4.activeUsers(day.minusDays(1)));
     }
 
     /** 管理端手动触发：失败抛业务异常（含原因），供接口回显。 */

@@ -117,6 +117,8 @@ dependencies:
   # 🛡 边界有测试守着：test/place/map_usage_boundary_test.dart 扫全仓源码，
   #    出现 Places/Geocoding/Directions 的调用面、或地图出现在第三个页面，即红。
   google_maps_flutter: ^2.18.0
+  firebase_core: ^4.15.0
+  firebase_analytics: ^12.6.0
 
 dependency_overrides:
   # jcenter() 已被 Gradle 9 移除而 pub.dev 原版 9.0.7652 仍在用 → vendor 打补丁
