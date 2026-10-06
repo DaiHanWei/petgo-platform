@@ -44,6 +44,9 @@ public class MilestoneCompletionService {
 
     private static final Logger log = LoggerFactory.getLogger(MilestoneCompletionService.class);
 
+    /** 用户可见日期的口径：印尼 WIB 自然日（与日报、后台一致）。 */
+    private static final java.time.ZoneId WIB = java.time.ZoneId.of("Asia/Jakarta");
+
     private final PetProfileRepository profiles;
     private final PetMilestoneRepository milestones;
     private final MilestoneCompletionRepository completions;
@@ -191,14 +194,22 @@ public class MilestoneCompletionService {
      * 「系统推送 + 用户当天发布」L 级节点的发布回填（Story 8.6 · FR-42）：发布成长日历记录时，若已达
      * 对应节点时点则完成 —— 第一个生日 L1（生日当天 month/day 命中）、陪伴满 100 天 L2、满 365 天 L3。
      * 幂等（completeForOwner 短路）；source=PUBLISH。
+     *
+     * <p>🔴 「今天」与「陪伴天数」一律按 <b>WIB（雅加达）自然日</b>（bug 20260930-579）：曾按 UTC 取日期，
+     * 生日当天 WIB 00:00–06:59 发布被判「不是生日」，生日前一天 WIB 07:00 后发布反被判成生日。
      */
     @Transactional
     public void completeDateGatedLNodesOnPublish(long ownerId) {
+        completeDateGatedLNodesOnPublish(ownerId, java.time.Instant.now());
+    }
+
+    /** 同上，可注入「当前时刻」（测时区边界用）。 */
+    void completeDateGatedLNodesOnPublish(long ownerId, java.time.Instant now) {
         PetProfile p = profiles.findByOwnerId(ownerId).orElse(null);
         if (p == null) {
             return;
         }
-        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        java.time.LocalDate today = now.atZone(WIB).toLocalDate();
         java.time.LocalDate birthday = p.getBirthday();
         if (birthday != null && birthday.getMonthValue() == today.getMonthValue()
                 && birthday.getDayOfMonth() == today.getDayOfMonth()) {
@@ -207,7 +218,7 @@ public class MilestoneCompletionService {
         }
         if (p.getCreatedAt() != null) {
             long days = java.time.temporal.ChronoUnit.DAYS.between(
-                    p.getCreatedAt().atZone(java.time.ZoneOffset.UTC).toLocalDate(), today);
+                    p.getCreatedAt().atZone(WIB).toLocalDate(), today);
             if (days >= 100) {
                 completeForOwner(ownerId, MilestoneAutoEvent.COMPANION_100_DAYS,
                         MilestoneCompletionSource.PUBLISH);
