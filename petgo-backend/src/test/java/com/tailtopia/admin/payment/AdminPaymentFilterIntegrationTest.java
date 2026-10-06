@@ -147,7 +147,7 @@ class AdminPaymentFilterIntegrationTest extends ApiIntegrationTest {
         pending(u, PaymentPurpose.VET_CONSULT, 90000L);
 
         var byPurpose = new AdminPaymentQueryService.Filter(
-                u, PaymentPurpose.VET_CONSULT, null, null, null);
+                u, java.util.Set.of(PaymentPurpose.VET_CONSULT), null, null, null);
         assertThat(service.search(byPurpose, 0, 20).getTotalElements()).isEqualTo(2);
         assertThat(service.summarize(byPurpose).cashIncome()).isEqualTo(50000L);
 
@@ -158,6 +158,40 @@ class AdminPaymentFilterIntegrationTest extends ApiIntegrationTest {
         assertThat(service.summarize(byStatus).cashIncome())
                 .as("筛出来全是未支付 ⇒ 收入必须是 0，不能是 90000")
                 .isZero();
+    }
+
+    /** 后台 PRD 2026-09-30：用途多选 = IN (...)；空集 = 不限。摘要条随所选用途合计。 */
+    @Test
+    void multiplePurposesAreOredAndEmptyMeansAll() {
+        long u = owner();
+        paid(u, PaymentPurpose.TAILSONALITY, PayChannel.QRIS, 5000L);
+        paid(u, PaymentPurpose.PASSPORT_SNAP, PayChannel.QRIS, 2000L);
+        paid(u, PaymentPurpose.VET_CONSULT, PayChannel.QRIS, 50000L);
+
+        var unlocks = new AdminPaymentQueryService.Filter(u,
+                java.util.EnumSet.of(PaymentPurpose.TAILSONALITY, PaymentPurpose.PASSPORT_SNAP, PaymentPurpose.BOARDING_PASS),
+                null, null, null);
+        assertThat(service.search(unlocks, 0, 20).getTotalElements()).isEqualTo(2);
+        assertThat(service.summarize(unlocks).cashIncome()).isEqualTo(7000L);
+
+        var all = new AdminPaymentQueryService.Filter(u, java.util.Set.of(), null, null, null);
+        assertThat(service.search(all, 0, 20).getTotalElements()).isEqualTo(3);
+        assertThat(new AdminPaymentQueryService.Filter(u, null, null, null, null).purposes()).isEmpty();
+    }
+
+    /** 后台 PRD 2026-10-02：付费用户数 = 筛选内 PAID 的去重 user_id；未成交不计，同人多次只算 1。 */
+    @Test
+    void payingUserCountIsDistinctPaidUsersOnly() {
+        long u = owner();
+        paid(u, PaymentPurpose.ID_HD, PayChannel.QRIS, 1000L);
+        paid(u, PaymentPurpose.ID_HD, PayChannel.QRIS, 1000L);
+        pending(u, PaymentPurpose.ID_HD, 1000L);
+        var f = new AdminPaymentQueryService.Filter(u, null, null, null, null);
+        assertThat(service.summarize(f).paidCount()).isEqualTo(2);
+        assertThat(service.summarize(f).payingUserCount()).as("同一用户付两次只算 1 人").isEqualTo(1);
+
+        var onlyPending = new AdminPaymentQueryService.Filter(u, null, PaymentStatus.PENDING, null, null);
+        assertThat(service.summarize(onlyPending).payingUserCount()).as("未成交不计").isZero();
     }
 
     /**

@@ -160,6 +160,35 @@ class AdminMoneyPagesDrawerIntegrationTest extends ApiIntegrationTest {
         assertThat(html).as("导出按钮带着当前筛选走，文案是「导出当前结果」").contains("导出当前结果");
     }
 
+    /**
+     * 后台 PRD 2026-09-30 / 10-02：用途多选 + 付费用户数。🔴 多值参数必须透传到导出链接（翻页 / 整表刷新同一个
+     * model 值、同一种写法），漏带就会在导出时静默丢掉筛选条件。
+     */
+    @Test
+    void multiPurposeFilterIsCarriedIntoExportAndShowsPayingUsers() throws Exception {
+        seedIntent();
+        String html = body(mvc.perform(get("/admin/payments").param("lang", "zh_CN")
+                        .param("purpose", "TAILSONALITY").param("purpose", "PASSPORT_SNAP").param("purpose", "NOPE")
+                        .with(authentication(superAdmin())))
+                .andExpect(status().isOk()).andReturn());
+
+        assertThat(html).as("不认识的值宽松丢掉，按枚举序透传")
+                .containsPattern("/admin/payments/export\\.xlsx\\?[^\"]*purpose=TAILSONALITY&amp;purpose=PASSPORT_SNAP")
+                .doesNotContain("NOPE");
+        assertThat(html).contains("用途：已选 2 项").contains("data-multiselect")
+                .containsPattern("value=\"TAILSONALITY\"[^>]*checked").containsPattern("value=\"PASSPORT_SNAP\"[^>]*checked")
+                .doesNotContainPattern("value=\"VET_CONSULT\"[^>]*checked");
+        assertThat(html).as("新旧两组之间的分隔线").contains("class=\"ms-sep\"");
+        assertThat(html).contains("data-sum=\"paying-users\"").contains("付费用户数")
+                .contains("data-notice=\"payments-paying-users-scope\"").contains("data-notice=\"payments-purchases-pointer\"");
+        assertThat(html).as("状态筛选维持单选").contains("<select name=\"status\"");
+
+        String all = body(mvc.perform(get("/admin/payments").param("lang", "zh_CN").with(authentication(superAdmin())))
+                .andExpect(status().isOk()).andReturn());
+        assertThat(all).as("未选 = 不限，导出链接不带具体用途").contains("全部用途")
+                .doesNotContainPattern("export\\.xlsx\\?[^\"]*purpose=[A-Z]");
+    }
+
     @Test
     void paymentDrawerIsReadOnlyAndNeverShowsRawGatewayMeta() throws Exception {
         PaymentIntent p = seedIntent();

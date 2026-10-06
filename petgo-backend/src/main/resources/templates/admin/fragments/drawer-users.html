@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!--/*
-  B7 用户详情抽屉（V1.3.0 Story 8.1 · AC2，480px 抽屉体 res=user，UI 稿 3-2～3-6）。
-  五页签：基本信息 / 宠物档案 / 发布内容 / 历史问诊 / 处置。整页 `user-detail.html` 已删。
+  B7 用户详情抽屉（V1.3.0 Story 8.1 · AC2，抽屉体 res=user，UI 稿 3-2～3-6）。
+  六页签：基本信息 / 宠物档案 / 发布内容 / 历史问诊 / 处置 / 已购解锁（V1.3.2 后台 AB-23）。整页 `user-detail.html` 已删。
+  📐 V1.3.2 起本抽屉 600px（其余抽屉仍 480px，有意为之）：六个页签在中 / 英 / 印尼三语下都放不下 480（UI 稿 E1 实测）。
 
   ⚠️ 五页签**一次性渲染、切页签不再请求**（AC2）：这几块数据本来就是一次 detail() 聚合出来的，
      切一次发一次请求只会让运营在四个 loading 之间等。
@@ -45,6 +46,8 @@
                 th:text="#{admin.v130.users.tab.consults}">历史问诊</button>
         <button type="button" class="tab" role="tab" data-utab="actions"
                 th:text="#{admin.v130.users.tab.actions}">处置</button>
+        <button type="button" class="tab" role="tab" data-utab="purchases"
+                th:text="#{admin.v132.users.tab.purchases}">已购解锁</button>
     </div>
 
     <!--/* ① 基本信息 */-->
@@ -260,9 +263,80 @@
         </th:block>
     </section>
 
+    <!--/* ⑥ 已购解锁（V1.3.2 后台 AB-23 · UI 稿 D1 / D2）：只读，四组按 SKU 分卡、各带计数。
+           🔴 读业务表解锁状态而非支付表 —— PawCoin 付的也在这里。🔴 不得出现退款 / 撤销 / 补发 / 去购买任何按钮。 */-->
+    <section class="ud-purchases" data-utab-panel="purchases" hidden th:with="pu=${purchases}">
+        <div class="card card-full ud-card ud-empty" th:if="${pu == null or pu.isEmpty()}">
+            <p th:text="#{admin.v132.users.purchases.emptyTitle}">该用户还没有任何已购解锁</p>
+            <p class="muted" th:text="#{admin.v132.users.purchases.emptyNote}">KTP 高清、护照快照、登机牌、Tailsonality 结果均未购买。</p>
+        </div>
+        <th:block th:if="${pu != null and !pu.isEmpty()}">
+            <div class="card card-full ud-card" th:if="${!#lists.isEmpty(pu.ktpCards())}">
+                <h3 class="ud-pc-title"><span th:text="#{admin.v132.users.purchases.ktp}">KTP 卡高清</span>
+                    <span class="badge badge-neutral" th:text="${#lists.size(pu.ktpCards())}">1</span></h3>
+                <table class="ud-table ud-pc-table">
+                    <thead><tr><th th:text="#{admin.v132.users.purchases.col.card}">卡</th>
+                        <th class="num" th:text="#{admin.v132.users.purchases.col.unlockedAt}">解锁时间</th></tr></thead>
+                    <tbody><tr th:each="k : ${pu.ktpCards()}">
+                        <td th:text="'KTP #' + ${k.serialId()} + ' · ' + ${k.petName()}">KTP #4821 · Mochi</td>
+                        <td class="num" th:text="${k.unlockedAt() != null} ? ${@adminTime.wib(k.unlockedAt())} : '—'">09-12 14:33</td>
+                    </tr></tbody>
+                </table>
+            </div>
+            <div class="card card-full ud-card" th:if="${!#lists.isEmpty(pu.snapshots())}">
+                <h3 class="ud-pc-title"><span th:text="#{admin.v132.users.purchases.snapshot}">护照 · 快照</span>
+                    <span class="badge badge-neutral" th:text="${#lists.size(pu.snapshots())}">2</span></h3>
+                <table class="ud-table ud-pc-table">
+                    <thead><tr><th th:text="#{admin.v132.users.purchases.col.pet}">宠物</th>
+                        <th th:text="#{admin.v132.users.purchases.col.version}">版本</th>
+                        <th class="num" th:text="#{admin.v132.users.purchases.col.stamps}">章数</th>
+                        <th class="num" th:text="#{admin.v132.users.purchases.col.unlockedAt}">解锁时间</th></tr></thead>
+                    <tbody><tr th:each="sn : ${pu.snapshots()}">
+                        <td th:text="${sn.petName()}">Mochi</td>
+                        <td class="num-cell" th:text="'v' + ${sn.version()}">v3</td>
+                        <td class="num" th:text="#{admin.v132.users.purchases.stampCount(${sn.stampCount()})}">12 枚</td>
+                        <td class="num" th:text="${@adminTime.wib(sn.unlockedAt())}">09-28 20:14</td>
+                    </tr></tbody>
+                </table>
+                <p class="hint" th:text="#{admin.v132.users.purchases.snapshotNote}">快照是全 App 唯一会重复收费的 SKU。</p>
+            </div>
+            <div class="card card-full ud-card" th:if="${!#lists.isEmpty(pu.boardingPasses())}">
+                <h3 class="ud-pc-title"><span th:text="#{admin.v132.users.purchases.boarding}">护照 · 登机牌</span>
+                    <span class="badge badge-neutral" th:text="${#lists.size(pu.boardingPasses())}">2</span></h3>
+                <table class="ud-table ud-pc-table">
+                    <thead><tr><th th:text="#{admin.v132.users.purchases.col.pet}">宠物</th>
+                        <th th:text="#{admin.v132.users.purchases.col.place}">场所</th>
+                        <th class="num" th:text="#{admin.v132.users.purchases.col.unlockedAt}">解锁时间</th></tr></thead>
+                    <tbody><tr th:each="b : ${pu.boardingPasses()}">
+                        <td th:text="${b.petName()}">Mochi</td>
+                        <td><span th:text="${b.placeName()}">Kopi Kalyan</span>
+                            <span class="badge badge-warn" th:if="${b.superseded()}" th:text="#{admin.v132.users.purchases.superseded}">已合并</span></td>
+                        <td class="num" th:text="${@adminTime.wib(b.unlockedAt())}">09-20 12:41</td>
+                    </tr></tbody>
+                </table>
+                <p class="hint" th:if="${pu.hasSupersededBoardingPass()}"
+                   th:text="#{admin.v132.users.purchases.supersededNote}">「已合并」= 场所合并后作废的那张，用户为同一地方付过两次。</p>
+            </div>
+            <div class="card card-full ud-card" th:if="${!#lists.isEmpty(pu.tailsonality())}">
+                <h3 class="ud-pc-title"><span th:text="#{admin.v132.users.purchases.tailsonality}">Tailsonality 结果</span>
+                    <span class="badge badge-neutral" th:text="${#lists.size(pu.tailsonality())}">1</span></h3>
+                <table class="ud-table ud-pc-table">
+                    <thead><tr><th th:text="#{admin.v132.users.purchases.col.pet}">宠物</th>
+                        <th th:text="#{admin.v132.users.purchases.col.role}">代号</th>
+                        <th class="num" th:text="#{admin.v132.users.purchases.col.unlockedAt}">解锁时间</th></tr></thead>
+                    <tbody><tr th:each="t : ${pu.tailsonality()}">
+                        <td th:text="${t.petName()}">Mochi</td>
+                        <td><code th:text="${t.roleCode()}">ENTJ-H</code></td>
+                        <td class="num" th:text="${@adminTime.wib(t.unlockedAt())}">09-25 21:07</td>
+                    </tr></tbody>
+                </table>
+            </div>
+        </th:block>
+    </section>
+
     <div id="user-drawer-err" class="lst-inline-error" aria-live="polite"></div>
 
-    <!--/* 页签切换：纯前端切 hidden，不再请求（五块数据是一次聚合出来的）。
+    <!--/* 页签切换：纯前端切 hidden，不再请求（六块数据是一次聚合出来的）。
            htmx 每次 swap 进来都会重新执行，不需要额外的 re-init 钩子。 */-->
     <script>
         (function () {

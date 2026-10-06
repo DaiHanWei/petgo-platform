@@ -6,6 +6,7 @@ import com.tailtopia.admin.shared.web.HxRequest;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.domain.PaymentStatus;
 import java.time.LocalDate;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -71,7 +72,7 @@ public class AdminPaymentController {
     @GetMapping("/admin/payments")
     @PreAuthorize(VIEW_AUTH)
     public String search(@RequestParam(required = false) Long userId,
-                         @RequestParam(required = false) String purpose,
+                         @RequestParam(required = false) List<String> purpose,
                          @RequestParam(required = false) String status,
                          @RequestParam(required = false)
                          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -83,19 +84,24 @@ public class AdminPaymentController {
         model.addAttribute("active", "payments");
         model.addAttribute("open", open);
         model.addAttribute("userId", userId);
-        model.addAttribute("purpose", purpose);
+        var purposes = parsePurposes(purpose);
+        // 用途多选（后台 PRD 2026-09-30）：模板里分页 / 整表刷新 / 导出三处都带这同一个列表（空 = null = 不带参数 = 不限）。
+        // ⚠️ 漏带任何一处，翻页或导出时就会静默丢掉筛选条件。
+        model.addAttribute("purpose", purposes.isEmpty() ? null : purposes.stream().map(Enum::name).toList());
+        model.addAttribute("purposeSelected", purposes.stream().map(Enum::name).collect(java.util.stream.Collectors.toSet()));
         model.addAttribute("status", status);
         model.addAttribute("from", from);
         model.addAttribute("to", to);
         model.addAttribute("purposeOptions", PaymentPurpose.values());
+        // 本版本新增的三个解锁 SKU 与既有五项之间画分隔线（UI 稿 B1）：分组边界 = 第一个新用途。
+        model.addAttribute("purposeGroupStart", PaymentPurpose.TAILSONALITY);
         model.addAttribute("statusOptions", PaymentStatus.values());
 
         // ⚠️ 用途/状态**宽松解析**：值不认识就当"不限"，不报错。
         //    这两个值只能从下拉里来，出现非法值只可能是有人手改了 URL ——
         //    为此给运营一个报错页不划算，何况"不限"是最无害的退化。
         var filter = new AdminPaymentQueryService.Filter(
-                userId, parseEnum(PaymentPurpose.class, purpose),
-                parseEnum(PaymentStatus.class, status), from, to);
+                userId, purposes, parseEnum(PaymentStatus.class, status), from, to);
 
         Page<AdminPaymentRow> result = service.search(filter, Math.max(page, 0), PAGE_SIZE);
         model.addAttribute("payments", result.getContent());
@@ -142,15 +148,14 @@ public class AdminPaymentController {
             @org.springframework.security.core.annotation.AuthenticationPrincipal
             com.tailtopia.admin.service.AdminUserDetails admin,
             @RequestParam(required = false) Long userId,
-            @RequestParam(required = false) String purpose,
+            @RequestParam(required = false) List<String> purpose,
             @RequestParam(required = false) String status,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         var filter = new AdminPaymentQueryService.Filter(
-                userId, parseEnum(PaymentPurpose.class, purpose),
-                parseEnum(PaymentStatus.class, status), from, to);
+                userId, parsePurposes(purpose), parseEnum(PaymentStatus.class, status), from, to);
         byte[] body = exportService.exportXlsx(admin.getAdminAccountId(), filter);
         return org.springframework.http.ResponseEntity.ok()
                 .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
@@ -158,6 +163,23 @@ public class AdminPaymentController {
                 .contentType(org.springframework.http.MediaType.parseMediaType(
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(body);
+    }
+
+    /**
+     * 用途多值宽松解析（后台 PRD 2026-09-30）：逐个按 {@link #parseEnum} 解析，不认识的丢掉；全不认识 / 未传 → 空集（= 不限）。
+     * 有序（按枚举声明序），让分页与导出链接里的参数顺序稳定。
+     */
+    private static java.util.EnumSet<PaymentPurpose> parsePurposes(List<String> raw) {
+        var out = java.util.EnumSet.noneOf(PaymentPurpose.class);
+        if (raw != null) {
+            for (String v : raw) {
+                PaymentPurpose p = parseEnum(PaymentPurpose.class, v);
+                if (p != null) {
+                    out.add(p);
+                }
+            }
+        }
+        return out;
     }
 
     /** 宽松解析：空 / 不认识 → null（= 不限），绝不抛。 */

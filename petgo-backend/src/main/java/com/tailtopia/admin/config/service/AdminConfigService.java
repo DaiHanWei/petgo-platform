@@ -99,20 +99,24 @@ public class AdminConfigService {
         commit(logs, adminId, "PRICING", "pricing_config");
     }
 
+    /** 一次性解锁四价下限（IDR）。页面输入框 min、行内校验、DB CHECK 三处同值。 */
+    public static final long MIN_UNLOCK_PRICE = 100;
+
     // ── 一次性解锁定价四行（V1.3.0 Story 6.1 · AB-18A / AD-7；V1.3.2 Story 3.1 加 Tailsonality）──
     /**
      * KTP 卡高清 / 护照·护照内页（每次快照）/ 护照·登机牌（每张）/ Tailsonality·结果解锁 四个一次性解锁价。
      *
-     * <p>🔴 D-7 / D-3：四价一律 ≥1（不做 0 元限免——账本 CHECK amount &gt; 0、收款渠道不接 0 元单），与迁移加的 DB CHECK 同口径，
+     * <p>🔴 四价一律 ≥{@value #MIN_UNLOCK_PRICE}（后台 PRD 2026-10-02 §1.4 由 1 收紧：防运营漏个零把 Rp2,000 配成 Rp200；
+     * 0 元限免本就不做——账本 CHECK amount &gt; 0、收款渠道不接 0 元单），与迁移 V20261002_1817 的 DB CHECK 同口径，
      * 这里先拦成人话 422 而不是让 CHECK 以 500 露出来。四价独立保存、不联动（「快照价 ≥ 登机牌价」只提示不强校验）；只对真变化的字段写 {@code config_change_logs}
      * （PRICING 类型，字段名 = 列名）+ 一条审计 {@code CONFIG_UPDATE_PRICING}；无变化不写不审计（本类既有口径）。
      * 改价即时生效、只影响新发起的解锁（{@code IdCardHdService} 扣费逻辑不动）。
      */
     @Transactional
     public void updateKtpPricing(KtpPricingForm form, long adminId) {
-        require(form.idHdDownloadPrice() >= 1 && form.passportPagePrice() >= 1 && form.passportBoardingPrice() >= 1
-                        && form.tailsonalityUnlockPrice() >= 1,
-                "价格须为 ≥1 的整数（IDR），不做 0 元限免", "admin.err.config.ktpPriceMin");
+        require(form.idHdDownloadPrice() >= MIN_UNLOCK_PRICE && form.passportPagePrice() >= MIN_UNLOCK_PRICE
+                        && form.passportBoardingPrice() >= MIN_UNLOCK_PRICE && form.tailsonalityUnlockPrice() >= MIN_UNLOCK_PRICE,
+                "价格须为 ≥100 的整数（IDR）", "admin.err.config.ktpPriceMin");
         // 上限与充值档位同一把尺（复审 0914）：误填天文数字会让用户端解锁单无法支付（QRIS 单笔上限），且与同表其它金额护栏不一致
         require(form.idHdDownloadPrice() <= MAX_TIER_AMOUNT && form.passportPagePrice() <= MAX_TIER_AMOUNT
                         && form.passportBoardingPrice() <= MAX_TIER_AMOUNT && form.tailsonalityUnlockPrice() <= MAX_TIER_AMOUNT,

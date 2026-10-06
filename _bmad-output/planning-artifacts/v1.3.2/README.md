@@ -14,7 +14,8 @@
 | 件 | 文件 | 说明 |
 |---|---|---|
 | PRD（App 端） | `PRD-v1.3.2-batch-a.md` | 原名 `1-3-2prd.md`，原样入库 |
-| PRD（后台） | `PRD-v1.3.2-batch-a-admin.md` | 原名 `v1-3-2后台prd.md`；AB-18A 定价 / AB-18B 场所专属章 |
+| PRD（后台） | `PRD-v1.3.2-batch-a-admin.md` | 原名 `v1-3-2后台prd.md`；AB-18A 定价 / AB-18B 场所专属章 / AB-23 已购解锁。2026-10-02 换为定稿版（含开发前复核订正，见决策日志 D-22~D-30） |
+| UI 稿（后台） | `ui-admin-v1.3.2-batch-a.html` | 原名 `ui-admin-1-3-2-integrated-v1.html`，2026-10-02 定稿；20 帧（A 定价 7 · B 支付记录 2 · C 专属章 7 · D 已购解锁 2 · E 规格 2） |
 | 内容设计 | `tailsonality-内容设计.md` | FR-117 维度 / 16 角色 / 题库 / 计分 / 全部文案（中文；EN/ID 由 dev agent 翻译，D-8） |
 | UI 稿 | `ui-v1.3.2-batch-a.html` | 52 屏；图面多为占位示意 |
 | 设计资产清单 | `设计资产清单.md` | 插画产线清单 |

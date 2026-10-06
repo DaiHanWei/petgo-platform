@@ -54,6 +54,22 @@
 | D-20 | 旧里程碑 H5 链接大徽章随素材变成专属图 | **接受**（旧链接变好看是好事）；KOLEKSI 圆点仍保持原样（C-10） | 5-2 |
 | D-21 | 设计素材何时入库 / 云端怎么跑 | 设计图非最终版，**暂不入库**；云端开发一律代码绘制占位、按约定路径与文件名引用，素材到货后只放文件不改代码。云端**按块（Epic）跑**，每块跑完本地验收再放下一块 | 全部带素材的 story；`cloud-rules-batch-a.md` |
 
+## 2026-10-02 · 后台 PRD 定稿后开发前拍板（操作者 Hex）
+
+后台 PRD（`PRD-v1.3.2-batch-a-admin.md`）与后台 UI 稿（`ui-admin-v1.3.2-batch-a.html`）2026-10-02 定稿，对照当前代码复核后定下以下几条。开发在 `feat/1.3.2-batch-a-admin`。
+
+| # | 议题 | 决定 | 覆盖/订正了什么 |
+|---|---|---|---|
+| D-22 | 专属章规格：D-10 与定稿后台 PRD §2.5 冲突 | **维持 D-10**：后台校验 PNG / 512×512 / ≤300KB / 透明底四项；颜色不限、App 按原色展示；不做圆形检查。PRD §2.5 已按此改写 | 定稿 PRD §2.5「单色 + 客户端着色 + 圆形 + 后台不做规格校验」 |
+| D-23 | 快照付款用途代号 | **保持 `PASSPORT_SNAP`**（代码 / CHECK / `keepsake_purchases.sku` 已统一），PRD 改写法 | 定稿 PRD §1.5 的 `PASSPORT_SNAPSHOT` |
+| D-24 | 已购解锁 · KTP 解锁时间 | **真实付款时间**：QRIS = 支付单 PAID 的 `updated_at`；PawCoin = 购买记录 `purchased_at`；找不到付款记录显示「—」 | PRD §3 未写取数口径 |
+| D-25 | 已购解锁 · 护照快照版本号 | **只给已付款的按付款先后编号**（v1、v2…连续，未付款不占号） | 同上 |
+| D-26 | 已购解锁 · 合并作废的登机牌 | **列出并标「已合并」**（客服可看出为同一地方付过两次） | 同上 |
+| D-27 | 专属章上传失败的报错位置 | **保持现状**：统一行内错误位，不在章区块内（与待确认汇总 1.5 一致） | UI 稿 C4 |
+| D-28 | 专属章「由谁、何时上传」 | **`places` 加 `stamp_uploaded_at` / `stamp_uploaded_by` 两列**；上传 / 替换写入，移除清空；存量章不显示该行 | UI 稿 C3 需要的数据源 |
+| D-29 | 支付记录「另有 PawCoin 抵扣」小字 | **保留**（UI 稿 B1/B2 没画，不是要删） | UI 稿 B1/B2 |
+| D-30 | 看板取数 SQL 同步 | 外部 `3.数据埋点/数据查询/内容运营所需数据.sql` 的 `spend_events` 按看板代码对齐：补 `keepsake_purchases` 一段；身份证高清改为「PawCoin 行 + ID_HD 到账」（原 SQL 把 QRIS 下单行也算成交，与看板不一致） | PRD §1.6 的「各加两段」写法（PRD 已订正为单一来源） |
+
 **写 story 时发现的线上问题（不属本版本，待操作者安排）**：KTP 高清购买 `IdCardHdService.purchaseCard` 的 QRIS 与 PawCoin 两条路共用幂等键 `id-hd-card:{cardId}`；先建 QRIS 单再在 24h 内改用 PawCoin，`PawCoinWalletService.debit` 会把它判为重放而**不扣币、仍解锁**。已在代码中核实（`PaymentIntentService` L111 `idempotency.store` + `PawCoinWalletService` L83 `isReplay`）。本版本三类新付费在 3-1 按渠道加后缀规避。
 
 ## 设计素材状态（2026-09-28）

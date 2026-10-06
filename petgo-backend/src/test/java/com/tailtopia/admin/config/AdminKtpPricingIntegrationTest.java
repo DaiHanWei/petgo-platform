@@ -98,18 +98,23 @@ class AdminKtpPricingIntegrationTest extends ApiIntegrationTest {
         return pricingRepo.findById(PricingConfig.SINGLETON_ID).orElseThrow();
     }
 
-    /** AC1：迁移后两列存在、≥1；三条 CHECK 在位（手工改库改成 0 会被拒）。 */
+    /** AC1（后台 PRD 2026-10-02 收紧）：四列 ≥100，四条 CHECK 在位（手工改库改成 99 会被拒）。 */
     @Test
-    void migrationAddedPassportColumnsWithMinOneChecks() {
+    void migrationKeepsFourPriceColumnsAtLeastHundred() {
         PricingConfig c = current();
-        assertThat(c.getPassportPageUnlockPrice()).isGreaterThanOrEqualTo(1);
-        assertThat(c.getPassportBoardingUnlockPrice()).isGreaterThanOrEqualTo(1);
-        assertThat(c.getIdHdDownloadPrice()).isGreaterThanOrEqualTo(1);
+        assertThat(c.getPassportPageUnlockPrice()).isGreaterThanOrEqualTo(100);
+        assertThat(c.getPassportBoardingUnlockPrice()).isGreaterThanOrEqualTo(100);
+        assertThat(c.getIdHdDownloadPrice()).isGreaterThanOrEqualTo(100);
+        assertThat(c.getTailsonalityUnlockPrice()).isGreaterThanOrEqualTo(100);
         List<String> checks = jdbc.queryForList(
                 "SELECT conname FROM pg_constraint WHERE conrelid = 'pricing_config'::regclass AND contype = 'c'", String.class);
-        assertThat(checks).contains("ck_pricing_passport_page_min", "ck_pricing_passport_boarding_min", "ck_pricing_id_hd_min");
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update("UPDATE pricing_config SET passport_page_unlock_price = 0 WHERE id = 1"))
-                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        assertThat(checks).contains("ck_pricing_passport_page_min", "ck_pricing_passport_boarding_min", "ck_pricing_id_hd_min",
+                "ck_pricing_tailsonality_min");
+        for (String col : List.of("id_hd_download_price", "passport_page_unlock_price", "passport_boarding_unlock_price",
+                "tailsonality_unlock_price")) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update("UPDATE pricing_config SET " + col + " = 99 WHERE id = 1"))
+                    .as(col).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        }
     }
 
     /** AC3 / AC4（V1.3.2 Story 3.1 扩为四价）：四价独立保存、只记真变化；改价即时反映到 App 下发接口。 */
@@ -163,24 +168,24 @@ class AdminKtpPricingIntegrationTest extends ApiIntegrationTest {
         assertThat(auditCount() - auditsBefore).isEqualTo(1);
     }
 
-    /** AC3：任一价 ≤0 → flash error 回显（整页）且三价均不变；非整数在绑定层 400。 */
+    /** AC3：任一价 <100 → flash error 回显（整页）且四价均不变；非整数在绑定层 400。 */
     @Test
     void zeroOrNegativeOrNonIntegerIsRejectedAndNothingChanges() throws Exception {
         snapshot();
         PricingConfig c = current();
         mvc.perform(post("/admin/config/ktp-pricing").with(authentication(superAdmin())).with(csrf())
                         .param("idHdDownloadPrice", String.valueOf(c.getIdHdDownloadPrice()))
-                        .param("passportPagePrice", "0")
+                        .param("passportPagePrice", "99")
                         .param("passportBoardingPrice", String.valueOf(c.getPassportBoardingUnlockPrice()))
                         .param("tailsonalityUnlockPrice", String.valueOf(c.getTailsonalityUnlockPrice())).param("lang", "zh_CN"))
-                .andExpect(status().is3xxRedirection()).andExpect(flash().attribute("error", org.hamcrest.Matchers.containsString("≥1")));
+                .andExpect(status().is3xxRedirection()).andExpect(flash().attribute("error", org.hamcrest.Matchers.containsString("≥100")));
         mvc.perform(post("/admin/config/ktp-pricing").with(authentication(superAdmin())).with(csrf())
-                        .param("idHdDownloadPrice", "-5").param("passportPagePrice", "1").param("passportBoardingPrice", "1")
-                        .param("tailsonalityUnlockPrice", "1"))
+                        .param("idHdDownloadPrice", "-5").param("passportPagePrice", "100").param("passportBoardingPrice", "100")
+                        .param("tailsonalityUnlockPrice", "100"))
                 .andExpect(status().is3xxRedirection()).andExpect(flash().attributeExists("error"));
         mvc.perform(post("/admin/config/ktp-pricing").with(authentication(superAdmin())).with(csrf())
-                        .param("idHdDownloadPrice", "1.5").param("passportPagePrice", "1").param("passportBoardingPrice", "1")
-                        .param("tailsonalityUnlockPrice", "1"))
+                        .param("idHdDownloadPrice", "1.5").param("passportPagePrice", "100").param("passportBoardingPrice", "100")
+                        .param("tailsonalityUnlockPrice", "100"))
                 .andExpect(status().isBadRequest());
         PricingConfig after = current();
         assertThat(after.getIdHdDownloadPrice()).isEqualTo(c.getIdHdDownloadPrice());
@@ -195,8 +200,8 @@ class AdminKtpPricingIntegrationTest extends ApiIntegrationTest {
         snapshot();
         PricingConfig c = current();
         mvc.perform(post("/admin/config/ktp-pricing").with(authentication(staffWith(AdminPermissions.CONFIG_VIEW))).with(csrf())
-                        .param("idHdDownloadPrice", "1").param("passportPagePrice", "1").param("passportBoardingPrice", "1")
-                        .param("tailsonalityUnlockPrice", "1"))
+                        .param("idHdDownloadPrice", "100").param("passportPagePrice", "100").param("passportBoardingPrice", "100")
+                        .param("tailsonalityUnlockPrice", "100"))
                 .andExpect(status().isForbidden());
         String page = mvc.perform(get("/admin/config").param("lang", "zh_CN").with(authentication(staffWith(AdminPermissions.CONFIG_VIEW))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();

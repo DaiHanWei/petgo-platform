@@ -11,6 +11,12 @@
 */-->
 <body>
 <div th:fragment="sumbar(oob)" class="sum" id="payments-summary" th:attr="hx-swap-oob=${oob} ? 'true' : null">
+    <!--/* 后台 PRD 2026-10-02：付费用户数（PAID 去重 user_id，随筛选实时变化）。口径说明在页面底部常驻（只含现金成交）。 */-->
+    <div class="sum-item">
+        <div class="sum-label" th:text="#{admin.payments.sum.payingUsers}">付费用户数</div>
+        <div class="sum-value" data-sum="paying-users" th:text="${#numbers.formatInteger(summary.payingUserCount(), 1, 'COMMA')}">0</div>
+        <div class="hint" th:text="#{admin.payments.sum.payingUsersHint}">去重 · 仅计已到账</div>
+    </div>
     <div class="sum-item">
         <div class="sum-label" th:text="#{admin.v130.payments.summary.orders}">本期支付笔数</div>
         <div class="sum-value" data-sum="orders" th:text="${summary.orderCount()}">0</div>

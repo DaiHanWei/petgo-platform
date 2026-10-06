@@ -88,6 +88,14 @@ public class Place {
     @Column(name = "stamp_object_key", length = 255)
     private String stampObjectKey;
 
+    /** 专属章最近一次上传 / 替换时刻（后台 PRD 2026-10-02）；与 {@link #stampObjectKey} 同生同灭。存量章为 null。 */
+    @Column(name = "stamp_uploaded_at")
+    private Instant stampUploadedAt;
+
+    /** 专属章最近一次上传 / 替换的后台账号 id；同上。 */
+    @Column(name = "stamp_uploaded_by")
+    private Long stampUploadedBy;
+
 
 
 
@@ -179,9 +187,11 @@ public class Place {
     }
 
     /** 上传 / 替换专属章（V1.3.2 Story 1.4）。旧 OSS 对象不删（App 可能仍缓存旧 URL）。返回是否为替换。 */
-    public boolean setStamp(String objectKey) {
+    public boolean setStamp(String objectKey, long uploadedByAdminAccountId, Instant uploadedAt) {
         boolean replaced = this.stampObjectKey != null;
         this.stampObjectKey = Objects.requireNonNull(objectKey, "objectKey");
+        this.stampUploadedBy = uploadedByAdminAccountId;
+        this.stampUploadedAt = Objects.requireNonNull(uploadedAt, "uploadedAt");
         return replaced;
     }
 
@@ -191,11 +201,21 @@ public class Place {
             return false;
         }
         stampObjectKey = null;
+        stampUploadedAt = null;
+        stampUploadedBy = null;
         return true;
     }
 
     public String getStampObjectKey() {
         return stampObjectKey;
+    }
+
+    public Instant getStampUploadedAt() {
+        return stampUploadedAt;
+    }
+
+    public Long getStampUploadedBy() {
+        return stampUploadedBy;
     }
 
     /** 软删（deleted_at）；列表查询默认 {@code deleted_at IS NULL}。 */
