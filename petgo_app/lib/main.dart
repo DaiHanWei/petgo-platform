@@ -11,6 +11,7 @@ import 'package:tailtopia/app.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/analytics/appsflyer_client.dart';
 import 'package:tailtopia/core/analytics/att_gate.dart';
+import 'package:tailtopia/core/analytics/firebase_stats.dart';
 import 'package:tailtopia/core/l10n/locale_controller.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
@@ -70,6 +71,12 @@ Future<void> main() async {
     ],
     child: const TailTopiaApp(),
   ));
+
+  // 首帧后：Firebase（GA4）日活统计。与下方 AppsFlyer / ATT / 通知权限链路互不等待 ——
+  // 统计初始化慢或失败都不能拖后弹窗，反之亦然（spec-v132-ga4-dau-daily-report）。
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(FirebaseStats.init());
+  });
 
   // 首帧后：归因 SDK 初始化 + iOS ATT 授权 + 启动上报，三件事全部让开首帧。
   //
