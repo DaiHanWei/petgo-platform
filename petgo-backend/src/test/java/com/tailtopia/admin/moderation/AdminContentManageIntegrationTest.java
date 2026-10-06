@@ -152,10 +152,15 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
         assertThat(csv.lines().findFirst().orElse("")).isEqualTo(String.join(",",
                 msg.get("admin.v130.content.export.col.postId"), msg.get("admin.content.col.type"),
                 msg.get("admin.v130.content.export.col.authorId"), msg.get("admin.content.col.likes"),
-                msg.get("admin.content.col.views"), msg.get("admin.content.col.viewers"),
+                msg.get("admin.content.col.comments"), msg.get("admin.content.col.views"), msg.get("admin.content.col.viewers"),
                 msg.get("admin.v130.content.export.col.createdWib"), msg.get("admin.content.col.status"),
                 msg.get("admin.content.col.preview")));
         assertThat(csv).contains(String.valueOf(keep));
+        // bug 20260925-573：类型 / 状态与列表页同一套本地化文案，不再是枚举名 DAILY / ONLINE。
+        String keepRow = csv.lines().filter(l -> l.startsWith(keep + ",")).findFirst().orElseThrow();
+        assertThat(keepRow).contains(msg.get("admin.contentType.DAILY"))
+                .contains(msg.get("admin.content.status.online"))
+                .doesNotContain(",DAILY,").doesNotContain(",ONLINE,");
         assertThat(csv).doesNotContain("tips merawat anjing")
                 .as("🔴 筛选条件没带进导出 ⇒ 导出的表与屏幕上看到的不是同一份");
         assertThat(auditService.search(null, null, actor, "CONTENT_LIST_EXPORT",
@@ -257,7 +262,7 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
         assertThat(csv.lines().findFirst().orElse("")).isEqualTo(String.join(",",
                 msg.get("admin.v130.content.export.col.postId"), msg.get("admin.content.col.type"),
                 msg.get("admin.v130.content.export.col.authorId"), msg.get("admin.content.col.likesInWindow"),
-                msg.get("admin.content.col.views"), msg.get("admin.content.col.viewers"),
+                msg.get("admin.content.col.comments"), msg.get("admin.content.col.views"), msg.get("admin.content.col.viewers"),
                 msg.get("admin.v130.content.export.col.createdWib"), msg.get("admin.content.col.status"),
                 msg.get("admin.content.col.preview")));
         assertThat(csv).as("🔴 导出与屏幕口径不一致 ⇒ 两份表长得一样、数字对不上，"
