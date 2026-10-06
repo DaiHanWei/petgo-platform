@@ -283,10 +283,16 @@ public class ContentService {
         if (postIds == null || postIds.isEmpty()) {
             return java.util.List.of();
         }
+        // 评论数整页一次 GROUP BY（bug 20260930-580：这里曾用兼容构造器默认填 0，列表 0 / 详情真实值对不上）
+        java.util.Map<Long, Long> commentCounts = comments.countNotDeletedIn(postIds).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        CommentRepository.PostCommentCount::getPostId,
+                        CommentRepository.PostCommentCount::getCommentCount));
         return posts.findAllById(postIds).stream()
                 .map(p -> new com.tailtopia.content.dto.AdminContentRow(p.getId(), p.getType(),
                         p.getAuthorId(), p.getText(), p.getDeletedAt() != null, p.getCreatedAt(),
-                        p.getImageUrls(), p.getSpeciesOverride()))
+                        p.getImageUrls(), p.getSpeciesOverride(),
+                        commentCounts.getOrDefault(p.getId(), 0L)))
                 .toList();
     }
 

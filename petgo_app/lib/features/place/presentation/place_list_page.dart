@@ -284,8 +284,10 @@ class PlaceListPage extends ConsumerWidget {
             place: place,
             sortedByRecent: sortedByRecent,
             // 🔒 **详情对游客开放**（后端 GET 已放行）→ 这里不套 requireLogin。
+            // extra 带上这一行（bug 20260925-572）：详情页先用它把首屏画出来，不白屏干等。
             onTap: () => context.push(
-                PlaceDetailPage.routeFor(place.token, from: kPlaceDetailFromList)),
+                PlaceDetailPage.routeFor(place.token, from: kPlaceDetailFromList),
+                extra: place),
           );
         },
       );

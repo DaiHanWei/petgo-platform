@@ -2538,5 +2538,7 @@
   "placeDeletedToast": "Tempat yang kamu pilih sudah dihapus",
   "diaryOnlyToggle": "Diary saja",
   "passportVisitCount": "{count} Kunjungan",
-  "@passportVisitCount": {"placeholders": {"count": {"type": "int"}}}
+  "@passportVisitCount": {"placeholders": {"count": {"type": "int"}}},
+  "orderPawcoinHistoryHint": "Di sini hanya isi ulang. Hadiah dan pemakaian ada di riwayat PawCoin.",
+  "orderPawcoinHistoryLink": "Lihat"
 }

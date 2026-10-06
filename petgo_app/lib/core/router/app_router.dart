@@ -81,6 +81,7 @@ import '../../features/consult/presentation/vet_timed_pay_page.dart';
 import '../../features/consult/presentation/vet_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
+import '../../features/place/domain/place_summary.dart';
 import '../../features/place/presentation/place_detail_page.dart';
 import '../../features/place/presentation/place_checkin_success_page.dart';
 import '../../features/boarding_pass/presentation/boarding_pass_detail_page.dart';
@@ -594,6 +595,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         builder: (c, s) => PlaceDetailPage(
           token: s.pathParameters['token']!,
           analyticsFrom: s.uri.queryParameters['from'],
+          // bug 20260925-572：从列表进来时带着那一行的摘要，详情未到前先画它。
+          // 深链 / 分享链接没有 extra → null，照旧转圈。
+          preview: s.extra is PlaceSummary ? s.extra! as PlaceSummary : null,
         ),
       ),
       // 打卡成功页（V1.3.2 Story 1.1 · AC5）。结果经 `extra` 传入（照 /me/refunds/pawcoin-success）。

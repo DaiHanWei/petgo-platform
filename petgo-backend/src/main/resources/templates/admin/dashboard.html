@@ -37,22 +37,67 @@
                 <div th:replace="~{admin/fragments/dashboard-charts :: charts}"></div>
             </div>
             <div th:fragment="db-detail" class="dashboard-detail">
-                <!-- 底部「当前时点总量」摘要行：复用 overview() 九个数字（Story 9.10 的 admin.dashboard.m.* key 原样保留） -->
-                <section class="summary-row card card-full">
-                    <h2 th:text="#{admin.v130.dashboard.summary}">当前时点总量</h2>
-                    <ul class="summary-list">
-                        <li><span th:text="#{admin.dashboard.m.totalUsers}">总用户</span><b th:text="${metrics.totalUsers}">0</b></li>
-                        <li><span th:text="#{admin.dashboard.m.virtualAccounts}">运营发布身份</span><b th:text="${metrics.virtualAccounts}">0</b></li>
-                        <li><span th:text="#{admin.dashboard.m.vetConsultOrders}">兽医咨询单</span><b th:text="${metrics.vetConsultOrders}">0</b></li>
-                        <li><span th:text="#{admin.dashboard.m.aiCompletedOrders}">AI 完成单</span><b th:text="${metrics.aiCompletedOrders}">0</b></li>
-                        <li><span th:text="#{admin.dashboard.m.aiRevenue}">AI 收入（IDR）</span><b th:text="${#numbers.formatInteger(metrics.aiRevenue, 1, 'COMMA')}">0</b></li>
-                        <li><span th:text="#{admin.dashboard.m.posts}">帖子数</span><b th:text="${metrics.posts}">0</b></li>
-                        <li><span th:text="#{admin.dashboard.m.comments}">评论数</span><b th:text="${metrics.comments}">0</b></li>
-                        <li><span th:text="#{admin.dashboard.m.totalVets}">兽医总数</span><b th:text="${metrics.totalVets}">0</b></li>
-                        <li><span th:text="#{admin.dashboard.m.pendingSettlements}">待打款月结</span><b th:text="${metrics.pendingSettlements}">0</b></li>
+                <!-- 「当前时点总量」（bug 20260924-558：按 UI 稿改为卡片网格 —— 图标 + 标签 + 大号数字，AI 收入高亮；
+                     数据仍是 overview() 九个数字，Story 9.10 的 admin.dashboard.m.* key 原样保留）。图标为内联 SVG，不引图标库。 -->
+                <section class="summary-row totals card card-full">
+                    <header class="totals-head">
+                        <span class="totals-head-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>
+                        <h2 th:text="#{admin.v130.dashboard.summary}">当前时点总量</h2>
+                        <span class="totals-live"><i class="totals-dot"></i><span th:text="#{admin.v132.dashboard.live}">实时数据</span></span>
+                        <span class="muted totals-updated" th:text="#{admin.v132.dashboard.updatedNow}">刚刚更新</span>
+                    </header>
+                    <ul class="totals-grid">
+                        <li class="totals-card totals-card--blue" th:classappend="''">
+                            <span class="totals-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.8c1.7.8 2.8 2.6 3 5.2"/></svg></span>
+                            <span class="totals-label" th:text="#{admin.dashboard.m.totalUsers}">总用户</span>
+                            <b class="totals-value" th:text="${metrics.totalUsers}">0</b>
+                        </li>
+                        <li class="totals-card totals-card--violet" th:classappend="''">
+                            <span class="totals-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></span>
+                            <span class="totals-label" th:text="#{admin.dashboard.m.virtualAccounts}">运营发布身份</span>
+                            <b class="totals-value" th:text="${metrics.virtualAccounts}">0</b>
+                        </li>
+                        <li class="totals-card totals-card--orange" th:classappend="''">
+                            <span class="totals-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3v6a5 5 0 0 0 10 0V3"/><path d="M10 14v2a5 5 0 0 0 10 0v-2"/><circle cx="20" cy="12" r="2"/></svg></span>
+                            <span class="totals-label" th:text="#{admin.dashboard.m.vetConsultOrders}">兽医咨询单</span>
+                            <b class="totals-value" th:text="${metrics.vetConsultOrders}">0</b>
+                        </li>
+                        <li class="totals-card totals-card--indigo" th:classappend="''">
+                            <span class="totals-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 13v1M15 13v1M2 13v3M22 13v3"/></svg></span>
+                            <span class="totals-label" th:text="#{admin.dashboard.m.aiCompletedOrders}">AI 完成单</span>
+                            <b class="totals-value" th:text="${metrics.aiCompletedOrders}">0</b>
+                        </li>
+                        <li class="totals-card totals-card--green" th:classappend="'totals-card--hl'">
+                            <span class="totals-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg></span>
+                            <span class="totals-label" th:text="#{admin.dashboard.m.aiRevenue}">AI 收入（IDR）</span>
+                            <b class="totals-value" th:text="${#numbers.formatInteger(metrics.aiRevenue, 1, 'COMMA')}">0</b>
+                        </li>
+                        <li class="totals-card totals-card--pink" th:classappend="''">
+                            <span class="totals-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></span>
+                            <span class="totals-label" th:text="#{admin.dashboard.m.posts}">帖子数</span>
+                            <b class="totals-value" th:text="${metrics.posts}">0</b>
+                        </li>
+                        <li class="totals-card totals-card--sky" th:classappend="''">
+                            <span class="totals-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></span>
+                            <span class="totals-label" th:text="#{admin.dashboard.m.comments}">评论数</span>
+                            <b class="totals-value" th:text="${metrics.comments}">0</b>
+                        </li>
+                        <li class="totals-card totals-card--teal" th:classappend="''">
+                            <span class="totals-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M12 9v6M9 12h6"/></svg></span>
+                            <span class="totals-label" th:text="#{admin.dashboard.m.totalVets}">兽医总数</span>
+                            <b class="totals-value" th:text="${metrics.totalVets}">0</b>
+                        </li>
+                        <li class="totals-card totals-card--amber" th:classappend="''">
+                            <span class="totals-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+                            <span class="totals-label" th:text="#{admin.dashboard.m.pendingSettlements}">待打款月结</span>
+                            <b class="totals-value" th:text="${metrics.pendingSettlements}">0</b>
+                        </li>
                     </ul>
-                    <p class="muted" th:text="#{admin.v130.dashboard.summaryNote}">已剔除虚拟 / 种子账号与已注销用户数据。</p>
-                    <p><a th:href="@{/admin/seed-post}" th:text="#{admin.dashboard.seedLink}">发布种子内容</a></p>
+                    <footer class="totals-foot">
+                        <span class="totals-foot-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></span>
+                        <span class="muted" th:text="#{admin.v130.dashboard.summaryNote}">已剔除虚拟 / 种子账号与已注销用户数据。</span>
+                        <a class="totals-seed" th:href="@{/admin/seed-post}"><span th:text="#{admin.dashboard.seedLink}">发布种子内容</span> →</a>
+                    </footer>
                 </section>
                 <p class="hint retention-note" th:text="#{admin.v130.dashboard.retentionNote}">次日留存：登录事件只进 PostHog，不落库；请去 PostHog 查看。</p>
                 <!-- Story 3.3 AC3：stag 专用手动跑批入口（Bean 只在 stag profile 注册；按钮也只在 stag 渲染）。htmx 自动带 CSRF 头。 -->

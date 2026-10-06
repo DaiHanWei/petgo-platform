@@ -43,17 +43,24 @@ class PetPassportRepository {
 final petPassportRepositoryProvider =
     Provider<PetPassportRepository>((ref) => PetPassportRepository(dio: ref.read(dioProvider)));
 
+/// ⚠️ 本文件的 provider 一律 `retry: (_, _) => null`（bug 20261006-583）：Riverpod 3 默认对抛错的 provider
+/// 自动指数退避重试（最多 10 次、约 40s+），重试期间状态是 `AsyncLoading` 而不是 `AsyncError` ——
+/// 断网时页面一直停在加载骨架（空白护照本），「加载失败，重试」要 40 多秒后才出来。失败就停在失败态，重试由用户触发。
+///
 /// 本人宠物护照。`autoDispose`：护照页是 push 进来的一次性页面，每次进入重新拉（新章要看得见）。
 final petPassportProvider = FutureProvider.autoDispose<PetPassport>(
   (ref) => ref.read(petPassportRepositoryProvider).fetch(),
+  retry: (_, _) => null,
 );
 
 /// 已买版本列表（Story 3.4）。
 final passportSnapshotsProvider = FutureProvider.autoDispose<List<PassportSnapshotItem>>(
   (ref) => ref.read(petPassportRepositoryProvider).snapshots(),
+  retry: (_, _) => null,
 );
 
 /// 单个已买版本（回看）。
 final passportSnapshotProvider = FutureProvider.autoDispose.family<PassportSnapshotDetail, String>(
   (ref, token) => ref.read(petPassportRepositoryProvider).snapshot(token),
+  retry: (_, _) => null,
 );

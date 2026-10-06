@@ -35,10 +35,15 @@ class BoardingPassRepository {
 final boardingPassRepositoryProvider =
     Provider<BoardingPassRepository>((ref) => BoardingPassRepository(dio: ref.read(dioProvider)));
 
+/// ⚠️ 本文件的 provider 一律 `retry: (_, _) => null`（bug 20261006-583）：Riverpod 3 默认对抛错的 provider
+/// 自动指数退避重试（最多 10 次、约 40s+），重试期间状态是 `AsyncLoading` 而不是 `AsyncError` ——
+/// 断网时页面一直停在加载骨架（空白护照本），「加载失败，重试」要 40 多秒后才出来。失败就停在失败态，重试由用户触发。
 final boardingPassListProvider = FutureProvider.autoDispose<BoardingPassList>(
   (ref) => ref.read(boardingPassRepositoryProvider).list(),
+  retry: (_, _) => null,
 );
 
 final boardingPassDetailProvider = FutureProvider.autoDispose.family<BoardingPassDetail, String>(
   (ref, placeToken) => ref.read(boardingPassRepositoryProvider).detail(placeToken),
+  retry: (_, _) => null,
 );

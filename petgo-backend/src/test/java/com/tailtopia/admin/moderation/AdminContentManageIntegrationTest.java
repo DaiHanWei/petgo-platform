@@ -152,10 +152,15 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
         assertThat(csv.lines().findFirst().orElse("")).isEqualTo(String.join(",",
                 msg.get("admin.v130.content.export.col.postId"), msg.get("admin.content.col.type"),
                 msg.get("admin.v130.content.export.col.authorId"), msg.get("admin.content.col.likes"),
-                msg.get("admin.content.col.views"), msg.get("admin.content.col.viewers"),
+                msg.get("admin.content.col.comments"), msg.get("admin.content.col.views"), msg.get("admin.content.col.viewers"),
                 msg.get("admin.v130.content.export.col.createdWib"), msg.get("admin.content.col.status"),
                 msg.get("admin.content.col.preview")));
         assertThat(csv).contains(String.valueOf(keep));
+        // bug 20260925-573：类型 / 状态与列表页同一套本地化文案，不再是枚举名 DAILY / ONLINE。
+        String keepRow = csv.lines().filter(l -> l.startsWith(keep + ",")).findFirst().orElseThrow();
+        assertThat(keepRow).contains(msg.get("admin.contentType.DAILY"))
+                .contains(msg.get("admin.content.status.online"))
+                .doesNotContain(",DAILY,").doesNotContain(",ONLINE,");
         assertThat(csv).doesNotContain("tips merawat anjing")
                 .as("🔴 筛选条件没带进导出 ⇒ 导出的表与屏幕上看到的不是同一份");
         assertThat(auditService.search(null, null, actor, "CONTENT_LIST_EXPORT",
@@ -220,6 +225,28 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
                 .isEqualTo(2L);
     }
 
+    /** bug 20260930-580：「按点赞时间」那档列表的评论数曾恒为 0，同一条帖子详情却是真实值。 */
+    @Test
+    void likeWindowRowsCarryTheSameCommentCountAsDetail() {
+        long p = newPost(ContentType.KNOWLEDGE, "tips merawat anabul");
+        likeAt(p, Instant.now().minusSeconds(600));
+        long commenter = newUser().getId();
+        comments.save(Comment.create(p, null, commenter, "a"));
+        comments.save(Comment.create(p, null, commenter, "b"));
+        Comment gone = comments.save(Comment.create(p, null, commenter, "c"));
+        gone.softDelete();
+        comments.save(gone);
+        LocalDate today = LocalDate.now(java.time.ZoneId.of("Asia/Jakarta"));
+
+        AdminContentRow inWindow = contentManage.browseByLikeWindow(null, null, today, today, null, null, 0)
+                .rows().stream().filter(r -> r.id() == p).findFirst().orElseThrow();
+
+        assertThat(inWindow.commentCount())
+                .as("🔴 按点赞时间列表的评论数与详情口径（未删，含一二级）不一致 ⇒ 列表 0 / 详情 2")
+                .isEqualTo(contentManage.row(p).commentCount())
+                .isEqualTo(2L);
+    }
+
     /** 🛡 导出跟随口径：选了「按点赞时间」，导出的列头与数字必须是窗口口径。 */
     @Test
     void exportFollowsTheLikeWindowBasis() {
@@ -235,7 +262,7 @@ class AdminContentManageIntegrationTest extends ApiIntegrationTest {
         assertThat(csv.lines().findFirst().orElse("")).isEqualTo(String.join(",",
                 msg.get("admin.v130.content.export.col.postId"), msg.get("admin.content.col.type"),
                 msg.get("admin.v130.content.export.col.authorId"), msg.get("admin.content.col.likesInWindow"),
-                msg.get("admin.content.col.views"), msg.get("admin.content.col.viewers"),
+                msg.get("admin.content.col.comments"), msg.get("admin.content.col.views"), msg.get("admin.content.col.viewers"),
                 msg.get("admin.v130.content.export.col.createdWib"), msg.get("admin.content.col.status"),
                 msg.get("admin.content.col.preview")));
         assertThat(csv).as("🔴 导出与屏幕口径不一致 ⇒ 两份表长得一样、数字对不上，"

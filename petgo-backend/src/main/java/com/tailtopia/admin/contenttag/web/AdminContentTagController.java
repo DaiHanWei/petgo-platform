@@ -146,7 +146,11 @@ public class AdminContentTagController {
     @PreAuthorize(VIEW)
     public String pick(@RequestParam(value = "q", required = false) String q,
             @RequestParam(value = "page", defaultValue = "0") int page, Model model) {
-        model.addAttribute("candidates", service.pickable(q, page));
+        var rows = service.pickable(q, page);
+        model.addAttribute("candidates", rows);
+        model.addAttribute("hasMore", rows.size() >= com.tailtopia.admin.pin.service.PinnableContentPicker.PAGE_SIZE);
+        model.addAttribute("q", q);
+        model.addAttribute("page", page);
         return "admin/content-tags :: candidates";
     }
 

@@ -135,6 +135,20 @@ public interface CommentRepository extends JpaRepository<Comment, Long>,
     List<PostCommentCount> countVisibleForViewerIn(@Param("postIds") Collection<Long> postIds,
             @Param("viewerId") Long viewerId);
 
+    /**
+     * 后台全量口径的一批帖子评论数（bug 20260930-580）：只排除已删除，<b>不</b>按审核状态 / viewer 过滤。
+     *
+     * <p>🔴 必须与后台列表 {@code ContentPostAdminSearchImpl} 的相关子查询、详情
+     * {@code countByPostIdAndDeletedAtIsNull} 同口径 —— 「按点赞时间」那档列表曾经直接填 0，
+     * 同一条帖子列表 0、详情 17，运营只会以为数据坏了。无评论的帖不在结果中，调用方默认 0。
+     */
+    @Query("""
+            SELECT c.postId AS postId, COUNT(c) AS commentCount FROM Comment c
+            WHERE c.postId IN :postIds AND c.deletedAt IS NULL
+            GROUP BY c.postId
+            """)
+    List<PostCommentCount> countNotDeletedIn(@Param("postIds") Collection<Long> postIds);
+
     /** 批量评论数投影（postId → 条数）。无评论的帖不在结果中，调用方默认 0。 */
     interface PostCommentCount {
         Long getPostId();

@@ -506,6 +506,7 @@ public class AdminContentManageService {
         return List.of(msg.get("admin.v130.content.export.col.postId"), msg.get("admin.content.col.type"),
                 msg.get("admin.v130.content.export.col.authorId"),
                 msg.get(likedWindow ? "admin.content.col.likesInWindow" : "admin.content.col.likes"),
+                msg.get("admin.content.col.comments"),
                 msg.get("admin.content.col.views"), msg.get("admin.content.col.viewers"),
                 msg.get("admin.v130.content.export.col.createdWib"), msg.get("admin.content.col.status"),
                 msg.get("admin.content.col.preview"));
@@ -515,13 +516,18 @@ public class AdminContentManageService {
      * 一行导出数据（转义交给 {@code AdminExportWriter}：RFC 4180 + 前导 {@code =} 防公式注入）。
      *
      * <p>🔴 时间一律 WIB —— 后台全站按雅加达解释；导出若给 UTC，运营会把两份对不上的数拿去做汇报。
+     *
+     * <p>🔴 类型 / 状态与列表页同一套本地化文案（bug 20260925-573）：曾直接输出枚举名 DAILY / ONLINE，
+     * 与页面上的 Moment / 上线中 对不上。评论数与列表页同口径（未删，含一二级）。
      */
-    private static List<Object> exportRow(AdminContentRow r, long likeCount,
+    private List<Object> exportRow(AdminContentRow r, long likeCount,
             com.tailtopia.content.service.ContentViewStatsService.ViewStat vs) {
-        return java.util.Arrays.asList(r.id(), r.type() == null ? "" : r.type().name(),
-                r.authorId() == null ? "" : r.authorId(), likeCount,
+        return java.util.Arrays.asList(r.id(),
+                r.type() == null ? "" : msg.get("admin.contentType." + r.type().name()),
+                r.authorId() == null ? "" : r.authorId(), likeCount, r.commentCount(),
                 vs == null ? 0 : vs.views(), vs == null ? 0 : vs.viewers(),
-                WIB_CSV.format(r.createdAt().atZone(WIB)), r.deleted() ? "DELETED" : "ONLINE",
+                WIB_CSV.format(r.createdAt().atZone(WIB)),
+                msg.get(r.deleted() ? "admin.content.status.deleted" : "admin.content.status.online"),
                 r.textPreview());
     }
 

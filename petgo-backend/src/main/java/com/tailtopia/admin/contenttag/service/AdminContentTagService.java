@@ -33,7 +33,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class AdminContentTagService {
 
     /** 打标内容选择器每页条数。候选集接近全量内容，必须分页。 */
-    private static final int PICK_PAGE_SIZE = 20;
 
     private static final int SUMMARY_MAX = 40;
 
@@ -48,12 +47,14 @@ public class AdminContentTagService {
     /** 分配记录的「操作人」：分配表没有这一列，取自审计里那条 CONTENT_TAG_ASSIGN（Story 7.4 · AC3）。 */
     private final com.tailtopia.admin.audit.repository.AdminAuditLogRepository auditLogs;
     private final com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts;
+    private final com.tailtopia.admin.pin.service.PinnableContentPicker picker;
 
     public AdminContentTagService(ContentTagRepository tags,
             ContentTagAssignmentRepository assignments, ContentTagQueryService tagService,
             ContentPostRepository posts, AdminAuditService audit,
             com.tailtopia.admin.audit.repository.AdminAuditLogRepository auditLogs,
-            com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts) {
+            com.tailtopia.admin.account.repository.AdminAccountRepository adminAccounts,
+            com.tailtopia.admin.pin.service.PinnableContentPicker picker) {
         this.tags = tags;
         this.assignments = assignments;
         this.tagService = tagService;
@@ -61,6 +62,7 @@ public class AdminContentTagService {
         this.audit = audit;
         this.auditLogs = auditLogs;
         this.adminAccounts = adminAccounts;
+        this.picker = picker;
     }
 
     /**
@@ -240,14 +242,7 @@ public class AdminContentTagService {
     /** 打标内容选择器：复用顶置那条「只返回可公开展示内容」的分页查询，不另写一份。 */
     @Transactional(readOnly = true)
     public List<com.tailtopia.admin.pin.dto.PinnableContentRow> pickable(String keyword, int page) {
-        // 🔴 绝不传 null：绑 null 时 Postgres 推不出类型（lower(bytea) does not exist），
-        //    而"不带关键词"正是页面首次加载的那一次。无关键词 → "%" 匹配全部。
-        String pattern = (keyword == null || keyword.isBlank())
-                ? "%" : "%" + keyword.trim().toLowerCase() + "%";
-        return posts.searchPinnable(pattern, PageRequest.of(Math.max(page, 0), PICK_PAGE_SIZE)).stream()
-                .map(p -> new com.tailtopia.admin.pin.dto.PinnableContentRow(
-                        p.getId(), p.getType().name(), truncate(p.getText()), p.getCreatedAt()))
-                .toList();
+        return picker.page(keyword, page);
     }
 
     private List<AssignmentRow> decorate(List<ContentTagAssignment> rows, Instant now) {
