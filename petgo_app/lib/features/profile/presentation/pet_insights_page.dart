@@ -260,6 +260,7 @@ class _PetInsightsPageState extends ConsumerState<PetInsightsPage> {
                   icon: Icons.psychology_alt_outlined,
                   title: l10n.tailsonalityTitle,
                   sub: l10n.tailsonalityEntrySub,
+                  badge: l10n.insightNewBadge,
                   onTap: _onTailsonalityTap,
                 ),
               ),

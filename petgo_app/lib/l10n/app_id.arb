@@ -2412,6 +2412,7 @@
   "@timelineCheckinSemantics": {"placeholders": {"place": {"type": "String"}}},
   "tailsonalityTitle": "Tailsonality",
   "tailsonalityEntrySub": "Cari tahu kepribadian hewanmu",
+  "insightNewBadge": "new",
   "tailsonalityIntroSubject": "Tes kepribadian {pet} · {breed}",
   "@tailsonalityIntroSubject": {"placeholders": {"pet": {"type": "String"}, "breed": {"type": "String"}}},
   "tailsonalityIntroSubjectNoBreed": "Tes kepribadian {pet}",

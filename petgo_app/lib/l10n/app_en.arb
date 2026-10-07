@@ -3721,6 +3721,8 @@
   "@tailsonalityTitle": {"description": "Tailsonality: personality test entry card and intro sheet title (V1.3.2 Story 2.3). Product name, same in every locale."},
   "tailsonalityEntrySub": "Find out your pet's personality",
   "@tailsonalityEntrySub": {"description": "Know Your Pet hub: Tailsonality card subtitle."},
+  "insightNewBadge": "new",
+  "@insightNewBadge": {"description": "Know Your Pet hub: small red corner tag on a newly launched entry card (currently Tailsonality). Kept as the English word in every locale per product."},
   "tailsonalityIntroSubject": "Personality test for {pet} · {breed}",
   "@tailsonalityIntroSubject": {"description": "Intro sheet: who is being tested (pet name + breed or species).", "placeholders": {"pet": {"type": "String"}, "breed": {"type": "String"}}},
   "tailsonalityIntroSubjectNoBreed": "Personality test for {pet}",
