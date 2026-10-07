@@ -37,6 +37,10 @@
                                #    comment.virtual_post 的运营有权限却没有任何入口能走到这一页**
                                #    （「能进却看不见」）。修法是设计问题（侧栏该指向哪个页签），
                                #    已记入 Story 11.4 待拍板，不在 11.4 里私自改。
+/admin/payments/keepsake-exceptions   # 一次性解锁异常子页（V1.3.2 Story 3.6 AC5），真整页、只读。
+                                      #    门 = 与 /admin/payments 逐字同一个 VIEW_AUTH（payment.view），
+                                      #    入口是支付页顶部页内链接（同一 sec:authorize），story 明定不进侧栏；
+                                      #    码随父页，不在权限矩阵另起一行。
 
 # ---- 表单页（从列表页进入，本身不在导航里）----
 # ⚠️ Story 11.3 AC1 明确「/admin/shop/products/{id} 与 /new 表单页保留独立」（10.3）。
