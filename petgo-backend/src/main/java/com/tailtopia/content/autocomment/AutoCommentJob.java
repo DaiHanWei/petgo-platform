@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 自动评论定时任务：每天 10:30 与 20:30（WIB）各跑一轮（2026-09-29 由 09:30 / 20:00 调整）。
+ * 自动评论定时任务：每天 10:30 与 16:30（WIB）各跑一轮（2026-09-29 由 09:30 / 20:00 调整为 10:30 / 20:30；2026-10-07 晚场改 16:30）。
  *
  * <p>🔴 {@code zone} 必须显式写 Asia/Jakarta：容器默认 UTC，不写会晚 7 小时。
  * 调度开关由 {@code AsyncConfig} 的 {@code @EnableScheduling} 统一开启；禁引 Quartz 等调度中间件。
@@ -38,7 +38,7 @@ public class AutoCommentJob {
         run("morning");
     }
 
-    @Scheduled(cron = "${petgo.auto-comment.evening-cron:0 30 20 * * *}", zone = "Asia/Jakarta")
+    @Scheduled(cron = "${petgo.auto-comment.evening-cron:0 30 16 * * *}", zone = "Asia/Jakarta")
     public void evening() {
         run("evening");
     }

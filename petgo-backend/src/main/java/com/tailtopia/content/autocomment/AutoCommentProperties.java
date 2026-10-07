@@ -20,8 +20,8 @@ public class AutoCommentProperties {
     /** 早场 cron（Asia/Jakarta）：10:30。 */
     private String morningCron = "0 30 10 * * *";
 
-    /** 晚场 cron（Asia/Jakarta）：20:30。 */
-    private String eveningCron = "0 30 20 * * *";
+    /** 晚场 cron（Asia/Jakarta）：16:30。 */
+    private String eveningCron = "0 30 16 * * *";
 
     /** 只评这一天（WIB 零点）之后发的帖，老帖没有意义。 */
     private LocalDate startDate = LocalDate.of(2026, 9, 29);
