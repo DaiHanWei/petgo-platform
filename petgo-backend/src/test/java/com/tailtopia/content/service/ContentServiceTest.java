@@ -68,8 +68,13 @@ class ContentServiceTest {
                 new com.tailtopia.mention.service.MentionSanitizer(
                         Mockito.mock(com.tailtopia.auth.service.AccountQueryService.class),
                         Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class),
-                        Mockito.mock(com.tailtopia.mention.repository.MentionCandidateRepository.class)));
+                        Mockito.mock(com.tailtopia.mention.repository.MentionCandidateRepository.class)),
+                // V1.3.2 Story 1.5：打卡关联只读口（本类按需 stub）。
+                placeCheckins);
     }
+
+    private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins =
+            Mockito.mock(com.tailtopia.place.service.PlaceCheckinQueryService.class);
 
     private static void setId(ContentPost p, long id) {
         try {
@@ -263,6 +268,60 @@ class ContentServiceTest {
         assertThat(pending.getImageSizes())
                 .as("挂起分支漏写尺寸 —— 审核通过后进 Feed 会永远没有尺寸，且不报任何错")
                 .containsExactly(new com.tailtopia.content.domain.ImageSize(1200, 1600));
+    }
+
+    // ===== V1.3.2 Story 1.5：打卡后顺手发帖（AD-10）=====
+
+    private static ContentPostCreateRequest withCheckin(String token) {
+        return new ContentPostCreateRequest(ContentType.DAILY, null, "Ngopi bareng anabul", null, null, null,
+                null, null, token);
+    }
+
+    @Test
+    void ownCheckinTokenIsLinkedOnPublish() {
+        when(placeCheckins.findOwnedCheckinId(1L, "t".repeat(32))).thenReturn(java.util.Optional.of(501L));
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+
+        service.publish(1L, withCheckin("t".repeat(32)), null);
+
+        verify(posts).save(captor.capture());
+        assertThat(captor.getValue().getPlaceCheckinId()).isEqualTo(501L);
+    }
+
+    @Test
+    void foreignOrUnknownCheckinTokenIs422AndNothingIsSaved() {
+        when(placeCheckins.findOwnedCheckinId(org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyString())).thenReturn(java.util.Optional.empty());
+
+        assertThatThrownBy(() -> service.publish(1L, withCheckin("someone-elses-token"), null))
+                .isInstanceOf(com.tailtopia.shared.error.AppException.class)
+                .satisfies(e -> assertThat(((com.tailtopia.shared.error.AppException) e).getType())
+                        .isEqualTo(com.tailtopia.shared.error.ErrorTypes.POST_CHECKIN_INVALID));
+        verify(posts, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void noCheckinTokenLeavesTheLinkEmptyAndNeverQueries() {
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+        service.publish(1L, withCheckin(null), null);
+        verify(posts).save(captor.capture());
+        assertThat(captor.getValue().getPlaceCheckinId()).isNull();
+        org.mockito.Mockito.verifyNoInteractions(placeCheckins);
+    }
+
+    /** 🔴 挂起分支同样要写打卡关联（与尺寸 / @ 名单同一个坑）。 */
+    @Test
+    void pendingReviewPostAlsoCarriesCheckinLink() {
+        when(manualReviewGate.enabled()).thenReturn(true);
+        when(placeCheckins.findOwnedCheckinId(1L, "t".repeat(32))).thenReturn(java.util.Optional.of(502L));
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+
+        service.publish(1L, new ContentPostCreateRequest(ContentType.DAILY, null, "stub-high borderline text",
+                null, null, null, null, null, "t".repeat(32)), null);
+
+        verify(posts).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo(com.tailtopia.content.domain.PostStatus.UNDER_REVIEW);
+        assertThat(captor.getValue().getPlaceCheckinId()).isEqualTo(502L);
     }
 
     /** PR#34 finding #2：PRIVATE 日记进人工审核挂起时必须保留可见范围——否则审核通过后以实体默认 PUBLIC 进 Feed。 */

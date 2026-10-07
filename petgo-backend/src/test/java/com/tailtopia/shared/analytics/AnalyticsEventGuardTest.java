@@ -54,6 +54,16 @@ class AnalyticsEventGuardTest {
         // 2026-09-25 KTP 付费漏斗
         assertThat(guard.allowsEvent("ktp_unlock_succeeded")).isTrue();
         assertThat(guard.allowsEvent("ktp_unlock_failed")).isTrue();
+        // V1.3.2 Story 1.2：场所打卡 / 护照（服务端发）
+        assertThat(guard.allowsEvent("place_checkin")).isTrue();
+        assertThat(guard.allowsEvent("passport_issued")).isTrue();
+        assertThat(guard.allowsEvent("passport_stamped")).isTrue();
+        // V1.3.2 Story 3.2：Tailsonality 解锁成功（服务端发）
+        assertThat(guard.allowsEvent("tailsonality_unlocked")).isTrue();
+        // V1.3.2 Story 3.4：护照快照解锁成功（服务端发，事件名暂定）
+        assertThat(guard.allowsEvent("passport_snapshot_unlocked")).isTrue();
+        // V1.3.2 Story 3.5：登机牌单张解锁成功（服务端发，事件名暂定）
+        assertThat(guard.allowsEvent("boarding_pass_unlocked")).isTrue();
     }
 
     @Test
@@ -89,8 +99,18 @@ class AnalyticsEventGuardTest {
         raw.put("method", "QRIS");
         raw.put("price_idr", 10_000L);
         raw.put("failure_reason", "EXPIRED");
+        // V1.3.2 Story 1.2
+        raw.put("place_id", "aZ09aZ09aZ09aZ09aZ09aZ09aZ09aZ09");
+        raw.put("place_type", "CAFE");
+        raw.put("is_new_stamp", true);
+        raw.put("passport_source", "KTP");
+        raw.put("stamp_count", 3);
+        // V1.3.2 Story 3.2
+        raw.put("role_code", "ENTJ-H");
+        raw.put("price", 5_000L);
+        raw.put("result_index", 2);
 
-        assertThat(guard.filterProperties(raw)).hasSize(15).containsAllEntriesOf(raw);
+        assertThat(guard.filterProperties(raw)).hasSize(23).containsAllEntriesOf(raw);
     }
 
     @Test

@@ -162,6 +162,12 @@ public class SecurityConfig {
                                 "/place/**").permitAll()
                         // 品牌静态资源（H5 名片/分享页左上角 wordmark，bug 20260701-182）公开放行。
                         .requestMatchers(HttpMethod.GET, "/brand/**").permitAll()
+                        // 里程碑徽章素材（V1.3.2 Story 5.2 · AD-15）：/m 分享页的大徽章与 KOLEKSI 图。只 GET；
+                        // ⚠️ 不并进 /m/** 那组（那是三种分享页各自的前缀，见上）。
+                        .requestMatchers(HttpMethod.GET, "/milestone/**").permitAll()
+                        // Tailsonality 16 张角色卡 + 5 张配型卡（V1.3.2 · 2026-10-05 产品定：不打进 App 包，出结果时按需下载）。只 GET；
+                        // 与包内素材同等公开（APK 本就可解包），付费保护靠出图水印，不靠藏图。
+                        .requestMatchers(HttpMethod.GET, "/tailsonality/**").permitAll()
                         // 法律政策 H5（隐私 / 条款 / Mitra 条款 / 账号删除 / 儿童安全 / 支持）+ 下载引导落地页公开放行（商店上架 + App WebView 引用）
                         .requestMatchers(HttpMethod.GET, "/privacy", "/terms", "/mitra-terms",
                                 "/account-deletion", "/child-safety", "/support", "/get").permitAll()
@@ -244,6 +250,9 @@ public class SecurityConfig {
                         // 举报场所（Story 1.5）：**仅 role=USER**，与标记场所同一理由
                         // （controller 把 jwt.sub 当 users.id 用，兽医 token 的 sub 是 vetId）。
                         .requestMatchers(HttpMethod.POST, "/api/v1/places/*/reports").hasRole("USER")
+                        // 场所打卡（V1.3.2 Story 1.1）：**仅 role=USER**，同举报的理由（controller 把 jwt.sub
+                        // 当 users.id 用）。仍然精确路径，不写 `/places/**` 通配。
+                        .requestMatchers(HttpMethod.POST, "/api/v1/places/*/checkins").hasRole("USER")
                         // 场所评论列表（Story 1.7）：同详情，GET 对游客放行。
                         // ⚠️ 这条**必须写在** `GET /api/v1/places/*` 之后也无妨（两者路径形状不同，
                         //    `/*` 只匹配一段），但绝不能省 —— 省了它游客拉评论会 401，
@@ -299,6 +308,21 @@ public class SecurityConfig {
                                 "/api/v1/me/shop-reviews", "/api/v1/me/shop-reviews/**",
                                 "/api/v1/me/shop-returns", "/api/v1/me/shop-returns/**",
                                 "/api/v1/me/shop/**").hasRole("USER")
+                        // 宠物护照（V1.3.2 Story 1.2）：GET 里会签发（写）且 controller 把 jwt.sub 当 users.id 用 ——
+                        // 兽医 token 落到 anyRequest().authenticated() 会以同号用户名义签发 / 读取护照。精确路径，不写通配。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pet-profiles/me/passport").hasRole("USER")
+                        // 护照快照（V1.3.2 Story 3.4）：发起购买 / 已购列表 / 回看，同上理由（sub 当 users.id 用）。
+                        .requestMatchers("/api/v1/pet-profiles/me/passport/snapshots",
+                                "/api/v1/pet-profiles/me/passport/snapshots/**").hasRole("USER")
+                        // 登机牌（V1.3.2 Story 3.5）：GET 列表 / 详情 + POST unlock，同上理由。
+                        .requestMatchers("/api/v1/pet-profiles/me/boarding-passes",
+                                "/api/v1/pet-profiles/me/boarding-passes/**").hasRole("USER")
+                        // Tailsonality 主人类型（V1.3.2 Story 2.5）：账号级 /me 端点，同上面 /api/v1/me/* 的理由（sub 当 users.id 用）。
+                        .requestMatchers("/api/v1/me/tailsonality/**").hasRole("USER")
+                        // Tailsonality 结果（V1.3.2 Story 2.1）：controller 把 jwt.sub 当 users.id 用，兽医 token 的 sub
+                        // 与 users.id 撞号 —— 落 anyRequest().authenticated() 会以同号用户名义提交 / 读取。不写 pet-profiles 通配。
+                        .requestMatchers("/api/v1/pet-profiles/me/tailsonality",
+                                "/api/v1/pet-profiles/me/tailsonality/**").hasRole("USER")
                         // 其余 /api/v1 默认需 JWT（写一律拒绝未登录）；user 写端点对 vet token → 403
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

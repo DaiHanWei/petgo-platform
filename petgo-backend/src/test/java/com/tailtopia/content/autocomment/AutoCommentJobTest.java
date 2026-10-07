@@ -21,7 +21,7 @@ class AutoCommentJobTest {
         AutoCommentProperties defaults = new AutoCommentProperties();
         assertThat(defaults.isEnabled()).isTrue();
         assertThat(defaults.getMorningCron()).isEqualTo("0 30 10 * * *");
-        assertThat(defaults.getEveningCron()).isEqualTo("0 30 20 * * *");
+        assertThat(defaults.getEveningCron()).isEqualTo("0 30 16 * * *");
     }
 
     @Test

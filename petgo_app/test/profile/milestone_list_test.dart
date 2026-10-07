@@ -107,9 +107,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('milestoneBadge_C-S1')), findsOneWidget);
-    // 已完成 → 奖杯图标；未完成 → 锁图标。
-    expect(find.byIcon(Icons.emoji_events_rounded), findsWidgets);
-    expect(find.byIcon(Icons.lock_outline_rounded), findsWidgets);
+    // 素材已入库（2026-10-05）：已完成 → 该枚真图；未完成 → 全局锁定图（不暴露是哪一枚）。
+    // 缺素材时的奖杯 / 锁图标回落由 milestone_badge_test 用 debugOverride 覆盖。
+    String artOf(String code) =>
+        (tester.widget<Image>(find.byKey(ValueKey('milestoneBadgeArt_$code'))).image as AssetImage)
+            .assetName;
+    expect(artOf('C-S1'), 'assets/milestone/profile_created.webp');
+    expect(artOf('C-S6'), 'assets/milestone/locked.webp');
   });
 
   testWidgets('点击未完成非打卡徽章 → P-33b 只读说明（无打卡按钮）', (tester) async {

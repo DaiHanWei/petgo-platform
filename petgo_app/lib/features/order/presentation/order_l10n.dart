@@ -15,6 +15,9 @@ IconData orderTypeIcon(OrderType t) => switch (t) {
       OrderType.pawcoinTopup => Icons.savings_outlined,
       OrderType.idHd => Icons.badge_outlined,
       OrderType.ecommerce => Icons.shopping_bag_outlined,
+      OrderType.tailsonality => Icons.psychology_outlined,
+      OrderType.passportSnap => Icons.menu_book_outlined,
+      OrderType.boardingPass => Icons.airplane_ticket_outlined,
       OrderType.unknown => Icons.receipt_long_outlined,
     };
 
@@ -25,6 +28,9 @@ String orderTypeLabel(AppLocalizations l10n, OrderType t) => switch (t) {
       OrderType.pawcoinTopup => l10n.orderTypeTopup,
       OrderType.idHd => l10n.orderTypeIdHd,
       OrderType.ecommerce => l10n.orderTypeEcommerce,
+      OrderType.tailsonality => l10n.orderTypeTailsonality,
+      OrderType.passportSnap => l10n.orderTypePassportSnap,
+      OrderType.boardingPass => l10n.orderTypeBoardingPass,
       OrderType.unknown => l10n.orderTypeUnknown,
     };
 
@@ -46,6 +52,8 @@ String orderStatusLabel(AppLocalizations l10n, String statusCode) => switch (sta
       'REFUNDED' => l10n.orderStatusRefunded,
       'PAID' => l10n.orderStatusPaid,
       'PENDING' => l10n.orderStatusPending,
+      // V1.3.2 Story 3.6：一次性解锁重复 / 孤儿付款。🔴 缺分支会把字面量原样显示给用户（见上方 SHIPPED 的教训）。
+      'UNDER_REVIEW' => l10n.orderStatusUnderReview,
       _ => statusCode,
     };
 

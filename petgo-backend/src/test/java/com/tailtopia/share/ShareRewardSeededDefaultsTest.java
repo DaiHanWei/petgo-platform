@@ -60,6 +60,15 @@ class ShareRewardSeededDefaultsTest extends ApiIntegrationTest {
      * 它的状态才代表 <b>没有紧急情况</b>，而不是「还没配好」——
      * 否则运营看到开关是关的，无从判断是谁因为什么关的。
      */
+    /** V1.3.2 Story 4.5：两个新渠道四项同样默认 0（RC-3 由运营配）。 */
+    @Test
+    void tailsonalityAndPassportChannelsDefaultToZero() {
+        for (String col : java.util.List.of("tailsonality_share_reward", "tailsonality_share_daily_cap",
+                "passport_share_reward", "passport_share_daily_cap")) {
+            assertThat(columnDefault(col)).as("🔴 %s 的默认值被改动了", col).isEqualTo("0");
+        }
+    }
+
     @Test
     void masterSwitchDefaultsToOnBecauseItMeansNoEmergencyNotUnconfigured() {
         assertThat(columnDefault("share_reward_enabled")).isEqualTo("true");

@@ -213,7 +213,7 @@
                         <input type="search" name="q" class="inp field-full" th:placeholder="#{admin.tags.pickSearch}"
                                hx-get="/admin/content-tags/pick" hx-target="#tagCandidates"
                                hx-trigger="keyup changed delay:300ms, search"/>
-                        <div id="tagCandidates" hx-get="/admin/content-tags/pick" hx-trigger="load">
+                        <div id="tagCandidates" class="pick-list" hx-get="/admin/content-tags/pick" hx-trigger="load">
                             <p class="hint" th:text="#{admin.tags.pickEmpty}">没有可打标的公开内容。</p>
                         </div>
                     </fieldset>

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/storage/prefs.dart';
 import '../domain/archive_scope.dart';
 import '../domain/archive_stats.dart';
 import '../domain/calendar_month.dart';
@@ -16,10 +17,13 @@ import '../domain/visitor_profile.dart';
 /// **取数只有这一份实现**，两种作用域只是地址不同 —— 不复制第二套，
 /// 否则两套迟早漂移，而漂移的方向永远是访客那套更宽松。
 abstract class TimelineRepository {
+  /// [diaryOnly]（2026-10-06「只看 Diary」开关）：只取主人自己发的内容，由服务端筛（分页才准）；
+  /// 仅作者态有意义，访客态忽略。
   Future<TimelinePage> getTimeline({
     String? cursor,
     int limit = 20,
     ArchiveScope scope = const ArchiveScope.me(),
+    bool diaryOnly = false,
   });
 
   /// 日历月视图（按 event_date 聚合有记录日）。
@@ -42,6 +46,12 @@ abstract class TimelineRepository {
   Future<VisitorProfile> getInAppVisitorProfile(int petId);
 }
 
+/// Diary 客户端能力声明（V1.3.2 Story 1.6 · AD-9）：作者态时间线 / 日历 / 日详情请求带 `supports`。
+///
+/// 后端对未声明的新条目类型一律不下发（老 App 会把未知类型回落成照片卡）。
+/// V1.3.2 Story 3.3 追加 `tailsonality`；**访客态请求不带**（访客层不出打卡 / Tailsonality 条目）。
+const List<String> kTimelineSupports = ['place_checkin', 'tailsonality'];
+
 class DioTimelineRepository implements TimelineRepository {
   DioTimelineRepository(this.dio);
 
@@ -52,6 +62,7 @@ class DioTimelineRepository implements TimelineRepository {
     String? cursor,
     int limit = 20,
     ArchiveScope scope = const ArchiveScope.me(),
+    bool diaryOnly = false,
   }) async {
     if (scope.isVisitor) {
       // ⚠️ 访客侧**不分页**：服务端只给「最近 N 条」（访客是看一眼别人的宠物，
@@ -67,8 +78,9 @@ class DioTimelineRepository implements TimelineRepository {
           .toList();
       return TimelinePage(items: items, nextCursor: null, hasMore: false);
     }
-    final query = <String, dynamic>{'limit': limit};
+    final query = <String, dynamic>{'limit': limit, 'supports': kTimelineSupports};
     if (cursor != null) query['cursor'] = cursor;
+    if (diaryOnly) query['diaryOnly'] = true;
     final resp = await dio.get<Map<String, dynamic>>(
       ApiPaths.petProfileTimeline,
       queryParameters: query,
@@ -85,7 +97,11 @@ class DioTimelineRepository implements TimelineRepository {
       // 真有人从站内态调到这儿，当场抛比拼一个 `//` 的畸形 URL（或者更糟，
       // 悄悄回落到作者态看到自己的档案）都容易发现。
       scope.isVisitor ? ApiPaths.sharedPetCalendar(scope.token!) : ApiPaths.petProfileCalendar,
-      queryParameters: {'year': year, 'month': month},
+      queryParameters: {
+        'year': year,
+        'month': month,
+        if (!scope.isVisitor) 'supports': kTimelineSupports,
+      },
     );
     return CalendarMonth.fromJson(resp.data!);
   }
@@ -98,7 +114,7 @@ class DioTimelineRepository implements TimelineRepository {
     final resp = await dio.get<Map<String, dynamic>>(
       // token! 同上：站内态没有某天详情，走到这儿就该当场炸。
       scope.isVisitor ? ApiPaths.sharedPetDay(scope.token!) : ApiPaths.petProfileDay,
-      queryParameters: {'date': iso},
+      queryParameters: {'date': iso, if (!scope.isVisitor) 'supports': kTimelineSupports},
     );
     return DayDetail.fromJson(resp.data!);
   }
@@ -132,9 +148,45 @@ final Provider<TimelineRepository> timelineRepositoryProvider =
     Provider<TimelineRepository>((ref) => DioTimelineRepository(ref.read(dioProvider)));
 
 /// 首屏时间线（AsyncValue）。无限滚动的后续页由页面控制器追加。
+/// 跟随 [diaryOnlyProvider]：开关一拨，第一页换成新实例 → 页面据此丢掉已翻的页重来。
 final FutureProvider<TimelinePage> timelineFirstPageProvider = FutureProvider<TimelinePage>(
-  (ref) => ref.read(timelineRepositoryProvider).getTimeline(),
+  (ref) => ref.read(timelineRepositoryProvider).getTimeline(diaryOnly: ref.watch(diaryOnlyProvider)),
 );
+
+/// Diary 页「只看 Diary」开关（2026-10-06 产品）：开 = 只看主人自己发的帖子；关 = banner + 帖子全部。
+///
+/// 记在本机（[AppPrefs]），下次进来保持上次的选择；读不到偏好按「关」处理。
+final NotifierProvider<DiaryOnlyNotifier, bool> diaryOnlyProvider =
+    NotifierProvider<DiaryOnlyNotifier, bool>(DiaryOnlyNotifier.new);
+
+class DiaryOnlyNotifier extends Notifier<bool> {
+  static const String prefKey = 'petgo.diary_only';
+
+  @override
+  bool build() {
+    _restore();
+    return false;
+  }
+
+  Future<void> _restore() async {
+    try {
+      final saved = (await AppPrefs.create()).getBool(prefKey);
+      if (saved != state) state = saved;
+    } catch (_) {
+      // 偏好读不到：保持默认「关」，不影响看时间线。
+    }
+  }
+
+  Future<void> set(bool on) async {
+    if (on == state) return;
+    state = on;
+    try {
+      await (await AppPrefs.create()).setBool(prefKey, on);
+    } catch (_) {
+      // 存不下只影响「下次进来记不记得」，本次照常切换。
+    }
+  }
+}
 
 /// 档案统计栏（AC5）。状态切换/发布后失效刷新。
 final FutureProvider<ArchiveStats> archiveStatsProvider = FutureProvider<ArchiveStats>(

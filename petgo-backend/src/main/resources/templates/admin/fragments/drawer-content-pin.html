@@ -110,7 +110,7 @@
             <input type="search" name="q" class="inp field-full" th:placeholder="#{admin.pins.pickSearch}"
                    hx-get="/admin/content-pins/pick" hx-target="#pinCandidates"
                    hx-trigger="keyup changed delay:300ms, search"/>
-            <div id="pinCandidates">
+            <div id="pinCandidates" class="pick-list">
                 <div th:replace="~{admin/content-pins :: candidates}"></div>
             </div>
         </fieldset>

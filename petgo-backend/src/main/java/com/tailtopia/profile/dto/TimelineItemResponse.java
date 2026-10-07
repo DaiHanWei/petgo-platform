@@ -50,7 +50,22 @@ public record TimelineItemResponse(
          * 所以各个工厂方法一律传 null —— 时间线是五类混排、组装点不止一处，
          * 在每个组装点各取一遍既容易漏、又必然退化成逐条查。
          */
-        java.util.List<com.tailtopia.content.dto.ContentTagView> decorationTags) {
+        java.util.List<com.tailtopia.content.dto.ContentTagView> decorationTags,
+        /**
+         * 打卡场所（V1.3.2 Story 1.6）：只有 {@code PLACE_CHECKIN_BANNER} 条目有，其余 null（NON_NULL 省略）。
+         * 🔴 不下发打卡自增 id、坐标、visit_date。
+         */
+        CheckinPlace checkinPlace,
+        /** Tailsonality 结果 token（V1.3.2 Story 3.3，仅 {@code TAILSONALITY_BANNER}；作者态点击进结果页用）。 */
+        String tailsonalityResultToken,
+        /** 完整代号 {@code ENTJ-H}（仅 {@code TAILSONALITY_BANNER}）。 */
+        String tailsonalityCode,
+        /** 测试日期（结果 {@code created_at} 的 UTC 日，仅显示用；有效日期是解锁日）。 */
+        LocalDate tailsonalityTestedOn) {
+
+    /** 打卡条目的场所引用。{@code status} ∈ ACTIVE / UNAVAILABLE（点击能否进场所详情）。 */
+    public record CheckinPlace(String placeToken, String name, String status) {
+    }
 
     /** 贴上装饰标签的副本（record 不可变，统一贴标那一步用）。 */
     public TimelineItemResponse withDecorationTags(
@@ -58,7 +73,8 @@ public record TimelineItemResponse(
         return new TimelineItemResponse(kind, itemType, date, eventDate, postId, imageUrls, text,
                 aiLevel, symptomSummary, sourceType, sourceRef, milestoneCode, milestoneLevel,
                 healthRecordType, healthRecordId, idCardSerial,
-                (tags == null || tags.isEmpty()) ? null : tags);
+                (tags == null || tags.isEmpty()) ? null : tags, checkinPlace, tailsonalityResultToken,
+                tailsonalityCode, tailsonalityTestedOn);
     }
 
     public static final String HAPPY_MOMENT = "HAPPY_MOMENT";
@@ -69,12 +85,16 @@ public record TimelineItemResponse(
     public static final String MILESTONE = "MILESTONE";
     /** 身份证生成源（Story 3.2 新增）。 */
     public static final String ID_CARD = "ID_CARD";
+    /** 场所打卡源（V1.3.2 Story 1.6）。 */
+    public static final String PLACE_CHECKIN = "PLACE_CHECKIN";
+    /** Tailsonality 解锁源（V1.3.2 Story 3.3）。 */
+    public static final String TAILSONALITY = "TAILSONALITY";
 
     /** 类① 普通快乐时刻（Diary 内容）。 */
     public static TimelineItemResponse happyMoment(Long postId, Instant date, LocalDate eventDate,
             List<String> imageUrls, String text) {
         return new TimelineItemResponse(HAPPY_MOMENT, TimelineItemType.HAPPY_MOMENT, date, eventDate,
-                postId, imageUrls, text, null, null, null, null, null, null, null, null, null, null);
+                postId, imageUrls, text, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     /**
@@ -86,7 +106,7 @@ public record TimelineItemResponse(
             String milestoneLevel) {
         return new TimelineItemResponse(HAPPY_MOMENT, TimelineItemType.HAPPY_MOMENT_MILESTONE, date,
                 eventDate, postId, imageUrls, text, null, null, null, null, milestoneCode,
-                milestoneLevel, null, null, null, null);
+                milestoneLevel, null, null, null, null, null, null, null, null);
     }
 
     /**
@@ -105,26 +125,54 @@ public record TimelineItemResponse(
             String symptomSummary, String sourceType, String sourceRef) {
         return new TimelineItemResponse(HEALTH_EVENT, TimelineItemType.HEALTH_RECORD, date, eventDate,
                 null, null, null, aiLevel, symptomSummary, sourceType, sourceRef, null, null,
-                "CONSULT", null, null, null);
+                "CONSULT", null, null, null, null, null, null, null);
     }
 
     /** 类④ 结构化健康记录（疫苗/驱虫/绝育/月经/自定义）的只读镜像。 */
     public static TimelineItemResponse healthRecord(Long recordId, Instant createdAt,
             LocalDate eventDate, String type, String text) {
         return new TimelineItemResponse(HEALTH_RECORD, TimelineItemType.HEALTH_RECORD, createdAt,
-                eventDate, null, null, text, null, null, null, null, null, null, type, recordId, null, null);
+                eventDate, null, null, text, null, null, null, null, null, null, type, recordId, null, null, null, null, null, null);
     }
 
     /** 类③ 系统自动型里程碑 banner 的只读镜像（无「发布时间」概念 → 取完成时间戳参与同日排序）。 */
     public static TimelineItemResponse milestoneBanner(Instant completedAt, String code, String level) {
         return new TimelineItemResponse(MILESTONE, TimelineItemType.MILESTONE_BANNER, completedAt, null,
-                null, null, null, null, null, null, null, code, level, null, null, null, null);
+                null, null, null, null, null, null, null, code, level, null, null, null, null, null, null, null, null);
     }
 
     /** 类⑤ 身份证首次生成的只读镜像（取生成时间戳参与同日排序）。 */
     public static TimelineItemResponse idCardIssued(Instant createdAt, String serial) {
         return new TimelineItemResponse(ID_CARD, TimelineItemType.ID_CARD_ISSUED, createdAt, null, null,
-                null, null, null, null, null, null, null, null, null, null, serial, null);
+                null, null, null, null, null, null, null, null, null, null, serial, null, null, null, null, null);
+    }
+
+    /**
+     * 场所打卡通栏（V1.3.2 Story 1.6 · AD-9）。
+     *
+     * <p>🔴 {@code eventDate} 显式给 {@code checkedAt} 的 <b>UTC 日</b>（不是 WIB 的 visit_date）：
+     * 与服务端 {@link #effectiveDate()} 同一天；给 null 的话 App 会拿 UTC 时刻算本地日，
+     * WIB 00:00–07:00 的打卡两端会差一天。
+     */
+    public static TimelineItemResponse placeCheckinBanner(Instant checkedAt, String placeToken,
+            String placeName, String placeStatus) {
+        return new TimelineItemResponse(PLACE_CHECKIN, TimelineItemType.PLACE_CHECKIN_BANNER, checkedAt,
+                checkedAt.atZone(java.time.ZoneOffset.UTC).toLocalDate(), null, null, null, null, null, null,
+                null, null, null, null, null, null, null, new CheckinPlace(placeToken, placeName, placeStatus),
+                null, null, null);
+    }
+
+    /**
+     * Tailsonality 解锁通栏（V1.3.2 Story 3.3 · AD-9）。
+     *
+     * <p>🔴 {@code date} 与 {@code eventDate} 都取<b>解锁时刻</b>（eventDate = 其 UTC 日）：付费那天才进 Diary，
+     * 不会插回测试那天打乱已读。测试日期只作显示字段。
+     */
+    public static TimelineItemResponse tailsonalityBanner(Instant unlockedAt, String resultToken, String code,
+            LocalDate testedOn) {
+        return new TimelineItemResponse(TAILSONALITY, TimelineItemType.TAILSONALITY_BANNER, unlockedAt,
+                unlockedAt.atZone(java.time.ZoneOffset.UTC).toLocalDate(), null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, resultToken, code, testedOn);
     }
 
     /** 排序/显示有效日期（有 eventDate 取之；否则取 date 的 UTC 日）。 */

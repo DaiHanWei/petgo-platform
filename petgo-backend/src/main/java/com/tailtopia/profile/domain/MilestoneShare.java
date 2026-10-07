@@ -54,6 +54,13 @@ public class MilestoneShare {
     @Column(name = "collection_levels", nullable = false, length = 64)
     private String collectionLevels;
 
+    /**
+     * 「已解锁合集」完整 code 快照（V1.3.2 Story 5.2）：逗号分隔、按合集顺序。
+     * {@code null} = 旧分享（或新 App 无合集）→ H5 走 {@link #collectionLevels} 旧样式（C-10）。
+     */
+    @Column(name = "collection_codes", length = 400)
+    private String collectionCodes;
+
     @Column(name = "completed_at")
     private Instant completedAt;
 
@@ -68,7 +75,7 @@ public class MilestoneShare {
 
     public static MilestoneShare create(String shareToken, long petProfileId, String code,
             String level, String petName, String title, String body, String locale,
-            String collectionLevels, Instant completedAt) {
+            String collectionLevels, String collectionCodes, Instant completedAt) {
         MilestoneShare s = new MilestoneShare();
         s.shareToken = shareToken;
         s.petProfileId = petProfileId;
@@ -79,19 +86,22 @@ public class MilestoneShare {
         s.body = body;
         s.locale = locale;
         s.collectionLevels = collectionLevels;
+        s.collectionCodes = collectionCodes;
         s.completedAt = completedAt;
         return s;
     }
 
     /** 重复分享：复用 token，仅刷新本地化文案 / petName / locale / level / 合集快照（completedAt、token 不变）。 */
     public void refresh(String level, String petName, String title, String body, String locale,
-            String collectionLevels) {
+            String collectionLevels, String collectionCodes) {
         this.level = level;
         this.petName = petName;
         this.title = title;
         this.body = body;
         this.locale = locale;
         this.collectionLevels = collectionLevels;
+        // 「本次分享的快照」语义（同 collectionLevels）：老客户端刷新不传 → 清成 null，回到旧样式。
+        this.collectionCodes = collectionCodes;
     }
 
     @PrePersist
@@ -156,5 +166,9 @@ public class MilestoneShare {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public String getCollectionCodes() {
+        return collectionCodes;
     }
 }

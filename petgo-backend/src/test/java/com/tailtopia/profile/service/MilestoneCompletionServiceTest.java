@@ -152,7 +152,7 @@ class MilestoneCompletionServiceTest {
     @Test
     void dateGatedPublishCompletesBirthdayL1AndCompanionL2() {
         // 档案：生日今天（month/day 命中）+ 建档 120 天前（≥100 → L2，<365 → 不 L3）。
-        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Jakarta"));
         PetProfile p = PetProfile.create(7L, PetType.CAT, "Momo", null, null,
                 java.time.LocalDate.of(2024, today.getMonthValue(), today.getDayOfMonth()), null, "TOK");
         setField(p, "id", 10L);
@@ -168,6 +168,38 @@ class MilestoneCompletionServiceTest {
         verify(completions, times(2)).save(cap.capture());
         assertThat(cap.getAllValues().stream().map(MilestoneCompletion::getPetMilestoneId))
                 .containsExactlyInAnyOrder(l1, l2);
+    }
+
+    @Test
+    void birthdayIsJudgedByWibDateNotUtc() {
+        // bug 20260930-579：生日 10-06。WIB 10-06 05:30 = UTC 10-05 22:30 —— 按 UTC 会判「不是生日」。
+        PetProfile p = PetProfile.create(7L, PetType.CAT, "Momo", null, null,
+                java.time.LocalDate.of(2024, 10, 6), null, "TOK");
+        setField(p, "id", 10L);
+        setField(p, "createdAt", Instant.parse("2026-09-30T00:00:00Z")); // 陪伴不足 100 天，只看 L1
+        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(p));
+        long l1 = stubRoster(10, "C-L1");
+
+        service.completeDateGatedLNodesOnPublish(7L, Instant.parse("2026-10-05T22:30:00Z"));
+
+        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
+        verify(completions, times(1)).save(cap.capture());
+        assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(l1);
+    }
+
+    @Test
+    void dayBeforeBirthdayEveningInWibIsNotBirthday() {
+        // 反向：WIB 10-05 08:00 = UTC 10-05 01:00；生日 10-06 —— 两种口径都不是生日（守住不误判）。
+        // WIB 10-05 23:30 = UTC 10-05 16:30 同理；而 UTC 已是 10-06 的时刻（WIB 10-06 07:00+）才应命中。
+        PetProfile p = PetProfile.create(7L, PetType.CAT, "Momo", null, null,
+                java.time.LocalDate.of(2024, 10, 6), null, "TOK");
+        setField(p, "id", 10L);
+        setField(p, "createdAt", Instant.parse("2026-09-30T00:00:00Z"));
+        when(profiles.findByOwnerId(7L)).thenReturn(Optional.of(p));
+
+        service.completeDateGatedLNodesOnPublish(7L, Instant.parse("2026-10-05T16:30:00Z"));
+
+        verify(completions, never()).save(any());
     }
 
     @Test

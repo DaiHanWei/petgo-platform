@@ -64,12 +64,13 @@ public class AdminPlaceController {
     }
 
     /**
-     * 「打卡」三处（摘要 / 列表列 / 抽屉计数）是否展示（bug 20260923-552）：打卡归 B2，B2 上线前默认隐藏。
+     * 「打卡」三处（摘要 / 列表列 / 抽屉计数）是否展示（bug 20260923-552）：打卡归 B2，B2 上线前隐藏；
+     * V1.3.2 batch-a 打卡上线，2026-10-06 起默认展示（application.yml 同步改为 true）。
      * 本控制器所有视图（整页 / htmx 列表 / 抽屉 / 处置后 oob 行）都经这里拿到同一个开关 —— 只藏展示，不动数据与查询。
      */
     @org.springframework.web.bind.annotation.ModelAttribute("placesCheckinVisible")
     boolean placesCheckinVisible(
-            @org.springframework.beans.factory.annotation.Value("${admin.places.checkin-visible:false}") boolean visible) {
+            @org.springframework.beans.factory.annotation.Value("${admin.places.checkin-visible:true}") boolean visible) {
         return visible;
     }
 
@@ -212,6 +213,34 @@ public class AdminPlaceController {
             return reviewDetail(id, msg.get(changed ? "admin.flash.places.commentRemoved" : "admin.flash.places.noChange"), model);
         }
         return afterAction(id, changed ? "admin.flash.places.commentRemoved" : "admin.flash.places.noChange", model, response);
+    }
+
+    /**
+     * 上传 / 替换场所专属章（V1.3.2 Story 1.4 · AB-18B）：multipart {@code file}。校验只做四项（PNG / 512×512 /
+     * ≤200KB / 透明通道），不过 → 422 行内错误；成功走 {@link #afterAction}。同「场所管理」权限码，不新增权限。
+     */
+    @PostMapping(ROUTE + "/{id:\\d+}/stamp")
+    @PreAuthorize(VIEW_AUTH)
+    public String uploadStamp(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id,
+            @RequestParam(value = "file", required = false) MultipartFile file, HxRequest hx, Model model,
+            HttpServletResponse response) {
+        if (!hx.isHtmx()) {
+            return "redirect:" + ROUTE + "?open=" + id;
+        }
+        placeService.uploadStamp(id, file, admin.getAdminAccountId());
+        return afterAction(id, "admin.flash.places.stampUploaded", model, response);
+    }
+
+    /** 移除专属章（回到默认章）。模板走 {@code data-confirm} 二次确认。 */
+    @PostMapping(ROUTE + "/{id:\\d+}/stamp/remove")
+    @PreAuthorize(VIEW_AUTH)
+    public String removeStamp(@AuthenticationPrincipal AdminUserDetails admin, @PathVariable long id, HxRequest hx,
+            Model model, HttpServletResponse response) {
+        if (!hx.isHtmx()) {
+            return "redirect:" + ROUTE + "?open=" + id;
+        }
+        boolean changed = placeService.removeStamp(id, admin.getAdminAccountId());
+        return afterAction(id, changed ? "admin.flash.places.stampRemoved" : "admin.flash.places.noChange", model, response);
     }
 
     /** 合并：{@code {id}} = 被并入的 B，body {@code keepId} = 保留的 A（AC4）；成功后抽屉停在 B（已并入 → A）。 */

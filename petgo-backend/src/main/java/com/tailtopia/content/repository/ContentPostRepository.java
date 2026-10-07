@@ -294,6 +294,26 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             long authorId, long petId, ContentType type, Instant before, Pageable pageable);
 
     /**
+     * Diary 打卡条目去重（V1.3.2 Story 1.6 · AD-9）：这批打卡里，哪些有一条<b>会出现在作者自看时间线</b>的关联帖。
+     *
+     * <p>🔴 过滤条件必须与 {@link #findGrowthMomentsBeforeAnchor} 的作者自视口径<b>完全一致</b>（作者 / 宠物 /
+     * GROWTH_MOMENT / 未删；不加 visibility）：它存在 ⇔ 它一定出现在这条时间线的某一页 —— 去重因此与分页解耦。
+     */
+    @Query("""
+            SELECT DISTINCT p.placeCheckinId FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.petId = :petId
+              AND p.type = :type
+              AND p.deletedAt IS NULL
+              AND p.placeCheckinId IN :checkinIds
+            """)
+    List<Long> findCheckinIdsWithTimelinePost(
+            @Param("authorId") long authorId,
+            @Param("petId") long petId,
+            @Param("type") ContentType type,
+            @Param("checkinIds") java.util.Collection<Long> checkinIds);
+
+    /**
      * 成长时间线读（Story 3.1 · AD-1）：按**统一游标锚点**（event_date + 同日 created_at）取一批。
      * 取代上面按 created_at 单键的取数——排序键与游标键必须是同一把尺子，否则补记旧日期的日记
      * （event_date 旧、created_at 新）会在翻页时丢失或重复。

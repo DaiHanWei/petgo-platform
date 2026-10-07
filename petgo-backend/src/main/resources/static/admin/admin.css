@@ -725,9 +725,6 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chart-empty .empty-emoji { font-size: 26px; }
 .chart-foot { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: var(--fs-xs); }
 .chart-foot .chart-missing { color: var(--warn); font-weight: 700; }
-.summary-row .summary-list { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 22px; }
-.summary-row .summary-list li { display: flex; flex-direction: column; font-size: var(--fs-xs); color: var(--muted); }
-.summary-row .summary-list li b { font-size: var(--fs-md, 15px); color: var(--ink); }
 .retention-note { margin-top: 10px; }
 @media (max-width: 1024px) { .chart-grid { grid-template-columns: 1fr; } .chart-body { height: 220px; } }
 
@@ -791,6 +788,25 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* V1.3.0 Story 6.3：模板 D 配置卡——422 字段红边 / 只读注释 / PawCoin 卡与档位区块成组 / 复选行 */
 .cfg-card .inp.is-invalid, .cfg-card input.is-invalid { border-color: var(--danger); outline: 1px solid var(--danger); }
+/* 后台 PRD 2026-10-02（UI 稿 A1–A7）一次性解锁定价：每行细分隔线；Rp 前缀 + 右对齐 + 等宽数字；行内错误紧贴该行；
+   改动行品牌色描边 + 柔光。只读态（输入 disabled）用灰底降对比，不整块降透明度（会把说明文字一起压暗）。 */
+.cfg-card .price-row { margin: 0; padding: 12px 0; border-top: 1px solid var(--line, #e6e6e6); }
+.cfg-card .price-row:first-of-type { border-top: 0; }
+.price-row-label { display: block; color: var(--ink); font-weight: 600; margin-bottom: 6px; }
+.price-inp { display: inline-flex; align-items: center; border: 1px solid var(--line, #d9d9de); border-radius: var(--radius-sm, 6px);
+  background: var(--surface); padding: 0 10px; transition: box-shadow .15s, border-color .15s; }
+.price-inp-prefix { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
+.price-inp .price-inp-field { border: 0; outline: 0; box-shadow: none; padding: 7px 0; width: 160px; text-align: right;
+  font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: transparent; }
+.price-inp .price-inp-field::-webkit-inner-spin-button, .price-inp .price-inp-field::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.price-inp .price-inp-field { -moz-appearance: textfield; }
+.price-row .hint { display: block; margin-top: 4px; }
+.price-row.is-changed .price-inp { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-tint); }
+.price-inp:has(.price-inp-field.is-invalid) { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+.cfg-card .price-inp .price-inp-field.is-invalid { outline: 0; }
+.price-row .row-error { display: block; margin-top: 4px; color: var(--danger); font-size: var(--fs-sm); font-weight: 600; }
+.price-row .row-error[hidden] { display: none; }
+.price-inp:has(.price-inp-field:disabled) { background: var(--surface-2); color: var(--ink-2); }
 .cfg-foot .cfg-readonly { color: var(--muted); font-size: var(--fs-sm); margin-right: auto; }
 .cfg-group { display: flex; flex-direction: column; gap: 12px; }
 .cfg-tiers .cfg-head { flex-wrap: wrap; }
@@ -911,6 +927,14 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* 🔴 nowrap：切 ID 之后这五个词会变长，换行会把抽屉顶出两行 */
 .ud-tabs { margin: 0 0 10px; flex-wrap: nowrap; overflow-x: auto; }
 .ud-tabs .tab { white-space: nowrap; }
+/* V1.3.2 后台 AB-23：用户详情抽屉 480 → 600px（六页签三语都放不下 480，UI 稿 E1 实测）。
+   🔴 只放宽这一个抽屉 —— 场所等其余抽屉维持 480 是有意的，不要借此统一加宽。 */
+#user-drawer.drawer { width: 600px; }
+.ud-purchases .ud-card + .ud-card { margin-top: 10px; }
+.ud-pc-title { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: var(--fs); }
+.ud-pc-table .num, .ud-pc-table .num-cell { font-variant-numeric: tabular-nums; }
+.ud-pc-table .num { text-align: right; white-space: nowrap; }
+.ud-empty { text-align: center; padding: 28px 16px; }
 .ud-card { margin-bottom: 10px; }
 .ud-card h3 { margin: 0 0 6px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
 .ud-table { font-size: var(--fs-xs); }
@@ -958,3 +982,87 @@ tr.is-muted td { opacity: .55; }
 .recon-card .recon-check th, .recon-card .recon-check td { border-top: 2px solid var(--line); font-weight: 700; }
 /* 🔴 校验行不平 → 整卡红框：现状只有一行文字变色，一屏数字里根本注意不到 */
 .card-alert { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
+
+/* V1.3.2 Story 1.4：场所专属章预览 —— 棋盘格底看透明区；按原图原色（object-fit: contain，不裁圆、不加滤色，D-10） */
+.pl-stamp-body { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.pl-stamp-preview { width: 96px; height: 96px; border: 1px solid var(--line, #e6e6e6); border-radius: 8px;
+  background-color: #fff;
+  background-image: linear-gradient(45deg, #ececec 25%, transparent 25%), linear-gradient(-45deg, #ececec 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #ececec 75%), linear-gradient(-45deg, transparent 75%, #ececec 75%);
+  background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
+.pl-stamp-preview img { width: 100%; height: 100%; object-fit: contain; }
+.pl-stamp-actions { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+/* 「替换」是 <label class="btn">（包着隐藏的文件框）、「移除」是 <button class="btn">：label 会吃到
+   `.card label` 的上下外边距（12px / 4px）被推低，两种元素字体 / 基线也不同。清零外边距、统一同高 inline-flex，
+   并让 button 继承字体（2026-10-06 产品反馈：两个按钮不一样高）。 */
+.pl-stamp-actions form.inline { display: flex; }
+.pl-stamp-actions .btn { display: inline-flex; align-items: center; box-sizing: border-box; height: 30px; margin: 0;
+    font-family: inherit; line-height: 1; }
+/* 后台 PRD 2026-10-02（UI 稿 C1 / C3）：默认章占位方块 + 换章影响已盖出章的常驻提示（不是 hover 才出现） */
+.pl-stamp-preview--default { display: flex; align-items: center; justify-content: center; background-image: none;
+  background-color: var(--surface-2, #f6f6f8); color: var(--muted, #888); font-size: var(--fs-xs, 12px); }
+.pl-stamp-warn { margin: 8px 0 0; padding: 8px 10px; border-radius: var(--radius-sm, 6px);
+  background: var(--warn-bg); color: var(--warn); font-size: var(--fs-xs, 12px); }
+
+/* 后台 PRD 2026-09-30（UI 稿 B1）：支付记录「用途」多选下拉 —— 原生 <details> 承载展开，不引第三方组件。 */
+.ms-field { display: inline-block; position: relative; }
+.ms-field > span { display: block; font-size: var(--fs-sm); color: var(--ink-2); margin: 12px 0 4px; }
+.ms { position: relative; display: inline-block; }
+.ms-summary { list-style: none; cursor: pointer; min-width: 160px; }
+.ms-summary::-webkit-details-marker { display: none; }
+.ms-panel { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; min-width: 240px; padding: 10px 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); box-shadow: 0 6px 20px rgba(0,0,0,.08); }
+.ms-hint { margin: 0 0 6px; }
+.ms-opt { display: flex !important; align-items: center; gap: 8px; margin: 4px 0 !important; color: var(--ink); }
+.ms-sep { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
+.ms-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+
+/* bug 20260924-562：内容选择器（顶置 / 内容打标）候选卡片。定高可滚动，避免几十条候选把抽屉撑成长卷。
+   用户标签页的 .pick-row（候选是用户、不是内容）不在此列，样式不受影响。 */
+.pick-list { max-height: 420px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-sm, 6px);
+  padding: 4px; background: var(--surface); }
+.pick-card { display: grid !important; grid-template-columns: 18px 48px 1fr; gap: 10px; align-items: start;
+  margin: 0 !important; padding: 8px; border-radius: var(--radius-sm, 6px); cursor: pointer; }
+.pick-card + .pick-card { border-top: 1px solid var(--line); }
+.pick-card:hover { background: var(--bg); }
+.pick-card:has(input:checked) { background: var(--brand-tint); outline: 1px solid var(--brand); }
+.pick-card input[type=radio] { margin-top: 16px; }
+.pick-thumb { width: 48px; height: 48px; border-radius: 6px; overflow: hidden; background: var(--bg); display: block; }
+.pick-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pick-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pick-meta { font-size: var(--fs-xs, 12px); }
+.pick-summary { font-size: var(--fs-sm, 13px); color: var(--ink); overflow: hidden; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
+.pick-more { display: block; margin: 8px auto 4px; }
+
+/* bug 20260924-558：概览「当前时点总量」按 UI 稿改卡片网格（图标色块 + 标签 + 大号数字，AI 收入绿底高亮）。 */
+.totals .totals-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.totals .totals-head h2 { margin: 0; flex: 1; }
+.totals-head-ico, .totals-ico { display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; }
+.totals-head-ico { width: 32px; height: 32px; background: var(--brand-tint); color: var(--brand); }
+.totals svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.totals-live { display: inline-flex; align-items: center; gap: 6px; color: var(--ok); font-weight: 600; font-size: var(--fs-sm, 13px); }
+.totals-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
+.totals-updated { font-size: var(--fs-sm, 13px); margin-left: 14px; }
+.totals-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
+.totals-card { display: flex; flex-direction: column; gap: 10px; padding: 16px 14px; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--surface); min-width: 0; }
+.totals-ico { width: 36px; height: 36px; }
+.totals-label { color: var(--muted); font-size: var(--fs-sm, 13px); line-height: 1.3; min-height: 2.6em; }
+.totals-value { font-size: 26px; font-weight: 700; color: var(--ink); line-height: 1.1; word-break: break-all; }
+.totals-card--hl { background: #F0FAF3; border-color: #CDEBD6; }
+.totals-card--blue .totals-ico { background: #EAF2FF; color: #2F6FE4; }
+.totals-card--violet .totals-ico { background: #F1ECFB; color: #7B4FD6; }
+.totals-card--orange .totals-ico { background: #FFF1E6; color: #E07A2E; }
+.totals-card--indigo .totals-ico { background: #ECEBFF; color: #5B55D6; }
+.totals-card--green .totals-ico { background: #DDF3E4; color: #1E9A55; }
+.totals-card--pink .totals-ico { background: #FDECEF; color: #D9475F; }
+.totals-card--sky .totals-ico { background: #E6F3FD; color: #2C8BD6; }
+.totals-card--teal .totals-ico { background: #E2F6F1; color: #17977A; }
+.totals-card--amber .totals-ico { background: #FFF5DD; color: #C98A0B; }
+.totals-foot { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.totals-foot .muted { flex: 1; }
+.totals-foot-ico { color: var(--muted); display: inline-flex; }
+.totals-seed { color: var(--brand); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.totals-seed:hover { text-decoration: underline; }

@@ -46,6 +46,23 @@ void main() {
       }
     });
 
+    /// 2026-10-05 本地 L2 验收：四块遮罩只能拼直角孔，卡与描边是 r14 → 孔角露白。
+    /// 现在压暗由一层圆角孔画完，四块只拦点击（透明）。
+    testWidgets('压暗层的孔是 r14 圆角、与高亮描边同框；四块遮罩自身不着色', (tester) async {
+      await _pumpOverlay(tester, const Rect.fromLTWH(100, 200, 120, 60));
+
+      final paint = tester.widget<CustomPaint>(find.byKey(const ValueKey('coachmarkScrimPaint')));
+      final painter = paint.painter! as CoachmarkScrimPainter;
+      expect(painter.radius, CoachmarkOverlay.spotlightRadius);
+      expect(CoachmarkOverlay.spotlightRadius, 14);
+      expect(painter.hole, tester.getRect(find.byKey(const ValueKey('coachmarkSpotlight'))),
+          reason: '孔与描边必须同一个矩形');
+
+      final scrims = find.byKey(const ValueKey('coachmarkScrim'));
+      expect(find.descendant(of: scrims, matching: find.byType(ColoredBox)), findsNothing,
+          reason: '四块再着色就会和压暗层双重叠加');
+    });
+
     /// 🔴 四块之间也**互不重叠** —— 重叠处会比别处更暗，正是"双重叠加"的另一种形态。
     testWidgets('四块遮罩两两不重叠', (tester) async {
       await _pumpOverlay(tester, const Rect.fromLTWH(100, 200, 120, 60));
@@ -162,10 +179,11 @@ void main() {
       expect(marks.contains(kOnboardingMarkKtpMoved), isFalse);
     });
 
-    /// 🔴 本批次只有一个键。批次 C 的性格测试引导**必须另起一个键** ——
+    /// 🔴 一个引导一个键：V1.3.2 Story 2.7 的性格测试引导**另起了一个键** ——
     /// 共用会让看过第一次的人再也收不到第二次（PRD 明确那是两次独立触发）。
-    test('客户端侧的键与服务端登记的一致，且只有这一个', () {
+    test('客户端侧的键与服务端登记的一致，恰为这两个', () {
       expect(kOnboardingMarkKtpMoved, 'ktp_moved');
+      expect(kOnboardingMarkTailsonalityEntry, 'tailsonality_entry');
 
       final repoSrc =
           File('lib/features/profile/data/onboarding_mark_repository.dart').readAsStringSync();
@@ -173,7 +191,7 @@ void main() {
           .allMatches(repoSrc)
           .map((m) => m.group(1))
           .toList();
-      expect(keys, ['ktp_moved'], reason: '批次 C 加键时这条会红 —— 那是有意的');
+      expect(keys, ['ktp_moved', 'tailsonality_entry'], reason: '以后再加键时这条会红 —— 那是有意的：加的必须是新键');
     });
 
     /// 服务端的键登记表（枚举）与客户端常量必须是同一个字符串 ——
@@ -183,6 +201,7 @@ void main() {
               'domain/OnboardingMarkKey.java')
           .readAsStringSync();
       expect(backend, contains('KTP_MOVED("$kOnboardingMarkKtpMoved")'));
+      expect(backend, contains('TAILSONALITY_ENTRY("$kOnboardingMarkTailsonalityEntry")'));
     });
   });
 

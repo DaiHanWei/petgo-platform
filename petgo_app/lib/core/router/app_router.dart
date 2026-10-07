@@ -81,7 +81,22 @@ import '../../features/consult/presentation/vet_timed_pay_page.dart';
 import '../../features/consult/presentation/vet_waiting_page.dart';
 import '../../features/notify/presentation/notification_center_page.dart';
 import '../../features/gath/presentation/gath_page.dart';
+import '../../features/place/domain/place_summary.dart';
 import '../../features/place/presentation/place_detail_page.dart';
+import '../../features/place/presentation/place_checkin_success_page.dart';
+import '../../features/boarding_pass/presentation/boarding_pass_detail_page.dart';
+import '../../features/boarding_pass/presentation/boarding_pass_list_page.dart';
+import '../../features/pet_passport/presentation/passport_versions_page.dart';
+import '../../features/pet_passport/presentation/pet_passport_page.dart';
+import '../../features/pet_passport/domain/new_stamp_args.dart';
+import '../../features/pet_passport/presentation/pet_passport_new_stamp_page.dart';
+import '../../features/pet_passport/presentation/pet_passport_stamp_page.dart';
+import '../../features/tailsonality/domain/tailsonality_result.dart';
+import '../../features/tailsonality/presentation/tailsonality_match_page.dart';
+import '../../features/tailsonality/presentation/tailsonality_quiz_page.dart';
+import '../../features/tailsonality/presentation/tailsonality_result_page.dart';
+import '../../features/tailsonality/presentation/tailsonality_results_page.dart';
+import '../../features/tailsonality/presentation/tailsonality_routes.dart';
 import '../../features/place/presentation/place_list_page.dart';
 import '../../features/place/presentation/place_mark_page.dart';
 import '../../features/profile/presentation/pet_card_page.dart';
@@ -580,7 +595,20 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         builder: (c, s) => PlaceDetailPage(
           token: s.pathParameters['token']!,
           analyticsFrom: s.uri.queryParameters['from'],
+          // bug 20260925-572：从列表进来时带着那一行的摘要，详情未到前先画它。
+          // 深链 / 分享链接没有 extra → null，照旧转圈。
+          preview: s.extra is PlaceSummary ? s.extra! as PlaceSummary : null,
         ),
+      ),
+      // 打卡成功页（V1.3.2 Story 1.1 · AC5）。结果经 `extra` 传入（照 /me/refunds/pawcoin-success）。
+      // 🔴 `extra` 缺失（冷启动恢复 / 手敲深链）→ 回场所详情，不崩、不渲染一个空结果页。
+      //    游客同理不进受控名单：成功页只会从登录后的打卡流程 push 进来。
+      GoRoute(
+        path: PlaceCheckinSuccessPage.routePattern,
+        redirect: (c, s) => s.extra is PlaceCheckinSuccessArgs
+            ? null
+            : PlaceDetailPage.routeFor(s.pathParameters['token']!),
+        builder: (c, s) => PlaceCheckinSuccessPage(args: s.extra! as PlaceCheckinSuccessArgs),
       ),
 
       // ===== Toko（V1.4.0 Story 1.6，FR-93 / FR-93A）=====
@@ -750,6 +778,51 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 宠物身份证详情（Story 6.2 · FR-49B）。V1.3.0 Story 5.1 整体平移到聚合页之下，
       // 页面逻辑一字未改。
       GoRoute(path: PetInsightsRoutes.idCard, builder: (c, s) => const IdCardPage()),
+      // 宠物护照（V1.3.2 Story 1.2）。落在 /profile/ 下 → 自动继承游客门控，**不进**例外集合。
+      // `?focus=<placeToken>` 进入时停在该章（打卡成功「Lihat Paspor」）。
+      GoRoute(
+        path: PetInsightsRoutes.passport,
+        builder: (c, s) => PetPassportPage(focus: s.uri.queryParameters['focus']),
+      ),
+      // B4 整页落章（V1.3.2 Story 1.3）：只从打卡成功页 C2 进，入参经 extra；缺失 / 类型不符 → 回护照页。
+      GoRoute(
+        path: PetInsightsRoutes.passportNewStamp,
+        redirect: (c, s) => s.extra is NewStampArgs ? null : PetInsightsRoutes.passport,
+        builder: (c, s) => PetPassportNewStampPage(args: s.extra! as NewStampArgs),
+      ),
+      // B5 / B6 章详情（V1.3.2 Story 1.3）。字面量路径 new-stamp 在前，stamps/:placeToken 在后。
+      GoRoute(
+        path: PetInsightsRoutes.passportStamp,
+        builder: (c, s) => PetPassportStampPage(placeToken: s.pathParameters['placeToken']!),
+      ),
+      // 登机牌列表 / 详情（V1.3.2 Story 3.5）：同在 /profile/ 下 → 自动继承游客门控，**不进**例外集合。
+      GoRoute(path: PetInsightsRoutes.boardingPass, builder: (c, s) => const BoardingPassListPage()),
+      GoRoute(
+        path: PetInsightsRoutes.boardingPassDetail,
+        builder: (c, s) => BoardingPassDetailPage(placeToken: s.pathParameters['placeToken']!),
+      ),
+      // 已买护照版本列表 / 回看（V1.3.2 Story 3.4）：同在 /profile/ 下 → 自动继承游客门控。
+      GoRoute(path: PetInsightsRoutes.passportVersions, builder: (c, s) => const PassportVersionsPage()),
+      GoRoute(
+        path: PetInsightsRoutes.passportVersion,
+        builder: (c, s) => PassportVersionPage(token: s.pathParameters['token']!),
+      ),
+      // Tailsonality（V1.3.2 Story 2.3）：答题页 + 结果页，落在 /profile/ 下 → 自动受控，**不进**例外集合。
+      GoRoute(path: TailsonalityRoutes.quiz, builder: (c, s) => const TailsonalityQuizPage()),
+      // 结果列表（Story 2.6）：`/results` 与 `/results/:token` 段数不同，不会互相吞。
+      GoRoute(path: TailsonalityRoutes.results, builder: (c, s) => const TailsonalityResultsPage()),
+      GoRoute(
+        path: TailsonalityRoutes.resultPattern,
+        builder: (c, s) => TailsonalityResultPage(
+          token: s.pathParameters['token']!,
+          initial: s.extra is TailsonalityResult ? s.extra! as TailsonalityResult : null,
+        ),
+      ),
+      // 主人配型页（V1.3.2 Story 2.5），挂在某次结果下；同样在 /profile/ 下自动受控。
+      GoRoute(
+        path: TailsonalityRoutes.matchPattern,
+        builder: (c, s) => TailsonalityMatchPage(token: s.pathParameters['token']!),
+      ),
       // 🔴 旧路径**保留为重定向，不得删除**（AD-A17.2）：站内两处跳转 + 潜在的历史通知深链，
       // 断链是硬失败。
       //

@@ -62,6 +62,25 @@ class AppPrefs {
   //    这是 AD-14 Rule 1 的既定代价、不是缺陷；已填手机号者永不被问，故影响面很小。
   static const kPhonePromptShown = 'petgo.phone_prompt_shown';
 
+  // --- Tailsonality 挽留弹窗「已弹过」的结果 token（V1.3.2 Story 3.2 · AC7.2）---
+  //
+  // 粒度是**结果 token**（不是宠物 / 账号）：重测出新结果会再有一次机会。按设备存，换设备再弹一次可接受（AD-3）。
+  // 只保留最近 [kTailsonalityRetentionShownCap] 个，防无限增长。
+  static const kTailsonalityRetentionShown = 'petgo.tailsonality_retention_shown';
+  static const kTailsonalityRetentionShownCap = 50;
+
+  bool tailsonalityRetentionShown(String token) =>
+      (_prefs.getStringList(kTailsonalityRetentionShown) ?? const []).contains(token);
+
+  Future<void> markTailsonalityRetentionShown(String token) {
+    final list = [...?_prefs.getStringList(kTailsonalityRetentionShown)]..remove(token);
+    list.add(token);
+    final kept = list.length > kTailsonalityRetentionShownCap
+        ? list.sublist(list.length - kTailsonalityRetentionShownCap)
+        : list;
+    return _prefs.setStringList(kTailsonalityRetentionShown, kept);
+  }
+
   // --- 已废弃的键（下面这些**刻意不再提供 getter/setter**）---
   //
   // `petgo.splash_last_shown_date`：曾用于「splash 当天只播一次完整动画」。

@@ -155,6 +155,11 @@ void main() {
       }
     });
 
+    testWidgets('V1.3.2 Story 1.3：护照章详情入口 from=passport 原样透传', (tester) async {
+      await pump(tester, from: kPlaceDetailFromPassport);
+      expect(props('place_detail_viewed').single!['from'], 'passport');
+    });
+
     testWidgets('缺省 / 认不出的 from → other，不丢这次浏览', (tester) async {
       await pump(tester);
       expect(props('place_detail_viewed').single!['from'], kPlaceDetailFromOther);

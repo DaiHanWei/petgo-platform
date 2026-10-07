@@ -37,7 +37,7 @@ petgo:
   auto-comment:
     enabled: ${AUTO_COMMENT_ENABLED:true}
     morning-cron: ${AUTO_COMMENT_MORNING_CRON:0 30 10 * * *}
-    evening-cron: ${AUTO_COMMENT_EVENING_CRON:0 30 20 * * *}
+    evening-cron: ${AUTO_COMMENT_EVENING_CRON:0 30 16 * * *}
     start-date: ${AUTO_COMMENT_START_DATE:2026-09-29}
     min-post-age: ${AUTO_COMMENT_MIN_POST_AGE:2h}
     max-per-run: ${AUTO_COMMENT_MAX_PER_RUN:200}
@@ -129,13 +129,17 @@ petgo:
     android-url: ${CARD_ANDROID_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
     ios-url: ${CARD_IOS_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
     app-download-url: ${CARD_APP_DOWNLOAD_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
-  # 飞书群日报（每天 09:00 WIB 推昨日数据，admin/dailyreport）。webhook 留空 = 不推送（本地/测试天然关闭）。
+  # 飞书群日报（每天 13:00 WIB 推昨日数据，admin/dailyreport；13 点是为等 GA4 日数据定稿）。webhook 留空 = 不推送（本地/测试天然关闭）。
   # webhook 与签名密钥 env 注入，绝不入库、绝不落日志。
   daily-report:
     webhook-url: ${LARK_DAILY_REPORT_WEBHOOK_URL:}
     secret: ${LARK_DAILY_REPORT_SECRET:}
-    cron: ${LARK_DAILY_REPORT_CRON:0 0 9 * * *}
+    cron: ${LARK_DAILY_REPORT_CRON:0 0 13 * * *}
     timeout-seconds: ${LARK_DAILY_REPORT_TIMEOUT_SECONDS:10}
+    # 「日活（含游客）」= Firebase / GA4 activeUsers。任一为空 = 不查，日报该字段显示「—」。
+    ga4:
+      property-id: ${GA4_PROPERTY_ID:}
+      credentials-b64: ${GA4_SA_KEY_B64:}
   # Lark 定时发帖（spec-lark-scheduled-posts）：每小时从运营内容表格取一条经虚拟账号免审发布。
   # 凭证 env 注入绝不入库；mode=off（默认）任务静默，只有显式 live 才打 Lark API。
   lark-content:
@@ -326,9 +330,9 @@ admin:
     redirect-uri: ${LARK_REDIRECT_URI:}
     tenant-key: ${LARK_TENANT_KEY:}
   # B6 场所管理的「打卡」三处展示（摘要 / 列表列 / 抽屉计数）。打卡功能归 B2，B2 上线前默认隐藏（bug 20260923-552）；
-  # 只管展示，数据与查询照旧。B2 上线时置 true（或 env ADMIN_PLACES_CHECKIN_VISIBLE=true）即恢复。
+  # 只管展示，数据与查询照旧。V1.3.2 batch-a 打卡上线，2026-10-06 产品定默认打开（env ADMIN_PLACES_CHECKIN_VISIBLE=false 可临时关）。
   places:
-    checkin-visible: ${ADMIN_PLACES_CHECKIN_VISIBLE:false}
+    checkin-visible: ${ADMIN_PLACES_CHECKIN_VISIBLE:true}
 
 # Actuator：仅暴露 health + info（/actuator/** 内网语义，prod 由 CF/防火墙限制）
 management:

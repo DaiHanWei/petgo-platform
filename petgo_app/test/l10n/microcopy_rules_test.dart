@@ -120,6 +120,18 @@ List<String> _alphaWords(String v) => v
 const _sameInBothLocales = {
   // 品牌与产品专名
   'tailtopia', 'pawcoin', 'qris', 'gopay', 'ovo', 'ktp', 'hd',
+  // V1.3.2 Story 2.3：性格测试产品名，三语同形。
+  'tailsonality',
+  // V1.3.2 Story 3.2：能量档位 High / Low 与代号后缀 H / L 对应，story l10n 表规定两语同写（「Level energi High」）。
+  'high', 'low',
+  // V1.3.2 Story 3.5：「Boarding Pass」功能名两语同写（story l10n 表如此；印尼语直接借用，与机票版式一致）。
+  'boarding', 'pass',
+  // 「Know Your Pet」新功能角标 new（2026-10-07 产品指定原样用 new，两语同写，与电商常见 NEW 角标一致）。
+  'new',
+  // 币种符号 Rp（印尼盾）：两语写法相同，不是待翻译的词（V1.3.2 Story 3.2 l10n 说明）。
+  'rp',
+  // 配对连接符「{宠物} x {主人}」（V1.3.2 · 2026-10-05 分享卡设计稿）：小写 x 当「×」用，两语同写，不是词。
+  'x',
   // 印尼语直接借用的英文词
   'checkout', 'online', 'offline', 'normal', 'rating', 'refund', 'bonus',
   'edit', 'bug', 'email', 'whatsapp', 'label', 'diary', 'milestone', 'health',

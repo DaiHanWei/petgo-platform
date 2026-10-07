@@ -20,7 +20,7 @@ class DailyReportWiringTest {
     @Test
     @DisplayName("🔴 有多个构造器的 Bean 必须恰好一个标 @Autowired")
     void multiConstructorBeansDeclareWhichOneSpringUses() {
-        for (Class<?> c : List.of(LarkWebhookClient.class, DailyReportService.class, DailyReportQuery.class,
+        for (Class<?> c : List.of(LarkWebhookClient.class, Ga4ActiveUsersClient.class, DailyReportService.class, DailyReportQuery.class,
                 DailyReportJob.class, AdminDailyReportController.class)) {
             Constructor<?>[] ctors = c.getDeclaredConstructors();
             if (ctors.length > 1) {

@@ -14,7 +14,8 @@ import java.util.List;
  *   <li>**没有** `favorited` / 收藏相关字段；</li>
  *   <li>**没有** `rating` / 评分打星；</li>
  *   <li>**没有** 营业时间 / 电话 / 商户资料类字段；</li>
- *   <li>**没有** 打卡相关字段（⑧ 打卡在批次 B2）；</li>
+ *   <li>打卡只有**一个**字段 {@code checkedInToday}（V1.3.2 Story 1.1）：登录用户本人宠物今天（WIB）
+ *       在此是否已打卡；游客省略。**没有**打卡次数 / 能否打卡 / 打卡人列表这类字段；</li>
  *   <li>**没有** 任何「可编辑」标记 —— 用户不可编辑场所（2026-09-15 拍板）。</li>
  * </ul>
  * ⚠️ 这不是「还没做」，是**明确不做**。往这里加任何一条之前先回 PRD ⑥ / 决策日志改口径。
@@ -59,7 +60,12 @@ public record PlaceDetailResponse(
          * 自己按 photos.length 算会与服务端判定不一致 —— 要么传完才 422（桶里留孤儿），
          * 要么服务端还收、客户端已把「+」藏掉。
          */
-        int photoSlotsRemaining) {
+        int photoSlotsRemaining,
+        /**
+         * 今日已打卡（V1.3.2 Story 1.1 AC3）：本人任一宠物今天（WIB 自然日）在此场所是否已打卡。
+         * 🔴 游客为 null → **省略该键**（与 distanceMeters 同一 NON_NULL 机制），不是 false。
+         */
+        Boolean checkedInToday) {
 
     /**
      * 详情大图宽度（物理像素）。
@@ -79,6 +85,15 @@ public record PlaceDetailResponse(
             List<PlacePhotoView> photos, Integer distanceMeters,
             long commentCount, long recommendCount, long notRecommendCount,
             int photoSlotsRemaining) {
+        return of(p, markedBy, photos, distanceMeters, commentCount, recommendCount,
+                notRecommendCount, photoSlotsRemaining, null);
+    }
+
+    /** 带「今日已打卡」的完整工厂（V1.3.2 Story 1.1）；{@code checkedInToday} 为 null = 游客（省略该键）。 */
+    public static PlaceDetailResponse of(Place p, AuthorView markedBy,
+            List<PlacePhotoView> photos, Integer distanceMeters,
+            long commentCount, long recommendCount, long notRecommendCount,
+            int photoSlotsRemaining, Boolean checkedInToday) {
         return new PlaceDetailResponse(
                 p.getPublicToken(),
                 p.getName(),
@@ -94,7 +109,8 @@ public record PlaceDetailResponse(
                 commentCount,
                 recommendCount,
                 notRecommendCount,
-                Math.max(0, photoSlotsRemaining));
+                Math.max(0, photoSlotsRemaining),
+                checkedInToday);
     }
 
 }

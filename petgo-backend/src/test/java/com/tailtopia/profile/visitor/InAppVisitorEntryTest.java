@@ -58,7 +58,8 @@ class InAppVisitorEntryTest {
 
         profiles = mock(ProfileService.class);
         accounts = mock(AccountQueryService.class);
-        petCard = new PublicProfilePetController(profiles, visitors, accounts, hideRelations);
+        petCard = new PublicProfilePetController(profiles, visitors, accounts, hideRelations,
+                mock(com.tailtopia.tailsonality.service.TailsonalityBadgeQuery.class));
     }
 
     private static Jwt user(long userId) {

@@ -27,6 +27,9 @@ abstract class ContentRepository {
     /// 对方改名后它就对不上人了，可点的身份靠这份 id（AD-10 Rule 4）。
     /// 上限 5 人由服务端权威把关（AC5）。
     List<int> mentionedUserIds,
+    /// 打卡后顺手发帖关联的打卡 token（V1.3.2 Story 1.5 · AD-10）。
+    /// null = 普通发帖：请求体里**整个键不出现**（对老路径逐字节不变）。
+    String? placeCheckinToken,
   });
 }
 
@@ -46,6 +49,7 @@ class DioContentRepository implements ContentRepository {
     required String idempotencyKey,
     bool syncToMoment = true,
     List<int> mentionedUserIds = const [],
+    String? placeCheckinToken,
   }) async {
     final data = <String, dynamic>{'type': type.wire};
     // Story 4.2 同步开关 → Story 4.1 的 visibility 字段：关同步 = 仅自己可见。
@@ -55,6 +59,10 @@ class DioContentRepository implements ContentRepository {
     if (text != null && text.isNotEmpty) data['text'] = text;
     // Story 3.2 AC4：没 @ 人时**整个字段不出现**，与老客户端的请求体逐字节一致。
     if (mentionedUserIds.isNotEmpty) data['mentionedUserIds'] = mentionedUserIds;
+    // V1.3.2 Story 1.5：同写法 —— 为空整键省略；服务端校验为本人打卡后写入。
+    if (placeCheckinToken != null && placeCheckinToken.isNotEmpty) {
+      data['placeCheckinToken'] = placeCheckinToken;
+    }
     if (imageUrls.isNotEmpty) data['imageUrls'] = imageUrls;
     // 一个都测不出来时干脆不传，让服务端整组兜底（传一串全 null 没有意义）。
     if (imageSizes.isNotEmpty && imageSizes.any((e) => e != null)) {

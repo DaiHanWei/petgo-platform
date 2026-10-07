@@ -54,15 +54,32 @@ class ContentDetailAndCommentContractTest {
                 com.tailtopia.content.domain.ContentVisibility.PRIVATE,
                 Instant.parse("2026-06-05T00:00:00Z"),
                 // V1.3.0 batch-b1 Story 3.3：正文里的 @（能不能点是服务端算好的）。
-                List.of(new com.tailtopia.mention.dto.MentionView(9L, "阿花", true)));
+                List.of(new com.tailtopia.mention.dto.MentionView(9L, "阿花", true)),
+                // V1.3.2 Story 1.5：打卡场所条（普通帖为 null → 省略，见下一例）。
+                new com.tailtopia.place.dto.CheckinPlaceView("p".repeat(32), "Kopi Kucing",
+                        com.tailtopia.place.domain.PlaceAvailability.ACTIVE));
 
         assertThat(wire(d).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
                 "authorTags", "decorationTags", "type",
                 "body", "imageUrls", "imageSizes", "likeCount", "commentCount", "liked", "isAuthor",
-                "visibility", "createdAt", "mentions"));
+                "visibility", "createdAt", "mentions", "checkinPlace"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> place = (Map<String, Object>) wire(d).get("checkinPlace");
+        assertThat(place.keySet()).isEqualTo(Set.of("token", "name", "status"));
+        assertThat(place.get("status")).isEqualTo("ACTIVE");
         // 线格式是枚举名大写（客户端按字符串比 PRIVATE / PUBLIC，不做数字映射）。
         assertThat(wire(d)).containsEntry("visibility", "PRIVATE");
+    }
+
+    /** V1.3.2 Story 1.5：普通帖（无关联打卡）不下发 checkinPlace 键。 */
+    @Test
+    void plainPostOmitsCheckinPlace() {
+        ContentDetailResponse d = new ContentDetailResponse(1L, 7L, "小明", null, false, null, null,
+                ContentType.DAILY, "正文", List.of(), null, 0L, 0L, false, false,
+                com.tailtopia.content.domain.ContentVisibility.PUBLIC, Instant.parse("2026-06-05T00:00:00Z"),
+                null, null);
+        assertThat(wire(d)).doesNotContainKey("checkinPlace");
     }
 
     @Test

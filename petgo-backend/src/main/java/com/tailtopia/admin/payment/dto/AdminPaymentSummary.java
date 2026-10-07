@@ -28,9 +28,12 @@ package com.tailtopia.admin.payment.dto;
  *                    🛡 **单独列出而不是丢掉**：不列的话运营会拿"现金收入"去对"订单金额总和"，
  *                    发现对不上又找不到差额去哪了。两个数加起来正好是已支付的订单金额。
  * @param currency    币种。⚠️ 多币种混在一起时**不做换算**，见 {@code MIXED_CURRENCY}。
+ * @param payingUserCount 付费用户数：筛选结果里 PAID 的去重 user_id（后台 PRD 2026-10-02）。🔴 只覆盖
+ *                    {@code payment_intents}：用 PawCoin 余额买的一次性解锁不建支付单、不在其中 ——
+ *                    所以它是「现金付费用户数」，不是某个 SKU 的全部付费人数，界面口径说明必须常驻。
  */
 public record AdminPaymentSummary(long orderCount, long paidCount, long cashIncome,
-        long coinSpent, String currency) {
+        long coinSpent, String currency, long payingUserCount) {
 
     /**
      * 筛选结果里出现了不止一种币种时的占位。

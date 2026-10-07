@@ -31,6 +31,9 @@ import org.springframework.beans.factory.ObjectProvider;
 /** L0：聚合倒序 + 空健康源稳健 + 跨源合并 + 游标分页（AC1）。Story 3.1 起游标为统一复合锚点。 */
 class TimelineServiceTest {
 
+    private final com.tailtopia.tailsonality.service.TailsonalityTimelineQuery tailsonalityTimeline =
+            Mockito.mock(com.tailtopia.tailsonality.service.TailsonalityTimelineQuery.class);
+
     private ProfileService profileService;
     private ContentService contentService;
     private MilestoneService milestoneService;
@@ -40,6 +43,9 @@ class TimelineServiceTest {
     private com.tailtopia.profile.repository.MilestoneCompletionRepository milestoneCompletions;
     private com.tailtopia.profile.repository.IdCardRepository idCards;
     private TimelineService service;
+
+    private final com.tailtopia.place.service.PlaceCheckinTimelineQuery placeCheckinQuery =
+            Mockito.mock(com.tailtopia.place.service.PlaceCheckinTimelineQuery.class);
 
     @BeforeEach
     void setUp() {
@@ -61,7 +67,11 @@ class TimelineServiceTest {
                 Mockito.mock(MilestoneCelebrationService.class),
                 healthRecords, milestoneCompletions, idCards,
                 // V1.1.6 Story 5.2：装饰标签统一贴标点；本类不验它，给 mock（默认无标签）。
-                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class));
+                Mockito.mock(com.tailtopia.content.service.ContentTagQueryService.class),
+                // V1.3.2 Story 1.6：源⑥ 场所打卡（本类按需 stub；不声明能力时根本不调）。
+                placeCheckinQuery,
+                // V1.3.2 Story 3.3：源⑦ Tailsonality 解锁（不声明能力时根本不调）。
+                tailsonalityTimeline);
     }
 
     private GrowthMomentView moment(long id, String iso) {

@@ -20,6 +20,7 @@ import com.tailtopia.pay.repository.PaymentIntentRepository;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Set;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -27,7 +28,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 后台支付记录通用查询（Story 9.6，AB-8E）。按用户跨类型（VET_CONSULT/PAWCOIN_TOPUP/AI_UNLOCK/ID_HD）
+ * 后台支付记录通用查询（Story 9.6，AB-8E）。按用户跨类型（VET_CONSULT/PAWCOIN_TOPUP/AI_UNLOCK/ID_HD/SHOP_ORDER，
+ * V1.3.2 起含 TAILSONALITY/PASSPORT_SNAP/BOARDING_PASS；逻辑按 purpose 泛化、无分支）
  * 只读查 {@code payment_intents}。无敏感 PII（gateway_meta 已脱敏，本查询不返 meta）。
  */
 @Service
@@ -79,11 +81,20 @@ public class AdminPaymentQueryService {
      * @param from 起（含），按 **WIB 当天 00:00** 换算；null 不限
      * @param to   止（**含当天**），按 WIB 次日 00:00 换算；null 不限
      */
-    public record Filter(Long userId, PaymentPurpose purpose, PaymentStatus status,
+    public record Filter(Long userId, Set<PaymentPurpose> purposes, PaymentStatus status,
             LocalDate from, LocalDate to) {
 
+        /**
+         * 用途多选（后台 PRD 2026-09-30 定）：空集 = 不限，等价于旧的「全部用途」。null 归一为空集。
+         */
+        public Filter {
+            // 有序（枚举声明序）只读副本：导出审计里的 purposes=[...] 顺序稳定。
+            purposes = purposes == null || purposes.isEmpty() ? Set.of()
+                    : java.util.Collections.unmodifiableSet(java.util.EnumSet.copyOf(purposes));
+        }
+
         public boolean isEmpty() {
-            return userId == null && purpose == null && status == null && from == null && to == null;
+            return userId == null && purposes.isEmpty() && status == null && from == null && to == null;
         }
     }
 
@@ -95,8 +106,8 @@ public class AdminPaymentQueryService {
         if (f.userId() != null) {
             ps.add(cb.equal(r.get("userId"), f.userId()));
         }
-        if (f.purpose() != null) {
-            ps.add(cb.equal(r.get("purpose"), f.purpose()));
+        if (!f.purposes().isEmpty()) {
+            ps.add(r.get("purpose").in(f.purposes()));
         }
         if (f.status() != null) {
             ps.add(cb.equal(r.get("status"), f.status()));
@@ -182,8 +193,12 @@ public class AdminPaymentQueryService {
                         cb.coalesce(r.<Long>get("coinAmount"), 0L))
                 .otherwise(0L));
 
+        // 付费用户数（后台 PRD 2026-10-02 §1.5）：当前筛选下 PAID 的去重 user_id —— 与看板 #15「付费人数·现金到账」同源
+        // （都是 payment_intents PAID 去重用户），差别只在时间维度。未成交不计；区间内多次付费算 1 人。
+        Expression<Long> payingUsers = cb.countDistinct(cb.<Long>selectCase()
+                .when(isPaid, r.<Long>get("userId")).otherwise(cb.nullLiteral(Long.class)));
         cq.multiselect(cb.count(r), paidCount, cash, coin,
-                cb.countDistinct(r.get("currency")), cb.least(r.<String>get("currency")));
+                cb.countDistinct(r.get("currency")), cb.least(r.<String>get("currency")), payingUsers);
         cq.where(where(cb, r, f).toArray(Predicate[]::new));
 
         Object[] row = em.createQuery(cq).getSingleResult();
@@ -194,7 +209,7 @@ public class AdminPaymentQueryService {
         long currencies = num(row[4]);
         String currency = currencies > 1 ? AdminPaymentSummary.MIXED_CURRENCY
                 : (row[5] == null ? "IDR" : (String) row[5]);
-        return new AdminPaymentSummary(orders, paid, cashSum, coinSum, currency);
+        return new AdminPaymentSummary(orders, paid, cashSum, coinSum, currency, num(row[6]));
     }
 
     /** 空结果时聚合列会是 null（SUM 无行 → NULL），一律当 0。 */

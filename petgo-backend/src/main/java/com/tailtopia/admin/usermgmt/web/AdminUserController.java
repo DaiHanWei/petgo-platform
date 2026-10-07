@@ -53,10 +53,14 @@ public class AdminUserController {
     /** 后台操作提示与报错按当前语言输出（模板里的静态文案走 Thymeleaf #{...}，不经这里）。 */
     private final Messages msg;
 
+    /** V1.3.2 后台 AB-23：已购解锁页签取数（随抽屉同一次渲染，切页签不再请求）。 */
+    private final com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases;
+
     public AdminUserController(AdminUserService adminUserService,
-            Messages msg) {
+            Messages msg, com.tailtopia.admin.usermgmt.service.AdminUserPurchasesQuery purchases) {
         this.adminUserService = adminUserService;
         this.msg = msg;
+        this.purchases = purchases;
     }
 
     @GetMapping("/admin/users")
@@ -121,6 +125,8 @@ public class AdminUserController {
         boolean canSeePhone = hasPhoneView(auth);
         model.addAttribute("canSeePhone", canSeePhone);
         model.addAttribute("user", adminUserService.detail(userId, canSeePhone));
+        // 第六页签「已购解锁」（AB-23）：读业务表解锁状态，PawCoin 付的也查得到。只读、无 PII，权限沿用本抽屉。
+        model.addAttribute("purchases", purchases.forUser(userId));
         // 赠币表单一次性幂等 token（bug 20260728-389）：防双击/回退重提交重复入账。
         model.addAttribute("grantToken", java.util.UUID.randomUUID().toString());
     }

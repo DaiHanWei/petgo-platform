@@ -325,6 +325,9 @@ class AgeCardShareRewardTest {
             String src = Files.readString(Path.of("src/main/java/com/tailtopia/share/service/"
                     + "ShareRewardDeletionService.java"), StandardCharsets.UTF_8);
             assertThat(src).contains("ageCardRewards.deleteByUserId(userId)");
+            // V1.3.2 Story 4.5：两个新渠道账本同口径进注销级联。
+            assertThat(src).contains("tailsonalityRewards.deleteByUserId(userId)");
+            assertThat(src).contains("passportRewards.deleteByUserId(userId)");
         }
 
         /** 外键指向 users，与同胞表同构。 */

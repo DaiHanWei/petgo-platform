@@ -22,6 +22,7 @@ import com.tailtopia.shared.im.TencentImClient;
 import com.tailtopia.shared.media.MediaDeletionService;
 import com.tailtopia.shared.media.PersonalMedia;
 import com.tailtopia.shop.service.ShopAccountDeletionService;
+import com.tailtopia.tailsonality.service.TailsonalityDeletionService;
 import com.tailtopia.triage.service.TriageDeletionService;
 import java.util.List;
 import org.slf4j.Logger;
@@ -71,6 +72,7 @@ public class AccountDeletionService {
     private final PlacePhotoService placePhotoService;
     /** V1.3.0 batch-b1 Story 3.1：@ 候选集（派生表，两个方向都物理删）。 */
     private final MentionCandidateMaintenanceService mentionCandidateMaintenance;
+    private final TailsonalityDeletionService tailsonalityDeletion;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -84,7 +86,8 @@ public class AccountDeletionService {
             ShareRewardDeletionService shareRewardDeletion,
             com.tailtopia.onboarding.service.OnboardingMarkDeletionService onboardingMarkDeletion,
             PlaceCommentService placeCommentService, PlacePhotoService placePhotoService,
-            MentionCandidateMaintenanceService mentionCandidateMaintenance) {
+            MentionCandidateMaintenanceService mentionCandidateMaintenance,
+            TailsonalityDeletionService tailsonalityDeletion) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -105,6 +108,7 @@ public class AccountDeletionService {
         this.placeCommentService = placeCommentService;
         this.mentionCandidateMaintenance = mentionCandidateMaintenance;
         this.placePhotoService = placePhotoService;
+        this.tailsonalityDeletion = tailsonalityDeletion;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -181,6 +185,9 @@ public class AccountDeletionService {
         // V1.3.0 批次 A Story 5.4：一次性引导标记（谁看过哪个引导）随注销物理删除。
         // ⚠️ 漏接的表会在注销后留着指向一个已不存在的人的行，而这类遗漏没有任何报错提醒。
         onboardingMarkDeletion.deleteByUserId(userId);
+        // V1.3.2 Story 2.5：Tailsonality 主人类型是账号级个人数据（AD-17），须在 user 行删除前物理删除
+        // （tailsonality_owner_types.user_id 对 users 有 FK、无 ON DELETE）。宠物级的结果行已随上面的 profileDeletion 删掉。
+        tailsonalityDeletion.deleteOwnerTypeByUserId(userId);
 
         // PawCoin 余额作废（Story 1.6，FR-50D）：写 FORFEITURE 终结分录归零 + 物理删钱包/流水；在删 user 行前。
         pawCoinDeletion.voidBalanceAndPurge(userId);

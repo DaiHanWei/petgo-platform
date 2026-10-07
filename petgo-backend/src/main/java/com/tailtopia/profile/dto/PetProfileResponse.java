@@ -23,9 +23,20 @@ public record PetProfileResponse(
         /** 🔒 体重（kg），Story 6.1。null = 用户还没填 —— 前端据此展示补全引导卡。 */
         java.math.BigDecimal weightKg,
         String neuterStatus,
-        Instant createdAt) {
+        Instant createdAt,
+        /**
+         * Tailsonality 角色小标（V1.3.2 Story 3.3 · AC4）：佩戴 + 已解锁时为该结果的 4 字母（如 {@code ENTJ}），
+         * 否则 null（NON_NULL 省略）。只给 4 字母，不给结果 token。
+         */
+        String tailsonalityBadge) {
 
+    /** 无小标（创建路径等）：恒 null。 */
     public static PetProfileResponse from(PetProfile p) {
+        return from(p, null);
+    }
+
+    /** 带角色小标（{@code TailsonalityBadgeQuery.badgeOf}）。 */
+    public static PetProfileResponse from(PetProfile p, String tailsonalityBadge) {
         return new PetProfileResponse(
                 p.getId(),
                 p.getAvatarUrl(),
@@ -40,6 +51,7 @@ public record PetProfileResponse(
                 p.isSystemDefaultName(),
                 p.getWeightKg(),
                 p.getNeuterStatus() == null ? null : p.getNeuterStatus().name(),
-                p.getCreatedAt());
+                p.getCreatedAt(),
+                tailsonalityBadge);
     }
 }

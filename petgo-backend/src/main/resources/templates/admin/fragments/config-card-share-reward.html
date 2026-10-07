@@ -2,7 +2,8 @@
 <html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!--
   D2 运营配置 · 卡四「分享奖励」（V1.1.6 Story 18.3 AB-3M → V1.3.0 Story 6.3 套模板 D）。端点 / 参数逐字不变：POST /admin/config/share-reward
-  （shareRewardEnabled / shareRewardMonthlyCap / idCardShareReward / idCardShareDailyCap / ageCardShareReward / ageCardShareDailyCap）。
+  （shareRewardEnabled / shareRewardMonthlyCap / idCardShareReward / idCardShareDailyCap / ageCardShareReward / ageCardShareDailyCap
+   / tailsonalityShareReward / tailsonalityShareDailyCap / passportShareReward / passportShareDailyCap —— 后四项 V1.3.2 Story 4.5）。
   🛡 权限与别的卡不同：独立码 config.share_reward_view / config.share_reward_edit（AdminConfigController.SHARE_REWARD_*_AUTH），只读态按 edit 码判。
   🔴 白嫖倍数与当月消耗必须与配置同屏（AC2 / AC3）——概览两行放卡内表单上方。模型：pawcoin、shareRewardOverview（ov）、errorFields。
 -->
@@ -48,6 +49,16 @@
                 <input class="inp field-full" type="number" name="ageCardShareReward" min="0" step="1" th:value="${pawcoin.ageCardShareReward}" th:disabled="${!canEdit}"/></label>
             <label class="field"><span th:text="#{admin.config.ageCardShareDailyCap}">年龄卡分享每日次数上限</span>
                 <input class="inp field-full" type="number" name="ageCardShareDailyCap" min="0" step="1" th:value="${pawcoin.ageCardShareDailyCap}" th:disabled="${!canEdit}"/></label>
+            <!-- 渠道③ Tailsonality 结果卡 / 配型卡、渠道④ 护照卡 / 登机牌卡（V1.3.2 Story 4.5）。去重 = 宠物 × 卡类型（各一次），
+                 日上限是冗余保险。🔴 四个输入框缺一不可：端点对缺省参数取 0，少了就每保存一次把对应配置清零。 -->
+            <label class="field"><span th:text="#{admin.config.tailsonalityShareReward}">Tailsonality 分享每次发放</span>
+                <input class="inp field-full" type="number" name="tailsonalityShareReward" min="0" step="1" th:value="${pawcoin.tailsonalityShareReward}" th:disabled="${!canEdit}"/></label>
+            <label class="field"><span th:text="#{admin.config.tailsonalityShareDailyCap}">Tailsonality 分享每日次数上限</span>
+                <input class="inp field-full" type="number" name="tailsonalityShareDailyCap" min="0" step="1" th:value="${pawcoin.tailsonalityShareDailyCap}" th:disabled="${!canEdit}"/></label>
+            <label class="field"><span th:text="#{admin.config.passportShareReward}">护照 / 登机牌分享每次发放</span>
+                <input class="inp field-full" type="number" name="passportShareReward" min="0" step="1" th:value="${pawcoin.passportShareReward}" th:disabled="${!canEdit}"/></label>
+            <label class="field"><span th:text="#{admin.config.passportShareDailyCap}">护照 / 登机牌分享每日次数上限</span>
+                <input class="inp field-full" type="number" name="passportShareDailyCap" min="0" step="1" th:value="${pawcoin.passportShareDailyCap}" th:disabled="${!canEdit}"/></label>
         </div>
     </div>
 </th:block>

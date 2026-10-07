@@ -16,8 +16,8 @@ import java.time.LocalDate;
  * <p>⚠️ 同样没有 {@code intro}（自述）与 {@code sex} —— 那些在**点进去之后**的
  * 访客视图里给（{@link VisitorProfileResponse}）。一张列表卡片不需要它们。
  *
- * <p>⚠️ <b>没有 Tailsonality 角色小标</b>：FR-117 在批次 B2，本批次这个位置是
- * <b>天然空状态</b>，**不做占位设计**（AC3 原文）。
+ * <p>Tailsonality 角色小标（V1.3.2 Story 3.3 · AD-3）：<b>佩戴 + 已解锁</b>时下发 4 字母，否则 null（整键省略），
+ * 客户端不渲染任何占位。🛡 只给 4 字母，<b>不给结果 token</b>（与没有 cardToken 同一理由）。
  *
  * @param petId      宠物 id —— 客户端拿它调站内访客接口（AD-4 Rule 1 明写按 petId）
  * @param name       宠物名
@@ -26,6 +26,7 @@ import java.time.LocalDate;
  * @param birthday   生日，可空 —— 供客户端算「2th 3bln」；服务端不下发算好的字符串，
  *                   那样每过一天就得靠缓存失效才准
  * @param diaryCount 该宠物的 Diary 条数，与点进去之后统计条上那个数**同一个实现**
+ * @param tailsonalityBadge 角色小标 4 字母（{@code TailsonalityBadgeQuery.badgeOf}，与本人档案同一个方法），可空
  */
 public record PublicProfilePetResponse(
         long petId,
@@ -33,9 +34,10 @@ public record PublicProfilePetResponse(
         String avatarUrl,
         PetType petType,
         LocalDate birthday,
-        long diaryCount) {
+        long diaryCount,
+        String tailsonalityBadge) {
 
-    static PublicProfilePetResponse of(PetProfile p, long diaryCount) {
+    static PublicProfilePetResponse of(PetProfile p, long diaryCount, String tailsonalityBadge) {
         return new PublicProfilePetResponse(
                 p.getId(),
                 p.getName(),
@@ -43,6 +45,7 @@ public record PublicProfilePetResponse(
                         : AliyunOssClient.exifStrippedDeliveryUrl(p.getAvatarUrl()),
                 p.getPetType(),
                 p.getBirthday(),
-                diaryCount);
+                diaryCount,
+                tailsonalityBadge);
     }
 }

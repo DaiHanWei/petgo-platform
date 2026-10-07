@@ -9,6 +9,9 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/features/profile/presentation/pet_insights_page.dart';
+import 'package:tailtopia/features/tailsonality/data/tailsonality_repository.dart';
+import 'package:tailtopia/features/tailsonality/domain/tailsonality_result.dart';
+import 'package:tailtopia/features/tailsonality/presentation/tailsonality_routes.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// V1.3.0 批次 A · Story 5.1（L0）：综合入口聚合页与 KTP 平移（FR-65 · AD-A17 / AD-A24）。
@@ -35,6 +38,7 @@ void main() {
       expect(block.trim(), "'/profile'");
       expect(block, isNot(contains('pet-insights')));
       expect(block, isNot(contains('age-card')));
+      expect(block, isNot(contains('tailsonality')));
     });
 
     /// 受控前缀集合本身也不该被动（比如有人把 /profile 挪出去"顺便"放行子页）。
@@ -52,6 +56,24 @@ void main() {
       expect(redirectWouldRewrite(guest, PetInsightsRoutes.hub), isTrue);
       expect(redirectWouldRewrite(guest, PetInsightsRoutes.idCard), isTrue);
       expect(redirectWouldRewrite(guest, PetInsightsRoutes.ageCard), isTrue);
+      // V1.3.2 Story 1.2：护照页同样落在 /profile/ 下、自动受控。
+      expect(PetInsightsRoutes.passport, startsWith('/profile/'));
+      expect(redirectWouldRewrite(guest, PetInsightsRoutes.passport), isTrue);
+      expect(redirectWouldRewrite(guest, PetInsightsRoutes.passportFor(focus: 'abc')), isTrue);
+      // V1.3.2 Story 1.3：落章页与章详情页同样受控。
+      expect(redirectWouldRewrite(guest, PetInsightsRoutes.passportNewStamp), isTrue);
+      expect(redirectWouldRewrite(guest, PetInsightsRoutes.passportStampFor('abc')), isTrue);
+      // V1.3.2 Story 2.3：Tailsonality 答题页与结果页同样落在 /profile/ 下、自动受控。
+      expect(TailsonalityRoutes.quiz, startsWith('/profile/'));
+      expect(TailsonalityRoutes.result('abc'), startsWith('/profile/'));
+      expect(redirectWouldRewrite(guest, TailsonalityRoutes.quiz), isTrue);
+      expect(redirectWouldRewrite(guest, TailsonalityRoutes.result('abc')), isTrue);
+      // V1.3.2 Story 2.5：主人配型页同样受控。
+      expect(TailsonalityRoutes.match('abc'), startsWith('/profile/'));
+      expect(redirectWouldRewrite(guest, TailsonalityRoutes.match('abc')), isTrue);
+      // V1.3.2 Story 2.6：结果列表页同样受控。
+      expect(TailsonalityRoutes.results, startsWith('/profile/'));
+      expect(redirectWouldRewrite(guest, TailsonalityRoutes.results), isTrue);
       // 旧路径同样受控 —— 重定向不能变成绕过门控的旁路（AC4 / AD-A17.6）。
       expect(redirectWouldRewrite(guest, '/profile/id-card'), isTrue);
     });
@@ -60,6 +82,7 @@ void main() {
       const user = AuthState(status: AuthStatus.authenticated, role: 'USER');
       expect(redirectWouldRewrite(user, PetInsightsRoutes.hub), isFalse);
       expect(redirectWouldRewrite(user, PetInsightsRoutes.idCard), isFalse);
+      expect(redirectWouldRewrite(user, TailsonalityRoutes.quiz), isFalse);
     });
   });
 
@@ -87,13 +110,13 @@ void main() {
     });
   });
 
-  group('AC2 🔴 只有两张卡，不预埋第三张', () {
+  group('AC2 🔴 KTP / 年龄卡 / 护照 / Tailsonality / 登机牌五张卡，不预埋尚未上线的卡（V1.3.2 Story 3.5 更新）', () {
     final String pageSrc =
         File('lib/features/profile/presentation/pet_insights_page.dart').readAsStringSync();
 
-    /// 护照与性格测试**不占位、不置灰、不出现**。批次 C 是「新增卡」，
-    /// 不是「解锁占位」—— 所以连一个隐藏卡位、一个 enabled:false 的常量都不许留。
-    test('源码里没有护照 / 性格测试的任何痕迹', () {
+    /// 「即将推出」式占位一律不许留。护照（1.2）/ Tailsonality（2.3）/ 登机牌（3.5）已上线，从禁词里移除
+    /// （Story 3.5 按新规则更新：登机牌不再是禁词）；「即将推出」禁词原样保留。
+    test('源码里没有「即将推出」的任何痕迹', () {
       // 只看真正的代码：文档注释里**本来就会**提到这两样（那段话正是在写"为什么不占位"），
       // 扫全文会被自己的解释性注释弄红。
       final code = pageSrc
@@ -101,28 +124,119 @@ void main() {
           .where((l) => !l.trimLeft().startsWith('///') && !l.trimLeft().startsWith('//'))
           .join('\n');
       for (final banned in [
-        'passport',
-        'Passport',
-        'tailsonality',
-        'Tailsonality',
         'comingSoon',
         'coming_soon',
       ]) {
-        expect(code, isNot(contains(banned)), reason: '$banned 属批次 C，本批次不占位');
+        expect(code, isNot(contains(banned)), reason: '$banned：不占位');
       }
     });
 
-    testWidgets('聚合页就是两张卡', (tester) async {
+    testWidgets('聚合页就是五张卡，按 C-8 顺序', (tester) async {
       await _pumpHub(tester, petType: 'CAT');
-      expect(find.byKey(const ValueKey('insightIdCard')), findsOneWidget);
-      expect(find.byKey(const ValueKey('insightAgeCard')), findsOneWidget);
-      expect(find.byType(InkWell), findsNWidgets(2));
+      const order = ['insightIdCard', 'insightAgeCard', 'insightPassport', 'insightTailsonality', 'insightBoardingPass'];
+      for (final k in order) {
+        expect(find.byKey(ValueKey(k)), findsOneWidget, reason: k);
+      }
+      expect(find.byType(InkWell), findsNWidgets(5));
+      final rects = [for (final k in order) tester.getRect(find.byKey(ValueKey(k)))];
+      // 阅读顺序：同行左→右、行间上→下。
+      for (var i = 1; i < rects.length; i++) {
+        final prev = rects[i - 1], cur = rects[i];
+        expect(cur.top > prev.top || (cur.top == prev.top && cur.left > prev.left), isTrue, reason: order[i]);
+      }
+    });
+
+    /// V1.3.2 Story 2.3：2+2 排布 —— 护照从整宽变回半宽（预期），与 Tailsonality 并排第二行；全物种可点。
+    testWidgets('第二行护照 + Tailsonality 并排、全物种可点', (tester) async {
+      await _pumpHub(tester, petType: 'OTHER');
+      final ktp = tester.getRect(find.byKey(const ValueKey('insightIdCard')));
+      final age = tester.getRect(find.byKey(const ValueKey('insightAgeCard')));
+      final pass = tester.getRect(find.byKey(const ValueKey('insightPassport')));
+      final ts = tester.getRect(find.byKey(const ValueKey('insightTailsonality')));
+      expect(ktp.top, age.top, reason: '第一行两张并排');
+      expect(pass.top, greaterThan(ktp.bottom), reason: '护照在第二行');
+      expect(ts.top, pass.top, reason: 'Tailsonality 与护照同一行');
+      expect(pass.width, closeTo(ktp.width, 1), reason: '2+2：护照回到半宽');
+      expect(tester.widget<InkWell>(find.byKey(const ValueKey('insightTailsonality'))).onTap, isNotNull);
+      final card = tester.widget<InkWell>(find.byKey(const ValueKey('insightPassport')));
+      expect(card.onTap, isNotNull);
+
+      await tester.tap(find.byKey(const ValueKey('insightPassport')));
+      await tester.pumpAndSettle();
+      expect(find.text('passport'), findsOneWidget);
+    });
+
+    /// V1.3.2 Story 3.5：第三行整宽登机牌卡（2+2+1）；全物种可点 → 登机牌列表。
+    testWidgets('第三行登机牌整宽、可点进列表', (tester) async {
+      await _pumpHub(tester, petType: 'OTHER');
+      final ts = tester.getRect(find.byKey(const ValueKey('insightTailsonality')));
+      final ktp = tester.getRect(find.byKey(const ValueKey('insightIdCard')));
+      final bp = tester.getRect(find.byKey(const ValueKey('insightBoardingPass')));
+      expect(bp.top, greaterThan(ts.bottom), reason: '第三行');
+      expect(bp.width, greaterThan(ktp.width * 1.8), reason: '整宽');
+      await tester.tap(find.byKey(const ValueKey('insightBoardingPass')));
+      await tester.pumpAndSettle();
+      expect(find.text('boarding-pass'), findsOneWidget);
+    });
+
+    test('登机牌路由落在 /profile/ 下（继承游客门控）', () {
+      expect(PetInsightsRoutes.boardingPass, startsWith('/profile/'));
+      expect(PetInsightsRoutes.boardingPassFor('a b'), '${PetInsightsRoutes.boardingPass}/a%20b');
     });
 
     testWidgets('页面标题与入口卡标题同源', (tester) async {
       await _pumpHub(tester, petType: 'CAT');
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
       expect(find.text(l10n.petInsightsTitle), findsOneWidget);
+    });
+  });
+
+  group('V1.3.2 Story 2.3 · AC1.3 Tailsonality 卡分流', () {
+    testWidgets('无结果 → 弹说明抽屉', (tester) async {
+      await _pumpHub(tester, petType: 'CAT', tsResults: const []);
+      await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('tsIntroSheet')), findsOneWidget);
+    });
+
+    // V1.3.2 Story 2.6 · AC4：有结果的去向由「最近一次结果页」改为结果列表页。
+    testWidgets('有结果 → 进结果列表页', (tester) async {
+      await _pumpHub(tester, petType: 'CAT', tsResults: [_tsResult('newest'), _tsResult('older')]);
+      await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
+      await tester.pumpAndSettle();
+      expect(find.text('results-list'), findsOneWidget);
+      expect(find.text('result:newest'), findsNothing);
+    });
+
+    testWidgets('读列表期间双击只走一次', (tester) async {
+      final repo = _FakeTsRepo([_tsResult('newest')], delay: const Duration(milliseconds: 200));
+      await _pumpHub(tester, petType: 'CAT', repo: repo);
+      await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
+      await tester.pumpAndSettle();
+      expect(repo.calls, 1);
+      expect(find.text('results-list'), findsOneWidget);
+    });
+
+    // 待确认 2.5（2026-10-02）按新规则更新：不再静默，给「加载失败，再试一次」轻提示。
+    testWidgets('档案取失败且无结果 → 不抛未处理异常、不弹抽屉、给轻提示', (tester) async {
+      await _pumpHub(tester, petType: null, profileFails: true);
+      await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const ValueKey('tsIntroSheet')), findsNothing);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      expect(find.text(l10n.detailNetworkError), findsOneWidget);
+      await tester.pumpAndSettle(const Duration(seconds: 5));
+    });
+
+    testWidgets('列表读取失败 → 仍弹说明抽屉', (tester) async {
+      await _pumpHub(tester, petType: 'OTHER', tsFails: true);
+      await tester.tap(find.byKey(const ValueKey('insightTailsonality')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('tsIntroSheet')), findsOneWidget);
     });
   });
 
@@ -205,10 +319,18 @@ Future<void> _pumpHub(
   WidgetTester tester, {
   required String? petType,
   bool noProfile = false,
+  List<TailsonalityResult> tsResults = const [],
+  bool tsFails = false,
+  bool profileFails = false,
+  _FakeTsRepo? repo,
 }) async {
-  final container = ProviderContainer(overrides: [
-    petProfileProvider.overrideWith((ref) async =>
-        noProfile ? null : PetProfile(id: 1, name: 'Mochi', cardToken: 'tok', petType: petType)),
+  // retry 关掉：Riverpod 3 默认对失败 provider 定时重试，测试结束时会留下挂起的 Timer。
+  final container = ProviderContainer(retry: (_, _) => null, overrides: [
+    petProfileProvider.overrideWith((ref) async {
+      if (profileFails) throw Exception('profile');
+      return noProfile ? null : PetProfile(id: 1, name: 'Mochi', cardToken: 'tok', petType: petType);
+    }),
+    tailsonalityRepositoryProvider.overrideWithValue(repo ?? _FakeTsRepo(tsResults, fails: tsFails)),
   ]);
   addTearDown(container.dispose);
 
@@ -222,6 +344,21 @@ Future<void> _pumpHub(
       GoRoute(
           path: PetInsightsRoutes.ageCard,
           builder: (c, s) => const Scaffold(body: Text('age'))),
+      GoRoute(
+          path: PetInsightsRoutes.boardingPass,
+          builder: (c, s) => const Scaffold(body: Text('boarding-pass'))),
+      GoRoute(
+          path: PetInsightsRoutes.passport,
+          builder: (c, s) => const Scaffold(body: Text('passport'))),
+      GoRoute(
+          path: TailsonalityRoutes.quiz,
+          builder: (c, s) => const Scaffold(body: Text('quiz'))),
+      GoRoute(
+          path: TailsonalityRoutes.results,
+          builder: (c, s) => const Scaffold(body: Text('results-list'))),
+      GoRoute(
+          path: TailsonalityRoutes.resultPattern,
+          builder: (c, s) => Scaffold(body: Text('result:${s.pathParameters['token']}'))),
     ],
   );
   addTearDown(router.dispose);
@@ -236,4 +373,36 @@ Future<void> _pumpHub(
     ),
   ));
   await tester.pumpAndSettle();
+}
+
+TailsonalityResult _tsResult(String token) => TailsonalityResult(
+      token: token,
+      typeCode: 'ENTJ-H',
+      letters: 'ENTJ',
+      energy: 'H',
+      questionSet: 'CAT',
+      resultIndex: 1,
+      unlocked: false,
+      contentVersion: 1,
+      createdAt: DateTime.utc(2026, 9, 30),
+    );
+
+class _FakeTsRepo implements TailsonalityRepository {
+  _FakeTsRepo(this.results, {this.fails = false, this.delay = Duration.zero});
+
+  final List<TailsonalityResult> results;
+  final bool fails;
+  final Duration delay;
+  int calls = 0;
+
+  @override
+  Future<List<TailsonalityResult>> fetchResults() async {
+    calls++;
+    if (delay > Duration.zero) await Future<void>.delayed(delay);
+    if (fails) throw Exception('network');
+    return results;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

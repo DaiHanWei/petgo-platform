@@ -25,8 +25,11 @@ import '../../media/domain/media_upload_use_case.dart';
 import '../../profile/domain/card_link.dart';
 import '../../profile/domain/share_service.dart';
 import '../data/place_repository.dart';
+import '../../pet_passport/presentation/passport_layout.dart';
 import '../domain/place_comment.dart';
 import '../domain/place_detail.dart';
+import '../domain/place_summary.dart';
+import 'place_checkin_button.dart';
 import 'place_comment_composer.dart';
 import 'place_comments_controller.dart';
 import 'place_comment_section.dart';
@@ -38,9 +41,12 @@ import 'place_mini_map.dart';
 /// 场所详情页（V1.3.0 batch-b1 Story 1.5 · UI 稿 A4）。
 ///
 /// <h2>🔴 反向验收：本页**没有**这些东西（FR-112.6 / AC6）</h2>
-/// 没有收藏、没有评分打星、没有营业时间/电话等商户字段、**没有打卡按钮**（⑧ 在批次 B2）、
+/// 没有收藏、没有评分打星、没有营业时间/电话等商户字段、
 /// **没有「编辑场所」入口**（本版用户不可编辑，2026-09-15 拍板；纠错走后台 AB-17A）。
 /// 这不是「还没做」，是明确不做 —— 后端 DTO 里连字段都没有（那侧有契约测试钉着）。
+///
+/// **打卡按钮**（V1.3.2 Story 1.1）在距离行之后、描述之前（`PlaceCheckinButton`，整宽、不吸底）；
+/// 当日已打卡为禁用态，不隐藏。
 ///
 /// <h2>范围边界（别顺手加）</h2>
 /// <ul>
@@ -81,15 +87,29 @@ final _photoUploadingProvider =
 const String kPlaceDetailFromList = 'list';
 const String kPlaceDetailFromCreated = 'created';
 const String kPlaceDetailFromShare = 'share';
+
+/// 护照章详情「Lihat tempat」进来的（V1.3.2 Story 1.3 · AC5）。
+const String kPlaceDetailFromPassport = 'passport';
+
+/// 帖子详情的打卡场所条进来的（V1.3.2 Story 1.5 · AC5.5）。
+const String kPlaceDetailFromPost = 'post';
+
+/// Diary 时间线 / 某天详情的打卡条目进来的（V1.3.2 Story 1.6 · AC4.3）。
+const String kPlaceDetailFromDiary = 'diary';
 const String kPlaceDetailFromOther = 'other';
 
 class PlaceDetailPage extends ConsumerWidget {
-  const PlaceDetailPage({super.key, required this.token, this.analyticsFrom});
+  const PlaceDetailPage(
+      {super.key, required this.token, this.analyticsFrom, this.preview});
 
   final String token;
 
   /// 从哪个入口进来的（路由 `?from=`），只喂 `place_detail_viewed`，不影响任何行为。
   final String? analyticsFrom;
+
+  /// 列表那一行的摘要（bug 20260925-572）：详情请求在途时先把它画出来，不白屏转圈。
+  /// 深链 / 分享链接进来为 null，照旧转圈。纯展示，不参与任何请求与交互。
+  final PlaceSummary? preview;
 
   /// 路由路径模板。⚠️ 与 `app_router.dart` 的注册值同源。
   static const String routePattern = '/places/:token';
@@ -99,12 +119,17 @@ class PlaceDetailPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 打卡成功页正文是护照本：在场所详情就把底图解码好，成功页入场时不再白底闪一下。
+    precachePassportBook(context);
     // 🔴 埋点包一层有状态壳：本页是 ConsumerWidget，build 会随定位 / 详情数据到达重跑好几次，
     // 直接在 build 里报等于一次浏览报三四条。壳子始终在同一位置，initState 只走一次。
-    return _PlaceDetailViewedOnce(
-      token: token,
-      from: analyticsFrom,
-      child: _buildPage(context, ref),
+    // 安卓返回前先撤掉小地图再走返回动画（bug 20260925-572，见 PlaceMiniMapPopGuard）。
+    return PlaceMiniMapPopGuard(
+      child: _PlaceDetailViewedOnce(
+        token: token,
+        from: analyticsFrom,
+        child: _buildPage(context, ref),
+      ),
     );
   }
 
@@ -118,7 +143,7 @@ class PlaceDetailPage extends ConsumerWidget {
     // ② 族键换了就是**另一个还没有值的 provider** —— 已经渲染好的详情会被整屏转圈顶掉，
     // 第二次再失败就直接落错误态。深链进来（Story 1.10 的分享链接）恰好总是这条路径。
     if (locationAsync.isLoading && !locationAsync.hasValue) {
-      return _scaffold(l10n, const Center(child: CircularProgressIndicator()));
+      return _scaffold(l10n, _loadingBody());
     }
     // 定位链路失败不该让详情打不开 —— 退回不带坐标（距离位隐藏）。
     final coords = locationAsync.value?.coordinates;
@@ -132,7 +157,7 @@ class PlaceDetailPage extends ConsumerWidget {
         // 🔴 404（下架 / 不存在）走**统一空态**，不区分两种情况、不泄漏任何原内容（AC7）。
         AsyncError(:final error) => _errorBody(context, ref, l10n, query, error),
         AsyncData(:final value) => _body(context, ref, l10n, value),
-        _ => const Center(child: CircularProgressIndicator()),
+        _ => _loadingBody(),
       },
       // 举报入口（AC5）。⚠️ 只在**真的有这个场所**时才给 —— 下架态弹举报抽屉毫无意义。
       onReport: async.hasValue ? () => _onReport(context, ref) : null,
@@ -140,6 +165,15 @@ class PlaceDetailPage extends ConsumerWidget {
       // 404 空态下挂一个输入框，用户打完字一发就是另一个 404。
       composer: async.hasValue ? PlaceCommentComposer(token: token) : null,
     );
+  }
+
+  /// 详情未到时的首屏：有列表摘要就先画摘要（bug 20260925-572），没有（深链）照旧转圈。
+  Widget _loadingBody() {
+    final p = preview;
+    if (p == null || p.token != token) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return _PreviewBody(summary: p);
   }
 
   Widget _scaffold(AppLocalizations l10n, Widget body,
@@ -239,6 +273,10 @@ class PlaceDetailPage extends ConsumerWidget {
                 Text(formatPlaceDistance(l10n, p.distanceMeters!),
                     style: AppTypography.caption),
               ],
+              // V1.3.2 Story 1.1 AC4：打卡按钮 —— 距离行之后、描述之前；无定位（距离行省略）时
+              // 照常紧跟名称 / 标签区。🔴 不吸底：吸底位是评论输入条（body Column 底部）。
+              const SizedBox(height: AppSpacing.md),
+              PlaceCheckinButton(token: token, checkedInToday: p.checkedInToday),
               if (p.description != null) ...[
                 const SizedBox(height: AppSpacing.md),
                 Text(p.description!, style: AppTypography.body),
@@ -512,6 +550,9 @@ class _PlaceDetailViewedOnceState extends State<_PlaceDetailViewedOnce> {
     kPlaceDetailFromList,
     kPlaceDetailFromCreated,
     kPlaceDetailFromShare,
+    kPlaceDetailFromPassport,
+    kPlaceDetailFromPost,
+    kPlaceDetailFromDiary,
   };
 
   @override
@@ -542,6 +583,91 @@ class _PlaceDetailViewedOnceState extends State<_PlaceDetailViewedOnce> {
 ///       这是当前能拿到的最大安全尺寸，**不是真正的原图**。要更清晰得改后端出口尺寸，
 ///       而不是在前端加参数（真·原图不能直接外发：那条路径没有 `format,jpg`，会带着 GPS）。</li>
 /// </ul>
+/// 详情未到时的首屏（bug 20260925-572）：用列表那一行已有的封面 / 名称 / 类型标签 / 距离，
+/// 按正式详情同样的尺寸与位置画出来，数据到了原位替换，不跳版。
+///
+/// 🔒 纯展示：不给补图、举报、评论等任何交互 —— 那些都依赖详情接口的真值
+/// （剩余名额、是否下架等），在它回来之前一律不开放。
+class _PreviewBody extends StatelessWidget {
+  const _PreviewBody({required this.summary});
+
+  final PlaceSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final p = summary;
+    final cover = p.firstPhotoUrl;
+    return ListView(
+      key: const ValueKey('placeDetailPreview'),
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+      children: [
+        // 与 _PhotoStrip 同高同宽：有封面就把第一张摆在同一位置，没有就给空态底色。
+        if (cover != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: AppImage.widget(
+                  cover,
+                  width: _PhotoStrip._itemWidth,
+                  height: _PhotoStrip._height,
+                  errorBuilder: (_, _, _) => Container(
+                    width: _PhotoStrip._itemWidth,
+                    height: _PhotoStrip._height,
+                    color: AppColors.cream2,
+                  ),
+                ),
+              ),
+            ),
+          )
+        else
+          Container(height: _PhotoStrip._height, color: AppColors.cream2),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: AppSpacing.md),
+              Text(p.name,
+                  style: AppTypography.headline
+                      .copyWith(fontSize: 20, fontWeight: FontWeight.w600)),
+              if (p.type != null || p.tags.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: AppSpacing.xs,
+                  runSpacing: AppSpacing.xs,
+                  children: [
+                    if (p.type != null) _TagChip(label: p.type!.label(l10n)),
+                    for (final t in p.tags) _TagChip(label: t.label(l10n)),
+                  ],
+                ),
+              ],
+              if (p.distanceMeters != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(formatPlaceDistance(l10n, p.distanceMeters!),
+                    style: AppTypography.caption),
+              ],
+              const SizedBox(height: AppSpacing.xl),
+              // 其余（地址 / 地图 / 标记人 / 评论）等详情回来再画，这里只给一个轻量的加载提示。
+              const Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _PhotoStrip extends StatelessWidget {
   const _PhotoStrip({
     required this.photos,

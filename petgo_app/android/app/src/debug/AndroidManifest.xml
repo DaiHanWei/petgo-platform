@@ -9,5 +9,11 @@
          仅合并进 debug manifest，release 不受影响（生产走 HTTPS）。 -->
     <application
         android:usesCleartextTraffic="true"
-        tools:targetApi="28" />
+        tools:targetApi="28">
+        <!-- DEV-ONLY：debug 构建默认关 Firebase 统计，连首次启动那一下都不报进生产 GA4 口径
+             （Dart 侧 FirebaseStats 在 debug 也会显式关，这里兜住初始化之前的自动采集）。 -->
+        <meta-data
+            android:name="firebase_analytics_collection_enabled"
+            android:value="false" />
+    </application>
 </manifest>

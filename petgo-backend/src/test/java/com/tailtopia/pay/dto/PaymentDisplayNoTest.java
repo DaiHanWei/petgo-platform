@@ -32,6 +32,26 @@ class PaymentDisplayNoTest {
         assertThat(PaymentDisplayNo.of(p)).startsWith("PAYTOPUP-").endsWith("-000007");
     }
 
+    /** V1.3.2 Story 3.1：三类一次性解锁各有独立前缀，且全部用途前缀互不相同。 */
+    @Test
+    void keepsakePurposesHaveOwnPrefixesAndAllPrefixesAreDistinct() {
+        java.util.Map<PaymentPurpose, String> expected = java.util.Map.of(
+                PaymentPurpose.TAILSONALITY, "PAYTS-", PaymentPurpose.PASSPORT_SNAP, "PAYPASS-",
+                PaymentPurpose.BOARDING_PASS, "PAYBP-");
+        java.util.Set<String> prefixes = new java.util.HashSet<>();
+        for (PaymentPurpose purpose : PaymentPurpose.values()) {
+            PaymentIntent p = PaymentIntent.create(1L, purpose, PayChannel.QRIS, 5_000L, "IDR", "tok");
+            ReflectionTestUtils.setField(p, "id", 9L);
+            ReflectionTestUtils.setField(p, "createdAt", Instant.parse("2026-09-30T01:00:00Z"));
+            String no = PaymentDisplayNo.of(p);
+            if (expected.containsKey(purpose)) {
+                assertThat(no).startsWith(expected.get(purpose));
+            }
+            prefixes.add(no.substring(0, no.indexOf('-')));
+        }
+        assertThat(prefixes).hasSize(PaymentPurpose.values().length);
+    }
+
     @Test
     void unsavedIntentYieldsNullSoCallerFallsBackToToken() {
         PaymentIntent p = PaymentIntent.create(1L, PaymentPurpose.ID_HD, PayChannel.QRIS,

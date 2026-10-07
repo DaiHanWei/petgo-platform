@@ -172,15 +172,6 @@ class _CommentRow extends StatelessWidget {
                           style: AppTypography.caption
                               .copyWith(fontWeight: FontWeight.w600)),
                     ),
-                    // 「仅你可见」：挂起 / 被拒 / 被下架的评论只会下发给作者本人，
-                    // 不给标签的话他会以为自己发的东西凭空消失了。
-                    if (comment.moderation.onlyVisibleToMe)
-                      Padding(
-                        padding: const EdgeInsets.only(left: AppSpacing.xs),
-                        child: Text(l10n.placeCommentOnlyVisibleToYou,
-                            style: AppTypography.micro
-                                .copyWith(color: AppColors.textTertiary)),
-                      ),
                     // bug 20260924-569：评论时间。与帖子评论同一个 formatPublishTime
                     // （7 天内相对、超 7 天绝对日期），同在昵称行靠右。
                     if (comment.createdAt != null)
@@ -194,6 +185,14 @@ class _CommentRow extends StatelessWidget {
                       ),
                   ],
                 ),
+                // 「仅你可见」：挂起 / 被拒 / 被下架的评论只会下发给作者本人，
+                // 不给标签的话他会以为自己发的东西凭空消失了。
+                // bug 20260925-574：标签独占昵称下面一行。原先与昵称、评论时间挤在同一行，
+                // 印尼语文案很长（Hanya kamu yang bisa melihat），昵称被挤成「Al…」。
+                if (comment.moderation.onlyVisibleToMe)
+                  Text(l10n.placeCommentOnlyVisibleToYou,
+                      key: ValueKey('placeCommentOnlyVisible-${comment.id}'),
+                      style: AppTypography.micro.copyWith(color: AppColors.textTertiary)),
                 Text(comment.body, style: AppTypography.body),
                 if (comment.attitude != null) ...[
                   const SizedBox(height: AppSpacing.xxs),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -105,5 +106,50 @@ void main() {
     expect(del.width, greaterThanOrEqualTo(44));
     expect(del.height, greaterThanOrEqualTo(44));
     expect(find.byKey(const ValueKey('placeCommentDelete-11')), findsNothing, reason: '他人评论没有删除钮');
+  });
+
+  // bug 20260925-574：「仅你可见」与昵称、时间同挤一行时，印尼语长文案把昵称挤成「Al…」。
+  testWidgets('「仅你可见」独占昵称下一行，窄屏印尼语下昵称不被截断', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(480, 800); // 测试字体 Ahem 每字等宽于字号，比真机宽得多
+    addTearDown(tester.view.reset);
+    const name = 'Alexandra Wijaya';
+    final items = [
+      PlaceComment(
+        id: 20,
+        authorId: 7,
+        authorDeleted: false,
+        authorNickname: name,
+        body: 'Tempatnya nyaman',
+        mine: true,
+        moderation: PlaceCommentModeration.underReview,
+        createdAt: DateTime.now(),
+      ),
+    ];
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        placeCommentsProvider('p1').overrideWith(() => _FakeComments(
+            'p1', PlaceCommentPage(items: items, hasMore: false, total: items.length))),
+      ],
+      child: const MaterialApp(
+        localizationsDelegates: [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('id'),
+        home: Scaffold(body: SingleChildScrollView(child: PlaceCommentSection(token: 'p1'))),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final tag = find.byKey(const ValueKey('placeCommentOnlyVisible-20'));
+    expect(tag, findsOneWidget);
+    expect(tester.getTopLeft(tag).dy, greaterThan(tester.getTopLeft(find.text(name)).dy),
+        reason: '标签应在昵称下方一行，而不是与昵称同行');
+    final nameParagraph = tester.renderObject<RenderParagraph>(find.text(name));
+    expect(nameParagraph.didExceedMaxLines, isFalse, reason: '昵称被省略号截断');
   });
 }

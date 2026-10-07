@@ -1,6 +1,7 @@
 package com.tailtopia.shared.analytics;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -8,11 +9,16 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 
+import java.net.SocketTimeoutException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.mock.http.client.MockClientHttpRequest;
+import org.springframework.test.web.client.ExpectedCount;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
@@ -164,6 +170,65 @@ class PostHogAnalyticsClientTest {
 
             server.verify();
         }
+    }
+
+    // ---------- 2026-10-05 本地 L1 验收：启动后首条丢失 / 机房 geoip ----------
+
+    @Test
+    @DisplayName("每条事件带 uuid，并要求 PostHog 不按发送方 IP 补地理位置（$geoip_disable）")
+    void carriesUuidAndDisablesGeoip() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://ph.test");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(requestTo("https://ph.test/i/v0/e/"))
+                .andExpect(jsonPath("$.uuid").isString())
+                .andExpect(jsonPath("$.properties['$geoip_disable']").value(true))
+                .andRespond(withSuccess());
+
+        new PostHogAnalyticsClient(KEY, builder, "prod", GUARD)
+                .capture("hash-abc", "milestone_achieved", Map.of("code", "C-S1"));
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("网络类失败（超时 / 连不上）原地重试一次，两次带同一个 uuid（PostHog 去重）")
+    void retriesOnceOnNetworkFailureWithSameUuid() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://ph.test");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        List<String> bodies = new ArrayList<>();
+        server.expect(once(), requestTo("https://ph.test/i/v0/e/"))
+                .andRespond(req -> {
+                    bodies.add(((MockClientHttpRequest) req).getBodyAsString());
+                    throw new SocketTimeoutException("connect timed out");
+                });
+        server.expect(once(), requestTo("https://ph.test/i/v0/e/"))
+                .andRespond(req -> {
+                    bodies.add(((MockClientHttpRequest) req).getBodyAsString());
+                    return withSuccess().createResponse(req);
+                });
+
+        new PostHogAnalyticsClient(KEY, builder, "prod", GUARD)
+                .capture("hash-abc", "milestone_achieved", Map.of("code", "C-S1"));
+
+        server.verify();
+        assertThat(bodies).hasSize(2);
+        assertThat(bodies.get(1)).isEqualTo(bodies.get(0));
+    }
+
+    @Test
+    @DisplayName("连续两次网络失败：放弃、不外抛、不发第三次")
+    void givesUpAfterSecondNetworkFailure() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("https://ph.test");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(ExpectedCount.times(2), requestTo("https://ph.test/i/v0/e/"))
+                .andRespond(req -> {
+                    throw new SocketTimeoutException("connect timed out");
+                });
+
+        new PostHogAnalyticsClient(KEY, builder, "prod", GUARD)
+                .capture("hash-abc", "milestone_achieved", Map.of("code", "C-S1"));
+
+        server.verify();
     }
 
     @Test

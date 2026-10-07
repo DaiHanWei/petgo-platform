@@ -69,12 +69,16 @@ public class ContentService {
      */
     private final MentionSanitizer mentions;
 
+    /** V1.3.2 Story 1.5：发帖关联打卡的只读口（place 包，不直接 join 打卡表）。 */
+    private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins;
+
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, ProfileService profileService,
             IdempotencyService idempotency, ContentModerationService moderation,
             ApplicationEventPublisher events, ManualReviewGate manualReviewGate,
             ImageSizeResolver imageSizes, ImageSizeBackfillService sizeBackfill,
-            ContentPinService pins, MentionSanitizer mentions) {
+            ContentPinService pins, MentionSanitizer mentions,
+            com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -87,6 +91,7 @@ public class ContentService {
         this.sizeBackfill = sizeBackfill;
         this.pins = pins;
         this.mentions = mentions;
+        this.placeCheckins = placeCheckins;
     }
 
     /**
@@ -278,10 +283,16 @@ public class ContentService {
         if (postIds == null || postIds.isEmpty()) {
             return java.util.List.of();
         }
+        // 评论数整页一次 GROUP BY（bug 20260930-580：这里曾用兼容构造器默认填 0，列表 0 / 详情真实值对不上）
+        java.util.Map<Long, Long> commentCounts = comments.countNotDeletedIn(postIds).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        CommentRepository.PostCommentCount::getPostId,
+                        CommentRepository.PostCommentCount::getCommentCount));
         return posts.findAllById(postIds).stream()
                 .map(p -> new com.tailtopia.content.dto.AdminContentRow(p.getId(), p.getType(),
                         p.getAuthorId(), p.getText(), p.getDeletedAt() != null, p.getCreatedAt(),
-                        p.getImageUrls(), p.getSpeciesOverride()))
+                        p.getImageUrls(), p.getSpeciesOverride(),
+                        commentCounts.getOrDefault(p.getId(), 0L)))
                 .toList();
     }
 
@@ -399,6 +410,21 @@ public class ContentService {
         return count;
     }
 
+    /**
+     * Diary 打卡条目去重读口（V1.3.2 Story 1.6 · AD-9）：{@code checkinIds} 里有一条 GROWTH_MOMENT 关联帖、
+     * 且该帖会出现在作者自看时间线（同一过滤口径）的那些打卡 id。<b>一批查一次</b>，空集合短路。
+     * Moment / Edukasi 关联帖不抑制打卡条目（它们不进 Diary）。
+     */
+    @Transactional(readOnly = true)
+    public java.util.Set<Long> findCheckinIdsWithTimelinePost(long authorId, long petId,
+            java.util.Collection<Long> checkinIds) {
+        if (checkinIds == null || checkinIds.isEmpty()) {
+            return java.util.Set.of();
+        }
+        return java.util.Set.copyOf(posts.findCheckinIdsWithTimelinePost(
+                authorId, petId, ContentType.GROWTH_MOMENT, checkinIds));
+    }
+
     @Transactional
     public ContentPostResponse publish(long authorId, ContentPostCreateRequest req, String idempotencyKey) {
         // 幂等重放：同 key 已落一条则取回，不重复创建。
@@ -427,6 +453,14 @@ public class ContentService {
         // ⚠️ 放在**三方审核之前** —— 超过 5 人是本地就能判死的畸形请求，
         //    没理由先花一次三方审核的往返再拒。
         List<Long> mentionedUserIds = mentions.sanitize(authorId, req.mentionedUserIds());
+
+        // V1.3.2 Story 1.5（AD-10）：打卡关联。同样放在**三方审核之前**：不存在 / 非本人的 token 本地即可判死，
+        // 不落库、不审核。两种情况刻意同一个 422（不泄漏 token 是否存在）。
+        Long placeCheckinId = null;
+        if (req.placeCheckinToken() != null && !req.placeCheckinToken().isBlank()) {
+            placeCheckinId = placeCheckins.findOwnedCheckinId(authorId, req.placeCheckinToken())
+                    .orElseThrow(() -> AppException.postCheckinInvalid("打卡关联无效"));
+        }
 
         Long petId = req.petId();
         LocalDate eventDate = null;
@@ -492,6 +526,9 @@ public class ContentService {
                 // ⚠️ 挂起帖此刻**不发任何事件**，所以 @ 通知也天然不会在这里发出去；
                 //    Story 3.4 的落点应是「转可见那一刻」（同评论 approveComment 的口径）。
                 pendingPost.setMentionedUserIds(mentionedUserIds);
+                // V1.3.2 Story 1.5：🔴 挂起分支**同样要写打卡关联**（与尺寸 / @ 名单同一个坑）——
+                // 只写正常分支的话，审核挂起的帖过审后 Diary 会把同一件事拆成「打卡条目 + 帖子」两条。
+                pendingPost.setPlaceCheckinId(placeCheckinId);
                 ContentPost pending = posts.save(pendingPost);
                 scheduleSizeBackfill(pending, pendingSizes);
                 idempotency.store(idempotencyKey, pending.getId());
@@ -520,6 +557,7 @@ public class ContentService {
         // 所以被 @ 的人**永远打不开它**：通知发出去就是一条点进去是空态的骚扰。
         // ⚠️ 判据是 saved.getVisibility() == PUBLIC，别用「有没有 mentionedUserIds」。
         post.setMentionedUserIds(mentionedUserIds);
+        post.setPlaceCheckinId(placeCheckinId); // V1.3.2 Story 1.5（AD-10）
         ContentPost saved = posts.save(post);
         scheduleSizeBackfill(saved, sizes);
 

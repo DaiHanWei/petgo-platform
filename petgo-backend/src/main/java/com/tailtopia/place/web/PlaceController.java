@@ -2,10 +2,13 @@ package com.tailtopia.place.web;
 
 import com.tailtopia.moderation.dto.ReportRequest;
 import com.tailtopia.place.domain.GeoBox;
+import com.tailtopia.place.dto.PlaceCheckinRequest;
+import com.tailtopia.place.dto.PlaceCheckinResponse;
 import com.tailtopia.place.dto.PlaceCreateRequest;
 import com.tailtopia.place.dto.PlaceCreatedResponse;
 import com.tailtopia.place.dto.PlaceDetailResponse;
 import com.tailtopia.place.dto.PlaceListResponse;
+import com.tailtopia.place.service.PlaceCheckinService;
 import com.tailtopia.place.service.PlaceListFilter;
 import com.tailtopia.place.service.PlaceQueryService;
 import com.tailtopia.place.service.PlaceService;
@@ -52,14 +55,20 @@ public class PlaceController {
     private static final int REPORT_LIMIT = 10;
     private static final Duration REPORT_WINDOW = Duration.ofMinutes(1);
 
+    /** 打卡限流：10/分钟（V1.3.2 Story 1.1 AC2.9，与举报同量级）。每天每场所只能成功一次，挡的是脚本刷坐标试探。 */
+    private static final int CHECKIN_LIMIT = 10;
+    private static final Duration CHECKIN_WINDOW = Duration.ofMinutes(1);
+
     private final PlaceQueryService query;
     private final PlaceService placeService;
+    private final PlaceCheckinService checkinService;
     private final RedisRateLimiter rateLimiter;
 
     public PlaceController(PlaceQueryService query, PlaceService placeService,
-            RedisRateLimiter rateLimiter) {
+            PlaceCheckinService checkinService, RedisRateLimiter rateLimiter) {
         this.query = query;
         this.placeService = placeService;
+        this.checkinService = checkinService;
         this.rateLimiter = rateLimiter;
     }
 
@@ -162,6 +171,24 @@ public class PlaceController {
         long userId = currentUserId(jwt);
         rateLimiter.check("rl:place:report:" + userId, REPORT_LIMIT, REPORT_WINDOW);
         placeService.report(token, userId, req.reasonType());
+    }
+
+    /**
+     * 场所打卡（V1.3.2 batch-a Story 1.1 · AC2）。需登录（{@code role=USER}）；201。
+     *
+     * <p>到场 ≤500m 由<b>服务端</b>判定（D-7），「每天」按 WIB 自然日；失败按 ProblemDetail type 区分
+     * （{@code checkin-too-far} / {@code checkin-already-today} / {@code checkin-no-pet} /
+     * {@code checkin-pet-forbidden}；下架 / 不存在沿用 404）。
+     *
+     * <p>🛡 <b>请求体含精确坐标，本方法与服务层都不 log 它</b>（AD-4）。
+     */
+    @PostMapping("/{token}/checkins")
+    @ResponseStatus(HttpStatus.CREATED)
+    public PlaceCheckinResponse checkIn(@AuthenticationPrincipal Jwt jwt, @PathVariable String token,
+            @RequestBody PlaceCheckinRequest req) {
+        long userId = currentUserId(jwt);
+        rateLimiter.check("rl:place:checkin:" + userId, CHECKIN_LIMIT, CHECKIN_WINDOW);
+        return checkinService.checkIn(token, userId, req);
     }
 
     /**
