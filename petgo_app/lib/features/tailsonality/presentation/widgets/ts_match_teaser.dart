@@ -11,9 +11,13 @@ import '../../domain/content/ts_text.dart';
 /// 只比**四字母**（不带能量后缀）。本 story 只有「未配型」形态且 `onTap == null`（不做假跳转）；
 /// Story 2.5 传 [ownerLetters] / [sameCount] / [onTap] 接上「已配型」形态与跳转，不改结构。
 class TsMatchTeaser extends StatelessWidget {
-  const TsMatchTeaser({super.key, required this.petLetters, this.ownerLetters, this.sameCount, this.onTap});
+  const TsMatchTeaser(
+      {super.key, required this.petLetters, this.ownerLetters, this.sameCount, this.locked = false, this.onTap});
 
   final String petLetters;
+
+  /// 配型未解锁（2026-10-09 改回付费）：不显示档位，箭头前加锁。调用方同时传 `sameCount: null`。
+  final bool locked;
   final String? ownerLetters;
   final int? sameCount;
   final VoidCallback? onTap;
@@ -65,6 +69,12 @@ class TsMatchTeaser extends StatelessWidget {
                 key: const ValueKey('tsMatchTeaserLabel'),
                 style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.ink2)),
           ),
+          if (locked)
+            const Padding(
+              key: ValueKey('tsMatchTeaserLock'),
+              padding: EdgeInsets.only(left: 6),
+              child: Icon(Icons.lock_outline, size: 18, color: AppColors.muted),
+            ),
           if (onTap != null) const Icon(Icons.chevron_right, color: AppColors.muted),
         ],
       ),

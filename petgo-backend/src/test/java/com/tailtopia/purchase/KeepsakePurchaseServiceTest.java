@@ -82,6 +82,7 @@ class KeepsakePurchaseServiceTest {
         pricing.setTailsonalityUnlockPrice(5000);
         pricing.setPassportPageUnlockPrice(2000);
         pricing.setPassportBoardingUnlockPrice(1000);
+        pricing.setTailsonalityMatchUnlockPrice(3000);
         when(config.pricing()).thenReturn(pricing);
         when(grants.grantOrNull(any())).thenReturn(GrantOutcome.GRANTED);
         when(repo.saveAndFlush(any())).thenAnswer(inv -> {
@@ -249,6 +250,25 @@ class KeepsakePurchaseServiceTest {
         assertThat(KeepsakePurchaseService.priceOf(pricing, KeepsakeSku.TAILSONALITY)).isEqualTo(5000);
         assertThat(KeepsakePurchaseService.priceOf(pricing, KeepsakeSku.PASSPORT_SNAP)).isEqualTo(2000);
         assertThat(KeepsakePurchaseService.priceOf(pricing, KeepsakeSku.BOARDING_PASS)).isEqualTo(1000);
+        assertThat(KeepsakePurchaseService.priceOf(pricing, KeepsakeSku.TS_MATCH)).isEqualTo(3000);
         assertThat(Optional.of(KeepsakeSku.TAILSONALITY.toPurpose())).contains(PaymentPurpose.TAILSONALITY);
+        assertThat(Optional.of(KeepsakeSku.TS_MATCH.toPurpose())).contains(PaymentPurpose.TS_MATCH);
+    }
+
+    /**
+     * 2026-10-09 补差价：SKU 模块给的价覆盖定价表；幂等键加 :UPG —— 不能复用补差前按原价开的 QRIS 意图。
+     */
+    @Test
+    void priceOverrideIsChargedAndGetsItsOwnIdempotencyKeys() {
+        service.start(USER, ref(KeepsakeSku.TAILSONALITY, 5, false), PayChannel.QRIS); // 原价意图
+        KeepsakeRef upgrade = new KeepsakeRef(KeepsakeSku.TAILSONALITY, 5, "tok5", 70L, false, 2000L);
+        service.start(USER, upgrade, PayChannel.QRIS);
+        verify(intents).createIntent(eq(USER), eq(PaymentPurpose.TAILSONALITY), eq(PayChannel.QRIS), eq(2000L),
+                eq("IDR"), eq("TAILSONALITY:tok5:QRIS:UPG"), any());
+        assertThat(intentByKey).containsKeys("TAILSONALITY:tok5:QRIS", "TAILSONALITY:tok5:QRIS:UPG");
+
+        service.start(USER, new KeepsakeRef(KeepsakeSku.TAILSONALITY, 6, "tok6", 70L, false, 2000L),
+                PayChannel.PAWCOIN);
+        verify(wallet).debit(USER, 2000, PawCoinTxnType.SPEND, "TAILSONALITY", 6L, "TAILSONALITY:tok6:PAWCOIN:UPG");
     }
 }

@@ -40,20 +40,24 @@ public class TailsonalityResultService {
     private final PetProfileQueryService pets;
     private final TailsonalityTokenGenerator tokens;
     private final TailsonalityBadgeRepository badges;
+    private final TailsonalityUpgradePricing upgradePricing;
     private final Clock clock;
 
     @Autowired
     public TailsonalityResultService(TailsonalityResultRepository results, PetProfileQueryService pets,
-            TailsonalityTokenGenerator tokens, TailsonalityBadgeRepository badges) {
-        this(results, pets, tokens, badges, Clock.systemUTC());
+            TailsonalityTokenGenerator tokens, TailsonalityBadgeRepository badges,
+            TailsonalityUpgradePricing upgradePricing) {
+        this(results, pets, tokens, badges, upgradePricing, Clock.systemUTC());
     }
 
     TailsonalityResultService(TailsonalityResultRepository results, PetProfileQueryService pets,
-            TailsonalityTokenGenerator tokens, TailsonalityBadgeRepository badges, Clock clock) {
+            TailsonalityTokenGenerator tokens, TailsonalityBadgeRepository badges,
+            TailsonalityUpgradePricing upgradePricing, Clock clock) {
         this.results = results;
         this.pets = pets;
         this.tokens = tokens;
         this.badges = badges;
+        this.upgradePricing = upgradePricing;
         this.clock = clock;
     }
 
@@ -92,7 +96,8 @@ public class TailsonalityResultService {
         TailsonalityResult row = results.findByPublicTokenAndPetProfileId(token, pet.petId())
                 .orElseThrow(() -> AppException.notFound("结果不存在"));
         boolean equipped = badges.findResultIdByPetProfileId(pet.petId()).map(row.getId()::equals).orElse(false);
-        return TailsonalityResultResponse.of(row, indexOf(pet.petId(), row.getId()), equipped);
+        return TailsonalityResultResponse.of(row, indexOf(pet.petId(), row.getId()), equipped,
+                upgradePricing.upgradePriceOrNull(row));
     }
 
     /** 1 起序号：该宠物结果按 created_at 升序（同刻按 id）中本行的位置；与 {@link #list} 同一排序口径。 */

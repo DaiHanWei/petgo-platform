@@ -25,7 +25,9 @@ class TailsonalityResultResponseContractTest {
             "token", "typeCode", "letters", "energy", "questionSet", "resultIndex",
             "unlocked", "unlockedAt", "contentVersion", "createdAt",
             // V1.3.2 Story 3.3：是否正被佩戴。
-            "equipped");
+            "equipped",
+            // 2026-10-09 配型改回付费：配型可看 / 已买配型时完整解读的补差价（null 省略）。
+            "matchUnlocked", "upgradePrice");
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> wire(Object dto) {
@@ -35,7 +37,8 @@ class TailsonalityResultResponseContractTest {
     @Test
     void unlockedResultHasExactlyContractFields() {
         var dto = new TailsonalityResultResponse("t".repeat(32), "ENTJ-H", "ENTJ", "H", "CAT", 2, true,
-                Instant.parse("2026-09-30T09:00:00Z"), 1, Instant.parse("2026-09-30T08:00:00Z"), true);
+                Instant.parse("2026-09-30T09:00:00Z"), 1, Instant.parse("2026-09-30T08:00:00Z"), true,
+                true, 2000L);
         Map<String, Object> m = wire(dto);
         assertThat(m.keySet()).isEqualTo(FULL_FIELDS);
         assertThat(m.get("typeCode")).isEqualTo("ENTJ-H");
@@ -46,9 +49,11 @@ class TailsonalityResultResponseContractTest {
     @Test
     void lockedResultOmitsUnlockedAtAndNeverCarriesAnswersOrScores() {
         var dto = new TailsonalityResultResponse("t".repeat(32), "ISTP-L", "ISTP", "L", "GENERAL", 1, false,
-                null, 1, Instant.parse("2026-09-30T08:00:00Z"), false);
+                null, 1, Instant.parse("2026-09-30T08:00:00Z"), false, false, null);
         Map<String, Object> m = wire(dto);
         assertThat(m).doesNotContainKey("unlockedAt");
+        assertThat(m).doesNotContainKey("upgradePrice");
+        assertThat(m.get("matchUnlocked")).isEqualTo(false);
         assertThat(m.get("unlocked")).isEqualTo(false);
         assertThat(m.keySet()).doesNotContain("answers", "weights", "scores", "axisScores", "id");
     }

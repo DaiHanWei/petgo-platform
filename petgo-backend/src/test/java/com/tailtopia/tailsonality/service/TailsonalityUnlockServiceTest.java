@@ -36,7 +36,9 @@ class TailsonalityUnlockServiceTest {
     private final TailsonalityResultRepository results = mock(TailsonalityResultRepository.class);
     private final PetProfileQueryService pets = mock(PetProfileQueryService.class);
     private final KeepsakePurchaseService purchases = mock(KeepsakePurchaseService.class);
-    private final TailsonalityUnlockService service = new TailsonalityUnlockService(results, pets, purchases);
+    private final TailsonalityUpgradePricing upgradePricing = mock(TailsonalityUpgradePricing.class);
+    private final TailsonalityUnlockService service =
+            new TailsonalityUnlockService(results, pets, purchases, upgradePricing);
 
     private TailsonalityResult row(Instant unlockedAt) {
         TailsonalityResult r = TailsonalityResult.create("tok", 3L, 7L, TailsonalityQuestionSet.CAT, Map.of(),
@@ -48,6 +50,7 @@ class TailsonalityUnlockServiceTest {
 
     private void ownsPet() {
         when(pets.findOwnedPet(7L)).thenReturn(Optional.of(new OwnedPetRef(3L, PetType.CAT)));
+        when(upgradePricing.upgradePriceOrNull(any())).thenReturn(null); // Mockito 对 Long 默认回 0，显式回 null = 原价
     }
 
     @Test
@@ -85,5 +88,45 @@ class TailsonalityUnlockServiceTest {
         assertThatThrownBy(() -> service.unlock(8L, "tok", PayChannel.PAWCOIN)).isInstanceOf(AppException.class)
                 .extracting("status").isEqualTo(org.springframework.http.HttpStatus.NOT_FOUND);
         verify(purchases, never()).start(anyLong(), any(), any());
+    }
+
+    // ── 2026-10-09 配型改回付费 ─────────────────────────────────────────────────
+
+    @Test
+    void fullUnlockCarriesUpgradePriceComputedUnderTheRowLock() {
+        ownsPet();
+        TailsonalityResult r = row(null);
+        ReflectionTestUtils.setField(r, "matchUnlockedAt", Instant.EPOCH);
+        when(results.findForUpdateByPublicTokenAndPetProfileId("tok", 3L)).thenReturn(Optional.of(r));
+        when(upgradePricing.upgradePriceOrNull(r)).thenReturn(2000L);
+        service.unlock(7L, "tok", PayChannel.QRIS);
+        ArgumentCaptor<KeepsakeRef> ref = ArgumentCaptor.forClass(KeepsakeRef.class);
+        verify(purchases).start(eq(7L), ref.capture(), eq(PayChannel.QRIS));
+        assertThat(ref.getValue()).isEqualTo(new KeepsakeRef(KeepsakeSku.TAILSONALITY, 42L, "tok", 3L, false, 2000L));
+    }
+
+    @Test
+    void matchUnlockBuildsTsMatchRef() {
+        ownsPet();
+        when(results.findForUpdateByPublicTokenAndPetProfileId("tok", 3L)).thenReturn(Optional.of(row(null)));
+        service.unlockMatch(7L, "tok", PayChannel.PAWCOIN);
+        ArgumentCaptor<KeepsakeRef> ref = ArgumentCaptor.forClass(KeepsakeRef.class);
+        verify(purchases).start(eq(7L), ref.capture(), eq(PayChannel.PAWCOIN));
+        assertThat(ref.getValue()).isEqualTo(new KeepsakeRef(KeepsakeSku.TS_MATCH, 42L, "tok", 3L, false));
+    }
+
+    /** 完整解读已含配型：再单独买配型 → alreadyUnlocked（purchase 包抛 409）。 */
+    @Test
+    void matchUnlockOnFullyUnlockedOrMatchBoughtRowIsAlreadyUnlocked() {
+        ownsPet();
+        when(results.findForUpdateByPublicTokenAndPetProfileId("tok", 3L)).thenReturn(Optional.of(row(Instant.EPOCH)));
+        service.unlockMatch(7L, "tok", PayChannel.QRIS);
+        TailsonalityResult bought = row(null);
+        ReflectionTestUtils.setField(bought, "matchUnlockedAt", Instant.EPOCH);
+        when(results.findForUpdateByPublicTokenAndPetProfileId("tok2", 3L)).thenReturn(Optional.of(bought));
+        service.unlockMatch(7L, "tok2", PayChannel.QRIS);
+        ArgumentCaptor<KeepsakeRef> ref = ArgumentCaptor.forClass(KeepsakeRef.class);
+        verify(purchases, org.mockito.Mockito.times(2)).start(eq(7L), ref.capture(), eq(PayChannel.QRIS));
+        assertThat(ref.getAllValues()).allMatch(KeepsakeRef::alreadyUnlocked);
     }
 }

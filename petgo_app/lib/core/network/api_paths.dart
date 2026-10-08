@@ -184,6 +184,9 @@ class ApiPaths {
   /// 一次性解锁该结果（V1.3.2 Story 3.2）：POST `{channel}` → `KeepsakePurchaseResponse`。仅 role=USER。
   static String tailsonalityResultUnlock(String token) => '$petTailsonalityResults/$token/unlock';
 
+  /// 配型单独解锁（2026-10-09）：POST `{channel}` → `KeepsakePurchaseResponse`，同 [tailsonalityResultUnlock]。
+  static String tailsonalityResultMatchUnlock(String token) => '$petTailsonalityResults/$token/match-unlock';
+
   /// 角色小标佩戴（V1.3.2 Story 3.3）：PUT `{resultToken}` 切换 / DELETE 卸下，均 204。仅 role=USER。
   static const String tailsonalityBadge = '$base/pet-profiles/me/tailsonality/badge';
 

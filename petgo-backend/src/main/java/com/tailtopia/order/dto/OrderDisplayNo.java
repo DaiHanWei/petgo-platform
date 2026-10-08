@@ -28,6 +28,8 @@ public final class OrderDisplayNo {
     public static final String TAILSONALITY = "TSL";
     public static final String PASSPORT_SNAP = "PASPOR";
     public static final String BOARDING_PASS = "BPASS";
+    /** Tailsonality 配型单独解锁（2026-10-09）；订单中心与完整解读同归「Tailsonality」类，靠前缀区分。 */
+    public static final String TS_MATCH = "TSM";
 
     private static final ZoneId WIB = ZoneId.of("Asia/Jakarta");
     private static final DateTimeFormatter YMD = DateTimeFormatter.ofPattern("yyyyMMdd");
@@ -41,6 +43,7 @@ public final class OrderDisplayNo {
             case TAILSONALITY -> TAILSONALITY;
             case PASSPORT_SNAP -> PASSPORT_SNAP;
             case BOARDING_PASS -> BOARDING_PASS;
+            case TS_MATCH -> TS_MATCH;
         };
     }
 

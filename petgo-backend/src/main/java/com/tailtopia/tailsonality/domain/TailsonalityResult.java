@@ -61,6 +61,10 @@ public class TailsonalityResult {
     @Column(name = "unlocked_at")
     private Instant unlockedAt;
 
+    /** 配型单独解锁时刻（2026-10-09）；只由 TS_MATCH 发放置位。配型可看见 {@link #matchUnlocked()}。 */
+    @Column(name = "match_unlocked_at")
+    private Instant matchUnlockedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -121,6 +125,15 @@ public class TailsonalityResult {
 
     public Instant getUnlockedAt() {
         return unlockedAt;
+    }
+
+    public Instant getMatchUnlockedAt() {
+        return matchUnlockedAt;
+    }
+
+    /** 配型可看：完整解读已解锁（含配型），或单独买过配型。 */
+    public boolean matchUnlocked() {
+        return unlockedAt != null || matchUnlockedAt != null;
     }
 
     public Instant getCreatedAt() {

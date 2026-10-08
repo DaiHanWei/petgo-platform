@@ -24,7 +24,8 @@ import 'package:tailtopia/shared/card_render/card_watermark.dart';
 
 /// V1.3.2 Story 2.4（结果页免费态与重测）+ Story 2.3（生成中动效）· L0。
 void main() {
-  TailsonalityResult result({String letters = 'ISFP', String energy = 'L', bool unlocked = false}) =>
+  TailsonalityResult result(
+          {String letters = 'ISFP', String energy = 'L', bool unlocked = false, bool matchUnlocked = true}) =>
       TailsonalityResult(
         token: 'abc',
         typeCode: '$letters-$energy',
@@ -33,6 +34,7 @@ void main() {
         questionSet: 'CAT',
         resultIndex: 1,
         unlocked: unlocked,
+        matchUnlocked: matchUnlocked,
         contentVersion: 1,
         createdAt: DateTime.utc(2026, 9, 30),
       );
@@ -225,6 +227,15 @@ void main() {
       expect(find.text('ESTJ'), findsOneWidget);
       expect(find.text('Twin Flames'), findsOneWidget);
       expect(find.byKey(const ValueKey('tsMatchTeaserUnknown')), findsNothing);
+      expect(find.descendant(of: find.byType(TsMatchTeaser), matching: find.byType(InkWell)), findsOneWidget);
+    });
+
+    testWidgets('2026-10-09：配型未解锁 → 引流模块不露档位、带锁，仍可点进配型页', (tester) async {
+      await pumpPage(tester, r: result(letters: 'ENTJ', energy: 'H', matchUnlocked: false), ownerType: 'ESTJ');
+      expect(find.text('ESTJ'), findsOneWidget);
+      expect(find.text('Twin Flames'), findsNothing);
+      expect(find.text('Seberapa mirip kalian?'), findsOneWidget);
+      expect(find.byKey(const ValueKey('tsMatchTeaserLock')), findsOneWidget);
       expect(find.descendant(of: find.byType(TsMatchTeaser), matching: find.byType(InkWell)), findsOneWidget);
     });
 

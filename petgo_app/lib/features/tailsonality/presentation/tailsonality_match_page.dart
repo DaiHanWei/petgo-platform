@@ -8,15 +8,23 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/card_render/card_render_pipeline.dart';
 import '../../../shared/widgets/app_toast.dart';
+import '../../../shared/widgets/pay_channel_picker.dart';
+import '../../../shared/widgets/price_load_retry.dart';
 import '../../content/presentation/brag_post_entry.dart';
+import '../../keepsake/data/keepsake_repository.dart';
+import '../../keepsake/domain/keepsake_pricing.dart';
+import '../../keepsake/presentation/keepsake_pay_flow.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/tailsonality_owner_type_repository.dart';
 import '../data/tailsonality_providers.dart';
+import '../data/tailsonality_repository.dart';
 import '../data/ts_remote_art.dart';
 import '../domain/content/ts_match_copy.dart';
 import '../domain/content/ts_text.dart';
+import '../domain/tailsonality_result.dart';
 import '../domain/ts_match.dart';
 import 'share/match_share_card.dart';
+import 'tailsonality_unlock_analytics.dart';
 import 'widgets/ts_letter_compare.dart';
 import 'widgets/ts_match_card.dart';
 import 'widgets/ts_rich_text.dart';
@@ -24,8 +32,9 @@ import 'widgets/ts_type_selector.dart';
 
 /// 主人配型页（V1.3.2 Story 2.5 · UX-DR9）。挂在某次结果 token 下：宠物侧用**这次结果**的四字母。
 ///
-/// 配型**全免费**：无锁态、无水印、无任何付费要素；换类型不收费。页首 1:1 配型卡可点 → 配型卡分享预览（Story 4.2）；
-/// 结果视图底部主按钮「Pamer di postingan」（Story 4.4）。
+/// 🔴 2026-10-09 配型改回付费（推翻 2026-09-21「全免费」）：选主人类型仍免费；选完后**整页上锁**，
+/// 按结果单独解锁（默认 Rp3,000），或买完整解读（含配型）。锁态下不出配型卡、档位、字母对照（都会泄露结果）。
+/// 解锁后照旧：配型卡无水印、换类型不收费；页首 1:1 配型卡可点 → 分享预览（Story 4.2）；底部「Pamer di postingan」（Story 4.4）。
 class TailsonalityMatchPage extends ConsumerStatefulWidget {
   const TailsonalityMatchPage({super.key, required this.token});
 
@@ -44,6 +53,8 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
   String? _selected;
   bool _saving = false;
   bool _entered = false;
+  bool _buying = false;
+  bool _lockViewedReported = false;
 
   /// 页首 1:1 配型卡的截图边界（发帖 / 预览主操作都截它；永不带水印）。
   final GlobalKey _cardKey = GlobalKey();
@@ -165,9 +176,14 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
     } else {
       // 读主人类型失败按「未设置」处理：直接让用户选，选了就覆盖。
       final owner = ownerAsync.asData?.value;
+      final result = resultAsync.asData!.value;
       if (owner == null || _editing) {
         body = _selector(l10n);
         bottom = _confirmBar(l10n, pet4);
+      } else if (!result.matchUnlocked) {
+        _reportLockViewed(result);
+        body = _locked(l10n, owner, pet4, petName);
+        bottom = _unlockBar(l10n, result, petName);
       } else {
         body = _result(context, l10n, owner, pet4, petCode!, petName);
         bottom = _bragBar(l10n);
@@ -292,6 +308,206 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
               style: const TextStyle(fontSize: 14, height: 1.55, color: AppColors.ink)),
         ],
       ],
+    );
+  }
+
+  // ---------- 2026-10-09：配型锁态 ----------
+
+  void _reportLockViewed(TailsonalityResult r) {
+    if (_lockViewedReported) return;
+    _lockViewedReported = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) => TailsonalityUnlockAnalytics.matchViewed(
+        roleCode: r.typeCode, resultIndex: r.resultIndex, price: ref.read(keepsakePricingProvider).value?.tailsonalityMatch));
+  }
+
+  /// [full] = 买完整解读（含配型；已买过配型时按补差价——但能看到锁态说明还没买过配型，故恒为原价）。
+  Future<void> _startUnlock(TailsonalityResult r, String petName, {required bool full}) async {
+    if (_buying) return;
+    setState(() => _buying = true);
+    // 抽屉期间保活定价 provider（autoDispose）：确认埋点要读价格。
+    final priceSub = ref.listenManual(keepsakePricingProvider, (_, _) {});
+    final l10n = AppLocalizations.of(context);
+    final repo = ref.read(tailsonalityRepositoryProvider);
+    try {
+      final outcome = await runKeepsakePurchase(
+        context: context,
+        ref: ref,
+        sheet: (balance) => _TsMatchPaywallSheet(full: full, petName: petName, balance: balance, result: r),
+        start: (channel) => full ? repo.unlock(r.token, channel) : repo.unlockMatch(r.token, channel),
+        pollPaid: () async => (await ref.refresh(tailsonalityResultProvider(r.token).future)).matchUnlocked,
+        onChannelConfirmed: (channel) => TailsonalityUnlockAnalytics.matchInitiated(
+            roleCode: r.typeCode,
+            resultIndex: r.resultIndex,
+            method: channel,
+            product: full ? 'full' : 'match',
+            price: full ? r.fullUnlockPrice(priceSub.read().value) : priceSub.read().value?.tailsonalityMatch),
+      );
+      if (!mounted || outcome == KeepsakeFlowOutcome.notCompleted) return;
+      // 已解锁判定只看服务端：刷新结果（与列表），由服务端的 `matchUnlocked` 切换页面。
+      ref.invalidate(tailsonalityResultProvider(r.token));
+      ref.invalidate(tailsonalityResultsProvider);
+      // 买完整解读时服务端可能自动佩戴徽章（同结果页 _startUnlock）。
+      if (full) ref.invalidate(petProfileProvider);
+      if (outcome == KeepsakeFlowOutcome.unlocked) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(full ? l10n.tailsonalityUnlockedToast : l10n.tailsonalityMatchUnlockedToast)));
+      }
+    } finally {
+      priceSub.close();
+      if (mounted) setState(() => _buying = false);
+    }
+  }
+
+  /// 锁态：只亮出双方四字母（用户自己选的 + 测出来的，都不是付费内容）与要解锁的内容清单；可改类型（免费）。
+  Widget _locked(AppLocalizations l10n, String owner4, String pet4, String petName) {
+    Widget letters(String label, String code) => Column(
+          children: [
+            Text(label, style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
+            const SizedBox(height: 4),
+            Text(code,
+                style: const TextStyle(
+                    fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink, letterSpacing: 2)),
+          ],
+        );
+    return ListView(
+      key: const ValueKey('tsMatchLockedView'),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.lineViolet),
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  letters(l10n.tailsonalityMatchYou, owner4),
+                  const Icon(Icons.lock_outline, size: 28, color: AppColors.mint),
+                  letters(petName, pet4),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text(l10n.tailsonalityMatchLockedTitle(petName),
+                  key: const ValueKey('tsMatchLockedTitle'),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+              const SizedBox(height: 8),
+              Text(l10n.tailsonalityMatchLockedBody,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 14, height: 1.5, color: AppColors.ink2)),
+            ],
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            key: const ValueKey('tsMatchChangeType'),
+            onPressed: () => setState(() {
+              _editing = true;
+              _selected = owner4;
+            }),
+            child: Text(l10n.tailsonalityMatchChangeType),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 锁态底部：主按钮单买配型；下方文字链买完整解读（含配型）。价格只从服务端读（D-2），取价失败显示重试。
+  Widget _unlockBar(AppLocalizations l10n, TailsonalityResult r, String petName) {
+    final price = ref.watch(keepsakePricingProvider);
+    final Widget main;
+    final matchPrice = price.value?.tailsonalityMatch;
+    if ((price.hasError && !price.isLoading) || (price.hasValue && matchPrice == null)) {
+      main = Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: PriceLoadRetry(
+              key: const ValueKey('tsMatchUnlockPriceRetry'),
+              onRetry: () => ref.invalidate(keepsakePricingProvider)),
+        ),
+      );
+    } else {
+      main = FilledButton(
+        key: const ValueKey('tsMatchUnlockCta'),
+        onPressed: matchPrice == null || _buying ? null : () => _startUnlock(r, petName, full: false),
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.mint,
+          foregroundColor: AppColors.onAccent,
+          minimumSize: const Size.fromHeight(48),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+        child: Text(matchPrice == null ? '…' : l10n.tailsonalityMatchUnlockCta(formatIdrAmount(matchPrice)),
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+      );
+    }
+    final fullPrice = r.fullUnlockPrice(price.value);
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            main,
+            if (fullPrice != null)
+              TextButton(
+                key: const ValueKey('tsMatchFullUnlockLink'),
+                onPressed: _buying ? null : () => _startUnlock(r, petName, full: true),
+                child: Text(l10n.tailsonalityMatchFullUnlockLink(formatIdrAmount(fullPrice)),
+                    textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 配型锁态的选渠道抽屉：单买配型 / 买完整解读（含配型）两用，通用 [PayChannelPicker]。
+class _TsMatchPaywallSheet extends ConsumerWidget {
+  const _TsMatchPaywallSheet({required this.full, required this.petName, required this.balance, required this.result});
+
+  final bool full;
+  final String petName;
+  final int balance;
+  final TailsonalityResult result;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final pricing = ref.watch(keepsakePricingProvider);
+    // 旧后端无配型价时 tailsonalityMatch 为 null → 当作取价失败（抽屉显示重试），不猜价。
+    final AsyncValue<int> price = pricing.when(
+      data: (KeepsakePricing p) {
+        final v = full ? result.fullUnlockPrice(p) : p.tailsonalityMatch;
+        return v == null ? AsyncValue.error(StateError('no price'), StackTrace.current) : AsyncValue.data(v);
+      },
+      loading: () => const AsyncValue.loading(),
+      error: AsyncValue.error,
+    );
+    return PayChannelPicker(
+      header: Row(
+        children: [
+          const Icon(Icons.favorite_border, size: 28, color: AppColors.mint),
+          const SizedBox(width: 12),
+          Text(result.letters,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.ink)),
+        ],
+      ),
+      price: price,
+      onRetryPrice: () => ref.invalidate(keepsakePricingProvider),
+      balance: balance,
+      title: full ? l10n.tailsonalityPaywallTitle : l10n.tailsonalityMatchPaywallTitle,
+      body: full ? l10n.tailsonalityPaywallBody(petName) : l10n.tailsonalityMatchPaywallBody(petName),
+      confirmLabel: (p) => l10n.tailsonalityPayConfirm(p == null ? '…' : formatIdrAmount(p)),
+      confirmKey: const ValueKey('tsMatchPayConfirm'),
+      retryKey: const ValueKey('tsMatchPayPriceRetry'),
     );
   }
 }

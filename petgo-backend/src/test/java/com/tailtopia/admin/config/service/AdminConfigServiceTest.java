@@ -68,6 +68,7 @@ class AdminConfigServiceTest {
         set(c, "passportPageUnlockPrice", 5000L);
         set(c, "passportBoardingUnlockPrice", 5000L);
         set(c, "tailsonalityUnlockPrice", 5000L);
+        set(c, "tailsonalityMatchUnlockPrice", 3000L);
         set(c, "monthlyFreeQuota", 1);
         when(pricingRepo.findById(1L)).thenReturn(Optional.of(c));
         return c;
@@ -113,13 +114,13 @@ class AdminConfigServiceTest {
     @Test
     void ktpPricingRejectsBelowHundredOnAnyOfTheFour() {
         seedPricing();
-        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(0, 5000, 5000, 5000), 7L))
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(0, 5000, 5000, 5000, 3000), 7L))
                 .isInstanceOf(AppException.class).hasMessageContaining("≥100");
-        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, -1, 5000, 5000), 7L))
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, -1, 5000, 5000, 3000), 7L))
                 .isInstanceOf(AppException.class);
-        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 99, 5000), 7L))
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 99, 5000, 3000), 7L))
                 .as("Rp99 正是要防的漏零值").isInstanceOf(AppException.class);
-        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 1), 7L))
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 1, 3000), 7L))
                 .as("旧下限 1 已不合法").isInstanceOf(AppException.class).hasMessageContaining("≥100");
         verify(changeLogs, never()).saveAll(anyList());
         verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
@@ -128,7 +129,7 @@ class AdminConfigServiceTest {
     @Test
     void ktpPricingAcceptsExactlyHundred() {
         seedPricing();
-        svc.updateKtpPricing(new KtpPricingForm(100, 100, 100, 100), 7L);
+        svc.updateKtpPricing(new KtpPricingForm(100, 100, 100, 200, 100), 7L);
         verify(changeLogs).saveAll(anyList());
     }
 
@@ -136,20 +137,20 @@ class AdminConfigServiceTest {
     void ktpPricingRejectsAboveTierAmountCap() {
         seedPricing();
         long over = AdminConfigService.MAX_TIER_AMOUNT + 1;
-        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(over, 5000, 5000, 5000), 7L))
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(over, 5000, 5000, 5000, 3000), 7L))
                 .isInstanceOf(AppException.class).hasMessageContaining("100000000");
-        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, over, 5000), 7L))
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, over, 5000, 3000), 7L))
                 .isInstanceOf(AppException.class);
-        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, over), 7L))
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, over, 3000), 7L))
                 .isInstanceOf(AppException.class);
-        svc.updateKtpPricing(new KtpPricingForm(AdminConfigService.MAX_TIER_AMOUNT, 5000, 5000, 5000), 7L); // 恰好上限可存
+        svc.updateKtpPricing(new KtpPricingForm(AdminConfigService.MAX_TIER_AMOUNT, 5000, 5000, 5000, 3000), 7L); // 恰好上限可存
         verify(audit, times(1)).record(eq(7L), eq("CONFIG_UPDATE_PRICING"), anyString(), anyString(), anyString());
     }
 
     @Test
     void ktpPricingLogsOnlyChangedColumnsIndependentlyAndAuditsOnce() {
         PricingConfig c = seedPricing();
-        svc.updateKtpPricing(new KtpPricingForm(5000, 8000, 5000, 5000), 7L); // 只改护照内页
+        svc.updateKtpPricing(new KtpPricingForm(5000, 8000, 5000, 5000, 3000), 7L); // 只改护照内页
 
         ArgumentCaptor<List<ConfigChangeLog>> cap = ArgumentCaptor.forClass(List.class);
         verify(changeLogs).saveAll(cap.capture());
@@ -165,7 +166,7 @@ class AdminConfigServiceTest {
     @Test
     void ktpPricingTailsonalityPriceLogsOnlyItsOwnColumn() {
         PricingConfig c = seedPricing();
-        svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 7000), 7L);
+        svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 7000, 3000), 7L);
         ArgumentCaptor<List<ConfigChangeLog>> cap = ArgumentCaptor.forClass(List.class);
         verify(changeLogs).saveAll(cap.capture());
         assertThat(cap.getValue()).extracting(ConfigChangeLog::getField).containsExactly("tailsonality_unlock_price");
@@ -173,10 +174,30 @@ class AdminConfigServiceTest {
         assertThat(c.getPassportPageUnlockPrice()).isEqualTo(5000);
     }
 
+    /** 2026-10-09：配型价独立保存；须比结果价至少低 100（补差价不能落到收款下限以下）。 */
+    @Test
+    void ktpPricingMatchPriceSavesOnItsOwnAndMustStayBelowResultPrice() {
+        PricingConfig c = seedPricing();
+        svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 5000, 2500), 7L);
+        ArgumentCaptor<List<ConfigChangeLog>> cap = ArgumentCaptor.forClass(List.class);
+        verify(changeLogs).saveAll(cap.capture());
+        assertThat(cap.getValue()).extracting(ConfigChangeLog::getField)
+                .containsExactly("tailsonality_match_unlock_price");
+        assertThat(c.getTailsonalityMatchUnlockPrice()).isEqualTo(2500);
+
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 5000, 4901), 7L))
+                .as("差价 99 < 100").isInstanceOf(AppException.class).hasMessageContaining("至少低 100");
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 3000, 3000), 7L))
+                .as("下调结果价到不高于配型价同样拦").isInstanceOf(AppException.class);
+        assertThatThrownBy(() -> svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 5000, 99), 7L))
+                .isInstanceOf(AppException.class).hasMessageContaining("≥100");
+        svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 5000, 4900), 7L); // 恰好低 100 可存
+    }
+
     @Test
     void ktpPricingNoChangeWritesNothing() {
         seedPricing();
-        svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 5000), 7L);
+        svc.updateKtpPricing(new KtpPricingForm(5000, 5000, 5000, 5000, 3000), 7L);
         verify(changeLogs, never()).saveAll(anyList());
         verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
     }

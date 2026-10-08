@@ -71,7 +71,9 @@ public class AdminConfigController {
                     "admin.err.config.vetShareRateRange", "vetShareRate",
                     "admin.err.config.freeQuotaRange", "monthlyFreeQuota")),
             "ktp", json(Map.of(
-                    "admin.err.config.ktpPriceMin", "idHdDownloadPrice,passportPagePrice,passportBoardingPrice")),
+                    "admin.err.config.ktpPriceMin", "idHdDownloadPrice,passportPagePrice,passportBoardingPrice",
+                    "admin.err.config.tailsonalityMatchPriceNotBelowUnlock",
+                    "tailsonalityUnlockPrice,tailsonalityMatchUnlockPrice")),
             "pawcoin", json(Map.of(
                     "admin.err.config.premiumRateRange", "premiumRate",
                     "admin.err.config.premiumFixedNegative", "premiumFixed")),
@@ -292,9 +294,9 @@ public class AdminConfigController {
     public String updateKtpPricing(@AuthenticationPrincipal AdminUserDetails admin,
             @RequestParam long idHdDownloadPrice, @RequestParam long passportPagePrice,
             @RequestParam long passportBoardingPrice, @RequestParam long tailsonalityUnlockPrice,
-            HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
+            @RequestParam long tailsonalityMatchUnlockPrice, HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         KtpPricingForm form = new KtpPricingForm(idHdDownloadPrice, passportPagePrice, passportBoardingPrice,
-                tailsonalityUnlockPrice);
+                tailsonalityUnlockPrice, tailsonalityMatchUnlockPrice);
         if (hx.isHtmx()) {
             write.updateKtpPricing(form, admin.getAdminAccountId());
             return savedCard("cfg-ktp", "config-card-ktp", "admin.flash.config.ktpPricingSaved", model, response);
