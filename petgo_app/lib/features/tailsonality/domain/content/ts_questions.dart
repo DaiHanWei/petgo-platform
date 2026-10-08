@@ -64,7 +64,7 @@ const TsQuestion _kP3 = TsQuestion(
 const Map<String, TsQuestion> kTsQuestions = {
   // ===== 猫套 §6.2 =====
   'CAT.Q1': TsQuestion(
-    stem: (en: "A stranger walks in. {pet}'s first move?", id: "Ada orang asing masuk rumah, reaksi pertama {pet}…"),
+    stem: (en: "A stranger walks in. {pet}'s first move?", id: "Ada orang asing masuk rumah, reaksi pertama {pet} gimana?"),
     options: [
       (en: "Goes right up to sniff and rub", id: "Langsung nyamperin, endus-endus"),
       (en: "Watches from afar, comes closer later", id: "Ngeliatin dari jauh, lama-lama baru deketin"),
@@ -75,7 +75,7 @@ const Map<String, TsQuestion> kTsQuestions = {
   'CAT.Q2': TsQuestion(
     stem: (
       en: "While you're busy with your own stuff, where's {pet} usually?",
-      id: "Pas kamu lagi sibuk sendiri, {pet} biasanya ada di…",
+      id: "Pas kamu lagi sibuk sendiri, {pet} biasanya ada di mana?",
     ),
     options: [
       (en: "Lying right on your hands or keyboard", id: "Tiduran langsung di tangan atau keyboard kamu"),
@@ -85,7 +85,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'CAT.Q3': TsQuestion(
-    stem: (en: "The house is full of people and noise. {pet}…", id: "Rumah lagi rame banyak orang, {pet}…"),
+    stem: (en: "The house is full of people and noise. What does {pet} do?", id: "Rumah lagi rame banyak orang, biasanya {pet} gimana?"),
     options: [
       (en: "Checks on every single person, asks for pets too", id: "Nyamperin satu-satu, sekalian minta dielus"),
       (en: "Watches from a corner, pops out now and then", id: "Ngamatin dari pojok, sesekali keluar"),
@@ -94,7 +94,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'CAT.Q4': TsQuestion(
-    stem: (en: "Something new is sitting on the floor. {pet}…", id: "Ada barang baru ditaruh di lantai, {pet}…"),
+    stem: (en: "Something new is sitting on the floor. What does {pet} do?", id: "Ada barang baru ditaruh di lantai, biasanya {pet} gimana?"),
     options: [
       (en: "Investigates right away, pawing at it", id: "Langsung diselidiki, dicakar-cakar"),
       (en: "Watches a bit, then goes to sniff", id: "Ngeliatin dulu, baru deketin buat endus"),
@@ -103,7 +103,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'CAT.Q5': TsQuestion(
-    stem: (en: "You open a door that's usually closed. {pet}…", id: "Kamu buka pintu yang biasanya ditutup, {pet}…"),
+    stem: (en: "You open a door that's usually closed. What does {pet} do?", id: "Kamu buka pintu yang biasanya ditutup, {pet} gimana?"),
     options: [
       (en: "Rushes in to explore", id: "Langsung nyelonong masuk buat eksplor"),
       (en: "Peeks in first, then decides", id: "Ngintip dulu, baru mutusin"),
@@ -112,7 +112,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'CAT.Q6': TsQuestion(
-    stem: (en: "After playing with the same toy for ages, {pet}…", id: "Udah lama main mainan yang sama, {pet}…"),
+    stem: (en: "After playing with the same toy for ages, how does {pet} feel about it?", id: "Udah lama main mainan yang sama, {pet} gimana?"),
     options: [
       (en: "Got bored long ago, always hunting for new ones", id: "Udah bosen dari tadi, terus nyari yang baru"),
       (
@@ -125,8 +125,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'CAT.Q7': TsQuestion(
     stem: (
-      en: "A new smell in the house (a takeout bag, a new purchase). {pet}…",
-      id: "Ada bau asing di rumah (bungkus makanan, barang baru), {pet}…",
+      en: "A new smell in the house (a takeout bag, a new purchase). What does {pet} do?",
+      id: "Ada bau asing di rumah (bungkus makanan, barang baru), biasanya {pet} gimana?",
     ),
     options: [
       (en: "Follows the smell everywhere, checks every corner", id: "Ngikutin baunya terus, semua pojok dicek"),
@@ -137,8 +137,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'CAT.Q8': TsQuestion(
     stem: (
-      en: "A sudden loud bang (something drops, firecrackers). {pet}…",
-      id: "Tiba-tiba ada suara keras (barang jatuh, petasan), {pet}…",
+      en: "A sudden loud bang (something drops, firecrackers). What does {pet} do?",
+      id: "Tiba-tiba ada suara keras (barang jatuh, petasan), biasanya {pet} gimana?",
     ),
     options: [
       (en: "Jumps straight up and bolts to a hiding spot", id: "Loncat kaget, langsung kabur ke tempat ngumpet"),
@@ -149,8 +149,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'CAT.Q9': TsQuestion(
     stem: (
-      en: "New furniture, or things got moved around. {pet}…",
-      id: "Ada furnitur baru atau barang dipindah, {pet}…",
+      en: "New furniture, or things got moved around. What does {pet} do?",
+      id: "Ada furnitur baru atau barang dipindah, biasanya {pet} gimana?",
     ),
     options: [
       (en: "Avoids it for days, clearly uneasy", id: "Berhari-hari muter menghindar, kelihatan gelisah"),
@@ -173,8 +173,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'CAT.Q11': TsQuestion(
     stem: (
-      en: "A toy rolls into a gap it can't reach. {pet}…",
-      id: "Mainannya masuk celah yang nggak kejangkau, {pet}…",
+      en: "A toy rolls into a gap it can't reach. What does {pet} do?",
+      id: "Mainannya masuk celah yang nggak kejangkau, biasanya {pet} gimana?",
     ),
     options: [
       (en: "Keeps pawing until you come help", id: "Terus ngorek sampai kamu bantuin"),
@@ -188,8 +188,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'CAT.Q12': TsQuestion(
     stem: (
-      en: "You're playing with {pet} using a teaser wand. It's…",
-      id: "Kamu ajak {pet} main pakai tongkat mainan bulu, dia…",
+      en: "You're playing with {pet} using a teaser wand. How into it is {pet}?",
+      id: "Kamu ajak {pet} main pakai tongkat mainan bulu, dia gimana?",
     ),
     options: [
       (en: "Locked on the whole time, not a second off", id: "Fokus melotot terus, nggak lepas sedetik pun"),
@@ -200,8 +200,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'CAT.Q13': TsQuestion(
     stem: (
-      en: "{pet} wants to get onto an off-limits spot. After you stop it…",
-      id: "{pet} mau naik ke tempat yang dilarang. Habis kamu larang, dia…",
+      en: "{pet} wants to get onto an off-limits spot. After you stop it, what does it do?",
+      id: "{pet} mau naik ke tempat yang dilarang. Habis kamu larang, dia gimana?",
     ),
     options: [
       (
@@ -242,7 +242,7 @@ const Map<String, TsQuestion> kTsQuestions = {
   'CAT.P3': _kP3,
   // ===== 狗套 §6.3 =====
   'DOG.Q1': TsQuestion(
-    stem: (en: "A stranger walks in. {pet}'s first move?", id: "Ada orang asing masuk rumah, reaksi pertama {pet}…"),
+    stem: (en: "A stranger walks in. {pet}'s first move?", id: "Ada orang asing masuk rumah, reaksi pertama {pet} gimana?"),
     options: [
       (en: "Jumps right on them, begging for pets", id: "Langsung loncat minta dielus"),
       (en: "Barks a couple of times, then goes to sniff", id: "Gonggong dikit, terus deketin buat endus"),
@@ -251,7 +251,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'DOG.Q2': TsQuestion(
-    stem: (en: "On a walk you run into another dog. {pet}…", id: "Lagi jalan-jalan ketemu anjing lain, {pet}…"),
+    stem: (en: "On a walk you run into another dog. What does {pet} do?", id: "Lagi jalan-jalan ketemu anjing lain, biasanya {pet} gimana?"),
     options: [
       (en: "Gets excited from far away, wants to go over", id: "Dari jauh udah heboh pengen nyamperin"),
       (en: "Sniffs each other once they're close", id: "Kalau udah deket, saling endus"),
@@ -262,7 +262,7 @@ const Map<String, TsQuestion> kTsQuestions = {
   'DOG.Q3': TsQuestion(
     stem: (
       en: "While you're busy with your own stuff, where's {pet} usually?",
-      id: "Pas kamu lagi sibuk sendiri, {pet} biasanya ada di…",
+      id: "Pas kamu lagi sibuk sendiri, {pet} biasanya ada di mana?",
     ),
     options: [
       (en: "Glued to your feet, follows every move", id: "Nempel di kaki kamu, kamu gerak dikit langsung ngikut"),
@@ -273,8 +273,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'DOG.Q4': TsQuestion(
     stem: (
-      en: "On a walk, you take a route you've never taken. {pet}…",
-      id: "Jalan-jalan lewat rute yang belum pernah dilewatin, {pet}…",
+      en: "On a walk, you take a route you've never taken. What does {pet} do?",
+      id: "Jalan-jalan lewat rute yang belum pernah dilewatin, biasanya {pet} gimana?",
     ),
     options: [
       (en: "Excitedly pulls you forward", id: "Semangat narik kamu ke depan"),
@@ -284,7 +284,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'DOG.Q5': TsQuestion(
-    stem: (en: "You give {pet} a new toy. It…", id: "Kamu kasih {pet} mainan baru, dia…"),
+    stem: (en: "You give {pet} a new toy. How does it react?", id: "Kamu kasih {pet} mainan baru, biasanya dia gimana?"),
     options: [
       (en: "Pounces on it right away", id: "Langsung diterkam dan diselidiki"),
       (en: "Sniffs it, then starts playing", id: "Diendus dulu, baru dimainin"),
@@ -294,8 +294,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'DOG.Q6': TsQuestion(
     stem: (
-      en: "Something it's never seen (an umbrella, a suitcase, a robot vacuum). {pet}…",
-      id: "Ketemu barang yang belum pernah dilihat (payung, koper, robot vacuum), {pet}…",
+      en: "Something it's never seen (an umbrella, a suitcase, a robot vacuum). What does {pet} do?",
+      id: "Ketemu barang yang belum pernah dilihat (payung, koper, robot vacuum), biasanya {pet} gimana?",
     ),
     options: [
       (en: "Has to go check it out properly", id: "Harus nyamperin dan ngecek sampai jelas"),
@@ -305,7 +305,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'DOG.Q7': TsQuestion(
-    stem: (en: "New food or new treats. {pet}…", id: "Ganti makanan atau snack baru, {pet}…"),
+    stem: (en: "New food or new treats. What does {pet} do?", id: "Ganti makanan atau snack baru, biasanya {pet} gimana?"),
     options: [
       (en: "Wants to try it right away", id: "Langsung pengen nyobain"),
       (en: "Sniffs it, then eats", id: "Diendus, terus dimakan"),
@@ -314,7 +314,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'DOG.Q8': TsQuestion(
-    stem: (en: "Thunder or firecrackers. {pet}…", id: "Pas ada petir atau petasan, {pet}…"),
+    stem: (en: "Thunder or firecrackers. What does {pet} do?", id: "Pas ada petir atau petasan, biasanya {pet} gimana?"),
     options: [
       (en: "Shakes, crawls into a corner or jumps on you", id: "Gemetar, nyelip ke pojok atau loncat ke kamu"),
       (en: "Visibly tense, paces back and forth", id: "Kelihatan tegang, mondar-mandir"),
@@ -324,8 +324,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'DOG.Q9': TsQuestion(
     stem: (
-      en: "A new place (a new home, a friend's house). {pet}…",
-      id: "Di tempat baru (rumah baru, rumah temen), {pet}…",
+      en: "A new place (a new home, a friend's house). What does {pet} do?",
+      id: "Di tempat baru (rumah baru, rumah temen), biasanya {pet} gimana?",
     ),
     options: [
       (en: "Can't relax for ages, stays right behind you", id: "Lama nggak bisa santai, ngintil kamu terus"),
@@ -348,8 +348,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'DOG.Q11': TsQuestion(
     stem: (
-      en: "The ball rolls under the sofa, out of reach. {pet}…",
-      id: "Bolanya masuk kolong sofa dan nggak kejangkau, {pet}…",
+      en: "The ball rolls under the sofa, out of reach. What does {pet} do?",
+      id: "Bolanya masuk kolong sofa dan nggak kejangkau, biasanya {pet} gimana?",
     ),
     options: [
       (en: "Digs and barks nonstop until it's out", id: "Terus ngorek dan gonggong, pokoknya harus keluar"),
@@ -359,7 +359,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'DOG.Q12': TsQuestion(
-    stem: (en: "You're teaching {pet} a new command. It…", id: "Pas diajarin perintah baru, {pet}…"),
+    stem: (en: "You're teaching {pet} a new command. How does it react?", id: "Pas diajarin perintah baru, biasanya {pet} gimana?"),
     options: [
       (en: "Keeps its eyes on you, waiting for what's next", id: "Natap kamu terus, nunggu langkah berikutnya"),
       (en: "Picks it up, gets distracted now and then", id: "Bisa nangkep, sesekali nggak fokus"),
@@ -369,8 +369,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'DOG.Q13': TsQuestion(
     stem: (
-      en: "You're holding a treat but not giving it. {pet}…",
-      id: "Ada snack di tangan kamu tapi nggak dikasih, {pet}…",
+      en: "You're holding a treat but not giving it. What does {pet} do?",
+      id: "Ada snack di tangan kamu tapi nggak dikasih, biasanya {pet} gimana?",
     ),
     options: [
       (en: "Sits and stares until it gets it", id: "Duduk natap terus sampai dapet"),
@@ -392,7 +392,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'DOG.Q15': TsQuestion(
-    stem: (en: "Back from a walk. {pet}…", id: "Habis pulang jalan-jalan, {pet}…"),
+    stem: (en: "Back from a walk. What does {pet} do?", id: "Habis pulang jalan-jalan, biasanya {pet} gimana?"),
     options: [
       (en: "Rests a bit, then wants to play again", id: "Istirahat bentar, terus pengen main lagi"),
       (en: "Chills for a while, then moves around again", id: "Kalem sebentar, baru aktif lagi"),
@@ -405,7 +405,7 @@ const Map<String, TsQuestion> kTsQuestions = {
   'DOG.P3': _kP3,
   // ===== 通用套 §6.4 =====
   'GENERAL.Q1': TsQuestion(
-    stem: (en: "You reach into {pet}'s space. It…", id: "Kamu masukin tangan ke area {pet}, dia…"),
+    stem: (en: "You reach into {pet}'s space. How does it react?", id: "Kamu masukin tangan ke area {pet}, biasanya dia gimana?"),
     options: [
       (en: "Comes right over", id: "Langsung nyamperin"),
       (en: "Watches a bit, then comes closer", id: "Ngamatin dulu, baru deketin"),
@@ -414,7 +414,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'GENERAL.Q2': TsQuestion(
-    stem: (en: "You're watching {pet} from nearby. It…", id: "Pas kamu ngeliatin {pet} dari dekat, dia…"),
+    stem: (en: "You're watching {pet} from nearby. How does it react?", id: "Pas kamu ngeliatin {pet} dari dekat, biasanya dia gimana?"),
     options: [
       (en: "Heads your way", id: "Jalan ke arah kamu"),
       (en: "Carries on as usual, doesn't avoid you", id: "Aktivitas biasa, nggak menghindar"),
@@ -423,7 +423,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'GENERAL.Q3': TsQuestion(
-    stem: (en: "A stranger comes near {pet}'s space. It…", id: "Ada orang asing deketin area {pet}, dia…"),
+    stem: (en: "A stranger comes near {pet}'s space. How does it react?", id: "Ada orang asing deketin area {pet}, biasanya dia gimana?"),
     options: [
       (en: "Comes over, same as it does with you", id: "Nyamperin, sama kayak ke kamu"),
       (en: "Watches for a while first", id: "Ngamatin dulu sebentar"),
@@ -432,7 +432,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'GENERAL.Q4': TsQuestion(
-    stem: (en: "You put something new in {pet}'s space. It…", id: "Ada barang baru ditaruh di area {pet}, dia…"),
+    stem: (en: "You put something new in {pet}'s space. How does it react?", id: "Ada barang baru ditaruh di area {pet}, biasanya dia gimana?"),
     options: [
       (en: "Goes to investigate right away", id: "Langsung nyamperin buat diselidiki"),
       (en: "Watches a while before going near", id: "Ngamatin dulu baru deketin"),
@@ -441,7 +441,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'GENERAL.Q5': TsQuestion(
-    stem: (en: "New food. {pet}…", id: "Ganti makanan baru, {pet}…"),
+    stem: (en: "New food. What does {pet} do?", id: "Ganti makanan baru, biasanya {pet} gimana?"),
     options: [
       (en: "Tries it right away", id: "Langsung nyobain"),
       (en: "Hesitates a little, then eats", id: "Ragu sebentar, terus dimakan"),
@@ -451,8 +451,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'GENERAL.Q6': TsQuestion(
     stem: (
-      en: "Its space gets bigger (a new area opens up). {pet}…",
-      id: "Area {pet} diperluas (ada bagian baru dibuka), dia…",
+      en: "Its space gets bigger (a new area opens up). What does {pet} do?",
+      id: "Area {pet} diperluas (ada bagian baru dibuka), biasanya dia gimana?",
     ),
     options: [
       (en: "Goes to explore the new area right away", id: "Langsung eksplor area baru"),
@@ -463,8 +463,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'GENERAL.Q7': TsQuestion(
     stem: (
-      en: "Something familiar and something new, side by side. {pet}…",
-      id: "Barang lama dan barang baru ditaruh bareng di depannya, {pet}…",
+      en: "Something familiar and something new, side by side. What does {pet} do?",
+      id: "Barang lama dan barang baru ditaruh bareng di depannya, biasanya {pet} gimana?",
     ),
     options: [
       (en: "Goes for the new one first", id: "Milih yang baru duluan"),
@@ -474,7 +474,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'GENERAL.Q8': TsQuestion(
-    stem: (en: "A sudden loud bang. {pet}…", id: "Tiba-tiba ada suara keras, {pet}…"),
+    stem: (en: "A sudden loud bang. What does {pet} do?", id: "Tiba-tiba ada suara keras, biasanya {pet} gimana?"),
     options: [
       (en: "Bolts wildly, darting all over", id: "Kabur panik, lari ke mana-mana"),
       (en: "Visibly startled, then on guard", id: "Kaget banget, terus siaga"),
@@ -483,7 +483,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'GENERAL.Q9': TsQuestion(
-    stem: (en: "Its space gets rearranged. {pet}…", id: "Area {pet} ditata ulang, dia…"),
+    stem: (en: "Its space gets rearranged. What does {pet} do?", id: "Area {pet} ditata ulang, biasanya dia gimana?"),
     options: [
       (en: "Clearly uneasy for days", id: "Berhari-hari kelihatan gelisah"),
       (en: "Watches for a while, then adjusts", id: "Ngamatin dulu, baru bisa adaptasi"),
@@ -505,8 +505,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'GENERAL.Q11': TsQuestion(
     stem: (
-      en: "Food is placed somewhere it takes effort to reach. {pet}…",
-      id: "Makanan ditaruh di tempat yang butuh usaha buat diambil, {pet}…",
+      en: "Food is placed somewhere it takes effort to reach. What does {pet} do?",
+      id: "Makanan ditaruh di tempat yang butuh usaha buat diambil, biasanya {pet} gimana?",
     ),
     options: [
       (en: "Keeps trying until it gets it", id: "Nyoba terus sampai dapet"),
@@ -516,7 +516,7 @@ const Map<String, TsQuestion> kTsQuestions = {
     ],
   ),
   'GENERAL.Q12': TsQuestion(
-    stem: (en: "It's feeding time, but no food yet. {pet}…", id: "Udah jam makan tapi belum dikasih, {pet}…"),
+    stem: (en: "It's feeding time, but no food yet. What does {pet} do?", id: "Udah jam makan tapi belum dikasih, biasanya {pet} gimana?"),
     options: [
       (en: "Waits by the bowl and won't leave", id: "Nunggu di tempat makan, nggak mau pergi"),
       (en: "Keeps checking, but does other stuff too", id: "Bolak-balik ngecek, sambil ngapain yang lain"),
@@ -526,8 +526,8 @@ const Map<String, TsQuestion> kTsQuestions = {
   ),
   'GENERAL.Q13': TsQuestion(
     stem: (
-      en: "{pet} wants to go somewhere but the way is blocked. It…",
-      id: "{pet} mau ke suatu tempat tapi jalannya ketutup, dia…",
+      en: "{pet} wants to go somewhere but the way is blocked. How does it react?",
+      id: "{pet} mau ke suatu tempat tapi jalannya ketutup, biasanya dia gimana?",
     ),
     options: [
       (en: "Keeps trying to find a way", id: "Terus nyari jalan lain"),
