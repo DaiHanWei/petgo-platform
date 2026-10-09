@@ -12,6 +12,7 @@ import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/analytics/appsflyer_client.dart';
 import 'package:tailtopia/core/analytics/att_gate.dart';
 import 'package:tailtopia/core/analytics/firebase_stats.dart';
+import 'package:tailtopia/core/analytics/tiktok_client.dart';
 import 'package:tailtopia/core/l10n/locale_controller.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
@@ -136,6 +137,8 @@ Future<void> main() async {
 
     await afInit;
     await AppsFlyerClient.instance.start();
+    // TikTok 归因：同样必须在 ATT 落定之后 init（SDK 自带的 ATT 弹窗已关，授权结果直接读系统）。
+    await TikTokClient.instance.start();
   });
 }
 

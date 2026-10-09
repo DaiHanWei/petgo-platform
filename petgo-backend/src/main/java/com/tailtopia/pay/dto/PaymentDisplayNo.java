@@ -39,6 +39,7 @@ public final class PaymentDisplayNo {
             case TAILSONALITY -> "PAYTS";
             case PASSPORT_SNAP -> "PAYPASS";
             case BOARDING_PASS -> "PAYBP";
+            case TS_MATCH -> "PAYTSM";
         };
         return prefix + "-" + p.getCreatedAt().atZone(WIB).format(YMD)
                 + "-" + String.format("%06d", p.getId());

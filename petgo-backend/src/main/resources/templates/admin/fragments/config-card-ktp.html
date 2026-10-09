@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!--
-  D2 运营配置 · 卡二「一次性解锁定价」（V1.3.0 Story 6.1 三行 → 6.3 套模板 D → V1.3.2 Story 3.1 四行）。端点与既有参数逐字不变：
-  POST /admin/config/ktp-pricing（idHdDownloadPrice / passportPagePrice / passportBoardingPrice + tailsonalityUnlockPrice，一律 ≥100，后台 PRD 2026-10-02 §1.4）。
+  D2 运营配置 · 卡二「一次性解锁定价」（V1.3.0 Story 6.1 三行 → 6.3 套模板 D → V1.3.2 Story 3.1 四行 → 2026-10-09 加配型第五行）。端点与既有参数逐字不变：
+  POST /admin/config/ktp-pricing（idHdDownloadPrice / passportPagePrice / passportBoardingPrice + tailsonalityUnlockPrice + tailsonalityMatchUnlockPrice，一律 ≥100；配型价须比结果价至少低 100，后台 PRD 2026-10-02 §1.4）。
   确认弹层末尾追加「快照价应 ≥ 登机牌价」提醒（data-confirm-diff-note，后台不强校验）。确认弹层复述每个改动字段旧值 → 新值（data-confirm-diff，取代 6.1 的静态 data-confirm）。
 -->
 <body>
@@ -23,7 +23,8 @@
                         {'idHdDownloadPrice', pricing.idHdDownloadPrice, 'rowKtpHd', null, false},
                         {'passportPagePrice', pricing.passportPageUnlockPrice, 'rowPassportPage', 'descPassportPage', true},
                         {'passportBoardingPrice', pricing.passportBoardingUnlockPrice, 'rowPassportBoarding', 'descPassportBoarding', true},
-                        {'tailsonalityUnlockPrice', pricing.tailsonalityUnlockPrice, 'rowTailsonality', 'descTailsonality', false} } }"
+                        {'tailsonalityUnlockPrice', pricing.tailsonalityUnlockPrice, 'rowTailsonality', 'descTailsonality', false},
+                        {'tailsonalityMatchUnlockPrice', pricing.tailsonalityMatchUnlockPrice, 'rowTailsonalityMatch', 'descTailsonalityMatch', false} } }"
                    data-price-row>
                 <span class="price-row-label" th:text="#{'admin.config.ktp.' + ${row[2]}}">KTP 卡高清下载</span>
                 <span class="price-inp">

@@ -72,6 +72,16 @@
 
 **写 story 时发现的线上问题（不属本版本，待操作者安排）**：KTP 高清购买 `IdCardHdService.purchaseCard` 的 QRIS 与 PawCoin 两条路共用幂等键 `id-hd-card:{cardId}`；先建 QRIS 单再在 24h 内改用 PawCoin，`PawCoinWalletService.debit` 会把它判为重放而**不扣币、仍解锁**。已在代码中核实（`PaymentIntentService` L111 `idempotency.store` + `PawCoinWalletService` L83 `isReplay`）。本版本三类新付费在 3-1 按渠道加后缀规避。
 
+## 2026-10-09 · 配型改回付费（操作者 Hex）
+
+| # | 议题 | 决定 | 覆盖/订正了什么 |
+|---|---|---|---|
+| D-31 | 配型是否收费 | **收费**。配型按**每次测试结果**单独解锁，默认 **Rp3,000**（后台「一次性解锁定价」第 5 行可调，须比结果解锁价至少低 100）。选主人类型、改类型仍免费 | **推翻** 2026-09-21「配型页完全免费」：内容设计 §2.2 / §1 付费结构、PRD「配型全免费 / 无锁态 / E-11C 无解锁事件」、epics FR-117.11 |
+| D-32 | 未付费时配型页显示什么 | **整页上锁**：选完主人类型后只显示双方四字母、锁态说明与购买按钮；配型卡、档位、字母对照、总评、逐轴详解全部不显示，也不能分享配型卡。结果页上的配型入口同样不露档位 | 原「配型卡为免费传播卡」。解锁后配型卡仍**无水印**（水印规则不变） |
+| D-33 | 与 Rp5,000 结果解锁的关系 | 结果解锁**包含配型**。已单独买过配型的结果，再买结果解锁**只补差价**（结果价 − 该结果实付的配型价，下限 100），服务端计算 | — |
+
+实现要点：支付用途 / 购买类型代号 `TS_MATCH`（列宽 16 放不下 `TAILSONALITY_MATCH`）；订单中心归入 Tailsonality 类，订单号前缀 `TSM`；新增服务端埋点 `tailsonality_match_unlocked`、App 埋点 `tailsonality_match_unlock_viewed` / `tailsonality_match_unlock_initiated`。
+
 ## 设计素材状态（2026-09-28）
 
 源目录（操作者本机）：`~/Downloads/设计图/`

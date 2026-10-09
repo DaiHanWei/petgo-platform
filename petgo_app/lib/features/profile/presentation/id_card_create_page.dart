@@ -18,6 +18,7 @@ import 'id_card/hd_paywall_sheet.dart';
 import 'id_card/id_card_watermark.dart';
 import 'id_card/ktp_card.dart';
 import 'id_card/ktp_fields.dart';
+import '../../../core/analytics/analytics.dart';
 import 'id_card/ktp_unlock_analytics.dart';
 import 'id_card/passport_card.dart';
 import 'id_card/student_card.dart';
@@ -389,7 +390,7 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
         ref.invalidate(idCardListProvider);
         _toast(l10n.idCardHdUnlockedToast);
       } else if ((res.payload?.isNotEmpty ?? false) && mounted) {
-        await showQrPaymentSheet(
+        final bool paid = await showQrPaymentSheet(
           context,
           payload: res.payload!,
           orderRef: res.paymentRef,
@@ -398,6 +399,10 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
             return c.hdUnlocked;
           },
         );
+        // 投放归因：QRIS 现金到账（PawCoin 当场成交不计，钱在充值时已计）。
+        if (paid) {
+          Analytics.capturePurchase(amountIdr: priceIdr, purpose: 'ID_HD', orderRef: res.paymentRef);
+        }
         ref.invalidate(idCardListProvider);
       } else {
         _toast(l10n.idCardHdQrisPending);

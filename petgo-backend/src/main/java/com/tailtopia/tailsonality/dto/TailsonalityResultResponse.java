@@ -13,6 +13,9 @@ import java.time.Instant;
  * @param resultIndex 同宠物按 {@code created_at} 升序的 1 起序号，现算不落库
  * @param unlockedAt  null 时按全局 {@code non_null} 省略
  * @param equipped    当前宠物佩戴的就是本结果（Story 3.3 · AC2.5；佩戴行 {@code result_id} = 本结果 id）
+ * @param matchUnlocked 配型可看（完整解读已解锁，或单独买过配型；2026-10-09 配型改回付费）
+ * @param upgradePrice  已单独买过配型、完整解读未解锁时，完整解读的补差价（IDR）；其余情况 null → 按全局 {@code non_null} 省略，
+ *                      App 用定价接口的原价。只在单条 {@code GET …/results/{token}} 里算，列表恒为 null。
  */
 public record TailsonalityResultResponse(
         String token,
@@ -25,9 +28,16 @@ public record TailsonalityResultResponse(
         Instant unlockedAt,
         int contentVersion,
         Instant createdAt,
-        boolean equipped) {
+        boolean equipped,
+        boolean matchUnlocked,
+        Long upgradePrice) {
 
     public static TailsonalityResultResponse of(TailsonalityResult r, int resultIndex, boolean equipped) {
+        return of(r, resultIndex, equipped, null);
+    }
+
+    public static TailsonalityResultResponse of(TailsonalityResult r, int resultIndex, boolean equipped,
+            Long upgradePrice) {
         return new TailsonalityResultResponse(
                 r.getPublicToken(),
                 r.code().full(),
@@ -39,6 +49,8 @@ public record TailsonalityResultResponse(
                 r.getUnlockedAt(),
                 r.getContentVersion(),
                 r.getCreatedAt(),
-                equipped);
+                equipped,
+                r.matchUnlocked(),
+                upgradePrice);
     }
 }

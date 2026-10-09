@@ -9,7 +9,9 @@ package com.tailtopia.profile.dto;
  * <p>V1.3.0 Story 6.1（契约 X-4，FR-120 护照样式）：新增 {@code passportPageUnlockPrice}（护照·护照内页）与
  * {@code passportBoardingUnlockPrice}（护照·登机牌）两个一次性解锁价，同样实时读 {@code pricing_config}；旧字段 {@code price} 不变。
  * 改价只影响新发起的解锁，已解锁记录不受影响。
+ *
+ * <p>2026-10-09：新增 {@code tailsonalityMatchUnlockPrice}（配型单独解锁价）。
  */
 public record IdCardHdPricingResponse(long price, long passportPageUnlockPrice, long passportBoardingUnlockPrice,
-        long tailsonalityUnlockPrice) {
+        long tailsonalityUnlockPrice, long tailsonalityMatchUnlockPrice) {
 }

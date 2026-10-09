@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -6,6 +7,8 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 
 import 'appsflyer_client.dart';
 import 'button_ids.dart';
+import 'meta_client.dart';
+import 'tiktok_client.dart';
 
 /// 前端行为分析门面（PostHog Cloud EU · project 211847）。
 ///
@@ -81,6 +84,8 @@ class Analytics {
   /// 天然逐字节一致。
   static Future<void> identifyUser(int userId, {String? role}) async {
     AppsFlyerClient.instance.setUserId(distinctIdFor(userId));
+    unawaited(TikTokClient.instance.setUserId(distinctIdFor(userId)));
+    unawaited(MetaClient.instance.setUserId(distinctIdFor(userId)));
     try {
       await Posthog().identify(
         userId: distinctIdFor(userId),
@@ -114,9 +119,11 @@ class Analytics {
         'role': ?role,
       });
 
-  /// 登出 / 续期失败 → 解除关联，回到匿名。AppsFlyer CUID 同步清空（防换账号串数据）。
+  /// 登出 / 续期失败 → 解除关联，回到匿名。AppsFlyer CUID / TikTok / Meta 关联同步清空（防换账号串数据）。
   static Future<void> reset() async {
     AppsFlyerClient.instance.clearUserId();
+    unawaited(TikTokClient.instance.clearUserId());
+    unawaited(MetaClient.instance.clearUserId());
     try {
       await Posthog().reset();
     } catch (e) {
@@ -136,6 +143,12 @@ class Analytics {
     'consult_started', // 问诊开始（P1）
   };
 
+  /// 同步回传 Meta / TikTok 的注册完成事件（投放渠道看注册转化率用）。
+  static const String adRegistrationEvent = 'af_complete_registration';
+
+  /// 同步回传 Meta / TikTok 的付款成功事件（投放渠道看付费率 / ROAS 用）。只能经 [capturePurchase] 发。
+  static const String adPurchaseEvent = 'af_purchase';
+
   /// 事件是否分发 AppsFlyer（纯函数，L0 可测）。
   static bool isAppsFlyerEvent(String event) => appsflyerEvents.contains(event);
 
@@ -153,12 +166,63 @@ class Analytics {
     if (isAppsFlyerEvent(event)) {
       AppsFlyerClient.instance.logEvent(event, clean);
     }
+    // Meta / TikTok 自归因：目前只回传「注册完成」一个转化（2026-10-09，看渠道注册转化率 +
+    // 投放可按注册优化）。复用 AppsFlyer 的同名事件，单一触发点（只有 isNewUser 才会报）。
+    if (event == adRegistrationEvent) {
+      final method = clean?['af_registration_method'];
+      unawaited(MetaClient.instance.logRegistration(method is String ? method : null));
+      unawaited(TikTokClient.instance.logRegistration());
+    }
+    // 现金付款成功（所有 QRIS 入口统一走 [capturePurchase]）→ 两家的标准购买事件，看付费率 / ROAS。
+    if (event == adPurchaseEvent) {
+      final revenue = clean?['af_revenue'];
+      final purpose = clean?['af_content_id'];
+      final orderId = clean?['af_order_id'];
+      final amount = revenue is num ? revenue : null;
+      unawaited(MetaClient.instance.logPurchase(
+        amountIdr: amount,
+        purpose: purpose is String ? purpose : null,
+        orderId: orderId is String ? orderId : null,
+      ));
+      unawaited(TikTokClient.instance.logPurchase(
+        amountIdr: amount,
+        purpose: purpose is String ? purpose : null,
+        orderId: orderId is String ? orderId : null,
+      ));
+    }
     try {
       await Posthog().capture(eventName: event, properties: clean);
     } catch (e) {
       debugPrint('[Analytics] capture failed: $e');
     }
   }
+
+  /// **现金付款成功**的唯一上报入口（2026-10-09 起覆盖全部 QRIS 入口：PawCoin 充值 / 兽医问诊 /
+  /// AI 解锁 / KTP 高清图 / 一次性解锁 / 商城订单）。AppsFlyer `af_purchase` 与 Meta / TikTok
+  /// 购买事件都由它派生，三家同一口径。
+  ///
+  /// 🔴 **口径 = 用户真实付出的现金（IDR）**：
+  /// - 只在 QRIS 到账时调。**PawCoin 消费一律不调**——钱在充值那一刻已经计过，再计就是双倍收入。
+  /// - 混合支付（PawCoin + 现金）只计现金那一段。
+  /// - [amountIdr] 未知（价格没取到）时传 null：照样计一次付款（付费率要的是次数），但不带金额，
+  ///   不能拿 0 冒充（会把 ROAS 拉低）。
+  /// - [purpose] 用支付用途代号（与后端 `PaymentPurpose` 同名，如 `VET_CONSULT`），不带任何用户内容。
+  /// - [orderRef] 用不可枚举的支付号 / 订单号，供两家按订单去重（不传自增 id）。
+  ///
+  /// ⚠️ 已知盲区：用户关掉付款面板后才付款，App 侦测不到到账 —— 客户端口径会漏这类单。
+  /// 要全量只能改由后端到账时走 Meta Conversions API / TikTok Events API。
+  static Future<void> capturePurchase({
+    required int? amountIdr,
+    required String purpose,
+    String? orderRef,
+  }) =>
+      Analytics.capture('af_purchase', {
+        if (amountIdr != null && amountIdr > 0) 'af_revenue': amountIdr,
+        'af_currency': 'IDR',
+        'af_content_id': purpose,
+        'af_quantity': 1,
+        if (orderRef != null && orderRef.isNotEmpty) 'af_order_id': orderRef,
+      });
 
   /// T-7 `signup_succeeded` 的**唯一**上报入口（登录页与引导浮层两条注册路径共用）。
   ///

@@ -179,7 +179,7 @@ public class IdCardHdService {
     public com.tailtopia.profile.dto.IdCardHdPricingResponse currentPricing() {
         var p = platformConfig.pricing();
         return new com.tailtopia.profile.dto.IdCardHdPricingResponse(p.getIdHdDownloadPrice(), p.getPassportPageUnlockPrice(),
-                p.getPassportBoardingUnlockPrice(), p.getTailsonalityUnlockPrice());
+                p.getPassportBoardingUnlockPrice(), p.getTailsonalityUnlockPrice(), p.getTailsonalityMatchUnlockPrice());
     }
 
     /**

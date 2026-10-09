@@ -42,6 +42,7 @@ void main() {
         questionSet: 'CAT',
         resultIndex: 1,
         unlocked: unlocked,
+        matchUnlocked: true,
         contentVersion: 1,
         createdAt: DateTime.utc(2026, 9, 30),
       );

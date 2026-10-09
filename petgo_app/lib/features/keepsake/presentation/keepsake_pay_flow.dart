@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/network/problem_detail.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
@@ -29,6 +30,9 @@ enum KeepsakeFlowOutcome {
 ///
 /// [sheet] 以余额构造抽屉（通常是 `PayChannelPicker`），确认时 `pop(HdPayChannel)`。
 /// [start] 调 SKU 的发起接口；[pollPaid] 刷新业务对象、返回是否已解锁。
+/// [purchasePurpose] / [cashPriceIdr]：QRIS 现金到账时上报投放归因的付款事件（`Analytics.capturePurchase`）
+/// 用的支付用途代号（与后端 `PaymentPurpose` 同名）和本次实付金额。**必填**——新接入的 SKU 不会漏报。
+/// [cashPriceIdr] 是取值函数：到账那一刻再读定价（补差价等口径由调用方算好）。
 ///
 /// 🔴 错误按 `ProblemDetail.typeSlug` 分流，**不要**「409 一律当余额不足」：
 /// `keepsake-already-unlocked` 也是 409，把它说成余额不足会让已付款用户去充值。
@@ -38,6 +42,8 @@ Future<KeepsakeFlowOutcome> runKeepsakePurchase({
   required Widget Function(int balance) sheet,
   required Future<KeepsakePurchaseResult> Function(HdPayChannel channel) start,
   required Future<bool> Function() pollPaid,
+  required String purchasePurpose,
+  required int? Function() cashPriceIdr,
   void Function(HdPayChannel channel)? onChannelConfirmed,
 }) async {
   int balance = 0;
@@ -78,6 +84,10 @@ Future<KeepsakeFlowOutcome> runKeepsakePurchase({
       return KeepsakeFlowOutcome.notCompleted;
     }
     final paid = await showQrPaymentSheet(context, payload: payload, orderRef: res.paymentRef, pollPaid: pollPaid);
+    if (paid) {
+      // 投放归因：QRIS 现金到账（PawCoin 当场成交走上面的 unlocked 分支，不计——钱在充值时已计）。
+      Analytics.capturePurchase(amountIdr: cashPriceIdr(), purpose: purchasePurpose, orderRef: res.paymentRef);
+    }
     if (!paid || !context.mounted) return KeepsakeFlowOutcome.notCompleted;
     ref.invalidate(pawCoinProvider);
     return KeepsakeFlowOutcome.unlocked;

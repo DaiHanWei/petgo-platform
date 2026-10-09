@@ -62,7 +62,7 @@ class TailsonalityResultServiceTest {
         badges = mock(com.tailtopia.tailsonality.repository.TailsonalityBadgeRepository.class);
         when(badges.findResultIdByPetProfileId(PET)).thenReturn(Optional.empty());
         service = new TailsonalityResultService(repo, pets, tokens, badges,
-                Clock.fixed(Instant.parse("2026-09-30T08:00:00Z"), ZoneOffset.UTC));
+                mock(TailsonalityUpgradePricing.class), Clock.fixed(Instant.parse("2026-09-30T08:00:00Z"), ZoneOffset.UTC));
     }
 
     private static Map<String, Object> body(int idx) {

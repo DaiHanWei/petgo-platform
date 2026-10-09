@@ -18,6 +18,22 @@ public class TailsonalityTargetResolver implements KeepsakeTargetResolver {
         this.results = results;
     }
 
+    /**
+     * 配型单独解锁（2026-10-09）的订单「查看」：同一张结果页（配型入口就在结果页上），故复用本类逻辑只换 SKU。
+     */
+    @Component
+    public static class Match extends TailsonalityTargetResolver {
+
+        public Match(TailsonalityResultRepository results) {
+            super(results);
+        }
+
+        @Override
+        public KeepsakeSku sku() {
+            return KeepsakeSku.TS_MATCH;
+        }
+    }
+
     @Override
     public KeepsakeSku sku() {
         return KeepsakeSku.TAILSONALITY;

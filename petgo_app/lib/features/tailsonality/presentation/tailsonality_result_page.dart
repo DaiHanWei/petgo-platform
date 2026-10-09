@@ -136,7 +136,8 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
                   onCardTap: () => _openCardLightbox(shown),
                   onShare: () => openResultSharePreview(context, ref, shown),
                   footer: locked
-                      ? _UnlockCta(busy: _buying, onTap: () => _startUnlock(shown, petName))
+                      ? _UnlockCta(
+                          upgradePrice: shown.upgradePrice, busy: _buying, onTap: () => _startUnlock(shown, petName))
                       : null,
                 ),
               )
@@ -272,7 +273,7 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
     TailsonalityUnlockAnalytics.viewed(
         roleCode: r.typeCode,
         resultIndex: r.resultIndex,
-        price: price.value?.tailsonality);
+        price: r.fullUnlockPrice(price.value));
   }
 
   // ---------- AC4 / AC6：购买 ----------
@@ -290,11 +291,13 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
         sheet: (balance) => _TsPaywallSheet(result: r, petName: petName, balance: balance),
         start: (channel) => ref.read(tailsonalityRepositoryProvider).unlock(r.token, channel),
         pollPaid: () async => (await ref.refresh(tailsonalityResultProvider(r.token).future)).unlocked,
+        purchasePurpose: 'TAILSONALITY',
+        cashPriceIdr: () => r.fullUnlockPrice(priceSub.read().value),
         onChannelConfirmed: (channel) => TailsonalityUnlockAnalytics.initiated(
             roleCode: r.typeCode,
             resultIndex: r.resultIndex,
             method: channel,
-            price: priceSub.read().value?.tailsonality),
+            price: r.fullUnlockPrice(priceSub.read().value)),
       );
       if (!mounted || outcome == KeepsakeFlowOutcome.notCompleted) return;
       // 已解锁判定只看服务端：刷新结果（与列表），由服务端的 `unlocked` 切换页面。
@@ -516,14 +519,16 @@ class _Body extends StatelessWidget {
             style: const TextStyle(fontSize: 15, height: 1.55, color: AppColors.ink),
           ),
         const SizedBox(height: 16),
-        // 配型引流放在锁态区之前（它免费，放在墙后等于没有）。
+        // 配型引流放在锁态区之前：配型可单独购买（2026-10-09），入口放在完整解读的墙后等于没有。
         Consumer(builder: (context, ref, _) {
           // 主人类型已设 → 对照缩略 + 档位标签；未设（或读失败）→ `?` 形态。改类型后回来随 provider 立即更新。
+          // 2026-10-09 配型改回付费：未解锁配型时不露档位（档位就是付费内容），只显示引导文案 + 锁。
           final owner = ref.watch(tailsonalityOwnerTypeProvider).asData?.value;
           return TsMatchTeaser(
             petLetters: result.letters,
             ownerLetters: owner,
-            sameCount: owner == null ? null : computeTsMatch(owner, result.letters).sameCount,
+            sameCount: owner == null || !result.matchUnlocked ? null : computeTsMatch(owner, result.letters).sameCount,
+            locked: !result.matchUnlocked,
             onTap: () => context.push(TailsonalityRoutes.match(result.token)),
           );
         }),
@@ -565,9 +570,11 @@ class _Body extends StatelessWidget {
 }
 
 /// 锁态区底部购买按钮：价格只从服务端读（D-2），取价中「…」禁用，失败显示重试。
+/// 已单独买过配型 → 显示服务端算好的补差价 [upgradePrice]。
 class _UnlockCta extends ConsumerWidget {
-  const _UnlockCta({required this.busy, required this.onTap});
+  const _UnlockCta({this.upgradePrice, required this.busy, required this.onTap});
 
+  final int? upgradePrice;
   final bool busy;
   final VoidCallback onTap;
 
@@ -575,7 +582,7 @@ class _UnlockCta extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final price = ref.watch(keepsakePricingProvider);
-    if (price.hasError && !price.isLoading) {
+    if (upgradePrice == null && price.hasError && !price.isLoading) {
       return Center(
         child: FittedBox(
           fit: BoxFit.scaleDown,
@@ -584,7 +591,7 @@ class _UnlockCta extends ConsumerWidget {
         ),
       );
     }
-    final p = price.value?.tailsonality;
+    final p = upgradePrice ?? price.value?.tailsonality;
     return FilledButton(
       key: const ValueKey('tsUnlockCta'),
       onPressed: p == null || busy ? null : onTap,
@@ -612,11 +619,15 @@ class _TsPaywallSheet extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final role = kTsRoles[result.letters];
     return PayChannelPicker(
-      price: ref.watch(keepsakePricingProvider).whenData((p) => p.tailsonality),
+      price: result.upgradePrice != null
+          ? AsyncValue.data(result.upgradePrice!)
+          : ref.watch(keepsakePricingProvider).whenData((p) => p.tailsonality),
       onRetryPrice: () => ref.invalidate(keepsakePricingProvider),
       balance: balance,
       title: l10n.tailsonalityPaywallTitle,
-      body: l10n.tailsonalityPaywallBody(petName),
+      body: result.upgradePrice != null
+          ? l10n.tailsonalityPaywallUpgradeBody(petName)
+          : l10n.tailsonalityPaywallBody(petName),
       confirmLabel: (p) => l10n.tailsonalityPayConfirm(p == null ? '…' : formatIdrAmount(p)),
       confirmKey: const ValueKey('tsPayConfirm'),
       retryKey: const ValueKey('tsPayPriceRetry'),

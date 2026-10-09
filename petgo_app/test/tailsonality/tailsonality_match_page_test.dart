@@ -27,7 +27,7 @@ void main() {
   });
   tearDown(() => Analytics.debugCaptureSink = null);
 
-  Future<void> pump(WidgetTester tester, {String? owner}) async {
+  Future<void> pump(WidgetTester tester, {String? owner, bool matchUnlocked = true}) async {
     repo.stored = owner;
     tester.view.physicalSize = const Size(420, 2600);
     tester.view.devicePixelRatio = 1.0;
@@ -45,6 +45,7 @@ void main() {
               questionSet: 'DOG',
               resultIndex: 1,
               unlocked: false,
+              matchUnlocked: matchUnlocked,
               contentVersion: 1,
               createdAt: DateTime.utc(2026, 9, 30),
             )),

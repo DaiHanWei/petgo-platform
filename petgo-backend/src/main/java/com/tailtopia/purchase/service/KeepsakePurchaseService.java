@@ -41,6 +41,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 判成重放、不扣币，业务行却被解锁 = 免费拿到。
  *
  * <p>价格每次发起按 SKU 实时读 {@code pricing_config}；改价只影响新发起，已有 PENDING 行价不变。
+ * SKU 模块给了 {@link KeepsakeRef#priceOverride()}（补差价）则用它，幂等键另加 {@code :UPG} 后缀 —— 否则会复用
+ * 补差前按原价开出的 QRIS 意图，让用户照原价付。
  */
 @Service
 public class KeepsakePurchaseService {
@@ -82,7 +84,13 @@ public class KeepsakePurchaseService {
 
     /** 幂等键：基键 + 渠道后缀（见类注释）。 */
     static String idempotencyKey(KeepsakeRef ref, PayChannel channel) {
-        return ref.sku().name() + ":" + ref.refToken() + ":" + channel.name();
+        String base = ref.sku().name() + ":" + ref.refToken() + ":" + channel.name();
+        return ref.priceOverride() == null ? base : base + ":UPG";
+    }
+
+    /** 本次成交价：SKU 模块给的补差价优先，否则实时读定价表。 */
+    private long priceFor(KeepsakeRef ref) {
+        return ref.priceOverride() != null ? ref.priceOverride() : priceOf(platformConfig.pricing(), ref.sku());
     }
 
     /** 按 SKU 取当前价（每次发起实时读）。 */
@@ -91,6 +99,7 @@ public class KeepsakePurchaseService {
             case TAILSONALITY -> p.getTailsonalityUnlockPrice();
             case PASSPORT_SNAP -> p.getPassportPageUnlockPrice();
             case BOARDING_PASS -> p.getPassportBoardingUnlockPrice();
+            case TS_MATCH -> p.getTailsonalityMatchUnlockPrice();
         };
     }
 
@@ -110,7 +119,7 @@ public class KeepsakePurchaseService {
     }
 
     private KeepsakePurchaseResponse startPawcoin(long userId, KeepsakeRef ref) {
-        long price = priceOf(platformConfig.pricing(), ref.sku());
+        long price = priceFor(ref);
         // 余额不足 → debit 抛 pawcoin-insufficient（409）→ 整事务回滚。
         wallet.debit(userId, price, PawCoinTxnType.SPEND, ref.sku().name(), ref.refId(),
                 idempotencyKey(ref, PayChannel.PAWCOIN));
@@ -131,7 +140,7 @@ public class KeepsakePurchaseService {
     }
 
     private KeepsakePurchaseResponse startQris(long userId, KeepsakeRef ref) {
-        long price = priceOf(platformConfig.pricing(), ref.sku());
+        long price = priceFor(ref);
         PaymentIntentResponse intentResp = paymentIntents.createIntent(userId, ref.sku().toPurpose(), PayChannel.QRIS,
                 price, CURRENCY, idempotencyKey(ref, PayChannel.QRIS), PAY_WINDOW);
         PaymentIntent intent = paymentIntents.findByToken(intentResp.token())

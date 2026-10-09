@@ -119,6 +119,8 @@ dependencies:
   google_maps_flutter: ^2.18.0
   firebase_core: ^4.15.0
   firebase_analytics: ^12.6.0
+  tiktok_events_sdk: ^1.4.0
+  facebook_app_events: ^0.30.5
 
 dependency_overrides:
   # jcenter() 已被 Gradle 9 移除而 pub.dev 原版 9.0.7652 仍在用 → vendor 打补丁

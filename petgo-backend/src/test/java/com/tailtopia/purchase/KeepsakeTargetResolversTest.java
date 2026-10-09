@@ -69,12 +69,14 @@ class KeepsakeTargetResolversTest {
     }
 
     @Test
-    void everySkuHasOneResolverWithDistinctKinds() {
+    void everySkuHasOneResolver() {
         List<KeepsakeTargetResolver> all = List.of(new TailsonalityTargetResolver(mock(TailsonalityResultRepository.class)),
                 new PassportSnapshotTargetResolver(mock(PassportSnapshotRepository.class)),
-                new BoardingPassTargetResolver(mock(BoardingPassUnlockRepository.class), mock(PlaceIdentityQuery.class)));
+                new BoardingPassTargetResolver(mock(BoardingPassUnlockRepository.class), mock(PlaceIdentityQuery.class)),
+                new TailsonalityTargetResolver.Match(mock(TailsonalityResultRepository.class)));
         assertThat(all.stream().map(KeepsakeTargetResolver::sku)).containsExactlyInAnyOrder(KeepsakeSku.values());
+        // 配型单独解锁（2026-10-09）的「查看」与完整解读同去结果页。
         assertThat(all.stream().map(KeepsakeTargetResolver::targetKind))
-                .containsExactly("TAILSONALITY_RESULT", "PASSPORT_SNAPSHOT", "BOARDING_PASS");
+                .containsExactly("TAILSONALITY_RESULT", "PASSPORT_SNAPSHOT", "BOARDING_PASS", "TAILSONALITY_RESULT");
     }
 }

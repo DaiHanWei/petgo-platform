@@ -468,7 +468,7 @@ public class OrderCenterService {
             return includeKeepsake ? EnumSet.allOf(KeepsakeSku.class) : EnumSet.noneOf(KeepsakeSku.class);
         }
         return switch (filter) {
-            case TAILSONALITY -> EnumSet.of(KeepsakeSku.TAILSONALITY);
+            case TAILSONALITY -> EnumSet.of(KeepsakeSku.TAILSONALITY, KeepsakeSku.TS_MATCH);
             case PASSPORT_SNAP -> EnumSet.of(KeepsakeSku.PASSPORT_SNAP);
             case BOARDING_PASS -> EnumSet.of(KeepsakeSku.BOARDING_PASS);
             default -> EnumSet.noneOf(KeepsakeSku.class);
@@ -477,7 +477,8 @@ public class OrderCenterService {
 
     private static OrderType orderTypeOf(KeepsakeSku sku) {
         return switch (sku) {
-            case TAILSONALITY -> OrderType.TAILSONALITY;
+            // 配型单独解锁不另开订单类型（App 不用跟着加页签），归入 Tailsonality；订单号前缀 TSM 区分。
+            case TAILSONALITY, TS_MATCH -> OrderType.TAILSONALITY;
             case PASSPORT_SNAP -> OrderType.PASSPORT_SNAP;
             case BOARDING_PASS -> OrderType.BOARDING_PASS;
         };
