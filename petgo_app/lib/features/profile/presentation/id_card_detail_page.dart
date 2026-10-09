@@ -351,6 +351,10 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
             return card.hdUnlocked;
           },
         );
+        // 投放归因：QRIS 现金到账（PawCoin 当场成交不计，钱在充值时已计）。
+        if (paid) {
+          Analytics.capturePurchase(amountIdr: priceIdr, purpose: 'ID_HD', orderRef: res.paymentRef);
+        }
         if (paid && mounted) {
           ref.invalidate(idCardDetailProvider(widget.cardId));
           ref.invalidate(idCardListProvider);

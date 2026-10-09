@@ -335,6 +335,10 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
         sheet: (balance) => _TsMatchPaywallSheet(full: full, petName: petName, balance: balance, result: r),
         start: (channel) => full ? repo.unlock(r.token, channel) : repo.unlockMatch(r.token, channel),
         pollPaid: () async => (await ref.refresh(tailsonalityResultProvider(r.token).future)).matchUnlocked,
+        // 完整解读（含配型）与单买配型是两种支付用途；完整解读价已扣掉先前单买配型付过的钱（补差价）。
+        purchasePurpose: full ? 'TAILSONALITY' : 'TS_MATCH',
+        cashPriceIdr: () =>
+            full ? r.fullUnlockPrice(priceSub.read().value) : priceSub.read().value?.tailsonalityMatch,
         onChannelConfirmed: (channel) => TailsonalityUnlockAnalytics.matchInitiated(
             roleCode: r.typeCode,
             resultIndex: r.resultIndex,

@@ -291,6 +291,8 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
         sheet: (balance) => _TsPaywallSheet(result: r, petName: petName, balance: balance),
         start: (channel) => ref.read(tailsonalityRepositoryProvider).unlock(r.token, channel),
         pollPaid: () async => (await ref.refresh(tailsonalityResultProvider(r.token).future)).unlocked,
+        purchasePurpose: 'TAILSONALITY',
+        cashPriceIdr: () => r.fullUnlockPrice(priceSub.read().value),
         onChannelConfirmed: (channel) => TailsonalityUnlockAnalytics.initiated(
             roleCode: r.typeCode,
             resultIndex: r.resultIndex,

@@ -50,6 +50,7 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
   bool _awaitingCash = false; // PAYMENT_REQUIRED 后进「等待到账」态
   String? _qrPayload; // QRIS 二维码载荷（现金态本地生成二维码）
   String? _payRef; // 支付号（bug 326，客服对账）
+  int? _cashAmount; // 本次 QRIS 实付金额（投放归因付款事件用；取自支付单，后端权威）
 
   @override
   void initState() {
@@ -113,6 +114,12 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
         if (_awaitingCash) {
           Analytics.capture('consult_pay_succeeded',
               {'consult_type': 'VET', 'method': 'qris'});
+          // 投放归因：QRIS 现金到账（PawCoin 即时支付不计，钱在充值时已计）。
+          Analytics.capturePurchase(
+            amountIdr: _cashAmount ?? ref.read(vetConsultPriceProvider).value,
+            purpose: 'VET_CONSULT',
+            orderRef: _payRef,
+          );
         }
         // 兽医问诊漏斗终点：支付完成、会话建立。
         Analytics.capture('consult_session_started', {'consult_type': 'VET'});
@@ -191,6 +198,7 @@ class _VetTimedPayPageState extends ConsumerState<VetTimedPayPage> {
           _awaitingCash = true;
           _qrPayload = result.payload;
           _payRef = result.payment?.displayNo ?? result.payment?.token;
+          _cashAmount = result.payment?.amount;
         });
       }
     } on DioException catch (e) {

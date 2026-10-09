@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart';
 /// - **安装 / 启动由原生 SDK 自动上报**（这就是归因），开关在原生配置里按构建类型注入：
 ///   Android `fbAutoLogAppEvents`（build.gradle.kts，debug=false）、iOS
 ///   `FB_AUTO_LOG_APP_EVENTS`（Debug.xcconfig=NO）。本类不负责启动。
-/// - **业务事件只有「注册完成」一个**，且只从 `Analytics.capture` 的白名单分发进来
+/// - **业务事件只有「注册完成」「现金付款成功」两个**，且只从 `Analytics.capture` 的白名单分发进来
 ///   （TT-DPR-2026-001 红线：业务代码不得直接调本类 / Meta SDK）。
 /// - 只有正式构建上报：debug 默认不报（`META_DEBUG=true` 可联调）；stag 出包传
 ///   `META_ENABLED=false`——Android 的 build.gradle.kts 也读这个 define，连原生自动上报一起关
@@ -49,6 +49,24 @@ class MetaClient {
       await _fb.clearUserID();
     } catch (e) {
       debugPrint('[Meta] clearUserID failed: $e');
+    }
+  }
+
+  /// 现金付款成功（Meta 标准购买事件 `fb_mobile_purchase`，币种 IDR）。只由 `Analytics.capturePurchase` 派生。
+  /// 金额未知时按 0 记一次购买（Meta 接口要求必填金额；次数仍可用于付费率）。
+  Future<void> logPurchase({num? amountIdr, String? purpose, String? orderId}) async {
+    if (!_active) return;
+    try {
+      await _fb.logPurchase(
+        amount: (amountIdr ?? 0).toDouble(),
+        currency: 'IDR',
+        parameters: {
+          'fb_content_type': ?purpose,
+          'fb_order_id': ?orderId,
+        },
+      );
+    } catch (e) {
+      debugPrint('[Meta] purchase failed: $e');
     }
   }
 
