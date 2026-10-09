@@ -132,7 +132,8 @@ class AdminKtpPricingIntegrationTest extends ApiIntegrationTest {
                         .param("idHdDownloadPrice", String.valueOf(c.getIdHdDownloadPrice()))
                         .param("passportPagePrice", String.valueOf(page))
                         .param("passportBoardingPrice", String.valueOf(boarding))
-                        .param("tailsonalityUnlockPrice", String.valueOf(ts)))
+                        .param("tailsonalityUnlockPrice", String.valueOf(ts))
+                        .param("tailsonalityMatchUnlockPrice", String.valueOf(c.getTailsonalityMatchUnlockPrice())))
                 .andExpect(status().is3xxRedirection()).andExpect(flash().attributeExists("toast"));
 
         PricingConfig after = current();
@@ -155,17 +156,48 @@ class AdminKtpPricingIntegrationTest extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.price").value(c.getIdHdDownloadPrice()))
                 .andExpect(jsonPath("$.passportPageUnlockPrice").value(page))
                 .andExpect(jsonPath("$.passportBoardingUnlockPrice").value(boarding))
-                .andExpect(jsonPath("$.tailsonalityUnlockPrice").value(ts));
+                .andExpect(jsonPath("$.tailsonalityUnlockPrice").value(ts))
+                .andExpect(jsonPath("$.tailsonalityMatchUnlockPrice").value(c.getTailsonalityMatchUnlockPrice()));
 
         // 无变化再提交一次 → 不写日志不审计
         mvc.perform(post("/admin/config/ktp-pricing").with(authentication(superAdmin())).with(csrf())
                         .param("idHdDownloadPrice", String.valueOf(c.getIdHdDownloadPrice()))
                         .param("passportPagePrice", String.valueOf(page))
                         .param("passportBoardingPrice", String.valueOf(boarding))
-                        .param("tailsonalityUnlockPrice", String.valueOf(ts)))
+                        .param("tailsonalityUnlockPrice", String.valueOf(ts))
+                        .param("tailsonalityMatchUnlockPrice", String.valueOf(c.getTailsonalityMatchUnlockPrice())))
                 .andExpect(status().is3xxRedirection());
         assertThat(changeLogs.count() - logsBefore).isEqualTo(3);
         assertThat(auditCount() - auditsBefore).isEqualTo(1);
+    }
+
+    /** 2026-10-09：配型价独立保存、即时下发；不比结果价低至少 100 → flash error 且不变。 */
+    @Test
+    void matchPriceSavesOnItsOwnAndMustStayBelowTheResultPrice() throws Exception {
+        snapshot();
+        PricingConfig c = current();
+        long ts = c.getTailsonalityUnlockPrice();
+        long match = ts - 1000;
+        mvc.perform(post("/admin/config/ktp-pricing").with(authentication(superAdmin())).with(csrf())
+                        .param("idHdDownloadPrice", String.valueOf(c.getIdHdDownloadPrice()))
+                        .param("passportPagePrice", String.valueOf(c.getPassportPageUnlockPrice()))
+                        .param("passportBoardingPrice", String.valueOf(c.getPassportBoardingUnlockPrice()))
+                        .param("tailsonalityUnlockPrice", String.valueOf(ts))
+                        .param("tailsonalityMatchUnlockPrice", String.valueOf(match)))
+                .andExpect(status().is3xxRedirection()).andExpect(flash().attributeExists("toast"));
+        assertThat(current().getTailsonalityMatchUnlockPrice()).isEqualTo(match);
+        mvc.perform(get(API).header("Authorization", userBearer(newUser().getId())))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.tailsonalityMatchUnlockPrice").value(match));
+
+        mvc.perform(post("/admin/config/ktp-pricing").with(authentication(superAdmin())).with(csrf())
+                        .param("idHdDownloadPrice", String.valueOf(c.getIdHdDownloadPrice()))
+                        .param("passportPagePrice", String.valueOf(c.getPassportPageUnlockPrice()))
+                        .param("passportBoardingPrice", String.valueOf(c.getPassportBoardingUnlockPrice()))
+                        .param("tailsonalityUnlockPrice", String.valueOf(ts))
+                        .param("tailsonalityMatchUnlockPrice", String.valueOf(ts - 99)).param("lang", "zh_CN"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute("error", org.hamcrest.Matchers.containsString("至少低 100")));
+        assertThat(current().getTailsonalityMatchUnlockPrice()).isEqualTo(match);
     }
 
     /** AC3：任一价 <100 → flash error 回显（整页）且四价均不变；非整数在绑定层 400。 */
@@ -177,15 +209,16 @@ class AdminKtpPricingIntegrationTest extends ApiIntegrationTest {
                         .param("idHdDownloadPrice", String.valueOf(c.getIdHdDownloadPrice()))
                         .param("passportPagePrice", "99")
                         .param("passportBoardingPrice", String.valueOf(c.getPassportBoardingUnlockPrice()))
-                        .param("tailsonalityUnlockPrice", String.valueOf(c.getTailsonalityUnlockPrice())).param("lang", "zh_CN"))
+                        .param("tailsonalityUnlockPrice", String.valueOf(c.getTailsonalityUnlockPrice()))
+                        .param("tailsonalityMatchUnlockPrice", String.valueOf(c.getTailsonalityMatchUnlockPrice())).param("lang", "zh_CN"))
                 .andExpect(status().is3xxRedirection()).andExpect(flash().attribute("error", org.hamcrest.Matchers.containsString("≥100")));
         mvc.perform(post("/admin/config/ktp-pricing").with(authentication(superAdmin())).with(csrf())
                         .param("idHdDownloadPrice", "-5").param("passportPagePrice", "100").param("passportBoardingPrice", "100")
-                        .param("tailsonalityUnlockPrice", "100"))
+                        .param("tailsonalityUnlockPrice", "100").param("tailsonalityMatchUnlockPrice", "100"))
                 .andExpect(status().is3xxRedirection()).andExpect(flash().attributeExists("error"));
         mvc.perform(post("/admin/config/ktp-pricing").with(authentication(superAdmin())).with(csrf())
                         .param("idHdDownloadPrice", "1.5").param("passportPagePrice", "100").param("passportBoardingPrice", "100")
-                        .param("tailsonalityUnlockPrice", "100"))
+                        .param("tailsonalityUnlockPrice", "100").param("tailsonalityMatchUnlockPrice", "100"))
                 .andExpect(status().isBadRequest());
         PricingConfig after = current();
         assertThat(after.getIdHdDownloadPrice()).isEqualTo(c.getIdHdDownloadPrice());
@@ -201,7 +234,7 @@ class AdminKtpPricingIntegrationTest extends ApiIntegrationTest {
         PricingConfig c = current();
         mvc.perform(post("/admin/config/ktp-pricing").with(authentication(staffWith(AdminPermissions.CONFIG_VIEW))).with(csrf())
                         .param("idHdDownloadPrice", "100").param("passportPagePrice", "100").param("passportBoardingPrice", "100")
-                        .param("tailsonalityUnlockPrice", "100"))
+                        .param("tailsonalityUnlockPrice", "100").param("tailsonalityMatchUnlockPrice", "100"))
                 .andExpect(status().isForbidden());
         String page = mvc.perform(get("/admin/config").param("lang", "zh_CN").with(authentication(staffWith(AdminPermissions.CONFIG_VIEW))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -212,7 +245,8 @@ class AdminKtpPricingIntegrationTest extends ApiIntegrationTest {
                         .with(authentication(staffWith(AdminPermissions.CONFIG_VIEW, AdminPermissions.CONFIG_EDIT))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(editPage).contains("hx-post=\"/admin/config/ktp-pricing\"").contains("name=\"passportPagePrice\"").contains("name=\"passportBoardingPrice\"")
-                .contains("name=\"tailsonalityUnlockPrice\"").contains("data-confirm-diff-note=")
+                .contains("name=\"tailsonalityUnlockPrice\"").contains("name=\"tailsonalityMatchUnlockPrice\"")
+                .contains("data-confirm-diff-note=")
                 .contains("data-ref-hint").doesNotContain("name=\"idHdDownloadPrice\" min=\"0\"")
                 .doesNotContainPattern("id=\"cfg-ktp\"[^>]*data-readonly");
         // 定价卡：旧客户端多带 idHdDownloadPrice 参数也不再改 HD 价

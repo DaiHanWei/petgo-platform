@@ -13,6 +13,8 @@ void main() {
     'unlocked', 'unlockedAt', 'contentVersion', 'createdAt',
     // V1.3.2 Story 3.3
     'equipped',
+    // 2026-10-09 配型改回付费
+    'matchUnlocked', 'upgradePrice',
   };
 
   Map<String, dynamic> fixture() => {
@@ -27,6 +29,8 @@ void main() {
         'contentVersion': 1,
         'createdAt': '2026-09-30T08:00:00Z',
         'equipped': true,
+        'matchUnlocked': true,
+        'upgradePrice': 2000,
       };
 
   test('fixture 与后端 FULL_FIELDS 同集，全字段解析', () {
@@ -44,6 +48,17 @@ void main() {
     expect(r.createdAt, DateTime.parse('2026-09-30T08:00:00Z'));
     expect(r.equipped, isTrue);
     expect(TailsonalityResult.fromJson(fixture()..remove('equipped')).equipped, isFalse);
+    expect(r.matchUnlocked, isTrue);
+    expect(r.upgradePrice, 2000);
+  });
+
+  test('🔴 缺 matchUnlocked 键不得默认 true；缺 upgradePrice → null（按原价）', () {
+    final m = fixture()
+      ..remove('matchUnlocked')
+      ..remove('upgradePrice');
+    expect(TailsonalityResult.fromJson(m).matchUnlocked, isFalse);
+    expect(TailsonalityResult.fromJson(m).upgradePrice, isNull);
+    expect(TailsonalityResult.fromJson(fixture()..['matchUnlocked'] = 'true').matchUnlocked, isFalse);
   });
 
   test('缺 unlockedAt → null', () {

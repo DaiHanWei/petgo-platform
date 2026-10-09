@@ -24,6 +24,7 @@ import com.tailtopia.support.ApiIntegrationTest;
 import com.tailtopia.support.VetTestSupport;
 import com.tailtopia.tailsonality.domain.TailsonalityCatalog;
 import com.tailtopia.tailsonality.service.TailsonalityKeepsakeGranter;
+import com.tailtopia.tailsonality.service.TailsonalityMatchKeepsakeGranter;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +52,8 @@ class TailsonalityUnlockIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private TailsonalityKeepsakeGranter granter;
     @Autowired
+    private TailsonalityMatchKeepsakeGranter matchGranter;
+    @Autowired
     private PetProfileRepository petProfiles;
     @Autowired
     private PawCoinWalletService wallet;
@@ -64,6 +67,7 @@ class TailsonalityUnlockIntegrationTest extends ApiIntegrationTest {
     @BeforeEach
     void setUp() {
         when(granters.forSku(KeepsakeSku.TAILSONALITY)).thenReturn(granter);
+        when(granters.forSku(KeepsakeSku.TS_MATCH)).thenReturn(matchGranter);
     }
 
     private User userWithPet() {
@@ -229,5 +233,72 @@ class TailsonalityUnlockIntegrationTest extends ApiIntegrationTest {
         // 触发器撤掉后同一结果可正常再买（幂等键没有被失败的那次占住）
         unlock(u, token, "PAWCOIN").andExpect(status().isOk()).andExpect(jsonPath("$.unlocked").value(true));
         assertThat(unlockedInDb(token)).isTrue();
+    }
+
+    // ── 2026-10-09 配型改回付费 ─────────────────────────────────────────────────
+
+    /** 单买配型（PawCoin）→ 只开配型；再买完整解读只扣「结果价 − 实付配型价」；之后再买配型 409。 */
+    @Test
+    void matchThenFullUnlockOnlyChargesTheDifference() throws Exception {
+        User u = userWithPet();
+        wallet.credit(u.getId(), 50_000L, PawCoinTxnType.TOPUP, "TEST", null, "ts-topup:" + SEQ.incrementAndGet());
+        PricingConfig p = pricingRepo.findById(PricingConfig.SINGLETON_ID).orElseThrow();
+        long full = p.getTailsonalityUnlockPrice();
+        long match = p.getTailsonalityMatchUnlockPrice();
+        long before = wallet.balanceOf(u.getId());
+        String token = submit(u);
+        mvc.perform(get(BASE + "/" + token).header("Authorization", userBearer(u.getId())))
+                .andExpect(jsonPath("$.matchUnlocked").value(false))
+                .andExpect(jsonPath("$.upgradePrice").doesNotExist());
+
+        mvc.perform(post(BASE + "/" + token + "/match-unlock").header("Authorization", userBearer(u.getId()))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"channel\":\"PAWCOIN\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.unlocked").value(true));
+        assertThat(wallet.balanceOf(u.getId())).isEqualTo(before - match);
+        assertThat(unlockedInDb(token)).as("配型不开完整解读").isFalse();
+        mvc.perform(get(BASE + "/" + token).header("Authorization", userBearer(u.getId())))
+                .andExpect(jsonPath("$.unlocked").value(false))
+                .andExpect(jsonPath("$.matchUnlocked").value(true))
+                .andExpect(jsonPath("$.upgradePrice").value(full - match));
+
+        unlock(u, token, "PAWCOIN").andExpect(status().isOk());
+        assertThat(wallet.balanceOf(u.getId())).isEqualTo(before - full);
+        assertThat(jdbc.queryForObject("SELECT price_idr FROM keepsake_purchases WHERE sku = 'TAILSONALITY' AND ref_id ="
+                + " (SELECT id FROM tailsonality_results WHERE public_token = ?)", Long.class, token))
+                .isEqualTo(full - match);
+        mvc.perform(get(BASE + "/" + token).header("Authorization", userBearer(u.getId())))
+                .andExpect(jsonPath("$.unlocked").value(true))
+                .andExpect(jsonPath("$.matchUnlocked").value(true))
+                .andExpect(jsonPath("$.upgradePrice").doesNotExist());
+
+        mvc.perform(post(BASE + "/" + token + "/match-unlock").header("Authorization", userBearer(u.getId()))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"channel\":\"QRIS\"}"))
+                .andExpect(status().isConflict());
+    }
+
+    /** 完整解读直接买（原价）→ 配型随之可看；QRIS 配型单走 TS_MATCH 用途，到账置 match_unlocked_at。 */
+    @Test
+    void fullUnlockIncludesMatchAndQrisMatchGrantsOnPayment() throws Exception {
+        User u = userWithPet();
+        String a = submit(u);
+        String res = mvc.perform(post(BASE + "/" + a + "/match-unlock").header("Authorization", userBearer(u.getId()))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"channel\":\"QRIS\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.unlocked").value(false))
+                .andReturn().getResponse().getContentAsString();
+        String intent = json.readTree(res).path("payment").path("token").asText();
+        assertThat(jdbc.queryForObject("SELECT purpose FROM payment_intents WHERE public_token = ?", String.class,
+                intent)).isEqualTo("TS_MATCH");
+        paymentIntents.applyCallback(new PaymentCallback(intent, "gw-" + SEQ.incrementAndGet(), GatewayStatus.PAID,
+                Map.of()));
+        assertThat(jdbc.queryForObject("SELECT match_unlocked_at IS NOT NULL FROM tailsonality_results"
+                + " WHERE public_token = ?", Boolean.class, a)).isTrue();
+
+        wallet.credit(u.getId(), 50_000L, PawCoinTxnType.TOPUP, "TEST", null, "ts-topup:" + SEQ.incrementAndGet());
+        String b = submit(u);
+        unlock(u, b, "PAWCOIN").andExpect(status().isOk());
+        mvc.perform(get(BASE + "/" + b).header("Authorization", userBearer(u.getId())))
+                .andExpect(jsonPath("$.matchUnlocked").value(true));
+        assertThat(jdbc.queryForObject("SELECT match_unlocked_at IS NULL FROM tailsonality_results"
+                + " WHERE public_token = ?", Boolean.class, b)).as("完整解读不写配型列，靠 unlocked_at 判定").isTrue();
     }
 }

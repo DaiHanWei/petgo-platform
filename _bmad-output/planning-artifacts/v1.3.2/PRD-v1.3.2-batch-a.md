@@ -159,6 +159,7 @@ updated: 2026-09-18
 | 重测后 | 需重新解锁 |
 | 换主人类型后 | **不受影响**——配型与本付费点无关 |
 
+- **⚠️ 2026-10-09 再变更：配型改回付费**——单独解锁 Rp3,000（整页上锁）、结果解锁 Rp5,000 含配型、已买配型补差价。以决策日志 D-31～D-33 为准，下一条作废。
 - **⚠️ 2026-09-21 变更：原定的配型解锁（Rp3,000）取消，配型页完全免费**——内容、16 段逐轴详细解读、以及**无水印的配型卡**全部免费。配型页**不再有锁态区**，用户全程只会遇到一道付费墙（结果页那道）
 - **定价**：Rp5,000 本版本硬编码上线、运营不可调；后台定价配置行见 `v1-3-2后台prd.md` AB-18A。成交价必须**写入购买记录**，展示与对账均以记录值为准
 - **支付与记录**：复用 KTP HD 既有支付链路（PawCoin 扣减 / QRIS 建单），不新增支付渠道
@@ -362,7 +363,7 @@ updated: 2026-09-18
 | E-3 | `milestone_celebration_shown` | `code`、`level`、`path`：instant / catchup / revisit | FR-111（视觉重绘不新增埋点，沿用V1.3.0 已上线事件） |
 | E-11 | `tailsonality_started` / `tailsonality_completed` / `tailsonality_card_shared` | `role_code`（完成/分享时）、`is_unlocked`（分享时，区分带水印卡与无水印卡） | FR-117 测试漏斗与裂变 |
 | E-11B | `tailsonality_unlock_viewed` / `tailsonality_unlock_initiated` / `tailsonality_unlocked` | `role_code`、`price`、`result_index`（该宠物第几次结果） | FR-117 结果解锁转化漏斗与重测后复购 |
-| E-11C | `tailsonality_match_entered` / `tailsonality_owner_type_set` / `tailsonality_match_card_shared` | `owner_type`、`pet_type`、`match_level`（0~4 相同字母数） | FR-117 配型页完成率与配型卡传播（配型已全免费，无解锁事件） |
+| E-11C | `tailsonality_match_entered` / `tailsonality_owner_type_set` / `tailsonality_match_card_shared` | `owner_type`、`pet_type`、`match_level`（0~4 相同字母数） | FR-117 配型页完成率与配型卡传播（2026-10-09 配型改回付费：另有 `tailsonality_match_unlock_viewed` / `_initiated`（App）与 `tailsonality_match_unlocked`（服务端），见决策日志 D-31～D-33） |
 | E-11D | `tailsonality_retake_confirmed` / `tailsonality_paywall_abandoned` / `tailsonality_badge_equipped` | `result_index`（佩戴时） | FR-117 重测意愿、挽留弹窗效果、佩戴率 |
 | E-14 | `place_checkin` / `place_checkin_post_created` | `place_id`、`place_type` | 场所打卡量与「顺手发帖」转化 |
 | E-16 | `passport_issued` / `passport_stamped` / `passport_card_shared` | `stamp_count`（护照卡分享时）；`passport_card_shared` 另带 `card_type`：`page`（护照卡）/ `boarding`（登机牌卡，**不带** `stamp_count`）`[2026-10-02 待确认 4.6/4.7]` | FR-120 收集深度与晒护照裂变 |

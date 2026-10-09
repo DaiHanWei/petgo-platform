@@ -1,3 +1,5 @@
+import '../../keepsake/domain/keepsake_pricing.dart';
+
 /// Tailsonality 测试结果（V1.3.2 Story 2.1 · 后端 `TailsonalityResultResponse`）。
 ///
 /// 🔴 字段全集与后端 `TailsonalityResultResponseContractTest.FULL_FIELDS` 同集；
@@ -15,6 +17,8 @@ class TailsonalityResult {
     required this.contentVersion,
     required this.createdAt,
     this.equipped = false,
+    this.matchUnlocked = false,
+    this.upgradePrice,
   });
 
   /// 不可枚举对外标识（32 位）。
@@ -47,6 +51,16 @@ class TailsonalityResult {
   /// 当前宠物佩戴的就是本结果（V1.3.2 Story 3.3）。缺键 / 非 bool → false。
   final bool equipped;
 
+  /// 配型可看（完整解读已解锁，或单独买过配型；2026-10-09 配型改回付费）。
+  /// 🔴 缺键 / 非 bool 一律 false（fail-closed，同 [unlocked]）。
+  final bool matchUnlocked;
+
+  /// 已单独买过配型时，完整解读的补差价（IDR）；其余情况后端省略 → null，按定价接口原价。
+  final int? upgradePrice;
+
+  /// 本结果完整解读的应付价：补差价优先，否则定价接口原价；都没有 → null（按钮显示「…」/ 重试）。
+  int? fullUnlockPrice(KeepsakePricing? pricing) => upgradePrice ?? pricing?.tailsonality;
+
   factory TailsonalityResult.fromJson(Map<String, dynamic> json) {
     final rawUnlockedAt = json['unlockedAt'];
     return TailsonalityResult(
@@ -61,6 +75,8 @@ class TailsonalityResult {
       contentVersion: (json['contentVersion'] as num?)?.toInt() ?? 1,
       createdAt: DateTime.parse(json['createdAt'] as String),
       equipped: json['equipped'] == true,
+      matchUnlocked: json['matchUnlocked'] == true,
+      upgradePrice: (json['upgradePrice'] as num?)?.toInt(),
     );
   }
 }

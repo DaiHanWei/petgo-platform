@@ -136,7 +136,9 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
         String ktp = mvc.perform(post("/admin/config/ktp-pricing").with(authentication(superAdmin())).with(csrf())
                         .param("idHdDownloadPrice", String.valueOf(now.getIdHdDownloadPrice())).param("passportPagePrice", String.valueOf(now.getPassportPageUnlockPrice()))
                         .param("passportBoardingPrice", String.valueOf(now.getPassportBoardingUnlockPrice()))
-                        .param("tailsonalityUnlockPrice", String.valueOf(now.getTailsonalityUnlockPrice())).header("HX-Request", "true"))
+                        .param("tailsonalityUnlockPrice", String.valueOf(now.getTailsonalityUnlockPrice()))
+                        .param("tailsonalityMatchUnlockPrice", String.valueOf(now.getTailsonalityMatchUnlockPrice()))
+                        .header("HX-Request", "true"))
                 .andExpect(status().isOk()).andExpect(header().string("HX-Retarget", "#cfg-ktp")).andReturn().getResponse().getContentAsString();
         assertThat(ktp).contains("id=\"cfg-ktp\"").doesNotContain("id=\"cfg-pricing\"");
     }

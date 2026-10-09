@@ -47,6 +47,10 @@ public class PricingConfig {
     @Column(name = "tailsonality_unlock_price", nullable = false)
     private long tailsonalityUnlockPrice;
 
+    /** Tailsonality · 配型单独解锁价（IDR，≥100，须低于结果解锁价；2026-10-09 配型改回付费）。 */
+    @Column(name = "tailsonality_match_unlock_price", nullable = false)
+    private long tailsonalityMatchUnlockPrice;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -132,5 +136,13 @@ public class PricingConfig {
 
     public void setTailsonalityUnlockPrice(long v) {
         this.tailsonalityUnlockPrice = v;
+    }
+
+    public long getTailsonalityMatchUnlockPrice() {
+        return tailsonalityMatchUnlockPrice;
+    }
+
+    public void setTailsonalityMatchUnlockPrice(long v) {
+        this.tailsonalityMatchUnlockPrice = v;
     }
 }

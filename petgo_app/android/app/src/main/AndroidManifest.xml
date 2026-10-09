@@ -38,6 +38,22 @@
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="${googleMapsApiKey}"/>
+        <!-- Meta（Facebook）App Events：安装 / 启动自动上报 = 归因。
+             自动上报开关按构建类型注入（build.gradle.kts 的 fbAutoLogAppEvents）：
+             debug=false（本地装机不算安装、不污染投放数据），release=true。 -->
+        <meta-data
+            android:name="com.facebook.sdk.ApplicationId"
+            android:value="@string/facebook_app_id"/>
+        <meta-data
+            android:name="com.facebook.sdk.ClientToken"
+            android:value="@string/facebook_client_token"/>
+        <meta-data
+            android:name="com.facebook.sdk.AutoLogAppEventsEnabled"
+            android:value="${fbAutoLogAppEvents}"/>
+        <!-- 采集 GAID（Android 归因主信号）。不设时 SDK 每次启动打警告且归因质量下降。 -->
+        <meta-data
+            android:name="com.facebook.sdk.AdvertiserIDCollectionEnabled"
+            android:value="true"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

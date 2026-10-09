@@ -183,6 +183,7 @@ void main() {
                 questionSet: 'DOG',
                 resultIndex: 1,
                 unlocked: unlocked,
+                matchUnlocked: true, // 配型已解锁（2026-10-09 改回付费）；本组测的是配型卡与完整解读解锁无关
                 contentVersion: 1,
                 createdAt: DateTime.utc(2026, 9, 30),
               )),
@@ -268,7 +269,7 @@ void main() {
         tailsonalityOwnerTypeRepositoryProvider.overrideWithValue(_OwnerRepo('INFP')),
         tailsonalityResultProvider('abc').overrideWith((ref) async => TailsonalityResult(
               token: 'abc', typeCode: 'ENTJ-H', letters: 'ENTJ', energy: 'H', questionSet: 'DOG',
-              resultIndex: 1, unlocked: false, contentVersion: 1, createdAt: DateTime.utc(2026, 9, 30))),
+              resultIndex: 1, unlocked: false, matchUnlocked: true, contentVersion: 1, createdAt: DateTime.utc(2026, 9, 30))),
       ],
       child: MaterialApp(
         locale: const Locale('id'),
@@ -286,12 +287,13 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
-  /// AC2.2：配型卡入口代码不读结果解锁字段。
-  test('源码扫描：配型卡组件与入口不出现解锁相关标识符', () {
+  /// AC2.2：配型卡组件不读结果解锁字段（卡永不带水印）。
+  /// 2026-10-09 配型改回付费后，配型**页**要读 `matchUnlocked` 决定锁态，故只扫卡组件；页上不出水印另行断言。
+  test('源码扫描：配型卡组件不出现解锁相关标识符；配型页不出现水印', () {
     final card = File('lib/features/tailsonality/presentation/share/match_share_card.dart').readAsStringSync();
     expect(card.toLowerCase(), isNot(contains('unlock')));
     final page = File('lib/features/tailsonality/presentation/tailsonality_match_page.dart').readAsStringSync();
-    expect(page.toLowerCase(), isNot(contains('unlock')));
+    expect(page.toLowerCase(), isNot(contains('watermark')));
   });
 }
 

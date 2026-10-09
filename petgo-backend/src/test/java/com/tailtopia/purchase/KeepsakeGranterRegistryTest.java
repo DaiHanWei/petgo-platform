@@ -33,7 +33,8 @@ class KeepsakeGranterRegistryTest {
     private static List<KeepsakeGranter> all() {
         return List.of(granter(KeepsakeSku.TAILSONALITY, GrantOutcome.GRANTED),
                 granter(KeepsakeSku.PASSPORT_SNAP, GrantOutcome.GRANTED),
-                granter(KeepsakeSku.BOARDING_PASS, GrantOutcome.GRANTED));
+                granter(KeepsakeSku.BOARDING_PASS, GrantOutcome.GRANTED),
+                granter(KeepsakeSku.TS_MATCH, GrantOutcome.GRANTED));
     }
 
     @Test
@@ -73,7 +74,8 @@ class KeepsakeGranterRegistryTest {
         };
         KeepsakeGranterRegistry r = new KeepsakeGranterRegistry(List.of(boom,
                 granter(KeepsakeSku.PASSPORT_SNAP, GrantOutcome.GRANTED),
-                granter(KeepsakeSku.BOARDING_PASS, GrantOutcome.ALREADY_UNLOCKED)));
+                granter(KeepsakeSku.BOARDING_PASS, GrantOutcome.ALREADY_UNLOCKED),
+                granter(KeepsakeSku.TS_MATCH, GrantOutcome.GRANTED)));
         KeepsakeGrantRunner runner = new KeepsakeGrantRunner(r);
 
         KeepsakePurchase ts = KeepsakePurchase.paidPawcoin("a", new KeepsakeRef(KeepsakeSku.TAILSONALITY, 1, "r", null, false),

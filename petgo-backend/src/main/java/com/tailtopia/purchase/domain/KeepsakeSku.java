@@ -7,13 +7,15 @@ import java.util.Optional;
 public enum KeepsakeSku {
     TAILSONALITY,
     PASSPORT_SNAP,
-    BOARDING_PASS;
+    BOARDING_PASS,
+    /** Tailsonality 配型单独解锁（2026-10-09；业务行同 {@link #TAILSONALITY}，都指向 {@code tailsonality_results}）。 */
+    TS_MATCH;
 
     public PaymentPurpose toPurpose() {
         return PaymentPurpose.valueOf(name());
     }
 
-    /** 支付用途 → SKU；非三个一次性解锁用途 → empty。 */
+    /** 支付用途 → SKU；非一次性解锁用途 → empty。 */
     public static Optional<KeepsakeSku> fromPurpose(PaymentPurpose purpose) {
         if (purpose == null) {
             return Optional.empty();

@@ -87,6 +87,15 @@ public class TailsonalityController {
         return unlockService.unlock(userId, token, req.channel());
     }
 
+    /** 配型单独解锁（2026-10-09）：与 {@link #unlock} 同形、同限流桶（同一个人的付费点击共用一份额度）。 */
+    @PostMapping("/results/{token}/match-unlock")
+    public KeepsakePurchaseResponse unlockMatch(@AuthenticationPrincipal Jwt jwt, @PathVariable String token,
+            @Valid @RequestBody KeepsakePayRequest req) {
+        long userId = currentUserId(jwt);
+        rateLimiter.check("rl:tailsonality:unlock:" + userId, UNLOCK_LIMIT, UNLOCK_WINDOW);
+        return unlockService.unlockMatch(userId, token, req.channel());
+    }
+
     /** 佩戴某个已解锁结果（Story 3.3 · AC2）：未解锁 422 {@code tailsonality-badge-locked}；成功 204。 */
     @PutMapping("/badge")
     @ResponseStatus(HttpStatus.NO_CONTENT)

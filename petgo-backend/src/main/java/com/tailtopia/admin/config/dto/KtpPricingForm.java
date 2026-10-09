@@ -5,5 +5,5 @@ package com.tailtopia.admin.config.dto;
  * 三价独立保存、不联动；一律 ≥1（D-7 不做 0 元限免，DB CHECK 同口径）。
  */
 public record KtpPricingForm(long idHdDownloadPrice, long passportPagePrice, long passportBoardingPrice,
-        long tailsonalityUnlockPrice) {
+        long tailsonalityUnlockPrice, long tailsonalityMatchUnlockPrice) {
 }

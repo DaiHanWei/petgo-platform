@@ -12,6 +12,8 @@
 # （versionName=1.1.2-stag → PostHog $app_version 自动区分 stag 测试数据与生产数据）。
 # ⚠️ stag 分支出包**必须**走本脚本，直接 flutter build 打出的包会丢 -stag 污染埋点口径。
 #
+# TikTok / Meta 归因在 stag 包一律关闭（TIKTOK_ENABLED=false / META_ENABLED=false，2026-10-09）：
+# 测试装机不能被两家投放后台算成安装 / 注册。META_ENABLED 也会让 Android 关掉 Meta 原生自动上报。
 # Firebase（GA4）统计在 stag 包一律关闭（FIREBASE_ANALYTICS_ENABLED=false，2026-10-06）：
 # Firebase 只有一个项目，stag 测试设备若上报会混进生产 GA4 的日活（日报「日活（含游客）」口径）。
 # 同 AppsFlyer / PostHog 的 stag 关停口径；本段只留在 stag 分支，勿合回 dev / main。
@@ -48,7 +50,9 @@ if [[ "$MODE" == "debug" ]]; then
   flutter build apk --debug --build-name="$stag_name" --build-number="$build_number" \
     --dart-define=PETGO_API_BASE_URL=https://api-stag.tailtopia.id \
     --dart-define=PETGO_H5_BASE_URL=https://api-stag.tailtopia.id \
-    --dart-define=FIREBASE_ANALYTICS_ENABLED=false
+    --dart-define=FIREBASE_ANALYTICS_ENABLED=false \
+    --dart-define=TIKTOK_ENABLED=false \
+    --dart-define=META_ENABLED=false
   out="build/app/outputs/flutter-apk/app-debug.apk"
 else
   # release 内测包：debug 签名（挪开 key.properties → gradle 回退 debug key，SHA-1 已注册
@@ -66,6 +70,8 @@ else
     --dart-define=PETGO_H5_BASE_URL=https://api-stag.tailtopia.id \
     --dart-define=PETGO_DEV_STUB_LOGIN=false \
     --dart-define=FIREBASE_ANALYTICS_ENABLED=false \
+    --dart-define=TIKTOK_ENABLED=false \
+    --dart-define=META_ENABLED=false \
     --dart-define=GOOGLE_SERVER_CLIENT_ID=952015467016-3q9vb0ro18fnecl9gpnrddbfj9snqer0.apps.googleusercontent.com
   out="build/app/outputs/flutter-apk/app-release.apk"
 fi

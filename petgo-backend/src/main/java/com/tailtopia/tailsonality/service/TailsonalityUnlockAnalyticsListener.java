@@ -24,6 +24,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class TailsonalityUnlockAnalyticsListener {
 
     public static final String EVENT_UNLOCKED = "tailsonality_unlocked";
+    /** 配型单独解锁成功（2026-10-09）。完整解读解锁顺带开配型不另报。 */
+    public static final String EVENT_MATCH_UNLOCKED = "tailsonality_match_unlocked";
 
     private static final Logger log = LoggerFactory.getLogger(TailsonalityUnlockAnalyticsListener.class);
 
@@ -40,7 +42,7 @@ public class TailsonalityUnlockAnalyticsListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onUnlocked(KeepsakeUnlockedEvent e) {
-        if (e.sku() != KeepsakeSku.TAILSONALITY) {
+        if (e.sku() != KeepsakeSku.TAILSONALITY && e.sku() != KeepsakeSku.TS_MATCH) {
             return;
         }
         // AFTER_COMMIT 里抛出会冒到提交方（用户看到 500，钱却已成交）—— 埋点一律吞掉。
@@ -54,7 +56,8 @@ public class TailsonalityUnlockAnalyticsListener {
             if (row != null) {
                 p.put("result_index", resultService.indexOf(row.getPetProfileId(), row.getId()));
             }
-            analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_UNLOCKED, p);
+            analytics.capture(AnalyticsDistinctId.of(e.userId()),
+                    e.sku() == KeepsakeSku.TS_MATCH ? EVENT_MATCH_UNLOCKED : EVENT_UNLOCKED, p);
         } catch (RuntimeException ex) {
             log.warn("tailsonality unlock analytics skipped refId={}", e.refId(), ex);
         }

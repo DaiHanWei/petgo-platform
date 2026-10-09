@@ -17,6 +17,7 @@ class InsightEntryCard extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.sub,
+    this.badge,
   });
 
   /// 挂在可点区域（InkWell）上的 key —— 既有测试与埋点对照认的是它。
@@ -26,8 +27,44 @@ class InsightEntryCard extends StatelessWidget {
   final String title;
   final String sub;
 
+  /// 右上角红底白字小角标（如「new」）。null = 不画。
+  /// 角标骑在卡片上沿（一半露在卡外），所以画在卡片外层的 Stack 上，不受卡片圆角裁切。
+  final String? badge;
+
   @override
   Widget build(BuildContext context) {
+    final card = _buildCard();
+    if (badge == null) return card;
+    return Stack(
+      clipBehavior: Clip.none,
+      // passthrough：卡片照样吃满外层 Row(stretch) 给的高度，同行两卡仍等高。
+      fit: StackFit.passthrough,
+      children: [
+        card,
+        Positioned(
+          top: -4,
+          right: 8,
+          child: IgnorePointer(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.danger,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(badge!,
+                  style: const TextStyle(
+                      fontSize: 10,
+                      height: 1.2,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCard() {
     final bool disabled = onTap == null;
     return Opacity(
       opacity: disabled ? 0.45 : 1,

@@ -53,6 +53,38 @@
 		     中/英/印尼三语本地化（InfoPlist.strings），与 App Store 隐私标签一致——交付文档 §3.5。 -->
 		<key>NSUserTrackingUsageDescription</key>
 		<string>We use this to show you more relevant content and offers for you and your pet.</string>
+		<!-- Meta（Facebook）App Events 归因（2026-10-09）。App ID / Client Token 是客户端 SDK 凭证，非服务端机密。
+		     自动上报安装 / 启动按构建配置注入：Debug.xcconfig=NO（本地装机不污染投放数据），Release.xcconfig=YES。 -->
+		<key>FacebookAppID</key>
+		<string>1077309528092924</string>
+		<key>FacebookClientToken</key>
+		<string>2fa14f5004e733037c0265fefc89c627</string>
+		<key>FacebookDisplayName</key>
+		<string>Tailtopia</string>
+		<key>FacebookAutoLogAppEventsEnabled</key>
+		<string>$(FB_AUTO_LOG_APP_EVENTS)</string>
+		<!-- SKAdNetwork（iOS 14+ 未授权 ATT 用户的隐私归因）：只列已投放渠道、且来源已核实的 ID（2026-10-09）。
+		     Pangle（TikTok 版位之一）：pangleglobal.com/resource/27851；Meta：Meta 开发者文档 SKAdNetwork 页。
+		     ⚠️ TikTok App 内版位自己的 SKAdNetwork ID 公开文档未给出，待 TikTok 客户经理提供后补入。 -->
+		<key>SKAdNetworkItems</key>
+		<array>
+			<dict>
+				<key>SKAdNetworkIdentifier</key>
+				<string>238da6jt44.skadnetwork</string>
+			</dict>
+			<dict>
+				<key>SKAdNetworkIdentifier</key>
+				<string>22mmun2rn5.skadnetwork</string>
+			</dict>
+			<dict>
+				<key>SKAdNetworkIdentifier</key>
+				<string>v9wttpbfk9.skadnetwork</string>
+			</dict>
+			<dict>
+				<key>SKAdNetworkIdentifier</key>
+				<string>n38lu8286q.skadnetwork</string>
+			</dict>
+		</array>
 		<!-- Google Sign-In (google_sign_in 7.x)。client ID 非机密，随客户端分发。 -->
 		<key>GIDClientID</key>
 		<string>952015467016-rip06l8hh1mn4ppi4t3f758b0ah1nb8d.apps.googleusercontent.com</string>
@@ -61,6 +93,13 @@
 		<string>952015467016-3q9vb0ro18fnecl9gpnrddbfj9snqer0.apps.googleusercontent.com</string>
 		<key>CFBundleURLTypes</key>
 		<array>
+			<dict>
+				<!-- Meta SDK 回跳 scheme（fb + App ID），供 App Links / 延迟深链。 -->
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>fb1077309528092924</string>
+				</array>
+			</dict>
 			<dict>
 				<key>CFBundleTypeRole</key>
 				<string>Editor</string>

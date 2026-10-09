@@ -43,6 +43,13 @@ class TailsonalityRepository {
     return KeepsakePurchaseResult.fromJson(resp.data ?? const {});
   }
 
+  /// 配型单独解锁（2026-10-09）：完整解读已解锁 / 已买过配型 409 `keepsake-already-unlocked`。
+  Future<KeepsakePurchaseResult> unlockMatch(String token, HdPayChannel channel) async {
+    final resp = await dio.post<Map<String, dynamic>>(ApiPaths.tailsonalityResultMatchUnlock(token),
+        data: {'channel': channel.wire});
+    return KeepsakePurchaseResult.fromJson(resp.data ?? const {});
+  }
+
   /// 佩戴某个已解锁结果（Story 3.3）；未解锁 422 `tailsonality-badge-locked`。
   Future<void> equipBadge(String resultToken) async {
     await dio.put<void>(ApiPaths.tailsonalityBadge, data: {'resultToken': resultToken});

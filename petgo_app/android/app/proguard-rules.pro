@@ -22,3 +22,10 @@
 # --- FCM / Google Play services：消息服务经清单反射拉起 ---
 -keep class com.google.firebase.** { *; }
 -dontwarn com.google.firebase.**
+
+# --- TikTok Business SDK（官方 ProGuard 指引）：SDK 内部反射 + 取 GAID / Install Referrer ---
+-keep class com.tiktok.** { *; }
+-keep class com.android.installreferrer.** { *; }
+-keep class com.google.android.gms.ads.identifier.** { *; }
+-keep class com.google.android.gms.common.ConnectionResult { int SUCCESS; }
+-dontwarn com.tiktok.**

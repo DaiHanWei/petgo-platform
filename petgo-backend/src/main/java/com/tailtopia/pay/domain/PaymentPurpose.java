@@ -22,5 +22,10 @@ public enum PaymentPurpose {
      */
     TAILSONALITY,
     PASSPORT_SNAP,
-    BOARDING_PASS
+    BOARDING_PASS,
+    /**
+     * Tailsonality 配型单独解锁（2026-10-09）。🔴 末尾追加；列宽 VARCHAR(16) 放不下 {@code TAILSONALITY_MATCH}，故缩写。
+     * DB 侧 CHECK 全量重建见 V20261009_0113。
+     */
+    TS_MATCH
 }

@@ -121,6 +121,12 @@ public class AdminConfigService {
         require(form.idHdDownloadPrice() <= MAX_TIER_AMOUNT && form.passportPagePrice() <= MAX_TIER_AMOUNT
                         && form.passportBoardingPrice() <= MAX_TIER_AMOUNT && form.tailsonalityUnlockPrice() <= MAX_TIER_AMOUNT,
                 "价格须 ≤ 100000000 IDR", "admin.err.config.ktpPriceMax");
+        // 配型单独价（2026-10-09）：同一组上下限；另须比结果解锁价至少低 100 —— 已买配型的人买完整解读只补差价，
+        // 差价低于 100 就落进收款渠道不收的区间，而「配型比完整解读还贵」本身也说不通。
+        require(form.tailsonalityMatchUnlockPrice() >= MIN_UNLOCK_PRICE,
+                "价格须为 ≥100 的整数（IDR）", "admin.err.config.ktpPriceMin");
+        require(form.tailsonalityMatchUnlockPrice() <= form.tailsonalityUnlockPrice() - MIN_UNLOCK_PRICE,
+                "配型解锁价须比结果解锁价至少低 100 IDR", "admin.err.config.tailsonalityMatchPriceNotBelowUnlock");
 
         PricingConfig c = pricingRepo.findById(PricingConfig.SINGLETON_ID)
                 .orElseThrow(() -> new IllegalStateException("pricing_config 缺失"));
@@ -131,6 +137,8 @@ public class AdminConfigService {
                 form.passportBoardingPrice(), adminId);
         diff(logs, ConfigType.PRICING, "tailsonality_unlock_price", c.getTailsonalityUnlockPrice(),
                 form.tailsonalityUnlockPrice(), adminId);
+        diff(logs, ConfigType.PRICING, "tailsonality_match_unlock_price", c.getTailsonalityMatchUnlockPrice(),
+                form.tailsonalityMatchUnlockPrice(), adminId);
         if (logs.isEmpty()) {
             return; // 无变更 → 不写、不审计。
         }
@@ -138,6 +146,7 @@ public class AdminConfigService {
         c.setPassportPageUnlockPrice(form.passportPagePrice());
         c.setPassportBoardingUnlockPrice(form.passportBoardingPrice());
         c.setTailsonalityUnlockPrice(form.tailsonalityUnlockPrice());
+        c.setTailsonalityMatchUnlockPrice(form.tailsonalityMatchUnlockPrice());
         pricingRepo.save(c);
         commit(logs, adminId, "PRICING", "pricing_config");
     }
