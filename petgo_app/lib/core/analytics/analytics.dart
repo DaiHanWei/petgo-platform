@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -6,6 +7,8 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 
 import 'appsflyer_client.dart';
 import 'button_ids.dart';
+import 'meta_client.dart';
+import 'tiktok_client.dart';
 
 /// 前端行为分析门面（PostHog Cloud EU · project 211847）。
 ///
@@ -81,6 +84,8 @@ class Analytics {
   /// 天然逐字节一致。
   static Future<void> identifyUser(int userId, {String? role}) async {
     AppsFlyerClient.instance.setUserId(distinctIdFor(userId));
+    unawaited(TikTokClient.instance.setUserId(distinctIdFor(userId)));
+    unawaited(MetaClient.instance.setUserId(distinctIdFor(userId)));
     try {
       await Posthog().identify(
         userId: distinctIdFor(userId),
@@ -114,9 +119,11 @@ class Analytics {
         'role': ?role,
       });
 
-  /// 登出 / 续期失败 → 解除关联，回到匿名。AppsFlyer CUID 同步清空（防换账号串数据）。
+  /// 登出 / 续期失败 → 解除关联，回到匿名。AppsFlyer CUID / TikTok / Meta 关联同步清空（防换账号串数据）。
   static Future<void> reset() async {
     AppsFlyerClient.instance.clearUserId();
+    unawaited(TikTokClient.instance.clearUserId());
+    unawaited(MetaClient.instance.clearUserId());
     try {
       await Posthog().reset();
     } catch (e) {
@@ -136,6 +143,9 @@ class Analytics {
     'consult_started', // 问诊开始（P1）
   };
 
+  /// 同步回传 Meta / TikTok 的注册完成事件（投放渠道看注册转化率用）。
+  static const String adRegistrationEvent = 'af_complete_registration';
+
   /// 事件是否分发 AppsFlyer（纯函数，L0 可测）。
   static bool isAppsFlyerEvent(String event) => appsflyerEvents.contains(event);
 
@@ -152,6 +162,13 @@ class Analytics {
     debugCaptureSink?.call(event, clean);
     if (isAppsFlyerEvent(event)) {
       AppsFlyerClient.instance.logEvent(event, clean);
+    }
+    // Meta / TikTok 自归因：目前只回传「注册完成」一个转化（2026-10-09，看渠道注册转化率 +
+    // 投放可按注册优化）。复用 AppsFlyer 的同名事件，单一触发点（只有 isNewUser 才会报）。
+    if (event == adRegistrationEvent) {
+      final method = clean?['af_registration_method'];
+      unawaited(MetaClient.instance.logRegistration(method is String ? method : null));
+      unawaited(TikTokClient.instance.logRegistration());
     }
     try {
       await Posthog().capture(eventName: event, properties: clean);

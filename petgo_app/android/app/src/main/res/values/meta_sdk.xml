@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Meta（Facebook）App Events 归因配置（2026-10-09）。
+     App ID / Client Token 是客户端 SDK 凭证（随安装包分发、可被逆向），不是服务端机密；
+     与 AppsFlyer Dev Key 同款管理，入库但不贴公开渠道。 -->
+<resources>
+    <string name="facebook_app_id" translatable="false">1077309528092924</string>
+    <string name="facebook_client_token" translatable="false">2fa14f5004e733037c0265fefc89c627</string>
+</resources>

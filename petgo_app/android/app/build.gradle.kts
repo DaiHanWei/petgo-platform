@@ -1,4 +1,5 @@
 import java.io.FileInputStream
+import java.util.Base64
 import java.util.Properties
 
 plugins {
@@ -26,6 +27,16 @@ if (keystorePropertiesFile.exists()) {
 // 为一个没配密钥就整包编不出来，代价远大于收益（同 release 签名缺失回退 debug 的取舍）。
 // ⚠️ 密钥三套（iOS / Android / 后台 Web）**不要混用**；每把都要加平台限制 + 每日配额上限。
 // ⚠️ Google Cloud 项目**未开通结算**时密钥在正式包里不工作 —— 属发版检查单 RC-2，不是代码能解决的。
+// Flutter 把 --dart-define 以「逗号分隔的 base64(KEY=VALUE)」放进 Gradle 属性 dart-defines。
+// 这里只读一个：META_ENABLED=false（stag 出包传）⇒ Meta 原生自动上报（安装 / 启动）也关，
+// 与 Dart 侧 MetaClient 的事件开关同一个口径 —— 测试安装不能进投放归因。
+val metaEnabledByDefine: Boolean =
+    (project.findProperty("dart-defines") as String?)
+        ?.split(",")
+        ?.map { encoded: String -> String(Base64.getDecoder().decode(encoded)) }
+        ?.none { it == "META_ENABLED=false" }
+        ?: true
+
 val mapsProperties = Properties()
 val mapsPropertiesFile = rootProject.file("maps.properties")
 if (mapsPropertiesFile.exists()) {
@@ -63,6 +74,8 @@ android {
         versionName = flutter.versionName
         // 地图密钥经 manifest 占位符注入（AndroidManifest 里是 ${googleMapsApiKey}，不是明文）。
         manifestPlaceholders["googleMapsApiKey"] = googleMapsApiKey
+        // Meta 自动上报安装 / 启动：默认开（release），debug 构建在下方 buildTypes 覆盖为关。
+        manifestPlaceholders["fbAutoLogAppEvents"] = metaEnabledByDefine.toString()
     }
 
     signingConfigs {
@@ -86,6 +99,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 本地开发装机不能被 Meta 算成安装（污染投放归因）。联调 Meta 时临时改成 "true"。
+            manifestPlaceholders["fbAutoLogAppEvents"] = "false"
+        }
         release {
             // 有 key.properties → 用 upload key 正式签名（提审/上架）；否则回退 debug（内测/CI 不被卡）。
             signingConfig = if (keystorePropertiesFile.exists()) {
