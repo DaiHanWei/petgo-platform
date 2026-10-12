@@ -6,6 +6,7 @@ import com.tailtopia.auth.service.FollowCounterService;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import com.tailtopia.social.dto.FollowResultResponse;
+import com.tailtopia.social.event.UserFollowedEvent;
 import com.tailtopia.social.read.FollowReader;
 import com.tailtopia.social.read.UserHideRelationReader;
 import com.tailtopia.social.repository.UserFollowRepository;
@@ -14,6 +15,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,7 +29,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <p><b>计数</b>：关注行 {@code INSERT … ON CONFLICT DO NOTHING} / {@code DELETE} 的受影响行数 = 1 时，
  * 才在同一事务内经 {@link FollowCounterService} 条件 ±1 —— 并发双击只算一次。
  *
- * <p>🛡 日志只记内部 id，<b>不记 token</b>（token 是对外标识）。本服务不发通知 / 事件（Story 3.2 接入）。
+ * <p>🛡 日志只记内部 id，<b>不记 token</b>（token 是对外标识）。
+ *
+ * <p>Story 3.2：关注行<b>真正新建</b>时发布 {@link UserFollowedEvent}（与计数 +1 同一分支，事务内发布、
+ * 通知监听器 AFTER_COMMIT 才执行）；其余路径（幂等、拒绝、取关、拉黑联动、注销清理）一律不发。
+ * <b>不在这里判接收方隐藏关系</b>（D-4 / NFR2：被拉黑方从关注结果里察觉不到），抑制在通知侧。
  */
 @Service
 public class FollowService {
@@ -47,24 +53,27 @@ public class FollowService {
     private final UserHideRelationReader hideRelations;
     private final FollowReader followReader;
     private final RedisRateLimiter rateLimiter;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     @Autowired
     public FollowService(UserFollowRepository follows, FollowCounterService counters,
             AccountQueryService accounts, UserHideRelationReader hideRelations,
-            FollowReader followReader, RedisRateLimiter rateLimiter) {
-        this(follows, counters, accounts, hideRelations, followReader, rateLimiter, Clock.systemUTC());
+            FollowReader followReader, RedisRateLimiter rateLimiter, ApplicationEventPublisher events) {
+        this(follows, counters, accounts, hideRelations, followReader, rateLimiter, events, Clock.systemUTC());
     }
 
     FollowService(UserFollowRepository follows, FollowCounterService counters,
             AccountQueryService accounts, UserHideRelationReader hideRelations,
-            FollowReader followReader, RedisRateLimiter rateLimiter, Clock clock) {
+            FollowReader followReader, RedisRateLimiter rateLimiter, ApplicationEventPublisher events,
+            Clock clock) {
         this.follows = follows;
         this.counters = counters;
         this.accounts = accounts;
         this.hideRelations = hideRelations;
         this.followReader = followReader;
         this.rateLimiter = rateLimiter;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -90,6 +99,8 @@ public class FollowService {
             checkDailyLimit(viewerId);
             if (follows.insertIfAbsent(viewerId, targetId) == 1) {
                 counters.applyFollow(viewerId, targetId);
+                // Story 3.2：只在真正新建时发（并发双击只发一次）；对方拉黑了我也照发，抑制在通知侧（D-4）。
+                events.publishEvent(new UserFollowedEvent(viewerId, targetId, clock.instant()));
             }
         }
         return result(viewerId, targetId, true);

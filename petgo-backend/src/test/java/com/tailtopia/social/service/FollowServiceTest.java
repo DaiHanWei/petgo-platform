@@ -16,6 +16,7 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.error.ErrorTypes;
 import com.tailtopia.shared.ratelimit.RedisRateLimiter;
 import com.tailtopia.social.dto.FollowResultResponse;
+import com.tailtopia.social.event.UserFollowedEvent;
 import com.tailtopia.social.read.FollowReader;
 import com.tailtopia.social.read.FollowState;
 import com.tailtopia.social.read.UserHideRelationReader;
@@ -32,6 +33,7 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 
 /**
@@ -51,9 +53,10 @@ class FollowServiceTest {
     @Mock UserHideRelationReader hideRelations;
     @Mock FollowReader followReader;
     @Mock RedisRateLimiter rateLimiter;
+    @Mock ApplicationEventPublisher events;
 
     private FollowService service(Instant now) {
-        return new FollowService(follows, counters, accounts, hideRelations, followReader, rateLimiter,
+        return new FollowService(follows, counters, accounts, hideRelations, followReader, rateLimiter, events,
                 Clock.fixed(now, ZoneOffset.UTC));
     }
 
@@ -229,5 +232,80 @@ class FollowServiceTest {
         var order = Mockito.inOrder(counters, follows);
         order.verify(counters).purgeCountsFor(ME);
         order.verify(follows).deleteAllInvolving(ME);
+    }
+
+    // ===== V1.3.4 follow · Story 3.2：只在关注行真正新建时发 UserFollowedEvent =====
+
+    @Test
+    void newFollowPublishesUserFollowedEventOnce() {
+        targetExists();
+        when(follows.insertIfAbsent(ME, TARGET)).thenReturn(1);
+        Instant now = Instant.parse("2026-10-12T05:00:00Z");
+
+        service(now).follow(ME, TOKEN);
+
+        verify(events, Mockito.times(1)).publishEvent(new UserFollowedEvent(ME, TARGET, now));
+    }
+
+    /** 对方拉黑了我（D-4）：照常建行、照常发事件 —— FollowService 不判接收方隐藏关系（抑制在通知侧）。 */
+    @Test
+    void followWhenTargetBlockedMeStillPublishes() {
+        targetExists();
+        when(hideRelations.isBlocked(TARGET, ME)).thenReturn(true);
+        when(hideRelations.isHidden(TARGET, ME)).thenReturn(true);
+        when(follows.insertIfAbsent(ME, TARGET)).thenReturn(1);
+
+        service(Instant.parse("2026-10-12T05:00:00Z")).follow(ME, TOKEN);
+
+        verify(events).publishEvent(any(UserFollowedEvent.class));
+        verify(hideRelations, never()).isHidden(anyLong(), anyLong());
+    }
+
+    @Test
+    void idempotentAndConflictingFollowsDoNotPublish() {
+        targetExists();
+        when(follows.existsByFollowerIdAndFolloweeId(ME, TARGET)).thenReturn(true);
+        service(Instant.parse("2026-10-12T05:00:00Z")).follow(ME, TOKEN);
+
+        when(follows.existsByFollowerIdAndFolloweeId(ME, TARGET)).thenReturn(false);
+        when(follows.insertIfAbsent(ME, TARGET)).thenReturn(0); // 并发双击的后一笔
+        service(Instant.parse("2026-10-12T05:00:00Z")).follow(ME, TOKEN);
+
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    void rejectedFollowsDoNotPublish() {
+        targetExists();
+        FollowService svc = service(Instant.parse("2026-10-12T05:00:00Z"));
+        // 409：我拉黑了对方
+        when(hideRelations.isBlocked(ME, TARGET)).thenReturn(true);
+        assertThatThrownBy(() -> svc.follow(ME, TOKEN)).isInstanceOf(AppException.class);
+        when(hideRelations.isBlocked(ME, TARGET)).thenReturn(false);
+        // 429：每日上限
+        when(follows.countCreatedSince(eq(ME), any())).thenReturn(500L);
+        assertThatThrownBy(() -> svc.follow(ME, TOKEN)).isInstanceOf(AppException.class);
+        // 404：对方不存在 / 注销 / 封号
+        assertThatThrownBy(() -> svc.follow(ME, "z".repeat(32))).isInstanceOf(AppException.class);
+        // 422：关注自己
+        User me = Mockito.mock(User.class);
+        when(me.getId()).thenReturn(ME);
+        when(accounts.findActiveByPublicToken("m".repeat(32))).thenReturn(Optional.of(me));
+        assertThatThrownBy(() -> svc.follow(ME, "m".repeat(32))).isInstanceOf(AppException.class);
+
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    void unfollowBlockUnfollowAndPurgeNeverPublish() {
+        targetExists();
+        when(follows.deleteRelation(ME, TARGET)).thenReturn(1);
+        FollowService svc = service(Instant.parse("2026-10-12T05:00:00Z"));
+
+        svc.unfollow(ME, TOKEN);
+        svc.removeOnBlock(ME, TARGET);
+        svc.purgeUser(ME);
+
+        verify(events, never()).publishEvent(any());
     }
 }

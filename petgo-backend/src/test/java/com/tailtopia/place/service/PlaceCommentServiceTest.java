@@ -18,6 +18,7 @@ import com.tailtopia.place.domain.PlaceStatus;
 import com.tailtopia.place.domain.PlaceTag;
 import com.tailtopia.place.domain.PlaceType;
 import com.tailtopia.place.dto.PlaceCommentCreateRequest;
+import com.tailtopia.place.event.PlaceCommentApprovedEvent;
 import com.tailtopia.place.event.PlaceCommentSubmittedEvent;
 import com.tailtopia.place.repository.PlaceCommentRepository;
 import com.tailtopia.place.repository.PlaceRepository;
@@ -364,6 +365,78 @@ class PlaceCommentServiceTest {
         when(comments.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.empty());
         service.approve(7L);
         verify(comments, never()).save(any());
+    }
+
+    // ===== V1.3.4 follow · Story 3.2：审核通过发 PlaceCommentApprovedEvent（通知场所创建者） =====
+
+    private List<PlaceCommentApprovedEvent> approvedEvents() {
+        ArgumentCaptor<Object> ev = ArgumentCaptor.forClass(Object.class);
+        verify(events, Mockito.atLeast(0)).publishEvent(ev.capture());
+        return ev.getAllValues().stream().filter(PlaceCommentApprovedEvent.class::isInstance)
+                .map(PlaceCommentApprovedEvent.class::cast).toList();
+    }
+
+    @Test
+    void approvingPublishesApprovedEventOnceWithPlaceFields() {
+        PlaceComment c = withCommentId(PlaceComment.createUnderReview(
+                42L, 9L, "mantap", PlaceCommentAttitude.RECOMMEND), 7L);
+        when(comments.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(c));
+        when(places.findById(42L)).thenReturn(Optional.of(withId(place(), 42L)));
+
+        service.approve(7L);
+        service.approve(7L); // 幂等：已可见再 approve 不重发
+
+        assertThat(approvedEvents()).singleElement().satisfies(e -> {
+            assertThat(e.placeId()).isEqualTo(42L);
+            assertThat(e.placeToken()).isEqualTo("tok");
+            assertThat(e.placeCreatorId()).isEqualTo(1L);
+            assertThat(e.commentId()).isEqualTo(7L);
+            assertThat(e.commenterId()).isEqualTo(9L);
+        });
+    }
+
+    @Test
+    void approvingCommentWithoutAuthorPublishesNothing() {
+        PlaceComment c = withCommentId(PlaceComment.createUnderReview(
+                42L, 9L, "mantap", PlaceCommentAttitude.RECOMMEND), 7L);
+        setObjectField(c, PlaceComment.class, "authorId", null);
+        when(comments.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(c));
+        when(places.findById(42L)).thenReturn(Optional.of(withId(place(), 42L)));
+
+        service.approve(7L);
+
+        assertThat(approvedEvents()).isEmpty();
+    }
+
+    /** T-35：场所已不对用户可见（下架）时评论才过审 → 不通知创建者；场所不存在也不发。 */
+    @Test
+    void approvingOnInvisibleOrMissingPlacePublishesNothing() {
+        PlaceComment c = withCommentId(PlaceComment.createUnderReview(
+                42L, 9L, "mantap", PlaceCommentAttitude.RECOMMEND), 7L);
+        when(comments.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(c));
+        Place delisted = withId(place(), 42L);
+        setObjectField(delisted, Place.class, "status", PlaceStatus.DELISTED);
+        when(places.findById(42L)).thenReturn(Optional.of(delisted));
+
+        service.approve(7L);
+
+        PlaceComment c2 = withCommentId(PlaceComment.createUnderReview(
+                43L, 9L, "mantap", PlaceCommentAttitude.RECOMMEND), 8L);
+        when(comments.findByIdAndDeletedAtIsNull(8L)).thenReturn(Optional.of(c2));
+        service.approve(8L);
+
+        assertThat(approvedEvents()).isEmpty();
+        verify(counters).onCommentBecameVisible(42L, PlaceCommentAttitude.RECOMMEND);
+    }
+
+    private static void setObjectField(Object target, Class<?> type, String name, Object value) {
+        try {
+            var f = type.getDeclaredField(name);
+            f.setAccessible(true);
+            f.set(target, value);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(type.getSimpleName() + "." + name + " 字段名变了，改这里", e);
+        }
     }
 
     private static Place place() {

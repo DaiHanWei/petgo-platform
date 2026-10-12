@@ -139,6 +139,17 @@ public class AccountQueryService {
                 .orElse(false);
     }
 
+    /**
+     * 是否官方内容账号（{@code role = ADMIN} 的作者 shim，后台发帖的 {@code author_id} 即它）。
+     * V1.3.4 follow · D-9：官方号可被关注，但<b>不接收通知推送</b>（它不登录 App）。不存在的用户按 false。
+     */
+    @Transactional(readOnly = true)
+    public boolean isOfficialAccount(long userId) {
+        return users.findById(userId)
+                .map(u -> u.getRole() == com.tailtopia.auth.domain.Role.ADMIN)
+                .orElse(false);
+    }
+
     /** Story 3.2：取用户宠物状态（A/B/C），供 Feed 硬过滤；不存在/未设返回 empty。 */
     @Transactional(readOnly = true)
     public Optional<String> petStatusOf(long userId) {

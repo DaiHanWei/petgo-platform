@@ -51,6 +51,20 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     List<Notification> findByRecipientUserIdAndReadIsFalse(long recipientUserId);
 
+    /**
+     * 新粉丝通知 24 小时去重（V1.3.4 follow · Story 3.2 · AD-4）：{@code since} 之后是否已有
+     * 「{@code actorId} 关注了 {@code recipientId}」的通知行。取关后再关注 24 小时内不重复通知。
+     * 走 {@code ix_notification_actors_actor} + 通知主键。
+     */
+    @Query(value = """
+            SELECT EXISTS (SELECT 1 FROM notifications n
+                             JOIN notification_actors a ON a.notification_id = n.id
+                            WHERE n.recipient_user_id = :recipientId AND n.type = 'USER_FOLLOWED'
+                              AND a.actor_user_id = :actorId AND n.created_at > :since)
+            """, nativeQuery = true)
+    boolean existsFollowedNotificationSince(@Param("recipientId") long recipientId,
+            @Param("actorId") long actorId, @Param("since") Instant since);
+
     /** Story 7.3：注销级联删除该用户全部通知（纯个人数据，物理删除）。 */
     @org.springframework.transaction.annotation.Transactional
     void deleteByRecipientUserId(long recipientUserId);
