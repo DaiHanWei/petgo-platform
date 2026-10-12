@@ -222,11 +222,19 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
       });
     }
     return RefreshIndicator(
-      onRefresh: () {
+      onRefresh: () async {
         // Story 2.3 AC3.3：我自己的列表下拉刷新连推荐一起重拉（已关注的人由服务端排除）。
         // 推荐快照发请求前重记版本号 → 本页之前写的覆盖对新推荐自动失效（Story 2.1 AC3.5）。
         if (widget.ownerIsSelf) ref.invalidate(followSuggestionsProvider);
-        return ref.read(followListControllerProvider(_key).notifier).refresh();
+        await ref.read(followListControllerProvider(_key).notifier).refresh();
+        // 2.3 code-review F4：仍是空态（推荐区还在 watch）→ 转圈等推荐也回来再收，不让旧推荐在转圈结束后才换掉。
+        // 推荐失败吞掉：失败只隐藏推荐区（T-24），不算刷新失败。
+        final stillEmpty = mounted && (ref.read(followListControllerProvider(_key)).value?.items.isEmpty ?? false);
+        if (widget.ownerIsSelf && stillEmpty) {
+          try {
+            await ref.read(followSuggestionsProvider.future);
+          } catch (_) {}
+        }
       },
       child: async.when(
         skipLoadingOnRefresh: true,
@@ -344,7 +352,8 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
   Widget _selfEmpty(AppLocalizations l10n) {
     final following = widget.tab == FollowListTab.following;
     final suggestions = ref.watch(followSuggestionsProvider);
-    final items = suggestions.value ?? const <FollowListItem>[];
+    // 2.3 code-review F3：Riverpod 3 的 AsyncError 会带着上一次的值 —— 刷新失败时不能继续显示旧推荐（T-24 失败即隐藏）。
+    final items = suggestions.hasError ? const <FollowListItem>[] : (suggestions.value ?? const <FollowListItem>[]);
     if (!_suggestedReported && items.isNotEmpty) {
       _suggestedReported = true;
       Analytics.capture('suggested_follow_shown');

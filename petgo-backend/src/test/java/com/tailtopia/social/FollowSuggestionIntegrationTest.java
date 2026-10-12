@@ -5,25 +5,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.tailtopia.auth.domain.User;
-import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.social.dto.FollowListItem;
-import com.tailtopia.social.read.FollowReader;
-import com.tailtopia.social.repository.UserFollowRepository;
 import com.tailtopia.social.service.FollowSuggestionService;
 import com.tailtopia.social.service.UserHideRelationService;
 import com.tailtopia.support.ApiIntegrationTest;
 import com.tailtopia.support.VetTestSupport;
 import jakarta.persistence.EntityManagerFactory;
 import java.sql.Timestamp;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -33,16 +26,13 @@ import tools.jackson.databind.JsonNode;
 /**
  * L1：推荐关注（V1.3.4 follow · Story 2.3 · AC1）—— 需 Docker postgres+redis。
  *
- * <p>🔴 <b>共享库隔离</b>：测试库不回滚，别的测试留下的公开帖与「此刻」的点赞都会进候选。
- * 排序 / 资格 / 排除类断言因此用<b>固定时钟</b>的服务实例：每个测试取一个远在未来、且逐个递增的基准时刻
- * {@code base}，时钟 = {@code base + 30 天}，统计窗口起点 = {@code base}；本测试的帖子与点赞都落在
- * {@code base} 之后 —— 别人的点赞不在窗口内（全部 0 赞），别人的帖子都比本测试的旧（并列次序排在后面），
- * 本测试造的候选必占前排。鉴权、上限、HTTP 形状才走真实端点。
+ * <p>🔴 <b>共享库隔离</b>：测试库不回滚、跨运行保留，别的测试（以及本类上一次运行）留下的公开帖与点赞都会进候选。
+ * 排序 / 资格 / 排除类用例先 {@link #isolate}：让 viewer <b>关注此刻库里全部公开发帖人</b>（已关注 = 被推荐排除），
+ * 之后本用例新造的候选就是 viewer 唯一可能看到的人 —— 断言可以写成「结果恰好等于」，漏过滤会直接现形。
+ * 不用固定时钟 / 未来时间戳：未来时间的公开帖会永久顶在别的测试的 Feed 首位（2.3 code-review F1）。
+ * 用例全部走真实 bean（{@code FollowSuggestionService} 的 Spring 代理与构造器注入一并覆盖）。
  */
 class FollowSuggestionIntegrationTest extends ApiIntegrationTest {
-
-    /** 每个测试的基准时刻递增，后跑的测试候选永远排在先跑的前面。 */
-    private static final AtomicLong BASE_SEQ = new AtomicLong();
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -54,25 +44,23 @@ class FollowSuggestionIntegrationTest extends ApiIntegrationTest {
     private VetTestSupport vets;
 
     @Autowired
-    private UserFollowRepository followRepo;
-
-    @Autowired
-    private AccountQueryService accounts;
-
-    @Autowired
-    private FollowReader followReader;
+    private FollowSuggestionService service;
 
     @Autowired
     private EntityManagerFactory emf;
 
-    private Instant base;
-    private FollowSuggestionService service;
+    private final Instant now = Instant.now();
 
-    @BeforeEach
-    void setUp() {
-        base = Instant.parse("2200-01-01T00:00:00Z").plus(Duration.ofDays(1000 * BASE_SEQ.incrementAndGet()));
-        service = new FollowSuggestionService(followRepo, accounts, followReader,
-                Clock.fixed(base.plus(Duration.ofDays(30)), ZoneOffset.UTC));
+    /** viewer 关注此刻库里所有公开发帖人（jdbc 直插，不动计数列）。须在造候选<b>之前</b>调用。 */
+    private void isolate(User viewer) {
+        jdbc.update("""
+                INSERT INTO user_follows (follower_id, followee_id)
+                SELECT ?, p.author_id
+                  FROM (SELECT DISTINCT author_id FROM content_posts
+                         WHERE visibility = 'PUBLIC' AND status = 'PUBLISHED' AND deleted_at IS NULL) p
+                 WHERE p.author_id <> ?
+                ON CONFLICT DO NOTHING
+                """, viewer.getId(), viewer.getId());
     }
 
     private long post(User author, String visibility, String status, Instant createdAt, boolean deleted) {
@@ -105,39 +93,45 @@ class FollowSuggestionIntegrationTest extends ApiIntegrationTest {
     @Test
     void ordersByLikesInWindowThenLatestPublicPostThenIdDesc() {
         User viewer = newUser();
+        isolate(viewer);
         User a = newUser();
         User b = newUser();
         User c = newUser();
         User d = newUser();
-        Instant t = base.plus(Duration.ofDays(1));
-        likes(publicPost(a, t), 5, base.plus(Duration.ofDays(2)));
-        likes(publicPost(b, t), 2, base.plus(Duration.ofDays(2)));
+        Instant t = now.minus(Duration.ofDays(3));
+        likes(publicPost(a, t), 5, now.minus(Duration.ofDays(1)));
+        likes(publicPost(b, t), 2, now.minus(Duration.ofDays(1)));
         publicPost(c, t.plus(Duration.ofHours(2)));
         publicPost(d, t.plus(Duration.ofHours(1)));
-        // 窗口外 / 不计口径的赞：31 天前、私密帖、审核中帖、软删帖上的赞都不算。
-        likes(publicPost(d, base.minus(Duration.ofDays(5))), 9, base.minus(Duration.ofDays(1)));
-        likes(post(c, "PRIVATE", "PUBLISHED", t, false), 9, base.plus(Duration.ofDays(2)));
-        likes(post(c, "PUBLIC", "UNDER_REVIEW", t, false), 9, base.plus(Duration.ofDays(2)));
-        likes(post(c, "PUBLIC", "PUBLISHED", t, true), 9, base.plus(Duration.ofDays(2)));
+        // 不计口径的赞：31 天前的、私密帖 / 审核中帖 / 软删帖上的。
+        likes(publicPost(d, now.minus(Duration.ofDays(40))), 9, now.minus(Duration.ofDays(31)));
+        likes(post(c, "PRIVATE", "PUBLISHED", t, false), 9, now.minus(Duration.ofDays(1)));
+        likes(post(c, "PUBLIC", "UNDER_REVIEW", t, false), 9, now.minus(Duration.ofDays(1)));
+        likes(post(c, "PUBLIC", "PUBLISHED", t, true), 9, now.minus(Duration.ofDays(1)));
 
-        assertThat(suggestedIds(viewer)).startsWith(a.getId(), b.getId(), c.getId(), d.getId());
+        assertThat(suggestedIds(viewer)).containsExactly(a.getId(), b.getId(), c.getId(), d.getId());
     }
 
     @Test
     void tieBreaksOnUserIdDescWhenLatestPublicPostIsEqual() {
         User viewer = newUser();
+        isolate(viewer);
         User first = newUser();
         User second = newUser();
-        Instant t = base.plus(Duration.ofDays(1));
+        Instant t = now.minus(Duration.ofDays(1));
         publicPost(first, t);
         publicPost(second, t);
 
-        assertThat(suggestedIds(viewer)).startsWith(second.getId(), first.getId());
+        assertThat(suggestedIds(viewer)).containsExactly(second.getId(), first.getId());
     }
 
+    /**
+     * 不合格的人帖子<b>更新</b>、id 也更大 —— 一旦漏过滤必排在合格者前面，「恰好等于」立刻失败（2.3 code-review F2）。
+     */
     @Test
     void eligibilityRequiresActiveEnabledUserRoleWithLivePublicPost() {
         User viewer = newUser();
+        isolate(viewer);
         User ok = newUser();
         User virtual = newUser();
         User onlyPrivate = newUser();
@@ -148,13 +142,16 @@ class FollowSuggestionIntegrationTest extends ApiIntegrationTest {
         User disabled = newUser();
         User banned = newUser();
         User gone = newUser();
-        Instant t = base.plus(Duration.ofDays(1));
-        for (User u : List.of(ok, virtual, vet, admin, disabled, banned, gone)) {
-            publicPost(u, t);
+        Instant t = now.minus(Duration.ofDays(1));
+        Instant later = t.plus(Duration.ofHours(1));
+        publicPost(ok, t);
+        publicPost(virtual, t);
+        for (User u : List.of(vet, admin, disabled, banned, gone)) {
+            publicPost(u, later);
         }
-        post(onlyPrivate, "PRIVATE", "PUBLISHED", t, false);
-        post(onlyDeleted, "PUBLIC", "PUBLISHED", t, true);
-        post(onlyUnderReview, "PUBLIC", "UNDER_REVIEW", t, false);
+        post(onlyPrivate, "PRIVATE", "PUBLISHED", later, false);
+        post(onlyDeleted, "PUBLIC", "PUBLISHED", later, true);
+        post(onlyUnderReview, "PUBLIC", "UNDER_REVIEW", later, false);
         jdbc.update("UPDATE users SET account_type = 'VIRTUAL' WHERE id = ?", virtual.getId());
         jdbc.update("UPDATE users SET role = 'VET' WHERE id = ?", vet.getId());
         jdbc.update("UPDATE users SET role = 'ADMIN' WHERE id = ?", admin.getId());
@@ -162,42 +159,41 @@ class FollowSuggestionIntegrationTest extends ApiIntegrationTest {
         jdbc.update("UPDATE users SET status = 'DEACTIVATED' WHERE id = ?", banned.getId());
         jdbc.update("UPDATE users SET deleted_at = now() WHERE id = ?", gone.getId());
 
-        List<Long> ids = suggestedIds(viewer);
-        assertThat(ids).contains(ok.getId(), virtual.getId());
-        assertThat(ids).doesNotContain(onlyPrivate.getId(), onlyDeleted.getId(), onlyUnderReview.getId(),
-                vet.getId(), admin.getId(), disabled.getId(), banned.getId(), gone.getId());
+        assertThat(suggestedIds(viewer)).containsExactly(virtual.getId(), ok.getId());
     }
 
     /** AD-4 / T-26：排除自己、已关注、我拉黑的、我举报隐藏的；拉黑了我的人<b>不排除</b>（单向）。 */
     @Test
     void excludesSelfFollowedAndAnyHideRelationHeldByViewer() {
         User viewer = newUser();
+        isolate(viewer);
+        User plain = newUser();
+        User blockedMe = newUser();
         User followed = newUser();
         User blockedByMe = newUser();
         User reportedByMe = newUser();
-        User blockedMe = newUser();
-        User plain = newUser();
-        Instant t = base.plus(Duration.ofDays(1));
-        for (User u : List.of(viewer, followed, blockedByMe, reportedByMe, blockedMe, plain)) {
-            publicPost(u, t);
+        Instant t = now.minus(Duration.ofDays(1));
+        publicPost(plain, t);
+        publicPost(blockedMe, t);
+        // 被排除的人帖子更新：漏网必排在前面。
+        for (User u : List.of(viewer, followed, blockedByMe, reportedByMe)) {
+            publicPost(u, t.plus(Duration.ofHours(1)));
         }
         link(viewer, followed);
         hideService.block(viewer.getId(), blockedByMe.getId());
         hideService.hideByReport(viewer.getId(), reportedByMe.getId());
         hideService.block(blockedMe.getId(), viewer.getId());
 
-        List<Long> ids = suggestedIds(viewer);
-        assertThat(ids).contains(plain.getId(), blockedMe.getId());
-        assertThat(ids).doesNotContain(viewer.getId(), followed.getId(), blockedByMe.getId(),
-                reportedByMe.getId());
+        assertThat(suggestedIds(viewer)).containsExactly(blockedMe.getId(), plain.getId());
     }
 
     @Test
     void rowFieldsCarryFollowsMeAndConstantFalseFlagsWithFixedQueryCount() {
         User viewer = newUser();
+        isolate(viewer);
         User fan = newUser();
         User stranger = newUser();
-        Instant t = base.plus(Duration.ofDays(1));
+        Instant t = now.minus(Duration.ofDays(1));
         publicPost(fan, t);
         publicPost(stranger, t);
         link(fan, viewer);
@@ -210,6 +206,7 @@ class FollowSuggestionIntegrationTest extends ApiIntegrationTest {
         stats.setStatisticsEnabled(false);
 
         assertThat(statements).as("候选 + 展示字段 + token + 关系，固定次数（NFR3）").isLessThanOrEqualTo(4);
+        assertThat(items).extracting(FollowListItem::userId).containsExactly(stranger.getId(), fan.getId());
         for (FollowListItem i : items) {
             assertThat(i.iFollow()).isFalse();
             assertThat(i.self()).isFalse();
@@ -217,18 +214,15 @@ class FollowSuggestionIntegrationTest extends ApiIntegrationTest {
             assertThat(i.deleted()).isFalse();
             assertThat(i.userToken()).hasSize(32);
         }
-        FollowListItem fanRow = items.stream().filter(i -> i.userId() == fan.getId()).findFirst().orElseThrow();
-        FollowListItem strangerRow = items.stream().filter(i -> i.userId() == stranger.getId()).findFirst()
-                .orElseThrow();
-        assertThat(fanRow.followsMe()).isTrue();
-        assertThat(strangerRow.followsMe()).isFalse();
-        assertThat(fanRow.nickname()).isEqualTo(fan.getNickname());
+        assertThat(items.get(1).followsMe()).isTrue();
+        assertThat(items.get(0).followsMe()).isFalse();
+        assertThat(items.get(1).nickname()).isEqualTo(fan.getNickname());
     }
 
     @Test
     void endpointCapsAtThirtyRows() throws Exception {
         User viewer = newUser();
-        Instant t = base.plus(Duration.ofDays(1));
+        Instant t = now.minus(Duration.ofDays(1));
         for (int i = 0; i < 35; i++) {
             publicPost(newUser(), t);
         }

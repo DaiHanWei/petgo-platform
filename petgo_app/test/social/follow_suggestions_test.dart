@@ -326,6 +326,50 @@ void main() {
     });
   }
 
+  testWidgets('code-review F3：刷新时推荐失败 → 不残留旧推荐，只剩提示条', (tester) async {
+    await _pump(tester,
+        lists: _ListRepo({
+          FollowListTab.following: [_page([])],
+          FollowListTab.followers: [_page([])],
+        }),
+        suggestions: _SuggestRepo([
+          [_cand(7)],
+          Exception('boom'),
+        ]));
+    expect(find.byKey(const ValueKey('followSuggestRow_7')), findsOneWidget);
+
+    await tester.drag(find.byKey(const ValueKey('followListSelfEmpty_following')), const Offset(0, 300));
+    await tester.pumpAndSettle();
+
+    expect(_hint, findsOneWidget);
+    expect(_title, findsNothing);
+    expect(find.byKey(const ValueKey('followSuggestRow_7')), findsNothing);
+  });
+
+  testWidgets('code-review F4：下拉刷新的转圈等推荐也回来才收', (tester) async {
+    final pending = Completer<List<FollowListItem>>();
+    await _pump(tester,
+        lists: _ListRepo({
+          FollowListTab.following: [_page([])],
+          FollowListTab.followers: [_page([])],
+        }),
+        suggestions: _SuggestRepo([
+          [_cand(7)],
+          pending,
+        ]));
+
+    await tester.drag(find.byKey(const ValueKey('followListSelfEmpty_following')), const Offset(0, 300));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.byType(RefreshProgressIndicator), findsOneWidget, reason: '推荐还没回来，转圈不收');
+
+    pending.complete([_cand(8)]);
+    await tester.pumpAndSettle();
+    expect(find.byType(RefreshProgressIndicator), findsNothing);
+    expect(find.byKey(const ValueKey('followSuggestRow_8')), findsOneWidget);
+  });
+
   testWidgets('推荐加载中：提示条照常 + 骨架', (tester) async {
     final pending = Completer<List<FollowListItem>>();
     await _pump(tester,

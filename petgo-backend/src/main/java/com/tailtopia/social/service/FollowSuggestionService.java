@@ -42,8 +42,7 @@ public class FollowSuggestionService {
         this(follows, accounts, followReader, Clock.systemUTC());
     }
 
-    /** 可注入时钟（L1 测试用固定时钟隔离共享库里其他测试留下的点赞）。 */
-    public FollowSuggestionService(UserFollowRepository follows, AccountQueryService accounts,
+    FollowSuggestionService(UserFollowRepository follows, AccountQueryService accounts,
             FollowReader followReader, Clock clock) {
         this.follows = follows;
         this.accounts = accounts;
