@@ -393,12 +393,10 @@ class _DetailScaffold extends ConsumerWidget {
               // 最右位置换成关注按钮。徽章大小不变（T-17）。
               Row(
                 children: [
-                  Flexible(
-                    child: Text(formatPublishTime(context, l10n, detail.createdAt),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
-                  ),
+                  // 时间不收缩；空间不够时只让徽章收缩（code-review 2.1 #4）。
+                  Text(formatPublishTime(context, l10n, detail.createdAt),
+                      maxLines: 1,
+                      style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
                   const SizedBox(width: 6),
                   // 分类彩徽章（窄屏放不下时文字省略，不撑破作者行）。
                   Flexible(

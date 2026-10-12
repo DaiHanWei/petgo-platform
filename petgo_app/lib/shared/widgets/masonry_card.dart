@@ -185,13 +185,11 @@ class MasonryCard extends StatelessWidget {
                               // 给昵称行右侧的关注按钮让位；尺寸不变。
                               Row(
                                 children: [
-                                  Flexible(
-                                    child: Text(time,
-                                        style: const TextStyle(
-                                            fontSize: 11, color: AppColors.muted),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis),
-                                  ),
+                                  // 时间不收缩（很短）；空间不够时只让徽章收缩（code-review 2.1 #4）。
+                                  Text(time,
+                                      style: const TextStyle(
+                                          fontSize: 11, color: AppColors.muted),
+                                      maxLines: 1),
                                   const SizedBox(width: 6),
                                   // 类型徽章保留：三类内容要在首页可辨识（FR-93 明确要求保留）。
                                   // 🛡 窄屏（320）+ 长按钮文案时时间行可能放不下 → 徽章也可收缩（文字省略），

@@ -310,6 +310,14 @@ Claude（云端 headless session，bmad-dev-story 流程手工执行）
 - L0：后端 `clean package -DskipTests` 绿，纯单测回归 3004 通过；App `flutter analyze` 零告警、`flutter test` 2775 通过。
 - **L1 待本地验收**：`FeedFollowFieldsIntegrationTest` 及既有 Feed / 详情 / 顶置位集成测试。**L2 待本地验收**：C1~C7 逐屏、320 宽长昵称、顶置卡、自己的待审帖、游客点按钮。**L1/L2 待本地验收。**
 
+**code-review（2026-10-12）修复**
+- #1（中，CONFIRMED）请求在途时换账号，旧账号结果写进新覆盖表 → 已由 1.3 复审 F2 的修复覆盖（点击时记账号 id，写入前比对）。
+- #2（中低，CONFIRMED）换账号不刷新 `pinnedSlotProvider`，顶置卡关注 / 点赞快照串号 → `resetUserScopedCaches` 登记。
+- #3（低中，CONFIRMED）内联按钮 `minHeight: 44` 撑高作者行，按钮显隐时卡片高度跳动 → 可点区高度降为 32（= Feed 头像高；宽仍 ≥ 44）。**偏离** AC4.3「至少 44×44」，以避免列表跳动，L2 时请确认手感。
+- #4（低）时间与徽章两个 `Flexible` 对半分宽导致徽章被提前截断 → 时间不收缩，只让徽章收缩。
+- #6（中，CONFIRMED）测试证明力：新增 `test/content/follow_epoch_wiring_test.dart`（Feed 首屏 / 翻页 / syncCounts / 顶置位 / 详情 T-18 的版本号接线，均在请求在途时写覆盖来证明「请求前读」；FeedItem / ContentDetail 缺字段解析；feed_view 两种 surfaceKey 源码守卫）；后端新增 `FeedPinnedFollowTest`（顶置位本人 / 游客 / 封号分支）。
+- #5（低，PLAUSIBLE，未改）同一用户多个按钮实例并发请求、先发者失败时回滚可能覆盖后写入的结果；`_inFlight` 是实例级。窗口很小，留 L2 观察。
+
 **原写 story 时的待确认（均已由「待确认项裁定」覆盖，保留备查）**
 
 - 待确认 1：**文案前面要不要加「+」**。epics 和架构写的是「+ Ikuti」。UI 稿的 HTML 文字是「Ikuti」，「+」是用 CSS `::before` 加上去的（`.fc-btn .fbtn::before{content:"+"}`），「Mengikuti」前面没有「+」。本 story 按 UI 稿处理：「+」作为前缀单独渲染，l10n 用 Story 1.3 的「Ikuti」/「Ikuti Balik」。如果需要把「+」写进文案 key，请拍板。

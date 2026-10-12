@@ -118,7 +118,11 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
   }
 
   /// UI 稿 `.fc-btn .fbtn`：「+ Ikuti」紫 13 / w600（「+」w700、间隔 3，T-16 前缀单独渲染）；
-  /// 「Mengikuti」muted w500、无「+」。无底色无边框；可点区域 ≥ 44×44，视觉尺寸不变。
+  /// 「Mengikuti」muted w500、无「+」。无底色无边框；可点区域宽 ≥ 44、高 32，视觉尺寸不变。
+  ///
+  /// ⚠️ 高度只撑到 32（= Feed 卡头像高，详情头像 36 更高）而不是 44（code-review 2.1 #3）：
+  /// 撑到 44 会让「有按钮」的作者行比「没按钮」的高一截 —— 点关注后同作者其他卡按钮隐藏，
+  /// 卡片立刻变矮，列表在手指下方跳动。
   Widget _textInline(String label, {required bool plus}) {
     final color = plus ? AppColors.mint : AppColors.muted;
     return GestureDetector(
@@ -127,7 +131,7 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
       behavior: HitTestBehavior.opaque,
       onTap: _onTap,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 32),
         child: Center(
           widthFactor: 1,
           child: Padding(
