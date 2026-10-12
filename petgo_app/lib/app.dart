@@ -172,6 +172,12 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp>
       if (!mounted) return;
       if (d == UpdateDecision.forced) await showForcedUpdateDialog(ref);
     });
+    // 页面内触发强制弹窗的统一入口（V1.3.4 Story 3.4 复审）：设置页手动检查判定 forced 时走这里，
+    // 用根 State 的常驻 ref —— 页面自己的 ref 会随 go() 替换栈卸载，打断重弹循环（PRD AC4）。
+    AppUpdateBootstrap.registerForcedDialog(() async {
+      if (!mounted) return;
+      await showForcedUpdateDialog(ref);
+    });
   }
 
   @override

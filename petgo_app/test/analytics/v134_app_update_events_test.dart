@@ -21,6 +21,7 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 /// 属性用 [Analytics.debugCaptureSink] 看端上真正发出的形态。
 ///
 /// Story 3.3 起补 `app_update_later_tapped` 与横幅（surface=banner）三事件。
+/// Story 3.4 起补设置页手动检查的推荐态弹窗（surface=dialog, decision=recommend）三事件。
 
 Set<String> _eventNamesInSource() {
   final re = RegExp(r"""Analytics\.capture\(\s*'([A-Za-z0-9_]+)'""");
@@ -119,6 +120,75 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('appUpdateBannerGoStore')));
       await tester.pumpAndSettle();
       expect(events.where((e) => e.key == 'app_update_go_store_tapped').single.value, bannerProps);
+      expect(launched, ['https://play.google.com/store/apps/details?id=x']);
+    });
+  });
+
+  group('推荐态弹窗（Story 3.4 · 设置页手动检查）', () {
+    late List<MapEntry<String, Map<String, Object>?>> events;
+    late List<String> launched;
+    late WidgetRef hostRef;
+    late BuildContext hostContext;
+
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      events = [];
+      launched = [];
+      Analytics.debugCaptureSink = (e, p) => events.add(MapEntry(e, p));
+    });
+    tearDown(() => Analytics.debugCaptureSink = null);
+
+    Future<void> pumpDialog(WidgetTester tester) async {
+      final c = ProviderContainer(overrides: [
+        appVersionRepositoryProvider.overrideWithValue(_FakeRepo()),
+        appUpdateEnvProvider.overrideWithValue(AppUpdateEnv(
+          now: DateTime.now,
+          isIos: false,
+          loadCurrentVersion: () async => '1.3.3',
+          loadPrefs: AppPrefs.create,
+        )),
+        storeLauncherProvider.overrideWithValue((url) async => launched.add(url)),
+      ]);
+      addTearDown(c.dispose);
+      final outcome = await tester.runAsync(() => c.read(appUpdateControllerProvider.notifier).checkManually());
+      expect(outcome, ManualCheckOutcome.recommended);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(
+          locale: const Locale('id'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Consumer(builder: (context, ref, _) {
+            hostRef = ref;
+            hostContext = context;
+            return const Scaffold(body: SizedBox.shrink());
+          }),
+        ),
+      ));
+      unawaited(showRecommendedUpdateDialog(hostContext, hostRef));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('appUpdateRecommended')), findsOneWidget);
+    }
+
+    const dialogProps = {'decision': 'recommend', 'surface': 'dialog'};
+
+    testWidgets('弹出报 prompt_shown；点「Nanti」报 later_tapped', (tester) async {
+      await pumpDialog(tester);
+      expect(events.where((e) => e.key == 'app_update_prompt_shown').single.value, dialogProps);
+
+      await tester.tap(find.byKey(const ValueKey('appUpdateLater')));
+      await tester.pumpAndSettle();
+      expect(events.where((e) => e.key == 'app_update_later_tapped').single.value, dialogProps);
+      expect(events.where((e) => e.key == 'app_update_go_store_tapped'), isEmpty);
+      expect(launched, isEmpty);
+    });
+
+    testWidgets('点「Perbarui sekarang」报 go_store_tapped 并跳商店', (tester) async {
+      await pumpDialog(tester);
+      await tester.tap(find.byKey(const ValueKey('appUpdateGoStore')));
+      await tester.pumpAndSettle();
+      expect(events.where((e) => e.key == 'app_update_go_store_tapped').single.value, dialogProps);
+      expect(events.where((e) => e.key == 'app_update_later_tapped'), isEmpty);
       expect(launched, ['https://play.google.com/store/apps/details?id=x']);
     });
   });

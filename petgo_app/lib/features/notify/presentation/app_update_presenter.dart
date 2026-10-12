@@ -106,6 +106,46 @@ Future<void> showForcedUpdateDialog(WidgetRef ref) async {
   }
 }
 
+/// 弹出推荐更新弹窗（V1.3.4 Story 3.4 · 设置页手动检查判定为 recommended 时调用）。
+///
+/// - 弹出前报 `app_update_prompt_shown`（surface=dialog）。
+/// - 「Nanti」：弹窗先关（[AppUpdateDialog] 内部），再报 `app_update_later_tapped` → 记 72h 冷却。
+/// - 「Perbarui sekarang」：弹窗先关（[AppUpdateDialog] 内部），再报 `app_update_go_store_tapped`
+///   → 记冷却（先落盘：跳商店会让 App 进后台，进程可能被回收；写失败不挡跳商店）→ 跳本平台商店。
+/// - 点遮罩 / 返回键关闭：不记冷却、不报埋点。
+/// - 本平台商店链接为空 → 不渲染主按钮（同 3.2 AC6）。
+Future<void> showRecommendedUpdateDialog(BuildContext context, WidgetRef ref) async {
+  final controller = ref.read(appUpdateControllerProvider.notifier);
+  final version = controller.latestForPlatform ?? '';
+  final storeUrl = controller.storeUrlForPlatform;
+  final launch = ref.read(storeLauncherProvider);
+
+  Future<void> skip() async {
+    try {
+      await controller.recordSkip();
+    } catch (_) {}
+  }
+
+  unawaited(Analytics.capture('app_update_prompt_shown', {'decision': 'recommend', 'surface': 'dialog'}));
+  await AppUpdateDialog.show(
+    context,
+    decision: UpdateDecision.recommended,
+    version: version,
+    onGoStore: storeUrl == null
+        ? null
+        : () async {
+            unawaited(Analytics.capture(
+                'app_update_go_store_tapped', {'decision': 'recommend', 'surface': 'dialog'}));
+            await skip();
+            await launch(storeUrl);
+          },
+    onLater: () {
+      unawaited(Analytics.capture('app_update_later_tapped', {'decision': 'recommend', 'surface': 'dialog'}));
+      unawaited(skip());
+    },
+  );
+}
+
 /// 回前台版本检查（`app.dart` resumed 调用）。
 ///
 /// - 已判定 forced（弹窗可能已被意外移除）→ **直接重弹，不受 6h 节流**；已在显示则空转。

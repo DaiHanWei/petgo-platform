@@ -24,6 +24,27 @@ class AppUpdateBootstrap {
     }
   }
 
+  static Future<void> Function()? _showForced;
+
+  /// 注册「显示强制更新弹窗」入口（V1.3.4 Story 3.4 复审）：由 `app.dart` 根 State 用**常驻 ref**
+  /// 注册。页面（如设置页手动检查）判定 forced 时调 [showForcedDialog]，**不得**把页面自己的
+  /// ref 传给 `showForcedUpdateDialog` —— 推送 / 深链的 `go()` 替换栈会卸载页面，
+  /// 已卸载的 ref 在重弹循环里抛 StateError，强制弹窗不再重弹（可绕过强制更新，PRD AC4）。
+  static void registerForcedDialog(Future<void> Function() show) => _showForced = show;
+
+  /// 显示强制更新弹窗。未注册 → 空转（生产由 `app.dart` 启动时注册）。
+  static Future<void> showForcedDialog() async {
+    final show = _showForced;
+    if (show == null) {
+      debugPrint('[AppUpdate] forced dialog presenter not registered');
+      return;
+    }
+    await show();
+  }
+
   @visibleForTesting
-  static void debugReset() => _check = null;
+  static void debugReset() {
+    _check = null;
+    _showForced = null;
+  }
 }

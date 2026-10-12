@@ -14,15 +14,20 @@ import '../../../l10n/app_localizations.dart';
 import '../../auth/domain/auth_state.dart';
 import '../domain/phone_mask.dart';
 import 'phone_edit_sheet.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
 import '../../notify/data/push_permission_providers.dart';
+import '../../notify/domain/app_update_bootstrap.dart';
+import '../../notify/domain/app_update_controller.dart';
 import '../../notify/domain/push_permission_change_reporter.dart';
+import '../../notify/presentation/app_update_presenter.dart';
 import '../../social/data/blocked_users_repository.dart';
 
 /// 二级「设置」页（Story 7.1 · F8 · settings.html 1:1 还原）。
 ///
 /// 分组：AKUN（编辑档案/通知/语言）·（TAMPILAN 深色模式下版本再做，暂隐藏）·
-/// PRIVASI & KEAMANAN（公开档案/隐私政策/条款）· ZONA BAHAYA（退出/注销，红字）。
+/// PRIVASI & KEAMANAN（公开档案/隐私政策/条款）· TENTANG APLIKASI（手动检查更新，V1.3.4 Story 3.4）·
+/// ZONA BAHAYA（退出/注销，红字，始终在最后）。
 /// 语言逻辑在 7.2、退出/注销逻辑在 7.3（双重确认 + 短语校验，PDP 数据主体权利可达）。
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -40,6 +45,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
   bool _notif = false;
 
   static const Color _danger = AppColors.popRed;
+
+  /// 手动检查更新进行中（V1.3.4 Story 3.4 · AC2）：行换转圈、不可再点。
+  bool _checkingUpdate = false;
+
+  /// 当前包版本：入口行右值与底部小字同源（各自一次 `PackageInfo.fromPlatform()`）。
+  late final Future<PackageInfo> _packageInfo = PackageInfo.fromPlatform();
 
   @override
   void initState() {
@@ -195,6 +206,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
             ]),
             const SizedBox(height: 22),
 
+            // V1.3.4 Story 3.4：TENTANG APLIKASI —— 手动检查更新（危险区保持在最后，UX-DR7）。
+            _sectionTitle(l10n.settingsSectionAbout),
+            _card([ _checkUpdateRow(l10n) ]),
+            const SizedBox(height: 22),
+
             _sectionTitle(l10n.settingsSectionDanger),
             _card([
               _navRow(l10n.meLogout, danger: true, onTap: () => _logout(context, ref),
@@ -283,6 +299,94 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with WidgetsBinding
         ),
       ),
     );
+  }
+
+  /// 「Periksa pembaruan」行（V1.3.4 Story 3.4 · AC1/AC2）：与 [_navRow] 同结构（内边距 16/16、
+  /// 15/w500 左文案）；右侧 `v{version}` + 箭头，检查中换 18×18 转圈且 `onTap: null`。
+  Widget _checkUpdateRow(AppLocalizations l10n) {
+    final Widget trailing;
+    if (_checkingUpdate) {
+      trailing = const SizedBox(
+        key: ValueKey('settingsCheckUpdateSpinner'),
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(
+          strokeWidth: 2.5,
+          color: AppColors.mint,
+          backgroundColor: AppColors.violet100,
+        ),
+      );
+    } else {
+      trailing = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FutureBuilder<PackageInfo>(
+            future: _packageInfo,
+            builder: (context, snap) {
+              final info = snap.data;
+              // 未取到（未完成 / 出错）→ 不显示右值，只留箭头。
+              if (info == null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: Text('v${info.version}',
+                    key: const ValueKey('settingsCheckUpdateVersion'),
+                    style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.muted,
+                        fontFeatures: [FontFeature.tabularFigures()])),
+              );
+            },
+          ),
+          const Icon(Icons.chevron_right, size: 20, color: AppColors.muted),
+        ],
+      );
+    }
+    return InkWell(
+      key: const ValueKey('settingsCheckUpdate'),
+      onTap: _checkingUpdate ? null : _onCheckUpdate,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(l10n.settingsCheckUpdate,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.ink)),
+            ),
+            // 高度与箭头行一致（箭头 20），转圈 18 居中不撑高行。
+            SizedBox(height: 20, child: Center(child: trailing)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 手动检查更新（V1.3.4 Story 3.4 · AC2–AC6）：无视 72h 冷却与 6h 间隔。
+  Future<void> _onCheckUpdate() async {
+    if (_checkingUpdate) return;
+    setState(() => _checkingUpdate = true);
+    ManualCheckOutcome outcome;
+    try {
+      outcome = await ref.read(appUpdateControllerProvider.notifier).checkManually();
+    } catch (_) {
+      outcome = ManualCheckOutcome.failed; // 意外异常也按失败提示
+    } finally {
+      if (mounted) setState(() => _checkingUpdate = false);
+    }
+    // 检查最长约 10s，用户可能已离开设置页：离开了就不弹任何东西。
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context);
+    switch (outcome) {
+      case ManualCheckOutcome.recommended:
+        await showRecommendedUpdateDialog(context, ref);
+      case ManualCheckOutcome.forced:
+        // 🔴 复审：不传本页 ref —— 走根 State 常驻 ref 注册的入口，页面被 go() 卸载后仍能重弹。
+        await AppUpdateBootstrap.showForcedDialog();
+      case ManualCheckOutcome.upToDate:
+        showAppToast(context, l10n.updateAlreadyLatest);
+      case ManualCheckOutcome.failed:
+        showAppToast(context, l10n.updateCheckFailed);
+    }
   }
 
   Widget _toggleRow(String label, bool value, ValueChanged<bool> onChanged,
