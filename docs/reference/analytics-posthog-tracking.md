@@ -194,7 +194,7 @@ Tab 切换走 `goBranch` 不触发它，但**冷启动落地是 `ctx.go()`、是
 | T-11 | `diary_view_mode_switched` | Diary 在时间线 ⇄ 日历之间切换 | `to_view`（timeline/calendar） | `growth_archive_page.dart` |
 | T-12 | `milestone_achieved` | 里程碑达成（**后端上报**） | `code`、`level`、`path` | `MilestoneAnalyticsListener.java` |
 | T-13 | `login_guide_hard_dialog_shown` / `..._login_tapped` | 强登录弹窗：曝光 / 点了登录（2026-08-31 补，此前这条链路零埋点 → 漏斗上表现为下一个事件直接跳 `af_complete_registration`） | `entry_source`；后者另带 `method`（google/apple） | `login_guide_controller.dart` |
-| T-14 | `login_guide_entry_blocked` | 游客点了受控入口、被门控拦下（点击**意图**，与 onAllowed 里的浏览埋点相反，记在门控之外） | `entry`（tab_me / publish_add） | `app_shell.dart` |
+| T-14 | `login_guide_entry_blocked` | 游客点了受控入口、被门控拦下（点击**意图**，与 onAllowed 里的浏览埋点相反，记在门控之外） | `entry`（tab_me / publish_add / `ops_target`：运营弹窗·运营通知跳需登录页面，V1.3.4 Story 5.2） | `app_shell.dart` / `open_ops_target.dart` |
 
 属性取值词表：
 
@@ -204,7 +204,8 @@ Tab 切换走 `goBranch` 不触发它，但**冷启动落地是 `ctx.go()`、是
 - `source`（T-4）：`bottom_sticky_cta`（底部常驻主按钮）/ `timeline_item`（示例时间线条目与金徽章）/
   `demo_detail_interaction`（示例详情页点赞·评论·举报）/ `header_entry`（页头四个入口）
 - `entry_source`（T-7 / T-13）：`diary_cta`（游客态 Diary 引导）/ `social_soft_login`（软登录浮层）/
-  `login_page`（登录页直登）/ `tab_me`（底栏受控 Tab，2026-08-31 起）/ `publish_add`（底栏「＋」发布，同）/ `other`
+  `login_page`（登录页直登）/ `tab_me`（底栏受控 Tab，2026-08-31 起）/ `publish_add`（底栏「＋」发布，同）/
+  `ops_target`（运营弹窗 / 运营通知跳 KNOW_YOUR_PET·HEALTH·PUBLISH 时被拦，V1.3.4 Story 5.2 起）/ `other`
   ⚠️ `other` 的构成在 2026-08-31 之后**收窄**：底栏受控 Tab 与「＋」已改传显式值，
   剩下落在 `other` 档的主要是 401 续期失败的强弹窗与其余未标注入口。
   **改动日期前后的 `other` 占比不可直接对比**（老数据里它还包含 tab_me / publish_add）。
