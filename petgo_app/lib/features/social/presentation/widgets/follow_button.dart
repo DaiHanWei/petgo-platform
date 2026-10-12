@@ -53,6 +53,7 @@ class FollowButton extends ConsumerStatefulWidget {
     this.snapshotEpoch = 0,
     this.persistent = false,
     this.idleBackground,
+    this.idleBorderColor,
     this.onTapped,
   });
 
@@ -88,6 +89,9 @@ class FollowButton extends ConsumerStatefulWidget {
   /// 仅 [FollowButtonStyle.listCompact]：「Ikuti / Ikuti Balik」态的底色（缺省浅紫 violet100）。
   /// V1.3.4 Story 3.4：通知中心未读行本身是浅紫底，按钮改用白底（UI 稿核对结论）。
   final Color? idleBackground;
+
+  /// 仅 [FollowButtonStyle.listCompact]：「Ikuti / Ikuti Balik」态的 1.5px 描边色（缺省无描边）。
+  final Color? idleBorderColor;
 
   /// 已登录用户点下按钮那一刻回调（参数 = 这次是关注还是取关），在请求之前。
   /// V1.3.4 Story 3.4：通知中心据此上报 `notification_follow_back_tapped`。游客点击（弹登录）不回调。
@@ -189,6 +193,9 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
               style: FilledButton.styleFrom(
                 backgroundColor: widget.idleBackground ?? AppColors.violet100,
                 foregroundColor: AppColors.mint,
+                side: widget.idleBorderColor == null
+                    ? null
+                    : BorderSide(color: widget.idleBorderColor!, width: 1.5),
                 shape: shape,
                 minimumSize: const Size(88, 30),
                 padding: const EdgeInsets.symmetric(horizontal: 12),

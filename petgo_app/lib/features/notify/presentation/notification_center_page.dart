@@ -15,6 +15,7 @@ import '../../content/data/detail_repository.dart';
 import '../../content/domain/content_detail.dart';
 import '../../social/domain/follow_state.dart';
 import '../../social/presentation/widgets/follow_button.dart';
+import '../../user_profile/presentation/public_profile_page.dart';
 import '../../profile/domain/milestone_celebration_copy.dart';
 import '../../profile/domain/milestone_titles.dart';
 import '../../profile/presentation/widgets/milestone_badge.dart';
@@ -333,6 +334,12 @@ class _NotificationCenterPageState
       if (!mounted) return;
     } finally {
       _opening = false;
+    }
+    // 3.4 code-review F1 / T-21：进他人主页一律走 openUserProfile —— 那里才报 `user_profile_viewed`（from=avatar）。
+    final profileId = item.type == 'USER_FOLLOWED' ? int.tryParse(targetRef ?? '') : null;
+    if (profileId != null && location == '${PublicProfilePage.routeBase}/$profileId') {
+      unawaited(openUserProfile(context, ref, profileId));
+      return;
     }
     if (DeepLinkRoutes.isShellTabRoot(location)) {
       // Tab 分支根（如纪念日→/profile=Diary）只能 go 切分支：push 会二次构建 shell
@@ -981,18 +988,34 @@ class _NotificationTileState extends State<_NotificationTile> {
     final id = item.actorUserId;
     final token = item.actorToken;
     if (id == null || token == null) return null;
-    return FollowButton(
-      userId: id,
-      userToken: token,
-      initial: FollowState(iFollow: item.actorIFollow ?? false, followsMe: item.actorFollowsMe ?? true),
-      style: FollowButtonStyle.listCompact,
-      source: 'notification',
-      surfaceKey: 'notification:${item.deepLinkToken ?? id}',
-      snapshotEpoch: widget.followEpoch,
-      // 未读行本身是浅紫底 → 按钮用白底（UI 稿核对结论）；已读行用默认浅紫。
-      idleBackground: widget.read ? null : AppColors.card,
-      onTapped: widget.onFollowBackTapped,
-    );
+    final initial = FollowState(iFollow: item.actorIFollow ?? false, followsMe: item.actorFollowsMe ?? true);
+    final surfaceKey = 'notification:${item.deepLinkToken ?? id}';
+    // 3.4 code-review F6：按钮按全局规则隐藏时连同左侧间距一起不占位（否则已关注的行标题少 8px）。
+    return Consumer(builder: (context, ref, _) {
+      final display = resolveInlineFollow(
+        override: ref.watch(followStateProvider)[id],
+        server: initial,
+        snapshotEpoch: widget.followEpoch,
+        surfaceKey: surfaceKey,
+      );
+      if (display == InlineFollowDisplay.hidden) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: FollowButton(
+          userId: id,
+          userToken: token,
+          initial: initial,
+          style: FollowButtonStyle.listCompact,
+          source: 'notification',
+          surfaceKey: surfaceKey,
+          snapshotEpoch: widget.followEpoch,
+          // 未读行本身是浅紫底 → 按钮用白底 + 淡紫描边（UI 稿 `.ni.un .fbtn`，code-review F7）；已读行用默认浅紫。
+          idleBackground: widget.read ? null : AppColors.card,
+          idleBorderColor: widget.read ? null : AppColors.lineViolet,
+          onTapped: widget.onFollowBackTapped,
+        ),
+      );
+    });
   }
 
   /// 40×40 类型图标块；未读紫点（8×8）叠在图标块右上角（AC4.2，不再占条目最右侧的宽度）。
@@ -1174,10 +1197,7 @@ class _NotificationTileState extends State<_NotificationTile> {
                   }),
                 ),
                 // 新粉丝回关按钮（AC6）：按钮自己吃掉点击，不触发整行（不跳转、不标记已读）。
-                if (followBack != null) ...[
-                  const SizedBox(width: 8),
-                  followBack,
-                ],
+                ?followBack,
               ],
             ),
           ),

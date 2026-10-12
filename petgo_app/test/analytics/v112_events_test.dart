@@ -489,6 +489,8 @@ void main() {
         'from_screen',
         // V1.3.4 follow（D-6 / Story 1.3 / 2.2）：关注埋点与关注列表曝光的属性。
         'target_user_id', 'is_follow_back', 'is_self', 'is_empty',
+        // V1.3.4 follow · Story 3.4：通知条目点击带合并人数（后端文案条目才有）。
+        'actor_count',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

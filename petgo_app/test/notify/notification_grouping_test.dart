@@ -36,6 +36,15 @@ void main() {
     expect(groupOf(localMidnightish.toUtc(), now), NotificationGroup.today);
   });
 
+  /// code-review F3：CI 跑在 UTC，默认 toLocal() 与 UTC 无差别 —— 注入固定 +7（WIB）证明「先换本地再取日期」。
+  test('注入 WIB +7：UTC 昨天 18:00 = 本地今天 01:00 → 今天；去掉换算就会错判成昨天', () {
+    DateTime wib(DateTime d) => d.toUtc().add(const Duration(hours: 7));
+    final createdUtc = DateTime.utc(2026, 10, 11, 18, 0);
+    final nowUtc = DateTime.utc(2026, 10, 12, 1, 0); // = WIB 08:00
+    expect(groupOf(createdUtc, nowUtc, toLocal: wib), NotificationGroup.today);
+    expect(localDayDiff(createdUtc, nowUtc, toLocal: (d) => d.toUtc()), 1, reason: '不换算按 UTC 就是昨天');
+  });
+
   test('跨月边界', () {
     final nov2 = DateTime(2026, 11, 2, 9);
     expect(groupOf(DateTime(2026, 10, 31, 9).toUtc(), nov2), NotificationGroup.last7Days);

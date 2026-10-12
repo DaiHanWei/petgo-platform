@@ -202,9 +202,25 @@ Claude（云端 headless session，bmad-dev-story 流程手工执行）
 - core 的 `deep_link_routes.dart` 不 import feature 页面，新落点写字面量（与 `PlaceDetailPage.routeFor`、`PublicProfilePage.routeBase` 同形，测试里用这两个常量断言）。
 - 既有测试按设计更新：`milestone_sm_notification_test` 的点赞点击用例因新增「帖子探测」需要打桩详情仓库（统一返回网络错误 = 照常跳转），断言未改。
 
+**code-review 修复（2026-10-12，单独提交）**
+
+- F1【中，已确认】从通知进他人主页绕过了 `openUserProfile`，`user_profile_viewed` 漏报（T-21）→ 新粉丝落点改走 `openUserProfile`（from=avatar）。补测试断言事件。
+- F3【中，已确认】CI 跑在 UTC，时区换算用例删掉 `toLocal()` 也照样绿 → `groupOf / localDayDiff` 加可选 `toLocal` 注入，补「注入 WIB +7：UTC 昨天 18:00 归今天、不换算即错判昨天」用例。
+- F6【低，已确认】回关按钮隐藏时仍留 8px 间距 → 本页按同一 `resolveInlineFollow` 判断，隐藏时按钮与间距都不占位。
+- F7【低，已确认】未读行白底按钮缺 UI 稿的 1.5px 淡紫描边 → `FollowButton` 新增可选 `idleBorderColor`（缺省无描边，既有调用点不变），通知未读行传 `lineViolet`。
+- F8【低，已确认】埋点守卫属性登记表补 `actor_count`。
+- F9【低，已确认】补测试：`actorUserId` 缺失回退 `targetRef`、非后端文案条目不带 `actor_count`、探测进行中连点只上报一次、新图标底色、圆点在图标右上角（右缘对齐）、按钮隐藏不占宽。
+
+**待确认（复审项，未改）**
+
+- F2【中，已确认，属产品口径】系统推送点击按既有 FR-38 设计一律先落通知中心（`push_service.pushClickLocation`：带 token 即落通知中心），本 story 新增的两条深链只对**列表点击**生效；T-34「推送点击直达主页」因此不会兑现。L2 验收「点推送跳转」请按「推送 → 通知中心 → 点条目 → 主页 / 场所详情」验；若产品要推送直达，需在 `pushClickLocation` 给两种新类型开白名单。
+- F4【中，PLAUSIBLE】点赞 / 评论类点击串行等「标记已读 + 帖子探测」两次请求，弱网下无 loading、最长可达连接 / 读取超时；可改为并行 + 探测短超时。
+- F5【低，已确认，未改】回复通知的接收人点击时，探测请求与随后详情页各记一次浏览（帖子 `view_count` +2，浏览人数不受影响）；修法需后端提供不计浏览的探测或把探测结果传给详情页，超出本 story 范围。
+- F8 余项：对方已不再关注我时按钮显示「Ikuti」，点击仍报 `notification_follow_back_tapped`（事件 = 通知中心回关按钮的关注点击，不区分文案），建议决策日志注明口径。
+
 **待本地验收**
 
-- **L2 待本地验收**：UI 稿 D1 ~ D8 真机视觉（五段分组标题、浅紫未读底 + 图标右上角圆点、标题只加粗昵称、单行正文、两种新图标配色、未读行内白底回关按钮）；锁屏推送与列表同文案；点推送跳转（新粉丝进主页、场所评论进场所详情）；帖子已删 toast。
+- **L2 待本地验收**：UI 稿 D1 ~ D8 真机视觉（五段分组标题、浅紫未读底 + 图标右上角圆点、标题只加粗昵称、单行正文、两种新图标配色、未读行内白底回关按钮）；锁屏推送与列表同文案；点推送 → 通知中心 → 点条目跳转（新粉丝进主页、场所评论进场所详情，见待确认 F2）；帖子已删 toast；未读行回关按钮白底淡紫描边。
 - 本 story 只改 App，无 L1 项。L1/L2 待本地验收。
 
 **待确认**

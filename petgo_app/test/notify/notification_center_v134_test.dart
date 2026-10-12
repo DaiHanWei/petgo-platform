@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,13 +43,15 @@ class _Repo extends NotificationRepository {
 }
 
 class _Detail implements DetailRepository {
-  _Detail({this.gone = false});
+  _Detail({this.gone = false, this.gate});
   final bool gone;
+  final Completer<void>? gate;
   final List<int> probed = [];
 
   @override
   Future<ContentDetail> getDetail(int id) async {
     probed.add(id);
+    if (gate != null) await gate!.future;
     throw ContentLoadError(gone ? ContentLoadErrorKind.gone : ContentLoadErrorKind.network);
   }
 
@@ -283,6 +287,8 @@ void main() {
     final dotRect = tester.getRect(dot);
     expect(dotRect.left - tile.left, lessThan(70), reason: '贴在 40×40 图标块右上角（左内边距 12）');
     expect(dotRect.top - tile.top, lessThan(16));
+    // 右上角而不是左上角：圆点右缘与图标块右缘（左内边距 12 + 宽 40）对齐（越界 2px）。
+    expect(dotRect.right - tile.left, closeTo(54, 1));
   });
 
   testWidgets('AC5：两种新类型图标', (tester) async {
@@ -307,6 +313,12 @@ void main() {
     expect(person.color, AppColors.mint);
     final pin = tester.widget<Icon>(find.byIcon(Icons.location_on_rounded));
     expect(pin.color, AppColors.checkinIcon);
+    Color? blockColor(IconData icon) => (tester
+            .widget<Container>(find.ancestor(of: find.byIcon(icon), matching: find.byType(Container)).first)
+            .decoration! as BoxDecoration)
+        .color;
+    expect(blockColor(Icons.person_add_rounded), AppColors.violet100);
+    expect(blockColor(Icons.location_on_rounded), AppColors.checkinTint);
   });
 
   testWidgets('AC6：回关按钮三态', (tester) async {
@@ -321,6 +333,14 @@ void main() {
     expect(_btnLabel(tester, 'a'), l10n.followActionFollowBack);
     expect(_btnLabel(tester, 'b'), l10n.followActionFollow);
     expect(_followBtn('c'), findsNothing, reason: '我已关注 → 不显示');
+    // code-review F6：隐藏时不留间距 —— 已关注那一行的标题与无按钮的系统行一样宽。
+    expect(find.descendant(of: find.byKey(const ValueKey('notification_c')), matching: find.byType(Padding)),
+        findsWidgets);
+    double contentWidth(String t) => tester
+        .getSize(find.ancestor(of: find.byKey(ValueKey('notificationTitle_$t')), matching: find.byType(Expanded)).first)
+        .width;
+    expect(contentWidth('c'), greaterThan(contentWidth('a')));
+    expect(contentWidth('c') - contentWidth('a'), greaterThan(88), reason: '隐藏时按钮与间距都不占位');
   });
 
   testWidgets('AC6.4：未读行按钮白底，已读行默认浅紫', (tester) async {
@@ -328,13 +348,14 @@ void main() {
       [_followed(token: 'u', userId: 41), _followed(token: 'r', userId: 42, read: true)],
     ]));
 
-    Color? bg(String token) => tester
+    ButtonStyle style(String token) => tester
         .widget<FilledButton>(find.descendant(of: _followBtn(token), matching: find.byType(FilledButton)))
-        .style!
-        .backgroundColor!
-        .resolve(<WidgetState>{});
-    expect(bg('u'), AppColors.card);
-    expect(bg('r'), AppColors.violet100);
+        .style!;
+    expect(style('u').backgroundColor!.resolve(<WidgetState>{}), AppColors.card);
+    expect(style('u').side!.resolve(<WidgetState>{})!.color, AppColors.lineViolet,
+        reason: 'UI 稿 .ni.un .fbtn 白底 + 淡紫描边（code-review F7）');
+    expect(style('r').backgroundColor!.resolve(<WidgetState>{}), AppColors.violet100);
+    expect(style('r').side, isNull);
   });
 
   testWidgets('AC6.3 / 6.7 / AC8.2：点回关 → 关注、变 Following 可再点，不跳转、不标已读、不报条目点击',
@@ -400,11 +421,56 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('notification_f1')));
     await tester.pumpAndSettle();
 
-    expect(r.nav.pushed, '/users/42');
+    expect(r.nav.pushed, startsWith('/users/42'));
     expect(repo.markReadTokens, ['f1']);
     final tap = events.firstWhere((e) => e.$1 == 'app_notification_item_tapped').$2!;
     expect(tap['notif_type'], 'user_followed');
     expect(tap['actor_count'], 1);
+    // 3.4 code-review F1 / T-21：走 openUserProfile，报主页浏览 from=avatar。
+    final viewed = events.firstWhere((e) => e.$1 == 'user_profile_viewed').$2!;
+    expect(viewed, {'target_user_id': 42, 'from': 'avatar'});
+  });
+
+  testWidgets('AC7.2：actorUserId 缺失时退回 targetRef；非后端文案条目不带 actor_count', (tester) async {
+    final r = await _pump(tester, _Repo([
+      [
+        NotificationItem(
+          type: 'USER_FOLLOWED',
+          deepLinkType: 'USER_FOLLOWED',
+          deepLinkToken: 'f9',
+          targetRef: '77',
+          read: false,
+          createdAt: _daysAgo(0),
+        ),
+      ],
+    ]));
+
+    await tester.tap(find.byKey(const ValueKey('notification_f9')));
+    await tester.pumpAndSettle();
+
+    expect(r.nav.pushed, startsWith('/users/77'));
+    final tap = events.firstWhere((e) => e.$1 == 'app_notification_item_tapped').$2!;
+    expect(tap.containsKey('actor_count'), isFalse);
+  });
+
+  testWidgets('探测进行中再点任何一行都忽略：只上报一次条目点击', (tester) async {
+    final gate = Completer<void>();
+    final r = await _pump(tester, detail: _Detail(gate: gate), _Repo([
+      [
+        NotificationItem(type: 'CONTENT_LIKED', deepLinkType: 'CONTENT_LIKED', deepLinkToken: 'x1',
+            targetRef: '81', read: false, createdAt: _daysAgo(0)),
+      ],
+    ]));
+
+    await tester.tap(find.byKey(const ValueKey('notification_x1')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('notification_x1')));
+    await tester.pump();
+    gate.complete();
+    await tester.pumpAndSettle();
+
+    expect(events.where((e) => e.$1 == 'app_notification_item_tapped'), hasLength(1));
+    expect(r.nav.pushed, '/content/81');
   });
 
   testWidgets('AC7.1：点场所评论 → 场所详情', (tester) async {
