@@ -27,6 +27,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
             + "AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE")
     java.util.List<Object[]> findActivePublicTokens(@Param("ids") java.util.Collection<Long> ids);
 
+    /**
+     * 这批 id 里<b>未注销</b>账号的 {@code (id, public_token)}，<b>封号也给</b>（V1.3.4 follow Story 2.2）。
+     * 专供关注 / 粉丝列表：封号用户仍留在列表里且可被取关（D-8），取关要用 token。
+     */
+    @Query("SELECT u.id, u.publicToken FROM User u WHERE u.id IN :ids AND u.deletedAt IS NULL")
+    java.util.List<Object[]> findUndeletedPublicTokens(@Param("ids") java.util.Collection<Long> ids);
+
     /** V1.3.4 follow D-2：按对外不可枚举标识取号（关注接口解析目标用）。 */
     Optional<User> findByPublicToken(String publicToken);
 

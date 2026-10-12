@@ -57,6 +57,26 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, UserFoll
     List<UserFollow> findBetween(@Param("viewerId") long viewerId,
             @Param("targetIds") List<Long> targetIds);
 
+    /**
+     * 关注列表一页（Story 2.2 · AD-4）：{@code ownerId} 关注的人，keyset {@code created_at DESC, followee_id DESC}。
+     * 调用方传 {@code limit + 1} 判 hasMore；首页用 {@code KeysetCursor.firstPage()} 哨兵（不需要 hasCursor 门控）。
+     * 走 {@code idx_user_follows_follower_created}（T-4 三列）。
+     */
+    @Query("SELECT f FROM UserFollow f WHERE f.followerId = :ownerId "
+            + "AND (f.createdAt < :cursorTs OR (f.createdAt = :cursorTs AND f.followeeId < :cursorId)) "
+            + "ORDER BY f.createdAt DESC, f.followeeId DESC")
+    List<UserFollow> findFollowingPage(@Param("ownerId") long ownerId,
+            @Param("cursorTs") Instant cursorTs, @Param("cursorId") long cursorId,
+            org.springframework.data.domain.Pageable page);
+
+    /** 粉丝列表一页：关注 {@code ownerId} 的人，keyset {@code created_at DESC, follower_id DESC}。 */
+    @Query("SELECT f FROM UserFollow f WHERE f.followeeId = :ownerId "
+            + "AND (f.createdAt < :cursorTs OR (f.createdAt = :cursorTs AND f.followerId < :cursorId)) "
+            + "ORDER BY f.createdAt DESC, f.followerId DESC")
+    List<UserFollow> findFollowersPage(@Param("ownerId") long ownerId,
+            @Param("cursorTs") Instant cursorTs, @Param("cursorId") long cursorId,
+            org.springframework.data.domain.Pageable page);
+
     /** 注销清理：删除该用户两个方向的全部关注行，返回删除行数。 */
     @Modifying
     @Query(value = "DELETE FROM user_follows WHERE follower_id = :userId OR followee_id = :userId",

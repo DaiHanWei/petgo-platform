@@ -96,11 +96,22 @@ public class AccountQueryService {
      */
     @Transactional(readOnly = true)
     public Map<Long, String> publicTokensOf(Collection<Long> userIds) {
+        return publicTokensOf(userIds, false);
+    }
+
+    /**
+     * 同 {@link #publicTokensOf(Collection)}；{@code includeDeactivated = true} 时<b>封号账号也给 token</b>
+     * （已注销仍不给）—— 关注 / 粉丝列表专用（Story 2.2 · D-8：封号用户留在列表里、可被取关）。
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, String> publicTokensOf(Collection<Long> userIds, boolean includeDeactivated) {
         if (userIds == null || userIds.isEmpty()) {
             return Map.of();
         }
+        List<Long> ids = userIds.stream().distinct().toList();
         Map<Long, String> out = new java.util.HashMap<>();
-        for (Object[] row : users.findActivePublicTokens(userIds.stream().distinct().toList())) {
+        for (Object[] row : includeDeactivated ? users.findUndeletedPublicTokens(ids)
+                : users.findActivePublicTokens(ids)) {
             out.put((Long) row[0], (String) row[1]);
         }
         return out;

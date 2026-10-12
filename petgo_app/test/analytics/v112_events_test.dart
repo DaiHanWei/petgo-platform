@@ -325,6 +325,9 @@ void main() {
         // 🔴 刻意不挂 `post_`：评论赞混进帖子赞的口径，正是这条 bug 要纠正的。
         // 名字由 PRD §4 定死为 `comment_like_tapped`，扩表、不改名。
         'comment_',
+        // 关注列表（V1.3.4 follow · FR-140.9 / Story 2.2 的 `follow_list_viewed`）。模块是「关注列表页」——
+        // 我的页与他人主页两处入口共用，挂 `me_` / `user_` 都会误导。⚠️ 新模块入表，不是为遗留事件放宽规则。
+        'follow_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -479,6 +482,8 @@ void main() {
         // 推送疲劳终点信号（V1.4.0 Story 9.3）：from_screen ∈ {app_launch, settings_page}，
         // 受控字面量，不是 UI 文案。
         'from_screen',
+        // V1.3.4 follow（D-6 / Story 1.3 / 2.2）：关注埋点与关注列表曝光的属性。
+        'target_user_id', 'is_follow_back', 'is_self', 'is_empty',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

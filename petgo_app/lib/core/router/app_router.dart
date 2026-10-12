@@ -43,6 +43,8 @@ import '../../features/social/domain/account_action_entry.dart';
 import '../../features/social/presentation/blocked_users_page.dart';
 import '../../features/support/presentation/my_tickets_page.dart';
 import '../../features/user_profile/presentation/public_profile_page.dart';
+import '../../features/social/domain/follow_list_item.dart';
+import '../../features/social/presentation/follow_list_page.dart';
 import '../../features/support/presentation/ticket_compose_page.dart';
 import '../../features/support/presentation/ticket_detail_page.dart';
 import '../../features/support/presentation/csat_page.dart';
@@ -1080,6 +1082,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         builder: (c, s) => PublicProfilePage(
           userId: int.parse(s.pathParameters['userId']!),
           entry: accountActionEntryFromWire(s.uri.queryParameters['entry']),
+        ),
+      ),
+      // V1.3.4 follow Story 2.2：关注 / 粉丝列表（游客可看，不进 _controlledLocations；shell 外 push 隐藏 Tab Bar）。
+      GoRoute(
+        path: FollowListPage.routePattern,
+        builder: (c, s) => FollowListPage(
+          userId: int.parse(s.pathParameters['userId']!),
+          initialTab: FollowListTab.fromWire(s.uri.queryParameters['tab']),
         ),
       ),
       // ===== V1.1.6 Story 2.3：App 内访客只读视图（AD-2 Rule 6）=====

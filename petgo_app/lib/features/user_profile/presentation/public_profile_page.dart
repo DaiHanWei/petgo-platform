@@ -22,7 +22,9 @@ import '../../auth/domain/auth_guard.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../social/data/blocked_users_repository.dart';
 import '../../social/domain/account_action_entry.dart';
+import '../../social/domain/follow_list_item.dart';
 import '../../social/domain/follow_state.dart';
+import '../../social/presentation/follow_list_page.dart';
 import '../../social/presentation/widgets/follow_button.dart';
 import '../../me/data/me_counts_provider.dart';
 import '../../me/presentation/profile_edit_sheet.dart';
@@ -299,7 +301,8 @@ class PublicProfilePage extends ConsumerWidget {
           ),
         ],
         const SizedBox(height: AppSpacing.md),
-        // 四格（AC4.2）。Mengikuti / Pengikut 两格本 story 不可点（Story 2.2 接关注列表）。
+        // 四格（AC4.2）。Story 2.2：Mengikuti / Pengikut 两格进关注 / 粉丝列表；Postingan / Suka 不可点。
+        // 被拉黑方看拉黑者主页（A7）照常可点（列表接口对「对方拉黑了我」照常返回，D-10）。
         // 🔴 帖子 / 获赞：被拉黑方视角服务端已置 0（与「真没发过」逐字节一致）；
         //    关注 / 粉丝为真实值 —— 客户端不做任何「是否被拉黑」判断（FR-118.5）。
         ProfileStatsRow(
@@ -307,6 +310,8 @@ class PublicProfilePage extends ConsumerWidget {
           likeCount: p.likeCount,
           followingCount: p.followingCount,
           followerCount: followers,
+          onFollowingTap: () => context.push(FollowListPage.location(userId, FollowListTab.following)),
+          onFollowersTap: () => context.push(FollowListPage.location(userId, FollowListTab.followers)),
         ),
         const SizedBox(height: AppSpacing.md),
         // 主按钮槽位（AC4.5）：自己 → Edit Profil（D-11）；他人 → 关注三态；老后端无 token → 不渲染。

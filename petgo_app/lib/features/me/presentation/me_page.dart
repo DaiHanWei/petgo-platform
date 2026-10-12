@@ -17,6 +17,8 @@ import '../../profile/data/profile_repository.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../../profile/domain/pet_age.dart';
 import '../../profile/domain/pet_profile.dart';
+import '../../social/domain/follow_list_item.dart';
+import '../../social/presentation/follow_list_page.dart';
 import '../data/me_counts_provider.dart';
 import '../data/my_posts_repository.dart';
 import 'profile_edit_sheet.dart';
@@ -138,11 +140,17 @@ class _MeStats extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // 按当前用户 id 取实例（换账号不带上一个账号的旧值，见 meCountsProvider 注释）。
     final counts = ref.watch(meCountsProvider(profile?.id)).value ?? MeCounts.fromProfile(profile);
+    // V1.3.4 Story 2.2 · AC2：Mengikuti / Pengikut 两格进我的关注 / 粉丝列表；id 未知时不可点。
+    final id = profile?.id;
     return ProfileStatsRow(
       postCount: counts.postCount,
       likeCount: counts.likeCount,
       followingCount: counts.followingCount,
       followerCount: counts.followerCount,
+      onFollowingTap:
+          id == null ? null : () => context.push(FollowListPage.location(id, FollowListTab.following)),
+      onFollowersTap:
+          id == null ? null : () => context.push(FollowListPage.location(id, FollowListTab.followers)),
     );
   }
 }

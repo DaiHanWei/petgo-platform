@@ -341,6 +341,12 @@ class ApiPaths {
   /// 路径用**不可枚举用户 token**（D-2），不用数字 id。返回 `{iFollow, followsMe, followerCount}`。
   static String userFollow(String userToken) => '$base/users/$userToken/follow';
 
+  /// 关注列表（V1.3.4 follow · Story 2.2）：`{token}` 用户关注的人，`?cursor=` 不透明游标，每页 20。游客可读。
+  static String userFollowing(String userToken) => '$base/users/$userToken/following';
+
+  /// 粉丝列表（Story 2.2）：关注 `{token}` 用户的人。游客可读。
+  static String userFollowers(String userToken) => '$base/users/$userToken/followers';
+
   /// 公开主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2）：
   /// 该用户全部 PUBLIC 内容，三类混排、时间倒序、`?cursor=` 游标分页。游客可读。
   static String userPublicPosts(int userId) => '$base/users/$userId/posts';

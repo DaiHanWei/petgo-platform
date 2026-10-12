@@ -3930,5 +3930,9 @@
   "profilePetsSection": "Pets",
   "@profilePetsSection": {"description": "Other user's profile: pets section title"},
   "mePetsSection": "My pets",
-  "@mePetsSection": {"description": "Me page: my pets section title (V1.3.4 FR-140)"}
+  "@mePetsSection": {"description": "Me page: my pets section title (V1.3.4 FR-140)"},
+  "followListEmptyFollowing": "Not following anyone yet",
+  "@followListEmptyFollowing": {"description": "Follow list (Following tab) empty state (V1.3.4 FR-140.9)"},
+  "followListEmptyFollowers": "No followers yet",
+  "@followListEmptyFollowers": {"description": "Follow list (Followers tab) empty state"}
 }

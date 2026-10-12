@@ -2566,5 +2566,7 @@
   "profileStatPosts": "Postingan",
   "profileStatLikes": "Suka",
   "profilePetsSection": "Hewan",
-  "mePetsSection": "Hewanku"
+  "mePetsSection": "Hewanku",
+  "followListEmptyFollowing": "Belum mengikuti siapa pun",
+  "followListEmptyFollowers": "Belum ada pengikut"
 }

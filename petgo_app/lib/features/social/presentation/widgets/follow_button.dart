@@ -24,6 +24,10 @@ enum FollowButtonStyle {
   /// Feed 卡 / 详情头部的文字按钮（UI 稿 C1 / C2 / C4 / C5 `.fc-btn .fbtn`）。**非常驻**：
   /// 已关注的作者不显示；点关注的那个按钮保留「Mengikuti」，同一用户其他位置立即隐藏（AD-7）。
   textInline,
+
+  /// 关注 / 粉丝列表行右侧的小按钮（Story 2.2 · UI 稿 B1 / B3 / B7 `.fbtn`）：高 30、圆角 8、12 号字、最小宽 88；
+  /// Ikuti / Ikuti Balik 浅紫底紫字，Mengikuti 白底灰框。常驻与否由 [FollowButton.persistent] 决定。
+  listCompact,
 }
 
 /// 关注 / 取关按钮（V1.3.4 follow · Story 1.3 · AC3 / AC5 / AC7）。
@@ -47,6 +51,7 @@ class FollowButton extends ConsumerStatefulWidget {
     this.onNotFound,
     this.surfaceKey,
     this.snapshotEpoch = 0,
+    this.persistent = false,
   });
 
   /// 对方数字 userId（覆盖表的键 / 埋点 `target_user_id`）。
@@ -74,6 +79,10 @@ class FollowButton extends ConsumerStatefulWidget {
   /// 服务端快照（[initial]）发请求前读到的全局关注版本号（`FeedItem.followEpoch` 等）。
   final int snapshotEpoch;
 
+  /// 仅 [FollowButtonStyle.listCompact]：是否常驻位置（AD-7）。我自己的 Mengikuti 列表 = 常驻：
+  /// 始终三态（取关后该行保留、按钮变 Ikuti）；其余列表 = 非常驻：已关注不显示、本按钮保留 Mengikuti。
+  final bool persistent;
+
   @override
   ConsumerState<FollowButton> createState() => _FollowButtonState();
 }
@@ -98,6 +107,29 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
             ? l10n.followActionFollowing
             : (eff.followsMe ? l10n.followActionFollowBack : l10n.followActionFollow);
         return _profileFull(label, eff.iFollow);
+      case FollowButtonStyle.listCompact:
+        if (widget.persistent) {
+          final eff = ref
+              .read(followStateProvider.notifier)
+              .effective(widget.userId, widget.initial, snapshotEpoch: widget.snapshotEpoch);
+          return _listCompact(
+              eff.iFollow
+                  ? l10n.followActionFollowing
+                  : (eff.followsMe ? l10n.followActionFollowBack : l10n.followActionFollow),
+              following: eff.iFollow);
+        }
+        final listDisplay = resolveInlineFollow(
+          override: overrides[widget.userId],
+          server: widget.initial,
+          snapshotEpoch: widget.snapshotEpoch,
+          surfaceKey: _surfaceKey,
+        );
+        return switch (listDisplay) {
+          InlineFollowDisplay.hidden => const SizedBox.shrink(),
+          InlineFollowDisplay.following => _listCompact(l10n.followActionFollowing, following: true),
+          InlineFollowDisplay.followBack => _listCompact(l10n.followActionFollowBack, following: false),
+          InlineFollowDisplay.follow => _listCompact(l10n.followActionFollow, following: false),
+        };
       case FollowButtonStyle.textInline:
         // 自己的帖子（C7）不显示。
         final me = ref.watch(authControllerProvider.select((s) => s.profile?.id));
@@ -115,6 +147,46 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
           InlineFollowDisplay.follow => _textInline(l10n.followActionFollow, plus: true),
         };
     }
+  }
+
+  /// UI 稿 `.fbtn`（列表行）：高 30、圆角 8、12 号字、最小宽 88。
+  Widget _listCompact(String label, {required bool following}) {
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
+    final text = Text(label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600));
+    const constraints = BoxConstraints(minWidth: 88, minHeight: 30, maxHeight: 30);
+    return ConstrainedBox(
+      key: ValueKey('followList_$_surfaceKey'),
+      constraints: constraints,
+      child: following
+          ? OutlinedButton(
+              onPressed: _onTap,
+              style: OutlinedButton.styleFrom(
+                backgroundColor: AppColors.surface,
+                foregroundColor: AppColors.ink2,
+                side: const BorderSide(color: AppColors.line, width: 1.5),
+                shape: shape,
+                minimumSize: const Size(88, 30),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: text,
+            )
+          : FilledButton(
+              onPressed: _onTap,
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.violet100,
+                foregroundColor: AppColors.mint,
+                shape: shape,
+                minimumSize: const Size(88, 30),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: text,
+            ),
+    );
   }
 
   /// UI 稿 `.fc-btn .fbtn`：「+ Ikuti」紫 13 / w600（「+」w700、间隔 3，T-16 前缀单独渲染）；
