@@ -64,12 +64,14 @@ public class NotificationService {
     private final NotificationAggregateDao aggregates;
     private final NotificationActorRepository actors;
     private final InteractionCopyRenderer copy;
+    private final InteractionActorResolver unreadResolver;
     private final SecureRandom random = new SecureRandom();
 
     public NotificationService(NotificationRepository repo, StringRedisTemplate redis,
             NotificationPusher pusher, org.springframework.context.MessageSource messageSource,
             com.tailtopia.auth.service.AccountQueryService accountQuery, NotificationAggregateDao aggregates,
-            NotificationActorRepository actors, InteractionCopyRenderer copy) {
+            NotificationActorRepository actors, InteractionCopyRenderer copy,
+            InteractionActorResolver unreadResolver) {
         this.repo = repo;
         this.redis = redis;
         this.pusher = pusher;
@@ -78,6 +80,7 @@ public class NotificationService {
         this.aggregates = aggregates;
         this.actors = actors;
         this.copy = copy;
+        this.unreadResolver = unreadResolver;
     }
 
     /**
@@ -196,6 +199,11 @@ public class NotificationService {
                 bumpUnreadBadge(recipientUserId);
             } else if (newActor) {
                 aggregates.touch(r.id()); // 合并：时间刷新、角标不动
+                // 3.3 code-review F3：合并前这条若「不可见」（原触发人全被过滤 → 列表隐藏、角标未计，T-36），
+                // 这次合进来的人让它重新可见 → 角标要补 +1，否则铃铛比可见未读少 1。
+                if (wasInvisible(recipientUserId, r.id(), actorUserId)) {
+                    bumpUnreadBadge(recipientUserId);
+                }
             } else {
                 // T-29：同一人取消赞再赞、仍未读 —— 不刷新时间、不顶到最上、不再推送。
                 return repo.findById(r.id()).orElseThrow();
@@ -224,6 +232,13 @@ public class NotificationService {
             push.run();
         }
         return saved;
+    }
+
+    /** 合并前（不含本次触发人）的触发人是否全被过滤。 */
+    private boolean wasInvisible(long recipientUserId, long notificationId, long newActorId) {
+        List<Long> before = actors.findActorIdsNewestFirst(notificationId).stream()
+                .filter(id -> id != newActorId).toList();
+        return !before.isEmpty() && copy.resolve(recipientUserId, before).isEmpty();
     }
 
     private void pushInteraction(long recipientUserId, NotificationType type, String variant, String aggregateKey,
@@ -333,7 +348,8 @@ public class NotificationService {
             String key = UNREAD_KEY_PREFIX + recipientUserId;
             Long newCount = redis.opsForValue().increment(key);
             if (newCount != null && newCount == 1L) {
-                long dbUnread = repo.countByRecipientUserIdAndReadIsFalse(recipientUserId);
+                // V1.3.4 · 3.3 code-review F4：自愈值用与通知中心同一口径的「有效未读数」（T-36：不可见条目不计）。
+                long dbUnread = unreadResolver.effectiveUnreadCount(recipientUserId);
                 if (dbUnread > 1) {
                     redis.opsForValue().set(key, String.valueOf(dbUnread));
                 }

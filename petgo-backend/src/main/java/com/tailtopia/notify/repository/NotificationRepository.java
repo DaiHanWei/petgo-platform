@@ -67,15 +67,17 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     /**
      * 某人的<b>未读</b>、带触发人行的互动通知 id（Story 3.3 · ⚠️ T-36：触发人全被过滤的条目不计入未读角标，
-     * 角标校准时据此找出要扣掉的那些）。只看四种互动类型。
+     * 角标校准时据此找出要扣掉的那些）。{@code types} 由 {@code InteractionActorResolver.INTERACTION_TYPE_NAMES} 传入，
+     * 与 {@code NotificationService.INTERACTION_TYPES} 同一事实源（3.3 code-review F9）。
      */
     @Query(value = """
             SELECT n.id FROM notifications n
              WHERE n.recipient_user_id = :userId AND n.is_read = false
-               AND n.type IN ('CONTENT_LIKED', 'CONTENT_COMMENTED', 'USER_FOLLOWED', 'PLACE_COMMENTED')
+               AND n.type IN (:types)
                AND EXISTS (SELECT 1 FROM notification_actors a WHERE a.notification_id = n.id)
             """, nativeQuery = true)
-    List<Long> findUnreadInteractionIdsWithActors(@Param("userId") long userId);
+    List<Long> findUnreadInteractionIdsWithActors(@Param("userId") long userId,
+            @Param("types") java.util.Collection<String> types);
 
     /** Story 7.3：注销级联删除该用户全部通知（纯个人数据，物理删除）。 */
     @org.springframework.transaction.annotation.Transactional

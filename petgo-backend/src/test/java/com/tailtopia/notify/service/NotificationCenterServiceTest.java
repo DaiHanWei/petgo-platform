@@ -84,8 +84,8 @@ class NotificationCenterServiceTest {
         source.setDefaultEncoding(StandardCharsets.UTF_8.name());
         source.setFallbackToSystemLocale(false);
         InteractionCopyRenderer copy = new InteractionCopyRenderer(accounts, hideRelations, source);
-        return new NotificationCenterService(repo, redis, actorRepo, accounts, hideRelations, comments,
-                followReader, copy);
+        InteractionActorResolver resolver = new InteractionActorResolver(repo, actorRepo, accounts, hideRelations);
+        return new NotificationCenterService(repo, redis, resolver, accounts, comments, followReader, copy);
     }
 
     @Test
@@ -366,12 +366,83 @@ class NotificationCenterServiceTest {
         when(redis.opsForValue()).thenReturn(valueOps);
         when(valueOps.get("notify:unread:7")).thenReturn(null);
         when(repo.countByRecipientUserIdAndReadIsFalse(ME)).thenReturn(5L);
-        when(repo.findUnreadInteractionIdsWithActors(ME)).thenReturn(List.of(1L, 2L));
+        when(repo.findUnreadInteractionIdsWithActors(eq(ME), anyCollection())).thenReturn(List.of(1L, 2L));
         when(actorRepo.findByNotificationIds(anyCollection())).thenReturn(List.of(actor(1L, 3L), actor(2L, 4L)));
         when(accounts.findActorViews(anyCollection())).thenReturn(Map.of(3L, view(3L), 4L, view(4L)));
         when(hideRelations.hiddenByHolder(eq(ME), anyCollection())).thenReturn(Set.of(4L));
 
         assertThat(service().unreadCount(ME)).isEqualTo(4);
         verify(valueOps).set("notify:unread:7", "4");
+    }
+
+    // ===== 3.3 code-review 修复 =====
+
+    /** F6：首页把未读互动条目与本页候选合成一批解析 —— ①②③ 仍各一次；角标校准扣掉不可见的未读条目。 */
+    @Test
+    void firstPageCalibratesBadgeWithTheSameBatch() {
+        Notification visible = row(NotificationType.CONTENT_LIKED, null, null);
+        Notification hidden = row(NotificationType.USER_FOLLOWED, null, null);
+        when(repo.findPageBefore(eq(ME), any(), anyLong(), any(Pageable.class))).thenReturn(List.of(visible, hidden));
+        when(repo.findUnreadInteractionIdsWithActors(eq(ME), anyCollection()))
+                .thenReturn(List.of(visible.getId(), hidden.getId(), 999L));
+        when(repo.countByRecipientUserIdAndReadIsFalse(ME)).thenReturn(5L);
+        when(actorRepo.findByNotificationIds(anyCollection())).thenReturn(List.of(
+                actor(visible.getId(), 2L), actor(hidden.getId(), 3L), actor(999L, 3L)));
+        when(accounts.findActorViews(anyCollection())).thenReturn(Map.of(2L, view(2L), 3L, view(3L)));
+        when(hideRelations.hiddenByHolder(eq(ME), anyCollection())).thenReturn(Set.of(3L));
+        when(accounts.localeOf(ME)).thenReturn(ID);
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(followReader.followStates(eq(ME), anyCollection())).thenReturn(Map.of());
+
+        NotificationPage page = service().list(ME, null, 20);
+
+        assertThat(page.items()).hasSize(1);
+        verify(actorRepo, times(1)).findByNotificationIds(anyCollection());
+        verify(accounts, times(1)).findActorViews(anyCollection());
+        verify(hideRelations, times(1)).hiddenByHolder(eq(ME), anyCollection());
+        verify(valueOps).set("notify:unread:7", "3"); // 5 − 2 条不可见（hidden、999）
+    }
+
+    /** F2：一整页都被隐藏但后面还有 → 往后补取，不给 App「空页 + hasMore」。 */
+    @Test
+    void fullyHiddenPageIsRefilledFromTheNextRows() {
+        Notification h1 = row(NotificationType.CONTENT_LIKED, null, null);
+        Notification h2 = row(NotificationType.CONTENT_LIKED, null, null);
+        Notification sys = system();
+        when(repo.findPageBefore(eq(ME), any(), anyLong(), any(Pageable.class)))
+                .thenReturn(List.of(h1, h2, sys))   // limit 2 → hasMore
+                .thenReturn(List.of(sys));
+        when(actorRepo.findByNotificationIds(anyCollection()))
+                .thenReturn(List.of(actor(h1.getId(), 3L), actor(h2.getId(), 3L)));
+        when(accounts.findActorViews(anyCollection())).thenReturn(Map.of(3L, view(3L)));
+        when(hideRelations.hiddenByHolder(eq(ME), anyCollection())).thenReturn(Set.of(3L));
+
+        NotificationPage page = service().list(ME, CURSOR, 2);
+
+        assertThat(page.items()).extracting(NotificationItem::type).containsExactly("VET_REPLY");
+        assertThat(page.hasMore()).isFalse();
+        assertThat(page.nextCursor()).isNull();
+        verify(repo, times(2)).findPageBefore(eq(ME), any(), anyLong(), any(Pageable.class));
+    }
+
+    /** T-36 隐藏条目不影响游标推进：nextCursor 指向本批最后一条原始行。 */
+    @Test
+    void hiddenItemsStillAdvanceTheCursor() {
+        Notification visible = row(NotificationType.CONTENT_LIKED, null, null);
+        Notification hidden = row(NotificationType.CONTENT_LIKED, null, null);
+        Notification extra = system();
+        when(repo.findPageBefore(eq(ME), any(), anyLong(), any(Pageable.class)))
+                .thenReturn(List.of(visible, hidden, extra));
+        when(actorRepo.findByNotificationIds(anyCollection()))
+                .thenReturn(List.of(actor(visible.getId(), 2L), actor(hidden.getId(), 3L)));
+        when(accounts.findActorViews(anyCollection())).thenReturn(Map.of(2L, view(2L), 3L, view(3L)));
+        when(hideRelations.hiddenByHolder(eq(ME), anyCollection())).thenReturn(Set.of(3L));
+        when(accounts.localeOf(ME)).thenReturn(ID);
+
+        NotificationPage page = service().list(ME, CURSOR, 2);
+
+        assertThat(page.items()).hasSize(1);
+        assertThat(page.hasMore()).isTrue();
+        assertThat(KeysetCursor.decodeOrNull(page.nextCursor()).id()).isEqualTo(hidden.getId());
     }
 }

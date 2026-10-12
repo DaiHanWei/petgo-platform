@@ -45,6 +45,8 @@ class NotificationServiceTest {
     NotificationActorRepository actors;
     @Mock
     InteractionCopyRenderer copy;
+    @Mock
+    InteractionActorResolver resolver;
 
     private NotificationService service() {
         // push 文案本地化（bug 20260625-105）：mock MessageSource 回退到传入原文案，保持既有推送文本断言。
@@ -52,7 +54,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(2));
         when(accountQuery.localeOf(org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(java.util.Locale.forLanguageTag("id"));
-        return new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy);
+        return new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver);
     }
 
     @Test
@@ -99,7 +101,7 @@ class NotificationServiceTest {
         // 而本路径**根本不发推送**、用不到它们 —— 严格 stub 模式下会报 UnnecessaryStubbing。
         // 这本身就是"没发推送"的一个旁证。
         NotificationService svc =
-                new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy);
+                new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver);
         Notification n = svc.sendWithoutPush(7L, NotificationType.MILESTONE_SM_NODE,
                 "留痕标题", "留痕正文", NotificationType.MILESTONE_NODE.name(), "C-S14");
 
@@ -122,7 +124,7 @@ class NotificationServiceTest {
         when(redis.opsForValue()).thenReturn(valueOps);
         when(accountQuery.isVirtual(7L)).thenReturn(true);
         // 不走 service()：推送文案/语言根本用不到（严格 stub 下即为"没推送"的旁证）。
-        NotificationService svc = new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy);
+        NotificationService svc = new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver);
 
         svc.send(7L, NotificationType.CONTENT_LIKED, "a", "b", "X", "r");
         svc.sendWithCopy(7L, NotificationType.CONTENT_LIKED, "K", null, "a", "b", "r");
@@ -139,7 +141,7 @@ class NotificationServiceTest {
 
     /** 互动路径用的服务：不 stub 旧 pushText（严格 stub 下多余 stub 会报错）。 */
     private NotificationService interactionService() {
-        return new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy);
+        return new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver);
     }
 
     private void stubPushRendering() {
@@ -360,5 +362,60 @@ class NotificationServiceTest {
 
         verify(redis).delete("notify:likepush:55");
         org.mockito.Mockito.verifyNoInteractions(pusher);
+    }
+
+    // ===== 3.3 code-review F3 / F4 =====
+
+    /** F3：合并进一条原本不可见（触发人全被过滤、角标未计）的未读行 → 角标补 +1。 */
+    @Test
+    void mergeIntoPreviouslyInvisibleRowBumpsBadge() {
+        when(aggregates.upsertAggregate(eq(9L), any(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), eq("LIKE:POST:55"), isNull(), isNull()))
+                .thenReturn(new NotificationAggregateDao.UpsertResult(100L, "tok", false));
+        when(aggregates.addActor(100L, 3L)).thenReturn(true);
+        when(repo.findById(100L)).thenAnswer(inv -> java.util.Optional.of(persisted(100L, "tok")));
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(valueOps.setIfAbsent(anyString(), anyString(), any(java.time.Duration.class))).thenReturn(false);
+        when(actors.findActorIdsNewestFirst(100L)).thenReturn(java.util.List.of(3L, 2L));
+        when(copy.resolve(9L, java.util.List.of(2L))).thenReturn(java.util.Optional.empty());
+
+        interactionService().sendInteraction(9L, NotificationType.CONTENT_LIKED, 3L, "LIKE:POST:55", "55",
+                null, null, null);
+
+        verify(aggregates).touch(100L);
+        verify(valueOps).increment(NotificationService.UNREAD_KEY_PREFIX + "9");
+    }
+
+    @Test
+    void mergeIntoVisibleRowDoesNotBumpBadge() {
+        when(aggregates.upsertAggregate(eq(9L), any(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), eq("LIKE:POST:55"), isNull(), isNull()))
+                .thenReturn(new NotificationAggregateDao.UpsertResult(100L, "tok", false));
+        when(aggregates.addActor(100L, 3L)).thenReturn(true);
+        when(repo.findById(100L)).thenAnswer(inv -> java.util.Optional.of(persisted(100L, "tok")));
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(valueOps.setIfAbsent(anyString(), anyString(), any(java.time.Duration.class))).thenReturn(false);
+        when(actors.findActorIdsNewestFirst(100L)).thenReturn(java.util.List.of(3L, 2L));
+        when(copy.resolve(9L, java.util.List.of(2L))).thenReturn(java.util.Optional.of(SUMMARY));
+
+        interactionService().sendInteraction(9L, NotificationType.CONTENT_LIKED, 3L, "LIKE:POST:55", "55",
+                null, null, null);
+
+        verify(valueOps, never()).increment(anyString());
+    }
+
+    /** F4：角标键丢失后 INCR 得 1 → 用与通知中心同口径的有效未读数自愈（T-36）。 */
+    @Test
+    void badgeSelfHealUsesEffectiveUnreadCount() {
+        when(repo.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(valueOps.increment(NotificationService.UNREAD_KEY_PREFIX + "7")).thenReturn(1L);
+        when(resolver.effectiveUnreadCount(7L)).thenReturn(4L);
+
+        new NotificationService(repo, redis, pusher, messageSource, accountQuery, aggregates, actors, copy, resolver)
+                .sendWithoutPush(7L, NotificationType.MILESTONE_SM_NODE, "t", "b", "MILESTONE_NODE", "C-S1");
+
+        verify(valueOps).set(NotificationService.UNREAD_KEY_PREFIX + "7", "4");
+        verify(repo, never()).countByRecipientUserIdAndReadIsFalse(org.mockito.ArgumentMatchers.anyLong());
     }
 }

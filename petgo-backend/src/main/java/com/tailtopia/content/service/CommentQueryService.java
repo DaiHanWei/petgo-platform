@@ -78,19 +78,6 @@ public class CommentQueryService {
     }
 
     /**
-     * 一级评论分页，每条内嵌前 3 条二级回复 + replyCount。
-     * viewer 维度可见性过滤（§5.5）：非 VISIBLE 评论仅作者本人可见，游客（viewerId=null）仅见 VISIBLE。
-     *
-     * <p><b>V1.3.0 Story 2.4 起默认序为热度序</b>（{@code 点赞数 DESC, createdAt ASC, id ASC}，AD-A8.1）。
-     * 游标随之改用三元组的 {@link CommentHotCursor} —— <b>不是</b>共用的 {@link FeedCursor}
-     * （改那个会溢出到 Feed，见 CommentHotCursor 的类注释）。
-     *
-     * <p>⚠️ <b>不做服务端排序快照</b>（AD-A8.3，决策 A-6 已接受代价）：排序键每次查询实时取。
-     * 代价是某条评论的赞数恰在翻页瞬间跨越游标位置时，可能重复或漏一条 ——
-     * <b>后果是多看/少看一条评论，不是数据错误</b>。
-     * 「已渲染的列表不重排」由客户端承担，服务端不留状态。
-     */
-    /**
      * 一批评论的通知快照（Story 3.3）—— <b>一次</b> {@code findAllById}；缺失的 id 也给 {@code GONE}，调用方按 id 取必有值。
      * notify 只依赖本方法，不引用 {@code CommentRepository}（模块边界）。空入参不发查询。
      */
@@ -112,6 +99,19 @@ public class CommentQueryService {
         return out;
     }
 
+    /**
+     * 一级评论分页，每条内嵌前 3 条二级回复 + replyCount。
+     * viewer 维度可见性过滤（§5.5）：非 VISIBLE 评论仅作者本人可见，游客（viewerId=null）仅见 VISIBLE。
+     *
+     * <p><b>V1.3.0 Story 2.4 起默认序为热度序</b>（{@code 点赞数 DESC, createdAt ASC, id ASC}，AD-A8.1）。
+     * 游标随之改用三元组的 {@link CommentHotCursor} —— <b>不是</b>共用的 {@link FeedCursor}
+     * （改那个会溢出到 Feed，见 CommentHotCursor 的类注释）。
+     *
+     * <p>⚠️ <b>不做服务端排序快照</b>（AD-A8.3，决策 A-6 已接受代价）：排序键每次查询实时取。
+     * 代价是某条评论的赞数恰在翻页瞬间跨越游标位置时，可能重复或漏一条 ——
+     * <b>后果是多看/少看一条评论，不是数据错误</b>。
+     * 「已渲染的列表不重排」由客户端承担，服务端不留状态。
+     */
     @Transactional(readOnly = true)
     public CommentPageResponse topLevel(long postId, String cursor, Long viewerId) {
         // Story 1.3：这次要接住返回值——R2 的判据是**内容作者**，必须把 authorId 传进查询（AD-3）。

@@ -1,25 +1,20 @@
 package com.tailtopia.notify.service;
 
-import com.tailtopia.auth.dto.ActorView;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.content.service.CommentQueryService;
 import com.tailtopia.content.service.CommentQueryService.NotificationCommentSnapshot;
 import com.tailtopia.notify.domain.Notification;
-import com.tailtopia.notify.domain.NotificationActor;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.dto.NotificationItem;
 import com.tailtopia.notify.dto.NotificationPage;
-import com.tailtopia.notify.repository.NotificationActorRepository;
 import com.tailtopia.notify.repository.NotificationRepository;
 import com.tailtopia.notify.service.InteractionCopyRenderer.ActorSummary;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.paging.KeysetCursor;
 import com.tailtopia.social.read.FollowReader;
 import com.tailtopia.social.read.FollowState;
-import com.tailtopia.social.read.UserHideRelationReader;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -44,7 +39,9 @@ import org.springframework.transaction.annotation.Transactional;
  * 本页没有候选则一个都不调。跨模块只走对方的 service / 读端口，不写跨模块 SQL。
  *
  * <p>⚠️ T-36：触发人<b>全部</b>被过滤（注销 / 封号 / 被我隐藏）的条目<b>从列表隐藏</b>，未读角标同口径不计
- * （首页校准与缺键回算都扣掉它们）。分页游标仍按原始行推进，被隐藏的条目只会让某一页少几条。
+ * （首页校准、缺键回算、写入时的角标自愈都用 {@link InteractionActorResolver} 同一口径）。分页游标仍按原始行推进；
+ * 一页全被隐藏而后面还有时最多再补取 {@link #MAX_REFILL_ROUNDS} 轮，不给 App「空页 + hasMore」。
+ * 首页把未读互动条目与本页候选合成一批解析触发人，①②③ 仍各一次。
  * 合并会把 {@code created_at} 刷到当前：翻页期间被合并的那条会跳回首页，本次翻页看不到，重进即可。
  */
 @Service
@@ -52,24 +49,27 @@ public class NotificationCenterService {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationCenterService.class);
 
+    /**
+     * 一页现拼后若一条可见的都不剩、而后面还有（被隐藏的条目恰好占满一页），最多再往后补取几轮（3.3 code-review F2）——
+     * 否则 App 拿到「空页 + hasMore」会画成空态、再也翻不动。补取轮次有界，防止整库都是隐藏条目时拖垮请求。
+     */
+    static final int MAX_REFILL_ROUNDS = 3;
+
     private final NotificationRepository repo;
     private final StringRedisTemplate redis;
-    private final NotificationActorRepository actorRepo;
+    private final InteractionActorResolver actors;
     private final AccountQueryService accounts;
-    private final UserHideRelationReader hideRelations;
     private final CommentQueryService comments;
     private final FollowReader followReader;
     private final InteractionCopyRenderer copy;
 
     public NotificationCenterService(NotificationRepository repo, StringRedisTemplate redis,
-            NotificationActorRepository actorRepo, AccountQueryService accounts,
-            UserHideRelationReader hideRelations, CommentQueryService comments, FollowReader followReader,
-            InteractionCopyRenderer copy) {
+            InteractionActorResolver actors, AccountQueryService accounts, CommentQueryService comments,
+            FollowReader followReader, InteractionCopyRenderer copy) {
         this.repo = repo;
         this.redis = redis;
-        this.actorRepo = actorRepo;
+        this.actors = actors;
         this.accounts = accounts;
-        this.hideRelations = hideRelations;
         this.comments = comments;
         this.followReader = followReader;
         this.copy = copy;
@@ -89,19 +89,38 @@ public class NotificationCenterService {
     @Transactional(readOnly = true)
     public NotificationPage list(long userId, String cursor, int limit) {
         KeysetCursor c = parseCursor(cursor);
-        List<Notification> rows = repo.findPageBefore(
-                userId, c.createdAt(), c.id(), PageRequest.of(0, limit + 1));
-        boolean hasMore = rows.size() > limit;
-        List<Notification> pageRows = hasMore ? rows.subList(0, limit) : rows;
-        List<NotificationItem> items = renderPage(userId, pageRows);
-        Notification last = pageRows.isEmpty() ? null : pageRows.get(pageRows.size() - 1);
+        // 首页：未读互动条目与本页候选合成<b>一批</b>解析触发人 —— 角标校准不再单独多跑一遍 ①②③（3.3 code-review F6）。
+        List<Long> unreadIds = cursor == null ? actors.unreadInteractionIds(userId) : List.of();
+        List<NotificationItem> items = new ArrayList<>();
+        Map<Long, Optional<ActorSummary>> firstSummaries = Map.of();
+        boolean hasMore;
+        Notification last = null;
+        int round = 0;
+        do {
+            List<Notification> rows = repo.findPageBefore(
+                    userId, c.createdAt(), c.id(), PageRequest.of(0, limit + 1));
+            hasMore = rows.size() > limit;
+            List<Notification> pageRows = hasMore ? rows.subList(0, limit) : rows;
+            Rendered r = renderPage(userId, pageRows, round == 0 ? unreadIds : List.of());
+            if (round == 0) {
+                firstSummaries = r.summaries();
+            }
+            items.addAll(r.items());
+            if (!pageRows.isEmpty()) {
+                last = pageRows.get(pageRows.size() - 1);
+                c = new KeysetCursor(last.getCreatedAt(), last.getId());
+            }
+            round++;
+        } while (items.isEmpty() && hasMore && round <= MAX_REFILL_ROUNDS);
         String nextCursor = hasMore && last != null
                 ? new KeysetCursor(last.getCreatedAt(), last.getId()).encode()
                 : null;
         // 打开通知中心（首页）时以 DB 真实未读数校准 Redis 角标，自愈计数漂移
         // （如计数器残留致角标>0 但列表空，或行被清而计数未减）。仅校准计数，不改已读态。
+        // ⚠️ T-36：触发人全被过滤（列表里看不见）的未读互动条目不计。
         if (cursor == null) {
-            long actualUnread = effectiveUnreadCount(userId);
+            long actualUnread = Math.max(0, repo.countByRecipientUserIdAndReadIsFalse(userId)
+                    - InteractionActorResolver.invisibleCount(firstSummaries, unreadIds));
             // 🔎 漂移可观测（2026-08-19 加）：校准前后不一致说明角标确实漂了。
             // 线上反馈过「铃铛有数字、点进去没有新消息」，但代码里已知的四条成因
             // （INSERT 被静默丢弃 / 角标不自愈 / 前端刷太早 / 失败画成空态）都已修，
@@ -128,33 +147,45 @@ public class NotificationCenterService {
                 // 落到回算
             }
         }
-        long recomputed = effectiveUnreadCount(userId);
+        long recomputed = actors.effectiveUnreadCount(userId);
         redis.opsForValue().set(unreadKey(userId), String.valueOf(recomputed));
         return recomputed;
     }
 
     // ---------- Story 3.3：互动条目现拼 ----------
 
-    /** 一页条目：候选（四种互动类型）批量现拼；其余原样；触发人全被过滤的条目隐藏（T-36）。 */
-    private List<NotificationItem> renderPage(long userId, List<Notification> pageRows) {
-        List<Long> candidateIds = pageRows.stream()
-                .filter(n -> NotificationService.INTERACTION_TYPES.contains(n.getType()))
-                .map(Notification::getId).toList();
-        if (candidateIds.isEmpty()) {
-            return pageRows.stream().map(NotificationItem::from).toList();
+    /** 一页的渲染结果：可见条目 + 本批触发人摘要（首页角标校准复用）。 */
+    private record Rendered(List<NotificationItem> items, Map<Long, Optional<ActorSummary>> summaries) {
+    }
+
+    /**
+     * 一页条目：候选（四种互动类型）批量现拼；其余原样；触发人全被过滤的条目隐藏（T-36）。
+     *
+     * @param extraIds 与本页候选<b>同一批</b>解析的其它通知 id（首页角标校准用的未读互动条目）
+     */
+    private Rendered renderPage(long userId, List<Notification> pageRows, List<Long> extraIds) {
+        Set<Long> batch = new LinkedHashSet<>();
+        for (Notification n : pageRows) {
+            if (NotificationService.INTERACTION_TYPES.contains(n.getType())) {
+                batch.add(n.getId());
+            }
         }
-        // ① ② ③
-        Map<Long, List<Long>> actorsByNotification = actorsOf(candidateIds);
-        Map<Long, Optional<ActorSummary>> summaries = summarize(userId, actorsByNotification);
-        // ④ 评论快照：只对有可显示触发人的评论条目
+        batch.addAll(extraIds);
+        if (batch.isEmpty()) {
+            return new Rendered(pageRows.stream().map(NotificationItem::from).toList(), Map.of());
+        }
+        // ① ② ③ 各一次
+        Map<Long, Optional<ActorSummary>> summaries = actors.summarize(userId, batch);
+        // ④ 评论快照：只对有可显示触发人的评论条目；⑤ 新粉丝关系：只对有可显示触发人的新粉丝条目
         Set<Long> commentIds = new LinkedHashSet<>();
-        // ⑤ 新粉丝关系：只对有可显示触发人的新粉丝条目
         Set<Long> followerIds = new LinkedHashSet<>();
+        boolean anyVisible = false;
         for (Notification n : pageRows) {
             Optional<ActorSummary> s = summaries.get(n.getId());
             if (s == null || s.isEmpty()) {
                 continue;
             }
+            anyVisible = true;
             if (n.getType() == NotificationType.CONTENT_COMMENTED && n.getCommentId() != null) {
                 commentIds.add(n.getCommentId());
             } else if (n.getType() == NotificationType.USER_FOLLOWED) {
@@ -165,12 +196,12 @@ public class NotificationCenterService {
                 : comments.notificationSnapshots(commentIds);
         Map<Long, FollowState> states = followerIds.isEmpty() ? Map.of()
                 : followReader.followStates(userId, followerIds);
-        Locale locale = summaries.values().stream().anyMatch(Optional::isPresent)
-                ? accounts.localeOf(userId) : null;
+        Locale locale = anyVisible ? accounts.localeOf(userId) : null;
 
         List<NotificationItem> items = new ArrayList<>(pageRows.size());
         for (Notification n : pageRows) {
-            Optional<ActorSummary> s = summaries.get(n.getId());
+            Optional<ActorSummary> s = NotificationService.INTERACTION_TYPES.contains(n.getType())
+                    ? summaries.get(n.getId()) : null;
             if (s == null) {
                 items.add(NotificationItem.from(n)); // 非互动类型，或上线前的存量（无触发人行）
             } else if (s.isPresent()) {
@@ -178,7 +209,7 @@ public class NotificationCenterService {
             }
             // s.isEmpty()：触发人全被过滤 → 从列表隐藏（T-36）
         }
-        return items;
+        return new Rendered(items, summaries);
     }
 
     private NotificationItem render(Notification n, ActorSummary s, Locale locale,
@@ -197,45 +228,6 @@ public class NotificationCenterService {
         }
         return NotificationItem.rendered(n, title, body, s.latestActorId(), s.latestNickname(), s.latestToken(),
                 s.total(), iFollow, followsMe);
-    }
-
-    /** ① 触发人行一次取全，按通知分组（每组最新在前）。没有触发人行的通知不出现在结果里。 */
-    private Map<Long, List<Long>> actorsOf(List<Long> notificationIds) {
-        Map<Long, List<Long>> out = new HashMap<>();
-        for (NotificationActor a : actorRepo.findByNotificationIds(notificationIds)) {
-            out.computeIfAbsent(a.getId().getNotificationId(), k -> new ArrayList<>()).add(a.getId().getActorUserId());
-        }
-        return out;
-    }
-
-    /** ② ③ 各一次批量，再逐条纯函数过滤（与推送同一规则）。无触发人行 → 空 map。 */
-    private Map<Long, Optional<ActorSummary>> summarize(long userId, Map<Long, List<Long>> actorsByNotification) {
-        if (actorsByNotification.isEmpty()) {
-            return Map.of();
-        }
-        Set<Long> allActors = new LinkedHashSet<>();
-        actorsByNotification.values().forEach(allActors::addAll);
-        Map<Long, ActorView> views = accounts.findActorViews(allActors);
-        Set<Long> hidden = hideRelations.hiddenByHolder(userId, allActors);
-        Map<Long, Optional<ActorSummary>> out = new HashMap<>();
-        actorsByNotification.forEach((id, actors) ->
-                out.put(id, InteractionCopyRenderer.summarize(actors, views, hidden)));
-        return out;
-    }
-
-    /**
-     * 未读角标口径（⚠️ T-36）：库里未读数 − 「触发人全部被过滤、因而列表里看不见」的未读互动条目数。
-     * 只在首页校准与缺键回算时调用（日常读角标仍走 Redis）。
-     */
-    private long effectiveUnreadCount(long userId) {
-        long unread = repo.countByRecipientUserIdAndReadIsFalse(userId);
-        List<Long> interactionIds = repo.findUnreadInteractionIdsWithActors(userId);
-        if (interactionIds.isEmpty()) {
-            return unread;
-        }
-        long invisible = summarize(userId, actorsOf(interactionIds)).values().stream()
-                .filter(Optional::isEmpty).count();
-        return Math.max(0, unread - invisible);
     }
 
     /** 标记单条已读（token 定位，仅本人，否则 404 防枚举）+ 角标递减（不低于 0）。 */
