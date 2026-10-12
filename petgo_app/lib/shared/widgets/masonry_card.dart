@@ -183,35 +183,42 @@ class MasonryCard extends StatelessWidget {
                               const SizedBox(height: 1),
                               // V1.3.4 follow Story 2.1 · AC5.2（UI 稿 C1）：类型徽章从昵称行**移到时间右侧**，
                               // 给昵称行右侧的关注按钮让位；尺寸不变。
-                              Row(
-                                children: [
-                                  // 时间不收缩（很短）；空间不够时只让徽章收缩（code-review 2.1 #4）。
-                                  Text(time,
-                                      style: const TextStyle(
-                                          fontSize: 11, color: AppColors.muted),
-                                      maxLines: 1),
-                                  const SizedBox(width: 6),
-                                  // 类型徽章保留：三类内容要在首页可辨识（FR-93 明确要求保留）。
-                                  // 🛡 窄屏（320）+ 长按钮文案时时间行可能放不下 → 徽章也可收缩（文字省略），
-                                  //    尺寸样式不变，只是不再撑破作者行（AC8.1）。
-                                  Flexible(
-                                    child: Container(
-                                      key: ValueKey('feedCardTypeBadge_${item.id}'),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                          color: badgeBg,
-                                          borderRadius: BorderRadius.circular(5)),
-                                      child: Text(badgeLabel,
+                              // 时间优先完整显示（最多占满整行），徽章用剩下的宽度、放不下就省略
+                              // （code-review 2.1 #4：两个 Flexible 对半分会把徽章提前截断；
+                              //  时间完全不收缩又会在 320 宽 + 长按钮文案时溢出）。
+                              LayoutBuilder(
+                                builder: (context, c) => Row(
+                                  children: [
+                                    ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                          maxWidth: (c.maxWidth - 6).clamp(0, double.infinity)),
+                                      child: Text(time,
+                                          style: const TextStyle(
+                                              fontSize: 11, color: AppColors.muted),
                                           maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                              fontSize: 9.5,
-                                              fontWeight: FontWeight.w700,
-                                              color: badgeFg)),
+                                          overflow: TextOverflow.ellipsis),
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 6),
+                                    // 类型徽章保留：三类内容要在首页可辨识（FR-93 明确要求保留）。
+                                    Flexible(
+                                      child: Container(
+                                        key: ValueKey('feedCardTypeBadge_${item.id}'),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                            color: badgeBg,
+                                            borderRadius: BorderRadius.circular(5)),
+                                        child: Text(badgeLabel,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                                fontSize: 9.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: badgeFg)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),

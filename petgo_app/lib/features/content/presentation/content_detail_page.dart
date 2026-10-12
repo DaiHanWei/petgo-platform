@@ -391,26 +391,32 @@ class _DetailScaffold extends ConsumerWidget {
               ),
               // V1.3.4 follow Story 2.1 · AC6.1（UI 稿 C4）：分类徽章从作者行最右**移到时间右侧**，
               // 最右位置换成关注按钮。徽章大小不变（T-17）。
-              Row(
-                children: [
-                  // 时间不收缩；空间不够时只让徽章收缩（code-review 2.1 #4）。
-                  Text(formatPublishTime(context, l10n, detail.createdAt),
-                      maxLines: 1,
-                      style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
-                  const SizedBox(width: 6),
-                  // 分类彩徽章（窄屏放不下时文字省略，不撑破作者行）。
-                  Flexible(
-                    child: Container(
-                      key: const ValueKey('detailTypeBadge'),
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                      decoration: BoxDecoration(color: badge.bg, borderRadius: BorderRadius.circular(7)),
-                      child: Text(badge.label,
+              // 时间优先完整显示（最多占满整行），徽章用剩下的宽度、放不下就省略（code-review 2.1 #4）。
+              LayoutBuilder(
+                builder: (context, c) => Row(
+                  children: [
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: (c.maxWidth - 6).clamp(0, double.infinity)),
+                      child: Text(formatPublishTime(context, l10n, detail.createdAt),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: badge.fg)),
+                          style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    // 分类彩徽章（窄屏放不下时文字省略，不撑破作者行）。
+                    Flexible(
+                      child: Container(
+                        key: const ValueKey('detailTypeBadge'),
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(color: badge.bg, borderRadius: BorderRadius.circular(7)),
+                        child: Text(badge.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: badge.fg)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
