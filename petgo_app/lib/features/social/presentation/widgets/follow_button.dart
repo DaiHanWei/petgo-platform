@@ -210,6 +210,10 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
     final repo = ref.read(followRepositoryProvider);
     // 同理：成功后要失效我的页四格，请求返回时页面可能已关（code-review 1.4 #3）→ 先拿 container。
     final container = ProviderScope.containerOf(context, listen: false);
+    // 🔴 记下点击时的账号（code-review 1.3 F2）：请求在途时若 401 → 退游客 / 换账号，覆盖表已重建，
+    //    这时再写会把旧账号的关系写进新表 —— 写入前比对，不一致就丢弃。
+    final accountAtTap = container.read(authControllerProvider).profile?.id;
+    bool sameAccount() => container.read(authControllerProvider).profile?.id == accountAtTap;
     final userId = widget.userId;
     final surface = _surfaceKey;
     final before = ref.read(followStateProvider)[userId];
@@ -220,6 +224,7 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
     notifier.set(userId, current.copyWith(iFollow: wantFollow), pinnedSurface: surface);
     try {
       final result = wantFollow ? await repo.follow(token) : await repo.unfollow(token);
+      if (!sameAccount()) return;
       notifier.set(userId, result.state, pinnedSurface: surface);
       // D-6 过去式命名；成功后才报。is_follow_back = 点击前对方是否关注我（T-8，两个事件同口径）。
       Analytics.capture(wantFollow ? 'user_followed' : 'user_unfollowed', {
@@ -230,7 +235,8 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
       // V1.3.4 Story 1.4（T-15）：我的关注数变了 → 我的页四格重取 `/me`（页面已关也要失效）。
       container.invalidate(meCountsProvider);
     } catch (e) {
-      // 回滚到点击前那一条覆盖（原样，含版本号；之前没有则删除）。
+      // 回滚到点击前那一条覆盖（原样，含版本号；之前没有则删除）。账号已变 → 新表本就是空的，不写。
+      if (!sameAccount()) return;
       notifier.restore(userId, before);
       if (!mounted) return;
       final problem = e is DioException ? ProblemDetail.fromDioException(e) : null;

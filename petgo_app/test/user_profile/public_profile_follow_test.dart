@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tailtopia/core/router/route_intent.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_guide_controller.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/social/data/follow_repository.dart';
 import 'package:tailtopia/features/social/domain/follow_state.dart';
@@ -31,8 +33,26 @@ class _ProfileRepo implements PublicProfileRepository {
 }
 
 class _EmptyPosts implements PublicUserPostsRepository {
+  int calls = 0;
+
   @override
-  Future<PublicUserPostPage> fetch(int userId, {String? cursor}) async => PublicUserPostPage.empty;
+  Future<PublicUserPostPage> fetch(int userId, {String? cursor}) async {
+    calls++;
+    return PublicUserPostPage.empty;
+  }
+}
+
+int _petCalls = 0;
+
+class _Guide extends LoginGuideController {
+  _Guide() : super(() async => null);
+  int hardDialogs = 0;
+
+  @override
+  Future<void> showHardDialog(BuildContext context,
+      {RouteIntent? pendingAction, String entrySource = 'other'}) async {
+    hardDialogs++;
+  }
 }
 
 class _FollowRepo implements FollowRepository {
@@ -97,6 +117,8 @@ Future<ProviderContainer> _pump(
   required _ProfileRepo profiles,
   _FollowRepo? follows,
   AuthState auth = _loggedIn,
+  _EmptyPosts? posts,
+  _Guide? guide,
 }) async {
   tester.view.physicalSize = const Size(1080, 3200);
   tester.view.devicePixelRatio = 2.0;
@@ -113,8 +135,12 @@ Future<ProviderContainer> _pump(
   addTearDown(router.dispose);
   final container = ProviderContainer(overrides: [
     publicProfileRepositoryProvider.overrideWithValue(profiles),
-    publicUserPostsRepositoryProvider.overrideWithValue(_EmptyPosts()),
-    publicProfilePetProvider(_kTargetId).overrideWith((ref) async => null),
+    publicUserPostsRepositoryProvider.overrideWithValue(posts ?? _EmptyPosts()),
+    publicProfilePetProvider(_kTargetId).overrideWith((ref) async {
+      _petCalls++;
+      return null;
+    }),
+    if (guide != null) loginGuideControllerProvider.overrideWithValue(guide),
     followRepositoryProvider.overrideWithValue(follows ?? _FollowRepo()),
     authControllerProvider.overrideWith(() => _Auth(auth)),
   ]);
@@ -249,9 +275,20 @@ void main() {
   testWidgets('游客点关注 → 不发请求；登录后主页按新身份重取（不自动关注）', (tester) async {
     final profiles = _ProfileRepo(_profile());
     final follows = _FollowRepo();
+    final posts = _EmptyPosts();
+    final guide = _Guide();
+    _petCalls = 0;
     final c = await _pump(tester,
-        profiles: profiles, follows: follows, auth: const AuthState.guest());
+        profiles: profiles, follows: follows, auth: const AuthState.guest(), posts: posts, guide: guide);
     expect(profiles.calls, 1);
+    final petBefore = _petCalls;
+    final postsBefore = posts.calls;
+
+    // 游客点关注：只弹登录，不发请求。
+    await tester.tap(find.byKey(const ValueKey('followButton')));
+    await tester.pumpAndSettle();
+    expect(guide.hardDialogs, 1);
+    expect(follows.calls, isEmpty);
 
     // 模拟登录成功（弹窗关闭、仍停在此页）。
     profiles.profile = _profile(followsMe: true);
@@ -260,6 +297,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(profiles.calls, 2);
+    expect(_petCalls, greaterThan(petBefore), reason: 'AC5.6：宠物区按新身份重取');
+    expect(posts.calls, greaterThan(postsBefore), reason: 'AC5.6：帖子区按新身份重取');
     expect(follows.calls, isEmpty, reason: '登录后不自动关注（FR-140.19）');
     expect(_buttonLabel(tester), l10n.followActionFollowBack);
   });

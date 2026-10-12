@@ -66,14 +66,19 @@ class ProfileStatsRow extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            value,
-            maxLines: 1,
-            style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: AppColors.ink,
-              fontFeatures: [FontFeature.tabularFigures()],
+          // 🛡 窄屏 + 文字缩放 1.3 时「999,9K」这类无空格串可能放不下 → 等比缩小，
+          //    而不是折行截断把单位 K 丢掉（code-review 1.3 F4）。
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: AppColors.ink,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
             ),
           ),
           const SizedBox(height: 2),

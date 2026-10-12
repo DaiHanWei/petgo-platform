@@ -27,6 +27,10 @@ class _LoggedIn extends AuthController {
         role: 'USER',
         profile: UserProfile(id: 1, nickname: 'Me', onboardingCompleted: true),
       );
+
+  /// 真 toGuest 会去反注册推送 / 登出 IM —— 测试里只要状态切换。
+  @override
+  void toGuest() => state = const AuthState.guest();
 }
 
 class _Guest extends AuthController {
@@ -353,6 +357,22 @@ void main() {
     await _tap(tester);
     await tester.pumpAndSettle();
     expect(builds, 2);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  /// code-review 1.3 F2：请求在途时退成游客（401 刷新失败）→ 回滚 / 写回都不得写进新表。
+  testWidgets('请求在途切换账号：旧账号的关系不写进新覆盖表', (tester) async {
+    final repo = _Repo(error: _http(500))..gate = Completer<void>();
+    final c = await _pump(tester, repo: repo, initial: const FollowState(iFollow: true, followsMe: false));
+
+    await _tap(tester); // 取关在途（乐观写入 iFollow=false）
+    c.read(authControllerProvider.notifier).toGuest();
+    await tester.pump();
+    expect(c.read(followStateProvider), isEmpty, reason: '账号切换即重建为空表');
+
+    repo.gate!.complete();
+    await tester.pumpAndSettle();
+    expect(c.read(followStateProvider), isEmpty, reason: '失败回滚不得把旧账号的覆盖写进游客表');
     await tester.pump(const Duration(seconds: 3));
   });
 }

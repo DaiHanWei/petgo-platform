@@ -12,6 +12,7 @@ import 'package:tailtopia/features/social/data/blocked_users_repository.dart';
 import 'package:tailtopia/features/social/domain/account_action_entry.dart';
 import 'package:tailtopia/features/social/domain/account_report_reason.dart';
 import 'package:tailtopia/features/social/domain/blocked_user.dart';
+import 'package:tailtopia/features/social/domain/follow_state.dart';
 import 'package:tailtopia/features/user_profile/data/public_profile_pet_repository.dart';
 import 'package:tailtopia/features/user_profile/data/public_profile_repository.dart';
 import 'package:tailtopia/features/user_profile/data/public_user_posts_repository.dart';
@@ -144,6 +145,9 @@ PublicProfile _target({
 class _Probe {
   int blocked = 0;
   int reported = 0;
+
+  /// V1.3.4：本次 pump 的容器（验拉黑成功后清掉关注覆盖用）。
+  late ProviderContainer container;
 }
 
 /// 起一个**真的 GoRouter**：主页靠 `context.push` 进、靠 pop 的返回值把收尾信号交回调用方，
@@ -202,6 +206,7 @@ Future<_Probe> _pump(
     authControllerProvider.overrideWith(_LoggedInAuth.new),
   ]);
   addTearDown(container.dispose);
+  probe.container = container;
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: MaterialApp.router(
@@ -326,6 +331,22 @@ void main() {
       expect(find.byKey(const ValueKey('openProfile')), findsOneWidget); // 已退回调用方那一屏
       expect(find.text(l10n.blockUserSuccess), findsOneWidget);
       await tester.pump(const Duration(seconds: 3)); // toast 定时器跑完
+    });
+
+    /// V1.3.4 Story 1.3 · AC5.7：拉黑成功 → 清掉对他的关注覆盖（服务端已同事务取关，AD-5）。
+    testWidgets('拉黑成功 → followStateProvider 里对他的覆盖被清掉', (tester) async {
+      final probe = await _pump(tester, repo: _FakeProfileRepo(_target()), blockRepo: _FakeBlockRepo());
+      probe.container
+          .read(followStateProvider.notifier)
+          .set(_kTargetId, const FollowState(iFollow: true, followsMe: false));
+      await _openSheet(tester);
+      await tester.tap(find.byKey(const ValueKey('profileMenuBlock')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('confirmBlockUser')));
+      await tester.pumpAndSettle();
+
+      expect(probe.container.read(followStateProvider).containsKey(_kTargetId), isFalse);
+      await tester.pump(const Duration(seconds: 3));
     });
 
     testWidgets('拉黑失败 → **停在主页**、给失败提示、不触发收尾', (tester) async {
