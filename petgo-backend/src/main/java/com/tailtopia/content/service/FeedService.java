@@ -32,7 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.tailtopia.social.read.UserHideRelationReader;
 
 /**
- * Feed 读取服务（Story 3.2）。时间倒序 + 宠物状态硬过滤 + 分类过滤 + 游标分页，**无算法、无关注、无缓存**。
+ * Feed 读取服务（Story 3.2）。时间倒序 + 宠物状态硬过滤 + 分类过滤 + 游标分页，**无算法、无缓存**。
+ * 关注关系不影响 Feed 排序与候选（V1.3.4 FR-140.20，不做关注 Feed）。
  *
  * <p>硬过滤语义（FR-17，后端权威）：
  * <ul>

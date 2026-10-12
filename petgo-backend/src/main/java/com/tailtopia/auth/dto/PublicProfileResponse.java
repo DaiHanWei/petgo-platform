@@ -37,6 +37,13 @@ import java.util.List;
  *                    全局 Jackson {@code NON_NULL} 会把 null 字段整个键省略掉，
  *                    游客拿到的 key 集合因此一字未变（同 {@link MiniProfileResponse#reported} 的理由）。
  *                    写成 primitive 就永远出现在 JSON 里，当场破坏游客契约
+ * @param userToken   对外不可枚举用户 token（V1.3.4 follow D-2 / AD-6，关注接口用）；注销 / 封号时省略
+ * @param followingCount 目标关注的人数（冗余列直读）。⚠️ <b>被拉黑方视角也给真实值</b>（PRD「拉黑与关注」），
+ *                    与上面两个被伪装归零的计数不同
+ * @param followerCount  目标的粉丝数（同上）
+ * @param iFollow     我是否关注了对方。⚠️ 有意用 primitive：游客 / 本人 / 兽医恒 {@code false} 且键恒在 ——
+ *                    App 要靠两布尔恒有值决定按钮三态（与 {@code reported} 的装箱有意不同）
+ * @param followsMe   对方是否关注了我（同上）
  */
 public record PublicProfileResponse(
         String nickname,
@@ -48,7 +55,12 @@ public record PublicProfileResponse(
         long likeCount,
         boolean self,
         boolean isDeactivated,
-        Boolean reported) {
+        Boolean reported,
+        String userToken,
+        long followingCount,
+        long followerCount,
+        boolean iFollow,
+        boolean followsMe) {
 
     /**
      * 已注销：不暴露任何身份信息（AC5 / NFR-8）。
@@ -57,12 +69,18 @@ public record PublicProfileResponse(
      * 而注销的含义是这个人在站内不再可识别。
      */
     public static PublicProfileResponse deactivated() {
-        return new PublicProfileResponse(null, null, null, List.of(), null, 0, 0, false, true, null);
+        return new PublicProfileResponse(null, null, null, List.of(), null, 0, 0, false, true, null,
+                null, 0, 0, false, false);
     }
 
-    /** @param reported 登录者传 true/false；<b>游客传 null</b>（键会被 NON_NULL 省略）。 */
+    /**
+     * @param reported 登录者传 true/false；<b>游客传 null</b>（键会被 NON_NULL 省略）。
+     * @param follow   当前查看者与目标的关注关系（游客 / 本人传 {@code FollowState.NONE}）
+     */
     public static PublicProfileResponse of(AuthorView author, String signature, Instant joinedAt,
-            long postCount, long likeCount, boolean self, Boolean reported) {
+            long postCount, long likeCount, boolean self, Boolean reported,
+            String userToken, long followingCount, long followerCount,
+            com.tailtopia.social.read.FollowState follow) {
         return new PublicProfileResponse(
                 author.nickname(),
                 author.avatarUrl(),
@@ -73,6 +91,11 @@ public record PublicProfileResponse(
                 likeCount,
                 self,
                 false,
-                reported);
+                reported,
+                userToken,
+                followingCount,
+                followerCount,
+                follow.iFollow(),
+                follow.followsMe());
     }
 }

@@ -7,6 +7,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.tailtopia.auth.domain.PetStatus;
 import com.tailtopia.auth.domain.User;
+import com.tailtopia.content.domain.ContentLike;
+import com.tailtopia.content.domain.ContentPost;
+import com.tailtopia.content.domain.ContentType;
+import com.tailtopia.content.domain.ContentVisibility;
+import com.tailtopia.content.repository.ContentLikeRepository;
+import com.tailtopia.content.repository.ContentPostRepository;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.util.HashMap;
 import java.util.Map;
@@ -23,6 +29,50 @@ import org.springframework.http.MediaType;
  * 缺 token 401、以及防越权（带 A 的 token 改不到 B）。
  */
 class MeControllerEndpointTest extends ApiIntegrationTest {
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private ContentPostRepository posts;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private ContentLikeRepository likes;
+
+    /**
+     * V1.3.4 follow Story 1.2 · AC5（D-5 / T-5）：/me 带 token、两关注计数；帖子数计公开 + 私密 + 待审、
+     * 不计删除帖；获赞含私密帖上的赞；PATCH 响应同样带这五个字段。
+     */
+    @Test
+    void getAndPatchMe_carryOwnPostStatsAndFollowFields() throws Exception {
+        User u = newUser(PetStatus.HAS_PET);
+        User fan = newUser();
+        posts.save(ContentPost.publish(u.getId(), ContentType.DAILY, null, "公开", java.util.List.of()));
+        ContentPost priv = ContentPost.publish(u.getId(), ContentType.DAILY, null, "私密", java.util.List.of());
+        priv.setVisibility(ContentVisibility.PRIVATE);
+        priv = posts.save(priv);
+        posts.save(ContentPost.pendingReview(u.getId(), ContentType.DAILY, null, "待审", java.util.List.of(), null));
+        ContentPost gone = ContentPost.publish(u.getId(), ContentType.DAILY, null, "已删", java.util.List.of());
+        gone.softDelete();
+        posts.save(gone);
+        likes.save(ContentLike.of(priv.getId(), fan.getId()));
+
+        mvc.perform(get("/api/v1/me").header(HttpHeaders.AUTHORIZATION, userBearer(u.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userToken").value(u.getPublicToken()))
+                .andExpect(jsonPath("$.followingCount").value(0))
+                .andExpect(jsonPath("$.followerCount").value(0))
+                .andExpect(jsonPath("$.postCount").value(3))
+                .andExpect(jsonPath("$.likeCount").value(1));
+
+        mvc.perform(patch("/api/v1/me")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(u.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nickname\":\"四格\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userToken").value(u.getPublicToken()))
+                .andExpect(jsonPath("$.postCount").value(3))
+                .andExpect(jsonPath("$.likeCount").value(1))
+                .andExpect(jsonPath("$.followingCount").exists())
+                .andExpect(jsonPath("$.followerCount").exists());
+    }
 
     /** GET 正常路径：带本人 token → 200 + 回显本人资料字段。 */
     @Test

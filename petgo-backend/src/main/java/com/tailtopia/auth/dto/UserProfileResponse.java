@@ -41,9 +41,32 @@ public record UserProfileResponse(
          * <p>⚠️ 非 PII、无敏感性（不含精确行为轨迹），与 `onboardingCompleted` 同一档；
          * `users.created_at` 列早就存在，本字段**不涉及任何迁移**。
          */
-        java.time.Instant createdAt) {
+        java.time.Instant createdAt,
+        /** 对外不可枚举用户 token（V1.3.4 follow D-2 / AD-6）。实体直读，零额外查询。 */
+        String userToken,
+        /**
+         * 我的全部帖子数（D-5，含私密与本人待审帖，与「我的发布」网格同源）。
+         * ⚠️ <b>登录响应为 null（NON_NULL 省略）</b>：登录不查帖子统计（T-6），我的页四格以 {@code GET /me} 为准。
+         */
+        Long postCount,
+        /** 我的全部帖子获赞数（同 {@code postCount} 口径；登录响应为 null）。 */
+        Long likeCount,
+        /** 我关注的人数（冗余列直读，加载时快照）。 */
+        int followingCount,
+        /** 关注我的人数（同上）。 */
+        int followerCount) {
 
+    /** 登录响应用：不带帖子统计（{@code postCount} / {@code likeCount} 为 null，T-6）。 */
     public static UserProfileResponse from(User u, boolean hasPetProfile) {
+        return build(u, hasPetProfile, null, null);
+    }
+
+    /** {@code GET / PATCH /me} 用：带全部五个新字段（PATCH 响应缺计数会让 App 四格被清空）。 */
+    public static UserProfileResponse from(User u, boolean hasPetProfile, long postCount, long likeCount) {
+        return build(u, hasPetProfile, postCount, likeCount);
+    }
+
+    private static UserProfileResponse build(User u, boolean hasPetProfile, Long postCount, Long likeCount) {
         return new UserProfileResponse(
                 u.getId(),
                 u.getNickname(),
@@ -58,6 +81,11 @@ public record UserProfileResponse(
                 // 内容审核 story 4：昵称是否为违规重置的系统默认编码名（App 可据此轻量引导去改名，非必需）。
                 u.isSystemDefaultName(),
                 u.getPhone(),
-                u.getCreatedAt());
+                u.getCreatedAt(),
+                u.getPublicToken(),
+                postCount,
+                likeCount,
+                u.getFollowingCount(),
+                u.getFollowerCount());
     }
 }

@@ -48,9 +48,11 @@ public class AccountQueryService {
      * 此前本方法<b>只看注销</b>，于是被封号的用户其宠物分享页照样对全网可见 ——
      * 头像、名字、照片、里程碑全在。封号本就是因为违规，让他的对外页继续挂着不合理。
      *
-     * <p>本方法<b>只服务 H5 对外分享页的可见性判定</b>（{@code CardPageController} 与
-     * {@code MilestoneSharePageController} 是唯二调用方），<b>不是</b>通用的「能否登录」判断
-     * —— 登录门禁在 {@code AuthService} 自己那套里，别把这个方法挪去当登录判据。
+     * <p>本方法服务<b>对外可见性判定</b>：H5 分享页（{@code CardPageController}、
+     * {@code MilestoneSharePageController}）、主页宠物卡（{@code PublicProfilePetController}），
+     * 以及 V1.3.4 follow Story 1.2 起的<b>公开主页与其内容区</b>（{@code PublicProfileController}：
+     * PRD AC11 / 决策 D-8「封号用户各处按不存在处理」）和<b>关注调用方自检</b>（{@code FollowService}）。
+     * 它<b>不是</b>通用的「能否登录」判断 —— 登录门禁在 {@code AuthService} 自己那套里，别把这个方法挪去当登录判据。
      *
      * <p>⚠️ 封号可逆，所以本判定也必须可逆：重新激活后分享页要恢复可见
      * （{@code reactivatedAccountBecomesVisibleAgain} 钉着这条）。
@@ -211,6 +213,18 @@ public class AccountQueryService {
         }
         return users.findByPublicToken(token)
                 .filter(u -> u.getDeletedAt() == null);
+    }
+
+    /**
+     * 按 id 取账号，<b>不按 role 过滤</b>（V1.3.4 follow Story 1.2）。
+     *
+     * <p>专供公开主页取 {@code joinedAt} / {@code userToken} / 两关注计数：决策 D-9 官方内容账号
+     * （ADMIN 作者 shim）可被关注，主页必须给它 token；{@link #findUserById} 只认 USER，会让官方号主页
+     * 拿不到 token、关注按钮点了也无从调用。可见性判定（注销 / 封号）由调用方先行完成。
+     */
+    @Transactional(readOnly = true)
+    public Optional<User> findAccountById(long userId) {
+        return users.findById(userId);
     }
 
     /** Story 3.1：按 id 取普通用户（role=USER），供后台用户详情只读聚合。 */

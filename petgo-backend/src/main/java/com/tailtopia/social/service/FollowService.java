@@ -115,6 +115,21 @@ public class FollowService {
     }
 
     /**
+     * 拉黑联动取关（V1.3.4 follow Story 1.2 · AD-5 / FR-140.13）：删除 {@code holder → target} 的关注行，
+     * <b>仅当删除行数 = 1</b> 时两端计数 −1。由 {@code UserHideRelationService.block} 在插入 BLOCK 行的
+     * <b>同一事务</b>里调用（REQUIRED 加入外层事务，任一步失败整体回滚）。
+     *
+     * <p>⚠️ {@code target → holder} 保留不动；<b>不限流、不发任何通知 / 推送 / 事件</b>（PRD AC6 / AC9）；
+     * 重复拉黑删 0 行即无副作用；解除拉黑不恢复。
+     */
+    @Transactional
+    public void removeOnBlock(long holderId, long targetId) {
+        if (follows.deleteRelation(holderId, targetId) == 1) {
+            counters.applyUnfollow(holderId, targetId);
+        }
+    }
+
+    /**
      * 注销清理关注关系（AC7，幂等可重跑）：先扣对端计数（他关注的人 follower −1、关注他的人 following −1），
      * 再删两个方向的全部行，本人计数置 0。
      *

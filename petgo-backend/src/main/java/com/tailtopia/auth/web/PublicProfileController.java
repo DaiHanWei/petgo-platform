@@ -8,6 +8,8 @@ import com.tailtopia.content.service.ContentService;
 import com.tailtopia.content.service.FeedCursor;
 import com.tailtopia.content.service.FeedService;
 import com.tailtopia.shared.error.AppException;
+import com.tailtopia.social.read.FollowReader;
+import com.tailtopia.social.read.FollowState;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -59,13 +61,16 @@ public class PublicProfileController {
     private final ContentService contentService;
     private final FeedService feedService;
     private final UserHideRelationReader hideRelations;
+    /** V1.3.4 follow Story 1.2：主页的关注关系（AD-6）。 */
+    private final FollowReader followReader;
 
     public PublicProfileController(AccountQueryService accounts, ContentService contentService,
-            FeedService feedService, UserHideRelationReader hideRelations) {
+            FeedService feedService, UserHideRelationReader hideRelations, FollowReader followReader) {
         this.accounts = accounts;
         this.contentService = contentService;
         this.feedService = feedService;
         this.hideRelations = hideRelations;
+        this.followReader = followReader;
     }
 
     @GetMapping("/api/v1/users/{userId}/profile")
@@ -90,9 +95,17 @@ public class PublicProfileController {
             // AC5：一个身份字段都不给（NFR-8）。注销与「从没这个 id」在这里合流。
             return PublicProfileResponse.deactivated();
         }
+        // V1.3.4 follow Story 1.2 · AC4（PRD AC11 / D-8）：**封号按已注销处理**，同一出口。
+        // 判据与 H5 分享页同一句 isActive（未注销 + ACTIVE）；封号可逆，重新激活后主页恢复。
+        if (!accounts.isActive(userId)) {
+            return PublicProfileResponse.deactivated();
+        }
 
         // 加入时间 = users.created_at（AC1 明说是本批次新补的字段）。
-        var joinedAt = accounts.findUserById(userId).map(u -> u.getCreatedAt()).orElse(null);
+        // V1.3.4：token 与两关注计数从**同一个**对象取，不新增查询（AC2.4）。
+        // ⚠️ 不按 role 过滤（决策 D-9：官方内容账号可被关注，主页要给它 userToken）。
+        var owner = accounts.findAccountById(userId).orElse(null);
+        var joinedAt = owner == null ? null : owner.getCreatedAt();
         // ⚠️ 游客传 null：Jackson NON_NULL 会把这个键整个省略，游客响应体 key 集合一字未变。
         Boolean reported = viewerId == null ? null : hideRelations.isReported(viewerId, userId);
         // 🔴 Story 2.5：**对方拉黑了我** → 两个计数归零，与「这个人真的没发过公开内容」
@@ -111,7 +124,21 @@ public class PublicProfileController {
                 // 获赞总数：本批次新补（Story 2.2 · AC2）。一条 SQL 出数，不新增冗余计数列。
                 hiddenByOwner ? 0L : contentService.sumLikesOnPublicPostsByAuthor(userId),
                 viewerId != null && viewerId == userId,
-                reported);
+                reported,
+                owner == null ? null : owner.getPublicToken(),
+                // 🔴 关注 / 粉丝数**被拉黑方视角也给真实值**（PRD「拉黑与关注」，UI 稿 A7）——
+                //    与上面两个伪装归零的计数不同，这里不看 hiddenByOwner。
+                owner == null ? 0L : owner.getFollowingCount(),
+                owner == null ? 0L : owner.getFollowerCount(),
+                followState(viewerId, userId));
+    }
+
+    /** 游客 / 兽医（viewerId=null）/ 本人视角恒 NONE，且不查库（AC2.1）。 */
+    private FollowState followState(Long viewerId, long userId) {
+        if (viewerId == null || viewerId == userId) {
+            return FollowState.NONE;
+        }
+        return followReader.followState(viewerId, userId);
     }
 
     /**
@@ -147,6 +174,14 @@ public class PublicProfileController {
             // 少了这一句，一个畸形游标对普通访客是 422、对被拉黑者却是 200 空页 ——
             // 两个请求就能问出"我是不是被他拉黑了"，而这条设计的全部意义就是别让他确认。
             // 解出来的值不用，要的就是它抛不抛。
+            if (cursor != null && !cursor.isBlank()) {
+                FeedCursor.decode(cursor);
+            }
+            return new FeedPageResponse(List.of(), null, false, null);
+        }
+        // V1.3.4 follow Story 1.2（决策 D-8）：**封号用户与主页一样按不存在处理** → 同一个空页
+        // （注销用户的内容本就查不出来，这里一并覆盖）。同样先解游标，畸形游标照常 422。
+        if (!accounts.isActive(userId)) {
             if (cursor != null && !cursor.isBlank()) {
                 FeedCursor.decode(cursor);
             }
