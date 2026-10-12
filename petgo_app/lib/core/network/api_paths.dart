@@ -337,6 +337,10 @@ class ApiPaths {
   /// 游客可读；比迷你卡多「加入时间」与「是否本人视角」两个字段。
   static String userPublicProfile(int userId) => '$base/users/$userId/profile';
 
+  /// 关注 / 取关（V1.3.4 follow · FR-140 · AD-4）：`PUT` 关注、`DELETE` 取关，两者幂等，需登录。
+  /// 路径用**不可枚举用户 token**（D-2），不用数字 id。返回 `{iFollow, followsMe, followerCount}`。
+  static String userFollow(String userToken) => '$base/users/$userToken/follow';
+
   /// 公开主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2）：
   /// 该用户全部 PUBLIC 内容，三类混排、时间倒序、`?cursor=` 游标分页。游客可读。
   static String userPublicPosts(int userId) => '$base/users/$userId/posts';

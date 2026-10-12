@@ -37,6 +37,48 @@ void main() {
     expect(p.joinedAt, DateTime.utc(2026, 3, 4, 5, 6, 7));
   });
 
+  /// V1.3.4 follow · Story 1.3 · AC1.2：后端 Story 1.2 新增的五个键逐字段解析。
+  test('V1.3.4：关注五字段逐字段解析', () {
+    final p = PublicProfile.fromJson(<String, dynamic>{
+      'nickname': 'Rina',
+      'postCount': 18,
+      'likeCount': 342,
+      'self': false,
+      'isDeactivated': false,
+      'userToken': 'aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY',
+      'followingCount': 12,
+      'followerCount': 30,
+      'iFollow': true,
+      'followsMe': false,
+    });
+
+    expect(p.userToken, 'aB3dE5fG7hJ9kL1mN3pQ5rS7tU9vW1xY');
+    expect(p.followingCount, 12);
+    expect(p.followerCount, 30);
+    expect(p.iFollow, isTrue);
+    expect(p.followsMe, isFalse);
+  });
+
+  /// 老后端 / 已注销 / 游客：缺键一律取默认值（token null、计数 0、布尔 false），不崩。
+  test('V1.3.4：关注五字段缺键取默认值；已注销响应照常解析', () {
+    final old = PublicProfile.fromJson(<String, dynamic>{
+      'nickname': 'Rina',
+      'postCount': 1,
+      'self': false,
+      'isDeactivated': false,
+    });
+    expect(old.userToken, isNull);
+    expect(old.followingCount, 0);
+    expect(old.followerCount, 0);
+    expect(old.iFollow, isFalse);
+    expect(old.followsMe, isFalse);
+
+    final gone = PublicProfile.fromJson(<String, dynamic>{'isDeactivated': true});
+    expect(gone.isDeactivated, isTrue);
+    expect(gone.userToken, isNull);
+    expect(gone.followerCount, 0);
+  });
+
   /// 🔴 游客的响应体里**根本没有 `reported` 这个键**（后端可空布尔 + NON_NULL 省略）。
   /// 解析成 null 再当真值用就会崩；这里必须稳稳落成 false。
   test('AC1：游客响应（缺 reported / 缺 tags）不崩，reported=false', () {

@@ -241,7 +241,11 @@ void main() {
 
       expect(find.text('Rina'), findsOneWidget);
       expect(find.byKey(const ValueKey('profileSignature')), findsOneWidget);
-      expect(find.text(l10n.profileCounts(18, 342)), findsOneWidget);
+      // V1.3.4 Story 1.3：两个计数从分区标题行移到身份区四格。
+      expect(find.descendant(of: find.byKey(const ValueKey('profileStatPosts')), matching: find.text('18')),
+          findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('profileStatLikes')), matching: find.text('342')),
+          findsOneWidget);
       // 🔴 到月不到日：确切注册日期是没必要外泄的个人信息。
       final joined = tester.widget<Text>(find.byKey(const ValueKey('profileJoinedAt')));
       expect(joined.data, l10n.profileJoinedAt('Mar 2026'));

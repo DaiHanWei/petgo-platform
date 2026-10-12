@@ -86,6 +86,10 @@ Future<_Nav> _pump(
   PublicProfile? profile,
 }) async {
   final nav = _Nav();
+  // V1.3.4 居中名片把身份区拉高了 —— 给一块高屏，让网格与「加载更多」都在可视区内（ListView 懒构建）。
+  tester.view.physicalSize = const Size(1080, 3200);
+  tester.view.devicePixelRatio = 2.0;
+  addTearDown(tester.view.reset);
   final router = GoRouter(
     initialLocation: '${PublicProfilePage.routeBase}/$_kTargetId',
     routes: [
@@ -131,13 +135,20 @@ void main() {
     l10n = await AppLocalizations.delegate.load(const Locale('en'));
   });
 
-  group('AC2：两个聚合计数', () {
-    testWidgets('发帖总数与获赞总数同在一行', (tester) async {
+  // V1.3.4 follow Story 1.3 · AC4.2 / AC4.6：两个聚合计数从分区标题行移到身份区四格；
+  // 「Postingan」小节标题在有内容 / 空态 / 失败三种状态都显示。
+  group('AC2：两个聚合计数（V1.3.4 起在四格里）', () {
+    testWidgets('发帖总数与获赞总数在四格里，分区标题行不再有计数', (tester) async {
       await _pump(tester, postsRepo: _FakePostsRepo([
         PublicUserPostPage(items: [_post(1)], hasMore: false),
       ]));
 
-      expect(find.text(l10n.profileCounts(18, 342)), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('profileStatPosts')), matching: find.text('18')),
+          findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('profileStatLikes')), matching: find.text('342')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('profileCounts')), findsNothing);
+      expect(find.text(l10n.profilePostsTitle.toUpperCase()), findsOneWidget);
     });
 
     /// ⚠️ 零赞不是「没有这个数」—— 有帖子但没人点赞时写「0 suka」是对的，
@@ -149,16 +160,19 @@ void main() {
           ]),
           profile: _profile(postCount: 1, likeCount: 0));
 
-      expect(find.text(l10n.profileCounts(1, 0)), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('profileStatPosts')), matching: find.text('1')),
+          findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('profileStatLikes')), matching: find.text('0')),
+          findsOneWidget);
     });
 
-    /// UI 稿 C4：内容区为空时「POSTINGAN / 计数」**整行不渲染**，空态直接跟在身份区下。
-    testWidgets('内容区为空 → 分区标题与计数整行不渲染，只剩空态', (tester) async {
+    /// V1.3.4 UI 稿 A6：内容区为空时**空态上方仍有「Postingan」小节标题**（计数在四格里，为 0）。
+    testWidgets('内容区为空 → 小节标题照常在，下接空态', (tester) async {
       await _pump(tester,
           postsRepo: _FakePostsRepo(const []), profile: _profile(postCount: 0, likeCount: 0));
 
       expect(find.byKey(const ValueKey('profileCounts')), findsNothing);
-      expect(find.text(l10n.profilePostsTitle.toUpperCase()), findsNothing);
+      expect(find.text(l10n.profilePostsTitle.toUpperCase()), findsOneWidget);
       expect(find.byKey(const ValueKey('profilePostsEmpty')), findsOneWidget);
     });
   });
@@ -265,7 +279,10 @@ void main() {
       await _pump(tester, postsRepo: repo);
 
       expect(find.byKey(const ValueKey('profileAvatar')), findsOneWidget);
-      expect(find.text(l10n.profileCounts(18, 342)), findsOneWidget);
+      // 计数来自身份接口，与列表取数无关 → 四格照常在；小节标题也在。
+      expect(find.descendant(of: find.byKey(const ValueKey('profileStatPosts')), matching: find.text('18')),
+          findsOneWidget);
+      expect(find.text(l10n.profilePostsTitle.toUpperCase()), findsOneWidget);
       expect(repo.calls, 1, reason: 'Riverpod 3 的自动重试会让它自己横跳');
 
       await tester.tap(find.byKey(const ValueKey('profilePostsRetry')));
@@ -277,9 +294,10 @@ void main() {
   group('AC5：FR-118.7 的「不放」清单（反向验收）', () {
     /// 🔴 这一条是**明确不做**，不是"还没做"。
     ///
-    /// 扫的是主页自己那份源码：里程碑 / 护照 / 打卡 / 关注粉丝 / 访客记录 / 主页级分享
+    /// 扫的是主页自己那份源码：里程碑 / 护照 / 打卡 / 访客记录 / 主页级分享
     /// 任何一个悄悄长回来，这条就红。⚠️ 别通过从下面删词来"修"它。
-    test('主页源码里不出现里程碑 / 护照 / 打卡 / 关注 / 访客 / 分享入口', () {
+    // V1.3.4 FR-140 推翻了清单里的「关注 / 粉丝」一项（AD-15），其余禁词与剥注释逻辑不动。
+    test('主页源码里不出现里程碑 / 护照 / 打卡 / 访客 / 分享入口', () {
       // ⚠️ 先剥掉 import 与整行注释再扫，否则这条测试从第一天起就是红的
       // （`shared/widgets/...` 的路径里带着 "share"；而类注释里正写着这份禁用清单本身）——
       // 一条一直红的守门测试，很快会被人直接删掉。
@@ -297,7 +315,6 @@ void main() {
         'passport': '护照集章数',
         'checkin': '打卡足迹',
         'Share': '主页级 H5 分享入口',
-        'follow': '关注 / 粉丝',
         'visitor': '访客记录',
         'bio': '独立 bio 字段（签名复用既有的 signature，不另起一个）',
       };

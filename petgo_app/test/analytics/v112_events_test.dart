@@ -422,6 +422,10 @@ void main() {
         // 用户设定了一个账号级取值（V1.3.2 batch-a PRD E-11C `tailsonality_owner_type_set`）：`_set` = **保存成功**
         // 之后才报（失败不报），描述结果而非点击。名字由 PRD §4 定死，扩表、不改名。
         '_set',
+        // 关注 / 取关（V1.3.4 follow · D-6）：`user_followed` / `user_unfollowed` 用过去式，**服务端确认成功后**才报
+        // （失败、游客拦截不报）。`user_unfollowed` 并不以 `_followed` 结尾，两个都要登记。扩表、不改名。
+        '_followed',
+        '_unfollowed',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

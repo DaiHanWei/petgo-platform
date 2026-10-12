@@ -26,6 +26,11 @@ class PublicProfile {
     this.joinedAt,
     this.reported = false,
     this.tags = const [],
+    this.userToken,
+    this.followingCount = 0,
+    this.followerCount = 0,
+    this.iFollow = false,
+    this.followsMe = false,
   });
 
   /// 已发布（未软删）**PUBLIC** 内容数。
@@ -65,6 +70,22 @@ class PublicProfile {
   /// 运营标签（最多 3 个）。已注销恒为空。
   final List<UserTag> tags;
 
+  /// 对外不可枚举用户 token（V1.3.4 follow D-2）：关注接口用。路由仍用数字 userId。
+  /// 老后端 / 已注销 / 封号 → null（主页因此不渲染关注按钮）。
+  final String? userToken;
+
+  /// 目标关注的人数（冗余计数直读）。⚠️ 被拉黑方视角也是**真实值**（与上面两个被伪装归零的计数不同）。
+  final int followingCount;
+
+  /// 目标的粉丝数（同上）。
+  final int followerCount;
+
+  /// 我是否关注了对方（游客 / 本人视角恒 false）。
+  final bool iFollow;
+
+  /// 对方是否关注了我（决定「Ikuti」还是「Ikuti Balik」）。
+  final bool followsMe;
+
   /// 是否有可展示的签名（空串与纯空白按「没设置」处理）。
   bool get hasSignature => signature?.trim().isNotEmpty == true;
 
@@ -80,6 +101,12 @@ class PublicProfile {
         joinedAt: DateTime.tryParse((json['joinedAt'] ?? '') as String? ?? ''),
         reported: (json['reported'] ?? false) as bool,
         tags: UserTag.listFromJson(json['tags']),
+        // V1.3.4 follow（Story 1.2 后端字段）：缺键一律容忍 —— 老后端 / 游客 / 已注销响应都不崩。
+        userToken: json['userToken'] as String?,
+        followingCount: ((json['followingCount'] ?? 0) as num).toInt(),
+        followerCount: ((json['followerCount'] ?? 0) as num).toInt(),
+        iFollow: (json['iFollow'] ?? false) as bool,
+        followsMe: (json['followsMe'] ?? false) as bool,
       );
 }
 

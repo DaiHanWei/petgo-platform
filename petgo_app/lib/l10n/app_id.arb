@@ -2554,5 +2554,16 @@
   "passportVisitCount": "{count} Kunjungan",
   "@passportVisitCount": {"placeholders": {"count": {"type": "int"}}},
   "orderPawcoinHistoryHint": "Di sini hanya isi ulang. Hadiah dan pemakaian ada di riwayat PawCoin.",
-  "orderPawcoinHistoryLink": "Lihat"
+  "orderPawcoinHistoryLink": "Lihat",
+  "followActionFollow": "Ikuti",
+  "followActionFollowBack": "Ikuti Balik",
+  "followActionFollowing": "Mengikuti",
+  "followStatFollowing": "Mengikuti",
+  "followStatFollowers": "Pengikut",
+  "followRateLimited": "Terlalu sering. Coba lagi nanti.",
+  "followFailed": "Gagal mengikuti, coba lagi",
+  "followUnfollowFailed": "Gagal berhenti mengikuti, coba lagi",
+  "profileStatPosts": "Postingan",
+  "profileStatLikes": "Suka",
+  "profilePetsSection": "Hewan"
 }
