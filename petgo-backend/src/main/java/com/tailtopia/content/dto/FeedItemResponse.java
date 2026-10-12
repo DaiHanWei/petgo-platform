@@ -75,7 +75,15 @@ public record FeedItemResponse(
          * （见 {@link com.tailtopia.mention.dto.MentionView}）。
          * 空表不下发 —— Feed 一页 20 行，每行一个空数组白占体积（同 authorTags 的口径）。
          */
-        List<com.tailtopia.mention.dto.MentionView> mentions) {
+        List<com.tailtopia.mention.dto.MentionView> mentions,
+        /**
+         * 每张图的露出位置（V1.3.4 Story 2.1 · AD-5 · FR-125），与 {@link #imageUrls()} 同序；
+         * 元素为 {@code [0, 1]} 或 {@code null}（区间内的图，原样下发）。
+         *
+         * <p>存量 / 无超界图的帖为 {@code null} → NON_NULL 省略；App 无值即居中。
+         * 库里原值下发，不对齐、不改写（写入时已校验等长）。
+         */
+        List<Double> imageCropOffsets) {
 
     /**
      * ⚠️ {@code visibility} 恒下发（Story 4.1 · AC7）。Feed 里只会出现 PUBLIC，
@@ -109,6 +117,7 @@ public record FeedItemResponse(
                 p.getImageSizes(),
                 liked,
                 commentCount,
-                mentions);
+                mentions,
+                p.getImageCropOffsets());
     }
 }

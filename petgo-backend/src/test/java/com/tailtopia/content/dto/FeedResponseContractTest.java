@@ -51,7 +51,9 @@ class FeedResponseContractTest {
             // V1.1.6 Story 5.2（FR-75）：内容装饰标签。同样空表不下发。
             "decorationTags",
             // V1.3.0 batch-b1 Story 3.3：正文里的 @（能不能点是服务端算好的）。同样空表不下发。
-            "mentions");
+            "mentions",
+            // V1.3.4 Story 2.1（AD-5）：每张图的露出位置。存量 / 无超界图省略；App 无值即居中（2.2 读）。
+            "imageCropOffsets");
 
     /** 游标分页信封字段集 —— 对应 App FeedPage.fromJson 的 {items, nextCursor, hasMore}。 */
     /** V1.1.6 Story 16.5 起信封多一个 {@code rankMode}（非 Feed 出口时省略）。 */
@@ -81,7 +83,9 @@ class FeedResponseContractTest {
                 Arrays.asList(new ImageSize(1200, 1600), null),
                 true, 5L,
                 // V1.3.0 batch-b1 Story 3.3：@ 投影。
-                List.of(new com.tailtopia.mention.dto.MentionView(9L, "阿花", true)));
+                List.of(new com.tailtopia.mention.dto.MentionView(9L, "阿花", true)),
+                // V1.3.4 Story 2.1：露出位置，null 占位与 imageSizes 同理（用 Arrays.asList）。
+                java.util.Arrays.asList(0.0, null));
 
         Map<String, Object> m = wire(item);
         assertThat(m.keySet())
@@ -100,7 +104,7 @@ class FeedResponseContractTest {
                 42L, 7L, null, null, true, null, null,
                 ContentType.GROWTH_MOMENT, null, null, 0L,
                 Instant.parse("2026-06-05T00:00:00Z"), ContentVisibility.PRIVATE,
-                null, null, false, 0L, null);
+                null, null, false, 0L, null, null);
 
         Map<String, Object> m = wire(item);
         assertThat(m.keySet())
@@ -115,6 +119,26 @@ class FeedResponseContractTest {
         assertThat(m).doesNotContainKey("imageSizes");       // 存量内容亦然（零回填）
         // Story 3.3：没 @ 人的内容整列省略（存量内容恒如此 —— 存量文本不回溯解析）。
         assertThat(m).doesNotContainKey("mentions");
+        // V1.3.4 Story 2.1：存量 / 无超界图的帖整列省略（App 无值即居中）。
+        assertThat(m).doesNotContainKey("imageCropOffsets");
+    }
+
+    /**
+     * V1.3.4 Story 2.1（AC5.3）：露出位置数组里的 {@code null} 元素<b>原样下发</b>——
+     * NON_NULL 只省略整列为 null 的键，不会把数组里的 null 占位吃掉（否则下标错位）。
+     */
+    @Test
+    void imageCropOffsetsKeepNullElementsOnTheWire() {
+        FeedItemResponse item = new FeedItemResponse(
+                42L, 7L, "小明", null, false, null, null,
+                ContentType.DAILY, null, "https://cdn.petgo/p/a.jpg", 0L,
+                Instant.parse("2026-06-05T00:00:00Z"), ContentVisibility.PUBLIC,
+                List.of("https://cdn.petgo/p/a.jpg", "https://cdn.petgo/p/b.jpg"),
+                null, false, 0L, null,
+                Arrays.asList(0.0, null));
+
+        Map<String, Object> m = wire(item);
+        assertThat(m.get("imageCropOffsets")).isEqualTo(Arrays.asList(0.0, null));
     }
 
     @Test

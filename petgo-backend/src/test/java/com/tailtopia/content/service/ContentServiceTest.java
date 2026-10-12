@@ -70,7 +70,9 @@ class ContentServiceTest {
                         Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class),
                         Mockito.mock(com.tailtopia.mention.repository.MentionCandidateRepository.class)),
                 // V1.3.2 Story 1.5：打卡关联只读口（本类按需 stub）。
-                placeCheckins);
+                placeCheckins,
+                // V1.3.4 Story 2.1：露出位置校验用真实实现（纯函数、无 IO）。
+                new ImageCropOffsetValidator());
     }
 
     private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins =
@@ -689,5 +691,89 @@ class ContentServiceTest {
                 new ContentPostCreateRequest(ContentType.DAILY, null, "  ", null), "k"))
                 .isInstanceOf(AppException.class);
         verify(posts, never()).save(any());
+    }
+
+    // ===== V1.3.4 Story 2.1：每张图的露出位置（AD-5）=====
+
+    private static ContentPostCreateRequest withCropOffsets(List<String> imageUrls, List<Double> offsets) {
+        return new ContentPostCreateRequest(ContentType.DAILY, null, "Anabul lagi santai", imageUrls, null, null,
+                null, null, null, offsets);
+    }
+
+    /** ① 等长合法 → 原样落库（含 null 占位、顺序与数值不变）。 */
+    @Test
+    void validCropOffsetsArePersistedAsIs() {
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+        List<Double> offsets = java.util.Arrays.asList(0.0, null, 1.0);
+
+        service.publish(1L, withCropOffsets(List.of("u1", "u2", "u3"), offsets), null);
+
+        verify(posts).save(captor.capture());
+        assertThat(captor.getValue().getImageCropOffsets()).isEqualTo(java.util.Arrays.asList(0.0, null, 1.0));
+    }
+
+    /** ② 长度不符 → 422，不落库（刻意不像尺寸那样整组作废）。 */
+    @Test
+    void cropOffsetsLengthMismatchRejectedWith422() {
+        assertThatThrownBy(() -> service.publish(1L,
+                withCropOffsets(List.of("u1", "u2"), List.of(0.5)), null))
+                .isInstanceOfSatisfying(AppException.class, e -> {
+                    assertThat(e.getStatus().value()).isEqualTo(422);
+                    assertThat(e.getMessage()).contains("图片露出位置与图片数量不符");
+                });
+        verify(posts, never()).save(any());
+        verify(events, never()).publishEvent(any(Object.class));
+    }
+
+    /** ③ 上越界 → 422。 */
+    @Test
+    void cropOffsetAboveOneRejectedWith422() {
+        assertThatThrownBy(() -> service.publish(1L,
+                withCropOffsets(List.of("u1"), List.of(1.0001)), null))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getStatus().value()).isEqualTo(422));
+        verify(posts, never()).save(any());
+        verify(events, never()).publishEvent(any(Object.class));
+    }
+
+    /** ④ 下越界 → 422。 */
+    @Test
+    void cropOffsetBelowZeroRejectedWith422() {
+        assertThatThrownBy(() -> service.publish(1L,
+                withCropOffsets(List.of("u1"), List.of(-0.0001)), null))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getStatus().value()).isEqualTo(422));
+        verify(posts, never()).save(any());
+        verify(events, never()).publishEvent(any(Object.class));
+    }
+
+    /** ⑤ 不带字段 → 列为 null（老客户端行为不变）。 */
+    @Test
+    void absentCropOffsetsPersistNull() {
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+
+        service.publish(1L, new ContentPostCreateRequest(ContentType.DAILY, null, "hi", List.of("u1")), null);
+
+        verify(posts).save(captor.capture());
+        assertThat(captor.getValue().getImageCropOffsets()).isNull();
+    }
+
+    /** ⑥ 🔴 审核挂起分支同样要写露出位置（与尺寸 / @ 名单 / 打卡关联同一个坑）。 */
+    @Test
+    void pendingReviewPostAlsoCarriesCropOffsets() {
+        when(manualReviewGate.enabled()).thenReturn(true);
+        var captor = org.mockito.ArgumentCaptor.forClass(ContentPost.class);
+
+        service.publish(1L, new ContentPostCreateRequest(
+                ContentType.DAILY, null, "stub-high borderline text",
+                List.of("https://cdn/a.jpg", "https://cdn/b.jpg"), null, null, null, null, null,
+                java.util.Arrays.asList(0.25, null)), null);
+
+        verify(posts).save(captor.capture());
+        ContentPost pending = captor.getValue();
+        assertThat(pending.getStatus()).isEqualTo(com.tailtopia.content.domain.PostStatus.UNDER_REVIEW);
+        assertThat(pending.getImageCropOffsets())
+                .as("挂起分支漏写露出位置 —— 审核通过后进 Feed 会无声退化为居中")
+                .isEqualTo(java.util.Arrays.asList(0.25, null));
     }
 }

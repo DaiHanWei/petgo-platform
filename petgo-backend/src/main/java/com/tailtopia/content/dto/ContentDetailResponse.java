@@ -72,7 +72,13 @@ public record ContentDetailResponse(
          * 打卡场所条（V1.3.2 Story 1.5 · AC5 · AD-10）：帖子关联了打卡时下发 {@code {token, name, status}}；
          * 普通帖为 null → NON_NULL 省略。{@code status} ∈ ACTIVE / UNAVAILABLE（点击是否能进场所详情）。
          */
-        com.tailtopia.place.dto.CheckinPlaceView checkinPlace) {
+        com.tailtopia.place.dto.CheckinPlaceView checkinPlace,
+        /**
+         * 每张图的露出位置（V1.3.4 Story 2.1 · AD-5 · FR-125），与 {@link #imageUrls()} 同序；
+         * 元素为 {@code [0, 1]} 或 {@code null}（原样下发）。存量 / 无超界图为 null → 省略；App 无值即居中。
+         * 与 {@code FeedItemResponse.imageCropOffsets()} 同口径。
+         */
+        List<Double> imageCropOffsets) {
 
     /**
      * @param imageSizes 已由 {@code ImageSizeResolver.alignForRead} 对齐到 {@code imageUrls} 长度的尺寸列；
@@ -100,6 +106,6 @@ public record ContentDetailResponse(
                 (decorationTags == null || decorationTags.isEmpty()) ? null : decorationTags,
                 p.getType(), p.getText(), p.getImageUrls(), imageSizes,
                 likeCount, commentCount, liked, isAuthor, p.getVisibility(),
-                p.getCreatedAt(), mentions, checkinPlace);
+                p.getCreatedAt(), mentions, checkinPlace, p.getImageCropOffsets());
     }
 }

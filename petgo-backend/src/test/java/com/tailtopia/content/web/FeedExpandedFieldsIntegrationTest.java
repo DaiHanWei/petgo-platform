@@ -146,4 +146,64 @@ class FeedExpandedFieldsIntegrationTest extends ApiIntegrationTest {
                 .hasSize(2)
                 .containsExactly(null, null);
     }
+
+    /**
+     * V1.3.4 Story 2.1（AC5）：露出位置原样下发到 Feed 与详情（null 元素保留）；不带该字段的帖两处都省略该键。
+     */
+    @Test
+    void cropOffsetsShipInFeedAndDetailAndAreOmittedWhenAbsent() throws Exception {
+        User owner = newUser();
+        String withText = "crop-" + SEQ.incrementAndGet();
+        String withoutText = "nocrop-" + SEQ.incrementAndGet();
+
+        long withId = publishAndGetId(owner, """
+                {"type":"DAILY","text":"%s",
+                 "imageUrls":["https://cdn/w1.jpg","https://cdn/w2.jpg"],
+                 "imageCropOffsets":[0.0,null]}
+                """.formatted(withText));
+        long withoutId = publishAndGetId(owner, """
+                {"type":"DAILY","text":"%s","imageUrls":["https://cdn/n1.jpg"]}
+                """.formatted(withoutText));
+
+        var feedItems = json.readTree(feed(null)).get("items");
+        tools.jackson.databind.JsonNode withItem = null;
+        tools.jackson.databind.JsonNode withoutItem = null;
+        for (var item : feedItems) {
+            if (item.get("id").asLong() == withId) {
+                withItem = item;
+            } else if (item.get("id").asLong() == withoutId) {
+                withoutItem = item;
+            }
+        }
+        assertThat(withItem).as("带露出位置的帖应出现在 DAILY 时间序首页").isNotNull();
+        assertThat(withoutItem).as("不带露出位置的帖应出现在 DAILY 时间序首页").isNotNull();
+        assertCropOffsets(withItem);
+        assertThat(withoutItem.has("imageCropOffsets")).as("存量 / 未带的帖整列省略").isFalse();
+
+        var withDetail = json.readTree(mvc.perform(get("/api/v1/content-posts/" + withId))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        var withoutDetail = json.readTree(mvc.perform(get("/api/v1/content-posts/" + withoutId))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertCropOffsets(withDetail);
+        assertThat(withoutDetail.has("imageCropOffsets")).isFalse();
+    }
+
+    private long publishAndGetId(User owner, String body) throws Exception {
+        String resp = mvc.perform(post("/api/v1/content-posts")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(owner.getId()))
+                        .header("Idempotency-Key", "crop-" + SEQ.incrementAndGet())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return json.readTree(resp).get("id").asLong();
+    }
+
+    private static void assertCropOffsets(tools.jackson.databind.JsonNode node) {
+        var offsets = node.get("imageCropOffsets");
+        assertThat(offsets).as("露出位置必须下发").isNotNull();
+        assertThat(offsets.size()).isEqualTo(2);
+        assertThat(offsets.get(0).asDouble()).isEqualTo(0.0);
+        assertThat(offsets.get(1).isNull()).as("null 元素原样下发，不被省略（否则下标错位）").isTrue();
+    }
 }

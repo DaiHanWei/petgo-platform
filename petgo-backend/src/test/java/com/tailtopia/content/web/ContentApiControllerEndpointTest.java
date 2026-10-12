@@ -263,4 +263,61 @@ class ContentApiControllerEndpointTest extends ApiIntegrationTest {
                 .stream().filter(p -> p.getType() == ContentType.KNOWLEDGE).count();
         org.assertj.core.api.Assertions.assertThat(count).isEqualTo(1L);
     }
+
+    // ===== V1.3.4 Story 2.1（AD-5）：每张图的露出位置 —— 严格校验，不合法 422 不落库 =====
+
+    private ContentPostCreateRequest withCropOffsets(String text, List<String> imageUrls, List<Double> offsets) {
+        return new ContentPostCreateRequest(ContentType.DAILY, null, text, imageUrls, null, null,
+                null, null, null, offsets);
+    }
+
+    @Test
+    void cropOffsetsLengthMismatchReturns422AndNotPersisted() throws Exception {
+        User author = newUser();
+        var req = withCropOffsets("露出位置长度不符", List.of("https://cdn.petgo.test/a.jpg",
+                "https://cdn.petgo.test/b.jpg"), List.of(0.5));
+
+        mvc.perform(post("/api/v1/content-posts")
+                        .header("Authorization", userBearer(author.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(req)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.status").value(422))
+                .andExpect(jsonPath("$.detail").value("图片露出位置与图片数量不符"));
+
+        org.assertj.core.api.Assertions.assertThat(posts.findByAuthorIdOrderByCreatedAtDesc(author.getId()))
+                .noneMatch(p -> "露出位置长度不符".equals(p.getText()));
+    }
+
+    @Test
+    void cropOffsetOutOfRangeReturns422() throws Exception {
+        User author = newUser();
+        var req = withCropOffsets("露出位置越界", List.of("https://cdn.petgo.test/a.jpg"), List.of(1.5));
+
+        mvc.perform(post("/api/v1/content-posts")
+                        .header("Authorization", userBearer(author.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(req)))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.detail").value("图片露出位置超出范围"));
+
+        org.assertj.core.api.Assertions.assertThat(posts.findByAuthorIdOrderByCreatedAtDesc(author.getId()))
+                .isEmpty();
+    }
+
+    @Test
+    void validCropOffsetsReturn201AndPersist() throws Exception {
+        User author = newUser();
+        var req = withCropOffsets("露出位置合法", List.of("https://cdn.petgo.test/a.jpg"), List.of(0.25));
+
+        mvc.perform(post("/api/v1/content-posts")
+                        .header("Authorization", userBearer(author.getId()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(req)))
+                .andExpect(status().isCreated());
+
+        List<ContentPost> mine = posts.findByAuthorIdOrderByCreatedAtDesc(author.getId());
+        org.assertj.core.api.Assertions.assertThat(mine).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(mine.get(0).getImageCropOffsets()).containsExactly(0.25);
+    }
 }

@@ -48,8 +48,8 @@ development_status:
   1-3-下拉刷新真正-换一批-抖动系数打散: review
   epic-1-retrospective: optional
   # ===== Epic 2：发图不丢画面 =====
-  epic-2: backlog
-  2-1-帖子保存与下发每张图的露出位置: ready-for-dev
+  epic-2: in-progress
+  2-1-帖子保存与下发每张图的露出位置: review
   2-2-feed-卡与详情页按露出位置开窗: ready-for-dev
   2-3-露出区域页-取代三档裁剪页: ready-for-dev
   2-4-发布链路改为原图上传并带上露出位置: ready-for-dev

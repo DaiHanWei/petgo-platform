@@ -67,6 +67,19 @@ public class ContentPost {
     private List<ImageSize> imageSizes;
 
     /**
+     * 每张图在 Feed 里的露出位置（V1.3.4 Story 2.1 · AD-5 · FR-125）。与 {@link #imageUrls}
+     * <b>同序等长</b>，元素取值 {@code [0, 1]}（0 = 贴起始边、0.5 = 居中、1 = 贴结束边；宽图左右、竖图上下）。
+     *
+     * <p>仅超出容差区间（0.75~1.78）的图有值，区间内的图为 {@code null} 占位。
+     * 形状与取值范围由 {@code ImageCropOffsetValidator} 在发布时严格校验（不合法即 422）。
+     *
+     * <p>存量内容<b>永远为 null</b>（不回填 —— NFR7：无该值即沿用居中 cover）。
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "image_crop_offsets")
+    private List<Double> imageCropOffsets;
+
+    /**
      * 正文里 @ 到的人（V1.3.0 batch-b1 Story 3.2 · AC4 / AD-10 Rule 4）。
      *
      * <h2>🔴 存 userId，不存昵称</h2>
@@ -314,6 +327,20 @@ public class ContentPost {
      */
     public void setImageSizes(List<ImageSize> imageSizes) {
         this.imageSizes = imageSizes;
+    }
+
+    /** 每张图的露出位置（V1.3.4 Story 2.1）：与 imageUrls 同序等长；仅超界图有值；存量永远为 null。 */
+    public List<Double> getImageCropOffsets() {
+        return imageCropOffsets;
+    }
+
+    /**
+     * 写入露出位置（V1.3.4 Story 2.1）：与 imageUrls 同序等长；仅超界图有值；存量永远为 null。
+     *
+     * <p>🛡 调用方必须先经 {@code ImageCropOffsetValidator} 校验 —— 这里只负责存。
+     */
+    public void setImageCropOffsets(List<Double> imageCropOffsets) {
+        this.imageCropOffsets = imageCropOffsets;
     }
 
     public List<String> getImageUrls() {
