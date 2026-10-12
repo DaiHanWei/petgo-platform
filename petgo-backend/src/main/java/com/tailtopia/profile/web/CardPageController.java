@@ -278,7 +278,7 @@ public class CardPageController {
     /**
      * 里程碑收藏区（V1.1.6 Story 1.2 · AC2/AC4）。
      *
-     * <p>下发：总数（<b>按物种</b>：猫 31 / 狗 31 / 通用 16，取自 {@link MilestoneCatalog}，
+     * <p>下发：总数（<b>按物种</b>：猫 33 / 狗 33 / 通用 18，取自 {@link MilestoneCatalog}，
      * <b>不是视觉稿里那个示意的 30</b>）· 最近完成的具名徽章 · 未完成数（「+N」）· 最新动态的相对时间。
      *
      * <p>🔴 <b>本页对匿名公众开放，所以绝不能在这里触发写库。</b>

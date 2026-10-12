@@ -54,25 +54,25 @@ class MilestoneBadgeMappingTest {
     void mappingCoversExactlyEveryCatalogCode() throws IOException {
         Set<String> app = appMapping().keySet();
         Set<String> catalog = catalogCodes();
-        assertThat(catalog).hasSize(78);
+        assertThat(catalog).hasSize(84);
         assertThat(new HashSet<>(app)).as("App 映射与 MilestoneCatalog 的 code 集合必须互为子集").isEqualTo(catalog);
     }
 
     @Test
-    void valuesAreSnakeCaseAndExactlyFortyDistinct() throws IOException {
+    void valuesAreSnakeCaseAndExactlyFortyTwoDistinct() throws IOException {
         Map<String, String> m = appMapping();
         for (String v : m.values()) {
             assertThat(v).matches("^[a-z0-9_]+$");
         }
-        assertThat(new HashSet<>(m.values())).hasSize(40);
+        assertThat(new HashSet<>(m.values())).hasSize(42);
     }
 
-    /** 🔴 共用语义按语义而非编号对齐：三组抽查。 */
+    /** 🔴 共用语义按语义而非编号对齐：五组抽查（V1.3.4 +打卡 / 性格测试）。 */
     @Test
     void crossSpeciesSharedKeysAlignBySemanticsNotSuffix() throws IOException {
         Map<String, String> m = appMapping();
         for (String[] g : new String[][] {{"C-S8", "D-S8", "G-S6"}, {"C-M5", "D-M5", "G-M1"},
-            {"C-S16", "D-S16", "G-S9"}}) {
+            {"C-S16", "D-S16", "G-S9"}, {"C-S17", "D-S17", "G-S10"}, {"C-S18", "D-S18", "G-S11"}}) {
             assertThat(Stream.of(g).map(m::get).collect(Collectors.toSet())).as("%s 应同键", String.join("/", g))
                     .hasSize(1);
         }

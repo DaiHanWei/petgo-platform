@@ -64,8 +64,8 @@ development_status:
   3-5-首页场所入口换成-折叠地图-定位针-图标: review
   epic-3-retrospective: optional
   # ===== Epic 4：打卡与性格测试也能解锁里程碑 =====
-  epic-4: backlog
-  4-1-里程碑清单新增两项-双端清单-文案-徽章与存量回填: ready-for-dev
+  epic-4: in-progress
+  4-1-里程碑清单新增两项-双端清单-文案-徽章与存量回填: review
   4-2-打卡成功-解锁完整解读时自动达成: ready-for-dev
   4-3-达成当场弹出庆祝页: ready-for-dev
   epic-4-retrospective: optional

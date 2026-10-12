@@ -209,7 +209,7 @@ class CardPageControllerTest {
         org.mockito.Mockito.verify(milestoneService, org.mockito.Mockito.never()).getMilestones(7L);
     }
 
-    /** 总数按物种取常量目录（猫 31），<b>不是</b>视觉稿里那个示意的 30。 */
+    /** 总数按物种取常量目录（猫 33，V1.3.4 +C-S17/C-S18），<b>不是</b>视觉稿里那个示意的 30。 */
     @Test
     void milestoneTotalComesFromCatalogNotTheMockupNumber() {
         when(profileService.findByCardToken("TOK")).thenReturn(Optional.of(profile()));
@@ -221,9 +221,9 @@ class CardPageControllerTest {
 
         int catTotal = com.tailtopia.profile.domain.MilestoneCatalog
                 .forType(com.tailtopia.profile.domain.PetType.CAT).size();
-        assertThat(catTotal).isEqualTo(31);
+        assertThat(catTotal).isEqualTo(33);
         assertThat(model.getAttribute("milestoneTotal")).isEqualTo(catTotal);
-        assertThat(model.getAttribute("milestoneMore")).isEqualTo(31L); // 一个没完成 → +31
+        assertThat(model.getAttribute("milestoneMore")).isEqualTo(33L); // 一个没完成 → +33
     }
 
     /** 具名徽章取<b>最近完成</b>的若干条，且标题是<b>印尼语</b>（AC3：页面不得出现中文）。 */

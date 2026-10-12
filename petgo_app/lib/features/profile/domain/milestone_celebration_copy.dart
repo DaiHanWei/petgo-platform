@@ -117,6 +117,20 @@ const Map<String, MilestoneCelebrationCopy> kMilestoneCelebrationCopy = {
     bodyEn: 'People are starting to see how special {name} is. Keep sharing those moments!',
   ),
 
+  // V1.3.4 FR-126（决策日志 D-12）：第一次场所打卡 / 解锁性格测试结果，三物种同文案。
+  'C-S17': MilestoneCelebrationCopy(
+    titleId: 'Check-in pertama {name}! 📍',
+    bodyId: '{name} resmi jadi anabul jalan-jalan.',
+    titleEn: "{name}'s first check-in! 📍",
+    bodyEn: '{name} is officially a pet on the go.',
+  ),
+  'C-S18': MilestoneCelebrationCopy(
+    titleId: '{name} sudah kenal dirinya! 🔮',
+    bodyId: 'Kepribadian {name} sudah terbuka.',
+    titleEn: '{name} knows who they are now! 🔮',
+    bodyEn: "{name}'s personality is unlocked.",
+  ),
+
   // ===== CAT (C) · M 级 =====
   'C-M1': MilestoneCelebrationCopy(
     titleId: 'Petualangan pertama {name} dimulai! 🌏',
@@ -303,6 +317,20 @@ const Map<String, MilestoneCelebrationCopy> kMilestoneCelebrationCopy = {
     bodyEn: 'The world is starting to know {name}. Keep sharing those moments!',
   ),
 
+  // V1.3.4 FR-126（决策日志 D-12）：第一次场所打卡 / 解锁性格测试结果，三物种同文案。
+  'D-S17': MilestoneCelebrationCopy(
+    titleId: 'Check-in pertama {name}! 📍',
+    bodyId: '{name} resmi jadi anabul jalan-jalan.',
+    titleEn: "{name}'s first check-in! 📍",
+    bodyEn: '{name} is officially a pet on the go.',
+  ),
+  'D-S18': MilestoneCelebrationCopy(
+    titleId: '{name} sudah kenal dirinya! 🔮',
+    bodyId: 'Kepribadian {name} sudah terbuka.',
+    titleEn: '{name} knows who they are now! 🔮',
+    bodyEn: "{name}'s personality is unlocked.",
+  ),
+
   // ===== DOG (D) · M 级 =====
   'D-M1': MilestoneCelebrationCopy(
     titleId: 'Jalan-jalan pertama {name} dimulai! 🦮',
@@ -445,6 +473,20 @@ const Map<String, MilestoneCelebrationCopy> kMilestoneCelebrationCopy = {
     bodyId: 'Keistimewaan {name} sudah dirasakan orang lain. Terus bagikan momennya!',
     titleEn: '{name} got the first like! ❤️',
     bodyEn: "{name}'s specialness has been felt by others. Keep sharing those moments!",
+  ),
+
+  // V1.3.4 FR-126（决策日志 D-12）：第一次场所打卡 / 解锁性格测试结果，三物种同文案。
+  'G-S10': MilestoneCelebrationCopy(
+    titleId: 'Check-in pertama {name}! 📍',
+    bodyId: '{name} resmi jadi anabul jalan-jalan.',
+    titleEn: "{name}'s first check-in! 📍",
+    bodyEn: '{name} is officially a pet on the go.',
+  ),
+  'G-S11': MilestoneCelebrationCopy(
+    titleId: '{name} sudah kenal dirinya! 🔮',
+    bodyId: 'Kepribadian {name} sudah terbuka.',
+    titleEn: '{name} knows who they are now! 🔮',
+    bodyEn: "{name}'s personality is unlocked.",
   ),
 
   // ===== OTHER (G) · M 级 =====
