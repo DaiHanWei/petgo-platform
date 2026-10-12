@@ -125,6 +125,8 @@ petgo:
       # 候选池上界（最近 N 条公开内容）。🔴 必须有上界：这个查询每次下拉刷新都要跑一次，
       # 且推导物种/批量取赞评/取装饰标签都按这一批规模走。取"最近 N 条"也让它走既有索引。
       candidate-pool-size: ${FEED_RANK_CANDIDATE_POOL_SIZE:1000}
+      # 教育类独立池上界（V1.3.4 FR-122.1）：近 90 天 KNOWLEDGE 公开内容取最近 N 条，与主池按 id 合并。
+      edu-pool-size: ${FEED_RANK_EDU_POOL_SIZE:1000}
   card:
     android-url: ${CARD_ANDROID_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
     ios-url: ${CARD_IOS_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}

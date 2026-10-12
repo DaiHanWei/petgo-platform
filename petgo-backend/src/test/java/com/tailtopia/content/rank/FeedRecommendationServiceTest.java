@@ -95,7 +95,7 @@ class FeedRecommendationServiceTest {
 
         service = new FeedRecommendationService(posts, likes, comments, tags, species, pets,
                 seen, sequences, new FeedRankEngine(),
-                new FeedRankProperties(30, 100, 1000), platformConfig, throttles);
+                new FeedRankProperties(30, 100, 1000, 1000), platformConfig, throttles);
     }
 
     private static ContentPost post(long id, long authorId) {
@@ -466,5 +466,138 @@ class FeedRecommendationServiceTest {
         verify(seen).markSeen(key.capture(), any(), any());
         assertThat(key.getValue().namespace()).isEqualTo("u:9");
         assertThat(key.getValue().guest()).isFalse();
+    }
+
+    // ── V1.3.4 Story 1.1：教育类独立候选池（FR-122）──────────────────
+
+    private static ContentPost knowledge(long id, Instant createdAt) {
+        ContentPost p = ContentPost.publish(id, ContentType.KNOWLEDGE, null, "k" + id, List.of());
+        try {
+            var f = ContentPost.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(p, id);
+            var c = ContentPost.class.getDeclaredField("createdAt");
+            c.setAccessible(true);
+            c.set(p, createdAt);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+        return p;
+    }
+
+    /** 快照为空 ⇒ 走生成路径；读页时按 id 原样读回（{@code byId} 里找不到的按 DAILY 造）。 */
+    private void generationPath(Map<Long, ContentPost> byId) {
+        when(sequences.length(any(), any())).thenReturn(0L);
+        when(sequences.read(any(), any(), org.mockito.ArgumentMatchers.anyLong(), anyInt()))
+                .thenReturn(List.of());
+        when(posts.findRankableByIds(any(), anyBoolean(), any())).thenAnswer(inv -> {
+            Collection<Long> asked = inv.getArgument(0);
+            List<ContentPost> out = new ArrayList<>();
+            for (Long id : asked) {
+                out.add(byId.getOrDefault(id, post(id, id)));
+            }
+            return out;
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Long> appendedSequence() {
+        org.mockito.ArgumentCaptor<List<Long>> ids = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(sequences).append(any(), any(), ids.capture());
+        return ids.getValue();
+    }
+
+    /** 登录用户：教育池按查看者口径取，窗口 = 近 90 天，上界 = eduPoolSize（1000）。 */
+    @Test
+    void eduPoolIsQueriedWithViewerScopeAndNinetyDayWindow() {
+        generationPath(Map.of());
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(List.of(post(1, 1)));
+
+        Instant before = Instant.now();
+        service.page(42L, null, null, 20, null);
+        Instant after = Instant.now();
+
+        org.mockito.ArgumentCaptor<Instant> since = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> pageable =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        verify(posts).findEduCandidatePool(eq(true), eq(42L), since.capture(), pageable.capture());
+        java.time.Duration window = java.time.Duration.ofDays(90);
+        assertThat(since.getValue())
+                .isAfterOrEqualTo(before.minus(window).minusSeconds(1))
+                .isBeforeOrEqualTo(after.minus(window).plusSeconds(1));
+        assertThat(pageable.getValue().getPageSize()).isEqualTo(1000);
+    }
+
+    /** 游客：教育池以 hasViewer=false、viewerId=null 取（举报 / 屏蔽两项按游客口径跳过，与主池一致）。 */
+    @Test
+    void guestQueriesEduPoolWithoutViewer() {
+        generationPath(Map.of());
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(List.of(post(1, 1)));
+
+        service.page(null, "abc", null, 20, null);
+
+        verify(posts).findEduCandidatePool(eq(false), org.mockito.ArgumentMatchers.isNull(), any(), any());
+    }
+
+    /** 主池里没有的科普（60 天前）经教育池进入序列。 */
+    @Test
+    void eduOnlyPostsReachTheSequence() {
+        Instant sixtyDaysAgo = Instant.now().minus(java.time.Duration.ofDays(60));
+        Map<Long, ContentPost> byId = new java.util.HashMap<>();
+        List<ContentPost> edu = new ArrayList<>();
+        for (long i = 101; i <= 103; i++) {
+            ContentPost k = knowledge(i, sixtyDaysAgo);
+            edu.add(k);
+            byId.put(i, k);
+        }
+        generationPath(byId);
+        List<ContentPost> pool = new ArrayList<>();
+        for (long i = 1; i <= 30; i++) {
+            pool.add(post(i, i));
+        }
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
+        when(posts.findEduCandidatePool(anyBoolean(), any(), any(), any())).thenReturn(edu);
+
+        service.page(9L, null, null, 20, null);
+
+        assertThat(appendedSequence()).contains(101L, 102L, 103L);
+    }
+
+    /** 两池都有的同一条只出现一次；赞评批量聚合只调一次、id 无重复。 */
+    @Test
+    @SuppressWarnings("unchecked")
+    void postsInBothPoolsAppearOnce() {
+        ContentPost shared = knowledge(7, Instant.now().minus(java.time.Duration.ofDays(60)));
+        generationPath(Map.of(7L, shared));
+        List<ContentPost> pool = new ArrayList<>();
+        for (long i = 1; i <= 30; i++) {
+            pool.add(i == 7 ? shared : post(i, i));
+        }
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
+        when(posts.findEduCandidatePool(anyBoolean(), any(), any(), any())).thenReturn(List.of(shared));
+
+        service.page(9L, null, null, 20, null);
+
+        List<Long> seq = appendedSequence();
+        assertThat(seq).doesNotHaveDuplicates().contains(7L);
+        org.mockito.ArgumentCaptor<List<Long>> counted = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(likes, times(1)).countByPostIdIn(counted.capture());
+        assertThat(counted.getValue()).doesNotHaveDuplicates().hasSize(30);
+    }
+
+    /** AC3：教育池为空 → 引擎既有降级补位，首屏照常满 20 条。 */
+    @Test
+    void emptyEduPoolStillFillsThePage() {
+        generationPath(Map.of());
+        List<ContentPost> pool = new ArrayList<>();
+        for (long i = 1; i <= 50; i++) {
+            pool.add(post(i, i));
+        }
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
+        when(posts.findEduCandidatePool(anyBoolean(), any(), any(), any())).thenReturn(List.of());
+
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+
+        assertThat(p.posts()).hasSize(20);
     }
 }

@@ -33,7 +33,7 @@ class FeedSequenceStoreTest {
         redis = mock(StringRedisTemplate.class);
         list = mock(ListOperations.class);
         when(redis.opsForList()).thenReturn(list);
-        store = new FeedSequenceStore(redis, new FeedRankProperties(30, 100, 1000));
+        store = new FeedSequenceStore(redis, new FeedRankProperties(30, 100, 1000, 1000));
     }
 
     // ── 种子 ────────────────────────────────────────────────────────
