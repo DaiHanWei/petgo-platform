@@ -1,6 +1,6 @@
 # Story 3.1: 版本配置搬进数据库，接口按 iOS / Android 分别返回最新版本
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -70,24 +70,24 @@ public AppVersionConfig update(AppVersionConfigUpdate cmd, long adminId)
 
 ## Tasks / Subtasks
 
-- [ ] **T1 迁移**（AC1）
-  - [ ] 新建 `petgo-backend/src/main/resources/db/migration/V20261012_1104__create_app_version_config.sql`（全文见 Dev Notes）
-  - [ ] `bash scripts/ci/check-flyway-versions.sh origin/main` 通过
-- [ ] **T2 实体 / 仓储 / 服务**（AC2、AC3）
-  - [ ] `config/domain/AppVersionConfig.java`（照 `SupportContactConfig` 写法：`SINGLETON_ID = 1L`、`protected` 无参构造、getters、`apply(...)` 改值方法）
-  - [ ] `config/repository/AppVersionConfigRepository.java`（`JpaRepository<AppVersionConfig, Long>`）
-  - [ ] `config/service/AppVersionConfigUpdate.java`（record，5 个 String）
-  - [ ] `config/service/AppVersionConfigService.java`：`Optional<AppVersionConfig> current()`、`update(cmd, adminId)`；版本比较私有方法 `compare(String a, String b)`（逐段 `Integer.parseInt`，只在格式校验通过后调用）
-- [ ] **T3 改接口、删旧配置**（AC2）
-  - [ ] `shared/config/AppVersionController.java`：注入 `AppVersionConfigService`；`AppVersionResponse` 改为 5 字段 record（顺序同 AC2.1）；缺行抛 503
-  - [ ] 删除 `shared/config/AppVersionProperties.java`
-  - [ ] 删除 `application.yml` L106-111
-  - [ ] 全仓 grep 无残留（AC2.4 命令）
-- [ ] **T4 测试**（AC1.2、AC4、AC5）
-  - [ ] `src/test/java/com/tailtopia/config/service/AppVersionConfigServiceTest.java`（L0）
-  - [ ] `src/test/java/com/tailtopia/config/AppVersionConfigMigrationTest.java`（L0，读 `src/main/resources/db/migration/V20261012_1104__create_app_version_config.sql`）
-  - [ ] 改 `src/test/java/com/tailtopia/shared/config/AppVersionControllerEndpointTest.java`（L1，云端只编译不跑）
-- [ ] **T5 文档**（AC6）
+- [x] **T1 迁移**（AC1）
+  - [x] 新建 `petgo-backend/src/main/resources/db/migration/V20261012_1104__create_app_version_config.sql`（全文见 Dev Notes）
+  - [x] `bash scripts/ci/check-flyway-versions.sh origin/main` 通过
+- [x] **T2 实体 / 仓储 / 服务**（AC2、AC3）
+  - [x] `config/domain/AppVersionConfig.java`（照 `SupportContactConfig` 写法：`SINGLETON_ID = 1L`、`protected` 无参构造、getters、`apply(...)` 改值方法）
+  - [x] `config/repository/AppVersionConfigRepository.java`（`JpaRepository<AppVersionConfig, Long>`）
+  - [x] `config/service/AppVersionConfigUpdate.java`（record，5 个 String）
+  - [x] `config/service/AppVersionConfigService.java`：`Optional<AppVersionConfig> current()`、`update(cmd, adminId)`；版本比较私有方法 `compare(String a, String b)`（逐段 `Integer.parseInt`，只在格式校验通过后调用）
+- [x] **T3 改接口、删旧配置**（AC2）
+  - [x] `shared/config/AppVersionController.java`：注入 `AppVersionConfigService`；`AppVersionResponse` 改为 5 字段 record（顺序同 AC2.1）；缺行抛 503
+  - [x] 删除 `shared/config/AppVersionProperties.java`
+  - [x] 删除 `application.yml` L106-111
+  - [x] 全仓 grep 无残留（AC2.4 命令）
+- [x] **T4 测试**（AC1.2、AC4、AC5）
+  - [x] `src/test/java/com/tailtopia/config/service/AppVersionConfigServiceTest.java`（L0）
+  - [x] `src/test/java/com/tailtopia/config/AppVersionConfigMigrationTest.java`（L0，读 `src/main/resources/db/migration/V20261012_1104__create_app_version_config.sql`）
+  - [x] 改 `src/test/java/com/tailtopia/shared/config/AppVersionControllerEndpointTest.java`（L1，云端只编译不跑）
+- [x] **T5 文档**（AC6）
 
 ## Dev Notes
 
@@ -214,12 +214,56 @@ VALUES
 
 ### Agent Model Used
 
+Claude Opus 5.5 (1M context)（claude-opus-5-5[1m]）
+
 ### Debug Log References
+
+- `./mvnw -B clean package -DskipTests`：BUILD SUCCESS。
+- 排除连库测试的全量 `./mvnw -B test`：Tests run 3035，Failures 1，Errors 0，Skipped 7。唯一失败为已知基线红 `MilestoneBadgeAssetSyncTest.everyBackendWebpIsAKnownKey`（等 Story 4.1 补 key），与本 story 无关。
+  - 新增 `AppVersionConfigMigrationTest` 4/4 绿，`AppVersionConfigServiceTest` 18/18 绿。
+- `bash scripts/ci/check-flyway-versions.sh origin/main`：OK（树内 219 个迁移，无重号）。
+- AC2.4 grep（`app-version\.|APP_LATEST_VERSION|APP_MIN_SUPPORTED_VERSION|APP_IOS_STORE_URL|APP_ANDROID_STORE_URL`，范围 `petgo-backend/src`）：无结果。
+- 无前端改动，未跑 flutter。
 
 ### Completion Notes List
 
+- 开工前核对：Dev Notes 引用的类名、行号（`AppVersionController` L1-32、`AppVersionProperties`、`application.yml` L106-111、`SupportContactConfig`、`AppException.validation/.code/.serviceUnavailable`、`AdminConfigService.require`、`AdminConfigServiceTest`、`ApiIntegrationTest.adminActorId()`、`api-reference.md` §8.4）都和现状一致，story 文件没有需要修订的地方。
+- 迁移 `V20261012_1104__create_app_version_config.sql` 照抄 Dev Notes 全文。
+- 实体 `AppVersionConfig.apply(...)` 一次写入 5 个值和 `updatedAt` / `updatedBy`，由服务传入 `Instant.now()`。没用 `@PreUpdate`，这样值没变时也一定会写 `updated_at`。
+- 服务的校验顺序和 4 个错误码按 AC3 实现，另有一个用例钉住顺序。null 视为 `""`，所以版本号为 null 时报 format。`AdminConfigService.require` 在新服务里照抄了一份私有副本。
+- `AppVersionControllerEndpointTest` 的 `@AfterEach` 用 `adminActorId()` 作为 adminId 写回种子值（`updated_by` 没有外键，用哪个真实 id 都可以）。
+- `.env.example`：已核实无需改（本来就没有 `APP_*` 版本变量）。
+- 已按 D-17 处理：`messages_*.properties` 没动，没写 `config_change_logs`，也没调审计。
+- **L1/L2 待本地验收**：
+  1. AC1.3：本地起服务 `ddl-auto=validate` 通过；`SELECT * FROM app_version_config` 恰好一行，值等于预置值。
+  2. AC2.1-2.3：真接口 `GET /api/v1/app-version` 返回 5 个键、值来自表；改表后下一次请求立即生效；删掉该行后返回 503 ProblemDetail（不是 500）。
+  3. AC5：`AppVersionControllerEndpointTest` 3 个用例（游客、带 token、改值立即生效 + `@AfterEach` 复原）真跑通过；`SmokeApiTest.publicAppVersionIsOpen` 仍绿。
+
+- 复审（bmad-code-review 口径）无 HIGH/MED；已修：新增 L0 `AppVersionControllerTest.missingConfigRowIs503`（AC2.3 不再只靠 L1）。**交接 admin 主题**：4 个 `admin.err.config.*` 码当前在 messages properties 里没有文案（D-17：四语文案随 admin 主题落），`useCodeAsDefaultMessage` 下 422 detail 会显示键名，admin 接入保存接口时必须补齐。L1 首跑留意：`jsonPath("$.length()").value(5)` 作用在 JSON 对象上的行为；`@AfterEach` 写回会改动 `updated_by` / `updated_at`。
+
+#### 待确认
+
+- 沿用 Dev Notes「待确认」1–3（长度校验、变更留痕、`store-url.blank` 触发条件）。实现按 story 写定的口径，没有另加处理。
+- scheme 校验区分大小写（只认小写 `https://`），所以 `HTTPS://…` 会被拒并报 scheme 码，这与 AC3 写的「小写 `https://`」一致。如果 admin 表单希望容忍大写，需要 admin 主题自己决定。
+
 ### File List
+
+- `petgo-backend/src/test/java/com/tailtopia/shared/config/AppVersionControllerTest.java`（新，复审补）
+
+- 新增 `petgo-backend/src/main/resources/db/migration/V20261012_1104__create_app_version_config.sql`
+- 新增 `petgo-backend/src/main/java/com/tailtopia/config/domain/AppVersionConfig.java`
+- 新增 `petgo-backend/src/main/java/com/tailtopia/config/repository/AppVersionConfigRepository.java`
+- 新增 `petgo-backend/src/main/java/com/tailtopia/config/service/AppVersionConfigUpdate.java`
+- 新增 `petgo-backend/src/main/java/com/tailtopia/config/service/AppVersionConfigService.java`
+- 修改 `petgo-backend/src/main/java/com/tailtopia/shared/config/AppVersionController.java`
+- 删除 `petgo-backend/src/main/java/com/tailtopia/shared/config/AppVersionProperties.java`
+- 修改 `petgo-backend/src/main/resources/application.yml`（删 L106-111）
+- 新增 `petgo-backend/src/test/java/com/tailtopia/config/AppVersionConfigMigrationTest.java`
+- 新增 `petgo-backend/src/test/java/com/tailtopia/config/service/AppVersionConfigServiceTest.java`
+- 修改 `petgo-backend/src/test/java/com/tailtopia/shared/config/AppVersionControllerEndpointTest.java`
+- 修改 `docs/reference/api-reference.md`（§8.4）
 
 ## Change Log
 
 - 2026-10-12：story 创建（ready-for-dev）。
+- 2026-10-12：实现完成（review）。版本配置改由 `app_version_config` 单行表提供，`/api/v1/app-version` 改为 5 个字段，删除 env 配置，新增校验服务和 L0 测试；L1/L2 待本地验收。

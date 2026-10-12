@@ -56,8 +56,8 @@ development_status:
   2-5-发帖页点缩略图看大图: review
   epic-2-retrospective: optional
   # ===== Epic 3：用户能及时更新到新版本 =====
-  epic-3: backlog
-  3-1-版本配置搬进数据库-接口按-ios-android-分别返回最新版本: ready-for-dev
+  epic-3: in-progress
+  3-1-版本配置搬进数据库-接口按-ios-android-分别返回最新版本: review
   3-2-用真机版本号判定-并重做更新弹窗实现强制更新: ready-for-dev
   3-3-首页顶部推荐更新横幅: ready-for-dev
   3-4-设置页手动检查更新: ready-for-dev

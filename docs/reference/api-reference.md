@@ -361,7 +361,8 @@
 - 单桶（`tailtopia`）+ 对象级 ACL：`public/` 前缀对象 public-read 经 CDN 分发；`private/` 仅短 TTL 签名 URL 访问。真 AccessKey 始终只在后端，签名 URL 不进 INFO 日志。
 
 ### 8.4 `GET /app-version` — App 版本信息（公开）
-- Story 6.5。响应 `200`：`latestVersion`, `minSupportedVersion`, `iosStoreUrl`?, `androidStoreUrl`?。前端拿不到默认放行（不阻断启动）。
+- Story 6.5；V1.3.4 Story 3.1 改字段。响应 `200`：`iosLatestVersion`, `androidLatestVersion`, `minSupportedVersion`, `iosStoreUrl`, `androidStoreUrl`（未配置的商店链接为空串 `""`，不为 null；不再返回 `latestVersion`）。前端拿不到默认放行（不阻断启动）。
+- V1.3.4 起读 `app_version_config` 表（单行 id=1，每次请求读库、不缓存），改值走后台 AB-22，无需重启。配置行缺失 → `503` ProblemDetail（App 侧失败放行）。
 
 ---
 
