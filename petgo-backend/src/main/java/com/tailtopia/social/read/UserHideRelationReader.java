@@ -73,4 +73,15 @@ public interface UserHideRelationReader {
      * @return {@code others} 里命中的那些 id
      */
     java.util.Set<Long> hiddenEitherWay(long userId, java.util.Collection<Long> others);
+
+    /**
+     * 这批人里，{@code holderId} <b>单向</b>隐藏了哪些（V1.3.4 follow · Story 3.1）—— 与 {@link #isHidden} 同口径
+     * （<b>不分来源</b>：拉黑与举报隐藏都算，T-30），<b>一次查询</b>。
+     *
+     * <p>用途：互动通知「最新触发人 / and N others」排除接收者隐藏的人（推送 Story 3.1、列表 Story 3.3 共用）。
+     *
+     * @param targetIds 待判定的一批人（空表直接返回空集，不发查询）
+     * @return {@code targetIds} 里被 holder 隐藏的那些 id
+     */
+    java.util.Set<Long> hiddenByHolder(long holderId, java.util.Collection<Long> targetIds);
 }

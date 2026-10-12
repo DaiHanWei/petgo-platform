@@ -56,6 +56,28 @@ public class Notification {
     @Column(name = "read_at")
     private Instant readAt;
 
+    /**
+     * 合并键（V1.3.4 follow · Story 3.1 · AD-9）：{@code LIKE:POST:{postId}} / {@code COMMENT:PLACE:{placeId}}；
+     * 未读期间同键只留一行（部分唯一索引 {@code uq_notifications_unread_aggregate}）。不聚合的类型为 null。
+     */
+    @Column(name = "aggregate_key", length = 64)
+    private String aggregateKey;
+
+    /** 仅 {@code CONTENT_COMMENTED}：指向 {@code comments.id}，列表据此现查评论原文（AD-3）。 */
+    @Column(name = "comment_id")
+    private Long commentId;
+
+    /** {@link #VARIANT_REPLY} = 回复了你的评论；其余 null。 */
+    @Column(name = "variant", length = 16)
+    private String variant;
+
+    /** 合并刷新时刻；新建时等于 {@link #createdAt}。合并刷新走原生 SQL（{@code createdAt} 不可经实体更新）。 */
+    @Column(name = "updated_at")
+    private Instant updatedAt;
+
+    /** {@code variant} 取值：回复了你的评论（Story 3.1）。DB 无 CHECK，取值只在这里收口。 */
+    public static final String VARIANT_REPLY = "REPLY";
+
     protected Notification() {
     }
 
@@ -72,6 +94,20 @@ public class Notification {
         return n;
     }
 
+    /**
+     * 互动通知（V1.3.4 follow · Story 3.1）：带合并键 / 评论 id / variant。触发人另写 {@code notification_actors}。
+     * {@link #of} 的行为不变（新列为 null）。
+     */
+    public static Notification interaction(long recipientUserId, NotificationType type, String title,
+            String body, String deepLinkType, String deepLinkToken, String targetRef, String aggregateKey,
+            Long commentId, String variant) {
+        Notification n = of(recipientUserId, type, title, body, deepLinkType, deepLinkToken, targetRef);
+        n.aggregateKey = aggregateKey;
+        n.commentId = commentId;
+        n.variant = variant;
+        return n;
+    }
+
     public void markRead() {
         if (!read) {
             this.read = true;
@@ -82,6 +118,7 @@ public class Notification {
     @PrePersist
     void onCreate() {
         this.createdAt = Instant.now();
+        this.updatedAt = this.createdAt;
     }
 
     public Long getId() {
@@ -126,5 +163,21 @@ public class Notification {
 
     public Instant getReadAt() {
         return readAt;
+    }
+
+    public String getAggregateKey() {
+        return aggregateKey;
+    }
+
+    public Long getCommentId() {
+        return commentId;
+    }
+
+    public String getVariant() {
+        return variant;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
     }
 }

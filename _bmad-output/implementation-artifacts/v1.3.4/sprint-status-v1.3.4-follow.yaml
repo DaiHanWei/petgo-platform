@@ -34,7 +34,7 @@ development_status:
   epic-2-retrospective: optional
   # ===== Epic 3：通知中心说清楚「谁做了什么」 =====
   epic-3: in-progress
-  3-1-通知数据模型扩展-点赞评论带触发人与点赞合并: ready-for-dev
+  3-1-通知数据模型扩展-点赞评论带触发人与点赞合并: review
   3-2-新粉丝与场所评论两种新通知: ready-for-dev
   3-3-通知列表返回拼好的文案与触发人: ready-for-dev
   3-4-app通知中心改版: ready-for-dev

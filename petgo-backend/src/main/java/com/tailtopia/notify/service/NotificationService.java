@@ -2,8 +2,13 @@ package com.tailtopia.notify.service;
 
 import com.tailtopia.notify.domain.Notification;
 import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.notify.repository.NotificationActorRepository;
+import com.tailtopia.notify.repository.NotificationAggregateDao;
 import com.tailtopia.notify.repository.NotificationRepository;
 import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -29,6 +34,18 @@ public class NotificationService {
     private static final char[] BASE62 =
             "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray();
 
+    /** 点赞推送去抖键前缀（V1.3.4 follow · AD-10）：{@code notify:likepush:{postId}}，10 分钟内同帖只推一次。 */
+    public static final String LIKE_PUSH_KEY_PREFIX = "notify:likepush:";
+
+    /** 场所评论推送去抖键前缀（D-7，Story 3.2 使用）：{@code notify:placecommentpush:{placeId}}。 */
+    public static final String PLACE_COMMENT_PUSH_KEY_PREFIX = "notify:placecommentpush:";
+
+    /** 推送去抖窗口（AD-10）。 */
+    static final Duration PUSH_DEBOUNCE = Duration.ofMinutes(10);
+
+    /** 推送正文里评论原文的上限（T-31），超出截断加「…」。 */
+    static final int PUSH_BODY_MAX = 100;
+
     /** 兽医推送默认语言（V1 兽医无语言偏好字段，统一印尼语）。 */
     private static final java.util.Locale INDONESIAN = java.util.Locale.forLanguageTag("id");
 
@@ -37,16 +54,23 @@ public class NotificationService {
     private final NotificationPusher pusher;
     private final org.springframework.context.MessageSource messageSource;
     private final com.tailtopia.auth.service.AccountQueryService accountQuery;
+    private final NotificationAggregateDao aggregates;
+    private final NotificationActorRepository actors;
+    private final InteractionCopyRenderer copy;
     private final SecureRandom random = new SecureRandom();
 
     public NotificationService(NotificationRepository repo, StringRedisTemplate redis,
             NotificationPusher pusher, org.springframework.context.MessageSource messageSource,
-            com.tailtopia.auth.service.AccountQueryService accountQuery) {
+            com.tailtopia.auth.service.AccountQueryService accountQuery, NotificationAggregateDao aggregates,
+            NotificationActorRepository actors, InteractionCopyRenderer copy) {
         this.repo = repo;
         this.redis = redis;
         this.pusher = pusher;
         this.messageSource = messageSource;
         this.accountQuery = accountQuery;
+        this.aggregates = aggregates;
+        this.actors = actors;
+        this.copy = copy;
     }
 
     /**
@@ -110,6 +134,134 @@ public class NotificationService {
                 pushText(type, "title", locale, title), pushText(type, "body", locale, body),
                 deepLinkType, token, targetRef);
         return saved;
+    }
+
+    /**
+     * 互动通知（V1.3.4 follow · Story 3.1 · AD-9 / AD-10）：带触发人，点赞 / 场所评论「未读即合并」。
+     *
+     * <ul>
+     *   <li>{@code aggregateKey == null}（评论、回复、新粉丝）：每次新建一行 + 记触发人 + 角标 +1 + 推送。</li>
+     *   <li>{@code aggregateKey != null}（点赞、场所评论）：一条 upsert 原子地「有未读同键行则复用，否则新建」：
+     *     <ul>
+     *       <li>新建 → 角标 +1；</li>
+     *       <li>复用且本人是新触发人 → 刷新时间（移到最上），<b>角标不动</b>；</li>
+     *       <li>复用且本人已在触发人里（取消赞再赞，T-29）→ <b>什么都不做</b>：不刷新、不推送；</li>
+     *       <li>已读后再来 → 部分唯一索引不再命中 → 新建。</li>
+     *     </ul></li>
+     * </ul>
+     *
+     * <p>落库 {@code title / body} 只放兜底串，<b>不含昵称、不含评论原文</b>（AD-3：昵称读取时现查；评论原文由列表按
+     * {@code comment_id} 现查）。{@code pushBodyText} 只进推送正文、<b>不落库、不进日志</b>。
+     *
+     * <p>推送（同事务内、写库之后）：虚拟号不推 → 去抖（点赞 {@code notify:likepush:{postId}}、场所评论
+     * {@code notify:placecommentpush:{placeId}}，{@code SET NX EX 600}，抢到才推；Redis 异常照常推，T-32）→
+     * 标题按收件人语言用 {@link InteractionCopyRenderer} 渲染<b>推送时刻</b>的聚合结果，正文 = 评论原文（截 100 字）或空串。
+     *
+     * <p>⚠️ 拉黑 / 隐藏抑制<b>不在这里</b>，仍在各监听器（理由同 {@code ContentNotifyListener} 类注释）。
+     * REQUIRES_NEW 的理由同 {@link #send}。
+     *
+     * @return 落库（或被合并到）的那一行；T-29 跳过时也返回那一行
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Notification sendInteraction(long recipientUserId, NotificationType type, long actorUserId,
+            String aggregateKey, String targetRef, Long commentId, String variant, String pushBodyText) {
+        String title = fallbackTitle(type, variant);
+        String body = "点击查看";
+        long id;
+        String token;
+        if (aggregateKey == null) {
+            Notification saved = repo.save(Notification.interaction(recipientUserId, type, title, body,
+                    type.name(), generateToken(), targetRef, null, commentId, variant));
+            aggregates.addActor(saved.getId(), actorUserId);
+            bumpUnreadBadge(recipientUserId);
+            id = saved.getId();
+            token = saved.getDeepLinkToken();
+        } else {
+            NotificationAggregateDao.UpsertResult r = aggregates.upsertAggregate(recipientUserId, type, title, body,
+                    type.name(), generateToken(), targetRef, aggregateKey, commentId, variant);
+            boolean newActor = aggregates.addActor(r.id(), actorUserId);
+            if (r.inserted()) {
+                bumpUnreadBadge(recipientUserId);
+            } else if (newActor) {
+                aggregates.touch(r.id()); // 合并：时间刷新、角标不动
+            } else {
+                // T-29：同一人取消赞再赞、仍未读 —— 不刷新时间、不顶到最上、不再推送。
+                return repo.findById(r.id()).orElseThrow();
+            }
+            id = r.id();
+            token = r.deepLinkToken();
+        }
+        Notification saved = repo.findById(id).orElseThrow();
+        pushInteraction(recipientUserId, type, variant, aggregateKey, id, token, targetRef, pushBodyText);
+        return saved;
+    }
+
+    private void pushInteraction(long recipientUserId, NotificationType type, String variant, String aggregateKey,
+            long notificationId, String token, String targetRef, String pushBodyText) {
+        if (skipPushForVirtual(recipientUserId) || !acquirePushSlot(aggregateKey)) {
+            return;
+        }
+        List<Long> actorIds = actors.findActorIdsNewestFirst(notificationId);
+        Optional<InteractionCopyRenderer.ActorSummary> summary = copy.resolve(recipientUserId, actorIds);
+        if (summary.isEmpty()) {
+            return; // 触发人全被滤掉（理论上不会：本次 actor 刚过监听器的抑制判断）
+        }
+        java.util.Locale locale = accountQuery.localeOf(recipientUserId);
+        pusher.pushToUser(recipientUserId, copy.title(type, variant, summary.get(), locale),
+                truncateBody(pushBodyText), type.name(), token, targetRef);
+    }
+
+    /**
+     * 推送去抖（AD-10 / D-7）：不聚合的类型每次都推；点赞 / 场所评论 10 分钟内同一对象只推一次（抢到键才推）。
+     * Redis 不可用 → 照常推送（T-32：宁多勿漏），只记异常类名。
+     */
+    private boolean acquirePushSlot(String aggregateKey) {
+        String key = debounceKey(aggregateKey);
+        if (key == null) {
+            return true;
+        }
+        try {
+            return Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(key, "1", PUSH_DEBOUNCE));
+        } catch (RuntimeException e) {
+            log.warn("推送去抖键不可用（照常推送）cause={}", e.getClass().getSimpleName());
+            return true;
+        }
+    }
+
+    static String debounceKey(String aggregateKey) {
+        if (aggregateKey == null) {
+            return null;
+        }
+        if (aggregateKey.startsWith("LIKE:POST:")) {
+            return LIKE_PUSH_KEY_PREFIX + aggregateKey.substring("LIKE:POST:".length());
+        }
+        if (aggregateKey.startsWith("COMMENT:PLACE:")) {
+            return PLACE_COMMENT_PUSH_KEY_PREFIX + aggregateKey.substring("COMMENT:PLACE:".length());
+        }
+        return null;
+    }
+
+    /** 推送正文：评论原文截到 100 字（按码点，不劈开 emoji）加「…」（T-31）；无则空串（UI 稿 D8）。 */
+    static String truncateBody(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        if (text.codePointCount(0, text.length()) <= PUSH_BODY_MAX) {
+            return text;
+        }
+        return text.substring(0, text.offsetByCodePoints(0, PUSH_BODY_MAX)) + "…";
+    }
+
+    /** 落库兜底标题（沿用改造前的中文串；不含昵称，AD-3）。通知中心由 App / Story 3.3 按 type 本地化。 */
+    private static String fallbackTitle(NotificationType type, String variant) {
+        return switch (type) {
+            case CONTENT_LIKED -> "有人赞了你的内容";
+            case CONTENT_COMMENTED -> Notification.VARIANT_REPLY.equals(variant)
+                    ? "有人回复了你的评论" : "有人评论了你的内容";
+            case USER_FOLLOWED -> "有人关注了你";
+            case PLACE_COMMENTED -> "有人评论了你添加的地点";
+            default -> type.name();
+        };
     }
 
     /**
