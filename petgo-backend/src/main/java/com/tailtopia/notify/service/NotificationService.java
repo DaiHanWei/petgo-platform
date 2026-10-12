@@ -15,6 +15,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 统一推送出口（Story 6.1）。所有业务推送（6.2/6.3 经领域事件订阅）汇聚于此：
@@ -39,6 +41,11 @@ public class NotificationService {
 
     /** 场所评论推送去抖键前缀（D-7，Story 3.2 使用）：{@code notify:placecommentpush:{placeId}}。 */
     public static final String PLACE_COMMENT_PUSH_KEY_PREFIX = "notify:placecommentpush:";
+
+    /** {@link #sendInteraction} 只接受这四种互动类型（模板只覆盖它们）。 */
+    static final java.util.Set<NotificationType> INTERACTION_TYPES = java.util.EnumSet.of(
+            NotificationType.CONTENT_LIKED, NotificationType.CONTENT_COMMENTED,
+            NotificationType.USER_FOLLOWED, NotificationType.PLACE_COMMENTED);
 
     /** 推送去抖窗口（AD-10）。 */
     static final Duration PUSH_DEBOUNCE = Duration.ofMinutes(10);
@@ -153,9 +160,10 @@ public class NotificationService {
      * <p>落库 {@code title / body} 只放兜底串，<b>不含昵称、不含评论原文</b>（AD-3：昵称读取时现查；评论原文由列表按
      * {@code comment_id} 现查）。{@code pushBodyText} 只进推送正文、<b>不落库、不进日志</b>。
      *
-     * <p>推送（同事务内、写库之后）：虚拟号不推 → 去抖（点赞 {@code notify:likepush:{postId}}、场所评论
+     * <p>推送（<b>本事务提交之后</b>，失败只丢这次推送、不回滚通知）：虚拟号 / 官方号（D-9）不推 → 去抖（点赞 {@code notify:likepush:{postId}}、场所评论
      * {@code notify:placecommentpush:{placeId}}，{@code SET NX EX 600}，抢到才推；Redis 异常照常推，T-32）→
-     * 标题按收件人语言用 {@link InteractionCopyRenderer} 渲染<b>推送时刻</b>的聚合结果，正文 = 评论原文（截 100 字）或空串。
+     * 标题按收件人语言用 {@link InteractionCopyRenderer} 渲染<b>推送时刻</b>的聚合结果，正文 = 评论原文（截 100 字）或空串；
+     * 触发人全被滤掉则不推并释放去抖键。只接受 {@link #INTERACTION_TYPES}，其它类型写库前即拒。
      *
      * <p>⚠️ 拉黑 / 隐藏抑制<b>不在这里</b>，仍在各监听器（理由同 {@code ContentNotifyListener} 类注释）。
      * REQUIRES_NEW 的理由同 {@link #send}。
@@ -165,6 +173,10 @@ public class NotificationService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Notification sendInteraction(long recipientUserId, NotificationType type, long actorUserId,
             String aggregateKey, String targetRef, Long commentId, String variant, String pushBodyText) {
+        // 3.1 code-review F1：非互动类型在写库之前就拒绝（否则行写了、渲染推送时才炸）。
+        if (!INTERACTION_TYPES.contains(type)) {
+            throw new IllegalArgumentException("not an interaction type: " + type);
+        }
         String title = fallbackTitle(type, variant);
         String body = "点击查看";
         long id;
@@ -192,19 +204,45 @@ public class NotificationService {
             token = r.deepLinkToken();
         }
         Notification saved = repo.findById(id).orElseThrow();
-        pushInteraction(recipientUserId, type, variant, aggregateKey, id, token, targetRef, pushBodyText);
+        // 3.1 code-review F1：推送放到本事务提交之后 —— 渲染要查库，查询异常若发生在事务内会把刚写的通知一起回滚
+        // （角标已 +1、去抖键已占，通知却没了）。提交后再推，任何异常都只丢这一次推送。无事务（单测）时直接执行。
+        Runnable push = () -> {
+            try {
+                pushInteraction(recipientUserId, type, variant, aggregateKey, id, token, targetRef, pushBodyText);
+            } catch (RuntimeException e) {
+                log.warn("互动推送失败（通知已落库）notificationId={} cause={}", id, e.getClass().getSimpleName());
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    push.run();
+                }
+            });
+        } else {
+            push.run();
+        }
         return saved;
     }
 
     private void pushInteraction(long recipientUserId, NotificationType type, String variant, String aggregateKey,
             long notificationId, String token, String targetRef, String pushBodyText) {
-        if (skipPushForVirtual(recipientUserId) || !acquirePushSlot(aggregateKey)) {
+        // D-9：官方内容账号（role=ADMIN 的作者 shim）不登录 App、不接收推送，与虚拟号同样跳过（3.1 code-review F3）。
+        if (skipPushForVirtual(recipientUserId) || accountQuery.isOfficialAccount(recipientUserId)) {
+            return;
+        }
+        String slot = debounceKey(aggregateKey);
+        if (!acquirePushSlot(slot)) {
             return;
         }
         List<Long> actorIds = actors.findActorIdsNewestFirst(notificationId);
         Optional<InteractionCopyRenderer.ActorSummary> summary = copy.resolve(recipientUserId, actorIds);
         if (summary.isEmpty()) {
-            return; // 触发人全被滤掉（理论上不会：本次 actor 刚过监听器的抑制判断）
+            // 触发人全被滤掉（理论上不会：本次 actor 刚过监听器的抑制判断）→ 把刚占的去抖键还回去，
+            // 不让这 10 分钟内同一对象的后续互动推不出来（3.1 code-review F4）。
+            releasePushSlot(slot);
+            return;
         }
         java.util.Locale locale = accountQuery.localeOf(recipientUserId);
         pusher.pushToUser(recipientUserId, copy.title(type, variant, summary.get(), locale),
@@ -215,8 +253,7 @@ public class NotificationService {
      * 推送去抖（AD-10 / D-7）：不聚合的类型每次都推；点赞 / 场所评论 10 分钟内同一对象只推一次（抢到键才推）。
      * Redis 不可用 → 照常推送（T-32：宁多勿漏），只记异常类名。
      */
-    private boolean acquirePushSlot(String aggregateKey) {
-        String key = debounceKey(aggregateKey);
+    private boolean acquirePushSlot(String key) {
         if (key == null) {
             return true;
         }
@@ -225,6 +262,17 @@ public class NotificationService {
         } catch (RuntimeException e) {
             log.warn("推送去抖键不可用（照常推送）cause={}", e.getClass().getSimpleName());
             return true;
+        }
+    }
+
+    private void releasePushSlot(String key) {
+        if (key == null) {
+            return;
+        }
+        try {
+            redis.delete(key);
+        } catch (RuntimeException e) {
+            log.warn("推送去抖键释放失败 cause={}", e.getClass().getSimpleName());
         }
     }
 

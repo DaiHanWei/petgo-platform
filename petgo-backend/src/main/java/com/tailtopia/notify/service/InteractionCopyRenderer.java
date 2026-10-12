@@ -46,7 +46,10 @@ public class InteractionCopyRenderer {
     }
 
     /**
-     * 批量解析一条通知的触发人（固定 3 次查询：展示字段、有效账号、接收者隐藏集合），再交给 {@link #summarize}。
+     * 批量解析<b>一条</b>通知的触发人（固定 3 次查询：展示字段、有效账号、接收者隐藏集合），再交给 {@link #summarize}。
+     *
+     * <p>⚠️ 只给推送用（一次一条）。通知<b>列表</b>（Story 3.3）不得逐行调本方法（那是 N+1，违反 AD-11）：
+     * 应先对整页全部触发人各批量查一次，再逐行调纯函数 {@link #summarize}。
      *
      * @param actorIdsNewestFirst 本条通知全部触发人，最新在前
      */

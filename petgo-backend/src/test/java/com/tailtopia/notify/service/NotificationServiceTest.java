@@ -291,4 +291,74 @@ class NotificationServiceTest {
         String cut = NotificationService.truncateBody(emojis);
         assertThat(cut).isEqualTo("🐶".repeat(100) + "…");
     }
+
+    // ===== 3.1 code-review 修复 =====
+
+    /** F1：非互动类型写库之前就拒绝（否则行写了、渲染推送时才炸、整条回滚）。 */
+    @Test
+    void nonInteractionTypeIsRejectedBeforeAnyWrite() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> interactionService().sendInteraction(9L,
+                NotificationType.VET_REPLY, 2L, null, "55", null, null, null))
+                .isInstanceOf(IllegalArgumentException.class);
+        org.mockito.Mockito.verifyNoInteractions(repo, aggregates, redis, pusher);
+    }
+
+    /** F1：推送环节抛异常只丢这次推送 —— 不冒泡、不影响已落库的通知。 */
+    @Test
+    void pushFailureIsSwallowedAfterWrite() {
+        when(repo.save(any(Notification.class))).thenAnswer(inv -> {
+            Notification n = inv.getArgument(0);
+            org.springframework.test.util.ReflectionTestUtils.setField(n, "id", 100L);
+            return n;
+        });
+        when(repo.findById(100L)).thenAnswer(inv -> java.util.Optional.of(persisted(100L, "tok")));
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(actors.findActorIdsNewestFirst(100L)).thenThrow(new IllegalStateException("db"));
+
+        Notification n = interactionService().sendInteraction(9L, NotificationType.CONTENT_COMMENTED, 2L, null,
+                "55", 7L, null, "halo");
+
+        assertThat(n.getId()).isEqualTo(100L);
+        verify(aggregates).addActor(100L, 2L);
+        org.mockito.Mockito.verifyNoInteractions(pusher);
+    }
+
+    /** F3 / D-9：官方内容账号（role=ADMIN 作者 shim）不接收推送，通知照常落库。 */
+    @Test
+    void officialRecipientGetsRowButNoPush() {
+        when(aggregates.upsertAggregate(eq(9L), any(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), isNull(), isNull()))
+                .thenReturn(new NotificationAggregateDao.UpsertResult(100L, "tok", true));
+        when(aggregates.addActor(100L, 2L)).thenReturn(true);
+        when(repo.findById(100L)).thenAnswer(inv -> java.util.Optional.of(persisted(100L, "tok")));
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(accountQuery.isOfficialAccount(9L)).thenReturn(true);
+
+        interactionService().sendInteraction(9L, NotificationType.CONTENT_LIKED, 2L, "LIKE:POST:55", "55",
+                null, null, null);
+
+        verify(valueOps).increment(NotificationService.UNREAD_KEY_PREFIX + "9");
+        verify(valueOps, never()).setIfAbsent(anyString(), anyString(), any(java.time.Duration.class));
+        org.mockito.Mockito.verifyNoInteractions(pusher);
+    }
+
+    /** F4：触发人全被滤掉 → 不推，并把刚占的去抖键还回去。 */
+    @Test
+    void emptySummaryReleasesDebounceSlot() {
+        when(aggregates.upsertAggregate(eq(9L), any(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), isNull(), isNull()))
+                .thenReturn(new NotificationAggregateDao.UpsertResult(100L, "tok", true));
+        when(aggregates.addActor(100L, 2L)).thenReturn(true);
+        when(repo.findById(100L)).thenAnswer(inv -> java.util.Optional.of(persisted(100L, "tok")));
+        when(redis.opsForValue()).thenReturn(valueOps);
+        when(valueOps.setIfAbsent("notify:likepush:55", "1", java.time.Duration.ofMinutes(10))).thenReturn(true);
+        when(actors.findActorIdsNewestFirst(100L)).thenReturn(java.util.List.of(2L));
+        when(copy.resolve(9L, java.util.List.of(2L))).thenReturn(java.util.Optional.empty());
+
+        interactionService().sendInteraction(9L, NotificationType.CONTENT_LIKED, 2L, "LIKE:POST:55", "55",
+                null, null, null);
+
+        verify(redis).delete("notify:likepush:55");
+        org.mockito.Mockito.verifyNoInteractions(pusher);
+    }
 }

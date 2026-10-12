@@ -127,6 +127,7 @@ class NotificationAggregateIntegrationTest extends ApiIntegrationTest {
         User a = newUser();
         User b = newUser();
         long postId = newPostId();
+        long before = badge(author);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
@@ -147,6 +148,10 @@ class NotificationAggregateIntegrationTest extends ApiIntegrationTest {
             assertThat(id1).isEqualTo(id2);
             assertThat(unreadRows(author, postId)).isEqualTo(1);
             assertThat(actorsOf(id1)).containsExactlyInAnyOrder(a.getId(), b.getId());
+            // 3.1 code-review F9：并发下角标也只 +1、去抖后只推 1 次。
+            assertThat(badge(author) - before).isEqualTo(1);
+            verify(pusher, times(1)).pushToUser(eq(author.getId()), anyString(), anyString(), anyString(),
+                    anyString(), anyString());
         } finally {
             pool.shutdownNow();
         }

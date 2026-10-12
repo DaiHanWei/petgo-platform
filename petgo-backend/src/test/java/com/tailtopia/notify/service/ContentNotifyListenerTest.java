@@ -112,14 +112,15 @@ class ContentNotifyListenerTest {
                 anyString(), anyString(), eq(NotificationType.CONTENT_REMOVED.name()), eq("55"));
     }
 
+    /** 3.1 code-review F8：比「没调 sendInteraction」更强 —— 退回 send / sendWithCopy 也会红。 */
     private void verifyNoInteractionSent() {
-        verify(notificationService, never()).sendInteraction(anyLong(), any(), anyLong(), any(), any(), any(),
-                any(), any());
+        org.mockito.Mockito.verifyNoInteractions(notificationService);
     }
 
     private void verifyNoInteractionSentTo(long recipient) {
         verify(notificationService, never()).sendInteraction(eq(recipient), any(), anyLong(), any(), any(), any(),
                 any(), any());
+        verify(notificationService, never()).send(eq(recipient), any(), any(), any(), any(), any());
     }
 
     // ===== V1.1.4 Story 1.4：互动通知抑制 =====
