@@ -713,7 +713,7 @@ App 对 5xx **不报**：网关失败服务端已报 `GATEWAY_DECLINED`，再报
 | 事件 | 变更 |
 |---|---|
 | `passport_card_shared` | 新增 `card_type`：`page`（护照卡，仍带 `stamp_count`）/ `boarding`（登机牌卡，**不再带** `stamp_count`）。触发时机不变：系统分享面板回调成功才报 |
-| `lightbox_opened` / `lightbox_dismissed` | `source` 新增取值 `tailsonality_result`（Tailsonality 结果页点开大图）；原有 `place_detail` / `content_detail` 不变 |
+| `lightbox_opened` / `lightbox_dismissed` | `source` 新增取值 `tailsonality_result`（Tailsonality 结果页点开大图）、`publish_compose`（发帖页点缩略图看大图，V1.3.4 FR-139）；原有 `place_detail` / `content_detail` 不变 |
 
 ### 12.3 看数注意
 

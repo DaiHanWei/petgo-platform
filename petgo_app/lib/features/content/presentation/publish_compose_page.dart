@@ -25,6 +25,7 @@ import '../../profile/domain/milestone_titles.dart';
 import '../../profile/domain/pet_profile.dart';
 import '../../profile/data/milestone_celebration_reporter.dart';
 import '../../profile/presentation/widgets/milestone_celebration.dart';
+import '../../../shared/media/image_lightbox.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/dashed_rect.dart';
 import '../../../shared/widgets/keyboard_safe_area.dart';
@@ -1320,12 +1321,35 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     );
   }
 
+  /// 发帖页看大图（V1.3.4 Story 2.5 · FR-139 · AD-9）。只看不改；完整原图，不套露出窗口。
+  void _openPreview(PublishController controller, int index) {
+    // 另一根手指正在拖格子时不开灯箱（否则灯箱盖在拖影上）
+    if (_dragFrom != null) return;
+    final images = [for (final item in controller.items) item.bytes];
+    if (index < 0 || index >= images.length) return;
+    ImageLightbox.openMemory(
+      context,
+      images: images,
+      initialIndex: index,
+      heroTagPrefix: 'publish_compose',
+      source: 'publish_compose',
+    );
+  }
+
   /// 一格照片。V1.3.0 Story 4.1 起可长按拖拽重排（AC1），首格常驻「封面」角标（AC2）。
+  /// V1.3.4 Story 2.5 起单击看大图（FR-139）——上传中 / 失败 / 锁定期一样能点开。
   Widget _thumb(
       PublishController controller, int index, AppLocalizations l10n, double cell) {
     // 拖动途中所有格都藏起 ✕：手指正在排序，误触到删除就是丢图。
-    final cellContent = _thumbContent(controller, index, l10n,
-        showRemove: !_dragActive(controller));
+    // 点击只包格子本体（两条返回路径共用）；✕ 的识别器更深，点 ✕ 时它先胜出，不会冒泡开灯箱。
+    // ⚠️ 不加 Hero：拖拽 feedback 复用 _thumbContent，同 tag Hero 会出现两份而抛异常。
+    final cellContent = GestureDetector(
+      key: ValueKey('publishThumb_$index'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openPreview(controller, index),
+      child: _thumbContent(controller, index, l10n,
+          showRemove: !_dragActive(controller)),
+    );
     // 🔴 AC4：上传会话里**整个拖拽入口不挂**（不是挂上去再判空）——
     // 挂着的话手指还是能把那张图抬起来，只是放下没反应，看着像卡了。
     if (!controller.canReorder) return cellContent;
@@ -1444,6 +1468,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
             right: 3,
             top: 3,
             child: GestureDetector(
+              key: ValueKey('publishRemoveImage_$index'),
               onTap: () => controller.removeImage(index),
               child: Container(
                 width: 16,

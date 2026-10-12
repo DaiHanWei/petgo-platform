@@ -53,7 +53,7 @@ development_status:
   2-2-feed-卡与详情页按露出位置开窗: review
   2-3-露出区域页-取代三档裁剪页: review
   2-4-发布链路改为原图上传并带上露出位置: review
-  2-5-发帖页点缩略图看大图: ready-for-dev
+  2-5-发帖页点缩略图看大图: review
   epic-2-retrospective: optional
   # ===== Epic 3：用户能及时更新到新版本 =====
   epic-3: backlog
