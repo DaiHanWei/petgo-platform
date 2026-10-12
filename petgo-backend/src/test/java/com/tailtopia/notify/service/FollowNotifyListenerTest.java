@@ -6,7 +6,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.repository.NotificationRepository;
 import com.tailtopia.social.event.UserFollowedEvent;
@@ -19,7 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/** L0：新粉丝通知（V1.3.4 follow · Story 3.2 · AC2）—— 发送参数、隐藏抑制、24 小时去重、自关注、官方号。 */
+/** L0：新粉丝通知（V1.3.4 follow · Story 3.2 · AC2）—— 发送参数、隐藏抑制、24 小时去重、自关注。 */
 @ExtendWith(MockitoExtension.class)
 class FollowNotifyListenerTest {
 
@@ -30,10 +29,9 @@ class FollowNotifyListenerTest {
     @Mock NotificationService notificationService;
     @Mock UserHideRelationReader hideRelations;
     @Mock NotificationRepository notifications;
-    @Mock AccountQueryService accounts;
 
     private FollowNotifyListener listener() {
-        return new FollowNotifyListener(notificationService, hideRelations, notifications, accounts,
+        return new FollowNotifyListener(notificationService, hideRelations, notifications,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -80,16 +78,9 @@ class FollowNotifyListenerTest {
         listener().onUserFollowed(new UserFollowedEvent(A, A, NOW));
 
         verifyNotSent();
-        org.mockito.Mockito.verifyNoInteractions(hideRelations, notifications, accounts);
+        org.mockito.Mockito.verifyNoInteractions(hideRelations, notifications);
     }
 
-    /** D-9：官方内容账号不接收通知推送。 */
-    @Test
-    void officialAccountRecipientIsSkipped() {
-        when(accounts.isOfficialAccount(B)).thenReturn(true);
-
-        listener().onUserFollowed(aFollowsB());
-
-        verifyNotSent();
-    }
+    // D-9 官方内容账号：照常写行、只是不推送 —— 推送环节在 NotificationService 统一跳过
+    // （NotificationServiceTest.officialRecipientGetsRowButNoPush，3.2 code-review F3）。
 }

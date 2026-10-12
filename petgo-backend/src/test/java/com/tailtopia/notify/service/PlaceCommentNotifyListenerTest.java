@@ -19,7 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-/** L0：场所评论通知（V1.3.4 follow · Story 3.2 · AC4）—— 参数、自评、注销 / 封号、官方号、隐藏。 */
+/** L0：场所评论通知（V1.3.4 follow · Story 3.2 · AC4）—— 参数、自评、创建者 / 评论人注销或封号、隐藏。 */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class PlaceCommentNotifyListenerTest {
@@ -35,6 +35,7 @@ class PlaceCommentNotifyListenerTest {
     @BeforeEach
     void setUp() {
         when(accounts.isActive(CREATOR)).thenReturn(true);
+        when(accounts.isActive(COMMENTER)).thenReturn(true);
     }
 
     private PlaceCommentNotifyListener listener() {
@@ -73,9 +74,10 @@ class PlaceCommentNotifyListenerTest {
         verifyNotSent();
     }
 
+    /** 3.2 code-review F6 / D-8：评论人在审核期间被封号或注销 → 不写一条唯一触发人不可见的行。 */
     @Test
-    void officialCreatorIsSkipped() {
-        when(accounts.isOfficialAccount(CREATOR)).thenReturn(true);
+    void inactiveCommenterIsSkipped() {
+        when(accounts.isActive(COMMENTER)).thenReturn(false);
         listener().onPlaceCommentApproved(event(COMMENTER));
         verifyNotSent();
     }

@@ -274,24 +274,38 @@ class FollowServiceTest {
         verify(events, never()).publishEvent(any());
     }
 
+    private static void assertRejected(org.assertj.core.api.ThrowableAssert.ThrowingCallable call, HttpStatus status) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(AppException.class,
+                e -> assertThat(e.getStatus()).isEqualTo(status));
+    }
+
+    /** 3.2 code-review F5：每种拒绝都钉住状态码（串了也会红），且都不发事件。 */
     @Test
     void rejectedFollowsDoNotPublish() {
         targetExists();
         FollowService svc = service(Instant.parse("2026-10-12T05:00:00Z"));
         // 409：我拉黑了对方
         when(hideRelations.isBlocked(ME, TARGET)).thenReturn(true);
-        assertThatThrownBy(() -> svc.follow(ME, TOKEN)).isInstanceOf(AppException.class);
+        assertRejected(() -> svc.follow(ME, TOKEN), HttpStatus.CONFLICT);
         when(hideRelations.isBlocked(ME, TARGET)).thenReturn(false);
         // 429：每日上限
         when(follows.countCreatedSince(eq(ME), any())).thenReturn(500L);
-        assertThatThrownBy(() -> svc.follow(ME, TOKEN)).isInstanceOf(AppException.class);
+        assertRejected(() -> svc.follow(ME, TOKEN), HttpStatus.TOO_MANY_REQUESTS);
         // 404：对方不存在 / 注销 / 封号
-        assertThatThrownBy(() -> svc.follow(ME, "z".repeat(32))).isInstanceOf(AppException.class);
+        assertRejected(() -> svc.follow(ME, "z".repeat(32)), HttpStatus.NOT_FOUND);
         // 422：关注自己
         User me = Mockito.mock(User.class);
         when(me.getId()).thenReturn(ME);
         when(accounts.findActiveByPublicToken("m".repeat(32))).thenReturn(Optional.of(me));
-        assertThatThrownBy(() -> svc.follow(ME, "m".repeat(32))).isInstanceOf(AppException.class);
+        assertRejected(() -> svc.follow(ME, "m".repeat(32)), HttpStatus.UNPROCESSABLE_ENTITY);
+        // 401：调用方本人已失效（注销 / 封号后旧 access token）
+        when(accounts.isActive(ME)).thenReturn(false);
+        assertRejected(() -> svc.follow(ME, TOKEN), HttpStatus.UNAUTHORIZED);
+        when(accounts.isActive(ME)).thenReturn(true);
+        // 429：每分钟限流
+        Mockito.doThrow(AppException.rateLimited("too fast")).when(rateLimiter)
+                .check(eq("rl:social:follow:" + ME), eq(30), any());
+        assertRejected(() -> svc.follow(ME, TOKEN), HttpStatus.TOO_MANY_REQUESTS);
 
         verify(events, never()).publishEvent(any());
     }

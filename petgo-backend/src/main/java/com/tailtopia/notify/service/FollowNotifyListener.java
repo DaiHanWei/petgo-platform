@@ -1,6 +1,5 @@
 package com.tailtopia.notify.service;
 
-import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.repository.NotificationRepository;
 import com.tailtopia.social.event.UserFollowedEvent;
@@ -20,9 +19,11 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *   <li>自关注（双重保险，关注接口已 422）；</li>
  *   <li>接收者隐藏了关注者（{@code isHidden}，拉黑与举报隐藏都算，同 {@code ContentNotifyListener} 判据①；
  *       含 D-4「B 拉黑 A，A 关注 B」—— 关注照常成功，B 收不到通知）；</li>
- *   <li>接收者是官方内容账号（D-9：官方号不接收通知推送、不登录 App）；</li>
  *   <li>24 小时内已有「A 关注了 B」的通知（取关后再关注不重复打扰）。被抑制的那次没有通知行，不计入去重。</li>
  * </ol>
+ *
+ * <p>D-9 官方内容账号：照常写通知行，<b>只是不推送</b> —— 推送环节在 {@link NotificationService#sendInteraction}
+ * 统一跳过（与点赞 / 评论官方帖同一口径，3.2 code-review F3）。
  *
  * <p>⚠️ 抑制写在这里，不写进 {@link NotificationService}（理由同 {@code ContentNotifyListener}）。
  * 24 小时去重是「先查后写」：同一对用户毫秒级内连续两次新建关注（受 30 次 / 分钟限流）理论上可能各发一条，
@@ -37,21 +38,19 @@ public class FollowNotifyListener {
     private final NotificationService notificationService;
     private final UserHideRelationReader hideRelations;
     private final NotificationRepository notifications;
-    private final AccountQueryService accounts;
     private final Clock clock;
 
     @Autowired
     public FollowNotifyListener(NotificationService notificationService, UserHideRelationReader hideRelations,
-            NotificationRepository notifications, AccountQueryService accounts) {
-        this(notificationService, hideRelations, notifications, accounts, Clock.systemUTC());
+            NotificationRepository notifications) {
+        this(notificationService, hideRelations, notifications, Clock.systemUTC());
     }
 
     FollowNotifyListener(NotificationService notificationService, UserHideRelationReader hideRelations,
-            NotificationRepository notifications, AccountQueryService accounts, Clock clock) {
+            NotificationRepository notifications, Clock clock) {
         this.notificationService = notificationService;
         this.hideRelations = hideRelations;
         this.notifications = notifications;
-        this.accounts = accounts;
         this.clock = clock;
     }
 
@@ -63,9 +62,6 @@ public class FollowNotifyListener {
             return;
         }
         if (hideRelations.isHidden(followee, follower)) {
-            return;
-        }
-        if (accounts.isOfficialAccount(followee)) {
             return;
         }
         if (notifications.existsFollowedNotificationSince(followee, follower, clock.instant().minus(DEDUP_WINDOW))) {

@@ -40,8 +40,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
  * L1：新粉丝与场所评论两种新通知（V1.3.4 follow · Story 3.2 · AC5.2）—— 需 Docker postgres+redis。
  *
  * <p>关注走真实接口 {@code PUT/DELETE /api/v1/users/{token}/follow}；场所评论直接落 {@code UNDER_REVIEW} 行再调
- * {@link PlaceCommentService#approve}（绕开三方审核）。每例新建场所，去抖键 {@code notify:placecommentpush:{placeId}}
- * 天然隔离，<b>不 FLUSH Redis</b>。推送用 {@link MockitoBean} 计数。
+ * {@link PlaceCommentService#approve}（绕开三方审核）。每例新建场所并定点删掉它的去抖键
+ * {@code notify:placecommentpush:{placeId}}（placeId 来自库序列，可能撞上别的库留下的键），<b>不 FLUSH Redis</b>。
+ * 推送用 {@link MockitoBean} 计数。
  */
 class FollowAndPlaceNotifyIntegrationTest extends ApiIntegrationTest {
 
@@ -97,9 +98,13 @@ class FollowAndPlaceNotifyIntegrationTest extends ApiIntegrationTest {
     }
 
     private Place newPlace(User creator) {
-        return places.save(Place.mark(java.util.UUID.randomUUID().toString().replace("-", ""),
+        Place p = places.save(Place.mark(java.util.UUID.randomUUID().toString().replace("-", ""),
                 "Kopi " + SEQ.incrementAndGet(), PlaceType.CAFE, List.of(PlaceTag.PETS_ALLOWED_INSIDE),
                 -6.2351, 106.8101, "Jl. Test", null, creator.getId(), "Jakarta"));
+        // 3.2 code-review F1：placeId 来自库序列，换库 / 多分支共用一个 Redis 时可能撞上残留的去抖键 →
+        // 定点删掉这一个键（不是 FLUSH）。
+        redis.delete(NotificationService.PLACE_COMMENT_PUSH_KEY_PREFIX + p.getId());
+        return p;
     }
 
     private long approvedComment(Place p, User author) {
@@ -183,6 +188,18 @@ class FollowAndPlaceNotifyIntegrationTest extends ApiIntegrationTest {
         approvedComment(p, creator);
         placeComments.save(PlaceComment.createUnderReview(p.getId(), newUser().getId(), "tunggu",
                 PlaceCommentAttitude.RECOMMEND)); // 停留 UNDER_REVIEW：不调 approve
+
+        assertThat(notificationsOf(creator, "PLACE_COMMENTED")).isEmpty();
+    }
+
+    /** D-8：场所创建者被封号（未注销）→ 评论过审也不通知。 */
+    @Test
+    void bannedCreatorGetsNoPlaceCommentNotification() {
+        User creator = newUser();
+        Place p = newPlace(creator);
+        jdbc.update("UPDATE users SET status = 'DEACTIVATED' WHERE id = ?", creator.getId());
+
+        approvedComment(p, newUser());
 
         assertThat(notificationsOf(creator, "PLACE_COMMENTED")).isEmpty();
     }

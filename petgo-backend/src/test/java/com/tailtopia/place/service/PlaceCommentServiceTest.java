@@ -429,6 +429,28 @@ class PlaceCommentServiceTest {
         verify(counters).onCommentBecameVisible(42L, PlaceCommentAttitude.RECOMMEND);
     }
 
+    /** 3.2 code-review F5：场所已合并（MERGED）、或没有创建者 → 不发。 */
+    @Test
+    void approvingOnMergedOrCreatorlessPlacePublishesNothing() {
+        PlaceComment c = withCommentId(PlaceComment.createUnderReview(
+                42L, 9L, "mantap", PlaceCommentAttitude.RECOMMEND), 7L);
+        when(comments.findByIdAndDeletedAtIsNull(7L)).thenReturn(Optional.of(c));
+        Place merged = withId(place(), 42L);
+        setObjectField(merged, Place.class, "status", PlaceStatus.MERGED);
+        when(places.findById(42L)).thenReturn(Optional.of(merged));
+        service.approve(7L);
+
+        PlaceComment c2 = withCommentId(PlaceComment.createUnderReview(
+                43L, 9L, "mantap", PlaceCommentAttitude.RECOMMEND), 8L);
+        when(comments.findByIdAndDeletedAtIsNull(8L)).thenReturn(Optional.of(c2));
+        Place creatorless = withId(place(), 43L);
+        setObjectField(creatorless, Place.class, "createdBy", null);
+        when(places.findById(43L)).thenReturn(Optional.of(creatorless));
+        service.approve(8L);
+
+        assertThat(approvedEvents()).isEmpty();
+    }
+
     private static void setObjectField(Object target, Class<?> type, String name, Object value) {
         try {
             var f = type.getDeclaredField(name);

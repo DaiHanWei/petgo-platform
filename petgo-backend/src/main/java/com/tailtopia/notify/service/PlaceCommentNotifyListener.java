@@ -19,8 +19,10 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *       {@code comments.id}，场所评论在 {@code place_comments}、id 空间独立，填进去会被当成内容评论去查。</li>
  * </ul>
  *
- * <p>不发：评论人 == 创建者；创建者已注销或封号（D-8，{@code isActive}）；创建者是官方内容账号（D-9）；
+ * <p>不发：评论人 == 创建者；创建者已注销或封号（D-8，{@code isActive}）；评论人在审核期间已注销或封号
+ * （D-8：触发人按不存在处理，否则会写一条唯一触发人不可见的行，3.2 code-review F6）；
  * 创建者隐藏了评论人（{@code isHidden}，拉黑与举报隐藏都算）。场所已不可见的情况由 place 侧不发事件（T-35）。
+ * 创建者是官方内容账号（D-9）：照常写行、只是不推送（推送环节统一跳过，3.2 code-review F3）。
  */
 @Component
 public class PlaceCommentNotifyListener {
@@ -43,7 +45,7 @@ public class PlaceCommentNotifyListener {
         if (creator == commenter) {
             return;
         }
-        if (!accounts.isActive(creator) || accounts.isOfficialAccount(creator)) {
+        if (!accounts.isActive(creator) || !accounts.isActive(commenter)) {
             return;
         }
         if (hideRelations.isHidden(creator, commenter)) {
