@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/me/data/me_counts_provider.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/me/presentation/me_page.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
@@ -17,6 +18,8 @@ Future<void> _pump(
   required UserProfile profile,
   PetProfile? pet,
   List<MyPost> posts = const [],
+  MeCounts? counts = const MeCounts(postCount: 15, likeCount: 3, followingCount: 50, followerCount: 30),
+  Object? countsError,
 }) async {
   tester.view.physicalSize = const Size(1200, 3200);
   tester.view.devicePixelRatio = 1.0;
@@ -25,8 +28,13 @@ Future<void> _pump(
 
   final container = ProviderContainer(overrides: [
     myPostsProvider.overrideWith((ref) async => posts),
+    // V1.3.4 Story 1.4：四格数据源（`GET /me`）。countsError 非空时模拟失败 → 回落 auth.profile。
+    meCountsProvider.overrideWith((ref) async {
+      if (countsError != null) throw countsError;
+      return counts!;
+    }),
     petProfileProvider.overrideWith((ref) async => pet),
-    // 宠物卡元数据「momen 数」取此 provider；测试不打真实后端。
+    // 宠物卡 diary 标签取此 provider；测试不打真实后端。
     archiveStatsProvider.overrideWith((ref) async => const ArchiveStats(
         happyMomentCount: 12, consultCount: 0, milestoneCompleted: 0, milestoneTotal: 30)),
   ]);
@@ -131,5 +139,94 @@ void main() {
     expect(t30.dx, lessThan(t20.dx)); // 同行：左→右
     expect(t30.dy, closeTo(t20.dy, 1)); // 30/20 同一行
     expect(t10.dy, greaterThan(t30.dy)); // 第三条换行到下一行
+  });
+
+  // ===== V1.3.4 follow Story 1.4 =====
+
+  String cell(WidgetTester tester, String key) => tester
+      .widgetList<Text>(find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(Text)))
+      .first
+      .data!;
+
+  testWidgets('V1.3.4 AC2：四格数字来自 /me，大数缩写；邮箱不展示', (tester) async {
+    await _pump(
+      tester,
+      profile: const UserProfile(nickname: '小明', email: 'a@b.com', petStatus: 'PLANNING'),
+      counts: const MeCounts(postCount: 1234, likeCount: 3, followingCount: 50, followerCount: 30),
+    );
+    expect(cell(tester, 'profileStatPosts'), '1.2K');
+    expect(cell(tester, 'profileStatLikes'), '3');
+    expect(cell(tester, 'profileStatFollowing'), '50');
+    expect(cell(tester, 'profileStatFollowers'), '30');
+    expect(find.text('a@b.com'), findsNothing, reason: 'PRD OQ-6：我的页不再展示邮箱');
+  });
+
+  testWidgets('V1.3.4 AC1.3：/me 失败 → 回落登录态里的计数', (tester) async {
+    await _pump(
+      tester,
+      profile: const UserProfile(
+          nickname: '小明', petStatus: 'PLANNING', postCount: 7, likeCount: 8, followingCount: 9, followerCount: 10),
+      countsError: StateError('offline'),
+    );
+    expect(cell(tester, 'profileStatPosts'), '7');
+    expect(cell(tester, 'profileStatFollowers'), '10');
+  });
+
+  testWidgets('V1.3.4 T-14：/me 失败且登录态也没有计数 → 显示「–」，不闪 0', (tester) async {
+    await _pump(
+      tester,
+      profile: const UserProfile(nickname: '小明', petStatus: 'PLANNING'),
+      countsError: StateError('offline'),
+    );
+    for (final k in ['profileStatPosts', 'profileStatLikes', 'profileStatFollowing', 'profileStatFollowers']) {
+      expect(cell(tester, k), '–', reason: k);
+    }
+  });
+
+  testWidgets('V1.3.4 AC2.3：Mengikuti / Pengikut 两格本 story 不可点（无 InkWell）', (tester) async {
+    await _pump(tester, profile: const UserProfile(nickname: '小明', petStatus: 'PLANNING'));
+    for (final k in ['profileStatFollowing', 'profileStatFollowers']) {
+      expect(find.descendant(of: find.byKey(ValueKey(k)), matching: find.byType(InkWell)), findsNothing);
+    }
+  });
+
+  testWidgets('V1.3.4 AC2.4：整宽 Edit Profile 在四格下方', (tester) async {
+    await _pump(tester, profile: const UserProfile(nickname: '小明', petStatus: 'PLANNING'));
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    final btn = find.byKey(const ValueKey('meEditNickname'));
+    expect(find.descendant(of: btn, matching: find.text(l10n.meEditProfileTitle)), findsOneWidget);
+    expect(find.text(l10n.meEditButton), findsNothing);
+    expect(tester.getSize(btn).height, 40);
+    expect(tester.getCenter(btn).dy,
+        greaterThan(tester.getCenter(find.byKey(const ValueKey('profileStatPosts'))).dy));
+  });
+
+  testWidgets('V1.3.4 AC3：Hewanku 小节；宠物行卡 meta 只含「物种 · 年龄」，diary 标签单独显示', (tester) async {
+    await _pump(
+      tester,
+      profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET', hasPetProfile: true),
+      pet: const PetProfile(id: 1, name: 'Momo', cardToken: 'tok', petType: 'CAT'),
+    );
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.mePetsSection.toUpperCase()), findsOneWidget);
+    final meta = tester.widget<Text>(find.byKey(const ValueKey('mePetCardMeta'))).data!;
+    expect(meta, contains(l10n.petTypeCat));
+    expect(meta, isNot(contains('diary')));
+    expect(find.descendant(of: find.byKey(const ValueKey('mePetDiaryTag')), matching: find.text(l10n.meDiaryCount('12'))),
+        findsOneWidget);
+    expect(find.textContaining(l10n.meViewArchive), findsNothing);
+  });
+
+  testWidgets('V1.3.4 T-13：有宠物未建档时引导卡上方也有 Hewanku 标题；B/C 无标题', (tester) async {
+    await _pump(tester, profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET'));
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.byKey(const ValueKey('mePetGuideCard')), findsOneWidget);
+    expect(find.text(l10n.mePetsSection.toUpperCase()), findsOneWidget);
+  });
+
+  testWidgets('V1.3.4：状态 B/C 无 Hewanku 标题', (tester) async {
+    await _pump(tester, profile: const UserProfile(nickname: '小明', petStatus: 'PLANNING'));
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    expect(find.text(l10n.mePetsSection.toUpperCase()), findsNothing);
   });
 }

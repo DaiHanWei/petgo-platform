@@ -8,6 +8,7 @@ import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../../auth/domain/auth_guard.dart';
+import '../../../me/data/me_counts_provider.dart';
 import '../../data/follow_repository.dart';
 import '../../domain/follow_state.dart';
 
@@ -137,6 +138,8 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
           wantFollow ? await repo.follow(widget.userToken) : await repo.unfollow(widget.userToken);
       if (!mounted) return;
       ref.read(followStateProvider.notifier).set(userId, result.state);
+      // V1.3.4 Story 1.4（T-15）：我的关注数变了 → 我的页四格重取 `/me`。
+      ref.invalidate(meCountsProvider);
       // D-6 过去式命名；成功后才报。is_follow_back = 点击前对方是否关注我（T-8，两个事件同口径）。
       Analytics.capture(wantFollow ? 'user_followed' : 'user_unfollowed', {
         'target_user_id': userId,

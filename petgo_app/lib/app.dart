@@ -14,6 +14,7 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/consult/presentation/consult_refresh.dart';
 import 'package:tailtopia/features/mention/data/mention_candidate_repository.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
+import 'package:tailtopia/features/me/data/me_counts_provider.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/me/presentation/phone_edit_sheet.dart';
 import 'package:tailtopia/features/me/domain/phone_soft_prompt.dart';
@@ -328,6 +329,8 @@ void resetUserScopedCaches(WidgetRef ref) {
   ref.invalidate(calendarMonthProvider); // 成长日记：日历（按月 family 整族失效）
   ref.invalidate(dayDetailProvider); // 成长日记：日详情（按日 family 整族失效）
   ref.invalidate(myPostsProvider); // 我的：我的发布
+  // V1.3.4 follow Story 1.4：我的页四格（MePage 在 IndexedStack 常驻，autoDispose 不回收 → 必须登记）。
+  ref.invalidate(meCountsProvider);
   ref.invalidate(feedProvider); // 首页 Feed（按新用户宠物状态重过滤）
   ref.invalidate(unreadCountProvider); // 通知铃铛未读角标（bug 20260625-088：换账号防显示上个用户角标）
   // bug 20260731-446：宠物身份证是用户维度缓存（列表/单卡/详情 family），不登记则同设备

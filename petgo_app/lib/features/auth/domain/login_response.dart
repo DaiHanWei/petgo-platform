@@ -44,6 +44,11 @@ class UserProfile {
     this.isSystemDefaultName = false,
     this.phone,
     this.createdAt,
+    this.userToken,
+    this.postCount,
+    this.likeCount,
+    this.followingCount,
+    this.followerCount,
   });
 
   /// 当前用户 id（Story 3.5：评论删除入口可见性判定）。
@@ -76,6 +81,24 @@ class UserProfile {
   /// 只能从这里算。⚠️ 服务端下发 UTC，**时区换算在 [PhonePromptTiming] 一处做**。
   final DateTime? createdAt;
 
+  /// 对外不可枚举用户 token（V1.3.4 follow D-2，`/me` 下发）。
+  final String? userToken;
+
+  /// 我的全部帖子数（V1.3.4 D-5：含私密 / 仅自己可见、本人待审帖，与「我的发布」网格同源）。
+  ///
+  /// ⚠️ **可空 = 不知道**：登录响应（`/auth/*`）不带它（T-6），只有 `GET /me` 才有。
+  /// 我的页四格在它为 null 时显示「–」（T-14），而不是把「不知道」显示成 0。
+  final int? postCount;
+
+  /// 我全部帖子的获赞数（同上，可空 = 不知道）。
+  final int? likeCount;
+
+  /// 我关注的人数（可空 = 不知道）。
+  final int? followingCount;
+
+  /// 关注我的人数（可空 = 不知道）。
+  final int? followerCount;
+
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
         id: json['id'] as int?,
         nickname: json['nickname'] as String?,
@@ -91,6 +114,11 @@ class UserProfile {
         createdAt: json['createdAt'] == null
             ? null
             : DateTime.tryParse(json['createdAt'] as String),
+        userToken: json['userToken'] as String?,
+        postCount: (json['postCount'] as num?)?.toInt(),
+        likeCount: (json['likeCount'] as num?)?.toInt(),
+        followingCount: (json['followingCount'] as num?)?.toInt(),
+        followerCount: (json['followerCount'] as num?)?.toInt(),
       );
 
   UserProfile copyWith({
@@ -106,6 +134,11 @@ class UserProfile {
     bool? isSystemDefaultName,
     String? phone,
     DateTime? createdAt,
+    String? userToken,
+    int? postCount,
+    int? likeCount,
+    int? followingCount,
+    int? followerCount,
   }) =>
       UserProfile(
         id: id ?? this.id,
@@ -120,5 +153,10 @@ class UserProfile {
         isSystemDefaultName: isSystemDefaultName ?? this.isSystemDefaultName,
         phone: phone ?? this.phone,
         createdAt: createdAt ?? this.createdAt,
+        userToken: userToken ?? this.userToken,
+        postCount: postCount ?? this.postCount,
+        likeCount: likeCount ?? this.likeCount,
+        followingCount: followingCount ?? this.followingCount,
+        followerCount: followerCount ?? this.followerCount,
       );
 }

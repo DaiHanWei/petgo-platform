@@ -2565,5 +2565,6 @@
   "followUnfollowFailed": "Gagal berhenti mengikuti, coba lagi",
   "profileStatPosts": "Postingan",
   "profileStatLikes": "Suka",
-  "profilePetsSection": "Hewan"
+  "profilePetsSection": "Hewan",
+  "mePetsSection": "Hewanku"
 }

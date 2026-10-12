@@ -24,6 +24,7 @@ import '../../social/data/blocked_users_repository.dart';
 import '../../social/domain/account_action_entry.dart';
 import '../../social/domain/follow_state.dart';
 import '../../social/presentation/widgets/follow_button.dart';
+import '../../me/data/me_counts_provider.dart';
 import '../../me/presentation/profile_edit_sheet.dart';
 import '../../social/presentation/account_report_sheet.dart';
 import '../../profile/domain/pet_age.dart';
@@ -477,6 +478,8 @@ class PublicProfilePage extends ConsumerWidget {
           // V1.3.4 Story 1.3 · AC5.7：服务端已同事务删除我对他的关注（AD-5）——
           // 残留的「已关注」覆盖会让其他页面误显示 Mengikuti。
           ref.read(followStateProvider.notifier).forget(userId);
+          // V1.3.4 Story 1.4：拉黑联动取关会让我的关注数变化 → 我的页四格重取。
+          ref.invalidate(meCountsProvider);
           // 「逛别人家的毛孩子」推荐位要跟着重算（Story 4.1 AC3 / 4.4）——
           // 「互相拉黑不互推」是服务端取数时算的，不重取就等于这条过滤对当前那份数据不生效。
           invalidatePetRecommendations(ref);

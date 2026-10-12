@@ -10,6 +10,7 @@ import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_guide_controller.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/me/data/me_counts_provider.dart';
 import 'package:tailtopia/features/social/data/follow_repository.dart';
 import 'package:tailtopia/features/social/domain/follow_state.dart';
 import 'package:tailtopia/features/social/presentation/widgets/follow_button.dart';
@@ -309,4 +310,49 @@ void main() {
     });
   });
 
+  /// V1.3.4 Story 1.4 · AC6.3：关注成功后我的页四格（meCountsProvider）被失效重取；失败不失效。
+  testWidgets('关注成功 → meCountsProvider 重建；失败不重建', (tester) async {
+    var builds = 0;
+    final repo = _Repo();
+    final container = ProviderContainer(overrides: [
+      followRepositoryProvider.overrideWithValue(repo),
+      authControllerProvider.overrideWith(_LoggedIn.new),
+      meCountsProvider.overrideWith((ref) async {
+        builds++;
+        return const MeCounts(followingCount: 1);
+      }),
+    ]);
+    addTearDown(container.dispose);
+    final sub = container.listen(meCountsProvider, (_, _) {});
+    addTearDown(sub.close);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(
+        locale: Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: FollowButton(
+            userId: _kTarget,
+            userToken: _kToken,
+            initial: FollowState.none,
+            style: FollowButtonStyle.profileFull,
+            source: 'profile',
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(builds, 1);
+
+    await _tap(tester);
+    await tester.pumpAndSettle();
+    expect(builds, 2);
+
+    repo.error = _http(500);
+    await _tap(tester);
+    await tester.pumpAndSettle();
+    expect(builds, 2);
+    await tester.pump(const Duration(seconds: 3));
+  });
 }

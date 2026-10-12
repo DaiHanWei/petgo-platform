@@ -22,6 +22,7 @@ import '../../../core/theme/rounded.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../features/auth/domain/auth_state.dart';
+import '../../../features/me/data/me_counts_provider.dart';
 import '../../../features/me/data/my_posts_repository.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
@@ -519,6 +520,7 @@ class _DetailScaffold extends ConsumerWidget {
       // Feed + me 页「我的发布」同步移除（重拉，软删帖 deleted_at 非空被过滤）。
       ref.invalidate(feedProvider);
       ref.invalidate(myPostsProvider);
+      ref.invalidate(meCountsProvider); // V1.3.4：我的页四格帖子数 / 获赞数随删帖变化
       // 成长日历帖还出现在档案/时间线/日历视图，删后一并刷新（否则那些页仍显旧帖直到重启）。
       if (detail.type == ContentType.growthMoment.wire) {
         ref.invalidate(timelineFirstPageProvider);
