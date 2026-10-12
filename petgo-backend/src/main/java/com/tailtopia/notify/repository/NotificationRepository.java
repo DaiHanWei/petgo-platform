@@ -65,6 +65,18 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     boolean existsFollowedNotificationSince(@Param("recipientId") long recipientId,
             @Param("actorId") long actorId, @Param("since") Instant since);
 
+    /**
+     * 某人的<b>未读</b>、带触发人行的互动通知 id（Story 3.3 · ⚠️ T-36：触发人全被过滤的条目不计入未读角标，
+     * 角标校准时据此找出要扣掉的那些）。只看四种互动类型。
+     */
+    @Query(value = """
+            SELECT n.id FROM notifications n
+             WHERE n.recipient_user_id = :userId AND n.is_read = false
+               AND n.type IN ('CONTENT_LIKED', 'CONTENT_COMMENTED', 'USER_FOLLOWED', 'PLACE_COMMENTED')
+               AND EXISTS (SELECT 1 FROM notification_actors a WHERE a.notification_id = n.id)
+            """, nativeQuery = true)
+    List<Long> findUnreadInteractionIdsWithActors(@Param("userId") long userId);
+
     /** Story 7.3：注销级联删除该用户全部通知（纯个人数据，物理删除）。 */
     @org.springframework.transaction.annotation.Transactional
     void deleteByRecipientUserId(long recipientUserId);

@@ -78,6 +78,33 @@ class CommentQueryServiceTest {
         return p;
     }
 
+    // ===== V1.3.4 follow · Story 3.3：通知中心评论快照 =====
+
+    @Test
+    void notificationSnapshotsMarkDeletedHiddenAndMissingAsGoneInOneQuery() {
+        Comment visible = comment(1L, null, 5L, Instant.now());
+        setField(visible, Comment.class, "moderationStatus", com.tailtopia.content.domain.CommentModerationStatus.VISIBLE);
+        Comment deleted = comment(2L, null, 5L, Instant.now());
+        setField(deleted, Comment.class, "moderationStatus", com.tailtopia.content.domain.CommentModerationStatus.VISIBLE);
+        setField(deleted, Comment.class, "deletedAt", Instant.now());
+        Comment takenDown = comment(3L, null, 5L, Instant.now());
+        setField(takenDown, Comment.class, "moderationStatus",
+                com.tailtopia.content.domain.CommentModerationStatus.TAKEN_DOWN);
+        when(comments.findAllById(org.mockito.ArgumentMatchers.anyIterable()))
+                .thenReturn(List.of(visible, deleted, takenDown));
+
+        var snaps = service.notificationSnapshots(List.of(1L, 2L, 3L, 4L));
+
+        assertThat(snaps.get(1L)).isEqualTo(new CommentQueryService.NotificationCommentSnapshot("c1", false));
+        for (long gone : new long[] {2L, 3L, 4L}) {
+            assertThat(snaps.get(gone).gone()).as("id " + gone).isTrue();
+            assertThat(snaps.get(gone).body()).as("非可见不下发原文（T-37）").isNull();
+        }
+        org.mockito.Mockito.verify(comments, org.mockito.Mockito.times(1))
+                .findAllById(org.mockito.ArgumentMatchers.anyIterable());
+        assertThat(service.notificationSnapshots(List.of())).isEmpty();
+    }
+
     private static Comment comment(long id, Long parentId, long authorId, Instant ts) {
         Comment c = newComment();
         setField(c, Comment.class, "id", id);

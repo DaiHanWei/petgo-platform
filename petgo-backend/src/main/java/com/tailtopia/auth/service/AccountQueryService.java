@@ -146,7 +146,7 @@ public class AccountQueryService {
     @Transactional(readOnly = true)
     public boolean isOfficialAccount(long userId) {
         return users.findById(userId)
-                .map(u -> u.getRole() == com.tailtopia.auth.domain.Role.ADMIN)
+                .map(u -> u.getRole() == Role.ADMIN)
                 .orElse(false);
     }
 
@@ -191,6 +191,23 @@ public class AccountQueryService {
     @Transactional(readOnly = true)
     public Map<Long, AuthorView> findAuthorViewsWithoutTags(Collection<Long> userIds) {
         return basicViews(userIds);
+    }
+
+    /**
+     * 通知触发人投影（V1.3.4 follow · Story 3.3）—— <b>一次</b> {@code findAllById} 同时取昵称、{@code public_token}、
+     * 是否对外有效（不为 token 再多查一次）。通知中心不展示运营标签，故不查标签。缺失的 id 不出现。
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, com.tailtopia.auth.dto.ActorView> findActorViews(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        return users.findAllById(userIds).stream().collect(Collectors.toMap(User::getId, u -> {
+            boolean active = u.getDeletedAt() == null && u.getStatus() == UserStatus.ACTIVE;
+            String name = u.getNickname() != null ? u.getNickname() : u.getDisplayName();
+            return active ? new com.tailtopia.auth.dto.ActorView(u.getId(), name, u.getPublicToken(), true)
+                    : new com.tailtopia.auth.dto.ActorView(u.getId(), null, null, false);
+        }));
     }
 
     /** 身份三件套（id / 昵称 / 头像 + 是否注销）。缺失的 id 按匿名化补齐，调用方按 id 取必有值。 */

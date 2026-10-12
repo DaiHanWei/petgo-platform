@@ -7,7 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.tailtopia.auth.dto.AuthorView;
+import com.tailtopia.auth.dto.ActorView;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.notify.domain.Notification;
 import com.tailtopia.notify.domain.NotificationType;
@@ -49,14 +49,18 @@ class InteractionCopyRendererTest {
         renderer = new InteractionCopyRenderer(accounts, hide, source);
     }
 
-    private static AuthorView view(long id, String nickname) {
-        return new AuthorView(id, nickname, null, false, List.of());
+    private static ActorView view(long id, String nickname) {
+        return new ActorView(id, nickname, "tok" + id, true);
+    }
+
+    private static ActorView inactive(long id) {
+        return new ActorView(id, null, null, false);
     }
 
     @Test
-    void summarizeSkipsDeletedHiddenAndNamelessThenFallsThrough() {
-        Map<Long, AuthorView> views = Map.of(
-                1L, AuthorView.anonymized(1L),
+    void summarizeSkipsInactiveHiddenNamelessAndMissingThenFallsThrough() {
+        Map<Long, ActorView> views = Map.of(
+                1L, inactive(1L),
                 2L, view(2L, "Hidden"),
                 3L, view(3L, null),
                 4L, view(4L, "Rani"),
@@ -66,25 +70,28 @@ class InteractionCopyRendererTest {
         Optional<ActorSummary> s = InteractionCopyRenderer.summarize(List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L), views,
                 Set.of(2L, 6L));
 
-        assertThat(s).contains(new ActorSummary(4L, "Rani", 1));
+        assertThat(s).contains(new ActorSummary(4L, "Rani", "tok4", 1));
+        assertThat(s.get().total()).isEqualTo(2);
     }
 
     @Test
     void summarizeIsEmptyWhenEveryoneIsFilteredOut() {
         assertThat(InteractionCopyRenderer.summarize(List.of(1L, 2L),
-                Map.of(1L, AuthorView.anonymized(1L), 2L, view(2L, "X")), Set.of(2L))).isEmpty();
+                Map.of(1L, inactive(1L), 2L, view(2L, "X")), Set.of(2L))).isEmpty();
     }
 
-    /** D-8：封号（未注销、非 ACTIVE）与已注销同等处理；T-30：接收者隐藏的人不计入。 */
+    /** D-8：封号（非 active）与已注销同等处理；T-30：接收者隐藏的人不计入。固定 2 次批量查询。 */
     @Test
-    void resolveExcludesBannedAndHiddenWithFixedQueries() {
-        when(accounts.findAuthorViewsWithoutTags(anyCollection()))
-                .thenReturn(Map.of(4L, view(4L, "Banned"), 5L, view(5L, "Hidden"), 6L, view(6L, "Budi"),
+    void resolveExcludesInactiveAndHiddenWithTwoBatchQueries() {
+        when(accounts.findActorViews(anyCollection()))
+                .thenReturn(Map.of(4L, inactive(4L), 5L, view(5L, "Hidden"), 6L, view(6L, "Budi"),
                         7L, view(7L, "Sari")));
         when(hide.hiddenByHolder(anyLong(), anyCollection())).thenReturn(Set.of(5L));
-        when(accounts.activeIdsAmong(anyCollection())).thenReturn(Set.of(5L, 6L, 7L));
 
-        assertThat(renderer.resolve(9L, List.of(4L, 5L, 6L, 7L))).contains(new ActorSummary(6L, "Budi", 1));
+        assertThat(renderer.resolve(9L, List.of(4L, 5L, 6L, 7L)))
+                .contains(new ActorSummary(6L, "Budi", "tok6", 1));
+        org.mockito.Mockito.verify(accounts, org.mockito.Mockito.times(1)).findActorViews(anyCollection());
+        org.mockito.Mockito.verifyNoMoreInteractions(accounts);
     }
 
     @Test
@@ -94,25 +101,25 @@ class InteractionCopyRendererTest {
 
     @Test
     void likedPicksOneOrManyAndFormatsInRecipientLanguage() {
-        assertThat(renderer.title(NotificationType.CONTENT_LIKED, null, new ActorSummary(1L, "Rani", 0), ID))
+        assertThat(renderer.title(NotificationType.CONTENT_LIKED, null, new ActorSummary(1L, "Rani", "t", 0), ID))
                 .isEqualTo("Rani menyukai postinganmu");
-        assertThat(renderer.title(NotificationType.CONTENT_LIKED, null, new ActorSummary(1L, "Rani", 2), ID))
+        assertThat(renderer.title(NotificationType.CONTENT_LIKED, null, new ActorSummary(1L, "Rani", "t", 2), ID))
                 .isEqualTo("Rani dan 2 lainnya menyukai postinganmu");
-        assertThat(renderer.title(NotificationType.CONTENT_LIKED, null, new ActorSummary(1L, "Rani", 2), EN))
+        assertThat(renderer.title(NotificationType.CONTENT_LIKED, null, new ActorSummary(1L, "Rani", "t", 2), EN))
                 .isEqualTo("Rani and 2 others liked your post");
     }
 
     @Test
     void othersCountHasNoThousandsSeparator() {
-        assertThat(renderer.title(NotificationType.CONTENT_LIKED, null, new ActorSummary(1L, "Rani", 1234), ID))
+        assertThat(renderer.title(NotificationType.CONTENT_LIKED, null, new ActorSummary(1L, "Rani", "t", 1234), ID))
                 .isEqualTo("Rani dan 1234 lainnya menyukai postinganmu");
-        assertThat(renderer.title(NotificationType.PLACE_COMMENTED, null, new ActorSummary(1L, "Pet Walker", 1234),
+        assertThat(renderer.title(NotificationType.PLACE_COMMENTED, null, new ActorSummary(1L, "Pet Walker", "t", 1234),
                 EN)).isEqualTo("Pet Walker and 1234 others commented on the place you added");
     }
 
     @Test
     void commentReplyAndFollowTemplates() {
-        ActorSummary s = new ActorSummary(1L, "Rani", 0);
+        ActorSummary s = new ActorSummary(1L, "Rani", "t", 0);
         assertThat(renderer.title(NotificationType.CONTENT_COMMENTED, null, s, ID))
                 .isEqualTo("Rani mengomentari postinganmu");
         assertThat(renderer.title(NotificationType.CONTENT_COMMENTED, Notification.VARIANT_REPLY, s, ID))
@@ -126,13 +133,19 @@ class InteractionCopyRendererTest {
     /** 昵称里的单引号 / 花括号原样输出（MessageFormat 只解析模板，不解析实参）。 */
     @Test
     void nicknameIsNotInterpretedAsPattern() {
-        assertThat(renderer.title(NotificationType.CONTENT_LIKED, null, new ActorSummary(1L, "D'Arcy {0}", 0), EN))
+        assertThat(renderer.title(NotificationType.CONTENT_LIKED, null, new ActorSummary(1L, "D'Arcy {0}", "t", 0), EN))
                 .isEqualTo("D'Arcy {0} liked your post");
     }
 
     @Test
+    void commentDeletedCopyFollowsLocale() {
+        assertThat(renderer.commentDeleted(ID)).isEqualTo("Komentar telah dihapus");
+        assertThat(renderer.commentDeleted(EN)).isEqualTo("Comment deleted");
+    }
+
+    @Test
     void nonInteractionTypeIsRejected() {
-        assertThatThrownBy(() -> renderer.title(NotificationType.VET_REPLY, null, new ActorSummary(1L, "x", 0), ID))
+        assertThatThrownBy(() -> renderer.title(NotificationType.VET_REPLY, null, new ActorSummary(1L, "x", "t", 0), ID))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

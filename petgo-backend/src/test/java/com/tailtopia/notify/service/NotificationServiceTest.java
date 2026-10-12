@@ -135,7 +135,7 @@ class NotificationServiceTest {
     // ===== V1.3.4 follow · Story 3.1：sendInteraction（AD-9 / AD-10） =====
 
     private static final InteractionCopyRenderer.ActorSummary SUMMARY =
-            new InteractionCopyRenderer.ActorSummary(2L, "Rani", 0);
+            new InteractionCopyRenderer.ActorSummary(2L, "Rani", "tok2", 0);
 
     /** 互动路径用的服务：不 stub 旧 pushText（严格 stub 下多余 stub 会报错）。 */
     private NotificationService interactionService() {

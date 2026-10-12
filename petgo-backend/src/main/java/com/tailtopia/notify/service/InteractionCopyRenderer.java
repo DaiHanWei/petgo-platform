@@ -1,11 +1,10 @@
 package com.tailtopia.notify.service;
 
-import com.tailtopia.auth.dto.AuthorView;
+import com.tailtopia.auth.dto.ActorView;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.notify.domain.Notification;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.social.read.UserHideRelationReader;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -20,7 +19,7 @@ import org.springframework.stereotype.Component;
  *
  * <p>触发人过滤（FR-141.9）：最新触发人与「and N others」都只算<b>还对外有效</b>、且<b>接收者没有隐藏</b>的人：
  * <ul>
- *   <li>已注销（{@code AuthorView.deleted}）与封号（未注销但非 ACTIVE，D-8）一律剔除；</li>
+ *   <li>已注销与封号（未注销但非 ACTIVE，D-8）一律剔除（{@link ActorView#active()}）；</li>
  *   <li>接收者隐藏了的人（拉黑与举报隐藏都算，T-30，{@link UserHideRelationReader#hiddenByHolder}）剔除。</li>
  * </ul>
  * 最新触发人被剔除时顺延到下一个；全部被剔除 → 空。
@@ -30,8 +29,16 @@ import org.springframework.stereotype.Component;
 @Component
 public class InteractionCopyRenderer {
 
-    /** 最新触发人与其余人数。 */
-    public record ActorSummary(long latestActorId, String latestNickname, int others) {
+    /**
+     * 最新可显示的触发人与其余人数。{@code total()} = 过滤后的触发人总数（含最新那一位）。
+     *
+     * @param latestToken 最新触发人的 {@code users.public_token}（列表的回关按钮用）
+     */
+    public record ActorSummary(long latestActorId, String latestNickname, String latestToken, int others) {
+
+        public int total() {
+            return others + 1;
+        }
     }
 
     private final AccountQueryService accounts;
@@ -46,7 +53,7 @@ public class InteractionCopyRenderer {
     }
 
     /**
-     * 批量解析<b>一条</b>通知的触发人（固定 3 次查询：展示字段、有效账号、接收者隐藏集合），再交给 {@link #summarize}。
+     * 批量解析<b>一条</b>通知的触发人（固定 2 次查询：触发人投影、接收者隐藏集合），再交给 {@link #summarize}。
      *
      * <p>⚠️ 只给推送用（一次一条）。通知<b>列表</b>（Story 3.3）不得逐行调本方法（那是 N+1，违反 AD-11）：
      * 应先对整页全部触发人各批量查一次，再逐行调纯函数 {@link #summarize}。
@@ -57,41 +64,40 @@ public class InteractionCopyRenderer {
         if (actorIdsNewestFirst.isEmpty()) {
             return Optional.empty();
         }
-        Map<Long, AuthorView> views = accounts.findAuthorViewsWithoutTags(actorIdsNewestFirst);
-        Set<Long> excluded = new HashSet<>(hideRelations.hiddenByHolder(recipientUserId, actorIdsNewestFirst));
-        // D-8：封号（未注销）与已注销同等处理。activeIdsAmong = 未注销 + ACTIVE。
-        Set<Long> active = accounts.activeIdsAmong(actorIdsNewestFirst);
-        for (Long id : actorIdsNewestFirst) {
-            if (!active.contains(id)) {
-                excluded.add(id);
-            }
-        }
-        return summarize(actorIdsNewestFirst, views, excluded);
+        Map<Long, ActorView> views = accounts.findActorViews(actorIdsNewestFirst);
+        Set<Long> hidden = hideRelations.hiddenByHolder(recipientUserId, actorIdsNewestFirst);
+        return summarize(actorIdsNewestFirst, views, hidden);
     }
 
     /**
-     * 纯函数：取第一个「未注销、有昵称、不在 {@code excluded}」的人为最新触发人，{@code others} = 其余同样过滤后的人数。
+     * 纯函数：取第一个「对外有效（未注销且 ACTIVE，D-8）、有昵称、接收者没有隐藏（T-30）」的人为最新触发人，
+     * {@code others} = 其余同样过滤后的人数；全部被滤掉 → 空。推送与列表共用这一份规则。
      *
-     * @param excluded 要剔除的人（接收者隐藏的 + 封号的）
+     * @param views  触发人投影（缺失的 id 按不可显示处理）
+     * @param hidden 接收者隐藏了的人
      */
-    public static Optional<ActorSummary> summarize(List<Long> actorIdsNewestFirst, Map<Long, AuthorView> views,
-            Set<Long> excluded) {
-        Long latest = null;
-        String nickname = null;
+    public static Optional<ActorSummary> summarize(List<Long> actorIdsNewestFirst, Map<Long, ActorView> views,
+            Set<Long> hidden) {
+        ActorView latest = null;
         int others = 0;
         for (Long id : actorIdsNewestFirst) {
-            AuthorView v = views.get(id);
-            if (v == null || v.deleted() || v.nickname() == null || excluded.contains(id)) {
+            ActorView v = views.get(id);
+            if (v == null || !v.active() || v.nickname() == null || hidden.contains(id)) {
                 continue;
             }
             if (latest == null) {
-                latest = id;
-                nickname = v.nickname();
+                latest = v;
             } else {
                 others++;
             }
         }
-        return latest == null ? Optional.empty() : Optional.of(new ActorSummary(latest, nickname, others));
+        return latest == null ? Optional.empty()
+                : Optional.of(new ActorSummary(latest.userId(), latest.nickname(), latest.publicToken(), others));
+    }
+
+    /** 评论已删除 / 不可见时的第二行（FR-141.13，T-37）。 */
+    public String commentDeleted(Locale locale) {
+        return messages.getMessage("notify.tpl.commentDeleted", null, locale);
     }
 
     /**
