@@ -164,7 +164,7 @@ updated: '2026-10-12'
 - **AR14（AD-14）** `ops_popups` + `ops_popup_impressions` 两表；App 读接口 `GET /api/v1/ops-popups/candidates`（服务端过滤后返回有序候选）+ 曝光上报 `POST /api/v1/ops-popups/{token}/impressions`
 - **AR15（AD-15）** 本地频次记录（游客 + 登录用户都写），用于游客继承；WIB 日期按 UTC+7 计算
 - **AR16（AD-16）** 共享 `OpsTarget` + `openOpsTarget`：5 个固定 App 页面映射、需登录走 `requireLogin(RouteIntent)`、外链 `inAppBrowserView` 失败退回系统浏览器；不扩展 `tailtopia://`
-- **AR17（AD-17）** 通知类型 `OPS_ANNOUNCEMENT` + CHECK 全量重建（32 值）；`ops_notification_campaigns`（+ 指定用户子表）；写入时按收件人语言选文案；`NotificationItem` 对该类型附 `opsTarget`；`OpsNotificationDispatcher`（人群解析、批量写入、按语言分组批量推送、重试 3 次、定时扫描、条件更新防重）
+- **AR17（AD-17）** 通知类型 `OPS_ANNOUNCEMENT` + CHECK 全量重建（34 值，含 follow 主题两类型，D-26）；`ops_notification_campaigns`（+ 指定用户子表）；写入时按收件人语言选文案；`NotificationItem` 对该类型附 `opsTarget`；`OpsNotificationDispatcher`（人群解析、批量写入、按语言分组批量推送、重试 3 次、定时扫描、条件更新防重）
 - **AR18（AD-18）** 里程碑清单末尾追加、既有 code / sortOrder 不变；新事件 `PLACE_CHECKED_IN` / `TAILSONALITY_UNLOCKED`；`PlaceCheckedInEvent` 加 `petIds`；只认 `sku == TAILSONALITY`；回填迁移先补名册行再补完成行、不发通知；四个跨库测试同步更新
 - **AR19（AD-19）** App 端三张表（标题 / 庆祝文案 / 徽章 key）各加 6 code；两枚插画 PNG 转 webp 放 App 与后端两处；当场庆祝用短轮询范式
 - **AR20（AD-20）** `PlaceEntryRow` 图标用 UI 稿 SVG（`flutter_svg` 已有）
@@ -961,7 +961,7 @@ So that 我写的标题、正文和跳转能原样送到用户手上。
 
 **Given** 迁移执行后
 **When** 查看 `ck_notifications_type`
-**Then** 按 `V20260915_1614` 写法 DROP + ADD 全量重建，取值 = `NotificationType.java` 现有 31 值 + `OPS_ANNOUNCEMENT` 共 32 值；开工当天对全部远端分支做并集核查并在迁移注释记录（NFR11，FR-138.7）
+**Then** 按 `V20260915_1614` 写法 DROP + ADD 全量重建，取值 = `NotificationType.java` 现有 31 值 + `OPS_ANNOUNCEMENT` + follow 主题的 `USER_FOLLOWED` + `PLACE_COMMENTED` 共 34 值（决策日志 D-26；枚举三个值两分支逐字相同地追加）；开工当天对全部远端分支做并集核查并在迁移注释记录（NFR11，FR-138.7）
 
 **Given** 迁移执行后
 **When** 查看库表

@@ -47,3 +47,4 @@
 - 2.2 不写 golden 截图（Linux / macOS 字体渲染不同），改结构断言；golden 留本地 L2。
 - 迁移共 **8 个**（AD §11），非 6 个；`ck_notifications_type` 现行并集 31 值（43 个远端分支核查），+`OPS_ANNOUNCEMENT` = 32 值。
 - 后端 `MilestoneBadgeKeys.java` 也需加两条映射（AD-19 漏列）；H5 分享页标题取后端 `titleId`，非「随 App 传入」（订正 epics 4.1）。
+| D-26 | `ck_notifications_type` 与 follow 主题（FR-141 `USER_FOLLOWED` / `PLACE_COMMENTED`）分属两个分支 | **两个分支的重建都列全集 34 值**；`NotificationType` 枚举两分支都在末尾**按同一顺序**追加 `OPS_ANNOUNCEMENT`、`USER_FOLLOWED`、`PLACE_COMMENTED`（改动逐字相同，合并不冲突；`MentionNotifyTest`「枚举 = 约束」两边都成立）。同 follow 主题决策日志 D-1 | AD-17 / Story 6.1 原写 32 值 |

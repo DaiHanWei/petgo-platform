@@ -163,7 +163,7 @@ code_baseline: feat/1.3.4-app-ux-revamp @ 28a7d30d（= main，含 V1.3.3）
 **现状：** `notifications` 表（`V19`）`title VARCHAR(120)` / `body VARCHAR(255)` / `deep_link_type` / `deep_link_token` / `target_ref VARCHAR(64)`；类型 CHECK 最新全量重建为 `V20260915_1614`（31 值）。`NotificationService.send/sendWithCopy` 单人写入 + Redis 未读角标 + `@Async` 推送；推送文案按 `users.locale`（`en` 否则 `id`）从 messageSource 取。腾讯 IM `pushOffline` 一次一人。通知中心 `_typeLabel` / `_typeBody` **只用本地文案**，从不读 `item.title/body`。
 
 **AD-17 · 新类型 + 活动表 + 发送核心。**
-- 类型 `OPS_ANNOUNCEMENT`（≤32 字符）。迁移按 `V20260915_1614` 写法 **DROP + ADD 全量 32 值**，取值从 `NotificationType.java` 复制、开工当天对全部远端分支并集核查（四次漏值事故，见 CLAUDE.md）。
+- 类型 `OPS_ANNOUNCEMENT`（≤32 字符）。迁移按 `V20260915_1614` 写法 **DROP + ADD 全量 34 值** = 现有 31 + `OPS_ANNOUNCEMENT` + follow 主题的 `USER_FOLLOWED` + `PLACE_COMMENTED`（决策日志 D-26：两分支的重建都列全集，先后合并、先后执行都得到完整全集）；开工当天对全部远端分支并集核查（四次漏值事故，见 CLAUDE.md）。`NotificationType` 枚举两分支都在末尾按同一顺序追加三个值（逐字相同，合并不冲突，D-26）。
 - `ops_notification_campaigns`：`id`、`public_token`、`title_id/en`、`body_id/en`、`target_type` / `target_value`（同 AD-14）、`audience_spec JSONB`（全部 / 条件 / 指定 ID 列表）、`scheduled_at`（可空 = 立即）、`status`（`PENDING` / `SENDING` / `DONE` / `PARTIAL_FAILED` / `CANCELED`）、`recipient_count`、`failed_count`、`created_by`、时间戳。指定 ID 列表大时存子表 `ops_notification_campaign_targets(campaign_id, user_id)`。
 - 每个收件人一行 `notifications`：`type = OPS_ANNOUNCEMENT`，`title/body` **写入时按收件人 `users.locale` 选好语言**（推送与通知中心同一语言，PRD AC2），`deep_link_type = 'OPS_ANNOUNCEMENT'`，`target_ref = campaign public_token`。`NotificationItem` 对该类型附带 `opsTarget {type, value}`（查 campaign 得到），因为外链最长 512，塞不进 `target_ref`。
 - 发送核心 `OpsNotificationDispatcher`：
@@ -208,7 +208,7 @@ code_baseline: feat/1.3.4-app-ux-revamp @ 28a7d30d（= main，含 V1.3.3）
 | `…__create_app_version_config.sql` | 版本配置单行表 + 预置值 | AD-10 |
 | `…__create_ops_popups.sql` | `ops_popups` + `ops_popup_impressions` | AD-14 |
 | `…__create_ops_notification_campaigns.sql` | 活动表 + 指定用户子表 | AD-17 |
-| `…__rebuild_ck_notifications_type_with_ops.sql` | CHECK 全量 32 值 | AD-17 |
+| `…__rebuild_ck_notifications_type_with_ops.sql` | CHECK 全量 34 值（D-26） | AD-17 |
 | `…__milestones_checkin_tailsonality.sql` | 名册补行 + 存量回填 | AD-18 |
 
 ## 12. 会被打破、需要同步改的既有测试（开发时以实际为准）
