@@ -1,6 +1,6 @@
 # Story 1.1: 关注关系、用户 token 与关注接口
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.3.4 · 主题 follow · 分支 `feat/1.3.4-follow-notify`
 > 口径优先级：`决策日志-follow.md` > `PRD-v1.3.4-follow.md` > `architecture-v1.3.4-follow-delta.md` > `ui-v1.3.4-follow.html`（均在 `_bmad-output/planning-artifacts/v1.3.4/`）
@@ -90,23 +90,23 @@ so that 我能和喜欢的人建立持续的关系。
 
 ## Tasks / Subtasks
 
-- [ ] Task 1：迁移（AC1、AC2）
-  - [ ] 1.1 `create_user_follows_and_counters` 迁移
-  - [ ] 1.2 `users_public_token` 迁移（生成函数 + 回填 + NOT NULL + UNIQUE + DEFAULT）；本地空库从零跑通 Flyway
-- [ ] Task 2：实体与 token（AC1、AC2）
-  - [ ] 2.1 `UserFollow` 实体 + `UserFollowRepository`（native `insertIfAbsent` / `deleteRelation` / `countCreatedSince` / 批量状态查询 / 注销清理 SQL）
-  - [ ] 2.2 `User` 加 `publicToken`、两计数（只读映射）、`@PrePersist` 生成 token
-  - [ ] 2.3 `UserTokenGenerator`；`AccountQueryService.findActiveByPublicToken` / `findByPublicToken`；`UserRepository.findByPublicToken`
-- [ ] Task 3：服务与接口（AC3、AC4、AC6、AC8）
-  - [ ] 3.1 `FollowCounterService`（auth）+ `UserRepository` 计数 native UPDATE
-  - [ ] 3.2 `FollowService.follow` / `unfollow`（限流、拒绝顺序、每日上限、条件计数）
-  - [ ] 3.3 `FollowController` + `FollowResultResponse` + `SecurityConfig` 规则
-  - [ ] 3.4 `ErrorTypes.FOLLOW_BLOCKED` + `AppException.followBlocked`
-- [ ] Task 4：读端口（AC5）
-  - [ ] 4.1 `FollowReader` / `FollowState` / 实现
-- [ ] Task 5：注销联动（AC7）
-  - [ ] 5.1 `FollowService.purgeUser`；`AccountDeletionService` 接入（`authDeletion` 之后）
-- [ ] Task 6：测试（AC9）
+- [x] Task 1：迁移（AC1、AC2）
+  - [x] 1.1 `create_user_follows_and_counters` 迁移
+  - [x] 1.2 `users_public_token` 迁移（生成函数 + 回填 + NOT NULL + UNIQUE + DEFAULT）；本地空库从零跑通 Flyway
+- [x] Task 2：实体与 token（AC1、AC2）
+  - [x] 2.1 `UserFollow` 实体 + `UserFollowRepository`（native `insertIfAbsent` / `deleteRelation` / `countCreatedSince` / 批量状态查询 / 注销清理 SQL）
+  - [x] 2.2 `User` 加 `publicToken`、两计数（只读映射）、`@PrePersist` 生成 token
+  - [x] 2.3 `UserTokenGenerator`；`AccountQueryService.findActiveByPublicToken` / `findByPublicToken`；`UserRepository.findByPublicToken`
+- [x] Task 3：服务与接口（AC3、AC4、AC6、AC8）
+  - [x] 3.1 `FollowCounterService`（auth）+ `UserRepository` 计数 native UPDATE
+  - [x] 3.2 `FollowService.follow` / `unfollow`（限流、拒绝顺序、每日上限、条件计数）
+  - [x] 3.3 `FollowController` + `FollowResultResponse` + `SecurityConfig` 规则
+  - [x] 3.4 `ErrorTypes.FOLLOW_BLOCKED` + `AppException.followBlocked`
+- [x] Task 4：读端口（AC5）
+  - [x] 4.1 `FollowReader` / `FollowState` / 实现
+- [x] Task 5：注销联动（AC7）
+  - [x] 5.1 `FollowService.purgeUser`；`AccountDeletionService` 接入（`authDeletion` 之后）
+- [x] Task 6：测试（AC9）
 
 ## Dev Notes
 
@@ -175,9 +175,30 @@ Hibernate 默认 UPDATE 全列。`MeService.updateMe`（`auth/service/MeService.
 
 ### Agent Model Used
 
+Claude（云端 headless session，bmad-dev-story 流程手工执行）
+
 ### Debug Log References
 
+- 云端 `mvnw` 需 `LC_ALL=C.UTF-8`：存量测试有中文嵌套类名（`ScheduleWindowTest`），POSIX locale 下 javac 写 class 文件报 bad filename（与本 story 无关）。
+
 ### Completion Notes List
+
+**实现摘要（2026-10-12）**
+- 迁移：`V20261012_1020__create_user_follows_and_counters.sql`（表 + T-4 三列索引 + 两计数列）、`V20261012_1021__users_public_token.sql`（`gen_base62_token` 函数回填 + NOT NULL + UNIQUE + DEFAULT）。避开 app 主题预分配 `V20261012_1101~1108`，全部远端分支无撞号；`check-flyway-versions.sh origin/main` 通过。
+- 按裁定 D-9：`findActiveByPublicToken` 与 `findByPublicToken` **都不按 role 过滤**（官方号可关注，也就必须可取关；正文 AC2.4「`findByPublicToken` 要求 role = USER」随 D-9 一并去掉）。
+- code-review（2026-10-12）修复：
+  - F1 互相关注并发死锁 → `FollowCounterService` 两行 users 按 id 升序更新；
+  - F2 注销 / 封号后旧 access token 仍可关注、留下无清理入口的脏行 → `follow` 开头校验调用方 `isActive`，否则 401（新增单测 + 集成用例）；
+  - F5 「计数不低于 0」未真正覆盖 → 集成测试补「计数已 0 但行仍在时取关」用例。
+- L0：`clean package -DskipTests` 绿；`FollowServiceTest`(14) / `UserTokenGeneratorTest`(2) / `AccountDeletionServiceTest`(3) 全绿；全量纯单测回归 2988 通过（唯一失败为需 DB 的 `DashboardMaterializerIntegrationTest`，L1）。
+- **L1 待本地验收**：`FollowIntegrationTest`（含 FollowReader 一次查询断言）、Flyway 空库从零跑通。**L1/L2 待本地验收。**
+
+**待确认（code-review 留档，未改）**
+- F3（PLAUSIBLE）：注销清理与「已解析目标、尚未提交」的并发关注 / 取关存在极低概率竞态（孤儿行 / 计数少扣），未加锁处理。
+- F4：`ApiAccessLoggingFilter` 原样记录请求路径，`/api/v1/users/{token}/follow` 的 token 会进访问日志——与现有 `/places/{token}` 同口径的全局存量问题，建议统一对路径 token 段打码，超出本 story。
+- F6（PLAUSIBLE）：一次查询断言用 SessionFactory 全局统计，若测试上下文有后台线程同时查库可能偶发 >1；本地 L1 若遇到再改 `StatementInspector`。
+
+**原写 story 时的待确认（均已由「待确认项裁定」覆盖，保留备查）**
 
 - 待确认 1：每分钟 30 次的「关注操作」是否包含**取关**。本 story 先按「关注与取关共用一个桶」写（PRD「单个用户每分钟最多 30 次关注操作」、AD-4 只给了一个键）；若只限关注，DELETE 去掉限流即可。
 - 待确认 2：**取关封号用户**。AD-4 / epics 只写了「关注」时对方封号 → 404，取关未写。本 story 让取关对封号用户照常成功（否则我的 Following 列表里被封号的人永远取关不掉）；已注销 / 不存在仍 404。
@@ -188,3 +209,24 @@ Hibernate 默认 UPDATE 全列。`MeService.updateMe`（`auth/service/MeService.
 - L1/L2 待本地验收。
 
 ### File List
+
+- petgo-backend/src/main/resources/db/migration/V20261012_1020__create_user_follows_and_counters.sql（新）
+- petgo-backend/src/main/resources/db/migration/V20261012_1021__users_public_token.sql（新）
+- petgo-backend/src/main/java/com/tailtopia/auth/domain/User.java
+- petgo-backend/src/main/java/com/tailtopia/auth/repository/UserRepository.java
+- petgo-backend/src/main/java/com/tailtopia/auth/service/AccountQueryService.java
+- petgo-backend/src/main/java/com/tailtopia/auth/service/FollowCounterService.java（新）
+- petgo-backend/src/main/java/com/tailtopia/auth/service/UserTokenGenerator.java（新）
+- petgo-backend/src/main/java/com/tailtopia/social/domain/UserFollow.java（新）
+- petgo-backend/src/main/java/com/tailtopia/social/repository/UserFollowRepository.java（新）
+- petgo-backend/src/main/java/com/tailtopia/social/read/FollowReader.java / FollowReaderImpl.java / FollowState.java（新）
+- petgo-backend/src/main/java/com/tailtopia/social/service/FollowService.java（新）
+- petgo-backend/src/main/java/com/tailtopia/social/dto/FollowResultResponse.java（新）
+- petgo-backend/src/main/java/com/tailtopia/social/web/FollowController.java（新）
+- petgo-backend/src/main/java/com/tailtopia/shared/error/ErrorTypes.java / AppException.java
+- petgo-backend/src/main/java/com/tailtopia/shared/security/SecurityConfig.java
+- petgo-backend/src/main/java/com/tailtopia/account/service/AccountDeletionService.java
+- petgo-backend/src/test/java/com/tailtopia/social/FollowIntegrationTest.java（新，L1）
+- petgo-backend/src/test/java/com/tailtopia/social/service/FollowServiceTest.java（新，L0）
+- petgo-backend/src/test/java/com/tailtopia/auth/service/UserTokenGeneratorTest.java（新，L0）
+- petgo-backend/src/test/java/com/tailtopia/account/service/AccountDeletionServiceTest.java

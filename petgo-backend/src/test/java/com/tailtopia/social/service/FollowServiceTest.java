@@ -63,6 +63,7 @@ class FollowServiceTest {
         when(accounts.findActiveByPublicToken(TOKEN)).thenReturn(Optional.of(target));
         when(accounts.findByPublicToken(TOKEN)).thenReturn(Optional.of(target));
         when(followReader.followState(anyLong(), anyLong())).thenReturn(FollowState.NONE);
+        when(accounts.isActive(ME)).thenReturn(true);
     }
 
     @Test
@@ -167,6 +168,7 @@ class FollowServiceTest {
 
     @Test
     void unknownTargetIs404() {
+        when(accounts.isActive(ME)).thenReturn(true);
         when(accounts.findActiveByPublicToken(TOKEN)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service(Instant.now()).follow(ME, TOKEN))
@@ -174,8 +176,21 @@ class FollowServiceTest {
                         e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
     }
 
+    /** 注销 / 封号后旧 access token 仍有效：调用方本人无效 → 401，不写任何东西。 */
+    @Test
+    void inactiveViewerCannotFollow() {
+        targetExists();
+        when(accounts.isActive(ME)).thenReturn(false);
+
+        assertThatThrownBy(() -> service(Instant.now()).follow(ME, TOKEN))
+                .isInstanceOfSatisfying(AppException.class,
+                        e -> assertThat(e.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED));
+        verify(follows, never()).insertIfAbsent(anyLong(), anyLong());
+    }
+
     @Test
     void selfIs422() {
+        when(accounts.isActive(ME)).thenReturn(true);
         User self = Mockito.mock(User.class);
         when(self.getId()).thenReturn(ME);
         when(accounts.findActiveByPublicToken(TOKEN)).thenReturn(Optional.of(self));

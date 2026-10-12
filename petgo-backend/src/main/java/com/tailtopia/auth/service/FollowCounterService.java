@@ -26,14 +26,26 @@ public class FollowCounterService {
 
     /** follower 新关注了 followee：follower 的 following +1、followee 的 follower +1。 */
     public void applyFollow(long followerId, long followeeId) {
-        users.addFollowingCount(followerId, 1);
-        users.addFollowerCount(followeeId, 1);
+        apply(followerId, followeeId, 1);
     }
 
     /** follower 取关了 followee：两端各 −1（不低于 0）。 */
     public void applyUnfollow(long followerId, long followeeId) {
-        users.addFollowingCount(followerId, -1);
-        users.addFollowerCount(followeeId, -1);
+        apply(followerId, followeeId, -1);
+    }
+
+    /**
+     * 🔴 两行 users 一律<b>按 id 从小到大</b>加锁：A 关注 B 与 B 关注 A 同时提交时，
+     * 固定「先关注者后被关注者」会让两个事务交叉等锁 → PostgreSQL 判死锁、一方 500（code-review 2026-10-12）。
+     */
+    private void apply(long followerId, long followeeId, int delta) {
+        if (followerId < followeeId) {
+            users.addFollowingCount(followerId, delta);
+            users.addFollowerCount(followeeId, delta);
+        } else {
+            users.addFollowerCount(followeeId, delta);
+            users.addFollowingCount(followerId, delta);
+        }
     }
 
     /**

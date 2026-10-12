@@ -72,6 +72,11 @@ public class FollowService {
     @Transactional
     public FollowResultResponse follow(long viewerId, String targetToken) {
         checkRate(viewerId);
+        // 🔴 调用方本人必须仍有效（未注销、未封号）：注销只吊销 refresh token，access token 还能用到过期；
+        // 注销清理（purgeUser）跑完后再关注，会留下一条再也没有清理入口的脏关注行（code-review 2026-10-12）。
+        if (!accounts.isActive(viewerId)) {
+            throw AppException.unauthorized("登录已失效，请重新登录");
+        }
         // 不存在 / 已注销 / 封号 → 404（D-8）；不按 role 过滤（D-9 官方号可被关注）；不看 enabled（T-2）。
         User target = accounts.findActiveByPublicToken(targetToken)
                 .orElseThrow(() -> AppException.notFound("用户不存在"));

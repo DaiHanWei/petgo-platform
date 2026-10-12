@@ -128,6 +128,33 @@ class FollowIntegrationTest extends ApiIntegrationTest {
         assertThat(followerCount(b.getId())).isZero();
     }
 
+    /** GREATEST(…, 0) 兜底：计数已是 0 但关注行仍在时取关，计数不变成负数。 */
+    @Test
+    void unfollowNeverDrivesCountersBelowZero() throws Exception {
+        User a = newUser();
+        User b = newUser();
+        follow(a, b.getPublicToken()).andExpect(status().isOk());
+        jdbc.update("UPDATE users SET following_count = 0, follower_count = 0 WHERE id IN (?, ?)",
+                a.getId(), b.getId());
+
+        unfollow(a, b.getPublicToken()).andExpect(status().isOk());
+        assertThat(followingCount(a.getId())).isZero();
+        assertThat(followerCount(b.getId())).isZero();
+    }
+
+    /** 注销后旧 access token 仍有效：调用方本人已注销 → 401，不留脏关注行。 */
+    @Test
+    void deletedViewerCannotFollow() throws Exception {
+        User a = newUser();
+        User b = newUser();
+        User gone = users.findById(a.getId()).orElseThrow();
+        gone.anonymizeForDeletion(Instant.now());
+        users.save(gone);
+
+        follow(a, b.getPublicToken()).andExpect(status().isUnauthorized());
+        assertThat(rows(a.getId(), b.getId())).isZero();
+    }
+
     // ===== 拒绝规则 =====
 
     @Test
