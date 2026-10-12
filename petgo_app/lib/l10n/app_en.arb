@@ -1174,6 +1174,8 @@
   "publishCropHint": "Drag to choose the visible area",
   "publishCropApply": "Apply",
   "publishCropLocked": "Ratio follows the first cropped photo",
+  "publishExposureHint": "The part inside the frame shows in Social",
+  "publishExposureDrag": "Drag",
   "feedPinnedBadge": "Pinned",
   "phoneEditFieldLabel": "PHONE NUMBER",
   "phoneEditTitle": "Phone number",

@@ -970,6 +970,8 @@
   "publishCropHint": "Geser untuk memilih bagian yang tampil",
   "publishCropApply": "Terapkan",
   "publishCropLocked": "Rasio mengikuti foto pertama yang dipotong",
+  "publishExposureHint": "Bagian di dalam bingkai yang tampil di Sosial",
+  "publishExposureDrag": "Geser",
   "feedPinnedBadge": "Disematkan",
   "phoneEditFieldLabel": "NOMOR HANDPHONE",
   "phoneEditTitle": "Nomor HP",
