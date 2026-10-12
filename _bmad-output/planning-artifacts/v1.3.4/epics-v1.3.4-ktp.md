@@ -22,7 +22,7 @@ updated: '2026-10-12'
 
 **范围**：App + 后端 + 后台「用户购买记录」卡种显示（决策日志 D-1）。
 
-> 🔴 **口径优先级**：`决策日志-ktp.md`（D-1 ~ D-11）> `PRD-v1.3.4-ktp.md` > `architecture-v1.3.4-ktp-delta.md`（AD-1 ~ AD-14）> UI 稿（`ui-v1.3.4-ktp.html`）。PRD 中的 Albar 设计参考图仅说明意图，**不作视觉验收标准**；视觉以 UI 稿为准。
+> 🔴 **口径优先级**：`决策日志-ktp.md`（D-1 ~ D-19，另 T-1 ~ T-22 技术裁定）> `PRD-v1.3.4-ktp.md` > `architecture-v1.3.4-ktp-delta.md`（AD-1 ~ AD-14）> UI 稿（`ui-v1.3.4-ktp.html`）。PRD 中的 Albar 设计参考图仅说明意图，**不作视觉验收标准**；视觉以 UI 稿为准。
 
 ## Requirements Inventory
 
@@ -92,7 +92,7 @@ updated: '2026-10-12'
 
 - **FR-142G.1** 新卡种复用现有分享与分享奖励；奖励口径不变（每个宠物档案一次，不按卡种拆）
 - **FR-142G.2** 后台「用户购买记录」显示「{卡种名} · No. {身份码} · {宠物名}」，8 款各自名称；无身份码老卡显示流水号补零（D-6）
-- **FR-142G.3** 埋点：新增 `id_card_tab_view` / `id_card_style_click` / `id_card_form_open` / `id_card_create` / `id_card_buka_hd_click` / `id_card_paywall_close`；既有建卡、付费、分享事件补 `card_type` / `card_variant`；`card_style` 保留并扩到 0~4（D-7）
+- **FR-142G.3** 埋点：新增 `id_card_tab_viewed` / `id_card_style_tapped` / `id_card_form_opened` / `id_card_created` / `id_card_buka_hd_tapped` / `id_card_paywall_dismissed`；既有建卡、付费、分享事件补 `card_type` / `card_variant`；`card_style` 保留并扩到 0~4（D-7）
 
 ### NonFunctional Requirements
 
@@ -202,7 +202,7 @@ So that 我有更多卡可以做。
 **Given** 建卡请求 `POST /api/v1/pet-profiles/me/id-cards`
 **When** `cardType` 为 5 值之一、学生卡带合法 `cardVariant`、非学生卡不带
 **Then** 建卡成功，快照写入 `card_type` / `card_variant`
-**And** `cardType` 不在白名单、学生卡缺 `cardVariant`、非学生卡带 `cardVariant` → 422
+**And** `cardType` 不在白名单、非学生卡带 `cardVariant` → 422；学生卡缺 `cardVariant`（旧版 App）按 `KLASIK` 处理（D-12）
 
 **Given** 建卡请求
 **When** 缺 `petType`（或不在 `CAT|DOG|OTHER`）、缺 `gender`（或不在 `MALE|FEMALE|UNKNOWN`）、缺 `birthday`、或 KTP / KITAS 缺 `breed`
@@ -332,11 +332,11 @@ So that 我知道能做什么卡、直接去做。
 
 **Given** 点任一格
 **When** 跳转
-**Then** 进入建卡页并带上该卡款（Story 1.7 前建卡页按该款渲染卡面即可）；埋点 `id_card_style_click{card_type, card_variant}`
+**Then** 进入建卡页并带上该卡款（Story 1.7 前建卡页按该款渲染卡面即可）；埋点 `id_card_style_tapped{card_type, card_variant}`
 
 **Given** 进入页面或切换 Tab
 **When** 上报
-**Then** `id_card_tab_view{tab: style|created, has_cards}`
+**Then** `id_card_tab_viewed{tab: style|created, has_cards}`
 
 ### Story 1.6: Kartuku 列表——Buka HD 标签直接付费
 
@@ -369,7 +369,7 @@ So that 我不用进详情页也能解锁。
 
 **Given** 点「Buka HD」/ 关闭抽屉
 **When** 上报
-**Then** `id_card_buka_hd_click{card_type, entry: list_badge}`、`id_card_paywall_close{card_type, entry: list_badge}`；既有 `ktp_unlock_*` 带 `entry = list_badge` 与 `card_type` / `card_variant`
+**Then** `id_card_buka_hd_tapped{card_type, entry: list_badge}`、`id_card_paywall_dismissed{card_type, entry: list_badge}`；既有 `ktp_unlock_*` 带 `entry = list_badge` 与 `card_type` / `card_variant`
 
 ### Story 1.7: 建卡页去掉样式 Tab，按卡种填表
 
@@ -385,7 +385,7 @@ So that 填表更快、不被无关字段干扰。
 
 **Given** 点「Ubah info」
 **When** 打开底部抽屉
-**Then** 按卡款字段集显示（KTP 9 项 / Paspor 5 项 / 居住证 5 项 / SIM 7 项 / Pelajar 6 项，PRD §3.4 表），无「一句话介绍」；长表单抽屉内滚动、「Selesai」吸底；点「Selesai」回建卡页、卡面即时刷新（FR-142D.1 / D.2 / D.4，UX-DR7）；埋点 `id_card_form_open{card_type}`
+**Then** 按卡款字段集显示（KTP 9 项 / Paspor 5 项 / 居住证 5 项 / SIM 7 项 / Pelajar 6 项，PRD §3.4 表），无「一句话介绍」；长表单抽屉内滚动、「Selesai」吸底；点「Selesai」回建卡页、卡面即时刷新（FR-142D.1 / D.2 / D.4，UX-DR7）；埋点 `id_card_form_opened{card_type}`
 
 **Given** 物种 / 品种字段
 **When** 点击
@@ -402,7 +402,7 @@ So that 填表更快、不被无关字段干扰。
 **Given** 点「Buat Kartu」
 **When** 提交中 / 失败
 **Then** 主按钮内白色转圈、其余按钮不可点；失败时预览保持、SnackBar `idCardCreateError`（FR-142C.3）
-**And** 请求带 `cardType` + `cardVariant`；成功埋点 `id_card_create{card_type, card_variant, number_reused}`（`number_reused` 取后端返回值，Epic 2 前恒为 false）
+**And** 请求带 `cardType` + `cardVariant`；成功埋点 `id_card_created{card_type, card_variant, number_reused}`（`number_reused` 取后端返回值，Epic 2 前恒为 false）
 
 **Given** 本 story
 **When** 交付
@@ -431,7 +431,7 @@ So that 我不会回到建卡页重复建卡。
 **Given** 三个入口
 **When** 打开付费抽屉
 **Then** 共用 Story 1.6 的共享函数；价格读 `pricing_config.id_hd_download_price`、8 款同价；QRIS 等待、断网价格失败态沿用（FR-142F.3 / F.6 / F.7）
-**And** 埋点 `id_card_buka_hd_click{entry: detail}`、`id_card_paywall_close{entry: create|detail}`，均带 `card_type`
+**And** 埋点 `id_card_buka_hd_tapped{entry: detail}`、`id_card_paywall_dismissed{entry: create|detail}`，均带 `card_type`
 
 **Given** 服务端 HD 解锁成功
 **When** 上报 `ktp_unlock_succeeded`

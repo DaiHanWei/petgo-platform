@@ -1,0 +1,47 @@
+# generated: 2026-10-12
+# last_updated: 2026-10-12
+# project: TailTopia V1.3.4 ktp
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.3.4
+#
+# 规划来源：_bmad-output/planning-artifacts/v1.3.4/epics-v1.3.4-ktp.md（权威顺序：决策日志-ktp.md > PRD > 架构 delta > UI 稿）
+# 执行顺序：严格按下列顺序；Epic 2 依赖 Epic 1（新卡种与 card_variant）。
+#
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status: backlog → in-progress → done
+# Story Status: backlog → ready-for-dev → in-progress → review → done
+# Retrospective Status: optional ↔ done
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Dev moves story to 'review', then runs code-review
+# - 云端只跑到 L0；L1 / L2 留本地，Completion Notes 写「L1/L2 待本地验收」
+
+generated: 2026-10-12
+last_updated: 2026-10-12
+project: TailTopia V1.3.4 ktp
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.3.4"
+
+development_status:
+  # ===== Epic 1：8 款卡随心选——身份证模块改版 =====
+  epic-1: in-progress
+  1-1-后端支持5种卡种与学生卡配色: ready-for-dev
+  1-2-卡款注册表与四款学生卡卡面: ready-for-dev
+  1-3-sim与居住证卡面-护照日期改为建卡日: ready-for-dev
+  1-4-聚合页改为单列整宽: ready-for-dev
+  1-5-列表页双tab与样式网格: ready-for-dev
+  1-6-kartuku列表-buka-hd标签直接付费: ready-for-dev
+  1-7-建卡页去掉样式tab-按卡种填表: ready-for-dev
+  1-8-付费落点与详情页按钮统一: ready-for-dev
+  epic-1-retrospective: optional
+  # ===== Epic 2：已解锁学生卡的编号沿用 =====
+  epic-2: in-progress
+  2-1-记录每张卡的hd解锁时间: ready-for-dev
+  2-2-编号唯一性改为同用户内可重复: ready-for-dev
+  2-3-已解锁学生卡的编号沿用: ready-for-dev
+  epic-2-retrospective: optional
