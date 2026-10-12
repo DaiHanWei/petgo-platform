@@ -90,6 +90,14 @@ public class MilestoneCompletionService {
         return complete(p.getId(), p.getPetType(), code, source, linkedContentId);
     }
 
+    /** 按宠物 id + 自动事件幂等完成（V1.3.4：打卡 / 性格测试按宠物达成，不经 owner 反查）。宠物不存在 → false。 */
+    @Transactional
+    public boolean completeForPet(long petProfileId, MilestoneAutoEvent event, MilestoneCompletionSource source) {
+        return profiles.findById(petProfileId)
+                .map(p -> complete(p.getId(), p.getPetType(), event, source, null))
+                .orElse(false);
+    }
+
     /** 直接按 petProfileId + petType + **自动事件**完成（定时扫描 / 内部复用）。 */
     @Transactional
     public boolean complete(long petProfileId, PetType petType, MilestoneAutoEvent event,

@@ -29,12 +29,16 @@ class PassportAnalyticsListenerTest {
     @Test
     @SuppressWarnings({"unchecked", "rawtypes"})
     void newStampEmitsCheckinAndStamped() {
-        listener.onCheckedIn(new PlaceCheckedInEvent(7L, "tok".repeat(10), PlaceType.PARK, true, 3));
+        listener.onCheckedIn(new PlaceCheckedInEvent(7L, "tok".repeat(10), PlaceType.PARK, true, 3,
+                java.util.List.of(5L)));
 
         ArgumentCaptor<Map> checkin = ArgumentCaptor.forClass(Map.class);
         verify(analytics).capture(anyString(), eq("place_checkin"), checkin.capture());
         assertThat(checkin.getValue()).containsEntry("place_id", "tok".repeat(10))
                 .containsEntry("place_type", "PARK").containsEntry("is_new_stamp", true);
+        // V1.3.4 Story 4.2 · AC2.3：事件虽带 petIds，埋点不带任何宠物标识（AD-19）。
+        assertThat(checkin.getValue().keySet())
+                .isEqualTo(java.util.Set.of("place_id", "place_type", "is_new_stamp"));
         ArgumentCaptor<Map> stamped = ArgumentCaptor.forClass(Map.class);
         verify(analytics).capture(anyString(), eq("passport_stamped"), stamped.capture());
         assertThat(stamped.getValue()).containsEntry("place_type", "PARK").containsEntry("stamp_count", 3);
@@ -45,7 +49,8 @@ class PassportAnalyticsListenerTest {
 
     @Test
     void repeatVisitDoesNotEmitStamped() {
-        listener.onCheckedIn(new PlaceCheckedInEvent(7L, "t".repeat(32), PlaceType.CAFE, false, 3));
+        listener.onCheckedIn(new PlaceCheckedInEvent(7L, "t".repeat(32), PlaceType.CAFE, false, 3,
+                java.util.List.of(5L)));
         verify(analytics, never()).capture(anyString(), eq("passport_stamped"), anyMap());
     }
 

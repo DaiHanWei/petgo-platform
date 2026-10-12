@@ -32,6 +32,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *   <li>{@link HealthArchivedEvent} → 首次保存问诊结论。</li>
  *   <li>{@link ContentCommentedEvent} → 首次被评论（排除自评）。</li>
  *   <li>{@link ContentLikedEvent} → 首次收到点赞（自赞 content 侧已不发事件）。</li>
+ *   <li>场所打卡 / Tailsonality 完整解读解锁 → 见 {@link MilestoneCheckinTailsonalityListener}（V1.3.4，逐宠）。</li>
  * </ul>
  * 组合依赖 C-L4/D-L4（健康全完成）与计数阈值由 {@link MilestoneCompletionService} 内部处理；
  * 陪伴满 30 天走 {@link MilestoneScheduledCompleter}（@Scheduled）。

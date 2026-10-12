@@ -47,6 +47,8 @@ class MilestoneAutoCompleteMapTest {
             assertThat(code(PetType.CAT, MilestoneAutoEvent.FIRST_BIRTHDAY)).isEqualTo("C-L1");
             assertThat(code(PetType.CAT, MilestoneAutoEvent.COMPANION_100_DAYS)).isEqualTo("C-L2");
             assertThat(code(PetType.CAT, MilestoneAutoEvent.COMPANION_365_DAYS)).isEqualTo("C-L3");
+            assertThat(code(PetType.CAT, MilestoneAutoEvent.PLACE_CHECKED_IN)).isEqualTo("C-S17");
+            assertThat(code(PetType.CAT, MilestoneAutoEvent.TAILSONALITY_UNLOCKED)).isEqualTo("C-S18");
         }
     }
 
@@ -73,6 +75,8 @@ class MilestoneAutoCompleteMapTest {
             assertThat(code(PetType.DOG, MilestoneAutoEvent.FIRST_BIRTHDAY)).isEqualTo("D-L1");
             assertThat(code(PetType.DOG, MilestoneAutoEvent.COMPANION_100_DAYS)).isEqualTo("D-L2");
             assertThat(code(PetType.DOG, MilestoneAutoEvent.COMPANION_365_DAYS)).isEqualTo("D-L3");
+            assertThat(code(PetType.DOG, MilestoneAutoEvent.PLACE_CHECKED_IN)).isEqualTo("D-S17");
+            assertThat(code(PetType.DOG, MilestoneAutoEvent.TAILSONALITY_UNLOCKED)).isEqualTo("D-S18");
         }
     }
 
@@ -130,6 +134,13 @@ class MilestoneAutoCompleteMapTest {
         @Test
         void consultClosedLightsUpGenericVetVisitNode() {
             assertThat(code(PetType.OTHER, MilestoneAutoEvent.CONSULT_CLOSED)).isEqualTo("G-M1");
+        }
+
+        /** V1.3.4 Story 4.2（AD-18）：打卡 / 完整解读解锁 → 通用清单末尾追加的 G-S10 / G-S11。 */
+        @Test
+        void v134CheckinAndTailsonalityLightUpGenericS10S11() {
+            assertThat(code(PetType.OTHER, MilestoneAutoEvent.PLACE_CHECKED_IN)).isEqualTo("G-S10");
+            assertThat(code(PetType.OTHER, MilestoneAutoEvent.TAILSONALITY_UNLOCKED)).isEqualTo("G-S11");
         }
     }
 

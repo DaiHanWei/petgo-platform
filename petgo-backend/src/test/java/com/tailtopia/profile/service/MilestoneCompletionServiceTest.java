@@ -38,6 +38,7 @@ class MilestoneCompletionServiceTest {
     private PetMilestoneRepository milestones;
     private MilestoneCompletionRepository completions;
     private HealthRecordRepository healthRecords;
+    private org.springframework.context.ApplicationEventPublisher events;
     private MilestoneCompletionService service;
 
     private long nextId = 1;
@@ -48,8 +49,8 @@ class MilestoneCompletionServiceTest {
         milestones = Mockito.mock(PetMilestoneRepository.class);
         completions = Mockito.mock(MilestoneCompletionRepository.class);
         healthRecords = Mockito.mock(HealthRecordRepository.class);
-        service = new MilestoneCompletionService(profiles, milestones, completions, healthRecords,
-                Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
+        events = Mockito.mock(org.springframework.context.ApplicationEventPublisher.class);
+        service = new MilestoneCompletionService(profiles, milestones, completions, healthRecords, events);
     }
 
     private PetProfile profile(PetType type, long id) {
@@ -300,6 +301,61 @@ class MilestoneCompletionServiceTest {
         ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
         verify(completions).save(cap.capture());
         assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(lp);
+    }
+
+    // ===== V1.3.4 Story 4.2：completeForPet（按宠物 id 达成，不经 owner 反查） =====
+
+    @Test
+    void completeForPet_missingPetIsNoop() {
+        when(profiles.findById(10L)).thenReturn(Optional.empty());
+
+        boolean done = service.completeForPet(10L, MilestoneAutoEvent.PLACE_CHECKED_IN,
+                MilestoneCompletionSource.SYSTEM_AUTO);
+
+        assertThat(done).isFalse();
+        verify(completions, never()).save(any());
+        verify(events, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    void completeForPet_catCheckinCompletesCS17AndPublishes() {
+        when(profiles.findById(10L)).thenReturn(Optional.of(profile(PetType.CAT, 10)));
+        long m = stubRoster(10, "C-S17");
+
+        boolean done = service.completeForPet(10L, MilestoneAutoEvent.PLACE_CHECKED_IN,
+                MilestoneCompletionSource.SYSTEM_AUTO);
+
+        assertThat(done).isTrue();
+        ArgumentCaptor<MilestoneCompletion> cap = ArgumentCaptor.forClass(MilestoneCompletion.class);
+        verify(completions, times(1)).save(cap.capture());
+        assertThat(cap.getValue().getPetMilestoneId()).isEqualTo(m);
+        verify(events, times(1)).publishEvent(any(com.tailtopia.profile.event.MilestoneCompletedEvent.class));
+    }
+
+    @Test
+    void completeForPet_alreadyCompletedIsIdempotent() {
+        when(profiles.findById(10L)).thenReturn(Optional.of(profile(PetType.CAT, 10)));
+        long m = stubRoster(10, "C-S17");
+        when(completions.existsByPetMilestoneId(m)).thenReturn(true);
+
+        boolean done = service.completeForPet(10L, MilestoneAutoEvent.PLACE_CHECKED_IN,
+                MilestoneCompletionSource.SYSTEM_AUTO);
+
+        assertThat(done).isFalse();
+        verify(completions, never()).save(any());
+        verify(events, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    void completeForPet_otherTailsonalityLooksUpGS11() {
+        when(profiles.findById(10L)).thenReturn(Optional.of(profile(PetType.OTHER, 10)));
+        stubRoster(10, "G-S11");
+
+        boolean done = service.completeForPet(10L, MilestoneAutoEvent.TAILSONALITY_UNLOCKED,
+                MilestoneCompletionSource.SYSTEM_AUTO);
+
+        assertThat(done).isTrue();
+        verify(milestones).findByPetProfileIdAndCode(10L, "G-S11");
     }
 
     private static void setField(Object o, String name, Object value) {
