@@ -242,7 +242,9 @@ class PublicProfilePage extends ConsumerWidget {
     // **不用**关注响应里的 followerCount 回写（两种来源混用会跳数；重进页面即取最新服务端值）。
     ref.watch(followStateProvider);
     final server = FollowState(iFollow: p.iFollow, followsMe: p.followsMe);
-    final eff = ref.read(followStateProvider.notifier).effective(userId, server);
+    final eff = ref
+        .read(followStateProvider.notifier)
+        .effective(userId, server, snapshotEpoch: p.followEpoch);
     final followers =
         math.max(0, p.followerCount + (eff.iFollow ? 1 : 0) - (p.iFollow ? 1 : 0));
     final token = p.userToken;
@@ -315,6 +317,8 @@ class PublicProfilePage extends ConsumerWidget {
             userId: userId,
             userToken: token,
             initial: server,
+            snapshotEpoch: p.followEpoch,
+            surfaceKey: 'profile:$userId',
             style: FollowButtonStyle.profileFull,
             source: 'profile',
             // T-9：对方刚被注销 / 封号 → 重取主页，显示「Pengguna tidak ditemukan」。

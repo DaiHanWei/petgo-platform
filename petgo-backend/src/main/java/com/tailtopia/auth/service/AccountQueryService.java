@@ -85,6 +85,27 @@ public class AccountQueryService {
         return new java.util.HashSet<>(users.findActiveIds(userIds));
     }
 
+    /**
+     * 一批用户的对外 token（V1.3.4 follow · T-19：Story 2.1 / 2.2 共用的批量取法）—— <b>一次查询</b>。
+     *
+     * <p>只返回<b>对外有效</b>账号（未注销 + 未封号，判据与 {@link #isActive} 逐字相同）：
+     * 已注销 / 封号的人缺席 → 调用方拿到 null → 不显示关注按钮（D-8「各处按不存在处理」）。
+     * ⚠️ <b>不按 role 过滤</b>（D-9：官方内容账号可被关注）。
+     *
+     * @return {@code userId → publicToken}；空入参返回空表、不发查询
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, String> publicTokensOf(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, String> out = new java.util.HashMap<>();
+        for (Object[] row : users.findActivePublicTokens(userIds.stream().distinct().toList())) {
+            out.put((Long) row[0], (String) row[1]);
+        }
+        return out;
+    }
+
     /** 取用户语言偏好（bug 20260625-105）：'en' 或 'id'（默认/未设=id）。供系统推送文案本地化。 */
     @Transactional(readOnly = true)
     public java.util.Locale localeOf(long userId) {

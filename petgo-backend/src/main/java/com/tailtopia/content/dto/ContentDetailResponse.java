@@ -72,7 +72,11 @@ public record ContentDetailResponse(
          * 打卡场所条（V1.3.2 Story 1.5 · AC5 · AD-10）：帖子关联了打卡时下发 {@code {token, name, status}}；
          * 普通帖为 null → NON_NULL 省略。{@code status} ∈ ACTIVE / UNAVAILABLE（点击是否能进场所详情）。
          */
-        com.tailtopia.place.dto.CheckinPlaceView checkinPlace) {
+        com.tailtopia.place.dto.CheckinPlaceView checkinPlace,
+        /** 作者对外 token（V1.3.4 follow · Story 2.1）；作者已注销 / 封号（D-8）时 null（不下发）。 */
+        String authorToken,
+        /** 当前查看者与作者的关注关系（Story 2.1）；游客 / 本人恒 false。 */
+        com.tailtopia.social.read.FollowState authorFollowState) {
 
     /**
      * @param imageSizes 已由 {@code ImageSizeResolver.alignForRead} 对齐到 {@code imageUrls} 长度的尺寸列；
@@ -84,7 +88,8 @@ public record ContentDetailResponse(
             List<ContentTagView> decorationTags,
             List<com.tailtopia.content.domain.ImageSize> imageSizes,
             List<com.tailtopia.mention.dto.MentionView> mentions) {
-        return of(p, author, likeCount, commentCount, liked, isAuthor, decorationTags, imageSizes, mentions, null);
+        return of(p, author, likeCount, commentCount, liked, isAuthor, decorationTags, imageSizes, mentions,
+                null, null, null);
     }
 
     /** 带打卡场所条的完整工厂（V1.3.2 Story 1.5）；{@code checkinPlace} 为 null = 普通帖（省略该键）。 */
@@ -93,13 +98,16 @@ public record ContentDetailResponse(
             List<ContentTagView> decorationTags,
             List<com.tailtopia.content.domain.ImageSize> imageSizes,
             List<com.tailtopia.mention.dto.MentionView> mentions,
-            com.tailtopia.place.dto.CheckinPlaceView checkinPlace) {
+            com.tailtopia.place.dto.CheckinPlaceView checkinPlace,
+            String authorToken,
+            com.tailtopia.social.read.FollowState authorFollowState) {
         return new ContentDetailResponse(
                 p.getId(), p.getAuthorId(), author.nickname(), author.avatarUrl(),
                 author.deleted(), author.tags().isEmpty() ? null : author.tags(),
                 (decorationTags == null || decorationTags.isEmpty()) ? null : decorationTags,
                 p.getType(), p.getText(), p.getImageUrls(), imageSizes,
                 likeCount, commentCount, liked, isAuthor, p.getVisibility(),
-                p.getCreatedAt(), mentions, checkinPlace);
+                p.getCreatedAt(), mentions, checkinPlace,
+                author.deleted() ? null : authorToken, authorFollowState);
     }
 }

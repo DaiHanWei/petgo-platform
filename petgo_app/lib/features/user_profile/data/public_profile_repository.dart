@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../../auth/domain/user_tag.dart';
+import '../../social/domain/follow_state.dart';
 
 /// 用户公开主页投影（对应后端 `PublicProfileResponse`）。
 /// V1.3.0 batch-b1 Story 2.1 · FR-118。
@@ -31,6 +32,7 @@ class PublicProfile {
     this.followerCount = 0,
     this.iFollow = false,
     this.followsMe = false,
+    this.followEpoch = 0,
   });
 
   /// 已发布（未软删）**PUBLIC** 内容数。
@@ -85,6 +87,29 @@ class PublicProfile {
 
   /// 对方是否关注了我（决定「Ikuti」还是「Ikuti Balik」）。
   final bool followsMe;
+
+  /// 这份快照发请求前读到的全局关注版本号（V1.3.4 Story 2.1 AC3：不来自 JSON）。
+  /// 重取主页 = 新快照 → 本页之前写的覆盖自动失效，回到服务端真值。
+  final int followEpoch;
+
+  PublicProfile withFollowEpoch(int epoch) => PublicProfile(
+        postCount: postCount,
+        likeCount: likeCount,
+        isDeactivated: isDeactivated,
+        self: self,
+        nickname: nickname,
+        avatarUrl: avatarUrl,
+        signature: signature,
+        joinedAt: joinedAt,
+        reported: reported,
+        tags: tags,
+        userToken: userToken,
+        followingCount: followingCount,
+        followerCount: followerCount,
+        iFollow: iFollow,
+        followsMe: followsMe,
+        followEpoch: epoch,
+      );
 
   /// 是否有可展示的签名（空串与纯空白按「没设置」处理）。
   bool get hasSignature => signature?.trim().isNotEmpty == true;
@@ -151,7 +176,12 @@ final Provider<PublicProfileRepository> publicProfileRepositoryProvider =
 /// 2. 本端点的失败以 **403 已拉黑** 为主，重试一万次也是同一个结果 ——
 ///    自动退避只是在替用户反复敲一个永远不会开的门。
 final publicProfileProvider = FutureProvider.family<PublicProfile, int>(
-  (ref, userId) => ref.read(publicProfileRepositoryProvider).getPublicProfile(userId),
+  (ref, userId) async {
+    // V1.3.4 Story 2.1 AC3.3：发请求前读全局关注版本号记进快照。
+    final epoch = ref.read(followStateProvider.notifier).currentEpoch;
+    final p = await ref.read(publicProfileRepositoryProvider).getPublicProfile(userId);
+    return p.withFollowEpoch(epoch);
+  },
   retry: (_, _) => null,
   isAutoDispose: true,
 );

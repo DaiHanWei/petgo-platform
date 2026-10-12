@@ -18,6 +18,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByGoogleSub(String googleSub);
 
+    /**
+     * 这批 id 里<b>对外有效</b>账号（未注销 + status=ACTIVE，判据同 AccountQueryService.isActive）的
+     * {@code (id, public_token)}（V1.3.4 follow T-19 · Story 2.1 / 2.2 共用）。
+     * 已注销 / 封号的人不出现（D-8：各处按「不存在」处理，不给关注按钮）。
+     */
+    @Query("SELECT u.id, u.publicToken FROM User u WHERE u.id IN :ids AND u.deletedAt IS NULL "
+            + "AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE")
+    java.util.List<Object[]> findActivePublicTokens(@Param("ids") java.util.Collection<Long> ids);
+
     /** V1.3.4 follow D-2：按对外不可枚举标识取号（关注接口解析目标用）。 */
     Optional<User> findByPublicToken(String publicToken);
 

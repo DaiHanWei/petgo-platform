@@ -57,13 +57,18 @@ class ContentDetailAndCommentContractTest {
                 List.of(new com.tailtopia.mention.dto.MentionView(9L, "阿花", true)),
                 // V1.3.2 Story 1.5：打卡场所条（普通帖为 null → 省略，见下一例）。
                 new com.tailtopia.place.dto.CheckinPlaceView("p".repeat(32), "Kopi Kucing",
-                        com.tailtopia.place.domain.PlaceAvailability.ACTIVE));
+                        com.tailtopia.place.domain.PlaceAvailability.ACTIVE),
+                // V1.3.4 follow Story 2.1：作者 token 与关注关系（AD-6 键名）。
+                "t".repeat(32), new com.tailtopia.social.read.FollowState(false, true));
 
         assertThat(wire(d).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
                 "authorTags", "decorationTags", "type",
                 "body", "imageUrls", "imageSizes", "likeCount", "commentCount", "liked", "isAuthor",
-                "visibility", "createdAt", "mentions", "checkinPlace"));
+                "visibility", "createdAt", "mentions", "checkinPlace", "authorToken", "authorFollowState"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> follow = (Map<String, Object>) wire(d).get("authorFollowState");
+        assertThat(follow).isEqualTo(Map.of("iFollow", false, "followsMe", true));
         @SuppressWarnings("unchecked")
         Map<String, Object> place = (Map<String, Object>) wire(d).get("checkinPlace");
         assertThat(place.keySet()).isEqualTo(Set.of("token", "name", "status"));
@@ -78,8 +83,10 @@ class ContentDetailAndCommentContractTest {
         ContentDetailResponse d = new ContentDetailResponse(1L, 7L, "小明", null, false, null, null,
                 ContentType.DAILY, "正文", List.of(), null, 0L, 0L, false, false,
                 com.tailtopia.content.domain.ContentVisibility.PUBLIC, Instant.parse("2026-06-05T00:00:00Z"),
-                null, null);
+                null, null, null, null);
         assertThat(wire(d)).doesNotContainKey("checkinPlace");
+        // V1.3.4：作者已注销 / 封号时 token 与关注关系不下发。
+        assertThat(wire(d)).doesNotContainKey("authorToken").doesNotContainKey("authorFollowState");
     }
 
     @Test

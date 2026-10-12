@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../social/domain/follow_state.dart';
 import '../data/detail_repository.dart';
 import '../domain/comment.dart';
 import '../domain/content_detail.dart';
@@ -9,7 +10,21 @@ import '../domain/content_detail.dart';
 /// autoDispose：离开详情页即弃缓存，重进重新拉取——否则点赞/评论变化后重进读到旧缓存
 /// （如点赞后返回列表再进入，liked 显示丢失）。
 final detailProvider = FutureProvider.autoDispose.family<ContentDetail, int>(
-  (ref, id) => ref.read(detailRepositoryProvider).getDetail(id),
+  (ref, id) async {
+    // V1.3.4 Story 2.1 AC3.3 + 裁定 T-18：快照版本号取「本次进入详情页」那一刻的值 ——
+    // 发 / 删评论引起的重拉**不算刷新**，沿用进入时的版本号，关注按钮保持；重新进入才按最新状态。
+    final epoch = ref.watch(detailEntryFollowEpochProvider(id));
+    final detail = await ref.read(detailRepositoryProvider).getDetail(id);
+    return detail.withFollowEpoch(epoch);
+  },
+);
+
+/// 进入详情页那一刻的全局关注版本号（V1.3.4 Story 2.1 · T-18）。
+///
+/// 只在首次被 [detailProvider] watch 时取值；评论刷新 invalidate 的是 [detailProvider] 本身，
+/// 这个值不变。离开详情页两者一起 autoDispose，下次进入重新取。
+final detailEntryFollowEpochProvider = Provider.autoDispose.family<int, int>(
+  (ref, id) => ref.read(followStateProvider.notifier).currentEpoch,
 );
 
 /// 评论区刷新信号（Story 3.5）。发表/回复/删除后 [bump]，CommentSection watch 后重拉。

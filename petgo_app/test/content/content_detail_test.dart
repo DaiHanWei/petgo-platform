@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/social/data/follow_repository.dart';
+import 'package:tailtopia/features/social/domain/follow_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/content/data/detail_repository.dart';
@@ -13,7 +17,13 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/empty_state.dart';
 import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
 
-ContentDetail _detail({int images = 2, bool isAuthor = false}) => ContentDetail(
+ContentDetail _detail({
+  int images = 2,
+  bool isAuthor = false,
+  String? authorToken,
+  FollowState follow = FollowState.none,
+}) =>
+    ContentDetail(
       id: 5,
       authorId: 7,
       authorDeleted: false,
@@ -26,6 +36,8 @@ ContentDetail _detail({int images = 2, bool isAuthor = false}) => ContentDetail(
       liked: false,
       isAuthor: isAuthor,
       createdAt: DateTime.utc(2026, 6, 2),
+      authorToken: authorToken,
+      authorFollowState: follow,
     );
 
 Comment _top(int id, {int replyCount = 0, List<Comment>? replies}) => Comment(
@@ -273,4 +285,87 @@ void main() {
     expect(container.exists(feedProvider), isFalse);
     expect(feedRepo.getFeedCalls, 0);
   });
+
+  // ===== V1.3.4 follow Story 2.1 · AC6 / AC9.4 =====
+
+  group('详情头部关注按钮', () {
+    const token = 'tok7tok7tok7tok7tok7tok7tok7tok7';
+    Finder btn() => find.byKey(const ValueKey('followInline_detail:5'));
+
+    Future<_FollowRepo> pumpWithFollow(WidgetTester tester, ContentDetail d) async {
+      final follows = _FollowRepo();
+      final container = ProviderContainer(overrides: [
+        detailRepositoryProvider.overrideWithValue(_FakeDetailRepo(detail: d)),
+        followRepositoryProvider.overrideWithValue(follows),
+      ]);
+      addTearDown(container.dispose);
+      container.read(authControllerProvider.notifier).applyLogin(const LoginResponse(
+          accessToken: 'a', refreshToken: 'r', role: 'USER', isNewUser: false, onboardingCompleted: true));
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          locale: Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ContentDetailPage(postId: 5),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      return follows;
+    }
+
+    testWidgets('未关注 → 显示；点关注 → Following，再点 → 变回；不进主页', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      final follows = await pumpWithFollow(tester, _detail(authorToken: token));
+      expect(btn(), findsOneWidget);
+
+      await tester.tap(btn());
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: btn(), matching: find.text(l10n.followActionFollowing)), findsOneWidget);
+
+      await tester.tap(btn());
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: btn(), matching: find.text(l10n.followActionFollow)), findsOneWidget);
+      expect(follows.calls, ['PUT', 'DELETE']);
+    });
+
+    testWidgets('自己的帖子不显示', (tester) async {
+      await pumpWithFollow(tester, _detail(isAuthor: true, authorToken: token));
+      expect(btn(), findsNothing);
+    });
+
+    testWidgets('已关注作者不显示', (tester) async {
+      await pumpWithFollow(
+          tester, _detail(authorToken: token, follow: const FollowState(iFollow: true, followsMe: false)));
+      expect(btn(), findsNothing);
+    });
+
+    testWidgets('无 token（注销 / 封号 / 老后端）不显示', (tester) async {
+      await pumpWithFollow(tester, _detail());
+      expect(btn(), findsNothing);
+    });
+
+    testWidgets('分类徽章在时间那一行', (tester) async {
+      await pumpWithFollow(tester, _detail(authorToken: token));
+      final badge = tester.getRect(find.byKey(const ValueKey('detailTypeBadge')));
+      final name = tester.getRect(find.text('Alice'));
+      expect(badge.top, greaterThanOrEqualTo(name.bottom - 1));
+    });
+  });
+}
+
+class _FollowRepo implements FollowRepository {
+  final List<String> calls = [];
+
+  @override
+  Future<FollowResult> follow(String userToken) async {
+    calls.add('PUT');
+    return const FollowResult(state: FollowState(iFollow: true, followsMe: false), followerCount: 1);
+  }
+
+  @override
+  Future<FollowResult> unfollow(String userToken) async {
+    calls.add('DELETE');
+    return const FollowResult(state: FollowState.none, followerCount: 0);
+  }
 }

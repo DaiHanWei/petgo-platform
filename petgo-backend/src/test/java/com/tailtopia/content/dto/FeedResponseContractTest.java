@@ -51,7 +51,9 @@ class FeedResponseContractTest {
             // V1.1.6 Story 5.2（FR-75）：内容装饰标签。同样空表不下发。
             "decorationTags",
             // V1.3.0 batch-b1 Story 3.3：正文里的 @（能不能点是服务端算好的）。同样空表不下发。
-            "mentions");
+            "mentions",
+            // V1.3.4 follow Story 2.1（AD-6）：作者 token 与相对查看者的关注关系。
+            "authorToken", "authorFollowState");
 
     /** 游标分页信封字段集 —— 对应 App FeedPage.fromJson 的 {items, nextCursor, hasMore}。 */
     /** V1.1.6 Story 16.5 起信封多一个 {@code rankMode}（非 Feed 出口时省略）。 */
@@ -81,7 +83,9 @@ class FeedResponseContractTest {
                 Arrays.asList(new ImageSize(1200, 1600), null),
                 true, 5L,
                 // V1.3.0 batch-b1 Story 3.3：@ 投影。
-                List.of(new com.tailtopia.mention.dto.MentionView(9L, "阿花", true)));
+                List.of(new com.tailtopia.mention.dto.MentionView(9L, "阿花", true)),
+                // V1.3.4 follow Story 2.1：作者 token 与关注关系（AD-6 键名）。
+                "t".repeat(32), new com.tailtopia.social.read.FollowState(true, false));
 
         Map<String, Object> m = wire(item);
         assertThat(m.keySet())
@@ -100,7 +104,7 @@ class FeedResponseContractTest {
                 42L, 7L, null, null, true, null, null,
                 ContentType.GROWTH_MOMENT, null, null, 0L,
                 Instant.parse("2026-06-05T00:00:00Z"), ContentVisibility.PRIVATE,
-                null, null, false, 0L, null);
+                null, null, false, 0L, null, null, null);
 
         Map<String, Object> m = wire(item);
         assertThat(m.keySet())

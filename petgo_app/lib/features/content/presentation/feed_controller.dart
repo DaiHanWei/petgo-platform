@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../social/domain/follow_state.dart';
 import '../data/feed_repository.dart';
 import '../domain/feed_item.dart';
 import '../domain/home_refresh_provider.dart';
@@ -80,9 +81,12 @@ class FeedController extends AsyncNotifier<FeedState> {
   Future<FeedState> build() async {
     final category = ref.watch(feedCategoryProvider);
     ref.watch(homeRefreshProvider); // 宠物状态变更 → 重建 → 按新状态硬过滤
+    // V1.3.4 Story 2.1 AC3.3：**发请求前**读全局关注版本号，写进这一屏每张卡的快照 ——
+    // 首屏重建（下拉刷新 / 切 Tab / homeRefresh / 重试）= 这个位置「刷新」了，旧覆盖对新快照自动失效。
+    final epoch = ref.read(followStateProvider.notifier).currentEpoch;
     final page = await ref.read(feedRepositoryProvider).getFeed(category: category);
     return FeedState(
-      items: page.items,
+      items: [for (final i in page.items) i.copyWith(followEpoch: epoch)],
       category: category,
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,
@@ -102,12 +106,14 @@ class FeedController extends AsyncNotifier<FeedState> {
       }
       // 进入加载：清失败态（重试场景）+ 置 loadingMore；nextCursor 由 copyWith 保留。
       state = AsyncData(current.copyWith(loadingMore: true, loadMoreFailed: false));
+      // V1.3.4 Story 2.1：翻页**只给新拉到的这一页**打版本号；已在屏上的卡不受影响（不算刷新）。
+      final epoch = ref.read(followStateProvider.notifier).currentEpoch;
       try {
         final page = await ref
             .read(feedRepositoryProvider)
             .getFeed(category: current.category, cursor: current.nextCursor);
         state = AsyncData(current.copyWith(
-          items: [...current.items, ...page.items],
+          items: [...current.items, for (final i in page.items) i.copyWith(followEpoch: epoch)],
           nextCursor: page.nextCursor,
           hasMore: page.hasMore,
           loadingMore: false,
@@ -198,7 +204,9 @@ void syncFeedCounts(WidgetRef ref, int postId,
 final FutureProvider<PinnedSlot?> pinnedSlotProvider =
     FutureProvider<PinnedSlot?>((ref) async {
   try {
-    return await ref.read(feedRepositoryProvider).getPinnedSlot();
+    // V1.3.4 Story 2.1 AC3.3：顶置位快照同样在发请求前记版本号（首页下拉刷新时随之 invalidate）。
+    final epoch = ref.read(followStateProvider.notifier).currentEpoch;
+    return (await ref.read(feedRepositoryProvider).getPinnedSlot())?.withFollowEpoch(epoch);
   } catch (_) {
     return null;
   }

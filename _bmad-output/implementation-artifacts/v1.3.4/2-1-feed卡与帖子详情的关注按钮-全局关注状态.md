@@ -1,6 +1,6 @@
 # Story 2.1: Feed 卡与帖子详情的关注按钮，全局关注状态
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.3.4 · 主题 follow · 分支 `feat/1.3.4-follow-notify`
 > 口径优先级：`决策日志-follow.md` > `PRD-v1.3.4-follow.md` > `architecture-v1.3.4-follow-delta.md` > `ui-v1.3.4-follow.html`（均在 `_bmad-output/planning-artifacts/v1.3.4/`）
@@ -148,20 +148,20 @@ so that 遇到喜欢的人不用先进主页。
 
 ## Tasks / Subtasks
 
-- [ ] Task 1：后端 DTO 与批量取数（AC1）
-  - [ ] 1.1 `AuthorView` 加 `publicToken`：保留原来 5 个参数的构造器，新参数传 null，这样测试里 31 处 `new AuthorView(...)` 都不用改；`anonymized` 和 `withTags` 要把这个字段带上；`toAuthorView` 从 `User.publicToken` 取值，已注销用户为 null
-  - [ ] 1.2 `FeedItemResponse` 和 `ContentDetailResponse` 增加 `authorToken`、`authorFollowState`，工厂方法 `of(...)` 增加 `FollowState followState` 参数（null 表示不下发）
-  - [ ] 1.3 `FeedService`：构造参数注入 `FollowReader`；`assemble` 整页调一次批量查询；`loadPinnedSlot` 单查；`userPublicPosts` 和 `myPosts` 传 null。`FeedService.java:35`「无关注」的注释由 Story 1.2 改，本 story 只核对是否已改
-  - [ ] 1.4 `ContentDetailService.getDetail` 单查；游客和本人不查库
-  - [ ] 1.5 测试改造与新增（AC1.6）
-- [ ] Task 2：App 领域层（AC2、AC3）
-  - [ ] 2.1 `FeedItem` 和 `ContentDetail` 加新字段，`copyWith` 带上 `followEpoch`（`syncCounts` 回写时不能把它丢掉）
-  - [ ] 2.2 `followStateProvider` 补全：版本号、`pinnedSurface`、显示判断的纯函数（如 `resolveInlineFollow(...)`，方便单测）
-  - [ ] 2.3 四个数据源在发请求前记下版本号（`FeedController.build`、`FeedController.loadMore`、`pinnedSlotProvider`、`detailProvider`）
-- [ ] Task 3：`FollowButton.textInline`（AC4）
-- [ ] Task 4：Feed 卡改版（AC5、AC8）：`MasonryCard` 作者行、`followSurfaceKey`，`FeedMasonryView` 给两种卡传 key
-- [ ] Task 5：详情页作者行改版（AC6）
-- [ ] Task 6：测试（AC9）；L2 在模拟器上走一遍 C1 → C2 → C3、C4 → C5 → 返回 Feed、C6、C7，外加长昵称、顶置卡、自己的帖子
+- [x] Task 1：后端 DTO 与批量取数（AC1）
+  - [x] 1.1 `AuthorView` 加 `publicToken`：保留原来 5 个参数的构造器，新参数传 null，这样测试里 31 处 `new AuthorView(...)` 都不用改；`anonymized` 和 `withTags` 要把这个字段带上；`toAuthorView` 从 `User.publicToken` 取值，已注销用户为 null
+  - [x] 1.2 `FeedItemResponse` 和 `ContentDetailResponse` 增加 `authorToken`、`authorFollowState`，工厂方法 `of(...)` 增加 `FollowState followState` 参数（null 表示不下发）
+  - [x] 1.3 `FeedService`：构造参数注入 `FollowReader`；`assemble` 整页调一次批量查询；`loadPinnedSlot` 单查；`userPublicPosts` 和 `myPosts` 传 null。`FeedService.java:35`「无关注」的注释由 Story 1.2 改，本 story 只核对是否已改
+  - [x] 1.4 `ContentDetailService.getDetail` 单查；游客和本人不查库
+  - [x] 1.5 测试改造与新增（AC1.6）
+- [x] Task 2：App 领域层（AC2、AC3）
+  - [x] 2.1 `FeedItem` 和 `ContentDetail` 加新字段，`copyWith` 带上 `followEpoch`（`syncCounts` 回写时不能把它丢掉）
+  - [x] 2.2 `followStateProvider` 补全：版本号、`pinnedSurface`、显示判断的纯函数（如 `resolveInlineFollow(...)`，方便单测）
+  - [x] 2.3 四个数据源在发请求前记下版本号（`FeedController.build`、`FeedController.loadMore`、`pinnedSlotProvider`、`detailProvider`）
+- [x] Task 3：`FollowButton.textInline`（AC4）
+- [x] Task 4：Feed 卡改版（AC5、AC8）：`MasonryCard` 作者行、`followSurfaceKey`，`FeedMasonryView` 给两种卡传 key
+- [x] Task 5：详情页作者行改版（AC6）
+- [x] Task 6（L2 待本地）：测试（AC9）；L2 在模拟器上走一遍 C1 → C2 → C3、C4 → C5 → 返回 Feed、C6、C7，外加长昵称、顶置卡、自己的帖子
 
 ## Dev Notes
 
@@ -285,9 +285,32 @@ so that 遇到喜欢的人不用先进主页。
 
 ### Agent Model Used
 
+Claude（云端 headless session，bmad-dev-story 流程手工执行）
+
 ### Debug Log References
 
+- 新 javadoc 提到 `findActiveIds` 撞上 `PetRecommendationServiceTest` 的源码扫描（按首次出现位置取上下文），改措辞，未改测试。
+- 320 宽 + 长昵称 + 「+ Ikuti Balik」时作者时间行溢出 59px（徽章移入时间行后与按钮争宽）→ 徽章外包 `Flexible` + 文字省略（Feed 卡与详情两处），尺寸样式不变。
+
 ### Completion Notes List
+
+**开工核对（story 文件是提前写的）**
+- Story 1.3 实际交付的 `FollowButton` 参数名为 `userId / userToken / initial / style / source`（非本文件 AC4.1 的 `targetUserId / targetToken / serverState`）；按 T-19「以 1.3 为准、2.1 只扩展」保留 1.3 命名，新增 `surfaceKey` / `snapshotEpoch`，`userToken` 改为可空（null 不渲染）。未改前序已提交的对外契约。
+- **偏离（依裁定 T-19 / D-8）**：作者 token **不走 `AuthorView.publicToken`**（Dev Notes 的推荐做法），而是统一用新增的 `AccountQueryService.publicTokensOf`（Story 2.2 共用）；它只返回对外有效（未注销 + 未封号）账号 → 封号作者无 token → 不显示按钮（D-8），不需要额外布尔字段。代价是 Feed 每页多一次 token 查询（与关注关系各一次）。
+- `myPosts` / `userPublicPosts` 两个出口 `authorToken` 也传 null（AC1.5 原写「照常带上」是基于 AuthorView 零成本取法；改用 `publicTokensOf` 后带上要多一次查询，而这两处不显示按钮）。
+- `is_follow_back`：沿用 1.3 的 T-8 口径（关注 / 取关都取点击前 followsMe），而非 AC4.5「取关上报 false」—— 决策日志 T-8 优先，且点击逻辑共用一处。
+
+**实现摘要（2026-10-12）**
+- 后端：`FeedItemResponse` / `ContentDetailResponse` 末尾加 `authorToken`、`authorFollowState`（复用 `social.read.FollowState` record，JSON 键 `iFollow` / `followsMe`）；`FeedService.assemble` 整页 `publicTokensOf` + `followStates` 各一次（游客 / 空页 / 本人 / 无 token 不查）；顶置位与详情单查；`ContentDetailService` 游客与本人不查。
+- App：`FeedItem` / `ContentDetail` / `PinnedSlot` 解析新字段 + `followEpoch`；`followStateProvider` 升级为 `Map<int, FollowOverride>`（`FollowOverride extends FollowState`，带 `epoch` / `pinnedSurface`），全局版本号计数器重建不归零；纯函数 `resolveInlineFollow`；`restore` 原样回滚。四个数据源发请求前记版本号（Feed build / loadMore 只给新页 / 顶置位 / 详情——详情按 T-18 用「进入时」版本号，评论重拉不算刷新）。他人主页（常驻位）也改为按版本号判断（`PublicProfile.followEpoch`，surfaceKey `profile:{id}`）。
+- `FollowButton.textInline`：「+」前缀单独渲染（T-16），≥44×44 可点区、`HitTestBehavior.opaque` 不冒泡；Feed 卡与顶置卡 surfaceKey `feed:item:{id}` / `feed:pinned:{id}`，详情 `detail:{id}`；source `feed_card` / `content_detail`。
+- 布局：Feed 卡与详情页类型徽章移到时间右侧（详情徽章大小不变，T-17）；关注按钮在「…」左边。
+- 测试：后端单测（`FeedBatchAggregationTest` +4、`ContentDetailServiceTest` +3、两个契约测试更新键集）；新增 L1 `FeedFollowFieldsIntegrationTest`；App 新增 `follow_state_provider_test`（9）、`feed_follow_button_test`（9，含 320 宽不溢出、跨卡一致、顶置卡）、`content_detail_test` +5。既有 `feed_test` 等无需改动（`MasonryCard` 不传 `followSurfaceKey` 时不渲染按钮，不碰 provider）。
+- 1.4 code-review #3（关注请求返回前离页不失效四格）随本次 `FollowButton` 改写一并修复：先取 `ProviderScope.containerOf` 再失效；失败回滚也不再受 `mounted` 影响。
+- L0：后端 `clean package -DskipTests` 绿，纯单测回归 3004 通过；App `flutter analyze` 零告警、`flutter test` 2775 通过。
+- **L1 待本地验收**：`FeedFollowFieldsIntegrationTest` 及既有 Feed / 详情 / 顶置位集成测试。**L2 待本地验收**：C1~C7 逐屏、320 宽长昵称、顶置卡、自己的待审帖、游客点按钮。**L1/L2 待本地验收。**
+
+**原写 story 时的待确认（均已由「待确认项裁定」覆盖，保留备查）**
 
 - 待确认 1：**文案前面要不要加「+」**。epics 和架构写的是「+ Ikuti」。UI 稿的 HTML 文字是「Ikuti」，「+」是用 CSS `::before` 加上去的（`.fc-btn .fbtn::before{content:"+"}`），「Mengikuti」前面没有「+」。本 story 按 UI 稿处理：「+」作为前缀单独渲染，l10n 用 Story 1.3 的「Ikuti」/「Ikuti Balik」。如果需要把「+」写进文案 key，请拍板。
 - 待确认 2：**详情页徽章的大小**。UI 稿 C4 中详情页时间右边的徽章和 Feed 用的是同一个样式（`.tb`：9.5 号、圆角 5），而现在的详情页徽章是 11 号、内边距 9×4、圆角 7。epics 只要求「头像 / 昵称 / 时间尺寸不变」，没说徽章。本 story 暂时保留详情页现有的徽章大小，只改位置。如需和 Feed 统一成 9.5 号，请拍板。
@@ -297,3 +320,8 @@ so that 遇到喜欢的人不用先进主页。
 - L1 / L2 待本地验收。
 
 ### File List
+
+- petgo-backend：auth/repository/UserRepository.java、auth/service/AccountQueryService.java、content/dto/FeedItemResponse.java、content/dto/ContentDetailResponse.java、content/service/FeedService.java、content/service/ContentDetailService.java
+- petgo-backend 测试：content/dto/{FeedResponseContractTest, ContentDetailAndCommentContractTest}、content/service/{FeedBatchAggregationTest, FeedServiceTest, UserPublicPostsTest, ContentDetailServiceTest}、content/web/FeedFollowFieldsIntegrationTest（新，L1）
+- petgo_app：features/social/domain/follow_state.dart、features/social/presentation/widgets/follow_button.dart、features/content/domain/{feed_item, content_detail, pinned_slot}.dart、features/content/presentation/{feed_controller, feed_view, detail_providers, content_detail_page}.dart、shared/widgets/masonry_card.dart、features/user_profile/data/public_profile_repository.dart、features/user_profile/presentation/public_profile_page.dart
+- petgo_app 测试：test/social/follow_state_provider_test.dart（新）、test/content/feed_follow_button_test.dart（新）、test/content/content_detail_test.dart

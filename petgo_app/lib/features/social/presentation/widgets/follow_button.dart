@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/analytics/analytics.dart';
 import '../../../../core/network/problem_detail.dart';
 import '../../../../core/theme/colors.dart';
+import '../../../auth/domain/auth_state.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../../auth/domain/auth_guard.dart';
@@ -14,11 +15,15 @@ import '../../domain/follow_state.dart';
 
 /// 关注按钮的外观（V1.3.4 follow）。
 ///
-/// 本 story（1.3）只有 [profileFull]；`textInline`（Feed 卡 / 详情头部）由 Story 2.1、
-/// `listCompact`（关注列表行）由 Story 2.2 追加 —— **只换外观，点击逻辑共用本组件内部一处**。
+/// [profileFull] 由 Story 1.3、[textInline] 由 Story 2.1 交付；`listCompact`（关注列表行）由 Story 2.2 追加
+/// —— **只换外观，点击逻辑共用本组件内部一处**。
 enum FollowButtonStyle {
-  /// 主页整宽主按钮（UI 稿 A2 / A3 / A4 `.wbtn` / `.wbtn.ghost2`）。
+  /// 主页整宽主按钮（UI 稿 A2 / A3 / A4 `.wbtn` / `.wbtn.ghost2`）。**常驻**：始终三态。
   profileFull,
+
+  /// Feed 卡 / 详情头部的文字按钮（UI 稿 C1 / C2 / C4 / C5 `.fc-btn .fbtn`）。**非常驻**：
+  /// 已关注的作者不显示；点关注的那个按钮保留「Mengikuti」，同一用户其他位置立即隐藏（AD-7）。
+  textInline,
 }
 
 /// 关注 / 取关按钮（V1.3.4 follow · Story 1.3 · AC3 / AC5 / AC7）。
@@ -40,13 +45,15 @@ class FollowButton extends ConsumerStatefulWidget {
     required this.style,
     required this.source,
     this.onNotFound,
+    this.surfaceKey,
+    this.snapshotEpoch = 0,
   });
 
   /// 对方数字 userId（覆盖表的键 / 埋点 `target_user_id`）。
   final int userId;
 
-  /// 对方不可枚举 token（关注接口路径用，D-2）。
-  final String userToken;
+  /// 对方不可枚举 token（关注接口路径用，D-2）。null（作者已注销 / 封号 / 老后端）→ 不渲染。
+  final String? userToken;
 
   /// 服务端下发的初值。
   final FollowState initial;
@@ -59,6 +66,14 @@ class FollowButton extends ConsumerStatefulWidget {
   /// 接口回 404（对方刚被注销 / 封号）时的额外动作（T-9：主页据此重取，显示「Pengguna tidak ditemukan」）。
   final VoidCallback? onNotFound;
 
+  /// 本按钮实例的位置键（Story 2.1 AC3.7）：`feed:item:{postId}` / `feed:pinned:{postId}` /
+  /// `detail:{postId}` / `profile:{userId}`……点击时写进覆盖的 `pinnedSurface`。
+  /// 缺省按 `{style}:{userId}` 生成。
+  final String? surfaceKey;
+
+  /// 服务端快照（[initial]）发请求前读到的全局关注版本号（`FeedItem.followEpoch` 等）。
+  final int snapshotEpoch;
+
   @override
   ConsumerState<FollowButton> createState() => _FollowButtonState();
 }
@@ -66,17 +81,80 @@ class FollowButton extends ConsumerStatefulWidget {
 class _FollowButtonState extends ConsumerState<FollowButton> {
   bool _inFlight = false;
 
+  String get _surfaceKey => widget.surfaceKey ?? '${widget.style.name}:${widget.userId}';
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    ref.watch(followStateProvider);
-    final eff = ref.read(followStateProvider.notifier).effective(widget.userId, widget.initial);
-    final label = eff.iFollow
-        ? l10n.followActionFollowing
-        : (eff.followsMe ? l10n.followActionFollowBack : l10n.followActionFollow);
-    return switch (widget.style) {
-      FollowButtonStyle.profileFull => _profileFull(label, eff.iFollow),
-    };
+    final overrides = ref.watch(followStateProvider);
+    final token = widget.userToken;
+    if (token == null) return const SizedBox.shrink();
+    switch (widget.style) {
+      case FollowButtonStyle.profileFull:
+        final eff = ref
+            .read(followStateProvider.notifier)
+            .effective(widget.userId, widget.initial, snapshotEpoch: widget.snapshotEpoch);
+        final label = eff.iFollow
+            ? l10n.followActionFollowing
+            : (eff.followsMe ? l10n.followActionFollowBack : l10n.followActionFollow);
+        return _profileFull(label, eff.iFollow);
+      case FollowButtonStyle.textInline:
+        // 自己的帖子（C7）不显示。
+        final me = ref.watch(authControllerProvider.select((s) => s.profile?.id));
+        if (me != null && me == widget.userId) return const SizedBox.shrink();
+        final display = resolveInlineFollow(
+          override: overrides[widget.userId],
+          server: widget.initial,
+          snapshotEpoch: widget.snapshotEpoch,
+          surfaceKey: _surfaceKey,
+        );
+        return switch (display) {
+          InlineFollowDisplay.hidden => const SizedBox.shrink(),
+          InlineFollowDisplay.following => _textInline(l10n.followActionFollowing, plus: false),
+          InlineFollowDisplay.followBack => _textInline(l10n.followActionFollowBack, plus: true),
+          InlineFollowDisplay.follow => _textInline(l10n.followActionFollow, plus: true),
+        };
+    }
+  }
+
+  /// UI 稿 `.fc-btn .fbtn`：「+ Ikuti」紫 13 / w600（「+」w700、间隔 3，T-16 前缀单独渲染）；
+  /// 「Mengikuti」muted w500、无「+」。无底色无边框；可点区域 ≥ 44×44，视觉尺寸不变。
+  Widget _textInline(String label, {required bool plus}) {
+    final color = plus ? AppColors.mint : AppColors.muted;
+    return GestureDetector(
+      key: ValueKey('followInline_$_surfaceKey'),
+      // 🔴 自己吃掉点击：不冒泡到外层「进主页」/「进详情」。
+      behavior: HitTestBehavior.opaque,
+      onTap: _onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        child: Center(
+          widthFactor: 1,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (plus) ...[
+                  Text('+',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
+                  const SizedBox(width: 3),
+                ],
+                Text(
+                  label,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: plus ? FontWeight.w600 : FontWeight.w500,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _profileFull(String label, bool following) {
@@ -121,40 +199,40 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
 
   Future<void> _onTap() async {
     if (_inFlight) return;
+    final token = widget.userToken;
+    if (token == null) return;
     // 游客：只弹登录，登录后不自动关注（FR-140.19）。
     if (!requireLogin(ref, context, entrySource: 'follow')) return;
     final l10n = AppLocalizations.of(context);
+    // ⚠️ 先把 notifier 拿在手里：请求期间页面可能被关掉（State 卸载后 ref 不可用），
+    //    回滚仍必须执行，否则乐观写入的覆盖会一直留着、别处按钮显示错。
     final notifier = ref.read(followStateProvider.notifier);
+    final repo = ref.read(followRepositoryProvider);
+    // 同理：成功后要失效我的页四格，请求返回时页面可能已关（code-review 1.4 #3）→ 先拿 container。
+    final container = ProviderScope.containerOf(context, listen: false);
     final userId = widget.userId;
+    final surface = _surfaceKey;
     final before = ref.read(followStateProvider)[userId];
-    final current = notifier.effective(userId, widget.initial);
+    final current = notifier.effective(userId, widget.initial, snapshotEpoch: widget.snapshotEpoch);
     final wantFollow = !current.iFollow;
     _inFlight = true;
-    // 乐观更新：followsMe 不变。
-    notifier.set(userId, current.copyWith(iFollow: wantFollow));
+    // 乐观更新：followsMe 不变；pinnedSurface = 本按钮，同一用户其他非常驻位置**立即**隐藏。
+    notifier.set(userId, current.copyWith(iFollow: wantFollow), pinnedSurface: surface);
     try {
-      final repo = ref.read(followRepositoryProvider);
-      final result =
-          wantFollow ? await repo.follow(widget.userToken) : await repo.unfollow(widget.userToken);
-      if (!mounted) return;
-      ref.read(followStateProvider.notifier).set(userId, result.state);
-      // V1.3.4 Story 1.4（T-15）：我的关注数变了 → 我的页四格重取 `/me`。
-      ref.invalidate(meCountsProvider);
+      final result = wantFollow ? await repo.follow(token) : await repo.unfollow(token);
+      notifier.set(userId, result.state, pinnedSurface: surface);
       // D-6 过去式命名；成功后才报。is_follow_back = 点击前对方是否关注我（T-8，两个事件同口径）。
       Analytics.capture(wantFollow ? 'user_followed' : 'user_unfollowed', {
         'target_user_id': userId,
         'source': widget.source,
         'is_follow_back': current.followsMe,
       });
+      // V1.3.4 Story 1.4（T-15）：我的关注数变了 → 我的页四格重取 `/me`（页面已关也要失效）。
+      container.invalidate(meCountsProvider);
     } catch (e) {
+      // 回滚到点击前那一条覆盖（原样，含版本号；之前没有则删除）。
+      notifier.restore(userId, before);
       if (!mounted) return;
-      // 回滚到点击前的覆盖值（点击前没有覆盖则丢弃，回到服务端初值）。
-      final n = ref.read(followStateProvider.notifier);
-      if (before == null) {
-        n.forget(userId);
-      } else {
-        n.set(userId, before);
-      }
       final problem = e is DioException ? ProblemDetail.fromDioException(e) : null;
       final status = problem?.status ?? (e is DioException ? e.response?.statusCode : null);
       if (problem?.typeSlug == 'rate-limited' || status == 429) {

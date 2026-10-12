@@ -82,8 +82,10 @@ public class FeedService {
             ContentLikeRepository likes, CommentRepository comments, ContentPinService pins,
             ContentTagQueryService contentTags, UserHideRelationReader hideRelations,
             FeedRecommendationService recommendations,
-            com.tailtopia.mention.service.MentionViewService mentionViews) {
+            com.tailtopia.mention.service.MentionViewService mentionViews,
+            com.tailtopia.social.read.FollowReader followReader) {
         this.mentionViews = mentionViews;
+        this.followReader = followReader;
         this.posts = posts;
         this.accountQueryService = accountQueryService;
         this.likes = likes;
@@ -96,6 +98,37 @@ public class FeedService {
 
     /** V1.3.0 batch-b1 Story 3.3：正文里 @ 的渲染投影（可点与否在服务端判）。 */
     private final com.tailtopia.mention.service.MentionViewService mentionViews;
+
+    /** V1.3.4 follow Story 2.1：卡片作者的关注关系（只读端口，同 hideRelations 的模块边界）。 */
+    private final com.tailtopia.social.read.FollowReader followReader;
+
+    /**
+     * 一页作者的 token 与关注关系（V1.3.4 follow Story 2.1 · AD-6 / AD-16）—— <b>整页各一次查询</b>。
+     *
+     * <p>token 走 {@code publicTokensOf}（T-19）：已注销 / 封号作者缺席 → null → App 不显示按钮（D-8）。
+     * 关注关系只查「有 token、且不是查看者本人」的作者；游客 / 空集合不发查询，恒 {@code NONE}。
+     */
+    private record AuthorFollow(Map<Long, String> tokens,
+            Map<Long, com.tailtopia.social.read.FollowState> states) {
+
+        com.tailtopia.social.read.FollowState stateOf(long authorId) {
+            return states.getOrDefault(authorId, com.tailtopia.social.read.FollowState.NONE);
+        }
+    }
+
+    private AuthorFollow authorFollow(List<ContentPost> page, Long viewerId) {
+        List<Long> authorIds = page.stream().map(ContentPost::getAuthorId).distinct().toList();
+        Map<Long, String> tokens = accountQueryService.publicTokensOf(authorIds);
+        if (viewerId == null) {
+            return new AuthorFollow(tokens, Map.of());
+        }
+        List<Long> targets = authorIds.stream()
+                .filter(tokens::containsKey)
+                .filter(id -> !id.equals(viewerId))
+                .toList();
+        return new AuthorFollow(tokens,
+                targets.isEmpty() ? Map.of() : followReader.followStates(viewerId, targets));
+    }
 
     /**
      * 一页内容各自的 @ 投影（Story 3.3）。**整页一次**，与装饰标签同一个形状（AD-6）。
@@ -328,6 +361,8 @@ public class FeedService {
         Map<Long, List<ContentTagView>> decorations = decorationTags(page);
 
         var mentions = mentionsFor(page, viewerId);
+        // V1.3.4 follow Story 2.1：作者 token 与关注关系，整页各一次（推荐序与时间倒序共用这一处）。
+        AuthorFollow follow = authorFollow(page, viewerId);
 
         List<FeedItemResponse> items = page.stream()
                 .map(p -> FeedItemResponse.of(p, authors.get(p.getAuthorId()),
@@ -336,7 +371,9 @@ public class FeedService {
                         commentCounts.getOrDefault(p.getId(), 0L),
                         decorations.get(p.getId()),
                         com.tailtopia.mention.service.MentionViewService.pick(
-                                p.getMentionedUserIds(), mentions)))
+                                p.getMentionedUserIds(), mentions),
+                        follow.tokens().get(p.getAuthorId()),
+                        follow.stateOf(p.getAuthorId())))
                 .toList();
         return new FeedPageResponse(items, nextCursor, hasMore, rankMode);
     }
@@ -390,13 +427,20 @@ public class FeedService {
         }
         List<ContentPost> one = List.of(post);
         Map<Long, AuthorView> authors = accountQueryService.findAuthorViews(List.of(post.getAuthorId()));
+        // V1.3.4 follow Story 2.1：顶置卡与普通卡同构，作者 token / 关注关系同口径（单条）。
+        String token = accountQueryService.publicTokensOf(List.of(post.getAuthorId())).get(post.getAuthorId());
+        com.tailtopia.social.read.FollowState followState =
+                viewerId == null || token == null || viewerId.equals(post.getAuthorId())
+                        ? com.tailtopia.social.read.FollowState.NONE
+                        : followReader.followState(viewerId, post.getAuthorId());
         FeedItemResponse item = FeedItemResponse.of(post, authors.get(post.getAuthorId()),
                 likeCounts(one).getOrDefault(post.getId(), 0L),
                 likedIds(one, viewerId).contains(post.getId()),
                 commentCounts(one, viewerId).getOrDefault(post.getId(), 0L),
                 decorationTags(one).get(post.getId()),
                 com.tailtopia.mention.service.MentionViewService.pick(
-                        post.getMentionedUserIds(), mentionsFor(one, viewerId)));
+                        post.getMentionedUserIds(), mentionsFor(one, viewerId)),
+                token, followState);
         return new PinnedSlotResponse(new PinnedSlotResponse.Pinned(
                 pin.getId(), pin.getObjectType().name(), item, null));
     }
@@ -465,7 +509,11 @@ public class FeedService {
                         liked.contains(p.getId()),
                         commentCounts.getOrDefault(p.getId(), 0L), null,
                         com.tailtopia.mention.service.MentionViewService.pick(
-                                p.getMentionedUserIds(), mentions)))
+                                p.getMentionedUserIds(), mentions),
+                        // V1.3.4 Story 2.1：本出口（他人主页网格 /「我的发布」）不展示关注按钮 ——
+                        // 与上面 decorationTags 传 null 同理：为一个不展示它的位置多发两次查询没有意义。
+                        // authorToken / authorFollowState 都传 null（NON_NULL 不下发）。
+                        null, null))
                 .toList();
 
         String nextCursor = null;
@@ -511,7 +559,11 @@ public class FeedService {
                         liked.contains(p.getId()),
                         commentCounts.getOrDefault(p.getId(), 0L), null,
                         com.tailtopia.mention.service.MentionViewService.pick(
-                                p.getMentionedUserIds(), mentions)))
+                                p.getMentionedUserIds(), mentions),
+                        // V1.3.4 Story 2.1：本出口（他人主页网格 /「我的发布」）不展示关注按钮 ——
+                        // 与上面 decorationTags 传 null 同理：为一个不展示它的位置多发两次查询没有意义。
+                        // authorToken / authorFollowState 都传 null（NON_NULL 不下发）。
+                        null, null))
                 .toList();
 
         String nextCursor = null;
