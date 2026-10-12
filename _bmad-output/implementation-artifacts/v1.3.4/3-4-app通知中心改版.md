@@ -1,6 +1,6 @@
 # Story 3.4: App 通知中心改版
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.3.4 · 主题 follow · 分支 `feat/1.3.4-follow-notify`
 > 口径优先级：`决策日志-follow.md` > `PRD-v1.3.4-follow.md` > `architecture-v1.3.4-follow-delta.md` > `ui-v1.3.4-follow.html`（均在 `_bmad-output/planning-artifacts/v1.3.4/`）
@@ -80,27 +80,27 @@ so that 通知值得点开。
 
 ## Tasks / Subtasks
 
-- [ ] Task 1：数据模型（AC3.1）
-  - [ ] 1.1 `NotificationItem` 5 个新字段 + `fromJson` 容错；`test/notify/` 补解析单测（缺键 / 有值）
-- [ ] Task 2：分组与时间（AC1 / AC2）
-  - [ ] 2.1 `notification_grouping.dart` 纯函数 + 单测（跨午夜、UTC 输入、30 / 31 天边界）
-  - [ ] 2.2 `_notificationList` 改五段；`_relativeTime` 先 `toLocal()`
-  - [ ] 2.3 三个新 l10n key（id / en）+ `flutter gen-l10n`
-- [ ] Task 3：条目渲染（AC3 / AC4 / AC5）
-  - [ ] 3.1 后端文案条目分支：标题富文本加粗昵称、单行正文、无展开按钮
-  - [ ] 3.2 圆点移到图标右上角
-  - [ ] 3.3 两种新类型图标
-- [ ] Task 4：回关按钮（AC6）
-  - [ ] 4.1 条目右侧接 `FollowButton(listCompact)`，surface key、白底参数、来源 `notification`
-  - [ ] 4.2 首页重载成功后清本页固定态
-- [ ] Task 5：跳转（AC7）
-  - [ ] 5.1 `pushPayloadToLocation` 两种新类型 + `deep_link_routes_test` 用例
-  - [ ] 5.2 列表点 `USER_FOLLOWED` 用 `actorUserId`
-  - [ ] 5.3 点赞 / 评论类帖子已删探测 + toast
-- [ ] Task 6：埋点（AC8）
-  - [ ] 6.1 `actor_count`、`notification_follow_back_tapped`、`FollowButton` 来源
-  - [ ] 6.2 `v112_events_test` 登记 `notification_` 前缀
-- [ ] Task 7：回归与测试（AC9）
+- [x] Task 1：数据模型（AC3.1）
+  - [x] 1.1 `NotificationItem` 5 个新字段 + `fromJson` 容错；`test/notify/` 补解析单测（缺键 / 有值）
+- [x] Task 2：分组与时间（AC1 / AC2）
+  - [x] 2.1 `notification_grouping.dart` 纯函数 + 单测（跨午夜、UTC 输入、30 / 31 天边界）
+  - [x] 2.2 `_notificationList` 改五段；`_relativeTime` 先 `toLocal()`
+  - [x] 2.3 三个新 l10n key（id / en）+ `flutter gen-l10n`
+- [x] Task 3：条目渲染（AC3 / AC4 / AC5）
+  - [x] 3.1 后端文案条目分支：标题富文本加粗昵称、单行正文、无展开按钮
+  - [x] 3.2 圆点移到图标右上角
+  - [x] 3.3 两种新类型图标
+- [x] Task 4：回关按钮（AC6）
+  - [x] 4.1 条目右侧接 `FollowButton(listCompact)`，surface key、白底参数、来源 `notification`
+  - [x] 4.2 首页重载成功后清本页固定态
+- [x] Task 5：跳转（AC7）
+  - [x] 5.1 `pushPayloadToLocation` 两种新类型 + `deep_link_routes_test` 用例
+  - [x] 5.2 列表点 `USER_FOLLOWED` 用 `actorUserId`
+  - [x] 5.3 点赞 / 评论类帖子已删探测 + toast
+- [x] Task 6：埋点（AC8）
+  - [x] 6.1 `actor_count`、`notification_follow_back_tapped`、`FollowButton` 来源
+  - [x] 6.2 `v112_events_test` 登记 `notification_` 前缀
+- [x] Task 7：回归与测试（AC9）
 
 ## Dev Notes
 
@@ -172,9 +172,47 @@ so that 通知值得点开。
 
 ### Agent Model Used
 
+Claude（云端 headless session，bmad-dev-story 流程手工执行）
+
 ### Debug Log References
 
+- App `flutter analyze` 零告警；`flutter test` 2843 个全绿（含新增 `notification_grouping_test`、`notification_center_v134_test`、`deep_link_routes_test` 两例、`test/l10n/` 文案规则）。后端未改，纯单测 3079 全绿。
+
 ### Completion Notes List
+
+**开工核对（对照 1.3 / 2.1 / 3.3 实际代码）**
+
+- `FollowButton` 实际参数：`userId / userToken / initial / style / source / surfaceKey / snapshotEpoch / persistent`；缺「idle 底色」与「点击回调」→ 按 Dev Notes 新增可选参数 `idleBackground`（仅 listCompact 的 Ikuti / Ikuti Balik 态）与 `onTapped(ValueChanged<bool> wantFollow)`（已登录点下那一刻、请求前），默认行为不变，1.3 / 2.x 调用点未动。
+- 3.3 实际字段：除 story 写的 5 个外还有 ⚠️ T-41 `actorFollowsMe`，模型一并解析（共 6 个）。
+- 「刷新后覆盖清除」用 Story 2.1 的版本号机制：每页发请求前记 `followStateProvider.currentEpoch`（按 deepLinkToken 存），按钮传 `snapshotEpoch`；重拉首页后旧的「本按钮保留 Mengikuti」对新快照自动失效（AC6.6）。
+
+**实现摘要**
+
+- `domain/notification_grouping.dart`：`enum NotificationGroup {today, yesterday, last7Days, last30Days, earlier}` + `groupOf(createdAt, now)`（先 `toLocal()`，按本地自然日相差天数：≤0 / 1 / 2–7 / 8–30 / >30，T-40）；页面只调它。时间显示「是否今天」同用 `groupOf`，非今天 `d MMM, HH:mm`（先 `toLocal()`）。l10n 新增 `notifyGroupYesterday / Last7Days / Last30Days`（id / en）。
+- `NotificationItem`：`actorName / actorCount / actorUserId / actorToken / actorIFollow / actorFollowsMe` + `hasServerCopy`（四种互动类型且 `actorName` 非空），`fromJson` 缺键容错。
+- 条目：后端文案条目标题 `Text.rich` 常规字重、只加粗 `actorName`（找不到则整句常规）；正文非空时单行省略、无展开按钮，空则不留正文行；其余条目（含存量点赞 / 评论）仍走 `_typeLabel / _typeBody`。未读紫点移到 40×40 图标块右上角（key `notificationUnreadDot_<token>`）。新图标 `USER_FOLLOWED`（person_add，mint / violet100）、`PLACE_COMMENTED`（location_on，checkinIcon / checkinTint）。
+- 回关：`USER_FOLLOWED` 后端文案条目右侧 `FollowButton(listCompact, 非常驻, source: 'notification', surfaceKey: 'notification:<deepLinkToken>')`，初值 `FollowState(iFollow: actorIFollow, followsMe: actorFollowsMe ?? true)`，按全局三态（⚠️ T-41：对方仍关注我「Ikuti Balik」，否则「Ikuti」，已关注不显示）；未读行白底、已读行浅紫。按钮吃掉点击：不跳转、不标已读、不报 `app_notification_item_tapped`；点「关注」时报 `notification_follow_back_tapped`，关注 / 取关结果由 `FollowButton` 报 `user_followed / user_unfollowed {source: notification}`。
+- 跳转：`DeepLinkRoutes.pushPayloadToLocation` 加 `PLACE_COMMENTED → /places/<token>`、`USER_FOLLOWED → /users/<id>`（非数字 / 空 → 通知中心）；列表点新粉丝用 `actorUserId`。点赞 / 评论类跳转前探一次帖子详情：`gone` → toast `detailGoneTitle`、不跳转（已读照常标）；其它错误照常跳；探测期间忽略连点。
+- 埋点：`app_notification_item_tapped` 对后端文案条目加 `actor_count`；`v112_events_test` 登记前缀 `notification_`（注释说明与 `notify_` 分开）。
+
+**与 story 文字的出入**
+
+- AC6.2「文案固定 Ikuti Balik」→ 按 ⚠️ T-41 三态显示。
+- AC9 / 待确认 6：⚠️ T-36 后端已不返回「触发人全被过滤」的条目，App 不做兜底。
+- core 的 `deep_link_routes.dart` 不 import feature 页面，新落点写字面量（与 `PlaceDetailPage.routeFor`、`PublicProfilePage.routeBase` 同形，测试里用这两个常量断言）。
+- 既有测试按设计更新：`milestone_sm_notification_test` 的点赞点击用例因新增「帖子探测」需要打桩详情仓库（统一返回网络错误 = 照常跳转），断言未改。
+
+**待本地验收**
+
+- **L2 待本地验收**：UI 稿 D1 ~ D8 真机视觉（五段分组标题、浅紫未读底 + 图标右上角圆点、标题只加粗昵称、单行正文、两种新图标配色、未读行内白底回关按钮）；锁屏推送与列表同文案；点推送跳转（新粉丝进主页、场所评论进场所详情）；帖子已删 toast。
+- 本 story 只改 App，无 L1 项。L1/L2 待本地验收。
+
+**待确认**
+
+- 探测帖子是否已删会让点赞 / 评论类通知点击多一次详情请求（T-43 已确认接受）。
+- 回关按钮的显示依赖本页快照的 `actorIFollow`；在别的页面关注了该用户后回到已打开的通知中心，按全局覆盖立即隐藏（AD-7 非常驻规则）。
+- 原 Completion Notes 的待确认 1~7 已被裁定 T-40 / T-34 / T-41 / T-42 / T-43 / T-36 / T-21 覆盖，按裁定实现。
+
 
 - 待确认 1：「7 hari terakhir」「30 hari terakhir」的天数边界。PRD / UI 只给了名称；本 story 按 UI 稿 D1 示例（今天 9 Okt，2 Okt 在 7 天组）取「相差 2 ~ 7 天 / 8 ~ 30 天 / 超过 30 天」。
 - 待确认 2（与 Story 3.2 对接）：系统推送点击 `USER_FOLLOWED` 只拿得到 `targetRef`，要进对方主页需要 3.2 把 `targetRef` 设为关注者的数字 id（与点赞通知 `targetRef = 帖子 id` 同口径，只下发给本人）。3.2 若用了别的值，本 story 的推送跳转需相应调整。
@@ -186,3 +224,11 @@ so that 通知值得点开。
 - L2 待本地验收（真机视觉、推送跳转）。
 
 ### File List
+
+- petgo_app/lib/features/notify/domain/notification_grouping.dart（新）
+- petgo_app/lib/features/notify/domain/notification_item.dart（改）
+- petgo_app/lib/features/notify/presentation/notification_center_page.dart（改）
+- petgo_app/lib/features/social/presentation/widgets/follow_button.dart（改：可选 `idleBackground`、`onTapped`）
+- petgo_app/lib/core/router/deep_link_routes.dart（改）
+- petgo_app/lib/l10n/app_en.arb、app_id.arb（改）
+- 测试：test/notify/notification_grouping_test.dart（新）、notification_center_v134_test.dart（新）、deep_link_routes_test.dart（改）、milestone_sm_notification_test.dart（改）；test/analytics/v112_events_test.dart（改：登记 `notification_`）

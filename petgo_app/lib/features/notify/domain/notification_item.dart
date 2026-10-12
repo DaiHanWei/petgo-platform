@@ -9,7 +9,21 @@ class NotificationItem {
     this.targetRef,
     required this.read,
     this.createdAt,
+    this.actorName,
+    this.actorCount = 0,
+    this.actorUserId,
+    this.actorToken,
+    this.actorIFollow,
+    this.actorFollowsMe,
   });
+
+  /// 后端拼好文案的四种互动类型（V1.3.4 follow · Story 3.3 / 3.4）。
+  static const Set<String> serverCopyTypes = {
+    'CONTENT_LIKED',
+    'CONTENT_COMMENTED',
+    'USER_FOLLOWED',
+    'PLACE_COMMENTED',
+  };
 
   // VET_REPLY|CONSULT_CLOSED|CONTENT_LIKED|CONTENT_COMMENTED|NEW_CONSULT_REQUEST|PET_BIRTHDAY|COMPANION_ANNIVERSARY|MILESTONE_NODE
   final String type;
@@ -22,6 +36,28 @@ class NotificationItem {
   final bool read;
   final DateTime? createdAt;
 
+  /// V1.3.4 follow · Story 3.3：最新可显示的触发人昵称（标题里只加粗它）；存量 / 系统类为 null。
+  final String? actorName;
+
+  /// 过滤后的触发人总数（含 [actorName] 那一位）；没有时 0。
+  final int actorCount;
+
+  /// 触发人数字 id（跳现有 `/users/:id` 主页路由，D-2）。
+  final int? actorUserId;
+
+  /// 触发人不可枚举 token（回关调 `PUT /users/{token}/follow`）。
+  final String? actorToken;
+
+  /// 只对 `USER_FOLLOWED`：我是否已关注该触发人（服务端初值）。
+  final bool? actorIFollow;
+
+  /// 只对 `USER_FOLLOWED`：该触发人是否仍关注我（T-41，回关按钮三态用）。
+  final bool? actorFollowsMe;
+
+  /// 「后端文案条目」：四种互动类型且后端给了触发人昵称 —— 只有这类读 [title] / [body]（AC3.2）。
+  /// 其余（含无触发人的存量点赞 / 评论，库值是中文兜底串）一律走本地文案。
+  bool get hasServerCopy => actorName != null && actorName!.isNotEmpty && serverCopyTypes.contains(type);
+
   factory NotificationItem.fromJson(Map<String, dynamic> json) => NotificationItem(
         type: (json['type'] ?? '') as String,
         title: json['title'] as String?,
@@ -31,6 +67,13 @@ class NotificationItem {
         targetRef: json['targetRef'] as String?,
         read: (json['read'] ?? false) as bool,
         createdAt: json['createdAt'] == null ? null : DateTime.tryParse(json['createdAt'] as String),
+        // V1.3.4 follow · Story 3.3：缺键容错（旧后端 / 全局 NON_NULL 不下发 null 键）。
+        actorName: json['actorName'] as String?,
+        actorCount: (json['actorCount'] as num?)?.toInt() ?? 0,
+        actorUserId: (json['actorUserId'] as num?)?.toInt(),
+        actorToken: json['actorToken'] as String?,
+        actorIFollow: json['actorIFollow'] as bool?,
+        actorFollowsMe: json['actorFollowsMe'] as bool?,
       );
 }
 

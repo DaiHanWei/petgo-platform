@@ -52,6 +52,8 @@ class FollowButton extends ConsumerStatefulWidget {
     this.surfaceKey,
     this.snapshotEpoch = 0,
     this.persistent = false,
+    this.idleBackground,
+    this.onTapped,
   });
 
   /// 对方数字 userId（覆盖表的键 / 埋点 `target_user_id`）。
@@ -82,6 +84,14 @@ class FollowButton extends ConsumerStatefulWidget {
   /// 仅 [FollowButtonStyle.listCompact]：是否常驻位置（AD-7）。我自己的 Mengikuti 列表 = 常驻：
   /// 始终三态（取关后该行保留、按钮变 Ikuti）；其余列表 = 非常驻：已关注不显示、本按钮保留 Mengikuti。
   final bool persistent;
+
+  /// 仅 [FollowButtonStyle.listCompact]：「Ikuti / Ikuti Balik」态的底色（缺省浅紫 violet100）。
+  /// V1.3.4 Story 3.4：通知中心未读行本身是浅紫底，按钮改用白底（UI 稿核对结论）。
+  final Color? idleBackground;
+
+  /// 已登录用户点下按钮那一刻回调（参数 = 这次是关注还是取关），在请求之前。
+  /// V1.3.4 Story 3.4：通知中心据此上报 `notification_follow_back_tapped`。游客点击（弹登录）不回调。
+  final ValueChanged<bool>? onTapped;
 
   @override
   ConsumerState<FollowButton> createState() => _FollowButtonState();
@@ -177,7 +187,7 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
           : FilledButton(
               onPressed: _onTap,
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.violet100,
+                backgroundColor: widget.idleBackground ?? AppColors.violet100,
                 foregroundColor: AppColors.mint,
                 shape: shape,
                 minimumSize: const Size(88, 30),
@@ -295,6 +305,7 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
     final before = ref.read(followStateProvider)[userId];
     final current = notifier.effective(userId, widget.initial, snapshotEpoch: widget.snapshotEpoch);
     final wantFollow = !current.iFollow;
+    widget.onTapped?.call(wantFollow);
     _inFlight = true;
     // 乐观更新：followsMe 不变；pinnedSurface = 本按钮，同一用户其他非常驻位置**立即**隐藏。
     notifier.set(userId, current.copyWith(iFollow: wantFollow), pinnedSurface: surface);

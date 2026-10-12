@@ -330,6 +330,9 @@ void main() {
         'follow_',
         // 推荐关注（V1.3.4 follow · FR-140.11 / Story 2.3 的 `suggested_follow_shown`）：我自己的空关注 / 粉丝列表里的推荐区。
         'suggested_',
+        // 通知中心（V1.3.4 follow · FR-141.16 / Story 3.4 的 `notification_follow_back_tapped`）：通知中心页里的动作。
+        // ⚠️ 与已有的 `notify_`（推送权限撤销检测点）刻意分开 —— 一个是页面模块，一个是推送基建。
+        'notification_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
