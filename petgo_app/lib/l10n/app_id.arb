@@ -749,6 +749,7 @@
   "updateForceBody": "Silakan perbarui ke versi terbaru untuk terus memakai TailTopia.",
   "updateGoStore": "Perbarui sekarang",
   "updateLater": "Nanti",
+  "updateVersionLabel": "Versi {version}",
   "notificationCenterTitle": "Notifikasi",
   "notificationEmpty": "Belum ada notifikasi",
   "notificationEmptyHint": "Kamu akan menerima notifikasi tentang suka, komentar, dan pembaruan konsultasi.",

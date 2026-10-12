@@ -81,6 +81,25 @@ class AppPrefs {
     return _prefs.setStringList(kTailsonalityRetentionShown, kept);
   }
 
+  // --- 推荐更新「Nanti」冷却记录（V1.3.4 Story 3.2 · AD-11）---
+  //
+  // 记的是**被跳过的那个最新版本号 + 跳过时刻（UTC 毫秒）**：服务端最新版本上升即重新提示，
+  // 否则 72h 内不再出横幅。强制更新不受此影响。按设备存，换设备重新提示可接受。
+  static const kUpdateSkippedVersion = 'petgo.update_skipped_version';
+  static const kUpdateSkippedAt = 'petgo.update_skipped_at';
+
+  String? get updateSkippedVersion => _prefs.getString(kUpdateSkippedVersion);
+
+  DateTime? get updateSkippedAt {
+    final ms = _prefs.getInt(kUpdateSkippedAt);
+    return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+  }
+
+  Future<void> setUpdateSkipped(String version, DateTime at) async {
+    await _prefs.setString(kUpdateSkippedVersion, version);
+    await _prefs.setInt(kUpdateSkippedAt, at.toUtc().millisecondsSinceEpoch);
+  }
+
   // --- 已废弃的键（下面这些**刻意不再提供 getter/setter**）---
   //
   // `petgo.splash_last_shown_date`：曾用于「splash 当天只播一次完整动画」。

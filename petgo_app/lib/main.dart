@@ -17,6 +17,7 @@ import 'package:tailtopia/core/l10n/locale_controller.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/notify/domain/app_update_bootstrap.dart';
 import 'package:tailtopia/features/notify/domain/push_permission_bootstrap.dart';
 import 'package:tailtopia/features/notify/domain/push_permission_state_reporter.dart';
 
@@ -139,6 +140,9 @@ Future<void> main() async {
     await AppsFlyerClient.instance.start();
     // TikTok 归因：同样必须在 ATT 落定之后 init（SDK 自带的 ATT 弹窗已关，授权结果直接读系统）。
     await TikTokClient.instance.start();
+    // 冷启动版本检查（V1.3.4 Story 3.2 · AC6.1）：排在启动链**末尾**，让开 ATT / 通知权限
+    // 两个系统框；回调由 app.dart initState 注册，内部吞掉一切异常，绝不影响启动。
+    await AppUpdateBootstrap.runColdStartCheck();
   });
 }
 

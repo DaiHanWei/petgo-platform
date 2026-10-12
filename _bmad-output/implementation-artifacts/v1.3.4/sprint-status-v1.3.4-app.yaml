@@ -58,7 +58,7 @@ development_status:
   # ===== Epic 3：用户能及时更新到新版本 =====
   epic-3: in-progress
   3-1-版本配置搬进数据库-接口按-ios-android-分别返回最新版本: review
-  3-2-用真机版本号判定-并重做更新弹窗实现强制更新: ready-for-dev
+  3-2-用真机版本号判定-并重做更新弹窗实现强制更新: review
   3-3-首页顶部推荐更新横幅: ready-for-dev
   3-4-设置页手动检查更新: ready-for-dev
   3-5-首页场所入口换成-折叠地图-定位针-图标: ready-for-dev

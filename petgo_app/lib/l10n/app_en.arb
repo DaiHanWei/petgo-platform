@@ -974,6 +974,8 @@
   "updateForceBody": "Please update to the latest version to keep using TailTopia.",
   "updateGoStore": "Update now",
   "updateLater": "Later",
+  "updateVersionLabel": "Version {version}",
+  "@updateVersionLabel": { "description": "Update dialog version chip", "placeholders": { "version": { "type": "String" } } },
   "notificationCenterTitle": "Notifications",
   "notificationEmpty": "No notifications yet",
   "notificationEmptyHint": "You'll get notified about likes, comments, and consultation updates.",
