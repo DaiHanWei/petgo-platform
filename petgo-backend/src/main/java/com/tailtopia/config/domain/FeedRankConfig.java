@@ -23,6 +23,8 @@ import java.time.Instant;
  * 而它就是同一个打分公式里的一个乘法因子 —— 放进同一张单行表可以直接复用
  * FEED_RANK 的 diff 审计与配置页，不新增配置类型。
  *
+ * <p>🆕 科普新鲜度半衰期（V1.3.4）{@link #getEduFreshnessHalfLifeHours()} 也在本表，但<b>不在后台露出</b>。
+ *
  * <p>{@link #getInteractionP95()} 是<b>动态值</b>（近 30 天 95 分位，定期重算），
  * 不是运营手填的常数；{@code 0} = 尚未算出。
  */
@@ -88,6 +90,15 @@ public class FeedRankConfig {
     @Column(name = "throttle_factor", nullable = false)
     private double throttleFactor;
 
+    /**
+     * 科普（KNOWLEDGE / EDU）新鲜度半衰期（小时，V1.3.4 FR-122.3，默认 720 = 30 天）。
+     *
+     * <p>🔴 <b>不在后台露出</b>（PRD OQ-1）：工程直接改库，下一次生成推荐序列即生效。
+     * 表级 CHECK {@code > 0}。FUN / LIFE 的 24 小时不是配置项。
+     */
+    @Column(name = "edu_freshness_half_life_hours", nullable = false)
+    private double eduFreshnessHalfLifeHours;
+
     @Column(name = "p95_recomputed_at")
     private Instant p95RecomputedAt;
 
@@ -147,6 +158,19 @@ public class FeedRankConfig {
 
     public void setThrottleFactor(double v) {
         this.throttleFactor = v;
+    }
+
+    /** 科普新鲜度半衰期（小时，默认 720）。 */
+    public double getEduFreshnessHalfLifeHours() {
+        return eduFreshnessHalfLifeHours;
+    }
+
+    /**
+     * 不在后台露出；setter 仅供测试与工程脚本，🔴 {@code AdminConfigService} 不得调用
+     * （后台保存只 set 表单 14 个字段，本列保持读出来的原值）。
+     */
+    public void setEduFreshnessHalfLifeHours(double v) {
+        this.eduFreshnessHalfLifeHours = v;
     }
 
     public double getExposureDecay() {

@@ -47,6 +47,8 @@ class FeedRecommendationServiceTest {
     private FeedSequenceStore sequences;
     private com.tailtopia.moderation.throttle.service.RankThrottleService throttles;
     private FeedRecommendationService service;
+    private com.tailtopia.config.domain.FeedRankConfig cfg;
+    private com.tailtopia.config.service.PlatformConfigService platformConfig;
 
     @BeforeEach
     void setUp() {
@@ -72,8 +74,7 @@ class FeedRecommendationServiceTest {
                 .thenReturn(List.of());
 
         // Story 16.4：打分参数来自配置表（本类不验参数取值，给默认种子值）
-        com.tailtopia.config.domain.FeedRankConfig cfg =
-                mock(com.tailtopia.config.domain.FeedRankConfig.class);
+        cfg = mock(com.tailtopia.config.domain.FeedRankConfig.class);
         when(cfg.getFreshnessWeight()).thenReturn(0.6);
         when(cfg.getInteractionWeight()).thenReturn(0.4);
         when(cfg.getCommentWeight()).thenReturn(2.0);
@@ -85,8 +86,8 @@ class FeedRecommendationServiceTest {
         when(cfg.getAttrFunQuota()).thenReturn(5);
         when(cfg.getAttrEduQuota()).thenReturn(3);
         when(cfg.getAttrLifeQuota()).thenReturn(2);
-        com.tailtopia.config.service.PlatformConfigService platformConfig =
-                mock(com.tailtopia.config.service.PlatformConfigService.class);
+        when(cfg.getEduFreshnessHalfLifeHours()).thenReturn(720.0); // V1.3.4 Story 1.2
+        platformConfig = mock(com.tailtopia.config.service.PlatformConfigService.class);
         when(platformConfig.feedRank()).thenReturn(cfg);
 
         // Story 17.1：本类不验限流（有 RankThrottleIntegrationTest），默认无限流记录。
@@ -599,5 +600,50 @@ class FeedRecommendationServiceTest {
         FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
 
         assertThat(p.posts()).hasSize(20);
+    }
+
+    // ── V1.3.4 Story 1.2：科普半衰期取自配置（FR-122.3）───────────────
+
+    /** 用 spy 引擎重建服务，跑一次生成，取传进引擎的 RankParams。 */
+    private RankParams paramsReachingTheEngine() {
+        FeedRankEngine engine = org.mockito.Mockito.spy(new FeedRankEngine());
+        FeedRecommendationService svc = new FeedRecommendationService(posts, likes, comments, tags,
+                species, pets, seen, sequences, engine, new FeedRankProperties(30, 100, 1000, 1000),
+                platformConfig, throttles);
+        generationPath(Map.of());
+        List<ContentPost> pool = new ArrayList<>();
+        for (long i = 1; i <= 30; i++) {
+            pool.add(post(i, i));
+        }
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
+
+        svc.page(9L, null, null, 20, null);
+
+        org.mockito.ArgumentCaptor<FeedRankEngine.Input> input =
+                org.mockito.ArgumentCaptor.forClass(FeedRankEngine.Input.class);
+        verify(engine).rank(input.capture(), anyInt());
+        return input.getValue().params();
+    }
+
+    @Test
+    void eduHalfLifeFromConfigReachesTheEngine() {
+        when(cfg.getEduFreshnessHalfLifeHours()).thenReturn(360.0);
+
+        assertThat(paramsReachingTheEngine().eduFreshnessHalfLifeHours()).isEqualTo(360.0);
+    }
+
+    /** 🛡 0 / 负数 / NaN（库 CHECK 已挡，只为 mock / 脏数据兜底）→ 回落 720。 */
+    @Test
+    void nonPositiveEduHalfLifeFallsBackTo720() {
+        when(cfg.getEduFreshnessHalfLifeHours()).thenReturn(0.0);
+
+        assertThat(paramsReachingTheEngine().eduFreshnessHalfLifeHours()).isEqualTo(720.0);
+    }
+
+    @Test
+    void nanEduHalfLifeFallsBackTo720() {
+        when(cfg.getEduFreshnessHalfLifeHours()).thenReturn(Double.NaN);
+
+        assertThat(paramsReachingTheEngine().eduFreshnessHalfLifeHours()).isEqualTo(720.0);
     }
 }

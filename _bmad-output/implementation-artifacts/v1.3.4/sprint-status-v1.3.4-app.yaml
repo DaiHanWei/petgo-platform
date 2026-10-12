@@ -44,7 +44,7 @@ development_status:
   # ===== Epic 1：首页推荐更「新」 =====
   epic-1: in-progress
   1-1-教育类槽位改用近-90-天独立候选池: review
-  1-2-科普内容新鲜度改为-30-天半衰-可配置: ready-for-dev
+  1-2-科普内容新鲜度改为-30-天半衰-可配置: review
   1-3-下拉刷新真正-换一批-抖动系数打散: ready-for-dev
   epic-1-retrospective: optional
   # ===== Epic 2：发图不丢画面 =====

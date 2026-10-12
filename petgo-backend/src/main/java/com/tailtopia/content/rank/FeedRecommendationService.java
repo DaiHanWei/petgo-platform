@@ -347,7 +347,15 @@ public class FeedRecommendationService {
                 cfg.getSpeciesMainQuota(), cfg.getSpeciesOtherQuota(), cfg.getSpeciesGeneralQuota(),
                 RankParams.DEFAULT_MAX_SAME_ATTRIBUTE_RUN, RankParams.DEFAULT_MAX_SAME_AUTHOR_RUN,
                 RankParams.DEFAULT_MAX_SAME_AUTHOR_PER_WINDOW,
-                RankParams.DEFAULT_MAX_SAME_OTHER_SPECIES_RUN);
+                RankParams.DEFAULT_MAX_SAME_OTHER_SPECIES_RUN,
+                eduHalfLife(cfg));
+    }
+
+    /** 科普新鲜度半衰期（V1.3.4 FR-122.3）：取配置，非法值回落 720。 */
+    private static double eduHalfLife(FeedRankConfig cfg) {
+        double v = cfg.getEduFreshnessHalfLifeHours();
+        // 🛡 库里有 CHECK > 0；这里只为 mock / 脏数据兜底 —— 0 会除零、负数会让越老的科普分越高。
+        return v > 0 ? v : RankParams.DEFAULT_EDU_FRESHNESS_HALF_LIFE_HOURS;   // NaN > 0 为 false，同样回落
     }
 
     /**

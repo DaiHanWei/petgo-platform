@@ -24,6 +24,7 @@ package com.tailtopia.content.rank;
  * @param maxSameAuthorRun    同一作者最多连续几条（默认 1）
  * @param maxSameAuthorPerWindow 同一作者在 10 条窗口内最多几条（默认 2）
  * @param maxSameOtherSpeciesRun 同一<b>非主物种</b>最多连续几条（默认 1）
+ * @param eduFreshnessHalfLifeHours 科普（EDU）新鲜度半衰期小时数，默认 720；FUN / LIFE 固定 24
  */
 public record RankParams(
         double freshnessWeight,
@@ -38,7 +39,14 @@ public record RankParams(
         int maxSameAttributeRun,
         int maxSameAuthorRun,
         int maxSameAuthorPerWindow,
-        int maxSameOtherSpeciesRun) {
+        int maxSameOtherSpeciesRun,
+        double eduFreshnessHalfLifeHours) {
+
+    /** FUN / LIFE 的新鲜度半衰期（小时）。🛡 不做成配置（PRD 只要求教育类可调）。 */
+    public static final double DEFAULT_FRESHNESS_HALF_LIFE_HOURS = 24d;
+
+    /** 科普（EDU）新鲜度半衰期默认值（小时），与迁移 {@code V20261012_1102} 的 DEFAULT 一致。 */
+    public static final double DEFAULT_EDU_FRESHNESS_HALF_LIFE_HOURS = 720d;
 
     /**
      * 防扎堆四条的默认阈值。
@@ -55,7 +63,8 @@ public record RankParams(
     public static RankParams defaults(double interactionP95) {
         return new RankParams(0.6, 0.4, 2.0, interactionP95, 1.3, 0.8, 6, 2, 2,
                 DEFAULT_MAX_SAME_ATTRIBUTE_RUN, DEFAULT_MAX_SAME_AUTHOR_RUN,
-                DEFAULT_MAX_SAME_AUTHOR_PER_WINDOW, DEFAULT_MAX_SAME_OTHER_SPECIES_RUN);
+                DEFAULT_MAX_SAME_AUTHOR_PER_WINDOW, DEFAULT_MAX_SAME_OTHER_SPECIES_RUN,
+                DEFAULT_EDU_FRESHNESS_HALF_LIFE_HOURS);
     }
 
     /**
