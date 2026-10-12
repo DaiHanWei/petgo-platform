@@ -220,6 +220,13 @@ public class SecurityConfig {
                         // banner 在转化漏斗最上层，用登录墙拦它没有任何意义。
                         // 只读；配置走 /admin/shop/banners，不在此放行。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/banner").permitAll()
+                        // 运营弹窗（V1.3.4 Story 5.1，AD-14）：候选列表游客可读（ALL 人群弹窗面向游客）；
+                        // controller 只认 role=USER 识别登录用户，VET token 按游客处理。
+                        // 曝光上报只给登录用户：游客频次在设备本地（AD-15）；兽医 token 的 sub=vetId
+                        // 与 users.id 撞号，落 authenticated() 会以同号用户名义写曝光 → 显式 hasRole USER。
+                        // 🔴 两条都是精确路径，不写 /api/v1/ops-popups/** 通配；写接口属 admin 主题（D-2）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/ops-popups/candidates").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/ops-popups/*/impressions").hasRole("USER")
                         // 行政区划树（Story 2.4）：区划与是否可配送都不敏感，
                         // 且用户在注册前就该能看到「你们送不送我这儿」。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/regions").permitAll()

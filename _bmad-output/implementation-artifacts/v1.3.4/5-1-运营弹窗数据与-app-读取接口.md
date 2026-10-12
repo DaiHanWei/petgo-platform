@@ -1,6 +1,6 @@
 # Story 5.1: 运营弹窗数据与 App 读取接口
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -84,31 +84,31 @@ so that 每个用户只收到该看、还没看够次数的弹窗。
 
 ## Tasks / Subtasks
 
-- [ ] **T1 迁移**（AC1）
-  - [ ] 按 Dev Notes「迁移全文」新建 `V20261012_1106__create_ops_popups.sql`
-  - [ ] `src/test/java/com/tailtopia/ops/popup/OpsPopupMigrationTest.java`（L0，读迁移文件文本断言，照 `place/PlaceSchemaAlignmentTest` 的文件读取方式）
-- [ ] **T2 统一跳转目标后端件**（AC2）
-  - [ ] `ops/target/OpsTargetType.java`、`OpsAppPage.java`、`OpsTargetView.java`、`OpsTargetPolicy.java`
-  - [ ] `ops/OpsTokenGenerator.java`
-  - [ ] `OpsTargetPolicyTest`（L0）：五类型合法 / 非法各至少一例；`EXTERNAL` 的 `HTTPS://x.id`（大写 scheme 合法）、`javascript:alert(1)`、`ftp://x`、`https://`（无 host）、513 字符；`APP_PAGE` 的 `home`（小写非法）、`SETTINGS`（非 5 值）；`NONE` 带值非法；`PRODUCT` 下架（mock 仓储返回 empty）不可用
-- [ ] **T3 实体与仓储**（AC2）
-  - [ ] `ops/popup/domain/OpsPopup.java`、`OpsPopupImpression.java`、`OpsPopupStatus.java`、`OpsPopupAudience.java`、`OpsPopupFrequency.java`
-  - [ ] `ops/popup/repository/OpsPopupRepository.java`：`findByPublicToken(String)`；JPQL `findLiveCandidates(Instant now, Collection<OpsPopupAudience> audiences)`（`status = ACTIVE`、`startsAt <= :now`、`(endsAt is null or :now < endsAt)`、`audience in :audiences`、`order by priority desc, createdAt desc, id desc`）
-  - [ ] `ops/popup/repository/OpsPopupImpressionRepository.java`：`@Query select distinct i.popupId ... where i.userId = :uid and i.popupId in :ids` 与带 `i.shownAt >= :since` 的同名重载；`@Modifying deleteByUserId`
-- [ ] **T4 候选服务与接口**（AC3 / AC4）
-  - [ ] `ops/popup/service/OpsPopupCandidateService.java`：`List<OpsPopupCandidateView> candidates(Long viewerUserId)`；注入 `Clock`（照 `TailsonalityResultService` 双构造器：`@Autowired` 公开构造器用 `Clock.systemUTC()`，包可见构造器收 `Clock` 供测试）
-  - [ ] `ops/popup/service/OpsPopupImpressionService.java`：`record(String token, long userId)`
-  - [ ] `ops/popup/dto/OpsPopupCandidateView.java`、`OpsPopupCandidatesResponse.java`
-  - [ ] `ops/popup/web/OpsPopupController.java`：`@RequestMapping("/api/v1/ops-popups")`，`GET /candidates`、`POST /{token}/impressions`；`viewerId(Jwt)` 照 `MiniProfileController` L85-96
-  - [ ] `SecurityConfig`：在 `GET /api/v1/shop/banner` 放行（L222）之后加两条精确 matcher（见 AC3.1 / AC4.1），**不得**写 `/api/v1/ops-popups/**`
-  - [ ] `OpsPopupCandidateServiceTest`（L0 Mockito + 固定 `Clock`）：游客只查 ALL 且**不调用**曝光仓储；VET（controller 传 null）同游客；NEW 边界恰好 N×24h → NEW、N×24h+1s → OLD；DAILY 在 `16:59:59Z` 已曝光（WIB 23:59:59）→ 次日 `17:00:00Z` 可再下发；商品下架剔除；`image_url_id` 为 key 且 CDN base 未配置 → 剔除；`http://` 图剔除；EN 图不可用 → 字段 null；空白 EN 文案 → null；超过 20 条截断；排序透传
-  - [ ] `OpsPopupControllerTest`（L0，直接 new 控制器 + mock 服务）：jwt 为 null / role=VET → 服务收到 `null`；role=USER → 收到 userId；impressions 对未知 token 抛 404
-- [ ] **T5 注销联动**（AC5）
-  - [ ] `ops/popup/service/OpsPopupImpressionDeletionService.java` + 接入 `AccountDeletionService`
-  - [ ] 更新 `account/service/AccountDeletionServiceTest`（构造器多一个 mock；断言 `deleteByUserId` 被调且在 `authDeletion.deleteByUserId` 之前，`InOrder`）
-- [ ] **T6 L1 集成测试**（AC6，云端写好不运行）
-  - [ ] `src/test/java/com/tailtopia/ops/popup/OpsPopupIntegrationTest.java`：`@BeforeEach` 执行 `DELETE FROM ops_popups`（曝光级联删；该表只有本测试类写入）
-- [ ] **T7 L0 门禁**：后端编译 + 排除 L1 的单测全绿；`check-flyway-versions.sh` 通过
+- [x] **T1 迁移**（AC1）
+  - [x] 按 Dev Notes「迁移全文」新建 `V20261012_1106__create_ops_popups.sql`
+  - [x] `src/test/java/com/tailtopia/ops/popup/OpsPopupMigrationTest.java`（L0，读迁移文件文本断言，照 `place/PlaceSchemaAlignmentTest` 的文件读取方式）
+- [x] **T2 统一跳转目标后端件**（AC2）
+  - [x] `ops/target/OpsTargetType.java`、`OpsAppPage.java`、`OpsTargetView.java`、`OpsTargetPolicy.java`
+  - [x] `ops/OpsTokenGenerator.java`
+  - [x] `OpsTargetPolicyTest`（L0）：五类型合法 / 非法各至少一例；`EXTERNAL` 的 `HTTPS://x.id`（大写 scheme 合法）、`javascript:alert(1)`、`ftp://x`、`https://`（无 host）、513 字符；`APP_PAGE` 的 `home`（小写非法）、`SETTINGS`（非 5 值）；`NONE` 带值非法；`PRODUCT` 下架（mock 仓储返回 empty）不可用
+- [x] **T3 实体与仓储**（AC2）
+  - [x] `ops/popup/domain/OpsPopup.java`、`OpsPopupImpression.java`、`OpsPopupStatus.java`、`OpsPopupAudience.java`、`OpsPopupFrequency.java`
+  - [x] `ops/popup/repository/OpsPopupRepository.java`：`findByPublicToken(String)`；JPQL `findLiveCandidates(Instant now, Collection<OpsPopupAudience> audiences)`（`status = ACTIVE`、`startsAt <= :now`、`(endsAt is null or :now < endsAt)`、`audience in :audiences`、`order by priority desc, createdAt desc, id desc`）
+  - [x] `ops/popup/repository/OpsPopupImpressionRepository.java`：`@Query select distinct i.popupId ... where i.userId = :uid and i.popupId in :ids` 与带 `i.shownAt >= :since` 的同名重载；`@Modifying deleteByUserId`
+- [x] **T4 候选服务与接口**（AC3 / AC4）
+  - [x] `ops/popup/service/OpsPopupCandidateService.java`：`List<OpsPopupCandidateView> candidates(Long viewerUserId)`；注入 `Clock`（照 `TailsonalityResultService` 双构造器：`@Autowired` 公开构造器用 `Clock.systemUTC()`，包可见构造器收 `Clock` 供测试）
+  - [x] `ops/popup/service/OpsPopupImpressionService.java`：`record(String token, long userId)`
+  - [x] `ops/popup/dto/OpsPopupCandidateView.java`、`OpsPopupCandidatesResponse.java`
+  - [x] `ops/popup/web/OpsPopupController.java`：`@RequestMapping("/api/v1/ops-popups")`，`GET /candidates`、`POST /{token}/impressions`；`viewerId(Jwt)` 照 `MiniProfileController` L85-96
+  - [x] `SecurityConfig`：在 `GET /api/v1/shop/banner` 放行（L222）之后加两条精确 matcher（见 AC3.1 / AC4.1），**不得**写 `/api/v1/ops-popups/**`
+  - [x] `OpsPopupCandidateServiceTest`（L0 Mockito + 固定 `Clock`）：游客只查 ALL 且**不调用**曝光仓储；VET（controller 传 null）同游客；NEW 边界恰好 N×24h → NEW、N×24h+1s → OLD；DAILY 在 `16:59:59Z` 已曝光（WIB 23:59:59）→ 次日 `17:00:00Z` 可再下发；商品下架剔除；`image_url_id` 为 key 且 CDN base 未配置 → 剔除；`http://` 图剔除；EN 图不可用 → 字段 null；空白 EN 文案 → null；超过 20 条截断；排序透传
+  - [x] `OpsPopupControllerTest`（L0，直接 new 控制器 + mock 服务）：jwt 为 null / role=VET → 服务收到 `null`；role=USER → 收到 userId；impressions 对未知 token 抛 404
+- [x] **T5 注销联动**（AC5）
+  - [x] `ops/popup/service/OpsPopupImpressionDeletionService.java` + 接入 `AccountDeletionService`
+  - [x] 更新 `account/service/AccountDeletionServiceTest`（构造器多一个 mock；断言 `deleteByUserId` 被调且在 `authDeletion.deleteByUserId` 之前，`InOrder`）
+- [x] **T6 L1 集成测试**（AC6，云端写好不运行）
+  - [x] `src/test/java/com/tailtopia/ops/popup/OpsPopupIntegrationTest.java`：`@BeforeEach` 执行 `DELETE FROM ops_popups`（曝光级联删；该表只有本测试类写入）
+- [x] **T7 L0 门禁**：后端编译 + 排除 L1 的单测全绿；`check-flyway-versions.sh` 通过
 
 ## Dev Notes
 
@@ -289,9 +289,32 @@ COMMENT ON COLUMN ops_popup_impressions.shown_at IS '服务端收到曝光上报
 
 ### Agent Model Used
 
+Claude Opus 5.5 (1M context)（claude-opus-5-5[1m]）
+
 ### Debug Log References
 
+- 后端 L0：`./mvnw -B clean package -DskipTests` → PKG OK；排除 L1（`*IntegrationTest` / 继承 `ApiIntegrationTest` / `@SpringBootTest`）的全量 `./mvnw -B test` → **Tests run: 3089, Failures: 0, Errors: 0, Skipped: 7**。
+  - 新增：`OpsTargetPolicyTest` 7、`OpsPopupMigrationTest` 6、`OpsPopupCandidateServiceTest` 14、`OpsPopupControllerTest` 6、`OpsPopupImpressionServiceTest` 2；`AccountDeletionServiceTest` 3（含新顺序断言）全绿。
+  - `OpsPopupIntegrationTest`（L1）已编译通过，按规则排除未运行。
+- `bash scripts/ci/check-flyway-versions.sh origin/main` → `flyway-guard: OK（树内 221 个迁移，无重号…）`。
+- 前端无改动，未跑 flutter。
+
 ### Completion Notes List
+
+- 开工前核对：Dev Notes 引用的类名 / 方法 / 行号（`SecurityConfig` L222 banner、`AccountDeletionService` 构造器末位 `TailsonalityDeletionService` 与 L187 `onboardingMarkDeletion`、`MiniProfileController.viewerId`、`ScheduleWindow.WIB/isActiveAt`、`ShopImageUrlResolver.publicUrl`、`ShopProductRepository.findByPublicTokenAndActiveTrue`、`AccountQueryService.findUserById`、`ApiIntegrationTest` 助手等）与现状一致，**本 story 文件无需改动**。
+- 迁移 `V20261012_1106__create_ops_popups.sql` 由 Dev Notes「迁移全文」逐字落盘。
+- `OpsTokenGenerator`：字符表 / 长度照抄 `ShopTokenGenerator`；额外提供静态 `next()`，供 `OpsPopup.create(...)` 静态工厂生成 token（实体内无法注入 bean），实例方法 `generate()` 委托给它。
+- `OpsPopupCandidateService`：带 USER token 但 `findUserById` 查不到（非 USER 或不存在）→ 按游客处理（只查 ALL、不碰曝光表）。过滤顺序：仓储（ACTIVE + 时间窗 + 人群集合 + 排序）→ 人群 NEW/OLD 判定 → `OpsTargetPolicy.isAvailable` → ID 图解析 → 登录用户频次（ONCE / DAILY 各一次批量查询）→ 截断 20。
+- 控制器曝光端点内对 jwt 做防御性解析（非 USER → 401），SecurityConfig 已先挡，属双保险。
+- 额外新增 `OpsPopupImpressionServiceTest`（404 不写库；停用弹窗照记、`shown_at` 取服务端时钟）。
+- `ShopUserEndpointsRoleGuardTest` 只扫 `/api/v1/me` 下电商端点，本 story 新路径不在其范围，无需登记。
+- **L1/L2 待本地验收**，具体待验项：
+  1. Spring 上下文以 `ddl-auto=validate` 启动成功（实体与 `ops_popups` / `ops_popup_impressions` 一致，AC1.8）；
+  2. `OpsPopupIntegrationTest` 全部用例（响应形状 / 游客只见 ALL 且不受曝光影响 / NEW-OLD 边界 / 停用-未开始-已结束-长期有效 / 商品下架即消失 + EXTERNAL 非 http(s) / 排序 / ONCE 上报后消失 + 编辑不重置 / DAILY 当天 WIB 消失、昨天 WIB 曝光不算 / VET 按游客 / 曝光 404-401-403 / 曝光不去重 / 注销后曝光行被删）；
+  3. `AccountDeletion*IntegrationTest`、`TailsonalityOwnerTypeIntegrationTest` 注销全链路回归（构造器新增参数）；
+  4. 曝光限流 `rl:ops-popup:impression:{userId}` 30/分钟超限 429（需 Redis）。
+  - L2：无（视觉在 Story 5.4）。
+- **复审（2026-10-12）修复**：① L1 `vetTreatedAsGuest` / `impressionErrors` 的 VET token 改用 `VetTestSupport.newActiveVet("ops-popup-it")` 真实兽医（原 id 不在库，`BannedVetFilter` 直接 401）；② 消除 PRODUCT 目标 N+1：`ShopProductRepository.findActivePublicTokens`（只投影 token）+ `OpsTargetPolicy.availableProductTokens` / 静态 `isAvailable(type, value, onSale)` 批量口径（单条 `isAvailable` 保留给 admin / Epic 6），候选服务过滤顺序改为人群 → 频次 → 目标 → 图片，L0 钉住「多个 PRODUCT 只查一次、已满频次的不查商品、无 PRODUCT 不查库」；③ 曝光写入前经 `AccountQueryService.findUserById` 确认 USER 存在且 `deleted_at IS NULL`，否则 404（候选接口对已注销用户同样按游客），补 L0 与 L1 用例；④ `https://` 图片复用 `OpsTargetPolicy.isHttpsUrl`（同 EXTERNAL 的解析 + host 校验，只放 https），补无 host / 不可解析例。复审后 L0：Tests run 3097, Failures 0, Errors 0, Skipped 7。
 
 #### 待确认
 
@@ -299,9 +322,39 @@ COMMENT ON COLUMN ops_popup_impressions.shown_at IS '服务端收到曝光上报
 - **文案列长度**：PRD / AD 未给弹窗标题、正文、按钮的长度上限。取标题 ≤120、正文 ≤255（与 `notifications` 表同口径，PRD §3.7 影响面）、按钮 ≤40、名称 ≤100；admin 主题表单按此校验。
 - **`target_value` 与 `NONE` 的强约束**（`(target_type = 'NONE') = (target_value IS NULL)`）：后台表单选「无跳转」时必须写 NULL 而非空串。
 - **候选上限 20 条**：无出处，按「客户端只取第一个可用的」推出的保守值。
+- **空白文案置 null 的范围**：AC3.5 原文「空白字符串的标题 / 正文 / 按钮 EN 文案按 null 输出」可读作仅 EN。实现取保守超集：`titleId/titleEn/bodyId/bodyEn/buttonTextEn` 空白一律省略（这些列本就可空，省略与 null 对 App 同义）；`buttonTextId`（NOT NULL）原样下发。若只想对 EN 生效，改 `OpsPopupCandidateService.toView` 两处即可。
+- **带 USER token 但用户行查不到**（`AccountQueryService.findUserById` 为空）：按游客处理（只返回 ALL、不做频次过滤）。story 未规定，取最保守做法。
 
 ### File List
+
+新增（后端 main）：
+- `petgo-backend/src/main/resources/db/migration/V20261012_1106__create_ops_popups.sql`
+- `petgo-backend/src/main/java/com/tailtopia/ops/OpsTokenGenerator.java`
+- `petgo-backend/src/main/java/com/tailtopia/ops/target/{OpsTargetType,OpsAppPage,OpsTargetView,OpsTargetPolicy}.java`
+- `petgo-backend/src/main/java/com/tailtopia/ops/popup/domain/{OpsPopup,OpsPopupImpression,OpsPopupStatus,OpsPopupAudience,OpsPopupFrequency}.java`
+- `petgo-backend/src/main/java/com/tailtopia/ops/popup/repository/{OpsPopupRepository,OpsPopupImpressionRepository}.java`
+- `petgo-backend/src/main/java/com/tailtopia/ops/popup/service/{OpsPopupCandidateService,OpsPopupImpressionService,OpsPopupImpressionDeletionService}.java`
+- `petgo-backend/src/main/java/com/tailtopia/ops/popup/dto/{OpsPopupCandidateView,OpsPopupCandidatesResponse}.java`
+- `petgo-backend/src/main/java/com/tailtopia/ops/popup/web/OpsPopupController.java`
+
+修改（后端 main）：
+- `petgo-backend/src/main/java/com/tailtopia/shared/security/SecurityConfig.java`（banner 放行后加两条精确 matcher）
+- `petgo-backend/src/main/java/com/tailtopia/shop/repository/ShopProductRepository.java`（复审：新增只读批量查询 `findActivePublicTokens`）
+- `petgo-backend/src/main/java/com/tailtopia/account/service/AccountDeletionService.java`（构造器末尾追加 `OpsPopupImpressionDeletionService`；`onboardingMarkDeletion` 之后调用）
+
+新增（后端 test）：
+- `petgo-backend/src/test/java/com/tailtopia/ops/target/OpsTargetPolicyTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/ops/popup/OpsPopupMigrationTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/ops/popup/OpsPopupIntegrationTest.java`（L1）
+- `petgo-backend/src/test/java/com/tailtopia/ops/popup/service/OpsPopupCandidateServiceTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/ops/popup/service/OpsPopupImpressionServiceTest.java`
+- `petgo-backend/src/test/java/com/tailtopia/ops/popup/web/OpsPopupControllerTest.java`
+
+修改（后端 test）：
+- `petgo-backend/src/test/java/com/tailtopia/account/service/AccountDeletionServiceTest.java`（构造器 mock + `InOrder` 顺序断言）
 
 ### Change Log
 
 - 2026-10-12：story 文件创建（ready-for-dev）。
+- 2026-10-12：dev-story 完成（后端两表 + 统一跳转目标 + 候选 / 曝光接口 + 注销联动），L0 全绿，Status → review；L1 待本地验收。
+- 2026-10-12：复审修复 4 项（L1 兽医夹具、商品 N+1 批量口径 + 频次前置、曝光校验用户未注销、https 图 host 校验），L0 3097/0 失败。

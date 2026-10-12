@@ -70,8 +70,8 @@ development_status:
   4-3-达成当场弹出庆祝页: review
   epic-4-retrospective: optional
   # ===== Epic 5：运营弹窗 =====
-  epic-5: backlog
-  5-1-运营弹窗数据与-app-读取接口: ready-for-dev
+  epic-5: in-progress
+  5-1-运营弹窗数据与-app-读取接口: review
   5-2-统一跳转目标-运营弹窗与运营通知共用: ready-for-dev
   5-3-记录本次冷启动出现过的功能弹窗: ready-for-dev
   5-4-冷启动进入-diary-social-时弹出运营弹窗: ready-for-dev
