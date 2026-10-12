@@ -23,3 +23,27 @@
 | D-12 | 新增文案审定 | 架构评审时列出的 14 条新增文案（印尼文按 UI 稿、英文 / 中文由 dev agent 拟）**全部采用**；两条庆祝页标题按既有惯例**结尾加 emoji**：打卡 📍、性格测试 🔮 | UI 稿 F1 / F2 标题无 emoji |
 | D-13 | 架构增量技术选择 | `architecture-v1.3.4-app-delta.md` AD-1 ~ AD-20 **全部同意** | — |
 | D-14 | 发帖页上传失败的图：⚠ 与 ✕ 叠在同一角（UI 稿 B5 画为失败时无 ✕） | **不在本版处理**，保持现状（两个图标都在）；B5 只示意「失败的图也能点开看大图」。重叠问题记入待办 | UI 稿 B5「此时无 ✕」 |
+
+## 2026-10-12 · 云端执行前预检拍板（操作者 Dai，「全部按推荐」）
+
+> 来源：上云前就绪审查（云端 headless 只能跑 L0、不能问人）。以下项写进对应 story 与 `cloud-rules-app.md`，云端**一律按此执行，不自行发明**。
+
+| # | 议题 | 决定 | 覆盖/订正了什么 |
+|---|---|---|---|
+| D-15 | 两条新里程碑的「何时自动点亮」说明文案（`milestone_checkin_prompt_copy.dart`，缺则徽章详情抽屉空白） | 打卡：ID `Otomatis selesai saat {name} pertama kali check-in di sebuah tempat.` / EN `Automatically completed when {name} checks in at a place for the first time.`；性格测试：ID `Otomatis selesai saat hasil lengkap kepribadian {name} terbuka.` / EN `Automatically completed when {name}'s full personality result is unlocked.` | 补 AD-19 / D-12 的 14 条文案之外的 2 条 |
+| D-16 | 运营通知 `audience_spec` JSON 结构（与 admin 主题的契约） | `{ "mode": "ALL" \| "FILTER" \| "IDS", "registeredFrom"?: date, "registeredTo"?: date, "activeFrom"?: date, "activeTo"?: date, "hasPet"?: bool, "species"?: ["CAT","DOG","OTHER"], "hasShopOrder"?: bool, "hasPhone"?: bool }`；未出现的键 = 不筛；日期按 WIB 自然日含两端；`IDS` 模式的用户 id 一律存子表（不进 JSON）。「下过电商订单」= **有过已支付的商城订单**；「最近活跃」取 `users.last_active_at`；「填过手机号」= 手机号非空 | 后台 PRD AB-31 只列条件、未给结构（且在仓库外） |
+| D-17 | 版本配置保存的错误码（AB-22 §1.1 在仓库外） | 沿用后台既有 `admin.err.config.*` 命名，定 4 个：`admin.err.config.version.format`（非 x.y.z）、`admin.err.config.version.min-gt-latest`（最低支持版本 > 任一端最新版本）、`admin.err.config.store-url.scheme`（非 https）、`admin.err.config.store-url.blank`（为空）。本主题只交付服务层校验与码，四语文案随 admin 主题落 | epics 3.1「给出对应错误码（后台 PRD §1.1）」 |
+| D-18 | `app_version_config` 两端最新版本号预置值 | iOS / Android **都预置 `1.3.3`**，迁移注释标「发版检查项」。迁移一旦提交即冻结；日后改值走后台（AB-22）或另起 UPDATE 迁移，**不得改原迁移** | AD-10「App Store 1.3.2 / Google Play 待查」 |
+| D-19 | 运营通知推送方式 | 本版**循环调用既有单人 `NotificationPusher.pushOffline` + 限速**，不新接腾讯 IM 批量接口 `/v4/timpush/batch` | AD 中的批量接口 |
+| D-20 | 运营通知运行参数 | 每批 500 人；批间隔 1 秒；单批失败重试 3 次，退避 1s / 2s / 4s；定时扫描每 60 秒；SENDING 状态超过 15 分钟无进展 → 置 `PARTIAL_FAILED`，**不自动重发**（防重复推送） | epics 6.2 未给数值 |
+| D-21 | 运营弹窗图片加载超时 | 5 秒内未加载完成 → 本次不弹、**不计频次** | PRD §3.6 未给 |
+| D-22 | 运营弹窗与 Diary 新功能引导蒙层（`growth_archive_page.dart` 首帧后弹 `CoachmarkOverlay`）同时出现 | 运营弹窗判定在 Diary / Social 首次可见后**延一帧再加约 500ms**；真正 show 之前**再查一次**本次冷启动功能弹窗记录，已有则不弹 | AD-12 ledger 只登记不排队 |
+| D-23 | `ops_popups` 列可空性 | `ends_at` 可空（= 长期有效）；`title_id` / `title_en` 可空；`button_text_id` 必填，`button_text_en` 可空（为空回落 ID 文案）；body 与 en 图片可空（同 AD-14） | AD-14 未标的列 |
+| D-24 | 埋点里运营弹窗 / 运营通知的标识 | `popup_id` / `campaign_id` 一律取 `public_token`，不外露自增 id | PRD §4 未指定 |
+| D-25 | 版本更新埋点的 `decision` 属性 | 三个事件（`prompt_shown` 等）**都带** `decision` | PRD §4 只给 `prompt_shown`；AD-11 为超集，取超集 |
+
+### 同日技术处置（无需拍板，记录备查）
+- 两枚新徽章素材：从 UI 稿 F1 / F2 帧内嵌的 512×512 PNG 解出，`cwebp -q 90` 转 `place_checkin.webp` / `tailsonality.webp`，**预置入库**（App 与后端各一份），本版不适用「设计素材不入库」。
+- 2.2 不写 golden 截图（Linux / macOS 字体渲染不同），改结构断言；golden 留本地 L2。
+- 迁移共 **8 个**（AD §11），非 6 个；`ck_notifications_type` 现行并集 31 值（43 个远端分支核查），+`OPS_ANNOUNCEMENT` = 32 值。
+- 后端 `MilestoneBadgeKeys.java` 也需加两条映射（AD-19 漏列）；H5 分享页标题取后端 `titleId`，非「随 App 传入」（订正 epics 4.1）。

@@ -7,7 +7,7 @@
 
 | 主题 | 功能分支 | Epic 号段 | Story | 状态 |
 |---|---|---|---|---|
-| **app** · App + 后端 | `feat/1.3.4-app-ux-revamp` | Epic 1–6 | 23 | PRD / UI 稿入库，架构 delta（AD-1~AD-20）+ epics 定稿（2026-10-12）—— **待 sprint planning 与逐条建 story 文件** |
+| **app** · App + 后端 | `feat/1.3.4-app-ux-revamp` | Epic 1–6 | 23 | PRD / UI 稿入库，架构 delta（AD-1~AD-20）+ epics 定稿；上云预检拍板 D-15~D-25；**23 条 story 全部 ready-for-dev**（`implementation-artifacts/v1.3.4/`，含 `sprint-status-v1.3.4-app.yaml` 与 `cloud-rules-app.md`，2026-10-12）—— 云端批跑 |
 | admin · 后台 AB-22 / AB-30 / AB-31 | 待开 | — | — | 未开始（数据面与核心服务由 app 主题提供，见 AD-1） |
 
 ## 产物文件（app）

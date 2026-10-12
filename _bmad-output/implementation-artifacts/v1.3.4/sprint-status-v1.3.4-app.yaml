@@ -1,0 +1,84 @@
+# generated: 2026-10-12
+# last_updated: 2026-10-12  # 23 条 story 文件全部生成（ready-for-dev），云端批跑
+# project: TailTopia V1.3.4 · 主题 app（App + 后端）
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.3.4
+# source_epics: {project-root}/_bmad-output/planning-artifacts/v1.3.4/epics-v1.3.4-app.md (6 Epic / 23 Story)
+# architecture: {project-root}/_bmad-output/planning-artifacts/v1.3.4/architecture-v1.3.4-app-delta.md (AD-1~AD-20)
+# prd: {project-root}/_bmad-output/planning-artifacts/v1.3.4/PRD-v1.3.4-app.md
+# 决策日志: {project-root}/_bmad-output/planning-artifacts/v1.3.4/决策日志-app.md (D-1~D-25；D-15~D-25 = 2026-10-12 上云预检拍板)
+# ui: {project-root}/_bmad-output/planning-artifacts/v1.3.4/ui-v1.3.4-app.html (31 屏)
+# 云端规则: {project-root}/_bmad-output/implementation-artifacts/v1.3.4/cloud-rules-app.md
+#
+# 🔴 口径优先级：决策日志 > PRD > 架构 delta > UI 稿。
+#
+# STATUS DEFINITIONS:
+# Epic Status:   backlog -> in-progress -> done
+# Story Status:  backlog -> ready-for-dev -> in-progress -> review -> done
+# Retrospective: optional <-> done
+#
+# ===== Epic 依赖链（全后向，无环；按序串行推进，不跳序） =====
+# Epic 1、2、3、4 互不依赖
+# Epic 3 -> Epic 5      # 5.3 回头给 3.2 强制更新弹窗补「功能弹窗」登记
+# Epic 4 -> Epic 5      # 5.3 回头给 4.3 庆祝页补登记
+# Epic 5 -> Epic 6      # 6.1 / 6.3 复用 5.1 / 5.2 的统一跳转目标
+#
+# ===== 迁移预分配（8 个，不得另取号） =====
+# 1.1 V20261012_1101  1.2 V20261012_1102  2.1 V20261012_1103  3.1 V20261012_1104
+# 4.1 V20261012_1105  5.1 V20261012_1106  6.1 V20261012_1107 + V20261012_1108
+#
+# ===== 发版检查单（不是 story） =====
+# - app_version_config 两端最新版本号按商店实际版本核对（D-18 预置 1.3.3）
+# - 6.1 合入前重跑 ck_notifications_type 跨分支并集
+# - admin 主题（AB-22 / AB-30 / AB-31）未开始：运营弹窗 / 通知的 L2 验收先在 stag 用 SQL 灌数据
+
+generated: 2026-10-12
+last_updated: 2026-10-12
+project: TailTopia V1.3.4 app
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.3.4"
+
+development_status:
+  # ===== Epic 1：首页推荐更「新」 =====
+  epic-1: backlog
+  1-1-教育类槽位改用近-90-天独立候选池: ready-for-dev
+  1-2-科普内容新鲜度改为-30-天半衰-可配置: ready-for-dev
+  1-3-下拉刷新真正-换一批-抖动系数打散: ready-for-dev
+  epic-1-retrospective: optional
+  # ===== Epic 2：发图不丢画面 =====
+  epic-2: backlog
+  2-1-帖子保存与下发每张图的露出位置: ready-for-dev
+  2-2-feed-卡与详情页按露出位置开窗: ready-for-dev
+  2-3-露出区域页-取代三档裁剪页: ready-for-dev
+  2-4-发布链路改为原图上传并带上露出位置: ready-for-dev
+  2-5-发帖页点缩略图看大图: ready-for-dev
+  epic-2-retrospective: optional
+  # ===== Epic 3：用户能及时更新到新版本 =====
+  epic-3: backlog
+  3-1-版本配置搬进数据库-接口按-ios-android-分别返回最新版本: ready-for-dev
+  3-2-用真机版本号判定-并重做更新弹窗实现强制更新: ready-for-dev
+  3-3-首页顶部推荐更新横幅: ready-for-dev
+  3-4-设置页手动检查更新: ready-for-dev
+  3-5-首页场所入口换成-折叠地图-定位针-图标: ready-for-dev
+  epic-3-retrospective: optional
+  # ===== Epic 4：打卡与性格测试也能解锁里程碑 =====
+  epic-4: backlog
+  4-1-里程碑清单新增两项-双端清单-文案-徽章与存量回填: ready-for-dev
+  4-2-打卡成功-解锁完整解读时自动达成: ready-for-dev
+  4-3-达成当场弹出庆祝页: ready-for-dev
+  epic-4-retrospective: optional
+  # ===== Epic 5：运营弹窗 =====
+  epic-5: backlog
+  5-1-运营弹窗数据与-app-读取接口: ready-for-dev
+  5-2-统一跳转目标-运营弹窗与运营通知共用: ready-for-dev
+  5-3-记录本次冷启动出现过的功能弹窗: ready-for-dev
+  5-4-冷启动进入-diary-social-时弹出运营弹窗: ready-for-dev
+  epic-5-retrospective: optional
+  # ===== Epic 6：运营系统通知 =====
+  epic-6: backlog
+  6-1-运营通知类型与活动数据: ready-for-dev
+  6-2-运营通知发送核心-人群-分批推送-重试-定时: ready-for-dev
+  6-3-通知中心显示运营通知并按配置跳转: ready-for-dev
+  epic-6-retrospective: optional
