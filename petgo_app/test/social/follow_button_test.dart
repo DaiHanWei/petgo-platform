@@ -317,13 +317,13 @@ void main() {
     final container = ProviderContainer(overrides: [
       followRepositoryProvider.overrideWithValue(repo),
       authControllerProvider.overrideWith(_LoggedIn.new),
-      meCountsProvider.overrideWith((ref) async {
+      meCountsProvider.overrideWith((ref, userId) async {
         builds++;
         return const MeCounts(followingCount: 1);
       }),
     ]);
     addTearDown(container.dispose);
-    final sub = container.listen(meCountsProvider, (_, _) {});
+    final sub = container.listen(meCountsProvider(1), (_, _) {});
     addTearDown(sub.close);
     await tester.pumpWidget(UncontrolledProviderScope(
       container: container,

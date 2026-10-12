@@ -37,7 +37,15 @@ class MeCounts {
 ///
 /// `retry: (_, _) => null`：关掉 Riverpod 3 的自动重试 —— 失败时四格回落到 `auth.profile` 的值，
 /// 不需要它在后台反复横跳。
-final meCountsProvider = FutureProvider.autoDispose<MeCounts>(
-  (ref) async => MeCounts.fromProfile(await ref.read(meRepositoryProvider).getMe()),
+///
+/// 🔴 **按当前用户 id 分 family**（code-review 2026-10-12）：Riverpod 3 在 invalidate 后的加载中 / 出错态
+/// 都会保留上一份数据（`value` 不为 null）—— 若是同一个实例，换账号后 B 会先看到、甚至（B 的 `/me`
+/// 失败时）一直看到 A 的计数。按 id 分实例，新账号就没有旧值可带。`invalidate(meCountsProvider)`
+/// 仍可整族失效。id 为 null（未登录 / 兽医）→ 不发请求，全「–」。
+final meCountsProvider = FutureProvider.autoDispose.family<MeCounts, int?>(
+  (ref, userId) async {
+    if (userId == null) return const MeCounts();
+    return MeCounts.fromProfile(await ref.read(meRepositoryProvider).getMe());
+  },
   retry: (_, _) => null,
 );

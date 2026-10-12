@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,6 +22,7 @@ Future<void> _pump(
   List<MyPost> posts = const [],
   MeCounts? counts = const MeCounts(postCount: 15, likeCount: 3, followingCount: 50, followerCount: 30),
   Object? countsError,
+  Completer<MeCounts>? countsPending,
 }) async {
   tester.view.physicalSize = const Size(1200, 3200);
   tester.view.devicePixelRatio = 1.0;
@@ -29,8 +32,9 @@ Future<void> _pump(
   final container = ProviderContainer(overrides: [
     myPostsProvider.overrideWith((ref) async => posts),
     // V1.3.4 Story 1.4：四格数据源（`GET /me`）。countsError 非空时模拟失败 → 回落 auth.profile。
-    meCountsProvider.overrideWith((ref) async {
+    meCountsProvider.overrideWith((ref, userId) async {
       if (countsError != null) throw countsError;
+      if (countsPending != null) return countsPending.future;
       return counts!;
     }),
     petProfileProvider.overrideWith((ref) async => pet),
@@ -228,5 +232,44 @@ void main() {
     await _pump(tester, profile: const UserProfile(nickname: '小明', petStatus: 'PLANNING'));
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     expect(find.text(l10n.mePetsSection.toUpperCase()), findsNothing);
+  });
+
+  // ===== code-review 2026-10-12（Story 1.4）补强 =====
+
+  testWidgets('T-14：/me 还在加载、登录态也没计数（刚登录）→ 四格显示「–」', (tester) async {
+    final pending = Completer<MeCounts>();
+    await _pump(tester,
+        profile: const UserProfile(id: 3, nickname: '小明', petStatus: 'PLANNING'), countsPending: pending);
+    expect(cell(tester, 'profileStatPosts'), '–');
+    expect(cell(tester, 'profileStatFollowers'), '–');
+    pending.complete(const MeCounts(postCount: 4, likeCount: 0, followingCount: 1, followerCount: 2));
+    await tester.pumpAndSettle();
+    expect(cell(tester, 'profileStatPosts'), '4');
+  });
+
+  testWidgets('T-6：两边都有值时以 /me 为准，不用登录态里的', (tester) async {
+    await _pump(
+      tester,
+      profile: const UserProfile(
+          id: 3, nickname: '小明', petStatus: 'PLANNING', postCount: 1, likeCount: 1, followingCount: 1, followerCount: 1),
+      counts: const MeCounts(postCount: 9, likeCount: 8, followingCount: 7, followerCount: 6),
+    );
+    expect(cell(tester, 'profileStatPosts'), '9');
+    expect(cell(tester, 'profileStatFollowers'), '6');
+  });
+
+  testWidgets('AC4.3：页面顺序 Edit Profile → Hewanku → Aktivitas → Postinganku', (tester) async {
+    await _pump(
+      tester,
+      profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET', hasPetProfile: true),
+      pet: const PetProfile(id: 1, name: 'Momo', cardToken: 'tok'),
+    );
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    double y(Finder f) => tester.getCenter(f).dy;
+    final edit = y(find.byKey(const ValueKey('meEditNickname')));
+    final pets = y(find.text(l10n.mePetsSection.toUpperCase()));
+    final orders = y(find.byKey(const ValueKey('meOrders')));
+    final posts = y(find.text(l10n.meMyPostsTitle.toUpperCase()));
+    expect(edit < pets && pets < orders && orders < posts, isTrue);
   });
 }

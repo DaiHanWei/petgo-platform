@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/me/data/me_counts_provider.dart';
@@ -36,5 +38,21 @@ void main() {
     final q = p.copyWith(followerCount: 4);
     expect(q.postCount, 2);
     expect(q.followerCount, 4);
+  });
+
+  /// T-15 / AC1.4：六个失效点都在（删任一行这里就红 —— code-review 2026-10-12 #4）。
+  test('meCountsProvider 的失效点齐全', () {
+    const sites = {
+      'lib/app.dart': '换账号 resetUserScopedCaches',
+      'lib/shared/widgets/app_shell.dart': '切到 Saya Tab',
+      'lib/features/content/presentation/publish_compose_page.dart': '发帖',
+      'lib/features/content/presentation/content_detail_page.dart': '删帖',
+      'lib/features/social/presentation/widgets/follow_button.dart': '关注 / 取关成功',
+      'lib/features/user_profile/presentation/public_profile_page.dart': '主页拉黑成功',
+      'lib/shared/widgets/mini_profile_sheet.dart': '迷你卡拉黑成功',
+    };
+    sites.forEach((file, why) {
+      expect(File(file).readAsStringSync(), contains('invalidate(meCountsProvider)'), reason: '$why：$file');
+    });
   });
 }

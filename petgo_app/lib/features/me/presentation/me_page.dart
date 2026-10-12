@@ -136,7 +136,8 @@ class _MeStats extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final counts = ref.watch(meCountsProvider).value ?? MeCounts.fromProfile(profile);
+    // 按当前用户 id 取实例（换账号不带上一个账号的旧值，见 meCountsProvider 注释）。
+    final counts = ref.watch(meCountsProvider(profile?.id)).value ?? MeCounts.fromProfile(profile);
     return ProfileStatsRow(
       postCount: counts.postCount,
       likeCount: counts.likeCount,
