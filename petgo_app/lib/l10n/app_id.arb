@@ -2568,5 +2568,7 @@
   "profilePetsSection": "Hewan",
   "mePetsSection": "Hewanku",
   "followListEmptyFollowing": "Belum mengikuti siapa pun",
-  "followListEmptyFollowers": "Belum ada pengikut"
+  "followListEmptyFollowers": "Belum ada pengikut",
+  "followListEmptySelfFollowing": "Kamu belum mengikuti siapa pun",
+  "followSuggestedTitle": "Disarankan untukmu"
 }

@@ -328,6 +328,8 @@ void main() {
         // 关注列表（V1.3.4 follow · FR-140.9 / Story 2.2 的 `follow_list_viewed`）。模块是「关注列表页」——
         // 我的页与他人主页两处入口共用，挂 `me_` / `user_` 都会误导。⚠️ 新模块入表，不是为遗留事件放宽规则。
         'follow_',
+        // 推荐关注（V1.3.4 follow · FR-140.11 / Story 2.3 的 `suggested_follow_shown`）：我自己的空关注 / 粉丝列表里的推荐区。
+        'suggested_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[

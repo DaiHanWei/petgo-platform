@@ -10,6 +10,7 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/social/data/follow_list_repository.dart';
 import 'package:tailtopia/features/social/data/follow_repository.dart';
+import 'package:tailtopia/features/social/data/follow_suggestion_repository.dart';
 import 'package:tailtopia/features/social/domain/follow_list_item.dart';
 import 'package:tailtopia/features/social/domain/follow_state.dart';
 import 'package:tailtopia/features/social/presentation/blocked_list_skeleton.dart';
@@ -57,6 +58,12 @@ class _ListRepo implements FollowListRepository {
     if (r is FollowListPageData) return r;
     throw r;
   }
+}
+
+/// Story 2.3：我自己的空列表会请求推荐 —— 本文件不测推荐，一律给空数组（推荐区只剩提示条）。
+class _NoSuggestions implements FollowSuggestionRepository {
+  @override
+  Future<List<FollowListItem>> fetch() async => const [];
 }
 
 class _FollowRepo implements FollowRepository {
@@ -131,6 +138,7 @@ Future<_Nav> _pump(
     publicProfileRepositoryProvider.overrideWithValue(_ProfileRepo(profile)),
     followListRepositoryProvider.overrideWithValue(lists),
     followRepositoryProvider.overrideWithValue(follows ?? _FollowRepo()),
+    followSuggestionRepositoryProvider.overrideWithValue(_NoSuggestions()),
     authControllerProvider.overrideWith(_Auth.new),
   ]);
   addTearDown(container.dispose);
@@ -250,7 +258,8 @@ void main() {
       FollowListTab.followers: [_page([_row(7)])],
     });
     await _pump(tester, profile: _owner(self: true), lists: lists);
-    expect(find.text(l10n.followListEmptyFollowing), findsOneWidget);
+    // Story 2.3：我自己的空 Mengikuti 换成提示条文案（推荐区见 follow_suggestions_test.dart）。
+    expect(find.text(l10n.followListEmptySelfFollowing), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('followListTabFollowers')));
     await tester.pumpAndSettle();

@@ -3934,5 +3934,9 @@
   "followListEmptyFollowing": "Not following anyone yet",
   "@followListEmptyFollowing": {"description": "Follow list (Following tab) empty state (V1.3.4 FR-140.9)"},
   "followListEmptyFollowers": "No followers yet",
-  "@followListEmptyFollowers": {"description": "Follow list (Followers tab) empty state"}
+  "@followListEmptyFollowers": {"description": "Follow list (Followers tab) empty state"},
+  "followListEmptySelfFollowing": "You're not following anyone yet",
+  "@followListEmptySelfFollowing": {"description": "My own empty Following tab, hint bar above follow suggestions (V1.3.4 Story 2.3)"},
+  "followSuggestedTitle": "Suggested for you",
+  "@followSuggestedTitle": {"description": "Section title above follow suggestions on my own empty follow list (Story 2.3)"}
 }

@@ -11,6 +11,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/letter_avatar.dart';
 import '../../user_profile/data/public_profile_repository.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
+import '../data/follow_suggestion_repository.dart';
 import '../domain/follow_list_item.dart';
 import 'blocked_list_skeleton.dart';
 import 'follow_list_controller.dart';
@@ -182,6 +183,9 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
   /// AC7.1：同一页面实例内同一 Tab 只报一次 `follow_list_viewed`（首页数据到达后）。
   bool _reported = false;
 
+  /// Story 2.3 AC4.1（T-23）：同一页面实例内同一 Tab 只报一次 `suggested_follow_shown`（推荐区至少 1 行时）。
+  bool _suggestedReported = false;
+
   FollowListKey get _key => (token: widget.token, tab: widget.tab);
 
   /// AD-7：我自己的 Mengikuti 列表 = 常驻位置（三态常显、取关后该行保留）。
@@ -206,13 +210,21 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
       });
     }
     return RefreshIndicator(
-      onRefresh: () => ref.read(followListControllerProvider(_key).notifier).refresh(),
+      onRefresh: () {
+        // Story 2.3 AC3.3：我自己的列表下拉刷新连推荐一起重拉（已关注的人由服务端排除）。
+        // 推荐快照发请求前重记版本号 → 本页之前写的覆盖对新推荐自动失效（Story 2.1 AC3.5）。
+        if (widget.ownerIsSelf) ref.invalidate(followSuggestionsProvider);
+        return ref.read(followListControllerProvider(_key).notifier).refresh();
+      },
       child: async.when(
         skipLoadingOnRefresh: true,
         loading: () => const BlockedListSkeleton(),
         // 🔴 绝不把请求错误画成空态（bug 20260625-088）。
         error: (_, _) => _ListError(onRetry: () => ref.invalidate(followListControllerProvider(_key))),
-        data: (s) => s.items.isEmpty ? _empty(l10n) : _list(l10n, s),
+        // Story 2.3 AC2：我自己的空列表换成「提示条 + 推荐」；别人的空列表保持普通空态（UI 稿 B8）。
+        data: (s) => s.items.isEmpty
+            ? (widget.ownerIsSelf ? _selfEmpty(l10n) : _empty(l10n))
+            : _list(l10n, s),
       ),
     );
   }
@@ -251,7 +263,14 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
         ),
       );
 
-  Widget _row(AppLocalizations l10n, FollowListItem item) {
+  /// 一行（列表与推荐共用，Story 2.3 AC2.1）。[surfaceKey] / [persistent] / [source] 缺省为列表行的取值。
+  Widget _row(
+    AppLocalizations l10n,
+    FollowListItem item, {
+    String? surfaceKey,
+    bool? persistent,
+    String source = 'follow_list',
+  }) {
     final name = item.deleted ? l10n.feedDeletedUser : (item.nickname ?? l10n.feedDeletedUser);
     final token = item.userToken;
     final identity = Row(
@@ -269,7 +288,7 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
     // 注销行：不可点、无按钮；自己那一行 / 我拉黑的人：无按钮（AC4 / AC5）。
     final showButton = !item.deleted && !item.self && !item.blockedByMe && token != null;
     return Padding(
-      key: ValueKey('followListRow_${item.userId}'),
+      key: ValueKey(surfaceKey == null ? 'followListRow_${item.userId}' : 'followSuggestRow_${item.userId}'),
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
@@ -291,10 +310,10 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
               userToken: token,
               initial: item.followState,
               snapshotEpoch: item.followEpoch,
-              surfaceKey: 'list:${widget.tab.wire}:${widget.ownerId}:${item.userId}',
+              surfaceKey: surfaceKey ?? 'list:${widget.tab.wire}:${widget.ownerId}:${item.userId}',
               style: FollowButtonStyle.listCompact,
-              persistent: _persistent,
-              source: 'follow_list',
+              persistent: persistent ?? _persistent,
+              source: source,
             ),
           ],
         ],
@@ -302,7 +321,80 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
     );
   }
 
-  /// UI 稿 B8：居中图标 48 + 标题；外层可滚（下拉刷新可用）；不显示推荐（我自己的空列表由 Story 2.3 换成推荐）。
+  /// Story 2.3 · UI 稿 B4 / B5：我自己的空 Tab = 浅紫提示条 +「Disarankan untukmu」+ 推荐行。
+  ///
+  /// 推荐加载中 → 提示条 + 骨架；失败或空数组 → 只剩提示条（T-24）。外层可滚（下拉刷新可用）。
+  /// 推荐行属非常驻位置（AD-7）：点关注后本按钮保留「Mengikuti」可再点取消，行不移除。
+  Widget _selfEmpty(AppLocalizations l10n) {
+    final following = widget.tab == FollowListTab.following;
+    final suggestions = ref.watch(followSuggestionsProvider);
+    final items = suggestions.value ?? const <FollowListItem>[];
+    if (!_suggestedReported && items.isNotEmpty) {
+      _suggestedReported = true;
+      Analytics.capture('suggested_follow_shown');
+    }
+    return ListView(
+      key: ValueKey('followListSelfEmpty_${widget.tab.wire}'),
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
+      children: [
+        Container(
+          key: const ValueKey('followListSelfEmptyHint'),
+          margin: const EdgeInsets.only(top: 14, bottom: 4),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          decoration: BoxDecoration(
+            color: AppColors.cream2,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Icon(following ? Icons.group : Icons.person_add, size: 28, color: AppColors.mint),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  following ? l10n.followListEmptySelfFollowing : l10n.followListEmptyFollowers,
+                  style: const TextStyle(fontSize: 13, color: AppColors.ink2),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (suggestions.isLoading && !suggestions.hasValue)
+          const SizedBox(
+            key: ValueKey('followSuggestLoading'),
+            height: 320,
+            child: BlockedListSkeleton(),
+          )
+        else if (items.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 16, bottom: 2),
+            child: Text(
+              l10n.followSuggestedTitle.toUpperCase(),
+              key: const ValueKey('followSuggestTitle'),
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: AppColors.muted,
+              ),
+            ),
+          ),
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0) const Divider(height: 1, thickness: 1, color: AppColors.line2),
+            _row(
+              l10n,
+              items[i],
+              surfaceKey: 'suggest:${widget.tab.wire}:${items[i].userId}',
+              persistent: false,
+              source: 'suggested',
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  /// UI 稿 B8：居中图标 48 + 标题；外层可滚（下拉刷新可用）。别人的空列表（我自己的空列表见 [_selfEmpty]）。
   Widget _empty(AppLocalizations l10n) {
     final following = widget.tab == FollowListTab.following;
     return ListView(

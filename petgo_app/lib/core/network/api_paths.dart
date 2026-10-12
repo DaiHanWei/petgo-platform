@@ -347,6 +347,9 @@ class ApiPaths {
   /// 粉丝列表（Story 2.2）：关注 `{token}` 用户的人。游客可读。
   static String userFollowers(String userToken) => '$base/users/$userToken/followers';
 
+  /// 推荐关注（V1.3.4 follow · Story 2.3）：我自己的关注 / 粉丝列表为空时展示，最多 30 行、无分页。仅登录用户。
+  static const String meFollowSuggestions = '$base/me/follow-suggestions';
+
   /// 公开主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2）：
   /// 该用户全部 PUBLIC 内容，三类混排、时间倒序、`?cursor=` 游标分页。游客可读。
   static String userPublicPosts(int userId) => '$base/users/$userId/posts';

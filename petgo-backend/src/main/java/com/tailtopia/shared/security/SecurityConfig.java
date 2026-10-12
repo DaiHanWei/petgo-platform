@@ -216,6 +216,8 @@ public class SecurityConfig {
                         // V1.3.4 follow Story 2.2：关注 / 粉丝列表，游客可看（与 /profile 同口径）。精确路径，不写通配。
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/following").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/followers").permitAll()
+                        // V1.3.4 follow Story 2.3：推荐关注，仅 role=USER（controller 把 sub 当 users.id 用，同 /me 端点）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/me/follow-suggestions").hasRole("USER")
                         // Toko 商品只读对游客可见（V1.4.0 Story 1.1，FR-93A）：GET 商品列表/详情放行。
                         // 与 FR-78「未登录点击非落地 Tab 触发登录引导」有意不同——商品浏览是转化漏斗
                         // 最上层，登录墙会直接杀掉转化；登录引导推迟到「加入购物车」（Story 3.6）。
