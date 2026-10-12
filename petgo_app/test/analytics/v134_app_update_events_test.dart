@@ -13,13 +13,14 @@ import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/notify/data/app_version_repository.dart';
 import 'package:tailtopia/features/notify/domain/app_update_controller.dart';
 import 'package:tailtopia/features/notify/domain/app_version_check.dart';
+import 'package:tailtopia/features/notify/presentation/app_update_banner.dart';
 import 'package:tailtopia/features/notify/presentation/app_update_presenter.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// V1.3.4 Story 3.2 · AC9（D-25）：版本更新埋点 —— 事件名从 `lib/` 源码提取，
 /// 属性用 [Analytics.debugCaptureSink] 看端上真正发出的形态。
 ///
-/// Story 3.4 落地后在本文件补 `app_update_later_tapped`。
+/// Story 3.3 起补 `app_update_later_tapped` 与横幅（surface=banner）三事件。
 
 Set<String> _eventNamesInSource() {
   final re = RegExp(r"""Analytics\.capture\(\s*'([A-Za-z0-9_]+)'""");
@@ -58,6 +59,68 @@ void main() {
     final inSource = _eventNamesInSource();
     expect(inSource, contains('app_update_prompt_shown'));
     expect(inSource, contains('app_update_go_store_tapped'));
+    expect(inSource, contains('app_update_later_tapped'));
+  });
+
+  group('首页推荐横幅（Story 3.3）', () {
+    late List<MapEntry<String, Map<String, Object>?>> events;
+    late List<String> launched;
+    late ProviderContainer c;
+
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      events = [];
+      launched = [];
+      Analytics.debugCaptureSink = (e, p) => events.add(MapEntry(e, p));
+    });
+    tearDown(() => Analytics.debugCaptureSink = null);
+
+    Future<void> pumpBanner(WidgetTester tester) async {
+      c = ProviderContainer(overrides: [
+        appVersionRepositoryProvider.overrideWithValue(_FakeRepo()),
+        appUpdateEnvProvider.overrideWithValue(AppUpdateEnv(
+          now: DateTime.now,
+          isIos: false,
+          loadCurrentVersion: () async => '1.3.3',
+          loadPrefs: AppPrefs.create,
+        )),
+        storeLauncherProvider.overrideWithValue((url) async => launched.add(url)),
+      ]);
+      addTearDown(c.dispose);
+      final d = await tester.runAsync(
+          () => c.read(appUpdateControllerProvider.notifier).check(AppUpdateTrigger.coldStart));
+      expect(d, UpdateDecision.recommended);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(
+          locale: const Locale('id'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const Scaffold(body: AppUpdateBanner()),
+        ),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    const bannerProps = {'decision': 'recommend', 'surface': 'banner'};
+
+    testWidgets('曝光 + 点 ✕：prompt_shown / later_tapped 属性正确', (tester) async {
+      await pumpBanner(tester);
+      expect(events.where((e) => e.key == 'app_update_prompt_shown').single.value, bannerProps);
+
+      await tester.tap(find.byKey(const ValueKey('appUpdateBannerClose')));
+      await tester.pumpAndSettle();
+      expect(events.where((e) => e.key == 'app_update_later_tapped').single.value, bannerProps);
+      expect(launched, isEmpty);
+    });
+
+    testWidgets('点「Perbarui sekarang」：go_store_tapped 属性正确', (tester) async {
+      await pumpBanner(tester);
+      await tester.tap(find.byKey(const ValueKey('appUpdateBannerGoStore')));
+      await tester.pumpAndSettle();
+      expect(events.where((e) => e.key == 'app_update_go_store_tapped').single.value, bannerProps);
+      expect(launched, ['https://play.google.com/store/apps/details?id=x']);
+    });
   });
 
   group('强制弹窗', () {

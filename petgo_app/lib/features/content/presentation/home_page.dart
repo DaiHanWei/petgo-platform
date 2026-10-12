@@ -9,6 +9,7 @@ import '../../../features/auth/domain/auth_guard.dart';
 import '../../../features/auth/domain/auth_state.dart';
 import '../../../features/auth/domain/login_guide_controller.dart';
 import '../../../features/notify/presentation/notification_bell.dart';
+import '../../notify/presentation/app_update_banner.dart';
 import '../../../features/place/presentation/place_entry_row.dart';
 import '../../profile/data/pet_recommendation_repository.dart';
 import '../../profile/presentation/widgets/pet_recommendation_strip.dart';
@@ -293,6 +294,7 @@ class HomePage extends ConsumerWidget {
 /// V1.3.0 batch-b1 Story 1.1（AC7 · FR-112.4）：分类 chips **之上**新增场所入口行。
 /// ⚠️ AppBar（品牌标 + 通知铃）、分类 chips、瀑布流、底部 Tab **一处不改**。
 /// Epic 4 的宠物横滑行将加在场所入口行**之下**，本 story **不为它预留占位**。
+/// V1.3.4 Story 3.3：场所入口行之上加推荐更新横幅（不满足条件时不占位）。
 class _BerandaTop extends StatelessWidget {
   const _BerandaTop({
     required this.selectedCategory,
@@ -310,6 +312,9 @@ class _BerandaTop extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 8),
+        // 推荐更新横幅（V1.3.4 Story 3.3）：场所入口行之上；不满足条件时组件内部返回
+        // `SizedBox.shrink()`，这里不留占位。
+        const AppUpdateBanner(),
         // 场所入口行（Story 1.1 AC7）：在分类 chips 之上。
         const PlaceEntryRow(),
         // 宠物横滑行（Story 4.4 AC1/AC2）：在场所入口行**之下**、分类 chips **之上**。
