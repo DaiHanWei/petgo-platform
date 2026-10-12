@@ -37,10 +37,9 @@ import '../../mention/presentation/mention_picker.dart';
 import '../data/content_repository.dart';
 import '../domain/content_type.dart';
 import '../domain/publish_checkin_place.dart';
-import '../domain/feed_image_layout.dart';
-import '../domain/image_crop.dart';
+import '../domain/image_exposure.dart';
 import '../domain/publish_controller.dart';
-import 'publish_crop_page.dart';
+import 'publish_exposure_page.dart';
 import 'feed_controller.dart';
 import 'publish_result_page.dart';
 
@@ -302,20 +301,22 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       if (mounted) setState(() => _addingImage = false);
     }
     if (bytes == null) return;
-    // 只有超出容差区间的图才会被裁剪框打断；区间内的图用户完全感知不到这一步存在。
-    final cropped = await applyBatchCrop([bytes], ask: _askCrop);
-    if (cropped == null || cropped.isEmpty) return; // 用户在裁剪页退出 → 取消本次上传
+    // 只有超出容差区间的图才会进露出区域页；区间内的图用户完全感知不到这一步存在。
+    // 字节原样放行（不裁不重编码），超界图只多带一个露出位置 offset。
+    final prepared = await prepareBatchExposure([bytes], ask: _askExposure);
+    if (prepared == null || prepared.isEmpty) return; // 用户在露出区域页 ✕ / 返回 → 取消本次上传
+    final p = prepared.first;
     // 即选即传：item 入列即以 pending/uploading 态渲染（自带 loading 盖层）；上传期间发布按钮置灰。
-    if (controller.addImage(cropped.first)) {
+    if (controller.addImage(p.bytes, cropOffset: p.cropOffset)) {
       await controller.uploadAll();
     }
   }
 
-  /// 打开裁剪页问用户怎么裁。[locked] 非空表示本批次档位已定，界面上不再让换档。
-  Future<CropChoice?> _askCrop(Uint8List bytes, ImageSize size, CropPreset? locked) {
-    if (!mounted) return Future<CropChoice?>.value();
-    return Navigator.of(context).push<CropChoice>(MaterialPageRoute<CropChoice>(
-      builder: (_) => PublishCropPage(bytes: bytes, size: size, lockedPreset: locked),
+  /// 打开露出区域页（V1.3.4 Story 2.3），整批超界图同页处理；只在有超界图时被调用。
+  Future<ExposureResult?> _askExposure(List<ExposureImage> overflow) {
+    if (!mounted) return Future<ExposureResult?>.value();
+    return Navigator.of(context).push<ExposureResult>(MaterialPageRoute<ExposureResult>(
+      builder: (_) => PublishExposurePage(images: overflow),
     ));
   }
 
@@ -332,11 +333,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       if (mounted) setState(() => _addingImage = false);
     }
     if (images.isEmpty) return;
-    // 🛡 批次锁定只作用于「需要裁剪的图之间」——区间内的图原样入列，不被跟着改比例。
-    final cropped = await applyBatchCrop(images, ask: _askCrop);
-    if (cropped == null) return; // 用户在裁剪页退出 → 整批取消
-    for (final bytes in cropped) {
-      controller.addImage(bytes);
+    // 🛡 整批超界图一次进露出区域页；区间内的图原样入列、offset 为 null。
+    final prepared = await prepareBatchExposure(images, ask: _askExposure);
+    if (prepared == null) return; // 用户在露出区域页 ✕ / 返回 → 整批取消（区间内的也不加）
+    for (final p in prepared) {
+      controller.addImage(p.bytes, cropOffset: p.cropOffset);
     }
     await controller.uploadAll();
   }

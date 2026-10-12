@@ -506,9 +506,9 @@ social_user_hide_submitted       {origin: REPORT, entry: report_flow}
 | E-5 | `phone_prompt_responded` | — | **`action`**: submitted/skipped/**dismissed** | 同上 |
 | E-6 | `me_phone_save_succeeded` | `phone_saved` | **`entry`**、`is_first_time` | `phone_edit_sheet.dart` |
 | E-7 | `me_phone_save_error_shown` | `phone_save_failed` | `entry` | 同上 |
-| E-8 | `publish_image_crop_shown` | `publish_image_crop_required` | **`original_ratio`**、`batch_size` | `image_crop.dart` |
-| E-9 | `publish_image_crop_completed` | `publish_image_crop_confirmed` | **`target_ratio`**、`is_batch_lock_source` | 同上 |
-| E-10 | `publish_image_crop_exit_tapped` | `publish_image_crop_abandoned` | `original_ratio` | `publish_crop_page.dart` |
+| E-8 | `publish_image_crop_shown` | `publish_image_crop_required` | **`original_ratio`**、`batch_size` | `image_exposure.dart` |
+| E-9 | `publish_image_crop_completed` | `publish_image_crop_confirmed` | **`target_ratio`**（0x75 / 1x78）、`adjusted`（V1.3.4 口径变更：原 1x1/4x5/3x4 + `is_batch_lock_source`，按发版日切分） | `image_exposure.dart` |
+| E-10 | `publish_image_crop_exit_tapped` | `publish_image_crop_abandoned` | `original_ratio` | `publish_exposure_page.dart` |
 | E-11 | `post_share_card_tapped` | — | `content_type`、**`is_private_diary`**、`has_image` | `content_detail_page.dart` |
 | E-12 | `post_share_card_generated` | — | `template`、`size`、**`duration_ms`** | `share_card_preview_page.dart` |
 | E-13 | `post_share_card_sent` | （旧名 `..._share_completed` 已废） | `channel` | 同上（**系统回调之后**） |

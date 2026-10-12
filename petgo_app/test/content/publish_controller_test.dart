@@ -14,6 +14,7 @@ class _FakeRepo implements ContentRepository {
   int? lastPetId;
   List<String>? lastUrls;
   List<ImageSize?>? lastSizes;
+  List<double?>? lastOffsets;
   String? lastIdem;
   DateTime? lastEventDate;
   int publishCalls = 0;
@@ -28,6 +29,7 @@ class _FakeRepo implements ContentRepository {
     String? text,
     List<String> imageUrls = const [],
     List<ImageSize?> imageSizes = const [],
+    List<double?> imageCropOffsets = const [],
     DateTime? eventDate,
     required String idempotencyKey,
     bool syncToMoment = true,
@@ -39,6 +41,7 @@ class _FakeRepo implements ContentRepository {
     lastPetId = petId;
     lastUrls = imageUrls;
     lastSizes = imageSizes;
+    lastOffsets = imageCropOffsets;
     lastEventDate = eventDate;
     lastIdem = idempotencyKey;
     if (throwOnPublish != null) throw throwOnPublish!;
@@ -251,6 +254,71 @@ void main() {
       expect(m.repo.lastSizes![1], isNotNull);
       expect(m.repo.lastSizes!.length, m.repo.lastUrls!.length,
           reason: '长度必须与图片数一致，否则后端整组作废');
+    });
+  });
+
+  /// V1.3.4 Story 2.4 · AC4 / AC5.1：露出位置随 item 对象走；上传的就是入列的那份字节。
+  group('露出位置 offset 跟着图走（V1.3.4 Story 2.4）', () {
+    test('addImage 带 cropOffset → 发布请求带同值', () async {
+      final m = make();
+      m.c.addImage(bytes('a'), cropOffset: 0.3);
+      await m.c.publish(idempotencyKey: 'k');
+      expect(m.repo.lastOffsets, [0.3]);
+    });
+
+    test('重排后 offset 仍属于原图，与 imageUrls 同序', () async {
+      final m = make();
+      m.c.addImage(bytes('a'), cropOffset: 0.1);
+      m.c.addImage(bytes('b'));
+      m.c.addImage(bytes('c'), cropOffset: 0.9);
+      await m.c.uploadAll();
+      m.c.reorderImage(2, 0);
+      await m.c.publish(idempotencyKey: 'k');
+      expect(m.repo.lastOffsets, [0.9, 0.1, null]);
+      expect(m.repo.lastUrls,
+          ['https://cdn/c.jpg', 'https://cdn/a.jpg', 'https://cdn/b.jpg']);
+    });
+
+    test('删除后剩下的图 offset 不串位', () async {
+      final m = make();
+      m.c.addImage(bytes('a'), cropOffset: 0.1);
+      m.c.addImage(bytes('b'));
+      m.c.addImage(bytes('c'), cropOffset: 0.9);
+      m.c.removeImage(0);
+      await m.c.publish(idempotencyKey: 'k');
+      expect(m.repo.lastOffsets, [null, 0.9]);
+      expect(m.repo.lastOffsets!.length, m.repo.lastUrls!.length);
+    });
+
+    test('上传失败 → 重试成功 → 发布：offset 仍与 imageUrls 同序等长', () async {
+      final m = make();
+      m.c.addImage(bytes('a'), cropOffset: 0.1);
+      m.c.addImage(bytes('bad'));
+      m.c.addImage(bytes('c'), cropOffset: 0.9);
+      expect(await m.c.publish(idempotencyKey: 'k'), isNull); // 有失败件 → 不提交
+      expect(m.repo.publishCalls, 0);
+
+      m.failing.clear();
+      await m.c.retryFailed();
+      await m.c.publish(idempotencyKey: 'k');
+      expect(m.repo.lastOffsets, [0.1, null, 0.9]);
+      expect(m.repo.lastOffsets!.length, m.repo.lastUrls!.length);
+    });
+
+    test('🔴 uploadOne 收到的字节与 addImage 传入的是同一个对象（零裁切、零重编码）', () async {
+      final received = <Uint8List>[];
+      final c = PublishController(
+        repository: _FakeRepo(),
+        uploadOne: (b) async {
+          received.add(b);
+          return 'https://cdn/x.jpg';
+        },
+      );
+      final original = bytes('orig');
+      c.addImage(original, cropOffset: 0.0);
+      await c.uploadAll();
+      expect(received, hasLength(1));
+      expect(identical(received.single, original), isTrue);
     });
   });
 }
