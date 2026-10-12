@@ -39,6 +39,13 @@ public interface TencentImClient {
     void pushOffline(String imUserId, String title, String body, String deepLinkType, String deepLinkToken,
             String targetRef);
 
+    /** 同 pushOffline，但返回是否投递成功（HTTP 成功且 ErrorCode == 0）。运营通知重试用（V1.3.4 Story 6.2）。 */
+    default boolean pushOfflineChecked(String imUserId, String title, String body, String deepLinkType,
+            String deepLinkToken, String targetRef) {
+        pushOffline(imUserId, title, body, deepLinkType, deepLinkToken, targetRef);
+        return true;
+    }
+
     /** 校验腾讯 IM 服务端回调签名/token（非法回调拒绝）。 */
     boolean verifyCallback(String token);
 

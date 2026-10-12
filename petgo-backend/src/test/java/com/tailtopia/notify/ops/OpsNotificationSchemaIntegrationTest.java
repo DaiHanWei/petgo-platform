@@ -20,6 +20,7 @@ import com.tailtopia.ops.OpsTokenGenerator;
 import com.tailtopia.ops.target.OpsTargetType;
 import com.tailtopia.support.ApiIntegrationTest;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,7 +49,29 @@ class OpsNotificationSchemaIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private AccountDeletionService accountDeletion;
 
+    /** 本类造的活动 id（{@link #cancelCreatedCampaigns} 收尾用）。 */
+    private final List<Long> createdCampaignIds = new java.util.ArrayList<>();
+
+    /**
+     * V1.3.4 Story 6.2 复审：造完的活动一律置 CANCELED。否则共享库里会留下 PENDING 的全量（ALL）活动，
+     * 任一跑着运营通知扫描的上下文（60 秒首延）会把它发给库里全部用户。
+     */
+    @AfterEach
+    void cancelCreatedCampaigns() {
+        for (Long id : createdCampaignIds) {
+            jdbc.update("UPDATE ops_notification_campaigns SET status = 'CANCELED', canceled_at = now(), "
+                    + "updated_at = now() WHERE id = ? AND status = 'PENDING'", id);
+        }
+        createdCampaignIds.clear();
+    }
+
     private OpsNotificationCampaign saveCampaign(OpsTargetType type, String value, AudienceSpec spec) {
+        OpsNotificationCampaign c = saveCampaignRaw(type, value, spec);
+        createdCampaignIds.add(c.getId());
+        return c;
+    }
+
+    private OpsNotificationCampaign saveCampaignRaw(OpsTargetType type, String value, AudienceSpec spec) {
         return campaigns.save(OpsNotificationCampaign.create(OpsTokenGenerator.next(),
                 "Promo akhir pekan", "Weekend promo", "Isi", "Body", type, value, spec.toJson(), null, null));
     }
