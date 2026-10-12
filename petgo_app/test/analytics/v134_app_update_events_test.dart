@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/core/router/app_router.dart';
+import 'package:tailtopia/core/startup/startup_popup_ledger.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/notify/data/app_version_repository.dart';
 import 'package:tailtopia/features/notify/domain/app_update_controller.dart';
@@ -203,6 +204,7 @@ void main() {
     setUp(() {
       SharedPreferences.setMockInitialValues({});
       debugResetForcedUpdateDialog();
+      StartupPopupLedger.instance.resetForTest();
       events = [];
       launched = [];
       repo = _FakeRepo();
@@ -280,6 +282,27 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('appUpdateForced')), findsOneWidget);
       expect(events.where((e) => e.key == 'app_update_prompt_shown'), hasLength(1));
+    });
+
+    testWidgets('V1.3.4 Story 5.3：强制弹窗弹出后 ledger 含 forceUpdate；还在 splash 没弹时不登记', (tester) async {
+      await pumpApp(tester, initial: '/splash');
+      await runCheck(tester);
+
+      unawaited(showForcedUpdateDialog(hostRef));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('appUpdateForced')), findsNothing);
+      expect(StartupPopupLedger.instance.hasAny, isFalse, reason: '没真正出现不登记');
+
+      router.go('/home');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('appUpdateForced')), findsOneWidget);
+      expect(StartupPopupLedger.instance.recorded, {StartupPopupKind.forceUpdate});
+
+      // go 替换栈后重弹：仍只有这一种记录。
+      router.go('/other');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('appUpdateForced')), findsOneWidget);
+      expect(StartupPopupLedger.instance.recorded, {StartupPopupKind.forceUpdate});
     });
 
     testWidgets('仍在 /splash 时先等它离开再弹（否则 go 替换栈会把弹窗一起移除）', (tester) async {

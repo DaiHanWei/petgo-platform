@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/startup/startup_popup_ledger.dart';
 import '../../core/theme/colors.dart';
 
 /// 一次性引导蒙层（V1.3.0 批次 A · Story 5.4 · AD-A21.5）。项目内此前**没有** coachmark 组件。
@@ -84,6 +85,8 @@ class _CoachmarkOverlayState extends State<CoachmarkOverlay> {
   @override
   void initState() {
     super.initState();
+    // 被插进 Overlay 才会走到这里 = 蒙层真正出现：登记本次冷启动功能弹窗（V1.3.4 Story 5.3 · AD-12）。
+    StartupPopupLedger.instance.record(StartupPopupKind.coachmark);
     if (widget.anchorKey != null) _scheduleMeasure();
   }
 

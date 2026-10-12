@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/analytics/analytics.dart';
 import '../../../core/router/app_router.dart';
+import '../../../core/startup/startup_popup_ledger.dart';
 import '../domain/app_update_controller.dart';
 import '../domain/app_version_check.dart';
 import 'app_update_dialog.dart';
@@ -84,7 +85,8 @@ Future<void> showForcedUpdateDialog(WidgetRef ref) async {
         reported = true;
         unawaited(Analytics.capture('app_update_prompt_shown', {'decision': 'force', 'surface': 'dialog'}));
       }
-      // LEDGER-HOOK(5.3): 强制更新弹窗真正出现时登记 startupPopupLedger
+      // 强制更新弹窗真正出现时登记（V1.3.4 Story 5.3 · AD-12）；被路由替换后重弹重复登记无副作用。
+      StartupPopupLedger.instance.record(StartupPopupKind.forceUpdate);
       await AppUpdateDialog.show(
         ctx,
         decision: UpdateDecision.forced,

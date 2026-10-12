@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
+import 'package:tailtopia/core/startup/startup_popup_ledger.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/features/notify/data/app_version_repository.dart';
@@ -59,6 +60,7 @@ void main() {
     launched = [];
     skippedAtLaunch = [];
     Analytics.debugCaptureSink = (e, p) => events.add(MapEntry(e, p));
+    StartupPopupLedger.instance.resetForTest();
   });
   tearDown(() => Analytics.debugCaptureSink = null);
 
@@ -124,6 +126,14 @@ void main() {
       expect(_banner, findsOneWidget);
       expect(find.text('Versi baru tersedia'), findsOneWidget);
       expect(find.text('Perbarui sekarang'), findsOneWidget);
+    });
+
+    testWidgets('V1.3.4 Story 5.3：横幅显示后 ledger hasAny == false（横幅不算弹窗）', (tester) async {
+      final c = host();
+      await pumpBanner(tester, c);
+      expect(await runCheck(tester, c), UpdateDecision.recommended);
+      expect(_banner, findsOneWidget);
+      expect(StartupPopupLedger.instance.hasAny, isFalse);
     });
 
     testWidgets('AC1.5 离开再回来，只要 bannerVisible 仍为 true 就还在', (tester) async {

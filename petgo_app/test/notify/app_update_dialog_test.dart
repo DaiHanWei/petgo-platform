@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/core/startup/startup_popup_ledger.dart';
 import 'package:tailtopia/features/notify/domain/app_version_check.dart';
 import 'package:tailtopia/features/notify/presentation/app_update_dialog.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -45,6 +46,15 @@ const _goStore = ValueKey('appUpdateGoStore');
 const _later = ValueKey('appUpdateLater');
 
 void main() {
+  setUp(StartupPopupLedger.instance.resetForTest);
+
+  testWidgets('V1.3.4 Story 5.3：直接调 AppUpdateDialog.show 推荐态 → ledger 为空（推荐态不算冷启动功能弹窗）',
+      (tester) async {
+    await _pump(tester, UpdateDecision.recommended);
+    expect(find.byKey(_recommended), findsOneWidget);
+    expect(StartupPopupLedger.instance.hasAny, isFalse);
+  });
+
   testWidgets('推荐更新：有「Nanti」+ 主按钮；点「Nanti」关窗并回调 onLater', (tester) async {
     var later = 0;
     await _pump(tester, UpdateDecision.recommended, onLater: () => later++);

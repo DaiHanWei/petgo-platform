@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/core/startup/startup_popup_ledger.dart';
 import 'package:tailtopia/features/profile/data/onboarding_mark_repository.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/coachmark_overlay.dart';
@@ -15,6 +16,55 @@ import 'package:tailtopia/shared/widgets/coachmark_overlay.dart';
 void main() {
   final String overlaySrc =
       File('lib/shared/widgets/coachmark_overlay.dart').readAsStringSync();
+
+  setUp(StartupPopupLedger.instance.resetForTest);
+
+  /// V1.3.4 Story 5.3 · AC2.4：蒙层被插进 Overlay（真正出现）才登记；标记已存在不插 → 不登记。
+  group('V1.3.4 Story 5.3 冷启动功能弹窗登记', () {
+    Future<void> pumpHost(WidgetTester tester, {required bool alreadySeen}) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: Builder(builder: (context) {
+          // 同 growth_archive_page `_maybeShowMigrationCoachmark`：看过（标记已存在）就不插入。
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (alreadySeen) return;
+            late final OverlayEntry entry;
+            entry = OverlayEntry(
+              builder: (_) => CoachmarkOverlay(
+                spotlight: const Rect.fromLTWH(100, 200, 120, 60),
+                text: l10n.ktpMovedCoachmark,
+                confirmLabel: l10n.commonGotIt,
+                onDismiss: () => entry.remove(),
+              ),
+            );
+            Overlay.of(context, rootOverlay: true).insert(entry);
+          });
+          return const Scaffold(body: SizedBox.shrink());
+        }),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('蒙层出现后 ledger 含 coachmark；关掉后记录仍在', (tester) async {
+      await pumpHost(tester, alreadySeen: false);
+      expect(find.byType(CoachmarkOverlay), findsOneWidget);
+      expect(StartupPopupLedger.instance.recorded, {StartupPopupKind.coachmark});
+
+      await tester.tap(find.text('Got it'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CoachmarkOverlay), findsNothing);
+      expect(StartupPopupLedger.instance.recorded, contains(StartupPopupKind.coachmark));
+    });
+
+    testWidgets('标记已存在不弹 → ledger 为空', (tester) async {
+      await pumpHost(tester, alreadySeen: true);
+      expect(find.byType(CoachmarkOverlay), findsNothing);
+      expect(StartupPopupLedger.instance.hasAny, isFalse);
+    });
+  });
 
   group('AC5 🔴 聚光挖孔的实现禁忌', () {
     /// 🔴 UI 稿第四步实测：3000px 的 box-shadow 叠在另一层半透明遮罩上会**双重叠加** ——
