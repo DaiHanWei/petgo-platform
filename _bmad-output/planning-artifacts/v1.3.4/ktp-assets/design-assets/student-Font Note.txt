@@ -1,0 +1,14 @@
+Tailtopia Academy & Student Card
+Typeface: Rubik
+Weight: ExtraBold & Italic
+Usage: Main document title
+
+Universitas, Mochi & 3276
+Typeface: Rubik
+Weight: Bold
+Usage: main Information
+
+other text
+Typeface: Rubik
+Weight: Medium
+Usage: Information
