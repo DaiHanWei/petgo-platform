@@ -10,6 +10,7 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../core/analytics/analytics.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../ops/presentation/open_ops_target.dart';
 import '../../profile/domain/milestone_celebration_copy.dart';
 import '../../profile/domain/milestone_titles.dart';
 import '../../profile/presentation/widgets/milestone_badge.dart';
@@ -274,6 +275,23 @@ class _NotificationCenterPageState
       setState(() {
         _locallyReadTokens.add(token);
       });
+    }
+    // 运营通知（V1.3.4 Story 6.3 · AD-17）：跳转全部交给 Story 5.2 的 openOpsTarget，不走深链表。
+    if (item.type == 'OPS_ANNOUNCEMENT') {
+      // campaign_id = targetRef = 活动 public_token（D-24），不外露自增 id。
+      final campaignId = item.targetRef;
+      if (campaignId != null && campaignId.isNotEmpty) {
+        Analytics.capture('ops_notification_opened',
+            {'campaign_id': campaignId, 'source': 'notification_center'});
+      }
+      // 标记已读 + 角标重算：沿用同一入口（它对本类型返回通知中心 location，忽略即可）。
+      await NotificationDeepLink.open(ref,
+          type: item.deepLinkType, token: token, targetRef: item.targetRef);
+      if (!mounted) return;
+      final target = item.opsTarget;
+      // 5.2：NONE / 无效值不跳转不报错；导航用 rootNavigatorKey；需登录页游客走登录强弹窗。
+      if (target != null) await openOpsTarget(context, ref, target);
+      return;
     }
     // 列表点击与系统推送直跳共用 NotificationDeepLink.open（标记已读 + 角标重算 + 算 location）。
     final location = await NotificationDeepLink.open(
@@ -745,6 +763,12 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.mint,
       AppColors.cream2,
     ),
+    // 运营通知（V1.3.4 Story 6.3 · UX-DR10 / UI 稿 E2）：紫色图标块 + 喇叭。
+    'OPS_ANNOUNCEMENT' => (
+      Icons.campaign_rounded,
+      AppColors.mint,
+      AppColors.cream2,
+    ),
     _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
   };
 
@@ -780,6 +804,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     'LIFECYCLE_WINBACK' => l10n.notifyTypeLifecycleWinback,
     // 被 @ 提及（V1.3.0 batch-b1 Story 3.4）：标题两种文案共用一句，正文才分帖子 / 评论。
     'CONTENT_MENTIONED' => l10n.notifyTypeContentMentioned,
+    // 运营通知（V1.3.4 Story 6.3）：唯一读后端 title 的类型，理由见 [_opsTitle]。
+    'OPS_ANNOUNCEMENT' => _opsTitle(l10n),
     // 未知类型兜底：中性「系统通知」，不再复用页面标题（bug 20260729-391 的「克隆卡」观感来源）。
     _ => l10n.notifyTypeSystem,
   };
@@ -832,9 +858,25 @@ class _NotificationTileState extends State<_NotificationTile> {
     'CONTENT_MENTIONED' => _isCommentMention
         ? l10n.notifyBodyContentMentionedComment
         : l10n.notifyBodyContentMentionedPost,
+    // 运营通知（V1.3.4 Story 6.3）：唯一读后端 body 的类型，理由见 [_opsTitle]。
+    'OPS_ANNOUNCEMENT' => _opsBody(l10n),
     // 未知类型兜底：中性正文，不再复用空态提示串（那本身就是个 bug）。
     _ => l10n.notifyBodySystem,
   };
+
+  /// 运营通知（V1.3.4 Story 6.3 · FR-138）：**唯一读后端 title / body 的类型**。
+  /// 运营每次写的内容不同，App 不可能本地化；后端写入时已按收件人账号语言选好 EN / ID（6.1 AC5），
+  /// 推送与通知中心同一语言（PRD AC2）——所以这里原样显示，**不按 App 当前语言再选**。
+  /// 后端没给（理论上不会）时落中性兜底，绝不显示空白。
+  String _opsTitle(AppLocalizations l10n) {
+    final t = widget.item.title?.trim() ?? '';
+    return t.isEmpty ? l10n.notifyTypeSystem : t;
+  }
+
+  String _opsBody(AppLocalizations l10n) {
+    final b = widget.item.body?.trim() ?? '';
+    return b.isEmpty ? l10n.notifyBodySystem : b;
+  }
 
   /// 这条 @ 通知指的是评论提及还是正文提及（Story 3.4）。
   ///
@@ -920,7 +962,7 @@ class _NotificationTileState extends State<_NotificationTile> {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 文案按 type 本地化，随 App 语言渲染；**不渲染后端 title/body**（后端串为服务端语言）。
+                        // 文案按 type 本地化，随 App 语言渲染；除 `OPS_ANNOUNCEMENT` 外不渲染后端 title/body（后端串为服务端语言；例外理由见 `_opsTitle`）。
                         Text(
                           _typeLabel(l10n),
                           style: const TextStyle(

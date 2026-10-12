@@ -484,6 +484,10 @@ void main() {
         // 推送疲劳终点信号（V1.4.0 Story 9.3）：from_screen ∈ {app_launch, settings_page}，
         // 受控字面量，不是 UI 文案。
         'from_screen',
+        // 运营通知打开（V1.3.4 Story 6.3 · `ops_notification_opened`）：campaign_id = 活动 public_token（D-24），
+        // 不外露自增 id；source ∈ {push, notification_center}（'source' 已在上方）。
+        'campaign_id',
+        'popup_id', // V1.3.4 Story 5.4（运营弹窗 public_token，D-24）
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

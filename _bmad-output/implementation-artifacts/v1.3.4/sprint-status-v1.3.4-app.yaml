@@ -80,5 +80,5 @@ development_status:
   epic-6: in-progress
   6-1-运营通知类型与活动数据: review
   6-2-运营通知发送核心-人群-分批推送-重试-定时: review
-  6-3-通知中心显示运营通知并按配置跳转: ready-for-dev
+  6-3-通知中心显示运营通知并按配置跳转: review
   epic-6-retrospective: optional

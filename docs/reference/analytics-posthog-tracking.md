@@ -754,3 +754,19 @@ App 对 5xx **不报**：网关失败服务端已报 `GATEWAY_DECLINED`，再报
 - D-25：三个事件**都带** `decision`（PRD §4 只给了 `prompt_shown`，取 AD-11 超集）。
 - 代码：`petgo_app/lib/features/notify/presentation/app_update_presenter.dart`、`app_update_banner.dart`；
   行为级断言 `petgo_app/test/analytics/v134_app_update_events_test.dart`。
+
+### 13.3 运营通知（FR-138 · Story 6.3）
+
+| 事件 | 上报端 | 触发点 | 属性 |
+|---|---|---|---|
+| `ops_notification_opened` | App | ① 点系统推送（`OPS_ANNOUNCEMENT`）打开 App；② 在通知中心点运营通知那一行（跳转目标为 NONE 也报） | `campaign_id` = 通知行 `targetRef`（即活动 `public_token`，D-24）；`source`：`push` / `notification_center` |
+
+- 空 `targetRef` 不报（理论上不会出现）。不带文案、目标值、用户信息。
+- 一次「点推送 → 在通知中心再点该条」会上报**两条**（`source` 分别为 `push` / `notification_center`），
+  按 PRD §4「从推送或通知中心打开均上报」；看板算打开人数时按 `campaign_id` + 用户去重。
+- 通知中心那次点击仍照常报既有 `app_notification_item_tapped`（`notif_type = ops_announcement`）。
+- 推送点击落点不变（2026-08-07 规则：先落通知中心并标已读，再点才跳目标）。
+- 属性名 `campaign_id` 已登记 `petgo_app/test/analytics/v112_events_test.dart`（前缀 `ops_` / 后缀 `_opened` 已在表内）。
+- 代码：`petgo_app/lib/features/notify/presentation/notification_center_page.dart`（`_onTap`）、
+  `petgo_app/lib/core/push/push_service.dart`（`reportOpsNotificationOpenedFromPush`）；
+  行为级断言 `petgo_app/test/notify/ops_notification_test.dart`。
