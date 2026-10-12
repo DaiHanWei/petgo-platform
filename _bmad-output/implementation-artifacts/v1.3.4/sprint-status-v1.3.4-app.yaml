@@ -74,7 +74,7 @@ development_status:
   5-1-运营弹窗数据与-app-读取接口: review
   5-2-统一跳转目标-运营弹窗与运营通知共用: review
   5-3-记录本次冷启动出现过的功能弹窗: review
-  5-4-冷启动进入-diary-social-时弹出运营弹窗: ready-for-dev
+  5-4-冷启动进入-diary-social-时弹出运营弹窗: review
   epic-5-retrospective: optional
   # ===== Epic 6：运营系统通知 =====
   epic-6: backlog

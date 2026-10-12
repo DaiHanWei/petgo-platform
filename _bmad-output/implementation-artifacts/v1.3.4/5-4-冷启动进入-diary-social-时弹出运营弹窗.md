@@ -1,6 +1,6 @@
 # Story 5.4: 冷启动进入 Diary / Social 时弹出运营弹窗
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -71,24 +71,24 @@ so that 我不会错过活动。
 
 ## Tasks / Subtasks
 
-- [ ] **T1 数据层**（AC4）
-  - [ ] `lib/core/network/api_paths.dart` 两个常量
-  - [ ] `lib/features/ops/domain/ops_popup.dart`：`enum OpsPopupFrequency { once, daily }`、`class OpsPopupCandidate`（字段同 Story 5.1 AC3.5 JSON）+ `fromJson`（返回 `OpsPopupCandidate?`）+ `imageUrlFor(bool isEn)` / `titleFor` / `bodyFor` / `buttonTextFor`
-  - [ ] `lib/features/ops/data/ops_popup_repository.dart`：`Future<List<OpsPopupCandidate>> fetchCandidates()`（内部 `.timeout(const Duration(seconds: 5))`，任何异常返回 `const []`）、`Future<void> reportImpression(String token)`（吞异常）；`opsPopupRepositoryProvider`
-  - [ ] `test/ops/ops_popup_model_test.dart`、`test/ops/ops_popup_repository_test.dart`（dio 假适配器照 `test/shop/shop_product_paging_test.dart` L274 `_BodyAdapter`）
-- [ ] **T2 本地频次**（AC3）
-  - [ ] `lib/core/storage/prefs.dart`：`kOpsPopupShown` + 两个方法
-  - [ ] `lib/features/ops/domain/ops_popup_frequency.dart`：`String wibDateOf(DateTime now)`、`OpsPopupCandidate? pickOpsPopup(List<OpsPopupCandidate> candidates, Map<String, String> shown, String todayWib)`
-  - [ ] `test/ops/ops_popup_frequency_test.dart`
-- [ ] **T3 弹窗组件**（AC2 / AC5）
-  - [ ] `lib/features/ops/presentation/ops_popup_dialog.dart`：`enum OpsPopupOutcome { tap, close }`、`class OpsPopupDialog extends StatefulWidget`（入参：`ImageProvider image`、`String? title`、`String? body`、`String buttonText`、`bool imageTappable`、`VoidCallback onShown`）、`Future<OpsPopupOutcome?> showOpsPopupDialog(BuildContext rootContext, OpsPopupDialog dialog)`
-  - [ ] `test/ops/ops_popup_dialog_test.dart`（结构断言，不写 golden）
-- [ ] **T4 协调器**（AC1 / AC3.4-3.5 / AC5 / AC6）
-  - [ ] `lib/features/ops/presentation/ops_popup_coordinator.dart`：`class OpsPopupCoordinator`（依赖全部可注入，见 Dev Notes「协调器骨架」）+ `opsPopupCoordinatorProvider`
-  - [ ] `lib/shared/widgets/app_shell.dart`：新增 `initState`，首帧后 `ref.read(opsPopupCoordinatorProvider).attach(ref.read(routerProvider))`（`attach` 幂等）
-  - [ ] `test/ops/ops_popup_coordinator_test.dart`（`fakeAsync` / `tester` 驱动，全部依赖注入假实现）
-- [ ] **T5 埋点守卫**（AC6.3）：改 `test/analytics/v112_events_test.dart` 两个白名单
-- [ ] **T6 L0 门禁**：`cd petgo_app && flutter analyze && flutter test`
+- [x] **T1 数据层**（AC4）
+  - [x] `lib/core/network/api_paths.dart` 两个常量
+  - [x] `lib/features/ops/domain/ops_popup.dart`：`enum OpsPopupFrequency { once, daily }`、`class OpsPopupCandidate`（字段同 Story 5.1 AC3.5 JSON）+ `fromJson`（返回 `OpsPopupCandidate?`）+ `imageUrlFor(bool isEn)` / `titleFor` / `bodyFor` / `buttonTextFor`
+  - [x] `lib/features/ops/data/ops_popup_repository.dart`：`Future<List<OpsPopupCandidate>> fetchCandidates()`（响应体为 Story 5.1 实际形状 `{"items": [...]}`；内部 `.timeout(const Duration(seconds: 5))`，任何异常返回 `const []`）、`Future<void> reportImpression(String token)`（吞异常）；`opsPopupRepositoryProvider`
+  - [x] `test/ops/ops_popup_model_test.dart`、`test/ops/ops_popup_repository_test.dart`（dio 假适配器照 `test/shop/shop_product_paging_test.dart` L274 `_BodyAdapter`）
+- [x] **T2 本地频次**（AC3）
+  - [x] `lib/core/storage/prefs.dart`：`kOpsPopupShown` + 两个方法
+  - [x] `lib/features/ops/domain/ops_popup_frequency.dart`：`String wibDateOf(DateTime now)`、`OpsPopupCandidate? pickOpsPopup(List<OpsPopupCandidate> candidates, Map<String, String> shown, String todayWib)`
+  - [x] `test/ops/ops_popup_frequency_test.dart`
+- [x] **T3 弹窗组件**（AC2 / AC5）
+  - [x] `lib/features/ops/presentation/ops_popup_dialog.dart`：`enum OpsPopupOutcome { tap, close }`、`class OpsPopupDialog extends StatefulWidget`（入参：`ImageProvider image`、`String? title`、`String? body`、`String buttonText`、`bool imageTappable`、`VoidCallback onShown`）、`Future<OpsPopupOutcome?> showOpsPopupDialog(BuildContext rootContext, OpsPopupDialog dialog)`
+  - [x] `test/ops/ops_popup_dialog_test.dart`（结构断言，不写 golden）
+- [x] **T4 协调器**（AC1 / AC3.4-3.5 / AC5 / AC6）
+  - [x] `lib/features/ops/presentation/ops_popup_coordinator.dart`：`class OpsPopupCoordinator`（依赖全部可注入，见 Dev Notes「协调器骨架」）+ `opsPopupCoordinatorProvider`
+  - [x] `lib/shared/widgets/app_shell.dart`：新增 `initState`，首帧后 `ref.read(opsPopupCoordinatorProvider).attach(GoRouter.maybeOf(context)!, ref: ref)`（`attach` 幂等；router 取承载外壳的那个实例 = 生产 `routerProvider` 的实例；`ref` 供 5.2 `openOpsTarget` 的调用契约）
+  - [x] `test/ops/ops_popup_coordinator_test.dart`（`fakeAsync` / `tester` 驱动，全部依赖注入假实现）
+- [x] **T5 埋点守卫**（AC6.3）：改 `test/analytics/v112_events_test.dart` 两个白名单
+- [x] **T6 L0 门禁**：`cd petgo_app && flutter analyze && flutter test`
 - [ ] **T7 L2 本地**（AC7）：按 Dev Notes「stag L2 灌数据 SQL」与「L2 走查清单」
 
 ## Dev Notes
@@ -140,7 +140,7 @@ class OpsPopupCoordinator {
     bool Function()? isResumed,                                   // 默认 lifecycleState == resumed
   });
 
-  void attach(GoRouter router);   // 幂等；addListener + 立即按当前路径评估一次
+  void attach(GoRouter router, {WidgetRef? ref});   // 幂等；addListener + 立即按当前路径评估一次；ref 每次刷新（5.2 openOpsTarget 需要挂载中的 WidgetRef）
   void dispose();                 // removeListener
   @visibleForTesting bool get settled;
 }
@@ -273,9 +273,36 @@ UPDATE app_version_config SET min_supported_version = '1.0.0' WHERE id = 1;
 
 ### Agent Model Used
 
+Claude Opus 5.5 (1M context)（claude-opus-5-5[1m]）
+
 ### Debug Log References
 
+- `flutter analyze`：No issues found。
+- `flutter test test/ops/`（本 story 新增 5 个文件）：model 4 / repository 5 / frequency 11 / dialog 13 / coordinator 26，全绿。
+- `flutter test` 全量：**+3005，0 失败**（All tests passed）。
+- 复审修复后：`flutter analyze` No issues；`flutter test test/ops/` 104 全绿；`flutter test` 全量 **+3012，0 失败**。
+- 后端无改动、无迁移 → 未跑 be-l0 / flyway 检查。
+- 调试记录：协调器测试初版 20 条红——`StartupPopupLedger.resetForTest()` 写在 `setUp` 里，新 Completer 建在真实 zone，`markStartupChainDone()` 的完成回调排进真实事件循环、`tester.pump()` 推不动；改为在测试体（fakeAsync zone）里 reset 后全绿。生产无此问题（单例在根 zone 建）。
+
 ### Completion Notes List
+
+- **对照前序提交改了本 story 文件**：① 5.1 候选接口实际响应是 `OpsPopupCandidatesResponse` = `{"items": [...]}`（单条字段与 AC4.3 一致：`token/frequency/imageUrlId/imageUrlEn/titleId/titleEn/bodyId/bodyEn/buttonTextId/buttonTextEn/target{type,value}`，null 字段省略），T1 已注明；② 5.2 `openOpsTarget(BuildContext, WidgetRef, OpsTarget)` 实际要求 `WidgetRef` 且「调用当下必须挂载」——`attach` 增加可选 `ref:`，由 AppShell 传入其 `ref`，跳转前检查 `ref.context.mounted`，骨架与 T4 已改；③ 5.3 `StartupPopupLedger.instance / startupChainDone / hasAny / record / resetForTest / markStartupChainDone` 与 story 一致，无改动。
+- **AppShell 取 router 用 `GoRouter.maybeOf(context)` 而非 `ref.read(routerProvider)`**：生产里二者是同一实例；但若干既有 widget 测试用自建 GoRouter 承载 AppShell，`ref.read(routerProvider)` 会在这些测试里另建一个生产路由（带 auth 监听 / 深链副作用）。取宿主 router 更保守，结果相同。
+- **落地页判据加严**：`currentConfiguration.uri.path ∈ {/profile, /home}` **且** `router.state.uri.path` 同样是落地页。go_router 17 的 `currentConfiguration.uri` 不反映 imperative `push`（Story 5.2 测试注释亦已指出），落地页上 push 的 shell 内页面仍报 `/home`；`router.state` 是栈顶真实落点。只会更少弹、不会多弹。测试 ⑧b 覆盖。
+- 判定流程按 AC1.3 九步实现；空闲检查不定局、功能弹窗 / 兽医 / 无候选 / 图片失败 / 二次 ledger 检查定局；内部意外异常一律吞掉并定局（NFR5，避免本次运行内反复请求）。
+- 频次与曝光、`ops_popup_shown` 只在弹窗首帧回调（`onShown`）里做，重复回调去重；`ops_popup_tapped` / `ops_popup_closed` 在 `showDialog` future 完成后上报，跳转也在其后（AC5.4）。
+- 外链只允许 http/https：由 5.2 `resolveOpsTarget` 把关，本 story 只按 `resolveOpsTarget(target) is! OpsNoAction` 判定按钮跳转 / 图片可点。
+- 埋点守卫：`allowedPrefixes` + `'ops_'`、`allowedSuffixes` + `'_closed'`（附注释），正则 / `legacyEvents` 未动。属性 `popup_id` 过 `Analytics.scrub` 与 NFR-5 全局体检（不含禁词）。
+- 未新增 l10n key；✕ 无障碍标签复用 `commonClose`。
+- **复审（2026-10-12）修复**：① ✕ 的 `Semantics(excludeSemantics)` 补 `onTap`（读屏双击可关，测试断言 `SemanticsAction.tap` 且经 `tester.semantics.tap` 关闭；去掉 onTap 该测试即红）；② 卡片加 `maxHeight = 可用高度 − 48`，文案区 `Flexible + SingleChildScrollView`（按钮固定不滚），补 360×640 + 1.3x 字号 + 长文案无溢出测试；③ 协调器在启动链结束后、判 VET / 取候选前 `await ensureRestored()`（上限 5s，超时按当时已知态继续），新注入点 `authReady`，补「恢复中不判定 / 恢复为 VET 定局 / 5s 超时继续」测试；④ `opsPopupImpressions` 注释写明 token 恒为 Base62 22 位（`OpsTokenGenerator`），URL-safe 不编码；⑤ 异常日志只打 `e.runtimeType`；⑥ `docs/reference/analytics-posthog-tracking.md` 新增 §13「V1.3.4 新增埋点」（`ops_popup_*` 与 `app_update_*` 三事件）；⑦ 补测「图片预加载卡住期间 record(coachmark) → 不 show」、`ops_popup_app_shell_test.dart`（attach 一次、router 为宿主实例、ref 非空且挂载）、`defaultPrecache` 成功返回 true。
+- **L1/L2 待本地验收**（本 story 无 L1 项；L2 全部待本地真机 / 模拟器 + stag 灌数据，见 Dev Notes「stag L2 灌数据 SQL」）：
+  1. D1 / D2 两种形态视觉（卡片宽、圆角、投影、4:5 图、✕ 位置与 44 热区、遮罩压暗）；
+  2. EN / ID 切换文案与图片，EN 图为空回落 ID 图；
+  3. 点按钮 / 图片跳商品、品类、5 个 App 页面、外链（App 内浏览器、系统默认配色）；无跳转时按钮关闭、图片无反应；
+  4. 每人一次 / 每天一次（含改手机时区不影响 WIB 边界）；游客只见 ALL、游客弹过的 ONCE 登录后不再弹；
+  5. 首装 ATT（iOS 真机）/ 推送权限（Android 13+）/ Diary 蒙层 / 强制更新 / 里程碑庆祝出现的那次冷启动不弹；
+  6. 图片 404 不弹且下次冷启动还会弹；断网冷启动无异常提示；
+  7. 推送冷启动落通知中心不弹、返回 Social 后弹（依赖本 story 的 `router.state` + `rootCanPop` 判据，真机确认）。
 
 #### 待确认
 
@@ -283,11 +310,34 @@ UPDATE app_version_config SET min_supported_version = '1.0.0' WHERE id = 1;
 - **点按钮且目标为 NONE 记 `ops_popup_tapped`**（不是 `closed`）：按钮是 CTA，点了就是点击；✕ / 返回键才记关闭。
 - **EN 标题 / 正文为空时回落 ID**：D-23 只明写按钮回落；标题 / 正文按同一口径处理，避免 EN 用户看到「ID 有标题、EN 无标题」的残缺弹窗。
 - **标题最多 2 行、正文最多 4 行**：UI 稿未给行数上限，按 288 宽卡片与 4:5 图在 640 高屏幕内完整可见推出。
-- **空闲检查不通过后只在「下一次路由回到 Diary / Social」时重试**：若用户一直停在落地页、只是上面的登录框关掉了，本次运行不会再弹（不另起轮询）。
+- **空闲检查不通过后只在「下一次路由回到 Diary / Social」时重试**：若用户一直停在落地页、只是上面的登录框关掉了，本次运行不会再弹（不另起轮询）。注：根 Navigator 上的对话框 / 顶层页 pop 也会触发 routerDelegate 通知（顶层页 pop 一定会；纯 `showDialog` 关闭是否触发取决于 go_router，未依赖）。
 - **残余竞态（D-22 已接受）**：Diary 引导蒙层若晚于运营弹窗出现，两者会叠加；ledger 二次检查覆盖了「候选请求期间蒙层出现」的大多数情况。
+- **落地页判据加严（router.state）**、**AppShell 用宿主 GoRouter**：见上，偏离 story 字面但结果更保守，请主代理 / 架构确认。
+- **根 Navigator `canPop` 不覆盖分支 Navigator 上的 bottom sheet**（复审提出）：若某 Tab 根页在自己分支的 Navigator 上弹了 bottom sheet / 对话框（`useRootNavigator: false`），空闲检查看不到，运营弹窗可能叠在其上。现有落地页的弹层大多走根 Navigator；未另加检测，待确认是否需要。
+- **登录态恢复等待上限 5s**：与 splash 的 5s 兜底同量级；恢复超过 5s 时按当时已知态（通常为游客）判定与取候选。
+- **空白字符串当缺失**：`token` / `imageUrlId` / `buttonTextId` 为空白串时该条丢弃，标题 / 正文为空白串时不渲染（后端 5.1 已拒空，双端兜底）。
 
 ### File List
+
+- `petgo_app/lib/core/network/api_paths.dart`（改：`opsPopupCandidates` / `opsPopupImpressions`）
+- `petgo_app/lib/core/storage/prefs.dart`（改：`kOpsPopupShown` / `kOpsPopupShownCap` / `opsPopupShown()` / `markOpsPopupShown()`）
+- `petgo_app/lib/shared/widgets/app_shell.dart`（改：新增 `initState` 挂协调器）
+- `petgo_app/lib/features/ops/domain/ops_popup.dart`（新）
+- `petgo_app/lib/features/ops/domain/ops_popup_frequency.dart`（新）
+- `petgo_app/lib/features/ops/data/ops_popup_repository.dart`（新）
+- `petgo_app/lib/features/ops/presentation/ops_popup_dialog.dart`（新）
+- `petgo_app/lib/features/ops/presentation/ops_popup_coordinator.dart`（新）
+- `petgo_app/test/ops/ops_popup_model_test.dart`（新）
+- `petgo_app/test/ops/ops_popup_repository_test.dart`（新）
+- `petgo_app/test/ops/ops_popup_frequency_test.dart`（新）
+- `petgo_app/test/ops/ops_popup_dialog_test.dart`（新）
+- `petgo_app/test/ops/ops_popup_coordinator_test.dart`（新）
+- `petgo_app/test/analytics/v112_events_test.dart`（改：命名守卫 `'ops_'` / `'_closed'`）
+- `petgo_app/test/ops/ops_popup_app_shell_test.dart`（新，复审）
+- `docs/reference/analytics-posthog-tracking.md`（改，复审：§13 V1.3.4 新增埋点）
 
 ### Change Log
 
 - 2026-10-12：story 文件创建（ready-for-dev）。
+- 2026-10-12：实现完成（App 数据层 / 本地频次 / 弹窗组件 / 判定协调器 / 埋点守卫），L0 全绿，Status → review；按 5.1 / 5.2 实际提交校正响应体形状与 `attach(router, ref:)` 签名。
+- 2026-10-12：复审 7 项修复（✕ 读屏点击、卡片高度上限与文案滚动、等登录态恢复、曝光路径注释、日志脱敏、埋点文档 §13、补测），全量 flutter test +3012 / 0 失败。

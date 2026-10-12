@@ -17,6 +17,7 @@ import '../../features/content/presentation/feed_controller.dart';
 import '../../features/profile/data/timeline_repository.dart';
 import '../../features/profile/domain/profile_tab_entered_provider.dart';
 import '../../features/content/presentation/publish_compose_page.dart';
+import '../../features/ops/presentation/ops_popup_coordinator.dart';
 import 'bottom_tab_bar.dart';
 
 /// **免门控 Tab 白名单**（Story 1.1 去索引化 · Story 2.4 放行 Diary）。
@@ -58,6 +59,20 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     duration: AppMotion.tabFade,
     value: 1,
   );
+
+  @override
+  void initState() {
+    super.initState();
+    // V1.3.4 Story 5.4：冷启动运营弹窗协调器挂到路由上（attach 幂等）。
+    // 协调器第一步就等启动链结束（StartupPopupLedger.startupChainDone），widget 测试里永不放行。
+    // router 取承载本外壳的那个 GoRouter（生产即 routerProvider 的实例），不另建。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final router = GoRouter.maybeOf(context);
+      if (router == null) return;
+      ref.read(opsPopupCoordinatorProvider).attach(router, ref: ref);
+    });
+  }
 
   @override
   void didUpdateWidget(covariant AppShell oldWidget) {

@@ -722,3 +722,35 @@ App 对 5xx **不报**：网关失败服务端已报 `GATEWAY_DECLINED`，再报
 - 分享率可用 `*_card_shared ÷ keepsake_card_generated`（同 `card_type`）；出图后取消分享不计 `_shared`。
 - 服务端两个 `*_unlocked` 依赖 `POSTHOG_SERVER_KEY`（同 §11.3）。
 - staging 数据按 App Version 带 `-stag` 后缀筛除 / 筛选。
+
+## 13. V1.3.4 新增埋点（app 主题 · 2026-10-12）
+
+> 完整口径以 `_bmad-output/planning-artifacts/v1.3.4/PRD-v1.3.4-app.md` §4 与 `决策日志-app.md`（D-24 / D-25）为准。
+> 所有事件都**不带**文案、图片 URL、用户信息；运营弹窗标识只用 `public_token`。
+
+### 13.1 运营弹窗（FR-137 · Story 5.4）
+
+| 事件 | 上报端 | 触发点 | 属性 |
+|---|---|---|---|
+| `ops_popup_shown` | App | 弹窗**首帧显示后**报一次（图片预加载失败 / 判定中止都不报，也不计频次） | `popup_id` = 候选的 `token`（即 `ops_popups.public_token`，D-24） |
+| `ops_popup_tapped` | App | 点按钮（无论目标是否有效）或点图片（仅目标有效时图片可点）；弹窗关闭后上报，跳转在其后 | `popup_id` |
+| `ops_popup_closed` | App | 点 ✕ 或系统返回键关闭（点遮罩不关、不报） | `popup_id` |
+
+- 模块前缀 `ops_`（运营触达：弹窗 + 运营通知）与动作后缀 `_closed` 为本版本新增，已登记
+  `petgo_app/test/analytics/v112_events_test.dart`。`_closed` 与 `_dismissed` 区分：运营弹窗关闭是中性结果，
+  看板按 shown / tapped / closed 三分。
+- 点击率 = `ops_popup_tapped ÷ ops_popup_shown`（同 `popup_id`）。登录用户另有服务端曝光记录
+  （`ops_popup_impressions`），游客只有 App 埋点，两者口径不同，不要直接相减。
+- 代码：`petgo_app/lib/features/ops/presentation/ops_popup_coordinator.dart`。
+
+### 13.2 版本更新（FR-124 · Story 3.2 / 3.3 / 3.4 · D-25）
+
+| 事件 | 上报端 | 触发点 | 属性 |
+|---|---|---|---|
+| `app_update_prompt_shown` | App | 更新提示出现：强制更新弹窗 / 推荐更新弹窗（设置页手动检查）/ 首页推荐横幅 | `decision`：`force` / `recommend`；`surface`：`dialog` / `banner` |
+| `app_update_go_store_tapped` | App | 点「Perbarui sekarang」跳商店（弹窗或横幅） | 同上 |
+| `app_update_later_tapped` | App | 推荐更新点「Nanti」（弹窗或横幅关闭；强制更新没有此出口） | 同上（`decision` 恒为 `recommend`） |
+
+- D-25：三个事件**都带** `decision`（PRD §4 只给了 `prompt_shown`，取 AD-11 超集）。
+- 代码：`petgo_app/lib/features/notify/presentation/app_update_presenter.dart`、`app_update_banner.dart`；
+  行为级断言 `petgo_app/test/analytics/v134_app_update_events_test.dart`。

@@ -325,6 +325,10 @@ void main() {
         // 🔴 刻意不挂 `post_`：评论赞混进帖子赞的口径，正是这条 bug 要纠正的。
         // 名字由 PRD §4 定死为 `comment_like_tapped`，扩表、不改名。
         'comment_',
+        // 运营触达（V1.3.4 FR-137 运营弹窗 / FR-138 运营通知）。模块是「运营触达」—— 横跨冷启动弹窗与
+        // 通知中心两处界面，挂任一单页前缀都会误导。名字由 PRD §4 定死（ops_popup_shown / _tapped / _closed）。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
+        'ops_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -422,6 +426,11 @@ void main() {
         // 用户设定了一个账号级取值（V1.3.2 batch-a PRD E-11C `tailsonality_owner_type_set`）：`_set` = **保存成功**
         // 之后才报（失败不报），描述结果而非点击。名字由 PRD §4 定死，扩表、不改名。
         '_set',
+        // 运营弹窗被关掉（V1.3.4 Story 5.4 · PRD §4 定死 `ops_popup_closed`）。
+        // 🔴 与 `_dismissed` 区分：运营弹窗没有「未完成的流程」，关闭（✕ / 系统返回）是**中性结果**，
+        //    看板按 shown / tapped / closed 三分。上面 `_dismissed` 注释里「刻意不用 `_closed`」针对的是
+        //    支付面板（那里关闭 = 放弃），两处口径不冲突。名字由 PRD 定死，扩表、不改名。
+        '_closed',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;
