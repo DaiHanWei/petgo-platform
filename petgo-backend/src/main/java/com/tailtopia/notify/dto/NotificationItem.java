@@ -1,6 +1,7 @@
 package com.tailtopia.notify.dto;
 
 import com.tailtopia.notify.domain.Notification;
+import com.tailtopia.ops.target.OpsTargetView;
 import java.time.Instant;
 
 /**
@@ -10,6 +11,10 @@ import java.time.Instant;
  * VET_REPLY/CONSULT_CLOSED→会话 id）的目标页在客户端本就以数字 id 寻址（feed `/content/{id}`、
  * `/consult/conversation/{id}`），targetRef 即这些 id，未引入新的可枚举暴露；且仅下发给通知本人。
  * 固定目标类（生日/纪念日/里程碑）的 targetRef 为内部标识（如 "C-L1"），客户端不用于寻址。
+ *
+ * <p><b>opsTarget</b>（V1.3.4 Story 6.1）：仅 {@code OPS_ANNOUNCEMENT} 附带，复用 Story 5.1 的
+ * {@link OpsTargetView}（与运营弹窗候选接口的 {@code target} 同一形态）；其它类型为 null，
+ * 经全局 NON_NULL 不出现该键。运营通知的 targetRef = 活动 publicToken（不可枚举）。
  */
 public record NotificationItem(
         String type,
@@ -19,10 +24,16 @@ public record NotificationItem(
         String deepLinkToken,
         String targetRef,
         boolean read,
-        Instant createdAt) {
+        Instant createdAt,
+        OpsTargetView opsTarget) {
 
     public static NotificationItem from(Notification n) {
+        return from(n, null);
+    }
+
+    public static NotificationItem from(Notification n, OpsTargetView opsTarget) {
         return new NotificationItem(n.getType().name(), n.getTitle(), n.getBody(),
-                n.getDeepLinkType(), n.getDeepLinkToken(), n.getTargetRef(), n.isRead(), n.getCreatedAt());
+                n.getDeepLinkType(), n.getDeepLinkToken(), n.getTargetRef(), n.isRead(), n.getCreatedAt(),
+                opsTarget);
     }
 }

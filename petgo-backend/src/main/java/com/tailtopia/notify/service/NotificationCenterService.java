@@ -1,13 +1,22 @@
 package com.tailtopia.notify.service;
 
 import com.tailtopia.notify.domain.Notification;
+import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.dto.NotificationItem;
 import com.tailtopia.notify.dto.NotificationPage;
+import com.tailtopia.notify.ops.domain.OpsNotificationCampaign;
+import com.tailtopia.notify.ops.repository.OpsNotificationCampaignRepository;
 import com.tailtopia.notify.repository.NotificationRepository;
+import com.tailtopia.ops.target.OpsTargetType;
+import com.tailtopia.ops.target.OpsTargetView;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.paging.KeysetCursor;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,10 +35,13 @@ public class NotificationCenterService {
 
     private final NotificationRepository repo;
     private final StringRedisTemplate redis;
+    private final OpsNotificationCampaignRepository campaigns;
 
-    public NotificationCenterService(NotificationRepository repo, StringRedisTemplate redis) {
+    public NotificationCenterService(NotificationRepository repo, StringRedisTemplate redis,
+            OpsNotificationCampaignRepository campaigns) {
         this.repo = repo;
         this.redis = redis;
+        this.campaigns = campaigns;
     }
 
     private static String unreadKey(long userId) {
@@ -50,7 +62,7 @@ public class NotificationCenterService {
                 userId, c.createdAt(), c.id(), PageRequest.of(0, limit + 1));
         boolean hasMore = rows.size() > limit;
         List<Notification> pageRows = hasMore ? rows.subList(0, limit) : rows;
-        List<NotificationItem> items = pageRows.stream().map(NotificationItem::from).toList();
+        List<NotificationItem> items = toItems(pageRows);
         Notification last = pageRows.isEmpty() ? null : pageRows.get(pageRows.size() - 1);
         String nextCursor = hasMore && last != null
                 ? new KeysetCursor(last.getCreatedAt(), last.getId()).encode()
@@ -72,6 +84,32 @@ public class NotificationCenterService {
             redis.opsForValue().set(unreadKey(userId), String.valueOf(actualUnread));
         }
         return new NotificationPage(items, nextCursor, hasMore);
+    }
+
+    /**
+     * 行 → 列表项。运营通知（{@code OPS_ANNOUNCEMENT}）按 targetRef（活动 publicToken）<b>一页一次</b>批量回查活动，
+     * 附带 {@code opsTarget}；targetRef 为 null 或查不到活动（理论上不会发生，活动不提供删除）给 {@code NONE}。其它类型 opsTarget = null。
+     */
+    private List<NotificationItem> toItems(List<Notification> pageRows) {
+        Set<String> opsTokens = pageRows.stream()
+                .filter(n -> n.getType() == NotificationType.OPS_ANNOUNCEMENT && n.getTargetRef() != null)
+                .map(Notification::getTargetRef)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<String, OpsTargetView> targets = opsTokens.isEmpty()
+                ? Map.of()
+                : campaigns.findByPublicTokenIn(opsTokens).stream().collect(Collectors.toMap(
+                        OpsNotificationCampaign::getPublicToken,
+                        c -> OpsTargetView.of(c.getTargetType(), c.getTargetValue()),
+                        (a, b) -> a));
+        OpsTargetView none = OpsTargetView.of(OpsTargetType.NONE, null);
+        return pageRows.stream()
+                .map(n -> n.getType() == NotificationType.OPS_ANNOUNCEMENT
+                        // Map.of() 不接受 null 键：targetRef 为 null 先判，直接给 NONE
+                        ? NotificationItem.from(n, n.getTargetRef() == null
+                                ? none
+                                : targets.getOrDefault(n.getTargetRef(), none))
+                        : NotificationItem.from(n))
+                .toList();
     }
 
     /** 未读角标：读 Redis；缺值按库回算并回填（容错，不依赖角标键永不丢）。 */

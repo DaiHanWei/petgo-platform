@@ -160,5 +160,31 @@ public enum NotificationType {
      * 见 {@code V20260915_1614__rebuild_ck_notifications_type_with_mention.sql}。
      * 本枚举是那份清单的**唯一权威**。
      */
-    CONTENT_MENTIONED
+    CONTENT_MENTIONED,
+
+    // ===== V1.3.4（决策日志 D-26）：app 主题与 follow 主题两分支按同一顺序追加这三个值 =====
+    /**
+     * 运营系统通知（V1.3.4 app 主题 FR-138 · AD-17 · Story 6.1）。
+     *
+     * <ul>
+     *   <li>通知中心<b>显示后端下发的 title / body</b>（唯一例外：其它类型由 App 按 type 本地化，见 Story 6.3）；
+     *       title / body 在写入时已按收件人语言从活动的 EN / ID 两套文案中选定。</li>
+     *   <li>{@code targetRef} = 活动 {@code ops_notification_campaigns.public_token}；
+     *       列表接口据此批量回查活动、附带 {@code opsTarget}。</li>
+     *   <li>推送文案直接用该行 title / body，<b>不走 messageSource</b>。</li>
+     * </ul>
+     * ⚠️ 加值必须同步重列 {@code ck_notifications_type}（见 {@code V20261012_1108__rebuild_ck_notifications_type.sql}）。
+     */
+    OPS_ANNOUNCEMENT,
+    /**
+     * 被关注 → 被关注者（follow 主题 FR-141 Story 3.2）；不聚合；targetRef = 关注者 userId。
+     * app 主题只占位、不写业务。⚠️ 加值必须同步重列 {@code ck_notifications_type}。
+     */
+    USER_FOLLOWED,
+    /**
+     * 他人在我创建的场所下评论（审核通过后）→ 创建者（follow 主题 FR-141 Story 3.2）；
+     * {@code aggregate_key = COMMENT:PLACE:{placeId}}；targetRef = 场所 publicToken。
+     * app 主题只占位、不写业务。⚠️ 加值必须同步重列 {@code ck_notifications_type}。
+     */
+    PLACE_COMMENTED
 }

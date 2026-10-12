@@ -347,7 +347,7 @@
 
 | 端点 | 方法 | 请求 | 响应 |
 |---|---|---|---|
-| `/notifications` | `GET` | `cursor`?, `limit`?(默认 20，最大 50) | `200` 游标信封；item：`type`,`title`?,`body`?,`deepLinkType`?,`deepLinkToken`?,`read`(bool),`createdAt` |
+| `/notifications` | `GET` | `cursor`?, `limit`?(默认 20，最大 50) | `200` 游标信封；item：`type`,`title`?,`body`?,`deepLinkType`?,`deepLinkToken`?,`targetRef`?,`read`(bool),`createdAt`,`opsTarget`?（仅 `OPS_ANNOUNCEMENT`：`{type, value?}`，与运营弹窗 `target` 同形；V1.3.4 Story 6.1） |
 | `/notifications/unread-count` | `GET` | — | `200`：`count`(long) |
 | `/notifications/{token}/read` | `POST` | path `token` | `200`（标记单条已读） |
 | `/notifications/read-all` | `POST` | — | `200`（全部已读） |
