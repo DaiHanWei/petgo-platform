@@ -9,6 +9,7 @@ import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/letter_avatar.dart';
+import '../../auth/domain/auth_state.dart';
 import '../../user_profile/data/public_profile_repository.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
 import '../data/follow_suggestion_repository.dart';
@@ -58,6 +59,17 @@ class _FollowListPageState extends ConsumerState<FollowListPage> with SingleTick
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 2.2 code-review F1：游客在本页登录（或换了账号）→ 主页信息（`self`）与两个 Tab 按新身份重取，
+    // 否则自己那一行会冒出关注按钮、已关注的人仍显示 Ikuti（同主页 Story 1.3 AC5.6）。
+    ref.listen<int?>(
+      authControllerProvider.select((s) => s.isLoggedIn ? s.profile?.id : null),
+      (prev, next) {
+        if (prev == next) return;
+        ref.invalidate(publicProfileProvider(widget.userId));
+        ref.invalidate(followListControllerProvider);
+        ref.invalidate(followSuggestionsProvider);
+      },
+    );
     final async = ref.watch(publicProfileProvider(widget.userId));
     final profile = async.value;
     return Scaffold(
@@ -232,7 +244,11 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
   Widget _list(AppLocalizations l10n, FollowListState s) =>
       NotificationListener<ScrollNotification>(
         onNotification: (n) {
-          if (n.metrics.extentAfter < 300 && s.hasMore && !s.loadingMore && !s.loadMoreFailed) {
+          if (n.metrics.extentAfter >= 300) return false;
+          // ⚠️ 读**当前**状态，不用闭包里构建时的 `s`：失败落地到下一帧重建之间，惯性滚动的通知仍拿着旧 `s`
+          // （loadMoreFailed=false），会绕过「失败后不自动重试、等底部 Coba lagi」直接再发一次。
+          final cur = ref.read(followListControllerProvider(_key)).value;
+          if (cur != null && cur.hasMore && !cur.loadingMore && !cur.loadMoreFailed) {
             ref.read(followListControllerProvider(_key).notifier).loadMore();
           }
           return false;

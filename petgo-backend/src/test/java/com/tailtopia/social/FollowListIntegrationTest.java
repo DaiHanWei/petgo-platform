@@ -117,6 +117,10 @@ class FollowListIntegrationTest extends ApiIntegrationTest {
 
         JsonNode items = page("/api/v1/users/" + owner.getPublicToken() + "/following",
                 userBearer(viewer.getId()), null).get("items");
+        // 2.2 code-review F8：先钉住条数与每一行都在，否则下面 if/else 缺行也照样通过。
+        assertThat(ids(page("/api/v1/users/" + owner.getPublicToken() + "/following", null, null)))
+                .containsExactlyInAnyOrder(viewer.getId(), mutual.getId(), blocked.getId(), reported.getId());
+        assertThat(items).hasSize(4);
         for (JsonNode i : items) {
             long id = i.get("userId").asLong();
             if (id == viewer.getId()) {
@@ -147,6 +151,7 @@ class FollowListIntegrationTest extends ApiIntegrationTest {
             assertThat(i.get("iFollow").asBoolean()).isFalse();
             assertThat(i.get("followsMe").asBoolean()).isFalse();
             assertThat(i.get("self").asBoolean()).isFalse();
+            assertThat(i.get("blockedByMe").asBoolean()).isFalse();
         }
     }
 

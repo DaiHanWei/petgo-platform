@@ -33,12 +33,26 @@ class _Auth extends AuthController {
       );
 }
 
+/// 2.2 code-review F1：游客 → 登录（同一页面实例里切身份）。
+class _GuestThenLogin extends AuthController {
+  @override
+  AuthState build() => const AuthState.guest();
+
+  void login() => state = const AuthState(
+        status: AuthStatus.authenticated,
+        role: 'USER',
+        profile: UserProfile(id: _kMe, nickname: 'Me', onboardingCompleted: true),
+      );
+}
+
 class _ProfileRepo implements PublicProfileRepository {
   _ProfileRepo(this.result);
-  final Object result;
+  Object result;
+  int calls = 0;
 
   @override
   Future<PublicProfile> getPublicProfile(int userId) async {
+    calls++;
     final r = result;
     if (r is PublicProfile) return r;
     throw r;
@@ -104,6 +118,7 @@ late AppLocalizations l10n;
 
 class _Nav {
   int? openedProfile;
+  late ProviderContainer container;
 }
 
 Future<_Nav> _pump(
@@ -112,6 +127,7 @@ Future<_Nav> _pump(
   required _ListRepo lists,
   _FollowRepo? follows,
   FollowListTab tab = FollowListTab.following,
+  AuthController Function()? auth,
 }) async {
   final nav = _Nav();
   final router = GoRouter(
@@ -135,13 +151,14 @@ Future<_Nav> _pump(
   );
   addTearDown(router.dispose);
   final container = ProviderContainer(overrides: [
-    publicProfileRepositoryProvider.overrideWithValue(_ProfileRepo(profile)),
+    publicProfileRepositoryProvider.overrideWithValue(profile is _ProfileRepo ? profile : _ProfileRepo(profile)),
     followListRepositoryProvider.overrideWithValue(lists),
     followRepositoryProvider.overrideWithValue(follows ?? _FollowRepo()),
     followSuggestionRepositoryProvider.overrideWithValue(_NoSuggestions()),
-    authControllerProvider.overrideWith(_Auth.new),
+    authControllerProvider.overrideWith(auth ?? _Auth.new),
   ]);
   addTearDown(container.dispose);
+  nav.container = container;
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: MaterialApp.router(
@@ -284,10 +301,6 @@ void main() {
 
   testWidgets('加载中显示拉黑列表同款骨架', (tester) async {
     final gate = Completer<FollowListPageData>();
-    final lists = _ListRepo({
-      FollowListTab.following: [gate.future],
-      FollowListTab.followers: [_page([])],
-    });
     final router = GoRouter(
       initialLocation: FollowListPage.location(_kOwner, FollowListTab.following),
       routes: [
@@ -309,10 +322,13 @@ void main() {
     ));
     await tester.pump();
     await tester.pump();
+    // 2.2 code-review F8：主页信息已到（Tab 栏已出）→ 这个骨架是**列表**的，不是主页加载那一个。
+    expect(find.byKey(const ValueKey('followListTabFollowing')), findsOneWidget);
     expect(find.byType(BlockedListSkeleton), findsOneWidget);
-    gate.complete(_page([]));
+    gate.complete(_page([_row(7)]));
     await tester.pumpAndSettle();
-    expect(lists.calls, isEmpty);
+    expect(find.byType(BlockedListSkeleton), findsNothing);
+    expect(find.byKey(const ValueKey('followListRow_7')), findsOneWidget);
   });
 
   testWidgets('失败态：不画成空态；点重试只重拉当前 Tab', (tester) async {
@@ -331,7 +347,7 @@ void main() {
     expect(lists.calls.where((c) => c.$1 == FollowListTab.followers), isEmpty);
   });
 
-  testWidgets('主页用户已注销 / 封号 → Pengguna tidak ditemukan；我拉黑了他 → 已拉黑空态', (tester) async {
+  testWidgets('主页用户已注销 / 封号 → Pengguna tidak ditemukan', (tester) async {
     await _pump(tester,
         profile: const PublicProfile(postCount: 0, likeCount: 0, isDeactivated: true, self: false),
         lists: _ListRepo({FollowListTab.following: [_page([])], FollowListTab.followers: [_page([])]}));
@@ -366,6 +382,113 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(lists.calls.where((c) => c.$1 == FollowListTab.following).map((c) => c.$2), [null, 'c2']);
+  });
+
+  // ===== 2.2 code-review F8：补齐未覆盖的 AC 要点 =====
+
+  testWidgets('AC5.1 常驻：取关后行保留，下拉刷新后该行消失', (tester) async {
+    final lists = _ListRepo({
+      FollowListTab.following: [
+        _page([_row(7, s: const FollowState(iFollow: true, followsMe: false)), _row(8, s: const FollowState(iFollow: true, followsMe: false))]),
+        _page([_row(8, s: const FollowState(iFollow: true, followsMe: false))]),
+      ],
+      FollowListTab.followers: [_page([])],
+    });
+    await _pump(tester, profile: _owner(self: true), lists: lists);
+    await tester.tap(_btn('following', 7));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('followListRow_7')), findsOneWidget);
+
+    await tester.drag(find.byKey(const ValueKey('followListRow_8')), const Offset(0, 300));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('followListRow_7')), findsNothing);
+    expect(_label(tester, 'following', 8), l10n.followActionFollowing);
+  });
+
+  testWidgets('AC5.2 非常驻：在一个 Tab 关注了某人 → 另一个 Tab 里同一个人的按钮立即隐藏', (tester) async {
+    final lists = _ListRepo({
+      FollowListTab.following: [_page([_row(11)])],
+      FollowListTab.followers: [_page([_row(11)])],
+    });
+    await _pump(tester, profile: _owner(), lists: lists);
+    await tester.tap(find.byKey(const ValueKey('followListTabFollowers')));
+    await tester.pumpAndSettle();
+    expect(_btn('followers', 11), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('followListTabFollowing')));
+    await tester.pumpAndSettle();
+    await tester.tap(_btn('following', 11));
+    await tester.pumpAndSettle();
+    expect(_label(tester, 'following', 11), l10n.followActionFollowing);
+
+    await tester.tap(find.byKey(const ValueKey('followListTabFollowers')));
+    await tester.pumpAndSettle();
+    expect(_btn('followers', 11), findsNothing);
+    expect(find.byKey(const ValueKey('followListRow_11')), findsOneWidget);
+  });
+
+  testWidgets('AC7.1 下拉刷新 / 加载更多不重复报 follow_list_viewed；加载更多失败 → 底部重试', (tester) async {
+    final lists = _ListRepo({
+      FollowListTab.following: [
+        _page([for (var i = 100; i < 120; i++) _row(i)], hasMore: true, next: 'c2'),
+        DioException(requestOptions: RequestOptions(path: '/x')),
+        _page([_row(200)]),
+        _page([_row(300)]),
+      ],
+      FollowListTab.followers: [_page([])],
+    });
+    await _pump(tester, profile: _owner(), lists: lists);
+
+    await tester.drag(find.byType(ListView).first, const Offset(0, -3000));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('followListLoadMoreRetry')), findsOneWidget);
+    expect(lists.calls.where((c) => c.$2 == 'c2'), hasLength(1), reason: '失败后不自动重试（惯性滚动也不行）');
+
+    await tester.tap(find.byKey(const ValueKey('followListLoadMoreRetry')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('followListRow_200')), findsOneWidget);
+
+    await tester.drag(find.byType(ListView).first, const Offset(0, 5000));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).first, const Offset(0, 300));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('followListRow_300')), findsOneWidget);
+
+    expect(events.where((e) => e.$1 == 'follow_list_viewed'), hasLength(1));
+  });
+
+  testWidgets('AC4.4 自己那一行无按钮但可点进自己的主页', (tester) async {
+    final lists = _ListRepo({
+      FollowListTab.following: [_page([_row(_kMe, self: true)])],
+      FollowListTab.followers: [_page([])],
+    });
+    final nav = await _pump(tester, profile: _owner(), lists: lists);
+
+    expect(_btn('following', _kMe), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('followListOpen_$_kMe')));
+    await tester.pumpAndSettle();
+    expect(nav.openedProfile, _kMe);
+  });
+
+  testWidgets('code-review F1：游客在列表页登录 → 主页信息与列表按新身份重取', (tester) async {
+    final profiles = _ProfileRepo(_owner());
+    final lists = _ListRepo({
+      FollowListTab.following: [
+        _page([_row(_kMe), _row(7)]),
+        _page([_row(_kMe, self: true), _row(7, s: const FollowState(iFollow: true, followsMe: false))]),
+      ],
+      FollowListTab.followers: [_page([])],
+    });
+    final nav = await _pump(tester, profile: profiles, lists: lists, auth: _GuestThenLogin.new);
+    expect(_btn('following', _kMe), findsOneWidget, reason: '游客视角：自己那一行是普通行');
+    expect(profiles.calls, 1);
+
+    (nav.container.read(authControllerProvider.notifier) as _GuestThenLogin).login();
+    await tester.pumpAndSettle();
+
+    expect(profiles.calls, 2);
+    expect(_btn('following', _kMe), findsNothing, reason: '登录后自己那一行无按钮');
+    expect(_btn('following', 7), findsNothing, reason: '已关注的人在非常驻列表不显示按钮');
   });
 
   test('FollowListItem.fromJson：注销行缺键不崩', () {

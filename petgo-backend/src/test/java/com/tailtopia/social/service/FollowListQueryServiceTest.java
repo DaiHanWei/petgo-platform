@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -38,7 +39,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 
 /** L0：关注 / 粉丝列表组装（V1.3.4 follow · Story 2.2 · AC1）—— 整页批量、游客、拉黑、分页、注销行。 */
@@ -93,7 +93,7 @@ class FollowListQueryServiceTest {
         for (int i = 0; i < n; i++) {
             rows.add(row(OWNER, 100L + i, t.minusSeconds(i)));
         }
-        when(follows.findFollowingPage(eq(OWNER), any(), anyLong(), any(Pageable.class))).thenReturn(rows);
+        when(follows.findFollowingPage(eq(OWNER), any(), anyLong(), anyInt())).thenReturn(rows);
     }
 
     @Test
@@ -120,7 +120,7 @@ class FollowListQueryServiceTest {
                 row(OWNER, VIEWER, Instant.parse("2026-10-12T00:00:02Z")),
                 row(OWNER, 101L, Instant.parse("2026-10-12T00:00:01Z")),
                 row(OWNER, 99L, Instant.parse("2026-10-12T00:00:00Z")));
-        when(follows.findFollowingPage(eq(OWNER), any(), anyLong(), any(Pageable.class))).thenReturn(rows);
+        when(follows.findFollowingPage(eq(OWNER), any(), anyLong(), anyInt())).thenReturn(rows);
         when(followReader.followStates(eq(VIEWER), anyCollection()))
                 .thenReturn(Map.of(100L, new FollowState(true, true)));
         when(hideRepo.findTargetIdsByHolderAndSourceIn(eq(VIEWER), eq(HideSource.BLOCK), anyList()))
@@ -163,7 +163,7 @@ class FollowListQueryServiceTest {
 
         when(hideRelations.isBlocked(VIEWER, OWNER)).thenReturn(false);
         when(hideRelations.isBlocked(OWNER, VIEWER)).thenReturn(true);
-        when(follows.findFollowersPage(eq(OWNER), any(), anyLong(), any(Pageable.class))).thenReturn(List.of());
+        when(follows.findFollowersPage(eq(OWNER), any(), anyLong(), anyInt())).thenReturn(List.of());
         assertThat(service.followers(OWNER_TOKEN, VIEWER, null).items()).isEmpty();
     }
 
@@ -180,13 +180,13 @@ class FollowListQueryServiceTest {
         service.following(OWNER_TOKEN, VIEWER, "@@not-base64@@");
         var ts = org.mockito.ArgumentCaptor.forClass(Instant.class);
         var id = org.mockito.ArgumentCaptor.forClass(Long.class);
-        verify(follows).findFollowingPage(eq(OWNER), ts.capture(), id.capture(), any(Pageable.class));
+        verify(follows).findFollowingPage(eq(OWNER), ts.capture(), id.capture(), anyInt());
         assertThat(id.getValue()).isEqualTo(Long.MAX_VALUE);
         assertThat(ts.getValue()).isAfter(Instant.now());
 
         Instant at = Instant.parse("2026-10-01T00:00:00.123456Z");
         service.following(OWNER_TOKEN, VIEWER, new KeysetCursor(at, 42L).encode());
-        verify(follows).findFollowingPage(OWNER, at, 42L, org.springframework.data.domain.PageRequest.of(0, 21));
+        verify(follows).findFollowingPage(OWNER, at, 42L, 21);
     }
 
     @Test

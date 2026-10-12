@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,8 +61,7 @@ public class FollowListQueryService {
     public FollowListPage following(String ownerToken, Long viewerId, String cursor) {
         long ownerId = resolveOwner(ownerToken, viewerId);
         KeysetCursor c = parseCursor(cursor);
-        List<UserFollow> rows = follows.findFollowingPage(ownerId, c.createdAt(), c.id(),
-                PageRequest.of(0, PAGE_SIZE + 1));
+        List<UserFollow> rows = follows.findFollowingPage(ownerId, c.createdAt(), c.id(), PAGE_SIZE + 1);
         return assemble(rows, UserFollow::getFolloweeId, viewerId);
     }
 
@@ -72,8 +70,7 @@ public class FollowListQueryService {
     public FollowListPage followers(String ownerToken, Long viewerId, String cursor) {
         long ownerId = resolveOwner(ownerToken, viewerId);
         KeysetCursor c = parseCursor(cursor);
-        List<UserFollow> rows = follows.findFollowersPage(ownerId, c.createdAt(), c.id(),
-                PageRequest.of(0, PAGE_SIZE + 1));
+        List<UserFollow> rows = follows.findFollowersPage(ownerId, c.createdAt(), c.id(), PAGE_SIZE + 1);
         return assemble(rows, UserFollow::getFollowerId, viewerId);
     }
 

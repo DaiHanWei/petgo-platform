@@ -58,24 +58,32 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, UserFoll
             @Param("targetIds") List<Long> targetIds);
 
     /**
-     * 关注列表一页（Story 2.2 · AD-4）：{@code ownerId} 关注的人，keyset {@code created_at DESC, followee_id DESC}。
+     * 关注列表一页（Story 2.2 · AC1）：{@code ownerId} 关注的人，keyset {@code created_at DESC, followee_id DESC}。
      * 调用方传 {@code limit + 1} 判 hasMore；首页用 {@code KeysetCursor.firstPage()} 哨兵（不需要 hasCursor 门控）。
-     * 走 {@code idx_user_follows_follower_created}（T-4 三列）。
+     *
+     * <p>2.2 code-review F7：游标条件用<b>行值比较</b> {@code (created_at, followee_id) < (ts, id)}，
+     * 不写 {@code created_at < ts OR (created_at = ts AND …)} —— 后者 Postgres 只能从该用户索引开头扫起、
+     * 边扫边过滤，翻页越深越慢；行值比较能直接在 {@code idx_user_follows_follower_created}（T-4 三列）上定位起点。
+     * 用 native 写，避免依赖 HQL 元组比较的方言渲染。
      */
-    @Query("SELECT f FROM UserFollow f WHERE f.followerId = :ownerId "
-            + "AND (f.createdAt < :cursorTs OR (f.createdAt = :cursorTs AND f.followeeId < :cursorId)) "
-            + "ORDER BY f.createdAt DESC, f.followeeId DESC")
+    @Query(value = """
+            SELECT * FROM user_follows
+             WHERE follower_id = :ownerId AND (created_at, followee_id) < (:cursorTs, :cursorId)
+             ORDER BY created_at DESC, followee_id DESC
+             LIMIT :limit
+            """, nativeQuery = true)
     List<UserFollow> findFollowingPage(@Param("ownerId") long ownerId,
-            @Param("cursorTs") Instant cursorTs, @Param("cursorId") long cursorId,
-            org.springframework.data.domain.Pageable page);
+            @Param("cursorTs") Instant cursorTs, @Param("cursorId") long cursorId, @Param("limit") int limit);
 
-    /** 粉丝列表一页：关注 {@code ownerId} 的人，keyset {@code created_at DESC, follower_id DESC}。 */
-    @Query("SELECT f FROM UserFollow f WHERE f.followeeId = :ownerId "
-            + "AND (f.createdAt < :cursorTs OR (f.createdAt = :cursorTs AND f.followerId < :cursorId)) "
-            + "ORDER BY f.createdAt DESC, f.followerId DESC")
+    /** 粉丝列表一页：关注 {@code ownerId} 的人，keyset {@code created_at DESC, follower_id DESC}（行值比较，同上）。 */
+    @Query(value = """
+            SELECT * FROM user_follows
+             WHERE followee_id = :ownerId AND (created_at, follower_id) < (:cursorTs, :cursorId)
+             ORDER BY created_at DESC, follower_id DESC
+             LIMIT :limit
+            """, nativeQuery = true)
     List<UserFollow> findFollowersPage(@Param("ownerId") long ownerId,
-            @Param("cursorTs") Instant cursorTs, @Param("cursorId") long cursorId,
-            org.springframework.data.domain.Pageable page);
+            @Param("cursorTs") Instant cursorTs, @Param("cursorId") long cursorId, @Param("limit") int limit);
 
     /**
      * 推荐关注候选 id，已按推荐次序排好（Story 2.3 · AD-4 / FR-140.11）。
