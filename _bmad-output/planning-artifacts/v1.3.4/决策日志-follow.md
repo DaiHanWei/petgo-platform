@@ -8,7 +8,7 @@
 
 | # | 议题 | 决定 | 覆盖/订正了什么 |
 |---|---|---|---|
-| D-1 | `ck_notifications_type` 与 app 主题（FR-138 `OPS_ANNOUNCEMENT`）分属两个分支 | **两个分支的重建都列全集 34 值**（现有 31 + `OPS_ANNOUNCEMENT` + `USER_FOLLOWED` + `PLACE_COMMENTED`），先后合并、先后执行都得到完整全集；app 主题架构 AD-17 / Story 6.1 同步改为 34 值 | PRD §3.2「合并到同一个迁移」的落地方式 |
+| D-1 | `ck_notifications_type` 与 app 主题（FR-138 `OPS_ANNOUNCEMENT`）分属两个分支 | **两个分支的重建都列全集 34 值**（现有 31 + `OPS_ANNOUNCEMENT` + `USER_FOLLOWED` + `PLACE_COMMENTED`），先后合并、先后执行都得到完整全集；`NotificationType` 枚举两分支都在末尾按同一顺序追加这三个值（改动逐字相同、合并不冲突；`MentionNotifyTest` 校验「枚举 = 约束」）；app 主题 AD-17 / Story 6-1 已同步（其决策日志 D-26，2026-10-12） | PRD §3.2「合并到同一个迁移」的落地方式 |
 | D-2 | 关注相关新接口的用户标识 | **新接口改用不可枚举的用户 token**（`users` 新增 `public_token`）；现有他人主页 / 拉黑 / 作者字段仍是数字 id，本版本不改造。关注列表行同时带 `userId`（跳转现有主页路由用）与 `userToken`（关注操作用） | 架构护栏「对外标识一律 token」的新增接口部分 |
 | D-3 | 计数缩写 | **≥ 1.000 即缩写**：1.234 → id「1,2K」/ en「1.2K」；≥ 1.000.000 用 M；最多一位小数、去掉末尾 0（1.000 → 1K）；< 1.000 显示原数。用于主页四格数据 | PRD「≥10,000 显示 1.2K 式」 |
 | D-4 | B 拉黑 A 后，A 能否关注 B | **能，照常成功**：不暴露 A 被拉黑；B 的粉丝数 +1，但 B 不收到这条新粉丝通知（拉黑过滤） | 补 PRD §3.1「拉黑与关注」只写了拉黑方不能关注 |

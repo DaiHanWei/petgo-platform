@@ -85,7 +85,7 @@ updated: '2026-10-12'
 
 - **AR1（AD-1）** `user_follows` + `users.following_count / follower_count` 冗余计数；注销先删关系并扣对端计数
 - **AR2（AD-2）** `users.public_token` + 回填；下发到主页 / me / Feed / 详情 / 列表 / 新粉丝通知
-- **AR3（AD-3）** `notifications` 加 `aggregate_key` / `comment_id` / `variant` / `updated_at`；新表 `notification_actors`；未读聚合部分唯一索引；CHECK 34 值；枚举加 `USER_FOLLOWED` / `PLACE_COMMENTED`
+- **AR3（AD-3）** `notifications` 加 `aggregate_key` / `comment_id` / `variant` / `updated_at`；新表 `notification_actors`；未读聚合部分唯一索引；CHECK 34 值；枚举末尾按序加 `OPS_ANNOUNCEMENT` / `USER_FOLLOWED` / `PLACE_COMMENTED`
 - **AR4（AD-4）** 关注接口 PUT / DELETE `/users/{token}/follow`；拒绝规则；30 / 分钟 + 500 / WIB 日；列表 keyset；推荐接口
 - **AR5（AD-5）** 拉黑同事务删 A→B 关注
 - **AR6（AD-6）** 主页 / me / Feed / 详情 DTO 扩字段；封号按已注销处理
@@ -96,7 +96,7 @@ updated: '2026-10-12'
 - **AR11（AD-11）** 列表读取时批量拼文案；DTO 加 `actorName` / `actorCount` / `actorUserId` / `actorToken` / `actorIFollow`
 - **AR12（AD-12）** App 通知中心五段 / 时间格式 / 圆点 / 新图标 / 回关按钮 / 路由
 - **AR13（AD-13）** 埋点与前缀登记
-- **AR14（AD-14）** `OPS_ANNOUNCEMENT` 枚举由 app 主题加，本主题 CHECK 预留
+- **AR14（AD-14）** 枚举三个新值两分支逐字相同地追加；`OPS_ANNOUNCEMENT` 本主题只占位
 - **AR15（AD-15）** 推翻「不做关注」的注释与测试
 - **AR16** 迁移 4 个（AD §9）
 
@@ -398,7 +398,7 @@ So that 通知不再是一串看不出内容的「有人赞了你」。
 **Given** 迁移执行后
 **When** 查看库表
 **Then** `notifications` 新增 `aggregate_key`、`comment_id`、`variant`、`updated_at`；新表 `notification_actors(notification_id, actor_user_id, acted_at, PK)`（两 FK CASCADE）；部分唯一索引 `uq_notifications_unread_aggregate (recipient_user_id, aggregate_key) WHERE is_read = false AND aggregate_key IS NOT NULL`（AD-3）
-**And** `ck_notifications_type` DROP + ADD 全集 34 值（现有 31 + `OPS_ANNOUNCEMENT` + `USER_FOLLOWED` + `PLACE_COMMENTED`），开工当天对全部远端分支并集核查并在迁移注释记录；`NotificationType` 枚举加 `USER_FOLLOWED`、`PLACE_COMMENTED`（`OPS_ANNOUNCEMENT` 由 app 主题加）（D-1，NFR6）
+**And** `ck_notifications_type` DROP + ADD 全集 34 值（现有 31 + `OPS_ANNOUNCEMENT` + `USER_FOLLOWED` + `PLACE_COMMENTED`），开工当天对全部远端分支并集核查并在迁移注释记录；`NotificationType` 枚举末尾按序追加 `OPS_ANNOUNCEMENT`、`USER_FOLLOWED`、`PLACE_COMMENTED`（与 app 主题逐字相同，`MentionNotifyTest` 两边都成立）（D-1，NFR6）
 
 **Given** `NotificationService.sendInteraction(...)`
 **When** 同一帖子（`aggregate_key = LIKE:POST:{postId}`）有未读点赞通知时又被点赞

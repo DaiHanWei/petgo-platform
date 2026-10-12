@@ -38,7 +38,7 @@ code_baseline: feat/1.3.4-follow-notify @ 28a7d30d（= main，含 V1.3.3）
 - `notifications` 加：`aggregate_key VARCHAR(64) NULL`（`LIKE:POST:{id}` / `COMMENT:PLACE:{id}`）、`comment_id BIGINT NULL`（评论 / 回复类指向具体评论）、`variant VARCHAR(16) NULL`（`REPLY` 区分「回复了你的评论」，D 文案见 §5）、`updated_at TIMESTAMPTZ`。
 - 新表 `notification_actors(notification_id BIGINT FK CASCADE, actor_user_id BIGINT FK → users ON DELETE CASCADE, acted_at TIMESTAMPTZ, PRIMARY KEY (notification_id, actor_user_id))`——每条互动通知的触发人集合（评论 / 新粉丝恰一行；点赞 / 场所评论聚合多行）。不在 `notifications` 存昵称（PRD：读取时现查）。
 - 「未读即合并」约束：部分唯一索引 `uq_notifications_unread_aggregate ON notifications (recipient_user_id, aggregate_key) WHERE is_read = false AND aggregate_key IS NOT NULL`。
-- **CHECK 重建**（决策日志 D-1）：`ck_notifications_type` DROP + ADD 全集 **34 值** = `V20260915_1614` 的 31 值 + `OPS_ANNOUNCEMENT` + `USER_FOLLOWED` + `PLACE_COMMENTED`；开工当天对全部远端分支并集核查并在迁移注释记录。`NotificationType` 枚举加 `USER_FOLLOWED`、`PLACE_COMMENTED`（`OPS_ANNOUNCEMENT` 由 app 主题加枚举；本主题只在 CHECK 中预留，见 §8 风险）。
+- **CHECK 重建**（决策日志 D-1）：`ck_notifications_type` DROP + ADD 全集 **34 值** = `V20260915_1614` 的 31 值 + `OPS_ANNOUNCEMENT` + `USER_FOLLOWED` + `PLACE_COMMENTED`；开工当天对全部远端分支并集核查并在迁移注释记录。`NotificationType` 枚举在末尾**按此顺序**追加 `OPS_ANNOUNCEMENT`、`USER_FOLLOWED`、`PLACE_COMMENTED`（与 app 主题逐字相同，合并不冲突；`MentionNotifyTest` 校验「枚举 = 约束」，只加两个会红）。
 
 ## 2. 关注接口（FR-140）
 
@@ -99,7 +99,7 @@ code_baseline: feat/1.3.4-follow-notify @ 28a7d30d（= main，含 V1.3.3）
 
 ## 8. 风险与跨主题约束
 
-**AD-14 · 与 app 主题的通知类型。** 两分支 CHECK 都列 34 值（D-1）；`NotificationType` 枚举里的 `OPS_ANNOUNCEMENT` 由 app 主题加——本主题**不加**该枚举值（避免两边枚举冲突），CHECK 预留不影响运行。两分支合并时以「枚举 ⊆ CHECK」为验收。
+**AD-14 · 与 app 主题的通知类型。** 两分支 CHECK 都列 34 值、枚举末尾都按同一顺序追加三个值（逐字相同，D-1；app 主题决策日志 D-26 同步）。`OPS_ANNOUNCEMENT` 在本主题只占位、不写业务。
 
 **AD-15 · 已知注释 / 测试推翻。** `public_profile_page.dart:116-119`「明确不做关注」、`FeedService.java:35`「无关注」、`public_profile_posts_test` 的 `follow` 禁词、`mini_profile_test` 无 Follow 断言，随对应 story 更新。
 
