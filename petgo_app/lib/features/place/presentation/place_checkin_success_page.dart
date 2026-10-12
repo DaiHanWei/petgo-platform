@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +14,8 @@ import '../../pet_passport/data/pet_passport_repository.dart';
 import '../../pet_passport/domain/new_stamp_args.dart';
 import '../../pet_passport/presentation/passport_layout.dart';
 import '../../pet_passport/presentation/pet_passport_stamp_page.dart';
+import '../../profile/domain/milestone_instant_codes.dart';
+import '../../profile/presentation/milestone_instant_celebration.dart';
 import '../../profile/presentation/pet_insights_page.dart';
 import '../domain/place_checkin_result.dart';
 import 'widgets/place_stamp_view.dart';
@@ -55,6 +59,9 @@ class PlaceCheckinSuccessPage extends ConsumerStatefulWidget {
 class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPage> {
   PlaceCheckinSuccessArgs get args => widget.args;
 
+  /// V1.3.4 Story 4.3：每个成功页实例只检测一次「第一次打卡」里程碑的当场庆祝（重建 / 返回本页不重复）。
+  bool _milestoneChecked = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -67,6 +74,12 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
     // 刚盖的章要出现在护照里：进页即重取护照（章详情块读它；取到前 / 取不到用简版章面兜底）。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) ref.invalidate(petPassportProvider);
+      // V1.3.4 Story 4.3 · AD-19：后端异步达成「第一次打卡」→ 盖在成功页上当场庆祝；没等到交补庆祝兜底。
+      // 不按 isNewStamp 过滤（那是「这个场所的新章」），统一看「已完成未庆祝」。
+      if (mounted && !_milestoneChecked) {
+        _milestoneChecked = true;
+        unawaited(celebrateAutoMilestoneIfAny(context, ref, kPlaceCheckinMilestoneCodes));
+      }
     });
   }
 
