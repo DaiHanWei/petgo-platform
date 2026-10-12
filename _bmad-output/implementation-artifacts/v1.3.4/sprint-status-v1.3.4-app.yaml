@@ -50,7 +50,7 @@ development_status:
   # ===== Epic 2：发图不丢画面 =====
   epic-2: in-progress
   2-1-帖子保存与下发每张图的露出位置: review
-  2-2-feed-卡与详情页按露出位置开窗: ready-for-dev
+  2-2-feed-卡与详情页按露出位置开窗: review
   2-3-露出区域页-取代三档裁剪页: ready-for-dev
   2-4-发布链路改为原图上传并带上露出位置: ready-for-dev
   2-5-发帖页点缩略图看大图: ready-for-dev

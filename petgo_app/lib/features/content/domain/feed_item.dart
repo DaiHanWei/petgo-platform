@@ -99,6 +99,7 @@ class FeedItem {
     this.liked = false,
     this.commentCount = 0,
     this.imageSizes = const [],
+    this.imageCropOffsets = const [],
     this.imageUrls = const [],
     this.authorTags = const [],
     this.decorationTags = const [],
@@ -167,6 +168,16 @@ class FeedItem {
   /// 取用一律走 [firstImageSize] 这类安全取法。
   final List<ImageSize?> imageSizes;
 
+  /// 每张图的露出位置（V1.3.4 Story 2.1 下发 / 2.2 使用 · AD-6）。
+  ///
+  /// 与图片同序；元素 0~1，null = 居中。存量 / 无超界图的帖整列为空。
+  /// 取用一律走 [cropOffsetAt]，别假设长度与图片数一致。
+  final List<double?> imageCropOffsets;
+
+  /// 第 [i] 张图的露出位置；越界 / 缺失 → null（居中）。
+  double? cropOffsetAt(int i) =>
+      (i >= 0 && i < imageCropOffsets.length) ? imageCropOffsets[i] : null;
+
   /// 整组图片（V1.1.6 Story 3.4）。
   ///
   /// ⚠️ 后端**一直在下发**，只是首页此前每帖只显示一张，客户端从没读过。
@@ -202,6 +213,7 @@ class FeedItem {
         liked: liked ?? this.liked,
         commentCount: commentCount ?? this.commentCount,
         imageSizes: imageSizes,
+        imageCropOffsets: imageCropOffsets,
         imageUrls: imageUrls,
         authorTags: authorTags,
         decorationTags: decorationTags,
@@ -225,6 +237,8 @@ class FeedItem {
         commentCount: (json['commentCount'] ?? 0) as int,
         // 无图时后端整个字段都不下发（Jackson NON_NULL）——解析必须容忍缺失。
         imageSizes: ImageSize.listFromJson(json['imageSizes']),
+        // V1.3.4 2.1：存量 / 无超界图时整个字段不下发；元素可为 null。
+        imageCropOffsets: cropOffsetListFromJson(json['imageCropOffsets']),
         // 同样在无图时整个字段都不下发。
         authorTags: UserTag.listFromJson(json['authorTags']),
         decorationTags: ContentTag.listFromJson(json['decorationTags']),

@@ -1,6 +1,6 @@
 # Story 2.2: Feed 卡与详情页按露出位置开窗
 
-Status: ready-for-dev
+Status: review
 
 > 版本 V1.3.4 · 主题 app · Epic 2「发图不丢画面」· FR-125.3 / 125.8 / 125.9 / 125.10 · AD-6 / AD-7 · NFR2 / NFR7
 > 本 story **只动 App**（读 2.1 下发的 `imageCropOffsets` 并在渲染时换对齐方式）。后端无改动。
@@ -57,23 +57,23 @@ Alignment feedImageAlignment(ImageSize? size, double? cropOffset)
 
 ## Tasks / Subtasks
 
-- [ ] **T1 纯函数 + 解析**（AC1 / AC2）
-  - [ ] `feed_image_layout.dart` 顶部加 `import 'package:flutter/painting.dart' show Alignment;`；新增 `feedImageAlignment`（AC1 规则，函数 doc 写「BoxFit.cover 下 0 / 0.5 / 1 恰对应贴起始边 / 居中 / 贴结束边；只换对齐，不碰比例」）
-  - [ ] 同文件新增 `List<double?> cropOffsetListFromJson(Object? raw)`：非 List → `const []`；元素 `num` 且有限 → `toDouble()`，否则 null（容忍 `0` / `1` 以整数形式下发）
-  - [ ] `test/content/feed_image_layout_test.dart` 追加一个 `group('V1.3.4 2.2 露出位置', ...)`：AC1 全部断言 + AC2 两条算术断言 + `cropOffsetListFromJson` 三例（缺字段 / 含 null / 整数 0 与 1）
-- [ ] **T2 模型**（AC3.1 / AC4.1）
-  - [ ] `feed_item.dart`：构造器 L101 附近加 `this.imageCropOffsets = const []`；字段 + doc；`cropOffsetAt`；`copyWith`（L190–208）透传；`fromJson`（L227 附近）`imageCropOffsets: cropOffsetListFromJson(json['imageCropOffsets'])`
-  - [ ] `content_detail.dart`：同上（构造器 L24 附近、字段在 `imageSizes` L59 之后、`cropOffsetAt` 照 `sizeAt` L64–65、`fromJson` L103 之后）
-- [ ] **T3 Feed 卡**（AC3）
-  - [ ] `lib/shared/widgets/feed_image.dart`：构造器加 `this.sizes = const []`、`this.cropOffsets = const []` 两入参与 doc；`_imageAt(i)`（L208–224）的 `Image(...)` 增 `alignment:`（AC3.2 取法）；`build` 内 `resolveFeedImageAspect` 调用（L230–234）**不改**
-  - [ ] `lib/shared/widgets/masonry_card.dart` L236–253 `FeedImage(...)` 增两实参
-  - [ ] `lib/features/content/presentation/promo_pinned_card.dart` L55–62 **不改**（推广卡是运营素材，无 offset 数据 → 默认居中；见「关键设计点」）
-- [ ] **T4 详情轮播**（AC4）
-  - [ ] `lib/shared/widgets/app_image.dart` `widget(...)`（L43–89）加 `Alignment alignment = Alignment.center` 并转发三种 `Image.*`
-  - [ ] `content_detail_page.dart`：`_ImageCarousel`（L539–565）加 `required this.cropOffsets` 字段与 doc；调用点 L247–256 传 `cropOffsets: detail.imageCropOffsets`；`AppImage.widget(...)`（L624 起）增 `alignment:`；`resolveDetailImageAspect` 调用（L600–604）不改
-  - [ ] 顺手把同一 `AspectRatio` 上方注释（约 L610–611）里过期的「clamp 0.75~1.34」改为「0.75~1.78」（AD §13 第 5 条，仅注释）
-- [ ] **T5 测试**（见下表）
-- [ ] **T6 L0**：`cd petgo_app && flutter analyze && flutter test`；**不对整个文件跑 `dart format`**
+- [x] **T1 纯函数 + 解析**（AC1 / AC2）
+  - [x] `feed_image_layout.dart` 顶部加 `import 'package:flutter/painting.dart' show Alignment;`；新增 `feedImageAlignment`（AC1 规则，函数 doc 写「BoxFit.cover 下 0 / 0.5 / 1 恰对应贴起始边 / 居中 / 贴结束边；只换对齐，不碰比例」）
+  - [x] 同文件新增 `List<double?> cropOffsetListFromJson(Object? raw)`：非 List → `const []`；元素 `num` 且有限 → `toDouble()`，否则 null（容忍 `0` / `1` 以整数形式下发）
+  - [x] `test/content/feed_image_layout_test.dart` 追加一个 `group('V1.3.4 2.2 露出位置', ...)`：AC1 全部断言 + AC2 两条算术断言 + `cropOffsetListFromJson` 三例（缺字段 / 含 null / 整数 0 与 1）
+- [x] **T2 模型**（AC3.1 / AC4.1）
+  - [x] `feed_item.dart`：构造器 L101 附近加 `this.imageCropOffsets = const []`；字段 + doc；`cropOffsetAt`；`copyWith`（L190–208）透传；`fromJson`（L227 附近）`imageCropOffsets: cropOffsetListFromJson(json['imageCropOffsets'])`
+  - [x] `content_detail.dart`：同上（构造器 L24 附近、字段在 `imageSizes` L59 之后、`cropOffsetAt` 照 `sizeAt` L64–65、`fromJson` L103 之后）
+- [x] **T3 Feed 卡**（AC3）
+  - [x] `lib/shared/widgets/feed_image.dart`：构造器加 `this.sizes = const []`、`this.cropOffsets = const []` 两入参与 doc；`_imageAt(i)`（L208–224）的 `Image(...)` 增 `alignment:`（AC3.2 取法）；`build` 内 `resolveFeedImageAspect` 调用（L230–234）**不改**
+  - [x] `lib/shared/widgets/masonry_card.dart` L236–253 `FeedImage(...)` 增两实参
+  - [x] `lib/features/content/presentation/promo_pinned_card.dart` L55–62 **不改**（推广卡是运营素材，无 offset 数据 → 默认居中；见「关键设计点」）
+- [x] **T4 详情轮播**（AC4）
+  - [x] `lib/shared/widgets/app_image.dart` `widget(...)`（L43–89）加 `Alignment alignment = Alignment.center` 并转发三种 `Image.*`
+  - [x] `content_detail_page.dart`：`_ImageCarousel`（L539–565）加 `required this.cropOffsets` 字段与 doc；调用点 L247–256 传 `cropOffsets: detail.imageCropOffsets`；`AppImage.widget(...)`（L624 起）增 `alignment:`；`resolveDetailImageAspect` 调用（L600–604）不改
+  - [x] 顺手把同一 `AspectRatio` 上方注释（约 L610–611）里过期的「clamp 0.75~1.34」改为「0.75~1.78」（AD §13 第 5 条，仅注释）
+- [x] **T5 测试**（见下表）
+- [x] **T6 L0**：`cd petgo_app && flutter analyze && flutter test`；**不对整个文件跑 `dart format`**
 
 ## Dev Notes
 
@@ -161,14 +161,51 @@ Alignment feedImageAlignment(ImageSize? size, double? cropOffset)
 
 ### Agent Model Used
 
+Claude Opus 5.5 (1M context)（claude-opus-5-5[1m]）
+
 ### Debug Log References
+
+- `flutter analyze`：No issues found。
+- `flutter test test/content test/shared`：612 通过 / 0 失败。
+- `flutter test`（全量）：2725 通过 / 1 失败——唯一失败为已知基线红 `test/profile/milestone_badge_test.dart`「每个 .webp 文件名都是某个语义键或 locked」（等 Story 4.1 补 key，4.1 之前允许红）。
+- 灯箱测试（`test/shared/image_lightbox_test.dart` / `lightbox_transition_test.dart`）全绿；`image_lightbox.dart`、`promo_pinned_card.dart`、`detail_image_layout.dart` 零 diff。
+- 后端无改动，未跑后端 L0；无迁移。
 
 ### Completion Notes List
 
+- 开工前核对 2.1 提交（0112176）：后端 JSON 键为 `imageCropOffsets`，元素为数字或 null，存量 / 无超界图整字段省略（NON_NULL）——与本 story 引用一致，story 文字无需改动。App 侧无镜像字段集测试 / mock 数据（`FeedResponseContractTest` 注释所指的 `FeedItem.fromJson` 已同步读取该键）。
+- `feedImageAlignment` / `cropOffsetListFromJson` 落在 `feed_image_layout.dart`（加 `package:flutter/painting.dart show Alignment`）；三段口径函数与常量一字未动。
+- `FeedImage` 新增 `sizes` / `cropOffsets`；`_sizeAt(0)` = `declaredSize ?? _decoded ?? sizes[0]`，其余按下标安全取；高度仍只按首图。`MasonryCard` 透传，顶置已发布内容同样开窗。
+- 详情 `_ImageCarousel` 新增 `cropOffsets`，`AppImage.widget` 新增 `alignment`（默认 center，三种 `Image.*` 均转发）；顺手把注释「0.75~1.34」订正为「0.75~1.78」。
+- **L1/L2 待本地验收**（本 story 无 L1 项）：
+  - AC3.5：模拟器上 3:1 宽图 offset 0 / 1 卡片露出最左 / 最右；1:2 竖图 offset 0 / 1 露出最上 / 最下。
+  - AC4.5：同一帖从 Feed 点进详情，露出段一致、无跳变。
+  - AC5.2：同一存量帖改动前后各截一张模拟器图逐像素比对。
+  - 数据准备：stag 上需有带 offset 的帖（2.4 完成后新包发，或 `UPDATE content_posts SET image_crop_offsets='[0.0]' WHERE id=<测试帖>`）。
+
+- 复审（bmad-code-review 口径）无 HIGH/MED；已修：规则 5 补上界端点 1.78 用例。记录（已知边界，按 AC3.2 写死规则不改）：帖子有 offset 但无尺寸时（后端 `ImageSizeResolver` 长度不齐整列丢弃尺寸、offset 另走严格校验，理论可能），Feed 首图会退到 `_decoded` 判方向而详情只看 `sizes[0]`，从 Feed 进详情可能出现露出段跳变；正常新发布帖必带尺寸，不会出现。
+
 #### 待确认
 
+- 沿用 story 已列项：推广卡（`PromoPinnedCard`）无 offset 来源，保持居中零改动；只有顶置的已发布内容（`MasonryCard`）开窗。若产品要推广卡也支持露出位置，需另开需求（后台可配 offset）。
+
 ### File List
+
+- petgo_app/lib/features/content/domain/feed_image_layout.dart
+- petgo_app/lib/features/content/domain/feed_item.dart
+- petgo_app/lib/features/content/domain/content_detail.dart
+- petgo_app/lib/features/content/presentation/content_detail_page.dart
+- petgo_app/lib/shared/widgets/feed_image.dart
+- petgo_app/lib/shared/widgets/masonry_card.dart
+- petgo_app/lib/shared/widgets/app_image.dart
+- petgo_app/test/content/feed_image_layout_test.dart
+- petgo_app/test/content/feed_image_render_test.dart
+- petgo_app/test/content/feed_carousel_test.dart
+- petgo_app/test/content/content_detail_test.dart
+- petgo_app/test/content/detail_image_layout_test.dart
+- petgo_app/test/shared/app_image_test.dart
 
 ## Change Log
 
 - 2026-10-12：story 创建（ready-for-dev）。
+- 2026-10-12：实现完成——Feed 卡与详情轮播按 `imageCropOffsets` 开窗（只换对齐、不碰比例），L0 绿（除已知基线红），Status → review。

@@ -22,6 +22,7 @@ class ContentDetail {
     this.body,
     this.imageUrls = const [],
     this.imageSizes = const [],
+    this.imageCropOffsets = const [],
     this.visibility = 'PUBLIC',
     this.mentions = const [],
     this.checkinPlace,
@@ -64,6 +65,14 @@ class ContentDetail {
   ImageSize? sizeAt(int i) =>
       (i >= 0 && i < imageSizes.length) ? imageSizes[i] : null;
 
+  /// 每张图的露出位置（V1.3.4 Story 2.1 下发 / 2.2 使用），与 [imageUrls] 同序；
+  /// 元素 0~1，null = 居中；存量整列为空。与 Feed 同走 [feedImageAlignment]。
+  final List<double?> imageCropOffsets;
+
+  /// 第 [i] 张图的露出位置；越界 / 缺失 → null（居中）。
+  double? cropOffsetAt(int i) =>
+      (i >= 0 && i < imageCropOffsets.length) ? imageCropOffsets[i] : null;
+
   /// 可见性线格式（`PUBLIC` / `PRIVATE`）。老响应体没有这个字段 ⇒ 按 `PUBLIC` 兜底。
   ///
   /// 只有一个用处：埋点 E-11 的 `is_private_diary`。**不要拿它当权限判据** ——
@@ -101,6 +110,7 @@ class ContentDetail {
       body: json['body'] as String?,
       imageUrls: raw is List ? raw.map((e) => e.toString()).toList() : const [],
       imageSizes: ImageSize.listFromJson(json['imageSizes']),
+      imageCropOffsets: cropOffsetListFromJson(json['imageCropOffsets']),
       visibility: (json['visibility'] ?? 'PUBLIC') as String,
       mentions: MentionView.listFromJson(json['mentions']),
       checkinPlace: CheckinPlaceRef.fromJson(json['checkinPlace']),

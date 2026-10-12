@@ -239,6 +239,9 @@ class MasonryCard extends StatelessWidget {
                     declaredSize: item.firstImageSize,
                     width: media.size.width,
                     maxImageHeight: maxH,
+                    // V1.3.4 2.2：按露出位置开窗（只换对齐，不碰比例）。
+                    sizes: item.imageSizes,
+                    cropOffsets: item.imageCropOffsets,
                     // 🛡 两个角位留给 Epic 4（顶置角标）与 Epic 5（装饰标签）——
                     // 它们只往这里挂内容，**不得再改图片区结构**（AD-8 Rule 6）。
                     topRight: pinnedBadge,
