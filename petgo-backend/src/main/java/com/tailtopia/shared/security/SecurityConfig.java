@@ -210,6 +210,9 @@ public class SecurityConfig {
                         // AC1 明写"仅对登录用户开放"，它靠落进默认的 authenticated 规则实现，
                         // 而不是再写一条规则（少动一次安全配置就少一次出错机会）。
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/pet").permitAll()
+                        // V1.3.4 follow Story 1.1：关注 / 取关（PUT / DELETE），只给 USER。
+                        // ⚠️ 不加这条会落到 anyRequest().authenticated()，兽医 token 也能以同号用户名义关注。
+                        .requestMatchers("/api/v1/users/*/follow").hasRole("USER")
                         // Toko 商品只读对游客可见（V1.4.0 Story 1.1，FR-93A）：GET 商品列表/详情放行。
                         // 与 FR-78「未登录点击非落地 Tab 触发登录引导」有意不同——商品浏览是转化漏斗
                         // 最上层，登录墙会直接杀掉转化；登录引导推迟到「加入购物车」（Story 3.6）。

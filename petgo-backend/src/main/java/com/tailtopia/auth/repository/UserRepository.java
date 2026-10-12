@@ -18,6 +18,60 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByGoogleSub(String googleSub);
 
+    /** V1.3.4 follow D-2：按对外不可枚举标识取号（关注接口解析目标用）。 */
+    Optional<User> findByPublicToken(String publicToken);
+
+    /**
+     * 关注 / 取关的冗余计数 ±1（V1.3.4 follow AD-1，只由 {@code FollowCounterService} 调用）。
+     *
+     * <p>🔴 必须在 SQL 里改，<b>禁止</b>读出来在 Java 里 ±1 再 save（并发丢更新）；
+     * 计数列在实体上是只读映射，save 也写不进去。{@code GREATEST(…, 0)} 兜底，计数永不为负。
+     */
+    @Modifying
+    @Query(value = "UPDATE users SET following_count = GREATEST(following_count + :delta, 0) WHERE id = :userId",
+            nativeQuery = true)
+    int addFollowingCount(@Param("userId") long userId, @Param("delta") int delta);
+
+    /** 同 {@link #addFollowingCount}，改 {@code follower_count}。 */
+    @Modifying
+    @Query(value = "UPDATE users SET follower_count = GREATEST(follower_count + :delta, 0) WHERE id = :userId",
+            nativeQuery = true)
+    int addFollowerCount(@Param("userId") long userId, @Param("delta") int delta);
+
+    /**
+     * 注销清理：被注销者关注的每个人 {@code follower_count − 1}（一条集合 UPDATE，不逐行循环）。
+     * 必须在删关注行<b>之前</b>执行。
+     */
+    @Modifying
+    @Query(value = """
+            UPDATE users u SET follower_count = GREATEST(u.follower_count - 1, 0)
+              FROM user_follows f
+             WHERE f.follower_id = :userId AND u.id = f.followee_id
+            """, nativeQuery = true)
+    int decrementFollowerCountsOfFollowees(@Param("userId") long userId);
+
+    /**
+     * 注销清理：关注被注销者的每个人 {@code following_count − 1}（一条集合 UPDATE）。
+     * 必须在删关注行<b>之前</b>执行。
+     */
+    @Modifying
+    @Query(value = """
+            UPDATE users u SET following_count = GREATEST(u.following_count - 1, 0)
+              FROM user_follows f
+             WHERE f.followee_id = :userId AND u.id = f.follower_id
+            """, nativeQuery = true)
+    int decrementFollowingCountsOfFollowers(@Param("userId") long userId);
+
+    /** 注销清理：本人两计数置 0。 */
+    @Modifying
+    @Query(value = "UPDATE users SET following_count = 0, follower_count = 0 WHERE id = :userId",
+            nativeQuery = true)
+    int zeroFollowCounts(@Param("userId") long userId);
+
+    /** 重新读出 {@code follower_count}（实体值是加载时快照，关注写入后要最新值时用）。 */
+    @Query(value = "SELECT follower_count FROM users WHERE id = :userId", nativeQuery = true)
+    Integer findFollowerCount(@Param("userId") long userId);
+
     /**
      * 这批 id 里哪些是**仍然可见**的账号（V1.3.0 batch-b1 Story 4.1）。
      *

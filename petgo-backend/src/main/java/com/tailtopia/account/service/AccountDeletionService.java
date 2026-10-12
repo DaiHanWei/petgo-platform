@@ -22,6 +22,7 @@ import com.tailtopia.shared.im.TencentImClient;
 import com.tailtopia.shared.media.MediaDeletionService;
 import com.tailtopia.shared.media.PersonalMedia;
 import com.tailtopia.shop.service.ShopAccountDeletionService;
+import com.tailtopia.social.service.FollowService;
 import com.tailtopia.tailsonality.service.TailsonalityDeletionService;
 import com.tailtopia.triage.service.TriageDeletionService;
 import java.util.List;
@@ -73,6 +74,8 @@ public class AccountDeletionService {
     /** V1.3.0 batch-b1 Story 3.1：@ 候选集（派生表，两个方向都物理删）。 */
     private final MentionCandidateMaintenanceService mentionCandidateMaintenance;
     private final TailsonalityDeletionService tailsonalityDeletion;
+    /** V1.3.4 follow Story 1.1：关注关系两个方向显式清理 + 扣对端计数（AD-1）。 */
+    private final FollowService followService;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -87,7 +90,7 @@ public class AccountDeletionService {
             com.tailtopia.onboarding.service.OnboardingMarkDeletionService onboardingMarkDeletion,
             PlaceCommentService placeCommentService, PlacePhotoService placePhotoService,
             MentionCandidateMaintenanceService mentionCandidateMaintenance,
-            TailsonalityDeletionService tailsonalityDeletion) {
+            TailsonalityDeletionService tailsonalityDeletion, FollowService followService) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -109,6 +112,7 @@ public class AccountDeletionService {
         this.mentionCandidateMaintenance = mentionCandidateMaintenance;
         this.placePhotoService = placePhotoService;
         this.tailsonalityDeletion = tailsonalityDeletion;
+        this.followService = followService;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -193,6 +197,11 @@ public class AccountDeletionService {
         pawCoinDeletion.voidBalanceAndPurge(userId);
         // auth 最后删（用户行删除后 UGC 即匿名）；收头像图。
         media = media.merge(authDeletion.deleteByUserId(userId));
+        // V1.3.4 follow Story 1.1：关注关系两个方向删行 + 扣对端计数（AD-1）。
+        // 🔴 **不能靠 FK 的 ON DELETE CASCADE**：注销是就地匿名化，users 行不删，CASCADE 永远不触发。
+        // ⚠️ 放在 authDeletion **之后**：此时 deleted_at 已写，findActiveByPublicToken 已拒绝新的关注，
+        //    清理后不会再长出新行（放在之前会有一个「清完又被人关注」的窗口）。幂等可重跑。
+        followService.purgeUser(userId);
 
         // OSS 个人图：2026-08-19 起保留不删（F21，快照引用保护；MediaDeletionService 只记账）。
         mediaDeletion.deletePrivateKeys(media.privateKeys());

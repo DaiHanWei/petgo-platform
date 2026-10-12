@@ -182,6 +182,37 @@ public class AccountQueryService {
         return out;
     }
 
+    /**
+     * 按对外 token 取一个<b>可被关注</b>的账号（V1.3.4 follow Story 1.1，D-2 / D-8 / D-9）：
+     * 未注销 + {@code status = ACTIVE}（判据与 {@link #isActive} 一致）。
+     *
+     * <p>⚠️ <b>不按 role 过滤</b>（决策 D-9：官方内容账号 ADMIN 作者 shim 可被关注）；
+     * 「只有 USER 能调关注接口」约束的是<b>调用方</b>（SecurityConfig），与被关注方无关。
+     * ⚠️ 不看 {@code enabled}（T-2：被运营停用的虚拟号照常可被关注）。
+     *
+     * <p>token 为空 / 长度不是 32 → 直接 empty，不查库。
+     */
+    @Transactional(readOnly = true)
+    public Optional<User> findActiveByPublicToken(String token) {
+        return findByPublicToken(token)
+                .filter(u -> u.getStatus() == UserStatus.ACTIVE);
+    }
+
+    /**
+     * 按对外 token 取一个<b>未注销</b>账号，<b>不看封号</b>（V1.3.4 follow Story 1.1 AC4.3 / D-8）。
+     *
+     * <p>专供<b>取关</b>：封号用户仍留在我的关注列表里（D-8），若取关也要求对方 ACTIVE，
+     * 用户就永远取关不掉一个被封号的人。与 {@link #findActiveByPublicToken} 同样不按 role 过滤（D-9）。
+     */
+    @Transactional(readOnly = true)
+    public Optional<User> findByPublicToken(String token) {
+        if (token == null || token.length() != UserTokenGenerator.LENGTH) {
+            return Optional.empty();
+        }
+        return users.findByPublicToken(token)
+                .filter(u -> u.getDeletedAt() == null);
+    }
+
     /** Story 3.1：按 id 取普通用户（role=USER），供后台用户详情只读聚合。 */
     @Transactional(readOnly = true)
     public Optional<User> findUserById(long userId) {
