@@ -59,6 +59,7 @@ class ContentDetail {
         body: body,
         imageUrls: imageUrls,
         imageSizes: imageSizes,
+        imageCropOffsets: imageCropOffsets,
         visibility: visibility,
         mentions: mentions,
         checkinPlace: checkinPlace,
