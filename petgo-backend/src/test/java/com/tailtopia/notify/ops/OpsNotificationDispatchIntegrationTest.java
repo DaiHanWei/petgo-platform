@@ -134,7 +134,8 @@ class OpsNotificationDispatchIntegrationTest extends ApiIntegrationTest {
     void baseFilterExcludesInvalidAccounts() {
         User normal = newUser();
         User virtual = newUser();
-        sql("account_type = 'VIRTUAL'", virtual.getId());
+        // 造数与生产形态一致：虚拟号 google_sub 必带 virtual: 前缀（否则污染 SyntheticAccountParityTest 的全表护栏）
+        sql("account_type = 'VIRTUAL', google_sub = 'virtual:' || google_sub", virtual.getId());
         User deleted = newUser();
         sql("deleted_at = now()", deleted.getId());
         User deactivated = newUser();

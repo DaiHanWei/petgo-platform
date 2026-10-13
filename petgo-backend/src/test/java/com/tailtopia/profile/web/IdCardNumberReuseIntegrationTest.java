@@ -225,21 +225,28 @@ class IdCardNumberReuseIntegrationTest extends ApiIntegrationTest {
         User b = newUser();
         String c = testCardNo();
         String p = testPassportNo("02");
-        sourceCard(a.getId(), "STUDENT", "MALAM", true, Instant.parse("2026-09-01T00:00:00Z"), "FEMALE", "CAT",
-                BIRTHDAY, c, p, false); // 不登记归属
+        long seeded = sourceCard(a.getId(), "STUDENT", "MALAM", true, Instant.parse("2026-09-01T00:00:00Z"), "FEMALE",
+                "CAT", BIRTHDAY, c, p, false); // 不登记归属
         jdbc.update("INSERT INTO id_card_number_owners (kind, number, user_id) VALUES ('C', ?, ?)", c, b.getId());
-        long before = jdbc.queryForObject("SELECT count(*) FROM id_cards WHERE user_id = ?", Long.class, a.getId());
+        // 本用例故意造「卡在 A、号登记给 B」的不一致态 —— 测完必须清掉，否则污染
+        // CardNumberOwnershipIntegrationTest 的全库护栏（全量 L1 共用一个库）。
+        try {
+            long before = jdbc.queryForObject("SELECT count(*) FROM id_cards WHERE user_id = ?", Long.class, a.getId());
 
-        mvc.perform(post("/api/v1/pet-profiles/me/id-cards/v2")
-                        .header(HttpHeaders.AUTHORIZATION, userBearer(a.getId()))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body("KTP", null, "FEMALE", "CAT", BIRTHDAY)))
-                .andExpect(status().isInternalServerError());
+            mvc.perform(post("/api/v1/pet-profiles/me/id-cards/v2")
+                            .header(HttpHeaders.AUTHORIZATION, userBearer(a.getId()))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body("KTP", null, "FEMALE", "CAT", BIRTHDAY)))
+                    .andExpect(status().isInternalServerError());
 
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM id_cards WHERE user_id = ?", Long.class, a.getId()))
-                .isEqualTo(before);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM id_card_number_owners WHERE user_id = ? AND number = ?",
-                Long.class, a.getId(), c)).isZero();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM id_cards WHERE user_id = ?", Long.class, a.getId()))
+                    .isEqualTo(before);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM id_card_number_owners WHERE user_id = ? AND number = ?",
+                    Long.class, a.getId(), c)).isZero();
+        } finally {
+            jdbc.update("DELETE FROM id_card_number_owners WHERE kind = 'C' AND number = ?", c);
+            jdbc.update("DELETE FROM id_cards WHERE id = ?", seeded);
+        }
     }
 
     @Test

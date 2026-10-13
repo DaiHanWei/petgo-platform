@@ -148,10 +148,28 @@ class ContentTagIntegrationTest extends ApiIntegrationTest {
         ContentTag tag = newTag();
         tagQuery.assign(post.getId(), tag.getId(), Instant.now().minusSeconds(60), null);
 
-        String body = mvc.perform(get("/api/v1/content-posts"))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        // 共享测试库里帖子多，推荐流第一页不保证排到这条 → 沿游标翻页找（全量 L1 才暴露的顺序依赖）。
+        String found = null;
+        String cursor = null;
+        for (int page = 0; page < 30 && found == null; page++) {
+            var req = get("/api/v1/content-posts");
+            if (cursor != null) {
+                req = req.param("cursor", cursor);
+            }
+            String body = mvc.perform(req)
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            if (body.contains(tag.getCode())) {
+                found = body;
+            }
+            var m = java.util.regex.Pattern.compile("\"nextCursor\":\"([^\"]+)\"").matcher(body);
+            if (!m.find()) {
+                break;
+            }
+            cursor = m.group(1);
+        }
 
-        assertThat(body).contains("\"decorationTags\"").contains(tag.getCode());
+        assertThat(found).as("推荐流翻页后应出现该帖").isNotNull();
+        assertThat(found).contains("\"decorationTags\"").contains(tag.getCode());
     }
 
     /** 内容详情页下发装饰标签。 */

@@ -152,9 +152,11 @@ class FollowSuggestionIntegrationTest extends ApiIntegrationTest {
         post(onlyPrivate, "PRIVATE", "PUBLISHED", later, false);
         post(onlyDeleted, "PUBLIC", "PUBLISHED", later, true);
         post(onlyUnderReview, "PUBLIC", "UNDER_REVIEW", later, false);
-        jdbc.update("UPDATE users SET account_type = 'VIRTUAL' WHERE id = ?", virtual.getId());
+        // 造数与生产形态一致：虚拟号 / 管理员的 google_sub 必带 virtual: / admin: 前缀（否则污染 SyntheticAccountParityTest 的全表护栏）
+        jdbc.update("UPDATE users SET account_type = 'VIRTUAL', google_sub = 'virtual:' || google_sub WHERE id = ?",
+                virtual.getId());
         jdbc.update("UPDATE users SET role = 'VET' WHERE id = ?", vet.getId());
-        jdbc.update("UPDATE users SET role = 'ADMIN' WHERE id = ?", admin.getId());
+        jdbc.update("UPDATE users SET role = 'ADMIN', google_sub = 'admin:' || google_sub WHERE id = ?", admin.getId());
         jdbc.update("UPDATE users SET enabled = false WHERE id = ?", disabled.getId());
         jdbc.update("UPDATE users SET status = 'DEACTIVATED' WHERE id = ?", banned.getId());
         jdbc.update("UPDATE users SET deleted_at = now() WHERE id = ?", gone.getId());
