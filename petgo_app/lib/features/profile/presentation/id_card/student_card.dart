@@ -11,7 +11,8 @@ const Size kStudentCardCanvas = Size(1988, 1200);
 const double kStudentCardCanvasRadius = _StudentLayout.radius;
 
 /// 学生卡展示字段（全部由快照派生，零新增采集，见 spec 6-8 §4.2）。
-/// spec ktp-pet-idcode-numbering：学生卡面**取消证号展示**，无 studentNo。
+/// V1.3.4 ktp（FR-142E.8 / D-4）：学生卡面印「Nomor Induk Anabul」+ 身份码 [cardNo]（原样，不另起学号）；
+/// [cardNo] 为 null / 空串（V95 前旧卡、预览未填生日）→ 编号位整块不渲染。
 @immutable
 class StudentFields {
   const StudentFields({
@@ -21,6 +22,7 @@ class StudentFields {
     required this.school,
     required this.faculty,
     this.avatarUrl,
+    this.cardNo,
   });
 
   final String name;
@@ -31,6 +33,9 @@ class StudentFields {
   final String school;
   final String faculty;
   final String? avatarUrl;
+
+  /// 身份码 `card_no` 原样；null / 空串 → 卡面编号位隐藏。
+  final String? cardNo;
 }
 
 /// 纯函数：快照 → 学生卡字段（pet_type → 物种本地化；school/faculty 空落趣味默认）。
@@ -46,6 +51,7 @@ StudentFields buildStudentFields(IdCardData data) {
         ? data.faculty!.trim().toUpperCase()
         : 'FAKULTAS KEBAHAGIAAN',
     avatarUrl: data.avatarUrl,
+    cardNo: data.cardNo,
   );
 }
 
@@ -100,10 +106,19 @@ abstract final class _StudentLayout {
 
   // 右下圆章（素材 199×262 竖幅）。
   static const Rect stamp = Rect.fromLTWH(1548, 720, 320, 421);
+
+  // 编号位（V1.3.4 ktp D-4，UI 稿 F8 `.kl-no`：left 32% / top 76%，标签 2.2cqw、编号 3.4cqw + 字距 .04em）。
+  // 左缘与字段标签列对齐；落在 Faculty 行（基线 ≈782）与底部紫线（≈1090）之间，不压右下圆章（x ≥ 1548）。
+  static const double numberTop = 912;
+  static const double numberLabelSize = 43.7;
+  static const double numberSize = 67.6;
 }
 
 /// 全卡文字墨色（学生卡为深紫；头条内为白）。
 const Color _kInk = Color(0xFF3D2A63);
+
+/// 编号位小字标签色（UI 稿 F8）。
+const Color _kNumberLabel = Color(0xFF6C48AE);
 const String _kFontFamily = 'Rubik';
 const List<FontVariation> _kMedium = [FontVariation('wght', 500)];
 const List<FontVariation> _kSemiBold = [FontVariation('wght', 600)];
@@ -138,6 +153,7 @@ class StudentCardFront extends StatelessWidget {
                 _style(size: _StudentLayout.subtitleSize, weight: _kMedium, color: Colors.white, italic: true)),
             _photo(),
             ..._fieldRows(),
+            if (fields.cardNo != null && fields.cardNo!.isNotEmpty) _numberBlock(fields.cardNo!),
             _positioned(
               _StudentLayout.stamp,
               const Image(image: AssetImage('assets/student/student_stamp.png'), fit: BoxFit.contain),
@@ -176,6 +192,27 @@ class StudentCardFront extends StatelessWidget {
       ));
     }
     return out;
+  }
+
+  /// 编号位：「Nomor Induk Anabul」（卡面文字，不翻译）+ 身份码，数字等宽。
+  Widget _numberBlock(String cardNo) {
+    return Positioned(
+      left: _StudentLayout.labelX,
+      top: _StudentLayout.numberTop,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Nomor Induk Anabul',
+              style: _style(size: _StudentLayout.numberLabelSize, weight: _kMedium, color: _kNumberLabel)),
+          Text(cardNo,
+              style: _style(
+                  size: _StudentLayout.numberSize,
+                  weight: _kBold,
+                  tracking: _StudentLayout.numberSize * 0.04,
+                  tabular: true)),
+        ],
+      ),
+    );
   }
 
   Widget _photo() {
@@ -234,6 +271,7 @@ class StudentCardFront extends StatelessWidget {
     double? tracking,
     Color color = _kInk,
     bool italic = false,
+    bool tabular = false,
   }) {
     return TextStyle(
       fontFamily: _kFontFamily,
@@ -245,6 +283,7 @@ class StudentCardFront extends StatelessWidget {
       color: color,
       fontSize: size,
       letterSpacing: tracking,
+      fontFeatures: tabular ? const [FontFeature.tabularFigures()] : null,
     );
   }
 }

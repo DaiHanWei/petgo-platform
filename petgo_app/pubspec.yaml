@@ -169,6 +169,20 @@ flutter:
     - assets/ktp/
     - assets/passport/
     - assets/student/
+    # V1.3.4 ktp 三款新学生卡（Story 1.2）。源：_bmad-output/planning-artifacts/v1.3.4/ktp-assets/design-assets/
+    # Bintang = student02（底图 994×600 原样）；Malam = student03（底图裁 x47 y182 994×600）；
+    # Ceria = student01（底图裁 x0 y201 994×600）。Logo 原样拷贝。资源目录不递归，逐个登记。
+    - assets/id_card/student_bintang/
+    - assets/id_card/student_malam/
+    - assets/id_card/student_ceria/
+    # V1.3.4 ktp SIM / 居住证（Story 1.3）。源同上 design-assets/：SIM = driving/（Driving.png 底图、Logo.png 原样；
+    # Sign.png 与 assets/ktp/ktp_paw_stamp.png 逐字节相同，直接复用后者不重复入库）；
+    # 居住证 = permit/（Background.png 1008×604 按 alpha 裁 x3 y4 → 994×600；Label / Logo / Sign 原样）。
+    - assets/id_card/sim/
+    - assets/id_card/kitas/
+    # V1.3.4 ktp「Pilih Kartu」8 张样式缩略图（Story 1.5，D-2 / AD-8）：由 scripts/gen-id-card-style-thumbnails.sh
+    # 用卡面组件 + 固定示例数据渲染生成；设计日后可同名替换，代码不改。
+    - assets/id_card/styles/
     # 年龄卡角色切图（V1.3.0 Story 5.2 换皮）：`{cat,dog,other}_{10,25,75,100}.webp`，
     # 透明底、宽 ~1080。四档按 `PetAgeStage`（puppy/young/middle/senior）依次取，
     # **文件名里的数字不是判据** —— 它只是设计稿的档位编号。

@@ -1,0 +1,19 @@
+Pengurus Administrasi Hewan & TAILTOPIA
+Typeface: Rubik
+Weight: Medium & Bold
+Usage: Main document title
+
+Kartu Izin Tinggal Hewan
+Typeface: Rubik
+Weight: Italic
+Usage: Sub document title
+
+Nama
+Typeface: Rubik
+Weight: Regular
+Usage: Information label
+
+Oyen
+Typeface: Rubik
+Weight: Bold
+Usage: Personal/pet information

@@ -8,6 +8,7 @@ import java.time.LocalDate;
  * 身份证卡快照响应（Story 6-7）：单卡渲染 + 解锁态 + 建卡时刻。历史列表与单卡详情共用。
  * 不含 owner PII/健康数据；serialId 仅展示编号。
  * cardNo/passportNo/gender（spec-ktp-pet-idcode-numbering）：新卡非空；旧卡 null → 前端维持旧拼号展示。
+ * cardVariant（V1.3.4 ktp）：学生卡配色 BINTANG/MALAM/CERIA/KLASIK，非学生卡 null；存量学生卡为 KLASIK。
  */
 public record IdCardResponse(
         long id,
@@ -26,6 +27,7 @@ public record IdCardResponse(
         String occupation,
         String maritalStatus,
         String cardType,
+        String cardVariant,
         String school,
         String faculty,
         boolean hdUnlocked,
@@ -35,7 +37,7 @@ public record IdCardResponse(
         return new IdCardResponse(c.getId(), c.getSerialId(), c.getName(), c.getPetType(),
                 c.getBreed(), c.getBirthday(), c.getAvatarUrl(), c.getIntro(), c.getGender(),
                 c.getCardNo(), c.getPassportNo(), c.getBirthCity(), c.getAddress(),
-                c.getOccupation(), c.getMaritalStatus(), c.getCardType(), c.getSchool(),
+                c.getOccupation(), c.getMaritalStatus(), c.getCardType(), c.getCardVariant(), c.getSchool(),
                 c.getFaculty(), c.isHdUnlocked(), c.getCreatedAt());
     }
 }

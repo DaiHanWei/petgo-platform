@@ -31,9 +31,10 @@ public class AdminUserPurchasesQuery {
      *   <li>PawCoin：{@code purchased_at}（当场扣币，下单即付款）。</li>
      * </ul>
      * 一张卡可能有多条购买行（如先建 QRIS 单未付、再改用 PawCoin），取最早一次真付款。都没有 → null。
+     * V1.3.4 ktp（D-6）：增选卡种 / 配色 / 身份码，页面按「{卡种名} · No. {编号} · {宠物名}」渲染。
      */
     static final String KTP_SQL = """
-            SELECT c.serial_id, c.name,
+            SELECT c.serial_id, c.name, c.card_type, c.card_variant, c.card_no,
                    (SELECT MIN(CASE WHEN h.pay_channel = 'PAWCOIN' THEN h.purchased_at
                                     WHEN pi.status = 'PAID' THEN pi.updated_at END)
                       FROM id_card_hd_purchases h
@@ -84,7 +85,8 @@ public class AdminUserPurchasesQuery {
         Map<String, Object> p = Map.of("u", userId);
         return new UserPurchasesView(
                 jdbc.query(KTP_SQL, p, (rs, i) -> new UserPurchasesView.KtpCard(
-                        rs.getLong("serial_id"), rs.getString("name"), instant(rs, "unlocked_at"))),
+                        rs.getLong("serial_id"), rs.getString("name"), instant(rs, "unlocked_at"),
+                        rs.getString("card_type"), rs.getString("card_variant"), rs.getString("card_no"))),
                 jdbc.query(SNAPSHOT_SQL, p, (rs, i) -> new UserPurchasesView.PassportSnapshot(
                         rs.getString("name"), rs.getInt("version"), rs.getInt("stamp_count"), instant(rs, "paid_at"))),
                 jdbc.query(BOARDING_SQL, p, (rs, i) -> new UserPurchasesView.BoardingPass(

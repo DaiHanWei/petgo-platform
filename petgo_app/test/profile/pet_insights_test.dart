@@ -139,24 +139,24 @@ void main() {
       }
       expect(find.byType(InkWell), findsNWidgets(5));
       final rects = [for (final k in order) tester.getRect(find.byKey(ValueKey(k)))];
-      // 阅读顺序：同行左→右、行间上→下。
+      // V1.3.4 AD-14 单列：自上而下，后一张严格在前一张下方。
       for (var i = 1; i < rects.length; i++) {
         final prev = rects[i - 1], cur = rects[i];
-        expect(cur.top > prev.top || (cur.top == prev.top && cur.left > prev.left), isTrue, reason: order[i]);
+        expect(cur.top, greaterThan(prev.bottom), reason: order[i]);
       }
     });
 
-    /// V1.3.2 Story 2.3：2+2 排布 —— 护照从整宽变回半宽（预期），与 Tailsonality 并排第二行；全物种可点。
-    testWidgets('第二行护照 + Tailsonality 并排、全物种可点', (tester) async {
+    /// V1.3.4 AD-14：单列整宽——五张卡左缘相同、等宽、宽度 ≈ 页面内容宽；护照 / Tailsonality 全物种可点。
+    testWidgets('单列整宽：五张卡等宽撑满、护照 + Tailsonality 全物种可点', (tester) async {
       await _pumpHub(tester, petType: 'OTHER');
-      final ktp = tester.getRect(find.byKey(const ValueKey('insightIdCard')));
-      final age = tester.getRect(find.byKey(const ValueKey('insightAgeCard')));
-      final pass = tester.getRect(find.byKey(const ValueKey('insightPassport')));
-      final ts = tester.getRect(find.byKey(const ValueKey('insightTailsonality')));
-      expect(ktp.top, age.top, reason: '第一行两张并排');
-      expect(pass.top, greaterThan(ktp.bottom), reason: '护照在第二行');
-      expect(ts.top, pass.top, reason: 'Tailsonality 与护照同一行');
-      expect(pass.width, closeTo(ktp.width, 1), reason: '2+2：护照回到半宽');
+      const order = ['insightIdCard', 'insightAgeCard', 'insightPassport', 'insightTailsonality', 'insightBoardingPass'];
+      final rects = [for (final k in order) tester.getRect(find.byKey(ValueKey(k)))];
+      final contentWidth = tester.getSize(find.byType(SingleChildScrollView)).width - 32;
+      for (var i = 0; i < rects.length; i++) {
+        expect(rects[i].left, closeTo(rects[0].left, 1), reason: order[i]);
+        expect(rects[i].width, closeTo(rects[0].width, 1), reason: order[i]);
+        expect(rects[i].width, closeTo(contentWidth, 1), reason: '${order[i]} 撑满内容宽');
+      }
       expect(tester.widget<InkWell>(find.byKey(const ValueKey('insightTailsonality'))).onTap, isNotNull);
       final card = tester.widget<InkWell>(find.byKey(const ValueKey('insightPassport')));
       expect(card.onTap, isNotNull);
@@ -166,14 +166,14 @@ void main() {
       expect(find.text('passport'), findsOneWidget);
     });
 
-    /// V1.3.2 Story 3.5：第三行整宽登机牌卡（2+2+1）；全物种可点 → 登机牌列表。
-    testWidgets('第三行登机牌整宽、可点进列表', (tester) async {
+    /// 登机牌在 Tailsonality 下方、与 KTP 卡同宽；全物种可点 → 登机牌列表。
+    testWidgets('登机牌在最后一行、与 KTP 同宽、可点进列表', (tester) async {
       await _pumpHub(tester, petType: 'OTHER');
       final ts = tester.getRect(find.byKey(const ValueKey('insightTailsonality')));
       final ktp = tester.getRect(find.byKey(const ValueKey('insightIdCard')));
       final bp = tester.getRect(find.byKey(const ValueKey('insightBoardingPass')));
-      expect(bp.top, greaterThan(ts.bottom), reason: '第三行');
-      expect(bp.width, greaterThan(ktp.width * 1.8), reason: '整宽');
+      expect(bp.top, greaterThan(ts.bottom), reason: '在 Tailsonality 下方');
+      expect(bp.width, closeTo(ktp.width, 1), reason: '单列等宽');
       await tester.tap(find.byKey(const ValueKey('insightBoardingPass')));
       await tester.pumpAndSettle();
       expect(find.text('boarding-pass'), findsOneWidget);
@@ -310,6 +310,50 @@ void main() {
       expect(headerSrc, contains("ValueKey('diaryIdCardButton')"));
       // 副文案沿用现成 key，不新写（AC1）。
       expect(headerSrc, contains('timelineIdCardTapToView'));
+    });
+  });
+
+  group('insightRows 单列（V1.3.4 AD-14）', () {
+    test('3 张 → 5 个 widget：偶数位是卡，奇数位是 gap 间隔', () {
+      final cards = [for (var i = 0; i < 3; i++) SizedBox(key: ValueKey('c$i'), height: 40)];
+      final rows = insightRows(cards, gap: 10);
+      expect(rows, hasLength(5));
+      for (var i = 0; i < rows.length; i++) {
+        if (i.isEven) {
+          expect((rows[i] as SizedBox).child, same(cards[i ~/ 2]));
+        } else {
+          expect((rows[i] as SizedBox).height, 10);
+          expect((rows[i] as SizedBox).child, isNull);
+        }
+      }
+    });
+
+    test('0 张 → 空；1 张 → 只有它、无间隔', () {
+      expect(insightRows(const []), isEmpty);
+      final only = insightRows(const [SizedBox(key: ValueKey('only'), height: 40)]);
+      expect(only, hasLength(1));
+      expect(((only.single as SizedBox).child as SizedBox).key, const ValueKey('only'));
+    });
+
+    testWidgets('不产出 Row / IntrinsicHeight，每张卡宽 = 父宽', (tester) async {
+      await tester.pumpWidget(Directionality(
+        textDirection: TextDirection.ltr,
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 300,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: insightRows([for (var i = 0; i < 3; i++) SizedBox(key: ValueKey('c$i'), height: 40)]),
+            ),
+          ),
+        ),
+      ));
+      expect(find.byType(Row), findsNothing);
+      expect(find.byType(IntrinsicHeight), findsNothing);
+      for (var i = 0; i < 3; i++) {
+        expect(tester.getSize(find.byKey(ValueKey('c$i'))).width, 300);
+      }
     });
   });
 }

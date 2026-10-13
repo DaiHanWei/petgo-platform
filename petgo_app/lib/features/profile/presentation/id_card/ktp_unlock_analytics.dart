@@ -5,7 +5,7 @@ import '../../domain/id_card.dart';
 
 /// KTP（身份证高清图）付费漏斗 · App 端埋点（2026-09-25）。
 ///
-/// 生成页与卡详情页两个付费入口共用这里，事件名与属性键只有一份定义，两处口径不会跑偏。
+/// 生成页、卡详情页与 Kartuku 列表（V1.3.4，经 `openIdCardHdPaywall`）付费入口共用这里，事件名与属性键只有一份定义，两处口径不会跑偏。
 ///
 /// 分工（与后端 `KtpUnlockAnalyticsListener` 配合）：
 /// - App 报：`ktp_unlock_paywall_shown`（弹付费弹窗）、`ktp_unlock_started`（选定支付方式）、
@@ -21,18 +21,33 @@ class KtpUnlockAnalytics {
   static const String entryCreate = 'create';
   static const String entryDetail = 'detail';
 
-  static void paywallShown({required String entry, int? priceIdr}) {
+  /// V1.3.4 ktp：Kartuku 列表「Buka HD」标签直接付费。
+  static const String entryListBadge = 'list_badge';
+
+  // V1.3.4 ktp（AD-12 / D-7）：三个事件可选带 card_type / card_variant（接口 wire 值，T-12），null 不带键。
+
+  static void paywallShown({required String entry, int? priceIdr, String? cardType, String? cardVariant}) {
     Analytics.capture('ktp_unlock_paywall_shown', {
       'entry': entry,
       'price_idr': ?priceIdr,
+      'card_type': ?cardType,
+      'card_variant': ?cardVariant,
     });
   }
 
-  static void started({required String entry, required HdPayChannel method, int? priceIdr}) {
+  static void started({
+    required String entry,
+    required HdPayChannel method,
+    int? priceIdr,
+    String? cardType,
+    String? cardVariant,
+  }) {
     Analytics.capture('ktp_unlock_started', {
       'entry': entry,
       'method': method.wire,
       'price_idr': ?priceIdr,
+      'card_type': ?cardType,
+      'card_variant': ?cardVariant,
     });
   }
 
@@ -42,6 +57,8 @@ class KtpUnlockAnalytics {
     required HdPayChannel method,
     required Object error,
     int? priceIdr,
+    String? cardType,
+    String? cardVariant,
   }) {
     final reason = failureReasonOf(error);
     if (reason == null) return;
@@ -50,6 +67,8 @@ class KtpUnlockAnalytics {
       'method': method.wire,
       'failure_reason': reason,
       'price_idr': ?priceIdr,
+      'card_type': ?cardType,
+      'card_variant': ?cardVariant,
     });
   }
 

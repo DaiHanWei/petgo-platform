@@ -25,8 +25,29 @@ public record UserPurchasesView(List<KtpCard> ktpCards, List<PassportSnapshot> s
      *
      * @param unlockedAt 真实付款时刻：QRIS = 对应支付单到账（PAID 的 {@code updated_at}，与看板 #15 同口径）；
      *                   PawCoin = 购买记录时刻（当场扣币）。V92 回填的老卡没有可用的付款记录 → null，页面显示「—」。
+     * @param cardType    卡种 KTP / PASSPORT / KITAS / SIM / STUDENT（V1.3.4 ktp D-6）
+     * @param cardVariant 学生卡配色，非学生卡 null
+     * @param cardNo      身份码；V95 前老卡 null → 显示流水号补零（与 App 列表同口径）
      */
-    public record KtpCard(long serialId, String petName, Instant unlockedAt) {
+    public record KtpCard(long serialId, String petName, Instant unlockedAt, String cardType,
+            String cardVariant, String cardNo) {
+
+        /** 卡种名 i18n key 后缀：学生卡 {@code STUDENT.<配色>}，其余为卡种本身（D-6：8 款各显示自己的名称）。 */
+        public String styleKey() {
+            if ("STUDENT".equals(cardType)) {
+                return "STUDENT." + (cardVariant == null ? "KLASIK" : cardVariant);
+            }
+            return cardType == null ? "KTP" : cardType;
+        }
+
+        /** 展示编号：优先身份码；V95 前老卡无身份码 → 流水号左补零到 4 位（App {@code id_card_page} 同口径）。 */
+        public String displayNo() {
+            if (cardNo != null && !cardNo.isEmpty()) {
+                return cardNo;
+            }
+            String s = Long.toString(serialId);
+            return s.length() >= 4 ? s : "0".repeat(4 - s.length()) + s;
+        }
     }
 
     /**

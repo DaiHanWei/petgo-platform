@@ -833,10 +833,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 与本条只差一个字母。改动时**逐条改，禁止做前缀字符串替换**（AD-A17.7）。
       GoRoute(path: '/profile/id-card', redirect: (c, s) => PetInsightsRoutes.idCard),
       // Story 6-7 多卡：建卡器（字面量在前，避免被 :id 吞）+ 单卡详情。
-      GoRoute(path: '/profile/id-cards/create', builder: (c, s) => const IdCardCreatePage()),
+      // V1.3.4 ktp Story 1.5：?style=<IdCardStyle.name> 带入卡款；缺省 / 非法值回落 KTP。
+      GoRoute(
+        path: '/profile/id-cards/create',
+        builder: (c, s) =>
+            IdCardCreatePage(initialStyle: IdCardCreatePage.styleFromQuery(s.uri.queryParameters['style'])),
+      ),
       GoRoute(
         path: '/profile/id-cards/:id',
-        builder: (c, s) => IdCardDetailPage(cardId: int.parse(s.pathParameters['id']!)),
+        // V1.3.4 ktp D-16：?export=1 = 建卡入口付费成功落到详情，自动弹保存 / 分享选单。
+        builder: (c, s) => IdCardDetailPage(
+            cardId: int.parse(s.pathParameters['id']!), autoExport: s.uri.queryParameters['export'] == '1'),
       ),
       // 健康记录列表（Story 7.2 · FR-45B）。受控（/profile/ 前缀，游客被门控）。
       // ?add=VACCINE|DEWORM|...：进页自动弹预选类型的添加表单（bug 20260729-406，健康类里程碑直跳）。

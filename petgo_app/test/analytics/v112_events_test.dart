@@ -475,6 +475,9 @@ void main() {
         // 推送疲劳终点信号（V1.4.0 Story 9.3）：from_screen ∈ {app_launch, settings_page}，
         // 受控字面量，不是 UI 文案。
         'from_screen',
+        // V1.3.4 ktp Story 1.5（AD-12 / D-13）：id_card_tab_viewed{tab, has_cards}、
+        // id_card_style_tapped{card_type, card_variant}；card_type / card_variant 取接口 wire 值（大写，T-12）。
+        'has_cards', 'card_type', 'card_variant',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

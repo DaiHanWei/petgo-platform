@@ -207,4 +207,14 @@ class AnalyticsEventGuardTest {
         assertThat(guard.filterProperties(Map.of("distinct_id", "hash", "app_env", "prod")))
                 .isEmpty();
     }
+
+    @Test
+    @DisplayName("V1.3.4 ktp Story 1.8：card_type / card_variant 放行（ktp_unlock_succeeded 补卡种）")
+    void allowsCardStyleKeys() {
+        java.util.Map<String, Object> props = new java.util.HashMap<>();
+        props.put("card_type", "STUDENT");
+        props.put("card_variant", "BINTANG");
+        props.put("pet_name", "Momo"); // 不在白名单 → 丢弃
+        assertThat(guard.filterProperties(props)).containsOnlyKeys("card_type", "card_variant");
+    }
 }

@@ -148,12 +148,13 @@ void main() {
     });
   });
 
-  // bug 20260803-448：建卡表单性别按档案预填（档案两值 → 卡三值），未填回落未知。
-  test('idCardGenderFromPetSex：档案性别预填建卡表单', () {
+  // bug 20260803-448：建卡表单性别按档案预填（档案两值 → 卡三值）。
+  // V1.3.4 ktp Story 1.7（FR-142D.7）：性别改必填，档案未填 / 未知值 → null（不预选），不再回落 UNKNOWN。
+  test('idCardGenderFromPetSex：档案性别预填建卡表单，未填不预选', () {
     expect(idCardGenderFromPetSex('MALE'), 'MALE');
     expect(idCardGenderFromPetSex('FEMALE'), 'FEMALE');
-    expect(idCardGenderFromPetSex(null), 'UNKNOWN');
-    expect(idCardGenderFromPetSex('weird'), 'UNKNOWN');
+    expect(idCardGenderFromPetSex(null), isNull);
+    expect(idCardGenderFromPetSex('weird'), isNull);
     // 预填 MALE 后 KTP 卡面 JANTAN（与表单选择联动的既有映射）。
     expect(KtpDefaults.jenisKelaminFor(idCardGenderFromPetSex('MALE')), 'JANTAN');
   });
