@@ -1,6 +1,6 @@
 # Story 1.6: Kartuku 列表——Buka HD 标签直接付费
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.3.4 · 主题 ktp · 分支 `feat/1.3.4-ktp-revamp`
 > 口径优先级：`决策日志-ktp.md` > `PRD-v1.3.4-ktp.md` > `architecture-v1.3.4-ktp-delta.md` > `ui-v1.3.4-ktp.html`（均在 `_bmad-output/planning-artifacts/v1.3.4/`）
@@ -94,22 +94,22 @@ so that 我不用进详情页也能解锁。
 
 ## Tasks / Subtasks
 
-- [ ] Task 1：共享付费函数（AC5、AC6）
-  - [ ] 1.1 新建 `id_card/id_card_hd_flow.dart`：`IdCardPaywallEntry`（含 `wire`）、`IdCardHdFlowResult`、`openIdCardHdPaywall`
-  - [ ] 1.2 `KtpUnlockAnalytics` 加 `entryListBadge` 与 `cardType` / `cardVariant` 可选参数
-  - [ ] 1.3 `id_card_buka_hd_tapped` / `id_card_paywall_dismissed` 上报（放置位置见 Dev Notes「埋点放哪」）
-  - [ ] 1.4 处理 v112 后缀规则（Dev Notes「埋点命名与 v112 规则冲突」）
-- [ ] Task 2：Kartuku 有卡态（AC1、AC2、AC3）
-  - [ ] 2.1 行首证件图标、卡种名取注册表、编号等宽、删 HD 徽标、删 `_createEntry`
-  - [ ] 2.2 「Buka HD」标签 + 独立 44 热区 + 防重入
-  - [ ] 2.3 吸底「Buat Kartu Baru」→ 切 Pilih Kartu
-  - [ ] 2.4 l10n：新增 `idCardCreateNewCta`（en / id），删除无引用的 `idCardCreateEntry` / `idCardHdUnlockedBadge`，`flutter gen-l10n`
-- [ ] Task 3：空态 / 加载 / 失败（AC4）
-- [ ] Task 4：测试（AC7）
-  - [ ] 4.1 重写 `id_card_page_test.dart`
-  - [ ] 4.2 新增 `id_card_hd_flow_test.dart`
-  - [ ] 4.3 更新 `ktp_unlock_analytics_test.dart`
-  - [ ] 4.4 `flutter analyze` + `flutter test` 全绿
+- [x] Task 1：共享付费函数（AC5、AC6）
+  - [x] 1.1 新建 `id_card/id_card_hd_flow.dart`：`IdCardPaywallEntry`（含 `wire`）、`IdCardHdFlowResult`、`openIdCardHdPaywall`
+  - [x] 1.2 `KtpUnlockAnalytics` 加 `entryListBadge` 与 `cardType` / `cardVariant` 可选参数
+  - [x] 1.3 `id_card_buka_hd_tapped` / `id_card_paywall_dismissed` 上报（放置位置见 Dev Notes「埋点放哪」）
+  - [x] 1.4 处理 v112 后缀规则（Dev Notes「埋点命名与 v112 规则冲突」）
+- [x] Task 2：Kartuku 有卡态（AC1、AC2、AC3）
+  - [x] 2.1 行首证件图标、卡种名取注册表、编号等宽、删 HD 徽标、删 `_createEntry`
+  - [x] 2.2 「Buka HD」标签 + 独立 44 热区 + 防重入
+  - [x] 2.3 吸底「Buat Kartu Baru」→ 切 Pilih Kartu
+  - [x] 2.4 l10n：新增 `idCardCreateNewCta`（en / id），删除无引用的 `idCardCreateEntry` / `idCardHdUnlockedBadge`，`flutter gen-l10n`
+- [x] Task 3：空态 / 加载 / 失败（AC4）
+- [x] Task 4：测试（AC7）
+  - [x] 4.1 重写 `id_card_page_test.dart`
+  - [x] 4.2 新增 `id_card_hd_flow_test.dart`
+  - [x] 4.3 更新 `ktp_unlock_analytics_test.dart`
+  - [x] 4.4 `flutter analyze` + `flutter test` 全绿
 
 ## Dev Notes
 
@@ -200,10 +200,24 @@ so that 我不用进详情页也能解锁。
 
 ### Agent Model Used
 
+Claude（云端 headless session，dev-story 流程手工执行）
+
 ### Debug Log References
+
+- 失败态测试需关掉 Riverpod 3 自动重试（`ProviderScope(retry: (_, _) => null)`），否则失败态与自动重试交替，用例不稳定。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：本 story 只动 App，无 L1；L2 待本地真机 / 模拟器走 B2 / B3 / B5 / E5——视觉、「Buka HD」标签热区与整行点击互不干扰、PawCoin 与 QRIS 各一次付费（成功后标签消失 + toast、关二维码页后列表刷新）。
+- L0 已绿：`flutter analyze` 无问题；`flutter test` 全量通过（重写 `id_card_page_test`，新增 `id_card_hd_flow_test`，扩 `ktp_unlock_analytics_test`；`keepsake_contract_test` 抽屉回归、`v112_events_test` / `v116_events_test` 原样通过）。
+- 按文末裁定实现：T-7 `idCardUnlockHd` 本 story 改值（id「Buka HD」/ en「Unlock HD」，详情页按钮同步变化，1.8 不再重复）；D-13 事件名 `id_card_buka_hd_tapped` / `id_card_paywall_dismissed` 本就符合词尾白名单，未扩 `allowedSuffixes`；T-8 仅抽屉未选渠道关闭时报 dismissed（列表 `entry = list_badge`）；T-21 关二维码未付只刷新列表不提示；D-14 由 Story 1.5 保证。
+- 共享函数 `openIdCardHdPaywall` / `IdCardPaywallEntry`（`wire` 引用 `KtpUnlockAnalytics` 常量，单一来源）/ `IdCardHdFlowResult{dismissed, unlocked, notCompleted, failed}`；内部一律用由 `context` 取到的 `ProviderContainer` 做读取 / 失效 / 轮询，调用页在付费请求在途时被退出也不会把已成功的付款报成失败（code-review 采纳）；选了渠道但页面已卸载返回 `notCompleted`（不是 `dismissed`）。
+- 建卡页 `_openPayment`、详情页 `_openHdPaywall` / `_purchaseHd` 未动（Story 1.8 切换）。
+- Kartuku：行首 `Icons.badge_outlined`、卡种名取注册表、编号等宽且 `card_no` 原样（SIM / 居住证不格式化）、删「✓ HD」徽标与顶部入口行、吸底 `idCardCreateNewCta` 切回 Pilih Kartu；`idCardCreateEntry` 已无引用并从两份 ARB 删除；`idCardHdUnlockedBadge` 仍被详情页使用，保留。
+- 列表数据态：有数据优先显示数据（静默刷新 / 刷新失败 / 自动重试都保留旧列表，AC4.4）；无数据时加载与「Coba lagi」重拉显示转圈（B4），否则失败页（B5）。标签付费进行中仍占住点击（函数内防重入），不冒泡到整行进详情（code-review 采纳）。
+- code-review（medium）10 条：采纳 5 条（见上两条 + `wire` 单一来源）；不改 5 条——`idCardUnlockHd` 改值波及详情页（T-7 明确在本 story 改）、存量学生卡 `cardVariant` 为 null 时按 KLASIK 上报（后端已回填 KLASIK，D-12 同口径）、两个 `id_card_*` 事件不进 `KtpUnlockAnalytics`（Dev Notes「埋点放哪」明确要求）、已解锁行无标记（AC2.2 按设计删除徽标）、`_hdBusy` 触发整页重建（影响很小）。
+
+- 以下原「待确认」已按文末 2026-10-12 裁定（D-13 / D-14 / T-7 / T-8 / T-21）关闭，实现即按裁定口径。
 - 待确认：`idCardUnlockHd` 改值（→「Buka HD」/「Unlock HD」）按约定在 Story 1.8；本 story 的列表标签复用该 key，若 1.6 单独提测会暂显「Buka unduhan HD」。是否把改值提前到 1.6（1.8 只验收详情页）？
 - 待确认：事件名 `id_card_buka_hd_tapped` / `id_card_paywall_dismissed` 不符合 `v112_events_test` 的后缀规则（已有同义 `_tapped` / `_dismissed`）。默认按 epics 原名并扩后缀白名单；或按 PRD §4「与现有命名对齐」改为 `id_card_buka_hd_tapped` / `id_card_paywall_dismissed`（Story 1.5 的 `id_card_tab_viewed` / `id_card_style_tapped` 同类问题）。
 - 待确认：PRD §4 `id_card_paywall_dismissed` 的 `entry` 只列 create / detail，epics Story 1.6 要求列表入口也报 `entry = list_badge`；本 story 按 epics 报。

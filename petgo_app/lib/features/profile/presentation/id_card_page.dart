@@ -9,6 +9,7 @@ import '../../../shared/utils/date_format.dart';
 import '../data/id_card_repository.dart';
 import '../domain/id_card.dart';
 import '../domain/id_card_style.dart';
+import 'id_card/id_card_hd_flow.dart';
 import 'id_card/id_card_style_grid.dart';
 import 'id_card_create_page.dart';
 
@@ -36,6 +37,9 @@ class _IdCardPageState extends ConsumerState<IdCardPage> with SingleTickerProvid
   int? _reportedTab;
 
   static const List<String> _tabWire = ['style', 'created'];
+
+  /// 列表「Buka HD」付费进行中（防重入）。
+  bool _hdBusy = false;
 
   @override
   void initState() {
@@ -125,109 +129,167 @@ class _IdCardPageState extends ConsumerState<IdCardPage> with SingleTickerProvid
     );
   }
 
-  /// Kartuku：原列表页内容原样平移（Story 1.6 再改造）。只在本子树 watch 列表，列表状态变化不重建网格。
+  /// Kartuku（V1.3.4 ktp Story 1.6，UI 稿 B2 / B3 / B4 / B5）。只在本子树 watch 列表，列表状态变化不重建网格。
   Widget _myCards(BuildContext context, AppLocalizations l10n) {
-    return Consumer(
-      builder: (context, ref, _) => ref.watch(idCardListProvider).when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (_, _) => _centered(l10n.idCardLoadError),
-            data: (cards) => cards.isEmpty ? _empty(context, l10n) : _list(context, l10n, cards),
-          ),
-    );
+    return Consumer(builder: (context, ref, _) {
+      final async = ref.watch(idCardListProvider);
+      // 有数据就显示数据：付费成功后的静默刷新（含刷新失败、自动重试）保留旧列表，不闪整页转圈（AC4.4）。
+      final cards = async.hasValue ? async.value : null;
+      if (cards != null) return cards.isEmpty ? _empty(l10n) : _list(context, l10n, cards);
+      // 无数据：加载中与「Coba lagi」重拉（含 Riverpod 3 自动重试）显示转圈（B4），否则失败页（B5）。
+      if (async.isLoading) return _loading();
+      return _error(l10n);
+    });
   }
 
+  Widget _loading() => const Center(child: CircularProgressIndicator());
+
+  /// 有卡态（B3）：说明句 + 卡片行，吸底「Buat Kartu Baru」。
   Widget _list(BuildContext context, AppLocalizations l10n, List<IdCard> cards) {
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        children: [
-          Text(l10n.idCardListSubtitle,
-              style: const TextStyle(fontSize: 12.5, color: AppColors.ink2, height: 1.5)),
-          const SizedBox(height: 14),
-          _createEntry(context, l10n),
-          const SizedBox(height: 14),
-          for (final card in cards) ...[
-            _cardTile(context, l10n, card),
-            const SizedBox(height: 10),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _empty(BuildContext context, AppLocalizations l10n) {
-    return SafeArea(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+    return Column(
+      children: [
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             children: [
-              const Text('🪪', style: TextStyle(fontSize: 44)),
+              Text(l10n.idCardListSubtitle,
+                  style: const TextStyle(fontSize: 12.5, color: AppColors.ink2, height: 1.5)),
               const SizedBox(height: 14),
-              Text(l10n.idCardListEmptyTitle,
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink)),
-              const SizedBox(height: 8),
-              Text(l10n.idCardListEmptyBody,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13, color: AppColors.ink2, height: 1.5)),
-              const SizedBox(height: 22),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  key: const ValueKey('idCardCreateEntry'),
-                  style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.mint, padding: const EdgeInsets.symmetric(vertical: 14)),
-                  onPressed: () => context.push('/profile/id-cards/create'),
-                  icon: const Icon(Icons.add),
-                  label: Text(l10n.idCardCreateEntry),
-                ),
-              ),
+              // 顺序 = 接口返回顺序（后端已按建卡时刻倒序），App 不再排序。
+              for (final card in cards) ...[
+                _cardTile(context, l10n, card),
+                const SizedBox(height: 10),
+              ],
             ],
+          ),
+        ),
+        _createNewCta(l10n),
+      ],
+    );
+  }
+
+  /// 空态（B2）：紫浅底圆形证件图标 + 标题 / 说明，吸底「Buat Kartu Baru」。
+  Widget _empty(AppLocalizations l10n) {
+    return Column(
+      children: [
+        Expanded(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppColors.mintTint,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.lineViolet),
+                    ),
+                    child: const Icon(Icons.badge_outlined, size: 34, color: AppColors.mint),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(l10n.idCardListEmptyTitle,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                  const SizedBox(height: 8),
+                  Text(l10n.idCardListEmptyBody,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 13, color: AppColors.ink2, height: 1.5)),
+                ],
+              ),
+            ),
+          ),
+        ),
+        _createNewCta(l10n),
+      ],
+    );
+  }
+
+  /// 失败态（B5）：断网图标 + 文案 +「Coba lagi」描边按钮，点击重新拉取。
+  Widget _error(AppLocalizations l10n) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.line),
+              ),
+              child: const Icon(Icons.cloud_off_outlined, size: 34, color: AppColors.muted),
+            ),
+            const SizedBox(height: 14),
+            Text(l10n.idCardLoadError,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13.5, color: AppColors.ink2, height: 1.5)),
+            const SizedBox(height: 18),
+            SizedBox(
+              height: 44,
+              child: OutlinedButton(
+                key: const ValueKey('idCardListRetry'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.mint,
+                  side: const BorderSide(color: AppColors.lineViolet, width: 1.5),
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                ),
+                onPressed: () => ref.invalidate(idCardListProvider),
+                child: Text(l10n.commonRetry, style: const TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 吸底主按钮「Buat Kartu Baru」：切到 Pilih Kartu 选款（不再直接 push 建卡页）。
+  Widget _createNewCta(AppLocalizations l10n) {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            key: const ValueKey('idCardCreateNewCta'),
+            style: FilledButton.styleFrom(
+                backgroundColor: AppColors.mint, padding: const EdgeInsets.symmetric(vertical: 14)),
+            onPressed: () => _tabs.animateTo(0),
+            icon: const Icon(Icons.add),
+            label: Text(l10n.idCardCreateNewCta),
           ),
         ),
       ),
     );
   }
 
-  Widget _createEntry(BuildContext context, AppLocalizations l10n) {
-    return Material(
-      color: AppColors.mintTint,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        key: const ValueKey('idCardCreateEntry'),
-        borderRadius: BorderRadius.circular(14),
-        onTap: () => context.push('/profile/id-cards/create'),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: AppColors.mint, borderRadius: BorderRadius.circular(11)),
-                child: const Icon(Icons.add, color: Colors.white),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(l10n.idCardCreateEntry,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.mint)),
-              ),
-              const Icon(Icons.chevron_right, color: AppColors.mint),
-            ],
-          ),
-        ),
-      ),
-    );
+  /// 「Buka HD」标签：直接弹付费抽屉，不进详情（FR-142B.9）；落点 = 留在列表（AD-10 `list_badge`）。
+  Future<void> _onBukaHd(IdCard card) async {
+    if (_hdBusy) return; // 付费进行中不可再次触发，防连点重复下单
+    setState(() => _hdBusy = true);
+    try {
+      await openIdCardHdPaywall(context, ref, card, entry: IdCardPaywallEntry.listBadge);
+    } finally {
+      if (mounted) setState(() => _hdBusy = false);
+    }
   }
 
   Widget _cardTile(BuildContext context, AppLocalizations l10n, IdCard card) {
-    // 展示优先新编码 cardNo（TT 开头 14 位）；旧卡（cardNo=null）维持旧 serial 展示。
+    // 编号 = card_no 原样（SIM / 居住证也不格式化，FR-142E.7）；旧卡（cardNo=null）维持 serial 补零 4 位。
     final serial = (card.cardNo?.isNotEmpty == true)
         ? card.cardNo!
         : (card.serialId == null ? '----' : card.serialId!.toString().padLeft(4, '0'));
-    // bug 20260730-430：一卡一面后列表须能分辨卡种。V1.3.4 ktp（AD-6）：卡款名取注册表（8 款各显示自己的名称）。
+    // 卡款名取注册表（AD-6，8 款各显示自己的名称）。
     final typeLabel = IdCardStyle.fromCard(card).label(l10n);
     return Material(
       color: AppColors.surface,
@@ -245,7 +307,7 @@ class _IdCardPageState extends ConsumerState<IdCardPage> with SingleTickerProvid
                 height: 46,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(color: AppColors.mintTint, borderRadius: BorderRadius.circular(12)),
-                child: const Text('🪪', style: TextStyle(fontSize: 22)),
+                child: const Icon(Icons.badge_outlined, size: 24, color: AppColors.mint),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -260,7 +322,10 @@ class _IdCardPageState extends ConsumerState<IdCardPage> with SingleTickerProvid
                     Text('$typeLabel · ${l10n.idCardSerialLabel(serial)}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12, color: AppColors.ink2)),
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.ink2,
+                            fontFeatures: [FontFeature.tabularFigures()])),
                     if (card.createdAt != null) ...[
                       const SizedBox(height: 1),
                       Text(l10n.idCardCreatedLabel(formatDayMonthYear(context, card.createdAt!.toLocal())),
@@ -269,23 +334,10 @@ class _IdCardPageState extends ConsumerState<IdCardPage> with SingleTickerProvid
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              if (card.hdUnlocked)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                      color: AppColors.mintTint2, borderRadius: BorderRadius.circular(8)),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.check_circle_rounded, size: 13, color: AppColors.mint),
-                      const SizedBox(width: 4),
-                      Text(l10n.idCardHdUnlockedBadge,
-                          style: const TextStyle(
-                              fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.mint)),
-                    ],
-                  ),
-                ),
+              if (!card.hdUnlocked) ...[
+                const SizedBox(width: 4),
+                _bukaHdTag(l10n, card),
+              ],
               const SizedBox(width: 4),
               const Icon(Icons.chevron_right, color: AppColors.line),
             ],
@@ -295,6 +347,31 @@ class _IdCardPageState extends ConsumerState<IdCardPage> with SingleTickerProvid
     );
   }
 
-  Widget _centered(String text) => Center(
-      child: Padding(padding: const EdgeInsets.all(24), child: Text(text, textAlign: TextAlign.center)));
+  /// 紫色胶囊「Buka HD」：独立 ≥44×44 热区，点击不冒泡到整行（整行点进详情）。
+  Widget _bukaHdTag(AppLocalizations l10n, IdCard card) {
+    return GestureDetector(
+      key: ValueKey('idCardBukaHd_${card.id}'),
+      behavior: HitTestBehavior.opaque,
+      // 付费进行中也占住点击（_onBukaHd 内防重入），否则无识别器的 GestureDetector 会让点击落到整行进详情。
+      onTap: () => _onBukaHd(card),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+            decoration: BoxDecoration(color: AppColors.mint, borderRadius: BorderRadius.circular(999)),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.lock_outline, size: 12, color: Colors.white),
+                const SizedBox(width: 4),
+                Text(l10n.idCardUnlockHd,
+                    style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

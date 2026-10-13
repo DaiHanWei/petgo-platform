@@ -75,11 +75,35 @@ void main() {
   });
 
   test('🔴 App 端没有 ktp_unlock_succeeded —— 成功只由服务端报（关掉二维码后再付款 App 不知道）', () {
-    final code = File('lib/features/profile/presentation/id_card/ktp_unlock_analytics.dart')
-        .readAsLinesSync()
-        .where((l) => !l.trim().startsWith('//'))
-        .join('\n');
-    expect(code.contains("'ktp_unlock_succeeded'"), isFalse);
+    for (final path in [
+      'lib/features/profile/presentation/id_card/ktp_unlock_analytics.dart',
+      // V1.3.4 ktp Story 1.6：共享付费函数同样不得报成功。
+      'lib/features/profile/presentation/id_card/id_card_hd_flow.dart',
+    ]) {
+      final code = File(path).readAsLinesSync().where((l) => !l.trim().startsWith('//')).join('\n');
+      expect(code.contains("'ktp_unlock_succeeded'"), isFalse, reason: path);
+    }
+  });
+
+  test('V1.3.4：entryListBadge = list_badge；card_type / card_variant 可选，null 不带键', () {
+    expect(KtpUnlockAnalytics.entryListBadge, 'list_badge');
+    KtpUnlockAnalytics.paywallShown(
+        entry: KtpUnlockAnalytics.entryListBadge, priceIdr: 5000, cardType: 'STUDENT', cardVariant: 'BINTANG');
+    KtpUnlockAnalytics.started(
+        entry: KtpUnlockAnalytics.entryListBadge, method: HdPayChannel.qris, cardType: 'KTP');
+    KtpUnlockAnalytics.failedFromError(
+        entry: KtpUnlockAnalytics.entryListBadge, method: HdPayChannel.qris, error: dio(), cardType: 'SIM');
+    expect(sent[0].$2, {'entry': 'list_badge', 'price_idr': 5000, 'card_type': 'STUDENT', 'card_variant': 'BINTANG'});
+    expect(sent[1].$2, {'entry': 'list_badge', 'method': 'QRIS', 'card_type': 'KTP'});
+    expect(sent[2].$2, {'entry': 'list_badge', 'method': 'QRIS', 'failure_reason': 'NETWORK_ERROR', 'card_type': 'SIM'});
+  });
+
+  test('共享付费函数接了 shown / started / failed，且 entry 来自参数', () {
+    final code = File('lib/features/profile/presentation/id_card/id_card_hd_flow.dart').readAsStringSync();
+    for (final call in ['paywallShown(', 'started(', 'failedFromError(']) {
+      expect(code.contains('KtpUnlockAnalytics.$call'), isTrue, reason: '漏了 $call');
+    }
+    expect('entry: entry.wire'.allMatches(code).length, 3);
   });
 
   test('两个付费入口（生成页 / 卡详情页）都接了 shown / started / failed，且 entry 不串', () {
