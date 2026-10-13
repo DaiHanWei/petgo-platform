@@ -76,7 +76,13 @@ public record ContentDetailResponse(
         /** 作者对外 token（V1.3.4 follow · Story 2.1）；作者已注销 / 封号（D-8）时 null（不下发）。 */
         String authorToken,
         /** 当前查看者与作者的关注关系（Story 2.1）；游客 / 本人恒 false。 */
-        com.tailtopia.social.read.FollowState authorFollowState) {
+        com.tailtopia.social.read.FollowState authorFollowState,
+        /**
+         * 每张图的露出位置（V1.3.4 Story 2.1 · AD-5 · FR-125），与 {@link #imageUrls()} 同序；
+         * 元素为 {@code [0, 1]} 或 {@code null}（原样下发）。存量 / 无超界图为 null → 省略；App 无值即居中。
+         * 与 {@code FeedItemResponse.imageCropOffsets()} 同口径。
+         */
+        List<Double> imageCropOffsets) {
 
     /**
      * @param imageSizes 已由 {@code ImageSizeResolver.alignForRead} 对齐到 {@code imageUrls} 长度的尺寸列；
@@ -108,6 +114,6 @@ public record ContentDetailResponse(
                 p.getType(), p.getText(), p.getImageUrls(), imageSizes,
                 likeCount, commentCount, liked, isAuthor, p.getVisibility(),
                 p.getCreatedAt(), mentions, checkinPlace,
-                author.deleted() ? null : authorToken, authorFollowState);
+                author.deleted() ? null : authorToken, authorFollowState, p.getImageCropOffsets());
     }
 }

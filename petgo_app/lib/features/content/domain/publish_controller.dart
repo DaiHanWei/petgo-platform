@@ -11,7 +11,8 @@ enum ImageUploadStatus { pending, uploading, success, failed }
 
 /// 单张待发图片项（内存草稿，无持久化）。
 class ImageUploadItem {
-  ImageUploadItem(this.bytes, {this.status = ImageUploadStatus.pending, this.url, this.size});
+  ImageUploadItem(this.bytes,
+      {this.status = ImageUploadStatus.pending, this.url, this.size, this.cropOffset});
 
   final Uint8List bytes;
   ImageUploadStatus status;
@@ -26,6 +27,11 @@ class ImageUploadItem {
   ///
   /// 发布路径本来就在解码图片，宽高顺手就有。量不出来时留 null，由服务端兜底。
   final ImageSize? size;
+
+  /// 露出位置（V1.3.4 Story 2.4 · AD-8）；仅超界图有值；随项走，重排 / 删除不丢。
+  ///
+  /// 🔴 作为对象字段跟着 item 移动，**不另建「下标 → offset」映射**（那就是第二份顺序，AD-A27.1）。
+  final double? cropOffset;
 }
 
 /// 文字上限（FR：1000 字符实时计数，超出禁止发布）。
@@ -118,10 +124,11 @@ class PublishController extends ChangeNotifier {
   }
 
   /// 加入一张待传图片（≤9）。返回是否成功加入。
-  bool addImage(Uint8List bytes) {
+  /// [cropOffset]：露出区域页给的露出位置（仅超界图）；字节原样入列，不裁不重编码。
+  bool addImage(Uint8List bytes, {double? cropOffset}) {
     if (items.length >= kMaxImages) return false;
     // 只读文件头，不整张解码 —— 9 张图各解一遍会让加图这一步明显卡顿。
-    items.add(ImageUploadItem(bytes, size: imageSizeOf(bytes)));
+    items.add(ImageUploadItem(bytes, size: imageSizeOf(bytes), cropOffset: cropOffset));
     notifyListeners();
     return true;
   }
@@ -219,6 +226,8 @@ class PublishController extends ChangeNotifier {
       // 🛡 **与图片同序等长**：后端对长度不符的处理是**整组作废**（不做部分采信），
       // 所以量不出来的位置也要占一个 null，绝不能"跳过不放"。
       final sizes = items.map((i) => i.size).toList();
+      // V1.3.4 Story 2.4：同序等长；后端（2.1）长度不符直接 422。
+      final offsets = items.map((i) => i.cropOffset).toList();
       final growth = type == ContentType.growthMoment;
       final trimmed = text.trim();
       return await repository.publish(
@@ -230,6 +239,7 @@ class PublishController extends ChangeNotifier {
         mentionedUserIds: mentions.userIdsIn(trimmed),
         imageUrls: urls,
         imageSizes: sizes,
+        imageCropOffsets: offsets,
         eventDate: growth ? (eventDate ?? DateTime.now()) : null,
         idempotencyKey: idempotencyKey,
         // 非 Diary 恒公开；Diary 由开关决定。

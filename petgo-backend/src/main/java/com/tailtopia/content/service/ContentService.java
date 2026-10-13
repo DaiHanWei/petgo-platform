@@ -72,13 +72,17 @@ public class ContentService {
     /** V1.3.2 Story 1.5：发帖关联打卡的只读口（place 包，不直接 join 打卡表）。 */
     private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins;
 
+    /** V1.3.4 Story 2.1：每张图露出位置的严格校验（长度不符 / 越界 → 422，不整组作废）。 */
+    private final ImageCropOffsetValidator cropOffsets;
+
     public ContentService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, ProfileService profileService,
             IdempotencyService idempotency, ContentModerationService moderation,
             ApplicationEventPublisher events, ManualReviewGate manualReviewGate,
             ImageSizeResolver imageSizes, ImageSizeBackfillService sizeBackfill,
             ContentPinService pins, MentionSanitizer mentions,
-            com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins) {
+            com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins,
+            ImageCropOffsetValidator cropOffsets) {
         this.posts = posts;
         this.comments = comments;
         this.likes = likes;
@@ -92,6 +96,7 @@ public class ContentService {
         this.pins = pins;
         this.mentions = mentions;
         this.placeCheckins = placeCheckins;
+        this.cropOffsets = cropOffsets;
     }
 
     /**
@@ -472,6 +477,10 @@ public class ContentService {
         //    没理由先花一次三方审核的往返再拒。
         List<Long> mentionedUserIds = mentions.sanitize(authorId, req.mentionedUserIds());
 
+        // V1.3.4 Story 2.1（AD-5）：露出位置严格校验，同样放在**三方审核之前** ——
+        // 长度不符 / 越界是本地即可判死的客户端 bug，422 不落库、不审核（刻意不像尺寸那样整组作废）。
+        List<Double> cropOffsets = this.cropOffsets.validate(imageUrls, req.imageCropOffsets());
+
         // V1.3.2 Story 1.5（AD-10）：打卡关联。同样放在**三方审核之前**：不存在 / 非本人的 token 本地即可判死，
         // 不落库、不审核。两种情况刻意同一个 422（不泄漏 token 是否存在）。
         Long placeCheckinId = null;
@@ -539,6 +548,8 @@ public class ContentService {
                 // 只写下面那条正常分支的话，审核挂起的帖会永远没有尺寸。
                 List<ImageSize> pendingSizes = imageSizes.normalize(imageUrls, req.imageSizes());
                 pendingPost.setImageSizes(pendingSizes);
+                // V1.3.4 Story 2.1：🔴 挂起分支**同样要写露出位置**（与尺寸 / @ 名单 / 打卡关联同一个坑）。
+                pendingPost.setImageCropOffsets(cropOffsets);
                 // Story 3.2：🔴 挂起分支**同样要写 @ 名单**（与上面尺寸那条同一个坑）——
                 // 只写下面正常分支的话，审核挂起的帖过审后正文里那串「@昵称」是死的、点不动。
                 // ⚠️ 挂起帖此刻**不发任何事件**，所以 @ 通知也天然不会在这里发出去；
@@ -566,6 +577,8 @@ public class ContentService {
         // 缺失的位置交由异步兜底测量 —— 绝不在本事务里同步拉图。
         List<ImageSize> sizes = imageSizes.normalize(imageUrls, req.imageSizes());
         post.setImageSizes(sizes);
+        // V1.3.4 Story 2.1（AD-5）：用户为超界图选的露出位置（已校验等长 / 取值范围）。
+        post.setImageCropOffsets(cropOffsets);
         // Story 3.2 AC4：正文里显示昵称，可点的身份存这里（存 userId 不存昵称）。
         //
         // 🔴 **给 Story 3.4（被 @ 的通知）的硬约束：非 PUBLIC 的内容不得发 @ 通知。**

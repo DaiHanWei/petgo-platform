@@ -1,6 +1,6 @@
 /// 里程碑徽章：完整 code → 语义键（V1.3.2 Story 5.1 · AD-15 · 代码核对报告 §3）。
 ///
-/// 78 个 code 各一条、40 个语义键；同一语义跨物种共用一个键（Camilan：C-S8 / D-S8 / G-S6 → `first_treat`）。
+/// 84 个 code 各一条、42 个语义键（V1.3.4 FR-126 +`place_checkin` / `tailsonality`）；同一语义跨物种共用一个键（Camilan：C-S8 / D-S8 / G-S6 → `first_treat`）。
 ///
 /// 🔴 **只按完整 code 精确查表**：通用套编号与猫狗不对齐 —— `G-S6` 是零食、`G-S8` 是点赞，
 /// 按后缀寻址会让通用宠物的零食徽章显示成点赞图。本文件与 `milestone_badge.dart` 不得出现任何字符串切分 / 正则
@@ -8,7 +8,7 @@
 ///
 /// 映射是**语义事实**，一次写全、不随素材到货变；「有没有图」看 asset manifest（`MilestoneBadgeAssets`），
 /// 所以往 `assets/milestone/` 放一枚 `<语义键>.webp` 即生效，不改代码。
-/// 后端跨库测试 `MilestoneBadgeMappingTest` 钉住：code 集合 == `MilestoneCatalog` 全集、恰 40 个不同值。
+/// 后端跨库测试 `MilestoneBadgeMappingTest` 钉住：code 集合 == `MilestoneCatalog` 全集、恰 42 个不同值。
 const Map<String, String> kMilestoneBadgeKeys = {
   // ===== CAT (C) =====
   'C-S1': 'profile_created',
@@ -42,6 +42,8 @@ const Map<String, String> kMilestoneBadgeKeys = {
   'C-L3': 'together_365_days',
   'C-L4': 'all_health_milestones',
   'C-L5': 'growth_records_30',
+  'C-S17': 'place_checkin',
+  'C-S18': 'tailsonality',
   // ===== DOG (D) =====
   'D-S1': 'profile_created',
   'D-S2': 'first_calendar_photo',
@@ -74,6 +76,8 @@ const Map<String, String> kMilestoneBadgeKeys = {
   'D-L3': 'together_365_days',
   'D-L4': 'all_health_milestones',
   'D-L5': 'growth_records_30',
+  'D-S17': 'place_checkin',
+  'D-S18': 'tailsonality',
   // ===== GENERAL (G) =====
   'G-S1': 'profile_created',
   'G-S2': 'first_calendar_photo',
@@ -91,6 +95,8 @@ const Map<String, String> kMilestoneBadgeKeys = {
   'G-L1': 'first_birthday',
   'G-L2': 'together_100_days',
   'G-L3': 'together_365_days',
+  'G-S10': 'place_checkin',
+  'G-S11': 'tailsonality',
 };
 
 /// 锁定态全局一张（素材清单 §5「D. 锁定态」）：不属于任何 code，**不暴露是哪一枚**。

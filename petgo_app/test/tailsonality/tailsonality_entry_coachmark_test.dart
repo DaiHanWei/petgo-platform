@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:tailtopia/core/startup/startup_popup_ledger.dart';
 import 'package:tailtopia/features/profile/data/onboarding_mark_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
@@ -16,6 +17,8 @@ import 'package:tailtopia/shared/widgets/coachmark_overlay.dart';
 /// V1.3.2 Story 2.7 · L0：聚合页第二次入口引导（触发条件 / 高亮位置 / 关闭置位 / 点穿卡片 / 两键独立）。
 void main() {
   late _FakeMarksRepo marksRepo;
+
+  setUp(StartupPopupLedger.instance.resetForTest);
 
   Future<ProviderContainer> pump(WidgetTester tester, {Set<String>? server, bool fetchFails = false,
       Set<String> localMarkBeforePage = const {}}) async {
@@ -56,6 +59,18 @@ void main() {
     final overlay = tester.widget<CoachmarkOverlay>(find.byType(CoachmarkOverlay));
     final card = tester.getRect(find.byKey(const ValueKey('insightTailsonality')));
     expect(overlay.spotlight, card);
+  });
+
+  testWidgets('V1.3.4 Story 5.3：蒙层出现后 ledger 含 coachmark', (tester) async {
+    await pump(tester, server: {kOnboardingMarkKtpMoved});
+    expect(find.byType(CoachmarkOverlay), findsOneWidget);
+    expect(StartupPopupLedger.instance.recorded, {StartupPopupKind.coachmark});
+  });
+
+  testWidgets('V1.3.4 Story 5.3：标记已存在不弹 → ledger 为空', (tester) async {
+    await pump(tester, server: {kOnboardingMarkKtpMoved, kOnboardingMarkTailsonalityEntry});
+    expect(find.byType(CoachmarkOverlay), findsNothing);
+    expect(StartupPopupLedger.instance.hasAny, isFalse);
   });
 
   testWidgets('新账号（快照与当前都无 ktp_moved）→ 弹（D-17）', (tester) async {

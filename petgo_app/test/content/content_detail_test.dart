@@ -9,6 +9,7 @@ import 'package:tailtopia/features/content/data/detail_repository.dart';
 import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/domain/comment.dart';
 import 'package:tailtopia/features/content/domain/content_detail.dart';
+import 'package:tailtopia/features/content/domain/feed_image_layout.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
 import 'package:tailtopia/features/content/domain/pinned_slot.dart';
 import 'package:tailtopia/features/content/presentation/content_detail_page.dart';
@@ -22,6 +23,8 @@ ContentDetail _detail({
   bool isAuthor = false,
   String? authorToken,
   FollowState follow = FollowState.none,
+  List<ImageSize?> imageSizes = const [],
+  List<double?> imageCropOffsets = const [],
 }) =>
     ContentDetail(
       id: 5,
@@ -31,6 +34,8 @@ ContentDetail _detail({
       type: 'DAILY',
       body: 'A lovely pet day',
       imageUrls: List.generate(images, (i) => 'https://cdn/$i.jpg'),
+      imageSizes: imageSizes,
+      imageCropOffsets: imageCropOffsets,
       likeCount: 3,
       commentCount: 2,
       liked: false,
@@ -284,6 +289,57 @@ void main() {
 
     expect(container.exists(feedProvider), isFalse);
     expect(feedRepo.getFeedCalls, 0);
+  });
+
+  /// V1.3.4 2.2 · AC4：详情轮播与 Feed 卡同走 feedImageAlignment 开窗。
+  Image carouselImage(WidgetTester tester) => tester.widget<Image>(find
+      .descendant(of: find.byType(PageView), matching: find.byType(Image))
+      .first);
+
+  testWidgets('V1.3.4 2.2 AC4: 3:1 宽图 + offset 1 → 轮播贴右开窗、cover', (tester) async {
+    await _pump(
+      tester,
+      _FakeDetailRepo(
+        detail: _detail(
+          images: 1,
+          imageSizes: const [ImageSize(3000, 1000)],
+          imageCropOffsets: const [1.0],
+        ),
+      ),
+    );
+    final img = carouselImage(tester);
+    expect(img.alignment, const Alignment(1, 0));
+    expect(img.fit, BoxFit.cover);
+  });
+
+  testWidgets('V1.3.4 2.2 AC5.1: 不带 offsets → 轮播居中（与改前一致）', (tester) async {
+    await _pump(
+      tester,
+      _FakeDetailRepo(
+        detail: _detail(images: 1, imageSizes: const [ImageSize(3000, 1000)]),
+      ),
+    );
+    final img = carouselImage(tester);
+    expect(img.alignment, Alignment.center);
+    expect(img.fit, BoxFit.cover);
+  });
+
+  test('V1.3.4 2.2: ContentDetail.fromJson 读 imageCropOffsets，cropOffsetAt 越界为 null', () {
+    final d = ContentDetail.fromJson({
+      'id': 5,
+      'authorId': 7,
+      'createdAt': '2026-10-12T00:00:00Z',
+      'imageCropOffsets': [1, null],
+    });
+    expect(d.imageCropOffsets, [1.0, null]);
+    expect(d.cropOffsetAt(0), 1.0);
+    expect(d.cropOffsetAt(1), isNull);
+    expect(d.cropOffsetAt(9), isNull);
+    expect(
+      ContentDetail.fromJson({'id': 5, 'authorId': 7, 'createdAt': '2026-10-12T00:00:00Z'})
+          .imageCropOffsets,
+      isEmpty,
+    );
   });
 
   // ===== V1.3.4 follow Story 2.1 · AC6 / AC9.4 =====

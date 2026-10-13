@@ -2,8 +2,10 @@ package com.tailtopia.shop.repository;
 
 import com.tailtopia.shop.domain.ProductCategory;
 import com.tailtopia.shop.domain.ShopProduct;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -14,6 +16,13 @@ public interface ShopProductRepository extends JpaRepository<ShopProduct, Long> 
 
     /** 对外一律按 token 寻址，绝不按自增 id（CLAUDE.md 护栏）。 */
     Optional<ShopProduct> findByPublicTokenAndActiveTrue(String publicToken);
+
+    /**
+     * 批量版「在售」判定：{@code tokens} 中存在且 {@code is_active = true} 的商品 token（V1.3.4 Story 5.1，
+     * 运营弹窗候选过滤一次查完，避免逐条查实体的 N+1）。只投影 token，不加载实体。
+     */
+    @Query("select p.publicToken from ShopProduct p where p.publicToken in :tokens and p.active = true")
+    Set<String> findActivePublicTokens(@Param("tokens") Collection<String> tokens);
 
     /** 稳定排序：运营权重降序，id 降序兜底（避免同权重时分页漂移）。 */
     List<ShopProduct> findByActiveTrueOrderBySortWeightDescIdDesc();

@@ -23,7 +23,7 @@ package com.tailtopia.profile.visitor;
  * @param happyMomentCount   Diary 条数（<b>含</b>作者关闭同步的私密条目，与访客可见的时间线一致）
  * @param consultCount       问诊次数（只是计数，不含任何问诊内容）
  * @param milestoneCompleted 已完成里程碑数
- * @param milestoneTotal     里程碑总数（按物种：猫 31 / 狗 31 / 通用 16）
+ * @param milestoneTotal     里程碑总数（按物种：猫 33 / 狗 33 / 通用 18）
  */
 public record VisitorStats(
         long happyMomentCount,

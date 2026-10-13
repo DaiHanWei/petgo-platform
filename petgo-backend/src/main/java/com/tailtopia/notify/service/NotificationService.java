@@ -413,6 +413,48 @@ public class NotificationService {
         return messageSource.getMessage("notify." + copyKey + "." + suffix, args, fallback, locale);
     }
 
+    /**
+     * 运营通知批量写入通知中心（Story 6.1 / 6.2）。不发推送——推送由 OpsNotificationDispatcher 逐人同步下发。
+     *
+     * <p>每个收件人写一行 {@link NotificationType#OPS_ANNOUNCEMENT}：{@code deepLinkType = "OPS_ANNOUNCEMENT"}、
+     * {@code targetRef} = 活动 {@code publicToken}、{@code deepLinkToken} 为本类 32 位 base62。
+     * title / body 在写入时按收件人语言定死（AD-17）：{@code "en".equalsIgnoreCase(locale)} → EN，
+     * 其余（{@code id}、null、空串、其它语言）→ ID（与 {@code AccountQueryService.localeOf} 同口径）。
+     * 每人照常 {@link #bumpUnreadBadge}（Redis 失败只记日志不回滚），但<b>统一挪到本事务提交之后</b>
+     * （{@code afterCommit}）：整批是一个事务，若中途失败回滚，提交前就 INCR 的角标会凭空多出来；
+     * 无事务同步时（如单测直调）退化为立即加。<b>不</b>调 pusher、<b>不</b>查 messageSource。
+     *
+     * @return 已保存的行，顺序同入参
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public java.util.List<Notification> writeOpsAnnouncements(
+            com.tailtopia.notify.ops.domain.OpsNotificationCampaign campaign,
+            java.util.List<com.tailtopia.notify.ops.domain.OpsRecipient> recipients) {
+        java.util.List<Notification> saved = new java.util.ArrayList<>(recipients.size());
+        for (com.tailtopia.notify.ops.domain.OpsRecipient r : recipients) {
+            boolean en = "en".equalsIgnoreCase(r.locale());
+            String title = en ? campaign.getTitleEn() : campaign.getTitleId();
+            String body = en ? campaign.getBodyEn() : campaign.getBodyId();
+            saved.add(repo.save(Notification.of(r.userId(), NotificationType.OPS_ANNOUNCEMENT, title, body,
+                    NotificationType.OPS_ANNOUNCEMENT.name(), generateToken(), campaign.getPublicToken())));
+        }
+        java.util.List<Long> badgeUserIds = recipients.stream()
+                .map(com.tailtopia.notify.ops.domain.OpsRecipient::userId).toList();
+        Runnable bumpAll = () -> badgeUserIds.forEach(this::bumpUnreadBadge);
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            bumpAll.run();
+                        }
+                    });
+        } else {
+            bumpAll.run();
+        }
+        return saved;
+    }
+
     private String generateToken() {
         StringBuilder sb = new StringBuilder(32);
         for (int i = 0; i < 32; i++) {

@@ -21,9 +21,14 @@ import 'package:tailtopia/features/place/domain/place_summary.dart';
 import 'package:tailtopia/features/place/presentation/place_checkin_success_page.dart';
 import 'package:tailtopia/features/pet_passport/domain/new_stamp_args.dart';
 import 'package:tailtopia/features/place/presentation/place_detail_page.dart';
+import 'package:tailtopia/features/profile/data/milestone_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
+import 'package:tailtopia/features/profile/presentation/milestone_instant_celebration.dart';
+import 'package:tailtopia/features/profile/presentation/widgets/milestone_badge.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+
+import '../profile/milestone_instant_fakes.dart';
 
 /// V1.3.2 batch-a Story 1.1 · L0：打卡结果契约 + 详情页打卡按钮流程（AC4）+ 成功页两种形态（AC5）。
 void main() {
@@ -293,7 +298,11 @@ void main() {
       ]);
       addTearDown(router.dispose);
       await tester.pumpWidget(ProviderScope(
-        overrides: [petPassportProvider.overrideWith((ref) async => throw StateError('offline'))],
+        overrides: [
+          petPassportProvider.overrideWith((ref) async => throw StateError('offline')),
+          // V1.3.4 Story 4.3：成功页首帧会检测当场庆祝；本用例不关心 → 关掉，免真实网络与挂起计时器。
+          milestoneInstantPollDelaysProvider.overrideWithValue(const []),
+        ],
         child: MaterialApp.router(
           routerConfig: router,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -385,6 +394,45 @@ void main() {
       expect(find.byKey(const ValueKey('placeCheckinNewStamp')), findsNothing,
           reason: 'C2b 不播落章');
       expect(find.text('Lihat Jejak'), findsNothing);
+    });
+
+    // V1.3.4 Story 4.3 · AC1：首帧后检测「第一次打卡」，已完成未庆祝 → 盖在成功页上当场庆祝；关闭回成功页。
+    testWidgets('Story 4.3：C-S17 已完成未庆祝 → 当场弹庆祝，关闭后回成功页、按钮可点、回报 celebrations',
+        (tester) async {
+      MilestoneBadgeAssets.debugOverride = const {};
+      addTearDown(() => MilestoneBadgeAssets.debugOverride = null);
+      final repo = ScriptedMilestoneRepository([instantMilestoneList('C-S17', completed: true)]);
+      await _pumpSuccess(tester,
+          isNew: true, count: 1, milestones: repo, pollDelays: const [Duration.zero], settle: false);
+
+      expect(find.byKey(const ValueKey('milestoneCelebration')), findsOneWidget);
+      expect(find.text('Check-in pertama Momo! 📍'), findsOneWidget);
+      expect(repo.calls, 1, reason: '预读即命中，不轮询');
+
+      // 右上角关闭钮在测试默认 800×600 画布上被居中的滚动区盖住（命中测试打不到），直接触发它的回调。
+      tester.widget<IconButton>(find.byKey(const ValueKey('milestoneCelebrationClose'))).onPressed!();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('milestoneCelebration')), findsNothing);
+      expect(find.byKey(const ValueKey('placeCheckinSuccessTitle')), findsOneWidget);
+      final cta = tester.widget<ButtonStyleButton>(find.byKey(const ValueKey('placeCheckinRecordMoment')));
+      expect(cta.onPressed, isNotNull);
+      expect(repo.reported, [
+        ['C-S17']
+      ]);
+    });
+
+    testWidgets('Story 4.3 · AC1.5：同一成功页实例重建不重复检测', (tester) async {
+      // 「未完成」→ 每次检测都会走预读 + 轮询；重建若再检测，调用次数必然增加。
+      final repo = ScriptedMilestoneRepository([instantMilestoneList('C-S17', completed: false)]);
+      await _pumpSuccess(tester,
+          isNew: false, count: 2, milestones: repo, pollDelays: const [Duration.zero]);
+      expect(repo.calls, 2, reason: '预读 1 次 + 轮询 1 次');
+      // 改画布尺寸触发重建（MediaQuery 变化 → didChangeDependencies / build 重跑）。
+      tester.view.physicalSize = const Size(1200, 2600);
+      addTearDown(tester.view.reset);
+      await tester.pumpAndSettle();
+      expect(repo.calls, 2, reason: '重建不再检测');
+      expect(find.byKey(const ValueKey('milestoneCelebration')), findsNothing);
     });
   });
 }
@@ -543,6 +591,7 @@ Future<void> _pumpDetail(
       petProfileProvider.overrideWith(
           (ref) async => const PetProfile(id: 77, name: 'Momo', cardToken: 'card')),
       if (guide != null) loginGuideControllerProvider.overrideWithValue(guide),
+      milestoneInstantPollDelaysProvider.overrideWithValue(const []),
     ],
     child: MaterialApp.router(
       routerConfig: router,
@@ -557,12 +606,23 @@ Future<void> _pumpDetail(
 }
 
 /// [passport] 为 null：护照取不到 → 成功页走简版章面兜底（C2 / C2b 原样）；非 null：正文为 1.3 章详情块。
+///
+/// [milestones] / [pollDelays]（V1.3.4 Story 4.3）：默认 `const []` = 不检测当场庆祝；
+/// 接线用例传假仓库与 `[Duration.zero]`，此时庆祝页彩纸持续动画，[settle] 传 false 改为有限次 pump。
 Future<void> _pumpSuccess(WidgetTester tester,
-    {required bool isNew, required int count, Locale locale = const Locale('id'), PetPassport? passport}) async {
+    {required bool isNew,
+    required int count,
+    Locale locale = const Locale('id'),
+    PetPassport? passport,
+    MilestoneRepository? milestones,
+    List<Duration> pollDelays = const [],
+    bool settle = true}) async {
   await tester.pumpWidget(ProviderScope(
     overrides: [
       petPassportProvider.overrideWith(
           (ref) async => passport ?? (throw StateError('offline'))),
+      milestoneInstantPollDelaysProvider.overrideWithValue(pollDelays),
+      if (milestones != null) milestoneRepositoryProvider.overrideWithValue(milestones),
     ],
     child: MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -584,5 +644,11 @@ Future<void> _pumpSuccess(WidgetTester tester,
     ),
     ),
   ));
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
 }

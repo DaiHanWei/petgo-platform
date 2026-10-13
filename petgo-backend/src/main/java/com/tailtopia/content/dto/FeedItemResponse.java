@@ -85,7 +85,15 @@ public record FeedItemResponse(
          * 当前查看者与作者的关注关系 {@code {iFollow, followsMe}}（Story 2.1 · AD-6）。
          * 游客 / 本人恒 false；「我的发布」与他人主页网格不展示按钮 → null（不下发、不查库）。
          */
-        com.tailtopia.social.read.FollowState authorFollowState) {
+        com.tailtopia.social.read.FollowState authorFollowState,
+        /**
+         * 每张图的露出位置（V1.3.4 Story 2.1 · AD-5 · FR-125），与 {@link #imageUrls()} 同序；
+         * 元素为 {@code [0, 1]} 或 {@code null}（区间内的图，原样下发）。
+         *
+         * <p>存量 / 无超界图的帖为 {@code null} → NON_NULL 省略；App 无值即居中。
+         * 库里原值下发，不对齐、不改写（写入时已校验等长）。
+         */
+        List<Double> imageCropOffsets) {
 
     /**
      * ⚠️ {@code visibility} 恒下发（Story 4.1 · AC7）。Feed 里只会出现 PUBLIC，
@@ -122,6 +130,7 @@ public record FeedItemResponse(
                 commentCount,
                 mentions,
                 author.deleted() ? null : authorToken,
-                authorFollowState);
+                authorFollowState,
+                p.getImageCropOffsets());
     }
 }

@@ -59,16 +59,20 @@ class ContentDetailAndCommentContractTest {
                 new com.tailtopia.place.dto.CheckinPlaceView("p".repeat(32), "Kopi Kucing",
                         com.tailtopia.place.domain.PlaceAvailability.ACTIVE),
                 // V1.3.4 follow Story 2.1：作者 token 与关注关系（AD-6 键名）。
-                "t".repeat(32), new com.tailtopia.social.read.FollowState(false, true));
+                "t".repeat(32), new com.tailtopia.social.read.FollowState(false, true),
+                // V1.3.4 Story 2.1：每张图的露出位置（与 imageUrls 同序；null 元素原样下发）。
+                java.util.Arrays.asList(1.0, null));
 
         assertThat(wire(d).keySet()).isEqualTo(Set.of(
                 "id", "authorId", "authorNickname", "authorAvatarUrl", "authorDeleted",
                 "authorTags", "decorationTags", "type",
                 "body", "imageUrls", "imageSizes", "likeCount", "commentCount", "liked", "isAuthor",
-                "visibility", "createdAt", "mentions", "checkinPlace", "authorToken", "authorFollowState"));
+                "visibility", "createdAt", "mentions", "checkinPlace", "authorToken", "authorFollowState",
+                "imageCropOffsets"));
         @SuppressWarnings("unchecked")
         Map<String, Object> follow = (Map<String, Object>) wire(d).get("authorFollowState");
         assertThat(follow).isEqualTo(Map.of("iFollow", false, "followsMe", true));
+        assertThat(wire(d).get("imageCropOffsets")).isEqualTo(java.util.Arrays.asList(1.0, null));
         @SuppressWarnings("unchecked")
         Map<String, Object> place = (Map<String, Object>) wire(d).get("checkinPlace");
         assertThat(place.keySet()).isEqualTo(Set.of("token", "name", "status"));
@@ -83,10 +87,12 @@ class ContentDetailAndCommentContractTest {
         ContentDetailResponse d = new ContentDetailResponse(1L, 7L, "小明", null, false, null, null,
                 ContentType.DAILY, "正文", List.of(), null, 0L, 0L, false, false,
                 com.tailtopia.content.domain.ContentVisibility.PUBLIC, Instant.parse("2026-06-05T00:00:00Z"),
-                null, null, null, null);
+                null, null, null, null, null);
         assertThat(wire(d)).doesNotContainKey("checkinPlace");
         // V1.3.4：作者已注销 / 封号时 token 与关注关系不下发。
         assertThat(wire(d)).doesNotContainKey("authorToken").doesNotContainKey("authorFollowState");
+        // V1.3.4 Story 2.1：存量 / 无超界图的帖不下发露出位置（App 无值即居中）。
+        assertThat(wire(d)).doesNotContainKey("imageCropOffsets");
     }
 
     @Test

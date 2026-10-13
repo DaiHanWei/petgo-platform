@@ -11,6 +11,7 @@ import com.tailtopia.content.service.ContentService;
 import com.tailtopia.content.service.ContentShareService;
 import com.tailtopia.moderation.violation.service.ViolationCountService;
 import com.tailtopia.notify.service.NotificationDeletionService;
+import com.tailtopia.ops.popup.service.OpsPopupImpressionDeletionService;
 import com.tailtopia.pay.service.PawCoinAccountDeletionService;
 import com.tailtopia.mention.service.MentionCandidateMaintenanceService;
 import com.tailtopia.place.service.PlaceCommentService;
@@ -76,6 +77,8 @@ public class AccountDeletionService {
     private final TailsonalityDeletionService tailsonalityDeletion;
     /** V1.3.4 follow Story 1.1：关注关系两个方向显式清理 + 扣对端计数（AD-1）。 */
     private final FollowService followService;
+    /** V1.3.4 Story 5.1：运营弹窗曝光（登录用户的频次记录，纯个人数据，物理删）。 */
+    private final OpsPopupImpressionDeletionService opsPopupImpressionDeletion;
 
     public AccountDeletionService(AccountDeletionRepository deletions,
             ProfileDeletionService profileDeletion, TriageDeletionService triageDeletion,
@@ -90,7 +93,8 @@ public class AccountDeletionService {
             com.tailtopia.onboarding.service.OnboardingMarkDeletionService onboardingMarkDeletion,
             PlaceCommentService placeCommentService, PlacePhotoService placePhotoService,
             MentionCandidateMaintenanceService mentionCandidateMaintenance,
-            TailsonalityDeletionService tailsonalityDeletion, FollowService followService) {
+            TailsonalityDeletionService tailsonalityDeletion, FollowService followService,
+            OpsPopupImpressionDeletionService opsPopupImpressionDeletion) {
         this.deletions = deletions;
         this.profileDeletion = profileDeletion;
         this.triageDeletion = triageDeletion;
@@ -113,6 +117,7 @@ public class AccountDeletionService {
         this.placePhotoService = placePhotoService;
         this.tailsonalityDeletion = tailsonalityDeletion;
         this.followService = followService;
+        this.opsPopupImpressionDeletion = opsPopupImpressionDeletion;
     }
 
     /** 受理注销（双重确认在 web 层校验）：登记 PENDING（幂等）+ 发事件触发异步作业（AFTER_COMMIT）。 */
@@ -189,6 +194,9 @@ public class AccountDeletionService {
         // V1.3.0 批次 A Story 5.4：一次性引导标记（谁看过哪个引导）随注销物理删除。
         // ⚠️ 漏接的表会在注销后留着指向一个已不存在的人的行，而这类遗漏没有任何报错提醒。
         onboardingMarkDeletion.deleteByUserId(userId);
+        // V1.3.4 Story 5.1：运营弹窗曝光行随注销物理删除（D1/D2）。
+        // ⚠️ users 行只匿名化不删，ops_popup_impressions 的 FK ON DELETE CASCADE 在这条路径上不会触发 —— 必须显式删。
+        opsPopupImpressionDeletion.deleteByUserId(userId);
         // V1.3.2 Story 2.5：Tailsonality 主人类型是账号级个人数据（AD-17），须在 user 行删除前物理删除
         // （tailsonality_owner_types.user_id 对 users 有 FK、无 ON DELETE）。宠物级的结果行已随上面的 profileDeletion 删掉。
         tailsonalityDeletion.deleteOwnerTypeByUserId(userId);

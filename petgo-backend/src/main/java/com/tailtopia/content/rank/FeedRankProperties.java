@@ -20,14 +20,24 @@ public class FeedRankProperties {
     private final int sequenceTtlMinutes;
     private final int sequenceLength;
     private final int candidatePoolSize;
+    private final int eduPoolSize;
+
+    /**
+     * 教育类独立候选池的时间窗（V1.3.4 FR-122.1）：近 90 天。
+     *
+     * <p>🛡 90 天是产品口径，不做成属性；只有上界 {@link #eduPoolSize()} 可调（测试上下文要压小）。
+     */
+    public static final Duration EDU_POOL_WINDOW = Duration.ofDays(90);
 
     public FeedRankProperties(
             @Value("${petgo.feed.rank.sequence-ttl-minutes:30}") int sequenceTtlMinutes,
             @Value("${petgo.feed.rank.sequence-length:100}") int sequenceLength,
-            @Value("${petgo.feed.rank.candidate-pool-size:1000}") int candidatePoolSize) {
+            @Value("${petgo.feed.rank.candidate-pool-size:1000}") int candidatePoolSize,
+            @Value("${petgo.feed.rank.edu-pool-size:1000}") int eduPoolSize) {
         this.sequenceTtlMinutes = sequenceTtlMinutes;
         this.sequenceLength = sequenceLength;
         this.candidatePoolSize = candidatePoolSize;
+        this.eduPoolSize = eduPoolSize;
     }
 
     /** 序列快照 TTL（默认 30 分钟）。 */
@@ -52,5 +62,13 @@ public class FeedRankProperties {
      */
     public int candidatePoolSize() {
         return candidatePoolSize;
+    }
+
+    /**
+     * 教育类独立候选池上界（V1.3.4 FR-122.1，默认 1000）：近 {@link #EDU_POOL_WINDOW} 内的 KNOWLEDGE 公开内容
+     * 按 {@code created_at DESC} 取前 N 条，与主池按 id 合并。走部分索引 {@code idx_content_posts_knowledge_feed}。
+     */
+    public int eduPoolSize() {
+        return eduPoolSize;
     }
 }

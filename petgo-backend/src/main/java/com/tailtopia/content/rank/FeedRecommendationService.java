@@ -16,6 +16,7 @@ import com.tailtopia.profile.repository.PetProfileRepository;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 推荐序取数与翻页（V1.1.6 Story 16.3）。
  *
  * <p>把三块已有的东西接起来：候选池查询（本 story）、序列快照与曝光记录（16.1）、
- * 打分与配比引擎（16.2）。🛡 <b>本类不做打分</b> —— 那是引擎的事，这里只负责喂数据与切页。
+ * 打分与配比引擎（16.2）。ALL Tab 候选 = 主池 ∪ 教育池（V1.3.4 FR-122，按 id 去重合并）。🛡 <b>本类不做打分</b> —— 那是引擎的事，这里只负责喂数据与切页。
  *
  * <h2>翻页契约</h2>
  * 冷启动 / 下拉刷新 → 新种子 → 一次算出前 {@link FeedRankProperties#sequenceLength()} 条并写快照；
@@ -257,7 +258,19 @@ public class FeedRecommendationService {
             Set<Long> exclude, int wanted, Instant now) {
         List<ContentPost> pool = posts.findRankCandidatePool(viewerId != null, viewerId,
                 PageRequest.of(0, props.candidatePoolSize()));
-        List<ContentPost> usable = pool.stream().filter(p -> !exclude.contains(p.getId())).toList();
+        // V1.3.4 FR-122：教育类槽位另取近 90 天全部 KNOWLEDGE（不受主池「最近 N 条」截断），与主池按 id 合并。
+        List<ContentPost> eduPool = posts.findEduCandidatePool(viewerId != null, viewerId,
+                now.minus(FeedRankProperties.EDU_POOL_WINDOW), PageRequest.of(0, props.eduPoolSize()));
+        Map<Long, ContentPost> merged = new LinkedHashMap<>();
+        for (ContentPost p : pool) {
+            merged.putIfAbsent(p.getId(), p);
+        }
+        for (ContentPost p : eduPool) {
+            merged.putIfAbsent(p.getId(), p);
+        }
+        // 🛡 exclude（已缓存序列 id）在合并之后套：教育池里已下发过的内容续算时同样被排掉。
+        List<ContentPost> usable = merged.values().stream()
+                .filter(p -> !exclude.contains(p.getId())).toList();
         if (usable.isEmpty()) {
             return List.of();
         }
@@ -334,7 +347,15 @@ public class FeedRecommendationService {
                 cfg.getSpeciesMainQuota(), cfg.getSpeciesOtherQuota(), cfg.getSpeciesGeneralQuota(),
                 RankParams.DEFAULT_MAX_SAME_ATTRIBUTE_RUN, RankParams.DEFAULT_MAX_SAME_AUTHOR_RUN,
                 RankParams.DEFAULT_MAX_SAME_AUTHOR_PER_WINDOW,
-                RankParams.DEFAULT_MAX_SAME_OTHER_SPECIES_RUN);
+                RankParams.DEFAULT_MAX_SAME_OTHER_SPECIES_RUN,
+                eduHalfLife(cfg));
+    }
+
+    /** 科普新鲜度半衰期（V1.3.4 FR-122.3）：取配置，非法值回落 720。 */
+    private static double eduHalfLife(FeedRankConfig cfg) {
+        double v = cfg.getEduFreshnessHalfLifeHours();
+        // 🛡 库里有 CHECK > 0；这里只为 mock / 脏数据兜底 —— 0 会除零、负数会让越老的科普分越高。
+        return v > 0 ? v : RankParams.DEFAULT_EDU_FRESHNESS_HALF_LIFE_HOURS;   // NaN > 0 为 false，同样回落
     }
 
     /**

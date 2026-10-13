@@ -20,6 +20,10 @@ import 'package:tailtopia/features/me/presentation/phone_edit_sheet.dart';
 import 'package:tailtopia/features/me/domain/phone_soft_prompt.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/notify/data/notification_repository.dart';
+import 'package:tailtopia/features/notify/domain/app_update_bootstrap.dart';
+import 'package:tailtopia/features/notify/domain/app_update_controller.dart';
+import 'package:tailtopia/features/notify/domain/app_version_check.dart';
+import 'package:tailtopia/features/notify/presentation/app_update_presenter.dart';
 import 'package:tailtopia/features/order/presentation/order_list_controller.dart';
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
 import 'package:tailtopia/features/profile/data/health_record_repository.dart';
@@ -159,6 +163,22 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp>
         return PhoneEditSheet.openDetailed(ctx, entry: 'soft_prompt');
       },
     );
+
+    // 冷启动版本检查（V1.3.4 Story 3.2 · AC6.1）：注册放这里同上 —— main 的启动回调
+    // 在 ProviderScope 之外、拿不到 ref。`main.dart` 在首帧启动链**末尾**调用它。
+    // ⚠️ 推荐态冷启动**不弹窗**（PRD AC3b），横幅由 Story 3.3 读 bannerVisible 自己出现。
+    AppUpdateBootstrap.register(() async {
+      if (!mounted) return;
+      final d = await ref.read(appUpdateControllerProvider.notifier).check(AppUpdateTrigger.coldStart);
+      if (!mounted) return;
+      if (d == UpdateDecision.forced) await showForcedUpdateDialog(ref);
+    });
+    // 页面内触发强制弹窗的统一入口（V1.3.4 Story 3.4 复审）：设置页手动检查判定 forced 时走这里，
+    // 用根 State 的常驻 ref —— 页面自己的 ref 会随 go() 替换栈卸载，打断重弹循环（PRD AC4）。
+    AppUpdateBootstrap.registerForcedDialog(() async {
+      if (!mounted) return;
+      await showForcedUpdateDialog(ref);
+    });
   }
 
   @override
@@ -174,6 +194,19 @@ class _TailTopiaAppState extends ConsumerState<TailTopiaApp>
     // ⚠️ 不做轮询：只在"用户回到 App"这个明确时点拉一次，不为角标烧流量和电。
     if (state == AppLifecycleState.resumed) {
       ref.invalidate(unreadCountProvider);
+      // 回前台版本检查（V1.3.4 Story 3.2 · AC6.2）：距上次检查 < 6h、或冷启动检查尚未发出时
+      // 由控制器直接空转，不产生网络调用。
+      unawaited(_onResumeUpdateCheck());
+    }
+  }
+
+  Future<void> _onResumeUpdateCheck() async {
+    if (!mounted) return;
+    try {
+      // 已判定 forced 时直接重弹（不受 6h 节流）；其余走 onResumed 节流，见 onResumeUpdateCheck。
+      await onResumeUpdateCheck(ref);
+    } catch (_) {
+      // 版本检查失败放行，绝不影响前台恢复。
     }
   }
 

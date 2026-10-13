@@ -974,6 +974,12 @@
   "updateForceBody": "Please update to the latest version to keep using TailTopia.",
   "updateGoStore": "Update now",
   "updateLater": "Later",
+  "updateVersionLabel": "Version {version}",
+  "@updateVersionLabel": { "description": "Update dialog version chip", "placeholders": { "version": { "type": "String" } } },
+  "updateAlreadyLatest": "You're on the latest version",
+  "@updateAlreadyLatest": { "description": "Toast: manual update check found no newer version" },
+  "updateCheckFailed": "Couldn't check for updates. Try again later.",
+  "@updateCheckFailed": { "description": "Toast: manual update check failed" },
   "notificationCenterTitle": "Notifications",
   "notificationEmpty": "No notifications yet",
   "notificationEmptyHint": "You'll get notified about likes, comments, and consultation updates.",
@@ -1177,9 +1183,8 @@
   "onboardDoneEnter": "Enter TailTopia",
   "publishCancel": "Cancel",
   "publishCropTitle": "Adjust photo",
-  "publishCropHint": "Drag to choose the visible area",
-  "publishCropApply": "Apply",
-  "publishCropLocked": "Ratio follows the first cropped photo",
+  "publishExposureHint": "The part inside the frame shows in Social",
+  "publishExposureDrag": "Drag",
   "feedPinnedBadge": "Pinned",
   "phoneEditFieldLabel": "PHONE NUMBER",
   "phoneEditTitle": "Phone number",
@@ -1261,6 +1266,14 @@
   "settingsSectionPrivacy": "PRIVACY & SECURITY",
   "@settingsSectionPrivacy": {
     "description": "Settings section header: privacy and security"
+  },
+  "settingsSectionAbout": "ABOUT THE APP",
+  "@settingsSectionAbout": {
+    "description": "Settings section header: about the app"
+  },
+  "settingsCheckUpdate": "Check for updates",
+  "@settingsCheckUpdate": {
+    "description": "Settings row: manually check for app updates"
   },
   "settingsSectionDanger": "DANGER ZONE",
   "@settingsSectionDanger": {

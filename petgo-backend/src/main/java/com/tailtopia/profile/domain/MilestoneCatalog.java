@@ -13,7 +13,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 里程碑清单后端固定常量（FR-42 / 决策 F16；7.3 聚合里程碑 +1）。**清单的唯一事实源**——猫 31 / 狗 31 / 通用 16。
+ * 里程碑清单后端固定常量（FR-42 / 决策 F16；7.3 聚合里程碑 +1）。**清单的唯一事实源**——猫 33 / 狗 33 / 通用 18
+ * （V1.3.4 FR-126 在各清单末尾追加「第一次场所打卡」「解锁性格测试结果」两条）。
  *
  * <p>V1 不做运营可编辑清单（护栏）：清单为编译期常量；DB 的 {@code pet_milestones} roster 仅是建档时
  * 按本常量物化的 per-pet 副本（承载结构位供查询自包含），标题/级别/触发/组合依赖一律以本类为准。
@@ -79,7 +80,9 @@ public final class MilestoneCatalog {
         return code != null && NEWBIE_PREREQ_CODES.values().stream().anyMatch(l -> l.contains(code));
     }
 
-    /** Lulus Pemula 按 pet_type 的 code（catalog 末位 S 节点：CAT/DOG=S16、OTHER=S9）。 */
+    /**
+     * Lulus Pemula 按 pet_type 的 code（CAT/DOG=S16、OTHER=S9；V1.3.4 前的末位；V1.3.4 起其后追加了打卡 / 性格测试两条）。
+     */
     public static String lulusPemulaCode(PetType petType) {
         return switch (petType) {
             case CAT -> "C-S16";
@@ -108,7 +111,7 @@ public final class MilestoneCatalog {
     }
 
     // ----------------------------------------------------------------------------------------
-    // 🐱 猫咪里程碑清单（共 31：S16(含 Lulus Pemula) / M10 / L5）
+    // 🐱 猫咪里程碑清单（共 33：S18(含 Lulus Pemula、V1.3.4 打卡 / 性格测试) / M10 / L5）
     // ----------------------------------------------------------------------------------------
     private static List<MilestoneDefinition> buildCat() {
         Seq q = new Seq("C");
@@ -147,11 +150,15 @@ public final class MilestoneCatalog {
                 q.l(SYSTEM_AUTO, "完成全部健康里程碑", "Semua tonggak kesehatan"),         // C-L4
                 q.l(SYSTEM_AUTO, "成长日历记录满 30 条", "30 catatan tumbuh kembang"),       // C-L5
                 // 聚合里程碑（S 级 +1，末位 sortOrder，7.3）：6 新手任务全完成自动解锁。
-                q.s(SYSTEM_AUTO, "新手毕业 · Lulus Pemula", "Lulus Pemula 🎓"));  // C-S16
+                q.s(SYSTEM_AUTO, "新手毕业 · Lulus Pemula", "Lulus Pemula 🎓"),  // C-S16
+                // V1.3.4 FR-126（AD-18）：Lulus Pemula 之后追加，既有 code / sortOrder 一个不变。
+                // 不纳入新手任务；自动达成由 Story 4.2 的事件监听接线。
+                q.s(SYSTEM_AUTO, "第一次场所打卡", "Check-in pertama"),          // C-S17
+                q.s(SYSTEM_AUTO, "解锁性格测试结果", "Kenal kepribadian"));      // C-S18
     }
 
     // ----------------------------------------------------------------------------------------
-    // 🐶 狗狗里程碑清单（共 31：S16(含 Lulus Pemula) / M10 / L5）
+    // 🐶 狗狗里程碑清单（共 33：S18(含 Lulus Pemula、V1.3.4 打卡 / 性格测试) / M10 / L5）
     // ----------------------------------------------------------------------------------------
     private static List<MilestoneDefinition> buildDog() {
         Seq q = new Seq("D");
@@ -190,11 +197,15 @@ public final class MilestoneCatalog {
                 q.l(SYSTEM_AUTO, "完成全部健康里程碑", "Semua tonggak kesehatan"),         // D-L4
                 q.l(SYSTEM_AUTO, "成长日历记录满 30 条", "30 catatan tumbuh kembang"),       // D-L5
                 // 聚合里程碑（S 级 +1，末位 sortOrder，7.3）：6 新手任务全完成自动解锁。
-                q.s(SYSTEM_AUTO, "新手毕业 · Lulus Pemula", "Lulus Pemula 🎓"));  // D-S16
+                q.s(SYSTEM_AUTO, "新手毕业 · Lulus Pemula", "Lulus Pemula 🎓"),  // D-S16
+                // V1.3.4 FR-126（AD-18）：Lulus Pemula 之后追加，既有 code / sortOrder 一个不变。
+                // 不纳入新手任务；自动达成由 Story 4.2 的事件监听接线。
+                q.s(SYSTEM_AUTO, "第一次场所打卡", "Check-in pertama"),          // D-S17
+                q.s(SYSTEM_AUTO, "解锁性格测试结果", "Kenal kepribadian"));      // D-S18
     }
 
     // ----------------------------------------------------------------------------------------
-    // 🐾 通用里程碑清单（其他宠物，共 16：S9(含 Lulus Pemula) / M4 / L3）
+    // 🐾 通用里程碑清单（其他宠物，共 18：S11(含 Lulus Pemula、V1.3.4 打卡 / 性格测试) / M4 / L3）
     // ----------------------------------------------------------------------------------------
     private static List<MilestoneDefinition> buildOther() {
         Seq q = new Seq("G");
@@ -224,7 +235,11 @@ public final class MilestoneCatalog {
                 q.l(PUSH_PUBLISH, "陪伴满 100 天", "100 hari bersama"),            // G-L2
                 q.l(PUSH_PUBLISH, "陪伴满 365 天", "365 hari bersama"),            // G-L3
                 // 聚合里程碑（S 级 +1，末位 sortOrder，7.3）：6 新手任务全完成自动解锁。
-                q.s(SYSTEM_AUTO, "新手毕业 · Lulus Pemula", "Lulus Pemula 🎓"));  // G-S9
+                q.s(SYSTEM_AUTO, "新手毕业 · Lulus Pemula", "Lulus Pemula 🎓"),  // G-S9
+                // V1.3.4 FR-126（AD-18）：Lulus Pemula 之后追加，既有 code / sortOrder 一个不变。
+                // 不纳入新手任务；自动达成由 Story 4.2 的事件监听接线。
+                q.s(SYSTEM_AUTO, "第一次场所打卡", "Check-in pertama"),          // G-S10
+                q.s(SYSTEM_AUTO, "解锁性格测试结果", "Kenal kepribadian"));      // G-S11
     }
 
     /** 清单构造辅助：按级别自增编号生成 code（C-S1…），并维护全局 sortOrder。 */

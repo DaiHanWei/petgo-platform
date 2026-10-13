@@ -333,6 +333,10 @@ void main() {
         // 通知中心（V1.3.4 follow · FR-141.16 / Story 3.4 的 `notification_follow_back_tapped`）：通知中心页里的动作。
         // ⚠️ 与已有的 `notify_`（推送权限撤销检测点）刻意分开 —— 一个是页面模块，一个是推送基建。
         'notification_',
+        // 运营触达（V1.3.4 FR-137 运营弹窗 / FR-138 运营通知）。模块是「运营触达」—— 横跨冷启动弹窗与
+        // 通知中心两处界面，挂任一单页前缀都会误导。名字由 PRD §4 定死（ops_popup_shown / _tapped / _closed）。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
+        'ops_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -434,6 +438,11 @@ void main() {
         // （失败、游客拦截不报）。`user_unfollowed` 并不以 `_followed` 结尾，两个都要登记。扩表、不改名。
         '_followed',
         '_unfollowed',
+        // 运营弹窗被关掉（V1.3.4 Story 5.4 · PRD §4 定死 `ops_popup_closed`）。
+        // 🔴 与 `_dismissed` 区分：运营弹窗没有「未完成的流程」，关闭（✕ / 系统返回）是**中性结果**，
+        //    看板按 shown / tapped / closed 三分。上面 `_dismissed` 注释里「刻意不用 `_closed`」针对的是
+        //    支付面板（那里关闭 = 放弃），两处口径不冲突。名字由 PRD 定死，扩表、不改名。
+        '_closed',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;
@@ -494,6 +503,10 @@ void main() {
         'target_user_id', 'is_follow_back', 'is_self', 'is_empty',
         // V1.3.4 follow · Story 3.4：通知条目点击带合并人数（后端文案条目才有）。
         'actor_count',
+        // 运营通知打开（V1.3.4 Story 6.3 · `ops_notification_opened`）：campaign_id = 活动 public_token（D-24），
+        // 不外露自增 id；source ∈ {push, notification_center}（'source' 已在上方）。
+        'campaign_id',
+        'popup_id', // V1.3.4 Story 5.4（运营弹窗 public_token，D-24）
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

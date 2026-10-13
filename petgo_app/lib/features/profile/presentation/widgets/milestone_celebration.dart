@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../../../core/analytics/analytics.dart';
+import '../../../../core/startup/startup_popup_ledger.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/utils/haptics.dart';
@@ -43,6 +44,8 @@ Future<void> showMilestoneCelebration(
   VoidCallback? onSeeAll,
   List<MilestoneItem> collection = const [],
 }) {
+  // 入口统一登记本次冷启动功能弹窗（V1.3.4 Story 5.3 · AD-12），覆盖全部调用方。
+  StartupPopupLedger.instance.record(StartupPopupKind.milestoneCelebration);
   // AC6：展示即上报，携带 code / level / path。
   // ⚠️ 必须写成 `Analytics.capture(` 这个自限定形式 —— 埋点清单测试按该字面量对账。
   // 两台设备同时补弹会各报一次（**接受双计**，AD-A26.5）；回报本身仍是幂等的。

@@ -396,7 +396,7 @@ class FeedRankEngineTest {
     @Test
     void speciesQuotaConsistencyIsCheckable() {
         assertThat(P.speciesQuotasConsistent(10)).isTrue();
-        assertThat(new RankParams(0.6, 0.4, 2, 50, 1.3, 0, 6, 2, 3, 2, 1, 2, 1)
+        assertThat(new RankParams(0.6, 0.4, 2, 50, 1.3, 0, 6, 2, 3, 2, 1, 2, 1, 720)
                 .speciesQuotasConsistent(10)).isFalse();
     }
 
@@ -436,7 +436,7 @@ class FeedRankEngineTest {
                 P.commentWeight(), P.interactionP95(), P.honorBoost(), 0,
                 P.mainSpeciesQuota(), P.otherSpeciesQuota(), P.generalQuota(),
                 P.maxSameAttributeRun(), P.maxSameAuthorRun(), P.maxSameAuthorPerWindow(),
-                P.maxSameOtherSpeciesRun());
+                P.maxSameOtherSpeciesRun(), P.eduFreshnessHalfLifeHours());
         FeedRankEngine.Result seeded = engine.rank(new FeedRankEngine.Input(pool, null, Map.of(),
                 Set.of(), Map.of(), NOW, off, AttributeTemplate.defaultSchedule(), "s:aaa"), 10);
         FeedRankEngine.Result plain = engine.rank(new FeedRankEngine.Input(pool, null, Map.of(),

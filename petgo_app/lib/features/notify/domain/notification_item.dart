@@ -1,3 +1,5 @@
+import '../../ops/domain/ops_target.dart';
+
 /// 通知中心条目（对应后端 `NotificationItem`，Story 6.6）。对外只有 token + deepLinkType（无顺序 id）。
 class NotificationItem {
   const NotificationItem({
@@ -15,6 +17,7 @@ class NotificationItem {
     this.actorToken,
     this.actorIFollow,
     this.actorFollowsMe,
+    this.opsTarget,
   });
 
   /// 后端拼好文案的四种互动类型（V1.3.4 follow · Story 3.3 / 3.4）。
@@ -25,7 +28,7 @@ class NotificationItem {
     'PLACE_COMMENTED',
   };
 
-  // VET_REPLY|CONSULT_CLOSED|CONTENT_LIKED|CONTENT_COMMENTED|NEW_CONSULT_REQUEST|PET_BIRTHDAY|COMPANION_ANNIVERSARY|MILESTONE_NODE
+  // VET_REPLY|CONSULT_CLOSED|CONTENT_LIKED|CONTENT_COMMENTED|NEW_CONSULT_REQUEST|PET_BIRTHDAY|COMPANION_ANNIVERSARY|MILESTONE_NODE|OPS_ANNOUNCEMENT（V1.3.4 运营通知）|USER_FOLLOWED|PLACE_COMMENTED|…
   final String type;
   final String? title;
   final String? body;
@@ -35,6 +38,9 @@ class NotificationItem {
   final String? targetRef;
   final bool read;
   final DateTime? createdAt;
+  /// 运营通知的跳转目标（V1.3.4 Story 6.3 · AD-16）：后端只对 `OPS_ANNOUNCEMENT` 附带；其它类型为 null。
+  /// 解析全部交给 Story 5.2 的 [OpsTarget.fromJson]（未知 / 缺失 type → [OpsTarget.none]，不抛）。
+  final OpsTarget? opsTarget;
 
   /// V1.3.4 follow · Story 3.3：最新可显示的触发人昵称（标题里只加粗它）；存量 / 系统类为 null。
   final String? actorName;
@@ -74,6 +80,9 @@ class NotificationItem {
         actorToken: json['actorToken'] as String?,
         actorIFollow: json['actorIFollow'] as bool?,
         actorFollowsMe: json['actorFollowsMe'] as bool?,
+        opsTarget: json['opsTarget'] is Map
+            ? OpsTarget.fromJson((json['opsTarget'] as Map).cast<String, dynamic>())
+            : null,
       );
 }
 

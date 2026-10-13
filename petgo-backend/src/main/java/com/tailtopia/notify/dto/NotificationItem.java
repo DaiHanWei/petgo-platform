@@ -2,6 +2,7 @@ package com.tailtopia.notify.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.tailtopia.notify.domain.Notification;
+import com.tailtopia.ops.target.OpsTargetView;
 import java.time.Instant;
 
 /**
@@ -23,6 +24,10 @@ import java.time.Instant;
  * </ul>
  * 其它条目（系统类、上线前无触发人的存量）原样返回，新字段为 null / 0（全局 NON_NULL：null 键不下发）。
  * <b>不暴露</b>通知 id、评论 id、合并键、variant。
+ *
+ * <p><b>opsTarget</b>（V1.3.4 Story 6.1）：仅 {@code OPS_ANNOUNCEMENT} 附带，复用 Story 5.1 的
+ * {@link OpsTargetView}（与运营弹窗候选接口的 {@code target} 同一形态）；其它类型为 null，
+ * 经全局 NON_NULL 不出现该键。运营通知的 targetRef = 活动 publicToken（不可枚举）。
  */
 public record NotificationItem(
         String type,
@@ -38,17 +43,22 @@ public record NotificationItem(
         @JsonProperty("actorUserId") Long actorUserId,
         @JsonProperty("actorToken") String actorToken,
         @JsonProperty("actorIFollow") Boolean actorIFollow,
-        @JsonProperty("actorFollowsMe") Boolean actorFollowsMe) {
+        @JsonProperty("actorFollowsMe") Boolean actorFollowsMe,
+        OpsTargetView opsTarget) {
 
     /** 原样返回（系统类 / 存量）：title / body 照搬库值，触发人字段为空。 */
     public static NotificationItem from(Notification n) {
+        return from(n, null);
+    }
+
+    public static NotificationItem from(Notification n, OpsTargetView opsTarget) {
         return new NotificationItem(n.getType().name(), n.getTitle(), n.getBody(),
                 n.getDeepLinkType(), n.getDeepLinkToken(), n.getTargetRef(), n.isRead(), n.getCreatedAt(),
-                null, 0, null, null, null, null);
+                null, 0, null, null, null, null, opsTarget);
     }
 
     /**
-     * 现拼的互动条目（Story 3.3）：{@code title / body} 覆盖库值，其余字段照原样。
+     * 现拼的互动条目（Story 3.3）：{@code title / body} 覆盖库值，其余字段照原样。互动条目没有 opsTarget。
      *
      * @param iFollow / followsMe 只对 USER_FOLLOWED 传值，其余类型传 null
      */
@@ -56,6 +66,6 @@ public record NotificationItem(
             String actorName, String actorToken, int actorCount, Boolean iFollow, Boolean followsMe) {
         return new NotificationItem(n.getType().name(), title, body,
                 n.getDeepLinkType(), n.getDeepLinkToken(), n.getTargetRef(), n.isRead(), n.getCreatedAt(),
-                actorName, actorCount, actorUserId, actorToken, iFollow, followsMe);
+                actorName, actorCount, actorUserId, actorToken, iFollow, followsMe, null);
     }
 }

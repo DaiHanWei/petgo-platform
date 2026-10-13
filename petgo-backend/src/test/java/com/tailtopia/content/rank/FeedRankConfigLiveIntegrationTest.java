@@ -17,6 +17,7 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * L1：改配置 → <b>下一次生成序列即生效，不需要重启</b>（Story 16.4 · AC1）。
@@ -39,11 +40,17 @@ class FeedRankConfigLiveIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private ContentPostRepository posts;
 
+    @Autowired
+    private JdbcTemplate jdbc;
+
     private static final FeedRankForm SEED =
             new FeedRankForm(0.6, 0.4, 2, 0.3, 0.8, 0.2, 7, 10, 5, 3, 2, 6, 2, 2);
 
     @AfterEach
     void restore() {
+        // V1.3.4 Story 1.2：科普半衰期不在后台表单里，单独还原。⚠️ 放最前：它不经校验不会抛，
+        // 后面的表单还原万一抛了也不会把 360 留在共享库里。
+        jdbc.update("UPDATE feed_rank_config SET edu_freshness_half_life_hours = 720 WHERE id = 1");
         write.updateFeedRank(SEED, 1L);
     }
 
@@ -59,6 +66,37 @@ class FeedRankConfigLiveIntegrationTest extends ApiIntegrationTest {
         assertThat(c.getWindowSize()).isEqualTo(10);
         assertThat(c.getAttrFunQuota()).isEqualTo(5);
         assertThat(c.getSpeciesMainQuota()).isEqualTo(6);
+        assertThat(c.getEduFreshnessHalfLifeHours()).isEqualTo(720.0); // V1.3.4 Story 1.2
+    }
+
+    // ── V1.3.4 Story 1.2：科普半衰期（FR-122.3 / 122.4）────────────────
+
+    /** AC3.3：改库后不重启，读服务下一次就拿到新值。 */
+    @Test
+    void eduHalfLifeChangeIsVisibleWithoutRestart() {
+        jdbc.update("UPDATE feed_rank_config SET edu_freshness_half_life_hours = 360 WHERE id = 1");
+
+        assertThat(read.feedRank().getEduFreshnessHalfLifeHours()).isEqualTo(360.0);
+    }
+
+    /** AC4.3：后台保存其他参数，科普半衰期保持原值。 */
+    @Test
+    void adminSaveLeavesEduHalfLifeUntouched() {
+        jdbc.update("UPDATE feed_rank_config SET edu_freshness_half_life_hours = 360 WHERE id = 1");
+
+        write.updateFeedRank(new FeedRankForm(0.7, 0.3, 3, 0.2, 0.8, 0.2, 14, 10, 5, 3, 2, 6, 2, 2), 1L);
+
+        assertThat(read.feedRank().getEduFreshnessHalfLifeHours()).isEqualTo(360.0);
+    }
+
+    /** AC1.3：CHECK > 0 兜底 —— 绕过服务层存 0 也失败。 */
+    @Test
+    void databaseRejectsNonPositiveEduHalfLife() {
+        FeedRankConfig c = repo.findById(FeedRankConfig.SINGLETON_ID).orElseThrow();
+        c.setEduFreshnessHalfLifeHours(0);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> repo.saveAndFlush(c))
+                .isInstanceOf(RuntimeException.class);
     }
 
     /** 🔴 写进去的值，读服务下一次就拿到 —— 中间没有任何缓存层。 */

@@ -377,6 +377,14 @@ const Map<String, MilestoneCheckinPromptCopy> kMilestoneCheckinPromptCopy = {
   // 日历满 30 条
   'C-L5': _auto30Entries,
   'D-L5': _auto30Entries,
+  // 第一次场所打卡（V1.3.4 FR-126 · D-15）
+  'C-S17': _autoPlaceCheckin,
+  'D-S17': _autoPlaceCheckin,
+  'G-S10': _autoPlaceCheckin,
+  // 解锁性格测试结果（V1.3.4 FR-126 · D-15）
+  'C-S18': _autoTailsonality,
+  'D-S18': _autoTailsonality,
+  'G-S11': _autoTailsonality,
 };
 
 // 系统自动说明（C/D/G 共用，提取常量避免重复）。
@@ -432,6 +440,15 @@ const _autoAllHealth = MilestoneCheckinPromptCopy(
 const _auto30Entries = MilestoneCheckinPromptCopy(
   bodyId: 'Otomatis selesai saat {name} sudah punya 30 catatan di Kalender Tumbuh.',
   bodyEn: "Automatically completed when {name}'s Growth Calendar reaches 30 entries.",
+);
+// V1.3.4 FR-126（决策日志 D-15）：header 留空（系统自动类惯例）。
+const _autoPlaceCheckin = MilestoneCheckinPromptCopy(
+  bodyId: 'Otomatis selesai saat {name} pertama kali check-in di sebuah tempat.',
+  bodyEn: 'Automatically completed when {name} checks in at a place for the first time.',
+);
+const _autoTailsonality = MilestoneCheckinPromptCopy(
+  bodyId: 'Otomatis selesai saat hasil lengkap kepribadian {name} terbuka.',
+  bodyEn: "Automatically completed when {name}'s full personality result is unlocked.",
 );
 
 /// 按 code + locale 返回 P-33b 打卡引导/说明文案（header 提问 + body 描述），并把 `{name}` 替换为宠物名。

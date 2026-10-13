@@ -7,8 +7,12 @@ import com.tailtopia.notify.domain.Notification;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.notify.dto.NotificationItem;
 import com.tailtopia.notify.dto.NotificationPage;
+import com.tailtopia.notify.ops.domain.OpsNotificationCampaign;
+import com.tailtopia.notify.ops.repository.OpsNotificationCampaignRepository;
 import com.tailtopia.notify.repository.NotificationRepository;
 import com.tailtopia.notify.service.InteractionCopyRenderer.ActorSummary;
+import com.tailtopia.ops.target.OpsTargetType;
+import com.tailtopia.ops.target.OpsTargetView;
 import com.tailtopia.shared.error.AppException;
 import com.tailtopia.shared.paging.KeysetCursor;
 import com.tailtopia.social.read.FollowReader;
@@ -21,6 +25,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,10 +67,11 @@ public class NotificationCenterService {
     private final CommentQueryService comments;
     private final FollowReader followReader;
     private final InteractionCopyRenderer copy;
+    private final OpsNotificationCampaignRepository campaigns;
 
     public NotificationCenterService(NotificationRepository repo, StringRedisTemplate redis,
             InteractionActorResolver actors, AccountQueryService accounts, CommentQueryService comments,
-            FollowReader followReader, InteractionCopyRenderer copy) {
+            FollowReader followReader, InteractionCopyRenderer copy, OpsNotificationCampaignRepository campaigns) {
         this.repo = repo;
         this.redis = redis;
         this.actors = actors;
@@ -73,6 +79,7 @@ public class NotificationCenterService {
         this.comments = comments;
         this.followReader = followReader;
         this.copy = copy;
+        this.campaigns = campaigns;
     }
 
     private static String unreadKey(long userId) {
@@ -136,6 +143,36 @@ public class NotificationCenterService {
         return new NotificationPage(items, nextCursor, hasMore);
     }
 
+    /**
+     * 运营通知（{@code OPS_ANNOUNCEMENT}）按 targetRef（活动 publicToken）<b>一页一次</b>批量回查活动 → 跳转目标。
+     * 本页没有运营通知时不查库。
+     */
+    private Map<String, OpsTargetView> opsTargetsOf(List<Notification> pageRows) {
+        Set<String> opsTokens = pageRows.stream()
+                .filter(n -> n.getType() == NotificationType.OPS_ANNOUNCEMENT && n.getTargetRef() != null)
+                .map(Notification::getTargetRef)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        return opsTokens.isEmpty()
+                ? Map.of()
+                : campaigns.findByPublicTokenIn(opsTokens).stream().collect(Collectors.toMap(
+                        OpsNotificationCampaign::getPublicToken,
+                        c -> OpsTargetView.of(c.getTargetType(), c.getTargetValue()),
+                        (a, b) -> a));
+    }
+
+    /**
+     * 原样返回的条目（非互动类型 / 存量）。运营通知附带 {@code opsTarget}；targetRef 为 null 或查不到活动
+     * （理论上不会发生，活动不提供删除）给 {@code NONE}。其它类型 opsTarget = null。
+     */
+    private static NotificationItem plain(Notification n, Map<String, OpsTargetView> opsTargets) {
+        if (n.getType() != NotificationType.OPS_ANNOUNCEMENT) {
+            return NotificationItem.from(n);
+        }
+        OpsTargetView none = OpsTargetView.of(OpsTargetType.NONE, null);
+        // Map.of() 不接受 null 键：targetRef 为 null 先判，直接给 NONE
+        return NotificationItem.from(n, n.getTargetRef() == null ? none : opsTargets.getOrDefault(n.getTargetRef(), none));
+    }
+
     /** 未读角标：读 Redis；缺值按库回算并回填（容错，不依赖角标键永不丢）。 */
     @Transactional(readOnly = true)
     public long unreadCount(long userId) {
@@ -159,7 +196,7 @@ public class NotificationCenterService {
     }
 
     /**
-     * 一页条目：候选（四种互动类型）批量现拼；其余原样；触发人全被过滤的条目隐藏（T-36）。
+     * 一页条目：候选（四种互动类型）批量现拼；其余原样（运营通知附带 opsTarget）；触发人全被过滤的条目隐藏（T-36）。
      *
      * @param extraIds 与本页候选<b>同一批</b>解析的其它通知 id（首页角标校准用的未读互动条目）
      */
@@ -171,8 +208,9 @@ public class NotificationCenterService {
             }
         }
         batch.addAll(extraIds);
+        Map<String, OpsTargetView> opsTargets = opsTargetsOf(pageRows);
         if (batch.isEmpty()) {
-            return new Rendered(pageRows.stream().map(NotificationItem::from).toList(), Map.of());
+            return new Rendered(pageRows.stream().map(n -> plain(n, opsTargets)).toList(), Map.of());
         }
         // ① ② ③ 各一次
         Map<Long, Optional<ActorSummary>> summaries = actors.summarize(userId, batch);
@@ -203,7 +241,7 @@ public class NotificationCenterService {
             Optional<ActorSummary> s = NotificationService.INTERACTION_TYPES.contains(n.getType())
                     ? summaries.get(n.getId()) : null;
             if (s == null) {
-                items.add(NotificationItem.from(n)); // 非互动类型，或上线前的存量（无触发人行）
+                items.add(plain(n, opsTargets)); // 非互动类型（含运营通知），或上线前的存量（无触发人行）
             } else if (s.isPresent()) {
                 items.add(render(n, s.get(), locale, snapshots, states));
             }

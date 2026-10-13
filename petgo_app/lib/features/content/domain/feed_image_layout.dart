@@ -13,6 +13,8 @@
 /// 客户端再 clamp 一遍就是**双重裁切**。后端有专门的契约测试守这条。
 library;
 
+import 'package:flutter/painting.dart' show Alignment;
+
 /// 图片原始像素尺寸（对应后端 `ImageSize {w, h}`）。
 ///
 /// ⚠️ **存量内容永远是 null** —— 尺寸列是 V1.1.6 Story 3.1 才加的，
@@ -161,4 +163,35 @@ double resolveFeedImageAspect({
   if (width <= 0 || !maxImageHeight.isFinite || maxImageHeight <= 0) return clamped;
   final floor = width / maxImageHeight;
   return clamped < floor ? floor : clamped;
+}
+
+/// 露出位置 → 图片对齐（V1.3.4 Story 2.2 · AD-6）。
+///
+/// [cropOffset] 是发帖人选的「露出位置」（0~1，2.1 下发的 `imageCropOffsets` 元素）。
+/// `BoxFit.cover` 下 0 / 0.5 / 1 恰对应贴起始边 / 居中 / 贴结束边；**只换对齐，不碰比例** ——
+/// 窗口比例仍只由 [resolveFeedImageAspect] 决定。
+///
+/// 规则：offset 缺失 / 非有限 → 居中；尺寸缺失 / 不可用 → 居中；
+/// 过宽（ratio > [kFeedRatioMax]）→ 横向开窗；过竖（ratio < [kFeedRatioMin]）→ 纵向开窗；
+/// 区间内（闭区间，端点算区间内）→ 居中（带了 offset 也忽略）。
+Alignment feedImageAlignment(ImageSize? size, double? cropOffset) {
+  if (cropOffset == null || !cropOffset.isFinite) return Alignment.center;
+  if (size == null || !size.isUsable) return Alignment.center;
+  final o = cropOffset.clamp(0.0, 1.0);
+  final ratio = size.ratio;
+  if (ratio > kFeedRatioMax) return Alignment(2 * o - 1, 0);
+  if (ratio < kFeedRatioMin) return Alignment(0, 2 * o - 1);
+  return Alignment.center;
+}
+
+/// 露出位置数组（对应后端 `imageCropOffsets`）。
+///
+/// 非 List（整字段缺失 = 存量 / 无超界图）→ 空表；元素为有限 `num` → `toDouble()`
+/// （容忍 `0` / `1` 以整数形式下发），否则该位置留 null（= 居中）。
+/// 长度不在这里对齐，取用方按下标安全取。
+List<double?> cropOffsetListFromJson(Object? raw) {
+  if (raw is! List) return const [];
+  return raw
+      .map((e) => (e is num && e.isFinite) ? e.toDouble() : null)
+      .toList(growable: false);
 }

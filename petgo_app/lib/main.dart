@@ -14,9 +14,11 @@ import 'package:tailtopia/core/analytics/att_gate.dart';
 import 'package:tailtopia/core/analytics/firebase_stats.dart';
 import 'package:tailtopia/core/analytics/tiktok_client.dart';
 import 'package:tailtopia/core/l10n/locale_controller.dart';
+import 'package:tailtopia/core/startup/startup_popup_ledger.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/notify/domain/app_update_bootstrap.dart';
 import 'package:tailtopia/features/notify/domain/push_permission_bootstrap.dart';
 import 'package:tailtopia/features/notify/domain/push_permission_state_reporter.dart';
 
@@ -94,51 +96,61 @@ Future<void> main() async {
   //   两者授权率一起掉；串行让用户先答完跟踪、再答通知。
   // - `start()` 必须同时晚于 ATT 结果与 init（未 init 时 start 是 no-op），故末尾按序 await 两者。
   WidgetsBinding.instance.addPostFrameCallback((_) async {
-    final Future<void> afInit = AppsFlyerClient.instance.init();
+    // 启动链结束标记（V1.3.4 Story 5.3 · AD-12）：包 try/finally —— 中途任何一步抛错，标记照样打上，
+    // 否则运营弹窗（Story 5.4）本次永远等不到。只加这一层包裹，既有语句先后一字不动。
+    try {
+      final Future<void> afInit = AppsFlyerClient.instance.init();
 
-    // 通知权限只弹一次的会话内闸（跨会话由 PushPermissionBootstrap 的 prefs 标记兜底）。
-    var notificationAsked = false;
-    Future<void> askNotificationOnce() async {
-      if (notificationAsked) return;
-      notificationAsked = true;
-      await PushPermissionBootstrap.requestOnFirstLaunch();
+      // 通知权限只弹一次的会话内闸（跨会话由 PushPermissionBootstrap 的 prefs 标记兜底）。
+      var notificationAsked = false;
+      Future<void> askNotificationOnce() async {
+        if (notificationAsked) return;
+        notificationAsked = true;
+        await PushPermissionBootstrap.requestOnFirstLaunch();
+      }
+
+      // 前台补弹（2026-08-09 拒信，iPad 兼容模式）：冷启动请求被系统吞掉后，本会话内
+      // 每次回前台都会重试直到落定；落定那一刻把被推迟的通知权限接回来。
+      // 系统保证 ATT 弹窗只真正出现一次（仅 notDetermined 有 UI），不会骚扰已作答用户。
+      AttGate.installForegroundRetry(onSettled: askNotificationOnce);
+
+      final attSettled = await AttGate.requestIfNeeded();
+      // 首启即申请通知权限（2026-08-07 产品决策，取代 F7 双时机——见 PushPermissionBootstrap
+      // 文档：双时机对存量用户是死路）。拒绝后不再自动弹，改由设置页开关兜底。
+      //
+      // 🔴 必须在 ATT **落定之后**（PR#34 finding #14 + 2026-08-09 iPad 拒信）：
+      // `requestIfNeeded()` 返回 false = 仍 notDetermined（弹窗开着没作答，或请求被吞）——
+      // 此时弹通知权限会盖住/挤掉 ATT ⇒ Guideline 2.1。未落定就交给前台补弹链路，
+      // 本会话内落定即弹，实在等不到则下一次冷启动（首启标记未消费，照常询问）。
+      if (attSettled) {
+        await askNotificationOnce();
+      } else {
+        debugPrint('[ATT] undetermined — notification prompt deferred to settle/next launch');
+      }
+
+      // 权限状态快照（Story 8.1 / 埋点 E-21）：本次启动的通知权限流程**落定之后**报一次。
+      //
+      // 🔴 位置不能提前：报「申请之前」的状态会让首启永远是 false，把授权率系统性低估。
+      // 🔴 **两条分支之后都要报**（故放在 if/else 之外）：ATT 未落定那支不会走到
+      //    askNotificationOnce()，只在 if 里报就会漏掉全部「ATT 未落定」的启动 ——
+      //    那不是随机缺失，只缺 iPad 兼容模式 / 请求被系统吞掉这类设备，趋势会被带偏。
+      // ⚠️ 上面 installForegroundRetry 的补弹回调里**不要**再报：那是同一会话内的补弹、
+      //    不是新的冷启动，再报会违反「一次冷启动恰好一次」（分母会被重度用户拉偏）。
+      //    该类内有进程内一次性闸，即使误调也只空转。
+      // ⚠️ 本行不参与 init / ATT / 通知权限 / start 四者的排序，只在其后追加。
+      await PushPermissionStateReporter.reportOnColdStart();
+
+      await afInit;
+      await AppsFlyerClient.instance.start();
+      // TikTok 归因：同样必须在 ATT 落定之后 init（SDK 自带的 ATT 弹窗已关，授权结果直接读系统）。
+      await TikTokClient.instance.start();
+      // 冷启动版本检查（V1.3.4 Story 3.2 · AC6.1）：排在启动链**末尾**，让开 ATT / 通知权限
+      // 两个系统框；回调由 app.dart initState 注册，内部吞掉一切异常，绝不影响启动。
+      await AppUpdateBootstrap.runColdStartCheck();
+    } finally {
+      // 必须晚于上面的冷启动版本检查；强制态下弹窗不可关闭 ⇒ 永不走到这里 ⇒ 运营弹窗本次不出（预期）。
+      StartupPopupLedger.instance.markStartupChainDone();
     }
-
-    // 前台补弹（2026-08-09 拒信，iPad 兼容模式）：冷启动请求被系统吞掉后，本会话内
-    // 每次回前台都会重试直到落定；落定那一刻把被推迟的通知权限接回来。
-    // 系统保证 ATT 弹窗只真正出现一次（仅 notDetermined 有 UI），不会骚扰已作答用户。
-    AttGate.installForegroundRetry(onSettled: askNotificationOnce);
-
-    final attSettled = await AttGate.requestIfNeeded();
-    // 首启即申请通知权限（2026-08-07 产品决策，取代 F7 双时机——见 PushPermissionBootstrap
-    // 文档：双时机对存量用户是死路）。拒绝后不再自动弹，改由设置页开关兜底。
-    //
-    // 🔴 必须在 ATT **落定之后**（PR#34 finding #14 + 2026-08-09 iPad 拒信）：
-    // `requestIfNeeded()` 返回 false = 仍 notDetermined（弹窗开着没作答，或请求被吞）——
-    // 此时弹通知权限会盖住/挤掉 ATT ⇒ Guideline 2.1。未落定就交给前台补弹链路，
-    // 本会话内落定即弹，实在等不到则下一次冷启动（首启标记未消费，照常询问）。
-    if (attSettled) {
-      await askNotificationOnce();
-    } else {
-      debugPrint('[ATT] undetermined — notification prompt deferred to settle/next launch');
-    }
-
-    // 权限状态快照（Story 8.1 / 埋点 E-21）：本次启动的通知权限流程**落定之后**报一次。
-    //
-    // 🔴 位置不能提前：报「申请之前」的状态会让首启永远是 false，把授权率系统性低估。
-    // 🔴 **两条分支之后都要报**（故放在 if/else 之外）：ATT 未落定那支不会走到
-    //    askNotificationOnce()，只在 if 里报就会漏掉全部「ATT 未落定」的启动 ——
-    //    那不是随机缺失，只缺 iPad 兼容模式 / 请求被系统吞掉这类设备，趋势会被带偏。
-    // ⚠️ 上面 installForegroundRetry 的补弹回调里**不要**再报：那是同一会话内的补弹、
-    //    不是新的冷启动，再报会违反「一次冷启动恰好一次」（分母会被重度用户拉偏）。
-    //    该类内有进程内一次性闸，即使误调也只空转。
-    // ⚠️ 本行不参与 init / ATT / 通知权限 / start 四者的排序，只在其后追加。
-    await PushPermissionStateReporter.reportOnColdStart();
-
-    await afInit;
-    await AppsFlyerClient.instance.start();
-    // TikTok 归因：同样必须在 ATT 落定之后 init（SDK 自带的 ATT 弹窗已关，授权结果直接读系统）。
-    await TikTokClient.instance.start();
   });
 }
 

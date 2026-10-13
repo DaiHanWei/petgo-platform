@@ -7,10 +7,23 @@
 
 | 主题 | 功能分支 | Epic 号段 | Story | 状态 |
 |---|---|---|---|---|
-| **app** · App + 后端 | `feat/1.3.4-app-ux-revamp` | Epic 1–6 | 23 | 架构 delta + epics 定稿（2026-10-12），产物在该分支 |
+| **app** · App + 后端 | `feat/1.3.4-app-ux-revamp` | Epic 1–6 | 23 | 云端已实现，23 条全部 review |
 | **ktp** · KTP 样式迭代 | `feat/1.3.4-ktp-revamp` | Epic 1–2 | 11 | 云端已实现，11 条全部 review |
 | **follow** · 用户关注与通知中心 | `feat/1.3.4-follow-notify` | Epic 1–3 | 11 | 云端已实现，11 条全部 review |
-| admin · 后台 AB-22 / AB-30 / AB-31 | 待开 | — | — | 未开始 |
+| admin · 后台 AB-22 / AB-30 / AB-31 | 待开 | — | — | 未开始（数据面与核心服务由 app 主题提供，见 AD-1） |
+
+## 产物文件（app）
+
+| 件 | 文件 | 说明 |
+|---|---|---|
+| PRD | `PRD-v1.3.4-app.md` | 原名 `1-3-4prd.md`，原样入库 |
+| UI 稿 | `ui-v1.3.4-app.html` | 原名 `ui-1-3-4-integrated-v1.html`，2026-10-12 定稿，31 屏 |
+| UI 决策记录 | `UI决策记录-app.md` | UI 稿阶段的决策（原 `.decision-log.md`） |
+| **决策日志** | `决策日志-app.md` | D-1 ~ D-14，**冲突时以此为准** |
+| 架构 delta | `architecture-v1.3.4-app-delta.md` | AD-1 ~ AD-20 |
+| epics | `epics-v1.3.4-app.md` | 6 个 Epic · 23 条 story |
+
+**权威顺序**：决策日志 > PRD > 架构 delta > UI 稿。
 
 ## 产物文件（ktp）
 
@@ -35,4 +48,4 @@
 | 架构 delta | `architecture-v1.3.4-follow-delta.md` | AD-1 ~ AD-16 |
 | epics | `epics-v1.3.4-follow.md` | 3 个 Epic · 11 条 story |
 
-**权威顺序**：决策日志 > PRD > 架构 delta > UI 稿。三个分支合并时本文件与总索引会冲突，合并时保留三个主题的全部登记行。
+**权威顺序**：决策日志 > PRD > 架构 delta > UI 稿。三个主题已于 2026-10-13 合入 `dev_1.3.4`（顺序 ktp → follow → app）。

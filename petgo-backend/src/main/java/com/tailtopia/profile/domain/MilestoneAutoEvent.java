@@ -46,4 +46,8 @@ public enum MilestoneAutoEvent {
     COMPANION_100_DAYS,
     /** 陪伴满 365 天后发布成长日历记录。 */
     COMPANION_365_DAYS,
+    /** 场所打卡成功（逐宠，V1.3.4 FR-126）。 */
+    PLACE_CHECKED_IN,
+    /** Tailsonality 完整解读解锁成功（sku=TAILSONALITY，含补差价升级；配型单买 TS_MATCH 不算）。 */
+    TAILSONALITY_UNLOCKED,
 }

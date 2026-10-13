@@ -249,6 +249,7 @@ class _DetailScaffold extends ConsumerWidget {
                       _ImageCarousel(
                         urls: detail.imageUrls,
                         sizes: detail.imageSizes,
+                        cropOffsets: detail.imageCropOffsets,
                         viewportHeight: viewport.maxHeight,
                         decorationTags: detail.decorationTags,
                         // 前缀带上帖子 id：同一屏里不会有第二个同 tag 的 Hero。
@@ -579,6 +580,7 @@ class _ImageCarousel extends StatefulWidget {
   const _ImageCarousel({
     required this.urls,
     required this.sizes,
+    required this.cropOffsets,
     required this.viewportHeight,
     required this.heroTagPrefix,
     this.decorationTags = const [],
@@ -592,6 +594,11 @@ class _ImageCarousel extends StatefulWidget {
 
   /// 与 [urls] 同序等长的原始宽高；测不出来 / 存量内容为 null（走占位兜底）。
   final List<ImageSize?> sizes;
+
+  /// 与 [urls] 同序的露出位置（V1.3.4 Story 2.2 · AD-6）；可短、可含 null（= 居中）。
+  ///
+  /// 与 Feed 卡同走 [feedImageAlignment]，同一帖点进来露出段一致。只换对齐、不碰比例。
+  final List<double?> cropOffsets;
 
   /// 滚动视口实际高度，喂给高度护栏（由详情页的 `LayoutBuilder` 量得）。
   final double viewportHeight;
@@ -612,6 +619,12 @@ class _ImageCarouselState extends State<_ImageCarousel> {
     _controller.dispose();
     super.dispose();
   }
+
+  ImageSize? _sizeAt(int i) =>
+      (i >= 0 && i < widget.sizes.length) ? widget.sizes[i] : null;
+
+  double? _offsetAt(int i) =>
+      (i >= 0 && i < widget.cropOffsets.length) ? widget.cropOffsets[i] : null;
 
   Future<void> _openLightbox(int index) async {
     // V1.3.0 Story 3.1：灯箱已上提为共享组件（`shared/media/image_lightbox.dart`），
@@ -646,7 +659,7 @@ class _ImageCarouselState extends State<_ImageCarousel> {
         // 通栏出血：**不再 ClipRRect 圆角**，图片两侧贴屏幕边（AC2）。
         // 圆角是「卡片」的语言，详情页的图不是卡片。
         AspectRatio(
-          // ① 实际比例 → ② clamp 0.75~1.34 闭区间 → ③ 高度护栏，
+          // ① 实际比例 → ② clamp 0.75~1.78 闭区间 → ③ 高度护栏，
           // 三步全在 resolveFeedImageAspect 里，与 Feed **同一个出口函数**（AC2）。
           // 详情页只负责把自己的护栏口径喂进去（见 detail_image_layout.dart）。
           aspectRatio: aspect,
@@ -665,6 +678,8 @@ class _ImageCarouselState extends State<_ImageCarousel> {
                     // 容器比例已按原图算好，cover 在比例相符时不裁切；
                     // 仅当某张与首图比例不同（多图混排）才裁，这是容器锁首图的必然代价。
                     fit: BoxFit.cover,
+                    // V1.3.4 2.2：按露出位置开窗，与 Feed 卡同一个函数（无 offset = 居中）。
+                    alignment: feedImageAlignment(_sizeAt(i), _offsetAt(i)),
                     thumbWidth: 1080, // 按手机全宽取缩略图（全屏放大走原图）
                     errorBuilder: (context, error, stack) =>
                         Container(color: AppColors.border),

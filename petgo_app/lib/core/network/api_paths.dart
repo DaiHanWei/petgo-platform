@@ -474,4 +474,14 @@ class ApiPaths {
   /// ⚠️ 游客不展示该区（story Dev Notes「游客态不动」），所以后端也不放行未登录。
   /// 可选 `?limit=`；全屏集合页的游标分页属 Story 4.3，现在不先摆一个没人用的参数。
   static const String mePetRecommendations = '$base/me/pet-recommendations';
+
+  // ===== 运营弹窗（V1.3.4 Story 5.1 / 5.4 · AD-14）=====
+  /// 候选弹窗（游客可读；带 USER token 时按用户过滤）。返回 `{"items": [...]}`，按优先级排好序。
+  static const String opsPopupCandidates = '$base/ops-popups/candidates';
+
+  /// 曝光上报（仅登录用户，无请求体，204）。路径只出现 public_token（D-24）。
+  ///
+  /// token 不做 URL 编码是刻意的：后端 `OpsTokenGenerator` 恒为 Base62（`[0-9a-zA-Z]`）22 位，
+  /// 本身就是 URL-safe 的路径段。若日后改字符表，这里须改成 `Uri.encodeComponent(token)`。
+  static String opsPopupImpressions(String token) => '$base/ops-popups/$token/impressions';
 }

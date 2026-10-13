@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 非敏感偏好存储（语言 / petStatus / 引导计数等）。
@@ -79,6 +81,60 @@ class AppPrefs {
         ? list.sublist(list.length - kTailsonalityRetentionShownCap)
         : list;
     return _prefs.setStringList(kTailsonalityRetentionShown, kept);
+  }
+
+  // --- 推荐更新「Nanti」冷却记录（V1.3.4 Story 3.2 · AD-11）---
+  //
+  // 记的是**被跳过的那个最新版本号 + 跳过时刻（UTC 毫秒）**：服务端最新版本上升即重新提示，
+  // 否则 72h 内不再出横幅。强制更新不受此影响。按设备存，换设备重新提示可接受。
+  static const kUpdateSkippedVersion = 'petgo.update_skipped_version';
+  static const kUpdateSkippedAt = 'petgo.update_skipped_at';
+
+  String? get updateSkippedVersion => _prefs.getString(kUpdateSkippedVersion);
+
+  DateTime? get updateSkippedAt {
+    final ms = _prefs.getInt(kUpdateSkippedAt);
+    return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+  }
+
+  Future<void> setUpdateSkipped(String version, DateTime at) async {
+    await _prefs.setString(kUpdateSkippedVersion, version);
+    await _prefs.setInt(kUpdateSkippedAt, at.toUtc().millisecondsSinceEpoch);
+  }
+
+  // --- 运营弹窗本地频次（V1.3.4 Story 5.4 · AC3 · AD-15）---
+  //
+  // JSON 对象字符串 `{ "<popup public_token>": "once" | "yyyy-MM-dd"(WIB) }`。
+  // 🔴 游客与登录用户**都写**：游客期间写下的 `once` 登录后照样剔除（PRD AC4）。
+  // 按插入顺序保留最近 [kOpsPopupShownCap] 条，防无限增长。
+  static const kOpsPopupShown = 'petgo.ops_popup_shown';
+  static const kOpsPopupShownCap = 200;
+
+  /// 缺失 / 损坏（非 JSON、非对象）→ 空 Map，不抛；非字符串值的条目丢弃。
+  Map<String, String> opsPopupShown() {
+    final raw = _prefs.getString(kOpsPopupShown);
+    if (raw == null) return <String, String>{};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return <String, String>{};
+      return <String, String>{
+        for (final e in decoded.entries)
+          if (e.key is String && e.value is String) e.key as String: e.value as String,
+      };
+    } catch (_) {
+      return <String, String>{};
+    }
+  }
+
+  /// 覆盖同 token 旧值并移到末尾；超过 [kOpsPopupShownCap] 条丢最早的。
+  Future<void> markOpsPopupShown(String token, String value) {
+    final map = opsPopupShown()..remove(token);
+    map[token] = value;
+    final entries = map.entries.toList();
+    final kept = entries.length > kOpsPopupShownCap
+        ? entries.sublist(entries.length - kOpsPopupShownCap)
+        : entries;
+    return _prefs.setString(kOpsPopupShown, jsonEncode(Map<String, String>.fromEntries(kept)));
   }
 
   // --- 已废弃的键（下面这些**刻意不再提供 getter/setter**）---
