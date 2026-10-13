@@ -4,11 +4,19 @@ import com.tailtopia.pay.domain.PayChannel;
 import com.tailtopia.pay.domain.PaymentPurpose;
 import com.tailtopia.pay.event.PaymentIntentFailedEvent;
 import com.tailtopia.pay.event.PaymentIntentPaidEvent;
+import com.tailtopia.profile.domain.IdCard;
+import com.tailtopia.profile.domain.IdCardHdPurchase;
 import com.tailtopia.profile.event.IdHdPawcoinUnlockedEvent;
+import com.tailtopia.profile.repository.IdCardHdPurchaseRepository;
+import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.shared.analytics.AnalyticsClient;
 import com.tailtopia.shared.analytics.AnalyticsDistinctId;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -27,6 +35,11 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *
  * <p>照 {@code ShopPaymentAnalyticsListener}：不加 {@code @Async}（capture 自身已异步）、不写库。
  * 🔒 属性只有枚举与数值，不带 token / 卡号 / 用户信息。
+ *
+ * <p>V1.3.4 ktp Story 1.8（AD-12）：{@code ktp_unlock_succeeded} 补 {@code card_type} / {@code card_variant}
+ * （枚举名）。PawCoin 按事件里的卡 id 查卡；QRIS 由支付意图反查购买行 → 卡（与到账处理同一路径）。
+ * 查不到卡（旧版单卡端点 / 无购买行）或查库异常 → 事件照发、只是不带这两个键；任何路径不抛异常。
+ * {@code ktp_unlock_failed} 不补（T-20）。
  */
 @Component
 public class KtpUnlockAnalyticsListener {
@@ -34,10 +47,17 @@ public class KtpUnlockAnalyticsListener {
     public static final String EVENT_SUCCEEDED = "ktp_unlock_succeeded";
     public static final String EVENT_FAILED = "ktp_unlock_failed";
 
-    private final AnalyticsClient analytics;
+    private static final Logger log = LoggerFactory.getLogger(KtpUnlockAnalyticsListener.class);
 
-    public KtpUnlockAnalyticsListener(AnalyticsClient analytics) {
+    private final AnalyticsClient analytics;
+    private final IdCardRepository idCards;
+    private final IdCardHdPurchaseRepository purchases;
+
+    public KtpUnlockAnalyticsListener(AnalyticsClient analytics, IdCardRepository idCards,
+            IdCardHdPurchaseRepository purchases) {
         this.analytics = analytics;
+        this.idCards = idCards;
+        this.purchases = purchases;
     }
 
     /** QRIS 到账（PawCoin 不建意图，走 {@link #onPawcoinUnlocked}）。 */
@@ -46,14 +66,42 @@ public class KtpUnlockAnalyticsListener {
         if (e.purpose() != PaymentPurpose.ID_HD) {
             return;
         }
-        analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_SUCCEEDED,
-                props(e.channel() == null ? PayChannel.QRIS.name() : e.channel().name(), e.amount()));
+        Map<String, Object> p = props(e.channel() == null ? PayChannel.QRIS.name() : e.channel().name(), e.amount());
+        putCardStyle(p, safeCard(() -> purchases.findFirstByPaymentIntentId(e.intentId())
+                .map(IdCardHdPurchase::getCardId)
+                .flatMap(idCards::findById)));
+        analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_SUCCEEDED, p);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onPawcoinUnlocked(IdHdPawcoinUnlockedEvent e) {
-        analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_SUCCEEDED,
-                props(PayChannel.PAWCOIN.name(), e.price()));
+        Map<String, Object> p = props(PayChannel.PAWCOIN.name(), e.price());
+        if (e.cardId() != null) {
+            putCardStyle(p, safeCard(() -> idCards.findById(e.cardId())));
+        }
+        analytics.capture(AnalyticsDistinctId.of(e.userId()), EVENT_SUCCEEDED, p);
+    }
+
+    /** 查卡；任何异常都吞掉（埋点不能影响任何流程），只记一行不含业务数据的警告。 */
+    private static Optional<IdCard> safeCard(Supplier<Optional<IdCard>> lookup) {
+        try {
+            return lookup.get();
+        } catch (RuntimeException ex) {
+            log.warn("ktp_unlock_succeeded 卡种反查失败，事件照发不带卡种: {}", ex.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
+    /** 卡种 / 配色（枚举名）；配色为 null（非学生卡）不带键。 */
+    private static void putCardStyle(Map<String, Object> p, Optional<IdCard> card) {
+        card.ifPresent(c -> {
+            if (c.getCardType() != null) {
+                p.put("card_type", c.getCardType());
+            }
+            if (c.getCardVariant() != null) {
+                p.put("card_variant", c.getCardVariant());
+            }
+        });
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

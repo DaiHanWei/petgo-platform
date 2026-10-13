@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,21 +11,25 @@ import '../../../core/analytics/analytics.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/card_render/card_export.dart';
-import '../../../shared/widgets/qr_payment_sheet.dart';
-import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../data/id_card_repository.dart';
 import '../domain/id_card.dart';
 import '../domain/id_card_style.dart';
-import 'id_card/hd_paywall_sheet.dart';
-import 'id_card/ktp_unlock_analytics.dart';
+import 'id_card/id_card_hd_flow.dart';
 import 'id_card/id_card_watermark.dart';
 
 /// 单张身份证卡详情（Story 6-7）。渲染冻结快照卡面 + 按卡付费解锁 HD + 保存到相册/分享。
 /// 快照不可编辑（建卡时定格）；下载/解锁按本卡 [cardId] 走多卡端点。
 class IdCardDetailPage extends ConsumerStatefulWidget {
-  const IdCardDetailPage({super.key, required this.cardId});
+  const IdCardDetailPage({super.key, required this.cardId, this.autoExport = false});
 
   final int cardId;
+
+  /// 进页后若卡已解锁，自动弹一次保存 / 分享选单（V1.3.4 ktp D-16：建卡入口付费成功落到详情时用）。
+  final bool autoExport;
+
+  /// 详情页路由位置；[autoExport] 时带 `?export=1`。
+  static String locationFor(int cardId, {bool autoExport = false}) =>
+      '/profile/id-cards/$cardId${autoExport ? '?export=1' : ''}';
 
   @override
   ConsumerState<IdCardDetailPage> createState() => _IdCardDetailPageState();
@@ -34,6 +37,9 @@ class IdCardDetailPage extends ConsumerStatefulWidget {
 
 class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
   bool _hdBusy = false;
+
+  /// [IdCardDetailPage.autoExport] 只触发一次。
+  bool _autoExported = false;
   bool _shareBusy = false;
 
   /// 当前卡款（bug 20260730-430：一卡一面，由快照 cardType 决定，不再提供三 Tab 切换）。
@@ -72,6 +78,11 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
     // bug 20260730-430：一卡一面——卡面由快照 cardType 决定（存量旧卡 null → KTP），
     // 不再提供三 Tab 视图切换；HD 解锁随之天然按单卡面计费。卡款判断只在注册表（AD-6）。
     _style = IdCardStyle.fromCard(card);
+    if (widget.autoExport && !_autoExported && card.hdUnlocked) {
+      _autoExported = true;
+      // 等卡面画进导出边界后再截图。
+      WidgetsBinding.instance.addPostFrameCallback((_) => _autoExport());
+    }
     final Size canvas = _style.canvas;
     final double radius = _style.canvasRadius;
     final Widget cardFront = _style.buildFront(data);
@@ -165,6 +176,7 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: FilledButton.icon(
+                        key: const ValueKey('idCardHdButton'),
                         style: FilledButton.styleFrom(backgroundColor: AppColors.mint),
                         onPressed: _hdBusy ? null : () => _onDownloadHd(card),
                         icon: _hdBusy
@@ -234,7 +246,12 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
       // 🛡 AC2：截**含水印**的那个 boundary。无水印仍需付费。
       final bytes = await _capture(idCardWatermarkedBoundaryKey);
       if (bytes == null) return;
-      Analytics.capture('id_card_share_tapped', {'card_style': _style.analyticsCardStyle});
+      // D-7：card_style 保留（KTP 0 / 护照 1 / 学生卡 2 / SIM 3 / 居住证 4），另加 card_type / card_variant（wire 值）。
+      Analytics.capture('id_card_share_tapped', {
+        'card_style': _style.analyticsCardStyle,
+        'card_type': _style.cardType,
+        if (_style.cardVariant != null) 'card_variant': _style.cardVariant!,
+      });
       final channel = await CardExport.shareImage(
         bytes,
         name: 'tailtopia_id_card',
@@ -266,92 +283,37 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
     }
   }
 
+  /// D-16 自动导出：先等导出边界内的图片（宠物照片、卡面素材）加载完，再截图弹选单；期间按钮置 busy，防重复导出。
+  Future<void> _autoExport() async {
+    if (!mounted) return;
+    setState(() => _hdBusy = true);
+    try {
+      final images = <Future<void>>[];
+      void visit(Element el) {
+        final w = el.widget;
+        if (w is Image) images.add(precacheImage(w.image, el, onError: (_, _) {}));
+        el.visitChildren(visit);
+      }
+      idCardBoundaryKey.currentContext?.visitChildElements(visit);
+      await Future.wait(images);
+      if (!mounted) return;
+      await WidgetsBinding.instance.endOfFrame; // 图片到位后的那一帧画完再截
+      if (mounted) await _exportHd();
+    } finally {
+      if (mounted) setState(() => _hdBusy = false);
+    }
+  }
+
   Future<void> _onDownloadHd(IdCard card) async {
     if (card.hdUnlocked) {
       await _exportHd();
-    } else {
-      await _openHdPaywall(card);
+      return;
     }
-  }
-
-  Future<void> _openHdPaywall(IdCard card) async {
-    int balance = 0;
-    try {
-      balance = (await ref.read(pawCoinProvider.future)).balance;
-    } catch (_) {
-      balance = 0;
-    }
-    if (!mounted) return;
-    // 弹窗期间保活定价 provider（autoDispose）：弹窗关掉后「开始付款」埋点还要读价格。
-    final priceSub = ref.listenManual(idCardHdPriceProvider, (_, _) {});
-    KtpUnlockAnalytics.paywallShown(
-        entry: KtpUnlockAnalytics.entryDetail, priceIdr: priceSub.read().value);
-    final channel = await showModalBottomSheet<HdPayChannel>(
-      context: context,
-      backgroundColor: AppColors.card,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => HdPaywallSheet(
-        petName: card.name,
-        serialId: card.serialId,
-        cardNo: card.cardNo,
-        avatarUrl: card.avatarUrl,
-        balance: balance,
-      ),
-    );
-    final priceIdr = priceSub.read().value;
-    priceSub.close();
-    if (channel == null || !mounted) return;
-    KtpUnlockAnalytics.started(
-        entry: KtpUnlockAnalytics.entryDetail, method: channel, priceIdr: priceIdr);
-    await _purchaseHd(channel, priceIdr: priceIdr);
-  }
-
-  Future<void> _purchaseHd(HdPayChannel channel, {int? priceIdr}) async {
+    // AD-10：付费只走共享函数（entry = detail，落点 = 留在详情）。成功后仍自动弹保存 / 分享选单（D-16 保留现状）。
     setState(() => _hdBusy = true);
-    final l10n = AppLocalizations.of(context);
     try {
-      final res = await ref.read(idCardRepositoryProvider).purchaseHdForCard(widget.cardId, channel);
-      if (res.unlocked) {
-        ref.invalidate(idCardDetailProvider(widget.cardId));
-        ref.invalidate(idCardListProvider);
-        // bug 20260806 同类收口：PawCoin 即时扣款成功后失效余额缓存，防他处读到旧余额。
-        ref.invalidate(pawCoinProvider);
-        _toast(l10n.idCardHdUnlockedToast);
-        await _exportHd();
-      } else if ((res.payload?.isNotEmpty ?? false) && mounted) {
-        final bool paid = await showQrPaymentSheet(
-          context,
-          payload: res.payload!,
-          orderRef: res.paymentRef,
-          pollPaid: () async {
-            final card = await ref.refresh(idCardDetailProvider(widget.cardId).future);
-            return card.hdUnlocked;
-          },
-        );
-        // 投放归因：QRIS 现金到账（PawCoin 当场成交不计，钱在充值时已计）。
-        if (paid) {
-          Analytics.capturePurchase(amountIdr: priceIdr, purpose: 'ID_HD', orderRef: res.paymentRef);
-        }
-        if (paid && mounted) {
-          ref.invalidate(idCardDetailProvider(widget.cardId));
-          ref.invalidate(idCardListProvider);
-          _toast(l10n.idCardHdUnlockedToast);
-          await _exportHd();
-        }
-      } else {
-        _toast(l10n.idCardHdQrisPending);
-      }
-    } on DioException catch (e) {
-      KtpUnlockAnalytics.failedFromError(
-          entry: KtpUnlockAnalytics.entryDetail, method: channel, error: e, priceIdr: priceIdr);
-      _toast(e.response?.statusCode == 409
-          ? l10n.idCardHdInsufficientBalance
-          : l10n.idCardHdPurchaseError);
-    } catch (_) {
-      _toast(l10n.idCardHdPurchaseError);
+      final result = await openIdCardHdPaywall(context, ref, card, entry: IdCardPaywallEntry.detail);
+      if (result == IdCardHdFlowResult.unlocked && mounted) await _exportHd();
     } finally {
       if (mounted) setState(() => _hdBusy = false);
     }

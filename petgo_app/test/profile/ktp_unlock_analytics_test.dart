@@ -106,16 +106,23 @@ void main() {
     expect('entry: entry.wire'.allMatches(code).length, 3);
   });
 
-  test('两个付费入口（生成页 / 卡详情页）都接了 shown / started / failed，且 entry 不串', () {
+  test('V1.3.4 Story 1.8：建卡页 / 详情页都经共享付费函数，entry 不串，页面不再直调 KtpUnlockAnalytics', () {
     for (final (path, entry) in [
-      ('lib/features/profile/presentation/id_card_create_page.dart', 'entryCreate'),
-      ('lib/features/profile/presentation/id_card_detail_page.dart', 'entryDetail'),
+      ('lib/features/profile/presentation/id_card_create_page.dart', 'IdCardPaywallEntry.create'),
+      ('lib/features/profile/presentation/id_card_detail_page.dart', 'IdCardPaywallEntry.detail'),
     ]) {
       final code = File(path).readAsStringSync();
-      for (final call in ['paywallShown(', 'started(', 'failedFromError(']) {
-        expect(code.contains('KtpUnlockAnalytics.$call'), isTrue, reason: '$path 漏了 $call');
+      expect(code.contains('openIdCardHdPaywall('), isTrue, reason: '$path 没接共享函数');
+      expect(code.contains(entry), isTrue, reason: '$path 的 entry 应是 $entry');
+      for (final banned in [
+        'KtpUnlockAnalytics.',
+        'HdPaywallSheet(',
+        'purchaseHdForCard(',
+        'showQrPaymentSheet(',
+        'showModalBottomSheet<HdPayChannel>',
+      ]) {
+        expect(code.contains(banned), isFalse, reason: '$path 仍直接调用 $banned');
       }
-      expect('KtpUnlockAnalytics.$entry'.allMatches(code).length, 3, reason: '$path 的 entry 应全是 $entry');
     }
   });
 }

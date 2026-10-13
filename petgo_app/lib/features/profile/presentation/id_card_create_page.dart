@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,19 +8,17 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/utils/media_permission.dart';
-import '../../../shared/widgets/qr_payment_sheet.dart';
 import '../../media/domain/media_upload_use_case.dart';
-import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../data/id_card_repository.dart';
 import '../data/profile_repository.dart';
 import '../domain/id_card.dart';
 import '../domain/id_card_style.dart';
-import 'id_card/hd_paywall_sheet.dart';
 import 'id_card/id_card_form.dart';
+import 'id_card/id_card_hd_flow.dart';
 import 'id_card/id_card_pet_type_fields.dart';
 import 'id_card/id_card_watermark.dart';
 import 'id_card/ktp_fields.dart';
-import 'id_card/ktp_unlock_analytics.dart';
+import 'id_card_detail_page.dart';
 
 /// 独立建卡器（Story 6-7，决策④）——预览优先版。
 ///
@@ -235,7 +232,7 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
     }
   }
 
-  /// 创建：POST 落库 → 弹 HD 支付页 → 返回列表（可见待支付/已支付卡）。付费与返回在 Story 1.8 改造。
+  /// 创建：POST 落库 → 弹 HD 付费抽屉 → 替换到新卡详情（V1.3.4 ktp Story 1.8，AD-10 / D-15 / D-16）。
   /// T-16：只提交本卡款表单内的字段，字段集外一律 null；intro 不再提交（PRD §3.4）。
   Future<void> _create() async {
     final l10n = AppLocalizations.of(context);
@@ -276,73 +273,13 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
       'number_reused': card.numberReused,
     });
     if (!mounted) return;
-    // 落库成功 → 弹支付页（HD 解锁）。无论支付与否，卡已在列表。
-    await _openPayment(card);
-    if (mounted) context.pop(); // 返回列表
-  }
-
-  /// HD 付费解锁（复用详情页范式）：选渠道 → PawCoin 直扣或现金 QR。
-  Future<void> _openPayment(IdCard card) async {
-    int balance = 0;
-    try {
-      balance = (await ref.read(pawCoinProvider.future)).balance;
-    } catch (_) {}
+    // 落库成功 → 弹付费抽屉（AD-10 共享函数，entry = create）。
+    final result = await openIdCardHdPaywall(context, ref, card, entry: IdCardPaywallEntry.create);
     if (!mounted) return;
-    // 弹窗期间保活定价 provider（autoDispose）：弹窗关掉后「开始付款」埋点还要读价格。
-    final priceSub = ref.listenManual(idCardHdPriceProvider, (_, _) {});
-    KtpUnlockAnalytics.paywallShown(
-        entry: KtpUnlockAnalytics.entryCreate, priceIdr: priceSub.read().value);
-    final channel = await showModalBottomSheet<HdPayChannel>(
-      context: context,
-      backgroundColor: AppColors.card,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => HdPaywallSheet(
-          petName: card.name,
-          serialId: card.serialId,
-          cardNo: card.cardNo,
-          avatarUrl: card.avatarUrl,
-          balance: balance),
-    );
-    final priceIdr = priceSub.read().value;
-    priceSub.close();
-    if (channel == null || !mounted) return;
-    KtpUnlockAnalytics.started(
-        entry: KtpUnlockAnalytics.entryCreate, method: channel, priceIdr: priceIdr);
-    final l10n = AppLocalizations.of(context);
-    try {
-      final res = await ref.read(idCardRepositoryProvider).purchaseHdForCard(card.id, channel);
-      if (res.unlocked) {
-        ref.invalidate(idCardListProvider);
-        _toast(l10n.idCardHdUnlockedToast);
-      } else if ((res.payload?.isNotEmpty ?? false) && mounted) {
-        final bool paid = await showQrPaymentSheet(
-          context,
-          payload: res.payload!,
-          orderRef: res.paymentRef,
-          pollPaid: () async {
-            final c = await ref.refresh(idCardDetailProvider(card.id).future);
-            return c.hdUnlocked;
-          },
-        );
-        // 投放归因：QRIS 现金到账（PawCoin 当场成交不计，钱在充值时已计）。
-        if (paid) {
-          Analytics.capturePurchase(amountIdr: priceIdr, purpose: 'ID_HD', orderRef: res.paymentRef);
-        }
-        ref.invalidate(idCardListProvider);
-      } else {
-        _toast(l10n.idCardHdQrisPending);
-      }
-    } on DioException catch (e) {
-      KtpUnlockAnalytics.failedFromError(
-          entry: KtpUnlockAnalytics.entryCreate, method: channel, error: e, priceIdr: priceIdr);
-      _toast(e.response?.statusCode == 409
-          ? l10n.idCardHdInsufficientBalance
-          : l10n.idCardHdPurchaseError);
-    } catch (_) {
-      _toast(l10n.idCardHdPurchaseError);
-    }
+    // AD-10 / D-15：任何结局（关闭 / 成功 / 失败 / QRIS 未付）都替换到新卡详情，建卡页出栈，避免回建卡页重复建卡；
+    // 失败提示已由共享函数先弹出。D-16：付费成功落到详情后同样自动弹保存 / 分享选单。
+    context.pushReplacement(
+        IdCardDetailPage.locationFor(card.id, autoExport: result == IdCardHdFlowResult.unlocked));
   }
 
   void _toast(String msg) {

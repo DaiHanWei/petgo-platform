@@ -841,7 +841,9 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/profile/id-cards/:id',
-        builder: (c, s) => IdCardDetailPage(cardId: int.parse(s.pathParameters['id']!)),
+        // V1.3.4 ktp D-16：?export=1 = 建卡入口付费成功落到详情，自动弹保存 / 分享选单。
+        builder: (c, s) => IdCardDetailPage(
+            cardId: int.parse(s.pathParameters['id']!), autoExport: s.uri.queryParameters['export'] == '1'),
       ),
       // 健康记录列表（Story 7.2 · FR-45B）。受控（/profile/ 前缀，游客被门控）。
       // ?add=VACCINE|DEWORM|...：进页自动弹预选类型的添加表单（bug 20260729-406，健康类里程碑直跳）。

@@ -22,17 +22,34 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// V1.3.4 ktp Story 1.7：建卡页去 Tab、按卡款填表、身份证专用物种 / 品种下拉、必填置灰、提交口径与埋点。
 class _Repo implements IdCardRepository {
-  _Repo({this.fail = false, this.numberReused = false});
+  _Repo({this.fail = false, this.numberReused = false, this.purchaseFails = false});
   final bool fail;
   final bool numberReused;
+  final bool purchaseFails;
   CreateIdCardRequest? last;
 
   @override
   Future<IdCard> createCard(CreateIdCardRequest req) async {
     last = req;
     if (fail) throw Exception('boom');
-    return IdCard.fromJson({'id': 9, 'serialId': 9, 'name': req.name, 'numberReused': numberReused});
+    return IdCard.fromJson({
+      'id': 9,
+      'serialId': 9,
+      'name': req.name,
+      'cardType': req.cardType,
+      'cardVariant': req.cardVariant,
+      'numberReused': numberReused,
+    });
   }
+
+  @override
+  Future<HdPurchaseResult> purchaseHdForCard(int cardId, HdPayChannel channel) async {
+    if (purchaseFails) throw Exception('boom');
+    return const HdPurchaseResult(unlocked: true);
+  }
+
+  @override
+  Future<IdCard> getCard(int cardId) async => IdCard(id: cardId, hdUnlocked: !purchaseFails);
 
   @override
   Future<int> hdPrice() async => 5000;
@@ -67,6 +84,12 @@ Future<void> _pump(WidgetTester tester, IdCardStyle style, {required _Repo repo,
     GoRoute(
         path: '/profile/id-cards/create',
         builder: (c, s) => IdCardCreatePage(initialStyle: IdCardCreatePage.styleFromQuery(s.uri.queryParameters['style']))),
+    GoRoute(
+        path: '/profile/id-cards/:id',
+        builder: (c, s) => Scaffold(
+            body: TextButton(
+                onPressed: () => c.pop(),
+                child: Text('detail:${s.pathParameters['id']}:${s.uri.queryParameters['export'] ?? ''}')))),
   ]);
   await tester.pumpWidget(ProviderScope(
     overrides: [
@@ -277,11 +300,17 @@ void main() {
         'card_variant': style.cardVariant!,
         'number_reused': style == IdCardStyle.studentCeria,
       });
-      // 现状保留：建卡后弹付费抽屉（Story 1.8 改落点）→ 关闭后回列表。
+      // Story 1.8（AD-10 / D-15）：建卡后弹付费抽屉 → 关闭 → 替换到新卡详情（未解锁，不自动导出）；返回 → 列表。
       expect(find.byType(HdPaywallSheet), findsOneWidget);
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
-      expect(find.text('list'), findsOneWidget);
+      expect(find.text('detail:9:'), findsOneWidget);
+      expect(find.byType(IdCardCreatePage), findsNothing, reason: '建卡页已出栈');
+      await tester.tap(find.text('detail:9:'));
+      await tester.pumpAndSettle();
+      expect(find.text('list'), findsOneWidget, reason: '详情返回直接回列表，不回建卡页');
+      expect(events.where((e) => e.$1 == 'id_card_paywall_dismissed').single.$2,
+          {'card_type': 'STUDENT', 'entry': 'create'});
       expect(tester.takeException(), isNull);
     }
   });
@@ -339,5 +368,27 @@ void main() {
     await tester.pumpAndSettle();
     await _openForm(tester);
     expect(find.widgetWithText(TextField, 'Belang'), findsOneWidget);
+  });
+
+  testWidgets('建卡后 PawCoin 付费成功 → 替换到新卡详情并带 export=1（D-16），toast 可见', (tester) async {
+    final repo = _Repo();
+    await _pump(tester, IdCardStyle.sim, repo: repo, profile: _profile());
+    await _submit(tester);
+    expect(find.byType(HdPaywallSheet), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('hdPayConfirm')));
+    await tester.pumpAndSettle();
+    expect(find.text('detail:9:1'), findsOneWidget);
+    expect(find.text('HD download unlocked!'), findsOneWidget);
+    expect(events.where((e) => e.$1 == 'id_card_buka_hd_tapped'), isEmpty, reason: 'create 入口不报 buka_hd_tapped');
+  });
+
+  testWidgets('建卡后付费失败 → 先提示失败，再替换到新卡详情（D-15）', (tester) async {
+    final repo = _Repo(purchaseFails: true);
+    await _pump(tester, IdCardStyle.passport, repo: repo, profile: _profile());
+    await _submit(tester);
+    await tester.tap(find.byKey(const ValueKey('hdPayConfirm')));
+    await tester.pumpAndSettle();
+    expect(find.text('detail:9:'), findsOneWidget);
+    expect(find.text('Payment could not be completed. Please try again.'), findsOneWidget);
   });
 }
