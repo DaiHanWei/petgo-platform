@@ -44,11 +44,18 @@ class FollowListPage extends ConsumerStatefulWidget {
 }
 
 class _FollowListPageState extends ConsumerState<FollowListPage> with SingleTickerProviderStateMixin {
-  late final TabController _tabs = TabController(
-    length: 2,
-    vsync: this,
-    initialIndex: widget.initialTab == FollowListTab.followers ? 1 : 0,
-  );
+  // 在 initState 里建，不用懒初始化：错误态页面从不读 _tabs，懒建会拖到 dispose 才创建 → 断言崩。
+  late final TabController _tabs;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTab == FollowListTab.followers ? 1 : 0,
+    );
+  }
 
   @override
   void dispose() {
