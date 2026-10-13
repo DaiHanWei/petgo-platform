@@ -13,6 +13,9 @@ import com.tailtopia.profile.repository.IdCardRepository;
 import com.tailtopia.profile.repository.PetProfileRepository;
 import com.tailtopia.shared.error.AppException;
 import java.util.List;
+import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class IdCardService {
+
+    private static final Logger log = LoggerFactory.getLogger(IdCardService.class);
 
     private final PetProfileRepository profiles;
     private final SerialAllocationService serialAllocation;
@@ -80,6 +85,8 @@ public class IdCardService {
      *
      * <p>V1.3.4 ktp（AD-1 / AD-4）：卡种 5 值 + 学生卡配色；KTP / KITAS 品种必填；intro 不写入；
      * 新卡种与旧卡种一样分配 serial + 两号。
+     * <p>V1.3.4 ktp Story 2.3（AD-5）：本人有已解锁学生卡且生日 / 性别 / 物种快照逐项相同 → 新卡（8 款任一）沿用其
+     * card_no / passport_no（多张取最早解锁），{@code numberReused = true}；号仍经 {@code claimNumbers} 登记（AD-3）。
      */
     @Transactional
     public IdCardCreateResponse createCard(long ownerId, CreateIdCardRequest req) {
@@ -91,9 +98,17 @@ public class IdCardService {
         }
         // petType / gender 必填与白名单由 DTO 保证（D-9：不再把空 gender 默认成 UNKNOWN）。
         String gender = req.gender();
-        long serial = serialAllocation.allocate();
-        String cardNo = cardNumbers.allocateCardNo(req.birthday(), gender, req.petType());
-        String passportNo = cardNumbers.allocatePassportNo(req.petType());
+        // AD-5：按用户串行建卡，再判「编号沿用」——同一用户并发两次建卡判定一致；
+        // 解锁到账与建卡并发时以本事务读到的已提交状态为准（T-19）。
+        cardNumbers.lockOwnerForCardCreation(ownerId);
+        long serial = serialAllocation.allocate(); // serial_id 照常每卡新取（沿用也不例外）
+        Optional<IdCard> source =
+                idCards.findNumberSourceCard(ownerId, req.birthday(), gender, req.petType());
+        // 命中已解锁学生卡（三项相同）→ 复制两个号、不调发号器（计数器不前进）；只共号、不共解锁。
+        String cardNo = source.map(IdCard::getCardNo)
+                .orElseGet(() -> cardNumbers.allocateCardNo(req.birthday(), gender, req.petType()));
+        String passportNo = source.map(IdCard::getPassportNo)
+                .orElseGet(() -> cardNumbers.allocatePassportNo(req.petType()));
         // AD-3：登记号的归属（同一用户可共用、跨用户不可），他人已持有 → 抛错整笔回滚（T-17）。
         cardNumbers.claimNumbers(ownerId, cardNo, passportNo);
         // intro：DTO 字段为兼容旧版 App 保留，一律不写入（PRD §3.4 / FR-142D.4）。
@@ -103,8 +118,8 @@ public class IdCardService {
                 blankToNull(req.occupation()), blankToNull(req.maritalStatus()),
                 cardType.name(), cardVariant, blankToNull(req.school()),
                 blankToNull(req.faculty())));
-        // numberReused：编号沿用在 Epic 2（Story 2.3）接真值，本期恒 false。
-        return IdCardCreateResponse.of(IdCardResponse.from(card), false);
+        source.ifPresent(src -> log.info("身份证编号沿用 card={} source={}", card.getId(), src.getId()));
+        return IdCardCreateResponse.of(IdCardResponse.from(card), source.isPresent());
     }
 
     /**

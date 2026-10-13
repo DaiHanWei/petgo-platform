@@ -355,4 +355,68 @@ class IdCardServiceTest {
                 .isInstanceOf(IllegalStateException.class);
         verify(idCards, never()).save(any());
     }
+
+    // ---- V1.3.4 ktp Story 2.3（AD-5）：已解锁学生卡的编号沿用 ----
+
+    private static IdCard unlockedStudentSource() {
+        IdCard src = IdCard.snapshot(7L, 3L, "Momo", "CAT", null, LocalDate.of(2024, 3, 10), null, null, "FEMALE",
+                "TT600324020007", "TT02P2500009", null, null, null, null, "STUDENT", "MALAM", null, null);
+        src.markHdUnlocked();
+        org.springframework.test.util.ReflectionTestUtils.setField(src, "id", 3L);
+        return src;
+    }
+
+    @Test
+    void reuseHitCopiesNumbersSkipsAllocatorsAndReportsReused() {
+        when(serialAllocation.allocate()).thenReturn(11L);
+        when(idCards.findNumberSourceCard(7L, LocalDate.of(2024, 3, 10), "FEMALE", "CAT"))
+                .thenReturn(Optional.of(unlockedStudentSource()));
+        when(idCards.save(any())).thenAnswer(IdCardServiceTest::persisted);
+
+        IdCardCreateResponse res = service.createCard(7L, req("KTP", null));
+
+        verify(cardNumbers, never()).allocateCardNo(any(), any(), any());
+        verify(cardNumbers, never()).allocatePassportNo(any());
+        verify(serialAllocation).allocate();
+        ArgumentCaptor<IdCard> saved = ArgumentCaptor.forClass(IdCard.class);
+        verify(idCards).save(saved.capture());
+        assertThat(saved.getValue().getCardNo()).isEqualTo("TT600324020007");
+        assertThat(saved.getValue().getPassportNo()).isEqualTo("TT02P2500009");
+        assertThat(saved.getValue().getSerialId()).isEqualTo(11L); // serial 照常新取
+        assertThat(saved.getValue().isHdUnlocked()).as("只共号、不共解锁").isFalse();
+        assertThat(saved.getValue().getHdUnlockedAt()).isNull();
+        assertThat(res.numberReused()).isTrue();
+        verify(cardNumbers).claimNumbers(7L, "TT600324020007", "TT02P2500009");
+    }
+
+    @Test
+    void reuseMissAllocatesFreshNumbers() {
+        when(serialAllocation.allocate()).thenReturn(11L);
+        when(idCards.findNumberSourceCard(anyLong(), any(), any(), any())).thenReturn(Optional.empty());
+        when(cardNumbers.allocateCardNo(any(), any(), any())).thenReturn("TT600324020001");
+        when(cardNumbers.allocatePassportNo(any())).thenReturn("TT02P2600001");
+        when(idCards.save(any())).thenAnswer(IdCardServiceTest::persisted);
+
+        IdCardCreateResponse res = service.createCard(7L, req("SIM", null));
+
+        verify(cardNumbers).allocateCardNo(LocalDate.of(2024, 3, 10), "FEMALE", "CAT");
+        verify(cardNumbers).allocatePassportNo("CAT");
+        assertThat(res.numberReused()).isFalse();
+    }
+
+    @Test
+    void reuseOrderIsLockThenLookupThenClaimThenSave() {
+        when(serialAllocation.allocate()).thenReturn(11L);
+        when(idCards.findNumberSourceCard(anyLong(), any(), any(), any()))
+                .thenReturn(Optional.of(unlockedStudentSource()));
+        when(idCards.save(any())).thenAnswer(IdCardServiceTest::persisted);
+
+        service.createCard(7L, req("STUDENT", "MALAM"));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(cardNumbers, idCards);
+        order.verify(cardNumbers).lockOwnerForCardCreation(7L);
+        order.verify(idCards).findNumberSourceCard(7L, LocalDate.of(2024, 3, 10), "FEMALE", "CAT");
+        order.verify(cardNumbers).claimNumbers(anyLong(), any(), any());
+        order.verify(idCards).save(any());
+    }
 }

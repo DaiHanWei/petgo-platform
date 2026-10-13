@@ -41,4 +41,18 @@ public interface IdCardRepository extends JpaRepository<IdCard, Long> {
     @Modifying
     @Query("update IdCard c set c.profileDeletedAt = :at where c.userId = :userId and c.profileDeletedAt is null")
     void markProfileDeleted(@Param("userId") long userId, @Param("at") Instant at);
+
+    /**
+     * 编号沿用来源（V1.3.4 ktp Story 2.3，AD-5 / FR-142E）：本人、学生卡（任意配色）、HD 已解锁、两个号齐全、
+     * 快照生日 / 性别 / 物种与新卡请求值<b>逐项相等</b>（D-19：快照物种为空的老卡用 {@code =} 天然不命中，不视同 OTHER）；
+     * 多张取 {@code hd_unlocked_at} 最早（空排最后），同刻按 id 小。比的是两张卡的快照值，不读档案；
+     * 不按 {@code profile_deleted_at} 过滤（T-18：档案已删的已解锁学生卡仍可作来源）。只读。
+     */
+    @Query(value = "SELECT c.* FROM id_cards c "
+            + "WHERE c.user_id = :userId AND c.card_type = 'STUDENT' AND c.hd_unlocked "
+            + "AND c.card_no IS NOT NULL AND c.passport_no IS NOT NULL "
+            + "AND c.birthday = :birthday AND c.gender = :gender AND c.pet_type = :petType "
+            + "ORDER BY c.hd_unlocked_at ASC NULLS LAST, c.id ASC LIMIT 1", nativeQuery = true)
+    Optional<IdCard> findNumberSourceCard(@Param("userId") long userId, @Param("birthday") java.time.LocalDate birthday,
+            @Param("gender") String gender, @Param("petType") String petType);
 }

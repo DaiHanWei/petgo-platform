@@ -7,6 +7,7 @@ import java.time.ZoneId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -42,6 +43,9 @@ public class CardNumberService {
 
     private static final ZoneId WIB = ZoneId.of("Asia/Jakarta");
     private static final Logger log = LoggerFactory.getLogger(CardNumberService.class);
+
+    /** 建卡按用户串行的 advisory 锁命名空间（V1.3.4 ktp Story 2.3）："ICCR"，与 AGEC / TSSR / PPSR 不撞。 */
+    static final int CARD_CREATE_LOCK_NS = 0x4943_4352;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -83,6 +87,19 @@ public class CardNumberService {
             throw new IllegalStateException("护照号顺序号超出当年上限（99999）");
         }
         return composePassportNo(petType, year, seq);
+    }
+
+    /**
+     * 对该用户取事务级 advisory 锁（V1.3.4 ktp Story 2.3，AD-5）：同一用户并发两次建卡对「沿用 / 新发」的判定一致。
+     * 两参形式按用户分锁，随调用方事务提交 / 回滚释放；须在 {@code IdCardService.createCard} 事务内、查沿用来源前调用。
+     * 与号池单参锁（{@link SerialAllocationService}）是两把锁，取锁顺序固定（先用户锁、后号池锁），不会死锁。
+     */
+    @Transactional(propagation = Propagation.MANDATORY) // 事务外调用即失败：xact 锁离开事务就等于没锁
+    public void lockOwnerForCardCreation(long userId) {
+        entityManager.createNativeQuery("SELECT pg_advisory_xact_lock(:ns, :uid)")
+                .setParameter("ns", CARD_CREATE_LOCK_NS)
+                .setParameter("uid", (int) (userId % Integer.MAX_VALUE))
+                .getSingleResult();
     }
 
     /**
