@@ -27,7 +27,16 @@ import 'widgets/pet_form_fields.dart';
 /// 「修改信息」「修改图片」均**仅会话级、不落库**；点「创建」才 POST 落库并弹 HD 支付页，
 /// 返回列表可见该待支付/已支付卡。
 class IdCardCreatePage extends ConsumerStatefulWidget {
-  const IdCardCreatePage({super.key});
+  const IdCardCreatePage({super.key, this.initialStyle = IdCardStyle.ktp});
+
+  /// 进入时的卡款（V1.3.4 ktp Story 1.5：「Pilih Kartu」点格带入）；缺省 KTP（Kartuku 入口 / 旧深链）。
+  final IdCardStyle initialStyle;
+
+  /// 建卡页路由位置：`/profile/id-cards/create?style=<IdCardStyle.name>`（路由 builder 读 query，非法值回落 KTP）。
+  static String locationFor(IdCardStyle style) => '/profile/id-cards/create?style=${style.name}';
+
+  /// 路由 query `style` → 卡款；缺省 / 非法值回落 KTP（兼容不带参数的入口与旧深链）。
+  static IdCardStyle styleFromQuery(String? style) => IdCardStyle.values.asNameMap()[style] ?? IdCardStyle.ktp;
 
   @override
   ConsumerState<IdCardCreatePage> createState() => _IdCardCreatePageState();
@@ -50,9 +59,9 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
   String _school = '';
   String _faculty = '';
   bool _prefilled = false;
-  // 当前卡款（V1.3.4 ktp AD-6：由注册表决定卡面 / 水印 / 卡种 wire 值）。三 Tab 依次 = [_tabStyles]，
-  // 学生卡 Tab 暂对应 Klasik（建卡请求不带 cardVariant，后端兜底落 KLASIK；三 Tab 在 Story 1.7 去掉）。
-  IdCardStyle _style = IdCardStyle.ktp;
+  // 当前卡款（V1.3.4 ktp AD-6：由注册表决定卡面 / 水印 / 卡种与配色 wire 值），由 [IdCardCreatePage.initialStyle]
+  // 初始化。过渡期旧三 Tab（Story 1.7 删）：按当前卡种高亮（KITAS / SIM 三个都不高亮），点 Tab 切到 [_tabStyles]。
+  late IdCardStyle _style = widget.initialStyle;
   static const List<IdCardStyle> _tabStyles = [
     IdCardStyle.ktp,
     IdCardStyle.passport,
@@ -221,10 +230,11 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
   }
 
   Widget _styleTab(String label, int index) {
-    final selected = _style == _tabStyles[index];
+    final selected = _style.cardType == _tabStyles[index].cardType;
     return GestureDetector(
       key: ValueKey('idCardStyleTab_$index'),
-      onTap: () => setState(() => _style = _tabStyles[index]),
+      // 已高亮（同卡种）再点不改卡款：从网格选的 Bintang / Malam / Ceria 不会被旧 Tab 悄悄换成 Klasik。
+      onTap: selected ? null : () => setState(() => _style = _tabStyles[index]),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         alignment: Alignment.center,
@@ -320,8 +330,9 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
             occupation: _emptyToNull(_occupation),
             maritalStatus: _emptyToNull(_maritalStatus),
             // bug 430：在哪个卡面 Tab 点 Create 就只建哪种卡。
-            // bug 20260730-430：建卡即绑定单卡面；卡种 wire 值取注册表。
+            // bug 20260730-430：建卡即绑定单卡面；卡种 / 配色 wire 值取注册表（选 Bintang 就落 Bintang）。
             cardType: _style.cardType,
+            cardVariant: _style.cardVariant,
             school: _emptyToNull(_school),
             faculty: _emptyToNull(_faculty),
           ));

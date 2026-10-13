@@ -1,6 +1,6 @@
 # Story 1.5: 身份证列表页双 Tab 与「Create new」样式网格
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.3.4 · 主题 ktp · 分支 `feat/1.3.4-ktp-revamp`
 > 口径优先级：`决策日志-ktp.md` > `PRD-v1.3.4-ktp.md` > `architecture-v1.3.4-ktp-delta.md` > `ui-v1.3.4-ktp.html`（均在 `_bmad-output/planning-artifacts/v1.3.4/`）
@@ -80,25 +80,25 @@ so that 我知道能做什么卡、直接去做。
 
 ## Tasks / Subtasks
 
-- [ ] Task 1：l10n（AC1 / AC2）
-  - [ ] 1.1 `app_id.arb` / `app_en.arb` 新增 `idCardTabStyles`、`idCardTabMyCards`、`idCardStyleGridTitle`、`idCardStyleGroupIdentity`、`idCardStyleGroupStudent`；`flutter gen-l10n`
-- [ ] Task 2：Tab 骨架（AC1 / AC7）
-  - [ ] 2.1 `IdCardPage` → `ConsumerStatefulWidget` + `SingleTickerProviderStateMixin`，`TabController(length: 2, initialIndex: 0)`
-  - [ ] 2.2 现有 `async.when(...)` 整体移入 Kartuku Tab；Pilih Kartu 不 watch 列表
-  - [ ] 2.3 卡片行点进详情：`await context.push(...)` 后 `animateTo(0)`
-- [ ] Task 3：网格（AC2 / AC4）
-  - [ ] 3.1 网格与格子组件（可放 `presentation/id_card/id_card_style_grid.dart`）
-  - [ ] 3.2 `kIdCardNewStylesBadgeUntil` + `idCardStyleShowsNewBadge`；角标
-  - [ ] 3.3 Completion Notes 记录发版检查项（AC4.5）
-- [ ] Task 4：缩略图脚本与素材（AC3）
-  - [ ] 4.1 `test/tool/id_card_style_thumbnails_test.dart`（默认跳过）+ `scripts/gen-id-card-style-thumbnails.sh`
-  - [ ] 4.2 跑脚本、目检、8 张 `.webp` 入库；`pubspec.yaml` 登记 `assets/id_card/styles/`
-  - [ ] 4.3 素材存在性单测
-- [ ] Task 5：跳转建卡页（AC5）
-  - [ ] 5.1 `IdCardCreatePage.locationFor` + `initialStyle`；路由读 query
-  - [ ] 5.2 建卡页当前卡款由入参初始化、预览按注册表；请求带 `cardType` / `cardVariant`；旧三 Tab 过渡映射
-- [ ] Task 6：埋点（AC5.6 / AC6）+ `v112_events_test` 扩表
-- [ ] Task 7：测试（AC8）；L2 真机目检网格与缩略图
+- [x] Task 1：l10n（AC1 / AC2）
+  - [x] 1.1 `app_id.arb` / `app_en.arb` 新增 `idCardTabStyles`、`idCardTabMyCards`、`idCardStyleGridTitle`、`idCardStyleGroupIdentity`、`idCardStyleGroupStudent`；`flutter gen-l10n`
+- [x] Task 2：Tab 骨架（AC1 / AC7）
+  - [x] 2.1 `IdCardPage` → `ConsumerStatefulWidget` + `SingleTickerProviderStateMixin`，`TabController(length: 2, initialIndex: 0)`
+  - [x] 2.2 现有 `async.when(...)` 整体移入 Kartuku Tab；Pilih Kartu 不 watch 列表
+  - [x] 2.3 卡片行点进详情：`await context.push(...)` 后 `animateTo(0)`
+- [x] Task 3：网格（AC2 / AC4）
+  - [x] 3.1 网格与格子组件（可放 `presentation/id_card/id_card_style_grid.dart`）
+  - [x] 3.2 `kIdCardNewStylesBadgeUntil` + `idCardStyleShowsNewBadge`；角标
+  - [x] 3.3 Completion Notes 记录发版检查项（AC4.5）
+- [x] Task 4：缩略图脚本与素材（AC3）
+  - [x] 4.1 `test/tool/id_card_style_thumbnails_test.dart`（默认跳过）+ `scripts/gen-id-card-style-thumbnails.sh`
+  - [x] 4.2 跑脚本、目检、8 张 `.webp` 入库；`pubspec.yaml` 登记 `assets/id_card/styles/`
+  - [x] 4.3 素材存在性单测
+- [x] Task 5：跳转建卡页（AC5）
+  - [x] 5.1 `IdCardCreatePage.locationFor` + `initialStyle`；路由读 query
+  - [x] 5.2 建卡页当前卡款由入参初始化、预览按注册表；请求带 `cardType` / `cardVariant`；旧三 Tab 过渡映射
+- [x] Task 6：埋点（AC5.6 / AC6）+ `v112_events_test` 扩表
+- [x] Task 7：测试（AC8）；L2 真机目检网格与缩略图
 
 ## Dev Notes
 
@@ -176,10 +176,29 @@ so that 我知道能做什么卡、直接去做。
 
 ### Agent Model Used
 
+Claude（云端 headless session，dev-story 流程手工执行）
+
 ### Debug Log References
+
+- Riverpod 3 失败自动重试：重试期间 `idCardListProvider` 状态是「带 error 的 AsyncLoading」，首次 `id_card_tab_viewed` 的「有结果」判定须含 `hasError`，否则失败场景永远不报。
+- 缩略图生成器首版截图文字带黄色双下划线：卡面外缺 `Material` 时 Text 走 debug 兜底样式；生成器包透明 `Material` 后正常（页面内卡面在 Scaffold 中，不受影响）。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：本 story 只动 App，无 L1；L2 待本地真机 360dp、id / en 两语看网格（两列不溢出、「Kartu Izin Tinggal」「Residence Permit」「Driving License」不截断）、缩略图清晰度与护照等高居中、角标位置、点格进入建卡页卡面正确。
+- **🔴 发版检查项**：`kIdCardNewStylesBadgeUntil`（`lib/features/profile/domain/id_card_style.dart`）当前为 T-10 远期占位 **WIB 2027-01-01 00:00**（`DateTime.utc(2026, 12, 31, 17)`），发版时必须改为「上线日 + 30 天」的 WIB 00:00。`docs/runbooks/` 下无发版检查清单，已在此登记并在交付汇报中提示操作者。
+- L0 已绿：`flutter analyze` 无问题；`flutter test` 全量通过（新增 `id_card_style_grid_test`，更新 `id_card_page_test`，`v112_events_test` propNames 加 `has_cards` / `card_type` / `card_variant`）。
+- 与 story 文字的出入（按文末裁定 / 实际约束）：
+  - **D-14 覆盖 AC1.4**：从 Kartuku 点卡进详情再返回**仍停在 Kartuku**，不切回、不补报（有测试）；外部入口仍默认 Pilih Kartu；建卡路径落点归 Story 1.8。
+  - D-13：事件名 `id_card_tab_viewed` / `id_card_style_tapped` 本就符合现有词尾白名单，未扩 `allowedSuffixes`。
+  - AC4.1 写 `const DateTime`，但 `DateTime.utc` 不是 const 构造，改为顶层 `final`。
+  - AC3.2 / AC3.4：云端无 `cwebp`，包装脚本优先 `cwebp -q 90`、缺失时回落 python3 + Pillow（quality 90）；卡面只用 Rubik（另加载 MaterialIcons 供 KTP 卡面的爪印图标），Poppins 未被卡面使用故不加载。输出文件名取注册表 `thumbnailAsset`。生成两次结果逐字节相同（可重复）。缩略图实际尺寸 600×363（1988×1200 按宽 600 取整）、护照 466×362。
+  - AC5.2：路由 builder 调 `IdCardCreatePage.styleFromQuery(...)`（缺省 / 非法 → KTP），便于单测；字面量路径 `'/profile/id-cards/create'` 保留。
+  - AC6.2 / T-9：加载失败省略 `has_cards`；若首个结果到达前用户已切到 Kartuku，先报 `style` 再补报 `created`（code-review 采纳）。
+- 目检：8 张缩略图正常；Bintang 生日行压在底图自带的学院圆章上（UI 稿坐标），列入 Story 1.2 的 L2 校准项。
+- code-review（medium）10 条：采纳 5 条（建卡页已高亮的旧学生 Tab 再点不把 Bintang/Malam/Ceria 换成 Klasik、入口事件不漏报、Kartuku 用 `Consumer` 收窄重建、生成器文件名取注册表、脚本先清空 build 目录）；不改 5 条——建卡后回到 Pilih Kartu 看不到新卡（D-14 / Story 1.8 落点）、KITAS 缺品种只给通用错误（Story 1.7 表单校验）、刷新中 `has_cards` 取最近已知值（可接受）、Kartuku 建卡入口仍用字面量路径（AC7.2 明确本 story 不改）、截止常量为占位（T-10，发版检查项）。
+
+- 以下原「待确认 1 ~ 6」已按文末 2026-10-12 裁定（D-13 / D-14 / T-9 ~ T-13）关闭，实现即按裁定口径。
 - 待确认 1：「从详情页返回停在 Pilih Kartu」的范围。FR-142B.1 / UI 稿写「一律停在 Pilih Kartu」，本 story 按字面实现——**包括用户从 Kartuku 点卡进详情再返回**，也会被切回 Pilih Kartu。PRD §3.2 原文只说「从新卡详情页返回」；若产品本意只指建卡后的新卡详情（该路径列表页本来就停在 Pilih Kartu），则 AC1.4 的「返回后切回」可去掉。
 - 待确认 2：缩略图的宠物照片。卡面头像只支持网络 URL，示例数据不带头像，8 张缩略图头像位为卡面自身的无头像占位。UI 稿 B1 的 KTP / Paspor 示例是线上真实渲染图（是否带照片未写明）。如需示例宠物照片，要给卡面加本地图来源或改用一张固定的公网图，另行确认。
 - 待确认 3：`id_card_tab_viewed` 进入页面时列表**加载失败**，`has_cards` 取什么。PRD 未定义；本 story 暂按「不带 `has_cards` 键照常上报」实现。

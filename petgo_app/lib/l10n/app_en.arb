@@ -2354,6 +2354,14 @@
   "idCardStyleStudentMalam": "Student Night",
   "idCardStyleStudentCeria": "Student Cheerful",
   "idCardStyleStudentKlasik": "Student Classic",
+  "idCardTabStyles": "Create new",
+  "idCardTabMyCards": "My Cards",
+  "idCardStyleGridTitle": "Pick and create an ID card for your pet!",
+  "idCardStyleGroupIdentity": "ID Cards",
+  "idCardStyleGroupStudent": "Student Cards",
+  "@idCardTabStyles": {
+    "description": "V1.3.4 ktp D-11：身份证列表页 Tab「Pilih Kartu」英文为 Create new（不是 Choose a Card）"
+  },
   "@idCardStyleKitas": {
     "description": "V1.3.4 ktp D-11：卡款名称（居住证）。8 款卡名由 IdCardStyle 注册表统一取用"
   },

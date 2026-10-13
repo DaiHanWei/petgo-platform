@@ -56,17 +56,22 @@ Future<void> _pump(WidgetTester tester, List<IdCard> cards) async {
 }
 
 void main() {
-  testWidgets('空列表 → 空态标题 + 建卡入口', (tester) async {
+  testWidgets('空列表 → 空态标题 + 建卡入口（Kartuku Tab）', (tester) async {
     await _pump(tester, const []);
+    // V1.3.4 ktp Story 1.5：默认停在 Pilih Kartu，原列表内容在 Kartuku Tab。
+    await tester.tap(find.byKey(const ValueKey('idCardTab_created')));
+    await tester.pumpAndSettle();
     expect(find.text('No ID cards yet'), findsOneWidget);
     expect(find.byKey(const ValueKey('idCardCreateEntry')), findsOneWidget);
   });
 
-  testWidgets('有卡 → 渲染卡片(名字/编号) + 建卡入口 + 已解锁徽章', (tester) async {
+  testWidgets('有卡 → 渲染卡片(名字/编号) + 建卡入口 + 已解锁徽章（Kartuku Tab）', (tester) async {
     await _pump(tester, [
       IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: true, createdAt: DateTime.utc(2026, 7, 22)),
       IdCard(id: 2, serialId: 7, name: 'Coco', createdAt: DateTime.utc(2026, 7, 20)),
     ]);
+    await tester.tap(find.byKey(const ValueKey('idCardTab_created')));
+    await tester.pumpAndSettle();
     expect(find.text('Mochi'), findsOneWidget);
     expect(find.text('Coco'), findsOneWidget);
     // 编号补零展示；bug 430 起序号行带卡种前缀（无 cardType 的存量卡归 KTP）。

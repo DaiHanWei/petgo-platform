@@ -833,7 +833,12 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 与本条只差一个字母。改动时**逐条改，禁止做前缀字符串替换**（AD-A17.7）。
       GoRoute(path: '/profile/id-card', redirect: (c, s) => PetInsightsRoutes.idCard),
       // Story 6-7 多卡：建卡器（字面量在前，避免被 :id 吞）+ 单卡详情。
-      GoRoute(path: '/profile/id-cards/create', builder: (c, s) => const IdCardCreatePage()),
+      // V1.3.4 ktp Story 1.5：?style=<IdCardStyle.name> 带入卡款；缺省 / 非法值回落 KTP。
+      GoRoute(
+        path: '/profile/id-cards/create',
+        builder: (c, s) =>
+            IdCardCreatePage(initialStyle: IdCardCreatePage.styleFromQuery(s.uri.queryParameters['style'])),
+      ),
       GoRoute(
         path: '/profile/id-cards/:id',
         builder: (c, s) => IdCardDetailPage(cardId: int.parse(s.pathParameters['id']!)),

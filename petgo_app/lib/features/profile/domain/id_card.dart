@@ -235,6 +235,7 @@ class CreateIdCardRequest {
     this.occupation,
     this.maritalStatus,
     this.cardType,
+    this.cardVariant,
     this.school,
     this.faculty,
   });
@@ -256,6 +257,9 @@ class CreateIdCardRequest {
   /// 卡种 KTP/PASSPORT/STUDENT（bug 20260730-430：建卡即绑定单卡面）。null → 后端默认 KTP。
   final String? cardType;
 
+  /// 学生卡配色 BINTANG/MALAM/CERIA/KLASIK（V1.3.4 ktp）。非学生卡 null（不发该键）；学生卡缺省后端落 KLASIK。
+  final String? cardVariant;
+
   /// 学生卡专属（bug 20260730-429）。null/空 = 后端落 null → 渲染趣味默认。
   final String? school;
   final String? faculty;
@@ -273,6 +277,7 @@ class CreateIdCardRequest {
         if (occupation != null) 'occupation': occupation,
         if (maritalStatus != null) 'maritalStatus': maritalStatus,
         if (cardType != null) 'cardType': cardType,
+        if (cardVariant != null) 'cardVariant': cardVariant,
         if (school != null) 'school': school,
         if (faculty != null) 'faculty': faculty,
       };
