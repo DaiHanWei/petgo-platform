@@ -1,10 +1,11 @@
 import 'package:flutter/widgets.dart';
 
 import '../../../l10n/app_localizations.dart';
-import '../presentation/id_card/id_card_placeholder.dart';
+import '../presentation/id_card/kitas_card.dart';
 import '../presentation/id_card/ktp_card.dart';
 import '../presentation/id_card/ktp_fields.dart';
 import '../presentation/id_card/passport_card.dart';
+import '../presentation/id_card/sim_card.dart';
 import '../presentation/id_card/student_card.dart';
 import '../presentation/id_card/student_variant_card.dart';
 import 'id_card.dart';
@@ -179,8 +180,8 @@ enum IdCardStyle {
   Size get canvas => switch (this) {
         IdCardStyle.ktp => kIdCardCanvas,
         IdCardStyle.passport => kPassportCardCanvas,
-        // SIM / 居住证在 Story 1.3 前为占位卡面（同 KTP 画布）。
-        IdCardStyle.kitas || IdCardStyle.sim => kIdCardCanvas,
+        IdCardStyle.kitas => kKitasCardCanvas,
+        IdCardStyle.sim => kSimCardCanvas,
         _ => kStudentCardCanvas,
       };
 
@@ -188,7 +189,8 @@ enum IdCardStyle {
   double get canvasRadius => switch (this) {
         IdCardStyle.ktp => kIdCardCanvasRadius,
         IdCardStyle.passport => kPassportCardCanvasRadius,
-        IdCardStyle.kitas || IdCardStyle.sim => kIdCardComingSoonRadius,
+        IdCardStyle.kitas => kKitasCardCanvasRadius,
+        IdCardStyle.sim => kSimCardCanvasRadius,
         IdCardStyle.studentKlasik => kStudentCardCanvasRadius,
         _ => kStudentVariantCanvasRadius,
       };
@@ -197,10 +199,8 @@ enum IdCardStyle {
   Widget buildFront(IdCardData data) => switch (this) {
         IdCardStyle.ktp => KtpCardFront(fields: buildKtpFields(data, KtpEdits.empty)),
         IdCardStyle.passport => PassportCardFront(fields: buildPassportFields(data)),
-        IdCardStyle.kitas || IdCardStyle.sim => Builder(builder: (context) {
-            final l10n = AppLocalizations.of(context);
-            return IdCardComingSoon(styleLabel: label(l10n), comingSoonText: l10n.idCardComingSoon);
-          }),
+        IdCardStyle.kitas => KitasCardFront(fields: buildKitasFields(data)),
+        IdCardStyle.sim => SimCardFront(fields: buildSimFields(data)),
         IdCardStyle.studentBintang => StudentVariantCardFront(
             layout: StudentVariantLayout.bintang, fields: buildStudentFields(data)),
         IdCardStyle.studentMalam => StudentVariantCardFront(

@@ -5,7 +5,9 @@ import 'package:tailtopia/features/profile/data/id_card_repository.dart';
 import 'package:tailtopia/features/profile/domain/id_card.dart';
 import 'package:tailtopia/features/profile/domain/id_card_style.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/id_card_watermark.dart';
+import 'package:tailtopia/features/profile/presentation/id_card/kitas_card.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/ktp_card.dart';
+import 'package:tailtopia/features/profile/presentation/id_card/sim_card.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/student_card.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/student_variant_card.dart';
 import 'package:tailtopia/features/profile/presentation/id_card_detail_page.dart';
@@ -162,6 +164,16 @@ void main() {
           ? find.byType(StudentCardFront)
           : find.byType(StudentVariantCardFront);
       expect(front, findsOneWidget, reason: '$style');
+      expectWatermarkOutsideExportBoundary(tester, front);
+    }
+  });
+
+  testWidgets('SIM / 居住证：水印同样在 HD 导出 RepaintBoundary 子树之外', (tester) async {
+    for (final (type, front) in [('SIM', find.byType(SimCardFront)), ('KITAS', find.byType(KitasCardFront))]) {
+      await _pump(tester,
+          IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: true, cardType: type, cardNo: 'TT730326020110'));
+      expect(find.byType(IdCardWatermark), findsOneWidget, reason: type);
+      expect(front, findsOneWidget, reason: type);
       expectWatermarkOutsideExportBoundary(tester, front);
     }
   });

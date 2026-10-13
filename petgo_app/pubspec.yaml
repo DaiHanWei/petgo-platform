@@ -175,6 +175,11 @@ flutter:
     - assets/id_card/student_bintang/
     - assets/id_card/student_malam/
     - assets/id_card/student_ceria/
+    # V1.3.4 ktp SIM / 居住证（Story 1.3）。源同上 design-assets/：SIM = driving/（Driving.png 底图、Logo.png 原样；
+    # Sign.png 与 assets/ktp/ktp_paw_stamp.png 逐字节相同，直接复用后者不重复入库）；
+    # 居住证 = permit/（Background.png 1008×604 按 alpha 裁 x3 y4 → 994×600；Label / Logo / Sign 原样）。
+    - assets/id_card/sim/
+    - assets/id_card/kitas/
     # 年龄卡角色切图（V1.3.0 Story 5.2 换皮）：`{cat,dog,other}_{10,25,75,100}.webp`，
     # 透明底、宽 ~1080。四档按 `PetAgeStage`（puppy/young/middle/senior）依次取，
     # **文件名里的数字不是判据** —— 它只是设计稿的档位编号。

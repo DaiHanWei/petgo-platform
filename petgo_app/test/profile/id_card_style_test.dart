@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/profile/domain/id_card.dart';
 import 'package:tailtopia/features/profile/domain/id_card_style.dart';
-import 'package:tailtopia/features/profile/presentation/id_card/id_card_placeholder.dart';
+import 'package:tailtopia/features/profile/presentation/id_card/kitas_card.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/ktp_card.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/passport_card.dart';
+import 'package:tailtopia/features/profile/presentation/id_card/sim_card.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/student_card.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/student_variant_card.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -127,12 +128,13 @@ void main() {
     expect(IdCardStyle.studentKlasik.label(AppLocalizationsId()), 'Pelajar Klasik');
   });
 
-  test('画布与圆角：学生卡 1988×1200；护照 1990×1548；SIM / 居住证占位同 KTP 画布', () {
+  test('画布与圆角：学生卡 / SIM / 居住证 1988×1200；护照 1990×1548', () {
     expect(IdCardStyle.ktp.canvas, kIdCardCanvas);
     expect(IdCardStyle.passport.canvas, kPassportCardCanvas);
     expect(IdCardStyle.kitas.canvas, const Size(1988, 1200));
     expect(IdCardStyle.sim.canvas, const Size(1988, 1200));
-    expect(IdCardStyle.kitas.canvasRadius, kIdCardComingSoonRadius);
+    expect(IdCardStyle.kitas.canvasRadius, kKitasCardCanvasRadius);
+    expect(IdCardStyle.sim.canvasRadius, kSimCardCanvasRadius);
     for (final s in IdCardStyle.values.where((s) => s.group == IdCardStyleGroup.student)) {
       expect(s.canvas, const Size(1988, 1200), reason: '$s');
     }
@@ -144,22 +146,11 @@ void main() {
     expect(IdCardStyle.ktp.buildFront(data), isA<KtpCardFront>());
     expect(IdCardStyle.passport.buildFront(data), isA<PassportCardFront>());
     expect(IdCardStyle.studentKlasik.buildFront(data), isA<StudentCardFront>());
+    // Story 1.3：SIM / 居住证由占位换成正式卡面。
+    expect(IdCardStyle.sim.buildFront(data), isA<SimCardFront>());
+    expect(IdCardStyle.kitas.buildFront(data), isA<KitasCardFront>());
     for (final s in [IdCardStyle.studentBintang, IdCardStyle.studentMalam, IdCardStyle.studentCeria]) {
       expect(s.buildFront(data), isA<StudentVariantCardFront>(), reason: '$s');
-    }
-  });
-
-  testWidgets('SIM / 居住证占位：IdCardComingSoon + 款名 + 「设计中」', (tester) async {
-    for (final s in [IdCardStyle.sim, IdCardStyle.kitas]) {
-      await tester.pumpWidget(MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        locale: const Locale('id'),
-        home: FittedBox(child: s.buildFront(const IdCardData(generated: true))),
-      ));
-      expect(find.byType(IdCardComingSoon), findsOneWidget);
-      expect(find.text(s.label(AppLocalizationsId())), findsOneWidget);
-      expect(find.text('Dalam desain'), findsOneWidget);
     }
   });
 }

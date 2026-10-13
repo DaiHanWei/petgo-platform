@@ -25,6 +25,7 @@ class IdCardData {
     this.maritalStatus,
     this.school,
     this.faculty,
+    this.createdAt,
   });
 
   final bool generated;
@@ -60,6 +61,10 @@ class IdCardData {
   /// 学生卡专属快照（bug 20260730-429）。null = 渲染趣味默认。
   final String? school;
   final String? faculty;
+
+  /// 建卡时刻（V1.3.4 ktp D-5 / AD-7）：护照签发 / 到期日、SIM 签发日由它派生（按手机本地日期，T-4）。
+  /// 快照卡由 [IdCard.toIdCardData] 传入；建卡页预览（未落库）与旧单卡端点为 null → 卡面取当天。
+  final DateTime? createdAt;
 
   factory IdCardData.fromJson(Map<String, dynamic> json) {
     return IdCardData(
@@ -209,6 +214,7 @@ class IdCard {
         maritalStatus: maritalStatus,
         school: school,
         faculty: faculty,
+        createdAt: createdAt,
       );
 }
 

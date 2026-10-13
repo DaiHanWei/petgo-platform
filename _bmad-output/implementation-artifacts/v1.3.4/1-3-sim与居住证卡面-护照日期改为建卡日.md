@@ -1,6 +1,6 @@
 # Story 1.3: SIM 与居住证卡面，护照日期改为建卡日
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.3.4 · 主题 ktp · 分支 `feat/1.3.4-ktp-revamp`
 > 口径优先级：`决策日志-ktp.md` > `PRD-v1.3.4-ktp.md` > `architecture-v1.3.4-ktp-delta.md` > `ui-v1.3.4-ktp.html`（均在 `_bmad-output/planning-artifacts/v1.3.4/`）
@@ -99,29 +99,29 @@ so that 我有新卡可做，旧卡隔天看也不会变日期。
 
 ## Tasks / Subtasks
 
-- [ ] Task 1：素材入库（AC2.2、AC3.2）
-  - [ ] 1.1 拷 `ktp-assets/design-assets/driving/{Driving,Logo,Sign}.png` → `petgo_app/assets/id_card/sim/`（Sign 可改为复用 `assets/ktp/ktp_paw_stamp.png`）
-  - [ ] 1.2 `permit/Background.png` 按 alpha 实测裁到 994×600 → `assets/id_card/kitas/Background.png`；`Label.png` / `Logo.png` / `Sign.png` 原样入库
-  - [ ] 1.3 量两张底图的卡角半径（994 尺度 ×2）→ `kSimCardCanvasRadius` / `kKitasCardCanvasRadius`
-  - [ ] 1.4 `pubspec.yaml` 登记 `assets/id_card/sim/`、`assets/id_card/kitas/`（注释写来源与版本）
-- [ ] Task 2：编号格式化（AC1）
-  - [ ] 2.1 `id_card_number_format.dart` 两个函数 + 非法输入原样返回
-  - [ ] 2.2 `id_card_number_format_test.dart`
-- [ ] Task 3：SIM 卡面（AC2）
-  - [ ] 3.1 `sim_card.dart`：`SimFields` / `buildSimFields` / `SimCardFront`，布局常量集中在私有 `_SimLayout`（仿 `_KtpLayout` 写法，注释写清取值来源 = UI 稿 F4）
-  - [ ] 3.2 与 UI 稿 F4 叠图校准位置 / 字号（L2，本地模拟器）
-- [ ] Task 4：居住证卡面（AC3）
-  - [ ] 4.1 `kitas_card.dart`：`KitasFields` / `buildKitasFields` / `KitasCardFront`，`_KitasLayout`
-  - [ ] 4.2 与 UI 稿 F3 叠图校准（L2）
-- [ ] Task 5：护照日期（AC4）
-  - [ ] 5.1 `IdCardData.createdAt` + `toIdCardData()` 补传
-  - [ ] 5.2 `buildPassportFields` 签发 / 到期改由 `createdAt` 派生
-  - [ ] 5.3 `passport_fields_test.dart`
-- [ ] Task 6：接入注册表与详情页（AC5）
-  - [ ] 6.1 `IdCardStyle.sim` / `.kitas` 卡面构建替换占位
-  - [ ] 6.2 核对详情页导出画布 / 水印对两款生效
-  - [ ] 6.3 `id_card_watermark_test` 补两款；新增 `sim_kitas_card_test.dart`
-- [ ] Task 7：回归（AC6）——`flutter analyze` / `flutter test`；本地模拟器用 API 造一张 SIM、一张 KITAS、一张存量护照卡，看详情预览、HD 下载、分享图（L2）
+- [x] Task 1：素材入库（AC2.2、AC3.2）
+  - [x] 1.1 拷 `ktp-assets/design-assets/driving/{Driving,Logo,Sign}.png` → `petgo_app/assets/id_card/sim/`（Sign 可改为复用 `assets/ktp/ktp_paw_stamp.png`）
+  - [x] 1.2 `permit/Background.png` 按 alpha 实测裁到 994×600 → `assets/id_card/kitas/Background.png`；`Label.png` / `Logo.png` / `Sign.png` 原样入库
+  - [x] 1.3 量两张底图的卡角半径（994 尺度 ×2）→ `kSimCardCanvasRadius` / `kKitasCardCanvasRadius`
+  - [x] 1.4 `pubspec.yaml` 登记 `assets/id_card/sim/`、`assets/id_card/kitas/`（注释写来源与版本）
+- [x] Task 2：编号格式化（AC1）
+  - [x] 2.1 `id_card_number_format.dart` 两个函数 + 非法输入原样返回
+  - [x] 2.2 `id_card_number_format_test.dart`
+- [x] Task 3：SIM 卡面（AC2）
+  - [x] 3.1 `sim_card.dart`：`SimFields` / `buildSimFields` / `SimCardFront`，布局常量集中在私有 `_SimLayout`（仿 `_KtpLayout` 写法，注释写清取值来源 = UI 稿 F4）
+  - [x] 3.2 与 UI 稿 F4 叠图校准位置 / 字号（L2，本地模拟器）
+- [x] Task 4：居住证卡面（AC3）
+  - [x] 4.1 `kitas_card.dart`：`KitasFields` / `buildKitasFields` / `KitasCardFront`，`_KitasLayout`
+  - [x] 4.2 与 UI 稿 F3 叠图校准（L2）
+- [x] Task 5：护照日期（AC4）
+  - [x] 5.1 `IdCardData.createdAt` + `toIdCardData()` 补传
+  - [x] 5.2 `buildPassportFields` 签发 / 到期改由 `createdAt` 派生
+  - [x] 5.3 `passport_fields_test.dart`
+- [x] Task 6：接入注册表与详情页（AC5）
+  - [x] 6.1 `IdCardStyle.sim` / `.kitas` 卡面构建替换占位
+  - [x] 6.2 核对详情页导出画布 / 水印对两款生效
+  - [x] 6.3 `id_card_watermark_test` 补两款；新增 `sim_kitas_card_test.dart`
+- [x] Task 7：回归（AC6）——`flutter analyze` / `flutter test`；本地模拟器用 API 造一张 SIM、一张 KITAS、一张存量护照卡，看详情预览、HD 下载、分享图（L2）
 
 ## Dev Notes
 
@@ -180,10 +180,26 @@ so that 我有新卡可做，旧卡隔天看也不会变日期。
 
 ### Agent Model Used
 
+Claude（云端 headless session，dev-story 流程手工执行）
+
 ### Debug Log References
+
+- 无。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**：本 story 只动 App，无 L1；L2 待本地模拟器——API 造 SIM / KITAS 卡各一张，详情预览对照 UI 稿 F3 / F4 叠图校准位置与字号（当前为 UI 稿百分比换算起点）；HD 下载（1988×1200、无水印）与免费分享（带水印）；存量护照卡签发日 = 列表「Dibuat」日期、到期 +5 年、隔天再看不变。Task 3.2 / 4.2（叠图校准）与 Task 7 的模拟器部分均属 L2，未在云端执行。
+- L0 已绿：`flutter analyze` 无问题；`flutter test` 全量 2758 通过（新增 `id_card_number_format_test`、`passport_fields_test`、`sim_kitas_card_test`，扩 `id_card_watermark_test` SIM / KITAS 导出边界，`id_card_style_test` 占位用例改为正式卡面）。
+- 与 story 文字的出入（按文末裁定 / 前序代码修正，已在此记录）：
+  - T-1：签名为 `formatSimCardNo(String cardNo, {DateTime? birthday})`，年份取快照生日年；`birthday` 为 null 或生日年后两位与 `card_no` 的 YY 不一致（不应出现）时回落 `20YY`，保证卡面编号年段不与 `card_no` 矛盾（code-review 采纳）。
+  - 1.2 实际代码里 SIM / KITAS 占位圆角常量为 `kIdCardComingSoonRadius`，本 story 改为 `kSimCardCanvasRadius` / `kKitasCardCanvasRadius`；占位组件 `IdCardComingSoon` 现无调用方，未删除（不在本 story 范围）。
+  - 文字定位用 CSS 文字盒左上角 + `height 1.1` + `TextLeadingDistribution.even`（与 1.2 三款学生卡同法），等价于 UI 稿 `top`；未用 `Baseline` 换算。
+- 素材：SIM 签章**复用** `assets/ktp/ktp_paw_stamp.png`（与 `driving/Sign.png` 逐字节相同），不重复入库；SIM 底图 / Logo 原样；居住证底图按 alpha 外接框裁 x3 y4 → 994×600，Label / Logo（D-18 Permit 自带）/ Sign 原样。两款底图圆角实测设计 ≈41px，圆角常量取 80（与 KTP / Klasik 同）。
+- T-2：`card_no` 为空 → 编号位不渲染（不回落 serial）；T-3：用户值原样（trim），趣味默认首字母大写（`Mochi` / `Bandung` / `Jl. Melati No. 25, Bandung` / `Chief Happiness Officer`；物种 Kucing / Anjing / Hewan；性别 Jantan / Betina / `-`）；生日缺省 `01-01-2020`（同 KTP 默认）；T-4：签发日 / 护照日期 `createdAt.toLocal()`，预览（null）取今天。
+- T-6：SIM / 居住证字段值单行、超宽等比缩字（值栏右缘到签章左缘留 30）；居住证编号右对齐到 95.5%、加 800 栏宽缩字（code-review 采纳）。
+- code-review（medium）8 条：采纳 3 条（测试去掉依赖当天日期的断言并防跨午夜、SIM 年份与 YY 一致性、KITAS 编号栏宽）；不改 5 条——`IdCardData.fromJson`（旧单卡端点）不读 `createdAt`（story Dev Notes 明确可不读）、2 月 29 日 +5 年沿用原写法（AC4.2 指定）、SIM / KITAS 默认值与 KTP 映射重复及两卡面 `_photo` 重复（大小写不同，保持各卡面自包含）、占位组件闲置。
+
+- 以下原「待确认 1 ~ 5」已按文末 2026-10-12 裁定（T-1 / T-2 / T-3 / T-4 / D-18）关闭，实现即按裁定口径。
 - 待确认 1：SIM 编号「年份展开 4 位」只能从 `card_no` 的两位 `YY` 推出世纪。PRD / epics 未写规则，本 story 默认按 `20YY`（宠物生日不早于 2000 年）；若要改为取卡快照 `birthday.year`，函数签名需改为传入生日。
 - 待确认 2：SIM / 居住证 `card_no` 为空时的编号位。后端建卡总会分配 `card_no`，只有建卡页预览「生日未填」时 `buildPreviewCardNo` 返回 null；文档未规定此时显示什么。本 story 默认编号位留空（不显示、不崩、不回落 `serial_id`）。
 - 待确认 3：卡面文字大小写。KTP / 护照卡面把值统一转大写；UI 稿 F3 / F4 的示例是首字母大写（`Oyen`、`Jl. Melati No. 25`、`Chief Happiness Officer`、`Kucing`）。本 story 按 UI 稿：用户填的值原样显示（trim），趣味默认值与物种 / 性别映射用首字母大写形式。

@@ -52,7 +52,9 @@ PassportFields buildPassportFields(IdCardData data) {
   final serial = data.serialId ?? 0;
   final nikim = _nikim(serial, data.birthday);
   final name = (data.name?.isNotEmpty == true ? data.name! : 'MOCHI').toUpperCase();
-  final issue = DateTime.now();
+  // D-5：签发日 = 建卡日（手机本地日期，T-4），到期 = 签发 + 5 年；不再取渲染当天，隔天打开不变。
+  // createdAt 为 null（建卡页预览，尚未落库）→ 今天（即「今天建卡」的日期）。
+  final issue = (data.createdAt ?? DateTime.now()).toLocal();
   final expiry = DateTime(issue.year + 5, issue.month, issue.day);
   return PassportFields(
     // 新编码卡直显后端 passportNo；旧卡（passportNo=null）维持旧拼号，展示零变化。
