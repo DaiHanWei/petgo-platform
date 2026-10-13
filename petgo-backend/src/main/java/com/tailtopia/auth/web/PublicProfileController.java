@@ -130,7 +130,9 @@ public class PublicProfileController {
                 //    与上面两个伪装归零的计数不同，这里不看 hiddenByOwner。
                 owner == null ? 0L : owner.getFollowingCount(),
                 owner == null ? 0L : owner.getFollowerCount(),
-                followState(viewerId, userId));
+                followState(viewerId, userId),
+                // 2026-10-13 决定：官方内容账号主页不给拉黑 / 举报入口 → App 据此隐藏「···」。
+                owner != null && owner.getRole() == com.tailtopia.auth.domain.Role.ADMIN);
     }
 
     /** 游客 / 兽医（viewerId=null）/ 本人视角恒 NONE，且不查库（AC2.1）。 */

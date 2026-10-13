@@ -94,7 +94,8 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, UserFoll
      * 剔除会掉到 30 以下。展示字段（昵称 / 头像 / token）仍经 {@code AccountQueryService} 批量取。
      *
      * <ul>
-     *   <li>资格：{@code role=USER}、未注销、{@code enabled}、{@code status=ACTIVE}（封号排除，D-8 / T-26），
+     *   <li>资格：{@code role} 为 USER 或 ADMIN（官方内容账号也进推荐，2026-10-13 决定；兽医不进）、未注销、
+     *       {@code enabled}、{@code status=ACTIVE}（封号排除，D-8 / T-26），
      *       且至少一条 PUBLIC + PUBLISHED + 未软删的帖；虚拟号与真人都包括。</li>
      *   <li>排除：自己、viewer 已关注的人、viewer 作为 holder 有<b>任意来源</b>隐藏关系的人（单向，T-26）。</li>
      *   <li>排序：{@code since} 起在其 PUBLIC + PUBLISHED + 未软删帖上的点赞数倒序（口径同主页「Suka」，T-27），
@@ -120,7 +121,7 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, UserFoll
               FROM publishers pb
               JOIN users u ON u.id = pb.author_id
               LEFT JOIN recent_likes r ON r.author_id = pb.author_id
-             WHERE u.role = 'USER' AND u.deleted_at IS NULL AND u.enabled = true AND u.status = 'ACTIVE'
+             WHERE u.role IN ('USER', 'ADMIN') AND u.deleted_at IS NULL AND u.enabled = true AND u.status = 'ACTIVE'
                AND u.id <> :viewerId
                AND NOT EXISTS (SELECT 1 FROM user_follows f
                                 WHERE f.follower_id = :viewerId AND f.followee_id = u.id)

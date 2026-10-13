@@ -10,7 +10,6 @@ import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/content/data/detail_repository.dart';
-import 'package:tailtopia/features/content/domain/content_detail.dart';
 import 'package:tailtopia/features/notify/data/notification_repository.dart';
 import 'package:tailtopia/features/notify/domain/notification_item.dart';
 import 'package:tailtopia/features/notify/presentation/notification_center_page.dart';
@@ -42,21 +41,19 @@ class _Repo extends NotificationRepository {
   Future<void> markAllRead() async {}
 }
 
-class _Detail implements DetailRepository {
-  _Detail({this.gone = false, this.gate});
+/// 帖子探测桩（ContentGoneProbe：countView=false 的详情请求）。
+class _Detail extends ContentGoneProbe {
+  _Detail({this.gone = false, this.gate}) : super(Dio());
   final bool gone;
   final Completer<void>? gate;
   final List<int> probed = [];
 
   @override
-  Future<ContentDetail> getDetail(int id) async {
-    probed.add(id);
+  Future<bool> isGone(int postId) async {
+    probed.add(postId);
     if (gate != null) await gate!.future;
-    throw ContentLoadError(gone ? ContentLoadErrorKind.gone : ContentLoadErrorKind.network);
+    return gone;
   }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _Follow implements FollowRepository {
@@ -144,7 +141,7 @@ Future<({ProviderContainer container, _Nav nav})> _pump(
   addTearDown(router.dispose);
   final container = ProviderContainer(overrides: [
     notificationRepositoryProvider.overrideWithValue(repo),
-    detailRepositoryProvider.overrideWithValue(detail ?? _Detail()),
+    contentGoneProbeProvider.overrideWithValue(detail ?? _Detail()),
     followRepositoryProvider.overrideWithValue(follows ?? _Follow()),
     authControllerProvider.overrideWith(_Auth.new),
   ]);

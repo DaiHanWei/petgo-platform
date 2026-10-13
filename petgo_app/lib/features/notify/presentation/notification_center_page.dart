@@ -12,7 +12,6 @@ import '../../../core/analytics/analytics.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../content/data/detail_repository.dart';
-import '../../content/domain/content_detail.dart';
 import '../../social/domain/follow_state.dart';
 import '../../social/presentation/widgets/follow_button.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
@@ -350,17 +349,15 @@ class _NotificationCenterPageState
     }
   }
 
-  /// 点赞 / 评论类条目对应的帖子是否已删除（详情接口 404 → [ContentLoadErrorKind.gone]）。
+  /// 点赞 / 评论类条目对应的帖子是否已删除（详情接口 404）。
   Future<bool> _postGone(NotificationItem item) async {
     final type = item.deepLinkType;
     if (type != 'CONTENT_LIKED' && type != 'CONTENT_COMMENTED') return false;
     final postId = int.tryParse(item.targetRef ?? '');
     if (postId == null) return false;
     try {
-      await ref.read(detailRepositoryProvider).getDetail(postId);
-      return false;
-    } on ContentLoadError catch (e) {
-      return e.kind == ContentLoadErrorKind.gone;
+      // 不计浏览的探测（countView=false），否则随后打开详情会让浏览次数记两次。
+      return await ref.read(contentGoneProbeProvider).isGone(postId);
     } catch (_) {
       return false;
     }

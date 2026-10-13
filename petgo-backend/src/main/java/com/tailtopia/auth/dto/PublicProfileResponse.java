@@ -44,6 +44,8 @@ import java.util.List;
  * @param iFollow     我是否关注了对方。⚠️ 有意用 primitive：游客 / 本人 / 兽医恒 {@code false} 且键恒在 ——
  *                    App 要靠两布尔恒有值决定按钮三态（与 {@code reported} 的装箱有意不同）
  * @param followsMe   对方是否关注了我（同上）
+ * @param official    是否官方内容账号（{@code role = ADMIN} 的作者 shim）。<b>只在 true 时下发</b>（装箱，平时 null → NON_NULL 省略，
+ *                    普通用户与游客的 key 集合不变）。2026-10-13 决定：官方号主页不显示「···」（不可拉黑 / 举报）
  */
 public record PublicProfileResponse(
         String nickname,
@@ -60,7 +62,8 @@ public record PublicProfileResponse(
         long followingCount,
         long followerCount,
         boolean iFollow,
-        boolean followsMe) {
+        boolean followsMe,
+        Boolean official) {
 
     /**
      * 已注销：不暴露任何身份信息（AC5 / NFR-8）。
@@ -70,7 +73,7 @@ public record PublicProfileResponse(
      */
     public static PublicProfileResponse deactivated() {
         return new PublicProfileResponse(null, null, null, List.of(), null, 0, 0, false, true, null,
-                null, 0, 0, false, false);
+                null, 0, 0, false, false, null);
     }
 
     /**
@@ -80,7 +83,7 @@ public record PublicProfileResponse(
     public static PublicProfileResponse of(AuthorView author, String signature, Instant joinedAt,
             long postCount, long likeCount, boolean self, Boolean reported,
             String userToken, long followingCount, long followerCount,
-            com.tailtopia.social.read.FollowState follow) {
+            com.tailtopia.social.read.FollowState follow, boolean official) {
         return new PublicProfileResponse(
                 author.nickname(),
                 author.avatarUrl(),
@@ -96,6 +99,7 @@ public record PublicProfileResponse(
                 followingCount,
                 followerCount,
                 follow.iFollow(),
-                follow.followsMe());
+                follow.followsMe(),
+                official ? Boolean.TRUE : null);
     }
 }

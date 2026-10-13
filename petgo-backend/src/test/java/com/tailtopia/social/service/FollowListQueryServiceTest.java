@@ -76,6 +76,11 @@ class FollowListQueryServiceTest {
             return ids.stream().filter(id -> id != 99L).collect(Collectors.toMap(id -> id, id -> "tok" + id));
         });
         when(followReader.followStates(anyLong(), anyCollection())).thenReturn(Map.of());
+        // 默认全员对外有效（88 号为封号用户，见 bannedUserTokenOnlyWhenViewerFollows）。
+        when(accounts.activeIdsAmong(anyCollection())).thenAnswer(inv -> {
+            Collection<Long> ids = inv.getArgument(0);
+            return ids.stream().filter(id -> id != 88L).collect(Collectors.toSet());
+        });
         when(hideRepo.findTargetIdsByHolderAndSourceIn(anyLong(), any(), anyList())).thenReturn(List.of());
     }
 
@@ -197,5 +202,23 @@ class FollowListQueryServiceTest {
         assertThat(page.nextCursor()).isNull();
         verify(accounts, never()).findAuthorViewsWithoutTags(anyCollection());
         verify(followReader, never()).followStates(anyLong(), anyCollection());
+    }
+
+    /** 2026-10-13 决定（2.2 复审 F2）：封号用户只在我已关注时给 token（可取关）；没关注 → 无 token、无按钮。 */
+    @Test
+    void bannedUserTokenOnlyWhenViewerFollows() {
+        List<UserFollow> rows = List.of(row(OWNER, 88L, Instant.parse("2026-10-02T00:00:00Z")),
+                row(OWNER, 89L, Instant.parse("2026-10-01T00:00:00Z")));
+        when(follows.findFollowingPage(eq(OWNER), any(), anyLong(), anyInt())).thenReturn(rows);
+        when(accounts.activeIdsAmong(anyCollection())).thenReturn(java.util.Set.of(89L));
+
+        FollowListPage page = service.following(OWNER_TOKEN, VIEWER, null);
+        assertThat(page.items().get(0).userToken()).as("封号且我没关注").isNull();
+        assertThat(page.items().get(1).userToken()).isEqualTo("tok89");
+
+        when(followReader.followStates(anyLong(), anyCollection()))
+                .thenReturn(Map.of(88L, new FollowState(true, false)));
+        FollowListPage followed = service.following(OWNER_TOKEN, VIEWER, null);
+        assertThat(followed.items().get(0).userToken()).as("封号但我已关注 → 可取关").isEqualTo("tok88");
     }
 }

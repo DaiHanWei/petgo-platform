@@ -127,6 +127,7 @@ PublicProfile _target({
   List<UserTag> tags = const [],
   int postCount = 18,
   int likeCount = 342,
+  bool official = false,
 }) =>
     PublicProfile(
       postCount: postCount,
@@ -139,6 +140,7 @@ PublicProfile _target({
       joinedAt: joinedAt,
       reported: reported,
       tags: tags,
+      official: official,
     );
 
 /// 收尾回调的计数盒（闭包捕获变量本身，跨帧观察需要一个可变对象）。
@@ -267,6 +269,17 @@ void main() {
       await _pump(tester, repo: _FakeProfileRepo(_target(joinedAt: DateTime.utc(2026, 3, 4))));
 
       expect(find.byKey(const ValueKey('profilePetCard')), findsNothing);
+    });
+
+    testWidgets('官方内容账号 → 不渲染「···」（2026-10-13 决定：不可拉黑 / 举报）', (tester) async {
+      await _pump(tester, repo: _FakeProfileRepo(_target(official: true)));
+
+      expect(find.byKey(const ValueKey('profileMore')), findsNothing);
+    });
+
+    test('PublicProfile.fromJson：official 只在 true 时下发，缺键为 false', () {
+      expect(PublicProfile.fromJson(const {'official': true}).official, isTrue);
+      expect(PublicProfile.fromJson(const {}).official, isFalse);
     });
 
     testWidgets('自己视角 → 不渲染「···」（对自己举报 / 拉黑没有意义）', (tester) async {

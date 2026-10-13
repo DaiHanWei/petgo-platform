@@ -167,7 +167,8 @@ class PublicProfilePage extends ConsumerWidget {
     final profile = async.value;
     // 「···」只在**确定是他人、且账号还在**时渲染：自己没什么可举报可拉黑的，
     // 已注销的人也一样（NFR-3：连身份都不下发了，再挂一个举报入口是自相矛盾）。
-    final showMore = profile != null && !profile.self && !profile.isDeactivated;
+    // 2026-10-13 决定：官方内容账号不可拉黑 / 举报（后端也只认普通用户，点了会 404）→ 不给「···」。
+    final showMore = profile != null && !profile.self && !profile.isDeactivated && !profile.official;
     return Scaffold(
       backgroundColor: AppColors.base,
       appBar: AppBar(

@@ -126,7 +126,7 @@ class FollowSuggestionIntegrationTest extends ApiIntegrationTest {
     }
 
     /**
-     * 不合格的人帖子<b>更新</b>、id 也更大 —— 一旦漏过滤必排在合格者前面，「恰好等于」立刻失败（2.3 code-review F2）。
+     * 不合格的人帖子<b>更新</b>、id 也更大（官方号 ADMIN 例外：它合格，2026-10-13 决定） —— 一旦漏过滤必排在合格者前面，「恰好等于」立刻失败（2.3 code-review F2）。
      */
     @Test
     void eligibilityRequiresActiveEnabledUserRoleWithLivePublicPost() {
@@ -159,7 +159,8 @@ class FollowSuggestionIntegrationTest extends ApiIntegrationTest {
         jdbc.update("UPDATE users SET status = 'DEACTIVATED' WHERE id = ?", banned.getId());
         jdbc.update("UPDATE users SET deleted_at = now() WHERE id = ?", gone.getId());
 
-        assertThat(suggestedIds(viewer)).containsExactly(virtual.getId(), ok.getId());
+        // 2026-10-13 决定：官方内容账号（role=ADMIN）也进推荐；兽医不进。admin 帖子更新 → 排最前。
+        assertThat(suggestedIds(viewer)).containsExactly(admin.getId(), virtual.getId(), ok.getId());
     }
 
     /** AD-4 / T-26：排除自己、已关注、我拉黑的、我举报隐藏的；拉黑了我的人<b>不排除</b>（单向）。 */

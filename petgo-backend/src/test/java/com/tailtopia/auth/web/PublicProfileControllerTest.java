@@ -121,6 +121,19 @@ class PublicProfileControllerTest {
         assertThat(controller.profile(viewer(5L), 9L).self()).isFalse();
     }
 
+    /** 2026-10-13 决定：官方内容账号（role=ADMIN）主页带 official=true（App 隐藏「···」）；普通用户该键为 null（省略）。 */
+    @Test
+    void officialAccountIsFlaggedAndRegularUserOmitsTheKey() {
+        stubActive(9L, "TailTopia", null, List.of(), Instant.EPOCH);
+        when(accounts.activeSignatureOf(9L)).thenReturn(Optional.empty());
+        User official = accounts.findAccountById(9L).orElseThrow();
+        when(official.getRole()).thenReturn(com.tailtopia.auth.domain.Role.ADMIN);
+        assertThat(controller.profile(viewer(5L), 9L).official()).isTrue();
+
+        when(official.getRole()).thenReturn(com.tailtopia.auth.domain.Role.USER);
+        assertThat(controller.profile(viewer(5L), 9L).official()).isNull();
+    }
+
     /** 游客一律不查隐藏关系，{@code reported} 为 null（NON_NULL 会把这个键整个省略）。 */
     @Test
     void guestNeverConsultsHideRelationsAndGetsNoReportedKey() {

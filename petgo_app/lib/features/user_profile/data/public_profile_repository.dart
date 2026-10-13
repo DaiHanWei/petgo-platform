@@ -33,6 +33,7 @@ class PublicProfile {
     this.iFollow = false,
     this.followsMe = false,
     this.followEpoch = 0,
+    this.official = false,
   });
 
   /// 已发布（未软删）**PUBLIC** 内容数。
@@ -88,6 +89,10 @@ class PublicProfile {
   /// 对方是否关注了我（决定「Ikuti」还是「Ikuti Balik」）。
   final bool followsMe;
 
+  /// 官方内容账号（后台发帖用的作者 shim）。2026-10-13 决定：主页不显示「···」（不可拉黑 / 举报）。
+  /// 后端只在 true 时下发该键，缺键即 false。
+  final bool official;
+
   /// 这份快照发请求前读到的全局关注版本号（V1.3.4 Story 2.1 AC3：不来自 JSON）。
   /// 重取主页 = 新快照 → 本页之前写的覆盖自动失效，回到服务端真值。
   final int followEpoch;
@@ -109,6 +114,7 @@ class PublicProfile {
         iFollow: iFollow,
         followsMe: followsMe,
         followEpoch: epoch,
+        official: official,
       );
 
   /// 是否有可展示的签名（空串与纯空白按「没设置」处理）。
@@ -132,6 +138,7 @@ class PublicProfile {
         followerCount: ((json['followerCount'] ?? 0) as num).toInt(),
         iFollow: (json['iFollow'] ?? false) as bool,
         followsMe: (json['followsMe'] ?? false) as bool,
+        official: (json['official'] ?? false) as bool,
       );
 }
 

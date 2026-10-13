@@ -81,4 +81,10 @@
 | P-2 | `idx_content_likes_created_at` | **采纳**，保留迁移 `V20261012_1216__content_likes_created_at_index.sql`（不再等造数 EXPLAIN 才定；本地 EXPLAIN 仍可作佐证） | 2.3 |
 | P-3 | T-36 与 V1.1.4 决策 A-A30「拉黑不回溯清理已产生数据」 | 二者并存：**数据层**按 A-A30 不清理（通知行、触发人行都保留）；**展示层**按 T-36，触发人全部被过滤的互动通知从列表隐藏、未读角标不计 —— 在通知中心范围内 T-36 的展示口径取代 A-A30。既有 L1 用例 `InteractionNotifySuppressionIntegrationTest.ac5_historyBeforeBlockIsNotRetroactivelyCleaned` 已按此改断言 | 3.3 |
 | P-4 | 英文模板 `{0} and {1} others …` 在只多 1 人时为「and 1 others」 | **先忽略**，文案维持 story 写死的值（印尼语无此问题） | 3.1 / 3.3 |
+| P-5 | 别人的关注 / 粉丝列表里，我**没关注**的封号用户 | **不显示关注按钮**（后端不下发其 token）；我已关注的封号用户照常给 token、可取关（D-8） | 2.2 |
+| P-6 | 官方内容账号（`role=ADMIN` 作者 shim）进不进推荐关注 | **进**：推荐资格改为 `role IN (USER, ADMIN)`，兽医仍不进（取代 AD-4 / Story 2.3 的「只取 USER」） | 2.3 |
+| P-7 | 官方内容账号主页的「···」（拉黑 / 举报） | **不显示**：主页接口对官方号下发 `official=true`，App 据此隐藏「···」（后端拉黑也只认普通用户） | 1.2 / 1.3 |
+| P-8 | `notification_follow_back_tapped` 口径 | = 通知中心新粉丝条目上回关按钮的**关注点击**，不区分按钮文案是「Ikuti」还是「Ikuti Balik」；取关不报 | 3.4 |
+| P-9 | 「帖子已删」探测导致浏览次数记两次 | **修**：详情接口新增 `countView=false`（只做可见性判定、不计浏览），App 探测改用它 | 3.4 |
+| P-10 | 昵称与 displayName 都为空的触发人 | 视为不可显示（整条随 T-36 隐藏），不加兜底名 | 3.3 |
 

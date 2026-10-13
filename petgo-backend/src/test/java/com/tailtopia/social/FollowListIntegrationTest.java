@@ -164,9 +164,15 @@ class FollowListIntegrationTest extends ApiIntegrationTest {
         b.deactivate();
         users.save(b);
 
-        JsonNode items = page("/api/v1/users/" + owner.getPublicToken() + "/following", null, null).get("items");
+        String path = "/api/v1/users/" + owner.getPublicToken() + "/following";
+        // 主页用户本人看：他关注着这个封号用户 → 给 token，可取关（D-8）。
+        JsonNode items = page(path, userBearer(owner.getId()), null).get("items");
         assertThat(items.get(0).get("userId").asLong()).isEqualTo(banned.getId());
         assertThat(items.get(0).get("userToken").asText()).as("封号可取关，需 token（D-8）").hasSize(32);
+        // 2026-10-13 决定：没关注他的人（游客）看 → 照常列出，但不给 token（不显示「Ikuti」，点了必 404）。
+        JsonNode guestItems = page(path, null, null).get("items");
+        assertThat(guestItems.get(0).get("userId").asLong()).isEqualTo(banned.getId());
+        assertThat(guestItems.get(0).has("userToken")).isFalse();
 
         mvc.perform(get("/api/v1/users/" + banned.getPublicToken() + "/followers"))
                 .andExpect(status().isNotFound());

@@ -32,7 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 主页用户拉黑了我 → 照常返回真实列表。列表本身<b>不做隐藏过滤</b>（我举报隐藏的人、拉黑了我的人照常列出），
  * 只有我拉黑的人那一行 {@code blockedByMe=true}（App 不显示按钮）。
  *
- * <p>封号用户照常列出（D-8，点进去主页显示不存在，可取关 → 给 token）；已注销用户的关注行已被注销流程删除。
+ * <p>封号用户照常列出（D-8，点进去主页显示不存在）；只有查看者已关注他时才给 token（可取关），
+ * 未关注则不给 token、App 不显示按钮（2026-10-13 决定）。已注销用户的关注行已被注销流程删除。
  */
 @Service
 public class FollowListQueryService {
@@ -95,6 +96,9 @@ public class FollowListQueryService {
         Map<Long, AuthorView> views = accounts.findAuthorViewsWithoutTags(ids);
         // 封号也给 token（D-8：可取关）；已注销不给。
         Map<Long, String> tokens = accounts.publicTokensOf(ids, true);
+        // 2026-10-13 决定（2.2 复审 F2）：封号用户只有「我已关注」时才给 token（App 据此显示按钮、可取关）；
+        // 我没关注的封号用户不给 token → 不显示「Ikuti」（点了必 404）。
+        Set<Long> active = accounts.activeIdsAmong(ids);
         Map<Long, FollowState> states = viewerId == null ? Map.of() : followReader.followStates(viewerId, ids);
         Set<Long> blocked = viewerId == null ? Set.of()
                 : new HashSet<>(hideRepo.findTargetIdsByHolderAndSourceIn(viewerId, HideSource.BLOCK, ids));
@@ -103,8 +107,9 @@ public class FollowListQueryService {
             AuthorView v = views.getOrDefault(id, AuthorView.anonymized(id));
             FollowState s = states.getOrDefault(id, FollowState.NONE);
             boolean deleted = v.deleted();
+            boolean actionable = active.contains(id) || s.iFollow();
             return new FollowListItem(id,
-                    deleted ? null : tokens.get(id),
+                    deleted || !actionable ? null : tokens.get(id),
                     deleted ? null : v.nickname(),
                     deleted ? null : v.avatarUrl(),
                     deleted,
