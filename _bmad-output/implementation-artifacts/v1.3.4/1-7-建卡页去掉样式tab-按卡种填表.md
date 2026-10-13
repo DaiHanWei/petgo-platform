@@ -1,6 +1,6 @@
 # Story 1.7: 建卡页去掉样式 Tab，按卡种填表
 
-Status: ready-for-dev
+Status: review
 
 > 版本 v1.3.4 · 主题 ktp · 分支 `feat/1.3.4-ktp-revamp`
 > 口径优先级：`决策日志-ktp.md` > `PRD-v1.3.4-ktp.md` > `architecture-v1.3.4-ktp-delta.md` > `ui-v1.3.4-ktp.html`（均在 `_bmad-output/planning-artifacts/v1.3.4/`）
@@ -92,32 +92,32 @@ so that 填表更快、不被无关字段干扰。
 
 ## Tasks / Subtasks
 
-- [ ] Task 1：建卡页接收卡款、去 Tab（AC1）
-  - [ ] 1.1 `IdCardCreatePage` 增 `style` 参数；对接 Story 1.5 的路由传参（`app_router.dart:836`），缺省回落 `IdCardStyle.ktp`
-  - [ ] 1.2 删 `_styleIndex` / `_styleSwitcher` / `_styleTab` / `_cardTypeWire`；预览改由注册表构建
-- [ ] Task 2：预填与会话状态（AC2）
-  - [ ] 2.1 `_gender` 改 `String?`；`idCardGenderFromPetSex` 回落改 null；删 `_intro`
-  - [ ] 2.2 更新 `ktp_fields_test` 对应用例
-- [ ] Task 3：按卡款字段集的表单抽屉（AC3、AC5.2 / 5.3）
-  - [ ] 3.1 `_EditInfoSheet` 按 `style.formFields` 渲染；删「一句话介绍」；必填 `*`
-  - [ ] 3.2 抽屉结构改「字段区滚动 + Selesai 吸底」
-  - [ ] 3.3 物种 / 性别 / 生日字段下红字；物种框红描边
-  - [ ] 3.4 `id_card_form_opened` 埋点
-- [ ] Task 4：身份证专用物种 / 品种下拉（AC4）
-  - [ ] 4.1 新组件（框下内联展开、打勾、约 5 项内滚、「Lainnya」原位输入、OTHER 直接输入、同时只开一个）
-  - [ ] 4.2 确认 `pet_form_fields.dart` 零改动
-- [ ] Task 5：必填判定与建卡页置灰提示（AC5）
-  - [ ] 5.1 `idCardMissingFields` 纯函数 + 单测
-  - [ ] 5.2 建卡页组合红字 `idCardCreateMissing`，替换现有生日单独提示
-  - [ ] 5.3 l10n 新 key（id / en，见 Dev Notes），`flutter gen-l10n`
-- [ ] Task 6：提交（AC6、AC7）
-  - [ ] 6.1 `CreateIdCardRequest` 加 `cardVariant`、删 `intro`；`IdCard.numberReused`
-  - [ ] 6.2 `_create` 按字段集取值、带 `cardType` / `cardVariant`；成功埋点 `id_card_created`；付费与 `context.pop()` 保持现状
-  - [ ] 6.3 `v112_events_test` 增 `_open` / `_create` 后缀
-- [ ] Task 7：测试（AC8）
-  - [ ] 7.1 新建 `test/profile/id_card_create_page_test.dart`
-  - [ ] 7.2 `flutter analyze` / `flutter test` 全绿
-- [ ] Task 8：联调与视觉验收（AC9，L1 / L2 本地）
+- [x] Task 1：建卡页接收卡款、去 Tab（AC1）
+  - [x] 1.1 `IdCardCreatePage` 增 `style` 参数；对接 Story 1.5 的路由传参（`app_router.dart:836`），缺省回落 `IdCardStyle.ktp`
+  - [x] 1.2 删 `_styleIndex` / `_styleSwitcher` / `_styleTab` / `_cardTypeWire`；预览改由注册表构建
+- [x] Task 2：预填与会话状态（AC2）
+  - [x] 2.1 `_gender` 改 `String?`；`idCardGenderFromPetSex` 回落改 null；删 `_intro`
+  - [x] 2.2 更新 `ktp_fields_test` 对应用例
+- [x] Task 3：按卡款字段集的表单抽屉（AC3、AC5.2 / 5.3）
+  - [x] 3.1 `_EditInfoSheet` 按 `style.formFields` 渲染；删「一句话介绍」；必填 `*`
+  - [x] 3.2 抽屉结构改「字段区滚动 + Selesai 吸底」
+  - [x] 3.3 物种 / 性别 / 生日字段下红字；物种框红描边
+  - [x] 3.4 `id_card_form_opened` 埋点
+- [x] Task 4：身份证专用物种 / 品种下拉（AC4）
+  - [x] 4.1 新组件（框下内联展开、打勾、约 5 项内滚、「Lainnya」原位输入、OTHER 直接输入、同时只开一个）
+  - [x] 4.2 确认 `pet_form_fields.dart` 零改动
+- [x] Task 5：必填判定与建卡页置灰提示（AC5）
+  - [x] 5.1 `idCardMissingFields` 纯函数 + 单测
+  - [x] 5.2 建卡页组合红字 `idCardCreateMissing`，替换现有生日单独提示
+  - [x] 5.3 l10n 新 key（id / en，见 Dev Notes），`flutter gen-l10n`
+- [x] Task 6：提交（AC6、AC7）
+  - [x] 6.1 `CreateIdCardRequest` 加 `cardVariant`、删 `intro`；`IdCard.numberReused`
+  - [x] 6.2 `_create` 按字段集取值、带 `cardType` / `cardVariant`；成功埋点 `id_card_created`；付费与 `context.pop()` 保持现状
+  - [x] 6.3 `v112_events_test` 增 `_open` / `_create` 后缀
+- [x] Task 7：测试（AC8）
+  - [x] 7.1 新建 `test/profile/id_card_create_page_test.dart`
+  - [x] 7.2 `flutter analyze` / `flutter test` 全绿
+- [x] Task 8：联调与视觉验收（AC9，L1 / L2 本地）
 
 ## Dev Notes
 
@@ -213,10 +213,28 @@ so that 填表更快、不被无关字段干扰。
 
 ### Agent Model Used
 
+Claude（云端 headless session，dev-story 流程手工执行）
+
 ### Debug Log References
+
+- 建卡成功后付费抽屉打开期间按钮转圈持续动画（现状，Story 1.8 前保留），测试里点「Buat Kartu」后不能 `pumpAndSettle`，按固定时长推进。
 
 ### Completion Notes List
 
+- **L1/L2 待本地验收**（Task 8 / AC9）：L1 连本分支后端 8 款各建一张，核 `card_type` / `card_variant` 落库、`intro` 与字段集外字段为 NULL、`number_reused` 埋点为 false；L2 模拟器看 8 款无 Tab、KTP 长表单抽屉内滚动「Selesai」吸底、物种 / 品种框下展开约 5 项内滚、「Lainnya」原位输入、C4 红字与置灰，以及档案创建 / 编辑页物种品种仍弹底部抽屉。
+- L0 已绿：`flutter analyze` 无问题；`flutter test` 全量 2812 通过（新增 `id_card_create_page_test`、`id_card_form_fields_test`，更新 `ktp_fields_test`）；`widgets/pet_form_fields.dart` 无改动。
+- 与 story 文字的出入：
+  - AC1.1 写参数名 `style`；Story 1.5 已落地对外契约 `IdCardCreatePage(initialStyle:)` + `locationFor` / `styleFromQuery`，按规则不改前序契约，沿用 `initialStyle`（页面内 `_style` 只读，不再可切换）。
+  - AC6.1「新增 `cardVariant`」已在 Story 1.5 完成，本 story 只删 `intro`。
+  - AC7：D-13 改名后的 `id_card_form_opened` / `id_card_created` 本就符合词尾白名单（`_opened` / `_created` 已在表内），未扩表。
+  - `idCardStylePelajar` 已无引用（建卡页三 Tab 删除、列表取注册表），从两份 ARB 删除。
+- 按文末裁定：D-17 KTP / 居住证品种必填（标签带 `*`）；T-14 缺项提示「Lengkapi {项} dulu」/「Fill in {fields} first」，项名与拼接见 `id_card_form.dart`；T-15 表单内红字只有生日 / 物种 / 性别；T-16 只提交本卡款字段集内的值（字段集外一律 null）。
+- 性别未选时预览卡面沿用现有映射（`KtpDefaults.jenisKelaminFor(null)` → JANTAN，为旧卡零变化不改），编号占位按性别加码 0（原待确认 5，保持现状）。
+- 必填判定纯函数 `idCardMissingFields` / `idCardFieldRequired` / `idCardMissingText` 在 `presentation/id_card/id_card_form.dart`，建卡页与表单共用；草稿类型 `IdCardFormDraft` 取代 `_InfoDraft`。
+- 物种 / 品种下拉为身份证专用组件 `id_card_pet_type_fields.dart`（框下内联展开、当前项打勾、品种菜单 5 行高内滚、「Lainnya」原位输入、OTHER 直接输入、预填自定义品种进入手填态），同时只展开一个（父级统一管理，点其他字段收起）。
+- code-review（medium）6 条：采纳 5 条（迟到的档案预填不覆盖已确认编辑、生日 picker 初始日期夹到范围内、手填品种框获得焦点收起下拉、补测 FEMALE 预选、缺项名不回落枚举名）；不改 1 条——品种必填规则写在 `idCardFieldRequired` 单一纯函数内（story AC5.1 指定），未挪进注册表。
+
+- 以下原「待确认 1 ~ 6」已按文末 2026-10-12 裁定（D-13 / D-17 / T-14 / T-15 / T-16）关闭，实现即按裁定口径。
 - 待确认 1：**KTP / 居住证品种必填**——PRD §3.4 表与 FR-142C.5 写必填，且称「为现状口径不变」，但现状 App 建卡页并不校验品种（`id_card_create_page.dart:204` 只看名字与生日），UI 稿 D1 / D3 的「RAS」标签也没有 `*`。本 story 按 PRD 做成必填并加 `*`；物种选「Lainnya」（`OTHER`，无品种清单）时用户须手填品种才能建 KTP / 居住证。
 - 待确认 2：**缺项提示文案**——各项名称（nama hewan / ras / tanggal lahir 及其英文）与三项以上的拼接方式文档未给，Dev Notes 中为拟稿；另 UI 稿 C1 说明写「缺生日时按钮上方显示 `idCardBirthdayRequired`（现状保留）」，而 C4 / epics AC 为统一的「Lengkapi {缺的项} dulu」。本 story 按 epics 统一用组合提示（只缺生日时为「Lengkapi tanggal lahir dulu」）。
 - 待确认 3：**名字 / 品种缺失时表单内是否红字**——FR-142D.6 只列生日 / 物种 / 性别三条红字；名字、品种缺失本 story 只在建卡页组合提示里体现，表单内不加红字。

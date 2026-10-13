@@ -120,6 +120,7 @@ class IdCard {
     this.cardVariant,
     this.school,
     this.faculty,
+    this.numberReused = false,
   });
 
   /// 卡自身主键（授权态内部用；详情端点 `GET /pet-profiles/me/id-cards/{id}` 寻址）。
@@ -165,6 +166,10 @@ class IdCard {
   final String? school;
   final String? faculty;
 
+  /// 建卡响应专属（V1.3.4 ktp AD-4）：新卡是否沿用了已解锁学生卡的编号（埋点 `number_reused`）。
+  /// 列表 / 详情响应无此键 → false；Epic 2 前后端恒 false。
+  final bool numberReused;
+
   factory IdCard.fromJson(Map<String, dynamic> json) {
     return IdCard(
       id: (json['id'] as num).toInt(),
@@ -186,6 +191,7 @@ class IdCard {
       maritalStatus: json['maritalStatus'] as String?,
       cardType: json['cardType'] as String?,
       cardVariant: json['cardVariant'] as String?,
+      numberReused: json['numberReused'] as bool? ?? false,
       school: json['school'] as String?,
       faculty: json['faculty'] as String?,
     );
@@ -229,7 +235,6 @@ class CreateIdCardRequest {
     this.birthday,
     this.gender,
     this.avatarUrl,
-    this.intro,
     this.birthCity,
     this.address,
     this.occupation,
@@ -246,7 +251,6 @@ class CreateIdCardRequest {
   final DateTime? birthday;
   final String? gender;
   final String? avatarUrl;
-  final String? intro;
 
   /// 卡面趣味字段（bug 20260729-409）。null/空 = 后端落 null → 渲染趣味默认。
   final String? birthCity;
@@ -271,7 +275,6 @@ class CreateIdCardRequest {
         if (birthday != null) 'birthday': _isoDate(birthday!),
         if (gender != null) 'gender': gender,
         if (avatarUrl != null) 'avatarUrl': avatarUrl,
-        if (intro != null) 'intro': intro,
         if (birthCity != null) 'birthCity': birthCity,
         if (address != null) 'address': address,
         if (occupation != null) 'occupation': occupation,
