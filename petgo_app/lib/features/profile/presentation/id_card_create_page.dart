@@ -14,14 +14,12 @@ import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../data/id_card_repository.dart';
 import '../data/profile_repository.dart';
 import '../domain/id_card.dart';
+import '../domain/id_card_style.dart';
 import 'id_card/hd_paywall_sheet.dart';
 import 'id_card/id_card_watermark.dart';
-import 'id_card/ktp_card.dart';
 import 'id_card/ktp_fields.dart';
 import '../../../core/analytics/analytics.dart';
 import 'id_card/ktp_unlock_analytics.dart';
-import 'id_card/passport_card.dart';
-import 'id_card/student_card.dart';
 import 'widgets/pet_form_fields.dart';
 
 /// 独立建卡器（Story 6-7，决策④）——预览优先版：
@@ -52,7 +50,14 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
   String _school = '';
   String _faculty = '';
   bool _prefilled = false;
-  int _styleIndex = 0; // 0=KTP, 1=Paspor, 2=Pelajar
+  // 当前卡款（V1.3.4 ktp AD-6：由注册表决定卡面 / 水印 / 卡种 wire 值）。三 Tab 依次 = [_tabStyles]，
+  // 学生卡 Tab 暂对应 Klasik（建卡请求不带 cardVariant，后端兜底落 KLASIK；三 Tab 在 Story 1.7 去掉）。
+  IdCardStyle _style = IdCardStyle.ktp;
+  static const List<IdCardStyle> _tabStyles = [
+    IdCardStyle.ktp,
+    IdCardStyle.passport,
+    IdCardStyle.studentKlasik,
+  ];
   bool _busy = false; // 上传/创建中
 
   @override
@@ -98,35 +103,14 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
         faculty: _emptyToNull(_faculty),
       );
 
-  /// 当前 Tab 对应的卡种 wire 值（bug 20260730-430：建卡即绑定单卡面）。
-  String get _cardTypeWire => switch (_styleIndex) {
-        1 => 'PASSPORT',
-        2 => 'STUDENT',
-        _ => 'KTP',
-      };
-
   static String? _emptyToNull(String v) => v.trim().isEmpty ? null : v.trim();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final (Size canvas, double radius, Widget cardFront) = switch (_styleIndex) {
-      1 => (
-          kPassportCardCanvas,
-          kPassportCardCanvasRadius,
-          PassportCardFront(fields: buildPassportFields(_preview))
-        ),
-      2 => (
-          kStudentCardCanvas,
-          kStudentCardCanvasRadius,
-          StudentCardFront(fields: buildStudentFields(_preview))
-        ),
-      _ => (
-          kIdCardCanvas,
-          kIdCardCanvasRadius,
-          KtpCardFront(fields: buildKtpFields(_preview, KtpEdits.empty))
-        ),
-    };
+    final Size canvas = _style.canvas;
+    final double radius = _style.canvasRadius;
+    final Widget cardFront = _style.buildFront(_preview);
     return Scaffold(
       backgroundColor: AppColors.cream2,
       appBar: AppBar(title: Text(l10n.idCardCreateTitle)),
@@ -237,10 +221,10 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
   }
 
   Widget _styleTab(String label, int index) {
-    final selected = _styleIndex == index;
+    final selected = _style == _tabStyles[index];
     return GestureDetector(
       key: ValueKey('idCardStyleTab_$index'),
-      onTap: () => setState(() => _styleIndex = index),
+      onTap: () => setState(() => _style = _tabStyles[index]),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         alignment: Alignment.center,
@@ -336,7 +320,8 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
             occupation: _emptyToNull(_occupation),
             maritalStatus: _emptyToNull(_maritalStatus),
             // bug 430：在哪个卡面 Tab 点 Create 就只建哪种卡。
-            cardType: _cardTypeWire,
+            // bug 20260730-430：建卡即绑定单卡面；卡种 wire 值取注册表。
+            cardType: _style.cardType,
             school: _emptyToNull(_school),
             faculty: _emptyToNull(_faculty),
           ));

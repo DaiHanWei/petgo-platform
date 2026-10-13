@@ -169,6 +169,12 @@ flutter:
     - assets/ktp/
     - assets/passport/
     - assets/student/
+    # V1.3.4 ktp 三款新学生卡（Story 1.2）。源：_bmad-output/planning-artifacts/v1.3.4/ktp-assets/design-assets/
+    # Bintang = student02（底图 994×600 原样）；Malam = student03（底图裁 x47 y182 994×600）；
+    # Ceria = student01（底图裁 x0 y201 994×600）。Logo 原样拷贝。资源目录不递归，逐个登记。
+    - assets/id_card/student_bintang/
+    - assets/id_card/student_malam/
+    - assets/id_card/student_ceria/
     # 年龄卡角色切图（V1.3.0 Story 5.2 换皮）：`{cat,dog,other}_{10,25,75,100}.webp`，
     # 透明底、宽 ~1080。四档按 `PetAgeStage`（puppy/young/middle/senior）依次取，
     # **文件名里的数字不是判据** —— 它只是设计稿的档位编号。

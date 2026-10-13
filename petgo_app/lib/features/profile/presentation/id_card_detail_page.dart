@@ -16,13 +16,10 @@ import '../../../shared/widgets/qr_payment_sheet.dart';
 import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../data/id_card_repository.dart';
 import '../domain/id_card.dart';
+import '../domain/id_card_style.dart';
 import 'id_card/hd_paywall_sheet.dart';
 import 'id_card/ktp_unlock_analytics.dart';
 import 'id_card/id_card_watermark.dart';
-import 'id_card/ktp_card.dart';
-import 'id_card/ktp_fields.dart';
-import 'id_card/passport_card.dart';
-import 'id_card/student_card.dart';
 
 /// 单张身份证卡详情（Story 6-7）。渲染冻结快照卡面 + 按卡付费解锁 HD + 保存到相册/分享。
 /// 快照不可编辑（建卡时定格）；下载/解锁按本卡 [cardId] 走多卡端点。
@@ -39,9 +36,10 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
   bool _hdBusy = false;
   bool _shareBusy = false;
 
-  /// 当前卡面（bug 20260730-430：一卡一面，由快照 cardType 决定，不再提供三 Tab 切换）。
-  /// 0=KTP, 1=Paspor, 2=Pelajar；在 [_view] 随卡数据赋值，供导出链（[_exportHd]）选画布。
-  int _styleIndex = 0;
+  /// 当前卡款（bug 20260730-430：一卡一面，由快照 cardType 决定，不再提供三 Tab 切换）。
+  /// V1.3.4 ktp（AD-6）：由注册表 [IdCardStyle.fromCard] 反查；在 [_view] 随卡数据赋值，
+  /// 供导出链（[_exportHd]）选画布、分享埋点取 `card_style`。
+  IdCardStyle _style = IdCardStyle.ktp;
   final GlobalKey idCardBoundaryKey = GlobalKey();
 
   /// 含水印的外层 boundary（Story 18.2 · AC2）。
@@ -72,29 +70,11 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
   Widget _view(AppLocalizations l10n, IdCard card) {
     final data = card.toIdCardData();
     // bug 20260730-430：一卡一面——卡面由快照 cardType 决定（存量旧卡 null → KTP），
-    // 不再提供三 Tab 视图切换；HD 解锁随之天然按单卡面计费。
-    _styleIndex = switch (card.effectiveCardType) {
-      'PASSPORT' => 1,
-      'STUDENT' => 2,
-      _ => 0,
-    };
-    final (Size canvas, double radius, Widget cardFront) = switch (_styleIndex) {
-      1 => (
-          kPassportCardCanvas,
-          kPassportCardCanvasRadius,
-          PassportCardFront(fields: buildPassportFields(data))
-        ),
-      2 => (
-          kStudentCardCanvas,
-          kStudentCardCanvasRadius,
-          StudentCardFront(fields: buildStudentFields(data))
-        ),
-      _ => (
-          kIdCardCanvas,
-          kIdCardCanvasRadius,
-          KtpCardFront(fields: buildKtpFields(data, KtpEdits.empty))
-        ),
-    };
+    // 不再提供三 Tab 视图切换；HD 解锁随之天然按单卡面计费。卡款判断只在注册表（AD-6）。
+    _style = IdCardStyle.fromCard(card);
+    final Size canvas = _style.canvas;
+    final double radius = _style.canvasRadius;
+    final Widget cardFront = _style.buildFront(data);
     return SafeArea(
       child: Column(
         children: [
@@ -254,7 +234,7 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
       // 🛡 AC2：截**含水印**的那个 boundary。无水印仍需付费。
       final bytes = await _capture(idCardWatermarkedBoundaryKey);
       if (bytes == null) return;
-      Analytics.capture('id_card_share_tapped', {'card_style': _styleIndex});
+      Analytics.capture('id_card_share_tapped', {'card_style': _style.analyticsCardStyle});
       final channel = await CardExport.shareImage(
         bytes,
         name: 'tailtopia_id_card',
@@ -389,11 +369,7 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
     if (boundary == null) return null;
     // 按当前卡面选画布（护照 1990×1548 与 KTP/学生卡 1988×1200 不同，
     // 恒用 KTP 宽会把护照导出尺寸错算）。
-    final exportCanvas = switch (_styleIndex) {
-      1 => kPassportCardCanvas,
-      2 => kStudentCardCanvas,
-      _ => kIdCardCanvas,
-    };
+    final exportCanvas = _style.canvas;
     final pixelRatio = exportCanvas.width / boundary.size.width;
     final ui.Image shot = await boundary.toImage(pixelRatio: pixelRatio);
     // bug 20260731-441：卡面 ClipRRect 圆角外是 alpha=0 透明像素，PNG 存透明本身没问题，

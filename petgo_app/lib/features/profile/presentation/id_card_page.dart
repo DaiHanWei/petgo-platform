@@ -7,6 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
 import '../data/id_card_repository.dart';
 import '../domain/id_card.dart';
+import '../domain/id_card_style.dart';
 
 /// 身份证历史卡列表（Story 6-7）。点进 KTP 先看这个：历史快照卡列表 + 建卡入口。
 /// 每张卡是一次信息快照（独立 serial，旧卡保留可看可下载）；点卡进详情，点建卡入口走独立建卡器。
@@ -119,12 +120,8 @@ class IdCardPage extends ConsumerWidget {
     final serial = (card.cardNo?.isNotEmpty == true)
         ? card.cardNo!
         : (card.serialId == null ? '----' : card.serialId!.toString().padLeft(4, '0'));
-    // bug 20260730-430：一卡一面后列表须能分辨卡种（复用建卡页三 Tab 文案）。
-    final typeLabel = switch (card.effectiveCardType) {
-      'PASSPORT' => l10n.idCardStylePaspor,
-      'STUDENT' => l10n.idCardStylePelajar,
-      _ => l10n.idCardStyleKtp,
-    };
+    // bug 20260730-430：一卡一面后列表须能分辨卡种。V1.3.4 ktp（AD-6）：卡款名取注册表（8 款各显示自己的名称）。
+    final typeLabel = IdCardStyle.fromCard(card).label(l10n);
     return Material(
       color: AppColors.surface,
       borderRadius: BorderRadius.circular(14),

@@ -31,7 +31,7 @@ development_status:
   # ===== Epic 1：8 款卡随心选——身份证模块改版 =====
   epic-1: in-progress
   1-1-后端支持5种卡种与学生卡配色: review
-  1-2-卡款注册表与四款学生卡卡面: ready-for-dev
+  1-2-卡款注册表与四款学生卡卡面: review
   1-3-sim与居住证卡面-护照日期改为建卡日: ready-for-dev
   1-4-聚合页改为单列整宽: ready-for-dev
   1-5-列表页双tab与样式网格: ready-for-dev

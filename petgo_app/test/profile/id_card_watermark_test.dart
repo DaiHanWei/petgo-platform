@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/profile/data/id_card_repository.dart';
 import 'package:tailtopia/features/profile/domain/id_card.dart';
+import 'package:tailtopia/features/profile/domain/id_card_style.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/id_card_watermark.dart';
 import 'package:tailtopia/features/profile/presentation/id_card/ktp_card.dart';
+import 'package:tailtopia/features/profile/presentation/id_card/student_card.dart';
+import 'package:tailtopia/features/profile/presentation/id_card/student_variant_card.dart';
 import 'package:tailtopia/features/profile/presentation/id_card_detail_page.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
@@ -43,7 +46,9 @@ class _FakeIdCardRepo implements IdCardRepository {
 }
 
 Future<void> _pump(WidgetTester tester, IdCard card) async {
+  // 每次换新 ProviderScope：否则同一测试内连续 pump 不同卡时详情 provider 仍缓存上一张卡。
   await tester.pumpWidget(ProviderScope(
+    key: UniqueKey(),
     overrides: [idCardRepositoryProvider.overrideWithValue(_FakeIdCardRepo(card))],
     child: const MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -78,13 +83,22 @@ void main() {
     expect(find.byType(IdCardWatermark), findsOneWidget);
   });
 
-  testWidgets('未解锁同样盖水印；护照/学生卡卡种同样盖（bug 430 一卡一面后按 cardType 渲染）',
+  testWidgets('未解锁同样盖水印；8 款卡（含 SIM / 居住证占位与四款学生卡）每款恰好一个水印',
       (tester) async {
-    for (final type in ['PASSPORT', 'STUDENT', 'KTP']) {
-      await _pump(tester,
-          IdCard(id: 1, serialId: 12, name: 'Mochi', hdUnlocked: false, cardType: type));
+    // V1.3.4 ktp Story 1.2：按 IdCard(cardType, cardVariant) 逐款 pump 详情页。
+    for (final style in IdCardStyle.values) {
+      await _pump(
+          tester,
+          IdCard(
+              id: 1,
+              serialId: 12,
+              name: 'Mochi',
+              hdUnlocked: false,
+              cardType: style.cardType,
+              cardVariant: style.cardVariant));
       await tester.pumpAndSettle();
-      expect(find.byType(IdCardWatermark), findsOneWidget, reason: 'cardType=$type');
+      expect(find.byType(IdCardWatermark), findsOneWidget, reason: '$style');
+      expect(tester.takeException(), isNull, reason: '$style');
     }
   });
 
@@ -107,5 +121,48 @@ void main() {
       find.descendant(of: find.byWidget(exportBoundary!), matching: find.byType(IdCardWatermark)),
       findsNothing,
     );
+  });
+
+  /// 卡面最近的 RepaintBoundary 祖先 = 页面导出边界（GlobalKey 标记）；水印不得在其子树内。
+  void expectWatermarkOutsideExportBoundary(WidgetTester tester, Finder cardFront) {
+    RepaintBoundary? exportBoundary;
+    tester.element(cardFront).visitAncestorElements((el) {
+      if (el.widget is RepaintBoundary) {
+        exportBoundary = el.widget as RepaintBoundary;
+        return false;
+      }
+      return true;
+    });
+    expect(exportBoundary, isNotNull);
+    expect(exportBoundary!.key, isA<GlobalKey>());
+    expect(
+      find.descendant(of: find.byWidget(exportBoundary!), matching: find.byType(IdCardWatermark)),
+      findsNothing,
+    );
+  }
+
+  testWidgets('四款学生卡：水印同样在 HD 导出 RepaintBoundary 子树之外', (tester) async {
+    for (final style in [
+      IdCardStyle.studentBintang,
+      IdCardStyle.studentMalam,
+      IdCardStyle.studentCeria,
+      IdCardStyle.studentKlasik,
+    ]) {
+      await _pump(
+          tester,
+          IdCard(
+              id: 1,
+              serialId: 12,
+              name: 'Mochi',
+              hdUnlocked: true,
+              cardType: 'STUDENT',
+              cardVariant: style.cardVariant,
+              cardNo: 'TT230326020110'));
+      final front = style == IdCardStyle.studentKlasik
+          ? find.byType(StudentCardFront)
+          : find.byType(StudentVariantCardFront);
+      expect(front, findsOneWidget, reason: '$style');
+      expectWatermarkOutsideExportBoundary(tester, front);
+    }
   });
 }
