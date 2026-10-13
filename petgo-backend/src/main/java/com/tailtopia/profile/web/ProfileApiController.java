@@ -236,9 +236,9 @@ public class ProfileApiController {
         return idCardService.getMyCard(currentUserId(jwt), cardId);
     }
 
-    /** 独立建卡器：把当前填写的信息冻结成一张新卡快照（分配新 serial）。 */
+    /** 独立建卡器：把当前填写的信息冻结成一张新卡快照（分配新 serial）。响应额外带 {@code numberReused}。 */
     @PostMapping("/me/id-cards")
-    public IdCardResponse createIdCard(@AuthenticationPrincipal Jwt jwt,
+    public com.tailtopia.profile.dto.IdCardCreateResponse createIdCard(@AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CreateIdCardRequest req) {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:profile:idcard:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);

@@ -107,7 +107,7 @@ class IdCardShareRewardIntegrationTest extends ApiIntegrationTest {
     private IdCard card(long userId) {
         return cards.save(IdCard.snapshot(userId, SEQ.incrementAndGet() + 900000000L,
                 "分享测试", "DOG", null, null, null, null, "UNKNOWN", null, null, null, null,
-                null, null, "KTP", null, null));
+                null, null, "KTP", null, null, null));
     }
 
     // ── 🔴 AC4：按档案去重，不按卡 ──────────────────────────────────

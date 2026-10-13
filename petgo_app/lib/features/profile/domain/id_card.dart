@@ -112,6 +112,7 @@ class IdCard {
     this.occupation,
     this.maritalStatus,
     this.cardType,
+    this.cardVariant,
     this.school,
     this.faculty,
   });
@@ -152,6 +153,9 @@ class IdCard {
   /// 卡种 KTP/PASSPORT/STUDENT（bug 20260730-430：一卡一面）。旧后端/存量卡 null → 视同 KTP。
   final String? cardType;
 
+  /// 学生卡配色 wire 值 BINTANG/MALAM/CERIA/KLASIK（V1.3.4 ktp）。非学生卡、旧后端为 null。
+  final String? cardVariant;
+
   /// 学生卡专属快照（bug 20260730-429）。null = 渲染趣味默认。
   final String? school;
   final String? faculty;
@@ -176,6 +180,7 @@ class IdCard {
       occupation: json['occupation'] as String?,
       maritalStatus: json['maritalStatus'] as String?,
       cardType: json['cardType'] as String?,
+      cardVariant: json['cardVariant'] as String?,
       school: json['school'] as String?,
       faculty: json['faculty'] as String?,
     );

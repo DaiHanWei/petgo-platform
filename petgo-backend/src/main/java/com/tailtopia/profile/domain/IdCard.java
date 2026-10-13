@@ -89,9 +89,16 @@ public class IdCard {
     @Column(name = "marital_status", length = 24)
     private String maritalStatus;
 
-    /** 卡种 KTP/PASSPORT/STUDENT（bug 20260730-430：一卡一面，V93 列自此真正接线；存量卡 DEFAULT 'KTP'）。 */
+    /**
+     * 卡种（bug 20260730-430：一卡一面，V93 列自此真正接线；存量卡 DEFAULT 'KTP'）。
+     * V1.3.4 ktp 扩为 {@link IdCardType} 5 值（KTP/PASSPORT/KITAS/SIM/STUDENT），库内 CHECK 同源。
+     */
     @Column(name = "card_type", nullable = false, length = 16)
     private String cardType;
+
+    /** 学生卡配色 {@link StudentVariant}（V1.3.4 ktp AD-1）；非学生卡 NULL，存量学生卡回填 KLASIK。 */
+    @Column(name = "card_variant", length = 16)
+    private String cardVariant;
 
     // ---- 学生卡专属字段快照（bug 20260730-429）。可空：null → 前端趣味默认。----
 
@@ -111,12 +118,13 @@ public class IdCard {
      * 建卡快照（独立建卡器传入的字段 + 分配好的 legacy serial + 新规则两号）。初始未解锁。
      * gender/cardNo/passportNo 为 spec-ktp-pet-idcode-numbering 新增：新卡三者皆非空，旧卡保持 null。
      * birthCity/address/occupation/maritalStatus（bug 20260729-409）可空：null → 前端趣味默认。
+     * cardVariant（V1.3.4 ktp）：学生卡配色，非学生卡传 null。
      */
     public static IdCard snapshot(long userId, long serialId, String name, String petType,
             String breed, LocalDate birthday, String avatarUrl, String intro,
             String gender, String cardNo, String passportNo,
             String birthCity, String address, String occupation, String maritalStatus,
-            String cardType, String school, String faculty) {
+            String cardType, String cardVariant, String school, String faculty) {
         IdCard c = new IdCard();
         c.userId = userId;
         c.serialId = serialId;
@@ -135,6 +143,7 @@ public class IdCard {
         c.occupation = occupation;
         c.maritalStatus = maritalStatus;
         c.cardType = cardType;
+        c.cardVariant = cardVariant;
         c.school = school;
         c.faculty = faculty;
         return c;
@@ -226,6 +235,10 @@ public class IdCard {
 
     public String getCardType() {
         return cardType;
+    }
+
+    public String getCardVariant() {
+        return cardVariant;
     }
 
     public String getSchool() {

@@ -81,7 +81,7 @@ class PetPassportIntegrationTest extends ApiIntegrationTest {
         newPet(u.getId(), PetType.CAT);
         String ktpNo = "TT02P26" + String.format("%05d", SEQ.incrementAndGet() % 100000);
         idCards.save(IdCard.snapshot(u.getId(), SEQ.incrementAndGet() + 900000000L, "Momo", "CAT", null, null,
-                null, null, "UNKNOWN", null, ktpNo, null, null, null, null, "KTP", null, null));
+                null, null, "UNKNOWN", null, ktpNo, null, null, null, null, "KTP", null, null, null));
         List<Map<String, Object>> before = jdbc.queryForList("SELECT * FROM id_cards WHERE user_id = ?", u.getId());
 
         assertThat(passportNo(u.getId())).isEqualTo(ktpNo);
@@ -100,7 +100,7 @@ class PetPassportIntegrationTest extends ApiIntegrationTest {
         newPet(u.getId(), PetType.DOG);
         idCards.save(IdCard.snapshot(u.getId(), SEQ.incrementAndGet() + 900000000L, "Momo", "CAT", null, null,
                 null, null, "UNKNOWN", null, "TT02P26" + String.format("%05d", SEQ.incrementAndGet() % 100000),
-                null, null, null, null, "KTP", null, null));
+                null, null, null, null, "KTP", null, null, null));
 
         assertThat(passportNo(u.getId())).startsWith("TT01P");
     }
@@ -150,7 +150,7 @@ class PetPassportIntegrationTest extends ApiIntegrationTest {
         newPet(u.getId(), PetType.CAT);
         idCards.save(IdCard.snapshot(u.getId(), SEQ.incrementAndGet() + 900000000L, "Momo", "CAT", null, null,
                 null, null, "UNKNOWN", null, "TT02P26" + String.format("%05d", SEQ.incrementAndGet() % 100000),
-                null, null, null, null, "KTP", null, null));
+                null, null, null, null, "KTP", null, null, null));
         String first = passportNo(u.getId());
 
         profileDeletion.deleteByUserId(u.getId());

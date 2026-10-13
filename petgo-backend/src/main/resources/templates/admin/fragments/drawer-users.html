@@ -278,7 +278,8 @@
                     <thead><tr><th th:text="#{admin.v132.users.purchases.col.card}">卡</th>
                         <th class="num" th:text="#{admin.v132.users.purchases.col.unlockedAt}">解锁时间</th></tr></thead>
                     <tbody><tr th:each="k : ${pu.ktpCards()}">
-                        <td th:text="'KTP #' + ${k.serialId()} + ' · ' + ${k.petName()}">KTP #4821 · Mochi</td>
+                        <!--/* V1.3.4 ktp D-6：{卡种名} · No. {编号} · {宠物名}；8 款各显示自己的名称 */-->
+                        <td th:text="${#messages.msg('admin.v134.idcard.style.' + k.styleKey())} + ' · No. ' + ${k.displayNo()} + ' · ' + ${k.petName()}">KTP · No. TT600324020001 · Mochi</td>
                         <td class="num" th:text="${k.unlockedAt() != null} ? ${@adminTime.wib(k.unlockedAt())} : '—'">09-12 14:33</td>
                     </tr></tbody>
                 </table>

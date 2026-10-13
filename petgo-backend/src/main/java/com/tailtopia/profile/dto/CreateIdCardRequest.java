@@ -17,20 +17,36 @@ import java.time.LocalDate;
  * 均选填；null → 前端渲染趣味默认。
  * cardType（bug 20260730-430：一卡一面）：KTP/PASSPORT/STUDENT；null 容错默认 KTP（兼容旧客户端）。
  * school/faculty（bug 20260730-429：学生卡专属）选填；null → 前端趣味默认。
+ *
+ * <p>V1.3.4 ktp（AD-4）：cardType 白名单扩为 {@link com.tailtopia.profile.domain.IdCardType} 5 值；新增
+ * cardVariant（学生卡配色 {@link com.tailtopia.profile.domain.StudentVariant}，跨字段规则在
+ * {@code IdCardService.createCard}：学生卡缺省 KLASIK（D-12），非学生卡带值 422）。petType / gender 改必填
+ * （D-9，不再把空 gender 当 UNKNOWN）；KTP / KITAS 的 breed 必填（服务层校验）。intro 字段保留以兼容旧版 App，
+ * 但一律不写入。两条白名单正则与枚举同源（{@code IdCardTypeWhitelistTest}）。
  */
 public record CreateIdCardRequest(
         @NotBlank @Size(max = 60) String name,
-        @Size(max = 16) String petType,
+        @NotNull @Pattern(regexp = PET_TYPES) String petType,
         @Size(max = 80) String breed,
         @NotNull @PastOrPresent LocalDate birthday,
-        @Pattern(regexp = "MALE|FEMALE|UNKNOWN") String gender,
+        @NotNull @Pattern(regexp = "MALE|FEMALE|UNKNOWN") String gender,
         @Size(max = 1024) String avatarUrl,
         @Size(max = 30) String intro,
         @Size(max = 40) String birthCity,
         @Size(max = 80) String address,
         @Size(max = 40) String occupation,
         @Size(max = 24) String maritalStatus,
-        @Pattern(regexp = "KTP|PASSPORT|STUDENT") String cardType,
+        @Pattern(regexp = CARD_TYPES) String cardType,
         @Size(max = 40) String school,
-        @Size(max = 40) String faculty) {
+        @Size(max = 40) String faculty,
+        @Pattern(regexp = CARD_VARIANTS) String cardVariant) {
+
+    /** 卡种白名单（= {@code IdCardType} 枚举名，库内 {@code ck_id_cards_card_type} 同源）。 */
+    public static final String CARD_TYPES = "KTP|PASSPORT|KITAS|SIM|STUDENT";
+
+    /** 学生卡配色白名单（= {@code StudentVariant} 枚举名，库内 {@code ck_id_cards_card_variant} 同源）。 */
+    public static final String CARD_VARIANTS = "BINTANG|MALAM|CERIA|KLASIK";
+
+    /** 物种白名单（= {@code PetType} 枚举名）。 */
+    public static final String PET_TYPES = "CAT|DOG|OTHER";
 }

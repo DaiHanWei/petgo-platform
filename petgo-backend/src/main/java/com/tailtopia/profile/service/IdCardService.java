@@ -1,8 +1,11 @@
 package com.tailtopia.profile.service;
 
 import com.tailtopia.profile.domain.IdCard;
+import com.tailtopia.profile.domain.IdCardType;
 import com.tailtopia.profile.domain.PetProfile;
+import com.tailtopia.profile.domain.StudentVariant;
 import com.tailtopia.profile.dto.CreateIdCardRequest;
+import com.tailtopia.profile.dto.IdCardCreateResponse;
 import com.tailtopia.profile.dto.IdCardDataResponse;
 import com.tailtopia.profile.dto.IdCardResponse;
 import com.tailtopia.profile.repository.IdCardHdPurchaseRepository;
@@ -74,30 +77,51 @@ public class IdCardService {
      *
      * <p>spec-ktp-pet-idcode-numbering：legacy serial 照旧分配（号池不动），再按《宠物身份码护照编码规则》
      * 生成身份码 + 护照号一起落库；取号与落卡同事务（{@link CardNumberService} join 本事务，行锁保原子）。
+     *
+     * <p>V1.3.4 ktp（AD-1 / AD-4）：卡种 5 值 + 学生卡配色；KTP / KITAS 品种必填；intro 不写入；
+     * 新卡种与旧卡种一样分配 serial + 两号。
      */
     @Transactional
-    public IdCardResponse createCard(long ownerId, CreateIdCardRequest req) {
-        String gender = normalizeGender(req.gender());
+    public IdCardCreateResponse createCard(long ownerId, CreateIdCardRequest req) {
+        IdCardType cardType = normalizeCardType(req.cardType());
+        String cardVariant = resolveVariant(cardType, req.cardVariant());
+        if ((cardType == IdCardType.KTP || cardType == IdCardType.KITAS)
+                && (req.breed() == null || req.breed().isBlank())) {
+            throw AppException.validation("该卡种品种必填");
+        }
+        // petType / gender 必填与白名单由 DTO 保证（D-9：不再把空 gender 默认成 UNKNOWN）。
+        String gender = req.gender();
         long serial = serialAllocation.allocate();
         String cardNo = cardNumbers.allocateCardNo(req.birthday(), gender, req.petType());
         String passportNo = cardNumbers.allocatePassportNo(req.petType());
+        // intro：DTO 字段为兼容旧版 App 保留，一律不写入（PRD §3.4 / FR-142D.4）。
         IdCard card = idCards.save(IdCard.snapshot(ownerId, serial, req.name(), req.petType(),
-                req.breed(), req.birthday(), req.avatarUrl(), req.intro(), gender, cardNo,
+                req.breed(), req.birthday(), req.avatarUrl(), null, gender, cardNo,
                 passportNo, blankToNull(req.birthCity()), blankToNull(req.address()),
                 blankToNull(req.occupation()), blankToNull(req.maritalStatus()),
-                normalizeCardType(req.cardType()), blankToNull(req.school()),
+                cardType.name(), cardVariant, blankToNull(req.school()),
                 blankToNull(req.faculty())));
-        return IdCardResponse.from(card);
+        // numberReused：编号沿用在 Epic 2（Story 2.3）接真值，本期恒 false。
+        return IdCardCreateResponse.of(IdCardResponse.from(card), false);
     }
 
-    /** gender 归一化：null 视同 UNKNOWN。白名单由 DTO 的 {@code @Pattern} 保证（非法值与其余字段统一 422）。 */
-    private static String normalizeGender(String gender) {
-        return gender == null ? "UNKNOWN" : gender;
+    /**
+     * 学生卡配色（AD-1 / D-12）：学生卡缺省 KLASIK（旧版 App 只有紫色一款）；非学生卡带配色 → 422。
+     * 白名单由 DTO 的 {@code @Pattern} 保证。
+     */
+    private static String resolveVariant(IdCardType cardType, String cardVariant) {
+        if (cardType == IdCardType.STUDENT) {
+            return cardVariant == null ? StudentVariant.KLASIK.name() : cardVariant;
+        }
+        if (cardVariant != null) {
+            throw AppException.validation("仅学生卡可指定配色");
+        }
+        return null;
     }
 
     /** cardType 归一化（bug 430）：null 视同 KTP（兼容未升级客户端）。白名单由 {@code @Pattern} 保证。 */
-    private static String normalizeCardType(String cardType) {
-        return cardType == null ? "KTP" : cardType;
+    private static IdCardType normalizeCardType(String cardType) {
+        return cardType == null ? IdCardType.KTP : IdCardType.valueOf(cardType);
     }
 
     /** 趣味字段空串折叠为 null（快照 null = 前端渲染趣味默认，避免空串盖掉默认展示）。 */
