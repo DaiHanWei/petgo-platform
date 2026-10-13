@@ -170,6 +170,8 @@ void main() {
       await pumpBanner(tester, c);
 
       expect(tester.getSize(_banner).height, greaterThanOrEqualTo(52));
+      // 单行时恰为设计高 52（UI 稿 C1；外层下边距 8 不计入卡片）
+      expect(tester.getSize(_banner).height, 52);
       final m = tester.widget<Material>(_banner);
       expect(m.color, AppColors.mintTint);
       expect(m.borderRadius, BorderRadius.circular(14));

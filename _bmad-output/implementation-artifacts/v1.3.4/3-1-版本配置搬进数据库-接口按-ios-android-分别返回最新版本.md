@@ -246,6 +246,8 @@ Claude Opus 5.5 (1M context)（claude-opus-5-5[1m]）
 - 沿用 Dev Notes「待确认」1–3（长度校验、变更留痕、`store-url.blank` 触发条件）。实现按 story 写定的口径，没有另加处理。
 - scheme 校验区分大小写（只认小写 `https://`），所以 `HTTPS://…` 会被拒并报 scheme 码，这与 AC3 写的「小写 `https://`」一致。如果 admin 表单希望容忍大写，需要 admin 主题自己决定。
 
+- 2026-10-13 跟进（D-28）：四个 `admin.err.config.*` 错误码文案已写入四份文案包（基线 / en / zh_CN / id），新增 L0 `AppVersionConfigMessagesTest`；上方「交接 admin 主题：码无文案」一条作废。
+
 ### File List
 
 - `petgo-backend/src/test/java/com/tailtopia/shared/config/AppVersionControllerTest.java`（新，复审补）
@@ -267,3 +269,4 @@ Claude Opus 5.5 (1M context)（claude-opus-5-5[1m]）
 
 - 2026-10-12：story 创建（ready-for-dev）。
 - 2026-10-12：实现完成（review）。版本配置改由 `app_version_config` 单行表提供，`/api/v1/app-version` 改为 5 个字段，删除 env 配置，新增校验服务和 L0 测试；L1/L2 待本地验收。
+- 2026-10-13：操作者拍板跟进（见决策日志 D-27~D-31）。

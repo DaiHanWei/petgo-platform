@@ -87,7 +87,8 @@ class _AppUpdateBannerState extends ConsumerState<AppUpdateBanner> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 52),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 0, 8),
+            // 上下 4：单行时 4 + ✕ 热区 44 + 4 = 52，与 UI 稿 C1 一致（2026-10-13 操作者确认按设计 52）。
+            padding: const EdgeInsets.fromLTRB(12, 4, 0, 4),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [

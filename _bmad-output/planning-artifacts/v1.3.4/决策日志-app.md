@@ -48,3 +48,13 @@
 - 迁移共 **8 个**（AD §11），非 6 个；`ck_notifications_type` 现行并集 31 值（43 个远端分支核查），+`OPS_ANNOUNCEMENT` = 32 值。
 - 后端 `MilestoneBadgeKeys.java` 也需加两条映射（AD-19 漏列）；H5 分享页标题取后端 `titleId`，非「随 App 传入」（订正 epics 4.1）。
 | D-26 | `ck_notifications_type` 与 follow 主题（FR-141 `USER_FOLLOWED` / `PLACE_COMMENTED`）分属两个分支 | **两个分支的重建都列全集 34 值**；`NotificationType` 枚举两分支都在末尾**按同一顺序**追加 `OPS_ANNOUNCEMENT`、`USER_FOLLOWED`、`PLACE_COMMENTED`（改动逐字相同，合并不冲突；`MentionNotifyTest`「枚举 = 约束」两边都成立）。同 follow 主题决策日志 D-1 | AD-17 / Story 6.1 原写 32 值 |
+
+## 2026-10-13 · 云端批跑后待确认项拍板（操作者 Dai：「这个分支会同时上线 / 编写错误码 / 按推荐来」）
+
+| # | 议题 | 决定 | 覆盖/订正了什么 |
+|---|---|---|---|
+| D-27 | 4.1 存量回填与 4.2 自动达成的上线顺序 | 本分支 23 条 story **同一版本一起上线**，不拆分发布；4.1 回填与 4.2 之间不存在漏记窗口 | 4.1 / 4.2 Completion Notes「须同版上线」 |
+| D-28 | `admin.err.config.*` 四个版本配置错误码文案（D-17 原定随 admin 主题落） | **本主题提前写入**四份文案包（基线 / en / zh_CN / id），admin 主题直接复用；L0 守卫 `AppVersionConfigMessagesTest` | D-17「四语文案随 admin 主题落」 |
+| D-29 | 推荐更新横幅高度（实现 60 vs UI 稿 52） | **按 UI 稿 52**：卡片上下内边距 8 → 4 | Story 3.3 待确认 |
+| D-30 | 云端批跑各 story「待确认」中按保守口径实现的其余项 | **一律按已实现的推荐口径保留**：推荐弹窗点「去更新」也记 72h 冷却；`adjusted` = 拖动过即算；推广卡不开窗保持居中；推荐态点遮罩 / 返回不记冷却不报埋点；运营弹窗点遮罩不关、NONE 目标记 `tapped`、EN 空回落 ID；落地页判据加严（`router.state`）；运营通知「推送 + 中心」两条 `ops_notification_opened` 由看板按 `campaign_id` + 用户去重；运营通知标题 / 正文缺失兜底「系统通知」；外链打不开静默；游客归因 `entrySource = ops_target` | 各 story「待确认」 |
+| D-31 | 复审记录的「已知残留」 | **另开任务处理，不在本版修**：① `feed_rank_config` 后台保存与改库的丢失更新（`@DynamicUpdate` / `@Version`）；② 运营弹窗空闲检查覆盖不到 Tab 分支 Navigator 上的底部弹层；③ 埋点属性名守卫改为扫描源码；④ 运营通知发送在 IM 不可用时的熔断 / 提前终止 | 各 story 复审记录 |
