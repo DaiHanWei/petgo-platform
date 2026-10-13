@@ -54,6 +54,13 @@ public class IdCard {
     private boolean hdUnlocked;
 
     /**
+     * HD 解锁（到账）时刻，UTC（V1.3.4 ktp Story 2.1，AD-2）。首次 {@link #markHdUnlocked()} 写入，之后不改写；
+     * 未解锁为 null。存量按决策 D-8 回填。用于编号沿用「取最早解锁的学生卡」。不对外暴露。
+     */
+    @Column(name = "hd_unlocked_at")
+    private Instant hdUnlockedAt;
+
+    /**
      * 档案删除打标（V108，2026-08-19 决策）：非空 = 建卡所属档案已被删除。
      * 可见性 = {@code hdUnlocked || profileDeletedAt == null}——付费卡恒可见（展示快照），
      * 未付费卡隐藏；支付回调到账翻转 {@code hdUnlocked} 后自动重新可见（防支付时间差）。
@@ -149,9 +156,16 @@ public class IdCard {
         return c;
     }
 
-    /** 标记本卡 HD 已解锁（购买到账）。幂等：已解锁再调无副作用。 */
+    /**
+     * 标记本卡 HD 已解锁（购买到账），首次解锁同时记下解锁时刻。幂等：已解锁再调无副作用——
+     * 不改写 {@link #hdUnlockedAt}（如先 PawCoin 解锁、早先建的 QRIS 单后到账的场景）。
+     */
     public void markHdUnlocked() {
+        if (this.hdUnlocked) {
+            return;
+        }
         this.hdUnlocked = true;
+        this.hdUnlockedAt = Instant.now();
     }
 
     @PrePersist
@@ -199,6 +213,10 @@ public class IdCard {
 
     public boolean isHdUnlocked() {
         return hdUnlocked;
+    }
+
+    public Instant getHdUnlockedAt() {
+        return hdUnlockedAt;
     }
 
     public Instant getProfileDeletedAt() {

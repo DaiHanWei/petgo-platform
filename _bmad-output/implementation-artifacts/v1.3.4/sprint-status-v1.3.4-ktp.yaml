@@ -41,7 +41,7 @@ development_status:
   epic-1-retrospective: optional
   # ===== Epic 2：已解锁学生卡的编号沿用 =====
   epic-2: in-progress
-  2-1-记录每张卡的hd解锁时间: ready-for-dev
+  2-1-记录每张卡的hd解锁时间: review
   2-2-编号唯一性改为同用户内可重复: ready-for-dev
   2-3-已解锁学生卡的编号沿用: ready-for-dev
   epic-2-retrospective: optional
