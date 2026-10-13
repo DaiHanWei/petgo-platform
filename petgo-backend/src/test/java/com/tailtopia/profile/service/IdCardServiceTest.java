@@ -249,10 +249,10 @@ class IdCardServiceTest {
     }
 
     @Test
-    void ktpAndKitasRequireBreed() {
+    void v2KtpAndKitasRequireBreed() {
         for (String type : List.of("KTP", "KITAS")) {
             for (String breed : java.util.Arrays.asList(null, "  ")) {
-                assertThatThrownBy(() -> service.createCard(7L, req(type, null, "CAT", "FEMALE", breed, null)))
+                assertThatThrownBy(() -> service.createCardV2(7L, req(type, null, "CAT", "FEMALE", breed, null)))
                         .isInstanceOf(AppException.class)
                         .satisfies(e -> assertThat(((AppException) e).getStatus().value()).isEqualTo(422));
             }
@@ -290,7 +290,7 @@ class IdCardServiceTest {
         assertThat(res.card().cardType()).isEqualTo("STUDENT");
     }
 
-    // ---- DTO Bean 校验（全局映射 422）：petType / gender 必填且限白名单；卡种 / 配色白名单 ----
+    // ---- DTO Bean 校验（全局映射 422）：只校验白名单；必填按接口区分（D-20，V2 在服务层校验） ----
 
     private static Set<String> violatedFields(CreateIdCardRequest r) {
         return VALIDATOR.validate(r).stream()
@@ -299,9 +299,40 @@ class IdCardServiceTest {
     }
 
     @Test
-    void dtoRequiresPetTypeAndGender() {
-        assertThat(violatedFields(req("KTP", null, null, "FEMALE", "x", null))).containsExactly("petType");
-        assertThat(violatedFields(req("KTP", null, "CAT", null, "x", null))).containsExactly("gender");
+    void dtoLeavesPetTypeGenderOptionalForLegacyEndpoint() {
+        // D-20：必填按接口区分，Bean 校验只管白名单——旧接口（1.3.3 及更早 App）可不传。
+        assertThat(violatedFields(req("KTP", null, null, null, null, null))).isEmpty();
+    }
+
+    @Test
+    void v2RequiresPetTypeAndGender() {
+        assertThatThrownBy(() -> service.createCardV2(7L, req("PASSPORT", null, null, "FEMALE", null, null)))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getStatus().value()).isEqualTo(422));
+        assertThatThrownBy(() -> service.createCardV2(7L, req("PASSPORT", null, "CAT", null, null, null)))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getStatus().value()).isEqualTo(422));
+        verify(serialAllocation, never()).allocate();
+    }
+
+    @Test
+    void legacyAcceptsMissingPetTypeGenderBreedAndDefaultsGenderUnknown() {
+        // D-20：旧接口保持 1.3.3 口径——KTP 不填品种、物种、性别也能建，性别落 UNKNOWN。
+        IdCard c = created(req("KTP", null, null, null, null, null));
+        assertThat(c.getCardType()).isEqualTo("KTP");
+        assertThat(c.getBreed()).isNull();
+        assertThat(c.getPetType()).isNull();
+        assertThat(c.getGender()).isEqualTo("UNKNOWN");
+        verify(cardNumbers).allocateCardNo(LocalDate.of(2024, 3, 10), "UNKNOWN", null);
+    }
+
+    @Test
+    void v2WithAllFieldsBehavesLikeLegacy() {
+        when(serialAllocation.allocate()).thenReturn(11L);
+        when(idCards.save(any())).thenAnswer(IdCardServiceTest::persisted);
+        IdCardCreateResponse res = service.createCardV2(7L, req("STUDENT", "CERIA"));
+        assertThat(res.card().cardVariant()).isEqualTo("CERIA");
+        verify(cardNumbers).claimNumbers(anyLong(), any(), any());
     }
 
     @Test

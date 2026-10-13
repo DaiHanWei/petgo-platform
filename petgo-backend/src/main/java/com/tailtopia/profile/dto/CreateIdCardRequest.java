@@ -20,16 +20,20 @@ import java.time.LocalDate;
  *
  * <p>V1.3.4 ktp（AD-4）：cardType 白名单扩为 {@link com.tailtopia.profile.domain.IdCardType} 5 值；新增
  * cardVariant（学生卡配色 {@link com.tailtopia.profile.domain.StudentVariant}，跨字段规则在
- * {@code IdCardService.createCard}：学生卡缺省 KLASIK（D-12），非学生卡带值 422）。petType / gender 改必填
- * （D-9，不再把空 gender 当 UNKNOWN）；KTP / KITAS 的 breed 必填（服务层校验）。intro 字段保留以兼容旧版 App，
- * 但一律不写入。两条白名单正则与枚举同源（{@code IdCardTypeWhitelistTest}）。
+ * {@code IdCardService}：学生卡缺省 KLASIK（D-12），非学生卡带值 422）。intro 字段保留以兼容旧版 App，
+ * 但一律不写入。
+ *
+ * <p>V1.3.4 ktp D-20：<b>必填口径按接口区分，不放在 Bean 校验里</b>——旧接口 {@code POST /me/id-cards}
+ * （1.3.3 及更早 App）保持宽松：petType / gender / breed 可空，gender 空视同 UNKNOWN；新接口
+ * {@code POST /me/id-cards/v2}（1.3.4 起 App）在服务层强制 petType / gender 必填、KTP / KITAS 的 breed 必填（AD-4）。
+ * 这里只校验取值白名单（非空时）。两条白名单正则与枚举同源（{@code IdCardTypeWhitelistTest}）。
  */
 public record CreateIdCardRequest(
         @NotBlank @Size(max = 60) String name,
-        @NotNull @Pattern(regexp = PET_TYPES) String petType,
+        @Pattern(regexp = PET_TYPES) String petType,
         @Size(max = 80) String breed,
         @NotNull @PastOrPresent LocalDate birthday,
-        @NotNull @Pattern(regexp = "MALE|FEMALE|UNKNOWN") String gender,
+        @Pattern(regexp = "MALE|FEMALE|UNKNOWN") String gender,
         @Size(max = 1024) String avatarUrl,
         @Size(max = 30) String intro,
         @Size(max = 40) String birthCity,

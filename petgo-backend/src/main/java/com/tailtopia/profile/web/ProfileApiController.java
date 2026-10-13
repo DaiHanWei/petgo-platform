@@ -236,13 +236,28 @@ public class ProfileApiController {
         return idCardService.getMyCard(currentUserId(jwt), cardId);
     }
 
-    /** 独立建卡器：把当前填写的信息冻结成一张新卡快照（分配新 serial）。响应额外带 {@code numberReused}。 */
+    /**
+     * 独立建卡器（旧接口，留给 1.3.3 及更早 App）：把当前填写的信息冻结成一张新卡快照（分配新 serial）。
+     * 物种 / 性别 / 品种可不填（V1.3.4 ktp D-20）。响应额外带 {@code numberReused}。
+     */
     @PostMapping("/me/id-cards")
     public com.tailtopia.profile.dto.IdCardCreateResponse createIdCard(@AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CreateIdCardRequest req) {
         long ownerId = currentUserId(jwt);
         rateLimiter.check("rl:profile:idcard:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
         return idCardService.createCard(ownerId, req);
+    }
+
+    /**
+     * 建卡 V2（V1.3.4 ktp D-20，1.3.4 起 App 调用）：同一套建卡逻辑，另加必填——物种 / 性别必填，
+     * KTP / 居住证品种必填（AD-4），缺失 422。与旧接口共用同一限流键。
+     */
+    @PostMapping("/me/id-cards/v2")
+    public com.tailtopia.profile.dto.IdCardCreateResponse createIdCardV2(@AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody CreateIdCardRequest req) {
+        long ownerId = currentUserId(jwt);
+        rateLimiter.check("rl:profile:idcard:" + ownerId, CREATE_LIMIT, CREATE_WINDOW);
+        return idCardService.createCardV2(ownerId, req);
     }
 
     /**

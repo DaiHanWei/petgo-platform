@@ -223,6 +223,7 @@ Claude（云端 headless session，dev-story 流程手工执行）
 
 - **L1/L2 待本地验收**（Task 8 / AC9）：L1 连本分支后端 8 款各建一张，核 `card_type` / `card_variant` 落库、`intro` 与字段集外字段为 NULL、`number_reused` 埋点为 false；L2 模拟器看 8 款无 Tab、KTP 长表单抽屉内滚动「Selesai」吸底、物种 / 品种框下展开约 5 项内滚、「Lainnya」原位输入、C4 红字与置灰，以及档案创建 / 编辑页物种品种仍弹底部抽屉。
 - L0 已绿：`flutter analyze` 无问题；`flutter test` 全量 2812 通过（新增 `id_card_create_page_test`、`id_card_form_fields_test`，更新 `ktp_fields_test`）；`widgets/pet_form_fields.dart` 无改动。
+- 后续变更（2026-10-13，D-20）：App 建卡改调 `POST /me/id-cards/v2`（`ApiPaths.meIdCardsCreateV2`），旧路径 POST 留给旧版 App；新增 `test/profile/id_card_create_v2_path_test.dart`。
 - 与 story 文字的出入：
   - AC1.1 写参数名 `style`；Story 1.5 已落地对外契约 `IdCardCreatePage(initialStyle:)` + `locationFor` / `styleFromQuery`，按规则不改前序契约，沿用 `initialStyle`（页面内 `_style` 只读，不再可切换）。
   - AC6.1「新增 `cardVariant`」已在 Story 1.5 完成，本 story 只删 `intro`。

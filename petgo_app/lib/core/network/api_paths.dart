@@ -201,6 +201,10 @@ class ApiPaths {
   /// 完整路径含 `/pet-profiles/me/id-cards`；旧路径漏前缀致列表恒 404（历史列表打不开）。已补齐。
   static const String meIdCards = '$base/pet-profiles/me/id-cards';
 
+  /// 建卡 V2（V1.3.4 ktp D-20）：新版 App 建卡走这里——物种 / 性别必填、KTP / 居住证品种必填由服务端强制。
+  /// 旧路径 [meIdCards] 的 POST 留给 1.3.3 及更早 App（宽松口径），列表 GET 仍走 [meIdCards]。
+  static const String meIdCardsCreateV2 = '$base/pet-profiles/me/id-cards/v2';
+
   /// HD 下载当前定价（417 同类：展示价改后端实时下发，与扣费同源 pricing_config）。
   static const String meIdCardHdPricing = '$base/pet-profiles/me/id-cards/pricing';
 

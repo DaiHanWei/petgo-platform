@@ -19,6 +19,7 @@
 # - Epic transitions to 'in-progress' automatically when first story is created
 # - Dev moves story to 'review', then runs code-review
 # - 云端只跑到 L0；L1 / L2 留本地，Completion Notes 写「L1/L2 待本地验收」
+# - 🔴 发版前必看：docs/runbooks/release-checklist-v1.3.4-ktp.md（new 角标截止日期、先后端再 App、迁移注意）
 
 generated: 2026-10-12
 last_updated: 2026-10-13

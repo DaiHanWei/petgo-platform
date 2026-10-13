@@ -83,21 +83,34 @@ public class IdCardService {
      * <p>spec-ktp-pet-idcode-numbering：legacy serial 照旧分配（号池不动），再按《宠物身份码护照编码规则》
      * 生成身份码 + 护照号一起落库；取号与落卡同事务（{@link CardNumberService} join 本事务，行锁保原子）。
      *
-     * <p>V1.3.4 ktp（AD-1 / AD-4）：卡种 5 值 + 学生卡配色；KTP / KITAS 品种必填；intro 不写入；
-     * 新卡种与旧卡种一样分配 serial + 两号。
+     * <p>V1.3.4 ktp（AD-1）：卡种 5 值 + 学生卡配色；intro 不写入；新卡种与旧卡种一样分配 serial + 两号。
+     * 本方法是<b>旧接口</b>（1.3.3 及更早 App）：petType / gender / breed 可空（D-20），必填口径见 {@link #createCardV2}。
      * <p>V1.3.4 ktp Story 2.3（AD-5）：本人有已解锁学生卡且生日 / 性别 / 物种快照逐项相同 → 新卡（8 款任一）沿用其
      * card_no / passport_no（多张取最早解锁），{@code numberReused = true}；号仍经 {@code claimNumbers} 登记（AD-3）。
      */
     @Transactional
     public IdCardCreateResponse createCard(long ownerId, CreateIdCardRequest req) {
+        return create(ownerId, req, false);
+    }
+
+    /**
+     * 建卡 V2（V1.3.4 ktp D-20，1.3.4 起 App 调用）：与 {@link #createCard} 同一套建卡逻辑，另加 AD-4 必填——
+     * petType / gender 必填，KTP / KITAS 的 breed 必填（缺失 422 {@code validation}）。
+     * 旧接口 {@link #createCard} 留给 1.3.3 及更早 App，保持宽松（D-9 / AD-4 对旧版的影响因此不再发生）。
+     */
+    @Transactional
+    public IdCardCreateResponse createCardV2(long ownerId, CreateIdCardRequest req) {
+        return create(ownerId, req, true);
+    }
+
+    private IdCardCreateResponse create(long ownerId, CreateIdCardRequest req, boolean strict) {
         IdCardType cardType = normalizeCardType(req.cardType());
         String cardVariant = resolveVariant(cardType, req.cardVariant());
-        if ((cardType == IdCardType.KTP || cardType == IdCardType.KITAS)
-                && (req.breed() == null || req.breed().isBlank())) {
-            throw AppException.validation("该卡种品种必填");
+        if (strict) {
+            requireStrictFields(cardType, req);
         }
-        // petType / gender 必填与白名单由 DTO 保证（D-9：不再把空 gender 默认成 UNKNOWN）。
-        String gender = req.gender();
+        // 取值白名单由 DTO 保证；旧接口 gender 空视同 UNKNOWN（1.3.3 口径），V2 已保证非空。
+        String gender = req.gender() == null ? "UNKNOWN" : req.gender();
         // AD-5：按用户串行建卡，再判「编号沿用」——同一用户并发两次建卡判定一致；
         // 解锁到账与建卡并发时以本事务读到的已提交状态为准（T-19）。
         cardNumbers.lockOwnerForCardCreation(ownerId);
@@ -120,6 +133,20 @@ public class IdCardService {
                 blankToNull(req.faculty())));
         source.ifPresent(src -> log.info("身份证编号沿用 card={} source={}", card.getId(), src.getId()));
         return IdCardCreateResponse.of(IdCardResponse.from(card), source.isPresent());
+    }
+
+    /** V2 必填（AD-4 / D-17）：物种、性别；KTP / 居住证另加品种。 */
+    private static void requireStrictFields(IdCardType cardType, CreateIdCardRequest req) {
+        if (req.petType() == null) {
+            throw AppException.validation("物种必填");
+        }
+        if (req.gender() == null) {
+            throw AppException.validation("性别必填");
+        }
+        if ((cardType == IdCardType.KTP || cardType == IdCardType.KITAS)
+                && (req.breed() == null || req.breed().isBlank())) {
+            throw AppException.validation("该卡种品种必填");
+        }
     }
 
     /**

@@ -241,7 +241,7 @@ const Set<IdCardFormField> _studentFields = {
 
 /// `new` 角标截止时刻（V1.3.4 ktp D-3 / AD-11）。
 ///
-/// **发版检查项：上线日 + 30 天（WIB）**——发版时改成「上线日 + 30 天」的 WIB 00:00（以 UTC 写出：
+/// **发版检查项：上线日 + 30 天（WIB）**（清单见 `docs/runbooks/release-checklist-v1.3.4-ktp.md`）——发版时改成「上线日 + 30 天」的 WIB 00:00（以 UTC 写出：
 /// WIB 某日 00:00 = 前一日 UTC 17:00）。到达该时刻起所有用户都不再显示 `new` 角标，不做后台配置。
 /// 开发期取远期占位值（T-10）：WIB 2027-01-01 00:00。
 /// ⚠️ `DateTime` 没有 const 构造，只能是 `final`。

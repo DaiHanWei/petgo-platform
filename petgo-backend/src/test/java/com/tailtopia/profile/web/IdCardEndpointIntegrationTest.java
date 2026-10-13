@@ -280,9 +280,10 @@ class IdCardEndpointIntegrationTest extends ApiIntegrationTest {
 
     // ---- V1.3.4 ktp Story 1.1：5 种卡种 + 学生卡配色 + 必填口径（AD-1 / AD-4 / D-9 / D-12） ----
 
+    /** 新版 App 的建卡 V2 接口（D-20：必填在这里强制）。 */
     private org.springframework.test.web.servlet.ResultActions postCardRaw(String token, String body)
             throws Exception {
-        return mvc.perform(post("/api/v1/pet-profiles/me/id-cards")
+        return mvc.perform(post("/api/v1/pet-profiles/me/id-cards/v2")
                 .header(HttpHeaders.AUTHORIZATION, token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body));
@@ -397,5 +398,34 @@ class IdCardEndpointIntegrationTest extends ApiIntegrationTest {
         mvc.perform(get("/api/v1/pet-profiles/me/id-cards").header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].numberReused").doesNotExist());
+    }
+
+    // ---- V1.3.4 ktp D-20：旧接口留给 1.3.3 及更早 App，必填口径不变；V2 才强制 ----
+
+    @Test
+    void legacyEndpointStillAcceptsOldAppBodies() throws Exception {
+        String token = userBearer(newUser().getId());
+        // 1.3.3 App 建 KTP：档案没填品种 / 物种时不传这两个键；性别不传按 UNKNOWN。
+        var node = json.readTree(postCard(token, """
+                {"name":"Momo","birthday":"2024-03-10","cardType":"KTP"}
+                """));
+        assertThat(node.get("cardType").asString()).isEqualTo("KTP");
+        assertThat(node.get("gender").asString()).isEqualTo("UNKNOWN");
+        assertThat(node.has("breed")).isFalse();
+        // 旧版学生卡不带配色 → KLASIK（D-12）。
+        var student = json.readTree(postCard(token, """
+                {"name":"Momo","birthday":"2024-03-10","gender":"MALE","cardType":"STUDENT"}
+                """));
+        assertThat(student.get("cardVariant").asString()).isEqualTo("KLASIK");
+    }
+
+    @Test
+    void v2EndpointCreatesWithFullBody() throws Exception {
+        String token = userBearer(newUser().getId());
+        String body = postCardRaw(token, cardBody("STUDENT", "MALAM"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var node = json.readTree(body);
+        assertThat(node.get("cardVariant").asString()).isEqualTo("MALAM");
+        assertThat(node.get("numberReused").isBoolean()).isTrue();
     }
 }

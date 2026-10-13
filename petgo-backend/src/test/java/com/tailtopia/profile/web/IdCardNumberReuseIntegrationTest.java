@@ -48,7 +48,7 @@ class IdCardNumberReuseIntegrationTest extends ApiIntegrationTest {
     }
 
     private JsonNode create(long uid, String body) throws Exception {
-        String res = mvc.perform(post("/api/v1/pet-profiles/me/id-cards")
+        String res = mvc.perform(post("/api/v1/pet-profiles/me/id-cards/v2")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(uid))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -230,7 +230,7 @@ class IdCardNumberReuseIntegrationTest extends ApiIntegrationTest {
         jdbc.update("INSERT INTO id_card_number_owners (kind, number, user_id) VALUES ('C', ?, ?)", c, b.getId());
         long before = jdbc.queryForObject("SELECT count(*) FROM id_cards WHERE user_id = ?", Long.class, a.getId());
 
-        mvc.perform(post("/api/v1/pet-profiles/me/id-cards")
+        mvc.perform(post("/api/v1/pet-profiles/me/id-cards/v2")
                         .header(HttpHeaders.AUTHORIZATION, userBearer(a.getId()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("KTP", null, "FEMALE", "CAT", BIRTHDAY)))
