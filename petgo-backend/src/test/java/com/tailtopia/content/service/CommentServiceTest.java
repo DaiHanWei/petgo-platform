@@ -249,6 +249,7 @@ class CommentServiceTest {
     @Test
     void approveCommentTurnsVisibleAndPublishesNewCommentEvent() {
         Comment c = underReview(70L, null, 9L, 1L);
+        setField(c, Comment.class, "body", "anabul lucu");
         when(comments.findById(70L)).thenReturn(Optional.of(c));
         postBy(1L, 7L);
         service.approveComment(70L);
@@ -257,6 +258,8 @@ class CommentServiceTest {
         ArgumentCaptor<ContentCommentedEvent> ev = ArgumentCaptor.forClass(ContentCommentedEvent.class);
         verify(events).publishEvent(ev.capture()); // G4：转可见此刻才发新评论通知
         assertThat(ev.getValue().contentAuthorId()).isEqualTo(7L);
+        // V1.3.4 follow · Story 3.1：事件带上已过审的评论原文（只用于推送正文）。
+        assertThat(ev.getValue().body()).isEqualTo("anabul lucu");
     }
 
     // ===== V1.3.0 batch-b1 Story 3.4：评论里的 @ 通知 =====

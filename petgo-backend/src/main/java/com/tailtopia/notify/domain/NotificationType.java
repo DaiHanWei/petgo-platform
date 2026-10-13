@@ -160,5 +160,27 @@ public enum NotificationType {
      * 见 {@code V20260915_1614__rebuild_ck_notifications_type_with_mention.sql}。
      * 本枚举是那份清单的**唯一权威**。
      */
-    CONTENT_MENTIONED
+    CONTENT_MENTIONED,
+
+    /**
+     * 运营系统通知（V1.3.4 app 主题 FR-138）。**本主题只占位、不写业务**；值与位置与 app 主题逐字相同（D-1）。
+     *
+     * <p>⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261012_1300__rebuild_ck_notifications_type_follow_place.sql}）。
+     */
+    OPS_ANNOUNCEMENT,
+
+    /**
+     * 被关注 → 被关注者（V1.3.4 follow · Story 3.2，FR-141）。**不聚合**；{@code targetRef} = 关注者 userId。
+     *
+     * <p>⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261012_1300__rebuild_ck_notifications_type_follow_place.sql}）。
+     */
+    USER_FOLLOWED,
+
+    /**
+     * 他人在我创建的场所下评论（审核通过后）→ 场所创建者（V1.3.4 follow · Story 3.2，FR-141）。
+     * {@code aggregate_key = COMMENT:PLACE:{placeId}}（未读即合并）；{@code targetRef} = 场所 publicToken。
+     *
+     * <p>⚠️ 加值必须同步重列 {@code ck_notifications_type}（{@code V20261012_1300__rebuild_ck_notifications_type_follow_place.sql}）。
+     */
+    PLACE_COMMENTED
 }

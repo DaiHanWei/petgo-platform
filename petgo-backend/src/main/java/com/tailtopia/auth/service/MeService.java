@@ -7,6 +7,7 @@ import com.tailtopia.auth.dto.UpdateMeRequest;
 import com.tailtopia.auth.dto.UserProfileResponse;
 import com.tailtopia.auth.repository.UserRepository;
 import com.tailtopia.avatarmoderation.domain.AvatarDefaults;
+import com.tailtopia.content.service.ContentService;
 import com.tailtopia.avatarmoderation.domain.AvatarSubjectType;
 import com.tailtopia.avatarmoderation.event.AvatarReviewRequestedEvent;
 import com.tailtopia.namemoderation.domain.NameTargetType;
@@ -30,17 +31,27 @@ public class MeService {
     private final UserRepository users;
     private final PetProfileRepository petProfiles;
     private final ApplicationEventPublisher events;
+    /** V1.3.4 follow Story 1.2：我的页四格的帖子数 / 获赞数（作者自视口径，D-5）。 */
+    private final ContentService contentService;
 
     public MeService(UserRepository users, PetProfileRepository petProfiles,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, ContentService contentService) {
         this.users = users;
         this.petProfiles = petProfiles;
         this.events = events;
+        this.contentService = contentService;
     }
 
     @Transactional(readOnly = true)
     public UserProfileResponse getMe(long userId) {
-        return UserProfileResponse.from(load(userId), hasPetProfile(userId));
+        return withStats(load(userId), userId);
+    }
+
+    /** /me 聚合视图（GET 与 PATCH 共用）：带作者自视的帖子数 / 获赞数（D-5 / T-5）。 */
+    private UserProfileResponse withStats(User user, long userId) {
+        return UserProfileResponse.from(user, hasPetProfile(userId),
+                contentService.countOwnPostsByAuthor(userId),
+                contentService.sumLikesOnOwnPostsByAuthor(userId));
     }
 
     /**
@@ -134,7 +145,7 @@ public class MeService {
         }
 
         users.save(user);
-        return UserProfileResponse.from(user, hasPetProfile(userId));
+        return withStats(user, userId);
     }
 
     private User load(long userId) {

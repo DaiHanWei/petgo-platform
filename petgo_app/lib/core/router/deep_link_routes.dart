@@ -147,6 +147,15 @@ class DeepLinkRoutes {
         return '/me/support-tickets/$targetRef';
       case 'CSAT_SURVEY':
         return '/me/support-tickets/$targetRef/csat';
+      // V1.3.4 follow · Story 3.4（AD-12）：我添加的地点被评论 → 场所详情；targetRef = 场所 token
+      // （与 PlaceDetailPage.routeFor 同形；core 不 import feature 页面，故写字面量）。
+      case 'PLACE_COMMENTED':
+        return '/places/$targetRef';
+      // 新粉丝 → 对方主页（现有数字 id 路由 `/users/:userId`，T-34）。
+      // 🛡 targetRef 不是数字就落通知中心 —— 绝不拼出 /users/abc 让路由里的 int.parse 崩。
+      case 'USER_FOLLOWED':
+        final id = int.tryParse(targetRef);
+        return id == null ? notificationsCenter : '/users/$id';
       default:
         // CONTENT_REVIEW_REJECTED / CONTENT_REVIEW_TIMED_OUT / REPORT_REVIEWED：
         // targetRef=null 已在上方短路兜底（无深链，点击不跳）；此处为其它未知类兜底。

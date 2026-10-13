@@ -11,6 +11,7 @@ import 'package:tailtopia/features/user_profile/data/public_profile_pet_reposito
 import 'package:tailtopia/features/user_profile/data/public_profile_repository.dart';
 import 'package:tailtopia/features/user_profile/data/public_user_posts_repository.dart';
 import 'package:tailtopia/features/user_profile/presentation/public_profile_page.dart';
+import 'package:tailtopia/shared/widgets/profile_stats_row.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/user_tag_row.dart';
 
@@ -82,6 +83,10 @@ Future<void> _pump(
   List<UserTag> tags = const [],
   bool withPosts = false,
 }) async {
+  // V1.3.4 居中名片把身份区拉高了 —— 给一块高屏，免得 ListView 懒构建把下面的区块裁掉。
+  tester.view.physicalSize = const Size(1080, 3200);
+  tester.view.devicePixelRatio = 2.0;
+  addTearDown(tester.view.reset);
   final router = GoRouter(
     initialLocation: '${PublicProfilePage.routeBase}/$_kMeId',
     routes: [
@@ -121,17 +126,19 @@ void main() {
   });
 
   group('AC1 / AC2：同页两视角', () {
-    /// 🔴 两种视角的差别**只有两处**：「···」与「编辑资料」。
-    /// 其余（头像 / 昵称 / 加入时间 / 签名 / 计数 / 内容区）一字不差。
-    testWidgets('自己视角：有「编辑资料」、没有「···」', (tester) async {
+    /// 🔴 两种视角的差别**只有两处**：「···」与主按钮槽位（自己：Edit Profil；他人：关注）。
+    /// 其余（头像 / 昵称 / 加入时间 / 签名 / 四格 / 内容区）一字不差。
+    testWidgets('自己视角：有「编辑资料」、没有「···」、没有关注按钮', (tester) async {
       await _pump(tester, self: true, withPosts: true);
 
       expect(find.byKey(const ValueKey('profileEditButton')), findsOneWidget);
       expect(find.byKey(const ValueKey('profileMore')), findsNothing);
+      expect(find.byKey(const ValueKey('followButton')), findsNothing);
       // 其余照旧。
       expect(find.text('Rina'), findsOneWidget);
       expect(find.byKey(const ValueKey('profileJoinedAt')), findsOneWidget);
-      expect(find.text(l10n.profileCounts(18, 342)), findsOneWidget);
+      expect(find.descendant(of: find.byKey(const ValueKey('profileStatPosts')), matching: find.text('18')),
+          findsOneWidget);
     });
 
     testWidgets('他人视角：有「···」、没有「编辑资料」', (tester) async {
@@ -141,17 +148,18 @@ void main() {
       expect(find.byKey(const ValueKey('profileEditButton')), findsNothing);
     });
 
-    /// UI 稿 C1/C2：两个计数挪到「POSTINGAN」分区标题**同一行右侧**，两种视角同一处。
+    /// V1.3.4 UI 稿 A2：两个计数从「POSTINGAN」标题行移到身份区四格，两种视角同一处；
+    /// 分区标题行不再带计数，四格在标题之上。
     for (final self in [true, false]) {
-      testWidgets('计数与分区标题同一行、在其右侧（self=$self）', (tester) async {
+      testWidgets('计数在四格里、在分区标题之上，标题行不再带计数（self=$self）', (tester) async {
         await _pump(tester, self: self, withPosts: true);
 
-        final counts = find.byKey(const ValueKey('profileCounts'));
+        final stats = find.byKey(const ValueKey('profileStatPosts'));
         final title = find.text(l10n.profilePostsTitle.toUpperCase());
-        expect(counts, findsOneWidget);
+        expect(stats, findsOneWidget);
         expect(title, findsOneWidget);
-        expect((tester.getCenter(counts).dy - tester.getCenter(title).dy).abs(), lessThan(2));
-        expect(tester.getTopLeft(counts).dx, greaterThan(tester.getTopRight(title).dx));
+        expect(find.byKey(const ValueKey('profileCounts')), findsNothing);
+        expect(tester.getCenter(stats).dy, lessThan(tester.getCenter(title).dy));
       });
     }
 
@@ -174,10 +182,10 @@ void main() {
   });
 
   group('AC3：编辑资料入口', () {
-    /// 🔴 位置在**身份行内、与头像同一行**，**不在顶部 AppBar**。
+    /// 🔴 V1.3.4（D-11）：位置在**主按钮槽位**（四格下方、整宽），**不在顶部 AppBar**。
     /// AppBar 那个槽位在他人视角上是「···」—— 两种视角共用一个槽位会让人
     /// 第一眼分不清自己在看谁的主页。
-    testWidgets('按钮在身份行内，不在 AppBar 里', (tester) async {
+    testWidgets('按钮在四格下方的主按钮槽位、整宽，不在 AppBar 里', (tester) async {
       await _pump(tester, self: true);
 
       final button = find.byKey(const ValueKey('profileEditButton'));
@@ -185,16 +193,17 @@ void main() {
       expect(
         find.ancestor(of: button, matching: find.byType(AppBar)),
         findsNothing,
-        reason: 'UI 稿 C2 明确标了位置：身份行内，不塞 AppBar',
+        reason: '主按钮槽位在身份区内，不塞 AppBar',
       );
-      // 与头像同一行。
-      expect(
-        find.ancestor(of: button, matching: find.byType(Row)),
-        findsWidgets,
-      );
-      // UI 稿 C2：与头像**垂直居中**，不贴顶。
-      final avatarY = tester.getCenter(find.byKey(const ValueKey('profileAvatar'))).dy;
-      expect((tester.getCenter(button).dy - avatarY).abs(), lessThan(1));
+      final statsY = tester.getCenter(find.byKey(const ValueKey('profileStatPosts'))).dy;
+      expect(tester.getCenter(button).dy, greaterThan(statsY));
+      // 整宽：与四格同宽（左右都贴内容边）。
+      final row = tester.getRect(find.byType(ProfileStatsRow));
+      final rect = tester.getRect(button);
+      expect((rect.width - row.width).abs(), lessThan(1));
+      expect(rect.height, 40);
+      expect(tester.widget<Text>(find.descendant(of: button, matching: find.byType(Text))).data,
+          l10n.meEditProfileTitle);
     });
 
     testWidgets('点它弹出的是既有的资料编辑抽屉（昵称 / 签名 / 只读邮箱）', (tester) async {
@@ -204,7 +213,9 @@ void main() {
       await tester.pumpAndSettle();
 
       // 三个字段的 key 都是「我的」Tab 那个抽屉原本就有的 —— 证明是同一份实现。
-      expect(find.text(l10n.meEditProfileTitle), findsOneWidget);
+      // （V1.3.4：按钮文案也是 Edit Profil，故只在抽屉里找标题。）
+      expect(find.descendant(of: find.byType(BottomSheet), matching: find.text(l10n.meEditProfileTitle)),
+          findsOneWidget);
       expect(find.byKey(const ValueKey('nicknameField')), findsOneWidget);
       expect(find.byKey(const ValueKey('signatureField')), findsOneWidget);
       expect(find.byKey(const ValueKey('meEditSaveButton')), findsOneWidget);

@@ -41,6 +41,9 @@ class InteractionNotifySuppressionIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private CommentRepository comments;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
     /**
      * ⚠️ 评论的通知是<b>异步到达</b>的，断言前必须等：评论落库时是 {@code UNDER_REVIEW}，
      * 机器审核在另一个线程跑，通过后才由 {@code CommentService.approveComment} 发
@@ -231,7 +234,13 @@ class InteractionNotifySuppressionIntegrationTest extends ApiIntegrationTest {
         assertThat(notificationTypesOf(a.getId())).containsExactly("CONTENT_COMMENTED");
     }
 
-    /** 拉黑**之前**已产生的历史通知不回溯清理（A-A30：拉黑不回溯清理已产生数据）。 */
+    /**
+     * 拉黑**之前**已产生的历史通知不回溯清理（A-A30：拉黑不回溯清理已产生数据）—— <b>数据层</b>仍然成立：通知行不删。
+     *
+     * <p>⚠️ V1.3.4 follow · Story 3.3 起<b>展示口径</b>按 T-36 变了：通知带触发人后，触发人全部被我隐藏的互动条目
+     * <b>从列表隐藏、未读角标同口径不计</b>（「and N others」与最新触发人按 T-30 排除我拉黑的人，只剩他一人时整条不显示）。
+     * 本用例按新规则更新断言（3.3 code-review F1），不删、不 skip。
+     */
     @Test
     void ac5_historyBeforeBlockIsNotRetroactivelyCleaned() throws Exception {
         User a = newUser();
@@ -243,8 +252,12 @@ class InteractionNotifySuppressionIntegrationTest extends ApiIntegrationTest {
 
         hideService.block(a.getId(), b.getId());
 
-        assertThat(notificationTypesOf(a.getId())).containsExactly("CONTENT_LIKED"); // 还在
-        assertThat(unreadCountOf(a.getId())).isEqualTo(1);
+        // 数据不回溯清理：行还在。
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications WHERE recipient_user_id = ? "
+                + "AND type = 'CONTENT_LIKED'", Long.class, a.getId())).isEqualTo(1);
+        // 展示按 T-36：唯一触发人被我拉黑 → 列表不显示，首页校准后角标不计。
+        assertThat(notificationTypesOf(a.getId())).isEmpty();
+        assertThat(unreadCountOf(a.getId())).isZero();
     }
 
     // ===== AC6 · 对被拉黑方无影响 =====

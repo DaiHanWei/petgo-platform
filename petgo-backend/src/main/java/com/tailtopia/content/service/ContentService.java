@@ -198,6 +198,24 @@ public class ContentService {
         return likes.sumLikesOnPublicPostsByAuthor(authorId);
     }
 
+    /**
+     * <b>作者自视</b>帖子数（V1.3.4 follow Story 1.2 · D-5）：我的页四格，与 {@code findMyPosts} 同源
+     * （含私密、本人待审帖）。⚠️ <b>他人视角一律用 {@link #countPublicPostsByAuthor}</b>。
+     */
+    @Transactional(readOnly = true)
+    public long countOwnPostsByAuthor(long authorId) {
+        return posts.countOwnPostsByAuthor(authorId);
+    }
+
+    /**
+     * <b>作者自视</b>获赞总数（V1.3.4 follow Story 1.2 · D-5）：与 {@link #countOwnPostsByAuthor} 同一帖子集合。
+     * ⚠️ <b>他人视角一律用 {@link #sumLikesOnPublicPostsByAuthor}</b>。
+     */
+    @Transactional(readOnly = true)
+    public long sumLikesOnOwnPostsByAuthor(long authorId) {
+        return likes.sumLikesOnOwnPostsByAuthor(authorId);
+    }
+
     /** 内容是否存在且可见（Story 3.7：举报前校验，经 service 暴露给 moderation，不让其直读 content 表）。 */
     @Transactional(readOnly = true)
     public boolean isVisible(long postId) {

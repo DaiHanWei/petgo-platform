@@ -181,6 +181,23 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     long countPublicPublishedByAuthor(@Param("authorId") long authorId);
 
     /**
+     * <b>作者自视</b>的帖子数（V1.3.4 follow Story 1.2 · D-5 / T-5）：我的页四格「Postingan」。
+     *
+     * <p>🔴 谓词与 {@link #findMyPosts}（「我的发布」网格）<b>逐字同源</b>：未软删 + {@code PUBLISHED / UNDER_REVIEW}，
+     * <b>不过滤 visibility</b>（含私密 / 仅自己可见、本人待审帖）—— 否则四格的数与下方网格对不上。
+     * <p>⚠️ <b>他人视角一律用 {@link #countPublicPublishedByAuthor}</b>，两者不得互相替代
+     * （用本方法给访客看，差值就是这人有几篇私密内容）。
+     */
+    @Query("""
+            SELECT count(p) FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.deletedAt IS NULL
+              AND (p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+                   OR p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW)
+            """)
+    long countOwnPostsByAuthor(@Param("authorId") long authorId);
+
+    /**
      * 他人主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2 · AC1）：
      * 该作者全部 PUBLIC 内容，三类混排不分流，时间倒序游标分页。
      *

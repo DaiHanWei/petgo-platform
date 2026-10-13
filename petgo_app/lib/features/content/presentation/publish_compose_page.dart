@@ -29,6 +29,7 @@ import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/dashed_rect.dart';
 import '../../../shared/widgets/keyboard_safe_area.dart';
 import '../../../shared/utils/media_permission.dart';
+import '../../me/data/me_counts_provider.dart';
 import '../../me/data/my_posts_repository.dart';
 import '../../mention/data/mention_candidate_repository.dart';
 import '../../mention/domain/mention_context.dart';
@@ -409,6 +410,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       }
       ref.invalidate(feedProvider);
       ref.invalidate(myPostsProvider);
+      ref.invalidate(meCountsProvider); // V1.3.4：我的页四格帖子数随发帖变化
       // 成长日历发帖 → 同步刷新成长档案时间线与统计，避免需手动下拉刷新才显示（F9）。
       if (controller.type == ContentType.growthMoment) {
         ref.invalidate(timelineFirstPageProvider);

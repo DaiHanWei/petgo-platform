@@ -51,6 +51,34 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     List<Notification> findByRecipientUserIdAndReadIsFalse(long recipientUserId);
 
+    /**
+     * 新粉丝通知 24 小时去重（V1.3.4 follow · Story 3.2 · AD-4）：{@code since} 之后是否已有
+     * 「{@code actorId} 关注了 {@code recipientId}」的通知行。取关后再关注 24 小时内不重复通知。
+     * 走 {@code ix_notification_actors_actor} + 通知主键。
+     */
+    @Query(value = """
+            SELECT EXISTS (SELECT 1 FROM notifications n
+                             JOIN notification_actors a ON a.notification_id = n.id
+                            WHERE n.recipient_user_id = :recipientId AND n.type = 'USER_FOLLOWED'
+                              AND a.actor_user_id = :actorId AND n.created_at > :since)
+            """, nativeQuery = true)
+    boolean existsFollowedNotificationSince(@Param("recipientId") long recipientId,
+            @Param("actorId") long actorId, @Param("since") Instant since);
+
+    /**
+     * 某人的<b>未读</b>、带触发人行的互动通知 id（Story 3.3 · ⚠️ T-36：触发人全被过滤的条目不计入未读角标，
+     * 角标校准时据此找出要扣掉的那些）。{@code types} 由 {@code InteractionActorResolver.INTERACTION_TYPE_NAMES} 传入，
+     * 与 {@code NotificationService.INTERACTION_TYPES} 同一事实源（3.3 code-review F9）。
+     */
+    @Query(value = """
+            SELECT n.id FROM notifications n
+             WHERE n.recipient_user_id = :userId AND n.is_read = false
+               AND n.type IN (:types)
+               AND EXISTS (SELECT 1 FROM notification_actors a WHERE a.notification_id = n.id)
+            """, nativeQuery = true)
+    List<Long> findUnreadInteractionIdsWithActors(@Param("userId") long userId,
+            @Param("types") java.util.Collection<String> types);
+
     /** Story 7.3：注销级联删除该用户全部通知（纯个人数据，物理删除）。 */
     @org.springframework.transaction.annotation.Transactional
     void deleteByRecipientUserId(long recipientUserId);

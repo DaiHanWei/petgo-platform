@@ -14,6 +14,7 @@ import java.time.Instant;
  * @param commenterId      评论者 id
  * @param contentAuthorId  内容作者 id（推送目标之一）
  * @param parentAuthorId   被回复的一级评论作者 id（一级评论时 null）
+ * @param body             评论原文（V1.3.4，推送正文用；禁止进日志）
  */
 public record ContentCommentedEvent(
         long postId,
@@ -23,5 +24,16 @@ public record ContentCommentedEvent(
         Long parentAuthorId,
         Instant createdAt,
         /** V1.3.0 Story 4.3：二级回复所挂的一级评论 id（一级评论为 null）；暖贴跟进入队按它定位被回复的虚拟一级评论。 */
-        Long parentCommentId) {
+        Long parentCommentId,
+        /**
+         * V1.3.4 follow · Story 3.1：评论原文（已过审核），只用于互动推送正文。
+         * 🔴 含用户原文，<b>禁止写进任何日志</b>。可为 null（老调用方经 7 参构造器）。
+         */
+        String body) {
+
+    /** 不带原文的 7 参构造（V1.3.4 之前的全部调用方；{@code body = null}）。 */
+    public ContentCommentedEvent(long postId, long commentId, long commenterId, long contentAuthorId,
+            Long parentAuthorId, Instant createdAt, Long parentCommentId) {
+        this(postId, commentId, commenterId, contentAuthorId, parentAuthorId, createdAt, parentCommentId, null);
+    }
 }

@@ -8,6 +8,7 @@ import '../../features/content/domain/feed_item.dart';
 import '../../features/content/presentation/like_button.dart';
 import '../../features/mention/domain/mention_context.dart';
 import '../../features/mention/presentation/mention_text.dart';
+import '../../features/social/presentation/widgets/follow_button.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_image.dart';
 import 'content_tag_chip.dart';
@@ -46,6 +47,7 @@ class MasonryCard extends StatelessWidget {
     this.feedTab,
     this.rankMode,
     this.onTapMention,
+    this.followSurfaceKey,
   });
 
   final FeedItem item;
@@ -75,6 +77,10 @@ class MasonryCard extends StatelessWidget {
   /// 🛡 为空则正文里的 @ 只高亮不可点 —— 本组件是共享件，没有跳转语义的调用方
   /// 不该凭空多一个能点的片段。
   final void Function(int userId)? onTapMention;
+
+  /// 关注按钮的位置键（V1.3.4 follow · Story 2.1 · AC5.4）：普通卡 `feed:item:{id}`、顶置卡 `feed:pinned:{id}`。
+  /// **不传就不显示关注按钮** —— 「我的发布」等别的调用方完全不受影响。
+  final String? followSurfaceKey;
 
   /// 图片区高度上限（V1.1.6 Story 3.3 的高度护栏）。
   ///
@@ -162,44 +168,58 @@ class MasonryCard extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  Flexible(
-                                    // V1.1.6 Story 5.1：昵称旁挂运营标签（四处展示位之一）。
-                                    // 🛡 空间不足时**昵称完整优先、标签丢弃**，不截断昵称、不做「+N」折叠。
-                                    child: UserTagRow(
-                                      position: 'feed',
-                                      name: name,
-                                      nameStyle: const TextStyle(
-                                          fontSize: 13.5,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppColors.ink),
-                                      // 注销作者不挂标签（匿名化之后不该再有身份标识）。
-                                      tags: item.authorDeleted ? const [] : item.authorTags,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  // 类型徽章保留：三类内容要在首页可辨识（FR-93 明确要求保留）。
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                        color: badgeBg,
-                                        borderRadius: BorderRadius.circular(5)),
-                                    child: Text(badgeLabel,
-                                        style: TextStyle(
-                                            fontSize: 9.5,
-                                            fontWeight: FontWeight.w700,
-                                            color: badgeFg)),
-                                  ),
-                                ],
+                              // V1.1.6 Story 5.1：昵称旁挂运营标签（四处展示位之一）。
+                              // 🛡 空间不足时**昵称完整优先、标签丢弃**，不截断昵称、不做「+N」折叠。
+                              UserTagRow(
+                                position: 'feed',
+                                name: name,
+                                nameStyle: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.ink),
+                                // 注销作者不挂标签（匿名化之后不该再有身份标识）。
+                                tags: item.authorDeleted ? const [] : item.authorTags,
                               ),
                               const SizedBox(height: 1),
-                              Text(time,
-                                  style: const TextStyle(
-                                      fontSize: 11, color: AppColors.muted),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
+                              // V1.3.4 follow Story 2.1 · AC5.2（UI 稿 C1）：类型徽章从昵称行**移到时间右侧**，
+                              // 给昵称行右侧的关注按钮让位；尺寸不变。
+                              // 时间优先完整显示（最多占满整行），徽章用剩下的宽度、放不下就省略
+                              // （code-review 2.1 #4：两个 Flexible 对半分会把徽章提前截断；
+                              //  时间完全不收缩又会在 320 宽 + 长按钮文案时溢出）。
+                              LayoutBuilder(
+                                builder: (context, c) => Row(
+                                  children: [
+                                    ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                          maxWidth: (c.maxWidth - 6).clamp(0, double.infinity)),
+                                      child: Text(time,
+                                          style: const TextStyle(
+                                              fontSize: 11, color: AppColors.muted),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    // 类型徽章保留：三类内容要在首页可辨识（FR-93 明确要求保留）。
+                                    Flexible(
+                                      child: Container(
+                                        key: ValueKey('feedCardTypeBadge_${item.id}'),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                            color: badgeBg,
+                                            borderRadius: BorderRadius.circular(5)),
+                                        child: Text(badgeLabel,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                                fontSize: 9.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: badgeFg)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
                         ),
@@ -207,6 +227,18 @@ class MasonryCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                // V1.3.4 follow Story 2.1 · AC5.1：「+ Ikuti」在「…」左边；自己的帖子 / 已关注 /
+                // 已注销 / 封号（无 token）由按钮自己判定不渲染。点击不冒泡到「进主页」。
+                if (followSurfaceKey != null && !item.authorDeleted)
+                  FollowButton(
+                    userId: item.authorId,
+                    userToken: item.authorToken,
+                    initial: item.authorFollowState,
+                    snapshotEpoch: item.followEpoch,
+                    surfaceKey: followSurfaceKey,
+                    style: FollowButtonStyle.textInline,
+                    source: 'feed_card',
+                  ),
                 if (onMore != null)
                   GestureDetector(
                     key: ValueKey('feedCardMore_${item.id}'),

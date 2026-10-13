@@ -37,15 +37,21 @@ public class ContentDetailController {
         this.viewStats = viewStats;
     }
 
+    /**
+     * @param countView V1.3.4 follow · Story 3.4：{@code false} = 只探测能不能看（通知中心跳转前判「帖子已删」，T-43），
+     *                  <b>不计浏览</b> —— 否则那次探测加上随后真正打开详情会让 {@code view_count} 记两次。
+     *                  可见范围 / 拉黑等判定与正常请求完全相同（同一个 {@code getDetail}），只跳过统计。缺省 true。
+     */
     @GetMapping("/api/v1/content-posts/{id}")
     public ContentDetailResponse detail(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
             @RequestHeader(value = ContentFeedController.ANON_SESSION_HEADER, required = false)
-            String anonSession) {
+            String anonSession,
+            @RequestParam(name = "countView", defaultValue = "true") boolean countView) {
         Long viewerId = viewerId(jwt);
         ContentDetailResponse resp = detailService.getDetail(id, viewerId);
         // 浏览统计（2026-08-31）：详情成功返回才算「一次浏览」（404/不可见路径在上一行已抛）。
         // 作者本人不计 —— isAuthor 详情本来就要算，不为统计再查一遍。异步落库，不拖慢本请求。
-        if (!resp.isAuthor()) {
+        if (countView && !resp.isAuthor()) {
             viewStats.recordView(id, viewerId, anonSession);
         }
         return resp;

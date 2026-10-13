@@ -30,6 +30,16 @@ class PinnedSlot {
   /// 改埋点取值会切断已有序列，所以这里做一次显式映射而不是直接把线格式发上去。
   String get analyticsType => pinType == 'PROMO' ? 'promo_card' : 'post';
 
+  /// 给顶置内容条目打上快照版本号（V1.3.4 Story 2.1 AC3.3）；推广卡没有作者，原样返回。
+  PinnedSlot withFollowEpoch(int epoch) => item == null
+      ? this
+      : PinnedSlot(
+          pinConfigId: pinConfigId,
+          pinType: pinType,
+          item: item!.copyWith(followEpoch: epoch),
+          promo: promo,
+        );
+
   /// 无生效配置 → null（客户端什么都不渲染、**不留占位**）。
   static PinnedSlot? fromJson(Map<String, dynamic> json) {
     final pin = json['pin'];

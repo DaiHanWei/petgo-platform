@@ -169,4 +169,14 @@ public class AppException extends RuntimeException {
     public static AppException tailsonalityBadgeLocked(String detail) {
         return new AppException(HttpStatus.UNPROCESSABLE_ENTITY, ErrorTypes.TAILSONALITY_BADGE_LOCKED, detail);
     }
+
+    /**
+     * V1.3.4 follow Story 1.1：关注我已拉黑的人 → 409 {@code follow-blocked}。
+     *
+     * <p>只在「我拉黑了对方」（{@code isBlocked(me, target)}，只认 BLOCK）时抛；
+     * <b>对方拉黑了我不抛</b>，照常关注成功（决策 D-4，不暴露被拉黑）。
+     */
+    public static AppException followBlocked(String detail) {
+        return new AppException(HttpStatus.CONFLICT, ErrorTypes.FOLLOW_BLOCKED, detail);
+    }
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../../auth/domain/user_tag.dart';
+import '../../social/domain/follow_state.dart';
 
 /// 用户公开主页投影（对应后端 `PublicProfileResponse`）。
 /// V1.3.0 batch-b1 Story 2.1 · FR-118。
@@ -26,6 +27,13 @@ class PublicProfile {
     this.joinedAt,
     this.reported = false,
     this.tags = const [],
+    this.userToken,
+    this.followingCount = 0,
+    this.followerCount = 0,
+    this.iFollow = false,
+    this.followsMe = false,
+    this.followEpoch = 0,
+    this.official = false,
   });
 
   /// 已发布（未软删）**PUBLIC** 内容数。
@@ -65,6 +73,50 @@ class PublicProfile {
   /// 运营标签（最多 3 个）。已注销恒为空。
   final List<UserTag> tags;
 
+  /// 对外不可枚举用户 token（V1.3.4 follow D-2）：关注接口用。路由仍用数字 userId。
+  /// 老后端 / 已注销 / 封号 → null（主页因此不渲染关注按钮）。
+  final String? userToken;
+
+  /// 目标关注的人数（冗余计数直读）。⚠️ 被拉黑方视角也是**真实值**（与上面两个被伪装归零的计数不同）。
+  final int followingCount;
+
+  /// 目标的粉丝数（同上）。
+  final int followerCount;
+
+  /// 我是否关注了对方（游客 / 本人视角恒 false）。
+  final bool iFollow;
+
+  /// 对方是否关注了我（决定「Ikuti」还是「Ikuti Balik」）。
+  final bool followsMe;
+
+  /// 官方内容账号（后台发帖用的作者 shim）。2026-10-13 决定：主页不显示「···」（不可拉黑 / 举报）。
+  /// 后端只在 true 时下发该键，缺键即 false。
+  final bool official;
+
+  /// 这份快照发请求前读到的全局关注版本号（V1.3.4 Story 2.1 AC3：不来自 JSON）。
+  /// 重取主页 = 新快照 → 本页之前写的覆盖自动失效，回到服务端真值。
+  final int followEpoch;
+
+  PublicProfile withFollowEpoch(int epoch) => PublicProfile(
+        postCount: postCount,
+        likeCount: likeCount,
+        isDeactivated: isDeactivated,
+        self: self,
+        nickname: nickname,
+        avatarUrl: avatarUrl,
+        signature: signature,
+        joinedAt: joinedAt,
+        reported: reported,
+        tags: tags,
+        userToken: userToken,
+        followingCount: followingCount,
+        followerCount: followerCount,
+        iFollow: iFollow,
+        followsMe: followsMe,
+        followEpoch: epoch,
+        official: official,
+      );
+
   /// 是否有可展示的签名（空串与纯空白按「没设置」处理）。
   bool get hasSignature => signature?.trim().isNotEmpty == true;
 
@@ -80,6 +132,13 @@ class PublicProfile {
         joinedAt: DateTime.tryParse((json['joinedAt'] ?? '') as String? ?? ''),
         reported: (json['reported'] ?? false) as bool,
         tags: UserTag.listFromJson(json['tags']),
+        // V1.3.4 follow（Story 1.2 后端字段）：缺键一律容忍 —— 老后端 / 游客 / 已注销响应都不崩。
+        userToken: json['userToken'] as String?,
+        followingCount: ((json['followingCount'] ?? 0) as num).toInt(),
+        followerCount: ((json['followerCount'] ?? 0) as num).toInt(),
+        iFollow: (json['iFollow'] ?? false) as bool,
+        followsMe: (json['followsMe'] ?? false) as bool,
+        official: (json['official'] ?? false) as bool,
       );
 }
 
@@ -124,7 +183,12 @@ final Provider<PublicProfileRepository> publicProfileRepositoryProvider =
 /// 2. 本端点的失败以 **403 已拉黑** 为主，重试一万次也是同一个结果 ——
 ///    自动退避只是在替用户反复敲一个永远不会开的门。
 final publicProfileProvider = FutureProvider.family<PublicProfile, int>(
-  (ref, userId) => ref.read(publicProfileRepositoryProvider).getPublicProfile(userId),
+  (ref, userId) async {
+    // V1.3.4 Story 2.1 AC3.3：发请求前读全局关注版本号记进快照。
+    final epoch = ref.read(followStateProvider.notifier).currentEpoch;
+    final p = await ref.read(publicProfileRepositoryProvider).getPublicProfile(userId);
+    return p.withFollowEpoch(epoch);
+  },
   retry: (_, _) => null,
   isAutoDispose: true,
 );

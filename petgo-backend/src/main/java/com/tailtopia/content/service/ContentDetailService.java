@@ -44,13 +44,18 @@ public class ContentDetailService {
     /** V1.3.2 Story 1.5：帖子关联打卡的场所条（place 只读口）。 */
     private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins;
 
+    /** V1.3.4 follow Story 2.1：详情头部关注按钮的关注关系（只读端口）。 */
+    private final com.tailtopia.social.read.FollowReader followReader;
+
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
             ReportService reportService, UserHideRelationReader hideRelations,
             ContentTagQueryService contentTags, ImageSizeResolver imageSizes,
             com.tailtopia.mention.service.MentionViewService mentionViews,
-            com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins) {
+            com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins,
+            com.tailtopia.social.read.FollowReader followReader) {
         this.placeCheckins = placeCheckins;
+        this.followReader = followReader;
         this.contentTags = contentTags;
         this.imageSizes = imageSizes;
         this.mentionViews = mentionViews;
@@ -120,7 +125,14 @@ public class ContentDetailService {
         // V1.3.2 Story 1.5（AC5.2）：关联打卡 → 场所条，按打卡**当前** place_id 取（合并后指向保留方）。
         var checkinPlace = post.getPlaceCheckinId() == null ? null
                 : placeCheckins.findCheckinPlace(post.getPlaceCheckinId()).orElse(null);
+        // V1.3.4 follow Story 2.1：作者 token（已注销 / 封号缺席 → 不显示按钮，D-8）与关注关系；
+        // 游客 / 本人不查库，恒 NONE。
+        String authorToken = accountQueryService.publicTokensOf(List.of(post.getAuthorId()))
+                .get(post.getAuthorId());
+        var followState = viewerId == null || isAuthor || authorToken == null
+                ? com.tailtopia.social.read.FollowState.NONE
+                : followReader.followState(viewerId, post.getAuthorId());
         return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor,
-                decorations, sizes, mentions, checkinPlace);
+                decorations, sizes, mentions, checkinPlace, authorToken, followState);
     }
 }

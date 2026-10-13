@@ -5,10 +5,12 @@ import com.tailtopia.content.service.ContentModerationService;
 import com.tailtopia.place.domain.Place;
 import com.tailtopia.place.domain.PlaceComment;
 import com.tailtopia.place.dto.PlaceCommentCreateRequest;
+import com.tailtopia.place.event.PlaceCommentApprovedEvent;
 import com.tailtopia.place.event.PlaceCommentSubmittedEvent;
 import com.tailtopia.place.repository.PlaceCommentRepository;
 import com.tailtopia.place.repository.PlaceRepository;
 import com.tailtopia.shared.error.AppException;
+import java.time.Instant;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -175,8 +177,23 @@ public class PlaceCommentService {
             if (c.approveModeration()) {
                 comments.save(c);
                 counters.onCommentBecameVisible(c.getPlaceId(), c.getAttitude());
+                publishApproved(c);
             }
         });
+    }
+
+    /**
+     * V1.3.4 follow · Story 3.2：评论转可见 → 通知场所创建者（notify 侧再判自评 / 隐藏 / 封号 / 注销）。
+     * 评论人为空（已注销匿名化）、场所不存在 / 已不对用户可见（T-35）、无创建者 → 不发。
+     */
+    private void publishApproved(PlaceComment c) {
+        if (c.getAuthorId() == null) {
+            return;
+        }
+        places.findById(c.getPlaceId())
+                .filter(p -> p.isVisibleToUsers() && p.getCreatedBy() != null)
+                .ifPresent(p -> events.publishEvent(new PlaceCommentApprovedEvent(p.getId(), p.getPublicToken(),
+                        p.getCreatedBy(), c.getId(), c.getAuthorId(), Instant.now())));
     }
 
     private Place requireActive(String token) {

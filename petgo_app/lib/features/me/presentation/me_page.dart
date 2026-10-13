@@ -10,16 +10,23 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/customer_service_sheet.dart';
 import '../../../shared/widgets/initial_avatar.dart';
 import '../../../shared/widgets/post_grid_tile.dart';
+import '../../../shared/widgets/profile_stats_row.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../auth/domain/login_response.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/data/timeline_repository.dart';
 import '../../profile/domain/pet_age.dart';
 import '../../profile/domain/pet_profile.dart';
+import '../../social/domain/follow_list_item.dart';
+import '../../social/presentation/follow_list_page.dart';
+import '../data/me_counts_provider.dart';
 import '../data/my_posts_repository.dart';
 import 'profile_edit_sheet.dart';
 
 /// 「我的」页面（Story 7.1，FR-20 · F8 信息架构重组）。
+///
+/// V1.3.4 follow Story 1.4（UI 稿 A1「居中名片」）：头像 → 昵称 → 签名 → 四格（Postingan / Suka /
+/// Mengikuti / Pengikut）→ 整宽 Edit Profil → Hewanku → Aktivitas → Postinganku。邮箱不再展示（接口仍保留）。
 ///
 /// 🔄 PRD V1.0.0 修订（F8 · 2026-06-08）：顶栏右上「帮助反馈」+「设置」双图标；语言/退出/注销三项
 /// 收进二级设置页（点设置图标进入）；主页面主体只承载「人 + 宠物」内容——用户信息 / 宠物卡片或引导卡
@@ -69,31 +76,28 @@ class MePage extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.screenEdge),
         children: [
-          // ① profhead：用户信息 + 宠物 mini 同卡（原型 p-profil profhead）。
+          // ① 居中名片：头像 / 昵称 / 签名（V1.3.4 Story 1.4 · AC2）。
           _ProfileHeadCard(
             profile: profile,
-            onEdit: () => openProfileEditSheet(context, ref),
             onAvatarTap: () => changeAvatar(context, ref),
           ),
+          const SizedBox(height: AppSpacing.md),
+          // ② 四格（AC2.2）。Mengikuti / Pengikut 本 story 不可点（Story 2.2 接关注列表）。
+          _MeStats(profile: profile),
+          const SizedBox(height: AppSpacing.md),
+          // ③ 整宽「Edit Profil」（AC2.4，UI 稿 `.wbtn.ghost`）。
+          _EditProfileButton(onEdit: () => openProfileEditSheet(context, ref)),
+          // ④ Hewanku（AC3）：只在 HAS_PET 时出现（含未建档的引导卡，T-13）。
+          const _PetZone(),
           const SizedBox(height: AppSpacing.lg),
           // AKTIVITAS 入口组（0711 profil-entries）：订单为主入口（PawCoin 已并入订单列表 header
-          // 余额格，退款经订单详情可达），紫虚线卡 + BARU 徽章突出 V1.1 新增。
+          // 余额格，退款经订单详情可达）。
           _ActivitySection(onOrders: () => context.push('/me/orders')),
           const SizedBox(height: AppSpacing.lg),
-          // ② 我的发布（原型 Postinganku）：小标题 + 裸 2 列网格（无卡边框）。
-          // 注：宠物状态/改状态/编辑档案区块已按设计（原型 p-profil 无此块）移除。
+          // ⑤ 我的发布（原型 Postinganku）：小节标题（表头不显示数量，数量在四格）+ 裸 2 列网格。
           Padding(
-            padding: const EdgeInsets.only(
-              left: AppSpacing.xs,
-              bottom: AppSpacing.sm,
-            ),
-            child: Text(
-              l10n.meMyPostsTitle.toUpperCase(),
-              style: AppTypography.caption.copyWith(
-                letterSpacing: 0.6,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: _SectionTitle(l10n.meMyPostsTitle),
           ),
           _MyPostsList(),
         ],
@@ -101,6 +105,86 @@ class MePage extends ConsumerWidget {
     );
   }
 
+}
+
+/// 小节标题（V1.3.4 Story 1.4）：12 / w700 / 大写 / letterSpacing 0.6 / `muted` ——
+/// 与他人主页的 Hewan / Postingan 同款。
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+        text.toUpperCase(),
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.6,
+          color: AppColors.muted,
+        ),
+      );
+}
+
+/// 我的页四格（V1.3.4 Story 1.4 · AC1 / AC2.2）。
+///
+/// 数据源以 `GET /me`（[meCountsProvider]）为准（T-6）；它首次加载中 / 失败时回落到登录态里的
+/// 同名字段（冷启动 restoreSession 走 `/me`，通常已有值）；两者都没有 → 数字位「–」（T-14，不闪 0）。
+/// 刷新中保留上次的值（Riverpod 3 的 `value` 在 refresh / 出错时仍给上一份数据）。
+class _MeStats extends ConsumerWidget {
+  const _MeStats({required this.profile});
+
+  final UserProfile? profile;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // 按当前用户 id 取实例（换账号不带上一个账号的旧值，见 meCountsProvider 注释）。
+    final counts = ref.watch(meCountsProvider(profile?.id)).value ?? MeCounts.fromProfile(profile);
+    // V1.3.4 Story 2.2 · AC2：Mengikuti / Pengikut 两格进我的关注 / 粉丝列表；id 未知时不可点。
+    final id = profile?.id;
+    return ProfileStatsRow(
+      postCount: counts.postCount,
+      likeCount: counts.likeCount,
+      followingCount: counts.followingCount,
+      followerCount: counts.followerCount,
+      onFollowingTap:
+          id == null ? null : () => context.push(FollowListPage.location(id, FollowListTab.following)),
+      onFollowersTap:
+          id == null ? null : () => context.push(FollowListPage.location(id, FollowListTab.followers)),
+    );
+  }
+}
+
+/// 整宽「Edit Profil」（V1.3.4 Story 1.4 · AC2.4，UI 稿 `.wbtn.ghost`）：白底 + 1.5px 浅紫描边 + 紫字。
+/// 与他人主页「自己看自己」的 Edit Profil 同款（D-11）。点了仍是既有的资料编辑抽屉。
+class _EditProfileButton extends StatelessWidget {
+  const _EditProfileButton({required this.onEdit});
+
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SizedBox(
+      width: double.infinity,
+      height: 40,
+      child: OutlinedButton(
+        key: const ValueKey('meEditNickname'),
+        onPressed: onEdit,
+        style: OutlinedButton.styleFrom(
+          backgroundColor: AppColors.surface,
+          foregroundColor: AppColors.mint,
+          side: const BorderSide(color: AppColors.dashedViolet, width: 1.5),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: EdgeInsets.zero,
+        ),
+        child: Text(
+          l10n.meEditProfileTitle,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+        ),
+      ),
+    );
+  }
 }
 
 /// AC5 宠物区位三态分支（人 60%/宠物 40%）。
@@ -120,8 +204,21 @@ class _PetZone extends ConsumerWidget {
     // 后端 /auth/* 登录响应恒返回 hasPetProfile=false，仅 /me 与 /pet-profiles 才是权威，
     // 否则老用户登录后即便有档案，/me 仍会错误显示「创建宠物档案」引导卡（用户反馈）。
     final petAsync = ref.watch(petProfileProvider);
+    final l10n = AppLocalizations.of(context);
+    // V1.3.4 Story 1.4 · AC3：独立小节「Hewanku」+ 内容；引导卡也属于宠物区，同样带标题（T-13）。
+    Widget section(Widget child) => Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _SectionTitle(l10n.mePetsSection),
+              const SizedBox(height: AppSpacing.sm),
+              child,
+            ],
+          ),
+        );
     return petAsync.when(
-      data: (pet) => pet == null ? const _PetGuideCard() : const _PetCard(),
+      data: (pet) => section(pet == null ? const _PetGuideCard() : const _PetCard()),
       loading: () => const SizedBox.shrink(),
       // 拉取失败不误导地催建档，留空待重试。
       error: (_, _) => const SizedBox.shrink(),
@@ -168,106 +265,118 @@ class _PetGuideCard extends StatelessWidget {
   }
 }
 
-/// AC5 宠物卡片（状态 A 已建档）·原型 petmini：宠物头像 + 名字 + 元数据（种类 · 年龄 · momen 数）+「Lihat →」。
+/// AC5 宠物行卡（状态 A 已建档）· V1.3.4 UI 稿 A1 `.petr`：白底 + 1px `line2` 描边、圆角 14；
+/// 头像 · 名字 /「物种 · 年龄」· diary 小标签 · chevron。
+///
+/// 组件按列表做（本版本数据源仍是单只 `petProfileProvider`，包成长度 0 / 1 的列表），不做多宠物取数。
 class _PetCard extends ConsumerWidget {
   const _PetCard();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
     final petAsync = ref.watch(petProfileProvider);
     return petAsync.maybeWhen(
       data: (pet) {
         if (pet == null) return const SizedBox.shrink();
-        final meta = _petMeta(context, ref, pet, l10n);
-        return GestureDetector(
-          key: const ValueKey('mePetCard'),
-          onTap: () => context.go('/profile'), // 跳成长档案 Tab
-          child: Container(
-            padding: const EdgeInsets.all(11),
-            decoration: BoxDecoration(
-              color: AppColors.mintTint2, // 原型 petmini 紫浅底 #F8F6FF
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Row(
-              children: [
-                InitialAvatar(
-                  avatarUrl: pet.avatarUrl,
-                  nickname: pet.name,
-                  radius: 21,
-                ),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        pet.name,
-                        style: AppTypography.body.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (meta.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          meta,
-                          key: const ValueKey('mePetCardMeta'),
-                          style: AppTypography.caption.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Text(
-                  '${l10n.meViewArchive} →',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.mint,
-                  ),
-                ),
-              ],
-            ),
-          ),
+        final pets = <PetProfile>[pet];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final p in pets) _row(context, ref, p),
+          ],
         );
       },
       orElse: () => const SizedBox.shrink(),
     );
   }
 
-  /// 元数据「种类 · 年龄 · momen 数」：种类由 petType、年龄由 birthday 计算、momen 数取 archiveStats。
-  String _petMeta(
-    BuildContext context,
-    WidgetRef ref,
-    PetProfile pet,
-    AppLocalizations l10n,
-  ) {
+  Widget _row(BuildContext context, WidgetRef ref, PetProfile pet) {
+    final l10n = AppLocalizations.of(context);
+    final meta = _petMeta(l10n, pet);
+    // bug 20260722-355：GROWTH_MOMENT 帖即「Diary」，>99 显示「99+」，跟随实际记录数变化。
+    final momen = ref.watch(archiveStatsProvider).asData?.value.happyMomentCount;
+    return GestureDetector(
+      key: const ValueKey('mePetCard'),
+      onTap: () => context.go('/profile'), // 跳成长档案 Tab
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.line2),
+        ),
+        child: Row(
+          children: [
+            InitialAvatar(avatarUrl: pet.avatarUrl, nickname: pet.name, radius: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    pet.name,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (meta.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      meta,
+                      key: const ValueKey('mePetCardMeta'),
+                      style: const TextStyle(fontSize: 12, color: AppColors.ink2),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (momen != null) ...[
+              const SizedBox(width: AppSpacing.sm),
+              Container(
+                key: const ValueKey('mePetDiaryTag'),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.mintTint2,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.menu_book, size: 13, color: AppColors.mint),
+                    const SizedBox(width: 3),
+                    Text(
+                      l10n.meDiaryCount(momen > 99 ? '99+' : '$momen'),
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.mint),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right, size: 20, color: AppColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 元数据「种类 · 年龄」（V1.3.4：diary 数移到右侧小标签；不显示品种）。
+  String _petMeta(AppLocalizations l10n, PetProfile pet) {
     final species = switch (pet.petType) {
       'CAT' => l10n.petTypeCat,
       'DOG' => l10n.petTypeDog,
       'OTHER' => l10n.petTypeOther,
       _ => null,
     };
-    final momen = ref
-        .watch(archiveStatsProvider)
-        .asData
-        ?.value
-        .happyMomentCount;
     return [
       ?species,
       // 与档案页同一出口：不满 1 个月按天表达，避免「0th 0bln」。
       ?formatPetAge(l10n, pet.birthday),
-      // bug 20260722-355：GROWTH_MOMENT 帖即「Diary」（与档案头部/网格徽章同口径），
-      // 文案由「moments」改「diary」，>99 显示「99+」，跟随实际记录数变化。
-      if (momen != null) l10n.meDiaryCount(momen > 99 ? '99+' : '$momen'),
     ].join(' · ');
   }
 }
@@ -329,16 +438,10 @@ class _ActivitySection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 分组标题（0718 去 BARU 徽章）。
+        // 分组标题（0718 去 BARU 徽章；V1.3.4 统一为小节标题样式）。
         Padding(
-          padding: const EdgeInsets.only(left: AppSpacing.xs, bottom: AppSpacing.sm),
-          child: Text(
-            l10n.meActivitySection,
-            style: AppTypography.caption.copyWith(
-              letterSpacing: 0.6,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: _SectionTitle(l10n.meActivitySection),
         ),
         // 实心卡「Pesanan Saya · Termasuk saldo PawCoin」→ 订单中心（图标去 tinted 方块底）。
         Container(
@@ -390,125 +493,72 @@ class _ActivitySection extends StatelessWidget {
   }
 }
 
-/// profhead 卡（原型 p-profil）：白卡 + 阴影，内含「用户行（渐变头像 + 名/邮箱 + Edit）」+
-/// 状态 A 时下挂「宠物 mini」（[_PetZone]，紫浅底行）。B/C 仅用户行。
+/// 居中名片头部（V1.3.4 Story 1.4 · AC2，UI 稿 A1）：头像 84（右下相机角标，点了换头像）→ 昵称 → 签名。
+///
+/// ⚠️ **邮箱不再展示**（PRD OQ-6 / UI 稿 A1）；`UserProfile.email` 字段与 `/me` 接口不动。
+/// 宠物区已移出为独立小节「Hewanku」（[_PetZone]）。
 class _ProfileHeadCard extends StatelessWidget {
-  const _ProfileHeadCard({required this.profile, required this.onEdit, this.onAvatarTap});
+  const _ProfileHeadCard({required this.profile, this.onAvatarTap});
 
   final UserProfile? profile;
-  final VoidCallback onEdit;
   final VoidCallback? onAvatarTap; // Story B：点头像换图(上传)
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     final name = profile?.nickname ?? profile?.displayName ?? '';
-    final email = profile?.email ?? '';
-    final showPet = profile?.petStatus == 'HAS_PET';
-    // 原型 profhead：背景与页面同为白，无可见卡片/阴影（白叠白 + 6% 阴影≈无），故不加卡片装饰；
-    // 仅内部 petmini 用紫浅底区分。
+    final signature = profile?.signature ?? '';
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            // 原型 avlg 62（渐变 + 首字母）。Story B：点击换头像(上传) + 右下角相机角标。
-            GestureDetector(
-              key: const ValueKey('meAvatarUpload'),
-              onTap: onAvatarTap,
-              child: Stack(
-                children: [
-                  InitialAvatar(avatarUrl: profile?.avatarUrl, nickname: name, radius: 31),
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: AppColors.accentGrowth,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.surface, width: 2),
-                      ),
-                      child: const Icon(Icons.photo_camera, size: 12, color: Colors.white),
-                    ),
+        // Story B：点击换头像(上传) + 右下角相机角标。
+        GestureDetector(
+          key: const ValueKey('meAvatarUpload'),
+          onTap: onAvatarTap,
+          child: Stack(
+            children: [
+              InitialAvatar(avatarUrl: profile?.avatarUrl, nickname: name, radius: 42),
+              Positioned(
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentGrowth,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.surface, width: 2),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    name,
-                    style: AppTypography.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  // 一句话个性签名（bug 20260721-327）。
-                  if ((profile?.signature ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    Text(
-                      profile!.signature!,
-                      key: const ValueKey('meSignature'),
-                      style: AppTypography.caption,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (email.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      email,
-                      style: AppTypography.caption,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            // 原型 editbtn：圆角矩形(8) + 1.5px 浅紫描边(#C2B0EC) + 紫字，无图标。
-            OutlinedButton(
-              key: const ValueKey('meEditNickname'),
-              onPressed: onEdit,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.accentGrowth,
-                side: const BorderSide(
-                  color: AppColors.dashedViolet,
-                  width: 1.5,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                // 原型 padding:6 12；给文字与描边留足内边距（去掉 compact 压缩）。
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: Text(
-                l10n.meEditButton,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                  child: const Icon(Icons.photo_camera, size: 13, color: Colors.white),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        // 宠物 mini（状态 A：已建档=宠物卡 / 未建档=引导卡；B/C 不挂）。
-        if (showPet) ...[const SizedBox(height: 14), const _PetZone()],
+        const SizedBox(height: 10),
+        Text(
+          name,
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.ink),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+        ),
+        // 一句话个性签名（bug 20260721-327）。
+        if (signature.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: Text(
+              signature,
+              key: const ValueKey('meSignature'),
+              style: const TextStyle(fontSize: 13, color: AppColors.ink2),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
       ],
     );
   }
 }
-
 
 /// 「我的发布」列表（原型 Postinganku）：2 列裸网格；一格的样子见 `PostGridTile`。
 class _MyPostsList extends ConsumerWidget {

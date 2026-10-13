@@ -14,6 +14,7 @@ import '../../features/auth/domain/user_state.dart';
 import '../../features/content/domain/home_refresh_provider.dart';
 import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/feed_controller.dart';
+import '../../features/me/data/me_counts_provider.dart';
 import '../../features/profile/data/timeline_repository.dart';
 import '../../features/profile/domain/profile_tab_entered_provider.dart';
 import '../../features/content/presentation/publish_compose_page.dart';
@@ -147,6 +148,11 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
           _reportTabEntered(from, tab);
         }
         _goBranch(index);
+        if (tab == AppTab.me) {
+          // V1.3.4 follow Story 1.4（T-15）：切到「Saya」即重取 `/me` —— 别人关注我、我在别处
+          // 关注 / 取关后，四格的关注 / 粉丝数才跟得上（MePage 常驻 IndexedStack，不会自己重建）。
+          ref.invalidate(meCountsProvider);
+        }
       },
     );
     // **点击意图**埋点与浏览相反，必须在门控**之外**记：被拦下时「用户想进这里」这件事

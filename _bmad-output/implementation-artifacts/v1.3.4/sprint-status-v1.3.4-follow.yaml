@@ -1,0 +1,41 @@
+# generated: 2026-10-12
+# last_updated: 2026-10-12
+# project: TailTopia V1.3.4 follow
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts/v1.3.4
+#
+# 规划来源：_bmad-output/planning-artifacts/v1.3.4/epics-v1.3.4-follow.md（权威顺序：决策日志-follow.md > PRD > 架构 delta > UI 稿）
+# 执行顺序：Epic 1 → Epic 2 / Epic 3（两者都只依赖 Epic 1，可并行）。
+#
+# Story Status: backlog → ready-for-dev → in-progress → review → done
+# 云端只跑到 L0；L1 / L2 留本地，Completion Notes 写「L1/L2 待本地验收」
+
+generated: 2026-10-12
+last_updated: 2026-10-12
+project: TailTopia V1.3.4 follow
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts/v1.3.4"
+
+development_status:
+  # ===== Epic 1：关注一个人——主页上的关注与新主页 =====
+  epic-1: in-progress
+  1-1-关注关系-用户token与关注接口: review
+  1-2-拉黑联动与主页接口返回关注信息: review
+  1-3-他人主页改版与关注按钮: review
+  1-4-我的页改版为居中名片: review
+  epic-1-retrospective: optional
+  # ===== Epic 2：到处都能关注，也能看关注了谁 =====
+  epic-2: in-progress
+  2-1-feed卡与帖子详情的关注按钮-全局关注状态: review
+  2-2-关注与粉丝列表: review
+  2-3-自己的空列表推荐关注: review
+  epic-2-retrospective: optional
+  # ===== Epic 3：通知中心说清楚「谁做了什么」 =====
+  epic-3: in-progress
+  3-1-通知数据模型扩展-点赞评论带触发人与点赞合并: review
+  3-2-新粉丝与场所评论两种新通知: review
+  3-3-通知列表返回拼好的文案与触发人: review
+  3-4-app通知中心改版: review
+  epic-3-retrospective: optional

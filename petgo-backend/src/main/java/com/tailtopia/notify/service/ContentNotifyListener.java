@@ -3,6 +3,7 @@ package com.tailtopia.notify.service;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.event.ContentLikedEvent;
 import com.tailtopia.content.event.ContentRemovedEvent;
+import com.tailtopia.notify.domain.Notification;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.social.read.UserHideRelationReader;
 import org.springframework.stereotype.Component;
@@ -16,7 +17,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *   <li>{@link ContentRemovedEvent} → 推送作者「你发布的内容因违反社区规范已被移除」（Story 3.7 AC3，
  *       运营人工下架触发；<b>不说明举报人</b>、V1 <b>无申诉入口</b>；内容已 404 故 targetRef 仅作内部标识）。</li>
  * </ul>
- * 护栏：<b>自互动不推</b>（actor == author 跳过）；<b>逐条不合并</b>（每事件独立 send，无聚合/去抖，不引 MQ）。
+ * 护栏：<b>自互动不推</b>（actor == author 跳过）。V1.3.4 follow · Story 3.1 起点赞 / 评论改走
+ * {@link NotificationService#sendInteraction}：带触发人，点赞同帖未读即合并 + 推送去抖（AD-9 / AD-10），不引 MQ。
  *
  * <p>V1 事件未富化标题/宠物名，故 body 用通用文案；标题富化需 Epic 3 事件扩展（避免 notify join content 表）。
  * 深链 token 由 NotificationService 生成；targetRef 存 postId 供后端解析。
@@ -32,7 +34,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *   <li><b>抑制只能写在本类的 {@code onContentLiked} / {@code onContentCommented} 里，
  *       绝不能写进 {@link NotificationService#send}</b> —— 那是全站唯一的通用发送方法，有 12 个调用点，
  *       覆盖封号 / 审核结果 / 内容被移除 / 退款驳回 / 工单结案等<b>系统通知</b>。写进去等于把它们一起掐了。
- *       同理，本类的 {@code onContentRemoved} 也<b>不接抑制</b>：它是「你的内容被运营移除」的平台告知。</li>
+ *       同理，本类的 {@code onContentRemoved} 也<b>不接抑制</b>：它是「你的内容被运营移除」的平台告知。
+ *       V1.3.4 的 {@link NotificationService#sendInteraction} 同样不接抑制（新粉丝、场所评论也会用它）。</li>
  *   <li><b>判据有两条，只做第一条会漏掉第三方</b>（见 {@link #suppressed}）。</li>
  * </ol>
  */
@@ -80,9 +83,9 @@ public class ContentNotifyListener {
         if (suppressed(event.authorId(), event.likerId(), event.authorId())) {
             return;
         }
-        notificationService.send(event.authorId(), NotificationType.CONTENT_LIKED,
-                "有人赞了你的内容", "点击查看",
-                NotificationType.CONTENT_LIKED.name(), String.valueOf(event.postId()));
+        // V1.3.4 follow · Story 3.1：带触发人、同帖未读即合并（AD-9）；取消点赞不发事件、不回退通知。
+        notificationService.sendInteraction(event.authorId(), NotificationType.CONTENT_LIKED, event.likerId(),
+                "LIKE:POST:" + event.postId(), String.valueOf(event.postId()), null, null, null);
     }
 
     @TransactionalEventListener
@@ -91,8 +94,9 @@ public class ContentNotifyListener {
         // 通知内容作者（自评不推）。
         if (event.commenterId() != event.contentAuthorId()
                 && !suppressed(event.contentAuthorId(), event.commenterId(), event.contentAuthorId())) {
-            notificationService.send(event.contentAuthorId(), NotificationType.CONTENT_COMMENTED,
-                    "有人评论了你的内容", "点击查看", NotificationType.CONTENT_COMMENTED.name(), ref);
+            // V1.3.4 follow · Story 3.1：带触发人与 comment_id，不聚合；评论原文只进推送正文。
+            notificationService.sendInteraction(event.contentAuthorId(), NotificationType.CONTENT_COMMENTED,
+                    event.commenterId(), null, ref, event.commentId(), null, event.body());
         }
         // Bug 20260625-088：回复二级评论时，另行通知被回复的一级评论作者（parentAuthorId）。
         // 去重：排除自回复（== commenter）、以及与内容作者重复（上面已推，避免双推）。
@@ -103,8 +107,8 @@ public class ContentNotifyListener {
         Long parent = event.parentAuthorId();
         if (parent != null && parent != event.commenterId() && parent != event.contentAuthorId()
                 && !suppressed(parent, event.commenterId(), event.contentAuthorId())) {
-            notificationService.send(parent, NotificationType.CONTENT_COMMENTED,
-                    "有人回复了你的评论", "点击查看", NotificationType.CONTENT_COMMENTED.name(), ref);
+            notificationService.sendInteraction(parent, NotificationType.CONTENT_COMMENTED, event.commenterId(),
+                    null, ref, event.commentId(), Notification.VARIANT_REPLY, event.body());
         }
     }
 

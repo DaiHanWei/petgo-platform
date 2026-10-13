@@ -21,11 +21,14 @@ public class UserHideRelationService {
 
     private final UserHideRelationRepository relations;
     private final AccountQueryService accountQuery;
+    /** V1.3.4 follow Story 1.2：拉黑同事务取消 holder → target 的关注（AD-5）。 */
+    private final FollowService followService;
 
     public UserHideRelationService(UserHideRelationRepository relations,
-            AccountQueryService accountQuery) {
+            AccountQueryService accountQuery, FollowService followService) {
         this.relations = relations;
         this.accountQuery = accountQuery;
+        this.followService = followService;
     }
 
     /**
@@ -43,6 +46,10 @@ public class UserHideRelationService {
         // 提交时 UnexpectedRollbackException → 500。注销用户是软删（users 行仍在），不受影响。
         requireUserExists(targetId);
         insertIfAbsent(holderId, targetId, HideSource.BLOCK);
+        // V1.3.4 follow Story 1.2（AD-5）：同一事务取消我对他的关注（他对我的关注保留）。
+        // ⚠️ 重复拉黑也照常执行一次 —— 删 0 行即无副作用；不发任何通知。
+        // hideByReport / unblock 刻意不碰关注（REPORT 不影响关注，解除拉黑不恢复）。
+        followService.removeOnBlock(holderId, targetId);
     }
 
     /**

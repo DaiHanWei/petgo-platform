@@ -40,6 +40,10 @@ class ContentDetailServiceTest {
     private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins =
             mock(com.tailtopia.place.service.PlaceCheckinQueryService.class);
 
+    /** V1.3.4 follow Story 2.1：详情头部关注关系读端口。 */
+    private com.tailtopia.social.read.FollowReader followReader =
+            org.mockito.Mockito.mock(com.tailtopia.social.read.FollowReader.class);
+
     @BeforeEach
     void setUp() {
         posts = mock(ContentPostRepository.class);
@@ -60,7 +64,9 @@ class ContentDetailServiceTest {
                         Mockito.mock(com.tailtopia.auth.service.AccountQueryService.class),
                         Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class)),
                 // V1.3.2 Story 1.5：打卡场所条只读口。
-                placeCheckins);
+                placeCheckins,
+                // V1.3.4 follow Story 2.1：详情头部关注关系。
+                followReader);
         when(comments.countVisibleForViewer(org.mockito.ArgumentMatchers.anyLong(),
                 org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.anyLong())).thenReturn(5L);
@@ -206,5 +212,54 @@ class ContentDetailServiceTest {
         assertThat(d.authorDeleted()).isTrue(); // 非 404，匿名化保留
         assertThat(d.authorNickname()).isNull();
         assertThat(d.authorId()).isEqualTo(8L);
+    }
+
+    // ===== V1.3.4 follow Story 2.1 · AC1.2 / AC1.3 / D-8 =====
+
+    private void stubAuthor7() {
+        when(posts.findById(1L)).thenReturn(Optional.of(post(1L, 7L, null)));
+        when(accounts.findAuthorViews(anyList()))
+                .thenReturn(Map.of(7L, new AuthorView(7L, "Alice", null, false, java.util.List.of())));
+    }
+
+    @Test
+    void detailCarriesAuthorTokenAndFollowStateForOtherViewer() {
+        stubAuthor7();
+        when(accounts.publicTokensOf(anyList())).thenReturn(Map.of(7L, "tok7"));
+        when(followReader.followState(99L, 7L))
+                .thenReturn(new com.tailtopia.social.read.FollowState(false, true));
+
+        ContentDetailResponse d = service.getDetail(1L, 99L);
+
+        assertThat(d.authorToken()).isEqualTo("tok7");
+        assertThat(d.authorFollowState()).isEqualTo(new com.tailtopia.social.read.FollowState(false, true));
+        org.mockito.Mockito.verify(followReader, org.mockito.Mockito.times(1)).followState(99L, 7L);
+    }
+
+    @Test
+    void guestAndAuthorDoNotQueryFollowState() {
+        stubAuthor7();
+        when(accounts.publicTokensOf(anyList())).thenReturn(Map.of(7L, "tok7"));
+
+        assertThat(service.getDetail(1L, null).authorFollowState())
+                .isEqualTo(com.tailtopia.social.read.FollowState.NONE);
+        assertThat(service.getDetail(1L, 7L).authorFollowState())
+                .isEqualTo(com.tailtopia.social.read.FollowState.NONE);
+        org.mockito.Mockito.verify(followReader, org.mockito.Mockito.never())
+                .followState(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    /** D-8：封号作者（publicTokensOf 缺席）→ 无 token、不查关注关系 → App 不显示按钮。 */
+    @Test
+    void deactivatedAuthorHasNoTokenAndNoFollowLookup() {
+        stubAuthor7();
+        when(accounts.publicTokensOf(anyList())).thenReturn(Map.of());
+
+        ContentDetailResponse d = service.getDetail(1L, 99L);
+
+        assertThat(d.authorToken()).isNull();
+        assertThat(d.authorFollowState()).isEqualTo(com.tailtopia.social.read.FollowState.NONE);
+        org.mockito.Mockito.verify(followReader, org.mockito.Mockito.never())
+                .followState(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyLong());
     }
 }

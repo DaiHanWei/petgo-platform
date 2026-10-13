@@ -325,6 +325,14 @@ void main() {
         // 🔴 刻意不挂 `post_`：评论赞混进帖子赞的口径，正是这条 bug 要纠正的。
         // 名字由 PRD §4 定死为 `comment_like_tapped`，扩表、不改名。
         'comment_',
+        // 关注列表（V1.3.4 follow · FR-140.9 / Story 2.2 的 `follow_list_viewed`）。模块是「关注列表页」——
+        // 我的页与他人主页两处入口共用，挂 `me_` / `user_` 都会误导。⚠️ 新模块入表，不是为遗留事件放宽规则。
+        'follow_',
+        // 推荐关注（V1.3.4 follow · FR-140.11 / Story 2.3 的 `suggested_follow_shown`）：我自己的空关注 / 粉丝列表里的推荐区。
+        'suggested_',
+        // 通知中心（V1.3.4 follow · FR-141.16 / Story 3.4 的 `notification_follow_back_tapped`）：通知中心页里的动作。
+        // ⚠️ 与已有的 `notify_`（推送权限撤销检测点）刻意分开 —— 一个是页面模块，一个是推送基建。
+        'notification_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -422,6 +430,10 @@ void main() {
         // 用户设定了一个账号级取值（V1.3.2 batch-a PRD E-11C `tailsonality_owner_type_set`）：`_set` = **保存成功**
         // 之后才报（失败不报），描述结果而非点击。名字由 PRD §4 定死，扩表、不改名。
         '_set',
+        // 关注 / 取关（V1.3.4 follow · D-6）：`user_followed` / `user_unfollowed` 用过去式，**服务端确认成功后**才报
+        // （失败、游客拦截不报）。`user_unfollowed` 并不以 `_followed` 结尾，两个都要登记。扩表、不改名。
+        '_followed',
+        '_unfollowed',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;
@@ -478,6 +490,10 @@ void main() {
         // V1.3.4 ktp Story 1.5（AD-12 / D-13）：id_card_tab_viewed{tab, has_cards}、
         // id_card_style_tapped{card_type, card_variant}；card_type / card_variant 取接口 wire 值（大写，T-12）。
         'has_cards', 'card_type', 'card_variant',
+        // V1.3.4 follow（D-6 / Story 1.3 / 2.2）：关注埋点与关注列表曝光的属性。
+        'target_user_id', 'is_follow_back', 'is_self', 'is_empty',
+        // V1.3.4 follow · Story 3.4：通知条目点击带合并人数（后端文案条目才有）。
+        'actor_count',
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

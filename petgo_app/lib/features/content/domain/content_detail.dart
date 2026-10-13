@@ -1,5 +1,6 @@
 import '../../auth/domain/user_tag.dart';
 import '../../mention/domain/mention_view.dart';
+import '../../social/domain/follow_state.dart';
 import 'content_tag.dart';
 import 'feed_image_layout.dart';
 import '../../place/domain/checkin_place_ref.dart';
@@ -25,7 +26,45 @@ class ContentDetail {
     this.visibility = 'PUBLIC',
     this.mentions = const [],
     this.checkinPlace,
+    this.authorToken,
+    this.authorFollowState = FollowState.none,
+    this.followEpoch = 0,
   });
+
+  /// 作者对外 token（V1.3.4 follow · Story 2.1）；作者已注销 / 封号 / 老后端 → null（不显示关注按钮）。
+  final String? authorToken;
+
+  /// 当前查看者与作者的关注关系（快照）。缺字段 → [FollowState.none]。
+  final FollowState authorFollowState;
+
+  /// 这份快照发请求前读到的全局关注版本号（不来自 JSON，见 `FeedItem.followEpoch`）。
+  final int followEpoch;
+
+  /// 带上快照版本号的拷贝（`detailProvider` 用；其余字段原样）。
+  ContentDetail withFollowEpoch(int epoch) => ContentDetail(
+        id: id,
+        authorId: authorId,
+        authorDeleted: authorDeleted,
+        type: type,
+        likeCount: likeCount,
+        commentCount: commentCount,
+        liked: liked,
+        isAuthor: isAuthor,
+        createdAt: createdAt,
+        authorNickname: authorNickname,
+        authorTags: authorTags,
+        decorationTags: decorationTags,
+        authorAvatarUrl: authorAvatarUrl,
+        body: body,
+        imageUrls: imageUrls,
+        imageSizes: imageSizes,
+        visibility: visibility,
+        mentions: mentions,
+        checkinPlace: checkinPlace,
+        authorToken: authorToken,
+        authorFollowState: authorFollowState,
+        followEpoch: epoch,
+      );
 
   final int id;
   final int authorId;
@@ -104,6 +143,9 @@ class ContentDetail {
       visibility: (json['visibility'] ?? 'PUBLIC') as String,
       mentions: MentionView.listFromJson(json['mentions']),
       checkinPlace: CheckinPlaceRef.fromJson(json['checkinPlace']),
+      // V1.3.4 follow Story 2.1：缺失 / null 都按默认。
+      authorToken: json['authorToken'] as String?,
+      authorFollowState: FollowState.fromJson(json['authorFollowState']),
     );
   }
 }
