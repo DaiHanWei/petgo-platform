@@ -4,6 +4,8 @@ import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,8 +27,10 @@ import org.springframework.transaction.annotation.Transactional;
  * 与 legacy 号池 {@link SerialAllocationService} 的 advisory 锁互不相干、互不影响。
  *
  * <p>撞号兜底：身份码日期段=生日、顺序号却按登记日计，不同登记日的同生日同性别同物种宠物可能拼出同号——
- * 拼出的号若已存在于 {@code id_cards} 则继续取下一个序号，直到序号耗尽（9999），DB UNIQUE 约束（V95）
- * 为终极兜底。<b>不设固定次数上限</b>：同前缀历史卡跨日累积会永久占用低位序号，固定上限会让该组合
+ * 拼出的号若已登记在归属表 {@code id_card_number_owners} 则继续取下一个序号，直到序号耗尽（9999）。
+ * V1.3.4 ktp Story 2.2（AD-3）：全局 UNIQUE（V95）已删除（同一用户的多张卡可共用一个号），
+ * <b>归属表主键 + {@link #claimNumbers}</b> 为终极兜底——跨用户撞号整笔建卡回滚。
+ * <b>不设固定次数上限</b>：同前缀历史卡跨日累积会永久占用低位序号，固定上限会让该组合
  * 从某天起建卡恒失败；以 9999 为界则至多退化为一次线性扫描（≤500 DAU 不可达）。
  * 序号超上限（身份码 9999 / 护照号 99999）→ 500（按 spec「Ask First」之外的默认策略直接报错）。
  *
@@ -37,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CardNumberService {
 
     private static final ZoneId WIB = ZoneId.of("Asia/Jakarta");
+    private static final Logger log = LoggerFactory.getLogger(CardNumberService.class);
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -58,7 +63,7 @@ public class CardNumberService {
             if (!cardNoExists(candidate)) {
                 return candidate;
             }
-            // 撞上历史登记日发出的同号（UNIQUE 兜底面）→ 继续取下一个序号，序号耗尽由上方 9999 界终止。
+            // 撞上已登记的号（归属表兜底面）→ 继续取下一个序号，序号耗尽由上方 9999 界终止。
         }
     }
 
@@ -78,6 +83,41 @@ public class CardNumberService {
             throw new IllegalStateException("护照号顺序号超出当年上限（99999）");
         }
         return composePassportNo(petType, year, seq);
+    }
+
+    /**
+     * 登记本卡两个号的归属（V1.3.4 ktp Story 2.2，AD-3）。须在建卡事务内、落卡前调用（REQUIRED 加入
+     * {@code IdCardService.createCard}）。对每个号：{@code INSERT .. ON CONFLICT DO NOTHING} 后查归属——
+     * 本人（刚登记或早已登记）→ 通过；<b>他人 → 抛 {@link IllegalStateException}，整笔建卡回滚</b>（发号出错的兜底，
+     * T-17：500 级系统错误）。并发下 PG 的 ON CONFLICT 会等待对方未提交的同键插入，对方提交后本方读到对方归属。
+     * null 的号跳过（防御；新卡两个号恒非空）。日志不记号码（编码了宠物生日）与对方 user_id。
+     */
+    @Transactional
+    public void claimNumbers(long userId, String cardNo, String passportNo) {
+        claim(userId, "C", cardNo);
+        claim(userId, "P", passportNo);
+    }
+
+    private void claim(long userId, String kind, String number) {
+        if (number == null) {
+            return;
+        }
+        entityManager.createNativeQuery(
+                        "INSERT INTO id_card_number_owners (kind, number, user_id) VALUES (:kind, :no, :uid) "
+                                + "ON CONFLICT (kind, number) DO NOTHING")
+                .setParameter("kind", kind)
+                .setParameter("no", number)
+                .setParameter("uid", userId)
+                .executeUpdate();
+        Number owner = (Number) entityManager.createNativeQuery(
+                        "SELECT user_id FROM id_card_number_owners WHERE kind = :kind AND number = :no")
+                .setParameter("kind", kind)
+                .setParameter("no", number)
+                .getSingleResult();
+        if (owner.longValue() != userId) {
+            log.error("身份证编号跨用户冲突，建卡回滚 userId={} kind={}", userId, kind);
+            throw new IllegalStateException("身份证编号已属于其他用户");
+        }
     }
 
     /** 身份码拼装（纯函数，包内可见供单测）：TT + (日+性别加码)(2) + 月(2) + 年后两位(2) + SP(2) + 序号(4)。 */
@@ -135,9 +175,10 @@ public class CardNumberService {
         return next.intValue();
     }
 
+    /** 号是否已被任何人登记（AD-3：查归属表，不再查 id_cards；新发的号必须全新）。 */
     private boolean cardNoExists(String cardNo) {
         Boolean exists = (Boolean) entityManager.createNativeQuery(
-                        "SELECT EXISTS(SELECT 1 FROM id_cards WHERE card_no = :no)")
+                        "SELECT EXISTS(SELECT 1 FROM id_card_number_owners WHERE kind = 'C' AND number = :no)")
                 .setParameter("no", cardNo)
                 .getSingleResult();
         return Boolean.TRUE.equals(exists);

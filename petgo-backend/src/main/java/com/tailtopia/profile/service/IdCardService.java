@@ -94,6 +94,8 @@ public class IdCardService {
         long serial = serialAllocation.allocate();
         String cardNo = cardNumbers.allocateCardNo(req.birthday(), gender, req.petType());
         String passportNo = cardNumbers.allocatePassportNo(req.petType());
+        // AD-3：登记号的归属（同一用户可共用、跨用户不可），他人已持有 → 抛错整笔回滚（T-17）。
+        cardNumbers.claimNumbers(ownerId, cardNo, passportNo);
         // intro：DTO 字段为兼容旧版 App 保留，一律不写入（PRD §3.4 / FR-142D.4）。
         IdCard card = idCards.save(IdCard.snapshot(ownerId, serial, req.name(), req.petType(),
                 req.breed(), req.birthday(), req.avatarUrl(), null, gender, cardNo,

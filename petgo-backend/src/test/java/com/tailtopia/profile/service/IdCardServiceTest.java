@@ -3,6 +3,7 @@ package com.tailtopia.profile.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -324,5 +325,34 @@ class IdCardServiceTest {
                 assertThat(violatedFields(req("KTP", null, pt, g, "x", null))).isEmpty();
             }
         }
+    }
+
+    // ---- V1.3.4 ktp Story 2.2（AD-3）：建卡写号先登记归属，再落卡 ----
+
+    @Test
+    void createCardClaimsNumbersBeforeSave() {
+        when(serialAllocation.allocate()).thenReturn(11L);
+        when(cardNumbers.allocateCardNo(any(), any(), any())).thenReturn("TT600324020001");
+        when(cardNumbers.allocatePassportNo(any())).thenReturn("TT02P2600001");
+        when(idCards.save(any())).thenAnswer(IdCardServiceTest::persisted);
+
+        service.createCard(7L, req("PASSPORT", null));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(cardNumbers, idCards);
+        order.verify(cardNumbers).claimNumbers(7L, "TT600324020001", "TT02P2600001");
+        order.verify(idCards).save(any());
+    }
+
+    @Test
+    void claimConflictAbortsWithoutSaving() {
+        when(serialAllocation.allocate()).thenReturn(11L);
+        when(cardNumbers.allocateCardNo(any(), any(), any())).thenReturn("TT600324020001");
+        when(cardNumbers.allocatePassportNo(any())).thenReturn("TT02P2600001");
+        org.mockito.Mockito.doThrow(new IllegalStateException("身份证编号已属于其他用户"))
+                .when(cardNumbers).claimNumbers(anyLong(), any(), any());
+
+        assertThatThrownBy(() -> service.createCard(7L, req("PASSPORT", null)))
+                .isInstanceOf(IllegalStateException.class);
+        verify(idCards, never()).save(any());
     }
 }
