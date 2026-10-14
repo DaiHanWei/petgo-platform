@@ -10,6 +10,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../../auth/domain/auth_guard.dart';
 import '../../../me/data/me_counts_provider.dart';
+import '../../../user_profile/data/public_profile_repository.dart';
 import '../../data/follow_repository.dart';
 import '../../domain/follow_state.dart';
 
@@ -328,6 +329,8 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
       });
       // V1.3.4 Story 1.4（T-15）：我的关注数变了 → 我的页四格重取 `/me`（页面已关也要失效）。
       container.invalidate(meCountsProvider);
+      // 我本人的公开主页（关注列表页在栈里时会一直持有它）同样带 Mengikuti 计数，不失效就停在旧值（验收 FL-30）。
+      if (accountAtTap != null) container.invalidate(publicProfileProvider(accountAtTap));
     } catch (e) {
       // 回滚到点击前那一条覆盖（原样，含版本号；之前没有则删除）。账号已变 → 新表本就是空的，不写。
       if (!sameAccount()) return;

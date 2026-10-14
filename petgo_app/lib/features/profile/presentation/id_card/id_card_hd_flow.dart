@@ -63,10 +63,15 @@ Future<IdCardHdFlowResult> openIdCardHdPaywall(
   }
 
   int balance = 0;
+  // 读余额期间挂一个监听：没有监听者时 Riverpod 会暂停失败重试，断网后 future 永不返回，
+  // 按钮一直转圈、恢复网络也不动（验收 ID-21 附带 bug）。再加超时兜底（同 keepsake_pay_flow）。
+  final balanceSub = container.listen(pawCoinProvider, (_, _) {});
   try {
-    balance = (await container.read(pawCoinProvider.future)).balance;
+    balance = (await container.read(pawCoinProvider.future).timeout(const Duration(seconds: 10))).balance;
   } catch (_) {
     balance = 0;
+  } finally {
+    balanceSub.close();
   }
   if (!context.mounted) return IdCardHdFlowResult.dismissed;
 
