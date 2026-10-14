@@ -2602,5 +2602,7 @@
   "followingStripMore": "Lainnya",
   "followingEmptyTitle": "Belum ada postingan dari teman",
   "followingEmptyBody": "Ikuti orang yang kamu suka, momen dan diary mereka akan muncul di sini.",
-  "followingExploreDiscover": "Jelajahi Discover ›"
+  "followingExploreDiscover": "Jelajahi Discover ›",
+  "postLikersTitle": "Suka",
+  "postLikersEmpty": "Belum ada yang menyukai"
 }

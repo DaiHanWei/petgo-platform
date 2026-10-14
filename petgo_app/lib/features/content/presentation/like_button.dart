@@ -7,6 +7,7 @@ import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../features/auth/domain/auth_guard.dart';
 import '../data/like_repository.dart';
+import 'post_likers_sheet.dart';
 
 /// 点赞按钮（Story 3.4 FR-23；V1.1.6 Story 3.2 起首页也用）。心形 + 计数；乐观更新（失败回滚）。
 ///
@@ -21,6 +22,7 @@ class LikeButton extends ConsumerStatefulWidget {
     required this.initialLiked,
     required this.initialCount,
     required this.source,
+    required this.likersSource,
     this.feedTab,
     this.rankMode,
     this.onSettled,
@@ -36,6 +38,14 @@ class LikeButton extends ConsumerStatefulWidget {
   /// 只改一侧的话，「开放首页点赞到底是净增长还是把详情页的点赞前移了」这个对比
   /// 就**彻底失效**，而这正是本版本要回答的问题。故设为必填参数：漏传编译不过。
   final String source;
+
+  /// 点数字打开点赞人抽屉时的埋点 `post_likers_opened.source`（V1.3.4）：
+  /// `feed_card`（首页卡片）/ `content_detail`（详情页底栏）。必填，理由同 [source]。
+  final String likersSource;
+
+  /// 数字热区向右多出的透明命中宽度（视觉不变）。调用方据此把后面的间距减掉同样的量，
+  /// 使可见间距与拆分前一致。
+  static const double countTrailingHitExtent = 12;
 
   /// 埋点 `feed_tab`（V1.1.6 Story 16.5）。只有从 Feed 卡片来时才有值。
   final String? feedTab;
@@ -132,33 +142,48 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
     }
   }
 
+  /// 点数字（V1.3.4 点赞人列表）：本地计数为 0 → 无反应（以乐观更新后的值判断）；
+  /// 游客 → 登录引导（不打开抽屉）；否则弹点赞人抽屉。不触碰点赞状态。
+  void _openLikers() {
+    if (_count <= 0) return;
+    if (!requireLogin(ref, context, entrySource: 'likers')) return;
+    showPostLikersSheet(context, postId: widget.postId, source: widget.likersSource);
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 🔴 key 必须带内容编号：本组件原先写死成详情页专用的名字，
-    // 进了首页列表后一屏多张卡会**重复 key**（Flutter 里重复 key 会报错或错配状态）。
-    return InkWell(
-      key: ValueKey('likeButton_${widget.postId}'),
-      onTap: _toggle,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
+    final color = _liked ? AppColors.likeHeart : AppColors.textSecondary;
+    // V1.3.4：爱心与数字是**两个互不重叠**的热区 —— 爱心 = 点赞（行为与拆分前一致），
+    // 数字 = 点赞人列表。数字热区吃掉原先图标与数字之间的空隙并向右多出
+    // [LikeButton.countTrailingHitExtent]（Feed 小卡上数字很小，不放大点不准）。
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 🔴 key 必须带内容编号：本组件原先写死成详情页专用的名字，
+        // 进了首页列表后一屏多张卡会**重复 key**（Flutter 里重复 key 会报错或错配状态）。
+        InkWell(
+          key: ValueKey('likeButton_${widget.postId}'),
+          onTap: _toggle,
+          child: Icon(
             _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
             size: 20,
             // 点赞红心（设计稿）：激活态用暖红 likeHeart，与 Feed 卡片点赞一致。
-            color: _liked ? AppColors.likeHeart : AppColors.textSecondary,
+            color: color,
           ),
-          const SizedBox(width: AppSpacing.xs),
-          // 数字与心形**同步变色**（FR-93）：改前数字恒为次要色，已赞时只有图标变红，
-          // 看上去像"没点上"。
-          Text(
-            '$_count',
-            style: AppTypography.caption.copyWith(
-              color: _liked ? AppColors.likeHeart : AppColors.textSecondary,
-            ),
+        ),
+        GestureDetector(
+          key: ValueKey('likeCount_${widget.postId}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: _openLikers,
+          child: Padding(
+            padding: const EdgeInsets.only(
+                left: AppSpacing.xs, right: LikeButton.countTrailingHitExtent),
+            // 数字与心形**同步变色**（FR-93）：改前数字恒为次要色，已赞时只有图标变红，
+            // 看上去像"没点上"。
+            child: Text('$_count', style: AppTypography.caption.copyWith(color: color)),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

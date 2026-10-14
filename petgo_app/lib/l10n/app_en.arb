@@ -3998,5 +3998,9 @@
   "followingEmptyBody": "Follow people you like and their moments and diaries will show up here.",
   "@followingEmptyBody": {"description": "Following tab empty state description"},
   "followingExploreDiscover": "Explore Discover ›",
-  "@followingExploreDiscover": {"description": "Following empty state bottom link, switches to the Discover tab"}
+  "@followingExploreDiscover": {"description": "Following empty state bottom link, switches to the Discover tab"},
+  "postLikersTitle": "Likes",
+  "@postLikersTitle": {"description": "Post likers bottom sheet title (V1.3.4)"},
+  "postLikersEmpty": "No likes yet",
+  "@postLikersEmpty": {"description": "Post likers bottom sheet empty state (V1.3.4)"}
 }

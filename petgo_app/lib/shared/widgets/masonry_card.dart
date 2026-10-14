@@ -357,11 +357,13 @@ class MasonryCard extends StatelessWidget {
                   initialCount: item.likeCount,
                   // 🛡 两侧都要传，否则「首页点赞是净增还是把详情页的前移了」无从判断。
                   source: 'feed',
+                  likersSource: 'feed_card',
                   // V1.1.6 Story 16.5：FR-95 的效果归因靠这两个属性区分排序路径。
                   feedTab: feedTab,
                   rankMode: rankMode,
                 ),
-                const SizedBox(width: 18),
+                // 可见间距仍是 18：点赞数字的透明热区已向右占掉一段（V1.3.4）。
+                const SizedBox(width: 18 - LikeButton.countTrailingHitExtent),
                 GestureDetector(
                   key: ValueKey('feedCardComment_${item.id}'),
                   behavior: HitTestBehavior.opaque,
