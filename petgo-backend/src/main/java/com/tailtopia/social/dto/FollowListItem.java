@@ -14,6 +14,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param followsMe   对方是否关注我
  * @param blockedByMe 我是否主动拉黑了对方（只认 BLOCK，T-20）—— 该行不显示关注按钮
  * @param self        这一行是不是我自己
+ * @param petType     宠物物种 CAT/DOG/OTHER（仅推荐关注填充，其余列表为 null 省略）
+ * @param petBirthday 宠物生日（同上，可空）
  */
 public record FollowListItem(
         long userId,
@@ -25,5 +27,13 @@ public record FollowListItem(
         @JsonProperty("iFollow") boolean iFollow,
         @JsonProperty("followsMe") boolean followsMe,
         @JsonProperty("blockedByMe") boolean blockedByMe,
-        @JsonProperty("self") boolean self) {
+        @JsonProperty("self") boolean self,
+        String petType,
+        java.time.LocalDate petBirthday) {
+
+    /** 不带宠物字段的便捷构造（关注 / 粉丝列表用）。 */
+    public FollowListItem(long userId, String userToken, String nickname, String avatarUrl, boolean deleted,
+            boolean iFollow, boolean followsMe, boolean blockedByMe, boolean self) {
+        this(userId, userToken, nickname, avatarUrl, deleted, iFollow, followsMe, blockedByMe, self, null, null);
+    }
 }
