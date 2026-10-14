@@ -600,6 +600,7 @@ dialog { z-index: 60; }
 .cfg-title { font-size: 15px; margin: 0 0 8px; }
 .cfg-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; }
 .cfg-foot .inline-error-slot:empty { display: none; }
+.cfg-foot .btn { flex-shrink: 0; } /* 长报错文案会把保存钮挤窄截字（AB-22 预览发现） */
 .tag-dirty { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bg); }
 /* .tag 自带 display:inline-block，会盖掉 UA 的 [hidden]{display:none} —— 不补这条，「已修改」在未改动时也常亮（跨页 bug）。 */
 .tag-dirty[hidden], .tag[hidden] { display: none; }
@@ -629,6 +630,7 @@ label.field.req::after { content: " *"; color: var(--danger); font-weight: 700; 
 .sel::after { content: '▾'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--muted); }
 /* UX-DR12 三语占位 */
 .field label, label.field { display: block; }
+label.field[hidden] { display: none; } /* 同 .perm-groups[hidden]：上一条会盖掉 UA 的 [hidden]（AB-22 确认框） */
 .btn { min-width: 88px; white-space: nowrap; }
 .btn-sm { min-width: 0; }
 th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

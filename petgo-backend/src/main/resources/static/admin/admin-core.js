@@ -88,7 +88,8 @@ function tailtopiaConfirmDiffMessage(form) {
     var on = form.getAttribute('data-confirm-diff-on') || 'on', off = form.getAttribute('data-confirm-diff-off') || 'off';
     var lines = [];
     form.querySelectorAll('input[name], select[name], textarea[name]').forEach(function (el) {
-        if (el.type === 'hidden' || el.disabled) { return; }
+        // data-diff-skip：确认用的输入（V1.3.4 AB-22「再次输入最低支持版本」）不是配置值，不复述
+        if (el.type === 'hidden' || el.disabled || el.hasAttribute('data-diff-skip')) { return; }
         var isCheck = el.type === 'checkbox' || el.type === 'radio';
         var cur = isCheck ? (el.checked ? '1' : '0') : el.value;
         var was = el.dataset.initialValue === undefined ? cur : el.dataset.initialValue;
@@ -1005,7 +1006,24 @@ document.addEventListener('change', function (e) {
         });
         return bad;
     }
+    // V1.3.4 AB-22：[data-reveal-when-changed="<字段名>"] —— 该字段偏离初值才显示并启用内含输入（App 版本卡「再次输入最低支持版本」），
+    // 改回初值即隐藏、禁用并清空。⚠️ 必须先于 dirty 比对执行：disabled 的输入不进 FormData，否则改回原值后卡仍算「已修改」。
+    // 体验护栏不是安全边界：确认值是否相符由服务端判定（422 min-confirm）。
+    function reveal(form) {
+        form.querySelectorAll('[data-reveal-when-changed]').forEach(function (box) {
+            var src = form.querySelector('[name="' + box.getAttribute('data-reveal-when-changed') + '"]');
+            // forceReveal：服务端回了 422 min-confirm 而本页认为没改（页面过期，库里已被别人改过）→ 也展开，否则卡死在一个禁用的框上
+            var changed = box.dataset.forceReveal === '1' ||
+                (!!src && src.dataset.initialValue !== undefined && src.value.trim() !== src.dataset.initialValue.trim());
+            box.hidden = !changed;
+            box.querySelectorAll('input').forEach(function (inp) {
+                inp.disabled = !changed;
+                if (!changed) { inp.value = ''; }
+            });
+        });
+    }
     function refresh(form) {
+        reveal(form);
         var dirty = serialize(form) !== form.dataset.initial;
         form.classList.toggle('is-dirty', dirty);
         var save = form.querySelector('[data-save]');
@@ -1047,6 +1065,9 @@ document.addEventListener('change', function (e) {
                     var el = name && form.querySelector('[name="' + name + '"]');
                     if (el) { el.classList.add('is-invalid'); }
                 });
+                if (err.getAttribute('data-code') === 'admin.err.config.version.min-confirm') {
+                    form.querySelectorAll('[data-reveal-when-changed]').forEach(function (box) { box.dataset.forceReveal = '1'; });
+                }
                 form.dataset.invalid = '1'; // 复审 #3：不动 dirty / diff 基线，只用独立标志禁用保存钮
                 refresh(form);
             }
@@ -1057,6 +1078,10 @@ document.addEventListener('change', function (e) {
         document.addEventListener(evt, function (e) {
             var el = e.target;
             if (el && el.classList && el.classList.contains('is-invalid')) { el.classList.remove('is-invalid'); }
+            // AB-22：用户动了源字段 → 撤销 422 带来的强制展开，回到「偏离初值才显示」
+            if (el && el.name && el.form) {
+                el.form.querySelectorAll('[data-reveal-when-changed="' + el.name + '"]').forEach(function (box) { delete box.dataset.forceReveal; });
+            }
             var form = el && el.closest ? el.closest('form[data-config-card]') : null;
             if (form && form.dataset.invalid === '1') { delete form.dataset.invalid; refresh(form); }
         });

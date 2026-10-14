@@ -33,6 +33,8 @@
             </div>
             <!--/* 客服联系方式（shop-v2 Story 3-1 / AD-S8）——改完即生效，不需发版、不需重启 */-->
             <div th:replace="~{admin/fragments/config-card-support :: card}"></div>
+            <!--/* App 版本配置（V1.3.4 AB-22 · FR-124）——App 冷启动读取，改完即生效；最低支持版本改动须再输一遍确认 */-->
+            <div th:replace="~{admin/fragments/config-card-app-version :: card}"></div>
         </th:block>
 
         <!--/* 分享奖励（V1.1.6 Story 18.3 · AB-3M）：独立权限码；edit 码也放进门里——应急操作员可能只握 share_reward_edit */-->
