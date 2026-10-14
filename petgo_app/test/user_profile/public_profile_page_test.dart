@@ -277,6 +277,21 @@ void main() {
       expect(find.byKey(const ValueKey('profileMore')), findsNothing);
     });
 
+    testWidgets('官方号 → 关注 / 粉丝两格仅展示不可点（列表服务端 403）；普通号两格可点', (tester) async {
+      await _pump(tester, repo: _FakeProfileRepo(_target(official: true)));
+      for (final k in ['profileStatFollowing', 'profileStatFollowers']) {
+        expect(find.byKey(ValueKey(k)), findsOneWidget, reason: '数字照常显示');
+        expect(find.descendant(of: find.byKey(ValueKey(k)), matching: find.byType(InkWell)), findsNothing);
+      }
+    });
+
+    testWidgets('普通号 → 关注 / 粉丝两格可点', (tester) async {
+      await _pump(tester, repo: _FakeProfileRepo(_target()));
+      for (final k in ['profileStatFollowing', 'profileStatFollowers']) {
+        expect(find.descendant(of: find.byKey(ValueKey(k)), matching: find.byType(InkWell)), findsOneWidget);
+      }
+    });
+
     test('PublicProfile.fromJson：official 只在 true 时下发，缺键为 false', () {
       expect(PublicProfile.fromJson(const {'official': true}).official, isTrue);
       expect(PublicProfile.fromJson(const {}).official, isFalse);

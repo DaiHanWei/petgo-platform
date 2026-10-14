@@ -7,6 +7,7 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
+import 'package:tailtopia/features/content/domain/home_refresh_provider.dart';
 import 'package:tailtopia/features/content/domain/pinned_slot.dart';
 import 'package:tailtopia/features/content/presentation/feed_tab_row.dart';
 import 'package:tailtopia/features/content/presentation/feed_view.dart';
@@ -38,6 +39,9 @@ class _User extends AuthController {
 class _FeedRepo implements FeedRepository {
   int followingCalls = 0;
 
+  /// true → 关注流返回一条帖（FollowingStrip 只在非空流里挂载）。
+  bool followingHasItem = false;
+
   @override
   Future<FeedPage> getFeed({FeedCategory category = FeedCategory.all, String? cursor, int limit = 20}) async =>
       FeedPage(items: [
@@ -58,13 +62,29 @@ class _FeedRepo implements FeedRepository {
   @override
   Future<FeedPage> getFollowingFeed({String? cursor}) async {
     followingCalls++;
-    return const FeedPage(items: []);
+    if (!followingHasItem) return const FeedPage(items: []);
+    return FeedPage(items: [
+      FeedItem(
+        id: 2,
+        authorId: 8,
+        authorDeleted: false,
+        authorNickname: 'Bob',
+        type: 'DAILY',
+        body: 'following post',
+        createdAt: DateTime.utc(2026, 10, 2),
+      ),
+    ]);
   }
 }
 
 class _StripRepo implements FollowingStripRepository {
+  static int calls = 0;
+
   @override
-  Future<List<FollowingStripUser>> fetch() async => const [];
+  Future<List<FollowingStripUser>> fetch() async {
+    calls++;
+    return const [];
+  }
 }
 
 class _SuggestRepo implements FollowSuggestionRepository {
@@ -148,5 +168,24 @@ void main() {
     expect(find.byType(FollowingTabView), findsNothing);
     expect(find.byType(FeedTabRow), findsOneWidget);
     expect(repo.followingCalls, 0);
+  });
+
+  testWidgets('已在 Following 再点页签 → 回顶信号 +1、头像排与关注流都重新拉取', (tester) async {
+    final (c, repo) = await _pump(tester, guest: false);
+    repo.followingHasItem = true;
+    await tester.tap(find.byKey(const ValueKey('socialTab_following')));
+    await tester.pumpAndSettle();
+    expect(c.read(socialTabProvider), SocialTab.following);
+    final feedCallsBefore = repo.followingCalls;
+    final stripCallsBefore = _StripRepo.calls;
+    final topBefore = c.read(homeScrollTopProvider);
+
+    await tester.tap(find.byKey(const ValueKey('socialTab_following')));
+    await tester.pumpAndSettle();
+
+    expect(c.read(socialTabProvider), SocialTab.following);
+    expect(c.read(homeScrollTopProvider), isNot(topBefore), reason: '回顶信号应递增');
+    expect(repo.followingCalls, greaterThan(feedCallsBefore), reason: '关注流重新拉取');
+    expect(_StripRepo.calls, greaterThan(stripCallsBefore), reason: '头像排重新拉取');
   });
 }
