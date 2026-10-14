@@ -46,6 +46,7 @@ public final class OpsAudienceSql {
 
     private static final String SELECT = "SELECT u.id, u.locale FROM users u WHERE ";
     private static final String ORDER = " ORDER BY u.id ASC";
+    private static final String COUNT = "SELECT count(*) FROM users u WHERE ";
 
     private static final String HAS_PET = "EXISTS (SELECT 1 FROM pet_profiles p WHERE p.owner_id = u.id)";
     private static final String HAS_SPECIES =
@@ -75,6 +76,32 @@ public final class OpsAudienceSql {
             case FILTER -> appendFilter(spec, wib, where, params);
         }
         return new Query(SELECT + where + ORDER, Collections.unmodifiableMap(params));
+    }
+
+    /**
+     * 人数预估（V1.3.4 AB-31 后台「预估人数」）：ALL / FILTER 与 {@link #build} <b>同一段 WHERE</b>，只把选列换成
+     * {@code count(*)}——预估与真正发送两处口径不能各写一份。
+     *
+     * <p>IDS 模式发送时 id 在子表里、预估时活动还没建，不能走这里：用 {@link #countIds()} 按粘贴的 id 分批计数。
+     */
+    public static Query count(AudienceSpec spec, ZoneId wib) {
+        if (spec.mode() == AudienceSpec.Mode.IDS) {
+            throw new IllegalArgumentException("IDS 模式请用 countIds");
+        }
+        StringBuilder where = new StringBuilder(BASE_FILTER);
+        Map<String, Object> params = new LinkedHashMap<>();
+        if (spec.mode() == AudienceSpec.Mode.FILTER) {
+            appendFilter(spec, wib, where, params);
+        }
+        return new Query(COUNT + where, Collections.unmodifiableMap(params));
+    }
+
+    /**
+     * IDS 模式预估：给定一批 id（调用方已去重、已分批，参数名 {@code ids}）里满足基础过滤的人数。
+     * 与发送时 {@link #IN_TARGETS} 分支同口径（基础过滤 + 指定 id，不叠加任何筛选条件）。
+     */
+    public static String countIds() {
+        return COUNT + BASE_FILTER + " AND u.id IN (:ids)";
     }
 
     private static void appendFilter(AudienceSpec spec, ZoneId wib, StringBuilder where,

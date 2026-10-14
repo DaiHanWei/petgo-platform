@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.admin.ops.AdminOpsTargetValidator;
 import com.tailtopia.admin.opspopup.dto.OpsPopupForm;
 import com.tailtopia.ops.popup.domain.OpsPopup;
 import com.tailtopia.ops.popup.domain.OpsPopupAudience;
@@ -50,7 +51,7 @@ class AdminOpsPopupServiceTest {
         products = mock(ShopProductRepository.class);
         audit = mock(AdminAuditService.class);
         when(popups.save(any(OpsPopup.class))).thenAnswer(inv -> inv.getArgument(0));
-        service = new AdminOpsPopupService(popups, new OpsTargetPolicy(products), audit);
+        service = new AdminOpsPopupService(popups, new AdminOpsTargetValidator(new OpsTargetPolicy(products)), audit);
     }
 
     /** 一份必填齐全的合法表单（调用方覆盖某项构造违规用例）。 */

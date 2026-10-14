@@ -99,7 +99,8 @@ class AdminPageCatalogTest {
                 "shopProducts", "shopReconciliation", "shopRepurchase", "shopReturns", "shopShipping", "shopTurnover",
                 "shopOrderExceptions", "shopPrecedents", "support-tickets", "tickets", "user-tags", "users", "vets",
                 "virtual-accounts", "warm-replies", "places",
-                "ops-popups")) { // V1.3.4 AB-30
+                "ops-popups", // V1.3.4 AB-30
+                "ops-notifications")) { // V1.3.4 AB-31
             assertThat(actives).as("active=" + active + " 没有对应侧栏项").contains(active);
         }
     }

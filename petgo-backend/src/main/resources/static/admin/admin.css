@@ -1094,3 +1094,16 @@ tr.is-muted td { opacity: .55; }
 .opsp-sub { font-size: var(--fs-xs); margin-top: 2px; }
 .opsp-window { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .opsp-url { display: inline-block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+
+/* ===== 运营通知（V1.3.4 AB-31）：复用 .opsp-form 抽屉样式，只补人群区间 / 复选 / 预估行 / 只读详情 ===== */
+.opsn-range { display: flex; align-items: center; gap: 6px; }
+.opsn-range > input { flex: 1; min-width: 0; }
+.opsn-check { display: inline-flex; align-items: center; gap: 4px; margin-right: 14px; }
+.opsn-preview-row { display: flex; align-items: center; gap: 10px; }
+.opsn-preview-row .inline-error-slot { margin: 0; flex: 1; }
+.opsn-preview-ok { font-weight: 600; }
+.opsn-dl { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; margin: 0; }
+.opsn-dl dt { color: var(--muted); }
+.opsn-dl dd { margin: 0; word-break: break-word; }
+.opsn-pre { white-space: pre-wrap; }
+

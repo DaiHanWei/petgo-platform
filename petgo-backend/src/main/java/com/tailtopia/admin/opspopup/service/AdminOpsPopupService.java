@@ -2,6 +2,7 @@ package com.tailtopia.admin.opspopup.service;
 
 import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.audit.service.AuditActions;
+import com.tailtopia.admin.ops.AdminOpsTargetValidator;
 import com.tailtopia.admin.opspopup.dto.OpsPopupForm;
 import com.tailtopia.ops.popup.domain.OpsPopup;
 import com.tailtopia.ops.popup.domain.OpsPopupAudience;
@@ -51,10 +52,10 @@ public class AdminOpsPopupService {
     static final int PRIORITY_MAX = 100_000;
 
     private final OpsPopupRepository popups;
-    private final OpsTargetPolicy targets;
+    private final AdminOpsTargetValidator targets;
     private final AdminAuditService audit;
 
-    public AdminOpsPopupService(OpsPopupRepository popups, OpsTargetPolicy targets, AdminAuditService audit) {
+    public AdminOpsPopupService(OpsPopupRepository popups, AdminOpsTargetValidator targets, AdminAuditService audit) {
         this.popups = popups;
         this.targets = targets;
         this.audit = audit;
@@ -250,28 +251,10 @@ public class AdminOpsPopupService {
     }
 
     /**
-     * 跳转目标：先格式（{@link OpsTargetPolicy#isWellFormed}），再可用性（{@link OpsTargetPolicy#isAvailable}，
-     * 商品须存在且在售）。格式错按类型给各自的话 —— 「跳转目标不合法」五种类型共用一句，运营不知道该改哪。
+     * 跳转目标：规则与按类型的错误码都在共享的 {@link AdminOpsTargetValidator}（AB-31 运营通知同用一份）。
      */
     private void checkTarget(OpsTargetType type, String value, boolean checkAvailability) {
-        if (!OpsTargetPolicy.isWellFormed(type, value)) {
-            switch (type) {
-                case NONE -> throw AppException.validation("「不跳转」不应带跳转值")
-                        .code("admin.err.opsPopup.targetNoneWithValue");
-                case PRODUCT -> throw AppException.validation("请填写正确的商品 token")
-                        .code("admin.err.opsPopup.targetProduct");
-                case CATEGORY -> throw AppException.validation("请选择商品分类")
-                        .code("admin.err.opsPopup.targetCategory");
-                case APP_PAGE -> throw AppException.validation("请选择 App 页面")
-                        .code("admin.err.opsPopup.targetAppPage");
-                default -> throw AppException.validation("外部链接须以 http:// 或 https:// 开头")
-                        .code("admin.err.opsPopup.targetExternal");
-            }
-        }
-        if (checkAvailability && !targets.isAvailable(type, value)) {
-            // 能走到这里的只有 PRODUCT：格式对，但商品不存在或已下架
-            throw AppException.validation("商品不存在或已下架").code("admin.err.opsPopup.productUnavailable");
-        }
+        targets.check(type, value, checkAvailability);
     }
 
     /**

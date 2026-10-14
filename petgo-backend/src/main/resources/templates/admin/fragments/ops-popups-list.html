@@ -50,15 +50,7 @@
                      th:text="#{admin.opsPopups.newUserDaysShort(${p.newUserDays})}">分界 7 天</div>
             </td>
             <td th:text="#{'admin.opsPopups.frequency.' + ${p.frequency}}">每人一次</td>
-            <td>
-                <span th:text="#{'admin.opsPopups.targetType.' + ${p.targetType}}">不跳转</span>
-                <div th:switch="${p.targetType}" class="opsp-sub">
-                    <span th:case="'CATEGORY'" th:text="#{'admin.v130.shopProducts.category.' + ${p.targetValue}}">主粮</span>
-                    <span th:case="'APP_PAGE'" th:text="#{'admin.opsPopups.appPage.' + ${p.targetValue}}">首页</span>
-                    <span th:case="'PRODUCT'" class="s-mono" th:text="${p.targetValue}">token</span>
-                    <span th:case="'EXTERNAL'" class="s-mono opsp-url" th:text="${p.targetValue}" th:title="${p.targetValue}">https://</span>
-                </div>
-            </td>
+            <td th:insert="~{admin/fragments/ops-target-fields :: summary(${p.targetType}, ${p.targetValue})}"></td>
             <td class="s-col-act">
                 <!-- 只读账号也能点开看详情（抽屉里全部禁用、无保存钮）；写操作按钮只给 config.edit -->
                 <button type="button" class="btn btn-sm btn-neutral" data-drawer-res="ops-popup"

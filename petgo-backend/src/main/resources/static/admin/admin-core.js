@@ -148,6 +148,8 @@ document.addEventListener('DOMContentLoaded', function () {
         var elt = e.detail && e.detail.elt;
         var form = elt && elt.closest ? elt.closest('form[data-confirm], form[data-confirm-diff]') : null;
         if (!form || !tailtopiaIsHxForm(form)) { return; }
+        // 表单里另有自己 hx-* 的辅助按钮（AB-31「预估人数」）：它不是提交，不该弹表单的「确认发送」
+        if (elt !== form && elt.hasAttribute && elt.hasAttribute('data-no-confirm')) { return; }
         // 钮级 data-confirm（data-confirm-button，见本文件末尾）自己在 click 阶段确认过，这里不重复
         if (e.detail.triggeringEvent && e.detail.triggeringEvent.submitter
                 && e.detail.triggeringEvent.submitter.hasAttribute && e.detail.triggeringEvent.submitter.hasAttribute('data-confirm-button')) { return; }
@@ -1381,6 +1383,82 @@ document.addEventListener('click', function (e) {
                     .forEach(function (el) { el.classList.add('is-invalid'); first = first || el; });
             });
             if (first && first.scrollIntoView) { first.scrollIntoView({ block: 'center' }); }
+        });
+    });
+})();
+
+// ===== 发送前预估人数门槛（V1.3.4 AB-31 运营通知抽屉）=====
+// form[data-preview-form]：
+// · 「预估人数」按钮的结果落进 [data-preview-slot]，片段里 [data-preview-count] = N；
+//   N > 0 → 门槛隐藏字段 [data-preview-gate]（name=previewCount）置值（它挂 data-requires-text ⇒ 发送钮放开），
+//   并把 N 写进表单的 data-confirm-args（确认框 data-confirm 里的 {0}）；N = 0 或 422 报错 → 门槛清空，发送钮保持禁用。
+// · [data-preview-scope]（人群块）里任何输入变化 → 清掉旧结果 + 门槛清空：人群改了就必须按新条件重新预估，
+//   否则确认框里的「约 N 人」是上一次条件的数。
+// · 🔴 迟到的旧预估不能复活门槛：每次重置把表单的代数 +1，预估请求发出时记下当时的代数（挂在 xhr 上），
+//   回来时代数对不上（期间人群改过）就丢弃不 swap；按钮另挂 hx-sync="this:replace"，新预估顶掉在途旧预估。
+// · 确认框按「发送时间」切换文案：空 → data-confirm-now（{0} = N），填了 → data-confirm-scheduled（{1} = WIB 时间）。
+// 体验护栏不是安全边界：服务端按 previewCount 重算比对（AdminOpsNotifyService 预估闸），这里只保证「没看到人数就发不出去」。
+(function () {
+    function gen(form) { return form.__previewGen || 0; }
+    function syncConfirm(form) {
+        var gate = form.querySelector('[data-preview-gate]');
+        var n = gate ? gate.value : '';
+        var at = form.querySelector('[name="scheduledAt"]');
+        var when = at && at.value ? at.value.replace('T', ' ') : '';
+        var tpl = when ? form.getAttribute('data-confirm-scheduled') : form.getAttribute('data-confirm-now');
+        if (tpl) { form.setAttribute('data-confirm', tpl); }
+        if (n) { form.setAttribute('data-confirm-args', when ? n + '|' + when : n); } else { form.removeAttribute('data-confirm-args'); }
+    }
+    function setGate(form, n) {
+        var gate = form.querySelector('[data-preview-gate]');
+        if (!gate) { return; }
+        gate.value = n > 0 ? String(n) : '';
+        syncConfirm(form);
+        // 冒泡一个 input，让 data-requires-form 的同步逻辑重算发送钮（门槛不在 scope 内，不会触发下面的重置）
+        gate.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    function reset(e) {
+        var t = e.target;
+        if (t && t.name === 'scheduledAt') {
+            var f = t.closest ? t.closest('form[data-preview-form]') : null;
+            if (f) { syncConfirm(f); }
+            return;
+        }
+        var scope = t && t.closest ? t.closest('[data-preview-scope]') : null;
+        var form = scope ? scope.closest('form[data-preview-form]') : null;
+        if (!form) { return; }
+        form.__previewGen = gen(form) + 1;
+        var slot = form.querySelector('[data-preview-slot]');
+        if (slot) { slot.innerHTML = ''; }
+        setGate(form, 0);
+    }
+    function previewTarget(e) {
+        var t = e.detail && e.detail.target;
+        if (!t || !t.hasAttribute || !t.hasAttribute('data-preview-slot')) { return null; }
+        return t.closest('form[data-preview-form]');
+    }
+    function stale(e, form) {
+        var xhr = e.detail && e.detail.xhr;
+        return !xhr || xhr.__previewGen !== gen(form);
+    }
+    document.addEventListener('input', reset);
+    document.addEventListener('change', reset);
+    document.addEventListener('DOMContentLoaded', function () {
+        document.body.addEventListener('htmx:beforeRequest', function (e) {
+            var form = previewTarget(e);
+            if (form && e.detail.xhr) { e.detail.xhr.__previewGen = gen(form); }
+        });
+        // 本监听注册晚于文件头的 422 放行，后执行：旧代数的结果（含 422）一律不 swap
+        document.body.addEventListener('htmx:beforeSwap', function (e) {
+            var form = previewTarget(e);
+            if (form && stale(e, form)) { e.detail.shouldSwap = false; }
+        });
+        document.body.addEventListener('htmx:afterSwap', function (e) {
+            var form = previewTarget(e);
+            if (!form) { return; }
+            if (stale(e, form)) { return; }
+            var c = e.detail.target.querySelector('[data-preview-count]');
+            setGate(form, c ? (parseInt(c.getAttribute('data-preview-count'), 10) || 0) : 0);
         });
     });
 })();

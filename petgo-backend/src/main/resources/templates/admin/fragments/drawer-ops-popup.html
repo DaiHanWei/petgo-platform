@@ -121,54 +121,9 @@
     </div>
     <div th:replace="~{admin/fragments/drawer-ops-popup :: texts('En', 'f-opsp-titleEn', 'f-opsp-bodyEn', 'f-opsp-btnEn', false)}"></div>
 
-    <!-- ⑤ 跳转：CATEGORY / APP_PAGE 只给下拉不让手填（值必须是枚举名，手填大小写一错就永远不弹） -->
+    <!-- ⑤ 跳转：表单块与 AB-31 运营通知共用（fragments/ops-target-fields.html） -->
     <h4 class="opsp-group" th:text="#{admin.opsPopups.group.target}">跳转</h4>
-    <div class="s-form-row">
-        <label class="s-label s-req" for="f-opsp-ttype" th:text="#{admin.opsPopups.form.targetType}">跳转类型</label>
-        <div class="s-ctl">
-            <select id="f-opsp-ttype" class="inp" th:field="*{targetType}" data-show-switch>
-                <option th:each="t : ${targetTypes}" th:value="${t}"
-                        th:text="#{'admin.opsPopups.targetType.' + ${t}}">不跳转</option>
-            </select>
-        </div>
-    </div>
-    <div class="s-form-row" data-show-when="targetType:PRODUCT" th:hidden="${form.targetType != 'PRODUCT'}">
-        <label class="s-label s-req" for="f-opsp-tproduct" th:text="#{admin.opsPopups.form.targetProduct}">商品 token</label>
-        <div class="s-ctl">
-            <input id="f-opsp-tproduct" type="text" class="inp" name="targetValue" maxlength="32"
-                   th:value="${form.targetType == 'PRODUCT'} ? ${form.targetValue} : ''"
-                   th:disabled="${form.targetType != 'PRODUCT'}"/>
-            <p class="hint" th:text="#{admin.opsPopups.form.targetProductHint}">填商品的 token；商品须存在且在售。</p>
-        </div>
-    </div>
-    <div class="s-form-row" data-show-when="targetType:CATEGORY" th:hidden="${form.targetType != 'CATEGORY'}">
-        <label class="s-label s-req" for="f-opsp-tcat" th:text="#{admin.opsPopups.form.targetCategory}">商品分类</label>
-        <div class="s-ctl">
-            <select id="f-opsp-tcat" class="inp" name="targetValue" th:disabled="${form.targetType != 'CATEGORY'}">
-                <option th:each="c : ${categories}" th:value="${c}"
-                        th:selected="${form.targetType == 'CATEGORY' and form.targetValue == c.name()}"
-                        th:text="#{'admin.v130.shopProducts.category.' + ${c}}">主粮</option>
-            </select>
-        </div>
-    </div>
-    <div class="s-form-row" data-show-when="targetType:APP_PAGE" th:hidden="${form.targetType != 'APP_PAGE'}">
-        <label class="s-label s-req" for="f-opsp-tpage" th:text="#{admin.opsPopups.form.targetAppPage}">App 页面</label>
-        <div class="s-ctl">
-            <select id="f-opsp-tpage" class="inp" name="targetValue" th:disabled="${form.targetType != 'APP_PAGE'}">
-                <option th:each="g : ${appPages}" th:value="${g}"
-                        th:selected="${form.targetType == 'APP_PAGE' and form.targetValue == g.name()}"
-                        th:text="#{'admin.opsPopups.appPage.' + ${g}}">首页</option>
-            </select>
-        </div>
-    </div>
-    <div class="s-form-row" data-show-when="targetType:EXTERNAL" th:hidden="${form.targetType != 'EXTERNAL'}">
-        <label class="s-label s-req" for="f-opsp-text" th:text="#{admin.opsPopups.form.targetExternal}">外部链接</label>
-        <div class="s-ctl">
-            <input id="f-opsp-text" type="url" class="inp" name="targetValue" maxlength="512" placeholder="https://"
-                   th:value="${form.targetType == 'EXTERNAL'} ? ${form.targetValue} : ''"
-                   th:disabled="${form.targetType != 'EXTERNAL'}"/>
-        </div>
-    </div>
+    <div th:replace="~{admin/fragments/ops-target-fields :: fields('f-opsp')}"></div>
     </fieldset>
     <div class="sticky-footer opsp-foot">
         <p class="inline-error-slot" id="ops-popup-form-err" aria-live="polite"></p>
