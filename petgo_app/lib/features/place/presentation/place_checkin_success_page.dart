@@ -68,9 +68,22 @@ class PlaceCheckinSuccessPage extends ConsumerStatefulWidget {
     return CustomTransitionPage<void>(
       key: state.pageKey,
       transitionDuration: ceremonyFadeIn,
-      reverseTransitionDuration: ceremonyFadeIn,
-      transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-          FadeTransition(opacity: animation, child: child),
+      // 进场只淡入；侧滑 / 返回交还平台转场（iOS 自带边缘右滑返回，popGestureEnabled 恢复）。
+      // 两种状态下 widget 树结构不变（始终 FadeTransition + 平台转场），成功页 State 不重建。
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final route = ModalRoute.of(context)! as PageRoute<void>;
+        final entering = animation.status == AnimationStatus.forward && !route.popGestureInProgress;
+        return FadeTransition(
+          opacity: entering ? animation : kAlwaysCompleteAnimation,
+          child: Theme.of(context).pageTransitionsTheme.buildTransitions<void>(
+                route,
+                context,
+                entering ? kAlwaysCompleteAnimation : animation,
+                secondaryAnimation,
+                child,
+              ),
+        );
+      },
       child: child,
     );
   }

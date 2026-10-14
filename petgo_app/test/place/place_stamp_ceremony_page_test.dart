@@ -49,9 +49,10 @@ void main() {
     final route = ModalRoute.of(tester.element(find.byType(PlaceCheckinSuccessPage)))! as PageRoute<void>;
     expect(route.settings, isA<CustomTransitionPage<void>>());
     expect(route.transitionDuration, const Duration(milliseconds: 300));
-    final fade = tester.widget<FadeTransition>(
-        find.ancestor(of: find.byType(PlaceCheckinSuccessPage), matching: find.byType(FadeTransition)).first);
-    expect(fade.opacity.value, inExclusiveRange(0.0, 1.0), reason: '0.3s 淡入进行中');
+    // 进场淡入是最外层 FadeTransition（内层是被钉在终态的平台转场）。
+    final fades = tester.widgetList<FadeTransition>(
+        find.ancestor(of: find.byType(PlaceCheckinSuccessPage), matching: find.byType(FadeTransition)));
+    expect(fades.any((f) => f.opacity.value > 0.0 && f.opacity.value < 1.0), isTrue, reason: '0.3s 淡入进行中');
     expect(find.byType(PlaceStampCeremonyPage), findsOneWidget, reason: '淡入期间动画最终帧仍垫在下面');
 
     await tester.pumpAndSettle();

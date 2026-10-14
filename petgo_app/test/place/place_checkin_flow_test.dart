@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,7 +21,15 @@ import 'package:tailtopia/features/profile/presentation/milestone_instant_celebr
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// V1.3.4 签到盖章动画 · Task 3 · L0：签到按钮按 `isNewStamp` 分流（新章 → 动画页；再访 → 直接成功页）。
+int _ceremonyRouteBuilds = 0;
+
 void main() {
+  setUp(() {
+    RiveRuntime.available = true; // 假动画组件用例默认 Rive 可用
+    _ceremonyRouteBuilds = 0;
+  });
+  tearDown(() => RiveRuntime.available = false);
+
   testWidgets('newStampGoesThroughCeremony', (tester) async {
     final ceremonies = <StampCeremonyRequest>[];
     await _pumpDetail(tester, isNewStamp: true, ceremonies: ceremonies);
@@ -49,6 +56,31 @@ void main() {
     expect(find.byType(PlaceStampCeremonyPage), findsNothing);
   });
 
+  testWidgets('iOS：播过动画后的成功页保留边缘右滑返回（回到详情）', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    final ceremonies = <StampCeremonyRequest>[];
+    await _pumpDetail(tester, isNewStamp: true, ceremonies: ceremonies);
+
+    await tester.tap(find.byKey(const ValueKey('placeCheckinButton')));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    ceremonies.single.onComplete();
+    await tester.pump(const Duration(milliseconds: 750));
+    await tester.pumpAndSettle();
+    expect(find.byType(PlaceCheckinSuccessPage), findsOneWidget);
+    expect(tester.widget<PlaceCheckinSuccessPage>(find.byType(PlaceCheckinSuccessPage)).args.ceremonyPlayed,
+        isTrue);
+    final route = ModalRoute.of(tester.element(find.byType(PlaceCheckinSuccessPage)))! as PageRoute<void>;
+    expect(route.popGestureEnabled, isTrue);
+
+    await tester.dragFrom(const Offset(5, 300), const Offset(380, 0));
+    await tester.pumpAndSettle();
+    expect(find.byType(PlaceCheckinSuccessPage), findsNothing);
+    expect(find.byType(PlaceDetailPage), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null; // 须在用例结束前复位（测试框架校验）
+  });
+
   testWidgets('revisitSkipsCeremony', (tester) async {
     final ceremonies = <StampCeremonyRequest>[];
     await _pumpDetail(tester, isNewStamp: false, ceremonies: ceremonies);
@@ -66,6 +98,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('placeCheckinButton')));
     await tester.pumpAndSettle();
+    expect(_ceremonyRouteBuilds, 0, reason: 'Rive 不可用时绝不构建动画页路由');
     expect(find.byType(PlaceStampCeremonyPage), findsNothing);
     expect(find.byType(PlaceCheckinSuccessPage), findsOneWidget);
     expect(tester.widget<PlaceCheckinSuccessPage>(find.byType(PlaceCheckinSuccessPage)).args.ceremonyPlayed,
@@ -147,7 +180,9 @@ Future<void> _pumpDetail(WidgetTester tester,
     GoRoute(path: '/', builder: (c, s) => const PlaceDetailPage(token: 'tok')),
     GoRoute(
       path: PlaceStampCeremonyPage.routePattern,
-      builder: (c, s) => PlaceStampCeremonyPage(
+      builder: (c, s) {
+        _ceremonyRouteBuilds++;
+        return PlaceStampCeremonyPage(
         args: s.extra! as PlaceCheckinSuccessArgs,
         faceLoader: ({String? url, PlaceType? type}) async => Uint8List.fromList([1, 2, 3]),
         ceremonyBuilder: ceremonies == null
@@ -158,7 +193,8 @@ Future<void> _pumpDetail(WidgetTester tester,
                 }
                 return const SizedBox.expand();
               },
-      ),
+      );
+      },
     ),
     GoRoute(
       path: PlaceCheckinSuccessPage.routePattern,

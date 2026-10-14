@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/problem_detail.dart';
+import '../../../core/rive/rive_runtime.dart';
 import '../../../core/router/route_intent.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
@@ -142,9 +143,9 @@ class _PlaceCheckinButtonState extends ConsumerState<PlaceCheckinButton> {
       final placeToken = result.placeToken.isEmpty ? widget.token : result.placeToken;
       final args = PlaceCheckinSuccessArgs(result: result, petName: pet.name);
       // V1.3.4 签到盖章动画：新章先进全屏动画页（结束后它 pushReplacement 成功页，返回仍回详情）；
-      // 再访与现状一致，直接成功页。
+      // 再访、或 Rive 原生库不可用时跳过动画页，直接成功页（ceremonyPlayed 为 false，保留小落章）。
       context.push(
-        result.isNewStamp
+        result.isNewStamp && RiveRuntime.available
             ? PlaceStampCeremonyPage.routeFor(placeToken)
             : PlaceCheckinSuccessPage.routeFor(placeToken),
         extra: args,
