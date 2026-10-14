@@ -105,6 +105,26 @@ public interface ContentLikeRepository extends JpaRepository<ContentLike, Long> 
     List<Long> findLikedPostIds(@Param("userId") long userId,
             @Param("postIds") Collection<Long> postIds);
 
+    /**
+     * 点赞人分页（V1.3.4 点赞人列表）：{@code created_at DESC, id DESC} 游标；
+     * 排除已注销 / 非 ACTIVE 用户，以及<b>我主动拉黑</b>（source=BLOCK、holder=我，单向）的人。
+     * REPORT 隐藏的人保留。调用方传 {@code PageRequest.of(0, 21)}。
+     */
+    @Query("""
+            SELECT l FROM ContentLike l
+            WHERE l.postId = :postId
+              AND (l.createdAt < :ts OR (l.createdAt = :ts AND l.id < :lastId))
+              AND EXISTS (SELECT 1 FROM User u WHERE u.id = l.userId AND u.deletedAt IS NULL
+                          AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE)
+              AND NOT EXISTS (SELECT 1 FROM UserHideRelation r WHERE r.holderId = :viewerId
+                          AND r.targetId = l.userId
+                          AND r.source = com.tailtopia.social.domain.HideSource.BLOCK)
+            ORDER BY l.createdAt DESC, l.id DESC
+            """)
+    List<ContentLike> findLikersPage(@Param("postId") long postId, @Param("viewerId") long viewerId,
+            @Param("ts") Instant ts, @Param("lastId") long lastId,
+            org.springframework.data.domain.Pageable pageable);
+
     @Transactional
     void deleteByPostIdAndUserId(long postId, long userId);
 

@@ -2,6 +2,10 @@ package com.tailtopia.content.web;
 
 import com.tailtopia.content.dto.LikeResponse;
 import com.tailtopia.content.service.LikeService;
+import com.tailtopia.content.service.PostLikersService;
+import com.tailtopia.social.dto.FollowListPage;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import com.tailtopia.shared.error.AppException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -18,9 +22,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class LikeController {
 
     private final LikeService likeService;
+    private final PostLikersService likersService;
 
-    public LikeController(LikeService likeService) {
+    public LikeController(LikeService likeService, PostLikersService likersService) {
         this.likeService = likeService;
+        this.likersService = likersService;
+    }
+
+    /** 点赞人列表（V1.3.4）：仅 role=USER；帖子不可见 → 404。 */
+    @GetMapping("/api/v1/content-posts/{id}/likers")
+    public FollowListPage likers(@AuthenticationPrincipal Jwt jwt, @PathVariable long id,
+            @RequestParam(required = false) String cursor) {
+        return likersService.likers(id, currentUserId(jwt), cursor);
     }
 
     @PostMapping("/api/v1/content-posts/{id}/like")

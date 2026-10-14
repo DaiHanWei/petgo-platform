@@ -190,6 +190,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/support/contact").permitAll()
                         // 游客只读放行锚点（Story 1.5 细化具体业务 GET）
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
+                        // V1.3.4 点赞人列表：仅 role=USER（游客 401、兽医 403）。
+                        // ⚠️ 必须排在下方 GET /api/v1/content-posts/** permitAll 之前，否则被通配吞掉。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/content-posts/*/likers").hasRole("USER")
                         // Feed 只读对游客可见（Story 3.2，FR-0A/17）：GET 内容流放行（写仍需 JWT）
                         .requestMatchers(HttpMethod.GET, "/api/v1/content-posts").permitAll()
                         // 内容详情 + 评论只读对游客可见（Story 3.3）：GET 详情/评论/回复放行（写仍需 JWT）

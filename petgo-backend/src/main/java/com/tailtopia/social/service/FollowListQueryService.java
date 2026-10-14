@@ -98,6 +98,21 @@ public class FollowListQueryService {
             return new FollowListPage(List.of(), null, false);
         }
         List<Long> ids = page.stream().map(other).toList();
+        List<FollowListItem> items = itemsFor(ids, viewerId);
+        UserFollow last = page.get(page.size() - 1);
+        String next = hasMore ? new KeysetCursor(last.getCreatedAt(), other.apply(last)).encode() : null;
+        return new FollowListPage(items, next, hasMore);
+    }
+
+    /**
+     * 一批 userId 按给定顺序组装成列表行（token / 关注三态 / self / blockedByMe），整批各一次查询。
+     * 点赞人列表等复用。
+     */
+    @Transactional(readOnly = true)
+    public List<FollowListItem> itemsFor(List<Long> ids, Long viewerId) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
         Map<Long, AuthorView> views = accounts.findAuthorViewsWithoutTags(ids);
         // 封号也给 token（D-8：可取关）；已注销不给。
         Map<Long, String> tokens = accounts.publicTokensOf(ids, true);
@@ -107,8 +122,7 @@ public class FollowListQueryService {
         Map<Long, FollowState> states = viewerId == null ? Map.of() : followReader.followStates(viewerId, ids);
         Set<Long> blocked = viewerId == null ? Set.of()
                 : new HashSet<>(hideRepo.findTargetIdsByHolderAndSourceIn(viewerId, HideSource.BLOCK, ids));
-        List<FollowListItem> items = page.stream().map(f -> {
-            long id = other.apply(f);
+        return ids.stream().map(id -> {
             AuthorView v = views.getOrDefault(id, AuthorView.anonymized(id));
             FollowState s = states.getOrDefault(id, FollowState.NONE);
             boolean deleted = v.deleted();
@@ -121,11 +135,8 @@ public class FollowListQueryService {
                     s.iFollow(),
                     s.followsMe(),
                     blocked.contains(id),
-                    viewerId != null && viewerId == id);
+                    viewerId != null && viewerId.equals(id));
         }).toList();
-        UserFollow last = page.get(page.size() - 1);
-        String next = hasMore ? new KeysetCursor(last.getCreatedAt(), other.apply(last)).encode() : null;
-        return new FollowListPage(items, next, hasMore);
     }
 
     /** 坏游标按首页处理、不报错（同 {@code NotificationCenterService.parseCursor}）。 */
