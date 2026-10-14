@@ -44,8 +44,12 @@ class PostLikersController extends AsyncNotifier<LikersState> {
 
   final int postId;
 
+  /// build 代际：build 重跑（retry / invalidate）后，旧的 loadMore 结果据此丢弃。
+  int _gen = 0;
+
   @override
   Future<LikersState> build() async {
+    _gen++;
     final epoch = ref.read(followStateProvider.notifier).currentEpoch;
     try {
       final page = await ref.read(postLikersRepositoryProvider).getLikers(postId);
@@ -71,15 +75,18 @@ class PostLikersController extends AsyncNotifier<LikersState> {
     }
     state = AsyncData(current.copyWith(loadingMore: true, loadMoreFailed: false));
     final epoch = ref.read(followStateProvider.notifier).currentEpoch;
+    final gen = _gen;
     try {
       final page =
           await ref.read(postLikersRepositoryProvider).getLikers(postId, cursor: current.nextCursor);
+      if (!ref.mounted || gen != _gen) return;
       state = AsyncData(LikersState(
         items: [...current.items, for (final i in page.items) i.withFollowEpoch(epoch)],
         nextCursor: page.nextCursor,
         hasMore: page.hasMore,
       ));
     } catch (e) {
+      if (!ref.mounted || gen != _gen) return;
       state = AsyncData(_is404(e)
           ? const LikersState.gone()
           : current.copyWith(loadingMore: false, loadMoreFailed: true));
@@ -88,6 +95,7 @@ class PostLikersController extends AsyncNotifier<LikersState> {
 
   /// 首页失败后的重试（重新 build）。
   Future<void> retry() async {
+    if (!ref.mounted) return;
     ref.invalidateSelf();
     await future;
   }

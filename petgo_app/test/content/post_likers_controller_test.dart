@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -90,5 +92,39 @@ void main() {
     expect(s.items.length, 1);
     expect(s.loadMoreFailed, isTrue);
     expect(s.loadingMore, isFalse);
+  });
+
+  test('disposeDuringLoadMoreDoesNotThrow', () async {
+    final gate = Completer<FollowListPageData>();
+    final repo = _Repo((cur) => cur == null
+        ? Future.value(FollowListPageData(items: [_u(1)], nextCursor: 'c1', hasMore: true))
+        : gate.future);
+    final c = ProviderContainer(overrides: [postLikersRepositoryProvider.overrideWithValue(repo)]);
+    c.listen(postLikersProvider(9), (_, _) {});
+    await c.read(postLikersProvider(9).future);
+    final pending = c.read(postLikersProvider(9).notifier).loadMore();
+    c.dispose();
+    gate.complete(FollowListPageData(items: [_u(2)]));
+    await pending; // 不抛 Bad state
+  });
+
+  test('staleLoadMoreDroppedAfterRebuild', () async {
+    final gate = Completer<FollowListPageData>();
+    var builds = 0;
+    final repo = _Repo((cur) {
+      if (cur != null) return gate.future;
+      builds++;
+      return Future.value(builds == 1
+          ? FollowListPageData(items: [_u(1)], nextCursor: 'c1', hasMore: true)
+          : FollowListPageData(items: [_u(7)]));
+    });
+    final c = _c(repo);
+    c.listen(postLikersProvider(9), (_, _) {});
+    await c.read(postLikersProvider(9).future);
+    final pending = c.read(postLikersProvider(9).notifier).loadMore();
+    await c.read(postLikersProvider(9).notifier).retry(); // build 重跑
+    gate.complete(FollowListPageData(items: [_u(2)]));
+    await pending;
+    expect(c.read(postLikersProvider(9)).value!.items.map((e) => e.userId), [7]);
   });
 }
