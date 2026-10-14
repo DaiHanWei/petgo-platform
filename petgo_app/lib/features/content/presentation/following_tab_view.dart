@@ -12,6 +12,7 @@ import '../domain/feed_item.dart';
 import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
 import 'feed_skeleton.dart';
+import '../domain/home_refresh_provider.dart';
 import 'feed_view.dart';
 import 'following_feed_controller.dart';
 import 'report_sheet.dart';
@@ -40,14 +41,7 @@ class FollowingTabView extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final feedAsync = ref.watch(followingFeedProvider);
 
-    Widget scrollable(Widget child) => RefreshIndicator(
-          color: AppColors.mint,
-          onRefresh: () => _refresh(ref),
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: child,
-          ),
-        );
+    Widget scrollable(Widget child) => _TopScrollable(onRefresh: () => _refresh(ref), child: child);
 
     return feedAsync.when(
       loading: () => const SingleChildScrollView(child: FeedSkeleton()),
@@ -119,5 +113,43 @@ class FollowingTabView extends ConsumerWidget {
       hide();
       ref.invalidate(followingStripProvider);
     };
+  }
+}
+
+/// 空状态 / 错误态的可下拉滚动容器；监听 [homeScrollTopProvider]（重点击 Social 底栏 / Following 页签）回到顶部。
+class _TopScrollable extends ConsumerStatefulWidget {
+  const _TopScrollable({required this.onRefresh, required this.child});
+
+  final Future<void> Function() onRefresh;
+  final Widget child;
+
+  @override
+  ConsumerState<_TopScrollable> createState() => _TopScrollableState();
+}
+
+class _TopScrollableState extends ConsumerState<_TopScrollable> {
+  final ScrollController _controller = ScrollController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<int>(homeScrollTopProvider, (_, _) {
+      if (!_controller.hasClients) return;
+      _controller.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    });
+    return RefreshIndicator(
+      color: AppColors.mint,
+      onRefresh: widget.onRefresh,
+      child: SingleChildScrollView(
+        controller: _controller,
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: widget.child,
+      ),
+    );
   }
 }

@@ -22,6 +22,8 @@ import 'feed_controller.dart';
 import 'feed_skeleton.dart';
 import 'feed_tab_row.dart';
 import 'feed_view.dart';
+import '../../social/data/following_strip_repository.dart';
+import '../domain/home_refresh_provider.dart';
 import 'following_feed_controller.dart';
 import 'following_tab_view.dart';
 import 'promo_target.dart';
@@ -138,7 +140,15 @@ class HomePage extends ConsumerWidget {
     // 🔴 回调走 container：登录弹窗关闭后才执行，WidgetRef 不保证还可用。
     final container = ProviderScope.containerOf(context, listen: false);
     void enterFollowing() {
-      if (container.read(socialTabProvider) == SocialTab.following) return;
+      if (container.read(socialTabProvider) == SocialTab.following) {
+        // 已在 Following 再点页签 → 回顶 + 刷新（与 Discover 重点击一致）。
+        container.read(homeScrollTopProvider.notifier).bump();
+        container.invalidate(followingStripProvider);
+        if (container.exists(followingFeedProvider)) {
+          container.read(followingFeedProvider.notifier).refresh();
+        }
+        return;
+      }
       if (container.exists(followingFeedProvider)) {
         container.read(followingFeedProvider.notifier).refresh();
       }

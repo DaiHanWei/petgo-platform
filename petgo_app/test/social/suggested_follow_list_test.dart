@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/core/theme/colors.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/profile/domain/pet_age.dart';
@@ -50,7 +51,7 @@ FollowListItem _cand(int id, {String? petType, DateTime? birthday}) => FollowLis
       petBirthday: birthday,
     );
 
-Future<void> _pump(WidgetTester tester, Object result) async {
+Future<void> _pump(WidgetTester tester, Object result, {int? maxItems, bool emphasized = false}) async {
   await tester.pumpWidget(ProviderScope(
     overrides: [
       followSuggestionRepositoryProvider.overrideWithValue(_SuggestRepo(result)),
@@ -61,7 +62,7 @@ Future<void> _pump(WidgetTester tester, Object result) async {
       locale: const Locale('en'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: const Scaffold(body: SingleChildScrollView(child: SuggestedFollowList(source: 'suggested'))),
+      home: Scaffold(body: SingleChildScrollView(child: SuggestedFollowList(source: 'suggested', maxItems: maxItems, emphasized: emphasized))),
     ),
   ));
   await tester.pumpAndSettle();
@@ -96,5 +97,33 @@ void main() {
     expect(find.byKey(const ValueKey('followSuggestTitle')), findsNothing);
     expect(find.byType(SuggestedFollowList), findsOneWidget);
     expect(tester.getSize(find.byType(SuggestedFollowList)).height, 0);
+  });
+
+  Color? followBg(WidgetTester tester, int id) {
+    final btn = find.descendant(
+        of: find.byKey(ValueKey('followSuggestRow_$id')), matching: find.byType(FilledButton));
+    return tester.widget<FilledButton>(btn).style?.backgroundColor?.resolve({});
+  }
+
+  testWidgets('maxItems 限制行数；缺省显示全部', (tester) async {
+    final list = [for (var i = 1; i <= 8; i++) _cand(i)];
+    await _pump(tester, list, maxItems: 5);
+    expect(find.byKey(const ValueKey('followSuggestRow_5')), findsOneWidget);
+    expect(find.byKey(const ValueKey('followSuggestRow_6')), findsNothing);
+
+    await _pump(tester, list);
+    expect(find.byKey(const ValueKey('followSuggestRow_8')), findsOneWidget);
+  });
+
+  testWidgets('emphasized 才用实心紫 Follow 按钮 + 句首大写标题 + 无分隔线；默认保持浅紫', (tester) async {
+    await _pump(tester, [_cand(1), _cand(2)], emphasized: true);
+    expect(followBg(tester, 1), AppColors.mint);
+    expect(find.text('Suggested for you'), findsOneWidget);
+    expect(find.byType(Divider), findsNothing);
+
+    await _pump(tester, [_cand(1), _cand(2)]);
+    expect(followBg(tester, 1), AppColors.violet100);
+    expect(find.text('SUGGESTED FOR YOU'), findsOneWidget);
+    expect(find.byType(Divider), findsOneWidget);
   });
 }

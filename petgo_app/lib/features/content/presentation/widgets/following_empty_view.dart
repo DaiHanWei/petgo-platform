@@ -44,7 +44,12 @@ class FollowingEmptyView extends ConsumerWidget {
             style: const TextStyle(fontSize: 14.5, height: 1.45, color: AppColors.ink2),
           ),
           const SizedBox(height: 16),
-          const SuggestedFollowList(source: 'following_empty', surfaceScope: 'followingEmpty'),
+          const SuggestedFollowList(
+            source: 'following_empty',
+            surfaceScope: 'followingEmpty',
+            maxItems: 5,
+            emphasized: true,
+          ),
           const SizedBox(height: 16),
           Center(
             child: TextButton(

@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
+import 'package:tailtopia/core/theme/colors.dart';
+import 'package:tailtopia/features/content/domain/home_refresh_provider.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/content/data/feed_repository.dart';
@@ -191,6 +193,36 @@ void main() {
     expect(find.text('Follow people you like and their moments and diaries will show up here.'), findsOneWidget);
     expect(find.text('cand50'), findsOneWidget); // 推荐区
     expect(find.text('Explore Discover ›'), findsOneWidget);
+  });
+
+  testWidgets('空状态：推荐最多 5 行，Follow 为实心紫；Explore Discover 可见', (tester) async {
+    await _pump(
+      tester,
+      posts: const [],
+      strip: const [],
+      suggestions: [for (var i = 50; i < 58; i++) FollowListItem(userId: i, deleted: false, userToken: 'tok$i', nickname: 'cand$i')],
+    );
+    expect(find.byKey(const ValueKey('followSuggestRow_54')), findsOneWidget);
+    expect(find.byKey(const ValueKey('followSuggestRow_55')), findsNothing);
+    final btn = find.descendant(of: find.byKey(const ValueKey('followSuggestRow_50')), matching: find.byType(FilledButton));
+    expect(tester.widget<FilledButton>(btn).style?.backgroundColor?.resolve({}), AppColors.mint);
+    expect(find.byKey(const ValueKey('followingExploreDiscover')), findsOneWidget);
+  });
+
+  testWidgets('重点击信号（homeScrollTopProvider）→ 空状态滚回顶部', (tester) async {
+    final c = await _pump(
+      tester,
+      posts: const [],
+      strip: const [],
+      suggestions: [for (var i = 50; i < 58; i++) FollowListItem(userId: i, deleted: false, userToken: 'tok$i', nickname: 'cand$i')],
+    );
+    final scroll = find.byType(SingleChildScrollView).first;
+    tester.state<ScrollableState>(find.descendant(of: scroll, matching: find.byType(Scrollable)).first).position.jumpTo(120);
+    await tester.pump();
+    expect(tester.state<ScrollableState>(find.descendant(of: scroll, matching: find.byType(Scrollable)).first).position.pixels, 120);
+    c.read(homeScrollTopProvider.notifier).bump();
+    await tester.pumpAndSettle();
+    expect(tester.state<ScrollableState>(find.descendant(of: scroll, matching: find.byType(Scrollable)).first).position.pixels, 0);
   });
 
   testWidgets('exploreDiscoverSwitchesTab：点 Explore Discover → 页签切回 Discover', (tester) async {

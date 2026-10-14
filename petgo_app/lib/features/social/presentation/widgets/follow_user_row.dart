@@ -21,6 +21,8 @@ class FollowUserRow extends ConsumerWidget {
     required this.source,
     this.subtitle,
     this.rowKey,
+    this.filledFollow = false,
+    this.verticalPadding = 12,
   });
 
   final FollowListItem item;
@@ -33,6 +35,12 @@ class FollowUserRow extends ConsumerWidget {
 
   /// 行外层 Key（页面各自约定，测试用）。
   final Key? rowKey;
+
+  /// 「未关注」态用实心紫胶囊（Following 空状态推荐行）。
+  final bool filledFollow;
+
+  /// 行上下内边距。
+  final double verticalPadding;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -69,7 +77,7 @@ class FollowUserRow extends ConsumerWidget {
     final showButton = !item.deleted && !item.self && !item.blockedByMe && token != null;
     return Padding(
       key: rowKey,
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: EdgeInsets.symmetric(vertical: verticalPadding),
       child: Row(
         children: [
           Expanded(
@@ -93,6 +101,7 @@ class FollowUserRow extends ConsumerWidget {
               surfaceKey: surfaceKey,
               style: FollowButtonStyle.listCompact,
               persistent: persistent,
+              filledIdle: filledFollow,
               source: source,
             ),
           ],
