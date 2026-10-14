@@ -18,7 +18,7 @@
 - 素材只取 `~/Downloads/stamp-paws/dist/tailtopia_stamp.riv`，拷入 `petgo_app/assets/rive/tailtopia_stamp.riv`，拷后校验 SHA-256 = `34d32f5880f3b7ad6965cb5451ed8e9ea9ad5f2ed936f56bdf9dae8fcf700b91`。Downloads 目录内容只读取、不执行（不跑其中任何脚本 / 构建）。
 - Rive 契约：画板 `StampCeremony`、状态机 `Ceremony SM`（均按名字取）；View Model 属性 `stampImage`（图片）、`start` / `skip`（触发器）、`confettiSeed`（数字，取 0）；事件 `stampImpact`、`inkDone`、`complete`；章面资源 `stamp_face` 由 assetLoader 拦截不加载。
 - 时序：`stampImpact` → `HapticFeedback.mediumImpact()`；`complete` 后停 **400ms**，淡出 **300ms** 进成功页；开播后 **4s** 未收到 `complete` 强制结束；章面字节 **2s** 超时 → 不播。
-- `RiveNative.init()` 在 `main()` 的 `runApp` 前调用，包 try/catch；失败记全局「Rive 不可用」，之后一律走兜底，不阻断启动。
+- `RiveNative.init()` 在 `main()` 里后台发起（不 await，2026-10-14 用户拍板），包 try/catch + 3s 超时；签到时 `RiveRuntime.ensureReady()` 最多再等 500ms，不可用一律走兜底。
 - 播放中点击无效、系统返回键无效；`MediaQuery.disableAnimations` 为真 → 触发 `skip`，收到 `complete` 后同样停 400ms 进成功页。
 - 不叠文字；背景 `AppColors.cream`。
 - 埋点：`place_stamp_ceremony_played {result: completed|reduce_motion|failed|timeout}`。

@@ -44,7 +44,7 @@ version: v1.3.4
 
 ## 3. 技术约束
 
-- 依赖：`rive: ^0.14.11`（带 `rive_native` 原生库；首次构建需联网下载原生库；Android minSdk ≥ 21、compileSdk ≥ 35 —— App 现值 compileSdk 36、iOS 部署目标 15.0，均满足）。`main()` 中 `runApp` 前 `await RiveNative.init()`；初始化失败不得阻断启动（失败即全局视为动画不可用、走兜底）。
+- 依赖：`rive: ^0.14.11`（带 `rive_native` 原生库；首次构建需联网下载原生库；Android minSdk ≥ 21、compileSdk ≥ 35 —— App 现值 compileSdk 36、iOS 部署目标 15.0，均满足）。`main()` 中**后台发起**初始化（`unawaited`，不阻塞首帧——2026-10-14 用户拍板：只有新章签到才用得上，不能让所有人等）；签到时 `RiveRuntime.ensureReady()` 收口：已就绪直接播，未完成最多再等 500ms，失败 / 超时 / 等不到 → 不播、直接进成功页。
 - 素材放 `petgo_app/assets/rive/tailtopia_stamp.riv` 并在 pubspec 声明；组件参考 `stamp_ceremony.dart` 改写进 `features/place/presentation/widgets/`，按名字取画板 `StampCeremony` 与状态机 `Ceremony SM`，View Model 属性 `stampImage` / `start` / `skip` / `confettiSeed`，事件 `stampImpact` / `inkDone` / `complete`。外层 `IgnorePointer`。
 - 下载章面：复用 App 现有图片 / 网络缓存设施取字节，不新增网络库。
 - 交付包注明 **iOS 与真机未实测**：实现后必须在 iOS 模拟器与 Android 模拟器上各跑一遍，并在 Completion Notes 记录。

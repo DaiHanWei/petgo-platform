@@ -57,8 +57,9 @@ Future<void> main() async {
   // Story 7.2：读持久化语言选择（空/缺失 = 跟随设备）。
   final savedLocale = await _loadSavedLocale();
 
-  // V1.3.4 签到盖章动画：初始化 Rive 原生库；失败只置「不可用」，不阻断启动。
-  await RiveRuntime.init();
+  // V1.3.4 签到盖章动画：后台初始化 Rive 原生库，**不 await**——只有新章签到才用得上，不能让所有人等首帧；
+  // 失败 / 超时只置「不可用」，签到时由 RiveRuntime.ensureReady 收口兜底。
+  unawaited(RiveRuntime.init());
 
   runApp(ProviderScope(
     overrides: [

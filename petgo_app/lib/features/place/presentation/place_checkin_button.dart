@@ -139,13 +139,15 @@ class _PlaceCheckinButtonState extends ConsumerState<PlaceCheckinButton> {
       // Story 1.2 复审：栈里可能已有一个护照页（空态「Cari Tempat」→ 列表 → 打卡），
       // 不失效的话「Lihat Paspor」拿到的是缓存的旧护照，看不到新章、也定位不到它。
       container.invalidate(petPassportProvider);
+      // 新章才需要 Rive：后台初始化通常早已完成；没完成最多再等 500ms，等不到就不播（直接成功页）。
+      final playCeremony = result.isNewStamp && await RiveRuntime.ensureReady();
       if (!mounted) return;
       final placeToken = result.placeToken.isEmpty ? widget.token : result.placeToken;
       final args = PlaceCheckinSuccessArgs(result: result, petName: pet.name);
       // V1.3.4 签到盖章动画：新章先进全屏动画页（结束后它 pushReplacement 成功页，返回仍回详情）；
       // 再访、或 Rive 原生库不可用时跳过动画页，直接成功页（ceremonyPlayed 为 false，保留小落章）。
       context.push(
-        result.isNewStamp && RiveRuntime.available
+        playCeremony
             ? PlaceStampCeremonyPage.routeFor(placeToken)
             : PlaceCheckinSuccessPage.routeFor(placeToken),
         extra: args,
