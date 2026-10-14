@@ -1,5 +1,6 @@
 package com.tailtopia.social.service;
 
+import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.auth.service.FollowCounterService;
@@ -9,6 +10,7 @@ import com.tailtopia.social.dto.FollowResultResponse;
 import com.tailtopia.social.event.UserFollowedEvent;
 import com.tailtopia.social.read.FollowReader;
 import com.tailtopia.social.read.UserHideRelationReader;
+import com.tailtopia.social.repository.OfficialFollowOptoutRepository;
 import com.tailtopia.social.repository.UserFollowRepository;
 import java.time.Clock;
 import java.time.Duration;
@@ -54,19 +56,22 @@ public class FollowService {
     private final FollowReader followReader;
     private final RedisRateLimiter rateLimiter;
     private final ApplicationEventPublisher events;
+    private final OfficialFollowOptoutRepository optouts;
     private final Clock clock;
 
     @Autowired
     public FollowService(UserFollowRepository follows, FollowCounterService counters,
             AccountQueryService accounts, UserHideRelationReader hideRelations,
-            FollowReader followReader, RedisRateLimiter rateLimiter, ApplicationEventPublisher events) {
-        this(follows, counters, accounts, hideRelations, followReader, rateLimiter, events, Clock.systemUTC());
+            FollowReader followReader, RedisRateLimiter rateLimiter, ApplicationEventPublisher events,
+            OfficialFollowOptoutRepository optouts) {
+        this(follows, counters, accounts, hideRelations, followReader, rateLimiter, events, optouts,
+                Clock.systemUTC());
     }
 
     FollowService(UserFollowRepository follows, FollowCounterService counters,
             AccountQueryService accounts, UserHideRelationReader hideRelations,
             FollowReader followReader, RedisRateLimiter rateLimiter, ApplicationEventPublisher events,
-            Clock clock) {
+            OfficialFollowOptoutRepository optouts, Clock clock) {
         this.follows = follows;
         this.counters = counters;
         this.accounts = accounts;
@@ -74,6 +79,7 @@ public class FollowService {
         this.followReader = followReader;
         this.rateLimiter = rateLimiter;
         this.events = events;
+        this.optouts = optouts;
         this.clock = clock;
     }
 
@@ -121,6 +127,10 @@ public class FollowService {
         requireNotSelf(viewerId, targetId);
         if (follows.deleteRelation(viewerId, targetId) == 1) {
             counters.applyUnfollow(viewerId, targetId);
+            // 官方号：用户主动取关后记 optout，之后不再被自动关注（V1.3.4 following 流）。
+            if (target.getRole() == Role.ADMIN) {
+                optouts.insertIfAbsent(viewerId, targetId);
+            }
         }
         return result(viewerId, targetId, false);
     }

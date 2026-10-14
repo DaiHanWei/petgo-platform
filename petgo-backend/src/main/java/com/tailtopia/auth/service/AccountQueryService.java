@@ -64,6 +64,21 @@ public class AccountQueryService {
                 .orElse(false);
     }
 
+    /** 有效官方号（role=ADMIN、未注销、未封号）的内部 id（V1.3.4 following 流 · 自动关注）。 */
+    @Transactional(readOnly = true)
+    public List<Long> activeOfficialIds() {
+        return users.findActiveOfficialIds();
+    }
+
+    /** 该账号是否「有效的普通用户」（role=USER、未注销、未封号）。 */
+    @Transactional(readOnly = true)
+    public boolean isActiveRegularUser(long userId) {
+        return users.findById(userId)
+                .map(u -> u.getRole() == Role.USER && u.getDeletedAt() == null
+                        && u.getStatus() == UserStatus.ACTIVE)
+                .orElse(false);
+    }
+
     /**
      * {@link #isActive} 的**批量**版：这批 id 里哪些账号对外有效（未注销 + 未封号）。
      *

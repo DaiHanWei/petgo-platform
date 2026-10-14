@@ -35,6 +35,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     java.util.List<Object[]> findUndeletedPublicTokens(@Param("ids") java.util.Collection<Long> ids);
 
     /** V1.3.4 follow D-2：按对外不可枚举标识取号（关注接口解析目标用）。 */
+    /** 有效官方号（role=ADMIN、未注销、未封号）的 id 列表（V1.3.4 following 流 · 自动关注）。 */
+    @Query("SELECT u.id FROM User u WHERE u.role = com.tailtopia.auth.domain.Role.ADMIN "
+            + "AND u.deletedAt IS NULL AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE ORDER BY u.id")
+    java.util.List<Long> findActiveOfficialIds();
+
     Optional<User> findByPublicToken(String publicToken);
 
     /**
