@@ -138,6 +138,10 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       foregroundColor: AppColors.mint,
                       side: const BorderSide(color: AppColors.mint),
+                      // 与右侧主 CTA（filledButtonTheme：圆角 12 + 14.5/w700）同形同字重；
+                      // 主题未配 outlinedButtonTheme，不写则落到 Material 默认胶囊形 + 细字，两钮并排不统一。
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14.5, fontWeight: FontWeight.w700),
                     ),
                     // Story 1.3：先进 B4 整页落章（只在 isNewStamp 分支构造 NewStampArgs），
                     // B4 的「Lihat Paspor」再 pushReplacement 到护照页停在新章。
