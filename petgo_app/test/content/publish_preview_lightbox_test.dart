@@ -222,7 +222,11 @@ void main() {
     await tester.pump();
 
     expect(c.items[1].status, ImageUploadStatus.failed);
-    expect(find.byIcon(Icons.error), findsWidgets);
+    expect(find.byKey(const ValueKey('publishFailedMark_1')), findsOneWidget);
+    // D-14（2026-10-14）：⚠ 与 ✕ 同时存在且不重叠（⚠ 在左下、✕ 在右上）。
+    final mark = tester.getRect(find.byKey(const ValueKey('publishFailedMark_1')));
+    final rm = tester.getRect(find.byKey(const ValueKey('publishRemoveImage_1')));
+    expect(mark.overlaps(rm), isFalse);
 
     await tester.tap(find.byKey(const ValueKey('publishThumb_1')));
     await tester.settleLightbox();

@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/retry_policy.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/health_list_item.dart';
@@ -50,5 +51,14 @@ final Provider<HealthRecordRepository> healthRecordRepositoryProvider =
     Provider<HealthRecordRepository>((ref) => DioHealthRecordRepository(ref.read(dioProvider)));
 
 /// 混排健康列表（Story 7.2）。
-final FutureProvider<List<HealthListItem>> healthListProvider =
-    FutureProvider<List<HealthListItem>>((ref) => ref.read(healthRecordRepositoryProvider).list());
+///
+/// ⚠️ `retry: healthListRetry`：Riverpod 3 默认对抛错的 provider 指数退避重试（最多 10 次、约 15s 才落
+/// AsyncError）。无宠物档案时后端返回确定性 404（「尚未创建宠物档案」），重试只会让页面转圈 15 秒才出
+/// 「先建档」空态（如从运营通知 APP_PAGE=HEALTH 跳入）。4xx 不重试、立即进错误态；网络错误 / 5xx 仍走默认重试。
+final FutureProvider<List<HealthListItem>> healthListProvider = FutureProvider<List<HealthListItem>>(
+  (ref) => ref.read(healthRecordRepositoryProvider).list(),
+  retry: healthListRetry,
+);
+
+/// [healthListProvider] 的重试策略：见 [retryExcept4xx]（4xx 不重试、其余走默认）。
+Duration? healthListRetry(int retryCount, Object error) => retryExcept4xx(retryCount, error);

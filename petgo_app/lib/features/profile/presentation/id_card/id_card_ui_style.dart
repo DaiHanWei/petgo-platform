@@ -44,12 +44,13 @@ ButtonStyle idCardPrimaryButtonStyle({bool busy = false}) => FilledButton.styleF
     );
 
 /// 描边按钮（稿 `.btn.out`：高 44 · 胶囊 · 1.5 lineViolet 描边 · mint 14/w600）。
-ButtonStyle idCardOutlineButtonStyle() => OutlinedButton.styleFrom(
+/// [height]：与主按钮并排时传 48 对齐（卡详情页 Bagikan，2026-10-14 产品拍板）；建卡页保持默认 44。
+ButtonStyle idCardOutlineButtonStyle({double height = 44}) => OutlinedButton.styleFrom(
       foregroundColor: AppColors.mint,
       // 提交中按钮暂不可点但保持紫色（稿 C2），不走默认灰
       disabledForegroundColor: AppColors.mint,
       side: const BorderSide(color: AppColors.lineViolet, width: 1.5),
-      minimumSize: const Size(64, 44),
+      minimumSize: Size(64, height),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       shape: const StadiumBorder(),
       textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w600),

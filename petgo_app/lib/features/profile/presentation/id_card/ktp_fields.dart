@@ -115,9 +115,17 @@ String speciesCodeFor(String? petType) => switch (petType) {
     };
 
 /// 建卡预览用**客户端占位身份码**（未落库无序号，末四位占位 `0000`；创建后以后端 cardNo 为准）。
-/// 规则：`TT` + DD(日+性别加码：母50/公10/未知0) + MMYY + SP + `0000`。生日缺失 → null（走旧占位 NIK）。
-String? buildPreviewCardNo({DateTime? birthday, String? gender, String? petType}) {
-  if (birthday == null) return null;
+/// 规则：`TT` + DD(日+性别加码：母50/公10/未知0) + MMYY + SP + `0000`。
+/// 生日缺失：
+/// - [placeholderWhenNoBirthday] = true（KTP 预览，产品 2026-10-14 拍板 4C）→ 日期段整段占位 `000000`
+///   （不叠性别加码），仍是新格式 14 位，如 `TT000000020000`，不再回落旧占位 NIK（`3276…`，那条路径只留给
+///   cardNo=null 的 V95 前旧卡）；
+/// - false（SIM / 居住证等，决策日志 T-2「生日未填时编号位留空」）→ null。
+/// 选 `000000` 而非 `––––––`：日 00 / 月 00 是不可能日期，一眼是占位、不像真号；数字在卡面各字体
+/// （Rubik / IBMPlexMono 子集）都有字形且与真号等宽，卡号行不会因字形缺失或宽度变化而错位。
+String? buildPreviewCardNo(
+    {DateTime? birthday, String? gender, String? petType, bool placeholderWhenNoBirthday = false}) {
+  if (birthday == null) return placeholderWhenNoBirthday ? 'TT000000${speciesCodeFor(petType)}0000' : null;
   final offset = switch (gender) {
     'FEMALE' => 50,
     'MALE' => 10,

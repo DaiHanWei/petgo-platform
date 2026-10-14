@@ -89,9 +89,9 @@ void main() {
 
     test('占位身份码：2024-03-10 母猫 → TT600324020000（TT600324 + 02 + 0000）', () {
       final no = buildPreviewCardNo(
-          birthday: DateTime(2024, 3, 10), gender: 'FEMALE', petType: 'CAT');
+          birthday: DateTime(2024, 3, 10), gender: 'FEMALE', petType: 'CAT')!;
       expect(no, 'TT600324020000');
-      expect(no!.startsWith('TT600324'), isTrue); // 日 10+50=60
+      expect(no.startsWith('TT600324'), isTrue); // 日 10+50=60
       expect(no.substring(8, 10), '02'); // SP：猫 02
       expect(no.length, 14);
     });
@@ -103,7 +103,13 @@ void main() {
           'TT100324000000'); // 日 10+0，SP 其他/未选 00
     });
 
-    test('占位身份码：生日缺失 → null（走旧占位 NIK）', () {
+    test('占位身份码：生日缺失 → KTP 用新格式占位 TT000000+SP+0000（不回落旧 NIK、不叠性别加码）；非 KTP 留空（T-2）', () {
+      final no = buildPreviewCardNo(birthday: null, gender: 'FEMALE', petType: 'CAT', placeholderWhenNoBirthday: true)!;
+      expect(no, 'TT000000020000');
+      expect(no.length, 14);
+      expect(buildPreviewCardNo(birthday: null, gender: null, petType: 'DOG', placeholderWhenNoBirthday: true), 'TT000000010000');
+      expect(buildPreviewCardNo(birthday: null, gender: 'MALE', petType: null, placeholderWhenNoBirthday: true), 'TT000000000000');
+      // T-2：SIM / 居住证等非 KTP 预览，缺生日编号位留空
       expect(buildPreviewCardNo(birthday: null, gender: 'FEMALE', petType: 'CAT'), isNull);
     });
 

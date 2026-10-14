@@ -51,31 +51,36 @@ KitasFields buildKitasFields(IdCardData data) {
   );
 }
 
-/// UI 稿 F3 换算布局（画布 1988×1200；文字为 CSS 文字盒顶，`line-height 1.1`；cqw × 19.88 = px）。
-/// ⚠️ 起点值，L2 须与 UI 稿 F3 叠图逐像素校准。
+/// F3 布局（画布 1988×1200；文字为文字盒顶，`line-height 1.1`）。起点取 UI 稿 F3 CSS（cqw × 19.88 = px），
+/// V1.3.4 复评后按概念图 `ktp-assets/17-style-izin-tinggal.png`（994×600 = 画布 ½）像素差分反解校准：
+/// 同示例数据渲染 → 缩到 994×600 → 逐元素比对墨迹外接框（字号取同文本墨迹宽度比，位置取墨迹顶/左/右缘差 ×2），
+/// 图片素材取模板匹配位置并按原生尺寸 ×2。校准后各元素墨迹框与概念图偏差 ≤1 设计 px（照片位除外，概念图为红色占位）。
 abstract final class _KitasLayout {
-  static const Rect label = Rect.fromLTWH(0, 50.4, 1988, 292); // 0 · 4.2% · 宽 100%（994×146）
-  static const double headerTop = 114; // 9.5%，水平居中
-  static const double brandTop = 216; // 18%，水平居中
-  static const double headerSize = 57.7; // 2.9cqw
-  static const Rect logo = Rect.fromLTWH(1699.7, 117.6, 159, 157); // 85.5% · 9.8% · 宽 8%（81×80）
-  static const Rect photo = Rect.fromLTWH(79.5, 450, 449.3, 540); // 4% · 37.5% · 22.6% × 45%
+  static const Rect label = Rect.fromLTWH(0, 52, 1988, 292); // 原 top 50.4；按概念图紫带上下沿差分 +0.75 设计 px
+  static const double headerTop = 116; // 原 114；差分 +1 设计 px，水平居中
+  static const double brandTop = 214; // 原 216；差分 −1 设计 px，水平居中
+  static const double headerSize = 62.7; // 原 57.7（2.9cqw）；按概念图 17 差分：墨迹宽 452/416、161/148 ⇒ ×1.087
+  static const Rect logo = Rect.fromLTWH(1698, 118, 162, 160); // 模板匹配 (849,59)，素材原生 81×80 ×2
+  static const Rect photo = Rect.fromLTWH(79.5, 450, 449.3, 540); // 4% · 37.5% · 22.6% × 45%（与概念图红框 40,224,224×270 偏差 <1px，未动）
   static const double photoRadius = 31.8; // 1.6cqw
 
-  static const double fieldX = 596.4; // 30%
-  static const double fieldTop = 402; // 33.5%
-  static const double fieldPitch = 64.2; // 5.35%
-  static const double fieldSize = 44.7; // 2.25cqw
-  static const double valueWidth = 904; // 到签章左缘留 30（值单行，超宽缩字）
+  static const double fieldX = 593.4; // 原 596.4；差分 −1.5 设计 px
+  static const double fieldTop = 393; // 原 402；差分 −4.5 设计 px
+  static const double fieldPitch = 63.9; // 原 64.2；概念图 10 行墨迹顶跨度 8 行距 = 31.94 设计 px
+  static const double fieldSize = 50.0; // 原 44.7（2.25cqw）；差分：标签墨迹宽比 1.08~1.13、值 1.12~1.13 ⇒ ×1.12
+  static const double valueWidth = 894.6; // 到签章左缘（1518）留 30（值单行，超宽缩字）
 
-  static const double numberRight = 1988 - 1898.5; // 右对齐到 95.5%
-  static const double numberTop = 402; // 33.5%
-  static const double numberSize = 45.7; // 2.3cqw
-  static const double numberWidth = 800; // 编号栏（右缘 1898.5 往左），不压字段列
+  static const double numberRight = 1988 - 1902.5; // 原 1898.5；概念图编号墨迹右缘 950 设计 px
+  static const double numberTop = 392; // 原 402；差分 −5 设计 px
+  static const double numberSize = 49.0; // 原 45.7（2.3cqw）；差分：墨迹宽 221/206 ⇒ ×1.073
+  static const double numberWidth = 800; // 编号栏（右缘往左），不压字段列
 
-  static const Rect sign = Rect.fromLTWH(1530.8, 588, 298.2, 274.6); // 77% · 49% · 宽 15%（177×163）
-  static const double footerTop = 1118.4; // 93.2%，水平居中
-  static const double footerSize = 41.7; // 2.1cqw
+  /// 爪印签章：原 (1530.8, 588, 298.2, 274.6) 按 UI 稿宽 15% 缩成 0.84 倍（即复评「小约 20%」）；
+  /// 模板匹配概念图得素材原生尺寸 177×163 位于 (759, 296) 设计 px ⇒ ×2。
+  static const Rect sign = Rect.fromLTWH(1518, 592, 354, 326);
+  static const double footerTop = 1114.4; // 原 1118.4；差分 −2 设计 px
+  static const double footerDx = -15; // 概念图副标题墨迹中心 491 设计 px（卡面中线 497 偏左 7.5）
+  static const double footerSize = 46.6; // 原 41.7（2.1cqw）；差分：墨迹宽 268/240 ⇒ ×1.117
 }
 
 const Color _kLabel = Color(0xFF2E2A45);
@@ -147,7 +152,8 @@ class KitasCardFront extends StatelessWidget {
             _rect(_KitasLayout.sign,
                 const Image(image: AssetImage('assets/id_card/kitas/sign.png'), fit: BoxFit.contain)),
             _centered('Kartu Izin Tinggal Hewan', _KitasLayout.footerTop,
-                newCardTextStyle(_KitasLayout.footerSize, _kRegular, _kValue, italic: true)),
+                newCardTextStyle(_KitasLayout.footerSize, _kRegular, _kValue, italic: true),
+                dx: _KitasLayout.footerDx),
           ],
         ),
       ),
@@ -169,9 +175,9 @@ class KitasCardFront extends StatelessWidget {
     );
   }
 
-  static Widget _centered(String text, double top, TextStyle style) => Positioned(
-        left: 0,
-        right: 0,
+  static Widget _centered(String text, double top, TextStyle style, {double dx = 0}) => Positioned(
+        left: dx,
+        right: -dx,
         top: top,
         child: Text(text, textAlign: TextAlign.center, maxLines: 1, softWrap: false, style: style),
       );

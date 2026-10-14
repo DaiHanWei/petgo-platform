@@ -102,14 +102,14 @@ void main() {
   });
 
   group('居住证', () {
-    testWidgets('1988×1200 + 抬头 / 副标题 / 格式化编号（右对齐到 95.5%）', (tester) async {
+    testWidgets('1988×1200 + 抬头 / 副标题 / 格式化编号（右对齐到 1902.5，按概念图 17 差分）', (tester) async {
       await pump(tester, KitasCardFront(fields: buildKitasFields(data())));
       expect(tester.getSize(find.byType(KitasCardFront)), const Size(1988, 1200));
       expect(find.text('Pengurus Administrasi Hewan'), findsOneWidget);
       expect(find.text('TAILTOPIA'), findsOneWidget);
       expect(find.text('Kartu Izin Tinggal Hewan'), findsOneWidget);
       expect(find.text('TT-730326020110'), findsOneWidget);
-      expect(tester.getRect(find.text('TT-730326020110')).right, moreOrLessEquals(1898.5, epsilon: 0.5));
+      expect(tester.getRect(find.text('TT-730326020110')).right, moreOrLessEquals(1902.5, epsilon: 0.5));
       expect(find.text('Oyen'), findsOneWidget);
       expect(find.text('Kucing'), findsOneWidget);
       expect(find.text('Domestik'), findsOneWidget);

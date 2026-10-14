@@ -172,8 +172,8 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
                         //    这样总开关关闭时只需停掉成功后的提示，
                         //    不会出现"按钮承诺了奖励却不发"。
                         label: Text(l10n.idCardShare),
-                        // 稿 G1 `.btn.out`：胶囊 · 1.5 lineViolet 描边 · mint 粗体。
-                        style: idCardOutlineButtonStyle(),
+                        // 稿 G1 `.btn.out`：胶囊 · 1.5 lineViolet 描边 · mint 粗体；高 48 与右侧主按钮对齐。
+                        style: idCardOutlineButtonStyle(height: 48),
                       ),
                     ),
                     const SizedBox(width: 10),

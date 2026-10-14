@@ -82,7 +82,12 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
         breed: _emptyToNull(_draft.breed),
         birthday: _draft.birthday,
         gender: _draft.gender,
-        cardNo: buildPreviewCardNo(birthday: _draft.birthday, gender: _draft.gender, petType: _draft.petType),
+        // 缺生日：KTP 显示新格式占位号（4C），SIM / 居住证等编号位留空（T-2）
+        cardNo: buildPreviewCardNo(
+            birthday: _draft.birthday,
+            gender: _draft.gender,
+            petType: _draft.petType,
+            placeholderWhenNoBirthday: _style == IdCardStyle.ktp),
         // 年份按 WIB（UTC+7）折算，与后端签发年一致（跨年时刻本地时区差异不影响预览）。
         passportNo: buildPreviewPassportNo(
             petType: _draft.petType, year: DateTime.now().toUtc().add(const Duration(hours: 7)).year),

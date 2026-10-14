@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/retry_policy.dart';
 import '../../../core/network/api_paths.dart';
 import '../../../core/network/dio_client.dart';
 import '../domain/order_detail.dart';
@@ -50,5 +51,7 @@ final orderRepositoryProvider =
     Provider<OrderRepository>((ref) => OrderRepository(dio: ref.read(dioProvider)));
 
 /// 订单详情（按 token）。
+/// 订单不存在 / 非本人 → 4xx 立即显示，不走 Riverpod 默认 15 秒重试（[retryExcept4xx]）。
 final orderDetailProvider = FutureProvider.autoDispose.family<OrderDetail, String>(
-    (ref, token) => ref.read(orderRepositoryProvider).fetchDetail(token));
+    (ref, token) => ref.read(orderRepositoryProvider).fetchDetail(token),
+    retry: retryExcept4xx);

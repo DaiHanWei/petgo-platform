@@ -1436,11 +1436,21 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
               ),
             ),
           ),
+        // 失败标记：样式取 UI 稿 B5（#F0425A 描边 ⚠ + 白色圆底）。位置放左下角——
+        // 右上角留给删除 ✕、左上角是首格「封面」角标，三者互不遮挡（D-14，2026-10-14 产品改）。
         if (item.status == ImageUploadStatus.failed)
-          const Positioned(
-            right: 4,
-            top: 4,
-            child: Icon(Icons.error, color: Colors.red, size: 18),
+          Positioned(
+            left: 4,
+            bottom: 4,
+            child: Container(
+              key: ValueKey('publishFailedMark_$index'),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.error_outline,
+                  color: Color(0xFFF0425A), size: 18),
+            ),
           ),
         // AC2：首格常驻「封面」角标。它只是顺序的**投影** ——
         // 不另设「哪张是封面」的字段，否则迟早出现「界面第一张是 A、封面却是 B」。

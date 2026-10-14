@@ -29,9 +29,9 @@ void main() {
 
   test('预览占位号（末四位 0000）照常格式化', () {
     final birthday = DateTime(2024, 3, 10);
-    final preview = buildPreviewCardNo(birthday: birthday, gender: 'FEMALE', petType: 'CAT')!;
+    final preview = buildPreviewCardNo(birthday: birthday, gender: 'FEMALE', petType: 'CAT');
     expect(preview, 'TT600324020000');
-    expect(formatSimCardNo(preview, birthday: birthday), 'TT6003-2024-020000');
+    expect(formatSimCardNo(preview!, birthday: birthday), 'TT6003-2024-020000');
     expect(formatKitasCardNo(preview), 'TT-600324020000');
   });
 
