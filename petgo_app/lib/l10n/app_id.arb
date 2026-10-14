@@ -2596,5 +2596,11 @@
   "followListEmptyFollowing": "Belum mengikuti siapa pun",
   "followListEmptyFollowers": "Belum ada pengikut",
   "followListEmptySelfFollowing": "Kamu belum mengikuti siapa pun",
-  "followSuggestedTitle": "Disarankan untukmu"
+  "followSuggestedTitle": "Disarankan untukmu",
+  "socialTabDiscover": "Jelajah",
+  "socialTabFollowing": "Mengikuti",
+  "followingStripMore": "Lainnya",
+  "followingEmptyTitle": "Belum ada postingan dari teman",
+  "followingEmptyBody": "Ikuti orang yang kamu suka, momen dan diary mereka akan muncul di sini.",
+  "followingExploreDiscover": "Jelajahi Discover ›"
 }

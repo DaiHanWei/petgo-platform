@@ -12,6 +12,7 @@ import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
 import 'package:tailtopia/features/content/presentation/feed_tab_row.dart';
 import 'package:tailtopia/features/content/presentation/home_page.dart';
+import 'package:tailtopia/features/content/presentation/social_tab.dart';
 import 'package:tailtopia/features/place/presentation/place_entry_row.dart';
 import 'package:tailtopia/features/profile/data/pet_recommendation_repository.dart';
 import 'package:tailtopia/features/profile/presentation/widgets/pet_recommendation_strip.dart';
@@ -163,7 +164,7 @@ void main() {
       await pumpHome(tester, _FakeRepo([_pet(1)]));
       expect(find.byType(PlaceEntryRow), findsOneWidget);
       expect(find.byType(FeedTabRow), findsOneWidget);
-      expect(find.bySemanticsLabel('TailTopia'), findsOneWidget); // AppBar 品牌标
+      expect(find.byType(SocialTabBar), findsOneWidget); // AppBar 页签栏（V1.3.4 起替代品牌标）
     });
 
     testWidgets('「查看全部」→ Story 4.3 的集合页', (tester) async {

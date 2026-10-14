@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_intent.dart';
@@ -23,9 +22,12 @@ import 'feed_controller.dart';
 import 'feed_skeleton.dart';
 import 'feed_tab_row.dart';
 import 'feed_view.dart';
+import 'following_feed_controller.dart';
+import 'following_tab_view.dart';
 import 'promo_target.dart';
 import 'publish_compose_page.dart';
 import 'report_sheet.dart';
+import 'social_tab.dart';
 import '../../notify/data/notification_repository.dart';
 
 /// 首页 Beranda（TailTopia Prototype 全面换肤）。
@@ -44,8 +46,15 @@ class HomePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final auth = ref.watch(authControllerProvider);
-    final selectedCategory = ref.watch(feedCategoryProvider);
-    final feedAsync = ref.watch(feedProvider);
+    // V1.3.4 following 流：顶部 Discover / Following 页签。游客恒按 Discover 渲染
+    // （登出时状态可能还停在 following —— 关注流接口只对登录用户开放，游客绝不能去请求它）。
+    final selectedTab = ref.watch(socialTabProvider);
+    final tab = auth.isLoggedIn ? selectedTab : SocialTab.discover;
+
+    // 登出 → 页签复位 Discover（不报埋点），下个账号登录后从默认页签开始。
+    ref.listen<bool>(authControllerProvider.select((s) => s.isLoggedIn), (prev, next) {
+      if (prev == true && !next) ref.read(socialTabProvider.notifier).reset();
+    });
 
     // FR-0B：游客浏览至第 3 页 → 软性登录浮层（控制器内部 session 去重）。
     ref.listen<AsyncValue<FeedState>>(feedProvider, (prev, next) {
@@ -64,12 +73,11 @@ class HomePage extends ConsumerWidget {
         backgroundColor: AppColors.cream,
         scrolledUnderElevation: 0,
         titleSpacing: 20,
-        // 左上角品牌标：Tailtopia wordmark。源 logo.svg(Adobe 多图层导出)经 svgo 清洗——
-        // 去 display:none 隐藏层 + 内联样式转属性 + viewBox 裁到文字区，得 flutter_svg 可渲的干净 SVG。
-        title: SvgPicture.asset(
-          'assets/brand/logo.svg',
-          height: 28,
-          semanticsLabel: l10n.appTitle,
+        // V1.3.4 following 流（spec §2.1 · UI 稿 A2/A3）：左上角品牌标换成 Discover / Following 页签；
+        // 右侧通知铃 / 游客「Masuk」一处不改。
+        title: SocialTabBar(
+          selected: tab,
+          onSelected: (t) => _selectTab(context, ref, t),
         ),
         actions: [
           if (auth.isLoggedIn)
@@ -111,8 +119,38 @@ class HomePage extends ConsumerWidget {
       body: SafeArea(
         top: false,
         bottom: false,
-        child: _content(context, ref, l10n, feedAsync, selectedCategory),
+        // Discover 分支与改动前一致；Following 只在登录态挂（上面已按登录态折算）。
+        child: tab == SocialTab.following
+            ? const FollowingTabView()
+            : _content(context, ref, l10n, ref.watch(feedProvider), ref.watch(feedCategoryProvider)),
       ),
+    );
+  }
+
+  /// 切页签。游客点 Following → 拉起登录（与游客点关注按钮一致），页签**不切**；
+  /// 登录成功后落到 Following（pendingAction 的命令式回调；新用户先走引导，同既有受控入口）。
+  /// 每次切进 Following 都重取一次（spec §2.4「下次进入时才出现」）。
+  void _selectTab(BuildContext context, WidgetRef ref, SocialTab target) {
+    if (target == SocialTab.discover) {
+      ref.read(socialTabProvider.notifier).select(SocialTab.discover);
+      return;
+    }
+    // 🔴 回调走 container：登录弹窗关闭后才执行，WidgetRef 不保证还可用。
+    final container = ProviderScope.containerOf(context, listen: false);
+    void enterFollowing() {
+      if (container.read(socialTabProvider) == SocialTab.following) return;
+      if (container.exists(followingFeedProvider)) {
+        container.read(followingFeedProvider.notifier).refresh();
+      }
+      container.read(socialTabProvider.notifier).select(SocialTab.following);
+    }
+
+    requireLogin(
+      ref,
+      context,
+      entrySource: 'following_tab',
+      pendingAction: RouteIntent(onResume: enterFollowing),
+      onAllowed: enterFollowing,
     );
   }
 
@@ -227,7 +265,8 @@ class HomePage extends ConsumerWidget {
           onTapItem: (item) => context.push('/content/${item.id}'),
           onLongPressItem: (item) => openReport(context, ref, item.id, onReported: () {
             // cm-6 §6.1：举报成功 → 乐观移除卡片 +「不再向你展示」提示（后端 §5.4 已过滤，刷新亦不复现）。
-            ref.read(feedProvider.notifier).removeItem(item.id);
+            // V1.3.4：关注流里同一张卡一并移除。
+            removeFeedPost(ref, item.id);
             if (context.mounted) {
               ScaffoldMessenger.of(context)
                 ..hideCurrentSnackBar()
@@ -264,7 +303,7 @@ class HomePage extends ConsumerWidget {
             ref,
             item.id,
             onReported: () {
-              ref.read(feedProvider.notifier).removeItem(item.id);
+              removeFeedPost(ref, item.id);
               if (context.mounted) {
                 ScaffoldMessenger.of(context)
                   ..hideCurrentSnackBar()

@@ -328,6 +328,10 @@ void main() {
         // 关注列表（V1.3.4 follow · FR-140.9 / Story 2.2 的 `follow_list_viewed`）。模块是「关注列表页」——
         // 我的页与他人主页两处入口共用，挂 `me_` / `user_` 都会误导。⚠️ 新模块入表，不是为遗留事件放宽规则。
         'follow_',
+        // 关注流（V1.3.4 following 流 · spec §5 的 `following_strip_tapped`）。模块是「Following 页」——
+        // 🔴 刻意不并进 `follow_`：那是关注列表页，这是关注的人的帖子流 + 头像排，两组数不是同一漏斗。
+        // ⚠️ 新模块入表，不是为遗留事件放宽规则。
+        'following_',
         // 推荐关注（V1.3.4 follow · FR-140.11 / Story 2.3 的 `suggested_follow_shown`）：我自己的空关注 / 粉丝列表里的推荐区。
         'suggested_',
         // 通知中心（V1.3.4 follow · FR-141.16 / Story 3.4 的 `notification_follow_back_tapped`）：通知中心页里的动作。

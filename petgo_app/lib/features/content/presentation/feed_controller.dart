@@ -5,6 +5,7 @@ import '../data/feed_repository.dart';
 import '../domain/feed_item.dart';
 import '../domain/home_refresh_provider.dart';
 import '../domain/pinned_slot.dart';
+import 'following_feed_controller.dart';
 
 /// 当前选中的分类 Tab（Story 3.2，AC3）。切换即重置游标重拉（feedProvider watch 此值）。
 final NotifierProvider<FeedCategoryNotifier, FeedCategory> feedCategoryProvider =
@@ -187,13 +188,30 @@ final AsyncNotifierProvider<FeedController, FeedState> feedProvider =
 ///
 /// 🔴 先判 [Ref.exists]：从通知深链直接进详情时 Feed 可能还没建，`ref.read(feedProvider.notifier)`
 /// 会顺手把它建出来并发一次首屏请求 —— 为了回写一个数去拉整页 Feed 不值当，没建就不写。
-/// ⚠️ 只覆盖 [feedProvider]（Social 全部 Tab 共用这一个实例，切 Tab 是同一实例重建）。
+/// ⚠️ 覆盖 [feedProvider]（Social 全部分类 Tab 共用这一个实例，切 Tab 是同一实例重建）
+/// 与 V1.3.4 的关注流 [followingFeedProvider]（同一张帖可能同时挂在两条流上，两边各自判 exists）。
 /// 顶置卡（pinnedSlotProvider）是独立快照，不在此回写。
 void syncFeedCounts(WidgetRef ref, int postId,
     {int? commentCount, int? likeCount, bool? liked}) {
-  if (!ref.exists(feedProvider)) return;
-  ref.read(feedProvider.notifier).syncCounts(postId,
-      commentCount: commentCount, likeCount: likeCount, liked: liked);
+  if (ref.exists(feedProvider)) {
+    ref.read(feedProvider.notifier).syncCounts(postId,
+        commentCount: commentCount, likeCount: likeCount, liked: liked);
+  }
+  if (ref.exists(followingFeedProvider)) {
+    ref.read(followingFeedProvider.notifier).syncCounts(postId,
+        commentCount: commentCount, likeCount: likeCount, liked: liked);
+  }
+}
+
+/// 举报某帖成功 → 从 Discover 与关注流里**都**乐观移除这张卡（V1.3.4 following 流）。
+///
+/// 🔴 两边都先判 [Ref.exists]：没建过的流不为移除一张卡去建它、发首屏请求（同 [syncFeedCounts]）。
+/// 后端两条流都已过滤「我举报过的帖」，下次拉取不会复现；这里补的是**当前这一屏**。
+void removeFeedPost(WidgetRef ref, int postId) {
+  if (ref.exists(feedProvider)) ref.read(feedProvider.notifier).removeItem(postId);
+  if (ref.exists(followingFeedProvider)) {
+    ref.read(followingFeedProvider.notifier).removeItem(postId);
+  }
 }
 
 

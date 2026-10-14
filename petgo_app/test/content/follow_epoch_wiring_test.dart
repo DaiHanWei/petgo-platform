@@ -180,6 +180,8 @@ void main() {
   test('FeedMasonryView 给顶置卡 / 普通卡分配不同的位置键', () {
     final src = File('lib/features/content/presentation/feed_view.dart').readAsStringSync();
     expect(src, contains("followSurfaceKey: 'feed:pinned:"));
-    expect(src, contains("followSurfaceKey: 'feed:item:"));
+    // V1.3.4 following 流：普通卡前缀可配（Discover 默认 `feed`，关注流 `following`），两条流同帖不串位置。
+    expect(src, contains(r"followSurfaceKey: '${widget.followSurfacePrefix}:item:"));
+    expect(src, contains("this.followSurfacePrefix = 'feed'"));
   });
 }
