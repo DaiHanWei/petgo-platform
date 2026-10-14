@@ -36,7 +36,7 @@ void main() {
     expect(ceremonies, hasLength(1));
 
     ceremonies.single.onComplete();
-    await tester.pump(const Duration(milliseconds: 750)); // 停 400ms + 淡出 300ms（墙钟计时）
+    await tester.pump(const Duration(milliseconds: 750)); // 停 400ms（墙钟计时），随后成功页 300ms 淡入
     await tester.pumpAndSettle();
     expect(find.byType(PlaceStampCeremonyPage), findsNothing);
     expect(find.byType(PlaceCheckinSuccessPage), findsOneWidget);
@@ -162,7 +162,7 @@ Future<void> _pumpDetail(WidgetTester tester,
     ),
     GoRoute(
       path: PlaceCheckinSuccessPage.routePattern,
-      builder: (c, s) => PlaceCheckinSuccessPage(args: s.extra! as PlaceCheckinSuccessArgs),
+      pageBuilder: (c, s) => PlaceCheckinSuccessPage.pageFor(s, s.extra! as PlaceCheckinSuccessArgs),
     ),
   ]);
   addTearDown(router.dispose);

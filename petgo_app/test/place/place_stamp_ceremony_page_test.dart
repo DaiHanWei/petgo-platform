@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/pet_passport/data/pet_passport_repository.dart';
+import 'package:tailtopia/features/pet_passport/domain/pet_passport.dart';
 import 'package:tailtopia/features/place/domain/place_checkin_result.dart';
 import 'package:tailtopia/features/place/domain/place_summary.dart';
 import 'package:tailtopia/features/place/presentation/place_checkin_success_page.dart';
@@ -42,11 +43,16 @@ void main() {
     expect(find.byType(PlaceStampCeremonyPage), findsOneWidget, reason: '最终帧停 400ms');
     expect(find.byType(PlaceCheckinSuccessPage), findsNothing);
 
-    await tester.pump(const Duration(milliseconds: 20)); // 过 400ms → 开始淡出
+    await tester.pump(const Duration(milliseconds: 20)); // 过 400ms → pushReplacement 成功页
     await tester.pump(const Duration(milliseconds: 150));
-    final opacity = tester.widget<FadeTransition>(find.byKey(const ValueKey('placeStampCeremonyFade')));
-    expect(opacity.opacity.value, inExclusiveRange(0.0, 1.0), reason: '0.3s 淡出进行中');
-    expect(find.byType(PlaceCheckinSuccessPage), findsNothing);
+    // spec §2 拍板 A：成功页以 300ms 淡入盖上动画最终帧（不是先淡成空白页再走平台转场）。
+    final route = ModalRoute.of(tester.element(find.byType(PlaceCheckinSuccessPage)))! as PageRoute<void>;
+    expect(route.settings, isA<CustomTransitionPage<void>>());
+    expect(route.transitionDuration, const Duration(milliseconds: 300));
+    final fade = tester.widget<FadeTransition>(
+        find.ancestor(of: find.byType(PlaceCheckinSuccessPage), matching: find.byType(FadeTransition)).first);
+    expect(fade.opacity.value, inExclusiveRange(0.0, 1.0), reason: '0.3s 淡入进行中');
+    expect(find.byType(PlaceStampCeremonyPage), findsOneWidget, reason: '淡入期间动画最终帧仍垫在下面');
 
     await tester.pumpAndSettle();
     expect(find.byType(PlaceStampCeremonyPage), findsNothing);
@@ -64,12 +70,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(PlaceCheckinSuccessPage), findsOneWidget);
     expect(h.successArgs.single.ceremonyPlayed, isFalse);
-    // 成功页按「未播动画」处理：保留原 0.36s 小落章。
+    // 成功页按「未播动画」处理：默认平台转场 + 保留原 0.36s 小落章。
+    final route = ModalRoute.of(tester.element(find.byType(PlaceCheckinSuccessPage)))!;
+    expect(route.settings, isA<MaterialPage<void>>());
     expect(
-        find.ancestor(
-            of: find.byType(PlaceStampView), matching: find.byKey(const ValueKey('placeCheckinNewStamp'))),
+        find.ancestor(of: find.byType(PlaceStampView), matching: find.byType(TweenAnimationBuilder<double>)),
         findsOneWidget);
-    expect(find.byType(TweenAnimationBuilder<double>), findsWidgets);
     expect(ceremonyEvents(), [
       {'result': 'failed'}
     ]);
@@ -145,8 +151,11 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.byType(PlaceStampCeremonyPage), findsOneWidget, reason: '系统返回键在播放期间不生效');
     expect(find.text('DETAIL'), findsNothing);
-    // 播放中点击无效：外层吞掉指针。
-    expect(find.byKey(const ValueKey('placeStampCeremonyBlocker')), findsOneWidget);
+    // 播放中点击无效：真点一下动画区域，组件收不到。
+    await tester.tap(find.byKey(const ValueKey('fakeCeremony')), warnIfMissed: false);
+    await tester.pump();
+    expect(h.fake.taps, 0);
+    expect(find.byType(PlaceStampCeremonyPage), findsOneWidget);
   });
 
   testWidgets('successBackReturnsToPlaceDetail', (tester) async {
@@ -235,6 +244,40 @@ void main() {
       expect(find.text('Momo dapat cap baru'), findsOneWidget);
     });
 
+    for (final played in [true, false]) {
+      testWidgets('护照里有这枚章：ceremonyPlayed=$played → 章详情${played ? '直接终态' : '0.36s 淡入'}', (tester) async {
+        final passport = PetPassport.fromJson({
+          'petName': 'Momo',
+          'passportNo': 'TT02P2600128',
+          'currentVersionUnlocked': false,
+          'stamps': [
+            {
+              'placeToken': 'p' * 32,
+              'placeName': 'Kopi Kucing',
+              'placeType': 'CAFE',
+              'placeStatus': 'ACTIVE',
+              'visitCount': 1,
+              'firstVisitDate': '2026-09-30',
+              'addressText': 'Jl. Kemang 1',
+            },
+          ],
+        });
+        await _pumpSuccessOnly(tester, ceremonyPlayed: played, passport: passport, settle: false);
+        await tester.pump(); // 护照到手 → 占位换成章详情
+        await tester.pump(const Duration(milliseconds: 16));
+        final detail = find.byKey(const ValueKey('placeCheckinStampDetail'));
+        expect(detail, findsOneWidget);
+        final fade = tester.widget<FadeTransition>(
+            find.ancestor(of: detail, matching: find.byType(FadeTransition)).first);
+        if (played) {
+          expect(fade.opacity.value, 1.0, reason: '播过盖章动画 → 不再叠 0.36s 淡入');
+        } else {
+          expect(fade.opacity.value, lessThan(1.0), reason: '未播动画 → 保持原 0.36s 淡入');
+        }
+        await tester.pumpAndSettle();
+      });
+    }
+
     testWidgets('false（默认）→ 保留小落章', (tester) async {
       await _pumpSuccessOnly(tester, ceremonyPlayed: false);
       expect(
@@ -246,7 +289,7 @@ void main() {
 
 // ===== fakes & harness =====
 
-/// 停留 / 淡出后的导航按墙钟 Timer 触发，期间可能没有帧可 settle：先推过 400+300ms 再 settle。
+/// 停留后的导航按墙钟 Timer 触发，期间可能没有帧可 settle：先推过 400ms 停留再 settle（含 300ms 淡入）。
 Future<void> _settle(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 750));
   await tester.pumpAndSettle();
@@ -254,6 +297,7 @@ Future<void> _settle(WidgetTester tester) async {
 
 class _FakeCeremony {
   int instances = 0;
+  int taps = 0;
   StampCeremonyRequest? lastRequest;
 
   Widget build(BuildContext context, StampCeremonyRequest request) => _FakeCeremonyWidget(this, request);
@@ -284,7 +328,12 @@ class _FakeCeremonyWidgetState extends State<_FakeCeremonyWidget> {
   }
 
   @override
-  Widget build(BuildContext context) => const SizedBox.expand(key: ValueKey('fakeCeremony'));
+  Widget build(BuildContext context) => GestureDetector(
+        key: const ValueKey('fakeCeremony'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => widget.owner.taps++,
+        child: const SizedBox.expand(),
+      );
 }
 
 class _Harness {
@@ -339,10 +388,10 @@ class _Harness {
       ),
       GoRoute(
         path: PlaceCheckinSuccessPage.routePattern,
-        builder: (c, s) {
+        pageBuilder: (c, s) {
           final a = s.extra! as PlaceCheckinSuccessArgs;
           _successArgs.add(a);
-          return PlaceCheckinSuccessPage(args: a);
+          return PlaceCheckinSuccessPage.pageFor(s, a);
         },
       ),
     ]);
@@ -372,10 +421,11 @@ class _Harness {
   }
 }
 
-Future<void> _pumpSuccessOnly(WidgetTester tester, {required bool ceremonyPlayed}) async {
+Future<void> _pumpSuccessOnly(WidgetTester tester,
+    {required bool ceremonyPlayed, PetPassport? passport, bool settle = true}) async {
   await tester.pumpWidget(ProviderScope(
     overrides: [
-      petPassportProvider.overrideWith((ref) async => throw StateError('offline')),
+      petPassportProvider.overrideWith((ref) async => passport ?? (throw StateError('offline'))),
       milestoneInstantPollDelaysProvider.overrideWithValue(const []),
     ],
     child: MaterialApp(
@@ -399,5 +449,5 @@ Future<void> _pumpSuccessOnly(WidgetTester tester, {required bool ceremonyPlayed
       ),
     ),
   ));
-  await tester.pumpAndSettle();
+  if (settle) await tester.pumpAndSettle();
 }

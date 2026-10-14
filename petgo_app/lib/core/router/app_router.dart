@@ -611,7 +611,8 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         redirect: (c, s) => s.extra is PlaceCheckinSuccessArgs
             ? null
             : PlaceDetailPage.routeFor(s.pathParameters['token']!),
-        builder: (c, s) => PlaceCheckinSuccessPage(args: s.extra! as PlaceCheckinSuccessArgs),
+        // V1.3.4：从盖章动画页 pushReplacement 进来（ceremonyPlayed）→ 300ms 淡入，其余默认转场。
+        pageBuilder: (c, s) => PlaceCheckinSuccessPage.pageFor(s, s.extra! as PlaceCheckinSuccessArgs),
       ),
       // V1.3.4 签到盖章动画：新章签到后的全屏动画页，结束后 pushReplacement 到上面的成功页。
       // 入参同成功页；`extra` 缺失（冷启动恢复 / 手敲深链）同样回场所详情。

@@ -56,6 +56,25 @@ class PlaceCheckinSuccessPage extends ConsumerStatefulWidget {
   /// 落章轻反馈时长（AC5.1：≤400ms）。
   static const Duration stampAnimation = Duration(milliseconds: 360);
 
+  /// V1.3.4：从盖章动画页进来时的淡入时长（spec §2 拍板 A：停 0.4s 后约 0.3s 淡出进入成功页）。
+  static const Duration ceremonyFadeIn = Duration(milliseconds: 300);
+
+  /// 路由页面：刚播过盖章动画（`ceremonyPlayed`）→ 300ms 淡入（动画页被 pushReplacement 替换，
+  /// 淡入期间它仍垫在下面，即「动画最终帧 → 成功页」的交叉淡化）；其余（再访 / 兜底）保持默认平台转场。
+  /// ⚠️ `app_router.dart` 与测试路由同用它。
+  static Page<void> pageFor(GoRouterState state, PlaceCheckinSuccessArgs args) {
+    final child = PlaceCheckinSuccessPage(args: args);
+    if (!args.ceremonyPlayed) return MaterialPage<void>(key: state.pageKey, child: child);
+    return CustomTransitionPage<void>(
+      key: state.pageKey,
+      transitionDuration: ceremonyFadeIn,
+      reverseTransitionDuration: ceremonyFadeIn,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+          FadeTransition(opacity: animation, child: child),
+      child: child,
+    );
+  }
+
   @override
   ConsumerState<PlaceCheckinSuccessPage> createState() => _PlaceCheckinSuccessPageState();
 }
@@ -199,7 +218,8 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
             if ((passport != null && stampIndex >= 0) || passportPending)
               // 空白护照本 → 有内容的那页：底图不动，只让新内容淡入（旧的占位不淡出，避免中间整页发白一帧）。
               AnimatedSwitcher(
-                duration: PlaceCheckinSuccessPage.stampAnimation,
+                // 刚播过盖章动画 → 章详情直接终态，不再叠 0.36s 淡入（不重复动效）。
+                duration: args.ceremonyPlayed ? Duration.zero : PlaceCheckinSuccessPage.stampAnimation,
                 switchInCurve: Curves.easeOut,
                 layoutBuilder: (current, previous) => Stack(
                   alignment: Alignment.topCenter,

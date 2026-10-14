@@ -37,7 +37,8 @@ typedef StampFaceLoader = Future<Uint8List?> Function({String? url, PlaceType? t
 /// 新章签到后的全屏盖章动画页（V1.3.4 签到盖章动画 · spec §2）。
 ///
 /// 流程：取章面字节（2s 超时，取不到 → 不播）→ 播 [StampCeremony] → 收到 `complete` 停 400ms →
-/// 淡出 300ms → `pushReplacement` 成功页（`ceremonyPlayed: true`，成功页跳过原小落章）。
+/// `pushReplacement` 成功页（`ceremonyPlayed: true`）：成功页路由自带 300ms 淡入（见
+/// [PlaceCheckinSuccessPage.pageFor]），本页最终帧垫在下面被淡入覆盖；成功页跳过原小落章。
 /// 任何失败（章面取不到 / Rive 失败 / 开播 4s 未完成）→ 立即 `pushReplacement` 成功页（`ceremonyPlayed: false`）。
 ///
 /// - 返回栈：本页被成功页**替换**，成功页返回 → 场所详情。
@@ -59,20 +60,17 @@ class PlaceStampCeremonyPage extends StatefulWidget {
   /// `complete` 后最终帧停留。
   static const Duration hold = Duration(milliseconds: 400);
 
-  /// 停留后淡出进成功页。
-  static const Duration fadeOut = Duration(milliseconds: 300);
-
   /// 开播后多久没收到 `complete` 就强制结束。
+  ///
+  /// 起算点 = 章面就绪、把播放请求交给盖章组件的那一刻（组件随后才加载 .riv 并触发 start），
+  /// 即 4s 覆盖「.riv 加载 + ~2.4s 播放」。真机加载耗时待 L2 观察，偏紧再调。
   static const Duration watchdog = Duration(seconds: 4);
 
   @override
   State<PlaceStampCeremonyPage> createState() => _PlaceStampCeremonyPageState();
 }
 
-class _PlaceStampCeremonyPageState extends State<PlaceStampCeremonyPage> with SingleTickerProviderStateMixin {
-  late final AnimationController _fade =
-      AnimationController(vsync: this, duration: PlaceStampCeremonyPage.fadeOut, value: 1);
-
+class _PlaceStampCeremonyPageState extends State<PlaceStampCeremonyPage> {
   StampCeremonyRequest? _request;
   Timer? _watchdog;
   Timer? _holdTimer;
@@ -92,7 +90,7 @@ class _PlaceStampCeremonyPageState extends State<PlaceStampCeremonyPage> with Si
   Future<void> _prepare() async {
     if (!mounted) return;
     final r = widget.args.result;
-    final load = widget.faceLoader ?? ({String? url, PlaceType? type}) => loadStampFace(url: url, type: type);
+    final load = widget.faceLoader ?? loadStampFace;
     Uint8List? face;
     try {
       face = await load(url: r.stampImageUrl, type: r.placeType);
@@ -128,12 +126,8 @@ class _PlaceStampCeremonyPageState extends State<PlaceStampCeremonyPage> with Si
     _finishing = true;
     _watchdog?.cancel();
     _track(_request?.reduceMotion == true ? 'reduce_motion' : 'completed');
-    _holdTimer = Timer(PlaceStampCeremonyPage.hold, () {
-      if (!mounted) return;
-      // 淡出只管视觉；导航按墙钟计时，不等动画 Future —— 切后台时 ticker 停摆也不会卡在本页。
-      unawaited(_fade.reverse().orCancel.catchError((_) {}));
-      _holdTimer = Timer(PlaceStampCeremonyPage.fadeOut, () => _goToSuccess(ceremonyPlayed: true));
-    });
+    // 停留按墙钟 Timer 计时（不依赖帧 / ticker）：切后台也不会卡在本页。淡入由成功页路由转场负责。
+    _holdTimer = Timer(PlaceStampCeremonyPage.hold, () => _goToSuccess(ceremonyPlayed: true));
   }
 
   void _onError(Object error) {
@@ -173,7 +167,6 @@ class _PlaceStampCeremonyPageState extends State<PlaceStampCeremonyPage> with Si
   void dispose() {
     _watchdog?.cancel();
     _holdTimer?.cancel();
-    _fade.dispose();
     super.dispose();
   }
 
@@ -186,14 +179,8 @@ class _PlaceStampCeremonyPageState extends State<PlaceStampCeremonyPage> with Si
         backgroundColor: AppColors.cream,
         body: AbsorbPointer(
           key: const ValueKey('placeStampCeremonyBlocker'),
-          child: FadeTransition(
-            key: const ValueKey('placeStampCeremonyFade'),
-            opacity: _fade,
-            child: SizedBox.expand(
-              child: request == null
-                  ? null
-                  : (widget.ceremonyBuilder ?? _defaultCeremony)(context, request),
-            ),
+          child: SizedBox.expand(
+            child: request == null ? null : (widget.ceremonyBuilder ?? _defaultCeremony)(context, request),
           ),
         ),
       ),

@@ -586,7 +586,7 @@ Future<void> _pumpDetail(
     ),
     GoRoute(
       path: PlaceCheckinSuccessPage.routePattern,
-      builder: (c, s) => PlaceCheckinSuccessPage(args: s.extra! as PlaceCheckinSuccessArgs),
+      pageBuilder: (c, s) => PlaceCheckinSuccessPage.pageFor(s, s.extra! as PlaceCheckinSuccessArgs),
     ),
   ]);
   addTearDown(router.dispose);
