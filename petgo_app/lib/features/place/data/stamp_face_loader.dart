@@ -6,6 +6,11 @@ import 'package:flutter/services.dart';
 import '../../pet_passport/presentation/default_stamp_assets.dart';
 import '../domain/place_summary.dart';
 
+final Dio _plainDio = Dio(BaseOptions(
+  connectTimeout: const Duration(seconds: 2),
+  responseType: ResponseType.bytes,
+));
+
 /// 取盖章动画的「章面」PNG 字节（V1.3.4）。
 ///
 /// - 有 [url]：用无鉴权的裸 dio 取字节（章图是公开 OSS 地址，不能把登录令牌带出去）；
@@ -20,16 +25,18 @@ Future<Uint8List?> loadStampFace({
   Dio? dio,
   AssetBundle? bundle,
 }) async {
+  CancelToken? cancel;
   try {
     final Uint8List? bytes;
     if (url != null && url.isNotEmpty) {
-      final client = dio ?? Dio();
+      final client = dio ?? _plainDio;
+      cancel = CancelToken();
       final resp = await client.get<List<int>>(
         url,
+        cancelToken: cancel,
         options: Options(
           responseType: ResponseType.bytes,
           receiveTimeout: timeout,
-          sendTimeout: timeout,
           validateStatus: (s) => s != null && s >= 200 && s < 300,
         ),
       ).timeout(timeout);
@@ -44,6 +51,7 @@ Future<Uint8List?> loadStampFace({
     if (bytes == null || bytes.isEmpty) return null;
     return bytes;
   } catch (e) {
+    cancel?.cancel('stamp face timeout');
     debugPrint('loadStampFace failed: $e');
     return null;
   }

@@ -70,8 +70,24 @@ class _StampCeremonyState extends State<StampCeremony> {
   }
 
   Future<void> _load() async {
+    rive.File? file;
+    rive.RiveWidgetController? controller;
+    rive.ViewModelInstance? vm;
+    rive.RenderImage? face;
+    var listening = false;
+    var handedOver = false;
+
+    void release() {
+      if (listening) controller?.stateMachine.removeEventListener(_onEvent);
+      vm?.dispose();
+      controller?.dispose();
+      file?.dispose();
+      // 没交给 VM 的章面图由我们释放；已交给 VM 的随 VM 释放。
+      if (!handedOver) face?.dispose();
+    }
+
     try {
-      final file = await rive.File.asset(
+      file = await rive.File.asset(
         widget.asset,
         riveFactory: rive.Factory.rive,
         // stamp_face is a referenced placeholder that is not shipped; the real face arrives
@@ -80,29 +96,28 @@ class _StampCeremonyState extends State<StampCeremony> {
       );
       if (file == null) throw StateError('could not decode ${widget.asset}');
       if (!mounted) {
-        file.dispose();
+        release();
         return;
       }
 
       // Select the artboard by name: a watermarked build also carries Rive's watermark artboards.
-      final controller = rive.RiveWidgetController(
+      controller = rive.RiveWidgetController(
         file,
         artboardSelector: rive.ArtboardSelector.byName(_artboard),
         stateMachineSelector: rive.StateMachineSelector.byName(_stateMachine),
       );
-      final vm = controller.dataBind(rive.DataBind.auto());
+      vm = controller.dataBind(rive.DataBind.auto());
       controller.stateMachine.addEventListener(_onEvent);
+      listening = true;
 
-      final face = await rive.Factory.rive.decodeImage(widget.stampPng);
+      face = await rive.Factory.rive.decodeImage(widget.stampPng);
       if (face == null) throw StateError('could not decode the stamp PNG');
       vm.image('stampImage')?.value = face;
+      handedOver = true;
       vm.number('confettiSeed')?.value = widget.confettiSeed;
 
       if (!mounted) {
-        controller.stateMachine.removeEventListener(_onEvent);
-        vm.dispose();
-        controller.dispose();
-        file.dispose();
+        release();
         return;
       }
       setState(() {
@@ -113,7 +128,8 @@ class _StampCeremonyState extends State<StampCeremony> {
       _go();
     } catch (e) {
       debugPrint('StampCeremony: $e');
-      widget.onError?.call(e);
+      release();
+      if (mounted) widget.onError?.call(e);
     }
   }
 
