@@ -76,6 +76,7 @@ class _StampCeremonyState extends State<StampCeremony> {
     rive.RenderImage? face;
     var listening = false;
     var handedOver = false;
+    var transferred = false;
 
     void release() {
       if (listening) controller?.stateMachine.removeEventListener(_onEvent);
@@ -125,10 +126,11 @@ class _StampCeremonyState extends State<StampCeremony> {
         _controller = controller;
         _vm = vm;
       });
+      transferred = true; // 所有权已交给 State，dispose() 负责释放
       _go();
     } catch (e) {
       debugPrint('StampCeremony: $e');
-      release();
+      if (!transferred) release();
       if (mounted) widget.onError?.call(e);
     }
   }
