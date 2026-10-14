@@ -53,6 +53,10 @@ import tools.jackson.databind.ObjectMapper;
             // 这样那些测试仍然走**真实的推荐序路径**，而不是被迫改成时间倒序绕开问题。
             // ⚠️ 别为了「更快」或「更像生产」调大：调大就是把那十来条测试变成随机红。
             "petgo.feed.rank.candidate-pool-size=60",
+            // V1.3.4 Story 1.1：教育类独立池同理压到 60 —— 共享测试库里历史 KNOWLEDGE 帖很多，
+            // 默认 1000 下刚造的新科普要和它们按分数竞争（配上 Story 1.2 的 720h 半衰更明显），
+            // 既有「新帖出现在首页第一页」类测试会变成随机红。⚠️ 别为了「更像生产」调大。
+            "petgo.feed.rank.edu-pool-size=60",
             // V1.1.6 Story 16.4：P95 重算是每 6 小时一次的定时任务，初始延迟 2 分钟 ——
             // 而全量套件要跑 7 分钟，所以它**会在跑测试的中途触发**，并对
             // 「近 30 天全部公开内容」做一遍互动统计。
@@ -68,6 +72,11 @@ import tools.jackson.databind.ObjectMapper;
             // 套件恰跨那一刻时它会抢先物化近几天，让 DashboardMaterializerIntegrationTest 的「恰好补 3 天」随机红。
             // "-" = Scheduled.CRON_DISABLED；跑批本身由该测试类直接调用验证。
             "petgo.admin.dashboard.cron=-",
+            // V1.3.4 Story 6.2：运营通知定时扫描（默认首延 60s、每 60s）会把共享库里别的测试遗留的
+            // PENDING 全量（ALL）活动发出去 —— 给库里所有用户各写一条通知、角标 +1，
+            // 让「新用户未读数 = N」类断言随机红。首延拉到 1 天 = 测试期内不自动跑；
+            // 扫描逻辑由 OpsNotificationDispatchIntegrationTest 直接调 scan() 验证。
+            "petgo.ops-notify.scan-initial-delay-ms=86400000",
         })
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")

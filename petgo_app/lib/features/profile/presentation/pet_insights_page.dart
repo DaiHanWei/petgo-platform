@@ -72,34 +72,21 @@ class PetInsightsRoutes {
   static String passportVersionFor(String token) => '$passport/versions/${Uri.encodeComponent(token)}';
 }
 
-/// 聚合页卡片排布（V1.3.2 Story 1.2 · C-8 / UX-DR1 的 2+2+1 规则）：
-/// 按顺序每两张一行（`IntrinsicHeight > Row(stretch) > 2×Expanded`，两卡等高），
-/// 最后落单的一张**整宽**独占一行。后续 story 只往卡片列表里加一项，不必再动布局。
+/// 聚合页卡片排布（V1.3.4 ktp AD-14 / FR-142A）：**单列整宽**——每张卡独占一行、撑满父宽，
+/// 相邻两行之间一个 `SizedBox(height: gap)`（V1.3.2 的 2+2+1 并排已废弃）。
+/// 后续 story 新增入口只需往卡片列表里追加一项，不必再动布局。
 List<Widget> insightRows(List<Widget> cards, {double gap = 10}) {
   final rows = <Widget>[];
-  for (var i = 0; i < cards.length; i += 2) {
+  for (final card in cards) {
     if (rows.isNotEmpty) rows.add(SizedBox(height: gap));
-    if (i + 1 < cards.length) {
-      rows.add(IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(child: cards[i]),
-            SizedBox(width: gap),
-            Expanded(child: cards[i + 1]),
-          ],
-        ),
-      ));
-    } else {
-      rows.add(SizedBox(width: double.infinity, child: cards[i]));
-    }
+    rows.add(SizedBox(width: double.infinity, child: card));
   }
   return rows;
 }
 
 /// 「Know Your Pet / Kenali Hewanmu」聚合页（FR-65 · AD-A17）。
 ///
-/// ## 卡片列表 → 每两张一行、落单整宽（[insightRows]）
+/// ## 卡片列表 → 单列整宽（[insightRows]，V1.3.4 AD-14）
 /// V1.3.2 起按 C-8 顺序 KTP / 年龄卡 / 护照 / Tailsonality / 登机牌逐个**新增**；
 /// 尚未上线的卡**不占位、不置灰、不出现** —— 连一个隐藏卡位、一个 `enabled: false` 的常量都不许留。
 /// 一个灰着的「即将推出」就是一句不兑现的承诺。
@@ -218,8 +205,8 @@ class _PetInsightsPageState extends ConsumerState<PetInsightsPage> {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
-          // UI 稿 P2：**横向**矮卡两两并排（AC1「与档案页入口卡同一样式」），
-          // 不是竖排高卡的网格。IntrinsicHeight 让同行两卡等高（文案两语长度不同）。
+          // UI 稿 A1（V1.3.4 AD-14）：**横向**矮卡单列整宽（与档案页入口卡同一样式），
+          // 每张独占一行，副标题有足够宽度完整显示。
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: insightRows([
@@ -244,7 +231,7 @@ class _PetInsightsPageState extends ConsumerState<PetInsightsPage> {
                 // 🔴 置灰即**彻底不可点**：onTap 为 null，连水波纹都不会有。
                 onTap: ageCardEnabled ? () => context.push(PetInsightsRoutes.ageCard) : null,
               ),
-              // V1.3.2 Story 1.2：宠物护照，全物种可点（第 2 行落单 → 整宽）。
+              // V1.3.2 Story 1.2：宠物护照，全物种可点。
               InsightEntryCard(
                 inkKey: const ValueKey('insightPassport'),
                 icon: Icons.menu_book_outlined,
@@ -252,7 +239,7 @@ class _PetInsightsPageState extends ConsumerState<PetInsightsPage> {
                 sub: l10n.passportEntrySub,
                 onTap: () => context.push(PetInsightsRoutes.passport),
               ),
-              // V1.3.2 Story 2.3：Tailsonality，全物种可点（OTHER 走通用题套）；2+2 排布。
+              // V1.3.2 Story 2.3：Tailsonality，全物种可点（OTHER 走通用题套）。
               KeyedSubtree(
                 key: _tailsonalityAnchor,
                 child: InsightEntryCard(
@@ -264,7 +251,7 @@ class _PetInsightsPageState extends ConsumerState<PetInsightsPage> {
                   onTap: _onTailsonalityTap,
                 ),
               ),
-              // V1.3.2 Story 3.5：登机牌，第三行整宽（C-8 的 2+2+1）；全物种可点。
+              // V1.3.2 Story 3.5：登机牌，全物种可点。
               InsightEntryCard(
                 inkKey: const ValueKey('insightBoardingPass'),
                 icon: Icons.airplane_ticket_outlined,

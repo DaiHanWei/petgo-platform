@@ -1,5 +1,6 @@
 import 'package:permission_handler/permission_handler.dart' as ph;
 
+import '../../../core/startup/startup_popup_ledger.dart';
 import '../../../core/storage/prefs.dart';
 import 'push_permission_change_reporter.dart';
 
@@ -20,9 +21,13 @@ class PushPermissionBootstrap {
   ///
   /// ⚠️ 调用时机必须在 iOS ATT 弹窗**之后**（见 main.dart）：两个系统弹窗同帧抛出会互相
   /// 遮挡、拉低两者的授权率。异常静默——权限拿不到只是收不到推送，绝不能拖垮启动。
+  ///
+  /// [willShowSystemPrompt]（V1.3.4 Story 5.3 · AD-12）：这次请求是否会出系统弹窗；会 → 请求前登记
+  /// 本次冷启动功能弹窗。默认 `status.isDenied`（iOS notDetermined / Android 13+ 首次请求前均为 denied）。
   static Future<bool> requestOnFirstLaunch({
     AppPrefs? prefs,
     Future<bool> Function()? request,
+    Future<bool> Function()? willShowSystemPrompt,
   }) async {
     try {
       final p = prefs ?? await AppPrefs.create();
@@ -34,6 +39,14 @@ class PushPermissionBootstrap {
             fromScreen: 'app_launch', prefs: p);
         return granted;
       }
+      // 🔴 判定单独 try/catch：异常按「不会弹」处理，绝不能落进外层 catch 而跳过 request。
+      var willShow = false;
+      try {
+        willShow = await (willShowSystemPrompt ?? _willShowSystemPrompt)();
+      } catch (_) {
+        willShow = false;
+      }
+      if (willShow) StartupPopupLedger.instance.record(StartupPopupKind.pushPermission);
       final granted = await (request ?? _request)();
       await p.setPushPermissionAsked(true);
       // 首启这一次只写基线（reporter 内部：无上一次状态 → 不上报）
@@ -47,6 +60,9 @@ class PushPermissionBootstrap {
 
   static Future<bool> _request() async =>
       (await ph.Permission.notification.request()).isGranted;
+
+  static Future<bool> _willShowSystemPrompt() async =>
+      (await ph.Permission.notification.status).isDenied;
 
   static Future<bool> _isGranted() async =>
       (await ph.Permission.notification.status).isGranted;

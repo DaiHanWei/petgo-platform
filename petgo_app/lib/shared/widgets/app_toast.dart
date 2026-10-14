@@ -140,6 +140,8 @@ class _ToastWidgetState extends State<_ToastWidget> with SingleTickerProviderSta
     final Widget body = hasAction
         ? Row(
             mainAxisSize: MainAxisSize.min,
+            // 整宽条里内容居中（稿 `.toast` text-align:center）
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Flexible(
                 child: Text(widget.message,
@@ -182,7 +184,10 @@ class _ToastWidgetState extends State<_ToastWidget> with SingleTickerProviderSta
           opacity: _fade,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 360),
+            // V1.3.4 UI 稿 `.toast`：整宽深色条（left/right 24 撑满），不再按文字宽度收成胶囊；
+            // maxWidth 360 只在平板等宽屏上封顶。
             child: Container(
+              width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
               decoration: BoxDecoration(
                 color: AppColors.ink.withValues(alpha: 0.94),

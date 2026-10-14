@@ -40,6 +40,9 @@ class AppImage {
   ///
   /// [thumbWidth]（物理像素）非空时，**仅网络 OSS 图**经 [ossResized] 取缩略图（列表/网格用）；
   /// asset/file 本地图与非 OSS 网络图不受影响。
+  ///
+  /// [alignment]（V1.3.4 Story 2.2）：原样转给 `Image.*`，详情轮播按露出位置开窗用；
+  /// 缺省 `Alignment.center` = 改前行为。
   static Widget widget(
     String url, {
     Key? key,
@@ -49,6 +52,7 @@ class AppImage {
     int? thumbWidth,
     Widget Function(BuildContext, Object, StackTrace?)? errorBuilder,
     ImageFrameBuilder? frameBuilder,
+    Alignment alignment = Alignment.center,
   }) {
     if (url.startsWith('asset:')) {
       return Image.asset(url.substring(6),
@@ -56,6 +60,7 @@ class AppImage {
           width: width,
           height: height,
           fit: fit,
+          alignment: alignment,
           errorBuilder: errorBuilder,
           frameBuilder: frameBuilder);
     }
@@ -65,6 +70,7 @@ class AppImage {
           width: width,
           height: height,
           fit: fit,
+          alignment: alignment,
           errorBuilder: errorBuilder,
           frameBuilder: frameBuilder);
     }
@@ -74,6 +80,7 @@ class AppImage {
           width: width,
           height: height,
           fit: fit,
+          alignment: alignment,
           errorBuilder: errorBuilder,
           frameBuilder: frameBuilder);
     }
@@ -83,6 +90,7 @@ class AppImage {
         width: width,
         height: height,
         fit: fit,
+        alignment: alignment,
         errorBuilder: errorBuilder,
         frameBuilder: frameBuilder);
   }

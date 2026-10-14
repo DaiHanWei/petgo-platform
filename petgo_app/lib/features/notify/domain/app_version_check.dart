@@ -1,11 +1,15 @@
-/// App 版本更新判定（Story 6.5，FR-22C）。纯逻辑，L0 可全覆盖。
+/// App 版本更新判定（Story 6.5，FR-22C；V1.3.4 Story 3.2 加冷却）。纯逻辑，L0 可全覆盖。
 ///
 /// 此提醒为 **App 内提示**，不走系统推送、不需推送权限。
+/// 当前版本一律取真机包版本（`AppUpdateEnv.loadCurrentVersion` → `PackageInfo.fromPlatform()`），
+/// 不再经编译期注入 —— 旧做法从未被任何构建脚本注入，恒为 1.0.0。
 library;
 
-/// 当前构建版本（V1 经 `--dart-define=APP_VERSION` 注入；缺省 1.0.0）。
-/// 说明：未引入 package_info_plus 原生插件以免动摇前端 L0；可后续切真机包信息。
-const String kAppVersion = String.fromEnvironment('APP_VERSION', defaultValue: '1.0.0');
+/// 推荐更新被「Nanti」跳过后的冷却期（AD-11）。
+const Duration kUpdateCooldown = Duration(hours: 72);
+
+/// 回前台自动检查的最小间隔（PRD §3.3 AC1）：距上次检查不足此值不发请求。
+const Duration kUpdateResumeCheckInterval = Duration(hours: 6);
 
 /// 更新态三分支。
 enum UpdateDecision {
@@ -53,6 +57,24 @@ class AppVersionCheck {
     if (compareSemver(current, minSupported) < 0) return UpdateDecision.forced;
     if (compareSemver(current, latest) < 0) return UpdateDecision.recommended;
     return UpdateDecision.none;
+  }
+
+  /// 推荐更新冷却是否生效（AD-11）。
+  ///
+  /// - 无跳过记录（任一为 null）→ false
+  /// - 服务端最新版本已高于被跳过的版本 → false（新版本重新提示）
+  /// - 跳过时刻晚于 now（时钟被往回拨）→ false
+  /// - 距跳过不足 [kUpdateCooldown] → true；否则 false
+  static bool cooldownActive({
+    required String latest,
+    String? skippedVersion,
+    DateTime? skippedAt,
+    required DateTime now,
+  }) {
+    if (skippedVersion == null || skippedAt == null) return false;
+    if (compareSemver(latest, skippedVersion) > 0) return false;
+    if (skippedAt.isAfter(now)) return false;
+    return now.difference(skippedAt) < kUpdateCooldown;
   }
 
   /// 平台商店 URL：iOS → App Store / Android → Google Play。

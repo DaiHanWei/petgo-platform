@@ -254,7 +254,7 @@ class PlaceCheckinServiceTest {
         org.mockito.ArgumentCaptor<Object> ev = org.mockito.ArgumentCaptor.forClass(Object.class);
         verify(events).publishEvent(ev.capture());
         assertThat(ev.getValue()).isEqualTo(new com.tailtopia.place.event.PlaceCheckedInEvent(
-                USER, place.getPublicToken(), PlaceType.CAFE, true, 4));
+                USER, place.getPublicToken(), PlaceType.CAFE, true, 4, java.util.List.of(PET)));
     }
 
     /** 被拒绝的打卡不签发护照、不发事件。 */

@@ -67,6 +67,8 @@ class FeedImage extends StatefulWidget {
     this.thumbWidth = 800,
     this.topRight,
     this.bottomLeft,
+    this.sizes = const [],
+    this.cropOffsets = const [],
   });
 
   /// 整组图片（上传顺序）。空表示无图，本组件不该被渲染。
@@ -85,6 +87,16 @@ class FeedImage extends StatefulWidget {
 
   /// 高度护栏上限。
   final double maxImageHeight;
+
+  /// 整组图片的原始尺寸（与 [urls] 同序，可短、可含 null）—— **只用来判开窗方向**（V1.3.4 2.2）。
+  ///
+  /// 🛡 不参与定高：容器高度仍只按首图（[declaredSize]）锁定。
+  final List<ImageSize?> sizes;
+
+  /// 整组图片的露出位置（与 [urls] 同序，可短、可含 null）（V1.3.4 2.2 · AD-6）。
+  ///
+  /// 经 [feedImageAlignment] 换成 `Alignment`；缺省 / null = 居中，与改动前一致。
+  final List<double?> cropOffsets;
 
   /// OSS 缩略图宽度（物理像素）。Feed 全宽封面取缩略图省流量、滚动更顺。
   final int thumbWidth;
@@ -205,14 +217,28 @@ class _FeedImageState extends State<FeedImage> {
     super.dispose();
   }
 
+  /// 第 [i] 张图的尺寸（判开窗方向用）：首图优先后端声明 / 解码量到，其余按下标安全取。
+  ImageSize? _sizeAt(int i) {
+    final listed =
+        (i >= 0 && i < widget.sizes.length) ? widget.sizes[i] : null;
+    if (i == 0) return widget.declaredSize ?? _decoded ?? listed;
+    return listed;
+  }
+
+  double? _offsetAt(int i) => (i >= 0 && i < widget.cropOffsets.length)
+      ? widget.cropOffsets[i]
+      : null;
+
   Widget _imageAt(int i) {
     final placeholder = PostCoverPlaceholder(type: widget.type);
     final provider = i == 0 ? _firstProvider : _providerAt(i);
     if (provider == null) return placeholder;
     return Image(
       image: provider,
-      // 🛡 非首图**居中裁剪填满** —— 容器高度由首图锁定，其余图只负责把这个框填满。
+      // 🛡 裁剪填满 —— 容器高度由首图锁定，每张图只负责把这个框填满。
       fit: BoxFit.cover,
+      // V1.3.4 2.2：按发帖人选的露出位置开窗；无 offset / 区间内 = 居中（与改动前一致）。
+      alignment: feedImageAlignment(_sizeAt(i), _offsetAt(i)),
       width: double.infinity,
       height: double.infinity,
       // 换图时先留住上一帧，避免中间闪一下白（同款先例见宠物资料卡）。

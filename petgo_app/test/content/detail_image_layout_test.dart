@@ -1,3 +1,4 @@
+import 'package:flutter/painting.dart' show Alignment;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/content/domain/content_detail.dart';
 import 'package:tailtopia/features/content/domain/detail_image_layout.dart';
@@ -189,5 +190,37 @@ void main() {
       expect(partial.sizeAt(1)!.w, 800);
       expect(partial.sizeAt(1)!.h, 800);
     });
+  });
+
+  /// V1.3.4 2.2 · AC4.4：同一组 (size, offset) 在 Feed 与详情得到同一个 Alignment，
+  /// 比例也仍是同一个出口 —— 从首页点进详情露出段不跳。
+  test('V1.3.4 2.2 AC4.4 Feed 与详情同一 (size, offset) → 同一 Alignment 与比例', () {
+    const size = ImageSize(3000, 1000);
+    const offset = 0.25;
+    final feedSide = feedImageAlignment(size, offset);
+    final detail = ContentDetail(
+      id: 1,
+      authorId: 2,
+      authorDeleted: false,
+      type: 'DAILY',
+      likeCount: 0,
+      commentCount: 0,
+      liked: false,
+      isAuthor: false,
+      createdAt: DateTime.utc(2026, 10, 12),
+      imageSizes: const [size],
+      imageCropOffsets: const [offset],
+    );
+    final detailSide = feedImageAlignment(detail.sizeAt(0), detail.cropOffsetAt(0));
+    expect(feedSide, const Alignment(-0.5, 0));
+    expect(detailSide, feedSide);
+
+    const width = 360.0;
+    const viewport = 600.0;
+    final maxH = DetailImageMetrics.maxImageHeight(viewport);
+    expect(
+      resolveDetailImageAspect(size: size, width: width, viewportHeight: viewport),
+      resolveFeedImageAspect(size: size, width: width, maxImageHeight: maxH),
+    );
   });
 }

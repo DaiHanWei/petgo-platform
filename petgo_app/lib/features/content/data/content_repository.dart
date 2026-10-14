@@ -17,6 +17,9 @@ abstract class ContentRepository {
     /// 与 [imageUrls] **同序等长**的原始宽高（V1.1.6 Story 3.5）。
     /// 量不出来的位置留 null；🛡 长度对不上后端会**整组作废**，不做部分采信。
     List<ImageSize?> imageSizes,
+    /// 与 [imageUrls] **同序等长**的露出位置（V1.3.4 Story 2.4 · AD-8）。
+    /// 仅超界图有值（`0.0 ~ 1.0`），其余 null；全为 null 时请求体**整键不出现**。
+    List<double?> imageCropOffsets,
     DateTime? eventDate,
     required String idempotencyKey,
     /// Story 4.2 同步开关：`false` = 只保存在 Diary（`visibility=PRIVATE`）。
@@ -45,6 +48,7 @@ class DioContentRepository implements ContentRepository {
     String? text,
     List<String> imageUrls = const [],
     List<ImageSize?> imageSizes = const [],
+    List<double?> imageCropOffsets = const [],
     DateTime? eventDate,
     required String idempotencyKey,
     bool syncToMoment = true,
@@ -68,6 +72,13 @@ class DioContentRepository implements ContentRepository {
     if (imageSizes.isNotEmpty && imageSizes.any((e) => e != null)) {
       data['imageSizes'] =
           imageSizes.map((e) => e == null ? null : {'w': e.w, 'h': e.h}).toList();
+    }
+    // V1.3.4 Story 2.4：没有超界图（全 null）→ 整键不出现，与 V1.3.3 请求体逐字节一致、
+    // 后端列保持 NULL；有则元素 null 原样、非 null 夹到 [0,1] 再保留 3 位小数。
+    if (imageCropOffsets.any((e) => e != null)) {
+      data['imageCropOffsets'] = imageCropOffsets
+          .map((e) => e == null ? null : (e.clamp(0.0, 1.0) * 1000).round() / 1000)
+          .toList();
     }
     // 事件日期 yyyy-MM-dd（仅成长日历传；后端对日常/科普强制忽略，F9）。
     if (eventDate != null) {

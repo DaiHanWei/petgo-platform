@@ -125,6 +125,29 @@ public class User {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    /**
+     * 对外不可枚举用户标识（V1.3.4 follow D-2 / AD-2，32 位 base62）。新接口（关注 / 关注列表 / 推荐 /
+     * 新粉丝通知）一律用它标识用户；现有数字 id 路由与字段不动。注销后保留不变。
+     *
+     * <p>在 {@link #onCreate()} 里生成 —— 全部建号工厂与测试夹具一处覆盖；jdbc 直插的行由 DB 默认值兜底。
+     */
+    @Column(name = "public_token", nullable = false, updatable = false, length = 32)
+    private String publicToken;
+
+    /**
+     * 我关注的人数 / 关注我的人数（V1.3.4 follow AD-1 冗余计数）。
+     *
+     * <p>🔴 <b>只读映射，不可改成可更新</b>：Hibernate 默认 UPDATE 全列，{@code MeService.updateMe}、
+     * 昵称 / 头像审核等 load → 改字段 → save 的路径会把<b>加载时的旧计数</b>写回去，
+     * 覆盖同期别人的关注（丢更新且无报错）。只能由 {@code FollowCounterService} 的 native UPDATE 改。
+     * 实体上的值是加载时快照，需要最新值时重新查库。
+     */
+    @Column(name = "following_count", insertable = false, updatable = false)
+    private int followingCount;
+
+    @Column(name = "follower_count", insertable = false, updatable = false)
+    private int followerCount;
+
     /** 注销前 email 快照，仅运营后台展示（原 {@code email} 注销后置空）。业务/公开/vet 侧不读。 */
     @Column(name = "deleted_email", length = 320)
     private String deletedEmail;
@@ -206,6 +229,9 @@ public class User {
         Instant now = Instant.now();
         this.createdAt = now;
         this.updatedAt = now;
+        if (this.publicToken == null) {
+            this.publicToken = com.tailtopia.auth.service.UserTokenGenerator.generate();
+        }
     }
 
     @PreUpdate
@@ -234,6 +260,21 @@ public class User {
 
     public Long getId() {
         return id;
+    }
+
+    /** 对外不可枚举用户标识（V1.3.4 D-2）。 */
+    public String getPublicToken() {
+        return publicToken;
+    }
+
+    /** 我关注的人数（加载时快照，见字段注释）。 */
+    public int getFollowingCount() {
+        return followingCount;
+    }
+
+    /** 关注我的人数（加载时快照，见字段注释）。 */
+    public int getFollowerCount() {
+        return followerCount;
     }
 
     public String getGoogleSub() {

@@ -151,13 +151,11 @@ class _RechargePageState extends ConsumerState<RechargePage> {
     // PawCoin 消耗（问诊/解锁等）绝不能再计 af_purchase，否则收入/ROAS 双倍虚报。
     final t = _topup;
     if (t != null) {
-      Analytics.capture('af_purchase', {
-        'af_revenue': t.amount,
-        'af_currency': 'IDR',
-        'af_content_id': _selectedTier ?? '',
-        'af_quantity': 1,
-        'af_order_id': t.intentToken, // 对账去重用（不可枚举 token，非自增 id）
-      });
+      Analytics.capturePurchase(
+        amountIdr: t.amount,
+        purpose: 'PAWCOIN_TOPUP',
+        orderRef: t.intentToken, // 对账去重用（不可枚举 token，非自增 id）
+      );
     }
     if (!mounted) return;
     ref.invalidate(pawCoinProvider); // 刷新余额页

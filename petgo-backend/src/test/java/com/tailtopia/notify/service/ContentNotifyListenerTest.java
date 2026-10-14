@@ -1,6 +1,9 @@
 package com.tailtopia.notify.service;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -9,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.tailtopia.content.event.ContentCommentedEvent;
 import com.tailtopia.content.event.ContentLikedEvent;
 import com.tailtopia.content.event.ContentRemovedEvent;
+import com.tailtopia.notify.domain.Notification;
 import com.tailtopia.notify.domain.NotificationType;
 import com.tailtopia.social.read.UserHideRelationReader;
 import java.time.Instant;
@@ -18,7 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * L0：内容互动推送 —— 被赞/被评推给作者；自互动不推；逐条独立 send。
+ * L0：内容互动推送 —— 被赞/被评推给作者；自互动不推。V1.3.4 起走 {@code sendInteraction}（Story 3.1）。
  *
  * <p>V1.1.4 Story 1.4 追加：互动通知抑制的两条判据（含 R3 第三方那一支）与「系统通知不受影响」。
  */
@@ -36,58 +40,69 @@ class ContentNotifyListenerTest {
         return new ContentNotifyListener(notificationService, hideRelations);
     }
 
+    // V1.3.4 follow · Story 3.1：点赞 / 评论 / 回复改走 sendInteraction（带触发人、点赞合并键、comment_id、variant、原文）。
+
     @Test
     void likedNotifiesAuthor() {
         listener().onContentLiked(new ContentLikedEvent(55L, 2L, 9L, Instant.now()));
-        verify(notificationService).send(eq(9L), eq(NotificationType.CONTENT_LIKED),
-                anyString(), anyString(), eq(NotificationType.CONTENT_LIKED.name()), eq("55"));
+        verify(notificationService).sendInteraction(9L, NotificationType.CONTENT_LIKED, 2L,
+                "LIKE:POST:55", "55", null, null, null);
     }
 
     @Test
     void selfLikeNotPushed() {
         listener().onContentLiked(new ContentLikedEvent(55L, 9L, 9L, Instant.now()));
-        verify(notificationService, never()).send(anyLongArg(), any(), anyString(), anyString(), anyString(), anyString());
+        verifyNoInteractionSent();
     }
 
     @Test
     void commentNotifiesContentAuthor() {
+        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, null, Instant.now(), null, "halo"));
+        verify(notificationService).sendInteraction(9L, NotificationType.CONTENT_COMMENTED, 2L,
+                null, "55", 7L, null, "halo");
+    }
+
+    /** 7 参构造（老调用方）：原文为 null，推送正文留空。 */
+    @Test
+    void legacyEventWithoutBodyStillNotifies() {
         listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, null, Instant.now(), null));
-        verify(notificationService).send(eq(9L), eq(NotificationType.CONTENT_COMMENTED),
-                anyString(), anyString(), eq(NotificationType.CONTENT_COMMENTED.name()), eq("55"));
+        verify(notificationService).sendInteraction(9L, NotificationType.CONTENT_COMMENTED, 2L,
+                null, "55", 7L, null, null);
     }
 
     @Test
     void selfCommentNotPushed() {
         listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 9L, 9L, null, Instant.now(), null));
-        verify(notificationService, never()).send(anyLongArg(), any(), anyString(), anyString(), anyString(), anyString());
+        verifyNoInteractionSent();
     }
 
     // Bug 20260625-088：回复二级评论时，被回复人(parentAuthor)也应收到通知。
     @Test
     void replyNotifiesBothContentAuthorAndParentAuthor() {
         // post 作者 9；评论者 2 回复了 5 的一级评论。
-        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, 5L, Instant.now(), null));
-        verify(notificationService).send(eq(9L), eq(NotificationType.CONTENT_COMMENTED),
-                anyString(), anyString(), eq(NotificationType.CONTENT_COMMENTED.name()), eq("55"));
-        verify(notificationService).send(eq(5L), eq(NotificationType.CONTENT_COMMENTED),
-                anyString(), anyString(), eq(NotificationType.CONTENT_COMMENTED.name()), eq("55"));
+        listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, 5L, Instant.now(), 3L, "hai"));
+        verify(notificationService).sendInteraction(9L, NotificationType.CONTENT_COMMENTED, 2L,
+                null, "55", 7L, null, "hai");
+        verify(notificationService).sendInteraction(5L, NotificationType.CONTENT_COMMENTED, 2L,
+                null, "55", 7L, Notification.VARIANT_REPLY, "hai");
     }
 
     @Test
     void replyToOwnCommentDoesNotNotifySelf() {
         // 评论者 5 回复自己的一级评论；内容作者 9。仅通知作者 9，不给自己(5)发。
         listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 5L, 9L, 5L, Instant.now(), null));
-        verify(notificationService).send(eq(9L), eq(NotificationType.CONTENT_COMMENTED),
-                anyString(), anyString(), anyString(), eq("55"));
-        verify(notificationService, never()).send(eq(5L), any(), anyString(), anyString(), anyString(), anyString());
+        verify(notificationService).sendInteraction(eq(9L), eq(NotificationType.CONTENT_COMMENTED), eq(5L),
+                isNull(), eq("55"), eq(7L), isNull(), isNull());
+        verifyNoInteractionSentTo(5L);
     }
 
     @Test
     void replyWhereParentIsContentAuthorNotifiedOnce() {
-        // 被回复人 9 恰是内容作者：只推一条（去重，不双推）。
+        // 被回复人 9 恰是内容作者：只推一条「评论了你的帖子」（去重，不双推）。
         listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, 9L, Instant.now(), null));
-        verify(notificationService, org.mockito.Mockito.times(1)).send(eq(9L), any(),
-                anyString(), anyString(), anyString(), anyString());
+        verify(notificationService, org.mockito.Mockito.times(1)).sendInteraction(eq(9L), any(), anyLong(),
+                any(), any(), any(), any(), any());
+        verify(notificationService).sendInteraction(eq(9L), any(), anyLong(), any(), any(), any(), isNull(), any());
     }
 
     @Test
@@ -97,12 +112,15 @@ class ContentNotifyListenerTest {
                 anyString(), anyString(), eq(NotificationType.CONTENT_REMOVED.name()), eq("55"));
     }
 
-    private static long anyLongArg() {
-        return org.mockito.ArgumentMatchers.anyLong();
+    /** 3.1 code-review F8：比「没调 sendInteraction」更强 —— 退回 send / sendWithCopy 也会红。 */
+    private void verifyNoInteractionSent() {
+        org.mockito.Mockito.verifyNoInteractions(notificationService);
     }
 
-    private static NotificationType any() {
-        return org.mockito.ArgumentMatchers.any();
+    private void verifyNoInteractionSentTo(long recipient) {
+        verify(notificationService, never()).sendInteraction(eq(recipient), any(), anyLong(), any(), any(), any(),
+                any(), any());
+        verify(notificationService, never()).send(eq(recipient), any(), any(), any(), any(), any());
     }
 
     // ===== V1.1.4 Story 1.4：互动通知抑制 =====
@@ -112,8 +130,7 @@ class ContentNotifyListenerTest {
     void likeFromHiddenUserIsSuppressed() {
         when(hideRelations.isHidden(9L, 2L)).thenReturn(true); // 作者 9 隐藏了点赞者 2
         listener().onContentLiked(new ContentLikedEvent(55L, 2L, 9L, Instant.now()));
-        verify(notificationService, never()).send(anyLongArg(), any(), anyString(), anyString(),
-                anyString(), anyString());
+        verifyNoInteractionSent();
     }
 
     /** AC1：我拉黑的人来评论我的内容 → 不发。 */
@@ -121,8 +138,7 @@ class ContentNotifyListenerTest {
     void commentFromHiddenUserIsSuppressedForContentAuthor() {
         when(hideRelations.isHidden(9L, 2L)).thenReturn(true);
         listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, null, Instant.now(), null));
-        verify(notificationService, never()).send(anyLongArg(), any(), anyString(), anyString(),
-                anyString(), anyString());
+        verifyNoInteractionSent();
     }
 
     /**
@@ -141,10 +157,8 @@ class ContentNotifyListenerTest {
 
         listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, 5L, Instant.now(), null));
 
-        verify(notificationService, never()).send(eq(9L), any(), anyString(), anyString(),
-                anyString(), anyString()); // A 收不到
-        verify(notificationService, never()).send(eq(5L), any(), anyString(), anyString(),
-                anyString(), anyString()); // ⚠️ C 也收不到
+        verifyNoInteractionSentTo(9L); // A 收不到
+        verifyNoInteractionSentTo(5L); // ⚠️ C 也收不到
     }
 
     /** 反向：只有被回复者自己拉黑了 actor → 只压他这一条，内容作者照常收到。 */
@@ -155,10 +169,9 @@ class ContentNotifyListenerTest {
 
         listener().onContentCommented(new ContentCommentedEvent(55L, 7L, 2L, 9L, 5L, Instant.now(), null));
 
-        verify(notificationService).send(eq(9L), eq(NotificationType.CONTENT_COMMENTED),
-                anyString(), anyString(), anyString(), eq("55")); // 内容作者照常收到
-        verify(notificationService, never()).send(eq(5L), any(), anyString(), anyString(),
-                anyString(), anyString());
+        verify(notificationService).sendInteraction(eq(9L), eq(NotificationType.CONTENT_COMMENTED), eq(2L),
+                isNull(), eq("55"), eq(7L), isNull(), isNull()); // 内容作者照常收到
+        verifyNoInteractionSentTo(5L);
     }
 
     /**

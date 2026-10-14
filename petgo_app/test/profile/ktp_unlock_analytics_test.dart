@@ -75,23 +75,54 @@ void main() {
   });
 
   test('🔴 App 端没有 ktp_unlock_succeeded —— 成功只由服务端报（关掉二维码后再付款 App 不知道）', () {
-    final code = File('lib/features/profile/presentation/id_card/ktp_unlock_analytics.dart')
-        .readAsLinesSync()
-        .where((l) => !l.trim().startsWith('//'))
-        .join('\n');
-    expect(code.contains("'ktp_unlock_succeeded'"), isFalse);
+    for (final path in [
+      'lib/features/profile/presentation/id_card/ktp_unlock_analytics.dart',
+      // V1.3.4 ktp Story 1.6：共享付费函数同样不得报成功。
+      'lib/features/profile/presentation/id_card/id_card_hd_flow.dart',
+    ]) {
+      final code = File(path).readAsLinesSync().where((l) => !l.trim().startsWith('//')).join('\n');
+      expect(code.contains("'ktp_unlock_succeeded'"), isFalse, reason: path);
+    }
   });
 
-  test('两个付费入口（生成页 / 卡详情页）都接了 shown / started / failed，且 entry 不串', () {
+  test('V1.3.4：entryListBadge = list_badge；card_type / card_variant 可选，null 不带键', () {
+    expect(KtpUnlockAnalytics.entryListBadge, 'list_badge');
+    KtpUnlockAnalytics.paywallShown(
+        entry: KtpUnlockAnalytics.entryListBadge, priceIdr: 5000, cardType: 'STUDENT', cardVariant: 'BINTANG');
+    KtpUnlockAnalytics.started(
+        entry: KtpUnlockAnalytics.entryListBadge, method: HdPayChannel.qris, cardType: 'KTP');
+    KtpUnlockAnalytics.failedFromError(
+        entry: KtpUnlockAnalytics.entryListBadge, method: HdPayChannel.qris, error: dio(), cardType: 'SIM');
+    expect(sent[0].$2, {'entry': 'list_badge', 'price_idr': 5000, 'card_type': 'STUDENT', 'card_variant': 'BINTANG'});
+    expect(sent[1].$2, {'entry': 'list_badge', 'method': 'QRIS', 'card_type': 'KTP'});
+    expect(sent[2].$2, {'entry': 'list_badge', 'method': 'QRIS', 'failure_reason': 'NETWORK_ERROR', 'card_type': 'SIM'});
+  });
+
+  test('共享付费函数接了 shown / started / failed，且 entry 来自参数', () {
+    final code = File('lib/features/profile/presentation/id_card/id_card_hd_flow.dart').readAsStringSync();
+    for (final call in ['paywallShown(', 'started(', 'failedFromError(']) {
+      expect(code.contains('KtpUnlockAnalytics.$call'), isTrue, reason: '漏了 $call');
+    }
+    expect('entry: entry.wire'.allMatches(code).length, 3);
+  });
+
+  test('V1.3.4 Story 1.8：建卡页 / 详情页都经共享付费函数，entry 不串，页面不再直调 KtpUnlockAnalytics', () {
     for (final (path, entry) in [
-      ('lib/features/profile/presentation/id_card_create_page.dart', 'entryCreate'),
-      ('lib/features/profile/presentation/id_card_detail_page.dart', 'entryDetail'),
+      ('lib/features/profile/presentation/id_card_create_page.dart', 'IdCardPaywallEntry.create'),
+      ('lib/features/profile/presentation/id_card_detail_page.dart', 'IdCardPaywallEntry.detail'),
     ]) {
       final code = File(path).readAsStringSync();
-      for (final call in ['paywallShown(', 'started(', 'failedFromError(']) {
-        expect(code.contains('KtpUnlockAnalytics.$call'), isTrue, reason: '$path 漏了 $call');
+      expect(code.contains('openIdCardHdPaywall('), isTrue, reason: '$path 没接共享函数');
+      expect(code.contains(entry), isTrue, reason: '$path 的 entry 应是 $entry');
+      for (final banned in [
+        'KtpUnlockAnalytics.',
+        'HdPaywallSheet(',
+        'purchaseHdForCard(',
+        'showQrPaymentSheet(',
+        'showModalBottomSheet<HdPayChannel>',
+      ]) {
+        expect(code.contains(banned), isFalse, reason: '$path 仍直接调用 $banned');
       }
-      expect('KtpUnlockAnalytics.$entry'.allMatches(code).length, 3, reason: '$path 的 entry 应全是 $entry');
     }
   });
 }

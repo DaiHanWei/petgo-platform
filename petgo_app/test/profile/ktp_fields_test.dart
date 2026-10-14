@@ -89,9 +89,9 @@ void main() {
 
     test('占位身份码：2024-03-10 母猫 → TT600324020000（TT600324 + 02 + 0000）', () {
       final no = buildPreviewCardNo(
-          birthday: DateTime(2024, 3, 10), gender: 'FEMALE', petType: 'CAT');
+          birthday: DateTime(2024, 3, 10), gender: 'FEMALE', petType: 'CAT')!;
       expect(no, 'TT600324020000');
-      expect(no!.startsWith('TT600324'), isTrue); // 日 10+50=60
+      expect(no.startsWith('TT600324'), isTrue); // 日 10+50=60
       expect(no.substring(8, 10), '02'); // SP：猫 02
       expect(no.length, 14);
     });
@@ -103,7 +103,13 @@ void main() {
           'TT100324000000'); // 日 10+0，SP 其他/未选 00
     });
 
-    test('占位身份码：生日缺失 → null（走旧占位 NIK）', () {
+    test('占位身份码：生日缺失 → KTP 用新格式占位 TT000000+SP+0000（不回落旧 NIK、不叠性别加码）；非 KTP 留空（T-2）', () {
+      final no = buildPreviewCardNo(birthday: null, gender: 'FEMALE', petType: 'CAT', placeholderWhenNoBirthday: true)!;
+      expect(no, 'TT000000020000');
+      expect(no.length, 14);
+      expect(buildPreviewCardNo(birthday: null, gender: null, petType: 'DOG', placeholderWhenNoBirthday: true), 'TT000000010000');
+      expect(buildPreviewCardNo(birthday: null, gender: 'MALE', petType: null, placeholderWhenNoBirthday: true), 'TT000000000000');
+      // T-2：SIM / 居住证等非 KTP 预览，缺生日编号位留空
       expect(buildPreviewCardNo(birthday: null, gender: 'FEMALE', petType: 'CAT'), isNull);
     });
 
@@ -148,12 +154,13 @@ void main() {
     });
   });
 
-  // bug 20260803-448：建卡表单性别按档案预填（档案两值 → 卡三值），未填回落未知。
-  test('idCardGenderFromPetSex：档案性别预填建卡表单', () {
+  // bug 20260803-448：建卡表单性别按档案预填（档案两值 → 卡三值）。
+  // V1.3.4 ktp Story 1.7（FR-142D.7）：性别改必填，档案未填 / 未知值 → null（不预选），不再回落 UNKNOWN。
+  test('idCardGenderFromPetSex：档案性别预填建卡表单，未填不预选', () {
     expect(idCardGenderFromPetSex('MALE'), 'MALE');
     expect(idCardGenderFromPetSex('FEMALE'), 'FEMALE');
-    expect(idCardGenderFromPetSex(null), 'UNKNOWN');
-    expect(idCardGenderFromPetSex('weird'), 'UNKNOWN');
+    expect(idCardGenderFromPetSex(null), isNull);
+    expect(idCardGenderFromPetSex('weird'), isNull);
     // 预填 MALE 后 KTP 卡面 JANTAN（与表单选择联动的既有映射）。
     expect(KtpDefaults.jenisKelaminFor(idCardGenderFromPetSex('MALE')), 'JANTAN');
   });

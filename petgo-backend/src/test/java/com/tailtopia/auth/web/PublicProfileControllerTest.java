@@ -42,6 +42,7 @@ class PublicProfileControllerTest {
     private ContentService content;
     private FeedService feed;
     private UserHideRelationReader hideRelations;
+    private com.tailtopia.social.read.FollowReader followReader;
     private PublicProfileController controller;
 
     @BeforeEach
@@ -50,7 +51,13 @@ class PublicProfileControllerTest {
         content = mock(ContentService.class);
         feed = mock(FeedService.class);
         hideRelations = mock(UserHideRelationReader.class);
-        controller = new PublicProfileController(accounts, content, feed, hideRelations);
+        followReader = mock(com.tailtopia.social.read.FollowReader.class);
+        when(followReader.followState(anyLong(), anyLong()))
+                .thenReturn(com.tailtopia.social.read.FollowState.NONE);
+        controller = new PublicProfileController(accounts, content, feed, hideRelations,
+                followReader);
+        // V1.3.4 Story 1.2：主页 / 内容区先判 isActive（封号按不存在）；默认按有效账号走。
+        when(accounts.isActive(anyLong())).thenReturn(true);
     }
 
     private static Jwt guest() {
@@ -114,6 +121,19 @@ class PublicProfileControllerTest {
         assertThat(controller.profile(viewer(5L), 9L).self()).isFalse();
     }
 
+    /** 2026-10-13 决定：官方内容账号（role=ADMIN）主页带 official=true（App 隐藏「···」）；普通用户该键为 null（省略）。 */
+    @Test
+    void officialAccountIsFlaggedAndRegularUserOmitsTheKey() {
+        stubActive(9L, "TailTopia", null, List.of(), Instant.EPOCH);
+        when(accounts.activeSignatureOf(9L)).thenReturn(Optional.empty());
+        User official = accounts.findAccountById(9L).orElseThrow();
+        when(official.getRole()).thenReturn(com.tailtopia.auth.domain.Role.ADMIN);
+        assertThat(controller.profile(viewer(5L), 9L).official()).isTrue();
+
+        when(official.getRole()).thenReturn(com.tailtopia.auth.domain.Role.USER);
+        assertThat(controller.profile(viewer(5L), 9L).official()).isNull();
+    }
+
     /** 游客一律不查隐藏关系，{@code reported} 为 null（NON_NULL 会把这个键整个省略）。 */
     @Test
     void guestNeverConsultsHideRelationsAndGetsNoReportedKey() {
@@ -168,7 +188,7 @@ class PublicProfileControllerTest {
         verify(content, never()).countPublicPostsByAuthor(anyLong());
         verify(content, never()).sumLikesOnPublicPostsByAuthor(anyLong());
         verify(accounts, never()).activeSignatureOf(anyLong());
-        verify(accounts, never()).findUserById(anyLong());
+        verify(accounts, never()).findAccountById(anyLong());
     }
 
     /**
@@ -295,12 +315,102 @@ class PublicProfileControllerTest {
         assertThat(r.nickname()).isEqualTo("Rina");
     }
 
+    // ===== V1.3.4 follow Story 1.2 · 关注字段 / 封号 =====
+
+    private User stubOwner(long userId, String token, int following, int followers) {
+        stubActive(userId, "Rina", null, List.of(), Instant.EPOCH);
+        User user = accounts.findAccountById(userId).orElseThrow();
+        when(user.getPublicToken()).thenReturn(token);
+        when(user.getFollowingCount()).thenReturn(following);
+        when(user.getFollowerCount()).thenReturn(followers);
+        return user;
+    }
+
+    /** AC2：登录看他人 —— token / 两计数 / 两布尔正确，关注态走 FollowReader。 */
+    @Test
+    void loggedInViewerGetsFollowFields() {
+        stubOwner(9L, "tok9", 12, 34);
+        when(followReader.followState(5L, 9L))
+                .thenReturn(new com.tailtopia.social.read.FollowState(true, false));
+
+        PublicProfileResponse r = controller.profile(viewer(5L), 9L);
+
+        assertThat(r.userToken()).isEqualTo("tok9");
+        assertThat(r.followingCount()).isEqualTo(12);
+        assertThat(r.followerCount()).isEqualTo(34);
+        assertThat(r.iFollow()).isTrue();
+        assertThat(r.followsMe()).isFalse();
+    }
+
+    /** AC2：游客 / 兽医 / 本人视角 —— 两布尔 false，且不查 FollowReader。 */
+    @Test
+    void guestVetAndSelfNeverConsultFollowReader() {
+        stubOwner(9L, "tok9", 1, 2);
+
+        PublicProfileResponse g = controller.profile(guest(), 9L);
+        PublicProfileResponse v = controller.profile(vet(5L), 9L);
+        PublicProfileResponse self = controller.profile(viewer(9L), 9L);
+
+        for (PublicProfileResponse r : List.of(g, v, self)) {
+            assertThat(r.iFollow()).isFalse();
+            assertThat(r.followsMe()).isFalse();
+            assertThat(r.userToken()).isEqualTo("tok9");
+            assertThat(r.followerCount()).isEqualTo(2);
+        }
+        verify(followReader, never()).followState(anyLong(), anyLong());
+    }
+
+    /** AC3：被拉黑方视角 —— 帖子 / 获赞归零，关注 / 粉丝真实，iFollow 真实。 */
+    @Test
+    void blockedViewerSeesRealFollowCountsButZeroedContentCounts() {
+        stubOwner(9L, "tok9", 7, 8);
+        when(hideRelations.isBlocked(9L, 5L)).thenReturn(true);
+        when(content.countPublicPostsByAuthor(9L)).thenReturn(18L);
+        when(content.sumLikesOnPublicPostsByAuthor(9L)).thenReturn(342L);
+        when(followReader.followState(5L, 9L))
+                .thenReturn(new com.tailtopia.social.read.FollowState(true, false));
+
+        PublicProfileResponse r = controller.profile(viewer(5L), 9L);
+
+        assertThat(r.postCount()).isZero();
+        assertThat(r.likeCount()).isZero();
+        assertThat(r.followingCount()).isEqualTo(7);
+        assertThat(r.followerCount()).isEqualTo(8);
+        assertThat(r.iFollow()).isTrue();
+    }
+
+    /** AC4 / D-8：封号 → 与注销同一出口，无 token、无任何身份字段。 */
+    @Test
+    void deactivatedAccountIsTreatedAsDeleted() {
+        stubOwner(9L, "tok9", 1, 2);
+        when(accounts.isActive(9L)).thenReturn(false);
+
+        PublicProfileResponse r = controller.profile(viewer(5L), 9L);
+
+        assertThat(r).isEqualTo(PublicProfileResponse.deactivated());
+        assertThat(r.isDeactivated()).isTrue();
+        assertThat(r.userToken()).isNull();
+        assertThat(r.nickname()).isNull();
+        verify(followReader, never()).followState(anyLong(), anyLong());
+    }
+
+    /** D-8：封号用户的内容区与主页一样按不存在 → 空页，不查 Feed。 */
+    @Test
+    void deactivatedAccountPostsAreAnEmptyPage() {
+        when(accounts.isActive(9L)).thenReturn(false);
+
+        FeedPageResponse page = controller.posts(viewer(5L), 9L, null);
+
+        assertThat(page.items()).isEmpty();
+        verify(feed, never()).userPublicPosts(anyLong(), any(), any());
+    }
+
     private void stubActive(long userId, String nickname, String avatarUrl, List<UserTagView> tags,
             Instant joinedAt) {
         when(accounts.findAuthorViews(anyList()))
                 .thenReturn(Map.of(userId, new AuthorView(userId, nickname, avatarUrl, false, tags)));
         User user = mock(User.class);
         when(user.getCreatedAt()).thenReturn(joinedAt);
-        when(accounts.findUserById(userId)).thenReturn(Optional.of(user));
+        when(accounts.findAccountById(userId)).thenReturn(Optional.of(user));
     }
 }

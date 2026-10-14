@@ -103,7 +103,10 @@ public class AnalyticsEventGuard {
             // ---- V1.3.2 Story 3.2：Tailsonality 解锁。🛡 不带宠物名 / 品种 / token ----
             "role_code",                        // 完整代号，如 ENTJ-H
             "price",                            // long，成交价
-            "result_index");                    // int，该宠物第几次测试
+            "result_index",                     // int，该宠物第几次测试
+            // ---- V1.3.4 ktp Story 1.8：ktp_unlock_succeeded 补卡种。值为枚举名，🛡 不带卡号 / 宠物名 ----
+            "card_type",                        // KTP / PASSPORT / KITAS / SIM / STUDENT
+            "card_variant");                    // 学生卡配色 BINTANG / MALAM / CERIA / KLASIK
 
     /**
      * 字符串属性值的长度上限。

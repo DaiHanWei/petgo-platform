@@ -18,6 +18,8 @@ import '../../content/presentation/brag_post_entry.dart';
 import '../../keepsake/data/keepsake_repository.dart';
 import '../../keepsake/presentation/keepsake_pay_flow.dart';
 import '../../profile/data/profile_repository.dart';
+import '../../profile/domain/milestone_instant_codes.dart';
+import '../../profile/presentation/milestone_instant_celebration.dart';
 import '../data/tailsonality_owner_type_repository.dart';
 import '../data/tailsonality_providers.dart';
 import '../data/tailsonality_repository.dart';
@@ -291,6 +293,8 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
         sheet: (balance) => _TsPaywallSheet(result: r, petName: petName, balance: balance),
         start: (channel) => ref.read(tailsonalityRepositoryProvider).unlock(r.token, channel),
         pollPaid: () async => (await ref.refresh(tailsonalityResultProvider(r.token).future)).unlocked,
+        purchasePurpose: 'TAILSONALITY',
+        cashPriceIdr: () => r.fullUnlockPrice(priceSub.read().value),
         onChannelConfirmed: (channel) => TailsonalityUnlockAnalytics.initiated(
             roleCode: r.typeCode,
             resultIndex: r.resultIndex,
@@ -305,6 +309,8 @@ class _TailsonalityResultPageState extends ConsumerState<TailsonalityResultPage>
       ref.invalidate(petProfileProvider);
       if (outcome == KeepsakeFlowOutcome.unlocked) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.tailsonalityUnlockedToast)));
+        // V1.3.4 Story 4.3 · AD-19：完整解读解锁 → 等后端异步达成「性格测试」里程碑当场庆祝（不阻塞收尾）。
+        unawaited(celebrateAutoMilestoneIfAny(context, ref, kTailsonalityMilestoneCodes));
       }
     } finally {
       priceSub.close();

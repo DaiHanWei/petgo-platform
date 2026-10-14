@@ -190,6 +190,12 @@ Future<void> runAiUnlockFlow(
         if (r.locked == false) {
           Analytics.capture('ai_unlock_succeeded',
               {'consult_type': 'AI', 'method': _methodWire(method)});
+          // 投放归因：QRIS 现金到账。金额取本次支付单（后端权威），缺省退展示价。
+          Analytics.capturePurchase(
+            amountIdr: st.payment?.amount ?? priceIdr ?? kAiUnlockPriceIdr,
+            purpose: 'AI_UNLOCK',
+            orderRef: st.payment?.displayNo ?? st.payment?.token,
+          );
           notifier.markUnlocked(triageId, r);
           return true;
         }

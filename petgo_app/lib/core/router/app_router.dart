@@ -43,6 +43,8 @@ import '../../features/social/domain/account_action_entry.dart';
 import '../../features/social/presentation/blocked_users_page.dart';
 import '../../features/support/presentation/my_tickets_page.dart';
 import '../../features/user_profile/presentation/public_profile_page.dart';
+import '../../features/social/domain/follow_list_item.dart';
+import '../../features/social/presentation/follow_list_page.dart';
 import '../../features/support/presentation/ticket_compose_page.dart';
 import '../../features/support/presentation/ticket_detail_page.dart';
 import '../../features/support/presentation/csat_page.dart';
@@ -833,10 +835,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 与本条只差一个字母。改动时**逐条改，禁止做前缀字符串替换**（AD-A17.7）。
       GoRoute(path: '/profile/id-card', redirect: (c, s) => PetInsightsRoutes.idCard),
       // Story 6-7 多卡：建卡器（字面量在前，避免被 :id 吞）+ 单卡详情。
-      GoRoute(path: '/profile/id-cards/create', builder: (c, s) => const IdCardCreatePage()),
+      // V1.3.4 ktp Story 1.5：?style=<IdCardStyle.name> 带入卡款；缺省 / 非法值回落 KTP。
+      GoRoute(
+        path: '/profile/id-cards/create',
+        builder: (c, s) =>
+            IdCardCreatePage(initialStyle: IdCardCreatePage.styleFromQuery(s.uri.queryParameters['style'])),
+      ),
       GoRoute(
         path: '/profile/id-cards/:id',
-        builder: (c, s) => IdCardDetailPage(cardId: int.parse(s.pathParameters['id']!)),
+        // V1.3.4 ktp D-16：?export=1 = 建卡入口付费成功落到详情，自动弹保存 / 分享选单。
+        builder: (c, s) => IdCardDetailPage(
+            cardId: int.parse(s.pathParameters['id']!), autoExport: s.uri.queryParameters['export'] == '1'),
       ),
       // 健康记录列表（Story 7.2 · FR-45B）。受控（/profile/ 前缀，游客被门控）。
       // ?add=VACCINE|DEWORM|...：进页自动弹预选类型的添加表单（bug 20260729-406，健康类里程碑直跳）。
@@ -1080,6 +1089,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         builder: (c, s) => PublicProfilePage(
           userId: int.parse(s.pathParameters['userId']!),
           entry: accountActionEntryFromWire(s.uri.queryParameters['entry']),
+        ),
+      ),
+      // V1.3.4 follow Story 2.2：关注 / 粉丝列表（游客可看，不进 _controlledLocations；shell 外 push 隐藏 Tab Bar）。
+      GoRoute(
+        path: FollowListPage.routePattern,
+        builder: (c, s) => FollowListPage(
+          userId: int.parse(s.pathParameters['userId']!),
+          initialTab: FollowListTab.fromWire(s.uri.queryParameters['tab']),
         ),
       ),
       // ===== V1.1.6 Story 2.3：App 内访客只读视图（AD-2 Rule 6）=====

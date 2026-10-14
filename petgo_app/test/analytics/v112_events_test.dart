@@ -325,6 +325,18 @@ void main() {
         // 🔴 刻意不挂 `post_`：评论赞混进帖子赞的口径，正是这条 bug 要纠正的。
         // 名字由 PRD §4 定死为 `comment_like_tapped`，扩表、不改名。
         'comment_',
+        // 关注列表（V1.3.4 follow · FR-140.9 / Story 2.2 的 `follow_list_viewed`）。模块是「关注列表页」——
+        // 我的页与他人主页两处入口共用，挂 `me_` / `user_` 都会误导。⚠️ 新模块入表，不是为遗留事件放宽规则。
+        'follow_',
+        // 推荐关注（V1.3.4 follow · FR-140.11 / Story 2.3 的 `suggested_follow_shown`）：我自己的空关注 / 粉丝列表里的推荐区。
+        'suggested_',
+        // 通知中心（V1.3.4 follow · FR-141.16 / Story 3.4 的 `notification_follow_back_tapped`）：通知中心页里的动作。
+        // ⚠️ 与已有的 `notify_`（推送权限撤销检测点）刻意分开 —— 一个是页面模块，一个是推送基建。
+        'notification_',
+        // 运营触达（V1.3.4 FR-137 运营弹窗 / FR-138 运营通知）。模块是「运营触达」—— 横跨冷启动弹窗与
+        // 通知中心两处界面，挂任一单页前缀都会误导。名字由 PRD §4 定死（ops_popup_shown / _tapped / _closed）。
+        // ⚠️ 这是**新模块**入表，不是为遗留事件放宽规则。
+        'ops_',
       ];
       // 动作必须落在词尾（过去式/被动），这样一眼分得清「曝光」与「点击」。
       const allowedSuffixes = <String>[
@@ -422,6 +434,15 @@ void main() {
         // 用户设定了一个账号级取值（V1.3.2 batch-a PRD E-11C `tailsonality_owner_type_set`）：`_set` = **保存成功**
         // 之后才报（失败不报），描述结果而非点击。名字由 PRD §4 定死，扩表、不改名。
         '_set',
+        // 关注 / 取关（V1.3.4 follow · D-6）：`user_followed` / `user_unfollowed` 用过去式，**服务端确认成功后**才报
+        // （失败、游客拦截不报）。`user_unfollowed` 并不以 `_followed` 结尾，两个都要登记。扩表、不改名。
+        '_followed',
+        '_unfollowed',
+        // 运营弹窗被关掉（V1.3.4 Story 5.4 · PRD §4 定死 `ops_popup_closed`）。
+        // 🔴 与 `_dismissed` 区分：运营弹窗没有「未完成的流程」，关闭（✕ / 系统返回）是**中性结果**，
+        //    看板按 shown / tapped / closed 三分。上面 `_dismissed` 注释里「刻意不用 `_closed`」针对的是
+        //    支付面板（那里关闭 = 放弃），两处口径不冲突。名字由 PRD 定死，扩表、不改名。
+        '_closed',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;
@@ -475,6 +496,17 @@ void main() {
         // 推送疲劳终点信号（V1.4.0 Story 9.3）：from_screen ∈ {app_launch, settings_page}，
         // 受控字面量，不是 UI 文案。
         'from_screen',
+        // V1.3.4 ktp Story 1.5（AD-12 / D-13）：id_card_tab_viewed{tab, has_cards}、
+        // id_card_style_tapped{card_type, card_variant}；card_type / card_variant 取接口 wire 值（大写，T-12）。
+        'has_cards', 'card_type', 'card_variant',
+        // V1.3.4 follow（D-6 / Story 1.3 / 2.2）：关注埋点与关注列表曝光的属性。
+        'target_user_id', 'is_follow_back', 'is_self', 'is_empty',
+        // V1.3.4 follow · Story 3.4：通知条目点击带合并人数（后端文案条目才有）。
+        'actor_count',
+        // 运营通知打开（V1.3.4 Story 6.3 · `ops_notification_opened`）：campaign_id = 活动 public_token（D-24），
+        // 不外露自增 id；source ∈ {push, notification_center}（'source' 已在上方）。
+        'campaign_id',
+        'popup_id', // V1.3.4 Story 5.4（运营弹窗 public_token，D-24）
       ];
       for (final n in propNames) {
         expect(naming.hasMatch(n), isTrue, reason: '$n 不是 snake_case');

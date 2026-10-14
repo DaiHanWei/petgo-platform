@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,8 @@ import '../../keepsake/data/keepsake_repository.dart';
 import '../../keepsake/domain/keepsake_pricing.dart';
 import '../../keepsake/presentation/keepsake_pay_flow.dart';
 import '../../profile/data/profile_repository.dart';
+import '../../profile/domain/milestone_instant_codes.dart';
+import '../../profile/presentation/milestone_instant_celebration.dart';
 import '../data/tailsonality_owner_type_repository.dart';
 import '../data/tailsonality_providers.dart';
 import '../data/tailsonality_repository.dart';
@@ -335,6 +338,10 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
         sheet: (balance) => _TsMatchPaywallSheet(full: full, petName: petName, balance: balance, result: r),
         start: (channel) => full ? repo.unlock(r.token, channel) : repo.unlockMatch(r.token, channel),
         pollPaid: () async => (await ref.refresh(tailsonalityResultProvider(r.token).future)).matchUnlocked,
+        // 完整解读（含配型）与单买配型是两种支付用途；完整解读价已扣掉先前单买配型付过的钱（补差价）。
+        purchasePurpose: full ? 'TAILSONALITY' : 'TS_MATCH',
+        cashPriceIdr: () =>
+            full ? r.fullUnlockPrice(priceSub.read().value) : priceSub.read().value?.tailsonalityMatch,
         onChannelConfirmed: (channel) => TailsonalityUnlockAnalytics.matchInitiated(
             roleCode: r.typeCode,
             resultIndex: r.resultIndex,
@@ -351,6 +358,8 @@ class _TailsonalityMatchPageState extends ConsumerState<TailsonalityMatchPage> {
       if (outcome == KeepsakeFlowOutcome.unlocked) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(full ? l10n.tailsonalityUnlockedToast : l10n.tailsonalityMatchUnlockedToast)));
+        // V1.3.4 Story 4.3 · AD-19：仅「买完整解读」才达成性格测试里程碑；单买配型不检测。
+        if (full) unawaited(celebrateAutoMilestoneIfAny(context, ref, kTailsonalityMilestoneCodes));
       }
     } finally {
       priceSub.close();

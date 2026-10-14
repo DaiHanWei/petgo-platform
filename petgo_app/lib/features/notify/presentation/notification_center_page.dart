@@ -9,13 +9,20 @@ import '../../../core/router/deep_link_routes.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../core/analytics/analytics.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../../../shared/widgets/empty_state.dart';
+import '../../content/data/detail_repository.dart';
+import '../../social/domain/follow_state.dart';
+import '../../social/presentation/widgets/follow_button.dart';
+import '../../user_profile/presentation/public_profile_page.dart';
+import '../../ops/presentation/open_ops_target.dart';
 import '../../profile/domain/milestone_celebration_copy.dart';
 import '../../profile/domain/milestone_titles.dart';
 import '../../profile/presentation/widgets/milestone_badge.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/notification_repository.dart';
 import '../domain/notification_deep_link.dart';
+import '../domain/notification_grouping.dart';
 import '../domain/notification_item.dart';
 import '../domain/push_permission_prompt.dart';
 import '../../../core/storage/prefs.dart';
@@ -63,6 +70,14 @@ class _NotificationCenterPageState
   bool _loadMoreFailed = false;
   bool _markingAllRead = false;
   final ScrollController _scroll = ScrollController();
+
+  /// V1.3.4 Story 3.4 · AC6.6：每条通知所在那一页发请求前的全局关注版本号（按 deepLinkToken）。
+  /// 新粉丝回关按钮据此判断覆盖是否对它生效 —— 重新进入 / 失败重试重拉首页后，旧的「本按钮保留 Mengikuti」
+  /// 对新快照自动失效（Story 2.1 的「刷新」口径），`actorIFollow = true` 的条目不再显示按钮。
+  final Map<String, int> _followEpochs = <String, int>{};
+
+  /// AC7.4：点赞 / 评论类条目跳转前探测帖子是否已删 —— 探测期间不响应连点。
+  bool _opening = false;
 
   /// 触发点 4（FR-85 / Story 8.2）：打开通知中心且系统通知关闭 → 顶部引导条。
   ///
@@ -149,11 +164,14 @@ class _NotificationCenterPageState
   /// 首页（cursor=null）。服务端在此按 DB 真实未读校准 Redis 角标（自愈计数漂移）；
   /// 拉完刷新铃铛角标使其立即与真实一致。
   void _loadFirstPage() {
+    final epoch = ref.read(followStateProvider.notifier).currentEpoch;
     final f = ref.read(notificationRepositoryProvider).list();
     _page = f;
     f.then((page) {
       if (!mounted) return;
       setState(() {
+        _followEpochs.clear();
+        _recordEpoch(page.items, epoch);
         _items
           ..clear()
           ..addAll(page.items);
@@ -191,11 +209,13 @@ class _NotificationCenterPageState
       _loadMoreFailed = false;
     });
     try {
+      final epoch = ref.read(followStateProvider.notifier).currentEpoch;
       // ⚠️ cursor 对客户端是**不透明串**：原样回传，不解析、不拼装
       // （服务端格式为 "<epochMicros>_<id>" 的复合游标，见后端 NotificationRepository#findPageBefore）。
       final page = await ref.read(notificationRepositoryProvider).list(cursor: cursor);
       if (!mounted) return;
       setState(() {
+        _recordEpoch(page.items, epoch);
         _items.addAll(page.items);
         _nextCursor = page.nextCursor;
         _hasMore = page.hasMore;
@@ -208,6 +228,13 @@ class _NotificationCenterPageState
         _loadingMore = false;
         _loadMoreFailed = true;
       });
+    }
+  }
+
+  void _recordEpoch(List<NotificationItem> items, int epoch) {
+    for (final it in items) {
+      final t = it.deepLinkToken;
+      if (t != null) _followEpochs[t] = epoch;
     }
   }
 
@@ -268,6 +295,11 @@ class _NotificationCenterPageState
     if (level != null) {
       props['level'] = level;
     }
+    // V1.3.4 Story 3.4 · AC8.1：后端文案条目另带合并人数。
+    if (item.hasServerCopy) {
+      props['actor_count'] = item.actorCount;
+    }
+    if (_opening) return;
     Analytics.capture('app_notification_item_tapped', props);
     final token = item.deepLinkToken;
     if (token != null && token.isNotEmpty && !item.read) {
@@ -275,17 +307,57 @@ class _NotificationCenterPageState
         _locallyReadTokens.add(token);
       });
     }
+    // 运营通知（V1.3.4 Story 6.3 · AD-17）：跳转全部交给 Story 5.2 的 openOpsTarget，不走深链表。
+    if (item.type == 'OPS_ANNOUNCEMENT') {
+      // campaign_id = targetRef = 活动 public_token（D-24），不外露自增 id。
+      final campaignId = item.targetRef;
+      if (campaignId != null && campaignId.isNotEmpty) {
+        Analytics.capture('ops_notification_opened',
+            {'campaign_id': campaignId, 'source': 'notification_center'});
+      }
+      // 标记已读 + 角标重算：沿用同一入口（它对本类型返回通知中心 location，忽略即可）。
+      await NotificationDeepLink.open(ref,
+          type: item.deepLinkType, token: token, targetRef: item.targetRef);
+      if (!mounted) return;
+      final target = item.opsTarget;
+      // 5.2：NONE / 无效值不跳转不报错；导航用 rootNavigatorKey；需登录页游客走登录强弹窗。
+      if (target != null) await openOpsTarget(context, ref, target);
+      return;
+    }
     // 列表点击与系统推送直跳共用 NotificationDeepLink.open（标记已读 + 角标重算 + 算 location）。
-    final location = await NotificationDeepLink.open(
-      ref,
-      type: item.deepLinkType,
-      token: token,
-      targetRef: item.targetRef,
-      commentAnchor: item.deepLinkType == 'CONTENT_COMMENTED',
-    );
-    if (!mounted) return;
-    // 兜底落点是本页自身时不重复跳转。
-    if (location == DeepLinkRoutes.notificationsCenter) return;
+    // V1.3.4 Story 3.4 · AC7.2：新粉丝用 actorUserId 进对方主页（推送点击只有 targetRef，T-34 同为关注者 id）。
+    final targetRef = item.type == 'USER_FOLLOWED' && item.actorUserId != null
+        ? item.actorUserId.toString()
+        : item.targetRef;
+    _opening = true;
+    final String location;
+    try {
+      location = await NotificationDeepLink.open(
+        ref,
+        type: item.deepLinkType,
+        token: token,
+        targetRef: targetRef,
+        commentAnchor: item.deepLinkType == 'CONTENT_COMMENTED',
+      );
+      if (!mounted) return;
+      // 兜底落点是本页自身时不重复跳转。
+      if (location == DeepLinkRoutes.notificationsCenter) return;
+      // AC7.4 / T-43：点赞 / 评论类先探一次帖子 —— 已删（404）就 toast、不跳转（已读照常标）。
+      // 其它错误（断网 / 403）照常跳，由详情页自己的错误态处理。
+      if (await _postGone(item)) {
+        if (mounted) showAppToast(context, AppLocalizations.of(context).detailGoneTitle);
+        return;
+      }
+      if (!mounted) return;
+    } finally {
+      _opening = false;
+    }
+    // 3.4 code-review F1 / T-21：进他人主页一律走 openUserProfile —— 那里才报 `user_profile_viewed`（from=avatar）。
+    final profileId = item.type == 'USER_FOLLOWED' ? int.tryParse(targetRef ?? '') : null;
+    if (profileId != null && location == '${PublicProfilePage.routeBase}/$profileId') {
+      unawaited(openUserProfile(context, ref, profileId));
+      return;
+    }
     if (DeepLinkRoutes.isShellTabRoot(location)) {
       // Tab 分支根（如纪念日→/profile=Diary）只能 go 切分支：push 会二次构建 shell
       // → GlobalKey 撞车白屏 + 此后该 Tab 永久失效（bug 20260729）。go 同时收掉本页栈。
@@ -293,6 +365,26 @@ class _NotificationCenterPageState
     } else {
       context.push(location);
     }
+  }
+
+  /// 点赞 / 评论类条目对应的帖子是否已删除（详情接口 404）。
+  Future<bool> _postGone(NotificationItem item) async {
+    final type = item.deepLinkType;
+    if (type != 'CONTENT_LIKED' && type != 'CONTENT_COMMENTED') return false;
+    final postId = int.tryParse(item.targetRef ?? '');
+    if (postId == null) return false;
+    try {
+      // 不计浏览的探测（countView=false），否则随后打开详情会让浏览次数记两次。
+      return await ref.read(contentGoneProbeProvider).isGone(postId);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 新粉丝回关（AC6）：点按钮只上报这一个事件；关注 / 取关结果由 FollowButton 按既有规则上报（source=notification）。
+  /// 不标记已读、不报 `app_notification_item_tapped`（只有点整行才算点条目，AC6.7）。
+  void _onFollowBackTapped(bool wantFollow) {
+    if (wantFollow) Analytics.capture('notification_follow_back_tapped');
   }
 
   bool _isRead(NotificationItem item) {
@@ -460,7 +552,7 @@ class _NotificationCenterPageState
           if (items.isEmpty) {
             return EmptyState(
               key: const ValueKey('notificationEmpty'),
-              icon: Icons.notifications_none,
+              icon: Icons.notifications_off_outlined, // 稿 D6：静音铃铛
               iconBackground: AppColors.cream2, // 浅紫圆底盘（原型 notif-empty）
               title: l10n.notificationEmpty,
               message: l10n.notificationEmptyHint,
@@ -474,46 +566,47 @@ class _NotificationCenterPageState
     AppLocalizations l10n,
     List<NotificationItem> items,
   ) {
-    // 按时间分组：今天 → HARI INI；其余 → KEMARIN（notif.html）。
-    final now = DateTime.now();
-    bool isToday(NotificationItem it) {
-      final d = it.createdAt;
-      if (d == null) return true;
-      return d.year == now.year && d.month == now.month && d.day == now.day;
-    }
-
-    final today = items.where(isToday).toList();
-    final earlier = items.where((it) => !isToday(it)).toList();
-    // bug 20260730-436：显式 padding 会关掉 ScrollView 自动注入的底部安全区补偿，
-    // edge-to-edge 下末条会被系统手势条/三键遮挡——固定 20 之上叠加安全区高度。
+    // V1.3.4 Story 3.4 · AC1：五段分组（按手机本地时间的自然日，判定全在 groupOf，这里不写日期判断）。
+    // 组内保持服务端顺序；翻页加载的条目按同一函数并入对应分组；空组不显示。
     // V1.1.6 Story 6.1：S/M 里程碑通知要显示**具体是哪一条**，文案里带 `{name}` 占位符。
     // V1 单宠物，取当前档案的名字；拿不到就退化成简短标题（仍然具体）。
     final petName = ref.watch(petProfileProvider).asData?.value?.name;
+    final now = DateTime.now();
+    final groups = <NotificationGroup, List<NotificationItem>>{};
+    for (final it in items) {
+      groups.putIfAbsent(groupOf(it.createdAt, now), () => <NotificationItem>[]).add(it);
+    }
+    final labels = {
+      NotificationGroup.today: l10n.notifyGroupToday,
+      NotificationGroup.yesterday: l10n.notifyGroupYesterday,
+      NotificationGroup.last7Days: l10n.notifyGroupLast7Days,
+      NotificationGroup.last30Days: l10n.notifyGroupLast30Days,
+      NotificationGroup.earlier: l10n.notifyGroupEarlier,
+    };
+    final sections = <Widget>[];
+    for (final g in NotificationGroup.values) {
+      final list = groups[g];
+      if (list == null) continue;
+      if (sections.isNotEmpty) sections.add(const SizedBox(height: 8));
+      sections.add(_groupLabel(labels[g]!, key: ValueKey('notificationGroup_${g.name}')));
+      for (final it in list) {
+        sections.add(_NotificationTile(
+          item: it,
+          read: _isRead(it),
+          onTap: () => _onTap(it),
+          petName: petName,
+          followEpoch: _followEpochs[it.deepLinkToken] ?? 0,
+          onFollowBackTapped: _onFollowBackTapped,
+        ));
+      }
+    }
+    // bug 20260730-436：显式 padding 会关掉 ScrollView 自动注入的底部安全区补偿，
+    // edge-to-edge 下末条会被系统手势条/三键遮挡——固定 20 之上叠加安全区高度。
     return ListView(
       controller: _scroll, // 滚到底附近自动加载下一页（_onScroll）
       padding: EdgeInsets.fromLTRB(16, 4, 16, 20 + MediaQuery.paddingOf(context).bottom),
       children: [
-        if (today.isNotEmpty) ...[
-          _groupLabel(l10n.notifyGroupToday),
-          for (final it in today)
-            _NotificationTile(
-              item: it,
-              read: _isRead(it),
-              onTap: () => _onTap(it),
-              petName: petName,
-            ),
-        ],
-        if (earlier.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          _groupLabel(l10n.notifyGroupEarlier),
-          for (final it in earlier)
-            _NotificationTile(
-              item: it,
-              read: _isRead(it),
-              onTap: () => _onTap(it),
-              petName: petName,
-            ),
-        ],
+        ...sections,
         // 翻页尾部：加载中 / 失败可重试 / 到底了。
         if (_hasMore || _loadingMore || _loadMoreFailed)
           Padding(
@@ -562,10 +655,12 @@ class _NotificationCenterPageState
     ),
   );
 
-  Widget _groupLabel(String text) => Padding(
+  Widget _groupLabel(String text, {Key? key}) => Padding(
+    key: key,
     padding: const EdgeInsets.fromLTRB(4, 10, 4, 8),
+    // UI 稿 D1 `.grp`：分组标题全大写显示（arb 文案不改）。
     child: Text(
-      text,
+      text.toUpperCase(),
       style: const TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w700,
@@ -585,11 +680,19 @@ class _NotificationTile extends StatefulWidget {
     required this.read,
     required this.onTap,
     this.petName,
+    this.followEpoch = 0,
+    this.onFollowBackTapped,
   });
 
   final NotificationItem item;
   final bool read;
   final VoidCallback onTap;
+
+  /// 本条所在那一页发请求前的全局关注版本号（回关按钮的快照版本，AC6.6）。
+  final int followEpoch;
+
+  /// 回关按钮被点（参数 = 关注还是取关）。
+  final ValueChanged<bool>? onFollowBackTapped;
 
   /// 当前宠物名（V1 单宠物）。里程碑庆祝文案里带 `{name}` 占位符，靠它替换。
   /// 拿不到时退化成里程碑的**简短标题** —— 仍然是具体名称，不会落到中性兜底。
@@ -745,6 +848,24 @@ class _NotificationTileState extends State<_NotificationTile> {
       AppColors.mint,
       AppColors.cream2,
     ),
+    // V1.3.4 follow · Story 3.4 · AC5（UI 稿 D8）：新粉丝 / 我添加的地点被评论。
+    'USER_FOLLOWED' => (
+      Icons.person_add_rounded,
+      AppColors.mint,
+      AppColors.violet100,
+    ),
+    'PLACE_COMMENTED' => (
+      Icons.location_on_rounded,
+      AppColors.checkinIcon,
+      AppColors.checkinTint,
+    ),
+    // 运营通知（V1.3.4 Story 6.3 · UX-DR10 / UI 稿 E2）：紫色图标块 + 喇叭。
+    'OPS_ANNOUNCEMENT' => (
+      Icons.campaign_outlined,
+      AppColors.mint,
+      // 不用 cream2：与未读条目底色相同，图标块会「消失」（稿 E2 为可见的浅紫块）
+      AppColors.violet100,
+    ),
     _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
   };
 
@@ -780,6 +901,8 @@ class _NotificationTileState extends State<_NotificationTile> {
     'LIFECYCLE_WINBACK' => l10n.notifyTypeLifecycleWinback,
     // 被 @ 提及（V1.3.0 batch-b1 Story 3.4）：标题两种文案共用一句，正文才分帖子 / 评论。
     'CONTENT_MENTIONED' => l10n.notifyTypeContentMentioned,
+    // 运营通知（V1.3.4 Story 6.3）：唯一读后端 title 的类型，理由见 [_opsTitle]。
+    'OPS_ANNOUNCEMENT' => _opsTitle(l10n),
     // 未知类型兜底：中性「系统通知」，不再复用页面标题（bug 20260729-391 的「克隆卡」观感来源）。
     _ => l10n.notifyTypeSystem,
   };
@@ -832,9 +955,25 @@ class _NotificationTileState extends State<_NotificationTile> {
     'CONTENT_MENTIONED' => _isCommentMention
         ? l10n.notifyBodyContentMentionedComment
         : l10n.notifyBodyContentMentionedPost,
+    // 运营通知（V1.3.4 Story 6.3）：唯一读后端 body 的类型，理由见 [_opsTitle]。
+    'OPS_ANNOUNCEMENT' => _opsBody(l10n),
     // 未知类型兜底：中性正文，不再复用空态提示串（那本身就是个 bug）。
     _ => l10n.notifyBodySystem,
   };
+
+  /// 运营通知（V1.3.4 Story 6.3 · FR-138）：**唯一读后端 title / body 的类型**。
+  /// 运营每次写的内容不同，App 不可能本地化；后端写入时已按收件人账号语言选好 EN / ID（6.1 AC5），
+  /// 推送与通知中心同一语言（PRD AC2）——所以这里原样显示，**不按 App 当前语言再选**。
+  /// 后端没给（理论上不会）时落中性兜底，绝不显示空白。
+  String _opsTitle(AppLocalizations l10n) {
+    final t = widget.item.title?.trim() ?? '';
+    return t.isEmpty ? l10n.notifyTypeSystem : t;
+  }
+
+  String _opsBody(AppLocalizations l10n) {
+    final b = widget.item.body?.trim() ?? '';
+    return b.isEmpty ? l10n.notifyBodySystem : b;
+  }
 
   /// 这条 @ 通知指的是评论提及还是正文提及（Story 3.4）。
   ///
@@ -842,17 +981,19 @@ class _NotificationTileState extends State<_NotificationTile> {
   /// 「正文里说在评论里提到你，点进去却没锚到评论区」。
   bool get _isCommentMention => (widget.item.targetRef ?? '').startsWith('COMMENT:');
 
-  /// 相对时间，随 App 语言本地化（今天：刚刚 / N 分钟前 / N 小时前；更早：本地化日期）。
+  /// 相对时间，随 App 语言本地化（今天：刚刚 / N 分钟前 / N 小时前；更早：「8 Okt, 15:57」）。
+  ///
+  /// V1.3.4 Story 3.4 · AC2：后端时间是 UTC，先 `toLocal()`；「是否今天」与分组用同一个 [groupOf]。
   String _relativeTime(AppLocalizations l10n, String locale) {
-    final d = widget.item.createdAt;
-    if (d == null) return '';
+    final raw = widget.item.createdAt;
+    if (raw == null) return '';
+    final d = raw.toLocal();
     final now = DateTime.now();
     final diff = now.difference(d);
-    final isToday =
-        d.year == now.year && d.month == now.month && d.day == now.day;
-    if (!isToday) {
+    if (groupOf(raw, now) != NotificationGroup.today) {
       return DateFormat('d MMM, HH:mm', locale).format(d);
     }
+    if (diff.isNegative) return l10n.notifyTimeJustNow; // 时钟偏差导致的「未来时间」
     if (diff.inMinutes < 1) return l10n.notifyTimeJustNow;
     if (diff.inHours < 1) return l10n.notifyTimeMinutesAgo(diff.inMinutes);
     return l10n.notifyTimeHoursAgo(diff.inHours);
@@ -860,11 +1001,149 @@ class _NotificationTileState extends State<_NotificationTile> {
 
   bool get _isMilestone => widget.item.type == 'MILESTONE_NODE' || widget.item.type == 'MILESTONE_SM_NODE';
 
+  /// 后端文案条目的标题（V1.3.4 Story 3.4 · AC3.3）：整句常规字重，**只有** actorName 加粗；
+  /// actorName 在标题里找不到 → 整句常规字重，不崩。
+  Widget _serverTitle() {
+    final title = widget.item.title ?? '';
+    final name = widget.item.actorName ?? '';
+    final at = name.isEmpty ? -1 : title.indexOf(name);
+    return Text.rich(
+      key: ValueKey('notificationTitle_${widget.item.deepLinkToken ?? widget.item.type}'),
+      at < 0
+          ? TextSpan(text: title)
+          : TextSpan(children: [
+              TextSpan(text: title.substring(0, at)),
+              TextSpan(text: name, style: const TextStyle(fontWeight: FontWeight.w700)),
+              TextSpan(text: title.substring(at + name.length)),
+            ]),
+      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w400, color: AppColors.ink),
+    );
+  }
+
+  /// 新粉丝回关按钮（AC6）：非常驻位置（AD-7）—— 按服务端初值 + 全局覆盖判断，已关注不显示；
+  /// 本按钮点过关注后保留「Mengikuti」可再点取关；同一用户其它位置立即隐藏。surface 按通知 token 区分
+  /// （同一人的两条新粉丝通知是两个位置）。文案按三态：对方仍关注我 →「Ikuti Balik」，否则「Ikuti」（T-41）。
+  Widget? _followBack() {
+    final item = widget.item;
+    if (item.type != 'USER_FOLLOWED' || !item.hasServerCopy) return null;
+    final id = item.actorUserId;
+    final token = item.actorToken;
+    if (id == null || token == null) return null;
+    final initial = FollowState(iFollow: item.actorIFollow ?? false, followsMe: item.actorFollowsMe ?? true);
+    final surfaceKey = 'notification:${item.deepLinkToken ?? id}';
+    // 3.4 code-review F6：按钮按全局规则隐藏时连同左侧间距一起不占位（否则已关注的行标题少 8px）。
+    return Consumer(builder: (context, ref, _) {
+      final display = resolveInlineFollow(
+        override: ref.watch(followStateProvider)[id],
+        server: initial,
+        snapshotEpoch: widget.followEpoch,
+        surfaceKey: surfaceKey,
+      );
+      if (display == InlineFollowDisplay.hidden) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: FollowButton(
+          userId: id,
+          userToken: token,
+          initial: initial,
+          style: FollowButtonStyle.listCompact,
+          source: 'notification',
+          surfaceKey: surfaceKey,
+          snapshotEpoch: widget.followEpoch,
+          // 未读行本身是浅紫底 → 按钮用白底 + 淡紫描边（UI 稿 `.ni.un .fbtn`，code-review F7）；已读行用默认浅紫。
+          idleBackground: widget.read ? null : AppColors.card,
+          idleBorderColor: widget.read ? null : AppColors.lineViolet,
+          onTapped: widget.onFollowBackTapped,
+        ),
+      );
+    });
+  }
+
+  /// 40×40 类型图标块；未读紫点（8×8）叠在图标块右上角（AC4.2，不再占条目最右侧的宽度）。
+  Widget _iconBlock(IconData icon, Color fg, Color bg, bool unread) {
+    final block = Container(
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(11),
+      ),
+      // V1.3.2 Story 5.1：两类里程碑通知显示该枚徽章（targetRef 即里程碑 code）；
+      // 素材没到 / targetRef 不是合法 code（如生日节点）时回落原图标。
+      child: _isMilestone
+          ? MilestoneBadge(
+              code: widget.item.targetRef ?? '',
+              size: 32,
+              fallback: (_) => Icon(icon, size: 20, color: fg),
+            )
+          : Icon(icon, size: 20, color: fg),
+    );
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          block,
+          if (unread)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                key: ValueKey('notificationUnreadDot_${widget.item.deepLinkToken ?? widget.item.type}'),
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: AppColors.mint,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _timeText(AppLocalizations l10n) => Text(
+        _relativeTime(l10n, Localizations.localeOf(context).toString()),
+        style: const TextStyle(fontSize: 11, color: AppColors.muted),
+      );
+
+  /// 后端文案条目（AC3）：标题富文本加粗昵称；正文（评论 / 回复原文、评论已删除）单行省略、无展开按钮；
+  /// 正文为空（点赞、新粉丝、场所评论）不留正文行。
+  Widget _serverCopyContent(AppLocalizations l10n) {
+    final body = widget.item.body;
+    final bodyStyle = DefaultTextStyle.of(context).style.merge(_kBodyStyle);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _serverTitle(),
+        if (body != null && body.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            body,
+            key: ValueKey('notificationBody_${widget.item.deepLinkToken ?? widget.item.type}'),
+            // 单行省略按 follow Story 3.4 AC3.4（优先于稿 .nb 的 2 行）；评论已删除按稿 .nb.del：muted 色斜体
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: widget.item.bodyDeleted
+                ? bodyStyle.copyWith(color: AppColors.muted, fontStyle: FontStyle.italic)
+                : bodyStyle,
+          ),
+        ],
+        const SizedBox(height: 6),
+        _timeText(l10n),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final (icon, fg, bg) = _iconStyle;
     final unread = !widget.read;
+    final followBack = _followBack();
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
@@ -881,28 +1160,14 @@ class _NotificationTileState extends State<_NotificationTile> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 圆角方形彩色图标块。
-                Container(
-                  width: 40,
-                  height: 40,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: bg,
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  // V1.3.2 Story 5.1：两类里程碑通知显示该枚徽章（targetRef 即里程碑 code）；
-                  // 素材没到 / targetRef 不是合法 code（如生日节点）时回落原图标。
-                  child: _isMilestone
-                      ? MilestoneBadge(
-                          code: widget.item.targetRef ?? '',
-                          size: 32,
-                          fallback: (_) => Icon(icon, size: 20, color: fg),
-                        )
-                      : Icon(icon, size: 20, color: fg),
-                ),
+                // 圆角方形彩色图标块（未读紫点叠在右上角）。
+                // 稿 E2：运营通知未读时图标块白底（压在 cream2 未读底上才看得清），已读回落 violet100
+                _iconBlock(icon, fg, widget.item.type == 'OPS_ANNOUNCEMENT' && unread ? AppColors.card : bg, unread),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: LayoutBuilder(builder: (context, constraints) {
+                  child: widget.item.hasServerCopy
+                      ? _serverCopyContent(l10n)
+                      : LayoutBuilder(builder: (context, constraints) {
                     // bug 20260727-368：只在正文折叠态(2 行)真溢出时才显示 展开/收起 按钮。
                     // 测量必须与正文 Text 同 style、同可用宽、同 textScaler（clamp≤1.3 后的实际值）。
                     // bug 20260730-431：style 必须 merge DefaultTextStyle——裸 _kBodyStyle 无
@@ -921,6 +1186,8 @@ class _NotificationTileState extends State<_NotificationTile> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // 文案按 type 本地化，随 App 语言渲染；**不渲染后端 title/body**（后端串为服务端语言）。
+                        // V1.3.4 两处例外：「后端文案条目」（hasServerCopy）走上面的分支读后端 title/body；
+                        // `OPS_ANNOUNCEMENT` 在 _typeLabel / _typeBody 里读后端串（理由见 `_opsTitle`）。
                         Text(
                           _typeLabel(l10n),
                           style: const TextStyle(
@@ -942,18 +1209,7 @@ class _NotificationTileState extends State<_NotificationTile> {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Expanded(
-                              child: Text(
-                                _relativeTime(
-                                  l10n,
-                                  Localizations.localeOf(context).toString(),
-                                ),
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: AppColors.muted,
-                                ),
-                              ),
-                            ),
+                            Expanded(child: _timeText(l10n)),
                             if (needsToggle)
                               TextButton(
                                 style: TextButton.styleFrom(
@@ -986,19 +1242,8 @@ class _NotificationTileState extends State<_NotificationTile> {
                     );
                   }),
                 ),
-                // 未读紫点。
-                if (unread) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 8,
-                    height: 8,
-                    margin: const EdgeInsets.only(top: 4),
-                    decoration: const BoxDecoration(
-                      color: AppColors.mint,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
+                // 新粉丝回关按钮（AC6）：按钮自己吃掉点击，不触发整行（不跳转、不标记已读）。
+                ?followBack,
               ],
             ),
           ),

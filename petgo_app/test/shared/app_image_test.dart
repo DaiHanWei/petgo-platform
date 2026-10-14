@@ -91,4 +91,31 @@ void main() {
       expect(AppImage.provider('', thumbWidth: 96), isNull);
     });
   });
+
+  group('V1.3.4 2.2 取档与开窗', () {
+    const prodUrl =
+        'https://tailtopia.oss-ap-southeast-5.aliyuncs.com/public/1/abc.jpg';
+
+    /// 钉住「Feed 列表绝不拉原图」所依赖的域名判定（AD-7 表：Feed 800 / 详情 1080）。
+    test('AD-7 生产域名按 800 / 1080 取档', () {
+      expect(AppImage.ossResized(prodUrl, width: 800),
+          contains('x-oss-process=image/resize,w_800'));
+      expect(AppImage.ossResized(prodUrl, width: 1080),
+          contains('x-oss-process=image/resize,w_1080'));
+    });
+
+    test('alignment 原样转给 Image；不传为 Alignment.center', () {
+      final aligned =
+          AppImage.widget(prodUrl, alignment: const Alignment(1, 0)) as Image;
+      expect(aligned.alignment, const Alignment(1, 0));
+      final plain = AppImage.widget(prodUrl) as Image;
+      expect(plain.alignment, Alignment.center);
+      final asset =
+          AppImage.widget('asset:x.png', alignment: const Alignment(0, -1)) as Image;
+      expect(asset.alignment, const Alignment(0, -1));
+      final file =
+          AppImage.widget('file:/tmp/x.png', alignment: const Alignment(0, 1)) as Image;
+      expect(file.alignment, const Alignment(0, 1));
+    });
+  });
 }

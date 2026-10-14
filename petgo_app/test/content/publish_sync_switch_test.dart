@@ -23,6 +23,7 @@ class _RecordingRepo implements ContentRepository {
     String? text,
     List<String> imageUrls = const [],
     List<ImageSize?> imageSizes = const [],
+    List<double?> imageCropOffsets = const [],
     DateTime? eventDate,
     required String idempotencyKey,
     bool syncToMoment = true,

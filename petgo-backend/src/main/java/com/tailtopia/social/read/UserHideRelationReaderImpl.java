@@ -52,4 +52,13 @@ public class UserHideRelationReaderImpl implements UserHideRelationReader {
         }
         return Set.copyOf(relations.findHiddenEitherWay(userId, List.copyOf(others)));
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> hiddenByHolder(long holderId, Collection<Long> targetIds) {
+        if (targetIds == null || targetIds.isEmpty()) {
+            return Set.of(); // 🛡 `IN ()` 在 Postgres 上是语法错误。
+        }
+        return Set.copyOf(relations.findHiddenTargetIds(holderId, List.copyOf(targetIds)));
+    }
 }

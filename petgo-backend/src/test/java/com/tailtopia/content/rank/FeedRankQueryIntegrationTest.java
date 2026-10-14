@@ -1,6 +1,8 @@
 package com.tailtopia.content.rank;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.content.domain.ContentPost;
@@ -15,10 +17,14 @@ import com.tailtopia.social.domain.HideSource;
 import com.tailtopia.social.domain.UserHideRelation;
 import com.tailtopia.social.repository.UserHideRelationRepository;
 import com.tailtopia.support.ApiIntegrationTest;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * L1：推荐序候选池的过滤口径（Story 16.3 · AC2 / AC4）—— 真 PostgreSQL 跑真 JPQL。
@@ -39,6 +45,9 @@ class FeedRankQueryIntegrationTest extends ApiIntegrationTest {
 
     @Autowired
     private UserHideRelationRepository hides;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private ContentPost publish(long authorId, ContentType type) {
         return posts.save(ContentPost.publish(authorId, type, null, "rank-pool-" + SEQ.incrementAndGet(),
@@ -190,5 +199,120 @@ class FeedRankQueryIntegrationTest extends ApiIntegrationTest {
             assertThat(p.getVisibility()).isEqualTo(ContentVisibility.PUBLIC);
             assertThat(p.getStatus()).isEqualTo(PostStatus.PUBLISHED);
         });
+    }
+
+    // ── V1.3.4 Story 1.1：教育类独立候选池（FR-122）─────────────────
+
+    /** {@code created_at} 实体 updatable=false，回拨时间走 jdbc。 */
+    private void backdate(long postId, Duration ago) {
+        jdbc.update("UPDATE content_posts SET created_at = ? WHERE id = ?",
+                Timestamp.from(Instant.now().minus(ago)), postId);
+    }
+
+    private List<Long> eduPool(Long viewerId) {
+        return posts.findEduCandidatePool(viewerId != null, viewerId,
+                Instant.now().minus(Duration.ofDays(90)), PageRequest.of(0, 100_000)).stream()
+                .map(ContentPost::getId).toList();
+    }
+
+    /** AC1.4：教育池覆盖近 90 天、只收 KNOWLEDGE；主池（被新帖占满）覆盖不到 60 天前的。 */
+    @Test
+    void eduPoolCoversNinetyDaysAndOnlyKnowledge() {
+        long author = newUser().getId();
+        ContentPost k91 = publish(author, ContentType.KNOWLEDGE);
+        ContentPost k60 = publish(author, ContentType.KNOWLEDGE);
+        ContentPost k5 = publish(author, ContentType.KNOWLEDGE);
+        ContentPost d5 = publish(author, ContentType.DAILY);
+        backdate(k91.getId(), Duration.ofDays(91));
+        backdate(k60.getId(), Duration.ofDays(60));
+        backdate(k5.getId(), Duration.ofDays(5));
+        backdate(d5.getId(), Duration.ofDays(5));
+        // 主池上界 60：造 60 条新 DAILY 把它占满（模拟生产「主池只覆盖近 10 天」）
+        for (int i = 0; i < 60; i++) {
+            publish(author, ContentType.DAILY);
+        }
+
+        List<Long> edu = eduPool(null);
+        assertThat(edu).contains(k60.getId(), k5.getId()).doesNotContain(k91.getId(), d5.getId());
+        List<Long> main = posts.findRankCandidatePool(false, null, PageRequest.of(0, 60)).stream()
+                .map(ContentPost::getId).toList();
+        assertThat(main).doesNotContain(k60.getId());
+    }
+
+    /** AC2.2 / AC6：教育池套的是主池同一份过滤；游客跳过举报 / 屏蔽两项。 */
+    @Test
+    void eduPoolAppliesEveryFilter() {
+        User viewer = newUser();
+        long author = newUser().getId();
+        long blockedAuthor = newUser().getId();
+        ContentPost control = publish(author, ContentType.KNOWLEDGE);
+        ContentPost blocked = publish(blockedAuthor, ContentType.KNOWLEDGE);
+        ContentPost reported = publish(author, ContentType.KNOWLEDGE);
+        ContentPost deleted = publish(author, ContentType.KNOWLEDGE);
+        ContentPost privatePost = publish(author, ContentType.KNOWLEDGE);
+        ContentPost held = publish(author, ContentType.KNOWLEDGE);
+        hides.save(UserHideRelation.create(viewer.getId(), blockedAuthor, HideSource.BLOCK));
+        reports.save(ContentReport.create(reported.getId(), viewer.getId(), ReportReason.INAPPROPRIATE));
+        deleted.softDelete();
+        posts.save(deleted);
+        privatePost.setVisibility(ContentVisibility.PRIVATE);
+        posts.save(privatePost);
+        held.applyReportHold();
+        posts.save(held);
+        for (ContentPost p : List.of(control, blocked, reported, deleted, privatePost, held)) {
+            backdate(p.getId(), Duration.ofDays(60));
+        }
+
+        List<Long> forViewer = eduPool(viewer.getId());
+        assertThat(forViewer).contains(control.getId()).doesNotContain(blocked.getId(),
+                reported.getId(), deleted.getId(), privatePost.getId(), held.getId());
+        List<Long> forGuest = eduPool(null);
+        assertThat(forGuest).contains(control.getId(), blocked.getId(), reported.getId())
+                .doesNotContain(deleted.getId(), privatePost.getId(), held.getId());
+    }
+
+    /** AC2.2：作者被屏蔽的 60 天前科普不出现在该用户 ALL Tab 任何一页。 */
+    @Test
+    void blockedAuthorsKnowledgeNeverReachesAnyPage() throws Exception {
+        User viewer = newUser();
+        long blockedAuthor = newUser().getId();
+        ContentPost k = publish(blockedAuthor, ContentType.KNOWLEDGE);
+        backdate(k.getId(), Duration.ofDays(60));
+        hides.save(UserHideRelation.create(viewer.getId(), blockedAuthor, HideSource.BLOCK));
+
+        String cursor = null;
+        for (int page = 0; page < 50; page++) {
+            var req = get("/api/v1/content-posts").header("Authorization", userBearer(viewer.getId()));
+            if (cursor != null) {
+                req = req.param("cursor", cursor);
+            }
+            String body = mvc.perform(req).andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            assertThat(body).doesNotContain("\"id\":" + k.getId() + ",");
+            cursor = extractCursor(body);
+            if (cursor == null) {
+                break;
+            }
+        }
+    }
+
+    /** AC4 L1：部分索引已建且谓词正确。 */
+    @Test
+    void knowledgePartialIndexExists() {
+        List<String> defs = jdbc.queryForList(
+                "SELECT indexdef FROM pg_indexes WHERE indexname = 'idx_content_posts_knowledge_feed'",
+                String.class);
+        assertThat(defs).hasSize(1);
+        assertThat(defs.get(0)).contains("'KNOWLEDGE'::text").contains("deleted_at IS NULL");
+    }
+
+    private static String extractCursor(String body) {
+        int i = body.indexOf("\"nextCursor\":\"");
+        if (i < 0) {
+            return null;
+        }
+        int start = i + "\"nextCursor\":\"".length();
+        int end = body.indexOf('"', start);
+        return body.substring(start, end);
     }
 }

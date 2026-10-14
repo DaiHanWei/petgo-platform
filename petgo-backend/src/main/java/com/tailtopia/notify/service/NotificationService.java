@@ -2,14 +2,21 @@ package com.tailtopia.notify.service;
 
 import com.tailtopia.notify.domain.Notification;
 import com.tailtopia.notify.domain.NotificationType;
+import com.tailtopia.notify.repository.NotificationActorRepository;
+import com.tailtopia.notify.repository.NotificationAggregateDao;
 import com.tailtopia.notify.repository.NotificationRepository;
 import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 统一推送出口（Story 6.1）。所有业务推送（6.2/6.3 经领域事件订阅）汇聚于此：
@@ -29,6 +36,23 @@ public class NotificationService {
     private static final char[] BASE62 =
             "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray();
 
+    /** 点赞推送去抖键前缀（V1.3.4 follow · AD-10）：{@code notify:likepush:{postId}}，10 分钟内同帖只推一次。 */
+    public static final String LIKE_PUSH_KEY_PREFIX = "notify:likepush:";
+
+    /** 场所评论推送去抖键前缀（D-7，Story 3.2 使用）：{@code notify:placecommentpush:{placeId}}。 */
+    public static final String PLACE_COMMENT_PUSH_KEY_PREFIX = "notify:placecommentpush:";
+
+    /** {@link #sendInteraction} 只接受这四种互动类型（模板只覆盖它们）。 */
+    static final java.util.Set<NotificationType> INTERACTION_TYPES = java.util.EnumSet.of(
+            NotificationType.CONTENT_LIKED, NotificationType.CONTENT_COMMENTED,
+            NotificationType.USER_FOLLOWED, NotificationType.PLACE_COMMENTED);
+
+    /** 推送去抖窗口（AD-10）。 */
+    static final Duration PUSH_DEBOUNCE = Duration.ofMinutes(10);
+
+    /** 推送正文里评论原文的上限（T-31），超出截断加「…」。 */
+    static final int PUSH_BODY_MAX = 100;
+
     /** 兽医推送默认语言（V1 兽医无语言偏好字段，统一印尼语）。 */
     private static final java.util.Locale INDONESIAN = java.util.Locale.forLanguageTag("id");
 
@@ -37,16 +61,26 @@ public class NotificationService {
     private final NotificationPusher pusher;
     private final org.springframework.context.MessageSource messageSource;
     private final com.tailtopia.auth.service.AccountQueryService accountQuery;
+    private final NotificationAggregateDao aggregates;
+    private final NotificationActorRepository actors;
+    private final InteractionCopyRenderer copy;
+    private final InteractionActorResolver unreadResolver;
     private final SecureRandom random = new SecureRandom();
 
     public NotificationService(NotificationRepository repo, StringRedisTemplate redis,
             NotificationPusher pusher, org.springframework.context.MessageSource messageSource,
-            com.tailtopia.auth.service.AccountQueryService accountQuery) {
+            com.tailtopia.auth.service.AccountQueryService accountQuery, NotificationAggregateDao aggregates,
+            NotificationActorRepository actors, InteractionCopyRenderer copy,
+            InteractionActorResolver unreadResolver) {
         this.repo = repo;
         this.redis = redis;
         this.pusher = pusher;
         this.messageSource = messageSource;
         this.accountQuery = accountQuery;
+        this.aggregates = aggregates;
+        this.actors = actors;
+        this.copy = copy;
+        this.unreadResolver = unreadResolver;
     }
 
     /**
@@ -113,6 +147,187 @@ public class NotificationService {
     }
 
     /**
+     * 互动通知（V1.3.4 follow · Story 3.1 · AD-9 / AD-10）：带触发人，点赞 / 场所评论「未读即合并」。
+     *
+     * <ul>
+     *   <li>{@code aggregateKey == null}（评论、回复、新粉丝）：每次新建一行 + 记触发人 + 角标 +1 + 推送。</li>
+     *   <li>{@code aggregateKey != null}（点赞、场所评论）：一条 upsert 原子地「有未读同键行则复用，否则新建」：
+     *     <ul>
+     *       <li>新建 → 角标 +1；</li>
+     *       <li>复用且本人是新触发人 → 刷新时间（移到最上），<b>角标不动</b>；</li>
+     *       <li>复用且本人已在触发人里（取消赞再赞，T-29）→ <b>什么都不做</b>：不刷新、不推送；</li>
+     *       <li>已读后再来 → 部分唯一索引不再命中 → 新建。</li>
+     *     </ul></li>
+     * </ul>
+     *
+     * <p>落库 {@code title / body} 只放兜底串，<b>不含昵称、不含评论原文</b>（AD-3：昵称读取时现查；评论原文由列表按
+     * {@code comment_id} 现查）。{@code pushBodyText} 只进推送正文、<b>不落库、不进日志</b>。
+     *
+     * <p>推送（<b>本事务提交之后</b>，失败只丢这次推送、不回滚通知）：虚拟号 / 官方号（D-9）不推 → 去抖（点赞 {@code notify:likepush:{postId}}、场所评论
+     * {@code notify:placecommentpush:{placeId}}，{@code SET NX EX 600}，抢到才推；Redis 异常照常推，T-32）→
+     * 标题按收件人语言用 {@link InteractionCopyRenderer} 渲染<b>推送时刻</b>的聚合结果，正文 = 评论原文（截 100 字）或空串；
+     * 触发人全被滤掉则不推并释放去抖键。只接受 {@link #INTERACTION_TYPES}，其它类型写库前即拒。
+     *
+     * <p>⚠️ 拉黑 / 隐藏抑制<b>不在这里</b>，仍在各监听器（理由同 {@code ContentNotifyListener} 类注释）。
+     * REQUIRES_NEW 的理由同 {@link #send}。
+     *
+     * @return 落库（或被合并到）的那一行；T-29 跳过时也返回那一行
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Notification sendInteraction(long recipientUserId, NotificationType type, long actorUserId,
+            String aggregateKey, String targetRef, Long commentId, String variant, String pushBodyText) {
+        // 3.1 code-review F1：非互动类型在写库之前就拒绝（否则行写了、渲染推送时才炸）。
+        if (!INTERACTION_TYPES.contains(type)) {
+            throw new IllegalArgumentException("not an interaction type: " + type);
+        }
+        String title = fallbackTitle(type, variant);
+        String body = "点击查看";
+        long id;
+        String token;
+        if (aggregateKey == null) {
+            Notification saved = repo.save(Notification.interaction(recipientUserId, type, title, body,
+                    type.name(), generateToken(), targetRef, null, commentId, variant));
+            aggregates.addActor(saved.getId(), actorUserId);
+            bumpUnreadBadge(recipientUserId);
+            id = saved.getId();
+            token = saved.getDeepLinkToken();
+        } else {
+            NotificationAggregateDao.UpsertResult r = aggregates.upsertAggregate(recipientUserId, type, title, body,
+                    type.name(), generateToken(), targetRef, aggregateKey, commentId, variant);
+            boolean newActor = aggregates.addActor(r.id(), actorUserId);
+            if (r.inserted()) {
+                bumpUnreadBadge(recipientUserId);
+            } else if (newActor) {
+                aggregates.touch(r.id()); // 合并：时间刷新、角标不动
+                // 3.3 code-review F3：合并前这条若「不可见」（原触发人全被过滤 → 列表隐藏、角标未计，T-36），
+                // 这次合进来的人让它重新可见 → 角标要补 +1，否则铃铛比可见未读少 1。
+                if (wasInvisible(recipientUserId, r.id(), actorUserId)) {
+                    bumpUnreadBadge(recipientUserId);
+                }
+            } else {
+                // T-29：同一人取消赞再赞、仍未读 —— 不刷新时间、不顶到最上、不再推送。
+                return repo.findById(r.id()).orElseThrow();
+            }
+            id = r.id();
+            token = r.deepLinkToken();
+        }
+        Notification saved = repo.findById(id).orElseThrow();
+        // 3.1 code-review F1：推送放到本事务提交之后 —— 渲染要查库，查询异常若发生在事务内会把刚写的通知一起回滚
+        // （角标已 +1、去抖键已占，通知却没了）。提交后再推，任何异常都只丢这一次推送。无事务（单测）时直接执行。
+        Runnable push = () -> {
+            try {
+                pushInteraction(recipientUserId, type, variant, aggregateKey, id, token, targetRef, pushBodyText);
+            } catch (RuntimeException e) {
+                log.warn("互动推送失败（通知已落库）notificationId={} cause={}", id, e.getClass().getSimpleName());
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    push.run();
+                }
+            });
+        } else {
+            push.run();
+        }
+        return saved;
+    }
+
+    /** 合并前（不含本次触发人）的触发人是否全被过滤。 */
+    private boolean wasInvisible(long recipientUserId, long notificationId, long newActorId) {
+        List<Long> before = actors.findActorIdsNewestFirst(notificationId).stream()
+                .filter(id -> id != newActorId).toList();
+        return !before.isEmpty() && copy.resolve(recipientUserId, before).isEmpty();
+    }
+
+    private void pushInteraction(long recipientUserId, NotificationType type, String variant, String aggregateKey,
+            long notificationId, String token, String targetRef, String pushBodyText) {
+        // D-9：官方内容账号（role=ADMIN 的作者 shim）不登录 App、不接收推送，与虚拟号同样跳过（3.1 code-review F3）。
+        if (skipPushForVirtual(recipientUserId) || accountQuery.isOfficialAccount(recipientUserId)) {
+            return;
+        }
+        String slot = debounceKey(aggregateKey);
+        if (!acquirePushSlot(slot)) {
+            return;
+        }
+        List<Long> actorIds = actors.findActorIdsNewestFirst(notificationId);
+        Optional<InteractionCopyRenderer.ActorSummary> summary = copy.resolve(recipientUserId, actorIds);
+        if (summary.isEmpty()) {
+            // 触发人全被滤掉（理论上不会：本次 actor 刚过监听器的抑制判断）→ 把刚占的去抖键还回去，
+            // 不让这 10 分钟内同一对象的后续互动推不出来（3.1 code-review F4）。
+            releasePushSlot(slot);
+            return;
+        }
+        java.util.Locale locale = accountQuery.localeOf(recipientUserId);
+        pusher.pushToUser(recipientUserId, copy.title(type, variant, summary.get(), locale),
+                truncateBody(pushBodyText), type.name(), token, targetRef);
+    }
+
+    /**
+     * 推送去抖（AD-10 / D-7）：不聚合的类型每次都推；点赞 / 场所评论 10 分钟内同一对象只推一次（抢到键才推）。
+     * Redis 不可用 → 照常推送（T-32：宁多勿漏），只记异常类名。
+     */
+    private boolean acquirePushSlot(String key) {
+        if (key == null) {
+            return true;
+        }
+        try {
+            return Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(key, "1", PUSH_DEBOUNCE));
+        } catch (RuntimeException e) {
+            log.warn("推送去抖键不可用（照常推送）cause={}", e.getClass().getSimpleName());
+            return true;
+        }
+    }
+
+    private void releasePushSlot(String key) {
+        if (key == null) {
+            return;
+        }
+        try {
+            redis.delete(key);
+        } catch (RuntimeException e) {
+            log.warn("推送去抖键释放失败 cause={}", e.getClass().getSimpleName());
+        }
+    }
+
+    static String debounceKey(String aggregateKey) {
+        if (aggregateKey == null) {
+            return null;
+        }
+        if (aggregateKey.startsWith("LIKE:POST:")) {
+            return LIKE_PUSH_KEY_PREFIX + aggregateKey.substring("LIKE:POST:".length());
+        }
+        if (aggregateKey.startsWith("COMMENT:PLACE:")) {
+            return PLACE_COMMENT_PUSH_KEY_PREFIX + aggregateKey.substring("COMMENT:PLACE:".length());
+        }
+        return null;
+    }
+
+    /** 推送正文：评论原文截到 100 字（按码点，不劈开 emoji）加「…」（T-31）；无则空串（UI 稿 D8）。 */
+    static String truncateBody(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        if (text.codePointCount(0, text.length()) <= PUSH_BODY_MAX) {
+            return text;
+        }
+        return text.substring(0, text.offsetByCodePoints(0, PUSH_BODY_MAX)) + "…";
+    }
+
+    /** 落库兜底标题（沿用改造前的中文串；不含昵称，AD-3）。通知中心由 App / Story 3.3 按 type 本地化。 */
+    private static String fallbackTitle(NotificationType type, String variant) {
+        return switch (type) {
+            case CONTENT_LIKED -> "有人赞了你的内容";
+            case CONTENT_COMMENTED -> Notification.VARIANT_REPLY.equals(variant)
+                    ? "有人回复了你的评论" : "有人评论了你的内容";
+            case USER_FOLLOWED -> "有人关注了你";
+            case PLACE_COMMENTED -> "有人评论了你添加的地点";
+            default -> type.name();
+        };
+    }
+
+    /**
      * 推送给兽医（Story 6.2 新问诊请求）。兽医为独立角色（v_{vetId}）；V1 兽医侧无 6.6 通知中心，
      * 故仅离线推送 + 工作台深链，不写用户通知中心行 / 不增用户角标。
      */
@@ -133,7 +348,8 @@ public class NotificationService {
             String key = UNREAD_KEY_PREFIX + recipientUserId;
             Long newCount = redis.opsForValue().increment(key);
             if (newCount != null && newCount == 1L) {
-                long dbUnread = repo.countByRecipientUserIdAndReadIsFalse(recipientUserId);
+                // V1.3.4 · 3.3 code-review F4：自愈值用与通知中心同一口径的「有效未读数」（T-36：不可见条目不计）。
+                long dbUnread = unreadResolver.effectiveUnreadCount(recipientUserId);
                 if (dbUnread > 1) {
                     redis.opsForValue().set(key, String.valueOf(dbUnread));
                 }
@@ -195,6 +411,48 @@ public class NotificationService {
     private String formatCopy(String copyKey, String suffix, Object[] args, java.util.Locale locale,
             String fallback) {
         return messageSource.getMessage("notify." + copyKey + "." + suffix, args, fallback, locale);
+    }
+
+    /**
+     * 运营通知批量写入通知中心（Story 6.1 / 6.2）。不发推送——推送由 OpsNotificationDispatcher 逐人同步下发。
+     *
+     * <p>每个收件人写一行 {@link NotificationType#OPS_ANNOUNCEMENT}：{@code deepLinkType = "OPS_ANNOUNCEMENT"}、
+     * {@code targetRef} = 活动 {@code publicToken}、{@code deepLinkToken} 为本类 32 位 base62。
+     * title / body 在写入时按收件人语言定死（AD-17）：{@code "en".equalsIgnoreCase(locale)} → EN，
+     * 其余（{@code id}、null、空串、其它语言）→ ID（与 {@code AccountQueryService.localeOf} 同口径）。
+     * 每人照常 {@link #bumpUnreadBadge}（Redis 失败只记日志不回滚），但<b>统一挪到本事务提交之后</b>
+     * （{@code afterCommit}）：整批是一个事务，若中途失败回滚，提交前就 INCR 的角标会凭空多出来；
+     * 无事务同步时（如单测直调）退化为立即加。<b>不</b>调 pusher、<b>不</b>查 messageSource。
+     *
+     * @return 已保存的行，顺序同入参
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public java.util.List<Notification> writeOpsAnnouncements(
+            com.tailtopia.notify.ops.domain.OpsNotificationCampaign campaign,
+            java.util.List<com.tailtopia.notify.ops.domain.OpsRecipient> recipients) {
+        java.util.List<Notification> saved = new java.util.ArrayList<>(recipients.size());
+        for (com.tailtopia.notify.ops.domain.OpsRecipient r : recipients) {
+            boolean en = "en".equalsIgnoreCase(r.locale());
+            String title = en ? campaign.getTitleEn() : campaign.getTitleId();
+            String body = en ? campaign.getBodyEn() : campaign.getBodyId();
+            saved.add(repo.save(Notification.of(r.userId(), NotificationType.OPS_ANNOUNCEMENT, title, body,
+                    NotificationType.OPS_ANNOUNCEMENT.name(), generateToken(), campaign.getPublicToken())));
+        }
+        java.util.List<Long> badgeUserIds = recipients.stream()
+                .map(com.tailtopia.notify.ops.domain.OpsRecipient::userId).toList();
+        Runnable bumpAll = () -> badgeUserIds.forEach(this::bumpUnreadBadge);
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            bumpAll.run();
+                        }
+                    });
+        } else {
+            bumpAll.run();
+        }
+        return saved;
     }
 
     private String generateToken() {

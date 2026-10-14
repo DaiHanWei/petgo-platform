@@ -1,5 +1,6 @@
 import '../../auth/domain/user_tag.dart';
 import '../../mention/domain/mention_view.dart';
+import '../../social/domain/follow_state.dart';
 import 'content_tag.dart';
 import 'feed_image_layout.dart';
 import '../../place/domain/checkin_place_ref.dart';
@@ -22,10 +23,50 @@ class ContentDetail {
     this.body,
     this.imageUrls = const [],
     this.imageSizes = const [],
+    this.imageCropOffsets = const [],
     this.visibility = 'PUBLIC',
     this.mentions = const [],
     this.checkinPlace,
+    this.authorToken,
+    this.authorFollowState = FollowState.none,
+    this.followEpoch = 0,
   });
+
+  /// 作者对外 token（V1.3.4 follow · Story 2.1）；作者已注销 / 封号 / 老后端 → null（不显示关注按钮）。
+  final String? authorToken;
+
+  /// 当前查看者与作者的关注关系（快照）。缺字段 → [FollowState.none]。
+  final FollowState authorFollowState;
+
+  /// 这份快照发请求前读到的全局关注版本号（不来自 JSON，见 `FeedItem.followEpoch`）。
+  final int followEpoch;
+
+  /// 带上快照版本号的拷贝（`detailProvider` 用；其余字段原样）。
+  ContentDetail withFollowEpoch(int epoch) => ContentDetail(
+        id: id,
+        authorId: authorId,
+        authorDeleted: authorDeleted,
+        type: type,
+        likeCount: likeCount,
+        commentCount: commentCount,
+        liked: liked,
+        isAuthor: isAuthor,
+        createdAt: createdAt,
+        authorNickname: authorNickname,
+        authorTags: authorTags,
+        decorationTags: decorationTags,
+        authorAvatarUrl: authorAvatarUrl,
+        body: body,
+        imageUrls: imageUrls,
+        imageSizes: imageSizes,
+        imageCropOffsets: imageCropOffsets,
+        visibility: visibility,
+        mentions: mentions,
+        checkinPlace: checkinPlace,
+        authorToken: authorToken,
+        authorFollowState: authorFollowState,
+        followEpoch: epoch,
+      );
 
   final int id;
   final int authorId;
@@ -64,6 +105,14 @@ class ContentDetail {
   ImageSize? sizeAt(int i) =>
       (i >= 0 && i < imageSizes.length) ? imageSizes[i] : null;
 
+  /// 每张图的露出位置（V1.3.4 Story 2.1 下发 / 2.2 使用），与 [imageUrls] 同序；
+  /// 元素 0~1，null = 居中；存量整列为空。与 Feed 同走 [feedImageAlignment]。
+  final List<double?> imageCropOffsets;
+
+  /// 第 [i] 张图的露出位置；越界 / 缺失 → null（居中）。
+  double? cropOffsetAt(int i) =>
+      (i >= 0 && i < imageCropOffsets.length) ? imageCropOffsets[i] : null;
+
   /// 可见性线格式（`PUBLIC` / `PRIVATE`）。老响应体没有这个字段 ⇒ 按 `PUBLIC` 兜底。
   ///
   /// 只有一个用处：埋点 E-11 的 `is_private_diary`。**不要拿它当权限判据** ——
@@ -101,9 +150,13 @@ class ContentDetail {
       body: json['body'] as String?,
       imageUrls: raw is List ? raw.map((e) => e.toString()).toList() : const [],
       imageSizes: ImageSize.listFromJson(json['imageSizes']),
+      imageCropOffsets: cropOffsetListFromJson(json['imageCropOffsets']),
       visibility: (json['visibility'] ?? 'PUBLIC') as String,
       mentions: MentionView.listFromJson(json['mentions']),
       checkinPlace: CheckinPlaceRef.fromJson(json['checkinPlace']),
+      // V1.3.4 follow Story 2.1：缺失 / null 都按默认。
+      authorToken: json['authorToken'] as String?,
+      authorFollowState: FollowState.fromJson(json['authorFollowState']),
     );
   }
 }

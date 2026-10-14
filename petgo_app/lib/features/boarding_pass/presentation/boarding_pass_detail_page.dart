@@ -87,6 +87,8 @@ class _BoardingPassDetailPageState extends ConsumerState<BoardingPassDetailPage>
         sheet: (balance) => BoardingPassPayPicker(pass: d, balance: balance),
         start: (channel) => ref.read(boardingPassRepositoryProvider).unlock(widget.placeToken, channel),
         pollPaid: () async => (await ref.refresh(boardingPassDetailProvider(widget.placeToken).future)).unlocked,
+        purchasePurpose: 'BOARDING_PASS',
+        cashPriceIdr: () => price,
       );
       if (!mounted || outcome == KeepsakeFlowOutcome.notCompleted) return;
       ref.invalidate(boardingPassDetailProvider(widget.placeToken));

@@ -323,6 +323,8 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
               child: MasonryCard(
                 key: const ValueKey('feedPinnedCard'),
                 item: pinnedItem,
+                // V1.3.4 Story 2.1：顶置卡与普通卡的关注按钮位置键必须不同（同一帖可能同屏出现两次）。
+                followSurfaceKey: 'feed:pinned:${pinnedItem.id}',
                 deletedUserLabel: widget.deletedUserLabel,
                 onShare: () =>
                     ShareCardEntry.openForPostId(context, ref, pinnedItem.id),
@@ -374,6 +376,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                     ),
               child: MasonryCard(
                 item: widget.items[i],
+                followSurfaceKey: 'feed:item:${widget.items[i].id}',
                 deletedUserLabel: widget.deletedUserLabel,
                 // 信息流分享入口（bug 20260826）。走 postId 版：卡面要的正文全文与首图原图
                 // 在流里是裁过的摘要，直接拿它拼卡会与详情页分享出去的不是同一张。

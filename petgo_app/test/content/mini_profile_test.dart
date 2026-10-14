@@ -56,7 +56,7 @@ void main() {
     expect(find.text(l10n.miniProfilePostCount(3)), findsOneWidget);
     expect(find.text(l10n.miniProfileComingSoon), findsOneWidget);
     expect(find.byKey(const ValueKey('miniProfileClose')), findsOneWidget);
-    // 无「关注」「查看主页」按钮
+    // 无「关注」「查看主页」按钮 —— 迷你卡已退役，关注入口在完整主页（V1.3.4）。
     expect(find.text('Follow'), findsNothing);
     expect(find.text('View profile'), findsNothing);
   });

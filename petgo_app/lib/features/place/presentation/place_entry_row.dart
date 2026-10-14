@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
@@ -7,9 +8,21 @@ import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
 import 'place_list_page.dart';
 
+/// 场所入口图标：「折叠地图 + 定位针」（V1.3.4 Story 3.5 · AD-20 · UI 稿 C1 `.hm-place`）。
+/// 原文 `stroke="currentColor"` 换成占位色 `#000000`，实际颜色由 `colorFilter`（AppColors.mint）决定。
+const String kPlaceEntryMapPinSvg =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="1.8" '
+    'stroke-linecap="round" stroke-linejoin="round">'
+    '<path d="M3 6.5l5-2 5 2 5-2v6.2"/>'
+    '<path d="M3 6.5v13l5-2 3 1.2"/>'
+    '<path d="M8 4.5v13"/>'
+    '<path d="M18 21.5s3.6-3 3.6-5.9a3.6 3.6 0 1 0-7.2 0c0 2.9 3.6 5.9 3.6 5.9z"/>'
+    '<circle cx="18" cy="15.6" r="1.2"/>'
+    '</svg>';
+
 /// Sosial（首页 Feed）顶部的场所入口行（V1.3.0 batch-b1 Story 1.1 · AC7 · FR-112.4 · UX-DR1）。
 ///
-/// 单行导航条：📍图标 + 文字 + 箭头（UI 稿 B1）。**与场所列表页同一条 story 交付** ——
+/// 单行导航条：折叠地图 + 定位针图标（V1.3.4 Story 3.5，UI 稿 C1）+ 文字 + 箭头（UI 稿 B1）。**与场所列表页同一条 story 交付** ——
 /// 页面没有入口就不可达、无法验收。
 ///
 /// <h2>布局约定</h2>
@@ -42,7 +55,13 @@ class PlaceEntryRow extends StatelessWidget {
                 horizontal: AppSpacing.md, vertical: 14),
             child: Row(
               children: [
-                const Icon(Icons.place_outlined, size: 20, color: AppColors.mint),
+                SvgPicture.string(
+                  kPlaceEntryMapPinSvg,
+                  key: const ValueKey('placeEntryIcon'),
+                  width: 20,
+                  height: 20,
+                  colorFilter: const ColorFilter.mode(AppColors.mint, BlendMode.srcIn),
+                ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(

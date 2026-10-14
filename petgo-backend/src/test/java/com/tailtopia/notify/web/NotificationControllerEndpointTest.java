@@ -457,4 +457,92 @@ class NotificationControllerEndpointTest extends ApiIntegrationTest {
 
         assertThat(badge(u.getId())).isEqualTo("3"); // 未被校准
     }
+
+    // ===== V1.3.4 follow · Story 3.3：互动条目现拼「谁 + 做了什么」（L1） =====
+
+    private void addActor(long notificationId, User actor) {
+        jdbc.update("INSERT INTO notification_actors (notification_id, actor_user_id) VALUES (?, ?)",
+                notificationId, actor.getId());
+    }
+
+    private Notification persistInteraction(long recipientUserId, NotificationType type, String token) {
+        return notifications.save(Notification.interaction(recipientUserId, type, "兜底", "点击查看", type.name(),
+                token, "55", null, null, null));
+    }
+
+    @Test
+    void list_rendersInteractionItemsWithActorFieldsInAccountLocale() throws Exception {
+        User me = newUser();
+        jdbc.update("UPDATE users SET locale = 'en' WHERE id = ?", me.getId());
+        User fan = newUser();
+        Notification followed = persistInteraction(me.getId(), NotificationType.USER_FOLLOWED, tok());
+        addActor(followed.getId(), fan);
+        jdbc.update("INSERT INTO user_follows (follower_id, followee_id) VALUES (?, ?)", fan.getId(), me.getId());
+
+        mvc.perform(get("/api/v1/notifications").header(HttpHeaders.AUTHORIZATION, userBearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].title").value(fan.getNickname() + " started following you"))
+                .andExpect(jsonPath("$.items[0].actorName").value(fan.getNickname()))
+                .andExpect(jsonPath("$.items[0].actorCount").value(1))
+                .andExpect(jsonPath("$.items[0].actorUserId").value(fan.getId()))
+                .andExpect(jsonPath("$.items[0].actorToken").value(fan.getPublicToken()))
+                .andExpect(jsonPath("$.items[0].actorIFollow").value(false))
+                .andExpect(jsonPath("$.items[0].actorFollowsMe").value(true))
+                .andExpect(jsonPath("$.items[0].id").doesNotExist())
+                .andExpect(jsonPath("$.items[0].commentId").doesNotExist())
+                .andExpect(jsonPath("$.items[0].aggregateKey").doesNotExist());
+    }
+
+    @Test
+    void list_likedManyInIndonesianAndHiddenActorsAreSkipped() throws Exception {
+        User me = newUser();
+        jdbc.update("UPDATE users SET locale = 'id' WHERE id = ?", me.getId());
+        User a = newUser();
+        User b = newUser();
+        User c = newUser();
+        Notification liked = persistInteraction(me.getId(), NotificationType.CONTENT_LIKED, tok());
+        addActor(liked.getId(), a);
+        addActor(liked.getId(), b);
+        addActor(liked.getId(), c);
+        // 我拉黑了 c：不计入 N。
+        jdbc.update("INSERT INTO user_hide_relations (holder_id, target_id, source) VALUES (?, ?, 'BLOCK')",
+                me.getId(), c.getId());
+
+        mvc.perform(get("/api/v1/notifications").header(HttpHeaders.AUTHORIZATION, userBearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].actorCount").value(2))
+                .andExpect(jsonPath("$.items[0].title").value(org.hamcrest.Matchers.endsWith(
+                        " dan 1 lainnya menyukai postinganmu")));
+    }
+
+    /** ⚠️ T-36：触发人全被过滤的条目从列表隐藏，首页校准后的角标同口径不计。 */
+    @Test
+    void list_hidesItemsWhoseActorsAreAllFilteredAndBadgeExcludesThem() throws Exception {
+        User me = newUser();
+        User banned = newUser();
+        Notification n = persistInteraction(me.getId(), NotificationType.CONTENT_LIKED, tok());
+        addActor(n.getId(), banned);
+        jdbc.update("UPDATE users SET status = 'DEACTIVATED' WHERE id = ?", banned.getId());
+        persist(me.getId(), NotificationType.VET_REPLY, tok(), false);
+
+        mvc.perform(get("/api/v1/notifications").header(HttpHeaders.AUTHORIZATION, userBearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].type").value("VET_REPLY"));
+        assertThat(badge(me.getId())).isEqualTo("1");
+    }
+
+    /** 存量（无触发人行）原样返回，新字段为空。 */
+    @Test
+    void list_legacyInteractionWithoutActorsIsReturnedAsIs() throws Exception {
+        User me = newUser();
+        String t = tok();
+        persist(me.getId(), NotificationType.CONTENT_LIKED, t, false);
+
+        mvc.perform(get("/api/v1/notifications").header(HttpHeaders.AUTHORIZATION, userBearer(me.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].title").value("标题-" + t))
+                .andExpect(jsonPath("$.items[0].actorName").doesNotExist())
+                .andExpect(jsonPath("$.items[0].actorCount").value(0));
+    }
 }

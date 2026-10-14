@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/features/place/presentation/place_detail_page.dart';
+import 'package:tailtopia/features/user_profile/presentation/public_profile_page.dart';
 import 'package:tailtopia/core/router/deep_link_routes.dart';
 
 /// Story 6.1 J4：pushPayloadToLocation 七类映射 + 评论区锚点 + 未知 type/空 token 兜底。
@@ -136,5 +138,19 @@ void main() {
         DeepLinkRoutes.notificationsCenter);
     expect(DeepLinkRoutes.pushPayloadToLocation('VET_REPLY', ''),
         DeepLinkRoutes.notificationsCenter);
+  });
+
+  // V1.3.4 follow · Story 3.4 · AC7.1：两种新类型（系统推送点击与列表点击共用）。
+  test('PLACE_COMMENTED → 场所详情（targetRef = 场所 token）；空 → 通知中心', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('PLACE_COMMENTED', 'aZ09aZ09'),
+        PlaceDetailPage.routeFor('aZ09aZ09'));
+    expect(DeepLinkRoutes.pushPayloadToLocation('PLACE_COMMENTED', null), DeepLinkRoutes.notificationsCenter);
+    expect(DeepLinkRoutes.pushPayloadToLocation('PLACE_COMMENTED', ''), DeepLinkRoutes.notificationsCenter);
+  });
+
+  test('USER_FOLLOWED → 对方主页（数字 id，T-34）；非数字 / 空 → 通知中心，绝不拼出 /users/abc', () {
+    expect(DeepLinkRoutes.pushPayloadToLocation('USER_FOLLOWED', '42'), '${PublicProfilePage.routeBase}/42');
+    expect(DeepLinkRoutes.pushPayloadToLocation('USER_FOLLOWED', 'abc'), DeepLinkRoutes.notificationsCenter);
+    expect(DeepLinkRoutes.pushPayloadToLocation('USER_FOLLOWED', null), DeepLinkRoutes.notificationsCenter);
   });
 }

@@ -78,6 +78,8 @@ class _PetPassportPageState extends ConsumerState<PetPassportPage> {
           final now = await ref.refresh(petPassportProvider.future);
           return now.currentVersionUnlocked || now.purchasedVersionCount > p.purchasedVersionCount;
         },
+        purchasePurpose: 'PASSPORT_SNAP',
+        cashPriceIdr: () => price,
       );
       if (!mounted || outcome == KeepsakeFlowOutcome.notCompleted) return;
       ref.invalidate(petPassportProvider);

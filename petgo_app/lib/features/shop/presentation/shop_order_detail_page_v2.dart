@@ -829,6 +829,12 @@ class _ShopOrderDetailPageV2State extends ConsumerState<ShopOrderDetailPageV2> {
       ref.invalidate(shopOrderDetailProvider(widget.orderToken));
       ref.invalidate(pawCoinProvider);
       if (paid) {
+        // 投放归因：只计现金段（混合支付的 PawCoin 段在充值时已计）；非混合单 cashAmount 为 null → 全额现金。
+        Analytics.capturePurchase(
+          amountIdr: order.cashAmount ?? order.totalAmount,
+          purpose: 'SHOP_ORDER',
+          orderRef: order.orderToken,
+        );
         Analytics.capture('toko_order_payment_succeeded', {
           'pay_channel': order.payChannel ?? 'UNKNOWN',
           'attribution_source': order.attributionSource,

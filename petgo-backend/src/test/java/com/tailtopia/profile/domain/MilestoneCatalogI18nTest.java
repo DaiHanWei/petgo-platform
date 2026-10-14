@@ -112,11 +112,11 @@ class MilestoneCatalogI18nTest {
                 .allMatch(backendCodes::contains);
     }
 
-    /** 两边条目数一致（猫 31 + 狗 31 + 通用 16 = 78）。 */
+    /** 两边条目数一致（猫 33 + 狗 33 + 通用 18 = 84；V1.3.4 FR-126 +6）。 */
     @Test
     void bothSidesHaveSameEntryCount() throws IOException {
         assertThat(readAppTitles()).hasSameSizeAs(all());
-        assertThat(all()).hasSize(78);
+        assertThat(all()).hasSize(84);
     }
 
     // ===== 读取 App 源码 =====

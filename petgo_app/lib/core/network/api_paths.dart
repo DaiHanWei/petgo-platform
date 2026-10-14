@@ -201,6 +201,10 @@ class ApiPaths {
   /// 完整路径含 `/pet-profiles/me/id-cards`；旧路径漏前缀致列表恒 404（历史列表打不开）。已补齐。
   static const String meIdCards = '$base/pet-profiles/me/id-cards';
 
+  /// 建卡 V2（V1.3.4 ktp D-20）：新版 App 建卡走这里——物种 / 性别必填、KTP / 居住证品种必填由服务端强制。
+  /// 旧路径 [meIdCards] 的 POST 留给 1.3.3 及更早 App（宽松口径），列表 GET 仍走 [meIdCards]。
+  static const String meIdCardsCreateV2 = '$base/pet-profiles/me/id-cards/v2';
+
   /// HD 下载当前定价（417 同类：展示价改后端实时下发，与扣费同源 pricing_config）。
   static const String meIdCardHdPricing = '$base/pet-profiles/me/id-cards/pricing';
 
@@ -337,6 +341,19 @@ class ApiPaths {
   /// 游客可读；比迷你卡多「加入时间」与「是否本人视角」两个字段。
   static String userPublicProfile(int userId) => '$base/users/$userId/profile';
 
+  /// 关注 / 取关（V1.3.4 follow · FR-140 · AD-4）：`PUT` 关注、`DELETE` 取关，两者幂等，需登录。
+  /// 路径用**不可枚举用户 token**（D-2），不用数字 id。返回 `{iFollow, followsMe, followerCount}`。
+  static String userFollow(String userToken) => '$base/users/$userToken/follow';
+
+  /// 关注列表（V1.3.4 follow · Story 2.2）：`{token}` 用户关注的人，`?cursor=` 不透明游标，每页 20。游客可读。
+  static String userFollowing(String userToken) => '$base/users/$userToken/following';
+
+  /// 粉丝列表（Story 2.2）：关注 `{token}` 用户的人。游客可读。
+  static String userFollowers(String userToken) => '$base/users/$userToken/followers';
+
+  /// 推荐关注（V1.3.4 follow · Story 2.3）：我自己的关注 / 粉丝列表为空时展示，最多 30 行、无分页。仅登录用户。
+  static const String meFollowSuggestions = '$base/me/follow-suggestions';
+
   /// 公开主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2）：
   /// 该用户全部 PUBLIC 内容，三类混排、时间倒序、`?cursor=` 游标分页。游客可读。
   static String userPublicPosts(int userId) => '$base/users/$userId/posts';
@@ -457,4 +474,14 @@ class ApiPaths {
   /// ⚠️ 游客不展示该区（story Dev Notes「游客态不动」），所以后端也不放行未登录。
   /// 可选 `?limit=`；全屏集合页的游标分页属 Story 4.3，现在不先摆一个没人用的参数。
   static const String mePetRecommendations = '$base/me/pet-recommendations';
+
+  // ===== 运营弹窗（V1.3.4 Story 5.1 / 5.4 · AD-14）=====
+  /// 候选弹窗（游客可读；带 USER token 时按用户过滤）。返回 `{"items": [...]}`，按优先级排好序。
+  static const String opsPopupCandidates = '$base/ops-popups/candidates';
+
+  /// 曝光上报（仅登录用户，无请求体，204）。路径只出现 public_token（D-24）。
+  ///
+  /// token 不做 URL 编码是刻意的：后端 `OpsTokenGenerator` 恒为 Base62（`[0-9a-zA-Z]`）22 位，
+  /// 本身就是 URL-safe 的路径段。若日后改字符表，这里须改成 `Uri.encodeComponent(token)`。
+  static String opsPopupImpressions(String token) => '$base/ops-popups/$token/impressions';
 }

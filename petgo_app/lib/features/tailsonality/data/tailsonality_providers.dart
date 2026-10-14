@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/retry_policy.dart';
 import '../domain/tailsonality_result.dart';
 import 'tailsonality_repository.dart';
 
@@ -11,6 +12,8 @@ final tailsonalityResultsProvider = FutureProvider.autoDispose<List<Tailsonality
 );
 
 /// 单次结果（结果页用）。token 不存在或非本人宠物 → 404（以 DioException 抛出）。
+/// 404 立即显示「不存在」，不走 Riverpod 默认 15 秒重试（[retryExcept4xx]）。
 final tailsonalityResultProvider = FutureProvider.autoDispose.family<TailsonalityResult, String>(
   (ref, token) => ref.read(tailsonalityRepositoryProvider).fetchResult(token),
+  retry: retryExcept4xx,
 );

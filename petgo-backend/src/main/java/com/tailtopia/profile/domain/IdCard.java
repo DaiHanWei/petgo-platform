@@ -54,6 +54,13 @@ public class IdCard {
     private boolean hdUnlocked;
 
     /**
+     * HD 解锁（到账）时刻，UTC（V1.3.4 ktp Story 2.1，AD-2）。首次 {@link #markHdUnlocked()} 写入，之后不改写；
+     * 未解锁为 null。存量按决策 D-8 回填。用于编号沿用「取最早解锁的学生卡」。不对外暴露。
+     */
+    @Column(name = "hd_unlocked_at")
+    private Instant hdUnlockedAt;
+
+    /**
      * 档案删除打标（V108，2026-08-19 决策）：非空 = 建卡所属档案已被删除。
      * 可见性 = {@code hdUnlocked || profileDeletedAt == null}——付费卡恒可见（展示快照），
      * 未付费卡隐藏；支付回调到账翻转 {@code hdUnlocked} 后自动重新可见（防支付时间差）。
@@ -89,9 +96,16 @@ public class IdCard {
     @Column(name = "marital_status", length = 24)
     private String maritalStatus;
 
-    /** 卡种 KTP/PASSPORT/STUDENT（bug 20260730-430：一卡一面，V93 列自此真正接线；存量卡 DEFAULT 'KTP'）。 */
+    /**
+     * 卡种（bug 20260730-430：一卡一面，V93 列自此真正接线；存量卡 DEFAULT 'KTP'）。
+     * V1.3.4 ktp 扩为 {@link IdCardType} 5 值（KTP/PASSPORT/KITAS/SIM/STUDENT），库内 CHECK 同源。
+     */
     @Column(name = "card_type", nullable = false, length = 16)
     private String cardType;
+
+    /** 学生卡配色 {@link StudentVariant}（V1.3.4 ktp AD-1）；非学生卡 NULL，存量学生卡回填 KLASIK。 */
+    @Column(name = "card_variant", length = 16)
+    private String cardVariant;
 
     // ---- 学生卡专属字段快照（bug 20260730-429）。可空：null → 前端趣味默认。----
 
@@ -111,12 +125,13 @@ public class IdCard {
      * 建卡快照（独立建卡器传入的字段 + 分配好的 legacy serial + 新规则两号）。初始未解锁。
      * gender/cardNo/passportNo 为 spec-ktp-pet-idcode-numbering 新增：新卡三者皆非空，旧卡保持 null。
      * birthCity/address/occupation/maritalStatus（bug 20260729-409）可空：null → 前端趣味默认。
+     * cardVariant（V1.3.4 ktp）：学生卡配色，非学生卡传 null。
      */
     public static IdCard snapshot(long userId, long serialId, String name, String petType,
             String breed, LocalDate birthday, String avatarUrl, String intro,
             String gender, String cardNo, String passportNo,
             String birthCity, String address, String occupation, String maritalStatus,
-            String cardType, String school, String faculty) {
+            String cardType, String cardVariant, String school, String faculty) {
         IdCard c = new IdCard();
         c.userId = userId;
         c.serialId = serialId;
@@ -135,14 +150,22 @@ public class IdCard {
         c.occupation = occupation;
         c.maritalStatus = maritalStatus;
         c.cardType = cardType;
+        c.cardVariant = cardVariant;
         c.school = school;
         c.faculty = faculty;
         return c;
     }
 
-    /** 标记本卡 HD 已解锁（购买到账）。幂等：已解锁再调无副作用。 */
+    /**
+     * 标记本卡 HD 已解锁（购买到账），首次解锁同时记下解锁时刻。幂等：已解锁再调无副作用——
+     * 不改写 {@link #hdUnlockedAt}（如先 PawCoin 解锁、早先建的 QRIS 单后到账的场景）。
+     */
     public void markHdUnlocked() {
+        if (this.hdUnlocked) {
+            return;
+        }
         this.hdUnlocked = true;
+        this.hdUnlockedAt = Instant.now();
     }
 
     @PrePersist
@@ -192,6 +215,10 @@ public class IdCard {
         return hdUnlocked;
     }
 
+    public Instant getHdUnlockedAt() {
+        return hdUnlockedAt;
+    }
+
     public Instant getProfileDeletedAt() {
         return profileDeletedAt;
     }
@@ -226,6 +253,10 @@ public class IdCard {
 
     public String getCardType() {
         return cardType;
+    }
+
+    public String getCardVariant() {
+        return cardVariant;
     }
 
     public String getSchool() {

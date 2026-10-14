@@ -8,7 +8,7 @@ import java.time.Instant;
  *
  * <pre>
  *   内容分 = freshnessWeight × 新鲜度 + interactionWeight × 互动度
- *   新鲜度 = 1 / (1 + Δt / 24)                        Δt = 发布至今小时数
+ *   新鲜度 = 1 / (1 + Δt / 半衰期)  半衰期：EDU = 配置（默认 720），其余 24   Δt = 发布至今小时数
  *   互动度 = ln(1 + 赞 + commentWeight × 评) / ln(1 + P95)
  *   最终分 = 内容分 × 曝光衰减 × 荣誉加成 × 限流系数
  * </pre>
@@ -21,8 +21,11 @@ final class FeedRankScorer {
     private FeedRankScorer() {
     }
 
-    /** 新鲜度：24 小时衰减到 0.5，48 小时到 1/3。⚠️ 未来时间（时钟偏移）按 0 小时算，不给超过 1 的分。 */
-    static double freshness(Instant createdAt, Instant now) {
+    /**
+     * 新鲜度：半衰期 h 小时 ⇒ h 小时衰减到 0.5、2h 到 1/3。
+     * ⚠️ 未来时间（时钟偏移）按 0 小时算，不给超过 1 的分；halfLifeHours 须 &gt; 0（调用方保证）。
+     */
+    static double freshness(Instant createdAt, Instant now, double halfLifeHours) {
         if (createdAt == null) {
             return 0d;
         }
@@ -30,7 +33,14 @@ final class FeedRankScorer {
         if (hours < 0) {
             hours = 0;
         }
-        return 1d / (1d + hours / 24d);
+        return 1d / (1d + hours / halfLifeHours);
+    }
+
+    /** 半衰期按内容属性（= 内容类型）取，不按所在槽位：科普用配置值，其余固定 24 小时（V1.3.4 FR-122.3）。 */
+    static double halfLifeHours(RankCandidate c, RankParams p) {
+        return c.attribute() == FeedAttribute.EDU
+                ? p.eduFreshnessHalfLifeHours()
+                : RankParams.DEFAULT_FRESHNESS_HALF_LIFE_HOURS;
     }
 
     /**
@@ -53,7 +63,7 @@ final class FeedRankScorer {
 
     /** 内容分（不含四个乘法系数）。 */
     static double contentScore(RankCandidate c, Instant now, RankParams p) {
-        return p.freshnessWeight() * freshness(c.createdAt(), now)
+        return p.freshnessWeight() * freshness(c.createdAt(), now, halfLifeHours(c, p))
                 + p.interactionWeight() * interaction(c.likes(), c.comments(), p);
     }
 

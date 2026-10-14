@@ -15,6 +15,7 @@ FeedItem _item({
   int id = 1,
   String? image = 'https://cdn.example.com/a.jpg',
   List<ImageSize?> sizes = const [],
+  List<double?> offsets = const [],
 }) =>
     FeedItem(
       id: id,
@@ -26,6 +27,7 @@ FeedItem _item({
       firstImageUrl: image,
       createdAt: DateTime.utc(2026, 6, 2),
       imageSizes: sizes,
+      imageCropOffsets: offsets,
     );
 
 Future<double?> _pumpAspect(
@@ -155,6 +157,72 @@ void main() {
         'imageSizes': [null, {'w': 800, 'h': 800}],
       });
       expect(nullFirst.firstImageSize, isNull);
+    });
+  });
+
+  group('V1.3.4 2.2 开窗', () {
+    Image feedImg(WidgetTester tester) => tester.widget<Image>(find.descendant(
+        of: find.byType(FeedImage), matching: find.byType(Image)));
+
+    testWidgets('3:1 宽图 + offset 0 → 贴左开窗、cover、比例 kFeedRatioMax', (tester) async {
+      final aspect = await _pumpAspect(
+          tester, _item(sizes: const [ImageSize(3000, 1000)], offsets: const [0.0]),
+          maxImageHeight: 10000);
+      expect(aspect, kFeedRatioMax);
+      final img = feedImg(tester);
+      expect(img.alignment, const Alignment(-1, 0));
+      expect(img.fit, BoxFit.cover);
+    });
+
+    testWidgets('1:2 竖图 + offset 1 → 贴下开窗、比例 kFeedRatioMin', (tester) async {
+      final aspect = await _pumpAspect(
+          tester, _item(sizes: const [ImageSize(1000, 2000)], offsets: const [1.0]),
+          maxImageHeight: 10000);
+      expect(aspect, kFeedRatioMin);
+      expect(feedImg(tester).alignment, const Alignment(0, 1));
+    });
+
+    /// 🔴 AC5.1 向后兼容硬验收：无 offset 与 offset 为 null 渲染参数完全相同。
+    testWidgets('AC5.1 无 offset 与 [null] 均居中且比例相等', (tester) async {
+      final a = await _pumpAspect(
+          tester, _item(sizes: const [ImageSize(3000, 1000)]),
+          maxImageHeight: 10000);
+      final imgA = feedImg(tester);
+      expect(imgA.alignment, Alignment.center);
+      expect(imgA.fit, BoxFit.cover);
+
+      final b = await _pumpAspect(
+          tester, _item(sizes: const [ImageSize(3000, 1000)], offsets: const [null]),
+          maxImageHeight: 10000);
+      final imgB = feedImg(tester);
+      expect(imgB.alignment, Alignment.center);
+      expect(imgB.fit, BoxFit.cover);
+      expect(b, a);
+    });
+
+    testWidgets('区间内 4:3 带 offset 0 → 仍居中', (tester) async {
+      await _pumpAspect(
+          tester, _item(sizes: const [ImageSize(1600, 1200)], offsets: const [0.0]),
+          maxImageHeight: 10000);
+      expect(feedImg(tester).alignment, Alignment.center);
+    });
+
+    test('fromJson 读 imageCropOffsets；缺字段为空表；copyWith 透传', () {
+      final base = {
+        'id': 1,
+        'authorId': 2,
+        'createdAt': '2026-10-12T00:00:00Z',
+      };
+      final withOffsets = FeedItem.fromJson({
+        ...base,
+        'imageCropOffsets': [0, null],
+      });
+      expect(withOffsets.imageCropOffsets, [0.0, null]);
+      expect(withOffsets.cropOffsetAt(0), 0.0);
+      expect(withOffsets.cropOffsetAt(1), isNull);
+      expect(withOffsets.cropOffsetAt(5), isNull);
+      expect(withOffsets.copyWith(likeCount: 3).imageCropOffsets, [0.0, null]);
+      expect(FeedItem.fromJson(base).imageCropOffsets, isEmpty);
     });
   });
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/painting.dart' show Alignment;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/content/domain/feed_image_layout.dart';
 
@@ -228,6 +229,74 @@ void main() {
         expect(list, hasLength(4));
         expect(list.every((e) => e == null), isTrue);
       });
+    });
+  });
+
+  group('V1.3.4 2.2 露出位置', () {
+    const wide = ImageSize(3000, 1000); // 3:1，过宽
+    const tall = ImageSize(1000, 2000); // 1:2，过竖
+
+    test('AC1 3:1 宽图 offset 0 / 0.5 / 1 → 贴左 / 居中 / 贴右', () {
+      expect(feedImageAlignment(wide, 0.0), const Alignment(-1, 0));
+      expect(feedImageAlignment(wide, 0.5), const Alignment(0, 0));
+      expect(feedImageAlignment(wide, 1.0), const Alignment(1, 0));
+    });
+
+    test('AC1 1:2 竖图 offset 0 / 0.5 / 1 → 贴上 / 居中 / 贴下', () {
+      expect(feedImageAlignment(tall, 0.0), const Alignment(0, -1));
+      expect(feedImageAlignment(tall, 0.5), const Alignment(0, 0));
+      expect(feedImageAlignment(tall, 1.0), const Alignment(0, 1));
+    });
+
+    test('AC1 规则 1：offset 为 null / 非有限 → 居中', () {
+      expect(feedImageAlignment(wide, null), Alignment.center);
+      expect(feedImageAlignment(wide, double.nan), Alignment.center);
+      expect(feedImageAlignment(wide, double.infinity), Alignment.center);
+    });
+
+    test('AC1 规则 2：尺寸为 null / 不可用 → 居中', () {
+      expect(feedImageAlignment(null, 0.0), Alignment.center);
+      expect(feedImageAlignment(const ImageSize(0, 100), 0.0), Alignment.center);
+    });
+
+    test('AC1 规则 5：区间内（含端点）带 offset 也忽略 → 居中', () {
+      expect(feedImageAlignment(const ImageSize(1600, 1200), 0.0), Alignment.center); // 4:3
+      expect(feedImageAlignment(const ImageSize(1200, 1600), 1.0), Alignment.center); // 3:4 = 下界
+      expect(feedImageAlignment(const ImageSize(178, 100), 0.0), Alignment.center); // 1.78 = 上界
+    });
+
+    test('AC1 offset 越界被夹到 [0,1]', () {
+      expect(feedImageAlignment(wide, 1.2), const Alignment(1, 0));
+      expect(feedImageAlignment(wide, -0.3), const Alignment(-1, 0));
+    });
+
+    /// 🛡 AD-6「只换对齐、不碰比例」：护栏不介入时窗口比例就是 clamp 后的原图比例。
+    test('AC2 窗口比例不变：3:1 → kFeedRatioMax，1:2 → kFeedRatioMin', () {
+      for (final size in [wide, tall]) {
+        expect(
+          resolveFeedImageAspect(size: size, width: 390, maxImageHeight: 10000),
+          clampFeedRatio(size.ratio),
+        );
+      }
+      expect(resolveFeedImageAspect(size: wide, width: 390, maxImageHeight: 10000),
+          kFeedRatioMax);
+      expect(resolveFeedImageAspect(size: tall, width: 390, maxImageHeight: 10000),
+          kFeedRatioMin);
+    });
+
+    test('cropOffsetListFromJson：缺字段 → 空表', () {
+      expect(cropOffsetListFromJson(null), isEmpty);
+      expect(cropOffsetListFromJson('oops'), isEmpty);
+    });
+
+    test('cropOffsetListFromJson：元素 null / 非数字 → 该位 null', () {
+      expect(cropOffsetListFromJson([0.25, null, 'x']), [0.25, null, null]);
+    });
+
+    test('cropOffsetListFromJson：整数 0 与 1 容忍为 double', () {
+      final list = cropOffsetListFromJson([0, 1]);
+      expect(list, [0.0, 1.0]);
+      expect(list.every((e) => e is double), isTrue);
     });
   });
 }

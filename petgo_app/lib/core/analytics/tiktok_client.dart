@@ -7,9 +7,9 @@ import 'package:tiktok_events_sdk/tiktok_events_sdk.dart';
 /// TikTok 投放后台的「测量合作方」选 TikTok SDK 即可，不需要第三方追踪链接。
 ///
 /// 设计约束：
-/// - **归因 + 唯一一个业务事件「注册完成」**：安装 / 启动 / 留存由 SDK 自动上报；注册完成只从
+/// - **归因 + 两个业务事件「注册完成」「现金付款成功」**：安装 / 启动 / 留存由 SDK 自动上报；注册完成只从
 ///   `Analytics.capture` 的白名单分发进来（TT-DPR-2026-001 红线），不得在业务代码里直接调本 SDK。
-///   再加回传事件（如充值）同样只能走 `Analytics` 门面的白名单。
+///   再加回传事件同样只能走 `Analytics` 门面的白名单。
 /// - **只有正式构建上报**：debug 构建默认不初始化（`TIKTOK_DEBUG=true` 可联调），
 ///   stag 出包传 `TIKTOK_ENABLED=false`——测试安装不能被算进投放归因。
 /// - 🔴 **iOS 不许 SDK 自己弹 ATT**（`displayAtt: false` + `disableAppTrackingDialog: true`）：
@@ -112,6 +112,28 @@ class TikTokClient {
       await TikTokEventsSdk.logEvent(event: TikTokEvent(eventName: 'Registration'));
     } catch (e) {
       debugPrint('[TikTok] registration failed: $e');
+    }
+  }
+
+  /// 现金付款成功（TikTok 标准事件 `Purchase`，币种 IDR）。只由 `Analytics.capturePurchase` 派生。
+  /// [orderId] 作 event_id：同一笔单重复上报时 TikTok 按它去重。
+  Future<void> logPurchase({num? amountIdr, String? purpose, String? orderId}) async {
+    if (!_started) return;
+    try {
+      await TikTokEventsSdk.logEvent(
+        event: TikTokEvent(
+          eventName: 'Purchase',
+          eventType: TTEventType.purchase,
+          eventId: orderId,
+          properties: EventProperties(
+            value: amountIdr?.toDouble(),
+            currency: amountIdr == null ? null : CurrencyCode.IDR,
+            contentType: purpose,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[TikTok] purchase failed: $e');
     }
   }
 

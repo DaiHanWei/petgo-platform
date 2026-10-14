@@ -16,6 +16,7 @@ FeedItem _item({
   int id = 1,
   List<String> urls = const ['https://cdn.example.com/a.jpg'],
   List<ImageSize?> sizes = const [ImageSize(1200, 1600)],
+  List<double?> offsets = const [],
 }) =>
     FeedItem(
       id: id,
@@ -27,6 +28,7 @@ FeedItem _item({
       firstImageUrl: urls.isEmpty ? null : urls.first,
       imageUrls: urls,
       imageSizes: sizes,
+      imageCropOffsets: offsets,
       createdAt: DateTime.utc(2026, 6, 2),
     );
 
@@ -125,6 +127,28 @@ void main() {
         sizes: const [ImageSize(1200, 1600), ImageSize(1600, 900), ImageSize(1600, 900)],
       ));
       expect(_aspect(tester), 0.75);
+    });
+
+    /// V1.3.4 2.2：非首图按**自身**比例判开窗方向（容器仍锁首图）。
+    testWidgets('V1.3.4 2.2 第二张按自身尺寸与 offset 开窗，容器高度不变', (tester) async {
+      await _pump(tester, _item(
+        urls: _threeImages.sublist(0, 2),
+        sizes: const [ImageSize(3000, 1000), ImageSize(1000, 2000)],
+        offsets: const [0.0, 1.0],
+      ));
+      final before = _aspect(tester);
+      expect(before, kFeedRatioMax);
+
+      Image imageOf(String url) => tester
+          .widgetList<Image>(find.descendant(
+              of: find.byType(FeedImage), matching: find.byType(Image)))
+          .firstWhere((img) => (img.image as NetworkImage).url == url);
+      expect(imageOf(_threeImages[0]).alignment, const Alignment(-1, 0));
+
+      await tester.fling(find.byType(PageView), const Offset(-400, 0), 1200);
+      await tester.pumpAndSettle();
+      expect(imageOf(_threeImages[1]).alignment, const Alignment(0, 1));
+      expect(_aspect(tester), before, reason: '翻页不得改变容器高度');
     });
   });
 

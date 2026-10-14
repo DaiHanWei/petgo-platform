@@ -210,6 +210,14 @@ public class SecurityConfig {
                         // AC1 明写"仅对登录用户开放"，它靠落进默认的 authenticated 规则实现，
                         // 而不是再写一条规则（少动一次安全配置就少一次出错机会）。
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/pet").permitAll()
+                        // V1.3.4 follow Story 1.1：关注 / 取关（PUT / DELETE），只给 USER。
+                        // ⚠️ 不加这条会落到 anyRequest().authenticated()，兽医 token 也能以同号用户名义关注。
+                        .requestMatchers("/api/v1/users/*/follow").hasRole("USER")
+                        // V1.3.4 follow Story 2.2：关注 / 粉丝列表，游客可看（与 /profile 同口径）。精确路径，不写通配。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/*/following").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/users/*/followers").permitAll()
+                        // V1.3.4 follow Story 2.3：推荐关注，仅 role=USER（controller 把 sub 当 users.id 用，同 /me 端点）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/me/follow-suggestions").hasRole("USER")
                         // Toko 商品只读对游客可见（V1.4.0 Story 1.1，FR-93A）：GET 商品列表/详情放行。
                         // 与 FR-78「未登录点击非落地 Tab 触发登录引导」有意不同——商品浏览是转化漏斗
                         // 最上层，登录墙会直接杀掉转化；登录引导推迟到「加入购物车」（Story 3.6）。
@@ -220,6 +228,13 @@ public class SecurityConfig {
                         // banner 在转化漏斗最上层，用登录墙拦它没有任何意义。
                         // 只读；配置走 /admin/shop/banners，不在此放行。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/banner").permitAll()
+                        // 运营弹窗（V1.3.4 Story 5.1，AD-14）：候选列表游客可读（ALL 人群弹窗面向游客）；
+                        // controller 只认 role=USER 识别登录用户，VET token 按游客处理。
+                        // 曝光上报只给登录用户：游客频次在设备本地（AD-15）；兽医 token 的 sub=vetId
+                        // 与 users.id 撞号，落 authenticated() 会以同号用户名义写曝光 → 显式 hasRole USER。
+                        // 🔴 两条都是精确路径，不写 /api/v1/ops-popups/** 通配；写接口属 admin 主题（D-2）。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/ops-popups/candidates").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/ops-popups/*/impressions").hasRole("USER")
                         // 行政区划树（Story 2.4）：区划与是否可配送都不敏感，
                         // 且用户在注册前就该能看到「你们送不送我这儿」。
                         .requestMatchers(HttpMethod.GET, "/api/v1/shop/regions").permitAll()

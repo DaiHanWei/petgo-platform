@@ -46,4 +46,27 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    /**
+     * 运营通知发送专用执行器（V1.3.4 Story 6.2 · AC6 · D-19 / D-20）。
+     *
+     * <p><b>单线程</b>：同一时刻只发一个活动——逐人同步推送本身就是限速，单线程保证两个全量活动不会叠加
+     * 打爆腾讯 IM 频控；后来者排队。
+     *
+     * <p><b>满则丢弃无妨</b>：抢占（PENDING → SENDING 条件更新）在<b>执行线程内</b>做，被丢弃的任务从未抢占，
+     * 活动仍是 PENDING，下一轮扫描（60 秒）再投——不会留下卡在 SENDING 的活动。
+     * ⚠ 同 {@link #analyticsExecutor}：依赖 {@code spring.task.execution.mode=force}，不得改动。
+     * 调用点使用限定符 {@code @Async("opsNotificationExecutor")}。
+     */
+    @Bean("opsNotificationExecutor")
+    public TaskExecutor opsNotificationExecutor() {  // 单线程：同一时刻只发一个活动，天然限速；后来者排队
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("ops-notify-");
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(100);
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.DiscardPolicy()); // 丢了也无妨：仍是 PENDING，下一轮扫描再投
+        executor.initialize();
+        return executor;
+    }
 }

@@ -57,7 +57,7 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
      * 渲染到页面上出现 {@code expected} 为止（最多约 5 秒）。
      *
      * <p>🔴 建档那条里程碑由 {@code MilestoneAutoCompleteListener} 在 AFTER_COMMIT 后 <b>@Async</b> 完成 ——
-     * 建完档立刻渲染，异步任务可能还没跑完，页面是「0 / 31」。CI 机器稍慢就撞上（2026-09-25 PR #39 实际红过一次，
+     * 建完档立刻渲染，异步任务可能还没跑完，页面是「0 / 33」。CI 机器稍慢就撞上（2026-09-25 PR #39 实际红过一次，
      * 同一提交的另一次运行是绿的）。等异步落定再断言，而不是赌时序。
      */
     private String renderUntil(String token, String expected) throws Exception {
@@ -193,21 +193,21 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
     }
 
     /**
-     * AC2：总数按物种取常量目录（猫 <b>31</b>），<b>不是</b>视觉稿里那个示意的 30。
+     * AC2：总数按物种取常量目录（猫 <b>33</b>，V1.3.4 +C-S17/C-S18），<b>不是</b>视觉稿里那个示意的 30。
      *
      * <p>⚠️ <b>刚建的档案不是「零里程碑」</b>：建档动作本身会自动完成 C-S1
-     * （{@code Profil dibuat}，SYSTEM_AUTO），所以新档案一进来就是 <b>1 / 31</b>。
+     * （{@code Profil dibuat}，SYSTEM_AUTO），所以新档案一进来就是 <b>1 / 33</b>。
      * 换句话说 <b>E2 零态屏在真实系统里几乎不会自然出现</b> —— 只有存量老档案（roster 尚未物化）
      * 或数据异常才会是 0。零态本身由 L0 的 {@code CardPageControllerTest} 覆盖。
      */
     @Test
     void freshProfileShowsOneCompletedAndCatalogTotal() throws Exception {
         // 等异步的建档里程碑落定（见 renderUntil）
-        String html = renderUntil(createProfileAndGetToken(newUser()), "1 / 31");
+        String html = renderUntil(createProfileAndGetToken(newUser()), "1 / 33");
 
         assertThat(html)
-                .as("里程碑总数应取常量目录的 31（猫），不是视觉稿示意的 30")
-                .contains("1 / 31");
+                .as("里程碑总数应取常量目录的 33（猫），不是视觉稿示意的 30")
+                .contains("1 / 33");
         // 建档那条里程碑的印尼语标题（不是中文，也不是 code）
         assertThat(html).contains("Profil dibuat");
         // 有里程碑 → 票根第三列「Tonggak」出现
@@ -232,8 +232,8 @@ class CardPageRenderIntegrationTest extends ApiIntegrationTest {
         String html = render(p.getCardToken());
         assertThat(html).contains("Lihat cerita X");
         assertThat(html).doesNotContain("··");
-        // 通用物种总数是 16；建档自动完成 1 条 → 1 / 16
-        assertThat(html).contains("1 / 16");
+        // 通用物种总数是 18（V1.3.4 +G-S10/G-S11）；建档自动完成 1 条 → 1 / 18
+        assertThat(html).contains("1 / 18");
     }
 
     // ===== L2 视觉验收（2026-08-17）实测发现的两个缺陷，各配一条回归 =====

@@ -25,6 +25,7 @@ class IdCardData {
     this.maritalStatus,
     this.school,
     this.faculty,
+    this.createdAt,
   });
 
   final bool generated;
@@ -60,6 +61,10 @@ class IdCardData {
   /// 学生卡专属快照（bug 20260730-429）。null = 渲染趣味默认。
   final String? school;
   final String? faculty;
+
+  /// 建卡时刻（V1.3.4 ktp D-5 / AD-7）：护照签发 / 到期日、SIM 签发日由它派生（按手机本地日期，T-4）。
+  /// 快照卡由 [IdCard.toIdCardData] 传入；建卡页预览（未落库）与旧单卡端点为 null → 卡面取当天。
+  final DateTime? createdAt;
 
   factory IdCardData.fromJson(Map<String, dynamic> json) {
     return IdCardData(
@@ -112,8 +117,10 @@ class IdCard {
     this.occupation,
     this.maritalStatus,
     this.cardType,
+    this.cardVariant,
     this.school,
     this.faculty,
+    this.numberReused = false,
   });
 
   /// 卡自身主键（授权态内部用；详情端点 `GET /pet-profiles/me/id-cards/{id}` 寻址）。
@@ -152,9 +159,16 @@ class IdCard {
   /// 卡种 KTP/PASSPORT/STUDENT（bug 20260730-430：一卡一面）。旧后端/存量卡 null → 视同 KTP。
   final String? cardType;
 
+  /// 学生卡配色 wire 值 BINTANG/MALAM/CERIA/KLASIK（V1.3.4 ktp）。非学生卡、旧后端为 null。
+  final String? cardVariant;
+
   /// 学生卡专属快照（bug 20260730-429）。null = 渲染趣味默认。
   final String? school;
   final String? faculty;
+
+  /// 建卡响应专属（V1.3.4 ktp AD-4）：新卡是否沿用了已解锁学生卡的编号（埋点 `number_reused`）。
+  /// 列表 / 详情响应无此键 → false；Epic 2 前后端恒 false。
+  final bool numberReused;
 
   factory IdCard.fromJson(Map<String, dynamic> json) {
     return IdCard(
@@ -176,6 +190,8 @@ class IdCard {
       occupation: json['occupation'] as String?,
       maritalStatus: json['maritalStatus'] as String?,
       cardType: json['cardType'] as String?,
+      cardVariant: json['cardVariant'] as String?,
+      numberReused: json['numberReused'] as bool? ?? false,
       school: json['school'] as String?,
       faculty: json['faculty'] as String?,
     );
@@ -204,6 +220,7 @@ class IdCard {
         maritalStatus: maritalStatus,
         school: school,
         faculty: faculty,
+        createdAt: createdAt,
       );
 }
 
@@ -218,12 +235,12 @@ class CreateIdCardRequest {
     this.birthday,
     this.gender,
     this.avatarUrl,
-    this.intro,
     this.birthCity,
     this.address,
     this.occupation,
     this.maritalStatus,
     this.cardType,
+    this.cardVariant,
     this.school,
     this.faculty,
   });
@@ -234,7 +251,6 @@ class CreateIdCardRequest {
   final DateTime? birthday;
   final String? gender;
   final String? avatarUrl;
-  final String? intro;
 
   /// 卡面趣味字段（bug 20260729-409）。null/空 = 后端落 null → 渲染趣味默认。
   final String? birthCity;
@@ -244,6 +260,9 @@ class CreateIdCardRequest {
 
   /// 卡种 KTP/PASSPORT/STUDENT（bug 20260730-430：建卡即绑定单卡面）。null → 后端默认 KTP。
   final String? cardType;
+
+  /// 学生卡配色 BINTANG/MALAM/CERIA/KLASIK（V1.3.4 ktp）。非学生卡 null（不发该键）；学生卡缺省后端落 KLASIK。
+  final String? cardVariant;
 
   /// 学生卡专属（bug 20260730-429）。null/空 = 后端落 null → 渲染趣味默认。
   final String? school;
@@ -256,12 +275,12 @@ class CreateIdCardRequest {
         if (birthday != null) 'birthday': _isoDate(birthday!),
         if (gender != null) 'gender': gender,
         if (avatarUrl != null) 'avatarUrl': avatarUrl,
-        if (intro != null) 'intro': intro,
         if (birthCity != null) 'birthCity': birthCity,
         if (address != null) 'address': address,
         if (occupation != null) 'occupation': occupation,
         if (maritalStatus != null) 'maritalStatus': maritalStatus,
         if (cardType != null) 'cardType': cardType,
+        if (cardVariant != null) 'cardVariant': cardVariant,
         if (school != null) 'school': school,
         if (faculty != null) 'faculty': faculty,
       };

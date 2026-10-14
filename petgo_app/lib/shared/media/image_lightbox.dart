@@ -662,11 +662,15 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
         // 否则用户会以为原图就是这么糊。失败态撤掉它（L6：纯黑底）。
         if (!_failed.contains(i))
           // L5：模糊底图压到 0.7，让「还没清晰」与原图淡入的反差更明显。
+          // ClipRect：sigma 12 的模糊会向图外扩散约 36px，不裁的话在黑底上成一圈光晕，
+          // 且原图盖上来后仍露在原图四周（UI 稿 A8/B2/B3 无光晕）。裁到缩略图自身区域即与原图同框。
           Opacity(
             opacity: 0.7,
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: AppImage.widget(url, fit: BoxFit.contain, thumbWidth: _thumbWidth),
+            child: ClipRect(
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: AppImage.widget(url, fit: BoxFit.contain, thumbWidth: _thumbWidth),
+              ),
             ),
           ),
         AppImage.widget(
@@ -778,7 +782,12 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
           child: Container(
             width: 34,
             height: 34,
-            decoration: const BoxDecoration(color: Colors.black38, shape: BoxShape.circle),
+            // 1px 白 12% 描边（UI 稿 `.lb-x` outline）：纯黑底上只有 black38 圆底时圆钮不可见。
+            decoration: BoxDecoration(
+              color: Colors.black38,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0x1FFFFFFF)),
+            ),
             child: const Icon(Icons.close_rounded, size: 17, color: Colors.white),
           ),
         ),
@@ -793,10 +802,18 @@ class _ImageLightboxState extends State<ImageLightbox> with SingleTickerProvider
         decoration: BoxDecoration(
           color: Colors.black38,
           borderRadius: BorderRadius.circular(999),
+          // 同 ✕：1px 白 12% 描边（UI 稿 `.lb-pg` outline），黑底上才看得出胶囊。
+          border: Border.all(color: const Color(0x1FFFFFFF)),
         ),
         child: Text(
-          '${_current + 1}/$_count',
-          style: const TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w500),
+          // UI 稿 `.lb-pg`：「1 / 3」带空格 + 等宽数字。
+          '${_current + 1} / $_count',
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+            fontFeatures: [FontFeature.tabularFigures()],
+          ),
         ),
       );
 }
