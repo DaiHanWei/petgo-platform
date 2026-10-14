@@ -37,6 +37,9 @@ class FollowListIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private VetTestSupport vets;
 
+    @Autowired
+    private com.tailtopia.social.service.FollowListQueryService lists;
+
     private void link(User follower, User followee, Instant at) {
         jdbc.update("INSERT INTO user_follows (follower_id, followee_id, created_at) VALUES (?, ?, ?)",
                 follower.getId(), followee.getId(), java.sql.Timestamp.from(at));
@@ -198,5 +201,26 @@ class FollowListIntegrationTest extends ApiIntegrationTest {
         hideService.block(owner2.getId(), viewer.getId());
         assertThat(ids(page("/api/v1/users/" + owner2.getPublicToken() + "/following",
                 userBearer(viewer.getId()), null))).containsExactly(other.getId());
+    }
+
+    /** I-3：官方号（ADMIN）的关注 / 粉丝列表只给本人；游客与其他用户 403，本人（服务层）200。 */
+    @Test
+    void officialAccountListsAreClosedExceptToOwner() throws Exception {
+        long n = SEQ.incrementAndGet();
+        User official = users.save(User.newAdmin("official-list-" + n + "@t.test", "官方" + n, "{bcrypt}x"));
+        User fan = newUser();
+        link(fan, official, Instant.now());
+        link(official, fan, Instant.now());
+        for (String suffix : new String[] {"/followers", "/following"}) {
+            String path = "/api/v1/users/" + official.getPublicToken() + suffix;
+            mvc.perform(get(path)).andExpect(status().isForbidden());
+            mvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, userBearer(fan.getId())))
+                    .andExpect(status().isForbidden());
+        }
+        // 本人：ADMIN 无法登录 App，故在服务层验证（viewerId == ownerId 放行）。
+        assertThat(lists.followers(official.getPublicToken(), official.getId(), null).items()).hasSize(1);
+        assertThat(lists.following(official.getPublicToken(), official.getId(), null).items()).hasSize(1);
+        // 普通用户的列表不受影响。
+        assertThat(page("/api/v1/users/" + fan.getPublicToken() + "/following", null, null).get("items")).hasSize(1);
     }
 }

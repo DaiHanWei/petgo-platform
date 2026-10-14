@@ -70,11 +70,12 @@ public class AccountQueryService {
         return users.findActiveOfficialIds();
     }
 
-    /** 该账号是否「有效的普通用户」（role=USER、未注销、未封号）。 */
+    /** 该账号是否「有效的真实普通用户」（role=USER、account_type=REAL、未注销、未封号；VIRTUAL 马甲不算）。 */
     @Transactional(readOnly = true)
     public boolean isActiveRegularUser(long userId) {
         return users.findById(userId)
-                .map(u -> u.getRole() == Role.USER && u.getDeletedAt() == null
+                .map(u -> u.getRole() == Role.USER && u.getAccountType() == AccountType.REAL
+                        && u.getDeletedAt() == null
                         && u.getStatus() == UserStatus.ACTIVE)
                 .orElse(false);
     }

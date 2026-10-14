@@ -135,4 +135,37 @@ class OfficialAutoFollowIntegrationTest extends ApiIntegrationTest {
         }
         assertThat(rows(u.getId(), official.getId())).isEqualTo(1);
     }
+
+    private User newVirtualUser() {
+        long n = SEQ.incrementAndGet();
+        User v = users.save(User.newVirtual("virtual-sub-" + n, "马甲" + n, null, 1L));
+        return v;
+    }
+
+    @Test
+    void virtualUserNotAutoFollowedOnSignup() {
+        User official = newOfficial();
+        User v = newVirtualUser();
+        autoFollow.followOfficialAccounts(v.getId());
+        assertThat(rows(v.getId(), official.getId())).isZero();
+    }
+
+    /** I-2：重跑迁移的回填段（INSERT + UPDATE），VIRTUAL 不得被回填，REAL 被回填。 */
+    @Test
+    void backfillSqlExcludesVirtualUsers() throws Exception {
+        User official = newOfficial();
+        User real = newUser();
+        User virt = newVirtualUser();
+        String sql = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/resources/db/migration/V20261014_1600__following_feed_official_follow.sql"));
+        String backfill = sql.substring(sql.indexOf("INSERT INTO user_follows"));
+        for (String stmt : backfill.split(";\\s*\\n")) {
+            if (stmt.replaceAll("--[^\\n]*", "").isBlank()) {
+                continue;
+            }
+            jdbc.execute(stmt);
+        }
+        assertThat(rows(real.getId(), official.getId())).isEqualTo(1);
+        assertThat(rows(virt.getId(), official.getId())).isZero();
+    }
 }

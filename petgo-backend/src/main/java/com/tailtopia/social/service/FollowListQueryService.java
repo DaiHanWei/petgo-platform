@@ -1,6 +1,7 @@
 package com.tailtopia.social.service;
 
 import com.tailtopia.auth.dto.AuthorView;
+import com.tailtopia.auth.domain.Role;
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.auth.service.AccountQueryService;
 import com.tailtopia.shared.error.AppException;
@@ -80,6 +81,10 @@ public class FollowListQueryService {
         User owner = accounts.findActiveByPublicToken(ownerToken)
                 .orElseThrow(() -> AppException.notFound("用户不存在"));
         long ownerId = owner.getId();
+        // I-3：官方号（ADMIN）的关注 / 粉丝列表只给本人，对外只给数字（V1.3.4 终审 · 选项 B）。
+        if (owner.getRole() == Role.ADMIN && (viewerId == null || viewerId != ownerId)) {
+            throw AppException.forbidden("该账号的关注列表不对外开放");
+        }
         if (viewerId != null && hideRelations.isBlocked(viewerId, ownerId)) {
             throw AppException.blockedUser("你已拉黑该用户");
         }
