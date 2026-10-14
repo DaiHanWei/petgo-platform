@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import '../../../shared/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -597,16 +598,23 @@ class _Badge extends ConsumerWidget {
               lockedFallback: (_) => _art(false),
             ),
             const SizedBox(height: 6),
-            Text(
-              localizedMilestoneTitle(item.code, Localizations.localeOf(context)),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                height: 1.15,
-                color: completed ? AppColors.ink : AppColors.muted,
-                fontWeight: completed ? FontWeight.w700 : FontWeight.w500,
+            // UI 稿 `.ms-b`（宽 64、不限行数）：长单词（「kepribadian」≈70 /「Petualangan」≈74）
+            // 在浏览器里不拆词、居中溢出 64。这里同口径：徽章占位仍是 64（Wrap 网格不变），
+            // 文字可向两侧各借半个间距（共 64 + 12 = 76，容得下现有最长单词），行数放到 3（稿里最多 3 行）。
+            OverflowBox(
+              maxWidth: _size + AppSpacing.md,
+              fit: OverflowBoxFit.deferToChild,
+              child: Text(
+                localizedMilestoneTitle(item.code, Localizations.localeOf(context)),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  height: 1.15,
+                  color: completed ? AppColors.ink : AppColors.muted,
+                  fontWeight: completed ? FontWeight.w700 : FontWeight.w500,
+                ),
               ),
             ),
           ],

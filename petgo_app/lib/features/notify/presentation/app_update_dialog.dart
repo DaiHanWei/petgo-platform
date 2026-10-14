@@ -104,19 +104,23 @@ class AppUpdateDialog extends StatelessWidget {
           Text(
             forced ? l10n.updateForceTitle : l10n.updateRecommendTitle,
             textAlign: TextAlign.center,
+            // 稿 `.ud b` 写 19px，但稿用的系统无衬线比 Poppins 窄约 12%：Poppins 19 下
+            // 「Perlu pembaruan untuk lanjut」宽 ≈295 > 卡内 272 折成两行。按稿的「一行」视觉宽度
+            // （≈265）换算成 Poppins 17（≈264），C2 / C5 标题与稿一样单行。
             style: const TextStyle(
-              fontSize: 19,
+              fontSize: 17,
               fontWeight: FontWeight.w700,
               color: AppColors.ink,
               height: 1.3,
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+            // 同标题：稿的系统字体比 Poppins 窄，13 下整句约 290 > 卡内 272 仍折行（C5），收到 12、去掉左右缩进
+            padding: const EdgeInsets.fromLTRB(0, 8, 0, 0),
             child: Text(
               forced ? l10n.updateForceBody : l10n.updateRecommendBody,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 13.5, color: AppColors.ink2, height: 1.5),
+              style: const TextStyle(fontSize: 12, color: AppColors.ink2, height: 1.5),
             ),
           ),
           const SizedBox(height: 12),
@@ -148,7 +152,7 @@ class AppUpdateDialog extends StatelessWidget {
                   backgroundColor: AppColors.mint,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  textStyle: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+                  textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14.5, fontWeight: FontWeight.w700),
                 ),
                 onPressed: () {
                   // 强制态：跳商店后弹窗**不关闭**（用户从商店回来仍被拦住）。
@@ -169,7 +173,7 @@ class AppUpdateDialog extends StatelessWidget {
                 key: const ValueKey('appUpdateLater'),
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.ink2,
-                  textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w600),
                 ),
                 onPressed: () {
                   Navigator.of(context).pop();

@@ -260,6 +260,8 @@ class NotificationCenterServiceTest {
         assertThat(items.get(1).title()).isEqualTo("u3 membalas komentarmu");
         assertThat(items.get(1).body()).isEqualTo("balas");
         assertThat(items.get(2).body()).isEqualTo("Komentar telah dihapus");
+        assertThat(items.get(2).bodyDeleted()).as("评论已删除 → App 按稿灰色斜体").isTrue();
+        assertThat(items.get(0).bodyDeleted()).as("正常评论不下发该字段").isNull();
         assertThat(items.get(3).body()).as("comment_id 为空 → body null").isNull();
     }
 

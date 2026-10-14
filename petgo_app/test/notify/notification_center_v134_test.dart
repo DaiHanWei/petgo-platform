@@ -185,9 +185,9 @@ void main() {
     final keys = ['today', 'yesterday', 'last7Days', 'last30Days', 'earlier'];
     final ys = [for (final k in keys) tester.getTopLeft(find.byKey(ValueKey('notificationGroup_$k'))).dy];
     expect(ys, orderedEquals([...ys]..sort()));
-    expect(find.text(l10n.notifyGroupYesterday), findsOneWidget);
-    expect(find.text(l10n.notifyGroupLast7Days), findsOneWidget);
-    expect(find.text(l10n.notifyGroupLast30Days), findsOneWidget);
+    expect(find.text(l10n.notifyGroupYesterday.toUpperCase()), findsOneWidget);
+    expect(find.text(l10n.notifyGroupLast7Days.toUpperCase()), findsOneWidget);
+    expect(find.text(l10n.notifyGroupLast30Days.toUpperCase()), findsOneWidget);
   });
 
   testWidgets('AC1：空组不显示', (tester) async {

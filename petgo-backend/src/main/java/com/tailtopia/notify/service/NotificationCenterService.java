@@ -256,16 +256,18 @@ public class NotificationCenterService {
         String body = null;
         Boolean iFollow = null;
         Boolean followsMe = null;
+        boolean bodyDeleted = false;
         if (n.getType() == NotificationType.CONTENT_COMMENTED && n.getCommentId() != null) {
             NotificationCommentSnapshot c = snapshots.get(n.getCommentId());
-            body = c == null || c.gone() ? copy.commentDeleted(locale) : c.body();
+            bodyDeleted = c == null || c.gone();
+            body = bodyDeleted ? copy.commentDeleted(locale) : c.body();
         } else if (n.getType() == NotificationType.USER_FOLLOWED) {
             FollowState f = states.getOrDefault(s.latestActorId(), FollowState.NONE);
             iFollow = f.iFollow();
             followsMe = f.followsMe();
         }
         return NotificationItem.rendered(n, title, body, s.latestActorId(), s.latestNickname(), s.latestToken(),
-                s.total(), iFollow, followsMe);
+                s.total(), iFollow, followsMe, bodyDeleted);
     }
 
     /** 标记单条已读（token 定位，仅本人，否则 404 防枚举）+ 角标递减（不低于 0）。 */

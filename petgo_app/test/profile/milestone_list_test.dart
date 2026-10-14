@@ -116,6 +116,24 @@ void main() {
     expect(artOf('C-S6'), 'assets/milestone/locked.webp');
   });
 
+  /// UI 稿 F3/F4 `.ms-b`：徽章占位 64 不变，名称可向两侧借半个间距（76）、最多 3 行 ——
+  /// 「Kenal kepribadian」这类长单词不再被拆在词中间或截断。
+  testWidgets('徽章名：占位仍 64，文字最宽 76、最多 3 行', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(500, 2600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(_wrap());
+    await tester.pumpAndSettle();
+
+    final badge = find.byKey(const ValueKey('milestoneBadge_C-S1'));
+    expect(tester.getSize(badge).width, 64);
+    final box = tester.widget<OverflowBox>(
+        find.descendant(of: badge, matching: find.byType(OverflowBox)));
+    expect(box.maxWidth, 76);
+    final label = tester.widget<Text>(
+        find.descendant(of: find.byWidget(box), matching: find.byType(Text)));
+    expect(label.maxLines, 3);
+  });
+
   testWidgets('点击未完成非打卡徽章 → P-33b 只读说明（无打卡按钮）', (tester) async {
     await tester.binding.setSurfaceSize(const Size(500, 2600));
     addTearDown(() => tester.binding.setSurfaceSize(null));

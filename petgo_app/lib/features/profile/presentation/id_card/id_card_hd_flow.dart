@@ -11,6 +11,7 @@ import '../../data/id_card_repository.dart';
 import '../../domain/id_card.dart';
 import '../../domain/id_card_style.dart';
 import 'hd_paywall_sheet.dart';
+import 'id_card_ui_style.dart';
 import 'ktp_unlock_analytics.dart';
 
 /// 付费抽屉的入口（V1.3.4 ktp AD-10）。`wire` 即埋点 `entry` 属性值。
@@ -99,7 +100,7 @@ Future<IdCardHdFlowResult> openIdCardHdPaywall(
       entry: entry.wire, method: channel, priceIdr: priceIdr, cardType: cardType, cardVariant: cardVariant);
   final l10n = AppLocalizations.of(context);
   final messenger = ScaffoldMessenger.of(context);
-  void toast(String msg) => messenger.showSnackBar(SnackBar(content: Text(msg)));
+  void toast(String msg) => messenger.showSnackBar(idCardSnackBar(msg));
 
   void invalidateUnlocked() {
     container.invalidate(idCardDetailProvider(card.id));

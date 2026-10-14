@@ -3,45 +3,104 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/colors.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/pet_breeds.dart';
+import 'id_card_ui_style.dart';
 
 /// 身份证建卡表单专用的物种 / 品种下拉（V1.3.4 ktp Story 1.7，AD-9 / FR-142D.3，UI 稿 D7）。
 ///
 /// 与档案页共享的 `SpeciesField` / `BreedField`（弹底部抽屉）**无关、不复用**——那两个组件零改动（NFR5）。
-/// 选项在输入框**正下方内联展开**（随抽屉一起滚动，不用 Overlay），当前项打勾；
+/// 选项以**浮层**展开在输入框正下方（UI 稿 D7 `.dd{position:absolute}`：覆盖下方内容、不推挤布局；
+/// [OverlayPortal] + [CompositedTransformFollower]，随抽屉滚动跟随），当前项打勾；
 /// 「同一时刻最多一个展开」由父级用 [expanded] / [onToggle] 统一管理。
 
 const double _kRowHeight = 44;
 
+// 稿 `.in`：圆角 12 · 1.5 描边（line / 展开 mint / `.bad` 红）。
 BoxDecoration _boxDecoration({bool error = false, bool focused = false, bool disabled = false}) => BoxDecoration(
       color: disabled ? AppColors.line2 : AppColors.surface,
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(kIdCardInputRadius),
       border: Border.all(
         color: error ? AppColors.danger : (focused ? AppColors.mint : AppColors.line),
-        width: error || focused ? 1.5 : 1,
+        width: 1.5,
       ),
     );
 
+// 稿 `.dd`：白底 · 圆角 12 · 内边距 4 · 双层阴影，无描边。
 Widget _menu(List<Widget> rows, {double? maxHeight, Key? key}) => Container(
       key: key,
       margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.lineViolet),
-        boxShadow: const [BoxShadow(color: Color(0x142E2A45), blurRadius: 8, offset: Offset(0, 2))],
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(color: Color(0x142E2A45), blurRadius: 2, offset: Offset(0, 1)),
+          BoxShadow(color: Color(0x242E2A45), blurRadius: 24, offset: Offset(0, 8)),
+        ],
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: maxHeight ?? double.infinity),
-        child: ListView(shrinkWrap: true, padding: EdgeInsets.zero, children: rows),
+        // 透明 Material：选中行用 Ink 画 mintTint 底，Ink 画在最近的 Material 上——
+        // 没有这层会画到外层、被本 Container 的白底盖住（稿 `.dd-i.on` 浅紫底不显示）
+        child: Material(
+          type: MaterialType.transparency,
+          child: ListView(shrinkWrap: true, padding: EdgeInsets.zero, children: rows),
+        ),
       ),
     );
+
+/// 把下拉菜单作为浮层挂在输入框正下方（不占布局高度，覆盖下方字段）。
+/// 浮层常驻（[OverlayPortalController.show] 在挂载前调用），[menu] 为 null 时浮层为空。
+class _DropdownAnchor extends StatefulWidget {
+  const _DropdownAnchor({required this.field, required this.menu});
+
+  final Widget field;
+  final Widget? menu;
+
+  @override
+  State<_DropdownAnchor> createState() => _DropdownAnchorState();
+}
+
+class _DropdownAnchorState extends State<_DropdownAnchor> {
+  final _link = LayerLink();
+  final _portal = OverlayPortalController()..show();
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) => OverlayPortal(
+          controller: _portal,
+          overlayChildBuilder: (_) {
+            final menu = widget.menu;
+            if (menu == null) return const SizedBox.shrink();
+            return CompositedTransformFollower(
+              link: _link,
+              showWhenUnlinked: false,
+              targetAnchor: Alignment.bottomLeft,
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: constraints.maxWidth,
+                  child: Material(type: MaterialType.transparency, child: menu),
+                ),
+              ),
+            );
+          },
+          child: CompositedTransformTarget(link: _link, child: widget.field),
+        ),
+      );
+}
 
 Widget _option({required Key key, required String label, required bool selected, required VoidCallback onTap}) =>
     InkWell(
       key: key,
       onTap: onTap,
-      child: SizedBox(
+      borderRadius: BorderRadius.circular(8),
+      // 稿 `.dd-i` / `.dd-i.on`：行高 44 · 圆角 8 · 选中 mintTint 底 + mint 字 w600。
+      child: Ink(
         height: _kRowHeight,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.mintTint : null,
+          borderRadius: BorderRadius.circular(8),
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
@@ -51,7 +110,9 @@ Widget _option({required Key key, required String label, required bool selected,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        color: AppColors.ink, fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+                        fontSize: 14,
+                        color: selected ? AppColors.mint : AppColors.ink,
+                        fontWeight: selected ? FontWeight.w600 : FontWeight.w400)),
               ),
               if (selected) const Icon(Icons.check_rounded, size: 18, color: AppColors.mint),
             ],
@@ -90,39 +151,38 @@ class IdCardSpeciesDropdown extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final opts = options(l10n);
     final current = opts.where((o) => o.$1 == petType).map((o) => o.$2).firstOrNull;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        InkWell(
-          key: const ValueKey('idCardSpeciesField'),
-          onTap: onToggle,
-          child: Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: _boxDecoration(error: error && !expanded, focused: expanded),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(current ?? l10n.petProfileTypePick,
-                      style: TextStyle(color: current == null ? AppColors.muted : AppColors.ink)),
-                ),
-                Icon(expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.muted),
-              ],
-            ),
+    return _DropdownAnchor(
+      field: InkWell(
+        key: const ValueKey('idCardSpeciesField'),
+        onTap: onToggle,
+        borderRadius: BorderRadius.circular(kIdCardInputRadius),
+        child: Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: _boxDecoration(error: error && !expanded, focused: expanded),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(current ?? l10n.petProfileTypePick,
+                    style: TextStyle(color: current == null ? AppColors.muted : AppColors.ink)),
+              ),
+              Icon(expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                  color: expanded ? AppColors.mint : AppColors.muted),
+            ],
           ),
         ),
-        if (expanded)
-          _menu([
-            for (final (wire, label) in opts)
-              _option(
-                key: ValueKey('idCardSpeciesOption_$wire'),
-                label: label,
-                selected: wire == petType,
-                onTap: () => onSelected(wire),
-              ),
-          ]),
-      ],
+      ),
+      menu: expanded
+          ? _menu([
+              for (final (wire, label) in opts)
+                _option(
+                  key: ValueKey('idCardSpeciesOption_$wire'),
+                  label: label,
+                  selected: wire == petType,
+                  onTap: () => onSelected(wire),
+                ),
+            ])
+          : null,
     );
   }
 }
@@ -190,11 +250,7 @@ class _IdCardBreedDropdownState extends State<IdCardBreedDropdown> {
         maxLength: 60,
         onTap: widget.onInputTap,
         onChanged: (_) => widget.onChanged(),
-        decoration: InputDecoration(
-          hintText: l10n.petProfileBreedHint,
-          border: const OutlineInputBorder(),
-          counterText: '',
-        ),
+        decoration: idCardInputDecoration(hintText: l10n.petProfileBreedHint),
       );
 
   @override
@@ -206,7 +262,7 @@ class _IdCardBreedDropdownState extends State<IdCardBreedDropdown> {
         key: const ValueKey('idCardBreedField'),
         height: 48,
         alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: _boxDecoration(disabled: true),
         child: Text(l10n.petProfileBreedNeedType, style: const TextStyle(color: AppColors.muted)),
       );
@@ -220,49 +276,53 @@ class _IdCardBreedDropdownState extends State<IdCardBreedDropdown> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        InkWell(
-          key: const ValueKey('idCardBreedField'),
-          onTap: widget.onToggle,
-          child: Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: _boxDecoration(focused: widget.expanded),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    value.isEmpty ? l10n.petProfileBreedHint : value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: value.isEmpty ? AppColors.muted : AppColors.ink),
+        _DropdownAnchor(
+          field: InkWell(
+            key: const ValueKey('idCardBreedField'),
+            onTap: widget.onToggle,
+            borderRadius: BorderRadius.circular(kIdCardInputRadius),
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: _boxDecoration(focused: widget.expanded),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      value.isEmpty ? l10n.petProfileBreedHint : value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: value.isEmpty ? AppColors.muted : AppColors.ink),
+                    ),
                   ),
-                ),
-                Icon(widget.expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.muted),
-              ],
+                  Icon(widget.expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                      color: widget.expanded ? AppColors.mint : AppColors.muted),
+                ],
+              ),
             ),
           ),
+          menu: widget.expanded
+              ? _menu(
+                  [
+                    for (final b in breeds)
+                      _option(
+                        key: ValueKey('idCardBreedOption_$b'),
+                        label: b,
+                        selected: !_custom && b == value,
+                        onTap: () => _select(b),
+                      ),
+                    _option(
+                      key: const ValueKey('idCardBreedOption_OTHER'),
+                      label: l10n.petProfileBreedOther,
+                      selected: _custom,
+                      onTap: _chooseOther,
+                    ),
+                  ],
+                  maxHeight: _kRowHeight * 5,
+                  key: const ValueKey('idCardBreedMenu'),
+                )
+              : null,
         ),
-        if (widget.expanded)
-          _menu(
-            [
-              for (final b in breeds)
-                _option(
-                  key: ValueKey('idCardBreedOption_$b'),
-                  label: b,
-                  selected: !_custom && b == value,
-                  onTap: () => _select(b),
-                ),
-              _option(
-                key: const ValueKey('idCardBreedOption_OTHER'),
-                label: l10n.petProfileBreedOther,
-                selected: _custom,
-                onTap: _chooseOther,
-              ),
-            ],
-            maxHeight: _kRowHeight * 5,
-            key: const ValueKey('idCardBreedMenu'),
-          ),
         if (_custom) ...[
           const SizedBox(height: 6),
           _customInput(l10n),

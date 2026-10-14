@@ -255,15 +255,25 @@ class PublicProfilePage extends ConsumerWidget {
       padding: const EdgeInsets.all(AppSpacing.screenEdge),
       children: [
         Center(
-          child: CircleAvatar(
-            key: const ValueKey('profileAvatar'),
-            radius: 42,
-            backgroundColor: AppColors.border,
-            backgroundImage: AppImage.provider(p.avatarUrl, thumbWidth: 320),
-            child: (p.avatarUrl == null || p.avatarUrl!.isEmpty)
-                ? const Icon(Icons.person_rounded, size: 42, color: AppColors.textTertiary)
-                : null,
-          ),
+          // UI 稿 A2 `.av.person`：无头像 = 白底 + 1px line 描边（border-box 84）+ 实心 person 52 muted。
+          child: (p.avatarUrl == null || p.avatarUrl!.isEmpty)
+              ? Container(
+                  key: const ValueKey('profileAvatar'),
+                  width: 84,
+                  height: 84,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.line),
+                  ),
+                  child: const Icon(Icons.person_rounded, size: 52, color: AppColors.muted),
+                )
+              : CircleAvatar(
+                  key: const ValueKey('profileAvatar'),
+                  radius: 42,
+                  backgroundColor: AppColors.border,
+                  backgroundImage: AppImage.provider(p.avatarUrl, thumbWidth: 320),
+                ),
         ),
         const SizedBox(height: 12),
         // 运营标签的第五处展示位（前四处：feed / detail / comment / mini_profile）。

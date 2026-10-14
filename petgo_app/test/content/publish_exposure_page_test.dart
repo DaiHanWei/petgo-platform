@@ -118,6 +118,17 @@ void main() {
       expect(next.height, 46);
     });
 
+    /// UI 稿 A1：图左右各留 16；提示句紧贴图正下方（间距 16），不沉到底部按钮上方。
+    testWidgets('布局：图左右留 16，提示句紧贴图下方', (tester) async {
+      await _open(tester, [_wide]);
+      final screen = tester.getRect(find.byType(Scaffold).last);
+      final image = tester.getRect(find.byType(Image).first);
+      final hint = tester.getRect(find.byKey(const ValueKey('exposureHint')));
+      expect(image.left - screen.left, closeTo(16, 0.01));
+      expect(screen.right - image.right, closeTo(16, 0.01));
+      expect(hint.top - image.bottom, closeTo(16, 0.01));
+    });
+
     testWidgets('白框与压暗只落在图片显示范围内', (tester) async {
       await _open(tester, [_wide]);
       final frame = tester.getRect(find.byKey(const ValueKey('exposureFrame_0')));

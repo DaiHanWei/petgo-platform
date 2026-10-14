@@ -218,7 +218,7 @@ void main() {
     testWidgets('AC2：页码胶囊从用户点的那张算起', (tester) async {
       await openLightbox(tester);
       // initialIndex = 1 → 第 2 张。
-      expect(find.text('2/3'), findsOneWidget);
+      expect(find.text('2 / 3'), findsOneWidget);
     });
 
     testWidgets('AC2：单图不显示页码（1/1 是噪音）', (tester) async {
@@ -242,7 +242,7 @@ void main() {
         ),
       ));
       await tester.settleLightbox();
-      expect(find.text('2/2'), findsOneWidget);
+      expect(find.text('2 / 2'), findsOneWidget);
     });
 
     testWidgets('空列表不打开任何页面', (tester) async {

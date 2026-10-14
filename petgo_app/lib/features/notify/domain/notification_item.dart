@@ -17,6 +17,7 @@ class NotificationItem {
     this.actorToken,
     this.actorIFollow,
     this.actorFollowsMe,
+    this.bodyDeleted = false,
     this.opsTarget,
   });
 
@@ -60,6 +61,9 @@ class NotificationItem {
   /// 只对 `USER_FOLLOWED`：该触发人是否仍关注我（T-41，回关按钮三态用）。
   final bool? actorFollowsMe;
 
+  /// 评论已删除：[body] 是后端给的「评论已删除」占位文案，按稿显示灰色斜体（缺键 = false）。
+  final bool bodyDeleted;
+
   /// 「后端文案条目」：四种互动类型且后端给了触发人昵称 —— 只有这类读 [title] / [body]（AC3.2）。
   /// 其余（含无触发人的存量点赞 / 评论，库值是中文兜底串）一律走本地文案。
   bool get hasServerCopy => actorName != null && actorName!.isNotEmpty && serverCopyTypes.contains(type);
@@ -80,6 +84,7 @@ class NotificationItem {
         actorToken: json['actorToken'] as String?,
         actorIFollow: json['actorIFollow'] as bool?,
         actorFollowsMe: json['actorFollowsMe'] as bool?,
+        bodyDeleted: json['bodyDeleted'] == true,
         opsTarget: json['opsTarget'] is Map
             ? OpsTarget.fromJson((json['opsTarget'] as Map).cast<String, dynamic>())
             : null,

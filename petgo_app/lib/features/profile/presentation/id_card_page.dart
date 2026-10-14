@@ -11,6 +11,7 @@ import '../domain/id_card.dart';
 import '../domain/id_card_style.dart';
 import 'id_card/id_card_hd_flow.dart';
 import 'id_card/id_card_style_grid.dart';
+import 'id_card/id_card_ui_style.dart';
 import 'id_card_create_page.dart';
 
 /// 身份证列表页（Story 6-7；V1.3.4 ktp Story 1.5 改双 Tab）。
@@ -195,9 +196,13 @@ class _IdCardPageState extends ConsumerState<IdCardPage> with SingleTickerProvid
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.ink)),
                   const SizedBox(height: 8),
-                  Text(l10n.idCardListEmptyBody,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 13, color: AppColors.ink2, height: 1.5)),
+                  // 稿 B2 `.e-b{ max-width:280px }`。
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 280),
+                    child: Text(l10n.idCardListEmptyBody,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 13, color: AppColors.ink2, height: 1.5)),
+                  ),
                 ],
               ),
             ),
@@ -243,7 +248,14 @@ class _IdCardPageState extends ConsumerState<IdCardPage> with SingleTickerProvid
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
                 ),
                 onPressed: () => ref.invalidate(idCardListProvider),
-                child: Text(l10n.commonRetry, style: const TextStyle(fontWeight: FontWeight.w600)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.refresh_rounded, size: 18),
+                    const SizedBox(width: 6),
+                    Text(l10n.commonRetry, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ],
+                ),
               ),
             ),
           ],
@@ -262,8 +274,7 @@ class _IdCardPageState extends ConsumerState<IdCardPage> with SingleTickerProvid
           width: double.infinity,
           child: FilledButton.icon(
             key: const ValueKey('idCardCreateNewCta'),
-            style: FilledButton.styleFrom(
-                backgroundColor: AppColors.mint, padding: const EdgeInsets.symmetric(vertical: 14)),
+            style: idCardPrimaryButtonStyle(),
             onPressed: () => _tabs.animateTo(0),
             icon: const Icon(Icons.add),
             label: Text(l10n.idCardCreateNewCta),

@@ -92,24 +92,13 @@ class _AppUpdateBannerState extends ConsumerState<AppUpdateBanner> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Container(
+                // UI 稿 C1 `.upd2 .ic`：17 紫色线框图标直接落在浅紫底上，无白色方底。
+                SvgPicture.string(
+                  kUpdatePhoneSvgBanner,
                   key: const ValueKey('appUpdateBannerIcon'),
-                  width: 36,
-                  height: 36,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: const [
-                      BoxShadow(color: Color(0x0F2E2A45), offset: Offset(0, 1), blurRadius: 2),
-                    ],
-                  ),
-                  child: SvgPicture.string(
-                    kUpdatePhoneSvgBanner,
-                    width: 17,
-                    height: 17,
-                    colorFilter: const ColorFilter.mode(AppColors.mint, BlendMode.srcIn),
-                  ),
+                  width: 17,
+                  height: 17,
+                  colorFilter: const ColorFilter.mode(AppColors.mint, BlendMode.srcIn),
                 ),
                 const SizedBox(width: 6),
                 // 不设 maxLines / ellipsis：窄屏宁可折行增高，也不截断标题。

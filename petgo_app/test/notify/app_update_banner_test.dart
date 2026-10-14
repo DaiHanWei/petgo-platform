@@ -184,7 +184,7 @@ void main() {
       expect(title.style?.color, AppColors.ink);
 
       expect(tester.getSize(find.byKey(const ValueKey('appUpdateBannerClose'))), const Size(44, 44));
-      expect(tester.getSize(find.byKey(const ValueKey('appUpdateBannerIcon'))), const Size(36, 36));
+      expect(tester.getSize(find.byKey(const ValueKey('appUpdateBannerIcon'))), const Size(17, 17));
       expect(find.byKey(const ValueKey('appUpdateBannerGoStore')), findsOneWidget);
       expect(find.byIcon(Icons.close_rounded), findsOneWidget);
 

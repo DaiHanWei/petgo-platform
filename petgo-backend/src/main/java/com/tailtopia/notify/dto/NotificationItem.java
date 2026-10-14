@@ -44,7 +44,9 @@ public record NotificationItem(
         @JsonProperty("actorToken") String actorToken,
         @JsonProperty("actorIFollow") Boolean actorIFollow,
         @JsonProperty("actorFollowsMe") Boolean actorFollowsMe,
-        OpsTargetView opsTarget) {
+        OpsTargetView opsTarget,
+        /** 评论条目的评论已被删除（body 为「评论已删除」占位文案）；App 据此按稿显示灰色斜体。其余为 null（不下发）。 */
+        @JsonProperty("bodyDeleted") Boolean bodyDeleted) {
 
     /** 原样返回（系统类 / 存量）：title / body 照搬库值，触发人字段为空。 */
     public static NotificationItem from(Notification n) {
@@ -54,18 +56,21 @@ public record NotificationItem(
     public static NotificationItem from(Notification n, OpsTargetView opsTarget) {
         return new NotificationItem(n.getType().name(), n.getTitle(), n.getBody(),
                 n.getDeepLinkType(), n.getDeepLinkToken(), n.getTargetRef(), n.isRead(), n.getCreatedAt(),
-                null, 0, null, null, null, null, opsTarget);
+                null, 0, null, null, null, null, opsTarget, null);
     }
 
     /**
      * 现拼的互动条目（Story 3.3）：{@code title / body} 覆盖库值，其余字段照原样。互动条目没有 opsTarget。
      *
      * @param iFollow / followsMe 只对 USER_FOLLOWED 传值，其余类型传 null
+     * @param bodyDeleted 评论已删除（body 是占位文案）时 true
      */
     public static NotificationItem rendered(Notification n, String title, String body, long actorUserId,
-            String actorName, String actorToken, int actorCount, Boolean iFollow, Boolean followsMe) {
+            String actorName, String actorToken, int actorCount, Boolean iFollow, Boolean followsMe,
+            boolean bodyDeleted) {
         return new NotificationItem(n.getType().name(), title, body,
                 n.getDeepLinkType(), n.getDeepLinkToken(), n.getTargetRef(), n.isRead(), n.getCreatedAt(),
-                actorName, actorCount, actorUserId, actorToken, iFollow, followsMe, null);
+                actorName, actorCount, actorUserId, actorToken, iFollow, followsMe, null,
+                bodyDeleted ? Boolean.TRUE : null);
     }
 }

@@ -552,7 +552,7 @@ class _NotificationCenterPageState
           if (items.isEmpty) {
             return EmptyState(
               key: const ValueKey('notificationEmpty'),
-              icon: Icons.notifications_none,
+              icon: Icons.notifications_off_outlined, // 稿 D6：静音铃铛
               iconBackground: AppColors.cream2, // 浅紫圆底盘（原型 notif-empty）
               title: l10n.notificationEmpty,
               message: l10n.notificationEmptyHint,
@@ -658,8 +658,9 @@ class _NotificationCenterPageState
   Widget _groupLabel(String text, {Key? key}) => Padding(
     key: key,
     padding: const EdgeInsets.fromLTRB(4, 10, 4, 8),
+    // UI 稿 D1 `.grp`：分组标题全大写显示（arb 文案不改）。
     child: Text(
-      text,
+      text.toUpperCase(),
       style: const TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w700,
@@ -860,9 +861,10 @@ class _NotificationTileState extends State<_NotificationTile> {
     ),
     // 运营通知（V1.3.4 Story 6.3 · UX-DR10 / UI 稿 E2）：紫色图标块 + 喇叭。
     'OPS_ANNOUNCEMENT' => (
-      Icons.campaign_rounded,
+      Icons.campaign_outlined,
       AppColors.mint,
-      AppColors.cream2,
+      // 不用 cream2：与未读条目底色相同，图标块会「消失」（稿 E2 为可见的浅紫块）
+      AppColors.violet100,
     ),
     _ => (Icons.notifications_rounded, AppColors.mint, AppColors.cream2),
   };
@@ -1122,9 +1124,12 @@ class _NotificationTileState extends State<_NotificationTile> {
           Text(
             body,
             key: ValueKey('notificationBody_${widget.item.deepLinkToken ?? widget.item.type}'),
+            // 单行省略按 follow Story 3.4 AC3.4（优先于稿 .nb 的 2 行）；评论已删除按稿 .nb.del：muted 色斜体
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: bodyStyle,
+            style: widget.item.bodyDeleted
+                ? bodyStyle.copyWith(color: AppColors.muted, fontStyle: FontStyle.italic)
+                : bodyStyle,
           ),
         ],
         const SizedBox(height: 6),
@@ -1156,7 +1161,8 @@ class _NotificationTileState extends State<_NotificationTile> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 圆角方形彩色图标块（未读紫点叠在右上角）。
-                _iconBlock(icon, fg, bg, unread),
+                // 稿 E2：运营通知未读时图标块白底（压在 cream2 未读底上才看得清），已读回落 violet100
+                _iconBlock(icon, fg, widget.item.type == 'OPS_ANNOUNCEMENT' && unread ? AppColors.card : bg, unread),
                 const SizedBox(width: 12),
                 Expanded(
                   child: widget.item.hasServerCopy

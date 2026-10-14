@@ -16,6 +16,7 @@ import '../domain/id_card_style.dart';
 import 'id_card/id_card_form.dart';
 import 'id_card/id_card_hd_flow.dart';
 import 'id_card/id_card_pet_type_fields.dart';
+import 'id_card/id_card_ui_style.dart';
 import 'id_card/id_card_watermark.dart';
 import 'id_card/ktp_fields.dart';
 import 'id_card_detail_page.dart';
@@ -110,83 +111,87 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
       body: SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: 12),
+            // 稿 C1：卡面 + 两个描边按钮为一组，在剩余空间内垂直居中；主按钮单独吸底。
             Expanded(
               child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: AspectRatio(
-                    aspectRatio: canvas.width / canvas.height,
-                    // 防截图水印（bug 20260728-383）：建卡预览未付费即可见完整卡面，同样恒盖水印。
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        FittedBox(fit: BoxFit.contain, child: cardFront),
-                        IdCardWatermark(canvas: canvas, canvasRadius: radius),
-                      ],
-                    ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AspectRatio(
+                        aspectRatio: canvas.width / canvas.height,
+                        // 防截图水印（bug 20260728-383）：建卡预览未付费即可见完整卡面，同样恒盖水印。
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            FittedBox(fit: BoxFit.contain, child: cardFront),
+                            IdCardWatermark(canvas: canvas, canvasRadius: radius),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              key: const ValueKey('idCardEditInfo'),
+                              onPressed: _busy ? null : _editInfo,
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              label: Text(l10n.idCardEditInfo),
+                              style: idCardOutlineButtonStyle(),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              key: const ValueKey('idCardEditPhoto'),
+                              onPressed: _busy ? null : _editPhoto,
+                              icon: const Icon(Icons.image_outlined, size: 18),
+                              label: Text(l10n.idCardEditPhoto),
+                              style: idCardOutlineButtonStyle(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      key: const ValueKey('idCardEditInfo'),
-                      onPressed: _busy ? null : _editInfo,
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: Text(l10n.idCardEditInfo),
-                      style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.mint,
-                          side: const BorderSide(color: AppColors.lineViolet, width: 1.5),
-                          padding: const EdgeInsets.symmetric(vertical: 12)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      key: const ValueKey('idCardEditPhoto'),
-                      onPressed: _busy ? null : _editPhoto,
-                      icon: const Icon(Icons.image_outlined, size: 18),
-                      label: Text(l10n.idCardEditPhoto),
-                      style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.mint,
-                          side: const BorderSide(color: AppColors.lineViolet, width: 1.5),
-                          padding: const EdgeInsets.symmetric(vertical: 12)),
-                    ),
-                  ),
-                ],
               ),
             ),
             // 缺必填时按钮置灰，主页面必须给出原因（UI 稿 C4，T-14）——提示不能只藏在编辑抽屉里。
             if (missingText != null)
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-                child: Text(missingText,
-                    key: const ValueKey('idCardCreateMissingHint'),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12, color: AppColors.danger)),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline_rounded, size: 15, color: AppColors.danger),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(missingText,
+                          key: const ValueKey('idCardCreateMissingHint'),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 12, color: AppColors.danger)),
+                    ),
+                  ],
+                ),
               ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              padding: EdgeInsets.fromLTRB(16, missingText != null ? 8 : 10, 16, 12),
               child: SizedBox(
                 width: double.infinity,
                 child: FilledButton(
                   key: const ValueKey('idCardCreateSubmit'),
-                  style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.mint,
-                      padding: const EdgeInsets.symmetric(vertical: 14)),
+                  // 提交中保持紫底 + 白色转圈（稿 C2），只禁点。
+                  style: idCardPrimaryButtonStyle(busy: _busy),
                   onPressed: (missingText != null || _busy) ? null : _create,
                   child: _busy
                       ? const SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : Text(l10n.idCardCreateSubmit,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                      : Text(l10n.idCardCreateSubmit),
                 ),
               ),
             ),
@@ -284,7 +289,8 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    // 页面有 48 高吸底主按钮（+12 间距）：浮动条抬到按钮之上
+    ScaffoldMessenger.of(context).showSnackBar(idCardSnackBar(msg, bottom: 76));
   }
 }
 
@@ -385,12 +391,13 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
     final style = widget.style;
     final fields = idCardOrderedFields(style);
     final maxHeight = MediaQuery.of(context).size.height * 0.9;
+    final keyboard = MediaQuery.of(context).viewInsets.bottom;
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight),
+      padding: EdgeInsets.only(bottom: keyboard),
+      // 稿 .sheet.tall：固定高度（不随字段多少伸缩），中间滚动、「Selesai」固定在底部
+      child: SizedBox(
+        height: (maxHeight - keyboard).clamp(240.0, maxHeight),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 12),
@@ -402,7 +409,7 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
               ),
             ),
             const SizedBox(height: 12),
-            Flexible(
+            Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
                 child: Column(
@@ -425,11 +432,9 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
                   width: double.infinity,
                   child: FilledButton(
                     key: const ValueKey('idCardEditDone'),
-                    style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.mint, padding: const EdgeInsets.symmetric(vertical: 14)),
+                    style: idCardPrimaryButtonStyle(),
                     onPressed: () => Navigator.of(context).pop(_current),
-                    child: Text(l10n.idCardEditDone,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                    child: Text(l10n.idCardEditDone),
                   ),
                 ),
               ),
@@ -455,8 +460,7 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
             maxLength: 60,
             onTap: _closeDropdown,
             onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-                hintText: l10n.petProfileNameHint, border: const OutlineInputBorder(), counterText: ''),
+            decoration: idCardInputDecoration(hintText: l10n.petProfileNameHint),
           ),
         ];
       case IdCardFormField.petType:
@@ -514,10 +518,14 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
           InkWell(
             key: const ValueKey('idCardEditBirthday'),
             onTap: _pickBirthday,
+            borderRadius: BorderRadius.circular(kIdCardInputRadius),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-              decoration:
-                  BoxDecoration(border: Border.all(color: AppColors.line), borderRadius: BorderRadius.circular(6)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              // 稿 `.in` / `.in.bad`：圆角 12 · 1.5 描边，缺生日红框。
+              decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  border: Border.all(color: _birthday == null ? AppColors.danger : AppColors.line, width: 1.5),
+                  borderRadius: BorderRadius.circular(kIdCardInputRadius)),
               child: Row(
                 children: [
                   const Icon(Icons.cake_outlined, size: 18, color: AppColors.muted),
@@ -607,7 +615,7 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
         controller: controller,
         maxLength: maxLength,
         onTap: _closeDropdown,
-        decoration: InputDecoration(hintText: hint, border: const OutlineInputBorder(), counterText: ''),
+        decoration: idCardInputDecoration(hintText: hint),
       );
 
   Widget _label(String text) =>

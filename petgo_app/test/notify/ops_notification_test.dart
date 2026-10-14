@@ -160,14 +160,21 @@ void main() {
       });
     }
 
-    testWidgets('图标：campaign_rounded，图标色 mint、图标块底 cream2', (tester) async {
+    testWidgets('图标：campaign_outlined，图标色 mint；未读图标块白底（稿 E2）', (tester) async {
       await _pump(tester, [_ops()]);
-      final iconFinder = find.byIcon(Icons.campaign_rounded);
+      final iconFinder = find.byIcon(Icons.campaign_outlined);
       expect(iconFinder, findsOneWidget);
       expect(tester.widget<Icon>(iconFinder).color, AppColors.mint);
       final block = tester.widget<Container>(
           find.ancestor(of: iconFinder, matching: find.byType(Container)).first);
-      expect((block.decoration as BoxDecoration).color, AppColors.cream2);
+      expect((block.decoration as BoxDecoration).color, AppColors.card, reason: '未读：白底压在 cream2 上');
+    });
+
+    testWidgets('已读运营通知图标块 violet100（稿 E3）', (tester) async {
+      await _pump(tester, [_ops(read: true)]);
+      final block = tester.widget<Container>(
+          find.ancestor(of: find.byIcon(Icons.campaign_outlined), matching: find.byType(Container)).first);
+      expect((block.decoration as BoxDecoration).color, AppColors.violet100, reason: '已读：白卡上用浅紫块');
     });
 
     testWidgets('未读：cream2 底 + 紫点；已读：card 白底、无紫点', (tester) async {

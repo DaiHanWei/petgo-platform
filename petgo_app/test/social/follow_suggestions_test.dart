@@ -188,7 +188,7 @@ void main() {
         suggestions: suggestions);
 
     expect(find.descendant(of: _hint, matching: find.text(l10n.followListEmptySelfFollowing)), findsOneWidget);
-    expect(find.descendant(of: _hint, matching: find.byIcon(Icons.group)), findsOneWidget);
+    expect(find.descendant(of: _hint, matching: find.byIcon(Icons.group_outlined)), findsOneWidget);
     final hint = tester.widget<Container>(_hint);
     expect((hint.decoration! as BoxDecoration).borderRadius, BorderRadius.circular(14));
     expect(tester.widget<Text>(_title).data, l10n.followSuggestedTitle.toUpperCase());
@@ -201,7 +201,7 @@ void main() {
 
     await _switchTab(tester, 'followListTabFollowers');
     expect(find.descendant(of: _hint, matching: find.text(l10n.followListEmptyFollowers)), findsOneWidget);
-    expect(find.descendant(of: _hint, matching: find.byIcon(Icons.person_add)), findsOneWidget);
+    expect(find.descendant(of: _hint, matching: find.byIcon(Icons.person_add_outlined)), findsOneWidget);
     expect(find.byKey(const ValueKey('followSuggestRow_7')), findsOneWidget);
 
     // AC2.3：两个 Tab 都空 → 共用同一次推荐结果。

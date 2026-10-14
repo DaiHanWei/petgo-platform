@@ -93,7 +93,8 @@ class _FollowListPageState extends ConsumerState<FollowListPage> with SingleTick
         ),
       ),
       body: async.when(
-        loading: () => const BlockedListSkeleton(),
+        // UI 稿 B9 / B10：资料加载中 / 失败也先画 Tab 栏外壳，骨架 / 错误态放在 Tab 内容区。
+        loading: () => _withTabBar(l10n, const BlockedListSkeleton(rows: 7, divided: true)),
         error: (e, _) => _profileError(l10n, e),
         data: (p) {
           final token = p.userToken;
@@ -125,7 +126,15 @@ class _FollowListPageState extends ConsumerState<FollowListPage> with SingleTick
     );
   }
 
-  /// UI 稿 `.tabs`：14 号、未选 w500 muted、选中 w600 ink + 3px 品牌紫下划线、底部 1px 分隔线；不带数量。
+  /// Tab 栏 + 内容区（资料尚未就绪时的外壳）。
+  Widget _withTabBar(AppLocalizations l10n, Widget content) => Column(
+        children: [
+          _tabBar(l10n),
+          Expanded(child: content),
+        ],
+      );
+
+  /// UI 稿 `.tabs`：14 号 w600、未选 muted、选中 ink + 3px 品牌紫下划线（整 Tab 宽）、底部 1px 分隔线；不带数量。
   Widget _tabBar(AppLocalizations l10n) => Container(
         decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: AppColors.line)),
@@ -135,11 +144,11 @@ class _FollowListPageState extends ConsumerState<FollowListPage> with SingleTick
           labelColor: AppColors.ink,
           unselectedLabelColor: AppColors.muted,
           labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          unselectedLabelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          unselectedLabelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           indicator: const UnderlineTabIndicator(
             borderSide: BorderSide(color: AppColors.mint, width: 3),
           ),
-          indicatorSize: TabBarIndicatorSize.label,
+          indicatorSize: TabBarIndicatorSize.tab,
           dividerHeight: 0,
           tabs: [
             Tab(key: const ValueKey('followListTabFollowing'), text: l10n.followStatFollowing),
@@ -157,7 +166,7 @@ class _FollowListPageState extends ConsumerState<FollowListPage> with SingleTick
     if (problem?.status == 404) {
       return _pageEmpty(const ValueKey('followListNotFound'), Icons.person_off_outlined, l10n.profileNotFound);
     }
-    return _ListError(onRetry: () => ref.invalidate(publicProfileProvider(widget.userId)));
+    return _withTabBar(l10n, _ListError(onRetry: () => ref.invalidate(publicProfileProvider(widget.userId))));
   }
 
   Widget _pageEmpty(Key key, IconData icon, String message) => Center(
@@ -245,7 +254,7 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
       },
       child: async.when(
         skipLoadingOnRefresh: true,
-        loading: () => const BlockedListSkeleton(),
+        loading: () => const BlockedListSkeleton(rows: 7, divided: true),
         // 🔴 绝不把请求错误画成空态（bug 20260625-088）。
         error: (_, _) => _ListError(onRetry: () => ref.invalidate(followListControllerProvider(_key))),
         // Story 2.3 AC2：我自己的空列表换成「提示条 + 推荐」；别人的空列表保持普通空态（UI 稿 B8）。
@@ -380,7 +389,7 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
           ),
           child: Row(
             children: [
-              Icon(following ? Icons.group : Icons.person_add, size: 28, color: AppColors.mint),
+              Icon(following ? Icons.group_outlined : Icons.person_add_outlined, size: 28, color: AppColors.mint),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -444,7 +453,7 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
   }
 }
 
-/// 失败态（拉黑列表同款）：标题 + 正文 + 描边「Coba lagi」，只重拉当前 Tab。
+/// 失败态（UI 稿 B10 `.center.top`）：顶距 120、间距 12；标题 18 w600 + 正文 14 ink2 + `.obtn` 描边「Coba lagi」。
 class _ListError extends StatelessWidget {
   const _ListError({required this.onRetry});
 
@@ -459,15 +468,23 @@ class _ListError extends StatelessWidget {
       children: [
         const SizedBox(height: 120),
         Text(l10n.blockedListLoadFailed, textAlign: TextAlign.center, style: AppTypography.title),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: AppSpacing.md),
         Text(l10n.blockedListLoadFailedBody,
             textAlign: TextAlign.center,
-            style: AppTypography.body.copyWith(color: AppColors.textSecondary)),
+            style: AppTypography.body.copyWith(fontSize: 14, color: AppColors.textSecondary)),
         const SizedBox(height: AppSpacing.lg),
         Center(
           child: OutlinedButton(
             key: const ValueKey('followListRetry'),
             onPressed: onRetry,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.mint,
+              side: const BorderSide(color: AppColors.mint, width: 1.5),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 24),
+              // 稿 .obtn 继承 body：Poppins 15 w700。按钮 textStyle 不合并主题字体，必须显式写 family，否则退成 Roboto
+              textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 15, fontWeight: FontWeight.w700),
+            ),
             child: Text(l10n.feedRetry),
           ),
         ),

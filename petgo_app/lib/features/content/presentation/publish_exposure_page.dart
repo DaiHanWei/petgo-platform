@@ -85,18 +85,32 @@ class _PublishExposurePageState extends State<PublishExposurePage> {
                 controller: _pager,
                 itemCount: widget.images.length,
                 onPageChanged: (i) => setState(() => _current = i),
-                itemBuilder: (context, i) => LayoutBuilder(
-                  builder: (context, c) => Center(child: _canvas(i, c.maxWidth, c.maxHeight, l10n)),
+                // UI 稿 A1–A4：图左右各留 16，提示句紧贴图正下方（间距 16），两者作为一组在取景区垂直居中。
+                itemBuilder: (context, i) => Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screenEdge),
+                          child: LayoutBuilder(
+                            // 稿 A2：竖图不顶满取景区（约六成高，上下留黑边），封顶 80% 免得贴到标题栏
+                            builder: (context, c) => _canvas(i, c.maxWidth, c.maxHeight * 0.8, l10n),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+                        child: Text(
+                          l10n.publishExposureHint,
+                          key: const ValueKey('exposureHint'),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Color(0xB8FFFFFF), fontSize: 12.5),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-              child: Text(
-                l10n.publishExposureHint,
-                key: const ValueKey('exposureHint'),
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Color(0xB8FFFFFF), fontSize: 12.5),
               ),
             ),
             if (_multi) _strip(),

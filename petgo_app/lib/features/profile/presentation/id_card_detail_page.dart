@@ -15,6 +15,7 @@ import '../data/id_card_repository.dart';
 import '../domain/id_card.dart';
 import '../domain/id_card_style.dart';
 import 'id_card/id_card_hd_flow.dart';
+import 'id_card/id_card_ui_style.dart';
 import 'id_card/id_card_watermark.dart';
 
 /// 单张身份证卡详情（Story 6-7）。渲染冻结快照卡面 + 按卡付费解锁 HD + 保存到相册/分享。
@@ -171,13 +172,15 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
                         //    这样总开关关闭时只需停掉成功后的提示，
                         //    不会出现"按钮承诺了奖励却不发"。
                         label: Text(l10n.idCardShare),
+                        // 稿 G1 `.btn.out`：胶囊 · 1.5 lineViolet 描边 · mint 粗体。
+                        style: idCardOutlineButtonStyle(),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: FilledButton.icon(
                         key: const ValueKey('idCardHdButton'),
-                        style: FilledButton.styleFrom(backgroundColor: AppColors.mint),
+                        style: idCardPrimaryButtonStyle(busy: _hdBusy),
                         onPressed: _hdBusy ? null : () => _onDownloadHd(card),
                         icon: _hdBusy
                             ? const SizedBox(
@@ -185,7 +188,7 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
                                 height: 18,
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.download),
+                            : const Icon(Icons.download_outlined),
                         label: Text(card.hdUnlocked ? l10n.idCardDownloadHd : l10n.idCardUnlockHd),
                       ),
                     ),
@@ -416,6 +419,6 @@ class _IdCardDetailPageState extends ConsumerState<IdCardDetailPage> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(idCardSnackBar(msg));
   }
 }
