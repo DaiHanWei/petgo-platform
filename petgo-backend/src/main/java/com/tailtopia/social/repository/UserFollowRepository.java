@@ -31,6 +31,18 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, UserFoll
             """, nativeQuery = true)
     int insertIfAbsent(@Param("followerId") long followerId, @Param("followeeId") long followeeId);
 
+    /**
+     * 系统自动关注（官方号，V1.3.4）：同 {@link #insertIfAbsent}，但 {@code source='SYSTEM'}，不占每日新增上限。
+     * 返回实际插入行数（0 / 1），调用方只在返回 1 时改计数。
+     */
+    @Modifying
+    @Query(value = """
+            INSERT INTO user_follows (follower_id, followee_id, created_at, source)
+            VALUES (:followerId, :followeeId, now(), 'SYSTEM')
+            ON CONFLICT (follower_id, followee_id) DO NOTHING
+            """, nativeQuery = true)
+    int insertSystemIfAbsent(@Param("followerId") long followerId, @Param("followeeId") long followeeId);
+
     /** 取关：返回实际删除行数（0 / 1）。调用方只在返回 1 时改计数。 */
     @Modifying
     @Query(value = "DELETE FROM user_follows WHERE follower_id = :followerId AND followee_id = :followeeId",
@@ -40,10 +52,11 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, UserFoll
     boolean existsByFollowerIdAndFolloweeId(long followerId, long followeeId);
 
     /**
-     * 某人自 {@code since} 起新建、<b>且仍存在</b>的关注行数（每日新增上限，AD-4 / T-3）。
+     * 某人自 {@code since} 起新建、<b>且仍存在</b>的<b>用户主动</b>（{@code source='USER'}）关注行数
+     * （每日新增上限，AD-4 / T-3；系统自动关注官方号不计）。
      * 走 {@code idx_user_follows_follower_created}。
      */
-    @Query(value = "SELECT count(*) FROM user_follows WHERE follower_id = :followerId AND created_at >= :since",
+    @Query(value = "SELECT count(*) FROM user_follows WHERE follower_id = :followerId AND created_at >= :since AND source = 'USER'",
             nativeQuery = true)
     long countCreatedSince(@Param("followerId") long followerId, @Param("since") Instant since);
 
