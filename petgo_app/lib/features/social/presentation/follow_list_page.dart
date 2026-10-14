@@ -8,7 +8,6 @@ import '../../../core/theme/colors.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../../shared/widgets/letter_avatar.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../user_profile/data/public_profile_repository.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
@@ -16,7 +15,8 @@ import '../data/follow_suggestion_repository.dart';
 import '../domain/follow_list_item.dart';
 import 'blocked_list_skeleton.dart';
 import 'follow_list_controller.dart';
-import 'widgets/follow_button.dart';
+import 'widgets/follow_user_row.dart';
+import 'widgets/suggested_follow_list.dart';
 
 /// 关注 / 粉丝列表页（V1.3.4 follow · Story 2.2 · UI 稿 B1 / B3 / B7 ~ B10）。
 ///
@@ -211,9 +211,6 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
   /// AC7.1：同一页面实例内同一 Tab 只报一次 `follow_list_viewed`（首页数据到达后）。
   bool _reported = false;
 
-  /// Story 2.3 AC4.1（T-23）：同一页面实例内同一 Tab 只报一次 `suggested_follow_shown`（推荐区至少 1 行时）。
-  bool _suggestedReported = false;
-
   FollowListKey get _key => (token: widget.token, tab: widget.tab);
 
   /// AD-7：我自己的 Mengikuti 列表 = 常驻位置（三态常显、取关后该行保留）。
@@ -303,63 +300,14 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
         ),
       );
 
-  /// 一行（列表与推荐共用，Story 2.3 AC2.1）。[surfaceKey] / [persistent] / [source] 缺省为列表行的取值。
-  Widget _row(
-    AppLocalizations l10n,
-    FollowListItem item, {
-    String? surfaceKey,
-    bool? persistent,
-    String source = 'follow_list',
-  }) {
-    final name = item.deleted ? l10n.feedDeletedUser : (item.nickname ?? l10n.feedDeletedUser);
-    final token = item.userToken;
-    final identity = Row(
-      children: [
-        LetterAvatar(url: item.deleted ? null : item.avatarUrl, name: name, deleted: item.deleted, size: 40),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.body.copyWith(fontWeight: FontWeight.w600)),
-        ),
-      ],
-    );
-    // 注销行：不可点、无按钮；自己那一行 / 我拉黑的人：无按钮（AC4 / AC5）。
-    final showButton = !item.deleted && !item.self && !item.blockedByMe && token != null;
-    return Padding(
-      key: ValueKey(surfaceKey == null ? 'followListRow_${item.userId}' : 'followSuggestRow_${item.userId}'),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: item.deleted
-                ? identity
-                : GestureDetector(
-                    key: ValueKey('followListOpen_${item.userId}'),
-                    behavior: HitTestBehavior.opaque,
-                    // T-21：from 记 avatar（PRD 定死三值，不新增）。
-                    onTap: () => openUserProfile(context, ref, item.userId),
-                    child: identity,
-                  ),
-          ),
-          if (showButton) ...[
-            const SizedBox(width: 8),
-            FollowButton(
-              userId: item.userId,
-              userToken: token,
-              initial: item.followState,
-              snapshotEpoch: item.followEpoch,
-              surfaceKey: surfaceKey ?? 'list:${widget.tab.wire}:${widget.ownerId}:${item.userId}',
-              style: FollowButtonStyle.listCompact,
-              persistent: persistent ?? _persistent,
-              source: source,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
+  /// 一行（关注 / 粉丝列表）；推荐行见 [SuggestedFollowList]。
+  Widget _row(AppLocalizations l10n, FollowListItem item) => FollowUserRow(
+        item: item,
+        rowKey: ValueKey('followListRow_${item.userId}'),
+        surfaceKey: 'list:${widget.tab.wire}:${widget.ownerId}:${item.userId}',
+        persistent: _persistent,
+        source: 'follow_list',
+      );
 
   /// Story 2.3 · UI 稿 B4 / B5：我自己的空 Tab = 浅紫提示条 +「Disarankan untukmu」+ 推荐行。
   ///
@@ -367,13 +315,6 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
   /// 推荐行属非常驻位置（AD-7）：点关注后本按钮保留「Mengikuti」可再点取消，行不移除。
   Widget _selfEmpty(AppLocalizations l10n) {
     final following = widget.tab == FollowListTab.following;
-    final suggestions = ref.watch(followSuggestionsProvider);
-    // 2.3 code-review F3：Riverpod 3 的 AsyncError 会带着上一次的值 —— 刷新失败时不能继续显示旧推荐（T-24 失败即隐藏）。
-    final items = suggestions.hasError ? const <FollowListItem>[] : (suggestions.value ?? const <FollowListItem>[]);
-    if (!_suggestedReported && items.isNotEmpty) {
-      _suggestedReported = true;
-      Analytics.capture('suggested_follow_shown');
-    }
     return ListView(
       key: ValueKey('followListSelfEmpty_${widget.tab.wire}'),
       physics: const AlwaysScrollableScrollPhysics(),
@@ -400,37 +341,7 @@ class _FollowListTabViewState extends ConsumerState<_FollowListTabView>
             ],
           ),
         ),
-        if (suggestions.isLoading && !suggestions.hasValue)
-          const SizedBox(
-            key: ValueKey('followSuggestLoading'),
-            height: 320,
-            child: BlockedListSkeleton(),
-          )
-        else if (items.isNotEmpty) ...[
-          Padding(
-            padding: const EdgeInsets.only(top: 16, bottom: 2),
-            child: Text(
-              l10n.followSuggestedTitle.toUpperCase(),
-              key: const ValueKey('followSuggestTitle'),
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
-                color: AppColors.muted,
-              ),
-            ),
-          ),
-          for (var i = 0; i < items.length; i++) ...[
-            if (i > 0) const Divider(height: 1, thickness: 1, color: AppColors.line2),
-            _row(
-              l10n,
-              items[i],
-              surfaceKey: 'suggest:${widget.tab.wire}:${items[i].userId}',
-              persistent: false,
-              source: 'suggested',
-            ),
-          ],
-        ],
+        SuggestedFollowList(source: 'suggested', surfaceScope: 'suggest:${widget.tab.wire}'),
       ],
     );
   }

@@ -837,12 +837,7 @@ class _PetSection extends ConsumerWidget {
   /// 「物种 · 年龄」—— 逐项复用「我的」页那套出口（物种文案 / `formatPetAge`），
   /// **不含品种、不含 diary 数**（diary 数在头像角标上，UI 稿 A2）。
   String _meta(AppLocalizations l10n, PublicProfilePet pet) {
-    final species = switch (pet.petType) {
-      'CAT' => l10n.petTypeCat,
-      'DOG' => l10n.petTypeDog,
-      'OTHER' => l10n.petTypeOther,
-      _ => null,
-    };
+    final species = petSpeciesLabel(l10n, pet.petType);
     return [
       ?species,
       // 不满 1 个月按天表达，避免「0th 0bln」（与档案页同一出口）。
