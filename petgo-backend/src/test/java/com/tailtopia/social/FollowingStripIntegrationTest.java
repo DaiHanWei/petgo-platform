@@ -27,6 +27,9 @@ class FollowingStripIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private UserHideRelationService hideService;
 
+    @Autowired
+    private com.tailtopia.support.VetTestSupport vets;
+
     private final Instant now = Instant.now();
 
     private void link(User follower, User followee, Instant at) {
@@ -110,5 +113,12 @@ class FollowingStripIntegrationTest extends ApiIntegrationTest {
     @Test
     void guestGets401() throws Exception {
         mvc.perform(get("/api/v1/me/following-strip")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void vetTokenIs403() throws Exception {
+        long vetId = vets.newActiveVet("strip-vet-it").getId();
+        mvc.perform(get("/api/v1/me/following-strip").header(HttpHeaders.AUTHORIZATION, vetBearer(vetId)))
+                .andExpect(status().isForbidden());
     }
 }

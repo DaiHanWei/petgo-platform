@@ -31,6 +31,9 @@ class FollowingFeedIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private com.tailtopia.support.VetTestSupport vets;
+
     private ContentPost savePost(long authorId, String text) {
         return posts.save(ContentPost.publish(authorId, ContentType.DAILY, null, text, List.of(), null));
     }
@@ -147,5 +150,12 @@ class FollowingFeedIntegrationTest extends ApiIntegrationTest {
     @Test
     void guestGets401() throws Exception {
         mvc.perform(get(URL)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void vetTokenIs403() throws Exception {
+        long vetId = vets.newActiveVet("feed-vet-it").getId();
+        mvc.perform(get(URL).header(HttpHeaders.AUTHORIZATION, vetBearer(vetId)))
+                .andExpect(status().isForbidden());
     }
 }
