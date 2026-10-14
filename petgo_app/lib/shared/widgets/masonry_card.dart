@@ -347,8 +347,12 @@ class MasonryCard extends StatelessWidget {
           Padding(
             // ⚠️ 下内边距不能是 0：操作行现在是卡片**最后一个**元素，
             //    0 会让图标直接贴上卡间分隔线（原先最后一个是时间那行小字，贴着不明显）。
+            // V1.3.4：点赞数字热区纵向撑高了这一行 ≈12dp，上下内边距各减一半抵消，卡片高度不变。
             padding: const EdgeInsets.fromLTRB(
-                AppSpacing.screenEdge, 10, AppSpacing.screenEdge, 6),
+                AppSpacing.screenEdge,
+                10 - LikeButton.countVerticalHitTrim,
+                AppSpacing.screenEdge,
+                6 - LikeButton.countVerticalHitTrim),
             child: Row(
               children: [
                 LikeButton(

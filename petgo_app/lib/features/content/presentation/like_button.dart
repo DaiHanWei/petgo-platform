@@ -26,6 +26,7 @@ class LikeButton extends ConsumerStatefulWidget {
     this.feedTab,
     this.rankMode,
     this.onSettled,
+    this.expandCountHitArea = true,
   });
 
   final int postId;
@@ -46,6 +47,17 @@ class LikeButton extends ConsumerStatefulWidget {
   /// 数字热区向右多出的透明命中宽度（视觉不变）。调用方据此把后面的间距减掉同样的量，
   /// 使可见间距与拆分前一致。
   static const double countTrailingHitExtent = 12;
+
+  /// 数字热区上下各多出的透明命中高度：数字文本行高约 18，上下各 7 → 总高约 32dp。
+  static const double countVerticalHitPadding = 7;
+
+  /// 数字热区撑高整行 ≈12dp（32 - 图标 20）；Feed 卡片操作行上下内边距各减去这个值的一半，
+  /// 使卡片整体高度、爱心与数字的视觉位置都与拆分前一致。
+  static const double countVerticalHitTrim = 6;
+
+  /// 是否放大数字热区（右 12dp + 上下 6.9dp）。Feed 小卡上数字很小，需要放大（默认 true）；
+  /// 详情页底栏已有 44dp 的外层命中框，传 false 以保持爱心 + 数字原有位置。
+  final bool expandCountHitArea;
 
   /// 埋点 `feed_tab`（V1.1.6 Story 16.5）。只有从 Feed 卡片来时才有值。
   final String? feedTab;
@@ -176,8 +188,13 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
           behavior: HitTestBehavior.opaque,
           onTap: _openLikers,
           child: Padding(
-            padding: const EdgeInsets.only(
-                left: AppSpacing.xs, right: LikeButton.countTrailingHitExtent),
+            padding: widget.expandCountHitArea
+                ? const EdgeInsets.fromLTRB(
+                    AppSpacing.xs,
+                    LikeButton.countVerticalHitPadding,
+                    LikeButton.countTrailingHitExtent,
+                    LikeButton.countVerticalHitPadding)
+                : const EdgeInsets.only(left: AppSpacing.xs),
             // 数字与心形**同步变色**（FR-93）：改前数字恒为次要色，已赞时只有图标变红，
             // 看上去像"没点上"。
             child: Text('$_count', style: AppTypography.caption.copyWith(color: color)),

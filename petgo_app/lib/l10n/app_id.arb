@@ -2604,5 +2604,6 @@
   "followingEmptyBody": "Ikuti orang yang kamu suka, momen dan diary mereka akan muncul di sini.",
   "followingExploreDiscover": "Jelajahi Discover ›",
   "postLikersTitle": "Suka",
-  "postLikersEmpty": "Belum ada yang menyukai"
+  "postLikersEmpty": "Belum ada yang menyukai",
+  "postLikersLoadFailed": "Gagal memuat daftar"
 }

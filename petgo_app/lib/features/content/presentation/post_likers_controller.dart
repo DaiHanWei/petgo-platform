@@ -97,7 +97,11 @@ class PostLikersController extends AsyncNotifier<LikersState> {
   Future<void> retry() async {
     if (!ref.mounted) return;
     ref.invalidateSelf();
-    await future;
+    // 首页再次失败时 future 会抛错，而按钮回调丢弃了返回值 → 未捕获异步异常。
+    // 失败由 provider 的 error 态承载并渲染，这里吞掉。
+    try {
+      await future;
+    } catch (_) {}
   }
 }
 

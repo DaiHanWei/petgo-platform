@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -203,7 +205,7 @@ void main() {
       if (fail) throw _http(500);
       return FollowListPageData(items: [_u(2)]);
     }));
-    expect(find.text(l10n.blockedListLoadFailed), findsOneWidget);
+    expect(find.text(l10n.postLikersLoadFailed), findsOneWidget);
     fail = false;
     await tester.tap(find.byKey(const ValueKey('postLikersRetry')));
     await tester.pumpAndSettle();
@@ -246,5 +248,66 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.cursors, [null, 'c1']);
     expect(find.byKey(const ValueKey('postLikersRow_99')), findsOneWidget);
+  });
+
+  testWidgets('errorRetryFailsAgainNoUnhandledException', (tester) async {
+    final repo = _LikersRepo((_) async => throw _http(500));
+    await _open(tester, repo);
+    await tester.tap(find.byKey(const ValueKey('postLikersRetry')));
+    await tester.pumpAndSettle();
+    expect(repo.cursors.length, 2);
+    expect(find.text(l10n.postLikersLoadFailed), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('scrollDoesNotAutoRetryAfterLoadMoreFailed', (tester) async {
+    final repo = _LikersRepo((cur) async => cur == null
+        ? FollowListPageData(items: [for (var i = 10; i < 30; i++) _u(i)], nextCursor: 'c1', hasMore: true)
+        : throw _http(500));
+    await _open(tester, repo);
+    await tester.drag(find.text(l10n.postLikersTitle), const Offset(0, -400));
+    await tester.pumpAndSettle();
+    await tester.fling(find.byKey(const ValueKey('postLikersRow_12')), const Offset(0, -2000), 3000);
+    await tester.pumpAndSettle();
+    expect(repo.cursors, [null, 'c1']);
+    final retry = find.byKey(const ValueKey('postLikersLoadMoreRetry'));
+    expect(retry, findsOneWidget);
+    // 失败后继续来回滚动：不应再发请求。
+    await tester.fling(find.byType(CustomScrollView), const Offset(0, 300), 1000);
+    await tester.pumpAndSettle();
+    await tester.fling(find.byType(CustomScrollView), const Offset(0, -2000), 3000);
+    await tester.pumpAndSettle();
+    expect(repo.cursors, [null, 'c1']);
+    // 点按钮才重试。
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+    expect(repo.cursors, [null, 'c1', 'c1']);
+  });
+
+  testWidgets('goneWhileCoveredClosesAfterReturn', (tester) async {
+    final second = Completer<FollowListPageData>();
+    await _open(
+        tester,
+        _LikersRepo((cur) => cur == null
+            ? Future.value(FollowListPageData(
+                items: [for (var i = 10; i < 30; i++) _u(i)], nextCursor: 'c1', hasMore: true))
+            : second.future));
+    await tester.drag(find.text(l10n.postLikersTitle), const Offset(0, -400));
+    await tester.pumpAndSettle();
+    await tester.fling(find.byKey(const ValueKey('postLikersRow_12')), const Offset(0, -2000), 3000);
+    await tester.pump();
+    // 翻页请求在途时，在抽屉之上压一个页面。
+    final nav = Navigator.of(tester.element(_sheet), rootNavigator: true);
+    nav.push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('profile'))));
+    await tester.pumpAndSettle();
+    second.completeError(_http(404));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('postLikersSheet'), skipOffstage: false), findsOneWidget, reason: '被盖住时不能 pop 掉别人的页面');
+    nav.pop();
+    await tester.pumpAndSettle();
+    expect(_sheet, findsNothing, reason: '返回后补关，不留空白抽屉');
+    expect(find.byKey(const ValueKey('open')), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
   });
 }

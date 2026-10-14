@@ -4002,5 +4002,7 @@
   "postLikersTitle": "Likes",
   "@postLikersTitle": {"description": "Post likers bottom sheet title (V1.3.4)"},
   "postLikersEmpty": "No likes yet",
-  "@postLikersEmpty": {"description": "Post likers bottom sheet empty state (V1.3.4)"}
+  "@postLikersEmpty": {"description": "Post likers bottom sheet empty state (V1.3.4)"},
+  "postLikersLoadFailed": "Couldn't load the list",
+  "@postLikersLoadFailed": {"description": "Post likers bottom sheet load-failed title (V1.3.4)"}
 }

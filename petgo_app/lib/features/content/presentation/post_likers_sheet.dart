@@ -54,6 +54,18 @@ class _PostLikersSheetState extends ConsumerState<PostLikersSheet> {
   /// 多 pop 一次会把底下的页面也关掉。
   bool _closing = false;
 
+  /// 路由的 isCurrent 变化会触发本方法（ModalRoute.of 建立了依赖）：
+  /// 被别的页面盖住期间已收到 404，等它退出、本抽屉重新成为栈顶后补关，
+  /// 否则返回后会留下一个空白抽屉。
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (ModalRoute.of(context)?.isCurrent != true || _closing) return;
+    if (ref.read(postLikersProvider(widget.postId)).value?.gone == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _close());
+    }
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -63,7 +75,7 @@ class _PostLikersSheetState extends ConsumerState<PostLikersSheet> {
   void _close() {
     if (_closing || !mounted) return;
     final route = ModalRoute.of(context);
-    if (route != null && !route.isCurrent) return;
+    if (route != null && !route.isCurrent) return; // 见 didChangeDependencies
     _closing = true;
     Navigator.of(context).pop();
   }
@@ -78,7 +90,9 @@ class _PostLikersSheetState extends ConsumerState<PostLikersSheet> {
   }
 
   bool _onScroll(ScrollNotification n) {
-    if (n.metrics.axis == Axis.vertical && n.metrics.extentAfter < 300) {
+    // 翻页失败后只能点「重试」按钮，滚动不再自动重试（否则断网时每次滚动都在发请求）。
+    final failed = ref.read(postLikersProvider(widget.postId)).value?.loadMoreFailed ?? false;
+    if (n.metrics.axis == Axis.vertical && n.metrics.extentAfter < 300 && !failed) {
       ref.read(postLikersProvider(widget.postId).notifier).loadMore();
     }
     return false;
@@ -226,7 +240,7 @@ class _PostLikersSheetState extends ConsumerState<PostLikersSheet> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(l10n.blockedListLoadFailed, textAlign: TextAlign.center, style: AppTypography.title),
+            Text(l10n.postLikersLoadFailed, textAlign: TextAlign.center, style: AppTypography.title),
             const SizedBox(height: AppSpacing.lg),
             OutlinedButton(
               key: const ValueKey('postLikersRetry'),

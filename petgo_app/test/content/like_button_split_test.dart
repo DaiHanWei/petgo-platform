@@ -76,7 +76,8 @@ class _Env {
   final _Guide guide;
 }
 
-Future<_Env> _pump(WidgetTester tester, {int count = 3, bool loggedIn = true}) async {
+Future<_Env> _pump(WidgetTester tester,
+    {int count = 3, bool loggedIn = true, bool expand = true}) async {
   final env = _Env(_LikeRepo(), _LikersRepo(), _Guide());
   final container = ProviderContainer(overrides: [
     likeRepositoryProvider.overrideWithValue(env.like),
@@ -99,6 +100,7 @@ Future<_Env> _pump(WidgetTester tester, {int count = 3, bool loggedIn = true}) a
             initialCount: count,
             source: 'feed',
             likersSource: 'feed_card',
+            expandCountHitArea: expand,
           ),
         ),
       ),
@@ -176,8 +178,51 @@ void main() {
     await tester.tap(_count);
     await tester.pumpAndSettle();
     expect(env.guide.hardDialogs, 1);
+    expect(env.guide.lastEntrySource, 'likers');
     expect(_sheet, findsNothing);
     expect(env.likers.calls, 0);
     expect(events.where((e) => e.$1 == 'post_likers_opened'), isEmpty);
+  });
+
+  testWidgets('countHitAreaTallerThanTextAndRowHeightUnchanged', (tester) async {
+    await _pump(tester);
+    final count = tester.getRect(_count);
+    final text = tester.getRect(find.text('3'));
+    expect(count.height, greaterThanOrEqualTo(31.9));
+    // 整个点赞组高度 = 数字热区高度，(32dp) 由卡片上下内边距各减 6 抵消。
+    expect(count.height - 20, closeTo(2 * LikeButton.countVerticalHitTrim, 0.5));
+    // 文字上下 5dp 处仍能点开抽屉。
+    await tester.tapAt(Offset(text.center.dx, text.top - 5));
+    await tester.pumpAndSettle();
+    expect(_sheet, findsOneWidget);
+  });
+
+  testWidgets('countHitBelowTextOpensSheetHeartUnaffected', (tester) async {
+    final env = await _pump(tester);
+    final text = tester.getRect(find.text('3'));
+    await tester.tapAt(Offset(text.center.dx, text.bottom + 5));
+    await tester.pumpAndSettle();
+    expect(_sheet, findsOneWidget);
+    expect(env.like.likeCalls + env.like.unlikeCalls, 0);
+  });
+
+  testWidgets('heartRegionAboveTextLevelStillToggles', (tester) async {
+    final env = await _pump(tester);
+    final heart = tester.getRect(_heart);
+    await tester.tapAt(heart.center);
+    await tester.pumpAndSettle();
+    expect(env.like.likeCalls, 1);
+    expect(_sheet, findsNothing);
+  });
+
+  testWidgets('detailVariantHasNoExtraTrailingOrVerticalHitPadding', (tester) async {
+    await _pump(tester, expand: false);
+    final count = tester.getRect(_count);
+    final text = tester.getRect(find.text('3'));
+    expect(count.right, closeTo(text.right, 0.01), reason: '数字右侧无额外透明热区');
+    expect(count.height, closeTo(text.height, 0.01), reason: '纵向无额外热区');
+    await tester.tap(_count);
+    await tester.pumpAndSettle();
+    expect(_sheet, findsOneWidget);
   });
 }
