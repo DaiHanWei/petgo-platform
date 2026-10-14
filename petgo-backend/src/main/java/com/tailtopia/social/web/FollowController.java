@@ -4,9 +4,11 @@ import com.tailtopia.shared.error.AppException;
 import com.tailtopia.social.dto.FollowListPage;
 import com.tailtopia.social.dto.FollowResultResponse;
 import com.tailtopia.social.dto.FollowSuggestionsResponse;
+import com.tailtopia.social.dto.FollowingStripResponse;
 import com.tailtopia.social.service.FollowListQueryService;
 import com.tailtopia.social.service.FollowService;
 import com.tailtopia.social.service.FollowSuggestionService;
+import com.tailtopia.social.service.FollowingStripService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -35,12 +37,20 @@ public class FollowController {
     private final FollowService follows;
     private final FollowListQueryService lists;
     private final FollowSuggestionService suggestions;
+    private final FollowingStripService strip;
 
     public FollowController(FollowService follows, FollowListQueryService lists,
-            FollowSuggestionService suggestions) {
+            FollowSuggestionService suggestions, FollowingStripService strip) {
         this.follows = follows;
         this.lists = lists;
         this.suggestions = suggestions;
+        this.strip = strip;
+    }
+
+    /** 关注头像排（following 流）：最多 20 个，无分页。 */
+    @GetMapping("/me/following-strip")
+    public FollowingStripResponse followingStrip(@AuthenticationPrincipal Jwt jwt) {
+        return strip.stripFor(currentUserId(jwt));
     }
 
     /** 推荐关注（Story 2.3）：最多 30 行，无分页。 */

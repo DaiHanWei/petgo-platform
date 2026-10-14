@@ -146,6 +146,34 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, UserFoll
     List<Long> findSuggestionIds(@Param("viewerId") long viewerId, @Param("since") Instant since,
             @Param("limit") int limit);
 
+    /**
+     * 关注头像排（V1.3.4 following 流）：我关注的人，按「对我可见的最近一条公开帖」时间倒序（无帖 NULLS LAST），
+     * 再按关注时间倒序、用户 id 倒序。可见口径与 {@code ContentPostRepository.findFollowingFeed} 一致
+     * （未删 / PUBLISHED / PUBLIC / 非我举报过 / 作者不在我的隐藏名单）。排除未注销之外的账号：
+     * {@code deleted_at} 非空或 status 非 ACTIVE，以及我隐藏 / 拉黑的人。
+     */
+    @Query(value = """
+            SELECT u.id
+              FROM user_follows f
+              JOIN users u ON u.id = f.followee_id
+              LEFT JOIN (SELECT p.author_id, max(p.created_at) AS last_at
+                           FROM content_posts p
+                          WHERE p.deleted_at IS NULL
+                            AND p.status = 'PUBLISHED'
+                            AND p.visibility = 'PUBLIC'
+                            AND NOT EXISTS (SELECT 1 FROM content_reports r
+                                             WHERE r.post_id = p.id AND r.reporter_id = :viewerId)
+                          GROUP BY p.author_id) lp ON lp.author_id = u.id
+             WHERE f.follower_id = :viewerId
+               AND u.deleted_at IS NULL
+               AND u.status = 'ACTIVE'
+               AND NOT EXISTS (SELECT 1 FROM user_hide_relations h
+                                WHERE h.holder_id = :viewerId AND h.target_id = u.id)
+             ORDER BY lp.last_at DESC NULLS LAST, f.created_at DESC, u.id DESC
+             LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findStripUserIds(@Param("viewerId") long viewerId, @Param("limit") int limit);
+
     /** 注销清理：删除该用户两个方向的全部关注行，返回删除行数。 */
     @Modifying
     @Query(value = "DELETE FROM user_follows WHERE follower_id = :userId OR followee_id = :userId",
