@@ -308,6 +308,9 @@ class ApiPaths {
   /// 内容发布 + Feed 列表（Story 2.3 / 3.2）。
   static const String contentPosts = '$base/content-posts';
 
+  /// 帖子点赞人列表（V1.3.4）：`GET ?cursor=` → `{items, nextCursor, hasMore}`。
+  static String postLikers(int postId) => '$contentPosts/$postId/likers';
+
   /// 顶置坑位（V1.1.6 Story 4.2）。**独立取数**，与首页分页互不影响。
   static const String contentPinnedSlot = '$base/content-posts/pinned';
 
