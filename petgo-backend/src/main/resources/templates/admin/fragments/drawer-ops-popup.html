@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  运营弹窗新建 / 编辑抽屉（V1.3.4 AB-30）。分组：基本 / 投放 / 内容·印尼文 / 内容·英文 / 跳转。
+  提交：新建 `POST /admin/ops-popups`、编辑 `POST /admin/ops-popups/{token}`（token 不变，频次不重置）。
+  🔴 hx-target 是表单底部自己的错误槽（#ops-popup-form-err），不是抽屉体：422 时表单原样保留、
+     只在底部出一行红字并按 data-error-fields 把对应字段标红；指抽屉体的话整张表单会被一行红字换掉，
+     运营填了二十个字段全白填。成功时 Controller 用 oob 刷列表 + HX-Trigger: admin:drawer-close 关抽屉。
+  🔴 跳转类型 / 人群切换只是显隐（data-show-when，admin-core.js）：隐藏的那几格同时 disabled 不提交，
+     所以「NONE」时根本没有 targetValue 字段，服务端仍按 OpsTargetPolicy 兜底校验。
+  只读账号（仅 config.view）：整张表单包在 disabled 的 fieldset 里，无保存钮。
+  upload-host: ops-popups.html
+    ↑ 本片段的上传控件走 fetch，需要 CSRF meta；片段没有自己的 <head>，meta 来自宿主页。
+-->
+<body>
+<form th:fragment="form" class="opsp-form"
+      th:object="${form}"
+      th:attr="hx-post=${popupToken} == null ? @{/admin/ops-popups} : @{/admin/ops-popups/{t}(t=${popupToken})}"
+      hx-target="#ops-popup-form-err" hx-swap="innerHTML" data-requires-form
+      data-error-fields='{"admin.err.opsPopup.nameRequired":"name","admin.err.opsPopup.nameTooLong":"name",
+        "admin.err.opsPopup.priority":"priority","admin.err.opsPopup.startsAtRequired":"startsAt",
+        "admin.err.opsPopup.startsAtFormat":"startsAt","admin.err.opsPopup.endsAtFormat":"endsAt",
+        "admin.err.opsPopup.window":"startsAt,endsAt","admin.err.opsPopup.audience":"audience",
+        "admin.err.opsPopup.newUserDays":"newUserDays","admin.err.opsPopup.frequency":"frequency",
+        "admin.err.opsPopup.imageIdRequired":"imageUrlId","admin.err.opsPopup.imageIdInvalid":"imageUrlId",
+        "admin.err.opsPopup.imageEnInvalid":"imageUrlEn","admin.err.opsPopup.titleIdTooLong":"titleId",
+        "admin.err.opsPopup.titleEnTooLong":"titleEn","admin.err.opsPopup.bodyIdTooLong":"bodyId",
+        "admin.err.opsPopup.bodyEnTooLong":"bodyEn","admin.err.opsPopup.buttonIdRequired":"buttonTextId",
+        "admin.err.opsPopup.buttonIdTooLong":"buttonTextId","admin.err.opsPopup.buttonEnTooLong":"buttonTextEn",
+        "admin.err.opsPopup.targetType":"targetType","admin.err.opsPopup.targetNoneWithValue":"targetType",
+        "admin.err.opsPopup.targetProduct":"targetValue","admin.err.opsPopup.targetCategory":"targetValue",
+        "admin.err.opsPopup.targetAppPage":"targetValue","admin.err.opsPopup.targetExternal":"targetValue",
+        "admin.err.opsPopup.productUnavailable":"targetValue"}'>
+    <p th:if="${popupToken != null}" class="muted opsp-meta">
+        <span class="badge" th:classappend="${popupStatus == 'ACTIVE'} ? 'badge-ok' : 'badge-muted'"
+              th:text="#{'admin.opsPopups.status.' + ${popupStatus}}">停用</span>
+        <span class="s-mono" th:text="${popupToken}">token</span>
+    </p>
+    <fieldset class="opsp-fieldset" th:disabled="${!canEdit}">
+    <!-- ① 基本 -->
+    <h4 class="opsp-group" th:text="#{admin.opsPopups.group.basic}">基本</h4>
+    <div class="s-form-row">
+        <label class="s-label s-req" for="f-opsp-name" th:text="#{admin.opsPopups.form.name}">名称</label>
+        <div class="s-ctl">
+            <input id="f-opsp-name" type="text" class="inp" th:field="*{name}" maxlength="100" data-requires-text/>
+            <p class="hint" th:text="#{admin.opsPopups.form.nameHint}">仅后台可见，不下发 App。</p>
+        </div>
+    </div>
+    <div class="s-form-row">
+        <label class="s-label" for="f-opsp-priority" th:text="#{admin.opsPopups.form.priority}">优先级</label>
+        <div class="s-ctl">
+            <input id="f-opsp-priority" type="number" min="-100000" max="100000" step="1" class="inp" th:field="*{priority}"/>
+            <p class="hint" th:text="#{admin.opsPopups.form.priorityHint}">同时生效时数值大的先弹；同值取后建的。</p>
+        </div>
+    </div>
+
+    <!-- ② 投放 -->
+    <h4 class="opsp-group" th:text="#{admin.opsPopups.group.delivery}">投放</h4>
+    <div class="s-form-row">
+        <label class="s-label s-req" for="f-opsp-start" th:text="#{admin.opsPopups.form.startsAt}">开始（WIB）</label>
+        <div class="s-ctl">
+            <input id="f-opsp-start" type="datetime-local" class="inp" th:field="*{startsAt}" data-requires-text/>
+        </div>
+    </div>
+    <div class="s-form-row">
+        <label class="s-label" for="f-opsp-end" th:text="#{admin.opsPopups.form.endsAt}">结束（WIB）</label>
+        <div class="s-ctl">
+            <input id="f-opsp-end" type="datetime-local" class="inp" th:field="*{endsAt}"/>
+            <p class="hint" th:text="#{admin.opsPopups.form.endsAtHint}">留空 = 长期有效；填了须晚于开始时间。</p>
+        </div>
+    </div>
+    <div class="s-form-row">
+        <label class="s-label s-req" for="f-opsp-audience" th:text="#{admin.opsPopups.form.audience}">人群</label>
+        <div class="s-ctl">
+            <select id="f-opsp-audience" class="inp" th:field="*{audience}" data-show-switch>
+                <option th:each="a : ${audiences}" th:value="${a}"
+                        th:text="#{'admin.opsPopups.audience.' + ${a}}">全部用户</option>
+            </select>
+        </div>
+    </div>
+    <div class="s-form-row" data-show-when="audience:NEW,OLD"
+         th:hidden="${form.audience == null or form.audience == 'ALL'}">
+        <label class="s-label s-req" for="f-opsp-days" th:text="#{admin.opsPopups.form.newUserDays}">新老分界天数</label>
+        <div class="s-ctl">
+            <input id="f-opsp-days" type="number" min="1" max="3650" step="1" class="inp" th:field="*{newUserDays}"
+                   th:disabled="${form.audience == null or form.audience == 'ALL'}"/>
+            <p class="hint" th:text="#{admin.opsPopups.form.newUserDaysHint}">注册不超过该天数算新用户，超过算老用户。</p>
+        </div>
+    </div>
+    <div class="s-form-row">
+        <label class="s-label s-req" for="f-opsp-freq" th:text="#{admin.opsPopups.form.frequency}">频次</label>
+        <div class="s-ctl">
+            <select id="f-opsp-freq" class="inp" th:field="*{frequency}">
+                <option th:each="q : ${frequencies}" th:value="${q}"
+                        th:text="#{'admin.opsPopups.frequency.' + ${q}}">每人一次</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- ③ 内容 · 印尼文（图、按钮必填） -->
+    <h4 class="opsp-group" th:text="#{admin.opsPopups.group.contentId}">内容 · 印尼文</h4>
+    <div class="s-form-row">
+        <div class="s-label s-req" th:text="#{admin.opsPopups.form.image}">图片</div>
+        <div class="s-ctl" data-error-name="imageUrlId">
+            <div th:replace="~{admin/fragments/drawer-ops-popup :: uploader('f-opsp-imageId', ${existingImages.id})}"></div>
+            <!-- 真正提交的字段；上传控件只是它的可视化编辑器。挂 data-requires-text ⇒ 没图时保存钮是灰的 -->
+            <input type="hidden" id="f-opsp-imageId" th:field="*{imageUrlId}" data-requires-text/>
+        </div>
+    </div>
+    <div th:replace="~{admin/fragments/drawer-ops-popup :: texts('Id', 'f-opsp-titleId', 'f-opsp-bodyId', 'f-opsp-btnId', true)}"></div>
+
+    <!-- ④ 内容 · 英文（全部可空，空则 App 回落印尼文） -->
+    <h4 class="opsp-group" th:text="#{admin.opsPopups.group.contentEn}">内容 · 英文</h4>
+    <p class="hint opsp-group-hint" th:text="#{admin.opsPopups.form.enFallbackHint}">均可留空，空则 App 回落印尼文。</p>
+    <div class="s-form-row">
+        <div class="s-label" th:text="#{admin.opsPopups.form.image}">图片</div>
+        <div class="s-ctl" data-error-name="imageUrlEn">
+            <div th:replace="~{admin/fragments/drawer-ops-popup :: uploader('f-opsp-imageEn', ${existingImages.en})}"></div>
+            <input type="hidden" id="f-opsp-imageEn" th:field="*{imageUrlEn}"/>
+        </div>
+    </div>
+    <div th:replace="~{admin/fragments/drawer-ops-popup :: texts('En', 'f-opsp-titleEn', 'f-opsp-bodyEn', 'f-opsp-btnEn', false)}"></div>
+
+    <!-- ⑤ 跳转：CATEGORY / APP_PAGE 只给下拉不让手填（值必须是枚举名，手填大小写一错就永远不弹） -->
+    <h4 class="opsp-group" th:text="#{admin.opsPopups.group.target}">跳转</h4>
+    <div class="s-form-row">
+        <label class="s-label s-req" for="f-opsp-ttype" th:text="#{admin.opsPopups.form.targetType}">跳转类型</label>
+        <div class="s-ctl">
+            <select id="f-opsp-ttype" class="inp" th:field="*{targetType}" data-show-switch>
+                <option th:each="t : ${targetTypes}" th:value="${t}"
+                        th:text="#{'admin.opsPopups.targetType.' + ${t}}">不跳转</option>
+            </select>
+        </div>
+    </div>
+    <div class="s-form-row" data-show-when="targetType:PRODUCT" th:hidden="${form.targetType != 'PRODUCT'}">
+        <label class="s-label s-req" for="f-opsp-tproduct" th:text="#{admin.opsPopups.form.targetProduct}">商品 token</label>
+        <div class="s-ctl">
+            <input id="f-opsp-tproduct" type="text" class="inp" name="targetValue" maxlength="32"
+                   th:value="${form.targetType == 'PRODUCT'} ? ${form.targetValue} : ''"
+                   th:disabled="${form.targetType != 'PRODUCT'}"/>
+            <p class="hint" th:text="#{admin.opsPopups.form.targetProductHint}">填商品的 token；商品须存在且在售。</p>
+        </div>
+    </div>
+    <div class="s-form-row" data-show-when="targetType:CATEGORY" th:hidden="${form.targetType != 'CATEGORY'}">
+        <label class="s-label s-req" for="f-opsp-tcat" th:text="#{admin.opsPopups.form.targetCategory}">商品分类</label>
+        <div class="s-ctl">
+            <select id="f-opsp-tcat" class="inp" name="targetValue" th:disabled="${form.targetType != 'CATEGORY'}">
+                <option th:each="c : ${categories}" th:value="${c}"
+                        th:selected="${form.targetType == 'CATEGORY' and form.targetValue == c.name()}"
+                        th:text="#{'admin.v130.shopProducts.category.' + ${c}}">主粮</option>
+            </select>
+        </div>
+    </div>
+    <div class="s-form-row" data-show-when="targetType:APP_PAGE" th:hidden="${form.targetType != 'APP_PAGE'}">
+        <label class="s-label s-req" for="f-opsp-tpage" th:text="#{admin.opsPopups.form.targetAppPage}">App 页面</label>
+        <div class="s-ctl">
+            <select id="f-opsp-tpage" class="inp" name="targetValue" th:disabled="${form.targetType != 'APP_PAGE'}">
+                <option th:each="g : ${appPages}" th:value="${g}"
+                        th:selected="${form.targetType == 'APP_PAGE' and form.targetValue == g.name()}"
+                        th:text="#{'admin.opsPopups.appPage.' + ${g}}">首页</option>
+            </select>
+        </div>
+    </div>
+    <div class="s-form-row" data-show-when="targetType:EXTERNAL" th:hidden="${form.targetType != 'EXTERNAL'}">
+        <label class="s-label s-req" for="f-opsp-text" th:text="#{admin.opsPopups.form.targetExternal}">外部链接</label>
+        <div class="s-ctl">
+            <input id="f-opsp-text" type="url" class="inp" name="targetValue" maxlength="512" placeholder="https://"
+                   th:value="${form.targetType == 'EXTERNAL'} ? ${form.targetValue} : ''"
+                   th:disabled="${form.targetType != 'EXTERNAL'}"/>
+        </div>
+    </div>
+    </fieldset>
+    <div class="sticky-footer opsp-foot">
+        <p class="inline-error-slot" id="ops-popup-form-err" aria-live="polite"></p>
+        <button th:if="${canEdit}" type="submit" class="btn btn-primary" disabled data-requires-target
+                th:text="${popupToken} == null ? #{admin.opsPopups.btn.create} : #{admin.common.save}">新建</button>
+    </div>
+</form>
+
+<!--/* 单图上传控件（objectKey 模式，复用 admin-core.js 的 [data-seed-uploader]）。
+       data-max-images=1：弹窗一种语言只有一张图；data-max-bytes=1MB：超限的图根本不发出去（服务端同样拦）。 */-->
+<div th:fragment="uploader(fieldId, existing)" data-seed-uploader data-mode="objectkey" data-max-images="1"
+     th:attr="data-field-main=${fieldId},
+              data-upload-url=@{/admin/ops-popups/images},
+              data-msg-cover=#{admin.opsPopups.form.imageCurrent},
+              data-msg-limit=#{admin.opsPopups.form.imageLimit},
+              data-msg-remove=#{admin.seed.images.remove},
+              data-msg-uploading=#{admin.seed.images.uploading},
+              data-msg-failed=#{admin.seed.upload.failed},
+              data-msg-expired=#{admin.seed.upload.sessionExpired},
+              data-max-bytes=${maxImageBytes},
+              data-msg-too-large=#{admin.seed.upload.tooLarge(1)}">
+    <input type="file" data-seed-file accept="image/jpeg,image/png,image/webp"/>
+    <p class="hint" th:text="#{admin.opsPopups.form.imageHint}">4:5，建议 1080×1350，单张 ≤1MB，右上角留空给关闭按钮。</p>
+    <p class="hint" data-seed-status></p>
+    <div class="seed-thumbs" data-seed-thumbs>
+        <div th:if="${existing != null}" class="seed-thumb" data-seed-thumb
+             th:attr="data-key=${existing.key},data-url=${existing.url}">
+            <img th:src="${existing.url}" alt=""/>
+            <span class="seed-cover" data-seed-cover th:text="#{admin.opsPopups.form.imageCurrent}">当前</span>
+            <button type="button" class="seed-thumb-del" data-seed-del
+                    th:title="#{admin.seed.images.remove}">&times;</button>
+        </div>
+    </div>
+</div>
+
+<!--/* 一种语言的标题 / 正文 / 按钮。lang = Id / En（拼字段名）；btnRequired 只有印尼文为 true。 */-->
+<th:block th:fragment="texts(lang, titleFid, bodyFid, btnFid, btnRequired)">
+    <div class="s-form-row">
+        <label class="s-label" th:for="${titleFid}" th:text="#{admin.opsPopups.form.title}">标题</label>
+        <div class="s-ctl">
+            <input th:id="${titleFid}" type="text" class="inp" maxlength="120"
+                   th:name="'title' + ${lang}" th:value="${lang == 'Id'} ? ${form.titleId} : ${form.titleEn}"/>
+        </div>
+    </div>
+    <div class="s-form-row">
+        <label class="s-label" th:for="${bodyFid}" th:text="#{admin.opsPopups.form.body}">正文</label>
+        <div class="s-ctl">
+            <textarea th:id="${bodyFid}" class="inp" rows="3" maxlength="255"
+                      th:name="'body' + ${lang}" th:text="${lang == 'Id'} ? ${form.bodyId} : ${form.bodyEn}"></textarea>
+        </div>
+    </div>
+    <div class="s-form-row">
+        <label class="s-label" th:classappend="${btnRequired} ? 's-req'" th:for="${btnFid}"
+               th:text="#{admin.opsPopups.form.button}">按钮文案</label>
+        <div class="s-ctl">
+            <input th:id="${btnFid}" type="text" class="inp" maxlength="40"
+                   th:name="'buttonText' + ${lang}"
+                   th:value="${lang == 'Id'} ? ${form.buttonTextId} : ${form.buttonTextEn}"
+                   th:attr="data-requires-text=${btnRequired} ? '' : null"/>
+        </div>
+    </div>
+</th:block>
+</body>
+</html>

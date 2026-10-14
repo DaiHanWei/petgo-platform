@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!--
+  运营弹窗配置页（V1.3.4 AB-30 · FR-137），模板 B · tpl-b-list + 抽屉，结构照 Toko 顶部 Banner 页。
+  App 冷启动进 Diary / Social 时，按人群 / 时间窗 / 频次 / 优先级从「已启用 + 进行中」里最多弹一个 ——
+  列表与 App 取用同序（优先级高的在前），运营一眼看出同时生效时谁压谁。
+  新建 / 编辑收进抽屉（fragments/drawer-ops-popup.html）；抽屉取数复用 GET /admin/ops-popups 本身
+  （?create=1 / ?open=<token> + HX-Request），不新开端点。URL 一律用 public_token。
+  🔴 不做删除（停用即可，保留频次与审计）；不展示曝光 / 点击数（走 PostHog）。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.nav.opsPopups}">运营弹窗 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
+    <!-- 🔴 抽屉里的上传走 fetch，而 /admin/** 那条过滤链**保留 CSRF** —— 少了这两个 meta 就是 403。
+         ⚠️ 不能挪到 layout：业务页只换 body 里那个 div，各页保留自己的 <head>。 -->
+    <meta name="_csrf" th:content="${_csrf?.token}"/>
+    <meta name="_csrf_header" th:content="${_csrf?.headerName}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag" th:with="res='ops-popup'">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.nav.opsPopups}">运营弹窗</h1>
+            <button th:if="${canEdit}" type="button" class="btn btn-primary btn-sm" data-drawer-res="ops-popup"
+                    th:attr="data-drawer-open=@{/admin/ops-popups(create=1)},data-drawer-autoopen=${openCreate} ? 'true' : null"
+                    th:text="#{admin.opsPopups.btn.add}">＋ 新建弹窗</button>
+        </div>
+        <p class="muted" th:text="#{admin.opsPopups.hint}">App 冷启动最多弹一个。</p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <!--/* 行内启用 / 停用的结果槽：成功清空、失败（404 / 422）回填红字。放表格上方 —— 运营刚点完按钮，眼睛就在这儿。
+               不复用抽屉体：抽屉可能正开着另一条的编辑，落进去会冲掉未保存的内容。 */-->
+        <p id="ops-popup-row-error" class="lst-inline-error" aria-live="polite"></p>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{}, ~{}, ~{::opsp-table}, ~{::opsp-drawer})}">
+            <div th:fragment="opsp-table" id="ops-popup-rows">
+                <div th:replace="~{admin/fragments/ops-popups-list :: rows}"></div>
+            </div>
+            <div th:fragment="opsp-drawer" class="drawer-title" th:text="#{admin.nav.opsPopups}">运营弹窗</div>
+        </div>
+        <!--/* ?open=<token> 深链兜底：行按钮走 [data-drawer-open]，但从别处带 ?open= 进来时得有个落点。 */-->
+        <span hidden th:if="${open != null}" data-drawer-res="ops-popup"
+              th:attr="data-drawer-deeplink=@{/admin/ops-popups(open=${open})}"></span>
+    </div>
+</div>
+</body>
+</html>
