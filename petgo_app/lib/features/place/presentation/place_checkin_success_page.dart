@@ -22,12 +22,16 @@ import 'widgets/place_stamp_view.dart';
 
 /// 打卡成功页的入参（经 go_router `extra` 传入）。
 class PlaceCheckinSuccessArgs {
-  const PlaceCheckinSuccessArgs({required this.result, required this.petName});
+  const PlaceCheckinSuccessArgs({required this.result, required this.petName, this.ceremonyPlayed = false});
 
   final PlaceCheckinResult result;
 
   /// 当前唯一宠物的名字（C2「{pet} dapat cap baru」）。
   final String petName;
+
+  /// V1.3.4：刚播过全屏盖章动画（`PlaceStampCeremonyPage`）→ 不再播本页 0.36s 小落章，章面直接终态。
+  /// 再访 / 动画兜底失败为 false，保持原样。
+  final bool ceremonyPlayed;
 }
 
 /// 打卡成功页（V1.3.2 batch-a Story 1.1 · AC5 · UI 稿 C2 / C2b）。
@@ -219,7 +223,10 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
               )
             else ...[
               const SizedBox(height: 12),
-              Center(child: r.isNewStamp ? _NewStamp(result: r) : _RepeatStamp(result: r)),
+              Center(
+                  child: r.isNewStamp
+                      ? _NewStamp(result: r, animate: !args.ceremonyPlayed)
+                      : _RepeatStamp(result: r)),
               const SizedBox(height: 16),
               Text(date == null ? r.placeName : l10n.placeCheckinSuccessPlaceDate(r.placeName, date),
                   textAlign: TextAlign.center,
@@ -233,13 +240,22 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
 }
 
 /// C2：落章轻反馈（缩放 1.25→1.0 + 淡入，一次）。
+///
+/// [animate] 为 false（V1.3.4 刚播过全屏盖章动画）→ 直接终态，不重复落章。
 class _NewStamp extends StatelessWidget {
-  const _NewStamp({required this.result});
+  const _NewStamp({required this.result, this.animate = true});
 
   final PlaceCheckinResult result;
+  final bool animate;
 
   @override
   Widget build(BuildContext context) {
+    if (!animate) {
+      return KeyedSubtree(
+        key: const ValueKey('placeCheckinNewStamp'),
+        child: PlaceStampView(placeType: result.placeType, imageUrl: result.stampImageUrl, size: 112),
+      );
+    }
     return TweenAnimationBuilder<double>(
       key: const ValueKey('placeCheckinNewStamp'),
       tween: Tween(begin: 0, end: 1),

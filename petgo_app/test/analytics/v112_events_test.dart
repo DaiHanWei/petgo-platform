@@ -447,6 +447,11 @@ void main() {
         //    看板按 shown / tapped / closed 三分。上面 `_dismissed` 注释里「刻意不用 `_closed`」针对的是
         //    支付面板（那里关闭 = 放弃），两处口径不冲突。名字由 PRD 定死，扩表、不改名。
         '_closed',
+        // 签到盖章动画结局（V1.3.4 签到盖章动画 · plan Global Constraints 定死 `place_stamp_ceremony_played`）：
+        // `_played` = 动画页**有了结局**才报一次，结局由属性 result 承载（completed / reduce_motion / failed / timeout）。
+        // 🔴 刻意不用 `_viewed`：失败 / 超时时用户并没看到动画；也不用 `_completed`：那会把兜底结局藏进维度。
+        //    名字由计划定死，扩表、不改名。
+        '_played',
       ];
       for (final e in eventNamesInSource()) {
         if (legacyEvents.contains(e)) continue;

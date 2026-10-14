@@ -15,6 +15,7 @@ import '../data/location_service.dart';
 import '../data/place_repository.dart';
 import 'place_checkin_success_page.dart';
 import 'place_comments_controller.dart';
+import 'place_stamp_ceremony_page.dart';
 import 'place_location_controller.dart';
 
 /// 场所详情页的整宽「Check-in」按钮（V1.3.2 batch-a Story 1.1 · AC4）。
@@ -138,9 +139,15 @@ class _PlaceCheckinButtonState extends ConsumerState<PlaceCheckinButton> {
       // 不失效的话「Lihat Paspor」拿到的是缓存的旧护照，看不到新章、也定位不到它。
       container.invalidate(petPassportProvider);
       if (!mounted) return;
+      final placeToken = result.placeToken.isEmpty ? widget.token : result.placeToken;
+      final args = PlaceCheckinSuccessArgs(result: result, petName: pet.name);
+      // V1.3.4 签到盖章动画：新章先进全屏动画页（结束后它 pushReplacement 成功页，返回仍回详情）；
+      // 再访与现状一致，直接成功页。
       context.push(
-        PlaceCheckinSuccessPage.routeFor(result.placeToken.isEmpty ? widget.token : result.placeToken),
-        extra: PlaceCheckinSuccessArgs(result: result, petName: pet.name),
+        result.isNewStamp
+            ? PlaceStampCeremonyPage.routeFor(placeToken)
+            : PlaceCheckinSuccessPage.routeFor(placeToken),
+        extra: args,
       );
     } on DioException catch (e) {
       _onFailure(l10n, e, container);
