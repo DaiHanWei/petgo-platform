@@ -14,6 +14,7 @@ import 'package:tailtopia/core/analytics/att_gate.dart';
 import 'package:tailtopia/core/analytics/firebase_stats.dart';
 import 'package:tailtopia/core/analytics/tiktok_client.dart';
 import 'package:tailtopia/core/l10n/locale_controller.dart';
+import 'package:tailtopia/core/rive/rive_runtime.dart';
 import 'package:tailtopia/core/startup/startup_popup_ledger.dart';
 import 'package:tailtopia/core/storage/prefs.dart';
 import 'package:tailtopia/features/auth/domain/auth_state.dart';
@@ -55,6 +56,10 @@ Future<void> main() async {
 
   // Story 7.2：读持久化语言选择（空/缺失 = 跟随设备）。
   final savedLocale = await _loadSavedLocale();
+
+  // V1.3.4 签到盖章动画：后台初始化 Rive 原生库，**不 await**——只有新章签到才用得上，不能让所有人等首帧；
+  // 失败 / 超时只置「不可用」，签到时由 RiveRuntime.ensureReady 收口兜底。
+  unawaited(RiveRuntime.init());
 
   runApp(ProviderScope(
     overrides: [

@@ -495,8 +495,8 @@ class _DetailScaffold extends ConsumerWidget {
                   } else {
                     openReport(context, ref, detail.id, onReported: () {
                       // cm-6 §6.1：详情页举报成功 → pop 回列表（该帖对本人已不存在，后端详情 404）+ 提示。
-                      // 同步乐观移除 Feed 中的该卡片（若在列表；后端 §5.4 刷新亦已过滤）。
-                      ref.read(feedProvider.notifier).removeItem(detail.id);
+                      // 同步乐观移除 Feed（含 V1.3.4 关注流）中的该卡片（若在列表；后端 §5.4 刷新亦已过滤）。
+                      removeFeedPost(ref, detail.id);
                       if (context.mounted) {
                         showAppToast(context, l10n.reportHiddenToast);
                         Navigator.of(context).maybePop();

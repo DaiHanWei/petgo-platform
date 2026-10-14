@@ -42,6 +42,7 @@ class FeedMasonryView extends ConsumerStatefulWidget {
     this.autoLoadMore = true,
     this.feedTab,
     this.rankMode,
+    this.followSurfacePrefix = 'feed',
   });
 
   final List<FeedItem> items;
@@ -99,6 +100,10 @@ class FeedMasonryView extends ConsumerStatefulWidget {
   /// ⚠️ 非 Feed 场景不传（如「我的发布」复用本组件时）。
   final String? feedTab;
   final String? rankMode;
+
+  /// 卡片关注按钮 surfaceKey 前缀（V1.3.4 following 流）。Discover 用默认 `feed`（与改动前一字不差）；
+  /// 关注流传 `following` —— 同一张帖可能同时挂在两条流上，共用 key 会让一边点关注后另一边也被「钉住」显示。
+  final String followSurfacePrefix;
 
   @override
   ConsumerState<FeedMasonryView> createState() => _FeedMasonryViewState();
@@ -376,7 +381,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
                     ),
               child: MasonryCard(
                 item: widget.items[i],
-                followSurfaceKey: 'feed:item:${widget.items[i].id}',
+                followSurfaceKey: '${widget.followSurfacePrefix}:item:${widget.items[i].id}',
                 deletedUserLabel: widget.deletedUserLabel,
                 // 信息流分享入口（bug 20260826）。走 postId 版：卡面要的正文全文与首图原图
                 // 在流里是裁过的摘要，直接拿它拼卡会与详情页分享出去的不是同一张。

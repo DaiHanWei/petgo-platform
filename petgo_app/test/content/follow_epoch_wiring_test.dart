@@ -19,6 +19,9 @@ import 'package:tailtopia/features/social/domain/follow_state.dart';
 FeedItem _item(int id) => FeedItem(id: id, authorId: 7, authorDeleted: false, type: 'DAILY', createdAt: DateTime.utc(2026));
 
 class _FeedRepo implements FeedRepository {
+  @override
+  Future<FeedPage> getFollowingFeed({String? cursor}) => throw UnimplementedError();
+
   Completer<FeedPage>? pending;
   Completer<PinnedSlot?>? pinned;
 
@@ -177,6 +180,8 @@ void main() {
   test('FeedMasonryView 给顶置卡 / 普通卡分配不同的位置键', () {
     final src = File('lib/features/content/presentation/feed_view.dart').readAsStringSync();
     expect(src, contains("followSurfaceKey: 'feed:pinned:"));
-    expect(src, contains("followSurfaceKey: 'feed:item:"));
+    // V1.3.4 following 流：普通卡前缀可配（Discover 默认 `feed`，关注流 `following`），两条流同帖不串位置。
+    expect(src, contains(r"followSurfaceKey: '${widget.followSurfacePrefix}:item:"));
+    expect(src, contains("this.followSurfacePrefix = 'feed'"));
   });
 }

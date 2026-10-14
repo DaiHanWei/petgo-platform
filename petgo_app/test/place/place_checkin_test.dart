@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +22,7 @@ import 'package:tailtopia/features/place/domain/place_summary.dart';
 import 'package:tailtopia/features/place/presentation/place_checkin_success_page.dart';
 import 'package:tailtopia/features/pet_passport/domain/new_stamp_args.dart';
 import 'package:tailtopia/features/place/presentation/place_detail_page.dart';
+import 'package:tailtopia/features/place/presentation/place_stamp_ceremony_page.dart';
 import 'package:tailtopia/features/profile/data/milestone_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/presentation/milestone_instant_celebration.dart';
@@ -574,9 +576,17 @@ Future<void> _pumpDetail(
   addTearDown(tester.view.reset);
   final router = GoRouter(routes: [
     GoRoute(path: '/', builder: (c, s) => const PlaceDetailPage(token: 'tok')),
+    // V1.3.4：新章先进盖章动画页。测试环境无 Rive 原生库 → 真组件走兜底，直接替换成成功页。
+    GoRoute(
+      path: PlaceStampCeremonyPage.routePattern,
+      builder: (c, s) => PlaceStampCeremonyPage(
+        args: s.extra! as PlaceCheckinSuccessArgs,
+        faceLoader: ({String? url, PlaceType? type}) async => Uint8List.fromList([1, 2, 3]),
+      ),
+    ),
     GoRoute(
       path: PlaceCheckinSuccessPage.routePattern,
-      builder: (c, s) => PlaceCheckinSuccessPage(args: s.extra! as PlaceCheckinSuccessArgs),
+      pageBuilder: (c, s) => PlaceCheckinSuccessPage.pageFor(s, s.extra! as PlaceCheckinSuccessArgs),
     ),
   ]);
   addTearDown(router.dispose);

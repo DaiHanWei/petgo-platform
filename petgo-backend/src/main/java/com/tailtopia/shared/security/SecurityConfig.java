@@ -190,6 +190,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/support/contact").permitAll()
                         // 游客只读放行锚点（Story 1.5 细化具体业务 GET）
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
+                        // V1.3.4 点赞人列表：仅 role=USER（游客 401、兽医 403）。
+                        // ⚠️ 必须排在下方 GET /api/v1/content-posts/** permitAll 之前，否则被通配吞掉。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/content-posts/*/likers").hasRole("USER")
                         // Feed 只读对游客可见（Story 3.2，FR-0A/17）：GET 内容流放行（写仍需 JWT）
                         .requestMatchers(HttpMethod.GET, "/api/v1/content-posts").permitAll()
                         // 内容详情 + 评论只读对游客可见（Story 3.3）：GET 详情/评论/回复放行（写仍需 JWT）
@@ -218,6 +221,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/*/followers").permitAll()
                         // V1.3.4 follow Story 2.3：推荐关注，仅 role=USER（controller 把 sub 当 users.id 用，同 /me 端点）。
                         .requestMatchers(HttpMethod.GET, "/api/v1/me/follow-suggestions").hasRole("USER")
+                        // V1.3.4 following 流：关注头像排，仅 role=USER。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/me/following-strip").hasRole("USER")
+                        // 关注流：同上，不加则兽医 token 以同号用户名义读到关注流。
+                        .requestMatchers(HttpMethod.GET, "/api/v1/me/following-feed").hasRole("USER")
                         // Toko 商品只读对游客可见（V1.4.0 Story 1.1，FR-93A）：GET 商品列表/详情放行。
                         // 与 FR-78「未登录点击非落地 Tab 触发登录引导」有意不同——商品浏览是转化漏斗
                         // 最上层，登录墙会直接杀掉转化；登录引导推迟到「加入购物车」（Story 3.6）。

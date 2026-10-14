@@ -125,11 +125,12 @@ void main() {
       initialLiked: false,
       initialCount: 0,
       source: 'feed',
+      likersSource: 'feed_card',
       feedTab: 'all',
       rankMode: RankMode.recommend,
     ));
 
-    await tester.tap(find.byType(LikeButton));
+    await tester.tap(find.byKey(const ValueKey('likeButton_1')));
     await tester.pumpAndSettle();
 
     expect(propsOf('post_like_tapped'), {
@@ -148,9 +149,10 @@ void main() {
       initialLiked: false,
       initialCount: 0,
       source: 'detail',
+      likersSource: 'content_detail',
     ));
 
-    await tester.tap(find.byType(LikeButton));
+    await tester.tap(find.byKey(const ValueKey('likeButton_2')));
     await tester.pumpAndSettle();
 
     expect(propsOf('post_like_tapped'), {'liked': true, 'source': 'detail'});

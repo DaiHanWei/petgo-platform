@@ -321,8 +321,13 @@ class PublicProfilePage extends ConsumerWidget {
           likeCount: p.likeCount,
           followingCount: p.followingCount,
           followerCount: followers,
-          onFollowingTap: () => context.push(FollowListPage.location(userId, FollowListTab.following)),
-          onFollowersTap: () => context.push(FollowListPage.location(userId, FollowListTab.followers)),
+          // 官方号的关注 / 粉丝列表不对外（服务端 403）：数字照常显示，两格不可点。
+          onFollowingTap: p.official
+              ? null
+              : () => context.push(FollowListPage.location(userId, FollowListTab.following)),
+          onFollowersTap: p.official
+              ? null
+              : () => context.push(FollowListPage.location(userId, FollowListTab.followers)),
         ),
         const SizedBox(height: AppSpacing.md),
         // 主按钮槽位（AC4.5）：自己 → Edit Profil（D-11）；他人 → 关注三态；老后端无 token → 不渲染。
@@ -837,12 +842,7 @@ class _PetSection extends ConsumerWidget {
   /// 「物种 · 年龄」—— 逐项复用「我的」页那套出口（物种文案 / `formatPetAge`），
   /// **不含品种、不含 diary 数**（diary 数在头像角标上，UI 稿 A2）。
   String _meta(AppLocalizations l10n, PublicProfilePet pet) {
-    final species = switch (pet.petType) {
-      'CAT' => l10n.petTypeCat,
-      'DOG' => l10n.petTypeDog,
-      'OTHER' => l10n.petTypeOther,
-      _ => null,
-    };
+    final species = petSpeciesLabel(l10n, pet.petType);
     return [
       ?species,
       // 不满 1 个月按天表达，避免「0th 0bln」（与档案页同一出口）。

@@ -55,6 +55,8 @@ dependencies:
   # FR-44：Apple Sign-In（仅 iOS 展示按钮；真机授权需 iOS「Sign in with Apple」能力，L2 节点）。
   sign_in_with_apple: ^8.0.0
   url_launcher: ^6.3.1
+  # V1.3.4 签到盖章动画（Rive）
+  rive: ^0.14.11
   # Story 1.3：PawCoin 充值二维码本地生成。GemPay 返回 QRIS/EMVCo 串（qrcode），
   # 由本地生成二维码渲染（qrcode_url 是托管网页非图片，不能 Image.network）。
   qr_flutter: ^4.1.0
@@ -161,6 +163,7 @@ flutter:
   # 演示/假数据宠物照片（mock 模式 Feed/详情/档案用，asset: 前缀经 app_image 解析）。
   assets:
     - assets/seed/
+    - assets/rive/
     # Diary 游客引导态的内置示例配图（FR-80 · NFR-5 零网络）。
     # 目前是 assets/seed 的缩图占位（OQ-1 未闭合）；素材到位后同名替换即可，不需改代码。
     - assets/demo_diary/

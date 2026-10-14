@@ -457,6 +457,9 @@ class _CommentComposerState extends ConsumerState<CommentComposer> {
             initialCount: detail.likeCount,
             // 🛡 两个挂载点都必须传来源，否则「首页点赞是净增还是前移」这个对比失效。
             source: 'detail',
+            likersSource: 'content_detail',
+            // 底栏外层已有 44dp 命中框：不再放大数字热区，爱心 + 数字保持拆分前的位置。
+            expandCountHitArea: false,
             // bug 20260923-538：详情页点赞后回写 Feed 快照，返回 Social 不再是旧的点赞态/数。
             onSettled: (liked, count) =>
                 syncFeedCounts(ref, detail.id, liked: liked, likeCount: count),

@@ -18,6 +18,8 @@ const _mustReset = <String>[
   'healthListProvider',
   'myPostsProvider',
   'feedProvider',
+  'followingFeedProvider',
+  'followingStripProvider',
   'unreadCountProvider',
   'idCardListProvider',
   'newbieTasksProvider',

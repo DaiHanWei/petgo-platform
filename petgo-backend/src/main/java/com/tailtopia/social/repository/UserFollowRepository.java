@@ -31,6 +31,18 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, UserFoll
             """, nativeQuery = true)
     int insertIfAbsent(@Param("followerId") long followerId, @Param("followeeId") long followeeId);
 
+    /**
+     * 系统自动关注（官方号，V1.3.4）：同 {@link #insertIfAbsent}，但 {@code source='SYSTEM'}，不占每日新增上限。
+     * 返回实际插入行数（0 / 1），调用方只在返回 1 时改计数。
+     */
+    @Modifying
+    @Query(value = """
+            INSERT INTO user_follows (follower_id, followee_id, created_at, source)
+            VALUES (:followerId, :followeeId, now(), 'SYSTEM')
+            ON CONFLICT (follower_id, followee_id) DO NOTHING
+            """, nativeQuery = true)
+    int insertSystemIfAbsent(@Param("followerId") long followerId, @Param("followeeId") long followeeId);
+
     /** 取关：返回实际删除行数（0 / 1）。调用方只在返回 1 时改计数。 */
     @Modifying
     @Query(value = "DELETE FROM user_follows WHERE follower_id = :followerId AND followee_id = :followeeId",
@@ -40,10 +52,11 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, UserFoll
     boolean existsByFollowerIdAndFolloweeId(long followerId, long followeeId);
 
     /**
-     * 某人自 {@code since} 起新建、<b>且仍存在</b>的关注行数（每日新增上限，AD-4 / T-3）。
+     * 某人自 {@code since} 起新建、<b>且仍存在</b>的<b>用户主动</b>（{@code source='USER'}）关注行数
+     * （每日新增上限，AD-4 / T-3；系统自动关注官方号不计）。
      * 走 {@code idx_user_follows_follower_created}。
      */
-    @Query(value = "SELECT count(*) FROM user_follows WHERE follower_id = :followerId AND created_at >= :since",
+    @Query(value = "SELECT count(*) FROM user_follows WHERE follower_id = :followerId AND created_at >= :since AND source = 'USER'",
             nativeQuery = true)
     long countCreatedSince(@Param("followerId") long followerId, @Param("since") Instant since);
 
@@ -132,6 +145,34 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, UserFoll
             """, nativeQuery = true)
     List<Long> findSuggestionIds(@Param("viewerId") long viewerId, @Param("since") Instant since,
             @Param("limit") int limit);
+
+    /**
+     * 关注头像排（V1.3.4 following 流）：我关注的人，按「对我可见的最近一条公开帖」时间倒序（无帖 NULLS LAST），
+     * 再按关注时间倒序、用户 id 倒序。可见口径与 {@code ContentPostRepository.findFollowingFeed} 一致
+     * （未删 / PUBLISHED / PUBLIC / 非我举报过 / 作者不在我的隐藏名单）。排除未注销之外的账号：
+     * {@code deleted_at} 非空或 status 非 ACTIVE，以及我隐藏 / 拉黑的人。
+     */
+    @Query(value = """
+            SELECT u.id
+              FROM user_follows f
+              JOIN users u ON u.id = f.followee_id
+              LEFT JOIN (SELECT p.author_id, max(p.created_at) AS last_at
+                           FROM content_posts p
+                          WHERE p.deleted_at IS NULL
+                            AND p.status = 'PUBLISHED'
+                            AND p.visibility = 'PUBLIC'
+                            AND NOT EXISTS (SELECT 1 FROM content_reports r
+                                             WHERE r.post_id = p.id AND r.reporter_id = :viewerId)
+                          GROUP BY p.author_id) lp ON lp.author_id = u.id
+             WHERE f.follower_id = :viewerId
+               AND u.deleted_at IS NULL
+               AND u.status = 'ACTIVE'
+               AND NOT EXISTS (SELECT 1 FROM user_hide_relations h
+                                WHERE h.holder_id = :viewerId AND h.target_id = u.id)
+             ORDER BY lp.last_at DESC NULLS LAST, f.created_at DESC, u.id DESC
+             LIMIT :limit
+            """, nativeQuery = true)
+    List<Long> findStripUserIds(@Param("viewerId") long viewerId, @Param("limit") int limit);
 
     /** 注销清理：删除该用户两个方向的全部关注行，返回删除行数。 */
     @Modifying

@@ -10,6 +10,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../../../shared/widgets/app_toast.dart';
 import '../../../auth/domain/auth_guard.dart';
 import '../../../me/data/me_counts_provider.dart';
+import '../../../user_profile/data/public_profile_repository.dart';
 import '../../data/follow_repository.dart';
 import '../../domain/follow_state.dart';
 
@@ -54,6 +55,7 @@ class FollowButton extends ConsumerStatefulWidget {
     this.persistent = false,
     this.idleBackground,
     this.idleBorderColor,
+    this.filledIdle = false,
     this.onTapped,
   });
 
@@ -92,6 +94,10 @@ class FollowButton extends ConsumerStatefulWidget {
 
   /// 仅 [FollowButtonStyle.listCompact]：「Ikuti / Ikuti Balik」态的 1.5px 描边色（缺省无描边）。
   final Color? idleBorderColor;
+
+  /// 仅 [FollowButtonStyle.listCompact]：「Ikuti / Ikuti Balik」态改为实心品牌紫胶囊（高 36、圆角 18、白字 w700）。
+  /// 只给 Following 空状态的推荐行用（UI 稿 A3）；其余用法保持浅紫小芯片。
+  final bool filledIdle;
 
   /// 已登录用户点下按钮那一刻回调（参数 = 这次是关注还是取关），在请求之前。
   /// V1.3.4 Story 3.4：通知中心据此上报 `notification_follow_back_tapped`。游客点击（弹登录）不回调。
@@ -165,12 +171,14 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
 
   /// UI 稿 `.fbtn`（列表行）：高 30、圆角 8、12 号字、最小宽 88。
   Widget _listCompact(String label, {required bool following}) {
-    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
+    final filled = widget.filledIdle && !following;
+    final h = filled ? 36.0 : 30.0;
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(filled ? 18 : 8));
     final text = Text(label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600));
-    const constraints = BoxConstraints(minWidth: 88, minHeight: 30, maxHeight: 30);
+        style: TextStyle(fontSize: filled ? 13 : 12, fontWeight: filled ? FontWeight.w700 : FontWeight.w600));
+    final constraints = BoxConstraints(minWidth: filled ? 78 : 88, minHeight: h, maxHeight: h);
     return ConstrainedBox(
       key: ValueKey('followList_$_surfaceKey'),
       constraints: constraints,
@@ -191,14 +199,14 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
           : FilledButton(
               onPressed: _onTap,
               style: FilledButton.styleFrom(
-                backgroundColor: widget.idleBackground ?? AppColors.violet100,
-                foregroundColor: AppColors.mint,
+                backgroundColor: filled ? AppColors.mint : (widget.idleBackground ?? AppColors.violet100),
+                foregroundColor: filled ? Colors.white : AppColors.mint,
                 side: widget.idleBorderColor == null
                     ? null
                     : BorderSide(color: widget.idleBorderColor!, width: 1.5),
                 shape: shape,
-                minimumSize: const Size(88, 30),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                minimumSize: Size(filled ? 78 : 88, h),
+                padding: EdgeInsets.symmetric(horizontal: filled ? 16 : 12),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               child: text,
@@ -328,6 +336,8 @@ class _FollowButtonState extends ConsumerState<FollowButton> {
       });
       // V1.3.4 Story 1.4（T-15）：我的关注数变了 → 我的页四格重取 `/me`（页面已关也要失效）。
       container.invalidate(meCountsProvider);
+      // 我本人的公开主页（关注列表页在栈里时会一直持有它）同样带 Mengikuti 计数，不失效就停在旧值（验收 FL-30）。
+      if (accountAtTap != null) container.invalidate(publicProfileProvider(accountAtTap));
     } catch (e) {
       // 回滚到点击前那一条覆盖（原样，含版本号；之前没有则删除）。账号已变 → 新表本就是空的，不写。
       if (!sameAccount()) return;

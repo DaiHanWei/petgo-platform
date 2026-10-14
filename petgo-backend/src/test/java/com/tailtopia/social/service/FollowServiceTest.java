@@ -54,10 +54,11 @@ class FollowServiceTest {
     @Mock FollowReader followReader;
     @Mock RedisRateLimiter rateLimiter;
     @Mock ApplicationEventPublisher events;
+    @Mock com.tailtopia.social.repository.OfficialFollowOptoutRepository optouts;
 
     private FollowService service(Instant now) {
         return new FollowService(follows, counters, accounts, hideRelations, followReader, rateLimiter, events,
-                Clock.fixed(now, ZoneOffset.UTC));
+                optouts, Clock.fixed(now, ZoneOffset.UTC));
     }
 
     private void targetExists() {

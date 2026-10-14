@@ -75,6 +75,39 @@ class FollowIntegrationTest extends ApiIntegrationTest {
                 Long.class, followerId, followeeId);
     }
 
+    @Autowired
+    private com.tailtopia.social.repository.UserFollowRepository followRepo;
+
+    @Autowired
+    private org.springframework.transaction.PlatformTransactionManager txManager;
+
+    // ===== 官方号自动关注：SYSTEM 来源行不占每日新增上限 =====
+
+    @Test
+    void systemFollowRowsDoNotCountTowardsDailyLimit() throws Exception {
+        User viewer = newUser();
+        for (int i = 0; i < 5; i++) {
+            User official = newUser();
+            jdbc.update("INSERT INTO user_follows (follower_id, followee_id, source) VALUES (?, ?, 'SYSTEM')",
+                    viewer.getId(), official.getId());
+        }
+        User other = newUser();
+        Instant dayStart = Instant.now().minusSeconds(3600);
+
+        assertThat(followRepo.countCreatedSince(viewer.getId(), dayStart)).isZero();
+        follow(viewer, other.getPublicToken()).andExpect(status().isOk());
+        assertThat(followRepo.countCreatedSince(viewer.getId(), dayStart)).isEqualTo(1);
+
+        User sys = newUser();
+        var tx = new org.springframework.transaction.support.TransactionTemplate(txManager);
+        Integer first = tx.execute(st -> followRepo.insertSystemIfAbsent(viewer.getId(), sys.getId()));
+        assertThat(first).isEqualTo(1);
+        Integer second = tx.execute(st -> followRepo.insertSystemIfAbsent(viewer.getId(), sys.getId()));
+        assertThat(second).isZero();
+        assertThat(jdbc.queryForObject("SELECT source FROM user_follows WHERE follower_id = ? AND followee_id = ?",
+                String.class, viewer.getId(), sys.getId())).isEqualTo("SYSTEM");
+    }
+
     // ===== AC3 · 关注 =====
 
     @Test

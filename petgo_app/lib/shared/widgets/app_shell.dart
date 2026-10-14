@@ -14,6 +14,9 @@ import '../../features/auth/domain/user_state.dart';
 import '../../features/content/domain/home_refresh_provider.dart';
 import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/feed_controller.dart';
+import '../../features/content/presentation/following_feed_controller.dart';
+import '../../features/content/presentation/social_tab.dart';
+import '../../features/social/data/following_strip_repository.dart';
 import '../../features/me/data/me_counts_provider.dart';
 import '../../features/profile/data/timeline_repository.dart';
 import '../../features/profile/domain/profile_tab_entered_provider.dart';
@@ -145,6 +148,14 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
           ref.read(homeScrollTopProvider.notifier).bump();
         }
         ref.read(feedProvider.notifier).refresh();
+        // V1.3.4 following 流：停在 Following 页签时关注流同样重取（spec §2.4「下次进入时才出现」）。
+        // 判 exists：没进过 Following 不为此去建关注流。
+        if (ref.read(authControllerProvider).isLoggedIn &&
+            ref.read(socialTabProvider) == SocialTab.following &&
+            ref.exists(followingFeedProvider)) {
+          ref.invalidate(followingStripProvider);
+          ref.read(followingFeedProvider.notifier).refresh();
+        }
       }
       return;
     }

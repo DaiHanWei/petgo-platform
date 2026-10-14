@@ -208,7 +208,7 @@ class FollowSuggestionIntegrationTest extends ApiIntegrationTest {
         long statements = stats.getPrepareStatementCount();
         stats.setStatisticsEnabled(false);
 
-        assertThat(statements).as("候选 + 展示字段 + token + 关系，固定次数（NFR3）").isLessThanOrEqualTo(4);
+        assertThat(statements).as("候选 + 展示字段 + token + 关系 + 宠物档案，固定次数（NFR3）").isLessThanOrEqualTo(5);
         assertThat(items).extracting(FollowListItem::userId).containsExactly(stranger.getId(), fan.getId());
         for (FollowListItem i : items) {
             assertThat(i.iFollow()).isFalse();
@@ -240,6 +240,48 @@ class FollowSuggestionIntegrationTest extends ApiIntegrationTest {
         for (String key : List.of("userId", "userToken", "iFollow", "followsMe", "blockedByMe", "self", "deleted")) {
             assertThat(first.has(key)).as(key).isTrue();
         }
+    }
+
+    @Test
+    void suggestionCarriesPetTypeAndBirthday() throws Exception {
+        User viewer = newUser();
+        isolate(viewer);
+        User withPet = newUser();
+        User noPet = newUser();
+        publicPost(withPet, now.minus(Duration.ofHours(2)));
+        publicPost(noPet, now.minus(Duration.ofHours(3)));
+        jdbc.update("INSERT INTO pet_profiles (owner_id, pet_type, name, birthday, card_token, created_at,"
+                + " updated_at) VALUES (?, 'DOG', 'Momo', DATE '2024-01-01', ?, now(), now())",
+                withPet.getId(), "sp" + withPet.getId());
+
+        List<FollowListItem> items = service.suggestionsFor(viewer.getId()).items();
+        FollowListItem a = items.stream().filter(x -> x.userId() == withPet.getId()).findFirst().orElseThrow();
+        FollowListItem b = items.stream().filter(x -> x.userId() == noPet.getId()).findFirst().orElseThrow();
+        assertThat(a.petType()).isEqualTo("DOG");
+        assertThat(a.petBirthday()).isEqualTo(java.time.LocalDate.of(2024, 1, 1));
+        assertThat(b.petType()).isNull();
+        assertThat(b.petBirthday()).isNull();
+
+        // HTTP 层：有宠物者带键，无宠物者省略键
+        String body = mvc.perform(get("/api/v1/me/follow-suggestions")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(viewer.getId())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        for (JsonNode n : json.readTree(body).get("items")) {
+            if (n.get("userId").asLong() == withPet.getId()) {
+                assertThat(n.get("petType").asText()).isEqualTo("DOG");
+                assertThat(n.get("petBirthday").asText()).isEqualTo("2024-01-01");
+            } else if (n.get("userId").asLong() == noPet.getId()) {
+                assertThat(n.has("petType")).isFalse();
+                assertThat(n.has("petBirthday")).isFalse();
+            }
+        }
+
+        // 关注列表不输出宠物字段（即便被关注者有宠物）
+        link(viewer, withPet);
+        String fb = mvc.perform(get("/api/v1/users/" + viewer.getPublicToken() + "/following")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(viewer.getId())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(fb).doesNotContain("petType").doesNotContain("petBirthday");
     }
 
     @Test

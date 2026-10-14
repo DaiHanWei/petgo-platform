@@ -308,6 +308,9 @@ class ApiPaths {
   /// 内容发布 + Feed 列表（Story 2.3 / 3.2）。
   static const String contentPosts = '$base/content-posts';
 
+  /// 帖子点赞人列表（V1.3.4）：`GET ?cursor=` → `{items, nextCursor, hasMore}`。
+  static String postLikers(int postId) => '$contentPosts/$postId/likers';
+
   /// 顶置坑位（V1.1.6 Story 4.2）。**独立取数**，与首页分页互不影响。
   static const String contentPinnedSlot = '$base/content-posts/pinned';
 
@@ -353,6 +356,12 @@ class ApiPaths {
 
   /// 推荐关注（V1.3.4 follow · Story 2.3）：我自己的关注 / 粉丝列表为空时展示，最多 30 行、无分页。仅登录用户。
   static const String meFollowSuggestions = '$base/me/follow-suggestions';
+
+  /// 关注流（V1.3.4 following 流）：`GET /me/following-feed?cursor=`，信封同 Discover feed。
+  static const String meFollowingFeed = '$base/me/following-feed';
+
+  /// 关注头像排：`GET /me/following-strip`，最多 20 人。
+  static const String meFollowingStrip = '$base/me/following-strip';
 
   /// 公开主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2）：
   /// 该用户全部 PUBLIC 内容，三类混排、时间倒序、`?cursor=` 游标分页。游客可读。

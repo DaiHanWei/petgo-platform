@@ -14,6 +14,8 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/consult/presentation/consult_refresh.dart';
 import 'package:tailtopia/features/mention/data/mention_candidate_repository.dart';
 import 'package:tailtopia/features/content/presentation/feed_controller.dart';
+import 'package:tailtopia/features/content/presentation/following_feed_controller.dart';
+import 'package:tailtopia/features/social/data/following_strip_repository.dart';
 import 'package:tailtopia/features/me/data/me_counts_provider.dart';
 import 'package:tailtopia/features/me/data/my_posts_repository.dart';
 import 'package:tailtopia/features/me/presentation/phone_edit_sheet.dart';
@@ -365,6 +367,9 @@ void resetUserScopedCaches(WidgetRef ref) {
   // V1.3.4 follow Story 1.4：我的页四格（MePage 在 IndexedStack 常驻，autoDispose 不回收 → 必须登记）。
   ref.invalidate(meCountsProvider);
   ref.invalidate(feedProvider); // 首页 Feed（按新用户宠物状态重过滤）
+  // V1.3.4 following 流：关注流 / 头像排都按当前用户算，换账号必须重取（否则看到上个账号的关注内容）。
+  ref.invalidate(followingFeedProvider);
+  ref.invalidate(followingStripProvider);
   // V1.3.4 follow Story 2.1（code-review #2）：顶置卡带查看者相关的关注 / 点赞快照，换账号不重取会串号。
   ref.invalidate(pinnedSlotProvider);
   ref.invalidate(unreadCountProvider); // 通知铃铛未读角标（bug 20260625-088：换账号防显示上个用户角标）

@@ -305,6 +305,31 @@ public class FeedService {
         }
     }
 
+    /**
+     * 关注流（V1.3.4）：我关注的人的公开帖，纯时间倒序，登录专属。
+     * 🔴 过滤全在 SQL WHERE 内（{@code PAGE_SIZE+1} / hasMore / 游标契约），组装复用 {@link #assemble}。
+     */
+    @Transactional(readOnly = true)
+    public FeedPageResponse loadFollowingFeed(long viewerId, String cursor) {
+        FeedCursor decoded = (cursor == null || cursor.isBlank()) ? null : FeedCursor.decode(cursor);
+        List<ContentPost> rows = posts.findFollowingFeed(
+                viewerId,
+                decoded != null,
+                decoded == null ? null : decoded.createdAt(),
+                decoded == null ? null : decoded.id(),
+                PageRequest.of(0, PAGE_SIZE + 1));
+
+        boolean hasMore = rows.size() > PAGE_SIZE;
+        List<ContentPost> page = hasMore ? rows.subList(0, PAGE_SIZE) : rows;
+
+        String nextCursor = null;
+        if (hasMore && !page.isEmpty()) {
+            ContentPost last = page.get(page.size() - 1);
+            nextCursor = new FeedCursor(last.getCreatedAt(), last.getId()).encode();
+        }
+        return assemble(page, viewerId, nextCursor, hasMore, FeedPageResponse.RANK_MODE_CHRONO);
+    }
+
     /** 告警锚点串（降级链级别 4）。🛡 改动即等于改动告警配置。 */
     static final String RANK_FALLBACK_MARKER = "feed-rank-fallback-to-chrono";
 

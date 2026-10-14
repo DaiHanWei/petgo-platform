@@ -86,6 +86,7 @@ import '../../features/gath/presentation/gath_page.dart';
 import '../../features/place/domain/place_summary.dart';
 import '../../features/place/presentation/place_detail_page.dart';
 import '../../features/place/presentation/place_checkin_success_page.dart';
+import '../../features/place/presentation/place_stamp_ceremony_page.dart';
 import '../../features/boarding_pass/presentation/boarding_pass_detail_page.dart';
 import '../../features/boarding_pass/presentation/boarding_pass_list_page.dart';
 import '../../features/pet_passport/presentation/passport_versions_page.dart';
@@ -610,7 +611,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         redirect: (c, s) => s.extra is PlaceCheckinSuccessArgs
             ? null
             : PlaceDetailPage.routeFor(s.pathParameters['token']!),
-        builder: (c, s) => PlaceCheckinSuccessPage(args: s.extra! as PlaceCheckinSuccessArgs),
+        // V1.3.4：从盖章动画页 pushReplacement 进来（ceremonyPlayed）→ 300ms 淡入，其余默认转场。
+        pageBuilder: (c, s) => PlaceCheckinSuccessPage.pageFor(s, s.extra! as PlaceCheckinSuccessArgs),
+      ),
+      // V1.3.4 签到盖章动画：新章签到后的全屏动画页，结束后 pushReplacement 到上面的成功页。
+      // 入参同成功页；`extra` 缺失（冷启动恢复 / 手敲深链）同样回场所详情。
+      GoRoute(
+        path: PlaceStampCeremonyPage.routePattern,
+        redirect: (c, s) => s.extra is PlaceCheckinSuccessArgs
+            ? null
+            : PlaceDetailPage.routeFor(s.pathParameters['token']!),
+        builder: (c, s) => PlaceStampCeremonyPage(args: s.extra! as PlaceCheckinSuccessArgs),
       ),
 
       // ===== Toko（V1.4.0 Story 1.6，FR-93 / FR-93A）=====

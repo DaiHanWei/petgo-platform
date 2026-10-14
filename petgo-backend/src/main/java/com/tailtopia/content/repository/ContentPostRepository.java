@@ -526,6 +526,40 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             Pageable pageable);
 
     /**
+     * 关注流（V1.3.4 Following 流）：仅「我关注的人」的公开帖，时间倒序游标分页。
+     *
+     * <p>🔴 过滤口径与 {@link #findFeed} 一致（deleted / PUBLISHED / PUBLIC / 举报帖 / 账号级隐藏 / 游标），
+     * 去掉：UNDER_REVIEW 本人例外（关注流只含他人帖）、类型 / 宠物 / 顶置让位。
+     * 另加：作者在我的关注名单内，且作者未注销（{@code deletedAt IS NULL}）、状态 ACTIVE。
+     * 登录专属，故无 hasViewer 门控。排序 {@code created_at DESC, id DESC}（id 作 tie-breaker 保游标稳定）。
+     * Discover 查询不受影响。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND p.authorId IN (SELECT f.followeeId FROM UserFollow f WHERE f.followerId = :viewerId)
+              AND p.authorId IN (SELECT u.id FROM User u
+                                 WHERE u.deletedAt IS NULL
+                                   AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE)
+              AND NOT EXISTS (SELECT 1 FROM ContentReport r
+                              WHERE r.postId = p.id AND r.reporterId = :viewerId)
+              AND NOT EXISTS (SELECT 1 FROM UserHideRelation h
+                              WHERE h.holderId = :viewerId AND h.targetId = p.authorId)
+              AND (:hasCursor = false
+                   OR p.createdAt < :cursorTs
+                   OR (p.createdAt = :cursorTs AND p.id < :cursorId))
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> findFollowingFeed(
+            @Param("viewerId") long viewerId,
+            @Param("hasCursor") boolean hasCursor,
+            @Param("cursorTs") Instant cursorTs,
+            @Param("cursorId") Long cursorId,
+            Pageable pageable);
+
+    /**
      * 推荐序候选池的过滤口径 —— 主池 {@link #findRankCandidatePool} 与教育池 {@link #findEduCandidatePool} 共用
      * （V1.3.4 FR-122.2 / NFR3：任何池子都不得绕过）。🔴 不要复制一份给新池子，加池子就拼这个常量。
      */

@@ -5,6 +5,7 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/content/presentation/feed_tab_row.dart';
 import 'package:tailtopia/features/content/presentation/home_page.dart';
+import 'package:tailtopia/features/content/presentation/social_tab.dart';
 import 'package:tailtopia/features/notify/domain/app_update_controller.dart';
 import 'package:tailtopia/features/place/presentation/place_entry_row.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -53,8 +54,8 @@ void main() {
 
     await _pumpHome(tester, c);
 
-    // AppBar 品牌标(logo.svg，semanticsLabel=TailTopia) + 分类 Chips 恒在。
-    expect(find.bySemanticsLabel('TailTopia'), findsOneWidget);
+    // V1.3.4 following 流：AppBar 品牌标已换成 Discover / Following 页签；分类 Chips 恒在。
+    expect(find.byType(SocialTabBar), findsOneWidget);
     expect(find.byType(FeedTabRow), findsOneWidget);
     // 推倒重做：旧 Momo 问候头 / 快捷入口 / 每日卡 / 「Untukmu」区头不再渲染。
     expect(find.text('Apa kabar, Aurel?'), findsNothing);

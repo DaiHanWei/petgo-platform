@@ -124,6 +124,9 @@ class _FakeDetailRepo implements DetailRepository {
 
 /// bug 20260923-538：Feed 里那条（id=5）进详情前的旧快照 —— 评论 0 / 赞 0。
 class _StaleFeedRepo implements FeedRepository {
+  @override
+  Future<FeedPage> getFollowingFeed({String? cursor}) => throw UnimplementedError();
+
   int getFeedCalls = 0;
 
   @override

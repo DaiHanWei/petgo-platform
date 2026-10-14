@@ -44,7 +44,8 @@ class FollowSuggestionServiceTest {
         follows = mock(UserFollowRepository.class);
         accounts = mock(AccountQueryService.class);
         followReader = mock(FollowReader.class);
-        service = new FollowSuggestionService(follows, accounts, followReader, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new FollowSuggestionService(follows, accounts, followReader,
+                mock(com.tailtopia.profile.repository.PetProfileRepository.class), Clock.fixed(NOW, ZoneOffset.UTC));
         when(accounts.findAuthorViewsWithoutTags(anyCollection())).thenAnswer(inv -> {
             Collection<Long> ids = inv.getArgument(0);
             return ids.stream().collect(Collectors.toMap(id -> id,
