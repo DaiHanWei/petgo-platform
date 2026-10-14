@@ -19,6 +19,9 @@ import 'package:tailtopia/features/social/domain/follow_state.dart';
 FeedItem _item(int id) => FeedItem(id: id, authorId: 7, authorDeleted: false, type: 'DAILY', createdAt: DateTime.utc(2026));
 
 class _FeedRepo implements FeedRepository {
+  @override
+  Future<FeedPage> getFollowingFeed({String? cursor}) => throw UnimplementedError();
+
   Completer<FeedPage>? pending;
   Completer<PinnedSlot?>? pinned;
 

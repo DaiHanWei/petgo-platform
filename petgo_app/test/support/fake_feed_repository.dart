@@ -7,6 +7,9 @@ import 'package:tailtopia/features/content/domain/feed_item.dart';
 /// 用于 app 级 widget 测试覆写 [feedRepositoryProvider]，让首页 Feed 进入确定态
 /// （否则真实 dio 调用在测试环境悬挂在 loading 骨架）。
 class FakeFeedRepository implements FeedRepository {
+  @override
+  Future<FeedPage> getFollowingFeed({String? cursor}) => throw UnimplementedError();
+
   FakeFeedRepository([this.items = const []]);
 
   final List<FeedItem> items;

@@ -27,6 +27,8 @@ class FollowListItem {
     this.blockedByMe = false,
     this.self = false,
     this.followEpoch = 0,
+    this.petType,
+    this.petBirthday,
   });
 
   /// 对方数字 id（跳现有主页路由）。
@@ -52,6 +54,12 @@ class FollowListItem {
   /// 这页快照发请求前的全局关注版本号（不来自 JSON，Story 2.1 AC3）。
   final int followEpoch;
 
+  /// 推荐关注行的宠物物种（`CAT` / `DOG` / `OTHER`）；无宠物 → null。
+  final String? petType;
+
+  /// 推荐关注行的宠物生日；无宠物 / 缺省 → null。
+  final DateTime? petBirthday;
+
   FollowListItem withFollowEpoch(int epoch) => FollowListItem(
         userId: userId,
         deleted: deleted,
@@ -62,6 +70,8 @@ class FollowListItem {
         blockedByMe: blockedByMe,
         self: self,
         followEpoch: epoch,
+        petType: petType,
+        petBirthday: petBirthday,
       );
 
   /// 缺键容忍（注销行身份键整个不下发）。
@@ -74,6 +84,8 @@ class FollowListItem {
         followState: FollowState.fromJson(json),
         blockedByMe: (json['blockedByMe'] ?? false) as bool,
         self: (json['self'] ?? false) as bool,
+        petType: json['petType'] as String?,
+        petBirthday: DateTime.tryParse((json['petBirthday'] as String?) ?? ''),
       );
 }
 
