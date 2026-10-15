@@ -10,7 +10,7 @@ import java.util.Properties;
 import org.junit.jupiter.api.Test;
 
 /**
- * L0（V1.3.4 Story 3.1 · D-17）：版本配置保存的 4 个错误码在四份文案包里都有文案。
+ * L0（V1.3.4 Story 3.1 · D-17；返工清单 §2 把 min-gt-latest 拆成 iOS / Android 两条）：版本配置保存的 5 个错误码在四份文案包里都有文案。
  *
  * <p>🔴 缺任何一条，admin 主题接上保存接口后 422 的 detail 会直接露出键名。
  */
@@ -18,7 +18,8 @@ class AppVersionConfigMessagesTest {
 
     private static final List<String> CODES = List.of(
             "admin.err.config.version.format",
-            "admin.err.config.version.min-gt-latest",
+            "admin.err.config.version.min-gt-ios-latest",
+            "admin.err.config.version.min-gt-android-latest",
             "admin.err.config.store-url.scheme",
             "admin.err.config.store-url.blank");
 

@@ -113,7 +113,12 @@ class AudienceSpecTest {
         "{\"mode\":\"ALL\"}xyz",
         "{\"mode\":\"ALL\"}{\"mode\":\"IDS\"}",
         "{\"mode\":\"ALL\",\"mode\":\"FILTER\"}",
-        "{\"mode\":\"FILTER\",\"hasPet\":true,\"hasPet\":false}"
+        "{\"mode\":\"FILTER\",\"hasPet\":true,\"hasPet\":false}",
+        // V1.3.4 返工 §0-5：相对天数须为 1..3650 的整数
+        "{\"mode\":\"FILTER\",\"registeredWithinDays\":0}",
+        "{\"mode\":\"FILTER\",\"activeWithinDays\":3651}",
+        "{\"mode\":\"FILTER\",\"activeWithinDays\":\"30\"}",
+        "{\"mode\":\"FILTER\",\"registeredWithinDays\":7.5}"
     })
     @DisplayName("非法输入统一抛 admin.err.ops-notify.audience.invalid")
     void invalidInputsThrowUnifiedCode(String json) {
@@ -135,5 +140,31 @@ class AudienceSpecTest {
     void factories() {
         assertThat(AudienceSpec.all().toJson()).isEqualTo("{\"mode\":\"ALL\"}");
         assertThat(AudienceSpec.ids().toJson()).isEqualTo("{\"mode\":\"IDS\"}");
+    }
+
+    @Test
+    @DisplayName("V1.3.4 返工 §0-5：相对键 registeredWithinDays / activeWithinDays 往返；与旧绝对日期键可并存")
+    void relativeKeysRoundTrip() {
+        AudienceSpec s = AudienceSpec.parse("{\"mode\":\"FILTER\",\"activeWithinDays\":30,"
+                + "\"registeredWithinDays\":7,\"registeredFrom\":\"2026-01-01\"}");
+        assertThat(s.activeWithinDays()).isEqualTo(30);
+        assertThat(s.registeredWithinDays()).isEqualTo(7);
+        assertThat(s.registeredFrom()).isEqualTo(java.time.LocalDate.of(2026, 1, 1));
+        assertThat(AudienceSpec.parse(s.toJson())).isEqualTo(s);
+        assertThat(s.toJson()).contains("\"registeredWithinDays\":7").contains("\"activeWithinDays\":30");
+        assertThat(s.noFilter()).isFalse();
+    }
+
+    @Test
+    @DisplayName("V1.3.4 返工：存量行（只有绝对日期键）照常解析；ALL / IDS 丢弃相对键")
+    void legacyAbsoluteKeysStillParseAndNonFilterDropsRelative() {
+        AudienceSpec legacy = AudienceSpec.parse("{\"mode\":\"FILTER\",\"activeFrom\":\"2026-10-01\","
+                + "\"activeTo\":\"2026-10-12\"}");
+        assertThat(legacy.activeWithinDays()).isNull();
+        assertThat(legacy.activeFrom()).isNotNull();
+        AudienceSpec ids = AudienceSpec.parse("{\"mode\":\"IDS\",\"activeWithinDays\":30}");
+        assertThat(ids.activeWithinDays()).isNull();
+        assertThat(ids.toJson()).isEqualTo("{\"mode\":\"IDS\"}");
+        assertThat(AudienceSpec.parse("{\"mode\":\"FILTER\"}").noFilter()).isTrue();
     }
 }

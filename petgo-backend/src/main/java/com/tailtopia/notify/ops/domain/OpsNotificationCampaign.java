@@ -78,6 +78,18 @@ public class OpsNotificationCampaign {
     @Column(name = "skipped_count", nullable = false)
     private int skippedCount;
 
+    /** 后台新建时的预估人数（列表「预计 N」）；存量行为 null（V1.3.4 AB-31 返工）。 */
+    @Column(name = "estimated_count")
+    private Integer estimatedCount;
+
+    /** 开始发送时按实际发送时刻解析出的人数（列表「发送中」的分母），由发送核心写入；未开始为 null。 */
+    @Column(name = "planned_count")
+    private Integer plannedCount;
+
+    /** 指定用户模式的 ID 来源：{@code PASTE} / {@code CSV}；其余模式与存量行为 null。 */
+    @Column(name = "ids_source", length = 8)
+    private String idsSource;
+
     /** 后台账号 id（admin_accounts.id），无外键。 */
     @Column(name = "created_by")
     private Long createdBy;
@@ -125,6 +137,12 @@ public class OpsNotificationCampaign {
         c.status = OpsCampaignStatus.PENDING;
         c.createdBy = createdBy;
         return c;
+    }
+
+    /** 后台新建时附带的展示元数据（预估人数、ID 来源），落库前由核心调用。 */
+    public void recordAdminMeta(Integer estimatedCount, String idsSource) {
+        this.estimatedCount = estimatedCount;
+        this.idsSource = idsSource;
     }
 
     @PrePersist
@@ -193,6 +211,18 @@ public class OpsNotificationCampaign {
 
     public int getSkippedCount() {
         return skippedCount;
+    }
+
+    public Integer getEstimatedCount() {
+        return estimatedCount;
+    }
+
+    public Integer getPlannedCount() {
+        return plannedCount;
+    }
+
+    public String getIdsSource() {
+        return idsSource;
     }
 
     public Long getCreatedBy() {

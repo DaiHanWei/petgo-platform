@@ -28,6 +28,26 @@ public interface OpsNotificationCampaignRepository extends JpaRepository<OpsNoti
     /** 后台发送记录列表（V1.3.4 AB-31）：新建的在前，同刻按 id 倒序保证翻页稳定。 */
     Page<OpsNotificationCampaign> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);
 
+    /**
+     * 后台发送记录列表 · 带筛选（V1.3.4 AB-31 返工 · UI 稿 I1）：{@code status} 为空 = 全部；
+     * {@code since} 为空 = 不限时间，否则按「发送时间」= {@code COALESCE(started_at, scheduled_at, created_at)} ≥ since
+     * （未来的定时一律在内）。排序同上。
+     */
+    @Query(value = """
+            SELECT * FROM ops_notification_campaigns c
+             WHERE (CAST(:status AS varchar) IS NULL OR c.status = CAST(:status AS varchar))
+               AND (CAST(:since AS timestamptz) IS NULL
+                    OR COALESCE(c.started_at, c.scheduled_at, c.created_at) >= CAST(:since AS timestamptz))
+             ORDER BY c.created_at DESC, c.id DESC
+            """, countQuery = """
+            SELECT count(*) FROM ops_notification_campaigns c
+             WHERE (CAST(:status AS varchar) IS NULL OR c.status = CAST(:status AS varchar))
+               AND (CAST(:since AS timestamptz) IS NULL
+                    OR COALESCE(c.started_at, c.scheduled_at, c.created_at) >= CAST(:since AS timestamptz))
+            """, nativeQuery = true)
+    Page<OpsNotificationCampaign> search(@Param("status") String status, @Param("since") java.time.OffsetDateTime since,
+            Pageable pageable);
+
     /** 通知中心列表一页一次批量回查（不 N+1）。 */
     List<OpsNotificationCampaign> findByPublicTokenIn(Collection<String> publicTokens);
 
@@ -76,6 +96,17 @@ public interface OpsNotificationCampaignRepository extends JpaRepository<OpsNoti
                and c.status = com.tailtopia.notify.ops.domain.OpsCampaignStatus.SENDING
             """)
     int addFailed(@Param("id") long id, @Param("n") int n, @Param("now") Instant now);
+
+    /** 本次实际要发的人数（按实际发送时刻解析的人群）+ 刷进展。返回 0 = 已不在 SENDING，须停止。 */
+    @Transactional
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update OpsNotificationCampaign c
+               set c.plannedCount = :n, c.lastProgressAt = :now, c.updatedAt = :now
+             where c.id = :id
+               and c.status = com.tailtopia.notify.ops.domain.OpsCampaignStatus.SENDING
+            """)
+    int setPlanned(@Param("id") long id, @Param("n") int n, @Param("now") Instant now);
 
     /** IDS 模式无效 id 个数（子表条数 − 命中人数）+ 刷进展。返回 0 = 已不在 SENDING，须停止。 */
     @Transactional

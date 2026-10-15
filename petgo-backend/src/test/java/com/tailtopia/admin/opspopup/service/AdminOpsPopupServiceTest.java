@@ -18,6 +18,7 @@ import com.tailtopia.ops.popup.domain.OpsPopup;
 import com.tailtopia.ops.popup.domain.OpsPopupAudience;
 import com.tailtopia.ops.popup.domain.OpsPopupFrequency;
 import com.tailtopia.ops.popup.domain.OpsPopupStatus;
+import com.tailtopia.ops.popup.repository.OpsPopupImpressionRepository;
 import com.tailtopia.ops.popup.repository.OpsPopupRepository;
 import com.tailtopia.ops.target.OpsTargetPolicy;
 import com.tailtopia.ops.target.OpsTargetType;
@@ -41,6 +42,7 @@ import org.springframework.http.HttpStatus;
 class AdminOpsPopupServiceTest {
 
     private OpsPopupRepository popups;
+    private OpsPopupImpressionRepository impressions;
     private ShopProductRepository products;
     private AdminAuditService audit;
     private AdminOpsPopupService service;
@@ -48,10 +50,11 @@ class AdminOpsPopupServiceTest {
     @BeforeEach
     void setUp() {
         popups = mock(OpsPopupRepository.class);
+        impressions = mock(OpsPopupImpressionRepository.class);
         products = mock(ShopProductRepository.class);
         audit = mock(AdminAuditService.class);
         when(popups.save(any(OpsPopup.class))).thenAnswer(inv -> inv.getArgument(0));
-        service = new AdminOpsPopupService(popups, new AdminOpsTargetValidator(new OpsTargetPolicy(products)), audit);
+        service = new AdminOpsPopupService(popups, impressions, new AdminOpsTargetValidator(new OpsTargetPolicy(products)), audit);
     }
 
     /** 一份必填齐全的合法表单（调用方覆盖某项构造违规用例）。 */
@@ -60,7 +63,7 @@ class AdminOpsPopupServiceTest {
         f.setName("  双十一  ");
         f.setPriority("5");
         f.setStartsAt("2026-11-01T08:00");
-        f.setEndsAt("");
+        f.setEndsAt("2026-11-12T00:00");
         f.setAudience("ALL");
         f.setFrequency("ONCE");
         f.setImageUrlId("prod/public/ops-popup/a.jpg");
@@ -69,7 +72,7 @@ class AdminOpsPopupServiceTest {
         f.setTitleEn("");
         f.setBodyId(" ");
         f.setButtonTextId("Lihat");
-        f.setButtonTextEn("");
+        f.setButtonTextEn("See");
         f.setTargetType("APP_PAGE");
         f.setTargetValue("KNOW_YOUR_PET");
         tweak.accept(f);
@@ -88,21 +91,21 @@ class AdminOpsPopupServiceTest {
     }
 
     @Test
-    @DisplayName("新建：DISABLED、WIB→UTC、空白串归一为 null、trim、记审计 CREATED（target=token）")
+    @DisplayName("新建：直接 ACTIVE（§0-1）、WIB→UTC、空白串归一为 null、trim、记审计 CREATED（target=token）")
     void createNormalizesAndAudits() {
         OpsPopup p = service.create(valid(f -> { }), 7L);
 
-        assertThat(p.getStatus()).isEqualTo(OpsPopupStatus.DISABLED);
+        assertThat(p.getStatus()).as("新建直接生效，按时间进入未开始 / 进行中").isEqualTo(OpsPopupStatus.ACTIVE);
         assertThat(p.getName()).isEqualTo("双十一");
         // 2026-11-01 08:00 WIB = 01:00 UTC
         assertThat(p.getStartsAt()).isEqualTo(Instant.parse("2026-11-01T01:00:00Z"));
-        assertThat(p.getEndsAt()).isNull();
+        assertThat(p.getEndsAt()).isEqualTo(Instant.parse("2026-11-11T17:00:00Z"));
         assertThat(p.getPriority()).isEqualTo(5);
         assertThat(p.getNewUserDays()).isEqualTo(7);
         assertThat(p.getImageUrlEn()).isNull();
         assertThat(p.getTitleEn()).isNull();
         assertThat(p.getBodyId()).isNull();
-        assertThat(p.getButtonTextEn()).isNull();
+        assertThat(p.getButtonTextEn()).isEqualTo("See");
         assertThat(p.getTargetType()).isEqualTo(OpsTargetType.APP_PAGE);
         assertThat(p.getTargetValue()).isEqualTo("KNOW_YOUR_PET");
         verify(audit).record(eq(7L), eq(AuditActions.OPS_POPUP_CREATED), eq("OPS_POPUP"),
@@ -110,16 +113,18 @@ class AdminOpsPopupServiceTest {
     }
 
     @Test
-    @DisplayName("编辑：id / token / 状态不变；人群为全部（天数未提交）时沿用原天数；记审计 UPDATED")
+    @DisplayName("编辑：id / token / 状态不变；人群为全部时天数不校验、沿用原值；记审计 UPDATED")
     void updateKeepsTokenStatusAndDays() {
-        OpsPopup existing = OpsPopup.create("old", Instant.parse("2026-10-01T00:00:00Z"), null, 0,
+        // 原开始时间在未来（未开始）：已开始的弹窗开始时间改不到未来，见 startLockedOnceStarted
+        OpsPopup existing = OpsPopup.create("old", Instant.now().plusSeconds(86_400), null, 0,
                 OpsPopupAudience.NEW, 30, OpsPopupFrequency.DAILY, "k.jpg", null, null, null, null, null,
                 "Lihat", null, OpsTargetType.NONE, null);
         existing.activate();
         String token = existing.getPublicToken();
         when(popups.findByPublicToken(token)).thenReturn(Optional.of(existing));
 
-        OpsPopup p = service.update(token, valid(f -> f.setNewUserDays(null)), 3L);
+        // 人群改成「全部」：N 无意义，不校验、沿用原值（不冲成默认 7）
+        OpsPopup p = service.update(token, valid(f -> f.setNewUserDays("abc")), 3L);
 
         assertThat(p).isSameAs(existing);
         assertThat(p.getPublicToken()).isEqualTo(token);
@@ -153,18 +158,70 @@ class AdminOpsPopupServiceTest {
     }
 
     @Test
-    @DisplayName("缺必填：名称 / 印尼文图 / 印尼文按钮 / 开始时间")
+    @DisplayName("缺必填（除标题正文外全必填，§3）：名称 / 图片（两张都没有）/ EN 或 ID 按钮 / 开始 / 结束 / 跳转类型 / 频次 / 人群 / 优先级")
     void missingRequired() {
         assertRejected(f -> f.setName("   "), "admin.err.opsPopup.nameRequired");
-        assertRejected(f -> f.setImageUrlId(""), "admin.err.opsPopup.imageIdRequired");
-        assertRejected(f -> f.setButtonTextId(null), "admin.err.opsPopup.buttonIdRequired");
+        assertRejected(f -> { f.setImageUrlId(""); f.setImageUrlEn(null); }, "admin.err.opsPopup.imageRequired");
+        assertRejected(f -> f.setButtonTextId(null), "admin.err.opsPopup.buttonRequired");
+        assertRejected(f -> f.setButtonTextEn(" "), "admin.err.opsPopup.buttonRequired");
         assertRejected(f -> f.setStartsAt(""), "admin.err.opsPopup.startsAtRequired");
+        assertRejected(f -> f.setEndsAt(""), "admin.err.opsPopup.endsAtRequired");
+        assertRejected(f -> { f.setTargetType(""); f.setTargetValue(null); }, "admin.err.opsPopup.targetTypeRequired");
+        assertRejected(f -> f.setFrequency(null), "admin.err.opsPopup.frequencyRequired");
+        assertRejected(f -> f.setAudience(""), "admin.err.opsPopup.audienceRequired");
+        assertRejected(f -> f.setPriority(""), "admin.err.opsPopup.priorityRequired");
+    }
+
+    @Test
+    @DisplayName("H7：全部字段错误一次收集（按表单顺序），汇总按槽计数；标红名单只含缺的那个按钮")
+    void collectsAllErrorsAtOnce() {
+        OpsPopupForm f = valid(x -> {
+            x.setButtonTextEn("");
+            x.setTargetType("");
+            x.setTargetValue(null);
+            x.setEndsAt("2026-11-01T07:00");
+            x.setTitleEn("t".repeat(121));
+            x.setTitleId("t".repeat(121));
+        });
+        assertThatThrownBy(() -> service.create(f, 1L))
+                .isInstanceOfSatisfying(OpsPopupValidationException.class, e -> {
+                    assertThat(e.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+                    assertThat(e.errors()).extracting(OpsPopupValidationException.FieldError::code).containsExactly(
+                            "admin.err.opsPopup.titleEnTooLong", "admin.err.opsPopup.titleIdTooLong",
+                            "admin.err.opsPopup.buttonRequired", "admin.err.opsPopup.targetTypeRequired",
+                            "admin.err.opsPopup.window");
+                    assertThat(e.getMessageCode()).as("单码调用方拿到第一条").isEqualTo("admin.err.opsPopup.titleEnTooLong");
+                    assertThat(e.slotCount()).as("标题两条算一项").isEqualTo(4);
+                    assertThat(e.errors().get(2).inputs()).containsExactly("buttonTextEn");
+                    assertThat(e.errors().get(4).inputs()).containsExactly("startsAt", "endsAt");
+                });
+        verify(popups, never()).save(any());
+
+        // 空表单：必填全报（标题 / 正文选填不报；开始、结束各一条）
+        assertThatThrownBy(() -> service.create(new OpsPopupForm(), 1L))
+                .isInstanceOfSatisfying(OpsPopupValidationException.class, e -> assertThat(e.errors())
+                        .extracting(OpsPopupValidationException.FieldError::slot).containsExactly(
+                                "name", "image", "button", "target", "window", "window", "frequency", "audience",
+                                "priority"));
+    }
+
+    @Test
+    @DisplayName("图片：只传 EN → 存进 image_url_id、image_url_en 留空（两语共用）；只传 ID / 两张都传原样")
+    void enOnlyImageGoesToIdColumn() {
+        OpsPopup en = service.create(valid(f -> { f.setImageUrlId(""); f.setImageUrlEn(" https://cdn.example/en.jpg "); }), 1L);
+        assertThat(en.getImageUrlId()).isEqualTo("https://cdn.example/en.jpg");
+        assertThat(en.getImageUrlEn()).isNull();
+
+        OpsPopup both = service.create(valid(f -> f.setImageUrlEn("k/en.jpg")), 1L);
+        assertThat(both.getImageUrlId()).isEqualTo("prod/public/ops-popup/a.jpg");
+        assertThat(both.getImageUrlEn()).isEqualTo("k/en.jpg");
     }
 
     @Test
     @DisplayName("时间窗非法：结束 ≤ 开始、格式错")
     void badWindow() {
         assertRejected(f -> f.setEndsAt("2026-11-01T08:00"), "admin.err.opsPopup.window");
+        assertRejected(f -> { f.setStartsAt("bad"); f.setEndsAt("bad"); }, "admin.err.opsPopup.startsAtFormat");
         assertRejected(f -> f.setEndsAt("2026-10-31T08:00"), "admin.err.opsPopup.window");
         assertRejected(f -> f.setStartsAt("2026/11/01 08:00"), "admin.err.opsPopup.startsAtFormat");
         assertRejected(f -> f.setEndsAt("2026-13-01T08:00"), "admin.err.opsPopup.endsAtFormat");
@@ -198,6 +255,7 @@ class AdminOpsPopupServiceTest {
         assertRejected(f -> f.setAudience("VIP"), "admin.err.opsPopup.audience");
         assertRejected(f -> f.setFrequency("WEEKLY"), "admin.err.opsPopup.frequency");
         assertRejected(f -> f.setTargetType("DEEPLINK"), "admin.err.opsPopup.targetType");
+        assertRejected(f -> f.setPriority("abc"), "admin.err.opsPopup.priority");
     }
 
     @Test
@@ -251,7 +309,7 @@ class AdminOpsPopupServiceTest {
     @Test
     @DisplayName("编辑：跳转目标未改时不问在售（商品临时下架仍可改文案）；改了目标才要求新商品在售")
     void updateSkipsAvailabilityWhenTargetUnchanged() {
-        OpsPopup existing = OpsPopup.create("old", Instant.parse("2026-10-01T00:00:00Z"), null, 0,
+        OpsPopup existing = OpsPopup.create("old", Instant.now().plusSeconds(86_400), null, 0,
                 OpsPopupAudience.ALL, 7, OpsPopupFrequency.ONCE, "k.jpg", null, null, null, null, null,
                 "Lihat", null, OpsTargetType.PRODUCT, "offsale1");
         String token = existing.getPublicToken();
@@ -277,7 +335,7 @@ class AdminOpsPopupServiceTest {
                         .isEqualTo("admin.err.opsPopup.productUnavailable"));
 
         // 格式校验仍恒做：目标没改也照样拦坏 token（库里不该有，但不能因「没改」放行）
-        OpsPopup bad = OpsPopup.create("bad", Instant.parse("2026-10-01T00:00:00Z"), null, 0,
+        OpsPopup bad = OpsPopup.create("bad", Instant.now().plusSeconds(86_400), null, 0,
                 OpsPopupAudience.ALL, 7, OpsPopupFrequency.ONCE, "k.jpg", null, null, null, null, null,
                 "Lihat", null, OpsTargetType.PRODUCT, "bad token!");
         when(popups.findByPublicToken(bad.getPublicToken())).thenReturn(Optional.of(bad));
@@ -287,5 +345,144 @@ class AdminOpsPopupServiceTest {
         }), 1L)).isInstanceOf(AppException.class)
                 .satisfies(e -> assertThat(((AppException) e).getMessageCode())
                         .isEqualTo("admin.err.opsPopup.targetProduct"));
+    }
+
+    /** 已存在的弹窗（反射补 id：mock 仓储不会替我们落库生成）。 */
+    private OpsPopup stored(long id, String name, Instant start, Instant end, boolean active) {
+        OpsPopup p = OpsPopup.create(name, start, end, 0, OpsPopupAudience.ALL, 7, OpsPopupFrequency.ONCE,
+                "k.jpg", null, null, null, null, null, "B", "B", OpsTargetType.NONE, null);
+        if (active) {
+            p.activate();
+        }
+        try {
+            java.lang.reflect.Field f = OpsPopup.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(p, id);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+        when(popups.findByPublicToken(p.getPublicToken())).thenReturn(Optional.of(p));
+        return p;
+    }
+
+    @Test
+    @DisplayName("删除（§0-2）：只有 启用 + 未到开始 + 无曝光 可删并记审计 DELETED；有曝光 / 已停用未开始 / 已开始 → 409")
+    void deleteOnlyPending() {
+        Instant future = Instant.now().plusSeconds(86_400);
+        Instant past = Instant.now().minusSeconds(86_400);
+
+        OpsPopup pending = stored(1L, "p", future, future.plusSeconds(3600), true);
+        when(impressions.existsByPopupId(1L)).thenReturn(false);
+        service.delete(pending.getPublicToken(), 9L);
+        verify(popups).delete(pending);
+        verify(audit).record(eq(9L), eq(AuditActions.OPS_POPUP_DELETED), eq("OPS_POPUP"),
+                eq(pending.getPublicToken()), anyString());
+
+        OpsPopup seen = stored(2L, "seen", future, future.plusSeconds(3600), true);
+        when(impressions.existsByPopupId(2L)).thenReturn(true);
+        OpsPopup disabled = stored(3L, "off", future, future.plusSeconds(3600), false);
+        OpsPopup started = stored(4L, "live", past, future, true);
+        for (OpsPopup p : java.util.List.of(seen, disabled, started)) {
+            assertThatThrownBy(() -> service.delete(p.getPublicToken(), 9L))
+                    .isInstanceOf(AppException.class)
+                    .satisfies(e -> {
+                        assertThat(((AppException) e).getStatus()).isEqualTo(HttpStatus.CONFLICT);
+                        assertThat(((AppException) e).getMessageCode()).isEqualTo("admin.err.opsPopup.deleteNotPending");
+                    });
+            verify(popups, never()).delete(p);
+        }
+        verify(audit, org.mockito.Mockito.times(1)).record(any(), eq(AuditActions.OPS_POPUP_DELETED), anyString(),
+                anyString(), anyString());
+    }
+
+    /** Instant → 表单 datetime-local（WIB，分钟精度）。 */
+    private static String wib(Instant t) {
+        return com.tailtopia.shared.schedule.ScheduleWindow.toWib(t)
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"));
+    }
+
+    @Test
+    @DisplayName("开始时间锁：已开始过的弹窗不能把开始时间改到未来（startLocked，挂 startsAt）；改到过去 / 原值可以；未开始的照常可改；删除仍只许未开始")
+    void startLockedOnceStarted() {
+        Instant past = Instant.now().minusSeconds(3 * 86_400);
+        Instant future = Instant.now().plusSeconds(2 * 86_400);
+        Instant end = Instant.now().plusSeconds(30 * 86_400);
+
+        OpsPopup live = stored(5L, "live", past, end, true);
+        assertThatThrownBy(() -> service.update(live.getPublicToken(), valid(f -> {
+            f.setStartsAt(wib(future));
+            f.setEndsAt(wib(end));
+        }), 1L)).isInstanceOf(OpsPopupValidationException.class)
+                .satisfies(e -> {
+                    OpsPopupValidationException ve = (OpsPopupValidationException) e;
+                    assertThat(ve.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+                    assertThat(ve.errors()).singleElement().satisfies(fe -> {
+                        assertThat(fe.code()).isEqualTo("admin.err.opsPopup.startLocked");
+                        assertThat(fe.inputs()).containsExactly("startsAt");
+                    });
+                });
+        verify(popups, never()).save(live);
+        assertThat(live.getStartsAt()).isEqualTo(past);
+        // 删除仍拒：开始时间没被挪走，仍是「已开始」
+        when(impressions.existsByPopupId(5L)).thenReturn(false);
+        assertThatThrownBy(() -> service.delete(live.getPublicToken(), 9L))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode())
+                        .isEqualTo("admin.err.opsPopup.deleteNotPending"));
+
+        // 已开始 → 改文案、开始时间改到更早的过去：照常保存
+        Instant earlier = past.minusSeconds(86_400);
+        service.update(live.getPublicToken(), valid(f -> {
+            f.setName("改文案");
+            f.setStartsAt(wib(earlier));
+            f.setEndsAt(wib(end));
+        }), 1L);
+        assertThat(live.getName()).isEqualTo("改文案");
+        assertThat(live.getStartsAt()).isBefore(Instant.now());
+
+        // 已停用但开始时间已过（开始过）→ 同样锁
+        OpsPopup stopped = stored(6L, "stopped", past, end, false);
+        assertThatThrownBy(() -> service.update(stopped.getPublicToken(), valid(f -> {
+            f.setStartsAt(wib(future));
+            f.setEndsAt(wib(end));
+        }), 1L)).isInstanceOf(OpsPopupValidationException.class)
+                .satisfies(e -> assertThat(((AppException) e).getMessageCode())
+                        .isEqualTo("admin.err.opsPopup.startLocked"));
+
+        // 未开始 → 开始时间可改到另一个未来时刻，且仍可删
+        OpsPopup pending = stored(7L, "pending", future, end, true);
+        Instant later = future.plusSeconds(86_400);
+        service.update(pending.getPublicToken(), valid(f -> {
+            f.setStartsAt(wib(later));
+            f.setEndsAt(wib(end));
+        }), 1L);
+        assertThat(pending.getStartsAt()).isAfter(Instant.now());
+        when(impressions.existsByPopupId(7L)).thenReturn(false);
+        service.delete(pending.getPublicToken(), 9L);
+        verify(popups).delete(pending);
+    }
+
+    @Test
+    @DisplayName("列表（H1）：合一状态（停用 → 已停用，否则按时间窗）、状态筛选、名称搜索（不区分大小写）、四格计数不受筛选影响")
+    void listFilterSearchAndCounts() {
+        Instant now = Instant.now();
+        OpsPopup running = stored(1L, "Weekend Cat 8折", now.minusSeconds(60), now.plusSeconds(3600), true);
+        OpsPopup pending = stored(2L, "新人发帖引导", now.plusSeconds(3600), now.plusSeconds(7200), true);
+        OpsPopup ended = stored(3L, "KTP 新卡面", now.minusSeconds(7200), now.minusSeconds(3600), true);
+        OpsPopup off = stored(4L, "测试弹窗 cat", now.minusSeconds(60), now.plusSeconds(3600), false);
+        when(popups.findAllByOrderByPriorityDescCreatedAtDescIdDesc()).thenReturn(java.util.List.of(running, pending, ended, off));
+
+        assertThat(OpsPopupState.of(running, now)).isEqualTo(OpsPopupState.RUNNING);
+        assertThat(OpsPopupState.of(pending, now)).isEqualTo(OpsPopupState.PENDING);
+        assertThat(OpsPopupState.of(ended, now)).isEqualTo(OpsPopupState.ENDED);
+        assertThat(OpsPopupState.of(off, now)).as("停用优先于时间阶段").isEqualTo(OpsPopupState.DISABLED);
+
+        assertThat(service.list(null, null, now)).hasSize(4);
+        assertThat(service.list(OpsPopupState.PENDING, " ", now)).containsExactly(pending);
+        assertThat(service.list(null, "CAT", now)).containsExactly(running, off);
+        assertThat(service.list(OpsPopupState.DISABLED, "cat", now)).containsExactly(off);
+        assertThat(service.list(OpsPopupState.parseOrNull("BOGUS"), null, now)).as("非法筛选值 = 不筛").hasSize(4);
+        assertThat(service.counts(now)).containsEntry(OpsPopupState.RUNNING, 1L).containsEntry(OpsPopupState.PENDING, 1L)
+                .containsEntry(OpsPopupState.ENDED, 1L).containsEntry(OpsPopupState.DISABLED, 1L);
     }
 }

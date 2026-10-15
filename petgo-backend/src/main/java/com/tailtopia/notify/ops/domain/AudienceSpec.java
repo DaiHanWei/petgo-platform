@@ -28,8 +28,13 @@ import java.util.regex.Pattern;
  *   "hasPet"?: true|false,
  *   "species"?: ["CAT","DOG","OTHER"],
  *   "hasShopOrder"?: true|false,
- *   "hasPhone"?: true|false }
+ *   "hasPhone"?: true|false,
+ *   "registeredWithinDays"?: 1..3650, "activeWithinDays"?: 1..3650 }
  * }</pre>
+ *
+ * <p>V1.3.4 后台返工清单 §0-5：后台「注册时间 / 最近活跃时间」改为相对预设（不限 / 近 7 / 30 / 90 天），落
+ * {@code registeredWithinDays} / {@code activeWithinDays}——<b>按实际发送时刻</b>往前推 N×24 小时，定时发送不会
+ * 因为创建与发送之间隔了几天而圈错人。旧的绝对日期键保留并照常解析（存量行），两类键可同时出现（「且」）。
  *
  * <h2>语义</h2>
  * <ul>
@@ -55,7 +60,12 @@ public record AudienceSpec(
         Boolean hasPet,
         Set<PetType> species,
         Boolean hasShopOrder,
-        Boolean hasPhone) {
+        Boolean hasPhone,
+        Integer registeredWithinDays,
+        Integer activeWithinDays) {
+
+    /** 相对天数上限（10 年）：再大没有意义，也防溢出。 */
+    public static final int MAX_WITHIN_DAYS = 3650;
 
     /** 人群模式。 */
     public enum Mode {
@@ -76,7 +86,14 @@ public record AudienceSpec(
     private static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
 
     private static final Set<String> KEYS = Set.of("mode", "registeredFrom", "registeredTo", "activeFrom",
-            "activeTo", "hasPet", "species", "hasShopOrder", "hasPhone");
+            "activeTo", "hasPet", "species", "hasShopOrder", "hasPhone", "registeredWithinDays", "activeWithinDays");
+
+    /** 只有绝对日期键的旧形状（存量调用方 / 测试）。 */
+    public AudienceSpec(Mode mode, LocalDate registeredFrom, LocalDate registeredTo, LocalDate activeFrom,
+            LocalDate activeTo, Boolean hasPet, Set<PetType> species, Boolean hasShopOrder, Boolean hasPhone) {
+        this(mode, registeredFrom, registeredTo, activeFrom, activeTo, hasPet, species, hasShopOrder, hasPhone,
+                null, null);
+    }
 
     /**
      * 规范化：{@code mode} 必填；{@code ALL} / {@code IDS} 丢弃全部筛选键；{@code species} 空集 → null；
@@ -95,7 +112,11 @@ public record AudienceSpec(
             species = null;
             hasShopOrder = null;
             hasPhone = null;
+            registeredWithinDays = null;
+            activeWithinDays = null;
         }
+        checkWithin(registeredWithinDays, "registeredWithinDays");
+        checkWithin(activeWithinDays, "activeWithinDays");
         species = species == null || species.isEmpty()
                 ? null
                 : Collections.unmodifiableSet(EnumSet.copyOf(species));
@@ -113,6 +134,19 @@ public record AudienceSpec(
 
     public static AudienceSpec ids() {
         return new AudienceSpec(Mode.IDS, null, null, null, null, null, null, null, null);
+    }
+
+    /** 按条件筛选里一个条件都没选（= 全部可接收用户）。 */
+    public boolean noFilter() {
+        return registeredFrom == null && registeredTo == null && activeFrom == null && activeTo == null
+                && hasPet == null && species == null && hasShopOrder == null && hasPhone == null
+                && registeredWithinDays == null && activeWithinDays == null;
+    }
+
+    private static void checkWithin(Integer days, String key) {
+        if (days != null && (days < 1 || days > MAX_WITHIN_DAYS)) {
+            throw invalid(key + " 须在 1.." + MAX_WITHIN_DAYS + " 之间");
+        }
     }
 
     /** 解析并校验 D-16 JSON。 */
@@ -145,7 +179,9 @@ public record AudienceSpec(
                 bool(root, "hasPet"),
                 species(root.get("species")),
                 bool(root, "hasShopOrder"),
-                bool(root, "hasPhone"));
+                bool(root, "hasPhone"),
+                days(root, "registeredWithinDays"),
+                days(root, "activeWithinDays"));
     }
 
     /** 序列化：省略 null 键，日期写 {@code yyyy-MM-dd}，{@code species} 按枚举序。 */
@@ -168,6 +204,12 @@ public record AudienceSpec(
         }
         if (hasPhone != null) {
             o.put("hasPhone", hasPhone);
+        }
+        if (registeredWithinDays != null) {
+            o.put("registeredWithinDays", registeredWithinDays.intValue());
+        }
+        if (activeWithinDays != null) {
+            o.put("activeWithinDays", activeWithinDays.intValue());
         }
         try {
             return JSON.writeValueAsString(o);
@@ -216,6 +258,17 @@ public record AudienceSpec(
             throw invalid(key + " 不是布尔值");
         }
         return n.booleanValue();
+    }
+
+    private static Integer days(JsonNode root, String key) {
+        JsonNode n = root.get(key);
+        if (n == null || n.isNull()) {
+            return null;
+        }
+        if (!n.isIntegralNumber() || !n.canConvertToInt()) {
+            throw invalid(key + " 不是整数");
+        }
+        return n.intValue();
     }
 
     private static Set<PetType> species(JsonNode n) {

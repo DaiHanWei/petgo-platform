@@ -1,5 +1,6 @@
 package com.tailtopia.admin.config.web;
 
+import com.tailtopia.admin.config.dto.AppVersionChange;
 import com.tailtopia.admin.config.dto.FeedRankForm;
 import com.tailtopia.admin.account.domain.AdminPermissions;
 import com.tailtopia.admin.config.dto.KtpPricingForm;
@@ -22,8 +23,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import com.tailtopia.admin.shared.web.AdminConfirmModal;
 import com.tailtopia.admin.shared.web.AdminFragmentResponses;
+import com.tailtopia.admin.shared.web.AdminHxEvents;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.web.util.HtmlUtils;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -87,13 +93,15 @@ public class AdminConfigController {
                     "admin.err.config.supportEmailBlank", "email",
                     "admin.err.config.supportEmailInvalid", "email",
                     "admin.err.config.supportEmailTooLong", "email")),
-            // V1.3.4 AB-22 App 版本配置：四个码来自 AppVersionConfigService.update（D-17），min-confirm 是后台确认值
+            // V1.3.4 AB-22 App 版本更新：校验码来自 AppVersionConfigService.validate（返工清单 §2 拆 iOS / Android 两条），
+            // min-forbidden 是字段级权限（服务端兜底；页面上该行本就只读）。min-confirm 只会出现在确认弹层里，不进卡。
             "appVersion", json(Map.of(
                     "admin.err.config.version.format", "iosLatestVersion,androidLatestVersion,minSupportedVersion",
-                    "admin.err.config.version.min-gt-latest", "iosLatestVersion,androidLatestVersion,minSupportedVersion",
+                    "admin.err.config.version.min-gt-ios-latest", "minSupportedVersion,iosLatestVersion",
+                    "admin.err.config.version.min-gt-android-latest", "minSupportedVersion,androidLatestVersion",
                     "admin.err.config.store-url.scheme", "iosStoreUrl,androidStoreUrl",
                     "admin.err.config.store-url.blank", "iosStoreUrl,androidStoreUrl",
-                    "admin.err.config.version.min-confirm", "minConfirm")),
+                    "admin.err.config.version.min-forbidden", "minSupportedVersion")),
             // ⚠️ Map.ofEntries：Map.of 最多 10 对，V1.3.2 Story 4.5 加两渠道后超了。
             "shareReward", json(Map.ofEntries(
                     Map.entry("admin.err.config.shareRewardCapNegative", "shareRewardMonthlyCap"),
@@ -277,11 +285,103 @@ public class AdminConfigController {
     }
 
     /**
-     * App 版本配置（V1.3.4 AB-22 · FR-124）：两端最新版本 + 最低支持版本 + 两个商店链接。改完即生效（App 每次冷启动读库）。
+     * App 版本更新卡 · 保存前预检（V1.3.4 后台返工清单 §2 · UI 稿 G3 / G4）：<b>只校验、不写库</b>，通过则回服务端确认弹层。
      *
-     * <p>🔴 复用 {@code config.view} / {@code config.edit}，不新增权限码（同客服联系方式卡先例）。
-     * {@code minConfirm} 只在最低支持版本有改动时才有意义（前端改了才显示该输入框），未改时浏览器不提交 ⇒ 非必填；
-     * 服务端是唯一判定点（改了却没确认 / 确认不符 → 422 {@code admin.err.config.version.min-confirm}）。
+     * <p>弹层两态：改了「最低支持版本」→ G4（红色警示 + 手动输入新版本号，输入一致前确认钮禁用；同时改多个字段也只弹它并列出全部改动）；
+     * 否则 G3（逐字段新旧值 + 按字段提醒语）。弹层内的表单再 POST {@link #updateAppVersion}（带 {@code minConfirm}）。
+     * 校验不过 → 422 行内 err 回卡底槽（与保存端点同码），不弹层；改最低版本而无 {@code config.app_min_version_edit} → 403。
+     * 非 htmx 请求没有弹层可回，重定向回页面。
+     */
+    @PostMapping("/admin/config/app-version/confirm")
+    @PreAuthorize(EDIT_AUTH)
+    public String confirmAppVersion(@AuthenticationPrincipal AdminUserDetails admin,
+            @RequestParam String iosLatestVersion, @RequestParam String androidLatestVersion,
+            @RequestParam String minSupportedVersion,
+            @RequestParam(defaultValue = "") String iosStoreUrl, @RequestParam(defaultValue = "") String androidStoreUrl,
+            HxRequest hx, Model model, HttpServletResponse response) {
+        if (!hx.isHtmx()) {
+            return "redirect:/admin/config";
+        }
+        AppVersionConfigUpdate cmd = new AppVersionConfigUpdate(iosLatestVersion, androidLatestVersion,
+                minSupportedVersion, iosStoreUrl, androidStoreUrl);
+        List<AppVersionChange> changes = write.previewAppVersion(cmd, canEditMinVersion(admin));
+        model.addAttribute("cm", appVersionConfirmModal(changes, cmd));
+        response.setHeader(AdminFragmentResponses.HEADER_RETARGET, "#confirm-host");
+        response.setHeader(AdminFragmentResponses.HEADER_RESWAP, "innerHTML");
+        return "admin/fragments/confirm-modal :: modal";
+    }
+
+    /** G3 / G4 弹层内容（文案全部取 i18n；新旧值是服务端按库里当前值算出的，页面过期也不会复述错）。 */
+    private AdminConfirmModal appVersionConfirmModal(List<AppVersionChange> changes, AppVersionConfigUpdate cmd) {
+        List<AdminConfirmModal.DiffLine> lines = changes.stream()
+                .map(c -> new AdminConfirmModal.DiffLine(msg.get(APP_VERSION_LABELS.get(c.field())), c.oldValue(), c.newValue()))
+                .toList();
+        Map<String, String> hidden = new java.util.LinkedHashMap<>();
+        hidden.put("iosLatestVersion", cmd.iosLatestVersion().trim());
+        hidden.put("androidLatestVersion", cmd.androidLatestVersion().trim());
+        hidden.put("minSupportedVersion", cmd.minSupportedVersion().trim());
+        hidden.put("iosStoreUrl", cmd.iosStoreUrl().trim());
+        hidden.put("androidStoreUrl", cmd.androidStoreUrl().trim());
+        String action = "/admin/config/app-version";
+        AppVersionChange min = changes.stream().filter(c -> AppVersionChange.MIN_SUPPORTED.equals(c.field()))
+                .findFirst().orElse(null);
+        if (min != null) {
+            // G4：上调 / 下调标题与按钮按方向（返工清单 §0-8）；输入值须与新版本号完全一致
+            boolean up = AppVersionConfigService.compareVersions(min.newValue(), min.oldValue()) > 0;
+            String prompt = msg.get("admin.config.appVersion.confirm.typedPrompt",
+                    "<b>" + HtmlUtils.htmlEscape(min.newValue()) + "</b>");
+            return new AdminConfirmModal(
+                    msg.get(up ? "admin.config.appVersion.confirm.minUpTitle" : "admin.config.appVersion.confirm.minDownTitle"),
+                    msg.get("admin.config.appVersion.confirm.minDanger"), lines, null,
+                    prompt, "minConfirm", min.newValue(), action, hidden,
+                    msg.get(up ? "admin.config.appVersion.confirm.btnUp" : "admin.config.appVersion.confirm.btn"), true);
+        }
+        // G3：按字段提醒语（版本号 → 先确认商店已上架；链接 → 「前往更新」跳去哪），末尾统一一句审计
+        StringBuilder note = new StringBuilder();
+        for (AppVersionChange c : changes) {
+            switch (c.field()) {
+                case AppVersionChange.IOS_LATEST -> note.append(msg.get("admin.config.appVersion.confirm.iosLatestNote", c.newValue()));
+                case AppVersionChange.ANDROID_LATEST ->
+                        note.append(msg.get("admin.config.appVersion.confirm.androidLatestNote", c.newValue()));
+                case AppVersionChange.IOS_STORE_URL -> note.append(msg.get("admin.config.appVersion.confirm.iosUrlNote"));
+                case AppVersionChange.ANDROID_STORE_URL -> note.append(msg.get("admin.config.appVersion.confirm.androidUrlNote"));
+                default -> { }
+            }
+        }
+        note.append(msg.get("admin.config.appVersion.confirm.auditNote"));
+        return new AdminConfirmModal(msg.get("admin.config.appVersion.confirm.title"), null, lines, note.toString(),
+                null, null, null, action, hidden, msg.get("admin.config.appVersion.confirm.btn"), false);
+    }
+
+    /** 字段 → 卡上同一个标签键（弹层复述与卡片读法一致）。 */
+    private static final Map<String, String> APP_VERSION_LABELS = Map.of(
+            AppVersionChange.IOS_LATEST, "admin.config.appVersion.iosLatest",
+            AppVersionChange.ANDROID_LATEST, "admin.config.appVersion.androidLatest",
+            AppVersionChange.MIN_SUPPORTED, "admin.config.appVersion.minSupported",
+            AppVersionChange.IOS_STORE_URL, "admin.config.appVersion.iosStoreUrl",
+            AppVersionChange.ANDROID_STORE_URL, "admin.config.appVersion.androidStoreUrl");
+
+    /** 超管或持 {@code config.app_min_version_edit}（返工清单 §0-9：附加于 config.edit 的字段级权限）。 */
+    private static boolean canEditMinVersion(AdminUserDetails admin) {
+        if (admin == null) {
+            return false;
+        }
+        for (GrantedAuthority a : admin.getAuthorities()) {
+            if ("ROLE_SUPER_ADMIN".equals(a.getAuthority())
+                    || AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT.equals(a.getAuthority())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * App 版本更新（V1.3.4 AB-22 · FR-124）：两端最新版本 + 最低支持版本 + 两个商店链接。改完即生效（App 每次冷启动读库）。
+     *
+     * <p>页面上由确认弹层（{@link #confirmAppVersion}）提交到这里；端点仍是 config.edit，改「最低支持版本」另需
+     * {@code config.app_min_version_edit}（无则 403 min-forbidden），且须带与新值一致的 {@code minConfirm}（否则 422 min-confirm）——
+     * 两道都在服务端判，绕过弹层直接 POST 也一样。htmx 成功：回卡 fragment（原位替换）+ toast，并在 swap 后发
+     * {@code admin:confirm-close} 收起弹层；失败 422 / 403 回填到弹层内的错误槽（hx-target 由弹层表单决定）。
      */
     @PostMapping("/admin/config/app-version")
     @PreAuthorize(EDIT_AUTH)
@@ -293,13 +393,16 @@ public class AdminConfigController {
             HxRequest hx, Model model, HttpServletResponse response, RedirectAttributes flash) {
         AppVersionConfigUpdate cmd = new AppVersionConfigUpdate(iosLatestVersion, androidLatestVersion,
                 minSupportedVersion, iosStoreUrl, androidStoreUrl);
+        boolean canEditMin = canEditMinVersion(admin);
         if (hx.isHtmx()) {
-            write.updateAppVersion(cmd, minConfirm, admin.getAdminAccountId());
+            write.updateAppVersion(cmd, minConfirm, canEditMin, admin.getAdminAccountId());
+            // 在 swap 之后再收弹层：先收的话发请求的表单已不在 DOM 里
+            response.setHeader("HX-Trigger-After-Swap", AdminHxEvents.CONFIRM_CLOSE);
             return savedCard("cfg-app-version", "config-card-app-version", "admin.flash.config.appVersionSaved",
                     model, response);
         }
         try {
-            write.updateAppVersion(cmd, minConfirm, admin.getAdminAccountId());
+            write.updateAppVersion(cmd, minConfirm, canEditMin, admin.getAdminAccountId());
             flash.addFlashAttribute("toast", msg.get("admin.flash.config.appVersionSaved"));
         } catch (AppException e) {
             flash.addFlashAttribute("error", msg.resolve(e));

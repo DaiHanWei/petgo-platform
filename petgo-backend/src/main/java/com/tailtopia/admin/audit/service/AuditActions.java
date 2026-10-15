@@ -193,9 +193,10 @@ public final class AuditActions {
     public static final String SHOP_BANNER_DELETED = "SHOP_BANNER_DELETED";
 
     /**
-     * 运营弹窗（V1.3.4 AB-30）的新建 / 编辑 / 启用 / 停用。target = 弹窗 public_token（不外露自增 id）。
+     * 运营弹窗（V1.3.4 AB-30）的新建 / 编辑 / 启用 / 停用 / 删除。target = 弹窗 public_token（不外露自增 id）。
      *
-     * <p>🔴 没有 DELETED：弹窗不提供删除（删除会级联掉曝光记录，频次失忆），停用即可。
+     * <p>🔴 删除只许「未开始」（返工清单 §0-2：启用中、未到开始时间、且从未有曝光记录）——
+     * 上线过的弹窗删掉会级联掉曝光记录（频次失忆），只能停用。
      */
     public static final String OPS_POPUP_CREATED = "OPS_POPUP_CREATED";
 
@@ -204,6 +205,8 @@ public final class AuditActions {
     public static final String OPS_POPUP_ACTIVATED = "OPS_POPUP_ACTIVATED";
 
     public static final String OPS_POPUP_DEACTIVATED = "OPS_POPUP_DEACTIVATED";
+
+    public static final String OPS_POPUP_DELETED = "OPS_POPUP_DELETED";
 
     /**
      * 运营通知（V1.3.4 AB-31）的新建 / 取消。target = 活动 public_token（D-24，不外露自增 id）。

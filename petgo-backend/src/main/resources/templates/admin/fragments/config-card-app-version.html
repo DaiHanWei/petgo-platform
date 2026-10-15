@@ -1,52 +1,83 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <!--
-  D2 运营配置 · App 版本配置卡（V1.3.4 AB-22 · FR-124）。POST /admin/config/app-version
-  （iosLatestVersion / androidLatestVersion / minSupportedVersion / iosStoreUrl / androidStoreUrl / minConfirm）。
-  App 每次冷启动读 GET /api/v1/app-version（不加缓存），改完即生效。后台 PRD 与 UI 稿不在仓库，按相邻配置卡风格自设计（2026-10-14 拍板）。
-  「再次输入最低支持版本」只在最低版本偏离初值时显示并启用（admin-core.js 的 data-reveal-when-changed）；
-  未显示时输入框 disabled ⇒ 不进 FormData、不进「已修改」比对；显示后也带 data-diff-skip，不进确认弹层复述。服务端仍以 422 min-confirm 兜底。
+  D2 运营配置 · App 版本更新卡（V1.3.4 AB-22 · FR-124；2026-10-15 按后台 PRD §1 + UI 稿 G1–G8 返工，见 admin-doc-rework-v1.3.4.md §2）。
+  · 行式布局（UI 稿 G1）：左标签 230px，右输入 + 说明；版本号框 160px 等宽数字，链接框 420px。卡片排在「一次性解锁定价」之后。
+  · 「最低支持版本」行左侧红线 +「高危」标签（.prow.hot / .risk）；改它另需 config.app_min_version_edit，无码时只读 + 注明所缺权限（G7）。
+  · 即时校验（admin-core.js [data-av-row]）：x.y.z 格式、最低 ≤ iOS / Android 最新（分端报、带版本号）、https://、上调前两个链接齐；
+    错误贴在出错行下，有错时保存钮禁用、不发预检（G5 / G6）。服务端 422 兜底到卡底 err 槽（data-error-fields 标红）。
+  · 保存：hx-post 到 /admin/config/app-version/confirm（只校验不写库）→ 服务端渲染确认弹层（G3 普通 / G4 输入新版本号）
+    到 #confirm-host；弹层内再 POST 原端点 /admin/config/app-version（带 minConfirm）。无 JS 时 action 直接 POST 原端点（服务端照判）。
   appVersion 为 null（缺行）时整卡不渲染，同客服联系方式卡。
 -->
 <body>
 <th:block th:fragment="card" th:if="${appVersion != null}"
-          th:with="action=@{/admin/config/app-version},hxPost=@{/admin/config/app-version},cardId='cfg-app-version',confirmDiff=true,confirmDiffTitle=#{admin.config.appVersion.confirmTitle},
+          th:with="action=@{/admin/config/app-version},hxPost=@{/admin/config/app-version/confirm},cardId='cfg-app-version',
                    errorFields=${errorFields?.get('appVersion')},
                    canEdit=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
+                   canEditMin=${#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.app_min_version_edit'')')},
                    readonly=${!#authorization.expression('hasRole(''SUPER_ADMIN'') or hasAuthority(''config.edit'')')},
                    readonlyNote=#{admin.v130.config.readonly(#{perm.config.edit})}">
     <div th:replace="~{admin/fragments/tpl-d-config-card :: configCard(~{::app-version-title}, ~{::app-version-form}, #{admin.config.btn.saveAppVersion})}">
-        <h2 class="cfg-title" th:fragment="app-version-title" th:text="#{admin.config.appVersion}">App 版本配置</h2>
-        <div th:fragment="app-version-form">
-            <p class="hint" th:text="#{admin.config.appVersionHint}">版本号格式 x.y.z。App 每次冷启动读取，改完立即生效 —— 不需发版、不需重启。</p>
-            <div class="cfg-grid-2">
-                <label class="field"><span th:text="#{admin.config.appVersion.iosLatest}">iOS 最新版本</span>
-                    <input class="inp field-full" type="text" name="iosLatestVersion" maxlength="20" required
+        <h2 class="cfg-title" th:fragment="app-version-title" th:text="#{admin.config.appVersion}">App 版本更新</h2>
+        <div th:fragment="app-version-form" class="av-body"
+             th:attr="data-msg-format=#{admin.err.config.version.format},data-msg-min-gt-ios=#{admin.err.config.version.min-gt-ios-latest('{0}')},data-msg-min-gt-android=#{admin.err.config.version.min-gt-android-latest('{0}')},data-msg-scheme=#{admin.err.config.store-url.scheme},data-msg-blank=#{admin.err.config.store-url.blank}">
+            <p class="av-hint" th:text="#{admin.config.appVersionHint}">控制 App 的推荐更新与强制更新。</p>
+            <!--/* ⚠️ 行标签是 <label for>：读屏念得出字段名；类名不用 .field —— 那条全局规则会给它加必填星号与上下外边距。 */-->
+            <div class="prow" data-av-row="version">
+                <label class="prow-lbl" for="av-ios-latest" th:text="#{admin.config.appVersion.iosLatest}">iOS 最新版本号</label>
+                <div class="prow-ctl">
+                    <input id="av-ios-latest" class="inp vin" type="text" name="iosLatestVersion" maxlength="20" required
+                           autocomplete="off" spellcheck="false" aria-describedby="av-ios-latest-err"
                            th:value="${appVersion.iosLatestVersion}" th:disabled="${!canEdit}"/>
-                </label>
-                <label class="field"><span th:text="#{admin.config.appVersion.androidLatest}">Android 最新版本</span>
-                    <input class="inp field-full" type="text" name="androidLatestVersion" maxlength="20" required
+                    <p class="prow-sub" th:utext="#{admin.config.appVersion.iosLatestSub}">说明</p>
+                    <p class="row-error" id="av-ios-latest-err" role="alert" hidden data-row-error></p>
+                </div>
+            </div>
+            <div class="prow" data-av-row="version">
+                <label class="prow-lbl" for="av-android-latest" th:text="#{admin.config.appVersion.androidLatest}">Android 最新版本号</label>
+                <div class="prow-ctl">
+                    <input id="av-android-latest" class="inp vin" type="text" name="androidLatestVersion" maxlength="20" required
+                           autocomplete="off" spellcheck="false" aria-describedby="av-android-latest-err"
                            th:value="${appVersion.androidLatestVersion}" th:disabled="${!canEdit}"/>
+                    <p class="prow-sub" th:utext="#{admin.config.appVersion.androidLatestSub}">说明</p>
+                    <p class="row-error" id="av-android-latest-err" role="alert" hidden data-row-error></p>
+                </div>
+            </div>
+            <!--/* 高危行（UI 稿 G1 / G7）。无 config.app_min_version_edit：readonly（不是 disabled —— 值仍要随表单提交，端点参数必填），
+                   服务端另判一道（改了就 403 min-forbidden）。 */-->
+            <div class="prow hot" data-av-row="min" th:classappend="${canEdit and !canEditMin} ? 'is-ro'">
+                <label class="prow-lbl" for="av-min">
+                    <span th:text="#{admin.config.appVersion.minSupported}">最低支持版本</span><span class="risk" th:text="#{admin.config.appVersion.risk}">高危</span>
                 </label>
-                <label class="field"><span th:text="#{admin.config.appVersion.minSupported}">最低支持版本</span>
-                    <input class="inp field-full" type="text" name="minSupportedVersion" maxlength="20" required
-                           th:value="${appVersion.minSupportedVersion}" th:disabled="${!canEdit}"/>
-                </label>
-                <!--/* 慎改说明：上调最低版本 = 低于它的全部用户冷启动即被强制更新。⚠️ 文案不用「高危」二字（D-8：页面不标红「高危」，AdminConfigTemplateDIntegrationTest 守着） */-->
-                <p class="hint cfg-grid-right" data-risk-note="min-supported" th:text="#{admin.config.appVersion.minRisk}">
-                    ⚠ 慎改：低于该版本的所有用户打开 App 即被强制更新；上调前两个商店链接都必须填写。</p>
-                <label class="field cfg-grid-full" data-reveal-when-changed="minSupportedVersion" hidden th:if="${canEdit}">
-                    <span th:text="#{admin.config.appVersion.minConfirm}">再次输入最低支持版本（确认）</span>
-                    <input class="inp field-full" type="text" name="minConfirm" maxlength="20" autocomplete="off" data-diff-skip disabled/>
-                </label>
-                <label class="field cfg-grid-full"><span th:text="#{admin.config.appVersion.iosStoreUrl}">iOS 商店链接</span>
-                    <input class="inp field-full" type="text" name="iosStoreUrl" maxlength="512" inputmode="url"
+                <div class="prow-ctl">
+                    <input id="av-min" class="inp vin" type="text" name="minSupportedVersion" maxlength="20" required
+                           autocomplete="off" spellcheck="false" aria-describedby="av-min-err"
+                           th:value="${appVersion.minSupportedVersion}" th:disabled="${!canEdit}"
+                           th:readonly="${canEdit and !canEditMin}"/>
+                    <p class="prow-sub"><span th:utext="#{admin.config.appVersion.minSub}">说明</span>
+                        <span class="prow-ro" th:if="${canEdit and !canEditMin}" data-av-min-readonly
+                              th:text="#{admin.config.appVersion.minReadonly(#{perm.config.app_min_version_edit})}">只读</span></p>
+                    <p class="row-error" id="av-min-err" role="alert" hidden data-row-error></p>
+                </div>
+            </div>
+            <div class="prow" data-av-row="url">
+                <label class="prow-lbl" for="av-ios-url" th:text="#{admin.config.appVersion.iosStoreUrl}">iOS 商店链接</label>
+                <div class="prow-ctl">
+                    <input id="av-ios-url" class="inp vin vin-url" type="text" name="iosStoreUrl" maxlength="512" inputmode="url"
+                           autocomplete="off" spellcheck="false" placeholder="https://…" aria-describedby="av-ios-url-err"
                            th:value="${appVersion.iosStoreUrl}" th:disabled="${!canEdit}"/>
-                </label>
-                <label class="field cfg-grid-full"><span th:text="#{admin.config.appVersion.androidStoreUrl}">Android 商店链接</span>
-                    <input class="inp field-full" type="text" name="androidStoreUrl" maxlength="512" inputmode="url"
+                    <p class="row-error" id="av-ios-url-err" role="alert" hidden data-row-error></p>
+                </div>
+            </div>
+            <div class="prow" data-av-row="url">
+                <label class="prow-lbl" for="av-android-url" th:text="#{admin.config.appVersion.androidStoreUrl}">Android 商店链接</label>
+                <div class="prow-ctl">
+                    <input id="av-android-url" class="inp vin vin-url" type="text" name="androidStoreUrl" maxlength="512" inputmode="url"
+                           autocomplete="off" spellcheck="false" placeholder="https://…" aria-describedby="av-android-url-err"
                            th:value="${appVersion.androidStoreUrl}" th:disabled="${!canEdit}"/>
-                </label>
+                    <p class="row-error" id="av-android-url-err" role="alert" hidden data-row-error></p>
+                </div>
             </div>
         </div>
     </div>

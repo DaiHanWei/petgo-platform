@@ -74,6 +74,40 @@ public class OpsAudienceQuery {
         return total;
     }
 
+    /** 指定用户 ID 的归类（{@link OpsAudienceSql#classifyIds()}）。 */
+    public enum IdStatus {
+        OK,
+        NOT_FOUND,
+        DELETED,
+        BANNED,
+        VIRTUAL
+    }
+
+    /**
+     * 逐个归类指定用户 ID（V1.3.4 AB-31 返工 · CSV 校验）。库里查不到的 id 记 {@link IdStatus#NOT_FOUND}。
+     * {@code OK} 的个数与 {@link #count} 在 IDS 模式下的结果同口径。
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, IdStatus> classify(Collection<Long> ids) {
+        Map<Long, IdStatus> out = new java.util.HashMap<>();
+        if (ids == null || ids.isEmpty()) {
+            return out;
+        }
+        List<Long> distinct = ids.stream().filter(Objects::nonNull).distinct().toList();
+        String sql = OpsAudienceSql.classifyIds();
+        for (int from = 0; from < distinct.size(); from += ID_CHUNK) {
+            List<Long> chunk = distinct.subList(from, Math.min(from + ID_CHUNK, distinct.size()));
+            jdbc.query(sql, new MapSqlParameterSource("ids", chunk),
+                    rs -> {
+                        out.put(rs.getLong("id"), IdStatus.valueOf(rs.getString("k")));
+                    });
+            for (Long id : chunk) {
+                out.putIfAbsent(id, IdStatus.NOT_FOUND);
+            }
+        }
+        return out;
+    }
+
     /** timestamptz 精确绑定：Instant → UTC OffsetDateTime（不依赖 JVM 默认时区）。 */
     private static MapSqlParameterSource bind(Map<String, Object> raw) {
         MapSqlParameterSource params = new MapSqlParameterSource();
