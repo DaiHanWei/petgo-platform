@@ -135,7 +135,9 @@ class PetAvatarItem extends StatelessWidget {
               meta,
               key: metaKey,
               style: const TextStyle(fontSize: 11, color: AppColors.ink2),
-              maxLines: 1,
+              // 验收 2026-10-15：84 宽单行放不下「Anjing · 1th 0bln」被截成「…」→ 允许两行，
+              // 年龄内用不换行空格，只在「·」处折行
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
             ),
@@ -149,6 +151,6 @@ class PetAvatarItem extends StatelessWidget {
   String _meta(AppLocalizations l10n) => [
         ?petSpeciesLabel(l10n, petType),
         // 不满 1 个月按天表达，避免「0th 0bln」（与档案页同一出口）。
-        ?formatPetAge(l10n, birthday),
+        ?formatPetAge(l10n, birthday)?.replaceAll(' ', '\u00A0'),
       ].join(' · ');
 }
