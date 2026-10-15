@@ -13,6 +13,7 @@ import '../router/app_router.dart';
 import '../storage/secure_storage.dart';
 import 'api_log_interceptor.dart';
 import 'auth_interceptor.dart';
+import 'client_info_interceptor.dart';
 
 /// 后端基址（运行时配置；env/--dart-define 注入，默认线上正式服）。
 /// 默认值为用户明确指令固定：非用户明确要求，不得改动此默认值。
@@ -45,6 +46,8 @@ final Provider<Dio> dioProvider = Provider<Dio>((ref) {
     connectTimeout: const Duration(seconds: 15),
     receiveTimeout: const Duration(seconds: 30),
   ));
+  // V1.3.4 起每个 API 请求带 X-App-Version / X-App-Platform（后端据此区分新旧客户端）。
+  dio.interceptors.add(ClientInfoInterceptor());
   dio.interceptors.add(AuthInterceptor(
     dio: dio,
     tokenStore: ref.read(tokenStoreProvider),
