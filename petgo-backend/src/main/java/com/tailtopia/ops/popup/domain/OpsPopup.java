@@ -13,12 +13,13 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import org.hibernate.annotations.DynamicUpdate;
 
 /**
  * 运营弹窗（V1.3.4 FR-137 · AD-14 · D-23 / D-24）。
  *
- * <p>本主题只读：配置由 admin 主题（AB-30）写入（D-2 / AD-1）。{@link #create} / {@link #activate()} /
- * {@link #disable()} 供 admin 主题与测试夹具使用，<b>本主题不提供写接口</b>。
+ * <p>本主题只读：配置由 admin 主题（AB-30）写入（D-2 / AD-1）。{@link #create} / {@link #update} /
+ * {@link #activate()} / {@link #disable()} 供 admin 主题与测试夹具使用，<b>本主题不提供写接口</b>。
  *
  * <p>🔴 对外标识一律 {@code publicToken}（D-24），自增 id 不外露。
  * 🔴 频次挂在 {@code id} 上（{@code ops_popup_impressions.popup_id}）：编辑不换 id、不换 token，
@@ -26,8 +27,13 @@ import java.time.Instant;
  *
  * <p>{@code imageUrlId / imageUrlEn} 存「https:// 完整地址」或「公开桶 OSS objectKey」二者之一，
  * 读接口统一换算（见 {@code OpsPopupCandidateService}）。
+ *
+ * <p>🔴 {@code @DynamicUpdate}：UPDATE 只写脏列。编辑（{@link #update}）不碰 {@code status}，于是编辑事务
+ * 不会把装载时的旧状态写回 —— 运营 A 在抽屉里改文案、B 同时点了启用 / 停用，A 保存后 B 的启停仍在。
+ * （其余字段两人同时编辑仍是后写赢，暂不加 {@code @Version}。）
  */
 @Entity
+@DynamicUpdate
 @Table(name = "ops_popups")
 public class OpsPopup {
 
@@ -138,6 +144,37 @@ public class OpsPopup {
         p.targetType = targetType;
         p.targetValue = targetValue;
         return p;
+    }
+
+    /**
+     * 后台编辑（AB-30）：字段同 {@link #create}。
+     *
+     * <p>🔴 <b>不动 {@code id} / {@code publicToken} / {@code status}</b>：频次记录挂在 id 上（AD-14），
+     * 换 id 等于让已看过的人再看一遍；token 是埋点 {@code popup_id}（D-24），换了数据就断成两截；
+     * 启停另走 {@link #activate()} / {@link #disable()}，编辑不顺手改状态（改文案不该让一条停用的弹窗上线）。
+     */
+    public void update(String name, Instant startsAt, Instant endsAt, int priority,
+            OpsPopupAudience audience, int newUserDays, OpsPopupFrequency frequency,
+            String imageUrlId, String imageUrlEn, String titleId, String titleEn,
+            String bodyId, String bodyEn, String buttonTextId, String buttonTextEn,
+            OpsTargetType targetType, String targetValue) {
+        this.name = name;
+        this.startsAt = startsAt;
+        this.endsAt = endsAt;
+        this.priority = priority;
+        this.audience = audience;
+        this.newUserDays = newUserDays;
+        this.frequency = frequency;
+        this.imageUrlId = imageUrlId;
+        this.imageUrlEn = imageUrlEn;
+        this.titleId = titleId;
+        this.titleEn = titleEn;
+        this.bodyId = bodyId;
+        this.bodyEn = bodyEn;
+        this.buttonTextId = buttonTextId;
+        this.buttonTextEn = buttonTextEn;
+        this.targetType = targetType;
+        this.targetValue = targetValue;
     }
 
     public void activate() {

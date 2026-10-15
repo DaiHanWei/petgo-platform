@@ -600,6 +600,7 @@ dialog { z-index: 60; }
 .cfg-title { font-size: 15px; margin: 0 0 8px; }
 .cfg-foot { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 12px; }
 .cfg-foot .inline-error-slot:empty { display: none; }
+.cfg-foot .btn { flex-shrink: 0; } /* 长报错文案会把保存钮挤窄截字（AB-22 预览发现） */
 .tag-dirty { background: var(--warn-bg); color: var(--warn); border-color: var(--warn-bg); }
 /* .tag 自带 display:inline-block，会盖掉 UA 的 [hidden]{display:none} —— 不补这条，「已修改」在未改动时也常亮（跨页 bug）。 */
 .tag-dirty[hidden], .tag[hidden] { display: none; }
@@ -629,6 +630,7 @@ label.field.req::after { content: " *"; color: var(--danger); font-weight: 700; 
 .sel::after { content: '▾'; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--muted); }
 /* UX-DR12 三语占位 */
 .field label, label.field { display: block; }
+label.field[hidden] { display: none; } /* 同 .perm-groups[hidden]：上一条会盖掉 UA 的 [hidden]（AB-22 确认框） */
 .btn { min-width: 88px; white-space: nowrap; }
 .btn-sm { min-width: 0; }
 th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -864,7 +866,9 @@ th, .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
    而给 main 加底部留白对固定定位的抽屉毫无作用（V1.3.0 Story 7.3 复审 P2）。 */
 /* ⚠️ 排除 B4：那页的时间输入在收起的 <details> 里也留在 DOM 中，:has 按存在判会让
    分配记录页签底部恒空一大片（V1.3.0 Story 7.4 复审 P3）——B4 改由 details[open] 自己留白。 */
-.drawer-body:has(input[type="datetime-local"]):not(:has(.tag-assign-details)) { padding-bottom: 340px; }
+/* ⚠️ 也排除运营弹窗抽屉（AB-30）：表单很长、时间输入在上半部，下方本就有足够内容给日期弹层；
+   而 340px 底部留白会把 sticky 底栏顶到抽屉中间（sticky 以滚动容器内边距为界）。 */
+.drawer-body:has(input[type="datetime-local"]):not(:has(.tag-assign-details)):not(:has(.opsp-form)) { padding-bottom: 340px; }
 
 /* ===== B4 内容标签（V1.3.0 Story 7.4，模板 B + 480px 抽屉）===== */
 .tags-table td { vertical-align: middle; }
@@ -1066,3 +1070,40 @@ tr.is-muted td { opacity: .55; }
 .totals-foot-ico { color: var(--muted); display: inline-flex; }
 .totals-seed { color: var(--brand); font-weight: 600; text-decoration: none; white-space: nowrap; }
 .totals-seed:hover { text-decoration: underline; }
+
+/* ===== 运营弹窗（V1.3.4 AB-30）===== */
+/* 表单分五组、字段多：抽屉放宽到 560px，标签列收窄到 110px，避免 260px 的输入框把每行挤成两行。 */
+#ops-popup-drawer.drawer { width: 560px; }
+.opsp-form .opsp-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.opsp-form .s-form-row[hidden] { display: none; } /* .s-form-row 自带 display:flex，会盖掉 UA 的 [hidden]（人群 / 跳转类型显隐） */
+.opsp-form .s-form-row > .s-label { width: 110px; }
+.opsp-form .s-form-row > .s-ctl > input,
+.opsp-form .s-form-row > .s-ctl > select { min-width: 0; width: 100%; box-sizing: border-box; }
+.opsp-form .s-form-row > .s-ctl > textarea { box-sizing: border-box; }
+.opsp-group { margin: 18px 0 4px; padding-top: 12px; border-top: 1px solid var(--line); font-size: var(--fs-sm); color: var(--ink-2); }
+.opsp-fieldset > .opsp-group:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.opsp-group-hint { margin: 0 0 4px; }
+.opsp-meta { display: flex; gap: 8px; align-items: center; margin: 0 0 10px; }
+.opsp-form .is-invalid { border-color: var(--danger); outline: 1px solid var(--danger); }
+.opsp-form [data-error-name].is-invalid { outline-offset: 4px; border-radius: 6px; }
+.opsp-foot { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.opsp-foot .inline-error-slot { flex: 1; margin: 0; }
+.opsp-foot .inline-error-slot:empty { display: none; }
+/* 4:5 竖图缩略：列表里统一 64×80，不按原图撑高行。 */
+.opsp-thumb { width: 64px; height: 80px; object-fit: cover; border-radius: 6px; display: block; background: var(--surface-2, #F1F2F5); }
+.opsp-sub { font-size: var(--fs-xs); margin-top: 2px; }
+.opsp-window { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.opsp-url { display: inline-block; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+
+/* ===== 运营通知（V1.3.4 AB-31）：复用 .opsp-form 抽屉样式，只补人群区间 / 复选 / 预估行 / 只读详情 ===== */
+.opsn-range { display: flex; align-items: center; gap: 6px; }
+.opsn-range > input { flex: 1; min-width: 0; }
+.opsn-check { display: inline-flex; align-items: center; gap: 4px; margin-right: 14px; }
+.opsn-preview-row { display: flex; align-items: center; gap: 10px; }
+.opsn-preview-row .inline-error-slot { margin: 0; flex: 1; }
+.opsn-preview-ok { font-weight: 600; }
+.opsn-dl { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; margin: 0; }
+.opsn-dl dt { color: var(--muted); }
+.opsn-dl dd { margin: 0; word-break: break-word; }
+.opsn-pre { white-space: pre-wrap; }
+

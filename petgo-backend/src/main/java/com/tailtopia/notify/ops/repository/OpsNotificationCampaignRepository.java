@@ -6,6 +6,8 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -22,6 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 public interface OpsNotificationCampaignRepository extends JpaRepository<OpsNotificationCampaign, Long> {
 
     Optional<OpsNotificationCampaign> findByPublicToken(String publicToken);
+
+    /** 后台发送记录列表（V1.3.4 AB-31）：新建的在前，同刻按 id 倒序保证翻页稳定。 */
+    Page<OpsNotificationCampaign> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);
 
     /** 通知中心列表一页一次批量回查（不 N+1）。 */
     List<OpsNotificationCampaign> findByPublicTokenIn(Collection<String> publicTokens);

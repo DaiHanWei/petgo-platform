@@ -16,6 +16,7 @@ import com.tailtopia.admin.audit.service.AdminAuditService;
 import com.tailtopia.admin.config.dto.KtpPricingForm;
 import com.tailtopia.admin.config.dto.PawCoinForm;
 import com.tailtopia.admin.config.dto.PricingForm;
+import com.tailtopia.config.domain.AppVersionConfig;
 import com.tailtopia.config.domain.ConfigChangeLog;
 import com.tailtopia.config.domain.PawCoinConfig;
 import com.tailtopia.config.domain.PawCoinTopupTier;
@@ -24,6 +25,8 @@ import com.tailtopia.config.repository.ConfigChangeLogRepository;
 import com.tailtopia.config.repository.PawCoinConfigRepository;
 import com.tailtopia.config.repository.PawCoinTopupTierRepository;
 import com.tailtopia.config.repository.PricingConfigRepository;
+import com.tailtopia.config.service.AppVersionConfigService;
+import com.tailtopia.config.service.AppVersionConfigUpdate;
 import com.tailtopia.shared.error.AppException;
 import java.util.List;
 import java.util.Optional;
@@ -41,6 +44,7 @@ class AdminConfigServiceTest {
     private ConfigChangeLogRepository changeLogs;
     private AdminAuditService audit;
     private com.tailtopia.config.repository.FeedRankConfigRepository feedRankRepo;
+    private AppVersionConfigService appVersion;
     private AdminConfigService svc;
 
     @BeforeEach
@@ -55,7 +59,9 @@ class AdminConfigServiceTest {
         svc = new AdminConfigService(pricingRepo, pawcoinRepo, tierRepo, changeLogs, audit,
                 feedRankRepo,
                 // V1.3.0 Story 3-1：客服联系方式（本类既有用例不碰它，另有专门用例）
-                Mockito.mock(com.tailtopia.config.repository.SupportContactConfigRepository.class));
+                Mockito.mock(com.tailtopia.config.repository.SupportContactConfigRepository.class),
+                // V1.3.4 AB-22：App 版本配置（校验与写入归它，本类只测 diff / 确认值 / 日志审计）
+                appVersion = Mockito.mock(AppVersionConfigService.class));
     }
 
     private PricingConfig seedPricing() {
@@ -331,6 +337,86 @@ class AdminConfigServiceTest {
         svc.setTierEnabled(9L, true, 7L);
         assertThat(off.isEnabled()).isTrue();
         verify(tierRepo).save(off);
+    }
+
+    // ── V1.3.4 AB-22：App 版本配置（diff / 无变化不写 / 最低版本确认值 / 日志 + 审计）──────────
+    private static final String IOS_URL = "https://apps.apple.com/app/id6785361196";
+    private static final String ANDROID_URL = "https://play.google.com/store/apps/details?id=com.tailtopia.app";
+
+    private AppVersionConfig seedAppVersion() {
+        AppVersionConfig c = instantiate(AppVersionConfig.class);
+        set(c, "id", 1L);
+        c.apply("1.3.3", "1.3.3", "1.0.0", IOS_URL, ANDROID_URL, java.time.Instant.now(), 1L);
+        when(appVersion.current()).thenReturn(Optional.of(c));
+        return c;
+    }
+
+    @Test
+    void appVersionUnchangedAfterTrimWritesNothing() {
+        seedAppVersion();
+        svc.updateAppVersion(new AppVersionConfigUpdate(" 1.3.3 ", "1.3.3", "1.0.0 ", IOS_URL, " " + ANDROID_URL), null, 7L);
+        verify(appVersion, never()).update(any(), anyLong());
+        verify(changeLogs, never()).saveAll(anyList());
+        verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void appVersionMinChangedWithoutMatchingConfirmIsRejectedBeforeWrite() {
+        seedAppVersion();
+        AppVersionConfigUpdate cmd = new AppVersionConfigUpdate("1.3.4", "1.3.4", "1.1.0", IOS_URL, ANDROID_URL);
+        for (String confirm : new String[] {null, "", "1.1", "1.1.1"}) {
+            assertThatThrownBy(() -> svc.updateAppVersion(cmd, confirm, 7L))
+                    .isInstanceOf(AppException.class)
+                    .satisfies(e -> assertThat(((AppException) e).getMessageCode())
+                            .isEqualTo("admin.err.config.version.min-confirm"));
+        }
+        verify(appVersion, never()).update(any(), anyLong());
+        verify(changeLogs, never()).saveAll(anyList());
+    }
+
+    @Test
+    void appVersionLatestOnlyChangeNeedsNoConfirmAndLogsEachChangedField() {
+        seedAppVersion();
+        svc.updateAppVersion(new AppVersionConfigUpdate("1.3.4", " 1.3.4", "1.0.0", IOS_URL, ANDROID_URL), null, 7L);
+
+        ArgumentCaptor<AppVersionConfigUpdate> sent = ArgumentCaptor.forClass(AppVersionConfigUpdate.class);
+        verify(appVersion).update(sent.capture(), eq(7L));
+        assertThat(sent.getValue().androidLatestVersion()).isEqualTo("1.3.4"); // 已 trim
+        ArgumentCaptor<List<ConfigChangeLog>> cap = ArgumentCaptor.forClass(List.class);
+        verify(changeLogs).saveAll(cap.capture());
+        assertThat(cap.getValue()).extracting(ConfigChangeLog::getField)
+                .containsExactlyInAnyOrder("ios_latest_version", "android_latest_version");
+        assertThat(cap.getValue()).allSatisfy(l -> assertThat(l.getConfigType())
+                .isEqualTo(ConfigChangeLog.ConfigType.APP_VERSION));
+        verify(audit, times(1)).record(eq(7L), eq("CONFIG_UPDATE_APP_VERSION"), eq("config"),
+                eq("app_version_config"), eq("2 field(s) changed"));
+    }
+
+    @Test
+    void appVersionMinChangeWithMatchingConfirmSavesAndAudits() {
+        seedAppVersion();
+        svc.updateAppVersion(new AppVersionConfigUpdate("1.3.3", "1.3.3", "1.1.0", IOS_URL, ANDROID_URL), " 1.1.0 ", 7L);
+        verify(appVersion).update(any(), eq(7L));
+        ArgumentCaptor<List<ConfigChangeLog>> cap = ArgumentCaptor.forClass(List.class);
+        verify(changeLogs).saveAll(cap.capture());
+        assertThat(cap.getValue()).singleElement().satisfies(l -> {
+            assertThat(l.getField()).isEqualTo("min_supported_version");
+            assertThat(l.getOldValue()).isEqualTo("1.0.0");
+            assertThat(l.getNewValue()).isEqualTo("1.1.0");
+        });
+        verify(audit).record(eq(7L), eq("CONFIG_UPDATE_APP_VERSION"), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void appVersionValidationErrorFromDelegateLeavesNoLogOrAudit() {
+        seedAppVersion();
+        when(appVersion.update(any(), anyLong())).thenThrow(
+                AppException.validation("版本号格式不正确").code("admin.err.config.version.format"));
+        assertThatThrownBy(() -> svc.updateAppVersion(
+                new AppVersionConfigUpdate("1.3", "1.3.3", "1.0.0", IOS_URL, ANDROID_URL), null, 7L))
+                .isInstanceOf(AppException.class);
+        verify(changeLogs, never()).saveAll(anyList());
+        verify(audit, never()).record(anyLong(), anyString(), anyString(), anyString(), anyString());
     }
 
     private static <T> T instantiate(Class<T> cls) {

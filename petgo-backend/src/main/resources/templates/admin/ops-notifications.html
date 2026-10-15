@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!--
+  运营通知发送页（V1.3.4 AB-31 · FR-138），模板 B · tpl-b-list + 抽屉，结构照运营弹窗页（AB-30）。
+  发送记录列表（新建的在前，分页）+ 新建抽屉（立即 / 定时，fragments/drawer-ops-notification.html :: form）
+  + 只读详情（同文件 :: detail）。抽屉取数复用 GET /admin/ops-notifications 本身（?create=1 / ?open=<token> + HX-Request）。
+  URL 一律用 public_token（D-24）。
+  🔴 不做编辑 / 重发 / 删除；只有「待发送」可取消。不展示打开 / 点击数（走 PostHog）。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.nav.opsNotifications}">运营通知 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag" th:with="res='ops-notify'">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.nav.opsNotifications}">运营通知</h1>
+            <button th:if="${canEdit}" type="button" class="btn btn-primary btn-sm" data-drawer-res="ops-notify"
+                    th:attr="data-drawer-open=@{/admin/ops-notifications(create=1)},data-drawer-autoopen=${openCreate} ? 'true' : null"
+                    th:text="#{admin.opsNotify.btn.add}">＋ 新建通知</button>
+        </div>
+        <p class="muted" th:text="#{admin.opsNotify.hint}">发到 App 通知中心并推送。</p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <!--/* 行内取消的结果槽：成功清空、失败（404 / 409）回填红字。不复用抽屉体：抽屉可能正开着一条没发出去的新建。 */-->
+        <p id="ops-notify-row-error" class="lst-inline-error" aria-live="polite"></p>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{}, ~{}, ~{::opsn-table}, ~{::opsn-drawer})}">
+            <div th:fragment="opsn-table" id="ops-notify-rows">
+                <div th:replace="~{admin/fragments/ops-notifications-list :: rows}"></div>
+            </div>
+            <div th:fragment="opsn-drawer" class="drawer-title" th:text="#{admin.nav.opsNotifications}">运营通知</div>
+        </div>
+        <!--/* ?open=<token> 深链兜底 */-->
+        <span hidden th:if="${open != null}" data-drawer-res="ops-notify"
+              th:attr="data-drawer-deeplink=@{/admin/ops-notifications(open=${open})}"></span>
+    </div>
+</div>
+</body>
+</html>

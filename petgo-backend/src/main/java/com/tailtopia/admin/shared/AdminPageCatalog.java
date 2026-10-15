@@ -238,6 +238,10 @@ public final class AdminPageCatalog {
             // ⚙️ 配置与安全
             page("config", G_CONFIG, "/admin/config",
                     List.of(CONFIG_VIEW), List.of(CONFIG_EDIT), List.of()).nav("admin.nav.config", "config", CONFIG_VIEW, CONFIG_SHARE_REWARD_VIEW, CONFIG_SHARE_REWARD_EDIT),
+            // V1.3.4 AB-30：运营弹窗。与 AB-22 同口径复用 config.view / config.edit（不另立码），矩阵里只展示「沿用」。
+            shared("ops-popups", G_CONFIG, "/admin/ops-popups", List.of(CONFIG_VIEW, CONFIG_EDIT)).nav("admin.nav.opsPopups", "ops-popups", CONFIG_VIEW, CONFIG_EDIT),
+            // V1.3.4 AB-31：运营通知发送页。同口径复用 config.view（看）/ config.edit（发、取消）。
+            shared("ops-notifications", G_CONFIG, "/admin/ops-notifications", List.of(CONFIG_VIEW, CONFIG_EDIT)).nav("admin.nav.opsNotifications", "ops-notifications", CONFIG_VIEW, CONFIG_EDIT),
             page("algo-params", G_CONFIG, "/admin/algo-params",
                     List.of(CONFIG_ALGO_PARAM_VIEW), List.of(CONFIG_ALGO_PARAM_EDIT), List.of()).nav("admin.nav.algoParams", "algo-params", CONFIG_ALGO_PARAM_VIEW),
             page("share-reward", G_CONFIG, null,
