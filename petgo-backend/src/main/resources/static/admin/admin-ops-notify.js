@@ -73,6 +73,14 @@
             if (err) { err.innerHTML = ''; }
         }
 
+        // 验收 2026-10-15：改了任一字段即收起「下一步」留下的步骤提示与该字段红边（原先选了人群红字还在）
+        ['input', 'change'].forEach(function (evt) {
+            form.addEventListener(evt, function (e) {
+                $$(form, '[data-ferr]').forEach(function (p) { p.hidden = true; p.textContent = ''; });
+                if (e.target && e.target.classList) { e.target.classList.remove('is-invalid'); }
+            });
+        });
+
         function wibNow() {
             // WIB 固定 UTC+7（无夏令时）：与服务端 ScheduleWindow 同口径
             return new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 16);

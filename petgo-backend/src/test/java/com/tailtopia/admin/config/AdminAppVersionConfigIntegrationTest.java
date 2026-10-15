@@ -313,7 +313,8 @@ class AdminAppVersionConfigIntegrationTest extends ApiIntegrationTest {
         write("1.3.3", "1.3.3", "1.1.0", IOS_URL, ANDROID_URL);
         String down = mvc.perform(confirm(superAdmin(), "1.3.3", "1.3.3", "1.0.0", IOS_URL, ANDROID_URL))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(down).contains("确认修改最低支持版本？").contains("data-expected=\"1.0.0\"").contains(">确认修改<")
+        assertThat(down).contains("下调后，版本号介于新旧值之间的用户将不再被强制更新").doesNotContain("无法继续使用 App")
+                .contains("确认修改最低支持版本？").contains("data-expected=\"1.0.0\"").contains(">确认修改<")
                 .doesNotContain("确认上调");
         assertThat(row().get("min_supported_version")).isEqualTo("1.1.0");
     }

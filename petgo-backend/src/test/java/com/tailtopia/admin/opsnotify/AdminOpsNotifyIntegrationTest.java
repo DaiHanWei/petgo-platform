@@ -319,13 +319,13 @@ class AdminOpsNotifyIntegrationTest extends ApiIntegrationTest {
                         .with(authentication(ed)).with(csrf()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(body).contains("data-valid=\"1\"")
-                .contains("有效 1 人，跳过 6 个（不存在 3 · 已注销 1 · 已封号 1 · 虚拟号 1）");
+                .contains("有效 1 人，跳过 5 个（不存在 2 · 已注销 1 · 已封号 1 · 虚拟号 1）"); // 首行表头 user_id 不计（验收 2026-10-15）
 
         // 粘贴同样内容 → 同样结果（文本参数）
         String pasted = mvc.perform(htmx(post(BASE + "/ids/check").param("userIds", csv), "opsn-ids-result")
                         .with(authentication(ed)).with(csrf()))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(pasted).contains("data-valid=\"1\"").contains("不存在 3");
+        assertThat(pasted).contains("data-valid=\"1\"").contains("不存在 2");
 
         MvcResult export = mvc.perform(post(BASE + "/ids/skipped.csv").param("userIds", csv).param("lang", "zh_CN")
                         .with(authentication(ed)).with(csrf()))
@@ -334,7 +334,7 @@ class AdminOpsNotifyIntegrationTest extends ApiIntegrationTest {
         assertThat(export.getResponse().getHeader("Content-Disposition")).contains("attachment");
         String out = export.getResponse().getContentAsString(StandardCharsets.UTF_8);
         assertThat(out).startsWith("﻿\"原始内容\",\"原因\"")
-                .contains("\"user_id,name\",\"不存在\"").contains("\"" + deleted.getId() + "\",\"已注销\"")
+                .doesNotContain("user_id").contains("\"" + deleted.getId() + "\",\"已注销\"")
                 .contains("\"" + banned.getId() + "\",\"已封号\"").contains("\"" + virtual.getId() + "\",\"虚拟号\"")
                 .contains("\"999999999999\",\"不存在\"")
                 .as("CSV 公式注入防护").contains("\"'=cmd\"").doesNotContain("\"" + ok.getId() + "\"");
