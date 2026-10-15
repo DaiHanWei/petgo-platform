@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_share_reward_repository.dart';
@@ -277,6 +278,43 @@ void main() {
     expect(tester.widget<CardQr>(find.byType(CardQr)).side, greaterThanOrEqualTo(CardQr.minExportSide));
     expect(find.byKey(const ValueKey('resultShareCardOwner')), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('bug 589：超长宠物名 + 昵称 → 换行完整显示，不溢出、码不被挤出画布', (tester) async {
+    tester.view.physicalSize = kTsShareCanvas.size;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    const pet = 'Princess Mochi Bubbles';
+    const owner = 'Aurelia Putri Kusumawardhani S';
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Align(
+        alignment: Alignment.topLeft,
+        child: SizedBox.fromSize(
+          size: kTsShareCanvas.size,
+          child: ResultShareCard(result: result(), petName: pet, ownerName: owner),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text(pet), findsOneWidget);
+    expect(find.text(owner), findsOneWidget);
+    // 「x」与名字同字号、单行 → 拿它的高当一行高。
+    final lineHeight = tester.getRect(find.byKey(const ValueKey('resultShareCardCross'))).height;
+    for (final key in ['resultShareCardPetName', 'resultShareCardOwner']) {
+      final para = tester.renderObject<RenderParagraph>(
+          find.descendant(of: find.byKey(ValueKey(key)), matching: find.byType(RichText)));
+      expect(tester.getRect(find.byKey(ValueKey(key))).height, greaterThan(lineHeight * 1.5),
+          reason: '$key 应换行而非单行省略');
+      expect(para.didExceedMaxLines, isFalse, reason: '$key 不应被省略号截断');
+    }
+    final qr = tester.getRect(find.byType(CardQr));
+    final owned = tester.getRect(find.byKey(const ValueKey('resultShareCardOwner')));
+    expect(owned.bottom, lessThan(qr.top));
+    expect(qr.bottom, lessThanOrEqualTo(kTsShareCanvas.height));
+    expect(tester.getRect(find.text('Download page')).bottom, lessThanOrEqualTo(kTsShareCanvas.height));
   });
 }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -43,6 +45,8 @@ class FeedMasonryView extends ConsumerStatefulWidget {
     this.feedTab,
     this.rankMode,
     this.followSurfacePrefix = 'feed',
+    this.focusItemId,
+    this.onFocusHandled,
   });
 
   final List<FeedItem> items;
@@ -105,6 +109,14 @@ class FeedMasonryView extends ConsumerStatefulWidget {
   /// 关注流传 `following` —— 同一张帖可能同时挂在两条流上，共用 key 会让一边点关注后另一边也被「钉住」显示。
   final String followSurfacePrefix;
 
+  /// 要定位的条目 id（bug 20261012-586：发布成功页「去 Feed 看」刚发的帖）。
+  ///
+  /// 非空且 [items] 里有它 → 滚到它（不在视口内才滚）+ 短暂高亮，然后回调 [onFocusHandled]；
+  /// [items] 里没有 → 放弃定位，同样回调（一次性信号必须被清掉）。
+  /// ⚠️ 调用方须在**数据已到手**（非加载 / 刷新中）时才传，否则会拿旧列表判「没有」而提前放弃。
+  final int? focusItemId;
+  final VoidCallback? onFocusHandled;
+
   @override
   ConsumerState<FeedMasonryView> createState() => _FeedMasonryViewState();
 }
@@ -122,6 +134,78 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
     );
   }
 
+  // ── 定位刚发的帖（bug 20261012-586；高亮口径同 health_list_page） ─────────
+
+  final GlobalKey _focusKey = GlobalKey();
+
+  /// 正在高亮的条目 id；[_kFocusHighlight] 后熄灭（常亮会被误读成选中态）。
+  int? _highlightId;
+  Timer? _highlightTimer;
+
+  /// 挂 [_focusKey] 的条目 id（最近一次定位的那条）。
+  int? _keyedId;
+
+  /// 已处理过的定位请求（同一个 id 重建时不重复滚）。
+  int? _handledFocusId;
+  int _focusAttempts = 0;
+
+  static const Duration _kFocusHighlight = Duration(milliseconds: 2200);
+  static const int _kFocusMaxAttempts = 6;
+
+  void _maybeFocus() {
+    final target = widget.focusItemId;
+    if (target == null || target == _handledFocusId) return;
+    _handledFocusId = target;
+    _focusAttempts = 0;
+    if (!widget.items.any((i) => i.id == target)) {
+      // 首屏里确实没有（兜底取数也没取到）：放弃定位，清信号。回调放到帧后 —— 不在 build 期间改 provider。
+      WidgetsBinding.instance.addPostFrameCallback((_) => widget.onFocusHandled?.call());
+      return;
+    }
+    _keyedId = target;
+    _scheduleFocusAttempt(target);
+  }
+
+  void _scheduleFocusAttempt(int target) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final ctx = _focusKey.currentContext;
+      if (ctx == null) {
+        if (++_focusAttempts < _kFocusMaxAttempts) {
+          _scheduleFocusAttempt(target);
+        } else {
+          widget.onFocusHandled?.call();
+        }
+        return;
+      }
+      if (!_fullyVisible(ctx)) {
+        // alignment 0.2：卡片顶边落在视口上 1/5 处，上方还能露出一截顶置卡 —— 「紧跟在顶置下面」看得出来。
+        await Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOut,
+          alignment: 0.2,
+        );
+      }
+      if (!mounted) return;
+      setState(() => _highlightId = target);
+      _highlightTimer?.cancel();
+      _highlightTimer = Timer(_kFocusHighlight, () {
+        if (mounted) setState(() => _highlightId = null);
+      });
+      widget.onFocusHandled?.call();
+    });
+  }
+
+  /// 目标卡片是否已整张落在滚动视口内（是 → 不滚，免得画面无谓地动一下）。
+  bool _fullyVisible(BuildContext target) {
+    final box = target.findRenderObject();
+    final viewport = context.findRenderObject();
+    if (box is! RenderBox || viewport is! RenderBox || !box.attached) return false;
+    final top = box.localToGlobal(Offset.zero, ancestor: viewport).dy;
+    return top >= 0 && top + box.size.height <= viewport.size.height;
+  }
+
   /// 距底预加载阈值（≈3~5 卡）。
   static const double _preloadThreshold = 600;
 
@@ -136,6 +220,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
     super.initState();
     _controller.addListener(_onScroll);
     _reportPinAnalytics();
+    _maybeFocus();
   }
 
   @override
@@ -146,6 +231,8 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
       _duplicateReported.clear();
     }
     _reportPinAnalytics();
+    if (widget.focusItemId == null) _handledFocusId = null;
+    _maybeFocus();
   }
 
   /// 顶置相关的两个曝光事件（E-1 / E-3）。
@@ -198,6 +285,7 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
 
   @override
   void dispose() {
+    _highlightTimer?.cancel();
     _controller.removeListener(_onScroll);
     _controller.dispose();
     super.dispose();
@@ -369,16 +457,23 @@ class _FeedMasonryViewState extends ConsumerState<FeedMasonryView> {
           for (var i = 0; i < widget.items.length; i++)
             // 通栏版式（V1.1.6 Story 3.2 · FR-93）：条目之间 1px 分隔线 + 上下 12px；
             // ⚠️ **最后一条不画线**，否则列表底部会多出一道悬空的横线。
-            Container(
+            AnimatedContainer(
+              // bug 20261012-586：被定位的那张挂 GlobalKey（ensureVisible 用）+ 短暂高亮底色。
+              //    key 钉在「最近一次定位的 id」上、高亮熄灭也不摘 —— 摘 key 会让这张卡整棵子树重建（图片闪一下）。
+              key: widget.items[i].id == _keyedId ? _focusKey : null,
+              duration: const Duration(milliseconds: 300),
               padding: const EdgeInsets.only(bottom: 12),
               margin: const EdgeInsets.only(bottom: 12),
-              decoration: i == widget.items.length - 1
-                  ? null
-                  : const BoxDecoration(
-                      border: Border(
+              decoration: BoxDecoration(
+                color: widget.items[i].id == _highlightId
+                    ? AppColors.mint.withValues(alpha: 0.08)
+                    : Colors.transparent,
+                border: i == widget.items.length - 1
+                    ? null
+                    : const Border(
                         bottom: BorderSide(color: AppColors.line2, width: 1),
                       ),
-                    ),
+              ),
               child: MasonryCard(
                 item: widget.items[i],
                 followSurfaceKey: '${widget.followSurfacePrefix}:item:${widget.items[i].id}',

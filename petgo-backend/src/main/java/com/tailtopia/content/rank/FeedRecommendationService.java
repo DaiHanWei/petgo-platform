@@ -13,6 +13,7 @@ import com.tailtopia.config.service.PlatformConfigService;
 import com.tailtopia.moderation.throttle.service.RankThrottleService;
 import com.tailtopia.profile.domain.PetProfile;
 import com.tailtopia.profile.repository.PetProfileRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -65,6 +66,17 @@ public class FeedRecommendationService {
      * <p>⚠️ 有上界是为了防「一个人连发十条待审」把首屏整页占满 —— 那对作者自己也不是好体验。
      */
     private static final int MAX_OWN_PENDING = 3;
+
+    /**
+     * 「刚发的帖」窗口（bug 20261012-586）：本人在此时长内发布的公开帖，首屏插在自然流最前
+     * （紧跟顶置位之后）。
+     *
+     * <p>⚠️ 窗口要短：它只服务「发布成功页 → 去 Feed 看」这一跳，不是给作者自己的帖子长期加权。
+     */
+    static final Duration OWN_RECENT_WINDOW = Duration.ofMinutes(10);
+
+    /** 「刚发的帖」最多插几条（同 {@link #MAX_OWN_PENDING} 的理由：防连发占满首屏）。 */
+    static final int MAX_OWN_RECENT = 3;
 
     private final ContentPostRepository posts;
     private final ContentLikeRepository likes;
@@ -142,19 +154,40 @@ public class FeedRecommendationService {
         int consumed = rc.consumed();
         boolean sequenceExhausted = false;
 
-        // 🔴 AC2：作者本人的挂起帖首屏置顶，**不占算法槽位、不参与配比与打分**。
-        // 候选池只收 PUBLISHED，所以它们压根没进引擎；这里单独取、单独插。
-        // ⚠️ 只首屏插 —— 后续页来自序列，序列里没有它们，天然不会重复。
-        Set<Long> pinnedPending = new LinkedHashSet<>();
+        // bug 20261012-586：本人「刚发的帖」（窗口内的已发布 + 挂起）首屏插在自然流最前 ——
+        // 发布成功页点「去 Feed 看」要一眼看到它（顶置位由客户端独立渲染在它上面）。
+        // 🛡 锚点取**种子时刻**：后续页按同一锚点重放查询，把这几条从序列里排掉（序列里可能有它们，
+        //    PUBLISHED 的会进候选池），首屏插过的不会在第二页再冒一次。
+        Instant anchor = recentAnchor(rc.seed(), firstPage ? now : null);
+        Set<Long> pinnedOwn = new LinkedHashSet<>();
         if (firstPage && viewerId != null) {
+            for (ContentPost recent : ownRecent(viewerId, anchor)) {
+                // 🛡 被运营顶置的恰好是自己的帖：顶置位已经在展示它，首屏让位口径不变
+                if (yieldId != null && yieldId.equals(recent.getId())) {
+                    continue;
+                }
+                page.add(recent);
+                served.add(recent.getId());
+                pinnedOwn.add(recent.getId());
+            }
+            // 🔴 AC2：作者本人的挂起帖首屏置顶，**不占算法槽位、不参与配比与打分**。
+            // 候选池只收 PUBLISHED，所以它们压根没进引擎；这里单独取、单独插。
+            // ⚠️ 只首屏插 —— 后续页来自序列，序列里没有它们，天然不会重复。
             for (ContentPost pending : posts.findOwnPendingPosts(viewerId,
                     PageRequest.of(0, MAX_OWN_PENDING))) {
-                page.add(pending);
                 // ⚠️ 记进 served 是为了**去重**：一条帖可能在排序时还是 PUBLISHED、之后才被挂起，
                 //    而按 id 读回来的那个查询允许作者看自己的挂起帖 ⇒ 同一条会从"置顶"和"序列"
-                //    两边各冒一次。不去重就是首屏同一条出现两次。
-                served.add(pending.getId());
-                pinnedPending.add(pending.getId());
+                //    两边各冒一次。不去重就是首屏同一条出现两次。（「刚发的帖」已插过的也在这里去重）
+                if (!served.add(pending.getId())) {
+                    continue;
+                }
+                page.add(pending);
+                pinnedOwn.add(pending.getId());
+            }
+        } else if (viewerId != null && anchor != null) {
+            // 后续页：首屏插过的那几条记进 served，序列里再遇到就跳过（消费照算，见下方循环）。
+            for (ContentPost recent : ownRecent(viewerId, anchor)) {
+                served.add(recent.getId());
             }
         }
 
@@ -193,13 +226,33 @@ public class FeedRecommendationService {
         // 🔴 AC2（16.1）：序列返回给客户端时即记入曝光，不等客户端上报。
         // 🛡 本人挂起帖**不记曝光**：它没参与打分，记了不影响任何东西，
         //    只会让作者自己的待审内容莫名占着曝光集合的位置。
-        List<Long> exposed = served.stream().filter(id -> !pinnedPending.contains(id)).toList();
+        // bug 20261012-586：「刚发的帖」同理不记曝光；后续页记进 served 的那几条本页并没下发，更不能记。
+        List<Long> exposed = page.stream().map(ContentPost::getId)
+                .filter(id -> !pinnedOwn.contains(id)).toList();
         seenStore.markSeen(key, exposed, now);
 
         boolean hasMore = !sequenceExhausted || page.size() == pageSize;
         String next = (page.isEmpty() || !hasMore) ? null
                 : new FeedRankCursor(rc.seed(), consumed).encode();
         return new RankedPage(List.copyOf(page), next, next != null);
+    }
+
+    /**
+     * 「刚发的帖」的锚点时刻：优先取种子里的刷新时刻（首屏与后续页同一锚点，去重才对得上）；
+     * 种子解不出时首屏退回 {@code fallback}（当前时刻），后续页返回 null（不去重，与改动前一致）。
+     */
+    private static Instant recentAnchor(String seed, Instant fallback) {
+        Instant t = FeedSequenceStore.seedTime(seed);
+        return t != null ? t : fallback;
+    }
+
+    /** 本人在 {@code (anchor - 窗口, anchor]} 内发布的公开帖，最新在前，至多 {@link #MAX_OWN_RECENT} 条。 */
+    private List<ContentPost> ownRecent(long viewerId, Instant anchor) {
+        if (anchor == null) {
+            return List.of();
+        }
+        return posts.findOwnRecentPosts(viewerId, anchor.minus(OWN_RECENT_WINDOW), anchor,
+                PageRequest.of(0, MAX_OWN_RECENT));
     }
 
     /**

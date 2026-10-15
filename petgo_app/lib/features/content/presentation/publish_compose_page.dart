@@ -484,7 +484,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         return;
       }
       Navigator.of(context).pop(); // 关闭发布 sheet
-      context.push('/publish/done', extra: args); // → P-39 发布成功
+      // bug 20261012-586：带上新帖 id，成功页「去 Feed 看」据此定位。
+      context.push('/publish/done', extra: args.withPostId(id)); // → P-39 发布成功
     } else if (blockSlug != null) {
       // AC8（F10）：审核拦截 → P-39c 内容被拒（整页 + 拒因）。
       final reasons = <String>[

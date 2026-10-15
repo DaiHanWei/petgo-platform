@@ -422,7 +422,12 @@ class AdminOpsNotifyServiceTest {
         AdminOpsNotifyService.ParsedIds p = AdminOpsNotifyService.parseIdLines(
                 "﻿user_id,name\r\n\"12\",Budi\r\n\r\n12\n 34 ;x\n-5\n1.5\n");
         assertThat(p.ids()).containsExactly(12L, 34L);
-        assertThat(p.invalid()).containsExactly("user_id,name", "-5", "1.5");
+        // 首行纯字母表头不算跳过（验收 2026-10-15）；非首行的同样文本照常算无效
+        assertThat(p.invalid()).containsExactly("-5", "1.5");
+        assertThat(AdminOpsNotifyService.parseIdLines("12\nuser_id\n").invalid()).containsExactly("user_id");
+        assertThat(AdminOpsNotifyService.parseIdLines("id1\n12\n").invalid())
+                .as("非常见列名的首行不当表头").containsExactly("id1");
+        assertThat(AdminOpsNotifyService.parseIdLines("UserId\n12\n").invalid()).isEmpty();
         assertThat(AdminOpsNotifyService.parseIdLines(null).ids()).isEmpty();
     }
 

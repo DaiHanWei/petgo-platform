@@ -332,7 +332,9 @@ public class AdminConfigController {
                     "<b>" + HtmlUtils.htmlEscape(min.newValue()) + "</b>");
             return new AdminConfirmModal(
                     msg.get(up ? "admin.config.appVersion.confirm.minUpTitle" : "admin.config.appVersion.confirm.minDownTitle"),
-                    msg.get("admin.config.appVersion.confirm.minDanger"), lines, null,
+                    // 下调不会锁人，「无法继续使用」的警示不成立（验收 2026-10-15）→ 换下调专用说明
+                    msg.get(up ? "admin.config.appVersion.confirm.minDanger" : "admin.config.appVersion.confirm.minDownNote"),
+                    lines, null,
                     prompt, "minConfirm", min.newValue(), action, hidden,
                     msg.get(up ? "admin.config.appVersion.confirm.btnUp" : "admin.config.appVersion.confirm.btn"), true);
         }

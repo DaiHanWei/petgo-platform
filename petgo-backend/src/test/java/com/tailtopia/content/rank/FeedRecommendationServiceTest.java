@@ -127,8 +127,12 @@ class FeedRecommendationServiceTest {
      * 此时上一个 answer 会带着 null 参数执行，直接 NPE。
      */
     private void sequenceIs(List<Long> ids, java.util.function.LongPredicate stillAlive) {
-        when(sequences.length(any(), eq("s-seed-1"))).thenReturn((long) ids.size());
-        when(sequences.read(any(), eq("s-seed-1"), org.mockito.ArgumentMatchers.anyLong(), anyInt()))
+        sequenceIs("s-seed-1", ids, stillAlive);
+    }
+
+    private void sequenceIs(String seed, List<Long> ids, java.util.function.LongPredicate stillAlive) {
+        when(sequences.length(any(), eq(seed))).thenReturn((long) ids.size());
+        when(sequences.read(any(), eq(seed), org.mockito.ArgumentMatchers.anyLong(), anyInt()))
                 .thenAnswer(inv -> {
                     long off = inv.getArgument(2);
                     int lim = inv.getArgument(3);
@@ -645,5 +649,139 @@ class FeedRecommendationServiceTest {
         when(cfg.getEduFreshnessHalfLifeHours()).thenReturn(Double.NaN);
 
         assertThat(paramsReachingTheEngine().eduFreshnessHalfLifeHours()).isEqualTo(720.0);
+    }
+
+    // ── bug 20261012-586：本人「刚发的帖」首屏插在自然流最前 ─────────────
+
+    private static List<Long> range(long from, long to) {
+        List<Long> out = new ArrayList<>();
+        for (long i = from; i <= to; i++) {
+            out.add(i);
+        }
+        return out;
+    }
+
+    /** 与 {@link FeedSequenceStore#newSeed} 同格式的真种子（后续页靠它还原锚点）。 */
+    private static String seedAt(Instant t) {
+        return FeedRankCursor.SEED_PREFIX + Long.toString(t.toEpochMilli(), 36);
+    }
+
+    /**
+     * 🔴 本 bug 的主断言：刚发的帖（PUBLISHED，也在序列里排在后面）首屏排第一，且不重复出现。
+     * 页大小不变（插进来的挤掉序列尾巴，而不是多出一条）。
+     */
+    @Test
+    void ownRecentPostIsFirstOnFirstPageAndNotDuplicated() {
+        sequenceIs(range(1, 40));
+        when(posts.findOwnRecentPosts(eq(9L), any(), any(), any()))
+                .thenReturn(List.of(post(17L, 9L)));
+
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+
+        assertThat(p.posts().get(0).getId()).isEqualTo(17L);
+        assertThat(p.posts()).hasSize(20);
+        assertThat(p.posts().stream().map(ContentPost::getId)).doesNotHaveDuplicates();
+    }
+
+    /** 窗口与条数是常量：查询按 (锚点 - 10 分钟, 锚点] 取、至多 3 条；锚点 = 种子时刻。 */
+    @Test
+    void ownRecentQueryUsesSeedAnchoredTenMinuteWindow() {
+        Instant anchor = Instant.parse("2026-10-15T08:00:00Z");
+        String seed = seedAt(anchor);
+        when(sequences.newSeed(any())).thenReturn(seed);
+        sequenceIs(seed, range(1, 5), id -> true);
+
+        service.page(9L, null, null, 20, null);
+
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> pageable =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        verify(posts).findOwnRecentPosts(eq(9L), eq(anchor.minus(java.time.Duration.ofMinutes(10))),
+                eq(anchor), pageable.capture());
+        assertThat(pageable.getValue().getPageSize()).isEqualTo(3);
+        assertThat(FeedRecommendationService.OWN_RECENT_WINDOW).isEqualTo(java.time.Duration.ofMinutes(10));
+        assertThat(FeedRecommendationService.MAX_OWN_RECENT).isEqualTo(3);
+    }
+
+    /**
+     * 🔴 后续页去重：首屏插过的那条在序列里排第 25 位，第二页不能再冒一次 ——
+     * 后续页按种子时刻重放查询得到同一批 id 并跳过（消费照算，不出短页）。
+     */
+    @Test
+    void ownRecentPostDoesNotReappearOnLaterPages() {
+        Instant anchor = Instant.parse("2026-10-15T08:00:00Z");
+        String seed = seedAt(anchor);
+        sequenceIs(seed, range(1, 60), id -> true);
+        when(posts.findOwnRecentPosts(eq(9L), eq(anchor.minus(java.time.Duration.ofMinutes(10))),
+                eq(anchor), any())).thenReturn(List.of(post(25L, 9L)));
+
+        String cursor = new FeedRankCursor(seed, 19).encode();
+        FeedRecommendationService.RankedPage later = service.page(9L, null, cursor, 20, null);
+
+        assertThat(later.posts().stream().map(ContentPost::getId)).doesNotContain(25L);
+        assertThat(later.posts()).hasSize(20);
+    }
+
+    /** 顺序：刚发的帖（新在前）→ 其余本人挂起帖；同一条既是刚发又在挂起，只出现一次。 */
+    @Test
+    void ownRecentComesBeforeOlderPendingAndIsDeduped() {
+        sequenceIs(range(1, 40));
+        when(posts.findOwnRecentPosts(eq(9L), any(), any(), any()))
+                .thenReturn(List.of(post(900L, 9L), post(901L, 9L)));
+        when(posts.findOwnPendingPosts(eq(9L), any()))
+                .thenReturn(List.of(post(901L, 9L), post(800L, 9L)));
+
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+
+        assertThat(p.posts().stream().limit(3).map(ContentPost::getId))
+                .containsExactly(900L, 901L, 800L);
+        assertThat(p.posts().stream().map(ContentPost::getId)).doesNotHaveDuplicates();
+    }
+
+    /** 自己的帖恰好被运营顶置：顶置位已在展示，首屏不再插一次（让位口径不变）。 */
+    @Test
+    void ownRecentPostThatIsPinnedYieldsOnFirstPage() {
+        sequenceIs(range(1, 40));
+        when(posts.findOwnRecentPosts(eq(9L), any(), any(), any()))
+                .thenReturn(List.of(post(500L, 9L)));
+
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, 500L);
+
+        assertThat(p.posts().stream().map(ContentPost::getId)).doesNotContain(500L);
+    }
+
+    /** 🛡 刚发的帖不记曝光（它没参与打分）。 */
+    @Test
+    void ownRecentPostIsNotMarkedAsSeen() {
+        sequenceIs(List.of(1L, 2L));
+        when(posts.findOwnRecentPosts(eq(9L), any(), any(), any()))
+                .thenReturn(List.of(post(999L, 9L)));
+
+        service.page(9L, null, null, 20, null);
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<Collection<Long>> captor =
+                org.mockito.ArgumentCaptor.forClass(Collection.class);
+        verify(seen).markSeen(any(), captor.capture(), any());
+        assertThat(captor.getValue()).containsExactly(1L, 2L);
+    }
+
+    /** 游客没有「本人刚发的帖」，不发这次查询。 */
+    @Test
+    void guestNeverQueriesOwnRecentPosts() {
+        sequenceIs(List.of(1L));
+
+        service.page(null, "anon", null, 20, null);
+
+        verify(posts, never()).findOwnRecentPosts(org.mockito.ArgumentMatchers.anyLong(), any(),
+                any(), any());
+    }
+
+    @Test
+    void seedTimeRoundTripsAndRejectsForeignSeeds() {
+        Instant t = Instant.parse("2026-10-15T08:00:00.123Z");
+        assertThat(FeedSequenceStore.seedTime(seedAt(t))).isEqualTo(t);
+        assertThat(FeedSequenceStore.seedTime("s-seed-1")).isNull();
+        assertThat(FeedSequenceStore.seedTime("x123")).isNull();
+        assertThat(FeedSequenceStore.seedTime(null)).isNull();
     }
 }

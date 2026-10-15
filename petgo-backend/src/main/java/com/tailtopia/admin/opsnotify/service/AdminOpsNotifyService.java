@@ -238,6 +238,10 @@ public class AdminOpsNotifyService {
     /**
      * 解析粘贴 / CSV 文本（见 {@link #checkIds}）。文件开头的 UTF-8 BOM 去掉。
      */
+    /** CSV 表头：只认首行、且是常见的 ID 列名（不区分大小写）；其它字母串仍按无效 ID 计入跳过。 */
+    private static final java.util.regex.Pattern HEADER =
+            java.util.regex.Pattern.compile("(?i)(user[ _]?id|uid|id)");
+
     static ParsedIds parseIdLines(String raw) {
         if (raw == null || raw.isBlank()) {
             return new ParsedIds(List.of(), List.of());
@@ -260,6 +264,9 @@ public class AdminOpsNotifyService {
             }
             if (ID.matcher(first).matches()) {
                 ids.add(Long.parseLong(first));
+            } else if (lines == 1 && HEADER.matcher(first).matches()) {
+                // 验收 2026-10-15：CSV 首行是表头（如 user_id）→ 忽略，不算跳过、不占行数
+                lines--;
             } else {
                 invalid.add(t.length() > SKIPPED_VALUE_MAX ? t.substring(0, SKIPPED_VALUE_MAX) : t);
             }

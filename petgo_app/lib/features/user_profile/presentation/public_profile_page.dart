@@ -29,9 +29,8 @@ import '../../social/presentation/widgets/follow_button.dart';
 import '../../me/data/me_counts_provider.dart';
 import '../../me/presentation/profile_edit_sheet.dart';
 import '../../social/presentation/account_report_sheet.dart';
-import '../../profile/domain/pet_age.dart';
 import '../../profile/presentation/visitor_archive_view.dart';
-import '../../tailsonality/presentation/widgets/tailsonality_badge_chip.dart';
+import '../../profile/presentation/widgets/pet_avatar_item.dart';
 import '../data/public_profile_pet_repository.dart';
 import '../data/public_profile_repository.dart';
 import 'public_user_posts_controller.dart';
@@ -744,110 +743,21 @@ class _PetSection extends ConsumerWidget {
     );
   }
 
+  /// 单项外观抽到共享件 [PetAvatarItem]（bug 20261015-590：我的页「Hewanku」同款）。
   Widget _item(BuildContext context, WidgetRef ref, AppLocalizations l10n, PublicProfilePet pet) {
-    final diary = pet.diaryCount > 99 ? '99+' : '${pet.diaryCount}';
-    return GestureDetector(
+    return PetAvatarItem(
       key: const ValueKey('profilePetCard'),
-      behavior: HitTestBehavior.opaque,
+      name: pet.name,
+      avatarUrl: pet.avatarUrl,
+      petType: pet.petType,
+      birthday: pet.birthday,
+      tailsonalityBadge: pet.tailsonalityBadge,
+      diaryCount: pet.diaryCount,
+      diaryBadgeKey: const ValueKey('profilePetDiaryBadge'),
+      tailsonalityKey: const ValueKey('profilePetTailsonality'),
+      metaKey: const ValueKey('profilePetMeta'),
       onTap: () => _open(context, ref, pet),
-      child: SizedBox(
-        width: 84,
-        child: Column(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                      color: AppColors.dashedViolet, shape: BoxShape.circle),
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration:
-                        const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                    child: CircleAvatar(
-                      radius: 32,
-                      backgroundColor: AppColors.border,
-                      backgroundImage: AppImage.provider(pet.avatarUrl, thumbWidth: 200),
-                      child: (pet.avatarUrl == null || pet.avatarUrl!.isEmpty)
-                          ? const Icon(Icons.pets, size: 28, color: AppColors.textTertiary)
-                          : null,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  right: -6,
-                  top: -4,
-                  child: Container(
-                    key: const ValueKey('profilePetDiaryBadge'),
-                    constraints: const BoxConstraints(minWidth: 20),
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.mint,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                    child: Text(
-                      diary,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        fontFeatures: [FontFeature.tabularFigures()],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              pet.name,
-              style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.ink),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-            ),
-            if (pet.tailsonalityBadge != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                // T-7：名字下方，放不下省略（裁掉而不是撑破 84 宽）。
-                child: ClipRect(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: TailsonalityBadgeChip(
-                      key: const ValueKey('profilePetTailsonality'),
-                      letters: pet.tailsonalityBadge,
-                      compact: true,
-                    ),
-                  ),
-                ),
-              ),
-            Text(
-              _meta(l10n, pet),
-              key: const ValueKey('profilePetMeta'),
-              style: const TextStyle(fontSize: 11, color: AppColors.ink2),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
     );
-  }
-
-  /// 「物种 · 年龄」—— 逐项复用「我的」页那套出口（物种文案 / `formatPetAge`），
-  /// **不含品种、不含 diary 数**（diary 数在头像角标上，UI 稿 A2）。
-  String _meta(AppLocalizations l10n, PublicProfilePet pet) {
-    final species = petSpeciesLabel(l10n, pet.petType);
-    return [
-      ?species,
-      // 不满 1 个月按天表达，避免「0th 0bln」（与档案页同一出口）。
-      ?formatPetAge(l10n, pet.birthday),
-    ].join(' · ');
   }
 
   /// FR-0C：游客点进访客视图 → 强登录引导，**不发请求**（站内访客接口仅登录可用）。
