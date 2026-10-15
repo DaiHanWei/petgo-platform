@@ -12,7 +12,9 @@ import '../../features/auth/domain/auth_guard.dart';
 import '../../features/auth/domain/auth_state.dart';
 import '../../features/content/data/mini_profile_repository.dart';
 import '../../features/social/data/blocked_users_repository.dart';
+import '../../features/me/data/me_counts_provider.dart';
 import '../../features/social/domain/account_action_entry.dart';
+import '../../features/social/domain/follow_state.dart';
 import '../../features/social/presentation/account_report_sheet.dart';
 import '../../l10n/app_localizations.dart';
 import 'app_image.dart';
@@ -384,6 +386,10 @@ class _MiniProfileCard extends StatelessWidget {
       onConfirm: () async {
         try {
           await ref.read(blockedUsersRepositoryProvider).block(userId);
+          // V1.3.4 follow（Story 1.3 AC5.7 / 1.4）：服务端已同事务删除我对他的关注（AD-5）——
+          // 清掉残留的「已关注」覆盖，并让我的页四格重取关注数。
+          ref.read(followStateProvider.notifier).forget(userId);
+          ref.invalidate(meCountsProvider);
           // 「逛别人家的毛孩子」推荐位要跟着重算（Story 4.1 AC3 / 4.4）——
           // 「互相拉黑不互推」是服务端取数时算的，不重取就等于这条过滤对当前那份数据不生效。
           invalidatePetRecommendations(ref);

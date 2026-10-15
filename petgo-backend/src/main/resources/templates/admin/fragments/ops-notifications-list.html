@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  系统通知发送记录片段（V1.3.4 AB-31；按后台返工清单 §4 对齐 UI 稿 I1 / I2）。rows — 表格 + 空态 + 翻页；done — 取消成功（整表 oob + toast）。
+  列：内容摘要（印尼文标题）· 人群（可读摘要）· 发送时间（WIB）· 状态 · 触达人数 · 操作。
+  发送时间：未发出的定时显示「10/11 09:00（定时）」，已开始的显示实际发出时间。
+  触达人数 = 写进通知中心的人数（推送是否送达不计）：待发送「预计 N」/ 发送中「已写入 / 计划」/ 已完成 N / 部分失败「N · 失败 M」/ 已取消「—」。
+  状态色：待发送 info / 发送中 warn / 已完成 ok / 部分失败 danger / 已取消灰。操作只在待发送行出现红色「取消」（无发送权限不渲染）。
+-->
+<body>
+<th:block th:fragment="rows">
+    <table th:if="${!#lists.isEmpty(campaigns)}" class="opsp-table opsn-table">
+        <thead><tr>
+            <th class="opsn-c-sum" th:text="#{admin.opsNotify.col.summary}">内容摘要</th>
+            <th class="opsn-c-aud" th:text="#{admin.opsNotify.col.audience}">人群</th>
+            <th class="opsn-c-at" th:text="#{admin.opsNotify.col.sendAt}">发送时间（WIB）</th>
+            <th class="opsn-c-st" th:text="#{admin.opsNotify.col.status}">状态</th>
+            <th class="opsn-c-reach" th:text="#{admin.opsNotify.col.reach}">触达人数</th>
+            <th class="opsn-c-act" th:text="#{admin.common.actions}">操作</th>
+        </tr></thead>
+        <tbody>
+        <tr th:each="c : ${campaigns}" th:id="'ops-notify-row-' + ${c.token}">
+            <td class="opsn-c-sum" th:text="${c.titleId}" th:title="${c.titleId}">Promo akhir pekan</td>
+            <td th:text="${c.audience}">按条件：近 30 天活跃 · 猫</td>
+            <td class="opsp-window" th:text="${c.sendLabel}">10/11 09:00（定时）</td>
+            <td><span class="badge" th:classappend="${c.status == 'DONE'} ? 'badge-ok'
+                         : (${c.status == 'PARTIAL_FAILED'} ? 'badge-danger'
+                         : (${c.status == 'SENDING'} ? 'badge-warn'
+                         : (${c.status == 'PENDING'} ? 'badge-info' : 'badge-muted')))"
+                      th:text="#{'admin.opsNotify.status.' + ${c.status}}">待发送</span></td>
+            <td class="opsn-reach" th:classappend="${c.reachMuted} ? 'muted'">
+                <span th:text="${c.reach}">预计 8,210</span><span class="muted" th:if="${c.failed != null}"
+                      th:text="' · ' + ${c.failed}"> · 失败 120</span>
+            </td>
+            <td class="opsp-acts">
+                <button type="button" class="opsp-lnk dg" th:if="${canEdit and c.pending}"
+                        th:attr="hx-get=@{/admin/ops-notifications/{t}/confirm-cancel(t=${c.token},page=${page})}"
+                        hx-include="#ops-notify-filters" hx-target="#ops-notify-row-error" hx-swap="innerHTML"
+                        th:text="#{admin.opsNotify.btn.cancel}">取消</button>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <div class="empty opsp-empty opsn-empty" th:if="${#lists.isEmpty(campaigns) and !anyCampaign}">
+        <span class="empty-emoji">📣</span>
+        <p th:text="#{admin.opsNotify.empty}">还没有发送过系统通知。</p>
+        <a th:if="${canEdit}" class="btn btn-primary btn-sm" th:href="@{/admin/ops-notifications/new}"
+           th:text="#{admin.opsNotify.btn.add}">＋ 新建通知</a>
+    </div>
+    <div class="empty opsp-empty opsn-empty" th:if="${#lists.isEmpty(campaigns) and anyCampaign}">
+        <p th:text="#{admin.opsNotify.emptyFiltered}">没有符合条件的发送记录。</p>
+    </div>
+    <div class="pager" th:if="${page > 0 or hasNext}">
+        <a th:if="${page > 0}" href="#" th:attr="hx-get=@{/admin/ops-notifications(page=${page - 1})}"
+           hx-include="#ops-notify-filters" hx-target="#ops-notify-rows" hx-swap="innerHTML"
+           th:text="#{admin.opsNotify.pager.prev}">上一页</a>
+        <span th:text="#{admin.opsNotify.pager.total(${total}, ${page + 1})}">共 N 条 · 第 1 页</span>
+        <a th:if="${hasNext}" href="#" th:attr="hx-get=@{/admin/ops-notifications(page=${page + 1})}"
+           hx-include="#ops-notify-filters" hx-target="#ops-notify-rows" hx-swap="innerHTML"
+           th:text="#{admin.opsNotify.pager.next}">下一页</a>
+    </div>
+</th:block>
+
+<!--
+  取消成功（I10 弹层内提交）。主 swap 落在弹层内错误槽（内容为空），列表走 oob；弹层由 HX-Trigger-After-Swap 收起。
+-->
+<th:block th:fragment="done">
+    <!--/* toast 必须多包一层：`beforeend:` oob 搬的是子节点。 */-->
+    <div hx-swap-oob="beforeend:#admin-toast-host">
+        <div class="toast" role="status" th:text="${message}">已取消</div>
+    </div>
+    <div id="ops-notify-rows" hx-swap-oob="true">
+        <div th:replace="~{admin/fragments/ops-notifications-list :: rows}"></div>
+    </div>
+</th:block>
+</body>
+</html>

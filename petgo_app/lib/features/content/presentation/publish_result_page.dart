@@ -7,6 +7,7 @@ import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../profile/domain/card_link.dart';
 import '../../profile/domain/share_service.dart';
+import 'feed_controller.dart';
 import 'publish_compose_page.dart';
 
 /// 发布结果三屏（P-39 成功 / P-39b 审核中 / P-39c 被拒）的共享参数。
@@ -22,7 +23,12 @@ class PublishResultArgs {
     this.isPrivate = false,
     this.cardToken,
     this.petName,
+    this.postId,
   });
+
+  /// 刚发布成功的帖子 id（bug 20261012-586）：「去 Feed 看」据此在 Discover 里定位并高亮它。
+  /// 发布前构建的预览参数（审核中 / 被拒页）为 null；为 null 时退回「只切 Tab」。
+  final int? postId;
 
   final String excerpt;
   final String typeLabel;
@@ -54,6 +60,19 @@ class PublishResultArgs {
         isPrivate: isPrivate,
         cardToken: cardToken,
         petName: petName,
+        postId: postId,
+      );
+
+  PublishResultArgs withPostId(int id) => PublishResultArgs(
+        excerpt: excerpt,
+        typeLabel: typeLabel,
+        photoCount: photoCount,
+        petEmoji: petEmoji,
+        reasons: reasons,
+        isPrivate: isPrivate,
+        cardToken: cardToken,
+        petName: petName,
+        postId: id,
       );
 
   /// DEV 直达样例（深链无 extra 时用，供逐屏视觉验收）。
@@ -159,7 +178,16 @@ class PublishDonePage extends ConsumerWidget {
                 child: FilledButton(
                   key: const ValueKey('publishDoneViewFeed'),
                   // 私密内容永不进 Social Feed → 主 CTA 改「去 Diary 看」（finding #11）。
-                  onPressed: () => context.go(private ? '/profile' : '/home'),
+                  // 公开帖（bug 20261012-586）：切 Social → Discover 并定位到刚发的帖（紧跟顶置卡、滚到可见、短暂高亮）。
+                  onPressed: () {
+                    if (private) {
+                      context.go('/profile');
+                      return;
+                    }
+                    final id = args.postId;
+                    if (id != null) showPostInDiscoverFeed(ref, id);
+                    context.go('/home');
+                  },
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.mint,
                     foregroundColor: AppColors.onAccent,

@@ -214,6 +214,20 @@ public class LiveTencentImClient implements TencentImClient {
     }
 
     /**
+     * 同 {@link #pushOffline}（请求体<b>完全相同</b>，单收件人 {@code /v4/timpush/batch}），但返回是否投递成功
+     * （V1.3.4 Story 6.2：运营通知逐人推送 + 失败重试，D-19）。日志行为与 {@link #pushOffline} 一致。
+     */
+    @Override
+    public boolean pushOfflineChecked(String imUserId, String title, String body, String deepLinkType,
+            String deepLinkToken, String targetRef) {
+        return postRest("/v4/timpush/batch",
+                buildBatchPushBody(props.getAdminIdentifier(),
+                        ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE),
+                        imUserId, title, body, deepLinkType, deepLinkToken, targetRef),
+                "pushOffline");
+    }
+
+    /**
      * 组 {@code /v4/timpush/batch} 请求体（包可见静态：L0 单测断言 Ext 契约——只含
      * type/token/targetRef，绝不带健康数据明文；title/body 由调用方按收件人语言渲染完毕）。
      */
@@ -278,8 +292,11 @@ public class LiveTencentImClient implements TencentImClient {
     /**
      * 统一 REST 调用：拼管理员鉴权 query（usersig 用 admin 身份签）+ POST JSON。
      * 失败仅记<b>异常类名</b>（绝不泄 body/凭证/堆栈），<b>不抛出</b>——由调用方「不阻断业务」语义兜底。
+     *
+     * <p>V1.3.4 Story 6.2：返回是否成功（见 {@link #isSuccess}；异常 → {@code false}），日志行为不变；
+     * 既有调用方忽略返回值。
      */
-    private void postRest(String path, Map<String, Object> body, String op) {
+    private boolean postRest(String path, Map<String, Object> body, String op) {
         try {
             String adminSig = genUserSig(props.getAdminIdentifier(), props.getUserSigTtlSeconds());
             String uri = path
@@ -302,9 +319,20 @@ public class LiveTencentImClient implements TencentImClient {
                 log.warn("[IM-live] {} 业务失败（不阻断业务）: ErrorCode={} ErrorInfo={}",
                         op, n, resp.get("ErrorInfo"));
             }
+            return isSuccess(resp);
         } catch (RuntimeException e) {
             // 非敏感日志：仅 op + 异常类名（不打印 imUserId 外的 PII / 文本 / usersig）。
             log.warn("[IM-live] {} 失败（不阻断业务）: {}", op, e.getClass().getSimpleName());
+            return false;
         }
+    }
+
+    /**
+     * 腾讯 REST 响应是否表示成功：响应体为 {@code null}、缺 {@code ErrorCode} 或 {@code ErrorCode == 0} → 成功；
+     * {@code ErrorCode != 0} → 失败（与上面「只对非 0 告警」同口径）。
+     */
+    static boolean isSuccess(Map<?, ?> resp) {
+        Object code = resp == null ? null : resp.get("ErrorCode");
+        return !(code instanceof Number n && n.intValue() != 0);
     }
 }

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!--
+  系统通知发送 · 发送记录列表（V1.3.4 AB-31 · FR-138；按后台返工清单 §4 对齐 UI 稿 I1 / I2 / I9 / I10 / I11），模板 B。
+  页头 h1 +「＋ 新建通知」（→ 独立四步页 /admin/ops-notifications/new）→ 说明 → 筛选（状态 / 发送时间，默认近 30 天）→ 表格。
+  只有 ops_notify.view 的账号：不渲染新建 / 取消，h1 下显示只读提示（I11）。
+  待发送行的「取消」先拉服务端确认弹层（I10，fragments/confirm-modal.html → #confirm-host）。
+  新建成功由新建页 HX-Redirect 回到这里，toast 走 flash（layout 渲染，I9）。URL 一律用 public_token（D-24）。
+  🔴 不做编辑 / 重发 / 删除；不展示打开 / 点击数（走 PostHog，按 campaign_id 查）。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.nav.opsNotifications}">系统通知发送 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <div class="wb-title-row opsn-head">
+            <h1 th:text="#{admin.nav.opsNotifications}">系统通知发送</h1>
+            <a th:if="${canEdit}" class="btn btn-primary btn-sm" th:href="@{/admin/ops-notifications/new}"
+               th:text="#{admin.opsNotify.btn.add}">＋ 新建通知</a>
+        </div>
+        <p class="muted opsn-ro" th:unless="${canEdit}" th:text="#{admin.opsNotify.readOnly}">只读：需要「发送系统通知」权限才能新建或取消。</p>
+        <p class="muted opsp-hint" th:text="#{admin.opsNotify.hint('campaign_id')}">发送后写入用户 App 通知中心……</p>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!--/* 筛选（I1）：状态 + 发送时间，选完即刷。行内取消 / 翻页都 hx-include 它，处置后按原筛选重拉。 */-->
+        <form id="ops-notify-filters" class="opsp-filters" th:attr="hx-get=@{/admin/ops-notifications}"
+              hx-target="#ops-notify-rows" hx-swap="innerHTML" hx-trigger="change, submit">
+            <select name="status" class="inp opsp-filter-status" th:attr="aria-label=#{admin.opsNotify.col.status}">
+                <option value="" th:text="#{admin.opsNotify.filter.status(${#messages.msg('admin.opsNotify.filter.all')})}">状态：全部</option>
+                <option th:each="s : ${statuses}" th:value="${s}" th:selected="${filterStatus == s.name()}"
+                        th:text="#{admin.opsNotify.filter.status(${#messages.msg('admin.opsNotify.status.' + s)})}">状态：待发送</option>
+            </select>
+            <select name="range" class="inp opsp-filter-status" th:attr="aria-label=#{admin.opsNotify.col.sendAt}">
+                <option th:each="r : ${ranges}" th:value="${r}" th:selected="${filterRange == r}"
+                        th:text="#{admin.opsNotify.filter.range(${#messages.msg('admin.opsNotify.range.' + r)})}">发送时间：近 30 天</option>
+            </select>
+        </form>
+        <!--/* 拉取取消确认弹层失败（404 / 已不是待发送 409）的落点 */-->
+        <p id="ops-notify-row-error" class="lst-inline-error" aria-live="polite"></p>
+
+        <div id="ops-notify-rows">
+            <div th:replace="~{admin/fragments/ops-notifications-list :: rows}"></div>
+        </div>
+        <!--/* 服务端确认弹层宿主（I10）。 */-->
+        <div id="confirm-host"></div>
+    </div>
+</div>
+</body>
+</html>

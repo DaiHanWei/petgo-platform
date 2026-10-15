@@ -17,7 +17,7 @@ public final class MilestoneBadgeKeys {
     private MilestoneBadgeKeys() {
     }
 
-    /** 78 个 code → 40 个语义键。 */
+    /** 84 个 code → 42 个语义键（V1.3.4 FR-126 +place_checkin / tailsonality）。 */
     public static final Map<String, String> KEYS = Map.ofEntries(
         // ===== CAT (C) =====
         Map.entry("C-S1", "profile_created"),
@@ -51,6 +51,8 @@ public final class MilestoneBadgeKeys {
         Map.entry("C-L3", "together_365_days"),
         Map.entry("C-L4", "all_health_milestones"),
         Map.entry("C-L5", "growth_records_30"),
+        Map.entry("C-S17", "place_checkin"),
+        Map.entry("C-S18", "tailsonality"),
         // ===== DOG (D) =====
         Map.entry("D-S1", "profile_created"),
         Map.entry("D-S2", "first_calendar_photo"),
@@ -83,6 +85,8 @@ public final class MilestoneBadgeKeys {
         Map.entry("D-L3", "together_365_days"),
         Map.entry("D-L4", "all_health_milestones"),
         Map.entry("D-L5", "growth_records_30"),
+        Map.entry("D-S17", "place_checkin"),
+        Map.entry("D-S18", "tailsonality"),
         // ===== GENERAL (G) =====
         Map.entry("G-S1", "profile_created"),
         Map.entry("G-S2", "first_calendar_photo"),
@@ -99,7 +103,9 @@ public final class MilestoneBadgeKeys {
         Map.entry("G-M4", "growth_records_10"),
         Map.entry("G-L1", "first_birthday"),
         Map.entry("G-L2", "together_100_days"),
-        Map.entry("G-L3", "together_365_days"));
+        Map.entry("G-L3", "together_365_days"),
+        Map.entry("G-S10", "place_checkin"),
+        Map.entry("G-S11", "tailsonality"));
 
     /** 精确查表；未知 code（含 null）→ empty。 */
     public static Optional<String> keyOf(String code) {

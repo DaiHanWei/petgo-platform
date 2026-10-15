@@ -7,6 +7,7 @@
   调用方须在外层 th:with 提供：action=@{...}（必填，壳不写 @{}，便于纯模板引擎渲染单测）；可选 cardId（form id，也是行内 err 槽 <id>-err 的前缀）、
   hxPost（htmx 提交：成功回卡 fragment，失败 422 行内 err 到 #<cardId>-err）、confirmDiff（true = 提交前复述改动）、errorFields（422 错误码 → 字段名 JSON，红边）、
   readonly（true = 保存钮固定禁用并显示 readonlyNote）、confirmDiffNote（可选：确认弹层末尾追加的一句提醒，V1.3.2 Story 3.1；缺省 = 行为不变）。
+  需要服务端确认弹层的卡（V1.3.4 AB-22）不设 confirmDiff，hxPost 指向只校验的预检端点，由它回 fragments/confirm-modal 到页面 #confirm-host。
 -->
 <body>
 <form class="cfg-card card" th:fragment="configCard(titleSlot, formSlot, saveLabelSlot)" method="post" data-config-card

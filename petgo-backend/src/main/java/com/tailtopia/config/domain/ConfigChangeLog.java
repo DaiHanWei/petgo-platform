@@ -21,7 +21,9 @@ public class ConfigChangeLog {
         /** 首页推荐算法打分参数（V1.1.6 Story 16.4）。 */
         FEED_RANK,
         /** 客服联系方式（V1.3.0 Story 3-1）。 */
-        SUPPORT_CONTACT
+        SUPPORT_CONTACT,
+        /** App 版本配置（V1.3.4 AB-22；约束放开见 V20261014_2304）。 */
+        APP_VERSION
     }
 
     // 🔴 加枚举值**不够**：列上有 CHECK 白名单，不同步放开会在写日志时撞约束，
@@ -40,10 +42,11 @@ public class ConfigChangeLog {
     @Column(name = "field", nullable = false)
     private String field;
 
-    @Column(name = "old_value")
+    /** V20261014_2304 起 VARCHAR(512)（原 64）：AB-22 商店链接最长 512，要原样记进日志。 */
+    @Column(name = "old_value", length = 512)
     private String oldValue;
 
-    @Column(name = "new_value")
+    @Column(name = "new_value", length = 512)
     private String newValue;
 
     @Column(name = "changed_by", nullable = false)

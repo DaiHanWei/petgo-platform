@@ -106,27 +106,58 @@ class ResultShareCard extends StatelessWidget {
                 ),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(36, 120, 36, 84),
+                  // bug 20261015-589：长名不再单行省略 —— 每个名字最多 3 行、按长度降字号；
+                  // 名字组是唯一的 Flexible，二维码段 / 字标固定尺寸，spaceBetween 让三段等距
+                  // （与原两个 Spacer 等效）。名字组再超高就整体等比缩小，码与字标永远不会被挤出画布。
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      for (final (key, line) in names)
-                        Text(
-                          line,
-                          key: ValueKey(key),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: nameStyle,
+                      Flexible(
+                        child: LayoutBuilder(
+                          builder: (context, box) {
+                            final style = nameStyle.copyWith(
+                                fontSize: _fitNameFontSize(context, [for (final n in names) n.$2], box.maxWidth, nameStyle));
+                            return FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.topCenter,
+                              child: SizedBox(
+                                width: box.maxWidth,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    for (final (key, line) in names)
+                                      Text(
+                                        line,
+                                        key: ValueKey(key),
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                        style: style,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      const Spacer(),
-                      CardQr(data: petDownloadUrl(), side: _kQrSide),
-                      const SizedBox(height: 20),
-                      Text(
-                        l10n.tsShareDownloadHint,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w700, color: Colors.white),
                       ),
-                      const Spacer(),
+                      // 上下各留 24 的最小间距：名字再长，码段与名字 / 字标之间也不贴死。
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CardQr(data: petDownloadUrl(), side: _kQrSide),
+                            const SizedBox(height: 20),
+                            Text(
+                              l10n.tsShareDownloadHint,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w700, color: Colors.white),
+                            ),
+                          ],
+                        ),
+                      ),
                       // 字标资产本身是纯白（紫底专用），这里正好是深紫底，不上色。
                       SvgPicture.asset('assets/brand/wordmark_brand.svg', width: 190),
                     ],
@@ -140,6 +171,35 @@ class ResultShareCard extends StatelessWidget {
     );
   }
 }
+
+/// 名字字号：先按较长的那个名字降档起步（同组字号一致，「x」跟随），再实测 —— 任一名字在栏宽内
+/// 排不进 3 行就继续降一档，直到最小档。省略号只在最小档仍放不下时兜底。
+/// 档位按右栏内宽 314 定：30 字符昵称 + 20 字符宠物名在 3 行内放得下。
+double _fitNameFontSize(BuildContext context, List<String> lines, double width, TextStyle base) {
+  final longest = lines.fold<int>(0, (m, l) => l.characters.length > m ? l.characters.length : m);
+  var size = longest > 26 ? 34.0 : longest > 20 ? 38.0 : longest > 10 ? 44.0 : 52.0;
+  if (!width.isFinite) return size;
+  final style = DefaultTextStyle.of(context).style.merge(base);
+  final scaler = MediaQuery.textScalerOf(context);
+  bool fits(double s) => lines.every((l) {
+        final tp = TextPainter(
+          text: TextSpan(text: l, style: style.copyWith(fontSize: s)),
+          textAlign: TextAlign.center,
+          textDirection: Directionality.of(context),
+          textScaler: scaler,
+          maxLines: 3,
+        )..layout(maxWidth: width);
+        final ok = !tp.didExceedMaxLines;
+        tp.dispose();
+        return ok;
+      });
+  while (size > _kMinNameFontSize && !fits(size)) {
+    size -= 4;
+  }
+  return size < _kMinNameFontSize ? _kMinNameFontSize : size;
+}
+
+const double _kMinNameFontSize = 26;
 
 /// 结果卡预览入口：结果页 ⋯「Bagikan」与已解锁底部「Bagikan」**共用**这一个。
 ///

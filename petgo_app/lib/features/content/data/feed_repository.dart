@@ -22,6 +22,9 @@ abstract class FeedRepository {
   /// 🛡 **独立取数**：与首页取数分开，首页的分页形态一点不变；
   /// 本请求失败时调用方当作没有顶置，首页照常显示。
   Future<PinnedSlot?> getPinnedSlot();
+
+  /// 关注流（V1.3.4）：`GET /me/following-feed`，纯时间序，信封与 [getFeed] 相同。
+  Future<FeedPage> getFollowingFeed({String? cursor});
 }
 
 class DioFeedRepository implements FeedRepository {
@@ -42,6 +45,15 @@ class DioFeedRepository implements FeedRepository {
       queryParameters: query,
       // 🛡 只挂在首页取数上，不做成全局请求头 —— 它长得像跟踪 id，别让它出现在无关请求里。
       options: Options(headers: {'X-Anon-Session': AnonFeedSession.id}),
+    );
+    return FeedPage.fromJson(resp.data!);
+  }
+
+  @override
+  Future<FeedPage> getFollowingFeed({String? cursor}) async {
+    final resp = await dio.get<Map<String, dynamic>>(
+      ApiPaths.meFollowingFeed,
+      queryParameters: {'cursor': ?cursor},
     );
     return FeedPage.fromJson(resp.data!);
   }

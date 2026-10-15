@@ -57,6 +57,10 @@ class AccountDeletionServiceTest {
     @Mock com.tailtopia.place.service.PlacePhotoService placePhotoService;
     @Mock com.tailtopia.mention.service.MentionCandidateMaintenanceService mentionCandidateMaintenance;
     @Mock com.tailtopia.tailsonality.service.TailsonalityDeletionService tailsonalityDeletion;
+    /** V1.3.4 follow Story 1.1：关注关系清理。 */
+    @Mock com.tailtopia.social.service.FollowService followService;
+    /** V1.3.4 Story 5.1：运营弹窗曝光随注销物理删除。 */
+    @Mock com.tailtopia.ops.popup.service.OpsPopupImpressionDeletionService opsPopupImpressionDeletion;
 
     private AccountDeletionService service() {
         return new AccountDeletionService(deletions, profileDeletion, triageDeletion,
@@ -64,7 +68,8 @@ class AccountDeletionServiceTest {
                 mediaDeletion, imClient, events,
                 contentService, reviewService, violationCountService,
                 shopDeletion, contentShareService, shareRewardDeletion, onboardingMarkDeletion,
-                placeCommentService, placePhotoService, mentionCandidateMaintenance, tailsonalityDeletion);
+                placeCommentService, placePhotoService, mentionCandidateMaintenance, tailsonalityDeletion,
+                followService, opsPopupImpressionDeletion);
     }
 
     private AccountDeletion pending(long id, long userId) {
@@ -104,6 +109,11 @@ class AccountDeletionServiceTest {
         org.mockito.InOrder beforeUserRow = org.mockito.Mockito.inOrder(tailsonalityDeletion, authDeletion);
         beforeUserRow.verify(tailsonalityDeletion).deleteOwnerTypeByUserId(7L);
         beforeUserRow.verify(authDeletion).deleteByUserId(7L);
+        // V1.3.4 Story 5.1 · AC5：弹窗曝光行显式删（users 行只匿名化，FK CASCADE 不触发），且在 user 行处理之前。
+        verify(opsPopupImpressionDeletion).deleteByUserId(7L);
+        org.mockito.InOrder popupBeforeUserRow = org.mockito.Mockito.inOrder(opsPopupImpressionDeletion, authDeletion);
+        popupBeforeUserRow.verify(opsPopupImpressionDeletion).deleteByUserId(7L);
+        popupBeforeUserRow.verify(authDeletion).deleteByUserId(7L);
         // V1.3.0 场所评论注销联动（NFR-8 / D1/D2）：独立表，content 那条级联碰不到它 ——
         // 漏了的话注销用户的场所评论会继续挂着身份对所有人可见。
         verify(placeCommentService).deactivateAuthorComments(7L);
@@ -113,6 +123,11 @@ class AccountDeletionServiceTest {
         // 他还会继续出现在别人的 @ 候选里（点进去是「用户不存在」）。
         verify(mentionCandidateMaintenance).purgeUser(7L);
         verify(authDeletion).deleteByUserId(7L);
+        // V1.3.4 follow Story 1.1 · AC7：关注关系显式清理（users 行不删，FK CASCADE 不触发），
+        // 且必须在 authDeletion 之后 —— 那时 deleted_at 已写，不会再被人关注出新行。
+        org.mockito.InOrder afterUserRow = org.mockito.Mockito.inOrder(authDeletion, followService);
+        afterUserRow.verify(authDeletion).deleteByUserId(7L);
+        afterUserRow.verify(followService).purgeUser(7L);
         // OSS 私密图（h1+t1+t2+c1）+ 公开头像 + IM 媒体
         verify(mediaDeletion).deletePrivateKeys(anyList());
         verify(mediaDeletion).deletePublicByUrls(anyList());

@@ -39,6 +39,12 @@ class UserHideRelationIntegrationTest extends ApiIntegrationTest {
     @Autowired
     private ContentPostRepository posts;
 
+    @Autowired
+    private com.tailtopia.social.service.FollowService followService;
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
     private ContentPost newPost(long authorId) {
         return posts.save(ContentPost.publish(authorId, ContentType.DAILY, null, "测试正文", List.of()));
     }
@@ -356,5 +362,75 @@ class UserHideRelationIntegrationTest extends ApiIntegrationTest {
 
         // 游客 Feed 不做拉黑过滤（无登录身份可用）
         mvc.perform(get("/api/v1/content-posts").param("category", "DAILY")).andExpect(status().isOk());
+    }
+
+    // ===== V1.3.4 follow Story 1.2 · AC1 拉黑联动取关 =====
+
+    private void followVia(User viewer, User target) throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/api/v1/users/" + target.getPublicToken() + "/follow")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(viewer.getId())))
+                .andExpect(status().isOk());
+    }
+
+    private int count(String column, long userId) {
+        return jdbc.queryForObject("SELECT " + column + " FROM users WHERE id = ?", Integer.class, userId);
+    }
+
+    private long followRows(long followerId, long followeeId) {
+        return jdbc.queryForObject("SELECT count(*) FROM user_follows WHERE follower_id = ? AND followee_id = ?",
+                Long.class, followerId, followeeId);
+    }
+
+    private long notificationsOf(long userId) {
+        return jdbc.queryForObject("SELECT count(*) FROM notifications WHERE recipient_user_id = ?",
+                Long.class, userId);
+    }
+
+    /** AD-5：拉黑同事务删 A→B、扣两端计数；B→A 保留；不发通知；解除不恢复；重复拉黑不再变。 */
+    @Test
+    void blockRemovesHolderFollowOnlyAndSendsNothing() throws Exception {
+        User a = newUser();
+        User b = newUser();
+        followVia(a, b);
+        followVia(b, a);
+        long bNotificationsBefore = notificationsOf(b.getId());
+
+        mvc.perform(post("/api/v1/me/blocked-users")
+                        .header(HttpHeaders.AUTHORIZATION, userBearer(a.getId()))
+                        .contentType(MediaType.APPLICATION_JSON).content(blockBody(b.getId())))
+                .andExpect(status().isNoContent());
+
+        assertThat(followRows(a.getId(), b.getId())).isZero();
+        assertThat(followRows(b.getId(), a.getId())).isOne();
+        assertThat(count("following_count", a.getId())).isZero();
+        assertThat(count("follower_count", b.getId())).isZero();
+        assertThat(count("following_count", b.getId())).isEqualTo(1);
+        assertThat(count("follower_count", a.getId())).isEqualTo(1);
+        // 回归护栏：Story 3.2 接入新粉丝通知后，拉黑联动取关仍不得发任何通知。
+        assertThat(notificationsOf(b.getId())).isEqualTo(bNotificationsBefore);
+
+        // 重复拉黑：计数不再变。
+        hideService.block(a.getId(), b.getId());
+        assertThat(count("following_count", a.getId())).isZero();
+        assertThat(count("follower_count", b.getId())).isZero();
+        assertThat(count("follower_count", a.getId())).isEqualTo(1);
+
+        // 解除拉黑不恢复关注。
+        hideService.unblock(a.getId(), b.getId());
+        assertThat(followRows(a.getId(), b.getId())).isZero();
+    }
+
+    /** AC1.5：举报隐藏（REPORT）不触碰关注。 */
+    @Test
+    void reportHideKeepsFollow() throws Exception {
+        User a = newUser();
+        User b = newUser();
+        followVia(a, b);
+
+        hideService.hideByReport(a.getId(), b.getId());
+
+        assertThat(followRows(a.getId(), b.getId())).isOne();
+        assertThat(count("follower_count", b.getId())).isEqualTo(1);
     }
 }

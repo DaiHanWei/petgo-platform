@@ -46,6 +46,15 @@ public class CommentQueryService {
     /** V1.3.0 batch-b1 Story 3.3：评论里 @ 的渲染投影（可点与否在服务端判）。 */
     private final MentionViewService mentionViews;
 
+    /**
+     * 通知中心用的评论快照（V1.3.4 follow · Story 3.3 · AC5）：{@code gone = 行不存在 || 已软删 || 非 VISIBLE}
+     * （巡查下架 / 作者注销隐藏等一律按「已删除」，不下发原文，T-37）；{@code gone} 时 {@code body} 为 null。
+     */
+    public record NotificationCommentSnapshot(String body, boolean gone) {
+
+        static final NotificationCommentSnapshot GONE = new NotificationCommentSnapshot(null, true);
+    }
+
     public CommentQueryService(CommentRepository comments, CommentLikeRepository commentLikes,
             ContentPostRepository posts,
             AccountQueryService accountQueryService, UserHideRelationReader hideRelations,
@@ -66,6 +75,28 @@ public class CommentQueryService {
     private Map<Long, MentionView> resolveMentions(Long viewerId, Stream<Comment> all) {
         return mentionViews.resolveAll(viewerId,
                 all.flatMap(c -> c.getMentionedUserIds().stream()).toList());
+    }
+
+    /**
+     * 一批评论的通知快照（Story 3.3）—— <b>一次</b> {@code findAllById}；缺失的 id 也给 {@code GONE}，调用方按 id 取必有值。
+     * notify 只依赖本方法，不引用 {@code CommentRepository}（模块边界）。空入参不发查询。
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, NotificationCommentSnapshot> notificationSnapshots(java.util.Collection<Long> commentIds) {
+        if (commentIds == null || commentIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, NotificationCommentSnapshot> out = new java.util.HashMap<>();
+        for (Long id : commentIds) {
+            out.put(id, NotificationCommentSnapshot.GONE);
+        }
+        for (Comment c : comments.findAllById(commentIds)) {
+            boolean gone = c.getDeletedAt() != null
+                    || c.getModerationStatus() != com.tailtopia.content.domain.CommentModerationStatus.VISIBLE;
+            out.put(c.getId(), gone ? NotificationCommentSnapshot.GONE
+                    : new NotificationCommentSnapshot(c.getBody(), false));
+        }
+        return out;
     }
 
     /**

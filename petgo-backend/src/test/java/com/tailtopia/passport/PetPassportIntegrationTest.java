@@ -81,7 +81,7 @@ class PetPassportIntegrationTest extends ApiIntegrationTest {
         newPet(u.getId(), PetType.CAT);
         String ktpNo = "TT02P26" + String.format("%05d", SEQ.incrementAndGet() % 100000);
         idCards.save(IdCard.snapshot(u.getId(), SEQ.incrementAndGet() + 900000000L, "Momo", "CAT", null, null,
-                null, null, "UNKNOWN", null, ktpNo, null, null, null, null, "KTP", null, null));
+                null, null, "UNKNOWN", null, ktpNo, null, null, null, null, "KTP", null, null, null));
         List<Map<String, Object>> before = jdbc.queryForList("SELECT * FROM id_cards WHERE user_id = ?", u.getId());
 
         assertThat(passportNo(u.getId())).isEqualTo(ktpNo);
@@ -100,7 +100,7 @@ class PetPassportIntegrationTest extends ApiIntegrationTest {
         newPet(u.getId(), PetType.DOG);
         idCards.save(IdCard.snapshot(u.getId(), SEQ.incrementAndGet() + 900000000L, "Momo", "CAT", null, null,
                 null, null, "UNKNOWN", null, "TT02P26" + String.format("%05d", SEQ.incrementAndGet() % 100000),
-                null, null, null, null, "KTP", null, null));
+                null, null, null, null, "KTP", null, null, null));
 
         assertThat(passportNo(u.getId())).startsWith("TT01P");
     }
@@ -150,7 +150,7 @@ class PetPassportIntegrationTest extends ApiIntegrationTest {
         newPet(u.getId(), PetType.CAT);
         idCards.save(IdCard.snapshot(u.getId(), SEQ.incrementAndGet() + 900000000L, "Momo", "CAT", null, null,
                 null, null, "UNKNOWN", null, "TT02P26" + String.format("%05d", SEQ.incrementAndGet() % 100000),
-                null, null, null, null, "KTP", null, null));
+                null, null, null, null, "KTP", null, null, null));
         String first = passportNo(u.getId());
 
         profileDeletion.deleteByUserId(u.getId());
@@ -162,5 +162,51 @@ class PetPassportIntegrationTest extends ApiIntegrationTest {
         assertThat(second).isNotEqualTo(first);
         assertThat(jdbc.queryForObject("SELECT source FROM pet_passports WHERE passport_no = ?",
                 String.class, second)).isEqualTo("ISSUED");
+    }
+
+    // ---- V1.3.4 ktp Story 2.2（AD-3 / AC4）：同一用户多张卡共用护照号后，护照取号行为不变 ----
+
+    private void cardWithPassportNo(long uid, String no) {
+        idCards.save(IdCard.snapshot(uid, SEQ.incrementAndGet() + 900000000L, "Momo", "CAT", null, null,
+                null, null, "UNKNOWN", null, no, null, null, null, null, "KTP", null, null, null));
+    }
+
+    @Test
+    void sharedPassportNoAcrossOwnCardsIsReusedOnceThenStaysIssued() throws Exception {
+        User u = newUser();
+        newPet(u.getId(), PetType.CAT);
+        // 年段用 99：计数器真实发出的号是当年年段，不会与之撞上（避免被其它用例签发的护照占用）。
+        String shared = "TT02P99" + String.format("%05d", SEQ.incrementAndGet() % 100000);
+        cardWithPassportNo(u.getId(), shared);
+        cardWithPassportNo(u.getId(), shared); // 全局 UNIQUE 已删：同一用户两张卡同号
+
+        assertThat(passportNo(u.getId())).isEqualTo(shared);
+        cardWithPassportNo(u.getId(), shared); // 第三张同号卡
+        assertThat(passportNo(u.getId())).as("返回已签发那本，不新建、不撞 uq_pet_passports_passport_no")
+                .isEqualTo(shared);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM pet_passports pp JOIN pet_profiles p "
+                + "ON p.id = pp.pet_profile_id WHERE p.owner_id = ?", Long.class, u.getId())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT source FROM pet_passports pp JOIN pet_profiles p "
+                + "ON p.id = pp.pet_profile_id WHERE p.owner_id = ?", String.class, u.getId())).isEqualTo("KTP");
+    }
+
+    @Test
+    void passportNoAlreadyOccupiedByAPassportIsNotReused() throws Exception {
+        // 用户 A 的号已被 A 的宠物护照占用。
+        User a = newUser();
+        newPet(a.getId(), PetType.CAT);
+        String taken = "TT02P99" + String.format("%05d", SEQ.incrementAndGet() % 100000);
+        cardWithPassportNo(a.getId(), taken);
+        assertThat(passportNo(a.getId())).isEqualTo(taken);
+
+        // 另一只宠物（另一个用户）手里有一张同号的卡（理论上不应出现，归属表兜底前的存量形态）：
+        // NOT EXISTS 把它排除，签发全新号（ISSUED）。
+        User b = newUser();
+        newPet(b.getId(), PetType.CAT);
+        cardWithPassportNo(b.getId(), taken);
+        String issued = passportNo(b.getId());
+        assertThat(issued).isNotEqualTo(taken).startsWith("TT02P");
+        assertThat(jdbc.queryForObject("SELECT source FROM pet_passports pp JOIN pet_profiles p "
+                + "ON p.id = pp.pet_profile_id WHERE p.owner_id = ?", String.class, b.getId())).isEqualTo("ISSUED");
     }
 }

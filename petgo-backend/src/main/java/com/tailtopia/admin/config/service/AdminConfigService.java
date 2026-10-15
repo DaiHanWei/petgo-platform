@@ -19,6 +19,10 @@ import com.tailtopia.config.repository.PawCoinConfigRepository;
 import com.tailtopia.config.repository.PawCoinTopupTierRepository;
 import com.tailtopia.config.repository.PricingConfigRepository;
 import com.tailtopia.config.repository.SupportContactConfigRepository;
+import com.tailtopia.config.domain.AppVersionConfig;
+import com.tailtopia.config.service.AppVersionConfigService;
+import com.tailtopia.config.service.AppVersionConfigUpdate;
+import com.tailtopia.admin.config.dto.AppVersionChange;
 import com.tailtopia.content.rank.AttributeTemplate;
 import com.tailtopia.admin.config.dto.ShareRewardForm;
 import com.tailtopia.shared.error.AppException;
@@ -47,6 +51,8 @@ public class AdminConfigService {
     private final AdminAuditService audit;
     private final FeedRankConfigRepository feedRankRepo;
     private final SupportContactConfigRepository supportContactRepo;
+    /** App 版本配置（V1.3.4 AB-22）：校验与写入归 app 主题的服务（AD-1），本类只管 diff / 日志 / 审计。 */
+    private final AppVersionConfigService appVersion;
 
     /** 启用档位上限（AB-22A：活动调档最多 4 档；表上无约束，服务层数 + advisory 锁串行）。 */
     public static final int MAX_ENABLED_TIERS = 4;
@@ -60,9 +66,10 @@ public class AdminConfigService {
     public AdminConfigService(PricingConfigRepository pricingRepo, PawCoinConfigRepository pawcoinRepo,
             PawCoinTopupTierRepository tierRepo, ConfigChangeLogRepository changeLogs,
             AdminAuditService audit, FeedRankConfigRepository feedRankRepo,
-            SupportContactConfigRepository supportContactRepo) {
+            SupportContactConfigRepository supportContactRepo, AppVersionConfigService appVersion) {
         this.feedRankRepo = feedRankRepo;
         this.supportContactRepo = supportContactRepo;
+        this.appVersion = appVersion;
         this.pricingRepo = pricingRepo;
         this.pawcoinRepo = pawcoinRepo;
         this.tierRepo = tierRepo;
@@ -442,10 +449,13 @@ public class AdminConfigService {
     private static final int MAX_WHATSAPP_LEN = 20;
 
     /**
-     * {@code config_change_logs.old_value} / {@code new_value} 的列宽（V78，VARCHAR(64)）。
+     * 客服邮箱的长度闸 = {@code config_change_logs.old_value} / {@code new_value} 的<b>原</b>列宽（V78，VARCHAR(64)）。
      *
-     * <p>🔴 任何要写进变更日志的配置值都受它约束 —— 比字段自己那张表的列宽更紧时，
-     * 以它为准，否则保存时炸的是审计写入而不是业务校验（500 而不是 422）。
+     * <p>🔴 写进变更日志的值不得超过日志列宽，否则保存时炸的是审计写入而不是业务校验（500 而不是 422）；
+     * 现列宽见下条。
+     *
+     * <p>⚠️ V1.3.4 AB-22 的 V20261014_2304 已把两列加宽到 VARCHAR(512)（商店链接要整条记进日志）。
+     * 客服邮箱这道 64 闸<b>刻意保留</b>：放宽属于客服卡的行为变更，不随版本配置卡顺手改。
      */
     private static final int MAX_CHANGE_LOG_VALUE_LEN = 64;
 
@@ -504,6 +514,99 @@ public class AdminConfigService {
         // commit 拼出的审计 action 自动是 CONFIG_UPDATE_SUPPORT_CONTACT —— 不需要在
         // AuditActions 加常量，与既有 PRICING / PAWCOIN 一致。
         commit(logs, adminId, "SUPPORT_CONTACT", "support_contact_config");
+    }
+
+    // ── App 版本配置（V1.3.4 AB-22 · FR-124）────────────────────────────────
+
+    /**
+     * 后台保存 App 版本配置。改完即生效：{@code GET /api/v1/app-version} 每次读库、不加缓存。
+     *
+     * <p>流程：读当前行 → 五列逐字段 diff（新值先 trim，与 {@link AppVersionConfigService#update} 落库口径一致）
+     * → 无变化直接返回（不写库 / 日志 / 审计，同其它配置卡）→ 最低支持版本有改动时：先判权限码
+     * {@code config.app_min_version_edit}（403），再核对确认值（422 min-confirm）→ 委托 {@code update} 校验并写入
+     * → 变更日志 + 审计 {@code CONFIG_UPDATE_APP_VERSION}。同一事务。
+     *
+     * <p>🔴 <b>校验不在这里重写</b>：格式 / 大小 / 链接的错误码唯一口径在 {@code AppVersionConfigService.validate}。
+     * 页面上「确认弹层输入新版本号」只是体验（V1.3.4 返工清单 §2 · G4），服务端仍按 {@code minConfirm} 判定——
+     * 绕过弹层直接 POST 照样要带对确认值；降回也算改动（防误操作）。
+     *
+     * @param canEditMin 调用方是否持有 {@code config.app_min_version_edit}（或超管）；端点本身仍只要求 config.edit
+     */
+    @Transactional
+    public void updateAppVersion(AppVersionConfigUpdate cmd, String minConfirm, boolean canEditMin, long adminId) {
+        AppVersionConfig c = currentAppVersion();
+        AppVersionConfigUpdate t = trimmed(cmd);
+        List<ConfigChangeLog> logs = new ArrayList<>();
+        diff(logs, ConfigType.APP_VERSION, "ios_latest_version", c.getIosLatestVersion(), t.iosLatestVersion(), adminId);
+        diff(logs, ConfigType.APP_VERSION, "android_latest_version", c.getAndroidLatestVersion(), t.androidLatestVersion(), adminId);
+        diff(logs, ConfigType.APP_VERSION, "min_supported_version", c.getMinSupportedVersion(), t.minSupportedVersion(), adminId);
+        diff(logs, ConfigType.APP_VERSION, "ios_store_url", c.getIosStoreUrl(), t.iosStoreUrl(), adminId);
+        diff(logs, ConfigType.APP_VERSION, "android_store_url", c.getAndroidStoreUrl(), t.androidStoreUrl(), adminId);
+        if (logs.isEmpty()) {
+            return; // 无变更 → 不写、不审计（update 自身不判无变化，所以必须拦在调它之前）。
+        }
+        if (!t.minSupportedVersion().equals(c.getMinSupportedVersion())) {
+            requireMinPermission(canEditMin);
+            require(t.minSupportedVersion().equals(trimToEmpty(minConfirm)), "最低支持版本有改动，请输入新版本号确认",
+                    "admin.err.config.version.min-confirm");
+        }
+        appVersion.update(t, adminId);
+        commit(logs, adminId, "APP_VERSION", "app_version_config");
+    }
+
+    /**
+     * 保存前预检（只校验、不写库；V1.3.4 后台返工清单 §2：确认弹层由服务端渲染，校验不过直接 422、不弹层）。
+     * 校验顺序与 {@link #updateAppVersion} 一致：无改动 → 最低版本权限 → {@code AppVersionConfigService.validate}。
+     *
+     * @return 逐字段改动（非空）
+     */
+    @Transactional(readOnly = true)
+    public List<AppVersionChange> previewAppVersion(AppVersionConfigUpdate cmd, boolean canEditMin) {
+        AppVersionConfig c = currentAppVersion();
+        AppVersionConfigUpdate t = trimmed(cmd);
+        List<AppVersionChange> changes = new ArrayList<>();
+        change(changes, AppVersionChange.IOS_LATEST, c.getIosLatestVersion(), t.iosLatestVersion());
+        change(changes, AppVersionChange.ANDROID_LATEST, c.getAndroidLatestVersion(), t.androidLatestVersion());
+        change(changes, AppVersionChange.MIN_SUPPORTED, c.getMinSupportedVersion(), t.minSupportedVersion());
+        change(changes, AppVersionChange.IOS_STORE_URL, c.getIosStoreUrl(), t.iosStoreUrl());
+        change(changes, AppVersionChange.ANDROID_STORE_URL, c.getAndroidStoreUrl(), t.androidStoreUrl());
+        require(!changes.isEmpty(), "没有改动", "admin.err.config.noChange");
+        if (AppVersionChange.touchesMin(changes)) {
+            requireMinPermission(canEditMin);
+        }
+        appVersion.validate(t);
+        return List.copyOf(changes);
+    }
+
+    private AppVersionConfig currentAppVersion() {
+        return appVersion.current().orElseThrow(() -> new IllegalStateException("app_version_config 缺失"));
+    }
+
+    private static AppVersionConfigUpdate trimmed(AppVersionConfigUpdate cmd) {
+        return new AppVersionConfigUpdate(trimToEmpty(cmd.iosLatestVersion()), trimToEmpty(cmd.androidLatestVersion()),
+                trimToEmpty(cmd.minSupportedVersion()), trimToEmpty(cmd.iosStoreUrl()), trimToEmpty(cmd.androidStoreUrl()));
+    }
+
+    private static void change(List<AppVersionChange> out, String field, String oldVal, String newVal) {
+        String o = oldVal == null ? "" : oldVal;
+        if (!o.equals(newVal)) {
+            out.add(new AppVersionChange(field, o, newVal));
+        }
+    }
+
+    /**
+     * 改「最低支持版本」另需 {@code config.app_min_version_edit}（返工清单 §0-9 / §1）。403 + 码，
+     * 与「采购入库另需编辑进货价权限」（{@code admin.err.inventory.costEditRequired}）同一写法：端点门是 config.edit，字段级再判一道。
+     */
+    private static void requireMinPermission(boolean canEditMin) {
+        if (!canEditMin) {
+            throw AppException.forbidden("修改最低支持版本需要「修改最低支持版本」权限")
+                    .code("admin.err.config.version.min-forbidden");
+        }
+    }
+
+    private static String trimToEmpty(String s) {
+        return s == null ? "" : s.trim();
     }
 
     // ── 内部 ──────────────────────────────────────────────────────────────────

@@ -1,9 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../social/domain/follow_state.dart';
 import '../data/feed_repository.dart';
+import '../data/own_post_lookup.dart';
+import '../domain/feed_focus.dart';
 import '../domain/feed_item.dart';
 import '../domain/home_refresh_provider.dart';
 import '../domain/pinned_slot.dart';
+import 'following_feed_controller.dart';
+import 'social_tab.dart';
 
 /// 当前选中的分类 Tab（Story 3.2，AC3）。切换即重置游标重拉（feedProvider watch 此值）。
 final NotifierProvider<FeedCategoryNotifier, FeedCategory> feedCategoryProvider =
@@ -80,15 +85,41 @@ class FeedController extends AsyncNotifier<FeedState> {
   Future<FeedState> build() async {
     final category = ref.watch(feedCategoryProvider);
     ref.watch(homeRefreshProvider); // 宠物状态变更 → 重建 → 按新状态硬过滤
+    // V1.3.4 Story 2.1 AC3.3：**发请求前**读全局关注版本号，写进这一屏每张卡的快照 ——
+    // 首屏重建（下拉刷新 / 切 Tab / homeRefresh / 重试）= 这个位置「刷新」了，旧覆盖对新快照自动失效。
+    final epoch = ref.read(followStateProvider.notifier).currentEpoch;
     final page = await ref.read(feedRepositoryProvider).getFeed(category: category);
+    var items = [for (final i in page.items) i.copyWith(followEpoch: epoch)];
+    // bug 20261012-586：发布成功页「去 Feed 看」→ 刚发的帖要排在自然流第一位（紧跟顶置卡）。
+    // 新后端首屏已经把它排在最前；这里兜老后端 / 没排上的情况（只读信号，不在 build 里清它 ——
+    // 清由 Feed 视图定位完成后做）。
+    final focus = ref.read(pendingFeedFocusProvider);
+    if (focus != null && category == FeedCategory.all) {
+      items = await _withFocusFirst(items, focus, epoch);
+    }
     return FeedState(
-      items: page.items,
+      items: items,
       category: category,
       nextCursor: page.nextCursor,
       hasMore: page.hasMore,
       pagesLoaded: 1,
       rankMode: page.rankMode,
     );
+  }
+
+  /// 把待定位的帖挪到第一位；首屏里没有 → 兜底取回本人这一条插到第一位。取不到就原样返回
+  /// （视图那边找不到会放弃定位并清信号，不会卡住）。
+  Future<List<FeedItem>> _withFocusFirst(List<FeedItem> items, int focus, int epoch) async {
+    final at = items.indexWhere((i) => i.id == focus);
+    if (at == 0) return items;
+    if (at > 0) return [items[at], ...items.sublist(0, at), ...items.sublist(at + 1)];
+    try {
+      final own = await ref.read(ownPostLookupProvider)(focus);
+      if (own == null || own.isPrivate) return items;
+      return [own.copyWith(followEpoch: epoch), ...items];
+    } catch (_) {
+      return items; // 兜底取数失败不连累整个首屏
+    }
   }
 
   /// 距底预加载 / 底部重试 / 访客引导卡「继续浏览」：用 nextCursor 拉下一批并追加（去重由游标稳定性保证）。
@@ -102,12 +133,20 @@ class FeedController extends AsyncNotifier<FeedState> {
       }
       // 进入加载：清失败态（重试场景）+ 置 loadingMore；nextCursor 由 copyWith 保留。
       state = AsyncData(current.copyWith(loadingMore: true, loadMoreFailed: false));
+      // V1.3.4 Story 2.1：翻页**只给新拉到的这一页**打版本号；已在屏上的卡不受影响（不算刷新）。
+      final epoch = ref.read(followStateProvider.notifier).currentEpoch;
       try {
         final page = await ref
             .read(feedRepositoryProvider)
             .getFeed(category: current.category, cursor: current.nextCursor);
+        // bug 20261012-586：首屏本地插进来的「刚发的帖」老后端翻页时可能再给一次 → 按 id 去重。
+        final have = {for (final i in current.items) i.id};
         state = AsyncData(current.copyWith(
-          items: [...current.items, ...page.items],
+          items: [
+            ...current.items,
+            for (final i in page.items)
+              if (!have.contains(i.id)) i.copyWith(followEpoch: epoch),
+          ],
           nextCursor: page.nextCursor,
           hasMore: page.hasMore,
           loadingMore: false,
@@ -181,13 +220,30 @@ final AsyncNotifierProvider<FeedController, FeedState> feedProvider =
 ///
 /// 🔴 先判 [Ref.exists]：从通知深链直接进详情时 Feed 可能还没建，`ref.read(feedProvider.notifier)`
 /// 会顺手把它建出来并发一次首屏请求 —— 为了回写一个数去拉整页 Feed 不值当，没建就不写。
-/// ⚠️ 只覆盖 [feedProvider]（Social 全部 Tab 共用这一个实例，切 Tab 是同一实例重建）。
+/// ⚠️ 覆盖 [feedProvider]（Social 全部分类 Tab 共用这一个实例，切 Tab 是同一实例重建）
+/// 与 V1.3.4 的关注流 [followingFeedProvider]（同一张帖可能同时挂在两条流上，两边各自判 exists）。
 /// 顶置卡（pinnedSlotProvider）是独立快照，不在此回写。
 void syncFeedCounts(WidgetRef ref, int postId,
     {int? commentCount, int? likeCount, bool? liked}) {
-  if (!ref.exists(feedProvider)) return;
-  ref.read(feedProvider.notifier).syncCounts(postId,
-      commentCount: commentCount, likeCount: likeCount, liked: liked);
+  if (ref.exists(feedProvider)) {
+    ref.read(feedProvider.notifier).syncCounts(postId,
+        commentCount: commentCount, likeCount: likeCount, liked: liked);
+  }
+  if (ref.exists(followingFeedProvider)) {
+    ref.read(followingFeedProvider.notifier).syncCounts(postId,
+        commentCount: commentCount, likeCount: likeCount, liked: liked);
+  }
+}
+
+/// 举报某帖成功 → 从 Discover 与关注流里**都**乐观移除这张卡（V1.3.4 following 流）。
+///
+/// 🔴 两边都先判 [Ref.exists]：没建过的流不为移除一张卡去建它、发首屏请求（同 [syncFeedCounts]）。
+/// 后端两条流都已过滤「我举报过的帖」，下次拉取不会复现；这里补的是**当前这一屏**。
+void removeFeedPost(WidgetRef ref, int postId) {
+  if (ref.exists(feedProvider)) ref.read(feedProvider.notifier).removeItem(postId);
+  if (ref.exists(followingFeedProvider)) {
+    ref.read(followingFeedProvider.notifier).removeItem(postId);
+  }
 }
 
 
@@ -198,8 +254,22 @@ void syncFeedCounts(WidgetRef ref, int postId,
 final FutureProvider<PinnedSlot?> pinnedSlotProvider =
     FutureProvider<PinnedSlot?>((ref) async {
   try {
-    return await ref.read(feedRepositoryProvider).getPinnedSlot();
+    // V1.3.4 Story 2.1 AC3.3：顶置位快照同样在发请求前记版本号（首页下拉刷新时随之 invalidate）。
+    final epoch = ref.read(followStateProvider.notifier).currentEpoch;
+    return (await ref.read(feedRepositoryProvider).getPinnedSlot())?.withFollowEpoch(epoch);
   } catch (_) {
     return null;
   }
 });
+
+/// 发布成功页「去 Feed 看」（bug 20261012-586）：切到 Social → Discover（全部分类），
+/// 记下待定位的新帖，并让顶置位与首屏**一起**重拉。导航（`go('/home')`）由调用方做。
+///
+/// 🔴 两个都要 invalidate：只刷首屏的话顶置卡还是旧快照，新帖「紧跟顶置卡」的相对位置可能对不上。
+void showPostInDiscoverFeed(WidgetRef ref, int postId) {
+  ref.read(socialTabProvider.notifier).select(SocialTab.discover);
+  ref.read(feedCategoryProvider.notifier).select(FeedCategory.all);
+  ref.read(pendingFeedFocusProvider.notifier).request(postId);
+  ref.invalidate(pinnedSlotProvider);
+  ref.invalidate(feedProvider);
+}

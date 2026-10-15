@@ -86,7 +86,7 @@ class DioIdCardRepository implements IdCardRepository {
 
   @override
   Future<IdCard> createCard(CreateIdCardRequest req) async {
-    final res = await dio.post<Map<String, dynamic>>(ApiPaths.meIdCards, data: req.toJson());
+    final res = await dio.post<Map<String, dynamic>>(ApiPaths.meIdCardsCreateV2, data: req.toJson());
     return IdCard.fromJson(res.data ?? const {});
   }
 

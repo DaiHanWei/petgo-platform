@@ -219,6 +219,23 @@ public final class AdminPermissions {
      */
     public static final String CONFIG_SHARE_REWARD_EDIT = "config.share_reward_edit";
 
+    /**
+     * 改 App 版本配置里的「最低支持版本」（V1.3.4 AB-22，后台 PRD §1.1 · UI 稿 G7）。<b>附加于 {@link #CONFIG_EDIT}</b>：
+     * 端点仍要求 config.edit，改这一个字段另需本码；无本码时该行只读、其余字段照常可改。
+     *
+     * <p>🔴 单独成码：设错 = 全量用户被锁进不可跳过的强制更新弹窗、无法自救。
+     * 不预授予任何预置角色（照 {@link #PLACE_MANAGE} 先例），超管隐式拥有，需要时在角色页勾选。
+     */
+    public static final String CONFIG_APP_MIN_VERSION_EDIT = "config.app_min_version_edit";
+
+    // 运营触达（V1.3.4 AB-30 / AB-31）——不预授予任何预置角色，超管隐式拥有
+    /** 运营弹窗页查看 + 编辑（AB-30；单一码，无此码侧栏不出现该项）。 */
+    public static final String OPS_POPUP_MANAGE = "ops_popup.manage";
+    /** 查看系统通知发送记录（AB-31）。 */
+    public static final String OPS_NOTIFY_VIEW = "ops_notify.view";
+    /** 新建 / 取消系统通知发送（AB-31；发送与查看分权，一次可触达全量用户）。 */
+    public static final String OPS_NOTIFY_SEND = "ops_notify.send";
+
     // 兽医分成月结对账（V1.1 Epic 9，Story 9-5）
     /** 月结对账查看。 */
     public static final String SETTLEMENT_VIEW = "settlement.view";
@@ -310,7 +327,8 @@ public final class AdminPermissions {
                     VIRTUAL_ACCOUNT_VIEW,
                     ADMIN_VIEW_ACCOUNTS, ADMIN_VIEW_LOGS,
                     SHOP_PRODUCT_VIEW, SHOP_COST_VIEW, SHOP_INVENTORY_VIEW,
-                    SHOP_ORDER_VIEW, SHOP_ORDER_PHONE_SEARCH, SHOP_FINANCE_VIEW)),
+                    SHOP_ORDER_VIEW, SHOP_ORDER_PHONE_SEARCH, SHOP_FINANCE_VIEW,
+                    OPS_NOTIFY_VIEW)),
             new PermissionGroup("perm.group.edit", List.of(
                     CONTENT_TAKEDOWN, CONTENT_RESTORE, CONTENT_PROACTIVE_TAKEDOWN,
                     CONTENT_MANUAL_REVIEW, CONTENT_DISPOSE_ACCOUNT, CONTENT_THROTTLE_MANAGE,
@@ -324,7 +342,8 @@ public final class AdminPermissions {
                     ADMIN_CREATE_ACCOUNT, ADMIN_DEACTIVATE,
                     SHOP_PRODUCT_EDIT, SHOP_COST_EDIT, SHOP_INVENTORY_EDIT,
                     SHOP_ORDER_FULFILL,
-                    PLACE_MANAGE, COMMENT_VIRTUAL_POST)));
+                    PLACE_MANAGE, COMMENT_VIRTUAL_POST,
+                    CONFIG_APP_MIN_VERSION_EDIT, OPS_POPUP_MANAGE, OPS_NOTIFY_SEND)));
 
     /** 全部合法权限码（UI 勾选项 + 校验白名单），保持模块分组顺序。 */
     // 采用 v1.1-dev 的 GROUPS 派生模型（更细粒度权限，为 stag 硬编码列表的超集）。

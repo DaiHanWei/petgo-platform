@@ -47,6 +47,8 @@ class FeedRecommendationServiceTest {
     private FeedSequenceStore sequences;
     private com.tailtopia.moderation.throttle.service.RankThrottleService throttles;
     private FeedRecommendationService service;
+    private com.tailtopia.config.domain.FeedRankConfig cfg;
+    private com.tailtopia.config.service.PlatformConfigService platformConfig;
 
     @BeforeEach
     void setUp() {
@@ -72,8 +74,7 @@ class FeedRecommendationServiceTest {
                 .thenReturn(List.of());
 
         // Story 16.4：打分参数来自配置表（本类不验参数取值，给默认种子值）
-        com.tailtopia.config.domain.FeedRankConfig cfg =
-                mock(com.tailtopia.config.domain.FeedRankConfig.class);
+        cfg = mock(com.tailtopia.config.domain.FeedRankConfig.class);
         when(cfg.getFreshnessWeight()).thenReturn(0.6);
         when(cfg.getInteractionWeight()).thenReturn(0.4);
         when(cfg.getCommentWeight()).thenReturn(2.0);
@@ -85,8 +86,8 @@ class FeedRecommendationServiceTest {
         when(cfg.getAttrFunQuota()).thenReturn(5);
         when(cfg.getAttrEduQuota()).thenReturn(3);
         when(cfg.getAttrLifeQuota()).thenReturn(2);
-        com.tailtopia.config.service.PlatformConfigService platformConfig =
-                mock(com.tailtopia.config.service.PlatformConfigService.class);
+        when(cfg.getEduFreshnessHalfLifeHours()).thenReturn(720.0); // V1.3.4 Story 1.2
+        platformConfig = mock(com.tailtopia.config.service.PlatformConfigService.class);
         when(platformConfig.feedRank()).thenReturn(cfg);
 
         // Story 17.1：本类不验限流（有 RankThrottleIntegrationTest），默认无限流记录。
@@ -95,7 +96,7 @@ class FeedRecommendationServiceTest {
 
         service = new FeedRecommendationService(posts, likes, comments, tags, species, pets,
                 seen, sequences, new FeedRankEngine(),
-                new FeedRankProperties(30, 100, 1000), platformConfig, throttles);
+                new FeedRankProperties(30, 100, 1000, 1000), platformConfig, throttles);
     }
 
     private static ContentPost post(long id, long authorId) {
@@ -126,8 +127,12 @@ class FeedRecommendationServiceTest {
      * 此时上一个 answer 会带着 null 参数执行，直接 NPE。
      */
     private void sequenceIs(List<Long> ids, java.util.function.LongPredicate stillAlive) {
-        when(sequences.length(any(), eq("s-seed-1"))).thenReturn((long) ids.size());
-        when(sequences.read(any(), eq("s-seed-1"), org.mockito.ArgumentMatchers.anyLong(), anyInt()))
+        sequenceIs("s-seed-1", ids, stillAlive);
+    }
+
+    private void sequenceIs(String seed, List<Long> ids, java.util.function.LongPredicate stillAlive) {
+        when(sequences.length(any(), eq(seed))).thenReturn((long) ids.size());
+        when(sequences.read(any(), eq(seed), org.mockito.ArgumentMatchers.anyLong(), anyInt()))
                 .thenAnswer(inv -> {
                     long off = inv.getArgument(2);
                     int lim = inv.getArgument(3);
@@ -466,5 +471,317 @@ class FeedRecommendationServiceTest {
         verify(seen).markSeen(key.capture(), any(), any());
         assertThat(key.getValue().namespace()).isEqualTo("u:9");
         assertThat(key.getValue().guest()).isFalse();
+    }
+
+    // ── V1.3.4 Story 1.1：教育类独立候选池（FR-122）──────────────────
+
+    private static ContentPost knowledge(long id, Instant createdAt) {
+        ContentPost p = ContentPost.publish(id, ContentType.KNOWLEDGE, null, "k" + id, List.of());
+        try {
+            var f = ContentPost.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(p, id);
+            var c = ContentPost.class.getDeclaredField("createdAt");
+            c.setAccessible(true);
+            c.set(p, createdAt);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+        return p;
+    }
+
+    /** 快照为空 ⇒ 走生成路径；读页时按 id 原样读回（{@code byId} 里找不到的按 DAILY 造）。 */
+    private void generationPath(Map<Long, ContentPost> byId) {
+        when(sequences.length(any(), any())).thenReturn(0L);
+        when(sequences.read(any(), any(), org.mockito.ArgumentMatchers.anyLong(), anyInt()))
+                .thenReturn(List.of());
+        when(posts.findRankableByIds(any(), anyBoolean(), any())).thenAnswer(inv -> {
+            Collection<Long> asked = inv.getArgument(0);
+            List<ContentPost> out = new ArrayList<>();
+            for (Long id : asked) {
+                out.add(byId.getOrDefault(id, post(id, id)));
+            }
+            return out;
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Long> appendedSequence() {
+        org.mockito.ArgumentCaptor<List<Long>> ids = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(sequences).append(any(), any(), ids.capture());
+        return ids.getValue();
+    }
+
+    /** 登录用户：教育池按查看者口径取，窗口 = 近 90 天，上界 = eduPoolSize（1000）。 */
+    @Test
+    void eduPoolIsQueriedWithViewerScopeAndNinetyDayWindow() {
+        generationPath(Map.of());
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(List.of(post(1, 1)));
+
+        Instant before = Instant.now();
+        service.page(42L, null, null, 20, null);
+        Instant after = Instant.now();
+
+        org.mockito.ArgumentCaptor<Instant> since = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> pageable =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        verify(posts).findEduCandidatePool(eq(true), eq(42L), since.capture(), pageable.capture());
+        java.time.Duration window = java.time.Duration.ofDays(90);
+        assertThat(since.getValue())
+                .isAfterOrEqualTo(before.minus(window).minusSeconds(1))
+                .isBeforeOrEqualTo(after.minus(window).plusSeconds(1));
+        assertThat(pageable.getValue().getPageSize()).isEqualTo(1000);
+    }
+
+    /** 游客：教育池以 hasViewer=false、viewerId=null 取（举报 / 屏蔽两项按游客口径跳过，与主池一致）。 */
+    @Test
+    void guestQueriesEduPoolWithoutViewer() {
+        generationPath(Map.of());
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(List.of(post(1, 1)));
+
+        service.page(null, "abc", null, 20, null);
+
+        verify(posts).findEduCandidatePool(eq(false), org.mockito.ArgumentMatchers.isNull(), any(), any());
+    }
+
+    /** 主池里没有的科普（60 天前）经教育池进入序列。 */
+    @Test
+    void eduOnlyPostsReachTheSequence() {
+        Instant sixtyDaysAgo = Instant.now().minus(java.time.Duration.ofDays(60));
+        Map<Long, ContentPost> byId = new java.util.HashMap<>();
+        List<ContentPost> edu = new ArrayList<>();
+        for (long i = 101; i <= 103; i++) {
+            ContentPost k = knowledge(i, sixtyDaysAgo);
+            edu.add(k);
+            byId.put(i, k);
+        }
+        generationPath(byId);
+        List<ContentPost> pool = new ArrayList<>();
+        for (long i = 1; i <= 30; i++) {
+            pool.add(post(i, i));
+        }
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
+        when(posts.findEduCandidatePool(anyBoolean(), any(), any(), any())).thenReturn(edu);
+
+        service.page(9L, null, null, 20, null);
+
+        assertThat(appendedSequence()).contains(101L, 102L, 103L);
+    }
+
+    /** 两池都有的同一条只出现一次；赞评批量聚合只调一次、id 无重复。 */
+    @Test
+    @SuppressWarnings("unchecked")
+    void postsInBothPoolsAppearOnce() {
+        ContentPost shared = knowledge(7, Instant.now().minus(java.time.Duration.ofDays(60)));
+        generationPath(Map.of(7L, shared));
+        List<ContentPost> pool = new ArrayList<>();
+        for (long i = 1; i <= 30; i++) {
+            pool.add(i == 7 ? shared : post(i, i));
+        }
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
+        when(posts.findEduCandidatePool(anyBoolean(), any(), any(), any())).thenReturn(List.of(shared));
+
+        service.page(9L, null, null, 20, null);
+
+        List<Long> seq = appendedSequence();
+        assertThat(seq).doesNotHaveDuplicates().contains(7L);
+        org.mockito.ArgumentCaptor<List<Long>> counted = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(likes, times(1)).countByPostIdIn(counted.capture());
+        assertThat(counted.getValue()).doesNotHaveDuplicates().hasSize(30);
+    }
+
+    /** AC3：教育池为空 → 引擎既有降级补位，首屏照常满 20 条。 */
+    @Test
+    void emptyEduPoolStillFillsThePage() {
+        generationPath(Map.of());
+        List<ContentPost> pool = new ArrayList<>();
+        for (long i = 1; i <= 50; i++) {
+            pool.add(post(i, i));
+        }
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
+        when(posts.findEduCandidatePool(anyBoolean(), any(), any(), any())).thenReturn(List.of());
+
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+
+        assertThat(p.posts()).hasSize(20);
+    }
+
+    // ── V1.3.4 Story 1.2：科普半衰期取自配置（FR-122.3）───────────────
+
+    /** 用 spy 引擎重建服务，跑一次生成，取传进引擎的 RankParams。 */
+    private RankParams paramsReachingTheEngine() {
+        FeedRankEngine engine = org.mockito.Mockito.spy(new FeedRankEngine());
+        FeedRecommendationService svc = new FeedRecommendationService(posts, likes, comments, tags,
+                species, pets, seen, sequences, engine, new FeedRankProperties(30, 100, 1000, 1000),
+                platformConfig, throttles);
+        generationPath(Map.of());
+        List<ContentPost> pool = new ArrayList<>();
+        for (long i = 1; i <= 30; i++) {
+            pool.add(post(i, i));
+        }
+        when(posts.findRankCandidatePool(anyBoolean(), any(), any())).thenReturn(pool);
+
+        svc.page(9L, null, null, 20, null);
+
+        org.mockito.ArgumentCaptor<FeedRankEngine.Input> input =
+                org.mockito.ArgumentCaptor.forClass(FeedRankEngine.Input.class);
+        verify(engine).rank(input.capture(), anyInt());
+        return input.getValue().params();
+    }
+
+    @Test
+    void eduHalfLifeFromConfigReachesTheEngine() {
+        when(cfg.getEduFreshnessHalfLifeHours()).thenReturn(360.0);
+
+        assertThat(paramsReachingTheEngine().eduFreshnessHalfLifeHours()).isEqualTo(360.0);
+    }
+
+    /** 🛡 0 / 负数 / NaN（库 CHECK 已挡，只为 mock / 脏数据兜底）→ 回落 720。 */
+    @Test
+    void nonPositiveEduHalfLifeFallsBackTo720() {
+        when(cfg.getEduFreshnessHalfLifeHours()).thenReturn(0.0);
+
+        assertThat(paramsReachingTheEngine().eduFreshnessHalfLifeHours()).isEqualTo(720.0);
+    }
+
+    @Test
+    void nanEduHalfLifeFallsBackTo720() {
+        when(cfg.getEduFreshnessHalfLifeHours()).thenReturn(Double.NaN);
+
+        assertThat(paramsReachingTheEngine().eduFreshnessHalfLifeHours()).isEqualTo(720.0);
+    }
+
+    // ── bug 20261012-586：本人「刚发的帖」首屏插在自然流最前 ─────────────
+
+    private static List<Long> range(long from, long to) {
+        List<Long> out = new ArrayList<>();
+        for (long i = from; i <= to; i++) {
+            out.add(i);
+        }
+        return out;
+    }
+
+    /** 与 {@link FeedSequenceStore#newSeed} 同格式的真种子（后续页靠它还原锚点）。 */
+    private static String seedAt(Instant t) {
+        return FeedRankCursor.SEED_PREFIX + Long.toString(t.toEpochMilli(), 36);
+    }
+
+    /**
+     * 🔴 本 bug 的主断言：刚发的帖（PUBLISHED，也在序列里排在后面）首屏排第一，且不重复出现。
+     * 页大小不变（插进来的挤掉序列尾巴，而不是多出一条）。
+     */
+    @Test
+    void ownRecentPostIsFirstOnFirstPageAndNotDuplicated() {
+        sequenceIs(range(1, 40));
+        when(posts.findOwnRecentPosts(eq(9L), any(), any(), any()))
+                .thenReturn(List.of(post(17L, 9L)));
+
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+
+        assertThat(p.posts().get(0).getId()).isEqualTo(17L);
+        assertThat(p.posts()).hasSize(20);
+        assertThat(p.posts().stream().map(ContentPost::getId)).doesNotHaveDuplicates();
+    }
+
+    /** 窗口与条数是常量：查询按 (锚点 - 10 分钟, 锚点] 取、至多 3 条；锚点 = 种子时刻。 */
+    @Test
+    void ownRecentQueryUsesSeedAnchoredTenMinuteWindow() {
+        Instant anchor = Instant.parse("2026-10-15T08:00:00Z");
+        String seed = seedAt(anchor);
+        when(sequences.newSeed(any())).thenReturn(seed);
+        sequenceIs(seed, range(1, 5), id -> true);
+
+        service.page(9L, null, null, 20, null);
+
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> pageable =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        verify(posts).findOwnRecentPosts(eq(9L), eq(anchor.minus(java.time.Duration.ofMinutes(10))),
+                eq(anchor), pageable.capture());
+        assertThat(pageable.getValue().getPageSize()).isEqualTo(3);
+        assertThat(FeedRecommendationService.OWN_RECENT_WINDOW).isEqualTo(java.time.Duration.ofMinutes(10));
+        assertThat(FeedRecommendationService.MAX_OWN_RECENT).isEqualTo(3);
+    }
+
+    /**
+     * 🔴 后续页去重：首屏插过的那条在序列里排第 25 位，第二页不能再冒一次 ——
+     * 后续页按种子时刻重放查询得到同一批 id 并跳过（消费照算，不出短页）。
+     */
+    @Test
+    void ownRecentPostDoesNotReappearOnLaterPages() {
+        Instant anchor = Instant.parse("2026-10-15T08:00:00Z");
+        String seed = seedAt(anchor);
+        sequenceIs(seed, range(1, 60), id -> true);
+        when(posts.findOwnRecentPosts(eq(9L), eq(anchor.minus(java.time.Duration.ofMinutes(10))),
+                eq(anchor), any())).thenReturn(List.of(post(25L, 9L)));
+
+        String cursor = new FeedRankCursor(seed, 19).encode();
+        FeedRecommendationService.RankedPage later = service.page(9L, null, cursor, 20, null);
+
+        assertThat(later.posts().stream().map(ContentPost::getId)).doesNotContain(25L);
+        assertThat(later.posts()).hasSize(20);
+    }
+
+    /** 顺序：刚发的帖（新在前）→ 其余本人挂起帖；同一条既是刚发又在挂起，只出现一次。 */
+    @Test
+    void ownRecentComesBeforeOlderPendingAndIsDeduped() {
+        sequenceIs(range(1, 40));
+        when(posts.findOwnRecentPosts(eq(9L), any(), any(), any()))
+                .thenReturn(List.of(post(900L, 9L), post(901L, 9L)));
+        when(posts.findOwnPendingPosts(eq(9L), any()))
+                .thenReturn(List.of(post(901L, 9L), post(800L, 9L)));
+
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, null);
+
+        assertThat(p.posts().stream().limit(3).map(ContentPost::getId))
+                .containsExactly(900L, 901L, 800L);
+        assertThat(p.posts().stream().map(ContentPost::getId)).doesNotHaveDuplicates();
+    }
+
+    /** 自己的帖恰好被运营顶置：顶置位已在展示，首屏不再插一次（让位口径不变）。 */
+    @Test
+    void ownRecentPostThatIsPinnedYieldsOnFirstPage() {
+        sequenceIs(range(1, 40));
+        when(posts.findOwnRecentPosts(eq(9L), any(), any(), any()))
+                .thenReturn(List.of(post(500L, 9L)));
+
+        FeedRecommendationService.RankedPage p = service.page(9L, null, null, 20, 500L);
+
+        assertThat(p.posts().stream().map(ContentPost::getId)).doesNotContain(500L);
+    }
+
+    /** 🛡 刚发的帖不记曝光（它没参与打分）。 */
+    @Test
+    void ownRecentPostIsNotMarkedAsSeen() {
+        sequenceIs(List.of(1L, 2L));
+        when(posts.findOwnRecentPosts(eq(9L), any(), any(), any()))
+                .thenReturn(List.of(post(999L, 9L)));
+
+        service.page(9L, null, null, 20, null);
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<Collection<Long>> captor =
+                org.mockito.ArgumentCaptor.forClass(Collection.class);
+        verify(seen).markSeen(any(), captor.capture(), any());
+        assertThat(captor.getValue()).containsExactly(1L, 2L);
+    }
+
+    /** 游客没有「本人刚发的帖」，不发这次查询。 */
+    @Test
+    void guestNeverQueriesOwnRecentPosts() {
+        sequenceIs(List.of(1L));
+
+        service.page(null, "anon", null, 20, null);
+
+        verify(posts, never()).findOwnRecentPosts(org.mockito.ArgumentMatchers.anyLong(), any(),
+                any(), any());
+    }
+
+    @Test
+    void seedTimeRoundTripsAndRejectsForeignSeeds() {
+        Instant t = Instant.parse("2026-10-15T08:00:00.123Z");
+        assertThat(FeedSequenceStore.seedTime(seedAt(t))).isEqualTo(t);
+        assertThat(FeedSequenceStore.seedTime("s-seed-1")).isNull();
+        assertThat(FeedSequenceStore.seedTime("x123")).isNull();
+        assertThat(FeedSequenceStore.seedTime(null)).isNull();
     }
 }

@@ -109,8 +109,9 @@ public class FeedRankEngine {
                     ? p.honorBoost() : 1.0;
             double throttle = factor(in.throttleFactors(), c.id());
             // 刷新抖动（2026-09-01）：最终分再乘一个 (1-幅度, 1] 区间的确定性系数。
-            // ⚠️ 用 seeded Random 而不是 Math.random —— 同一种子必须算出同一序列
-            //    （续算、级别 3 降级重算都依赖这一点），类注释禁的是**不可重放**的随机。
+            // ⚠️ 系数由（种子, id）经 SplitMix64 终混确定性算出，不用不可重放的随机 ——
+            //    同一种子必须算出同一序列（续算、级别 3 降级重算都依赖这一点）。
+            //    FR-135（2026-09-30）：旧实现 Random(种子×常数+id) 让相邻 id 系数只差约 1e-4，首条刷不动。
             double jitter = jitterFactor(in.shuffleSeed(), c.id(), p.shuffleStrength());
             pool.add(new Scored(c, SpeciesBucket.of(c.species(), in.mainSpecies()),
                     FeedRankScorer.finalScore(c, now, p, decay, honor, throttle) * jitter));
@@ -252,15 +253,28 @@ public class FeedRankEngine {
      *
      * <p>🛡 种子为 null 或幅度 ≤ 0 → 1.0（不抖动）：既有单测与「关闭抖动」的运营配置
      * 都靠这条回到纯分数排序。乘法而非加法 —— 分数为 0 的内容抖不上来。
+     *
+     * <p>🔴 V1.3.4 FR-135：先 SplitMix64 打散（种子、id 任一位变化都让结果整体改变），
+     * 再取 53 位尾数作 [0,1)。旧实现把 id 直接加在 java.util.Random 的种子上，
+     * 而 Random 对种子只做一次线性变换 ⇒ 相邻 id 系数只差约 1e-4，新内容同涨同落、首条刷不动。
+     * 包级可见只为同包单测（{@code FeedRankJitterTest}）。
      */
-    private static double jitterFactor(String seed, long id, double strength) {
+    static double jitterFactor(String seed, long id, double strength) {
         if (seed == null || strength <= 0) {
             return 1.0;
         }
-        // java.util.Random 的算法是 JDK 规范钉死的（LCG），String.hashCode 同理 ——
-        // 跨 JVM、跨重启同一（种子, id）永远得到同一个数。
-        double rand = new java.util.Random(seed.hashCode() * 1_000_003L + id).nextDouble();
-        return 1.0 - strength * rand;
+        // SplitMix64 终混：种子与 id 先各自充分打散再合并，任一位变化都让结果整体改变（FR-135）。
+        // String.hashCode 与下面的常数运算都是规范钉死的 —— 跨 JVM、跨重启同一（种子, id）永远同一个数。
+        long h = mix64(seed.hashCode() * 0x9E3779B97F4A7C15L ^ mix64(id));
+        double rand = (mix64(h) >>> 11) * 0x1.0p-53;   // 53 位尾数 → [0, 1)
+        return 1.0 - strength * rand;                    // ∈ (1 - strength, 1]
+    }
+
+    /** SplitMix64 的终混（Steele / Lea / Flood 2014）：三次 xor-shift-multiply，雪崩性好。 */
+    private static long mix64(long z) {
+        z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
+        z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
+        return z ^ (z >>> 31);
     }
 
     /** 缺省系数 = 1.0（🛡 不是 0 —— 那会把内容分整条抹平）。 */

@@ -5,6 +5,9 @@ import 'package:tailtopia/features/auth/domain/auth_state.dart';
 import 'package:tailtopia/features/auth/domain/login_response.dart';
 import 'package:tailtopia/features/content/presentation/feed_tab_row.dart';
 import 'package:tailtopia/features/content/presentation/home_page.dart';
+import 'package:tailtopia/features/content/presentation/social_tab.dart';
+import 'package:tailtopia/features/notify/domain/app_update_controller.dart';
+import 'package:tailtopia/features/place/presentation/place_entry_row.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -21,6 +24,12 @@ LoginResponse _user() => const LoginResponse(
       profile: UserProfile(
           nickname: 'Aurel', petStatus: 'PLANNING', hasPetProfile: true, onboardingCompleted: true),
     );
+
+/// V1.3.4 Story 3.3：横幅可见态（只换 build 初值，其余沿用真实控制器）。
+class _BannerVisibleController extends AppUpdateController {
+  @override
+  AppUpdateState build() => const AppUpdateState(bannerVisible: true);
+}
 
 Future<void> _pumpHome(WidgetTester tester, ProviderContainer c) async {
   await tester.pumpWidget(UncontrolledProviderScope(
@@ -45,13 +54,32 @@ void main() {
 
     await _pumpHome(tester, c);
 
-    // AppBar 品牌标(logo.svg，semanticsLabel=TailTopia) + 分类 Chips 恒在。
-    expect(find.bySemanticsLabel('TailTopia'), findsOneWidget);
+    // V1.3.4 following 流：AppBar 品牌标已换成 Discover / Following 页签；分类 Chips 恒在。
+    expect(find.byType(SocialTabBar), findsOneWidget);
     expect(find.byType(FeedTabRow), findsOneWidget);
     // 推倒重做：旧 Momo 问候头 / 快捷入口 / 每日卡 / 「Untukmu」区头不再渲染。
     expect(find.text('Apa kabar, Aurel?'), findsNothing);
     expect(find.text('Konsultasi Kilat'), findsNothing);
     expect(find.text('Catat momen hari ini'), findsNothing);
     expect(find.text('Untukmu'), findsNothing);
+  });
+
+  testWidgets('V1.3.4 Story 3.3：默认无推荐更新横幅；bannerVisible=true 时横幅在场所入口行之上', (tester) async {
+    final plain = ProviderContainer();
+    addTearDown(plain.dispose);
+    await _pumpHome(tester, plain);
+    expect(find.byKey(const ValueKey('appUpdateBanner')), findsNothing);
+
+    final c = ProviderContainer(overrides: [
+      appUpdateControllerProvider.overrideWith(_BannerVisibleController.new),
+    ]);
+    addTearDown(c.dispose);
+    await _pumpHome(tester, c);
+
+    final banner = find.byKey(const ValueKey('appUpdateBanner'));
+    expect(banner, findsOneWidget);
+    expect(find.byType(PlaceEntryRow), findsOneWidget);
+    expect(tester.getBottomLeft(banner).dy,
+        lessThanOrEqualTo(tester.getTopLeft(find.byType(PlaceEntryRow)).dy));
   });
 }

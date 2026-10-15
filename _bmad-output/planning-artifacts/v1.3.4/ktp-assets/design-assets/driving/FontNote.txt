@@ -1,0 +1,19 @@
+TAILTOPIA & Pet Driving License
+Typeface: Rubik
+Weight: Bold & Italic
+Usage: Main document title
+
+SURAT IZIN MENGEMUDI HEWAN
+Typeface: Rubik
+Weight: Medium
+Usage: Main document title
+
+Nama
+Typeface: Rubik
+Weight: Regular
+Usage: Information label
+
+Oyen
+Typeface: Rubik
+Weight: Bold
+Usage: Personal/pet information

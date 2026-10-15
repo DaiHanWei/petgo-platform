@@ -58,6 +58,12 @@ PublicProfile _identityOnly() => PublicProfile(
       avatarUrl: null,
       signature: 'Pecinta kucing',
       joinedAt: DateTime.utc(2026, 3, 4),
+      // V1.3.4（UI 稿 A7）：关注 / 粉丝数与关注关系是**真实值**（被拉黑方仍关注对方）。
+      userToken: 'tokOwner0000000000000000000000ab',
+      followingCount: 12,
+      followerCount: 30,
+      iFollow: true,
+      followsMe: false,
     );
 
 Future<void> _pump(WidgetTester tester) async {
@@ -108,9 +114,22 @@ void main() {
       expect(find.text('Rani'), findsOneWidget);
       expect(find.byKey(const ValueKey('profileJoinedAt')), findsOneWidget);
       expect(find.byKey(const ValueKey('profileSignature')), findsOneWidget);
-      // UI 稿 C4：内容区为空 →「POSTINGAN / 计数」整行不渲染（与真没发过同样隐藏，不区分）。
+      // V1.3.4 UI 稿 A6 / A7：计数在四格 —— 帖子 / 获赞为 0（服务端伪装），关注 / 粉丝为真实值；
+      // 「Postingan」小节标题与「真没发过」同样照常显示，不区分。
       expect(find.byKey(const ValueKey('profileCounts')), findsNothing);
-      expect(find.text(l10n.profilePostsTitle.toUpperCase()), findsNothing);
+      expect(find.text(l10n.profilePostsTitle.toUpperCase()), findsOneWidget);
+      for (final (key, value) in [
+        ('profileStatPosts', '0'),
+        ('profileStatLikes', '0'),
+        ('profileStatFollowing', '12'),
+        ('profileStatFollowers', '30'),
+      ]) {
+        expect(find.descendant(of: find.byKey(ValueKey(key)), matching: find.text(value)), findsOneWidget,
+            reason: key);
+      }
+      // 按真实关系显示且可操作（D-4）：仍关注对方 →「Following」。
+      expect(find.descendant(of: find.byKey(const ValueKey('followButton')),
+          matching: find.text(l10n.followActionFollowing)), findsOneWidget);
 
       expect(find.byKey(const ValueKey('profilePostsEmpty')), findsOneWidget);
       expect(find.byType(PostGridTile), findsNothing);

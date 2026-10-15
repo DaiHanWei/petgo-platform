@@ -25,10 +25,12 @@ import '../../profile/domain/milestone_titles.dart';
 import '../../profile/domain/pet_profile.dart';
 import '../../profile/data/milestone_celebration_reporter.dart';
 import '../../profile/presentation/widgets/milestone_celebration.dart';
+import '../../../shared/media/image_lightbox.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/widgets/dashed_rect.dart';
 import '../../../shared/widgets/keyboard_safe_area.dart';
 import '../../../shared/utils/media_permission.dart';
+import '../../me/data/me_counts_provider.dart';
 import '../../me/data/my_posts_repository.dart';
 import '../../mention/data/mention_candidate_repository.dart';
 import '../../mention/domain/mention_context.dart';
@@ -37,10 +39,9 @@ import '../../mention/presentation/mention_picker.dart';
 import '../data/content_repository.dart';
 import '../domain/content_type.dart';
 import '../domain/publish_checkin_place.dart';
-import '../domain/feed_image_layout.dart';
-import '../domain/image_crop.dart';
+import '../domain/image_exposure.dart';
 import '../domain/publish_controller.dart';
-import 'publish_crop_page.dart';
+import 'publish_exposure_page.dart';
 import 'feed_controller.dart';
 import 'publish_result_page.dart';
 
@@ -302,20 +303,22 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       if (mounted) setState(() => _addingImage = false);
     }
     if (bytes == null) return;
-    // 只有超出容差区间的图才会被裁剪框打断；区间内的图用户完全感知不到这一步存在。
-    final cropped = await applyBatchCrop([bytes], ask: _askCrop);
-    if (cropped == null || cropped.isEmpty) return; // 用户在裁剪页退出 → 取消本次上传
+    // 只有超出容差区间的图才会进露出区域页；区间内的图用户完全感知不到这一步存在。
+    // 字节原样放行（不裁不重编码），超界图只多带一个露出位置 offset。
+    final prepared = await prepareBatchExposure([bytes], ask: _askExposure);
+    if (prepared == null || prepared.isEmpty) return; // 用户在露出区域页 ✕ / 返回 → 取消本次上传
+    final p = prepared.first;
     // 即选即传：item 入列即以 pending/uploading 态渲染（自带 loading 盖层）；上传期间发布按钮置灰。
-    if (controller.addImage(cropped.first)) {
+    if (controller.addImage(p.bytes, cropOffset: p.cropOffset)) {
       await controller.uploadAll();
     }
   }
 
-  /// 打开裁剪页问用户怎么裁。[locked] 非空表示本批次档位已定，界面上不再让换档。
-  Future<CropChoice?> _askCrop(Uint8List bytes, ImageSize size, CropPreset? locked) {
-    if (!mounted) return Future<CropChoice?>.value();
-    return Navigator.of(context).push<CropChoice>(MaterialPageRoute<CropChoice>(
-      builder: (_) => PublishCropPage(bytes: bytes, size: size, lockedPreset: locked),
+  /// 打开露出区域页（V1.3.4 Story 2.3），整批超界图同页处理；只在有超界图时被调用。
+  Future<ExposureResult?> _askExposure(List<ExposureImage> overflow) {
+    if (!mounted) return Future<ExposureResult?>.value();
+    return Navigator.of(context).push<ExposureResult>(MaterialPageRoute<ExposureResult>(
+      builder: (_) => PublishExposurePage(images: overflow),
     ));
   }
 
@@ -332,11 +335,11 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       if (mounted) setState(() => _addingImage = false);
     }
     if (images.isEmpty) return;
-    // 🛡 批次锁定只作用于「需要裁剪的图之间」——区间内的图原样入列，不被跟着改比例。
-    final cropped = await applyBatchCrop(images, ask: _askCrop);
-    if (cropped == null) return; // 用户在裁剪页退出 → 整批取消
-    for (final bytes in cropped) {
-      controller.addImage(bytes);
+    // 🛡 整批超界图一次进露出区域页；区间内的图原样入列、offset 为 null。
+    final prepared = await prepareBatchExposure(images, ask: _askExposure);
+    if (prepared == null) return; // 用户在露出区域页 ✕ / 返回 → 整批取消（区间内的也不加）
+    for (final p in prepared) {
+      controller.addImage(p.bytes, cropOffset: p.cropOffset);
     }
     await controller.uploadAll();
   }
@@ -409,6 +412,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
       }
       ref.invalidate(feedProvider);
       ref.invalidate(myPostsProvider);
+      ref.invalidate(meCountsProvider); // V1.3.4：我的页四格帖子数随发帖变化
       // 成长日历发帖 → 同步刷新成长档案时间线与统计，避免需手动下拉刷新才显示（F9）。
       if (controller.type == ContentType.growthMoment) {
         ref.invalidate(timelineFirstPageProvider);
@@ -480,7 +484,8 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
         return;
       }
       Navigator.of(context).pop(); // 关闭发布 sheet
-      context.push('/publish/done', extra: args); // → P-39 发布成功
+      // bug 20261012-586：带上新帖 id，成功页「去 Feed 看」据此定位。
+      context.push('/publish/done', extra: args.withPostId(id)); // → P-39 发布成功
     } else if (blockSlug != null) {
       // AC8（F10）：审核拦截 → P-39c 内容被拒（整页 + 拒因）。
       final reasons = <String>[
@@ -1319,12 +1324,35 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
     );
   }
 
+  /// 发帖页看大图（V1.3.4 Story 2.5 · FR-139 · AD-9）。只看不改；完整原图，不套露出窗口。
+  void _openPreview(PublishController controller, int index) {
+    // 另一根手指正在拖格子时不开灯箱（否则灯箱盖在拖影上）
+    if (_dragFrom != null) return;
+    final images = [for (final item in controller.items) item.bytes];
+    if (index < 0 || index >= images.length) return;
+    ImageLightbox.openMemory(
+      context,
+      images: images,
+      initialIndex: index,
+      heroTagPrefix: 'publish_compose',
+      source: 'publish_compose',
+    );
+  }
+
   /// 一格照片。V1.3.0 Story 4.1 起可长按拖拽重排（AC1），首格常驻「封面」角标（AC2）。
+  /// V1.3.4 Story 2.5 起单击看大图（FR-139）——上传中 / 失败 / 锁定期一样能点开。
   Widget _thumb(
       PublishController controller, int index, AppLocalizations l10n, double cell) {
     // 拖动途中所有格都藏起 ✕：手指正在排序，误触到删除就是丢图。
-    final cellContent = _thumbContent(controller, index, l10n,
-        showRemove: !_dragActive(controller));
+    // 点击只包格子本体（两条返回路径共用）；✕ 的识别器更深，点 ✕ 时它先胜出，不会冒泡开灯箱。
+    // ⚠️ 不加 Hero：拖拽 feedback 复用 _thumbContent，同 tag Hero 会出现两份而抛异常。
+    final cellContent = GestureDetector(
+      key: ValueKey('publishThumb_$index'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openPreview(controller, index),
+      child: _thumbContent(controller, index, l10n,
+          showRemove: !_dragActive(controller)),
+    );
     // 🔴 AC4：上传会话里**整个拖拽入口不挂**（不是挂上去再判空）——
     // 挂着的话手指还是能把那张图抬起来，只是放下没反应，看着像卡了。
     if (!controller.canReorder) return cellContent;
@@ -1409,11 +1437,21 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
               ),
             ),
           ),
+        // 失败标记：样式取 UI 稿 B5（#F0425A 描边 ⚠ + 白色圆底）。位置放左下角——
+        // 右上角留给删除 ✕、左上角是首格「封面」角标，三者互不遮挡（D-14，2026-10-14 产品改）。
         if (item.status == ImageUploadStatus.failed)
-          const Positioned(
-            right: 4,
-            top: 4,
-            child: Icon(Icons.error, color: Colors.red, size: 18),
+          Positioned(
+            left: 4,
+            bottom: 4,
+            child: Container(
+              key: ValueKey('publishFailedMark_$index'),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.error_outline,
+                  color: Color(0xFFF0425A), size: 18),
+            ),
           ),
         // AC2：首格常驻「封面」角标。它只是顺序的**投影** ——
         // 不另设「哪张是封面」的字段，否则迟早出现「界面第一张是 A、封面却是 B」。
@@ -1443,6 +1481,7 @@ class _PublishComposePageState extends ConsumerState<PublishComposePage> {
             right: 3,
             top: 3,
             child: GestureDetector(
+              key: ValueKey('publishRemoveImage_$index'),
               onTap: () => controller.removeImage(index),
               child: Container(
                 width: 16,

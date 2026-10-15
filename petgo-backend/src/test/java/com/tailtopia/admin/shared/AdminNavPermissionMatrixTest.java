@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 /**
- * L1：**逐个权限码**跑一遍导航渲染（V1.3.0 Story 11.4 · AC4，74 个码）。
+ * L1：**逐个权限码**跑一遍导航渲染（V1.3.0 Story 11.4 · AC4，74 个码；V1.3.4 返工清单 §1 起 78 个）。
  *
  * <h2>与既有 {@code AdminPagesRenderSmokeTest.everySidebarLinkMatchesItsPageGate} 的分工</h2>
  * 那一条是**按页面**遍历：对每个侧栏里有入口的页，比对「入口门的码集」与「持该码时侧栏是否可见」。

@@ -147,6 +147,8 @@ document.addEventListener('DOMContentLoaded', function () {
         var elt = e.detail && e.detail.elt;
         var form = elt && elt.closest ? elt.closest('form[data-confirm], form[data-confirm-diff]') : null;
         if (!form || !tailtopiaIsHxForm(form)) { return; }
+        // 表单里另有自己 hx-* 的辅助按钮（AB-31「预估人数」）：它不是提交，不该弹表单的「确认发送」
+        if (elt !== form && elt.hasAttribute && elt.hasAttribute('data-no-confirm')) { return; }
         // 钮级 data-confirm（data-confirm-button，见本文件末尾）自己在 click 阶段确认过，这里不重复
         if (e.detail.triggeringEvent && e.detail.triggeringEvent.submitter
                 && e.detail.triggeringEvent.submitter.hasAttribute && e.detail.triggeringEvent.submitter.hasAttribute('data-confirm-button')) { return; }
@@ -191,6 +193,17 @@ document.addEventListener('click', function (e) {
     if (e.target.tagName === 'DIALOG' && typeof e.target.close === 'function') {
         e.target.close();
     }
+});
+
+// 服务端确认弹层 · 输入值确认（V1.3.4 AB-22 G4；AB-31 I8 复用，fragments/confirm-modal.html）：
+//   input[data-typed-confirm][data-expected] 的值（去首尾空格）与期望值完全一致时才放开同一表单里的
+//   [data-typed-confirm-submit]，否则保持禁用。🛡 只是体验：服务端按提交上来的值自己再比一次。
+document.addEventListener('input', function (e) {
+    var inp = e.target;
+    if (!inp || !inp.hasAttribute || !inp.hasAttribute('data-typed-confirm')) { return; }
+    var form = inp.form || (inp.closest && inp.closest('form'));
+    var btn = form && form.querySelector('[data-typed-confirm-submit]');
+    if (btn) { btn.disabled = (inp.value || '').trim() !== inp.getAttribute('data-expected'); }
 });
 
 // 筛选栏下拉选完即刷新（bug 20260820：人工复核页选了状态还得再点一次「筛选」，多一步且容易忘）。
@@ -661,9 +674,18 @@ function adminUploadError(root, text, selectors) {
     }
 
     function upload(root, file) {
-        var thumbs = root.querySelectorAll('[data-seed-thumb]').length;
-        if (thumbs >= MAX) {
-            window.alert(root.getAttribute('data-msg-limit') || 'max 9 images');
+        // 🔴 在途的也算张数（root._seedPending）：连粘两张 / 一次多选时，第一张还没回来 thumbs 仍是 0，
+        //    只数缩略图就会全部放行，传完一看超了上限（单图控件里出现两张）。
+        var thumbs = root.querySelectorAll('[data-seed-thumb]').length + (root._seedPending || 0);
+        // V1.3.4 AB-30：data-max-images 收紧张数（运营弹窗每种语言只有一张图）；不带的老模板仍按 MAX。
+        var max = parseInt(root.getAttribute('data-max-images') || '', 10) || MAX;
+        if (thumbs >= max) {
+            // 一次多选超额时同一轮只弹一次，不连弹 N 个 alert
+            if (!root._seedLimitAlerted) {
+                root._seedLimitAlerted = true;
+                setTimeout(function () { root._seedLimitAlerted = false; }, 0);
+                window.alert(root.getAttribute('data-msg-limit') || 'max 9 images');
+            }
             return;
         }
         // 🔴 超限的图**根本不发出去**（2026-09-03 stag 回归 P1）。
@@ -685,6 +707,11 @@ function adminUploadError(root, text, selectors) {
         var token = document.querySelector('meta[name="_csrf"]');
         var header = document.querySelector('meta[name="_csrf_header"]');
         if (token && header) { headers[header.content] = token.content; }
+        root._seedPending = (root._seedPending || 0) + 1;
+        var settled = false;
+        function settle() {
+            if (!settled) { settled = true; root._seedPending = Math.max(0, (root._seedPending || 1) - 1); }
+        }
         fetch(root.getAttribute('data-upload-url'), {
             method: 'POST', body: body, headers: headers, credentials: 'same-origin'
         }).then(function (r) {
@@ -705,6 +732,7 @@ function adminUploadError(root, text, selectors) {
                 return { ok: r.ok, status: r.status, body: parsed };
             });
         }).then(function (res) {
+            settle();
             if (status) { status.textContent = ''; }
             if (res.expired) {
                 showError(root, file, root.getAttribute('data-msg-expired') || 'session expired');
@@ -728,6 +756,7 @@ function adminUploadError(root, text, selectors) {
             addThumb(root, res.body);
         }).catch(function () {
             // 网络层就没走通（断网 / 被扩展拦掉）。同样必须出声。
+            settle();
             if (status) { status.textContent = ''; }
             showError(root, file, failedText(root));
         });
@@ -761,15 +790,35 @@ function adminUploadError(root, text, selectors) {
         sync(root);
     });
 
+    // 可编辑：有文件框且没被禁用（:disabled 连祖先 fieldset[disabled] 一并算 —— 只读账号的抽屉就是这么禁的）。
+    function editable(root) {
+        var input = root.querySelector('[data-seed-file]');
+        return !!input && !input.matches(':disabled') && !root.closest('fieldset[disabled]');
+    }
+
+    // 最近操作过的上传控件（点击 / 聚焦 / 拖放落在它里面）。页面上有多个控件时，粘贴只给它。
+    var lastActive = null;
+    function touch(e) {
+        var root = e.target.closest && e.target.closest('[data-seed-uploader]');
+        if (root) { lastActive = root; }
+    }
+    document.addEventListener('pointerdown', touch, true);
+    document.addEventListener('focusin', touch, true);
+    document.addEventListener('drop', touch, true);
+
     // 粘贴上传：剪贴板里有图就直接传（AC2）。
+    // 🔴 多个控件（运营弹窗印尼文 / 英文两张、商品主图 + 图集）时不能一把喂给所有控件 —— 同一张图会同时进两处。
+    //    只给最近操作过的那个；一个都没点过就不传（宁可让运营再点一下，也不猜）。单控件页面行为不变。
     document.addEventListener('paste', function (e) {
-        eachRoot(function (root) {
-            var items = (e.clipboardData && e.clipboardData.items) || [];
-            [].slice.call(items).forEach(function (it) {
-                if (it.kind === 'file' && it.type.indexOf('image/') === 0) {
-                    upload(root, it.getAsFile());
-                }
-            });
+        var roots = [].slice.call(document.querySelectorAll('[data-seed-uploader]'));
+        var root = roots.length === 1 ? roots[0]
+                : (lastActive && document.contains(lastActive) ? lastActive : null);
+        if (!root || !editable(root)) { return; }
+        var items = (e.clipboardData && e.clipboardData.items) || [];
+        [].slice.call(items).forEach(function (it) {
+            if (it.kind === 'file' && it.type.indexOf('image/') === 0) {
+                upload(root, it.getAsFile());
+            }
         });
     });
 
@@ -779,13 +828,17 @@ function adminUploadError(root, text, selectors) {
         var t = e.target.closest && e.target.closest('[data-seed-thumb]');
         if (t) { dragging = t; e.dataTransfer.effectAllowed = 'move'; }
     });
+    // 🔴 只在同一个控件内排序：跨控件拖过去等于把印尼文图挪进英文槽（或主图挪进图集），两边隐藏字段都会被改。
+    function sameRoot(a, b) {
+        return a.closest('[data-seed-uploader]') === b.closest('[data-seed-uploader]');
+    }
     document.addEventListener('dragover', function (e) {
         var over = e.target.closest && e.target.closest('[data-seed-thumb]');
-        if (dragging && over) { e.preventDefault(); }
+        if (dragging && over && sameRoot(dragging, over)) { e.preventDefault(); }
     });
     document.addEventListener('drop', function (e) {
         var over = e.target.closest && e.target.closest('[data-seed-thumb]');
-        if (!dragging || !over || over === dragging) { return; }
+        if (!dragging || !over || over === dragging || !sameRoot(dragging, over)) { return; }
         e.preventDefault();
         over.parentNode.insertBefore(dragging, over);
         sync(dragging.closest('[data-seed-uploader]'));
@@ -1005,12 +1058,66 @@ document.addEventListener('change', function (e) {
         });
         return bad;
     }
+    // V1.3.4 AB-22（UI 稿 G5 / G6）：App 版本更新卡 [data-av-row] 即时校验，口径与 AppVersionConfigService.validate 一致：
+    //   版本号 x.y.z（每段 0~9999、无前导零）→ 最低 ≤ iOS 最新、≤ Android 最新（分端报、带该端版本号）→ 链接须 https://
+    //   → 最低 > 1.0.0 时两个链接都得填（报在空的那一行下）。有错 → 错误贴在出错行下、输入框红边、保存钮禁用（自然不发预检、不弹层）。
+    //   文案全部来自卡上的 data-msg-*（{0} 由这里填）。服务端 422 仍是兜底。
+    var AV_VERSION = /^(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})$/;
+    function avCompare(a, b) {
+        var pa = a.split('.'), pb = b.split('.');
+        for (var i = 0; i < 3; i++) {
+            var d = Number(pa[i]) - Number(pb[i]);
+            if (d !== 0) { return d; }
+        }
+        return 0;
+    }
+    function avInvalid(form) {
+        var box = form.querySelector('[data-msg-format]');
+        if (!box || !form.querySelector('[data-av-row]')) { return false; }
+        var val = function (name) { var el = form.querySelector('[name="' + name + '"]'); return el ? (el.value || '').trim() : ''; };
+        var ios = val('iosLatestVersion'), android = val('androidLatestVersion'), min = val('minSupportedVersion');
+        var iosUrl = val('iosStoreUrl'), androidUrl = val('androidStoreUrl');
+        var errs = {};
+        ['iosLatestVersion', 'androidLatestVersion', 'minSupportedVersion'].forEach(function (n) {
+            if (!AV_VERSION.test(val(n))) { errs[n] = box.getAttribute('data-msg-format'); }
+        });
+        if (!errs.minSupportedVersion) {
+            if (!errs.iosLatestVersion && avCompare(min, ios) > 0) {
+                errs.minSupportedVersion = (box.getAttribute('data-msg-min-gt-ios') || '').split('{0}').join(ios);
+            } else if (!errs.androidLatestVersion && avCompare(min, android) > 0) {
+                errs.minSupportedVersion = (box.getAttribute('data-msg-min-gt-android') || '').split('{0}').join(android);
+            }
+        }
+        var raised = !errs.minSupportedVersion && AV_VERSION.test(min) && avCompare(min, '1.0.0') > 0;
+        [['iosStoreUrl', iosUrl], ['androidStoreUrl', androidUrl]].forEach(function (p) {
+            if (p[1] !== '' && p[1].indexOf('https://') !== 0) { errs[p[0]] = box.getAttribute('data-msg-scheme'); }
+            else if (p[1] === '' && raised) { errs[p[0]] = box.getAttribute('data-msg-blank'); }
+        });
+        var bad = false;
+        form.querySelectorAll('[data-av-row]').forEach(function (row) {
+            var inp = row.querySelector('input[name]');
+            var err = row.querySelector('[data-row-error]');
+            if (!inp || !err) { return; }
+            var msg = inp.disabled ? null : (errs[inp.name] || null);
+            if (msg) {
+                var text = '⚠ ' + msg;
+                if (err.textContent !== text) { err.textContent = text; }
+                bad = true;
+            }
+            err.hidden = !msg;
+            inp.classList.toggle('is-changed', inp.dataset.initialValue !== undefined && inp.value !== inp.dataset.initialValue);
+            inp.classList.toggle('is-invalid', !!msg);
+            inp.setAttribute('aria-invalid', msg ? 'true' : 'false');
+        });
+        return bad;
+    }
     function refresh(form) {
         var dirty = serialize(form) !== form.dataset.initial;
         form.classList.toggle('is-dirty', dirty);
         var save = form.querySelector('[data-save]');
         // 422 之后（data-invalid）保存钮禁用到再次修改（Story 6.3 AC3），dirty 基线不动：改回原值仍算干净、离开页面照提示
         var rowBad = rowsInvalid(form);
+        if (avInvalid(form)) { rowBad = true; }
         if (save) { save.disabled = !dirty || form.dataset.invalid === '1' || rowBad; }
         var flag = form.querySelector('[data-dirty-flag]');
         if (flag) { flag.hidden = !dirty; }
@@ -1269,3 +1376,53 @@ document.addEventListener('click', function (e) {
         if (!d.contains(e.target)) { d.removeAttribute('open'); }
     });
 });
+
+// ===== 表单内按下拉值显隐 + 抽屉表单 422 标红（V1.3.4 AB-30 运营弹窗抽屉）=====
+// · select[data-show-switch] 变化时，同表单内 [data-show-when="<字段名>:<值1>,<值2>"] 按当前值显隐；
+//   隐藏的那块里的输入**同时 disabled**（不进 FormData）—— 跳转类型切到 NONE 时 targetValue 根本不提交，
+//   四个同名 targetValue 输入也只有可见的那一个生效。初始显隐由服务端渲染（hidden / disabled），这里只管变化。
+// · form[data-error-fields]（非配置卡；配置卡另有自己的处理）：422 片段落进表单内的 .inline-error-slot 后，
+//   按错误码映射把对应输入（或 [data-error-name] 容器，如上传控件）标红；输入变化即清（上面那条全局监听）。
+// 体验护栏不是安全边界：取值合法性仍在服务端（AdminOpsPopupService + OpsTargetPolicy）。
+(function () {
+    document.addEventListener('change', function (e) {
+        var sel = e.target;
+        if (!sel || !sel.hasAttribute || !sel.hasAttribute('data-show-switch') || !sel.form) { return; }
+        sel.form.querySelectorAll('[data-show-when]').forEach(function (box) {
+            var spec = box.getAttribute('data-show-when');
+            var i = spec.indexOf(':');
+            if (spec.substring(0, i) !== sel.name) { return; }
+            var show = spec.substring(i + 1).split(',').indexOf(sel.value) >= 0;
+            box.hidden = !show;
+            box.querySelectorAll('input, select, textarea').forEach(function (inp) {
+                inp.disabled = !show;
+                if (!show) { inp.classList.remove('is-invalid'); }
+            });
+        });
+    });
+    // 上传控件换图时回填的是容器里的隐藏字段（setAndNotify 会冒泡 input）：清掉容器上的红边
+    document.addEventListener('input', function (e) {
+        var box = e.target && e.target.closest ? e.target.closest('[data-error-name].is-invalid') : null;
+        if (box) { box.classList.remove('is-invalid'); }
+    });
+    document.addEventListener('DOMContentLoaded', function () {
+        document.body.addEventListener('htmx:afterSwap', function (e) {
+            var t = e.detail && e.detail.target;
+            if (!t || !t.classList || !t.classList.contains('inline-error-slot')) { return; }
+            var form = t.closest('form[data-error-fields]');
+            if (!form || form.hasAttribute('data-config-card')) { return; }
+            form.querySelectorAll('.is-invalid').forEach(function (el) { el.classList.remove('is-invalid'); });
+            var err = t.querySelector('.inline-error[data-code]');
+            if (!err) { return; }
+            var map = {};
+            try { map = JSON.parse(form.getAttribute('data-error-fields') || '{}'); } catch (ex) { map = {}; }
+            var first = null;
+            (map[err.getAttribute('data-code')] || '').split(',').forEach(function (name) {
+                if (!name) { return; }
+                form.querySelectorAll('[name="' + name + '"]:not([disabled]):not([type="hidden"]), [data-error-name="' + name + '"]')
+                    .forEach(function (el) { el.classList.add('is-invalid'); first = first || el; });
+            });
+            if (first && first.scrollIntoView) { first.scrollIntoView({ block: 'center' }); }
+        });
+    });
+})();

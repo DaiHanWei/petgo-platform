@@ -34,6 +34,9 @@ FeedItem _item({
 
 /// 可注入的 fake：返回固定 items（一次性，hasMore=false）。
 class _FakeFeedRepo implements FeedRepository {
+  @override
+  Future<FeedPage> getFollowingFeed({String? cursor}) => throw UnimplementedError();
+
   _FakeFeedRepo(this.items);
   final List<FeedItem> items;
 
@@ -53,6 +56,9 @@ class _FakeFeedRepo implements FeedRepository {
 
 /// 脚本化 fake：由注入函数决定每次 getFeed 的结果（含抛错），用于 AC5 失败态。
 class _ScriptedFeedRepo implements FeedRepository {
+  @override
+  Future<FeedPage> getFollowingFeed({String? cursor}) => throw UnimplementedError();
+
   _ScriptedFeedRepo(this.handler);
   final Future<FeedPage> Function(FeedCategory category, String? cursor) handler;
 

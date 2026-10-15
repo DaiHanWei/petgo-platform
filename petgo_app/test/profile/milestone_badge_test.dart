@@ -10,9 +10,10 @@ import 'package:tailtopia/features/profile/presentation/widgets/milestone_badge.
 /// V1.3.2 Story 5.1：里程碑徽章映射表与公共组件（L0）。
 void main() {
   group('AC1 映射表：按完整 code 精确寻址', () {
-    test('78 个 code 各一条、恰 40 个语义键，code 集合 == 标题表全集', () {
-      expect(kMilestoneBadgeKeys, hasLength(78));
-      expect(kMilestoneBadgeKeys.values.toSet(), hasLength(40));
+    test('84 个 code 各一条、恰 42 个语义键，code 集合 == 标题表全集', () {
+      // V1.3.4 FR-126：+6 code（打卡 / 性格测试 × 三物种）、+2 语义键（place_checkin / tailsonality）。
+      expect(kMilestoneBadgeKeys, hasLength(84));
+      expect(kMilestoneBadgeKeys.values.toSet(), hasLength(42));
       expect(kMilestoneBadgeKeys.keys.toSet(), kMilestoneTitles.keys.toSet());
       for (final v in kMilestoneBadgeKeys.values) {
         expect(RegExp(r'^[a-z0-9_]+$').hasMatch(v), isTrue, reason: v);
@@ -27,11 +28,13 @@ void main() {
       expect(milestoneBadgeKeyOf('G-S8'), 'first_like');
     });
 
-    test('三组跨物种共用：C-S8/D-S8/G-S6、C-M5/D-M5/G-M1、C-S16/D-S16/G-S9', () {
+    test('五组跨物种共用：C-S8/D-S8/G-S6、C-M5/D-M5/G-M1、C-S16/D-S16/G-S9、C-S17/D-S17/G-S10、C-S18/D-S18/G-S11', () {
       for (final group in [
         ['C-S8', 'D-S8', 'G-S6'],
         ['C-M5', 'D-M5', 'G-M1'],
         ['C-S16', 'D-S16', 'G-S9'],
+        ['C-S17', 'D-S17', 'G-S10'],
+        ['C-S18', 'D-S18', 'G-S11'],
       ]) {
         expect(group.map(milestoneBadgeKeyOf).toSet(), hasLength(1), reason: '$group');
       }

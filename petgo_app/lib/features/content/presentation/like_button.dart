@@ -7,6 +7,7 @@ import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../features/auth/domain/auth_guard.dart';
 import '../data/like_repository.dart';
+import 'post_likers_sheet.dart';
 
 /// 点赞按钮（Story 3.4 FR-23；V1.1.6 Story 3.2 起首页也用）。心形 + 计数；乐观更新（失败回滚）。
 ///
@@ -21,9 +22,11 @@ class LikeButton extends ConsumerStatefulWidget {
     required this.initialLiked,
     required this.initialCount,
     required this.source,
+    required this.likersSource,
     this.feedTab,
     this.rankMode,
     this.onSettled,
+    this.expandCountHitArea = true,
   });
 
   final int postId;
@@ -36,6 +39,34 @@ class LikeButton extends ConsumerStatefulWidget {
   /// 只改一侧的话，「开放首页点赞到底是净增长还是把详情页的点赞前移了」这个对比
   /// 就**彻底失效**，而这正是本版本要回答的问题。故设为必填参数：漏传编译不过。
   final String source;
+
+  /// 点数字打开点赞人抽屉时的埋点 `post_likers_opened.source`（V1.3.4）：
+  /// `feed_card`（首页卡片）/ `content_detail`（详情页底栏）。必填，理由同 [source]。
+  final String likersSource;
+
+  /// 数字热区向右多出的透明命中宽度（视觉不变）。调用方据此把后面的间距减掉同样的量，
+  /// 使可见间距与拆分前一致。
+  static const double countTrailingHitExtent = 12;
+
+  /// 数字热区上下各多出的透明命中高度：数字文本行高约 18，上下各 7 → 总高约 32dp。
+  static const double countVerticalHitPadding = 7;
+
+  /// 心形图标可见尺寸。
+  static const double heartSize = 20;
+
+  /// 详情页底栏（[expandCountHitArea] = false）爱心 / 数字热区的整高与爱心上下各补的透明命中高度：
+  /// 把两块热区都撑到底栏 44dp 命中框的整高（外层 ConstrainedBox + Center 只居中、不扩大命中范围，
+  /// 不补的话爱心只剩 20×20、数字只剩文字本身可点 —— OCR 审查 #3）。
+  static const double barHitHeight = 44;
+  static const double barVerticalHitPadding = (barHitHeight - heartSize) / 2;
+
+  /// 数字热区撑高整行 ≈12dp（32 - 图标 20）；Feed 卡片操作行上下内边距各减去这个值的一半，
+  /// 使卡片整体高度、爱心与数字的视觉位置都与拆分前一致。
+  static const double countVerticalHitTrim = 6;
+
+  /// 是否放大数字热区（右 12dp + 上下 6.9dp）。Feed 小卡上数字很小，需要放大（默认 true）；
+  /// 详情页底栏已有 44dp 的外层命中框，传 false 以保持爱心 + 数字原有位置。
+  final bool expandCountHitArea;
 
   /// 埋点 `feed_tab`（V1.1.6 Story 16.5）。只有从 Feed 卡片来时才有值。
   final String? feedTab;
@@ -132,32 +163,71 @@ class _LikeButtonState extends ConsumerState<LikeButton> {
     }
   }
 
+  /// 点数字（V1.3.4 点赞人列表）：本地计数为 0 → 无反应（以乐观更新后的值判断）；
+  /// 游客 → 登录引导（不打开抽屉）；否则弹点赞人抽屉。不触碰点赞状态。
+  void _openLikers() {
+    if (_count <= 0) return;
+    if (!requireLogin(ref, context, entrySource: 'likers')) return;
+    showPostLikersSheet(context, postId: widget.postId, source: widget.likersSource);
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 🔴 key 必须带内容编号：本组件原先写死成详情页专用的名字，
-    // 进了首页列表后一屏多张卡会**重复 key**（Flutter 里重复 key 会报错或错配状态）。
-    return InkWell(
-      key: ValueKey('likeButton_${widget.postId}'),
-      onTap: _toggle,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
+    final color = _liked ? AppColors.likeHeart : AppColors.textSecondary;
+    // V1.3.4：爱心与数字是**两个互不重叠**的热区 —— 爱心 = 点赞（行为与拆分前一致），
+    // 数字 = 点赞人列表。数字热区吃掉原先图标与数字之间的空隙并向右多出
+    // [LikeButton.countTrailingHitExtent]（Feed 小卡上数字很小，不放大点不准）。
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 🔴 key 必须带内容编号：本组件原先写死成详情页专用的名字，
+        // 进了首页列表后一屏多张卡会**重复 key**（Flutter 里重复 key 会报错或错配状态）。
+        _heartHitArea(InkWell(
+          key: ValueKey('likeButton_${widget.postId}'),
+          onTap: _toggle,
+          child: Icon(
             _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            size: 20,
+            size: LikeButton.heartSize,
             // 点赞红心（设计稿）：激活态用暖红 likeHeart，与 Feed 卡片点赞一致。
-            color: _liked ? AppColors.likeHeart : AppColors.textSecondary,
+            color: color,
           ),
-          const SizedBox(width: AppSpacing.xs),
-          // 数字与心形**同步变色**（FR-93）：改前数字恒为次要色，已赞时只有图标变红，
-          // 看上去像"没点上"。
-          Text(
-            '$_count',
-            style: AppTypography.caption.copyWith(
-              color: _liked ? AppColors.likeHeart : AppColors.textSecondary,
-            ),
+        )),
+        GestureDetector(
+          key: ValueKey('likeCount_${widget.postId}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: _openLikers,
+          child: Padding(
+            padding: widget.expandCountHitArea
+                ? const EdgeInsets.fromLTRB(
+                    AppSpacing.xs,
+                    LikeButton.countVerticalHitPadding,
+                    LikeButton.countTrailingHitExtent,
+                    LikeButton.countVerticalHitPadding)
+                : const EdgeInsets.only(left: AppSpacing.xs),
+            // 数字与心形**同步变色**（FR-93）：改前数字恒为次要色，已赞时只有图标变红，
+            // 看上去像"没点上"。
+            child: _countHitHeight(Text('$_count', style: AppTypography.caption.copyWith(color: color))),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  /// 详情页底栏：数字热区固定撑满 [LikeButton.barHitHeight]（文字只有约 18dp 高）。Feed 卡片原样返回。
+  Widget _countHitHeight(Widget text) => widget.expandCountHitArea
+      ? text
+      : SizedBox(height: LikeButton.barHitHeight, child: Center(widthFactor: 1, child: text));
+
+  /// 详情页底栏：爱心外包一层透明命中区，上下撑满 44dp 底栏高度（不改可见位置、不放大水波纹）。
+  /// Feed 卡片（[LikeButton.expandCountHitArea] = true）沿用原 20×20 命中区，避免改动卡片布局。
+  Widget _heartHitArea(Widget heart) {
+    if (widget.expandCountHitArea) return heart;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _toggle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: LikeButton.barVerticalHitPadding),
+        child: heart,
       ),
     );
   }

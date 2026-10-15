@@ -44,13 +44,18 @@ public class ContentDetailService {
     /** V1.3.2 Story 1.5：帖子关联打卡的场所条（place 只读口）。 */
     private final com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins;
 
+    /** V1.3.4 follow Story 2.1：详情头部关注按钮的关注关系（只读端口）。 */
+    private final com.tailtopia.social.read.FollowReader followReader;
+
     public ContentDetailService(ContentPostRepository posts, CommentRepository comments,
             ContentLikeRepository likes, AccountQueryService accountQueryService,
             ReportService reportService, UserHideRelationReader hideRelations,
             ContentTagQueryService contentTags, ImageSizeResolver imageSizes,
             com.tailtopia.mention.service.MentionViewService mentionViews,
-            com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins) {
+            com.tailtopia.place.service.PlaceCheckinQueryService placeCheckins,
+            com.tailtopia.social.read.FollowReader followReader) {
         this.placeCheckins = placeCheckins;
+        this.followReader = followReader;
         this.contentTags = contentTags;
         this.imageSizes = imageSizes;
         this.mentionViews = mentionViews;
@@ -63,13 +68,12 @@ public class ContentDetailService {
     }
 
     /**
-     * 取内容详情。
+     * 帖子对 viewer 的可见性判定（详情与点赞人列表共用同一份代码）：不可见一律统一 404。
      *
-     * @param postId   内容 id
-     * @param viewerId 当前用户 id（游客为 null，用于 isAuthor / liked）
+     * @param viewerId 当前用户 id（游客为 null）
      */
     @Transactional(readOnly = true)
-    public ContentDetailResponse getDetail(long postId, Long viewerId) {
+    public ContentPost requireVisiblePost(long postId, Long viewerId) {
         // 可见性（内容审核 story 2 · D-CM2）：PUBLISHED 对所有人可见；UNDER_REVIEW 挂起帖仅作者本人可见
         // （审核中作者无感知，可正常点入详情），对他人 404 防枚举；拒绝即软删（deletedAt），对所有人隐藏。
         ContentPost post = posts.findById(postId)
@@ -93,6 +97,18 @@ public class ContentDetailService {
         if (viewerId != null && hideRelations.isHidden(viewerId, post.getAuthorId())) {
             throw AppException.notFound(GONE_DETAIL);
         }
+        return post;
+    }
+
+    /**
+     * 取内容详情。
+     *
+     * @param postId   内容 id
+     * @param viewerId 当前用户 id（游客为 null，用于 isAuthor / liked）
+     */
+    @Transactional(readOnly = true)
+    public ContentDetailResponse getDetail(long postId, Long viewerId) {
+        ContentPost post = requireVisiblePost(postId, viewerId);
 
         AuthorView author = accountQueryService.findAuthorViews(List.of(post.getAuthorId()))
                 .get(post.getAuthorId());
@@ -120,7 +136,14 @@ public class ContentDetailService {
         // V1.3.2 Story 1.5（AC5.2）：关联打卡 → 场所条，按打卡**当前** place_id 取（合并后指向保留方）。
         var checkinPlace = post.getPlaceCheckinId() == null ? null
                 : placeCheckins.findCheckinPlace(post.getPlaceCheckinId()).orElse(null);
+        // V1.3.4 follow Story 2.1：作者 token（已注销 / 封号缺席 → 不显示按钮，D-8）与关注关系；
+        // 游客 / 本人不查库，恒 NONE。
+        String authorToken = accountQueryService.publicTokensOf(List.of(post.getAuthorId()))
+                .get(post.getAuthorId());
+        var followState = viewerId == null || isAuthor || authorToken == null
+                ? com.tailtopia.social.read.FollowState.NONE
+                : followReader.followState(viewerId, post.getAuthorId());
         return ContentDetailResponse.of(post, author, likeCount, commentCount, liked, isAuthor,
-                decorations, sizes, mentions, checkinPlace);
+                decorations, sizes, mentions, checkinPlace, authorToken, followState);
     }
 }

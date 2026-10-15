@@ -191,6 +191,31 @@ public final class AuditActions {
     public static final String SHOP_BANNER_DEACTIVATED = "SHOP_BANNER_DEACTIVATED";
 
     public static final String SHOP_BANNER_DELETED = "SHOP_BANNER_DELETED";
+
+    /**
+     * 运营弹窗（V1.3.4 AB-30）的新建 / 编辑 / 启用 / 停用 / 删除。target = 弹窗 public_token（不外露自增 id）。
+     *
+     * <p>🔴 删除只许「未开始」（返工清单 §0-2：启用中、未到开始时间、且从未有曝光记录）——
+     * 上线过的弹窗删掉会级联掉曝光记录（频次失忆），只能停用。
+     */
+    public static final String OPS_POPUP_CREATED = "OPS_POPUP_CREATED";
+
+    public static final String OPS_POPUP_UPDATED = "OPS_POPUP_UPDATED";
+
+    public static final String OPS_POPUP_ACTIVATED = "OPS_POPUP_ACTIVATED";
+
+    public static final String OPS_POPUP_DEACTIVATED = "OPS_POPUP_DEACTIVATED";
+
+    public static final String OPS_POPUP_DELETED = "OPS_POPUP_DELETED";
+
+    /**
+     * 运营通知（V1.3.4 AB-31）的新建 / 取消。target = 活动 public_token（D-24，不外露自增 id）。
+     *
+     * <p>🔴 没有 UPDATED / RESENT / DELETED：发送记录不可编辑、不可重发、不可删除；只有「待发送」能取消。
+     */
+    public static final String OPS_NOTIFY_CREATED = "OPS_NOTIFY_CREATED";
+
+    public static final String OPS_NOTIFY_CANCELED = "OPS_NOTIFY_CANCELED";
     /** 商品下架。🔴 只改可见性，不触发任何库存或订单动作（SPEC-7 口径）。 */
     public static final String SHOP_PRODUCT_DELISTED = "SHOP_PRODUCT_DELISTED";
 

@@ -21,7 +21,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 #    必须**严格递增**，再用 13 会被拒收；stag 测试机上 1.3.0-stag+13 也能直接覆盖升级到 14。
 # 🛡 这里**不写 `-stag` 后缀**（那是 scripts/build-stag-apk.sh 构建时注入的），
 #    写进来会让该脚本直接拒绝出包，且跨分支合并多一处冲突面。
-version: 1.3.3+16
+version: 1.3.4+17
 
 environment:
   sdk: ^3.12.1
@@ -55,6 +55,8 @@ dependencies:
   # FR-44：Apple Sign-In（仅 iOS 展示按钮；真机授权需 iOS「Sign in with Apple」能力，L2 节点）。
   sign_in_with_apple: ^8.0.0
   url_launcher: ^6.3.1
+  # V1.3.4 签到盖章动画（Rive）
+  rive: ^0.14.11
   # Story 1.3：PawCoin 充值二维码本地生成。GemPay 返回 QRIS/EMVCo 串（qrcode），
   # 由本地生成二维码渲染（qrcode_url 是托管网页非图片，不能 Image.network）。
   qr_flutter: ^4.1.0
@@ -161,6 +163,7 @@ flutter:
   # 演示/假数据宠物照片（mock 模式 Feed/详情/档案用，asset: 前缀经 app_image 解析）。
   assets:
     - assets/seed/
+    - assets/rive/
     # Diary 游客引导态的内置示例配图（FR-80 · NFR-5 零网络）。
     # 目前是 assets/seed 的缩图占位（OQ-1 未闭合）；素材到位后同名替换即可，不需改代码。
     - assets/demo_diary/
@@ -169,6 +172,20 @@ flutter:
     - assets/ktp/
     - assets/passport/
     - assets/student/
+    # V1.3.4 ktp 三款新学生卡（Story 1.2）。源：_bmad-output/planning-artifacts/v1.3.4/ktp-assets/design-assets/
+    # Bintang = student02（底图 994×600 原样）；Malam = student03（底图裁 x47 y182 994×600）；
+    # Ceria = student01（底图裁 x0 y201 994×600）。Logo 原样拷贝。资源目录不递归，逐个登记。
+    - assets/id_card/student_bintang/
+    - assets/id_card/student_malam/
+    - assets/id_card/student_ceria/
+    # V1.3.4 ktp SIM / 居住证（Story 1.3）。源同上 design-assets/：SIM = driving/（Driving.png 底图、Logo.png 原样；
+    # Sign.png 与 assets/ktp/ktp_paw_stamp.png 逐字节相同，直接复用后者不重复入库）；
+    # 居住证 = permit/（Background.png 1008×604 按 alpha 裁 x3 y4 → 994×600；Label / Logo / Sign 原样）。
+    - assets/id_card/sim/
+    - assets/id_card/kitas/
+    # V1.3.4 ktp「Pilih Kartu」8 张样式缩略图（Story 1.5，D-2 / AD-8）：由 scripts/gen-id-card-style-thumbnails.sh
+    # 用卡面组件 + 固定示例数据渲染生成；设计日后可同名替换，代码不改。
+    - assets/id_card/styles/
     # 年龄卡角色切图（V1.3.0 Story 5.2 换皮）：`{cat,dog,other}_{10,25,75,100}.webp`，
     # 透明底、宽 ~1080。四档按 `PetAgeStage`（puppy/young/middle/senior）依次取，
     # **文件名里的数字不是判据** —— 它只是设计稿的档位编号。

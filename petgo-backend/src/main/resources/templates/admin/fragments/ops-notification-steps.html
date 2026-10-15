@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  新建系统通知四步页的服务端片段（V1.3.4 AB-31；UI 稿 I4 / I5 / I7）。
+  estimate — 预计触达人数（落 #opsn-estimate，data-count 供 admin-ops-notify.js 读）；
+  idsResult — 指定用户 ID 校验黄条（落 #opsn-ids-result，data-valid 供脚本读；有跳过才给「导出跳过清单」）；
+  review — ④ 确认面板（oob 换进 #opsn-review；带隐藏 previewCount = 此刻的预计人数，「确认发送」随表单提交）；
+  redirecting — 新建成功的占位（htmx 收到 HX-Redirect 会整页跳走、丢弃响应体）。
+-->
+<body>
+<th:block th:fragment="estimate"><span class="opsn-est-v" th:attr="data-count=${count}"
+        th:text="#{admin.opsNotify.estimate.value(${count})}">8,210 人</span></th:block>
+
+<th:block th:fragment="idsResult">
+    <div class="opsn-ids-banner" th:attr="data-valid=${valid}">
+        <span th:text="${skippedTotal > 0} ? #{admin.opsNotify.ids.result(${valid}, ${skippedTotal}, ${reasons})}
+                       : #{admin.opsNotify.ids.resultNoSkip(${valid})}">有效 1,203 人，跳过 17 个（不存在 9 · 已注销 5 · 已封号 2 · 虚拟号 1）。</span>
+        <button type="button" class="opsp-lnk" th:if="${skippedTotal > 0}" data-opsn-export
+                th:text="#{admin.opsNotify.btn.exportSkipped}">导出跳过清单</button>
+    </div>
+</th:block>
+
+<th:block th:fragment="review">
+    <div id="opsn-review" hx-swap-oob="innerHTML">
+        <input type="hidden" name="previewCount" th:value="${p.count}"/>
+        <div class="opsn-review">
+            <div class="opsn-card opsn-pv">
+                <div class="opsn-pv-cap" th:text="#{admin.opsNotify.review.previewId}">内容预览（ID）</div>
+                <div class="opsn-bubble"><i aria-hidden="true"></i><div><b th:text="${p.titleId}">Promo akhir pekan</b><span th:text="${p.bodyId}">Diskon 20%</span></div></div>
+                <div class="opsn-pv-cap" th:text="#{admin.opsNotify.review.previewEn}">内容预览（EN）</div>
+                <div class="opsn-bubble"><i aria-hidden="true"></i><div><b th:text="${p.titleEn}">Weekend promo</b><span th:text="${p.bodyEn}">20% off</span></div></div>
+            </div>
+            <div class="opsn-card">
+                <dl class="opsn-kv">
+                    <dt th:text="#{admin.opsNotify.review.audience}">人群</dt><dd th:text="${audienceLabel}">按条件：近 30 天活跃</dd>
+                    <dt th:text="#{admin.opsNotify.review.estimate}">预计触达</dt>
+                    <dd th:text="#{admin.opsNotify.review.estimateValue(${p.count})}">8,210 人（发送时重新计算）</dd>
+                    <dt th:text="#{admin.opsNotify.review.sendAt}">发送时间</dt><dd th:text="${sendAtLabel}">2026-10-11 09:00 WIB（定时）</dd>
+                    <dt th:text="#{admin.opsNotify.review.target}">点击跳转</dt><dd th:text="${targetLabel}">外部链接 · promo.example</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</th:block>
+
+<th:block th:fragment="redirecting"></th:block>
+</body>
+</html>

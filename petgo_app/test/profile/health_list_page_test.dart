@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,6 +29,28 @@ class _FakeHealthRepo implements HealthRecordRepository {
 
   @override
   Future<void> delete(int id) async {}
+}
+
+/// list 恒抛指定 DioException（无档案 404 / 5xx），记录调用次数以断言是否被自动重试。
+class _ThrowingHealthRepo extends _FakeHealthRepo {
+  _ThrowingHealthRepo(this.error) : super(const []);
+  final DioException error;
+  int listCalls = 0;
+
+  @override
+  Future<List<HealthListItem>> list() async {
+    listCalls++;
+    throw error;
+  }
+}
+
+DioException _httpError(int status) {
+  final req = RequestOptions(path: '/api/v1/pet-profiles/me/health-records');
+  return DioException(
+    requestOptions: req,
+    type: DioExceptionType.badResponse,
+    response: Response<dynamic>(requestOptions: req, statusCode: status),
+  );
 }
 
 Future<_FakeHealthRepo> _pump(WidgetTester tester, List<HealthListItem> items) async {
@@ -129,5 +152,40 @@ void main() {
         find.text(
             'Consultation records are added automatically when you archive a consultation result'),
         findsNothing); // 不再弹 toast
+  });
+
+  testWidgets('无宠物档案 404 → 不自动重试、立即显示「先建档」空态', (tester) async {
+    final repo = _ThrowingHealthRepo(_httpError(404));
+    await tester.pumpWidget(ProviderScope(
+      overrides: [healthRecordRepositoryProvider.overrideWithValue(repo)],
+      child: const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('en'),
+        home: HealthListPage(),
+      ),
+    ));
+    await tester.pump(); // future 完成 → 直接进错误态，不经重试等待
+    expect(find.text('Create a pet profile first to keep health records.'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    // 推进远超默认重试总时长（~15s+），确认没有在后台再请求。
+    await tester.pump(const Duration(seconds: 30));
+    expect(repo.listCalls, 1);
+  });
+
+  test('healthListRetry：4xx 不重试；5xx / 网络错误仍走默认重试', () {
+    expect(healthListRetry(0, _httpError(404)), isNull);
+    expect(healthListRetry(0, _httpError(403)), isNull);
+    expect(healthListRetry(0, _httpError(500)), isNotNull);
+    expect(
+        healthListRetry(
+            0,
+            DioException(
+                requestOptions: RequestOptions(path: '/x'),
+                type: DioExceptionType.connectionError)),
+        isNotNull);
+    // 默认策略的上限保持：第 10 次后不再重试。
+    expect(healthListRetry(10, _httpError(500)), isNull);
   });
 }

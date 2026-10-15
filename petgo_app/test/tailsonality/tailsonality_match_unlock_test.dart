@@ -7,9 +7,12 @@ import 'package:tailtopia/features/keepsake/data/keepsake_repository.dart';
 import 'package:tailtopia/features/keepsake/domain/keepsake_pricing.dart';
 import 'package:tailtopia/features/keepsake/domain/keepsake_purchase_result.dart';
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
+import 'package:tailtopia/features/profile/data/milestone_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/id_card.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
+import 'package:tailtopia/features/profile/presentation/milestone_instant_celebration.dart';
+import 'package:tailtopia/features/profile/presentation/widgets/milestone_badge.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_owner_type_repository.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_repository.dart';
 import 'package:tailtopia/features/tailsonality/domain/tailsonality_result.dart';
@@ -18,6 +21,8 @@ import 'package:tailtopia/features/tailsonality/presentation/tailsonality_result
 import 'package:tailtopia/features/tailsonality/presentation/widgets/ts_letter_compare.dart';
 import 'package:tailtopia/features/tailsonality/presentation/widgets/ts_match_card.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
+
+import '../profile/milestone_instant_fakes.dart';
 
 /// 2026-10-09 配型改回付费 · L0：配型页整页上锁、单买配型 Rp3,000、从配型页买完整解读（含配型）、
 /// 已买配型后完整解读只补差价。
@@ -49,7 +54,11 @@ void main() {
   tearDown(() => Analytics.debugCaptureSink = null);
 
   Future<_Repo> pump(WidgetTester tester, Widget page,
-      {required _Repo repo, KeepsakePricing price = pricing, String? owner = 'INFP'}) async {
+      {required _Repo repo,
+      KeepsakePricing price = pricing,
+      String? owner = 'INFP',
+      MilestoneRepository? milestones,
+      List<Duration> pollDelays = const []}) async {
     tester.view.physicalSize = const Size(420, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -62,6 +71,9 @@ void main() {
         tailsonalityRepositoryProvider.overrideWithValue(repo),
         keepsakePricingProvider.overrideWith((ref) async => price),
         pawCoinProvider.overrideWith(_Paw.new),
+        // V1.3.4 Story 4.3：解锁成功后会检测当场庆祝；默认 const [] = 不检测（免真实网络与挂起计时器）。
+        milestoneInstantPollDelaysProvider.overrideWithValue(pollDelays),
+        if (milestones != null) milestoneRepositoryProvider.overrideWithValue(milestones),
       ],
       child: MaterialApp(
         locale: const Locale('id'),
@@ -144,6 +156,44 @@ void main() {
       expect(find.text('Hasil sudah kebuka!'), findsOneWidget);
       expect(find.byKey(const ValueKey('tsMatchResultView')), findsOneWidget);
       expect(events.where((e) => e.$1 == 'tailsonality_match_unlock_initiated').single.$2!['product'], 'full');
+    });
+
+    // V1.3.4 Story 4.3 · AC2.2 / AC4.1：单买配型不检测；买完整解读 → 检测并在已完成未庆祝时当场弹。
+    testWidgets('Story 4.3：单买配型成功（full: false）→ 从不读里程碑', (tester) async {
+      final ms = ScriptedMilestoneRepository([instantMilestoneList('C-S18', completed: true)]);
+      await pump(tester, const TailsonalityMatchPage(token: 'abc'),
+          repo: _Repo(result()), milestones: ms, pollDelays: const [Duration.zero]);
+      await tester.tap(find.byKey(const ValueKey('tsMatchUnlockCta')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('tsMatchPayConfirm')));
+      await tester.pumpAndSettle();
+      expect(find.text('Kecocokan sudah kebuka!'), findsOneWidget);
+      expect(ms.calls, 0);
+      expect(find.byKey(const ValueKey('milestoneCelebration')), findsNothing);
+    });
+
+    testWidgets('Story 4.3：配型页买完整解读成功 + C-S18 已完成未庆祝 → 当场弹庆祝，关闭回配型页', (tester) async {
+      MilestoneBadgeAssets.debugOverride = const {};
+      addTearDown(() => MilestoneBadgeAssets.debugOverride = null);
+      final ms = ScriptedMilestoneRepository([instantMilestoneList('C-S18', completed: true)]);
+      await pump(tester, const TailsonalityMatchPage(token: 'abc'),
+          repo: _Repo(result()), milestones: ms, pollDelays: const [Duration.zero]);
+      await tester.tap(find.byKey(const ValueKey('tsMatchFullUnlockLink')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('tsMatchPayConfirm')));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(ms.calls, 1);
+      expect(find.byKey(const ValueKey('milestoneCelebration')), findsOneWidget);
+      expect(find.text('Momo sudah kenal dirinya! 🔮'), findsOneWidget);
+      tester.widget<IconButton>(find.byKey(const ValueKey('milestoneCelebrationClose'))).onPressed!();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('milestoneCelebration')), findsNothing);
+      expect(find.byKey(const ValueKey('tsMatchResultView')), findsOneWidget);
+      expect(ms.reported, [
+        ['C-S18']
+      ]);
     });
 
     testWidgets('完整解读已解锁的结果：配型直接可看，无锁态', (tester) async {

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/notify/domain/app_version_check.dart';
 
@@ -34,5 +36,52 @@ void main() {
         'play://y');
     expect(AppVersionCheck.storeUrl(isIos: true, iosStoreUrl: '', androidStoreUrl: 'play://y'),
         isNull);
+  });
+
+  group('cooldownActive（V1.3.4 Story 3.2 · AC5.2）', () {
+    final skippedAt = DateTime.utc(2026, 10, 1, 12);
+
+    bool active({String latest = '1.3.4', String? version = '1.3.4', DateTime? at, required DateTime now}) =>
+        AppVersionCheck.cooldownActive(
+            latest: latest, skippedVersion: version, skippedAt: at ?? skippedAt, now: now);
+
+    test('71h59m → 冷却中；72h → 不冷却', () {
+      expect(active(now: skippedAt.add(const Duration(hours: 71, minutes: 59))), isTrue);
+      expect(active(now: skippedAt.add(const Duration(hours: 72))), isFalse);
+      expect(kUpdateCooldown, const Duration(hours: 72));
+    });
+
+    test('冷却中服务端从 1.3.4 升到 1.3.5 → 不冷却', () {
+      expect(active(latest: '1.3.5', now: skippedAt.add(const Duration(hours: 1))), isFalse);
+    });
+
+    test('无跳过记录 → 不冷却', () {
+      final now = skippedAt.add(const Duration(hours: 1));
+      expect(
+          AppVersionCheck.cooldownActive(
+              latest: '1.3.4', skippedVersion: null, skippedAt: skippedAt, now: now),
+          isFalse);
+      expect(
+          AppVersionCheck.cooldownActive(
+              latest: '1.3.4', skippedVersion: '1.3.4', skippedAt: null, now: now),
+          isFalse);
+    });
+
+    test('跳过时刻晚于 now（时钟被往回拨）→ 不冷却', () {
+      expect(active(now: skippedAt.subtract(const Duration(minutes: 1))), isFalse);
+    });
+
+    test('回前台检查间隔 6h', () {
+      expect(kUpdateResumeCheckInterval, const Duration(hours: 6));
+    });
+  });
+
+  test('AC1.2：lib/ 下不得再从编译期注入取 APP_VERSION', () {
+    final hits = <String>[];
+    for (final f in Directory('lib').listSync(recursive: true).whereType<File>()) {
+      if (!f.path.endsWith('.dart')) continue;
+      if (f.readAsStringSync().contains("fromEnvironment('APP_VERSION'")) hits.add(f.path);
+    }
+    expect(hits, isEmpty, reason: '当前版本必须取真机包版本（PackageInfo），见 AppUpdateEnv');
   });
 }

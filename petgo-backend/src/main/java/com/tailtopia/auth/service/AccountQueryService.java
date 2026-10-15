@@ -48,9 +48,11 @@ public class AccountQueryService {
      * 此前本方法<b>只看注销</b>，于是被封号的用户其宠物分享页照样对全网可见 ——
      * 头像、名字、照片、里程碑全在。封号本就是因为违规，让他的对外页继续挂着不合理。
      *
-     * <p>本方法<b>只服务 H5 对外分享页的可见性判定</b>（{@code CardPageController} 与
-     * {@code MilestoneSharePageController} 是唯二调用方），<b>不是</b>通用的「能否登录」判断
-     * —— 登录门禁在 {@code AuthService} 自己那套里，别把这个方法挪去当登录判据。
+     * <p>本方法服务<b>对外可见性判定</b>：H5 分享页（{@code CardPageController}、
+     * {@code MilestoneSharePageController}）、主页宠物卡（{@code PublicProfilePetController}），
+     * 以及 V1.3.4 follow Story 1.2 起的<b>公开主页与其内容区</b>（{@code PublicProfileController}：
+     * PRD AC11 / 决策 D-8「封号用户各处按不存在处理」）和<b>关注调用方自检</b>（{@code FollowService}）。
+     * 它<b>不是</b>通用的「能否登录」判断 —— 登录门禁在 {@code AuthService} 自己那套里，别把这个方法挪去当登录判据。
      *
      * <p>⚠️ 封号可逆，所以本判定也必须可逆：重新激活后分享页要恢复可见
      * （{@code reactivatedAccountBecomesVisibleAgain} 钉着这条）。
@@ -59,6 +61,22 @@ public class AccountQueryService {
     public boolean isActive(long userId) {
         return users.findById(userId)
                 .map(u -> u.getDeletedAt() == null && u.getStatus() == UserStatus.ACTIVE)
+                .orElse(false);
+    }
+
+    /** 有效官方号（role=ADMIN、未注销、未封号）的内部 id（V1.3.4 following 流 · 自动关注）。 */
+    @Transactional(readOnly = true)
+    public List<Long> activeOfficialIds() {
+        return users.findActiveOfficialIds();
+    }
+
+    /** 该账号是否「有效的真实普通用户」（role=USER、account_type=REAL、未注销、未封号；VIRTUAL 马甲不算）。 */
+    @Transactional(readOnly = true)
+    public boolean isActiveRegularUser(long userId) {
+        return users.findById(userId)
+                .map(u -> u.getRole() == Role.USER && u.getAccountType() == AccountType.REAL
+                        && u.getDeletedAt() == null
+                        && u.getStatus() == UserStatus.ACTIVE)
                 .orElse(false);
     }
 
@@ -83,6 +101,38 @@ public class AccountQueryService {
         return new java.util.HashSet<>(users.findActiveIds(userIds));
     }
 
+    /**
+     * 一批用户的对外 token（V1.3.4 follow · T-19：Story 2.1 / 2.2 共用的批量取法）—— <b>一次查询</b>。
+     *
+     * <p>只返回<b>对外有效</b>账号（未注销 + 未封号，判据与 {@link #isActive} 逐字相同）：
+     * 已注销 / 封号的人缺席 → 调用方拿到 null → 不显示关注按钮（D-8「各处按不存在处理」）。
+     * ⚠️ <b>不按 role 过滤</b>（D-9：官方内容账号可被关注）。
+     *
+     * @return {@code userId → publicToken}；空入参返回空表、不发查询
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, String> publicTokensOf(Collection<Long> userIds) {
+        return publicTokensOf(userIds, false);
+    }
+
+    /**
+     * 同 {@link #publicTokensOf(Collection)}；{@code includeDeactivated = true} 时<b>封号账号也给 token</b>
+     * （已注销仍不给）—— 关注 / 粉丝列表专用（Story 2.2 · D-8：封号用户留在列表里、可被取关）。
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, String> publicTokensOf(Collection<Long> userIds, boolean includeDeactivated) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> ids = userIds.stream().distinct().toList();
+        Map<Long, String> out = new java.util.HashMap<>();
+        for (Object[] row : includeDeactivated ? users.findUndeletedPublicTokens(ids)
+                : users.findActivePublicTokens(ids)) {
+            out.put((Long) row[0], (String) row[1]);
+        }
+        return out;
+    }
+
     /** 取用户语言偏好（bug 20260625-105）：'en' 或 'id'（默认/未设=id）。供系统推送文案本地化。 */
     @Transactional(readOnly = true)
     public java.util.Locale localeOf(long userId) {
@@ -102,6 +152,17 @@ public class AccountQueryService {
     public boolean isVirtual(long userId) {
         return users.findById(userId)
                 .map(u -> u.getAccountType() == AccountType.VIRTUAL)
+                .orElse(false);
+    }
+
+    /**
+     * 是否官方内容账号（{@code role = ADMIN} 的作者 shim，后台发帖的 {@code author_id} 即它）。
+     * V1.3.4 follow · D-9：官方号可被关注，但<b>不接收通知推送</b>（它不登录 App）。不存在的用户按 false。
+     */
+    @Transactional(readOnly = true)
+    public boolean isOfficialAccount(long userId) {
+        return users.findById(userId)
+                .map(u -> u.getRole() == Role.ADMIN)
                 .orElse(false);
     }
 
@@ -148,6 +209,23 @@ public class AccountQueryService {
         return basicViews(userIds);
     }
 
+    /**
+     * 通知触发人投影（V1.3.4 follow · Story 3.3）—— <b>一次</b> {@code findAllById} 同时取昵称、{@code public_token}、
+     * 是否对外有效（不为 token 再多查一次）。通知中心不展示运营标签，故不查标签。缺失的 id 不出现。
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, com.tailtopia.auth.dto.ActorView> findActorViews(Collection<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+        return users.findAllById(userIds).stream().collect(Collectors.toMap(User::getId, u -> {
+            boolean active = u.getDeletedAt() == null && u.getStatus() == UserStatus.ACTIVE;
+            String name = u.getNickname() != null ? u.getNickname() : u.getDisplayName();
+            return active ? new com.tailtopia.auth.dto.ActorView(u.getId(), name, u.getPublicToken(), true)
+                    : new com.tailtopia.auth.dto.ActorView(u.getId(), null, null, false);
+        }));
+    }
+
     /** 身份三件套（id / 昵称 / 头像 + 是否注销）。缺失的 id 按匿名化补齐，调用方按 id 取必有值。 */
     private Map<Long, AuthorView> basicViews(Collection<Long> userIds) {
         Map<Long, AuthorView> found = users.findAllById(userIds).stream()
@@ -180,6 +258,49 @@ public class AccountQueryService {
         Map<Long, AuthorView> out = new java.util.HashMap<>(views);
         tags.forEach((userId, list) -> out.computeIfPresent(userId, (k, v) -> v.withTags(list)));
         return out;
+    }
+
+    /**
+     * 按对外 token 取一个<b>可被关注</b>的账号（V1.3.4 follow Story 1.1，D-2 / D-8 / D-9）：
+     * 未注销 + {@code status = ACTIVE}（判据与 {@link #isActive} 一致）。
+     *
+     * <p>⚠️ <b>不按 role 过滤</b>（决策 D-9：官方内容账号 ADMIN 作者 shim 可被关注）；
+     * 「只有 USER 能调关注接口」约束的是<b>调用方</b>（SecurityConfig），与被关注方无关。
+     * ⚠️ 不看 {@code enabled}（T-2：被运营停用的虚拟号照常可被关注）。
+     *
+     * <p>token 为空 / 长度不是 32 → 直接 empty，不查库。
+     */
+    @Transactional(readOnly = true)
+    public Optional<User> findActiveByPublicToken(String token) {
+        return findByPublicToken(token)
+                .filter(u -> u.getStatus() == UserStatus.ACTIVE);
+    }
+
+    /**
+     * 按对外 token 取一个<b>未注销</b>账号，<b>不看封号</b>（V1.3.4 follow Story 1.1 AC4.3 / D-8）。
+     *
+     * <p>专供<b>取关</b>：封号用户仍留在我的关注列表里（D-8），若取关也要求对方 ACTIVE，
+     * 用户就永远取关不掉一个被封号的人。与 {@link #findActiveByPublicToken} 同样不按 role 过滤（D-9）。
+     */
+    @Transactional(readOnly = true)
+    public Optional<User> findByPublicToken(String token) {
+        if (token == null || token.length() != UserTokenGenerator.LENGTH) {
+            return Optional.empty();
+        }
+        return users.findByPublicToken(token)
+                .filter(u -> u.getDeletedAt() == null);
+    }
+
+    /**
+     * 按 id 取账号，<b>不按 role 过滤</b>（V1.3.4 follow Story 1.2）。
+     *
+     * <p>专供公开主页取 {@code joinedAt} / {@code userToken} / 两关注计数：决策 D-9 官方内容账号
+     * （ADMIN 作者 shim）可被关注，主页必须给它 token；{@link #findUserById} 只认 USER，会让官方号主页
+     * 拿不到 token、关注按钮点了也无从调用。可见性判定（注销 / 封号）由调用方先行完成。
+     */
+    @Transactional(readOnly = true)
+    public Optional<User> findAccountById(long userId) {
+        return users.findById(userId);
     }
 
     /** Story 3.1：按 id 取普通用户（role=USER），供后台用户详情只读聚合。 */

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tailtopia/core/startup/startup_popup_ledger.dart';
 import 'package:tailtopia/features/profile/domain/milestone.dart';
 import 'package:tailtopia/features/profile/presentation/widgets/milestone_celebration.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
@@ -29,6 +30,18 @@ Widget _host(MilestoneItem item, {String petName = 'Momo', void Function()? onSh
     );
 
 void main() {
+  setUp(StartupPopupLedger.instance.resetForTest);
+
+  testWidgets('V1.3.4 Story 5.3：调用 showMilestoneCelebration 后 ledger 含 milestoneCelebration', (tester) async {
+    await tester.pumpWidget(_host(_item(MilestoneLevel.s)));
+    expect(StartupPopupLedger.instance.hasAny, isFalse);
+    await tester.tap(find.text('go'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const ValueKey('milestoneCelebration')), findsOneWidget);
+    expect(StartupPopupLedger.instance.recorded, {StartupPopupKind.milestoneCelebration});
+  });
+
   testWidgets('统一 P-35 庆祝：S/M/L 都用同一全屏弹层（无半屏/全屏之分）', (tester) async {
     for (final level in MilestoneLevel.values) {
       await tester.pumpWidget(_host(_item(level)));

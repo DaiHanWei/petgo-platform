@@ -9,6 +9,7 @@ package com.tailtopia.profile.event;
  *
  * @param userId 付款用户
  * @param price  成交价（PawCoin 数，与 IDR 1:1）
+ * @param cardId 解锁的卡（V1.3.4 ktp Story 1.8，供埋点反查卡种 / 配色）；旧版单卡端点没有卡 → {@code null}
  */
-public record IdHdPawcoinUnlockedEvent(long userId, long price) {
+public record IdHdPawcoinUnlockedEvent(long userId, long price, Long cardId) {
 }

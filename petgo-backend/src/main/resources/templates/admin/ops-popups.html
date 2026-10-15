@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!--
+  运营弹窗配置页（V1.3.4 AB-30 · FR-137；按后台返工清单 §3 对齐 UI 稿 H1–H10），模板 B · tpl-b-list + 抽屉。
+  App 冷启动进首页时，按人群 / 时间窗 / 频次 / 优先级从「启用 + 进行中」里最多弹一个 ——
+  列表与 App 取用同序（优先级高的在前），运营一眼看出同时生效时谁压谁。
+  页头 h1 + 「＋ 新建弹窗」→ 说明 → 筛选栏（状态、名称）→ 汇总四格 → 表格（H1）。
+  新建 / 编辑 / 预览收进抽屉（fragments/drawer-ops-popup.html）；抽屉取数复用 GET /admin/ops-popups 本身
+  （?create=1 / ?open=<token> + HX-Request），不新开端点。URL 一律用 public_token。
+  停用 / 启用 / 删除走服务端确认弹层（H8–H10，fragments/confirm-modal.html → #confirm-host）。
+  不展示曝光 / 点击数（走 PostHog，按 popup_id 查）。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.nav.opsPopups}">运营弹窗 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-drawer.js}"></script>
+    <script defer th:src="@{/admin/admin-ops-popup.js}"></script>
+    <!-- 🔴 抽屉里的上传走 fetch，而 /admin/** 那条过滤链**保留 CSRF** —— 少了这两个 meta 就是 403。
+         ⚠️ 不能挪到 layout：业务页只换 body 里那个 div，各页保留自己的 <head>。 -->
+    <meta name="_csrf" th:content="${_csrf?.token}"/>
+    <meta name="_csrf_header" th:content="${_csrf?.headerName}"/>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag" th:with="res='ops-popup'">
+        <div class="wb-title-row">
+            <h1 th:text="#{admin.nav.opsPopups}">运营弹窗</h1>
+            <button type="button" class="btn btn-primary btn-sm" data-drawer-res="ops-popup"
+                    th:attr="data-drawer-open=@{/admin/ops-popups(create=1)},data-drawer-autoopen=${openCreate} ? 'true' : null"
+                    th:text="#{admin.opsPopups.btn.add}">＋ 新建弹窗</button>
+        </div>
+        <p class="muted opsp-hint" th:text="#{admin.opsPopups.hint('popup_id')}">App 冷启动进入首页时弹出，一次最多一个。</p>
+        <div class="banner ok" th:if="${notice}" th:text="${notice}">ok</div>
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+
+        <!--/* 筛选栏（H1）：状态下拉 + 名称搜索，输入即刷（300ms 防抖）。行内确认 / 抽屉保存都 hx-include 它，处置后按原筛选重拉。 */-->
+        <form id="ops-popup-filters" class="opsp-filters" th:attr="hx-get=@{/admin/ops-popups}"
+              hx-target="#ops-popup-rows" hx-swap="innerHTML" hx-trigger="input delay:300ms, submit">
+            <select name="status" class="inp opsp-filter-status" th:attr="aria-label=#{admin.opsPopups.col.status}">
+                <option value="" th:text="#{admin.opsPopups.filter.status(${#messages.msg('admin.opsPopups.filter.all')})}">状态：全部</option>
+                <option th:each="s : ${states}" th:value="${s}" th:selected="${filterStatus == s.name()}"
+                        th:text="#{admin.opsPopups.filter.status(${#messages.msg('admin.opsPopups.state.' + s)})}">状态：进行中</option>
+            </select>
+            <input type="search" name="q" class="inp opsp-filter-q" maxlength="100" th:value="${q}"
+                   th:placeholder="#{admin.opsPopups.filter.search}" placeholder="搜索名称"
+                   th:attr="aria-label=#{admin.opsPopups.filter.search}"/>
+        </form>
+        <!--/* 行内停用 / 启用 / 删除拉确认弹层失败（404 / 409）的落点。放表格上方 —— 运营刚点完，眼睛就在这儿。 */-->
+        <p id="ops-popup-row-error" class="lst-inline-error" aria-live="polite"></p>
+
+        <div th:replace="~{admin/fragments/tpl-b-list :: list(~{}, ~{}, ~{::opsp-table}, ~{::opsp-drawer})}">
+            <div th:fragment="opsp-table" id="ops-popup-rows">
+                <div th:replace="~{admin/fragments/ops-popups-list :: rows}"></div>
+            </div>
+            <div th:fragment="opsp-drawer" class="drawer-title" id="ops-popup-drawer-title"
+                 th:text="#{admin.opsPopups.drawer.create}">新建运营弹窗</div>
+        </div>
+        <!--/* 服务端确认弹层宿主（H8 / H9 / H10）。 */-->
+        <div id="confirm-host"></div>
+        <!--/* ?open=<token> 深链兜底：行不在当前筛选结果里时也能打开。 */-->
+        <span hidden th:if="${open != null}" data-drawer-res="ops-popup"
+              th:attr="data-drawer-deeplink=@{/admin/ops-popups(open=${open})}"></span>
+    </div>
+</div>
+</body>
+</html>

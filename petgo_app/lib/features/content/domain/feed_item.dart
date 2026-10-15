@@ -1,5 +1,6 @@
 import '../../auth/domain/user_tag.dart';
 import '../../mention/domain/mention_view.dart';
+import '../../social/domain/follow_state.dart';
 import 'content_tag.dart';
 import 'feed_image_layout.dart';
 
@@ -99,14 +100,29 @@ class FeedItem {
     this.liked = false,
     this.commentCount = 0,
     this.imageSizes = const [],
+    this.imageCropOffsets = const [],
     this.imageUrls = const [],
     this.authorTags = const [],
     this.decorationTags = const [],
     this.mentions = const [],
+    this.authorToken,
+    this.authorFollowState = FollowState.none,
+    this.followEpoch = 0,
   });
 
   final int id;
   final int authorId;
+
+  /// 作者对外 token（V1.3.4 follow · Story 2.1）：关注接口用。作者已注销 / 封号 / 老后端 /
+  /// 「我的发布」等不展示关注按钮的出口 → null（按钮不渲染）。
+  final String? authorToken;
+
+  /// 当前查看者与作者的关注关系（快照，服务端初值）。缺字段 → [FollowState.none]。
+  final FollowState authorFollowState;
+
+  /// 这份快照**发请求前**读到的全局关注版本号（不来自 JSON，AD-7 / Story 2.1 AC3.3）。
+  /// 覆盖的 epoch 大于它才生效；数据源重拉 = 新快照 = 旧覆盖自动失效（按位置算「刷新」）。
+  final int followEpoch;
 
   /// 作者已注销（NFR-8）：前端渲染本地化「已注销用户」+ 默认头像，且头像不可点（Story 3.8）。
   final bool authorDeleted;
@@ -167,6 +183,16 @@ class FeedItem {
   /// 取用一律走 [firstImageSize] 这类安全取法。
   final List<ImageSize?> imageSizes;
 
+  /// 每张图的露出位置（V1.3.4 Story 2.1 下发 / 2.2 使用 · AD-6）。
+  ///
+  /// 与图片同序；元素 0~1，null = 居中。存量 / 无超界图的帖整列为空。
+  /// 取用一律走 [cropOffsetAt]，别假设长度与图片数一致。
+  final List<double?> imageCropOffsets;
+
+  /// 第 [i] 张图的露出位置；越界 / 缺失 → null（居中）。
+  double? cropOffsetAt(int i) =>
+      (i >= 0 && i < imageCropOffsets.length) ? imageCropOffsets[i] : null;
+
   /// 整组图片（V1.1.6 Story 3.4）。
   ///
   /// ⚠️ 后端**一直在下发**，只是首页此前每帖只显示一张，客户端从没读过。
@@ -186,8 +212,10 @@ class FeedItem {
 
   /// 互动计数回写用的拷贝（bug 20260923-538）：详情页评论/点赞后把新值写回 Feed 快照。
   ///
-  /// ⚠️ 只开放点赞态、点赞数、评论数三项 —— 其余字段是内容本身，列表里没有就地改它们的场景。
-  FeedItem copyWith({int? likeCount, bool? liked, int? commentCount}) => FeedItem(
+  /// ⚠️ 只开放点赞态、点赞数、评论数三项（+ V1.3.4 的快照版本号）—— 其余字段是内容本身。
+  /// ⚠️ 关注快照（[authorToken] / [authorFollowState] / [followEpoch]）**原样带过去**：
+  /// `syncCounts` 回写计数时丢了它们，按钮的版本号判断就乱了。
+  FeedItem copyWith({int? likeCount, bool? liked, int? commentCount, int? followEpoch}) => FeedItem(
         id: id,
         authorId: authorId,
         authorDeleted: authorDeleted,
@@ -202,10 +230,14 @@ class FeedItem {
         liked: liked ?? this.liked,
         commentCount: commentCount ?? this.commentCount,
         imageSizes: imageSizes,
+        imageCropOffsets: imageCropOffsets,
         imageUrls: imageUrls,
         authorTags: authorTags,
         decorationTags: decorationTags,
         mentions: mentions,
+        authorToken: authorToken,
+        authorFollowState: authorFollowState,
+        followEpoch: followEpoch ?? this.followEpoch,
       );
 
   factory FeedItem.fromJson(Map<String, dynamic> json) => FeedItem(
@@ -225,12 +257,17 @@ class FeedItem {
         commentCount: (json['commentCount'] ?? 0) as int,
         // 无图时后端整个字段都不下发（Jackson NON_NULL）——解析必须容忍缺失。
         imageSizes: ImageSize.listFromJson(json['imageSizes']),
+        // V1.3.4 2.1：存量 / 无超界图时整个字段不下发；元素可为 null。
+        imageCropOffsets: cropOffsetListFromJson(json['imageCropOffsets']),
         // 同样在无图时整个字段都不下发。
         authorTags: UserTag.listFromJson(json['authorTags']),
         decorationTags: ContentTag.listFromJson(json['decorationTags']),
         imageUrls: (json['imageUrls'] as List?)?.whereType<String>().toList(growable: false) ??
             const [],
         mentions: MentionView.listFromJson(json['mentions']),
+        // V1.3.4 follow Story 2.1：缺失 / null 都按默认（老后端、「我的发布」不下发）。
+        authorToken: json['authorToken'] as String?,
+        authorFollowState: FollowState.fromJson(json['authorFollowState']),
       );
 }
 

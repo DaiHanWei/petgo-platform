@@ -103,12 +103,6 @@ petgo:
     vet-share-rate: ${CONSULT_VET_SHARE_RATE:60}
     max-rebroadcast: ${CONSULT_MAX_REBROADCAST:5}
     request-max-age-minutes: ${CONSULT_REQUEST_MAX_AGE_MIN:30}
-  # App 版本更新提醒（Story 6.5，App 内提示，外部化配置运营可调，不走推送）。
-  app-version:
-    latest: ${APP_LATEST_VERSION:1.0.0}
-    min-supported: ${APP_MIN_SUPPORTED_VERSION:1.0.0}
-    ios-store-url: ${APP_IOS_STORE_URL:}
-    android-store-url: ${APP_ANDROID_STORE_URL:}
   # 对外 H5（名片 /p、里程碑庆祝分享 /m）下载 CTA（CardPageController + MilestoneSharePageController 共用）。
   # V1 仅 Android 上架：iOS / 桌面统一兜底到 Play 商店；待 iOS 上架再单独配 CARD_IOS_URL。env 可覆盖。
   # 首页推荐序**基建**参数（V1.1.6 Story 16.1，16.4 收窄）。
@@ -125,6 +119,8 @@ petgo:
       # 候选池上界（最近 N 条公开内容）。🔴 必须有上界：这个查询每次下拉刷新都要跑一次，
       # 且推导物种/批量取赞评/取装饰标签都按这一批规模走。取"最近 N 条"也让它走既有索引。
       candidate-pool-size: ${FEED_RANK_CANDIDATE_POOL_SIZE:1000}
+      # 教育类独立池上界（V1.3.4 FR-122.1）：近 90 天 KNOWLEDGE 公开内容取最近 N 条，与主池按 id 合并。
+      edu-pool-size: ${FEED_RANK_EDU_POOL_SIZE:1000}
   card:
     android-url: ${CARD_ANDROID_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
     ios-url: ${CARD_IOS_URL:https://play.google.com/store/apps/details?id=com.tailtopia.app}
@@ -317,6 +313,12 @@ spring:
 
 server:
   port: ${SERVER_PORT:8080}
+  tomcat:
+    # 🔴 后台「系统通知发送」的指定用户 ID（粘贴 / CSV 读进 textarea）走 x-www-form-urlencoded 整表提交，
+    # Tomcat 默认 max-http-form-post-size=2MB：5 万行 ID（含 CSV 多列、换行转义成 %0D%0A 后会膨胀）超了，
+    # Tomcat 在进 controller 之前就解析失败（丢参 / 报错），运营看不到「过大」这类可读提示。前端文件读取上限 4MB
+    # （AdminOpsNotifyController.MAX_CSV_BYTES），urlencode 后最多约 2.5 倍，这里放到 10MB。
+    max-http-form-post-size: ${SERVER_TOMCAT_MAX_FORM_POST_SIZE:10MB}
   servlet:
     session:
       # Story 1.2 AC6：后台会话闲置 8h 过期（滑动续期）。仅影响会话链（/admin/**）；/api/v1 无状态不受影响。

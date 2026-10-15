@@ -37,7 +37,8 @@ Future<void> _pump(WidgetTester tester, ProviderContainer container) async {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
-        body: LikeButton(postId: 5, initialLiked: false, initialCount: 3, source: 'detail'),
+        body: LikeButton(
+            postId: 5, initialLiked: false, initialCount: 3, source: 'detail', likersSource: 'content_detail'),
       ),
     ),
   ));

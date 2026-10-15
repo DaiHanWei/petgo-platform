@@ -62,6 +62,24 @@ public class FeedSequenceStore {
         return FeedRankCursor.SEED_PREFIX + Long.toString(refreshAt.toEpochMilli(), 36);
     }
 
+    /**
+     * {@link #newSeed} 的逆：种子对应的刷新时刻；解不出（非本格式）→ {@code null}。
+     *
+     * <p>bug 20261012-586：后续页要按<b>首屏那一刻</b>重放「本人近期帖」查询来去重，
+     * 种子里本来就带着那一刻，不必再往游标里塞东西。
+     */
+    public static Instant seedTime(String seed) {
+        if (seed == null || !seed.startsWith(FeedRankCursor.SEED_PREFIX)) {
+            return null;
+        }
+        try {
+            return Instant.ofEpochMilli(
+                    Long.parseLong(seed.substring(FeedRankCursor.SEED_PREFIX.length()), 36));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     /** 已缓存的序列长度；Redis 不可用或键不存在 → 0。 */
     public long length(FeedRankCacheKey cacheKey, String seed) {
         String key = key(cacheKey, seed);

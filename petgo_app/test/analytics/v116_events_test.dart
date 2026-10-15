@@ -30,7 +30,7 @@ import 'v112_events_test.dart' show eventNamesInSource;
 /// 混在一起以后想回答「V1.1.6 的埋点齐了没」就得从一堆断言里挑。
 ///
 /// 🔴 **本文件不重复钉前序 story 已经钉过的事件**（E-1/2/3 在 pinned_slot_test、
-/// E-8/9/10 在 image_crop_test、E-19/20/21 在 push_* 那几个文件…）。
+/// E-8/9 在 publish_exposure_flow_test、E-10 在 publish_exposure_page_test、E-19/20/21 在 push_* 那几个文件…）。
 /// 重复断言的代价是：某个事件改了名要改两处，而漏改的那一处会**继续绿着**。
 /// 这里只钉两样：① 本 story 新补的事件；② 一条**集合级**的存在性护栏。
 void main() {

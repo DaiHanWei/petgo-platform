@@ -22,7 +22,8 @@ public record MilestoneShareRequest(
         @Size(max = 500) String body,
         @NotBlank @Pattern(regexp = "id|en") String locale,
         @Pattern(regexp = "[SML]*") @Size(max = 64) String collectionLevels,
-        @Size(max = 31) List<@Pattern(regexp = "[CDG]-[SML]\\d{1,2}") String> collectionCodes) {
+        // V1.3.4 Story 4.1：猫 / 狗清单 31 → 33 条，上限同步（MilestoneShareRequestLimitTest 钉住 ≥ 最长清单）
+        @Size(max = 33) List<@Pattern(regexp = "[CDG]-[SML]\\d{1,2}") String> collectionCodes) {
 
     /** 老客户端形状（无 code 列表）。 */
     public MilestoneShareRequest(String title, String body, String locale, String collectionLevels) {

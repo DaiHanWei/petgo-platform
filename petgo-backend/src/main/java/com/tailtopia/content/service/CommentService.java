@@ -297,7 +297,7 @@ public class CommentService {
                 : comments.findById(c.getParentId()).map(Comment::getAuthorId).orElse(null);
         events.publishEvent(new ContentCommentedEvent(
                 c.getPostId(), c.getId(), c.getAuthorId(), contentAuthorId, parentAuthorId, Instant.now(),
-                c.isTopLevel() ? null : c.getParentId()));
+                c.isTopLevel() ? null : c.getParentId(), c.getBody()));
         // Story 3.4：@ 通知与「新评论」通知**同一个落点** —— 评论 UNDER_REVIEW → VISIBLE 的那一刻。
         // 🔴 提交那一刻发的话，审核没过的评论会让被 @ 的人点进去看不到任何东西。
         List<Long> mentioned = c.getMentionedUserIds();

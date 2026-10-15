@@ -78,12 +78,12 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
         return html.split(java.util.regex.Pattern.quote(needle), -1).length - 1;
     }
 
-    /** AC1：五卡（四卡 + shop-v2 3-1 合入的客服联系方式卡）各自成 form[data-config-card]，action / hx-post / 参数名逐字不变；组头无「高危」。 */
+    /** AC1：六卡（四卡 + shop-v2 3-1 合入的客服联系方式卡 + V1.3.4 AB-22 App 版本更新卡）各自成 form[data-config-card]，action / 参数名逐字不变；组头无「高危」（AB-22 最低支持版本行除外，见下）。 */
     @Test
     void pageRendersFourIndependentCardsWithUnchangedEndpoints() throws Exception {
         String html = mvc.perform(get("/admin/config").param("lang", "zh_CN").with(authentication(superAdmin())))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(count(html, "data-config-card")).isEqualTo(5);
+        assertThat(count(html, "data-config-card")).isEqualTo(6);
         for (String[] card : new String[][] {
                 {"cfg-pricing", "/admin/config/pricing", "vetConsultPrice"}, {"cfg-ktp", "/admin/config/ktp-pricing", "passportPagePrice"},
                 {"cfg-pawcoin", "/admin/config/pawcoin", "premiumRate"}, {"cfg-share-reward", "/admin/config/share-reward", "shareRewardMonthlyCap"},
@@ -92,16 +92,30 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
                     .contains("hx-target=\"#" + card[0] + "-err\"").contains("id=\"" + card[0] + "-err\"").contains("name=\"" + card[2] + "\"")
                     .containsPattern("id=\"" + card[0] + "\"[^>]*data-confirm-diff=\"true\"").containsPattern("id=\"" + card[0] + "\"[^>]*data-error-fields=");
         }
+        // V1.3.4 后台返工清单 §2：App 版本更新卡改走服务端确认弹层 —— 整页提交仍是原端点，htmx 先 POST 只校验的预检端点；
+        // 不再挂 data-confirm-diff（浏览器 confirm 换成 G3 / G4 服务端 modal），弹层宿主 #confirm-host 在页上。
+        assertThat(html).contains("id=\"cfg-app-version\"").contains("action=\"/admin/config/app-version\"")
+                .contains("hx-post=\"/admin/config/app-version/confirm\"").contains("hx-target=\"#cfg-app-version-err\"")
+                .contains("id=\"cfg-app-version-err\"").contains("name=\"minSupportedVersion\"")
+                .containsPattern("id=\"cfg-app-version\"[^>]*data-error-fields=")
+                .doesNotContainPattern("id=\"cfg-app-version\"[^>]*data-confirm-diff").contains("id=\"confirm-host\"");
         // 保存钮初始禁用 + 「已修改」标；确认弹层文案模板挂在表单上（前端拼旧值 → 新值）
-        assertThat(count(html, "data-save")).isEqualTo(5);
-        assertThat(count(html, "data-dirty-flag")).isEqualTo(5);
+        assertThat(count(html, "data-save")).isEqualTo(6);
+        assertThat(count(html, "data-dirty-flag")).isEqualTo(6);
         assertThat(html).contains("data-confirm-diff-line=\"{0}：{1} → {2}\"").contains("确认修改以下配置");
-        assertThat(html).doesNotContain("高危");
+        // D-8「组头不标红高危」对其余配置卡照旧；唯一例外是 AB-22 的「最低支持版本」行 —— 后台 PRD §1.1 / UI 稿 G1 明确要求
+        // 该行左侧红线 +「高危」标签（返工清单 §2）。所以只把这张卡切掉再断言，且它自己必须恰好出现一次。
+        int avStart = html.indexOf("id=\"cfg-app-version\"");
+        int avEnd = html.indexOf("</form>", avStart);
+        String avCard = html.substring(avStart, avEnd);
+        assertThat(count(avCard, "高危")).isEqualTo(1);
+        assertThat(html.substring(0, avStart) + html.substring(avEnd)).doesNotContain("高危");
         // PawCoin 卡附属：档位两表 + 新建（Story 6.2）端点不变
         assertThat(html).contains("id=\"cfg-tiers\"").contains("/admin/config/tiers/").contains("action=\"/admin/config/tiers\"").contains("id=\"tiers-enabled\"");
         // 卡顺序按 UI 稿 7-1
         assertThat(html.indexOf("id=\"cfg-pricing\"")).isLessThan(html.indexOf("id=\"cfg-ktp\""));
-        assertThat(html.indexOf("id=\"cfg-ktp\"")).isLessThan(html.indexOf("id=\"cfg-pawcoin\""));
+        assertThat(html.indexOf("id=\"cfg-ktp\"")).isLessThan(html.indexOf("id=\"cfg-app-version\""));
+        assertThat(html.indexOf("id=\"cfg-app-version\"")).isLessThan(html.indexOf("id=\"cfg-pawcoin\""));
         assertThat(html.indexOf("id=\"cfg-pawcoin\"")).isLessThan(html.indexOf("id=\"cfg-share-reward\""));
     }
 
@@ -149,7 +163,7 @@ class AdminConfigTemplateDIntegrationTest extends ApiIntegrationTest {
         String viewOnly = mvc.perform(get("/admin/config").param("lang", "zh_CN")
                         .with(authentication(staffWith(AdminPermissions.CONFIG_VIEW, AdminPermissions.CONFIG_SHARE_REWARD_VIEW))))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(count(viewOnly, "data-readonly=\"true\"")).isEqualTo(5); // 含客服联系方式卡（同按 config.edit）
+        assertThat(count(viewOnly, "data-readonly=\"true\"")).isEqualTo(6); // 含客服联系方式卡、App 版本配置卡（同按 config.edit）
         assertThat(viewOnly).containsPattern("name=\"vetConsultPrice\"[^>]*disabled").containsPattern("name=\"shareRewardMonthlyCap\"[^>]*disabled")
                 .contains("需要「编辑配置」权限").contains("需要「改分享奖励配置（含总开关）」权限").doesNotContain("action=\"/admin/config/tiers\"");
         // 只持 share_reward_edit 的应急操作员：分享奖励卡可编辑，其它三卡不渲染

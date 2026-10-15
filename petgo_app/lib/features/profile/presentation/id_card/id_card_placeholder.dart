@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/colors.dart';
 import 'ktp_card.dart';
 
-/// 证件卡「设计中」占位（Story 6.2）。Paspor / Pelajar 两风格视觉本体待用户出图另做，
+/// 占位卡面圆角（画布坐标），供水印层裁剪对齐。
+const double kIdCardComingSoonRadius = 36;
+
+/// 证件卡「设计中」占位（Story 6.2）。V1.3.4 ktp Story 1.2：SIM / 居住证正式卡面（Story 1.3）前复用本组件。Paspor / Pelajar 两风格视觉本体待用户出图另做，
 /// 本 Story 先预留切换位置：同 1600×900 画布内居中「敬请期待」卡，不渲染证件本体。
 class IdCardComingSoon extends StatelessWidget {
   const IdCardComingSoon({super.key, required this.styleLabel, required this.comingSoonText});
@@ -19,7 +22,7 @@ class IdCardComingSoon extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: AppColors.mintTint,
-          borderRadius: BorderRadius.circular(36),
+          borderRadius: BorderRadius.circular(kIdCardComingSoonRadius),
           border: Border.all(color: AppColors.lineViolet, width: 3),
         ),
         child: Center(

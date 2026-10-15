@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
+<!--
+  新建系统通知 · 四步页（V1.3.4 AB-31；按后台返工清单 §4 对齐 UI 稿 I3–I8），模板 E（步骤条 + 吸底操作条）。
+  ① 内容（EN / ID 标题正文 + 点击跳转）② 选择用户（全部 / 按条件 3×2 下拉 / 指定用户 粘贴或 CSV）③ 发送时间（立即 / 定时）④ 确认。
+  · 分步只在浏览器里（admin-ops-notify.js）：已完成的步骤可点回；每步「下一步」前做本步校验（体验护栏）。
+  · 进入 ④ 时整表 hx-post …/review：服务端按同一套规则全验一遍（422 落 #opsn-err，前端按 data-error-steps 跳回对应步骤），
+    通过则确认面板以 oob 换进 #opsn-review（含确认页上的预计人数 previewCount）。
+  · 「确认发送」整表 hx-post …/ops-notifications：全部用户或预计 > 1 万 → 服务端回输入确认弹层（I8，#confirm-host）；
+    成功 → HX-Redirect 回列表 + flash toast（I9）。服务端另有预估闸与一次性 submitKey。
+  · 🔴 hx-disinherit：表单上的 hx-disabled-elt="find .opsn-submit" 若被预计人数 / ID 校验这些子元素继承，htmx 在子元素里
+    find 不到按钮会拿 null 取内部数据直接抛错（预计人数永远停在「—」）。子元素各自声明自己的 target / sync。
+  · ② 的预计触达：人群块一变 300ms 防抖自动 hx-post …/preview；指定用户：输入 / 读入 CSV 后 300ms 防抖 hx-post …/ids/check。
+-->
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="#{admin.opsNotify.new.title}">新建系统通知 · TailTopia 运营后台</title>
+    <link rel="stylesheet" th:href="@{/admin/admin.css}"/>
+    <link rel="stylesheet" th:href="@{/admin/admin-shop.css}"/>
+    <script defer th:src="@{/admin/admin-core.js}"></script>
+    <script defer th:src="@{/admin/admin-ops-notify.js}"></script>
+</head>
+<body>
+<div th:replace="~{admin/layout :: page(~{::content})}">
+    <div th:fragment="content" th:remove="tag">
+        <div class="banner err" th:if="${error}" th:text="${error}">err</div>
+        <form id="opsn-form" class="opsn-wiz" th:object="${form}" data-opsn-wizard
+              th:attr="hx-post=@{/admin/ops-notifications},data-check-url=@{/admin/ops-notifications/ids/check},
+                       data-export-url=@{/admin/ops-notifications/ids/skipped.csv},data-max-csv=${maxCsvBytes},
+                       data-msg-text=#{admin.err.ops-notify.text.blank},data-msg-type=#{admin.err.opsPopup.targetTypeRequired},
+                       data-msg-value=#{admin.opsNotify.err.targetValue},data-msg-https=#{admin.err.ops-notify.target.https},
+                       data-msg-mode=#{admin.opsNotify.err.audienceRequired},data-msg-pending=#{admin.opsNotify.err.estimatePending},
+                       data-msg-empty=#{admin.err.ops-notify.audience-empty},data-msg-ids=#{admin.err.ops-notify.audience.ids-empty},
+                       data-msg-at=#{admin.err.ops-notify.schedule.required},data-msg-past=#{admin.err.ops-notify.schedule.past},
+                       data-msg-csv=#{admin.opsNotify.err.csvTooLarge},data-msg-csv-enc=#{admin.opsNotify.err.csvNotUtf8},
+                       data-msg-now=#{admin.opsNotify.send.now}"
+              hx-target="#opsn-err" hx-swap="innerHTML" hx-sync="this:drop" hx-disabled-elt="find .opsn-submit"
+              hx-disinherit="hx-disabled-elt hx-sync hx-target hx-swap"
+              data-error-steps='{"admin.err.ops-notify.text.blank":1,"admin.err.ops-notify.text.too-long":1,
+                "admin.err.opsPopup.targetTypeRequired":1,"admin.err.opsPopup.targetType":1,
+                "admin.err.opsPopup.targetNoneWithValue":1,"admin.err.opsPopup.targetProduct":1,
+                "admin.err.opsPopup.targetCategory":1,"admin.err.opsPopup.targetAppPage":1,
+                "admin.err.opsPopup.targetExternal":1,"admin.err.opsPopup.productUnavailable":1,
+                "admin.err.ops-notify.target.https":1,"admin.err.ops-notify.audience.invalid":2,
+                "admin.err.ops-notify.audience.ids-empty":2,"admin.err.ops-notify.audience.ids-too-many":2,
+                "admin.err.ops-notify.audience-empty":2,"admin.err.ops-notify.schedule.required":3,
+                "admin.err.ops-notify.schedule.format":3,"admin.err.ops-notify.schedule.past":3}'
+              data-error-fields='{"admin.err.ops-notify.text.blank":"titleEn,titleId,bodyEn,bodyId",
+                "admin.err.ops-notify.text.too-long":"titleEn,titleId,bodyEn,bodyId",
+                "admin.err.opsPopup.targetTypeRequired":"targetType","admin.err.opsPopup.targetType":"targetType",
+                "admin.err.opsPopup.targetNoneWithValue":"targetType","admin.err.opsPopup.targetProduct":"targetValue",
+                "admin.err.opsPopup.targetCategory":"targetValue","admin.err.opsPopup.targetAppPage":"targetValue",
+                "admin.err.opsPopup.targetExternal":"targetValue","admin.err.opsPopup.productUnavailable":"targetValue",
+                "admin.err.ops-notify.target.https":"targetValue","admin.err.ops-notify.audience.ids-empty":"userIds",
+                "admin.err.ops-notify.audience.ids-too-many":"userIds","admin.err.ops-notify.schedule.required":"scheduledAt",
+                "admin.err.ops-notify.schedule.format":"scheduledAt","admin.err.ops-notify.schedule.past":"scheduledAt"}'>
+            <h1 th:text="#{admin.opsNotify.new.title}">新建系统通知</h1>
+            <ol class="step-bar opsn-steps">
+                <li class="step step--on" data-step-tab="1" th:text="#{admin.opsNotify.step.1}">① 内容</li>
+                <li class="step" data-step-tab="2" th:text="#{admin.opsNotify.step.2}">② 选择用户</li>
+                <li class="step" data-step-tab="3" th:text="#{admin.opsNotify.step.3}">③ 发送时间</li>
+                <li class="step" data-step-tab="4" th:text="#{admin.opsNotify.step.4}">④ 确认</li>
+            </ol>
+
+            <!-- ① 内容（I3） -->
+            <section class="opsn-panel" data-step="1">
+                <div class="opsn-card">
+                    <div class="opsn-grid2">
+                        <label class="opsn-fld"><span class="opsn-l"><span><span th:text="#{admin.opsNotify.form.titleEn}">标题 EN</span> <i>*</i></span><em data-count-of="titleEn">0 / 120</em></span>
+                            <input type="text" class="inp" name="titleEn" maxlength="120" th:value="*{titleEn}" data-max="120"/></label>
+                        <label class="opsn-fld"><span class="opsn-l"><span><span th:text="#{admin.opsNotify.form.titleId}">标题 ID</span> <i>*</i></span><em data-count-of="titleId">0 / 120</em></span>
+                            <input type="text" class="inp" name="titleId" maxlength="120" th:value="*{titleId}" data-max="120"/></label>
+                        <label class="opsn-fld"><span class="opsn-l"><span><span th:text="#{admin.opsNotify.form.bodyEn}">正文 EN</span> <i>*</i></span><em data-count-of="bodyEn">0 / 255</em></span>
+                            <textarea class="inp" name="bodyEn" rows="3" maxlength="255" th:text="*{bodyEn}" data-max="255"></textarea></label>
+                        <label class="opsn-fld"><span class="opsn-l"><span><span th:text="#{admin.opsNotify.form.bodyId}">正文 ID</span> <i>*</i></span><em data-count-of="bodyId">0 / 255</em></span>
+                            <textarea class="inp" name="bodyId" rows="3" maxlength="255" th:text="*{bodyId}" data-max="255"></textarea></label>
+                    </div>
+                    <p class="opsn-h" th:text="#{admin.opsNotify.form.langHint}">用户收到哪种语言按其账号语言决定（英文账号看 EN，其余看 ID）。</p>
+                    <p class="opsn-ferr" data-ferr="text" hidden></p>
+                </div>
+                <div class="opsn-card">
+                    <div class="opsn-fld">
+                        <span class="opsn-l"><span><span th:text="#{admin.opsNotify.form.target}">点击跳转</span> <i>*</i></span></span>
+                        <div th:replace="~{admin/fragments/ops-target-fields :: inline('f-opsn')}"></div>
+                        <p class="opsn-h" th:text="#{admin.opsNotify.form.targetHint}">可选：商品 / 品类 / App 内页面……</p>
+                        <p class="opsn-ferr" data-ferr="target" hidden></p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ② 选择用户（I4 / I5） -->
+            <section class="opsn-panel" data-step="2" hidden>
+                <div class="opsn-card">
+                    <label class="opsn-radio"><input type="radio" name="audienceMode" value="ALL"/>
+                        <span th:text="#{admin.opsNotify.mode.ALL}">全部用户</span></label>
+                    <label class="opsn-radio"><input type="radio" name="audienceMode" value="FILTER"/>
+                        <span th:text="#{admin.opsNotify.mode.FILTER}">按条件筛选</span></label>
+                    <div class="opsn-cond" data-mode-panel="FILTER" hidden>
+                        <label class="opsn-fld"><span class="opsn-l" th:text="#{admin.opsNotify.form.registered}">注册时间</span>
+                            <select class="inp" name="registeredWithin" disabled>
+                                <option value="" th:text="#{admin.opsNotify.any}">不限</option>
+                                <option th:each="d : ${withinPresets}" th:value="${d}" th:text="#{admin.opsNotify.within(${d})}">近 30 天</option>
+                            </select></label>
+                        <label class="opsn-fld"><span class="opsn-l" th:text="#{admin.opsNotify.form.active}">最近活跃时间</span>
+                            <select class="inp" name="activeWithin" disabled>
+                                <option value="" th:text="#{admin.opsNotify.any}">不限</option>
+                                <option th:each="d : ${withinPresets}" th:value="${d}" th:text="#{admin.opsNotify.within(${d})}">近 30 天</option>
+                            </select></label>
+                        <label class="opsn-fld"><span class="opsn-l" th:text="#{admin.opsNotify.form.hasPet}">是否建了宠物档案</span>
+                            <select class="inp" name="hasPet" disabled>
+                                <option value="" th:text="#{admin.opsNotify.any}">不限</option>
+                                <option value="true" th:text="#{admin.opsNotify.yes}">是</option>
+                                <option value="false" th:text="#{admin.opsNotify.no}">否</option>
+                            </select></label>
+                        <label class="opsn-fld"><span class="opsn-l" th:text="#{admin.opsNotify.form.species}">宠物物种</span>
+                            <select class="inp" name="species" disabled>
+                                <option value="" th:text="#{admin.opsNotify.any}">不限</option>
+                                <option th:each="s : ${speciesValues}" th:value="${s}" th:text="#{'admin.opsNotify.species.' + ${s}}">猫</option>
+                            </select></label>
+                        <label class="opsn-fld"><span class="opsn-l" th:text="#{admin.opsNotify.form.hasShopOrder}">是否下过电商订单</span>
+                            <select class="inp" name="hasShopOrder" disabled>
+                                <option value="" th:text="#{admin.opsNotify.any}">不限</option>
+                                <option value="true" th:text="#{admin.opsNotify.yes}">是</option>
+                                <option value="false" th:text="#{admin.opsNotify.no}">否</option>
+                            </select></label>
+                        <label class="opsn-fld"><span class="opsn-l" th:text="#{admin.opsNotify.form.hasPhone}">是否填写手机号</span>
+                            <select class="inp" name="hasPhone" disabled>
+                                <option value="" th:text="#{admin.opsNotify.any}">不限</option>
+                                <option value="true" th:text="#{admin.opsNotify.yes}">是</option>
+                                <option value="false" th:text="#{admin.opsNotify.no}">否</option>
+                            </select></label>
+                    </div>
+                    <label class="opsn-radio"><input type="radio" name="audienceMode" value="IDS"/>
+                        <span th:text="#{admin.opsNotify.mode.IDS}">指定用户（粘贴 ID 或上传 CSV）</span></label>
+                    <div class="opsn-ids" data-mode-panel="IDS" hidden>
+                        <textarea id="f-opsn-ids" class="inp s-mono" name="userIds" rows="5" disabled spellcheck="false"
+                                  th:attr="hx-post=@{/admin/ops-notifications/ids/check}"
+                                  hx-trigger="input changed delay:300ms, opsn-refresh delay:300ms"
+                                  hx-target="#opsn-ids-result" hx-swap="innerHTML" hx-sync="this:replace"
+                                 ></textarea>
+                        <input type="hidden" name="idsSource" th:value="*{idsSource}" disabled/>
+                        <div class="opsn-ids-row">
+                            <button type="button" class="btn btn-neutral btn-sm opsn-upload" data-opsn-upload
+                                    th:text="#{admin.opsNotify.btn.uploadCsv}">上传 CSV</button>
+                            <input type="file" accept=".csv,.txt,text/csv,text/plain" hidden data-opsn-file/>
+                            <span class="opsn-h" th:text="#{admin.opsNotify.ids.hint}">一行一个用户 ID，单次最多 5 万行。</span>
+                        </div>
+                        <div id="opsn-ids-result" class="inline-error-slot opsn-ids-result" aria-live="polite"></div>
+                    </div>
+                    <p class="opsn-ferr" data-ferr="audience" hidden></p>
+                </div>
+                <div class="opsn-card opsn-est" data-estimate-card hidden>
+                    <div class="opsn-est-l" th:text="#{admin.opsNotify.estimate.label}">预计触达</div>
+                    <div class="opsn-est-row">
+                        <div id="opsn-estimate" class="inline-error-slot opsn-est-n" data-estimate data-state="idle"
+                             th:attr="hx-post=@{/admin/ops-notifications/preview}" hx-trigger="opsn-refresh delay:300ms"
+                             hx-include="#opsn-form" hx-target="this" hx-swap="innerHTML" hx-sync="this:replace"
+                             aria-live="polite">—</div>
+                        <span class="opsn-h" th:text="#{admin.opsNotify.estimate.hint}">已自动排除：封号、已注销、虚拟号。条件之间为「且」。</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ③ 发送时间（I6） -->
+            <section class="opsn-panel" data-step="3" hidden>
+                <div class="opsn-card">
+                    <label class="opsn-radio"><input type="radio" name="sendMode" value="NOW" th:checked="*{sendMode == 'NOW'}"/>
+                        <span th:text="#{admin.opsNotify.send.NOW}">立即发送</span></label>
+                    <label class="opsn-radio"><input type="radio" name="sendMode" value="SCHEDULED" th:checked="*{sendMode == 'SCHEDULED'}"/>
+                        <span th:text="#{admin.opsNotify.send.SCHEDULED}">定时发送</span></label>
+                    <div class="opsn-at" data-send-panel="SCHEDULED" th:hidden="*{sendMode != 'SCHEDULED'}">
+                        <div class="opsn-at-row">
+                            <input type="datetime-local" class="inp" name="scheduledAt" th:min="${minScheduleWib}"
+                                   th:disabled="*{sendMode != 'SCHEDULED'}"/>
+                            <span class="opsn-h" data-now-wib th:text="#{admin.opsNotify.send.now(${nowWib})}">WIB · 现在是 WIB 2026-10-08 15:42</span>
+                        </div>
+                        <p class="opsn-h" th:text="#{admin.opsNotify.send.hint}">定时发送创建后不能编辑……</p>
+                    </div>
+                    <p class="opsn-ferr" data-ferr="schedule" hidden></p>
+                </div>
+            </section>
+
+            <!-- ④ 确认（I7）：内容由 …/review 换进来 -->
+            <section class="opsn-panel" data-step="4" hidden>
+                <div id="opsn-review"></div>
+            </section>
+
+            <!--/* 一次性提交键：服务端 Redis 认领，同一键只能建一条 */-->
+            <input type="hidden" name="submitKey" th:value="*{submitKey}"/>
+            <footer class="opsn-foot">
+                <p id="opsn-err" class="inline-error-slot" aria-live="polite"></p>
+                <a class="btn btn-neutral" data-opsn-cancel th:href="@{/admin/ops-notifications}"
+                   th:text="#{admin.opsNotify.btn.cancelNew}">取消</a>
+                <button type="button" class="btn btn-neutral" data-opsn-prev hidden th:text="#{admin.opsNotify.btn.prev}">← 上一步</button>
+                <button type="button" class="btn btn-primary" data-opsn-next th:text="#{admin.opsNotify.btn.next}">下一步 →</button>
+                <button type="submit" class="btn btn-primary opsn-submit" hidden th:text="#{admin.opsNotify.btn.confirmSend}">确认发送</button>
+            </footer>
+        </form>
+        <!--/* 进入 ④：整表提交服务端全验（成功发 opsn:reviewed）。放表单外：表单自身的 hx-post 是「确认发送」。 */-->
+        <span id="opsn-review-trigger" hidden th:attr="hx-post=@{/admin/ops-notifications/review}"
+              hx-include="#opsn-form" hx-target="#opsn-err" hx-swap="innerHTML" hx-trigger="opsn-review"
+              hx-sync="this:replace"></span>
+        <!--/* 输入确认弹层宿主（I8）。 */-->
+        <div id="confirm-host"></div>
+    </div>
+</div>
+</body>
+</html>

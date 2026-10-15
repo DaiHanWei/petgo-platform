@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:tailtopia/features/auth/domain/auth_state.dart';
+import 'package:tailtopia/features/auth/domain/login_response.dart';
+import 'package:tailtopia/features/social/data/follow_repository.dart';
+import 'package:tailtopia/features/social/domain/follow_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tailtopia/features/content/data/detail_repository.dart';
 import 'package:tailtopia/features/content/data/feed_repository.dart';
 import 'package:tailtopia/features/content/domain/comment.dart';
 import 'package:tailtopia/features/content/domain/content_detail.dart';
+import 'package:tailtopia/features/content/domain/feed_image_layout.dart';
 import 'package:tailtopia/features/content/domain/feed_item.dart';
 import 'package:tailtopia/features/content/domain/pinned_slot.dart';
 import 'package:tailtopia/features/content/presentation/content_detail_page.dart';
@@ -13,7 +18,15 @@ import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/widgets/empty_state.dart';
 import 'package:tailtopia/shared/widgets/login_hard_dialog.dart';
 
-ContentDetail _detail({int images = 2, bool isAuthor = false}) => ContentDetail(
+ContentDetail _detail({
+  int images = 2,
+  bool isAuthor = false,
+  String? authorToken,
+  FollowState follow = FollowState.none,
+  List<ImageSize?> imageSizes = const [],
+  List<double?> imageCropOffsets = const [],
+}) =>
+    ContentDetail(
       id: 5,
       authorId: 7,
       authorDeleted: false,
@@ -21,11 +34,15 @@ ContentDetail _detail({int images = 2, bool isAuthor = false}) => ContentDetail(
       type: 'DAILY',
       body: 'A lovely pet day',
       imageUrls: List.generate(images, (i) => 'https://cdn/$i.jpg'),
+      imageSizes: imageSizes,
+      imageCropOffsets: imageCropOffsets,
       likeCount: 3,
       commentCount: 2,
       liked: false,
       isAuthor: isAuthor,
       createdAt: DateTime.utc(2026, 6, 2),
+      authorToken: authorToken,
+      authorFollowState: follow,
     );
 
 Comment _top(int id, {int replyCount = 0, List<Comment>? replies}) => Comment(
@@ -107,6 +124,9 @@ class _FakeDetailRepo implements DetailRepository {
 
 /// bug 20260923-538：Feed 里那条（id=5）进详情前的旧快照 —— 评论 0 / 赞 0。
 class _StaleFeedRepo implements FeedRepository {
+  @override
+  Future<FeedPage> getFollowingFeed({String? cursor}) => throw UnimplementedError();
+
   int getFeedCalls = 0;
 
   @override
@@ -273,4 +293,138 @@ void main() {
     expect(container.exists(feedProvider), isFalse);
     expect(feedRepo.getFeedCalls, 0);
   });
+
+  /// V1.3.4 2.2 · AC4：详情轮播与 Feed 卡同走 feedImageAlignment 开窗。
+  Image carouselImage(WidgetTester tester) => tester.widget<Image>(find
+      .descendant(of: find.byType(PageView), matching: find.byType(Image))
+      .first);
+
+  testWidgets('V1.3.4 2.2 AC4: 3:1 宽图 + offset 1 → 轮播贴右开窗、cover', (tester) async {
+    await _pump(
+      tester,
+      _FakeDetailRepo(
+        detail: _detail(
+          images: 1,
+          imageSizes: const [ImageSize(3000, 1000)],
+          imageCropOffsets: const [1.0],
+        ),
+      ),
+    );
+    final img = carouselImage(tester);
+    expect(img.alignment, const Alignment(1, 0));
+    expect(img.fit, BoxFit.cover);
+  });
+
+  testWidgets('V1.3.4 2.2 AC5.1: 不带 offsets → 轮播居中（与改前一致）', (tester) async {
+    await _pump(
+      tester,
+      _FakeDetailRepo(
+        detail: _detail(images: 1, imageSizes: const [ImageSize(3000, 1000)]),
+      ),
+    );
+    final img = carouselImage(tester);
+    expect(img.alignment, Alignment.center);
+    expect(img.fit, BoxFit.cover);
+  });
+
+  test('V1.3.4 2.2: ContentDetail.fromJson 读 imageCropOffsets，cropOffsetAt 越界为 null', () {
+    final d = ContentDetail.fromJson({
+      'id': 5,
+      'authorId': 7,
+      'createdAt': '2026-10-12T00:00:00Z',
+      'imageCropOffsets': [1, null],
+    });
+    expect(d.imageCropOffsets, [1.0, null]);
+    expect(d.cropOffsetAt(0), 1.0);
+    expect(d.cropOffsetAt(1), isNull);
+    expect(d.cropOffsetAt(9), isNull);
+    expect(
+      ContentDetail.fromJson({'id': 5, 'authorId': 7, 'createdAt': '2026-10-12T00:00:00Z'})
+          .imageCropOffsets,
+      isEmpty,
+    );
+  });
+
+  // ===== V1.3.4 follow Story 2.1 · AC6 / AC9.4 =====
+
+  group('详情头部关注按钮', () {
+    const token = 'tok7tok7tok7tok7tok7tok7tok7tok7';
+    Finder btn() => find.byKey(const ValueKey('followInline_detail:5'));
+
+    Future<_FollowRepo> pumpWithFollow(WidgetTester tester, ContentDetail d) async {
+      final follows = _FollowRepo();
+      final container = ProviderContainer(overrides: [
+        detailRepositoryProvider.overrideWithValue(_FakeDetailRepo(detail: d)),
+        followRepositoryProvider.overrideWithValue(follows),
+      ]);
+      addTearDown(container.dispose);
+      container.read(authControllerProvider.notifier).applyLogin(const LoginResponse(
+          accessToken: 'a', refreshToken: 'r', role: 'USER', isNewUser: false, onboardingCompleted: true));
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          locale: Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ContentDetailPage(postId: 5),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      return follows;
+    }
+
+    testWidgets('未关注 → 显示；点关注 → Following，再点 → 变回；不进主页', (tester) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      final follows = await pumpWithFollow(tester, _detail(authorToken: token));
+      expect(btn(), findsOneWidget);
+
+      await tester.tap(btn());
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: btn(), matching: find.text(l10n.followActionFollowing)), findsOneWidget);
+
+      await tester.tap(btn());
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: btn(), matching: find.text(l10n.followActionFollow)), findsOneWidget);
+      expect(follows.calls, ['PUT', 'DELETE']);
+    });
+
+    testWidgets('自己的帖子不显示', (tester) async {
+      await pumpWithFollow(tester, _detail(isAuthor: true, authorToken: token));
+      expect(btn(), findsNothing);
+    });
+
+    testWidgets('已关注作者不显示', (tester) async {
+      await pumpWithFollow(
+          tester, _detail(authorToken: token, follow: const FollowState(iFollow: true, followsMe: false)));
+      expect(btn(), findsNothing);
+    });
+
+    testWidgets('无 token（注销 / 封号 / 老后端）不显示', (tester) async {
+      await pumpWithFollow(tester, _detail());
+      expect(btn(), findsNothing);
+    });
+
+    testWidgets('分类徽章在时间那一行', (tester) async {
+      await pumpWithFollow(tester, _detail(authorToken: token));
+      final badge = tester.getRect(find.byKey(const ValueKey('detailTypeBadge')));
+      final name = tester.getRect(find.text('Alice'));
+      expect(badge.top, greaterThanOrEqualTo(name.bottom - 1));
+    });
+  });
+}
+
+class _FollowRepo implements FollowRepository {
+  final List<String> calls = [];
+
+  @override
+  Future<FollowResult> follow(String userToken) async {
+    calls.add('PUT');
+    return const FollowResult(state: FollowState(iFollow: true, followsMe: false), followerCount: 1);
+  }
+
+  @override
+  Future<FollowResult> unfollow(String userToken) async {
+    calls.add('DELETE');
+    return const FollowResult(state: FollowState.none, followerCount: 0);
+  }
 }

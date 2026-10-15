@@ -47,3 +47,11 @@ String? formatPetAge(AppLocalizations l10n, DateTime? birthday, {DateTime? now})
   }
   return l10n.growthArchiveAge(age.years, age.months);
 }
+
+/// 宠物物种文案（`CAT` / `DOG` / `OTHER`）；未知或 null 返回 null，由调用方整段省略。
+String? petSpeciesLabel(AppLocalizations l10n, String? petType) => switch (petType) {
+      'CAT' => l10n.petTypeCat,
+      'DOG' => l10n.petTypeDog,
+      'OTHER' => l10n.petTypeOther,
+      _ => null,
+    };

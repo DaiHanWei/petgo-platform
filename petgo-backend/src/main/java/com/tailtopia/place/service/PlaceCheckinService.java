@@ -145,7 +145,7 @@ public class PlaceCheckinService {
         PetPassport passport = passports.ensureIssued(primaryPet, userId);
         int stampCount = stamps.stampCountOf(primaryPet);
         events.publishEvent(new PlaceCheckedInEvent(userId, place.getPublicToken(), place.getType(),
-                isNewStamp, stampCount));
+                isNewStamp, stampCount, petIds));
         return new PlaceCheckinResponse(saved.getPublicToken(), place.getPublicToken(),
                 place.getName(), place.getType(), today, isNewStamp, visitCount,
                 passport.getPassportNo(), stampCount, stamps.stampUrlOf(place.getStampObjectKey()));

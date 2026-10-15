@@ -54,6 +54,7 @@ class BlockedViewerProfileTest {
     private ContentService content;
     private FeedService feed;
     private UserHideRelationReader hideRelations;
+    private com.tailtopia.social.read.FollowReader followReader;
     private PublicProfileController profileController;
 
     private ProfileService profiles;
@@ -66,7 +67,13 @@ class BlockedViewerProfileTest {
         content = mock(ContentService.class);
         feed = mock(FeedService.class);
         hideRelations = mock(UserHideRelationReader.class);
-        profileController = new PublicProfileController(accounts, content, feed, hideRelations);
+        followReader = mock(com.tailtopia.social.read.FollowReader.class);
+        when(followReader.followState(anyLong(), anyLong()))
+                .thenReturn(com.tailtopia.social.read.FollowState.NONE);
+        profileController = new PublicProfileController(accounts, content, feed, hideRelations,
+                followReader);
+        // V1.3.4 Story 1.2：主页 / 内容区先判 isActive（封号按不存在）；默认按有效账号走。
+        when(accounts.isActive(anyLong())).thenReturn(true);
 
         profiles = mock(ProfileService.class);
         visitors = mock(VisitorProjectionService.class);
@@ -78,7 +85,7 @@ class BlockedViewerProfileTest {
         when(accounts.activeSignatureOf(OWNER)).thenReturn(Optional.of("Pecinta kucing"));
         User user = mock(User.class);
         when(user.getCreatedAt()).thenReturn(Instant.parse("2026-03-04T05:06:07Z"));
-        when(accounts.findUserById(OWNER)).thenReturn(Optional.of(user));
+        when(accounts.findAccountById(OWNER)).thenReturn(Optional.of(user));
     }
 
     private static Jwt viewer(long userId) {

@@ -1,74 +1,73 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/analytics/analytics.dart';
 import '../../../core/media/media_scope.dart';
 import '../../../core/theme/colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../../shared/utils/media_permission.dart';
-import '../../../shared/widgets/qr_payment_sheet.dart';
 import '../../media/domain/media_upload_use_case.dart';
-import '../../pawcoin/presentation/pawcoin_controller.dart';
 import '../data/id_card_repository.dart';
 import '../data/profile_repository.dart';
 import '../domain/id_card.dart';
-import 'id_card/hd_paywall_sheet.dart';
+import '../domain/id_card_style.dart';
+import 'id_card/id_card_form.dart';
+import 'id_card/id_card_hd_flow.dart';
+import 'id_card/id_card_pet_type_fields.dart';
+import 'id_card/id_card_ui_style.dart';
 import 'id_card/id_card_watermark.dart';
-import 'id_card/ktp_card.dart';
 import 'id_card/ktp_fields.dart';
-import '../../../core/analytics/analytics.dart';
-import 'id_card/ktp_unlock_analytics.dart';
-import 'id_card/passport_card.dart';
-import 'id_card/student_card.dart';
-import 'widgets/pet_form_fields.dart';
+import 'id_card_detail_page.dart';
 
-/// 独立建卡器（Story 6-7，决策④）——预览优先版：
-/// 点「New ID Card」进本页 → 卡面按当前档案信息渲染预览（KTP/Paspor/Pelajar 三 Tab 可切）。
-/// 「修改信息」「修改图片」均**仅会话级、不落库**；点「创建」才 POST 落库并弹 HD 支付页，
-/// 返回列表可见该待支付/已支付卡。
+/// 独立建卡器（Story 6-7，决策④）——预览优先版。
+///
+/// V1.3.4 ktp Story 1.7：卡款由入口（「Pilih Kartu」网格）决定，页面**不再有切换卡款的 Tab**；
+/// 卡面 / 水印 / 表单字段集 / 卡种与配色一律取注册表 [IdCardStyle]（AD-6 / AD-9）。
+/// 「Ubah info」「Ganti foto」均**仅会话级、不落库**；必填（名字 / 物种 / 性别 / 生日，KTP 与居住证另加品种）
+/// 缺失时「Buat Kartu」置灰并说明缺项。点「Buat Kartu」才 POST 落库并弹 HD 支付页，返回列表可见该卡。
 class IdCardCreatePage extends ConsumerStatefulWidget {
-  const IdCardCreatePage({super.key});
+  const IdCardCreatePage({super.key, this.initialStyle = IdCardStyle.ktp});
+
+  /// 本页的卡款（Story 1.5 起由「Pilih Kartu」点格带入；名字沿用 1.5 已落地的对外契约）。
+  /// 缺省 / 路由 query 非法时为 KTP（防御，正常入口只有网格）。
+  final IdCardStyle initialStyle;
+
+  /// 建卡页路由位置：`/profile/id-cards/create?style=<IdCardStyle.name>`（路由 builder 读 query，非法值回落 KTP）。
+  static String locationFor(IdCardStyle style) => '/profile/id-cards/create?style=${style.name}';
+
+  /// 路由 query `style` → 卡款；缺省 / 非法值回落 KTP（兼容不带参数的入口与旧深链）。
+  static IdCardStyle styleFromQuery(String? style) => IdCardStyle.values.asNameMap()[style] ?? IdCardStyle.ktp;
 
   @override
   ConsumerState<IdCardCreatePage> createState() => _IdCardCreatePageState();
 }
 
 class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
-  String _name = '';
-  String? _petType;
-  String _breed = '';
-  DateTime? _birthday;
-  String _gender = 'UNKNOWN'; // wire 值 MALE/FEMALE/UNKNOWN，默认未知
-  String _intro = '';
+  /// 会话级表单草稿（不落库）。
+  IdCardFormDraft _draft = const IdCardFormDraft();
   String? _avatarUrl;
-  // 卡面趣味字段（bug 20260729-409：Edit Info 与卡面字段对齐）。空 = 卡面渲染趣味默认。
-  String _birthCity = '';
-  String _address = '';
-  String _occupation = '';
-  String _maritalStatus = '';
-  // 学生卡专属（bug 20260730-429）。空 = 卡面渲染趣味默认。
-  String _school = '';
-  String _faculty = '';
   bool _prefilled = false;
-  int _styleIndex = 0; // 0=KTP, 1=Paspor, 2=Pelajar
   bool _busy = false; // 上传/创建中
+
+  IdCardStyle get _style => widget.initialStyle;
 
   @override
   void initState() {
     super.initState();
-    // 默认预填当前档案值（会话级，可改）。失败则留空。
+    // 预填当前档案值（会话级，可改；FR-142C.2）：名字 / 物种 / 品种 / 生日 / 性别 / 头像。
+    // 档案无值不预选（性别 null、物种 null）；不再预填一句话介绍。失败则留空。
     ref.read(petProfileProvider.future).then((p) {
       if (!mounted || _prefilled || p == null) return;
       setState(() {
-        _name = p.name;
-        _petType = p.petType;
-        _breed = p.breed ?? '';
-        _birthday = p.birthday;
-        // 性别也按档案预填（bug 20260803-448）；档案未填 → 维持「未知」。仅建卡初值，建后仍是快照不联动。
-        _gender = idCardGenderFromPetSex(p.sex);
-        _intro = p.intro ?? '';
+        _draft = IdCardFormDraft(
+          name: p.name,
+          petType: p.petType,
+          breed: p.breed ?? '',
+          birthday: p.birthday,
+          gender: idCardGenderFromPetSex(p.sex),
+        );
         _avatarUrl = p.avatarUrl;
         _prefilled = true;
       });
@@ -78,137 +77,126 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
   /// 会话级预览数据（未落库，序号未分配 → 客户端拼占位号，创建后以后端号为准）。
   IdCardData get _preview => IdCardData(
         generated: true,
-        name: _name.trim().isEmpty ? null : _name.trim(),
-        petType: _petType,
-        breed: _breed.trim().isEmpty ? null : _breed.trim(),
-        birthday: _birthday,
-        gender: _gender,
-        cardNo: buildPreviewCardNo(birthday: _birthday, gender: _gender, petType: _petType),
+        name: _emptyToNull(_draft.name),
+        petType: _draft.petType,
+        breed: _emptyToNull(_draft.breed),
+        birthday: _draft.birthday,
+        gender: _draft.gender,
+        // 缺生日：KTP 显示新格式占位号（4C），SIM / 居住证等编号位留空（T-2）
+        cardNo: buildPreviewCardNo(
+            birthday: _draft.birthday,
+            gender: _draft.gender,
+            petType: _draft.petType,
+            placeholderWhenNoBirthday: _style == IdCardStyle.ktp),
         // 年份按 WIB（UTC+7）折算，与后端签发年一致（跨年时刻本地时区差异不影响预览）。
         passportNo: buildPreviewPassportNo(
-            petType: _petType,
-            year: DateTime.now().toUtc().add(const Duration(hours: 7)).year),
+            petType: _draft.petType, year: DateTime.now().toUtc().add(const Duration(hours: 7)).year),
         avatarUrl: _avatarUrl,
-        intro: _intro.trim().isEmpty ? null : _intro.trim(),
-        birthCity: _emptyToNull(_birthCity),
-        address: _emptyToNull(_address),
-        occupation: _emptyToNull(_occupation),
-        maritalStatus: _emptyToNull(_maritalStatus),
-        school: _emptyToNull(_school),
-        faculty: _emptyToNull(_faculty),
+        birthCity: _emptyToNull(_draft.birthCity),
+        address: _emptyToNull(_draft.address),
+        occupation: _emptyToNull(_draft.occupation),
+        maritalStatus: _emptyToNull(_draft.maritalStatus),
+        school: _emptyToNull(_draft.school),
+        faculty: _emptyToNull(_draft.faculty),
       );
-
-  /// 当前 Tab 对应的卡种 wire 值（bug 20260730-430：建卡即绑定单卡面）。
-  String get _cardTypeWire => switch (_styleIndex) {
-        1 => 'PASSPORT',
-        2 => 'STUDENT',
-        _ => 'KTP',
-      };
 
   static String? _emptyToNull(String v) => v.trim().isEmpty ? null : v.trim();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final (Size canvas, double radius, Widget cardFront) = switch (_styleIndex) {
-      1 => (
-          kPassportCardCanvas,
-          kPassportCardCanvasRadius,
-          PassportCardFront(fields: buildPassportFields(_preview))
-        ),
-      2 => (
-          kStudentCardCanvas,
-          kStudentCardCanvasRadius,
-          StudentCardFront(fields: buildStudentFields(_preview))
-        ),
-      _ => (
-          kIdCardCanvas,
-          kIdCardCanvasRadius,
-          KtpCardFront(fields: buildKtpFields(_preview, KtpEdits.empty))
-        ),
-    };
+    final style = _style;
+    final Size canvas = style.canvas;
+    final double radius = style.canvasRadius;
+    final Widget cardFront = style.buildFront(_preview);
+    final missingText = idCardMissingText(l10n, idCardMissingFields(style, _draft));
     return Scaffold(
       backgroundColor: AppColors.cream2,
       appBar: AppBar(title: Text(l10n.idCardCreateTitle)),
       body: SafeArea(
         child: Column(
           children: [
-            _styleSwitcher(l10n),
+            // 稿 C1：卡面 + 两个描边按钮为一组，在剩余空间内垂直居中；主按钮单独吸底。
             Expanded(
               child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: AspectRatio(
-                    aspectRatio: canvas.width / canvas.height,
-                    // 防截图水印（bug 20260728-383）：建卡预览未付费即可见完整卡面，同样恒盖水印。
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        FittedBox(fit: BoxFit.contain, child: cardFront),
-                        IdCardWatermark(canvas: canvas, canvasRadius: radius),
-                      ],
-                    ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AspectRatio(
+                        aspectRatio: canvas.width / canvas.height,
+                        // 防截图水印（bug 20260728-383）：建卡预览未付费即可见完整卡面，同样恒盖水印。
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            FittedBox(fit: BoxFit.contain, child: cardFront),
+                            IdCardWatermark(canvas: canvas, canvasRadius: radius),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              key: const ValueKey('idCardEditInfo'),
+                              onPressed: _busy ? null : _editInfo,
+                              icon: const Icon(Icons.edit_outlined, size: 18),
+                              label: Text(l10n.idCardEditInfo),
+                              style: idCardOutlineButtonStyle(),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              key: const ValueKey('idCardEditPhoto'),
+                              onPressed: _busy ? null : _editPhoto,
+                              icon: const Icon(Icons.image_outlined, size: 18),
+                              label: Text(l10n.idCardEditPhoto),
+                              style: idCardOutlineButtonStyle(),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      key: const ValueKey('idCardEditInfo'),
-                      onPressed: _busy ? null : _editInfo,
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: Text(l10n.idCardEditInfo),
-                      style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.mint,
-                          side: const BorderSide(color: AppColors.lineViolet, width: 1.5),
-                          padding: const EdgeInsets.symmetric(vertical: 12)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      key: const ValueKey('idCardEditPhoto'),
-                      onPressed: _busy ? null : _editPhoto,
-                      icon: const Icon(Icons.image_outlined, size: 18),
-                      label: Text(l10n.idCardEditPhoto),
-                      style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.mint,
-                          side: const BorderSide(color: AppColors.lineViolet, width: 1.5),
-                          padding: const EdgeInsets.symmetric(vertical: 12)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // 缺生日时按钮禁用，主页面必须给出原因（提示不能只藏在编辑抽屉里，否则按钮「灰死」无解释）。
-            if (_birthday == null)
+            // 缺必填时按钮置灰，主页面必须给出原因（UI 稿 C4，T-14）——提示不能只藏在编辑抽屉里。
+            if (missingText != null)
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-                child: Text(l10n.idCardBirthdayRequired,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 12, color: AppColors.danger)),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline_rounded, size: 15, color: AppColors.danger),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(missingText,
+                          key: const ValueKey('idCardCreateMissingHint'),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 12, color: AppColors.danger)),
+                    ),
+                  ],
+                ),
               ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              padding: EdgeInsets.fromLTRB(16, missingText != null ? 8 : 10, 16, 12),
               child: SizedBox(
                 width: double.infinity,
                 child: FilledButton(
                   key: const ValueKey('idCardCreateSubmit'),
-                  style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.mint,
-                      padding: const EdgeInsets.symmetric(vertical: 14)),
-                  onPressed: (_name.trim().isEmpty || _birthday == null || _busy) ? null : _create,
+                  // 提交中保持紫底 + 白色转圈（稿 C2），只禁点。
+                  style: idCardPrimaryButtonStyle(busy: _busy),
+                  onPressed: (missingText != null || _busy) ? null : _create,
                   child: _busy
                       ? const SizedBox(
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : Text(l10n.idCardCreateSubmit,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                      : Text(l10n.idCardCreateSubmit),
                 ),
               ),
             ),
@@ -218,84 +206,21 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
     );
   }
 
-  Widget _styleSwitcher(AppLocalizations l10n) {
-    final labels = [l10n.idCardStyleKtp, l10n.idCardStylePaspor, l10n.idCardStylePelajar];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Row(
-        children: [
-          for (var i = 0; i < labels.length; i++)
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(right: i < labels.length - 1 ? 8 : 0),
-                child: _styleTab(labels[i], i),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _styleTab(String label, int index) {
-    final selected = _styleIndex == index;
-    return GestureDetector(
-      key: ValueKey('idCardStyleTab_$index'),
-      onTap: () => setState(() => _styleIndex = index),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? AppColors.mint : AppColors.card,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? AppColors.mint : AppColors.line, width: 1.5),
-        ),
-        child: Text(label,
-            style: TextStyle(
-                color: selected ? Colors.white : AppColors.ink2,
-                fontWeight: FontWeight.w600,
-                fontSize: 14)),
-      ),
-    );
-  }
-
-  /// 修改信息（会话级）：底部表单编辑 name/type/breed/dob/intro，确认后更新预览。**不落库**。
+  /// 修改信息（会话级）：按卡款字段集渲染的底部表单，确认后更新预览。**不落库**。
   Future<void> _editInfo() async {
-    final result = await showModalBottomSheet<_InfoDraft>(
+    Analytics.capture('id_card_form_opened', {'card_type': _style.cardType});
+    final result = await showModalBottomSheet<IdCardFormDraft>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => _EditInfoSheet(
-        initial: _InfoDraft(
-            name: _name,
-            petType: _petType,
-            breed: _breed,
-            birthday: _birthday,
-            gender: _gender,
-            intro: _intro,
-            birthCity: _birthCity,
-            address: _address,
-            occupation: _occupation,
-            maritalStatus: _maritalStatus,
-            school: _school,
-            faculty: _faculty),
-      ),
+      builder: (_) => _EditInfoSheet(style: _style, initial: _draft),
     );
     if (result != null) {
       setState(() {
-        _name = result.name;
-        _petType = result.petType;
-        _breed = result.breed;
-        _birthday = result.birthday;
-        _gender = result.gender;
-        _intro = result.intro;
-        _birthCity = result.birthCity;
-        _address = result.address;
-        _occupation = result.occupation;
-        _maritalStatus = result.maritalStatus;
-        _school = result.school;
-        _faculty = result.faculty;
+        _draft = result;
+        _prefilled = true; // 用户已确认的编辑优先：迟到的档案预填不得再覆盖
       });
     }
   }
@@ -317,28 +242,31 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
     }
   }
 
-  /// 创建：POST 落库 → 弹 HD 支付页 → 返回列表（可见待支付/已支付卡）。
+  /// 创建：POST 落库 → 弹 HD 付费抽屉 → 替换到新卡详情（V1.3.4 ktp Story 1.8，AD-10 / D-15 / D-16）。
+  /// T-16：只提交本卡款表单内的字段，字段集外一律 null；intro 不再提交（PRD §3.4）。
   Future<void> _create() async {
     final l10n = AppLocalizations.of(context);
+    final style = _style;
+    final has = style.formFields.contains;
     setState(() => _busy = true);
     IdCard card;
     try {
       card = await ref.read(idCardRepositoryProvider).createCard(CreateIdCardRequest(
-            name: _name.trim(),
-            petType: _petType,
-            breed: _breed.trim().isEmpty ? null : _breed.trim(),
-            birthday: _birthday,
-            gender: _gender,
+            name: _draft.name.trim(),
+            petType: _draft.petType,
+            breed: has(IdCardFormField.breed) ? _emptyToNull(_draft.breed) : null,
+            birthday: _draft.birthday,
+            gender: _draft.gender,
             avatarUrl: _avatarUrl,
-            intro: _intro.trim().isEmpty ? null : _intro.trim(),
-            birthCity: _emptyToNull(_birthCity),
-            address: _emptyToNull(_address),
-            occupation: _emptyToNull(_occupation),
-            maritalStatus: _emptyToNull(_maritalStatus),
-            // bug 430：在哪个卡面 Tab 点 Create 就只建哪种卡。
-            cardType: _cardTypeWire,
-            school: _emptyToNull(_school),
-            faculty: _emptyToNull(_faculty),
+            birthCity: has(IdCardFormField.birthCity) ? _emptyToNull(_draft.birthCity) : null,
+            address: has(IdCardFormField.address) ? _emptyToNull(_draft.address) : null,
+            occupation: has(IdCardFormField.occupation) ? _emptyToNull(_draft.occupation) : null,
+            maritalStatus: has(IdCardFormField.maritalStatus) ? _emptyToNull(_draft.maritalStatus) : null,
+            // 建卡即绑定单卡面；卡种 / 配色 wire 值取注册表（选 Bintang 就落 Bintang）。
+            cardType: style.cardType,
+            cardVariant: style.cardVariant,
+            school: has(IdCardFormField.school) ? _emptyToNull(_draft.school) : null,
+            faculty: has(IdCardFormField.faculty) ? _emptyToNull(_draft.faculty) : null,
           ));
       ref.invalidate(idCardListProvider);
     } catch (_) {
@@ -348,128 +276,46 @@ class _IdCardCreatePageState extends ConsumerState<IdCardCreatePage> {
       }
       return;
     }
+    // AD-12 / T-12：wire 值大写；非学生卡不带 card_variant 键。number_reused 取建卡响应（Epic 2 前恒 false）。
+    Analytics.capture('id_card_created', {
+      'card_type': style.cardType,
+      if (style.cardVariant != null) 'card_variant': style.cardVariant!,
+      'number_reused': card.numberReused,
+    });
     if (!mounted) return;
-    // 落库成功 → 弹支付页（HD 解锁）。无论支付与否，卡已在列表。
-    await _openPayment(card);
-    if (mounted) context.pop(); // 返回列表
-  }
-
-  /// HD 付费解锁（复用详情页范式）：选渠道 → PawCoin 直扣或现金 QR。
-  Future<void> _openPayment(IdCard card) async {
-    int balance = 0;
-    try {
-      balance = (await ref.read(pawCoinProvider.future)).balance;
-    } catch (_) {}
+    // 落库成功 → 弹付费抽屉（AD-10 共享函数，entry = create）。
+    final result = await openIdCardHdPaywall(context, ref, card, entry: IdCardPaywallEntry.create);
     if (!mounted) return;
-    // 弹窗期间保活定价 provider（autoDispose）：弹窗关掉后「开始付款」埋点还要读价格。
-    final priceSub = ref.listenManual(idCardHdPriceProvider, (_, _) {});
-    KtpUnlockAnalytics.paywallShown(
-        entry: KtpUnlockAnalytics.entryCreate, priceIdr: priceSub.read().value);
-    final channel = await showModalBottomSheet<HdPayChannel>(
-      context: context,
-      backgroundColor: AppColors.card,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => HdPaywallSheet(
-          petName: card.name,
-          serialId: card.serialId,
-          cardNo: card.cardNo,
-          avatarUrl: card.avatarUrl,
-          balance: balance),
-    );
-    final priceIdr = priceSub.read().value;
-    priceSub.close();
-    if (channel == null || !mounted) return;
-    KtpUnlockAnalytics.started(
-        entry: KtpUnlockAnalytics.entryCreate, method: channel, priceIdr: priceIdr);
-    final l10n = AppLocalizations.of(context);
-    try {
-      final res = await ref.read(idCardRepositoryProvider).purchaseHdForCard(card.id, channel);
-      if (res.unlocked) {
-        ref.invalidate(idCardListProvider);
-        _toast(l10n.idCardHdUnlockedToast);
-      } else if ((res.payload?.isNotEmpty ?? false) && mounted) {
-        final bool paid = await showQrPaymentSheet(
-          context,
-          payload: res.payload!,
-          orderRef: res.paymentRef,
-          pollPaid: () async {
-            final c = await ref.refresh(idCardDetailProvider(card.id).future);
-            return c.hdUnlocked;
-          },
-        );
-        // 投放归因：QRIS 现金到账（PawCoin 当场成交不计，钱在充值时已计）。
-        if (paid) {
-          Analytics.capturePurchase(amountIdr: priceIdr, purpose: 'ID_HD', orderRef: res.paymentRef);
-        }
-        ref.invalidate(idCardListProvider);
-      } else {
-        _toast(l10n.idCardHdQrisPending);
-      }
-    } on DioException catch (e) {
-      KtpUnlockAnalytics.failedFromError(
-          entry: KtpUnlockAnalytics.entryCreate, method: channel, error: e, priceIdr: priceIdr);
-      _toast(e.response?.statusCode == 409
-          ? l10n.idCardHdInsufficientBalance
-          : l10n.idCardHdPurchaseError);
-    } catch (_) {
-      _toast(l10n.idCardHdPurchaseError);
-    }
+    // AD-10 / D-15：任何结局（关闭 / 成功 / 失败 / QRIS 未付）都替换到新卡详情，建卡页出栈，避免回建卡页重复建卡；
+    // 失败提示已由共享函数先弹出。D-16：付费成功落到详情后同样自动弹保存 / 分享选单。
+    context.pushReplacement(
+        IdCardDetailPage.locationFor(card.id, autoExport: result == IdCardHdFlowResult.unlocked));
   }
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    // 页面有 48 高吸底主按钮（+12 间距）：浮动条抬到按钮之上
+    ScaffoldMessenger.of(context).showSnackBar(idCardSnackBar(msg, bottom: 76));
   }
 }
 
-/// 修改信息草稿（会话级）。
-class _InfoDraft {
-  const _InfoDraft(
-      {required this.name,
-      required this.petType,
-      required this.breed,
-      required this.birthday,
-      required this.gender,
-      required this.intro,
-      this.birthCity = '',
-      this.address = '',
-      this.occupation = '',
-      this.maritalStatus = '',
-      this.school = '',
-      this.faculty = ''});
-  final String name;
-  final String? petType;
-  final String breed;
-  final DateTime? birthday;
-  final String gender; // wire 值 MALE/FEMALE/UNKNOWN
-  final String intro;
-
-  // 卡面趣味字段（bug 20260729-409）。空 = 卡面渲染趣味默认。
-  final String birthCity;
-  final String address;
-  final String occupation;
-  final String maritalStatus;
-
-  // 学生卡专属（bug 20260730-429）。空 = 卡面渲染趣味默认。
-  final String school;
-  final String faculty;
-}
-
-/// 修改信息底部表单（会话级；确认返回草稿，不触后端）。
+/// 修改信息底部表单（会话级；确认返回草稿，不触后端）。字段集与顺序取自卡款（AD-9 / PRD §3.4）。
+/// 结构：顶部把手 + 字段区（抽屉内滚动）+ 底部吸底「Selesai」；「Selesai」不拦截、始终可点。
 class _EditInfoSheet extends StatefulWidget {
-  const _EditInfoSheet({required this.initial});
-  final _InfoDraft initial;
+  const _EditInfoSheet({required this.style, required this.initial});
+  final IdCardStyle style;
+  final IdCardFormDraft initial;
 
   @override
   State<_EditInfoSheet> createState() => _EditInfoSheetState();
 }
 
+/// 当前展开的下拉（同一时刻最多一个）。
+enum _Dropdown { species, breed }
+
 class _EditInfoSheetState extends State<_EditInfoSheet> {
   late final TextEditingController _name;
   late final TextEditingController _breed;
-  late final TextEditingController _intro;
   late final TextEditingController _birthCity;
   late final TextEditingController _address;
   late final TextEditingController _occupation;
@@ -478,45 +324,67 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
   late final TextEditingController _faculty;
   late String? _petType;
   late DateTime? _birthday;
-  late String _gender;
+  late String? _gender;
+  _Dropdown? _open;
 
   @override
   void initState() {
     super.initState();
-    _name = TextEditingController(text: widget.initial.name);
-    _breed = TextEditingController(text: widget.initial.breed);
-    _intro = TextEditingController(text: widget.initial.intro);
-    _birthCity = TextEditingController(text: widget.initial.birthCity);
-    _address = TextEditingController(text: widget.initial.address);
-    _occupation = TextEditingController(text: widget.initial.occupation);
-    _maritalStatus = TextEditingController(text: widget.initial.maritalStatus);
-    _school = TextEditingController(text: widget.initial.school);
-    _faculty = TextEditingController(text: widget.initial.faculty);
-    _petType = widget.initial.petType;
-    _birthday = widget.initial.birthday;
-    _gender = widget.initial.gender;
+    final d = widget.initial;
+    _name = TextEditingController(text: d.name);
+    _breed = TextEditingController(text: d.breed);
+    _birthCity = TextEditingController(text: d.birthCity);
+    _address = TextEditingController(text: d.address);
+    _occupation = TextEditingController(text: d.occupation);
+    _maritalStatus = TextEditingController(text: d.maritalStatus);
+    _school = TextEditingController(text: d.school);
+    _faculty = TextEditingController(text: d.faculty);
+    _petType = d.petType;
+    _birthday = d.birthday;
+    _gender = d.gender;
   }
 
   @override
   void dispose() {
-    _name.dispose();
-    _breed.dispose();
-    _intro.dispose();
-    _birthCity.dispose();
-    _address.dispose();
-    _occupation.dispose();
-    _maritalStatus.dispose();
-    _school.dispose();
-    _faculty.dispose();
+    for (final c in [_name, _breed, _birthCity, _address, _occupation, _maritalStatus, _school, _faculty]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
+  IdCardFormDraft get _current => IdCardFormDraft(
+        name: _name.text.trim(),
+        petType: _petType,
+        breed: _breed.text.trim(),
+        gender: _gender,
+        birthday: _birthday,
+        birthCity: _birthCity.text.trim(),
+        address: _address.text.trim(),
+        occupation: _occupation.text.trim(),
+        maritalStatus: _maritalStatus.text.trim(),
+        school: _school.text.trim(),
+        faculty: _faculty.text.trim(),
+      );
+
+  void _toggle(_Dropdown d) => setState(() => _open = _open == d ? null : d);
+
+  /// 点其他字段时收起下拉。
+  void _closeDropdown() {
+    if (_open != null) setState(() => _open = null);
+  }
+
   Future<void> _pickBirthday() async {
+    _closeDropdown();
     final now = DateTime.now();
+    final first = DateTime(now.year - 40);
+    // 档案预填的生日可能落在可选范围外（更早 / 时钟偏差晚于今天），夹到范围内，避免 picker 断言。
+    final initial = _birthday == null || _birthday!.isAfter(now)
+        ? now
+        : (_birthday!.isBefore(first) ? first : _birthday!);
     final picked = await showDatePicker(
       context: context,
-      initialDate: _birthday ?? now,
-      firstDate: DateTime(now.year - 40),
+      initialDate: initial,
+      firstDate: first,
       lastDate: now,
     );
     if (picked != null) setState(() => _birthday = picked);
@@ -525,153 +393,55 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final style = widget.style;
+    final fields = idCardOrderedFields(style);
+    final maxHeight = MediaQuery.of(context).size.height * 0.9;
+    final keyboard = MediaQuery.of(context).viewInsets.bottom;
     return Padding(
-      padding: EdgeInsets.only(
-          left: 20, right: 20, top: 18, bottom: MediaQuery.of(context).viewInsets.bottom + 24),
-      child: SingleChildScrollView(
+      padding: EdgeInsets.only(bottom: keyboard),
+      // 稿 .sheet.tall：固定高度（不随字段多少伸缩），中间滚动、「Selesai」固定在底部
+      child: SizedBox(
+        height: (maxHeight - keyboard).clamp(240.0, maxHeight),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const SizedBox(height: 12),
             Center(
               child: Container(
                 width: 36,
                 height: 4,
-                decoration:
-                    BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(999)),
+                decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(999)),
               ),
             ),
-            const SizedBox(height: 16),
-            _label(l10n.petProfileNameLabel),
-            const SizedBox(height: 6),
-            TextField(
-              key: const ValueKey('idCardEditName'),
-              controller: _name,
-              maxLength: 60,
-              decoration: InputDecoration(
-                  hintText: l10n.petProfileNameHint,
-                  border: const OutlineInputBorder(),
-                  counterText: ''),
-            ),
-            const SizedBox(height: 14),
-            _label(l10n.petTypeLabel),
-            const SizedBox(height: 6),
-            SpeciesField(
-                petType: _petType,
-                onChanged: (t) => setState(() {
-                      _petType = t;
-                      _breed.clear();
-                    })),
-            const SizedBox(height: 14),
-            _label(l10n.petProfileBreedLabel),
-            const SizedBox(height: 6),
-            BreedField(petType: _petType, controller: _breed, onChanged: () => setState(() {})),
-            const SizedBox(height: 14),
-            _label(l10n.idCardGenderLabel),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                for (final (i, (wire, label)) in <(String, String)>[
-                  ('MALE', l10n.idCardGenderMale),
-                  ('FEMALE', l10n.idCardGenderFemale),
-                  ('UNKNOWN', l10n.idCardGenderUnknown),
-                ].indexed) ...[
-                  if (i > 0) const SizedBox(width: 8),
-                  Expanded(child: _genderChip(wire, label)),
-                ],
-              ],
-            ),
-            const SizedBox(height: 14),
-            // 生日必填（后端 422）：标签带 * 标记，未填时给必填提示。
-            _requiredLabel(l10n.petProfileBirthdayLabel),
-            const SizedBox(height: 6),
-            InkWell(
-              key: const ValueKey('idCardEditBirthday'),
-              onTap: _pickBirthday,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.line),
-                    borderRadius: BorderRadius.circular(6)),
-                child: Row(
+            const SizedBox(height: 12),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(Icons.cake_outlined, size: 18, color: AppColors.muted),
-                    const SizedBox(width: 8),
-                    Text(
-                        _birthday == null
-                            ? l10n.petProfileBirthdayPick
-                            : formatBirthday(context, _birthday!),
-                        style: TextStyle(
-                            color: _birthday == null ? AppColors.muted : AppColors.ink)),
+                    for (final (i, f) in fields.indexed) ...[
+                      if (i > 0) const SizedBox(height: 14),
+                      ..._field(l10n, style, f),
+                    ],
                   ],
                 ),
               ),
             ),
-            if (_birthday == null) ...[
-              const SizedBox(height: 4),
-              Text(l10n.idCardBirthdayRequired,
-                  style: const TextStyle(fontSize: 11, color: AppColors.danger)),
-            ],
-            const SizedBox(height: 14),
-            _label(l10n.petProfileBioLabel),
-            const SizedBox(height: 6),
-            TextField(
-              key: const ValueKey('idCardEditIntro'),
-              controller: _intro,
-              maxLength: 30,
-              decoration:
-                  InputDecoration(hintText: l10n.petProfileIntro, border: const OutlineInputBorder()),
-            ),
-            // 卡面趣味字段（bug 20260729-409：与卡面展示字段对齐）。留空 = 卡面默认值，
-            // hint 直接展示各默认值（卡面设计常量，非 app-locale 文案）。
-            const SizedBox(height: 14),
-            _label(l10n.idCardBirthCityLabel),
-            const SizedBox(height: 6),
-            _funField('idCardEditBirthCity', _birthCity, KtpDefaults.tempatKota, 20),
-            const SizedBox(height: 14),
-            _label(l10n.idCardAddressLabel),
-            const SizedBox(height: 6),
-            _funField('idCardEditAddress', _address, KtpDefaults.alamat, 48),
-            const SizedBox(height: 14),
-            _label(l10n.idCardOccupationLabel),
-            const SizedBox(height: 6),
-            _funField('idCardEditOccupation', _occupation, KtpDefaults.pekerjaan, 30),
-            const SizedBox(height: 14),
-            _label(l10n.idCardMaritalLabel),
-            const SizedBox(height: 6),
-            _funField('idCardEditMarital', _maritalStatus, KtpDefaults.statusPerkawinan, 20),
-            // 学生卡专属（bug 20260730-429）：留空走卡面趣味默认（设计常量非 locale 文案）。
-            const SizedBox(height: 14),
-            _label(l10n.idCardSchoolLabel),
-            const SizedBox(height: 6),
-            _funField('idCardEditSchool', _school, 'TAILTOPIA ACADEMY', 20),
-            const SizedBox(height: 14),
-            _label(l10n.idCardFacultyLabel),
-            const SizedBox(height: 6),
-            _funField('idCardEditFaculty', _faculty, 'FAKULTAS KEBAHAGIAAN', 20),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                key: const ValueKey('idCardEditDone'),
-                style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.mint,
-                    padding: const EdgeInsets.symmetric(vertical: 14)),
-                onPressed: () => Navigator.of(context).pop(_InfoDraft(
-                    name: _name.text.trim(),
-                    petType: _petType,
-                    breed: _breed.text.trim(),
-                    birthday: _birthday,
-                    gender: _gender,
-                    intro: _intro.text.trim(),
-                    birthCity: _birthCity.text.trim(),
-                    address: _address.text.trim(),
-                    occupation: _occupation.text.trim(),
-                    maritalStatus: _maritalStatus.text.trim(),
-                    school: _school.text.trim(),
-                    faculty: _faculty.text.trim())),
-                child: Text(l10n.idCardEditDone,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    key: const ValueKey('idCardEditDone'),
+                    style: idCardPrimaryButtonStyle(),
+                    onPressed: () => Navigator.of(context).pop(_current),
+                    child: Text(l10n.idCardEditDone),
+                  ),
+                ),
               ),
             ),
           ],
@@ -680,12 +450,153 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
     );
   }
 
+  /// 单个字段（标签 + 控件 + 必要时红字）。必填标签带红色 `*`；表单内红字只有生日 / 物种 / 性别（T-15）。
+  List<Widget> _field(AppLocalizations l10n, IdCardStyle style, IdCardFormField f) {
+    Widget label(String text) =>
+        idCardFieldRequired(style, f) ? _requiredLabel(text) : _label(text);
+    switch (f) {
+      case IdCardFormField.name:
+        return [
+          label(l10n.petProfileNameLabel),
+          const SizedBox(height: 6),
+          TextField(
+            key: const ValueKey('idCardEditName'),
+            controller: _name,
+            maxLength: 60,
+            onTap: _closeDropdown,
+            onChanged: (_) => setState(() {}),
+            decoration: idCardInputDecoration(hintText: l10n.petProfileNameHint),
+          ),
+        ];
+      case IdCardFormField.petType:
+        return [
+          label(l10n.petTypeLabel),
+          const SizedBox(height: 6),
+          IdCardSpeciesDropdown(
+            petType: _petType,
+            expanded: _open == _Dropdown.species,
+            error: _petType == null,
+            onToggle: () => _toggle(_Dropdown.species),
+            onSelected: (t) => setState(() {
+              if (t != _petType) _breed.clear(); // 改物种清空品种
+              _petType = t;
+              _open = null; // 选中即收起
+            }),
+          ),
+          if (_petType == null) _errorText(l10n.idCardPetTypeRequired),
+        ];
+      case IdCardFormField.breed:
+        return [
+          label(l10n.petProfileBreedLabel),
+          const SizedBox(height: 6),
+          IdCardBreedDropdown(
+            petType: _petType,
+            controller: _breed,
+            expanded: _open == _Dropdown.breed,
+            onToggle: () => _toggle(_Dropdown.breed),
+            onChanged: () => setState(() {}),
+            onInputTap: _closeDropdown,
+          ),
+        ];
+      case IdCardFormField.gender:
+        return [
+          label(l10n.idCardGenderLabel),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              for (final (i, (wire, text)) in <(String, String)>[
+                ('MALE', l10n.idCardGenderMale),
+                ('FEMALE', l10n.idCardGenderFemale),
+                ('UNKNOWN', l10n.idCardGenderUnknown),
+              ].indexed) ...[
+                if (i > 0) const SizedBox(width: 8),
+                Expanded(child: _genderChip(wire, text)),
+              ],
+            ],
+          ),
+          if (_gender == null) _errorText(l10n.idCardGenderRequired),
+        ];
+      case IdCardFormField.birthday:
+        return [
+          label(l10n.petProfileBirthdayLabel),
+          const SizedBox(height: 6),
+          InkWell(
+            key: const ValueKey('idCardEditBirthday'),
+            onTap: _pickBirthday,
+            borderRadius: BorderRadius.circular(kIdCardInputRadius),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              // 稿 `.in` / `.in.bad`：圆角 12 · 1.5 描边，缺生日红框。
+              decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  border: Border.all(color: _birthday == null ? AppColors.danger : AppColors.line, width: 1.5),
+                  borderRadius: BorderRadius.circular(kIdCardInputRadius)),
+              child: Row(
+                children: [
+                  const Icon(Icons.cake_outlined, size: 18, color: AppColors.muted),
+                  const SizedBox(width: 8),
+                  Text(_birthday == null ? l10n.petProfileBirthdayPick : formatBirthday(context, _birthday!),
+                      style: TextStyle(color: _birthday == null ? AppColors.muted : AppColors.ink)),
+                ],
+              ),
+            ),
+          ),
+          if (_birthday == null) _errorText(l10n.idCardBirthdayRequired),
+        ];
+      // 卡面趣味字段（选填）：留空 = 卡面默认值，hint 直接展示各默认值（卡面设计常量，非 app-locale 文案）。
+      case IdCardFormField.birthCity:
+        return [
+          label(l10n.idCardBirthCityLabel),
+          const SizedBox(height: 6),
+          _funField('idCardEditBirthCity', _birthCity, KtpDefaults.tempatKota, 20),
+        ];
+      case IdCardFormField.address:
+        return [
+          label(l10n.idCardAddressLabel),
+          const SizedBox(height: 6),
+          _funField('idCardEditAddress', _address, KtpDefaults.alamat, 48),
+        ];
+      case IdCardFormField.occupation:
+        return [
+          label(l10n.idCardOccupationLabel),
+          const SizedBox(height: 6),
+          _funField('idCardEditOccupation', _occupation, KtpDefaults.pekerjaan, 30),
+        ];
+      case IdCardFormField.maritalStatus:
+        return [
+          label(l10n.idCardMaritalLabel),
+          const SizedBox(height: 6),
+          _funField('idCardEditMarital', _maritalStatus, KtpDefaults.statusPerkawinan, 20),
+        ];
+      case IdCardFormField.school:
+        return [
+          label(l10n.idCardSchoolLabel),
+          const SizedBox(height: 6),
+          _funField('idCardEditSchool', _school, 'TAILTOPIA ACADEMY', 20),
+        ];
+      case IdCardFormField.faculty:
+        return [
+          label(l10n.idCardFacultyLabel),
+          const SizedBox(height: 6),
+          _funField('idCardEditFaculty', _faculty, 'FAKULTAS KEBAHAGIAAN', 20),
+        ];
+    }
+  }
+
+  Widget _errorText(String text) => Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(text, style: const TextStyle(fontSize: 11, color: AppColors.danger)),
+      );
+
   /// 性别单选 chip（随表单控件风格：选中紫底白字，未选卡底描边）。
   Widget _genderChip(String wire, String label) {
     final selected = _gender == wire;
     return GestureDetector(
       key: ValueKey('idCardGender_$wire'),
-      onTap: () => setState(() => _gender = wire),
+      onTap: () => setState(() {
+        _gender = wire;
+        _open = null;
+      }),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         alignment: Alignment.center,
@@ -698,33 +609,29 @@ class _EditInfoSheetState extends State<_EditInfoSheet> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-                color: selected ? Colors.white : AppColors.ink2,
-                fontWeight: FontWeight.w600,
-                fontSize: 13)),
+                color: selected ? Colors.white : AppColors.ink2, fontWeight: FontWeight.w600, fontSize: 13)),
       ),
     );
   }
 
   /// 趣味字段输入框：hint 展示卡面默认值（留空即用默认）。
-  Widget _funField(String key, TextEditingController controller, String hint, int maxLength) =>
-      TextField(
+  Widget _funField(String key, TextEditingController controller, String hint, int maxLength) => TextField(
         key: ValueKey(key),
         controller: controller,
         maxLength: maxLength,
-        decoration: InputDecoration(
-            hintText: hint, border: const OutlineInputBorder(), counterText: ''),
+        onTap: _closeDropdown,
+        decoration: idCardInputDecoration(hintText: hint),
       );
 
-  Widget _label(String text) => Text(text,
-      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink2));
+  Widget _label(String text) =>
+      Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.ink2));
 
   /// 必填字段标签：`_label` + 红色 `*`（必填视觉标记，非文案）。
   Widget _requiredLabel(String text) => Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           _label(text),
-          const Text(' *',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.danger)),
+          const Text(' *', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.danger)),
         ],
       );
 }

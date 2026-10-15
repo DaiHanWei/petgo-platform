@@ -237,6 +237,30 @@ void main() {
       expect(carousel, contains('thumbWidth: 1080'));
     });
 
+    /// UI 稿 A8/B2/B3 无光晕：模糊底图必须裁在自身区域内，否则 sigma 12 向外扩散成一圈光晕，
+    /// 原图盖上后仍露在四周。
+    testWidgets('模糊缩略图外包 ClipRect，不向图外溢出', (tester) async {
+      await tester.pumpWidget(const MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: Locale('en'),
+        home: ImageLightbox(
+          urls: [night],
+          initialIndex: 0,
+          heroTagPrefix: 'p',
+          source: 'content_detail',
+        ),
+      ));
+      await tester.settleLightbox();
+
+      final blur = find.byType(ImageFiltered);
+      expect(blur, findsOneWidget);
+      expect(find.ancestor(of: blur, matching: find.byType(ClipRect)), findsWidgets);
+      final clip = tester.getRect(
+          find.ancestor(of: blur, matching: find.byType(ClipRect)).first);
+      expect(clip, tester.getRect(blur));
+    });
+
     testWidgets('加载失败 → 出提示与重试按钮，点了不会把灯箱关掉', (tester) async {
       await tester.pumpWidget(const MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,

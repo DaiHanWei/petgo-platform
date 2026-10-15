@@ -23,6 +23,15 @@ class AdminPageCatalogTest {
                 .containsExactlyInAnyOrderElementsOf(AdminPermissions.ALL);
         assertThat(owned).contains(AdminPermissions.CONTENT_MANUAL_REVIEW,
                 AdminPermissions.PLACE_MANAGE, AdminPermissions.COMMENT_VIRTUAL_POST);
+        // V1.3.4 返工清单 §1：四个新码各有归属页（运营弹窗 / 系统通知由「沿用 config.*」改为自有码）
+        java.util.Map<String, AdminPageCatalog.Page> byKey = new java.util.HashMap<>();
+        AdminPageCatalog.PAGES.forEach(p -> byKey.put(p.key(), p));
+        assertThat(byKey.get("config").otherCodes()).containsExactly(AdminPermissions.CONFIG_APP_MIN_VERSION_EDIT);
+        assertThat(byKey.get("ops-popups").ownedCodes()).containsExactly(AdminPermissions.OPS_POPUP_MANAGE);
+        assertThat(byKey.get("ops-popups").sharedCodes()).isEmpty();
+        assertThat(byKey.get("ops-notifications").viewCodes()).containsExactly(AdminPermissions.OPS_NOTIFY_VIEW);
+        assertThat(byKey.get("ops-notifications").editCodes()).containsExactly(AdminPermissions.OPS_NOTIFY_SEND);
+        assertThat(byKey.get("ops-notifications").sharedCodes()).isEmpty();
     }
 
     @Test
@@ -98,7 +107,9 @@ class AdminPageCatalogTest {
                 "roles", "seed", "seed-batches", "settlements", "shopBanners", "shopInventory", "shopMargin", "shopOrders",
                 "shopProducts", "shopReconciliation", "shopRepurchase", "shopReturns", "shopShipping", "shopTurnover",
                 "shopOrderExceptions", "shopPrecedents", "support-tickets", "tickets", "user-tags", "users", "vets",
-                "virtual-accounts", "warm-replies", "places")) {
+                "virtual-accounts", "warm-replies", "places",
+                "ops-popups", // V1.3.4 AB-30
+                "ops-notifications")) { // V1.3.4 AB-31
             assertThat(actives).as("active=" + active + " 没有对应侧栏项").contains(active);
         }
     }

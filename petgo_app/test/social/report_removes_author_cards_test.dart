@@ -36,6 +36,9 @@ FeedItem _item(int id, int authorId) => FeedItem(
     );
 
 class _FakeFeedRepo implements FeedRepository {
+  @override
+  Future<FeedPage> getFollowingFeed({String? cursor}) => throw UnimplementedError();
+
   _FakeFeedRepo(this.items);
   final List<FeedItem> items;
   @override

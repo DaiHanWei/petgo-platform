@@ -9,9 +9,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.tailtopia.auth.domain.User;
 import com.tailtopia.support.ApiIntegrationTest;
+import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * L1 集成测试：{@code /api/v1/pet-profiles/me/id-card}（Story 6.1，FR-49A）真 HTTP 链路。
@@ -20,6 +23,9 @@ import org.springframework.http.MediaType;
  * POST 幂等（二次返同号）；无档案 GET/POST → 404；未登录 → 401。
  */
 class IdCardEndpointIntegrationTest extends ApiIntegrationTest {
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private String createBody() {
         return """
@@ -223,7 +229,7 @@ class IdCardEndpointIntegrationTest extends ApiIntegrationTest {
         // 未填/空串 → null 落库：前端据 null 渲染趣味默认，旧行为零变化。
         User owner = newUser();
         String body = postCard(userBearer(owner.getId()), """
-                {"name":"Momo","petType":"CAT","birthday":"2024-03-10","gender":"FEMALE","birthCity":"  "}
+                {"name":"Momo","petType":"CAT","breed":"英短","birthday":"2024-03-10","gender":"FEMALE","birthCity":"  "}
                 """);
         var node = json.readTree(body);
         // Jackson 全局 non_null：null 字段在响应中整键省略（前端 fromJson 缺键即 null，语义等价）。
@@ -270,5 +276,156 @@ class IdCardEndpointIntegrationTest extends ApiIntegrationTest {
                                 {"name":"Momo","petType":"CAT","birthday":"2999-12-31","gender":"FEMALE"}
                                 """))
                 .andExpect(status().isUnprocessableEntity());
+    }
+
+    // ---- V1.3.4 ktp Story 1.1：5 种卡种 + 学生卡配色 + 必填口径（AD-1 / AD-4 / D-9 / D-12） ----
+
+    /** 新版 App 的建卡 V2 接口（D-20：必填在这里强制）。 */
+    private org.springframework.test.web.servlet.ResultActions postCardRaw(String token, String body)
+            throws Exception {
+        return mvc.perform(post("/api/v1/pet-profiles/me/id-cards/v2")
+                .header(HttpHeaders.AUTHORIZATION, token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body));
+    }
+
+    private static String cardBody(String cardType, String cardVariant) {
+        return "{\"name\":\"Momo\",\"petType\":\"CAT\",\"breed\":\"英短\",\"birthday\":\"2024-03-10\","
+                + "\"gender\":\"FEMALE\",\"cardType\":\"" + cardType + "\""
+                + (cardVariant == null ? "" : ",\"cardVariant\":\"" + cardVariant + "\"") + "}";
+    }
+
+    @Test
+    void createCardAcceptsAllFiveCardTypes() throws Exception {
+        String token = userBearer(newUser().getId());
+        for (String type : List.of("KTP", "PASSPORT", "KITAS", "SIM")) {
+            var node = json.readTree(postCard(token, cardBody(type, null)));
+            assertThat(node.get("cardType").asString()).isEqualTo(type);
+            assertThat(node.has("cardVariant")).isFalse(); // 非学生卡 null（全局 non_null 省略）
+            assertThat(node.get("cardNo").asString()).isNotBlank(); // 新卡种照常发号
+            assertThat(node.get("passportNo").asString()).isNotBlank();
+            assertThat(node.get("serialId").isNumber()).isTrue();
+        }
+        var student = json.readTree(postCard(token, cardBody("STUDENT", "BINTANG")));
+        assertThat(student.get("cardType").asString()).isEqualTo("STUDENT");
+    }
+
+    @Test
+    void createStudentCardInEachVariant() throws Exception {
+        String token = userBearer(newUser().getId());
+        for (String v : List.of("BINTANG", "MALAM", "CERIA", "KLASIK")) {
+            var node = json.readTree(postCard(token, cardBody("STUDENT", v)));
+            assertThat(node.get("cardVariant").asString()).isEqualTo(v);
+            long id = node.get("id").asLong();
+            mvc.perform(get("/api/v1/pet-profiles/me/id-cards/" + id).header(HttpHeaders.AUTHORIZATION, token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.cardVariant").value(v));
+        }
+    }
+
+    @Test
+    void studentCardWithoutVariantFallsBackToKlasik() throws Exception {
+        // D-12：旧版 App 建学生卡不带 cardVariant → KLASIK（旧版只有紫色一款），不 422。
+        var node = json.readTree(postCard(userBearer(newUser().getId()), cardBody("STUDENT", null)));
+        assertThat(node.get("cardVariant").asString()).isEqualTo("KLASIK");
+        assertThat(jdbc.queryForObject("SELECT card_variant FROM id_cards WHERE id = ?", String.class,
+                node.get("id").asLong())).isEqualTo("KLASIK");
+    }
+
+    @Test
+    void nonStudentCardWithVariantIs422() throws Exception {
+        postCardRaw(userBearer(newUser().getId()), cardBody("KTP", "BINTANG"))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void unknownCardTypeOrVariantIs422() throws Exception {
+        String token = userBearer(newUser().getId());
+        postCardRaw(token, cardBody("ALIEN", null)).andExpect(status().isUnprocessableEntity());
+        postCardRaw(token, cardBody("STUDENT", "UNGU")).andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void missingPetTypeOrGenderIs422() throws Exception {
+        String token = userBearer(newUser().getId());
+        postCardRaw(token, """
+                {"name":"Momo","breed":"英短","birthday":"2024-03-10","gender":"FEMALE"}
+                """).andExpect(status().isUnprocessableEntity());
+        postCardRaw(token, """
+                {"name":"Momo","petType":"CAT","breed":"英短","birthday":"2024-03-10"}
+                """).andExpect(status().isUnprocessableEntity());
+        postCardRaw(token, """
+                {"name":"Momo","petType":"RABBIT","breed":"英短","birthday":"2024-03-10","gender":"FEMALE"}
+                """).andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void ktpAndKitasRequireBreedOthersDoNot() throws Exception {
+        String token = userBearer(newUser().getId());
+        for (String type : List.of("KTP", "KITAS")) {
+            postCardRaw(token, "{\"name\":\"Momo\",\"petType\":\"CAT\",\"breed\":\"  \","
+                    + "\"birthday\":\"2024-03-10\",\"gender\":\"FEMALE\",\"cardType\":\"" + type + "\"}")
+                    .andExpect(status().isUnprocessableEntity());
+        }
+        postCardRaw(token, """
+                {"name":"Momo","petType":"CAT","birthday":"2024-03-10","gender":"FEMALE","cardType":"SIM"}
+                """).andExpect(status().isOk());
+    }
+
+    @Test
+    void introIsAcceptedButNeverPersisted() throws Exception {
+        // PRD §3.4 / FR-142D.4：旧版 App 仍会传 intro，接受但一律不落库。
+        var node = json.readTree(postCard(userBearer(newUser().getId()), """
+                {"name":"Momo","petType":"CAT","breed":"英短","birthday":"2024-03-10","gender":"FEMALE",
+                 "intro":"乖巧"}
+                """));
+        assertThat(node.has("intro")).isFalse();
+        assertThat(jdbc.queryForObject("SELECT intro FROM id_cards WHERE id = ?", String.class,
+                node.get("id").asLong())).isNull();
+    }
+
+    @Test
+    void numberReusedOnlyOnCreateResponse() throws Exception {
+        String token = userBearer(newUser().getId());
+        var node = json.readTree(postCard(token, newCardBody()));
+        // Story 1.1 恒 false（Epic 2 Story 2.3 接真值）；卡字段平铺在顶层。
+        assertThat(node.get("numberReused").asBoolean()).isFalse();
+        assertThat(node.get("cardType").asString()).isEqualTo("KTP");
+        long id = node.get("id").asLong();
+        mvc.perform(get("/api/v1/pet-profiles/me/id-cards/" + id).header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.numberReused").doesNotExist());
+        mvc.perform(get("/api/v1/pet-profiles/me/id-cards").header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].numberReused").doesNotExist());
+    }
+
+    // ---- V1.3.4 ktp D-20：旧接口留给 1.3.3 及更早 App，必填口径不变；V2 才强制 ----
+
+    @Test
+    void legacyEndpointStillAcceptsOldAppBodies() throws Exception {
+        String token = userBearer(newUser().getId());
+        // 1.3.3 App 建 KTP：档案没填品种 / 物种时不传这两个键；性别不传按 UNKNOWN。
+        var node = json.readTree(postCard(token, """
+                {"name":"Momo","birthday":"2024-03-10","cardType":"KTP"}
+                """));
+        assertThat(node.get("cardType").asString()).isEqualTo("KTP");
+        assertThat(node.get("gender").asString()).isEqualTo("UNKNOWN");
+        assertThat(node.has("breed")).isFalse();
+        // 旧版学生卡不带配色 → KLASIK（D-12）。
+        var student = json.readTree(postCard(token, """
+                {"name":"Momo","birthday":"2024-03-10","gender":"MALE","cardType":"STUDENT"}
+                """));
+        assertThat(student.get("cardVariant").asString()).isEqualTo("KLASIK");
+    }
+
+    @Test
+    void v2EndpointCreatesWithFullBody() throws Exception {
+        String token = userBearer(newUser().getId());
+        String body = postCardRaw(token, cardBody("STUDENT", "MALAM"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        var node = json.readTree(body);
+        assertThat(node.get("cardVariant").asString()).isEqualTo("MALAM");
+        assertThat(node.get("numberReused").isBoolean()).isTrue();
     }
 }

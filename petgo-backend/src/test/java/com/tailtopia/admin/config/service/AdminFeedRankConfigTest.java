@@ -37,7 +37,8 @@ class AdminFeedRankConfigTest {
         svc = new AdminConfigService(Mockito.mock(PricingConfigRepository.class),
                 Mockito.mock(PawCoinConfigRepository.class),
                 Mockito.mock(PawCoinTopupTierRepository.class), changeLogs, audit, repo,
-                Mockito.mock(com.tailtopia.config.repository.SupportContactConfigRepository.class));
+                Mockito.mock(com.tailtopia.config.repository.SupportContactConfigRepository.class),
+                Mockito.mock(com.tailtopia.config.service.AppVersionConfigService.class));
         cfg = seed();
         Mockito.when(repo.findById(FeedRankConfig.SINGLETON_ID)).thenReturn(Optional.of(cfg));
     }
@@ -52,6 +53,7 @@ class AdminFeedRankConfigTest {
         set(c, "exposureDecay", 0.3);
         set(c, "shuffleStrength", 0.8); // 2026-09-01 刷新抖动
         set(c, "throttleFactor", 0.2); // Story 17.1
+        set(c, "eduFreshnessHalfLifeHours", 360d); // V1.3.4 Story 1.2：非默认值，好证明后台保存不动它
 
         set(c, "seenWindowDays", 7);
         set(c, "windowSize", 10);
@@ -127,6 +129,23 @@ class AdminFeedRankConfigTest {
                         "comment_weight", "exposure_decay", "seen_window_days");
         Mockito.verify(audit).record(Mockito.eq(7L), Mockito.eq("CONFIG_UPDATE_FEED_RANK"),
                 Mockito.any(), Mockito.any(), Mockito.any());
+    }
+
+    /**
+     * 🔴 V1.3.4 Story 1.2 · AC4：后台保存其他参数，科普半衰期（不在后台露出）保持原值，
+     * 也不出现在变更记录里。
+     */
+    @Test
+    void savingOtherParamsKeepsEduHalfLife() {
+        svc.updateFeedRank(valid(), 1L);
+
+        assertThat(cfg.getEduFreshnessHalfLifeHours()).isEqualTo(360.0);
+        Mockito.verify(repo).save(cfg);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ConfigChangeLog>> logs = ArgumentCaptor.forClass(List.class);
+        Mockito.verify(changeLogs).saveAll(logs.capture());
+        assertThat(logs.getValue()).extracting(ConfigChangeLog::getField)
+                .doesNotContain("edu_freshness_half_life_hours");
     }
 
     /** 🛡 无变更 → 不写库、不记日志、不审计。 */

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:tailtopia/features/content/data/detail_repository.dart';
 import 'package:tailtopia/core/analytics/analytics.dart';
 import 'package:tailtopia/features/notify/data/notification_repository.dart';
 import 'package:tailtopia/features/notify/domain/notification_item.dart';
@@ -47,6 +48,15 @@ NotificationItem _item({
       createdAt: DateTime.now(),
     );
 
+/// V1.3.4 Story 3.4 · AC7.4：点赞 / 评论类条目跳转前会探一次帖子是否已删。本文件不测探测，
+/// 一律回「未删除」（= 照常跳转），不让真实 dio 留下挂起的计时器。
+class _NotGone extends ContentGoneProbe {
+  _NotGone() : super(Dio());
+
+  @override
+  Future<bool> isGone(int postId) async => false;
+}
+
 Future<void> _pump(
   WidgetTester tester,
   List<NotificationItem> items, {
@@ -55,6 +65,7 @@ Future<void> _pump(
   await tester.pumpWidget(ProviderScope(
     overrides: [
       notificationRepositoryProvider.overrideWithValue(_FakeNotificationRepo(items)),
+      contentGoneProbeProvider.overrideWithValue(_NotGone()),
       if (pet != null) petProfileProvider.overrideWith((ref) async => pet),
     ],
     // ⚠️ 点通知会走真实跳转，所以要给一个路由器 —— 否则埋点虽已上报，

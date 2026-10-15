@@ -10,7 +10,10 @@ import 'package:tencent_cloud_chat_push/tencent_cloud_chat_push.dart';
 import 'package:tencent_cloud_chat_sdk/tencent_im_sdk_plugin.dart';
 
 import '../../features/auth/domain/auth_state.dart';
+import '../../features/notify/domain/app_update_controller.dart';
+import '../../features/notify/domain/app_version_check.dart';
 import '../../features/notify/domain/notification_deep_link.dart';
+import '../analytics/analytics.dart';
 import '../im/im_service.dart';
 import '../router/app_router.dart';
 import '../router/deep_link_routes.dart';
@@ -40,6 +43,15 @@ PushPayload parsePushExt(String ext) {
   } catch (_) {
     return const PushPayload();
   }
+}
+
+/// 运营通知从系统推送打开（V1.3.4 Story 6.3 · FR-138.8）。campaign_id = ext 里的 targetRef（活动 public_token）。
+@visibleForTesting
+void reportOpsNotificationOpenedFromPush(PushPayload p) {
+  if (p.type != 'OPS_ANNOUNCEMENT') return;
+  final id = p.targetRef;
+  if (id == null || id.isEmpty) return;
+  Analytics.capture('ops_notification_opened', {'campaign_id': id, 'source': 'push'});
 }
 
 /// 推送点击落点分流（纯函数，L0 可测）。见 [PushService._onNotificationClicked] 的决策说明。
@@ -224,6 +236,8 @@ class PushService {
   ///（Story 5.1 F2），正是兽医新单推送该去的地方。
   void _onNotificationClicked({required String ext, String? userID, String? groupID}) {
     final p = parsePushExt(ext);
+    // 运营通知埋点（Story 6.3）；落点规则不变（有 token → 通知中心，不直达目标）。
+    reportOpsNotificationOpenedFromPush(p);
     Future<void>(() async {
       String location;
       try {
@@ -259,6 +273,9 @@ class PushService {
       _ref.read(pendingDeepLinkProvider.notifier).set(location);
       return;
     }
+    // 强制更新期间不导航：push 会把新页盖在根 Navigator 的强更弹窗之上，弹窗不返回也就不重弹，
+    // 等于点一条推送就绕过了强更（OCR 审查 #1）。强更下 App 本就不可用，直接丢弃该跳转。
+    if (_ref.read(appUpdateControllerProvider).decision == UpdateDecision.forced) return;
     if (DeepLinkRoutes.isShellTabRoot(location) || location.startsWith('/vet')) {
       ctx.go(location);
     } else if (redirectWouldRewrite(_ref.read(authControllerProvider), location)) {

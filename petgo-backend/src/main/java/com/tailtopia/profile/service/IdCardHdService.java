@@ -98,7 +98,7 @@ public class IdCardHdService {
                 idCards.save(card);
                 purchases.save(IdCardHdPurchase.of(userId, null, cardId, PayChannel.PAWCOIN, null));
                 // KTP 付费埋点：AFTER_COMMIT 上报，扣款回滚则不报（KtpUnlockAnalyticsListener）
-                events.publishEvent(new IdHdPawcoinUnlockedEvent(userId, price));
+                events.publishEvent(new IdHdPawcoinUnlockedEvent(userId, price, cardId));
                 yield HdPurchaseResponse.granted();
             }
             case QRIS -> {
@@ -205,7 +205,8 @@ public class IdCardHdService {
                 wallet.debit(userId, price, PawCoinTxnType.SPEND, REF_TYPE, petProfileId,
                         "id-hd:" + petProfileId);
                 purchases.save(IdCardHdPurchase.of(userId, petProfileId, null, PayChannel.PAWCOIN, null));
-                events.publishEvent(new IdHdPawcoinUnlockedEvent(userId, price));
+                // 旧版单卡端点没有卡记录：埋点不带卡种（V1.3.4 T-20，不造默认值）。
+                events.publishEvent(new IdHdPawcoinUnlockedEvent(userId, price, null));
                 yield HdPurchaseResponse.granted();
             }
             case QRIS -> {

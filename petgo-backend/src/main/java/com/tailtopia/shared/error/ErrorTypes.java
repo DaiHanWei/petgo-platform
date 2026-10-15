@@ -62,6 +62,12 @@ public final class ErrorTypes {
     /** V1.3.2 Story 3.3：佩戴未解锁的 Tailsonality 结果（422）。 */
     public static final URI TAILSONALITY_BADGE_LOCKED = URI.create(BASE + "tailsonality-badge-locked");
 
+    /**
+     * V1.3.4 follow Story 1.1：关注一个<b>我已拉黑</b>的人（409）。
+     * 只在「我拉黑了对方」时出现；<b>对方拉黑了我不出现</b>（D-4，不暴露被拉黑）。
+     */
+    public static final URI FOLLOW_BLOCKED = URI.create(BASE + "follow-blocked");
+
     private ErrorTypes() {
     }
 }

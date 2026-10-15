@@ -77,6 +77,10 @@ Future<_Nav> _pump(
   bool loggedIn = true,
 }) async {
   final nav = _Nav();
+  // V1.3.4 居中名片把身份区拉高了 —— 给一块高屏，宠物区在可视区内才点得到。
+  tester.view.physicalSize = const Size(1080, 3200);
+  tester.view.devicePixelRatio = 2.0;
+  addTearDown(tester.view.reset);
   final router = GoRouter(
     initialLocation: '${PublicProfilePage.routeBase}/$_kTargetId',
     routes: [
@@ -124,29 +128,38 @@ void main() {
   });
 
   group('AC3：主页宠物区', () {
-    testWidgets('渲染宠物卡：名字 + 物种 · 年龄 · Diary 数', (tester) async {
+    /// V1.3.4 Story 1.3 · AC6：小节标题「Hewan」+ 圆形头像；meta 只有「物种 · 年龄」，
+    /// diary 数移到头像右上角角标（UI 稿 A2）。
+    testWidgets('渲染宠物头像：名字 + 物种 · 年龄，diary 数在角标', (tester) async {
       await _pump(tester, pet: _pet());
 
+      expect(find.text(l10n.profilePetsSection.toUpperCase()), findsOneWidget);
       expect(find.byKey(const ValueKey('profilePetCard')), findsOneWidget);
       expect(find.text('Miu'), findsOneWidget);
       final meta = tester.widget<Text>(find.byKey(const ValueKey('profilePetMeta'))).data!;
       expect(meta, contains(l10n.petTypeCat));
-      expect(meta, contains(l10n.meDiaryCount('42')));
+      expect(meta, isNot(contains(l10n.meDiaryCount('42'))));
+      expect(meta.split(' · '), hasLength(lessThanOrEqualTo(2)), reason: '不含品种、不含 diary 数');
+      expect(find.descendant(of: find.byKey(const ValueKey('profilePetDiaryBadge')), matching: find.text('42')),
+          findsOneWidget);
+      // 「Lihat →」删除。
+      expect(find.text(l10n.meViewArchive), findsNothing);
     });
 
-    /// ⚠️ Diary 数 >99 收成「99+」—— 与「我的」页同一出口，别在这里另起一套阈值。
-    testWidgets('Diary 数超过 99 显示 99+', (tester) async {
+    /// ⚠️ Diary 数 >99 收成「99+」—— 与「我的」页同一阈值，别在这里另起一套。
+    testWidgets('Diary 数超过 99 角标显示 99+', (tester) async {
       await _pump(tester, pet: _pet(diaryCount: 128));
 
-      expect(tester.widget<Text>(find.byKey(const ValueKey('profilePetMeta'))).data,
-          contains(l10n.meDiaryCount('99+')));
+      expect(find.descendant(of: find.byKey(const ValueKey('profilePetDiaryBadge')), matching: find.text('99+')),
+          findsOneWidget);
     });
 
-    /// 没建过档案的人：整块**不渲染** —— 「他还没养宠物」不需要一张空卡片来说明。
-    testWidgets('没有宠物 → 宠物区整块不渲染', (tester) async {
+    /// 没建过档案的人：整块（含「Hewan」小节标题）**不渲染**（UI 稿 A5）。
+    testWidgets('没有宠物 → 宠物区整块（含标题）不渲染', (tester) async {
       await _pump(tester, pet: null);
 
       expect(find.byKey(const ValueKey('profilePetCard')), findsNothing);
+      expect(find.text(l10n.profilePetsSection.toUpperCase()), findsNothing);
     });
 
     /// V1.3.2 Story 3.3 · AC5.4（按新规则改写，原「天然空状态」一例拆成两例）：
@@ -158,7 +171,7 @@ void main() {
       expect(find.textContaining('Tailsonality'), findsNothing);
     });
 
-    /// 佩戴 + 已解锁 → 名字右侧 4 字母胶囊；界面上只显 4 字母，不出现产品名。
+    /// 佩戴 + 已解锁 → 名字下方（T-7）4 字母胶囊；界面上只显 4 字母，不出现产品名。
     testWidgets('有小标 ENTJ → 显示胶囊且只显 4 字母', (tester) async {
       await _pump(tester, pet: _pet(badge: 'ENTJ'));
 

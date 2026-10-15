@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  运营弹窗新建 / 编辑抽屉（V1.3.4 AB-30；按后台返工清单 §3 对齐 UI 稿 H3–H7）。
+  三区：① 内容（名称 / 图片 EN·ID 上传位 / 标题 / 正文 / 按钮文案）② 跳转（类型 + 目标值一行）③ 投放规则
+  （生效时间 / 频次 / 目标人群 / 优先级）。双语字段 EN 在左、ID 在右。底部：左「预览」，右「取消 / 保存」。
+  提交：新建 `POST /admin/ops-popups`、编辑 `POST /admin/ops-popups/{token}`（token 不变，频次不重置）；
+  hx-include 带上列表筛选（status / q），保存后整表按原筛选重拉。
+  🔴 校验全在服务端（AdminOpsPopupService）：保存钮始终可点；422 回 `:: errors` —— 汇总条落进字段区末尾的
+     #ops-popup-form-err，各字段红字以 oob 贴进 #opsp-err-<槽>，要标红的输入名单在 data-invalid（admin-ops-popup.js 标红）。
+     hx-target 不是抽屉体：422 时表单原样保留，运营填的内容一个不丢。
+  🔴 跳转类型切换只是显隐（data-show-when，admin-core.js）：隐藏的那几格同时 disabled 不提交。
+  预览（H6）纯前端：admin-ops-popup.js 按表单当前值渲染 EN / ID 两台手机，样式对齐 App OpsPopupDialog。
+  upload-host: ops-popups.html
+    ↑ 本片段的上传位走 fetch，需要 CSRF meta；片段没有自己的 <head>，meta 来自宿主页。
+-->
+<body>
+<form th:fragment="form" class="opsp-form"
+      th:object="${form}"
+      th:attr="hx-post=${popupToken} == null ? @{/admin/ops-popups} : @{/admin/ops-popups/{t}(t=${popupToken})},
+               data-drawer-title=${popupToken} == null ? #{admin.opsPopups.drawer.create} : #{admin.opsPopups.drawer.edit},
+               data-preview-title=#{admin.opsPopups.preview.title('{0}')}"
+      hx-target="#ops-popup-form-err" hx-swap="innerHTML" hx-include="#ops-popup-filters" novalidate>
+    <div class="opsp-edit" data-opsp-edit>
+        <!-- ① 内容 -->
+        <div class="opsp-sec" th:text="#{admin.opsPopups.sec.content}">① 内容</div>
+        <div class="opsp-fld">
+            <label class="opsp-l" for="f-opsp-name"><span th:text="#{admin.opsPopups.form.name}">名称（仅后台可见）</span><i> *</i></label>
+            <input id="f-opsp-name" type="text" class="inp" th:field="*{name}" maxlength="100"/>
+            <div class="opsp-ferr" id="opsp-err-name"></div>
+        </div>
+        <div class="opsp-fld">
+            <span class="opsp-l"><span th:text="#{admin.opsPopups.form.image}">图片</span><i> *</i></span>
+            <div class="opsp-upr" data-error-name="image">
+                <div th:replace="~{admin/fragments/drawer-ops-popup :: tile('EN', 'imageUrlEn', ${form.imageUrlEn}, ${existingImages.en})}"></div>
+                <div th:replace="~{admin/fragments/drawer-ops-popup :: tile('ID', 'imageUrlId', ${form.imageUrlId}, ${existingImages.id})}"></div>
+                <div class="opsp-up-hint">
+                    <span th:text="#{admin.opsPopups.form.imageHint}">建议比例 4:5（1080 × 1350），单张不超过 1MB。</span>
+                    <div class="opsp-ferr" id="opsp-err-image"></div>
+                    <div class="opsp-ferr" data-opsp-upload-err></div>
+                </div>
+            </div>
+        </div>
+        <div class="opsp-fld">
+            <span class="opsp-l" th:text="#{admin.opsPopups.form.title}">标题（选填）</span>
+            <div class="opsp-two">
+                <input type="text" class="inp" name="titleEn" maxlength="120" placeholder="EN" th:value="*{titleEn}"/>
+                <input type="text" class="inp" name="titleId" maxlength="120" placeholder="ID" th:value="*{titleId}"/>
+            </div>
+            <div class="opsp-ferr" id="opsp-err-title"></div>
+        </div>
+        <div class="opsp-fld">
+            <span class="opsp-l" th:text="#{admin.opsPopups.form.body}">正文（选填）</span>
+            <div class="opsp-two">
+                <textarea class="inp opsp-body" name="bodyEn" rows="1" maxlength="255" placeholder="EN" th:text="*{bodyEn}"></textarea>
+                <textarea class="inp opsp-body" name="bodyId" rows="1" maxlength="255" placeholder="ID" th:text="*{bodyId}"></textarea>
+            </div>
+            <div class="opsp-ferr" id="opsp-err-body"></div>
+        </div>
+        <div class="opsp-fld">
+            <span class="opsp-l"><span th:text="#{admin.opsPopups.form.button}">按钮文案</span><i> *</i></span>
+            <div class="opsp-two">
+                <input type="text" class="inp" name="buttonTextEn" maxlength="40" placeholder="EN" th:value="*{buttonTextEn}"/>
+                <input type="text" class="inp" name="buttonTextId" maxlength="40" placeholder="ID" th:value="*{buttonTextId}"/>
+            </div>
+            <div class="opsp-ferr" id="opsp-err-button"></div>
+        </div>
+
+        <!-- ② 跳转：类型 + 目标值一行（共享片段 ops-target-fields :: inline，文案与 AB-31 同一套） -->
+        <div class="opsp-sec" th:text="#{admin.opsPopups.sec.target}">② 跳转</div>
+        <div class="opsp-fld">
+            <label class="opsp-l" for="f-opsp-ttype"><span th:text="#{admin.opsPopups.form.targetType}">跳转</span><i> *</i></label>
+            <div th:replace="~{admin/fragments/ops-target-fields :: inline('f-opsp')}"></div>
+            <div class="opsp-h" th:text="#{admin.opsPopups.form.targetHint}">商品 / 品类 / App 内页面 / 外部链接 / 无跳转。</div>
+            <div class="opsp-ferr" id="opsp-err-target"></div>
+        </div>
+
+        <!-- ③ 投放规则 -->
+        <div class="opsp-sec" th:text="#{admin.opsPopups.sec.rules}">③ 投放规则</div>
+        <div class="opsp-fld">
+            <label class="opsp-l" for="f-opsp-start"><span th:text="#{admin.opsPopups.form.window}">生效时间（WIB）</span><i> *</i></label>
+            <div class="opsp-two">
+                <input id="f-opsp-start" type="datetime-local" class="inp" th:field="*{startsAt}"/>
+                <input id="f-opsp-end" type="datetime-local" class="inp" th:field="*{endsAt}"/>
+            </div>
+            <div class="opsp-h" th:text="#{admin.opsPopups.form.windowHint}">结束须晚于开始。</div>
+            <div class="opsp-ferr" id="opsp-err-window"></div>
+        </div>
+        <div class="opsp-fld">
+            <span class="opsp-l"><span th:text="#{admin.opsPopups.form.frequency}">频次</span><i> *</i></span>
+            <div class="opsp-rad" data-error-name="frequency">
+                <label><input type="radio" name="frequency" value="ONCE" th:checked="*{frequency == 'ONCE'}"/><span
+                        th:text="#{admin.opsPopups.frequency.ONCE}">每人一次</span></label>
+                <label><input type="radio" name="frequency" value="DAILY" th:checked="*{frequency == 'DAILY'}"/><span
+                        th:text="#{admin.opsPopups.form.frequencyDaily}">每天最多一次（WIB 自然日）</span></label>
+            </div>
+            <div class="opsp-ferr" id="opsp-err-frequency"></div>
+        </div>
+        <div class="opsp-fld">
+            <span class="opsp-l"><span th:text="#{admin.opsPopups.form.audience}">目标人群</span><i> *</i></span>
+            <!--/* N 天嵌在「新用户」选项里；新 / 老用户共用这一个值（返工清单 §0-3），选「全部」时服务端不看它 */-->
+            <div class="opsp-rad" data-error-name="audience">
+                <label><input type="radio" name="audience" value="ALL" th:checked="*{audience == 'ALL'}"/><span
+                        th:text="#{admin.opsPopups.audience.ALL}">全部用户</span></label>
+                <span class="opsp-rad-days">
+                    <label><input type="radio" name="audience" value="NEW" th:checked="*{audience == 'NEW'}"/><span
+                            th:text="#{admin.opsPopups.form.audienceNewPre}">新用户（注册</span></label>
+                    <input type="number" class="inp opsp-days" min="1" max="3650" step="1" th:field="*{newUserDays}"
+                           th:attr="aria-label=#{admin.opsPopups.form.newUserDaysAria}"/>
+                    <span th:text="#{admin.opsPopups.form.audienceNewPost}">天内）</span>
+                </span>
+                <label><input type="radio" name="audience" value="OLD" th:checked="*{audience == 'OLD'}"/><span
+                        th:text="#{admin.opsPopups.audience.OLD}">老用户</span></label>
+            </div>
+            <div class="opsp-h" th:text="#{admin.opsPopups.form.audienceHint}">只有「全部用户」会对未登录游客展示。</div>
+            <div class="opsp-ferr" id="opsp-err-audience"></div>
+        </div>
+        <div class="opsp-fld">
+            <label class="opsp-l" for="f-opsp-priority"><span th:text="#{admin.opsPopups.form.priority}">优先级</span><i> *</i></label>
+            <input id="f-opsp-priority" type="number" min="-100000" max="100000" step="1" class="inp opsp-prio" th:field="*{priority}"/>
+            <div class="opsp-h" th:text="#{admin.opsPopups.form.priorityHint}">数字越大越优先；相同时后创建的优先。</div>
+            <div class="opsp-ferr" id="opsp-err-priority"></div>
+        </div>
+        <!--/* 汇总条（H7）：错误槽放在提交按钮正上方（既有约定）。 */-->
+        <div id="ops-popup-form-err" class="opsp-summary-slot" aria-live="polite"></div>
+    </div>
+
+    <!--/* 预览（H6）：admin-ops-popup.js 点「预览」时按当前表单值填充；样式对齐 App OpsPopupDialog（4:5 图 + 右上关闭 + 标题 / 正文 + 满宽按钮）。 */-->
+    <div class="opsp-preview" data-opsp-preview hidden>
+        <div class="opsp-pv">
+            <div th:each="lang : ${ {'EN', 'ID'} }" class="opsp-pv-col">
+                <div class="opsp-phone" th:attr="data-opsp-phone=${lang}">
+                    <div class="opsp-card">
+                        <div class="opsp-card-im"><img alt="" data-pv-img hidden/><span class="opsp-card-x" aria-hidden="true">✕</span></div>
+                        <div class="opsp-card-tx"><b data-pv-title></b><span data-pv-body></span></div>
+                        <div class="opsp-card-bt" data-pv-button></div>
+                    </div>
+                </div>
+                <div class="opsp-pv-cap" th:text="${lang}">EN</div>
+            </div>
+        </div>
+        <p class="opsp-pv-note" th:text="#{admin.opsPopups.preview.note}">按 App 实际样式预览；App 按用户当前语言显示其中一种。</p>
+    </div>
+
+    <div class="sticky-footer opsp-foot">
+        <button type="button" class="btn btn-sm opsp-btn-gh opsp-foot-l" data-opsp-preview-open
+                th:text="#{admin.opsPopups.btn.preview}">预览</button>
+        <button type="button" class="btn opsp-btn-gh" data-drawer-close data-opsp-edit-only
+                th:text="#{admin.confirm.cancel}">取消</button>
+        <button type="submit" class="btn btn-primary" data-opsp-edit-only th:text="#{admin.common.save}">保存</button>
+        <button type="button" class="btn opsp-btn-gh" data-opsp-preview-close hidden
+                th:text="#{admin.opsPopups.btn.backToEdit}">返回编辑</button>
+    </div>
+</form>
+
+<!--/* 单个上传位（H3 / H5）：120×150 虚线框「＋ EN / ＋ ID」，选图即传（admin-ops-popup.js）；回填的是隐藏字段 objectKey。
+       超 1MB 不发请求、上传位变红「⚠ 超过 1MB」+ 提示行写明文件名与大小（服务端 /images 同样拦）。
+       lang = EN / ID（显示用）；field = 提交字段名；value = 已存值（objectKey 或 https）；url = 可显示的地址（拼不出为 null）。 */-->
+<div th:fragment="tile(lang, field, value, url)" class="opsp-up" data-opsp-upload
+     th:classappend="${url != null} ? 'has'"
+     th:attr="data-upload-url=@{/admin/ops-popups/images},
+              data-max-bytes=${maxImageBytes},
+              data-msg-too-large=#{admin.opsPopups.form.imageTooLarge('{0}', '{1}')},
+              data-msg-failed=#{admin.seed.upload.failed},
+              data-msg-expired=#{admin.seed.upload.sessionExpired},
+              data-lang=${lang}">
+    <input type="file" accept="image/jpeg,image/png,image/webp" data-opsp-file
+           th:attr="aria-label=${lang}"/>
+    <input type="hidden" th:name="${field}" th:value="${value}" data-opsp-key/>
+    <img alt="" data-opsp-img th:src="${url}" th:hidden="${url == null}"/>
+    <span class="opsp-up-ph" data-opsp-ph th:text="'＋ ' + ${lang}">＋ EN</span>
+    <span class="opsp-up-bad" th:text="#{admin.opsPopups.form.imageTooLargeTile}">超过 1MB</span>
+    <span class="opsp-up-busy" th:text="#{admin.seed.images.uploading}">上传中…</span>
+    <span class="opsp-up-tag" th:text="${lang}">EN</span>
+    <button type="button" class="opsp-up-del" data-opsp-del th:title="#{admin.seed.images.remove}">&times;</button>
+</div>
+
+<!--/* 422 汇总（H7）：主 swap = 汇总条；各槽红字 oob（没错的槽一并清空）。data-invalid = 要标红的输入名 / 容器名。 */-->
+<th:block th:fragment="errors">
+    <div class="opsp-summary" role="alert"
+         th:attr="data-invalid=${invalidInputs},data-codes=${#strings.listJoin(errorCodes, ',')}"
+         th:text="${summary}">还有 3 项需要修改，请检查标红的字段。</div>
+    <div th:each="e : ${errorSlots}" th:id="'opsp-err-' + ${e.key}" hx-swap-oob="innerHTML"><p
+            th:each="m : ${e.value}" th:text="${m}">请填写</p></div>
+</th:block>
+</body>
+</html>

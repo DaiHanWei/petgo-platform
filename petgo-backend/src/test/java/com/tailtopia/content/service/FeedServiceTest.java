@@ -37,6 +37,10 @@ class FeedServiceTest {
     private com.tailtopia.content.rank.FeedRecommendationService recommendations;
     private FeedService service;
 
+    /** V1.3.4 follow Story 2.1：卡片作者关注关系读端口。 */
+    private com.tailtopia.social.read.FollowReader followReader =
+            org.mockito.Mockito.mock(com.tailtopia.social.read.FollowReader.class);
+
     @BeforeEach
     void setUp() {
         posts = mock(ContentPostRepository.class);
@@ -62,7 +66,9 @@ class FeedServiceTest {
                 // （也因此**不会**多发查询 —— 批量聚合的用例计数不受影响）。
                 new com.tailtopia.mention.service.MentionViewService(
                         mock(com.tailtopia.auth.service.AccountQueryService.class),
-                        mock(com.tailtopia.social.read.UserHideRelationReader.class)));
+                        mock(com.tailtopia.social.read.UserHideRelationReader.class)),
+                // V1.3.4 follow Story 2.1：作者关注关系（整页一次批量）。
+                followReader);
         // 默认作者视图：返回非注销，nickname 由 id 推。
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);

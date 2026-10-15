@@ -77,6 +77,9 @@ public final class MilestoneAutoCompleteMap {
         put(t, MilestoneAutoEvent.FIRST_BIRTHDAY, "C-L1", "D-L1", "G-L1");
         put(t, MilestoneAutoEvent.COMPANION_100_DAYS, "C-L2", "D-L2", "G-L2");
         put(t, MilestoneAutoEvent.COMPANION_365_DAYS, "C-L3", "D-L3", "G-L3");
+        // V1.3.4 FR-126（AD-18）：清单末尾追加的两项，三物种都有节点。
+        put(t, MilestoneAutoEvent.PLACE_CHECKED_IN, "C-S17", "D-S17", "G-S10");
+        put(t, MilestoneAutoEvent.TAILSONALITY_UNLOCKED, "C-S18", "D-S18", "G-S11");
         return Map.copyOf(t);
     }
 

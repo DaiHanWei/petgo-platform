@@ -25,6 +25,7 @@
 /admin/content-tags/pick   # 内容标签的内容选择器
 /admin/user-tags/pick   # 用户标签的用户选择器
 /admin/seed-post/pets   # 种子发布的宠物选择器
+/admin/ops-notifications/new   # 系统通知发送的四步新建页（V1.3.4 AB-31），从列表「＋ 新建通知」进，侧栏仍归 /admin/ops-notifications；门 = ops_notify.send
 
 # ---- 🟠 真页面、故意不进目录（不是片段；每条都要单独说清为什么）----
 # ⚠️ 这一段与上面几段性质不同：它们**能独立打开、有自己的 @PreAuthorize**，

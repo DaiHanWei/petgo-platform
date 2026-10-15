@@ -5,10 +5,11 @@ import 'package:image/image.dart' as img;
 import 'package:tailtopia/features/content/domain/feed_image_layout.dart';
 import 'package:tailtopia/features/content/domain/image_crop.dart';
 
-/// V1.1.6 Story 3.5：发布端的裁剪判定与几何。
+/// V1.1.6 Story 3.5：发布端的超界判定。
 ///
-/// <p>守两件事：**什么图才该被打断**（免裁主路径不能被误伤），以及**裁下来的那块对不对**。
-/// 后者用算术断言 —— 靠肉眼看截图判断裁剪结果，错一两成都看不出来。
+/// <p>守**什么图才该被打断**（免裁主路径不能被误伤）。V1.3.4 Story 2.4 起不再物理裁剪，
+/// 原「裁剪矩形 / 真实字节裁剪」两组随旧物理裁剪 API 一并删除；
+/// 露出区域编排见 `publish_exposure_flow_test.dart`。
 Uint8List _jpeg(int w, int h) =>
     Uint8List.fromList(img.encodeJpg(img.Image(width: w, height: h), quality: 80));
 
@@ -53,64 +54,6 @@ void main() {
       expect(needsCrop((kFeedRatioMax * 1000).round(), 1000), isFalse);
       expect(needsCrop((kFeedRatioMin * 1000).round() - 5, 1000), isTrue);
       expect(needsCrop((kFeedRatioMax * 1000).round() + 5, 1000), isTrue);
-    });
-  });
-
-  group('AC2 裁剪矩形', () {
-    test('目标更宽 → 宽度铺满、上下裁', () {
-      // 1000×2000（0.5）裁成 1:1
-      final r = computeCropRect(width: 1000, height: 2000, targetAspect: 1.0);
-      expect(r.width, 1000);
-      expect(r.height, 1000);
-      expect(r.x, 0);
-      expect(r.y, 500, reason: '居中 → 上下各去掉 500');
-    });
-
-    test('目标更窄 → 高度铺满、左右裁', () {
-      // 2000×1000（2.0）裁成 4:5（0.8）
-      final r = computeCropRect(width: 2000, height: 1000, targetAspect: 4 / 5);
-      expect(r.height, 1000);
-      expect(r.width, 800);
-      expect(r.y, 0);
-      expect(r.x, 600, reason: '居中 → 左右各去掉 600');
-    });
-
-    test('比例正好相等 → 一个像素都不裁', () {
-      final r = computeCropRect(width: 1000, height: 1000, targetAspect: 1.0);
-      expect((r.x, r.y, r.width, r.height), (0, 0, 1000, 1000));
-    });
-
-    test('对齐值决定保留哪一块', () {
-      final top = computeCropRect(width: 1000, height: 2000, targetAspect: 1.0, alignY: 0);
-      final bottom = computeCropRect(width: 1000, height: 2000, targetAspect: 1.0, alignY: 1);
-      expect(top.y, 0);
-      expect(bottom.y, 1000);
-    });
-
-    test('对齐值越界被夹住，不会算出画面外的矩形', () {
-      final r = computeCropRect(width: 1000, height: 2000, targetAspect: 1.0, alignY: 9);
-      expect(r.y, 1000);
-      expect(r.y + r.height, lessThanOrEqualTo(2000));
-    });
-  });
-
-  group('AC2 真实字节裁剪', () {
-    test('裁完的图确实变成了目标比例', () {
-      final out = cropToAspect(_jpeg(1000, 2000), targetAspect: 1.0);
-      final size = imageSizeOf(out)!;
-      expect(size.w, size.h);
-    });
-
-    test('4:5 档裁出来就是 4:5', () {
-      final out = cropToAspect(_jpeg(2000, 1000), targetAspect: 4 / 5);
-      final size = imageSizeOf(out)!;
-      expect(size.w / size.h, closeTo(0.8, 0.01));
-    });
-
-    /// 解不开的字节不该把整个发布流程卡死。
-    test('解不开的字节原样放行', () {
-      final junk = Uint8List.fromList([1, 2, 3, 4]);
-      expect(cropToAspect(junk, targetAspect: 1.0), junk);
     });
   });
 

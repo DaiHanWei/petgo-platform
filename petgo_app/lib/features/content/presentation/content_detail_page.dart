@@ -4,6 +4,7 @@ import '../../../shared/media/image_lightbox.dart';
 import '../../../shared/utils/date_format.dart';
 import '../../mention/domain/mention_context.dart';
 import '../../mention/presentation/mention_text.dart';
+import '../../social/presentation/widgets/follow_button.dart';
 import '../../social/domain/account_action_entry.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../place/domain/checkin_place_ref.dart';
@@ -22,6 +23,7 @@ import '../../../core/theme/rounded.dart';
 import '../../../core/theme/spacing.dart';
 import '../../../core/theme/typography.dart';
 import '../../../features/auth/domain/auth_state.dart';
+import '../../../features/me/data/me_counts_provider.dart';
 import '../../../features/me/data/my_posts_repository.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/confirm_sheet.dart';
@@ -247,6 +249,7 @@ class _DetailScaffold extends ConsumerWidget {
                       _ImageCarousel(
                         urls: detail.imageUrls,
                         sizes: detail.imageSizes,
+                        cropOffsets: detail.imageCropOffsets,
                         viewportHeight: viewport.maxHeight,
                         decorationTags: detail.decorationTags,
                         // 前缀带上帖子 id：同一屏里不会有第二个同 tag 的 Hero。
@@ -366,7 +369,7 @@ class _DetailScaffold extends ConsumerWidget {
     final name = detail.authorDeleted ? l10n.feedDeletedUser : (detail.authorNickname ?? l10n.feedDeletedUser);
     // 映射单一来源：分享卡也用它（见 ContentTypeBadge 的注释）。
     final badge = ContentTypeBadge.of(detail.type, l10n);
-    final row = Row(
+    final identity = Row(
       children: [
         // 头像着色与列表卡片共用同一算法（LetterAvatar），保证同一用户两处颜色一致。
         LetterAvatar(
@@ -387,36 +390,72 @@ class _DetailScaffold extends ConsumerWidget {
                 nameStyle: AppTypography.body.copyWith(fontWeight: FontWeight.w700),
                 tags: detail.authorDeleted ? const [] : detail.authorTags,
               ),
-              Text(formatPublishTime(context, l10n, detail.createdAt),
-                  style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
+              // V1.3.4 follow Story 2.1 · AC6.1（UI 稿 C4）：分类徽章从作者行最右**移到时间右侧**，
+              // 最右位置换成关注按钮。徽章大小不变（T-17）。
+              // 时间优先完整显示（最多占满整行），徽章用剩下的宽度、放不下就省略（code-review 2.1 #4）。
+              LayoutBuilder(
+                builder: (context, c) => Row(
+                  children: [
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: (c.maxWidth - 6).clamp(0, double.infinity)),
+                      child: Text(formatPublishTime(context, l10n, detail.createdAt),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.caption.copyWith(color: AppColors.textTertiary)),
+                    ),
+                    const SizedBox(width: 6),
+                    // 分类彩徽章（窄屏放不下时文字省略，不撑破作者行）。
+                    Flexible(
+                      child: Container(
+                        key: const ValueKey('detailTypeBadge'),
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(color: badge.bg, borderRadius: BorderRadius.circular(7)),
+                        child: Text(badge.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: badge.fg)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        // 分类彩徽章。
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-          decoration: BoxDecoration(color: badge.bg, borderRadius: BorderRadius.circular(7)),
-          child: Text(badge.label,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: badge.fg)),
         ),
       ],
     );
     // 作者点击 → **完整主页**（V1.3.0 batch-b1 Story 2.1 · FR-118.1，此前是迷你卡）：
-    // 注销作者不可点（NFR-8）。
-    if (detail.authorDeleted) return row;
-    return GestureDetector(
-      key: const ValueKey('detailAuthorRow'),
-      onTap: () => openUserProfile(
-        context,
-        ref,
-        detail.authorId,
-        // 详情页拉黑 / 举报成功 → 该帖对本人已不可见（服务端返回 404），停在这一页只会看到一个空壳，
-        // 所以**先退回上一级列表**，再把他在列表里的卡片一并移除。举报侧一律静默。
-        onBlocked: onAuthorHidden(ref, detail.authorId, popContext: context),
-        onReported: onAuthorHidden(ref, detail.authorId, popContext: context),
-      ),
-      child: row,
+    // 注销作者不可点（NFR-8）。⚠️ 关注按钮在这个手势**之外**，点它不进主页。
+    final tappable = detail.authorDeleted
+        ? identity
+        : GestureDetector(
+            key: const ValueKey('detailAuthorRow'),
+            onTap: () => openUserProfile(
+              context,
+              ref,
+              detail.authorId,
+              // 详情页拉黑 / 举报成功 → 该帖对本人已不可见（服务端返回 404），停在这一页只会看到一个空壳，
+              // 所以**先退回上一级列表**，再把他在列表里的卡片一并移除。举报侧一律静默。
+              onBlocked: onAuthorHidden(ref, detail.authorId, popContext: context),
+              onReported: onAuthorHidden(ref, detail.authorId, popContext: context),
+            ),
+            child: identity,
+          );
+    return Row(
+      children: [
+        Expanded(child: tappable),
+        // V1.3.4 follow Story 2.1 · AC6（UI 稿 C4 / C5 / C6 / C7）：自己的帖子 / 已关注 / 已注销 / 封号不显示。
+        if (!detail.authorDeleted && !detail.isAuthor)
+          FollowButton(
+            userId: detail.authorId,
+            userToken: detail.authorToken,
+            initial: detail.authorFollowState,
+            snapshotEpoch: detail.followEpoch,
+            surfaceKey: 'detail:${detail.id}',
+            style: FollowButtonStyle.textInline,
+            source: 'content_detail',
+          ),
+      ],
     );
   }
 
@@ -456,8 +495,8 @@ class _DetailScaffold extends ConsumerWidget {
                   } else {
                     openReport(context, ref, detail.id, onReported: () {
                       // cm-6 §6.1：详情页举报成功 → pop 回列表（该帖对本人已不存在，后端详情 404）+ 提示。
-                      // 同步乐观移除 Feed 中的该卡片（若在列表；后端 §5.4 刷新亦已过滤）。
-                      ref.read(feedProvider.notifier).removeItem(detail.id);
+                      // 同步乐观移除 Feed（含 V1.3.4 关注流）中的该卡片（若在列表；后端 §5.4 刷新亦已过滤）。
+                      removeFeedPost(ref, detail.id);
                       if (context.mounted) {
                         showAppToast(context, l10n.reportHiddenToast);
                         Navigator.of(context).maybePop();
@@ -519,6 +558,7 @@ class _DetailScaffold extends ConsumerWidget {
       // Feed + me 页「我的发布」同步移除（重拉，软删帖 deleted_at 非空被过滤）。
       ref.invalidate(feedProvider);
       ref.invalidate(myPostsProvider);
+      ref.invalidate(meCountsProvider); // V1.3.4：我的页四格帖子数 / 获赞数随删帖变化
       // 成长日历帖还出现在档案/时间线/日历视图，删后一并刷新（否则那些页仍显旧帖直到重启）。
       if (detail.type == ContentType.growthMoment.wire) {
         ref.invalidate(timelineFirstPageProvider);
@@ -540,6 +580,7 @@ class _ImageCarousel extends StatefulWidget {
   const _ImageCarousel({
     required this.urls,
     required this.sizes,
+    required this.cropOffsets,
     required this.viewportHeight,
     required this.heroTagPrefix,
     this.decorationTags = const [],
@@ -553,6 +594,11 @@ class _ImageCarousel extends StatefulWidget {
 
   /// 与 [urls] 同序等长的原始宽高；测不出来 / 存量内容为 null（走占位兜底）。
   final List<ImageSize?> sizes;
+
+  /// 与 [urls] 同序的露出位置（V1.3.4 Story 2.2 · AD-6）；可短、可含 null（= 居中）。
+  ///
+  /// 与 Feed 卡同走 [feedImageAlignment]，同一帖点进来露出段一致。只换对齐、不碰比例。
+  final List<double?> cropOffsets;
 
   /// 滚动视口实际高度，喂给高度护栏（由详情页的 `LayoutBuilder` 量得）。
   final double viewportHeight;
@@ -573,6 +619,12 @@ class _ImageCarouselState extends State<_ImageCarousel> {
     _controller.dispose();
     super.dispose();
   }
+
+  ImageSize? _sizeAt(int i) =>
+      (i >= 0 && i < widget.sizes.length) ? widget.sizes[i] : null;
+
+  double? _offsetAt(int i) =>
+      (i >= 0 && i < widget.cropOffsets.length) ? widget.cropOffsets[i] : null;
 
   Future<void> _openLightbox(int index) async {
     // V1.3.0 Story 3.1：灯箱已上提为共享组件（`shared/media/image_lightbox.dart`），
@@ -607,7 +659,7 @@ class _ImageCarouselState extends State<_ImageCarousel> {
         // 通栏出血：**不再 ClipRRect 圆角**，图片两侧贴屏幕边（AC2）。
         // 圆角是「卡片」的语言，详情页的图不是卡片。
         AspectRatio(
-          // ① 实际比例 → ② clamp 0.75~1.34 闭区间 → ③ 高度护栏，
+          // ① 实际比例 → ② clamp 0.75~1.78 闭区间 → ③ 高度护栏，
           // 三步全在 resolveFeedImageAspect 里，与 Feed **同一个出口函数**（AC2）。
           // 详情页只负责把自己的护栏口径喂进去（见 detail_image_layout.dart）。
           aspectRatio: aspect,
@@ -626,6 +678,8 @@ class _ImageCarouselState extends State<_ImageCarousel> {
                     // 容器比例已按原图算好，cover 在比例相符时不裁切；
                     // 仅当某张与首图比例不同（多图混排）才裁，这是容器锁首图的必然代价。
                     fit: BoxFit.cover,
+                    // V1.3.4 2.2：按露出位置开窗，与 Feed 卡同一个函数（无 offset = 居中）。
+                    alignment: feedImageAlignment(_sizeAt(i), _offsetAt(i)),
                     thumbWidth: 1080, // 按手机全宽取缩略图（全屏放大走原图）
                     errorBuilder: (context, error, stack) =>
                         Container(color: AppColors.border),

@@ -48,6 +48,10 @@ class FeedBatchAggregationTest {
     private CommentRepository comments;
     private FeedService service;
 
+    /** V1.3.4 follow Story 2.1：卡片作者关注关系读端口。 */
+    private com.tailtopia.social.read.FollowReader followReader =
+            org.mockito.Mockito.mock(com.tailtopia.social.read.FollowReader.class);
+
     @BeforeEach
     void setUp() {
         posts = mock(ContentPostRepository.class);
@@ -68,7 +72,9 @@ class FeedBatchAggregationTest {
                 // （也因此**不会**多发查询 —— 批量聚合的用例计数不受影响）。
                 new com.tailtopia.mention.service.MentionViewService(
                         Mockito.mock(com.tailtopia.auth.service.AccountQueryService.class),
-                        Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class)));
+                        Mockito.mock(com.tailtopia.social.read.UserHideRelationReader.class)),
+                // V1.3.4 follow Story 2.1：作者关注关系（整页一次批量）。
+                followReader);
         when(accounts.findAuthorViews(anyList())).thenAnswer(inv -> {
             List<Long> ids = inv.getArgument(0);
             return ids.stream().distinct().collect(Collectors.toMap(
@@ -187,5 +193,96 @@ class FeedBatchAggregationTest {
                     .doesNotContain("displayheight")
                     .doesNotContain("clamped");
         }
+    }
+
+    // ===== V1.3.4 follow Story 2.1 · AC1.2 / AC1.3 =====
+
+    /** 一页 20 条（多个作者）：作者 token 与关注关系各只查一次，且按作者去重。 */
+    @Test
+    void followStatesQueriedOncePerPage() {
+        List<ContentPost> rows = new ArrayList<>();
+        for (int i = 1; i <= 20; i++) {
+            ContentPost p = ContentPost.publish(100L + (i % 4), ContentType.DAILY, null, "t" + i, null, null);
+            setId(p, (long) i);
+            rows.add(p);
+        }
+        when(posts.findFeed(any(), any(Boolean.class), any(Boolean.class), any(),
+                any(Boolean.class), any(), any(), any(Boolean.class), any(), any(Pageable.class)))
+                .thenReturn(rows);
+        when(accounts.publicTokensOf(anyList())).thenAnswer(inv -> {
+            java.util.Collection<Long> ids = inv.getArgument(0);
+            return ids.stream().collect(Collectors.toMap(id -> id, id -> "tok" + id));
+        });
+        when(followReader.followStates(anyLong(), anyList())).thenReturn(java.util.Map.of(
+                101L, new com.tailtopia.social.read.FollowState(true, false),
+                102L, new com.tailtopia.social.read.FollowState(false, true)));
+
+        FeedPageResponse page = service.loadFeed("DAILY", null, 99L, null);
+
+        verify(accounts, times(1)).publicTokensOf(anyList());
+        verify(followReader, times(1)).followStates(org.mockito.ArgumentMatchers.eq(99L), anyList());
+        verify(followReader, never()).followState(anyLong(), anyLong());
+        assertThat(page.items()).allSatisfy(item -> {
+            assertThat(item.authorToken()).isEqualTo("tok" + item.authorId());
+            assertThat(item.authorFollowState()).isNotNull();
+        });
+        assertThat(page.items()).filteredOn(i -> i.authorId() == 101L)
+                .allSatisfy(i -> assertThat(i.authorFollowState().iFollow()).isTrue());
+        assertThat(page.items()).filteredOn(i -> i.authorId() == 103L)
+                .allSatisfy(i -> assertThat(i.authorFollowState())
+                        .isEqualTo(com.tailtopia.social.read.FollowState.NONE));
+    }
+
+    /** 游客：不查关注关系，恒 false；空页：两个查询都不发。 */
+    @Test
+    void guestAndEmptyPageSkipFollowQueries() {
+        stubPage(5);
+        when(accounts.publicTokensOf(anyList())).thenReturn(java.util.Map.of(7L, "tok7"));
+
+        FeedPageResponse page = service.loadFeed("DAILY", null, null, null);
+
+        verify(followReader, never()).followStates(anyLong(), anyList());
+        assertThat(page.items()).allSatisfy(i -> assertThat(i.authorFollowState())
+                .isEqualTo(com.tailtopia.social.read.FollowState.NONE));
+
+        org.mockito.Mockito.clearInvocations(followReader);
+        stubPage(0);
+        service.loadFeed("DAILY", null, 99L, null);
+        verify(followReader, never()).followStates(anyLong(), anyList());
+    }
+
+    /** 本人的帖子（含本人待审帖）与封号 / 注销作者（无 token）不查关注关系、不下发 token（D-8）。 */
+    @Test
+    void selfAndInactiveAuthorsGetNoFollowLookup() {
+        stubPage(3); // 作者恒为 7
+        when(accounts.publicTokensOf(anyList())).thenReturn(java.util.Map.of());
+
+        FeedPageResponse page = service.loadFeed("DAILY", null, 99L, null);
+        verify(followReader, never()).followStates(anyLong(), anyList());
+        assertThat(page.items()).allSatisfy(i -> assertThat(i.authorToken()).isNull());
+
+        when(accounts.publicTokensOf(anyList())).thenReturn(java.util.Map.of(7L, "tok7"));
+        page = service.loadFeed("DAILY", null, 7L, null);
+        verify(followReader, never()).followStates(anyLong(), anyList());
+        assertThat(page.items()).allSatisfy(i -> assertThat(i.authorFollowState())
+                .isEqualTo(com.tailtopia.social.read.FollowState.NONE));
+    }
+
+    /** 「我的发布」不展示关注按钮：token / 关注关系都不查、不下发。 */
+    @Test
+    void myPostsCarryNoFollowFields() {
+        List<ContentPost> rows = new ArrayList<>();
+        ContentPost p = ContentPost.publish(7L, ContentType.DAILY, null, "t", null, null);
+        setId(p, 1L);
+        rows.add(p);
+        when(posts.findMyPosts(anyLong(), any(Boolean.class), any(), any(), any(Pageable.class)))
+                .thenReturn(rows);
+
+        FeedPageResponse page = service.myPosts(7L, null);
+
+        verify(accounts, never()).publicTokensOf(anyList());
+        verify(followReader, never()).followStates(anyLong(), anyList());
+        assertThat(page.items().get(0).authorToken()).isNull();
+        assertThat(page.items().get(0).authorFollowState()).isNull();
     }
 }

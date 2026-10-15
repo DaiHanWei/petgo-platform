@@ -194,7 +194,7 @@ Tab 切换走 `goBranch` 不触发它，但**冷启动落地是 `ctx.go()`、是
 | T-11 | `diary_view_mode_switched` | Diary 在时间线 ⇄ 日历之间切换 | `to_view`（timeline/calendar） | `growth_archive_page.dart` |
 | T-12 | `milestone_achieved` | 里程碑达成（**后端上报**） | `code`、`level`、`path` | `MilestoneAnalyticsListener.java` |
 | T-13 | `login_guide_hard_dialog_shown` / `..._login_tapped` | 强登录弹窗：曝光 / 点了登录（2026-08-31 补，此前这条链路零埋点 → 漏斗上表现为下一个事件直接跳 `af_complete_registration`） | `entry_source`；后者另带 `method`（google/apple） | `login_guide_controller.dart` |
-| T-14 | `login_guide_entry_blocked` | 游客点了受控入口、被门控拦下（点击**意图**，与 onAllowed 里的浏览埋点相反，记在门控之外） | `entry`（tab_me / publish_add） | `app_shell.dart` |
+| T-14 | `login_guide_entry_blocked` | 游客点了受控入口、被门控拦下（点击**意图**，与 onAllowed 里的浏览埋点相反，记在门控之外） | `entry`（tab_me / publish_add / `ops_target`：运营弹窗·运营通知跳需登录页面，V1.3.4 Story 5.2） | `app_shell.dart` / `open_ops_target.dart` |
 
 属性取值词表：
 
@@ -204,7 +204,8 @@ Tab 切换走 `goBranch` 不触发它，但**冷启动落地是 `ctx.go()`、是
 - `source`（T-4）：`bottom_sticky_cta`（底部常驻主按钮）/ `timeline_item`（示例时间线条目与金徽章）/
   `demo_detail_interaction`（示例详情页点赞·评论·举报）/ `header_entry`（页头四个入口）
 - `entry_source`（T-7 / T-13）：`diary_cta`（游客态 Diary 引导）/ `social_soft_login`（软登录浮层）/
-  `login_page`（登录页直登）/ `tab_me`（底栏受控 Tab，2026-08-31 起）/ `publish_add`（底栏「＋」发布，同）/ `other`
+  `login_page`（登录页直登）/ `tab_me`（底栏受控 Tab，2026-08-31 起）/ `publish_add`（底栏「＋」发布，同）/
+  `ops_target`（运营弹窗 / 运营通知跳 KNOW_YOUR_PET·HEALTH·PUBLISH 时被拦，V1.3.4 Story 5.2 起）/ `other`
   ⚠️ `other` 的构成在 2026-08-31 之后**收窄**：底栏受控 Tab 与「＋」已改传显式值，
   剩下落在 `other` 档的主要是 401 续期失败的强弹窗与其余未标注入口。
   **改动日期前后的 `other` 占比不可直接对比**（老数据里它还包含 tab_me / publish_add）。
@@ -506,9 +507,9 @@ social_user_hide_submitted       {origin: REPORT, entry: report_flow}
 | E-5 | `phone_prompt_responded` | — | **`action`**: submitted/skipped/**dismissed** | 同上 |
 | E-6 | `me_phone_save_succeeded` | `phone_saved` | **`entry`**、`is_first_time` | `phone_edit_sheet.dart` |
 | E-7 | `me_phone_save_error_shown` | `phone_save_failed` | `entry` | 同上 |
-| E-8 | `publish_image_crop_shown` | `publish_image_crop_required` | **`original_ratio`**、`batch_size` | `image_crop.dart` |
-| E-9 | `publish_image_crop_completed` | `publish_image_crop_confirmed` | **`target_ratio`**、`is_batch_lock_source` | 同上 |
-| E-10 | `publish_image_crop_exit_tapped` | `publish_image_crop_abandoned` | `original_ratio` | `publish_crop_page.dart` |
+| E-8 | `publish_image_crop_shown` | `publish_image_crop_required` | **`original_ratio`**、`batch_size` | `image_exposure.dart` |
+| E-9 | `publish_image_crop_completed` | `publish_image_crop_confirmed` | **`target_ratio`**（0x75 / 1x78）、`adjusted`（V1.3.4 口径变更：原 1x1/4x5/3x4 + `is_batch_lock_source`，按发版日切分） | `image_exposure.dart` |
+| E-10 | `publish_image_crop_exit_tapped` | `publish_image_crop_abandoned` | `original_ratio` | `publish_exposure_page.dart` |
 | E-11 | `post_share_card_tapped` | — | `content_type`、**`is_private_diary`**、`has_image` | `content_detail_page.dart` |
 | E-12 | `post_share_card_generated` | — | `template`、`size`、**`duration_ms`** | `share_card_preview_page.dart` |
 | E-13 | `post_share_card_sent` | （旧名 `..._share_completed` 已废） | `channel` | 同上（**系统回调之后**） |
@@ -713,7 +714,7 @@ App 对 5xx **不报**：网关失败服务端已报 `GATEWAY_DECLINED`，再报
 | 事件 | 变更 |
 |---|---|
 | `passport_card_shared` | 新增 `card_type`：`page`（护照卡，仍带 `stamp_count`）/ `boarding`（登机牌卡，**不再带** `stamp_count`）。触发时机不变：系统分享面板回调成功才报 |
-| `lightbox_opened` / `lightbox_dismissed` | `source` 新增取值 `tailsonality_result`（Tailsonality 结果页点开大图）；原有 `place_detail` / `content_detail` 不变 |
+| `lightbox_opened` / `lightbox_dismissed` | `source` 新增取值 `tailsonality_result`（Tailsonality 结果页点开大图）、`publish_compose`（发帖页点缩略图看大图，V1.3.4 FR-139）；原有 `place_detail` / `content_detail` 不变 |
 
 ### 12.3 看数注意
 
@@ -721,3 +722,51 @@ App 对 5xx **不报**：网关失败服务端已报 `GATEWAY_DECLINED`，再报
 - 分享率可用 `*_card_shared ÷ keepsake_card_generated`（同 `card_type`）；出图后取消分享不计 `_shared`。
 - 服务端两个 `*_unlocked` 依赖 `POSTHOG_SERVER_KEY`（同 §11.3）。
 - staging 数据按 App Version 带 `-stag` 后缀筛除 / 筛选。
+
+## 13. V1.3.4 新增埋点（app 主题 · 2026-10-12）
+
+> 完整口径以 `_bmad-output/planning-artifacts/v1.3.4/PRD-v1.3.4-app.md` §4 与 `决策日志-app.md`（D-24 / D-25）为准。
+> 所有事件都**不带**文案、图片 URL、用户信息；运营弹窗标识只用 `public_token`。
+
+### 13.1 运营弹窗（FR-137 · Story 5.4）
+
+| 事件 | 上报端 | 触发点 | 属性 |
+|---|---|---|---|
+| `ops_popup_shown` | App | 弹窗**首帧显示后**报一次（图片预加载失败 / 判定中止都不报，也不计频次） | `popup_id` = 候选的 `token`（即 `ops_popups.public_token`，D-24） |
+| `ops_popup_tapped` | App | 点按钮（无论目标是否有效）或点图片（仅目标有效时图片可点）；弹窗关闭后上报，跳转在其后 | `popup_id` |
+| `ops_popup_closed` | App | 点 ✕ 或系统返回键关闭（点遮罩不关、不报） | `popup_id` |
+
+- 模块前缀 `ops_`（运营触达：弹窗 + 运营通知）与动作后缀 `_closed` 为本版本新增，已登记
+  `petgo_app/test/analytics/v112_events_test.dart`。`_closed` 与 `_dismissed` 区分：运营弹窗关闭是中性结果，
+  看板按 shown / tapped / closed 三分。
+- 点击率 = `ops_popup_tapped ÷ ops_popup_shown`（同 `popup_id`）。登录用户另有服务端曝光记录
+  （`ops_popup_impressions`），游客只有 App 埋点，两者口径不同，不要直接相减。
+- 代码：`petgo_app/lib/features/ops/presentation/ops_popup_coordinator.dart`。
+
+### 13.2 版本更新（FR-124 · Story 3.2 / 3.3 / 3.4 · D-25）
+
+| 事件 | 上报端 | 触发点 | 属性 |
+|---|---|---|---|
+| `app_update_prompt_shown` | App | 更新提示出现：强制更新弹窗 / 推荐更新弹窗（设置页手动检查）/ 首页推荐横幅 | `decision`：`force` / `recommend`；`surface`：`dialog` / `banner` |
+| `app_update_go_store_tapped` | App | 点「Perbarui sekarang」跳商店（弹窗或横幅） | 同上 |
+| `app_update_later_tapped` | App | 推荐更新点「Nanti」（弹窗或横幅关闭；强制更新没有此出口） | 同上（`decision` 恒为 `recommend`） |
+
+- D-25：三个事件**都带** `decision`（PRD §4 只给了 `prompt_shown`，取 AD-11 超集）。
+- 代码：`petgo_app/lib/features/notify/presentation/app_update_presenter.dart`、`app_update_banner.dart`；
+  行为级断言 `petgo_app/test/analytics/v134_app_update_events_test.dart`。
+
+### 13.3 运营通知（FR-138 · Story 6.3）
+
+| 事件 | 上报端 | 触发点 | 属性 |
+|---|---|---|---|
+| `ops_notification_opened` | App | ① 点系统推送（`OPS_ANNOUNCEMENT`）打开 App；② 在通知中心点运营通知那一行（跳转目标为 NONE 也报） | `campaign_id` = 通知行 `targetRef`（即活动 `public_token`，D-24）；`source`：`push` / `notification_center` |
+
+- 空 `targetRef` 不报（理论上不会出现）。不带文案、目标值、用户信息。
+- 一次「点推送 → 在通知中心再点该条」会上报**两条**（`source` 分别为 `push` / `notification_center`），
+  按 PRD §4「从推送或通知中心打开均上报」；看板算打开人数时按 `campaign_id` + 用户去重。
+- 通知中心那次点击仍照常报既有 `app_notification_item_tapped`（`notif_type = ops_announcement`）。
+- 推送点击落点不变（2026-08-07 规则：先落通知中心并标已读，再点才跳目标）。
+- 属性名 `campaign_id` 已登记 `petgo_app/test/analytics/v112_events_test.dart`（前缀 `ops_` / 后缀 `_opened` 已在表内）。
+- 代码：`petgo_app/lib/features/notify/presentation/notification_center_page.dart`（`_onTap`）、
+  `petgo_app/lib/core/push/push_service.dart`（`reportOpsNotificationOpenedFromPush`）；
+  行为级断言 `petgo_app/test/notify/ops_notification_test.dart`。

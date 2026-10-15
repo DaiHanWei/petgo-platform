@@ -78,6 +78,17 @@ class AdminUserPurchasesIntegrationTest extends ApiIntegrationTest {
                 Long.class, userId, serial, unlocked);
     }
 
+    /**
+     * V1.3.4 ktp：指定卡种 / 配色 / 身份码的已解锁卡（CHECK：仅学生卡带配色）。
+     * 身份码用 TX 前缀：发号器只出 TT 号，直插的号不会与别的用例经接口发出的号撞（绕过归属表登记，否则污染
+     * CardNumberOwnershipIntegrationTest 的全库护栏）。
+     */
+    private long typedCard(long userId, long serial, String cardType, String cardVariant, String cardNo) {
+        return jdbc.queryForObject("INSERT INTO id_cards (user_id, serial_id, name, hd_unlocked, card_type, card_variant, card_no) "
+                        + "VALUES (?, ?, 'Mochi', true, ?, ?, ?) RETURNING id",
+                Long.class, userId, serial, cardType, cardVariant, cardNo);
+    }
+
     private void hdPurchase(long userId, long cardId, String channel, Long intentId, Instant at) {
         jdbc.update("INSERT INTO id_card_hd_purchases (user_id, card_id, pay_channel, payment_intent_id, purchased_at) VALUES (?, ?, ?, ?, ?)",
                 userId, cardId, channel, intentId, Timestamp.from(at));
@@ -179,6 +190,43 @@ class AdminUserPurchasesIntegrationTest extends ApiIntegrationTest {
         assertThat(panel).as("只读：不得出现任何按钮 / 表单").doesNotContain("<button").doesNotContain("<form");
 
         assertThat(drawer(nobody.getId())).contains("该用户还没有任何已购解锁");
+    }
+
+    /**
+     * V1.3.4 ktp D-6：购买记录按「{卡种名} · No. {编号} · {宠物名}」显示 —— 护照显示「护照」而不是「KTP」，
+     * 学生卡显示配色名，V95 前无身份码的老卡显示流水号补零。
+     */
+    @Test
+    void ktpRowsShowCardStyleNameAndNumber() throws Exception {
+        User u = newUser();
+        long base = 8_000_000L + SEQ.incrementAndGet() % 1_000_000;
+        long passport = typedCard(u.getId(), base, "PASSPORT", null, "TX600324020001");
+        hdPurchase(u.getId(), passport, "PAWCOIN", null, T0);
+        long student = typedCard(u.getId(), base + 1, "STUDENT", "CERIA", "TX600324020002");
+        hdPurchase(u.getId(), student, "PAWCOIN", null, T0.plus(1, ChronoUnit.HOURS));
+        long sim = typedCard(u.getId(), base + 2, "SIM", null, "TX600324020003");
+        hdPurchase(u.getId(), sim, "PAWCOIN", null, T0.plus(2, ChronoUnit.HOURS));
+        // V95 前老卡：无身份码，流水号补零到 4 位（如 42 → 0042）。流水号取库里空闲的 1–999（保留补零断言）——
+        // 写死 42 会和同库其他测试建的卡撞 uq_id_cards_serial（CI 全量跑时稳定复现）。
+        long legacySerial = jdbc.queryForObject("SELECT s FROM generate_series(1, 999) s "
+                + "WHERE NOT EXISTS (SELECT 1 FROM id_cards c WHERE c.serial_id = s) LIMIT 1", Long.class);
+        String legacyNo = String.format("%04d", legacySerial);
+        long legacy = jdbc.queryForObject("INSERT INTO id_cards (user_id, serial_id, name, hd_unlocked) "
+                + "VALUES (?, ?, 'Mochi', true) RETURNING id", Long.class, u.getId(), legacySerial);
+        hdPurchase(u.getId(), legacy, "PAWCOIN", null, T0.plus(3, ChronoUnit.HOURS));
+
+        UserPurchasesView v = query.forUser(u.getId());
+        assertThat(v.ktpCards()).extracting(UserPurchasesView.KtpCard::styleKey)
+                .containsExactly("KTP", "SIM", "STUDENT.CERIA", "PASSPORT");
+        assertThat(v.ktpCards()).extracting(UserPurchasesView.KtpCard::displayNo)
+                .containsExactly(legacyNo, "TX600324020003", "TX600324020002", "TX600324020001");
+
+        String html = drawer(u.getId());
+        assertThat(html).contains("护照 · No. TX600324020001 · Mochi")
+                .contains("学生卡 Ceria · No. TX600324020002 · Mochi")
+                .contains("SIM 驾照 · No. TX600324020003 · Mochi")
+                .contains("KTP · No. " + legacyNo + " · Mochi")
+                .doesNotContain("KTP #");
     }
 
     private String drawer(long userId) throws Exception {

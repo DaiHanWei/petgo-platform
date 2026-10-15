@@ -11,9 +11,12 @@ import 'package:tailtopia/features/keepsake/data/keepsake_repository.dart';
 import 'package:tailtopia/features/keepsake/domain/keepsake_pricing.dart';
 import 'package:tailtopia/features/keepsake/domain/keepsake_purchase_result.dart';
 import 'package:tailtopia/features/pawcoin/presentation/pawcoin_controller.dart';
+import 'package:tailtopia/features/profile/data/milestone_repository.dart';
 import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/domain/id_card.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
+import 'package:tailtopia/features/profile/presentation/milestone_instant_celebration.dart';
+import 'package:tailtopia/features/profile/presentation/widgets/milestone_badge.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_owner_type_repository.dart';
 import 'package:tailtopia/features/tailsonality/data/tailsonality_repository.dart';
 import 'package:tailtopia/features/tailsonality/domain/tailsonality_result.dart';
@@ -22,6 +25,8 @@ import 'package:tailtopia/features/tailsonality/presentation/widgets/ts_locked_a
 import 'package:tailtopia/features/tailsonality/presentation/widgets/ts_unlocked_analysis.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 import 'package:tailtopia/shared/card_render/card_watermark.dart';
+
+import '../profile/milestone_instant_fakes.dart';
 
 /// V1.3.2 Story 3.2 · L0：锁态购买入口（AC4）、已解锁付费区（AC5）、挽留弹窗（AC7）、App 埋点（AC8）。
 void main() {
@@ -56,6 +61,8 @@ void main() {
     int balance = 20000,
     _Repo? repo,
     Future<PawCoinState> Function()? paw,
+    MilestoneRepository? milestones,
+    List<Duration> pollDelays = const [],
   }) async {
     tester.view.physicalSize = const Size(420, 2400);
     tester.view.devicePixelRatio = 1.0;
@@ -72,6 +79,9 @@ void main() {
         tailsonalityRepositoryProvider.overrideWithValue(r),
         keepsakePricingProvider.overrideWith((ref) => (price ?? () async => pricing)()),
         pawCoinProvider.overrideWith(() => _Paw(balance, paw)),
+        // V1.3.4 Story 4.3：解锁成功后会检测当场庆祝；默认 const [] = 不检测（免真实网络与挂起计时器）。
+        milestoneInstantPollDelaysProvider.overrideWithValue(pollDelays),
+        if (milestones != null) milestoneRepositoryProvider.overrideWithValue(milestones),
       ],
       child: MaterialApp(
         locale: const Locale('id'),
@@ -172,6 +182,43 @@ void main() {
       expect(find.text('PawCoin tidak cukup. Silakan isi ulang dulu.'), findsNothing);
       expect(find.text('Hasil sudah kebuka!'), findsNothing);
       expect(find.byType(TsUnlockedAnalysis), findsOneWidget);
+    });
+
+    // V1.3.4 Story 4.3 · AC2.1：unlocked → 检测「性格测试」里程碑并当场庆祝；alreadyUnlocked → 不检测。
+    testWidgets('Story 4.3：解锁成功 + C-S18 已完成未庆祝 → 结果页上当场弹庆祝，关闭回结果页', (tester) async {
+      MilestoneBadgeAssets.debugOverride = const {};
+      addTearDown(() => MilestoneBadgeAssets.debugOverride = null);
+      final ms = ScriptedMilestoneRepository([instantMilestoneList('C-S18', completed: true)]);
+      await pumpPage(tester, milestones: ms, pollDelays: const [Duration.zero]);
+      await tester.tap(find.byKey(const ValueKey('tsUnlockCta')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('tsPayConfirm')));
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(ms.calls, 1);
+      expect(find.byKey(const ValueKey('milestoneCelebration')), findsOneWidget);
+      expect(find.text('Momo sudah kenal dirinya! 🔮'), findsOneWidget);
+      tester.widget<IconButton>(find.byKey(const ValueKey('milestoneCelebrationClose'))).onPressed!();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('milestoneCelebration')), findsNothing);
+      expect(find.byType(TsUnlockedAnalysis), findsOneWidget);
+      expect(ms.reported, [
+        ['C-S18']
+      ]);
+    });
+
+    testWidgets('Story 4.3：409 keepsake-already-unlocked（alreadyUnlocked）→ 不检测里程碑', (tester) async {
+      final repo = _Repo(result())..error = _problem(409, 'keepsake-already-unlocked');
+      final ms = ScriptedMilestoneRepository([instantMilestoneList('C-S18', completed: true)]);
+      await pumpPage(tester, repo: repo, milestones: ms, pollDelays: const [Duration.zero]);
+      await tester.tap(find.byKey(const ValueKey('tsUnlockCta')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('tsPayConfirm')));
+      await tester.pumpAndSettle();
+      expect(find.byType(TsUnlockedAnalysis), findsOneWidget);
+      expect(ms.calls, 0);
+      expect(find.byKey(const ValueKey('milestoneCelebration')), findsNothing);
     });
 
     testWidgets('409 pawcoin-insufficient → 余额不足文案，保持锁态', (tester) async {

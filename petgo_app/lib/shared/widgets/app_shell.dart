@@ -14,9 +14,14 @@ import '../../features/auth/domain/user_state.dart';
 import '../../features/content/domain/home_refresh_provider.dart';
 import '../../features/content/domain/content_type.dart';
 import '../../features/content/presentation/feed_controller.dart';
+import '../../features/content/presentation/following_feed_controller.dart';
+import '../../features/content/presentation/social_tab.dart';
+import '../../features/social/data/following_strip_repository.dart';
+import '../../features/me/data/me_counts_provider.dart';
 import '../../features/profile/data/timeline_repository.dart';
 import '../../features/profile/domain/profile_tab_entered_provider.dart';
 import '../../features/content/presentation/publish_compose_page.dart';
+import '../../features/ops/presentation/ops_popup_coordinator.dart';
 import 'bottom_tab_bar.dart';
 
 /// **免门控 Tab 白名单**（Story 1.1 去索引化 · Story 2.4 放行 Diary）。
@@ -58,6 +63,20 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
     duration: AppMotion.tabFade,
     value: 1,
   );
+
+  @override
+  void initState() {
+    super.initState();
+    // V1.3.4 Story 5.4：冷启动运营弹窗协调器挂到路由上（attach 幂等）。
+    // 协调器第一步就等启动链结束（StartupPopupLedger.startupChainDone），widget 测试里永不放行。
+    // router 取承载本外壳的那个 GoRouter（生产即 routerProvider 的实例），不另建。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final router = GoRouter.maybeOf(context);
+      if (router == null) return;
+      ref.read(opsPopupCoordinatorProvider).attach(router, ref: ref);
+    });
+  }
 
   @override
   void didUpdateWidget(covariant AppShell oldWidget) {
@@ -129,6 +148,14 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
           ref.read(homeScrollTopProvider.notifier).bump();
         }
         ref.read(feedProvider.notifier).refresh();
+        // V1.3.4 following 流：停在 Following 页签时关注流同样重取（spec §2.4「下次进入时才出现」）。
+        // 判 exists：没进过 Following 不为此去建关注流。
+        if (ref.read(authControllerProvider).isLoggedIn &&
+            ref.read(socialTabProvider) == SocialTab.following &&
+            ref.exists(followingFeedProvider)) {
+          ref.invalidate(followingStripProvider);
+          ref.read(followingFeedProvider.notifier).refresh();
+        }
       }
       return;
     }
@@ -147,6 +174,11 @@ class _AppShellState extends ConsumerState<AppShell> with SingleTickerProviderSt
           _reportTabEntered(from, tab);
         }
         _goBranch(index);
+        if (tab == AppTab.me) {
+          // V1.3.4 follow Story 1.4（T-15）：切到「Saya」即重取 `/me` —— 别人关注我、我在别处
+          // 关注 / 取关后，四格的关注 / 粉丝数才跟得上（MePage 常驻 IndexedStack，不会自己重建）。
+          ref.invalidate(meCountsProvider);
+        }
       },
     );
     // **点击意图**埋点与浏览相反，必须在门控**之外**记：被拦下时「用户想进这里」这件事

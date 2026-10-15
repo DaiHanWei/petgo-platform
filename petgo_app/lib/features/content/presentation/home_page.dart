@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/route_intent.dart';
@@ -9,6 +8,7 @@ import '../../../features/auth/domain/auth_guard.dart';
 import '../../../features/auth/domain/auth_state.dart';
 import '../../../features/auth/domain/login_guide_controller.dart';
 import '../../../features/notify/presentation/notification_bell.dart';
+import '../../notify/presentation/app_update_banner.dart';
 import '../../../features/place/presentation/place_entry_row.dart';
 import '../../profile/data/pet_recommendation_repository.dart';
 import '../../profile/presentation/widgets/pet_recommendation_strip.dart';
@@ -16,15 +16,21 @@ import '../../../l10n/app_localizations.dart';
 import '../../../shared/widgets/empty_state.dart';
 import '../../social/domain/account_action_entry.dart';
 import '../../user_profile/presentation/public_profile_page.dart';
+import '../domain/feed_focus.dart';
 import '../domain/feed_item.dart';
 import 'author_moderation_callbacks.dart';
 import 'feed_controller.dart';
 import 'feed_skeleton.dart';
 import 'feed_tab_row.dart';
 import 'feed_view.dart';
+import '../../social/data/following_strip_repository.dart';
+import '../domain/home_refresh_provider.dart';
+import 'following_feed_controller.dart';
+import 'following_tab_view.dart';
 import 'promo_target.dart';
 import 'publish_compose_page.dart';
 import 'report_sheet.dart';
+import 'social_tab.dart';
 import '../../notify/data/notification_repository.dart';
 
 /// 首页 Beranda（TailTopia Prototype 全面换肤）。
@@ -43,8 +49,15 @@ class HomePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final auth = ref.watch(authControllerProvider);
-    final selectedCategory = ref.watch(feedCategoryProvider);
-    final feedAsync = ref.watch(feedProvider);
+    // V1.3.4 following 流：顶部 Discover / Following 页签。游客恒按 Discover 渲染
+    // （登出时状态可能还停在 following —— 关注流接口只对登录用户开放，游客绝不能去请求它）。
+    final selectedTab = ref.watch(socialTabProvider);
+    final tab = auth.isLoggedIn ? selectedTab : SocialTab.discover;
+
+    // 登出 → 页签复位 Discover（不报埋点），下个账号登录后从默认页签开始。
+    ref.listen<bool>(authControllerProvider.select((s) => s.isLoggedIn), (prev, next) {
+      if (prev == true && !next) ref.read(socialTabProvider.notifier).reset();
+    });
 
     // FR-0B：游客浏览至第 3 页 → 软性登录浮层（控制器内部 session 去重）。
     ref.listen<AsyncValue<FeedState>>(feedProvider, (prev, next) {
@@ -63,12 +76,11 @@ class HomePage extends ConsumerWidget {
         backgroundColor: AppColors.cream,
         scrolledUnderElevation: 0,
         titleSpacing: 20,
-        // 左上角品牌标：Tailtopia wordmark。源 logo.svg(Adobe 多图层导出)经 svgo 清洗——
-        // 去 display:none 隐藏层 + 内联样式转属性 + viewBox 裁到文字区，得 flutter_svg 可渲的干净 SVG。
-        title: SvgPicture.asset(
-          'assets/brand/logo.svg',
-          height: 28,
-          semanticsLabel: l10n.appTitle,
+        // V1.3.4 following 流（spec §2.1 · UI 稿 A2/A3）：左上角品牌标换成 Discover / Following 页签；
+        // 右侧通知铃 / 游客「Masuk」一处不改。
+        title: SocialTabBar(
+          selected: tab,
+          onSelected: (t) => _selectTab(context, ref, t),
         ),
         actions: [
           if (auth.isLoggedIn)
@@ -110,8 +122,46 @@ class HomePage extends ConsumerWidget {
       body: SafeArea(
         top: false,
         bottom: false,
-        child: _content(context, ref, l10n, feedAsync, selectedCategory),
+        // Discover 分支与改动前一致；Following 只在登录态挂（上面已按登录态折算）。
+        child: tab == SocialTab.following
+            ? const FollowingTabView()
+            : _content(context, ref, l10n, ref.watch(feedProvider), ref.watch(feedCategoryProvider)),
       ),
+    );
+  }
+
+  /// 切页签。游客点 Following → 拉起登录（与游客点关注按钮一致），页签**不切**；
+  /// 登录成功后落到 Following（pendingAction 的命令式回调；新用户先走引导，同既有受控入口）。
+  /// 每次切进 Following 都重取一次（spec §2.4「下次进入时才出现」）。
+  void _selectTab(BuildContext context, WidgetRef ref, SocialTab target) {
+    if (target == SocialTab.discover) {
+      ref.read(socialTabProvider.notifier).select(SocialTab.discover);
+      return;
+    }
+    // 🔴 回调走 container：登录弹窗关闭后才执行，WidgetRef 不保证还可用。
+    final container = ProviderScope.containerOf(context, listen: false);
+    void enterFollowing() {
+      if (container.read(socialTabProvider) == SocialTab.following) {
+        // 已在 Following 再点页签 → 回顶 + 刷新（与 Discover 重点击一致）。
+        container.read(homeScrollTopProvider.notifier).bump();
+        container.invalidate(followingStripProvider);
+        if (container.exists(followingFeedProvider)) {
+          container.read(followingFeedProvider.notifier).refresh();
+        }
+        return;
+      }
+      if (container.exists(followingFeedProvider)) {
+        container.read(followingFeedProvider.notifier).refresh();
+      }
+      container.read(socialTabProvider.notifier).select(SocialTab.following);
+    }
+
+    requireLogin(
+      ref,
+      context,
+      entrySource: 'following_tab',
+      pendingAction: RouteIntent(onResume: enterFollowing),
+      onAllowed: enterFollowing,
     );
   }
 
@@ -189,16 +239,24 @@ class HomePage extends ConsumerWidget {
             onRefresh: () => ref.read(feedProvider.notifier).refresh(),
           );
         }
+        final pinnedAsync = ref.watch(pinnedSlotProvider);
         // 访客登录引导卡已下线（不再显示登录/注册按钮）；游客与登录态一致自动翻页浏览。
         return FeedMasonryView(
           header: header,
+          // bug 20261012-586：发布成功页「去 Feed 看」→ 定位刚发的帖。
+          // 🔴 首屏与顶置**都到手**才传：刷新中拿的是旧列表（会误判「没有」提前放弃）；
+          //    顶置晚到会把卡片整体往下推，先滚过去就白滚了。
+          focusItemId: feedAsync.isLoading || pinnedAsync.isLoading
+              ? null
+              : ref.watch(pendingFeedFocusProvider),
+          onFocusHandled: () => ref.read(pendingFeedFocusProvider.notifier).clear(),
           // V1.1.6 Story 16.5：FR-95 的效果归因靠这两个属性。
           // 🔴 rank_mode 由**服务端下发**（state.rankMode）而不是按 category 自己推 ——
           // 降级链级别 4 会让 ALL Tab 也走时间倒序，那对客户端完全无感。
           feedTab: category.analyticsTab,
           rankMode: state.rankMode,
           // 顶置坑位（V1.1.6 Story 4.2）：取数失败或无生效配置 → null → 什么都不渲染。
-          pinned: ref.watch(pinnedSlotProvider).value,
+          pinned: pinnedAsync.value,
           onTapPinned: (item) => context.push('/content/${item.id}'),
           onTapPromo: (promo) => openPromoTarget(context, promo),
           autoLoadMore: true,
@@ -226,7 +284,8 @@ class HomePage extends ConsumerWidget {
           onTapItem: (item) => context.push('/content/${item.id}'),
           onLongPressItem: (item) => openReport(context, ref, item.id, onReported: () {
             // cm-6 §6.1：举报成功 → 乐观移除卡片 +「不再向你展示」提示（后端 §5.4 已过滤，刷新亦不复现）。
-            ref.read(feedProvider.notifier).removeItem(item.id);
+            // V1.3.4：关注流里同一张卡一并移除。
+            removeFeedPost(ref, item.id);
             if (context.mounted) {
               ScaffoldMessenger.of(context)
                 ..hideCurrentSnackBar()
@@ -263,7 +322,7 @@ class HomePage extends ConsumerWidget {
             ref,
             item.id,
             onReported: () {
-              ref.read(feedProvider.notifier).removeItem(item.id);
+              removeFeedPost(ref, item.id);
               if (context.mounted) {
                 ScaffoldMessenger.of(context)
                   ..hideCurrentSnackBar()
@@ -293,6 +352,7 @@ class HomePage extends ConsumerWidget {
 /// V1.3.0 batch-b1 Story 1.1（AC7 · FR-112.4）：分类 chips **之上**新增场所入口行。
 /// ⚠️ AppBar（品牌标 + 通知铃）、分类 chips、瀑布流、底部 Tab **一处不改**。
 /// Epic 4 的宠物横滑行将加在场所入口行**之下**，本 story **不为它预留占位**。
+/// V1.3.4 Story 3.3：场所入口行之上加推荐更新横幅（不满足条件时不占位）。
 class _BerandaTop extends StatelessWidget {
   const _BerandaTop({
     required this.selectedCategory,
@@ -310,6 +370,9 @@ class _BerandaTop extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 8),
+        // 推荐更新横幅（V1.3.4 Story 3.3）：场所入口行之上；不满足条件时组件内部返回
+        // `SizedBox.shrink()`，这里不留占位。
+        const AppUpdateBanner(),
         // 场所入口行（Story 1.1 AC7）：在分类 chips 之上。
         const PlaceEntryRow(),
         // 宠物横滑行（Story 4.4 AC1/AC2）：在场所入口行**之下**、分类 chips **之上**。

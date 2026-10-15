@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,18 +14,24 @@ import '../../pet_passport/data/pet_passport_repository.dart';
 import '../../pet_passport/domain/new_stamp_args.dart';
 import '../../pet_passport/presentation/passport_layout.dart';
 import '../../pet_passport/presentation/pet_passport_stamp_page.dart';
+import '../../profile/domain/milestone_instant_codes.dart';
+import '../../profile/presentation/milestone_instant_celebration.dart';
 import '../../profile/presentation/pet_insights_page.dart';
 import '../domain/place_checkin_result.dart';
 import 'widgets/place_stamp_view.dart';
 
 /// 打卡成功页的入参（经 go_router `extra` 传入）。
 class PlaceCheckinSuccessArgs {
-  const PlaceCheckinSuccessArgs({required this.result, required this.petName});
+  const PlaceCheckinSuccessArgs({required this.result, required this.petName, this.ceremonyPlayed = false});
 
   final PlaceCheckinResult result;
 
   /// 当前唯一宠物的名字（C2「{pet} dapat cap baru」）。
   final String petName;
+
+  /// V1.3.4：刚播过全屏盖章动画（`PlaceStampCeremonyPage`）→ 不再播本页 0.36s 小落章，章面直接终态。
+  /// 再访 / 动画兜底失败为 false，保持原样。
+  final bool ceremonyPlayed;
 }
 
 /// 打卡成功页（V1.3.2 batch-a Story 1.1 · AC5 · UI 稿 C2 / C2b）。
@@ -48,12 +56,55 @@ class PlaceCheckinSuccessPage extends ConsumerStatefulWidget {
   /// 落章轻反馈时长（AC5.1：≤400ms）。
   static const Duration stampAnimation = Duration(milliseconds: 360);
 
+  /// V1.3.4：从盖章动画页进来时的淡入时长（spec §2 拍板 A：停 0.4s 后约 0.3s 淡出进入成功页）。
+  static const Duration ceremonyFadeIn = Duration(milliseconds: 300);
+
+  /// 空白护照本占位的最长时间（ST-07 弱网测试 2026-10-15）：护照重取超过它仍未回来 → 退到简版章面，
+  /// 不再让护照区整片空白（实测弱网下重取 5～17s 无任何提示）。退回后固定在简版，护照晚到也不跳变。
+  static const Duration passportPlaceholderMax = Duration(milliseconds: 1200);
+
+  /// 路由页面：刚播过盖章动画（`ceremonyPlayed`）→ 300ms 淡入（动画页被 pushReplacement 替换，
+  /// 淡入期间它仍垫在下面，即「动画最终帧 → 成功页」的交叉淡化）；其余（再访 / 兜底）保持默认平台转场。
+  /// ⚠️ `app_router.dart` 与测试路由同用它。
+  static Page<void> pageFor(GoRouterState state, PlaceCheckinSuccessArgs args) {
+    final child = PlaceCheckinSuccessPage(args: args);
+    if (!args.ceremonyPlayed) return MaterialPage<void>(key: state.pageKey, child: child);
+    return CustomTransitionPage<void>(
+      key: state.pageKey,
+      transitionDuration: ceremonyFadeIn,
+      // 进场只淡入；侧滑 / 返回交还平台转场（iOS 自带边缘右滑返回，popGestureEnabled 恢复）。
+      // 两种状态下 widget 树结构不变（始终 FadeTransition + 平台转场），成功页 State 不重建。
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final route = ModalRoute.of(context)! as PageRoute<void>;
+        final entering = animation.status == AnimationStatus.forward && !route.popGestureInProgress;
+        return FadeTransition(
+          opacity: entering ? animation : kAlwaysCompleteAnimation,
+          child: Theme.of(context).pageTransitionsTheme.buildTransitions<void>(
+                route,
+                context,
+                entering ? kAlwaysCompleteAnimation : animation,
+                secondaryAnimation,
+                child,
+              ),
+        );
+      },
+      child: child,
+    );
+  }
+
   @override
   ConsumerState<PlaceCheckinSuccessPage> createState() => _PlaceCheckinSuccessPageState();
 }
 
 class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPage> {
   PlaceCheckinSuccessArgs get args => widget.args;
+
+  /// V1.3.4 Story 4.3：每个成功页实例只检测一次「第一次打卡」里程碑的当场庆祝（重建 / 返回本页不重复）。
+  bool _milestoneChecked = false;
+
+  /// 占位超时（[PlaceCheckinSuccessPage.passportPlaceholderMax]）时护照仍未取回 → 本页固定走简版章面。
+  bool _passportFellBack = false;
+  Timer? _placeholderTimer;
 
   @override
   void didChangeDependencies() {
@@ -65,9 +116,27 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
   void initState() {
     super.initState();
     // 刚盖的章要出现在护照里：进页即重取护照（章详情块读它；取到前 / 取不到用简版章面兜底）。
+    _placeholderTimer = Timer(PlaceCheckinSuccessPage.passportPlaceholderMax, () {
+      if (!mounted) return;
+      final stamps = ref.read(petPassportProvider).asData?.value.stamps;
+      final found = stamps?.any((s) => s.placeToken == args.result.placeToken) ?? false;
+      if (!found) setState(() => _passportFellBack = true);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) ref.invalidate(petPassportProvider);
+      // V1.3.4 Story 4.3 · AD-19：后端异步达成「第一次打卡」→ 盖在成功页上当场庆祝；没等到交补庆祝兜底。
+      // 不按 isNewStamp 过滤（那是「这个场所的新章」），统一看「已完成未庆祝」。
+      if (mounted && !_milestoneChecked) {
+        _milestoneChecked = true;
+        unawaited(celebrateAutoMilestoneIfAny(context, ref, kPlaceCheckinMilestoneCodes));
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _placeholderTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -75,11 +144,13 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
     final l10n = AppLocalizations.of(context);
     final r = args.result;
     final passportAsync = ref.watch(petPassportProvider);
-    final passport = passportAsync.asData?.value;
+    final passport = _passportFellBack ? null : passportAsync.asData?.value;
     final stampIndex = passport?.stamps.indexWhere((s) => s.placeToken == r.placeToken) ?? -1;
     // 护照还在取（进页即重取）→ 先放空白护照本占位；只有真的取不到 / 找不到这枚章才退到简版章面。
     // （2026-10-06 动效验收：原先加载期间先闪约 0.8s 简版章面再换成护照本。）
-    final passportPending = stampIndex < 0 && (passportAsync.isLoading || passportAsync.isRefreshing);
+    // ST-07：占位有上限，超时后 [_passportFellBack] 让本页固定走简版章面。
+    final passportPending =
+        !_passportFellBack && stampIndex < 0 && (passportAsync.isLoading || passportAsync.isRefreshing);
     final date = r.visitDate == null ? null : formatDayMonthYear(context, r.visitDate!);
     return Scaffold(
       backgroundColor: AppColors.cream,
@@ -102,6 +173,10 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
                       padding: const EdgeInsets.symmetric(horizontal: 8),
                       foregroundColor: AppColors.mint,
                       side: const BorderSide(color: AppColors.mint),
+                      // 与右侧主 CTA（filledButtonTheme：圆角 12 + 14.5/w700）同形同字重；
+                      // 主题未配 outlinedButtonTheme，不写则落到 Material 默认胶囊形 + 细字，两钮并排不统一。
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14.5, fontWeight: FontWeight.w700),
                     ),
                     // Story 1.3：先进 B4 整页落章（只在 isNewStamp 分支构造 NewStampArgs），
                     // B4 的「Lihat Paspor」再 pushReplacement 到护照页停在新章。
@@ -182,7 +257,8 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
             if ((passport != null && stampIndex >= 0) || passportPending)
               // 空白护照本 → 有内容的那页：底图不动，只让新内容淡入（旧的占位不淡出，避免中间整页发白一帧）。
               AnimatedSwitcher(
-                duration: PlaceCheckinSuccessPage.stampAnimation,
+                // 刚播过盖章动画 → 章详情直接终态，不再叠 0.36s 淡入（不重复动效）。
+                duration: args.ceremonyPlayed ? Duration.zero : PlaceCheckinSuccessPage.stampAnimation,
                 switchInCurve: Curves.easeOut,
                 layoutBuilder: (current, previous) => Stack(
                   alignment: Alignment.topCenter,
@@ -206,7 +282,10 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
               )
             else ...[
               const SizedBox(height: 12),
-              Center(child: r.isNewStamp ? _NewStamp(result: r) : _RepeatStamp(result: r)),
+              Center(
+                  child: r.isNewStamp
+                      ? _NewStamp(result: r, animate: !args.ceremonyPlayed)
+                      : _RepeatStamp(result: r)),
               const SizedBox(height: 16),
               Text(date == null ? r.placeName : l10n.placeCheckinSuccessPlaceDate(r.placeName, date),
                   textAlign: TextAlign.center,
@@ -220,13 +299,22 @@ class _PlaceCheckinSuccessPageState extends ConsumerState<PlaceCheckinSuccessPag
 }
 
 /// C2：落章轻反馈（缩放 1.25→1.0 + 淡入，一次）。
+///
+/// [animate] 为 false（V1.3.4 刚播过全屏盖章动画）→ 直接终态，不重复落章。
 class _NewStamp extends StatelessWidget {
-  const _NewStamp({required this.result});
+  const _NewStamp({required this.result, this.animate = true});
 
   final PlaceCheckinResult result;
+  final bool animate;
 
   @override
   Widget build(BuildContext context) {
+    if (!animate) {
+      return KeyedSubtree(
+        key: const ValueKey('placeCheckinNewStamp'),
+        child: PlaceStampView(placeType: result.placeType, imageUrl: result.stampImageUrl, size: 112),
+      );
+    }
     return TweenAnimationBuilder<double>(
       key: const ValueKey('placeCheckinNewStamp'),
       tween: Tween(begin: 0, end: 1),

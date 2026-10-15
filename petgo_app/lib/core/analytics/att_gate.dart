@@ -5,6 +5,8 @@ import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import '../startup/startup_popup_ledger.dart';
+
 /// ATT（App Tracking Transparency）授权门——**独立于任何三方 SDK**。
 ///
 /// App Store 审核拒信（2026-08-06，Guideline 2.1，1.1.0(7)）根因修复：
@@ -84,6 +86,8 @@ class AttGate {
       final shown = _waitUntilInactive(const Duration(milliseconds: 1500));
       await AppTrackingTransparency.requestTrackingAuthorization();
       if (await shown) {
+        // 请求前 notDetermined 且确实夺焦 = 真正弹出（D-6）：登记本次冷启动功能弹窗（V1.3.4 Story 5.3 · AD-12）。
+        StartupPopupLedger.instance.record(StartupPopupKind.att);
         // 弹窗确实出现了：等用户作答落定。超时（15s 未作答）⇒ 弹窗还开着，返回 false
         // 告知调用方绝不能再叠系统弹窗（PR#34 finding #14）。
         return _waitUntilDetermined();

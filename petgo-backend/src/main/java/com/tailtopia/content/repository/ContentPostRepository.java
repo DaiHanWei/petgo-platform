@@ -181,6 +181,23 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
     long countPublicPublishedByAuthor(@Param("authorId") long authorId);
 
     /**
+     * <b>作者自视</b>的帖子数（V1.3.4 follow Story 1.2 · D-5 / T-5）：我的页四格「Postingan」。
+     *
+     * <p>🔴 谓词与 {@link #findMyPosts}（「我的发布」网格）<b>逐字同源</b>：未软删 + {@code PUBLISHED / UNDER_REVIEW}，
+     * <b>不过滤 visibility</b>（含私密 / 仅自己可见、本人待审帖）—— 否则四格的数与下方网格对不上。
+     * <p>⚠️ <b>他人视角一律用 {@link #countPublicPublishedByAuthor}</b>，两者不得互相替代
+     * （用本方法给访客看，差值就是这人有几篇私密内容）。
+     */
+    @Query("""
+            SELECT count(p) FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.deletedAt IS NULL
+              AND (p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+                   OR p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW)
+            """)
+    long countOwnPostsByAuthor(@Param("authorId") long authorId);
+
+    /**
      * 他人主页的**内容区**（V1.3.0 batch-b1 Story 2.2 · FR-118.2 · AC1）：
      * 该作者全部 PUBLIC 内容，三类混排不分流，时间倒序游标分页。
      *
@@ -509,6 +526,56 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             Pageable pageable);
 
     /**
+     * 关注流（V1.3.4 Following 流）：仅「我关注的人」的公开帖，时间倒序游标分页。
+     *
+     * <p>🔴 过滤口径与 {@link #findFeed} 一致（deleted / PUBLISHED / PUBLIC / 举报帖 / 账号级隐藏 / 游标），
+     * 去掉：UNDER_REVIEW 本人例外（关注流只含他人帖）、类型 / 宠物 / 顶置让位。
+     * 另加：作者在我的关注名单内，且作者未注销（{@code deletedAt IS NULL}）、状态 ACTIVE。
+     * 登录专属，故无 hasViewer 门控。排序 {@code created_at DESC, id DESC}（id 作 tie-breaker 保游标稳定）。
+     * Discover 查询不受影响。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND p.authorId IN (SELECT f.followeeId FROM UserFollow f WHERE f.followerId = :viewerId)
+              AND p.authorId IN (SELECT u.id FROM User u
+                                 WHERE u.deletedAt IS NULL
+                                   AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE)
+              AND NOT EXISTS (SELECT 1 FROM ContentReport r
+                              WHERE r.postId = p.id AND r.reporterId = :viewerId)
+              AND NOT EXISTS (SELECT 1 FROM UserHideRelation h
+                              WHERE h.holderId = :viewerId AND h.targetId = p.authorId)
+              AND (:hasCursor = false
+                   OR p.createdAt < :cursorTs
+                   OR (p.createdAt = :cursorTs AND p.id < :cursorId))
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> findFollowingFeed(
+            @Param("viewerId") long viewerId,
+            @Param("hasCursor") boolean hasCursor,
+            @Param("cursorTs") Instant cursorTs,
+            @Param("cursorId") Long cursorId,
+            Pageable pageable);
+
+    /**
+     * 推荐序候选池的过滤口径 —— 主池 {@link #findRankCandidatePool} 与教育池 {@link #findEduCandidatePool} 共用
+     * （V1.3.4 FR-122.2 / NFR3：任何池子都不得绕过）。🔴 不要复制一份给新池子，加池子就拼这个常量。
+     */
+    String RANK_POOL_FILTER = """
+            p.deletedAt IS NULL
+              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM ContentReport r
+                                  WHERE r.postId = p.id AND r.reporterId = :viewerId))
+              AND (:hasViewer = false
+                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
+                                  WHERE h.holderId = :viewerId AND h.targetId = p.authorId))
+            """;
+
+    /**
      * 推荐序候选池（V1.1.6 Story 16.3 · AC2）。
      *
      * <p>🔴 <b>过滤口径与 {@link #findFeed} 逐条相同</b>，只去掉「分类」「游标」「排序」三件事 ——
@@ -533,22 +600,27 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
      * ⚠️ 让它进池是很自然的写法（{@code findFeed} 就是那么写的），但那会让作者自己的
      * 待审内容去和全平台内容抢分数 —— 抢不到就等于「刚发的帖从首页消失」，正是 AC 要防的事。
      */
-    @Query("""
-            SELECT p FROM ContentPost p
-            WHERE p.deletedAt IS NULL
-              AND p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
-              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
-              AND (:hasViewer = false
-                   OR NOT EXISTS (SELECT 1 FROM ContentReport r
-                                  WHERE r.postId = p.id AND r.reporterId = :viewerId))
-              AND (:hasViewer = false
-                   OR NOT EXISTS (SELECT 1 FROM UserHideRelation h
-                                  WHERE h.holderId = :viewerId AND h.targetId = p.authorId))
-            ORDER BY p.createdAt DESC, p.id DESC
-            """)
+    @Query("SELECT p FROM ContentPost p WHERE " + RANK_POOL_FILTER
+            + " ORDER BY p.createdAt DESC, p.id DESC")
     List<ContentPost> findRankCandidatePool(
             @Param("hasViewer") boolean hasViewer,
             @Param("viewerId") Long viewerId,
+            Pageable pageable);
+
+    /**
+     * 教育类独立候选池（V1.3.4 FR-122.1）：近 {@code since} 起的全部 KNOWLEDGE 公开内容，过滤与主池同一份。
+     *
+     * <p>主池只取「最近 N 条」，科普占比低时会被截到只剩最近几天；本池让教育槽位从近 90 天的
+     * 全部科普里挑。由服务层与主池按 id 去重合并后交给引擎，排序引擎不感知池子来源。
+     */
+    @Query("SELECT p FROM ContentPost p WHERE " + RANK_POOL_FILTER
+            + " AND p.type = com.tailtopia.content.domain.ContentType.KNOWLEDGE"
+            + " AND p.createdAt >= :since"
+            + " ORDER BY p.createdAt DESC, p.id DESC")
+    List<ContentPost> findEduCandidatePool(
+            @Param("hasViewer") boolean hasViewer,
+            @Param("viewerId") Long viewerId,
+            @Param("since") Instant since,
             Pageable pageable);
 
     /**
@@ -602,6 +674,30 @@ public interface ContentPostRepository extends JpaRepository<ContentPost, Long>,
             ORDER BY p.createdAt DESC, p.id DESC
             """)
     List<ContentPost> findOwnPendingPosts(@Param("authorId") long authorId, Pageable pageable);
+
+    /**
+     * 查看者<b>本人</b>在 {@code (since, until]} 内发布的公开帖（bug 20261012-586）——
+     * 已发布与挂起都算，最新在前。
+     *
+     * <p>推荐序首屏把它们插在自然流最前（紧跟顶置位之后），让作者在发布成功页点
+     * 「去 Feed 看」时一眼看到自己刚发的帖，而不是去和全平台内容抢分数。
+     *
+     * <p>🛡 {@code until} 不是摆设：后续页按<b>同一个种子时刻</b>重放本查询来去重，
+     * 种子之后才发的帖首屏没插过，后续页也不该被误排掉。
+     */
+    @Query("""
+            SELECT p FROM ContentPost p
+            WHERE p.authorId = :authorId
+              AND p.deletedAt IS NULL
+              AND p.status IN (com.tailtopia.content.domain.PostStatus.PUBLISHED,
+                               com.tailtopia.content.domain.PostStatus.UNDER_REVIEW)
+              AND p.visibility = com.tailtopia.content.domain.ContentVisibility.PUBLIC
+              AND p.createdAt > :since
+              AND p.createdAt <= :until
+            ORDER BY p.createdAt DESC, p.id DESC
+            """)
+    List<ContentPost> findOwnRecentPosts(@Param("authorId") long authorId,
+            @Param("since") Instant since, @Param("until") Instant until, Pageable pageable);
 
     /**
      * 近期公开内容的 id（V1.1.6 Story 16.4）—— 供 P95 重算统计互动量分布。

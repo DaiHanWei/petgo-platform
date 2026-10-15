@@ -37,6 +37,10 @@ class MeServiceTest {
     @Mock
     ApplicationEventPublisher events;
 
+    /** V1.3.4 follow Story 1.2：/me 四格统计（作者自视口径）。 */
+    @Mock
+    com.tailtopia.content.service.ContentService contentService;
+
     @InjectMocks
     MeService meService;
 
@@ -149,5 +153,50 @@ class MeServiceTest {
         UserProfileResponse resp = meService.getMe(1L);
         assertThat(resp.hasPetProfile()).isFalse();
         assertThat(resp.displayName()).isEqualTo("Alice");
+    }
+
+    /** V1.3.4 follow Story 1.2 · AC5：GET /me 带 token、作者自视帖子数 / 获赞数与两关注计数。 */
+    @Test
+    void getMeCarriesOwnPostStatsAndFollowFields() {
+        User u = freshUser();
+        org.springframework.test.util.ReflectionTestUtils.setField(u, "publicToken", "tok");
+        org.springframework.test.util.ReflectionTestUtils.setField(u, "followingCount", 3);
+        org.springframework.test.util.ReflectionTestUtils.setField(u, "followerCount", 4);
+        when(users.findById(1L)).thenReturn(Optional.of(u));
+        when(contentService.countOwnPostsByAuthor(1L)).thenReturn(5L);
+        when(contentService.sumLikesOnOwnPostsByAuthor(1L)).thenReturn(9L);
+
+        UserProfileResponse resp = meService.getMe(1L);
+
+        assertThat(resp.userToken()).isEqualTo("tok");
+        assertThat(resp.postCount()).isEqualTo(5L);
+        assertThat(resp.likeCount()).isEqualTo(9L);
+        assertThat(resp.followingCount()).isEqualTo(3);
+        assertThat(resp.followerCount()).isEqualTo(4);
+        // ⚠️ 他人视角的 Public 统计不得被拿来当自视口径（D-5）。
+        org.mockito.Mockito.verify(contentService, org.mockito.Mockito.never()).countPublicPostsByAuthor(1L);
+    }
+
+    /** AC5.4：PATCH 响应同样带统计 —— 缺了 App 用它覆盖本地状态时四格会被清空。 */
+    @Test
+    void updateMeResponseCarriesOwnPostStats() {
+        User u = freshUser();
+        when(users.findById(1L)).thenReturn(Optional.of(u));
+        when(users.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(contentService.countOwnPostsByAuthor(1L)).thenReturn(2L);
+        when(contentService.sumLikesOnOwnPostsByAuthor(1L)).thenReturn(6L);
+
+        UserProfileResponse resp = meService.updateMe(1L, new UpdateMeRequest("Buddy", null, null, null, null));
+
+        assertThat(resp.postCount()).isEqualTo(2L);
+        assertThat(resp.likeCount()).isEqualTo(6L);
+    }
+
+    /** T-6：登录响应用的旧工厂不带帖子统计（null → NON_NULL 省略）。 */
+    @Test
+    void loginFactoryOmitsPostStats() {
+        UserProfileResponse resp = UserProfileResponse.from(freshUser(), false);
+        assertThat(resp.postCount()).isNull();
+        assertThat(resp.likeCount()).isNull();
     }
 }

@@ -75,7 +75,25 @@ public record FeedItemResponse(
          * （见 {@link com.tailtopia.mention.dto.MentionView}）。
          * 空表不下发 —— Feed 一页 20 行，每行一个空数组白占体积（同 authorTags 的口径）。
          */
-        List<com.tailtopia.mention.dto.MentionView> mentions) {
+        List<com.tailtopia.mention.dto.MentionView> mentions,
+        /**
+         * 作者对外 token（V1.3.4 follow · Story 2.1 · AD-2 / AD-6）：关注接口用。
+         * 作者已注销 / 封号（D-8）/ 本出口不展示关注按钮时为 null（NON_NULL 不下发）。
+         */
+        String authorToken,
+        /**
+         * 当前查看者与作者的关注关系 {@code {iFollow, followsMe}}（Story 2.1 · AD-6）。
+         * 游客 / 本人恒 false；「我的发布」与他人主页网格不展示按钮 → null（不下发、不查库）。
+         */
+        com.tailtopia.social.read.FollowState authorFollowState,
+        /**
+         * 每张图的露出位置（V1.3.4 Story 2.1 · AD-5 · FR-125），与 {@link #imageUrls()} 同序；
+         * 元素为 {@code [0, 1]} 或 {@code null}（区间内的图，原样下发）。
+         *
+         * <p>存量 / 无超界图的帖为 {@code null} → NON_NULL 省略；App 无值即居中。
+         * 库里原值下发，不对齐、不改写（写入时已校验等长）。
+         */
+        List<Double> imageCropOffsets) {
 
     /**
      * ⚠️ {@code visibility} 恒下发（Story 4.1 · AC7）。Feed 里只会出现 PUBLIC，
@@ -87,7 +105,8 @@ public record FeedItemResponse(
      */
     public static FeedItemResponse of(ContentPost p, AuthorView author, long likeCount,
             boolean liked, long commentCount, List<ContentTagView> decorationTags,
-            List<com.tailtopia.mention.dto.MentionView> mentions) {
+            List<com.tailtopia.mention.dto.MentionView> mentions, String authorToken,
+            com.tailtopia.social.read.FollowState authorFollowState) {
         List<String> images = p.getImageUrls();
         String firstImage = (images != null && !images.isEmpty()) ? images.get(0) : null;
         return new FeedItemResponse(
@@ -109,6 +128,9 @@ public record FeedItemResponse(
                 p.getImageSizes(),
                 liked,
                 commentCount,
-                mentions);
+                mentions,
+                author.deleted() ? null : authorToken,
+                authorFollowState,
+                p.getImageCropOffsets());
     }
 }

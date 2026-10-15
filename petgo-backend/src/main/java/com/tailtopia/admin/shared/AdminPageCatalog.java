@@ -236,8 +236,15 @@ public final class AdminPageCatalog {
             //      单个兽医的评分明细并入抽屉评分页签（D-46 产品已知悉）。
             //    `page("ratings", …)` 那条**保留**：rating.view 这个码仍然要有归属（它现在管抽屉的评分页签）。
             // ⚙️ 配置与安全
+            // V1.3.4 AB-22：「最低支持版本」单独一码（附加于 config.edit），归本页「其他操作」列
             page("config", G_CONFIG, "/admin/config",
-                    List.of(CONFIG_VIEW), List.of(CONFIG_EDIT), List.of()).nav("admin.nav.config", "config", CONFIG_VIEW, CONFIG_SHARE_REWARD_VIEW, CONFIG_SHARE_REWARD_EDIT),
+                    List.of(CONFIG_VIEW), List.of(CONFIG_EDIT), List.of(CONFIG_APP_MIN_VERSION_EDIT)).nav("admin.nav.config", "config", CONFIG_VIEW, CONFIG_SHARE_REWARD_VIEW, CONFIG_SHARE_REWARD_EDIT),
+            // V1.3.4 AB-30：运营弹窗。查看即管理，单一码 ops_popup.manage（后台 PRD / 返工清单 §1；照 places 先例不预授予）。
+            page("ops-popups", G_CONFIG, "/admin/ops-popups",
+                    List.of(OPS_POPUP_MANAGE), List.of(), List.of()).nav("admin.nav.opsPopups", "ops-popups", OPS_POPUP_MANAGE),
+            // V1.3.4 AB-31：系统通知发送页。查看 ops_notify.view / 新建、取消 ops_notify.send（发送与查看分权）。
+            page("ops-notifications", G_CONFIG, "/admin/ops-notifications",
+                    List.of(OPS_NOTIFY_VIEW), List.of(OPS_NOTIFY_SEND), List.of()).nav("admin.nav.opsNotifications", "ops-notifications", OPS_NOTIFY_VIEW, OPS_NOTIFY_SEND),
             page("algo-params", G_CONFIG, "/admin/algo-params",
                     List.of(CONFIG_ALGO_PARAM_VIEW), List.of(CONFIG_ALGO_PARAM_EDIT), List.of()).nav("admin.nav.algoParams", "algo-params", CONFIG_ALGO_PARAM_VIEW),
             page("share-reward", G_CONFIG, null,

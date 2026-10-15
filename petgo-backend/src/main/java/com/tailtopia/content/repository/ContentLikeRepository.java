@@ -44,6 +44,25 @@ public interface ContentLikeRepository extends JpaRepository<ContentLike, Long> 
             """)
     long sumLikesOnPublicPostsByAuthor(@Param("authorId") long authorId);
 
+    /**
+     * <b>作者自视</b>的获赞总数（V1.3.4 follow Story 1.2 · D-5）：我的页四格「Suka」。
+     *
+     * <p>帖子集合与 {@code ContentPostRepository#countOwnPostsByAuthor} / {@code findMyPosts} 同源
+     * （未软删 + PUBLISHED / UNDER_REVIEW，不过滤 visibility）。
+     * <p>⚠️ <b>他人视角一律用 {@link #sumLikesOnPublicPostsByAuthor}</b>。
+     */
+    @Query("""
+            SELECT COUNT(l) FROM ContentLike l
+            WHERE l.postId IN (
+                SELECT p.id FROM ContentPost p
+                WHERE p.authorId = :authorId
+                  AND p.deletedAt IS NULL
+                  AND (p.status = com.tailtopia.content.domain.PostStatus.PUBLISHED
+                       OR p.status = com.tailtopia.content.domain.PostStatus.UNDER_REVIEW)
+            )
+            """)
+    long sumLikesOnOwnPostsByAuthor(@Param("authorId") long authorId);
+
     /** 批量点赞数（Feed 卡片 likeCount，PRD-642）：一次 GROUP BY 取一页帖子的赞数，避免 N+1。 */
     @Query("SELECT l.postId AS postId, COUNT(l) AS likeCount FROM ContentLike l "
             + "WHERE l.postId IN :postIds GROUP BY l.postId")
@@ -85,6 +104,26 @@ public interface ContentLikeRepository extends JpaRepository<ContentLike, Long> 
     @Query("SELECT l.postId FROM ContentLike l WHERE l.userId = :userId AND l.postId IN :postIds")
     List<Long> findLikedPostIds(@Param("userId") long userId,
             @Param("postIds") Collection<Long> postIds);
+
+    /**
+     * 点赞人分页（V1.3.4 点赞人列表）：{@code created_at DESC, id DESC} 游标；
+     * 排除已注销 / 非 ACTIVE 用户，以及<b>我主动拉黑</b>（source=BLOCK、holder=我，单向）的人。
+     * REPORT 隐藏的人保留。调用方传 {@code PageRequest.of(0, 21)}。
+     */
+    @Query("""
+            SELECT l FROM ContentLike l
+            WHERE l.postId = :postId
+              AND (l.createdAt < :ts OR (l.createdAt = :ts AND l.id < :lastId))
+              AND EXISTS (SELECT 1 FROM User u WHERE u.id = l.userId AND u.deletedAt IS NULL
+                          AND u.status = com.tailtopia.auth.domain.UserStatus.ACTIVE)
+              AND NOT EXISTS (SELECT 1 FROM UserHideRelation r WHERE r.holderId = :viewerId
+                          AND r.targetId = l.userId
+                          AND r.source = com.tailtopia.social.domain.HideSource.BLOCK)
+            ORDER BY l.createdAt DESC, l.id DESC
+            """)
+    List<ContentLike> findLikersPage(@Param("postId") long postId, @Param("viewerId") long viewerId,
+            @Param("ts") Instant ts, @Param("lastId") long lastId,
+            org.springframework.data.domain.Pageable pageable);
 
     @Transactional
     void deleteByPostIdAndUserId(long postId, long userId);

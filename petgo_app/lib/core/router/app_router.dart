@@ -14,6 +14,8 @@ import '../../features/auth/domain/login_guide_controller.dart';
 import '../../features/auth/domain/user_state.dart';
 import '../../features/auth/presentation/dev_login_guide_page.dart';
 import '../../features/auth/presentation/login_page.dart';
+import '../../features/notify/domain/app_update_controller.dart';
+import '../../features/notify/domain/app_version_check.dart';
 import '../../features/shop/address/presentation/address_book_page.dart';
 import '../../features/order/presentation/order_list_page_v2.dart';
 import '../../features/shop/address/presentation/address_form_page_v2.dart';
@@ -43,6 +45,8 @@ import '../../features/social/domain/account_action_entry.dart';
 import '../../features/social/presentation/blocked_users_page.dart';
 import '../../features/support/presentation/my_tickets_page.dart';
 import '../../features/user_profile/presentation/public_profile_page.dart';
+import '../../features/social/domain/follow_list_item.dart';
+import '../../features/social/presentation/follow_list_page.dart';
 import '../../features/support/presentation/ticket_compose_page.dart';
 import '../../features/support/presentation/ticket_detail_page.dart';
 import '../../features/support/presentation/csat_page.dart';
@@ -84,6 +88,7 @@ import '../../features/gath/presentation/gath_page.dart';
 import '../../features/place/domain/place_summary.dart';
 import '../../features/place/presentation/place_detail_page.dart';
 import '../../features/place/presentation/place_checkin_success_page.dart';
+import '../../features/place/presentation/place_stamp_ceremony_page.dart';
 import '../../features/boarding_pass/presentation/boarding_pass_detail_page.dart';
 import '../../features/boarding_pass/presentation/boarding_pass_list_page.dart';
 import '../../features/pet_passport/presentation/passport_versions_page.dart';
@@ -255,6 +260,8 @@ String? rawDeepLinkRedirect(Uri uri) {
 /// 对一个「从 WhatsApp 点链接进来」的人来说，那就是一条死路 ——
 /// 而这条链路的全部意义正是把人**引进** App。
 void goDeepLinkFromLiveApp(WidgetRef ref, String location) {
+  // 强制更新期间不导航：基座 go 后下一帧再 push 深链，会盖在重弹的强更弹窗之上（OCR 审查 #1）。
+  if (ref.read(appUpdateControllerProvider).decision == UpdateDecision.forced) return;
   final ctx = rootNavigatorKey.currentContext;
   if (ctx == null || !ctx.mounted) {
     ref.read(routerProvider).go(location); // 极端兜底：拿不到 context 时至少别丢深链
@@ -608,7 +615,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         redirect: (c, s) => s.extra is PlaceCheckinSuccessArgs
             ? null
             : PlaceDetailPage.routeFor(s.pathParameters['token']!),
-        builder: (c, s) => PlaceCheckinSuccessPage(args: s.extra! as PlaceCheckinSuccessArgs),
+        // V1.3.4：从盖章动画页 pushReplacement 进来（ceremonyPlayed）→ 300ms 淡入，其余默认转场。
+        pageBuilder: (c, s) => PlaceCheckinSuccessPage.pageFor(s, s.extra! as PlaceCheckinSuccessArgs),
+      ),
+      // V1.3.4 签到盖章动画：新章签到后的全屏动画页，结束后 pushReplacement 到上面的成功页。
+      // 入参同成功页；`extra` 缺失（冷启动恢复 / 手敲深链）同样回场所详情。
+      GoRoute(
+        path: PlaceStampCeremonyPage.routePattern,
+        redirect: (c, s) => s.extra is PlaceCheckinSuccessArgs
+            ? null
+            : PlaceDetailPage.routeFor(s.pathParameters['token']!),
+        builder: (c, s) => PlaceStampCeremonyPage(args: s.extra! as PlaceCheckinSuccessArgs),
       ),
 
       // ===== Toko（V1.4.0 Story 1.6，FR-93 / FR-93A）=====
@@ -833,10 +850,17 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
       // 与本条只差一个字母。改动时**逐条改，禁止做前缀字符串替换**（AD-A17.7）。
       GoRoute(path: '/profile/id-card', redirect: (c, s) => PetInsightsRoutes.idCard),
       // Story 6-7 多卡：建卡器（字面量在前，避免被 :id 吞）+ 单卡详情。
-      GoRoute(path: '/profile/id-cards/create', builder: (c, s) => const IdCardCreatePage()),
+      // V1.3.4 ktp Story 1.5：?style=<IdCardStyle.name> 带入卡款；缺省 / 非法值回落 KTP。
+      GoRoute(
+        path: '/profile/id-cards/create',
+        builder: (c, s) =>
+            IdCardCreatePage(initialStyle: IdCardCreatePage.styleFromQuery(s.uri.queryParameters['style'])),
+      ),
       GoRoute(
         path: '/profile/id-cards/:id',
-        builder: (c, s) => IdCardDetailPage(cardId: int.parse(s.pathParameters['id']!)),
+        // V1.3.4 ktp D-16：?export=1 = 建卡入口付费成功落到详情，自动弹保存 / 分享选单。
+        builder: (c, s) => IdCardDetailPage(
+            cardId: int.parse(s.pathParameters['id']!), autoExport: s.uri.queryParameters['export'] == '1'),
       ),
       // 健康记录列表（Story 7.2 · FR-45B）。受控（/profile/ 前缀，游客被门控）。
       // ?add=VACCINE|DEWORM|...：进页自动弹预选类型的添加表单（bug 20260729-406，健康类里程碑直跳）。
@@ -1080,6 +1104,14 @@ final Provider<GoRouter> routerProvider = Provider<GoRouter>((ref) {
         builder: (c, s) => PublicProfilePage(
           userId: int.parse(s.pathParameters['userId']!),
           entry: accountActionEntryFromWire(s.uri.queryParameters['entry']),
+        ),
+      ),
+      // V1.3.4 follow Story 2.2：关注 / 粉丝列表（游客可看，不进 _controlledLocations；shell 外 push 隐藏 Tab Bar）。
+      GoRoute(
+        path: FollowListPage.routePattern,
+        builder: (c, s) => FollowListPage(
+          userId: int.parse(s.pathParameters['userId']!),
+          initialTab: FollowListTab.fromWire(s.uri.queryParameters['tab']),
         ),
       ),
       // ===== V1.1.6 Story 2.3：App 内访客只读视图（AD-2 Rule 6）=====

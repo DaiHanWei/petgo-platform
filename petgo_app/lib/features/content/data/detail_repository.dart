@@ -167,5 +167,32 @@ class DioDetailRepository implements DetailRepository {
   }
 }
 
+/// 帖子是否已删除的探测（V1.3.4 follow · Story 3.4 · T-43）：通知中心跳转前问一次。
+///
+/// 🔴 带 `countView=false`，**不计浏览** —— 否则这次探测加上随后真正打开详情会让浏览次数记两次
+/// （2026-10-13 决定修复）。可见范围 / 拉黑等判定与正常详情请求完全相同。
+/// 单独一个类而不挂在 [DetailRepository] 上：那个接口被十来个测试 fake `implements`。
+class ContentGoneProbe {
+  ContentGoneProbe(this.dio);
+
+  final Dio dio;
+
+  /// 404 → true；能打开 / 403 / 断网 → false（由详情页自己的错误态处理）。
+  Future<bool> isGone(int postId) async {
+    try {
+      await dio.get<Map<String, dynamic>>(
+        ApiPaths.contentPostDetail(postId),
+        queryParameters: const {'countView': false},
+      );
+      return false;
+    } on DioException catch (e) {
+      return e.response?.statusCode == 404;
+    }
+  }
+}
+
+final Provider<ContentGoneProbe> contentGoneProbeProvider =
+    Provider<ContentGoneProbe>((ref) => ContentGoneProbe(ref.read(dioProvider)));
+
 final Provider<DetailRepository> detailRepositoryProvider =
     Provider<DetailRepository>((ref) => DioDetailRepository(ref.read(dioProvider)));
