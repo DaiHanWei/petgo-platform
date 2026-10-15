@@ -215,14 +215,26 @@ void main() {
     expect(_sheet, findsNothing);
   });
 
-  testWidgets('detailVariantHasNoExtraTrailingOrVerticalHitPadding', (tester) async {
+  testWidgets('detailVariantHitAreasFillBarHeightWithoutTrailingPadding', (tester) async {
+    // 详情页底栏：外层 44dp 框只居中、不扩命中范围，故爱心 / 数字热区自身撑满 44dp 高（OCR 审查 #3）；
+    // 数字右侧仍不加透明热区（保持与右侧图标的可见间距）。
     await _pump(tester, expand: false);
     final count = tester.getRect(_count);
     final text = tester.getRect(find.text('3'));
     expect(count.right, closeTo(text.right, 0.01), reason: '数字右侧无额外透明热区');
-    expect(count.height, closeTo(text.height, 0.01), reason: '纵向无额外热区');
-    await tester.tap(_count);
+    expect(count.height, closeTo(44, 0.01), reason: '数字热区撑满底栏 44dp');
+    await tester.tapAt(Offset(count.center.dx, count.top + 2));
     await tester.pumpAndSettle();
-    expect(_sheet, findsOneWidget);
+    expect(_sheet, findsOneWidget, reason: '点数字上方空白也能打开点赞人');
+  });
+
+  testWidgets('detailVariantHeartTappableAboveIcon', (tester) async {
+    final env = await _pump(tester, expand: false);
+    final heart = tester.getRect(_heart);
+    // 图标正上方 8dp（20×20 图标之外、44dp 底栏之内）。
+    await tester.tapAt(Offset(heart.center.dx, heart.top - 8));
+    await tester.pumpAndSettle();
+    expect(env.like.likeCalls, 1);
+    expect(_sheet, findsNothing);
   });
 }
