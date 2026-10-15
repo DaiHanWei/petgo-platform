@@ -12,6 +12,7 @@ import 'package:tailtopia/features/profile/data/profile_repository.dart';
 import 'package:tailtopia/features/profile/data/timeline_repository.dart';
 import 'package:tailtopia/features/profile/domain/archive_stats.dart';
 import 'package:tailtopia/features/profile/domain/pet_profile.dart';
+import 'package:tailtopia/features/profile/presentation/widgets/pet_avatar_item.dart';
 import 'package:tailtopia/l10n/app_localizations.dart';
 
 /// Story 7.1 · F8：信息架构重组——顶栏双图标 + 主体「人+宠物」 + AC5 宠物区位三态。
@@ -205,7 +206,7 @@ void main() {
         greaterThan(tester.getCenter(find.byKey(const ValueKey('profileStatPosts'))).dy));
   });
 
-  testWidgets('V1.3.4 AC3：Hewanku 小节；宠物行卡 meta 只含「物种 · 年龄」，diary 标签单独显示', (tester) async {
+  testWidgets('bug 590：Hewanku 小节用与他人主页同款圆形头像；meta 只含「物种 · 年龄」，diary 数在头像角标', (tester) async {
     await _pump(
       tester,
       profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET', hasPetProfile: true),
@@ -216,9 +217,25 @@ void main() {
     final meta = tester.widget<Text>(find.byKey(const ValueKey('mePetCardMeta'))).data!;
     expect(meta, contains(l10n.petTypeCat));
     expect(meta, isNot(contains('diary')));
-    expect(find.descendant(of: find.byKey(const ValueKey('mePetDiaryTag')), matching: find.text(l10n.meDiaryCount('12'))),
+    // 同一个共享件（与他人主页 Hewan 区视觉一致），不再是整宽行卡。
+    final card = find.byKey(const ValueKey('mePetCard'));
+    expect(tester.widget(card), isA<PetAvatarItem>());
+    expect(tester.getSize(card).width, 84);
+    expect(find.descendant(of: find.byKey(const ValueKey('mePetDiaryTag')), matching: find.text('12')),
         findsOneWidget);
+    // 无头像 → 宠物图标占位（与他人主页一致，不是昵称首字母）。
+    expect(find.descendant(of: card, matching: find.byIcon(Icons.pets)), findsOneWidget);
     expect(find.textContaining(l10n.meViewArchive), findsNothing);
+  });
+
+  testWidgets('bug 590：佩戴 Tailsonality 时名字下方显示小标（与他人主页同款）', (tester) async {
+    await _pump(
+      tester,
+      profile: const UserProfile(nickname: '小明', petStatus: 'HAS_PET', hasPetProfile: true),
+      pet: const PetProfile(id: 1, name: 'Momo', cardToken: 'tok', petType: 'CAT', tailsonalityBadge: 'ENFP'),
+    );
+    expect(find.byKey(const ValueKey('mePetTailsonality')), findsOneWidget);
+    expect(find.text('ENFP'), findsOneWidget);
   });
 
   testWidgets('V1.3.4 T-13：有宠物未建档时引导卡上方也有 Hewanku 标题；B/C 无标题', (tester) async {

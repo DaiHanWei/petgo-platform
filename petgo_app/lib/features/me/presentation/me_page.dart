@@ -15,8 +15,8 @@ import '../../auth/domain/auth_state.dart';
 import '../../auth/domain/login_response.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/data/timeline_repository.dart';
-import '../../profile/domain/pet_age.dart';
 import '../../profile/domain/pet_profile.dart';
+import '../../profile/presentation/widgets/pet_avatar_item.dart';
 import '../../social/domain/follow_list_item.dart';
 import '../../social/presentation/follow_list_page.dart';
 import '../data/me_counts_provider.dart';
@@ -189,7 +189,7 @@ class _EditProfileButton extends StatelessWidget {
 
 /// AC5 宠物区位三态分支（人 60%/宠物 40%）。
 ///
-/// - 状态 A 且已建档 → [_PetCard]（宠物头像 + 名字 + 最近一条快乐时刻首图），点击跳成长档案 Tab。
+/// - 状态 A 且已建档 → [_PetCard]（圆形头像一排，与他人主页同款），点击跳成长档案 Tab。
 /// - 状态 A 未建档 → [_PetGuideCard]「给你的宠物创建专属档案」，点击进 FR-11 创建流程。
 /// - 状态 B / C → 不显示（宠物卡片与引导卡均不渲染）。
 class _PetZone extends ConsumerWidget {
@@ -265,8 +265,11 @@ class _PetGuideCard extends StatelessWidget {
   }
 }
 
-/// AC5 宠物行卡（状态 A 已建档）· V1.3.4 UI 稿 A1 `.petr`：白底 + 1px `line2` 描边、圆角 14；
-/// 头像 · 名字 /「物种 · 年龄」· diary 小标签 · chevron。
+/// AC5 宠物区（状态 A 已建档）—— 圆形头像一排，与他人主页「Hewan」**同一个组件** [PetAvatarItem]。
+///
+/// bug 20261015-590（2026-10-15 拍板）：原为整宽行卡（UI 稿 A1 `.petr`），与他人主页圆形头像不一致；
+/// 统一成圆形头像，为多宠物预留。diary 角标数仍取 `archiveStatsProvider.happyMomentCount`
+/// （bug 20260722-355：GROWTH_MOMENT 帖即「Diary」，>99 显示「99+」）；点头像仍跳成长档案 Tab。
 ///
 /// 组件按列表做（本版本数据源仍是单只 `petProfileProvider`，包成长度 0 / 1 的列表），不做多宠物取数。
 class _PetCard extends ConsumerWidget {
@@ -279,105 +282,37 @@ class _PetCard extends ConsumerWidget {
       data: (pet) {
         if (pet == null) return const SizedBox.shrink();
         final pets = <PetProfile>[pet];
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final p in pets) _row(context, ref, p),
-          ],
+        final diary = ref.watch(archiveStatsProvider).asData?.value.happyMomentCount;
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            // 角标向右上溢出 6 / 4，留出位置不被裁（与他人主页一致）。
+            padding: const EdgeInsets.only(top: 4, right: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final p in pets)
+                  PetAvatarItem(
+                    key: const ValueKey('mePetCard'),
+                    name: p.name,
+                    avatarUrl: p.avatarUrl,
+                    petType: p.petType,
+                    birthday: p.birthday,
+                    tailsonalityBadge: p.tailsonalityBadge,
+                    diaryCount: diary,
+                    diaryBadgeKey: const ValueKey('mePetDiaryTag'),
+                    tailsonalityKey: const ValueKey('mePetTailsonality'),
+                    metaKey: const ValueKey('mePetCardMeta'),
+                    onTap: () => context.go('/profile'), // 跳成长档案 Tab
+                  ),
+              ],
+            ),
+          ),
         );
       },
       orElse: () => const SizedBox.shrink(),
     );
-  }
-
-  Widget _row(BuildContext context, WidgetRef ref, PetProfile pet) {
-    final l10n = AppLocalizations.of(context);
-    final meta = _petMeta(l10n, pet);
-    // bug 20260722-355：GROWTH_MOMENT 帖即「Diary」，>99 显示「99+」，跟随实际记录数变化。
-    final momen = ref.watch(archiveStatsProvider).asData?.value.happyMomentCount;
-    return GestureDetector(
-      key: const ValueKey('mePetCard'),
-      onTap: () => context.go('/profile'), // 跳成长档案 Tab
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.line2),
-        ),
-        child: Row(
-          children: [
-            InitialAvatar(avatarUrl: pet.avatarUrl, nickname: pet.name, radius: 22),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    pet.name,
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.ink),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (meta.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      meta,
-                      key: const ValueKey('mePetCardMeta'),
-                      style: const TextStyle(fontSize: 12, color: AppColors.ink2),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (momen != null) ...[
-              const SizedBox(width: AppSpacing.sm),
-              Container(
-                key: const ValueKey('mePetDiaryTag'),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.mintTint2,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.menu_book, size: 13, color: AppColors.mint),
-                    const SizedBox(width: 3),
-                    Text(
-                      l10n.meDiaryCount(momen > 99 ? '99+' : '$momen'),
-                      style: const TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.mint),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(width: 4),
-            const Icon(Icons.chevron_right, size: 20, color: AppColors.muted),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// 元数据「种类 · 年龄」（V1.3.4：diary 数移到右侧小标签；不显示品种）。
-  String _petMeta(AppLocalizations l10n, PetProfile pet) {
-    final species = switch (pet.petType) {
-      'CAT' => l10n.petTypeCat,
-      'DOG' => l10n.petTypeDog,
-      'OTHER' => l10n.petTypeOther,
-      _ => null,
-    };
-    return [
-      ?species,
-      // 与档案页同一出口：不满 1 个月按天表达，避免「0th 0bln」。
-      ?formatPetAge(l10n, pet.birthday),
-    ].join(' · ');
   }
 }
 
