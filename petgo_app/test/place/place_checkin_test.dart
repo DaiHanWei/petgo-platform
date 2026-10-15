@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -267,6 +268,15 @@ void main() {
       expect(find.byKey(const ValueKey('placeCheckinNewStamp')), findsNothing, reason: '简版章面只做兜底');
       expect(find.byKey(const ValueKey('placeCheckinViewPassport')), findsOneWidget);
       expect(find.byType(CardWatermark), findsNothing, reason: '打卡成功页不叠水印（即使当前版本未买）');
+    });
+
+    testWidgets('ST-07：护照迟迟取不回（弱网）→ 空白护照本最多占位一小会儿，随后退到简版章面，不长时间空白', (tester) async {
+      await _pumpSuccess(tester, isNew: true, count: 1, hangPassport: true, settle: false);
+      expect(find.byKey(const ValueKey('placeCheckinBookPlaceholder')), findsOneWidget, reason: '刚进页：空白护照本占位');
+      await tester.pump(PlaceCheckinSuccessPage.passportPlaceholderMax);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byKey(const ValueKey('placeCheckinBookPlaceholder')), findsNothing, reason: '超过占位上限不再空白');
+      expect(find.byKey(const ValueKey('placeCheckinNewStamp')), findsOneWidget, reason: '退到简版章面（本地数据即可显示）');
     });
 
     testWidgets('Story 1.2 / 1.3：点「Lihat Paspor」→ 先进 B4 整页落章（带新章参数）', (tester) async {
@@ -624,13 +634,15 @@ Future<void> _pumpSuccess(WidgetTester tester,
     required int count,
     Locale locale = const Locale('id'),
     PetPassport? passport,
+    bool hangPassport = false,
     MilestoneRepository? milestones,
     List<Duration> pollDelays = const [],
     bool settle = true}) async {
   await tester.pumpWidget(ProviderScope(
     overrides: [
-      petPassportProvider.overrideWith(
-          (ref) async => passport ?? (throw StateError('offline'))),
+      petPassportProvider.overrideWith((ref) => hangPassport
+          ? Completer<PetPassport>().future
+          : Future(() => passport ?? (throw StateError('offline')))),
       milestoneInstantPollDelaysProvider.overrideWithValue(pollDelays),
       if (milestones != null) milestoneRepositoryProvider.overrideWithValue(milestones),
     ],
